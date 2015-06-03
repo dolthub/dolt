@@ -40,10 +40,10 @@ func TestEquals(t *testing.T) {
 	r01 := MustParse("sha1-0000000000000000000000000000000000000000")
 	r1 := MustParse("sha1-0000000000000000000000000000000000000001")
 
-	assert.True(r0.Equals(r01))
-	assert.True(r01.Equals(r0))
-	assert.False(r1.Equals(r0))
-	assert.False(r0.Equals(r1))
+	assert.Equal(r0, r01)
+	assert.Equal(r01, r0)
+	assert.NotEqual(r0, r1)
+	assert.NotEqual(r1, r0)
 }
 
 func TestString(t *testing.T) {

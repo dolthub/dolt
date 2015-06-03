@@ -21,10 +21,6 @@ type Ref struct {
 	digest Sha1Digest
 }
 
-func (r Ref) Equals(other *Ref) bool {
-	return r.digest == other.digest
-}
-
 func (r Ref) String() string {
 	return fmt.Sprintf("sha1-%s", hex.EncodeToString(r.digest[:]))
 }
@@ -33,25 +29,24 @@ func New(digest Sha1Digest) Ref {
 	return Ref{digest}
 }
 
-func Parse(s string) (*Ref, error) {
+func Parse(s string) (r Ref, err error) {
 	match := pattern.FindStringSubmatch(s)
 	if match == nil {
-		return nil, fmt.Errorf("Could not parse ref: %s", s)
+		return r, fmt.Errorf("Could not parse ref: %s", s)
 	}
-	result := Ref{}
 
 	// TODO: The new temp byte array is kinda bummer. Would be better to walk the string and decode each byte into result.digest. But can't find stdlib functions to do that.
-	n, err := hex.Decode(result.digest[:], []byte(match[1]))
+	n, err := hex.Decode(r.digest[:], []byte(match[1]))
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// If there was no error, we should have decoded exactly one digest worth of bytes.
 	Chk.Equal(sha1.Size, n)
-	return &result, nil
+	return
 }
 
-func MustParse(s string) *Ref {
+func MustParse(s string) Ref {
 	r, err := Parse(s)
 	Chk.NoError(err)
 	return r
