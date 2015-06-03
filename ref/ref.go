@@ -14,9 +14,11 @@ var (
 	pattern = regexp.MustCompile("^sha1-([0-9a-f]{40})$")
 )
 
+type Sha1Digest [sha1.Size]byte
+
 type Ref struct {
 	// In the future, we will also store the algorithm, and digest will thus probably have to be a slice (because it can vary in size)
-	digest [20]byte
+	digest Sha1Digest
 }
 
 func (r Ref) Equals(other *Ref) bool {
@@ -25,6 +27,10 @@ func (r Ref) Equals(other *Ref) bool {
 
 func (r Ref) String() string {
 	return fmt.Sprintf("sha1-%s", hex.EncodeToString(r.digest[:]))
+}
+
+func New(digest Sha1Digest) Ref {
+	return Ref{digest}
 }
 
 func Parse(s string) (*Ref, error) {
