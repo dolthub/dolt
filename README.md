@@ -12,3 +12,4 @@ This includes:
 * Serialization and deserialization
 * Chunkstore interface as well as several sample implementations
 * Search support
+* Sample applications
