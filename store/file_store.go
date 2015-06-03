@@ -3,6 +3,7 @@ package store
 import (
 	"crypto/sha1"
 	"flag"
+	"go/src/pkg/strings"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -28,6 +29,10 @@ func NewFileStore(dir string) FileStore {
 
 func NewFileStoreFromFlags() FileStore {
 	return NewFileStore(*dirFlag)
+}
+
+func (f *FileStore) Get(ref ref.Ref) (io.ReadCloser, error) {
+	return os.Open(getPath(f.dir, ref))
 }
 
 func (f *FileStore) Put() ChunkWriter {
@@ -60,9 +65,7 @@ func (w *fileChunkWriter) Ref() (ref.Ref, error) {
 	digest := ref.Sha1Digest{}
 	w.hash.Sum(digest[:0])
 	ref := ref.New(digest)
-	s := ref.String()
-	p := path.Join(w.root, "sha1", s[5:7], s[7:9], s)
-
+	p := getPath(w.root, ref)
 	err := os.MkdirAll(path.Dir(p), 0700)
 	Chk.NoError(err)
 
@@ -78,4 +81,10 @@ func (w *fileChunkWriter) Close() error {
 	os.Remove(w.file.Name())
 	w.file = nil
 	return nil
+}
+
+func getPath(root string, ref ref.Ref) string {
+	s := ref.String()
+	Chk.True(strings.HasPrefix(s, "sha1"))
+	return path.Join(root, "sha1", s[5:7], s[7:9], s)
 }
