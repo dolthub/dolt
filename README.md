@@ -6,7 +6,7 @@ This repository will contain the reference implementation of the noms protocol, 
 
 This includes:
 
-* Go types for all the core Nom types
+* Go wrappers for all the core Nom types
 * Support for generating Go types from Nom schema definitions
 * Chunking and dechunking
 * Serialization and deserialization
