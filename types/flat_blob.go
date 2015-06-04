@@ -16,7 +16,7 @@ func (fb flatBlob) Read() io.Reader {
 	return bytes.NewBuffer(fb.data)
 }
 
-func (fb flatBlob) Len() uint64 {
+func (fb flatBlob) ByteLen() uint64 {
 	return uint64(len(fb.data))
 }
 

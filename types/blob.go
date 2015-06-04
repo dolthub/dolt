@@ -4,7 +4,7 @@ import "io"
 
 type Blob interface {
 	Value
-	Len() uint64
+	ByteLen() uint64
 	Read() io.Reader
 }
 
