@@ -110,3 +110,26 @@ func TestFlatListInsert(t *testing.T) {
 		l2.Insert(5, Int32(0))
 	})
 }
+
+func TestFlatListRemove(t *testing.T) {
+	assert := assert.New(t)
+	l0 := List(flatList{})
+	l0 = l0.Remove(0, 0)
+	assert.Equal(uint64(0), l0.Len())
+
+	l0 = l0.Append(Bool(false), Bool(true), Bool(true), Bool(false))
+	l1 := l0.Remove(1, 3)
+	assert.Equal(uint64(4), l0.Len())
+	assert.Equal(uint64(2), l1.Len())
+	assert.True(NewList(Bool(false), Bool(false)).Equals(l1))
+
+	l1 = l1.Remove(1, 2)
+	assert.True(NewList(Bool(false)).Equals(l1))
+
+	l1 = l1.Remove(0, 1)
+	assert.True(NewList().Equals(l1))
+
+	assert.Panics(func() {
+		l1.Remove(0, 1)
+	})
+}
