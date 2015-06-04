@@ -1,5 +1,6 @@
 package types
 
+// TODO: I'm not sure we even want this interface in the long term, because noms is strongly-typed, so we should actually have List<T>.
 type List interface {
 	Value
 	Len() uint64
