@@ -12,6 +12,13 @@ func TestNewStringIsFlatString(t *testing.T) {
 	assert.IsType(s, flatString{})
 }
 
+func TestStringFromBytes(t *testing.T) {
+	assert := assert.New(t)
+	s := StringFromBytes([]byte("foo"))
+	assert.IsType(s, flatString{})
+	assert.Equal("foo", s.String())
+}
+
 func TestFlatStringLen(t *testing.T) {
 	assert := assert.New(t)
 	s1 := NewString("foo")
