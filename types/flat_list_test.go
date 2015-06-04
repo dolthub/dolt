@@ -56,6 +56,18 @@ func TestFlatListSlice(t *testing.T) {
 	})
 }
 
+func TestFlatListSet(t *testing.T) {
+	assert := assert.New(t)
+	l0 := List(flatList{})
+	l0 = l0.Append(Float32(0.0))
+	l1 := l0.Set(uint64(0), Float32(1.0))
+	assert.Equal(Float32(1.0), l1.Get(0))
+	assert.Equal(Float32(0.0), l0.Get(0))
+	assert.Panics(func() {
+		l1.Set(uint64(2), Float32(2.0))
+	})
+}
+
 func TestFlatListAppend(t *testing.T) {
 	assert := assert.New(t)
 
