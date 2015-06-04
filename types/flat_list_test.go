@@ -133,3 +133,17 @@ func TestFlatListRemove(t *testing.T) {
 		l1.Remove(0, 1)
 	})
 }
+
+func TestFlatListRemoveAt(t *testing.T) {
+	assert := assert.New(t)
+	l0 := List(flatList{})
+	l0 = l0.Append(Bool(false), Bool(true))
+	l1 := l0.RemoveAt(1)
+	assert.True(NewList(Bool(false)).Equals(l1))
+	l1 = l1.RemoveAt(0)
+	assert.True(NewList().Equals(l1))
+
+	assert.Panics(func() {
+		l1.RemoveAt(0)
+	})
+}
