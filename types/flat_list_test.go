@@ -84,3 +84,29 @@ func TestFlatListAppend(t *testing.T) {
 	assert.True(NewList(Bool(true), Bool(true)).Equals(l2.Slice(1, l2.Len())))
 	assert.Equal(uint64(1), l1.Len())
 }
+
+func TestFlatListInsert(t *testing.T) {
+	assert := assert.New(t)
+
+	// Insert(0, v1)
+	l0 := List(flatList{})
+	l1 := l0.Insert(uint64(0), Int32(-1))
+	assert.Equal(uint64(0), l0.Len())
+	assert.Equal(uint64(1), l1.Len())
+	assert.Equal(Int32(-1), l1.Get(0))
+
+	// Insert(0, v1, v2)
+	l2 := l1.Insert(0, Int32(-3), Int32(-2))
+	assert.Equal(uint64(3), l2.Len())
+	assert.Equal(Int32(-1), l2.Get(2))
+	assert.True(NewList(Int32(-3), Int32(-2)).Equals(l2.Slice(0, 2)))
+	assert.Equal(uint64(1), l1.Len())
+
+	// Insert(2, v3)
+	l3 := l2.Insert(2, Int32(1))
+	assert.Equal(Int32(1), l3.Get(2))
+
+	assert.Panics(func() {
+		l2.Insert(5, Int32(0))
+	})
+}
