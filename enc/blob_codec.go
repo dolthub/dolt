@@ -11,12 +11,12 @@ import (
 )
 
 var (
-	blobChunkTag = []byte("b ")
+	blobTag = []byte("b ")
 )
 
-func encodeBlobChunk(b types.Blob, s store.ChunkSink) (r ref.Ref, err error) {
+func encodeBlob(b types.Blob, s store.ChunkSink) (r ref.Ref, err error) {
 	w := s.Put()
-	if _, err = w.Write(blobChunkTag); err != nil {
+	if _, err = w.Write(blobTag); err != nil {
 		return
 	}
 	if _, err = io.Copy(w, b.Read()); err != nil {
@@ -25,13 +25,13 @@ func encodeBlobChunk(b types.Blob, s store.ChunkSink) (r ref.Ref, err error) {
 	return w.Ref()
 }
 
-func decodeBlobChunk(r io.Reader, s store.ChunkSource) (types.Value, error) {
+func decodeBlob(r io.Reader, s store.ChunkSource) (types.Value, error) {
 	buf := &bytes.Buffer{}
-	_, err := io.CopyN(buf, r, int64(len(blobChunkTag)))
+	_, err := io.CopyN(buf, r, int64(len(blobTag)))
 	if err != nil {
 		return nil, err
 	}
-	Chk.True(bytes.Equal(buf.Bytes(), blobChunkTag))
+	Chk.True(bytes.Equal(buf.Bytes(), blobTag))
 
 	buf.Truncate(0)
 	_, err = io.Copy(buf, r)

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBlobChunkCodec(t *testing.T) {
+func TestBlobCodec(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
@@ -18,24 +18,24 @@ func TestBlobChunkCodec(t *testing.T) {
 	assert.NoError(err)
 	fs := store.NewFileStore(dir)
 	b1 := types.NewBlob([]byte{})
-	r1, err := encodeBlobChunk(b1, fs)
+	r1, err := encodeBlob(b1, fs)
 	// echo -n 'b ' | sha1sum
 	assert.Equal("sha1-e1bc846440ec2fb557a5a271e785cd4c648883fa", r1.String())
 
 	b2 := types.NewBlob([]byte("Hello, World!"))
-	r2, err := encodeBlobChunk(b2, fs)
+	r2, err := encodeBlob(b2, fs)
 	// echo -n 'b Hello, World!' | sha1sum
 	assert.Equal("sha1-135fe1453330547994b2ce8a1b238adfbd7df87e", r2.String())
 
 	reader, err := fs.Get(r1)
 	assert.NoError(err)
-	v1, err := decodeBlobChunk(reader, fs)
+	v1, err := decodeBlob(reader, fs)
 	assert.NoError(err)
 	assert.True(b1.Equals(v1))
 
 	reader, err = fs.Get(r2)
 	assert.NoError(err)
-	v2, err := decodeBlobChunk(reader, fs)
+	v2, err := decodeBlob(reader, fs)
 	assert.NoError(err)
 	assert.True(b2.Equals(v2))
 }
