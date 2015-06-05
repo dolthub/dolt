@@ -6,6 +6,10 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
+type ChunkSource interface {
+	Get(ref ref.Ref) (io.ReadCloser, error)
+}
+
 type ChunkSink interface {
 	Put() ChunkWriter
 }

@@ -31,11 +31,11 @@ func NewFileStoreFromFlags() FileStore {
 	return NewFileStore(*dirFlag)
 }
 
-func (f *FileStore) Get(ref ref.Ref) (io.ReadCloser, error) {
+func (f FileStore) Get(ref ref.Ref) (io.ReadCloser, error) {
 	return os.Open(getPath(f.dir, ref))
 }
 
-func (f *FileStore) Put() ChunkWriter {
+func (f FileStore) Put() ChunkWriter {
 	return &fileChunkWriter{
 		f.dir,
 		nil,
