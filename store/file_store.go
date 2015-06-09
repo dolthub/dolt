@@ -62,9 +62,7 @@ func (w *fileChunkWriter) Write(data []byte) (int, error) {
 }
 
 func (w *fileChunkWriter) Ref() (ref.Ref, error) {
-	digest := ref.Sha1Digest{}
-	w.hash.Sum(digest[:0])
-	ref := ref.New(digest)
+	ref := ref.FromHash(w.hash)
 	p := getPath(w.root, ref)
 	err := os.MkdirAll(path.Dir(p), 0700)
 	Chk.NoError(err)

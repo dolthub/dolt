@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"regexp"
 
 	. "github.com/attic-labs/noms/dbg"
@@ -21,12 +22,25 @@ type Ref struct {
 	digest Sha1Digest
 }
 
+// Returns a *copy* of the digest.
+// TODO(aa): test this.
+func (r Ref) Digest() Sha1Digest {
+	return r.digest
+}
+
 func (r Ref) String() string {
 	return fmt.Sprintf("sha1-%s", hex.EncodeToString(r.digest[:]))
 }
 
 func New(digest Sha1Digest) Ref {
 	return Ref{digest}
+}
+
+// TODO(aa): Test.
+func FromHash(h hash.Hash) Ref {
+	digest := Sha1Digest{}
+	h.Sum(digest[:0])
+	return New(digest)
 }
 
 func Parse(s string) (r Ref, err error) {

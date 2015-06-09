@@ -19,7 +19,10 @@ func jsonEncode(v types.Value, s store.ChunkSink) (r ref.Ref, err error) {
 		return
 	}
 	w := s.Put()
-	err = json.NewEncoder(w).Encode(j)
+	_, err = w.Write([]byte{'j', ' '})
+	if err == nil {
+		err = json.NewEncoder(w).Encode(j)
+	}
 	if err != nil {
 		return
 	}

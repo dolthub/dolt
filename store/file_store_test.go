@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPut(t *testing.T) {
+func TestFileStorePut(t *testing.T) {
 	assert := assert.New(t)
 	dir, err := ioutil.TempDir(os.TempDir(), "")
 	defer os.Remove(dir)
