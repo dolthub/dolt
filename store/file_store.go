@@ -3,12 +3,13 @@ package store
 import (
 	"crypto/sha1"
 	"flag"
-	"go/src/pkg/strings"
 	"hash"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
+
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )

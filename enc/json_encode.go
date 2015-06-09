@@ -1,7 +1,7 @@
 package enc
 
 import (
-	"go/src/pkg/encoding/json"
+	"encoding/json"
 
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/store"
