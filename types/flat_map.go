@@ -58,7 +58,7 @@ func (fm flatMap) Equals(other Value) (res bool) {
 	if other, ok := other.(Map); ok {
 		res = true
 		fm.Iter(func(k string, v Value) (stop bool) {
-			if other.Get(k) != v {
+			if !v.Equals(other.Get(k)) {
 				stop = true
 				res = false
 			}

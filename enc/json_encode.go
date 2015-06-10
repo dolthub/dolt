@@ -8,6 +8,10 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var (
+	jsonTag = []byte("j ")
+)
+
 func jsonEncode(v types.Value, s store.ChunkSink) (r ref.Ref, err error) {
 	if b, ok := v.(types.Blob); ok {
 		return encodeBlob(b, s)
@@ -19,7 +23,7 @@ func jsonEncode(v types.Value, s store.ChunkSink) (r ref.Ref, err error) {
 		return
 	}
 	w := s.Put()
-	_, err = w.Write([]byte{'j', ' '})
+	_, err = w.Write(jsonTag)
 	if err == nil {
 		err = json.NewEncoder(w).Encode(j)
 	}

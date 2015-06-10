@@ -100,8 +100,8 @@ func TestFlatMapEquals(t *testing.T) {
 	assert.True(m3.Equals(m2))
 	assert.True(m2.Equals(m3))
 
-	m1 = NewMap("foo", Float32(0.0), "bar", Float32(1.1))
-	m2 = m2.SetM("foo", Float32(0.0), "bar", Float32(1.1))
+	m1 = NewMap("foo", Float32(0.0), "bar", NewList())
+	m2 = m2.SetM("foo", Float32(0.0), "bar", NewList())
 	assert.True(m1.Equals(m2))
 	assert.True(m2.Equals(m1))
 	assert.False(m2.Equals(m3))
