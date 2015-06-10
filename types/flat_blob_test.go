@@ -21,12 +21,12 @@ func TestNewBlobIsFlatBlob(t *testing.T) {
 	assert.IsType(t, flatBlob{}, b)
 }
 
-func TestFlatBlobByteLen(t *testing.T) {
+func TestFlatBlobLen(t *testing.T) {
 	assert := assert.New(t)
 	b := NewBlob([]byte{})
-	assert.Equal(uint64(0), b.ByteLen())
+	assert.Equal(uint64(0), b.Len())
 	b = NewBlob([]byte{0x01})
-	assert.Equal(uint64(1), b.ByteLen())
+	assert.Equal(uint64(1), b.Len())
 }
 
 func TestFlatBlobEquals(t *testing.T) {
