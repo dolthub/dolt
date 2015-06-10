@@ -85,7 +85,8 @@ func TestFlatMapIter(t *testing.T) {
 	stop = true
 	m.Iter(cb)
 	assert.Equal(1, len(got))
-	assert.True(Int32(0).Equals(got["a"]))
+	// Iteration order not guaranteed, but it has to be one of these.
+	assert.True(Int32(0).Equals(got["a"]) || Int32(1).Equals(got["b"]))
 }
 
 func TestFlatMapEquals(t *testing.T) {

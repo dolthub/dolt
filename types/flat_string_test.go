@@ -12,21 +12,6 @@ func TestNewStringIsFlatString(t *testing.T) {
 	assert.IsType(s, flatString{})
 }
 
-func TestStringFromBytes(t *testing.T) {
-	assert := assert.New(t)
-	s := StringFromBytes([]byte("foo"))
-	assert.IsType(s, flatString{})
-	assert.Equal("foo", s.String())
-}
-
-func TestFlatStringLen(t *testing.T) {
-	assert := assert.New(t)
-	s1 := NewString("foo")
-	s2 := NewString("⌘")
-	assert.Equal(uint64(3), uint64(s1.ByteLen()))
-	assert.Equal(uint64(3), uint64(s2.ByteLen()))
-}
-
 func TestFlatStringEquals(t *testing.T) {
 	assert := assert.New(t)
 	s1 := NewString("foo")

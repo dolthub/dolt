@@ -3,7 +3,6 @@ package store
 import (
 	"bytes"
 	"crypto/sha1"
-	"fmt"
 	"io"
 	"io/ioutil"
 
@@ -45,7 +44,6 @@ func (w *memoryChunkWriter) Ref() (ref.Ref, error) {
 	if w.ms.data == nil {
 		w.ms.data = map[ref.Ref][]byte{}
 	}
-	fmt.Println(string(w.buf.Bytes()))
 	w.ms.data[r] = w.buf.Bytes()
 	w.Close()
 	return r, nil
