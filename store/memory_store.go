@@ -5,7 +5,6 @@ import (
 	"crypto/sha1"
 	"io"
 	"io/ioutil"
-
 	"github.com/attic-labs/noms/ref"
 )
 
