@@ -13,7 +13,7 @@ func TestS3StorePut(t *testing.T) {
 	assert := assert.New(t)
 
 	input := "abc"
-	s := NewS3Store()
+	s := NewS3StoreFromFlags()
 
 	w := s.Put()
 	_, err := w.Write([]byte(input))
