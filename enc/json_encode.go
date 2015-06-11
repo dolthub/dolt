@@ -2,7 +2,9 @@ package enc
 
 import (
 	"encoding/json"
+	"fmt"
 
+	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/store"
 	"github.com/attic-labs/noms/types"
@@ -13,10 +15,6 @@ var (
 )
 
 func jsonEncode(v types.Value, s store.ChunkSink) (r ref.Ref, err error) {
-	if b, ok := v.(types.Blob); ok {
-		return encodeBlob(b, s)
-	}
-
 	var j interface{}
 	j, err = getJSON(v, s)
 	if err != nil {
@@ -36,7 +34,7 @@ func jsonEncode(v types.Value, s store.ChunkSink) (r ref.Ref, err error) {
 func getJSON(v types.Value, s store.ChunkSink) (interface{}, error) {
 	switch v := v.(type) {
 	case types.Blob:
-		panic("Cannot represent blob as JSON. Did not expect to get here.")
+		Chk.Fail(fmt.Sprintf("jsonEncode doesn't support encoding blobs - didn't expect to get here: %+v", v))
 	case types.Bool:
 		return bool(v), nil
 	case types.Float32:
@@ -80,6 +78,7 @@ func getJSON(v types.Value, s store.ChunkSink) (interface{}, error) {
 	default:
 		panic("Unexpected type")
 	}
+	return nil, nil
 }
 func getJSONList(l types.List, s store.ChunkSink) (r interface{}, err error) {
 	j := []interface{}{}

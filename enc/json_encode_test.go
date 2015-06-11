@@ -64,9 +64,6 @@ func TestJsonEncode(t *testing.T) {
 	testEncode(`j {"float64":3.14}
 `, types.Float64(3.14))
 
-	// Blobs we delegate to the blob codec. That's tested in blob_codec_test.go, but let's just make sure the delegation is working.
-	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), types.NewBlob([]byte{0x00, 0x01, 0x02}))
-
 	// Strings
 	testEncode(`j ""
 `, types.NewString(""))
