@@ -29,8 +29,7 @@ func ReadValue(ref ref.Ref, cs store.ChunkSource) (types.Value, error) {
 	}
 
 	if bytes.Equal(prefix, blobTag) {
-		// TODO: Rename decodeBlob blobDecode for consistency
-		return decodeBlob(buffered, cs)
+		return blobDecode(buffered, cs)
 	}
 
 	return nil, fmt.Errorf("Unsupported chunk tag: %+v", prefix)

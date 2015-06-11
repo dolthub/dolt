@@ -9,7 +9,7 @@ import (
 func WriteValue(v types.Value, cs store.ChunkSink) (ref.Ref, error) {
 	switch v := v.(type) {
 	case types.Blob:
-		return encodeBlob(v, cs)
+		return blobEncode(v, cs)
 	default:
 		return jsonEncode(v, cs)
 	}

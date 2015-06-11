@@ -14,7 +14,7 @@ var (
 	blobTag = []byte("b ")
 )
 
-func encodeBlob(b types.Blob, s store.ChunkSink) (r ref.Ref, err error) {
+func blobEncode(b types.Blob, s store.ChunkSink) (r ref.Ref, err error) {
 	w := s.Put()
 	if _, err = w.Write(blobTag); err != nil {
 		return
@@ -25,7 +25,7 @@ func encodeBlob(b types.Blob, s store.ChunkSink) (r ref.Ref, err error) {
 	return w.Ref()
 }
 
-func decodeBlob(r io.Reader, s store.ChunkSource) (types.Value, error) {
+func blobDecode(r io.Reader, s store.ChunkSource) (types.Value, error) {
 	buf := &bytes.Buffer{}
 	_, err := io.CopyN(buf, r, int64(len(blobTag)))
 	if err != nil {

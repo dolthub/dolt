@@ -123,11 +123,11 @@ func getChildJSON(v types.Value, s store.ChunkSink) (interface{}, error) {
 	switch v := v.(type) {
 	// Blobs, maps, and lists are always out-of-line
 	case types.Blob:
-		r, err = encodeBlob(v, s)
+		r, err = WriteValue(v, s)
 	case types.Map:
-		r, err = jsonEncode(v, s)
+		r, err = WriteValue(v, s)
 	case types.List:
-		r, err = jsonEncode(v, s)
+		r, err = WriteValue(v, s)
 	default:
 		// Other types are always inline.
 		return getJSON(v, s)
