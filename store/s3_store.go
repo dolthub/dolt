@@ -24,9 +24,14 @@ var (
 
 // S3Store assumes that credentials are received from the environment. In prod, this will be an IAM Policy attached to the running EC2 instance. For dev, credentials can be passed via flags or found in ~/.aws/credentials (https://github.com/aws/aws-sdk-go)
 
+type S3 interface {
+	GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
+	PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
+}
+
 type S3Store struct {
 	bucket string
-	svc    *s3.S3
+	svc    S3
 }
 
 func NewS3Store(bucket, region, key, secret string) S3Store {

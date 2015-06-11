@@ -1,19 +1,45 @@
 package store
 
 import (
+	"bytes"
 	"crypto/sha1"
+	"errors"
 	"io/ioutil"
 	"testing"
 
 	"github.com/attic-labs/noms/ref"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/stretchr/testify/assert"
 )
+
+type MockS3 map[string][]byte
+
+func (m *MockS3) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+	result, ok := (*m)[*input.Key]
+	if !ok {
+		return nil, errors.New("not here")
+	}
+
+	return &s3.GetObjectOutput{
+		Body: ioutil.NopCloser(bytes.NewReader(result)),
+	}, nil
+}
+
+func (m *MockS3) PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error) {
+	bytes, _ := ioutil.ReadAll(input.Body)
+	(*m)[*input.Key] = bytes
+	return nil, nil
+}
 
 func TestS3StorePut(t *testing.T) {
 	assert := assert.New(t)
 
 	input := "abc"
-	s := NewS3StoreFromFlags()
+
+	s := S3Store{
+		"bucket",
+		&MockS3{},
+	}
 
 	w := s.Put()
 	_, err := w.Write([]byte(input))
