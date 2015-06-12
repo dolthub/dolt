@@ -7,10 +7,12 @@ import (
 )
 
 type ChunkSource interface {
+	Root() ref.Ref
 	Get(ref ref.Ref) (io.ReadCloser, error)
 }
 
 type ChunkSink interface {
+	UpdateRoot(current, last ref.Ref) bool
 	Put() ChunkWriter
 }
 

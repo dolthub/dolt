@@ -1,34 +1,83 @@
 package store
 
 import (
+	"bytes"
+	"crypto/sha1"
+	"errors"
 	"flag"
+	"fmt"
 	"hash"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"strings"
+	"syscall"
 
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
 var (
-	dirFlag = flag.String("file-store", "", "directory to use as a FileStore")
+	dirFlag  = flag.String("file-store", "", "directory to use as a FileStore")
+	rootFlag = flag.String("root", "root", "file which holds root ref")
 )
 
 type FileStore struct {
-	dir string
+	dir, root string
 }
 
-func NewFileStore(dir string) FileStore {
+func NewFileStore(dir, root string) FileStore {
 	Chk.NotEmpty(dir)
+	Chk.NotEmpty(root)
 	Chk.NoError(os.MkdirAll(dir, 0700))
-	return FileStore{dir}
+	return FileStore{dir, path.Join(dir, root)}
 }
 
 func NewFileStoreFromFlags() FileStore {
-	return NewFileStore(*dirFlag)
+	return NewFileStore(*dirFlag, *rootFlag)
+}
+
+func readRef(file *os.File) ref.Ref {
+	var digest ref.Sha1Digest
+	len, err := io.Copy(bytes.NewBuffer(digest[:0]), file)
+	Chk.NoError(err)
+	if len == 0 {
+		return ref.Ref{}
+	}
+
+	Chk.Equal(len, sha1.Size)
+	return ref.New(digest)
+}
+
+func (f FileStore) Root() ref.Ref {
+	file, err := os.Open(f.root)
+	if os.IsNotExist(err) {
+		return ref.Ref{}
+	}
+	Chk.NoError(err)
+
+	syscall.Flock(int(file.Fd()), syscall.LOCK_SH)
+	defer file.Close()
+
+	return readRef(file)
+}
+
+func (f FileStore) UpdateRoot(current, last ref.Ref) bool {
+	file, err := os.OpenFile(f.root, os.O_RDWR|os.O_CREATE, os.ModePerm)
+	Chk.NoError(err)
+	syscall.Flock(int(file.Fd()), syscall.LOCK_EX)
+	defer file.Close()
+
+	existing := readRef(file)
+	if existing != last {
+		return false
+	}
+
+	file.Seek(0, 0)
+	file.Truncate(0)
+	file.Write([]byte(current.String()))
+	return true
 }
 
 func (f FileStore) Get(ref ref.Ref) (io.ReadCloser, error) {
