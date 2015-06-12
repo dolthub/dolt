@@ -6,9 +6,9 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/service/s3"

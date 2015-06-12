@@ -6,13 +6,16 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-type ChunkSource interface {
+type RootStore interface {
 	Root() ref.Ref
+	UpdateRoot(current, last ref.Ref) bool
+}
+
+type ChunkSource interface {
 	Get(ref ref.Ref) (io.ReadCloser, error)
 }
 
 type ChunkSink interface {
-	UpdateRoot(current, last ref.Ref) bool
 	Put() ChunkWriter
 }
 
