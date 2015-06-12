@@ -1,15 +1,17 @@
-package types
+package test
 
 import (
 	"testing"
 
+	_ "github.com/attic-labs/noms/enc"
+	. "github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFlatListLen(t *testing.T) {
+func TestListLen(t *testing.T) {
 	assert := assert.New(t)
 
-	l := List(flatList{})
+	l := NewList()
 	assert.Equal(uint64(0), l.Len())
 	l = l.Append(Bool(true))
 	assert.Equal(uint64(1), l.Len())
@@ -17,10 +19,10 @@ func TestFlatListLen(t *testing.T) {
 	assert.Equal(uint64(3), l.Len())
 }
 
-func TestFlatListGet(t *testing.T) {
+func TestListGet(t *testing.T) {
 	assert := assert.New(t)
 
-	l := List(flatList{})
+	l := NewList()
 	l = l.Append(Int32(0), Int32(1), Int32(2))
 	assert.Equal(Int32(0), l.Get(0))
 	assert.Equal(Int32(1), l.Get(1))
@@ -31,9 +33,9 @@ func TestFlatListGet(t *testing.T) {
 	})
 }
 
-func TestFlatListSlice(t *testing.T) {
+func TestListSlice(t *testing.T) {
 	assert := assert.New(t)
-	l1 := List(flatList{})
+	l1 := NewList()
 	l1 = l1.Append(Int32(0), Int32(1), Int32(2), Int32(3))
 	l2 := l1.Slice(1, 3)
 	assert.Equal(uint64(4), l1.Len())
@@ -56,9 +58,9 @@ func TestFlatListSlice(t *testing.T) {
 	})
 }
 
-func TestFlatListSet(t *testing.T) {
+func TestListSet(t *testing.T) {
 	assert := assert.New(t)
-	l0 := List(flatList{})
+	l0 := NewList()
 	l0 = l0.Append(Float32(0.0))
 	l1 := l0.Set(uint64(0), Float32(1.0))
 	assert.Equal(Float32(1.0), l1.Get(0))
@@ -68,10 +70,10 @@ func TestFlatListSet(t *testing.T) {
 	})
 }
 
-func TestFlatListAppend(t *testing.T) {
+func TestListAppend(t *testing.T) {
 	assert := assert.New(t)
 
-	l0 := flatList{}
+	l0 := NewList()
 	l1 := l0.Append(Bool(false))
 	assert.Equal(uint64(0), l0.Len())
 	assert.Equal(uint64(1), l1.Len())
@@ -85,11 +87,11 @@ func TestFlatListAppend(t *testing.T) {
 	assert.Equal(uint64(1), l1.Len())
 }
 
-func TestFlatListInsert(t *testing.T) {
+func TestListInsert(t *testing.T) {
 	assert := assert.New(t)
 
 	// Insert(0, v1)
-	l0 := List(flatList{})
+	l0 := NewList()
 	l1 := l0.Insert(uint64(0), Int32(-1))
 	assert.Equal(uint64(0), l0.Len())
 	assert.Equal(uint64(1), l1.Len())
@@ -111,9 +113,9 @@ func TestFlatListInsert(t *testing.T) {
 	})
 }
 
-func TestFlatListRemove(t *testing.T) {
+func TestListRemove(t *testing.T) {
 	assert := assert.New(t)
-	l0 := List(flatList{})
+	l0 := NewList()
 	l0 = l0.Remove(0, 0)
 	assert.Equal(uint64(0), l0.Len())
 
@@ -134,9 +136,9 @@ func TestFlatListRemove(t *testing.T) {
 	})
 }
 
-func TestFlatListRemoveAt(t *testing.T) {
+func TestListRemoveAt(t *testing.T) {
 	assert := assert.New(t)
-	l0 := List(flatList{})
+	l0 := NewList()
 	l0 = l0.Append(Bool(false), Bool(true))
 	l1 := l0.RemoveAt(1)
 	assert.True(NewList(Bool(false)).Equals(l1))

@@ -3,9 +3,7 @@ package types
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 
-	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -27,11 +25,9 @@ func (fb flatBlob) Ref() ref.Ref {
 }
 
 func (fb flatBlob) Equals(other Value) bool {
-	// TODO: See note about content addressing in flat_list.go.
-	if other, ok := other.(Blob); ok {
-		otherData, err := ioutil.ReadAll(other.Reader())
-		Chk.NoError(err)
-		return bytes.Equal(fb.data, otherData)
+	if other == nil {
+		return false
+	} else {
+		return fb.Ref() == other.Ref()
 	}
-	return false
 }

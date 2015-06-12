@@ -1,8 +1,10 @@
-package types
+package test
 
 import (
 	"testing"
 
+	_ "github.com/attic-labs/noms/enc"
+	. "github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,12 +18,7 @@ func AssertSymNe(assert *assert.Assertions, a, b Value) {
 	assert.False(b.Equals(a))
 }
 
-func TestNewBlobIsFlatBlob(t *testing.T) {
-	b := NewBlob([]byte{})
-	assert.IsType(t, flatBlob{}, b)
-}
-
-func TestFlatBlobLen(t *testing.T) {
+func TestBlobLen(t *testing.T) {
 	assert := assert.New(t)
 	b := NewBlob([]byte{})
 	assert.Equal(uint64(0), b.Len())
@@ -29,7 +26,7 @@ func TestFlatBlobLen(t *testing.T) {
 	assert.Equal(uint64(1), b.Len())
 }
 
-func TestFlatBlobEquals(t *testing.T) {
+func TestBlobEquals(t *testing.T) {
 	assert := assert.New(t)
 	b1 := NewBlob([]byte{0x01})
 	b11 := b1

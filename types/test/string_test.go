@@ -1,18 +1,14 @@
-package types
+package test
 
 import (
 	"testing"
 
+	_ "github.com/attic-labs/noms/enc"
+	. "github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewStringIsFlatString(t *testing.T) {
-	assert := assert.New(t)
-	s := NewString("foo")
-	assert.IsType(s, flatString{})
-}
-
-func TestFlatStringEquals(t *testing.T) {
+func TestStringEquals(t *testing.T) {
 	assert := assert.New(t)
 	s1 := NewString("foo")
 	s2 := NewString("foo")
@@ -26,7 +22,7 @@ func TestFlatStringEquals(t *testing.T) {
 	assert.False(s4.Equals(s1))
 }
 
-func TestFlatStringString(t *testing.T) {
+func TestStringString(t *testing.T) {
 	assert := assert.New(t)
 	s1 := NewString("")
 	s2 := NewString("foo")

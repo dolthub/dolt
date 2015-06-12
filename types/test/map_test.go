@@ -1,15 +1,17 @@
-package types
+package test
 
 import (
 	"testing"
 
+	_ "github.com/attic-labs/noms/enc"
+	. "github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewMap(t *testing.T) {
 	assert := assert.New(t)
 	m := NewMap()
-	assert.IsType(flatMap{}, m)
+	assert.IsType(NewMap(), m)
 	assert.Equal(uint64(0), m.Len())
 	m = NewMap("foo", NewString("foo"), "bar", NewString("bar"))
 	assert.Equal(uint64(2), m.Len())
@@ -17,7 +19,7 @@ func TestNewMap(t *testing.T) {
 	assert.True(NewString("bar").Equals(m.Get("bar")))
 }
 
-func TestFlatMapHasRemove(t *testing.T) {
+func TestMapHasRemove(t *testing.T) {
 	assert := assert.New(t)
 	m1 := NewMap()
 	assert.False(m1.Has("foo"))
@@ -30,7 +32,7 @@ func TestFlatMapHasRemove(t *testing.T) {
 	assert.False(m3.Has("foo"))
 }
 
-func TestFlatMapSetGet(t *testing.T) {
+func TestMapSetGet(t *testing.T) {
 	assert := assert.New(t)
 	m1 := NewMap()
 	assert.Nil(m1.Get("foo"))
@@ -48,7 +50,7 @@ func TestFlatMapSetGet(t *testing.T) {
 	assert.Nil(m4.Get("foo"))
 }
 
-func TestFlatMapSetM(t *testing.T) {
+func TestMapSetM(t *testing.T) {
 	assert := assert.New(t)
 	m1 := NewMap()
 	m2 := m1.SetM()
@@ -62,7 +64,7 @@ func TestFlatMapSetM(t *testing.T) {
 	assert.Equal(uint64(3), m4.Len())
 }
 
-func TestFlatMapIter(t *testing.T) {
+func TestMapIter(t *testing.T) {
 	assert := assert.New(t)
 	m := NewMap()
 	got := map[string]Value{}
@@ -89,7 +91,7 @@ func TestFlatMapIter(t *testing.T) {
 	assert.True(Int32(0).Equals(got["a"]) || Int32(1).Equals(got["b"]))
 }
 
-func TestFlatMapEquals(t *testing.T) {
+func TestMapEquals(t *testing.T) {
 	assert := assert.New(t)
 	m1 := NewMap()
 	m2 := m1

@@ -1,9 +1,11 @@
-package types
+package test
 
 import (
 	"testing"
 
+	_ "github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/ref"
+	. "github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -24,7 +26,12 @@ func TestCachedRef(t *testing.T) {
 		}
 	}
 
+	prevReffer := Reffer
 	Reffer = mockReffer
+	defer func() {
+		Reffer = prevReffer
+	}()
+
 	values := []Value{
 		NewBlob([]byte{}),
 		NewList(),

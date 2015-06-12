@@ -23,9 +23,9 @@ func (fs flatString) Ref() ref.Ref {
 }
 
 func (fs flatString) Equals(other Value) bool {
-	if other, ok := other.(String); ok {
-		return fs.String() == other.String()
-	} else {
+	if other == nil {
 		return false
+	} else {
+		return fs.Ref() == other.Ref()
 	}
 }
