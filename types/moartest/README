@@ -1,0 +1,5 @@
+These tests require the 'enc' package to be imported, which can't be done from within the 'types' package.
+
+We can't move the rest of the tests here, because they rely on access to the internals of the 'types' package, so they need to stay there.
+
+Not sure what best answer is yet.
