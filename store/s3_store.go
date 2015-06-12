@@ -90,9 +90,7 @@ func (w *s3ChunkWriter) Write(data []byte) (int, error) {
 }
 
 func (w *s3ChunkWriter) Ref() (ref.Ref, error) {
-	digest := ref.Sha1Digest{}
-	w.hash.Sum(digest[:0])
-	ref := ref.New(digest)
+	ref := ref.FromHash(w.hash)
 
 	w.file.Close()
 	f, err := os.Open(w.file.Name())
