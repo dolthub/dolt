@@ -1,8 +1,13 @@
 package types
 
+import (
+	"github.com/attic-labs/noms/ref"
+)
+
 // Stupid inefficient temporary implementation of the String interface.
 type flatString struct {
-	s string
+	s  string
+	cr *cachedRef
 }
 
 func (fs flatString) Blob() Blob {
@@ -11,6 +16,10 @@ func (fs flatString) Blob() Blob {
 
 func (fs flatString) String() string {
 	return fs.s
+}
+
+func (fs flatString) Ref() ref.Ref {
+	return fs.cr.Ref(fs)
 }
 
 func (fs flatString) Equals(other Value) bool {

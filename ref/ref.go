@@ -36,6 +36,11 @@ func New(digest Sha1Digest) Ref {
 	return Ref{digest}
 }
 
+// Creates a new instance of the hash we use for refs.
+func NewHash() hash.Hash {
+	return sha1.New()
+}
+
 // TODO(aa): Test.
 func FromHash(h hash.Hash) Ref {
 	digest := Sha1Digest{}

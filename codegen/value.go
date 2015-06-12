@@ -6,7 +6,7 @@ import (
 
 func init() {
 	templates = append(templates, &typewriter.Template{
-		Name: "noms",
+		Name: "value",
 		Text: `
 func (self {{.Name}}) Equals(other Value) bool {
 	if other, ok := other.({{.Name}}); ok {
@@ -14,6 +14,11 @@ func (self {{.Name}}) Equals(other Value) bool {
 	} else {
 		return false
 	}
+}
+
+func (v {{.Name}}) Ref() ref.Ref {
+	Chk.NotNil(Reffer, "Somebody forgot to call SetReffer")
+	return Reffer(v)
 }
 `,
 		TypeConstraint: typewriter.Constraint{Comparable: true},

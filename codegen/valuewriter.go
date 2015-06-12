@@ -12,20 +12,28 @@ var (
 )
 
 func init() {
-	Chk.NoError(typewriter.Register(&nomWriter{}))
+	Chk.NoError(typewriter.Register(&valueWriter{}))
 }
 
-type nomWriter struct{}
+type valueWriter struct{}
 
-func (nw *nomWriter) Name() string {
-	return "noms"
+func (nw *valueWriter) Name() string {
+	return "value"
 }
 
-func (nw *nomWriter) Imports(t typewriter.Type) []typewriter.ImportSpec {
-	return []typewriter.ImportSpec{}
+func (nw *valueWriter) Imports(t typewriter.Type) []typewriter.ImportSpec {
+	return []typewriter.ImportSpec{
+		typewriter.ImportSpec{
+			Name: ".",
+			Path: "github.com/attic-labs/noms/dbg",
+		},
+		typewriter.ImportSpec{
+			Path: "github.com/attic-labs/noms/ref",
+		},
+	}
 }
 
-func (nw *nomWriter) Write(w io.Writer, typ typewriter.Type) error {
+func (nw *valueWriter) Write(w io.Writer, typ typewriter.Type) error {
 	tag, found := typ.FindTag(nw)
 
 	if !found {

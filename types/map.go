@@ -15,5 +15,5 @@ type Map interface {
 }
 
 func NewMap(kv ...interface{}) Map {
-	return flatMap{buildMap(nil, kv...)}
+	return newFlatMap(buildMap(nil, kv...))
 }

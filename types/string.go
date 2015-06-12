@@ -10,5 +10,5 @@ type String interface {
 }
 
 func NewString(s string) String {
-	return flatString{s}
+	return flatString{s, &cachedRef{}}
 }

@@ -15,5 +15,5 @@ type List interface {
 }
 
 func NewList(v ...Value) List {
-	return flatList{v}
+	return newFlatList(v)
 }

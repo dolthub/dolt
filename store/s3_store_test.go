@@ -2,7 +2,6 @@ package store
 
 import (
 	"bytes"
-	"crypto/sha1"
 	"errors"
 	"io/ioutil"
 	"testing"
@@ -60,11 +59,8 @@ func TestS3StorePut(t *testing.T) {
 	assert.Equal(input, string(data))
 
 	// Reading a non-existing ref fails
-	digest := ref.Sha1Digest{}
-	hash := sha1.New()
+	hash := ref.NewHash()
 	hash.Write([]byte("Non-existent"))
-	hash.Sum(digest[:0])
-	r2 := ref.New(digest)
-	reader, err = s.Get(r2)
+	reader, err = s.Get(ref.FromHash(hash))
 	assert.Error(err)
 }

@@ -6,10 +6,12 @@ import (
 	"io/ioutil"
 
 	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/ref"
 )
 
 type flatBlob struct {
 	data []byte
+	cr   *cachedRef
 }
 
 func (fb flatBlob) Reader() io.Reader {
@@ -18,6 +20,10 @@ func (fb flatBlob) Reader() io.Reader {
 
 func (fb flatBlob) Len() uint64 {
 	return uint64(len(fb.data))
+}
+
+func (fb flatBlob) Ref() ref.Ref {
+	return fb.cr.Ref(fb)
 }
 
 func (fb flatBlob) Equals(other Value) bool {

@@ -9,5 +9,5 @@ type Blob interface {
 }
 
 func NewBlob(data []byte) Blob {
-	return flatBlob{data}
+	return flatBlob{data, &cachedRef{}}
 }

@@ -1,7 +1,6 @@
 package store
 
 import (
-	"crypto/sha1"
 	"flag"
 	"hash"
 	"io"
@@ -38,10 +37,8 @@ func (f FileStore) Get(ref ref.Ref) (io.ReadCloser, error) {
 
 func (f FileStore) Put() ChunkWriter {
 	return &fileChunkWriter{
-		f.dir,
-		nil,
-		nil,
-		sha1.New(),
+		root: f.dir,
+		hash: ref.NewHash(),
 	}
 }
 

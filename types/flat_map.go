@@ -2,6 +2,7 @@ package types
 
 import (
 	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/ref"
 )
 
 var (
@@ -12,7 +13,12 @@ var (
 type internalMap map[string]Value
 
 type flatMap struct {
-	m internalMap
+	m  internalMap
+	cr *cachedRef
+}
+
+func newFlatMap(m internalMap) flatMap {
+	return flatMap{m, &cachedRef{}}
 }
 
 func (fm flatMap) Len() uint64 {
@@ -33,17 +39,17 @@ func (fm flatMap) Get(key string) Value {
 }
 
 func (fm flatMap) Set(key string, val Value) Map {
-	return flatMap{buildMap(fm.m, key, val)}
+	return newFlatMap(buildMap(fm.m, key, val))
 }
 
 func (fm flatMap) SetM(kv ...interface{}) Map {
-	return flatMap{buildMap(fm.m, kv...)}
+	return newFlatMap(buildMap(fm.m, kv...))
 }
 
 func (fm flatMap) Remove(k string) Map {
 	m := buildMap(fm.m)
 	delete(m, k)
-	return flatMap{m}
+	return newFlatMap(m)
 }
 
 func (fm flatMap) Iter(cb IterCallback) {
@@ -52,6 +58,10 @@ func (fm flatMap) Iter(cb IterCallback) {
 			break
 		}
 	}
+}
+
+func (fm flatMap) Ref() ref.Ref {
+	return fm.cr.Ref(fm)
 }
 
 func (fm flatMap) Equals(other Value) (res bool) {

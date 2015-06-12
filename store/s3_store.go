@@ -1,14 +1,13 @@
 package store
 
 import (
-	"crypto/sha1"
 	"flag"
-	. "github.com/attic-labs/noms/dbg"
-	"github.com/attic-labs/noms/ref"
 	"hash"
 	"io"
 	"io/ioutil"
 	"os"
+	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/ref"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -65,10 +64,8 @@ func (s S3Store) Get(ref ref.Ref) (io.ReadCloser, error) {
 
 func (s S3Store) Put() ChunkWriter {
 	return &s3ChunkWriter{
-		s,
-		nil,
-		nil,
-		sha1.New(),
+		store: s,
+		hash:  ref.NewHash(),
 	}
 }
 
