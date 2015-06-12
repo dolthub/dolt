@@ -3,9 +3,7 @@ package store
 import (
 	"bytes"
 	"crypto/sha1"
-	"errors"
 	"flag"
-	"fmt"
 	"hash"
 	"io"
 	"io/ioutil"
