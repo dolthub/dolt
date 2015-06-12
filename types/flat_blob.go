@@ -12,7 +12,7 @@ type flatBlob struct {
 	data []byte
 }
 
-func (fb flatBlob) Read() io.Reader {
+func (fb flatBlob) Reader() io.Reader {
 	return bytes.NewBuffer(fb.data)
 }
 
@@ -23,7 +23,7 @@ func (fb flatBlob) Len() uint64 {
 func (fb flatBlob) Equals(other Value) bool {
 	// TODO: See note about content addressing in flat_list.go.
 	if other, ok := other.(Blob); ok {
-		otherData, err := ioutil.ReadAll(other.Read())
+		otherData, err := ioutil.ReadAll(other.Reader())
 		Chk.NoError(err)
 		return bytes.Equal(fb.data, otherData)
 	}

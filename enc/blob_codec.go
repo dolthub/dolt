@@ -19,7 +19,7 @@ func blobEncode(b types.Blob, s store.ChunkSink) (r ref.Ref, err error) {
 	if _, err = w.Write(blobTag); err != nil {
 		return
 	}
-	if _, err = io.Copy(w, b.Read()); err != nil {
+	if _, err = io.Copy(w, b.Reader()); err != nil {
 		return
 	}
 	return w.Ref()
