@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
@@ -15,13 +16,10 @@ import (
 )
 
 var (
-	keyFlag    = flag.String("aws-key", "", "aws credentials access key id")
-	secretFlag = flag.String("aws-secret", "", "aws credentials secret access key")
-	regionFlag = flag.String("aws-region", "us-west-2", "aws region")
-	bucketFlag = flag.String("s3-bucket", "atticlabs", "s3 bucket which contains chunks")
+	awsAuthFlag = flag.String("aws-auth", "", "aws credentials: 'KEY:SECRET', or 'ENV' which will retrieve from IAM policy or ~/.aws/credentials")
+	regionFlag  = flag.String("aws-region", "us-west-2", "aws region")
+	bucketFlag  = flag.String("s3-bucket", "atticlabs", "s3 bucket which contains chunks")
 )
-
-// S3Store assumes that credentials are received from the environment. In prod, this will be an IAM Policy attached to the running EC2 instance. For dev, credentials can be passed via flags or found in ~/.aws/credentials (https://github.com/aws/aws-sdk-go)
 
 type svc interface {
 	GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
@@ -33,19 +31,24 @@ type S3Store struct {
 	svc    svc
 }
 
-func NewS3Store(bucket, region, key, secret string) S3Store {
-	if key != "" && secret != "" {
-		aws.DefaultConfig.Credentials = credentials.NewStaticCredentials(key, secret, "")
+func NewS3Store(bucket, region, awsAuth string) S3Store {
+	Chk.NotEmpty(awsAuth)
+	creds := aws.DefaultConfig.Credentials
+
+	if awsAuth != "ENV" {
+		toks := strings.Split(awsAuth, ":")
+		Chk.Equal(2, len(toks))
+		creds = credentials.NewStaticCredentials(toks[0], toks[1], "")
 	}
 
 	return S3Store{
 		bucket,
-		s3.New(&aws.Config{Region: region}),
+		s3.New(&aws.Config{Region: region, Credentials: creds}),
 	}
 }
 
 func NewS3StoreFromFlags() S3Store {
-	return NewS3Store(*bucketFlag, *regionFlag, *keyFlag, *secretFlag)
+	return NewS3Store(*bucketFlag, *regionFlag, *awsAuthFlag)
 }
 
 func (s S3Store) Get(ref ref.Ref) (io.ReadCloser, error) {
