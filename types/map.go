@@ -1,6 +1,6 @@
 package types
 
-type IterCallback func(k string, v Value) bool
+type mapIterCallback func(k string, v Value) bool
 
 type Map interface {
 	Value
@@ -11,7 +11,7 @@ type Map interface {
 	Set(k string, v Value) Map
 	SetM(kv ...interface{}) Map
 	Remove(k string) Map
-	Iter(IterCallback)
+	Iter(mapIterCallback)
 }
 
 func NewMap(kv ...interface{}) Map {

@@ -52,7 +52,7 @@ func (fm flatMap) Remove(k string) Map {
 	return newFlatMap(m)
 }
 
-func (fm flatMap) Iter(cb IterCallback) {
+func (fm flatMap) Iter(cb mapIterCallback) {
 	for k, v := range fm.m {
 		if cb(k, v) {
 			break

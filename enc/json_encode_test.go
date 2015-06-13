@@ -83,4 +83,8 @@ func TestJsonEncode(t *testing.T) {
 	testEncode(`j {"map":{"bool":false,"int32":{"int32":42},"list":{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},"map":{"ref":"sha1-fa8026bf44f60b64ab674c49cda31a697467973c"},"string":"hotdog"}}
 `, types.NewMap("bool", types.Bool(false), "int32", types.Int32(42), "string", types.NewString("hotdog"), "list", types.NewList(), "map", types.NewMap()))
 	assertChildVals()
+
+	// Sets
+	testEncode(`j {"set":[]}
+`, types.NewSet())
 }

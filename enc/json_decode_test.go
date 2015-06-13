@@ -70,5 +70,11 @@ func TestJSONDecode(t *testing.T) {
 	testDecode(`j {"map":{"bool":false,"int32":{"int32":42},"list":{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},"map":{"ref":"sha1-fa8026bf44f60b64ab674c49cda31a697467973c"},"string":"hotdog"}}
 	//`, types.NewMap("bool", types.Bool(false), "int32", types.Int32(42), "string", types.NewString("hotdog"), "list", types.NewList(), "map", types.NewMap()))
 
+	// Sets
+	testDecode(`j {"set":[]}
+`, types.NewSet())
+	testDecode(`j {"set":[{"int32":42},"hotdog",{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},false,{"ref":"sha1-fa8026bf44f60b64ab674c49cda31a697467973c"}]}
+`, types.NewSet(types.Bool(false), types.Int32(42), types.NewString("hotdog"), types.NewList(), types.NewMap()))
+
 	// referenced blobs?
 }

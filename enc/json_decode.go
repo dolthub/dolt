@@ -73,6 +73,10 @@ func jsonDecodeTaggedValue(m map[string]interface{}, s store.ChunkSource) (types
 			if v, ok := v.([]interface{}); ok {
 				return jsonDecodeList(v, s)
 			}
+		case "set":
+			if v, ok := v.([]interface{}); ok {
+				return jsonDecodeSet(v, s)
+			}
 		case "map":
 			if v, ok := v.(map[string]interface{}); ok {
 				return jsonDecodeMap(v, s)
@@ -97,6 +101,18 @@ func jsonDecodeList(input []interface{}, s store.ChunkSource) (types.Value, erro
 		output = output.Append(outVal)
 	}
 	return output, nil
+}
+
+func jsonDecodeSet(input []interface{}, s store.ChunkSource) (types.Value, error) {
+	vals := []types.Value{}
+	for _, inVal := range input {
+		outVal, err := jsonDecodeValue(inVal, s)
+		if err != nil {
+			return nil, err
+		}
+		vals = append(vals, outVal)
+	}
+	return types.NewSet(vals...), nil
 }
 
 func jsonDecodeMap(input map[string]interface{}, s store.ChunkSource) (types.Value, error) {

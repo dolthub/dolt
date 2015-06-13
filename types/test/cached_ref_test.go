@@ -37,6 +37,7 @@ func TestCachedRef(t *testing.T) {
 		NewList(),
 		NewString(""),
 		NewMap(),
+		NewSet(),
 	}
 	for i := 0; i < 2; i++ {
 		for j, v := range values {

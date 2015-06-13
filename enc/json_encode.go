@@ -3,6 +3,7 @@ package enc
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
@@ -61,6 +62,8 @@ func getJSON(v types.Value, s store.ChunkSink) (interface{}, error) {
 		return getJSONList(v, s)
 	case types.Map:
 		return getJSONMap(v, s)
+	case types.Set:
+		return getJSONSet(v, s)
 	case types.String:
 		return v.String(), nil
 	case types.UInt16:
@@ -117,16 +120,46 @@ func getJSONMap(m types.Map, s store.ChunkSink) (r interface{}, err error) {
 	return
 }
 
+func getJSONSet(set types.Set, s store.ChunkSink) (r interface{}, err error) {
+	// Iteration through Set is random, but we need a deterministic order for serialization. Let's order using the refs of the values in the set.
+	lookup := map[ref.Ref]types.Value{}
+	order := ref.RefSlice{}
+	set.Iter(func(v types.Value) (stop bool) {
+		order = append(order, v.Ref())
+		lookup[v.Ref()] = v
+		return
+	})
+	sort.Sort(order)
+
+	j := []interface{}{}
+	for _, r := range order {
+		v := lookup[r]
+		var cj interface{}
+		cj, err = getChildJSON(v, s)
+		if err != nil {
+			return nil, err
+		}
+		j = append(j, cj)
+	}
+
+	r = map[string]interface{}{
+		"set": j,
+	}
+	return
+}
+
 func getChildJSON(v types.Value, s store.ChunkSink) (interface{}, error) {
 	var r ref.Ref
 	var err error
 	switch v := v.(type) {
-	// Blobs, maps, and lists are always out-of-line
+	// Blobs, lists, maps, and sets are always out-of-line
 	case types.Blob:
+		r, err = WriteValue(v, s)
+	case types.List:
 		r, err = WriteValue(v, s)
 	case types.Map:
 		r, err = WriteValue(v, s)
-	case types.List:
+	case types.Set:
 		r, err = WriteValue(v, s)
 	default:
 		// Other types are always inline.
