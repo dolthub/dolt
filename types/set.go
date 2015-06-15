@@ -12,5 +12,5 @@ type Set interface {
 }
 
 func NewSet(v ...Value) Set {
-	return newFlatSet(buildInternalMap(setInternalMap{}, v))
+	return newFlatSet(buildSetData(setData{}, v))
 }

@@ -100,20 +100,28 @@ func getJSONList(l types.List, s store.ChunkSink) (r interface{}, err error) {
 }
 
 func getJSONMap(m types.Map, s store.ChunkSink) (r interface{}, err error) {
-	j := map[string]interface{}{}
-	m.Iter(func(k string, v types.Value) (stop bool) {
-		var cj interface{}
-		cj, err = getChildJSON(v, s)
-		if err != nil {
-			stop = true
-			return
-		}
-		j[k] = cj
+	// Iteration through Set is random, but we need a deterministic order for serialization. Let's order using the refs of the values in the set.
+	order := types.MapEntrySlice{}
+	m.Iter(func(entry types.MapEntry) (stop bool) {
+		order = append(order, entry)
 		return
 	})
-	if err != nil {
-		return
+	sort.Sort(order)
+
+	j := []interface{}{}
+	for _, r := range order {
+		var cjk, cjv interface{}
+		cjk, err = getChildJSON(r.Key, s)
+		if err == nil {
+			cjv, err = getChildJSON(r.Value, s)
+		}
+		if err != nil {
+			return nil, err
+		}
+		j = append(j, cjk)
+		j = append(j, cjv)
 	}
+
 	r = map[string]interface{}{
 		"map": j,
 	}

@@ -4,14 +4,14 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
+type setData map[ref.Ref]Value
+
 type flatSet struct {
-	m  setInternalMap
+	m  setData
 	cr *cachedRef
 }
 
-type setInternalMap map[ref.Ref]Value
-
-func newFlatSet(m setInternalMap) flatSet {
+func newFlatSet(m setData) flatSet {
 	return flatSet{
 		m:  m,
 		cr: &cachedRef{},
@@ -28,11 +28,11 @@ func (fs flatSet) Has(v Value) bool {
 }
 
 func (fs flatSet) Insert(values ...Value) Set {
-	return newFlatSet(buildInternalMap(fs.m, values))
+	return newFlatSet(buildSetData(fs.m, values))
 }
 
 func (fs flatSet) Remove(values ...Value) Set {
-	m2 := copyInternalMap(fs.m)
+	m2 := copySetData(fs.m)
 	for _, v := range values {
 		delete(m2, v.Ref())
 	}
@@ -60,16 +60,16 @@ func (fs flatSet) Equals(other Value) bool {
 	}
 }
 
-func copyInternalMap(m setInternalMap) setInternalMap {
-	r := setInternalMap{}
+func copySetData(m setData) setData {
+	r := setData{}
 	for k, v := range m {
 		r[k] = v
 	}
 	return r
 }
 
-func buildInternalMap(old setInternalMap, values []Value) setInternalMap {
-	m := copyInternalMap(old)
+func buildSetData(old setData, values []Value) setData {
+	m := copySetData(old)
 	for _, v := range values {
 		m[v.Ref()] = v
 	}

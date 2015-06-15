@@ -24,7 +24,7 @@ func TestJSONDecode(t *testing.T) {
 	}
 
 	put(`j {"list":[]}`)
-	put(`j {"map":{}}`)
+	put(`j {"map":[]}`)
 
 	testDecode := func(s string, expected types.Value) {
 		actual, err := jsonDecode(strings.NewReader(s), &cs)
@@ -61,19 +61,19 @@ func TestJSONDecode(t *testing.T) {
 	// Lists
 	testDecode(`j {"list":[]}
 `, types.NewList())
-	testDecode(`j {"list":["foo",true,{"uint16":42},{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},{"ref":"sha1-fa8026bf44f60b64ab674c49cda31a697467973c"}]}
+	testDecode(`j {"list":["foo",true,{"uint16":42},{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
 	//`, types.NewList(types.NewString("foo"), types.Bool(true), types.UInt16(42), types.NewList(), types.NewMap()))
 
 	// Maps
-	testDecode(`j {"map":{}}
+	testDecode(`j {"map":[]}
 `, types.NewMap())
-	testDecode(`j {"map":{"bool":false,"int32":{"int32":42},"list":{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},"map":{"ref":"sha1-fa8026bf44f60b64ab674c49cda31a697467973c"},"string":"hotdog"}}
-	//`, types.NewMap("bool", types.Bool(false), "int32", types.Int32(42), "string", types.NewString("hotdog"), "list", types.NewList(), "map", types.NewMap()))
+	testDecode(`j {"map":["string","hotdog","list",{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},"int32",{"int32":42},"bool",false,"map",{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
+	//`, types.NewMap(types.NewString("bool"), types.Bool(false), types.NewString("int32"), types.Int32(42), types.NewString("string"), types.NewString("hotdog"), types.NewString("list"), types.NewList(), types.NewString("map"), types.NewMap()))
 
 	// Sets
 	testDecode(`j {"set":[]}
 `, types.NewSet())
-	testDecode(`j {"set":[{"int32":42},"hotdog",{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},false,{"ref":"sha1-fa8026bf44f60b64ab674c49cda31a697467973c"}]}
+	testDecode(`j {"set":[{"int32":42},"hotdog",{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},false,{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
 `, types.NewSet(types.Bool(false), types.Int32(42), types.NewString("hotdog"), types.NewList(), types.NewMap()))
 
 	// referenced blobs?

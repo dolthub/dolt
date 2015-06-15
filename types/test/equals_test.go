@@ -46,7 +46,7 @@ func TestPrimitiveEquals(t *testing.T) {
 		func() types.Value { return types.NewList(types.NewString("foo")) },
 		func() types.Value { return types.NewList(types.NewString("bar")) },
 		func() types.Value { return types.NewMap() },
-		func() types.Value { return types.NewMap("a", types.NewString("a")) },
+		func() types.Value { return types.NewMap(types.NewString("a"), types.NewString("a")) },
 		func() types.Value { return types.NewSet() },
 		func() types.Value { return types.NewSet(types.NewString("hi")) },
 	}

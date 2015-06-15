@@ -5,19 +5,14 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-var (
-	emptyString   = string("")
-	emptyValuePtr = (*Value)(nil)
-)
-
-type internalMap map[string]Value
+type mapData map[ref.Ref]MapEntry
 
 type flatMap struct {
-	m  internalMap
+	m  mapData
 	cr *cachedRef
 }
 
-func newFlatMap(m internalMap) flatMap {
+func newFlatMap(m mapData) flatMap {
 	return flatMap{m, &cachedRef{}}
 }
 
@@ -25,36 +20,36 @@ func (fm flatMap) Len() uint64 {
 	return uint64(len(fm.m))
 }
 
-func (fm flatMap) Has(key string) bool {
-	_, ok := fm.m[key]
+func (fm flatMap) Has(key Value) bool {
+	_, ok := fm.m[key.Ref()]
 	return ok
 }
 
-func (fm flatMap) Get(key string) Value {
-	if v, ok := fm.m[key]; ok {
-		return v
+func (fm flatMap) Get(key Value) Value {
+	if v, ok := fm.m[key.Ref()]; ok {
+		return v.Value
 	} else {
 		return nil
 	}
 }
 
-func (fm flatMap) Set(key string, val Value) Map {
-	return newFlatMap(buildMap(fm.m, key, val))
+func (fm flatMap) Set(key Value, val Value) Map {
+	return newFlatMap(buildMapData(fm.m, key, val))
 }
 
-func (fm flatMap) SetM(kv ...interface{}) Map {
-	return newFlatMap(buildMap(fm.m, kv...))
+func (fm flatMap) SetM(kv ...Value) Map {
+	return newFlatMap(buildMapData(fm.m, kv...))
 }
 
-func (fm flatMap) Remove(k string) Map {
-	m := buildMap(fm.m)
-	delete(m, k)
+func (fm flatMap) Remove(k Value) Map {
+	m := copyMapData(fm.m)
+	delete(m, k.Ref())
 	return newFlatMap(m)
 }
 
 func (fm flatMap) Iter(cb mapIterCallback) {
-	for k, v := range fm.m {
-		if cb(k, v) {
+	for _, v := range fm.m {
+		if cb(v) {
 			break
 		}
 	}
@@ -65,43 +60,29 @@ func (fm flatMap) Ref() ref.Ref {
 }
 
 func (fm flatMap) Equals(other Value) (res bool) {
-	if other, ok := other.(Map); ok {
-		res = true
-		fm.Iter(func(k string, v Value) (stop bool) {
-			if !v.Equals(other.Get(k)) {
-				stop = true
-				res = false
-			}
-			return
-		})
-		if !res {
-			return
-		}
-		other.Iter(func(k string, v Value) (stop bool) {
-			if !fm.Has(k) {
-				stop = true
-				res = false
-			}
-			return
-		})
+	if other == nil {
+		return false
+	} else {
+		return fm.Ref() == other.Ref()
 	}
-	return
 }
 
-func buildMap(initialData internalMap, kv ...interface{}) (m internalMap) {
-	Chk.Equal(0, len(kv)%2, "Must specify even number of key/value pairs")
-	m = internalMap{}
-	if initialData != nil {
-		for k, v := range initialData {
-			m[k] = v
-		}
+func copyMapData(m mapData) mapData {
+	r := mapData{}
+	for k, v := range m {
+		r[k] = v
 	}
+	return r
+}
+
+func buildMapData(oldData mapData, kv ...Value) mapData {
+	Chk.Equal(0, len(kv)%2, "Must specify even number of key/value pairs")
+
+	m := copyMapData(oldData)
 	for i := 0; i < len(kv); i += 2 {
 		k := kv[i]
 		v := kv[i+1]
-		Chk.IsType(emptyString, k)
-		Chk.Implements(emptyValuePtr, v)
-		m[k.(string)] = v.(Value)
+		m[k.Ref()] = MapEntry{k, v}
 	}
-	return
+	return m
 }

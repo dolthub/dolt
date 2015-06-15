@@ -13,41 +13,41 @@ func TestNewMap(t *testing.T) {
 	m := NewMap()
 	assert.IsType(NewMap(), m)
 	assert.Equal(uint64(0), m.Len())
-	m = NewMap("foo", NewString("foo"), "bar", NewString("bar"))
+	m = NewMap(NewString("foo"), NewString("foo"), NewString("bar"), NewString("bar"))
 	assert.Equal(uint64(2), m.Len())
-	assert.True(NewString("foo").Equals(m.Get("foo")))
-	assert.True(NewString("bar").Equals(m.Get("bar")))
+	assert.True(NewString("foo").Equals(m.Get(NewString("foo"))))
+	assert.True(NewString("bar").Equals(m.Get(NewString("bar"))))
 }
 
 func TestMapHasRemove(t *testing.T) {
 	assert := assert.New(t)
 	m1 := NewMap()
-	assert.False(m1.Has("foo"))
-	m2 := m1.Set("foo", NewString("foo"))
-	assert.False(m1.Has("foo"))
-	assert.True(m2.Has("foo"))
-	m3 := m1.Remove("foo")
-	assert.False(m1.Has("foo"))
-	assert.True(m2.Has("foo"))
-	assert.False(m3.Has("foo"))
+	assert.False(m1.Has(NewString("foo")))
+	m2 := m1.Set(NewString("foo"), NewString("foo"))
+	assert.False(m1.Has(NewString("foo")))
+	assert.True(m2.Has(NewString("foo")))
+	m3 := m1.Remove(NewString("foo"))
+	assert.False(m1.Has(NewString("foo")))
+	assert.True(m2.Has(NewString("foo")))
+	assert.False(m3.Has(NewString("foo")))
 }
 
 func TestMapSetGet(t *testing.T) {
 	assert := assert.New(t)
 	m1 := NewMap()
-	assert.Nil(m1.Get("foo"))
-	m2 := m1.Set("foo", Int32(42))
-	assert.Nil(m1.Get("foo"))
-	assert.True(Int32(42).Equals(m2.Get("foo")))
-	m3 := m2.Set("foo", Int32(43))
-	assert.Nil(m1.Get("foo"))
-	assert.True(Int32(42).Equals(m2.Get("foo")))
-	assert.True(Int32(43).Equals(m3.Get("foo")))
-	m4 := m3.Remove("foo")
-	assert.Nil(m1.Get("foo"))
-	assert.True(Int32(42).Equals(m2.Get("foo")))
-	assert.True(Int32(43).Equals(m3.Get("foo")))
-	assert.Nil(m4.Get("foo"))
+	assert.Nil(m1.Get(NewString("foo")))
+	m2 := m1.Set(NewString("foo"), Int32(42))
+	assert.Nil(m1.Get(NewString("foo")))
+	assert.True(Int32(42).Equals(m2.Get(NewString("foo"))))
+	m3 := m2.Set(NewString("foo"), Int32(43))
+	assert.Nil(m1.Get(NewString("foo")))
+	assert.True(Int32(42).Equals(m2.Get(NewString("foo"))))
+	assert.True(Int32(43).Equals(m3.Get(NewString("foo"))))
+	m4 := m3.Remove(NewString("foo"))
+	assert.Nil(m1.Get(NewString("foo")))
+	assert.True(Int32(42).Equals(m2.Get(NewString("foo"))))
+	assert.True(Int32(43).Equals(m3.Get(NewString("foo"))))
+	assert.Nil(m4.Get(NewString("foo")))
 }
 
 func TestMapSetM(t *testing.T) {
@@ -55,11 +55,11 @@ func TestMapSetM(t *testing.T) {
 	m1 := NewMap()
 	m2 := m1.SetM()
 	assert.True(m1.Equals(m2))
-	m3 := m2.SetM("foo", NewString("bar"), "hot", NewString("dog"))
+	m3 := m2.SetM(NewString("foo"), NewString("bar"), NewString("hot"), NewString("dog"))
 	assert.Equal(uint64(2), m3.Len())
-	assert.True(NewString("bar").Equals(m3.Get("foo")))
-	assert.True(NewString("dog").Equals(m3.Get("hot")))
-	m4 := m3.SetM("mon", NewString("key"))
+	assert.True(NewString("bar").Equals(m3.Get(NewString("foo"))))
+	assert.True(NewString("dog").Equals(m3.Get(NewString("hot"))))
+	m4 := m3.SetM(NewString("mon"), NewString("key"))
 	assert.Equal(uint64(2), m3.Len())
 	assert.Equal(uint64(3), m4.Len())
 }
@@ -67,28 +67,39 @@ func TestMapSetM(t *testing.T) {
 func TestMapIter(t *testing.T) {
 	assert := assert.New(t)
 	m := NewMap()
-	got := map[string]Value{}
+
+	type resultList []MapEntry
+	results := resultList{}
+	got := func(key, val Value) bool {
+		for _, r := range results {
+			if key.Equals(r.Key) && val.Equals(r.Value) {
+				return true
+			}
+		}
+		return false
+	}
+
 	stop := false
-	cb := func(k string, v Value) bool {
-		got[k] = v
+	cb := func(entry MapEntry) bool {
+		results = append(results, entry)
 		return stop
 	}
 
 	m.Iter(cb)
-	assert.Equal(0, len(got))
+	assert.Equal(0, len(results))
 
-	m = m.SetM("a", Int32(0), "b", Int32(1))
+	m = m.SetM(NewString("a"), Int32(0), NewString("b"), Int32(1))
 	m.Iter(cb)
-	assert.Equal(2, len(got))
-	assert.True(Int32(0).Equals(got["a"]))
-	assert.True(Int32(1).Equals(got["b"]))
+	assert.Equal(2, len(results))
+	assert.True(got(NewString("a"), Int32(0)))
+	assert.True(got(NewString("b"), Int32(1)))
 
-	got = map[string]Value{}
+	results = resultList{}
 	stop = true
 	m.Iter(cb)
-	assert.Equal(1, len(got))
+	assert.Equal(1, len(results))
 	// Iteration order not guaranteed, but it has to be one of these.
-	assert.True(Int32(0).Equals(got["a"]) || Int32(1).Equals(got["b"]))
+	assert.True(got(NewString("a"), Int32(0)) || got(NewString("b"), Int32(1)))
 }
 
 func TestMapEquals(t *testing.T) {
@@ -102,10 +113,36 @@ func TestMapEquals(t *testing.T) {
 	assert.True(m3.Equals(m2))
 	assert.True(m2.Equals(m3))
 
-	m1 = NewMap("foo", Float32(0.0), "bar", NewList())
-	m2 = m2.SetM("foo", Float32(0.0), "bar", NewList())
+	m1 = NewMap(NewString("foo"), Float32(0.0), NewString("bar"), NewList())
+	m2 = m2.SetM(NewString("foo"), Float32(0.0), NewString("bar"), NewList())
 	assert.True(m1.Equals(m2))
 	assert.True(m2.Equals(m1))
 	assert.False(m2.Equals(m3))
 	assert.False(m3.Equals(m2))
+}
+
+func TestMapNotStringKeys(t *testing.T) {
+	assert := assert.New(t)
+	l := []Value{
+		Bool(true), NewString("true"),
+		Bool(false), NewString("false"),
+		Int32(1), NewString("int32: 1"),
+		Int32(0), NewString("int32: 0"),
+		Float64(1), NewString("float64: 1"),
+		Float64(0), NewString("float64: 0"),
+		NewBlob([]byte("blob1")), NewString("blob1"),
+		NewBlob([]byte("blob2")), NewString("blob2"),
+		NewList(), NewString("empty list"),
+		NewList(NewList()), NewString("list of list"),
+		NewMap(), NewString("empty map"),
+		NewMap(NewMap(), NewMap()), NewString("map of map/map"),
+		NewSet(), NewString("empty set"),
+		NewSet(NewSet()), NewString("map of set/set"),
+	}
+	m1 := NewMap(l...)
+	assert.Equal(uint64(14), m1.Len())
+	for i := 0; i < len(l); i += 2 {
+		assert.True(m1.Get(l[i]).Equals(l[i+1]))
+	}
+	assert.Nil(m1.Get(Int32(42)))
 }

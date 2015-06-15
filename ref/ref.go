@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"hash"
 	"regexp"
-
 	. "github.com/attic-labs/noms/dbg"
 )
 
@@ -69,4 +68,18 @@ func MustParse(s string) Ref {
 	r, err := Parse(s)
 	Chk.NoError(err)
 	return r
+}
+
+func Less(r1, r2 Ref) bool {
+	d1, d2 := r1.digest, r2.digest
+	Chk.Equal(len(d1), len(d2))
+	for k := 0; k < len(d1); k++ {
+		b1, b2 := d1[k], d2[k]
+		if b1 < b2 {
+			return true
+		} else if b1 > b2 {
+			return false
+		}
+	}
+	return false
 }

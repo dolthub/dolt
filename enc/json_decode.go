@@ -78,7 +78,7 @@ func jsonDecodeTaggedValue(m map[string]interface{}, s store.ChunkSource) (types
 				return jsonDecodeSet(v, s)
 			}
 		case "map":
-			if v, ok := v.(map[string]interface{}); ok {
+			if v, ok := v.([]interface{}); ok {
 				return jsonDecodeMap(v, s)
 			}
 		case "ref":
@@ -115,14 +115,22 @@ func jsonDecodeSet(input []interface{}, s store.ChunkSource) (types.Value, error
 	return types.NewSet(vals...), nil
 }
 
-func jsonDecodeMap(input map[string]interface{}, s store.ChunkSource) (types.Value, error) {
+func jsonDecodeMap(input []interface{}, s store.ChunkSource) (types.Value, error) {
 	output := types.NewMap()
-	for k, inVal := range input {
+	Chk.Equal(0, len(input)%2, "Length on input array must be multiple of 2")
+	for i := 0; i < len(input); i += 2 {
+		inKey := input[i]
+		inVal := input[i+1]
+
+		outKey, err := jsonDecodeValue(inKey, s)
+		if err != nil {
+			return nil, err
+		}
 		outVal, err := jsonDecodeValue(inVal, s)
 		if err != nil {
 			return nil, err
 		}
-		output = output.Set(k, outVal)
+		output = output.Set(outKey, outVal)
 	}
 	return output, nil
 }
