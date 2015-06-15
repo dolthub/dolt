@@ -1,8 +1,6 @@
 package store
 
 import (
-	"bytes"
-	"crypto/sha1"
 	"flag"
 	"hash"
 	"io"
@@ -37,15 +35,13 @@ func NewFileStoreFromFlags() FileStore {
 }
 
 func readRef(file *os.File) ref.Ref {
-	var digest ref.Sha1Digest
-	len, err := io.Copy(bytes.NewBuffer(digest[:0]), file)
+	s, err := ioutil.ReadAll(file)
 	Chk.NoError(err)
-	if len == 0 {
+	if len(s) == 0 {
 		return ref.Ref{}
 	}
 
-	Chk.Equal(len, sha1.Size)
-	return ref.New(digest)
+	return ref.MustParse(string(s))
 }
 
 func (f FileStore) Root() ref.Ref {
