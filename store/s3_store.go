@@ -2,6 +2,7 @@ package store
 
 import (
 	"flag"
+	"fmt"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -18,10 +19,15 @@ import (
 )
 
 var (
-	awsAuthFlag = flag.String("aws-auth", "", "aws credentials: 'KEY:SECRET', or 'ENV' which will retrieve from IAM policy or ~/.aws/credentials")
-	regionFlag  = flag.String("aws-region", "us-west-2", "aws region")
-	bucketFlag  = flag.String("s3-bucket", "atticlabs", "s3 bucket which contains chunks")
-	tableFlag   = flag.String("ddb-table", "noms-root", "dynamodb table which contains root hash")
+	awsAuthFlag              = flag.String("aws-auth", "", "aws credentials: 'KEY:SECRET', or 'ENV' which will retrieve from IAM policy or ~/.aws/credentials")
+	regionFlag               = flag.String("aws-region", "us-west-2", "aws region")
+	bucketFlag               = flag.String("s3-bucket", "atticlabs", "s3 bucket which contains chunks")
+	tableFlag                = flag.String("ddb-table", "noms-root", "dynamodb table which contains root hash")
+	rootTablePrimaryKey      = "name"
+	rootTablePrimaryKeyValue = "root"
+	rootTableRef             = "hashRef"
+	refNotExistsExpression   = fmt.Sprintf("attribute_not_exists(%s)", rootTableRef)
+	refEqualsExpression      = fmt.Sprintf("%s = :prev", rootTableRef)
 )
 
 type s3svc interface {
@@ -66,7 +72,7 @@ func (s S3Store) Root() ref.Ref {
 	result, err := s.ddbsvc.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String(s.table),
 		Key: map[string]*dynamodb.AttributeValue{
-			"name": {S: aws.String("root")},
+			rootTablePrimaryKey: {S: aws.String(rootTablePrimaryKeyValue)},
 		},
 	})
 	Chk.NoError(err)
@@ -76,22 +82,22 @@ func (s S3Store) Root() ref.Ref {
 	}
 
 	Chk.Equal(len(result.Item), 2)
-	return ref.MustParse(*(result.Item["sha1"].S))
+	return ref.MustParse(*(result.Item[rootTableRef].S))
 }
 
 func (s S3Store) UpdateRoot(current, last ref.Ref) bool {
 	putArgs := dynamodb.PutItemInput{
 		TableName: aws.String(s.table),
 		Item: map[string]*dynamodb.AttributeValue{
-			"name": {S: aws.String("root")},
-			"sha1": {S: aws.String(current.String())},
+			rootTablePrimaryKey: {S: aws.String(rootTablePrimaryKeyValue)},
+			rootTableRef:        {S: aws.String(current.String())},
 		},
 	}
 
 	if (last == ref.Ref{}) {
-		putArgs.ConditionExpression = aws.String("attribute_not_exists(sha1)")
+		putArgs.ConditionExpression = aws.String(refNotExistsExpression)
 	} else {
-		putArgs.ConditionExpression = aws.String("sha1 = :prev")
+		putArgs.ConditionExpression = aws.String(refEqualsExpression)
 		putArgs.ExpressionAttributeValues = map[string]*dynamodb.AttributeValue{
 			":prev": {S: aws.String(last.String())},
 		}

@@ -87,20 +87,20 @@ func (m *mockDDB) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput
 
 	return &dynamodb.GetItemOutput{
 		Item: map[string]*dynamodb.AttributeValue{
-			"name": {S: aws.String("root")},
-			"sha1": {S: aws.String(string(*m))},
+			"name":    {S: aws.String("root")},
+			"hashRef": {S: aws.String(string(*m))},
 		},
 	}, nil
 }
 
 func (m *mockDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
-	initial := *(input.ConditionExpression) == "attribute_not_exists(sha1)"
+	initial := *(input.ConditionExpression) == "attribute_not_exists(hashRef)"
 
 	if (initial && string(*m) != "") || (!initial && string(*m) != *(input.ExpressionAttributeValues[":prev"].S)) {
 		return nil, mockAWSError("ConditionalCheckFailedException")
 	}
 
-	*m = mockDDB(*(input.Item["sha1"].S))
+	*m = mockDDB(*(input.Item["hashRef"].S))
 	return &dynamodb.PutItemOutput{}, nil
 }
 
