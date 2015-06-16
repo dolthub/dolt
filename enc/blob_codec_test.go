@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/attic-labs/noms/store"
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -16,7 +16,7 @@ func TestBlobCodec(t *testing.T) {
 	dir, err := ioutil.TempDir(os.TempDir(), "")
 	defer os.Remove(dir)
 	assert.NoError(err)
-	fs := store.NewFileStore(dir, "root")
+	fs := chunks.NewFileStore(dir, "root")
 	b1 := types.NewBlob([]byte{})
 	r1, err := blobEncode(b1, fs)
 	// echo -n 'b ' | sha1sum

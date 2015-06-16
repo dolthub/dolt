@@ -4,14 +4,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/attic-labs/noms/store"
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestJSONDecode(t *testing.T) {
 	assert := assert.New(t)
-	cs := store.MemoryStore{}
+	cs := chunks.MemoryStore{}
 
 	put := func(s string) {
 		s += "\n"

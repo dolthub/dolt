@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/store"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -15,7 +15,7 @@ var (
 	jsonTag = []byte("j ")
 )
 
-func jsonEncode(v types.Value, s store.ChunkSink) (r ref.Ref, err error) {
+func jsonEncode(v types.Value, s chunks.ChunkSink) (r ref.Ref, err error) {
 	var j interface{}
 	j, err = getJSON(v, s)
 	if err != nil {
@@ -32,7 +32,7 @@ func jsonEncode(v types.Value, s store.ChunkSink) (r ref.Ref, err error) {
 	return w.Ref()
 }
 
-func getJSON(v types.Value, s store.ChunkSink) (interface{}, error) {
+func getJSON(v types.Value, s chunks.ChunkSink) (interface{}, error) {
 	switch v := v.(type) {
 	case types.Blob:
 		Chk.Fail(fmt.Sprintf("jsonEncode doesn't support encoding blobs - didn't expect to get here: %+v", v))
@@ -83,7 +83,7 @@ func getJSON(v types.Value, s store.ChunkSink) (interface{}, error) {
 	}
 	return nil, nil
 }
-func getJSONList(l types.List, s store.ChunkSink) (r interface{}, err error) {
+func getJSONList(l types.List, s chunks.ChunkSink) (r interface{}, err error) {
 	j := []interface{}{}
 	for i := uint64(0); i < l.Len(); i++ {
 		var cj interface{}
@@ -99,7 +99,7 @@ func getJSONList(l types.List, s store.ChunkSink) (r interface{}, err error) {
 	return
 }
 
-func getJSONMap(m types.Map, s store.ChunkSink) (r interface{}, err error) {
+func getJSONMap(m types.Map, s chunks.ChunkSink) (r interface{}, err error) {
 	// Iteration through Set is random, but we need a deterministic order for serialization. Let's order using the refs of the values in the set.
 	order := types.MapEntrySlice{}
 	m.Iter(func(entry types.MapEntry) (stop bool) {
@@ -128,7 +128,7 @@ func getJSONMap(m types.Map, s store.ChunkSink) (r interface{}, err error) {
 	return
 }
 
-func getJSONSet(set types.Set, s store.ChunkSink) (r interface{}, err error) {
+func getJSONSet(set types.Set, s chunks.ChunkSink) (r interface{}, err error) {
 	// Iteration through Set is random, but we need a deterministic order for serialization. Let's order using the refs of the values in the set.
 	lookup := map[ref.Ref]types.Value{}
 	order := ref.RefSlice{}
@@ -156,7 +156,7 @@ func getJSONSet(set types.Set, s store.ChunkSink) (r interface{}, err error) {
 	return
 }
 
-func getChildJSON(v types.Value, s store.ChunkSink) (interface{}, error) {
+func getChildJSON(v types.Value, s chunks.ChunkSink) (interface{}, error) {
 	var r ref.Ref
 	var err error
 	switch v := v.(type) {

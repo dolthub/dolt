@@ -1,16 +1,16 @@
 package commit
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/store"
 	"github.com/attic-labs/noms/types"
 )
 
 // TODO(rafael):
 type memcacheReachable struct {
-	source store.ChunkSource
+	source chunks.ChunkSource
 	refs   map[string]bool
 }
 
@@ -54,7 +54,7 @@ func (cache *memcacheReachable) IsSupercededFrom(candidate, root ref.Ref) bool {
 	return ok
 }
 
-func NewMemCacheReachable(source store.ChunkSource) Reachable {
+func NewMemCacheReachable(source chunks.ChunkSource) Reachable {
 	return &memcacheReachable{
 		source,
 		make(map[string]bool),
