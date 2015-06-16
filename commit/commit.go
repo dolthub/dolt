@@ -8,10 +8,15 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+type Reachable interface {
+	IsSupercededFrom(candidate, root ref.Ref) bool
+}
+
 type Commit struct {
-	root   store.RootStore
-	source store.ChunkSource
-	sink   store.ChunkSink
+	root      store.RootStore
+	source    store.ChunkSource
+	sink      store.ChunkSink
+	reachable Reachable
 }
 
 func (c *Commit) GetRoots() (currentRoots types.Set) {
@@ -20,9 +25,7 @@ func (c *Commit) GetRoots() (currentRoots types.Set) {
 		return types.NewSet()
 	}
 
-	rootSetValue, err := enc.ReadValue(rootRef, c.source)
-	Chk.NoError(err)
-	return rootSetValue.(types.Set)
+	return enc.MustReadValue(rootRef, c.source).(types.Set)
 }
 
 func (c *Commit) Commit(newRoots types.Set) {
@@ -42,18 +45,26 @@ func (c *Commit) Commit(newRoots types.Set) {
 }
 
 func (c *Commit) doCommit(add, remove types.Set) bool {
+	oldRoot := c.root.Root()
 	oldRoots := c.GetRoots()
-	oldRef := oldRoots.Ref()
-	if oldRoots.Len() == 0 {
-		oldRef = ref.Ref{}
+
+	prexisting := make([]types.Value, 0)
+	add.Iter(func(r types.Value) (stop bool) {
+		if c.reachable.IsSupercededFrom(r.Ref(), oldRoot) {
+			prexisting = append(prexisting, r)
+		}
+		return false
+	})
+	add = add.Remove(prexisting...)
+	if add.Len() == 0 {
+		return true
 	}
 
-	newRoots := oldRoots.Subtract(remove)
-	newRoots = newRoots.Union(add)
+	newRoots := oldRoots.Subtract(remove).Union(add)
 
 	// TODO(rafael): This set will be orphaned if this UpdateRoot below fails
 	newRef, err := enc.WriteValue(newRoots, c.sink)
 	Chk.NoError(err)
 
-	return c.root.UpdateRoot(newRef, oldRef)
+	return c.root.UpdateRoot(newRef, oldRoot)
 }

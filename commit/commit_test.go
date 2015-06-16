@@ -18,7 +18,12 @@ func TestCommit(t *testing.T) {
 	assert.NoError(err)
 
 	store := store.NewFileStore(dir, "root")
-	commit := &Commit{store, store, store}
+	commit := &Commit{
+		store,
+		store,
+		store,
+		NewMemCacheReachable(store),
+	}
 
 	roots := commit.GetRoots()
 	assert.Equal(uint64(0), roots.Len())
@@ -29,7 +34,6 @@ func TestCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("a"),
 	)
 	aSet := types.NewSet(a)
-	enc.WriteValue(aSet, store)
 	commit.Commit(aSet)
 	assert.Equal(commit.GetRoots(), aSet)
 
@@ -39,7 +43,6 @@ func TestCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("b"),
 	)
 	bSet := types.NewSet(b)
-	enc.WriteValue(bSet, store)
 	commit.Commit(bSet)
 	assert.Equal(commit.GetRoots(), bSet)
 
@@ -50,7 +53,6 @@ func TestCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("c"),
 	)
 	cSet := types.NewSet(c)
-	enc.WriteValue(cSet, store)
 	commit.Commit(cSet)
 	bcSet := bSet.Insert(c)
 	assert.Equal(commit.GetRoots(), bcSet)
@@ -77,7 +79,6 @@ func TestCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("e"),
 	)
 	eSet := types.NewSet(e)
-	enc.WriteValue(eSet, store)
 	commit.Commit(eSet)
 	deSet := dSet.Insert(e)
 	assert.Equal(commit.GetRoots(), deSet)
@@ -85,14 +86,52 @@ func TestCommit(t *testing.T) {
 	// |a| <- |b| <-- |e| <- |f|
 	//   \----|c| <--/      /
 	//    \---|d| <-------/
-
 	f := types.NewMap(
 		types.NewString("parents"), deSet,
 		types.NewString("value"), types.NewString("f"),
 	)
 
 	fSet := types.NewSet(f)
-	enc.WriteValue(fSet, store)
 	commit.Commit(fSet)
 	assert.Equal(commit.GetRoots(), fSet)
+
+	// Attempt to recommit |b|
+	commit.Commit(bSet)
+	assert.Equal(commit.GetRoots(), fSet)
+
+	// Attempt to recommit |f|
+	commit.Commit(fSet)
+	assert.Equal(commit.GetRoots(), fSet)
+
+	// Attempt to recommit |c| while committing |g|
+	// |a| <- |b| <-- |e| <- |f| <- |g|
+	//   \----|c| <--/      /      /
+	//    \---|d| <-------/------/
+	fdSet := fSet.Insert(d)
+	g := types.NewMap(
+		types.NewString("parents"), fdSet,
+		types.NewString("value"), types.NewString("g"),
+	)
+	gSet := types.NewSet(g)
+	gdSet := gSet.Insert(c)
+
+	commit.Commit(gdSet)
+	assert.Equal(commit.GetRoots(), gSet)
+
+	//      / -|h|
+	//    /    |
+	// |a| <- |b| <-- |e| <- |f| <- |g|
+	//   \----|c| <--/      /      /
+	//    \---|d| <-------/------/
+	abSet := aSet.Insert(b)
+	h := types.NewMap(
+		types.NewString("parents"), abSet,
+		types.NewString("value"), types.NewString("h"),
+	)
+	hSet := types.NewSet(h)
+
+	commit.Commit(hSet)
+	hgSet := hSet.Insert(g)
+	roots = commit.GetRoots()
+	assert.Equal(commit.GetRoots(), hgSet)
 }
