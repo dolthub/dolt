@@ -4,8 +4,8 @@ import (
 	"crypto/sha1"
 	"testing"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/store"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -13,10 +13,10 @@ import (
 func TestWriteValue(t *testing.T) {
 	assert := assert.New(t)
 
-	var s *store.MemoryStore
+	var s *chunks.MemoryStore
 
 	testEncode := func(expected string, v types.Value) ref.Ref {
-		s = &store.MemoryStore{}
+		s = &chunks.MemoryStore{}
 		r, err := WriteValue(v, s)
 		assert.NoError(err)
 

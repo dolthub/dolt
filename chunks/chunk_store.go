@@ -1,4 +1,4 @@
-package store
+package chunks
 
 import (
 	"io"
@@ -6,7 +6,13 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-type RootStore interface {
+type ChunkStore interface {
+	RootTracker
+	ChunkSource
+	ChunkSink
+}
+
+type RootTracker interface {
 	Root() ref.Ref
 	UpdateRoot(current, last ref.Ref) bool
 }

@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/store"
 	"github.com/attic-labs/noms/types"
 )
 
-func jsonDecode(reader io.Reader, s store.ChunkSource) (types.Value, error) {
+func jsonDecode(reader io.Reader, s chunks.ChunkSource) (types.Value, error) {
 	prefix := make([]byte, len(jsonTag))
 	_, err := io.ReadFull(reader, prefix)
 	if err != nil {
@@ -30,7 +30,7 @@ func jsonDecode(reader io.Reader, s store.ChunkSource) (types.Value, error) {
 	return jsonDecodeValue(v, s)
 }
 
-func jsonDecodeValue(v interface{}, s store.ChunkSource) (types.Value, error) {
+func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (types.Value, error) {
 	switch v := v.(type) {
 	case bool:
 		return types.Bool(v), nil
@@ -43,7 +43,7 @@ func jsonDecodeValue(v interface{}, s store.ChunkSource) (types.Value, error) {
 	}
 }
 
-func jsonDecodeTaggedValue(m map[string]interface{}, s store.ChunkSource) (types.Value, error) {
+func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (types.Value, error) {
 	Chk.Equal(1, len(m))
 	for k, v := range m {
 		switch k {
@@ -91,7 +91,7 @@ func jsonDecodeTaggedValue(m map[string]interface{}, s store.ChunkSource) (types
 	return nil, fmt.Errorf("Cannot decode tagged json value: %+v", m)
 }
 
-func jsonDecodeList(input []interface{}, s store.ChunkSource) (types.Value, error) {
+func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (types.Value, error) {
 	output := types.NewList()
 	for _, inVal := range input {
 		outVal, err := jsonDecodeValue(inVal, s)
@@ -103,7 +103,7 @@ func jsonDecodeList(input []interface{}, s store.ChunkSource) (types.Value, erro
 	return output, nil
 }
 
-func jsonDecodeSet(input []interface{}, s store.ChunkSource) (types.Value, error) {
+func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (types.Value, error) {
 	vals := []types.Value{}
 	for _, inVal := range input {
 		outVal, err := jsonDecodeValue(inVal, s)
@@ -115,7 +115,7 @@ func jsonDecodeSet(input []interface{}, s store.ChunkSource) (types.Value, error
 	return types.NewSet(vals...), nil
 }
 
-func jsonDecodeMap(input []interface{}, s store.ChunkSource) (types.Value, error) {
+func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (types.Value, error) {
 	output := types.NewMap()
 	Chk.Equal(0, len(input)%2, "Length on input array must be multiple of 2")
 	for i := 0; i < len(input); i += 2 {
@@ -135,7 +135,7 @@ func jsonDecodeMap(input []interface{}, s store.ChunkSource) (types.Value, error
 	return output, nil
 }
 
-func jsonDecodeRef(refStr string, s store.ChunkSource) (types.Value, error) {
+func jsonDecodeRef(refStr string, s chunks.ChunkSource) (types.Value, error) {
 	ref, err := ref.Parse(refStr)
 	if err != nil {
 		return nil, err

@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/enc"
-	"github.com/attic-labs/noms/store"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -17,7 +17,7 @@ func TestCommit(t *testing.T) {
 	defer os.Remove(dir)
 	assert.NoError(err)
 
-	store := store.NewFileStore(dir, "root")
+	store := chunks.NewFileStore(dir, "root")
 	commit := &Commit{
 		store,
 		store,

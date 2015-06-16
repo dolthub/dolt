@@ -1,10 +1,10 @@
 package commit
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/store"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -13,9 +13,9 @@ type Reachable interface {
 }
 
 type Commit struct {
-	root      store.RootStore
-	source    store.ChunkSource
-	sink      store.ChunkSink
+	root      chunks.RootTracker
+	source    chunks.ChunkSource
+	sink      chunks.ChunkSink
 	reachable Reachable
 }
 

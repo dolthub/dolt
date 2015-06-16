@@ -5,14 +5,14 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/store"
 	"github.com/attic-labs/noms/types"
 )
 
 // Reads and decodes a value from a chunk source.
-func ReadValue(ref ref.Ref, cs store.ChunkSource) (types.Value, error) {
+func ReadValue(ref ref.Ref, cs chunks.ChunkSource) (types.Value, error) {
 	reader, err := cs.Get(ref)
 	if err != nil {
 		return nil, err
@@ -36,7 +36,7 @@ func ReadValue(ref ref.Ref, cs store.ChunkSource) (types.Value, error) {
 	return nil, fmt.Errorf("Unsupported chunk tag: %+v", prefix)
 }
 
-func MustReadValue(ref ref.Ref, cs store.ChunkSource) types.Value {
+func MustReadValue(ref ref.Ref, cs chunks.ChunkSource) types.Value {
 	val, err := ReadValue(ref, cs)
 	Chk.NoError(err)
 	return val
