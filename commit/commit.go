@@ -13,19 +13,17 @@ type Reachable interface {
 }
 
 type Commit struct {
-	root      chunks.RootTracker
-	source    chunks.ChunkSource
-	sink      chunks.ChunkSink
+	store     chunks.ChunkStore
 	reachable Reachable
 }
 
 func (c *Commit) GetRoots() (currentRoots types.Set) {
-	rootRef := c.root.Root()
+	rootRef := c.store.Root()
 	if (rootRef == ref.Ref{}) {
 		return types.NewSet()
 	}
 
-	return enc.MustReadValue(rootRef, c.source).(types.Set)
+	return enc.MustReadValue(rootRef, c.store).(types.Set)
 }
 
 func (c *Commit) Commit(newRoots types.Set) {
@@ -45,7 +43,7 @@ func (c *Commit) Commit(newRoots types.Set) {
 }
 
 func (c *Commit) doCommit(add, remove types.Set) bool {
-	oldRoot := c.root.Root()
+	oldRoot := c.store.Root()
 	oldRoots := c.GetRoots()
 
 	prexisting := make([]types.Value, 0)
@@ -63,8 +61,8 @@ func (c *Commit) doCommit(add, remove types.Set) bool {
 	newRoots := oldRoots.Subtract(remove).Union(add)
 
 	// TODO(rafael): This set will be orphaned if this UpdateRoot below fails
-	newRef, err := enc.WriteValue(newRoots, c.sink)
+	newRef, err := enc.WriteValue(newRoots, c.store)
 	Chk.NoError(err)
 
-	return c.root.UpdateRoot(newRef, oldRoot)
+	return c.store.UpdateRoot(newRef, oldRoot)
 }

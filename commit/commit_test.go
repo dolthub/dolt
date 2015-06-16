@@ -20,8 +20,6 @@ func TestCommit(t *testing.T) {
 	store := chunks.NewFileStore(dir, "root")
 	commit := &Commit{
 		store,
-		store,
-		store,
 		NewMemCacheReachable(store),
 	}
 
