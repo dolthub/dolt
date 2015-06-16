@@ -80,3 +80,21 @@ func TestSetRemove(t *testing.T) {
 	assert.True(s2.Has(v3))
 
 }
+
+func TestSetUnion(t *testing.T) {
+	assert := assert.New(t)
+	assert.True(NewSet(Int32(1), Int32(2)).Union(
+		NewSet(Int32(2), Int32(3)),
+		NewSet(Int32(-1)),
+		NewSet()).Equals(
+		NewSet(Int32(1), Int32(2), Int32(3), Int32(-1))))
+	assert.True(NewSet(Int32(1)).Union().Equals(NewSet(Int32(1))))
+}
+
+func TestSetSubtract(t *testing.T) {
+	assert := assert.New(t)
+	assert.True(NewSet(Int32(-1), Int32(0), Int32(1)).Subtract(
+		NewSet(Int32(0), Int32(-1)),
+		NewSet(Int32(1), Int32(2))).Equals(
+		NewSet()))
+}

@@ -39,6 +39,28 @@ func (fs flatSet) Remove(values ...Value) Set {
 	return newFlatSet(m2)
 }
 
+func (fs flatSet) Union(others ...Set) (result Set) {
+	result = fs
+	for _, other := range others {
+		other.Iter(func(v Value) (stop bool) {
+			result = result.Insert(v)
+			return
+		})
+	}
+	return result
+}
+
+func (fs flatSet) Subtract(others ...Set) (result Set) {
+	result = fs
+	for _, other := range others {
+		other.Iter(func(v Value) (stop bool) {
+			result = result.Remove(v)
+			return
+		})
+	}
+	return result
+}
+
 func (fm flatSet) Iter(cb setIterCallback) {
 	// TODO: sort iteration order
 	for _, v := range fm.m {
