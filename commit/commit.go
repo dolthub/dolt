@@ -25,6 +25,22 @@ func (c *Commit) GetRoots() (currentRoots types.Set) {
 	return rootSetValue.(types.Set)
 }
 
+func (c *Commit) Commit(newRoots types.Set) {
+	Chk.True(newRoots.Len() > 0)
+
+	parentsList := make([]types.Set, newRoots.Len())
+	i := uint64(0)
+	newRoots.Iter(func(root types.Value) (stop bool) {
+		parentsList[i] = root.(types.Map).Get(types.NewString("parents")).(types.Set)
+		i++
+		return false
+	})
+
+	superceded := types.NewSet().Union(parentsList...)
+	for !c.doCommit(newRoots, superceded) {
+	}
+}
+
 func (c *Commit) doCommit(add, remove types.Set) bool {
 	oldRoots := c.GetRoots()
 	oldRef := oldRoots.Ref()
@@ -40,20 +56,4 @@ func (c *Commit) doCommit(add, remove types.Set) bool {
 	Chk.NoError(err)
 
 	return c.root.UpdateRoot(newRef, oldRef)
-}
-
-func (c *Commit) Commit(newRoots types.Set) {
-	Chk.True(newRoots.Len() > 0)
-
-	parentsList := make([]types.Set, newRoots.Len())
-	i := uint64(0)
-	newRoots.Iter(func(root types.Value) (stop bool) {
-		parentsList[i] = root.(types.Map).Get(types.NewString("parents")).(types.Set)
-		i++
-		return false
-	})
-
-	superceded := types.NewSet().Union(parentsList...)
-	for !c.doCommit(newRoots, superceded) {
-	}
 }
