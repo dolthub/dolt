@@ -1,4 +1,4 @@
-package commit
+package datastore
 
 import (
 	"github.com/attic-labs/noms/chunks"
@@ -12,21 +12,21 @@ type Reachable interface {
 	IsSupercededFrom(candidate, root ref.Ref) bool
 }
 
-type Commit struct {
-	store     chunks.ChunkStore
+type DataStore struct {
+	chunks    chunks.ChunkStore
 	reachable Reachable
 }
 
-func (c *Commit) GetRoots() (currentRoots types.Set) {
-	rootRef := c.store.Root()
+func (ds *DataStore) GetRoots() types.Set {
+	rootRef := ds.chunks.Root()
 	if (rootRef == ref.Ref{}) {
 		return types.NewSet()
 	}
 
-	return enc.MustReadValue(rootRef, c.store).(types.Set)
+	return enc.MustReadValue(rootRef, ds.chunks).(types.Set)
 }
 
-func (c *Commit) Commit(newRoots types.Set) {
+func (ds *DataStore) Commit(newRoots types.Set) {
 	Chk.True(newRoots.Len() > 0)
 
 	parentsList := make([]types.Set, newRoots.Len())
@@ -38,17 +38,17 @@ func (c *Commit) Commit(newRoots types.Set) {
 	})
 
 	superceded := types.NewSet().Union(parentsList...)
-	for !c.doCommit(newRoots, superceded) {
+	for !ds.doCommit(newRoots, superceded) {
 	}
 }
 
-func (c *Commit) doCommit(add, remove types.Set) bool {
-	oldRoot := c.store.Root()
-	oldRoots := c.GetRoots()
+func (ds *DataStore) doCommit(add, remove types.Set) bool {
+	oldRoot := ds.chunks.Root()
+	oldRoots := ds.GetRoots()
 
 	prexisting := make([]types.Value, 0)
 	add.Iter(func(r types.Value) (stop bool) {
-		if c.reachable.IsSupercededFrom(r.Ref(), oldRoot) {
+		if ds.reachable.IsSupercededFrom(r.Ref(), oldRoot) {
 			prexisting = append(prexisting, r)
 		}
 		return false
@@ -61,8 +61,8 @@ func (c *Commit) doCommit(add, remove types.Set) bool {
 	newRoots := oldRoots.Subtract(remove).Union(add)
 
 	// TODO(rafael): This set will be orphaned if this UpdateRoot below fails
-	newRef, err := enc.WriteValue(newRoots, c.store)
+	newRef, err := enc.WriteValue(newRoots, ds.chunks)
 	Chk.NoError(err)
 
-	return c.store.UpdateRoot(newRef, oldRoot)
+	return ds.chunks.UpdateRoot(newRef, oldRoot)
 }

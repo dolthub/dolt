@@ -1,4 +1,4 @@
-package commit
+package datastore
 
 import (
 	"io/ioutil"
@@ -11,19 +11,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCommit(t *testing.T) {
+func TestDataStoreCommit(t *testing.T) {
 	assert := assert.New(t)
 	dir, err := ioutil.TempDir(os.TempDir(), "")
 	defer os.Remove(dir)
 	assert.NoError(err)
 
-	store := chunks.NewFileStore(dir, "root")
-	commit := &Commit{
-		store,
-		NewMemCacheReachable(store),
+	chunks := chunks.NewFileStore(dir, "root")
+	ds := &DataStore{
+		chunks,
+		NewMemCacheReachable(chunks),
 	}
 
-	roots := commit.GetRoots()
+	roots := ds.GetRoots()
 	assert.Equal(uint64(0), roots.Len())
 
 	// |a|
@@ -32,8 +32,8 @@ func TestCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("a"),
 	)
 	aSet := types.NewSet(a)
-	commit.Commit(aSet)
-	assert.Equal(commit.GetRoots(), aSet)
+	ds.Commit(aSet)
+	assert.Equal(ds.GetRoots(), aSet)
 
 	// |a| <- |b|
 	b := types.NewMap(
@@ -41,8 +41,8 @@ func TestCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("b"),
 	)
 	bSet := types.NewSet(b)
-	commit.Commit(bSet)
-	assert.Equal(commit.GetRoots(), bSet)
+	ds.Commit(bSet)
+	assert.Equal(ds.GetRoots(), bSet)
 
 	// |a| <- |b|
 	//   \----|c|
@@ -51,9 +51,9 @@ func TestCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("c"),
 	)
 	cSet := types.NewSet(c)
-	commit.Commit(cSet)
+	ds.Commit(cSet)
 	bcSet := bSet.Insert(c)
-	assert.Equal(commit.GetRoots(), bcSet)
+	assert.Equal(ds.GetRoots(), bcSet)
 
 	// |a| <- |b|
 	//   \----|c|
@@ -63,11 +63,11 @@ func TestCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("d"),
 	)
 	dSet := types.NewSet(d)
-	enc.WriteValue(dSet, store)
+	enc.WriteValue(dSet, chunks)
 
-	commit.Commit(dSet)
+	ds.Commit(dSet)
 	bcdSet := bcSet.Insert(d)
-	assert.Equal(commit.GetRoots(), bcdSet)
+	assert.Equal(ds.GetRoots(), bcdSet)
 
 	// |a| <- |b| <-- |e|
 	//   \----|c| <--/
@@ -77,9 +77,9 @@ func TestCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("e"),
 	)
 	eSet := types.NewSet(e)
-	commit.Commit(eSet)
+	ds.Commit(eSet)
 	deSet := dSet.Insert(e)
-	assert.Equal(commit.GetRoots(), deSet)
+	assert.Equal(ds.GetRoots(), deSet)
 
 	// |a| <- |b| <-- |e| <- |f|
 	//   \----|c| <--/      /
@@ -90,16 +90,16 @@ func TestCommit(t *testing.T) {
 	)
 
 	fSet := types.NewSet(f)
-	commit.Commit(fSet)
-	assert.Equal(commit.GetRoots(), fSet)
+	ds.Commit(fSet)
+	assert.Equal(ds.GetRoots(), fSet)
 
 	// Attempt to recommit |b|
-	commit.Commit(bSet)
-	assert.Equal(commit.GetRoots(), fSet)
+	ds.Commit(bSet)
+	assert.Equal(ds.GetRoots(), fSet)
 
 	// Attempt to recommit |f|
-	commit.Commit(fSet)
-	assert.Equal(commit.GetRoots(), fSet)
+	ds.Commit(fSet)
+	assert.Equal(ds.GetRoots(), fSet)
 
 	// Attempt to recommit |c| while committing |g|
 	// |a| <- |b| <-- |e| <- |f| <- |g|
@@ -113,8 +113,8 @@ func TestCommit(t *testing.T) {
 	gSet := types.NewSet(g)
 	gdSet := gSet.Insert(c)
 
-	commit.Commit(gdSet)
-	assert.Equal(commit.GetRoots(), gSet)
+	ds.Commit(gdSet)
+	assert.Equal(ds.GetRoots(), gSet)
 
 	//      / -|h|
 	//    /    |
@@ -128,8 +128,8 @@ func TestCommit(t *testing.T) {
 	)
 	hSet := types.NewSet(h)
 
-	commit.Commit(hSet)
+	ds.Commit(hSet)
 	hgSet := hSet.Insert(g)
-	roots = commit.GetRoots()
-	assert.Equal(commit.GetRoots(), hgSet)
+	roots = ds.GetRoots()
+	assert.Equal(ds.GetRoots(), hgSet)
 }
