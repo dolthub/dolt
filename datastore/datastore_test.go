@@ -20,7 +20,7 @@ func TestDataStoreCommit(t *testing.T) {
 	chunks := chunks.NewFileStore(dir, "root")
 	ds := &DataStore{
 		chunks,
-		NewMemCacheReachable(chunks),
+		NewRootCache(chunks),
 	}
 
 	roots := ds.GetRoots()

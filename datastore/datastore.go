@@ -8,13 +8,9 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-type Reachable interface {
-	IsSupercededFrom(candidate, root ref.Ref) bool
-}
-
 type DataStore struct {
-	chunks    chunks.ChunkStore
-	reachable Reachable
+	chunks chunks.ChunkStore
+	rc     *rootCache
 }
 
 func (ds *DataStore) GetRoots() types.Set {
@@ -47,8 +43,9 @@ func (ds *DataStore) doCommit(add, remove types.Set) bool {
 	oldRoots := ds.GetRoots()
 
 	prexisting := make([]types.Value, 0)
+	ds.rc.Update(oldRoot)
 	add.Iter(func(r types.Value) (stop bool) {
-		if ds.reachable.IsSupercededFrom(r.Ref(), oldRoot) {
+		if ds.rc.Contains(r.Ref()) {
 			prexisting = append(prexisting, r)
 		}
 		return false
