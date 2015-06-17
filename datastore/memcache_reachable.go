@@ -1,4 +1,4 @@
-package commit
+package datastore
 
 import (
 	"github.com/attic-labs/noms/chunks"
