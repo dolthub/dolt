@@ -13,6 +13,12 @@ type DataStore struct {
 	rc     *rootCache
 }
 
+func NewDataStore(cs chunks.ChunkStore) DataStore {
+	return DataStore{
+		cs, NewRootCache(cs),
+	}
+}
+
 func (ds *DataStore) GetRoots() types.Set {
 	rootRef := ds.chunks.Root()
 	if (rootRef == ref.Ref{}) {

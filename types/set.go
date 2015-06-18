@@ -12,6 +12,8 @@ type Set interface {
 	Remove(v ...Value) Set
 	Union(others ...Set) Set
 	Subtract(others ...Set) Set
+	// TODO: test
+	Any() Value
 }
 
 func NewSet(v ...Value) Set {

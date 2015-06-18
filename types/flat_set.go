@@ -70,6 +70,13 @@ func (fm flatSet) Iter(cb setIterCallback) {
 	}
 }
 
+func (fm flatSet) Any() Value {
+	for _, v := range fm.m {
+		return v
+	}
+	return nil
+}
+
 func (fs flatSet) Ref() ref.Ref {
 	return fs.cr.Ref(fs)
 }
