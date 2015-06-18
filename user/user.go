@@ -10,6 +10,9 @@ func GetUsers(ds datastore.DataStore) types.Set {
 	if ds.Roots().Len() == 0 {
 		return types.NewSet()
 	} else {
+		// We don't ever want to branch the user database. Currently we can't avoid that, but we should change DataStore::Commit() to support that mode of operation.
+		Chk.EqualValues(1, ds.Roots().Len())
+
 		return ds.Roots().Any().(types.Map).Get(types.NewString("value")).(types.Set)
 	}
 }
