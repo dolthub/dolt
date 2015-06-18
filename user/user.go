@@ -37,3 +37,9 @@ func CreateUser(ds datastore.DataStore, email string) {
 	users = users.Insert(user)
 	commit(ds, roots, users)
 }
+
+// TODO:
+// - GetUser(), then update CreateUser() to check for that
+// - SetUserAppRoot() (assume there's just one app for now)
+// - New RootTracker impl that uses above
+// - success?
