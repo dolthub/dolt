@@ -45,6 +45,15 @@ func GetUser(users types.Set, email string) (r types.Map) {
 	return
 }
 
+func GetAppRoot(users types.Set, userEmail string) types.Value {
+	user := GetUser(users, userEmail)
+	if user == nil {
+		return nil
+	} else {
+		return user.Get(types.NewString("appRoot"))
+	}
+}
+
 func SetAppRoot(users types.Set, userEmail string, val types.Value) types.Set {
 	user := GetUser(users, userEmail)
 	Chk.NotNil(user)
@@ -52,6 +61,5 @@ func SetAppRoot(users types.Set, userEmail string, val types.Value) types.Set {
 }
 
 // TODO:
-// - SetUserAppRoot() (assume there's just one app for now)
 // - New RootTracker impl that uses above
 // - success?

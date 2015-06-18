@@ -45,4 +45,5 @@ func TestSetAppRoot(t *testing.T) {
 	users = SetAppRoot(users, "foo@bar.com", types.Int32(42))
 	assert.EqualValues(1, users.Len())
 	assert.True(types.Int32(42).Equals(users.Any().(types.Map).Get(types.NewString("appRoot"))))
+	assert.True(types.Int32(42).Equals(GetAppRoot(users, "foo@bar.com")))
 }
