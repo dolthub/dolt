@@ -27,3 +27,14 @@ func TestInsertUser(t *testing.T) {
 	user := users.Any().(types.Map)
 	assert.True(types.NewString("foo@bar.com").Equals(user.Get(types.NewString("email"))))
 }
+
+func TestGetUser(t *testing.T) {
+	assert := assert.New(t)
+	ds := datastore.NewDataStore(&chunks.MemoryStore{})
+	users := GetUsers(ds)
+	user := GetUser(users, "foo@bar.com")
+	assert.Nil(user)
+	users = InsertUser(users, "foo@bar.com")
+	user = GetUser(users, "foo@bar.com")
+	assert.True(user.Get(types.NewString("email")).Equals(types.NewString("foo@bar.com")))
+}

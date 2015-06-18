@@ -14,13 +14,14 @@ func GetUsers(ds datastore.DataStore) types.Set {
 }
 
 func InsertUser(users types.Set, email string) types.Set {
+	if GetUser(users, email) != nil {
+		return users
+	}
 	user := types.NewMap(
 		types.NewString("$type"), types.NewString("noms.User"),
 		types.NewString("email"), types.NewString(email),
 		// TODO: Need nil Value so that we can put nil appRoot in here now?
 	)
-
-	// TODO: What if the user exists with a set appRoot? Need GetUser() check above.
 	return users.Insert(user)
 }
 
@@ -30,6 +31,17 @@ func CommitUsers(ds datastore.DataStore, users types.Set) datastore.DataStore {
 			types.NewString("$type"), types.NewString("noms.Root"),
 			types.NewString("parents"), ds.Roots(),
 			types.NewString("value"), users)))
+}
+
+func GetUser(users types.Set, email string) (r types.Map) {
+	users.Iter(func(v types.Value) (stop bool) {
+		if v.(types.Map).Get(types.NewString("email")).Equals(types.NewString(email)) {
+			r = v.(types.Map)
+			stop = true
+		}
+		return
+	})
+	return
 }
 
 // TODO:
