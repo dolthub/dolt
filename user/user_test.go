@@ -38,3 +38,11 @@ func TestGetUser(t *testing.T) {
 	user = GetUser(users, "foo@bar.com")
 	assert.True(user.Get(types.NewString("email")).Equals(types.NewString("foo@bar.com")))
 }
+
+func TestSetAppRoot(t *testing.T) {
+	assert := assert.New(t)
+	users := InsertUser(types.NewSet(), "foo@bar.com")
+	users = SetAppRoot(users, "foo@bar.com", types.Int32(42))
+	assert.EqualValues(1, users.Len())
+	assert.True(types.Int32(42).Equals(users.Any().(types.Map).Get(types.NewString("appRoot"))))
+}

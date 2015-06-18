@@ -2,6 +2,7 @@ package user
 
 import (
 	"github.com/attic-labs/noms/datastore"
+	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -42,6 +43,12 @@ func GetUser(users types.Set, email string) (r types.Map) {
 		return
 	})
 	return
+}
+
+func SetAppRoot(users types.Set, userEmail string, val types.Value) types.Set {
+	user := GetUser(users, userEmail)
+	Chk.NotNil(user)
+	return users.Remove(user).Insert(user.Set(types.NewString("appRoot"), val))
 }
 
 // TODO:
