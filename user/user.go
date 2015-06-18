@@ -2,30 +2,18 @@ package user
 
 import (
 	"github.com/attic-labs/noms/datastore"
-	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/types"
 )
 
-func commit(ds datastore.DataStore, oldRoots types.Set, users types.Set) {
-	ds.Commit(types.NewSet(
-		types.NewMap(
-			types.NewString("$type"), types.NewString("noms.Root"),
-			types.NewString("parents"), oldRoots,
-			types.NewString("value"), users)))
-}
-
-func InitDataStore(ds datastore.DataStore) types.Set {
-	roots := ds.GetRoots()
-	if roots.Len() == 0 {
-		commit(ds, roots, types.NewSet())
-		roots = ds.GetRoots()
+func GetUsers(ds datastore.DataStore) types.Set {
+	if ds.Roots().Len() == 0 {
+		return types.NewSet()
+	} else {
+		return ds.Roots().Any().(types.Map).Get(types.NewString("value")).(types.Set)
 	}
-	Chk.EqualValues(1, roots.Len())
-	return roots
 }
 
-func CreateUser(ds datastore.DataStore, email string) {
-	roots := InitDataStore(ds)
+func InsertUser(users types.Set, email string) types.Set {
 	user := types.NewMap(
 		types.NewString("$type"), types.NewString("noms.User"),
 		types.NewString("email"), types.NewString(email),
@@ -33,9 +21,15 @@ func CreateUser(ds datastore.DataStore, email string) {
 	)
 
 	// TODO: What if the user exists with a set appRoot? Need GetUser() check above.
-	users := roots.Any().(types.Map).Get(types.NewString("value")).(types.Set)
-	users = users.Insert(user)
-	commit(ds, roots, users)
+	return users.Insert(user)
+}
+
+func CommitUsers(ds datastore.DataStore, users types.Set) datastore.DataStore {
+	return ds.Commit(types.NewSet(
+		types.NewMap(
+			types.NewString("$type"), types.NewString("noms.Root"),
+			types.NewString("parents"), ds.Roots(),
+			types.NewString("value"), users)))
 }
 
 // TODO:

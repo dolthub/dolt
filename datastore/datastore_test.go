@@ -20,7 +20,7 @@ func TestDataStoreCommit(t *testing.T) {
 	chunks := chunks.NewFileStore(dir, "root")
 	ds := NewDataStore(chunks)
 
-	roots := ds.GetRoots()
+	roots := ds.Roots()
 	assert.Equal(uint64(0), roots.Len())
 
 	// |a|
@@ -29,8 +29,14 @@ func TestDataStoreCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("a"),
 	)
 	aSet := types.NewSet(a)
-	ds.Commit(aSet)
-	assert.Equal(ds.GetRoots(), aSet)
+	ds2 := ds.Commit(aSet)
+
+	// The old datastore still still references the old roots.
+	assert.True(ds.Roots().Equals(roots))
+
+	// The new datastore has the new roots.
+	assert.True(ds2.Roots().Equals(aSet))
+	ds = ds2
 
 	// |a| <- |b|
 	b := types.NewMap(
@@ -38,8 +44,8 @@ func TestDataStoreCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("b"),
 	)
 	bSet := types.NewSet(b)
-	ds.Commit(bSet)
-	assert.Equal(ds.GetRoots(), bSet)
+	ds = ds.Commit(bSet)
+	assert.True(ds.Roots().Equals(bSet))
 
 	// |a| <- |b|
 	//   \----|c|
@@ -48,9 +54,9 @@ func TestDataStoreCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("c"),
 	)
 	cSet := types.NewSet(c)
-	ds.Commit(cSet)
+	ds = ds.Commit(cSet)
 	bcSet := bSet.Insert(c)
-	assert.Equal(ds.GetRoots(), bcSet)
+	assert.True(ds.Roots().Equals(bcSet))
 
 	// |a| <- |b|
 	//   \----|c|
@@ -62,9 +68,9 @@ func TestDataStoreCommit(t *testing.T) {
 	dSet := types.NewSet(d)
 	enc.WriteValue(dSet, chunks)
 
-	ds.Commit(dSet)
+	ds = ds.Commit(dSet)
 	bcdSet := bcSet.Insert(d)
-	assert.Equal(ds.GetRoots(), bcdSet)
+	assert.True(ds.Roots().Equals(bcdSet))
 
 	// |a| <- |b| <-- |e|
 	//   \----|c| <--/
@@ -74,9 +80,9 @@ func TestDataStoreCommit(t *testing.T) {
 		types.NewString("value"), types.NewString("e"),
 	)
 	eSet := types.NewSet(e)
-	ds.Commit(eSet)
+	ds = ds.Commit(eSet)
 	deSet := dSet.Insert(e)
-	assert.Equal(ds.GetRoots(), deSet)
+	assert.True(ds.Roots().Equals(deSet))
 
 	// |a| <- |b| <-- |e| <- |f|
 	//   \----|c| <--/      /
@@ -87,16 +93,16 @@ func TestDataStoreCommit(t *testing.T) {
 	)
 
 	fSet := types.NewSet(f)
-	ds.Commit(fSet)
-	assert.Equal(ds.GetRoots(), fSet)
+	ds = ds.Commit(fSet)
+	assert.True(ds.Roots().Equals(fSet))
 
 	// Attempt to recommit |b|
-	ds.Commit(bSet)
-	assert.Equal(ds.GetRoots(), fSet)
+	ds = ds.Commit(bSet)
+	assert.True(ds.Roots().Equals(fSet))
 
 	// Attempt to recommit |f|
-	ds.Commit(fSet)
-	assert.Equal(ds.GetRoots(), fSet)
+	ds = ds.Commit(fSet)
+	assert.True(ds.Roots().Equals(fSet))
 
 	// Attempt to recommit |c| while committing |g|
 	// |a| <- |b| <-- |e| <- |f| <- |g|
@@ -110,8 +116,8 @@ func TestDataStoreCommit(t *testing.T) {
 	gSet := types.NewSet(g)
 	gdSet := gSet.Insert(c)
 
-	ds.Commit(gdSet)
-	assert.Equal(ds.GetRoots(), gSet)
+	ds = ds.Commit(gdSet)
+	assert.True(ds.Roots().Equals(gSet))
 
 	//      / -|h|
 	//    /    |
@@ -125,8 +131,7 @@ func TestDataStoreCommit(t *testing.T) {
 	)
 	hSet := types.NewSet(h)
 
-	ds.Commit(hSet)
+	ds = ds.Commit(hSet)
 	hgSet := hSet.Insert(g)
-	roots = ds.GetRoots()
-	assert.Equal(ds.GetRoots(), hgSet)
+	assert.True(ds.Roots().Equals(hgSet))
 }

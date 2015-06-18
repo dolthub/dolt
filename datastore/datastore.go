@@ -11,24 +11,31 @@ import (
 type DataStore struct {
 	chunks chunks.ChunkStore
 	rc     *rootCache
+	roots  types.Set
 }
 
 func NewDataStore(cs chunks.ChunkStore) DataStore {
-	return DataStore{
-		cs, NewRootCache(cs),
-	}
+	return NewDataStoreWithCache(cs, NewRootCache(cs))
 }
 
-func (ds *DataStore) GetRoots() types.Set {
-	rootRef := ds.chunks.Root()
+func NewDataStoreWithCache(cs chunks.ChunkStore, rc *rootCache) DataStore {
+	var roots types.Set
+	rootRef := cs.Root()
 	if (rootRef == ref.Ref{}) {
-		return types.NewSet()
+		roots = types.NewSet()
+	} else {
+		roots = enc.MustReadValue(rootRef, cs).(types.Set)
 	}
-
-	return enc.MustReadValue(rootRef, ds.chunks).(types.Set)
+	return DataStore{
+		cs, rc, roots,
+	}
 }
 
-func (ds *DataStore) Commit(newRoots types.Set) {
+func (ds *DataStore) Roots() types.Set {
+	return ds.roots
+}
+
+func (ds *DataStore) Commit(newRoots types.Set) DataStore {
 	Chk.True(newRoots.Len() > 0)
 
 	parentsList := make([]types.Set, newRoots.Len())
@@ -42,14 +49,16 @@ func (ds *DataStore) Commit(newRoots types.Set) {
 	superceded := types.NewSet().Union(parentsList...)
 	for !ds.doCommit(newRoots, superceded) {
 	}
+
+	return NewDataStoreWithCache(ds.chunks, ds.rc)
 }
 
 func (ds *DataStore) doCommit(add, remove types.Set) bool {
-	oldRoot := ds.chunks.Root()
-	oldRoots := ds.GetRoots()
+	oldRootRef := ds.chunks.Root()
+	oldRoots := ds.Roots()
 
 	prexisting := make([]types.Value, 0)
-	ds.rc.Update(oldRoot)
+	ds.rc.Update(oldRootRef)
 	add.Iter(func(r types.Value) (stop bool) {
 		if ds.rc.Contains(r.Ref()) {
 			prexisting = append(prexisting, r)
@@ -64,8 +73,8 @@ func (ds *DataStore) doCommit(add, remove types.Set) bool {
 	newRoots := oldRoots.Subtract(remove).Union(add)
 
 	// TODO(rafael): This set will be orphaned if this UpdateRoot below fails
-	newRef, err := enc.WriteValue(newRoots, ds.chunks)
+	newRootRef, err := enc.WriteValue(newRoots, ds.chunks)
 	Chk.NoError(err)
 
-	return ds.chunks.UpdateRoot(newRef, oldRoot)
+	return ds.chunks.UpdateRoot(newRootRef, oldRootRef)
 }
