@@ -45,7 +45,6 @@ func GetUser(users types.Set, email string) (r types.Map) {
 }
 
 // TODO:
-// - GetUser(), then update CreateUser() to check for that
 // - SetUserAppRoot() (assume there's just one app for now)
 // - New RootTracker impl that uses above
 // - success?
