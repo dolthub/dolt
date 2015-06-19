@@ -26,7 +26,7 @@ func InsertUser(users types.Set, email string) types.Set {
 	user := types.NewMap(
 		types.NewString("$type"), types.NewString("noms.User"),
 		types.NewString("email"), types.NewString(email),
-		// TODO: Need nil Value so that we can put nil appRoot in here now?
+		types.NewString("apps"), types.NewSet(),
 	)
 	return users.Insert(user)
 }
@@ -53,18 +53,39 @@ func GetUser(users types.Set, email string) (r types.Map) {
 	return
 }
 
-func GetAppRoot(users types.Set, userEmail string) types.Value {
-	user := GetUser(users, userEmail)
-	if user == nil {
-		return nil
-	} else {
-		// 1 query
-		return user.Get(types.NewString("appRoot"))
-	}
+func GetApp(apps types.Set, appId string) (r types.Map) {
+	apps.Iter(func(val types.Value) (stop bool) {
+		if val.(types.Map).Get(types.NewString("id")).(types.String).String() == appId {
+			r = val.(types.Map)
+			stop = true
+		}
+		return
+	})
+	return
 }
 
-func SetAppRoot(users types.Set, userEmail string, val types.Value) types.Set {
+func GetAppRoot(users types.Set, userEmail, appId string) types.Value {
 	user := GetUser(users, userEmail)
 	Chk.NotNil(user, "Unknown user: %s", userEmail)
-	return users.Remove(user).Insert(user.Set(types.NewString("appRoot"), val))
+	app := GetApp(user.Get(types.NewString("apps")).(types.Set), appId)
+	if app == nil {
+		return nil
+	}
+	return app.Get(types.NewString("root"))
+}
+
+func SetAppRoot(users types.Set, userEmail, appId string, val types.Value) types.Set {
+	user := GetUser(users, userEmail)
+	Chk.NotNil(user, "Unknown user: %s", userEmail)
+	apps := user.Get(types.NewString("apps")).(types.Set)
+	app := GetApp(apps, appId)
+
+	return users.Remove(user).Insert(
+		user.Set(types.NewString("apps"),
+			apps.Remove(app).Insert(
+				types.NewMap(
+					types.NewString("$type"), types.NewString("noms.App"),
+					types.NewString("id"), types.NewString(appId),
+					types.NewString("root"), val,
+				))))
 }

@@ -10,24 +10,26 @@ import (
 )
 
 // Returns a datastore whose chunks are stored in rootStore, but whose root is associated with the specified user (and app in the future).
-func NewAppDataStore(rootStore datastore.DataStore, userEmail string) datastore.DataStore {
-	return datastore.NewDataStore(rootStore, &appRootTracker{rootStore, userEmail})
+func NewAppDataStore(rootStore datastore.DataStore, userEmail, appId string) datastore.DataStore {
+	return datastore.NewDataStore(rootStore, &appRootTracker{rootStore, userEmail, appId})
 }
 
 type appDataStoreFlags struct {
 	chunks.Flags
 	userEmail *string
+	appId     *string
 }
 
 func AppDataFlags() appDataStoreFlags {
 	return appDataStoreFlags{
 		chunks.NewFlags(),
 		flag.String("user-email", "", "email address of user to store data for"),
+		flag.String("app-id", "", "app id to store data for"),
 	}
 }
 
 func (f appDataStoreFlags) CreateStore() *datastore.DataStore {
-	if *f.userEmail == "" {
+	if *f.userEmail == "" || *f.appId == "" {
 		return nil
 	}
 	cs := f.Flags.CreateStore()
@@ -41,18 +43,18 @@ func (f appDataStoreFlags) CreateStore() *datastore.DataStore {
 	// For now, we just create the user here. In real life, user creation should be done elsewhere of course.
 	rootDataStore = CommitUsers(rootDataStore, InsertUser(GetUsers(rootDataStore), *f.userEmail))
 
-	ds := NewAppDataStore(rootDataStore, *f.userEmail)
+	ds := NewAppDataStore(rootDataStore, *f.userEmail, *f.appId)
 	return &ds
 }
 
 type appRootTracker struct {
 	rootStore datastore.DataStore
 	userEmail string
-	// Future: appId
+	appId     string
 }
 
 func (rt *appRootTracker) Root() ref.Ref {
-	user := GetAppRoot(GetUsers(rt.rootStore), rt.userEmail)
+	user := GetAppRoot(GetUsers(rt.rootStore), rt.userEmail, rt.appId)
 	if user == nil {
 		return ref.Ref{}
 	} else {
@@ -68,6 +70,6 @@ func (rt *appRootTracker) UpdateRoot(current, last ref.Ref) bool {
 	// BUG 11: Sucks to have to read the app root here in order to commit.
 	appRoot := enc.MustReadValue(current, rt.rootStore)
 
-	rt.rootStore = CommitUsers(rt.rootStore, SetAppRoot(GetUsers(rt.rootStore), rt.userEmail, appRoot))
+	rt.rootStore = CommitUsers(rt.rootStore, SetAppRoot(GetUsers(rt.rootStore), rt.userEmail, rt.appId, appRoot))
 	return true
 }

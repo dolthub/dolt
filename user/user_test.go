@@ -44,8 +44,8 @@ func TestGetUser(t *testing.T) {
 func TestSetAppRoot(t *testing.T) {
 	assert := assert.New(t)
 	users := InsertUser(types.NewSet(), "foo@bar.com")
-	users = SetAppRoot(users, "foo@bar.com", types.Int32(42))
+	users = SetAppRoot(users, "foo@bar.com", "app", types.Int32(42))
 	assert.EqualValues(1, users.Len())
-	assert.True(types.Int32(42).Equals(users.Any().(types.Map).Get(types.NewString("appRoot"))))
-	assert.True(types.Int32(42).Equals(GetAppRoot(users, "foo@bar.com")))
+	assert.True(types.Int32(42).Equals(users.Any().(types.Map).Get(types.NewString("apps")).(types.Set).Any().(types.Map).Get(types.NewString("root"))))
+	assert.True(types.Int32(42).Equals(GetAppRoot(users, "foo@bar.com", "app")))
 }

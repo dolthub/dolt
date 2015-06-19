@@ -12,13 +12,14 @@ import (
 func TestAppRootTracker(t *testing.T) {
 	assert := assert.New(t)
 	userEmail := "foo@bar.com"
+	appId := "testapp.com"
 	ms := &chunks.MemoryStore{}
 	rootDs := datastore.NewDataStore(ms, ms)
 	rootDs = CommitUsers(rootDs, InsertUser(types.NewSet(), userEmail))
 	users := GetUsers(rootDs)
-	assert.Equal(nil, GetAppRoot(users, userEmail))
+	assert.Equal(nil, GetAppRoot(users, userEmail, appId))
 
-	art := &appRootTracker{rootDs, userEmail}
+	art := &appRootTracker{rootDs, userEmail, appId}
 	appDs := datastore.NewDataStore(ms, art)
 	appRoot := types.NewString("Hello, AppRoot!")
 	appDs = appDs.Commit(types.NewSet(types.NewMap(

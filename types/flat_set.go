@@ -34,7 +34,9 @@ func (fs flatSet) Insert(values ...Value) Set {
 func (fs flatSet) Remove(values ...Value) Set {
 	m2 := copySetData(fs.m)
 	for _, v := range values {
-		delete(m2, v.Ref())
+		if v != nil {
+			delete(m2, v.Ref())
+		}
 	}
 	return newFlatSet(m2)
 }
