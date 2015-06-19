@@ -65,6 +65,7 @@ func (w *memoryChunkWriter) Ref() (ref.Ref, error) {
 
 func (w *memoryChunkWriter) Close() error {
 	// Not really necessary, but this will at least free memory and cause subsequent operations to crash.
+	// BUG 17: Make this method consistent with other ChunkStore implementations.
 	*w = memoryChunkWriter{}
 	return nil
 }
