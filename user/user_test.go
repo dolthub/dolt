@@ -11,7 +11,8 @@ import (
 
 func TestInsertUser(t *testing.T) {
 	assert := assert.New(t)
-	oldDs := datastore.NewDataStore(&chunks.MemoryStore{})
+	ms := &chunks.MemoryStore{}
+	oldDs := datastore.NewDataStore(ms, ms)
 
 	oldUsers := GetUsers(oldDs)
 	assert.EqualValues(0, oldUsers.Len())
@@ -30,7 +31,8 @@ func TestInsertUser(t *testing.T) {
 
 func TestGetUser(t *testing.T) {
 	assert := assert.New(t)
-	ds := datastore.NewDataStore(&chunks.MemoryStore{})
+	ms := &chunks.MemoryStore{}
+	ds := datastore.NewDataStore(ms, ms)
 	users := GetUsers(ds)
 	user := GetUser(users, "foo@bar.com")
 	assert.Nil(user)

@@ -9,25 +9,28 @@ import (
 )
 
 type DataStore struct {
-	chunks chunks.ChunkStore
-	rc     *rootCache
-	roots  types.Set
+	chunks.ChunkStore
+
+	rt    chunks.RootTracker
+	rc    *rootCache
+	roots types.Set
 }
 
-func NewDataStore(cs chunks.ChunkStore) DataStore {
-	return NewDataStoreWithCache(cs, NewRootCache(cs))
+func NewDataStore(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
+	return NewDataStoreWithCache(cs, rt, NewRootCache(cs))
 }
 
-func NewDataStoreWithCache(cs chunks.ChunkStore, rc *rootCache) DataStore {
+func NewDataStoreWithCache(cs chunks.ChunkStore, rt chunks.RootTracker, rc *rootCache) DataStore {
 	var roots types.Set
-	rootRef := cs.Root()
+	rootRef := rt.Root()
 	if (rootRef == ref.Ref{}) {
 		roots = types.NewSet()
 	} else {
+		// BUG 11: This reads the entire database into memory. Whoopsie.
 		roots = enc.MustReadValue(rootRef, cs).(types.Set)
 	}
 	return DataStore{
-		cs, rc, roots,
+		cs, rt, rc, roots,
 	}
 }
 
@@ -50,11 +53,11 @@ func (ds *DataStore) Commit(newRoots types.Set) DataStore {
 	for !ds.doCommit(newRoots, superceded) {
 	}
 
-	return NewDataStoreWithCache(ds.chunks, ds.rc)
+	return NewDataStoreWithCache(ds.ChunkStore, ds.rt, ds.rc)
 }
 
 func (ds *DataStore) doCommit(add, remove types.Set) bool {
-	oldRootRef := ds.chunks.Root()
+	oldRootRef := ds.rt.Root()
 	oldRoots := ds.Roots()
 
 	prexisting := make([]types.Value, 0)
@@ -73,8 +76,8 @@ func (ds *DataStore) doCommit(add, remove types.Set) bool {
 	newRoots := oldRoots.Subtract(remove).Union(add)
 
 	// TODO(rafael): This set will be orphaned if this UpdateRoot below fails
-	newRootRef, err := enc.WriteValue(newRoots, ds.chunks)
+	newRootRef, err := enc.WriteValue(newRoots, ds)
 	Chk.NoError(err)
 
-	return ds.chunks.UpdateRoot(newRootRef, oldRootRef)
+	return ds.rt.UpdateRoot(newRootRef, oldRootRef)
 }

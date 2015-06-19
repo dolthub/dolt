@@ -35,7 +35,7 @@ func (cache *rootCache) Update(rootsRef ref.Ref) {
 		return
 	}
 
-	// TODO(rafael): This is super-inefficient with eager ReadValue and no caching
+	// BUG 11: This is super-inefficient with eager ReadValue and no caching
 	rootSet := enc.MustReadValue(rootsRef, cache.source).(types.Set)
 	rootSet.Iter(func(commit types.Value) (stop bool) {
 		cache.updateFromCommit(commit.(types.Map))

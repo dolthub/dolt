@@ -7,7 +7,6 @@ import (
 )
 
 type ChunkStore interface {
-	RootTracker
 	ChunkSource
 	ChunkSink
 }
