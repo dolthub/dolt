@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"strings"
 
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
@@ -19,10 +18,6 @@ import (
 )
 
 var (
-	awsAuthFlag              = flag.String("aws-auth", "", "aws credentials: 'KEY:SECRET', or 'ENV' which will retrieve from IAM policy or ~/.aws/credentials")
-	regionFlag               = flag.String("aws-region", "us-west-2", "aws region")
-	bucketFlag               = flag.String("s3-bucket", "atticlabs", "s3 bucket which contains chunks")
-	tableFlag                = flag.String("ddb-table", "noms-root", "dynamodb table which contains root hash")
 	rootTablePrimaryKey      = "name"
 	rootTablePrimaryKeyValue = "root"
 	rootTableRef             = "hashRef"
@@ -46,14 +41,11 @@ type S3Store struct {
 	ddbsvc        ddbsvc
 }
 
-func NewS3Store(bucket, region, table, awsAuth string) S3Store {
-	Chk.NotEmpty(awsAuth)
+func NewS3Store(bucket, table, region, key, secret string) S3Store {
 	creds := aws.DefaultConfig.Credentials
 
-	if awsAuth != "ENV" {
-		toks := strings.Split(awsAuth, ":")
-		Chk.Equal(2, len(toks))
-		creds = credentials.NewStaticCredentials(toks[0], toks[1], "")
+	if key != "" {
+		creds = credentials.NewStaticCredentials(key, secret, "")
 	}
 
 	return S3Store{
@@ -62,10 +54,6 @@ func NewS3Store(bucket, region, table, awsAuth string) S3Store {
 		s3.New(&aws.Config{Region: region, Credentials: creds}),
 		dynamodb.New(&aws.Config{Region: region, Credentials: creds}),
 	}
-}
-
-func NewS3StoreFromFlags() S3Store {
-	return NewS3Store(*bucketFlag, *regionFlag, *tableFlag, *awsAuthFlag)
 }
 
 func (s S3Store) Root() ref.Ref {
@@ -179,4 +167,38 @@ func (w *s3ChunkWriter) Close() error {
 	os.Remove(w.file.Name())
 	w.file = nil
 	return nil
+}
+
+type s3StoreFlags struct {
+	s3Bucket    *string
+	dynamoTable *string
+	awsRegion   *string
+	authFromEnv *bool
+	awsKey      *string
+	awsSecret   *string
+}
+
+func s3Flags() s3StoreFlags {
+	return s3StoreFlags{
+		flag.String("aws-store-bucket", "", "s3 bucket to create an aws-based chunkstore in"),
+		flag.String("aws-store-dynamo-table", "noms-root", "dynamodb table to store the root of the aws-based chunkstore in"),
+		flag.String("aws-store-region", "us-west-2", "aws region to put the aws-based chunkstore in"),
+		flag.Bool("aws-store-auth-from-env", false, "creates the aws-based chunkstore from authorization found in the environment. This is typically used in production to get keys from IAM profile. If not specified, then -aws-store-key and aws-store-secret must be specified instead"),
+		flag.String("aws-store-key", "", "aws key to use to create the aws-based chunkstore"),
+		flag.String("aws-store-secret", "", "aws secret to use to create the aws-based chunkstore"),
+	}
+}
+
+func (f s3StoreFlags) createStore() ChunkStore {
+	if *f.s3Bucket == "" || *f.awsRegion == "" || *f.dynamoTable == "" {
+		return nil
+	}
+
+	if !*f.authFromEnv {
+		if *f.awsKey == "" || *f.awsSecret == "" {
+			return nil
+		}
+	}
+
+	return NewS3Store(*f.s3Bucket, *f.dynamoTable, *f.awsRegion, *f.awsKey, *f.awsSecret)
 }

@@ -2,6 +2,7 @@ package user
 
 import (
 	"testing"
+
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datastore"
 	"github.com/attic-labs/noms/types"
@@ -17,7 +18,7 @@ func TestAppRootTracker(t *testing.T) {
 	users := GetUsers(rootDs)
 	assert.Equal(nil, GetAppRoot(users, userEmail))
 
-	art := &AppRootTracker{rootDs, userEmail}
+	art := &appRootTracker{rootDs, userEmail}
 	appDs := datastore.NewDataStore(ms, art)
 	appRoot := types.NewString("Hello, AppRoot!")
 	appDs = appDs.Commit(types.NewSet(types.NewMap(

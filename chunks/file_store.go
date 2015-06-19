@@ -14,11 +14,6 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-var (
-	dirFlag  = flag.String("file-store", "", "directory to use as a FileStore")
-	rootFlag = flag.String("root", "root", "file which holds root ref")
-)
-
 type FileStore struct {
 	dir, root string
 }
@@ -28,10 +23,6 @@ func NewFileStore(dir, root string) FileStore {
 	Chk.NotEmpty(root)
 	Chk.NoError(os.MkdirAll(dir, 0700))
 	return FileStore{dir, path.Join(dir, root)}
-}
-
-func NewFileStoreFromFlags() FileStore {
-	return NewFileStore(*dirFlag, *rootFlag)
 }
 
 func readRef(file *os.File) ref.Ref {
@@ -126,4 +117,25 @@ func getPath(root string, ref ref.Ref) string {
 	s := ref.String()
 	Chk.True(strings.HasPrefix(s, "sha1"))
 	return path.Join(root, "sha1", s[5:7], s[7:9], s)
+}
+
+type fileStoreFlags struct {
+	dir  *string
+	root *string
+}
+
+func fileFlags() fileStoreFlags {
+	return fileStoreFlags{
+		flag.String("file-store", "", "directory to use for a file-based chunkstore"),
+		flag.String("file-store-root", "root", "filename which holds the root ref in the filestore"),
+	}
+}
+
+func (f fileStoreFlags) createStore() ChunkStore {
+	if *f.dir == "" || *f.root == "" {
+		return nil
+	} else {
+		fs := NewFileStore(*f.dir, *f.root)
+		return &fs
+	}
 }

@@ -3,6 +3,7 @@ package chunks
 import (
 	"bytes"
 	"crypto/sha1"
+	"flag"
 	"io"
 	"io/ioutil"
 
@@ -68,4 +69,22 @@ func (w *memoryChunkWriter) Close() error {
 	// BUG 17: Make this method consistent with other ChunkStore implementations.
 	*w = memoryChunkWriter{}
 	return nil
+}
+
+type memoryStoreFlags struct {
+	use *bool
+}
+
+func memoryFlags() memoryStoreFlags {
+	return memoryStoreFlags{
+		flag.Bool("memory-store", false, "use a memory-based (ephemeral, and private to this application) chunkstore"),
+	}
+}
+
+func (f memoryStoreFlags) createStore() ChunkStore {
+	if !*f.use {
+		return &MemoryStore{}
+	} else {
+		return nil
+	}
 }
