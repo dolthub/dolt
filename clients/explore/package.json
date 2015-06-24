@@ -1,0 +1,16 @@
+{
+  "name": "noms-explorer",
+  "dependencies": {
+    "react": "^0.12.0",
+    "immutable": "^3.7.4"
+  },
+  "devDependencies": {
+    "browserify": "^6.2.0",
+    "uglify-js": "~2.4.15",
+    "watchify": "^2.1.1"
+  },
+  "scripts": {
+    "start": "watchify -o explore.js -v -d main.js",
+    "build": "NODE_ENV=production browserify main.js | uglifyjs -cm > explore.js"
+  }
+}
