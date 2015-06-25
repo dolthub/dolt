@@ -19,7 +19,6 @@ var (
 	tracker chunks.RootTracker
 )
 
-// TODO(rafael): CORS header shouldn't allow access from anywhere?
 func handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 
@@ -75,7 +74,7 @@ func main() {
 	cs = flags.CreateStore()
 	Chk.NotNil(cs)
 
-	// TODO(rafael): Shouldn't have to cast here.
+	// TODO: Shouldn't have to cast here.
 	tracker = cs.(chunks.RootTracker)
 
 	createDummyData()

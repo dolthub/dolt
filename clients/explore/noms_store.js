@@ -10,7 +10,7 @@ var rpc = {
   root: nomsServer + '/root'
 }
 
-// TODO(rafael): Use whatwg-fetch
+// TODO: Use whatwg-fetch
 function fetch(url) {
   return new Promise(function(fulfill) {
     var xhr = new XMLHttpRequest();

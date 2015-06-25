@@ -113,7 +113,7 @@ func (s S3Store) Get(ref ref.Ref) (io.ReadCloser, error) {
 		Key:    aws.String(ref.String()),
 	})
 
-	// TODO(rafael): S3 storage is eventually consistent, so in theory, we could fail to read a value by ref which hasn't propogated yet. Implement existence checks & retry.
+	// TODO: S3 storage is eventually consistent, so in theory, we could fail to read a value by ref which hasn't propogated yet. Implement existence checks & retry.
 	if err != nil {
 		return nil, err
 	}

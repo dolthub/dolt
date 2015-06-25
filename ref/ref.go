@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash"
 	"regexp"
+
 	. "github.com/attic-labs/noms/dbg"
 )
 
@@ -22,7 +23,7 @@ type Ref struct {
 }
 
 // Returns a *copy* of the digest.
-// TODO(aa): test this.
+// TODO: test this.
 func (r Ref) Digest() Sha1Digest {
 	return r.digest
 }
@@ -40,7 +41,7 @@ func NewHash() hash.Hash {
 	return sha1.New()
 }
 
-// TODO(aa): Test.
+// TODO: Test.
 func FromHash(h hash.Hash) Ref {
 	digest := Sha1Digest{}
 	h.Sum(digest[:0])

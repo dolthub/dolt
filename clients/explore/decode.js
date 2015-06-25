@@ -67,7 +67,7 @@ var decode = {
   float64: decodeFloat
 };
 
-// TODO(rafael): Kind of cheating to decode all int & float types as numbers.
+// TODO: Kind of cheating to decode all int & float types as numbers.
 function decodeTaggedValue(taggedValue, getChunk) {
   return new Promise(function(fulfill) {
     var tagValue = [];

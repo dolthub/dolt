@@ -75,7 +75,7 @@ func (ds *DataStore) doCommit(add, remove types.Set) bool {
 
 	newRoots := oldRoots.Subtract(remove).Union(add)
 
-	// TODO(rafael): This set will be orphaned if this UpdateRoot below fails
+	// TODO: This set will be orphaned if this UpdateRoot below fails
 	newRootRef, err := enc.WriteValue(newRoots, ds)
 	Chk.NoError(err)
 
