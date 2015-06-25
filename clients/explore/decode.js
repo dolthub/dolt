@@ -36,9 +36,7 @@ function decodeSet(input, getChunk) {
 
 function decodeRef(ref, getChunk) {
   return new Promise(function(fulfill) {
-    readValue(ref, getChunk).then(function(value) {
-      fulfill(value);
-    });
+    readValue(ref, getChunk).then(fulfill);
   });
 }
 
@@ -61,24 +59,16 @@ function decodeTaggedValue(taggedValue, getChunk) {
           fulfill(Number.parseFloat(value));
           return;
         case 'list':
-          decodeList(value, getChunk).then(function(list) {
-            fulfill(list);
-          });
+          decodeList(value, getChunk).then(fulfill);
           return;
         case 'set':
-          decodeSet(value, getChunk).then(function(set) {
-            fulfill(set);
-          });
+          decodeSet(value, getChunk).then(fulfill);
           return;
         case 'map':
-          decodeMap(value, getChunk).then(function(map) {
-            fulfill(map);
-          });
+          decodeMap(value, getChunk).then(fulfill);
           return;
         case 'ref':
-          decodeRef(value, getChunk).then(function(decoded) {
-            fulfill(decoded)
-          });
+          decodeRef(value, getChunk).then(fulfill);
           return;
       }
 
@@ -94,48 +84,18 @@ function decodeValue(value, getChunk) {
       return;
     }
 
-    decodeTaggedValue(value, getChunk).then(function(result) {
-      fulfill(result);
-    });
-  });
-}
-
-function decode(data, getChunk) {
-  return new Promise(function(fulfill) {
-    if (data[0] != 'j')
-      throw 'Blob not implemented';
-
-    data = data.substring(2);
-
-    var decoded = JSON.parse(data);
-    var p;
-    for (var k in decoded) {
-      switch(k) {
-        case 'map' :
-          p = decodeMap(decoded[k]), getChunk;
-          break;
-        case 'list':
-          p = decodeList(decoded[k], getChunk);
-          break;
-        case 'set':
-          p = decodeSet(decoded[k], getChunk);
-          break;
-      }
-      break;
-    }
-
-    p.then(function(result) {
-      fulfill(result);
-    });
+    decodeTaggedValue(value, getChunk).then(fulfill);
   });
 }
 
 function readValue(ref, getChunk) {
   return new Promise(function(fulfill) {
     getChunk(ref).then(function(data) {
-      decode(data, getChunk).then(function(value) {
-        fulfill(value);
-      });
+      if (data[0] != 'j')
+        throw Error('Unsupported encoding');
+
+      var json = JSON.parse(data.substring(2));
+      return decodeValue(json, getChunk).then(fulfill);
     });
   });
 }

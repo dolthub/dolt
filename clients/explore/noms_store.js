@@ -1,8 +1,9 @@
-var m  = location.href.match(/([a-z]+):\/\/([^:^\/]+)/);
-var urlScheme = m[1];
-var urlHost = m[2];
+var host = function(host) {
+  var i = host.indexOf(':');
+  return i < 0 ? host : host.substring(0, i);
+}(location.host);
 var nomsPort = "8000";
-var nomsServer = urlScheme + '://' + urlHost + ":" + nomsPort;
+var nomsServer = location.protocol + '//' + host + ":" + nomsPort;
 
 var rpc = {
   get: nomsServer + '/get',

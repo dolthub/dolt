@@ -5,20 +5,16 @@ var style = {
   outer: {
     fontFamily: "Consolas, monospace"
   },
-  header: {
-
-  },
   collapsed: {
     display: 'inline-block',
-    transform: 'rotate(-90deg)'
+    transform: 'rotate(-90deg)',
+    WebkitTransform: 'rotate(-90deg)'
   },
   expanded: {
     display: 'inline-block',
   },
   inner: {
     marginLeft: "20px",
-  },
-  content: {
   },
   types: {
     collection: { color: "#b0b0b0" },
@@ -32,10 +28,14 @@ var style = {
   }
 };
 
+var isInteger = Number.isInteger || function(nVal) {
+    return typeof nVal === "number" && isFinite(nVal) && nVal > -9007199254740992 && nVal < 9007199254740992 && Math.floor(nVal) === nVal;
+}
+
 var TreeNode = React.createClass({
   getInitialState: function() {
     return {
-      collapsed: !this.props.expandAll,
+      expand: this.props.expandAll,
       expandAll: this.props.expandAll
     };
   },
@@ -51,7 +51,7 @@ var TreeNode = React.createClass({
       return "collection";
     var type = typeof value;
     if (type == "number") {
-      return Number.isInteger(value) ? "int" : "float"
+      return isInteger(value) ? "int" : "float"
     }
     return type;
   },
@@ -73,9 +73,9 @@ var TreeNode = React.createClass({
     return String(value);
   },
 
-  toggleCollapsed: function(e) {
+  toggleExpand: function(e) {
     this.setState({
-      collapsed: !this.state.collapsed,
+      expand: !this.state.expand,
       expandAll: e.getModifierState("Shift")
     });
   },
@@ -85,7 +85,7 @@ var TreeNode = React.createClass({
     var type = this.getTypeOf(value);
     var isCollection = this.isCollection(value);
 
-    var arrowStyle = this.state.collapsed ? "collapsed" : "expanded"
+    var arrowStyle = this.state.expand ? 'expanded' : 'collapsed';
     var bulletDiv = isCollection ?
       React.DOM.div({ style: style[arrowStyle] }, '\u25BE') :
       React.DOM.span({}, ' ');
@@ -96,10 +96,10 @@ var TreeNode = React.createClass({
       headerItems.push(React.DOM.span({}, this.props.name + ": "))
     }
     headerItems.push(React.DOM.span({ style: style.types[type] }, this.toString(value)))
-    var header = React.DOM.div({ style: style.header, onClick: this.toggleCollapsed }, headerItems);
+    var header = React.DOM.div({ style: style.header, onClick: this.toggleExpand }, headerItems);
 
     var content = [ header ];
-    if (!this.state.collapsed && isCollection) {
+    if (this.state.expand && isCollection) {
       var isSet = value instanceof Immutable.Set;
       value.forEach(function(subvalue, index) {
         var name = isSet ? undefined : index;
