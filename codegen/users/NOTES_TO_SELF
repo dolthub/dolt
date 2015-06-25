@@ -1,0 +1,13 @@
+HELLO TOMORROW SELF
+
+I know you will have forgotten all of this, so I left you a note:
+
+We are trying to generate strong Go types to make the code in /user easier to write, and to gain experience with how user code will eventually be strongly typed.
+
+- next up is to write out the getter/setters for the fields in nomgen/nomgen.go
+  - then generate the strongly-typed sets
+  - then actually try to use it in the /user package
+
+- i just realized i don't need the separation between the nomgen program and the mkdata program: nomgen should be a lib that user code (e.g., mkdata) links in. Then we also wouldn't need the file-based chunkstore as an intermediate place for the data to live between the two programs -- just a MemoryStore would do.
+
+- fill in the flag details for the various programs
