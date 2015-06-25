@@ -40,40 +40,51 @@ function decodeRef(ref, getChunk) {
   });
 }
 
+function decodeInt(value) {
+  return new Promise(function(fulfill) {
+    fulfill(Number.parseInt(value));
+  });
+}
+
+function decodeFloat(value) {
+  return new Promise(function(fulfill) {
+    fulfill(Number.parseFloat(value));
+  });
+}
+
+var decode = {
+  map: decodeMap,
+  list: decodeList,
+  set: decodeSet,
+  ref: decodeRef,
+  int16: decodeInt,
+  int32: decodeInt,
+  int64: decodeInt,
+  uint16: decodeInt,
+  uint32: decodeInt,
+  uint64: decodeInt,
+  float32: decodeFloat,
+  float64: decodeFloat
+};
+
 // TODO(rafael): Kind of cheating to decode all int & float types as numbers.
 function decodeTaggedValue(taggedValue, getChunk) {
   return new Promise(function(fulfill) {
+    var tagValue = [];
     for (var tag in taggedValue) {
-      var value = taggedValue[tag];
-      switch(tag) {
-        case 'int16':
-        case 'int32':
-        case 'int64':
-        case 'uint16':
-        case 'uint32':
-        case 'uint64':
-          fulfill(Number.parseInt(value));
-          return;
-        case 'float32':
-        case 'float64':
-          fulfill(Number.parseFloat(value));
-          return;
-        case 'list':
-          decodeList(value, getChunk).then(fulfill);
-          return;
-        case 'set':
-          decodeSet(value, getChunk).then(fulfill);
-          return;
-        case 'map':
-          decodeMap(value, getChunk).then(fulfill);
-          return;
-        case 'ref':
-          decodeRef(value, getChunk).then(fulfill);
-          return;
-      }
-
-      throw 'Not Reached';
+      tagValue.push(tag, taggedValue[tag]);
     }
+
+    if (tagValue.length != 2) {
+      throw Error('Bad tagged value encoding');
+    }
+
+    decodeFn = decode[tagValue[0]];
+    if (!decodeFn) {
+      throw Error('Unknown tagged value: ' + tagValue[0]);
+    }
+
+    decodeFn(tagValue[1], getChunk).then(fulfill);
   });
 }
 
