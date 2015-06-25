@@ -2,8 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 
 	"github.com/attic-labs/noms/chunks"
+	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/types"
 )
@@ -29,6 +31,7 @@ func main() {
 	)
 
 	user := types.NewMap(
+		types.NewString("$type"), types.NewString("noms.StructDef"),
 		types.NewString("$name"), types.NewString("User"),
 		types.NewString("email"), types.NewString("string"),
 		types.NewString("apps"), types.NewMap(
@@ -37,5 +40,7 @@ func main() {
 		),
 	)
 
-	enc.WriteValue(user, cs)
+	ref, err := enc.WriteValue(user, cs)
+	Chk.NoError(err)
+	fmt.Println(ref.String())
 }
