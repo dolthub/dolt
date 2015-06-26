@@ -18,6 +18,10 @@ func newFlatSet(m setData) flatSet {
 	}
 }
 
+func (fs flatSet) Empty() bool {
+	return fs.Len() == uint64(0)
+}
+
 func (fs flatSet) Len() uint64 {
 	return uint64(len(fs.m))
 }

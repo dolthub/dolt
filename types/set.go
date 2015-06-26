@@ -5,6 +5,7 @@ type setCombineCallback func(prev Set, v ...Value) Set
 
 type Set interface {
 	Value
+	Empty() bool
 	Len() uint64
 	Has(v Value) bool
 	Iter(setIterCallback)

@@ -79,7 +79,7 @@ func getJSON(v types.Value, s chunks.ChunkSink) (interface{}, error) {
 			"uint64": uint64(v),
 		}, nil
 	default:
-		panic("Unexpected type")
+		panic(fmt.Sprintf("Unexpected type: %+v", v))
 	}
 	return nil, nil
 }

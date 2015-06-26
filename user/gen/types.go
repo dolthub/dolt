@@ -2,32 +2,27 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"os"
 
-	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/codegen/nomgen"
 	. "github.com/attic-labs/noms/dbg"
-	"github.com/attic-labs/noms/enc"
+	_ "github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/types"
 )
 
-var (
-	outDir = flag.String("out", "", "blah")
-)
-
 func main() {
+	outFile := flag.String("o", "", "output file")
 	flag.Parse()
-	if *outDir == "" {
+	if *outFile == "" {
 		flag.Usage()
 		return
 	}
-
-	cs := chunks.NewFileStore(*outDir, "root")
 
 	app := types.NewMap(
 		types.NewString("$type"), types.NewString("noms.StructDef"),
 		types.NewString("$name"), types.NewString("App"),
 		types.NewString("id"), types.NewString("string"),
-		types.NewString("value"), types.NewString("value"),
+		types.NewString("root"), types.NewString("value"),
 	)
 
 	user := types.NewMap(
@@ -40,7 +35,13 @@ func main() {
 		),
 	)
 
-	ref, err := enc.WriteValue(user, cs)
+	userSet := types.NewMap(
+		types.NewString("$type"), types.NewString("noms.SetDef"),
+		types.NewString("elem"), user)
+
+	f, err := os.OpenFile(*outFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	defer f.Close()
 	Chk.NoError(err)
-	fmt.Println(ref.String())
+	ng := nomgen.New(f)
+	ng.WriteGo(userSet, "user")
 }

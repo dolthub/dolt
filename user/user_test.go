@@ -25,8 +25,7 @@ func TestInsertUser(t *testing.T) {
 	assert.EqualValues(1, users.Len())
 
 	assert.EqualValues(1, users.Len())
-	user := users.Any().(types.Map)
-	assert.True(types.NewString("foo@bar.com").Equals(user.Get(types.NewString("email"))))
+	assert.Equal("foo@bar.com", users.Any().Email().String())
 }
 
 func TestGetUser(t *testing.T) {
@@ -35,17 +34,17 @@ func TestGetUser(t *testing.T) {
 	ds := datastore.NewDataStore(ms, ms)
 	users := GetUsers(ds)
 	user := GetUser(users, "foo@bar.com")
-	assert.Nil(user)
+	assert.Equal(User{}, user)
 	users = InsertUser(users, "foo@bar.com")
 	user = GetUser(users, "foo@bar.com")
-	assert.True(user.Get(types.NewString("email")).Equals(types.NewString("foo@bar.com")))
+	assert.Equal("foo@bar.com", user.Email().String())
 }
 
 func TestSetAppRoot(t *testing.T) {
 	assert := assert.New(t)
-	users := InsertUser(types.NewSet(), "foo@bar.com")
+	users := InsertUser(NewUserSet(), "foo@bar.com")
 	users = SetAppRoot(users, "foo@bar.com", "app", types.Int32(42))
 	assert.EqualValues(1, users.Len())
-	assert.True(types.Int32(42).Equals(users.Any().(types.Map).Get(types.NewString("apps")).(types.Set).Any().(types.Map).Get(types.NewString("root"))))
+	assert.True(types.Int32(42).Equals(users.Any().Apps().Any().Root()))
 	assert.True(types.Int32(42).Equals(GetAppRoot(users, "foo@bar.com", "app")))
 }

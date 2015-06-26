@@ -6,46 +6,39 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-func GetUsers(ds datastore.DataStore) types.Set {
-	// 1 query (for roots set)
-	if ds.Roots().Len() == 0 {
-		return types.NewSet()
+//go:generate go run gen/types.go -o types.go
+
+func GetUsers(ds datastore.DataStore) UserSet {
+	if ds.Roots().Empty() {
+		return NewUserSet()
 	} else {
 		// BUG 13: We don't ever want to branch the user database. Currently we can't avoid that, but we should change DataStore::Commit() to support that mode of operation.
 		Chk.EqualValues(1, ds.Roots().Len())
-
-		// 2 queries Set::Any() -> Map::Get()
-		return ds.Roots().Any().(types.Map).Get(types.NewString("value")).(types.Set)
+		return UserSetFromVal(ds.Roots().Any().Value())
 	}
 }
 
-func InsertUser(users types.Set, email string) types.Set {
-	if GetUser(users, email) != nil {
+func InsertUser(users UserSet, email string) UserSet {
+	if GetUser(users, email) != (User{}) {
 		return users
 	}
-	user := types.NewMap(
-		types.NewString("$type"), types.NewString("noms.User"),
-		types.NewString("email"), types.NewString(email),
-		types.NewString("apps"), types.NewSet(),
-	)
-	return users.Insert(user)
+	return users.Insert(
+		NewUser().SetEmail(types.NewString(email)).SetApps(NewAppSet()))
 }
 
-func CommitUsers(ds datastore.DataStore, users types.Set) datastore.DataStore {
-	return ds.Commit(types.NewSet(
-		types.NewMap(
-			types.NewString("$type"), types.NewString("noms.Root"),
-			types.NewString("parents"), ds.Roots(),
-			types.NewString("value"), users)))
+func CommitUsers(ds datastore.DataStore, users UserSet) datastore.DataStore {
+	return ds.Commit(datastore.NewRootSet().Insert(
+		datastore.NewRoot().SetParents(
+			ds.Roots().NomsValue()).SetValue(
+			users.NomsValue())))
 }
 
-func GetUser(users types.Set, email string) (r types.Map) {
+func GetUser(users UserSet, email string) (r User) {
 	// n queries
 	// could parallelize using go routines. we actually want all the users in memory so we could just get them at GetUsers()
-	users.Iter(func(v types.Value) (stop bool) {
-		// 0 queries
-		if v.(types.Map).Get(types.NewString("email")).Equals(types.NewString(email)) {
-			r = v.(types.Map)
+	users.Iter(func(v User) (stop bool) {
+		if v.Email().String() == email {
+			r = v
 			stop = true
 		}
 		return
@@ -53,10 +46,10 @@ func GetUser(users types.Set, email string) (r types.Map) {
 	return
 }
 
-func GetApp(apps types.Set, appId string) (r types.Map) {
-	apps.Iter(func(val types.Value) (stop bool) {
-		if val.(types.Map).Get(types.NewString("id")).(types.String).String() == appId {
-			r = val.(types.Map)
+func GetApp(apps AppSet, appId string) (r App) {
+	apps.Iter(func(app App) (stop bool) {
+		if app.Id().String() == appId {
+			r = app
 			stop = true
 		}
 		return
@@ -64,28 +57,26 @@ func GetApp(apps types.Set, appId string) (r types.Map) {
 	return
 }
 
-func GetAppRoot(users types.Set, userEmail, appId string) types.Value {
+func GetAppRoot(users UserSet, userEmail, appId string) types.Value {
 	user := GetUser(users, userEmail)
-	Chk.NotNil(user, "Unknown user: %s", userEmail)
-	app := GetApp(user.Get(types.NewString("apps")).(types.Set), appId)
-	if app == nil {
+	Chk.NotEmpty(user, "Unknown user: %s", userEmail)
+	app := GetApp(user.Apps(), appId)
+	if app == (App{}) {
 		return nil
 	}
-	return app.Get(types.NewString("root"))
+	return app.Root()
 }
 
-func SetAppRoot(users types.Set, userEmail, appId string, val types.Value) types.Set {
+func SetAppRoot(users UserSet, userEmail, appId string, val types.Value) UserSet {
 	user := GetUser(users, userEmail)
-	Chk.NotNil(user, "Unknown user: %s", userEmail)
-	apps := user.Get(types.NewString("apps")).(types.Set)
+	Chk.NotEmpty(user, "Unknown user: %s", userEmail)
+	apps := user.Apps()
 	app := GetApp(apps, appId)
 
 	return users.Remove(user).Insert(
-		user.Set(types.NewString("apps"),
+		user.SetApps(
 			apps.Remove(app).Insert(
-				types.NewMap(
-					types.NewString("$type"), types.NewString("noms.App"),
-					types.NewString("id"), types.NewString(appId),
-					types.NewString("root"), val,
-				))))
+				NewApp().
+					SetId(types.NewString(appId)).
+					SetRoot(val))))
 }

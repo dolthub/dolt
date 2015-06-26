@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/attic-labs/noms/datastore"
 	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/user"
 )
@@ -24,13 +25,13 @@ func main() {
 	lastVal := uint64(0)
 	roots := ds.Roots()
 	if roots.Len() > uint64(0) {
-		lastVal = uint64(roots.Any().(types.Map).Get(types.NewString("value")).(types.UInt64))
+		lastVal = uint64(roots.Any().Value().(types.UInt64))
 	}
 	newVal := lastVal + 1
-	ds.Commit(types.NewSet(types.NewMap(
-		types.NewString("$root"), types.NewString("noms.Root"),
-		types.NewString("parents"), roots,
-		types.NewString("value"), types.UInt64(newVal))))
+	ds.Commit(datastore.NewRootSet().Insert(
+		datastore.NewRoot().SetParents(
+			roots.NomsValue()).SetValue(
+			types.UInt64(newVal))))
 
 	fmt.Println(newVal)
 }

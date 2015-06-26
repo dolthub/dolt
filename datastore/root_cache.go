@@ -13,17 +13,17 @@ type rootCache struct {
 	refs   map[ref.Ref]bool
 }
 
-func (cache *rootCache) updateFromCommit(commitMap types.Map) {
-	if _, ok := cache.refs[commitMap.Ref()]; ok {
+func (cache *rootCache) updateFromCommit(root Root) {
+	if _, ok := cache.refs[root.Ref()]; ok {
 		return
 	}
 
-	parents := commitMap.Get(types.NewString("parents")).(types.Set)
+	parents := root.Parents()
 	parents.Iter(func(commit types.Value) (stop bool) {
-		cache.updateFromCommit(commit.(types.Map))
+		cache.updateFromCommit(RootFromVal(commit))
 		return
 	})
-	cache.refs[commitMap.Ref()] = true
+	cache.refs[root.Ref()] = true
 }
 
 func (cache *rootCache) Update(rootsRef ref.Ref) {
@@ -36,9 +36,9 @@ func (cache *rootCache) Update(rootsRef ref.Ref) {
 	}
 
 	// BUG 11: This is super-inefficient with eager ReadValue and no caching
-	rootSet := enc.MustReadValue(rootsRef, cache.source).(types.Set)
-	rootSet.Iter(func(commit types.Value) (stop bool) {
-		cache.updateFromCommit(commit.(types.Map))
+	rootSet := RootSet{enc.MustReadValue(rootsRef, cache.source).(types.Set)}
+	rootSet.Iter(func(commit Root) (stop bool) {
+		cache.updateFromCommit(commit)
 		return
 	})
 	cache.refs[rootsRef] = true

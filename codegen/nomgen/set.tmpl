@@ -1,0 +1,82 @@
+// {{.StructName}}
+
+type {{.StructName}} struct {
+	s types.Set
+}
+
+type {{.StructName}}IterCallback (func (p {{.ElemName}}) (stop bool))
+
+func New{{.StructName}}() {{.StructName}} {
+	return {{.StructName}}{types.NewSet()}
+}
+
+func {{.StructName}}FromVal(p types.Value) {{.StructName}} {
+	return {{.StructName}}{p.(types.Set)}
+}
+
+func (s {{.StructName}}) NomsValue() types.Set {
+	return s.s
+}
+
+func (s {{.StructName}}) Equals(p {{.StructName}}) bool {
+	return s.s.Equals(p.s)
+}
+
+func (s {{.StructName}}) Ref() ref.Ref {
+	return s.s.Ref()
+}
+
+func (s {{.StructName}}) Empty() bool {
+	return s.s.Empty()
+}
+
+func (s {{.StructName}}) Len() uint64 {
+	return s.s.Len()
+}
+
+func (s {{.StructName}}) Has(p {{.ElemName}}) bool {
+	return s.s.Has(p.NomsValue())
+}
+
+func (s {{.StructName}}) Iter(cb {{.StructName}}IterCallback) {
+	s.s.Iter(func(v types.Value) bool {
+		return cb({{.ElemName}}FromVal(v))
+	})
+}
+
+func (s {{.StructName}}) Insert(p ...{{.ElemName}}) {{.StructName}} {
+	return {{.StructName}}{s.s.Insert(s.fromElemSlice(p)...)}
+}
+
+func (s {{.StructName}}) Remove(p ...{{.ElemName}}) {{.StructName}} {
+	return {{.StructName}}{s.s.Remove(s.fromElemSlice(p)...)}
+}
+
+func (s {{.StructName}}) Union(others ...{{.StructName}}) {{.StructName}} {
+	return {{.StructName}}{s.s.Union(s.fromStructSlice(others)...)}
+}
+
+func (s {{.StructName}}) Subtract(others ...{{.StructName}}) {{.StructName}} {
+	return {{.StructName}}{s.s.Subtract(s.fromStructSlice(others)...)}
+}
+
+func (s {{.StructName}}) Any() {{.ElemName}} {
+	return {{.ElemName}}FromVal(s.s.Any())
+}
+
+func (s {{.StructName}}) fromStructSlice(p []{{.StructName}}) []types.Set {
+	r := make([]types.Set, len(p))
+	for i, v := range p {
+		r[i] = v.s
+	}
+	return r
+}
+
+func (s {{.StructName}}) fromElemSlice(p []{{.ElemName}}) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v.NomsValue()
+	}
+	return r
+}
+

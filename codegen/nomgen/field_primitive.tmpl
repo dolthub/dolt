@@ -1,0 +1,7 @@
+func(s {{.StructName}}) {{.GoFieldName}}() {{.FieldType}} {
+	return s.m.Get(types.NewString("{{.FieldName}}")).({{.FieldType}})
+}
+
+func (s {{.StructName}}) Set{{.GoFieldName}}(p {{.FieldType}}) {{.StructName}} {
+	return {{.StructName}}FromVal(s.m.Set(types.NewString("{{.FieldName}}"), p))
+}
