@@ -51,3 +51,12 @@ func TestString(t *testing.T) {
 	r := MustParse(s)
 	assert.Equal(t, s, r.String())
 }
+
+func TestDigest(t *testing.T) {
+	r := New(Sha1Digest{})
+	d := r.Digest()
+	assert.Equal(t, r.Digest(), d)
+	// Digest() must return a copy otherwise things get weird.
+	d[0] = 0x01
+	assert.NotEqual(t, r.Digest(), d)
+}

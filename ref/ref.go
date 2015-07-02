@@ -23,7 +23,6 @@ type Ref struct {
 }
 
 // Returns a *copy* of the digest.
-// TODO: test this.
 func (r Ref) Digest() Sha1Digest {
 	return r.digest
 }
