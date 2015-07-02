@@ -40,8 +40,8 @@ func NewHash() hash.Hash {
 	return sha1.New()
 }
 
-// TODO: Test.
 func FromHash(h hash.Hash) Ref {
+	Chk.Equal(sha1.Size, h.Size())
 	digest := Sha1Digest{}
 	h.Sum(digest[:0])
 	return New(digest)

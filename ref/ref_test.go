@@ -3,6 +3,7 @@ package ref
 import (
 	"testing"
 
+	"go/src/pkg/crypto/sha1"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -59,4 +60,11 @@ func TestDigest(t *testing.T) {
 	// Digest() must return a copy otherwise things get weird.
 	d[0] = 0x01
 	assert.NotEqual(t, r.Digest(), d)
+}
+
+func TestFromHash(t *testing.T) {
+	h := sha1.New()
+	h.Write([]byte("abc"))
+	r := FromHash(h)
+	assert.Equal(t, "sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r.String())
 }
