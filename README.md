@@ -1,6 +1,8 @@
 # Noms
 
-Noms is a content-addressable, immutable, peer-to-peer, multi-application datastore for structured data.
+Noms is a content-addressable, append-only, peer-to-peer datastore for structured data.
+
+In other words, *noms is git for structured data*.
 
 This repository will contain the reference implementation of the noms protocol, and will eventually be open sourced. 
 
