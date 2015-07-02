@@ -98,3 +98,13 @@ func TestSetSubtract(t *testing.T) {
 		NewSet(Int32(1), Int32(2))).Equals(
 		NewSet()))
 }
+
+func TestSetAny(t *testing.T) {
+	assert := assert.New(t)
+	s := NewSet()
+	assert.Nil(s.Any())
+	s = s.Insert(Int32(1))
+	assert.NotNil(s.Any())
+	s = s.Insert(Int32(2))
+	assert.NotNil(s.Any())
+}
