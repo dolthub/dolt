@@ -17,7 +17,7 @@ func main() {
 		flag.Usage()
 		return
 	}
-	ds := datastore.NewDataStore(cs, cs.(chunks.RootTracker))
+	ds := datastore.NewDataStore(cs)
 
 	lastVal := uint64(0)
 	roots := ds.Roots()

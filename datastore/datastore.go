@@ -13,18 +13,17 @@ import (
 type DataStore struct {
 	chunks.ChunkStore
 
-	rt    chunks.RootTracker
 	rc    *rootCache
 	roots RootSet
 }
 
-func NewDataStore(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
-	return NewDataStoreWithCache(cs, rt, NewRootCache(cs))
+func NewDataStore(cs chunks.ChunkStore) DataStore {
+	return newDataStoreInternal(cs, NewRootCache(cs))
 }
 
-func NewDataStoreWithCache(cs chunks.ChunkStore, rt chunks.RootTracker, rc *rootCache) DataStore {
+func newDataStoreInternal(cs chunks.ChunkStore, rc *rootCache) DataStore {
 	var roots RootSet
-	rootRef := rt.Root()
+	rootRef := cs.Root()
 	if (rootRef == ref.Ref{}) {
 		roots = NewRootSet()
 	} else {
@@ -32,7 +31,7 @@ func NewDataStoreWithCache(cs chunks.ChunkStore, rt chunks.RootTracker, rc *root
 		roots = RootSetFromVal(enc.MustReadValue(rootRef, cs).(types.Set))
 	}
 	return DataStore{
-		cs, rt, rc, roots,
+		cs, rc, roots,
 	}
 }
 
@@ -55,11 +54,11 @@ func (ds *DataStore) Commit(newRoots RootSet) DataStore {
 	for !ds.doCommit(newRoots, RootSet{superceded}) {
 	}
 
-	return NewDataStoreWithCache(ds.ChunkStore, ds.rt, ds.rc)
+	return newDataStoreInternal(ds.ChunkStore, ds.rc)
 }
 
 func (ds *DataStore) doCommit(add, remove RootSet) bool {
-	oldRootRef := ds.rt.Root()
+	oldRootRef := ds.Root()
 	oldRoots := ds.Roots()
 
 	prexisting := make([]Root, 0)
@@ -81,5 +80,5 @@ func (ds *DataStore) doCommit(add, remove RootSet) bool {
 	newRootRef, err := enc.WriteValue(newRoots.NomsValue(), ds)
 	Chk.NoError(err)
 
-	return ds.rt.UpdateRoot(newRootRef, oldRootRef)
+	return ds.UpdateRoot(newRootRef, oldRootRef)
 }

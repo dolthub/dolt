@@ -9,6 +9,7 @@ import (
 type ChunkStore interface {
 	ChunkSource
 	ChunkSink
+	RootTracker
 }
 
 type RootTracker interface {
