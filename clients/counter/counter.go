@@ -4,23 +4,20 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datastore"
 	"github.com/attic-labs/noms/types"
-	"github.com/attic-labs/noms/user"
-)
-
-var (
-	appDataStoreFlags = user.AppDataFlags()
 )
 
 func main() {
+	flags := chunks.NewFlags()
 	flag.Parse()
-
-	ds := appDataStoreFlags.CreateStore()
-	if ds == nil {
+	cs := flags.CreateStore()
+	if cs == nil {
 		flag.Usage()
 		return
 	}
+	ds := datastore.NewDataStore(cs, cs.(chunks.RootTracker))
 
 	lastVal := uint64(0)
 	roots := ds.Roots()
