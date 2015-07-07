@@ -72,7 +72,10 @@ func main() {
 	flag.Parse()
 
 	cs = flags.CreateStore()
-	Chk.NotNil(cs)
+	if cs == nil {
+		flag.Usage()
+		return
+	}
 
 	// TODO: Shouldn't have to cast here.
 	tracker = cs.(chunks.RootTracker)
