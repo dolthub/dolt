@@ -4,7 +4,7 @@ This is the beginnings of a simple tree view of all noms data.
 
 ## Requirements
 
-* [`<noms>/clients/server`](../server) (see instructions there)
+* [`<noms>/clients/server`](../server)
 * Node.js: https://nodejs.org/download/
 
 ## Build
