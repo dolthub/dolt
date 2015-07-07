@@ -55,18 +55,67 @@ func TestS3StorePut(t *testing.T) {
 	assert.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
 
 	// And reading it via the API should work...
-	reader, err := s.Get(r1)
-	assert.NoError(err)
-
-	data, err := ioutil.ReadAll(reader)
-	assert.NoError(err)
-	assert.Equal(input, string(data))
+	assertInputInStore(input, r1, s, assert)
 
 	// Reading a non-existing ref fails
 	hash := ref.NewHash()
 	hash.Write([]byte("Non-existent"))
-	reader, err = s.Get(ref.FromHash(hash))
+	_, err = s.Get(ref.FromHash(hash))
 	assert.Error(err)
+}
+
+func TestS3StorePutRefAfterClose(t *testing.T) {
+	assert := assert.New(t)
+
+	input := "abc"
+
+	s := S3Store{
+		"bucket",
+		"table",
+		&mockS3{},
+		nil,
+	}
+
+	w := s.Put()
+	_, err := w.Write([]byte(input))
+	assert.NoError(err)
+
+	assert.NoError(w.Close())
+	r1, err := w.Ref()
+	assert.NoError(err)
+
+	// See http://www.di-mgt.com.au/sha_testvectors.html
+	assert.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
+
+	// And reading it via the API should work...
+	assertInputInStore(input, r1, s, assert)
+}
+
+func TestS3StorePutMultiRef(t *testing.T) {
+	assert := assert.New(t)
+
+	input := "abc"
+
+	s := S3Store{
+		"bucket",
+		"table",
+		&mockS3{},
+		nil,
+	}
+
+	w := s.Put()
+	_, err := w.Write([]byte(input))
+	assert.NoError(err)
+
+	_, _ = w.Ref()
+	r1, err := w.Ref()
+	assert.NoError(err)
+
+	// See http://www.di-mgt.com.au/sha_testvectors.html
+	assert.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
+
+	// And reading it via the API should work...
+	assertInputInStore(input, r1, s, assert)
 }
 
 type mockAWSError string

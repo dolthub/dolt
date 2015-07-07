@@ -146,24 +146,26 @@ func (w *s3ChunkWriter) Write(data []byte) (int, error) {
 }
 
 func (w *s3ChunkWriter) Ref() (ref.Ref, error) {
-	ref := ref.FromHash(w.hash)
+	Chk.NoError(w.Close())
+	return ref.FromHash(w.hash), nil
+}
 
-	w.file.Close()
-	f, err := os.Open(w.file.Name())
-	w.file = f
+func (w *s3ChunkWriter) Close() error {
+	if w.file == nil {
+		return nil
+	}
+	Chk.NoError(w.file.Sync())
+	_, err := w.file.Seek(0, 0)
+	Chk.NoError(err)
 
 	_, err = w.store.s3svc.PutObject(&s3.PutObjectInput{
 		Bucket: aws.String(w.store.bucket),
-		Key:    aws.String(ref.String()),
+		Key:    aws.String(ref.FromHash(w.hash).String()),
 		Body:   w.file,
 	})
 	Chk.NoError(err)
 
-	return ref, nil
-}
-
-func (w *s3ChunkWriter) Close() error {
-	w.file.Close()
+	Chk.NoError(w.file.Close())
 	os.Remove(w.file.Name())
 	w.file = nil
 	return nil

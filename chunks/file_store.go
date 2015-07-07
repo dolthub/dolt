@@ -94,8 +94,17 @@ func (w *fileChunkWriter) Write(data []byte) (int, error) {
 }
 
 func (w *fileChunkWriter) Ref() (ref.Ref, error) {
-	ref := ref.FromHash(w.hash)
-	p := getPath(w.root, ref)
+	Chk.NoError(w.Close())
+	return ref.FromHash(w.hash), nil
+}
+
+func (w *fileChunkWriter) Close() error {
+	if w.file == nil {
+		return nil
+	}
+	Chk.NoError(w.file.Close())
+
+	p := getPath(w.root, ref.FromHash(w.hash))
 	err := os.MkdirAll(path.Dir(p), 0700)
 	Chk.NoError(err)
 
@@ -103,11 +112,7 @@ func (w *fileChunkWriter) Ref() (ref.Ref, error) {
 	if err != nil {
 		Chk.True(os.IsExist(err))
 	}
-	return ref, nil
-}
 
-func (w *fileChunkWriter) Close() error {
-	w.file.Close()
 	os.Remove(w.file.Name())
 	w.file = nil
 	return nil

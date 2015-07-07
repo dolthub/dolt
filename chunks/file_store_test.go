@@ -36,16 +36,52 @@ func TestFileStorePut(t *testing.T) {
 	assert.Equal(input, string(data))
 
 	// And reading it via the API should work...
-	reader, err := s.Get(ref)
+	assertInputInStore(input, ref, s, assert)
+}
+
+func TestFileStorePutWithRefAfterClose(t *testing.T) {
+	assert := assert.New(t)
+	dir, err := ioutil.TempDir(os.TempDir(), "")
+	defer os.Remove(dir)
 	assert.NoError(err)
-	data, err = ioutil.ReadAll(reader)
+
+	input := "abc"
+	s := NewFileStore(dir, "root")
+	w := s.Put()
+	_, err = w.Write([]byte(input))
 	assert.NoError(err)
-	assert.Equal(input, string(data))
+
+	assert.NoError(w.Close())
+	ref, err := w.Ref() // Ref() after Close() should work...
+	assert.NoError(err)
+
+	// And reading the data via the API should work...
+	assertInputInStore(input, ref, &s, assert)
+}
+
+func TestFileStorePutWithMultipleRef(t *testing.T) {
+	assert := assert.New(t)
+	dir, err := ioutil.TempDir(os.TempDir(), "")
+	defer os.Remove(dir)
+	assert.NoError(err)
+
+	input := "abc"
+	s := NewFileStore(dir, "root")
+	w := s.Put()
+	_, err = w.Write([]byte(input))
+	assert.NoError(err)
+
+	_, _ = w.Ref()
+	assert.NoError(err)
+	ref, err := w.Ref() // Multiple calls to Ref() should work...
+	assert.NoError(err)
+
+	// And reading the data via the API should work...
+	assertInputInStore(input, ref, &s, assert)
 }
 
 func TestFileStoreRoot(t *testing.T) {
 	assert := assert.New(t)
-
 	dir, err := ioutil.TempDir(os.TempDir(), "")
 	defer os.Remove(dir)
 	assert.NoError(err)
