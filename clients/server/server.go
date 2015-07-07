@@ -14,9 +14,8 @@ import (
 )
 
 var (
-	port    *string = flag.String("port", "8000", "")
-	cs      chunks.ChunkStore
-	tracker chunks.RootTracker
+	port *string = flag.String("port", "8000", "")
+	cs   chunks.ChunkStore
 )
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +24,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path[1:] {
 	case "root":
 		w.Header().Add("content-type", "text/plain")
-		fmt.Fprintf(w, "%v", tracker.Root().String())
+		fmt.Fprintf(w, "%v", cs.Root().String())
 	case "get":
 		hashString := r.URL.Query()["ref"][0]
 		ref, err := ref.Parse(hashString)
@@ -64,7 +63,7 @@ func createDummyData() {
 
 	Chk.NotNil(cs)
 	enc.WriteValue(a, cs)
-	tracker.UpdateRoot(a.Ref(), tracker.Root())
+	cs.UpdateRoot(a.Ref(), cs.Root())
 }
 
 func main() {
@@ -76,9 +75,6 @@ func main() {
 		flag.Usage()
 		return
 	}
-
-	// TODO: Shouldn't have to cast here.
-	tracker = cs.(chunks.RootTracker)
 
 	createDummyData()
 
