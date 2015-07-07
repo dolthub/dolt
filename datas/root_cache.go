@@ -1,4 +1,4 @@
-package datastore
+package datas
 
 import (
 	"github.com/attic-labs/noms/chunks"

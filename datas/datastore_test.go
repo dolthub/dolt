@@ -1,4 +1,4 @@
-package datastore
+package datas
 
 import (
 	"io/ioutil"

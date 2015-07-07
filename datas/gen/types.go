@@ -34,5 +34,5 @@ func main() {
 	defer f.Close()
 	Chk.NoError(err)
 	ng := nomgen.New(f)
-	ng.WriteGo(rootSet, "datastore")
+	ng.WriteGo(rootSet, "datas")
 }

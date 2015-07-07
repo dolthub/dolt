@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/datastore"
+	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -17,7 +17,7 @@ func main() {
 		flag.Usage()
 		return
 	}
-	ds := datastore.NewDataStore(cs)
+	ds := datas.NewDataStore(cs)
 
 	lastVal := uint64(0)
 	roots := ds.Roots()
@@ -25,8 +25,8 @@ func main() {
 		lastVal = uint64(roots.Any().Value().(types.UInt64))
 	}
 	newVal := lastVal + 1
-	ds.Commit(datastore.NewRootSet().Insert(
-		datastore.NewRoot().SetParents(
+	ds.Commit(datas.NewRootSet().Insert(
+		datas.NewRoot().SetParents(
 			roots.NomsValue()).SetValue(
 			types.UInt64(newVal))))
 
