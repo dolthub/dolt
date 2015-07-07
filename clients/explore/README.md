@@ -4,7 +4,7 @@ This is the beginnings of a simple tree view of all noms data.
 
 ## Requirements
 
-* nodejs: https://nodejs.org/download/
+* Node.js: https://nodejs.org/download/
 
 ## Build
 
