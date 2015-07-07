@@ -7,10 +7,7 @@ import (
 	"net/http"
 
 	"github.com/attic-labs/noms/chunks"
-	. "github.com/attic-labs/noms/dbg"
-	"github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 )
 
 var (
@@ -47,25 +44,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func createDummyData() {
-	a := types.NewSet(
-		types.NewString("foo"),
-		types.Int64(34),
-		types.Float64(3.4),
-		types.NewList(
-			types.NewString("bar"),
-		),
-		types.NewMap(
-			types.NewString("foo"), types.NewString("bar"),
-			types.NewString("amount"), types.Bool(true),
-		),
-	)
-
-	Chk.NotNil(cs)
-	enc.WriteValue(a, cs)
-	cs.UpdateRoot(a.Ref(), cs.Root())
-}
-
 func main() {
 	flags := chunks.NewFlags()
 	flag.Parse()
@@ -75,8 +53,6 @@ func main() {
 		flag.Usage()
 		return
 	}
-
-	createDummyData()
 
 	http.HandleFunc("/", handler)
 	http.ListenAndServe(fmt.Sprintf(":%s", *port), nil)
