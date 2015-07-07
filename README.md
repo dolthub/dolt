@@ -15,3 +15,25 @@ This includes:
 * Chunkstore interface as well as several sample implementations
 * Search support
 * Sample applications
+
+# Get the code
+
+`go get -u -t github.com/attic-labs/noms/...`
+
+# Build and run tests
+
+`go test ./...`
+
+# Run
+
+```
+cd <noms>/clients/counter
+go build
+./counter -file-store="/tmp/foo"
+./counter -file-store="/tmp/foo"
+./counter -file-store="/tmp/foo"
+```
+
+rejoice!
+
+TODO: Document how to use the server and explore.html
