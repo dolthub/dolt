@@ -36,4 +36,11 @@ go build
 
 rejoice!
 
-TODO: Document how to use the server and explore.html
+You can see the raw data:
+
+```
+ls /tmp/foo
+cat /tmp/foo/root
+```
+
+You can also explore the raw data in the explore UI. Follow the instructions in `clients/explore`.
