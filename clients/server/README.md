@@ -7,7 +7,6 @@ This is an http server for noms. Currently it is read-only.
 ```
 cd <noms>/clients/server
 go build
-go test
 ```
 
 ## Run
