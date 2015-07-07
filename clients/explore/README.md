@@ -2,8 +2,13 @@
 
 This is the beginnings of a simple tree view of all noms data.
 
+## Requirements
+
+* nodejs: https://nodejs.org/download/
+
 ## Build
 
+* `cd <noms>/clients/explore`
 * `npm install`
 * `npm run build`
 
