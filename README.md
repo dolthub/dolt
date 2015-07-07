@@ -43,4 +43,4 @@ ls /tmp/foo
 cat /tmp/foo/root
 ```
 
-You can also explore the raw data in the explore UI. Follow the instructions in `clients/explore`.
+You can also explore the data visually. Follow the instructions in `clients/explore`.
