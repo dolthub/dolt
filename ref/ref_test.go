@@ -3,7 +3,8 @@ package ref
 import (
 	"testing"
 
-	"go/src/pkg/crypto/sha1"
+	"crypto/sha1"
+
 	"github.com/stretchr/testify/assert"
 )
 
