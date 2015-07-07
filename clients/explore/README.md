@@ -4,6 +4,7 @@ This is the beginnings of a simple tree view of all noms data.
 
 ## Requirements
 
+* <noms>/clients/server (see instructions there)
 * Node.js: https://nodejs.org/download/
 
 ## Build
