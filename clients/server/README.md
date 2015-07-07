@@ -11,6 +11,6 @@ go build
 
 ## Run
 ```
-# See flags for more options
+# See -h for more options
 ./server -file-store="/tmp/foo"
 ```
