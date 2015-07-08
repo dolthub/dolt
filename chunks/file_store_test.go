@@ -120,3 +120,36 @@ func TestFileStoreRoot(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal("sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd", string(input))
 }
+
+func TestFileStorePutExisting(t *testing.T) {
+	assert := assert.New(t)
+	dir, err := ioutil.TempDir(os.TempDir(), "")
+	defer os.Remove(dir)
+	assert.NoError(err)
+
+	input := "abc"
+	s := NewFileStore(dir, "root")
+
+	renameCount := 0
+	s.rename = func(oldPath, newPath string) error {
+		renameCount += 1
+		return os.Rename(oldPath, newPath)
+	}
+
+	write := func() {
+		w := s.Put()
+		_, err = w.Write([]byte(input))
+		assert.NoError(err)
+		_, err := w.Ref()
+		assert.NoError(err)
+	}
+
+	write()
+
+	assert.Equal(1, renameCount)
+
+	write()
+
+	// Shouldn't have written the second time.
+	assert.Equal(1, renameCount)
+}

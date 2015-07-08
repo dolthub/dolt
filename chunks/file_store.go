@@ -16,13 +16,18 @@ import (
 
 type FileStore struct {
 	dir, root string
+
+	// For testing
+	rename renameFn
 }
+
+type renameFn func(oldPath, newPath string) error
 
 func NewFileStore(dir, root string) FileStore {
 	Chk.NotEmpty(dir)
 	Chk.NotEmpty(root)
 	Chk.NoError(os.MkdirAll(dir, 0700))
-	return FileStore{dir, path.Join(dir, root)}
+	return FileStore{dir, path.Join(dir, root), os.Rename}
 }
 
 func readRef(file *os.File) ref.Ref {
@@ -71,8 +76,9 @@ func (f FileStore) Get(ref ref.Ref) (io.ReadCloser, error) {
 
 func (f FileStore) Put() ChunkWriter {
 	return &fileChunkWriter{
-		root: f.dir,
-		hash: ref.NewHash(),
+		root:   f.dir,
+		hash:   ref.NewHash(),
+		rename: f.rename,
 	}
 }
 
@@ -81,6 +87,7 @@ type fileChunkWriter struct {
 	file   *os.File
 	writer io.Writer
 	hash   hash.Hash
+	rename renameFn
 }
 
 func (w *fileChunkWriter) Write(data []byte) (int, error) {
@@ -105,10 +112,17 @@ func (w *fileChunkWriter) Close() error {
 	Chk.NoError(w.file.Close())
 
 	p := getPath(w.root, ref.FromHash(w.hash))
-	err := os.MkdirAll(path.Dir(p), 0700)
+
+	// If we already have this file, then nothing to do. Hooray.
+	_, err := os.Stat(p)
+	if err == nil {
+		return nil
+	}
+
+	err = os.MkdirAll(path.Dir(p), 0700)
 	Chk.NoError(err)
 
-	err = os.Rename(w.file.Name(), p)
+	err = w.rename(w.file.Name(), p)
 	if err != nil {
 		Chk.True(os.IsExist(err))
 	}
