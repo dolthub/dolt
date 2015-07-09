@@ -6,7 +6,6 @@ import (
 
 	"github.com/attic-labs/noms/codegen/nomgen"
 	. "github.com/attic-labs/noms/dbg"
-	_ "github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/types"
 )
 

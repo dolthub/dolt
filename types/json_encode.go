@@ -1,4 +1,4 @@
-package enc
+package types
 
 import (
 	"encoding/json"
@@ -8,14 +8,13 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 )
 
 var (
 	jsonTag = []byte("j ")
 )
 
-func jsonEncode(v types.Value, s chunks.ChunkSink) (r ref.Ref, err error) {
+func jsonEncode(v Value, s chunks.ChunkSink) (r ref.Ref, err error) {
 	var j interface{}
 	j, err = getJSON(v, s)
 	if err != nil {
@@ -32,49 +31,49 @@ func jsonEncode(v types.Value, s chunks.ChunkSink) (r ref.Ref, err error) {
 	return w.Ref()
 }
 
-func getJSON(v types.Value, s chunks.ChunkSink) (interface{}, error) {
+func getJSON(v Value, s chunks.ChunkSink) (interface{}, error) {
 	switch v := v.(type) {
-	case types.Blob:
+	case Blob:
 		Chk.Fail(fmt.Sprintf("jsonEncode doesn't support encoding blobs - didn't expect to get here: %+v", v))
-	case types.Bool:
+	case Bool:
 		return bool(v), nil
-	case types.Float32:
+	case Float32:
 		return map[string]interface{}{
 			"float32": float32(v),
 		}, nil
-	case types.Float64:
+	case Float64:
 		return map[string]interface{}{
 			"float64": float64(v),
 		}, nil
-	case types.Int16:
+	case Int16:
 		return map[string]interface{}{
 			"int16": int16(v),
 		}, nil
-	case types.Int32:
+	case Int32:
 		return map[string]interface{}{
 			"int32": int32(v),
 		}, nil
-	case types.Int64:
+	case Int64:
 		return map[string]interface{}{
 			"int64": int64(v),
 		}, nil
-	case types.List:
+	case List:
 		return getJSONList(v, s)
-	case types.Map:
+	case Map:
 		return getJSONMap(v, s)
-	case types.Set:
+	case Set:
 		return getJSONSet(v, s)
-	case types.String:
+	case String:
 		return v.String(), nil
-	case types.UInt16:
+	case UInt16:
 		return map[string]interface{}{
 			"uint16": uint16(v),
 		}, nil
-	case types.UInt32:
+	case UInt32:
 		return map[string]interface{}{
 			"uint32": uint32(v),
 		}, nil
-	case types.UInt64:
+	case UInt64:
 		return map[string]interface{}{
 			"uint64": uint64(v),
 		}, nil
@@ -83,7 +82,7 @@ func getJSON(v types.Value, s chunks.ChunkSink) (interface{}, error) {
 	}
 	return nil, nil
 }
-func getJSONList(l types.List, s chunks.ChunkSink) (r interface{}, err error) {
+func getJSONList(l List, s chunks.ChunkSink) (r interface{}, err error) {
 	j := []interface{}{}
 	for i := uint64(0); i < l.Len(); i++ {
 		var cj interface{}
@@ -99,10 +98,10 @@ func getJSONList(l types.List, s chunks.ChunkSink) (r interface{}, err error) {
 	return
 }
 
-func getJSONMap(m types.Map, s chunks.ChunkSink) (r interface{}, err error) {
+func getJSONMap(m Map, s chunks.ChunkSink) (r interface{}, err error) {
 	// Iteration through Set is random, but we need a deterministic order for serialization. Let's order using the refs of the values in the set.
-	order := types.MapEntrySlice{}
-	m.Iter(func(entry types.MapEntry) (stop bool) {
+	order := MapEntrySlice{}
+	m.Iter(func(entry MapEntry) (stop bool) {
 		order = append(order, entry)
 		return
 	})
@@ -128,11 +127,11 @@ func getJSONMap(m types.Map, s chunks.ChunkSink) (r interface{}, err error) {
 	return
 }
 
-func getJSONSet(set types.Set, s chunks.ChunkSink) (r interface{}, err error) {
+func getJSONSet(set Set, s chunks.ChunkSink) (r interface{}, err error) {
 	// Iteration through Set is random, but we need a deterministic order for serialization. Let's order using the refs of the values in the set.
-	lookup := map[ref.Ref]types.Value{}
+	lookup := map[ref.Ref]Value{}
 	order := ref.RefSlice{}
-	set.Iter(func(v types.Value) (stop bool) {
+	set.Iter(func(v Value) (stop bool) {
 		order = append(order, v.Ref())
 		lookup[v.Ref()] = v
 		return
@@ -156,18 +155,18 @@ func getJSONSet(set types.Set, s chunks.ChunkSink) (r interface{}, err error) {
 	return
 }
 
-func getChildJSON(v types.Value, s chunks.ChunkSink) (interface{}, error) {
+func getChildJSON(v Value, s chunks.ChunkSink) (interface{}, error) {
 	var r ref.Ref
 	var err error
 	switch v := v.(type) {
 	// Blobs, lists, maps, and sets are always out-of-line
-	case types.Blob:
+	case Blob:
 		r, err = WriteValue(v, s)
-	case types.List:
+	case List:
 		r, err = WriteValue(v, s)
-	case types.Map:
+	case Map:
 		r, err = WriteValue(v, s)
-	case types.Set:
+	case Set:
 		r, err = WriteValue(v, s)
 	default:
 		// Other types are always inline.

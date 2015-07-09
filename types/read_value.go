@@ -1,4 +1,4 @@
-package enc
+package types
 
 import (
 	"bufio"
@@ -8,11 +8,10 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 )
 
 // Reads and decodes a value from a chunk source.
-func ReadValue(ref ref.Ref, cs chunks.ChunkSource) (types.Value, error) {
+func ReadValue(ref ref.Ref, cs chunks.ChunkSource) (Value, error) {
 	reader, err := cs.Get(ref)
 	defer reader.Close()
 	if err != nil {
@@ -37,7 +36,7 @@ func ReadValue(ref ref.Ref, cs chunks.ChunkSource) (types.Value, error) {
 	return nil, fmt.Errorf("Unsupported chunk tag: %+v", prefix)
 }
 
-func MustReadValue(ref ref.Ref, cs chunks.ChunkSource) types.Value {
+func MustReadValue(ref ref.Ref, cs chunks.ChunkSource) Value {
 	val, err := ReadValue(ref, cs)
 	Chk.NoError(err)
 	return val

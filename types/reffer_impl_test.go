@@ -1,10 +1,9 @@
-package enc
+package types
 
 import (
 	"testing"
 
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -14,6 +13,6 @@ func TestRefferImpl(t *testing.T) {
 	h := ref.NewHash()
 	h.Write([]byte(input))
 	expected := ref.FromHash(h)
-	actual := types.Reffer(types.Bool(false))
+	actual := Reffer(Bool(false))
 	assert.Equal(expected, actual)
 }

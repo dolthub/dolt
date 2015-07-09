@@ -1,4 +1,4 @@
-package enc
+package types
 
 import (
 	"crypto/sha1"
@@ -6,7 +6,6 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,7 +14,7 @@ func TestWriteValue(t *testing.T) {
 
 	var s *chunks.MemoryStore
 
-	testEncode := func(expected string, v types.Value) ref.Ref {
+	testEncode := func(expected string, v Value) ref.Ref {
 		s = &chunks.MemoryStore{}
 		r, err := WriteValue(v, s)
 		assert.NoError(err)
@@ -27,7 +26,7 @@ func TestWriteValue(t *testing.T) {
 
 	// Encoding details for each codec is tested elsewhere.
 	// Here we just want to make sure codecs are selected correctly.
-	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), types.NewBlob([]byte{0x00, 0x01, 0x02}))
-	testEncode(string("j \"foo\"\n"), types.NewString("foo"))
+	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), NewBlob([]byte{0x00, 0x01, 0x02}))
+	testEncode(string("j \"foo\"\n"), NewString("foo"))
 
 }

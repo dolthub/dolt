@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -54,7 +53,7 @@ func TestDataStoreCommit(t *testing.T) {
 	//    \---|d|
 	d := NewRoot().SetParents(aSet.NomsValue()).SetValue(types.NewString("d"))
 	dSet := NewRootSet().Insert(d)
-	enc.WriteValue(dSet.NomsValue(), chunks)
+	types.WriteValue(dSet.NomsValue(), chunks)
 
 	ds = ds.Commit(dSet)
 	bcdSet := bcSet.Insert(d)

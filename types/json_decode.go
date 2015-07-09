@@ -1,4 +1,4 @@
-package enc
+package types
 
 import (
 	"encoding/json"
@@ -8,10 +8,9 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 )
 
-func jsonDecode(reader io.Reader, s chunks.ChunkSource) (types.Value, error) {
+func jsonDecode(reader io.Reader, s chunks.ChunkSource) (Value, error) {
 	prefix := make([]byte, len(jsonTag))
 	_, err := io.ReadFull(reader, prefix)
 	if err != nil {
@@ -30,12 +29,12 @@ func jsonDecode(reader io.Reader, s chunks.ChunkSource) (types.Value, error) {
 	return jsonDecodeValue(v, s)
 }
 
-func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (types.Value, error) {
+func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (Value, error) {
 	switch v := v.(type) {
 	case bool:
-		return types.Bool(v), nil
+		return Bool(v), nil
 	case string:
-		return types.NewString(v), nil
+		return NewString(v), nil
 	case map[string]interface{}:
 		return jsonDecodeTaggedValue(v, s)
 	default:
@@ -43,7 +42,7 @@ func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (types.Value, error) {
 	}
 }
 
-func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (types.Value, error) {
+func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (Value, error) {
 	Chk.Equal(1, len(m))
 	for k, v := range m {
 		switch k {
@@ -52,21 +51,21 @@ func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (type
 			if v, ok := v.(float64); ok {
 				switch k {
 				case "int16":
-					return types.Int16(int16(v)), nil
+					return Int16(int16(v)), nil
 				case "int32":
-					return types.Int32(int32(v)), nil
+					return Int32(int32(v)), nil
 				case "int64":
-					return types.Int64(int64(v)), nil
+					return Int64(int64(v)), nil
 				case "uint16":
-					return types.UInt16(uint16(v)), nil
+					return UInt16(uint16(v)), nil
 				case "uint32":
-					return types.UInt32(uint32(v)), nil
+					return UInt32(uint32(v)), nil
 				case "uint64":
-					return types.UInt64(uint64(v)), nil
+					return UInt64(uint64(v)), nil
 				case "float32":
-					return types.Float32(float32(v)), nil
+					return Float32(float32(v)), nil
 				case "float64":
-					return types.Float64(float64(v)), nil
+					return Float64(float64(v)), nil
 				}
 			}
 		case "list":
@@ -91,8 +90,8 @@ func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (type
 	return nil, fmt.Errorf("Cannot decode tagged json value: %+v", m)
 }
 
-func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (types.Value, error) {
-	output := types.NewList()
+func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (Value, error) {
+	output := NewList()
 	for _, inVal := range input {
 		outVal, err := jsonDecodeValue(inVal, s)
 		if err != nil {
@@ -103,8 +102,8 @@ func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (types.Value, err
 	return output, nil
 }
 
-func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (types.Value, error) {
-	vals := []types.Value{}
+func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (Value, error) {
+	vals := []Value{}
 	for _, inVal := range input {
 		outVal, err := jsonDecodeValue(inVal, s)
 		if err != nil {
@@ -112,11 +111,11 @@ func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (types.Value, erro
 		}
 		vals = append(vals, outVal)
 	}
-	return types.NewSet(vals...), nil
+	return NewSet(vals...), nil
 }
 
-func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (types.Value, error) {
-	output := types.NewMap()
+func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (Value, error) {
+	output := NewMap()
 	Chk.Equal(0, len(input)%2, "Length on input array must be multiple of 2")
 	for i := 0; i < len(input); i += 2 {
 		inKey := input[i]
@@ -135,7 +134,7 @@ func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (types.Value, erro
 	return output, nil
 }
 
-func jsonDecodeRef(refStr string, s chunks.ChunkSource) (types.Value, error) {
+func jsonDecodeRef(refStr string, s chunks.ChunkSource) (Value, error) {
 	ref, err := ref.Parse(refStr)
 	if err != nil {
 		return nil, err

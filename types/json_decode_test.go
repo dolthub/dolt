@@ -1,11 +1,10 @@
-package enc
+package types
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -26,7 +25,7 @@ func TestJSONDecode(t *testing.T) {
 	put(`j {"list":[]}`)
 	put(`j {"map":[]}`)
 
-	testDecode := func(s string, expected types.Value) {
+	testDecode := func(s string, expected Value) {
 		actual, err := jsonDecode(strings.NewReader(s), &cs)
 		assert.NoError(err)
 		assert.True(expected.Equals(actual), "Expected decoded value: %s to equal: %+v, but was: %+v", s, expected, actual)
@@ -34,47 +33,47 @@ func TestJSONDecode(t *testing.T) {
 
 	// integers
 	testDecode(`j {"int16":42}
-`, types.Int16(42))
+`, Int16(42))
 	testDecode(`j {"int32":0}
-`, types.Int32(0))
+`, Int32(0))
 	testDecode(`j {"int64":-4611686018427387904}
-`, types.Int64(-1<<62))
+`, Int64(-1<<62))
 	testDecode(`j {"uint16":42}
-`, types.UInt16(42))
+`, UInt16(42))
 	testDecode(`j {"uint32":0}
-`, types.UInt32(0))
+`, UInt32(0))
 	testDecode(`j {"uint64":9223372036854775808}
-`, types.UInt64(1<<63))
+`, UInt64(1<<63))
 
 	// floats
 	testDecode(`j {"float32":88.8}
-`, types.Float32(88.8))
+`, Float32(88.8))
 	testDecode(`j {"float64":3.14}
-`, types.Float64(3.14))
+`, Float64(3.14))
 
 	// Strings
 	testDecode(`j ""
-`, types.NewString(""))
+`, NewString(""))
 	testDecode(`j "Hello, World!"
-`, types.NewString("Hello, World!"))
+`, NewString("Hello, World!"))
 
 	// Lists
 	testDecode(`j {"list":[]}
-`, types.NewList())
+`, NewList())
 	testDecode(`j {"list":["foo",true,{"uint16":42},{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
-	//`, types.NewList(types.NewString("foo"), types.Bool(true), types.UInt16(42), types.NewList(), types.NewMap()))
+	//`, NewList(NewString("foo"), Bool(true), UInt16(42), NewList(), NewMap()))
 
 	// Maps
 	testDecode(`j {"map":[]}
-`, types.NewMap())
+`, NewMap())
 	testDecode(`j {"map":["string","hotdog","list",{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},"int32",{"int32":42},"bool",false,"map",{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
-	//`, types.NewMap(types.NewString("bool"), types.Bool(false), types.NewString("int32"), types.Int32(42), types.NewString("string"), types.NewString("hotdog"), types.NewString("list"), types.NewList(), types.NewString("map"), types.NewMap()))
+	//`, NewMap(NewString("bool"), Bool(false), NewString("int32"), Int32(42), NewString("string"), NewString("hotdog"), NewString("list"), NewList(), NewString("map"), NewMap()))
 
 	// Sets
 	testDecode(`j {"set":[]}
-`, types.NewSet())
+`, NewSet())
 	testDecode(`j {"set":[{"int32":42},"hotdog",{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},false,{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
-`, types.NewSet(types.Bool(false), types.Int32(42), types.NewString("hotdog"), types.NewList(), types.NewMap()))
+`, NewSet(Bool(false), Int32(42), NewString("hotdog"), NewList(), NewMap()))
 
 	// referenced blobs?
 }

@@ -3,7 +3,6 @@ package datas
 import (
 	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
-	"github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -28,7 +27,7 @@ func newDataStoreInternal(cs chunks.ChunkStore, rc *rootCache) DataStore {
 		roots = NewRootSet()
 	} else {
 		// BUG 11: This reads the entire database into memory. Whoopsie.
-		roots = RootSetFromVal(enc.MustReadValue(rootRef, cs).(types.Set))
+		roots = RootSetFromVal(types.MustReadValue(rootRef, cs).(types.Set))
 	}
 	return DataStore{
 		cs, rc, roots,
@@ -77,7 +76,7 @@ func (ds *DataStore) doCommit(add, remove RootSet) bool {
 	newRoots := oldRoots.Subtract(remove).Union(add)
 
 	// TODO: This set will be orphaned if this UpdateRoot below fails
-	newRootRef, err := enc.WriteValue(newRoots.NomsValue(), ds)
+	newRootRef, err := types.WriteValue(newRoots.NomsValue(), ds)
 	Chk.NoError(err)
 
 	return ds.UpdateRoot(newRootRef, oldRootRef)

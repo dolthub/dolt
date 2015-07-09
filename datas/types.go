@@ -14,7 +14,7 @@ type RootSet struct {
 	s types.Set
 }
 
-type RootSetIterCallback (func (p Root) (stop bool))
+type RootSetIterCallback (func(p Root) (stop bool))
 
 func NewRootSet() RootSet {
 	return RootSet{types.NewSet()}
@@ -116,14 +116,14 @@ func (s Root) Equals(p Root) bool {
 func (s Root) Ref() ref.Ref {
 	return s.m.Ref()
 }
-func(s Root) Value() types.Value {
+func (s Root) Value() types.Value {
 	return s.m.Get(types.NewString("value")).(types.Value)
 }
 
 func (s Root) SetValue(p types.Value) Root {
 	return RootFromVal(s.m.Set(types.NewString("value"), p))
 }
-func(s Root) Parents() types.Set {
+func (s Root) Parents() types.Set {
 	return s.m.Get(types.NewString("parents")).(types.Set)
 }
 

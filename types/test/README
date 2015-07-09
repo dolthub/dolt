@@ -3,3 +3,5 @@ Most of the types tests depend in some way on Value::Ref(), which in turn relies
 But enc itself relies on types.
 
 To break this cicular dependency, all the types tests are here in types/test. This is kind of a bummer because it means that types tests can't depend on internals of the types package. But it's less of a bummer than other solutions that have come to mind so far.
+
+TODO: These can go back to parent dir now?

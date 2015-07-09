@@ -1,4 +1,4 @@
-package enc
+package types
 
 import (
 	"bytes"
@@ -7,14 +7,13 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 )
 
 var (
 	blobTag = []byte("b ")
 )
 
-func blobEncode(b types.Blob, s chunks.ChunkSink) (r ref.Ref, err error) {
+func blobEncode(b Blob, s chunks.ChunkSink) (r ref.Ref, err error) {
 	w := s.Put()
 	if _, err = w.Write(blobTag); err != nil {
 		return
@@ -25,7 +24,7 @@ func blobEncode(b types.Blob, s chunks.ChunkSink) (r ref.Ref, err error) {
 	return w.Ref()
 }
 
-func blobDecode(r io.Reader, s chunks.ChunkSource) (types.Value, error) {
+func blobDecode(r io.Reader, s chunks.ChunkSource) (Value, error) {
 	buf := &bytes.Buffer{}
 	_, err := io.CopyN(buf, r, int64(len(blobTag)))
 	if err != nil {
@@ -38,5 +37,5 @@ func blobDecode(r io.Reader, s chunks.ChunkSource) (types.Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	return types.NewBlob(buf.Bytes()), nil
+	return NewBlob(buf.Bytes()), nil
 }

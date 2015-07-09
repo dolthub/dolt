@@ -3,7 +3,6 @@ package test
 import (
 	"testing"
 
-	_ "github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )

@@ -2,7 +2,6 @@ package datas
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -36,7 +35,7 @@ func (cache *rootCache) Update(rootsRef ref.Ref) {
 	}
 
 	// BUG 11: This is super-inefficient with eager ReadValue and no caching
-	rootSet := RootSet{enc.MustReadValue(rootsRef, cache.source).(types.Set)}
+	rootSet := RootSet{types.MustReadValue(rootsRef, cache.source).(types.Set)}
 	rootSet.Iter(func(commit Root) (stop bool) {
 		cache.updateFromCommit(commit)
 		return
