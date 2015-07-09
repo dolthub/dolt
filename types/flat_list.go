@@ -1,18 +1,29 @@
 package types
 
 import (
+	"github.com/attic-labs/noms/chunks"
+	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
 // flatList is a quick 'n easy implementation of List.
 // It should eventually be replaced by a chunking implementation.
 type flatList struct {
-	list []Value
+	list []Future
 	cr   *cachedRef
+	cs 	 chunks.ChunkSource
 }
 
-func newFlatList(list []Value) List {
-	return flatList{list, &cachedRef{}}
+func valuesToFutures(list []Value) []Future {
+	f := []Future{}
+	for _, v := range list {
+		f = append(f, FutureFromValue(v))
+	}
+	return f
+}
+
+func newFlatList(list []Future, cs chunks.ChunkSource) List {
+	return flatList{list, &cachedRef{}, cs}
 }
 
 func (l flatList) Len() uint64 {
@@ -20,37 +31,40 @@ func (l flatList) Len() uint64 {
 }
 
 func (l flatList) Get(idx uint64) Value {
-	return l.list[idx]
+	v, err := l.list[idx].Deref(l.cs)
+	// TODO: blech
+	Chk.NoError(err)
+	return v
 }
 
 func (l flatList) Slice(start uint64, end uint64) List {
-	return newFlatList(l.list[start:end])
+	return newFlatList(l.list[start:end], l.cs)
 }
 
 func (l flatList) Set(idx uint64, v Value) List {
-	b := make([]Value, len(l.list))
+	b := make([]Future, len(l.list))
 	copy(b, l.list)
-	b[idx] = v
-	return newFlatList(b)
+	b[idx] = FutureFromValue(v)
+	return newFlatList(b, l.cs)
 }
 
 func (l flatList) Append(v ...Value) List {
-	return newFlatList(append(l.list, v...))
+	return newFlatList(append(l.list, valuesToFutures(v)...), l.cs)
 }
 
 func (l flatList) Insert(idx uint64, v ...Value) List {
-	b := make([]Value, len(l.list)+len(v))
+	b := make([]Future, len(l.list)+len(v))
 	copy(b, l.list[:idx])
-	copy(b[idx:], v)
+	copy(b[idx:], valuesToFutures(v))
 	copy(b[idx+uint64(len(v)):], l.list[idx:])
-	return newFlatList(b)
+	return newFlatList(b, l.cs)
 }
 
 func (l flatList) Remove(start uint64, end uint64) List {
-	b := make([]Value, uint64(len(l.list))-(end-start))
+	b := make([]Future, uint64(len(l.list))-(end-start))
 	copy(b, l.list[:start])
 	copy(b[start:], l.list[end:])
-	return newFlatList(b)
+	return newFlatList(b, l.cs)
 }
 
 func (l flatList) RemoveAt(idx uint64) List {

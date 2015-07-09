@@ -15,5 +15,5 @@ type List interface {
 }
 
 func NewList(v ...Value) List {
-	return newFlatList(v)
+	return newFlatList(valuesToFutures(v), nil)
 }

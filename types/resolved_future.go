@@ -1,14 +1,8 @@
 package types
 
-import "github.com/attic-labs/noms/dbg"
+import "github.com/attic-labs/noms/chunks"
 
 func FutureFromValue(v Value) Future {
-	switch v.(type) {
-	case resolvedFuture:
-		dbg.Chk.Fail("Argh, we should never see non-pointer resolvedFuture")
-	case *resolvedFuture:
-		dbg.Chk.Fail("v must be non-future value")
-	}
 	return resolvedFuture{v}
 }
 
@@ -16,6 +10,11 @@ type resolvedFuture struct {
 	Value
 }
 
-func (rf resolvedFuture) Deref() (Value, error) {
+func (rf resolvedFuture) Equals(other Future) bool {
+	// TODO: We can avoid the hashes if we know that both us and the other guy are primitives.
+	return rf.Ref() == other.Ref()
+}
+
+func (rf resolvedFuture) Deref(cs chunks.ChunkSource) (Value, error) {
 	return rf.Value, nil
 }
