@@ -18,6 +18,7 @@ var (
 	fieldCompositeTempl = readTemplate("field_composite.tmpl")
 	fieldPrimitiveTempl = readTemplate("field_primitive.tmpl")
 	headerTmpl          = readTemplate("header.tmpl")
+	listTempl           = readTemplate("list.tmpl")
 	setTempl            = readTemplate("set.tmpl")
 	structTempl         = readTemplate("struct.tmpl")
 )
@@ -60,6 +61,18 @@ func (ng *NG) addType(val types.Value) {
 	}
 }
 
+func readTemplate(name string) *template.Template {
+	_, thisfile, _, _ := runtime.Caller(1)
+	f, err := os.Open(path.Join(path.Dir(thisfile), name))
+	Chk.NoError(err)
+	defer f.Close()
+	b, err := ioutil.ReadAll(f)
+	Chk.NoError(err)
+	t, err := template.New(name).Parse(string(b))
+	Chk.NoError(err)
+	return t
+}
+
 func (ng *NG) writeType(val types.Map) {
 	typ := val.Get(types.NewString("$type")).(types.String).String()
 	switch typ {
@@ -68,6 +81,9 @@ func (ng *NG) writeType(val types.Map) {
 		return
 	case "noms.SetDef":
 		ng.writeSet(val)
+		return
+	case "noms.ListDef":
+		ng.writeList(val)
 		return
 	}
 	Chk.Fail(fmt.Sprintf("Unexpected typedef: %+v", val))
@@ -88,16 +104,19 @@ func (ng *NG) writeSet(val types.Map) {
 	setTempl.Execute(ng.w, data)
 }
 
-func readTemplate(name string) *template.Template {
-	_, thisfile, _, _ := runtime.Caller(1)
-	f, err := os.Open(path.Join(path.Dir(thisfile), name))
-	Chk.NoError(err)
-	defer f.Close()
-	b, err := ioutil.ReadAll(f)
-	Chk.NoError(err)
-	t, err := template.New(name).Parse(string(b))
-	Chk.NoError(err)
-	return t
+func (ng *NG) writeList(val types.Map) {
+	elem := val.Get(types.NewString("elem"))
+	ng.addType(elem)
+
+	data := struct {
+		StructName string
+		ElemName   string
+	}{
+		getGoTypeName(val),
+		getGoTypeName(elem),
+	}
+
+	listTempl.Execute(ng.w, data)
 }
 
 func (ng *NG) writeStruct(val types.Map) {
@@ -155,6 +174,8 @@ func getGoTypeName(typeDef types.Value) string {
 			return typeDef.Get(types.NewString("$name")).(types.String).String()
 		case "noms.SetDef":
 			return fmt.Sprintf("%sSet", getGoTypeName(typeDef.Get(types.NewString("elem"))))
+		case "noms.ListDef":
+			return fmt.Sprintf("%sList", getGoTypeName(typeDef.Get(types.NewString("elem"))))
 		}
 	}
 	Chk.Fail("Unexpected typeDef struct: %+v", typeDef)
