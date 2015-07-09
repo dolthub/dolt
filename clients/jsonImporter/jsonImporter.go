@@ -4,34 +4,36 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"log"
 	"net/http"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/types"
 )
 
 func nomsValueFromObject(o interface{}) types.Value {
-	switch oo := o.(type) {
+	switch o := o.(type) {
 	case string:
-		return types.NewString(oo)
+		return types.NewString(o)
 	case bool:
-		return types.Bool(oo)
+		return types.Bool(o)
 	case float64:
-		return types.Float64(oo)
+		return types.Float64(o)
 	case nil:
 		return nil
 	case []interface{}:
 		out := types.NewList()
-		for _, v := range oo {
-			out = out.Append(nomsValueFromObject(v))
+		for _, v := range o {
+			nv := nomsValueFromObject(v)
+			if nv != nil {
+				out = out.Append(nv)
+			}
 		}
 		return out
 	case map[string]interface{}:
 		out := types.NewMap()
-		for k, v := range oo {
+		for k, v := range o {
 			nv := nomsValueFromObject(v)
 			if nv != nil {
 				out = out.Set(types.NewString(k), nv)
@@ -39,7 +41,7 @@ func nomsValueFromObject(o interface{}) types.Value {
 		}
 		return out
 	default:
-		fmt.Println(oo, "is of a type I don't know how to handle")
+		fmt.Println(o, "is of a type I don't know how to handle")
 	}
 	return nil
 }
@@ -60,24 +62,27 @@ func main() {
 	}
 
 	res, err := http.Get(url)
-	dbg.Chk.NoError(err)
+	defer res.Body.Close()
+	if err != nil {
+		log.Fatalf("Error fetching %s: %+v\n", url, err)
+	} else if res.StatusCode != 200 {
+		log.Fatalf("Error fetching %s: %s\n", url, res.Status)
+	}
 
-	gameEventsJSON, err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
-	dbg.Chk.NoError(err)
-
-	var events interface{}
-	err = json.Unmarshal(gameEventsJSON, &events)
-	dbg.Chk.NoError(err)
+	var jsonObject interface{}
+	err = json.NewDecoder(res.Body).Decode(&jsonObject)
+	if err != nil {
+		log.Fatalln("Error decoding JSON: ", err)
+	}
 
 	ds := datas.NewDataStore(cs)
 	roots := ds.Roots()
 
-	gameEvents := nomsValueFromObject(events)
+	value := nomsValueFromObject(jsonObject)
 
 	ds.Commit(datas.NewRootSet().Insert(
 		datas.NewRoot().SetParents(
 			roots.NomsValue()).SetValue(
-			gameEvents)))
+			value)))
 
 }
