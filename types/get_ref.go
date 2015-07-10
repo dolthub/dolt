@@ -12,3 +12,10 @@ var getRef = func(v Value) ref.Ref {
 	Chk.Nil(err)
 	return r
 }
+
+var ensureRef = func(r *ref.Ref, v Value) ref.Ref {
+	if *r == (ref.Ref{}) {
+		*r = getRef(v)
+	}
+	return *r
+}

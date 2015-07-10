@@ -8,8 +8,8 @@ import (
 
 type List struct {
 	list []future
-	cr   *cachedRef
-	cs 	 chunks.ChunkSource
+	ref  *ref.Ref
+	cs   chunks.ChunkSource
 }
 
 func NewList(v ...Value) List {
@@ -25,7 +25,7 @@ func valuesToFutures(list []Value) []future {
 }
 
 func listFromFutures(list []future, cs chunks.ChunkSource) List {
-	return List{list, &cachedRef{}, cs}
+	return List{list, &ref.Ref{}, cs}
 }
 
 func (l List) Len() uint64 {
@@ -74,7 +74,7 @@ func (l List) RemoveAt(idx uint64) List {
 }
 
 func (l List) Ref() ref.Ref {
-	return l.cr.Ref(l)
+	return ensureRef(l.ref, l)
 }
 
 func (l List) Equals(other Value) bool {

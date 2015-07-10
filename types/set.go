@@ -9,9 +9,9 @@ import (
 type setData map[ref.Ref]future
 
 type Set struct {
-	m  setData
-	cs chunks.ChunkSource
-	cr *cachedRef
+	m   setData
+	cs  chunks.ChunkSource
+	ref *ref.Ref
 }
 
 func NewSet(v ...Value) Set {
@@ -94,7 +94,7 @@ func (fm Set) Any() Value {
 }
 
 func (fs Set) Ref() ref.Ref {
-	return fs.cr.Ref(fs)
+	return ensureRef(fs.ref, fs)
 }
 
 func (fs Set) Equals(other Value) bool {
@@ -106,7 +106,7 @@ func (fs Set) Equals(other Value) bool {
 }
 
 func newSetFromData(m setData, cs chunks.ChunkSource) Set {
-	return Set{m, cs, &cachedRef{}}
+	return Set{m, cs, &ref.Ref{}}
 }
 
 func copySetData(m setData) setData {

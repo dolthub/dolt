@@ -8,8 +8,8 @@ import (
 type mapData map[ref.Ref]MapEntry
 
 type Map struct {
-	m  mapData
-	cr *cachedRef
+	m   mapData
+	ref *ref.Ref
 }
 
 func NewMap(kv ...Value) Map {
@@ -58,7 +58,7 @@ func (fm Map) Iter(cb mapIterCallback) {
 }
 
 func (fm Map) Ref() ref.Ref {
-	return fm.cr.Ref(fm)
+	return ensureRef(fm.ref, fm)
 }
 
 func (fm Map) Equals(other Value) (res bool) {
@@ -89,7 +89,7 @@ func (mes MapEntrySlice) Less(i, j int) bool {
 }
 
 func newMapFromData(m mapData) Map {
-	return Map{m, &cachedRef{}}
+	return Map{m, &ref.Ref{}}
 }
 
 func copyMapData(m mapData) mapData {

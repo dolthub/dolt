@@ -9,7 +9,7 @@ import (
 
 type Blob struct {
 	data []byte
-	cr   *cachedRef
+	ref  *ref.Ref
 }
 
 func (fb Blob) Reader() io.Reader {
@@ -21,7 +21,7 @@ func (fb Blob) Len() uint64 {
 }
 
 func (fb Blob) Ref() ref.Ref {
-	return fb.cr.Ref(fb)
+	return ensureRef(fb.ref, fb)
 }
 
 func (fb Blob) Equals(other Value) bool {
@@ -33,5 +33,5 @@ func (fb Blob) Equals(other Value) bool {
 }
 
 func NewBlob(data []byte) Blob {
-	return Blob{data, &cachedRef{}}
+	return Blob{data, &ref.Ref{}}
 }

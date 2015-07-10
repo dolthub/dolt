@@ -5,12 +5,12 @@ import (
 )
 
 type String struct {
-	s  string
-	cr *cachedRef
+	s   string
+	ref *ref.Ref
 }
 
 func NewString(s string) String {
-	return String{s, &cachedRef{}}
+	return String{s, &ref.Ref{}}
 }
 
 func (fs String) Blob() Blob {
@@ -22,7 +22,7 @@ func (fs String) String() string {
 }
 
 func (fs String) Ref() ref.Ref {
-	return fs.cr.Ref(fs)
+	return ensureRef(fs.ref, fs)
 }
 
 func (fs String) Equals(other Value) bool {
