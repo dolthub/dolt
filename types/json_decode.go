@@ -113,19 +113,15 @@ func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (future, error) {
 }
 
 func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (future, error) {
-	vals := []Value{}
+	output := []future{}
 	for _, inVal := range input {
 		f, err := jsonDecodeValue(inVal, s)
 		if err != nil {
 			return nil, err
 		}
-		outVal, err := f.Deref(s)
-		if err != nil {
-			return nil, err
-		}
-		vals = append(vals, outVal)
+		output = append(output, f)
 	}
-	return futureFromValue(NewSet(vals...)), nil
+	return futureFromValue(setFromFutures(output, s)), nil
 }
 
 func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (future, error) {

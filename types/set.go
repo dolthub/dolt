@@ -1,18 +1,25 @@
 package types
 
 import (
+	"github.com/attic-labs/noms/chunks"
+	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
-type setData map[ref.Ref]Value
+type setData map[ref.Ref]future
 
 type Set struct {
 	m  setData
+	cs chunks.ChunkSource
 	cr *cachedRef
 }
 
 func NewSet(v ...Value) Set {
-	return newSetFromData(buildSetData(setData{}, v))
+	return newSetFromData(buildSetData(setData{}, valuesToFutures(v)), nil)
+}
+
+func setFromFutures(f []future, cs chunks.ChunkSource) Set {
+	return newSetFromData(buildSetData(setData{}, f), cs)
 }
 
 func (fs Set) Empty() bool {
@@ -29,7 +36,7 @@ func (fs Set) Has(v Value) bool {
 }
 
 func (fs Set) Insert(values ...Value) Set {
-	return newSetFromData(buildSetData(fs.m, values))
+	return newSetFromData(buildSetData(fs.m, valuesToFutures(values)), fs.cs)
 }
 
 func (fs Set) Remove(values ...Value) Set {
@@ -39,7 +46,7 @@ func (fs Set) Remove(values ...Value) Set {
 			delete(m2, v.Ref())
 		}
 	}
-	return newSetFromData(m2)
+	return newSetFromData(m2, fs.cs)
 }
 
 func (fs Set) Union(others ...Set) (result Set) {
@@ -68,7 +75,9 @@ type setIterCallback func(v Value) bool
 
 func (fm Set) Iter(cb setIterCallback) {
 	// TODO: sort iteration order
-	for _, v := range fm.m {
+	for _, f := range fm.m {
+		v, err := f.Deref(fm.cs)
+		Chk.NoError(err)
 		if cb(v) {
 			break
 		}
@@ -76,7 +85,9 @@ func (fm Set) Iter(cb setIterCallback) {
 }
 
 func (fm Set) Any() Value {
-	for _, v := range fm.m {
+	for _, f := range fm.m {
+		v, err := f.Deref(fm.cs)
+		Chk.NoError(err)
 		return v
 	}
 	return nil
@@ -94,25 +105,22 @@ func (fs Set) Equals(other Value) bool {
 	}
 }
 
-func newSetFromData(m setData) Set {
-	return Set{
-		m:  m,
-		cr: &cachedRef{},
-	}
+func newSetFromData(m setData, cs chunks.ChunkSource) Set {
+	return Set{m, cs, &cachedRef{}}
 }
 
 func copySetData(m setData) setData {
 	r := setData{}
-	for k, v := range m {
-		r[k] = v
+	for k, f := range m {
+		r[k] = f
 	}
 	return r
 }
 
-func buildSetData(old setData, values []Value) setData {
+func buildSetData(old setData, futures []future) setData {
 	m := copySetData(old)
-	for _, v := range values {
-		m[v.Ref()] = v
+	for _, f := range futures {
+		m[f.Ref()] = f
 	}
 	return m
 }

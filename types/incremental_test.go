@@ -7,11 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestIncrementalLoad(t *testing.T) {
-	assert := assert.New(t)
-	cs := &testStore{ChunkStore: &chunks.MemoryStore{}}
-
-	expected := NewList(
+var (
+	testVals = []Value{
 		Bool(true),
 		Int16(1),
 		Int32(1),
@@ -25,8 +22,23 @@ func TestIncrementalLoad(t *testing.T) {
 		NewBlob([]byte("hi")),
 		NewSet(NewString("hi")),
 		NewList(NewString("hi")),
-		NewMap(NewString("hi"), NewString("hi")))
+		NewMap(NewString("hi"), NewString("hi")),
+	}
+)
 
+func isEncodedOutOfLine(v Value) int {
+	switch v.(type) {
+	case Blob, Set, List, Map:
+		return 1
+	}
+	return 0
+}
+
+func TestIncrementalLoadList(t *testing.T) {
+	assert := assert.New(t)
+	cs := &testStore{ChunkStore: &chunks.MemoryStore{}}
+
+	expected := NewList(testVals...)
 	ref, err := WriteValue(expected, cs)
 	assert.NoError(err)
 
@@ -34,25 +46,38 @@ func TestIncrementalLoad(t *testing.T) {
 	assert.NoError(err)
 	actual := actualVar.(List)
 
-	prev := cs.count
-	assert.Equal(1, prev)
+	expectedCount := cs.count
+	assert.Equal(1, expectedCount)
 	for i := uint64(0); i < expected.Len(); i++ {
 		v := actual.Get(i)
 		assert.True(expected.Get(i).Equals(v))
 
-		next := prev
-		switch v.(type) {
-		case Blob, Set, List, Map:
-			// These are the types that are out-of-line in our current encoding. So we expect them to cause a load.
-			next += 1
-		}
-
-		assert.Equal(next, cs.count)
+		expectedCount += isEncodedOutOfLine(v)
+		assert.Equal(expectedCount, cs.count)
 
 		// Do it again to make sure multiple derefs don't do multiple loads.
 		v = actual.Get(i)
-		assert.Equal(next, cs.count)
-
-		prev = next
+		assert.Equal(expectedCount, cs.count)
 	}
+}
+
+func TestIncrementalLoadSet(t *testing.T) {
+	assert := assert.New(t)
+	cs := &testStore{ChunkStore: &chunks.MemoryStore{}}
+
+	expected := NewSet(testVals...)
+	ref, err := WriteValue(expected, cs)
+	assert.NoError(err)
+
+	actualVar, err := ReadValue(ref, cs)
+	assert.NoError(err)
+	actual := actualVar.(Set)
+
+	expectedCount := cs.count
+	assert.Equal(1, expectedCount)
+	actual.Iter(func(v Value) (stop bool) {
+		expectedCount += isEncodedOutOfLine(v)
+		assert.Equal(expectedCount, cs.count)
+		return
+	})
 }
