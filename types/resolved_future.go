@@ -11,8 +11,16 @@ type resolvedFuture struct {
 }
 
 func (rf resolvedFuture) Equals(other future) bool {
-	// TODO: We can avoid the hashes if we know that both us and the other guy are primitives.
-	return rf.Ref() == other.Ref()
+	// If we already have both values, then use their Equals() methods since for primitives it is faster than computing a reference.
+	if rf.Value != nil && other.Val() != nil {
+		return rf.Value.Equals(other.Val())
+	} else {
+		return rf.Ref() == other.Ref()
+	}
+}
+
+func (rf resolvedFuture) Val() Value {
+	return rf.Value
 }
 
 func (rf resolvedFuture) Deref(cs chunks.ChunkSource) (Value, error) {

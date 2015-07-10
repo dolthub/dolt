@@ -34,3 +34,5 @@ func TestUnresolvedFuture(t *testing.T) {
 	assert.NoError(err)
 	assert.True(v2.Equals(v3))
 }
+
+// TODO: TestEqualsFastPath

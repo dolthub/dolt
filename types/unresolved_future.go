@@ -10,13 +10,13 @@ func futureFromRef(ref ref.Ref) future {
 }
 
 type unresolvedFuture struct {
+	resolvedFuture
 	ref ref.Ref
-	val Value
 }
 
 func (f *unresolvedFuture) Deref(cs chunks.ChunkSource) (Value, error) {
-	if f.val != nil {
-		return f.val, nil
+	if f.Val() != nil {
+		return f.Val(), nil
 	}
 
 	val, err := ReadValue(f.ref, cs)
@@ -24,14 +24,10 @@ func (f *unresolvedFuture) Deref(cs chunks.ChunkSource) (Value, error) {
 		return nil, err
 	}
 
-	f.val = val
-	return f.val, nil
+	f.resolvedFuture.Value = val
+	return f.resolvedFuture.Value, nil
 }
 
 func (f *unresolvedFuture) Ref() ref.Ref {
 	return f.ref
-}
-
-func (f *unresolvedFuture) Equals(other future) bool {
-	return f.ref == other.Ref()
 }
