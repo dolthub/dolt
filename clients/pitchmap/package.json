@@ -1,5 +1,5 @@
 {
-  "name": "noms-explorer",
+  "name": "noms-pitchmap",
   "dependencies": {
     "react": "^0.12.0",
     "immutable": "^3.7.4"
