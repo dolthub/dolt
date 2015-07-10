@@ -7,149 +7,161 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/ref"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestFileStorePut(t *testing.T) {
-	assert := assert.New(t)
-	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.Remove(dir)
-	assert.NoError(err)
+func TestFileStoreTestSuite(t *testing.T) {
+	suite.Run(t, new(FileStoreTestSuite))
+}
 
+type FileStoreTestSuite struct {
+	suite.Suite
+	Dir   string
+	Store FileStore
+}
+
+func (suite *FileStoreTestSuite) SetupTest() {
+	var err error
+	suite.Dir, err = ioutil.TempDir(os.TempDir(), "")
+	suite.NoError(err)
+	suite.Store = NewFileStore(suite.Dir, "root")
+}
+
+func (suite *FileStoreTestSuite) TearDownTest() {
+	os.Remove(suite.Dir)
+}
+
+func (suite *FileStoreTestSuite) TestFileStorePut() {
 	input := "abc"
-	s := NewFileStore(dir, "root")
-	w := s.Put()
-	_, err = w.Write([]byte(input))
-	assert.NoError(err)
+	w := suite.Store.Put()
+	_, err := w.Write([]byte(input))
+	suite.NoError(err)
 	ref, err := w.Ref()
-	assert.NoError(err)
+	suite.NoError(err)
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
-	assert.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", ref.String())
+	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", ref.String())
 
 	// There should also be a file there now...
-	p := path.Join(dir, "sha1", "a9", "99", ref.String())
+	p := path.Join(suite.Dir, "sha1", "a9", "99", ref.String())
 	f, err := os.Open(p)
-	assert.NoError(err)
+	suite.NoError(err)
 	data, err := ioutil.ReadAll(f)
-	assert.NoError(err)
-	assert.Equal(input, string(data))
+	suite.NoError(err)
+	suite.Equal(input, string(data))
 
 	// And reading it via the API should work...
-	assertInputInStore(input, ref, s, assert)
+	assertInputInStore(input, ref, suite.Store, suite.Assert())
 }
 
-func TestFileStorePutWithRefAfterClose(t *testing.T) {
-	assert := assert.New(t)
-	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.Remove(dir)
-	assert.NoError(err)
-
+func (suite *FileStoreTestSuite) TestFileStoreWriteAfterCloseFails() {
 	input := "abc"
-	s := NewFileStore(dir, "root")
-	w := s.Put()
-	_, err = w.Write([]byte(input))
-	assert.NoError(err)
+	w := suite.Store.Put()
+	_, err := w.Write([]byte(input))
+	suite.NoError(err)
 
-	assert.NoError(w.Close())
-	ref, err := w.Ref() // Ref() after Close() should work...
-	assert.NoError(err)
-
-	// And reading the data via the API should work...
-	assertInputInStore(input, ref, &s, assert)
+	suite.NoError(w.Close())
+	suite.Panics(func() { w.Write([]byte(input)) }, "Write() after Close() should barf!")
 }
 
-func TestFileStorePutWithMultipleRef(t *testing.T) {
-	assert := assert.New(t)
-	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.Remove(dir)
-	assert.NoError(err)
-
+func (suite *FileStoreTestSuite) TestFileStoreWriteAfterRefFails() {
 	input := "abc"
-	s := NewFileStore(dir, "root")
-	w := s.Put()
-	_, err = w.Write([]byte(input))
-	assert.NoError(err)
+	w := suite.Store.Put()
+	_, err := w.Write([]byte(input))
+	suite.NoError(err)
 
 	_, _ = w.Ref()
-	assert.NoError(err)
-	ref, err := w.Ref() // Multiple calls to Ref() should work...
-	assert.NoError(err)
+	suite.NoError(err)
+	suite.Panics(func() { w.Write([]byte(input)) }, "Write() after Close() should barf!")
+}
+
+func (suite *FileStoreTestSuite) TestFileStorePutWithRefAfterClose() {
+	input := "abc"
+	w := suite.Store.Put()
+	_, err := w.Write([]byte(input))
+	suite.NoError(err)
+
+	suite.NoError(w.Close())
+	ref, err := w.Ref() // Ref() after Close() should work...
+	suite.NoError(err)
 
 	// And reading the data via the API should work...
-	assertInputInStore(input, ref, &s, assert)
+	assertInputInStore(input, ref, suite.Store, suite.Assert())
 }
 
-func TestFileStoreRoot(t *testing.T) {
-	assert := assert.New(t)
-	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.Remove(dir)
-	assert.NoError(err)
+func (suite *FileStoreTestSuite) TestFileStorePutWithMultipleRef() {
+	input := "abc"
+	w := suite.Store.Put()
+	_, err := w.Write([]byte(input))
+	suite.NoError(err)
 
-	s := NewFileStore(dir, "root")
-	oldRoot := s.Root()
-	assert.Equal(oldRoot, ref.Ref{})
+	_, _ = w.Ref()
+	suite.NoError(err)
+	ref, err := w.Ref() // Multiple calls to Ref() should work...
+	suite.NoError(err)
+
+	// And reading the data via the API should work...
+	assertInputInStore(input, ref, suite.Store, suite.Assert())
+}
+
+func (suite *FileStoreTestSuite) TestFileStoreRoot() {
+	oldRoot := suite.Store.Root()
+	suite.Equal(oldRoot, ref.Ref{})
 
 	// Root file should be absent
-	f, err := os.Open(path.Join(dir, "root"))
-	assert.True(os.IsNotExist(err))
+	f, err := os.Open(path.Join(suite.Dir, "root"))
+	suite.True(os.IsNotExist(err))
 
 	bogusRoot, err := ref.Parse("sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5") // sha1("Bogus, Dude")
-	assert.NoError(err)
+	suite.NoError(err)
 	newRoot, err := ref.Parse("sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd") // sha1("Hello, World")
-	assert.NoError(err)
+	suite.NoError(err)
 
 	// Try to update root with bogus oldRoot
-	result := s.UpdateRoot(newRoot, bogusRoot)
-	assert.False(result)
+	result := suite.Store.UpdateRoot(newRoot, bogusRoot)
+	suite.False(result)
 
 	// Root file should now be there, but should be empty
-	f, err = os.Open(path.Join(dir, "root"))
-	assert.NoError(err)
+	f, err = os.Open(path.Join(suite.Dir, "root"))
+	suite.NoError(err)
 	input, err := ioutil.ReadAll(f)
-	assert.Equal(len(input), 0)
+	suite.Equal(len(input), 0)
 
 	// Now do a valid root update
-	result = s.UpdateRoot(newRoot, oldRoot)
-	assert.True(result)
+	result = suite.Store.UpdateRoot(newRoot, oldRoot)
+	suite.True(result)
 
 	// Root file should now contain "Hello, World" sha1
-	f, err = os.Open(path.Join(dir, "root"))
-	assert.NoError(err)
+	f, err = os.Open(path.Join(suite.Dir, "root"))
+	suite.NoError(err)
 	input, err = ioutil.ReadAll(f)
-	assert.NoError(err)
-	assert.Equal("sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd", string(input))
+	suite.NoError(err)
+	suite.Equal("sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd", string(input))
 }
 
-func TestFileStorePutExisting(t *testing.T) {
-	assert := assert.New(t)
-	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.Remove(dir)
-	assert.NoError(err)
-
+func (suite *FileStoreTestSuite) TestFileStorePutExisting() {
 	input := "abc"
-	s := NewFileStore(dir, "root")
 
 	renameCount := 0
-	s.rename = func(oldPath, newPath string) error {
-		renameCount += 1
+	suite.Store.rename = func(oldPath, newPath string) error {
+		renameCount++
 		return os.Rename(oldPath, newPath)
 	}
 
 	write := func() {
-		w := s.Put()
-		_, err = w.Write([]byte(input))
-		assert.NoError(err)
-		_, err := w.Ref()
-		assert.NoError(err)
+		w := suite.Store.Put()
+		_, err := w.Write([]byte(input))
+		suite.NoError(err)
+		_, err = w.Ref()
+		suite.NoError(err)
 	}
 
 	write()
 
-	assert.Equal(1, renameCount)
+	suite.Equal(1, renameCount)
 
 	write()
 
 	// Shouldn't have written the second time.
-	assert.Equal(1, renameCount)
+	suite.Equal(1, renameCount)
 }

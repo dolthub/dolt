@@ -75,9 +75,14 @@ func (f FileStore) Get(ref ref.Ref) (io.ReadCloser, error) {
 }
 
 func (f FileStore) Put() ChunkWriter {
+	fyle, err := ioutil.TempFile(os.TempDir(), "")
+	Chk.NoError(err)
+	h := ref.NewHash()
 	return &fileChunkWriter{
 		root:   f.dir,
-		hash:   ref.NewHash(),
+		file:   fyle,
+		writer: io.MultiWriter(fyle, h),
+		hash:   h,
 		rename: f.rename,
 	}
 }
@@ -91,12 +96,7 @@ type fileChunkWriter struct {
 }
 
 func (w *fileChunkWriter) Write(data []byte) (int, error) {
-	if w.file == nil {
-		f, err := ioutil.TempFile(os.TempDir(), "")
-		Chk.NoError(err)
-		w.file = f
-		w.writer = io.MultiWriter(f, w.hash)
-	}
+	Chk.NotNil(w.file, "Write() cannot be called after Ref() or Close().")
 	return w.writer.Write(data)
 }
 

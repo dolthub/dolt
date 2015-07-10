@@ -122,9 +122,14 @@ func (s S3Store) Get(ref ref.Ref) (io.ReadCloser, error) {
 }
 
 func (s S3Store) Put() ChunkWriter {
+	f, err := ioutil.TempFile(os.TempDir(), "")
+	Chk.NoError(err)
+	h := ref.NewHash()
 	return &s3ChunkWriter{
-		store: s,
-		hash:  ref.NewHash(),
+		store:  s,
+		file:   f,
+		writer: io.MultiWriter(f, h),
+		hash:   h,
 	}
 }
 
@@ -136,12 +141,7 @@ type s3ChunkWriter struct {
 }
 
 func (w *s3ChunkWriter) Write(data []byte) (int, error) {
-	if w.file == nil {
-		f, err := ioutil.TempFile(os.TempDir(), "")
-		Chk.NoError(err)
-		w.file = f
-		w.writer = io.MultiWriter(f, w.hash)
-	}
+	Chk.NotNil(w.file, "Write() cannot be called after Ref() or Close().")
 	return w.writer.Write(data)
 }
 

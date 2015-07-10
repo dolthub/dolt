@@ -10,8 +10,26 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
+
+func TestS3StoreTestSuite(t *testing.T) {
+	suite.Run(t, new(S3StoreTestSuite))
+}
+
+type S3StoreTestSuite struct {
+	suite.Suite
+	Store S3Store
+}
+
+func (suite *S3StoreTestSuite) SetupTest() {
+	suite.Store = S3Store{
+		"bucket",
+		"table",
+		&mockS3{},
+		nil,
+	}
+}
 
 type mockS3 map[string][]byte
 
@@ -32,90 +50,63 @@ func (m *mockS3) PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error
 	return nil, nil
 }
 
-func TestS3StorePut(t *testing.T) {
-	assert := assert.New(t)
-
+func (suite *S3StoreTestSuite) TestS3StorePut() {
 	input := "abc"
 
-	s := S3Store{
-		"bucket",
-		"table",
-		&mockS3{},
-		nil,
-	}
-
-	w := s.Put()
+	w := suite.Store.Put()
 	_, err := w.Write([]byte(input))
-	assert.NoError(err)
+	suite.NoError(err)
 
 	r1, err := w.Ref()
-	assert.NoError(err)
+	suite.NoError(err)
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
-	assert.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
+	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
 
 	// And reading it via the API should work...
-	assertInputInStore(input, r1, s, assert)
+	assertInputInStore(input, r1, suite.Store, suite.Assert())
 
 	// Reading a non-existing ref fails
 	hash := ref.NewHash()
 	hash.Write([]byte("Non-existent"))
-	_, err = s.Get(ref.FromHash(hash))
-	assert.Error(err)
+	_, err = suite.Store.Get(ref.FromHash(hash))
+	suite.Error(err)
 }
 
-func TestS3StorePutRefAfterClose(t *testing.T) {
-	assert := assert.New(t)
-
+func (suite *S3StoreTestSuite) TestS3StorePutRefAfterClose() {
 	input := "abc"
 
-	s := S3Store{
-		"bucket",
-		"table",
-		&mockS3{},
-		nil,
-	}
-
-	w := s.Put()
+	w := suite.Store.Put()
 	_, err := w.Write([]byte(input))
-	assert.NoError(err)
+	suite.NoError(err)
 
-	assert.NoError(w.Close())
+	suite.NoError(w.Close())
 	r1, err := w.Ref()
-	assert.NoError(err)
+	suite.NoError(err)
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
-	assert.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
+	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
 
 	// And reading it via the API should work...
-	assertInputInStore(input, r1, s, assert)
+	assertInputInStore(input, r1, suite.Store, suite.Assert())
 }
 
-func TestS3StorePutMultiRef(t *testing.T) {
-	assert := assert.New(t)
-
+func (suite *S3StoreTestSuite) TestS3StorePutMultiRef() {
 	input := "abc"
 
-	s := S3Store{
-		"bucket",
-		"table",
-		&mockS3{},
-		nil,
-	}
-
-	w := s.Put()
+	w := suite.Store.Put()
 	_, err := w.Write([]byte(input))
-	assert.NoError(err)
+	suite.NoError(err)
 
 	_, _ = w.Ref()
 	r1, err := w.Ref()
-	assert.NoError(err)
+	suite.NoError(err)
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
-	assert.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
+	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
 
 	// And reading it via the API should work...
-	assertInputInStore(input, r1, s, assert)
+	assertInputInStore(input, r1, suite.Store, suite.Assert())
 }
 
 type mockAWSError string
@@ -153,38 +144,36 @@ func (m *mockDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput
 	return &dynamodb.PutItemOutput{}, nil
 }
 
-func TestS3StoreRoot(t *testing.T) {
-	assert := assert.New(t)
-
+func (suite *S3StoreTestSuite) TestS3StoreRoot() {
 	m := mockDDB("")
 
-	s := S3Store{
+	suite.Store = S3Store{
 		"bucket",
 		"table",
 		nil,
 		&m,
 	}
 
-	oldRoot := s.Root()
-	assert.Equal(oldRoot, ref.Ref{})
+	oldRoot := suite.Store.Root()
+	suite.Equal(oldRoot, ref.Ref{})
 
 	bogusRoot, err := ref.Parse("sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5") // sha1("Bogus, Dude")
-	assert.NoError(err)
+	suite.NoError(err)
 	newRoot, err := ref.Parse("sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd") // sha1("Hello, World")
-	assert.NoError(err)
+	suite.NoError(err)
 
 	// Try to update root with bogus oldRoot
-	result := s.UpdateRoot(newRoot, bogusRoot)
-	assert.False(result)
-	assert.Equal(ref.Ref{}, s.Root())
+	result := suite.Store.UpdateRoot(newRoot, bogusRoot)
+	suite.False(result)
+	suite.Equal(ref.Ref{}, suite.Store.Root())
 
 	// No do a valid update
-	result = s.UpdateRoot(newRoot, oldRoot)
-	assert.True(result)
-	assert.Equal(s.Root(), newRoot)
+	result = suite.Store.UpdateRoot(newRoot, oldRoot)
+	suite.True(result)
+	suite.Equal(suite.Store.Root(), newRoot)
 
 	// Now that there is a valid root, try to start a new lineage
-	result = s.UpdateRoot(bogusRoot, ref.Ref{})
-	assert.False(result)
-	assert.Equal(s.Root(), newRoot)
+	result = suite.Store.UpdateRoot(bogusRoot, ref.Ref{})
+	suite.False(result)
+	suite.Equal(suite.Store.Root(), newRoot)
 }
