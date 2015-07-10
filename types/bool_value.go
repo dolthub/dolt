@@ -5,7 +5,6 @@
 package types
 
 import (
-	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -23,6 +22,5 @@ func (self Bool) Equals(other Value) bool {
 }
 
 func (v Bool) Ref() ref.Ref {
-	Chk.NotNil(Reffer, "Somebody forgot to call SetReffer")
-	return Reffer(v)
+	return getRef(v)
 }

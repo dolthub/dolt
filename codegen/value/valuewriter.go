@@ -24,10 +24,6 @@ func (nw *valueWriter) Name() string {
 func (nw *valueWriter) Imports(t typewriter.Type) []typewriter.ImportSpec {
 	return []typewriter.ImportSpec{
 		typewriter.ImportSpec{
-			Name: ".",
-			Path: "github.com/attic-labs/noms/dbg",
-		},
-		typewriter.ImportSpec{
 			Path: "github.com/attic-labs/noms/ref",
 		},
 	}

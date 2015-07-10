@@ -1,17 +1,16 @@
-package test
+package types
 
 import (
 	"testing"
 
 	"github.com/attic-labs/noms/ref"
-	. "github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCachedRef(t *testing.T) {
 	assert := assert.New(t)
 	count := byte(1)
-	mockReffer := func(v Value) ref.Ref {
+	mockGetRef := func(v Value) ref.Ref {
 		d := ref.Sha1Digest{}
 		d[0] = count
 		count++
@@ -25,10 +24,10 @@ func TestCachedRef(t *testing.T) {
 		}
 	}
 
-	prevReffer := Reffer
-	Reffer = mockReffer
+	prevGetRef := getRef
+	getRef = mockGetRef
 	defer func() {
-		Reffer = prevReffer
+		getRef = prevGetRef
 	}()
 
 	values := []Value{

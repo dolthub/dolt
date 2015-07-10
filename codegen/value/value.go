@@ -17,8 +17,7 @@ func (self {{.Name}}) Equals(other Value) bool {
 }
 
 func (v {{.Name}}) Ref() ref.Ref {
-	Chk.NotNil(Reffer, "Somebody forgot to call SetReffer")
-	return Reffer(v)
+	return getRef(v)
 }
 `,
 		TypeConstraint: typewriter.Constraint{Comparable: true},

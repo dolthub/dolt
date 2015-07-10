@@ -7,12 +7,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRefferImpl(t *testing.T) {
+func TestGetRef(t *testing.T) {
 	assert := assert.New(t)
 	input := "j false\n"
 	h := ref.NewHash()
 	h.Write([]byte(input))
 	expected := ref.FromHash(h)
-	actual := Reffer(Bool(false))
+	actual := getRef(Bool(false))
 	assert.Equal(expected, actual)
 }
