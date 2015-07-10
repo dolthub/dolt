@@ -1,24 +1,12 @@
 package test
 
 import (
-	"io"
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
-
-type testSource struct {
-	chunks.ChunkStore
-	count int
-}
-
-func (s *testSource) Get(ref ref.Ref) (io.ReadCloser, error) {
-	s.count += 1
-	return s.ChunkStore.Get(ref)
-}
 
 func TestResolvedFuture(t *testing.T) {
 	assert := assert.New(t)
@@ -32,7 +20,7 @@ func TestResolvedFuture(t *testing.T) {
 func TestUnresolvedFuture(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := &testSource{ChunkStore: &chunks.MemoryStore{}}
+	cs := &testStore{ChunkStore: &chunks.MemoryStore{}}
 	v := types.NewString("hello")
 	r, _ := types.WriteValue(v, cs)
 

@@ -26,15 +26,25 @@ func jsonDecode(reader io.Reader, s chunks.ChunkSource) (Value, error) {
 		return nil, err
 	}
 
-	return jsonDecodeValue(v, s)
+	f, err := jsonDecodeValue(v, s)
+	if err != nil {
+		return nil, err
+	}
+
+	val, err := f.Deref(s)
+	if err != nil {
+		return nil, err
+	}
+
+	return val, nil
 }
 
-func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (Value, error) {
+func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (Future, error) {
 	switch v := v.(type) {
 	case bool:
-		return Bool(v), nil
+		return FutureFromValue(Bool(v)), nil
 	case string:
-		return NewString(v), nil
+		return FutureFromValue(NewString(v)), nil
 	case map[string]interface{}:
 		return jsonDecodeTaggedValue(v, s)
 	default:
@@ -42,7 +52,7 @@ func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (Value, error) {
 	}
 }
 
-func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (Value, error) {
+func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (Future, error) {
 	Chk.Equal(1, len(m))
 	for k, v := range m {
 		switch k {
@@ -51,21 +61,21 @@ func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (Valu
 			if v, ok := v.(float64); ok {
 				switch k {
 				case "int16":
-					return Int16(int16(v)), nil
+					return FutureFromValue(Int16(int16(v))), nil
 				case "int32":
-					return Int32(int32(v)), nil
+					return FutureFromValue(Int32(int32(v))), nil
 				case "int64":
-					return Int64(int64(v)), nil
+					return FutureFromValue(Int64(int64(v))), nil
 				case "uint16":
-					return UInt16(uint16(v)), nil
+					return FutureFromValue(UInt16(uint16(v))), nil
 				case "uint32":
-					return UInt32(uint32(v)), nil
+					return FutureFromValue(UInt32(uint32(v))), nil
 				case "uint64":
-					return UInt64(uint64(v)), nil
+					return FutureFromValue(UInt64(uint64(v))), nil
 				case "float32":
-					return Float32(float32(v)), nil
+					return FutureFromValue(Float32(float32(v))), nil
 				case "float64":
-					return Float64(float64(v)), nil
+					return FutureFromValue(Float64(float64(v))), nil
 				}
 			}
 		case "list":
@@ -90,54 +100,66 @@ func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (Valu
 	return nil, fmt.Errorf("Cannot decode tagged json value: %+v", m)
 }
 
-func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (Value, error) {
-	output := NewList()
+func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (Future, error) {
+	output := []Future{}
 	for _, inVal := range input {
 		outVal, err := jsonDecodeValue(inVal, s)
 		if err != nil {
 			return nil, err
 		}
-		output = output.Append(outVal)
+		output = append(output, outVal)
 	}
-	return output, nil
+	return FutureFromValue(newFlatList(output, s)), nil
 }
 
-func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (Value, error) {
+func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (Future, error) {
 	vals := []Value{}
 	for _, inVal := range input {
-		outVal, err := jsonDecodeValue(inVal, s)
+		f, err := jsonDecodeValue(inVal, s)
+		if err != nil {
+			return nil, err
+		}
+		outVal, err := f.Deref(s)
 		if err != nil {
 			return nil, err
 		}
 		vals = append(vals, outVal)
 	}
-	return NewSet(vals...), nil
+	return FutureFromValue(NewSet(vals...)), nil
 }
 
-func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (Value, error) {
+func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (Future, error) {
 	output := NewMap()
 	Chk.Equal(0, len(input)%2, "Length on input array must be multiple of 2")
 	for i := 0; i < len(input); i += 2 {
 		inKey := input[i]
 		inVal := input[i+1]
 
-		outKey, err := jsonDecodeValue(inKey, s)
+		outKeyF, err := jsonDecodeValue(inKey, s)
 		if err != nil {
 			return nil, err
 		}
-		outVal, err := jsonDecodeValue(inVal, s)
+		outKey, err := outKeyF.Deref(s)
+		if err != nil {
+			return nil, err
+		}
+		outValF, err := jsonDecodeValue(inVal, s)
+		if err != nil {
+			return nil, err
+		}
+		outVal, err := outValF.Deref(s)
 		if err != nil {
 			return nil, err
 		}
 		output = output.Set(outKey, outVal)
 	}
-	return output, nil
+	return FutureFromValue(output), nil
 }
 
-func jsonDecodeRef(refStr string, s chunks.ChunkSource) (Value, error) {
+func jsonDecodeRef(refStr string, s chunks.ChunkSource) (Future, error) {
 	ref, err := ref.Parse(refStr)
 	if err != nil {
 		return nil, err
 	}
-	return ReadValue(ref, s)
+	return FutureFromRef(ref), nil
 }
