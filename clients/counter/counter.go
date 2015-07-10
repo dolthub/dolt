@@ -4,20 +4,20 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
+	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 )
 
 func main() {
-	flags := chunks.NewFlags()
+	datasetDataStoreFlags := dataset.DatasetDataFlags()
 	flag.Parse()
-	cs := flags.CreateStore()
-	if cs == nil {
+
+	ds := datasetDataStoreFlags.CreateStore()
+	if ds == nil {
 		flag.Usage()
 		return
 	}
-	ds := datas.NewDataStore(cs)
 
 	lastVal := uint64(0)
 	roots := ds.Roots()

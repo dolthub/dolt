@@ -7,8 +7,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
+	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -47,10 +47,10 @@ func nomsValueFromObject(o interface{}) types.Value {
 }
 
 func main() {
-	flags := chunks.NewFlags()
+	datasetDataStoreFlags := dataset.DatasetDataFlags()
 	flag.Parse()
-	cs := flags.CreateStore()
-	if cs == nil {
+	ds := datasetDataStoreFlags.CreateStore()
+	if ds == nil {
 		flag.Usage()
 		return
 	}
@@ -75,7 +75,6 @@ func main() {
 		log.Fatalln("Error decoding JSON: ", err)
 	}
 
-	ds := datas.NewDataStore(cs)
 	roots := ds.Roots()
 
 	value := nomsValueFromObject(jsonObject)

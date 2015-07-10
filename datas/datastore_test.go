@@ -17,7 +17,7 @@ func TestDataStoreCommit(t *testing.T) {
 	assert.NoError(err)
 
 	chunks := chunks.NewFileStore(dir, "root")
-	ds := NewDataStore(chunks)
+	ds := NewDataStore(chunks, chunks)
 
 	roots := ds.Roots()
 	assert.Equal(uint64(0), roots.Len())
