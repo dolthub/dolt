@@ -21,4 +21,4 @@ This is an (incomplete) sample app that visualizes pitching data as a heatmap.
 
 * `npm run start`
 
-This will start watchify which is continually building a shippable (but non minified) heatmap.js
+This will start watchify which is continually building a shippable (but non minified) out.js

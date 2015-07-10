@@ -10,7 +10,7 @@
     "watchify": "^2.1.1"
   },
   "scripts": {
-    "start": "watchify -o heatmap.js -v -d main.js",
-    "build": "NODE_ENV=production browserify main.js | uglifyjs -cm > heatmap.js"
+    "start": "watchify -o out.js -v -d main.js",
+    "build": "NODE_ENV=production browserify main.js | uglifyjs -cm > out.js"
   }
 }
