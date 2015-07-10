@@ -14,16 +14,16 @@ import (
 )
 
 func TestS3StoreTestSuite(t *testing.T) {
-	suite.Run(t, new(S3StoreTestSuite))
+	suite.Run(t, &S3StoreTestSuite{})
 }
 
 type S3StoreTestSuite struct {
 	suite.Suite
-	Store S3Store
+	store S3Store
 }
 
 func (suite *S3StoreTestSuite) SetupTest() {
-	suite.Store = S3Store{
+	suite.store = S3Store{
 		"bucket",
 		"table",
 		&mockS3{},
@@ -53,7 +53,7 @@ func (m *mockS3) PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error
 func (suite *S3StoreTestSuite) TestS3StorePut() {
 	input := "abc"
 
-	w := suite.Store.Put()
+	w := suite.store.Put()
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
@@ -64,19 +64,19 @@ func (suite *S3StoreTestSuite) TestS3StorePut() {
 	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
 
 	// And reading it via the API should work...
-	assertInputInStore(input, r1, suite.Store, suite.Assert())
+	assertInputInStore(input, r1, suite.store, suite.Assert())
 
 	// Reading a non-existing ref fails
 	hash := ref.NewHash()
 	hash.Write([]byte("Non-existent"))
-	_, err = suite.Store.Get(ref.FromHash(hash))
+	_, err = suite.store.Get(ref.FromHash(hash))
 	suite.Error(err)
 }
 
 func (suite *S3StoreTestSuite) TestS3StorePutRefAfterClose() {
 	input := "abc"
 
-	w := suite.Store.Put()
+	w := suite.store.Put()
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
@@ -88,13 +88,13 @@ func (suite *S3StoreTestSuite) TestS3StorePutRefAfterClose() {
 	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
 
 	// And reading it via the API should work...
-	assertInputInStore(input, r1, suite.Store, suite.Assert())
+	assertInputInStore(input, r1, suite.store, suite.Assert())
 }
 
 func (suite *S3StoreTestSuite) TestS3StorePutMultiRef() {
 	input := "abc"
 
-	w := suite.Store.Put()
+	w := suite.store.Put()
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
@@ -106,7 +106,7 @@ func (suite *S3StoreTestSuite) TestS3StorePutMultiRef() {
 	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
 
 	// And reading it via the API should work...
-	assertInputInStore(input, r1, suite.Store, suite.Assert())
+	assertInputInStore(input, r1, suite.store, suite.Assert())
 }
 
 type mockAWSError string
@@ -147,14 +147,14 @@ func (m *mockDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput
 func (suite *S3StoreTestSuite) TestS3StoreRoot() {
 	m := mockDDB("")
 
-	suite.Store = S3Store{
+	suite.store = S3Store{
 		"bucket",
 		"table",
 		nil,
 		&m,
 	}
 
-	oldRoot := suite.Store.Root()
+	oldRoot := suite.store.Root()
 	suite.Equal(oldRoot, ref.Ref{})
 
 	bogusRoot, err := ref.Parse("sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5") // sha1("Bogus, Dude")
@@ -163,17 +163,17 @@ func (suite *S3StoreTestSuite) TestS3StoreRoot() {
 	suite.NoError(err)
 
 	// Try to update root with bogus oldRoot
-	result := suite.Store.UpdateRoot(newRoot, bogusRoot)
+	result := suite.store.UpdateRoot(newRoot, bogusRoot)
 	suite.False(result)
-	suite.Equal(ref.Ref{}, suite.Store.Root())
+	suite.Equal(ref.Ref{}, suite.store.Root())
 
 	// No do a valid update
-	result = suite.Store.UpdateRoot(newRoot, oldRoot)
+	result = suite.store.UpdateRoot(newRoot, oldRoot)
 	suite.True(result)
-	suite.Equal(suite.Store.Root(), newRoot)
+	suite.Equal(suite.store.Root(), newRoot)
 
 	// Now that there is a valid root, try to start a new lineage
-	result = suite.Store.UpdateRoot(bogusRoot, ref.Ref{})
+	result = suite.store.UpdateRoot(bogusRoot, ref.Ref{})
 	suite.False(result)
-	suite.Equal(suite.Store.Root(), newRoot)
+	suite.Equal(suite.store.Root(), newRoot)
 }

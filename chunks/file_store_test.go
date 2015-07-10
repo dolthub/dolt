@@ -11,29 +11,29 @@ import (
 )
 
 func TestFileStoreTestSuite(t *testing.T) {
-	suite.Run(t, new(FileStoreTestSuite))
+	suite.Run(t, &FileStoreTestSuite{})
 }
 
 type FileStoreTestSuite struct {
 	suite.Suite
-	Dir   string
-	Store FileStore
+	dir   string
+	store FileStore
 }
 
 func (suite *FileStoreTestSuite) SetupTest() {
 	var err error
-	suite.Dir, err = ioutil.TempDir(os.TempDir(), "")
+	suite.dir, err = ioutil.TempDir(os.TempDir(), "")
 	suite.NoError(err)
-	suite.Store = NewFileStore(suite.Dir, "root")
+	suite.store = NewFileStore(suite.dir, "root")
 }
 
 func (suite *FileStoreTestSuite) TearDownTest() {
-	os.Remove(suite.Dir)
+	os.Remove(suite.dir)
 }
 
 func (suite *FileStoreTestSuite) TestFileStorePut() {
 	input := "abc"
-	w := suite.Store.Put()
+	w := suite.store.Put()
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 	ref, err := w.Ref()
@@ -43,7 +43,7 @@ func (suite *FileStoreTestSuite) TestFileStorePut() {
 	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", ref.String())
 
 	// There should also be a file there now...
-	p := path.Join(suite.Dir, "sha1", "a9", "99", ref.String())
+	p := path.Join(suite.dir, "sha1", "a9", "99", ref.String())
 	f, err := os.Open(p)
 	suite.NoError(err)
 	data, err := ioutil.ReadAll(f)
@@ -51,12 +51,12 @@ func (suite *FileStoreTestSuite) TestFileStorePut() {
 	suite.Equal(input, string(data))
 
 	// And reading it via the API should work...
-	assertInputInStore(input, ref, suite.Store, suite.Assert())
+	assertInputInStore(input, ref, suite.store, suite.Assert())
 }
 
 func (suite *FileStoreTestSuite) TestFileStoreWriteAfterCloseFails() {
 	input := "abc"
-	w := suite.Store.Put()
+	w := suite.store.Put()
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
@@ -66,7 +66,7 @@ func (suite *FileStoreTestSuite) TestFileStoreWriteAfterCloseFails() {
 
 func (suite *FileStoreTestSuite) TestFileStoreWriteAfterRefFails() {
 	input := "abc"
-	w := suite.Store.Put()
+	w := suite.store.Put()
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
@@ -77,7 +77,7 @@ func (suite *FileStoreTestSuite) TestFileStoreWriteAfterRefFails() {
 
 func (suite *FileStoreTestSuite) TestFileStorePutWithRefAfterClose() {
 	input := "abc"
-	w := suite.Store.Put()
+	w := suite.store.Put()
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
@@ -86,12 +86,12 @@ func (suite *FileStoreTestSuite) TestFileStorePutWithRefAfterClose() {
 	suite.NoError(err)
 
 	// And reading the data via the API should work...
-	assertInputInStore(input, ref, suite.Store, suite.Assert())
+	assertInputInStore(input, ref, suite.store, suite.Assert())
 }
 
 func (suite *FileStoreTestSuite) TestFileStorePutWithMultipleRef() {
 	input := "abc"
-	w := suite.Store.Put()
+	w := suite.store.Put()
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
@@ -101,15 +101,15 @@ func (suite *FileStoreTestSuite) TestFileStorePutWithMultipleRef() {
 	suite.NoError(err)
 
 	// And reading the data via the API should work...
-	assertInputInStore(input, ref, suite.Store, suite.Assert())
+	assertInputInStore(input, ref, suite.store, suite.Assert())
 }
 
 func (suite *FileStoreTestSuite) TestFileStoreRoot() {
-	oldRoot := suite.Store.Root()
+	oldRoot := suite.store.Root()
 	suite.Equal(oldRoot, ref.Ref{})
 
 	// Root file should be absent
-	f, err := os.Open(path.Join(suite.Dir, "root"))
+	f, err := os.Open(path.Join(suite.dir, "root"))
 	suite.True(os.IsNotExist(err))
 
 	bogusRoot, err := ref.Parse("sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5") // sha1("Bogus, Dude")
@@ -118,21 +118,21 @@ func (suite *FileStoreTestSuite) TestFileStoreRoot() {
 	suite.NoError(err)
 
 	// Try to update root with bogus oldRoot
-	result := suite.Store.UpdateRoot(newRoot, bogusRoot)
+	result := suite.store.UpdateRoot(newRoot, bogusRoot)
 	suite.False(result)
 
 	// Root file should now be there, but should be empty
-	f, err = os.Open(path.Join(suite.Dir, "root"))
+	f, err = os.Open(path.Join(suite.dir, "root"))
 	suite.NoError(err)
 	input, err := ioutil.ReadAll(f)
 	suite.Equal(len(input), 0)
 
 	// Now do a valid root update
-	result = suite.Store.UpdateRoot(newRoot, oldRoot)
+	result = suite.store.UpdateRoot(newRoot, oldRoot)
 	suite.True(result)
 
 	// Root file should now contain "Hello, World" sha1
-	f, err = os.Open(path.Join(suite.Dir, "root"))
+	f, err = os.Open(path.Join(suite.dir, "root"))
 	suite.NoError(err)
 	input, err = ioutil.ReadAll(f)
 	suite.NoError(err)
@@ -143,13 +143,13 @@ func (suite *FileStoreTestSuite) TestFileStorePutExisting() {
 	input := "abc"
 
 	renameCount := 0
-	suite.Store.rename = func(oldPath, newPath string) error {
+	suite.store.rename = func(oldPath, newPath string) error {
 		renameCount++
 		return os.Rename(oldPath, newPath)
 	}
 
 	write := func() {
-		w := suite.Store.Put()
+		w := suite.store.Put()
 		_, err := w.Write([]byte(input))
 		suite.NoError(err)
 		_, err = w.Ref()

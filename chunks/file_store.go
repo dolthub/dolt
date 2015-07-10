@@ -75,13 +75,13 @@ func (f FileStore) Get(ref ref.Ref) (io.ReadCloser, error) {
 }
 
 func (f FileStore) Put() ChunkWriter {
-	fyle, err := ioutil.TempFile(os.TempDir(), "")
+	file, err := ioutil.TempFile(os.TempDir(), "")
 	Chk.NoError(err)
 	h := ref.NewHash()
 	return &fileChunkWriter{
 		root:   f.dir,
-		file:   fyle,
-		writer: io.MultiWriter(fyle, h),
+		file:   file,
+		writer: io.MultiWriter(file, h),
 		hash:   h,
 		rename: f.rename,
 	}
