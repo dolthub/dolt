@@ -1,28 +1,26 @@
 package types
 
-import "github.com/attic-labs/noms/chunks"
+import (
+	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/ref"
+)
 
 func futureFromValue(v Value) future {
 	return resolvedFuture{v}
 }
 
 type resolvedFuture struct {
-	Value
+	val Value
 }
 
-func (rf resolvedFuture) Equals(other future) bool {
-	// If we already have both values, then use their Equals() methods since for primitives it is faster than computing a reference.
-	if rf.Value != nil && other.Val() != nil {
-		return rf.Value.Equals(other.Val())
-	} else {
-		return rf.Ref() == other.Ref()
-	}
+func (rf resolvedFuture) Ref() ref.Ref {
+	return rf.val.Ref()
 }
 
 func (rf resolvedFuture) Val() Value {
-	return rf.Value
+	return rf.val
 }
 
 func (rf resolvedFuture) Deref(cs chunks.ChunkSource) (Value, error) {
-	return rf.Value, nil
+	return rf.val, nil
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,4 +36,37 @@ func TestUnresolvedFuture(t *testing.T) {
 	assert.True(v2.Equals(v3))
 }
 
-// TODO: TestEqualsFastPath
+func TestEqualsFastPath(t *testing.T) {
+	assert := assert.New(t)
+	cs := &chunks.MemoryStore{}
+
+	v := Int32(1)
+	r, err := WriteValue(v, cs)
+	assert.NoError(err)
+
+	fv := futureFromValue(v)
+	fr := futureFromRef(r)
+
+	oldGetRef := getRef
+	defer func() { getRef = oldGetRef }()
+
+	count := 0
+	getRef = func(val Value) ref.Ref {
+		count += 1
+		return oldGetRef(val)
+	}
+
+	assert.True(futuresEqual(fv, fr))
+	assert.True(futuresEqual(fr, fv))
+	assert.Equal(2, count)
+
+	_, err = fr.Deref(cs)
+	assert.NoError(err)
+
+	count = 0
+	assert.True(futuresEqual(fv, fv))
+	assert.True(futuresEqual(fv, fr))
+	assert.True(futuresEqual(fr, fv))
+
+	assert.Equal(0, count)
+}

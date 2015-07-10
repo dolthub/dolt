@@ -13,9 +13,15 @@ type future interface {
 	// Returns the Value if we already have it, nil otherwise.
 	Val() Value
 
-	// Determines if the two future values are equal without fetching either.
-	Equals(other future) bool
-
 	// Fetch the future value if necessary, then return it. Multiple calls to deref only result in one fetch.
 	Deref(cs chunks.ChunkSource) (Value, error)
+}
+
+func futuresEqual(f1, f2 future) bool {
+	// If we already have both values, then use their Equals() methods since for primitives it is faster than computing a reference.
+	if f1.Val() != nil && f2.Val() != nil {
+		return f1.Val().Equals(f2.Val())
+	} else {
+		return f1.Ref() == f2.Ref()
+	}
 }
