@@ -1,19 +1,86 @@
 package types
 
-// TODO: I'm not sure we even want this interface in the long term, because noms is strongly-typed, so we should actually have List<T>.
-type List interface {
-	Value
-	Len() uint64
-	Get(idx uint64) Value
-	// TODO: iterator
-	Slice(idx uint64, end uint64) List
-	Set(idx uint64, v Value) List
-	Append(v ...Value) List
-	Insert(idx uint64, v ...Value) List
-	Remove(start uint64, end uint64) List
-	RemoveAt(idx uint64) List
+import (
+	"github.com/attic-labs/noms/chunks"
+	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/ref"
+)
+
+type List struct {
+	list []future
+	cr   *cachedRef
+	cs 	 chunks.ChunkSource
 }
 
 func NewList(v ...Value) List {
-	return newFlatList(valuesToFutures(v), nil)
+	return listFromFutures(valuesToFutures(v), nil)
+}
+
+func valuesToFutures(list []Value) []future {
+	f := []future{}
+	for _, v := range list {
+		f = append(f, futureFromValue(v))
+	}
+	return f
+}
+
+func listFromFutures(list []future, cs chunks.ChunkSource) List {
+	return List{list, &cachedRef{}, cs}
+}
+
+func (l List) Len() uint64 {
+	return uint64(len(l.list))
+}
+
+func (l List) Get(idx uint64) Value {
+	v, err := l.list[idx].Deref(l.cs)
+	// This is the kind of thing that makes me feel like hiding deref'ing is probably not the right idea. But we'll go with it for now.
+	Chk.NoError(err)
+	return v
+}
+
+func (l List) Slice(start uint64, end uint64) List {
+	return listFromFutures(l.list[start:end], l.cs)
+}
+
+func (l List) Set(idx uint64, v Value) List {
+	b := make([]future, len(l.list))
+	copy(b, l.list)
+	b[idx] = futureFromValue(v)
+	return listFromFutures(b, l.cs)
+}
+
+func (l List) Append(v ...Value) List {
+	return listFromFutures(append(l.list, valuesToFutures(v)...), l.cs)
+}
+
+func (l List) Insert(idx uint64, v ...Value) List {
+	b := make([]future, len(l.list)+len(v))
+	copy(b, l.list[:idx])
+	copy(b[idx:], valuesToFutures(v))
+	copy(b[idx+uint64(len(v)):], l.list[idx:])
+	return listFromFutures(b, l.cs)
+}
+
+func (l List) Remove(start uint64, end uint64) List {
+	b := make([]future, uint64(len(l.list))-(end-start))
+	copy(b, l.list[:start])
+	copy(b[start:], l.list[end:])
+	return listFromFutures(b, l.cs)
+}
+
+func (l List) RemoveAt(idx uint64) List {
+	return l.Remove(idx, idx+1)
+}
+
+func (l List) Ref() ref.Ref {
+	return l.cr.Ref(l)
+}
+
+func (l List) Equals(other Value) bool {
+	if other == nil {
+		return false
+	} else {
+		return l.Ref() == other.Ref()
+	}
 }

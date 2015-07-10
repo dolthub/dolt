@@ -109,7 +109,7 @@ func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (future, error) {
 		}
 		output = append(output, outVal)
 	}
-	return futureFromValue(newFlatList(output, s)), nil
+	return futureFromValue(listFromFutures(output, s)), nil
 }
 
 func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (future, error) {

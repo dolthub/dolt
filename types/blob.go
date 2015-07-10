@@ -1,13 +1,37 @@
 package types
 
-import "io"
+import (
+	"bytes"
+	"io"
 
-type Blob interface {
-	Value
-	Len() uint64
-	Reader() io.Reader
+	"github.com/attic-labs/noms/ref"
+)
+
+type Blob struct {
+	data []byte
+	cr   *cachedRef
+}
+
+func (fb Blob) Reader() io.Reader {
+	return bytes.NewBuffer(fb.data)
+}
+
+func (fb Blob) Len() uint64 {
+	return uint64(len(fb.data))
+}
+
+func (fb Blob) Ref() ref.Ref {
+	return fb.cr.Ref(fb)
+}
+
+func (fb Blob) Equals(other Value) bool {
+	if other == nil {
+		return false
+	} else {
+		return fb.Ref() == other.Ref()
+	}
 }
 
 func NewBlob(data []byte) Blob {
-	return flatBlob{data, &cachedRef{}}
+	return Blob{data, &cachedRef{}}
 }
