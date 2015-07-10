@@ -1,4 +1,4 @@
-func(s {{.StructName}}) {{.GoFieldName}}() {{.FieldType}} {
+func (s {{.StructName}}) {{.GoFieldName}}() {{.FieldType}} {
 	return s.m.Get(types.NewString("{{.FieldName}}")).({{.FieldType}})
 }
 

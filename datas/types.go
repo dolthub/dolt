@@ -14,7 +14,7 @@ type RootSet struct {
 	s types.Set
 }
 
-type RootSetIterCallback (func(p Root) (stop bool))
+type RootSetIterCallback (func (p Root) (stop bool))
 
 func NewRootSet() RootSet {
 	return RootSet{types.NewSet()}

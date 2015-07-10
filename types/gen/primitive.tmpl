@@ -1,0 +1,14 @@
+type {{.NomsType}} {{.GoType}}
+
+func (self {{.NomsType}}) Equals(other Value) bool {
+	if other, ok := other.({{.NomsType}}); ok {
+		return self == other
+	} else {
+		return false
+	}
+}
+
+func (v {{.NomsType}}) Ref() ref.Ref {
+	return getRef(v)
+}
+

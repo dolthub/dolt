@@ -4,7 +4,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/attic-labs/noms/codegen/nomgen"
+	"github.com/attic-labs/noms/nomgen"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/types"
 )
