@@ -1,10 +1,9 @@
-package test
+package types
 
 import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	. "github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 

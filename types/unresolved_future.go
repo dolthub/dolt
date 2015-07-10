@@ -5,7 +5,7 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-func FutureFromRef(ref ref.Ref) Future {
+func futureFromRef(ref ref.Ref) future {
 	return &unresolvedFuture{ref: ref}
 }
 
@@ -32,6 +32,6 @@ func (f *unresolvedFuture) Ref() ref.Ref {
 	return f.ref
 }
 
-func (f *unresolvedFuture) Equals(other Future) bool {
+func (f *unresolvedFuture) Equals(other future) bool {
 	return f.ref == other.Ref()
 }

@@ -5,9 +5,9 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-// TODO: Seems like maybe this shouldn't be public for now?
-type Future interface {
+// future is an internal helper that encapsulates a Value which may or may not be available yet.
+type future interface {
 	Ref() ref.Ref
-	Equals(other Future) bool
+	Equals(other future) bool
 	Deref(cs chunks.ChunkSource) (Value, error)
 }

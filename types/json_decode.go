@@ -39,12 +39,12 @@ func jsonDecode(reader io.Reader, s chunks.ChunkSource) (Value, error) {
 	return val, nil
 }
 
-func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (Future, error) {
+func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (future, error) {
 	switch v := v.(type) {
 	case bool:
-		return FutureFromValue(Bool(v)), nil
+		return futureFromValue(Bool(v)), nil
 	case string:
-		return FutureFromValue(NewString(v)), nil
+		return futureFromValue(NewString(v)), nil
 	case map[string]interface{}:
 		return jsonDecodeTaggedValue(v, s)
 	default:
@@ -52,7 +52,7 @@ func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (Future, error) {
 	}
 }
 
-func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (Future, error) {
+func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (future, error) {
 	Chk.Equal(1, len(m))
 	for k, v := range m {
 		switch k {
@@ -61,21 +61,21 @@ func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (Futu
 			if v, ok := v.(float64); ok {
 				switch k {
 				case "int16":
-					return FutureFromValue(Int16(int16(v))), nil
+					return futureFromValue(Int16(int16(v))), nil
 				case "int32":
-					return FutureFromValue(Int32(int32(v))), nil
+					return futureFromValue(Int32(int32(v))), nil
 				case "int64":
-					return FutureFromValue(Int64(int64(v))), nil
+					return futureFromValue(Int64(int64(v))), nil
 				case "uint16":
-					return FutureFromValue(UInt16(uint16(v))), nil
+					return futureFromValue(UInt16(uint16(v))), nil
 				case "uint32":
-					return FutureFromValue(UInt32(uint32(v))), nil
+					return futureFromValue(UInt32(uint32(v))), nil
 				case "uint64":
-					return FutureFromValue(UInt64(uint64(v))), nil
+					return futureFromValue(UInt64(uint64(v))), nil
 				case "float32":
-					return FutureFromValue(Float32(float32(v))), nil
+					return futureFromValue(Float32(float32(v))), nil
 				case "float64":
-					return FutureFromValue(Float64(float64(v))), nil
+					return futureFromValue(Float64(float64(v))), nil
 				}
 			}
 		case "list":
@@ -100,8 +100,8 @@ func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (Futu
 	return nil, fmt.Errorf("Cannot decode tagged json value: %+v", m)
 }
 
-func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (Future, error) {
-	output := []Future{}
+func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (future, error) {
+	output := []future{}
 	for _, inVal := range input {
 		outVal, err := jsonDecodeValue(inVal, s)
 		if err != nil {
@@ -109,10 +109,10 @@ func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (Future, error) {
 		}
 		output = append(output, outVal)
 	}
-	return FutureFromValue(newFlatList(output, s)), nil
+	return futureFromValue(newFlatList(output, s)), nil
 }
 
-func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (Future, error) {
+func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (future, error) {
 	vals := []Value{}
 	for _, inVal := range input {
 		f, err := jsonDecodeValue(inVal, s)
@@ -125,10 +125,10 @@ func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (Future, error) {
 		}
 		vals = append(vals, outVal)
 	}
-	return FutureFromValue(NewSet(vals...)), nil
+	return futureFromValue(NewSet(vals...)), nil
 }
 
-func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (Future, error) {
+func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (future, error) {
 	output := NewMap()
 	Chk.Equal(0, len(input)%2, "Length on input array must be multiple of 2")
 	for i := 0; i < len(input); i += 2 {
@@ -153,13 +153,13 @@ func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (Future, error) {
 		}
 		output = output.Set(outKey, outVal)
 	}
-	return FutureFromValue(output), nil
+	return futureFromValue(output), nil
 }
 
-func jsonDecodeRef(refStr string, s chunks.ChunkSource) (Future, error) {
+func jsonDecodeRef(refStr string, s chunks.ChunkSource) (future, error) {
 	ref, err := ref.Parse(refStr)
 	if err != nil {
 		return nil, err
 	}
-	return FutureFromRef(ref), nil
+	return futureFromRef(ref), nil
 }
