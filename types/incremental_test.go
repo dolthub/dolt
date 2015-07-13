@@ -81,3 +81,25 @@ func TestIncrementalLoadSet(t *testing.T) {
 		return
 	})
 }
+
+func TestIncrementalLoadMap(t *testing.T) {
+	assert := assert.New(t)
+	cs := &testStore{ChunkStore: &chunks.MemoryStore{}}
+
+	expected := NewMap(testVals...)
+	ref, err := WriteValue(expected, cs)
+	assert.NoError(err)
+
+	actualVar, err := ReadValue(ref, cs)
+	assert.NoError(err)
+	actual := actualVar.(Map)
+
+	expectedCount := cs.count
+	assert.Equal(1, expectedCount)
+	actual.Iter(func(k, v Value) (stop bool) {
+		expectedCount += isEncodedOutOfLine(k)
+		expectedCount += isEncodedOutOfLine(v)
+		assert.Equal(expectedCount, cs.count)
+		return
+	})
+}

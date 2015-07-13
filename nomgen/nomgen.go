@@ -17,9 +17,9 @@ import (
 var (
 	fieldCompositeTempl = readTemplate("field_composite.tmpl")
 	fieldPrimitiveTempl = readTemplate("field_primitive.tmpl")
-	headerTmpl 			= readTemplate("header.tmpl")
-	setTempl    		= readTemplate("set.tmpl")
-	structTempl 		= readTemplate("struct.tmpl")
+	headerTmpl          = readTemplate("header.tmpl")
+	setTempl            = readTemplate("set.tmpl")
+	structTempl         = readTemplate("struct.tmpl")
 )
 
 type NG struct {
@@ -33,7 +33,7 @@ func New(w io.Writer) NG {
 }
 
 func (ng *NG) WriteGo(val types.Map, pkg string) {
-	headerTmpl.Execute(ng.w, struct{PackageName string}{pkg})
+	headerTmpl.Execute(ng.w, struct{ PackageName string }{pkg})
 
 	ng.addType(val)
 
@@ -108,10 +108,10 @@ func (ng *NG) writeStruct(val types.Map) {
 		getGoTypeName(val),
 	})
 
-	val.Iter(func(e types.MapEntry) (stop bool) {
-		sk := e.Key.(types.String).String()
+	val.Iter(func(k, v types.Values) (stop bool) {
+		sk := k.(types.String).String()
 		if sk[0] != '$' {
-			ng.writeField(structName, sk, e.Value)
+			ng.writeField(structName, sk, v)
 		}
 		return
 	})
@@ -121,11 +121,11 @@ func (ng *NG) writeField(structName, fieldName string, typeDef types.Value) {
 	ng.addType(typeDef)
 
 	data := struct {
-		StructName string
-		FieldType string
+		StructName  string
+		FieldType   string
 		GoFieldName string
-		FieldName string
-	} {
+		FieldName   string
+	}{
 		structName,
 		getGoTypeName(typeDef),
 		capitalize(fieldName),

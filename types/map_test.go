@@ -66,11 +66,16 @@ func TestMapIter(t *testing.T) {
 	assert := assert.New(t)
 	m := NewMap()
 
-	type resultList []MapEntry
+	type entry struct {
+		key   Value
+		value Value
+	}
+
+	type resultList []entry
 	results := resultList{}
 	got := func(key, val Value) bool {
 		for _, r := range results {
-			if key.Equals(r.Key) && val.Equals(r.Value) {
+			if key.Equals(r.key) && val.Equals(r.value) {
 				return true
 			}
 		}
@@ -78,8 +83,8 @@ func TestMapIter(t *testing.T) {
 	}
 
 	stop := false
-	cb := func(entry MapEntry) bool {
-		results = append(results, entry)
+	cb := func(k, v Value) bool {
+		results = append(results, entry{k, v})
 		return stop
 	}
 

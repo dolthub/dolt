@@ -125,31 +125,18 @@ func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (future, error) {
 }
 
 func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (future, error) {
-	output := NewMap()
+	output := []future{}
 	Chk.Equal(0, len(input)%2, "Length on input array must be multiple of 2")
-	for i := 0; i < len(input); i += 2 {
-		inKey := input[i]
-		inVal := input[i+1]
 
-		outKeyF, err := jsonDecodeValue(inKey, s)
+	for _, inVal := range input {
+		f, err := jsonDecodeValue(inVal, s)
 		if err != nil {
 			return nil, err
 		}
-		outKey, err := outKeyF.Deref(s)
-		if err != nil {
-			return nil, err
-		}
-		outValF, err := jsonDecodeValue(inVal, s)
-		if err != nil {
-			return nil, err
-		}
-		outVal, err := outValF.Deref(s)
-		if err != nil {
-			return nil, err
-		}
-		output = output.Set(outKey, outVal)
+		output = append(output, f)
 	}
-	return futureFromValue(output), nil
+
+	return futureFromValue(mapFromFutures(output, s)), nil
 }
 
 func jsonDecodeRef(refStr string, s chunks.ChunkSource) (future, error) {

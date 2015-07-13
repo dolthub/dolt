@@ -1,19 +1,25 @@
 package types
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
-type mapData map[ref.Ref]MapEntry
+type mapData map[ref.Ref]mapEntry
 
 type Map struct {
 	m   mapData
+	cs  chunks.ChunkSource
 	ref *ref.Ref
 }
 
 func NewMap(kv ...Value) Map {
-	return newMapFromData(buildMapData(mapData{}, kv...))
+	return newMapFromData(buildMapData(mapData{}, valuesToFutures(kv)), nil)
+}
+
+func mapFromFutures(f []future, cs chunks.ChunkSource) Map {
+	return newMapFromData(buildMapData(mapData{}, f), cs)
 }
 
 func (fm Map) Len() uint64 {
@@ -26,32 +32,38 @@ func (fm Map) Has(key Value) bool {
 }
 
 func (fm Map) Get(key Value) Value {
-	if v, ok := fm.m[key.Ref()]; ok {
-		return v.Value
+	if entry, ok := fm.m[key.Ref()]; ok {
+		v, err := entry.value.Deref(fm.cs)
+		Chk.NoError(err)
+		return v
 	} else {
 		return nil
 	}
 }
 
 func (fm Map) Set(key Value, val Value) Map {
-	return newMapFromData(buildMapData(fm.m, key, val))
+	return newMapFromData(buildMapData(fm.m, valuesToFutures([]Value{key, val})), nil)
 }
 
 func (fm Map) SetM(kv ...Value) Map {
-	return newMapFromData(buildMapData(fm.m, kv...))
+	return newMapFromData(buildMapData(fm.m, valuesToFutures(kv)), nil)
 }
 
 func (fm Map) Remove(k Value) Map {
 	m := copyMapData(fm.m)
 	delete(m, k.Ref())
-	return newMapFromData(m)
+	return newMapFromData(m, fm.cs)
 }
 
-type mapIterCallback func(entry MapEntry) bool
+type mapIterCallback func(key, value Value) bool
 
 func (fm Map) Iter(cb mapIterCallback) {
-	for _, v := range fm.m {
-		if cb(v) {
+	for _, entry := range fm.m {
+		k, err := entry.key.Deref(fm.cs)
+		Chk.NoError(err)
+		v, err := entry.value.Deref(fm.cs)
+		Chk.NoError(err)
+		if cb(k, v) {
 			break
 		}
 	}
@@ -69,27 +81,13 @@ func (fm Map) Equals(other Value) (res bool) {
 	}
 }
 
-type MapEntry struct {
-	Key   Value
-	Value Value
+type mapEntry struct {
+	key   future
+	value future
 }
 
-type MapEntrySlice []MapEntry
-
-func (mes MapEntrySlice) Len() int {
-	return len(mes)
-}
-
-func (mes MapEntrySlice) Swap(i, j int) {
-	mes[i], mes[j] = mes[j], mes[i]
-}
-
-func (mes MapEntrySlice) Less(i, j int) bool {
-	return ref.Less(mes[i].Key.Ref(), mes[j].Key.Ref())
-}
-
-func newMapFromData(m mapData) Map {
-	return Map{m, &ref.Ref{}}
+func newMapFromData(m mapData, cs chunks.ChunkSource) Map {
+	return Map{m, cs, &ref.Ref{}}
 }
 
 func copyMapData(m mapData) mapData {
@@ -100,14 +98,14 @@ func copyMapData(m mapData) mapData {
 	return r
 }
 
-func buildMapData(oldData mapData, kv ...Value) mapData {
-	Chk.Equal(0, len(kv)%2, "Must specify even number of key/value pairs")
+func buildMapData(oldData mapData, futures []future) mapData {
+	Chk.Equal(0, len(futures)%2, "Must specify even number of key/value pairs")
 
 	m := copyMapData(oldData)
-	for i := 0; i < len(kv); i += 2 {
-		k := kv[i]
-		v := kv[i+1]
-		m[k.Ref()] = MapEntry{k, v}
+	for i := 0; i < len(futures); i += 2 {
+		k := futures[i]
+		v := futures[i+1]
+		m[k.Ref()] = mapEntry{k, v}
 	}
 	return m
 }

@@ -98,11 +98,30 @@ func getJSONList(l List, s chunks.ChunkSink) (r interface{}, err error) {
 	return
 }
 
+type entry struct {
+	key   Value
+	value Value
+}
+
+type entrySlice []entry
+
+func (mes entrySlice) Len() int {
+	return len(mes)
+}
+
+func (mes entrySlice) Swap(i, j int) {
+	mes[i], mes[j] = mes[j], mes[i]
+}
+
+func (mes entrySlice) Less(i, j int) bool {
+	return ref.Less(mes[i].key.Ref(), mes[j].key.Ref())
+}
+
 func getJSONMap(m Map, s chunks.ChunkSink) (r interface{}, err error) {
 	// Iteration through Set is random, but we need a deterministic order for serialization. Let's order using the refs of the values in the set.
-	order := MapEntrySlice{}
-	m.Iter(func(entry MapEntry) (stop bool) {
-		order = append(order, entry)
+	order := entrySlice{}
+	m.Iter(func(k, v Value) (stop bool) {
+		order = append(order, entry{k, v})
 		return
 	})
 	sort.Sort(order)
@@ -110,9 +129,9 @@ func getJSONMap(m Map, s chunks.ChunkSink) (r interface{}, err error) {
 	j := []interface{}{}
 	for _, r := range order {
 		var cjk, cjv interface{}
-		cjk, err = getChildJSON(r.Key, s)
+		cjk, err = getChildJSON(r.key, s)
 		if err == nil {
-			cjv, err = getChildJSON(r.Value, s)
+			cjv, err = getChildJSON(r.value, s)
 		}
 		if err != nil {
 			return nil, err
