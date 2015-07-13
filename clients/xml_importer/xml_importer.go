@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"log"
 	"net/http"
@@ -9,7 +8,18 @@ import (
 	"github.com/attic-labs/noms/clients/lib"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
+	"github.com/attic-labs/noms/types"
+	"github.com/clbanning/mxj"
 )
+
+func myNomsValueFromObject(o interface{}) types.Value {
+	switch o := o.(type) {
+	case mxj.Map:
+		return lib.NomsValueFromObject(o.Old())
+	default:
+		return lib.NomsValueFromObject(o)
+	}
+}
 
 func main() {
 	datasetDataStoreFlags := dataset.DatasetDataFlags()
@@ -34,15 +44,14 @@ func main() {
 		log.Fatalf("Error fetching %s: %s\n", url, res.Status)
 	}
 
-	var jsonObject interface{}
-	err = json.NewDecoder(res.Body).Decode(&jsonObject)
+	xmlObject, err := mxj.NewMapXmlReader(res.Body)
 	if err != nil {
-		log.Fatalln("Error decoding JSON: ", err)
+		log.Fatalln("Error decoding XML: ", err)
 	}
 
 	roots := ds.Roots()
 
-	value := lib.NomsValueFromObject(jsonObject)
+	value := myNomsValueFromObject(xmlObject)
 
 	ds.Commit(datas.NewRootSet().Insert(
 		datas.NewRoot().SetParents(
