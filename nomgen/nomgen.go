@@ -108,7 +108,7 @@ func (ng *NG) writeStruct(val types.Map) {
 		getGoTypeName(val),
 	})
 
-	val.Iter(func(k, v types.Values) (stop bool) {
+	val.Iter(func(k, v types.Value) (stop bool) {
 		sk := k.(types.String).String()
 		if sk[0] != '$' {
 			ng.writeField(structName, sk, v)
