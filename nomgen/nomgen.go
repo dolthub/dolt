@@ -128,7 +128,7 @@ func (ng *NG) writeField(structName, fieldName string, typeDef types.Value) {
 	}{
 		structName,
 		getGoTypeName(typeDef),
-		capitalize(fieldName),
+		strings.Title(fieldName),
 		fieldName,
 	}
 
@@ -145,7 +145,7 @@ func getGoTypeName(typeDef types.Value) string {
 		name := typeDef.String()
 		switch name {
 		case "bool", "int16", "int32", "int64", "uint16", "uint32", "uint64", "float32", "float64", "blob", "string", "set", "map", "value":
-			return fmt.Sprintf("types.%s", capitalize(typeDef.String()))
+			return fmt.Sprintf("types.%s", strings.Title(typeDef.String()))
 		}
 		Chk.Fail("unexpected noms type name: %s", name)
 	case types.Map:
@@ -163,9 +163,4 @@ func getGoTypeName(typeDef types.Value) string {
 
 func (ng *NG) writeStr(str string, vals ...interface{}) {
 	io.WriteString(ng.w, fmt.Sprintf(str, vals...))
-}
-
-// I'm confused that this doesn't exist somewhere in go stdlib, but I can't find it...
-func capitalize(str string) string {
-	return strings.ToUpper(str[:1]) + str[1:]
 }
