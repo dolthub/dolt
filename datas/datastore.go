@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-//go:generate go run gen/types.go -o types.go
-
 type DataStore struct {
 	chunks.ChunkStore
 
