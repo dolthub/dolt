@@ -32,5 +32,5 @@ func main() {
 	defer f.Close()
 	Chk.NoError(err)
 	ng := nomgen.New(f)
-	ng.WriteGo(datasetSet, "dataset")
+	ng.WriteGo(datasetSet, "mgmt")
 }

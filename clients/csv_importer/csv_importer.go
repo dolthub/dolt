@@ -13,9 +13,14 @@ import (
 )
 
 func main() {
-	datasetDataStoreFlags := dataset.DatasetDataFlags()
+	dsFlags := dataset.Flags()
 	flag.Parse()
-	ds := datasetDataStoreFlags.CreateStore()
+	ds := dsFlags.CreateDataset()
+	if ds == nil {
+		flag.Usage()
+		return
+	}
+
 	url := flag.Arg(0)
 	if ds == nil || url == "" {
 		flag.Usage()
@@ -55,7 +60,6 @@ func main() {
 	}
 
 	roots := ds.Roots()
-
 	ds.Commit(datas.NewRootSet().Insert(
 		datas.NewRoot().SetParents(
 			roots.NomsValue()).SetValue(

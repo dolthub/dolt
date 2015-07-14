@@ -9,22 +9,29 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetDataset(t *testing.T) {
+func TestDatasetRootTracker(t *testing.T) {
 	assert := assert.New(t)
+	datasetId1 := "testdataset"
+	datasetId2 := "othertestdataset"
 	ms := &chunks.MemoryStore{}
-	ds := datas.NewDataStore(ms, ms)
-	datasets := GetDatasets(ds)
-	dataset := getDataset(datasets, "testdataset")
-	assert.Nil(dataset)
-	datasets = SetDatasetRoot(datasets, "testdataset", types.Int32(42))
-	dataset = getDataset(datasets, "testdataset")
-	assert.Equal("testdataset", dataset.Id().String())
-}
+	rootDs := datas.NewDataStore(ms, ms)
 
-func TestSetDatasetRoot(t *testing.T) {
-	assert := assert.New(t)
-	datasets := SetDatasetRoot(NewDatasetSet(), "testdataset", types.Int32(42))
-	assert.EqualValues(1, datasets.Len())
-	assert.True(types.Int32(42).Equals(datasets.Any().Root()))
-	assert.True(types.Int32(42).Equals(GetDatasetRoot(datasets, "testdataset")))
+	datasetDs1 := NewDataset(rootDs, datasetId1)
+	datasetRoot1 := types.NewString("Root value for " + datasetId1)
+	datasetDs1 = datasetDs1.Commit(datas.NewRootSet().Insert(
+		datas.NewRoot().SetParents(
+			types.NewSet()).SetValue(datasetRoot1)))
+
+	datasetDs2 := NewDataset(rootDs, datasetId2)
+	datasetRoot2 := types.NewString("Root value for " + datasetId2)
+	datasetDs2 = datasetDs2.Commit(datas.NewRootSet().Insert(
+		datas.NewRoot().SetParents(
+			types.NewSet()).SetValue(datasetRoot2)))
+
+	assert.EqualValues(1, datasetDs2.Roots().Len())
+	assert.EqualValues(1, datasetDs1.Roots().Len())
+	assert.EqualValues(datasetRoot1, datasetDs1.Roots().Any().Value())
+	assert.EqualValues(datasetRoot2, datasetDs2.Roots().Any().Value())
+	assert.False(datasetDs2.Roots().Any().Value().Equals(datasetRoot1))
+	assert.False(datasetDs1.Roots().Any().Value().Equals(datasetRoot2))
 }

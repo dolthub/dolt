@@ -12,9 +12,14 @@ import (
 )
 
 func main() {
-	datasetDataStoreFlags := dataset.DatasetDataFlags()
+	dsFlags := dataset.Flags()
 	flag.Parse()
-	ds := datasetDataStoreFlags.CreateStore()
+	ds := dsFlags.CreateDataset()
+	if ds == nil {
+		flag.Usage()
+		return
+	}
+
 	url := flag.Arg(0)
 	if ds == nil || url == "" {
 		flag.Usage()
