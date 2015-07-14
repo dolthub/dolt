@@ -7,22 +7,17 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
+	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 )
 
 func main() {
-	flags := chunks.NewFlags()
+	datasetDataStoreFlags := dataset.DatasetDataFlags()
 	flag.Parse()
-	cs := flags.CreateStore()
-	if cs == nil {
-		flag.Usage()
-		return
-	}
-
+	ds := datasetDataStoreFlags.CreateStore()
 	url := flag.Arg(0)
-	if url == "" {
+	if ds == nil || url == "" {
 		flag.Usage()
 		return
 	}
@@ -59,7 +54,6 @@ func main() {
 		value = value.Append(m)
 	}
 
-	ds := datas.NewDataStore(cs)
 	roots := ds.Roots()
 
 	ds.Commit(datas.NewRootSet().Insert(

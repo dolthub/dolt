@@ -5,19 +5,19 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/attic-labs/noms/clients/lib"
+	"github.com/attic-labs/noms/clients/go"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 	"github.com/clbanning/mxj"
 )
 
-func myNomsValueFromObject(o interface{}) types.Value {
+func nomsValueFromDecodedJSON(o interface{}) types.Value {
 	switch o := o.(type) {
 	case mxj.Map:
-		return lib.NomsValueFromObject(o.Old())
+		return util.NomsValueFromDecodedJSON(o.Old())
 	default:
-		return lib.NomsValueFromObject(o)
+		return util.NomsValueFromDecodedJSON(o)
 	}
 }
 
@@ -25,13 +25,8 @@ func main() {
 	datasetDataStoreFlags := dataset.DatasetDataFlags()
 	flag.Parse()
 	ds := datasetDataStoreFlags.CreateStore()
-	if ds == nil {
-		flag.Usage()
-		return
-	}
-
 	url := flag.Arg(0)
-	if url == "" {
+	if ds == nil || url == "" {
 		flag.Usage()
 		return
 	}
@@ -51,7 +46,7 @@ func main() {
 
 	roots := ds.Roots()
 
-	value := myNomsValueFromObject(xmlObject)
+	value := nomsValueFromDecodedJSON(xmlObject)
 
 	ds.Commit(datas.NewRootSet().Insert(
 		datas.NewRoot().SetParents(

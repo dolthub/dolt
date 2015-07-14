@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/attic-labs/noms/clients/lib"
+	"github.com/attic-labs/noms/clients/go"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 )
@@ -15,13 +15,8 @@ func main() {
 	datasetDataStoreFlags := dataset.DatasetDataFlags()
 	flag.Parse()
 	ds := datasetDataStoreFlags.CreateStore()
-	if ds == nil {
-		flag.Usage()
-		return
-	}
-
 	url := flag.Arg(0)
-	if url == "" {
+	if ds == nil || url == "" {
 		flag.Usage()
 		return
 	}
@@ -42,7 +37,7 @@ func main() {
 
 	roots := ds.Roots()
 
-	value := lib.NomsValueFromObject(jsonObject)
+	value := util.NomsValueFromDecodedJSON(jsonObject)
 
 	ds.Commit(datas.NewRootSet().Insert(
 		datas.NewRoot().SetParents(
