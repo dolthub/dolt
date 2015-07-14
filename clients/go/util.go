@@ -1,8 +1,9 @@
 package util
 
 import (
-	"fmt"
+	"reflect"
 
+	"github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -49,6 +50,7 @@ func NomsValueFromDecodedJSON(o interface{}) types.Value {
 		}
 		return out
 	default:
-		panic(fmt.Sprintln(o, "is of a type I don't know how to handle!"))
+		dbg.Chk.Fail("Nomsification failed.", "I don't understand %+v, which is of type %s!\n", o, reflect.TypeOf(o).String())
 	}
+	return nil
 }
