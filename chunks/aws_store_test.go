@@ -19,22 +19,27 @@ func TestAWSStoreTestSuite(t *testing.T) {
 
 type AWSStoreTestSuite struct {
 	suite.Suite
+	s3svc *mockS3
 	store AWSStore
 }
 
 func (suite *AWSStoreTestSuite) SetupTest() {
+	suite.s3svc = &mockS3{data: map[string][]byte{}}
 	suite.store = AWSStore{
 		"bucket",
 		"table",
-		&mockS3{},
+		suite.s3svc,
 		nil,
 	}
 }
 
-type mockS3 map[string][]byte
+type mockS3 struct {
+	data    map[string][]byte
+	numPuts int
+}
 
 func (m *mockS3) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
-	result, ok := (*m)[*input.Key]
+	result, ok := m.data[*input.Key]
 	if !ok {
 		return nil, errors.New("not here")
 	}
@@ -44,33 +49,47 @@ func (m *mockS3) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error
 	}, nil
 }
 
+func (m *mockS3) HeadObject(input *s3.HeadObjectInput) (*s3.HeadObjectOutput, error) {
+	if _, ok := m.data[*input.Key]; ok {
+		return &s3.HeadObjectOutput{}, nil
+	} else {
+		return nil, errors.New("not here")
+	}
+}
+
 func (m *mockS3) PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error) {
 	bytes, _ := ioutil.ReadAll(input.Body)
-	(*m)[*input.Key] = bytes
+	m.data[*input.Key] = bytes
+	m.numPuts += 1
 	return nil, nil
 }
 
 func (suite *AWSStoreTestSuite) TestAWSStorePut() {
 	input := "abc"
 
-	w := suite.store.Put()
-	_, err := w.Write([]byte(input))
-	suite.NoError(err)
+	for i := 0; i < 2; i++ {
+		w := suite.store.Put()
+		_, err := w.Write([]byte(input))
+		suite.NoError(err)
 
-	r1, err := w.Ref()
-	suite.NoError(err)
+		r1, err := w.Ref()
+		suite.NoError(err)
 
-	// See http://www.di-mgt.com.au/sha_testvectors.html
-	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
+		// See http://www.di-mgt.com.au/sha_testvectors.html
+		suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
 
-	// And reading it via the API should work...
-	assertInputInStore(input, r1, suite.store, suite.Assert())
+		// And reading it via the API should work...
+		assertInputInStore(input, r1, suite.store, suite.Assert())
 
-	// Reading a non-existing ref fails
-	hash := ref.NewHash()
-	hash.Write([]byte("Non-existent"))
-	_, err = suite.store.Get(ref.FromHash(hash))
-	suite.Error(err)
+		// Reading a non-existing ref fails
+		hash := ref.NewHash()
+		hash.Write([]byte("Non-existent"))
+		_, err = suite.store.Get(ref.FromHash(hash))
+		suite.Error(err)
+
+		// Writing the same thing again shouldn't result in a duplicate call to AWSStore.PutObject()
+		suite.Equal(1, suite.s3svc.numPuts)
+	}
 }
 
 func (suite *AWSStoreTestSuite) TestAWSStorePutRefAfterClose() {

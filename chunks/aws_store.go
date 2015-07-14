@@ -27,6 +27,7 @@ var (
 
 type awsSvc interface {
 	GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
+	HeadObject(input *s3.HeadObjectInput) (*s3.HeadObjectOutput, error)
 	PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
 }
 
@@ -158,9 +159,21 @@ func (w *awsChunkWriter) Close() error {
 	_, err := w.file.Seek(0, 0)
 	Chk.NoError(err)
 
+	bucket := aws.String(w.store.bucket)
+	key := aws.String(ref.FromHash(w.hash).String())
+
+	_, err = w.store.awsSvc.HeadObject(&s3.HeadObjectInput{
+		Bucket: bucket,
+		Key: key,
+	})
+	if err == nil {
+		// Nothing to do, s3 already has this chunk
+		return nil
+	}
+
 	_, err = w.store.awsSvc.PutObject(&s3.PutObjectInput{
-		Bucket: aws.String(w.store.bucket),
-		Key:    aws.String(ref.FromHash(w.hash).String()),
+		Bucket: bucket,
+		Key:    key,
 		Body:   w.file,
 	})
 	Chk.NoError(err)
