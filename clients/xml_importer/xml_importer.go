@@ -8,18 +8,8 @@ import (
 	"github.com/attic-labs/noms/clients/go"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/types"
 	"github.com/clbanning/mxj"
 )
-
-func nomsValueFromDecodedJSON(o interface{}) types.Value {
-	switch o := o.(type) {
-	case mxj.Map:
-		return util.NomsValueFromDecodedJSON(o.Old())
-	default:
-		return util.NomsValueFromDecodedJSON(o)
-	}
-}
 
 func main() {
 	dsFlags := dataset.Flags()
@@ -46,7 +36,7 @@ func main() {
 
 	roots := ds.Roots()
 
-	value := nomsValueFromDecodedJSON(xmlObject)
+	value := util.NomsValueFromDecodedJSON(xmlObject.Old())
 
 	ds.Commit(datas.NewRootSet().Insert(
 		datas.NewRoot().SetParents(
