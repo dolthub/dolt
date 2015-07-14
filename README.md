@@ -20,9 +20,12 @@ This includes:
 
 `go get -u -t github.com/attic-labs/noms/...`
 
-# Build and run tests
+# Build
 
-`go test ./...`
+```
+go build ./...
+go test ./...
+```
 
 # Run
 
