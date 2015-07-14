@@ -22,9 +22,9 @@ func nomsValueFromDecodedJSON(o interface{}) types.Value {
 }
 
 func main() {
-	datasetDataStoreFlags := dataset.DatasetDataFlags()
+	dsFlags := dataset.Flags()
 	flag.Parse()
-	ds := datasetDataStoreFlags.CreateStore()
+	ds := dsFlags.CreateDataset()
 	url := flag.Arg(0)
 	if ds == nil || url == "" {
 		flag.Usage()
