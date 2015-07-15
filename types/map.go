@@ -42,11 +42,11 @@ func (fm Map) Get(key Value) Value {
 }
 
 func (fm Map) Set(key Value, val Value) Map {
-	return newMapFromData(buildMapData(fm.m, valuesToFutures([]Value{key, val})), nil)
+	return newMapFromData(buildMapData(fm.m, valuesToFutures([]Value{key, val})), fm.cs)
 }
 
 func (fm Map) SetM(kv ...Value) Map {
-	return newMapFromData(buildMapData(fm.m, valuesToFutures(kv)), nil)
+	return newMapFromData(buildMapData(fm.m, valuesToFutures(kv)), fm.cs)
 }
 
 func (fm Map) Remove(k Value) Map {
