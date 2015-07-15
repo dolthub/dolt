@@ -80,7 +80,7 @@ func memoryFlags() memoryStoreFlags {
 }
 
 func (f memoryStoreFlags) createStore() ChunkStore {
-	if !*f.use {
+	if *f.use {
 		return &MemoryStore{}
 	} else {
 		return nil
