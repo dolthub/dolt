@@ -4,7 +4,7 @@ type {{.StructName}} struct {
 	s types.Set
 }
 
-type {{.StructName}}IterCallback (func (p {{.ElemName}}) (stop bool))
+type {{.StructName}}IterCallback (func(p {{.ElemName}}) (stop bool))
 
 func New{{.StructName}}() {{.StructName}} {
 	return {{.StructName}}{types.NewSet()}
