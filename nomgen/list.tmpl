@@ -1,0 +1,68 @@
+// {{.StructName}}
+
+type {{.StructName}} struct {
+	l types.List
+}
+
+type {{.StructName}}IterCallback (func (p {{.ElemName}}) (stop bool))
+
+func New{{.StructName}}() {{.StructName}} {
+	return {{.StructName}}{types.NewList()}
+}
+
+func {{.StructName}}FromVal(p types.Value) {{.StructName}} {
+	return {{.StructName}}{p.(types.List)}
+}
+
+func (l {{.StructName}}) NomsValue() types.List {
+	return l.l
+}
+
+func (l {{.StructName}}) Equals(p {{.StructName}}) bool {
+	return l.l.Equals(p.l)
+}
+
+func (l {{.StructName}}) Ref() ref.Ref {
+	return l.l.Ref()
+}
+
+func (l {{.StructName}}) Len() uint64 {
+	return l.l.Len()
+}
+
+func (l {{.StructName}}) Get(idx uint64) {{.ElemName}} {
+	return {{.ElemName}}FromVal(l.l.Get(idx))
+}
+
+func (l {{.StructName}}) Slice(idx uint64, end uint64) {{.StructName}} {
+	return {{.StructName}}{l.l.Slice(idx, end)}
+}
+
+func (l {{.StructName}}) Set(idx uint64, v {{.ElemName}}) {{.StructName}} {
+	return {{.StructName}}{l.l.Set(idx, v.NomsValue())}
+}
+
+func (l {{.StructName}}) Append(v ...{{.ElemName}}) {{.StructName}} {
+	return {{.StructName}}{l.l.Append(l.fromElemSlice(v)...)}
+}
+
+func (l {{.StructName}}) Insert(idx uint64, v ...{{.ElemName}}) {{.StructName}} {
+	return {{.StructName}}{l.l.Insert(idx, l.fromElemSlice(v)...)}
+}
+
+func (l {{.StructName}}) Remove(idx uint64, end uint64) {{.StructName}} {
+	return {{.StructName}}{l.l.Remove(idx, end)}
+}
+
+func (l {{.StructName}}) RemoveAt(idx uint64) {{.StructName}} {
+	return {{.StructName}}{(l.l.RemoveAt(idx))}
+}
+
+func (l {{.StructName}}) fromElemSlice(p []{{.ElemName}}) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v.NomsValue()
+	}
+	return r
+}
+
