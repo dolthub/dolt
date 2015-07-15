@@ -42,11 +42,9 @@ func main() {
 		return nil
 	})
 
-	value := util.NomsValueFromDecodedJSON(objects)
-	roots := ds.Roots()
 	ds.Commit(datas.NewRootSet().Insert(
 		datas.NewRoot().SetParents(
-			roots.NomsValue()).SetValue(
-			value)))
+			ds.Roots().NomsValue()).SetValue(
+			util.NomsValueFromDecodedJSON(objects))))
 
 }
