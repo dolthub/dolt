@@ -25,7 +25,6 @@ func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, rc *rootC
 	if (rootRef == ref.Ref{}) {
 		roots = NewRootSet()
 	} else {
-		// BUG 11: This reads the entire database into memory. Whoopsie.
 		roots = RootSetFromVal(types.MustReadValue(rootRef, cs).(types.Set))
 	}
 	return DataStore{

@@ -71,9 +71,7 @@ func (rt *datasetRootTracker) UpdateRoot(current, last ref.Ref) bool {
 		return false
 	}
 
-	// BUG 11: Sucks to have to read the dataset root here in order to commit.
 	datasetRoot := types.MustReadValue(current, rt.rootStore)
-
 	rt.rootStore = mgmt.CommitDatasets(rt.rootStore, mgmt.SetDatasetRoot(mgmt.GetDatasets(rt.rootStore), rt.datasetID, datasetRoot))
 	return true
 }

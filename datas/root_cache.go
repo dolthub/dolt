@@ -34,7 +34,6 @@ func (cache *rootCache) Update(rootsRef ref.Ref) {
 		return
 	}
 
-	// BUG 11: This is super-inefficient with eager ReadValue and no caching
 	rootSet := RootSet{types.MustReadValue(rootsRef, cache.source).(types.Set)}
 	rootSet.Iter(func(commit Root) (stop bool) {
 		cache.updateFromCommit(commit)
