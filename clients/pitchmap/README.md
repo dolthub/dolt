@@ -1,4 +1,4 @@
-= pitchmap =
+# pitchmap
 
 This directory contains a pipeline of tools that combine to generate a heatmap of locations for major league baseball pitchers.
 
