@@ -13,17 +13,17 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-func TestS3StoreTestSuite(t *testing.T) {
-	suite.Run(t, &S3StoreTestSuite{})
+func TestAWSStoreTestSuite(t *testing.T) {
+	suite.Run(t, &AWSStoreTestSuite{})
 }
 
-type S3StoreTestSuite struct {
+type AWSStoreTestSuite struct {
 	suite.Suite
-	store S3Store
+	store AWSStore
 }
 
-func (suite *S3StoreTestSuite) SetupTest() {
-	suite.store = S3Store{
+func (suite *AWSStoreTestSuite) SetupTest() {
+	suite.store = AWSStore{
 		"bucket",
 		"table",
 		&mockS3{},
@@ -50,7 +50,7 @@ func (m *mockS3) PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error
 	return nil, nil
 }
 
-func (suite *S3StoreTestSuite) TestS3StorePut() {
+func (suite *AWSStoreTestSuite) TestAWSStorePut() {
 	input := "abc"
 
 	w := suite.store.Put()
@@ -73,7 +73,7 @@ func (suite *S3StoreTestSuite) TestS3StorePut() {
 	suite.Error(err)
 }
 
-func (suite *S3StoreTestSuite) TestS3StorePutRefAfterClose() {
+func (suite *AWSStoreTestSuite) TestAWSStorePutRefAfterClose() {
 	input := "abc"
 
 	w := suite.store.Put()
@@ -91,7 +91,7 @@ func (suite *S3StoreTestSuite) TestS3StorePutRefAfterClose() {
 	assertInputInStore(input, r1, suite.store, suite.Assert())
 }
 
-func (suite *S3StoreTestSuite) TestS3StorePutMultiRef() {
+func (suite *AWSStoreTestSuite) TestAWSStorePutMultiRef() {
 	input := "abc"
 
 	w := suite.store.Put()
@@ -144,10 +144,10 @@ func (m *mockDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput
 	return &dynamodb.PutItemOutput{}, nil
 }
 
-func (suite *S3StoreTestSuite) TestS3StoreRoot() {
+func (suite *AWSStoreTestSuite) TestAWSStoreRoot() {
 	m := mockDDB("")
 
-	suite.store = S3Store{
+	suite.store = AWSStore{
 		"bucket",
 		"table",
 		nil,
