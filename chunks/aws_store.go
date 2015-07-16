@@ -25,7 +25,7 @@ var (
 	refEqualsExpression      = fmt.Sprintf("%s = :prev", rootTableRef)
 )
 
-type s3svc interface {
+type awsSvc interface {
 	GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
 	PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
 }
@@ -35,20 +35,20 @@ type ddbsvc interface {
 	PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
 }
 
-type S3Store struct {
+type AWSStore struct {
 	bucket, table string
-	s3svc         s3svc
+	awsSvc        awsSvc
 	ddbsvc        ddbsvc
 }
 
-func NewS3Store(bucket, table, region, key, secret string) S3Store {
+func NewAWSStore(bucket, table, region, key, secret string) AWSStore {
 	creds := aws.DefaultConfig.Credentials
 
 	if key != "" {
 		creds = credentials.NewStaticCredentials(key, secret, "")
 	}
 
-	return S3Store{
+	return AWSStore{
 		bucket,
 		table,
 		s3.New(&aws.Config{Region: region, Credentials: creds}),
@@ -56,7 +56,7 @@ func NewS3Store(bucket, table, region, key, secret string) S3Store {
 	}
 }
 
-func (s S3Store) Root() ref.Ref {
+func (s AWSStore) Root() ref.Ref {
 	result, err := s.ddbsvc.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String(s.table),
 		Key: map[string]*dynamodb.AttributeValue{
@@ -73,7 +73,7 @@ func (s S3Store) Root() ref.Ref {
 	return ref.MustParse(*(result.Item[rootTableRef].S))
 }
 
-func (s S3Store) UpdateRoot(current, last ref.Ref) bool {
+func (s AWSStore) UpdateRoot(current, last ref.Ref) bool {
 	putArgs := dynamodb.PutItemInput{
 		TableName: aws.String(s.table),
 		Item: map[string]*dynamodb.AttributeValue{
@@ -107,8 +107,8 @@ func (s S3Store) UpdateRoot(current, last ref.Ref) bool {
 	return true
 }
 
-func (s S3Store) Get(ref ref.Ref) (io.ReadCloser, error) {
-	result, err := s.s3svc.GetObject(&s3.GetObjectInput{
+func (s AWSStore) Get(ref ref.Ref) (io.ReadCloser, error) {
+	result, err := s.awsSvc.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(ref.String()),
 	})
@@ -121,11 +121,11 @@ func (s S3Store) Get(ref ref.Ref) (io.ReadCloser, error) {
 	return result.Body, nil
 }
 
-func (s S3Store) Put() ChunkWriter {
+func (s AWSStore) Put() ChunkWriter {
 	f, err := ioutil.TempFile(os.TempDir(), "")
 	Chk.NoError(err)
 	h := ref.NewHash()
-	return &s3ChunkWriter{
+	return &awsChunkWriter{
 		store:  s,
 		file:   f,
 		writer: io.MultiWriter(f, h),
@@ -133,24 +133,24 @@ func (s S3Store) Put() ChunkWriter {
 	}
 }
 
-type s3ChunkWriter struct {
-	store  S3Store
+type awsChunkWriter struct {
+	store  AWSStore
 	file   *os.File
 	writer io.Writer
 	hash   hash.Hash
 }
 
-func (w *s3ChunkWriter) Write(data []byte) (int, error) {
+func (w *awsChunkWriter) Write(data []byte) (int, error) {
 	Chk.NotNil(w.file, "Write() cannot be called after Ref() or Close().")
 	return w.writer.Write(data)
 }
 
-func (w *s3ChunkWriter) Ref() (ref.Ref, error) {
+func (w *awsChunkWriter) Ref() (ref.Ref, error) {
 	Chk.NoError(w.Close())
 	return ref.FromHash(w.hash), nil
 }
 
-func (w *s3ChunkWriter) Close() error {
+func (w *awsChunkWriter) Close() error {
 	if w.file == nil {
 		return nil
 	}
@@ -158,7 +158,7 @@ func (w *s3ChunkWriter) Close() error {
 	_, err := w.file.Seek(0, 0)
 	Chk.NoError(err)
 
-	_, err = w.store.s3svc.PutObject(&s3.PutObjectInput{
+	_, err = w.store.awsSvc.PutObject(&s3.PutObjectInput{
 		Bucket: aws.String(w.store.bucket),
 		Key:    aws.String(ref.FromHash(w.hash).String()),
 		Body:   w.file,
@@ -171,8 +171,8 @@ func (w *s3ChunkWriter) Close() error {
 	return nil
 }
 
-type s3StoreFlags struct {
-	s3Bucket    *string
+type awsStoreFlags struct {
+	awsBucket   *string
 	dynamoTable *string
 	awsRegion   *string
 	authFromEnv *bool
@@ -180,9 +180,9 @@ type s3StoreFlags struct {
 	awsSecret   *string
 }
 
-func s3Flags() s3StoreFlags {
-	return s3StoreFlags{
-		flag.String("aws-store-bucket", "", "s3 bucket to create an aws-based chunkstore in"),
+func awsFlags() awsStoreFlags {
+	return awsStoreFlags{
+		flag.String("aws-store-bucket", "", "aws bucket to create an aws-based chunkstore in"),
 		flag.String("aws-store-dynamo-table", "noms-root", "dynamodb table to store the root of the aws-based chunkstore in"),
 		flag.String("aws-store-region", "us-west-2", "aws region to put the aws-based chunkstore in"),
 		flag.Bool("aws-store-auth-from-env", false, "creates the aws-based chunkstore from authorization found in the environment. This is typically used in production to get keys from IAM profile. If not specified, then -aws-store-key and aws-store-secret must be specified instead"),
@@ -191,8 +191,8 @@ func s3Flags() s3StoreFlags {
 	}
 }
 
-func (f s3StoreFlags) createStore() ChunkStore {
-	if *f.s3Bucket == "" || *f.awsRegion == "" || *f.dynamoTable == "" {
+func (f awsStoreFlags) createStore() ChunkStore {
+	if *f.awsBucket == "" || *f.awsRegion == "" || *f.dynamoTable == "" {
 		return nil
 	}
 
@@ -202,5 +202,5 @@ func (f s3StoreFlags) createStore() ChunkStore {
 		}
 	}
 
-	return NewS3Store(*f.s3Bucket, *f.dynamoTable, *f.awsRegion, *f.awsKey, *f.awsSecret)
+	return NewAWSStore(*f.awsBucket, *f.dynamoTable, *f.awsRegion, *f.awsKey, *f.awsSecret)
 }

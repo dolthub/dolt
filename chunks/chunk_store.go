@@ -33,21 +33,21 @@ type ChunkWriter interface {
 type Flags struct {
 	file   fileStoreFlags
 	memory memoryStoreFlags
-	s3     s3StoreFlags
+	aws    awsStoreFlags
 }
 
 func NewFlags() Flags {
 	return Flags{
 		fileFlags(),
 		memoryFlags(),
-		s3Flags(),
+		awsFlags(),
 	}
 }
 
 func (f Flags) CreateStore() (cs ChunkStore) {
 	if cs = f.file.createStore(); cs != nil {
 	} else if cs = f.memory.createStore(); cs != nil {
-	} else if cs = f.s3.createStore(); cs != nil {
+	} else if cs = f.aws.createStore(); cs != nil {
 	}
 	return cs
 }
