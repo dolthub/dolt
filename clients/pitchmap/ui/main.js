@@ -1,30 +1,50 @@
 'use strict';
 
-var React = require('react');
-var Immutable = require('immutable');
 var store = require('./noms_store.js');
 var decode = require('./decode.js');
-var Map = React.createFactory(require('./map.js'));
+var Immutable = require('immutable');
+var React = require('react');
+var Map = require('./map.js');
 
-function createTestData() {
-  var set = Immutable.Set();
-  for (var i = 0; i < 200; i++) {
-    set = set.add(Immutable.Map({
-      x: Math.random(),
-      y: Math.random(),
-    }));
-  }
-  return set;
+store.getRoot().then(function(s) {
+  return decode.readValue(s, store.getChunk);
+}).then(function(v) {
+  return getDatasetRoot(v, 'mlb/heatmap');
+}).then(getPitchers).then(renderPitchersList).catch(function(err) {
+  console.error(err);
+});
+
+function getDatasetRoot(root, id) {
+  return root.first().get('value').find(function(map) {
+    return map.get('id') === id;
+  }).get('root');
 }
 
-store.getRoot().then(function(root) {
-  var testData = createTestData();
-  decode.readValue(root, store.getChunk).then(function(value) {
-    var target = document.getElementById('heatmap');
-    React.render(Map({
-      points: testData,
-      width: 287,
-      height: 330,
-    }), target);
-  });
+function getPitchers(datasetRoot) {
+  return datasetRoot.first().get('value')
+}
+
+var Pitcher = React.createClass({
+  render() {
+    return <li>
+      {this.props.name}
+      <Map points={this.props.locations}/>
+    </li>;
+  }
 });
+
+var PitcherList = React.createClass({
+  render() {
+    var data = this.props.data;
+    return <ul>{
+      this.props.data.map(function(v, key) {
+        return <Pitcher name={key} key={key} locations={v}/>;
+      }).toArray()
+    }</ul>;
+  }
+});
+
+function renderPitchersList(list) {
+  var target = document.getElementById('heatmap');
+  React.render(<PitcherList data={list}/>, target);
+}
