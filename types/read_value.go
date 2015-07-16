@@ -12,6 +12,7 @@ import (
 
 // Reads and decodes a value from a chunk source.
 func ReadValue(ref ref.Ref, cs chunks.ChunkSource) (Value, error) {
+	Chk.NotNil(cs)
 	reader, err := cs.Get(ref)
 	if err != nil {
 		return nil, err
