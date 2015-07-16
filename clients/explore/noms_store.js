@@ -1,3 +1,5 @@
+'use strict';
+
 var host = function(host) {
   var i = host.indexOf(':');
   return i < 0 ? host : host.substring(0, i);

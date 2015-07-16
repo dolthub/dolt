@@ -1,3 +1,5 @@
+'use strict';
+
 var React = require('react');
 var TreeNode = React.createFactory(require('./tree_node.js'));
 var store = require('./noms_store.js');

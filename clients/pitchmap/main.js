@@ -1,3 +1,5 @@
+'use strict';
+
 var React = require('react');
 var Immutable = require('immutable');
 var store = require('./noms_store.js');
