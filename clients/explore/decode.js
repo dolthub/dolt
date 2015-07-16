@@ -89,9 +89,9 @@ function readValue(ref, getChunk) {
     switch(data[0]) {
       case 'j':
         var json = JSON.parse(data.substring(2))
-        return decodeValue(json, getChunk).then(fulfill);
+        return decodeValue(json, getChunk);
       case 'b':
-        return decodeValue("(blob) ref: " + ref, getChunk).then(fulfill)
+        return decodeValue("(blob) ref: " + ref, getChunk);
       default :
         throw Error('Unsupported encoding: ' + data[0]);
     }
