@@ -1,3 +1,5 @@
+'use strict';
+
 var Immutable = require('immutable');
 
 function decodeMap(input, getChunk) {
@@ -79,7 +81,7 @@ function decodeTaggedValue(taggedValue, getChunk) {
       throw Error('Bad tagged value encoding');
     }
 
-    decodeFn = decode[tagValue[0]];
+    var decodeFn = decode[tagValue[0]];
     if (!decodeFn) {
       throw Error('Unknown tagged value: ' + tagValue[0]);
     }
