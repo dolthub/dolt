@@ -1,24 +1,24 @@
-# Pitchmap
+= pitchmap =
 
-This is an (incomplete) sample app that visualizes pitching data as a heatmap.
+This directory contains a pipeline of tools that combine to generate a heatmap of locations for major league baseball pitchers.
 
-## Requirements
+The source data comes from:
 
-* [`<noms>/clients/server`](../server)
-* Node.js: https://nodejs.org/download/
+http://gd2.mlb.com/components/game/mlb/
 
-## Build
+To use:
 
-* `cd <noms>/clients/pitchmap`
-* `npm install`
-* `npm run build`
+```
+cd /tmp/foo
 
-## Run
+wget -e robots=off -A "[0-9]*.xml" -r -l1
+http://gd2.mlb.com/components/game/mlb/year_2015/month_05/day_12/gid_2015_05_12_atlmlb_cinmlb_1/pitchers/
 
-* `python -m SimpleHTTPServer 8080` (expects ../server to run on same host, port 8000)
+wget -e robots=off -A "inning_[0-9]*.xml" -r -l1
+http://gd2.mlb.com/components/game/mlb/year_2015/month_05/day_12/gid_2015_05_12_atlmlb_cinmlb_1/inning/
 
-## Develop
+<noms>/clients/xml_importer --file-store=/tmp/mlb_data --dataset-id=mlb/xml  gd2.mlb.com/
 
-* `npm run start`
-
-This will start watchify which is continually building a shippable (but non minified) out.js
+<noms>/clients/pitchmap/index --file-store=/tmp/mlb_data --input-dataset-id=mlb/xml
+--output-dataset-id=mlb/heatmap
+```
