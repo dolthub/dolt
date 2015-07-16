@@ -82,11 +82,12 @@ func getJSON(v Value, s chunks.ChunkSink) (interface{}, error) {
 	}
 	return nil, nil
 }
+
 func getJSONList(l List, s chunks.ChunkSink) (r interface{}, err error) {
 	j := []interface{}{}
 	for i := uint64(0); i < l.Len(); i++ {
 		var cj interface{}
-		cj, err = getChildJSON(l.Get(i), s)
+		cj, err = getChildJSON(l.list[i], s)
 		if err != nil {
 			return
 		}
@@ -98,12 +99,7 @@ func getJSONList(l List, s chunks.ChunkSink) (r interface{}, err error) {
 	return
 }
 
-type entry struct {
-	key   Value
-	value Value
-}
-
-type entrySlice []entry
+type entrySlice []mapEntry
 
 func (mes entrySlice) Len() int {
 	return len(mes)
@@ -118,12 +114,11 @@ func (mes entrySlice) Less(i, j int) bool {
 }
 
 func getJSONMap(m Map, s chunks.ChunkSink) (r interface{}, err error) {
-	// Iteration through Set is random, but we need a deterministic order for serialization. Let's order using the refs of the values in the set.
+	// Iteration through Map is random, but we need a deterministic order for serialization. Let's order using the refs of the keys in the map.
 	order := entrySlice{}
-	m.Iter(func(k, v Value) (stop bool) {
-		order = append(order, entry{k, v})
-		return
-	})
+	for _, e := range m.m {
+		order = append(order, e)
+	}
 	sort.Sort(order)
 
 	j := []interface{}{}
@@ -148,20 +143,19 @@ func getJSONMap(m Map, s chunks.ChunkSink) (r interface{}, err error) {
 
 func getJSONSet(set Set, s chunks.ChunkSink) (r interface{}, err error) {
 	// Iteration through Set is random, but we need a deterministic order for serialization. Let's order using the refs of the values in the set.
-	lookup := map[ref.Ref]Value{}
+	lookup := setData{}
 	order := ref.RefSlice{}
-	set.Iter(func(v Value) (stop bool) {
-		order = append(order, v.Ref())
-		lookup[v.Ref()] = v
-		return
-	})
+	for _, f := range set.m {
+		order = append(order, f.Ref())
+		lookup[f.Ref()] = f
+	}
 	sort.Sort(order)
 
 	j := []interface{}{}
 	for _, r := range order {
-		v := lookup[r]
+		f := lookup[r]
 		var cj interface{}
-		cj, err = getChildJSON(v, s)
+		cj, err = getChildJSON(f, s)
 		if err != nil {
 			return nil, err
 		}
@@ -174,26 +168,33 @@ func getJSONSet(set Set, s chunks.ChunkSink) (r interface{}, err error) {
 	return
 }
 
-func getChildJSON(v Value, s chunks.ChunkSink) (interface{}, error) {
+func getChildJSON(f future, s chunks.ChunkSink) (interface{}, error) {
 	var r ref.Ref
 	var err error
-	switch v := v.(type) {
-	// Blobs, lists, maps, and sets are always out-of-line
-	case Blob:
-		r, err = WriteValue(v, s)
-	case List:
-		r, err = WriteValue(v, s)
-	case Map:
-		r, err = WriteValue(v, s)
-	case Set:
-		r, err = WriteValue(v, s)
-	default:
-		// Other types are always inline.
-		return getJSON(v, s)
+	if v, ok := f.(*unresolvedFuture); ok {
+		r = v.Ref()
+	} else {
+		v := f.Val()
+		Chk.NotNil(v)
+		switch v := v.(type) {
+		// Blobs, lists, maps, and sets are always out-of-line
+		case Blob:
+			r, err = WriteValue(v, s)
+		case List:
+			r, err = WriteValue(v, s)
+		case Map:
+			r, err = WriteValue(v, s)
+		case Set:
+			r, err = WriteValue(v, s)
+		default:
+			// Other types are always inline.
+			return getJSON(v, s)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
-	if err != nil {
-		return nil, err
-	}
+	Chk.NotNil(r)
 	return map[string]interface{}{
 		"ref": r.String(),
 	}, nil

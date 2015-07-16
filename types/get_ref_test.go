@@ -34,10 +34,9 @@ func TestEnsureRef(t *testing.T) {
 		}
 	}
 
-	prevGetRef := getRef
-	getRef = mockGetRef
+	getRefOverride = mockGetRef
 	defer func() {
-		getRef = prevGetRef
+		getRefOverride = nil
 	}()
 
 	values := []Value{

@@ -47,14 +47,12 @@ func TestEqualsFastPath(t *testing.T) {
 	fv := futureFromValue(v)
 	fr := futureFromRef(r)
 
-	oldGetRef := getRef
-	defer func() { getRef = oldGetRef }()
-
 	count := 0
-	getRef = func(val Value) ref.Ref {
+	getRefOverride = func(val Value) ref.Ref {
 		count += 1
-		return oldGetRef(val)
+		return getRefNoOverride(val)
 	}
+	defer func() { getRefOverride = nil }()
 
 	assert.True(futuresEqual(fv, fr))
 	assert.True(futuresEqual(fr, fv))
