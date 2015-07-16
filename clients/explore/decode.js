@@ -3,55 +3,43 @@
 var Immutable = require('immutable');
 
 function decodeMap(input, getChunk) {
-  return new Promise(function(fulfill) {
-    Promise.all(input.map(function(value) {
-      return decodeValue(value, getChunk);
-    })).then(function(values) {
-      var pairs = [];
-      for (var i = 0; i < input.length; i += 2) {
-        pairs.push([values[i], values[i+1]]);
-      }
-      fulfill(Immutable.Map(pairs));
-    });
+  return Promise.all(input.map(function(value) {
+    return decodeValue(value, getChunk);
+  })).then(function(values) {
+    var pairs = [];
+    for (var i = 0; i < input.length; i += 2) {
+      pairs.push([values[i], values[i+1]]);
+    }
+    return Immutable.Map(pairs);
   });
 }
 
 function decodeList(input, getChunk) {
-  return new Promise(function(fulfill) {
-    Promise.all(input.map(function(value) {
-      return decodeValue(value, getChunk);
-    })).then(function(values) {
-      fulfill(Immutable.List(values));
-    });
+  return Promise.all(input.map(function(value) {
+    return decodeValue(value, getChunk);
+  })).then(function(values) {
+    return Immutable.List(values);
   });
 }
 
 function decodeSet(input, getChunk) {
-  return new Promise(function(fulfill) {
-    Promise.all(input.map(function(value) {
-      return decodeValue(value, getChunk);
-    })).then(function(values) {
-      fulfill(Immutable.Set(values));
-    });
+  return Promise.all(input.map(function(value) {
+    return decodeValue(value, getChunk);
+  })).then(function(values) {
+    return Immutable.Set(values);
   });
 }
 
 function decodeRef(ref, getChunk) {
-  return new Promise(function(fulfill) {
-    readValue(ref, getChunk).then(fulfill);
-  });
+  return Promise.resolve(readValue(ref, getChunk));
 }
 
 function decodeInt(value) {
-  return new Promise(function(fulfill) {
-    fulfill(Number.parseInt(value));
-  });
+  return Promise.resolve(Number.parseInt(value));
 }
 
 function decodeFloat(value) {
-  return new Promise(function(fulfill) {
-    fulfill(Number.parseFloat(value));
-  });
+  return Promise.resolve(Number.parseFloat(value));
 }
 
 var decode = {
@@ -71,49 +59,42 @@ var decode = {
 
 // TODO: Kind of cheating to decode all int & float types as numbers.
 function decodeTaggedValue(taggedValue, getChunk) {
-  return new Promise(function(fulfill) {
-    var tagValue = [];
-    for (var tag in taggedValue) {
-      tagValue.push(tag, taggedValue[tag]);
-    }
+  var tagValue = [];
+  for (var tag in taggedValue) {
+    tagValue.push(tag, taggedValue[tag]);
+  }
 
-    if (tagValue.length != 2) {
-      throw Error('Bad tagged value encoding');
-    }
+  if (tagValue.length !== 2) {
+    return Promise.reject(new Error('Bad tagged value encoding'));
+  }
 
-    var decodeFn = decode[tagValue[0]];
-    if (!decodeFn) {
-      throw Error('Unknown tagged value: ' + tagValue[0]);
-    }
+  var decodeFn = decode[tagValue[0]];
+  if (!decodeFn) {
+    return Promise.reject(new Error('Unknown tagged value: ' + tagValue[0]));
+  }
 
-    decodeFn(tagValue[1], getChunk).then(fulfill);
-  });
+  return decodeFn(tagValue[1], getChunk);
 }
 
 function decodeValue(value, getChunk) {
-  return new Promise(function(fulfill) {
-    if (typeof value != 'object') {
-      fulfill(value);
-      return;
-    }
+  if (typeof value !== 'object') {
+    return Promise.resolve(value);
+  }
 
-    decodeTaggedValue(value, getChunk).then(fulfill);
-  });
+  return decodeTaggedValue(value, getChunk);
 }
 
 function readValue(ref, getChunk) {
-  return new Promise(function(fulfill) {
-    getChunk(ref).then(function(data) {
-      switch(data[0]) {
-        case 'j':
-          var json = JSON.parse(data.substring(2))
-          return decodeValue(json, getChunk).then(fulfill);
-        case 'b':
-          return decodeValue("(blob) ref: " + ref, getChunk).then(fulfill)
-        default :
-          throw Error('Unsupported encoding: ' + data[0]);
-      }
-    });
+  return getChunk(ref).then(function(data) {
+    switch(data[0]) {
+      case 'j':
+        var json = JSON.parse(data.substring(2))
+        return decodeValue(json, getChunk).then(fulfill);
+      case 'b':
+        return decodeValue("(blob) ref: " + ref, getChunk).then(fulfill)
+      default :
+        throw Error('Unsupported encoding: ' + data[0]);
+    }
   });
 }
 
