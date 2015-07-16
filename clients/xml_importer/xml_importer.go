@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 
 	"github.com/attic-labs/noms/clients/go"
 	"github.com/attic-labs/noms/datas"
@@ -14,6 +15,9 @@ import (
 )
 
 var (
+	noIO        = flag.Bool("benchmark", false, "Run in 'benchmark' mode, without file-IO")
+	cpuprofile  = flag.String("cpuprofile", "", "write cpu profile to file")
+	memprofile  = flag.String("memprofile", "", "write memory profile to this file")
 	customUsage = func() {
 		fmtString := `%s walks the given directory, looking for .xml files. When it finds one, the entity inside is parsed into nested Noms maps/lists and committed to the dataset indicated on the command line.`
 		fmt.Fprintf(os.Stderr, fmtString, os.Args[0])
@@ -32,6 +36,14 @@ func main() {
 		flag.Usage()
 		return
 	}
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	var objects []interface{}
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -45,6 +57,7 @@ func main() {
 		if err != nil {
 			log.Fatalln("Error getting XML: ", err)
 		}
+		defer file.Close()
 		xmlObject, err := mxj.NewMapXmlReader(file)
 		if err != nil {
 			log.Fatalln("Error decoding XML: ", err)
@@ -53,9 +66,20 @@ func main() {
 		return nil
 	})
 
-	ds.Commit(datas.NewRootSet().Insert(
-		datas.NewRoot().SetParents(
-			ds.Roots().NomsValue()).SetValue(
-			util.NomsValueFromDecodedJSON(objects))))
+	noms := util.NomsValueFromDecodedJSON(objects)
 
+	if !*noIO {
+		ds.Commit(datas.NewRootSet().Insert(
+			datas.NewRoot().SetParents(
+				ds.Roots().NomsValue()).SetValue(noms)))
+	}
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+		return
+	}
 }

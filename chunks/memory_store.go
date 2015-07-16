@@ -13,20 +13,7 @@ import (
 // An in-memory implementation of store.ChunkStore. Useful mainly for tests.
 type MemoryStore struct {
 	data map[ref.Ref][]byte
-	root ref.Ref
-}
-
-func (ms *MemoryStore) Root() ref.Ref {
-	return ms.root
-}
-
-func (ms *MemoryStore) UpdateRoot(current, last ref.Ref) bool {
-	if last != ms.root {
-		return false
-	}
-
-	ms.root = current
-	return true
+	memoryRootTracker
 }
 
 func (ms *MemoryStore) Get(ref ref.Ref) (io.ReadCloser, error) {
