@@ -10,7 +10,7 @@ store.getRoot().then(function(root) {
     var target = document.getElementById('explore');
 
     React.render(
-      TreeNode({ name: "root: " + root, value: value }), target
+      TreeNode({ name: 'Root', value: value }), target
     );
   });
 });

@@ -2,33 +2,56 @@
 
 var React = require('react');
 var Immutable = require('immutable');
+var getRef = require('./decode.js').getRef;
+
+function merge(a, b) {
+  var result = {};
+  for (var i = 0; i < arguments.length; i++) {
+    var obj = arguments[i];
+    Object.keys(obj).forEach(function(k) {
+      result[k] = obj[k];
+    });
+  }
+  return result;
+}
 
 var style = {
   outer: {
-    fontFamily: "Consolas, monospace"
-  },
-  collapsed: {
-    display: 'inline-block',
-    transform: 'rotate(-90deg)',
-    WebkitTransform: 'rotate(-90deg)'
-  },
-  expanded: {
-    display: 'inline-block',
+    fontFamily: 'Consolas, monospace'
   },
   inner: {
-    marginLeft: "20px",
+    marginLeft: '20px',
   },
   types: {
-    collection: { color: "#b0b0b0" },
-    string: { color: "#798953" },
-    int: { color: "#4562d2" },
-    float: { color: "#d28445" },
-    boolean: { color: "#75b5aa" }
+    collection: { color: '#bbb', whiteSpace: 'nowrap' },
+    string: { color: '#798953' },
+    int: { color: '#4562d2' },
+    float: { color: '#d28445' },
+    boolean: { color: '#75b5aa' }
   },
   contextSpan: {
-    color: "#AAA"
+    color: '#aaa'
+  },
+  ref: {
+    color: '#ddd',
+    paddingLeft: '1ex',
+    transition: '.3s',
+  },
+  arrow: {
+    display: 'inline-block',
+    padding: '0 1ex',
+  },
+  collapsed: {
+    transform: 'rotate(-90deg)',
+    WebkitTransform: 'rotate(-90deg)',
+  },
+  expanded: {},
+  treeHeader: {
+    whiteSpace: 'nowrap',
   }
 };
+style.collapsed = merge(style.arrow, style.collapsed);
+style.expanded = merge(style.arrow, style.expanded);
 
 var isInteger = Number.isInteger || function(nVal) {
     return typeof nVal === "number" && isFinite(nVal) && nVal > -9007199254740992 && nVal < 9007199254740992 && Math.floor(nVal) === nVal;
@@ -67,7 +90,7 @@ var TreeNode = React.createClass({
       return "Map";
   },
 
-  toString: function(value) {
+  valueAsString: function(value) {
     if (this.isCollection(value)) {
       return this.getCollectionName(value) + " (" + value.size + " values)";
     }
@@ -87,18 +110,33 @@ var TreeNode = React.createClass({
     var type = this.getTypeOf(value);
     var isCollection = this.isCollection(value);
 
-    var arrowStyle = this.state.expand ? 'expanded' : 'collapsed';
-    var bulletDiv = isCollection ?
-      React.DOM.div({ style: style[arrowStyle] }, '\u25BE') :
-      React.DOM.span({}, ' ');
+    var arrowStyle;
+    var arrowContent;
+    if (isCollection) {
+      arrowStyle = this.state.expand ? style.expanded : style.collapsed;
+      arrowContent = '\u25be';
+    } else {
+      arrowStyle = style.arrow;
+      arrowContent = '\u00a0';
+    }
 
-    var headerItems = [ bulletDiv, React.DOM.span({}, '  ') ];
+    var expander = React.DOM.span({style: arrowStyle}, arrowContent);
 
-    if (this.props.name != undefined) {
+    var headerItems = [expander];
+
+    if (this.props.name !== undefined) {
       headerItems.push(React.DOM.span({}, this.props.name + ": "))
     }
-    headerItems.push(React.DOM.span({ style: style.types[type] }, this.toString(value)))
-    var header = React.DOM.div({ style: style.header, onClick: this.toggleExpand }, headerItems);
+    headerItems.push(React.DOM.span({ style: style.types[type] }, this.valueAsString(value)))
+    headerItems.push(React.DOM.span({
+      className: 'ref',
+      style: style.ref
+    }, getRef(value)));
+    var header = React.DOM.div({
+      className: 'tree-header',
+      onClick: this.toggleExpand,
+      style: style.treeHeader,
+    }, headerItems);
 
     var content = [ header ];
     if (this.state.expand && isCollection) {

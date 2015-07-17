@@ -2,36 +2,44 @@
 
 var Immutable = require('immutable');
 
-function decodeMap(input, getChunk) {
+var refMapping = new WeakMap();
+
+function decodeMap(input, ref, getChunk) {
   return Promise.all(input.map(function(value) {
-    return decodeValue(value, getChunk);
+    return decodeValue(value, ref, getChunk);
   })).then(function(values) {
     var pairs = [];
     for (var i = 0; i < input.length; i += 2) {
       pairs.push([values[i], values[i+1]]);
     }
-    return Immutable.Map(pairs);
+    var value = Immutable.Map(pairs);
+    refMapping.set(value, ref);
+    return value;
   });
 }
 
-function decodeList(input, getChunk) {
+function decodeList(input, ref, getChunk) {
   return Promise.all(input.map(function(value) {
-    return decodeValue(value, getChunk);
+    return decodeValue(value, ref, getChunk);
   })).then(function(values) {
-    return Immutable.List(values);
+    var value = Immutable.List(values);
+    refMapping.set(value, ref);
+    return value;
   });
 }
 
-function decodeSet(input, getChunk) {
+function decodeSet(input, ref, getChunk) {
   return Promise.all(input.map(function(value) {
-    return decodeValue(value, getChunk);
+    return decodeValue(value, ref, getChunk);
   })).then(function(values) {
-    return Immutable.Set(values);
+    var value = Immutable.Set(values);
+    refMapping.set(value, ref);
+    return value;
   });
 }
 
-function decodeRef(ref, getChunk) {
-  return Promise.resolve(readValue(ref, getChunk));
+function decodeRef(ref, _, getChunk) {
+  return readValue(ref, getChunk);
 }
 
 function decodeInt(value) {
@@ -58,7 +66,7 @@ var decode = {
 };
 
 // TODO: Kind of cheating to decode all int & float types as numbers.
-function decodeTaggedValue(taggedValue, getChunk) {
+function decodeTaggedValue(taggedValue, ref, getChunk) {
   var tagValue = [];
   for (var tag in taggedValue) {
     tagValue.push(tag, taggedValue[tag]);
@@ -73,15 +81,15 @@ function decodeTaggedValue(taggedValue, getChunk) {
     return Promise.reject(new Error('Unknown tagged value: ' + tagValue[0]));
   }
 
-  return decodeFn(tagValue[1], getChunk);
+  return decodeFn(tagValue[1], ref, getChunk);
 }
 
-function decodeValue(value, getChunk) {
+function decodeValue(value, ref, getChunk) {
   if (typeof value !== 'object') {
     return Promise.resolve(value);
   }
 
-  return decodeTaggedValue(value, getChunk);
+  return decodeTaggedValue(value, ref, getChunk);
 }
 
 function readValue(ref, getChunk) {
@@ -89,15 +97,20 @@ function readValue(ref, getChunk) {
     switch(data[0]) {
       case 'j':
         var json = JSON.parse(data.substring(2))
-        return decodeValue(json, getChunk);
+        return decodeValue(json, ref, getChunk);
       case 'b':
-        return decodeValue("(blob) ref: " + ref, getChunk);
+        return decodeValue("(blob) ref: " + ref, ref, getChunk);
       default :
         throw Error('Unsupported encoding: ' + data[0]);
     }
   });
 }
 
+function getRef(value) {
+  return typeof value !== 'object' ? undefined : refMapping.get(value);
+}
+
 module.exports = {
-  readValue: readValue
+  readValue: readValue,
+  getRef: getRef,
 };
