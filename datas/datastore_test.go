@@ -109,3 +109,51 @@ func TestDataStoreCommit(t *testing.T) {
 	hgSet := hSet.Insert(g)
 	assert.True(ds.Roots().Equals(hgSet))
 }
+
+func TestDataStoreConcurrency(t *testing.T) {
+	assert := assert.New(t)
+	dir, err := ioutil.TempDir(os.TempDir(), "")
+	defer os.Remove(dir)
+	assert.NoError(err)
+
+	chunks := chunks.NewFileStore(dir, "root")
+	ds := NewDataStore(chunks, chunks)
+
+	// Setup:
+	// |a| <- |b|
+	//   \----|c|
+	a := NewRoot().SetParents(ds.Roots().NomsValue()).SetValue(types.NewString("a"))
+	aSet := NewRootSet().Insert(a)
+	ds = ds.Commit(aSet)
+	b := NewRoot().SetParents(aSet.NomsValue()).SetValue(types.NewString("b"))
+	bSet := NewRootSet().Insert(b)
+	ds = ds.Commit(bSet)
+	c := NewRoot().SetParents(aSet.NomsValue()).SetValue(types.NewString("c"))
+	cSet := NewRootSet().Insert(c)
+	ds = ds.Commit(cSet)
+	bcSet := bSet.Insert(c)
+
+	// Important to create this here.
+	ds2 := NewDataStore(chunks, chunks)
+
+	// Change 1:
+	// |a| <- |b| <- |d|
+	//   \----|c| --/
+	d := NewRoot().SetParents(bcSet.NomsValue()).SetValue(types.NewString("d"))
+	dSet := NewRootSet().Insert(d)
+	types.WriteValue(dSet.NomsValue(), chunks)
+	ds = ds.Commit(dSet)
+
+	// Change 2:
+	// |a| <- |b| <- |e|
+	//   \----|c| --/
+	e := NewRoot().SetParents(bcSet.NomsValue()).SetValue(types.NewString("e"))
+	eSet := NewRootSet().Insert(e)
+	types.WriteValue(eSet.NomsValue(), chunks)
+	ds2 = ds2.Commit(eSet)
+
+	// The chunkstore should have tracked that two conflicting commits happened and both |d| and |e| are now roots
+	deSet := dSet.Insert(e)
+	finalRoots := RootSetFromVal(types.MustReadValue(chunks.Root(), chunks).(types.Set))
+	assert.True(finalRoots.Equals(deSet))
+}

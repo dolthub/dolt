@@ -20,16 +20,20 @@ func NewDataStore(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
 }
 
 func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, rc *rootCache) DataStore {
+	return DataStore{
+		cs, rt, rc, rootSetFromRef(rt.Root(), cs),
+	}
+}
+
+func rootSetFromRef(rootRef ref.Ref, cs chunks.ChunkSource) RootSet {
 	var roots RootSet
-	rootRef := rt.Root()
 	if (rootRef == ref.Ref{}) {
 		roots = NewRootSet()
 	} else {
 		roots = RootSetFromVal(types.MustReadValue(rootRef, cs).(types.Set))
 	}
-	return DataStore{
-		cs, rt, rc, roots,
-	}
+
+	return roots
 }
 
 func (ds *DataStore) Roots() RootSet {
@@ -55,11 +59,12 @@ func (ds *DataStore) Commit(newRoots RootSet) DataStore {
 }
 
 func (ds *DataStore) doCommit(add, remove RootSet) bool {
-	oldRootRef := ds.rt.Root()
-	oldRoots := ds.Roots()
+	// Note that |oldRoots| may be different from |ds.Roots| if someone else has commited since this Datastore was created. This computation must be based on the *current root* not the root associated with this Datastore.
+	currentRootRef := ds.rt.Root()
+	oldRoots := rootSetFromRef(currentRootRef, ds)
 
 	prexisting := make([]Root, 0)
-	ds.rc.Update(oldRootRef)
+	ds.rc.Update(currentRootRef)
 	add.Iter(func(r Root) (stop bool) {
 		if ds.rc.Contains(r.Ref()) {
 			prexisting = append(prexisting, r)
@@ -77,5 +82,5 @@ func (ds *DataStore) doCommit(add, remove RootSet) bool {
 	newRootRef, err := types.WriteValue(newRoots.NomsValue(), ds)
 	Chk.NoError(err)
 
-	return ds.rt.UpdateRoot(newRootRef, oldRootRef)
+	return ds.rt.UpdateRoot(newRootRef, currentRootRef)
 }
