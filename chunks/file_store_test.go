@@ -142,10 +142,10 @@ func (suite *FileStoreTestSuite) TestFileStoreRoot() {
 func (suite *FileStoreTestSuite) TestFileStorePutExisting() {
 	input := "abc"
 
-	renameCount := 0
-	suite.store.rename = func(oldPath, newPath string) error {
-		renameCount++
-		return os.Rename(oldPath, newPath)
+	mkdirCount := 0
+	suite.store.mkdirAll = func(path string, perm os.FileMode) error {
+		mkdirCount++
+		return os.MkdirAll(path, perm)
 	}
 
 	write := func() {
@@ -158,10 +158,10 @@ func (suite *FileStoreTestSuite) TestFileStorePutExisting() {
 
 	write()
 
-	suite.Equal(1, renameCount)
+	suite.Equal(1, mkdirCount)
 
 	write()
 
 	// Shouldn't have written the second time.
-	suite.Equal(1, renameCount)
+	suite.Equal(1, mkdirCount)
 }
