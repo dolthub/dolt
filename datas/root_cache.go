@@ -25,11 +25,12 @@ func (cache *rootCache) updateFromCommit(root Root) {
 	cache.refs[root.Ref()] = true
 }
 
-func (cache *rootCache) Update(rootsRef ref.Ref) {
-	if rootsRef == (ref.Ref{}) {
+func (cache *rootCache) Update(currentRoots RootSet) {
+	if currentRoots.Len() == 0 {
 		return
 	}
 
+	rootsRef := currentRoots.Ref()
 	if _, ok := cache.refs[rootsRef]; ok {
 		return
 	}
