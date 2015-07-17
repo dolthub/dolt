@@ -99,7 +99,8 @@ func copyMapData(m mapData) mapData {
 }
 
 func buildMapData(oldData mapData, futures []future) mapData {
-	Chk.Equal(0, len(futures)%2, "Must specify even number of key/value pairs")
+	// Sadly, Chk.Equals() costs too much.
+	Chk.True(0 == len(futures)%2, "Must specify even number of key/value pairs")
 
 	m := copyMapData(oldData)
 	for i := 0; i < len(futures); i += 2 {

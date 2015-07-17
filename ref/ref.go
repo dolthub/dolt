@@ -22,7 +22,7 @@ type Ref struct {
 	digest Sha1Digest
 }
 
-// Returns a *copy* of the digest.
+// Digest returns a *copy* of the digest that backs Ref.
 func (r Ref) Digest() Sha1Digest {
 	return r.digest
 }
@@ -35,7 +35,7 @@ func New(digest Sha1Digest) Ref {
 	return Ref{digest}
 }
 
-// Creates a new instance of the hash we use for refs.
+// NewHash creates a new instance of the hash we use for refs.
 func NewHash() hash.Hash {
 	return sha1.New()
 }
@@ -70,9 +70,12 @@ func MustParse(s string) Ref {
 	return r
 }
 
+// Less compares two Refs, returning true if the first is less than the second.
+// This can be called a lot, so performance and avoiding creating garbage may be important.
+// Particularly, Chk.Equals{Value} does reflection, and this can be expensive, so avoid it here.
 func Less(r1, r2 Ref) bool {
 	d1, d2 := r1.digest, r2.digest
-	Chk.Equal(len(d1), len(d2))
+	Chk.True(len(d1) == len(d2))
 	for k := 0; k < len(d1); k++ {
 		b1, b2 := d1[k], d2[k]
 		if b1 < b2 {

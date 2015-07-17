@@ -1,6 +1,7 @@
 package chunks
 
 import (
+	"bytes"
 	"flag"
 	"hash"
 	"io"
@@ -18,16 +19,16 @@ type FileStore struct {
 	dir, root string
 
 	// For testing
-	rename renameFn
+	mkdirAll mkdirAllFn
 }
 
-type renameFn func(oldPath, newPath string) error
+type mkdirAllFn func(path string, perm os.FileMode) error
 
 func NewFileStore(dir, root string) FileStore {
 	Chk.NotEmpty(dir)
 	Chk.NotEmpty(root)
 	Chk.NoError(os.MkdirAll(dir, 0700))
-	return FileStore{dir, path.Join(dir, root), os.Rename}
+	return FileStore{dir, path.Join(dir, root), os.MkdirAll}
 }
 
 func readRef(file *os.File) ref.Ref {
@@ -75,28 +76,27 @@ func (f FileStore) Get(ref ref.Ref) (io.ReadCloser, error) {
 }
 
 func (f FileStore) Put() ChunkWriter {
-	file, err := ioutil.TempFile(os.TempDir(), "")
-	Chk.NoError(err)
+	b := &bytes.Buffer{}
 	h := ref.NewHash()
 	return &fileChunkWriter{
-		root:   f.dir,
-		file:   file,
-		writer: io.MultiWriter(file, h),
-		hash:   h,
-		rename: f.rename,
+		root:     f.dir,
+		buffer:   b,
+		writer:   io.MultiWriter(b, h),
+		hash:     h,
+		mkdirAll: f.mkdirAll,
 	}
 }
 
 type fileChunkWriter struct {
-	root   string
-	file   *os.File
-	writer io.Writer
-	hash   hash.Hash
-	rename renameFn
+	root     string
+	buffer   *bytes.Buffer
+	writer   io.Writer
+	hash     hash.Hash
+	mkdirAll mkdirAllFn
 }
 
 func (w *fileChunkWriter) Write(data []byte) (int, error) {
-	Chk.NotNil(w.file, "Write() cannot be called after Ref() or Close().")
+	Chk.NotNil(w.buffer, "Write() cannot be called after Ref() or Close().")
 	return w.writer.Write(data)
 }
 
@@ -106,29 +106,32 @@ func (w *fileChunkWriter) Ref() (ref.Ref, error) {
 }
 
 func (w *fileChunkWriter) Close() error {
-	if w.file == nil {
+	if w.buffer == nil {
 		return nil
 	}
-	Chk.NoError(w.file.Close())
 
 	p := getPath(w.root, ref.FromHash(w.hash))
 
 	// If we already have this file, then nothing to do. Hooray.
-	_, err := os.Stat(p)
-	if err == nil {
+	if _, err := os.Stat(p); err == nil {
 		return nil
 	}
 
-	err = os.MkdirAll(path.Dir(p), 0700)
+	err := w.mkdirAll(path.Dir(p), 0700)
 	Chk.NoError(err)
 
-	err = w.rename(w.file.Name(), p)
+	file, err := os.OpenFile(p, os.O_RDWR|os.O_CREATE, os.ModePerm)
+	defer file.Close()
 	if err != nil {
-		Chk.True(os.IsExist(err))
+		Chk.True(os.IsExist(err), "%+v\n", err)
 	}
 
-	os.Remove(w.file.Name())
-	w.file = nil
+	totalBytes := w.buffer.Len()
+	written, err := file.Write(w.buffer.Bytes())
+	Chk.NoError(err)
+	Chk.Equal(totalBytes, written, "Too few bytes written.")
+
+	w.buffer = nil
 	return nil
 }
 
