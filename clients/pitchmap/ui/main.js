@@ -6,19 +6,11 @@ var Immutable = require('immutable');
 var React = require('react');
 var Map = require('./map.js');
 
-store.getRoot().then(function(s) {
+store.getDataset('mlb/heatmap').then(function(s) {
   return decode.readValue(s, store.getChunk);
-}).then(function(v) {
-  return getDatasetRoot(v, 'mlb/heatmap');
 }).then(getPitchers).then(renderPitchersList).catch(function(err) {
   console.error(err);
 });
-
-function getDatasetRoot(root, id) {
-  return root.first().get('value').find(function(map) {
-    return map.get('id') === id;
-  }).get('root');
-}
 
 function getPitchers(datasetRoot) {
   return datasetRoot.first().get('value')

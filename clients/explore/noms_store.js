@@ -8,18 +8,22 @@ var nomsPort = "8000";
 var nomsServer = location.protocol + '//' + host + ":" + nomsPort;
 
 var rpc = {
+  dataset: nomsServer + '/dataset',
   get: nomsServer + '/get',
-  root: nomsServer + '/root'
-}
+  root: nomsServer + '/root',
+};
 
 // TODO: Use whatwg-fetch
 function fetch(url) {
-  return new Promise(function(fulfill) {
+  return new Promise((resolve, reject) => {
     var xhr = new XMLHttpRequest();
-    xhr.addEventListener('load', function(e) {
-      fulfill(e.target.responseText);
-    });
-    xhr.open("get", url, true);
+    xhr.onload = (e) => {
+      resolve(e.target.responseText);
+    };
+    xhr.onerror = (e) => {
+      reject(e.target.statusText);
+    };
+    xhr.open('get', url, true);
     xhr.send();
   });
 }
@@ -32,7 +36,12 @@ function getRoot() {
   return fetch(rpc.root);
 }
 
+function getDataset(id) {
+  return fetch(rpc.get + '?id=' + id)
+}
+
 module.exports = {
-  getRoot: getRoot,
-  getChunk: getChunk
+  getChunk,
+  getDataset,
+  getRoot,
 };
