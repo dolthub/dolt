@@ -114,15 +114,8 @@ func (mes entrySlice) Less(i, j int) bool {
 }
 
 func getJSONMap(m Map, s chunks.ChunkSink) (r interface{}, err error) {
-	// Iteration through Map is random, but we need a deterministic order for serialization. Let's order using the refs of the keys in the map.
-	order := entrySlice{}
-	for _, e := range m.m {
-		order = append(order, e)
-	}
-	sort.Sort(order)
-
 	j := []interface{}{}
-	for _, r := range order {
+	for _, r := range m.m {
 		var cjk, cjv interface{}
 		cjk, err = getChildJSON(r.key, s)
 		if err == nil {

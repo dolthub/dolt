@@ -1,15 +1,17 @@
 package types
 
 import (
+	"sort"
+
 	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
-type mapData map[ref.Ref]mapEntry
+type mapData []mapEntry
 
 type Map struct {
-	m   mapData
+	m   mapData // sorted by entry.key.Ref()
 	cs  chunks.ChunkSource
 	ref *ref.Ref
 }
@@ -27,18 +29,21 @@ func (fm Map) Len() uint64 {
 }
 
 func (fm Map) Has(key Value) bool {
-	_, ok := fm.m[key.Ref()]
-	return ok
+	idx := indexMapData(fm.m, key.Ref())
+	return idx < len(fm.m) && fm.m[idx].key.Ref() == key.Ref()
 }
 
 func (fm Map) Get(key Value) Value {
-	if entry, ok := fm.m[key.Ref()]; ok {
-		v, err := entry.value.Deref(fm.cs)
-		Chk.NoError(err)
-		return v
-	} else {
-		return nil
+	idx := indexMapData(fm.m, key.Ref())
+	if idx < len(fm.m) {
+		entry := fm.m[idx]
+		if entry.key.Ref() == key.Ref() {
+			v, err := entry.value.Deref(fm.cs)
+			Chk.NoError(err)
+			return v
+		}
 	}
+	return nil
 }
 
 func (fm Map) Set(key Value, val Value) Map {
@@ -50,9 +55,12 @@ func (fm Map) SetM(kv ...Value) Map {
 }
 
 func (fm Map) Remove(k Value) Map {
-	m := copyMapData(fm.m)
-	delete(m, k.Ref())
-	return newMapFromData(m, fm.cs)
+	idx := indexMapData(fm.m, k.Ref())
+	if idx == len(fm.m) || fm.m[idx].key.Ref() != k.Ref() {
+		return fm
+	}
+
+	return newMapFromData(append(fm.m[:idx], fm.m[idx+1:]...), fm.cs)
 }
 
 type mapIterCallback func(key, value Value) bool
@@ -91,10 +99,8 @@ func newMapFromData(m mapData, cs chunks.ChunkSource) Map {
 }
 
 func copyMapData(m mapData) mapData {
-	r := mapData{}
-	for k, v := range m {
-		r[k] = v
-	}
+	r := make(mapData, len(m))
+	copy(r, m)
 	return r
 }
 
@@ -106,7 +112,19 @@ func buildMapData(oldData mapData, futures []future) mapData {
 	for i := 0; i < len(futures); i += 2 {
 		k := futures[i]
 		v := futures[i+1]
-		m[k.Ref()] = mapEntry{k, v}
+		idx := indexMapData(m, k.Ref())
+		if idx == len(m) || m[idx].key.Ref() != k.Ref() {
+			// The key isn't present. Make room for it.
+			m = append(m, mapEntry{})
+			copy(m[idx+1:], m[idx:])
+		}
+		m[idx] = mapEntry{k, v}
 	}
 	return m
+}
+
+func indexMapData(m mapData, r ref.Ref) int {
+	return sort.Search(len(m), func(i int) bool {
+		return !ref.Less(m[i].key.Ref(), r)
+	})
 }
