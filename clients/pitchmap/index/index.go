@@ -36,7 +36,7 @@ func processPitcher(m types.Map) (id, name types.String) {
 }
 
 func checkPitch(v types.Map) bool {
-	return v.Get(types.NewString("-px")) != nil && v.Get(types.NewString("-pxz")) != nil
+	return v.Get(types.NewString("-px")) != nil && v.Get(types.NewString("-pz")) != nil
 }
 
 func toPitch(v types.Map) Pitch {
