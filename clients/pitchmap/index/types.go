@@ -102,17 +102,17 @@ func (s Pitch) Equals(p Pitch) bool {
 func (s Pitch) Ref() ref.Ref {
 	return s.m.Ref()
 }
-func (s Pitch) X() types.Float64 {
-	return s.m.Get(types.NewString("X")).(types.Float64)
-}
-
-func (s Pitch) SetX(p types.Float64) Pitch {
-	return PitchFromVal(s.m.Set(types.NewString("X"), p))
-}
 func (s Pitch) Z() types.Float64 {
 	return s.m.Get(types.NewString("Z")).(types.Float64)
 }
 
 func (s Pitch) SetZ(p types.Float64) Pitch {
 	return PitchFromVal(s.m.Set(types.NewString("Z"), p))
+}
+func (s Pitch) X() types.Float64 {
+	return s.m.Get(types.NewString("X")).(types.Float64)
+}
+
+func (s Pitch) SetX(p types.Float64) Pitch {
+	return PitchFromVal(s.m.Set(types.NewString("X"), p))
 }

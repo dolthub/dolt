@@ -34,12 +34,12 @@ func (s User) Equals(p User) bool {
 func (s User) Ref() ref.Ref {
 	return s.m.Ref()
 }
-func (s User) Id() types.String {
-	return s.m.Get(types.NewString("id")).(types.String)
+func (s User) OAuthToken() types.String {
+	return s.m.Get(types.NewString("oAuthToken")).(types.String)
 }
 
-func (s User) SetId(p types.String) User {
-	return UserFromVal(s.m.Set(types.NewString("id"), p))
+func (s User) SetOAuthToken(p types.String) User {
+	return UserFromVal(s.m.Set(types.NewString("oAuthToken"), p))
 }
 func (s User) Name() types.String {
 	return s.m.Get(types.NewString("name")).(types.String)
@@ -48,12 +48,12 @@ func (s User) Name() types.String {
 func (s User) SetName(p types.String) User {
 	return UserFromVal(s.m.Set(types.NewString("name"), p))
 }
-func (s User) OAuthToken() types.String {
-	return s.m.Get(types.NewString("oAuthToken")).(types.String)
+func (s User) Id() types.String {
+	return s.m.Get(types.NewString("id")).(types.String)
 }
 
-func (s User) SetOAuthToken(p types.String) User {
-	return UserFromVal(s.m.Set(types.NewString("oAuthToken"), p))
+func (s User) SetId(p types.String) User {
+	return UserFromVal(s.m.Set(types.NewString("id"), p))
 }
 func (s User) OAuthSecret() types.String {
 	return s.m.Get(types.NewString("oAuthSecret")).(types.String)
@@ -75,7 +75,7 @@ type PhotosetSet struct {
 	s types.Set
 }
 
-type PhotosetSetIterCallback (func (p Photoset) (stop bool))
+type PhotosetSetIterCallback (func(p Photoset) (stop bool))
 
 func NewPhotosetSet() PhotosetSet {
 	return PhotosetSet{types.NewSet()}
@@ -177,19 +177,19 @@ func (s Photoset) Equals(p Photoset) bool {
 func (s Photoset) Ref() ref.Ref {
 	return s.m.Ref()
 }
-func (s Photoset) Id() types.String {
-	return s.m.Get(types.NewString("id")).(types.String)
-}
-
-func (s Photoset) SetId(p types.String) Photoset {
-	return PhotosetFromVal(s.m.Set(types.NewString("id"), p))
-}
 func (s Photoset) Title() types.String {
 	return s.m.Get(types.NewString("title")).(types.String)
 }
 
 func (s Photoset) SetTitle(p types.String) Photoset {
 	return PhotosetFromVal(s.m.Set(types.NewString("title"), p))
+}
+func (s Photoset) Id() types.String {
+	return s.m.Get(types.NewString("id")).(types.String)
+}
+
+func (s Photoset) SetId(p types.String) Photoset {
+	return PhotosetFromVal(s.m.Set(types.NewString("id"), p))
 }
 func (s Photoset) Photos() PhotoSet {
 	return PhotoSetFromVal(s.m.Get(types.NewString("photos")))
@@ -204,7 +204,7 @@ type PhotoSet struct {
 	s types.Set
 }
 
-type PhotoSetIterCallback (func (p Photo) (stop bool))
+type PhotoSetIterCallback (func(p Photo) (stop bool))
 
 func NewPhotoSet() PhotoSet {
 	return PhotoSet{types.NewSet()}
@@ -306,13 +306,6 @@ func (s Photo) Equals(p Photo) bool {
 func (s Photo) Ref() ref.Ref {
 	return s.m.Ref()
 }
-func (s Photo) Id() types.String {
-	return s.m.Get(types.NewString("id")).(types.String)
-}
-
-func (s Photo) SetId(p types.String) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("id"), p))
-}
 func (s Photo) Title() types.String {
 	return s.m.Get(types.NewString("title")).(types.String)
 }
@@ -320,12 +313,12 @@ func (s Photo) Title() types.String {
 func (s Photo) SetTitle(p types.String) Photo {
 	return PhotoFromVal(s.m.Set(types.NewString("title"), p))
 }
-func (s Photo) Url() types.String {
-	return s.m.Get(types.NewString("url")).(types.String)
+func (s Photo) Id() types.String {
+	return s.m.Get(types.NewString("id")).(types.String)
 }
 
-func (s Photo) SetUrl(p types.String) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("url"), p))
+func (s Photo) SetId(p types.String) Photo {
+	return PhotoFromVal(s.m.Set(types.NewString("id"), p))
 }
 func (s Photo) Image() types.Blob {
 	return s.m.Get(types.NewString("image")).(types.Blob)
@@ -333,4 +326,11 @@ func (s Photo) Image() types.Blob {
 
 func (s Photo) SetImage(p types.Blob) Photo {
 	return PhotoFromVal(s.m.Set(types.NewString("image"), p))
+}
+func (s Photo) Url() types.String {
+	return s.m.Get(types.NewString("url")).(types.String)
+}
+
+func (s Photo) SetUrl(p types.String) Photo {
+	return PhotoFromVal(s.m.Set(types.NewString("url"), p))
 }
