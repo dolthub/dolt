@@ -75,7 +75,7 @@ func MustParse(s string) Ref {
 // Particularly, Chk.Equals{Value} does reflection, and this can be expensive, so avoid it here.
 func Less(r1, r2 Ref) bool {
 	d1, d2 := r1.digest, r2.digest
-	Chk.True(len(d1) == len(d2)) // Hot path!
+	Chk.True(len(d1) == len(d2)) // BUG #83
 	for k := 0; k < len(d1); k++ {
 		b1, b2 := d1[k], d2[k]
 		if b1 < b2 {
