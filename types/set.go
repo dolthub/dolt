@@ -121,21 +121,35 @@ func copySetData(m setData) setData {
 }
 
 func buildSetData(old setData, futures []future) setData {
-	m := copySetData(old)
+	r := make(setData, len(old), len(old)+len(futures))
+	copy(r, old)
 	for _, f := range futures {
-		idx := indexSetData(m, f.Ref())
-		if idx == len(m) || m[idx].Ref() != f.Ref() {
-			// The key isn't present. Make room for it.
-			m = append(m, nil)
-			copy(m[idx+1:], m[idx:])
+		idx := indexSetData(r, f.Ref())
+		if idx < len(r) && r[idx].Ref() == f.Ref() {
+			// We already have this fellow.
+			continue
+		} else {
+			r = append(r, f)
 		}
-		m[idx] = f
 	}
-	return m
+	sort.Sort(r)
+	return r
 }
 
 func indexSetData(m setData, r ref.Ref) int {
 	return sort.Search(len(m), func(i int) bool {
 		return !ref.Less(m[i].Ref(), r)
 	})
+}
+
+func (sd setData) Len() int {
+	return len(sd)
+}
+
+func (sd setData) Less(i, j int) bool {
+	return ref.Less(sd[i].Ref(), sd[j].Ref())
+}
+
+func (sd setData) Swap(i, j int) {
+	sd[i], sd[j] = sd[j], sd[i]
 }
