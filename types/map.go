@@ -8,13 +8,13 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-type mapData []mapEntry
-
 type Map struct {
 	m   mapData // sorted by entry.key.Ref()
 	cs  chunks.ChunkSource
 	ref *ref.Ref
 }
+
+type mapData []mapEntry
 
 func NewMap(kv ...Value) Map {
 	return newMapFromData(buildMapData(mapData{}, valuesToFutures(kv)), nil)
@@ -98,28 +98,24 @@ func newMapFromData(m mapData, cs chunks.ChunkSource) Map {
 	return Map{m, cs, &ref.Ref{}}
 }
 
-func copyMapData(m mapData) mapData {
-	r := make(mapData, len(m))
-	copy(r, m)
-	return r
-}
-
 func buildMapData(oldData mapData, futures []future) mapData {
 	// Sadly, Chk.Equals() costs too much.
 	Chk.True(0 == len(futures)%2, "Must specify even number of key/value pairs")
 
-	m := copyMapData(oldData)
+	m := make(mapData, len(oldData), len(oldData)+len(futures))
+	copy(m, oldData)
 	for i := 0; i < len(futures); i += 2 {
 		k := futures[i]
 		v := futures[i+1]
+		e := mapEntry{k, v}
 		idx := indexMapData(m, k.Ref())
-		if idx == len(m) || m[idx].key.Ref() != k.Ref() {
-			// The key isn't present. Make room for it.
-			m = append(m, mapEntry{})
-			copy(m[idx+1:], m[idx:])
+		if idx != len(m) && m[idx].key.Ref() == k.Ref() {
+			m[idx] = e
+		} else {
+			m = append(m, e)
 		}
-		m[idx] = mapEntry{k, v}
 	}
+	sort.Sort(m)
 	return m
 }
 
@@ -127,4 +123,16 @@ func indexMapData(m mapData, r ref.Ref) int {
 	return sort.Search(len(m), func(i int) bool {
 		return !ref.Less(m[i].key.Ref(), r)
 	})
+}
+
+func (md mapData) Len() int {
+	return len(md)
+}
+
+func (md mapData) Less(i, j int) bool {
+	return ref.Less(md[i].key.Ref(), md[j].key.Ref())
+}
+
+func (md mapData) Swap(i, j int) {
+	md[i], md[j] = md[j], md[i]
 }
