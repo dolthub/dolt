@@ -8,7 +8,7 @@ import (
 
 func TestPut(t *testing.T) {
 	assert := assert.New(t)
-	s := NopSink{}
+	s := NopStore{}
 
 	input := "abc"
 	w := s.Put()
