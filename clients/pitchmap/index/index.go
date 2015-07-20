@@ -3,7 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"reflect"
+	"runtime/pprof"
 	"strconv"
 
 	"github.com/attic-labs/noms/chunks"
@@ -14,8 +16,9 @@ import (
 )
 
 var (
-	inputID  = flag.String("input-dataset-id", "", "dataset to pull data from.")
-	outputID = flag.String("output-dataset-id", "", "dataset to store data in.")
+	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+	inputID    = flag.String("input-dataset-id", "", "dataset to pull data from.")
+	outputID   = flag.String("output-dataset-id", "", "dataset to store data in.")
 )
 
 func getAsString(fm types.Map, key string) string {
@@ -32,6 +35,10 @@ func processPitcher(m types.Map) (id, name types.String) {
 	return
 }
 
+func checkPitch(v types.Map) bool {
+	return v.Get(types.NewString("-px")) != nil && v.Get(types.NewString("-pxz")) != nil
+}
+
 func toPitch(v types.Map) Pitch {
 	x, _ := strconv.ParseFloat(v.Get(types.NewString("-px")).(types.String).String(), 64)
 	z, _ := strconv.ParseFloat(v.Get(types.NewString("-pz")).(types.String).String(), 64)
@@ -45,9 +52,13 @@ func processPitches(v types.Value) (pitches []Pitch) {
 			pitches = append(pitches, processPitches(v.Get(i))...)
 		}
 	case types.Map:
-		pitches = append(pitches, toPitch(v))
+		if checkPitch(v) {
+			pitches = append(pitches, toPitch(v))
+		}
+	case nil:
+		return // Yes, an at-bat can end with no pitches thrown.
 	default:
-		dbg.Chk.Fail("pitches shouldn't be %+v, which is of type %s!\n", v, reflect.TypeOf(v).String())
+		dbg.Chk.Fail("No pitch should be %+v, which is of type %s!\n", v, reflect.TypeOf(v).String())
 	}
 	return
 }
@@ -56,8 +67,11 @@ func getPitchesByPitcherForInning(m types.Map) map[string][]Pitch {
 	// This is brittle, figure out how to do it without being super verbose.
 	halves := []types.Map{
 		m.Get(types.NewString("top")).(types.Map),
-		m.Get(types.NewString("bottom")).(types.Map),
 	}
+	if bot := m.Get(types.NewString("bottom")); bot != nil {
+		halves = append(halves, bot.(types.Map))
+	}
+
 	pitchCounts := map[string][]Pitch{}
 	for _, half := range halves {
 		abs := half.Get(types.NewString("atbat")).(types.List)
@@ -79,6 +93,12 @@ func main() {
 	if cs == nil || *inputID == "" || *outputID == "" {
 		flag.Usage()
 		return
+	}
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		dbg.Chk.NoError(err, "Can't create cpu profile file.")
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 
 	rootDataStore := datas.NewDataStore(cs, cs.(chunks.RootTracker))
