@@ -40,7 +40,7 @@ func (suite *LibTestSuite) TestCompositeTypes() {
 	// }
 	m := types.NewMap(
 		types.NewString("string"), types.NewString("string"),
-		types.NewString("list"), types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
+		types.NewString("list"), types.NewList(types.Bool(false), types.Bool(true)),
 		types.NewString("map"), types.NewMap(types.NewString("nested"), types.NewString("string")))
 	suite.EqualValues(m, NomsValueFromDecodedJSON(map[string]interface{}{
 		"string": "string",
