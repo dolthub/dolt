@@ -36,7 +36,7 @@ func isEncodedOutOfLine(v Value) int {
 
 func TestIncrementalLoadList(t *testing.T) {
 	assert := assert.New(t)
-	cs := &testStore{ChunkStore: &chunks.MemoryStore{}}
+	cs := &chunks.TestStore{}
 
 	expected := NewList(testVals...)
 	ref, err := WriteValue(expected, cs)
@@ -46,24 +46,24 @@ func TestIncrementalLoadList(t *testing.T) {
 	assert.NoError(err)
 	actual := actualVar.(List)
 
-	expectedCount := cs.count
+	expectedCount := cs.Reads
 	assert.Equal(1, expectedCount)
 	for i := uint64(0); i < expected.Len(); i++ {
 		v := actual.Get(i)
 		assert.True(expected.Get(i).Equals(v))
 
 		expectedCount += isEncodedOutOfLine(v)
-		assert.Equal(expectedCount, cs.count)
+		assert.Equal(expectedCount, cs.Reads)
 
 		// Do it again to make sure multiple derefs don't do multiple loads.
 		v = actual.Get(i)
-		assert.Equal(expectedCount, cs.count)
+		assert.Equal(expectedCount, cs.Reads)
 	}
 }
 
 func TestIncrementalLoadSet(t *testing.T) {
 	assert := assert.New(t)
-	cs := &testStore{ChunkStore: &chunks.MemoryStore{}}
+	cs := &chunks.TestStore{}
 
 	expected := NewSet(testVals...)
 	ref, err := WriteValue(expected, cs)
@@ -73,18 +73,18 @@ func TestIncrementalLoadSet(t *testing.T) {
 	assert.NoError(err)
 	actual := actualVar.(Set)
 
-	expectedCount := cs.count
+	expectedCount := cs.Reads
 	assert.Equal(1, expectedCount)
 	actual.Iter(func(v Value) (stop bool) {
 		expectedCount += isEncodedOutOfLine(v)
-		assert.Equal(expectedCount, cs.count)
+		assert.Equal(expectedCount, cs.Reads)
 		return
 	})
 }
 
 func TestIncrementalLoadMap(t *testing.T) {
 	assert := assert.New(t)
-	cs := &testStore{ChunkStore: &chunks.MemoryStore{}}
+	cs := &chunks.TestStore{}
 
 	expected := NewMap(testVals...)
 	ref, err := WriteValue(expected, cs)
@@ -94,12 +94,12 @@ func TestIncrementalLoadMap(t *testing.T) {
 	assert.NoError(err)
 	actual := actualVar.(Map)
 
-	expectedCount := cs.count
+	expectedCount := cs.Reads
 	assert.Equal(1, expectedCount)
 	actual.Iter(func(k, v Value) (stop bool) {
 		expectedCount += isEncodedOutOfLine(k)
 		expectedCount += isEncodedOutOfLine(v)
-		assert.Equal(expectedCount, cs.count)
+		assert.Equal(expectedCount, cs.Reads)
 		return
 	})
 }

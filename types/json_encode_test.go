@@ -90,30 +90,30 @@ func TestJsonEncode(t *testing.T) {
 
 func TestGetJSONChildResolvedFuture(t *testing.T) {
 	assert := assert.New(t)
-	cs := &testStore{ChunkStore: &chunks.MemoryStore{}}
+	cs := &chunks.TestStore{}
 	v := NewString("abc")
 	f := futureFromValue(v)
 	o, err := getChildJSON(f, cs)
 	assert.NoError(err)
 	assert.Equal("abc", o)
-	assert.Equal(0, cs.count)
+	assert.Equal(0, cs.Reads)
 }
 
 func TestGetJSONChildUnresolvedFuture(t *testing.T) {
 	assert := assert.New(t)
-	cs := &testStore{ChunkStore: &chunks.MemoryStore{}}
+	cs := &chunks.TestStore{}
 	s := "sha1-a9993e364706816aba3e25717850c26c9cd0d89d"
 	r := ref.MustParse(s)
 	f := futureFromRef(r)
 	m, err := getChildJSON(f, cs)
 	assert.NoError(err)
 	assert.Equal(s, m.(map[string]interface{})["ref"].(string))
-	assert.Equal(0, cs.count)
+	assert.Equal(0, cs.Reads)
 }
 
 func TestFutureCompound(t *testing.T) {
 	assert := assert.New(t)
-	cs := &testStore{ChunkStore: &chunks.MemoryStore{}}
+	cs := &chunks.TestStore{}
 
 	v := NewString("abc")
 	resolved := futureFromValue(v)
@@ -127,19 +127,19 @@ func TestFutureCompound(t *testing.T) {
 	m, err := getJSONList(list, cs)
 	assert.NoError(err)
 	assert.IsType([]interface{}{}, m.(map[string]interface{})["list"])
-	assert.Equal(0, cs.count)
+	assert.Equal(0, cs.Reads)
 
 	set := setFromFutures(futures, cs)
 	assert.NotNil(set)
 	m, err = getJSONSet(set, cs)
 	assert.NoError(err)
 	assert.IsType([]interface{}{}, m.(map[string]interface{})["set"])
-	assert.Equal(0, cs.count)
+	assert.Equal(0, cs.Reads)
 
 	mm := mapFromFutures(futures, cs)
 	assert.NotNil(mm)
 	m, err = getJSONMap(mm, cs)
 	assert.NoError(err)
 	assert.IsType([]interface{}{}, m.(map[string]interface{})["map"])
-	assert.Equal(0, cs.count)
+	assert.Equal(0, cs.Reads)
 }
