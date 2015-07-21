@@ -17,7 +17,7 @@ var (
 )
 
 type server struct {
-	chunks.ChunkStore
+	cs chunks.ChunkStore
 }
 
 func (s server) handle(w http.ResponseWriter, r *http.Request) {
@@ -25,9 +25,8 @@ func (s server) handle(w http.ResponseWriter, r *http.Request) {
 
 	switch r.URL.Path[1:] {
 	case "root":
-		cs := s.ChunkStore
 		w.Header().Add("content-type", "text/plain")
-		fmt.Fprintf(w, "%v", cs.Root().String())
+		fmt.Fprintf(w, "%v", s.cs.Root().String())
 	case "get":
 		if refs, ok := r.URL.Query()["ref"]; ok {
 			s.handleGetRef(w, refs[0])
@@ -46,14 +45,13 @@ func (s server) handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) handleGetRef(w http.ResponseWriter, hashString string) {
-	cs := s.ChunkStore
 	ref, err := ref.Parse(hashString)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Parse error: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	reader, err := cs.Get(ref)
+	reader, err := s.cs.Get(ref)
 	if err != nil {
 		// TODO: Maybe we should not expose the internal path?
 		http.Error(w, fmt.Sprintf("Fetch error: %v", err), http.StatusNotFound)
@@ -71,8 +69,7 @@ func (s server) handleGetRef(w http.ResponseWriter, hashString string) {
 }
 
 func (s server) handleGetDataset(w http.ResponseWriter, id string) {
-	cs := s.ChunkStore
-	rootDataStore := datas.NewDataStore(cs, cs.(chunks.RootTracker))
+	rootDataStore := datas.NewDataStore(s.cs, s.cs.(chunks.RootTracker))
 	dataset := mgmt.GetDatasetRoot(mgmt.GetDatasets(rootDataStore), id)
 	if dataset == nil {
 		http.Error(w, fmt.Sprintf("Dataset not found: %s", id), http.StatusNotFound)
@@ -92,6 +89,6 @@ func main() {
 		return
 	}
 
-	http.HandleFunc("/", cs.(server).handle)
+	http.HandleFunc("/", server{cs}.handle)
 	http.ListenAndServe(fmt.Sprintf(":%s", *port), nil)
 }
