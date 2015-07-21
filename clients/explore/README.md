@@ -10,6 +10,7 @@ This is the beginnings of a simple tree view of all noms data.
 ## Build
 
 * `cd <noms>/clients/explore`
+* `./link.sh`
 * `npm install`
 * `npm run build`
 

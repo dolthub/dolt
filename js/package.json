@@ -1,0 +1,7 @@
+{
+  "name": "noms",
+  "main": "noms.js",
+  "dependencies": {
+    "immutable": "^3.7.4"
+  }
+}

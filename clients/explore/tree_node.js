@@ -2,7 +2,7 @@
 
 var React = require('react');
 var Immutable = require('immutable');
-var getRef = require('./decode.js').getRef;
+var getRef = require('noms').getRef;
 
 function merge(a, b) {
   var result = {};
@@ -66,9 +66,9 @@ var TreeNode = React.createClass({
   },
 
   isCollection: function(value) {
-    return value instanceof Immutable.List ||
-           value instanceof Immutable.Set ||
-           value instanceof Immutable.Map;
+    return Immutable.List.isList(value) ||
+           Immutable.Set.isSet(value) ||
+           Immutable.Map.isMap(value);
   },
 
   getTypeOf: function(value) {
@@ -82,11 +82,11 @@ var TreeNode = React.createClass({
   },
 
   getCollectionName: function(value) {
-    if (value instanceof Immutable.List)
+    if (Immutable.List.isList(value))
       return "List";
-    if (value instanceof Immutable.Set)
+    if (Immutable.Set.isSet(value))
       return "Set";
-    if (value instanceof Immutable.Map)
+    if (Immutable.Map.isMap(value))
       return "Map";
   },
 
@@ -140,7 +140,7 @@ var TreeNode = React.createClass({
 
     var content = [ header ];
     if (this.state.expand && isCollection) {
-      var isSet = value instanceof Immutable.Set;
+      var isSet = Immutable.Set.isSet(value);
       value.forEach(function(subvalue, index) {
         var name = isSet ? undefined : index;
         content.push(TreeNodeFactory({ value: subvalue, name: name, expandAll: this.state.expandAll }));

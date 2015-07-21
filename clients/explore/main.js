@@ -2,11 +2,10 @@
 
 var React = require('react');
 var TreeNode = React.createFactory(require('./tree_node.js'));
-var store = require('./noms_store.js');
-var decode = require('./decode.js');
+var noms = require('noms')
 
-store.getRoot().then(function(root) {
-  decode.readValue(root, store.getChunk).then(function(value) {
+noms.getRoot().then(function(root) {
+  noms.readValue(root, noms.getChunk).then(function(value) {
     var target = document.getElementById('explore');
 
     React.render(

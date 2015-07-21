@@ -9,9 +9,11 @@ This is an (incomplete) sample app that visualizes pitching data as a heatmap.
 
 ## Build
 
-* `cd <noms>/clients/pitchmap/ui`
+* `cd <noms>/clients/explore`
+* `./link.sh`
 * `npm install`
 * `npm run build`
+
 
 ## Run
 
