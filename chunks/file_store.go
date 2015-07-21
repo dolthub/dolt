@@ -72,7 +72,11 @@ func (f FileStore) UpdateRoot(current, last ref.Ref) bool {
 }
 
 func (f FileStore) Get(ref ref.Ref) (io.ReadCloser, error) {
-	return os.Open(getPath(f.dir, ref))
+	r, err := os.Open(getPath(f.dir, ref))
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	return r, err
 }
 
 func (f FileStore) Put() ChunkWriter {

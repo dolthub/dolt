@@ -165,3 +165,10 @@ func (suite *FileStoreTestSuite) TestFileStorePutExisting() {
 	// Shouldn't have written the second time.
 	suite.Equal(1, mkdirCount)
 }
+
+func (suite *FileStoreTestSuite) TestFileStoreGetNonExisting() {
+	ref := ref.MustParse("sha1-1111111111111111111111111111111111111111")
+	r, err := suite.store.Get(ref)
+	suite.NoError(err)
+	suite.Nil(r)
+}
