@@ -16,7 +16,7 @@ func TestSetLen(t *testing.T) {
 	assert.Equal(uint64(3), s3.Len())
 }
 
-// See bug #98
+// BUG 98
 func TestSetDuplicateInsert(t *testing.T) {
 	assert := assert.New(t)
 	s1 := NewSet(Bool(true), Int32(42), Int32(42))

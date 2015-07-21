@@ -62,7 +62,7 @@ func TestMapSetM(t *testing.T) {
 	assert.Equal(uint64(3), m4.Len())
 }
 
-// See bug #98
+// BUG 98
 func TestMapDuplicateSet(t *testing.T) {
 	assert := assert.New(t)
 	m1 := NewMap(Bool(true), Bool(true), Int32(42), Int32(42), Int32(42), Int32(42))
