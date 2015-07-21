@@ -1,18 +1,20 @@
 package types
 
 import (
+	"sort"
+
 	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
-type mapData map[ref.Ref]mapEntry
-
 type Map struct {
-	m   mapData
+	m   mapData // sorted by entry.key.Ref()
 	cs  chunks.ChunkSource
 	ref *ref.Ref
 }
+
+type mapData []mapEntry
 
 func NewMap(kv ...Value) Map {
 	return newMapFromData(buildMapData(mapData{}, valuesToFutures(kv)), nil)
@@ -27,18 +29,21 @@ func (fm Map) Len() uint64 {
 }
 
 func (fm Map) Has(key Value) bool {
-	_, ok := fm.m[key.Ref()]
-	return ok
+	idx := indexMapData(fm.m, key.Ref())
+	return idx < len(fm.m) && futureEqualsValue(fm.m[idx].key, key)
 }
 
 func (fm Map) Get(key Value) Value {
-	if entry, ok := fm.m[key.Ref()]; ok {
-		v, err := entry.value.Deref(fm.cs)
-		Chk.NoError(err)
-		return v
-	} else {
-		return nil
+	idx := indexMapData(fm.m, key.Ref())
+	if idx < len(fm.m) {
+		entry := fm.m[idx]
+		if futureEqualsValue(entry.key, key) {
+			v, err := entry.value.Deref(fm.cs)
+			Chk.NoError(err)
+			return v
+		}
 	}
+	return nil
 }
 
 func (fm Map) Set(key Value, val Value) Map {
@@ -50,9 +55,12 @@ func (fm Map) SetM(kv ...Value) Map {
 }
 
 func (fm Map) Remove(k Value) Map {
-	m := copyMapData(fm.m)
-	delete(m, k.Ref())
-	return newMapFromData(m, fm.cs)
+	idx := indexMapData(fm.m, k.Ref())
+	if idx == len(fm.m) || !futureEqualsValue(fm.m[idx].key, k) {
+		return fm
+	}
+
+	return newMapFromData(append(fm.m[:idx], fm.m[idx+1:]...), fm.cs)
 }
 
 type mapIterCallback func(key, value Value) bool
@@ -90,23 +98,41 @@ func newMapFromData(m mapData, cs chunks.ChunkSource) Map {
 	return Map{m, cs, &ref.Ref{}}
 }
 
-func copyMapData(m mapData) mapData {
-	r := mapData{}
-	for k, v := range m {
-		r[k] = v
-	}
-	return r
-}
-
 func buildMapData(oldData mapData, futures []future) mapData {
 	// Sadly, Chk.Equals() costs too much.
 	Chk.True(0 == len(futures)%2, "Must specify even number of key/value pairs")
 
-	m := copyMapData(oldData)
+	m := make(mapData, len(oldData), len(oldData)+len(futures))
+	copy(m, oldData)
 	for i := 0; i < len(futures); i += 2 {
 		k := futures[i]
 		v := futures[i+1]
-		m[k.Ref()] = mapEntry{k, v}
+		e := mapEntry{k, v}
+		idx := indexMapData(m, k.Ref())
+		if idx != len(m) && futuresEqual(m[idx].key, k) {
+			m[idx] = e
+		} else {
+			m = append(m, e)
+		}
 	}
+	sort.Sort(m)
 	return m
+}
+
+func indexMapData(m mapData, r ref.Ref) int {
+	return sort.Search(len(m), func(i int) bool {
+		return !ref.Less(m[i].key.Ref(), r)
+	})
+}
+
+func (md mapData) Len() int {
+	return len(md)
+}
+
+func (md mapData) Less(i, j int) bool {
+	return ref.Less(md[i].key.Ref(), md[j].key.Ref())
+}
+
+func (md mapData) Swap(i, j int) {
+	md[i], md[j] = md[j], md[i]
 }

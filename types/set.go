@@ -1,15 +1,17 @@
 package types
 
 import (
+	"sort"
+
 	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
-type setData map[ref.Ref]future
+type setData []future
 
 type Set struct {
-	m   setData
+	m   setData // sorted by Ref()
 	cs  chunks.ChunkSource
 	ref *ref.Ref
 }
@@ -31,8 +33,8 @@ func (fs Set) Len() uint64 {
 }
 
 func (fs Set) Has(v Value) bool {
-	_, ok := fs.m[v.Ref()]
-	return ok
+	idx := indexSetData(fs.m, v.Ref())
+	return idx < len(fs.m) && futureEqualsValue(fs.m[idx], v)
 }
 
 func (fs Set) Insert(values ...Value) Set {
@@ -43,7 +45,10 @@ func (fs Set) Remove(values ...Value) Set {
 	m2 := copySetData(fs.m)
 	for _, v := range values {
 		if v != nil {
-			delete(m2, v.Ref())
+			idx := indexSetData(fs.m, v.Ref())
+			if idx < len(fs.m) && futureEqualsValue(fs.m[idx], v) {
+				m2 = append(m2[:idx], m2[idx+1:]...)
+			}
 		}
 	}
 	return newSetFromData(m2, fs.cs)
@@ -110,17 +115,41 @@ func newSetFromData(m setData, cs chunks.ChunkSource) Set {
 }
 
 func copySetData(m setData) setData {
-	r := setData{}
-	for k, f := range m {
-		r[k] = f
-	}
+	r := make(setData, len(m))
+	copy(r, m)
 	return r
 }
 
 func buildSetData(old setData, futures []future) setData {
-	m := copySetData(old)
+	r := make(setData, len(old), len(old)+len(futures))
+	copy(r, old)
 	for _, f := range futures {
-		m[f.Ref()] = f
+		idx := indexSetData(r, f.Ref())
+		if idx < len(r) && futuresEqual(r[idx], f) {
+			// We already have this fellow.
+			continue
+		} else {
+			r = append(r, f)
+		}
 	}
-	return m
+	sort.Sort(r)
+	return r
+}
+
+func indexSetData(m setData, r ref.Ref) int {
+	return sort.Search(len(m), func(i int) bool {
+		return !ref.Less(m[i].Ref(), r)
+	})
+}
+
+func (sd setData) Len() int {
+	return len(sd)
+}
+
+func (sd setData) Less(i, j int) bool {
+	return ref.Less(sd[i].Ref(), sd[j].Ref())
+}
+
+func (sd setData) Swap(i, j int) {
+	sd[i], sd[j] = sd[j], sd[i]
 }

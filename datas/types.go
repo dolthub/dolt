@@ -116,17 +116,17 @@ func (s Root) Equals(p Root) bool {
 func (s Root) Ref() ref.Ref {
 	return s.m.Ref()
 }
-func (s Root) Value() types.Value {
-	return s.m.Get(types.NewString("value")).(types.Value)
-}
-
-func (s Root) SetValue(p types.Value) Root {
-	return RootFromVal(s.m.Set(types.NewString("value"), p))
-}
 func (s Root) Parents() types.Set {
 	return s.m.Get(types.NewString("parents")).(types.Set)
 }
 
 func (s Root) SetParents(p types.Set) Root {
 	return RootFromVal(s.m.Set(types.NewString("parents"), p))
+}
+func (s Root) Value() types.Value {
+	return s.m.Get(types.NewString("value")).(types.Value)
+}
+
+func (s Root) SetValue(p types.Value) Root {
+	return RootFromVal(s.m.Set(types.NewString("value"), p))
 }

@@ -3,7 +3,6 @@ package types
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 
 	"github.com/attic-labs/noms/chunks"
 	. "github.com/attic-labs/noms/dbg"
@@ -114,15 +113,8 @@ func (mes entrySlice) Less(i, j int) bool {
 }
 
 func getJSONMap(m Map, s chunks.ChunkSink) (r interface{}, err error) {
-	// Iteration through Map is random, but we need a deterministic order for serialization. Let's order using the refs of the keys in the map.
-	order := entrySlice{}
-	for _, e := range m.m {
-		order = append(order, e)
-	}
-	sort.Sort(order)
-
 	j := []interface{}{}
-	for _, r := range order {
+	for _, r := range m.m {
 		var cjk, cjv interface{}
 		cjk, err = getChildJSON(r.key, s)
 		if err == nil {
@@ -142,18 +134,8 @@ func getJSONMap(m Map, s chunks.ChunkSink) (r interface{}, err error) {
 }
 
 func getJSONSet(set Set, s chunks.ChunkSink) (r interface{}, err error) {
-	// Iteration through Set is random, but we need a deterministic order for serialization. Let's order using the refs of the values in the set.
-	lookup := setData{}
-	order := ref.RefSlice{}
-	for _, f := range set.m {
-		order = append(order, f.Ref())
-		lookup[f.Ref()] = f
-	}
-	sort.Sort(order)
-
 	j := []interface{}{}
-	for _, r := range order {
-		f := lookup[r]
+	for _, f := range set.m {
 		var cj interface{}
 		cj, err = getChildJSON(f, s)
 		if err != nil {
