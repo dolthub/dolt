@@ -20,18 +20,18 @@ func TestResolvedFuture(t *testing.T) {
 func TestUnresolvedFuture(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := &testStore{ChunkStore: &chunks.MemoryStore{}}
+	cs := &chunks.TestStore{}
 	v := NewString("hello")
 	r, _ := WriteValue(v, cs)
 
 	f := futureFromRef(r)
 	v2, err := f.Deref(cs)
-	assert.Equal(1, cs.count)
+	assert.Equal(1, cs.Reads)
 	assert.NoError(err)
 	assert.True(v.Equals(v2))
 
 	v3, err := f.Deref(cs)
-	assert.Equal(1, cs.count)
+	assert.Equal(1, cs.Reads)
 	assert.NoError(err)
 	assert.True(v2.Equals(v3))
 }
