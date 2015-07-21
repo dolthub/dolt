@@ -1,7 +1,14 @@
 {
   "name": "noms",
-  "main": "noms.js",
+  "main": "dist/noms.js",
   "dependencies": {
     "immutable": "^3.7.4"
+  },
+  "devDependencies": {
+    "babel": "^5.6.23"
+  },
+  "scripts": {
+    "start": "babel -w src/ -d dist/",
+    "build": "babel src/ -d dist/"
   }
 }

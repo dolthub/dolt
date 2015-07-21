@@ -5,9 +5,9 @@ var Immutable = require('immutable');
 var refMapping = new WeakMap();
 
 function decodeMap(input, ref, getChunk) {
-  return Promise.all(input.map(function(value) {
+  return Promise.all(input.map((value) => {
     return decodeValue(value, ref, getChunk);
-  })).then(function(values) {
+  })).then((values) => {
     var pairs = [];
     for (var i = 0; i < input.length; i += 2) {
       pairs.push([values[i], values[i+1]]);
@@ -19,9 +19,9 @@ function decodeMap(input, ref, getChunk) {
 }
 
 function decodeList(input, ref, getChunk) {
-  return Promise.all(input.map(function(value) {
+  return Promise.all(input.map((value) => {
     return decodeValue(value, ref, getChunk);
-  })).then(function(values) {
+  })).then((values) => {
     var value = Immutable.List(values);
     refMapping.set(value, ref);
     return value;
@@ -29,9 +29,9 @@ function decodeList(input, ref, getChunk) {
 }
 
 function decodeSet(input, ref, getChunk) {
-  return Promise.all(input.map(function(value) {
+  return Promise.all(input.map((value) => {
     return decodeValue(value, ref, getChunk);
-  })).then(function(values) {
+  })).then((values) => {
     var value = Immutable.Set(values);
     refMapping.set(value, ref);
     return value;
@@ -93,7 +93,7 @@ function decodeValue(value, ref, getChunk) {
 }
 
 function readValue(ref, getChunk) {
-  return getChunk(ref).then(function(data) {
+  return getChunk(ref).then((data) => {
     switch(data[0]) {
       case 'j':
         var json = JSON.parse(data.substring(2))
