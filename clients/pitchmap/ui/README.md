@@ -6,10 +6,10 @@ This is an (incomplete) sample app that visualizes pitching data as a heatmap.
 
 * [`<noms>/clients/server`](../server)
 * Node.js: https://nodejs.org/download/
+* You probably want to configure npm to [use a global module path that your user owns](https://docs.npmjs.com/getting-started/fixing-npm-permissions)
 
 ## Build
 
-* `cd <noms>/clients/explore`
 * `./link.sh`
 * `npm install`
 * `npm run build`

@@ -5,7 +5,7 @@ var React = require('react');
 var Map = require('./map.js');
 
 noms.getDataset('mlb/heatmap').then(function(s) {
-  return decode.readValue(s, noms.getChunk);
+  return noms.readValue(s, noms.getChunk);
 }).then(getPitchers).then(renderPitchersList).catch(function(err) {
   console.error(err);
 });
