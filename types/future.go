@@ -2,6 +2,7 @@ package types
 
 import (
 	"github.com/attic-labs/noms/chunks"
+	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -23,5 +24,14 @@ func futuresEqual(f1, f2 future) bool {
 		return f1.Val().Equals(f2.Val())
 	} else {
 		return f1.Ref() == f2.Ref()
+	}
+}
+
+func futureEqualsValue(f future, v Value) bool {
+	Chk.NotNil(v)
+	if f.Val() != nil {
+		return f.Val().Equals(v)
+	} else {
+		return f.Ref() == v.Ref()
 	}
 }

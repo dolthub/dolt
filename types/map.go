@@ -30,14 +30,14 @@ func (fm Map) Len() uint64 {
 
 func (fm Map) Has(key Value) bool {
 	idx := indexMapData(fm.m, key.Ref())
-	return idx < len(fm.m) && fm.m[idx].key.Ref() == key.Ref()
+	return idx < len(fm.m) && futureEqualsValue(fm.m[idx].key, key)
 }
 
 func (fm Map) Get(key Value) Value {
 	idx := indexMapData(fm.m, key.Ref())
 	if idx < len(fm.m) {
 		entry := fm.m[idx]
-		if entry.key.Ref() == key.Ref() {
+		if futureEqualsValue(entry.key, key) {
 			v, err := entry.value.Deref(fm.cs)
 			Chk.NoError(err)
 			return v
@@ -56,7 +56,7 @@ func (fm Map) SetM(kv ...Value) Map {
 
 func (fm Map) Remove(k Value) Map {
 	idx := indexMapData(fm.m, k.Ref())
-	if idx == len(fm.m) || fm.m[idx].key.Ref() != k.Ref() {
+	if idx == len(fm.m) || !futureEqualsValue(fm.m[idx].key, k) {
 		return fm
 	}
 
@@ -109,7 +109,7 @@ func buildMapData(oldData mapData, futures []future) mapData {
 		v := futures[i+1]
 		e := mapEntry{k, v}
 		idx := indexMapData(m, k.Ref())
-		if idx != len(m) && m[idx].key.Ref() == k.Ref() {
+		if idx != len(m) && futuresEqual(m[idx].key, k) {
 			m[idx] = e
 		} else {
 			m = append(m, e)

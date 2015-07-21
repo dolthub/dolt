@@ -34,7 +34,7 @@ func (fs Set) Len() uint64 {
 
 func (fs Set) Has(v Value) bool {
 	idx := indexSetData(fs.m, v.Ref())
-	return idx < len(fs.m) && fs.m[idx].Ref() == v.Ref()
+	return idx < len(fs.m) && futureEqualsValue(fs.m[idx], v)
 }
 
 func (fs Set) Insert(values ...Value) Set {
@@ -46,7 +46,7 @@ func (fs Set) Remove(values ...Value) Set {
 	for _, v := range values {
 		if v != nil {
 			idx := indexSetData(fs.m, v.Ref())
-			if idx < len(fs.m) && fs.m[idx].Ref() == v.Ref() {
+			if idx < len(fs.m) && futureEqualsValue(fs.m[idx], v) {
 				m2 = append(m2[:idx], m2[idx+1:]...)
 			}
 		}
@@ -125,7 +125,7 @@ func buildSetData(old setData, futures []future) setData {
 	copy(r, old)
 	for _, f := range futures {
 		idx := indexSetData(r, f.Ref())
-		if idx < len(r) && r[idx].Ref() == f.Ref() {
+		if idx < len(r) && futuresEqual(r[idx], f) {
 			// We already have this fellow.
 			continue
 		} else {
