@@ -18,6 +18,8 @@ type RootTracker interface {
 }
 
 type ChunkSource interface {
+	// Gets a reader for the value of the Ref in the store. If the ref is absent
+	// from the store nil and no error is returned.
 	Get(ref ref.Ref) (io.ReadCloser, error)
 }
 
