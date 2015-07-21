@@ -37,7 +37,7 @@ function getRoot() {
 }
 
 function getDataset(id) {
-  return fetch(rpc.get + '?id=' + id)
+  return fetch(rpc.dataset + '?id=' + id)
 }
 
 module.exports = {
