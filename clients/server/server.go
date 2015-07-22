@@ -80,7 +80,7 @@ func (s server) handleGetDataset(w http.ResponseWriter, id string) {
 }
 
 func main() {
-	flags := chunks.NewFlags()
+	flags := chunks.NewFlags("")
 	flag.Parse()
 
 	cs := flags.CreateStore()

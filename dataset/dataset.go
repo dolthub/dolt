@@ -30,7 +30,7 @@ type datasetFlags struct {
 
 func Flags() datasetFlags {
 	return datasetFlags{
-		chunks.NewFlags(),
+		chunks.NewFlags(""),
 		flag.String("dataset-id", "", "dataset id to store data for"),
 	}
 }
@@ -44,7 +44,7 @@ func (f datasetFlags) CreateDataset() *Dataset {
 		return nil
 	}
 
-	// Blech, kinda sucks to typecast to RootTracker, but we know that all the implementations of ChunkStore that implement it.
+	// Blech, kinda sucks to typecast to RootTracker, but we know that all the implementations of ChunkStore implement it.
 	commitDataStore := datas.NewDataStore(cs, cs.(chunks.RootTracker))
 
 	ds := NewDataset(commitDataStore, *f.datasetID)

@@ -40,9 +40,12 @@ type nopStoreFlags struct {
 	use *bool
 }
 
-func nopFlags() nopStoreFlags {
+func nopFlags(prefix string) nopStoreFlags {
+	if prefix != "" {
+		prefix += "-"
+	}
 	return nopStoreFlags{
-		flag.Bool("nop-store", false, "use a /dev/null-esque chunkstore"),
+		flag.Bool(prefix+"nop-store", false, "use a /dev/null-esque chunkstore"),
 	}
 }
 

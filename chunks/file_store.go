@@ -150,10 +150,13 @@ type fileStoreFlags struct {
 	root *string
 }
 
-func fileFlags() fileStoreFlags {
+func fileFlags(prefix string) fileStoreFlags {
+	if prefix != "" {
+		prefix += "-"
+	}
 	return fileStoreFlags{
-		flag.String("file-store", "", "directory to use for a file-based chunkstore"),
-		flag.String("file-store-root", "root", "filename which holds the root ref in the filestore"),
+		flag.String(prefix+"file-store", "", "directory to use for a file-based chunkstore"),
+		flag.String(prefix+"file-store-root", "root", "filename which holds the root ref in the filestore"),
 	}
 }
 

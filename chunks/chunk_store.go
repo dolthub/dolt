@@ -39,12 +39,12 @@ type Flags struct {
 	nop    nopStoreFlags
 }
 
-func NewFlags() Flags {
+func NewFlags(prefix string) Flags {
 	return Flags{
-		awsFlags(),
-		fileFlags(),
-		memoryFlags(),
-		nopFlags(),
+		awsFlags(prefix),
+		fileFlags(prefix),
+		memoryFlags(prefix),
+		nopFlags(prefix),
 	}
 }
 
