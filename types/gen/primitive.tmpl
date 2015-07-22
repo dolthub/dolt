@@ -12,3 +12,7 @@ func (v {{.NomsType}}) Ref() ref.Ref {
 	return getRef(v)
 }
 
+func {{.NomsType}}FromVal(v Value) {{.NomsType}} {
+	return v.({{.NomsType}})
+}
+

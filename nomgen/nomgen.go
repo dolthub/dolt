@@ -15,12 +15,11 @@ import (
 )
 
 var (
-	fieldCompositeTempl = readTemplate("field_composite.tmpl")
-	fieldPrimitiveTempl = readTemplate("field_primitive.tmpl")
-	headerTmpl          = readTemplate("header.tmpl")
-	listTempl           = readTemplate("list.tmpl")
-	setTempl            = readTemplate("set.tmpl")
-	structTempl         = readTemplate("struct.tmpl")
+	fieldTempl  = readTemplate("field.tmpl")
+	headerTmpl  = readTemplate("header.tmpl")
+	listTempl   = readTemplate("list.tmpl")
+	setTempl    = readTemplate("set.tmpl")
+	structTempl = readTemplate("struct.tmpl")
 )
 
 type NG struct {
@@ -61,6 +60,20 @@ func (ng *NG) addType(val types.Value) {
 	}
 }
 
+func fromNomsValue(name string) string {
+	if name == "types.Value" {
+		return ""
+	}
+	return fmt.Sprintf("%sFromVal", name)
+}
+
+func toNomsValue(name string) string {
+	if strings.HasPrefix(name, "types.") {
+		return ""
+	}
+	return ".NomsValue()"
+}
+
 func readTemplate(name string) *template.Template {
 	_, thisfile, _, _ := runtime.Caller(1)
 	f, err := os.Open(path.Join(path.Dir(thisfile), name))
@@ -68,7 +81,10 @@ func readTemplate(name string) *template.Template {
 	defer f.Close()
 	b, err := ioutil.ReadAll(f)
 	Chk.NoError(err)
-	t, err := template.New(name).Parse(string(b))
+	t, err := template.New(name).Funcs(template.FuncMap{
+		"fromVal": fromNomsValue,
+		"toVal":   toNomsValue,
+	}).Parse(string(b))
 	Chk.NoError(err)
 	return t
 }
@@ -151,11 +167,7 @@ func (ng *NG) writeField(structName, fieldName string, typeDef types.Value) {
 		fieldName,
 	}
 
-	if _, ok := typeDef.(types.String); ok {
-		fieldPrimitiveTempl.Execute(ng.w, data)
-	} else {
-		fieldCompositeTempl.Execute(ng.w, data)
-	}
+	fieldTempl.Execute(ng.w, data)
 }
 
 func getGoTypeName(typeDef types.Value) string {

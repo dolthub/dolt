@@ -32,3 +32,7 @@ func (fs String) Equals(other Value) bool {
 		return fs.Ref() == other.Ref()
 	}
 }
+
+func StringFromVal(v Value) String {
+	return v.(String)
+}

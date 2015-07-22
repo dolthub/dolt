@@ -31,7 +31,7 @@ func (l {{.StructName}}) Len() uint64 {
 }
 
 func (l {{.StructName}}) Get(idx uint64) {{.ElemName}} {
-	return {{.ElemName}}FromVal(l.l.Get(idx))
+	return {{fromVal .ElemName}}(l.l.Get(idx))
 }
 
 func (l {{.StructName}}) Slice(idx uint64, end uint64) {{.StructName}} {
@@ -39,7 +39,7 @@ func (l {{.StructName}}) Slice(idx uint64, end uint64) {{.StructName}} {
 }
 
 func (l {{.StructName}}) Set(idx uint64, v {{.ElemName}}) {{.StructName}} {
-	return {{.StructName}}{l.l.Set(idx, v.NomsValue())}
+	return {{.StructName}}{l.l.Set(idx, v{{toVal .ElemName}})}
 }
 
 func (l {{.StructName}}) Append(v ...{{.ElemName}}) {{.StructName}} {
@@ -61,7 +61,7 @@ func (l {{.StructName}}) RemoveAt(idx uint64) {{.StructName}} {
 func (l {{.StructName}}) fromElemSlice(p []{{.ElemName}}) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
-		r[i] = v.NomsValue()
+		r[i] = v{{toVal .ElemName}}
 	}
 	return r
 }

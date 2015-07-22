@@ -34,34 +34,39 @@ func (s User) Equals(p User) bool {
 func (s User) Ref() ref.Ref {
 	return s.m.Ref()
 }
+
 func (s User) OAuthToken() types.String {
-	return s.m.Get(types.NewString("oAuthToken")).(types.String)
+	return types.StringFromVal(s.m.Get(types.NewString("oAuthToken")))
 }
 
 func (s User) SetOAuthToken(p types.String) User {
 	return UserFromVal(s.m.Set(types.NewString("oAuthToken"), p))
 }
+
 func (s User) Name() types.String {
-	return s.m.Get(types.NewString("name")).(types.String)
+	return types.StringFromVal(s.m.Get(types.NewString("name")))
 }
 
 func (s User) SetName(p types.String) User {
 	return UserFromVal(s.m.Set(types.NewString("name"), p))
 }
+
 func (s User) Id() types.String {
-	return s.m.Get(types.NewString("id")).(types.String)
+	return types.StringFromVal(s.m.Get(types.NewString("id")))
 }
 
 func (s User) SetId(p types.String) User {
 	return UserFromVal(s.m.Set(types.NewString("id"), p))
 }
+
 func (s User) OAuthSecret() types.String {
-	return s.m.Get(types.NewString("oAuthSecret")).(types.String)
+	return types.StringFromVal(s.m.Get(types.NewString("oAuthSecret")))
 }
 
 func (s User) SetOAuthSecret(p types.String) User {
 	return UserFromVal(s.m.Set(types.NewString("oAuthSecret"), p))
 }
+
 func (s User) Photosets() PhotosetSet {
 	return PhotosetSetFromVal(s.m.Get(types.NewString("photosets")))
 }
@@ -69,6 +74,7 @@ func (s User) Photosets() PhotosetSet {
 func (s User) SetPhotosets(p PhotosetSet) User {
 	return UserFromVal(s.m.Set(types.NewString("photosets"), p.NomsValue()))
 }
+
 // PhotosetSet
 
 type PhotosetSet struct {
@@ -177,20 +183,23 @@ func (s Photoset) Equals(p Photoset) bool {
 func (s Photoset) Ref() ref.Ref {
 	return s.m.Ref()
 }
+
 func (s Photoset) Title() types.String {
-	return s.m.Get(types.NewString("title")).(types.String)
+	return types.StringFromVal(s.m.Get(types.NewString("title")))
 }
 
 func (s Photoset) SetTitle(p types.String) Photoset {
 	return PhotosetFromVal(s.m.Set(types.NewString("title"), p))
 }
+
 func (s Photoset) Id() types.String {
-	return s.m.Get(types.NewString("id")).(types.String)
+	return types.StringFromVal(s.m.Get(types.NewString("id")))
 }
 
 func (s Photoset) SetId(p types.String) Photoset {
 	return PhotosetFromVal(s.m.Set(types.NewString("id"), p))
 }
+
 func (s Photoset) Photos() PhotoSet {
 	return PhotoSetFromVal(s.m.Get(types.NewString("photos")))
 }
@@ -198,6 +207,7 @@ func (s Photoset) Photos() PhotoSet {
 func (s Photoset) SetPhotos(p PhotoSet) Photoset {
 	return PhotosetFromVal(s.m.Set(types.NewString("photos"), p.NomsValue()))
 }
+
 // PhotoSet
 
 type PhotoSet struct {
@@ -306,31 +316,36 @@ func (s Photo) Equals(p Photo) bool {
 func (s Photo) Ref() ref.Ref {
 	return s.m.Ref()
 }
+
 func (s Photo) Title() types.String {
-	return s.m.Get(types.NewString("title")).(types.String)
+	return types.StringFromVal(s.m.Get(types.NewString("title")))
 }
 
 func (s Photo) SetTitle(p types.String) Photo {
 	return PhotoFromVal(s.m.Set(types.NewString("title"), p))
 }
+
 func (s Photo) Id() types.String {
-	return s.m.Get(types.NewString("id")).(types.String)
+	return types.StringFromVal(s.m.Get(types.NewString("id")))
 }
 
 func (s Photo) SetId(p types.String) Photo {
 	return PhotoFromVal(s.m.Set(types.NewString("id"), p))
 }
+
 func (s Photo) Image() types.Blob {
-	return s.m.Get(types.NewString("image")).(types.Blob)
+	return types.BlobFromVal(s.m.Get(types.NewString("image")))
 }
 
 func (s Photo) SetImage(p types.Blob) Photo {
 	return PhotoFromVal(s.m.Set(types.NewString("image"), p))
 }
+
 func (s Photo) Url() types.String {
-	return s.m.Get(types.NewString("url")).(types.String)
+	return types.StringFromVal(s.m.Get(types.NewString("url")))
 }
 
 func (s Photo) SetUrl(p types.String) Photo {
 	return PhotoFromVal(s.m.Set(types.NewString("url"), p))
 }
+

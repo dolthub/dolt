@@ -60,7 +60,7 @@ func (fm Map) Remove(k Value) Map {
 		return fm
 	}
 
-	m := make(mapData, len(fm.m) - 1)
+	m := make(mapData, len(fm.m)-1)
 	copy(m, fm.m[:idx])
 	copy(m[idx:], fm.m[idx+1:])
 	return newMapFromData(m, fm.cs)
@@ -130,4 +130,8 @@ func indexMapData(m mapData, r ref.Ref) int {
 	return sort.Search(len(m), func(i int) bool {
 		return !ref.Less(m[i].key.Ref(), r)
 	})
+}
+
+func MapFromVal(v Value) Map {
+	return v.(Map)
 }
