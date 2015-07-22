@@ -28,6 +28,10 @@ func (fm Map) Len() uint64 {
 	return uint64(len(fm.m))
 }
 
+func (fm Map) Empty() bool {
+	return fm.Len() == uint64(0)
+}
+
 func (fm Map) Has(key Value) bool {
 	idx := indexMapData(fm.m, key.Ref())
 	return idx < len(fm.m) && futureEqualsValue(fm.m[idx].key, key)

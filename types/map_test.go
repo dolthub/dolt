@@ -156,3 +156,13 @@ func TestMapNotStringKeys(t *testing.T) {
 	}
 	assert.Nil(m1.Get(Int32(42)))
 }
+
+func TestMapEmpty(t *testing.T) {
+	assert := assert.New(t)
+	m := NewMap()
+	assert.True(m.Empty())
+	m = m.Set(Bool(false), NewString("hi"))
+	assert.False(m.Empty())
+	m = m.Set(NewList(), NewMap())
+	assert.False(m.Empty())
+}

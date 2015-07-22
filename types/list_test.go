@@ -17,6 +17,17 @@ func TestListLen(t *testing.T) {
 	assert.Equal(uint64(3), l.Len())
 }
 
+func TestListEmpty(t *testing.T) {
+	assert := assert.New(t)
+
+	l := NewList()
+	assert.True(l.Empty())
+	l = l.Append(Bool(true))
+	assert.False(l.Empty())
+	l = l.Append(Bool(false), Bool(false))
+	assert.False(l.Empty())
+}
+
 func TestListGet(t *testing.T) {
 	assert := assert.New(t)
 
