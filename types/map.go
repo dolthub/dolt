@@ -102,7 +102,7 @@ func newMapFromData(m mapData, cs chunks.ChunkSource) Map {
 }
 
 func buildMapData(oldData mapData, futures []future) mapData {
-	// Sadly, Chk.Equals() costs too much.
+	// Sadly, Chk.Equals() costs too much. BUG #83
 	Chk.True(0 == len(futures)%2, "Must specify even number of key/value pairs")
 
 	m := make(mapData, len(oldData), len(oldData)+len(futures))
