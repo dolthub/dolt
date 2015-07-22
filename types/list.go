@@ -32,6 +32,10 @@ func (l List) Len() uint64 {
 	return uint64(len(l.list))
 }
 
+func (l List) Empty() bool {
+	return l.Len() == uint64(0)
+}
+
 func (l List) Get(idx uint64) Value {
 	v, err := l.list[idx].Deref(l.cs)
 	// This is the kind of thing that makes me feel like hiding deref'ing is probably not the right idea. But we'll go with it for now.

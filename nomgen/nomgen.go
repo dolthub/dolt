@@ -18,6 +18,7 @@ var (
 	fieldTempl  = readTemplate("field.tmpl")
 	headerTmpl  = readTemplate("header.tmpl")
 	listTempl   = readTemplate("list.tmpl")
+	mapTempl    = readTemplate("map.tmpl")
 	setTempl    = readTemplate("set.tmpl")
 	structTempl = readTemplate("struct.tmpl")
 )
@@ -92,14 +93,17 @@ func readTemplate(name string) *template.Template {
 func (ng *NG) writeType(val types.Map) {
 	typ := val.Get(types.NewString("$type")).(types.String).String()
 	switch typ {
-	case "noms.StructDef":
-		ng.writeStruct(val)
+	case "noms.ListDef":
+		ng.writeList(val)
+		return
+	case "noms.MapDef":
+		ng.writeMap(val)
 		return
 	case "noms.SetDef":
 		ng.writeSet(val)
 		return
-	case "noms.ListDef":
-		ng.writeList(val)
+	case "noms.StructDef":
+		ng.writeStruct(val)
 		return
 	}
 	Chk.Fail(fmt.Sprintf("Unexpected typedef: %+v", val))
@@ -133,6 +137,25 @@ func (ng *NG) writeList(val types.Map) {
 	}
 
 	listTempl.Execute(ng.w, data)
+}
+
+func (ng *NG) writeMap(val types.Map) {
+	key := val.Get(types.NewString("key"))
+	ng.addType(key)
+	valueName := val.Get(types.NewString("value"))
+	ng.addType(valueName)
+
+	data := struct {
+		StructName string
+		KeyName    string
+		ValueName  string
+	}{
+		getGoTypeName(val),
+		getGoTypeName(key),
+		getGoTypeName(valueName),
+	}
+
+	mapTempl.Execute(ng.w, data)
 }
 
 func (ng *NG) writeStruct(val types.Map) {
@@ -171,23 +194,36 @@ func (ng *NG) writeField(structName, fieldName string, typeDef types.Value) {
 }
 
 func getGoTypeName(typeDef types.Value) string {
+	typeName := getGoStructName(typeDef)
+	switch typeDef.(type) {
+	case types.String:
+		return fmt.Sprintf("types.%s", typeName)
+	}
+	return typeName
+}
+
+func getGoStructName(typeDef types.Value) string {
 	switch typeDef := typeDef.(type) {
 	case types.String:
 		name := typeDef.String()
 		switch name {
 		case "bool", "int16", "int32", "int64", "uint16", "uint32", "uint64", "float32", "float64", "blob", "string", "set", "map", "value":
-			return fmt.Sprintf("types.%s", strings.Title(typeDef.String()))
+			return strings.Title(typeDef.String())
 		}
 		Chk.Fail("unexpected noms type name: %s", name)
 	case types.Map:
 		typ := typeDef.Get(types.NewString("$type")).(types.String).String()
 		switch typ {
+		case "noms.ListDef":
+			return fmt.Sprintf("%sList", getGoStructName(typeDef.Get(types.NewString("elem"))))
+		case "noms.MapDef":
+			return fmt.Sprintf("%s%sMap",
+				getGoStructName(typeDef.Get(types.NewString("key"))),
+				getGoStructName(typeDef.Get(types.NewString("value"))))
+		case "noms.SetDef":
+			return fmt.Sprintf("%sSet", getGoStructName(typeDef.Get(types.NewString("elem"))))
 		case "noms.StructDef":
 			return typeDef.Get(types.NewString("$name")).(types.String).String()
-		case "noms.SetDef":
-			return fmt.Sprintf("%sSet", getGoTypeName(typeDef.Get(types.NewString("elem"))))
-		case "noms.ListDef":
-			return fmt.Sprintf("%sList", getGoTypeName(typeDef.Get(types.NewString("elem"))))
 		}
 	}
 	Chk.Fail("Unexpected typeDef struct: %+v", typeDef)
