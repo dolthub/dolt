@@ -39,7 +39,7 @@ func checkPitch(v types.Map) bool {
 	return v.Get(types.NewString("-px")) != nil && v.Get(types.NewString("-pz")) != nil
 }
 
-func toPitch(v types.Map) Pitch {
+func getPitch(v types.Map) Pitch {
 	x, _ := strconv.ParseFloat(v.Get(types.NewString("-px")).(types.String).String(), 64)
 	z, _ := strconv.ParseFloat(v.Get(types.NewString("-pz")).(types.String).String(), 64)
 	return NewPitch().SetX(types.Float64(x)).SetZ(types.Float64(z))
@@ -53,7 +53,7 @@ func processPitches(v types.Value) (pitches []Pitch) {
 		}
 	case types.Map:
 		if checkPitch(v) {
-			pitches = append(pitches, toPitch(v))
+			pitches = append(pitches, getPitch(v))
 		}
 	case nil:
 		return // Yes, an at-bat can end with no pitches thrown.
@@ -63,7 +63,7 @@ func processPitches(v types.Value) (pitches []Pitch) {
 	return
 }
 
-func getPitchesByPitcherForInning(m types.Map) map[string][]Pitch {
+func processInning(m types.Map) map[string][]Pitch {
 	// This is brittle, figure out how to do it without being super verbose.
 	halves := []types.Map{
 		m.Get(types.NewString("top")).(types.Map),
@@ -85,35 +85,15 @@ func getPitchesByPitcherForInning(m types.Map) map[string][]Pitch {
 	return pitchCounts
 }
 
-func main() {
-	csFlags := chunks.NewFlags()
-	flag.Parse()
-
-	cs := csFlags.CreateStore()
-	if cs == nil || *inputID == "" || *outputID == "" {
-		flag.Usage()
-		return
-	}
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		dbg.Chk.NoError(err, "Can't create cpu profile file.")
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
-	rootDataStore := datas.NewDataStore(cs, cs.(chunks.RootTracker))
-	inputDataset := dataset.NewDataset(rootDataStore, *inputID)
-	outputDataset := dataset.NewDataset(rootDataStore, *outputID)
-
+func getIndex(input types.List) types.Map {
 	// Walk through the list in inputDataset and basically switch
 	// on the top-level key to know if it's an inning or a pitcher.
-	l := inputDataset.Roots().Any().Value().(types.List)
 	pitchCounts := types.NewMap()
 	pitchers := types.NewMap()
-	for i := uint64(0); i < l.Len(); i++ {
-		m := l.Get(i).(types.Map)
+	for i := uint64(0); i < input.Len(); i++ {
+		m := input.Get(i).(types.Map)
 		if key := types.NewString("inning"); m.Has(key) {
-			for idStr, p := range getPitchesByPitcherForInning(m.Get(key).(types.Map)) {
+			for idStr, p := range processInning(m.Get(key).(types.Map)) {
 				id := types.NewString(idStr)
 				pitches := NewPitchList()
 				if pitchCounts.Has(id) {
@@ -138,6 +118,33 @@ func main() {
 		}
 		return
 	})
+
+	return namedPitchCounts
+}
+
+func main() {
+	csFlags := chunks.NewFlags()
+	flag.Parse()
+
+	cs := csFlags.CreateStore()
+	if cs == nil || *inputID == "" || *outputID == "" {
+		flag.Usage()
+		return
+	}
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		dbg.Chk.NoError(err, "Can't create cpu profile file.")
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
+	rootDataStore := datas.NewDataStore(cs, cs.(chunks.RootTracker))
+	inputDataset := dataset.NewDataset(rootDataStore, *inputID)
+	outputDataset := dataset.NewDataset(rootDataStore, *outputID)
+
+	input := inputDataset.Roots().Any().Value().(types.List)
+	output := getIndex(input)
+
 	outputDataset.Commit(datas.NewRootSet().Insert(
-		datas.NewRoot().SetParents(outputDataset.Roots().NomsValue()).SetValue(namedPitchCounts)))
+		datas.NewRoot().SetParents(outputDataset.Roots().NomsValue()).SetValue(output)))
 }
