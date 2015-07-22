@@ -11,7 +11,11 @@ noms.getDataset('mlb/heatmap').then(function(s) {
 });
 
 function getPitchers(datasetRoot) {
-  return datasetRoot.first().get('value')
+  return datasetRoot.deref().then((root) => {
+    return root.first().deref();
+  }).then((map) =>{
+    return map.get('value').deref();
+  });
 }
 
 var Pitcher = React.createClass({

@@ -20,7 +20,30 @@ var Map = React.createClass({
     points: React.PropTypes.object.isRequired,
   },
 
+  loadIfNeeded() {
+    if (this.state.loaded) {
+      return;
+    }
+
+    this.props.points.deref().then((list) => {
+      return Promise.all(list.map(p => p.deref()))
+    }).then((points) => {
+      this.setState({
+        points: points,
+        loaded: true
+      });
+    });
+  },
+
+  getInitialState() {
+    return {
+      loaded: false,
+      points: null
+    };
+  },
+
   render() {
+    this.loadIfNeeded();
     var points = this.getPoints();
     var fillStyle = {
       bottom: 0,
@@ -43,7 +66,11 @@ var Map = React.createClass({
   },
 
   getPoints: function() {
-    return this.props.points.map(function(p) {
+    if (!this.state.loaded) {
+      return [];
+    }
+
+    return this.state.points.map((p) => {
       var w = 2;
       var h = 2;
       var x = - w / 2 + ORIGIN_X_PIXELS + feetToPixels(p.get('X'));
@@ -58,7 +85,7 @@ var Map = React.createClass({
           boxShadow: '0px 0px 16px 16px rgba(0,255,0,0.4)',
           borderRadius: '50%',
         } }/>;
-    }, this).toArray();
+    });
   },
 });
 

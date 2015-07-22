@@ -6,6 +6,7 @@ module.exports = {
   getDataset: store.getDataset,
   getChunk: store.getChunk,
   readValue: decode.readValue,
-  getRef: decode.getRef
+  getRef: decode.getRef,
+  Ref: decode.Ref
 };
 

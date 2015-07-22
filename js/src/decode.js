@@ -2,44 +2,79 @@
 
 var Immutable = require('immutable');
 
-var refMapping = new WeakMap();
+var isRef = {};
+
+class Ref{
+  constructor(ref, fetchFn) {
+    this._isRef = isRef;
+    this.ref = ref;
+    this._fetch = fetchFn;
+    this._promise = null;
+  }
+
+  deref() {
+    if (this._promise === null) {
+      this._promise = recursiveRef(this);
+    }
+
+    return this._promise;
+  }
+
+  // BUG 88 (instance of is failing in dev build)
+  static isRef(ref) {
+    return ref && ref._isRef === isRef;
+  }
+}
+
+function recursiveRef(ref) {
+  if (Ref.isRef(ref)) {
+    return ref._fetch().then(recursiveRef);
+  }
+
+  return Promise.resolve(ref);
+}
 
 function decodeMap(input, ref, getChunk) {
-  return Promise.all(input.map((value) => {
-    return decodeValue(value, ref, getChunk);
-  })).then((values) => {
-    var pairs = [];
-    for (var i = 0; i < input.length; i += 2) {
-      pairs.push([values[i], values[i+1]]);
-    }
-    var value = Immutable.Map(pairs);
-    refMapping.set(value, ref);
-    return value;
+  return new Ref(ref, () => {
+    return Promise.all(input.map((value) => {
+      return decodeValue(value, ref, getChunk);
+    })).then((values) => {
+      var pairs = [];
+      for (var i = 0; i < input.length; i += 2) {
+        pairs.push([values[i], values[i+1]]);
+      }
+      var value = Immutable.Map(pairs);
+      return value;
+    });
   });
 }
 
 function decodeList(input, ref, getChunk) {
-  return Promise.all(input.map((value) => {
-    return decodeValue(value, ref, getChunk);
-  })).then((values) => {
-    var value = Immutable.List(values);
-    refMapping.set(value, ref);
-    return value;
+  return new Ref(ref, () => {
+    return Promise.all(input.map((value) => {
+      return decodeValue(value, ref, getChunk);
+    })).then((values) => {
+      var value = Immutable.List(values);
+      return value;
+    });
   });
 }
 
 function decodeSet(input, ref, getChunk) {
-  return Promise.all(input.map((value) => {
-    return decodeValue(value, ref, getChunk);
-  })).then((values) => {
-    var value = Immutable.Set(values);
-    refMapping.set(value, ref);
-    return value;
+  return new Ref(ref, () => {
+    return Promise.all(input.map((value) => {
+      return decodeValue(value, ref, getChunk);
+    })).then((values) => {
+      var value = Immutable.Set(values);
+      return value;
+    });
   });
 }
 
 function decodeRef(ref, _, getChunk) {
-  return readValue(ref, getChunk);
+  return new Ref(ref, () => {
+    return readValue(ref, getChunk);
+  });
 }
 
 function decodeInt(value) {
@@ -106,11 +141,7 @@ function readValue(ref, getChunk) {
   });
 }
 
-function getRef(value) {
-  return typeof value !== 'object' ? undefined : refMapping.get(value);
-}
-
 module.exports = {
   readValue: readValue,
-  getRef: getRef,
+  Ref: Ref
 };

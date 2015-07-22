@@ -19,6 +19,5 @@ http://gd2.mlb.com/components/game/mlb/year_2015/month_05/day_12/gid_2015_05_12_
 
 <noms>/clients/xml_importer/xml_importer --file-store=/tmp/mlb_data --dataset-id=mlb/xml  gd2.mlb.com/
 
-<noms>/clients/pitchmap/index/index --file-store=/tmp/mlb_data --input-dataset-id=mlb/xml
---output-dataset-id=mlb/heatmap
+<noms>/clients/pitchmap/index/index --file-store=/tmp/mlb_data --input-dataset-id=mlb/xml --output-dataset-id=mlb/heatmap
 ```
