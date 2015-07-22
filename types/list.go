@@ -84,3 +84,7 @@ func (l List) Equals(other Value) bool {
 		return l.Ref() == other.Ref()
 	}
 }
+
+func ListFromVal(v Value) List {
+	return v.(List)
+}

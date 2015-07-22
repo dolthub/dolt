@@ -35,12 +35,12 @@ func (s {{.StructName}}) Len() uint64 {
 }
 
 func (s {{.StructName}}) Has(p {{.ElemName}}) bool {
-	return s.s.Has(p.NomsValue())
+	return s.s.Has(p{{toVal .ElemName}})
 }
 
 func (s {{.StructName}}) Iter(cb {{.StructName}}IterCallback) {
 	s.s.Iter(func(v types.Value) bool {
-		return cb({{.ElemName}}FromVal(v))
+		return cb({{fromVal .ElemName}}(v))
 	})
 }
 
@@ -61,7 +61,7 @@ func (s {{.StructName}}) Subtract(others ...{{.StructName}}) {{.StructName}} {
 }
 
 func (s {{.StructName}}) Any() {{.ElemName}} {
-	return {{.ElemName}}FromVal(s.s.Any())
+	return {{fromVal .ElemName}}(s.s.Any())
 }
 
 func (s {{.StructName}}) fromStructSlice(p []{{.StructName}}) []types.Set {
@@ -75,7 +75,7 @@ func (s {{.StructName}}) fromStructSlice(p []{{.StructName}}) []types.Set {
 func (s {{.StructName}}) fromElemSlice(p []{{.ElemName}}) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
-		r[i] = v.NomsValue()
+		r[i] = v{{toVal .ElemName}}
 	}
 	return r
 }

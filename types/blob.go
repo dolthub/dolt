@@ -35,3 +35,7 @@ func (fb Blob) Equals(other Value) bool {
 func NewBlob(data []byte) Blob {
 	return Blob{data, &ref.Ref{}}
 }
+
+func BlobFromVal(v Value) Blob {
+	return v.(Blob)
+}

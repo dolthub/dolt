@@ -116,17 +116,20 @@ func (s Dataset) Equals(p Dataset) bool {
 func (s Dataset) Ref() ref.Ref {
 	return s.m.Ref()
 }
+
 func (s Dataset) Id() types.String {
-	return s.m.Get(types.NewString("id")).(types.String)
+	return types.StringFromVal(s.m.Get(types.NewString("id")))
 }
 
 func (s Dataset) SetId(p types.String) Dataset {
 	return DatasetFromVal(s.m.Set(types.NewString("id"), p))
 }
+
 func (s Dataset) Root() types.Value {
-	return s.m.Get(types.NewString("root")).(types.Value)
+	return (s.m.Get(types.NewString("root")))
 }
 
 func (s Dataset) SetRoot(p types.Value) Dataset {
 	return DatasetFromVal(s.m.Set(types.NewString("root"), p))
 }
+
