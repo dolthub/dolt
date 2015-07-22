@@ -76,6 +76,66 @@ func (l PitchList) fromElemSlice(p []Pitch) []types.Value {
 	return r
 }
 
+// StringStringMap
+
+type StringStringMap struct {
+	m types.Map
+}
+
+type StringStringMapIterCallback (func(k types.String, v types.String) (stop bool))
+
+func NewStringStringMap() StringStringMap {
+	return StringStringMap{types.NewMap()}
+}
+
+func StringStringMapFromVal(p types.Value) StringStringMap {
+	return StringStringMap{p.(types.Map)}
+}
+
+func (m StringStringMap) NomsValue() types.Map {
+	return m.m
+}
+
+func (m StringStringMap) Equals(p StringStringMap) bool {
+	return m.m.Equals(p.m)
+}
+
+func (m StringStringMap) Ref() ref.Ref {
+	return m.m.Ref()
+}
+
+func (m StringStringMap) Empty() bool {
+	return m.m.Empty()
+}
+
+func (m StringStringMap) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m StringStringMap) Has(p types.String) bool {
+	return m.m.Has(p)
+}
+
+func (m StringStringMap) Get(p types.String) types.String {
+	return types.StringFromVal(m.m.Get(p))
+}
+
+func (m StringStringMap) Set(k types.String, v types.String) StringStringMap {
+	return StringStringMapFromVal(m.m.Set(k, v))
+}
+
+// TODO: Implement SetM?
+
+func (m StringStringMap) Remove(p types.String) StringStringMap {
+	return StringStringMapFromVal(m.m.Remove(p))
+}
+
+func (m StringStringMap) Iter(cb StringStringMapIterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(types.StringFromVal(k), types.StringFromVal(v))
+	})
+}
+
 // Pitch
 
 type Pitch struct {
@@ -117,5 +177,65 @@ func (s Pitch) X() types.Float64 {
 
 func (s Pitch) SetX(p types.Float64) Pitch {
 	return PitchFromVal(s.m.Set(types.NewString("X"), p))
+}
+
+// StringPitchListMap
+
+type StringPitchListMap struct {
+	m types.Map
+}
+
+type StringPitchListMapIterCallback (func(k types.String, v PitchList) (stop bool))
+
+func NewStringPitchListMap() StringPitchListMap {
+	return StringPitchListMap{types.NewMap()}
+}
+
+func StringPitchListMapFromVal(p types.Value) StringPitchListMap {
+	return StringPitchListMap{p.(types.Map)}
+}
+
+func (m StringPitchListMap) NomsValue() types.Map {
+	return m.m
+}
+
+func (m StringPitchListMap) Equals(p StringPitchListMap) bool {
+	return m.m.Equals(p.m)
+}
+
+func (m StringPitchListMap) Ref() ref.Ref {
+	return m.m.Ref()
+}
+
+func (m StringPitchListMap) Empty() bool {
+	return m.m.Empty()
+}
+
+func (m StringPitchListMap) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m StringPitchListMap) Has(p types.String) bool {
+	return m.m.Has(p)
+}
+
+func (m StringPitchListMap) Get(p types.String) PitchList {
+	return PitchListFromVal(m.m.Get(p))
+}
+
+func (m StringPitchListMap) Set(k types.String, v PitchList) StringPitchListMap {
+	return StringPitchListMapFromVal(m.m.Set(k, v.NomsValue()))
+}
+
+// TODO: Implement SetM?
+
+func (m StringPitchListMap) Remove(p types.String) StringPitchListMap {
+	return StringPitchListMapFromVal(m.m.Remove(p))
+}
+
+func (m StringPitchListMap) Iter(cb StringPitchListMapIterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(types.StringFromVal(k), PitchListFromVal(v))
+	})
 }
 

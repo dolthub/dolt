@@ -30,9 +30,21 @@ func main() {
 		types.NewString("elem"), pitch,
 	)
 
+	stringPitchListMap := types.NewMap(
+		types.NewString("$type"), types.NewString("noms.MapDef"),
+		types.NewString("key"), types.NewString("string"),
+		types.NewString("value"), pitchList,
+	)
+
+	stringStringMap := types.NewMap(
+		types.NewString("$type"), types.NewString("noms.MapDef"),
+		types.NewString("key"), types.NewString("string"),
+		types.NewString("value"), types.NewString("string"),
+	)
+
 	f, err := os.OpenFile(*outFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	defer f.Close()
 	dbg.Chk.NoError(err)
 	ng := nomgen.New(f)
-	ng.WriteGo(pitchList, "main")
+	ng.WriteGo("main", pitch, pitchList, stringPitchListMap, stringStringMap)
 }
