@@ -60,7 +60,10 @@ func (fm Map) Remove(k Value) Map {
 		return fm
 	}
 
-	return newMapFromData(append(fm.m[:idx], fm.m[idx+1:]...), fm.cs)
+	m := make(mapData, len(fm.m) - 1)
+	copy(m, fm.m[:idx])
+	copy(m[idx:], fm.m[idx+1:])
+	return newMapFromData(m, fm.cs)
 }
 
 type mapIterCallback func(key, value Value) bool
@@ -107,15 +110,19 @@ func buildMapData(oldData mapData, futures []future) mapData {
 	for i := 0; i < len(futures); i += 2 {
 		k := futures[i]
 		v := futures[i+1]
-		e := mapEntry{k, v}
 		idx := indexMapData(m, k.Ref())
-		if idx != len(m) && futuresEqual(m[idx].key, k) {
-			m[idx] = e
-		} else {
-			m = append(m, e)
+		if idx < len(m) && futuresEqual(m[idx].key, k) {
+			if !futuresEqual(m[idx].value, v) {
+				m[idx] = mapEntry{k, v}
+			}
+			continue
 		}
+
+		// TODO: These repeated copies suck. We're not allocating more memory (because we made the slice with the correct capacity to begin with above - yay!), but still, this is more work than necessary. Perhaps we should use an actual BST for the in-memory state, rather than a flat list.
+		m = append(m, mapEntry{})
+		copy(m[idx+1:], m[idx:])
+		m[idx] = mapEntry{k, v}
 	}
-	sort.Sort(m)
 	return m
 }
 
@@ -123,16 +130,4 @@ func indexMapData(m mapData, r ref.Ref) int {
 	return sort.Search(len(m), func(i int) bool {
 		return !ref.Less(m[i].key.Ref(), r)
 	})
-}
-
-func (md mapData) Len() int {
-	return len(md)
-}
-
-func (md mapData) Less(i, j int) bool {
-	return ref.Less(md[i].key.Ref(), md[j].key.Ref())
-}
-
-func (md mapData) Swap(i, j int) {
-	md[i], md[j] = md[j], md[i]
 }
