@@ -15,12 +15,12 @@ type Dataset struct {
 	datas.DataStore
 }
 
-func NewDataset(rootStore datas.DataStore, datasetID string) Dataset {
-	return Dataset{datas.NewDataStore(rootStore, &datasetRootTracker{rootStore, datasetID})}
+func NewDataset(parentStore datas.DataStore, datasetID string) Dataset {
+	return Dataset{datas.NewDataStore(parentStore, &datasetRootTracker{parentStore, datasetID})}
 }
 
-func (ds *Dataset) Commit(newRoots datas.RootSet) Dataset {
-	return Dataset{ds.DataStore.Commit(newRoots)}
+func (ds *Dataset) Commit(newCommits datas.CommitSet) Dataset {
+	return Dataset{ds.DataStore.Commit(newCommits)}
 }
 
 type datasetFlags struct {
@@ -45,20 +45,20 @@ func (f datasetFlags) CreateDataset() *Dataset {
 	}
 
 	// Blech, kinda sucks to typecast to RootTracker, but we know that all the implementations of ChunkStore that implement it.
-	rootDataStore := datas.NewDataStore(cs, cs.(chunks.RootTracker))
+	commitDataStore := datas.NewDataStore(cs, cs.(chunks.RootTracker))
 
-	ds := NewDataset(rootDataStore, *f.datasetID)
+	ds := NewDataset(commitDataStore, *f.datasetID)
 	return &ds
 }
 
 // TODO: Move to separate file
 type datasetRootTracker struct {
-	rootStore datas.DataStore
-	datasetID string
+	parentStore datas.DataStore
+	datasetID   string
 }
 
 func (rt *datasetRootTracker) Root() ref.Ref {
-	dataset := mgmt.GetDatasetRoot(mgmt.GetDatasets(rt.rootStore), rt.datasetID)
+	dataset := mgmt.GetDatasetRoot(mgmt.GetDatasets(rt.parentStore), rt.datasetID)
 	if dataset == nil {
 		return ref.Ref{}
 	} else {
@@ -71,7 +71,7 @@ func (rt *datasetRootTracker) UpdateRoot(current, last ref.Ref) bool {
 		return false
 	}
 
-	datasetRoot := types.MustReadValue(current, rt.rootStore)
-	rt.rootStore = mgmt.CommitDatasets(rt.rootStore, mgmt.SetDatasetRoot(mgmt.GetDatasets(rt.rootStore), rt.datasetID, datasetRoot))
+	datasetCommit := types.MustReadValue(current, rt.parentStore)
+	rt.parentStore = mgmt.CommitDatasets(rt.parentStore, mgmt.SetDatasetRoot(mgmt.GetDatasets(rt.parentStore), rt.datasetID, datasetCommit))
 	return true
 }

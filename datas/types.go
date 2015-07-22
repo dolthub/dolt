@@ -8,73 +8,73 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-// RootSet
+// CommitSet
 
-type RootSet struct {
+type CommitSet struct {
 	s types.Set
 }
 
-type RootSetIterCallback (func(p Root) (stop bool))
+type CommitSetIterCallback (func(p Commit) (stop bool))
 
-func NewRootSet() RootSet {
-	return RootSet{types.NewSet()}
+func NewCommitSet() CommitSet {
+	return CommitSet{types.NewSet()}
 }
 
-func RootSetFromVal(p types.Value) RootSet {
-	return RootSet{p.(types.Set)}
+func CommitSetFromVal(p types.Value) CommitSet {
+	return CommitSet{p.(types.Set)}
 }
 
-func (s RootSet) NomsValue() types.Set {
+func (s CommitSet) NomsValue() types.Set {
 	return s.s
 }
 
-func (s RootSet) Equals(p RootSet) bool {
+func (s CommitSet) Equals(p CommitSet) bool {
 	return s.s.Equals(p.s)
 }
 
-func (s RootSet) Ref() ref.Ref {
+func (s CommitSet) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s RootSet) Empty() bool {
+func (s CommitSet) Empty() bool {
 	return s.s.Empty()
 }
 
-func (s RootSet) Len() uint64 {
+func (s CommitSet) Len() uint64 {
 	return s.s.Len()
 }
 
-func (s RootSet) Has(p Root) bool {
+func (s CommitSet) Has(p Commit) bool {
 	return s.s.Has(p.NomsValue())
 }
 
-func (s RootSet) Iter(cb RootSetIterCallback) {
+func (s CommitSet) Iter(cb CommitSetIterCallback) {
 	s.s.Iter(func(v types.Value) bool {
-		return cb(RootFromVal(v))
+		return cb(CommitFromVal(v))
 	})
 }
 
-func (s RootSet) Insert(p ...Root) RootSet {
-	return RootSet{s.s.Insert(s.fromElemSlice(p)...)}
+func (s CommitSet) Insert(p ...Commit) CommitSet {
+	return CommitSet{s.s.Insert(s.fromElemSlice(p)...)}
 }
 
-func (s RootSet) Remove(p ...Root) RootSet {
-	return RootSet{s.s.Remove(s.fromElemSlice(p)...)}
+func (s CommitSet) Remove(p ...Commit) CommitSet {
+	return CommitSet{s.s.Remove(s.fromElemSlice(p)...)}
 }
 
-func (s RootSet) Union(others ...RootSet) RootSet {
-	return RootSet{s.s.Union(s.fromStructSlice(others)...)}
+func (s CommitSet) Union(others ...CommitSet) CommitSet {
+	return CommitSet{s.s.Union(s.fromStructSlice(others)...)}
 }
 
-func (s RootSet) Subtract(others ...RootSet) RootSet {
-	return RootSet{s.s.Subtract(s.fromStructSlice(others)...)}
+func (s CommitSet) Subtract(others ...CommitSet) CommitSet {
+	return CommitSet{s.s.Subtract(s.fromStructSlice(others)...)}
 }
 
-func (s RootSet) Any() Root {
-	return RootFromVal(s.s.Any())
+func (s CommitSet) Any() Commit {
+	return CommitFromVal(s.s.Any())
 }
 
-func (s RootSet) fromStructSlice(p []RootSet) []types.Set {
+func (s CommitSet) fromStructSlice(p []CommitSet) []types.Set {
 	r := make([]types.Set, len(p))
 	for i, v := range p {
 		r[i] = v.s
@@ -82,7 +82,7 @@ func (s RootSet) fromStructSlice(p []RootSet) []types.Set {
 	return r
 }
 
-func (s RootSet) fromElemSlice(p []Root) []types.Value {
+func (s CommitSet) fromElemSlice(p []Commit) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
 		r[i] = v.NomsValue()
@@ -90,46 +90,46 @@ func (s RootSet) fromElemSlice(p []Root) []types.Value {
 	return r
 }
 
-// Root
+// Commit
 
-type Root struct {
+type Commit struct {
 	m types.Map
 }
 
-func NewRoot() Root {
-	return Root{types.NewMap()}
+func NewCommit() Commit {
+	return Commit{types.NewMap()}
 }
 
-func RootFromVal(v types.Value) Root {
-	return Root{v.(types.Map)}
+func CommitFromVal(v types.Value) Commit {
+	return Commit{v.(types.Map)}
 }
 
 // TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
-func (s Root) NomsValue() types.Map {
+func (s Commit) NomsValue() types.Map {
 	return s.m
 }
 
-func (s Root) Equals(p Root) bool {
+func (s Commit) Equals(p Commit) bool {
 	return s.m.Equals(p.m)
 }
 
-func (s Root) Ref() ref.Ref {
+func (s Commit) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Root) Parents() types.Set {
+func (s Commit) Parents() types.Set {
 	return types.SetFromVal(s.m.Get(types.NewString("parents")))
 }
 
-func (s Root) SetParents(p types.Set) Root {
-	return RootFromVal(s.m.Set(types.NewString("parents"), p))
+func (s Commit) SetParents(p types.Set) Commit {
+	return CommitFromVal(s.m.Set(types.NewString("parents"), p))
 }
 
-func (s Root) Value() types.Value {
+func (s Commit) Value() types.Value {
 	return (s.m.Get(types.NewString("value")))
 }
 
-func (s Root) SetValue(p types.Value) Root {
-	return RootFromVal(s.m.Set(types.NewString("value"), p))
+func (s Commit) SetValue(p types.Value) Commit {
+	return CommitFromVal(s.m.Set(types.NewString("value"), p))
 }
 

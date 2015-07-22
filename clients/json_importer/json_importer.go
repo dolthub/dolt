@@ -40,13 +40,13 @@ func main() {
 		log.Fatalln("Error decoding JSON: ", err)
 	}
 
-	roots := ds.Roots()
+	commits := ds.Heads()
 
 	value := util.NomsValueFromDecodedJSON(jsonObject)
 
-	ds.Commit(datas.NewRootSet().Insert(
-		datas.NewRoot().SetParents(
-			roots.NomsValue()).SetValue(
+	ds.Commit(datas.NewCommitSet().Insert(
+		datas.NewCommit().SetParents(
+			commits.NomsValue()).SetValue(
 			value)))
 
 }

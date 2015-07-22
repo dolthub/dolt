@@ -11,95 +11,95 @@ type DataStore struct {
 	chunks.ChunkStore
 
 	rt    chunks.RootTracker
-	rc    *rootCache
-	roots RootSet
+	rc    *commitCache
+	heads CommitSet
 }
 
 func NewDataStore(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
-	return newDataStoreInternal(cs, rt, NewRootCache(cs))
+	return newDataStoreInternal(cs, rt, NewCommitCache(cs))
 }
 
-func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, rc *rootCache) DataStore {
+func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, rc *commitCache) DataStore {
 	return DataStore{
-		cs, rt, rc, rootSetFromRef(rt.Root(), cs),
+		cs, rt, rc, commitSetFromRef(rt.Root(), cs),
 	}
 }
 
-func rootSetFromRef(rootRef ref.Ref, cs chunks.ChunkSource) RootSet {
-	var roots RootSet
-	if (rootRef == ref.Ref{}) {
-		roots = NewRootSet()
+func commitSetFromRef(commitRef ref.Ref, cs chunks.ChunkSource) CommitSet {
+	var commits CommitSet
+	if (commitRef == ref.Ref{}) {
+		commits = NewCommitSet()
 	} else {
-		roots = RootSetFromVal(types.MustReadValue(rootRef, cs).(types.Set))
+		commits = CommitSetFromVal(types.MustReadValue(commitRef, cs).(types.Set))
 	}
 
-	return roots
+	return commits
 }
 
-func (ds *DataStore) Roots() RootSet {
-	return ds.roots
+func (ds *DataStore) Heads() CommitSet {
+	return ds.heads
 }
 
-func (ds *DataStore) Commit(newRoots RootSet) DataStore {
-	Chk.True(newRoots.Len() > 0)
+func (ds *DataStore) Commit(newCommits CommitSet) DataStore {
+	Chk.True(newCommits.Len() > 0)
 	// TODO: We probably shouldn't let this go *forever*. Considrer putting a limit and... I know don't...panicing?
-	for !ds.doCommit(newRoots) {
+	for !ds.doCommit(newCommits) {
 	}
 	return newDataStoreInternal(ds.ChunkStore, ds.rt, ds.rc)
 }
 
-// doCommit manages concurrent access the single logical piece of mutable state: the current root (rootSet). doCommit is optimistic in that it is attempting to create a new root making the assumption that currentRootRef is the existing root. The call to UpdateRoot below will fail if that assumption fails (e.g. because of a race with another writer) and the entire algorigthm must be tried again.
-func (ds *DataStore) doCommit(roots RootSet) bool {
-	Chk.True(roots.Len() > 0)
+// doCommit manages concurrent access the single logical piece of mutable state: the set of current heads. doCommit is optimistic in that it is attempting to update heads making the assumption that currentRootRef is the ref of the current heads. The call to UpdateRoot below will fail if that assumption fails (e.g. because of a race with another writer) and the entire algorigthm must be tried again.
+func (ds *DataStore) doCommit(commits CommitSet) bool {
+	Chk.True(commits.Len() > 0)
 
 	currentRootRef := ds.rt.Root()
 
-	// Note: |currentRoots| may be different from |ds.roots| and *must* be consistent with |currentRootRef|.
-	var currentRoots RootSet
-	if currentRootRef == ds.roots.Ref() {
-		currentRoots = ds.roots
+	// Note: |currentHeads| may be different from |ds.heads| and *must* be consistent with |currentCommitRef|.
+	var currentHeads CommitSet
+	if currentRootRef == ds.heads.Ref() {
+		currentHeads = ds.heads
 	} else {
-		currentRoots = rootSetFromRef(currentRootRef, ds)
+		currentHeads = commitSetFromRef(currentRootRef, ds)
 	}
 
-	newRoots := roots.Union(currentRoots)
+	newHeads := commits.Union(currentHeads)
 
-	roots.Iter(func(root Root) (stop bool) {
-		if ds.isPrexisting(root, currentRoots) {
-			newRoots = newRoots.Remove(root)
+	commits.Iter(func(commit Commit) (stop bool) {
+		if ds.isPrexisting(commit, currentHeads) {
+			newHeads = newHeads.Remove(commit)
 		} else {
-			newRoots = RootSetFromVal(newRoots.NomsValue().Subtract(root.Parents()))
+			newHeads = CommitSetFromVal(newHeads.NomsValue().Subtract(commit.Parents()))
 		}
 
 		return
 	})
 
-	if newRoots.Len() == 0 || newRoots.Equals(currentRoots) {
+	if newHeads.Len() == 0 || newHeads.Equals(currentHeads) {
 		return true
 	}
 
-	// TODO: This set will be orphaned if this UpdateRoot below fails
-	newRootRef, err := types.WriteValue(newRoots.NomsValue(), ds)
+	// TODO: This set will be orphaned if this UpdateCommit below fails
+	newRootRef, err := types.WriteValue(newHeads.NomsValue(), ds)
 	Chk.NoError(err)
 
 	return ds.rt.UpdateRoot(newRootRef, currentRootRef)
 }
 
-func (ds *DataStore) isPrexisting(root Root, currentRoots RootSet) bool {
-	if currentRoots.Has(root) {
+func (ds *DataStore) isPrexisting(commit Commit, currentHeads CommitSet) bool {
+	if currentHeads.Has(commit) {
 		return true
 	}
 
-	// If a new root directly superceeds an existing current root, it can't have already been committed because its hash would be uncomputable.
-	superceedsCurrentRoot := false
-	root.Parents().Iter(func(parent types.Value) (stop bool) {
-		superceedsCurrentRoot = currentRoots.Has(RootFromVal(parent))
-		return superceedsCurrentRoot
+	// If a new commit directly superceeds an existing current commit, it can't have already been committed because its hash would be uncomputable.
+	superceedsCurrentCommit := false
+	commit.Parents().Iter(func(parent types.Value) (stop bool) {
+		superceedsCurrentCommit = currentHeads.Has(CommitFromVal(parent))
+		return superceedsCurrentCommit
 	})
-	if superceedsCurrentRoot {
+	if superceedsCurrentCommit {
 		return false
 	}
 
-	ds.rc.Update(currentRoots)
-	return ds.rc.Contains(root.Ref())
+	ds.rc.Update(currentHeads)
+	return ds.rc.Contains(commit.Ref())
 }

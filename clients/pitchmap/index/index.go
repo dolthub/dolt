@@ -138,13 +138,13 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	rootDataStore := datas.NewDataStore(cs, cs.(chunks.RootTracker))
-	inputDataset := dataset.NewDataset(rootDataStore, *inputID)
-	outputDataset := dataset.NewDataset(rootDataStore, *outputID)
+	dataStore := datas.NewDataStore(cs, cs.(chunks.RootTracker))
+	inputDataset := dataset.NewDataset(dataStore, *inputID)
+	outputDataset := dataset.NewDataset(dataStore, *outputID)
 
-	input := inputDataset.Roots().Any().Value().(types.List)
+	input := inputDataset.Heads().Any().Value().(types.List)
 	output := getIndex(input)
 
-	outputDataset.Commit(datas.NewRootSet().Insert(
-		datas.NewRoot().SetParents(outputDataset.Roots().NomsValue()).SetValue(output)))
+	outputDataset.Commit(datas.NewCommitSet().Insert(
+		datas.NewCommit().SetParents(outputDataset.Heads().NomsValue()).SetValue(output)))
 }
