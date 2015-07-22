@@ -18,23 +18,34 @@ function getPitchers(datasetRoot) {
   });
 }
 
-var Pitcher = React.createClass({
-  render() {
-    return <li>
-      {this.props.name}
-      <Map points={this.props.locations}/>
-    </li>;
-  }
-});
-
 var PitcherList = React.createClass({
+  getInitialState() {
+    var pitchers = this.props.data.map((v, key) => key).toArray();
+    pitchers.sort();
+
+    return {
+      currentPitcher: pitchers[0],
+      pitchers: pitchers
+    };
+  },
+
+  onChangePitcher(e) {
+    this.setState({ currentPitcher: e.target.value });
+  },
+
   render() {
-    var data = this.props.data;
-    return <ul>{
-      this.props.data.map(function(v, key) {
-        return <Pitcher name={key} key={key} locations={v}/>;
-      }).toArray()
-    }</ul>;
+    var currentPitcher = this.state.currentPitcher;
+    var locations = this.props.data.get(currentPitcher);
+
+    return <div>
+      <select onChange={this.onChangePitcher} defaultValue={currentPitcher}>{
+        this.state.pitchers.map((pitcher) => {
+          var isCurrent = currentPitcher === pitcher;
+          return <option key={pitcher} value={pitcher}>{pitcher}</option>
+        })
+      }</select>
+      <Map key={currentPitcher} points={locations}/>
+    </div>
   }
 });
 
