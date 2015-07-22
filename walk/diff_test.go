@@ -7,16 +7,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDiff(t *testing.T) {
+func TestGetReachabilitySetDiff(t *testing.T) {
 	assert := assert.New(t)
 
 	// {"string": "string",
-	//  "list": [false true],
 	//  "map": {"nested": "string"}
 	//  "mtlist": []
-	//  "set": [5 7 8]
 	// }
-	from := types.NewMap(
+	small := types.NewMap(
 		types.NewString("string"), types.NewString("string"),
 		types.NewString("map"), types.NewMap(types.NewString("nested"), types.NewString("string")),
 		types.NewString("mtlist"), types.NewList())
@@ -24,10 +22,10 @@ func TestDiff(t *testing.T) {
 	setKey := types.NewString("set")
 	setElem := types.Int32(7)
 	setVal := types.NewSet(setElem)
-	to := from.Set(setKey, setVal)
+	big := small.Set(setKey, setVal)
 
 	var hashes []string
-	for _, r := range Diff(from, to) {
+	for _, r := range GetReachabilitySetDiff(small, big) {
 		hashes = append(hashes, r.String())
 	}
 
@@ -35,5 +33,5 @@ func TestDiff(t *testing.T) {
 	assert.Contains(hashes, setElem.Ref().String())
 	assert.Contains(hashes, setVal.Ref().String())
 
-	assert.Empty(Diff(from, from))
+	assert.Empty(GetReachabilitySetDiff(small, small))
 }

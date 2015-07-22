@@ -5,14 +5,14 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-// Diff returns the hashes of the chunks reachable from 'to' that cannot be reached from 'from'
-func Diff(from, to types.Value) (hashes []ref.Ref) {
-	fromRefs := map[ref.Ref]bool{}
-	WalkAll(from, func(v types.Value) {
-		fromRefs[v.Ref()] = true
+// GetReachabilitySetDiff returns the hashes of the chunks reachable from 'big' that cannot be reached from 'small'
+func GetReachabilitySetDiff(small, big types.Value) (hashes []ref.Ref) {
+	smallRefs := map[ref.Ref]bool{}
+	WalkAll(small, func(v types.Value) {
+		smallRefs[v.Ref()] = true
 	})
-	WalkAll(to, func(v types.Value) {
-		if !fromRefs[v.Ref()] {
+	WalkAll(big, func(v types.Value) {
+		if !smallRefs[v.Ref()] {
 			hashes = append(hashes, v.Ref())
 		}
 	})
