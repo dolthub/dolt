@@ -19,82 +19,82 @@ func TestDataStoreCommit(t *testing.T) {
 	chunks := chunks.NewFileStore(dir, "root")
 	ds := NewDataStore(chunks, chunks)
 
-	roots := ds.Roots()
-	assert.Equal(uint64(0), roots.Len())
+	commits := ds.Heads()
+	assert.Equal(uint64(0), commits.Len())
 
 	// |a|
-	a := NewRoot().SetParents(roots.NomsValue()).SetValue(types.NewString("a"))
-	aSet := NewRootSet().Insert(a)
+	a := NewCommit().SetParents(commits.NomsValue()).SetValue(types.NewString("a"))
+	aSet := NewCommitSet().Insert(a)
 	ds2 := ds.Commit(aSet)
 
-	// The old datastore still still references the old roots.
-	assert.True(ds.Roots().Equals(roots))
+	// The old datastore still still references the old commits.
+	assert.True(ds.Heads().Equals(commits))
 
-	// The new datastore has the new roots.
-	assert.True(ds2.Roots().Equals(aSet))
+	// The new datastore has the new commits.
+	assert.True(ds2.Heads().Equals(aSet))
 	ds = ds2
 
 	// |a| <- |b|
-	b := NewRoot().SetParents(aSet.NomsValue()).SetValue(types.NewString("b"))
-	bSet := NewRootSet().Insert(b)
+	b := NewCommit().SetParents(aSet.NomsValue()).SetValue(types.NewString("b"))
+	bSet := NewCommitSet().Insert(b)
 	ds = ds.Commit(bSet)
-	assert.True(ds.Roots().Equals(bSet))
+	assert.True(ds.Heads().Equals(bSet))
 
 	// |a| <- |b|
 	//   \----|c|
-	c := NewRoot().SetParents(aSet.NomsValue()).SetValue(types.NewString("c"))
-	cSet := NewRootSet().Insert(c)
+	c := NewCommit().SetParents(aSet.NomsValue()).SetValue(types.NewString("c"))
+	cSet := NewCommitSet().Insert(c)
 	ds = ds.Commit(cSet)
 	bcSet := bSet.Insert(c)
-	assert.True(ds.Roots().Equals(bcSet))
+	assert.True(ds.Heads().Equals(bcSet))
 
 	// |a| <- |b|
 	//   \----|c|
 	//    \---|d|
-	d := NewRoot().SetParents(aSet.NomsValue()).SetValue(types.NewString("d"))
-	dSet := NewRootSet().Insert(d)
+	d := NewCommit().SetParents(aSet.NomsValue()).SetValue(types.NewString("d"))
+	dSet := NewCommitSet().Insert(d)
 	types.WriteValue(dSet.NomsValue(), chunks)
 
 	ds = ds.Commit(dSet)
 	bcdSet := bcSet.Insert(d)
-	assert.True(ds.Roots().Equals(bcdSet))
+	assert.True(ds.Heads().Equals(bcdSet))
 
 	// |a| <- |b| <-- |e|
 	//   \----|c| <--/
 	//    \---|d|
-	e := NewRoot().SetParents(bcSet.NomsValue()).SetValue(types.NewString("e"))
-	eSet := NewRootSet().Insert(e)
+	e := NewCommit().SetParents(bcSet.NomsValue()).SetValue(types.NewString("e"))
+	eSet := NewCommitSet().Insert(e)
 	ds = ds.Commit(eSet)
 	deSet := dSet.Insert(e)
-	assert.True(ds.Roots().Equals(deSet))
+	assert.True(ds.Heads().Equals(deSet))
 
 	// |a| <- |b| <-- |e| <- |f|
 	//   \----|c| <--/      /
 	//    \---|d| <-------/
-	f := NewRoot().SetParents(deSet.NomsValue()).SetValue(types.NewString("f"))
-	fSet := NewRootSet().Insert(f)
+	f := NewCommit().SetParents(deSet.NomsValue()).SetValue(types.NewString("f"))
+	fSet := NewCommitSet().Insert(f)
 	ds = ds.Commit(fSet)
-	assert.True(ds.Roots().Equals(fSet))
+	assert.True(ds.Heads().Equals(fSet))
 
 	// Attempt to recommit |b|
 	ds = ds.Commit(bSet)
-	assert.True(ds.Roots().Equals(fSet))
+	assert.True(ds.Heads().Equals(fSet))
 
 	// Attempt to recommit |f|
 	ds = ds.Commit(fSet)
-	assert.True(ds.Roots().Equals(fSet))
+	assert.True(ds.Heads().Equals(fSet))
 
 	// Attempt to recommit |c| while committing |g|
 	// |a| <- |b| <-- |e| <- |f| <- |g|
 	//   \----|c| <--/      /      /
 	//    \---|d| <-------/------/
 	fdSet := fSet.Insert(d)
-	g := NewRoot().SetParents(fdSet.NomsValue()).SetValue(types.NewString("g"))
-	gSet := NewRootSet().Insert(g)
+	g := NewCommit().SetParents(fdSet.NomsValue()).SetValue(types.NewString("g"))
+	gSet := NewCommitSet().Insert(g)
 	gdSet := gSet.Insert(c)
 
 	ds = ds.Commit(gdSet)
-	assert.True(ds.Roots().Equals(gSet))
+	assert.True(ds.Heads().Equals(gSet))
 
 	//      / -|h|
 	//    /    |
@@ -102,12 +102,12 @@ func TestDataStoreCommit(t *testing.T) {
 	//   \----|c| <--/      /      /
 	//    \---|d| <-------/------/
 	abSet := aSet.Insert(b)
-	h := NewRoot().SetParents(abSet.NomsValue()).SetValue(types.NewString("h"))
-	hSet := NewRootSet().Insert(h)
+	h := NewCommit().SetParents(abSet.NomsValue()).SetValue(types.NewString("h"))
+	hSet := NewCommitSet().Insert(h)
 
 	ds = ds.Commit(hSet)
 	hgSet := hSet.Insert(g)
-	assert.True(ds.Roots().Equals(hgSet))
+	assert.True(ds.Heads().Equals(hgSet))
 }
 
 func TestDataStoreConcurrency(t *testing.T) {
@@ -116,20 +116,20 @@ func TestDataStoreConcurrency(t *testing.T) {
 	defer os.Remove(dir)
 	assert.NoError(err)
 
-	chunks := chunks.NewFileStore(dir, "root")
+	chunks := chunks.NewFileStore(dir, "commit")
 	ds := NewDataStore(chunks, chunks)
 
 	// Setup:
 	// |a| <- |b|
 	//   \----|c|
-	a := NewRoot().SetParents(ds.Roots().NomsValue()).SetValue(types.NewString("a"))
-	aSet := NewRootSet().Insert(a)
+	a := NewCommit().SetParents(ds.Heads().NomsValue()).SetValue(types.NewString("a"))
+	aSet := NewCommitSet().Insert(a)
 	ds = ds.Commit(aSet)
-	b := NewRoot().SetParents(aSet.NomsValue()).SetValue(types.NewString("b"))
-	bSet := NewRootSet().Insert(b)
+	b := NewCommit().SetParents(aSet.NomsValue()).SetValue(types.NewString("b"))
+	bSet := NewCommitSet().Insert(b)
 	ds = ds.Commit(bSet)
-	c := NewRoot().SetParents(aSet.NomsValue()).SetValue(types.NewString("c"))
-	cSet := NewRootSet().Insert(c)
+	c := NewCommit().SetParents(aSet.NomsValue()).SetValue(types.NewString("c"))
+	cSet := NewCommitSet().Insert(c)
 	ds = ds.Commit(cSet)
 	bcSet := bSet.Insert(c)
 
@@ -139,21 +139,21 @@ func TestDataStoreConcurrency(t *testing.T) {
 	// Change 1:
 	// |a| <- |b| <- |d|
 	//   \----|c| --/
-	d := NewRoot().SetParents(bcSet.NomsValue()).SetValue(types.NewString("d"))
-	dSet := NewRootSet().Insert(d)
+	d := NewCommit().SetParents(bcSet.NomsValue()).SetValue(types.NewString("d"))
+	dSet := NewCommitSet().Insert(d)
 	types.WriteValue(dSet.NomsValue(), chunks)
 	ds = ds.Commit(dSet)
 
 	// Change 2:
 	// |a| <- |b| <- |e|
 	//   \----|c| --/
-	e := NewRoot().SetParents(bcSet.NomsValue()).SetValue(types.NewString("e"))
-	eSet := NewRootSet().Insert(e)
+	e := NewCommit().SetParents(bcSet.NomsValue()).SetValue(types.NewString("e"))
+	eSet := NewCommitSet().Insert(e)
 	types.WriteValue(eSet.NomsValue(), chunks)
 	ds2 = ds2.Commit(eSet)
 
-	// The chunkstore should have tracked that two conflicting commits happened and both |d| and |e| are now roots
+	// The chunkstore should have tracked that two conflicting commits happened and both |d| and |e| are now commits
 	deSet := dSet.Insert(e)
-	finalRoots := RootSetFromVal(types.MustReadValue(chunks.Root(), chunks).(types.Set))
-	assert.True(finalRoots.Equals(deSet))
+	finalCommits := CommitSetFromVal(types.MustReadValue(chunks.Root(), chunks).(types.Set))
+	assert.True(finalCommits.Equals(deSet))
 }

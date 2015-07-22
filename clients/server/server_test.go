@@ -18,10 +18,10 @@ var datasetID = "testdataset"
 func createTestStore() chunks.ChunkStore {
 	ms := &chunks.MemoryStore{}
 	datasetDs := dataset.NewDataset(datas.NewDataStore(ms, ms), datasetID)
-	datasetRoot := types.NewString("Root value for " + datasetID)
-	datasetDs = datasetDs.Commit(datas.NewRootSet().Insert(
-		datas.NewRoot().SetParents(
-			types.NewSet()).SetValue(datasetRoot)))
+	datasetValue := types.NewString("Value for " + datasetID)
+	datasetDs = datasetDs.Commit(datas.NewCommitSet().Insert(
+		datas.NewCommit().SetParents(
+			types.NewSet()).SetValue(datasetValue)))
 	return ms
 }
 
@@ -62,7 +62,7 @@ func TestGetRef(t *testing.T) {
 	s := server{ms}
 	s.handle(w, req)
 	assert.Equal(w.Code, http.StatusOK)
-	assert.Equal(`j {"set":[{"ref":"sha1-b432c2dd6d7b6e7e163cab2517d1e6221d5d595c"}]}
+	assert.Equal(`j {"set":[{"ref":"sha1-8cd398c860f50a43898e3f95b266b5fdecb4e1e6"}]}
 `, w.Body.String())
 }
 

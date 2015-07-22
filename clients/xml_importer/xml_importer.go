@@ -69,9 +69,9 @@ func main() {
 	noms := util.NomsValueFromDecodedJSON(objects)
 
 	if !*noIO {
-		ds.Commit(datas.NewRootSet().Insert(
-			datas.NewRoot().SetParents(
-				ds.Roots().NomsValue()).SetValue(noms)))
+		ds.Commit(datas.NewCommitSet().Insert(
+			datas.NewCommit().SetParents(
+				ds.Heads().NomsValue()).SetValue(noms)))
 	}
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)

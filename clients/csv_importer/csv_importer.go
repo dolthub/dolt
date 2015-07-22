@@ -59,9 +59,9 @@ func main() {
 		value = value.Append(m)
 	}
 
-	roots := ds.Roots()
-	ds.Commit(datas.NewRootSet().Insert(
-		datas.NewRoot().SetParents(
-			roots.NomsValue()).SetValue(
+	commits := ds.Heads()
+	ds.Commit(datas.NewCommitSet().Insert(
+		datas.NewCommit().SetParents(
+			commits.NomsValue()).SetValue(
 			value)))
 }

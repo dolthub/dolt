@@ -67,9 +67,9 @@ func main() {
 }
 
 func getUser() {
-	roots := ds.Roots()
-	if roots.Len() > uint64(0) {
-		user = UserFromVal(roots.Any().Value())
+	commits := ds.Heads()
+	if commits.Len() > uint64(0) {
+		user = UserFromVal(commits.Any().Value())
 		if checkAuth() {
 			return
 		}
@@ -262,12 +262,12 @@ func awaitOAuthResponse(l *net.TCPListener, tempCred *oauth.Credentials) error {
 }
 
 func commitUser() {
-	roots := ds.Roots()
-	rootSet := datas.NewRootSet().Insert(
-		datas.NewRoot().SetParents(
-			roots.NomsValue()).SetValue(
+	commits := ds.Heads()
+	commitSet := datas.NewCommitSet().Insert(
+		datas.NewCommit().SetParents(
+			commits.NomsValue()).SetValue(
 			user.NomsValue()))
-	ds.Commit(rootSet)
+	ds.Commit(commitSet)
 }
 
 func callFlickrAPI(method string, response interface{}, args *map[string]string) error {

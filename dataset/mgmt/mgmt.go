@@ -8,19 +8,19 @@ import (
 )
 
 func GetDatasets(ds datas.DataStore) DatasetSet {
-	if ds.Roots().Empty() {
+	if ds.Heads().Empty() {
 		return NewDatasetSet()
 	} else {
 		// BUG 13: We don't ever want to branch the datasets database. Currently we can't avoid that, but we should change DataStore::Commit() to support that mode of operation.
-		Chk.EqualValues(1, ds.Roots().Len())
-		return DatasetSetFromVal(ds.Roots().Any().Value())
+		Chk.EqualValues(1, ds.Heads().Len())
+		return DatasetSetFromVal(ds.Heads().Any().Value())
 	}
 }
 
 func CommitDatasets(ds datas.DataStore, datasets DatasetSet) datas.DataStore {
-	return ds.Commit(datas.NewRootSet().Insert(
-		datas.NewRoot().SetParents(
-			ds.Roots().NomsValue()).SetValue(
+	return ds.Commit(datas.NewCommitSet().Insert(
+		datas.NewCommit().SetParents(
+			ds.Heads().NomsValue()).SetValue(
 			datasets.NomsValue())))
 }
 

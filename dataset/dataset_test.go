@@ -9,30 +9,30 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDatasetRootTracker(t *testing.T) {
+func TestDatasetCommitTracker(t *testing.T) {
 	assert := assert.New(t)
 	datasetId1 := "testdataset"
 	datasetId2 := "othertestdataset"
 	ms := &chunks.MemoryStore{}
 
 	datasetDs1 := NewDataset(datas.NewDataStore(ms, ms), datasetId1)
-	datasetRoot1 := types.NewString("Root value for " + datasetId1)
-	datasetDs1 = datasetDs1.Commit(datas.NewRootSet().Insert(
-		datas.NewRoot().SetParents(
-			types.NewSet()).SetValue(datasetRoot1)))
+	datasetCommit1 := types.NewString("Commit value for " + datasetId1)
+	datasetDs1 = datasetDs1.Commit(datas.NewCommitSet().Insert(
+		datas.NewCommit().SetParents(
+			types.NewSet()).SetValue(datasetCommit1)))
 
 	datasetDs2 := NewDataset(datas.NewDataStore(ms, ms), datasetId2)
-	datasetRoot2 := types.NewString("Root value for " + datasetId2)
-	datasetDs2 = datasetDs2.Commit(datas.NewRootSet().Insert(
-		datas.NewRoot().SetParents(
-			types.NewSet()).SetValue(datasetRoot2)))
+	datasetCommit2 := types.NewString("Commit value for " + datasetId2)
+	datasetDs2 = datasetDs2.Commit(datas.NewCommitSet().Insert(
+		datas.NewCommit().SetParents(
+			types.NewSet()).SetValue(datasetCommit2)))
 
-	assert.EqualValues(1, datasetDs2.Roots().Len())
-	assert.EqualValues(1, datasetDs1.Roots().Len())
-	assert.EqualValues(datasetRoot1, datasetDs1.Roots().Any().Value())
-	assert.EqualValues(datasetRoot2, datasetDs2.Roots().Any().Value())
-	assert.False(datasetDs2.Roots().Any().Value().Equals(datasetRoot1))
-	assert.False(datasetDs1.Roots().Any().Value().Equals(datasetRoot2))
+	assert.EqualValues(1, datasetDs2.Heads().Len())
+	assert.EqualValues(1, datasetDs1.Heads().Len())
+	assert.EqualValues(datasetCommit1, datasetDs1.Heads().Any().Value())
+	assert.EqualValues(datasetCommit2, datasetDs2.Heads().Any().Value())
+	assert.False(datasetDs2.Heads().Any().Value().Equals(datasetCommit1))
+	assert.False(datasetDs1.Heads().Any().Value().Equals(datasetCommit2))
 
-	assert.Equal(ms.Root().String(), "sha1-183d248d05e639b41054d76076444991b560cdb2")
+	assert.Equal("sha1-9b9fcfcd7e41ff727e6bea0edfa26f71def178a5", ms.Root().String())
 }

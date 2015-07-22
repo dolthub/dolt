@@ -20,14 +20,14 @@ func main() {
 	}
 
 	lastVal := uint64(0)
-	roots := ds.Roots()
-	if roots.Len() > uint64(0) {
-		lastVal = uint64(roots.Any().Value().(types.UInt64))
+	commits := ds.Heads()
+	if commits.Len() > uint64(0) {
+		lastVal = uint64(commits.Any().Value().(types.UInt64))
 	}
 	newVal := lastVal + 1
-	ds.Commit(datas.NewRootSet().Insert(
-		datas.NewRoot().SetParents(
-			roots.NomsValue()).SetValue(
+	ds.Commit(datas.NewCommitSet().Insert(
+		datas.NewCommit().SetParents(
+			commits.NomsValue()).SetValue(
 			types.UInt64(newVal))))
 
 	fmt.Println(newVal)
