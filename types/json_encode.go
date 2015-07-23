@@ -150,7 +150,7 @@ func getJSONSet(set Set, s chunks.ChunkSink) (r interface{}, err error) {
 	return
 }
 
-func getChildJSON(f future, s chunks.ChunkSink) (interface{}, error) {
+func getChildJSON(f Future, s chunks.ChunkSink) (interface{}, error) {
 	var r ref.Ref
 	var err error
 	if v, ok := f.(*unresolvedFuture); ok {

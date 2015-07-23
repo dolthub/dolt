@@ -7,7 +7,7 @@ import (
 )
 
 type List struct {
-	list []future
+	list []Future
 	ref  *ref.Ref
 	cs   chunks.ChunkSource
 }
@@ -16,15 +16,15 @@ func NewList(v ...Value) List {
 	return listFromFutures(valuesToFutures(v), nil)
 }
 
-func valuesToFutures(list []Value) []future {
-	f := []future{}
+func valuesToFutures(list []Value) []Future {
+	f := []Future{}
 	for _, v := range list {
-		f = append(f, futureFromValue(v))
+		f = append(f, FutureFromValue(v))
 	}
 	return f
 }
 
-func listFromFutures(list []future, cs chunks.ChunkSource) List {
+func listFromFutures(list []Future, cs chunks.ChunkSource) List {
 	return List{list, &ref.Ref{}, cs}
 }
 
@@ -48,9 +48,9 @@ func (l List) Slice(start uint64, end uint64) List {
 }
 
 func (l List) Set(idx uint64, v Value) List {
-	b := make([]future, len(l.list))
+	b := make([]Future, len(l.list))
 	copy(b, l.list)
-	b[idx] = futureFromValue(v)
+	b[idx] = FutureFromValue(v)
 	return listFromFutures(b, l.cs)
 }
 
@@ -59,7 +59,7 @@ func (l List) Append(v ...Value) List {
 }
 
 func (l List) Insert(idx uint64, v ...Value) List {
-	b := make([]future, len(l.list)+len(v))
+	b := make([]Future, len(l.list)+len(v))
 	copy(b, l.list[:idx])
 	copy(b[idx:], valuesToFutures(v))
 	copy(b[idx+uint64(len(v)):], l.list[idx:])
@@ -67,7 +67,7 @@ func (l List) Insert(idx uint64, v ...Value) List {
 }
 
 func (l List) Remove(start uint64, end uint64) List {
-	b := make([]future, uint64(len(l.list))-(end-start))
+	b := make([]Future, uint64(len(l.list))-(end-start))
 	copy(b, l.list[:start])
 	copy(b[start:], l.list[end:])
 	return listFromFutures(b, l.cs)
@@ -87,6 +87,17 @@ func (l List) Equals(other Value) bool {
 	} else {
 		return l.Ref() == other.Ref()
 	}
+}
+
+func (l List) Futures() (futures []Future) {
+	for _, f := range l.list {
+		switch f.(type) {
+		case *unresolvedFuture:
+			futures = append(futures, f)
+		default:
+		}
+	}
+	return
 }
 
 func ListFromVal(v Value) List {

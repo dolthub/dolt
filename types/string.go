@@ -33,6 +33,10 @@ func (fs String) Equals(other Value) bool {
 	}
 }
 
+func (fs String) Futures() []Future {
+	return nil
+}
+
 func StringFromVal(v Value) String {
 	return v.(String)
 }

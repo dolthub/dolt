@@ -5,7 +5,7 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-func futureFromValue(v Value) future {
+func FutureFromValue(v Value) Future {
 	return resolvedFuture{v}
 }
 

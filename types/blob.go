@@ -32,6 +32,10 @@ func (fb Blob) Equals(other Value) bool {
 	}
 }
 
+func (fb Blob) Futures() []Future {
+	return nil
+}
+
 func NewBlob(data []byte) Blob {
 	return Blob{data, &ref.Ref{}}
 }

@@ -92,7 +92,7 @@ func TestGetJSONChildResolvedFuture(t *testing.T) {
 	assert := assert.New(t)
 	cs := &chunks.TestStore{}
 	v := NewString("abc")
-	f := futureFromValue(v)
+	f := FutureFromValue(v)
 	o, err := getChildJSON(f, cs)
 	assert.NoError(err)
 	assert.Equal("abc", o)
@@ -104,7 +104,7 @@ func TestGetJSONChildUnresolvedFuture(t *testing.T) {
 	cs := &chunks.TestStore{}
 	s := "sha1-a9993e364706816aba3e25717850c26c9cd0d89d"
 	r := ref.MustParse(s)
-	f := futureFromRef(r)
+	f := FutureFromRef(r)
 	m, err := getChildJSON(f, cs)
 	assert.NoError(err)
 	assert.Equal(s, m.(map[string]interface{})["ref"].(string))
@@ -116,11 +116,11 @@ func TestFutureCompound(t *testing.T) {
 	cs := &chunks.TestStore{}
 
 	v := NewString("abc")
-	resolved := futureFromValue(v)
+	resolved := FutureFromValue(v)
 	s := "sha1-a9993e364706816aba3e25717850c26c9cd0d89d"
 	r := ref.MustParse(s)
-	unresolved := futureFromRef(r)
-	futures := []future{resolved, unresolved}
+	unresolved := FutureFromRef(r)
+	futures := []Future{resolved, unresolved}
 
 	list := listFromFutures(futures, cs)
 	assert.NotNil(list)

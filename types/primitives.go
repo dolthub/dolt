@@ -21,6 +21,10 @@ func (v Bool) Ref() ref.Ref {
 	return getRef(v)
 }
 
+func (v Bool) Futures() []Future {
+	return nil
+}
+
 func BoolFromVal(v Value) Bool {
 	return v.(Bool)
 }
@@ -37,6 +41,10 @@ func (self Int16) Equals(other Value) bool {
 
 func (v Int16) Ref() ref.Ref {
 	return getRef(v)
+}
+
+func (v Int16) Futures() []Future {
+	return nil
 }
 
 func Int16FromVal(v Value) Int16 {
@@ -57,6 +65,10 @@ func (v Int32) Ref() ref.Ref {
 	return getRef(v)
 }
 
+func (v Int32) Futures() []Future {
+	return nil
+}
+
 func Int32FromVal(v Value) Int32 {
 	return v.(Int32)
 }
@@ -73,6 +85,10 @@ func (self Int64) Equals(other Value) bool {
 
 func (v Int64) Ref() ref.Ref {
 	return getRef(v)
+}
+
+func (v Int64) Futures() []Future {
+	return nil
 }
 
 func Int64FromVal(v Value) Int64 {
@@ -93,6 +109,10 @@ func (v UInt16) Ref() ref.Ref {
 	return getRef(v)
 }
 
+func (v UInt16) Futures() []Future {
+	return nil
+}
+
 func UInt16FromVal(v Value) UInt16 {
 	return v.(UInt16)
 }
@@ -109,6 +129,10 @@ func (self UInt32) Equals(other Value) bool {
 
 func (v UInt32) Ref() ref.Ref {
 	return getRef(v)
+}
+
+func (v UInt32) Futures() []Future {
+	return nil
 }
 
 func UInt32FromVal(v Value) UInt32 {
@@ -129,6 +153,10 @@ func (v UInt64) Ref() ref.Ref {
 	return getRef(v)
 }
 
+func (v UInt64) Futures() []Future {
+	return nil
+}
+
 func UInt64FromVal(v Value) UInt64 {
 	return v.(UInt64)
 }
@@ -147,6 +175,10 @@ func (v Float32) Ref() ref.Ref {
 	return getRef(v)
 }
 
+func (v Float32) Futures() []Future {
+	return nil
+}
+
 func Float32FromVal(v Value) Float32 {
 	return v.(Float32)
 }
@@ -163,6 +195,10 @@ func (self Float64) Equals(other Value) bool {
 
 func (v Float64) Ref() ref.Ref {
 	return getRef(v)
+}
+
+func (v Float64) Futures() []Future {
+	return nil
 }
 
 func Float64FromVal(v Value) Float64 {

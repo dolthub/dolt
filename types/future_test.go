@@ -11,7 +11,7 @@ import (
 func TestResolvedFuture(t *testing.T) {
 	assert := assert.New(t)
 	v := Int32(42)
-	f := futureFromValue(v)
+	f := FutureFromValue(v)
 	v2, err := f.Deref(nil)
 	assert.NoError(err)
 	assert.True(v.Equals(v2))
@@ -24,7 +24,7 @@ func TestUnresolvedFuture(t *testing.T) {
 	v := NewString("hello")
 	r, _ := WriteValue(v, cs)
 
-	f := futureFromRef(r)
+	f := FutureFromRef(r)
 	v2, err := f.Deref(cs)
 	assert.Equal(1, cs.Reads)
 	assert.NoError(err)
@@ -44,8 +44,8 @@ func TestEqualsFastPath(t *testing.T) {
 	r, err := WriteValue(v, cs)
 	assert.NoError(err)
 
-	fv := futureFromValue(v)
-	fr := futureFromRef(r)
+	fv := FutureFromValue(v)
+	fr := FutureFromRef(r)
 
 	count := 0
 	getRefOverride = func(val Value) ref.Ref {
