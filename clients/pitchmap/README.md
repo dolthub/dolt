@@ -18,7 +18,7 @@ node fetch-urls.js --url="http://gd2.mlb.com/components/game/mlb/year_2015/month
 
 cd /tmp/mlb_data
 
-wget -i urls.txt
+wget -e robots=off -x -i urls.txt
 
 <noms>/clients/xml_importer/xml_importer --file-store=/tmp/mlb_data --dataset-id=mlb/xml  gd2.mlb.com/
 
