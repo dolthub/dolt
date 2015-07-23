@@ -6,7 +6,7 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-// Future is an internal helper that encapsulates a Value which may or may not be available yet.
+// Future encapsulates a Value which may or may not be available yet.
 type Future interface {
 	// Returns the Ref of the value without fetching it.
 	Ref() ref.Ref
