@@ -206,11 +206,17 @@ func getGoStructName(typeDef types.Value) string {
 	case types.String:
 		name := typeDef.String()
 		switch name {
-		case "bool", "int16", "int32", "int64", "uint16", "uint32", "uint64", "float32", "float64", "blob", "string", "set", "map", "value":
+		case "bool", "int16", "int32", "int64", "float32", "float64", "blob", "string", "set", "map", "value":
 			return strings.Title(typeDef.String())
+		case "uint16", "uint32", "uint64":
+			return strings.ToUpper(typeDef.String()[:2]) + typeDef.String()[2:]
 		}
+
 		Chk.Fail("unexpected noms type name: %s", name)
 	case types.Map:
+		if typeDef.Has(types.NewString("$name")) {
+			return typeDef.Get(types.NewString("$name")).(types.String).String()
+		}
 		typ := typeDef.Get(types.NewString("$type")).(types.String).String()
 		switch typ {
 		case "noms.ListDef":
@@ -222,7 +228,7 @@ func getGoStructName(typeDef types.Value) string {
 		case "noms.SetDef":
 			return fmt.Sprintf("%sSet", getGoStructName(typeDef.Get(types.NewString("elem"))))
 		case "noms.StructDef":
-			return typeDef.Get(types.NewString("$name")).(types.String).String()
+			Chk.Fail("noms.StructDef must have a $name filed: %+v", typeDef)
 		}
 	}
 	Chk.Fail("Unexpected typeDef struct: %+v", typeDef)

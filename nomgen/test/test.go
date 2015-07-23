@@ -63,6 +63,15 @@ func TestCompound(t *testingT) {
 	assert.Equal(m.Get(k), v)
 }
 
+func TestCustomName(t *testingT) {
+	assert := assert.New(t)
+
+	s := NewMyTestSet()
+	assert.True(s.Empty())
+	s = s.Insert(types.UInt32(32))
+	assert.Equal(uint64(1), s.Len())
+}
+
 type testingT struct {
 	testing.T
 	errors int
@@ -80,5 +89,6 @@ func main() {
 	TestSet(t)
 	TestStructTest(t)
 	TestCompound(t)
+	TestCustomName(t)
 	os.Exit(t.errors)
 }

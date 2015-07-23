@@ -8,6 +8,88 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// MyTestSet
+
+type MyTestSet struct {
+	s types.Set
+}
+
+type MyTestSetIterCallback (func(p types.UInt32) (stop bool))
+
+func NewMyTestSet() MyTestSet {
+	return MyTestSet{types.NewSet()}
+}
+
+func MyTestSetFromVal(p types.Value) MyTestSet {
+	return MyTestSet{p.(types.Set)}
+}
+
+func (s MyTestSet) NomsValue() types.Set {
+	return s.s
+}
+
+func (s MyTestSet) Equals(p MyTestSet) bool {
+	return s.s.Equals(p.s)
+}
+
+func (s MyTestSet) Ref() ref.Ref {
+	return s.s.Ref()
+}
+
+func (s MyTestSet) Empty() bool {
+	return s.s.Empty()
+}
+
+func (s MyTestSet) Len() uint64 {
+	return s.s.Len()
+}
+
+func (s MyTestSet) Has(p types.UInt32) bool {
+	return s.s.Has(p)
+}
+
+func (s MyTestSet) Iter(cb MyTestSetIterCallback) {
+	s.s.Iter(func(v types.Value) bool {
+		return cb(types.UInt32FromVal(v))
+	})
+}
+
+func (s MyTestSet) Insert(p ...types.UInt32) MyTestSet {
+	return MyTestSet{s.s.Insert(s.fromElemSlice(p)...)}
+}
+
+func (s MyTestSet) Remove(p ...types.UInt32) MyTestSet {
+	return MyTestSet{s.s.Remove(s.fromElemSlice(p)...)}
+}
+
+func (s MyTestSet) Union(others ...MyTestSet) MyTestSet {
+	return MyTestSet{s.s.Union(s.fromStructSlice(others)...)}
+}
+
+func (s MyTestSet) Subtract(others ...MyTestSet) MyTestSet {
+	return MyTestSet{s.s.Subtract(s.fromStructSlice(others)...)}
+}
+
+func (s MyTestSet) Any() types.UInt32 {
+	return types.UInt32FromVal(s.s.Any())
+}
+
+func (s MyTestSet) fromStructSlice(p []MyTestSet) []types.Set {
+	r := make([]types.Set, len(p))
+	for i, v := range p {
+		r[i] = v.s
+	}
+	return r
+}
+
+func (s MyTestSet) fromElemSlice(p []types.UInt32) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v
+	}
+	return r
+}
+
 // TestStructBoolSetMap
 
 type TestStructBoolSetMap struct {

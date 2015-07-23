@@ -45,5 +45,10 @@ func main() {
 		types.NewString("key"), testStruct,
 		types.NewString("value"), testSet))
 
+	ng.AddType(types.NewMap(
+		types.NewString("$type"), types.NewString("noms.SetDef"),
+		types.NewString("$name"), types.NewString("MyTestSet"),
+		types.NewString("elem"), types.NewString("uint32")))
+
 	ng.WriteGo("main")
 }
