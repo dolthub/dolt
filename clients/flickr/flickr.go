@@ -141,9 +141,9 @@ func getPhotoset(id string) {
 	fmt.Printf("\nPhotoset: %v\n", response.Photoset.Title)
 
 	// TODO: Retrieving a field which hasn't been set will crash, so we have to reach inside and test the untyped
-	var photosets PhotosetSet
+	var photosets SetOfPhotoset
 	if !user.NomsValue().Has(types.NewString("photosets")) {
-		photosets = NewPhotosetSet()
+		photosets = NewSetOfPhotoset()
 	} else {
 		photosets = user.Photosets()
 	}
@@ -175,7 +175,7 @@ func getPhotosets() {
 	}
 }
 
-func getPhotosetPhotos(id string) PhotoSet {
+func getPhotosetPhotos(id string) SetOfPhoto {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -193,7 +193,7 @@ func getPhotosetPhotos(id string) PhotoSet {
 	})
 	Chk.NoError(err)
 
-	photoSet := NewPhotoSet()
+	photoSet := NewSetOfPhoto()
 	for _, p := range response.Photoset.Photo {
 		url := getOriginalUrl(p.Id)
 		fmt.Printf(" . %v\n", url)
@@ -263,7 +263,7 @@ func awaitOAuthResponse(l *net.TCPListener, tempCred *oauth.Credentials) error {
 
 func commitUser() {
 	commits := ds.Heads()
-	commitSet := datas.NewCommitSet().Insert(
+	commitSet := datas.NewSetOfCommit().Insert(
 		datas.NewCommit().SetParents(
 			commits.NomsValue()).SetValue(
 			user.NomsValue()))

@@ -220,13 +220,13 @@ func getGoStructName(typeDef types.Value) string {
 		typ := typeDef.Get(types.NewString("$type")).(types.String).String()
 		switch typ {
 		case "noms.ListDef":
-			return fmt.Sprintf("%sList", getGoStructName(typeDef.Get(types.NewString("elem"))))
+			return fmt.Sprintf("ListOf%s", getGoStructName(typeDef.Get(types.NewString("elem"))))
 		case "noms.MapDef":
-			return fmt.Sprintf("%s%sMap",
+			return fmt.Sprintf("MapOf%sTo%s",
 				getGoStructName(typeDef.Get(types.NewString("key"))),
 				getGoStructName(typeDef.Get(types.NewString("value"))))
 		case "noms.SetDef":
-			return fmt.Sprintf("%sSet", getGoStructName(typeDef.Get(types.NewString("elem"))))
+			return fmt.Sprintf("SetOf%s", getGoStructName(typeDef.Get(types.NewString("elem"))))
 		case "noms.StructDef":
 			Chk.Fail("noms.StructDef must have a $name filed: %+v", typeDef)
 		}

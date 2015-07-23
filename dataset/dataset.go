@@ -19,7 +19,7 @@ func NewDataset(parentStore datas.DataStore, datasetID string) Dataset {
 	return Dataset{datas.NewDataStore(parentStore, &datasetRootTracker{parentStore, datasetID})}
 }
 
-func (ds *Dataset) Commit(newCommits datas.CommitSet) Dataset {
+func (ds *Dataset) Commit(newCommits datas.SetOfCommit) Dataset {
 	return Dataset{ds.DataStore.Commit(newCommits)}
 }
 

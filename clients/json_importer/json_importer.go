@@ -44,7 +44,7 @@ func main() {
 
 	value := util.NomsValueFromDecodedJSON(jsonObject)
 
-	ds.Commit(datas.NewCommitSet().Insert(
+	ds.Commit(datas.NewSetOfCommit().Insert(
 		datas.NewCommit().SetParents(
 			commits.NomsValue()).SetValue(
 			value)))

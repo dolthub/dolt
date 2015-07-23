@@ -13,7 +13,7 @@ import (
 func TestList(t *testingT) {
 	assert := assert.New(t)
 
-	l := NewInt32List()
+	l := NewListOfInt32()
 	assert.Equal(uint64(0), l.Len())
 	assert.True(l.Empty())
 	l = l.Append(types.Int32(1), types.Int32(2))
@@ -24,7 +24,7 @@ func TestList(t *testingT) {
 func TestMap(t *testingT) {
 	assert := assert.New(t)
 
-	m := NewStringFloat64Map()
+	m := NewMapOfStringToFloat64()
 	assert.Equal(uint64(0), m.Len())
 	assert.True(m.Empty())
 
@@ -36,7 +36,7 @@ func TestMap(t *testingT) {
 func TestSet(t *testingT) {
 	assert := assert.New(t)
 
-	s := NewBoolSet()
+	s := NewSetOfBool()
 	assert.Equal(uint64(0), s.Len())
 	assert.True(s.Empty())
 	s = s.Insert(types.Bool(true), types.Bool(false))
@@ -55,10 +55,10 @@ func TestStructTest(t *testingT) {
 func TestCompound(t *testingT) {
 	assert := assert.New(t)
 
-	m := NewTestStructBoolSetMap()
+	m := NewMapOfTestStructToSetOfBool()
 	k := NewTestStruct()
 	k = k.SetTitle(types.NewString("Hello"))
-	v := NewBoolSet()
+	v := NewSetOfBool()
 	m = m.Set(k, v)
 	assert.Equal(m.Get(k), v)
 }

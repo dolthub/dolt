@@ -12,7 +12,7 @@ type DataStore struct {
 
 	rt    chunks.RootTracker
 	rc    *commitCache
-	heads CommitSet
+	heads SetOfCommit
 }
 
 func NewDataStore(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
@@ -25,22 +25,22 @@ func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, rc *commi
 	}
 }
 
-func commitSetFromRef(commitRef ref.Ref, cs chunks.ChunkSource) CommitSet {
-	var commits CommitSet
+func commitSetFromRef(commitRef ref.Ref, cs chunks.ChunkSource) SetOfCommit {
+	var commits SetOfCommit
 	if (commitRef == ref.Ref{}) {
-		commits = NewCommitSet()
+		commits = NewSetOfCommit()
 	} else {
-		commits = CommitSetFromVal(types.MustReadValue(commitRef, cs).(types.Set))
+		commits = SetOfCommitFromVal(types.MustReadValue(commitRef, cs).(types.Set))
 	}
 
 	return commits
 }
 
-func (ds *DataStore) Heads() CommitSet {
+func (ds *DataStore) Heads() SetOfCommit {
 	return ds.heads
 }
 
-func (ds *DataStore) Commit(newCommits CommitSet) DataStore {
+func (ds *DataStore) Commit(newCommits SetOfCommit) DataStore {
 	Chk.True(newCommits.Len() > 0)
 	// TODO: We probably shouldn't let this go *forever*. Considrer putting a limit and... I know don't...panicing?
 	for !ds.doCommit(newCommits) {
@@ -49,13 +49,13 @@ func (ds *DataStore) Commit(newCommits CommitSet) DataStore {
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the set of current heads. doCommit is optimistic in that it is attempting to update heads making the assumption that currentRootRef is the ref of the current heads. The call to UpdateRoot below will fail if that assumption fails (e.g. because of a race with another writer) and the entire algorigthm must be tried again.
-func (ds *DataStore) doCommit(commits CommitSet) bool {
+func (ds *DataStore) doCommit(commits SetOfCommit) bool {
 	Chk.True(commits.Len() > 0)
 
 	currentRootRef := ds.rt.Root()
 
 	// Note: |currentHeads| may be different from |ds.heads| and *must* be consistent with |currentCommitRef|.
-	var currentHeads CommitSet
+	var currentHeads SetOfCommit
 	if currentRootRef == ds.heads.Ref() {
 		currentHeads = ds.heads
 	} else {
@@ -68,7 +68,7 @@ func (ds *DataStore) doCommit(commits CommitSet) bool {
 		if ds.isPrexisting(commit, currentHeads) {
 			newHeads = newHeads.Remove(commit)
 		} else {
-			newHeads = CommitSetFromVal(newHeads.NomsValue().Subtract(commit.Parents()))
+			newHeads = SetOfCommitFromVal(newHeads.NomsValue().Subtract(commit.Parents()))
 		}
 
 		return
@@ -85,7 +85,7 @@ func (ds *DataStore) doCommit(commits CommitSet) bool {
 	return ds.rt.UpdateRoot(newRootRef, currentRootRef)
 }
 
-func (ds *DataStore) isPrexisting(commit Commit, currentHeads CommitSet) bool {
+func (ds *DataStore) isPrexisting(commit Commit, currentHeads SetOfCommit) bool {
 	if currentHeads.Has(commit) {
 		return true
 	}

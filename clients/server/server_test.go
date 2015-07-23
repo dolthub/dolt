@@ -19,7 +19,7 @@ func createTestStore() chunks.ChunkStore {
 	ms := &chunks.MemoryStore{}
 	datasetDs := dataset.NewDataset(datas.NewDataStore(ms, ms), datasetID)
 	datasetValue := types.NewString("Value for " + datasetID)
-	datasetDs = datasetDs.Commit(datas.NewCommitSet().Insert(
+	datasetDs = datasetDs.Commit(datas.NewSetOfCommit().Insert(
 		datas.NewCommit().SetParents(
 			types.NewSet()).SetValue(datasetValue)))
 	return ms

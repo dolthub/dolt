@@ -23,7 +23,7 @@ func TestGetDataset(t *testing.T) {
 
 func TestSetDatasetRoot(t *testing.T) {
 	assert := assert.New(t)
-	datasets := SetDatasetRoot(NewDatasetSet(), "testdataset", types.Int32(42))
+	datasets := SetDatasetRoot(NewSetOfDataset(), "testdataset", types.Int32(42))
 	assert.EqualValues(1, datasets.Len())
 	assert.True(types.Int32(42).Equals(datasets.Any().Root()))
 	assert.True(types.Int32(42).Equals(GetDatasetRoot(datasets, "testdataset")))

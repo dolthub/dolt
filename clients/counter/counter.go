@@ -25,7 +25,7 @@ func main() {
 		lastVal = uint64(commits.Any().Value().(types.UInt64))
 	}
 	newVal := lastVal + 1
-	ds.Commit(datas.NewCommitSet().Insert(
+	ds.Commit(datas.NewSetOfCommit().Insert(
 		datas.NewCommit().SetParents(
 			commits.NomsValue()).SetValue(
 			types.UInt64(newVal))))
