@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-type setData []future
+type setData []Future
 
 type Set struct {
 	m   setData // sorted by Ref()
@@ -20,7 +20,7 @@ func NewSet(v ...Value) Set {
 	return newSetFromData(buildSetData(setData{}, valuesToFutures(v)), nil)
 }
 
-func setFromFutures(f []future, cs chunks.ChunkSource) Set {
+func setFromFutures(f []Future, cs chunks.ChunkSource) Set {
 	return newSetFromData(buildSetData(setData{}, f), cs)
 }
 
@@ -110,6 +110,15 @@ func (fs Set) Equals(other Value) bool {
 	}
 }
 
+func (fs Set) Chunks() (futures []Future) {
+	for _, f := range fs.m {
+		if f, ok := f.(*unresolvedFuture); ok {
+			futures = append(futures, f)
+		}
+	}
+	return
+}
+
 func newSetFromData(m setData, cs chunks.ChunkSource) Set {
 	return Set{m, cs, &ref.Ref{}}
 }
@@ -120,7 +129,7 @@ func copySetData(m setData) setData {
 	return r
 }
 
-func buildSetData(old setData, futures []future) setData {
+func buildSetData(old setData, futures []Future) setData {
 	r := make(setData, len(old), len(old)+len(futures))
 	copy(r, old)
 	for _, f := range futures {

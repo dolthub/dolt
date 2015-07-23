@@ -3,6 +3,7 @@ package types
 import (
 	"testing"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -165,4 +166,18 @@ func TestMapEmpty(t *testing.T) {
 	assert.False(m.Empty())
 	m = m.Set(NewList(), NewMap())
 	assert.False(m.Empty())
+}
+
+func TestMapFutures(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := &chunks.TestStore{}
+	k := NewString("hello")
+	kRef, _ := WriteValue(k, cs)
+	f := futureFromRef(kRef)
+
+	m := mapFromFutures([]Future{f, futureFromValue(Int64(0xbeefcafe))}, cs)
+
+	assert.Len(m.Chunks(), 1)
+	assert.EqualValues(kRef, m.Chunks()[0].Ref())
 }

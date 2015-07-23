@@ -120,7 +120,7 @@ func TestFutureCompound(t *testing.T) {
 	s := "sha1-a9993e364706816aba3e25717850c26c9cd0d89d"
 	r := ref.MustParse(s)
 	unresolved := futureFromRef(r)
-	futures := []future{resolved, unresolved}
+	futures := []Future{resolved, unresolved}
 
 	list := listFromFutures(futures, cs)
 	assert.NotNil(list)

@@ -12,6 +12,10 @@ func (v {{.NomsType}}) Ref() ref.Ref {
 	return getRef(v)
 }
 
+func (v {{.NomsType}}) Chunks() []Future {
+	return nil
+}
+
 func {{.NomsType}}FromVal(v Value) {{.NomsType}} {
 	return v.({{.NomsType}})
 }

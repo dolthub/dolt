@@ -3,6 +3,7 @@ package types
 import (
 	"testing"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -122,4 +123,18 @@ func TestSetAny(t *testing.T) {
 	assert.NotNil(s.Any())
 	s = s.Insert(Int32(2))
 	assert.NotNil(s.Any())
+}
+
+func TestSetFutures(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := &chunks.TestStore{}
+	v := NewString("hello")
+	r, _ := WriteValue(v, cs)
+	f := futureFromRef(r)
+
+	s := listFromFutures([]Future{f, futureFromValue(Int64(0xbeefcafe))}, cs)
+
+	assert.Len(s.Chunks(), 1)
+	assert.EqualValues(r, s.Chunks()[0].Ref())
 }

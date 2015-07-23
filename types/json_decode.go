@@ -39,7 +39,7 @@ func jsonDecode(reader io.Reader, s chunks.ChunkSource) (Value, error) {
 	return val, nil
 }
 
-func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (future, error) {
+func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (Future, error) {
 	switch v := v.(type) {
 	case bool:
 		return futureFromValue(Bool(v)), nil
@@ -52,7 +52,7 @@ func jsonDecodeValue(v interface{}, s chunks.ChunkSource) (future, error) {
 	}
 }
 
-func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (future, error) {
+func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (Future, error) {
 	Chk.Equal(1, len(m))
 	for k, v := range m {
 		switch k {
@@ -100,8 +100,8 @@ func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (futu
 	return nil, fmt.Errorf("Cannot decode tagged json value: %+v", m)
 }
 
-func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (future, error) {
-	output := []future{}
+func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (Future, error) {
+	output := []Future{}
 	for _, inVal := range input {
 		outVal, err := jsonDecodeValue(inVal, s)
 		if err != nil {
@@ -112,8 +112,8 @@ func jsonDecodeList(input []interface{}, s chunks.ChunkSource) (future, error) {
 	return futureFromValue(listFromFutures(output, s)), nil
 }
 
-func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (future, error) {
-	output := []future{}
+func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (Future, error) {
+	output := []Future{}
 	for _, inVal := range input {
 		f, err := jsonDecodeValue(inVal, s)
 		if err != nil {
@@ -124,8 +124,8 @@ func jsonDecodeSet(input []interface{}, s chunks.ChunkSource) (future, error) {
 	return futureFromValue(setFromFutures(output, s)), nil
 }
 
-func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (future, error) {
-	output := []future{}
+func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (Future, error) {
+	output := []Future{}
 	Chk.Equal(0, len(input)%2, "Length on input array must be multiple of 2")
 
 	for _, inVal := range input {
@@ -139,7 +139,7 @@ func jsonDecodeMap(input []interface{}, s chunks.ChunkSource) (future, error) {
 	return futureFromValue(mapFromFutures(output, s)), nil
 }
 
-func jsonDecodeRef(refStr string, s chunks.ChunkSource) (future, error) {
+func jsonDecodeRef(refStr string, s chunks.ChunkSource) (Future, error) {
 	ref, err := ref.Parse(refStr)
 	if err != nil {
 		return nil, err

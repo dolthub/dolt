@@ -20,7 +20,7 @@ func NewMap(kv ...Value) Map {
 	return newMapFromData(buildMapData(mapData{}, valuesToFutures(kv)), nil)
 }
 
-func mapFromFutures(f []future, cs chunks.ChunkSource) Map {
+func mapFromFutures(f []Future, cs chunks.ChunkSource) Map {
 	return newMapFromData(buildMapData(mapData{}, f), cs)
 }
 
@@ -96,17 +96,30 @@ func (fm Map) Equals(other Value) (res bool) {
 	}
 }
 
+func (fm Map) Chunks() (futures []Future) {
+	appendIfUnresolved := func(f Future) {
+		if f, ok := f.(*unresolvedFuture); ok {
+			futures = append(futures, f)
+		}
+	}
+	for _, entry := range fm.m {
+		appendIfUnresolved(entry.key)
+		appendIfUnresolved(entry.value)
+	}
+	return
+}
+
 type mapEntry struct {
-	key   future
-	value future
+	key   Future
+	value Future
 }
 
 func newMapFromData(m mapData, cs chunks.ChunkSource) Map {
 	return Map{m, cs, &ref.Ref{}}
 }
 
-func buildMapData(oldData mapData, futures []future) mapData {
-	// Sadly, Chk.Equals() costs too much.
+func buildMapData(oldData mapData, futures []Future) mapData {
+	// Sadly, Chk.Equals() costs too much. BUG #83
 	Chk.True(0 == len(futures)%2, "Must specify even number of key/value pairs")
 
 	m := make(mapData, len(oldData), len(oldData)+len(futures))
