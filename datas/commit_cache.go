@@ -25,7 +25,7 @@ func (cache *commitCache) updateFromCommit(commit Commit) {
 	cache.refs[commit.Ref()] = true
 }
 
-func (cache *commitCache) Update(currentCommits CommitSet) {
+func (cache *commitCache) Update(currentCommits SetOfCommit) {
 	if currentCommits.Len() == 0 {
 		return
 	}
@@ -35,7 +35,7 @@ func (cache *commitCache) Update(currentCommits CommitSet) {
 		return
 	}
 
-	commitSet := CommitSet{types.MustReadValue(commitsRef, cache.source).(types.Set)}
+	commitSet := SetOfCommit{types.MustReadValue(commitsRef, cache.source).(types.Set)}
 	commitSet.Iter(func(commit Commit) (stop bool) {
 		cache.updateFromCommit(commit)
 		return

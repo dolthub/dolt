@@ -60,7 +60,7 @@ func main() {
 	}
 
 	commits := ds.Heads()
-	ds.Commit(datas.NewCommitSet().Insert(
+	ds.Commit(datas.NewSetOfCommit().Insert(
 		datas.NewCommit().SetParents(
 			commits.NomsValue()).SetValue(
 			value)))

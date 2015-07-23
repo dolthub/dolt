@@ -90,131 +90,131 @@ func (s MyTestSet) fromElemSlice(p []types.UInt32) []types.Value {
 	return r
 }
 
-// TestStructBoolSetMap
+// MapOfTestStructToSetOfBool
 
-type TestStructBoolSetMap struct {
+type MapOfTestStructToSetOfBool struct {
 	m types.Map
 }
 
-type TestStructBoolSetMapIterCallback (func(k TestStruct, v BoolSet) (stop bool))
+type MapOfTestStructToSetOfBoolIterCallback (func(k TestStruct, v SetOfBool) (stop bool))
 
-func NewTestStructBoolSetMap() TestStructBoolSetMap {
-	return TestStructBoolSetMap{types.NewMap()}
+func NewMapOfTestStructToSetOfBool() MapOfTestStructToSetOfBool {
+	return MapOfTestStructToSetOfBool{types.NewMap()}
 }
 
-func TestStructBoolSetMapFromVal(p types.Value) TestStructBoolSetMap {
-	return TestStructBoolSetMap{p.(types.Map)}
+func MapOfTestStructToSetOfBoolFromVal(p types.Value) MapOfTestStructToSetOfBool {
+	return MapOfTestStructToSetOfBool{p.(types.Map)}
 }
 
-func (m TestStructBoolSetMap) NomsValue() types.Map {
+func (m MapOfTestStructToSetOfBool) NomsValue() types.Map {
 	return m.m
 }
 
-func (m TestStructBoolSetMap) Equals(p TestStructBoolSetMap) bool {
+func (m MapOfTestStructToSetOfBool) Equals(p MapOfTestStructToSetOfBool) bool {
 	return m.m.Equals(p.m)
 }
 
-func (m TestStructBoolSetMap) Ref() ref.Ref {
+func (m MapOfTestStructToSetOfBool) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
-func (m TestStructBoolSetMap) Empty() bool {
+func (m MapOfTestStructToSetOfBool) Empty() bool {
 	return m.m.Empty()
 }
 
-func (m TestStructBoolSetMap) Len() uint64 {
+func (m MapOfTestStructToSetOfBool) Len() uint64 {
 	return m.m.Len()
 }
 
-func (m TestStructBoolSetMap) Has(p TestStruct) bool {
+func (m MapOfTestStructToSetOfBool) Has(p TestStruct) bool {
 	return m.m.Has(p.NomsValue())
 }
 
-func (m TestStructBoolSetMap) Get(p TestStruct) BoolSet {
-	return BoolSetFromVal(m.m.Get(p.NomsValue()))
+func (m MapOfTestStructToSetOfBool) Get(p TestStruct) SetOfBool {
+	return SetOfBoolFromVal(m.m.Get(p.NomsValue()))
 }
 
-func (m TestStructBoolSetMap) Set(k TestStruct, v BoolSet) TestStructBoolSetMap {
-	return TestStructBoolSetMapFromVal(m.m.Set(k.NomsValue(), v.NomsValue()))
+func (m MapOfTestStructToSetOfBool) Set(k TestStruct, v SetOfBool) MapOfTestStructToSetOfBool {
+	return MapOfTestStructToSetOfBoolFromVal(m.m.Set(k.NomsValue(), v.NomsValue()))
 }
 
 // TODO: Implement SetM?
 
-func (m TestStructBoolSetMap) Remove(p TestStruct) TestStructBoolSetMap {
-	return TestStructBoolSetMapFromVal(m.m.Remove(p.NomsValue()))
+func (m MapOfTestStructToSetOfBool) Remove(p TestStruct) MapOfTestStructToSetOfBool {
+	return MapOfTestStructToSetOfBoolFromVal(m.m.Remove(p.NomsValue()))
 }
 
-func (m TestStructBoolSetMap) Iter(cb TestStructBoolSetMapIterCallback) {
+func (m MapOfTestStructToSetOfBool) Iter(cb MapOfTestStructToSetOfBoolIterCallback) {
 	m.m.Iter(func(k, v types.Value) bool {
-		return cb(TestStructFromVal(k), BoolSetFromVal(v))
+		return cb(TestStructFromVal(k), SetOfBoolFromVal(v))
 	})
 }
 
-// Int32List
+// ListOfInt32
 
-type Int32List struct {
+type ListOfInt32 struct {
 	l types.List
 }
 
-type Int32ListIterCallback (func (p types.Int32) (stop bool))
+type ListOfInt32IterCallback (func (p types.Int32) (stop bool))
 
-func NewInt32List() Int32List {
-	return Int32List{types.NewList()}
+func NewListOfInt32() ListOfInt32 {
+	return ListOfInt32{types.NewList()}
 }
 
-func Int32ListFromVal(p types.Value) Int32List {
-	return Int32List{p.(types.List)}
+func ListOfInt32FromVal(p types.Value) ListOfInt32 {
+	return ListOfInt32{p.(types.List)}
 }
 
-func (l Int32List) NomsValue() types.List {
+func (l ListOfInt32) NomsValue() types.List {
 	return l.l
 }
 
-func (l Int32List) Equals(p Int32List) bool {
+func (l ListOfInt32) Equals(p ListOfInt32) bool {
 	return l.l.Equals(p.l)
 }
 
-func (l Int32List) Ref() ref.Ref {
+func (l ListOfInt32) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l Int32List) Len() uint64 {
+func (l ListOfInt32) Len() uint64 {
 	return l.l.Len()
 }
 
-func (l Int32List) Empty() bool {
+func (l ListOfInt32) Empty() bool {
 	return l.Len() == uint64(0)
 }
 
-func (l Int32List) Get(idx uint64) types.Int32 {
+func (l ListOfInt32) Get(idx uint64) types.Int32 {
 	return types.Int32FromVal(l.l.Get(idx))
 }
 
-func (l Int32List) Slice(idx uint64, end uint64) Int32List {
-	return Int32List{l.l.Slice(idx, end)}
+func (l ListOfInt32) Slice(idx uint64, end uint64) ListOfInt32 {
+	return ListOfInt32{l.l.Slice(idx, end)}
 }
 
-func (l Int32List) Set(idx uint64, v types.Int32) Int32List {
-	return Int32List{l.l.Set(idx, v)}
+func (l ListOfInt32) Set(idx uint64, v types.Int32) ListOfInt32 {
+	return ListOfInt32{l.l.Set(idx, v)}
 }
 
-func (l Int32List) Append(v ...types.Int32) Int32List {
-	return Int32List{l.l.Append(l.fromElemSlice(v)...)}
+func (l ListOfInt32) Append(v ...types.Int32) ListOfInt32 {
+	return ListOfInt32{l.l.Append(l.fromElemSlice(v)...)}
 }
 
-func (l Int32List) Insert(idx uint64, v ...types.Int32) Int32List {
-	return Int32List{l.l.Insert(idx, l.fromElemSlice(v)...)}
+func (l ListOfInt32) Insert(idx uint64, v ...types.Int32) ListOfInt32 {
+	return ListOfInt32{l.l.Insert(idx, l.fromElemSlice(v)...)}
 }
 
-func (l Int32List) Remove(idx uint64, end uint64) Int32List {
-	return Int32List{l.l.Remove(idx, end)}
+func (l ListOfInt32) Remove(idx uint64, end uint64) ListOfInt32 {
+	return ListOfInt32{l.l.Remove(idx, end)}
 }
 
-func (l Int32List) RemoveAt(idx uint64) Int32List {
-	return Int32List{(l.l.RemoveAt(idx))}
+func (l ListOfInt32) RemoveAt(idx uint64) ListOfInt32 {
+	return ListOfInt32{(l.l.RemoveAt(idx))}
 }
 
-func (l Int32List) fromElemSlice(p []types.Int32) []types.Value {
+func (l ListOfInt32) fromElemSlice(p []types.Int32) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
 		r[i] = v
@@ -222,61 +222,61 @@ func (l Int32List) fromElemSlice(p []types.Int32) []types.Value {
 	return r
 }
 
-// StringFloat64Map
+// MapOfStringToFloat64
 
-type StringFloat64Map struct {
+type MapOfStringToFloat64 struct {
 	m types.Map
 }
 
-type StringFloat64MapIterCallback (func(k types.String, v types.Float64) (stop bool))
+type MapOfStringToFloat64IterCallback (func(k types.String, v types.Float64) (stop bool))
 
-func NewStringFloat64Map() StringFloat64Map {
-	return StringFloat64Map{types.NewMap()}
+func NewMapOfStringToFloat64() MapOfStringToFloat64 {
+	return MapOfStringToFloat64{types.NewMap()}
 }
 
-func StringFloat64MapFromVal(p types.Value) StringFloat64Map {
-	return StringFloat64Map{p.(types.Map)}
+func MapOfStringToFloat64FromVal(p types.Value) MapOfStringToFloat64 {
+	return MapOfStringToFloat64{p.(types.Map)}
 }
 
-func (m StringFloat64Map) NomsValue() types.Map {
+func (m MapOfStringToFloat64) NomsValue() types.Map {
 	return m.m
 }
 
-func (m StringFloat64Map) Equals(p StringFloat64Map) bool {
+func (m MapOfStringToFloat64) Equals(p MapOfStringToFloat64) bool {
 	return m.m.Equals(p.m)
 }
 
-func (m StringFloat64Map) Ref() ref.Ref {
+func (m MapOfStringToFloat64) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
-func (m StringFloat64Map) Empty() bool {
+func (m MapOfStringToFloat64) Empty() bool {
 	return m.m.Empty()
 }
 
-func (m StringFloat64Map) Len() uint64 {
+func (m MapOfStringToFloat64) Len() uint64 {
 	return m.m.Len()
 }
 
-func (m StringFloat64Map) Has(p types.String) bool {
+func (m MapOfStringToFloat64) Has(p types.String) bool {
 	return m.m.Has(p)
 }
 
-func (m StringFloat64Map) Get(p types.String) types.Float64 {
+func (m MapOfStringToFloat64) Get(p types.String) types.Float64 {
 	return types.Float64FromVal(m.m.Get(p))
 }
 
-func (m StringFloat64Map) Set(k types.String, v types.Float64) StringFloat64Map {
-	return StringFloat64MapFromVal(m.m.Set(k, v))
+func (m MapOfStringToFloat64) Set(k types.String, v types.Float64) MapOfStringToFloat64 {
+	return MapOfStringToFloat64FromVal(m.m.Set(k, v))
 }
 
 // TODO: Implement SetM?
 
-func (m StringFloat64Map) Remove(p types.String) StringFloat64Map {
-	return StringFloat64MapFromVal(m.m.Remove(p))
+func (m MapOfStringToFloat64) Remove(p types.String) MapOfStringToFloat64 {
+	return MapOfStringToFloat64FromVal(m.m.Remove(p))
 }
 
-func (m StringFloat64Map) Iter(cb StringFloat64MapIterCallback) {
+func (m MapOfStringToFloat64) Iter(cb MapOfStringToFloat64IterCallback) {
 	m.m.Iter(func(k, v types.Value) bool {
 		return cb(types.StringFromVal(k), types.Float64FromVal(v))
 	})
@@ -317,73 +317,73 @@ func (s TestStruct) SetTitle(p types.String) TestStruct {
 	return TestStructFromVal(s.m.Set(types.NewString("title"), p))
 }
 
-// BoolSet
+// SetOfBool
 
-type BoolSet struct {
+type SetOfBool struct {
 	s types.Set
 }
 
-type BoolSetIterCallback (func(p types.Bool) (stop bool))
+type SetOfBoolIterCallback (func(p types.Bool) (stop bool))
 
-func NewBoolSet() BoolSet {
-	return BoolSet{types.NewSet()}
+func NewSetOfBool() SetOfBool {
+	return SetOfBool{types.NewSet()}
 }
 
-func BoolSetFromVal(p types.Value) BoolSet {
-	return BoolSet{p.(types.Set)}
+func SetOfBoolFromVal(p types.Value) SetOfBool {
+	return SetOfBool{p.(types.Set)}
 }
 
-func (s BoolSet) NomsValue() types.Set {
+func (s SetOfBool) NomsValue() types.Set {
 	return s.s
 }
 
-func (s BoolSet) Equals(p BoolSet) bool {
+func (s SetOfBool) Equals(p SetOfBool) bool {
 	return s.s.Equals(p.s)
 }
 
-func (s BoolSet) Ref() ref.Ref {
+func (s SetOfBool) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s BoolSet) Empty() bool {
+func (s SetOfBool) Empty() bool {
 	return s.s.Empty()
 }
 
-func (s BoolSet) Len() uint64 {
+func (s SetOfBool) Len() uint64 {
 	return s.s.Len()
 }
 
-func (s BoolSet) Has(p types.Bool) bool {
+func (s SetOfBool) Has(p types.Bool) bool {
 	return s.s.Has(p)
 }
 
-func (s BoolSet) Iter(cb BoolSetIterCallback) {
+func (s SetOfBool) Iter(cb SetOfBoolIterCallback) {
 	s.s.Iter(func(v types.Value) bool {
 		return cb(types.BoolFromVal(v))
 	})
 }
 
-func (s BoolSet) Insert(p ...types.Bool) BoolSet {
-	return BoolSet{s.s.Insert(s.fromElemSlice(p)...)}
+func (s SetOfBool) Insert(p ...types.Bool) SetOfBool {
+	return SetOfBool{s.s.Insert(s.fromElemSlice(p)...)}
 }
 
-func (s BoolSet) Remove(p ...types.Bool) BoolSet {
-	return BoolSet{s.s.Remove(s.fromElemSlice(p)...)}
+func (s SetOfBool) Remove(p ...types.Bool) SetOfBool {
+	return SetOfBool{s.s.Remove(s.fromElemSlice(p)...)}
 }
 
-func (s BoolSet) Union(others ...BoolSet) BoolSet {
-	return BoolSet{s.s.Union(s.fromStructSlice(others)...)}
+func (s SetOfBool) Union(others ...SetOfBool) SetOfBool {
+	return SetOfBool{s.s.Union(s.fromStructSlice(others)...)}
 }
 
-func (s BoolSet) Subtract(others ...BoolSet) BoolSet {
-	return BoolSet{s.s.Subtract(s.fromStructSlice(others)...)}
+func (s SetOfBool) Subtract(others ...SetOfBool) SetOfBool {
+	return SetOfBool{s.s.Subtract(s.fromStructSlice(others)...)}
 }
 
-func (s BoolSet) Any() types.Bool {
+func (s SetOfBool) Any() types.Bool {
 	return types.BoolFromVal(s.s.Any())
 }
 
-func (s BoolSet) fromStructSlice(p []BoolSet) []types.Set {
+func (s SetOfBool) fromStructSlice(p []SetOfBool) []types.Set {
 	r := make([]types.Set, len(p))
 	for i, v := range p {
 		r[i] = v.s
@@ -391,7 +391,7 @@ func (s BoolSet) fromStructSlice(p []BoolSet) []types.Set {
 	return r
 }
 
-func (s BoolSet) fromElemSlice(p []types.Bool) []types.Value {
+func (s SetOfBool) fromElemSlice(p []types.Bool) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
 		r[i] = v

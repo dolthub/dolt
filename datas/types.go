@@ -8,73 +8,73 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-// CommitSet
+// SetOfCommit
 
-type CommitSet struct {
+type SetOfCommit struct {
 	s types.Set
 }
 
-type CommitSetIterCallback (func(p Commit) (stop bool))
+type SetOfCommitIterCallback (func(p Commit) (stop bool))
 
-func NewCommitSet() CommitSet {
-	return CommitSet{types.NewSet()}
+func NewSetOfCommit() SetOfCommit {
+	return SetOfCommit{types.NewSet()}
 }
 
-func CommitSetFromVal(p types.Value) CommitSet {
-	return CommitSet{p.(types.Set)}
+func SetOfCommitFromVal(p types.Value) SetOfCommit {
+	return SetOfCommit{p.(types.Set)}
 }
 
-func (s CommitSet) NomsValue() types.Set {
+func (s SetOfCommit) NomsValue() types.Set {
 	return s.s
 }
 
-func (s CommitSet) Equals(p CommitSet) bool {
+func (s SetOfCommit) Equals(p SetOfCommit) bool {
 	return s.s.Equals(p.s)
 }
 
-func (s CommitSet) Ref() ref.Ref {
+func (s SetOfCommit) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s CommitSet) Empty() bool {
+func (s SetOfCommit) Empty() bool {
 	return s.s.Empty()
 }
 
-func (s CommitSet) Len() uint64 {
+func (s SetOfCommit) Len() uint64 {
 	return s.s.Len()
 }
 
-func (s CommitSet) Has(p Commit) bool {
+func (s SetOfCommit) Has(p Commit) bool {
 	return s.s.Has(p.NomsValue())
 }
 
-func (s CommitSet) Iter(cb CommitSetIterCallback) {
+func (s SetOfCommit) Iter(cb SetOfCommitIterCallback) {
 	s.s.Iter(func(v types.Value) bool {
 		return cb(CommitFromVal(v))
 	})
 }
 
-func (s CommitSet) Insert(p ...Commit) CommitSet {
-	return CommitSet{s.s.Insert(s.fromElemSlice(p)...)}
+func (s SetOfCommit) Insert(p ...Commit) SetOfCommit {
+	return SetOfCommit{s.s.Insert(s.fromElemSlice(p)...)}
 }
 
-func (s CommitSet) Remove(p ...Commit) CommitSet {
-	return CommitSet{s.s.Remove(s.fromElemSlice(p)...)}
+func (s SetOfCommit) Remove(p ...Commit) SetOfCommit {
+	return SetOfCommit{s.s.Remove(s.fromElemSlice(p)...)}
 }
 
-func (s CommitSet) Union(others ...CommitSet) CommitSet {
-	return CommitSet{s.s.Union(s.fromStructSlice(others)...)}
+func (s SetOfCommit) Union(others ...SetOfCommit) SetOfCommit {
+	return SetOfCommit{s.s.Union(s.fromStructSlice(others)...)}
 }
 
-func (s CommitSet) Subtract(others ...CommitSet) CommitSet {
-	return CommitSet{s.s.Subtract(s.fromStructSlice(others)...)}
+func (s SetOfCommit) Subtract(others ...SetOfCommit) SetOfCommit {
+	return SetOfCommit{s.s.Subtract(s.fromStructSlice(others)...)}
 }
 
-func (s CommitSet) Any() Commit {
+func (s SetOfCommit) Any() Commit {
 	return CommitFromVal(s.s.Any())
 }
 
-func (s CommitSet) fromStructSlice(p []CommitSet) []types.Set {
+func (s SetOfCommit) fromStructSlice(p []SetOfCommit) []types.Set {
 	r := make([]types.Set, len(p))
 	for i, v := range p {
 		r[i] = v.s
@@ -82,7 +82,7 @@ func (s CommitSet) fromStructSlice(p []CommitSet) []types.Set {
 	return r
 }
 
-func (s CommitSet) fromElemSlice(p []Commit) []types.Value {
+func (s SetOfCommit) fromElemSlice(p []Commit) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
 		r[i] = v.NomsValue()

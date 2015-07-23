@@ -8,73 +8,73 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-// DatasetSet
+// SetOfDataset
 
-type DatasetSet struct {
+type SetOfDataset struct {
 	s types.Set
 }
 
-type DatasetSetIterCallback (func(p Dataset) (stop bool))
+type SetOfDatasetIterCallback (func(p Dataset) (stop bool))
 
-func NewDatasetSet() DatasetSet {
-	return DatasetSet{types.NewSet()}
+func NewSetOfDataset() SetOfDataset {
+	return SetOfDataset{types.NewSet()}
 }
 
-func DatasetSetFromVal(p types.Value) DatasetSet {
-	return DatasetSet{p.(types.Set)}
+func SetOfDatasetFromVal(p types.Value) SetOfDataset {
+	return SetOfDataset{p.(types.Set)}
 }
 
-func (s DatasetSet) NomsValue() types.Set {
+func (s SetOfDataset) NomsValue() types.Set {
 	return s.s
 }
 
-func (s DatasetSet) Equals(p DatasetSet) bool {
+func (s SetOfDataset) Equals(p SetOfDataset) bool {
 	return s.s.Equals(p.s)
 }
 
-func (s DatasetSet) Ref() ref.Ref {
+func (s SetOfDataset) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s DatasetSet) Empty() bool {
+func (s SetOfDataset) Empty() bool {
 	return s.s.Empty()
 }
 
-func (s DatasetSet) Len() uint64 {
+func (s SetOfDataset) Len() uint64 {
 	return s.s.Len()
 }
 
-func (s DatasetSet) Has(p Dataset) bool {
+func (s SetOfDataset) Has(p Dataset) bool {
 	return s.s.Has(p.NomsValue())
 }
 
-func (s DatasetSet) Iter(cb DatasetSetIterCallback) {
+func (s SetOfDataset) Iter(cb SetOfDatasetIterCallback) {
 	s.s.Iter(func(v types.Value) bool {
 		return cb(DatasetFromVal(v))
 	})
 }
 
-func (s DatasetSet) Insert(p ...Dataset) DatasetSet {
-	return DatasetSet{s.s.Insert(s.fromElemSlice(p)...)}
+func (s SetOfDataset) Insert(p ...Dataset) SetOfDataset {
+	return SetOfDataset{s.s.Insert(s.fromElemSlice(p)...)}
 }
 
-func (s DatasetSet) Remove(p ...Dataset) DatasetSet {
-	return DatasetSet{s.s.Remove(s.fromElemSlice(p)...)}
+func (s SetOfDataset) Remove(p ...Dataset) SetOfDataset {
+	return SetOfDataset{s.s.Remove(s.fromElemSlice(p)...)}
 }
 
-func (s DatasetSet) Union(others ...DatasetSet) DatasetSet {
-	return DatasetSet{s.s.Union(s.fromStructSlice(others)...)}
+func (s SetOfDataset) Union(others ...SetOfDataset) SetOfDataset {
+	return SetOfDataset{s.s.Union(s.fromStructSlice(others)...)}
 }
 
-func (s DatasetSet) Subtract(others ...DatasetSet) DatasetSet {
-	return DatasetSet{s.s.Subtract(s.fromStructSlice(others)...)}
+func (s SetOfDataset) Subtract(others ...SetOfDataset) SetOfDataset {
+	return SetOfDataset{s.s.Subtract(s.fromStructSlice(others)...)}
 }
 
-func (s DatasetSet) Any() Dataset {
+func (s SetOfDataset) Any() Dataset {
 	return DatasetFromVal(s.s.Any())
 }
 
-func (s DatasetSet) fromStructSlice(p []DatasetSet) []types.Set {
+func (s SetOfDataset) fromStructSlice(p []SetOfDataset) []types.Set {
 	r := make([]types.Set, len(p))
 	for i, v := range p {
 		r[i] = v.s
@@ -82,7 +82,7 @@ func (s DatasetSet) fromStructSlice(p []DatasetSet) []types.Set {
 	return r
 }
 
-func (s DatasetSet) fromElemSlice(p []Dataset) []types.Value {
+func (s SetOfDataset) fromElemSlice(p []Dataset) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
 		r[i] = v.NomsValue()

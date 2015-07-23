@@ -69,7 +69,7 @@ func main() {
 	noms := util.NomsValueFromDecodedJSON(objects)
 
 	if !*noIO {
-		ds.Commit(datas.NewCommitSet().Insert(
+		ds.Commit(datas.NewSetOfCommit().Insert(
 			datas.NewCommit().SetParents(
 				ds.Heads().NomsValue()).SetValue(noms)))
 	}

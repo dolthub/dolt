@@ -107,17 +107,17 @@ func processInning(m types.Map) map[string][]Pitch {
 	return pitchCounts
 }
 
-func getIndex(input types.List) StringPitchListMap {
+func getIndex(input types.List) MapOfStringToListOfPitch {
 	// Walk through the list in inputDataset and basically switch
 	// on the top-level key to know if it's an inning or a pitcher.
-	pitchCounts := NewStringPitchListMap()
-	pitchers := NewStringStringMap()
+	pitchCounts := NewMapOfStringToListOfPitch()
+	pitchers := NewMapOfStringToString()
 	for i := uint64(0); i < input.Len(); i++ {
 		m := input.Get(i).(types.Map)
 		if key := types.NewString("inning"); m.Has(key) {
 			for idStr, p := range processInning(m.Get(key).(types.Map)) {
 				id := types.NewString(idStr)
-				pitches := NewPitchList()
+				pitches := NewListOfPitch()
 				if pitchCounts.Has(id) {
 					pitches = pitchCounts.Get(id)
 				}
@@ -131,8 +131,8 @@ func getIndex(input types.List) StringPitchListMap {
 		}
 	}
 
-	namedPitchCounts := NewStringPitchListMap()
-	pitchCounts.Iter(func(id types.String, p PitchList) (stop bool) {
+	namedPitchCounts := NewMapOfStringToListOfPitch()
+	pitchCounts.Iter(func(id types.String, p ListOfPitch) (stop bool) {
 		if pitchers.Has(id) {
 			namedPitchCounts = namedPitchCounts.Set(pitchers.Get(id), p)
 		} else {
@@ -167,6 +167,6 @@ func main() {
 	input := types.ListFromVal(inputDataset.Heads().Any().Value())
 	output := getIndex(input)
 
-	outputDataset.Commit(datas.NewCommitSet().Insert(
+	outputDataset.Commit(datas.NewSetOfCommit().Insert(
 		datas.NewCommit().SetParents(outputDataset.Heads().NomsValue()).SetValue(output.NomsValue())))
 }

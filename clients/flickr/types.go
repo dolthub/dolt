@@ -8,6 +8,57 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// Photoset
+
+type Photoset struct {
+	m types.Map
+}
+
+func NewPhotoset() Photoset {
+	return Photoset{types.NewMap()}
+}
+
+func PhotosetFromVal(v types.Value) Photoset {
+	return Photoset{v.(types.Map)}
+}
+
+// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
+func (s Photoset) NomsValue() types.Map {
+	return s.m
+}
+
+func (s Photoset) Equals(p Photoset) bool {
+	return s.m.Equals(p.m)
+}
+
+func (s Photoset) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s Photoset) Title() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("title")))
+}
+
+func (s Photoset) SetTitle(p types.String) Photoset {
+	return PhotosetFromVal(s.m.Set(types.NewString("title"), p))
+}
+
+func (s Photoset) Id() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("id")))
+}
+
+func (s Photoset) SetId(p types.String) Photoset {
+	return PhotosetFromVal(s.m.Set(types.NewString("id"), p))
+}
+
+func (s Photoset) Photos() SetOfPhoto {
+	return SetOfPhotoFromVal(s.m.Get(types.NewString("photos")))
+}
+
+func (s Photoset) SetPhotos(p SetOfPhoto) Photoset {
+	return PhotosetFromVal(s.m.Set(types.NewString("photos"), p.NomsValue()))
+}
+
 // User
 
 type User struct {
@@ -67,81 +118,81 @@ func (s User) SetOAuthSecret(p types.String) User {
 	return UserFromVal(s.m.Set(types.NewString("oAuthSecret"), p))
 }
 
-func (s User) Photosets() PhotosetSet {
-	return PhotosetSetFromVal(s.m.Get(types.NewString("photosets")))
+func (s User) Photosets() SetOfPhotoset {
+	return SetOfPhotosetFromVal(s.m.Get(types.NewString("photosets")))
 }
 
-func (s User) SetPhotosets(p PhotosetSet) User {
+func (s User) SetPhotosets(p SetOfPhotoset) User {
 	return UserFromVal(s.m.Set(types.NewString("photosets"), p.NomsValue()))
 }
 
-// PhotosetSet
+// SetOfPhoto
 
-type PhotosetSet struct {
+type SetOfPhoto struct {
 	s types.Set
 }
 
-type PhotosetSetIterCallback (func(p Photoset) (stop bool))
+type SetOfPhotoIterCallback (func(p Photo) (stop bool))
 
-func NewPhotosetSet() PhotosetSet {
-	return PhotosetSet{types.NewSet()}
+func NewSetOfPhoto() SetOfPhoto {
+	return SetOfPhoto{types.NewSet()}
 }
 
-func PhotosetSetFromVal(p types.Value) PhotosetSet {
-	return PhotosetSet{p.(types.Set)}
+func SetOfPhotoFromVal(p types.Value) SetOfPhoto {
+	return SetOfPhoto{p.(types.Set)}
 }
 
-func (s PhotosetSet) NomsValue() types.Set {
+func (s SetOfPhoto) NomsValue() types.Set {
 	return s.s
 }
 
-func (s PhotosetSet) Equals(p PhotosetSet) bool {
+func (s SetOfPhoto) Equals(p SetOfPhoto) bool {
 	return s.s.Equals(p.s)
 }
 
-func (s PhotosetSet) Ref() ref.Ref {
+func (s SetOfPhoto) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s PhotosetSet) Empty() bool {
+func (s SetOfPhoto) Empty() bool {
 	return s.s.Empty()
 }
 
-func (s PhotosetSet) Len() uint64 {
+func (s SetOfPhoto) Len() uint64 {
 	return s.s.Len()
 }
 
-func (s PhotosetSet) Has(p Photoset) bool {
+func (s SetOfPhoto) Has(p Photo) bool {
 	return s.s.Has(p.NomsValue())
 }
 
-func (s PhotosetSet) Iter(cb PhotosetSetIterCallback) {
+func (s SetOfPhoto) Iter(cb SetOfPhotoIterCallback) {
 	s.s.Iter(func(v types.Value) bool {
-		return cb(PhotosetFromVal(v))
+		return cb(PhotoFromVal(v))
 	})
 }
 
-func (s PhotosetSet) Insert(p ...Photoset) PhotosetSet {
-	return PhotosetSet{s.s.Insert(s.fromElemSlice(p)...)}
+func (s SetOfPhoto) Insert(p ...Photo) SetOfPhoto {
+	return SetOfPhoto{s.s.Insert(s.fromElemSlice(p)...)}
 }
 
-func (s PhotosetSet) Remove(p ...Photoset) PhotosetSet {
-	return PhotosetSet{s.s.Remove(s.fromElemSlice(p)...)}
+func (s SetOfPhoto) Remove(p ...Photo) SetOfPhoto {
+	return SetOfPhoto{s.s.Remove(s.fromElemSlice(p)...)}
 }
 
-func (s PhotosetSet) Union(others ...PhotosetSet) PhotosetSet {
-	return PhotosetSet{s.s.Union(s.fromStructSlice(others)...)}
+func (s SetOfPhoto) Union(others ...SetOfPhoto) SetOfPhoto {
+	return SetOfPhoto{s.s.Union(s.fromStructSlice(others)...)}
 }
 
-func (s PhotosetSet) Subtract(others ...PhotosetSet) PhotosetSet {
-	return PhotosetSet{s.s.Subtract(s.fromStructSlice(others)...)}
+func (s SetOfPhoto) Subtract(others ...SetOfPhoto) SetOfPhoto {
+	return SetOfPhoto{s.s.Subtract(s.fromStructSlice(others)...)}
 }
 
-func (s PhotosetSet) Any() Photoset {
-	return PhotosetFromVal(s.s.Any())
+func (s SetOfPhoto) Any() Photo {
+	return PhotoFromVal(s.s.Any())
 }
 
-func (s PhotosetSet) fromStructSlice(p []PhotosetSet) []types.Set {
+func (s SetOfPhoto) fromStructSlice(p []SetOfPhoto) []types.Set {
 	r := make([]types.Set, len(p))
 	for i, v := range p {
 		r[i] = v.s
@@ -149,7 +200,7 @@ func (s PhotosetSet) fromStructSlice(p []PhotosetSet) []types.Set {
 	return r
 }
 
-func (s PhotosetSet) fromElemSlice(p []Photoset) []types.Value {
+func (s SetOfPhoto) fromElemSlice(p []Photo) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
 		r[i] = v.NomsValue()
@@ -157,124 +208,73 @@ func (s PhotosetSet) fromElemSlice(p []Photoset) []types.Value {
 	return r
 }
 
-// Photoset
+// SetOfPhotoset
 
-type Photoset struct {
-	m types.Map
-}
-
-func NewPhotoset() Photoset {
-	return Photoset{types.NewMap()}
-}
-
-func PhotosetFromVal(v types.Value) Photoset {
-	return Photoset{v.(types.Map)}
-}
-
-// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
-func (s Photoset) NomsValue() types.Map {
-	return s.m
-}
-
-func (s Photoset) Equals(p Photoset) bool {
-	return s.m.Equals(p.m)
-}
-
-func (s Photoset) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s Photoset) Title() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("title")))
-}
-
-func (s Photoset) SetTitle(p types.String) Photoset {
-	return PhotosetFromVal(s.m.Set(types.NewString("title"), p))
-}
-
-func (s Photoset) Id() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("id")))
-}
-
-func (s Photoset) SetId(p types.String) Photoset {
-	return PhotosetFromVal(s.m.Set(types.NewString("id"), p))
-}
-
-func (s Photoset) Photos() PhotoSet {
-	return PhotoSetFromVal(s.m.Get(types.NewString("photos")))
-}
-
-func (s Photoset) SetPhotos(p PhotoSet) Photoset {
-	return PhotosetFromVal(s.m.Set(types.NewString("photos"), p.NomsValue()))
-}
-
-// PhotoSet
-
-type PhotoSet struct {
+type SetOfPhotoset struct {
 	s types.Set
 }
 
-type PhotoSetIterCallback (func(p Photo) (stop bool))
+type SetOfPhotosetIterCallback (func(p Photoset) (stop bool))
 
-func NewPhotoSet() PhotoSet {
-	return PhotoSet{types.NewSet()}
+func NewSetOfPhotoset() SetOfPhotoset {
+	return SetOfPhotoset{types.NewSet()}
 }
 
-func PhotoSetFromVal(p types.Value) PhotoSet {
-	return PhotoSet{p.(types.Set)}
+func SetOfPhotosetFromVal(p types.Value) SetOfPhotoset {
+	return SetOfPhotoset{p.(types.Set)}
 }
 
-func (s PhotoSet) NomsValue() types.Set {
+func (s SetOfPhotoset) NomsValue() types.Set {
 	return s.s
 }
 
-func (s PhotoSet) Equals(p PhotoSet) bool {
+func (s SetOfPhotoset) Equals(p SetOfPhotoset) bool {
 	return s.s.Equals(p.s)
 }
 
-func (s PhotoSet) Ref() ref.Ref {
+func (s SetOfPhotoset) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s PhotoSet) Empty() bool {
+func (s SetOfPhotoset) Empty() bool {
 	return s.s.Empty()
 }
 
-func (s PhotoSet) Len() uint64 {
+func (s SetOfPhotoset) Len() uint64 {
 	return s.s.Len()
 }
 
-func (s PhotoSet) Has(p Photo) bool {
+func (s SetOfPhotoset) Has(p Photoset) bool {
 	return s.s.Has(p.NomsValue())
 }
 
-func (s PhotoSet) Iter(cb PhotoSetIterCallback) {
+func (s SetOfPhotoset) Iter(cb SetOfPhotosetIterCallback) {
 	s.s.Iter(func(v types.Value) bool {
-		return cb(PhotoFromVal(v))
+		return cb(PhotosetFromVal(v))
 	})
 }
 
-func (s PhotoSet) Insert(p ...Photo) PhotoSet {
-	return PhotoSet{s.s.Insert(s.fromElemSlice(p)...)}
+func (s SetOfPhotoset) Insert(p ...Photoset) SetOfPhotoset {
+	return SetOfPhotoset{s.s.Insert(s.fromElemSlice(p)...)}
 }
 
-func (s PhotoSet) Remove(p ...Photo) PhotoSet {
-	return PhotoSet{s.s.Remove(s.fromElemSlice(p)...)}
+func (s SetOfPhotoset) Remove(p ...Photoset) SetOfPhotoset {
+	return SetOfPhotoset{s.s.Remove(s.fromElemSlice(p)...)}
 }
 
-func (s PhotoSet) Union(others ...PhotoSet) PhotoSet {
-	return PhotoSet{s.s.Union(s.fromStructSlice(others)...)}
+func (s SetOfPhotoset) Union(others ...SetOfPhotoset) SetOfPhotoset {
+	return SetOfPhotoset{s.s.Union(s.fromStructSlice(others)...)}
 }
 
-func (s PhotoSet) Subtract(others ...PhotoSet) PhotoSet {
-	return PhotoSet{s.s.Subtract(s.fromStructSlice(others)...)}
+func (s SetOfPhotoset) Subtract(others ...SetOfPhotoset) SetOfPhotoset {
+	return SetOfPhotoset{s.s.Subtract(s.fromStructSlice(others)...)}
 }
 
-func (s PhotoSet) Any() Photo {
-	return PhotoFromVal(s.s.Any())
+func (s SetOfPhotoset) Any() Photoset {
+	return PhotosetFromVal(s.s.Any())
 }
 
-func (s PhotoSet) fromStructSlice(p []PhotoSet) []types.Set {
+func (s SetOfPhotoset) fromStructSlice(p []SetOfPhotoset) []types.Set {
 	r := make([]types.Set, len(p))
 	for i, v := range p {
 		r[i] = v.s
@@ -282,7 +282,7 @@ func (s PhotoSet) fromStructSlice(p []PhotoSet) []types.Set {
 	return r
 }
 
-func (s PhotoSet) fromElemSlice(p []Photo) []types.Value {
+func (s SetOfPhotoset) fromElemSlice(p []Photoset) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
 		r[i] = v.NomsValue()
