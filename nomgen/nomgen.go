@@ -33,12 +33,8 @@ func New(w io.Writer) NG {
 	return NG{w: w, written: types.NewSet(), toWrite: types.NewSet()}
 }
 
-func (ng *NG) WriteGo(pkg string, val ...types.Map) {
+func (ng *NG) WriteGo(pkg string) {
 	headerTmpl.Execute(ng.w, struct{ PackageName string }{pkg})
-
-	for _, v := range val {
-		ng.addType(v)
-	}
 
 	for !ng.toWrite.Empty() {
 		t := ng.toWrite.Any()
@@ -48,19 +44,20 @@ func (ng *NG) WriteGo(pkg string, val ...types.Map) {
 	}
 }
 
-func (ng *NG) addType(val types.Value) {
+func (ng *NG) AddType(val types.Value) types.Value {
 	switch val := val.(type) {
 	case types.String:
 		// Nothing to do, the type is primitive
-		return
+		return val
 	case types.Map:
 		if ng.written.Has(val) || ng.toWrite.Has(val) {
-			return
+			return val
 		}
 		ng.toWrite = ng.toWrite.Insert(val)
 	default:
 		Chk.Fail(fmt.Sprintf("Unexpected typedef: %+v", val))
 	}
+	return val
 }
 
 func fromNomsValue(name string) string {
@@ -113,7 +110,7 @@ func (ng *NG) writeType(val types.Map) {
 
 func (ng *NG) writeSet(val types.Map) {
 	elem := val.Get(types.NewString("elem"))
-	ng.addType(elem)
+	ng.AddType(elem)
 
 	data := struct {
 		StructName string
@@ -128,7 +125,7 @@ func (ng *NG) writeSet(val types.Map) {
 
 func (ng *NG) writeList(val types.Map) {
 	elem := val.Get(types.NewString("elem"))
-	ng.addType(elem)
+	ng.AddType(elem)
 
 	data := struct {
 		StructName string
@@ -143,9 +140,9 @@ func (ng *NG) writeList(val types.Map) {
 
 func (ng *NG) writeMap(val types.Map) {
 	key := val.Get(types.NewString("key"))
-	ng.addType(key)
+	ng.AddType(key)
 	valueName := val.Get(types.NewString("value"))
-	ng.addType(valueName)
+	ng.AddType(valueName)
 
 	data := struct {
 		StructName string
@@ -178,7 +175,7 @@ func (ng *NG) writeStruct(val types.Map) {
 }
 
 func (ng *NG) writeField(structName, fieldName string, typeDef types.Value) {
-	ng.addType(typeDef)
+	ng.AddType(typeDef)
 
 	data := struct {
 		StructName  string

@@ -30,6 +30,10 @@ func (l {{.StructName}}) Len() uint64 {
 	return l.l.Len()
 }
 
+func (l {{.StructName}}) Empty() bool {
+	return l.Len() == uint64(0)
+}
+
 func (l {{.StructName}}) Get(idx uint64) {{.ElemName}} {
 	return {{fromVal .ElemName}}(l.l.Get(idx))
 }
