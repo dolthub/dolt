@@ -34,8 +34,12 @@ var style = {
   },
   ref: {
     color: '#ddd',
+    opacity: 0,
     paddingLeft: '1ex',
     transition: '.3s',
+  },
+  opaque: {
+    opacity: 1,
   },
   arrow: {
     display: 'inline-block',
@@ -50,6 +54,7 @@ var style = {
     whiteSpace: 'nowrap',
   }
 };
+style.refVisible = merge(style.ref, style.opaque);
 style.collapsed = merge(style.arrow, style.collapsed);
 style.expanded = merge(style.arrow, style.expanded);
 
@@ -99,7 +104,8 @@ var TreeNode = React.createClass({
 
   valueAsString: function(value) {
     if (this.isCollection(value)) {
-      return this.getCollectionName(value) + ' (' + value.size + ' values)';
+      return this.getCollectionName(value) + ' (' +
+        value.size + ' values)';
     }
 
     if (Ref.isRef(value)) {
@@ -114,6 +120,13 @@ var TreeNode = React.createClass({
       expand: !this.state.expand,
       expandAll: e.getModifierState('Shift')
     });
+  },
+
+  toggleHover: function(over) {
+    var ref = this.getRef();
+    if (ref) {
+      this.props.onHighlightRef(over && ref);
+    }
   },
 
   getValue: function() {
@@ -134,7 +147,8 @@ var TreeNode = React.createClass({
   },
 
   getRef: function() {
-    return Ref.isRef(this.props.value) ? this.props.value.ref : undefined;
+    return Ref.isRef(this.props.value) ?
+      this.props.value.ref : undefined;
   },
 
   render: function() {
@@ -157,17 +171,21 @@ var TreeNode = React.createClass({
     var headerItems = [expander];
 
     if (this.props.name !== undefined) {
-      headerItems.push(React.DOM.span({}, this.props.name + ': '))
+      headerItems.push(React.DOM.span({},
+        this.props.name + ': '))
     }
 
-    headerItems.push(React.DOM.span({ style: style.types[type] }, this.valueAsString(value)))
     headerItems.push(React.DOM.span({
-      className: 'ref',
-      style: style.ref
+      style: style.types[type]
+    }, this.valueAsString(value)))
+    headerItems.push(React.DOM.span({
+      style: this.props.highlightedRef == this.getRef() ? style.refVisible : style.ref,
     }, this.getRef()));
     var header = React.DOM.div({
       className: 'tree-header',
       onClick: this.toggleExpand,
+      onMouseEnter: () => { this.toggleHover(true); },
+      onMouseLeave: () => { this.toggleHover(false); },
       style: style.treeHeader,
     }, headerItems);
 
@@ -177,7 +195,13 @@ var TreeNode = React.createClass({
       value.forEach(function(subvalue, index) {
         // TODO: If index is a ref, it won't have been loaded here.
         var name = isSet ? undefined : index;
-        content.push(TreeNodeFactory({ value: subvalue, name: name, expandAll: this.state.expandAll }));
+        content.push(TreeNodeFactory({
+          value: subvalue,
+          name: name,
+          expandAll: this.state.expandAll,
+          onHighlightRef: this.props.onHighlightRef,
+          highlightedRef: this.props.highlightedRef
+        }));
       }, this);
     }
 
@@ -189,4 +213,4 @@ var TreeNode = React.createClass({
 
 var TreeNodeFactory = React.createFactory(TreeNode);
 
-module.exports = TreeNode;
+module.exports = TreeNodeFactory;
