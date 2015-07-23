@@ -21,7 +21,7 @@ func (v Bool) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Bool) Futures() []Future {
+func (v Bool) Chunks() []Future {
 	return nil
 }
 
@@ -43,7 +43,7 @@ func (v Int16) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Int16) Futures() []Future {
+func (v Int16) Chunks() []Future {
 	return nil
 }
 
@@ -65,7 +65,7 @@ func (v Int32) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Int32) Futures() []Future {
+func (v Int32) Chunks() []Future {
 	return nil
 }
 
@@ -87,7 +87,7 @@ func (v Int64) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Int64) Futures() []Future {
+func (v Int64) Chunks() []Future {
 	return nil
 }
 
@@ -109,7 +109,7 @@ func (v UInt16) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v UInt16) Futures() []Future {
+func (v UInt16) Chunks() []Future {
 	return nil
 }
 
@@ -131,7 +131,7 @@ func (v UInt32) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v UInt32) Futures() []Future {
+func (v UInt32) Chunks() []Future {
 	return nil
 }
 
@@ -153,7 +153,7 @@ func (v UInt64) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v UInt64) Futures() []Future {
+func (v UInt64) Chunks() []Future {
 	return nil
 }
 
@@ -175,7 +175,7 @@ func (v Float32) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Float32) Futures() []Future {
+func (v Float32) Chunks() []Future {
 	return nil
 }
 
@@ -197,7 +197,7 @@ func (v Float64) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Float64) Futures() []Future {
+func (v Float64) Chunks() []Future {
 	return nil
 }
 

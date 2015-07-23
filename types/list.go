@@ -19,7 +19,7 @@ func NewList(v ...Value) List {
 func valuesToFutures(list []Value) []Future {
 	f := []Future{}
 	for _, v := range list {
-		f = append(f, FutureFromValue(v))
+		f = append(f, futureFromValue(v))
 	}
 	return f
 }
@@ -50,7 +50,7 @@ func (l List) Slice(start uint64, end uint64) List {
 func (l List) Set(idx uint64, v Value) List {
 	b := make([]Future, len(l.list))
 	copy(b, l.list)
-	b[idx] = FutureFromValue(v)
+	b[idx] = futureFromValue(v)
 	return listFromFutures(b, l.cs)
 }
 
@@ -89,12 +89,10 @@ func (l List) Equals(other Value) bool {
 	}
 }
 
-func (l List) Futures() (futures []Future) {
+func (l List) Chunks() (futures []Future) {
 	for _, f := range l.list {
-		switch f.(type) {
-		case *unresolvedFuture:
+		if f, ok := f.(*unresolvedFuture); ok {
 			futures = append(futures, f)
-		default:
 		}
 	}
 	return

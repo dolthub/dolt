@@ -32,7 +32,7 @@ func (fb Blob) Equals(other Value) bool {
 	}
 }
 
-func (fb Blob) Futures() []Future {
+func (fb Blob) Chunks() []Future {
 	return nil
 }
 

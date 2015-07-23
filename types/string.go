@@ -33,7 +33,7 @@ func (fs String) Equals(other Value) bool {
 	}
 }
 
-func (fs String) Futures() []Future {
+func (fs String) Chunks() []Future {
 	return nil
 }
 

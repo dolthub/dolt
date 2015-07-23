@@ -166,10 +166,10 @@ func TestListFutures(t *testing.T) {
 	cs := &chunks.TestStore{}
 	v := NewString("hello")
 	r, _ := WriteValue(v, cs)
-	f := FutureFromRef(r)
+	f := futureFromRef(r)
 
-	l := listFromFutures([]Future{f, FutureFromValue(Int64(0xbeefcafe))}, cs)
+	l := listFromFutures([]Future{f, futureFromValue(Int64(0xbeefcafe))}, cs)
 
-	assert.Len(l.Futures(), 1)
-	assert.EqualValues(r, l.Futures()[0].Ref())
+	assert.Len(l.Chunks(), 1)
+	assert.EqualValues(r, l.Chunks()[0].Ref())
 }

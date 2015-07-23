@@ -5,7 +5,7 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-func FutureFromRef(ref ref.Ref) Future {
+func futureFromRef(ref ref.Ref) Future {
 	return &unresolvedFuture{ref: ref}
 }
 

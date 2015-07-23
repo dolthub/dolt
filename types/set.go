@@ -110,12 +110,10 @@ func (fs Set) Equals(other Value) bool {
 	}
 }
 
-func (fs Set) Futures() (futures []Future) {
+func (fs Set) Chunks() (futures []Future) {
 	for _, f := range fs.m {
-		switch f.(type) {
-		case *unresolvedFuture:
+		if f, ok := f.(*unresolvedFuture); ok {
 			futures = append(futures, f)
-		default:
 		}
 	}
 	return

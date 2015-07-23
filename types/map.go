@@ -96,12 +96,10 @@ func (fm Map) Equals(other Value) (res bool) {
 	}
 }
 
-func (fm Map) Futures() (futures []Future) {
+func (fm Map) Chunks() (futures []Future) {
 	appendIfUnresolved := func(f Future) {
-		switch f.(type) {
-		case *unresolvedFuture:
+		if f, ok := f.(*unresolvedFuture); ok {
 			futures = append(futures, f)
-		default:
 		}
 	}
 	for _, entry := range fm.m {
