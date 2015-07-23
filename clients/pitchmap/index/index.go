@@ -64,22 +64,44 @@ func processPitches(v types.Value) (pitches []Pitch) {
 }
 
 func processInning(m types.Map) map[string][]Pitch {
+	pitchCounts := map[string][]Pitch{}
+
 	// This is brittle, figure out how to do it without being super verbose.
-	halves := []types.Map{
-		m.Get(types.NewString("top")).(types.Map),
+	top := m.Get(types.NewString("top"))
+	switch top.(type) {
+	case types.Map:
+	default:
+		// If "top" is anything other than a map, give up
+		return pitchCounts
 	}
+
+	halves := []types.Map{
+		top.(types.Map),
+	}
+
 	if bot := m.Get(types.NewString("bottom")); bot != nil {
 		halves = append(halves, bot.(types.Map))
 	}
 
-	pitchCounts := map[string][]Pitch{}
+	addPitch := func(ab types.Map) {
+		pitchData := ab.Get(types.NewString("pitch"))
+		pitcher := ab.Get(types.NewString("-pitcher")).(types.String).String()
+		pitchCounts[pitcher] = append(pitchCounts[pitcher], processPitches(pitchData)...)
+	}
+
 	for _, half := range halves {
-		abs := half.Get(types.NewString("atbat")).(types.List)
-		for i := uint64(0); i < abs.Len(); i++ {
-			ab := abs.Get(i).(types.Map)
-			pitchData := ab.Get(types.NewString("pitch"))
-			pitcher := ab.Get(types.NewString("-pitcher")).(types.String).String()
-			pitchCounts[pitcher] = append(pitchCounts[pitcher], processPitches(pitchData)...)
+		atbat := half.Get(types.NewString("atbat"))
+		switch atbat.(type) {
+		case types.List:
+			abs := atbat.(types.List)
+			for i := uint64(0); i < abs.Len(); i++ {
+				ab := abs.Get(i).(types.Map)
+				addPitch(ab)
+			}
+		case types.Map:
+			// Apparently, if there's only one, it's encoded directly as a singleton. Yay, data!
+			addPitch(atbat.(types.Map))
+		default:
 		}
 	}
 	return pitchCounts
