@@ -9,13 +9,16 @@ http://gd2.mlb.com/components/game/mlb/
 To use:
 
 ```
-cd /tmp/foo
 
-wget -e robots=off -A "[0-9]*.xml" -r -l1 \
-http://gd2.mlb.com/components/game/mlb/year_2015/month_05/day_12/gid_2015_05_12_atlmlb_cinmlb_1/pitchers/
+npm install
 
-wget -e robots=off -A "inning_[0-9]*.xml" -r -l1 \
-http://gd2.mlb.com/components/game/mlb/year_2015/month_05/day_12/gid_2015_05_12_atlmlb_cinmlb_1/inning/
+mkdir /tmp/mlb_data
+
+node fetch-urls.js --url="http://gd2.mlb.com/components/game/mlb/year_2015/month_05/day_07/" --print="gid.*pitcher.*xml$|gid.*inning_[0-9]*\.xml" --reject="\/year_[0-9]+\/pitchers\/|\/year_[0-9]+\/mobile\/|\/year_[0-9]+\/media\/|\/year_[0-9]+\/batters\/|\/premium\/|\/notifications\/|\/pitching_staff\/|\/media\/|\/batters\/|\/[^\/]+\.[^\/]+$" > /tmp/mlb_data/urls.txt
+
+cd /tmp/mlb_data
+
+wget -i urls.txt
 
 <noms>/clients/xml_importer/xml_importer --file-store=/tmp/mlb_data --dataset-id=mlb/xml  gd2.mlb.com/
 

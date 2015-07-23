@@ -1,0 +1,7 @@
+{
+  "name": "fetch-urls",
+  "dependencies": {
+    "argv": "*",
+    "simplecrawler": "*"
+  }
+}
