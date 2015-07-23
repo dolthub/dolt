@@ -33,10 +33,12 @@ func New(w io.Writer) NG {
 	return NG{w: w, written: types.NewSet(), toWrite: types.NewSet()}
 }
 
-func (ng *NG) WriteGo(val types.Map, pkg string) {
+func (ng *NG) WriteGo(pkg string, val ...types.Map) {
 	headerTmpl.Execute(ng.w, struct{ PackageName string }{pkg})
 
-	ng.addType(val)
+	for _, v := range val {
+		ng.addType(v)
+	}
 
 	for !ng.toWrite.Empty() {
 		t := ng.toWrite.Any()

@@ -85,11 +85,11 @@ func processInning(m types.Map) map[string][]Pitch {
 	return pitchCounts
 }
 
-func getIndex(input types.List) types.Map {
+func getIndex(input types.List) StringPitchListMap {
 	// Walk through the list in inputDataset and basically switch
 	// on the top-level key to know if it's an inning or a pitcher.
-	pitchCounts := types.NewMap()
-	pitchers := types.NewMap()
+	pitchCounts := NewStringPitchListMap()
+	pitchers := NewStringStringMap()
 	for i := uint64(0); i < input.Len(); i++ {
 		m := input.Get(i).(types.Map)
 		if key := types.NewString("inning"); m.Has(key) {
@@ -97,9 +97,9 @@ func getIndex(input types.List) types.Map {
 				id := types.NewString(idStr)
 				pitches := NewPitchList()
 				if pitchCounts.Has(id) {
-					pitches = PitchListFromVal(pitchCounts.Get(id))
+					pitches = pitchCounts.Get(id)
 				}
-				pitchCounts = pitchCounts.Set(id, pitches.Append(p...).NomsValue())
+				pitchCounts = pitchCounts.Set(id, pitches.Append(p...))
 			}
 		} else if key := types.NewString("Player"); m.Has(key) {
 			id, name := processPitcher(m.Get(key).(types.Map))
@@ -109,8 +109,8 @@ func getIndex(input types.List) types.Map {
 		}
 	}
 
-	namedPitchCounts := types.NewMap()
-	pitchCounts.Iter(func(id, p types.Value) (stop bool) {
+	namedPitchCounts := NewStringPitchListMap()
+	pitchCounts.Iter(func(id types.String, p PitchList) (stop bool) {
 		if pitchers.Has(id) {
 			namedPitchCounts = namedPitchCounts.Set(pitchers.Get(id), p)
 		} else {
@@ -142,9 +142,9 @@ func main() {
 	inputDataset := dataset.NewDataset(dataStore, *inputID)
 	outputDataset := dataset.NewDataset(dataStore, *outputID)
 
-	input := inputDataset.Heads().Any().Value().(types.List)
+	input := types.ListFromVal(inputDataset.Heads().Any().Value())
 	output := getIndex(input)
 
 	outputDataset.Commit(datas.NewCommitSet().Insert(
-		datas.NewCommit().SetParents(outputDataset.Heads().NomsValue()).SetValue(output)))
+		datas.NewCommit().SetParents(outputDataset.Heads().NomsValue()).SetValue(output.NomsValue())))
 }
