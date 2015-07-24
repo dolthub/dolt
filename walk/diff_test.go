@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetReachabilitySetDiff(t *testing.T) {
+func TestDifference(t *testing.T) {
 	assert := assert.New(t)
 	cs := &chunks.TestStore{}
 
@@ -32,11 +32,11 @@ func TestGetReachabilitySetDiff(t *testing.T) {
 	big := small.Set(types.NewString("set"), setVal)
 
 	var hashes []string
-	for _, r := range GetReachabilitySetDiff(storeAndRef(small), storeAndRef(big), cs) {
+	for _, r := range Difference(storeAndRef(small), storeAndRef(big), cs) {
 		hashes = append(hashes, r.String())
 	}
 
 	assert.Contains(hashes, setVal.Ref().String())
 
-	assert.Empty(GetReachabilitySetDiff(small.Ref(), small.Ref(), cs))
+	assert.Empty(Difference(small.Ref(), small.Ref(), cs))
 }

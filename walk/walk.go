@@ -17,27 +17,24 @@ type AllCallback func(r ref.Ref)
 // Some recursively walks over all ref.Refs reachable from r and calls cb on them.
 // If cb ever returns true, the walk will stop recursing on the current ref.
 func Some(r ref.Ref, cs chunks.ChunkSource, cb SomeCallback) {
-	v, err := types.ReadValue(r, cs)
-	dbg.Chk.NoError(err)
-	doTreeWalk(v, cs, cb)
+	doTreeWalk(r, cs, cb)
 }
 
+// All recursively walks over all ref.Refs reachable from r and calls cb on them.
 func All(r ref.Ref, cs chunks.ChunkSource, cb AllCallback) {
-	v, err := types.ReadValue(r, cs)
-	dbg.Chk.NoError(err)
-	doTreeWalk(v, cs, func(r ref.Ref) (skip bool) {
+	doTreeWalk(r, cs, func(r ref.Ref) (skip bool) {
 		cb(r)
 		return
 	})
 }
 
-func doTreeWalk(v types.Value, cs chunks.ChunkSource, cb SomeCallback) {
-	if cb(v.Ref()) {
+func doTreeWalk(r ref.Ref, cs chunks.ChunkSource, cb SomeCallback) {
+	if cb(r) {
 		return
 	}
+	v, err := types.ReadValue(r, cs)
+	dbg.Chk.NoError(err)
 	for _, cf := range v.Chunks() {
-		cv, err := cf.Deref(cs)
-		dbg.Chk.NoError(err)
-		doTreeWalk(cv, cs, cb)
+		doTreeWalk(cf.Ref(), cs, cb)
 	}
 }
