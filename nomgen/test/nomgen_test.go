@@ -11,7 +11,7 @@ import (
 	"os/exec"
 )
 
-// TestCodegen uses runs "go run gen/types.go -o types.go" and then runs
+// TestCodegen uses runs "go run gen/types.go" and then runs
 // "go build" and finally "./test" which depends on types.go
 func TestCodegen(t *testing.T) {
 	assert := assert.New(t)
@@ -20,7 +20,7 @@ func TestCodegen(t *testing.T) {
 	dir := path.Dir(thisfile)
 	os.Chdir(dir)
 
-	cmd := exec.Command("go", "run", path.Join("gen", "types.go"), "-o", "types.go")
+	cmd := exec.Command("go", "run", path.Join("gen", "types.go"))
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	assert.NoError(err, "go generate failed")

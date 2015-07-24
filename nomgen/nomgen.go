@@ -24,13 +24,15 @@ var (
 )
 
 type NG struct {
-	w       io.Writer
+	w       io.WriteCloser
 	written types.Set
 	toWrite types.Set
 }
 
-func New(w io.Writer) NG {
-	return NG{w: w, written: types.NewSet(), toWrite: types.NewSet()}
+func New(outFile string) NG {
+	f, err := os.OpenFile(outFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	Chk.NoError(err)
+	return NG{w: f, written: types.NewSet(), toWrite: types.NewSet()}
 }
 
 func (ng *NG) WriteGo(pkg string) {
@@ -42,6 +44,8 @@ func (ng *NG) WriteGo(pkg string) {
 		ng.written = ng.written.Insert(t)
 		ng.writeType(t.(types.Map))
 	}
+
+	ng.w.Close()
 }
 
 func (ng *NG) AddType(val types.Value) types.Value {
