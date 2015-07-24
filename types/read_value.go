@@ -14,7 +14,7 @@ import (
 func ReadValue(ref ref.Ref, cs chunks.ChunkSource) (Value, error) {
 	Chk.NotNil(cs)
 	reader, err := cs.Get(ref)
-	if err != nil {
+	if reader == nil || err != nil {
 		return nil, err
 	}
 	defer reader.Close()
