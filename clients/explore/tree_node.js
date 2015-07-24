@@ -109,7 +109,7 @@ var TreeNode = React.createClass({
     }
 
     if (Ref.isRef(value)) {
-      return '(loading)';
+      return 'Loading...';
     }
 
     return String(value);

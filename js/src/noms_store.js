@@ -1,5 +1,7 @@
 'use strict';
 
+require('whatwg-fetch');
+
 var host = function(host) {
   var i = host.indexOf(':');
   return i < 0 ? host : host.substring(0, i);
@@ -14,7 +16,7 @@ var rpc = {
 };
 
 // TODO: Chrome seems to start spitting out uncatchable errors if we queue too many XHRs. This limit probably doesn't actually slow us down because the user agent has its own queue of fetches to service.
-var maxConnections = 512;
+var maxConnections = 64;
 var activeFetches = 0;
 var pendingFetches = [];
 
@@ -27,7 +29,12 @@ function requestFetch(url) {
 
 function beginFetch(req) {
   activeFetches++;
-  fetch(req.url, req.resolve, req.reject);
+  fetch(req.url).then((r) => {
+    r.text().then((s) => {
+      req.resolve(s);
+      endFetch();
+    });
+  }).catch(req.reject);
 }
 
 function endFetch() {
@@ -37,23 +44,8 @@ function endFetch() {
 
 function pumpFetchQueue() {
   while (pendingFetches.length && activeFetches < maxConnections) {
-    beginFetch(pendingFetches.shift())
+    beginFetch(pendingFetches.shift());
   }
-}
-
-// TODO: Use whatwg-fetch
-function fetch(url, resolve, reject) {
-  var xhr = new XMLHttpRequest();
-  xhr.onload = (e) => {
-    endFetch();
-    resolve(e.target.responseText);
-  };
-  xhr.onerror = (e) => {
-    endFetch();
-    reject(e.target.statusText);
-  };
-  xhr.open('get', url, true);
-  xhr.send();
 }
 
 function getChunk(ref) {
