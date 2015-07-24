@@ -2,8 +2,8 @@
 
 var React = require('react');
 
-const IMAGE_WIDTH_PX = 287;
-const IMAGE_HEIGHT_PX = 330;
+const IMAGE_WIDTH_PX = 286;
+const IMAGE_HEIGHT_PX = 324;
 const BASE_PX = 72;
 const BASE_FEET = 1 + 5 / 12;
 const FEETS_TO_PIXELS = BASE_PX / BASE_FEET;
@@ -12,7 +12,8 @@ const ORIGIN_X_PIXELS = IMAGE_WIDTH_PX / 2;
 const ORIGIN_Z_PIXELS = IMAGE_HEIGHT_PX - 41;
 
 function feetToPixels(f) {
-  return f * BASE_PX / BASE_FEET;
+  // TODO: Find more accurate image/dimensions.
+  return 0.8 * f * BASE_PX / BASE_FEET;
 }
 
 var Map = React.createClass({
