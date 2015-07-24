@@ -16,15 +16,15 @@ func TestGetDataset(t *testing.T) {
 	datasets := GetDatasets(ds)
 	dataset := getDataset(datasets, "testdataset")
 	assert.Nil(dataset)
-	datasets = SetDatasetRoot(datasets, "testdataset", types.Int32(42))
+	datasets = SetDatasetHeads(datasets, "testdataset", types.Int32(42))
 	dataset = getDataset(datasets, "testdataset")
 	assert.Equal("testdataset", dataset.Id().String())
 }
 
 func TestSetDatasetRoot(t *testing.T) {
 	assert := assert.New(t)
-	datasets := SetDatasetRoot(NewSetOfDataset(), "testdataset", types.Int32(42))
+	datasets := SetDatasetHeads(NewSetOfDataset(), "testdataset", types.Int32(42))
 	assert.EqualValues(1, datasets.Len())
-	assert.True(types.Int32(42).Equals(datasets.Any().Root()))
-	assert.True(types.Int32(42).Equals(GetDatasetRoot(datasets, "testdataset")))
+	assert.True(types.Int32(42).Equals(datasets.Any().Heads()))
+	assert.True(types.Int32(42).Equals(GetDatasetHeads(datasets, "testdataset")))
 }

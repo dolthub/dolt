@@ -35,16 +35,16 @@ func getDataset(datasets SetOfDataset, datasetID string) (r *Dataset) {
 	return
 }
 
-func GetDatasetRoot(datasets SetOfDataset, datasetID string) types.Value {
+func GetDatasetHeads(datasets SetOfDataset, datasetID string) types.Value {
 	dataset := getDataset(datasets, datasetID)
 	if dataset == nil {
 		return nil
 	}
-	return dataset.Root()
+	return dataset.Heads()
 }
 
-func SetDatasetRoot(datasets SetOfDataset, datasetID string, val types.Value) SetOfDataset {
-	newDataset := NewDataset().SetId(types.NewString(datasetID)).SetRoot(val)
+func SetDatasetHeads(datasets SetOfDataset, datasetID string, val types.Value) SetOfDataset {
+	newDataset := NewDataset().SetId(types.NewString(datasetID)).SetHeads(val)
 	dataset := getDataset(datasets, datasetID)
 	if dataset == nil {
 		return datasets.Insert(newDataset)

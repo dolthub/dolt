@@ -26,7 +26,7 @@ func main() {
 		types.NewString("$type"), types.NewString("noms.StructDef"),
 		types.NewString("$name"), types.NewString("Dataset"),
 		types.NewString("id"), types.NewString("string"),
-		types.NewString("root"), types.NewString("value")))
+		types.NewString("heads"), types.NewString("value")))
 
 	ng.AddType(types.NewMap(
 		types.NewString("$type"), types.NewString("noms.SetDef"),
