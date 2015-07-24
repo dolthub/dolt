@@ -3,6 +3,7 @@ package types
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/attic-labs/noms/chunks"
@@ -14,7 +15,10 @@ import (
 func ReadValue(ref ref.Ref, cs chunks.ChunkSource) (Value, error) {
 	Chk.NotNil(cs)
 	reader, err := cs.Get(ref)
-	if reader == nil || err != nil {
+	if reader == nil {
+		return nil, errors.New("Chunk not present")
+	}
+	if err != nil {
 		return nil, err
 	}
 	defer reader.Close()
