@@ -34,5 +34,5 @@ func TestDatasetCommitTracker(t *testing.T) {
 	assert.False(datasetDs2.Heads().Any().Value().Equals(datasetCommit1))
 	assert.False(datasetDs1.Heads().Any().Value().Equals(datasetCommit2))
 
-	assert.Equal("sha1-9b9fcfcd7e41ff727e6bea0edfa26f71def178a5", ms.Root().String())
+	assert.Equal("sha1-20ddbcdce78e73801dfdf863ff73a6f95425b55d", ms.Root().String())
 }

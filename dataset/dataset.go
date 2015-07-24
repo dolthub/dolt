@@ -58,7 +58,7 @@ type datasetRootTracker struct {
 }
 
 func (rt *datasetRootTracker) Root() ref.Ref {
-	dataset := mgmt.GetDatasetRoot(mgmt.GetDatasets(rt.parentStore), rt.datasetID)
+	dataset := mgmt.GetDatasetHeads(mgmt.GetDatasets(rt.parentStore), rt.datasetID)
 	if dataset == nil {
 		return ref.Ref{}
 	} else {
@@ -72,6 +72,6 @@ func (rt *datasetRootTracker) UpdateRoot(current, last ref.Ref) bool {
 	}
 
 	datasetCommit := types.MustReadValue(current, rt.parentStore)
-	rt.parentStore = mgmt.CommitDatasets(rt.parentStore, mgmt.SetDatasetRoot(mgmt.GetDatasets(rt.parentStore), rt.datasetID, datasetCommit))
+	rt.parentStore = mgmt.CommitDatasets(rt.parentStore, mgmt.SetDatasetHeads(mgmt.GetDatasets(rt.parentStore), rt.datasetID, datasetCommit))
 	return true
 }

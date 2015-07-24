@@ -62,7 +62,7 @@ func TestGetRef(t *testing.T) {
 	s := server{ms}
 	s.handle(w, req)
 	assert.Equal(w.Code, http.StatusOK)
-	assert.Equal(`j {"set":[{"ref":"sha1-8cd398c860f50a43898e3f95b266b5fdecb4e1e6"}]}
+	assert.Equal(`j {"set":[{"ref":"sha1-643bfe5cc64aca9536d90e2682984c33241acbbe"}]}
 `, w.Body.String())
 }
 

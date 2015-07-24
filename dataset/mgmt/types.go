@@ -8,6 +8,49 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// Dataset
+
+type Dataset struct {
+	m types.Map
+}
+
+func NewDataset() Dataset {
+	return Dataset{types.NewMap()}
+}
+
+func DatasetFromVal(v types.Value) Dataset {
+	return Dataset{v.(types.Map)}
+}
+
+// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
+func (s Dataset) NomsValue() types.Map {
+	return s.m
+}
+
+func (s Dataset) Equals(p Dataset) bool {
+	return s.m.Equals(p.m)
+}
+
+func (s Dataset) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s Dataset) Id() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("id")))
+}
+
+func (s Dataset) SetId(p types.String) Dataset {
+	return DatasetFromVal(s.m.Set(types.NewString("id"), p))
+}
+
+func (s Dataset) Heads() types.Value {
+	return (s.m.Get(types.NewString("heads")))
+}
+
+func (s Dataset) SetHeads(p types.Value) Dataset {
+	return DatasetFromVal(s.m.Set(types.NewString("heads"), p))
+}
+
 // SetOfDataset
 
 type SetOfDataset struct {
@@ -88,48 +131,5 @@ func (s SetOfDataset) fromElemSlice(p []Dataset) []types.Value {
 		r[i] = v.NomsValue()
 	}
 	return r
-}
-
-// Dataset
-
-type Dataset struct {
-	m types.Map
-}
-
-func NewDataset() Dataset {
-	return Dataset{types.NewMap()}
-}
-
-func DatasetFromVal(v types.Value) Dataset {
-	return Dataset{v.(types.Map)}
-}
-
-// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
-func (s Dataset) NomsValue() types.Map {
-	return s.m
-}
-
-func (s Dataset) Equals(p Dataset) bool {
-	return s.m.Equals(p.m)
-}
-
-func (s Dataset) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s Dataset) Id() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("id")))
-}
-
-func (s Dataset) SetId(p types.String) Dataset {
-	return DatasetFromVal(s.m.Set(types.NewString("id"), p))
-}
-
-func (s Dataset) Root() types.Value {
-	return (s.m.Get(types.NewString("root")))
-}
-
-func (s Dataset) SetRoot(p types.Value) Dataset {
-	return DatasetFromVal(s.m.Set(types.NewString("root"), p))
 }
 
