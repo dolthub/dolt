@@ -20,20 +20,18 @@ func NewDataStore(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
 }
 
 func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, rc *commitCache) DataStore {
+	if (rt.Root() == ref.Ref{}) {
+		r, err := types.WriteValue(NewSetOfCommit().NomsValue(), cs)
+		Chk.NoError(err)
+		Chk.True(rt.UpdateRoot(r, ref.Ref{}))
+	}
 	return DataStore{
 		cs, rt, rc, commitSetFromRef(rt.Root(), cs),
 	}
 }
 
 func commitSetFromRef(commitRef ref.Ref, cs chunks.ChunkSource) SetOfCommit {
-	var commits SetOfCommit
-	if (commitRef == ref.Ref{}) {
-		commits = NewSetOfCommit()
-	} else {
-		commits = SetOfCommitFromVal(types.MustReadValue(commitRef, cs).(types.Set))
-	}
-
-	return commits
+	return SetOfCommitFromVal(types.MustReadValue(commitRef, cs))
 }
 
 func (ds *DataStore) Heads() SetOfCommit {
@@ -42,7 +40,7 @@ func (ds *DataStore) Heads() SetOfCommit {
 
 func (ds *DataStore) Commit(newCommits SetOfCommit) DataStore {
 	Chk.True(newCommits.Len() > 0)
-	// TODO: We probably shouldn't let this go *forever*. Considrer putting a limit and... I know don't...panicing?
+	// TODO: We probably shouldn't let this go *forever*. Consider putting a limit and... I know don't...panicing?
 	for !ds.doCommit(newCommits) {
 	}
 	return newDataStoreInternal(ds.ChunkStore, ds.rt, ds.rc)
@@ -70,7 +68,6 @@ func (ds *DataStore) doCommit(commits SetOfCommit) bool {
 		} else {
 			newHeads = SetOfCommitFromVal(newHeads.NomsValue().Subtract(commit.Parents()))
 		}
-
 		return
 	})
 
