@@ -39,7 +39,11 @@ type Flags struct {
 	nop    nopStoreFlags
 }
 
-func NewFlags(prefix string) Flags {
+func NewFlags() Flags {
+	return NewFlagsWithPrefix("")
+}
+
+func NewFlagsWithPrefix(prefix string) Flags {
 	return Flags{
 		awsFlags(prefix),
 		fileFlags(prefix),

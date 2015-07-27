@@ -1,9 +1,8 @@
 package sync
 
 import (
-	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
@@ -16,12 +15,12 @@ import (
 func validateRefAsSetOfCommit(r ref.Ref, cs chunks.ChunkSource) (v types.Value, err error) {
 	v, err = types.ReadValue(r, cs)
 	if v == nil {
-		return nil, errors.New("BAH")
+		return nil, fmt.Errorf("%v cannot be found", r)
 	} else if err != nil {
 		return nil, err
 	}
 	// TODO: Replace this weird recover stuff below once we have a way to determine if
-	// a Value is an instance of a custom struct type.
+	// a Value is an instance of a custom struct type. BUG #133
 	err = fmt.Errorf("%+v is not a SetOfCommit", v)
 	defer func() { recover() }()
 	datas.SetOfCommitFromVal(v) // If this panics the return value will be the error above
@@ -49,19 +48,11 @@ func CopyChunks(refs []ref.Ref, src chunks.ChunkSource, sink chunks.ChunkSink) e
 		} else if err != nil {
 			return err
 		}
-		// It seems like there should be some better way to connect a reader and a writer.
-		data, err := ioutil.ReadAll(reader)
-		if err != nil {
-			return err
-		}
 		writer := sink.Put()
 		defer writer.Close()
-		n, err := writer.Write(data)
+		_, err = io.Copy(writer, reader)
 		if err != nil {
 			return err
-		}
-		if len(data) != n {
-			return fmt.Errorf("Should have read %d bytes; only read %d.", n, len(data))
 		}
 	}
 	return nil

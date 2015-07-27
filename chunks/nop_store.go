@@ -41,9 +41,6 @@ type nopStoreFlags struct {
 }
 
 func nopFlags(prefix string) nopStoreFlags {
-	if prefix != "" {
-		prefix += "-"
-	}
 	return nopStoreFlags{
 		flag.Bool(prefix+"nop-store", false, "use a /dev/null-esque chunkstore"),
 	}

@@ -69,9 +69,6 @@ type memoryStoreFlags struct {
 }
 
 func memoryFlags(prefix string) memoryStoreFlags {
-	if prefix != "" {
-		prefix += "-"
-	}
 	return memoryStoreFlags{
 		flag.Bool(prefix+"memory-store", false, "use a memory-based (ephemeral, and private to this application) chunkstore"),
 	}

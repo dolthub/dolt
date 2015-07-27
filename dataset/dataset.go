@@ -28,10 +28,14 @@ type datasetFlags struct {
 	datasetID *string
 }
 
-func Flags() datasetFlags {
+func NewFlags() datasetFlags {
+	return NewFlagsWithPrefix("")
+}
+
+func NewFlagsWithPrefix(prefix string) datasetFlags {
 	return datasetFlags{
-		chunks.NewFlags(""),
-		flag.String("dataset-id", "", "dataset id to store data for"),
+		chunks.NewFlagsWithPrefix(prefix),
+		flag.String(prefix+"dataset-id", "", "dataset id to store data for"),
 	}
 }
 

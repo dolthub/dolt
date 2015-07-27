@@ -145,7 +145,7 @@ func getIndex(input types.List) MapOfStringToListOfPitch {
 }
 
 func main() {
-	csFlags := chunks.NewFlags("")
+	csFlags := chunks.NewFlags()
 	flag.Parse()
 
 	cs := csFlags.CreateStore()

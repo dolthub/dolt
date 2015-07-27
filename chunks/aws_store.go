@@ -194,9 +194,6 @@ type awsStoreFlags struct {
 }
 
 func awsFlags(prefix string) awsStoreFlags {
-	if prefix != "" {
-		prefix += "-"
-	}
 	return awsStoreFlags{
 		flag.String(prefix+"aws-store-bucket", "", "aws bucket to create an aws-based chunkstore in"),
 		flag.String(prefix+"aws-store-dynamo-table", "noms-root", "dynamodb table to store the root of the aws-based chunkstore in"),

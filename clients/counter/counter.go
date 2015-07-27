@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	dsFlags := dataset.Flags()
+	dsFlags := dataset.NewFlags()
 	flag.Parse()
 
 	ds := dsFlags.CreateDataset()
