@@ -135,6 +135,8 @@ func TestMapEquals(t *testing.T) {
 
 func TestMapNotStringKeys(t *testing.T) {
 	assert := assert.New(t)
+	b1, _ := NewBlob(bytes.NewBufferString("blob1"))
+	b2, _ := NewBlob(bytes.NewBufferString("blob2"))
 	l := []Value{
 		Bool(true), NewString("true"),
 		Bool(false), NewString("false"),
@@ -142,8 +144,8 @@ func TestMapNotStringKeys(t *testing.T) {
 		Int32(0), NewString("int32: 0"),
 		Float64(1), NewString("float64: 1"),
 		Float64(0), NewString("float64: 0"),
-		NewBlob(bytes.NewBufferString("blob1")), NewString("blob1"),
-		NewBlob(bytes.NewBufferString("blob2")), NewString("blob2"),
+		b1, NewString("blob1"),
+		b2, NewString("blob2"),
 		NewList(), NewString("empty list"),
 		NewList(NewList()), NewString("list of list"),
 		NewMap(), NewString("empty map"),

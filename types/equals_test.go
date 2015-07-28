@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,9 +39,23 @@ func TestPrimitiveEquals(t *testing.T) {
 		func() Value { return NewString("") },
 		func() Value { return NewString("hi") },
 		func() Value { return NewString("bye") },
-		func() Value { return NewBlob(&bytes.Buffer{}) },
-		func() Value { return NewBlob(bytes.NewBufferString("hi")) },
-		func() Value { return NewBlob(bytes.NewBufferString("bye")) },
+		func() Value {
+			v, _ := NewBlob(&bytes.Buffer{})
+			return v
+		},
+		func() Value {
+			v, _ := NewBlob(bytes.NewBufferString("hi"))
+			return v
+		},
+		func() Value {
+			v, _ := NewBlob(bytes.NewBufferString("bye"))
+			return v
+		},
+		func() Value {
+			b1, _ := NewBlob(bytes.NewBufferString("hi"))
+			b2, _ := NewBlob(bytes.NewBufferString("bye"))
+			return compoundBlob{uint64(5), []uint64{2, 3}, []Future{futureFromValue(b1), futureFromValue(b2)}, &ref.Ref{}, nil}
+		},
 		func() Value { return NewList() },
 		func() Value { return NewList(NewString("foo")) },
 		func() Value { return NewList(NewString("bar")) },

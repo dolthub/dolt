@@ -3,47 +3,90 @@ package types
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 
-	"github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/buzhash"
 	"github.com/attic-labs/noms/ref"
 )
 
-type Blob struct {
-	data []byte
-	ref  *ref.Ref
+const (
+	// 12 bits leads to an average size of 4k
+	// 13 bits leads to an average size of 8k
+	// 14 bits leads to an average size of 16k
+	pattern = uint32(1<<13 - 1)
+
+	// The window size to use for computing the rolling hash.
+	windowSize = 64
+)
+
+type Blob interface {
+	Value
+	Len() uint64
+	// BUG 155 - Should provide Seek and Write... Maybe even have Blob implement ReadWriteSeeker
+	Reader() io.Reader
 }
 
-func (fb Blob) Reader() io.Reader {
-	return bytes.NewBuffer(fb.data)
-}
+func NewBlob(r io.Reader) (Blob, error) {
+	length := uint64(0)
+	childLengths := []uint64{}
+	blobs := []Future{}
+	var blob blobLeaf
+	for {
+		buf := bytes.Buffer{}
+		n, err := copyChunk(&buf, r)
+		if err != nil {
+			return nil, err
+		}
 
-func (fb Blob) Len() uint64 {
-	return uint64(len(fb.data))
-}
+		if n == 0 {
+			// Don't add empty chunk.
+			break
+		}
 
-func (fb Blob) Ref() ref.Ref {
-	return ensureRef(fb.ref, fb)
-}
-
-func (fb Blob) Equals(other Value) bool {
-	if other == nil {
-		return false
-	} else {
-		return fb.Ref() == other.Ref()
+		length += n
+		blob = newBlobLeaf(buf.Bytes())
+		childLengths = append(childLengths, blob.Len())
+		blobs = append(blobs, futureFromValue(blob))
 	}
-}
 
-func (fb Blob) Chunks() []Future {
-	return nil
-}
+	if length == 0 {
+		return newBlobLeaf([]byte{}), nil
+	}
 
-func NewBlob(r io.Reader) Blob {
-	data, err := ioutil.ReadAll(r)
-	dbg.Chk.NoError(err)
-	return Blob{data, &ref.Ref{}}
+	if len(blobs) == 1 {
+		return blob, nil
+	}
+	return compoundBlob{length, childLengths, blobs, &ref.Ref{}, nil}, nil
 }
 
 func BlobFromVal(v Value) Blob {
 	return v.(Blob)
+}
+
+// copyChunk copies from src to dst until a chunk boundary is found.
+// It returns the number of bytes copied and the earliest error encountered while copying.
+// copyChunk never returns an io.EOF error, instead it returns the number of bytes read up to the io.EOF.
+func copyChunk(dst io.Writer, src io.Reader) (n uint64, err error) {
+	h := buzhash.NewBuzHash(windowSize)
+	p := []byte{0}
+
+	for {
+		_, err = src.Read(p)
+		if err != nil {
+			if err == io.EOF {
+				return n, nil
+			}
+			return
+		}
+
+		h.Write(p)
+		_, err = dst.Write(p)
+		if err != nil {
+			return
+		}
+		n++
+
+		if h.Sum32()&pattern == pattern {
+			return
+		}
+	}
 }

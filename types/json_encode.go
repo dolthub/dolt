@@ -32,10 +32,12 @@ func jsonEncode(v Value, s chunks.ChunkSink) (r ref.Ref, err error) {
 
 func getJSON(v Value, s chunks.ChunkSink) (interface{}, error) {
 	switch v := v.(type) {
-	case Blob:
+	case blobLeaf:
 		Chk.Fail(fmt.Sprintf("jsonEncode doesn't support encoding blobs - didn't expect to get here: %+v", v))
 	case Bool:
 		return bool(v), nil
+	case compoundBlob:
+		return getJSONCompoundBlob(v, s)
 	case Float32:
 		return map[string]interface{}{
 			"float32": float32(v),
@@ -160,24 +162,33 @@ func getChildJSON(f Future, s chunks.ChunkSink) (interface{}, error) {
 		Chk.NotNil(v)
 		switch v := v.(type) {
 		// Blobs, lists, maps, and sets are always out-of-line
-		case Blob:
+		case Blob, List, Map, Set:
 			r, err = WriteValue(v, s)
-		case List:
-			r, err = WriteValue(v, s)
-		case Map:
-			r, err = WriteValue(v, s)
-		case Set:
-			r, err = WriteValue(v, s)
+			if err != nil {
+				return nil, err
+			}
 		default:
 			// Other types are always inline.
 			return getJSON(v, s)
 		}
-		if err != nil {
+	}
+	return map[string]interface{}{
+		"ref": r.String(),
+	}, nil
+}
+
+func getJSONCompoundBlob(cb compoundBlob, s chunks.ChunkSink) (interface{}, error) {
+	var err error
+	l := make([]interface{}, len(cb.blobs)*2+1)
+	l[0] = cb.length
+	for i, f := range cb.blobs {
+		l[i*2+1] = cb.childLengths[i]
+		if l[i*2+2], err = getChildJSON(f, s); err != nil {
 			return nil, err
 		}
 	}
-	Chk.NotNil(r)
+
 	return map[string]interface{}{
-		"ref": r.String(),
+		"cb": l,
 	}, nil
 }

@@ -198,7 +198,9 @@ func getPhotosetPhotos(id string) SetOfPhoto {
 		url := getOriginalUrl(p.Id)
 		fmt.Printf(" . %v\n", url)
 		photoReader := getPhotoReader(url)
-		photo := NewPhoto().SetId(types.NewString(p.Id)).SetTitle(types.NewString(p.Title)).SetUrl(types.NewString(url)).SetImage(types.NewBlob(photoReader))
+		b, err := types.NewBlob(photoReader)
+		Chk.NoError(err)
+		photo := NewPhoto().SetId(types.NewString(p.Id)).SetTitle(types.NewString(p.Title)).SetUrl(types.NewString(url)).SetImage(b)
 		photoSet = photoSet.Insert(photo)
 	}
 	return photoSet

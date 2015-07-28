@@ -15,7 +15,7 @@ func NewString(s string) String {
 	return String{s, &ref.Ref{}}
 }
 
-func (fs String) Blob() Blob {
+func (fs String) Blob() (Blob, error) {
 	return NewBlob(bytes.NewBufferString(fs.s))
 }
 

@@ -27,7 +27,9 @@ func TestWriteValue(t *testing.T) {
 
 	// Encoding details for each codec is tested elsewhere.
 	// Here we just want to make sure codecs are selected correctly.
-	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), NewBlob(bytes.NewBuffer([]byte{0x00, 0x01, 0x02})))
+	b, err := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01, 0x02}))
+	assert.NoError(err)
+	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), b)
 	testEncode(string("j \"foo\"\n"), NewString("foo"))
 
 }

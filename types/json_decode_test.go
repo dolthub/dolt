@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestJSONDecode(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.MemoryStore{}
+	cs := &chunks.MemoryStore{}
 
 	put := func(s string) {
 		s += "\n"
@@ -26,7 +27,7 @@ func TestJSONDecode(t *testing.T) {
 	put(`j {"map":[]}`)
 
 	testDecode := func(s string, expected Value) {
-		actual, err := jsonDecode(strings.NewReader(s), &cs)
+		actual, err := jsonDecode(strings.NewReader(s), cs)
 		assert.NoError(err)
 		assert.True(expected.Equals(actual), "Expected decoded value: %s to equal: %+v, but was: %+v", s, expected, actual)
 	}
@@ -75,5 +76,45 @@ func TestJSONDecode(t *testing.T) {
 	testDecode(`j {"set":[{"int32":42},"hotdog",{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},false,{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
 `, NewSet(Bool(false), Int32(42), NewString("hotdog"), NewList(), NewMap()))
 
-	// referenced blobs?
+	// Blob (compound)
+	// echo -n 'b Hello' | sha1sum
+	blr := ref.MustParse("sha1-c35018551e725bd2ab45166b69d15fda00b161c1")
+	cb := compoundBlob{uint64(2), []uint64{2}, []Future{futureFromRef(blr)}, &ref.Ref{}, cs}
+	testDecode(`j {"cb":[2,2,{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"}]}
+`, cb)
+	// echo -n 'b  ' | sha1sum
+	blr2 := ref.MustParse("sha1-641283a12b475ed58ba510517c1224a912e934a6")
+	// echo -n 'b World!' | sha1sum
+	blr3 := ref.MustParse("sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9")
+	cb2 := compoundBlob{uint64(12), []uint64{5, 1, 6}, []Future{futureFromRef(blr), futureFromRef(blr2), futureFromRef(blr3)}, &ref.Ref{}, cs}
+	testDecode(`j {"cb":[12,5,{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},1,{"ref":"sha1-641283a12b475ed58ba510517c1224a912e934a6"},6,{"ref":"sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9"}]}
+`, cb2)
+}
+
+func TestCompoundBlobJSONDecodeInvalidFormat(t *testing.T) {
+	assert := assert.New(t)
+	cs := &chunks.MemoryStore{}
+
+	_, err := jsonDecode(strings.NewReader("j {\"cb\":[]}\n"), cs)
+	assert.Error(err)
+	_, err = jsonDecode(strings.NewReader("j {\"cb\":[2, 2]}\n"), cs)
+	assert.Error(err)
+
+	_, err = jsonDecode(strings.NewReader("j {\"cb\":[true]}\n"), cs)
+	assert.Error(err)
+	_, err = jsonDecode(strings.NewReader("j {\"cb\":[\"hi\"]}\n"), cs)
+	assert.Error(err)
+	_, err = jsonDecode(strings.NewReader("j {\"cb\":[2.5]}\n"), cs)
+	assert.Error(err)
+
+	_, err = jsonDecode(strings.NewReader(`j {"cb":[2,2.5,"{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"}]}
+`), cs)
+	assert.Error(err)
+
+	_, err = jsonDecode(strings.NewReader("j {\"cb\":[2,2,42]}\n"), cs)
+	assert.Error(err)
+
+	_, err = jsonDecode(strings.NewReader(`j {"cb":[2,2,{"ref":"invalid ref"}]}
+`), cs)
+	assert.Error(err)
 }

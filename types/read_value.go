@@ -35,7 +35,7 @@ func ReadValue(ref ref.Ref, cs chunks.ChunkSource) (Value, error) {
 	}
 
 	if bytes.Equal(prefix, blobTag) {
-		return blobDecode(buffered, cs)
+		return blobLeafDecode(buffered, cs)
 	}
 
 	return nil, fmt.Errorf("Unsupported chunk tag: %+v", prefix)

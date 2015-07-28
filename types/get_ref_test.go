@@ -1,9 +1,9 @@
 package types
 
 import (
-	"bytes"
 	"testing"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
@@ -20,6 +20,7 @@ func TestGetRef(t *testing.T) {
 
 func TestEnsureRef(t *testing.T) {
 	assert := assert.New(t)
+	cs := &chunks.MemoryStore{}
 	count := byte(1)
 	mockGetRef := func(v Value) ref.Ref {
 		d := ref.Sha1Digest{}
@@ -40,8 +41,12 @@ func TestEnsureRef(t *testing.T) {
 		getRefOverride = nil
 	}()
 
+	bl := newBlobLeaf([]byte("hi"))
+	cb := compoundBlob{uint64(2), []uint64{2}, []Future{futureFromValue(bl)}, &ref.Ref{}, cs}
+
 	values := []Value{
-		NewBlob(&bytes.Buffer{}),
+		newBlobLeaf([]byte{}),
+		cb,
 		NewList(),
 		NewString(""),
 		NewMap(),

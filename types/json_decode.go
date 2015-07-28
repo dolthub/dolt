@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 
@@ -9,6 +10,8 @@ import (
 	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
+
+var errInvalidEncoding = errors.New("Invalid encoding")
 
 func jsonDecode(reader io.Reader, s chunks.ChunkSource) (Value, error) {
 	prefix := make([]byte, len(jsonTag))
@@ -56,6 +59,10 @@ func jsonDecodeTaggedValue(m map[string]interface{}, s chunks.ChunkSource) (Futu
 	Chk.Equal(1, len(m))
 	for k, v := range m {
 		switch k {
+		case "cb":
+			if v, ok := v.([]interface{}); ok {
+				return jsonDecodeCompoundBlob(v, s)
+			}
 		case "int16", "int32", "int64", "uint16", "uint32", "uint64", "float32", "float64":
 			// Go decodes all JSON numbers as float64
 			if v, ok := v.(float64); ok {
@@ -145,4 +152,46 @@ func jsonDecodeRef(refStr string, s chunks.ChunkSource) (Future, error) {
 		return nil, err
 	}
 	return futureFromRef(ref), nil
+}
+
+func toUint64(v interface{}) (uint64, error) {
+	fl, ok := v.(float64)
+	if !ok {
+		return 0, errInvalidEncoding
+	}
+	i := uint64(fl)
+	if float64(i) != fl {
+		return 0, errInvalidEncoding
+	}
+	return i, nil
+}
+
+// [length,length0,{"ref":"sha1-0"}, ... lengthN, {"ref":"sha1-N"}]
+func jsonDecodeCompoundBlob(input []interface{}, cs chunks.ChunkSource) (Future, error) {
+	if len(input)%2 != 1 {
+		return nil, errInvalidEncoding
+	}
+
+	length, err := toUint64(input[0])
+	if err != nil {
+		return nil, err
+	}
+
+	numBlobs := len(input) / 2
+	childLengths := make([]uint64, numBlobs)
+	blobs := make([]Future, numBlobs)
+
+	for i := 1; i < len(input); i += 2 {
+		childLength, err := toUint64(input[i])
+		if err != nil {
+			return nil, err
+		}
+		childLengths[i/2] = childLength
+		blobs[i/2], err = jsonDecodeValue(input[i+1], cs)
+		if err != nil {
+			return nil, err
+		}
+	}
+	cb := compoundBlob{length, childLengths, blobs, &ref.Ref{}, cs}
+	return futureFromValue(cb), nil
 }

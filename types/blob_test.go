@@ -19,19 +19,21 @@ func AssertSymNe(assert *assert.Assertions, a, b Value) {
 
 func TestBlobLen(t *testing.T) {
 	assert := assert.New(t)
-	b := NewBlob(&bytes.Buffer{})
+	b, err := NewBlob(&bytes.Buffer{})
+	assert.NoError(err)
 	assert.Equal(uint64(0), b.Len())
-	b = NewBlob(bytes.NewBuffer([]byte{0x01}))
+	b, err = NewBlob(bytes.NewBuffer([]byte{0x01}))
+	assert.NoError(err)
 	assert.Equal(uint64(1), b.Len())
 }
 
 func TestBlobEquals(t *testing.T) {
 	assert := assert.New(t)
-	b1 := NewBlob(bytes.NewBuffer([]byte{0x01}))
+	b1, _ := NewBlob(bytes.NewBuffer([]byte{0x01}))
 	b11 := b1
-	b12 := NewBlob(bytes.NewBuffer([]byte{0x01}))
-	b2 := NewBlob(bytes.NewBuffer([]byte{0x02}))
-	b3 := NewBlob(bytes.NewBuffer([]byte{0x02, 0x03}))
+	b12, _ := NewBlob(bytes.NewBuffer([]byte{0x01}))
+	b2, _ := NewBlob(bytes.NewBuffer([]byte{0x02}))
+	b3, _ := NewBlob(bytes.NewBuffer([]byte{0x02, 0x03}))
 	AssertSymEq(assert, b1, b11)
 	AssertSymEq(assert, b1, b12)
 	AssertSymNe(assert, b1, b2)

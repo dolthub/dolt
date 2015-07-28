@@ -2,6 +2,7 @@ package types
 
 import (
 	"crypto/sha1"
+	"os"
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
@@ -86,6 +87,17 @@ func TestJsonEncode(t *testing.T) {
 	// Sets
 	testEncode(`j {"set":[]}
 `, NewSet())
+
+	// Blob (compound)
+	blr := ref.MustParse("sha1-5bf524e621975ee2efbf02aed1bc0cd01f1cf8e0")
+	cb := compoundBlob{uint64(2), []uint64{2}, []Future{futureFromRef(blr)}, &ref.Ref{}, s}
+	testEncode(`j {"cb":[2,2,{"ref":"sha1-5bf524e621975ee2efbf02aed1bc0cd01f1cf8e0"}]}
+`, cb)
+
+	bl := newBlobLeaf([]byte("hello"))
+	cb = compoundBlob{uint64(5), []uint64{5}, []Future{futureFromValue(bl)}, &ref.Ref{}, s}
+	testEncode(`j {"cb":[5,5,{"ref":"sha1-8543a1b775237567a8c0e70e8ae7a1c6aac0ebbb"}]}
+`, cb)
 }
 
 func TestGetJSONChildResolvedFuture(t *testing.T) {
@@ -142,4 +154,27 @@ func TestFutureCompound(t *testing.T) {
 	assert.NoError(err)
 	assert.IsType([]interface{}{}, m.(map[string]interface{})["map"])
 	assert.Equal(0, cs.Reads)
+}
+
+func TestCompoundBlobCodecChunked(t *testing.T) {
+	assert := assert.New(t)
+	cs := &chunks.MemoryStore{}
+
+	f, err := os.Open("alice-short.txt")
+	assert.NoError(err)
+	defer f.Close()
+
+	b, err := NewBlob(f)
+	assert.NoError(err)
+	cb, ok := b.(compoundBlob)
+	assert.True(ok)
+
+	r, err := jsonEncode(cb, cs)
+	assert.Equal("sha1-a50d4c424c6221897e0b673ea9ed7769b8e83d49", r.String())
+
+	reader, err := cs.Get(r)
+	assert.NoError(err)
+	v, err := jsonDecode(reader, cs)
+	assert.NoError(err)
+	assert.True(cb.Equals(v))
 }

@@ -1,7 +1,6 @@
 package types
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
@@ -20,7 +19,8 @@ var (
 		Float32(1),
 		Float64(1),
 		NewString("hi"),
-		NewBlob(bytes.NewBufferString("hi")),
+		newBlobLeaf([]byte("hi")),
+		// compoundBlob
 		NewSet(NewString("hi")),
 		NewList(NewString("hi")),
 		NewMap(NewString("hi"), NewString("hi")),
@@ -29,7 +29,7 @@ var (
 
 func isEncodedOutOfLine(v Value) int {
 	switch v.(type) {
-	case Blob, Set, List, Map:
+	case blobLeaf, compoundBlob, Set, List, Map:
 		return 1
 	}
 	return 0
