@@ -12,7 +12,7 @@ import (
 
 func TestWalkTestSuite(t *testing.T) {
 	suite.Run(t, &WalkAllTestSuite{})
-	//suite.Run(t, &WalkTestSuite{})
+	suite.Run(t, &WalkTestSuite{})
 }
 
 type WalkAllTestSuite struct {
@@ -80,7 +80,7 @@ type WalkTestSuite struct {
 }
 
 func (suite *WalkTestSuite) SetupTest() {
-	suite.shouldSee = types.NewString("zzz")
+	suite.shouldSee = types.NewList(types.NewString("zzz"))
 	suite.deadValue = types.UInt64(0xDEADBEEF)
 	suite.mustSkip = types.NewList(suite.deadValue)
 	suite.cs = &chunks.TestStore{}
@@ -101,15 +101,15 @@ func (suite *WalkTestSuite) skipWorker(composite types.Value) (reached []ref.Ref
 		reached = append(reached, r)
 		return r == suite.mustSkip.Ref()
 	})
-	return reached
+	return
 }
 
 // Skipping a sub-tree must allow other items in the list to be processed.
 func (suite *WalkTestSuite) TestSkipListElement() {
 	wholeList := types.NewList(suite.mustSkip, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeList)
-	for _, r := range []ref.Ref{wholeList.Ref(), suite.mustSkip.Ref(), suite.shouldSee.Ref(), suite.shouldSee.Ref()} {
-		suite.Contains(reached, r)
+	for _, v := range []types.Value{wholeList, suite.mustSkip, suite.shouldSee, suite.shouldSee} {
+		suite.Contains(reached, v.Ref(), "Doesn't contain %+v", v)
 	}
 	suite.Len(reached, 4)
 }
@@ -117,18 +117,27 @@ func (suite *WalkTestSuite) TestSkipListElement() {
 func (suite *WalkTestSuite) TestSkipSetElement() {
 	wholeSet := types.NewSet(suite.mustSkip, suite.shouldSee).Insert(suite.shouldSee)
 	reached := suite.skipWorker(wholeSet)
-	suite.EqualValues(types.NewList(wholeSet, suite.mustSkip, suite.shouldSee), reached)
+	for _, v := range []types.Value{wholeSet, suite.mustSkip, suite.shouldSee} {
+		suite.Contains(reached, v.Ref(), "Doesn't contain %+v", v)
+	}
+	suite.Len(reached, 3)
 }
 
 func (suite *WalkTestSuite) TestSkipMapValue() {
-	shouldAlsoSee := types.NewString("Also good")
+	shouldAlsoSee := types.NewSet(types.NewString("Also good"))
 	wholeMap := types.NewMap(suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
-	suite.EqualValues(types.NewList(wholeMap, shouldAlsoSee, suite.shouldSee, suite.shouldSee, suite.mustSkip), reached)
+	for _, v := range []types.Value{wholeMap, suite.mustSkip, shouldAlsoSee, suite.shouldSee, suite.shouldSee} {
+		suite.Contains(reached, v.Ref(), "Doesn't contain %+v", v)
+	}
+	suite.Len(reached, 5)
 }
 
 func (suite *WalkTestSuite) TestSkipMapKey() {
 	wholeMap := types.NewMap(suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
-	suite.EqualValues(types.NewList(wholeMap, suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee), reached)
+	for _, v := range []types.Value{wholeMap, suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee} {
+		suite.Contains(reached, v.Ref(), "Doesn't contain %+v", v)
+	}
+	suite.Len(reached, 5)
 }
