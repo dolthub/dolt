@@ -3,7 +3,9 @@ package types
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
 
+	"github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -36,7 +38,9 @@ func (fb Blob) Chunks() []Future {
 	return nil
 }
 
-func NewBlob(data []byte) Blob {
+func NewBlob(r io.Reader) Blob {
+	data, err := ioutil.ReadAll(r)
+	dbg.Chk.NoError(err)
 	return Blob{data, &ref.Ref{}}
 }
 

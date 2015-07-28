@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -16,12 +17,12 @@ func TestBlobCodec(t *testing.T) {
 	defer os.Remove(dir)
 	assert.NoError(err)
 	fs := chunks.NewFileStore(dir, "root")
-	b1 := NewBlob([]byte{})
+	b1 := NewBlob(&bytes.Buffer{})
 	r1, err := blobEncode(b1, fs)
 	// echo -n 'b ' | sha1sum
 	assert.Equal("sha1-e1bc846440ec2fb557a5a271e785cd4c648883fa", r1.String())
 
-	b2 := NewBlob([]byte("Hello, World!"))
+	b2 := NewBlob(bytes.NewBufferString("Hello, World!"))
 	r2, err := blobEncode(b2, fs)
 	// echo -n 'b Hello, World!' | sha1sum
 	assert.Equal("sha1-135fe1453330547994b2ce8a1b238adfbd7df87e", r2.String())

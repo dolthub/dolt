@@ -1,11 +1,10 @@
 package types
 
 import (
-	"bytes"
 	"io"
+	"io/ioutil"
 
 	"github.com/attic-labs/noms/chunks"
-	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -25,17 +24,10 @@ func blobEncode(b Blob, s chunks.ChunkSink) (r ref.Ref, err error) {
 }
 
 func blobDecode(r io.Reader, s chunks.ChunkSource) (Value, error) {
-	buf := &bytes.Buffer{}
-	_, err := io.CopyN(buf, r, int64(len(blobTag)))
+	// Skip the blobTag
+	_, err := ioutil.ReadAll(io.LimitReader(r, int64(len(blobTag))))
 	if err != nil {
 		return nil, err
 	}
-	Chk.True(bytes.Equal(buf.Bytes(), blobTag))
-
-	buf.Truncate(0)
-	_, err = io.Copy(buf, r)
-	if err != nil {
-		return nil, err
-	}
-	return NewBlob(buf.Bytes()), nil
+	return NewBlob(r), nil
 }

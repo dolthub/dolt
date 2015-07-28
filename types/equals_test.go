@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,9 +38,9 @@ func TestPrimitiveEquals(t *testing.T) {
 		func() Value { return NewString("") },
 		func() Value { return NewString("hi") },
 		func() Value { return NewString("bye") },
-		func() Value { return NewBlob([]byte{}) },
-		func() Value { return NewBlob([]byte("hi")) },
-		func() Value { return NewBlob([]byte("bye")) },
+		func() Value { return NewBlob(&bytes.Buffer{}) },
+		func() Value { return NewBlob(bytes.NewBufferString("hi")) },
+		func() Value { return NewBlob(bytes.NewBufferString("bye")) },
 		func() Value { return NewList() },
 		func() Value { return NewList(NewString("foo")) },
 		func() Value { return NewList(NewString("bar")) },

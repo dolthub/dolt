@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/attic-labs/noms/ref"
@@ -40,7 +41,7 @@ func TestEnsureRef(t *testing.T) {
 	}()
 
 	values := []Value{
-		NewBlob([]byte{}),
+		NewBlob(&bytes.Buffer{}),
 		NewList(),
 		NewString(""),
 		NewMap(),

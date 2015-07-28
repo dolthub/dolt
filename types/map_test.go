@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
@@ -141,8 +142,8 @@ func TestMapNotStringKeys(t *testing.T) {
 		Int32(0), NewString("int32: 0"),
 		Float64(1), NewString("float64: 1"),
 		Float64(0), NewString("float64: 0"),
-		NewBlob([]byte("blob1")), NewString("blob1"),
-		NewBlob([]byte("blob2")), NewString("blob2"),
+		NewBlob(bytes.NewBufferString("blob1")), NewString("blob1"),
+		NewBlob(bytes.NewBufferString("blob2")), NewString("blob2"),
 		NewList(), NewString("empty list"),
 		NewList(NewList()), NewString("list of list"),
 		NewMap(), NewString("empty map"),

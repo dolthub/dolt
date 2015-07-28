@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestWriteValue(t *testing.T) {
 
 	// Encoding details for each codec is tested elsewhere.
 	// Here we just want to make sure codecs are selected correctly.
-	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), NewBlob([]byte{0x00, 0x01, 0x02}))
+	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), NewBlob(bytes.NewBuffer([]byte{0x00, 0x01, 0x02})))
 	testEncode(string("j \"foo\"\n"), NewString("foo"))
 
 }

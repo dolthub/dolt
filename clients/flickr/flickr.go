@@ -1,11 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -197,8 +197,8 @@ func getPhotosetPhotos(id string) SetOfPhoto {
 	for _, p := range response.Photoset.Photo {
 		url := getOriginalUrl(p.Id)
 		fmt.Printf(" . %v\n", url)
-		photoBytes := getPhotoBytes(url)
-		photo := NewPhoto().SetId(types.NewString(p.Id)).SetTitle(types.NewString(p.Title)).SetUrl(types.NewString(url)).SetImage(types.NewBlob(photoBytes))
+		photoReader := getPhotoReader(url)
+		photo := NewPhoto().SetId(types.NewString(p.Id)).SetTitle(types.NewString(p.Title)).SetUrl(types.NewString(url)).SetImage(types.NewBlob(photoReader))
 		photoSet = photoSet.Insert(photo)
 	}
 	return photoSet
@@ -232,13 +232,11 @@ func getOriginalUrl(id string) string {
 	return "NOT REACHED"
 }
 
-func getPhotoBytes(url string) []byte {
+func getPhotoReader(url string) io.Reader {
 	resp, err := http.Get(url)
 	Chk.NoError(err)
 	defer resp.Body.Close()
-	var buff bytes.Buffer
-	buff.ReadFrom(resp.Body)
-	return buff.Bytes()
+	return resp.Body
 }
 
 func awaitOAuthResponse(l *net.TCPListener, tempCred *oauth.Credentials) error {
@@ -302,7 +300,7 @@ func callFlickrAPI(method string, response interface{}, args *map[string]string)
 
 	status := reflect.ValueOf(response).Elem().FieldByName("Stat").Interface().(string)
 	if status != "ok" {
-		err = errors.New(fmt.Sprintf("Failed flickr API call: %v, status: &v", method, status))
+		err = errors.New(fmt.Sprintf("Failed flickr API call: %v, status: %v", method, status))
 	}
 	return nil
 }

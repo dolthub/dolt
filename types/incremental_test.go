@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
@@ -19,7 +20,7 @@ var (
 		Float32(1),
 		Float64(1),
 		NewString("hi"),
-		NewBlob([]byte("hi")),
+		NewBlob(bytes.NewBufferString("hi")),
 		NewSet(NewString("hi")),
 		NewList(NewString("hi")),
 		NewMap(NewString("hi"), NewString("hi")),

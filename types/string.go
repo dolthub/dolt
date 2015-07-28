@@ -1,6 +1,8 @@
 package types
 
 import (
+	"bytes"
+
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -14,7 +16,7 @@ func NewString(s string) String {
 }
 
 func (fs String) Blob() Blob {
-	return NewBlob([]byte(fs.s))
+	return NewBlob(bytes.NewBufferString(fs.s))
 }
 
 func (fs String) String() string {
