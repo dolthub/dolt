@@ -7,26 +7,28 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// DataStore embeds ChunkStore, but also augments it with a notion of Commits. A Commit represents a single point in time in a DataStore, and each also keeps track of the lineage that brought it to this point.
 type DataStore struct {
 	chunks.ChunkStore
 
 	rt    chunks.RootTracker
-	rc    *commitCache
+	cc    *commitCache
 	heads SetOfCommit
 }
 
+// NewDataStore creates a new instance, wrapping cs and rt.
 func NewDataStore(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
-	return newDataStoreInternal(cs, rt, NewCommitCache(cs))
+	return newDataStoreInternal(cs, rt, newCommitCache(cs))
 }
 
-func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, rc *commitCache) DataStore {
+func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, cc *commitCache) DataStore {
 	if (rt.Root() == ref.Ref{}) {
 		r, err := types.WriteValue(NewSetOfCommit().NomsValue(), cs)
 		Chk.NoError(err)
 		Chk.True(rt.UpdateRoot(r, ref.Ref{}))
 	}
 	return DataStore{
-		cs, rt, rc, commitSetFromRef(rt.Root(), cs),
+		cs, rt, cc, commitSetFromRef(rt.Root(), cs),
 	}
 }
 
@@ -34,16 +36,18 @@ func commitSetFromRef(commitRef ref.Ref, cs chunks.ChunkSource) SetOfCommit {
 	return SetOfCommitFromVal(types.MustReadValue(commitRef, cs))
 }
 
+// Heads returns the current set of active Commits.
 func (ds *DataStore) Heads() SetOfCommit {
 	return ds.heads
 }
 
+// Commit returns a new DataStore with newCommits as the heads, but backed by the same ChunkStore and RootTracker instances as the current one.
 func (ds *DataStore) Commit(newCommits SetOfCommit) DataStore {
 	Chk.True(newCommits.Len() > 0)
 	// TODO: We probably shouldn't let this go *forever*. Consider putting a limit and... I know don't...panicing?
 	for !ds.doCommit(newCommits) {
 	}
-	return newDataStoreInternal(ds.ChunkStore, ds.rt, ds.rc)
+	return newDataStoreInternal(ds.ChunkStore, ds.rt, ds.cc)
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the set of current heads. doCommit is optimistic in that it is attempting to update heads making the assumption that currentRootRef is the ref of the current heads. The call to UpdateRoot below will fail if that assumption fails (e.g. because of a race with another writer) and the entire algorigthm must be tried again.
@@ -75,7 +79,7 @@ func (ds *DataStore) doCommit(commits SetOfCommit) bool {
 		return true
 	}
 
-	// TODO: This set will be orphaned if this UpdateCommit below fails
+	// TODO: This set will be orphaned if this UpdateRoot below fails
 	newRootRef, err := types.WriteValue(newHeads.NomsValue(), ds)
 	Chk.NoError(err)
 
@@ -97,6 +101,6 @@ func (ds *DataStore) isPrexisting(commit Commit, currentHeads SetOfCommit) bool 
 		return false
 	}
 
-	ds.rc.Update(currentHeads)
-	return ds.rc.Contains(commit.Ref())
+	ds.cc.Update(currentHeads)
+	return ds.cc.Contains(commit.Ref())
 }
