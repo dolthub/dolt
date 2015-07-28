@@ -27,7 +27,7 @@ var (
 )
 
 func main() {
-	dsFlags := dataset.Flags()
+	dsFlags := dataset.NewFlags()
 	flag.Usage = customUsage
 	flag.Parse()
 	ds := dsFlags.CreateDataset()

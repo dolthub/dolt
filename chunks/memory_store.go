@@ -68,9 +68,9 @@ type memoryStoreFlags struct {
 	use *bool
 }
 
-func memoryFlags() memoryStoreFlags {
+func memoryFlags(prefix string) memoryStoreFlags {
 	return memoryStoreFlags{
-		flag.Bool("memory-store", false, "use a memory-based (ephemeral, and private to this application) chunkstore"),
+		flag.Bool(prefix+"memory-store", false, "use a memory-based (ephemeral, and private to this application) chunkstore"),
 	}
 }
 

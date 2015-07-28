@@ -40,11 +40,15 @@ type Flags struct {
 }
 
 func NewFlags() Flags {
+	return NewFlagsWithPrefix("")
+}
+
+func NewFlagsWithPrefix(prefix string) Flags {
 	return Flags{
-		awsFlags(),
-		fileFlags(),
-		memoryFlags(),
-		nopFlags(),
+		awsFlags(prefix),
+		fileFlags(prefix),
+		memoryFlags(prefix),
+		nopFlags(prefix),
 	}
 }
 

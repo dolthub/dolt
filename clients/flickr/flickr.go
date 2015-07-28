@@ -33,7 +33,7 @@ type flickrCall struct {
 }
 
 func main() {
-	dsFlags := dataset.Flags()
+	dsFlags := dataset.NewFlags()
 	flag.Parse()
 
 	if *apiKeyFlag == "" || *apiKeySecretFlag == "" {

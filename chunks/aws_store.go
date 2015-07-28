@@ -164,7 +164,7 @@ func (w *awsChunkWriter) Close() error {
 
 	_, err = w.store.awsSvc.HeadObject(&s3.HeadObjectInput{
 		Bucket: bucket,
-		Key: key,
+		Key:    key,
 	})
 	if err == nil {
 		// Nothing to do, s3 already has this chunk
@@ -193,14 +193,14 @@ type awsStoreFlags struct {
 	awsSecret   *string
 }
 
-func awsFlags() awsStoreFlags {
+func awsFlags(prefix string) awsStoreFlags {
 	return awsStoreFlags{
-		flag.String("aws-store-bucket", "", "aws bucket to create an aws-based chunkstore in"),
-		flag.String("aws-store-dynamo-table", "noms-root", "dynamodb table to store the root of the aws-based chunkstore in"),
-		flag.String("aws-store-region", "us-west-2", "aws region to put the aws-based chunkstore in"),
-		flag.Bool("aws-store-auth-from-env", false, "creates the aws-based chunkstore from authorization found in the environment. This is typically used in production to get keys from IAM profile. If not specified, then -aws-store-key and aws-store-secret must be specified instead"),
-		flag.String("aws-store-key", "", "aws key to use to create the aws-based chunkstore"),
-		flag.String("aws-store-secret", "", "aws secret to use to create the aws-based chunkstore"),
+		flag.String(prefix+"aws-store-bucket", "", "aws bucket to create an aws-based chunkstore in"),
+		flag.String(prefix+"aws-store-dynamo-table", "noms-root", "dynamodb table to store the root of the aws-based chunkstore in"),
+		flag.String(prefix+"aws-store-region", "us-west-2", "aws region to put the aws-based chunkstore in"),
+		flag.Bool(prefix+"aws-store-auth-from-env", false, "creates the aws-based chunkstore from authorization found in the environment. This is typically used in production to get keys from IAM profile. If not specified, then -aws-store-key and aws-store-secret must be specified instead"),
+		flag.String(prefix+"aws-store-key", "", "aws key to use to create the aws-based chunkstore"),
+		flag.String(prefix+"aws-store-secret", "", "aws secret to use to create the aws-based chunkstore"),
 	}
 }
 
