@@ -81,6 +81,13 @@ func (l List) Ref() ref.Ref {
 	return ensureRef(l.ref, l)
 }
 
+// BUG 141
+func (l List) Release() {
+	for _, f := range l.list {
+		f.Release()
+	}
+}
+
 func (l List) Equals(other Value) bool {
 	if other == nil {
 		return false

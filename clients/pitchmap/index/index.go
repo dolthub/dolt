@@ -114,6 +114,10 @@ func getIndex(input types.List) MapOfStringToListOfPitch {
 	pitchers := NewMapOfStringToString()
 	for i := uint64(0); i < input.Len(); i++ {
 		m := input.Get(i).(types.Map)
+
+		// TODO: This really sucks
+		input.Release()
+
 		if key := types.NewString("inning"); m.Has(key) {
 			for idStr, p := range processInning(m.Get(key).(types.Map)) {
 				id := types.NewString(idStr)

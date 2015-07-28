@@ -35,3 +35,7 @@ func (f *unresolvedFuture) Deref(cs chunks.ChunkSource) (Value, error) {
 func (f *unresolvedFuture) Ref() ref.Ref {
 	return f.ref
 }
+
+func (f *unresolvedFuture) Release() {
+	f.val = nil
+}

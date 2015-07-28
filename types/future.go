@@ -16,6 +16,9 @@ type Future interface {
 
 	// Fetch the Future value if necessary, then return it. Multiple calls to deref only result in one fetch.
 	Deref(cs chunks.ChunkSource) (Value, error)
+
+	// BUG 141. The lazy loading api is clearly not working.
+	Release()
 }
 
 func futuresEqual(f1, f2 Future) bool {
