@@ -17,8 +17,8 @@ import (
 
 var (
 	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-	inputID    = flag.String("input-dataset-id", "", "dataset to pull data from.")
-	outputID   = flag.String("output-dataset-id", "", "dataset to store data in.")
+	inputID    = flag.String("input-ds", "", "dataset to pull data from.")
+	outputID   = flag.String("output-ds", "", "dataset to store data in.")
 )
 
 func getAsString(fm types.Map, key string) string {

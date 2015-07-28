@@ -20,7 +20,7 @@ cd /tmp/mlb_data
 
 wget -e robots=off -x -i urls.txt
 
-<noms>/clients/xml_importer/xml_importer --file-store=/tmp/mlb_data --dataset-id=mlb/xml  gd2.mlb.com/
+<noms>/clients/xml_importer/xml_importer --file-store=/tmp/mlb_data --ds=mlb/xml  gd2.mlb.com/
 
-<noms>/clients/pitchmap/index/index --file-store=/tmp/mlb_data --input-dataset-id=mlb/xml --output-dataset-id=mlb/heatmap
+<noms>/clients/pitchmap/index/index --file-store=/tmp/mlb_data --input-ds=mlb/xml --output-ds=mlb/heatmap
 ```
