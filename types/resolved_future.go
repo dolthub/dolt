@@ -24,3 +24,6 @@ func (rf resolvedFuture) Val() Value {
 func (rf resolvedFuture) Deref(cs chunks.ChunkSource) (Value, error) {
 	return rf.val, nil
 }
+
+func (rf resolvedFuture) Release() {
+}

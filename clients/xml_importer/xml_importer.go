@@ -11,6 +11,8 @@ import (
 	"github.com/attic-labs/noms/clients/go"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
+	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/types"
 	"github.com/clbanning/mxj"
 )
 
@@ -45,7 +47,8 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	var objects []interface{}
+	list := types.NewList()
+
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			log.Fatalln("Cannot traverse directories: ", err)
@@ -62,16 +65,28 @@ func main() {
 		if err != nil {
 			log.Fatalln("Error decoding XML: ", err)
 		}
-		objects = append(objects, xmlObject.Old())
+		object := xmlObject.Old()
+
+		nomsObj := util.NomsValueFromDecodedJSON(object)
+		if *noIO {
+			return nil
+		}
+
+		ref, err := types.WriteValue(nomsObj, ds)
+		Chk.NoError(err)
+
+		// BUG 141
+		nomsObj, err = types.ReadValue(ref, ds)
+		Chk.NoError(err)
+
+		list = list.Append(nomsObj)
 		return nil
 	})
-
-	noms := util.NomsValueFromDecodedJSON(objects)
 
 	if !*noIO {
 		ds.Commit(datas.NewSetOfCommit().Insert(
 			datas.NewCommit().SetParents(
-				ds.Heads().NomsValue()).SetValue(noms)))
+				ds.Heads().NomsValue()).SetValue(list)))
 	}
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)
