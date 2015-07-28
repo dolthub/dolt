@@ -35,7 +35,7 @@ func NewFlags() datasetFlags {
 func NewFlagsWithPrefix(prefix string) datasetFlags {
 	return datasetFlags{
 		chunks.NewFlagsWithPrefix(prefix),
-		flag.String("ds", "", "dataset id to store data for"),
+		flag.String(prefix+"ds", "", "dataset id to store data for"),
 	}
 }
 
