@@ -48,7 +48,7 @@ func (cache *commitCache) Contains(candidate ref.Ref) bool {
 	return ok
 }
 
-func NewCommitCache(source chunks.ChunkSource) *commitCache {
+func newCommitCache(source chunks.ChunkSource) *commitCache {
 	return &commitCache{
 		source,
 		make(map[ref.Ref]bool),
