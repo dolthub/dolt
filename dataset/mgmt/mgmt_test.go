@@ -12,7 +12,7 @@ import (
 func TestGetDataset(t *testing.T) {
 	assert := assert.New(t)
 	ms := &chunks.MemoryStore{}
-	ds := datas.NewDataStore(ms, ms)
+	ds := datas.NewDataStore(ms)
 	datasets := GetDatasets(ds)
 	dataset := getDataset(datasets, "testdataset")
 	assert.Nil(dataset)
