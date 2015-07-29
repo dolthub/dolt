@@ -9,7 +9,7 @@ To import a CSV file do:
 
 ```
 $ go build csv_importer.go
-$ ./csv_importer -file-store="/tmp/foo" <URL>
+$ ./csv_importer -fs="/tmp/foo" -ds="foo" <URL>
 ```
 
 ## List of CSV URLs

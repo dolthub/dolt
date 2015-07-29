@@ -12,5 +12,5 @@ go build
 ## Run
 ```
 # See -h for more options
-./server -file-store="/tmp/foo"
+./server -fs="/tmp/foo"
 ```
