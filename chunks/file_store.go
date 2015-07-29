@@ -131,9 +131,9 @@ func (w *fileChunkWriter) Close() error {
 	}
 
 	totalBytes := w.buffer.Len()
-	written, err := file.Write(w.buffer.Bytes())
+	written, err := io.Copy(file, w.buffer)
 	Chk.NoError(err)
-	Chk.True(totalBytes == written, "Too few bytes written.") // BUG #83
+	Chk.True(int64(totalBytes) == written, "Too few bytes written.") // BUG #83
 
 	w.buffer = nil
 	return nil
