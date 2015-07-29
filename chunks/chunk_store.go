@@ -6,20 +6,20 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-// ChunkStore provides the ability to read and write chunks of data, addressable by a ref.Ref.
+// ChunkStore is the core storage abstraction in noms. We can put data anyplace we have a ChunkStore implementation for.
 type ChunkStore interface {
 	ChunkSource
 	ChunkSink
 	RootTracker
 }
 
-// RootTracker allows querying and management of the root of an entire tree of references.
+// RootTracker allows querying and management of the root of an entire tree of references. The "root" is the single mutable variable in a ChunkStore. It can store any ref, but it is typically used by higher layers (such as DataStore) to store a ref to a value that represents the current state and entire history of a datastore.
 type RootTracker interface {
 	Root() ref.Ref
 	UpdateRoot(current, last ref.Ref) bool
 }
 
-// ChunkSource provides an interface for fetching chunks by Ref.
+// ChunkSource is a place to get chunks from.
 type ChunkSource interface {
 	// Get gets a reader for the value of the Ref in the store. If the ref is absent from the store nil and no error is returned.
 	Get(ref ref.Ref) (io.ReadCloser, error)
@@ -37,7 +37,7 @@ type ChunkWriter interface {
 	Ref() (ref.Ref, error)
 }
 
-// NewFlags creates a new instance of Flags.
+// NewFlags creates a new instance of Flags, which declares a number of ChunkStore-related command-line flags using the golang flag package. Call this before flag.Parse().
 func NewFlags() Flags {
 	return NewFlagsWithPrefix("")
 }
@@ -52,7 +52,7 @@ func NewFlagsWithPrefix(prefix string) Flags {
 	}
 }
 
-// Flags wraps up the command-line flags for all ChunkStore implementations.
+// Flags abstracts away definitions for and handling of command-line flags for all ChunkStore implementations.
 type Flags struct {
 	aws    awsStoreFlags
 	file   fileStoreFlags
@@ -60,7 +60,7 @@ type Flags struct {
 	nop    nopStoreFlags
 }
 
-// CreateStore consults f and returns an instance of the appropriate ChunkStore implementation.
+// CreateStore creates a ChunkStore implementation based on the values of command-line flags.
 func (f Flags) CreateStore() (cs ChunkStore) {
 	if cs = f.aws.createStore(); cs != nil {
 	} else if cs = f.file.createStore(); cs != nil {

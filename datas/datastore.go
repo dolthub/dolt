@@ -7,7 +7,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-// DataStore embeds ChunkStore, but also augments it with a notion of Commits. A Commit represents a single point in time in a DataStore, and each also keeps track of the lineage that brought it to this point.
+// DataStore provides versioned storage for noms values. Each DataStore instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new DataStore, representing a new moment in history.
 type DataStore struct {
 	chunks.ChunkStore
 
@@ -16,7 +16,7 @@ type DataStore struct {
 	heads SetOfCommit
 }
 
-// NewDataStore creates a new instance, wrapping cs and rt.
+// NewDataStore() creates a new DataStore with a specified ChunkStore and RootTracker. Typically these two values will be the same, but it is sometimes useful to have a separate RootTracker (e.g., see DataSet).
 func NewDataStore(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
 	return newDataStoreInternal(cs, rt, newCommitCache(cs))
 }
@@ -36,7 +36,7 @@ func commitSetFromRef(commitRef ref.Ref, cs chunks.ChunkSource) SetOfCommit {
 	return SetOfCommitFromVal(types.MustReadValue(commitRef, cs))
 }
 
-// Heads returns the current set of active Commits.
+// Heads returns the head Commit of all currently active forks.
 func (ds *DataStore) Heads() SetOfCommit {
 	return ds.heads
 }
