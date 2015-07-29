@@ -16,7 +16,7 @@ type Dataset struct {
 }
 
 func NewDataset(parentStore datas.DataStore, datasetID string) Dataset {
-	return Dataset{datas.NewDataStore(parentStore, &datasetRootTracker{parentStore, datasetID})}
+	return Dataset{datas.NewDataStoreWithRootTracker(parentStore, &datasetRootTracker{parentStore, datasetID})}
 }
 
 func (ds *Dataset) Commit(newCommits datas.SetOfCommit) Dataset {
@@ -48,10 +48,8 @@ func (f datasetFlags) CreateDataset() *Dataset {
 		return nil
 	}
 
-	// Blech, kinda sucks to typecast to RootTracker, but we know that all the implementations of ChunkStore implement it.
-	commitDataStore := datas.NewDataStore(cs, cs.(chunks.RootTracker))
-
-	ds := NewDataset(commitDataStore, *f.datasetID)
+	rootDS := datas.NewDataStore(cs)
+	ds := NewDataset(rootDS, *f.datasetID)
 	return &ds
 }
 

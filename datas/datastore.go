@@ -16,8 +16,12 @@ type DataStore struct {
 	heads SetOfCommit
 }
 
+func NewDataStore(cs chunks.ChunkStore) DataStore {
+	return NewDataStoreWithRootTracker(cs, cs)
+}
+
 // NewDataStore() creates a new DataStore with a specified ChunkStore and RootTracker. Typically these two values will be the same, but it is sometimes useful to have a separate RootTracker (e.g., see DataSet).
-func NewDataStore(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
+func NewDataStoreWithRootTracker(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
 	return newDataStoreInternal(cs, rt, newCommitCache(cs))
 }
 

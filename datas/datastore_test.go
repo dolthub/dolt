@@ -17,7 +17,7 @@ func TestDataStoreCommit(t *testing.T) {
 	assert.NoError(err)
 
 	chunks := chunks.NewFileStore(dir, "root")
-	ds := NewDataStore(chunks, chunks)
+	ds := NewDataStore(chunks)
 
 	commits := ds.Heads()
 	assert.Equal(uint64(0), commits.Len())
@@ -117,7 +117,7 @@ func TestDataStoreConcurrency(t *testing.T) {
 	assert.NoError(err)
 
 	chunks := chunks.NewFileStore(dir, "commit")
-	ds := NewDataStore(chunks, chunks)
+	ds := NewDataStore(chunks)
 
 	// Setup:
 	// |a| <- |b|
@@ -134,7 +134,7 @@ func TestDataStoreConcurrency(t *testing.T) {
 	bcSet := bSet.Insert(c)
 
 	// Important to create this here.
-	ds2 := NewDataStore(chunks, chunks)
+	ds2 := NewDataStore(chunks)
 
 	// Change 1:
 	// |a| <- |b| <- |d|

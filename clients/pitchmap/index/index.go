@@ -164,7 +164,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	dataStore := datas.NewDataStore(cs, cs.(chunks.RootTracker))
+	dataStore := datas.NewDataStore(cs)
 	inputDataset := dataset.NewDataset(dataStore, *inputID)
 	outputDataset := dataset.NewDataset(dataStore, *outputID)
 

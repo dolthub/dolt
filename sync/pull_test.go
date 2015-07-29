@@ -12,7 +12,7 @@ import (
 
 func createTestDataset(name string) dataset.Dataset {
 	t := &chunks.TestStore{}
-	return dataset.NewDataset(datas.NewDataStore(t, t), name)
+	return dataset.NewDataset(datas.NewDataStore(t), name)
 
 }
 

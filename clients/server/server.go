@@ -69,7 +69,7 @@ func (s server) handleGetRef(w http.ResponseWriter, hashString string) {
 }
 
 func (s server) handleGetDataset(w http.ResponseWriter, id string) {
-	dataStore := datas.NewDataStore(s.cs, s.cs.(chunks.RootTracker))
+	dataStore := datas.NewDataStore(s.cs)
 	dataset := mgmt.GetDatasetHeads(mgmt.GetDatasets(dataStore), id)
 	if dataset == nil {
 		http.Error(w, fmt.Sprintf("Dataset not found: %s", id), http.StatusNotFound)
