@@ -195,12 +195,12 @@ type awsStoreFlags struct {
 
 func awsFlags(prefix string) awsStoreFlags {
 	return awsStoreFlags{
-		flag.String(prefix+"aws-store-bucket", "", "aws bucket to create an aws-based chunkstore in"),
-		flag.String(prefix+"aws-store-dynamo-table", "noms-root", "dynamodb table to store the root of the aws-based chunkstore in"),
-		flag.String(prefix+"aws-store-region", "us-west-2", "aws region to put the aws-based chunkstore in"),
-		flag.Bool(prefix+"aws-store-auth-from-env", false, "creates the aws-based chunkstore from authorization found in the environment. This is typically used in production to get keys from IAM profile. If not specified, then -aws-store-key and aws-store-secret must be specified instead"),
-		flag.String(prefix+"aws-store-key", "", "aws key to use to create the aws-based chunkstore"),
-		flag.String(prefix+"aws-store-secret", "", "aws secret to use to create the aws-based chunkstore"),
+		flag.String(prefix+"aws-bucket", "", "aws bucket to create an aws-based chunkstore in"),
+		flag.String(prefix+"aws-dynamo-table", "noms-root", "dynamodb table to store the root of the aws-based chunkstore in"),
+		flag.String(prefix+"aws-region", "us-west-2", "aws region to put the aws-based chunkstore in"),
+		flag.Bool(prefix+"aws-auth-from-env", false, "creates the aws-based chunkstore from authorization found in the environment. This is typically used in production to get keys from IAM profile. If not specified, then -aws-key and aws-secret must be specified instead"),
+		flag.String(prefix+"aws-key", "", "aws key to use to create the aws-based chunkstore"),
+		flag.String(prefix+"aws-secret", "", "aws secret to use to create the aws-based chunkstore"),
 	}
 }
 

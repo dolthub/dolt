@@ -32,9 +32,9 @@ go test ./...
 ```
 cd <noms>/clients/counter
 go build
-./counter -file-store="/tmp/foo"
-./counter -file-store="/tmp/foo"
-./counter -file-store="/tmp/foo"
+./counter -fs="/tmp/foo" -ds="foo"
+./counter -fs="/tmp/foo" -ds="foo"
+./counter -fs="/tmp/foo" -ds="foo"
 ```
 
 rejoice!
