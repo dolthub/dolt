@@ -18,7 +18,7 @@ func createTestDataset(name string) dataset.Dataset {
 
 func TestValidateRef(t *testing.T) {
 	cs := &chunks.TestStore{}
-	r, err := types.WriteValue(types.Bool(true), cs)
+	r, _, err := types.WriteValue(types.Bool(true), cs)
 	assert.NoError(t, err)
 
 	_, err = validateRefAsSetOfCommit(r, cs)

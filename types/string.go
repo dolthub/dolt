@@ -37,6 +37,9 @@ func (fs String) Chunks() []Future {
 	return nil
 }
 
+func (fs String) Release() {
+}
+
 func StringFromVal(v Value) String {
 	return v.(String)
 }

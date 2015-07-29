@@ -14,7 +14,7 @@ func TestDifference(t *testing.T) {
 	cs := &chunks.TestStore{}
 
 	storeAndRef := func(v types.Value) (r ref.Ref) {
-		r, err := types.WriteValue(v, cs)
+		r, _, err := types.WriteValue(v, cs)
 		assert.NoError(err)
 		return
 	}

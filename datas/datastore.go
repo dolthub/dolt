@@ -22,13 +22,17 @@ func NewDataStore(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
 }
 
 func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, cc *commitCache) DataStore {
+	var commitSet SetOfCommit
 	if (rt.Root() == ref.Ref{}) {
-		r, err := types.WriteValue(NewSetOfCommit().NomsValue(), cs)
+		commitSet = NewSetOfCommit()
+		r, _, err := types.WriteValue(commitSet.NomsValue(), cs)
 		Chk.NoError(err)
 		Chk.True(rt.UpdateRoot(r, ref.Ref{}))
+	} else {
+		commitSet = commitSetFromRef(rt.Root(), cs)
 	}
 	return DataStore{
-		cs, rt, cc, commitSetFromRef(rt.Root(), cs),
+		cs, rt, cc, commitSet,
 	}
 }
 
@@ -44,7 +48,7 @@ func (ds *DataStore) Heads() SetOfCommit {
 // Commit returns a new DataStore with newCommits as the heads, but backed by the same ChunkStore and RootTracker instances as the current one.
 func (ds *DataStore) Commit(newCommits SetOfCommit) DataStore {
 	Chk.True(newCommits.Len() > 0)
-	// TODO: We probably shouldn't let this go *forever*. Consider putting a limit and... I know don't...panicing?
+	// TODO: We probably shouldn't let this go *forever*. Consider putting a limit and... I don't know...panicing?
 	for !ds.doCommit(newCommits) {
 	}
 	return newDataStoreInternal(ds.ChunkStore, ds.rt, ds.cc)
@@ -80,7 +84,8 @@ func (ds *DataStore) doCommit(commits SetOfCommit) bool {
 	}
 
 	// TODO: This set will be orphaned if this UpdateRoot below fails
-	newRootRef, err := types.WriteValue(newHeads.NomsValue(), ds)
+	// TODO: Instead of dropping the output value on the floor here (and probably re-reading it in newDataStoreInternal, is it correct to just use it?
+	newRootRef, _, err := types.WriteValue(newHeads.NomsValue(), ds)
 	Chk.NoError(err)
 
 	return ds.rt.UpdateRoot(newRootRef, currentRootRef)
