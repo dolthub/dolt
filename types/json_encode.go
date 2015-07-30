@@ -161,13 +161,13 @@ func getChildJSON(f Future, s chunks.ChunkSink) (interface{}, error) {
 		switch v := v.(type) {
 		// Blobs, lists, maps, and sets are always out-of-line
 		case Blob:
-			r, _, err = WriteValue(v, s)
+			r, err = WriteValue(v, s)
 		case List:
-			r, _, err = WriteValue(v, s)
+			r, err = WriteValue(v, s)
 		case Map:
-			r, _, err = WriteValue(v, s)
+			r, err = WriteValue(v, s)
 		case Set:
-			r, _, err = WriteValue(v, s)
+			r, err = WriteValue(v, s)
 		default:
 			// Other types are always inline.
 			return getJSON(v, s)

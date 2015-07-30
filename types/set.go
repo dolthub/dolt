@@ -119,12 +119,6 @@ func (fs Set) Chunks() (futures []Future) {
 	return
 }
 
-func (fs Set) Release() {
-	for _, f := range fs.m {
-		f.Release()
-	}
-}
-
 func newSetFromData(m setData, cs chunks.ChunkSource) Set {
 	return Set{m, cs, &ref.Ref{}}
 }

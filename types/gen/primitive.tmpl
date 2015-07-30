@@ -16,9 +16,7 @@ func (v {{.NomsType}}) Chunks() []Future {
 	return nil
 }
 
-func (v {{.NomsType}}) Release() {
-}
-
 func {{.NomsType}}FromVal(v Value) {{.NomsType}} {
 	return v.({{.NomsType}})
 }
+
