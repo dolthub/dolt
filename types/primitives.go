@@ -25,12 +25,10 @@ func (v Bool) Chunks() []Future {
 	return nil
 }
 
-func (v Bool) Release() {
-}
-
 func BoolFromVal(v Value) Bool {
 	return v.(Bool)
 }
+
 type Int16 int16
 
 func (self Int16) Equals(other Value) bool {
@@ -49,12 +47,10 @@ func (v Int16) Chunks() []Future {
 	return nil
 }
 
-func (v Int16) Release() {
-}
-
 func Int16FromVal(v Value) Int16 {
 	return v.(Int16)
 }
+
 type Int32 int32
 
 func (self Int32) Equals(other Value) bool {
@@ -73,12 +69,10 @@ func (v Int32) Chunks() []Future {
 	return nil
 }
 
-func (v Int32) Release() {
-}
-
 func Int32FromVal(v Value) Int32 {
 	return v.(Int32)
 }
+
 type Int64 int64
 
 func (self Int64) Equals(other Value) bool {
@@ -97,12 +91,10 @@ func (v Int64) Chunks() []Future {
 	return nil
 }
 
-func (v Int64) Release() {
-}
-
 func Int64FromVal(v Value) Int64 {
 	return v.(Int64)
 }
+
 type UInt16 uint16
 
 func (self UInt16) Equals(other Value) bool {
@@ -121,12 +113,10 @@ func (v UInt16) Chunks() []Future {
 	return nil
 }
 
-func (v UInt16) Release() {
-}
-
 func UInt16FromVal(v Value) UInt16 {
 	return v.(UInt16)
 }
+
 type UInt32 uint32
 
 func (self UInt32) Equals(other Value) bool {
@@ -145,12 +135,10 @@ func (v UInt32) Chunks() []Future {
 	return nil
 }
 
-func (v UInt32) Release() {
-}
-
 func UInt32FromVal(v Value) UInt32 {
 	return v.(UInt32)
 }
+
 type UInt64 uint64
 
 func (self UInt64) Equals(other Value) bool {
@@ -169,12 +157,10 @@ func (v UInt64) Chunks() []Future {
 	return nil
 }
 
-func (v UInt64) Release() {
-}
-
 func UInt64FromVal(v Value) UInt64 {
 	return v.(UInt64)
 }
+
 type Float32 float32
 
 func (self Float32) Equals(other Value) bool {
@@ -193,12 +179,10 @@ func (v Float32) Chunks() []Future {
 	return nil
 }
 
-func (v Float32) Release() {
-}
-
 func Float32FromVal(v Value) Float32 {
 	return v.(Float32)
 }
+
 type Float64 float64
 
 func (self Float64) Equals(other Value) bool {
@@ -217,9 +201,7 @@ func (v Float64) Chunks() []Future {
 	return nil
 }
 
-func (v Float64) Release() {
-}
-
 func Float64FromVal(v Value) Float64 {
 	return v.(Float64)
 }
+

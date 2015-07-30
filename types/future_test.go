@@ -22,7 +22,7 @@ func TestUnresolvedFuture(t *testing.T) {
 
 	cs := &chunks.TestStore{}
 	v := NewString("hello")
-	r, _, _ := WriteValue(v, cs)
+	r, _ := WriteValue(v, cs)
 
 	f := futureFromRef(r)
 	v2, err := f.Deref(cs)
@@ -41,7 +41,7 @@ func TestEqualsFastPath(t *testing.T) {
 	cs := &chunks.MemoryStore{}
 
 	v := Int32(1)
-	r, _, err := WriteValue(v, cs)
+	r, err := WriteValue(v, cs)
 	assert.NoError(err)
 
 	fv := futureFromValue(v)

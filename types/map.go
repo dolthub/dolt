@@ -109,13 +109,6 @@ func (fm Map) Chunks() (futures []Future) {
 	return
 }
 
-func (fn Map) Release() {
-	for _, f := range fn.m {
-		f.key.Release()
-		f.value.Release()
-	}
-}
-
 type mapEntry struct {
 	key   Future
 	value Future

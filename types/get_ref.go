@@ -16,7 +16,7 @@ func getRef(v Value) ref.Ref {
 }
 
 func getRefNoOverride(v Value) ref.Ref {
-	r, _, err := WriteValue(v, chunks.NopStore{})
+	r, err := WriteValue(v, chunks.NopStore{})
 	// This can never fail because NopStore doesn't write anywhere.
 	Chk.Nil(err)
 	return r
