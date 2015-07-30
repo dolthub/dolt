@@ -16,7 +16,7 @@ func TestWriteValue(t *testing.T) {
 
 	testEncode := func(expected string, v Value) ref.Ref {
 		s = &chunks.MemoryStore{}
-		r, err := WriteValue(v, s)
+		r, _, err := WriteValue(v, s)
 		assert.NoError(err)
 
 		// Assuming that MemoryStore works correctly, we don't need to check the actual serialization, only the hash. Neat.

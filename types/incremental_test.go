@@ -39,7 +39,7 @@ func TestIncrementalLoadList(t *testing.T) {
 	cs := &chunks.TestStore{}
 
 	expected := NewList(testVals...)
-	ref, err := WriteValue(expected, cs)
+	ref, _, err := WriteValue(expected, cs)
 	assert.NoError(err)
 
 	actualVar, err := ReadValue(ref, cs)
@@ -66,7 +66,7 @@ func TestIncrementalLoadSet(t *testing.T) {
 	cs := &chunks.TestStore{}
 
 	expected := NewSet(testVals...)
-	ref, err := WriteValue(expected, cs)
+	ref, _, err := WriteValue(expected, cs)
 	assert.NoError(err)
 
 	actualVar, err := ReadValue(ref, cs)
@@ -87,7 +87,7 @@ func TestIncrementalLoadMap(t *testing.T) {
 	cs := &chunks.TestStore{}
 
 	expected := NewMap(testVals...)
-	ref, err := WriteValue(expected, cs)
+	ref, _, err := WriteValue(expected, cs)
 	assert.NoError(err)
 
 	actualVar, err := ReadValue(ref, cs)

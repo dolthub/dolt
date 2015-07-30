@@ -26,4 +26,5 @@ func (rf resolvedFuture) Deref(cs chunks.ChunkSource) (Value, error) {
 }
 
 func (rf resolvedFuture) Release() {
+	rf.val.Release()
 }

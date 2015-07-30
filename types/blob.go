@@ -36,6 +36,9 @@ func (fb Blob) Chunks() []Future {
 	return nil
 }
 
+func (fb Blob) Release() {
+}
+
 func NewBlob(data []byte) Blob {
 	return Blob{data, &ref.Ref{}}
 }

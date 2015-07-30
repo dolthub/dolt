@@ -33,7 +33,7 @@ func (suite *WalkAllTestSuite) walkWorker(r ref.Ref, expected int) {
 }
 
 func (suite *WalkAllTestSuite) storeAndRef(v types.Value) (r ref.Ref) {
-	r, err := types.WriteValue(v, suite.cs)
+	r, _, err := types.WriteValue(v, suite.cs)
 	dbg.Chk.NoError(err)
 	return
 }
