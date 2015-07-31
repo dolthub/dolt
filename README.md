@@ -2,13 +2,13 @@
 
 Noms is a content-addressable, immutable, peer-to-peer datastore for structured data.
 
-In other words, *noms is git for structured data*.
+In other words, *noms is git for data*.
 
 This repository will contain the reference implementation of the noms protocol, and will eventually be open sourced. 
 
 This includes:
 
-* Go wrappers for all the core Nom types
+* Go wrappers for all the core noms types
 * Support for generating Go types from Nom schema definitions
 * Chunking and dechunking
 * Serialization and deserialization
