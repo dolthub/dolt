@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"io"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -75,4 +76,52 @@ func TestCompoundBlobChunks(t *testing.T) {
 	bl2 := newBlobLeaf([]byte("world"))
 	cb = compoundBlob{uint64(10), []uint64{5, 5}, []Future{futureFromRef(blr1), futureFromValue(bl2)}, &ref.Ref{}, cs}
 	assert.Equal(1, len(cb.Chunks()))
+}
+
+func TestCompoundBlobSameChunksWithPrefix(t *testing.T) {
+	assert := assert.New(t)
+
+	cb1 := getAliceBlob(t)
+
+	// Load same file again but prepend some data... all but the first chunk should stay the same
+	f, err := os.Open("alice-short.txt")
+	assert.NoError(err)
+	defer f.Close()
+	buf := bytes.NewBufferString("prefix")
+	r := io.MultiReader(buf, f)
+
+	b, err := NewBlob(r)
+	assert.NoError(err)
+	cb2 := b.(compoundBlob)
+
+	assert.Equal(cb2.Len(), cb1.Len()+uint64(6))
+	assert.Equal(3, len(cb1.blobs))
+	assert.Equal(len(cb1.blobs), len(cb2.blobs))
+	assert.NotEqual(cb1.blobs[0].Ref(), cb2.blobs[0].Ref())
+	assert.Equal(cb1.blobs[1].Ref(), cb2.blobs[1].Ref())
+	assert.Equal(cb1.blobs[2].Ref(), cb2.blobs[2].Ref())
+}
+
+func TestCompoundBlobSameChunksWithSuffix(t *testing.T) {
+	assert := assert.New(t)
+
+	cb1 := getAliceBlob(t)
+
+	// Load same file again but append some data... all but the last chunk should stay the same
+	f, err := os.Open("alice-short.txt")
+	assert.NoError(err)
+	defer f.Close()
+	buf := bytes.NewBufferString("suffix")
+	r := io.MultiReader(f, buf)
+
+	b, err := NewBlob(r)
+	assert.NoError(err)
+	cb2 := b.(compoundBlob)
+
+	assert.Equal(cb2.Len(), cb1.Len()+uint64(6))
+	assert.Equal(3, len(cb1.blobs))
+	assert.Equal(len(cb1.blobs), len(cb2.blobs))
+	assert.Equal(cb1.blobs[0].Ref(), cb2.blobs[0].Ref())
+	assert.Equal(cb1.blobs[1].Ref(), cb2.blobs[1].Ref())
+	assert.NotEqual(cb1.blobs[2].Ref(), cb2.blobs[2].Ref())
 }
