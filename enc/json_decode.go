@@ -19,7 +19,7 @@ func jsonDecode(reader io.Reader) (interface{}, error) {
 		return nil, err
 	}
 
-	// Since jsonDecode is private, and ReadValue() should have checked this, it is invariant that the prefix will match.
+	// Since jsonDecode is private, and Decode() should have checked this, it is invariant that the prefix will match.
 	dbg.Chk.EqualValues(jsonTag[:], prefix, "Cannot jsonDecode - invalid prefix")
 
 	var v interface{}

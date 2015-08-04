@@ -40,15 +40,15 @@ func MapFromItems(e ...interface{}) (m Map) {
 	return
 }
 
-func jsonEncode(v interface{}, w io.Writer) (err error) {
+func jsonEncode(dst io.Writer, v interface{}) (err error) {
 	var j interface{}
 	j, err = getJSON(v)
 	if err != nil {
 		return
 	}
-	_, err = w.Write(jsonTag)
+	_, err = dst.Write(jsonTag)
 	if err == nil {
-		err = json.NewEncoder(w).Encode(j)
+		err = json.NewEncoder(dst).Encode(j)
 	}
 	return
 }

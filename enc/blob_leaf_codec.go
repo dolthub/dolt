@@ -11,28 +11,23 @@ var (
 	blobTag = []byte("b ")
 )
 
-func blobLeafEncode(b io.Reader, w io.Writer) (err error) {
-	if _, err = w.Write(blobTag); err != nil {
+func blobLeafEncode(dst io.Writer, src io.Reader) (err error) {
+	if _, err = dst.Write(blobTag); err != nil {
 		return
 	}
-	if _, err = io.Copy(w, b); err != nil {
+	if _, err = io.Copy(dst, src); err != nil {
 		return
 	}
 	return
 }
 
-func blobLeafDecode(r io.Reader) ([]byte, error) {
+func blobLeafDecode(src io.Reader) (io.Reader, error) {
 	buf := &bytes.Buffer{}
-	_, err := io.CopyN(buf, r, int64(len(blobTag)))
+	_, err := io.CopyN(buf, src, int64(len(blobTag)))
 	if err != nil {
 		return nil, err
 	}
-	dbg.Chk.True(bytes.Equal(buf.Bytes(), blobTag))
+	dbg.Chk.True(bytes.Equal(buf.Bytes(), blobTag), "Cannot blobLeafDecode - invalid prefix")
 
-	buf.Truncate(0)
-	_, err = io.Copy(buf, r)
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return src, nil
 }

@@ -1,7 +1,7 @@
 package enc
 
 import (
-	"crypto/sha1"
+	"bytes"
 	"fmt"
 	"testing"
 
@@ -21,18 +21,24 @@ func (w *logChunkWriter) Write(data []byte) (int, error) {
 
 func TestJsonEncode(t *testing.T) {
 	assert := assert.New(t)
-	s := chunks.NopStore{}
 
-	testEncode := func(expected string, v interface{}) ref.Ref {
+	getRef := func(v interface{}) ref.Ref {
+		s := chunks.NopStore{}
 		w := s.Put()
-		err := jsonEncode(v, w)
-		assert.NoError(err)
-
-		// Assuming that NopStore works correctly, we don't need to check the actual serialization, only the hash. Neat.
+		assert.NoError(jsonEncode(w, v))
 		r, err := w.Ref()
 		assert.NoError(err)
-		assert.EqualValues(sha1.Sum([]byte(expected)), r.Digest(), "Incorrect ref serializing %+v. Got: %#x", v, r.Digest())
 		return r
+	}
+
+	// Empty compound types
+	emptyMapRef := getRef(Map{})
+	emptyListRef := getRef([]interface{}{})
+
+	testEncode := func(expected string, v interface{}) {
+		dst := &bytes.Buffer{}
+		assert.NoError(jsonEncode(dst, v))
+		assert.Equal(expected, string(dst.Bytes()), "Failed to serialize %+v. Got: %s", v, dst.Bytes())
 	}
 
 	// booleans
@@ -67,23 +73,21 @@ func TestJsonEncode(t *testing.T) {
 	testEncode(`j "Hello, World!"
 `, "Hello, World!")
 
-	// Empty compound types
-	emptyMapRef := testEncode(`j {"map":[]}
-`, Map{})
-	emptyListRef := testEncode(`j {"list":[]}
-`, []interface{}{})
-	testEncode(`j {"set":[]}
-`, Set{})
-
 	// Lists
+	testEncode(`j {"list":[]}
+`, []interface{}{})
 	testEncode(`j {"list":["foo",true,{"uint16":42},{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
 `, []interface{}{"foo", true, uint16(42), emptyListRef, emptyMapRef})
 
 	// Maps
+	testEncode(`j {"map":[]}
+`, Map{})
 	testEncode(`j {"map":["string","hotdog","list",{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},"int32",{"int32":42},"bool",false,"map",{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
 `, MapFromItems("string", "hotdog", "list", emptyListRef, "int32", int32(42), "bool", false, "map", emptyMapRef))
 
 	// Sets
+	testEncode(`j {"set":[]}
+`, Set{})
 	testEncode(`j {"set":["foo",true,{"uint16":42},{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
 `, Set{"foo", true, uint16(42), emptyListRef, emptyMapRef})
 
