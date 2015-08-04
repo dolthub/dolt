@@ -5,10 +5,6 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-func futureFromValue(v Value) Future {
-	return resolvedFuture{v}
-}
-
 type resolvedFuture struct {
 	val Value
 }

@@ -75,11 +75,7 @@ func main() {
 		ref, err := types.WriteValue(nomsObj, ds)
 		Chk.NoError(err)
 
-		// BUG 141
-		nomsObj, err = types.ReadValue(ref, ds)
-		Chk.NoError(err)
-
-		list = list.Append(nomsObj)
+		list = list.Append(types.Ref{ref})
 		return nil
 	})
 
