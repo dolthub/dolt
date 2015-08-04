@@ -52,8 +52,8 @@ func NewAWSStore(bucket, table, region, key, secret string) AWSStore {
 	return AWSStore{
 		bucket,
 		table,
-		s3.New(&aws.Config{Region: region, Credentials: creds}),
-		dynamodb.New(&aws.Config{Region: region, Credentials: creds}),
+		s3.New(&aws.Config{Region: &region, Credentials: creds}),
+		dynamodb.New(&aws.Config{Region: &region, Credentials: creds}),
 	}
 }
 
