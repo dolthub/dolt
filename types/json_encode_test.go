@@ -90,12 +90,12 @@ func TestJsonEncode(t *testing.T) {
 
 	// Blob (compound)
 	blr := ref.MustParse("sha1-5bf524e621975ee2efbf02aed1bc0cd01f1cf8e0")
-	cb := compoundBlob{uint64(2), []uint64{2}, []Future{futureFromRef(blr)}, &ref.Ref{}, s}
+	cb := compoundBlob{uint64(2), []uint64{0}, []Future{futureFromRef(blr)}, &ref.Ref{}, s}
 	testEncode(`j {"cb":[{"ref":"sha1-5bf524e621975ee2efbf02aed1bc0cd01f1cf8e0"},2]}
 `, cb)
 
 	bl := newBlobLeaf([]byte("hello"))
-	cb = compoundBlob{uint64(5), []uint64{5}, []Future{futureFromValue(bl)}, &ref.Ref{}, s}
+	cb = compoundBlob{uint64(5), []uint64{0}, []Future{futureFromValue(bl)}, &ref.Ref{}, s}
 	testEncode(`j {"cb":[{"ref":"sha1-8543a1b775237567a8c0e70e8ae7a1c6aac0ebbb"},5]}
 `, cb)
 }

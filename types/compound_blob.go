@@ -1,7 +1,9 @@
 package types
 
 import (
+	"errors"
 	"io"
+	"sort"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
@@ -18,38 +20,95 @@ type compoundBlob struct {
 }
 
 // Reader implements the Blob interface
-func (cb compoundBlob) Reader() io.Reader {
-	return &compoundBlobReader{cb.blobs, nil, cb.cs}
+func (cb compoundBlob) Reader() io.ReadSeeker {
+	return &compoundBlobReader{cb: cb}
 }
 
 type compoundBlobReader struct {
-	blobs []Future
-	r     io.Reader
-	cs    chunks.ChunkSource
+	cb               compoundBlob
+	currentReader    io.ReadSeeker
+	currentBlobIndex int
+	offset           int64
 }
 
 func (cbr *compoundBlobReader) Read(p []byte) (n int, err error) {
-	for len(cbr.blobs) > 0 {
-		if cbr.r == nil {
-			var v Value
-			v, err = cbr.blobs[0].Deref(cbr.cs)
-			if err != nil {
+	for cbr.currentBlobIndex < len(cbr.cb.blobs) {
+		if cbr.currentReader == nil {
+			if err = cbr.updateReader(); err != nil {
 				return
 			}
-			cbr.r = v.(Blob).Reader()
 		}
-		n, err = cbr.r.Read(p)
+
+		n, err = cbr.currentReader.Read(p)
 		if n > 0 || err != io.EOF {
 			if err == io.EOF {
 				err = nil
 			}
+			cbr.offset += int64(n)
 			return
 		}
 
-		cbr.blobs = cbr.blobs[1:]
-		cbr.r = nil
+		cbr.currentBlobIndex++
+		cbr.currentReader = nil
 	}
 	return 0, io.EOF
+}
+
+func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
+	var abs int64
+	switch whence {
+	case 0:
+		abs = offset
+	case 1:
+		abs = int64(cbr.offset) + offset
+	case 2:
+		abs = int64(cbr.cb.Len()) + offset
+	default:
+		return 0, errors.New("Blob.Reader.Seek: invalid whence")
+	}
+	if abs < 0 {
+		return 0, errors.New("Blob.Reader.Seek: negative position")
+	}
+
+	cbr.offset = abs
+	currentBlobIndex := cbr.currentBlobIndex
+	cbr.currentBlobIndex = cbr.findBlobOffset(uint64(abs))
+	if currentBlobIndex != cbr.currentBlobIndex {
+		if err := cbr.updateReader(); err != nil {
+			return int64(0), err
+		}
+	}
+	if cbr.currentReader != nil {
+		offset := abs - int64(cbr.cb.offsets[cbr.currentBlobIndex])
+		if _, err := cbr.currentReader.Seek(offset, 0); err != nil {
+			return 0, err
+		}
+	}
+
+	return abs, nil
+}
+
+func (cbr *compoundBlobReader) findBlobOffset(abs uint64) int {
+	// TODO(arv): The -1 at the end is bad. If the offsets was shifted one to the right things would be cleaner.
+	if abs >= cbr.cb.Len() {
+		return len(cbr.cb.blobs)
+	}
+	return sort.Search(len(cbr.cb.offsets), func(i int) bool {
+		return cbr.cb.offsets[i] > abs
+	}) - 1
+}
+
+func (cbr *compoundBlobReader) updateReader() error {
+	if cbr.currentBlobIndex < len(cbr.cb.blobs) {
+		v, err := cbr.cb.blobs[cbr.currentBlobIndex].Deref(cbr.cb.cs)
+		if err != nil {
+			return err
+		}
+		cbr.currentReader = v.(Blob).Reader()
+	} else {
+		cbr.currentReader = nil
+	}
+	return nil
 }
 
 // Len implements the Blob interface

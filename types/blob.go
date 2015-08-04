@@ -22,7 +22,7 @@ type Blob interface {
 	Value
 	Len() uint64
 	// BUG 155 - Should provide Seek and Write... Maybe even have Blob implement ReadWriteSeeker
-	Reader() io.Reader
+	Reader() io.ReadSeeker
 }
 
 func NewBlob(r io.Reader) (Blob, error) {

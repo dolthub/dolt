@@ -19,8 +19,8 @@ func newBlobLeaf(data []byte) blobLeaf {
 }
 
 // Reader implements the Blob interface
-func (bl blobLeaf) Reader() io.Reader {
-	return bytes.NewBuffer(bl.data)
+func (bl blobLeaf) Reader() io.ReadSeeker {
+	return bytes.NewReader(bl.data)
 }
 
 // Len implements the Blob interface

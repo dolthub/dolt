@@ -70,7 +70,7 @@ type testBlob struct {
 	readCount *int
 }
 
-func (b testBlob) Reader() io.Reader {
+func (b testBlob) Reader() io.ReadSeeker {
 	*b.readCount++
 	return b.blobLeaf.Reader()
 }
@@ -86,7 +86,7 @@ func TestCompoundBlobReaderLazy(t *testing.T) {
 	b2 := newBlobLeaf([]byte("bye"))
 	tb2 := &testBlob{b2, &readCount2}
 
-	cb := compoundBlob{uint64(5), []uint64{2, 3}, []Future{futureFromValue(tb1), futureFromValue(tb2)}, &ref.Ref{}, nil}
+	cb := compoundBlob{uint64(5), []uint64{0, 2}, []Future{futureFromValue(tb1), futureFromValue(tb2)}, &ref.Ref{}, nil}
 
 	r := cb.Reader()
 	assert.Equal(0, readCount1)
@@ -118,6 +118,101 @@ func TestCompoundBlobReaderLazy(t *testing.T) {
 	assert.Equal(1, readCount2)
 }
 
+func TestCompoundBlobReaderLazySeek(t *testing.T) {
+	assert := assert.New(t)
+
+	readCount1 := 0
+	b1 := newBlobLeaf([]byte("hi"))
+	tb1 := &testBlob{b1, &readCount1}
+
+	readCount2 := 0
+	b2 := newBlobLeaf([]byte("bye"))
+	tb2 := &testBlob{b2, &readCount2}
+
+	cb := compoundBlob{uint64(5), []uint64{0, 2}, []Future{futureFromValue(tb1), futureFromValue(tb2)}, &ref.Ref{}, nil}
+
+	r := cb.Reader()
+
+	_, err := r.Seek(0, 4)
+	assert.Error(err)
+
+	_, err = r.Seek(-1, 0)
+	assert.Error(err)
+
+	p := []byte{0}
+
+	n, err := r.Seek(3, 0)
+	assert.NoError(err)
+	assert.Equal(int64(3), n)
+	assert.Equal(0, readCount1)
+	assert.Equal(1, readCount2)
+
+	n2, err := r.Read(p)
+	assert.NoError(err)
+	assert.Equal(1, n2)
+	assert.Equal(0, readCount1)
+	assert.Equal(1, readCount2)
+	assert.Equal("y", string(p))
+
+	n, err = r.Seek(-1, 1)
+	assert.NoError(err)
+	assert.Equal(int64(3), n)
+	assert.Equal(0, readCount1)
+	assert.Equal(1, readCount2)
+
+	n2, err = r.Read(p)
+	assert.NoError(err)
+	assert.Equal(1, n2)
+	assert.Equal(0, readCount1)
+	assert.Equal(1, readCount2)
+	assert.Equal("y", string(p))
+
+	n, err = r.Seek(-5, 2)
+	assert.NoError(err)
+	assert.Equal(int64(0), n)
+	assert.Equal(1, readCount1)
+	assert.Equal(1, readCount2)
+
+	n2, err = r.Read(p)
+	assert.NoError(err)
+	assert.Equal(1, n2)
+	assert.Equal(1, readCount1)
+	assert.Equal(1, readCount2)
+	assert.Equal("h", string(p))
+
+	n, err = r.Seek(100, 0)
+	assert.NoError(err)
+	assert.Equal(int64(100), n)
+	assert.Equal(1, readCount1)
+	assert.Equal(1, readCount2)
+
+	n2, err = r.Read(p)
+	assert.Equal(io.EOF, err)
+	assert.Equal(0, n2)
+	assert.Equal(1, readCount1)
+	assert.Equal(1, readCount2)
+
+	n, err = r.Seek(-99, 1)
+	assert.NoError(err)
+	assert.Equal(int64(1), n)
+	assert.Equal(2, readCount1)
+	assert.Equal(1, readCount2)
+
+	n2, err = r.Read(p)
+	assert.NoError(err)
+	assert.Equal(1, n2)
+	assert.Equal(2, readCount1)
+	assert.Equal(1, readCount2)
+	assert.Equal("i", string(p))
+
+	n2, err = r.Read(p)
+	assert.NoError(err)
+	assert.Equal(1, n2)
+	assert.Equal(2, readCount1)
+	assert.Equal(2, readCount2)
+	assert.Equal("b", string(p))
+}
+
 func TestCompoundBlobLen(t *testing.T) {
 	assert := assert.New(t)
 	cb := getTestCompoundBlob("hello", "world")
@@ -137,7 +232,7 @@ func TestCompoundBlobChunks(t *testing.T) {
 	bl1 := newBlobLeaf([]byte("hello"))
 	blr1 := bl1.Ref()
 	bl2 := newBlobLeaf([]byte("world"))
-	cb = compoundBlob{uint64(10), []uint64{5, 5}, []Future{futureFromRef(blr1), futureFromValue(bl2)}, &ref.Ref{}, cs}
+	cb = compoundBlob{uint64(10), []uint64{0, 5}, []Future{futureFromRef(blr1), futureFromValue(bl2)}, &ref.Ref{}, cs}
 	assert.Equal(1, len(cb.Chunks()))
 }
 
