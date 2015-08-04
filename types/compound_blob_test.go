@@ -40,6 +40,8 @@ func getAliceBlob(t *testing.T) compoundBlob {
 
 func TestCompoundBlobReader(t *testing.T) {
 	assert := assert.New(t)
+	cs := &chunks.MemoryStore{}
+
 	cb := getTestCompoundBlob("hello", "world")
 	bs, err := ioutil.ReadAll(cb.Reader())
 	assert.NoError(err)
@@ -53,6 +55,67 @@ func TestCompoundBlobReader(t *testing.T) {
 	defer f.Close()
 	bs2, err := ioutil.ReadAll(f)
 	assert.Equal(bs2, bs)
+
+	ref, err := WriteValue(cb, cs)
+	assert.NoError(err)
+
+	cb2, err := ReadValue(ref, cs)
+	bs3, err := ioutil.ReadAll(cb2.(Blob).Reader())
+	assert.NoError(err)
+	assert.Equal("helloworld", string(bs3))
+}
+
+type testBlob struct {
+	blobLeaf
+	readCount *int
+}
+
+func (b testBlob) Reader() io.Reader {
+	*b.readCount++
+	return b.blobLeaf.Reader()
+}
+
+func TestCompoundBlobReaderLazy(t *testing.T) {
+	assert := assert.New(t)
+
+	readCount1 := 0
+	b1 := newBlobLeaf([]byte("hi"))
+	tb1 := &testBlob{b1, &readCount1}
+
+	readCount2 := 0
+	b2 := newBlobLeaf([]byte("bye"))
+	tb2 := &testBlob{b2, &readCount2}
+
+	cb := compoundBlob{uint64(5), []uint64{2, 3}, []Future{futureFromValue(tb1), futureFromValue(tb2)}, &ref.Ref{}, nil}
+
+	r := cb.Reader()
+	assert.Equal(0, readCount1)
+	assert.Equal(0, readCount2)
+
+	p := []byte{0}
+	n, err := r.Read(p)
+	assert.NoError(err)
+	assert.Equal(1, n)
+	assert.Equal(1, readCount1)
+	assert.Equal(0, readCount2)
+
+	n, err = r.Read(p)
+	assert.NoError(err)
+	assert.Equal(1, n)
+	assert.Equal(1, readCount1)
+	assert.Equal(0, readCount2)
+
+	n, err = r.Read(p)
+	assert.NoError(err)
+	assert.Equal(1, n)
+	assert.Equal(1, readCount1)
+	assert.Equal(1, readCount2)
+
+	n, err = r.Read(p)
+	assert.NoError(err)
+	assert.Equal(1, n)
+	assert.Equal(1, readCount1)
+	assert.Equal(1, readCount2)
 }
 
 func TestCompoundBlobLen(t *testing.T) {

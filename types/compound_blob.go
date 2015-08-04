@@ -4,7 +4,6 @@ import (
 	"io"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -20,15 +19,37 @@ type compoundBlob struct {
 
 // Reader implements the Blob interface
 func (cb compoundBlob) Reader() io.Reader {
-	readers := make([]io.Reader, len(cb.blobs))
-	for i, b := range cb.blobs {
-		// BUG 155 - Should provide Seek and Write... Maybe even have Blob implement ReadWriteSeeker
-		v, err := b.Deref(cb.cs)
-		// TODO: This is ugly. See comment in list.go@Get.
-		dbg.Chk.NoError(err)
-		readers[i] = v.(blobLeaf).Reader()
+	return &compoundBlobReader{cb.blobs, nil, cb.cs}
+}
+
+type compoundBlobReader struct {
+	blobs []Future
+	r     io.Reader
+	cs    chunks.ChunkSource
+}
+
+func (cbr *compoundBlobReader) Read(p []byte) (n int, err error) {
+	for len(cbr.blobs) > 0 {
+		if cbr.r == nil {
+			var v Value
+			v, err = cbr.blobs[0].Deref(cbr.cs)
+			if err != nil {
+				return
+			}
+			cbr.r = v.(Blob).Reader()
+		}
+		n, err = cbr.r.Read(p)
+		if n > 0 || err != io.EOF {
+			if err == io.EOF {
+				err = nil
+			}
+			return
+		}
+
+		cbr.blobs = cbr.blobs[1:]
+		cbr.r = nil
 	}
-	return io.MultiReader(readers...)
+	return 0, io.EOF
 }
 
 // Len implements the Blob interface
