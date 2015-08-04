@@ -10,11 +10,11 @@ import (
 // compoundBlob represents a list of Blobs.
 // It implements the Blob interface.
 type compoundBlob struct {
-	length       uint64
-	childLengths []uint64
-	blobs        []Future
-	ref          *ref.Ref
-	cs           chunks.ChunkSource
+	length  uint64
+	offsets []uint64
+	blobs   []Future
+	ref     *ref.Ref
+	cs      chunks.ChunkSource
 }
 
 // Reader implements the Blob interface

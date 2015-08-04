@@ -27,7 +27,7 @@ type Blob interface {
 
 func NewBlob(r io.Reader) (Blob, error) {
 	length := uint64(0)
-	childLengths := []uint64{}
+	offsets := []uint64{}
 	blobs := []Future{}
 	var blob blobLeaf
 	for {
@@ -42,10 +42,10 @@ func NewBlob(r io.Reader) (Blob, error) {
 			break
 		}
 
-		length += n
 		blob = newBlobLeaf(buf.Bytes())
-		childLengths = append(childLengths, blob.Len())
+		offsets = append(offsets, length)
 		blobs = append(blobs, futureFromValue(blob))
+		length += n
 	}
 
 	if length == 0 {
@@ -55,7 +55,7 @@ func NewBlob(r io.Reader) (Blob, error) {
 	if len(blobs) == 1 {
 		return blob, nil
 	}
-	return compoundBlob{length, childLengths, blobs, &ref.Ref{}, nil}, nil
+	return compoundBlob{length, offsets, blobs, &ref.Ref{}, nil}, nil
 }
 
 func BlobFromVal(v Value) Blob {

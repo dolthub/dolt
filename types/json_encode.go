@@ -182,7 +182,7 @@ func getJSONCompoundBlob(cb compoundBlob, s chunks.ChunkSink) (interface{}, erro
 	l := make([]interface{}, len(cb.blobs)*2+1)
 	l[0] = cb.length
 	for i, f := range cb.blobs {
-		l[i*2+1] = cb.childLengths[i]
+		l[i*2+1] = cb.offsets[i]
 		if l[i*2+2], err = getChildJSON(f, s); err != nil {
 			return nil, err
 		}

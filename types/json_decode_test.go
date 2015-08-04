@@ -79,15 +79,15 @@ func TestJSONDecode(t *testing.T) {
 	// Blob (compound)
 	// echo -n 'b Hello' | sha1sum
 	blr := ref.MustParse("sha1-c35018551e725bd2ab45166b69d15fda00b161c1")
-	cb := compoundBlob{uint64(2), []uint64{2}, []Future{futureFromRef(blr)}, &ref.Ref{}, cs}
-	testDecode(`j {"cb":[2,2,{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"}]}
+	cb := compoundBlob{uint64(2), []uint64{0}, []Future{futureFromRef(blr)}, &ref.Ref{}, cs}
+	testDecode(`j {"cb":[2,0,{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"}]}
 `, cb)
 	// echo -n 'b  ' | sha1sum
 	blr2 := ref.MustParse("sha1-641283a12b475ed58ba510517c1224a912e934a6")
 	// echo -n 'b World!' | sha1sum
 	blr3 := ref.MustParse("sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9")
-	cb2 := compoundBlob{uint64(12), []uint64{5, 1, 6}, []Future{futureFromRef(blr), futureFromRef(blr2), futureFromRef(blr3)}, &ref.Ref{}, cs}
-	testDecode(`j {"cb":[12,5,{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},1,{"ref":"sha1-641283a12b475ed58ba510517c1224a912e934a6"},6,{"ref":"sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9"}]}
+	cb2 := compoundBlob{uint64(12), []uint64{0, 5, 6}, []Future{futureFromRef(blr), futureFromRef(blr2), futureFromRef(blr3)}, &ref.Ref{}, cs}
+	testDecode(`j {"cb":[12,0,{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},5,{"ref":"sha1-641283a12b475ed58ba510517c1224a912e934a6"},6,{"ref":"sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9"}]}
 `, cb2)
 }
 
@@ -114,7 +114,7 @@ func TestCompoundBlobJSONDecodeInvalidFormat(t *testing.T) {
 	_, err = jsonDecode(strings.NewReader("j {\"cb\":[2,2,42]}\n"), cs)
 	assert.Error(err)
 
-	_, err = jsonDecode(strings.NewReader(`j {"cb":[2,2,{"ref":"invalid ref"}]}
+	_, err = jsonDecode(strings.NewReader(`j {"cb":[2,0,{"ref":"invalid ref"}]}
 `), cs)
 	assert.Error(err)
 }
