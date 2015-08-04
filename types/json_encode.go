@@ -100,20 +100,6 @@ func getJSONList(l List, s chunks.ChunkSink) (r interface{}, err error) {
 	return
 }
 
-type entrySlice []mapEntry
-
-func (mes entrySlice) Len() int {
-	return len(mes)
-}
-
-func (mes entrySlice) Swap(i, j int) {
-	mes[i], mes[j] = mes[j], mes[i]
-}
-
-func (mes entrySlice) Less(i, j int) bool {
-	return ref.Less(mes[i].key.Ref(), mes[j].key.Ref())
-}
-
 func getJSONMap(m Map, s chunks.ChunkSink) (r interface{}, err error) {
 	j := []interface{}{}
 	for _, r := range m.m {
