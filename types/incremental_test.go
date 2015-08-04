@@ -104,3 +104,30 @@ func TestIncrementalLoadMap(t *testing.T) {
 		return
 	})
 }
+
+func TestIncrementalAddRef(t *testing.T) {
+	assert := assert.New(t)
+	cs := &chunks.TestStore{}
+
+	expectedItem := UInt32(42)
+	ref, err := WriteValue(expectedItem, cs)
+	assert.NoError(err)
+
+	expected := NewList(Ref{ref})
+	ref, err = WriteValue(expected, cs)
+	actualVar, err := ReadValue(ref, cs)
+	assert.NoError(err)
+
+	assert.Equal(1, cs.Reads)
+	assert.True(expected.Equals(actualVar))
+
+	actual := actualVar.(List)
+	actualItem := actual.Get(0)
+	assert.Equal(2, cs.Reads)
+	assert.True(expectedItem.Equals(actualItem))
+
+	// do it again to make sure caching works.
+	actualItem = actual.Get(0)
+	assert.Equal(2, cs.Reads)
+	assert.True(expectedItem.Equals(actualItem))
+}
