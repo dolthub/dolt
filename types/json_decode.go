@@ -172,14 +172,17 @@ func jsonDecodeCompoundBlob(input []interface{}, cs chunks.ChunkSource) (Future,
 		return nil, errInvalidEncoding
 	}
 
-	var err error
-	i := 0
+	length, err := toUint64(input[len(input)-1])
+	if err != nil {
+		return nil, err
+	}
 
 	numBlobs := len(input) / 2
 	offsets := make([]uint64, numBlobs)
 	blobs := make([]Future, numBlobs)
 
-	for i < len(input)-1 {
+	for i := 0; i < len(input)-1; i++ {
+		var err error
 		var offset uint64
 		if i == 0 {
 			offset = uint64(0)
@@ -192,17 +195,10 @@ func jsonDecodeCompoundBlob(input []interface{}, cs chunks.ChunkSource) (Future,
 		}
 		offsets[i/2] = offset
 		blobs[i/2], err = jsonDecodeValue(input[i], cs)
-		i++
 		if err != nil {
 			return nil, err
 		}
 	}
-
-	length, err := toUint64(input[i])
-	if err != nil {
-		return nil, err
-	}
-	Chk.Equal(len(input), i+1)
 
 	cb := compoundBlob{length, offsets, blobs, &ref.Ref{}, cs}
 	return futureFromValue(cb), nil
