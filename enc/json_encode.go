@@ -15,9 +15,9 @@ var (
 
 // CompoundBlob represents the info needed to encode/decode chunked blob metadata.
 type CompoundBlob struct {
-	length       uint64
-	childLengths []uint64
-	blobs        []ref.Ref
+	length  uint64
+	offsets []uint64
+	blobs   []ref.Ref
 }
 
 // Map holds mapEntries in a stable order at runtime, in contrast to Go maps. This is important so that encoding remains stable.
@@ -114,15 +114,22 @@ func getJSONPrimitive(v interface{}) (interface{}, error) {
 }
 
 func getJSONCompoundBlob(cb CompoundBlob) (interface{}, error) {
-	var err error
-	l := make([]interface{}, len(cb.blobs)*2+1)
-	l[0] = cb.length
+	// {"cb":[{"ref":"sha1-x"},length]}
+	// {"cb":[{"ref":"sha1-x"},offset,{"ref":"sha1-y"},length]}
+	l := make([]interface{}, 0, len(cb.blobs)*2)
 	for i, f := range cb.blobs {
-		l[i*2+1] = cb.childLengths[i]
-		if l[i*2+2], err = getJSONPrimitive(f); err != nil {
+		if i != 0 {
+			l = append(l, cb.offsets[i])
+		}
+		c, err := getJSONPrimitive(f)
+		if err != nil {
 			return nil, err
 		}
+		l = append(l, c)
 	}
+	l = append(l, cb.length)
+
+	dbg.Chk.Equal(len(l), len(cb.blobs)*2)
 
 	return map[string]interface{}{
 		"cb": l,

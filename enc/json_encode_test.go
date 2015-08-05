@@ -94,6 +94,6 @@ func TestJsonEncode(t *testing.T) {
 	// Blob (compound)
 	blr := ref.MustParse("sha1-5bf524e621975ee2efbf02aed1bc0cd01f1cf8e0")
 	cb := CompoundBlob{uint64(2), []uint64{2}, []ref.Ref{blr}}
-	testEncode(`j {"cb":[2,2,{"ref":"sha1-5bf524e621975ee2efbf02aed1bc0cd01f1cf8e0"}]}
+	testEncode(`j {"cb":[{"ref":"sha1-5bf524e621975ee2efbf02aed1bc0cd01f1cf8e0"},2]}
 `, cb)
 }
