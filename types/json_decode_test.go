@@ -80,14 +80,14 @@ func TestJSONDecode(t *testing.T) {
 	// echo -n 'b Hello' | sha1sum
 	blr := ref.MustParse("sha1-c35018551e725bd2ab45166b69d15fda00b161c1")
 	cb := compoundBlob{uint64(2), []uint64{0}, []Future{futureFromRef(blr)}, &ref.Ref{}, cs}
-	testDecode(`j {"cb":[2,0,{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"}]}
+	testDecode(`j {"cb":[{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},2]}
 `, cb)
 	// echo -n 'b  ' | sha1sum
 	blr2 := ref.MustParse("sha1-641283a12b475ed58ba510517c1224a912e934a6")
 	// echo -n 'b World!' | sha1sum
 	blr3 := ref.MustParse("sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9")
 	cb2 := compoundBlob{uint64(12), []uint64{0, 5, 6}, []Future{futureFromRef(blr), futureFromRef(blr2), futureFromRef(blr3)}, &ref.Ref{}, cs}
-	testDecode(`j {"cb":[12,0,{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},5,{"ref":"sha1-641283a12b475ed58ba510517c1224a912e934a6"},6,{"ref":"sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9"}]}
+	testDecode(`j {"cb":[{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},5,{"ref":"sha1-641283a12b475ed58ba510517c1224a912e934a6"},6,{"ref":"sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9"},12]}
 `, cb2)
 }
 
@@ -97,24 +97,23 @@ func TestCompoundBlobJSONDecodeInvalidFormat(t *testing.T) {
 
 	_, err := jsonDecode(strings.NewReader("j {\"cb\":[]}\n"), cs)
 	assert.Error(err)
-	_, err = jsonDecode(strings.NewReader("j {\"cb\":[2, 2]}\n"), cs)
+	_, err = jsonDecode(strings.NewReader("j {\"cb\":[2]}\n"), cs)
 	assert.Error(err)
 
 	_, err = jsonDecode(strings.NewReader("j {\"cb\":[true]}\n"), cs)
 	assert.Error(err)
 	_, err = jsonDecode(strings.NewReader("j {\"cb\":[\"hi\"]}\n"), cs)
 	assert.Error(err)
-	_, err = jsonDecode(strings.NewReader("j {\"cb\":[2.5]}\n"), cs)
-	assert.Error(err)
 
-	_, err = jsonDecode(strings.NewReader(`j {"cb":[2,2.5,"{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"}]}
+	_, err = jsonDecode(strings.NewReader(`j {"cb":[{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},2.5]}
 `), cs)
 	assert.Error(err)
 
-	_, err = jsonDecode(strings.NewReader("j {\"cb\":[2,2,42]}\n"), cs)
+	_, err = jsonDecode(strings.NewReader(`j {"cb":[{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"}]}
+`), cs)
 	assert.Error(err)
 
-	_, err = jsonDecode(strings.NewReader(`j {"cb":[2,0,{"ref":"invalid ref"}]}
+	_, err = jsonDecode(strings.NewReader(`j {"cb":[{"ref":"invalid ref"},2]}
 `), cs)
 	assert.Error(err)
 }

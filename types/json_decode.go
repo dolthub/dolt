@@ -166,32 +166,44 @@ func toUint64(v interface{}) (uint64, error) {
 	return i, nil
 }
 
-// [length,length0,{"ref":"sha1-0"}, ... lengthN, {"ref":"sha1-N"}]
+// [{"ref":"sha1-0"},offset, ... offset, {"ref":"sha1-N"},length]
 func jsonDecodeCompoundBlob(input []interface{}, cs chunks.ChunkSource) (Future, error) {
-	if len(input)%2 != 1 {
+	if len(input)%2 != 0 || len(input) < 2 {
 		return nil, errInvalidEncoding
 	}
 
-	length, err := toUint64(input[0])
+	var err error
+	i := 0
+
+	numBlobs := len(input) / 2
+	offsets := make([]uint64, numBlobs)
+	blobs := make([]Future, numBlobs)
+
+	for i < len(input)-1 {
+		var offset uint64
+		if i == 0 {
+			offset = uint64(0)
+		} else {
+			offset, err = toUint64(input[i])
+			i++
+			if err != nil {
+				return nil, err
+			}
+		}
+		offsets[i/2] = offset
+		blobs[i/2], err = jsonDecodeValue(input[i], cs)
+		i++
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	length, err := toUint64(input[i])
 	if err != nil {
 		return nil, err
 	}
+	Chk.Equal(len(input), i+1)
 
-	numBlobs := len(input) / 2
-	childLengths := make([]uint64, numBlobs)
-	blobs := make([]Future, numBlobs)
-
-	for i := 1; i < len(input); i += 2 {
-		childLength, err := toUint64(input[i])
-		if err != nil {
-			return nil, err
-		}
-		childLengths[i/2] = childLength
-		blobs[i/2], err = jsonDecodeValue(input[i+1], cs)
-		if err != nil {
-			return nil, err
-		}
-	}
-	cb := compoundBlob{length, childLengths, blobs, &ref.Ref{}, cs}
+	cb := compoundBlob{length, offsets, blobs, &ref.Ref{}, cs}
 	return futureFromValue(cb), nil
 }

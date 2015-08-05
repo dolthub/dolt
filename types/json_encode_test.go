@@ -91,12 +91,12 @@ func TestJsonEncode(t *testing.T) {
 	// Blob (compound)
 	blr := ref.MustParse("sha1-5bf524e621975ee2efbf02aed1bc0cd01f1cf8e0")
 	cb := compoundBlob{uint64(2), []uint64{2}, []Future{futureFromRef(blr)}, &ref.Ref{}, s}
-	testEncode(`j {"cb":[2,2,{"ref":"sha1-5bf524e621975ee2efbf02aed1bc0cd01f1cf8e0"}]}
+	testEncode(`j {"cb":[{"ref":"sha1-5bf524e621975ee2efbf02aed1bc0cd01f1cf8e0"},2]}
 `, cb)
 
 	bl := newBlobLeaf([]byte("hello"))
 	cb = compoundBlob{uint64(5), []uint64{5}, []Future{futureFromValue(bl)}, &ref.Ref{}, s}
-	testEncode(`j {"cb":[5,5,{"ref":"sha1-8543a1b775237567a8c0e70e8ae7a1c6aac0ebbb"}]}
+	testEncode(`j {"cb":[{"ref":"sha1-8543a1b775237567a8c0e70e8ae7a1c6aac0ebbb"},5]}
 `, cb)
 }
 
@@ -170,7 +170,7 @@ func TestCompoundBlobCodecChunked(t *testing.T) {
 	assert.True(ok)
 
 	r, err := jsonEncode(cb, cs)
-	assert.Equal("sha1-c6a16813a6fcb7473934f9bc4bc1896b132762ff", r.String())
+	assert.Equal("sha1-981c8991b515a05f8c0a2058b306501ad833386e", r.String())
 
 	reader, err := cs.Get(r)
 	assert.NoError(err)

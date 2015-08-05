@@ -164,15 +164,24 @@ func getChildJSON(f Future, s chunks.ChunkSink) (interface{}, error) {
 }
 
 func getJSONCompoundBlob(cb compoundBlob, s chunks.ChunkSink) (interface{}, error) {
+	// {"cb":[{"ref":"sha1-x"},length]}
+	// {"cb":[{"ref":"sha1-x"},offset,{"ref":"sha1-y"},length]}
 	var err error
-	l := make([]interface{}, len(cb.blobs)*2+1)
-	l[0] = cb.length
+	l := make([]interface{}, len(cb.blobs)*2)
+	j := 0
 	for i, f := range cb.blobs {
-		l[i*2+1] = cb.offsets[i]
-		if l[i*2+2], err = getChildJSON(f, s); err != nil {
+		if i != 0 {
+			l[j] = cb.offsets[i]
+			j++
+		}
+		if l[j], err = getChildJSON(f, s); err != nil {
 			return nil, err
 		}
+		j++
 	}
+	l[j] = cb.length
+
+	Chk.Equal(len(l), j+1)
 
 	return map[string]interface{}{
 		"cb": l,
