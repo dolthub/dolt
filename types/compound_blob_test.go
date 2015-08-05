@@ -14,15 +14,15 @@ import (
 
 func getTestCompoundBlob(datas ...string) compoundBlob {
 	blobs := make([]Future, len(datas))
-	childLengths := make([]uint64, len(datas))
+	offsets := make([]uint64, len(datas))
 	length := uint64(0)
 	for i, s := range datas {
 		b, _ := NewBlob(bytes.NewBufferString(s))
 		blobs[i] = futureFromValue(b)
-		childLengths[i] = uint64(len(s))
+		offsets[i] = length
 		length += uint64(len(s))
 	}
-	return compoundBlob{length, childLengths, blobs, &ref.Ref{}, nil}
+	return compoundBlob{length, offsets, blobs, &ref.Ref{}, nil}
 }
 
 func getAliceBlob(t *testing.T) compoundBlob {

@@ -170,7 +170,7 @@ func TestCompoundBlobCodecChunked(t *testing.T) {
 	assert.True(ok)
 
 	r, err := jsonEncode(cb, cs)
-	assert.Equal("sha1-a50d4c424c6221897e0b673ea9ed7769b8e83d49", r.String())
+	assert.Equal("sha1-c6a16813a6fcb7473934f9bc4bc1896b132762ff", r.String())
 
 	reader, err := cs.Get(r)
 	assert.NoError(err)
