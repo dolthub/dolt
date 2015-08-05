@@ -22,23 +22,14 @@ func (w *logChunkWriter) Write(data []byte) (int, error) {
 func TestJsonEncode(t *testing.T) {
 	assert := assert.New(t)
 
-	getRef := func(v interface{}) ref.Ref {
-		s := chunks.NopStore{}
-		w := s.Put()
-		assert.NoError(jsonEncode(w, v))
-		r, err := w.Ref()
-		assert.NoError(err)
-		return r
-	}
-
 	// Empty compound types
-	emptyMapRef := getRef(Map{})
-	emptyListRef := getRef([]interface{}{})
+	ref1 := ref.New(ref.Sha1Digest{0xde, 0xad, 0xbe, 0xef})
+	ref2 := ref.New(ref.Sha1Digest{0xbe, 0xef, 0xca, 0xfe})
 
 	testEncode := func(expected string, v interface{}) {
 		dst := &bytes.Buffer{}
 		assert.NoError(jsonEncode(dst, v))
-		assert.Equal(expected, string(dst.Bytes()), "Failed to serialize %+v. Got: %s", v, dst.Bytes())
+		assert.Equal(expected, string(dst.Bytes()), "Failed to serialize %+v. Got %s instead of %s", v, dst.Bytes(), expected)
 	}
 
 	// booleans
@@ -76,24 +67,25 @@ func TestJsonEncode(t *testing.T) {
 	// Lists
 	testEncode(`j {"list":[]}
 `, []interface{}{})
-	testEncode(`j {"list":["foo",true,{"uint16":42},{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
-`, []interface{}{"foo", true, uint16(42), emptyListRef, emptyMapRef})
+	expected := fmt.Sprintf(`j {"list":["foo",true,{"uint16":42},{"ref":"%s"},{"ref":"%s"}]}
+`, ref2, ref1)
+	testEncode(expected, []interface{}{"foo", true, uint16(42), ref2, ref1})
 
 	// Maps
 	testEncode(`j {"map":[]}
 `, Map{})
-	testEncode(`j {"map":["string","hotdog","list",{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},"int32",{"int32":42},"bool",false,"map",{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
-`, MapFromItems("string", "hotdog", "list", emptyListRef, "int32", int32(42), "bool", false, "map", emptyMapRef))
+	expected = fmt.Sprintf(`j {"map":["string","hotdog","list",{"ref":"%s"},"int32",{"int32":42},"bool",false,"map",{"ref":"%s"}]}
+`, ref2, ref1)
+	testEncode(expected, MapFromItems("string", "hotdog", "list", ref2, "int32", int32(42), "bool", false, "map", ref1))
 
 	// Sets
 	testEncode(`j {"set":[]}
 `, Set{})
-	testEncode(`j {"set":["foo",true,{"uint16":42},{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
-`, Set{"foo", true, uint16(42), emptyListRef, emptyMapRef})
+	expected = fmt.Sprintf(`j {"set":["foo",true,{"uint16":42},{"ref":"%s"},{"ref":"%s"}]}
+`, ref2, ref1)
+	testEncode(expected, Set{"foo", true, uint16(42), ref2, ref1})
 
 	// Blob (compound)
-	blr := ref.MustParse("sha1-5bf524e621975ee2efbf02aed1bc0cd01f1cf8e0")
-	cb := CompoundBlob{uint64(2), []uint64{2}, []ref.Ref{blr}}
-	testEncode(`j {"cb":[{"ref":"sha1-5bf524e621975ee2efbf02aed1bc0cd01f1cf8e0"},2]}
-`, cb)
+	testEncode(fmt.Sprintf(`j {"cb":[{"ref":"%s"},2]}
+`, ref2), CompoundBlob{uint64(2), []uint64{2}, []ref.Ref{ref2}})
 }

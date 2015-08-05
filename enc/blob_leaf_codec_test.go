@@ -3,6 +3,7 @@ package enc
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,28 +17,30 @@ func TestBlobLeafEncode(t *testing.T) {
 	assert.NoError(blobLeafEncode(dst, src))
 	assert.EqualValues(blobTag, dst.Bytes())
 
-	src = bytes.NewBufferString("Hello, World!")
+	content := []byte("Hello, World!")
+	src = bytes.NewBuffer(content)
 	dst = &bytes.Buffer{}
 	assert.NoError(blobLeafEncode(dst, src))
-	assert.EqualValues(append(blobTag, []byte("Hello, World!")...), dst.Bytes())
+	assert.EqualValues(append(blobTag, content...), dst.Bytes())
 }
 
 func TestBlobLeafDecode(t *testing.T) {
 	assert := assert.New(t)
 
 	out := &bytes.Buffer{}
-	inputReader := bytes.NewBuffer(blobTag)
+	inputReader := bytes.NewReader(blobTag)
 	decoded, err := blobLeafDecode(inputReader)
 	assert.NoError(err)
-	_, err = io.Copy(out, decoded)
+	data, err := ioutil.ReadAll(decoded)
 	assert.NoError(err)
-	assert.EqualValues([]byte(nil), out.Bytes())
+	assert.EqualValues([]byte{}, data)
 
 	out.Truncate(0)
-	inputReader = bytes.NewBufferString("b Hello World!")
+	content := []byte("Hello, World!")
+	inputReader = bytes.NewReader(append(blobTag, content...))
 	decoded, err = blobLeafDecode(inputReader)
 	assert.NoError(err)
 	_, err = io.Copy(out, decoded)
 	assert.NoError(err)
-	assert.EqualValues([]byte("Hello World!"), out.Bytes())
+	assert.EqualValues(content, out.Bytes())
 }

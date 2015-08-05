@@ -114,6 +114,7 @@ func getJSONPrimitive(v interface{}) (interface{}, error) {
 }
 
 func getJSONCompoundBlob(cb CompoundBlob) (interface{}, error) {
+	// Perhaps tighten this up: BUG #170
 	// {"cb":[{"ref":"sha1-x"},length]}
 	// {"cb":[{"ref":"sha1-x"},offset,{"ref":"sha1-y"},length]}
 	l := make([]interface{}, 0, len(cb.blobs)*2)

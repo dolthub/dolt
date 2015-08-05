@@ -14,7 +14,7 @@ func TestEncode(t *testing.T) {
 	// Encoding details for each codec are tested elsewhere.
 	// Here we just want to make sure codecs are selected correctly.
 	dst := &bytes.Buffer{}
-	assert.NoError(Encode(dst, bytes.NewBuffer([]byte{0x00, 0x01, 0x02})))
+	assert.NoError(Encode(dst, bytes.NewReader([]byte{0x00, 0x01, 0x02})))
 	assert.Equal([]byte{'b', ' ', 0x00, 0x01, 0x02}, dst.Bytes())
 
 	dst.Reset()
@@ -25,11 +25,11 @@ func TestEncode(t *testing.T) {
 func TestInvalidDecode(t *testing.T) {
 	assert := assert.New(t)
 
-	v, err := Decode(bytes.NewBuffer([]byte{}))
+	v, err := Decode(bytes.NewReader([]byte{}))
 	assert.Nil(v)
 	assert.NotNil(err)
 
-	v, err = Decode(bytes.NewBuffer([]byte{0xff}))
+	v, err = Decode(bytes.NewReader([]byte{0xff}))
 	assert.Nil(v)
 	assert.NotNil(err)
 }
@@ -45,7 +45,7 @@ func TestSelectJSONDecoder(t *testing.T) {
 func TestSelectBlobDecoder(t *testing.T) {
 	assert := assert.New(t)
 
-	decoded, err := Decode(bytes.NewBuffer([]byte{'b', ' ', 0x2B}))
+	decoded, err := Decode(bytes.NewReader([]byte{'b', ' ', 0x2B}))
 	assert.NoError(err)
 	out := &bytes.Buffer{}
 	_, err = io.Copy(out, decoded.(io.Reader))
