@@ -13,32 +13,40 @@ var (
 	jsonTag = []byte("j ")
 )
 
-// CompoundBlob represents the info needed to encode/decode chunked blob metadata.
-type CompoundBlob struct {
+// compoundBlob represents the info needed to encode/decode chunked blob metadata.
+type compoundBlob struct {
 	length  uint64
 	offsets []uint64
 	blobs   []ref.Ref
 }
 
-// Map holds mapEntries in a stable order at runtime, in contrast to Go maps. This is important so that encoding remains stable.
-type Map []mapEntry
-
-type mapEntry struct {
-	k, v interface{}
+func NewCompoundBlob(length uint64, offsets []uint64, refs []ref.Ref) compoundBlob {
+	return compoundBlob{length, offsets, refs}
 }
 
-// Set represents (but does not in any way enforce) a list of unique items.
-type Set []interface{}
-
-// MapFromItems takes an even-numbered list of items and converts them into a Map by treating the even-indexed items as keys and the odd-indexed items as values, e.g. {e[0]: e[1], e[2]: e[3], ...}
-func MapFromItems(e ...interface{}) (m Map) {
+// MapFromItems takes an even-numbered list of items and converts them into a stably-ordered map-like value by treating the even-indexed items as keys and the odd-indexed items as values, e.g. {e[0]: e[1], e[2]: e[3], ...}. This does NOT enforce key uniqueness.
+func MapFromItems(e ...interface{}) (m encMap) {
 	dbg.Chk.True(0 == len(e)%2, "Length on input array must be multiple of 2")
-	m = make(Map, 0, len(e)/2)
+	m = make(encMap, 0, len(e)/2)
 	for i := 0; i < len(e); i += 2 {
 		m = append(m, mapEntry{e[i], e[i+1]})
 	}
 	return
 }
+
+// SetFromItems turns a list of arbitrary items into a value that will be encoded as a set, but does NOT enforce item uniqueness.
+func SetFromItems(e ...interface{}) set {
+	return e
+}
+
+// encMap holds mapEntries in a stable order at runtime, in contrast to Go maps. This is important so that encoding remains stable.
+type encMap []mapEntry
+
+type mapEntry struct {
+	k, v interface{}
+}
+
+type set []interface{}
 
 func jsonEncode(dst io.Writer, v interface{}) (err error) {
 	var j interface{}
@@ -57,11 +65,11 @@ func getJSON(v interface{}) (interface{}, error) {
 	switch v := v.(type) {
 	case []interface{}:
 		return getJSONList(v)
-	case CompoundBlob:
+	case compoundBlob:
 		return getJSONCompoundBlob(v)
-	case Map:
+	case encMap:
 		return getJSONMap(v)
-	case Set:
+	case set:
 		return getJSONSet(v)
 	default:
 		return getJSONPrimitive(v)
@@ -113,7 +121,7 @@ func getJSONPrimitive(v interface{}) (interface{}, error) {
 	}
 }
 
-func getJSONCompoundBlob(cb CompoundBlob) (interface{}, error) {
+func getJSONCompoundBlob(cb compoundBlob) (interface{}, error) {
 	// Perhaps tighten this up: BUG #170
 	// {"cb":[{"ref":"sha1-x"},length]}
 	// {"cb":[{"ref":"sha1-x"},offset,{"ref":"sha1-y"},length]}
@@ -153,7 +161,7 @@ func getJSONList(l []interface{}) (r interface{}, err error) {
 	return
 }
 
-func getJSONMap(m Map) (r interface{}, err error) {
+func getJSONMap(m encMap) (r interface{}, err error) {
 	j := make([]interface{}, 0, 2*len(m))
 	for _, c := range m {
 		var cjk, cjv interface{}
@@ -173,7 +181,7 @@ func getJSONMap(m Map) (r interface{}, err error) {
 	return
 }
 
-func getJSONSet(s Set) (r interface{}, err error) {
+func getJSONSet(s set) (r interface{}, err error) {
 	j := make([]interface{}, len(s))
 	for i, c := range s {
 		var cj interface{}

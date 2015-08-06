@@ -67,27 +67,27 @@ func TestJSONDecode(t *testing.T) {
 
 	// Maps
 	testDecode(`j {"map":[]}
-`, Map{})
+`, encMap{})
 	testDecode(`j {"map":["string","hotdog","list",{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},"int32",{"int32":42},"bool",false,"map",{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
 `, MapFromItems("string", "hotdog", "list", emptyListRef, "int32", int32(42), "bool", false, "map", emptyMapRef))
 
 	// Sets
 	testDecode(`j {"set":[]}
-`, Set{})
+`, set{})
 	testDecode(`j {"set":[false,{"int32":42},"hotdog",{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
-`, Set{false, int32(42), "hotdog", emptyListRef, emptyMapRef})
+`, set{false, int32(42), "hotdog", emptyListRef, emptyMapRef})
 
 	// Blob (compound)
 	// echo -n 'b Hello' | sha1sum
 	blr := ref.MustParse("sha1-c35018551e725bd2ab45166b69d15fda00b161c1")
-	cb := CompoundBlob{uint64(2), []uint64{0}, []ref.Ref{blr}}
+	cb := compoundBlob{uint64(2), []uint64{0}, []ref.Ref{blr}}
 	testDecode(`j {"cb":[{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},2]}
 `, cb)
 	// echo -n 'b  ' | sha1sum
 	blr2 := ref.MustParse("sha1-641283a12b475ed58ba510517c1224a912e934a6")
 	// echo -n 'b World!' | sha1sum
 	blr3 := ref.MustParse("sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9")
-	cb2 := CompoundBlob{uint64(12), []uint64{0, 5, 6}, []ref.Ref{blr, blr2, blr3}}
+	cb2 := compoundBlob{uint64(12), []uint64{0, 5, 6}, []ref.Ref{blr, blr2, blr3}}
 	testDecode(`j {"cb":[{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},5,{"ref":"sha1-641283a12b475ed58ba510517c1224a912e934a6"},6,{"ref":"sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9"},12]}
 `, cb2)
 }

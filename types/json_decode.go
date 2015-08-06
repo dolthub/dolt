@@ -11,7 +11,10 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-var errInvalidEncoding = errors.New("Invalid encoding")
+var (
+	jsonTag            = []byte("j ")
+	errInvalidEncoding = errors.New("Invalid encoding")
+)
 
 func jsonDecode(reader io.Reader, s chunks.ChunkSource) (Value, error) {
 	prefix := make([]byte, len(jsonTag))
