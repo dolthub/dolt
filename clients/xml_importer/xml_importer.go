@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"runtime/pprof"
 
-	"github.com/attic-labs/noms/clients/go"
+	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	. "github.com/attic-labs/noms/dbg"

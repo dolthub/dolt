@@ -289,7 +289,9 @@ type TestStruct struct {
 }
 
 func NewTestStruct() TestStruct {
-	return TestStruct{types.NewMap()}
+	return TestStruct{
+		types.NewMap(types.NewString("$name"), types.NewString("TestStruct")),
+	}
 }
 
 func TestStructFromVal(v types.Value) TestStruct {

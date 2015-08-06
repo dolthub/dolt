@@ -5,7 +5,9 @@ type {{.StructName}} struct {
 }
 
 func New{{.StructName}}() {{.StructName}} {
-	return {{.StructName}}{types.NewMap()}
+	return {{.StructName}}{
+		types.NewMap(types.NewString("$name"), types.NewString("{{.StructName}}")),
+	}
 }
 
 func {{.StructName}}FromVal(v types.Value) {{.StructName}} {

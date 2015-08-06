@@ -8,13 +8,18 @@ import (
 func main() {
 	ng := nomgen.New("types.go")
 
+	stringSet := ng.AddType(types.NewMap(
+		types.NewString("$type"), types.NewString("noms.SetDef"),
+		types.NewString("elem"), types.NewString("string")))
+
 	photo := ng.AddType(types.NewMap(
 		types.NewString("$type"), types.NewString("noms.StructDef"),
 		types.NewString("$name"), types.NewString("Photo"),
 		types.NewString("id"), types.NewString("string"),
 		types.NewString("title"), types.NewString("string"),
 		types.NewString("url"), types.NewString("string"),
-		types.NewString("image"), types.NewString("blob")))
+		types.NewString("image"), types.NewString("blob"),
+		types.NewString("tags"), stringSet))
 
 	photoSet := ng.AddType(types.NewMap(
 		types.NewString("$type"), types.NewString("noms.SetDef"),

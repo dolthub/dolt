@@ -207,7 +207,9 @@ type Pitch struct {
 }
 
 func NewPitch() Pitch {
-	return Pitch{types.NewMap()}
+	return Pitch{
+		types.NewMap(types.NewString("$name"), types.NewString("Pitch")),
+	}
 }
 
 func PitchFromVal(v types.Value) Pitch {

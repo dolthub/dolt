@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 
+	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	. "github.com/attic-labs/noms/dbg"
@@ -20,12 +22,13 @@ import (
 )
 
 var (
-	apiKeyFlag       *string = flag.String("api-key", "", "API keys for flickr can be created at https://www.flickr.com/services/apps/create/apply")
-	apiKeySecretFlag *string = flag.String("api-key-secret", "", "API keys for flickr can be created at https://www.flickr.com/services/apps/create/apply")
-	albumIdFlag      *string = flag.String("album-id", "", "Import a specific album, identified by id")
+	apiKeyFlag       = flag.String("api-key", "", "API keys for flickr can be created at https://www.flickr.com/services/apps/create/apply")
+	apiKeySecretFlag = flag.String("api-key-secret", "", "API keys for flickr can be created at https://www.flickr.com/services/apps/create/apply")
+	albumIdFlag      = flag.String("album-id", "", "Import a specific album, identified by id")
 	ds               *dataset.Dataset
 	user             User
 	oauthClient      oauth.Client
+	httpClient       *http.Client
 )
 
 type flickrCall struct {
@@ -36,7 +39,9 @@ func main() {
 	dsFlags := dataset.NewFlags()
 	flag.Parse()
 
-	if *apiKeyFlag == "" || *apiKeySecretFlag == "" {
+	httpClient = util.CachingHttpClient()
+
+	if *apiKeyFlag == "" || *apiKeySecretFlag == "" || httpClient == nil {
 		flag.Usage()
 		return
 	}
@@ -182,6 +187,7 @@ func getPhotosetPhotos(id string) SetOfPhoto {
 			Photo []struct {
 				Id    string `json:"id"`
 				Title string `json:"title"`
+				Tags  string `json:"tags"`
 			} `json:"photo"`
 		} `json:"photoset"`
 	}{}
@@ -190,20 +196,41 @@ func getPhotosetPhotos(id string) SetOfPhoto {
 	err := callFlickrAPI("flickr.photosets.getPhotos", &response, &map[string]string{
 		"photoset_id": id,
 		"user_id":     user.Id().String(),
+		"extras":      "tags",
 	})
 	Chk.NoError(err)
 
-	photoSet := NewSetOfPhoto()
+	photoSet := types.NewSet()
 	for _, p := range response.Photoset.Photo {
 		url := getOriginalUrl(p.Id)
 		fmt.Printf(" . %v\n", url)
 		photoReader := getPhotoReader(url)
+		defer photoReader.Close()
 		b, err := types.NewBlob(photoReader)
 		Chk.NoError(err)
-		photo := NewPhoto().SetId(types.NewString(p.Id)).SetTitle(types.NewString(p.Title)).SetUrl(types.NewString(url)).SetImage(b)
-		photoSet = photoSet.Insert(photo)
+		photo := NewPhoto().
+			SetId(types.NewString(p.Id)).
+			SetTitle(types.NewString(p.Title)).
+			SetUrl(types.NewString(url)).
+			SetTags(getTags(p.Tags)).
+			SetImage(b)
+		// The photo is big, so write it out now to release the memory.
+		r, err := types.WriteValue(photo.NomsValue(), ds)
+		Chk.NoError(err)
+		photoSet = photoSet.Insert(types.Ref{r})
 	}
-	return photoSet
+	return SetOfPhotoFromVal(photoSet)
+}
+
+func getTags(tagStr string) (res SetOfString) {
+	res = NewSetOfString()
+	if tagStr == "" {
+		return
+	}
+	for _, tag := range strings.Split(tagStr, " ") {
+		res = res.Insert(types.NewString(tag))
+	}
+	return res
 }
 
 func getOriginalUrl(id string) string {
@@ -234,10 +261,9 @@ func getOriginalUrl(id string) string {
 	return "NOT REACHED"
 }
 
-func getPhotoReader(url string) io.Reader {
-	resp, err := http.Get(url)
+func getPhotoReader(url string) io.ReadCloser {
+	resp, err := httpClient.Get(url)
 	Chk.NoError(err)
-	defer resp.Body.Close()
 	return resp.Body
 }
 
