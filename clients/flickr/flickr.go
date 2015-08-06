@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"reflect"
 
-	"github.com/attic-labs/noms/clients/go"
+	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	. "github.com/attic-labs/noms/dbg"

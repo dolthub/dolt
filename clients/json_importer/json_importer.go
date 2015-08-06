@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/attic-labs/noms/clients/go"
+	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 )
