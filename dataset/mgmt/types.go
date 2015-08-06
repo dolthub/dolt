@@ -15,7 +15,9 @@ type Dataset struct {
 }
 
 func NewDataset() Dataset {
-	return Dataset{types.NewMap()}
+	return Dataset{
+		types.NewMap(types.NewString("$name"), types.NewString("Dataset")),
+	}
 }
 
 func DatasetFromVal(v types.Value) Dataset {

@@ -97,7 +97,9 @@ type User struct {
 }
 
 func NewUser() User {
-	return User{types.NewMap()}
+	return User{
+		types.NewMap(types.NewString("$name"), types.NewString("User")),
+	}
 }
 
 func UserFromVal(v types.Value) User {
@@ -164,7 +166,9 @@ type Photoset struct {
 }
 
 func NewPhotoset() Photoset {
-	return Photoset{types.NewMap()}
+	return Photoset{
+		types.NewMap(types.NewString("$name"), types.NewString("Photoset")),
+	}
 }
 
 func PhotosetFromVal(v types.Value) Photoset {
@@ -215,7 +219,9 @@ type Photo struct {
 }
 
 func NewPhoto() Photo {
-	return Photo{types.NewMap()}
+	return Photo{
+		types.NewMap(types.NewString("$name"), types.NewString("Photo")),
+	}
 }
 
 func PhotoFromVal(v types.Value) Photo {

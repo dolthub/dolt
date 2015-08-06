@@ -97,7 +97,9 @@ type Commit struct {
 }
 
 func NewCommit() Commit {
-	return Commit{types.NewMap()}
+	return Commit{
+		types.NewMap(types.NewString("$name"), types.NewString("Commit")),
+	}
 }
 
 func CommitFromVal(v types.Value) Commit {
