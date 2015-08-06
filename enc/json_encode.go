@@ -24,7 +24,7 @@ func NewCompoundBlob(length uint64, offsets []uint64, refs []ref.Ref) compoundBl
 	return compoundBlob{length, offsets, refs}
 }
 
-// MapFromItems takes an even-numbered list of items and converts them into a stably-ordered map-like value by treating the even-indexed items as keys and the odd-indexed items as values, e.g. {e[0]: e[1], e[2]: e[3], ...}
+// MapFromItems takes an even-numbered list of items and converts them into a stably-ordered map-like value by treating the even-indexed items as keys and the odd-indexed items as values, e.g. {e[0]: e[1], e[2]: e[3], ...}. This does NOT enforce key uniqueness.
 func MapFromItems(e ...interface{}) (m encMap) {
 	dbg.Chk.True(0 == len(e)%2, "Length on input array must be multiple of 2")
 	m = make(encMap, 0, len(e)/2)

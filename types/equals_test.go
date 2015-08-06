@@ -70,7 +70,6 @@ func TestPrimitiveEquals(t *testing.T) {
 			if f1() == nil {
 				continue
 			}
-			//fmt.Printf("%+v ?= %+v\n", f1(), f2())
 			if i == j {
 				assert.True(f1().Equals(f2()))
 			} else {

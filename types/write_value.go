@@ -1,8 +1,6 @@
 package types
 
 import (
-	"fmt"
-
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/enc"
@@ -36,19 +34,19 @@ func toEncodeable(v Value, cs chunks.ChunkSink) (interface{}, error) {
 	case compoundBlob:
 		cb, err := encCompoundBlobFromCompoundBlob(v, cs)
 		if err != nil {
-			return ref.Ref{}, err
+			return nil, err
 		}
 		return cb, nil
 	case List:
 		l, err := makeListEncodeable(v, cs)
 		if err != nil {
-			return ref.Ref{}, err
+			return nil, err
 		}
 		return l, nil
 	case Map:
 		m, err := makeMapEncodeable(v, cs)
 		if err != nil {
-			return ref.Ref{}, err
+			return nil, err
 		}
 		return m, nil
 	case primitive:
@@ -58,7 +56,7 @@ func toEncodeable(v Value, cs chunks.ChunkSink) (interface{}, error) {
 	case Set:
 		s, err := makeSetEncodeable(v, cs)
 		if err != nil {
-			return ref.Ref{}, err
+			return nil, err
 		}
 		return s, nil
 	case String:
@@ -75,14 +73,10 @@ func encCompoundBlobFromCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) (inte
 		if err != nil {
 			return nil, err
 		}
-		if i, ok := i.(ref.Ref); !ok {
-			return nil, fmt.Errorf("All children of compoundBlob must be Blobs!")
-		} else {
-			refs[idx] = i
-		}
+		// All children of compoundBlob must be Blobs, which get encoded and reffed by processChild.
+		refs[idx] = i.(ref.Ref)
 	}
 	return enc.NewCompoundBlob(cb.length, cb.offsets, refs), nil
-
 }
 
 func makeListEncodeable(l List, cs chunks.ChunkSink) (interface{}, error) {
