@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/datas"
@@ -27,7 +28,7 @@ var (
 	ds               *dataset.Dataset
 	user             User
 	oauthClient      oauth.Client
-	httpClient 		*http.Client
+	httpClient       *http.Client
 )
 
 type flickrCall struct {
@@ -186,6 +187,7 @@ func getPhotosetPhotos(id string) SetOfPhoto {
 			Photo []struct {
 				Id    string `json:"id"`
 				Title string `json:"title"`
+				Tags  string `json:"tags"`
 			} `json:"photo"`
 		} `json:"photoset"`
 	}{}
@@ -194,6 +196,7 @@ func getPhotosetPhotos(id string) SetOfPhoto {
 	err := callFlickrAPI("flickr.photosets.getPhotos", &response, &map[string]string{
 		"photoset_id": id,
 		"user_id":     user.Id().String(),
+		"extras":      "tags",
 	})
 	Chk.NoError(err)
 
@@ -205,13 +208,29 @@ func getPhotosetPhotos(id string) SetOfPhoto {
 		defer photoReader.Close()
 		b, err := types.NewBlob(photoReader)
 		Chk.NoError(err)
-		photo := NewPhoto().SetId(types.NewString(p.Id)).SetTitle(types.NewString(p.Title)).SetUrl(types.NewString(url)).SetImage(b)
+		photo := NewPhoto().
+			SetId(types.NewString(p.Id)).
+			SetTitle(types.NewString(p.Title)).
+			SetUrl(types.NewString(url)).
+			SetTags(getTags(p.Tags)).
+			SetImage(b)
 		// The photo is big, so write it out now to release the memory.
 		r, err := types.WriteValue(photo.NomsValue(), ds)
 		Chk.NoError(err)
 		photoSet = photoSet.Insert(types.Ref{r})
 	}
 	return SetOfPhotoFromVal(photoSet)
+}
+
+func getTags(tagStr string) (res SetOfString) {
+	res = NewSetOfString()
+	if tagStr == "" {
+		return
+	}
+	for _, tag := range strings.Split(tagStr, " ") {
+		res = res.Insert(types.NewString(tag))
+	}
+	return res
 }
 
 func getOriginalUrl(id string) string {
