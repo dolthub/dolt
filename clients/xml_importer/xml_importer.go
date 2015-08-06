@@ -6,20 +6,17 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime/pprof"
 
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
-	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/types"
 	"github.com/clbanning/mxj"
 )
 
 var (
 	noIO        = flag.Bool("benchmark", false, "Run in 'benchmark' mode, without file-IO")
-	cpuprofile  = flag.String("cpuprofile", "", "write cpu profile to file")
-	memprofile  = flag.String("memprofile", "", "write memory profile to this file")
 	customUsage = func() {
 		fmtString := `%s walks the given directory, looking for .xml files. When it finds one, the entity inside is parsed into nested Noms maps/lists and committed to the dataset indicated on the command line.`
 		fmt.Fprintf(os.Stderr, fmtString, os.Args[0])
@@ -38,13 +35,10 @@ func main() {
 		flag.Usage()
 		return
 	}
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
+	if started, err := util.MaybeStartCPUProfile(); started {
+		defer util.StopCPUProfile()
+	} else if err != nil {
+		log.Fatalln("Can't create cpu profile file.", err)
 	}
 
 	list := types.NewList()
@@ -73,9 +67,9 @@ func main() {
 		}
 
 		ref, err := types.WriteValue(nomsObj, ds)
-		Chk.NoError(err)
+		dbg.Chk.NoError(err)
 
-		list = list.Append(types.Ref{ref})
+		list = list.Append(types.Ref{R: ref})
 		return nil
 	})
 
@@ -84,13 +78,7 @@ func main() {
 			datas.NewCommit().SetParents(
 				ds.Heads().NomsValue()).SetValue(list)))
 	}
-	if *memprofile != "" {
-		f, err := os.Create(*memprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.WriteHeapProfile(f)
-		f.Close()
-		return
+	if err := util.MaybeWriteMemProfile(); err != nil {
+		log.Fatalln("Can't create memory profile file.", err)
 	}
 }
