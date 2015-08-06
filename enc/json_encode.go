@@ -20,10 +20,6 @@ type CompoundBlob struct {
 	Blobs   []ref.Ref
 }
 
-func NewCompoundBlob(length uint64, offsets []uint64, refs []ref.Ref) CompoundBlob {
-	return CompoundBlob{length, offsets, refs}
-}
-
 // MapFromItems takes an even-numbered list of items and converts them into a stably-ordered map-like value by treating the even-indexed items as keys and the odd-indexed items as values, e.g. {e[0]: e[1], e[2]: e[3], ...}. This does NOT enforce key uniqueness.
 func MapFromItems(e ...interface{}) Map {
 	dbg.Chk.True(0 == len(e)%2, "Length on input array must be multiple of 2")
@@ -35,9 +31,19 @@ func SetFromItems(e ...interface{}) Set {
 	return e
 }
 
+// Map holds mapEntries in a stable order at runtime, in contrast to Go maps. This is important so that encoding remains stable.
 type Map []interface{}
 
+// Map.ToItems provides a mechanism for converting a Map back into a structure that allows ranging over all keys and values that doesn't rely on implementation details of the type.
+func (m Map) ToItems() []interface{} {
+	return m
+}
+
 type Set []interface{}
+
+func (s Set) ToItems() []interface{} {
+	return s
+}
 
 func jsonEncode(dst io.Writer, v interface{}) (err error) {
 	var j interface{}

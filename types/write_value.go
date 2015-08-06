@@ -76,7 +76,7 @@ func encCompoundBlobFromCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) (inte
 		// All children of compoundBlob must be Blobs, which get encoded and reffed by processChild.
 		refs[idx] = i.(ref.Ref)
 	}
-	return enc.NewCompoundBlob(cb.length, cb.offsets, refs), nil
+	return enc.CompoundBlob{cb.length, cb.offsets, refs}, nil
 }
 
 func makeListEncodeable(l List, cs chunks.ChunkSink) (interface{}, error) {

@@ -1,8 +1,8 @@
 package types
 
 import (
-	"bytes"
 	"io"
+	"io/ioutil"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/dbg"
@@ -14,27 +14,25 @@ import (
 func ReadValue(r ref.Ref, cs chunks.ChunkSource) (Value, error) {
 	dbg.Chk.NotNil(cs)
 	reader, err := cs.Get(r)
-	if reader == nil && err == nil {
-		return nil, nil // It's reasonable for a chunk to not be present.
-	} else if err != nil {
-		// Consider rejiggering this error handling with BUG #176.
-		return nil, err
+	if reader == nil {
+		// Consider rejiggering this error handling with BUG 176.
+		return nil, err // Get() will return nil, nil if chunk isn't present.
 	}
 	defer reader.Close()
 
 	i, err := enc.Decode(reader)
-	// Consider rejiggering this error handling with BUG #176.
+	// Consider rejiggering this error handling with BUG 176.
 	if err != nil {
 		return nil, err
 	}
 
-	// Consider rejiggering this error handling with BUG #176.
+	// Consider rejiggering this error handling with BUG 176.
 	f, err := fromEncodeable(i, cs)
 	if err != nil {
 		return nil, err
 	}
 
-	// Consider rejiggering this error handling with BUG #176.
+	// Consider rejiggering this error handling with BUG 176.
 	val, err := f.Deref(cs)
 	if err != nil {
 		return nil, err
@@ -68,16 +66,15 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) (Future, error) {
 	case ref.Ref:
 		return futureFromRef(i), nil
 	case io.Reader:
-		buf := &bytes.Buffer{}
-		_, err := io.Copy(buf, i)
+		data, err := ioutil.ReadAll(i)
 		dbg.Chk.NoError(err)
-		return futureFromValue(newBlobLeaf(buf.Bytes())), nil
+		return futureFromValue(newBlobLeaf(data)), nil
 	case []interface{}:
 		return futureListFromIterable(i, cs)
 	case enc.Map:
-		return futureMapFromIterable(i, cs)
+		return futureMapFromIterable(i.ToItems(), cs)
 	case enc.Set:
-		return futureSetFromIterable(i, cs)
+		return futureSetFromIterable(i.ToItems(), cs)
 	case enc.CompoundBlob:
 		blobs := make([]Future, len(i.Blobs))
 		for idx, blobRef := range i.Blobs {
