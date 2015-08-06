@@ -130,8 +130,9 @@ func jsonDecodeCompoundBlob(input []interface{}) (interface{}, error) {
 		if err != nil {
 			return ref.Ref{}, err
 		}
+		// Consider rejiggering this error handling with BUG #176.
 		if v, ok := v.(ref.Ref); !ok {
-			return ref.Ref{}, fmt.Errorf("compoundBlob children must be ref.Refs; got %+v", v)
+			return ref.Ref{}, fmt.Errorf("CompoundBlob children must be ref.Refs; got %+v", v)
 		}
 		return v.(ref.Ref), nil
 	}
@@ -155,7 +156,7 @@ func jsonDecodeCompoundBlob(input []interface{}) (interface{}, error) {
 		}
 	}
 
-	return compoundBlob{length, offsets, blobs}, nil
+	return CompoundBlob{length, offsets, blobs}, nil
 }
 
 func jsonDecodeList(input []interface{}) ([]interface{}, error) {
@@ -170,7 +171,7 @@ func jsonDecodeList(input []interface{}) ([]interface{}, error) {
 	return output, nil
 }
 
-func jsonDecodeMap(input []interface{}) (encMap, error) {
+func jsonDecodeMap(input []interface{}) (Map, error) {
 	r, err := jsonDecodeList(input)
 	if err != nil {
 		return nil, err
@@ -178,6 +179,6 @@ func jsonDecodeMap(input []interface{}) (encMap, error) {
 	return MapFromItems(r...), nil
 }
 
-func jsonDecodeSet(input []interface{}) (set, error) {
+func jsonDecodeSet(input []interface{}) (Set, error) {
 	return jsonDecodeList(input)
 }

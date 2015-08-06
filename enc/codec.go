@@ -46,6 +46,7 @@ func Decode(r io.Reader) (interface{}, error) {
 	// assumes all tags are same size, which they are for now.
 	buffered := bufio.NewReaderSize(r, len(jsonTag))
 	prefix, err := buffered.Peek(len(jsonTag))
+	// Consider rejiggering this error handling with BUG #176.
 	if err != nil {
 		return nil, err
 	}
@@ -55,5 +56,6 @@ func Decode(r io.Reader) (interface{}, error) {
 	} else if bytes.Equal(prefix, blobTag) {
 		return blobLeafDecode(buffered)
 	}
+	// Consider rejiggering this error handling with BUG #176.
 	return nil, fmt.Errorf("Unsupported chunk tag: %+v", prefix)
 }
