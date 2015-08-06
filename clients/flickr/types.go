@@ -8,208 +8,117 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-// User
+// MapOfStringToAlbum
 
-type User struct {
+type MapOfStringToAlbum struct {
 	m types.Map
 }
 
-func NewUser() User {
-	return User{
-		types.NewMap(types.NewString("$name"), types.NewString("User")),
-	}
+type MapOfStringToAlbumIterCallback (func(k types.String, v Album) (stop bool))
+
+func NewMapOfStringToAlbum() MapOfStringToAlbum {
+	return MapOfStringToAlbum{types.NewMap()}
 }
 
-func UserFromVal(v types.Value) User {
-	return User{v.(types.Map)}
+func MapOfStringToAlbumFromVal(p types.Value) MapOfStringToAlbum {
+	return MapOfStringToAlbum{p.(types.Map)}
 }
 
-// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
-func (s User) NomsValue() types.Map {
-	return s.m
+func (m MapOfStringToAlbum) NomsValue() types.Map {
+	return m.m
 }
 
-func (s User) Equals(p User) bool {
-	return s.m.Equals(p.m)
+func (m MapOfStringToAlbum) Equals(p MapOfStringToAlbum) bool {
+	return m.m.Equals(p.m)
 }
 
-func (s User) Ref() ref.Ref {
-	return s.m.Ref()
+func (m MapOfStringToAlbum) Ref() ref.Ref {
+	return m.m.Ref()
 }
 
-func (s User) OAuthToken() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("oAuthToken")))
+func (m MapOfStringToAlbum) Empty() bool {
+	return m.m.Empty()
 }
 
-func (s User) SetOAuthToken(p types.String) User {
-	return UserFromVal(s.m.Set(types.NewString("oAuthToken"), p))
+func (m MapOfStringToAlbum) Len() uint64 {
+	return m.m.Len()
 }
 
-func (s User) Name() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("name")))
+func (m MapOfStringToAlbum) Has(p types.String) bool {
+	return m.m.Has(p)
 }
 
-func (s User) SetName(p types.String) User {
-	return UserFromVal(s.m.Set(types.NewString("name"), p))
+func (m MapOfStringToAlbum) Get(p types.String) Album {
+	return AlbumFromVal(m.m.Get(p))
 }
 
-func (s User) Id() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("id")))
+func (m MapOfStringToAlbum) Set(k types.String, v Album) MapOfStringToAlbum {
+	return MapOfStringToAlbumFromVal(m.m.Set(k, v.NomsValue()))
 }
 
-func (s User) SetId(p types.String) User {
-	return UserFromVal(s.m.Set(types.NewString("id"), p))
+// TODO: Implement SetM?
+
+func (m MapOfStringToAlbum) Remove(p types.String) MapOfStringToAlbum {
+	return MapOfStringToAlbumFromVal(m.m.Remove(p))
 }
 
-func (s User) OAuthSecret() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("oAuthSecret")))
-}
-
-func (s User) SetOAuthSecret(p types.String) User {
-	return UserFromVal(s.m.Set(types.NewString("oAuthSecret"), p))
-}
-
-func (s User) Photosets() SetOfPhotoset {
-	return SetOfPhotosetFromVal(s.m.Get(types.NewString("photosets")))
-}
-
-func (s User) SetPhotosets(p SetOfPhotoset) User {
-	return UserFromVal(s.m.Set(types.NewString("photosets"), p.NomsValue()))
-}
-
-// Photoset
-
-type Photoset struct {
-	m types.Map
-}
-
-func NewPhotoset() Photoset {
-	return Photoset{
-		types.NewMap(types.NewString("$name"), types.NewString("Photoset")),
-	}
-}
-
-func PhotosetFromVal(v types.Value) Photoset {
-	return Photoset{v.(types.Map)}
-}
-
-// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
-func (s Photoset) NomsValue() types.Map {
-	return s.m
-}
-
-func (s Photoset) Equals(p Photoset) bool {
-	return s.m.Equals(p.m)
-}
-
-func (s Photoset) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s Photoset) Title() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("title")))
-}
-
-func (s Photoset) SetTitle(p types.String) Photoset {
-	return PhotosetFromVal(s.m.Set(types.NewString("title"), p))
-}
-
-func (s Photoset) Id() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("id")))
-}
-
-func (s Photoset) SetId(p types.String) Photoset {
-	return PhotosetFromVal(s.m.Set(types.NewString("id"), p))
-}
-
-func (s Photoset) Photos() SetOfPhoto {
-	return SetOfPhotoFromVal(s.m.Get(types.NewString("photos")))
-}
-
-func (s Photoset) SetPhotos(p SetOfPhoto) Photoset {
-	return PhotosetFromVal(s.m.Set(types.NewString("photos"), p.NomsValue()))
-}
-
-// SetOfPhotoset
-
-type SetOfPhotoset struct {
-	s types.Set
-}
-
-type SetOfPhotosetIterCallback (func(p Photoset) (stop bool))
-
-func NewSetOfPhotoset() SetOfPhotoset {
-	return SetOfPhotoset{types.NewSet()}
-}
-
-func SetOfPhotosetFromVal(p types.Value) SetOfPhotoset {
-	return SetOfPhotoset{p.(types.Set)}
-}
-
-func (s SetOfPhotoset) NomsValue() types.Set {
-	return s.s
-}
-
-func (s SetOfPhotoset) Equals(p SetOfPhotoset) bool {
-	return s.s.Equals(p.s)
-}
-
-func (s SetOfPhotoset) Ref() ref.Ref {
-	return s.s.Ref()
-}
-
-func (s SetOfPhotoset) Empty() bool {
-	return s.s.Empty()
-}
-
-func (s SetOfPhotoset) Len() uint64 {
-	return s.s.Len()
-}
-
-func (s SetOfPhotoset) Has(p Photoset) bool {
-	return s.s.Has(p.NomsValue())
-}
-
-func (s SetOfPhotoset) Iter(cb SetOfPhotosetIterCallback) {
-	s.s.Iter(func(v types.Value) bool {
-		return cb(PhotosetFromVal(v))
+func (m MapOfStringToAlbum) Iter(cb MapOfStringToAlbumIterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(types.StringFromVal(k), AlbumFromVal(v))
 	})
 }
 
-func (s SetOfPhotoset) Insert(p ...Photoset) SetOfPhotoset {
-	return SetOfPhotoset{s.s.Insert(s.fromElemSlice(p)...)}
+// Album
+
+type Album struct {
+	m types.Map
 }
 
-func (s SetOfPhotoset) Remove(p ...Photoset) SetOfPhotoset {
-	return SetOfPhotoset{s.s.Remove(s.fromElemSlice(p)...)}
-}
-
-func (s SetOfPhotoset) Union(others ...SetOfPhotoset) SetOfPhotoset {
-	return SetOfPhotoset{s.s.Union(s.fromStructSlice(others)...)}
-}
-
-func (s SetOfPhotoset) Subtract(others ...SetOfPhotoset) SetOfPhotoset {
-	return SetOfPhotoset{s.s.Subtract(s.fromStructSlice(others)...)}
-}
-
-func (s SetOfPhotoset) Any() Photoset {
-	return PhotosetFromVal(s.s.Any())
-}
-
-func (s SetOfPhotoset) fromStructSlice(p []SetOfPhotoset) []types.Set {
-	r := make([]types.Set, len(p))
-	for i, v := range p {
-		r[i] = v.s
+func NewAlbum() Album {
+	return Album{
+		types.NewMap(types.NewString("$name"), types.NewString("Album")),
 	}
-	return r
 }
 
-func (s SetOfPhotoset) fromElemSlice(p []Photoset) []types.Value {
-	r := make([]types.Value, len(p))
-	for i, v := range p {
-		r[i] = v.NomsValue()
-	}
-	return r
+func AlbumFromVal(v types.Value) Album {
+	return Album{v.(types.Map)}
+}
+
+// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
+func (s Album) NomsValue() types.Map {
+	return s.m
+}
+
+func (s Album) Equals(p Album) bool {
+	return s.m.Equals(p.m)
+}
+
+func (s Album) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s Album) Title() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("title")))
+}
+
+func (s Album) SetTitle(p types.String) Album {
+	return AlbumFromVal(s.m.Set(types.NewString("title"), p))
+}
+
+func (s Album) Id() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("id")))
+}
+
+func (s Album) SetId(p types.String) Album {
+	return AlbumFromVal(s.m.Set(types.NewString("id"), p))
+}
+
+func (s Album) Photos() SetOfPhoto {
+	return SetOfPhotoFromVal(s.m.Get(types.NewString("photos")))
+}
+
+func (s Album) SetPhotos(p SetOfPhoto) Album {
+	return AlbumFromVal(s.m.Set(types.NewString("photos"), p.NomsValue()))
 }
 
 // SetOfPhoto
@@ -443,5 +352,74 @@ func (s SetOfString) fromElemSlice(p []types.String) []types.Value {
 		r[i] = v
 	}
 	return r
+}
+
+// User
+
+type User struct {
+	m types.Map
+}
+
+func NewUser() User {
+	return User{
+		types.NewMap(types.NewString("$name"), types.NewString("User")),
+	}
+}
+
+func UserFromVal(v types.Value) User {
+	return User{v.(types.Map)}
+}
+
+// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
+func (s User) NomsValue() types.Map {
+	return s.m
+}
+
+func (s User) Equals(p User) bool {
+	return s.m.Equals(p.m)
+}
+
+func (s User) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s User) OAuthToken() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("oAuthToken")))
+}
+
+func (s User) SetOAuthToken(p types.String) User {
+	return UserFromVal(s.m.Set(types.NewString("oAuthToken"), p))
+}
+
+func (s User) Name() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("name")))
+}
+
+func (s User) SetName(p types.String) User {
+	return UserFromVal(s.m.Set(types.NewString("name"), p))
+}
+
+func (s User) Albums() MapOfStringToAlbum {
+	return MapOfStringToAlbumFromVal(s.m.Get(types.NewString("albums")))
+}
+
+func (s User) SetAlbums(p MapOfStringToAlbum) User {
+	return UserFromVal(s.m.Set(types.NewString("albums"), p.NomsValue()))
+}
+
+func (s User) Id() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("id")))
+}
+
+func (s User) SetId(p types.String) User {
+	return UserFromVal(s.m.Set(types.NewString("id"), p))
+}
+
+func (s User) OAuthSecret() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("oAuthSecret")))
+}
+
+func (s User) SetOAuthSecret(p types.String) User {
+	return UserFromVal(s.m.Set(types.NewString("oAuthSecret"), p))
 }
 
