@@ -64,9 +64,9 @@ func main() {
 
 	getUser()
 	if *albumIdFlag != "" {
-		getPhotoset(*albumIdFlag)
+		getAlbum(*albumIdFlag)
 	} else {
-		getPhotosets()
+		getAlbums()
 	}
 	commitUser()
 }
@@ -126,7 +126,7 @@ func authUser() {
 	}
 }
 
-func getPhotoset(id string) {
+func getAlbum(id string) {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -146,20 +146,23 @@ func getPhotoset(id string) {
 	fmt.Printf("\nPhotoset: %v\n", response.Photoset.Title)
 
 	// TODO: Retrieving a field which hasn't been set will crash, so we have to reach inside and test the untyped
-	var photosets SetOfPhotoset
-	if !user.NomsValue().Has(types.NewString("photosets")) {
-		photosets = NewSetOfPhotoset()
+	var albums MapOfStringToAlbum
+	if !user.NomsValue().Has(types.NewString("albums")) {
+		albums = NewMapOfStringToAlbum()
 	} else {
-		photosets = user.Photosets()
+		albums = user.Albums()
 	}
 
-	photos := getPhotosetPhotos(id)
-	photoset := NewPhotoset().SetId(types.NewString(id)).SetTitle(types.NewString(response.Photoset.Title.Content)).SetPhotos(photos)
-	photosets = photosets.Insert(photoset)
-	user = user.SetPhotosets(photosets)
+	photos := getAlbumPhotos(id)
+	album := NewAlbum().
+		SetId(types.NewString(id)).
+		SetTitle(types.NewString(response.Photoset.Title.Content)).
+		SetPhotos(photos)
+	albums = albums.Set(types.NewString(id), album)
+	user = user.SetAlbums(albums)
 }
 
-func getPhotosets() {
+func getAlbums() {
 	response := struct {
 		flickrCall
 		Photosets struct {
@@ -176,11 +179,11 @@ func getPhotosets() {
 	Chk.NoError(err)
 
 	for _, p := range response.Photosets.Photoset {
-		getPhotoset(p.Id)
+		getAlbum(p.Id)
 	}
 }
 
-func getPhotosetPhotos(id string) SetOfPhoto {
+func getAlbumPhotos(id string) SetOfPhoto {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -200,7 +203,7 @@ func getPhotosetPhotos(id string) SetOfPhoto {
 	})
 	Chk.NoError(err)
 
-	photoSet := types.NewSet()
+	photos := types.NewSet()
 	for _, p := range response.Photoset.Photo {
 		url := getOriginalUrl(p.Id)
 		fmt.Printf(" . %v\n", url)
@@ -217,9 +220,9 @@ func getPhotosetPhotos(id string) SetOfPhoto {
 		// The photo is big, so write it out now to release the memory.
 		r, err := types.WriteValue(photo.NomsValue(), ds)
 		Chk.NoError(err)
-		photoSet = photoSet.Insert(types.Ref{r})
+		photos = photos.Insert(types.Ref{r})
 	}
-	return SetOfPhotoFromVal(photoSet)
+	return SetOfPhotoFromVal(photos)
 }
 
 func getTags(tagStr string) (res SetOfString) {
