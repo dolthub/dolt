@@ -73,19 +73,19 @@ func TestJsonEncode(t *testing.T) {
 
 	// Maps
 	testEncode(`j {"map":[]}
-`, encMap{})
+`, Map{})
 	expected = fmt.Sprintf(`j {"map":["string","hotdog","list",{"ref":"%s"},"int32",{"int32":42},"bool",false,"map",{"ref":"%s"}]}
 `, ref2, ref1)
 	testEncode(expected, MapFromItems("string", "hotdog", "list", ref2, "int32", int32(42), "bool", false, "map", ref1))
 
 	// Sets
 	testEncode(`j {"set":[]}
-`, set{})
+`, Set{})
 	expected = fmt.Sprintf(`j {"set":["foo",true,{"uint16":42},{"ref":"%s"},{"ref":"%s"}]}
 `, ref2, ref1)
-	testEncode(expected, set{"foo", true, uint16(42), ref2, ref1})
+	testEncode(expected, SetFromItems("foo", true, uint16(42), ref2, ref1))
 
 	// Blob (compound)
 	testEncode(fmt.Sprintf(`j {"cb":[{"ref":"%s"},2]}
-`, ref2), compoundBlob{uint64(2), []uint64{0}, []ref.Ref{ref2}})
+`, ref2), CompoundBlob{uint64(2), []uint64{0}, []ref.Ref{ref2}})
 }
