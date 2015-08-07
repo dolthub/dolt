@@ -3,12 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 	"reflect"
-	"runtime/pprof"
 	"strconv"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/dbg"
@@ -16,9 +15,8 @@ import (
 )
 
 var (
-	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-	inputID    = flag.String("input-ds", "", "dataset to pull data from.")
-	outputID   = flag.String("output-ds", "", "dataset to store data in.")
+	inputID  = flag.String("input-ds", "", "dataset to pull data from.")
+	outputID = flag.String("output-ds", "", "dataset to store data in.")
 )
 
 func getAsString(fm types.Map, key string) string {
@@ -157,11 +155,10 @@ func main() {
 		flag.Usage()
 		return
 	}
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
+	if started, err := util.MaybeStartCPUProfile(); started {
+		defer util.StopCPUProfile()
+	} else if err != nil {
 		dbg.Chk.NoError(err, "Can't create cpu profile file.")
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
 	}
 
 	dataStore := datas.NewDataStore(cs)
