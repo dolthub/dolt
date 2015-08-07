@@ -37,16 +37,7 @@ func SetFromItems(e ...interface{}) Set {
 // Map holds mapEntries in a stable order at runtime, in contrast to Go maps. This is important so that encoding remains stable.
 type Map []interface{}
 
-// Map.ToItems provides a mechanism for converting a Map back into a structure that allows ranging over all keys and values that doesn't rely on implementation details of the type.
-func (m Map) ToItems() []interface{} {
-	return m
-}
-
 type Set []interface{}
-
-func (s Set) ToItems() []interface{} {
-	return s
-}
 
 func jsonEncode(dst io.Writer, v interface{}) (err error) {
 	var j interface{}
