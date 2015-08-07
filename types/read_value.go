@@ -14,11 +14,13 @@ import (
 func ReadValue(r ref.Ref, cs chunks.ChunkSource) (Value, error) {
 	dbg.Chk.NotNil(cs)
 	reader, err := cs.Get(r)
-	if reader == nil {
+	if reader != nil {
+		defer reader.Close()
+	}
+	if reader == nil || err != nil {
 		// Consider rejiggering this error handling with BUG 176.
 		return nil, err // Get() will return nil, nil if chunk isn't present.
 	}
-	defer reader.Close()
 
 	i, err := enc.Decode(reader)
 	// Consider rejiggering this error handling with BUG 176.
@@ -72,9 +74,9 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) (Future, error) {
 	case []interface{}:
 		return futureListFromIterable(i, cs)
 	case enc.Map:
-		return futureMapFromIterable(i.ToItems(), cs)
+		return futureMapFromIterable(i, cs)
 	case enc.Set:
-		return futureSetFromIterable(i.ToItems(), cs)
+		return futureSetFromIterable(i, cs)
 	case enc.CompoundBlob:
 		blobs := make([]Future, len(i.Blobs))
 		for idx, blobRef := range i.Blobs {
