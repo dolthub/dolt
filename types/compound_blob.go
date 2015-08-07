@@ -12,8 +12,7 @@ import (
 // compoundBlob represents a list of Blobs.
 // It implements the Blob interface.
 type compoundBlob struct {
-	length  uint64
-	offsets []uint64
+	offsets []uint64 // The offsets of the end of the related blobs.
 	blobs   []Future
 	ref     *ref.Ref
 	cs      chunks.ChunkSource
@@ -79,7 +78,10 @@ func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
 		}
 	}
 	if cbr.currentReader != nil {
-		offset := abs - int64(cbr.cb.offsets[cbr.currentBlobIndex])
+		offset := abs
+		if cbr.currentBlobIndex > 0 {
+			offset -= int64(cbr.cb.offsets[cbr.currentBlobIndex-1])
+		}
 		if _, err := cbr.currentReader.Seek(offset, 0); err != nil {
 			return 0, err
 		}
@@ -89,13 +91,9 @@ func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (cbr *compoundBlobReader) findBlobOffset(abs uint64) int {
-	// TODO(arv): The -1 at the end is bad. If the offsets was shifted one to the right things would be cleaner.
-	if abs >= cbr.cb.Len() {
-		return len(cbr.cb.blobs)
-	}
 	return sort.Search(len(cbr.cb.offsets), func(i int) bool {
 		return cbr.cb.offsets[i] > abs
-	}) - 1
+	})
 }
 
 func (cbr *compoundBlobReader) updateReader() error {
@@ -113,7 +111,7 @@ func (cbr *compoundBlobReader) updateReader() error {
 
 // Len implements the Blob interface
 func (cb compoundBlob) Len() uint64 {
-	return cb.length
+	return cb.offsets[len(cb.offsets)-1]
 }
 
 func (cb compoundBlob) Ref() ref.Ref {
@@ -123,9 +121,8 @@ func (cb compoundBlob) Ref() ref.Ref {
 func (cb compoundBlob) Equals(other Value) bool {
 	if other == nil {
 		return false
-	} else {
-		return cb.Ref() == other.Ref()
 	}
+	return cb.Ref() == other.Ref()
 }
 
 func (cb compoundBlob) Chunks() (futures []Future) {

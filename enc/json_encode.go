@@ -15,9 +15,12 @@ var (
 
 // CompoundBlob represents the info needed to encode/decode chunked blob metadata.
 type CompoundBlob struct {
-	Length  uint64
-	Offsets []uint64
+	Offsets []uint64 // The offsets of the end of the related blobs.
 	Blobs   []ref.Ref
+}
+
+func (cb CompoundBlob) Len() uint64 {
+	return cb.Offsets[len(cb.Offsets)-1]
 }
 
 // MapFromItems takes an even-numbered list of items and converts them into a stably-ordered map-like value by treating the even-indexed items as keys and the odd-indexed items as values, e.g. {e[0]: e[1], e[2]: e[3], ...}. This does NOT enforce key uniqueness.
@@ -121,19 +124,18 @@ func getJSONPrimitive(v interface{}) (interface{}, error) {
 func getJSONCompoundBlob(cb CompoundBlob) (interface{}, error) {
 	// Perhaps tighten this up: BUG #170
 	// {"cb":[{"ref":"sha1-x"},length]}
-	// {"cb":[{"ref":"sha1-x"},offset,{"ref":"sha1-y"},length]}
+	// {"cb":[{"ref":"sha1-x"},lengthX,{"ref":"sha1-y"},lengthY]}
+	offset := uint64(0)
 	l := make([]interface{}, 0, len(cb.Blobs)*2)
 	for i, f := range cb.Blobs {
-		if i != 0 {
-			l = append(l, cb.Offsets[i])
-		}
 		c, err := getJSONPrimitive(f)
 		if err != nil {
 			return nil, err
 		}
 		l = append(l, c)
+		l = append(l, cb.Offsets[i]-offset)
+		offset = cb.Offsets[i]
 	}
-	l = append(l, cb.Length)
 
 	dbg.Chk.Equal(len(l), len(cb.Blobs)*2)
 

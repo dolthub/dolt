@@ -42,7 +42,7 @@ func TestEnsureRef(t *testing.T) {
 	}()
 
 	bl := newBlobLeaf([]byte("hi"))
-	cb := compoundBlob{uint64(2), []uint64{0}, []Future{futureFromValue(bl)}, &ref.Ref{}, cs}
+	cb := compoundBlob{[]uint64{2}, []Future{futureFromValue(bl)}, &ref.Ref{}, cs}
 
 	values := []Value{
 		newBlobLeaf([]byte{}),

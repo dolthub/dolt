@@ -42,10 +42,10 @@ func NewBlob(r io.Reader) (Blob, error) {
 			break
 		}
 
-		blob = newBlobLeaf(buf.Bytes())
-		offsets = append(offsets, length)
-		blobs = append(blobs, futureFromValue(blob))
 		length += n
+		offsets = append(offsets, length)
+		blob = newBlobLeaf(buf.Bytes())
+		blobs = append(blobs, futureFromValue(blob))
 	}
 
 	if length == 0 {
@@ -55,7 +55,7 @@ func NewBlob(r io.Reader) (Blob, error) {
 	if len(blobs) == 1 {
 		return blob, nil
 	}
-	return compoundBlob{length, offsets, blobs, &ref.Ref{}, nil}, nil
+	return compoundBlob{offsets, blobs, &ref.Ref{}, nil}, nil
 }
 
 func BlobFromVal(v Value) Blob {

@@ -54,7 +54,7 @@ func TestPrimitiveEquals(t *testing.T) {
 		func() Value {
 			b1, _ := NewBlob(bytes.NewBufferString("hi"))
 			b2, _ := NewBlob(bytes.NewBufferString("bye"))
-			return compoundBlob{uint64(5), []uint64{0, 2}, []Future{futureFromValue(b1), futureFromValue(b2)}, &ref.Ref{}, nil}
+			return compoundBlob{[]uint64{2, 5}, []Future{futureFromValue(b1), futureFromValue(b2)}, &ref.Ref{}, nil}
 		},
 		func() Value { return NewList() },
 		func() Value { return NewList(NewString("foo")) },

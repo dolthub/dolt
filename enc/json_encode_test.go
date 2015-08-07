@@ -87,5 +87,5 @@ func TestJsonEncode(t *testing.T) {
 
 	// Blob (compound)
 	testEncode(fmt.Sprintf(`j {"cb":[{"ref":"%s"},2]}
-`, ref2), CompoundBlob{uint64(2), []uint64{0}, []ref.Ref{ref2}})
+`, ref2), CompoundBlob{[]uint64{2}, []ref.Ref{ref2}})
 }

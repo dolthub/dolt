@@ -19,10 +19,10 @@ func getTestCompoundBlob(datas ...string) compoundBlob {
 	for i, s := range datas {
 		b, _ := NewBlob(bytes.NewBufferString(s))
 		blobs[i] = futureFromValue(b)
-		offsets[i] = length
 		length += uint64(len(s))
+		offsets[i] = length
 	}
-	return compoundBlob{length, offsets, blobs, &ref.Ref{}, nil}
+	return compoundBlob{offsets, blobs, &ref.Ref{}, nil}
 }
 
 func getAliceBlob(t *testing.T) compoundBlob {
@@ -86,7 +86,7 @@ func TestCompoundBlobReaderLazy(t *testing.T) {
 	b2 := newBlobLeaf([]byte("bye"))
 	tb2 := &testBlob{b2, &readCount2}
 
-	cb := compoundBlob{uint64(5), []uint64{0, 2}, []Future{futureFromValue(tb1), futureFromValue(tb2)}, &ref.Ref{}, nil}
+	cb := compoundBlob{[]uint64{2, 5}, []Future{futureFromValue(tb1), futureFromValue(tb2)}, &ref.Ref{}, nil}
 
 	r := cb.Reader()
 	assert.Equal(0, readCount1)
@@ -129,7 +129,7 @@ func TestCompoundBlobReaderLazySeek(t *testing.T) {
 	b2 := newBlobLeaf([]byte("bye"))
 	tb2 := &testBlob{b2, &readCount2}
 
-	cb := compoundBlob{uint64(5), []uint64{0, 2}, []Future{futureFromValue(tb1), futureFromValue(tb2)}, &ref.Ref{}, nil}
+	cb := compoundBlob{[]uint64{2, 5}, []Future{futureFromValue(tb1), futureFromValue(tb2)}, &ref.Ref{}, nil}
 
 	r := cb.Reader()
 
@@ -232,7 +232,7 @@ func TestCompoundBlobChunks(t *testing.T) {
 	bl1 := newBlobLeaf([]byte("hello"))
 	blr1 := bl1.Ref()
 	bl2 := newBlobLeaf([]byte("world"))
-	cb = compoundBlob{uint64(10), []uint64{0, 5}, []Future{futureFromRef(blr1), futureFromValue(bl2)}, &ref.Ref{}, cs}
+	cb = compoundBlob{[]uint64{5, 10}, []Future{futureFromRef(blr1), futureFromValue(bl2)}, &ref.Ref{}, cs}
 	assert.Equal(1, len(cb.Chunks()))
 }
 

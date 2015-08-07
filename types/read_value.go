@@ -86,7 +86,7 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) (Future, error) {
 			}
 			blobs[idx] = f
 		}
-		cb := compoundBlob{i.Length, i.Offsets, blobs, &ref.Ref{}, cs}
+		cb := compoundBlob{i.Offsets, blobs, &ref.Ref{}, cs}
 		return futureFromValue(cb), nil
 	default:
 		dbg.Chk.Fail("Unknown encodeable", "%+v", i)

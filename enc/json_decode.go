@@ -111,17 +111,13 @@ func toUint64(v interface{}) (uint64, error) {
 	return i, nil
 }
 
-// [length,length0,{"ref":"sha1-0"}, ... lengthN, {"ref":"sha1-N"}]
+// [{"ref":"sha1-0"}, length0, ... {"ref":"sha1-N"},lengthN]
 func jsonDecodeCompoundBlob(input []interface{}) (interface{}, error) {
 	if len(input)%2 != 0 || len(input) < 2 {
 		return nil, errInvalidEncoding
 	}
 
-	length, err := toUint64(input[len(input)-1])
-	if err != nil {
-		return nil, err
-	}
-
+	offset := uint64(0)
 	numBlobs := len(input) / 2
 	offsets := make([]uint64, numBlobs)
 	blobs := make([]ref.Ref, numBlobs)
@@ -137,26 +133,21 @@ func jsonDecodeCompoundBlob(input []interface{}) (interface{}, error) {
 		return v.(ref.Ref), nil
 	}
 
-	for i := 0; i < len(input)-1; i++ {
+	for i := 0; i < len(input); i += 2 {
 		var err error
-		var offset uint64
-		if i == 0 {
-			offset = uint64(0)
-		} else {
-			offset, err = toUint64(input[i])
-			i++
-			if err != nil {
-				return nil, err
-			}
-		}
-		offsets[i/2] = offset
 		blobs[i/2], err = ensureRef(jsonDecodeValue(input[i]))
 		if err != nil {
 			return nil, err
 		}
+		length, err := toUint64(input[i+1])
+		if err != nil {
+			return nil, err
+		}
+		offset += length
+		offsets[i/2] = offset
 	}
 
-	return CompoundBlob{length, offsets, blobs}, nil
+	return CompoundBlob{offsets, blobs}, nil
 }
 
 func jsonDecodeList(input []interface{}) ([]interface{}, error) {
