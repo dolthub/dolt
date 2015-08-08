@@ -8,25 +8,29 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
+	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/dataset/mgmt"
 	"github.com/attic-labs/noms/ref"
 )
 
 var (
-	port = flag.String("port", "8000", "")
+	port   = flag.String("port", "8000", "")
+	dsName = flag.String("ds", "", "dataset to serve. If empty, the entire database is served")
 )
 
 type server struct {
-	cs chunks.ChunkStore
+	ds datas.DataStore
 }
 
 func (s server) handle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 
 	switch r.URL.Path[1:] {
+	// TODO: Rename "heads"
 	case "root":
 		w.Header().Add("content-type", "text/plain")
-		fmt.Fprintf(w, "%v", s.cs.Root().String())
+		// Important to use Heads() here, not Root() because Root() refers to root of entire ChunkStore, not root of the datastore. They can differ.
+		fmt.Fprintf(w, "%v", s.ds.Heads().Ref())
 	case "get":
 		if refs, ok := r.URL.Query()["ref"]; ok {
 			s.handleGetRef(w, refs[0])
@@ -34,6 +38,7 @@ func (s server) handle(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Missing query param ref", http.StatusBadRequest)
 		}
 	case "dataset":
+		// TODO: Remove this. BUG 185.
 		if ids, ok := r.URL.Query()["id"]; ok {
 			s.handleGetDataset(w, ids[0])
 		} else {
@@ -51,7 +56,7 @@ func (s server) handleGetRef(w http.ResponseWriter, hashString string) {
 		return
 	}
 
-	reader, err := s.cs.Get(ref)
+	reader, err := s.ds.Get(ref)
 	if err != nil {
 		// TODO: Maybe we should not expose the internal path?
 		http.Error(w, fmt.Sprintf("Fetch error: %v", err), http.StatusNotFound)
@@ -69,8 +74,7 @@ func (s server) handleGetRef(w http.ResponseWriter, hashString string) {
 }
 
 func (s server) handleGetDataset(w http.ResponseWriter, id string) {
-	dataStore := datas.NewDataStore(s.cs)
-	dataset := mgmt.GetDatasetHeads(mgmt.GetDatasets(dataStore), id)
+	dataset := mgmt.GetDatasetHeads(mgmt.GetDatasets(s.ds), id)
 	if dataset == nil {
 		http.Error(w, fmt.Sprintf("Dataset not found: %s", id), http.StatusNotFound)
 		return
@@ -89,6 +93,16 @@ func main() {
 		return
 	}
 
-	http.HandleFunc("/", server{cs}.handle)
+	dataStore := datas.NewDataStore(cs)
+	if *dsName != "" {
+		ds := mgmt.GetDatasetHeads(mgmt.GetDatasets(dataStore), *dsName)
+		if ds == nil {
+			fmt.Println("Dataset not found: ", *dsName)
+			return
+		}
+		dataStore = dataset.NewDataset(dataStore, *dsName).DataStore
+	}
+
+	http.HandleFunc("/", server{dataStore}.handle)
 	http.ListenAndServe(fmt.Sprintf(":%s", *port), nil)
 }
