@@ -1,9 +1,9 @@
 package chunks
 
 import (
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"testing"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestMemoryStorePut(t *testing.T) {

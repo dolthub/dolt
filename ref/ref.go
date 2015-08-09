@@ -7,7 +7,7 @@ import (
 	"hash"
 	"regexp"
 
-	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 )
 
 var (
@@ -41,7 +41,7 @@ func NewHash() hash.Hash {
 }
 
 func FromHash(h hash.Hash) Ref {
-	Chk.Equal(sha1.Size, h.Size())
+	d.Chk.Equal(sha1.Size, h.Size())
 	digest := Sha1Digest{}
 	h.Sum(digest[:0])
 	return New(digest)
@@ -60,22 +60,22 @@ func Parse(s string) (r Ref, err error) {
 	}
 
 	// If there was no error, we should have decoded exactly one digest worth of bytes.
-	Chk.Equal(sha1.Size, n)
+	d.Chk.Equal(sha1.Size, n)
 	return
 }
 
 func MustParse(s string) Ref {
 	r, err := Parse(s)
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 	return r
 }
 
 // Less compares two Refs, returning true if the first is less than the second.
 // This can be called a lot, so performance and avoiding creating garbage may be important.
-// Particularly, Chk.Equals{Value} does reflection, and this can be expensive, so avoid it here.
+// Particularly, d.Chk.Equals{Value} does reflection, and this can be expensive, so avoid it here.
 func Less(r1, r2 Ref) bool {
 	d1, d2 := r1.digest, r2.digest
-	Chk.True(len(d1) == len(d2)) // BUG #83
+	d.Chk.True(len(d1) == len(d2)) // BUG #83
 	for k := 0; k < len(d1); k++ {
 		b1, b2 := d1[k], d2[k]
 		if b1 < b2 {

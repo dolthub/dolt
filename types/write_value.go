@@ -2,7 +2,7 @@ package types
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/ref"
 )
@@ -12,7 +12,7 @@ type primitive interface {
 }
 
 func WriteValue(v Value, cs chunks.ChunkSink) (ref.Ref, error) {
-	dbg.Chk.NotNil(cs)
+	d.Chk.NotNil(cs)
 
 	e, err := toEncodeable(v, cs)
 	if err != nil {
@@ -128,7 +128,7 @@ func processChild(f Future, cs chunks.ChunkSink) (interface{}, error) {
 	}
 
 	v := f.Val()
-	dbg.Chk.NotNil(v)
+	d.Chk.NotNil(v)
 	switch v := v.(type) {
 	// Blobs, lists, maps, and sets are always out-of-line
 	case Blob, List, Map, Set:

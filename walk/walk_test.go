@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/suite"
@@ -34,7 +34,7 @@ func (suite *WalkAllTestSuite) walkWorker(r ref.Ref, expected int) {
 
 func (suite *WalkAllTestSuite) storeAndRef(v types.Value) (r ref.Ref) {
 	r, err := types.WriteValue(v, suite.cs)
-	dbg.Chk.NoError(err)
+	d.Chk.NoError(err)
 	return
 }
 

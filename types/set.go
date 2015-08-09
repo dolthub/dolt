@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	"github.com/attic-labs/noms/chunks"
-	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -82,7 +82,7 @@ func (fm Set) Iter(cb setIterCallback) {
 	// TODO: sort iteration order
 	for _, f := range fm.m {
 		v, err := f.Deref(fm.cs)
-		Chk.NoError(err)
+		d.Chk.NoError(err)
 		if cb(v) {
 			break
 		}
@@ -92,7 +92,7 @@ func (fm Set) Iter(cb setIterCallback) {
 func (fm Set) Any() Value {
 	for _, f := range fm.m {
 		v, err := f.Deref(fm.cs)
-		Chk.NoError(err)
+		d.Chk.NoError(err)
 		return v
 	}
 	return nil

@@ -7,7 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -43,7 +43,7 @@ func (w *memoryChunkWriter) Write(data []byte) (int, error) {
 }
 
 func (w *memoryChunkWriter) Ref() (ref.Ref, error) {
-	dbg.Chk.NoError(w.Close())
+	d.Chk.NoError(w.Close())
 	return w.ref, nil
 }
 

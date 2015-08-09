@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -64,13 +64,13 @@ func (s AWSStore) Root() ref.Ref {
 			rootTablePrimaryKey: {S: aws.String(rootTablePrimaryKeyValue)},
 		},
 	})
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 
 	if len(result.Item) == 0 {
 		return ref.Ref{}
 	}
 
-	Chk.Equal(len(result.Item), 2)
+	d.Chk.Equal(len(result.Item), 2)
 	return ref.MustParse(*(result.Item[rootTableRef].S))
 }
 
@@ -99,9 +99,9 @@ func (s AWSStore) UpdateRoot(current, last ref.Ref) bool {
 				return false
 			}
 
-			Chk.NoError(awsErr)
+			d.Chk.NoError(awsErr)
 		} else {
-			Chk.NoError(err)
+			d.Chk.NoError(err)
 		}
 	}
 
@@ -124,7 +124,7 @@ func (s AWSStore) Get(ref ref.Ref) (io.ReadCloser, error) {
 
 func (s AWSStore) Put() ChunkWriter {
 	f, err := ioutil.TempFile(os.TempDir(), "")
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 	h := ref.NewHash()
 	return &awsChunkWriter{
 		store:  s,
@@ -142,12 +142,12 @@ type awsChunkWriter struct {
 }
 
 func (w *awsChunkWriter) Write(data []byte) (int, error) {
-	Chk.NotNil(w.file, "Write() cannot be called after Ref() or Close().")
+	d.Chk.NotNil(w.file, "Write() cannot be called after Ref() or Close().")
 	return w.writer.Write(data)
 }
 
 func (w *awsChunkWriter) Ref() (ref.Ref, error) {
-	Chk.NoError(w.Close())
+	d.Chk.NoError(w.Close())
 	return ref.FromHash(w.hash), nil
 }
 
@@ -155,9 +155,9 @@ func (w *awsChunkWriter) Close() error {
 	if w.file == nil {
 		return nil
 	}
-	Chk.NoError(w.file.Sync())
+	d.Chk.NoError(w.file.Sync())
 	_, err := w.file.Seek(0, 0)
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 
 	bucket := aws.String(w.store.bucket)
 	key := aws.String(ref.FromHash(w.hash).String())
@@ -176,9 +176,9 @@ func (w *awsChunkWriter) Close() error {
 		Key:    key,
 		Body:   w.file,
 	})
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 
-	Chk.NoError(w.file.Close())
+	d.Chk.NoError(w.file.Close())
 	os.Remove(w.file.Name())
 	w.file = nil
 	return nil

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -31,7 +31,7 @@ type NG struct {
 
 func New(outFile string) NG {
 	f, err := os.OpenFile(outFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 	return NG{w: f, written: types.NewSet(), toWrite: types.NewSet()}
 }
 
@@ -59,7 +59,7 @@ func (ng *NG) AddType(val types.Value) types.Value {
 		}
 		ng.toWrite = ng.toWrite.Insert(val)
 	default:
-		Chk.Fail(fmt.Sprintf("Unexpected typedef: %+v", val))
+		d.Chk.Fail(fmt.Sprintf("Unexpected typedef: %+v", val))
 	}
 	return val
 }
@@ -81,15 +81,15 @@ func toNomsValue(name string) string {
 func readTemplate(name string) *template.Template {
 	_, thisfile, _, _ := runtime.Caller(1)
 	f, err := os.Open(path.Join(path.Dir(thisfile), name))
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 	defer f.Close()
 	b, err := ioutil.ReadAll(f)
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 	t, err := template.New(name).Funcs(template.FuncMap{
 		"fromVal": fromNomsValue,
 		"toVal":   toNomsValue,
 	}).Parse(string(b))
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 	return t
 }
 
@@ -109,7 +109,7 @@ func (ng *NG) writeType(val types.Map) {
 		ng.writeStruct(val)
 		return
 	}
-	Chk.Fail(fmt.Sprintf("Unexpected typedef: %+v", val))
+	d.Chk.Fail(fmt.Sprintf("Unexpected typedef: %+v", val))
 }
 
 func (ng *NG) writeSet(val types.Map) {
@@ -216,7 +216,7 @@ func getGoStructName(typeDef types.Value) string {
 			return strings.ToUpper(typeDef.String()[:2]) + typeDef.String()[2:]
 		}
 
-		Chk.Fail("unexpected noms type name: %s", name)
+		d.Chk.Fail("unexpected noms type name: %s", name)
 	case types.Map:
 		if typeDef.Has(types.NewString("$name")) {
 			return typeDef.Get(types.NewString("$name")).(types.String).String()
@@ -232,10 +232,10 @@ func getGoStructName(typeDef types.Value) string {
 		case "noms.SetDef":
 			return fmt.Sprintf("SetOf%s", getGoStructName(typeDef.Get(types.NewString("elem"))))
 		case "noms.StructDef":
-			Chk.Fail("noms.StructDef must have a $name filed: %+v", typeDef)
+			d.Chk.Fail("noms.StructDef must have a $name filed: %+v", typeDef)
 		}
 	}
-	Chk.Fail("Unexpected typeDef struct: %+v", typeDef)
+	d.Chk.Fail("Unexpected typeDef struct: %+v", typeDef)
 	return ""
 }
 

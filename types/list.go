@@ -2,7 +2,7 @@ package types
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -39,7 +39,7 @@ func (l List) Empty() bool {
 func (l List) Get(idx uint64) Value {
 	v, err := l.list[idx].Deref(l.cs)
 	// This is the kind of thing that makes me feel like hiding deref'ing is probably not the right idea. But we'll go with it for now.
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 	return v
 }
 

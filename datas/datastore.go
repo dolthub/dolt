@@ -2,7 +2,7 @@ package datas
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -28,8 +28,8 @@ func NewDataStoreWithRootTracker(cs chunks.ChunkStore, rt chunks.RootTracker) Da
 func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, cc *commitCache) DataStore {
 	if (rt.Root() == ref.Ref{}) {
 		r, err := types.WriteValue(NewSetOfCommit().NomsValue(), cs)
-		Chk.NoError(err)
-		Chk.True(rt.UpdateRoot(r, ref.Ref{}))
+		d.Chk.NoError(err)
+		d.Chk.True(rt.UpdateRoot(r, ref.Ref{}))
 	}
 	return DataStore{
 		cs, rt, cc, commitSetFromRef(rt.Root(), cs),
@@ -47,7 +47,7 @@ func (ds *DataStore) Heads() SetOfCommit {
 
 // Commit returns a new DataStore with newCommits as the heads, but backed by the same ChunkStore and RootTracker instances as the current one.
 func (ds *DataStore) Commit(newCommits SetOfCommit) DataStore {
-	Chk.True(newCommits.Len() > 0)
+	d.Chk.True(newCommits.Len() > 0)
 	// TODO: We probably shouldn't let this go *forever*. Consider putting a limit and... I know don't...panicing?
 	for !ds.doCommit(newCommits) {
 	}
@@ -56,7 +56,7 @@ func (ds *DataStore) Commit(newCommits SetOfCommit) DataStore {
 
 // doCommit manages concurrent access the single logical piece of mutable state: the set of current heads. doCommit is optimistic in that it is attempting to update heads making the assumption that currentRootRef is the ref of the current heads. The call to UpdateRoot below will fail if that assumption fails (e.g. because of a race with another writer) and the entire algorigthm must be tried again.
 func (ds *DataStore) doCommit(commits SetOfCommit) bool {
-	Chk.True(commits.Len() > 0)
+	d.Chk.True(commits.Len() > 0)
 
 	currentRootRef := ds.rt.Root()
 
@@ -85,7 +85,7 @@ func (ds *DataStore) doCommit(commits SetOfCommit) bool {
 
 	// TODO: This set will be orphaned if this UpdateRoot below fails
 	newRootRef, err := types.WriteValue(newHeads.NomsValue(), ds)
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 
 	return ds.rt.UpdateRoot(newRootRef, currentRootRef)
 }

@@ -6,7 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -18,7 +18,7 @@ type NopStore struct {
 
 // Get panics in NopStore! Since the data wasn't stored, you sure can't Get it.
 func (ms *NopStore) Get(ref ref.Ref) (io.ReadCloser, error) {
-	dbg.Chk.Fail("Whoops, you shouldn't have called this!")
+	d.Chk.Fail("Whoops, you shouldn't have called this!")
 	return nil, nil
 }
 

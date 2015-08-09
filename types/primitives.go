@@ -204,4 +204,3 @@ func (v Float64) Chunks() []Future {
 func Float64FromVal(v Value) Float64 {
 	return v.(Float64)
 }
-

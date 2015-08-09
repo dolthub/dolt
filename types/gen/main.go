@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/template"
 
-	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 )
 
 var (
@@ -40,11 +40,11 @@ func main() {
 func readTemplate(name string) *template.Template {
 	_, thisfile, _, _ := runtime.Caller(1)
 	f, err := os.Open(path.Join(path.Dir(thisfile), name))
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 	defer f.Close()
 	b, err := ioutil.ReadAll(f)
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 	t, err := template.New(name).Parse(string(b))
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 	return t
 }

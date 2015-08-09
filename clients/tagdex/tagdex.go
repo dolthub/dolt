@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
-	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -38,7 +38,7 @@ func main() {
 
 	types.All(inputRef, cs, func(f types.Future) {
 		v, err := f.Deref(cs)
-		Chk.NoError(err)
+		d.Chk.NoError(err)
 		if v, ok := v.(types.Map); ok && types.NewString("Photo").Equals(v.Get(types.NewString("$name"))) {
 			p := PhotoFromVal(v)
 			p.Tags().Iter(func(item types.String) (stop bool) {

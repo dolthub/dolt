@@ -5,8 +5,8 @@ import (
 	"log"
 
 	"github.com/attic-labs/noms/clients/util"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/sync"
 )
 
@@ -27,7 +27,7 @@ func main() {
 	if started, err := util.MaybeStartCPUProfile(); started {
 		defer util.StopCPUProfile()
 	} else if err != nil {
-		dbg.Chk.NoError(err, "Can't create cpu profile file.")
+		d.Chk.NoError(err, "Can't create cpu profile file.")
 	}
 
 	newHead := source.Heads().Ref()
