@@ -5,14 +5,14 @@ import (
 	"io/ioutil"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/ref"
 )
 
 // ReadValue reads and decodes a value from a chunk source. It is not considered an error for the requested chunk to be absent from cs; in this case, the function simply returns nil, nil.
 func ReadValue(r ref.Ref, cs chunks.ChunkSource) (Value, error) {
-	dbg.Chk.NotNil(cs)
+	d.Chk.NotNil(cs)
 	reader, err := cs.Get(r)
 	if reader != nil {
 		defer reader.Close()
@@ -69,7 +69,7 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) (Future, error) {
 		return futureFromRef(i), nil
 	case io.Reader:
 		data, err := ioutil.ReadAll(i)
-		dbg.Chk.NoError(err)
+		d.Chk.NoError(err)
 		return futureFromValue(newBlobLeaf(data)), nil
 	case []interface{}:
 		return futureListFromIterable(i, cs)
@@ -89,7 +89,7 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) (Future, error) {
 		cb := compoundBlob{i.Offsets, blobs, &ref.Ref{}, cs}
 		return futureFromValue(cb), nil
 	default:
-		dbg.Chk.Fail("Unknown encodeable", "%+v", i)
+		d.Chk.Fail("Unknown encodeable", "%+v", i)
 	}
 	return nil, nil
 }
@@ -132,6 +132,6 @@ func futuresFromIterable(items []interface{}, cs chunks.ChunkSource) (f []Future
 
 func MustReadValue(ref ref.Ref, cs chunks.ChunkSource) Value {
 	val, err := ReadValue(ref, cs)
-	dbg.Chk.NoError(err)
+	d.Chk.NoError(err)
 	return val
 }

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -20,7 +20,7 @@ func jsonDecode(reader io.Reader) (interface{}, error) {
 	}
 
 	// Since jsonDecode is private, and Decode() should have checked this, it is invariant that the prefix will match.
-	dbg.Chk.EqualValues(jsonTag[:], prefix, "Cannot jsonDecode - invalid prefix")
+	d.Chk.EqualValues(jsonTag[:], prefix, "Cannot jsonDecode - invalid prefix")
 
 	var v interface{}
 	err = json.NewDecoder(reader).Decode(&v)
@@ -48,7 +48,7 @@ func jsonDecodeValue(v interface{}) (interface{}, error) {
 }
 
 func jsonDecodeTaggedValue(m map[string]interface{}) (interface{}, error) {
-	dbg.Chk.Len(m, 1)
+	d.Chk.Len(m, 1)
 	for k, v := range m {
 		switch k {
 		case "cb":

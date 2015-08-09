@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -37,7 +37,7 @@ type stdoutChunkWriter struct {
 }
 
 func (w *stdoutChunkWriter) Write(data []byte) (int, error) {
-	dbg.Chk.NotNil(w.file, "Write() cannot be called after Ref() or Close().")
+	d.Chk.NotNil(w.file, "Write() cannot be called after Ref() or Close().")
 	return w.writer.Write(data)
 }
 

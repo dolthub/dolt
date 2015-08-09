@@ -25,12 +25,12 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 )
 
 // Encode serializes v into dst, and panics on unsupported types.
 func Encode(dst io.Writer, v interface{}) error {
-	dbg.Chk.NotNil(dst)
+	d.Chk.NotNil(dst)
 	switch v := v.(type) {
 	case io.Reader:
 		return blobLeafEncode(dst, v)
@@ -41,7 +41,7 @@ func Encode(dst io.Writer, v interface{}) error {
 
 // Decode deserializes data from r into an interface{}, and panics on unsupported encoded types.
 func Decode(r io.Reader) (interface{}, error) {
-	dbg.Chk.NotNil(r)
+	d.Chk.NotNil(r)
 
 	// assumes all tags are same size, which they are for now.
 	buffered := bufio.NewReaderSize(r, len(jsonTag))

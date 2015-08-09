@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 
 	"github.com/attic-labs/noms/clients/util"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/types"
 	"github.com/clbanning/mxj"
 )
@@ -67,7 +67,7 @@ func main() {
 		}
 
 		ref, err := types.WriteValue(nomsObj, ds)
-		dbg.Chk.NoError(err)
+		d.Chk.NoError(err)
 
 		list = list.Append(types.Ref{R: ref})
 		return nil

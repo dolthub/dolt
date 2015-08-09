@@ -6,7 +6,7 @@ import (
 	"os/user"
 	"path"
 
-	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/gregjones/httpcache"
 	"github.com/gregjones/httpcache/diskcache"
 )
@@ -26,7 +26,7 @@ func CachingHttpClient() *http.Client {
 
 	if *diskCacheDir == defaultDiskCacheDir {
 		user, err := user.Current()
-		Chk.NoError(err)
+		d.Chk.NoError(err)
 		*diskCacheDir = path.Join(user.HomeDir, "noms", "httpcache")
 	}
 

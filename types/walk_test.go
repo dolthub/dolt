@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,7 +15,7 @@ func TestWalkAll(t *testing.T) {
 
 	write := func(v Value) Value {
 		_, err := WriteValue(v, cs)
-		Chk.NoError(err)
+		d.Chk.NoError(err)
 		return v
 	}
 
@@ -49,7 +49,7 @@ func TestWalkAll(t *testing.T) {
 		expected := t.expected
 		All(t.v.Ref(), cs, func(f Future) {
 			v, err := f.Deref(cs)
-			Chk.NoError(err)
+			d.Chk.NoError(err)
 			assert.True(expected.Has(v))
 			expected = expected.Remove(v)
 		})

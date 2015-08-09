@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	"github.com/attic-labs/noms/chunks"
-	. "github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -43,7 +43,7 @@ func (fm Map) Get(key Value) Value {
 		entry := fm.m[idx]
 		if futureEqualsValue(entry.key, key) {
 			v, err := entry.value.Deref(fm.cs)
-			Chk.NoError(err)
+			d.Chk.NoError(err)
 			return v
 		}
 	}
@@ -75,9 +75,9 @@ type mapIterCallback func(key, value Value) bool
 func (fm Map) Iter(cb mapIterCallback) {
 	for _, entry := range fm.m {
 		k, err := entry.key.Deref(fm.cs)
-		Chk.NoError(err)
+		d.Chk.NoError(err)
 		v, err := entry.value.Deref(fm.cs)
-		Chk.NoError(err)
+		d.Chk.NoError(err)
 		if cb(k, v) {
 			break
 		}
@@ -119,8 +119,8 @@ func newMapFromData(m mapData, cs chunks.ChunkSource) Map {
 }
 
 func buildMapData(oldData mapData, futures []Future) mapData {
-	// Sadly, Chk.Equals() costs too much. BUG #83
-	Chk.True(0 == len(futures)%2, "Must specify even number of key/value pairs")
+	// Sadly, d.Chk.Equals() costs too much. BUG #83
+	d.Chk.True(0 == len(futures)%2, "Must specify even number of key/value pairs")
 
 	m := make(mapData, len(oldData), len(oldData)+len(futures))
 	copy(m, oldData)

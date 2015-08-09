@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -25,7 +25,7 @@ func (cb CompoundBlob) Len() uint64 {
 
 // MapFromItems takes an even-numbered list of items and converts them into a stably-ordered map-like value by treating the even-indexed items as keys and the odd-indexed items as values, e.g. {e[0]: e[1], e[2]: e[3], ...}. This does NOT enforce key uniqueness.
 func MapFromItems(e ...interface{}) Map {
-	dbg.Chk.True(0 == len(e)%2, "Length on input array must be multiple of 2")
+	d.Chk.True(0 == len(e)%2, "Length on input array must be multiple of 2")
 	return e
 }
 
@@ -128,7 +128,7 @@ func getJSONCompoundBlob(cb CompoundBlob) (interface{}, error) {
 		offset = cb.Offsets[i]
 	}
 
-	dbg.Chk.Equal(len(l), len(cb.Blobs)*2)
+	d.Chk.Equal(len(l), len(cb.Blobs)*2)
 
 	return map[string]interface{}{
 		"cb": l,

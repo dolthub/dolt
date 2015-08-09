@@ -2,7 +2,7 @@ package types
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -30,7 +30,7 @@ func doTreeWalk(f Future, cs chunks.ChunkSource, cb SomeCallback) {
 		return
 	}
 	v, err := f.Deref(cs)
-	dbg.Chk.NoError(err)
+	d.Chk.NoError(err)
 
 	switch v := v.(type) {
 	case Map:

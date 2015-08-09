@@ -2,8 +2,8 @@
 package mgmt
 
 import (
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
-	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -12,7 +12,7 @@ func GetDatasets(ds datas.DataStore) SetOfDataset {
 		return NewSetOfDataset()
 	} else {
 		// BUG 13: We don't ever want to branch the datasets database. Currently we can't avoid that, but we should change DataStore::Commit() to support that mode of operation.
-		Chk.EqualValues(1, ds.Heads().Len())
+		d.Chk.EqualValues(1, ds.Heads().Len())
 		return SetOfDatasetFromVal(ds.Heads().Any().Value())
 	}
 }

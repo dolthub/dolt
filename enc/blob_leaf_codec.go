@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"io"
 
-	"github.com/attic-labs/noms/dbg"
+	"github.com/attic-labs/noms/d"
 )
 
 var (
@@ -27,7 +27,7 @@ func blobLeafDecode(src io.Reader) (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	dbg.Chk.True(bytes.Equal(buf.Bytes(), blobTag), "Cannot blobLeafDecode - invalid prefix")
+	d.Chk.True(bytes.Equal(buf.Bytes(), blobTag), "Cannot blobLeafDecode - invalid prefix")
 
 	return src, nil
 }

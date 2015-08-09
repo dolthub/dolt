@@ -134,4 +134,3 @@ func (s Commit) Value() types.Value {
 func (s Commit) SetValue(p types.Value) Commit {
 	return CommitFromVal(s.m.Set(types.NewString("value"), p))
 }
-

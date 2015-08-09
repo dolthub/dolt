@@ -14,9 +14,9 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/clients/util"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
-	. "github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/types"
 	"github.com/garyburd/go-oauth/oauth"
 )
@@ -107,22 +107,22 @@ func checkAuth() bool {
 
 func authUser() {
 	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 
 	callbackURL := "http://" + l.Addr().String()
 	tempCred, err := oauthClient.RequestTemporaryCredentials(nil, callbackURL, url.Values{
 		"perms": []string{"read"},
 	})
 	// If we ever hear anything from the oauth handshake, it'll be acceptance. The user declining will mean we never get called.
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 
 	authUrl := oauthClient.AuthorizationURL(tempCred, nil)
 	fmt.Printf("Go to the following URL to authorize: %v\n", authUrl)
 	err = awaitOAuthResponse(l, tempCred)
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 
 	if !checkAuth() {
-		Chk.Fail("checkAuth failed after oauth succeded")
+		d.Chk.Fail("checkAuth failed after oauth succeded")
 	}
 }
 
@@ -141,7 +141,7 @@ func getAlbum(id string) {
 		"photoset_id": id,
 		"user_id":     user.Id().String(),
 	})
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 
 	fmt.Printf("\nPhotoset: %v\n", response.Photoset.Title)
 
@@ -176,7 +176,7 @@ func getAlbums() {
 	}{}
 
 	err := callFlickrAPI("flickr.photosets.getList", &response, nil)
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 
 	for _, p := range response.Photosets.Photoset {
 		getAlbum(p.Id)
@@ -201,7 +201,7 @@ func getAlbumPhotos(id string) SetOfPhoto {
 		"user_id":     user.Id().String(),
 		"extras":      "tags",
 	})
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 
 	photos := types.NewSet()
 	for _, p := range response.Photoset.Photo {
@@ -210,7 +210,7 @@ func getAlbumPhotos(id string) SetOfPhoto {
 		photoReader := getPhotoReader(url)
 		defer photoReader.Close()
 		b, err := types.NewBlob(photoReader)
-		Chk.NoError(err)
+		d.Chk.NoError(err)
 		photo := NewPhoto().
 			SetId(types.NewString(p.Id)).
 			SetTitle(types.NewString(p.Title)).
@@ -219,7 +219,7 @@ func getAlbumPhotos(id string) SetOfPhoto {
 			SetImage(b)
 		// The photo is big, so write it out now to release the memory.
 		r, err := types.WriteValue(photo.NomsValue(), ds)
-		Chk.NoError(err)
+		d.Chk.NoError(err)
 		photos = photos.Insert(types.Ref{r})
 	}
 	return SetOfPhotoFromVal(photos)
@@ -253,20 +253,20 @@ func getOriginalUrl(id string) string {
 	err := callFlickrAPI("flickr.photos.getSizes", &response, &map[string]string{
 		"photo_id": id,
 	})
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 
 	for _, p := range response.Sizes.Size {
 		if p.Label == "Original" {
 			return p.Source
 		}
 	}
-	Chk.Fail(fmt.Sprintf("No Original image size found photo: %v", id))
+	d.Chk.Fail(fmt.Sprintf("No Original image size found photo: %v", id))
 	return "NOT REACHED"
 }
 
 func getPhotoReader(url string) io.ReadCloser {
 	resp, err := httpClient.Get(url)
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 	return resp.Body
 }
 
@@ -324,7 +324,7 @@ func callFlickrAPI(method string, response interface{}, args *map[string]string)
 
 	defer res.Body.Close()
 	buff, err := ioutil.ReadAll(res.Body)
-	Chk.NoError(err)
+	d.Chk.NoError(err)
 	if err = json.Unmarshal(buff, response); err != nil {
 		return err
 	}

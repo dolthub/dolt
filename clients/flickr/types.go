@@ -422,4 +422,3 @@ func (s User) OAuthSecret() types.String {
 func (s User) SetOAuthSecret(p types.String) User {
 	return UserFromVal(s.m.Set(types.NewString("oAuthSecret"), p))
 }
-

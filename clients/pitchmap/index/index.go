@@ -8,9 +8,9 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/clients/util"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/dbg"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -56,7 +56,7 @@ func processPitches(v types.Value) (pitches []Pitch) {
 	case nil:
 		return // Yes, an at-bat can end with no pitches thrown.
 	default:
-		dbg.Chk.Fail("No pitch should be %+v, which is of type %s!\n", v, reflect.TypeOf(v).String())
+		d.Chk.Fail("No pitch should be %+v, which is of type %s!\n", v, reflect.TypeOf(v).String())
 	}
 	return
 }
@@ -138,7 +138,7 @@ func getIndex(input types.List) MapOfStringToListOfPitch {
 		if pitchers.Has(id) {
 			namedPitchCounts = namedPitchCounts.Set(pitchers.Get(id), p)
 		} else {
-			dbg.Chk.Fail("Unknown pitcher!", id)
+			d.Chk.Fail("Unknown pitcher!", id)
 		}
 		return
 	})
@@ -158,7 +158,7 @@ func main() {
 	if started, err := util.MaybeStartCPUProfile(); started {
 		defer util.StopCPUProfile()
 	} else if err != nil {
-		dbg.Chk.NoError(err, "Can't create cpu profile file.")
+		d.Chk.NoError(err, "Can't create cpu profile file.")
 	}
 
 	dataStore := datas.NewDataStore(cs)

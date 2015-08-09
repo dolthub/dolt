@@ -1,4 +1,4 @@
-package dbg
+package d
 
 import (
 	"fmt"

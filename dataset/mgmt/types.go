@@ -134,4 +134,3 @@ func (s SetOfDataset) fromElemSlice(p []Dataset) []types.Value {
 	}
 	return r
 }
-
