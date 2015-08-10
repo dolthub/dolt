@@ -6,6 +6,7 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
+	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -21,8 +22,7 @@ func TestValidateRef(t *testing.T) {
 	r, err := types.WriteValue(types.Bool(true), cs)
 	assert.NoError(t, err)
 
-	_, err = validateRefAsSetOfCommit(r, cs)
-	assert.Error(t, err)
+	assert.Panics(t, func() { validateRefAsSetOfCommit(r, cs) })
 }
 
 func TestPull(t *testing.T) {
@@ -49,11 +49,9 @@ func TestPull(t *testing.T) {
 
 	pullee = commitValue(updatedValue, pullee)
 
-	refs, err := DiffHeadsByRef(puller.Heads().Ref(), pullee.Heads().Ref(), pullee)
-	assert.NoError(err)
-	assert.NoError(CopyChunks(refs, pullee, puller))
-	puller, err = SetNewHeads(pullee.Heads().Ref(), puller)
-	assert.NoError(err)
+	refs := DiffHeadsByRef(puller.Heads().Ref(), pullee.Heads().Ref(), pullee)
+	CopyChunks(refs, pullee, puller)
+	puller = SetNewHeads(pullee.Heads().Ref(), puller)
 	assert.Equal(pullee.Heads().Ref(), puller.Heads().Ref())
 	assert.True(pullee.Heads().Equals(puller.Heads()))
 
@@ -77,12 +75,16 @@ func TestPullFirstCommit(t *testing.T) {
 
 	pullee = commitValue(initialValue, pullee)
 
-	refs, err := DiffHeadsByRef(puller.Heads().Ref(), pullee.Heads().Ref(), pullee)
-	assert.NoError(err)
-	assert.NoError(CopyChunks(refs, pullee, puller))
-	puller, err = SetNewHeads(pullee.Heads().Ref(), puller)
-	assert.NoError(err)
+	refs := DiffHeadsByRef(puller.Heads().Ref(), pullee.Heads().Ref(), pullee)
+	CopyChunks(refs, pullee, puller)
+	puller = SetNewHeads(pullee.Heads().Ref(), puller)
 	assert.Equal(pullee.Heads().Ref(), puller.Heads().Ref())
 	assert.True(pullee.Heads().Equals(puller.Heads()))
 
+}
+
+func TestFailedCopyChunks(t *testing.T) {
+	cs := &chunks.NopStore{}
+	r := ref.MustParse("sha1-0000000000000000000000000000000000000000")
+	assert.Panics(t, func() { CopyChunks([]ref.Ref{r}, cs, cs) })
 }

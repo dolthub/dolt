@@ -4,6 +4,8 @@ import (
 	"flag"
 	"os"
 	"runtime/pprof"
+
+	"github.com/attic-labs/noms/d"
 )
 
 var (
@@ -12,16 +14,14 @@ var (
 )
 
 // MaybeStartCPUProfile checks the -cpuprofile flag and, if it is set, attempts to start writing CPU profile data to the named file. Stopping CPU profiling is left to the caller.
-func MaybeStartCPUProfile() (started bool, err error) {
+func MaybeStartCPUProfile() bool {
 	if *cpuProfile != "" {
-		var f *os.File
-		f, err = os.Create(*cpuProfile)
-		if err == nil {
-			pprof.StartCPUProfile(f)
-			started = true
-		}
+		f, err := os.Create(*cpuProfile)
+		d.Exp.NoError(err)
+		pprof.StartCPUProfile(f)
+		return true
 	}
-	return
+	return false
 }
 
 // StopCPUProfile is a wrapper around pprof.StopCPUProfile(), provided for consistency; callers don't have to be aware of pprof at all.
@@ -29,15 +29,12 @@ func StopCPUProfile() {
 	pprof.StopCPUProfile()
 }
 
-// MaybeStartMemProfile checks the -memprofile flag and, if it is set, attempts to write memory profiling data to the named file.
-func MaybeWriteMemProfile() (err error) {
+// MaybeWriteMemProfile checks the -memprofile flag and, if it is set, attempts to write memory profiling data to the named file.
+func MaybeWriteMemProfile() {
 	if *memProfile != "" {
-		var f *os.File
-		f, err = os.Create(*memProfile)
+		f, err := os.Create(*memProfile)
 		defer f.Close()
-		if err == nil {
-			pprof.WriteHeapProfile(f)
-		}
+		d.Exp.NoError(err)
+		pprof.WriteHeapProfile(f)
 	}
-	return
 }
