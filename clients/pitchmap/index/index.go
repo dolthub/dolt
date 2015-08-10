@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"reflect"
 	"strconv"
 
@@ -155,10 +156,11 @@ func main() {
 		flag.Usage()
 		return
 	}
-	if started, err := util.MaybeStartCPUProfile(); started {
+	started := false
+	if err := d.Try(func() { started = util.MaybeStartCPUProfile() }); started {
 		defer util.StopCPUProfile()
 	} else if err != nil {
-		d.Chk.NoError(err, "Can't create cpu profile file.")
+		log.Fatalf("Can't create cpu profile file:\n%v\n", err)
 	}
 
 	dataStore := datas.NewDataStore(cs)
@@ -170,4 +172,8 @@ func main() {
 
 	outputDataset.Commit(datas.NewSetOfCommit().Insert(
 		datas.NewCommit().SetParents(outputDataset.Heads().NomsValue()).SetValue(output.NomsValue())))
+
+	if err := d.Try(util.MaybeWriteMemProfile); err != nil {
+		log.Fatalf("Can't create memory profile file:\n%v\n", err)
+	}
 }

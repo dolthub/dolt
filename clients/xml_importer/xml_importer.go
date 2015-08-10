@@ -35,50 +35,50 @@ func main() {
 		flag.Usage()
 		return
 	}
-	if started, err := util.MaybeStartCPUProfile(); started {
+
+	started := false
+	if err := d.Try(func() { started = util.MaybeStartCPUProfile() }); started {
 		defer util.StopCPUProfile()
 	} else if err != nil {
-		log.Fatalln("Can't create cpu profile file.", err)
+		log.Fatalf("Can't create cpu profile file:\n%v\n", err)
 	}
 
 	list := types.NewList()
 
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			log.Fatalln("Cannot traverse directories: ", err)
-		}
-		if info.IsDir() || filepath.Ext(path) != ".xml" {
+	err := d.Try(func() {
+		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			d.Exp.NoError(err, "Cannot traverse directories")
+			if info.IsDir() || filepath.Ext(path) != ".xml" {
+				return nil
+			}
+			file, err := os.Open(path)
+			d.Exp.NoError(err, "Error getting XML")
+			defer file.Close()
+
+			xmlObject, err := mxj.NewMapXmlReader(file)
+			d.Exp.NoError(err, "Error decoding XML")
+			object := xmlObject.Old()
+
+			nomsObj := util.NomsValueFromDecodedJSON(object)
+			if *noIO {
+				return nil
+			}
+
+			ref, err := types.WriteValue(nomsObj, ds)
+			d.Exp.NoError(err, "Failed to write noms value")
+
+			list = list.Append(types.Ref{R: ref})
 			return nil
-		}
-		file, err := os.Open(path)
-		if err != nil {
-			log.Fatalln("Error getting XML: ", err)
-		}
-		defer file.Close()
-		xmlObject, err := mxj.NewMapXmlReader(file)
-		if err != nil {
-			log.Fatalln("Error decoding XML: ", err)
-		}
-		object := xmlObject.Old()
-
-		nomsObj := util.NomsValueFromDecodedJSON(object)
-		if *noIO {
-			return nil
-		}
-
-		ref, err := types.WriteValue(nomsObj, ds)
-		d.Chk.NoError(err)
-
-		list = list.Append(types.Ref{R: ref})
-		return nil
+		})
 	})
-
 	if !*noIO {
 		ds.Commit(datas.NewSetOfCommit().Insert(
 			datas.NewCommit().SetParents(
 				ds.Heads().NomsValue()).SetValue(list)))
 	}
-	if err := util.MaybeWriteMemProfile(); err != nil {
-		log.Fatalln("Can't create memory profile file.", err)
+
+	err = d.Try(util.MaybeWriteMemProfile)
+	if err != nil {
+		log.Fatalf("Can't create memory profile file:\n%v\n", err)
 	}
 }

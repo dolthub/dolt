@@ -156,7 +156,7 @@ type ListOfInt32 struct {
 	l types.List
 }
 
-type ListOfInt32IterCallback (func(p types.Int32) (stop bool))
+type ListOfInt32IterCallback (func (p types.Int32) (stop bool))
 
 func NewListOfInt32() ListOfInt32 {
 	return ListOfInt32{types.NewList()}
@@ -400,3 +400,4 @@ func (s SetOfBool) fromElemSlice(p []types.Bool) []types.Value {
 	}
 	return r
 }
+
