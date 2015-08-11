@@ -1,104 +1,69 @@
-// Copyright 2011 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// Modified from golang's encoding/json/encode_test.go
 
-package json
+package marshal
 
 import (
 	"bytes"
-	"math"
-	"reflect"
+	"image"
+	"io/ioutil"
 	"testing"
-	"unicode"
+
+	"github.com/attic-labs/noms/types"
+	"github.com/stretchr/testify/assert"
 )
 
 type Optionals struct {
-	Sr string `json:"sr"`
-	So string `json:"so,omitempty"`
-	Sw string `json:"-"`
+	Sr string `noms:"sr"`
+	So string `noms:"so,omitempty"`
+	Sw string `noms:"-"`
 
-	Ir int `json:"omitempty"` // actually named omitempty, not an option
-	Io int `json:"io,omitempty"`
+	Ir int `noms:"omitempty"` // actually named omitempty, not an option
+	Io int `noms:"io,omitempty"`
 
-	Slr []string `json:"slr,random"`
-	Slo []string `json:"slo,omitempty"`
+	Slr []string `noms:"slr,random"`
+	Slo []string `noms:"slo,omitempty"`
 
-	Mr map[string]interface{} `json:"mr"`
-	Mo map[string]interface{} `json:",omitempty"`
+	Mr map[string]interface{} `noms:"mr"`
+	Mo map[string]interface{} `noms:",omitempty"`
 
-	Fr float64 `json:"fr"`
-	Fo float64 `json:"fo,omitempty"`
+	Fr float64 `noms:"fr"`
+	Fo float64 `noms:"fo,omitempty"`
 
-	Br bool `json:"br"`
-	Bo bool `json:"bo,omitempty"`
+	Br bool `noms:"br"`
+	Bo bool `noms:"bo,omitempty"`
 
-	Ur uint `json:"ur"`
-	Uo uint `json:"uo,omitempty"`
+	Ur uint `noms:"ur"`
+	Uo uint `noms:"uo,omitempty"`
 
-	Str struct{} `json:"str"`
-	Sto struct{} `json:"sto,omitempty"`
+	Str struct{} `noms:"str"`
+	Sto struct{} `noms:"sto,omitempty"`
 }
 
-var optionalsExpected = `{
- "sr": "",
- "omitempty": 0,
- "slr": null,
- "mr": {},
- "fr": 0,
- "br": false,
- "ur": 0,
- "str": {},
- "sto": {}
-}`
+var optionalsExpected = types.NewMap(
+	types.NewString("sr"), types.NewString(""),
+	types.NewString("omitempty"), types.Int32(0),
+	types.NewString("slr"), types.NewList(),
+	types.NewString("mr"), types.NewMap(),
+	types.NewString("fr"), types.Float64(0),
+	types.NewString("br"), types.Bool(false),
+	types.NewString("ur"), types.UInt32(0),
+	types.NewString("str"), types.NewMap(),
+	types.NewString("sto"), types.NewMap(),
+)
 
 func TestOmitEmpty(t *testing.T) {
+	assert := assert.New(t)
 	var o Optionals
 	o.Sw = "something"
 	o.Mr = map[string]interface{}{}
 	o.Mo = map[string]interface{}{}
 
-	got, err := MarshalIndent(&o, "", " ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := string(got); got != optionalsExpected {
-		t.Errorf(" got: %s\nwant: %s\n", got, optionalsExpected)
-	}
-}
-
-type StringTag struct {
-	BoolStr bool   `json:",string"`
-	IntStr  int64  `json:",string"`
-	StrStr  string `json:",string"`
-}
-
-var stringTagExpected = `{
- "BoolStr": "true",
- "IntStr": "42",
- "StrStr": "\"xzbit\""
-}`
-
-func TestStringTag(t *testing.T) {
-	var s StringTag
-	s.BoolStr = true
-	s.IntStr = 42
-	s.StrStr = "xzbit"
-	got, err := MarshalIndent(&s, "", " ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := string(got); got != stringTagExpected {
-		t.Fatalf(" got: %s\nwant: %s\n", got, stringTagExpected)
-	}
-
-	// Verify that it round-trips.
-	var s2 StringTag
-	err = NewDecoder(bytes.NewReader(got)).Decode(&s2)
-	if err != nil {
-		t.Fatalf("Decode: %v", err)
-	}
-	if !reflect.DeepEqual(s, s2) {
-		t.Fatalf("decode didn't match.\nsource: %#v\nEncoded as:\n%s\ndecode: %#v", s, string(got), s2)
+	nom, err := Marshal(&o)
+	assert.NoError(err)
+	if nom, ok := nom.(types.Map); !ok {
+		assert.Fail("%+v should be a Map", nom)
+	} else {
+		assert.True(optionalsExpected.Equals(nom))
 	}
 }
 
@@ -108,145 +73,28 @@ type renamedByteSlice []byte
 type renamedRenamedByteSlice []renamedByte
 
 func TestEncodeRenamedByteSlice(t *testing.T) {
-	s := renamedByteSlice("abc")
-	result, err := Marshal(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expect := `"YWJj"`
-	if string(result) != expect {
-		t.Errorf(" got %s want %s", result, expect)
-	}
-	r := renamedRenamedByteSlice("abc")
-	result, err = Marshal(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(result) != expect {
-		t.Errorf(" got %s want %s", result, expect)
-	}
-}
-
-var unsupportedValues = []interface{}{
-	math.NaN(),
-	math.Inf(-1),
-	math.Inf(1),
-}
-
-func TestUnsupportedValues(t *testing.T) {
-	for _, v := range unsupportedValues {
-		if _, err := Marshal(v); err != nil {
-			if _, ok := err.(*UnsupportedValueError); !ok {
-				t.Errorf("for %v, got %T want UnsupportedValueError", v, err)
-			}
+	assert := assert.New(t)
+	blobData := func(blob types.Value) []byte {
+		if blob, ok := blob.(types.Blob); !ok {
+			assert.Fail("blob should be a Blob, not %T", blob)
 		} else {
-			t.Errorf("for %v, expected error", v)
+			b, err := ioutil.ReadAll(blob.Reader())
+			assert.NoError(err)
+			return b
 		}
-	}
-}
-
-// Ref has Marshaler and Unmarshaler methods with pointer receiver.
-type Ref int
-
-func (*Ref) MarshalJSON() ([]byte, error) {
-	return []byte(`"ref"`), nil
-}
-
-func (r *Ref) UnmarshalJSON([]byte) error {
-	*r = 12
-	return nil
-}
-
-// Val has Marshaler methods with value receiver.
-type Val int
-
-func (Val) MarshalJSON() ([]byte, error) {
-	return []byte(`"val"`), nil
-}
-
-// RefText has Marshaler and Unmarshaler methods with pointer receiver.
-type RefText int
-
-func (*RefText) MarshalText() ([]byte, error) {
-	return []byte(`"ref"`), nil
-}
-
-func (r *RefText) UnmarshalText([]byte) error {
-	*r = 13
-	return nil
-}
-
-// ValText has Marshaler methods with value receiver.
-type ValText int
-
-func (ValText) MarshalText() ([]byte, error) {
-	return []byte(`"val"`), nil
-}
-
-func TestRefValMarshal(t *testing.T) {
-	var s = struct {
-		R0 Ref
-		R1 *Ref
-		R2 RefText
-		R3 *RefText
-		V0 Val
-		V1 *Val
-		V2 ValText
-		V3 *ValText
-	}{
-		R0: 12,
-		R1: new(Ref),
-		R2: 14,
-		R3: new(RefText),
-		V0: 13,
-		V1: new(Val),
-		V2: 15,
-		V3: new(ValText),
-	}
-	const want = `{"R0":"ref","R1":"ref","R2":"\"ref\"","R3":"\"ref\"","V0":"val","V1":"val","V2":"\"val\"","V3":"\"val\""}`
-	b, err := Marshal(&s)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	if got := string(b); got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-}
-
-// C implements Marshaler and returns unescaped JSON.
-type C int
-
-func (C) MarshalJSON() ([]byte, error) {
-	return []byte(`"<&>"`), nil
-}
-
-// CText implements Marshaler and returns unescaped text.
-type CText int
-
-func (CText) MarshalText() ([]byte, error) {
-	return []byte(`"<&>"`), nil
-}
-
-func TestMarshalerEscaping(t *testing.T) {
-	var c C
-	want := `"\u003c\u0026\u003e"`
-	b, err := Marshal(c)
-	if err != nil {
-		t.Fatalf("Marshal(c): %v", err)
-	}
-	if got := string(b); got != want {
-		t.Errorf("Marshal(c) = %#q, want %#q", got, want)
+		return nil
 	}
 
-	var ct CText
-	want = `"\"\u003c\u0026\u003e\""`
-	b, err = Marshal(ct)
-	if err != nil {
-		t.Fatalf("Marshal(ct): %v", err)
-	}
-	if got := string(b); got != want {
-		t.Errorf("Marshal(ct) = %#q, want %#q", got, want)
-	}
+	expected := "abc"
+	s := renamedByteSlice(expected)
+	result, err := Marshal(s)
+	assert.NoError(err)
+	assert.EqualValues(expected, blobData(result))
+
+	r := renamedRenamedByteSlice(expected)
+	result, err = Marshal(r)
+	assert.NoError(err)
+	assert.Equal(expected, string(blobData(result)))
 }
 
 type IntType int
@@ -258,15 +106,66 @@ type MyStruct struct {
 func TestAnonymousNonstruct(t *testing.T) {
 	var i IntType = 11
 	a := MyStruct{i}
-	const want = `{"IntType":11}`
 
-	b, err := Marshal(a)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
+	nom, err := Marshal(a)
+	assert.NoError(t, err)
+	if nom, ok := nom.(types.Map); !ok {
+		assert.Fail(t, "nom should be a Map, not %T", nom)
+	} else {
+		assert.EqualValues(t, i, nom.Get(types.NewString("IntType")))
 	}
-	if got := string(b); got != want {
-		t.Errorf("got %q, want %q", got, want)
+}
+
+var marshaledEmbeds = types.NewMap(
+	types.NewString("Level0"), types.Int32(1),
+	types.NewString("Level1b"), types.Int32(2),
+	types.NewString("Level1c"), types.Int32(3),
+	types.NewString("Level1a"), types.Int32(5),
+	types.NewString("LEVEL1B"), types.Int32(6),
+	types.NewString("e"), types.NewMap(
+		types.NewString("Level1a"), types.Int32(8),
+		types.NewString("Level1b"), types.Int32(9),
+		types.NewString("Level1c"), types.Int32(10),
+		types.NewString("Level1d"), types.Int32(11),
+		types.NewString("x"), types.Int32(12)),
+	types.NewString("Loop1"), types.Int32(13),
+	types.NewString("Loop2"), types.Int32(14),
+	types.NewString("X"), types.Int32(15),
+	types.NewString("Y"), types.Int32(16),
+	types.NewString("Z"), types.Int32(17))
+
+func TestMarshalEmbeds(t *testing.T) {
+	top := &Top{
+		Level0: 1,
+		Embed0: Embed0{
+			Level1b: 2,
+			Level1c: 3,
+		},
+		Embed0a: &Embed0a{
+			Level1a: 5,
+			Level1b: 6,
+		},
+		Embed0b: &Embed0b{
+			Level1a: 8,
+			Level1b: 9,
+			Level1c: 10,
+			Level1d: 11,
+			Level1e: 12,
+		},
+		Loop: Loop{
+			Loop1: 13,
+			Loop2: 14,
+		},
+		Embed0p: Embed0p{
+			Point: image.Point{X: 15, Y: 16},
+		},
+		Embed0q: Embed0q{
+			Point: Point{Z: 17},
+		},
 	}
+	b, err := Marshal(top)
+	assert.NoError(t, err)
+	assert.EqualValues(t, marshaledEmbeds, b)
 }
 
 type BugA struct {
@@ -291,36 +190,31 @@ type BugX struct {
 
 // Issue 5245.
 func TestEmbeddedBug(t *testing.T) {
+	assert := assert.New(t)
 	v := BugB{
 		BugA{"A"},
 		"B",
 	}
-	b, err := Marshal(v)
-	if err != nil {
-		t.Fatal("Marshal:", err)
-	}
-	want := `{"S":"B"}`
-	got := string(b)
-	if got != want {
-		t.Fatalf("Marshal: got %s want %s", got, want)
-	}
+	nom, err := Marshal(v)
+	assert.NoError(err)
+	nom = nom.(types.Map)
+
+	expected := types.NewMap(types.NewString("S"), types.NewString("B"))
+	assert.EqualValues(expected, nom)
+
 	// Now check that the duplicate field, S, does not appear.
 	x := BugX{
 		A: 23,
 	}
-	b, err = Marshal(x)
-	if err != nil {
-		t.Fatal("Marshal:", err)
-	}
-	want = `{"A":23}`
-	got = string(b)
-	if got != want {
-		t.Fatalf("Marshal: got %s want %s", got, want)
-	}
+	nom, err = Marshal(x)
+	assert.NoError(err)
+	nom = nom.(types.Map)
+	expected = types.NewMap(types.NewString("A"), types.Int32(23))
+	assert.EqualValues(expected, nom)
 }
 
 type BugD struct { // Same as BugA after tagging.
-	XXX string `json:"S"`
+	XXX string `noms:"S"`
 }
 
 // BugD's tagged S field should dominate BugA's.
@@ -331,19 +225,17 @@ type BugY struct {
 
 // Test that a field with a tag dominates untagged fields.
 func TestTaggedFieldDominates(t *testing.T) {
+	assert := assert.New(t)
 	v := BugY{
 		BugA{"BugA"},
 		BugD{"BugD"},
 	}
-	b, err := Marshal(v)
-	if err != nil {
-		t.Fatal("Marshal:", err)
-	}
-	want := `{"S":"BugD"}`
-	got := string(b)
-	if got != want {
-		t.Fatalf("Marshal: got %s want %s", got, want)
-	}
+	nom, err := Marshal(v)
+	assert.NoError(err)
+	nom = nom.(types.Map)
+
+	expected := types.NewMap(types.NewString("S"), types.NewString("BugD"))
+	assert.EqualValues(expected, nom)
 }
 
 // There are no tags here, so S should not appear.
@@ -354,6 +246,7 @@ type BugZ struct {
 }
 
 func TestDuplicatedFieldDisappears(t *testing.T) {
+	assert := assert.New(t)
 	v := BugZ{
 		BugA{"BugA"},
 		BugC{"BugC"},
@@ -362,171 +255,359 @@ func TestDuplicatedFieldDisappears(t *testing.T) {
 			BugD{"nested BugD"},
 		},
 	}
-	b, err := Marshal(v)
-	if err != nil {
-		t.Fatal("Marshal:", err)
+	nom, err := Marshal(v)
+	assert.NoError(err)
+	nom = nom.(types.Map)
+
+	expected := types.NewMap()
+	assert.EqualValues(expected, nom)
+}
+
+func TestMarshalSetP(t *testing.T) {
+	assert := assert.New(t)
+
+	setP := map[*Small]bool{
+		&Small{Tag: "tag"}: true,
+		nil:                true,
 	}
-	want := `{}`
-	got := string(b)
-	if got != want {
-		t.Fatalf("Marshal: got %s want %s", got, want)
+	expected := types.NewSet(types.NewMap(types.NewString("Tag"), types.NewString("tag")))
+	nom, err := Marshal(setP)
+	assert.NoError(err)
+
+	// Check against canned marshalled representation.
+	if nom, ok := nom.(types.Set); !ok {
+		assert.Fail("Marshal should return set.", "nom is %v", nom)
+		return
+	}
+	nomSet := nom.(types.Set)
+	if assert.NotNil(nomSet) {
+		assert.True(expected.Equals(nomSet), "%v != %v", expected, nomSet)
 	}
 }
 
-func TestStringBytes(t *testing.T) {
-	// Test that encodeState.stringBytes and encodeState.string use the same encoding.
-	es := &encodeState{}
-	var r []rune
-	for i := '\u0000'; i <= unicode.MaxRune; i++ {
-		r = append(r, i)
-	}
-	s := string(r) + "\xff\xff\xffhello" // some invalid UTF-8 too
-	_, err := es.string(s)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestMarshal(t *testing.T) {
+	assert := assert.New(t)
+	nom, err := Marshal(allValue)
+	assert.NoError(err)
 
-	esBytes := &encodeState{}
-	_, err = esBytes.stringBytes([]byte(s))
-	if err != nil {
-		t.Fatal(err)
+	// Check against canned marshalled representation.
+	if nom, ok := nom.(types.Map); !ok {
+		assert.Fail("Marshal should return map.", "nom is %v", nom)
+		return
 	}
+	nomMap := nom.(types.Map)
+	assert.NotNil(nomMap)
+	assert.Equal(allNomsValue.Len(), nomMap.Len(), "%d != %d", allNomsValue.Len(), nomMap.Len())
+	nomMap.Iter(func(k, v types.Value) (stop bool) {
+		expected := allNomsValue.Get(k)
+		assert.True(expected.Equals(v), "%s: %v != %v", k.(types.String).String(), expected, v)
+		return
+	})
 
-	enc := es.Buffer.String()
-	encBytes := esBytes.Buffer.String()
-	if enc != encBytes {
-		i := 0
-		for i < len(enc) && i < len(encBytes) && enc[i] == encBytes[i] {
-			i++
-		}
-		enc = enc[i:]
-		encBytes = encBytes[i:]
-		i = 0
-		for i < len(enc) && i < len(encBytes) && enc[len(enc)-i-1] == encBytes[len(encBytes)-i-1] {
-			i++
-		}
-		enc = enc[:len(enc)-i]
-		encBytes = encBytes[:len(encBytes)-i]
-
-		if len(enc) > 20 {
-			enc = enc[:20] + "..."
-		}
-		if len(encBytes) > 20 {
-			encBytes = encBytes[:20] + "..."
-		}
-
-		t.Errorf("encodings differ at %#q vs %#q", enc, encBytes)
+	nom, err = Marshal(pallValue)
+	assert.NoError(err)
+	if nom, ok := nom.(types.Map); !ok {
+		assert.Fail("Marshal should return map.", "nom is %v", nom)
+		return
 	}
+	nomMap = nom.(types.Map)
+	assert.NotNil(nomMap)
+	assert.Equal(pallNomsValue.Len(), nomMap.Len(), "%d != %d", pallNomsValue.Len(), nomMap.Len())
+	nomMap.Iter(func(k, v types.Value) (stop bool) {
+		expected := pallNomsValue.Get(k)
+		assert.True(expected.Equals(v), "%s: %v != %v", k.(types.String).String(), expected, v)
+		return
+	})
 }
 
-func TestIssue6458(t *testing.T) {
-	type Foo struct {
-		M RawMessage
-	}
-	x := Foo{RawMessage(`"foo"`)}
+// A struct with fields for all the things we can marshal and unmarshal relatively symmetrically.
+type All struct {
+	Bool    bool
+	Int     int
+	Int8    int8
+	Int16   int16
+	Int32   int32
+	Int64   int64
+	Uint    uint
+	Uint8   uint8
+	Uint16  uint16
+	Uint32  uint32
+	Uint64  uint64
+	Float32 float32
+	Float64 float64
 
-	b, err := Marshal(&x)
+	Foo  string `noms:"bar"`
+	Foo2 string `noms:"bar2,dummyopt"`
+
+	PBool    *bool
+	PInt     *int
+	PInt8    *int8
+	PInt16   *int16
+	PInt32   *int32
+	PInt64   *int64
+	PUint    *uint
+	PUint8   *uint8
+	PUint16  *uint16
+	PUint32  *uint32
+	PUint64  *uint64
+	PFloat32 *float32
+	PFloat64 *float64
+
+	String  string
+	PString *string
+
+	Map   map[string]Small
+	MapP  map[string]*Small
+	PMap  *map[string]Small
+	PMapP *map[string]*Small
+
+	EmptyMap map[string]Small
+	NilMap   map[string]Small
+
+	Slice   []Small
+	SliceP  []*Small
+	PSlice  *[]Small
+	PSliceP *[]*Small
+
+	EmptySlice []Small
+	NilSlice   []Small
+
+	StringSlice []string
+	ByteSlice   []byte
+
+	Small   Small
+	PSmall  *Small
+	PPSmall **Small
+
+	Interface  interface{}
+	PInterface *interface{}
+
+	Set map[Small]bool
+	// SetP  map[*Small]bool must be tested separately. Two maps that use pointers for keys will never compare equal unless literally the same pointers are used as keys in each. So, even if the maps had as keys pointers to structs that were equal, the maps would not be equal. This breaks the test harness.
+	PSet  *map[Small]bool
+	PSetP *map[*Small]bool
+
+	EmptySet map[Small]bool
+	NilSet   map[Small]bool
+
+	unexported int
+}
+
+type Small struct {
+	Tag string
+}
+
+// Sets values for everything except the fields that are pointers.
+var allValue = All{
+	Bool:    true,
+	Int:     2,
+	Int8:    3,
+	Int16:   4,
+	Int32:   5,
+	Int64:   6,
+	Uint:    7,
+	Uint8:   8,
+	Uint16:  9,
+	Uint32:  10,
+	Uint64:  11,
+	Float32: 14.1,
+	Float64: 15.1,
+	Foo:     "foo",
+	Foo2:    "foo2",
+	String:  "16",
+	Map: map[string]Small{
+		"17": {Tag: "tag17"},
+		"18": {Tag: "tag18"},
+	},
+	MapP: map[string]*Small{
+		"19": {Tag: "tag19"},
+		"20": nil,
+	},
+	EmptyMap:    map[string]Small{},
+	NilMap:      nil,
+	Slice:       []Small{{Tag: "tag20"}, {Tag: "tag21"}},
+	SliceP:      []*Small{{Tag: "tag22"}, nil, {Tag: "tag23"}},
+	EmptySlice:  []Small{},
+	NilSlice:    nil,
+	StringSlice: []string{"str24", "str25", "str26"},
+
+	ByteSlice: []byte{27, 28, 29},
+	Small:     Small{Tag: "tag30"},
+	PSmall:    &Small{Tag: "tag31"},
+	Interface: 5.2,
+
+	Set: map[Small]bool{
+		Small{Tag: "tag32"}: false,
+		Small{Tag: "tag33"}: true,
+	},
+
+	EmptySet: map[Small]bool{},
+	NilSet:   nil,
+}
+
+// Sets values for ONLY the fields that are pointers.
+var pallValue = All{
+	PBool:      &allValue.Bool,
+	PInt:       &allValue.Int,
+	PInt8:      &allValue.Int8,
+	PInt16:     &allValue.Int16,
+	PInt32:     &allValue.Int32,
+	PInt64:     &allValue.Int64,
+	PUint:      &allValue.Uint,
+	PUint8:     &allValue.Uint8,
+	PUint16:    &allValue.Uint16,
+	PUint32:    &allValue.Uint32,
+	PUint64:    &allValue.Uint64,
+	PFloat32:   &allValue.Float32,
+	PFloat64:   &allValue.Float64,
+	PString:    &allValue.String,
+	PMap:       &allValue.Map,
+	PMapP:      &allValue.MapP,
+	PSlice:     &allValue.Slice,
+	PSliceP:    &allValue.SliceP,
+	PPSmall:    &allValue.PSmall,
+	PInterface: &allValue.Interface,
+	PSet:       &allValue.Set,
+}
+
+// Used in creating canned marshaled values below.
+func makeNewBlob(b []byte) types.Blob {
+	blob, err := types.NewBlob(bytes.NewBuffer(b))
 	if err != nil {
-		t.Fatal(err)
+		panic(err) // Sigh
 	}
-	if want := `{"M":"foo"}`; string(b) != want {
-		t.Errorf("Marshal(&x) = %#q; want %#q", b, want)
-	}
-
-	b, err = Marshal(x)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if want := `{"M":"ImZvbyI="}`; string(b) != want {
-		t.Errorf("Marshal(x) = %#q; want %#q", b, want)
-	}
+	return blob
 }
 
-func TestHTMLEscape(t *testing.T) {
-	var b, want bytes.Buffer
-	m := `{"M":"<html>foo &` + "\xe2\x80\xa8 \xe2\x80\xa9" + `</html>"}`
-	want.Write([]byte(`{"M":"\u003chtml\u003efoo \u0026\u2028 \u2029\u003c/html\u003e"}`))
-	HTMLEscape(&b, []byte(m))
-	if !bytes.Equal(b.Bytes(), want.Bytes()) {
-		t.Errorf("HTMLEscape(&b, []byte(m)) = %s; want %s", b.Bytes(), want.Bytes())
-	}
-}
+// Canned marshaled version of allValue
+var allNomsValue = types.NewMap(
+	types.NewString("Bool"), types.Bool(true),
+	types.NewString("Int"), types.Int32(2),
+	types.NewString("Int8"), types.Int8(3),
+	types.NewString("Int16"), types.Int16(4),
+	types.NewString("Int32"), types.Int32(5),
+	types.NewString("Int64"), types.Int64(6),
+	types.NewString("Uint"), types.UInt32(7),
+	types.NewString("Uint8"), types.UInt8(8),
+	types.NewString("Uint16"), types.UInt16(9),
+	types.NewString("Uint32"), types.UInt32(10),
+	types.NewString("Uint64"), types.UInt64(11),
+	types.NewString("Float32"), types.Float32(14.1),
+	types.NewString("Float64"), types.Float64(15.1),
+	types.NewString("bar"), types.NewString("foo"),
+	types.NewString("bar2"), types.NewString("foo2"),
+	types.NewString("String"), types.NewString("16"),
 
-// golang.org/issue/8582
-func TestEncodePointerString(t *testing.T) {
-	type stringPointer struct {
-		N *int64 `json:"n,string"`
-	}
-	var n int64 = 42
-	b, err := Marshal(stringPointer{N: &n})
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	if got, want := string(b), `{"n":"42"}`; got != want {
-		t.Errorf("Marshal = %s, want %s", got, want)
-	}
-	var back stringPointer
-	err = Unmarshal(b, &back)
-	if err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	if back.N == nil {
-		t.Fatalf("Unmarshalled nil N field")
-	}
-	if *back.N != 42 {
-		t.Fatalf("*N = %d; want 42", *back.N)
-	}
-}
+	types.NewString("Map"), types.NewMap(
+		types.NewString("17"), types.NewMap(
+			types.NewString("Tag"), types.NewString("tag17")),
+		types.NewString("18"), types.NewMap(
+			types.NewString("Tag"), types.NewString("tag18"))),
 
-var encodeStringTests = []struct {
-	in  string
-	out string
-}{
-	{"\x00", `"\u0000"`},
-	{"\x01", `"\u0001"`},
-	{"\x02", `"\u0002"`},
-	{"\x03", `"\u0003"`},
-	{"\x04", `"\u0004"`},
-	{"\x05", `"\u0005"`},
-	{"\x06", `"\u0006"`},
-	{"\x07", `"\u0007"`},
-	{"\x08", `"\u0008"`},
-	{"\x09", `"\t"`},
-	{"\x0a", `"\n"`},
-	{"\x0b", `"\u000b"`},
-	{"\x0c", `"\u000c"`},
-	{"\x0d", `"\r"`},
-	{"\x0e", `"\u000e"`},
-	{"\x0f", `"\u000f"`},
-	{"\x10", `"\u0010"`},
-	{"\x11", `"\u0011"`},
-	{"\x12", `"\u0012"`},
-	{"\x13", `"\u0013"`},
-	{"\x14", `"\u0014"`},
-	{"\x15", `"\u0015"`},
-	{"\x16", `"\u0016"`},
-	{"\x17", `"\u0017"`},
-	{"\x18", `"\u0018"`},
-	{"\x19", `"\u0019"`},
-	{"\x1a", `"\u001a"`},
-	{"\x1b", `"\u001b"`},
-	{"\x1c", `"\u001c"`},
-	{"\x1d", `"\u001d"`},
-	{"\x1e", `"\u001e"`},
-	{"\x1f", `"\u001f"`},
-}
+	types.NewString("MapP"), types.NewMap(
+		types.NewString("19"), types.NewMap(
+			types.NewString("Tag"), types.NewString("tag19"))),
 
-func TestEncodeString(t *testing.T) {
-	for _, tt := range encodeStringTests {
-		b, err := Marshal(tt.in)
-		if err != nil {
-			t.Errorf("Marshal(%q): %v", tt.in, err)
-			continue
-		}
-		out := string(b)
-		if out != tt.out {
-			t.Errorf("Marshal(%q) = %#q, want %#q", tt.in, out, tt.out)
-		}
-	}
-}
+	types.NewString("EmptyMap"), types.NewMap(),
+	types.NewString("NilMap"), types.NewMap(),
+
+	types.NewString("Slice"), types.NewList(
+		types.NewMap(types.NewString("Tag"), types.NewString("tag20")),
+		types.NewMap(types.NewString("Tag"), types.NewString("tag21"))),
+	types.NewString("SliceP"), types.NewList(
+		types.NewMap(types.NewString("Tag"), types.NewString("tag22")),
+		types.NewMap(types.NewString("Tag"), types.NewString("tag23"))),
+
+	types.NewString("EmptySlice"), types.NewList(),
+	types.NewString("NilSlice"), types.NewList(),
+	types.NewString("StringSlice"), types.NewList(
+		types.NewString("str24"), types.NewString("str25"), types.NewString("str26")),
+	types.NewString("ByteSlice"), makeNewBlob([]byte{27, 28, 29}),
+	types.NewString("Small"), types.NewMap(types.NewString("Tag"), types.NewString("tag30")),
+	types.NewString("PSmall"), types.NewMap(types.NewString("Tag"), types.NewString("tag31")),
+
+	types.NewString("Interface"), types.Float64(5.2),
+
+	types.NewString("Set"), types.NewSet(types.NewMap(types.NewString("Tag"), types.NewString("tag33"))),
+
+	types.NewString("EmptySet"), types.NewSet(),
+	types.NewString("NilSet"), types.NewSet())
+
+// Canned marshaled version of pallValue.
+var pallNomsValue = types.NewMap(
+	types.NewString("Bool"), types.Bool(false),
+	types.NewString("Int"), types.Int32(0),
+	types.NewString("Int8"), types.Int8(0),
+	types.NewString("Int16"), types.Int16(0),
+	types.NewString("Int32"), types.Int32(0),
+	types.NewString("Int64"), types.Int64(0),
+	types.NewString("Uint"), types.UInt32(0),
+	types.NewString("Uint8"), types.UInt8(0),
+	types.NewString("Uint16"), types.UInt16(0),
+	types.NewString("Uint32"), types.UInt32(0),
+	types.NewString("Uint64"), types.UInt64(0),
+	types.NewString("Float32"), types.Float32(0),
+	types.NewString("Float64"), types.Float64(0),
+	types.NewString("bar"), types.NewString(""),
+	types.NewString("bar2"), types.NewString(""),
+
+	types.NewString("PBool"), types.Bool(true),
+	types.NewString("PInt"), types.Int32(2),
+	types.NewString("PInt8"), types.Int8(3),
+	types.NewString("PInt16"), types.Int16(4),
+	types.NewString("PInt32"), types.Int32(5),
+	types.NewString("PInt64"), types.Int64(6),
+	types.NewString("PUint"), types.UInt32(7),
+	types.NewString("PUint8"), types.UInt8(8),
+	types.NewString("PUint16"), types.UInt16(9),
+	types.NewString("PUint32"), types.UInt32(10),
+	types.NewString("PUint64"), types.UInt64(11),
+	types.NewString("PFloat32"), types.Float32(14.1),
+	types.NewString("PFloat64"), types.Float64(15.1),
+
+	types.NewString("String"), types.NewString(""),
+	types.NewString("PString"), types.NewString("16"),
+
+	types.NewString("Map"), types.NewMap(),
+	types.NewString("MapP"), types.NewMap(),
+
+	types.NewString("PMap"), types.NewMap(
+		types.NewString("17"), types.NewMap(
+			types.NewString("Tag"), types.NewString("tag17")),
+		types.NewString("18"), types.NewMap(
+			types.NewString("Tag"), types.NewString("tag18"))),
+
+	types.NewString("PMapP"), types.NewMap(
+		types.NewString("19"), types.NewMap(
+			types.NewString("Tag"), types.NewString("tag19"))),
+
+	types.NewString("EmptyMap"), types.NewMap(),
+	types.NewString("NilMap"), types.NewMap(),
+
+	types.NewString("Slice"), types.NewList(),
+	types.NewString("SliceP"), types.NewList(),
+
+	types.NewString("PSlice"), types.NewList(
+		types.NewMap(types.NewString("Tag"), types.NewString("tag20")),
+		types.NewMap(types.NewString("Tag"), types.NewString("tag21"))),
+	types.NewString("PSliceP"), types.NewList(
+		types.NewMap(types.NewString("Tag"), types.NewString("tag22")),
+		types.NewMap(types.NewString("Tag"), types.NewString("tag23"))),
+
+	types.NewString("EmptySlice"), types.NewList(),
+	types.NewString("NilSlice"), types.NewList(),
+	types.NewString("StringSlice"), types.NewList(),
+	types.NewString("ByteSlice"), makeNewBlob([]byte{}),
+
+	types.NewString("Small"), types.NewMap(types.NewString("Tag"), types.NewString("")),
+	// PSmall and Interface are not marhsaled, as they're a nil ptr and nil interface, respectively.
+	types.NewString("PPSmall"), types.NewMap(types.NewString("Tag"), types.NewString("tag31")),
+
+	types.NewString("PInterface"), types.Float64(5.2),
+
+	types.NewString("Set"), types.NewSet(),
+
+	types.NewString("PSet"), types.NewSet(types.NewMap(types.NewString("Tag"), types.NewString("tag33"))),
+
+	types.NewString("EmptySet"), types.NewSet(),
+	types.NewString("NilSet"), types.NewSet())

@@ -20,3 +20,7 @@ func {{.NomsType}}FromVal(v Value) {{.NomsType}} {
 	return v.({{.NomsType}})
 }
 
+func (v {{.NomsType}}) ToPrimitive() interface{} {
+	return {{.GoType}}(v)
+}
+
