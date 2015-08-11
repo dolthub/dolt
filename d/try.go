@@ -7,6 +7,7 @@ func Try(f func()) (err error) {
 	return
 }
 
+// TODO: I think a better name for this might be like UsageError. That's really what it's intended for: telling the caller "you're holding it wrong".
 type nomsError struct {
 	msg string
 }

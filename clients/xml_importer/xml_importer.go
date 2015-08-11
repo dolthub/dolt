@@ -26,27 +26,24 @@ var (
 )
 
 func main() {
-	dsFlags := dataset.NewFlags()
-	flag.Usage = customUsage
-	flag.Parse()
-	ds := dsFlags.CreateDataset()
-	dir := flag.Arg(0)
-	if ds == nil || dir == "" {
-		flag.Usage()
-		return
-	}
-
-	started := false
-	if err := d.Try(func() { started = util.MaybeStartCPUProfile() }); started {
-		defer util.StopCPUProfile()
-	} else if err != nil {
-		log.Fatalf("Can't create cpu profile file:\n%v\n", err)
-	}
-
-	list := types.NewList()
-
 	err := d.Try(func() {
-		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		dsFlags := dataset.NewFlags()
+		flag.Usage = customUsage
+		flag.Parse()
+		ds := dsFlags.CreateDataset()
+		dir := flag.Arg(0)
+		if ds == nil || dir == "" {
+			flag.Usage()
+			return
+		}
+
+		if util.MaybeStartCPUProfile() {
+			defer util.StopCPUProfile()
+		}
+
+		list := types.NewList()
+
+		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			d.Exp.NoError(err, "Cannot traverse directories")
 			if info.IsDir() || filepath.Ext(path) != ".xml" {
 				return nil
@@ -70,15 +67,18 @@ func main() {
 			list = list.Append(types.Ref{R: ref})
 			return nil
 		})
-	})
-	if !*noIO {
-		ds.Commit(datas.NewSetOfCommit().Insert(
-			datas.NewCommit().SetParents(
-				ds.Heads().NomsValue()).SetValue(list)))
-	}
+		d.Exp.NoError(err)
 
-	err = d.Try(util.MaybeWriteMemProfile)
+		if !*noIO {
+			ds.Commit(datas.NewSetOfCommit().Insert(
+				datas.NewCommit().SetParents(
+					ds.Heads().NomsValue()).SetValue(list)))
+		}
+
+		util.MaybeWriteMemProfile()
+	})
+
 	if err != nil {
-		log.Fatalf("Can't create memory profile file:\n%v\n", err)
+		log.Fatal(err)
 	}
 }
