@@ -79,6 +79,10 @@ func getJSONPrimitive(v interface{}) (interface{}, error) {
 		return map[string]interface{}{
 			"float64": float64(v),
 		}, nil
+	case int8:
+		return map[string]interface{}{
+			"int8": int8(v),
+		}, nil
 	case int16:
 		return map[string]interface{}{
 			"int16": int16(v),
@@ -94,6 +98,10 @@ func getJSONPrimitive(v interface{}) (interface{}, error) {
 	case ref.Ref:
 		return map[string]interface{}{
 			"ref": v.String(),
+		}, nil
+	case uint8:
+		return map[string]interface{}{
+			"uint8": uint8(v),
 		}, nil
 	case uint16:
 		return map[string]interface{}{

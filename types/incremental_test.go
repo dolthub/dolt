@@ -10,9 +10,11 @@ import (
 var (
 	testVals = []Value{
 		Bool(true),
+		Int8(1),
 		Int16(1),
 		Int32(1),
 		Int64(1),
+		UInt8(1),
 		UInt16(1),
 		UInt32(1),
 		UInt64(1),

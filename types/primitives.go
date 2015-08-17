@@ -29,6 +29,28 @@ func BoolFromVal(v Value) Bool {
 	return v.(Bool)
 }
 
+type Int8 int8
+
+func (self Int8) Equals(other Value) bool {
+	if other, ok := other.(Int8); ok {
+		return self == other
+	} else {
+		return false
+	}
+}
+
+func (v Int8) Ref() ref.Ref {
+	return getRef(v)
+}
+
+func (v Int8) Chunks() []Future {
+	return nil
+}
+
+func Int8FromVal(v Value) Int8 {
+	return v.(Int8)
+}
+
 type Int16 int16
 
 func (self Int16) Equals(other Value) bool {
@@ -93,6 +115,28 @@ func (v Int64) Chunks() []Future {
 
 func Int64FromVal(v Value) Int64 {
 	return v.(Int64)
+}
+
+type UInt8 uint8
+
+func (self UInt8) Equals(other Value) bool {
+	if other, ok := other.(UInt8); ok {
+		return self == other
+	} else {
+		return false
+	}
+}
+
+func (v UInt8) Ref() ref.Ref {
+	return getRef(v)
+}
+
+func (v UInt8) Chunks() []Future {
+	return nil
+}
+
+func UInt8FromVal(v Value) UInt8 {
+	return v.(UInt8)
 }
 
 type UInt16 uint16
@@ -204,3 +248,4 @@ func (v Float64) Chunks() []Future {
 func Float64FromVal(v Value) Float64 {
 	return v.(Float64)
 }
+

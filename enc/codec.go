@@ -1,9 +1,11 @@
 // Package enc contains a very low-level JSON encoder/decoder. Serializes from interface{} to an io.Writer and deserializes from an io.Reader into an interface{}. Does not recursively process nested compound types; ref.Refs are treated like any other value.
 // Supported types:
 //   - bool
+//   - int8
 //   - int16
 //   - int32
 //   - int64
+//   - uint8
 //   - uint16
 //   - uint32
 //   - uint64

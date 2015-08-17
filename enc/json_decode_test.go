@@ -34,12 +34,16 @@ func TestJSONDecode(t *testing.T) {
 	}
 
 	// integers
+	testDecode(`j {"int8":42}
+`, int8(42))
 	testDecode(`j {"int16":42}
 `, int16(42))
 	testDecode(`j {"int32":0}
 `, int32(0))
 	testDecode(`j {"int64":-4611686018427387904}
 `, int64(-1<<62))
+	testDecode(`j {"uint8":42}
+`, uint8(42))
 	testDecode(`j {"uint16":42}
 `, uint16(42))
 	testDecode(`j {"uint32":0}

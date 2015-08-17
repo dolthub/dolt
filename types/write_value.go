@@ -147,6 +147,10 @@ func (b Bool) ToPrimitive() interface{} {
 	return bool(b)
 }
 
+func (i Int8) ToPrimitive() interface{} {
+	return int8(i)
+}
+
 func (i Int16) ToPrimitive() interface{} {
 	return int16(i)
 }
@@ -165,6 +169,10 @@ func (f Float32) ToPrimitive() interface{} {
 
 func (f Float64) ToPrimitive() interface{} {
 	return float64(f)
+}
+
+func (u UInt8) ToPrimitive() interface{} {
+	return uint8(u)
 }
 
 func (u UInt16) ToPrimitive() interface{} {
