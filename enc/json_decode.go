@@ -55,16 +55,20 @@ func jsonDecodeTaggedValue(m map[string]interface{}) (interface{}, error) {
 			if v, ok := v.([]interface{}); ok {
 				return jsonDecodeCompoundBlob(v)
 			}
-		case "int16", "int32", "int64", "uint16", "uint32", "uint64", "float32", "float64":
+		case "int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64":
 			// Go decodes all JSON numbers as float64
 			if v, ok := v.(float64); ok {
 				switch k {
+				case "int8":
+					return int8(v), nil
 				case "int16":
 					return int16(v), nil
 				case "int32":
 					return int32(v), nil
 				case "int64":
 					return int64(v), nil
+				case "uint8":
+					return uint8(v), nil
 				case "uint16":
 					return uint16(v), nil
 				case "uint32":

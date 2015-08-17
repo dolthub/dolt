@@ -47,6 +47,8 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) (Future, error) {
 	switch i := i.(type) {
 	case bool:
 		return futureFromValue(Bool(i)), nil
+	case int8:
+		return futureFromValue(Int8(i)), nil
 	case int16:
 		return futureFromValue(Int16(i)), nil
 	case int32:
@@ -57,6 +59,8 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) (Future, error) {
 		return futureFromValue(Float32(i)), nil
 	case float64:
 		return futureFromValue(Float64(i)), nil
+	case uint8:
+		return futureFromValue(UInt8(i)), nil
 	case uint16:
 		return futureFromValue(UInt16(i)), nil
 	case uint32:

@@ -210,9 +210,9 @@ func getGoStructName(typeDef types.Value) string {
 	case types.String:
 		name := typeDef.String()
 		switch name {
-		case "bool", "int16", "int32", "int64", "float32", "float64", "blob", "string", "set", "map", "value":
+		case "bool", "int8", "int16", "int32", "int64", "float32", "float64", "blob", "string", "set", "map", "value":
 			return strings.Title(typeDef.String())
-		case "uint16", "uint32", "uint64":
+		case "uint8", "uint16", "uint32", "uint64":
 			return strings.ToUpper(typeDef.String()[:2]) + typeDef.String()[2:]
 		}
 

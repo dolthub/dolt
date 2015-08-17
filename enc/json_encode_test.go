@@ -39,12 +39,16 @@ func TestJsonEncode(t *testing.T) {
 `, true)
 
 	// integers
+	testEncode(`j {"int8":42}
+`, int8(42))
 	testEncode(`j {"int16":42}
 `, int16(42))
 	testEncode(`j {"int32":0}
 `, int32(0))
 	testEncode(`j {"int64":-4611686018427387904}
 `, int64(-1<<62))
+	testEncode(`j {"uint8":42}
+`, uint8(42))
 	testEncode(`j {"uint16":42}
 `, uint16(42))
 	testEncode(`j {"uint32":0}

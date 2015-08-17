@@ -18,7 +18,7 @@ var (
 )
 
 func main() {
-	types := []string{"Bool", "Int16", "Int32", "Int64", "UInt16", "UInt32", "UInt64", "Float32", "Float64"}
+	types := []string{"Bool", "Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64", "Float32", "Float64"}
 
 	f, err := os.OpenFile("primitives.go", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {

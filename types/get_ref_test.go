@@ -61,9 +61,11 @@ func TestEnsureRef(t *testing.T) {
 	count = byte(1)
 	values = []Value{
 		Bool(false),
+		Int8(0),
 		Int16(0),
 		Int32(0),
 		Int64(0),
+		UInt8(0),
 		UInt16(0),
 		UInt32(0),
 		UInt64(0),
