@@ -85,21 +85,24 @@ function decodeFloat(value) {
   return Promise.resolve(Number.parseFloat(value));
 }
 
+function decodeBlob(value, ref, getChunk) {
+  return Promise.resolve()
+}
+
 var decode = {
-  map: decodeMap,
-  list: decodeList,
-  set: decodeSet,
-  ref: decodeRef,
+  cb: decodeCompoundBlob,
   int8: decodeInt,
   int16: decodeInt,
   int32: decodeInt,
   int64: decodeInt,
+  list: decodeList,
+  map: decodeMap,
+  ref: decodeRef,
+  set: decodeSet,
   uint8: decodeInt,
   uint16: decodeInt,
   uint32: decodeInt,
   uint64: decodeInt,
-  float32: decodeFloat,
-  float64: decodeFloat
 };
 
 // TODO: Kind of cheating to decode all int & float types as numbers.
@@ -136,7 +139,7 @@ function readValue(ref, getChunk) {
         var json = JSON.parse(data.substring(2))
         return decodeValue(json, ref, getChunk);
       case 'b':
-        return decodeValue("(blob) ref: " + ref, ref, getChunk);
+        return decodeBlob()
       default :
         throw Error('Unsupported encoding: ' + data[0]);
     }
