@@ -156,24 +156,23 @@ func main() {
 		flag.Usage()
 		return
 	}
-	started := false
-	if err := d.Try(func() { started = util.MaybeStartCPUProfile() }); started {
-		defer util.StopCPUProfile()
-	} else if err != nil {
-		log.Fatalf("Can't create cpu profile file:\n%v\n", err)
-	}
+	err := d.Try(func() {
+		if util.MaybeStartCPUProfile() {
+			defer util.StopCPUProfile()
+		}
+		dataStore := datas.NewDataStore(cs)
+		inputDataset := dataset.NewDataset(dataStore, *inputID)
+		outputDataset := dataset.NewDataset(dataStore, *outputID)
 
-	dataStore := datas.NewDataStore(cs)
-	inputDataset := dataset.NewDataset(dataStore, *inputID)
-	outputDataset := dataset.NewDataset(dataStore, *outputID)
+		input := types.ListFromVal(inputDataset.Heads().Any().Value())
+		output := getIndex(input)
 
-	input := types.ListFromVal(inputDataset.Heads().Any().Value())
-	output := getIndex(input)
+		outputDataset.Commit(datas.NewSetOfCommit().Insert(
+			datas.NewCommit().SetParents(outputDataset.Heads().NomsValue()).SetValue(output.NomsValue())))
 
-	outputDataset.Commit(datas.NewSetOfCommit().Insert(
-		datas.NewCommit().SetParents(outputDataset.Heads().NomsValue()).SetValue(output.NomsValue())))
-
-	if err := d.Try(util.MaybeWriteMemProfile); err != nil {
-		log.Fatalf("Can't create memory profile file:\n%v\n", err)
+		util.MaybeWriteMemProfile()
+	})
+	if err != nil {
+		log.Fatal(err)
 	}
 }

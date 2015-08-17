@@ -23,5 +23,5 @@ type recoverablePanicker struct {
 }
 
 func (s recoverablePanicker) Errorf(format string, args ...interface{}) {
-	panic(nomsError{fmt.Sprintf(format, args...)})
+	panic(UsageError{fmt.Sprintf(format, args...)})
 }

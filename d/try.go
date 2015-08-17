@@ -7,18 +7,17 @@ func Try(f func()) (err error) {
 	return
 }
 
-// TODO: I think a better name for this might be like UsageError. That's really what it's intended for: telling the caller "you're holding it wrong".
-type nomsError struct {
+type UsageError struct {
 	msg string
 }
 
-func (e nomsError) Error() string {
+func (e UsageError) Error() string {
 	return e.msg
 }
 
 func nomsRecover(errp *error) {
 	if r := recover(); r != nil {
-		if _, ok := r.(nomsError); !ok {
+		if _, ok := r.(UsageError); !ok {
 			panic(r)
 		}
 		*errp = r.(error)

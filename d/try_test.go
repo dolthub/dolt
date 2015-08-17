@@ -10,7 +10,7 @@ func TestTry(t *testing.T) {
 	assert := assert.New(t)
 
 	e := Try(func() { Exp.Fail("hey-o") })
-	assert.IsType(nomsError{}, e)
+	assert.IsType(UsageError{}, e)
 
 	assert.Panics(func() {
 		Try(func() { Chk.Fail("hey-o") })

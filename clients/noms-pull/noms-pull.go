@@ -7,7 +7,6 @@ import (
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/sync"
 )
 
@@ -25,26 +24,21 @@ func main() {
 		flag.Usage()
 		return
 	}
-	started := false
-	if err := d.Try(func() { started = util.MaybeStartCPUProfile() }); started {
-		defer util.StopCPUProfile()
-	} else if err != nil {
-		log.Fatalf("Can't create cpu profile file:\n%v\n", err)
-	}
 
-	newHead := source.Heads().Ref()
-	var refs []ref.Ref
-	if err := d.Try(func() { refs = sync.DiffHeadsByRef(sink.Heads().Ref(), newHead, source) }); err != nil {
-		log.Fatalln(err)
-	}
-	if err := d.Try(func() { sync.CopyChunks(refs, source, sink) }); err != nil {
-		log.Fatalln(err)
-	}
-	if err := d.Try(func() { sync.SetNewHeads(newHead, *sink) }); err != nil {
-		log.Fatalln(err)
-	}
+	err := d.Try(func() {
+		if util.MaybeStartCPUProfile() {
+			defer util.StopCPUProfile()
+		}
 
-	if err := d.Try(util.MaybeWriteMemProfile); err != nil {
-		log.Fatalf("Can't create memory profile file:\n%v\n", err)
+		newHead := source.Heads().Ref()
+		refs := sync.DiffHeadsByRef(sink.Heads().Ref(), newHead, source)
+		sync.CopyChunks(refs, source, sink)
+		sync.SetNewHeads(newHead, *sink)
+
+		util.MaybeWriteMemProfile()
+	})
+
+	if err != nil {
+		log.Fatal(err)
 	}
 }
