@@ -38,7 +38,7 @@ func readRef(file *os.File) ref.Ref {
 		return ref.Ref{}
 	}
 
-	return ref.MustParse(string(s))
+	return ref.Parse(string(s))
 }
 
 func (f FileStore) Root() ref.Ref {
@@ -71,12 +71,13 @@ func (f FileStore) UpdateRoot(current, last ref.Ref) bool {
 	return true
 }
 
-func (f FileStore) Get(ref ref.Ref) (io.ReadCloser, error) {
+func (f FileStore) Get(ref ref.Ref) io.ReadCloser {
 	r, err := os.Open(getPath(f.dir, ref))
 	if os.IsNotExist(err) {
-		return nil, nil
+		return nil
 	}
-	return r, err
+	d.Chk.NoError(err)
+	return r
 }
 
 func (f FileStore) Put() ChunkWriter {
@@ -101,12 +102,14 @@ type fileChunkWriter struct {
 
 func (w *fileChunkWriter) Write(data []byte) (int, error) {
 	d.Chk.NotNil(w.buffer, "Write() cannot be called after Ref() or Close().")
-	return w.writer.Write(data)
+	n, err := w.writer.Write(data)
+	d.Chk.NoError(err)
+	return n, nil
 }
 
-func (w *fileChunkWriter) Ref() (ref.Ref, error) {
+func (w *fileChunkWriter) Ref() ref.Ref {
 	d.Chk.NoError(w.Close())
-	return ref.FromHash(w.hash), nil
+	return ref.FromHash(w.hash)
 }
 
 func (w *fileChunkWriter) Close() error {

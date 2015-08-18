@@ -3,6 +3,7 @@ package chunks
 import (
 	"io"
 
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -35,48 +36,43 @@ func (fc forwardCloser) Close() error {
 	return nil
 }
 
-func (rts ReadThroughStore) Get(ref ref.Ref) (io.ReadCloser, error) {
-	r, err := rts.cachingStore.Get(ref)
-	if r != nil && err == nil {
-		return r, err
+func (rts ReadThroughStore) Get(ref ref.Ref) io.ReadCloser {
+	r := rts.cachingStore.Get(ref)
+	if r != nil {
+		return r
 	}
-	r, err = rts.backingStore.Get(ref)
-	if r == nil || err != nil {
-		return r, err
+	r = rts.backingStore.Get(ref)
+	if r == nil {
+		return r
 	}
 
 	w := rts.cachingStore.Put()
 	tr := io.TeeReader(r, w)
-	return forwardCloser{tr, []io.Closer{r, w}}, nil
+	return forwardCloser{tr, []io.Closer{r, w}}
 }
 
 type readThroughChunkWriter struct {
 	cws []ChunkWriter
 }
 
-func (w readThroughChunkWriter) Ref() (r ref.Ref, err error) {
+func (w readThroughChunkWriter) Ref() (r ref.Ref) {
 	for _, cw := range w.cws {
-		if r, err = cw.Ref(); err != nil {
-			return
-		}
+		r = cw.Ref()
 	}
 	return
 }
 
 func (w readThroughChunkWriter) Write(p []byte) (n int, err error) {
 	for _, cw := range w.cws {
-		if n, err = cw.Write(p); err != nil {
-			return
-		}
+		n, err = cw.Write(p)
+		d.Chk.NoError(err)
 	}
 	return
 }
 
 func (w readThroughChunkWriter) Close() (err error) {
 	for _, cw := range w.cws {
-		if err = cw.Close(); err != nil {
-			return
-		}
+		cw.Close()
 	}
 	return
 }

@@ -2,7 +2,6 @@ package types
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"testing"
 
@@ -12,23 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type ErrorSource struct {
-	chunks.ChunkSource
-}
-
-func (e ErrorSource) Get(r ref.Ref) (io.ReadCloser, error) {
-	return nil, errors.New("Good golly Miss Molly!")
-}
-
 func TestTolerateUngettableRefs(t *testing.T) {
 	assert := assert.New(t)
-	v, err := ReadValue(ref.Ref{}, &chunks.TestStore{})
+	v, _ := ReadValue(ref.Ref{}, &chunks.TestStore{})
 	assert.Nil(v)
-	assert.Nil(err)
-
-	v, err = ReadValue(ref.Ref{}, &ErrorSource{})
-	assert.Nil(v)
-	assert.NotNil(err)
 }
 
 func TestBlobLeafDecode(t *testing.T) {

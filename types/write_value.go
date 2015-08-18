@@ -24,7 +24,7 @@ func WriteValue(v Value, cs chunks.ChunkSink) (ref.Ref, error) {
 	if err != nil {
 		return ref.Ref{}, err
 	}
-	return dst.Ref()
+	return dst.Ref(), nil
 }
 
 func toEncodeable(v Value, cs chunks.ChunkSink) (interface{}, error) {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
@@ -18,9 +19,8 @@ func TestJSONDecode(t *testing.T) {
 		w := cs.Put()
 		_, err := w.Write([]byte(s))
 		assert.NoError(err)
-		r, err := w.Ref()
+		r := w.Ref()
 		assert.NotNil(r)
-		assert.NoError(err)
 		return r
 	}
 
@@ -83,14 +83,14 @@ func TestJSONDecode(t *testing.T) {
 
 	// Blob (compound)
 	// echo -n 'b Hello' | sha1sum
-	blr := ref.MustParse("sha1-c35018551e725bd2ab45166b69d15fda00b161c1")
+	blr := ref.Parse("sha1-c35018551e725bd2ab45166b69d15fda00b161c1")
 	cb := CompoundBlob{[]uint64{2}, []ref.Ref{blr}}
 	testDecode(`j {"cb":[{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},2]}
 `, cb)
 	// echo -n 'b  ' | sha1sum
-	blr2 := ref.MustParse("sha1-641283a12b475ed58ba510517c1224a912e934a6")
+	blr2 := ref.Parse("sha1-641283a12b475ed58ba510517c1224a912e934a6")
 	// echo -n 'b World!' | sha1sum
-	blr3 := ref.MustParse("sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9")
+	blr3 := ref.Parse("sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9")
 	cb2 := CompoundBlob{[]uint64{5, 6, 12}, []ref.Ref{blr, blr2, blr3}}
 	testDecode(`j {"cb":[{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},5,{"ref":"sha1-641283a12b475ed58ba510517c1224a912e934a6"},1,{"ref":"sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9"},6]}
 `, cb2)
@@ -117,7 +117,9 @@ func TestCompoundBlobJSONDecodeInvalidFormat(t *testing.T) {
 `))
 	assert.Error(err)
 
-	_, err = jsonDecode(strings.NewReader(`j {"cb":[{"ref":"invalid ref"},2]}
+	d.Try(func() {
+		jsonDecode(strings.NewReader(`j {"cb":[{"ref":"invalid ref"},2]}
 `))
+	})
 	assert.Error(err)
 }

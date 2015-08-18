@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset/mgmt"
 	"github.com/attic-labs/noms/ref"
@@ -45,27 +46,23 @@ func (s server) handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) handleGetRef(w http.ResponseWriter, hashString string) {
-	ref, err := ref.Parse(hashString)
+	err := d.Try(func() {
+		r := ref.Parse(hashString)
+		reader := s.cs.Get(r)
+		if reader == nil {
+			http.Error(w, fmt.Sprintf("No such ref: %v", hashString), http.StatusNotFound)
+			return
+		}
+
+		w.Header().Add("content-type", "application/octet-stream")
+		w.Header().Add("cache-control", "max-age=31536000") // 1 year
+		io.Copy(w, reader)
+	})
+
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Parse error: %v", err), http.StatusBadRequest)
 		return
 	}
-
-	reader, err := s.cs.Get(ref)
-	if err != nil {
-		// TODO: Maybe we should not expose the internal path?
-		http.Error(w, fmt.Sprintf("Fetch error: %v", err), http.StatusNotFound)
-		return
-	}
-
-	if reader == nil {
-		http.Error(w, fmt.Sprintf("No such ref: %v", hashString), http.StatusNotFound)
-		return
-	}
-
-	w.Header().Add("content-type", "application/octet-stream")
-	w.Header().Add("cache-control", "max-age=31536000") // 1 year
-	io.Copy(w, reader)
 }
 
 func (s server) handleGetDataset(w http.ResponseWriter, id string) {

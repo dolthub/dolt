@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
@@ -27,10 +28,12 @@ func main() {
 		return
 	}
 
-	inputRef, err := ref.Parse(*inputRefStr)
+	var inputRef ref.Ref
+	err := d.Try(func() {
+		inputRef = ref.Parse(*inputRefStr)
+	})
 	if err != nil {
-		flag.Usage()
-		return
+		log.Fatalf("Invalid ref: %v", *inputRefStr)
 	}
 
 	ds := dataset.NewDataset(datas.NewDataStore(cs), *outputID)

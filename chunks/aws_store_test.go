@@ -72,8 +72,7 @@ func (suite *AWSStoreTestSuite) TestAWSStorePut() {
 		_, err := w.Write([]byte(input))
 		suite.NoError(err)
 
-		r1, err := w.Ref()
-		suite.NoError(err)
+		r1 := w.Ref()
 
 		// See http://www.di-mgt.com.au/sha_testvectors.html
 		suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
@@ -84,8 +83,8 @@ func (suite *AWSStoreTestSuite) TestAWSStorePut() {
 		// Reading a non-existing ref fails
 		hash := ref.NewHash()
 		hash.Write([]byte("Non-existent"))
-		_, err = suite.store.Get(ref.FromHash(hash))
-		suite.Error(err)
+		v := suite.store.Get(ref.FromHash(hash))
+		suite.Nil(v)
 
 		// Writing the same thing again shouldn't result in a duplicate call to AWSStore.PutObject()
 		suite.Equal(1, suite.s3svc.numPuts)
@@ -100,8 +99,7 @@ func (suite *AWSStoreTestSuite) TestAWSStorePutRefAfterClose() {
 	suite.NoError(err)
 
 	suite.NoError(w.Close())
-	r1, err := w.Ref()
-	suite.NoError(err)
+	r1 := w.Ref()
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
 	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
@@ -117,9 +115,8 @@ func (suite *AWSStoreTestSuite) TestAWSStorePutMultiRef() {
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
-	_, _ = w.Ref()
-	r1, err := w.Ref()
-	suite.NoError(err)
+	r1 := w.Ref()
+	suite.Equal(r1, w.Ref()) // calling ref again is valid, returns same value
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
 	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
@@ -176,10 +173,8 @@ func (suite *AWSStoreTestSuite) TestAWSStoreRoot() {
 	oldRoot := suite.store.Root()
 	suite.Equal(oldRoot, ref.Ref{})
 
-	bogusRoot, err := ref.Parse("sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5") // sha1("Bogus, Dude")
-	suite.NoError(err)
-	newRoot, err := ref.Parse("sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd") // sha1("Hello, World")
-	suite.NoError(err)
+	bogusRoot := ref.Parse("sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5") // sha1("Bogus, Dude")
+	newRoot := ref.Parse("sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd")   // sha1("Hello, World")
 
 	// Try to update root with bogus oldRoot
 	result := suite.store.UpdateRoot(newRoot, bogusRoot)

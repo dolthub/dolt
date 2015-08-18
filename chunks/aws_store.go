@@ -64,14 +64,14 @@ func (s AWSStore) Root() ref.Ref {
 			rootTablePrimaryKey: {S: aws.String(rootTablePrimaryKeyValue)},
 		},
 	})
-	d.Chk.NoError(err)
+	d.Exp.NoError(err)
 
 	if len(result.Item) == 0 {
 		return ref.Ref{}
 	}
 
 	d.Chk.Equal(len(result.Item), 2)
-	return ref.MustParse(*(result.Item[rootTableRef].S))
+	return ref.Parse(*(result.Item[rootTableRef].S))
 }
 
 func (s AWSStore) UpdateRoot(current, last ref.Ref) bool {
@@ -108,7 +108,7 @@ func (s AWSStore) UpdateRoot(current, last ref.Ref) bool {
 	return true
 }
 
-func (s AWSStore) Get(ref ref.Ref) (io.ReadCloser, error) {
+func (s AWSStore) Get(ref ref.Ref) io.ReadCloser {
 	result, err := s.awsSvc.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(ref.String()),
@@ -116,10 +116,10 @@ func (s AWSStore) Get(ref ref.Ref) (io.ReadCloser, error) {
 
 	// TODO: S3 storage is eventually consistent, so in theory, we could fail to read a value by ref which hasn't propogated yet. Implement existence checks & retry.
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
-	return result.Body, nil
+	return result.Body
 }
 
 func (s AWSStore) Put() ChunkWriter {
@@ -143,12 +143,14 @@ type awsChunkWriter struct {
 
 func (w *awsChunkWriter) Write(data []byte) (int, error) {
 	d.Chk.NotNil(w.file, "Write() cannot be called after Ref() or Close().")
-	return w.writer.Write(data)
+	n, err := w.writer.Write(data)
+	d.Chk.NoError(err)
+	return n, nil
 }
 
-func (w *awsChunkWriter) Ref() (ref.Ref, error) {
+func (w *awsChunkWriter) Ref() ref.Ref {
 	d.Chk.NoError(w.Close())
-	return ref.FromHash(w.hash), nil
+	return ref.FromHash(w.hash)
 }
 
 func (w *awsChunkWriter) Close() error {

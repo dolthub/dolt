@@ -91,7 +91,7 @@ func jsonDecodeTaggedValue(m map[string]interface{}) (interface{}, error) {
 			}
 		case "ref":
 			if v, ok := v.(string); ok {
-				return ref.Parse(v)
+				return ref.Parse(v), nil
 			}
 		case "set":
 			if v, ok := v.([]interface{}); ok {

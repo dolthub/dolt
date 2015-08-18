@@ -47,27 +47,19 @@ func FromHash(h hash.Hash) Ref {
 	return New(digest)
 }
 
-func Parse(s string) (r Ref, err error) {
+func Parse(s string) (r Ref) {
 	match := pattern.FindStringSubmatch(s)
 	if match == nil {
-		return r, fmt.Errorf("Could not parse ref: %s", s)
+		d.Exp.Fail(fmt.Sprintf("Cound not parse ref: %s", s))
 	}
 
 	// TODO: The new temp byte array is kinda bummer. Would be better to walk the string and decode each byte into result.digest. But can't find stdlib functions to do that.
 	n, err := hex.Decode(r.digest[:], []byte(match[1]))
-	if err != nil {
-		return
-	}
+	d.Chk.NoError(err) // The regexp above should have validated the input
 
 	// If there was no error, we should have decoded exactly one digest worth of bytes.
 	d.Chk.Equal(sha1.Size, n)
 	return
-}
-
-func MustParse(s string) Ref {
-	r, err := Parse(s)
-	d.Chk.NoError(err)
-	return r
 }
 
 // Less compares two Refs, returning true if the first is less than the second.

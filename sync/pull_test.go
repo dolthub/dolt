@@ -85,6 +85,6 @@ func TestPullFirstCommit(t *testing.T) {
 
 func TestFailedCopyChunks(t *testing.T) {
 	cs := &chunks.NopStore{}
-	r := ref.MustParse("sha1-0000000000000000000000000000000000000000")
+	r := ref.Parse("sha1-0000000000000000000000000000000000000000")
 	assert.Panics(t, func() { CopyChunks([]ref.Ref{r}, cs, cs) })
 }

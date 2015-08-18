@@ -36,8 +36,7 @@ func (suite *FileStoreTestSuite) TestFileStorePut() {
 	w := suite.store.Put()
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
-	ref, err := w.Ref()
-	suite.NoError(err)
+	ref := w.Ref()
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
 	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", ref.String())
@@ -70,7 +69,7 @@ func (suite *FileStoreTestSuite) TestFileStoreWriteAfterRefFails() {
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
-	_, _ = w.Ref()
+	_ = w.Ref()
 	suite.NoError(err)
 	suite.Panics(func() { w.Write([]byte(input)) }, "Write() after Close() should barf!")
 }
@@ -82,8 +81,7 @@ func (suite *FileStoreTestSuite) TestFileStorePutWithRefAfterClose() {
 	suite.NoError(err)
 
 	suite.NoError(w.Close())
-	ref, err := w.Ref() // Ref() after Close() should work...
-	suite.NoError(err)
+	ref := w.Ref() // Ref() after Close() should work...
 
 	// And reading the data via the API should work...
 	assertInputInStore(input, ref, suite.store, suite.Assert())
@@ -95,10 +93,8 @@ func (suite *FileStoreTestSuite) TestFileStorePutWithMultipleRef() {
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
-	_, _ = w.Ref()
-	suite.NoError(err)
-	ref, err := w.Ref() // Multiple calls to Ref() should work...
-	suite.NoError(err)
+	w.Ref()
+	ref := w.Ref() // Multiple calls to Ref() should work...
 
 	// And reading the data via the API should work...
 	assertInputInStore(input, ref, suite.store, suite.Assert())
@@ -112,10 +108,8 @@ func (suite *FileStoreTestSuite) TestFileStoreRoot() {
 	f, err := os.Open(path.Join(suite.dir, "root"))
 	suite.True(os.IsNotExist(err))
 
-	bogusRoot, err := ref.Parse("sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5") // sha1("Bogus, Dude")
-	suite.NoError(err)
-	newRoot, err := ref.Parse("sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd") // sha1("Hello, World")
-	suite.NoError(err)
+	bogusRoot := ref.Parse("sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5") // sha1("Bogus, Dude")
+	newRoot := ref.Parse("sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd")   // sha1("Hello, World")
 
 	// Try to update root with bogus oldRoot
 	result := suite.store.UpdateRoot(newRoot, bogusRoot)
@@ -152,8 +146,7 @@ func (suite *FileStoreTestSuite) TestFileStorePutExisting() {
 		w := suite.store.Put()
 		_, err := w.Write([]byte(input))
 		suite.NoError(err)
-		_, err = w.Ref()
-		suite.NoError(err)
+		w.Ref()
 	}
 
 	write()
@@ -167,8 +160,7 @@ func (suite *FileStoreTestSuite) TestFileStorePutExisting() {
 }
 
 func (suite *FileStoreTestSuite) TestFileStoreGetNonExisting() {
-	ref := ref.MustParse("sha1-1111111111111111111111111111111111111111")
-	r, err := suite.store.Get(ref)
-	suite.NoError(err)
+	ref := ref.Parse("sha1-1111111111111111111111111111111111111111")
+	r := suite.store.Get(ref)
 	suite.Nil(r)
 }

@@ -21,8 +21,8 @@ type RootTracker interface {
 
 // ChunkSource is a place to get chunks from.
 type ChunkSource interface {
-	// Get gets a reader for the value of the Ref in the store. If the ref is absent from the store nil and no error is returned.
-	Get(ref ref.Ref) (io.ReadCloser, error)
+	// Get gets a reader for the value of the Ref in the store. If the ref is absent from the store nil is returned.
+	Get(ref ref.Ref) io.ReadCloser
 }
 
 // ChunkSink is a place to put chunks.
@@ -32,9 +32,10 @@ type ChunkSink interface {
 
 // ChunkWriter wraps an io.WriteCloser, additionally providing the ability to grab a Ref for all data written through the interface. Calling Ref() or Close() on an instance disallows further writing.
 type ChunkWriter interface {
+	// Note that the Write(p []byte) (int, error) method of WriterCloser must be retained, but implementations of ChunkWriter should never return an error.
 	io.WriteCloser
 	// Ref returns the ref.Ref for all data written at the time of call.
-	Ref() (ref.Ref, error)
+	Ref() ref.Ref
 }
 
 // NewFlags creates a new instance of Flags, which declares a number of ChunkStore-related command-line flags using the golang flag package. Call this before flag.Parse().

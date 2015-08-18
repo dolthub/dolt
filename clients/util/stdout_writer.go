@@ -41,7 +41,7 @@ func (w *stdoutChunkWriter) Write(data []byte) (int, error) {
 	return w.writer.Write(data)
 }
 
-func (w *stdoutChunkWriter) Ref() (ref.Ref, error) {
+func (w *stdoutChunkWriter) Ref() ref.Ref {
 	w.file = nil
-	return ref.FromHash(w.hash), nil
+	return ref.FromHash(w.hash)
 }

@@ -49,7 +49,7 @@ func (l LevelDBStore) Root() ref.Ref {
 	}
 	d.Chk.NoError(err)
 
-	return ref.MustParse(string(val))
+	return ref.Parse(string(val))
 }
 
 func (l LevelDBStore) UpdateRoot(current, last ref.Ref) bool {
@@ -65,15 +65,15 @@ func (l LevelDBStore) UpdateRoot(current, last ref.Ref) bool {
 	return true
 }
 
-func (l LevelDBStore) Get(ref ref.Ref) (io.ReadCloser, error) {
+func (l LevelDBStore) Get(ref ref.Ref) io.ReadCloser {
 	key := toChunkKey(ref)
 	chunk, err := l.db.Get(key, nil)
 	if err == errors.ErrNotFound {
-		return nil, nil
+		return nil
 	}
 	d.Chk.NoError(err)
 
-	return ioutil.NopCloser(bytes.NewReader(chunk)), nil
+	return ioutil.NopCloser(bytes.NewReader(chunk))
 }
 
 func (l LevelDBStore) Put() ChunkWriter {
@@ -101,9 +101,9 @@ func (w *ldbChunkWriter) Write(data []byte) (int, error) {
 	return size, nil
 }
 
-func (w *ldbChunkWriter) Ref() (ref.Ref, error) {
+func (w *ldbChunkWriter) Ref() ref.Ref {
 	d.Chk.NoError(w.Close())
-	return ref.FromHash(w.hash), nil
+	return ref.FromHash(w.hash)
 }
 
 func (w *ldbChunkWriter) Close() error {

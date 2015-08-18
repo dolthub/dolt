@@ -17,9 +17,9 @@ type NopStore struct {
 }
 
 // Get panics in NopStore! Since the data wasn't stored, you sure can't Get it.
-func (ms *NopStore) Get(ref ref.Ref) (io.ReadCloser, error) {
+func (ms *NopStore) Get(ref ref.Ref) io.ReadCloser {
 	d.Chk.Fail("Whoops, you shouldn't have called this!")
-	return nil, nil
+	return nil
 }
 
 func (NopStore) Put() ChunkWriter {
@@ -32,8 +32,8 @@ type nopWriter struct {
 	io.Closer
 }
 
-func (nw nopWriter) Ref() (ref.Ref, error) {
-	return ref.FromHash(nw.Hash), nil
+func (nw nopWriter) Ref() ref.Ref {
+	return ref.FromHash(nw.Hash)
 }
 
 type nopStoreFlags struct {

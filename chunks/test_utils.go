@@ -9,16 +9,14 @@ import (
 )
 
 func assertInputInStore(input string, ref ref.Ref, s ChunkStore, assert *assert.Assertions) {
-	reader, err := s.Get(ref)
-	assert.NoError(err)
+	reader := s.Get(ref)
 	data, err := ioutil.ReadAll(reader)
 	assert.NoError(err)
 	assert.Equal(input, string(data))
 }
 
 func assertInputNotInStore(input string, ref ref.Ref, s ChunkStore, assert *assert.Assertions) {
-	reader, err := s.Get(ref)
-	assert.NoError(err)
+	reader := s.Get(ref)
 	assert.Nil(reader)
 }
 
@@ -28,7 +26,7 @@ type TestStore struct {
 	Writes int
 }
 
-func (s *TestStore) Get(ref ref.Ref) (io.ReadCloser, error) {
+func (s *TestStore) Get(ref ref.Ref) io.ReadCloser {
 	s.Reads++
 	return s.MemoryStore.Get(ref)
 }

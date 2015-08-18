@@ -46,8 +46,7 @@ func TestRoot(t *testing.T) {
 	s := server{ms}
 	s.handle(w, req)
 	assert.Equal(w.Code, http.StatusOK)
-	ref, err := ref.Parse(w.Body.String())
-	assert.NoError(err)
+	ref := ref.Parse(w.Body.String())
 	assert.Equal(ms.Root(), ref)
 }
 
