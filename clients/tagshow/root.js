@@ -8,17 +8,12 @@ var React = require('react');
 var SlideShow = require('./slideshow.js');
 var TagCloud = require('./tagcloud.js');
 
-var tagCloudStyle = {
-  position: 'absolute',
-  left: 0,
-  top: 0,
+var containerStyle = {
+  display: 'flex',
 };
 
 var slideShowStyle = {
-  position: 'absolute',
-  top: 0,
-  left: 300,
-  width: 500,
+  flex: 1,
 };
 
 var Root = React.createClass({
@@ -76,8 +71,8 @@ var Root = React.createClass({
         selected={this.state.selectedDs}
         onChange={this.handleDataSetPicked}/>
       <br/>
-      <div style={{position:"relative"}}>
-        <div style={tagCloudStyle}>
+      <div style={containerStyle}>
+        <div>
           <TagCloud tags={this.state.tags} selected={this.state.selected}
             onChoose={this.handleTagChoose}/>
         </div>

@@ -5,9 +5,12 @@ var ImmutableRenderMixin = require('react-immutable-render-mixin');
 var noms = require('noms')
 var React = require('react');
 
+var containerStyle = {
+};
+
 var imageStyle = {
-  display: 'block',
-  width: '100%',
+  maxHeight: 300,
+  marginRight: 7,
 };
 
 var SlideShow = React.createClass({
@@ -18,7 +21,7 @@ var SlideShow = React.createClass({
   },
 
   render: function() {
-    return <div>{
+    return <div style={containerStyle}>{
       this.props.photos
         .sort(
           // This sorts the photos deterministically, by the ref of their image
@@ -52,7 +55,7 @@ var Item = React.createClass({
       b => this.setState({blob: b}));
 
     if (this.state.blob == null) {
-      return <span>loading...</span>;
+      return null;
     }
 
     return <img style={imageStyle} src={URL.createObjectURL(this.state.blob)}/>
