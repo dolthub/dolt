@@ -1,6 +1,7 @@
 {
   "name": "noms-explorer",
   "dependencies": {
+    "humanize": "^0.0.9",
     "react": "^0.12.0",
     "immutable": "^3.7.4"
   },

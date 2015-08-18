@@ -71,6 +71,15 @@ function decodeSet(input, ref, getChunk) {
   });
 }
 
+function decodeCompoundBlob(value, ref, getChunk) {
+  // {"cb":[{"ref":"sha1-x"},lengthX,{"ref":"sha1-y"},lengthY]}
+  return Promise.all(
+    value
+      .filter(v => typeof v == 'object')
+      .map(v => readValue(v.ref, getChunk))
+  ).then(values => Promise.resolve(new Blob(values)));
+}
+
 function decodeRef(ref, _, getChunk) {
   return new Ref(ref, () => {
     return readValue(ref, getChunk);
@@ -83,10 +92,6 @@ function decodeInt(value) {
 
 function decodeFloat(value) {
   return Promise.resolve(Number.parseFloat(value));
-}
-
-function decodeBlob(value, ref, getChunk) {
-  return Promise.resolve()
 }
 
 var decode = {
@@ -132,18 +137,34 @@ function decodeValue(value, ref, getChunk) {
   return decodeTaggedValue(value, ref, getChunk);
 }
 
-function readValue(ref, getChunk) {
-  return getChunk(ref).then((data) => {
-    switch(data[0]) {
-      case 'j':
-        var json = JSON.parse(data.substring(2))
-        return decodeValue(json, ref, getChunk);
-      case 'b':
-        return decodeBlob()
-      default :
-        throw Error('Unsupported encoding: ' + data[0]);
-    }
+function readBlobAsText(blob) {
+  return new Promise((res, rej) => {
+    var reader = new FileReader();
+    reader.addEventListener('loadend',
+      () => res(reader.result));
+    reader.addEventListener('error', rej);
+    reader.readAsText(blob);
   });
+}
+
+function readValue(ref, getChunk) {
+  return getChunk(ref).then(
+    response => response.blob()).then(
+    blob => readBlobAsText(blob.slice(0, 2)).then(
+      header => {
+        var body = blob.slice(2);
+        switch (header) {
+          case 'j ':
+            return readBlobAsText(body).then(
+              data => decodeValue(JSON.parse(data), ref, getChunk));
+          case 'b ':
+            return Promise.resolve(body);
+          default :
+            throw Error('Unsupported encoding: ' + data[0]);
+        }
+      }
+    )
+  );
 }
 
 module.exports = {

@@ -30,10 +30,9 @@ function requestFetch(url) {
 function beginFetch(req) {
   activeFetches++;
   fetch(req.url).then((r) => {
-    r.text().then((s) => {
-      req.resolve(s);
-      endFetch();
-    });
+    // TODO: The caller should be able to do additional async work before endFetch() is called.
+    req.resolve(r);
+    endFetch();
   }).catch(req.reject);
 }
 
@@ -53,7 +52,7 @@ function getChunk(ref) {
 }
 
 function getRoot() {
-  return requestFetch(rpc.root);
+  return requestFetch(rpc.root).then(res => res.text());
 }
 
 function getDataset(id) {

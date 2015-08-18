@@ -1,7 +1,8 @@
 'use strict';
 
-var React = require('react');
+var humanize = require('humanize');
 var Immutable = require('immutable');
+var React = require('react');
 var Ref = require('noms').Ref
 
 function merge(a, b) {
@@ -106,6 +107,10 @@ var TreeNode = React.createClass({
     if (this.isCollection(value)) {
       return this.getCollectionName(value) + ' (' +
         value.size + ' values)';
+    }
+
+    if (value instanceof Blob) {
+      return 'Blob (' + humanize.filesize(value.size) + ')';
     }
 
     if (Ref.isRef(value)) {
