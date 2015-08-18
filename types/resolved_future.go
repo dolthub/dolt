@@ -17,8 +17,8 @@ func (rf resolvedFuture) Val() Value {
 	return rf.val
 }
 
-func (rf resolvedFuture) Deref(cs chunks.ChunkSource) (Value, error) {
-	return rf.val, nil
+func (rf resolvedFuture) Deref(cs chunks.ChunkSource) Value {
+	return rf.val
 }
 
 func (rf resolvedFuture) Release() {

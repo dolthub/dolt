@@ -6,11 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func IsUsageError(a *assert.Assertions, f func()) {
-	e := Try(f)
-	a.IsType(UsageError{}, e)
-}
-
 func TestTry(t *testing.T) {
 	assert := assert.New(t)
 

@@ -165,7 +165,7 @@ func TestListFutures(t *testing.T) {
 
 	cs := &chunks.TestStore{}
 	v := NewString("hello")
-	r, _ := WriteValue(v, cs)
+	r := WriteValue(v, cs)
 	f := futureFromRef(r)
 
 	l := listFromFutures([]Future{f, futureFromValue(Int64(0xbeefcafe))}, cs)

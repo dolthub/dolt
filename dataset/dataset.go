@@ -73,7 +73,7 @@ func (rt *datasetRootTracker) UpdateRoot(current, last ref.Ref) bool {
 		return false
 	}
 
-	datasetCommit := types.MustReadValue(current, rt.parentStore)
+	datasetCommit := types.ReadValue(current, rt.parentStore)
 	rt.parentStore = mgmt.CommitDatasets(rt.parentStore, mgmt.SetDatasetHeads(mgmt.GetDatasets(rt.parentStore), rt.datasetID, datasetCommit))
 	return true
 }

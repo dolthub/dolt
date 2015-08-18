@@ -42,11 +42,9 @@ func TestIncrementalLoadList(t *testing.T) {
 	cs := &chunks.TestStore{}
 
 	expected := NewList(testVals...)
-	ref, err := WriteValue(expected, cs)
-	assert.NoError(err)
+	ref := WriteValue(expected, cs)
 
-	actualVar, err := ReadValue(ref, cs)
-	assert.NoError(err)
+	actualVar := ReadValue(ref, cs)
 	actual := actualVar.(List)
 
 	expectedCount := cs.Reads
@@ -69,11 +67,9 @@ func TestIncrementalLoadSet(t *testing.T) {
 	cs := &chunks.TestStore{}
 
 	expected := NewSet(testVals...)
-	ref, err := WriteValue(expected, cs)
-	assert.NoError(err)
+	ref := WriteValue(expected, cs)
 
-	actualVar, err := ReadValue(ref, cs)
-	assert.NoError(err)
+	actualVar := ReadValue(ref, cs)
 	actual := actualVar.(Set)
 
 	expectedCount := cs.Reads
@@ -90,11 +86,9 @@ func TestIncrementalLoadMap(t *testing.T) {
 	cs := &chunks.TestStore{}
 
 	expected := NewMap(testVals...)
-	ref, err := WriteValue(expected, cs)
-	assert.NoError(err)
+	ref := WriteValue(expected, cs)
 
-	actualVar, err := ReadValue(ref, cs)
-	assert.NoError(err)
+	actualVar := ReadValue(ref, cs)
 	actual := actualVar.(Map)
 
 	expectedCount := cs.Reads
@@ -112,13 +106,11 @@ func TestIncrementalAddRef(t *testing.T) {
 	cs := &chunks.TestStore{}
 
 	expectedItem := UInt32(42)
-	ref, err := WriteValue(expectedItem, cs)
-	assert.NoError(err)
+	ref := WriteValue(expectedItem, cs)
 
 	expected := NewList(Ref{ref})
-	ref, err = WriteValue(expected, cs)
-	actualVar, err := ReadValue(ref, cs)
-	assert.NoError(err)
+	ref = WriteValue(expected, cs)
+	actualVar := ReadValue(ref, cs)
 
 	assert.Equal(1, cs.Reads)
 	assert.True(expected.Equals(actualVar))

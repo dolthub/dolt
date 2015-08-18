@@ -176,7 +176,7 @@ func TestMapFutures(t *testing.T) {
 
 	cs := &chunks.TestStore{}
 	k := NewString("hello")
-	kRef, _ := WriteValue(k, cs)
+	kRef := WriteValue(k, cs)
 	f := futureFromRef(kRef)
 
 	m := mapFromFutures([]Future{f, futureFromValue(Int64(0xbeefcafe))}, cs)

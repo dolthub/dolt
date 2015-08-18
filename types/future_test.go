@@ -12,8 +12,7 @@ func TestResolvedFuture(t *testing.T) {
 	assert := assert.New(t)
 	v := Int32(42)
 	f := futureFromValue(v)
-	v2, err := f.Deref(nil)
-	assert.NoError(err)
+	v2 := f.Deref(nil)
 	assert.True(v.Equals(v2))
 }
 
@@ -22,17 +21,15 @@ func TestUnresolvedFuture(t *testing.T) {
 
 	cs := &chunks.TestStore{}
 	v := NewString("hello")
-	r, _ := WriteValue(v, cs)
+	r := WriteValue(v, cs)
 
 	f := futureFromRef(r)
-	v2, err := f.Deref(cs)
+	v2 := f.Deref(cs)
 	assert.Equal(1, cs.Reads)
-	assert.NoError(err)
 	assert.True(v.Equals(v2))
 
-	v3, err := f.Deref(cs)
+	v3 := f.Deref(cs)
 	assert.Equal(1, cs.Reads)
-	assert.NoError(err)
 	assert.True(v2.Equals(v3))
 }
 
@@ -41,8 +38,7 @@ func TestEqualsFastPath(t *testing.T) {
 	cs := &chunks.MemoryStore{}
 
 	v := Int32(1)
-	r, err := WriteValue(v, cs)
-	assert.NoError(err)
+	r := WriteValue(v, cs)
 
 	fv := futureFromValue(v)
 	fr := futureFromRef(r)
@@ -58,8 +54,7 @@ func TestEqualsFastPath(t *testing.T) {
 	assert.True(futuresEqual(fr, fv))
 	assert.Equal(2, count)
 
-	_, err = fr.Deref(cs)
-	assert.NoError(err)
+	fr.Deref(cs)
 
 	count = 0
 	assert.True(futuresEqual(fv, fv))

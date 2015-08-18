@@ -13,9 +13,8 @@ import (
 )
 
 func validateRefAsSetOfCommit(r ref.Ref, cs chunks.ChunkSource) types.Value {
-	v, err := types.ReadValue(r, cs)
+	v := types.ReadValue(r, cs)
 	d.Exp.NotNil(v, "%v cannot be found", r)
-	d.Exp.NoError(err)
 
 	// TODO: Replace this weird recover stuff below once we have a way to determine if a Value is an instance of a custom struct type. BUG #133
 	defer func() {

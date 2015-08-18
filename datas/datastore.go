@@ -27,8 +27,7 @@ func NewDataStoreWithRootTracker(cs chunks.ChunkStore, rt chunks.RootTracker) Da
 
 func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, cc *commitCache) DataStore {
 	if (rt.Root() == ref.Ref{}) {
-		r, err := types.WriteValue(NewSetOfCommit().NomsValue(), cs)
-		d.Chk.NoError(err)
+		r := types.WriteValue(NewSetOfCommit().NomsValue(), cs)
 		d.Chk.True(rt.UpdateRoot(r, ref.Ref{}))
 	}
 	return DataStore{
@@ -37,7 +36,7 @@ func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, cc *commi
 }
 
 func commitSetFromRef(commitRef ref.Ref, cs chunks.ChunkSource) SetOfCommit {
-	return SetOfCommitFromVal(types.MustReadValue(commitRef, cs))
+	return SetOfCommitFromVal(types.ReadValue(commitRef, cs))
 }
 
 // Heads returns the head Commit of all currently active forks.
@@ -84,8 +83,7 @@ func (ds *DataStore) doCommit(commits SetOfCommit) bool {
 	}
 
 	// TODO: This set will be orphaned if this UpdateRoot below fails
-	newRootRef, err := types.WriteValue(newHeads.NomsValue(), ds)
-	d.Chk.NoError(err)
+	newRootRef := types.WriteValue(newHeads.NomsValue(), ds)
 
 	return ds.rt.UpdateRoot(newRootRef, currentRootRef)
 }

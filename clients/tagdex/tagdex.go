@@ -40,8 +40,7 @@ func main() {
 	out := NewMapOfStringToSetOfPhoto()
 
 	types.All(inputRef, cs, func(f types.Future) {
-		v, err := f.Deref(cs)
-		d.Chk.NoError(err)
+		v := f.Deref(cs)
 		if v, ok := v.(types.Map); ok && types.NewString("Photo").Equals(v.Get(types.NewString("$name"))) {
 			p := PhotoFromVal(v)
 			p.Tags().Iter(func(item types.String) (stop bool) {

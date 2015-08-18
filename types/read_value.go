@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 
@@ -11,69 +12,51 @@ import (
 )
 
 // ReadValue reads and decodes a value from a chunk source. It is not considered an error for the requested chunk to be absent from cs; in this case, the function simply returns nil, nil.
-func ReadValue(r ref.Ref, cs chunks.ChunkSource) (Value, error) {
-	d.Chk.NotNil(cs)
+func ReadValue(r ref.Ref, cs chunks.ChunkSource) Value {
+	d.Exp.NotNil(cs)
 	reader := cs.Get(r)
-	if reader != nil {
-		defer reader.Close()
-	}
 	if reader == nil {
-		return nil, nil
+		return nil
 	}
+	defer reader.Close()
 
-	i, err := enc.Decode(reader)
-	// Consider rejiggering this error handling with BUG 176.
-	if err != nil {
-		return nil, err
-	}
+	i := enc.Decode(reader)
 
-	// Consider rejiggering this error handling with BUG 176.
-	f, err := fromEncodeable(i, cs)
-	if err != nil {
-		return nil, err
-	}
-
-	// Consider rejiggering this error handling with BUG 176.
-	val, err := f.Deref(cs)
-	if err != nil {
-		return nil, err
-	}
-
-	return val, nil
+	return fromEncodeable(i, cs).Deref(cs)
 }
 
-func fromEncodeable(i interface{}, cs chunks.ChunkSource) (Future, error) {
+func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 	switch i := i.(type) {
 	case bool:
-		return futureFromValue(Bool(i)), nil
+		return futureFromValue(Bool(i))
 	case int8:
-		return futureFromValue(Int8(i)), nil
+		return futureFromValue(Int8(i))
 	case int16:
-		return futureFromValue(Int16(i)), nil
+		return futureFromValue(Int16(i))
 	case int32:
-		return futureFromValue(Int32(i)), nil
+		return futureFromValue(Int32(i))
 	case int64:
-		return futureFromValue(Int64(i)), nil
+		return futureFromValue(Int64(i))
 	case float32:
-		return futureFromValue(Float32(i)), nil
+		return futureFromValue(Float32(i))
 	case float64:
-		return futureFromValue(Float64(i)), nil
+		return futureFromValue(Float64(i))
 	case uint8:
-		return futureFromValue(UInt8(i)), nil
+		return futureFromValue(UInt8(i))
 	case uint16:
-		return futureFromValue(UInt16(i)), nil
+		return futureFromValue(UInt16(i))
 	case uint32:
-		return futureFromValue(UInt32(i)), nil
+		return futureFromValue(UInt32(i))
 	case uint64:
-		return futureFromValue(UInt64(i)), nil
+		return futureFromValue(UInt64(i))
 	case string:
-		return futureFromValue(NewString(i)), nil
+		return futureFromValue(NewString(i))
 	case ref.Ref:
-		return futureFromRef(i), nil
+		return futureFromRef(i)
 	case io.Reader:
 		data, err := ioutil.ReadAll(i)
 		d.Chk.NoError(err)
-		return futureFromValue(newBlobLeaf(data)), nil
+		return futureFromValue(newBlobLeaf(data))
 	case []interface{}:
 		return futureListFromIterable(i, cs)
 	case enc.Map:
@@ -83,58 +66,36 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) (Future, error) {
 	case enc.CompoundBlob:
 		blobs := make([]Future, len(i.Blobs))
 		for idx, blobRef := range i.Blobs {
-			f, err := fromEncodeable(blobRef, cs)
-			if err != nil {
-				return nil, err
-			}
-			blobs[idx] = f
+			blobs[idx] = fromEncodeable(blobRef, cs)
 		}
 		cb := compoundBlob{i.Offsets, blobs, &ref.Ref{}, cs}
-		return futureFromValue(cb), nil
+		return futureFromValue(cb)
 	default:
-		d.Chk.Fail("Unknown encodeable", "%+v", i)
+		d.Exp.Fail(fmt.Sprintf("Unknown encodeable", "%+v", i))
 	}
-	return nil, nil
+
+	return nil
 }
 
-func futureListFromIterable(items []interface{}, cs chunks.ChunkSource) (Future, error) {
-	output, err := futuresFromIterable(items, cs)
-	if err != nil {
-		return nil, err
-	}
-	return futureFromValue(listFromFutures(output, cs)), nil
+func futureListFromIterable(items []interface{}, cs chunks.ChunkSource) Future {
+	output := futuresFromIterable(items, cs)
+	return futureFromValue(listFromFutures(output, cs))
 }
 
-func futureMapFromIterable(items []interface{}, cs chunks.ChunkSource) (Future, error) {
-	output, err := futuresFromIterable(items, cs)
-	if err != nil {
-		return nil, err
-	}
-	return futureFromValue(mapFromFutures(output, cs)), nil
+func futureMapFromIterable(items []interface{}, cs chunks.ChunkSource) Future {
+	output := futuresFromIterable(items, cs)
+	return futureFromValue(mapFromFutures(output, cs))
 }
 
-func futureSetFromIterable(items []interface{}, cs chunks.ChunkSource) (Future, error) {
-	output, err := futuresFromIterable(items, cs)
-	if err != nil {
-		return nil, err
-	}
-	return futureFromValue(setFromFutures(output, cs)), nil
+func futureSetFromIterable(items []interface{}, cs chunks.ChunkSource) Future {
+	output := futuresFromIterable(items, cs)
+	return futureFromValue(setFromFutures(output, cs))
 }
 
-func futuresFromIterable(items []interface{}, cs chunks.ChunkSource) (f []Future, err error) {
+func futuresFromIterable(items []interface{}, cs chunks.ChunkSource) (f []Future) {
 	f = make([]Future, len(items))
 	for i, inVal := range items {
-		outVal, err := fromEncodeable(inVal, cs)
-		if err != nil {
-			return nil, err
-		}
-		f[i] = outVal
+		f[i] = fromEncodeable(inVal, cs)
 	}
 	return
-}
-
-func MustReadValue(ref ref.Ref, cs chunks.ChunkSource) Value {
-	val, err := ReadValue(ref, cs)
-	d.Chk.NoError(err)
-	return val
 }

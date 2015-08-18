@@ -28,8 +28,7 @@ func TestJSONDecode(t *testing.T) {
 	emptyMapRef := put(`j {"map":[]}`)
 
 	testDecode := func(s string, expected interface{}) {
-		actual, err := jsonDecode(strings.NewReader(s))
-		assert.NoError(err)
+		actual := jsonDecode(strings.NewReader(s))
 		assert.EqualValues(expected, actual, "Expected decoded value: %s to equal: %+v, but was: %+v", s, expected, actual)
 	}
 
@@ -99,27 +98,34 @@ func TestJSONDecode(t *testing.T) {
 func TestCompoundBlobJSONDecodeInvalidFormat(t *testing.T) {
 	assert := assert.New(t)
 
-	_, err := jsonDecode(strings.NewReader("j {\"cb\":[]}\n"))
-	assert.Error(err)
-	_, err = jsonDecode(strings.NewReader("j {\"cb\":[2]}\n"))
-	assert.Error(err)
+	d.IsUsageError(assert, func() {
+		jsonDecode(strings.NewReader("j {\"cb\":[]}\n"))
+	})
 
-	_, err = jsonDecode(strings.NewReader("j {\"cb\":[true]}\n"))
-	assert.Error(err)
-	_, err = jsonDecode(strings.NewReader("j {\"cb\":[\"hi\"]}\n"))
-	assert.Error(err)
+	d.IsUsageError(assert, func() {
+		jsonDecode(strings.NewReader("j {\"cb\":[2]}\n"))
+	})
 
-	_, err = jsonDecode(strings.NewReader(`j {"cb":[{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},2.5]}
+	d.IsUsageError(assert, func() {
+		jsonDecode(strings.NewReader("j {\"cb\":[true]}\n"))
+	})
+
+	d.IsUsageError(assert, func() {
+		jsonDecode(strings.NewReader("j {\"cb\":[\"hi\"]}\n"))
+	})
+
+	d.IsUsageError(assert, func() {
+		jsonDecode(strings.NewReader(`j {"cb":[{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"},2.5]}
 `))
-	assert.Error(err)
+	})
 
-	_, err = jsonDecode(strings.NewReader(`j {"cb":[{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"}]}
+	d.IsUsageError(assert, func() {
+		jsonDecode(strings.NewReader(`j {"cb":[{"ref":"sha1-c35018551e725bd2ab45166b69d15fda00b161c1"}]}
 `))
-	assert.Error(err)
+	})
 
-	d.Try(func() {
+	d.IsUsageError(assert, func() {
 		jsonDecode(strings.NewReader(`j {"cb":[{"ref":"invalid ref"},2]}
 `))
 	})
-	assert.Error(err)
 }

@@ -61,9 +61,7 @@ func main() {
 				return nil
 			}
 
-			ref, err := types.WriteValue(nomsObj, ds)
-			d.Exp.NoError(err, "Failed to write noms value")
-
+			ref := types.WriteValue(nomsObj, ds)
 			list = list.Append(types.Ref{R: ref})
 			return nil
 		})

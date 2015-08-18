@@ -13,10 +13,8 @@ func TestDifference(t *testing.T) {
 	assert := assert.New(t)
 	cs := &chunks.TestStore{}
 
-	storeAndRef := func(v types.Value) (r ref.Ref) {
-		r, err := types.WriteValue(v, cs)
-		assert.NoError(err)
-		return
+	storeAndRef := func(v types.Value) ref.Ref {
+		return types.WriteValue(v, cs)
 	}
 
 	// {"string": "string",

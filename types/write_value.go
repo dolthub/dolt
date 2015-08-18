@@ -11,132 +11,84 @@ type primitive interface {
 	ToPrimitive() interface{}
 }
 
-func WriteValue(v Value, cs chunks.ChunkSink) (ref.Ref, error) {
+func WriteValue(v Value, cs chunks.ChunkSink) ref.Ref {
 	d.Chk.NotNil(cs)
 
-	e, err := toEncodeable(v, cs)
-	if err != nil {
-		return ref.Ref{}, err
-	}
-
+	e := toEncodeable(v, cs)
 	dst := cs.Put()
-	err = enc.Encode(dst, e)
-	if err != nil {
-		return ref.Ref{}, err
-	}
-	return dst.Ref(), nil
+	enc.Encode(dst, e)
+	return dst.Ref()
 }
 
-func toEncodeable(v Value, cs chunks.ChunkSink) (interface{}, error) {
+func toEncodeable(v Value, cs chunks.ChunkSink) interface{} {
 	switch v := v.(type) {
 	case blobLeaf:
-		return v.Reader(), nil
+		return v.Reader()
 	case compoundBlob:
-		cb, err := encCompoundBlobFromCompoundBlob(v, cs)
-		if err != nil {
-			return nil, err
-		}
-		return cb, nil
+		return encCompoundBlobFromCompoundBlob(v, cs)
 	case List:
-		l, err := makeListEncodeable(v, cs)
-		if err != nil {
-			return nil, err
-		}
-		return l, nil
+		return makeListEncodeable(v, cs)
 	case Map:
-		m, err := makeMapEncodeable(v, cs)
-		if err != nil {
-			return nil, err
-		}
-		return m, nil
+		return makeMapEncodeable(v, cs)
 	case primitive:
-		return v.ToPrimitive(), nil
+		return v.ToPrimitive()
 	case Ref:
-		return v.Ref(), nil
+		return v.Ref()
 	case Set:
-		s, err := makeSetEncodeable(v, cs)
-		if err != nil {
-			return nil, err
-		}
-		return s, nil
+		return makeSetEncodeable(v, cs)
 	case String:
-		return v.String(), nil
+		return v.String()
 	default:
-		return v, nil
+		return v
 	}
 }
 
-func encCompoundBlobFromCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) (interface{}, error) {
+func encCompoundBlobFromCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) interface{} {
 	refs := make([]ref.Ref, len(cb.blobs))
 	for idx, f := range cb.blobs {
-		i, err := processChild(f, cs)
-		if err != nil {
-			return nil, err
-		}
+		i := processChild(f, cs)
 		// All children of compoundBlob must be Blobs, which get encoded and reffed by processChild.
 		refs[idx] = i.(ref.Ref)
 	}
-	return enc.CompoundBlob{Offsets: cb.offsets, Blobs: refs}, nil
+	return enc.CompoundBlob{Offsets: cb.offsets, Blobs: refs}
 }
 
-func makeListEncodeable(l List, cs chunks.ChunkSink) (interface{}, error) {
+func makeListEncodeable(l List, cs chunks.ChunkSink) interface{} {
 	items := make([]interface{}, l.Len())
 	for idx, f := range l.list {
-		i, err := processChild(f, cs)
-		if err != nil {
-			return nil, err
-		}
-		items[idx] = i
+		items[idx] = processChild(f, cs)
 	}
-	return items, nil
+	return items
 }
 
-func makeMapEncodeable(m Map, cs chunks.ChunkSink) (interface{}, error) {
+func makeMapEncodeable(m Map, cs chunks.ChunkSink) interface{} {
 	j := make([]interface{}, 0, 2*len(m.m))
 	for _, r := range m.m {
-		var cjk, cjv interface{}
-		cjk, err := processChild(r.key, cs)
-		if err == nil {
-			cjv, err = processChild(r.value, cs)
-		}
-		if err != nil {
-			return nil, err
-		}
-		j = append(j, cjk)
-		j = append(j, cjv)
+		j = append(j, processChild(r.key, cs))
+		j = append(j, processChild(r.value, cs))
 	}
-	return enc.MapFromItems(j...), nil
+	return enc.MapFromItems(j...)
 }
 
-func makeSetEncodeable(s Set, cs chunks.ChunkSink) (interface{}, error) {
+func makeSetEncodeable(s Set, cs chunks.ChunkSink) interface{} {
 	items := make([]interface{}, s.Len())
 	for idx, f := range s.m {
-		i, err := processChild(f, cs)
-		if err != nil {
-			return nil, err
-		}
-		items[idx] = i
+		items[idx] = processChild(f, cs)
 	}
-	return enc.SetFromItems(items...), nil
+	return enc.SetFromItems(items...)
 }
 
-func processChild(f Future, cs chunks.ChunkSink) (interface{}, error) {
-	var r ref.Ref
-	var err error
+func processChild(f Future, cs chunks.ChunkSink) interface{} {
 	if v, ok := f.(*unresolvedFuture); ok {
-		return v.Ref(), nil
+		return v.Ref()
 	}
 
 	v := f.Val()
-	d.Chk.NotNil(v)
+	d.Exp.NotNil(v)
 	switch v := v.(type) {
 	// Blobs, lists, maps, and sets are always out-of-line
 	case Blob, List, Map, Set:
-		r, err = WriteValue(v, cs)
-		if err != nil {
-			return nil, err
-		}
-		return r, nil
+		return WriteValue(v, cs)
 	default:
 		// Other types are always inline.
 		return toEncodeable(v, cs)
