@@ -35,19 +35,20 @@ var Item = React.createClass({
 
   getInitialState: function() {
     return {
-      photo: null,
+      blob: null,
     };
   },
 
   render: function() {
     this.props.photoRef.deref().then(
-      p => this.setState({photo: p}));
+      p => p.get('image').deref()).then(
+      b => this.setState({blob: b}));
 
-    if (this.state.photo == null) {
+    if (this.state.blob == null) {
       return <span>loading...</span>;
     }
 
-    return <img style={imageStyle} src={this.state.photo.get('url')}/>
+    return <img style={imageStyle} src={URL.createObjectURL(this.state.blob)}/>
   },
 });
 
