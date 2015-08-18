@@ -19,9 +19,16 @@ var SlideShow = React.createClass({
 
   render: function() {
     return <div>{
-      this.props.photos.map(
-        photoRef => <Item key={photoRef.ref} photoRef={photoRef}/>
-      ).toArray()
+      this.props.photos
+        .sort(
+          // This sorts the photos deterministically, by the ref of their image
+          // blob.
+          // TODO: Sort by create date if it ends up that the common image type
+          // has a create date.
+          (a, b) => a.ref < b.ref)
+        .map(
+          photoRef => <Item key={photoRef.ref} photoRef={photoRef}/>)
+        .toArray()
     }</div>
   },
 });
