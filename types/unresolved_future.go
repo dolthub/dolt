@@ -18,18 +18,13 @@ func (f *unresolvedFuture) Val() Value {
 	return f.val
 }
 
-func (f *unresolvedFuture) Deref(cs chunks.ChunkSource) (Value, error) {
+func (f *unresolvedFuture) Deref(cs chunks.ChunkSource) Value {
 	if f.val != nil {
-		return f.val, nil
+		return f.val
 	}
 
-	val, err := ReadValue(f.ref, cs)
-	if err != nil {
-		return nil, err
-	}
-
-	f.val = val
-	return f.val, nil
+	f.val = ReadValue(f.ref, cs)
+	return f.val
 }
 
 func (f *unresolvedFuture) Ref() ref.Ref {

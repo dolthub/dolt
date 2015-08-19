@@ -2,7 +2,6 @@ package types
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -16,10 +15,7 @@ func getRef(v Value) ref.Ref {
 }
 
 func getRefNoOverride(v Value) ref.Ref {
-	r, err := WriteValue(v, chunks.NopStore{})
-	// This can never fail because NopStore doesn't write anywhere.
-	d.Chk.Nil(err)
-	return r
+	return WriteValue(v, chunks.NopStore{})
 }
 
 func ensureRef(r *ref.Ref, v Value) ref.Ref {

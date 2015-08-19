@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/d"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -14,8 +13,7 @@ func TestWalkAll(t *testing.T) {
 	cs := &chunks.MemoryStore{}
 
 	write := func(v Value) Value {
-		_, err := WriteValue(v, cs)
-		d.Chk.NoError(err)
+		WriteValue(v, cs)
 		return v
 	}
 
@@ -48,8 +46,7 @@ func TestWalkAll(t *testing.T) {
 	for _, t := range tests {
 		expected := t.expected
 		All(t.v.Ref(), cs, func(f Future) {
-			v, err := f.Deref(cs)
-			d.Chk.NoError(err)
+			v := f.Deref(cs)
 			assert.True(expected.Has(v))
 			expected = expected.Remove(v)
 		})

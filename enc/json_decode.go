@@ -12,42 +12,34 @@ import (
 
 var errInvalidEncoding = errors.New("Invalid encoding")
 
-func jsonDecode(reader io.Reader) (interface{}, error) {
+func jsonDecode(reader io.Reader) interface{} {
 	prefix := make([]byte, len(jsonTag))
 	_, err := io.ReadFull(reader, prefix)
-	if err != nil {
-		return nil, err
-	}
+	d.Exp.NoError(err)
 
 	// Since jsonDecode is private, and Decode() should have checked this, it is invariant that the prefix will match.
 	d.Chk.EqualValues(jsonTag[:], prefix, "Cannot jsonDecode - invalid prefix")
 
 	var v interface{}
 	err = json.NewDecoder(reader).Decode(&v)
-	if err != nil {
-		return nil, err
-	}
+	d.Exp.NoError(err)
 
-	r, err := jsonDecodeValue(v)
-	if err != nil {
-		return nil, err
-	}
-
-	return r, nil
+	return jsonDecodeValue(v)
 }
 
-func jsonDecodeValue(v interface{}) (interface{}, error) {
+func jsonDecodeValue(v interface{}) interface{} {
 	switch v := v.(type) {
 	case bool, string:
-		return v, nil
+		return v
 	case map[string]interface{}:
 		return jsonDecodeTaggedValue(v)
 	default:
-		return nil, fmt.Errorf("Cannot decode json value: %+v", v)
+		d.Exp.Fail(fmt.Sprintf("Cannot decode json value: %+v", v))
 	}
+	return nil
 }
 
-func jsonDecodeTaggedValue(m map[string]interface{}) (interface{}, error) {
+func jsonDecodeTaggedValue(m map[string]interface{}) interface{} {
 	d.Chk.Len(m, 1)
 	for k, v := range m {
 		switch k {
@@ -60,25 +52,25 @@ func jsonDecodeTaggedValue(m map[string]interface{}) (interface{}, error) {
 			if v, ok := v.(float64); ok {
 				switch k {
 				case "int8":
-					return int8(v), nil
+					return int8(v)
 				case "int16":
-					return int16(v), nil
+					return int16(v)
 				case "int32":
-					return int32(v), nil
+					return int32(v)
 				case "int64":
-					return int64(v), nil
+					return int64(v)
 				case "uint8":
-					return uint8(v), nil
+					return uint8(v)
 				case "uint16":
-					return uint16(v), nil
+					return uint16(v)
 				case "uint32":
-					return uint32(v), nil
+					return uint32(v)
 				case "uint64":
-					return uint64(v), nil
+					return uint64(v)
 				case "float32":
-					return float32(v), nil
+					return float32(v)
 				case "float64":
-					return float64(v), nil
+					return float64(v)
 				}
 			}
 		case "list":
@@ -91,7 +83,7 @@ func jsonDecodeTaggedValue(m map[string]interface{}) (interface{}, error) {
 			}
 		case "ref":
 			if v, ok := v.(string); ok {
-				return ref.Parse(v), nil
+				return ref.Parse(v)
 			}
 		case "set":
 			if v, ok := v.([]interface{}); ok {
@@ -100,7 +92,8 @@ func jsonDecodeTaggedValue(m map[string]interface{}) (interface{}, error) {
 		}
 		break
 	}
-	return nil, fmt.Errorf("Cannot decode tagged json value: %+v", m)
+	d.Exp.Fail(fmt.Sprintf("Cannot decode tagged json value: %+v", m))
+	return nil
 }
 
 func toUint64(v interface{}) (uint64, error) {
@@ -116,9 +109,9 @@ func toUint64(v interface{}) (uint64, error) {
 }
 
 // [{"ref":"sha1-0"}, length0, ... {"ref":"sha1-N"},lengthN]
-func jsonDecodeCompoundBlob(input []interface{}) (interface{}, error) {
+func jsonDecodeCompoundBlob(input []interface{}) interface{} {
 	if len(input)%2 != 0 || len(input) < 2 {
-		return nil, errInvalidEncoding
+		d.Exp.NoError(errInvalidEncoding)
 	}
 
 	offset := uint64(0)
@@ -126,54 +119,39 @@ func jsonDecodeCompoundBlob(input []interface{}) (interface{}, error) {
 	offsets := make([]uint64, numBlobs)
 	blobs := make([]ref.Ref, numBlobs)
 
-	ensureRef := func(v interface{}, err error) (ref.Ref, error) {
-		if err != nil {
-			return ref.Ref{}, err
-		}
+	ensureRef := func(v interface{}) ref.Ref {
 		// Consider rejiggering this error handling with BUG #176.
 		if v, ok := v.(ref.Ref); !ok {
-			return ref.Ref{}, fmt.Errorf("CompoundBlob children must be ref.Refs; got %+v", v)
+			d.Exp.Fail(fmt.Sprintf("CompoundBlob children must be ref.Refs; got %+v", v))
+			return ref.Ref{}
 		}
-		return v.(ref.Ref), nil
+		return v.(ref.Ref)
 	}
 
 	for i := 0; i < len(input); i += 2 {
-		var err error
-		blobs[i/2], err = ensureRef(jsonDecodeValue(input[i]))
-		if err != nil {
-			return nil, err
-		}
+		blobs[i/2] = ensureRef(jsonDecodeValue(input[i]))
 		length, err := toUint64(input[i+1])
-		if err != nil {
-			return nil, err
-		}
+		d.Exp.NoError(err)
 		offset += length
 		offsets[i/2] = offset
 	}
 
-	return CompoundBlob{offsets, blobs}, nil
+	return CompoundBlob{offsets, blobs}
 }
 
-func jsonDecodeList(input []interface{}) ([]interface{}, error) {
+func jsonDecodeList(input []interface{}) []interface{} {
 	output := make([]interface{}, len(input))
 	for i, inVal := range input {
-		outVal, err := jsonDecodeValue(inVal)
-		if err != nil {
-			return nil, err
-		}
-		output[i] = outVal
+		output[i] = jsonDecodeValue(inVal)
 	}
-	return output, nil
+	return output
 }
 
-func jsonDecodeMap(input []interface{}) (Map, error) {
-	r, err := jsonDecodeList(input)
-	if err != nil {
-		return nil, err
-	}
-	return MapFromItems(r...), nil
+func jsonDecodeMap(input []interface{}) Map {
+	r := jsonDecodeList(input)
+	return MapFromItems(r...)
 }
 
-func jsonDecodeSet(input []interface{}) (Set, error) {
+func jsonDecodeSet(input []interface{}) Set {
 	return jsonDecodeList(input)
 }

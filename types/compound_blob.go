@@ -98,10 +98,7 @@ func (cbr *compoundBlobReader) findBlobOffset(abs uint64) int {
 
 func (cbr *compoundBlobReader) updateReader() error {
 	if cbr.currentBlobIndex < len(cbr.cb.blobs) {
-		v, err := cbr.cb.blobs[cbr.currentBlobIndex].Deref(cbr.cb.cs)
-		if err != nil {
-			return err
-		}
+		v := cbr.cb.blobs[cbr.currentBlobIndex].Deref(cbr.cb.cs)
 		cbr.currentReader = v.(Blob).Reader()
 	} else {
 		cbr.currentReader = nil

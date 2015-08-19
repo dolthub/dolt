@@ -154,6 +154,6 @@ func TestDataStoreConcurrency(t *testing.T) {
 
 	// The chunkstore should have tracked that two conflicting commits happened and both |d| and |e| are now commits
 	deSet := dSet.Insert(e)
-	finalCommits := SetOfCommitFromVal(types.MustReadValue(chunks.Root(), chunks).(types.Set))
+	finalCommits := SetOfCommitFromVal(types.ReadValue(chunks.Root(), chunks).(types.Set))
 	assert.True(finalCommits.Equals(deSet))
 }

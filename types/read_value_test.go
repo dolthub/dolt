@@ -13,7 +13,7 @@ import (
 
 func TestTolerateUngettableRefs(t *testing.T) {
 	assert := assert.New(t)
-	v, _ := ReadValue(ref.Ref{}, &chunks.TestStore{})
+	v := ReadValue(ref.Ref{}, &chunks.TestStore{})
 	assert.Nil(v)
 }
 
@@ -21,13 +21,8 @@ func TestBlobLeafDecode(t *testing.T) {
 	assert := assert.New(t)
 
 	blobLeafDecode := func(r io.Reader) Value {
-		i, err := enc.Decode(r)
-		assert.NoError(err)
-		f, err := fromEncodeable(i, nil)
-		assert.NoError(err)
-		val, err := f.Deref(nil)
-		assert.NoError(err)
-		return val
+		i := enc.Decode(r)
+		return fromEncodeable(i, nil).Deref(nil)
 	}
 
 	reader := bytes.NewBufferString("b ")

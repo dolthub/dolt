@@ -31,33 +31,31 @@ import (
 )
 
 // Encode serializes v into dst, and panics on unsupported types.
-func Encode(dst io.Writer, v interface{}) error {
+func Encode(dst io.Writer, v interface{}) {
 	d.Chk.NotNil(dst)
 	switch v := v.(type) {
 	case io.Reader:
-		return blobLeafEncode(dst, v)
+		blobLeafEncode(dst, v)
 	default:
-		return jsonEncode(dst, v)
+		jsonEncode(dst, v)
 	}
 }
 
 // Decode deserializes data from r into an interface{}, and panics on unsupported encoded types.
-func Decode(r io.Reader) (interface{}, error) {
+func Decode(r io.Reader) interface{} {
 	d.Chk.NotNil(r)
 
 	// assumes all tags are same size, which they are for now.
 	buffered := bufio.NewReaderSize(r, len(jsonTag))
 	prefix, err := buffered.Peek(len(jsonTag))
-	// Consider rejiggering this error handling with BUG #176.
-	if err != nil {
-		return nil, err
-	}
+	d.Exp.NoError(err)
 
 	if bytes.Equal(prefix, jsonTag) {
 		return jsonDecode(buffered)
 	} else if bytes.Equal(prefix, blobTag) {
 		return blobLeafDecode(buffered)
 	}
-	// Consider rejiggering this error handling with BUG #176.
-	return nil, fmt.Errorf("Unsupported chunk tag: %+v", prefix)
+
+	d.Exp.Fail(fmt.Sprintf("Unsupported chunk tag: %+v", prefix))
+	return nil
 }

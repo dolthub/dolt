@@ -56,10 +56,9 @@ func TestCompoundBlobReader(t *testing.T) {
 	bs2, err := ioutil.ReadAll(f)
 	assert.Equal(bs2, bs)
 
-	ref, err := WriteValue(cb, cs)
-	assert.NoError(err)
+	ref := WriteValue(cb, cs)
 
-	cb2, err := ReadValue(ref, cs)
+	cb2 := ReadValue(ref, cs)
 	bs3, err := ioutil.ReadAll(cb2.(Blob).Reader())
 	assert.NoError(err)
 	assert.Equal("helloworld", string(bs3))

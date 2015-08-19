@@ -28,7 +28,7 @@ func TestJsonEncode(t *testing.T) {
 
 	testEncode := func(expected string, v interface{}) {
 		dst := &bytes.Buffer{}
-		assert.NoError(jsonEncode(dst, v))
+		jsonEncode(dst, v)
 		assert.Equal(expected, string(dst.Bytes()), "Failed to serialize %+v. Got %s instead of %s", v, dst.Bytes(), expected)
 	}
 

@@ -15,7 +15,7 @@ type Future interface {
 	Val() Value
 
 	// Fetch the Future value if necessary, then return it. Multiple calls to deref only result in one fetch.
-	Deref(cs chunks.ChunkSource) (Value, error)
+	Deref(cs chunks.ChunkSource) Value
 
 	// BUG 141. The lazy loading api is clearly not working.
 	Release()

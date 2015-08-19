@@ -42,9 +42,7 @@ func (fm Map) Get(key Value) Value {
 	if idx < len(fm.m) {
 		entry := fm.m[idx]
 		if futureEqualsValue(entry.key, key) {
-			v, err := entry.value.Deref(fm.cs)
-			d.Chk.NoError(err)
-			return v
+			return entry.value.Deref(fm.cs)
 		}
 	}
 	return nil
@@ -74,10 +72,8 @@ type mapIterCallback func(key, value Value) bool
 
 func (fm Map) Iter(cb mapIterCallback) {
 	for _, entry := range fm.m {
-		k, err := entry.key.Deref(fm.cs)
-		d.Chk.NoError(err)
-		v, err := entry.value.Deref(fm.cs)
-		d.Chk.NoError(err)
+		k := entry.key.Deref(fm.cs)
+		v := entry.value.Deref(fm.cs)
 		if cb(k, v) {
 			break
 		}

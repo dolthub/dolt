@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/suite"
@@ -32,10 +31,8 @@ func (suite *WalkAllTestSuite) walkWorker(r ref.Ref, expected int) {
 	suite.Equal(expected, actual)
 }
 
-func (suite *WalkAllTestSuite) storeAndRef(v types.Value) (r ref.Ref) {
-	r, err := types.WriteValue(v, suite.cs)
-	d.Chk.NoError(err)
-	return
+func (suite *WalkAllTestSuite) storeAndRef(v types.Value) ref.Ref {
+	return types.WriteValue(v, suite.cs)
 }
 
 func (suite *WalkAllTestSuite) TestWalkPrimitives() {

@@ -2,7 +2,6 @@ package walk
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -32,8 +31,7 @@ func doTreeWalk(r ref.Ref, cs chunks.ChunkSource, cb SomeCallback) {
 	if cb(r) {
 		return
 	}
-	v, err := types.ReadValue(r, cs)
-	d.Chk.NoError(err)
+	v := types.ReadValue(r, cs)
 	for _, cf := range v.Chunks() {
 		doTreeWalk(cf.Ref(), cs, cb)
 	}
