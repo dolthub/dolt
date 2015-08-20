@@ -72,9 +72,9 @@ func main() {
 }
 
 func getUser() {
-	commits := ds.Heads()
-	if commits.Len() > uint64(0) {
-		user = UserFromVal(commits.Any().Value())
+	commit := ds.Head()
+	if !commit.Equals(datas.EmptyCommit) {
+		user = UserFromVal(commit.Value())
 		if checkAuth() {
 			return
 		}
@@ -290,12 +290,9 @@ func awaitOAuthResponse(l *net.TCPListener, tempCred *oauth.Credentials) error {
 }
 
 func commitUser() {
-	commits := ds.Heads()
-	commitSet := datas.NewSetOfCommit().Insert(
-		datas.NewCommit().SetParents(
-			commits.NomsValue()).SetValue(
-			user.NomsValue()))
-	ds.Commit(commitSet)
+	ok := false
+	*ds, ok = ds.Commit(datas.NewCommit().SetParents(ds.HeadAsSet()).SetValue(user.NomsValue()))
+	d.Exp.True(ok, "Could not commit due to conflicting edit")
 }
 
 func callFlickrAPI(method string, response interface{}, args *map[string]string) error {

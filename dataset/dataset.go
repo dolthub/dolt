@@ -10,7 +10,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-// TODO: Could just literally use datastore and just refer to it as 'dataset'. Unsure which is better.
 type Dataset struct {
 	datas.DataStore
 }
@@ -19,8 +18,9 @@ func NewDataset(parentStore datas.DataStore, datasetID string) Dataset {
 	return Dataset{datas.NewDataStoreWithRootTracker(parentStore, &datasetRootTracker{parentStore, datasetID})}
 }
 
-func (ds *Dataset) Commit(newCommits datas.SetOfCommit) Dataset {
-	return Dataset{ds.DataStore.Commit(newCommits)}
+func (ds *Dataset) Commit(newCommit datas.Commit) (Dataset, bool) {
+	store, ok := ds.DataStore.Commit(newCommit)
+	return Dataset{store}, ok
 }
 
 type datasetFlags struct {
@@ -60,20 +60,17 @@ type datasetRootTracker struct {
 }
 
 func (rt *datasetRootTracker) Root() ref.Ref {
-	dataset := mgmt.GetDatasetHeads(mgmt.GetDatasets(rt.parentStore), rt.datasetID)
+	dataset := mgmt.GetDatasetHead(mgmt.GetDatasets(rt.parentStore), rt.datasetID)
 	if dataset == nil {
 		return ref.Ref{}
-	} else {
-		return dataset.Ref()
 	}
+	return dataset.Ref()
 }
 
 func (rt *datasetRootTracker) UpdateRoot(current, last ref.Ref) bool {
-	if last != rt.Root() {
-		return false
-	}
-
 	datasetCommit := types.ReadValue(current, rt.parentStore)
-	rt.parentStore = mgmt.CommitDatasets(rt.parentStore, mgmt.SetDatasetHeads(mgmt.GetDatasets(rt.parentStore), rt.datasetID, datasetCommit))
-	return true
+	newDatasets := mgmt.SetDatasetHead(mgmt.GetDatasets(rt.parentStore), rt.datasetID, datasetCommit)
+	ok := false
+	rt.parentStore, ok = mgmt.CommitDatasets(rt.parentStore, newDatasets)
+	return ok
 }

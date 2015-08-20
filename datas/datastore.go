@@ -11,9 +11,8 @@ import (
 type DataStore struct {
 	chunks.ChunkStore
 
-	rt    chunks.RootTracker
-	cc    *commitCache
-	heads SetOfCommit
+	rt   chunks.RootTracker
+	head Commit
 }
 
 func NewDataStore(cs chunks.ChunkStore) DataStore {
@@ -22,87 +21,87 @@ func NewDataStore(cs chunks.ChunkStore) DataStore {
 
 // NewDataStore() creates a new DataStore with a specified ChunkStore and RootTracker. Typically these two values will be the same, but it is sometimes useful to have a separate RootTracker (e.g., see DataSet).
 func NewDataStoreWithRootTracker(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
-	return newDataStoreInternal(cs, rt, newCommitCache(cs))
+	return newDataStoreInternal(cs, rt)
 }
 
-func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker, cc *commitCache) DataStore {
+var EmptyCommit = NewCommit().SetParents(NewSetOfCommit().NomsValue())
+
+func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
 	if (rt.Root() == ref.Ref{}) {
-		r := types.WriteValue(NewSetOfCommit().NomsValue(), cs)
+		r := types.WriteValue(EmptyCommit.NomsValue(), cs)
 		d.Chk.True(rt.UpdateRoot(r, ref.Ref{}))
 	}
 	return DataStore{
-		cs, rt, cc, commitSetFromRef(rt.Root(), cs),
+		cs, rt, commitFromRef(rt.Root(), cs),
 	}
 }
 
-func commitSetFromRef(commitRef ref.Ref, cs chunks.ChunkSource) SetOfCommit {
-	return SetOfCommitFromVal(types.ReadValue(commitRef, cs))
+func commitFromRef(commitRef ref.Ref, cs chunks.ChunkSource) Commit {
+	return CommitFromVal(types.ReadValue(commitRef, cs))
 }
 
-// Heads returns the head Commit of all currently active forks.
-func (ds *DataStore) Heads() SetOfCommit {
-	return ds.heads
+// Head returns the current head Commit, which contains the current root of the DataStore's value tree.
+func (ds *DataStore) Head() Commit {
+	return ds.head
 }
 
-// Commit returns a new DataStore with newCommits as the heads, but backed by the same ChunkStore and RootTracker instances as the current one.
-func (ds *DataStore) Commit(newCommits SetOfCommit) DataStore {
-	d.Chk.True(newCommits.Len() > 0)
-	// TODO: We probably shouldn't let this go *forever*. Consider putting a limit and... I know don't...panicing?
-	for !ds.doCommit(newCommits) {
-	}
-	return newDataStoreInternal(ds.ChunkStore, ds.rt, ds.cc)
+// HeadAsSet returns a types.Set containing only ds.Head(). This is a common need and, currently, pretty verbose.
+func (ds *DataStore) HeadAsSet() types.Set {
+	return NewSetOfCommit().Insert(ds.Head()).NomsValue()
 }
 
-// doCommit manages concurrent access the single logical piece of mutable state: the set of current heads. doCommit is optimistic in that it is attempting to update heads making the assumption that currentRootRef is the ref of the current heads. The call to UpdateRoot below will fail if that assumption fails (e.g. because of a race with another writer) and the entire algorigthm must be tried again.
-func (ds *DataStore) doCommit(commits SetOfCommit) bool {
-	d.Chk.True(commits.Len() > 0)
+// Commit returns a new DataStore with newCommit as the head, but backed by the same ChunkStore and RootTracker instances as the current one.
+// newCommit MUST descend from the current Head().
+// If the call fails, the boolean return value will be set to false and the caller must retry. Regardless, the DataStore returned is the right one to use for subsequent calls to Commit() -- retries or otherwise.
+func (ds *DataStore) Commit(newCommit Commit) (DataStore, bool) {
+	ok := ds.doCommit(newCommit)
+	return newDataStoreInternal(ds.ChunkStore, ds.rt), ok
+}
 
+// doCommit manages concurrent access the single logical piece of mutable state: the current head. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will fail if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
+func (ds *DataStore) doCommit(commit Commit) bool {
 	currentRootRef := ds.rt.Root()
 
-	// Note: |currentHeads| may be different from |ds.heads| and *must* be consistent with |currentCommitRef|.
-	var currentHeads SetOfCommit
-	if currentRootRef == ds.heads.Ref() {
-		currentHeads = ds.heads
+	// Note: |currentHead| may be different from |ds.head| and *must* be consistent with |currentRootRef|.
+	var currentHead Commit
+	if currentRootRef == ds.head.Ref() {
+		currentHead = ds.head
 	} else {
-		currentHeads = commitSetFromRef(currentRootRef, ds)
+		currentHead = commitFromRef(currentRootRef, ds)
 	}
 
-	newHeads := commits.Union(currentHeads)
-
-	commits.Iter(func(commit Commit) (stop bool) {
-		if ds.isPrexisting(commit, currentHeads) {
-			newHeads = newHeads.Remove(commit)
-		} else {
-			newHeads = SetOfCommitFromVal(newHeads.NomsValue().Subtract(commit.Parents()))
-		}
-		return
-	})
-
-	if newHeads.Len() == 0 || newHeads.Equals(currentHeads) {
+	// Allow only fast-forward commits.
+	if commit.Equals(currentHead) {
 		return true
-	}
-
-	// TODO: This set will be orphaned if this UpdateRoot below fails
-	newRootRef := types.WriteValue(newHeads.NomsValue(), ds)
-
-	return ds.rt.UpdateRoot(newRootRef, currentRootRef)
-}
-
-func (ds *DataStore) isPrexisting(commit Commit, currentHeads SetOfCommit) bool {
-	if currentHeads.Has(commit) {
-		return true
-	}
-
-	// If a new commit directly superceeds an existing current commit, it can't have already been committed because its hash would be uncomputable.
-	superceedsCurrentCommit := false
-	commit.Parents().Iter(func(parent types.Value) (stop bool) {
-		superceedsCurrentCommit = currentHeads.Has(CommitFromVal(parent))
-		return superceedsCurrentCommit
-	})
-	if superceedsCurrentCommit {
+	} else if !descendsFrom(commit, currentHead) {
 		return false
 	}
 
-	ds.cc.Update(currentHeads)
-	return ds.cc.Contains(commit.Ref())
+	// TODO: This Commit will be orphaned if this UpdateRoot below fails
+	newRootRef := types.WriteValue(commit.NomsValue(), ds)
+
+	ok := ds.rt.UpdateRoot(newRootRef, currentRootRef)
+	return ok
+}
+
+func descendsFrom(commit, currentHead Commit) bool {
+	// BFS because the common case is that the ancestor is only a step or two away
+	ancestors := NewSetOfCommit().Insert(commit)
+	for !ancestors.Has(currentHead) {
+		if ancestors.Empty() {
+			return false
+		}
+		ancestors = getAncestors(ancestors)
+	}
+	return true
+}
+
+func getAncestors(commits SetOfCommit) SetOfCommit {
+	ancestors := NewSetOfCommit()
+	commits.Iter(func(c Commit) (stop bool) {
+		ancestors =
+			ancestors.Union(SetOfCommitFromVal(c.Parents()))
+		return
+	})
+	return ancestors
 }

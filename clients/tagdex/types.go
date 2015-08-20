@@ -300,3 +300,4 @@ func (s SetOfPhoto) fromElemSlice(p []Photo) []types.Value {
 	}
 	return r
 }
+

@@ -68,9 +68,8 @@ func main() {
 		d.Exp.NoError(err)
 
 		if !*noIO {
-			ds.Commit(datas.NewSetOfCommit().Insert(
-				datas.NewCommit().SetParents(
-					ds.Heads().NomsValue()).SetValue(list)))
+			_, ok := ds.Commit(datas.NewCommit().SetParents(ds.HeadAsSet()).SetValue(list))
+			d.Exp.True(ok, "Could not commit due to conflicting edit")
 		}
 
 		util.MaybeWriteMemProfile()

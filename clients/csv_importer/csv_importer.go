@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
@@ -59,9 +60,6 @@ func main() {
 		value = value.Append(m)
 	}
 
-	commits := ds.Heads()
-	ds.Commit(datas.NewSetOfCommit().Insert(
-		datas.NewCommit().SetParents(
-			commits.NomsValue()).SetValue(
-			value)))
+	_, ok := ds.Commit(datas.NewCommit().SetParents(ds.HeadAsSet()).SetValue(value))
+	d.Exp.True(ok, "Could not commit due to conflicting edit")
 }
