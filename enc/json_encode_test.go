@@ -5,19 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
-
-type logChunkWriter struct {
-	chunks.ChunkWriter
-}
-
-func (w *logChunkWriter) Write(data []byte) (int, error) {
-	fmt.Println(data)
-	return chunks.ChunkWriter.Write(w, data)
-}
 
 func TestJsonEncode(t *testing.T) {
 	assert := assert.New(t)

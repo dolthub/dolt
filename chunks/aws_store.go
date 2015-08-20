@@ -1,12 +1,10 @@
 package chunks
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
-	"hash"
 	"io"
-	"io/ioutil"
-	"os"
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -122,68 +120,25 @@ func (s AWSStore) Get(ref ref.Ref) io.ReadCloser {
 	return result.Body
 }
 
+func (s AWSStore) Has(ref ref.Ref) bool {
+	_, err := s.awsSvc.HeadObject(&s3.HeadObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(ref.String()),
+	})
+	return err == nil
+}
+
 func (s AWSStore) Put() ChunkWriter {
-	f, err := ioutil.TempFile(os.TempDir(), "")
-	d.Chk.NoError(err)
-	h := ref.NewHash()
-	return &awsChunkWriter{
-		store:  s,
-		file:   f,
-		writer: io.MultiWriter(f, h),
-		hash:   h,
-	}
+	return newChunkWriter(s.Has, s.write)
 }
 
-type awsChunkWriter struct {
-	store  AWSStore
-	file   *os.File
-	writer io.Writer
-	hash   hash.Hash
-}
-
-func (w *awsChunkWriter) Write(data []byte) (int, error) {
-	d.Chk.NotNil(w.file, "Write() cannot be called after Ref() or Close().")
-	n, err := w.writer.Write(data)
-	d.Chk.NoError(err)
-	return n, nil
-}
-
-func (w *awsChunkWriter) Ref() ref.Ref {
-	d.Chk.NoError(w.Close())
-	return ref.FromHash(w.hash)
-}
-
-func (w *awsChunkWriter) Close() error {
-	if w.file == nil {
-		return nil
-	}
-	d.Chk.NoError(w.file.Sync())
-	_, err := w.file.Seek(0, 0)
-	d.Chk.NoError(err)
-
-	bucket := aws.String(w.store.bucket)
-	key := aws.String(ref.FromHash(w.hash).String())
-
-	_, err = w.store.awsSvc.HeadObject(&s3.HeadObjectInput{
-		Bucket: bucket,
-		Key:    key,
-	})
-	if err == nil {
-		// Nothing to do, s3 already has this chunk
-		return nil
-	}
-
-	_, err = w.store.awsSvc.PutObject(&s3.PutObjectInput{
-		Bucket: bucket,
-		Key:    key,
-		Body:   w.file,
+func (s AWSStore) write(ref ref.Ref, buff *bytes.Buffer) {
+	_, err := s.awsSvc.PutObject(&s3.PutObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(ref.String()),
+		Body:   bytes.NewReader(buff.Bytes()),
 	})
 	d.Chk.NoError(err)
-
-	d.Chk.NoError(w.file.Close())
-	os.Remove(w.file.Name())
-	w.file = nil
-	return nil
 }
 
 type awsStoreFlags struct {

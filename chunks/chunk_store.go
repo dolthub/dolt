@@ -28,14 +28,9 @@ type ChunkSource interface {
 // ChunkSink is a place to put chunks.
 type ChunkSink interface {
 	Put() ChunkWriter
-}
 
-// ChunkWriter wraps an io.WriteCloser, additionally providing the ability to grab a Ref for all data written through the interface. Calling Ref() or Close() on an instance disallows further writing.
-type ChunkWriter interface {
-	// Note that the Write(p []byte) (int, error) method of WriterCloser must be retained, but implementations of ChunkWriter should never return an error.
-	io.WriteCloser
-	// Ref returns the ref.Ref for all data written at the time of call.
-	Ref() ref.Ref
+	// Returns true iff the value at the address |ref| is contained in the source
+	Has(ref ref.Ref) bool
 }
 
 // NewFlags creates a new instance of Flags, which declares a number of ChunkStore-related command-line flags using the golang flag package. Call this before flag.Parse().

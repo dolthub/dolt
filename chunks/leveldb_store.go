@@ -3,7 +3,6 @@ package chunks
 import (
 	"bytes"
 	"flag"
-	"hash"
 	"io"
 	"io/ioutil"
 	"os"
@@ -77,54 +76,22 @@ func (l *LevelDBStore) Get(ref ref.Ref) io.ReadCloser {
 	return ioutil.NopCloser(bytes.NewReader(chunk))
 }
 
+func (l *LevelDBStore) Has(ref ref.Ref) bool {
+	key := toChunkKey(ref)
+	exists, err := l.db.Has(key, &opt.ReadOptions{DontFillCache: true}) // This isn't really a "read", so don't signal the cache to treat it as one.
+	d.Chk.NoError(err)
+	return exists
+}
+
 func (l *LevelDBStore) Put() ChunkWriter {
-	b := &bytes.Buffer{}
-	h := ref.NewHash()
-	return &ldbChunkWriter{
-		ldb:    l,
-		buffer: b,
-		writer: io.MultiWriter(b, h),
-		hash:   h,
-	}
+	return newChunkWriter(l.Has, l.write)
 }
 
-type ldbChunkWriter struct {
-	ldb    *LevelDBStore
-	buffer *bytes.Buffer
-	writer io.Writer
-	hash   hash.Hash
-}
-
-func (w *ldbChunkWriter) Write(data []byte) (int, error) {
-	d.Chk.NotNil(w.buffer, "Write() cannot be called after Ref() or Close().")
-	size, err := w.writer.Write(data)
+func (l *LevelDBStore) write(ref ref.Ref, buff *bytes.Buffer) {
+	key := toChunkKey(ref)
+	err := l.db.Put(key, buff.Bytes(), nil)
 	d.Chk.NoError(err)
-	return size, nil
-}
-
-func (w *ldbChunkWriter) Ref() ref.Ref {
-	d.Chk.NoError(w.Close())
-	return ref.FromHash(w.hash)
-}
-
-func (w *ldbChunkWriter) Close() error {
-	if w.buffer == nil {
-		return nil
-	}
-
-	key := toChunkKey(ref.FromHash(w.hash))
-
-	exists, err := w.ldb.db.Has(key, &opt.ReadOptions{DontFillCache: true}) // This isn't really a "read", so don't signal the cache to treat it as one.
-	d.Chk.NoError(err)
-	if exists {
-		return nil
-	}
-
-	err = w.ldb.db.Put(key, w.buffer.Bytes(), nil)
-	d.Chk.NoError(err)
-	w.buffer = nil
-	w.ldb.putCount += 1
-	return nil
+	l.putCount += 1
 }
 
 type ldbStoreFlags struct {

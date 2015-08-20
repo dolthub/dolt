@@ -78,6 +78,10 @@ func (w readThroughChunkWriter) Close() (err error) {
 	return
 }
 
+func (rts ReadThroughStore) Has(ref ref.Ref) bool {
+	return rts.cachingStore.Has(ref) || rts.backingStore.Has(ref)
+}
+
 func (rts ReadThroughStore) Put() ChunkWriter {
 	bw := rts.backingStore.Put()
 	cw := rts.cachingStore.Put()

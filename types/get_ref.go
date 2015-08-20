@@ -15,7 +15,7 @@ func getRef(v Value) ref.Ref {
 }
 
 func getRefNoOverride(v Value) ref.Ref {
-	return WriteValue(v, chunks.NopStore{})
+	return WriteValue(v, &chunks.NopStore{})
 }
 
 func ensureRef(r *ref.Ref, v Value) ref.Ref {

@@ -12,7 +12,7 @@ import (
 
 func TestJSONDecode(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NopStore{}
+	cs := &chunks.NopStore{}
 
 	put := func(s string) ref.Ref {
 		s += "\n"

@@ -3,7 +3,6 @@ package chunks
 import (
 	"bytes"
 	"flag"
-	"hash"
 	"io"
 	"io/ioutil"
 	"os"
@@ -80,51 +79,18 @@ func (f FileStore) Get(ref ref.Ref) io.ReadCloser {
 	return r
 }
 
+func (f FileStore) Has(ref ref.Ref) bool {
+	_, err := os.Stat(getPath(f.dir, ref))
+	return err == nil
+}
+
 func (f FileStore) Put() ChunkWriter {
-	b := &bytes.Buffer{}
-	h := ref.NewHash()
-	return &fileChunkWriter{
-		root:     f.dir,
-		buffer:   b,
-		writer:   io.MultiWriter(b, h),
-		hash:     h,
-		mkdirAll: f.mkdirAll,
-	}
+	return newChunkWriter(f.Has, f.write)
 }
 
-type fileChunkWriter struct {
-	root     string
-	buffer   *bytes.Buffer
-	writer   io.Writer
-	hash     hash.Hash
-	mkdirAll mkdirAllFn
-}
-
-func (w *fileChunkWriter) Write(data []byte) (int, error) {
-	d.Chk.NotNil(w.buffer, "Write() cannot be called after Ref() or Close().")
-	n, err := w.writer.Write(data)
-	d.Chk.NoError(err)
-	return n, nil
-}
-
-func (w *fileChunkWriter) Ref() ref.Ref {
-	d.Chk.NoError(w.Close())
-	return ref.FromHash(w.hash)
-}
-
-func (w *fileChunkWriter) Close() error {
-	if w.buffer == nil {
-		return nil
-	}
-
-	p := getPath(w.root, ref.FromHash(w.hash))
-
-	// If we already have this file, then nothing to do. Hooray.
-	if _, err := os.Stat(p); err == nil {
-		return nil
-	}
-
-	err := w.mkdirAll(path.Dir(p), 0700)
+func (f FileStore) write(ref ref.Ref, buff *bytes.Buffer) {
+	p := getPath(f.dir, ref)
+	err := f.mkdirAll(path.Dir(p), 0700)
 	d.Chk.NoError(err)
 
 	file, err := os.OpenFile(p, os.O_RDWR|os.O_CREATE, os.ModePerm)
@@ -133,13 +99,10 @@ func (w *fileChunkWriter) Close() error {
 		d.Chk.True(os.IsExist(err), "%+v\n", err)
 	}
 
-	totalBytes := w.buffer.Len()
-	written, err := io.Copy(file, w.buffer)
+	totalBytes := buff.Len()
+	written, err := io.Copy(file, buff)
 	d.Chk.NoError(err)
 	d.Chk.True(int64(totalBytes) == written, "Too few bytes written.") // BUG #83
-
-	w.buffer = nil
-	return nil
 }
 
 func getPath(root string, ref ref.Ref) string {
