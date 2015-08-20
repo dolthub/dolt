@@ -26,11 +26,12 @@ func toChunkKey(r ref.Ref) []byte {
 }
 
 type LevelDBStore struct {
-	db *leveldb.DB
-	mu *sync.Mutex
+	db       *leveldb.DB
+	mu       *sync.Mutex
+	putCount int // for testing
 }
 
-func NewLevelDBStore(dir string) LevelDBStore {
+func NewLevelDBStore(dir string) *LevelDBStore {
 	d.Exp.NotEmpty(dir)
 	d.Exp.NoError(os.MkdirAll(dir, 0700))
 	db, err := leveldb.OpenFile(dir, &opt.Options{
@@ -39,10 +40,10 @@ func NewLevelDBStore(dir string) LevelDBStore {
 		WriteBuffer: 1 << 24,                   // 16MiB
 	})
 	d.Chk.NoError(err)
-	return LevelDBStore{db, &sync.Mutex{}}
+	return &LevelDBStore{db, &sync.Mutex{}, 0}
 }
 
-func (l LevelDBStore) Root() ref.Ref {
+func (l *LevelDBStore) Root() ref.Ref {
 	val, err := l.db.Get([]byte(rootKey), nil)
 	if err == errors.ErrNotFound {
 		return ref.Ref{}
@@ -52,7 +53,7 @@ func (l LevelDBStore) Root() ref.Ref {
 	return ref.Parse(string(val))
 }
 
-func (l LevelDBStore) UpdateRoot(current, last ref.Ref) bool {
+func (l *LevelDBStore) UpdateRoot(current, last ref.Ref) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if last != l.Root() {
@@ -65,7 +66,7 @@ func (l LevelDBStore) UpdateRoot(current, last ref.Ref) bool {
 	return true
 }
 
-func (l LevelDBStore) Get(ref ref.Ref) io.ReadCloser {
+func (l *LevelDBStore) Get(ref ref.Ref) io.ReadCloser {
 	key := toChunkKey(ref)
 	chunk, err := l.db.Get(key, nil)
 	if err == errors.ErrNotFound {
@@ -76,11 +77,11 @@ func (l LevelDBStore) Get(ref ref.Ref) io.ReadCloser {
 	return ioutil.NopCloser(bytes.NewReader(chunk))
 }
 
-func (l LevelDBStore) Put() ChunkWriter {
+func (l *LevelDBStore) Put() ChunkWriter {
 	b := &bytes.Buffer{}
 	h := ref.NewHash()
 	return &ldbChunkWriter{
-		db:     l.db,
+		ldb:    l,
 		buffer: b,
 		writer: io.MultiWriter(b, h),
 		hash:   h,
@@ -88,7 +89,7 @@ func (l LevelDBStore) Put() ChunkWriter {
 }
 
 type ldbChunkWriter struct {
-	db     *leveldb.DB
+	ldb    *LevelDBStore
 	buffer *bytes.Buffer
 	writer io.Writer
 	hash   hash.Hash
@@ -113,15 +114,16 @@ func (w *ldbChunkWriter) Close() error {
 
 	key := toChunkKey(ref.FromHash(w.hash))
 
-	exists, err := w.db.Has(key, &opt.ReadOptions{DontFillCache: true}) // This isn't really a "read", so don't signal the cache to treat it as one.
+	exists, err := w.ldb.db.Has(key, &opt.ReadOptions{DontFillCache: true}) // This isn't really a "read", so don't signal the cache to treat it as one.
 	d.Chk.NoError(err)
 	if exists {
 		return nil
 	}
 
-	err = w.db.Put(key, w.buffer.Bytes(), nil)
+	err = w.ldb.db.Put(key, w.buffer.Bytes(), nil)
 	d.Chk.NoError(err)
 	w.buffer = nil
+	w.ldb.putCount += 1
 	return nil
 }
 
@@ -139,7 +141,6 @@ func (f ldbStoreFlags) createStore() ChunkStore {
 	if *f.dir == "" {
 		return nil
 	} else {
-		fs := NewLevelDBStore(*f.dir)
-		return &fs
+		return NewLevelDBStore(*f.dir)
 	}
 }

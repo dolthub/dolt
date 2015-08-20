@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -18,19 +17,28 @@ func TestAWSStoreTestSuite(t *testing.T) {
 }
 
 type AWSStoreTestSuite struct {
-	suite.Suite
+	ChunkStoreTestSuite
 	s3svc *mockS3
-	store AWSStore
 }
 
 func (suite *AWSStoreTestSuite) SetupTest() {
 	suite.s3svc = &mockS3{data: map[string][]byte{}}
+
+	m := mockDDB("")
+
 	suite.store = AWSStore{
 		"bucket",
 		"table",
 		suite.s3svc,
-		nil,
+		&m,
 	}
+
+	suite.putCountFn = func() int {
+		return suite.s3svc.numPuts
+	}
+}
+
+func (suite *AWSStoreTestSuite) TearDownTest() {
 }
 
 type mockS3 struct {
@@ -62,67 +70,6 @@ func (m *mockS3) PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error
 	m.data[*input.Key] = bytes
 	m.numPuts += 1
 	return nil, nil
-}
-
-func (suite *AWSStoreTestSuite) TestAWSStorePut() {
-	input := "abc"
-
-	for i := 0; i < 2; i++ {
-		w := suite.store.Put()
-		_, err := w.Write([]byte(input))
-		suite.NoError(err)
-
-		r1 := w.Ref()
-
-		// See http://www.di-mgt.com.au/sha_testvectors.html
-		suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
-
-		// And reading it via the API should work...
-		assertInputInStore(input, r1, suite.store, suite.Assert())
-
-		// Reading a non-existing ref fails
-		hash := ref.NewHash()
-		hash.Write([]byte("Non-existent"))
-		v := suite.store.Get(ref.FromHash(hash))
-		suite.Nil(v)
-
-		// Writing the same thing again shouldn't result in a duplicate call to AWSStore.PutObject()
-		suite.Equal(1, suite.s3svc.numPuts)
-	}
-}
-
-func (suite *AWSStoreTestSuite) TestAWSStorePutRefAfterClose() {
-	input := "abc"
-
-	w := suite.store.Put()
-	_, err := w.Write([]byte(input))
-	suite.NoError(err)
-
-	suite.NoError(w.Close())
-	r1 := w.Ref()
-
-	// See http://www.di-mgt.com.au/sha_testvectors.html
-	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
-
-	// And reading it via the API should work...
-	assertInputInStore(input, r1, suite.store, suite.Assert())
-}
-
-func (suite *AWSStoreTestSuite) TestAWSStorePutMultiRef() {
-	input := "abc"
-
-	w := suite.store.Put()
-	_, err := w.Write([]byte(input))
-	suite.NoError(err)
-
-	r1 := w.Ref()
-	suite.Equal(r1, w.Ref()) // calling ref again is valid, returns same value
-
-	// See http://www.di-mgt.com.au/sha_testvectors.html
-	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r1.String())
-
-	// And reading it via the API should work...
-	assertInputInStore(input, r1, suite.store, suite.Assert())
 }
 
 type mockAWSError string
@@ -158,36 +105,4 @@ func (m *mockDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput
 
 	*m = mockDDB(*(input.Item["hashRef"].S))
 	return &dynamodb.PutItemOutput{}, nil
-}
-
-func (suite *AWSStoreTestSuite) TestAWSStoreRoot() {
-	m := mockDDB("")
-
-	suite.store = AWSStore{
-		"bucket",
-		"table",
-		nil,
-		&m,
-	}
-
-	oldRoot := suite.store.Root()
-	suite.Equal(oldRoot, ref.Ref{})
-
-	bogusRoot := ref.Parse("sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5") // sha1("Bogus, Dude")
-	newRoot := ref.Parse("sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd")   // sha1("Hello, World")
-
-	// Try to update root with bogus oldRoot
-	result := suite.store.UpdateRoot(newRoot, bogusRoot)
-	suite.False(result)
-	suite.Equal(ref.Ref{}, suite.store.Root())
-
-	// No do a valid update
-	result = suite.store.UpdateRoot(newRoot, oldRoot)
-	suite.True(result)
-	suite.Equal(suite.store.Root(), newRoot)
-
-	// Now that there is a valid root, try to start a new lineage
-	result = suite.store.UpdateRoot(bogusRoot, ref.Ref{})
-	suite.False(result)
-	suite.Equal(suite.store.Root(), newRoot)
 }

@@ -15,10 +15,11 @@ import (
 type ReadThroughStore struct {
 	cachingStore ChunkStore
 	backingStore ChunkStore
+	putCount     int
 }
 
 func NewReadThroughStore(cachingStore ChunkStore, backingStore ChunkStore) ReadThroughStore {
-	return ReadThroughStore{cachingStore, backingStore}
+	return ReadThroughStore{cachingStore, backingStore, 0}
 }
 
 // forwardCloser closes multiple io.Closer objects.

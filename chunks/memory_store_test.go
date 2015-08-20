@@ -1,32 +1,22 @@
 package chunks
 
 import (
-	"io/ioutil"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestMemoryStorePut(t *testing.T) {
-	assert := assert.New(t)
+func TestMemoryStoreTestSuite(t *testing.T) {
+	suite.Run(t, &MemoryStoreTestSuite{})
+}
 
-	s := MemoryStore{}
-	assert.Equal(0, s.Len())
+type MemoryStoreTestSuite struct {
+	ChunkStoreTestSuite
+}
 
-	input := "abc"
-	w := s.Put()
-	_, err := w.Write([]byte(input))
-	assert.NoError(err)
-	ref := w.Ref()
+func (suite *MemoryStoreTestSuite) SetupTest() {
+	suite.store = &MemoryStore{}
+}
 
-	// See http://www.di-mgt.com.au/sha_testvectors.html
-	assert.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", ref.String())
-
-	// Reading it back via the API should work...
-	reader := s.Get(ref)
-	data, err := ioutil.ReadAll(reader)
-	assert.NoError(err)
-	assert.Equal(input, string(data))
-
-	assert.Equal(1, s.Len())
+func (suite *MemoryStoreTestSuite) TearDownTest() {
 }
