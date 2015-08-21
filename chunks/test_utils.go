@@ -10,6 +10,7 @@ import (
 
 func assertInputInStore(input string, ref ref.Ref, s ChunkStore, assert *assert.Assertions) {
 	reader := s.Get(ref)
+	defer reader.Close()
 	assert.NotNil(reader)
 	data, err := ioutil.ReadAll(reader)
 	assert.NoError(err)

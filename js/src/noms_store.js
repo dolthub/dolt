@@ -10,8 +10,7 @@ var nomsPort = "8000";
 var nomsServer = location.protocol + '//' + host + ":" + nomsPort;
 
 var rpc = {
-  dataset: nomsServer + '/dataset',
-  get: nomsServer + '/get',
+  ref: nomsServer + '/ref',
   root: nomsServer + '/root',
 };
 
@@ -48,19 +47,14 @@ function pumpFetchQueue() {
 }
 
 function getChunk(ref) {
-  return requestFetch(rpc.get + '?ref=' + ref);
+  return requestFetch(rpc.ref + '/' + ref);
 }
 
 function getRoot() {
   return requestFetch(rpc.root).then(res => res.text());
 }
 
-function getDataset(id) {
-  return requestFetch(rpc.dataset + '?id=' + id)
-}
-
 module.exports = {
   getChunk,
-  getDataset,
   getRoot,
 };

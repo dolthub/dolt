@@ -4,11 +4,13 @@ var noms = require('noms');
 var React = require('react');
 var Map = require('./map.js');
 
-noms.getDataset('mlb/heatmap').then(function(s) {
-  return noms.readValue(s, noms.getChunk);
-}).then(getPitchers).then(renderPitchersList).catch(function(err) {
-  console.error(err);
-});
+noms.getDataset('mlb/heatmap')
+  .then(getPitchers)
+  .then(renderPitchersList).
+  catch(function(err) {
+    console.error(err);
+  }
+);
 
 function getPitchers(datasetRoot) {
   return datasetRoot.deref().then((root) => {
