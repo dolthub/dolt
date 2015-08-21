@@ -250,7 +250,7 @@ type httpStoreFlags struct {
 
 func httpFlags(prefix string) httpStoreFlags {
 	return httpStoreFlags{
-		flag.String(prefix+"h", "http://localhost:8000", "httpstore host to connect to"),
+		flag.String(prefix+"h", "", "httpstore host to connect to"),
 	}
 }
 
