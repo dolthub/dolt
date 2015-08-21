@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/defaults"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
@@ -41,7 +42,7 @@ type AWSStore struct {
 }
 
 func NewAWSStore(bucket, table, region, key, secret string) AWSStore {
-	creds := aws.DefaultConfig.Credentials
+	creds := defaults.DefaultConfig.Credentials
 
 	if key != "" {
 		creds = credentials.NewStaticCredentials(key, secret, "")
