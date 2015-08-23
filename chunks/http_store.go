@@ -35,9 +35,7 @@ func NewHttpStoreClient(host string) *HttpStoreClient {
 	u, err := url.Parse(host)
 	d.Exp.NoError(err)
 	d.Exp.True(u.Scheme == "http" || u.Scheme == "https")
-	d.Exp.Equal("", u.Path)
-	d.Exp.Equal("", u.RawQuery)
-
+	d.Exp.Equal(*u, url.URL{Scheme: u.Scheme, Host: u.Host})
 	return &HttpStoreClient{u}
 }
 
@@ -47,8 +45,8 @@ func NewHttpStoreServer(cs ChunkStore, port int) *HttpStoreServer {
 	}
 }
 
-// GET http://<host>/ref/<sha1-xxx>. Response will be chunk data if present, 404 if absent.
 func (c *HttpStoreClient) Get(ref ref.Ref) io.ReadCloser {
+	// GET http://<host>/ref/<sha1-xxx>. Response will be chunk data if present, 404 if absent.
 	res := c.requestRef(ref, "GET", nil)
 
 	d.Chk.True(res.StatusCode == http.StatusOK || res.StatusCode == http.StatusNotFound, "Unexpected response: %s", http.StatusText(res.StatusCode))
@@ -60,8 +58,8 @@ func (c *HttpStoreClient) Get(ref ref.Ref) io.ReadCloser {
 	return nil
 }
 
-// HEAD http://<host>/ref/<sha1-xxx>. Response will be 200 if present, 404 if absent.
 func (c *HttpStoreClient) Has(ref ref.Ref) bool {
+	// HEAD http://<host>/ref/<sha1-xxx>. Response will be 200 if present, 404 if absent.
 	res := c.requestRef(ref, "HEAD", nil)
 	defer closeResponse(res)
 
@@ -69,8 +67,8 @@ func (c *HttpStoreClient) Has(ref ref.Ref) bool {
 	return res.StatusCode == http.StatusOK
 }
 
-// PUT http://<host>/ref/<sha1-xxx>. Response will be 201.
 func (c *HttpStoreClient) Put() ChunkWriter {
+	// PUT http://<host>/ref/<sha1-xxx>. Response will be 201.
 	return newChunkWriter(c.Has, c.write)
 }
 
@@ -92,19 +90,19 @@ func (c *HttpStoreClient) requestRef(ref ref.Ref, method string, body io.Reader)
 	return res
 }
 
-// GET http://<host>/root. Response will be ref of root.
 func (c *HttpStoreClient) Root() ref.Ref {
+	// GET http://<host>/root. Response will be ref of root.
 	res := c.requestRoot("GET", ref.Ref{}, ref.Ref{})
 	defer closeResponse(res)
 
 	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
-	buff := &bytes.Buffer{}
-	io.Copy(buff, res.Body)
-	return ref.Parse(string(buff.Bytes()))
+	data, err := ioutil.ReadAll(res.Body)
+	d.Chk.NoError(err)
+	return ref.Parse(string(data))
 }
 
-// POST http://<host>root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
 func (c *HttpStoreClient) UpdateRoot(current, last ref.Ref) bool {
+	// POST http://<host>root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
 	res := c.requestRoot("POST", current, last)
 	defer closeResponse(res)
 
@@ -143,7 +141,9 @@ func (s *HttpStoreServer) HandleRequestRef(w http.ResponseWriter, req *http.Requ
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			io.Copy(w, reader)
+			defer reader.Close()
+			_, err := io.Copy(w, reader)
+			d.Chk.NoError(err)
 			w.Header().Add("content-type", "application/octet-stream")
 			w.Header().Add("cache-control", "max-age=31536000") // 1 year
 
@@ -155,8 +155,9 @@ func (s *HttpStoreServer) HandleRequestRef(w http.ResponseWriter, req *http.Requ
 		case "PUT":
 			writer := s.cs.Put()
 			defer writer.Close()
-			io.Copy(writer, req.Body)
-			writer.Ref() // BUG 206
+			_, err := io.Copy(writer, req.Body)
+			d.Chk.NoError(err)
+			// BUG 206 - Validate the ref matches what the client specified.
 			w.WriteHeader(http.StatusCreated)
 		}
 	})
@@ -221,7 +222,7 @@ func (s *HttpStoreServer) handleRequest(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// In order for keep alive to work we must read to EOF on every response. We may want to add a timeout so that a server that left it's connection open can't cause all of ports to be eaten up.
+// In order for keep alive to work we must read to EOF on every response. We may want to add a timeout so that a server that left its connection open can't cause all of ports to be eaten up.
 func closeResponse(res *http.Response) error {
 	data, err := ioutil.ReadAll(res.Body)
 	d.Chk.NoError(err)
@@ -229,8 +230,8 @@ func closeResponse(res *http.Response) error {
 	return res.Body.Close()
 }
 
-// Start blocks while the server is listening. Running on a separate go routine is supported.
-func (s *HttpStoreServer) Start() {
+// Blocks while the server is listening. Running on a separate go routine is supported.
+func (s *HttpStoreServer) Run() {
 	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: s.port})
 	d.Chk.NoError(err)
 	s.l = l
@@ -239,7 +240,7 @@ func (s *HttpStoreServer) Start() {
 	srv.Serve(l)
 }
 
-// Will cause the server to stop listening and an existing call to Start() to continue.
+// Will cause the server to stop listening and an existing call to Run() to continue.
 func (s *HttpStoreServer) Stop() {
 	s.l.Close()
 }

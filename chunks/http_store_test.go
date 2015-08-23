@@ -18,7 +18,7 @@ type HttpStoreTestSuite struct {
 func (suite *HttpStoreTestSuite) SetupTest() {
 	suite.store = NewHttpStoreClient("http://localhost:8000")
 	suite.server = NewHttpStoreServer(&MemoryStore{}, 8000)
-	go suite.server.Start()
+	go suite.server.Run()
 }
 
 func (suite *HttpStoreTestSuite) TearDownTest() {

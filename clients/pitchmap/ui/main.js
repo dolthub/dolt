@@ -6,11 +6,7 @@ var Map = require('./map.js');
 
 noms.getDataset('mlb/heatmap')
   .then(getPitchers)
-  .then(renderPitchersList).
-  catch(function(err) {
-    console.error(err);
-  }
-);
+  .then(renderPitchersList);
 
 function getPitchers(datasetRoot) {
   return datasetRoot.deref().then((root) => {
