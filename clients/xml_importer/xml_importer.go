@@ -61,7 +61,7 @@ func main() {
 				return nil
 			}
 
-			ref := types.WriteValue(nomsObj, ds)
+			ref := types.WriteValue(nomsObj, ds.Store())
 			list = list.Append(types.Ref{R: ref})
 			return nil
 		})

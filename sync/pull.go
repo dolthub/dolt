@@ -28,7 +28,9 @@ func validateRefAsCommit(r ref.Ref, cs chunks.ChunkSource) datas.Commit {
 
 // DiffHeadsByRef takes two Refs, validates that both refer to Heads in the given ChunkSource, and then returns the set of Refs that can be reached from 'big', but not 'small'.
 func DiffHeadsByRef(small, big ref.Ref, cs chunks.ChunkSource) []ref.Ref {
-	validateRefAsCommit(small, cs)
+	if small != (ref.Ref{}) {
+		validateRefAsCommit(small, cs)
+	}
 	validateRefAsCommit(big, cs)
 	return walk.Difference(small, big, cs)
 }
@@ -49,6 +51,6 @@ func CopyChunks(refs []ref.Ref, src chunks.ChunkSource, sink chunks.ChunkSink) {
 
 // SetNewHeads takes the Ref of the desired new Heads of ds, the chunk for which should already exist in the Dataset. It validates that the Ref points to an existing chunk that decodes to the correct type of value and then commits it to ds, returning a new Dataset with newHeadRef set and ok set to true. In the event that the commit fails, ok is set to false and a new up-to-date Dataset is returned WITHOUT newHeadRef in it. The caller should try again using this new Dataset.
 func SetNewHeads(newHeadRef ref.Ref, ds dataset.Dataset) (dataset.Dataset, bool) {
-	commit := validateRefAsCommit(newHeadRef, ds)
+	commit := validateRefAsCommit(newHeadRef, ds.Store())
 	return ds.Commit(commit)
 }

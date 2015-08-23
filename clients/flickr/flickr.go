@@ -218,7 +218,7 @@ func getAlbumPhotos(id string) SetOfPhoto {
 			SetTags(getTags(p.Tags)).
 			SetImage(b)
 		// The photo is big, so write it out now to release the memory.
-		r := types.WriteValue(photo.NomsValue(), ds)
+		r := types.WriteValue(photo.NomsValue(), ds.Store())
 		photos = photos.Insert(types.Ref{r})
 	}
 	return SetOfPhotoFromVal(photos)

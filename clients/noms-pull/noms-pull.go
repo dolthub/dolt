@@ -31,8 +31,8 @@ func main() {
 		}
 
 		newHead := source.Head().Ref()
-		refs := sync.DiffHeadsByRef(sink.Head().Ref(), newHead, source)
-		sync.CopyChunks(refs, source, sink)
+		refs := sync.DiffHeadsByRef(sink.Head().Ref(), newHead, source.Store())
+		sync.CopyChunks(refs, source.Store(), sink.Store())
 		for ok := false; !ok; *sink, ok = sync.SetNewHeads(newHead, *sink) {
 			continue
 		}

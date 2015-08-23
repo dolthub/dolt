@@ -10,30 +10,21 @@ import (
 // DataStore provides versioned storage for noms values. Each DataStore instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new DataStore, representing a new moment in history.
 type DataStore struct {
 	chunks.ChunkStore
-
-	rt   chunks.RootTracker
 	head Commit
 }
 
 func NewDataStore(cs chunks.ChunkStore) DataStore {
-	return NewDataStoreWithRootTracker(cs, cs)
-}
-
-// NewDataStore() creates a new DataStore with a specified ChunkStore and RootTracker. Typically these two values will be the same, but it is sometimes useful to have a separate RootTracker (e.g., see DataSet).
-func NewDataStoreWithRootTracker(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
-	return newDataStoreInternal(cs, rt)
+	return newDataStoreInternal(cs)
 }
 
 var EmptyCommit = NewCommit().SetParents(NewSetOfCommit().NomsValue())
 
-func newDataStoreInternal(cs chunks.ChunkStore, rt chunks.RootTracker) DataStore {
-	if (rt.Root() == ref.Ref{}) {
-		r := types.WriteValue(EmptyCommit.NomsValue(), cs)
-		d.Chk.True(rt.UpdateRoot(r, ref.Ref{}))
+func newDataStoreInternal(cs chunks.ChunkStore) DataStore {
+	if (cs.Root() == ref.Ref{}) {
+		r := types.WriteValue(EmptyCommit.NomsValue(), cs) // this is a little weird.
+		d.Chk.True(cs.UpdateRoot(r, ref.Ref{}))
 	}
-	return DataStore{
-		cs, rt, commitFromRef(rt.Root(), cs),
-	}
+	return DataStore{cs, commitFromRef(cs.Root(), cs)}
 }
 
 func commitFromRef(commitRef ref.Ref, cs chunks.ChunkSource) Commit {
@@ -55,12 +46,12 @@ func (ds *DataStore) HeadAsSet() types.Set {
 // If the call fails, the boolean return value will be set to false and the caller must retry. Regardless, the DataStore returned is the right one to use for subsequent calls to Commit() -- retries or otherwise.
 func (ds *DataStore) Commit(newCommit Commit) (DataStore, bool) {
 	ok := ds.doCommit(newCommit)
-	return newDataStoreInternal(ds.ChunkStore, ds.rt), ok
+	return newDataStoreInternal(ds.ChunkStore), ok
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current head. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will fail if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
 func (ds *DataStore) doCommit(commit Commit) bool {
-	currentRootRef := ds.rt.Root()
+	currentRootRef := ds.Root()
 
 	// Note: |currentHead| may be different from |ds.head| and *must* be consistent with |currentRootRef|.
 	var currentHead Commit
@@ -80,7 +71,7 @@ func (ds *DataStore) doCommit(commit Commit) bool {
 	// TODO: This Commit will be orphaned if this UpdateRoot below fails
 	newRootRef := types.WriteValue(commit.NomsValue(), ds)
 
-	ok := ds.rt.UpdateRoot(newRootRef, currentRootRef)
+	ok := ds.UpdateRoot(newRootRef, currentRootRef)
 	return ok
 }
 
