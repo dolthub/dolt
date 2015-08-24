@@ -14,7 +14,7 @@ type ListOfPitch struct {
 	l types.List
 }
 
-type ListOfPitchIterCallback (func(p Pitch) (stop bool))
+type ListOfPitchIterCallback (func (p Pitch) (stop bool))
 
 func NewListOfPitch() ListOfPitch {
 	return ListOfPitch{types.NewList()}
@@ -244,3 +244,4 @@ func (s Pitch) X() types.Float64 {
 func (s Pitch) SetX(p types.Float64) Pitch {
 	return PitchFromVal(s.m.Set(types.NewString("X"), p))
 }
+

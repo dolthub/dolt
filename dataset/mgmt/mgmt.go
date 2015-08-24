@@ -2,26 +2,21 @@
 package mgmt
 
 import (
-	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/types"
 )
 
 func GetDatasets(ds datas.DataStore) SetOfDataset {
-	if ds.Heads().Empty() {
+	if ds.Head().Equals(datas.EmptyCommit) {
 		return NewSetOfDataset()
-	} else {
-		// BUG 13: We don't ever want to branch the datasets database. Currently we can't avoid that, but we should change DataStore::Commit() to support that mode of operation.
-		d.Chk.EqualValues(1, ds.Heads().Len())
-		return SetOfDatasetFromVal(ds.Heads().Any().Value())
 	}
+	return SetOfDatasetFromVal(ds.Head().Value())
 }
 
-func CommitDatasets(ds datas.DataStore, datasets SetOfDataset) datas.DataStore {
-	return ds.Commit(datas.NewSetOfCommit().Insert(
-		datas.NewCommit().SetParents(
-			ds.Heads().NomsValue()).SetValue(
-			datasets.NomsValue())))
+func CommitDatasets(ds datas.DataStore, datasets SetOfDataset) (datas.DataStore, bool) {
+	newParents := datas.NewSetOfCommit().Insert(ds.Head())
+	return ds.Commit(
+		datas.NewCommit().SetParents(newParents.NomsValue()).SetValue(datasets.NomsValue()))
 }
 
 func getDataset(datasets SetOfDataset, datasetID string) (r *Dataset) {
@@ -35,16 +30,16 @@ func getDataset(datasets SetOfDataset, datasetID string) (r *Dataset) {
 	return
 }
 
-func GetDatasetHeads(datasets SetOfDataset, datasetID string) types.Value {
+func GetDatasetHead(datasets SetOfDataset, datasetID string) types.Value {
 	dataset := getDataset(datasets, datasetID)
 	if dataset == nil {
 		return nil
 	}
-	return dataset.Heads()
+	return dataset.Head()
 }
 
-func SetDatasetHeads(datasets SetOfDataset, datasetID string, val types.Value) SetOfDataset {
-	newDataset := NewDataset().SetId(types.NewString(datasetID)).SetHeads(val)
+func SetDatasetHead(datasets SetOfDataset, datasetID string, val types.Value) SetOfDataset {
+	newDataset := NewDataset().SetId(types.NewString(datasetID)).SetHead(val)
 	dataset := getDataset(datasets, datasetID)
 	if dataset == nil {
 		return datasets.Insert(newDataset)

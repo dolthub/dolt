@@ -12,24 +12,24 @@ import (
 	"github.com/attic-labs/noms/walk"
 )
 
-func validateRefAsSetOfCommit(r ref.Ref, cs chunks.ChunkSource) types.Value {
+func validateRefAsCommit(r ref.Ref, cs chunks.ChunkSource) datas.Commit {
 	v := types.ReadValue(r, cs)
+
 	d.Exp.NotNil(v, "%v cannot be found", r)
 
 	// TODO: Replace this weird recover stuff below once we have a way to determine if a Value is an instance of a custom struct type. BUG #133
 	defer func() {
 		if r := recover(); r != nil {
-			d.Exp.Fail("Not a SetOfCommit:", "%+v", v)
+			d.Exp.Fail("Not a Commit:", "%+v", v)
 		}
 	}()
-	datas.SetOfCommitFromVal(v)
-	return v
+	return datas.CommitFromVal(v)
 }
 
 // DiffHeadsByRef takes two Refs, validates that both refer to Heads in the given ChunkSource, and then returns the set of Refs that can be reached from 'big', but not 'small'.
 func DiffHeadsByRef(small, big ref.Ref, cs chunks.ChunkSource) []ref.Ref {
-	validateRefAsSetOfCommit(small, cs)
-	validateRefAsSetOfCommit(big, cs)
+	validateRefAsCommit(small, cs)
+	validateRefAsCommit(big, cs)
 	return walk.Difference(small, big, cs)
 }
 
@@ -47,8 +47,8 @@ func CopyChunks(refs []ref.Ref, src chunks.ChunkSource, sink chunks.ChunkSink) {
 	return
 }
 
-// SetNewHeads takes the Ref of the desired new Heads of ds, the chunk for which should already exist in the Dataset. It validates that the Ref points to an existing chunk that decodes to the correct type of value and then commits it to ds.
-func SetNewHeads(newHeadRef ref.Ref, ds dataset.Dataset) dataset.Dataset {
-	v := validateRefAsSetOfCommit(newHeadRef, ds)
-	return ds.Commit(datas.SetOfCommitFromVal(v))
+// SetNewHeads takes the Ref of the desired new Heads of ds, the chunk for which should already exist in the Dataset. It validates that the Ref points to an existing chunk that decodes to the correct type of value and then commits it to ds, returning a new Dataset with newHeadRef set and ok set to true. In the event that the commit fails, ok is set to false and a new up-to-date Dataset is returned WITHOUT newHeadRef in it. The caller should try again using this new Dataset.
+func SetNewHeads(newHeadRef ref.Ref, ds dataset.Dataset) (dataset.Dataset, bool) {
+	commit := validateRefAsCommit(newHeadRef, ds)
+	return ds.Commit(commit)
 }

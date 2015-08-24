@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
@@ -20,15 +21,13 @@ func main() {
 	}
 
 	lastVal := uint64(0)
-	commits := ds.Heads()
-	if commits.Len() > uint64(0) {
-		lastVal = uint64(commits.Any().Value().(types.UInt64))
+	commit := ds.Head()
+	if !commit.Equals(datas.EmptyCommit) {
+		lastVal = uint64(commit.Value().(types.UInt64))
 	}
 	newVal := lastVal + 1
-	ds.Commit(datas.NewSetOfCommit().Insert(
-		datas.NewCommit().SetParents(
-			commits.NomsValue()).SetValue(
-			types.UInt64(newVal))))
+	_, ok := ds.Commit(datas.NewCommit().SetParents(ds.HeadAsSet()).SetValue(types.UInt64(newVal)))
+	d.Exp.True(ok, "Could not commit due to conflicting edit")
 
 	fmt.Println(newVal)
 }

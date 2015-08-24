@@ -164,11 +164,12 @@ func main() {
 		inputDataset := dataset.NewDataset(dataStore, *inputID)
 		outputDataset := dataset.NewDataset(dataStore, *outputID)
 
-		input := types.ListFromVal(inputDataset.Heads().Any().Value())
-		output := getIndex(input)
+		input := types.ListFromVal(inputDataset.Head().Value())
+		output := getIndex(input).NomsValue()
 
-		outputDataset.Commit(datas.NewSetOfCommit().Insert(
-			datas.NewCommit().SetParents(outputDataset.Heads().NomsValue()).SetValue(output.NomsValue())))
+		_, ok := outputDataset.Commit(
+			datas.NewCommit().SetParents(outputDataset.HeadAsSet()).SetValue(output))
+		d.Exp.True(ok, "Could not commit due to conflicting edit")
 
 		util.MaybeWriteMemProfile()
 	})

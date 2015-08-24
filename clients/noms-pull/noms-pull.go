@@ -30,10 +30,12 @@ func main() {
 			defer util.StopCPUProfile()
 		}
 
-		newHead := source.Heads().Ref()
-		refs := sync.DiffHeadsByRef(sink.Heads().Ref(), newHead, source)
+		newHead := source.Head().Ref()
+		refs := sync.DiffHeadsByRef(sink.Head().Ref(), newHead, source)
 		sync.CopyChunks(refs, source, sink)
-		sync.SetNewHeads(newHead, *sink)
+		for ok := false; !ok; *sink, ok = sync.SetNewHeads(newHead, *sink) {
+			continue
+		}
 
 		util.MaybeWriteMemProfile()
 	})
