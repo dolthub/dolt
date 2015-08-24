@@ -55,7 +55,7 @@ func TestPull(t *testing.T) {
 
 	refs := DiffHeadsByRef(puller.Head().Ref(), pullee.Head().Ref(), pullee.Store())
 	CopyChunks(refs, pullee.Store(), puller.Store())
-	puller, ok = SetNewHeads(pullee.Head().Ref(), puller)
+	puller, ok = SetNewHead(pullee.Head().Ref(), puller)
 	assert.True(ok)
 	assert.True(pullee.Head().Equals(puller.Head()))
 }
@@ -83,7 +83,7 @@ func TestPullFirstCommit(t *testing.T) {
 
 	refs := DiffHeadsByRef(pullerHeadRef, pullee.Head().Ref(), pullee.Store())
 	CopyChunks(refs, pullee.Store(), puller.Store())
-	puller, ok = SetNewHeads(pullee.Head().Ref(), puller)
+	puller, ok = SetNewHead(pullee.Head().Ref(), puller)
 	assert.True(ok)
 	assert.True(pullee.Head().Equals(puller.Head()))
 

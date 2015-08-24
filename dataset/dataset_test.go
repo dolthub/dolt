@@ -30,8 +30,7 @@ func TestDatasetCommitTracker(t *testing.T) {
 	assert.False(ds2.Head().Value().Equals(ds1Commit))
 	assert.False(ds1.Head().Value().Equals(ds2Commit))
 
-	// This changed because the code no longer creates an initial commit.
-	// assert.Equal("sha1-8aba7db6a2e7769afdb0b6ba3eabfe9b4624d83f", ms.Root().String())
+	assert.Equal("sha1-3c54d36480262f0626dd3706ebbdf7f791320cb0", ms.Root().String())
 }
 
 func TestExplicitBranchUsingDatasets(t *testing.T) {
