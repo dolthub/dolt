@@ -8,7 +8,6 @@ import (
 
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 )
 
@@ -41,7 +40,6 @@ func main() {
 		log.Fatalln("Error decoding JSON: ", err)
 	}
 
-	value := util.NomsValueFromDecodedJSON(jsonObject)
-	_, ok := ds.Commit(datas.NewCommit().SetParents(ds.HeadAsSet()).SetValue(value))
+	_, ok := ds.Commit(util.NomsValueFromDecodedJSON(jsonObject))
 	d.Exp.True(ok, "Could not commit due to conflicting edit")
 }

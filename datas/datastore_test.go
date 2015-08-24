@@ -19,46 +19,48 @@ func TestDataStoreCommit(t *testing.T) {
 	chunks := chunks.NewFileStore(dir, "root")
 	ds := NewDataStore(chunks)
 
-	commit := ds.Head()
-	assert.True(commit.Equals(EmptyCommit))
+	_, ok := ds.MaybeHead()
+	assert.False(ok)
 
 	// |a|
-	a := NewCommit().SetParents(makeSetValue(commit)).SetValue(types.NewString("a"))
+	a := types.NewString("a")
 	ds2, ok := ds.Commit(a)
 	assert.True(ok)
 
-	// The old datastore still still references |commit|.
-	assert.True(ds.Head().Equals(commit))
+	// The old datastore still still has no head.
+	_, ok = ds.MaybeHead()
+	assert.False(ok)
 
 	// The new datastore has |a|.
-	assert.True(ds2.Head().Equals(a))
+	aCommit := ds2.Head()
+	assert.True(aCommit.Value().Equals(a))
 	ds = ds2
 
 	// |a| <- |b|
-	b := NewCommit().SetParents(makeSetValue(a)).SetValue(types.NewString("b"))
+	b := types.NewString("b")
 	ds, ok = ds.Commit(b)
 	assert.True(ok)
-	assert.True(ds.Head().Equals(b))
+	assert.True(ds.Head().Value().Equals(b))
 
 	// |a| <- |b|
 	//   \----|c|
 	// Should be disallowed.
-	c := NewCommit().SetParents(makeSetValue(a)).SetValue(types.NewString("c"))
-	ds, ok = ds.Commit(c)
+	c := types.NewString("c")
+	ds, ok = ds.CommitWithParents(c, NewSetOfCommit().Insert(aCommit))
 	assert.False(ok)
-	assert.True(ds.Head().Equals(b))
+	assert.True(ds.Head().Value().Equals(b))
 
 	// |a| <- |b| <- |d|
-	d := NewCommit().SetParents(makeSetValue(b)).SetValue(types.NewString("d"))
+	d := types.NewString("d")
 	ds, ok = ds.Commit(d)
 	assert.True(ok)
-	assert.True(ds.Head().Equals(d))
+	assert.True(ds.Head().Value().Equals(d))
 
-	// Attempt to recommit |b|
+	// Attempt to recommit |b| with |a| as parent.
 	// Should be disallowed.
-	ds, ok = ds.Commit(b)
+	ds, ok = ds.CommitWithParents(b, NewSetOfCommit().Insert(aCommit))
 	assert.False(ok)
-	assert.True(ds.Head().Equals(d))
+	assert.True(ds.Head().Value().Equals(d))
 }
 
 func TestDataStoreConcurrency(t *testing.T) {
@@ -72,30 +74,28 @@ func TestDataStoreConcurrency(t *testing.T) {
 
 	// Setup:
 	// |a| <- |b|
-	a := NewCommit().SetParents(makeSetValue(ds.Head())).SetValue(types.NewString("a"))
+	a := types.NewString("a")
 	ds, ok := ds.Commit(a)
-	b := NewCommit().SetParents(makeSetValue(a)).SetValue(types.NewString("b"))
+	b := types.NewString("b")
 	ds, ok = ds.Commit(b)
+	assert.True(ok)
+	assert.True(ds.Head().Value().Equals(b))
 
 	// Important to create this here.
 	ds2 := NewDataStore(chunks)
 
 	// Change 1:
 	// |a| <- |b| <- |c|
-	c := NewCommit().SetParents(makeSetValue(b)).SetValue(types.NewString("c"))
+	c := types.NewString("c")
 	ds, ok = ds.Commit(c)
 	assert.True(ok)
-	assert.True(ds.Head().Equals(c))
+	assert.True(ds.Head().Value().Equals(c))
 
 	// Change 2:
 	// |a| <- |b| <- |e|
 	// Should be disallowed, DataStore returned by Commit() should have |c| as Head.
-	e := NewCommit().SetParents(makeSetValue(b)).SetValue(types.NewString("e"))
+	e := types.NewString("e")
 	ds2, ok = ds2.Commit(e)
 	assert.False(ok)
-	assert.True(ds.Head().Equals(c))
-}
-
-func makeSetValue(commit Commit) types.Set {
-	return NewSetOfCommit().Insert(commit).NomsValue()
+	assert.True(ds.Head().Value().Equals(c))
 }

@@ -9,7 +9,6 @@ import (
 
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 	"github.com/clbanning/mxj"
@@ -61,14 +60,14 @@ func main() {
 				return nil
 			}
 
-			ref := types.WriteValue(nomsObj, ds)
+			ref := types.WriteValue(nomsObj, ds.Store())
 			list = list.Append(types.Ref{R: ref})
 			return nil
 		})
 		d.Exp.NoError(err)
 
 		if !*noIO {
-			_, ok := ds.Commit(datas.NewCommit().SetParents(ds.HeadAsSet()).SetValue(list))
+			_, ok := ds.Commit(list)
 			d.Exp.True(ok, "Could not commit due to conflicting edit")
 		}
 

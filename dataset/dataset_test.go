@@ -17,14 +17,12 @@ func TestDatasetCommitTracker(t *testing.T) {
 
 	ds1 := NewDataset(datas.NewDataStore(ms), id1)
 	ds1Commit := types.NewString("Commit value for " + id1)
-	ds1, ok := ds1.Commit(
-		datas.NewCommit().SetParents(ds1.HeadAsSet()).SetValue(ds1Commit))
+	ds1, ok := ds1.Commit(ds1Commit)
 	assert.True(ok)
 
 	ds2 := NewDataset(datas.NewDataStore(ms), id2)
 	ds2Commit := types.NewString("Commit value for " + id2)
-	ds2, ok = ds2.Commit(
-		datas.NewCommit().SetParents(ds2.HeadAsSet()).SetValue(ds2Commit))
+	ds2, ok = ds2.Commit(ds2Commit)
 	assert.True(ok)
 
 	assert.EqualValues(ds1Commit, ds1.Head().Value())
@@ -32,7 +30,7 @@ func TestDatasetCommitTracker(t *testing.T) {
 	assert.False(ds2.Head().Value().Equals(ds1Commit))
 	assert.False(ds1.Head().Value().Equals(ds2Commit))
 
-	assert.Equal("sha1-8aba7db6a2e7769afdb0b6ba3eabfe9b4624d83f", ms.Root().String())
+	assert.Equal("sha1-3c54d36480262f0626dd3706ebbdf7f791320cb0", ms.Root().String())
 }
 
 func TestExplicitBranchUsingDatasets(t *testing.T) {
@@ -48,53 +46,53 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	ds1 := getDS(id1)
 
 	// ds1: |a|
-	a := datas.NewCommit().SetParents(ds1.HeadAsSet()).SetValue(types.NewString("a"))
+	a := types.NewString("a")
 	ds1, ok := ds1.Commit(a)
 	assert.True(ok)
-	assert.True(ds1.Head().Equals(a))
+	assert.True(ds1.Head().Value().Equals(a))
 
 	// ds1: |a|
 	//        \ds2
 	ds2 := getDS(id2)
-	ds2, ok = ds2.Commit(ds1.Head())
+	ds2, ok = ds2.Commit(ds1.Head().Value())
 	assert.True(ok)
-	assert.True(ds2.Head().Equals(a))
+	assert.True(ds2.Head().Value().Equals(a))
 
 	// ds1: |a| <- |b|
-	b := datas.NewCommit().SetParents(ds1.HeadAsSet()).SetValue(types.NewString("b"))
+	b := types.NewString("b")
 	ds1, ok = ds1.Commit(b)
 	assert.False(ok)
-	assert.True(ds1.Head().Equals(a))
+	assert.True(ds1.Head().Value().Equals(a))
 	// Commit failed, but ds1 didn't change, so we should be able to just try again.
 	ds1, ok = ds1.Commit(b)
 	assert.True(ok)
-	assert.True(ds1.Head().Equals(b))
+	assert.True(ds1.Head().Value().Equals(b))
 
 	// ds1: |a|    <- |b|
 	//        \ds2 <- |c|
-	c := datas.NewCommit().SetParents(ds2.HeadAsSet()).SetValue(types.NewString("c"))
+	c := types.NewString("c")
 	ds2, ok = ds2.Commit(c)
 	assert.False(ok)
-	assert.True(ds2.Head().Equals(a))
+	assert.True(ds2.Head().Value().Equals(a))
 	// Commit failed, but ds2 didn't change, so we should be able to just try again.
 	ds2, ok = ds2.Commit(c)
 	assert.True(ok)
-	assert.True(ds2.Head().Equals(c))
+	assert.True(ds2.Head().Value().Equals(c))
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
-	mergeParents := datas.NewSetOfCommit().Insert(ds1.Head()).Insert(ds2.Head()).NomsValue()
-	d := datas.NewCommit().SetParents(mergeParents).SetValue(types.NewString("d"))
-	ds2, ok = ds2.Commit(d)
+	mergeParents := datas.NewSetOfCommit().Insert(ds1.Head()).Insert(ds2.Head())
+	d := types.NewString("d")
+	ds2, ok = ds2.CommitWithParents(d, mergeParents)
 	assert.True(ok)
-	assert.True(ds2.Head().Equals(d))
+	assert.True(ds2.Head().Value().Equals(d))
 
-	ds1, ok = ds1.Commit(d)
+	ds1, ok = ds1.CommitWithParents(d, mergeParents)
 	assert.False(ok)
-	assert.True(ds1.Head().Equals(b))
+	assert.True(ds1.Head().Value().Equals(b))
 	// Commit failed, but while ds2 changed, ds1 didn't.
-	ds1, ok = ds1.Commit(d)
+	ds1, ok = ds1.CommitWithParents(d, mergeParents)
 	assert.True(ok)
-	assert.True(ds1.Head().Equals(d))
+	assert.True(ds1.Head().Value().Equals(d))
 
 }

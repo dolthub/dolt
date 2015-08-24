@@ -56,8 +56,8 @@ func main() {
 		}
 	})
 
-	_, ok := ds.Commit(datas.NewCommit().SetParents(ds.HeadAsSet()).SetValue(out.NomsValue()))
+	_, ok := ds.Commit(out.NomsValue())
 	d.Exp.True(ok, "Could not commit due to conflicting edit")
 
-	fmt.Println(ds.Root().String())
+	fmt.Println(ds.Store().Root().String())
 }

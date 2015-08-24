@@ -167,8 +167,7 @@ func main() {
 		input := types.ListFromVal(inputDataset.Head().Value())
 		output := getIndex(input).NomsValue()
 
-		_, ok := outputDataset.Commit(
-			datas.NewCommit().SetParents(outputDataset.HeadAsSet()).SetValue(output))
+		_, ok := outputDataset.Commit(output)
 		d.Exp.True(ok, "Could not commit due to conflicting edit")
 
 		util.MaybeWriteMemProfile()
