@@ -15,7 +15,6 @@ import (
 
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 	"github.com/garyburd/go-oauth/oauth"
@@ -72,8 +71,7 @@ func main() {
 }
 
 func getUser() {
-	commit := ds.Head()
-	if !commit.Equals(datas.EmptyCommit) {
+	if commit, ok := ds.MaybeHead(); ok {
 		user = UserFromVal(commit.Value())
 		if checkAuth() {
 			return
@@ -291,7 +289,7 @@ func awaitOAuthResponse(l *net.TCPListener, tempCred *oauth.Credentials) error {
 
 func commitUser() {
 	ok := false
-	*ds, ok = ds.Commit(datas.NewCommit().SetParents(ds.HeadAsSet()).SetValue(user.NomsValue()))
+	*ds, ok = ds.Commit(user.NomsValue())
 	d.Exp.True(ok, "Could not commit due to conflicting edit")
 }
 

@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 )
@@ -60,6 +59,6 @@ func main() {
 		value = value.Append(m)
 	}
 
-	_, ok := ds.Commit(datas.NewCommit().SetParents(ds.HeadAsSet()).SetValue(value))
+	_, ok := ds.Commit(value)
 	d.Exp.True(ok, "Could not commit due to conflicting edit")
 }

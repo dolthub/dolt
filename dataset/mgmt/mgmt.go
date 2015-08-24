@@ -7,16 +7,14 @@ import (
 )
 
 func GetDatasets(ds datas.DataStore) SetOfDataset {
-	if ds.Head().Equals(datas.EmptyCommit) {
+	if _, ok := ds.MaybeHead(); !ok {
 		return NewSetOfDataset()
 	}
 	return SetOfDatasetFromVal(ds.Head().Value())
 }
 
 func CommitDatasets(ds datas.DataStore, datasets SetOfDataset) (datas.DataStore, bool) {
-	newParents := datas.NewSetOfCommit().Insert(ds.Head())
-	return ds.Commit(
-		datas.NewCommit().SetParents(newParents.NomsValue()).SetValue(datasets.NomsValue()))
+	return ds.Commit(datasets.NomsValue())
 }
 
 func getDataset(datasets SetOfDataset, datasetID string) (r *Dataset) {

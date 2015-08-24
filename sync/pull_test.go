@@ -30,31 +30,27 @@ func TestPull(t *testing.T) {
 	puller := createTestDataset("puller")
 	pullee := createTestDataset("pullee")
 
-	commitValue := func(v types.Value, ds dataset.Dataset) (dataset.Dataset, bool) {
-		return ds.Commit(datas.NewCommit().SetParents(ds.HeadAsSet()).SetValue(v))
-	}
-
 	// Give puller and pullee some initial shared context.
 	initialValue := types.NewMap(
 		types.NewString("first"), types.NewList(),
 		types.NewString("second"), types.NewList(types.Int32(2)))
 
 	ok := false
-	pullee, ok = commitValue(initialValue, pullee)
+	pullee, ok = pullee.Commit(initialValue)
 	assert.True(ok)
-	puller, ok = commitValue(initialValue, puller)
+	puller, ok = puller.Commit(initialValue)
 	assert.True(ok)
 
 	// Add some new stuff to pullee.
 	updatedValue := initialValue.Set(
 		types.NewString("third"), types.NewList(types.Int32(3)))
-	pullee, ok = commitValue(updatedValue, pullee)
+	pullee, ok = pullee.Commit(updatedValue)
 	assert.True(ok)
 
 	// Add some more stuff, so that pullee isn't directly ahead of puller.
 	updatedValue = updatedValue.Set(
 		types.NewString("fourth"), types.NewList(types.Int32(4)))
-	pullee, ok = commitValue(updatedValue, pullee)
+	pullee, ok = pullee.Commit(updatedValue)
 	assert.True(ok)
 
 	refs := DiffHeadsByRef(puller.Head().Ref(), pullee.Head().Ref(), pullee.Store())
@@ -70,24 +66,19 @@ func TestPullFirstCommit(t *testing.T) {
 	puller := createTestDataset("puller")
 	pullee := createTestDataset("pullee")
 
-	commitValue := func(v types.Value, ds dataset.Dataset) (dataset.Dataset, bool) {
-		return ds.Commit(datas.NewCommit().SetParents(ds.HeadAsSet()).SetValue(v))
-	}
-
 	initialValue := types.NewMap(
 		types.NewString("first"), types.NewList(),
 		types.NewString("second"), types.NewList(types.Int32(2)))
 
-	pullee, ok := commitValue(initialValue, pullee)
+	pullee, ok := pullee.Commit(initialValue)
 	assert.True(ok)
 
 	pullerHeadRef := func() ref.Ref {
 		head, ok := puller.MaybeHead()
 		if ok {
 			return head.Ref()
-		} else {
-			return ref.Ref{}
 		}
+		return ref.Ref{}
 	}()
 
 	refs := DiffHeadsByRef(pullerHeadRef, pullee.Head().Ref(), pullee.Store())

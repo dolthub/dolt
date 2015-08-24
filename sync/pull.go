@@ -52,5 +52,5 @@ func CopyChunks(refs []ref.Ref, src chunks.ChunkSource, sink chunks.ChunkSink) {
 // SetNewHeads takes the Ref of the desired new Heads of ds, the chunk for which should already exist in the Dataset. It validates that the Ref points to an existing chunk that decodes to the correct type of value and then commits it to ds, returning a new Dataset with newHeadRef set and ok set to true. In the event that the commit fails, ok is set to false and a new up-to-date Dataset is returned WITHOUT newHeadRef in it. The caller should try again using this new Dataset.
 func SetNewHeads(newHeadRef ref.Ref, ds dataset.Dataset) (dataset.Dataset, bool) {
 	commit := validateRefAsCommit(newHeadRef, ds.Store())
-	return ds.Commit(commit)
+	return ds.CommitWithParents(commit.Value(), datas.SetOfCommitFromVal(commit.Parents()))
 }
