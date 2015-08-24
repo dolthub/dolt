@@ -100,7 +100,7 @@ type ldbStoreFlags struct {
 
 func levelDBFlags(prefix string) ldbStoreFlags {
 	return ldbStoreFlags{
-		flag.String(prefix+"db", "", "directory to use for a LevelDB-backed chunkstore"),
+		flag.String(prefix+"ldb", "", "directory to use for a LevelDB-backed chunkstore"),
 	}
 }
 

@@ -11,6 +11,10 @@ function getDataset(id) {
   .then(datasets =>
   {
     var match = datasets.filter(dataset => dataset.get('id') == id);
+    if (match.length > 1) {
+      throw Error("Um...this can't be good: More than one dataset with id " + id);
+    }
+
     return match.length == 1 ? match[0].get('heads') : null
   });
 }

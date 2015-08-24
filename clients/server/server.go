@@ -20,5 +20,5 @@ func main() {
 	}
 
 	server := chunks.NewHttpStoreServer(cs, *port)
-	server.Start()
+	server.Run()
 }

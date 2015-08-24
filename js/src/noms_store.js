@@ -14,8 +14,8 @@ var rpc = {
   root: nomsServer + '/root',
 };
 
-// TODO: Chrome seems to start spitting out uncatchable errors if we queue too many XHRs. This limit probably doesn't actually slow us down because the user agent has its own queue of fetches to service.
-var maxConnections = 64;
+// Note that chrome limits the number of active xhrs to the same security origin to 6, more than that just sit in the "stalled" state.
+var maxConnections = 8;
 var activeFetches = 0;
 var pendingFetches = [];
 
