@@ -5,15 +5,12 @@ var React = require('react');
 var Map = require('./map.js');
 
 noms.getDataset('mlb/heatmap')
-  .then(getPitchers)
-  .then(renderPitchersList);
+    .then(getPitchers)
+    .then(renderPitchersList);
 
-function getPitchers(datasetRoot) {
-  return datasetRoot.deref().then((root) => {
-    return root.first().deref();
-  }).then((map) =>{
-    return map.get('value').deref();
-  });
+function getPitchers(datasetRootRef) {
+  return datasetRootRef.deref()
+      .then(datasetRoot => datasetRoot.get('value').deref());
 }
 
 var PitcherList = React.createClass({
