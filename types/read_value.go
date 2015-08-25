@@ -70,6 +70,13 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 		}
 		cb := compoundBlob{i.Offsets, blobs, &ref.Ref{}, cs}
 		return futureFromValue(cb)
+	case enc.CompoundList:
+		lists := make([]Future, len(i.Lists))
+		for idx, listRef := range i.Lists {
+			lists[idx] = fromEncodeable(listRef, cs)
+		}
+		cl := compoundList{i.Offsets, lists, &ref.Ref{}, cs}
+		return futureFromValue(cl)
 	default:
 		d.Exp.Fail(fmt.Sprintf("Unknown encodeable", "%+v", i))
 	}

@@ -47,6 +47,10 @@ func jsonDecodeTaggedValue(m map[string]interface{}) interface{} {
 			if v, ok := v.([]interface{}); ok {
 				return jsonDecodeCompoundBlob(v)
 			}
+		case "cl":
+			if v, ok := v.([]interface{}); ok {
+				return jsonDecodeCompoundList(v)
+			}
 		case "int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64":
 			// Go decodes all JSON numbers as float64
 			if v, ok := v.(float64); ok {
@@ -108,34 +112,44 @@ func toUint64(v interface{}) (uint64, error) {
 	return i, nil
 }
 
-// ["sha1-0", length0, ... "sha1-N",lengthN]
 func jsonDecodeCompoundBlob(input []interface{}) interface{} {
+	offsets, refs := jsonDecodeCompoundObject(input)
+	return CompoundBlob{offsets, refs}
+}
+
+func jsonDecodeCompoundList(input []interface{}) interface{} {
+	offsets, refs := jsonDecodeCompoundObject(input)
+	return CompoundList{offsets, refs}
+}
+
+func jsonDecodeCompoundObject(input []interface{}) ([]uint64, []ref.Ref) {
+	// ["sha1-0", length0, ... "sha1-N",lengthN]
 	if len(input)%2 != 0 || len(input) < 2 {
 		d.Exp.NoError(errInvalidEncoding)
 	}
 
 	offset := uint64(0)
-	numBlobs := len(input) / 2
-	offsets := make([]uint64, numBlobs)
-	blobs := make([]ref.Ref, numBlobs)
+	numRefs := len(input) / 2
+	offsets := make([]uint64, numRefs)
+	refs := make([]ref.Ref, numRefs)
 
 	ensureRef := func(v interface{}) ref.Ref {
 		if v, ok := v.(string); ok {
 			return ref.Parse(v)
 		}
-		d.Exp.Fail(fmt.Sprintf("CompoundBlob children must be strings that are valid ref.Refs; got %+v", v))
+		d.Exp.Fail(fmt.Sprintf("CompoundList children must be strings that are valid ref.Refs; got %+v", v))
 		return ref.Ref{}
 	}
 
 	for i := 0; i < len(input); i += 2 {
-		blobs[i/2] = ensureRef(input[i])
+		refs[i/2] = ensureRef(input[i])
 		length, err := toUint64(input[i+1])
 		d.Exp.NoError(err)
 		offset += length
 		offsets[i/2] = offset
 	}
 
-	return CompoundBlob{offsets, blobs}
+	return offsets, refs
 }
 
 func jsonDecodeList(input []interface{}) []interface{} {

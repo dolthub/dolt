@@ -93,6 +93,20 @@ func TestJSONDecode(t *testing.T) {
 	cb2 := CompoundBlob{[]uint64{5, 6, 12}, []ref.Ref{blr, blr2, blr3}}
 	testDecode(`j {"cb":["sha1-c35018551e725bd2ab45166b69d15fda00b161c1",5,"sha1-641283a12b475ed58ba510517c1224a912e934a6",1,"sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9",6]}
 `, cb2)
+
+	// List (compound)
+	// echo -n 'b Hello' | sha1sum
+	llr := ref.Parse("sha1-c35018551e725bd2ab45166b69d15fda00b161c1")
+	cl := CompoundList{[]uint64{2}, []ref.Ref{llr}}
+	testDecode(`j {"cl":["sha1-c35018551e725bd2ab45166b69d15fda00b161c1",2]}
+`, cl)
+	// echo -n 'b  ' | sha1sum
+	llr2 := ref.Parse("sha1-641283a12b475ed58ba510517c1224a912e934a6")
+	// echo -n 'b World!' | sha1sum
+	llr3 := ref.Parse("sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9")
+	cl2 := CompoundList{[]uint64{5, 6, 12}, []ref.Ref{llr, llr2, llr3}}
+	testDecode(`j {"cl":["sha1-c35018551e725bd2ab45166b69d15fda00b161c1",5,"sha1-641283a12b475ed58ba510517c1224a912e934a6",1,"sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9",6]}
+`, cl2)
 }
 
 func TestCompoundBlobJSONDecodeInvalidFormat(t *testing.T) {

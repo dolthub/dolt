@@ -36,7 +36,7 @@ func doTreeWalk(f Future, cs chunks.ChunkSource, cb SomeCallback) {
 			doTreeWalk(e.key, cs, cb)
 			doTreeWalk(e.value, cs, cb)
 		}
-	case List:
+	case listLeaf:
 		for _, f := range v.list {
 			doTreeWalk(f, cs, cb)
 		}
