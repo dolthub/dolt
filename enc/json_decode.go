@@ -108,7 +108,7 @@ func toUint64(v interface{}) (uint64, error) {
 	return i, nil
 }
 
-// [{"ref":"sha1-0"}, length0, ... {"ref":"sha1-N"},lengthN]
+// ["sha1-0", length0, ... "sha1-N",lengthN]
 func jsonDecodeCompoundBlob(input []interface{}) interface{} {
 	if len(input)%2 != 0 || len(input) < 2 {
 		d.Exp.NoError(errInvalidEncoding)
@@ -120,16 +120,15 @@ func jsonDecodeCompoundBlob(input []interface{}) interface{} {
 	blobs := make([]ref.Ref, numBlobs)
 
 	ensureRef := func(v interface{}) ref.Ref {
-		// Consider rejiggering this error handling with BUG #176.
-		if v, ok := v.(ref.Ref); !ok {
-			d.Exp.Fail(fmt.Sprintf("CompoundBlob children must be ref.Refs; got %+v", v))
-			return ref.Ref{}
+		if v, ok := v.(string); ok {
+			return ref.Parse(v)
 		}
-		return v.(ref.Ref)
+		d.Exp.Fail(fmt.Sprintf("CompoundBlob children must be strings that are valid ref.Refs; got %+v", v))
+		return ref.Ref{}
 	}
 
 	for i := 0; i < len(input); i += 2 {
-		blobs[i/2] = ensureRef(jsonDecodeValue(input[i]))
+		blobs[i/2] = ensureRef(input[i])
 		length, err := toUint64(input[i+1])
 		d.Exp.NoError(err)
 		offset += length

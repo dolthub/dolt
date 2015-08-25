@@ -121,13 +121,12 @@ func getJSONPrimitive(v interface{}) interface{} {
 }
 
 func getJSONCompoundBlob(cb CompoundBlob) interface{} {
-	// Perhaps tighten this up: BUG #170
-	// {"cb":[{"ref":"sha1-x"},length]}
-	// {"cb":[{"ref":"sha1-x"},lengthX,{"ref":"sha1-y"},lengthY]}
+	// {"cb":["sha1-x",length]}
+	// {"cb":["sha1-x",lengthX,"sha1-y",lengthY]}
 	offset := uint64(0)
 	l := make([]interface{}, 0, len(cb.Blobs)*2)
 	for i, f := range cb.Blobs {
-		l = append(l, getJSONPrimitive(f))
+		l = append(l, f.String())
 		l = append(l, cb.Offsets[i]-offset)
 		offset = cb.Offsets[i]
 	}
