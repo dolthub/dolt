@@ -1,6 +1,7 @@
 {
   "name": "noms-tagshow",
   "dependencies": {
+    "query-string": "^2.4.0",
     "react": "^0.12.0",
     "react-immutable-render-mixin": "^0.8.1",
     "immutable": "^3.7.4"

@@ -17,12 +17,27 @@ var SlideShow = React.createClass({
   mixins: [ImmutableRenderMixin],
 
   propTypes: {
-    photos: React.PropTypes.instanceOf(Immutable.Set),
+    ds: React.PropTypes.instanceOf(Immutable.Map),
+    tags: React.PropTypes.instanceOf(Immutable.Set),
+  },
+
+  getInitialState: function() {
+    return {
+      photos: Immutable.Set(),
+    }
   },
 
   render: function() {
+    this.props.ds
+      .then(head => head.get('value').deref())
+      .then(tags => Promise.all(
+          tags.filter((v, t) => this.props.tags.has(t))
+            .valueSeq()
+            .map(ref => ref.deref())))
+      .then(sets => this.setState({photos: Immutable.Set(...sets)}));
+
     return <div style={containerStyle}>{
-      this.props.photos
+      this.state.photos
         .sort(
           // This sorts the photos deterministically, by the ref of their image
           // blob.
@@ -55,7 +70,7 @@ var Item = React.createClass({
       b => this.setState({blob: b}));
 
     if (this.state.blob == null) {
-      return null;
+      return <span>loading...</span>;
     }
 
     return <img style={imageStyle} src={URL.createObjectURL(this.state.blob)}/>
