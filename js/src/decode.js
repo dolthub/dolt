@@ -72,12 +72,12 @@ function decodeSet(input, ref, getChunk) {
 }
 
 function decodeCompoundBlob(value, ref, getChunk) {
-  // {"cb":[{"ref":"sha1-x"},lengthX,{"ref":"sha1-y"},lengthY]}
+  // {"cb":["sha1-x",lengthX,"sha1-y",lengthY]}
   return Promise.all(
-    value
-      .filter(v => typeof v == 'object')
-      .map(v => readValue(v.ref, getChunk))
-  ).then(values => Promise.resolve(new Blob(values)));
+      value
+          .filter((v, i) => i % 2 === 0)
+          .map(v => readValue(v, getChunk)))
+      .then(childBlobs => new Blob(childBlobs));
 }
 
 function decodeRef(ref, _, getChunk) {
