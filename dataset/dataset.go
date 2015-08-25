@@ -36,7 +36,7 @@ func (ds *Dataset) MaybeHead() (datas.Commit, bool) {
 // Head returns the current head Commit, which contains the current root of the Dataset's value tree.
 func (ds *Dataset) Head() datas.Commit {
 	c, ok := ds.MaybeHead()
-	d.Chk.True(ok, "Dataset %s does not exist", ds.id)
+	d.Chk.True(ok, "Dataset \"%s\" does not exist", ds.id)
 	return c
 }
 

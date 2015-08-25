@@ -16,7 +16,6 @@ import (
 func createTestDataset(name string) dataset.Dataset {
 	t := &chunks.TestStore{}
 	return dataset.NewDataset(datas.NewDataStore(t), name)
-
 }
 
 func TestValidateRef(t *testing.T) {
@@ -125,14 +124,19 @@ func TestTonsOChunks(t *testing.T) {
 
 	source := dataset.NewDataset(datas.NewDataStore(fs1), "source")
 	sink := dataset.NewDataset(datas.NewDataStore(fs2), "sink")
-	assert.True(source.Heads().Equals(sink.Heads()))
+	s := types.NewString("dummy")
+	source, _ = source.Commit(s)
+	sink, _ = sink.Commit(s)
+	assert.True(source.Head().Equals(sink.Head()))
 
-	source = source.Commit(datas.NewSetOfCommit().Insert(datas.NewCommit().SetParents(source.Heads().NomsValue()).SetValue(set)))
-	assert.False(source.Heads().Equals(sink.Heads()))
+	source, ok := source.Commit(set)
+	assert.True(ok)
+	assert.False(source.Head().Equals(sink.Head()))
 
-	newHead := source.Heads().Ref()
-	refs := DiffHeadsByRef(sink.Heads().Ref(), newHead, source)
-	CopyChunks(refs, source, sink)
-	sink = SetNewHeads(newHead, sink)
-	assert.True(source.Heads().Equals(sink.Heads()))
+	newHead := source.Head().Ref()
+	refs := DiffHeadsByRef(sink.Head().Ref(), newHead, source.Store())
+	CopyChunks(refs, source.Store(), sink.Store())
+	sink, ok = SetNewHead(newHead, sink)
+	assert.True(ok)
+	assert.True(source.Head().Equals(sink.Head()))
 }
