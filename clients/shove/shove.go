@@ -7,6 +7,7 @@ import (
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
+	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/sync"
 )
 
@@ -30,10 +31,14 @@ func main() {
 			defer util.StopCPUProfile()
 		}
 
-		newHead := source.Head().Ref()
-		refs := sync.DiffHeadsByRef(sink.Head().Ref(), newHead, source.Store())
+		newHeadRef := source.Head().Ref()
+		currentHeadRef := ref.Ref{}
+		if currentHead, ok := sink.MaybeHead(); ok {
+			currentHeadRef = currentHead.Ref()
+		}
+		refs := sync.DiffHeadsByRef(currentHeadRef, newHeadRef, source.Store())
 		sync.CopyChunks(refs, source.Store(), sink.Store())
-		for ok := false; !ok; *sink, ok = sync.SetNewHead(newHead, *sink) {
+		for ok := false; !ok; *sink, ok = sync.SetNewHead(newHeadRef, *sink) {
 			continue
 		}
 
