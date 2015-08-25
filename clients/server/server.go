@@ -2,8 +2,13 @@ package main
 
 import (
 	"flag"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/clients/util"
+	"github.com/attic-labs/noms/d"
 )
 
 var (
@@ -20,5 +25,20 @@ func main() {
 	}
 
 	server := chunks.NewHttpStoreServer(cs, *port)
-	server.Run()
+
+	// Shutdown server gracefully so that profile may be written
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGTERM)
+	go func() {
+		<-c
+		server.Stop()
+	}()
+
+	d.Try(func() {
+		if util.MaybeStartCPUProfile() {
+			defer util.StopCPUProfile()
+		}
+		server.Run()
+	})
 }
