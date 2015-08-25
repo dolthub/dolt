@@ -5,21 +5,39 @@ var ImmutableRenderMixin = require('react-immutable-render-mixin');
 var noms = require('noms')
 var React = require('react');
 
+var containerStyle = {
+};
+
 var imageStyle = {
-  display: 'block',
-  width: '100%',
+  maxHeight: 300,
+  marginRight: 7,
 };
 
 var SlideShow = React.createClass({
   mixins: [ImmutableRenderMixin],
 
   propTypes: {
-    photos: React.PropTypes.instanceOf(Immutable.Set),
+    ds: React.PropTypes.instanceOf(Immutable.Map),
+    tags: React.PropTypes.instanceOf(Immutable.Set),
+  },
+
+  getInitialState: function() {
+    return {
+      photos: Immutable.Set(),
+    }
   },
 
   render: function() {
-    return <div>{
-      this.props.photos
+    this.props.ds
+      .then(head => head.get('value').deref())
+      .then(tags => Promise.all(
+          tags.filter((v, t) => this.props.tags.has(t))
+            .valueSeq()
+            .map(ref => ref.deref())))
+      .then(sets => this.setState({photos: Immutable.Set(...sets)}));
+
+    return <div style={containerStyle}>{
+      this.state.photos
         .sort(
           // This sorts the photos deterministically, by the ref of their image
           // blob.

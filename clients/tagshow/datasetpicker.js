@@ -9,9 +9,9 @@ var DatasetPicker = React.createClass({
   mixins: [ImmutableRenderMixin],
 
   propTypes: {
-    root: React.PropTypes.instanceOf(noms.Ref).isRequired,
+    datasets: React.PropTypes.instanceOf(Promise).isRequired,
     onChange: React.PropTypes.func.isRequired,
-    selected: React.PropTypes.instanceOf(Immutable.Map),
+    selected: React.PropTypes.string,
   },
 
   getInitialState: function() {
@@ -21,24 +21,21 @@ var DatasetPicker = React.createClass({
   },
 
   handleSelectChange: function(e) {
-    this.props.onChange(
-      this.state.datasets.find(
-        ds => ds.get('id') == e.target.value));
+    this.props.onChange(e.target.value);
   },
 
   render: function() {
-    // Get the datasets
-    this.props.root.deref().then(
-      heads => heads.first().deref()).then(
-      commit => commit.get('value').deref()).then(
-      dsRefs => Promise.all(dsRefs.map(ref => ref.deref()))).then(
+    this.props.datasets.then(
       datasets => {
-        this.setState({datasets: Immutable.Set.of(...datasets)});
-      });
+        this.setState({
+          datasets: Immutable.Set.of(...datasets)
+        });
+      }
+    );
 
     return <form>
       Dataset:
-      <select value={this.props.selected.get('id')}
+      <select value={this.props.selected}
           onChange={this.handleSelectChange}>
         <option/>
         { 

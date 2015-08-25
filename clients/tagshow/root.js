@@ -8,50 +8,48 @@ var React = require('react');
 var SlideShow = require('./slideshow.js');
 var TagCloud = require('./tagcloud.js');
 
-var tagCloudStyle = {
-  position: 'absolute',
-  left: 0,
-  top: 0,
+var containerStyle = {
+  display: 'flex',
 };
 
 var slideShowStyle = {
-  position: 'absolute',
-  top: 0,
-  left: 300,
-  width: 500,
+  flex: 1,
 };
 
 var Root = React.createClass({
   mixins: [ImmutableRenderMixin],
 
   propTypes: {
-    rootValue: React.PropTypes.instanceOf(noms.Ref),
+    rootValue: React.PropTypes.instanceOf(Promise),
+    qs: React.PropTypes.instanceOf(Immutable.Map),
+    updateQuery: React.PropTypes.func.isRequired,
   },
 
   getInitialState: function() {
     return {
-      selectedDs: Immutable.Map(),
-      tags: Immutable.Map(),
       selected: Immutable.Set(),
       selectedPhotos: Immutable.Set(),
     };
   },
 
   handleDataSetPicked: function(ds) {
-    this.setState({selectedDs: ds});
+    this.props.updateQuery(this.props.qs.set('ds', ds));
+  },
 
-    ds.get('heads').deref().then(
-      heads => heads.first().deref()).then(
-      commit => commit.get('value').deref()).then(
-      tags => this.setState({tags:tags}));
+  getSelectedTags: function() {
+    var tags = this.props.qs.get('tags');
+    if (tags) {
+      tags = tags.split(',');
+    } else {
+      tags = [];
+    }
+    return Immutable.Set(tags);
   },
 
   handleTagChoose: function(tag) {
-    this.setState({
-      selected: this.state.selected.has(tag) ?
-        this.state.selected.remove(tag) :
-        this.state.selected.add(tag),
-    });
+    var tags = this.getSelectedTags();
+    tags = tags.has(tag) ? tags.delete(tag) : tags.add(tag);
+    this.props.updateQuery(this.props.qs.set('tags', tags.toArray().join(',')));
   },
 
   render: function() {
@@ -60,32 +58,26 @@ var Root = React.createClass({
     // transformations, or async functions, or something, everything has to be
     // defensively deref'd.
 
-    // Get the selected photos
-    var selectedSetRefs = this.state.tags.filter(
-      (v, k) => this.state.selected.has(k)).valueSeq();
-    Promise.all(selectedSetRefs.map(r => r.deref())).then(
-      sets => {
-        this.setState({
-          selectedPhotos: Immutable.Set().union(...sets)
-        });
-      });
+    if (!this.props.qs.get('ds')) {
+      return <div>
+        <b>Error: </b> 'ds' hash parameter not found
+      </div>
+    }
 
-    return <div>
-      <DataSetPicker
-        root={this.props.rootValue}
-        selected={this.state.selectedDs}
-        onChange={this.handleDataSetPicked}/>
-      <br/>
-      <div style={{position:"relative"}}>
-        <div style={tagCloudStyle}>
-          <TagCloud tags={this.state.tags} selected={this.state.selected}
+    var dataset = noms.getDataset(this.props.qs.get('ds'))
+      .then(ref => ref.deref());
+
+    return (
+      <div style={containerStyle}>
+        <div>
+          <TagCloud ds={dataset} selected={this.getSelectedTags()}
             onChoose={this.handleTagChoose}/>
         </div>
         <div style={slideShowStyle}>
-          <SlideShow photos={this.state.selectedPhotos}/>
+          <SlideShow ds={dataset} tags={this.getSelectedTags()}/>
         </div>
       </div>
-    </div>
+    );
   },
 });
 
