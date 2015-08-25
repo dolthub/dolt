@@ -30,11 +30,14 @@ var SlideShow = React.createClass({
   render: function() {
     this.props.ds
       .then(head => head.get('value').deref())
-      .then(tags => Promise.all(
+      .then(tags => {
+        return Promise.all(
           tags.filter((v, t) => this.props.tags.has(t))
             .valueSeq()
-            .map(ref => ref.deref())))
-      .then(sets => this.setState({photos: Immutable.Set(...sets)}));
+            .map(ref => ref.deref()))
+      }).then(sets => {
+        this.setState({photos: Immutable.Set().union(...sets)})
+      });
 
     return <div style={containerStyle}>{
       this.state.photos
