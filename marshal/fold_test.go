@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 //
-// Copied from the encoding/json package.
+// Copied from the encoding/json package at 80e6d638bf309181eadcb3fecbe99d2d8518e364.
 
 package marshal
 

@@ -1,4 +1,4 @@
-// Modified from golang's encoding/json/encode.go
+// Modified from golang's encoding/json/encode.go at 80e6d638bf309181eadcb3fecbe99d2d8518e364.
 
 // Package marshal implements encoding and decoding of Noms values into native Go types.
 // The mapping between Noms objects and Go values is described
@@ -7,13 +7,13 @@ package marshal
 
 import (
 	"bytes"
-	"fmt"
+	"io"
 	"math"
 	"reflect"
-	"runtime"
 	"strconv"
 	"sync"
 
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -37,9 +37,8 @@ import (
 // becomes a member of the object unless
 //   - the field's tag is "-", or
 //   - the field is empty and its tag specifies the "omitempty" option.
-// The empty values are false, 0, any
-// nil pointer or interface value, and any array, slice, map, or string of
-// length zero. The Map's default key string is the struct field name
+// The empty values are the standard zero values.
+// The Map's default keys are the struct field name as a string,
 // but can be specified in the struct field's tag value. The "noms" key in
 // the struct field's tag value is the key name, followed by an optional comma
 // and options. Examples:
@@ -64,13 +63,13 @@ import (
 // only Unicode letters, digits, dollar signs, percent signs, hyphens,
 // underscores and slashes.
 //
-// Anonymous struct fields are usually marshaled as if their inner exported fields
-// were fields in the outer struct, subject to the usual Go visibility rules amended
-// as described in the next paragraph.
-// An anonymous struct field with a name given in its 'noms' tag is treated as
-// having that name, rather than being anonymous.
-// An anonymous struct field of interface type is treated the same as having
-// that type as its name, rather than being anonymous.
+// Anonymous struct fields (i.e. embedded structs) are marshaled as if their inner exported fields
+// were fields in the outer struct, mostly subject to the usual Go visibility rules.
+// These are amended slightly, as follows:
+// 1) An anonymous struct field with a name given in its 'noms' tag is treated as
+//    having that name, rather than being anonymous.
+// 2) An anonymous struct field of interface type is treated the same as having
+//    that type as its name, rather than being anonymous.
 //
 // The Go visibility rules for struct fields are amended for us when
 // deciding which field to marshal or unmarshal. If there are
@@ -79,7 +78,7 @@ import (
 // usual Go rules), the following extra rules apply:
 //
 // 1) Of those fields, if any are Noms-tagged, only tagged fields are considered,
-// even if there are multiple untagged fields that would otherwise conflict.
+//    even if there are multiple untagged fields that would otherwise conflict.
 // 2) If there is exactly one field (tagged or not according to the first rule), that is selected.
 // 3) Otherwise there are multiple fields, and all are ignored; no error occurs.
 //
@@ -99,44 +98,16 @@ import (
 // handle them.  Passing cyclic structures to Marshal will result in
 // an infinite recursion.
 //
-func Marshal(v interface{}) (types.Value, error) {
-	return marshal(v)
+func Marshal(v interface{}) types.Value {
+	return reflectValue(reflect.ValueOf(v))
 }
 
-// An UnsupportedTypeError is returned by Marshal when attempting
-// to encode an unsupported value type.
-type UnsupportedTypeError struct {
-	Type reflect.Type
+func unsupportedTypeMsg(t reflect.Type) string {
+	return "noms: unsupported type: " + t.String()
 }
 
-func (e *UnsupportedTypeError) Error() string {
-	return "noms: unsupported type: " + e.Type.String()
-}
-
-// An UnsupportedValueError is returned by Marshal when attempting
-// to encode an unsupported value -- such as a nil pointer.
-type UnsupportedValueError struct {
-	Value reflect.Value
-	Str   string
-}
-
-func (e *UnsupportedValueError) Error() string {
-	return "noms: unsupported value: " + e.Str
-}
-
-func marshal(v interface{}) (nom types.Value, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			if _, ok := r.(runtime.Error); ok {
-				panic(r)
-			}
-			if s, ok := r.(string); ok {
-				panic(s)
-			}
-			err = r.(error)
-		}
-	}()
-	return reflectValue(reflect.ValueOf(v)), nil
+func unsupportedValueMsg(s string) string {
+	return "noms: unsupported value: " + s
 }
 
 func isEmptyValue(v reflect.Value) bool {
@@ -209,8 +180,17 @@ func typeEncoder(t reflect.Type) encoderFunc {
 	return f
 }
 
+var (
+	bytesBufferType = reflect.TypeOf(&bytes.Buffer{})
+	readerType      = reflect.TypeOf((*io.Reader)(nil)).Elem()
+)
+
 // newTypeEncoder constructs an encoderFunc for a type.
 func newTypeEncoder(t reflect.Type) encoderFunc {
+	if t.Implements(readerType) {
+		return readerEncoder
+	}
+
 	switch t.Kind() {
 	case reflect.Bool:
 		return boolEncoder
@@ -259,14 +239,13 @@ func intEncoder(v reflect.Value) types.Value {
 		return types.Int32(v.Int())
 	case reflect.Int:
 		n := v.Int()
-		if reflect.ValueOf(types.Int32(0)).OverflowInt(n) {
-			panic(&UnsupportedValueError{v, fmt.Sprintf("Unsized integers must be 32 bit values; %d is too large.", n)})
-		}
+		d.Exp.False(reflect.ValueOf(types.Int32(0)).OverflowInt(n), " Unsized integers must be 32 bit values; %d is too large.")
 		return types.Int32(n)
 	case reflect.Int64:
 		return types.Int64(v.Int())
 	default:
-		panic(&UnsupportedValueError{v, "Not an integer"})
+		d.Exp.Fail("Not an integer")
+		panic("unreachable")
 	}
 }
 
@@ -281,14 +260,13 @@ func uintEncoder(v reflect.Value) types.Value {
 		return types.UInt32(n)
 	case reflect.Uint:
 		n := v.Uint()
-		if reflect.ValueOf(types.UInt32(0)).OverflowUint(n) {
-			panic(&UnsupportedValueError{v, fmt.Sprintf("Unsized integers must be 32 bit values; %d is too large.", n)})
-		}
+		d.Exp.False(reflect.ValueOf(types.UInt32(0)).OverflowUint(n), "Unsized integers must be 32 bit values; %d is too large.", n)
 		return types.UInt32(n)
 	case reflect.Uint64:
 		return types.UInt64(n)
 	default:
-		panic(&UnsupportedValueError{v, fmt.Sprintf("%d not an unsigned integer", n)})
+		d.Exp.Fail("Not an unsigned integer", "%d", n)
+		panic("unreachable")
 	}
 }
 
@@ -296,9 +274,8 @@ type floatEncoder int // number of bits
 
 func (bits floatEncoder) encode(v reflect.Value) types.Value {
 	f := v.Float()
-	if math.IsInf(f, 0) || math.IsNaN(f) {
-		panic(&UnsupportedValueError{v, strconv.FormatFloat(f, 'g', -1, int(bits))})
-	}
+	d.Exp.False(math.IsInf(f, 0), "Noms can't encode infinity", strconv.FormatFloat(f, 'g', -1, int(bits)))
+	d.Exp.False(math.IsNaN(f), "Noms can't encode NaN", strconv.FormatFloat(f, 'g', -1, int(bits)))
 	if bits == 64 {
 		return types.Float64(f)
 	}
@@ -315,14 +292,13 @@ func stringEncoder(v reflect.Value) types.Value {
 }
 
 func interfaceEncoder(v reflect.Value) types.Value {
-	if v.IsNil() {
-		panic(&UnsupportedValueError{v, "Noms can't encode nil interface."})
-	}
+	d.Exp.False(v.IsNil(), "Noms can't encode nil interface.")
 	return reflectValue(v.Elem())
 }
 
 func unsupportedTypeEncoder(v reflect.Value) types.Value {
-	panic(&UnsupportedTypeError{v.Type()})
+	d.Exp.Fail(unsupportedTypeMsg(v.Type()))
+	panic("unreachable")
 }
 
 type structEncoder struct {
@@ -337,6 +313,13 @@ func isNilPtrOrNilInterface(v reflect.Value) bool {
 	default:
 		return false
 	}
+}
+
+func readerEncoder(v reflect.Value) types.Value {
+	d.Chk.True(v.Type().Implements(readerType))
+	blob, err := types.NewBlob(v.Interface().(io.Reader))
+	d.Exp.NoError(err, "Failed to marshal reader into blob")
+	return blob
 }
 
 // Noms has no notion of a general-purpose nil value. Thus, if struct encoding encounters a field that holds a nil pointer or interface, it skips it even if that field doesn't have the omitempty option set. Nil maps and slices are encoded as an empty Noms map, set, list or blob as appropriate.
@@ -426,10 +409,6 @@ func encodeByteSlice(v reflect.Value) types.Value {
 }
 
 func newSliceEncoder(t reflect.Type) encoderFunc {
-	// Byte slices get special treatment; arrays don't.
-	if t.Elem().Kind() == reflect.Uint8 {
-		return encodeByteSlice
-	}
 	return newArrayEncoder(t)
 }
 
@@ -460,9 +439,7 @@ type ptrEncoder struct {
 }
 
 func (pe *ptrEncoder) encode(v reflect.Value) types.Value {
-	if v.IsNil() {
-		panic(&UnsupportedValueError{v, "Noms can't encode nil ptr."})
-	}
+	d.Exp.False(v.IsNil(), "Noms can't encode nil ptr.")
 	return pe.elemEnc(v.Elem())
 }
 

@@ -1,4 +1,4 @@
-// Extracted and modified from golang's encoding/json/encode.go
+// Extracted and modified from golang's encoding/json/encode.go at 80e6d638bf309181eadcb3fecbe99d2d8518e364.
 
 package marshal
 

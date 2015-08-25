@@ -1,4 +1,4 @@
-// Modified from golang's encoding/json/decode.go
+// Modified from golang's encoding/json/decode.go at 80e6d638bf309181eadcb3fecbe99d2d8518e364.
 
 package marshal
 
@@ -8,7 +8,6 @@ import (
 	"io"
 	"math"
 	"reflect"
-	"runtime"
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -25,120 +24,80 @@ import (
 // nom that don't have an analog in v. The primary difference is that
 // there's no analog to the json.Unmarshaler interface.
 //
-// Like json.Unmarshal, this code also treats overflows and field type
-// mismatches as non-fatal; the fields will just be skipped and a the
-// first such occurence will be reported in the return value. For example,
-// a types.Int32 will be unmarshalled into an int64, because that's safe,
-// but a types.Float64 won't be allowed to overflow a float32 in the
-// target. Similarly, Unmarshal will skip a piece of data in nom that maps
-// to a target of the wrong type in v -- e.g. both nom and v have a field
-// named Foo, but it's a types.String in the former and an int in the
-// latter.
-func Unmarshal(nom types.Value, v interface{}) error {
-	u := unmarshalState{}
-	return u.unmarshal(nom, v)
+// Any value can be "unmarshaled" into a ref.Ref, though the target will be populated only with the value's ref.
+// Primitive values can be unmarshaled into Go primitives.
+// Lists can be unmarshaled into slices, with space being allocated dynamically.
+// Lists can be unmarshaled into arrays if there is room for all the data.
+// Maps can be unmarshaled into Go maps.
+// Sets can be unmarshaled into Go maps of the form map[ElementType]bool
+// Blobs can be unmarshaled into anything that implements io.Writer by using io.Copy.
+//   Note that your Writer will not be cleared or destroyed before data is written to it.
+// Blobs can be unmarshaled into slices, with space being allocated dynamically.
+// Blobs can be unmarshaled into arrays if there is room for all the data.
+//
+// Unline json.Unmarshal, this code treats overflows and significant field
+// type mismatches as fatal. For example, a types.Int32 will be unmarshalled
+// into an int64, because that's safe, but a types.Float64 won't be allowed
+// to overflow a float32 in the target. Similarly, Unmarshal will error on a
+// piece of data in nom that maps to a target of the wrong type in v -- e.g.
+// both nom and v have a field named Foo, but it's a types.String in the
+// former and an int in the latter.
+func Unmarshal(nom types.Value, v interface{}) {
+	rv := reflect.ValueOf(v)
+	d.Exp.False(rv.Kind() != reflect.Ptr || rv.IsNil(), invalidUnmarshalMsg(reflect.TypeOf(v)))
+	unmarshalValue(nom, rv)
 }
 
 var (
 	refRefType = reflect.TypeOf(ref.Ref{})
+	writerType = reflect.TypeOf((*io.Writer)(nil)).Elem()
 )
 
-// An UnmarshalTypeError describes a Noms value that was
-// not appropriate for a value of a specific Go type.
-type UnmarshalTypeError struct {
-	Value string       // type name of Noms value
-	Type  reflect.Type // type of Go value it could not be assigned to
+func invalidTypeMsg(v string, t reflect.Type) string {
+	return "noms: cannot unmarshal noms " + v + " into Go value of type " + t.String()
 }
 
-func (e *UnmarshalTypeError) Error() string {
-	return "noms: cannot unmarshal noms " + e.Value + " into Go value of type " + e.Type.String()
-}
-
-// An InvalidUnmarshalError describes an invalid argument passed to Unmarshal.
-// (The argument to Unmarshal must be a non-nil pointer.)
-type InvalidUnmarshalError struct {
-	Type reflect.Type
-}
-
-func (e *InvalidUnmarshalError) Error() string {
-	if e.Type == nil {
+// The argument to Unmarshal must be a non-nil pointer
+func invalidUnmarshalMsg(t reflect.Type) string {
+	if t == nil {
 		return "noms: Unmarshal(nil)"
 	}
 
-	if e.Type.Kind() != reflect.Ptr {
-		return "noms: Unmarshal(non-pointer " + e.Type.String() + ")"
+	if t.Kind() != reflect.Ptr {
+		return "noms: Unmarshal(non-pointer " + t.String() + ")"
 	}
-	return "noms: Unmarshal(nil " + e.Type.String() + ")"
-}
-
-func (u *unmarshalState) unmarshal(nom types.Value, v interface{}) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			if _, ok := r.(runtime.Error); ok {
-				panic(r)
-			} else if s, ok := r.(string); ok {
-				r = fmt.Errorf(s)
-			}
-			err = r.(error)
-		}
-	}()
-
-	rv := reflect.ValueOf(v)
-	if rv.Kind() != reflect.Ptr || rv.IsNil() {
-		return &InvalidUnmarshalError{reflect.TypeOf(v)}
-	}
-
-	u.unmarshalValue(nom, rv)
-	return u.savedError
-}
-
-// unmarshalState represents the state while decoding a Noms value.
-type unmarshalState struct {
-	savedError error
-}
-
-// error aborts the decoding by panicking with err.
-func (u *unmarshalState) error(err error) {
-	panic(err)
-}
-
-// saveError saves the first err it is called with,
-// for reporting at the end of the unmarshal.
-func (u *unmarshalState) saveError(err error) {
-	if u.savedError == nil {
-		u.savedError = err
-	}
+	return "noms: Unmarshal(nil " + t.String() + ")"
 }
 
 // unmarshalValue unpacks an arbitrary types.Value into v.
-func (u *unmarshalState) unmarshalValue(nom types.Value, v reflect.Value) {
+func unmarshalValue(nom types.Value, v reflect.Value) {
 	if !v.IsValid() {
 		return
 	}
 
 	switch nom := nom.(type) {
 	case types.Blob:
-		u.unmarshalBlob(nom, v)
+		unmarshalBlob(nom, v)
 	case types.List:
-		u.unmarshalList(nom, v)
+		unmarshalList(nom, v)
 	case types.Map:
-		u.unmarshalMap(nom, v)
+		unmarshalMap(nom, v)
 	case primitive:
-		u.unmarshalPrimitive(nom, v)
+		unmarshalPrimitive(nom, v)
 	case types.Ref:
-		u.unmarshalRef(nom, v)
+		unmarshalRef(nom, v)
 	case types.Set:
-		u.unmarshalSet(nom, v)
+		unmarshalSet(nom, v)
 	case types.String:
-		u.unmarshalString(nom, v)
+		unmarshalString(nom, v)
 	default:
-		u.error(&UnmarshalTypeError{reflect.TypeOf(nom).Name(), v.Type()})
+		d.Exp.Fail(invalidTypeMsg(reflect.TypeOf(nom).Name(), v.Type()))
 	}
 }
 
 // indirect walks down v, allocating pointers as needed,
 // until it gets to a non-pointer.
-func (u *unmarshalState) indirect(v reflect.Value) reflect.Value {
+func indirect(v reflect.Value) reflect.Value {
 	// If v is a named type and is addressable,
 	// start with its address, so that if the type has pointer methods,
 	// we find them.
@@ -146,14 +105,9 @@ func (u *unmarshalState) indirect(v reflect.Value) reflect.Value {
 		v = v.Addr()
 	}
 	for {
-		// Load value from interface, but only if the result will be
-		// usefully addressable.
-		if v.Kind() == reflect.Interface && !v.IsNil() {
-			e := v.Elem()
-			if e.Kind() == reflect.Ptr && !e.IsNil() {
-				v = e
-				continue
-			}
+		if nv, ok := loadValueFromInterfaceIfAddressable(v); ok {
+			v = nv
+			continue
 		}
 
 		if v.Kind() != reflect.Ptr {
@@ -168,9 +122,57 @@ func (u *unmarshalState) indirect(v reflect.Value) reflect.Value {
 	return v
 }
 
-func (u *unmarshalState) unmarshalBlob(nom types.Blob, v reflect.Value) {
-	origType := v.Type()
-	v = u.indirect(v)
+// indirect walks down v, allocating pointers as needed,
+// until it gets to a non-pointer.
+func findImplementor(v reflect.Value, i reflect.Type) (reflect.Value, bool) {
+	d.Chk.Equal(reflect.Interface, i.Kind())
+	// If v is a named type and is addressable,
+	// start with its address, so that if the type has pointer methods,
+	// we find them.
+	if v.Kind() != reflect.Ptr && v.Type().Name() != "" && v.CanAddr() {
+		v = v.Addr()
+	}
+	for {
+		if v.Type().Implements(writerType) {
+			return v, true
+		}
+		if nv, ok := loadValueFromInterfaceIfAddressable(v); ok {
+			v = nv
+			continue
+		}
+
+		if v.Kind() != reflect.Ptr {
+			break
+		}
+
+		d.Chk.False(v.IsNil())
+		v = v.Elem()
+	}
+	return v, false
+}
+
+// Load value from interface, but only if the result will be usefully addressable.
+func loadValueFromInterfaceIfAddressable(v reflect.Value) (reflect.Value, bool) {
+	if v.Kind() == reflect.Interface && !v.IsNil() {
+		e := v.Elem()
+		if e.Kind() == reflect.Ptr && !e.IsNil() {
+			return e, true
+		}
+	}
+	return v, false
+}
+
+// TODO: unmarshal into *io.Reader? BUG 160
+func unmarshalBlob(nom types.Blob, v reflect.Value) {
+	origType := v.Type()  // For error reporting.
+	finalV := indirect(v) // To populate any nil pointers.
+	if v, ok := findImplementor(v, writerType); ok {
+		n, err := io.Copy(v.Interface().(io.Writer), nom.Reader())
+		d.Exp.NoError(err)
+		d.Exp.EqualValues(nom.Len(), n, "Blob too large")
+		return
+	}
+	v = finalV
 
 	// Decoding into nil interface? Stuff a reader in there.
 	if v.Kind() == reflect.Interface && v.NumMethod() == 0 {
@@ -187,7 +189,7 @@ func (u *unmarshalState) unmarshalBlob(nom types.Blob, v reflect.Value) {
 	// Check type of target.
 	switch v.Kind() {
 	default:
-		u.saveError(&UnmarshalTypeError{reflect.TypeOf(nom).Name(), origType})
+		d.Exp.Fail(invalidTypeMsg(reflect.TypeOf(nom).Name(), origType))
 		return
 	case reflect.Array:
 		break
@@ -201,22 +203,18 @@ func (u *unmarshalState) unmarshalBlob(nom types.Blob, v reflect.Value) {
 	}
 
 	read, err := io.ReadFull(nom.Reader(), v.Bytes())
-	if err != nil {
-		u.saveError(err)
-	}
-	if read < nomLen {
-		u.saveError(fmt.Errorf("blob too large"))
-	}
+	d.Exp.NoError(err)
+	d.Exp.Equal(nomLen, read, "blob too large")
 	return
 }
 
-func (u *unmarshalState) unmarshalList(nom types.List, v reflect.Value) {
+func unmarshalList(nom types.List, v reflect.Value) {
 	origType := v.Type()
-	v = u.indirect(v)
+	v = indirect(v)
 
 	// Decoding into nil interface?  Switch to non-reflect code.
 	if v.Kind() == reflect.Interface && v.NumMethod() == 0 {
-		v.Set(reflect.ValueOf(u.listInterface(nom)))
+		v.Set(reflect.ValueOf(listInterface(nom)))
 		return
 	} else if v.Kind() == reflect.Struct && v.Type() == refRefType {
 		v.Set(reflect.ValueOf(nom.Ref()))
@@ -226,7 +224,7 @@ func (u *unmarshalState) unmarshalList(nom types.List, v reflect.Value) {
 	// Check type of target.
 	switch v.Kind() {
 	default:
-		u.saveError(&UnmarshalTypeError{reflect.TypeOf(nom).Name(), origType})
+		d.Exp.Fail(invalidTypeMsg(reflect.TypeOf(nom).Name(), origType))
 		return
 	case reflect.Slice:
 		// The reflection stuff all uses int, so if nom is too big, just make v as big as possible.
@@ -242,11 +240,9 @@ func (u *unmarshalState) unmarshalList(nom types.List, v reflect.Value) {
 
 	i := 0
 	for ; uint64(i) < nom.Len(); i++ {
-		// If v is a fixed array and we've exhausted it, we just skip content from nom.
-		if i < v.Len() {
-			// Decode into element.
-			u.unmarshalValue(nom.Get(uint64(i)), v.Index(i))
-		}
+		d.Exp.True(i < v.Len(), "list is too large for target array of size %d", v.Len())
+		// Decode into element.
+		unmarshalValue(nom.Get(uint64(i)), v.Index(i))
 	}
 
 	if i < v.Len() {
@@ -262,13 +258,13 @@ func (u *unmarshalState) unmarshalList(nom types.List, v reflect.Value) {
 	}
 }
 
-func (u *unmarshalState) unmarshalMap(nom types.Map, v reflect.Value) {
+func unmarshalMap(nom types.Map, v reflect.Value) {
 	origType := v.Type()
-	v = u.indirect(v)
+	v = indirect(v)
 
 	// Decoding into nil interface?  Switch to non-reflect code.
 	if v.Kind() == reflect.Interface && v.NumMethod() == 0 {
-		v.Set(reflect.ValueOf(u.mapInterface(nom)))
+		v.Set(reflect.ValueOf(mapInterface(nom)))
 		return
 	} else if v.Kind() == reflect.Struct && v.Type() == refRefType {
 		v.Set(reflect.ValueOf(nom.Ref()))
@@ -277,10 +273,10 @@ func (u *unmarshalState) unmarshalMap(nom types.Map, v reflect.Value) {
 
 	switch v.Kind() {
 	default:
-		u.saveError(&UnmarshalTypeError{reflect.TypeOf(nom).Name(), origType})
+		d.Exp.Fail(invalidTypeMsg(reflect.TypeOf(nom).Name(), origType))
 		return
 	case reflect.Struct:
-		u.unmarshalStruct(nom, v)
+		unmarshalStruct(nom, v)
 		return
 	case reflect.Map:
 		if v.IsNil() {
@@ -295,10 +291,10 @@ func (u *unmarshalState) unmarshalMap(nom types.Map, v reflect.Value) {
 
 	nom.Iter(func(key, value types.Value) (stop bool) {
 		mapKey.Set(reflect.Zero(keyType))
-		u.unmarshalValue(key, mapKey)
+		unmarshalValue(key, mapKey)
 
 		mapElem.Set(reflect.Zero(elemType))
-		u.unmarshalValue(value, mapElem)
+		unmarshalValue(value, mapElem)
 		v.SetMapIndex(mapKey, mapElem)
 		return
 	})
@@ -310,9 +306,9 @@ type primitive interface {
 	ToPrimitive() interface{}
 }
 
-func (u *unmarshalState) unmarshalPrimitive(nom primitive, v reflect.Value) {
+func unmarshalPrimitive(nom primitive, v reflect.Value) {
 	origType := v.Type()
-	v = u.indirect(v)
+	v = indirect(v)
 	nomValue := reflect.ValueOf(nom.ToPrimitive())
 
 	if v.Kind() == reflect.Interface && v.NumMethod() == 0 {
@@ -326,36 +322,27 @@ func (u *unmarshalState) unmarshalPrimitive(nom primitive, v reflect.Value) {
 
 	switch v.Kind() {
 	default:
-		u.saveError(&UnmarshalTypeError{reflect.TypeOf(nom).Name(), origType})
+		d.Exp.Fail(invalidTypeMsg(reflect.TypeOf(nom).Name(), origType))
 	case reflect.Bool:
 		v.SetBool(nomValue.Bool())
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		n := nomValue.Int()
-		if v.OverflowInt(n) {
-			u.saveError(&UnmarshalTypeError{fmt.Sprintf("number %d", n), origType})
-			break
-		}
+		d.Exp.False(v.OverflowInt(n), invalidTypeMsg(fmt.Sprintf("number %d", n), origType))
 		v.SetInt(n)
 	case reflect.Float32, reflect.Float64:
 		n := nomValue.Float()
-		if v.OverflowFloat(n) {
-			u.saveError(&UnmarshalTypeError{fmt.Sprintf("number %f", n), origType})
-			break
-		}
+		d.Exp.False(v.OverflowFloat(n), invalidTypeMsg(fmt.Sprintf("number %f", n), origType))
 		v.SetFloat(n)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		n := nomValue.Uint()
-		if v.OverflowUint(n) {
-			u.saveError(&UnmarshalTypeError{fmt.Sprintf("number %d", n), origType})
-			break
-		}
+		d.Exp.False(v.OverflowUint(n), invalidTypeMsg(fmt.Sprintf("number %d", n), origType))
 		v.SetUint(n)
 	}
 }
 
-func (u *unmarshalState) unmarshalRef(nom types.Ref, v reflect.Value) {
+func unmarshalRef(nom types.Ref, v reflect.Value) {
 	origType := v.Type()
-	v = u.indirect(v)
+	v = indirect(v)
 
 	// Decoding into nil interface? Stuff a string in there.
 	if v.Kind() == reflect.Interface && v.NumMethod() == 0 {
@@ -369,7 +356,7 @@ func (u *unmarshalState) unmarshalRef(nom types.Ref, v reflect.Value) {
 	// Check type of target.
 	switch v.Kind() {
 	default:
-		u.saveError(&UnmarshalTypeError{reflect.TypeOf(nom).Name(), origType})
+		d.Exp.Fail(invalidTypeMsg(reflect.TypeOf(nom).Name(), origType))
 		return
 	case reflect.String:
 		v.SetString(nom.Ref().String())
@@ -382,18 +369,18 @@ func (u *unmarshalState) unmarshalRef(nom types.Ref, v reflect.Value) {
 			reflect.Copy(v, reflect.ValueOf(nom.Ref().Digest()))
 			return
 		}
-		u.saveError(&UnmarshalTypeError{reflect.TypeOf(nom).Name(), origType})
+		d.Exp.Fail(invalidTypeMsg(reflect.TypeOf(nom).Name(), origType))
 		return
 	}
 }
 
-func (u *unmarshalState) unmarshalSet(nom types.Set, v reflect.Value) {
+func unmarshalSet(nom types.Set, v reflect.Value) {
 	origType := v.Type()
-	v = u.indirect(v)
+	v = indirect(v)
 
 	// Decoding into nil interface?  Switch to non-reflect code.
 	if v.Kind() == reflect.Interface && v.NumMethod() == 0 {
-		v.Set(reflect.ValueOf(u.setInterface(nom)))
+		v.Set(reflect.ValueOf(setInterface(nom)))
 		return
 	} else if v.Kind() == reflect.Struct && v.Type() == refRefType {
 		v.Set(reflect.ValueOf(nom.Ref()))
@@ -403,13 +390,13 @@ func (u *unmarshalState) unmarshalSet(nom types.Set, v reflect.Value) {
 	// Check type of target.
 	switch v.Kind() {
 	default:
-		u.saveError(&UnmarshalTypeError{reflect.TypeOf(nom).Name(), origType})
+		d.Exp.Fail(invalidTypeMsg(reflect.TypeOf(nom).Name(), origType))
 		return
 	case reflect.Map:
 		// map must have bool values.
 		t := v.Type()
 		if t.Elem().Kind() != reflect.Bool {
-			u.saveError(&UnmarshalTypeError{reflect.TypeOf(nom).Name(), origType})
+			d.Exp.Fail(invalidTypeMsg(reflect.TypeOf(nom).Name(), origType))
 			return
 		}
 		if v.IsNil() {
@@ -422,16 +409,16 @@ func (u *unmarshalState) unmarshalSet(nom types.Set, v reflect.Value) {
 	newElem := reflect.New(v.Type().Key()).Elem() // New returns a pointer, hence the Elem().
 	trueValue := reflect.ValueOf(true)
 	nom.Iter(func(elem types.Value) (stop bool) {
-		u.unmarshalValue(elem, newElem)
+		unmarshalValue(elem, newElem)
 		v.SetMapIndex(newElem, trueValue)
 		return
 	})
 	return
 }
 
-func (u *unmarshalState) unmarshalString(nom types.String, v reflect.Value) {
+func unmarshalString(nom types.String, v reflect.Value) {
 	origType := v.Type()
-	v = u.indirect(v)
+	v = indirect(v)
 	if v.Kind() == reflect.Interface && v.NumMethod() == 0 {
 		// You can set the nil interface to a value of any type.
 		v.Set(reflect.ValueOf(nom.String()))
@@ -443,15 +430,15 @@ func (u *unmarshalState) unmarshalString(nom types.String, v reflect.Value) {
 
 	switch v.Kind() {
 	default:
-		u.saveError(&UnmarshalTypeError{reflect.TypeOf(nom).Name(), origType})
+		d.Exp.Fail(invalidTypeMsg(reflect.TypeOf(nom).Name(), origType))
 	case reflect.String:
 		v.SetString(nom.String())
 	}
 	return
 }
 
-func (u *unmarshalState) unmarshalStruct(nom types.Map, v reflect.Value) {
-	v = u.indirect(v)
+func unmarshalStruct(nom types.Map, v reflect.Value) {
+	v = indirect(v)
 	d.Chk.Equal(reflect.Struct, v.Kind())
 
 	if v.Type() == refRefType {
@@ -489,7 +476,7 @@ func (u *unmarshalState) unmarshalStruct(nom types.Map, v reflect.Value) {
 					subv = subv.Field(i)
 				}
 				// subv is left pointing to the field we want to unmarshal into.
-				u.unmarshalValue(value, subv)
+				unmarshalValue(value, subv)
 			}
 		}
 		return
@@ -511,48 +498,50 @@ func truncateUint64(u uint64) (out int) {
 // but they avoid the weight of reflection in this common case.
 
 // valueInterface is like value but returns interface{}
-func (u *unmarshalState) valueInterface(nom types.Value) interface{} {
+func valueInterface(nom types.Value) interface{} {
 	switch nom := nom.(type) {
+	case types.Blob:
+		d.Chk.Fail("Blobs should be handled by returing blob.Reader() directly.")
+		panic("unreachable")
 	case types.List:
-		return u.listInterface(nom)
+		return listInterface(nom)
 	case types.Map:
-		return u.mapInterface(nom)
+		return mapInterface(nom)
 	case types.Set:
-		return u.setInterface(nom)
+		return setInterface(nom)
 	case types.String:
 		return nom.String()
 	case primitive:
 		return nom.ToPrimitive()
 	default:
-		u.error(fmt.Errorf("Blobs not yet supported"))
 		panic("unreachable")
 	}
 }
 
 // listInterface is like unmarshalList but returns []interface{}.
-func (u *unmarshalState) listInterface(nom types.List) (v []interface{}) {
+func listInterface(nom types.List) (v []interface{}) {
 	v = make([]interface{}, 0)
 	for i := uint64(0); i < nom.Len(); i++ {
-		v = append(v, u.valueInterface(nom.Get(i)))
+		v = append(v, valueInterface(nom.Get(i)))
 	}
 	return
 }
 
 // setInterface is like unmarshalSet but returns map[interface{}]bool.
-func (u *unmarshalState) setInterface(nom types.Set) (v map[interface{}]bool) {
+func setInterface(nom types.Set) (v map[interface{}]bool) {
 	v = make(map[interface{}]bool)
 	nom.Iter(func(elem types.Value) (stop bool) {
-		v[u.valueInterface(elem)] = true
+		v[valueInterface(elem)] = true
 		return
 	})
 	return
 }
 
 // mapInterface is like unmarshalMap but returns map[string]interface{}.
-func (u *unmarshalState) mapInterface(nom types.Map) (m map[interface{}]interface{}) {
+func mapInterface(nom types.Map) (m map[interface{}]interface{}) {
 	m = make(map[interface{}]interface{})
 	nom.Iter(func(key, value types.Value) (stop bool) {
-		m[u.valueInterface(key)] = u.valueInterface(value)
+		m[valueInterface(key)] = valueInterface(value)
 		return
 	})
 	return

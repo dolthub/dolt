@@ -1,4 +1,4 @@
-// Modified from golang's encoding/json/decode_test.go
+// Modified from golang's encoding/json/decode_test.go at 80e6d638bf309181eadcb3fecbe99d2d8518e364.
 
 package marshal
 
@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
@@ -130,7 +131,7 @@ type unmarshalTest struct {
 	in  types.Value
 	ptr interface{}
 	out interface{}
-	err error
+	err string
 }
 
 type Ambig struct {
@@ -158,7 +159,7 @@ var unmarshalTests = []unmarshalTest{
 	{in: types.NewMap(
 		types.NewString("X"), types.NewList(types.Int16(1)),
 		types.NewString("Y"), types.Int32(4)),
-		ptr: new(T), out: T{Y: 4}, err: &UnmarshalTypeError{"List", reflect.TypeOf("")}},
+		ptr: new(T), out: T{Y: 4}, err: invalidTypeMsg("List", reflect.TypeOf(""))},
 	{in: strIntMap(si{"x", 1}), ptr: new(tx), out: tx{}},
 
 	// Z has a "-" tag.
@@ -171,7 +172,7 @@ var unmarshalTests = []unmarshalTest{
 
 	// array tests
 	{in: list(1, 2, 3), ptr: new([3]int), out: [3]int{1, 2, 3}},
-	{in: list(1, 2, 3), ptr: new([1]int), out: [1]int{1}},
+	{in: list(1, 2, 3), ptr: new([1]int), out: [1]int{1}, err: "list is too large"},
 	{in: list(1, 2, 3), ptr: new([5]int), out: [5]int{1, 2, 3, 0, 0}},
 
 	// blob tests
@@ -179,12 +180,12 @@ var unmarshalTests = []unmarshalTest{
 
 	// ref tests
 	{
-		in:  types.Ref{R: ref.MustParse("sha1-ffffffffffffffffffffffffffffffffffffffff")},
+		in:  types.Ref{R: ref.Parse("sha1-ffffffffffffffffffffffffffffffffffffffff")},
 		ptr: new(string),
 		out: "sha1-" + strings.Repeat("f", 40),
 	},
 	{
-		in:  types.Ref{R: ref.MustParse("sha1-ffffffffffffffffffffffffffffffffffffffff")},
+		in:  types.Ref{R: ref.Parse("sha1-ffffffffffffffffffffffffffffffffffffffff")},
 		ptr: &[]byte{},
 		out: byteSlice(0xff, len(ref.Sha1Digest{})),
 	},
@@ -284,23 +285,21 @@ func TestUnmarshal(t *testing.T) {
 		// v = new(right-type)
 		v := reflect.New(reflect.TypeOf(tt.ptr).Elem())
 
-		err := Unmarshal(tt.in, v.Interface())
-		if tt.err != nil {
+		err := d.Try(func() { Unmarshal(tt.in, v.Interface()) })
+		if tt.err != "" {
 			if assert.NotNil(err) {
-				assert.EqualValues(err, tt.err, "#%d: %v, want %v", i, err, tt.err)
+				assert.Contains(err.Error(), tt.err, "#%d: %v not in %s", i, err, tt.err)
 			}
 			continue
 		}
-		assert.NoError(err)
+		assert.NoError(err, "error in test #%d", i)
 		assert.EqualValues(tt.out, v.Elem().Interface())
 
 		// Check round trip.
-		nom, err := Marshal(v.Interface())
-		if assert.NoError(err, "#%d: error remarshaling", i) {
-			vv := reflect.New(reflect.TypeOf(tt.ptr).Elem())
-			assert.NoError(Unmarshal(nom, vv.Interface()), "#%d: error un-remarshaling", i)
-			assert.EqualValues(v.Elem().Interface(), vv.Elem().Interface())
-		}
+		nom := Marshal(v.Interface())
+		vv := reflect.New(reflect.TypeOf(tt.ptr).Elem())
+		Unmarshal(nom, vv.Interface())
+		assert.EqualValues(v.Elem().Interface(), vv.Elem().Interface())
 	}
 }
 
@@ -319,19 +318,15 @@ func TestUnmarshalAsRef(t *testing.T) {
 	for _, input := range unmarshalAsRefTests {
 		expected := input.Ref()
 		target := ref.Ref{}
-		if !assert.NoError(Unmarshal(input, &target)) {
-			return
-		}
+		Unmarshal(input, &target)
 
 		assert.EqualValues(expected, target)
 
 		// Check round trip.
-		nom, err := Marshal(target)
-		if assert.NoError(err, "error remarshaling") {
-			newTarget := ref.Ref{}
-			assert.NoError(Unmarshal(nom, &newTarget), "error un-remarshaling")
-			assert.EqualValues(target, newTarget)
-		}
+		nom := Marshal(target)
+		newTarget := ref.Ref{}
+		Unmarshal(nom, &newTarget)
+		assert.EqualValues(target, newTarget)
 	}
 }
 
@@ -351,8 +346,8 @@ func TestUnmarshalSetP(t *testing.T) {
 		return
 	}
 
-	err := Unmarshal(set, &target)
-	if !assert.NoError(err) || !assert.Len(target, len(expected)) {
+	Unmarshal(set, &target)
+	if !assert.Len(target, len(expected)) {
 		return
 	}
 
@@ -361,15 +356,43 @@ func TestUnmarshalSetP(t *testing.T) {
 	}
 
 	// Check round trip.
-	nom, err := Marshal(target)
-	if assert.NoError(err, "error remarshaling") {
-		newTarget := map[*Small]bool{}
-		if assert.NoError(Unmarshal(nom, &newTarget), "error un-remarshaling") {
-			for ntk := range newTarget {
-				assert.True(findValueInMapKeys(ntk, target))
-			}
-		}
+	nom := Marshal(target)
+	newTarget := map[*Small]bool{}
+	Unmarshal(nom, &newTarget)
+	for ntk := range newTarget {
+		assert.True(findValueInMapKeys(ntk, target))
 	}
+}
+
+func TestUnmarshalBlobIntoWriter(t *testing.T) {
+	assert := assert.New(t)
+
+	expected := []byte("abc")
+	blob := blob(expected...)
+	target := &bytes.Buffer{}
+
+	Unmarshal(blob, &target)
+	targetBytes := target.Bytes()
+	assert.EqualValues(expected, targetBytes)
+
+	// Check round trip.
+	nom := Marshal(target)
+	newTarget := &bytes.Buffer{}
+	Unmarshal(nom, &newTarget)
+	assert.EqualValues(targetBytes, newTarget.Bytes())
+}
+
+func TestUnmarshalBlobIntoWriterPtr(t *testing.T) {
+	assert := assert.New(t)
+
+	expected := []byte("abc")
+	blob := blob(expected...)
+	target := &bytes.Buffer{}
+	targetP := &target
+
+	Unmarshal(blob, &targetP)
+	targetBytes := target.Bytes()
+	assert.EqualValues(expected, targetBytes)
 }
 
 // Helpers for building up unmarshalTests
@@ -430,7 +453,7 @@ func TestUnmarshalMarshal(t *testing.T) {
 	if err := Unmarshal(jsonBig, &v); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	b, err := Marshal(v)
+	b:=Marshal(v)
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
@@ -447,12 +470,10 @@ func TestLargeByteSlice(t *testing.T) {
 	for i := range s0 {
 		s0[i] = byte(i)
 	}
-	b, err := Marshal(s0)
-	assert.NoError(t, err, "Failed to Marshal")
+	b := Marshal(s0)
 
 	var s1 []byte
-	err = Unmarshal(b, &s1)
-	assert.NoError(t, err, "Failed to Unmarshal")
+	Unmarshal(b, &s1)
 	if !assert.Equal(t, s0, s1, "Marshal large byte slice") {
 		printDiff(t, s0, s1)
 	}
@@ -485,7 +506,7 @@ type Xint struct {
 func TestUnmarshalInterface(t *testing.T) {
 	var xint Xint
 	var i interface{} = &xint
-	assert.NoError(t, Unmarshal(strIntMap(si{"X", 1}), &i))
+	Unmarshal(strIntMap(si{"X", 1}), &i)
 	if xint.X != 1 {
 		t.Fatalf("Did not write to xint")
 	}
@@ -494,7 +515,7 @@ func TestUnmarshalInterface(t *testing.T) {
 func TestUnmarshalPtrPtr(t *testing.T) {
 	var xint Xint
 	pxint := &xint
-	assert.NoError(t, Unmarshal(strIntMap(si{"X", 1}), &pxint))
+	Unmarshal(strIntMap(si{"X", 1}), &pxint)
 	if xint.X != 1 {
 		t.Fatalf("Did not write to xint")
 	}
@@ -533,25 +554,26 @@ func TestInterfaceSet(t *testing.T) {
 	for _, tt := range interfaceSetTests {
 		native := struct{ X interface{} }{tt.pre}
 		nom := types.NewMap(types.NewString("X"), tt.nom)
-		assert.NoError(t, Unmarshal(nom, &native))
+		Unmarshal(nom, &native)
 		assert.EqualValues(t, tt.post, native.X, "Unmarshal %v over %#v: X=%#v, want %#v", nom, tt.pre, native.X, tt.post)
 	}
 }
 
-// TODO: enable blobs to be unmarshaled to readers and writers, then add test cases here (BUG 160)
+// TODO: enable blobs to be unmarshaled to *io.Reader, then add test cases here (BUG 160)
 var blobInterfaceSetTests = []struct {
 	pre  interface{}
 	nom  types.Blob
 	post []byte
 }{
 	{"foo", blob(1, 2, 3), []byte{1, 2, 3}},
+	{bytes.NewBuffer([]byte{7}), blob(4, 5, 6), []byte{7, 4, 5, 6}},
 }
 
 func TestBlobInterfaceSet(t *testing.T) {
 	for _, tt := range blobInterfaceSetTests {
 		native := struct{ X interface{} }{tt.pre}
 		nom := types.NewMap(types.NewString("X"), tt.nom)
-		assert.NoError(t, Unmarshal(nom, &native))
+		Unmarshal(nom, &native)
 		bytes, err := ioutil.ReadAll(native.X.(io.Reader))
 		if assert.NoError(t, err) {
 			assert.Equal(t, tt.post, bytes)
@@ -568,10 +590,8 @@ func TestStringKind(t *testing.T) {
 		"foo": 42,
 	}
 
-	data, err := Marshal(m1)
-	assert.NoError(err)
-	err = Unmarshal(data, &m2)
-	assert.NoError(err)
+	data := Marshal(m1)
+	Unmarshal(data, &m2)
 
 	assert.EqualValues(m1, m2)
 }
@@ -585,12 +605,10 @@ func TestByteKind(t *testing.T) {
 
 	a := byteKind("hello")
 
-	data, err := Marshal(a)
-	assert.NoError(err)
+	data := Marshal(a)
 
 	var b byteKind
-	err = Unmarshal(data, &b)
-	assert.NoError(err)
+	Unmarshal(data, &b)
 
 	assert.EqualValues(a, b)
 }
@@ -609,8 +627,8 @@ var decodeTypeErrorTests = []struct {
 
 func TestUnmarshalTypeError(t *testing.T) {
 	for _, item := range decodeTypeErrorTests {
-		err := Unmarshal(item.src, item.dest)
-		assert.IsType(t, &UnmarshalTypeError{}, err, "expected type error for Unmarshal(%v, type %T): got %T (%v)",
+		err := d.Try(func() { Unmarshal(item.src, item.dest) })
+		assert.IsType(t, d.UsageError{}, err, "expected type error for Unmarshal(%v, type %T): got %T (%v)",
 			item.src, item.dest, err, err)
 	}
 }
@@ -630,7 +648,7 @@ func TestUnmarshalUnexported(t *testing.T) {
 	expected := &unexportedFields{Name: "Bob"}
 
 	out := &unexportedFields{}
-	assert.NoError(t, Unmarshal(input, out))
+	Unmarshal(input, out)
 	assert.EqualValues(t, expected, out)
 }
 
@@ -659,8 +677,7 @@ func TestPrefilled(t *testing.T) {
 
 	for _, tt := range prefillTests {
 		ptrstr := fmt.Sprintf("%v", tt.ptr)
-		err := Unmarshal(tt.in, tt.ptr) // tt.ptr edited here
-		assert.NoError(t, err)
+		Unmarshal(tt.in, tt.ptr) // tt.ptr edited here
 		assert.EqualValues(t, tt.ptr, tt.out, "Target should have been overwritten, was originally %s", ptrstr)
 	}
 }
@@ -678,8 +695,8 @@ var invalidUnmarshalTests = []struct {
 func TestInvalidUnmarshal(t *testing.T) {
 	nom := types.NewString("hello")
 	for _, tt := range invalidUnmarshalTests {
-		if err := Unmarshal(nom, tt.v); assert.Error(t, err) {
-			assert.Equal(t, tt.want, err.Error())
+		if err := d.Try(func() { Unmarshal(nom, tt.v) }); assert.Error(t, err) {
+			assert.Contains(t, err.Error(), tt.want)
 		} else {
 			assert.Fail(t, "Expecting error!")
 		}

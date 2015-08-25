@@ -1,10 +1,11 @@
-// Modified from golang's encoding/json/encode_test.go
+// Modified from golang's encoding/json/encode_test.go at 80e6d638bf309181eadcb3fecbe99d2d8518e364.
 
 package marshal
 
 import (
 	"bytes"
 	"image"
+	"io"
 	"io/ioutil"
 	"testing"
 
@@ -58,43 +59,12 @@ func TestOmitEmpty(t *testing.T) {
 	o.Mr = map[string]interface{}{}
 	o.Mo = map[string]interface{}{}
 
-	nom, err := Marshal(&o)
-	assert.NoError(err)
+	nom := Marshal(&o)
 	if nom, ok := nom.(types.Map); !ok {
 		assert.Fail("%+v should be a Map", nom)
 	} else {
 		assert.True(optionalsExpected.Equals(nom))
 	}
-}
-
-// byte slices are special even if they're renamed types.
-type renamedByte byte
-type renamedByteSlice []byte
-type renamedRenamedByteSlice []renamedByte
-
-func TestEncodeRenamedByteSlice(t *testing.T) {
-	assert := assert.New(t)
-	blobData := func(blob types.Value) []byte {
-		if blob, ok := blob.(types.Blob); !ok {
-			assert.Fail("blob should be a Blob, not %T", blob)
-		} else {
-			b, err := ioutil.ReadAll(blob.Reader())
-			assert.NoError(err)
-			return b
-		}
-		return nil
-	}
-
-	expected := "abc"
-	s := renamedByteSlice(expected)
-	result, err := Marshal(s)
-	assert.NoError(err)
-	assert.EqualValues(expected, blobData(result))
-
-	r := renamedRenamedByteSlice(expected)
-	result, err = Marshal(r)
-	assert.NoError(err)
-	assert.Equal(expected, string(blobData(result)))
 }
 
 type IntType int
@@ -107,8 +77,7 @@ func TestAnonymousNonstruct(t *testing.T) {
 	var i IntType = 11
 	a := MyStruct{i}
 
-	nom, err := Marshal(a)
-	assert.NoError(t, err)
+	nom := Marshal(a)
 	if nom, ok := nom.(types.Map); !ok {
 		assert.Fail(t, "nom should be a Map, not %T", nom)
 	} else {
@@ -163,8 +132,7 @@ func TestMarshalEmbeds(t *testing.T) {
 			Point: Point{Z: 17},
 		},
 	}
-	b, err := Marshal(top)
-	assert.NoError(t, err)
+	b := Marshal(top)
 	assert.EqualValues(t, marshaledEmbeds, b)
 }
 
@@ -195,8 +163,7 @@ func TestEmbeddedBug(t *testing.T) {
 		BugA{"A"},
 		"B",
 	}
-	nom, err := Marshal(v)
-	assert.NoError(err)
+	nom := Marshal(v)
 	nom = nom.(types.Map)
 
 	expected := types.NewMap(types.NewString("S"), types.NewString("B"))
@@ -206,8 +173,7 @@ func TestEmbeddedBug(t *testing.T) {
 	x := BugX{
 		A: 23,
 	}
-	nom, err = Marshal(x)
-	assert.NoError(err)
+	nom = Marshal(x)
 	nom = nom.(types.Map)
 	expected = types.NewMap(types.NewString("A"), types.Int32(23))
 	assert.EqualValues(expected, nom)
@@ -230,8 +196,7 @@ func TestTaggedFieldDominates(t *testing.T) {
 		BugA{"BugA"},
 		BugD{"BugD"},
 	}
-	nom, err := Marshal(v)
-	assert.NoError(err)
+	nom := Marshal(v)
 	nom = nom.(types.Map)
 
 	expected := types.NewMap(types.NewString("S"), types.NewString("BugD"))
@@ -255,8 +220,7 @@ func TestDuplicatedFieldDisappears(t *testing.T) {
 			BugD{"nested BugD"},
 		},
 	}
-	nom, err := Marshal(v)
-	assert.NoError(err)
+	nom := Marshal(v)
 	nom = nom.(types.Map)
 
 	expected := types.NewMap()
@@ -271,24 +235,51 @@ func TestMarshalSetP(t *testing.T) {
 		nil:                true,
 	}
 	expected := types.NewSet(types.NewMap(types.NewString("Tag"), types.NewString("tag")))
-	nom, err := Marshal(setP)
-	assert.NoError(err)
+	nom := Marshal(setP)
 
 	// Check against canned marshalled representation.
 	if nom, ok := nom.(types.Set); !ok {
 		assert.Fail("Marshal should return set.", "nom is %v", nom)
 		return
+	} else if assert.NotNil(nom) {
+		assert.True(expected.Equals(nom), "%v != %v", expected, nom)
 	}
-	nomSet := nom.(types.Set)
-	if assert.NotNil(nomSet) {
-		assert.True(expected.Equals(nomSet), "%v != %v", expected, nomSet)
+}
+
+func TestMarshalBuffer(t *testing.T) {
+	assert := assert.New(t)
+
+	expected := []byte("abc")
+	nom := Marshal(bytes.NewBufferString("abc"))
+	validateBlob(assert, expected, nom)
+}
+
+func TestMarshalReader(t *testing.T) {
+	assert := assert.New(t)
+
+	expected := []byte("abc")
+	var in io.Reader = bytes.NewBuffer(expected)
+	nom := Marshal(in)
+	validateBlob(assert, expected, nom)
+
+	in = bytes.NewBuffer(expected)
+	nom = Marshal(&in)
+	validateBlob(assert, expected, nom)
+}
+
+func validateBlob(assert *assert.Assertions, expected []byte, nom types.Value) {
+	if nom, ok := nom.(types.Blob); !ok || nom == nil {
+		assert.Fail("Marshal should return blob.", "nom is %v", nom)
+	} else {
+		nomBytes, err := ioutil.ReadAll(nom.Reader())
+		assert.NoError(err)
+		assert.EqualValues(expected, nomBytes)
 	}
 }
 
 func TestMarshal(t *testing.T) {
 	assert := assert.New(t)
-	nom, err := Marshal(allValue)
-	assert.NoError(err)
+	nom := Marshal(allValue)
 
 	// Check against canned marshalled representation.
 	if nom, ok := nom.(types.Map); !ok {
@@ -304,8 +295,7 @@ func TestMarshal(t *testing.T) {
 		return
 	})
 
-	nom, err = Marshal(pallValue)
-	assert.NoError(err)
+	nom = Marshal(pallValue)
 	if nom, ok := nom.(types.Map); !ok {
 		assert.Fail("Marshal should return map.", "nom is %v", nom)
 		return
@@ -522,7 +512,8 @@ var allNomsValue = types.NewMap(
 	types.NewString("NilSlice"), types.NewList(),
 	types.NewString("StringSlice"), types.NewList(
 		types.NewString("str24"), types.NewString("str25"), types.NewString("str26")),
-	types.NewString("ByteSlice"), makeNewBlob([]byte{27, 28, 29}),
+	types.NewString("ByteSlice"), types.NewList(
+		types.UInt8(27), types.UInt8(28), types.UInt8(29)),
 	types.NewString("Small"), types.NewMap(types.NewString("Tag"), types.NewString("tag30")),
 	types.NewString("PSmall"), types.NewMap(types.NewString("Tag"), types.NewString("tag31")),
 
@@ -597,7 +588,7 @@ var pallNomsValue = types.NewMap(
 	types.NewString("EmptySlice"), types.NewList(),
 	types.NewString("NilSlice"), types.NewList(),
 	types.NewString("StringSlice"), types.NewList(),
-	types.NewString("ByteSlice"), makeNewBlob([]byte{}),
+	types.NewString("ByteSlice"), types.NewList(),
 
 	types.NewString("Small"), types.NewMap(types.NewString("Tag"), types.NewString("")),
 	// PSmall and Interface are not marhsaled, as they're a nil ptr and nil interface, respectively.
