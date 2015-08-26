@@ -85,7 +85,7 @@ var Item = React.createClass({
       <div style={{display:'inline-block'}}>
         <img style={imageStyle} src={URL.createObjectURL(this.state.blob)}/>
         <br/>
-        {this.state.tags.toArray().join(', ')}
+        {this.state.tags.join(', ')}
       </div>
     );
   },
