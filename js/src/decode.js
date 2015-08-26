@@ -20,8 +20,12 @@ class Ref{
     return this._promise;
   }
 
-  valueOf() {
-    return this.ref;
+  equals(other) {
+    return this.ref === other.ref;
+  }
+
+  hashCode() {
+    return parseInt(this.ref.slice(0, 8), 16);
   }
 
   // BUG 88 (instance of is failing in dev build)
