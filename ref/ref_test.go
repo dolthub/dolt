@@ -5,8 +5,8 @@ import (
 
 	"crypto/sha1"
 
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/d"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestParseError(t *testing.T) {

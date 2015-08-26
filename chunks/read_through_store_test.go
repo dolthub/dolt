@@ -4,7 +4,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
 )
 
 func TestReadThroughStoreTestSuite(t *testing.T) {

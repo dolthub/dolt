@@ -3,7 +3,7 @@ package types
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 )
 
 func TestPrimitives(t *testing.T) {

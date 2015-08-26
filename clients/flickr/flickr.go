@@ -13,11 +13,11 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/garyburd/go-oauth/oauth"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
-	"github.com/garyburd/go-oauth/oauth"
 )
 
 var (
