@@ -20,6 +20,10 @@ class Ref{
     return this._promise;
   }
 
+  valueOf() {
+    return this.ref;
+  }
+
   // BUG 88 (instance of is failing in dev build)
   static isRef(ref) {
     return ref && ref._isRef === isRef;

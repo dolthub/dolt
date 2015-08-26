@@ -36,7 +36,7 @@ var SlideShow = React.createClass({
             .valueSeq()
             .map(ref => ref.deref()))
       }).then(sets => {
-        this.setState({photos: Immutable.Set().union(...sets)})
+        this.setState({photos: Immutable.Set(sets[0]).intersect(...sets)})
       });
 
     return <div style={containerStyle}>{
