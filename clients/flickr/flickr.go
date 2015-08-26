@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/attic-labs/noms/clients/util"
@@ -203,7 +204,7 @@ func getAlbumPhotos(id string) SetOfPhoto {
 
 	photos := types.NewSet()
 	for _, p := range response.Photoset.Photo {
-		url := getOriginalUrl(p.Id)
+		url, w, h := getOriginalUrl(p.Id)
 		fmt.Printf(" . %v\n", url)
 		photoReader := getPhotoReader(url)
 		defer photoReader.Close()
@@ -211,10 +212,12 @@ func getAlbumPhotos(id string) SetOfPhoto {
 		d.Chk.NoError(err)
 		photo := NewPhoto().
 			SetId(types.NewString(p.Id)).
+			SetImage(b).
+			SetTags(getTags(p.Tags)).
 			SetTitle(types.NewString(p.Title)).
 			SetUrl(types.NewString(url)).
-			SetTags(getTags(p.Tags)).
-			SetImage(b)
+			SetWidth(types.UInt32(w)).
+			SetHeight(types.UInt32(h))
 		// The photo is big, so write it out now to release the memory.
 		r := types.WriteValue(photo.NomsValue(), ds.Store())
 		photos = photos.Insert(types.Ref{r})
@@ -233,16 +236,15 @@ func getTags(tagStr string) (res SetOfString) {
 	return res
 }
 
-func getOriginalUrl(id string) string {
+func getOriginalUrl(id string) (string, uint32, uint32) {
 	response := struct {
 		flickrCall
 		Sizes struct {
 			Size []struct {
-				Label  string `json:"label"`
-				Source string `json:"source"`
-				// TODO: For some reason json unmarshalling was getting confused about types. Not sure why.
-				// Width  int `json:"width"`
-				// Height int `json:"height"`
+				Label  string      `json:"label"`
+				Source string      `json:"source"`
+				Width  interface{} `json:"width"`
+				Height interface{} `json:"height"`
 			} `json:"size"`
 		} `json:"sizes"`
 	}{}
@@ -254,11 +256,24 @@ func getOriginalUrl(id string) string {
 
 	for _, p := range response.Sizes.Size {
 		if p.Label == "Original" {
-			return p.Source
+			dim := func(v interface{}) uint32 {
+				switch v := v.(type) {
+				case float64:
+					return uint32(v)
+				case string:
+					i, err := strconv.Atoi(v)
+					d.Chk.NoError(err)
+					return uint32(i)
+				default:
+					d.Chk.Fail("Unexpected value for image width or height: %+v", v)
+					return 0
+				}
+			}
+			return p.Source, dim(p.Width), dim(p.Height)
 		}
 	}
 	d.Chk.Fail(fmt.Sprintf("No Original image size found photo: %v", id))
-	return "NOT REACHED"
+	return "NOT REACHED", 0, 0
 }
 
 func getPhotoReader(url string) io.ReadCloser {

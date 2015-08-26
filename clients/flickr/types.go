@@ -68,6 +68,75 @@ func (m MapOfStringToAlbum) Iter(cb MapOfStringToAlbumIterCallback) {
 	})
 }
 
+// User
+
+type User struct {
+	m types.Map
+}
+
+func NewUser() User {
+	return User{
+		types.NewMap(types.NewString("$name"), types.NewString("User")),
+	}
+}
+
+func UserFromVal(v types.Value) User {
+	return User{v.(types.Map)}
+}
+
+// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
+func (s User) NomsValue() types.Map {
+	return s.m
+}
+
+func (s User) Equals(p User) bool {
+	return s.m.Equals(p.m)
+}
+
+func (s User) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s User) OAuthToken() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("oAuthToken")))
+}
+
+func (s User) SetOAuthToken(p types.String) User {
+	return UserFromVal(s.m.Set(types.NewString("oAuthToken"), p))
+}
+
+func (s User) Name() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("name")))
+}
+
+func (s User) SetName(p types.String) User {
+	return UserFromVal(s.m.Set(types.NewString("name"), p))
+}
+
+func (s User) Albums() MapOfStringToAlbum {
+	return MapOfStringToAlbumFromVal(s.m.Get(types.NewString("albums")))
+}
+
+func (s User) SetAlbums(p MapOfStringToAlbum) User {
+	return UserFromVal(s.m.Set(types.NewString("albums"), p.NomsValue()))
+}
+
+func (s User) Id() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("id")))
+}
+
+func (s User) SetId(p types.String) User {
+	return UserFromVal(s.m.Set(types.NewString("id"), p))
+}
+
+func (s User) OAuthSecret() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("oAuthSecret")))
+}
+
+func (s User) SetOAuthSecret(p types.String) User {
+	return UserFromVal(s.m.Set(types.NewString("oAuthSecret"), p))
+}
+
 // Album
 
 type Album struct {
@@ -232,6 +301,14 @@ func (s Photo) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
+func (s Photo) Width() types.UInt32 {
+	return types.UInt32FromVal(s.m.Get(types.NewString("width")))
+}
+
+func (s Photo) SetWidth(p types.UInt32) Photo {
+	return PhotoFromVal(s.m.Set(types.NewString("width"), p))
+}
+
 func (s Photo) Title() types.String {
 	return types.StringFromVal(s.m.Get(types.NewString("title")))
 }
@@ -254,6 +331,14 @@ func (s Photo) Tags() SetOfString {
 
 func (s Photo) SetTags(p SetOfString) Photo {
 	return PhotoFromVal(s.m.Set(types.NewString("tags"), p.NomsValue()))
+}
+
+func (s Photo) Height() types.UInt32 {
+	return types.UInt32FromVal(s.m.Get(types.NewString("height")))
+}
+
+func (s Photo) SetHeight(p types.UInt32) Photo {
+	return PhotoFromVal(s.m.Set(types.NewString("height"), p))
 }
 
 func (s Photo) Image() types.Blob {
@@ -352,74 +437,5 @@ func (s SetOfString) fromElemSlice(p []types.String) []types.Value {
 		r[i] = v
 	}
 	return r
-}
-
-// User
-
-type User struct {
-	m types.Map
-}
-
-func NewUser() User {
-	return User{
-		types.NewMap(types.NewString("$name"), types.NewString("User")),
-	}
-}
-
-func UserFromVal(v types.Value) User {
-	return User{v.(types.Map)}
-}
-
-// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
-func (s User) NomsValue() types.Map {
-	return s.m
-}
-
-func (s User) Equals(p User) bool {
-	return s.m.Equals(p.m)
-}
-
-func (s User) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s User) OAuthToken() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("oAuthToken")))
-}
-
-func (s User) SetOAuthToken(p types.String) User {
-	return UserFromVal(s.m.Set(types.NewString("oAuthToken"), p))
-}
-
-func (s User) Name() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("name")))
-}
-
-func (s User) SetName(p types.String) User {
-	return UserFromVal(s.m.Set(types.NewString("name"), p))
-}
-
-func (s User) Albums() MapOfStringToAlbum {
-	return MapOfStringToAlbumFromVal(s.m.Get(types.NewString("albums")))
-}
-
-func (s User) SetAlbums(p MapOfStringToAlbum) User {
-	return UserFromVal(s.m.Set(types.NewString("albums"), p.NomsValue()))
-}
-
-func (s User) Id() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("id")))
-}
-
-func (s User) SetId(p types.String) User {
-	return UserFromVal(s.m.Set(types.NewString("id"), p))
-}
-
-func (s User) OAuthSecret() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("oAuthSecret")))
-}
-
-func (s User) SetOAuthSecret(p types.String) User {
-	return UserFromVal(s.m.Set(types.NewString("oAuthSecret"), p))
 }
 
