@@ -137,7 +137,7 @@ func jsonDecodeCompoundObject(input []interface{}) ([]uint64, []ref.Ref) {
 		if v, ok := v.(string); ok {
 			return ref.Parse(v)
 		}
-		d.Exp.Fail(fmt.Sprintf("CompoundList children must be strings that are valid ref.Refs; got %+v", v))
+		d.Exp.Fail(fmt.Sprintf("Compound children must be strings that are valid ref.Refs; got %+v", v))
 		return ref.Ref{}
 	}
 

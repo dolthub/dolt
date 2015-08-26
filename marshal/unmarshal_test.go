@@ -159,7 +159,7 @@ var unmarshalTests = []unmarshalTest{
 	{in: types.NewMap(
 		types.NewString("X"), types.NewList(types.Int16(1)),
 		types.NewString("Y"), types.Int32(4)),
-		ptr: new(T), out: T{Y: 4}, err: invalidTypeMsg("List", reflect.TypeOf(""))},
+		ptr: new(T), out: T{Y: 4}, err: invalidTypeMsg("listLeaf", reflect.TypeOf(""))},
 	{in: strIntMap(si{"x", 1}), ptr: new(tx), out: tx{}},
 
 	// Z has a "-" tag.

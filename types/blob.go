@@ -12,10 +12,10 @@ const (
 	// 12 bits leads to an average size of 4k
 	// 13 bits leads to an average size of 8k
 	// 14 bits leads to an average size of 16k
-	pattern = uint32(1<<13 - 1)
+	blobPattern = uint32(1<<13 - 1)
 
 	// The window size to use for computing the rolling hash.
-	windowSize = 64
+	blobWindowSize = 64
 )
 
 type Blob interface {
@@ -66,7 +66,7 @@ func BlobFromVal(v Value) Blob {
 // It returns the number of bytes copied and the earliest error encountered while copying.
 // copyChunk never returns an io.EOF error, instead it returns the number of bytes read up to the io.EOF.
 func copyChunk(dst io.Writer, src io.Reader) (n uint64, err error) {
-	h := buzhash.NewBuzHash(windowSize)
+	h := buzhash.NewBuzHash(blobWindowSize)
 	p := []byte{0}
 
 	for {
@@ -85,7 +85,7 @@ func copyChunk(dst io.Writer, src io.Reader) (n uint64, err error) {
 		}
 		n++
 
-		if h.Sum32()&pattern == pattern {
+		if h.Sum32()&blobPattern == blobPattern {
 			return
 		}
 	}

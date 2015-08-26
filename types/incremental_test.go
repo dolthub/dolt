@@ -49,16 +49,29 @@ func TestIncrementalLoadList(t *testing.T) {
 
 	expectedCount := cs.Reads
 	assert.Equal(1, expectedCount)
+	// There will be one read per chunk.
+	chunkReads := make([]int, expected.Len())
+	if cl, ok := actual.(compoundList); ok {
+		reads := 0
+		start := uint64(0)
+		for _, end := range cl.offsets {
+			reads++
+			for i := start; i < end; i++ {
+				chunkReads[i] = reads
+			}
+			start = end
+		}
+	}
 	for i := uint64(0); i < expected.Len(); i++ {
 		v := actual.Get(i)
 		assert.True(expected.Get(i).Equals(v))
 
 		expectedCount += isEncodedOutOfLine(v)
-		assert.Equal(expectedCount, cs.Reads)
+		assert.Equal(expectedCount+chunkReads[i], cs.Reads)
 
 		// Do it again to make sure multiple derefs don't do multiple loads.
 		v = actual.Get(i)
-		assert.Equal(expectedCount, cs.Reads)
+		assert.Equal(expectedCount+chunkReads[i], cs.Reads)
 	}
 }
 

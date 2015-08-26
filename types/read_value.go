@@ -13,7 +13,7 @@ import (
 
 // ReadValue reads and decodes a value from a chunk source. It is not considered an error for the requested chunk to be absent from cs; in this case, the function simply returns nil, nil.
 func ReadValue(r ref.Ref, cs chunks.ChunkSource) Value {
-	d.Exp.NotNil(cs)
+	d.Chk.NotNil(cs)
 	reader := cs.Get(r)
 	if reader == nil {
 		return nil
