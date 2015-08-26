@@ -6,9 +6,9 @@ import (
 	"os/user"
 	"path"
 
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/gregjones/httpcache"
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/gregjones/httpcache/diskcache"
 	"github.com/attic-labs/noms/d"
-	"github.com/gregjones/httpcache"
-	"github.com/gregjones/httpcache/diskcache"
 )
 
 const (

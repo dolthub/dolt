@@ -4,8 +4,8 @@ import (
 	"io"
 	"io/ioutil"
 
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/ref"
-	"github.com/stretchr/testify/assert"
 )
 
 func assertInputInStore(input string, ref ref.Ref, s ChunkStore, assert *assert.Assertions) {

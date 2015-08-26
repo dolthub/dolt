@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"io"
 
-	"github.com/attic-labs/buzhash"
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/attic-labs/buzhash"
 	"github.com/attic-labs/noms/ref"
 )
 

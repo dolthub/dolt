@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/ref"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestPrimitiveEquals(t *testing.T) {

@@ -1,0 +1,119 @@
+{
+	"ImportPath": "github.com/attic-labs/noms",
+	"GoVersion": "go1.5",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/attic-labs/buzhash",
+			"Rev": "ba25a3a15f617b6580523ccfb83d31764a50a97a"
+		},
+		{
+			"ImportPath": "github.com/aws/aws-sdk-go/aws",
+			"Comment": "v0.9.2rc3",
+			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
+		},
+		{
+			"ImportPath": "github.com/aws/aws-sdk-go/internal/endpoints",
+			"Comment": "v0.9.2rc3",
+			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
+		},
+		{
+			"ImportPath": "github.com/aws/aws-sdk-go/internal/protocol/json/jsonutil",
+			"Comment": "v0.9.2rc3",
+			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
+		},
+		{
+			"ImportPath": "github.com/aws/aws-sdk-go/internal/protocol/jsonrpc",
+			"Comment": "v0.9.2rc3",
+			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
+		},
+		{
+			"ImportPath": "github.com/aws/aws-sdk-go/internal/protocol/query",
+			"Comment": "v0.9.2rc3",
+			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
+		},
+		{
+			"ImportPath": "github.com/aws/aws-sdk-go/internal/protocol/rest",
+			"Comment": "v0.9.2rc3",
+			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
+		},
+		{
+			"ImportPath": "github.com/aws/aws-sdk-go/internal/protocol/restxml",
+			"Comment": "v0.9.2rc3",
+			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
+		},
+		{
+			"ImportPath": "github.com/aws/aws-sdk-go/internal/protocol/xml/xmlutil",
+			"Comment": "v0.9.2rc3",
+			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
+		},
+		{
+			"ImportPath": "github.com/aws/aws-sdk-go/internal/signer/v4",
+			"Comment": "v0.9.2rc3",
+			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
+		},
+		{
+			"ImportPath": "github.com/aws/aws-sdk-go/service/dynamodb",
+			"Comment": "v0.9.2rc3",
+			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
+		},
+		{
+			"ImportPath": "github.com/aws/aws-sdk-go/service/s3",
+			"Comment": "v0.9.2rc3",
+			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
+		},
+		{
+			"ImportPath": "github.com/clbanning/mxj",
+			"Rev": "87ef56c6f157ac80caf824a9779dddc6f69c6580"
+		},
+		{
+			"ImportPath": "github.com/fatih/structs",
+			"Rev": "a9f7daa9c2729e97450c2da2feda19130a367d8f"
+		},
+		{
+			"ImportPath": "github.com/garyburd/go-oauth/oauth",
+			"Rev": "3131beb69b81ff119923bdefbf029318f1f53794"
+		},
+		{
+			"ImportPath": "github.com/golang/snappy",
+			"Rev": "723cc1e459b8eea2dea4583200fd60757d40097a"
+		},
+		{
+			"ImportPath": "github.com/gregjones/httpcache",
+			"Rev": "a2645c9fb8bb4ad1cbad1bef941af9f8a32287de"
+		},
+		{
+			"ImportPath": "github.com/petar/GoLLRB/llrb",
+			"Rev": "53be0d36a84c2a886ca057d34b6aa4468df9ccb4"
+		},
+		{
+			"ImportPath": "github.com/peterbourgon/diskv",
+			"Rev": "72aa5da9f7d1125b480b83c6dc5ad09a1f04508c"
+		},
+		{
+			"ImportPath": "github.com/stretchr/testify/assert",
+			"Comment": "v1.0-36-gacfa84d",
+			"Rev": "acfa84d4543a981cf308682732f84872d4296ac5"
+		},
+		{
+			"ImportPath": "github.com/stretchr/testify/require",
+			"Comment": "v1.0-36-gacfa84d",
+			"Rev": "acfa84d4543a981cf308682732f84872d4296ac5"
+		},
+		{
+			"ImportPath": "github.com/stretchr/testify/suite",
+			"Comment": "v1.0-36-gacfa84d",
+			"Rev": "acfa84d4543a981cf308682732f84872d4296ac5"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
+			"Rev": "1a9d62f03ea92815b46fcaab357cfd4df264b1a0"
+		},
+		{
+			"ImportPath": "github.com/vaughan0/go-ini",
+			"Rev": "a98ad7ee00ec53921f08832bc06ecf7fd600e6a1"
+		}
+	]
+}

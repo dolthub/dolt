@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
 )
 
 func TestFileStoreTestSuite(t *testing.T) {

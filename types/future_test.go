@@ -3,9 +3,9 @@ package types
 import (
 	"testing"
 
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestResolvedFuture(t *testing.T) {
