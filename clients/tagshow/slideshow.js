@@ -64,6 +64,7 @@ var Item = React.createClass({
   getInitialState: function() {
     return {
       blob: null,
+      tags: Immutable.Set(),
     };
   },
 
@@ -72,11 +73,21 @@ var Item = React.createClass({
       p => p.get('image').deref()).then(
       b => this.setState({blob: b}));
 
+    this.props.photoRef.deref().then(
+      p => p.get('tags').deref()).then(
+      tags => this.setState({tags: tags}));
+
     if (this.state.blob == null) {
       return <span>loading...</span>;
     }
 
-    return <img style={imageStyle} src={URL.createObjectURL(this.state.blob)}/>
+    return (
+      <div style={{display:'inline-block'}}>
+        <img style={imageStyle} src={URL.createObjectURL(this.state.blob)}/>
+        <br/>
+        {this.state.tags.toArray().join(', ')}
+      </div>
+    );
   },
 });
 
