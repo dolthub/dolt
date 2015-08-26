@@ -31,8 +31,8 @@ func NewBlob(r io.Reader) (Blob, error) {
 	blobs := []Future{}
 	var blob blobLeaf
 	for {
-		buf := &bytes.Buffer{}
-		n, err := copyChunk(buf, r)
+		buf := bytes.Buffer{}
+		n, err := copyChunk(&buf, r)
 		if err != nil {
 			return nil, err
 		}
