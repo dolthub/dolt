@@ -29,6 +29,10 @@ func BoolFromVal(v Value) Bool {
 	return v.(Bool)
 }
 
+func (v Bool) ToPrimitive() interface{} {
+	return bool(v)
+}
+
 type Int8 int8
 
 func (self Int8) Equals(other Value) bool {
@@ -49,6 +53,10 @@ func (v Int8) Chunks() []Future {
 
 func Int8FromVal(v Value) Int8 {
 	return v.(Int8)
+}
+
+func (v Int8) ToPrimitive() interface{} {
+	return int8(v)
 }
 
 type Int16 int16
@@ -73,6 +81,10 @@ func Int16FromVal(v Value) Int16 {
 	return v.(Int16)
 }
 
+func (v Int16) ToPrimitive() interface{} {
+	return int16(v)
+}
+
 type Int32 int32
 
 func (self Int32) Equals(other Value) bool {
@@ -93,6 +105,10 @@ func (v Int32) Chunks() []Future {
 
 func Int32FromVal(v Value) Int32 {
 	return v.(Int32)
+}
+
+func (v Int32) ToPrimitive() interface{} {
+	return int32(v)
 }
 
 type Int64 int64
@@ -117,6 +133,10 @@ func Int64FromVal(v Value) Int64 {
 	return v.(Int64)
 }
 
+func (v Int64) ToPrimitive() interface{} {
+	return int64(v)
+}
+
 type UInt8 uint8
 
 func (self UInt8) Equals(other Value) bool {
@@ -137,6 +157,10 @@ func (v UInt8) Chunks() []Future {
 
 func UInt8FromVal(v Value) UInt8 {
 	return v.(UInt8)
+}
+
+func (v UInt8) ToPrimitive() interface{} {
+	return uint8(v)
 }
 
 type UInt16 uint16
@@ -161,6 +185,10 @@ func UInt16FromVal(v Value) UInt16 {
 	return v.(UInt16)
 }
 
+func (v UInt16) ToPrimitive() interface{} {
+	return uint16(v)
+}
+
 type UInt32 uint32
 
 func (self UInt32) Equals(other Value) bool {
@@ -181,6 +209,10 @@ func (v UInt32) Chunks() []Future {
 
 func UInt32FromVal(v Value) UInt32 {
 	return v.(UInt32)
+}
+
+func (v UInt32) ToPrimitive() interface{} {
+	return uint32(v)
 }
 
 type UInt64 uint64
@@ -205,6 +237,10 @@ func UInt64FromVal(v Value) UInt64 {
 	return v.(UInt64)
 }
 
+func (v UInt64) ToPrimitive() interface{} {
+	return uint64(v)
+}
+
 type Float32 float32
 
 func (self Float32) Equals(other Value) bool {
@@ -227,6 +263,10 @@ func Float32FromVal(v Value) Float32 {
 	return v.(Float32)
 }
 
+func (v Float32) ToPrimitive() interface{} {
+	return float32(v)
+}
+
 type Float64 float64
 
 func (self Float64) Equals(other Value) bool {
@@ -247,5 +287,9 @@ func (v Float64) Chunks() []Future {
 
 func Float64FromVal(v Value) Float64 {
 	return v.(Float64)
+}
+
+func (v Float64) ToPrimitive() interface{} {
+	return float64(v)
 }
 
