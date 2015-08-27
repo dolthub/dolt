@@ -18,11 +18,9 @@ type ChunkWriter interface {
 }
 
 // ChunkWriter wraps an io.WriteCloser, additionally providing the ability to grab a Ref for all data written through the interface. Calling Ref() or Close() on an instance disallows further writing.
-type hasFn func(ref ref.Ref) bool
 type writeFn func(ref ref.Ref, buff *bytes.Buffer)
 
 type chunkWriter struct {
-	has    hasFn
 	write  writeFn
 	buffer *bytes.Buffer
 	writer io.Writer
@@ -30,11 +28,10 @@ type chunkWriter struct {
 	ref    ref.Ref
 }
 
-func newChunkWriter(has hasFn, write writeFn) *chunkWriter {
+func newChunkWriter(write writeFn) *chunkWriter {
 	b := &bytes.Buffer{}
 	h := ref.NewHash()
 	return &chunkWriter{
-		has:    has,
 		write:  write,
 		buffer: b,
 		writer: io.MultiWriter(b, h),
@@ -60,9 +57,7 @@ func (w *chunkWriter) Close() error {
 	}
 
 	w.ref = ref.FromHash(w.hash)
-	if !w.has(w.ref) {
-		w.write(w.ref, w.buffer)
-	}
+	w.write(w.ref, w.buffer)
 	w.buffer = nil
 	return nil
 }

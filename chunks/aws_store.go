@@ -130,10 +130,14 @@ func (s AWSStore) Has(ref ref.Ref) bool {
 }
 
 func (s AWSStore) Put() ChunkWriter {
-	return newChunkWriter(s.Has, s.write)
+	return newChunkWriter(s.write)
 }
 
 func (s AWSStore) write(ref ref.Ref, buff *bytes.Buffer) {
+	if s.Has(ref) {
+		return
+	}
+
 	_, err := s.awsSvc.PutObject(&s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(ref.String()),

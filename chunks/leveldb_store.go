@@ -84,10 +84,14 @@ func (l *LevelDBStore) Has(ref ref.Ref) bool {
 }
 
 func (l *LevelDBStore) Put() ChunkWriter {
-	return newChunkWriter(l.Has, l.write)
+	return newChunkWriter(l.write)
 }
 
 func (l *LevelDBStore) write(ref ref.Ref, buff *bytes.Buffer) {
+	if l.Has(ref) {
+		return
+	}
+
 	key := toChunkKey(ref)
 	err := l.db.Put(key, buff.Bytes(), nil)
 	d.Chk.NoError(err)
