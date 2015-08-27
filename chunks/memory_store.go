@@ -31,10 +31,14 @@ func (ms *MemoryStore) Has(r ref.Ref) bool {
 }
 
 func (ms *MemoryStore) Put() ChunkWriter {
-	return newChunkWriter(ms.Has, ms.write)
+	return newChunkWriter(ms.write)
 }
 
 func (ms *MemoryStore) write(r ref.Ref, buff *bytes.Buffer) {
+	if ms.Has(r) {
+		return
+	}
+
 	if ms.data == nil {
 		ms.data = map[ref.Ref][]byte{}
 	}

@@ -85,10 +85,14 @@ func (f FileStore) Has(ref ref.Ref) bool {
 }
 
 func (f FileStore) Put() ChunkWriter {
-	return newChunkWriter(f.Has, f.write)
+	return newChunkWriter(f.write)
 }
 
 func (f FileStore) write(ref ref.Ref, buff *bytes.Buffer) {
+	if f.Has(ref) {
+		return
+	}
+
 	p := getPath(f.dir, ref)
 	err := f.mkdirAll(path.Dir(p), 0700)
 	d.Chk.NoError(err)

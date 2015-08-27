@@ -26,7 +26,7 @@ func (ms *NopStore) Has(ref ref.Ref) bool {
 }
 
 func (ms *NopStore) Put() ChunkWriter {
-	return newChunkWriter(ms.Has, ms.write)
+	return newChunkWriter(ms.write)
 }
 
 func (ms *NopStore) write(ref ref.Ref, buff *bytes.Buffer) {}

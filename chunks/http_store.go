@@ -69,7 +69,7 @@ func (c *HttpStoreClient) Has(ref ref.Ref) bool {
 
 func (c *HttpStoreClient) Put() ChunkWriter {
 	// PUT http://<host>/ref/<sha1-xxx>. Response will be 201.
-	return newChunkWriter(c.Has, c.write)
+	return newChunkWriter(c.write)
 }
 
 func (c *HttpStoreClient) write(r ref.Ref, buff *bytes.Buffer) {
