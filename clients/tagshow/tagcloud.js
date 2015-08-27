@@ -4,8 +4,9 @@ var Immutable = require('immutable');
 var ImmutableRenderMixin = require('react-immutable-render-mixin');
 var React = require('react');
 
-var buttonStyle = {
-  display: 'block',
+var tagStyle = {
+  display: 'inline',
+  marginRight: '1ex',
 };
 
 var TagCloud = React.createClass({
@@ -19,8 +20,20 @@ var TagCloud = React.createClass({
 
   getInitialState: function() {
     return {
+      selected: this.props.selected,
       tags: Immutable.Map(),
     };
+  },
+
+  handleChange: function(tag) {
+    var selected = this.state.selected;
+    selected = selected.has(tag) ? selected.delete(tag) : selected.add(tag);
+    this.setState({selected: selected});
+  },
+
+  handleSubmit: function(e) {
+    this.props.onChoose(this.state.selected);
+    e.preventDefault();
   },
 
   render: function() {
@@ -28,20 +41,25 @@ var TagCloud = React.createClass({
       .then(head => head.get('value').deref())
       .then(tags => this.setState({tags: tags}));
 
-    return <div>{
+    return <form onSubmit={this.handleSubmit}>{
       this.state.tags.keySeq().sort().map(
         tag => {
           var ref = this.state.tags.get(tag);
-          return <div style={buttonStyle}>
-            <label>
-              <input type="checkbox" name="tc"
-                checked={this.props.selected.has(tag)}
-                onChange={() => this.props.onChoose(tag) }/>
-              {tag}
-            </label>
-          </div>
+          return (
+            <div style={tagStyle}>
+              <label>
+                <input type="checkbox" name="tc"
+                  checked={this.state.selected.has(tag)}
+                  onChange={() => this.handleChange(tag) }/>
+                {tag}
+              </label>
+            </div>
+          );
         }).toArray()
-    }</div>
+      }
+      <br/>
+      <input type="submit" value="OK!"/>
+    </form>
   },
 });
 
