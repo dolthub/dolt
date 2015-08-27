@@ -46,9 +46,7 @@ var Root = React.createClass({
     return Immutable.Set(tags);
   },
 
-  handleTagChoose: function(tag) {
-    var tags = this.getSelectedTags();
-    tags = tags.has(tag) ? tags.delete(tag) : tags.add(tag);
+  handleTagChoose: function(tags) {
     this.props.updateQuery(this.props.qs.set('tags', tags.toArray().join(',')));
   },
 
@@ -60,14 +58,20 @@ var Root = React.createClass({
     var dataset = noms.getDataset(this.props.pRoot, this.props.qs.get('ds'))
       .then(ref => ref.deref());
 
+    var selectedTags = this.getSelectedTags();
+    if (selectedTags.size === 0) {
+      return (
+        <TagCloud
+          ds={dataset}
+          selected={this.getSelectedTags()}
+          onChoose={this.handleTagChoose}/>
+      );
+    }
+
     return (
       <div style={containerStyle}>
-        <div>
-          <TagCloud ds={dataset} selected={this.getSelectedTags()}
-            onChoose={this.handleTagChoose}/>
-        </div>
         <div style={slideShowStyle}>
-          <SlideShow ds={dataset} tags={this.getSelectedTags()}/>
+          <SlideShow ds={dataset} tags={selectedTags}/>
         </div>
       </div>
     );
