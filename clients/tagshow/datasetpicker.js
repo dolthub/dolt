@@ -9,7 +9,7 @@ var DatasetPicker = React.createClass({
   mixins: [ImmutableRenderMixin],
 
   propTypes: {
-    root: React.PropTypes.instanceOf(Promise),
+    pRoot: React.PropTypes.instanceOf(Promise),
     onChange: React.PropTypes.func.isRequired,
     selected: React.PropTypes.string,
   },
@@ -25,7 +25,7 @@ var DatasetPicker = React.createClass({
   },
 
   render: function() {
-    noms.getDatasetIds(this.props.root).then(
+    noms.getDatasetIds(this.props.pRoot).then(
       datasets => {
         this.setState({
           datasets: Immutable.Set.of(...datasets)

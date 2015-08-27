@@ -54,7 +54,7 @@ var Root = React.createClass({
 
   render: function() {
     if (!this.props.qs.get('ds')) {
-      return <DataSetPicker root={this.props.pRoot} onChange={this.handleDataSetPicked}/>
+      return <DataSetPicker pRoot={this.props.pRoot} onChange={this.handleDataSetPicked}/>
     }
 
     var dataset = noms.getDataset(this.props.pRoot, this.props.qs.get('ds'))
