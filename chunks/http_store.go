@@ -28,7 +28,7 @@ type HttpStoreClient struct {
 type HttpStoreServer struct {
 	cs   ChunkStore
 	port int
-	l    *net.TCPListener
+	l    *net.Listener
 }
 
 func NewHttpStoreClient(host string) *HttpStoreClient {
@@ -232,9 +232,9 @@ func closeResponse(res *http.Response) error {
 
 // Blocks while the server is listening. Running on a separate go routine is supported.
 func (s *HttpStoreServer) Run() {
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: s.port})
+	l, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	d.Chk.NoError(err)
-	s.l = l
+	s.l = &l
 
 	srv := &http.Server{Handler: http.HandlerFunc(s.handleRequest)}
 	srv.Serve(l)
@@ -242,7 +242,7 @@ func (s *HttpStoreServer) Run() {
 
 // Will cause the server to stop listening and an existing call to Run() to continue.
 func (s *HttpStoreServer) Stop() {
-	s.l.Close()
+	(*s.l).Close()
 }
 
 type httpStoreFlags struct {
