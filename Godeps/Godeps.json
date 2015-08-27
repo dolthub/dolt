@@ -10,61 +10,6 @@
 			"Rev": "ba25a3a15f617b6580523ccfb83d31764a50a97a"
 		},
 		{
-			"ImportPath": "github.com/aws/aws-sdk-go/aws",
-			"Comment": "v0.9.2rc3",
-			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
-		},
-		{
-			"ImportPath": "github.com/aws/aws-sdk-go/internal/endpoints",
-			"Comment": "v0.9.2rc3",
-			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
-		},
-		{
-			"ImportPath": "github.com/aws/aws-sdk-go/internal/protocol/json/jsonutil",
-			"Comment": "v0.9.2rc3",
-			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
-		},
-		{
-			"ImportPath": "github.com/aws/aws-sdk-go/internal/protocol/jsonrpc",
-			"Comment": "v0.9.2rc3",
-			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
-		},
-		{
-			"ImportPath": "github.com/aws/aws-sdk-go/internal/protocol/query",
-			"Comment": "v0.9.2rc3",
-			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
-		},
-		{
-			"ImportPath": "github.com/aws/aws-sdk-go/internal/protocol/rest",
-			"Comment": "v0.9.2rc3",
-			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
-		},
-		{
-			"ImportPath": "github.com/aws/aws-sdk-go/internal/protocol/restxml",
-			"Comment": "v0.9.2rc3",
-			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
-		},
-		{
-			"ImportPath": "github.com/aws/aws-sdk-go/internal/protocol/xml/xmlutil",
-			"Comment": "v0.9.2rc3",
-			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
-		},
-		{
-			"ImportPath": "github.com/aws/aws-sdk-go/internal/signer/v4",
-			"Comment": "v0.9.2rc3",
-			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
-		},
-		{
-			"ImportPath": "github.com/aws/aws-sdk-go/service/dynamodb",
-			"Comment": "v0.9.2rc3",
-			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
-		},
-		{
-			"ImportPath": "github.com/aws/aws-sdk-go/service/s3",
-			"Comment": "v0.9.2rc3",
-			"Rev": "1dc63737201ce6f6fb46c49c259cf2147cc67891"
-		},
-		{
 			"ImportPath": "github.com/clbanning/mxj",
 			"Rev": "87ef56c6f157ac80caf824a9779dddc6f69c6580"
 		},
@@ -110,10 +55,6 @@
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
 			"Rev": "1a9d62f03ea92815b46fcaab357cfd4df264b1a0"
-		},
-		{
-			"ImportPath": "github.com/vaughan0/go-ini",
-			"Rev": "a98ad7ee00ec53921f08832bc06ecf7fd600e6a1"
 		}
 	]
 }
