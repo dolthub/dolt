@@ -41,8 +41,6 @@ func NewFlags() Flags {
 // NewFlagsWithPrefix creates a new instance of Flags with the names of all flags declared therein prefixed by the given string.
 func NewFlagsWithPrefix(prefix string) Flags {
 	return Flags{
-		awsFlags(prefix),
-		fileFlags(prefix),
 		httpFlags(prefix),
 		levelDBFlags(prefix),
 		memoryFlags(prefix),
@@ -52,8 +50,6 @@ func NewFlagsWithPrefix(prefix string) Flags {
 
 // Flags abstracts away definitions for and handling of command-line flags for all ChunkStore implementations.
 type Flags struct {
-	aws    awsStoreFlags
-	file   fileStoreFlags
 	http   httpStoreFlags
 	ldb    ldbStoreFlags
 	memory memoryStoreFlags
@@ -62,9 +58,7 @@ type Flags struct {
 
 // CreateStore creates a ChunkStore implementation based on the values of command-line flags.
 func (f Flags) CreateStore() (cs ChunkStore) {
-	if cs = f.aws.createStore(); cs != nil {
-	} else if cs = f.file.createStore(); cs != nil {
-	} else if cs = f.http.createStore(); cs != nil {
+	if cs = f.http.createStore(); cs != nil {
 	} else if cs = f.ldb.createStore(); cs != nil {
 	} else if cs = f.memory.createStore(); cs != nil {
 	} else if cs = f.nop.createStore(); cs != nil {
