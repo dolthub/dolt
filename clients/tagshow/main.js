@@ -20,12 +20,13 @@ function render() {
   // NOTE: This actually does a fetch, so if render() starts getting called
   // more frequently (e.g., in response to window resize), then this should
   // get moved someplace else.
-  var rootValue = noms.getRoot().then(
-    rootRef => noms.readValue(rootRef, noms.getChunk))
+  var pRoot = noms.getRoot()
+      .then(ref => noms.readValue(ref, noms.getChunk))
+      .then(ref => ref.deref());
 
   React.render(
     <Root
       qs={Immutable.Map(qs)}
-      rootValue={rootValue}
+      pRoot={pRoot}
       updateQuery={updateQuery}/>, target);
 }

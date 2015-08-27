@@ -20,7 +20,7 @@ var Root = React.createClass({
   mixins: [ImmutableRenderMixin],
 
   propTypes: {
-    rootValue: React.PropTypes.instanceOf(Promise),
+    pRoot: React.PropTypes.instanceOf(Promise),
     qs: React.PropTypes.instanceOf(Immutable.Map),
     updateQuery: React.PropTypes.func.isRequired,
   },
@@ -53,18 +53,11 @@ var Root = React.createClass({
   },
 
   render: function() {
-    // TODO: This is making assumptions about what is inlined and not inlined
-    // that are unwarranted. Sadly, until we have search, or more magical
-    // transformations, or async functions, or something, everything has to be
-    // defensively deref'd.
-
     if (!this.props.qs.get('ds')) {
-      return <div>
-        <b>Error: </b> 'ds' hash parameter not found
-      </div>
+      return <DataSetPicker root={this.props.pRoot} onChange={this.handleDataSetPicked}/>
     }
 
-    var dataset = noms.getDataset(this.props.qs.get('ds'))
+    var dataset = noms.getDataset(this.props.pRoot, this.props.qs.get('ds'))
       .then(ref => ref.deref());
 
     return (

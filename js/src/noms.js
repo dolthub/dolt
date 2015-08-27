@@ -1,10 +1,8 @@
 var store = require('./noms_store.js')
 var decode = require('./decode.js')
 
-function getDataset(id) {
-  return store.getRoot()
-      .then(rootRef => decode.readValue(rootRef, store.getChunk))
-      .then(root => root.deref())
+function getDataset(pRoot, id) {
+  return pRoot
       .then(commit => commit.get('value').deref())
       .then(dsRefs => Promise.all(dsRefs.map(ref => ref.deref())))
       .then(datasets => {
@@ -13,14 +11,12 @@ function getDataset(id) {
           throw Error("Um...this can't be good: More than one dataset with id " + id);
         }
 
-        return match.length === 1 ? match[0].get('head') : null
-      });
+      return match.length === 1 ? match[0].get('head') : null
+    });
 }
 
-function getDatasetIds() {
-  return store.getRoot()
-      .then(rootRef => decode.readValue(rootRef, store.getChunk))
-      .then(root => root.deref())
+function getDatasetIds(pRoot) {
+  return pRoot
       .then(commit => commit.get('value').deref())
       .then(dsRefs => Promise.all(dsRefs.map(ref => ref.deref())))
       .then(datasets => datasets.map(dataset => dataset.get('id')))
