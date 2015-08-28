@@ -1,8 +1,6 @@
 package datas
 
 import (
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
@@ -12,11 +10,7 @@ import (
 
 func TestDataStoreCommit(t *testing.T) {
 	assert := assert.New(t)
-	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.Remove(dir)
-	assert.NoError(err)
-
-	chunks := chunks.NewFileStore(dir, "root")
+	chunks := &chunks.MemoryStore{}
 	ds := NewDataStore(chunks)
 
 	_, ok := ds.MaybeHead()
@@ -65,11 +59,8 @@ func TestDataStoreCommit(t *testing.T) {
 
 func TestDataStoreConcurrency(t *testing.T) {
 	assert := assert.New(t)
-	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.Remove(dir)
-	assert.NoError(err)
 
-	chunks := chunks.NewFileStore(dir, "commit")
+	chunks := &chunks.MemoryStore{}
 	ds := NewDataStore(chunks)
 
 	// Setup:
