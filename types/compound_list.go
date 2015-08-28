@@ -63,18 +63,24 @@ func newListChunkerFromList(l compoundList, startIdx uint64) *listChunker {
 	return lc
 }
 
-func (lc *listChunker) writeValue(v Value) {
-	lc.writeFuture(futureFromValue(v))
+// writeValue writes a Value to the chunker. Returns whether the write caused
+// a split after the written Value.
+func (lc *listChunker) writeValue(v Value) (split bool) {
+	return lc.writeFuture(futureFromValue(v))
 }
 
-func (lc *listChunker) writeFuture(f Future) {
+// writeFuture writes a Future to the chunker. Returns whether the write caused
+// a split after the written Future.
+func (lc *listChunker) writeFuture(f Future) (split bool) {
 	digest := f.Ref().Digest()
 	_, err := lc.h.Write(digest[:])
 	d.Chk.NoError(err)
 	lc.currentList = append(lc.currentList, f)
 	if lc.h.Sum32()&listPattern == listPattern {
 		lc.addChunk()
+		return true
 	}
+	return false
 }
 
 func (lc *listChunker) addChunk() {
@@ -87,6 +93,27 @@ func (lc *listChunker) addChunk() {
 	lc.offsets = append(lc.offsets, offset)
 	lc.currentList = []Future{}
 	lc.h = buzhash.NewBuzHash(listWindowSize)
+}
+
+// writeTail adds elements from cl to the chunker starting at idx.
+// added is used to figure out what index in the original list idx matches.
+func (lc *listChunker) writeTail(cl compoundList, idx, added uint64) {
+	// [aaaaaaaaa|bbbb|cccc|dddd|eeeeeeeee]
+	// b -> B
+	// [aaaaaaaaa|bbBb|cccc |dddd|eeeeeeeee]
+	// [aaaaaaaaa|bbBbcccc  |dddd|eeeeeeeee]
+	// [aaaaaaaaa|bbB|b|cccc|dddd|eeeeeeeee]
+	for i := idx; i < cl.Len(); i++ {
+		// TODO: getFuture is O(log n). We could create an iterator that is O(1) once we found the starting point.
+		if lc.writeFuture(cl.getFuture(i)) {
+			// if cl has a split at this index then the rest can be copied.
+			if sc, si := cl.startsChunk(i - added + 1); sc {
+				lc.lists = append(lc.lists, cl.lists[si:]...)
+				lc.offsets = append(lc.offsets, cl.offsets[si:]...)
+				break
+			}
+		}
+	}
 }
 
 func (lc *listChunker) makeList() List {
@@ -141,12 +168,9 @@ func (cl compoundList) Slice(start uint64, end uint64) List {
 }
 
 func (cl compoundList) Set(idx uint64, v Value) List {
-	// TODO: Optimize. We reuse everything up to idx but after that we should only need to rechunk 2 (?) chunks.
 	lc := newListChunkerFromList(cl, idx)
 	lc.writeValue(v)
-	for i := idx + 1; i < cl.Len(); i++ {
-		lc.writeFuture(cl.getFuture(i))
-	}
+	lc.writeTail(cl, idx+1, 0)
 	return lc.makeList()
 }
 
@@ -184,14 +208,11 @@ func (cl compoundList) Insert(idx uint64, vs ...Value) List {
 	if idx == cl.Len() {
 		return cl.Append(vs...)
 	}
-	// TODO: Optimize. We currently reuse the head but we should be able to reuse the tail too.
 	lc := newListChunkerFromList(cl, idx)
 	for _, v := range vs {
 		lc.writeValue(v)
 	}
-	for i := idx; i < cl.Len(); i++ {
-		lc.writeFuture(cl.getFuture(i))
-	}
+	lc.writeTail(cl, idx, uint64(len(vs)))
 	return lc.makeList()
 }
 
@@ -199,11 +220,8 @@ func (cl compoundList) Remove(start uint64, end uint64) List {
 	if start > cl.Len() || end > cl.Len() {
 		panic("Remove bounds out of range")
 	}
-	// TODO: Optimize. We currently reuse the head but we should be able to reuse the tail too.
 	lc := newListChunkerFromList(cl, start)
-	for i := end; i < cl.Len(); i++ {
-		lc.writeFuture(cl.getFuture(i))
-	}
+	lc.writeTail(cl, end, end-start)
 	return lc.makeList()
 }
 
@@ -235,6 +253,17 @@ func (cl compoundList) Chunks() (futures []Future) {
 		}
 	}
 	return
+}
+
+// startsChunk determines if idx refers to the first element in one of cl's chunks.
+// If so, it also returns the index of the chunk into which idx points.
+func (cl compoundList) startsChunk(idx uint64) (bool, uint64) {
+	si := findSubIndex(idx, cl.offsets)
+	offset := uint64(0)
+	if si > 0 {
+		offset += cl.offsets[si-1]
+	}
+	return offset == idx, uint64(si)
 }
 
 func newCompoundList(vs []Value, cs chunks.ChunkSource) List {
