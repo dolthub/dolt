@@ -88,6 +88,16 @@ function decodeCompoundBlob(value, ref, getChunk) {
       .then(childBlobs => new Blob(childBlobs));
 }
 
+function decodeCompoundList(value, ref, getChunk) {
+  // {"cl":["sha1-x",lengthX,"sha1-y",lengthY]}
+  return Promise.all(
+      value
+          .filter((v, i) => i % 2 === 0)
+          .map(v => decodeValue(v, ref, getChunk)))
+      .then(childLists => Immutable.List(childLists).flatten(1));
+}
+
+
 function decodeRef(ref, _, getChunk) {
   return new Ref(ref, () => {
     return readValue(ref, getChunk);
@@ -104,6 +114,7 @@ function decodeFloat(value) {
 
 var decode = {
   cb: decodeCompoundBlob,
+  cl: decodeCompoundList,
   int8: decodeInt,
   int16: decodeInt,
   int32: decodeInt,

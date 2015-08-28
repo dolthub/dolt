@@ -25,20 +25,30 @@ func All(r ref.Ref, cs chunks.ChunkSource, cb AllCallback) {
 }
 
 func doTreeWalk(f Future, cs chunks.ChunkSource, cb SomeCallback) {
-	if cb(f) {
+	doTreeWalk2(f, cs, cb, false)
+}
+
+func doTreeWalk2(f Future, cs chunks.ChunkSource, cb SomeCallback, skip bool) {
+	// skip is set to true when we shoud skip the top level value and this is used
+	// by compound lists which consists of other lists.
+	if !skip && cb(f) {
 		return
 	}
 	v := f.Deref(cs)
 
 	switch v := v.(type) {
+	case compoundList:
+		for _, f := range v.lists {
+			doTreeWalk2(f, cs, cb, true)
+		}
+	case listLeaf:
+		for _, f := range v.list {
+			doTreeWalk(f, cs, cb)
+		}
 	case Map:
 		for _, e := range v.m {
 			doTreeWalk(e.key, cs, cb)
 			doTreeWalk(e.value, cs, cb)
-		}
-	case List:
-		for _, f := range v.list {
-			doTreeWalk(f, cs, cb)
 		}
 	case Set:
 		for _, f := range v.m {

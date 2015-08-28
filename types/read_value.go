@@ -13,7 +13,7 @@ import (
 
 // ReadValue reads and decodes a value from a chunk source. It is not considered an error for the requested chunk to be absent from cs; in this case, the function simply returns nil, nil.
 func ReadValue(r ref.Ref, cs chunks.ChunkSource) Value {
-	d.Exp.NotNil(cs)
+	d.Chk.NotNil(cs)
 	reader := cs.Get(r)
 	if reader == nil {
 		return nil
@@ -70,6 +70,13 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 		}
 		cb := compoundBlob{i.Offsets, blobs, &ref.Ref{}, cs}
 		return futureFromValue(cb)
+	case enc.CompoundList:
+		lists := make([]Future, len(i.Lists))
+		for idx, listRef := range i.Lists {
+			lists[idx] = fromEncodeable(listRef, cs)
+		}
+		cl := compoundList{i.Offsets, lists, &ref.Ref{}, cs}
+		return futureFromValue(cl)
 	default:
 		d.Exp.Fail(fmt.Sprintf("Unknown encodeable", "%+v", i))
 	}

@@ -19,8 +19,10 @@ type CompoundBlob struct {
 	Blobs   []ref.Ref
 }
 
-func (cb CompoundBlob) Len() uint64 {
-	return cb.Offsets[len(cb.Offsets)-1]
+// CompoundList represents the info needed to encode/decode chunked list metadata.
+type CompoundList struct {
+	Offsets []uint64 // The offsets of the end of the related lists.
+	Lists   []ref.Ref
 }
 
 // MapFromItems takes an even-numbered list of items and converts them into a stably-ordered map-like value by treating the even-indexed items as keys and the odd-indexed items as values, e.g. {e[0]: e[1], e[2]: e[3], ...}. This does NOT enforce key uniqueness.
@@ -56,6 +58,8 @@ func getJSON(v interface{}) interface{} {
 		return getJSONList(v)
 	case CompoundBlob:
 		return getJSONCompoundBlob(v)
+	case CompoundList:
+		return getJSONCompoundList(v)
 	case Map:
 		return getJSONMap(v)
 	case Set:
@@ -123,18 +127,29 @@ func getJSONPrimitive(v interface{}) interface{} {
 func getJSONCompoundBlob(cb CompoundBlob) interface{} {
 	// {"cb":["sha1-x",length]}
 	// {"cb":["sha1-x",lengthX,"sha1-y",lengthY]}
+	return getJSONCompoundObject(cb.Blobs, cb.Offsets, "cb")
+}
+
+func getJSONCompoundList(cl CompoundList) interface{} {
+	// {"cl":["sha1-x",length]}
+	// {"cl":["sha1-x",lengthX,"sha1-y",lengthY]}
+	return getJSONCompoundObject(cl.Lists, cl.Offsets, "cl")
+}
+
+func getJSONCompoundObject(refs []ref.Ref, offsets []uint64, tag string) interface{} {
+	// {tag:["sha1-x",lengthX,"sha1-y",lengthY]}
 	offset := uint64(0)
-	l := make([]interface{}, 0, len(cb.Blobs)*2)
-	for i, f := range cb.Blobs {
-		l = append(l, f.String())
-		l = append(l, cb.Offsets[i]-offset)
-		offset = cb.Offsets[i]
+	l := make([]interface{}, 0, len(refs)*2)
+	for i, r := range refs {
+		l = append(l, r.String())
+		l = append(l, offsets[i]-offset)
+		offset = offsets[i]
 	}
 
-	d.Chk.Equal(len(l), len(cb.Blobs)*2)
+	d.Chk.Equal(len(l), len(refs)*2)
 
 	return map[string]interface{}{
-		"cb": l,
+		tag: l,
 	}
 }
 

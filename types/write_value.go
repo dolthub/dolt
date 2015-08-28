@@ -26,7 +26,9 @@ func toEncodeable(v Value, cs chunks.ChunkSink) interface{} {
 		return v.Reader()
 	case compoundBlob:
 		return encCompoundBlobFromCompoundBlob(v, cs)
-	case List:
+	case compoundList:
+		return encCompoundListFromCompoundList(v, cs)
+	case listLeaf:
 		return makeListEncodeable(v, cs)
 	case Map:
 		return makeMapEncodeable(v, cs)
@@ -53,7 +55,17 @@ func encCompoundBlobFromCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) inter
 	return enc.CompoundBlob{Offsets: cb.offsets, Blobs: refs}
 }
 
-func makeListEncodeable(l List, cs chunks.ChunkSink) interface{} {
+func encCompoundListFromCompoundList(cl compoundList, cs chunks.ChunkSink) interface{} {
+	refs := make([]ref.Ref, len(cl.lists))
+	for idx, f := range cl.lists {
+		i := processChild(f, cs)
+		// All children of compoundList must be Lists, which get encoded and reffed by processChild.
+		refs[idx] = i.(ref.Ref)
+	}
+	return enc.CompoundList{Offsets: cl.offsets, Lists: refs}
+}
+
+func makeListEncodeable(l listLeaf, cs chunks.ChunkSink) interface{} {
 	items := make([]interface{}, l.Len())
 	for idx, f := range l.list {
 		items[idx] = processChild(f, cs)

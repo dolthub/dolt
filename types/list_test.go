@@ -66,6 +66,9 @@ func TestListSlice(t *testing.T) {
 	assert.Panics(func() {
 		l3 = l1.Slice(0, l1.Len()+1)
 	})
+	assert.Panics(func() {
+		l3 = l1.Slice(l1.Len()+1, l1.Len()+2)
+	})
 }
 
 func TestListSet(t *testing.T) {
