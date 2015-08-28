@@ -1,8 +1,6 @@
 package sync
 
 import (
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
@@ -94,49 +92,4 @@ func TestFailedCopyChunks(t *testing.T) {
 	cs := &chunks.NopStore{}
 	r := ref.Parse("sha1-0000000000000000000000000000000000000000")
 	assert.Panics(t, func() { CopyChunks([]ref.Ref{r}, cs, cs) })
-}
-
-func TestTonsOChunks(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping test in short mode.")
-	}
-
-	// This is a stress test of pulling a large number of chunks. See https://github.com/attic-labs/noms/issues/213 for an example of an issue this would have caught.
-	assert := assert.New(t)
-
-	dir := func() string {
-		d, err := ioutil.TempDir(os.TempDir(), "")
-		assert.NoError(err)
-		return d
-	}
-
-	fs1 := chunks.NewFileStore(dir(), "root")
-	fs2 := chunks.NewFileStore(dir(), "root")
-
-	// Populate a filestore with a ton of chunks. Child structs are always out of line.
-	set := types.NewSet()
-	// On aa@'s mbp, values higher than 256 crash inside CopyChunks() due to "too many open files". Using a much larger value for theoretical other machines that tolerate larger amounts of open files.
-	for i := int32(0); i < 5000; i++ {
-		item := types.NewSet(types.Int64(int32(i)))
-		r := types.WriteValue(item, fs1)
-		set = set.Insert(types.Ref{r})
-	}
-
-	source := dataset.NewDataset(datas.NewDataStore(fs1), "source")
-	sink := dataset.NewDataset(datas.NewDataStore(fs2), "sink")
-	s := types.NewString("dummy")
-	source, _ = source.Commit(s)
-	sink, _ = sink.Commit(s)
-	assert.True(source.Head().Equals(sink.Head()))
-
-	source, ok := source.Commit(set)
-	assert.True(ok)
-	assert.False(source.Head().Equals(sink.Head()))
-
-	newHead := source.Head().Ref()
-	refs := DiffHeadsByRef(sink.Head().Ref(), newHead, source.Store())
-	CopyChunks(refs, source.Store(), sink.Store())
-	sink, ok = SetNewHead(newHead, sink)
-	assert.True(ok)
-	assert.True(source.Head().Equals(sink.Head()))
 }
