@@ -44,6 +44,25 @@ func newListChunker(cs chunks.ChunkSource) *listChunker {
 	}
 }
 
+// newListChunkerFromList creates a new listChunker copying the elements from l up to startIdx
+func newListChunkerFromList(l compoundList, startIdx uint64) *listChunker {
+	lc := newListChunker(l.cs)
+	si := findSubIndex(startIdx, l.offsets)
+	lc.lists = make([]Future, si)
+	copy(lc.lists, l.lists)
+	lc.offsets = make([]uint64, si)
+	copy(lc.offsets, l.offsets)
+	offset := uint64(0)
+	if si > 0 {
+		offset += l.offsets[si-1]
+	}
+	lastList := l.lists[si].Deref(l.cs).(List)
+	for i := offset; i < startIdx; i++ {
+		lc.writeFuture(lastList.getFuture(i - offset))
+	}
+	return lc
+}
+
 func (lc *listChunker) writeValue(v Value) {
 	lc.writeFuture(futureFromValue(v))
 }
@@ -122,14 +141,11 @@ func (cl compoundList) Slice(start uint64, end uint64) List {
 }
 
 func (cl compoundList) Set(idx uint64, v Value) List {
-	// TODO: Optimize. Everything up to idx can be reused. After that we should only need to rechunk 2 (?) chunks.
-	lc := newListChunker(cl.cs)
-	for i := uint64(0); i < cl.Len(); i++ {
-		if i == idx {
-			lc.writeValue(v)
-		} else {
-			lc.writeFuture(cl.getFuture(i))
-		}
+	// TODO: Optimize. We reuse everything up to idx but after that we should only need to rechunk 2 (?) chunks.
+	lc := newListChunkerFromList(cl, idx)
+	lc.writeValue(v)
+	for i := idx + 1; i < cl.Len(); i++ {
+		lc.writeFuture(cl.getFuture(i))
 	}
 	return lc.makeList()
 }
@@ -168,14 +184,12 @@ func (cl compoundList) Insert(idx uint64, vs ...Value) List {
 	if idx == cl.Len() {
 		return cl.Append(vs...)
 	}
-	// TODO: Optimize. We should be able to reuse the chunks up to idx and reuse the chunks after.
-	lc := newListChunker(cl.cs)
-	for i := uint64(0); i < cl.Len(); i++ {
-		if i == idx {
-			for _, v := range vs {
-				lc.writeValue(v)
-			}
-		}
+	// TODO: Optimize. We currently reuse the head but we should be able to reuse the tail too.
+	lc := newListChunkerFromList(cl, idx)
+	for _, v := range vs {
+		lc.writeValue(v)
+	}
+	for i := idx; i < cl.Len(); i++ {
 		lc.writeFuture(cl.getFuture(i))
 	}
 	return lc.makeList()
@@ -185,12 +199,10 @@ func (cl compoundList) Remove(start uint64, end uint64) List {
 	if start > cl.Len() || end > cl.Len() {
 		panic("Remove bounds out of range")
 	}
-	// TODO: Optimize. We should be able to reuse the chunks up to start and reuse the chunks after.
-	lc := newListChunker(cl.cs)
-	for i := uint64(0); i < cl.Len(); i++ {
-		if i < start || i >= end {
-			lc.writeFuture(cl.getFuture(i))
-		}
+	// TODO: Optimize. We currently reuse the head but we should be able to reuse the tail too.
+	lc := newListChunkerFromList(cl, start)
+	for i := end; i < cl.Len(); i++ {
+		lc.writeFuture(cl.getFuture(i))
 	}
 	return lc.makeList()
 }
