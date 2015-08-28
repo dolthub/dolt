@@ -40,7 +40,6 @@ func (l listLeaf) Slice(start uint64, end uint64) List {
 }
 
 func (l listLeaf) Set(idx uint64, v Value) List {
-	// TODO: Optimize
 	b := make([]Future, len(l.list))
 	copy(b, l.list)
 	b[idx] = futureFromValue(v)
@@ -52,7 +51,6 @@ func (l listLeaf) Append(v ...Value) List {
 }
 
 func (l listLeaf) Insert(idx uint64, v ...Value) List {
-	// TODO: Optimize
 	b := make([]Future, len(l.list)+len(v))
 	copy(b, l.list[:idx])
 	copy(b[idx:], valuesToFutures(v))
@@ -61,7 +59,6 @@ func (l listLeaf) Insert(idx uint64, v ...Value) List {
 }
 
 func (l listLeaf) Remove(start uint64, end uint64) List {
-	// TODO: Optimize
 	b := make([]Future, uint64(len(l.list))-(end-start))
 	copy(b, l.list[:start])
 	copy(b[start:], l.list[end:])
