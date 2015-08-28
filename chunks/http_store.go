@@ -26,9 +26,10 @@ type HttpStoreClient struct {
 }
 
 type HttpStoreServer struct {
-	cs   ChunkStore
-	port int
-	l    *net.Listener
+	cs    ChunkStore
+	port  int
+	l     *net.Listener
+	conns map[net.Conn]http.ConnState
 }
 
 func NewHttpStoreClient(host string) *HttpStoreClient {
@@ -41,7 +42,7 @@ func NewHttpStoreClient(host string) *HttpStoreClient {
 
 func NewHttpStoreServer(cs ChunkStore, port int) *HttpStoreServer {
 	return &HttpStoreServer{
-		cs, port, nil,
+		cs, port, nil, map[net.Conn]http.ConnState{},
 	}
 }
 
@@ -230,19 +231,34 @@ func closeResponse(res *http.Response) error {
 	return res.Body.Close()
 }
 
+func (s *HttpStoreServer) connState(c net.Conn, cs http.ConnState) {
+	switch cs {
+	case http.StateNew, http.StateActive, http.StateIdle:
+		s.conns[c] = cs
+	default:
+		delete(s.conns, c)
+	}
+}
+
 // Blocks while the server is listening. Running on a separate go routine is supported.
 func (s *HttpStoreServer) Run() {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	d.Chk.NoError(err)
 	s.l = &l
 
-	srv := &http.Server{Handler: http.HandlerFunc(s.handleRequest)}
+	srv := &http.Server{
+		Handler:   http.HandlerFunc(s.handleRequest),
+		ConnState: s.connState,
+	}
 	srv.Serve(l)
 }
 
 // Will cause the server to stop listening and an existing call to Run() to continue.
 func (s *HttpStoreServer) Stop() {
 	(*s.l).Close()
+	for c, _ := range s.conns {
+		c.Close()
+	}
 }
 
 type httpStoreFlags struct {
