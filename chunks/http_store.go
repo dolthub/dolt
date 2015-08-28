@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	rootPath = "root"
-	refPath  = "ref"
+	rootPath = "/root/"
+	refPath  = "/ref/"
 )
 
 type HttpStoreClient struct {
@@ -131,8 +131,23 @@ func (c *HttpStoreClient) requestRoot(method string, current, last ref.Ref) *htt
 	return res
 }
 
-func (s *HttpStoreServer) HandleRequestRef(w http.ResponseWriter, req *http.Request, refStr string) {
+func (s *HttpStoreServer) handleRequestRef(w http.ResponseWriter, req *http.Request) {
 	err := d.Try(func() {
+		if req.Method == "PUT" {
+			writer := s.cs.Put()
+			defer writer.Close()
+			_, err := io.Copy(writer, req.Body)
+			d.Chk.NoError(err)
+			// BUG 206 - Validate the ref matches what the client specified.
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+
+		refStr := ""
+		pathParts := strings.Split(req.URL.Path[1:], "/")
+		if len(pathParts) > 1 {
+			refStr = pathParts[1]
+		}
 		r := ref.Parse(refStr)
 
 		switch req.Method {
@@ -142,6 +157,7 @@ func (s *HttpStoreServer) HandleRequestRef(w http.ResponseWriter, req *http.Requ
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
+
 			defer reader.Close()
 			_, err := io.Copy(w, reader)
 			d.Chk.NoError(err)
@@ -153,13 +169,6 @@ func (s *HttpStoreServer) HandleRequestRef(w http.ResponseWriter, req *http.Requ
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-		case "PUT":
-			writer := s.cs.Put()
-			defer writer.Close()
-			_, err := io.Copy(writer, req.Body)
-			d.Chk.NoError(err)
-			// BUG 206 - Validate the ref matches what the client specified.
-			w.WriteHeader(http.StatusCreated)
 		}
 	})
 
@@ -169,7 +178,7 @@ func (s *HttpStoreServer) HandleRequestRef(w http.ResponseWriter, req *http.Requ
 	}
 }
 
-func (s *HttpStoreServer) HandleRequestRoot(w http.ResponseWriter, req *http.Request) {
+func (s *HttpStoreServer) handleRequestRoot(w http.ResponseWriter, req *http.Request) {
 	err := d.Try(func() {
 		switch req.Method {
 		case "GET":
@@ -199,30 +208,6 @@ func (s *HttpStoreServer) HandleRequestRoot(w http.ResponseWriter, req *http.Req
 	}
 }
 
-func (s *HttpStoreServer) handleRequest(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Access-Control-Allow-Origin", "*")
-
-	firstPart := ""
-	pathParts := strings.Split(r.URL.Path[1:], "/")
-	if len(pathParts) > 0 {
-		firstPart = pathParts[0]
-	}
-
-	switch firstPart {
-	case rootPath:
-		s.HandleRequestRoot(w, r)
-	case refPath:
-		refStr := ""
-		if len(pathParts) > 1 {
-			refStr = pathParts[1]
-		}
-
-		s.HandleRequestRef(w, r, refStr)
-	default:
-		http.Error(w, fmt.Sprintf("Unrecognized: %v", r.URL.Path[1:]), http.StatusBadRequest)
-	}
-}
-
 // In order for keep alive to work we must read to EOF on every response. We may want to add a timeout so that a server that left its connection open can't cause all of ports to be eaten up.
 func closeResponse(res *http.Response) error {
 	data, err := ioutil.ReadAll(res.Body)
@@ -246,8 +231,12 @@ func (s *HttpStoreServer) Run() {
 	d.Chk.NoError(err)
 	s.l = &l
 
+	mux := http.NewServeMux()
+	mux.HandleFunc(refPath, http.HandlerFunc(s.handleRequestRef))
+	mux.HandleFunc(rootPath, http.HandlerFunc(s.handleRequestRoot))
+
 	srv := &http.Server{
-		Handler:   http.HandlerFunc(s.handleRequest),
+		Handler:   mux,
 		ConnState: s.connState,
 	}
 	srv.Serve(l)
