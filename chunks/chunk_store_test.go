@@ -21,6 +21,8 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	// See http://www.di-mgt.com.au/sha_testvectors.html
 	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", ref.String())
 
+	suite.store.UpdateRoot(ref, suite.store.Root()) // Commit writes
+
 	// And reading it via the API should work...
 	assertInputInStore(input, ref, suite.store, suite.Assert())
 	if suite.putCountFn != nil {
@@ -69,6 +71,8 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePutWithRefAfterClose() {
 	suite.NoError(w.Close())
 	ref := w.Ref() // Ref() after Close() should work...
 
+	suite.store.UpdateRoot(ref, suite.store.Root()) // Commit writes
+
 	// And reading the data via the API should work...
 	assertInputInStore(input, ref, suite.store, suite.Assert())
 }
@@ -81,6 +85,8 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePutWithMultipleRef() {
 
 	w.Ref()
 	ref := w.Ref() // Multiple calls to Ref() should work...
+
+	suite.store.UpdateRoot(ref, suite.store.Root()) // Commit writes
 
 	// And reading the data via the API should work...
 	assertInputInStore(input, ref, suite.store, suite.Assert())

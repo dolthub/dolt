@@ -13,7 +13,7 @@ func TestHttpStoreTestSuite(t *testing.T) {
 
 type HttpStoreTestSuite struct {
 	ChunkStoreTestSuite
-	server *HttpStoreServer
+	server *httpStoreServer
 }
 
 func (suite *HttpStoreTestSuite) SetupTest() {
