@@ -18,7 +18,10 @@ This includes:
 
 # Get the code
 
-`go get -u -t github.com/attic-labs/noms/...`
+```
+cd $GOPATH
+git clone https://github.com/attic-labs/noms
+```
 
 # Build
 
