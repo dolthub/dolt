@@ -276,7 +276,10 @@ func (s *httpStoreServer) Run() {
 	mux.HandleFunc(rootPath, http.HandlerFunc(s.handleRequestRoot))
 
 	srv := &http.Server{
-		Handler:   mux,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Add("Access-Control-Allow-Origin", "*")
+			mux.ServeHTTP(w, r)
+		}),
 		ConnState: s.connState,
 	}
 	srv.Serve(l)
