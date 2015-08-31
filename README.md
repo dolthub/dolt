@@ -19,7 +19,6 @@ This includes:
 # Get the code
 
 ```
-cd $GOPATH
 git clone https://github.com/attic-labs/noms
 ```
 
