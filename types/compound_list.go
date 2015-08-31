@@ -4,10 +4,10 @@ import (
 	"crypto/sha1"
 	"sort"
 
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/kch42/buzhash"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
-	"github.com/kch42/buzhash"
 )
 
 const (
