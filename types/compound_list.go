@@ -57,8 +57,11 @@ func newListChunkerFromList(l compoundList, startIdx uint64) *listChunker {
 		offset += l.offsets[si-1]
 	}
 	lastList := l.lists[si].Deref(l.cs).(List)
-	for i := offset; i < startIdx; i++ {
-		lc.writeFuture(lastList.getFuture(i - offset))
+	it := newListIterator(lastList)
+	for i := uint64(0); i < startIdx-offset; i++ {
+		f, done := it.next()
+		d.Chk.False(done)
+		lc.writeFuture(f)
 	}
 	return lc
 }
@@ -103,9 +106,14 @@ func (lc *listChunker) writeTail(cl compoundList, idx, added uint64) {
 	// [aaaaaaaaa|bbBb|cccc |dddd|eeeeeeeee]
 	// [aaaaaaaaa|bbBbcccc  |dddd|eeeeeeeee]
 	// [aaaaaaaaa|bbB|b|cccc|dddd|eeeeeeeee]
+	if idx >= cl.Len() {
+		return
+	}
+	it := newListIteratorAt(cl, idx)
 	for i := idx; i < cl.Len(); i++ {
-		// TODO: getFuture is O(log n). We could create an iterator that is O(1) once we found the starting point.
-		if lc.writeFuture(cl.getFuture(i)) {
+		f, done := it.next()
+		d.Chk.False(done)
+		if lc.writeFuture(f) {
 			// if cl has a split at this index then the rest can be copied.
 			if sc, si := cl.startsChunk(i - added + 1); sc {
 				lc.lists = append(lc.lists, cl.lists[si:]...)
@@ -161,8 +169,11 @@ func (cl compoundList) getFuture(idx uint64) Future {
 func (cl compoundList) Slice(start uint64, end uint64) List {
 	// TODO: Optimize. We should be able to just reuse the chunks between start and end.
 	lc := newListChunker(cl.cs)
+	it := newListIteratorAt(cl, start)
 	for i := start; i < end; i++ {
-		lc.writeFuture(cl.getFuture(i))
+		f, done := it.next()
+		d.Chk.False(done)
+		lc.writeFuture(f)
 	}
 	return lc.makeList()
 }
@@ -192,8 +203,9 @@ func (cl compoundList) Append(vs ...Value) List {
 	lc.offsets = offsets
 
 	// Append elements from last list again.
-	for i := uint64(0); i < lastList.Len(); i++ {
-		lc.writeFuture(lastList.getFuture(i))
+	it := newListIterator(lastList)
+	for f, done := it.next(); !done; f, done = it.next() {
+		lc.writeFuture(f)
 	}
 	for _, v := range vs {
 		lc.writeValue(v)
