@@ -93,7 +93,8 @@ function decodeCompoundList(value, ref, getChunk) {
   return Promise.all(
       value
           .filter((v, i) => i % 2 === 0)
-          .map(v => decodeValue(v, ref, getChunk)))
+          // v is a string representing the ref here.
+          .map(v => decodeRef(v, ref, getChunk).deref()))
       .then(childLists => Immutable.List(childLists).flatten(1));
 }
 
