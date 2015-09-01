@@ -55,7 +55,10 @@ func NewBlob(r io.Reader) (Blob, error) {
 	if len(blobs) == 1 {
 		return blob, nil
 	}
-	return compoundBlob{offsets, blobs, &ref.Ref{}, nil}, nil
+
+	co := compoundObject{offsets, blobs, &ref.Ref{}, nil}
+	co = splitCompoundObject(co, compoundObjectToBlobFuture)
+	return compoundBlob{co}, nil
 }
 
 func BlobFromVal(v Value) Blob {

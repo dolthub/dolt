@@ -46,8 +46,8 @@ func toEncodeable(v Value, cs chunks.ChunkSink) interface{} {
 }
 
 func encCompoundBlobFromCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) interface{} {
-	refs := make([]ref.Ref, len(cb.blobs))
-	for idx, f := range cb.blobs {
+	refs := make([]ref.Ref, len(cb.futures))
+	for idx, f := range cb.futures {
 		i := processChild(f, cs)
 		// All children of compoundBlob must be Blobs, which get encoded and reffed by processChild.
 		refs[idx] = i.(ref.Ref)
@@ -56,8 +56,8 @@ func encCompoundBlobFromCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) inter
 }
 
 func encCompoundListFromCompoundList(cl compoundList, cs chunks.ChunkSink) interface{} {
-	refs := make([]ref.Ref, len(cl.lists))
-	for idx, f := range cl.lists {
+	refs := make([]ref.Ref, len(cl.futures))
+	for idx, f := range cl.futures {
 		i := processChild(f, cs)
 		// All children of compoundList must be Lists, which get encoded and reffed by processChild.
 		refs[idx] = i.(ref.Ref)

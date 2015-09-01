@@ -68,14 +68,14 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 		for idx, blobRef := range i.Blobs {
 			blobs[idx] = fromEncodeable(blobRef, cs)
 		}
-		cb := compoundBlob{i.Offsets, blobs, &ref.Ref{}, cs}
+		cb := newCompoundBlob(i.Offsets, blobs, cs)
 		return futureFromValue(cb)
 	case enc.CompoundList:
 		lists := make([]Future, len(i.Lists))
 		for idx, listRef := range i.Lists {
 			lists[idx] = fromEncodeable(listRef, cs)
 		}
-		cl := compoundList{i.Offsets, lists, &ref.Ref{}, cs}
+		cl := newCompoundList(i.Offsets, lists, cs)
 		return futureFromValue(cl)
 	default:
 		d.Exp.Fail(fmt.Sprintf("Unknown encodeable", "%+v", i))

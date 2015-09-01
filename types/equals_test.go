@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
-	"github.com/attic-labs/noms/ref"
 )
 
 func TestPrimitiveEquals(t *testing.T) {
@@ -59,7 +58,7 @@ func TestPrimitiveEquals(t *testing.T) {
 		func() Value {
 			b1, _ := NewBlob(bytes.NewBufferString("hi"))
 			b2, _ := NewBlob(bytes.NewBufferString("bye"))
-			return compoundBlob{[]uint64{2, 5}, []Future{futureFromValue(b1), futureFromValue(b2)}, &ref.Ref{}, nil}
+			return newCompoundBlob([]uint64{2, 5}, []Future{futureFromValue(b1), futureFromValue(b2)}, nil)
 		},
 		func() Value { return NewList() },
 		func() Value { return NewList(NewString("foo")) },

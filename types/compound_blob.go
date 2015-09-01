@@ -12,10 +12,11 @@ import (
 // compoundBlob represents a list of Blobs.
 // It implements the Blob interface.
 type compoundBlob struct {
-	offsets []uint64 // The offsets of the end of the related blobs.
-	blobs   []Future
-	ref     *ref.Ref
-	cs      chunks.ChunkSource
+	compoundObject
+}
+
+func newCompoundBlob(offsets []uint64, futures []Future, cs chunks.ChunkSource) compoundBlob {
+	return compoundBlob{compoundObject{offsets, futures, &ref.Ref{}, cs}}
 }
 
 // Reader implements the Blob interface
@@ -31,7 +32,7 @@ type compoundBlobReader struct {
 }
 
 func (cbr *compoundBlobReader) Read(p []byte) (n int, err error) {
-	for cbr.currentBlobIndex < len(cbr.cb.blobs) {
+	for cbr.currentBlobIndex < len(cbr.cb.futures) {
 		if cbr.currentReader == nil {
 			if err = cbr.updateReader(); err != nil {
 				return
@@ -97,18 +98,13 @@ func (cbr *compoundBlobReader) findBlobOffset(abs uint64) int {
 }
 
 func (cbr *compoundBlobReader) updateReader() error {
-	if cbr.currentBlobIndex < len(cbr.cb.blobs) {
-		v := cbr.cb.blobs[cbr.currentBlobIndex].Deref(cbr.cb.cs)
+	if cbr.currentBlobIndex < len(cbr.cb.futures) {
+		v := cbr.cb.futures[cbr.currentBlobIndex].Deref(cbr.cb.cs)
 		cbr.currentReader = v.(Blob).Reader()
 	} else {
 		cbr.currentReader = nil
 	}
 	return nil
-}
-
-// Len implements the Blob interface
-func (cb compoundBlob) Len() uint64 {
-	return cb.offsets[len(cb.offsets)-1]
 }
 
 func (cb compoundBlob) Ref() ref.Ref {
@@ -120,13 +116,4 @@ func (cb compoundBlob) Equals(other Value) bool {
 		return false
 	}
 	return cb.Ref() == other.Ref()
-}
-
-func (cb compoundBlob) Chunks() (futures []Future) {
-	for _, f := range cb.blobs {
-		if f, ok := f.(*unresolvedFuture); ok {
-			futures = append(futures, f)
-		}
-	}
-	return
 }

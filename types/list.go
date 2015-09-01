@@ -23,7 +23,7 @@ type List interface {
 }
 
 func NewList(v ...Value) List {
-	return newCompoundList(v, nil)
+	return newCompoundListFromValues(v, nil)
 }
 
 func valuesToFutures(list []Value) []Future {

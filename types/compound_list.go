@@ -19,10 +19,7 @@ const (
 // compoundList implements the List interface
 // compoundList implements the Value interface
 type compoundList struct {
-	offsets []uint64 // The offsets are the end offsets between child lists
-	lists   []Future
-	ref     *ref.Ref
-	cs      chunks.ChunkSource
+	compoundObject
 }
 
 // listChunker is used to create a compoundList or a listLeaf.
@@ -31,7 +28,7 @@ type compoundList struct {
 // we split the list at that point.
 type listChunker struct {
 	h           *buzhash.BuzHash
-	lists       []Future
+	futures     []Future
 	offsets     []uint64
 	currentList []Future // Accumulated Futures as the list is built.
 	cs          chunks.ChunkSource
@@ -48,15 +45,15 @@ func newListChunker(cs chunks.ChunkSource) *listChunker {
 func newListChunkerFromList(l compoundList, startIdx uint64) *listChunker {
 	lc := newListChunker(l.cs)
 	si := findSubIndex(startIdx, l.offsets)
-	lc.lists = make([]Future, si)
-	copy(lc.lists, l.lists)
+	lc.futures = make([]Future, si)
+	copy(lc.futures, l.futures)
 	lc.offsets = make([]uint64, si)
 	copy(lc.offsets, l.offsets)
 	offset := uint64(0)
 	if si > 0 {
 		offset += l.offsets[si-1]
 	}
-	lastList := l.lists[si].Deref(l.cs).(List)
+	lastList := l.futures[si].Deref(l.cs).(List)
 	it := newListIterator(lastList)
 	for i := uint64(0); i < startIdx-offset; i++ {
 		f, done := it.next()
@@ -88,7 +85,7 @@ func (lc *listChunker) writeFuture(f Future) (split bool) {
 
 func (lc *listChunker) addChunk() {
 	list := listLeafFromFutures(lc.currentList, lc.cs)
-	lc.lists = append(lc.lists, futureFromValue(list))
+	lc.futures = append(lc.futures, futureFromValue(list))
 	offset := uint64(len(lc.currentList))
 	if len(lc.offsets) > 0 {
 		offset += lc.offsets[len(lc.offsets)-1]
@@ -116,7 +113,7 @@ func (lc *listChunker) writeTail(cl compoundList, idx, added uint64) {
 		if lc.writeFuture(f) {
 			// if cl has a split at this index then the rest can be copied.
 			if sc, si := cl.startsChunk(i - added + 1); sc {
-				lc.lists = append(lc.lists, cl.lists[si:]...)
+				lc.futures = append(lc.futures, cl.futures[si:]...)
 				lc.offsets = append(lc.offsets, cl.offsets[si:]...)
 				break
 			}
@@ -125,21 +122,17 @@ func (lc *listChunker) writeTail(cl compoundList, idx, added uint64) {
 }
 
 func (lc *listChunker) makeList() List {
-	if len(lc.lists) == 0 {
+	if len(lc.futures) == 0 {
 		return listLeafFromFutures(lc.currentList, lc.cs)
 	}
 	if len(lc.currentList) > 0 {
 		lc.addChunk()
 	}
 	// In case we get a single child list just return that instead.
-	if len(lc.lists) == 1 {
-		return lc.lists[0].Deref(lc.cs).(List)
+	if len(lc.futures) == 1 {
+		return lc.futures[0].Deref(lc.cs).(List)
 	}
-	return compoundList{lc.offsets, lc.lists, &ref.Ref{}, lc.cs}
-}
-
-func (cl compoundList) Len() uint64 {
-	return cl.offsets[len(cl.offsets)-1]
+	return newCompoundList(lc.offsets, lc.futures, lc.cs)
 }
 
 func (cl compoundList) Empty() bool {
@@ -158,7 +151,7 @@ func (cl compoundList) Get(idx uint64) Value {
 
 func (cl compoundList) getFuture(idx uint64) Future {
 	si := findSubIndex(idx, cl.offsets)
-	f := cl.lists[si]
+	f := cl.futures[si]
 	l := f.Deref(cl.cs).(List)
 	if si > 0 {
 		idx -= cl.offsets[si-1]
@@ -188,18 +181,18 @@ func (cl compoundList) Set(idx uint64, v Value) List {
 func (cl compoundList) Append(vs ...Value) List {
 	// Redo chunking from last chunk.
 	d.Chk.False(cl.Empty())
-	d.Chk.True(len(cl.lists) > 1)
+	d.Chk.True(len(cl.futures) > 1)
 
 	l := len(cl.offsets)
 	offsets := make([]uint64, l-1, l)
 	copy(offsets, cl.offsets)
-	l = len(cl.lists)
+	l = len(cl.futures)
 	lists := make([]Future, l-1, l)
-	copy(lists, cl.lists)
-	lastList := cl.lists[l-1].Deref(cl.cs).(List)
+	copy(lists, cl.futures)
+	lastList := cl.futures[l-1].Deref(cl.cs).(List)
 
 	lc := newListChunker(cl.cs)
-	lc.lists = lists
+	lc.futures = lists
 	lc.offsets = offsets
 
 	// Append elements from last list again.
@@ -246,7 +239,7 @@ func (cl compoundList) Ref() ref.Ref {
 }
 
 func (cl compoundList) Release() {
-	for _, f := range cl.lists {
+	for _, f := range cl.futures {
 		f.Release()
 	}
 }
@@ -256,15 +249,6 @@ func (cl compoundList) Equals(other Value) bool {
 		return false
 	}
 	return cl.Ref() == other.Ref()
-}
-
-func (cl compoundList) Chunks() (futures []Future) {
-	for _, f := range cl.lists {
-		if f, ok := f.(*unresolvedFuture); ok {
-			futures = append(futures, f)
-		}
-	}
-	return
 }
 
 // startsChunk determines if idx refers to the first element in one of cl's chunks.
@@ -278,7 +262,11 @@ func (cl compoundList) startsChunk(idx uint64) (bool, uint64) {
 	return offset == idx, uint64(si)
 }
 
-func newCompoundList(vs []Value, cs chunks.ChunkSource) List {
+func newCompoundList(offsets []uint64, futures []Future, cs chunks.ChunkSource) compoundList {
+	return compoundList{compoundObject{offsets, futures, &ref.Ref{}, cs}}
+}
+
+func newCompoundListFromValues(vs []Value, cs chunks.ChunkSource) List {
 	l := uint64(len(vs))
 	// Always use a list leaf for empty and single element lists.
 	if l < 2 {

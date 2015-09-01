@@ -8,7 +8,6 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
 )
 
 func getFakeCompoundList(datas ...string) compoundList {
@@ -24,7 +23,7 @@ func getFakeCompoundList(datas ...string) compoundList {
 		length += l.Len()
 		offsets[i] = length
 	}
-	return compoundList{offsets, futures, &ref.Ref{}, nil}
+	return newCompoundList(offsets, futures, nil)
 }
 
 func getTestCompoundList(t *testing.T) List {
@@ -57,7 +56,7 @@ func getWordsInAlice(t *testing.T) []Value {
 }
 
 func getAliceList(t *testing.T) compoundList {
-	return newCompoundList(getWordsInAlice(t), nil).(compoundList)
+	return newCompoundListFromValues(getWordsInAlice(t), nil).(compoundList)
 }
 
 func TestCompoundListLen(t *testing.T) {
@@ -80,7 +79,7 @@ func TestCompoundListChunks(t *testing.T) {
 	ll1 := NewList(NewString("h"), NewString("i"))
 	llr1 := ll1.Ref()
 	ll2 := NewList(NewString("b"), NewString("y"), NewString("e"))
-	cl = compoundList{[]uint64{2, 5}, []Future{futureFromRef(llr1), futureFromValue(ll2)}, &ref.Ref{}, cs}
+	cl = newCompoundList([]uint64{2, 5}, []Future{futureFromRef(llr1), futureFromValue(ll2)}, cs)
 	assert.Equal(1, len(cl.Chunks()))
 }
 
@@ -106,16 +105,16 @@ func TestCompoundListReadWriteValue(t *testing.T) {
 	assert.True(v.Equals(cl))
 }
 
-func TestNewCompoundList(t *testing.T) {
+func TestnewCompoundListFromValues(t *testing.T) {
 	assert := assert.New(t)
 
-	vs := newCompoundList([]Value{}, nil)
+	vs := newCompoundListFromValues([]Value{}, nil)
 	assert.Equal(uint64(0), vs.Len())
 
-	vs = newCompoundList([]Value{NewString("a")}, nil)
+	vs = newCompoundListFromValues([]Value{NewString("a")}, nil)
 	assert.Equal(uint64(1), vs.Len())
 
-	vs = newCompoundList([]Value{NewString("h"), NewString("i")}, nil)
+	vs = newCompoundListFromValues([]Value{NewString("h"), NewString("i")}, nil)
 	assert.Equal(uint64(2), vs.Len())
 }
 
@@ -135,12 +134,12 @@ func TestCompoundListAppend(t *testing.T) {
 
 	cl2, ok := l2.(compoundList)
 	assert.True(ok)
-	assert.Equal(2, len(cl2.lists))
+	assert.Equal(2, len(cl2.futures))
 
 	// It should not matter how the list was made
 	words := getWordsInAlice(t)
-	al1 := newCompoundList(words, nil)
-	al2 := newCompoundList(words[0:len(words)/2], nil)
+	al1 := newCompoundListFromValues(words, nil)
+	al2 := newCompoundListFromValues(words[0:len(words)/2], nil)
 	al2 = al2.Append(words[len(words)/2:]...)
 	assert.True(al1.Equals(al2))
 
