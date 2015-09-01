@@ -59,6 +59,22 @@
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
 			"Rev": "1a9d62f03ea92815b46fcaab357cfd4df264b1a0"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context",
+			"Rev": "7654728e381988afd88e58cabfd6363a5ea91810"
+		},
+		{
+			"ImportPath": "golang.org/x/oauth2",
+			"Rev": "397fe7649477ff2e8ced8fc0b2696f781e53745a"
+		},
+		{
+			"ImportPath": "google.golang.org/cloud/compute/metadata",
+			"Rev": "157e4dbaa1bc2e0fa2e7de752639dc5d711fdfa6"
+		},
+		{
+			"ImportPath": "google.golang.org/cloud/internal",
+			"Rev": "157e4dbaa1bc2e0fa2e7de752639dc5d711fdfa6"
 		}
 	]
 }
