@@ -30,7 +30,6 @@ func TestWriteValue(t *testing.T) {
 	assert.NoError(err)
 	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), b)
 	testEncode(string("j \"foo\"\n"), NewString("foo"))
-
 }
 
 func TestWriteBlobLeaf(t *testing.T) {

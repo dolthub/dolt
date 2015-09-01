@@ -7,6 +7,19 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// This function builds up a Noms value that describes the type
+// package implemented by this file and registers it with the global
+// type package definition cache.
+func __testPackageInFile_struct_with_unions_Ref() types.Ref {
+	p := types.PackageDef{
+		Types: types.MapOfStringToTypeRefDef{
+
+			"StructWithUnions": __typeRefOfStructWithUnions(),
+		},
+	}.New()
+	return types.Ref{R: types.RegisterPackage(&p)}
+}
+
 // StructWithUnions
 
 type StructWithUnions struct {
@@ -16,6 +29,7 @@ type StructWithUnions struct {
 func NewStructWithUnions() StructWithUnions {
 	return StructWithUnions{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithUnions"),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnions"), __testPackageInFile_struct_with_unions_Ref()),
 		types.NewString("A"), New__unionOfBOfFloat64AndCOfString().NomsValue(),
 		types.NewString("D"), New__unionOfEOfFloat64AndFOfString().NomsValue(),
 	)}
@@ -30,6 +44,7 @@ func (def StructWithUnionsDef) New() StructWithUnions {
 	return StructWithUnions{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithUnions"),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnions"), __testPackageInFile_struct_with_unions_Ref()),
 			types.NewString("A"), def.A.New().NomsValue(),
 			types.NewString("D"), def.D.New().NomsValue(),
 		)}
@@ -40,6 +55,19 @@ func (self StructWithUnions) Def() StructWithUnionsDef {
 		__unionOfBOfFloat64AndCOfStringFromVal(self.m.Get(types.NewString("A"))).Def(),
 		__unionOfEOfFloat64AndFOfStringFromVal(self.m.Get(types.NewString("D"))).Def(),
 	}
+}
+
+// Creates and returns a Noms Value that describes StructWithUnions.
+func __typeRefOfStructWithUnions() types.TypeRef {
+	return types.MakeStructTypeRef(types.NewString("StructWithUnions"),
+		types.NewList(
+			types.NewString("a"), types.MakeStructTypeRef(types.NewString(""), nil, types.NewList(types.NewString("b"), types.MakePrimitiveTypeRef(types.Float64Kind),
+				types.NewString("c"), types.MakePrimitiveTypeRef(types.StringKind))),
+			types.NewString("d"), types.MakeStructTypeRef(types.NewString(""), nil, types.NewList(types.NewString("e"), types.MakePrimitiveTypeRef(types.Float64Kind),
+				types.NewString("f"), types.MakePrimitiveTypeRef(types.StringKind))),
+		),
+		nil)
+
 }
 
 func StructWithUnionsFromVal(val types.Value) StructWithUnions {
@@ -57,6 +85,10 @@ func (self StructWithUnions) Equals(other StructWithUnions) bool {
 
 func (self StructWithUnions) Ref() ref.Ref {
 	return self.m.Ref()
+}
+
+func (self StructWithUnions) Type() types.TypeRef {
+	return self.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (self StructWithUnions) A() __unionOfBOfFloat64AndCOfString {
@@ -84,6 +116,7 @@ type __unionOfBOfFloat64AndCOfString struct {
 func New__unionOfBOfFloat64AndCOfString() __unionOfBOfFloat64AndCOfString {
 	return __unionOfBOfFloat64AndCOfString{types.NewMap(
 		types.NewString("$name"), types.NewString("__unionOfBOfFloat64AndCOfString"),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfBOfFloat64AndCOfString"), __testPackageInFile_struct_with_unions_Ref()),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	)}
@@ -98,6 +131,7 @@ func (def __unionOfBOfFloat64AndCOfStringDef) New() __unionOfBOfFloat64AndCOfStr
 	return __unionOfBOfFloat64AndCOfString{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("__unionOfBOfFloat64AndCOfString"),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfBOfFloat64AndCOfString"), __testPackageInFile_struct_with_unions_Ref()),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
 		)}
@@ -130,6 +164,17 @@ func (self __unionOfBOfFloat64AndCOfString) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
+// Creates and returns a Noms Value that describes __unionOfBOfFloat64AndCOfString.
+func __typeRefOf__unionOfBOfFloat64AndCOfString() types.TypeRef {
+	return types.MakeStructTypeRef(types.NewString("__unionOfBOfFloat64AndCOfString"),
+		types.NewList(),
+		types.NewList(
+			types.NewString("b"), types.MakePrimitiveTypeRef(types.Float64Kind),
+			types.NewString("c"), types.MakePrimitiveTypeRef(types.StringKind),
+		))
+
+}
+
 func __unionOfBOfFloat64AndCOfStringFromVal(val types.Value) __unionOfBOfFloat64AndCOfString {
 	// TODO: Validate here
 	return __unionOfBOfFloat64AndCOfString{val.(types.Map)}
@@ -145,6 +190,10 @@ func (self __unionOfBOfFloat64AndCOfString) Equals(other __unionOfBOfFloat64AndC
 
 func (self __unionOfBOfFloat64AndCOfString) Ref() ref.Ref {
 	return self.m.Ref()
+}
+
+func (self __unionOfBOfFloat64AndCOfString) Type() types.TypeRef {
+	return self.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (self __unionOfBOfFloat64AndCOfString) B() (val float64, ok bool) {
@@ -204,6 +253,7 @@ type __unionOfEOfFloat64AndFOfString struct {
 func New__unionOfEOfFloat64AndFOfString() __unionOfEOfFloat64AndFOfString {
 	return __unionOfEOfFloat64AndFOfString{types.NewMap(
 		types.NewString("$name"), types.NewString("__unionOfEOfFloat64AndFOfString"),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfEOfFloat64AndFOfString"), __testPackageInFile_struct_with_unions_Ref()),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	)}
@@ -218,6 +268,7 @@ func (def __unionOfEOfFloat64AndFOfStringDef) New() __unionOfEOfFloat64AndFOfStr
 	return __unionOfEOfFloat64AndFOfString{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("__unionOfEOfFloat64AndFOfString"),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfEOfFloat64AndFOfString"), __testPackageInFile_struct_with_unions_Ref()),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
 		)}
@@ -250,6 +301,17 @@ func (self __unionOfEOfFloat64AndFOfString) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
+// Creates and returns a Noms Value that describes __unionOfEOfFloat64AndFOfString.
+func __typeRefOf__unionOfEOfFloat64AndFOfString() types.TypeRef {
+	return types.MakeStructTypeRef(types.NewString("__unionOfEOfFloat64AndFOfString"),
+		types.NewList(),
+		types.NewList(
+			types.NewString("e"), types.MakePrimitiveTypeRef(types.Float64Kind),
+			types.NewString("f"), types.MakePrimitiveTypeRef(types.StringKind),
+		))
+
+}
+
 func __unionOfEOfFloat64AndFOfStringFromVal(val types.Value) __unionOfEOfFloat64AndFOfString {
 	// TODO: Validate here
 	return __unionOfEOfFloat64AndFOfString{val.(types.Map)}
@@ -265,6 +327,10 @@ func (self __unionOfEOfFloat64AndFOfString) Equals(other __unionOfEOfFloat64AndF
 
 func (self __unionOfEOfFloat64AndFOfString) Ref() ref.Ref {
 	return self.m.Ref()
+}
+
+func (self __unionOfEOfFloat64AndFOfString) Type() types.TypeRef {
+	return self.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (self __unionOfEOfFloat64AndFOfString) E() (val float64, ok bool) {

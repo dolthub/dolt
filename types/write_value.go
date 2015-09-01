@@ -42,6 +42,8 @@ func toEncodeable(v Value, cs chunks.ChunkSink) interface{} {
 		return makeSetEncodeable(v, cs)
 	case String:
 		return v.String()
+	case TypeRef:
+		return makeTypeEncodeable(v, cs)
 	default:
 		return v
 	}
@@ -90,6 +92,15 @@ func makeSetEncodeable(s Set, cs chunks.ChunkSink) interface{} {
 		items[idx] = processChild(f, cs)
 	}
 	return enc.SetFromItems(items...)
+}
+
+func makeTypeEncodeable(t TypeRef, cs chunks.ChunkSink) interface{} {
+	pkgRef := t.PackageRef().Ref()
+	p := LookupPackage(pkgRef)
+	if p != nil {
+		pkgRef = WriteValue(p.NomsValue(), cs)
+	}
+	return enc.TypeRef{PkgRef: pkgRef, Name: t.Name().String(), Kind: uint8(t.kind), Desc: toEncodeable(t.desc, cs)}
 }
 
 func processChild(f Future, cs chunks.ChunkSink) interface{} {

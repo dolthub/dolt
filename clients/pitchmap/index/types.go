@@ -7,17 +7,30 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// This function builds up a Noms value that describes the type
+// package implemented by this file and registers it with the global
+// type package definition cache.
+func __mainPackageInFile_types_Ref() types.Ref {
+	p := types.PackageDef{
+		Types: types.MapOfStringToTypeRefDef{
+
+			"Pitch": __typeRefOfPitch(),
+		},
+	}.New()
+	return types.Ref{R: types.RegisterPackage(&p)}
+}
+
 // ListOfMapOfStringToValue
 
 type ListOfMapOfStringToValue struct {
 	l types.List
 }
 
-type ListOfMapOfStringToValueDef []MapOfStringToValueDef
-
 func NewListOfMapOfStringToValue() ListOfMapOfStringToValue {
 	return ListOfMapOfStringToValue{types.NewList()}
 }
+
+type ListOfMapOfStringToValueDef []MapOfStringToValueDef
 
 func (def ListOfMapOfStringToValueDef) New() ListOfMapOfStringToValue {
 	l := make([]types.Value, len(def))
@@ -27,17 +40,17 @@ func (def ListOfMapOfStringToValueDef) New() ListOfMapOfStringToValue {
 	return ListOfMapOfStringToValue{types.NewList(l...)}
 }
 
-func ListOfMapOfStringToValueFromVal(val types.Value) ListOfMapOfStringToValue {
-	// TODO: Validate here
-	return ListOfMapOfStringToValue{val.(types.List)}
-}
-
 func (self ListOfMapOfStringToValue) Def() ListOfMapOfStringToValueDef {
 	l := make([]MapOfStringToValueDef, self.Len())
 	for i := uint64(0); i < self.Len(); i++ {
 		l[i] = MapOfStringToValueFromVal(self.l.Get(i)).Def()
 	}
 	return l
+}
+
+func ListOfMapOfStringToValueFromVal(val types.Value) ListOfMapOfStringToValue {
+	// TODO: Validate here
+	return ListOfMapOfStringToValue{val.(types.List)}
 }
 
 func (self ListOfMapOfStringToValue) NomsValue() types.Value {
@@ -130,11 +143,11 @@ type MapOfStringToValue struct {
 	m types.Map
 }
 
-type MapOfStringToValueDef map[string]types.Value
-
 func NewMapOfStringToValue() MapOfStringToValue {
 	return MapOfStringToValue{types.NewMap()}
 }
+
+type MapOfStringToValueDef map[string]types.Value
 
 func (def MapOfStringToValueDef) New() MapOfStringToValue {
 	kv := make([]types.Value, 0, len(def)*2)
@@ -230,11 +243,11 @@ type MapOfStringToListOfPitch struct {
 	m types.Map
 }
 
-type MapOfStringToListOfPitchDef map[string]ListOfPitchDef
-
 func NewMapOfStringToListOfPitch() MapOfStringToListOfPitch {
 	return MapOfStringToListOfPitch{types.NewMap()}
 }
+
+type MapOfStringToListOfPitchDef map[string]ListOfPitchDef
 
 func (def MapOfStringToListOfPitchDef) New() MapOfStringToListOfPitch {
 	kv := make([]types.Value, 0, len(def)*2)
@@ -330,11 +343,11 @@ type ListOfPitch struct {
 	l types.List
 }
 
-type ListOfPitchDef []PitchDef
-
 func NewListOfPitch() ListOfPitch {
 	return ListOfPitch{types.NewList()}
 }
+
+type ListOfPitchDef []PitchDef
 
 func (def ListOfPitchDef) New() ListOfPitch {
 	l := make([]types.Value, len(def))
@@ -344,17 +357,17 @@ func (def ListOfPitchDef) New() ListOfPitch {
 	return ListOfPitch{types.NewList(l...)}
 }
 
-func ListOfPitchFromVal(val types.Value) ListOfPitch {
-	// TODO: Validate here
-	return ListOfPitch{val.(types.List)}
-}
-
 func (self ListOfPitch) Def() ListOfPitchDef {
 	l := make([]PitchDef, self.Len())
 	for i := uint64(0); i < self.Len(); i++ {
 		l[i] = PitchFromVal(self.l.Get(i)).Def()
 	}
 	return l
+}
+
+func ListOfPitchFromVal(val types.Value) ListOfPitch {
+	// TODO: Validate here
+	return ListOfPitch{val.(types.List)}
 }
 
 func (self ListOfPitch) NomsValue() types.Value {
@@ -443,11 +456,6 @@ func (l ListOfPitch) Filter(cb ListOfPitchFilterCallback) ListOfPitch {
 
 // Pitch
 
-type PitchDef struct {
-	X float64
-	Z float64
-}
-
 type Pitch struct {
 	m types.Map
 }
@@ -455,15 +463,22 @@ type Pitch struct {
 func NewPitch() Pitch {
 	return Pitch{types.NewMap(
 		types.NewString("$name"), types.NewString("Pitch"),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("Pitch"), __mainPackageInFile_types_Ref()),
 		types.NewString("X"), types.Float64(0),
 		types.NewString("Z"), types.Float64(0),
 	)}
+}
+
+type PitchDef struct {
+	X float64
+	Z float64
 }
 
 func (def PitchDef) New() Pitch {
 	return Pitch{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Pitch"),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("Pitch"), __mainPackageInFile_types_Ref()),
 			types.NewString("X"), types.Float64(def.X),
 			types.NewString("Z"), types.Float64(def.Z),
 		)}
@@ -474,6 +489,17 @@ func (self Pitch) Def() PitchDef {
 		float64(self.m.Get(types.NewString("X")).(types.Float64)),
 		float64(self.m.Get(types.NewString("Z")).(types.Float64)),
 	}
+}
+
+// Creates and returns a Noms Value that describes Pitch.
+func __typeRefOfPitch() types.TypeRef {
+	return types.MakeStructTypeRef(types.NewString("Pitch"),
+		types.NewList(
+			types.NewString("X"), types.MakePrimitiveTypeRef(types.Float64Kind),
+			types.NewString("Z"), types.MakePrimitiveTypeRef(types.Float64Kind),
+		),
+		nil)
+
 }
 
 func PitchFromVal(val types.Value) Pitch {
@@ -491,6 +517,10 @@ func (self Pitch) Equals(other Pitch) bool {
 
 func (self Pitch) Ref() ref.Ref {
 	return self.m.Ref()
+}
+
+func (self Pitch) Type() types.TypeRef {
+	return self.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (self Pitch) X() float64 {
@@ -515,11 +545,11 @@ type MapOfStringToString struct {
 	m types.Map
 }
 
-type MapOfStringToStringDef map[string]string
-
 func NewMapOfStringToString() MapOfStringToString {
 	return MapOfStringToString{types.NewMap()}
 }
+
+type MapOfStringToStringDef map[string]string
 
 func (def MapOfStringToStringDef) New() MapOfStringToString {
 	kv := make([]types.Value, 0, len(def)*2)

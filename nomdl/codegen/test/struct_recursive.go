@@ -7,6 +7,19 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// This function builds up a Noms value that describes the type
+// package implemented by this file and registers it with the global
+// type package definition cache.
+func __testPackageInFile_struct_recursive_Ref() types.Ref {
+	p := types.PackageDef{
+		Types: types.MapOfStringToTypeRefDef{
+
+			"Tree": __typeRefOfTree(),
+		},
+	}.New()
+	return types.Ref{R: types.RegisterPackage(&p)}
+}
+
 // Tree
 
 type Tree struct {
@@ -16,6 +29,7 @@ type Tree struct {
 func NewTree() Tree {
 	return Tree{types.NewMap(
 		types.NewString("$name"), types.NewString("Tree"),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("Tree"), __testPackageInFile_struct_recursive_Ref()),
 		types.NewString("Children"), types.NewList(),
 	)}
 }
@@ -28,6 +42,7 @@ func (def TreeDef) New() Tree {
 	return Tree{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Tree"),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("Tree"), __testPackageInFile_struct_recursive_Ref()),
 			types.NewString("Children"), def.Children.New().NomsValue(),
 		)}
 }
@@ -36,6 +51,16 @@ func (self Tree) Def() TreeDef {
 	return TreeDef{
 		ListOfTreeFromVal(self.m.Get(types.NewString("Children"))).Def(),
 	}
+}
+
+// Creates and returns a Noms Value that describes Tree.
+func __typeRefOfTree() types.TypeRef {
+	return types.MakeStructTypeRef(types.NewString("Tree"),
+		types.NewList(
+			types.NewString("children"), types.MakeCompoundTypeRef(types.NewString(""), types.ListKind, types.MakeTypeRef(types.NewString("Tree"), types.Ref{})),
+		),
+		nil)
+
 }
 
 func TreeFromVal(val types.Value) Tree {
@@ -53,6 +78,10 @@ func (self Tree) Equals(other Tree) bool {
 
 func (self Tree) Ref() ref.Ref {
 	return self.m.Ref()
+}
+
+func (self Tree) Type() types.TypeRef {
+	return self.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (self Tree) Children() ListOfTree {

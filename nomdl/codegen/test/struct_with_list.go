@@ -7,6 +7,19 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// This function builds up a Noms value that describes the type
+// package implemented by this file and registers it with the global
+// type package definition cache.
+func __testPackageInFile_struct_with_list_Ref() types.Ref {
+	p := types.PackageDef{
+		Types: types.MapOfStringToTypeRefDef{
+
+			"StructWithList": __typeRefOfStructWithList(),
+		},
+	}.New()
+	return types.Ref{R: types.RegisterPackage(&p)}
+}
+
 // StructWithList
 
 type StructWithList struct {
@@ -16,6 +29,7 @@ type StructWithList struct {
 func NewStructWithList() StructWithList {
 	return StructWithList{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithList"),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithList"), __testPackageInFile_struct_with_list_Ref()),
 		types.NewString("L"), types.NewList(),
 		types.NewString("B"), types.Bool(false),
 		types.NewString("S"), types.NewString(""),
@@ -34,6 +48,7 @@ func (def StructWithListDef) New() StructWithList {
 	return StructWithList{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithList"),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithList"), __testPackageInFile_struct_with_list_Ref()),
 			types.NewString("L"), def.L.New().NomsValue(),
 			types.NewString("B"), types.Bool(def.B),
 			types.NewString("S"), types.NewString(def.S),
@@ -48,6 +63,19 @@ func (self StructWithList) Def() StructWithListDef {
 		self.m.Get(types.NewString("S")).(types.String).String(),
 		int64(self.m.Get(types.NewString("I")).(types.Int64)),
 	}
+}
+
+// Creates and returns a Noms Value that describes StructWithList.
+func __typeRefOfStructWithList() types.TypeRef {
+	return types.MakeStructTypeRef(types.NewString("StructWithList"),
+		types.NewList(
+			types.NewString("l"), types.MakeCompoundTypeRef(types.NewString(""), types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)),
+			types.NewString("b"), types.MakePrimitiveTypeRef(types.BoolKind),
+			types.NewString("s"), types.MakePrimitiveTypeRef(types.StringKind),
+			types.NewString("i"), types.MakePrimitiveTypeRef(types.Int64Kind),
+		),
+		nil)
+
 }
 
 func StructWithListFromVal(val types.Value) StructWithList {
@@ -65,6 +93,10 @@ func (self StructWithList) Equals(other StructWithList) bool {
 
 func (self StructWithList) Ref() ref.Ref {
 	return self.m.Ref()
+}
+
+func (self StructWithList) Type() types.TypeRef {
+	return self.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (self StructWithList) L() ListOfUInt8 {

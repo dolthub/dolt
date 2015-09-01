@@ -41,6 +41,13 @@ type Map []interface{}
 
 type Set []interface{}
 
+type TypeRef struct {
+	PkgRef ref.Ref
+	Name   string
+	Kind   uint8
+	Desc   interface{}
+}
+
 func jsonEncode(dst io.Writer, v interface{}) {
 	var j interface{}
 	j = getJSON(v)
@@ -117,6 +124,8 @@ func getJSONPrimitive(v interface{}) interface{} {
 		return map[string]interface{}{
 			"uint64": uint64(v),
 		}
+	case TypeRef:
+		return getJSONTypeRef(v)
 	default:
 		d.Exp.Fail(fmt.Sprintf("Unexpected type: %T, %+v", v, v))
 	}
@@ -163,6 +172,20 @@ func getJSONMap(m Map) interface{} {
 
 func getJSONSet(s Set) interface{} {
 	return getJSONIterable("set", s)
+}
+
+func getJSONTypeRef(t TypeRef) interface{} {
+	body := map[string]interface{}{
+		"name": getJSONPrimitive(t.Name),
+		"kind": getJSONPrimitive(t.Kind),
+	}
+	if t.PkgRef != (ref.Ref{}) {
+		body["pkgRef"] = getJSON(t.PkgRef)
+	}
+	if t.Desc != nil {
+		body["desc"] = getJSON(t.Desc)
+	}
+	return map[string]interface{}{"type": body}
 }
 
 func getJSONIterable(tag string, items []interface{}) interface{} {

@@ -6,3 +6,13 @@ type {{.Name}} uint32
 const ({{range $index, $id := .Ids}}
 	{{title $id}}{{if eq $index 0}} {{$name}} = iota{{end}}{{end}}
 )
+
+// Creates and returns a Noms Value that describes {{.Name}}.
+func __typeRefOf{{.Name}}() types.TypeRef {
+	return types.MakeEnumTypeRef(types.NewString("{{.Name}}"), []types.String{
+			{{range $index, $id := .Ids}}
+			types.NewString("{{$id}}"),{{end}}
+		})
+
+}
+

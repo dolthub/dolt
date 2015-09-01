@@ -2,7 +2,6 @@ package types
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"io/ioutil"
 
@@ -63,6 +62,15 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 		return futureMapFromIterable(i, cs)
 	case enc.Set:
 		return futureSetFromIterable(i, cs)
+	case enc.TypeRef:
+		kind := NomsKind(i.Kind)
+		if i.PkgRef != (ref.Ref{}) {
+			d.Chk.Equal(ValueKind, kind)
+			d.Chk.Nil(i.Desc)
+			return futureFromValue(MakeTypeRef(NewString(i.Name), Ref{R: i.PkgRef}))
+		}
+		desc := typeDescFromInterface(kind, i.Desc, cs)
+		return futureFromValue(buildType(NewString(i.Name), kind, desc))
 	case enc.CompoundBlob:
 		blobs := make([]Future, len(i.Blobs))
 		for idx, blobRef := range i.Blobs {
@@ -78,7 +86,7 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 		cl := newCompoundList(i.Offsets, lists, cs)
 		return futureFromValue(cl)
 	default:
-		d.Exp.Fail(fmt.Sprintf("Unknown encodeable", "%+v", i))
+		d.Exp.Fail("Unknown encodeable", "%+v", i)
 	}
 
 	return nil
@@ -97,6 +105,33 @@ func futureMapFromIterable(items []interface{}, cs chunks.ChunkSource) Future {
 func futureSetFromIterable(items []interface{}, cs chunks.ChunkSource) Future {
 	output := futuresFromIterable(items, cs)
 	return futureFromValue(setFromFutures(output, cs))
+}
+
+func typeDescFromInterface(kind NomsKind, i interface{}, cs chunks.ChunkSource) Value {
+	if IsPrimitiveKind(kind) {
+		d.Chk.Nil(i, "Primitive TypeRefs have no description.")
+		return nil
+	}
+	switch kind {
+	case ListKind, RefKind, SetKind:
+		return fromEncodeable(i.(enc.TypeRef), cs).Deref(cs)
+	case MapKind:
+		items := i.([]interface{})
+		d.Chk.Len(items, 2)
+		return listFromFutures(futuresFromIterable(items, cs), cs)
+	case EnumKind:
+		items := i.([]interface{})
+		for _, item := range items {
+			d.Chk.IsType("", item, "Each enumeration must be a string.")
+		}
+		return listFromFutures(futuresFromIterable(items, cs), cs)
+	case StructKind:
+		items := i.(enc.Map)
+		return mapFromFutures(futuresFromIterable(items, cs), cs)
+	default:
+		d.Exp.Fail("Unrecognized Kind:", "%v", kind)
+		panic("unreachable")
+	}
 }
 
 func futuresFromIterable(items []interface{}, cs chunks.ChunkSource) (f []Future) {

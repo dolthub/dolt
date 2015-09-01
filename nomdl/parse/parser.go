@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/types"
 )
 
 // ParsePackage reads a Noms package specification from r and returns a Package. Errors will be annotated with logname and thrown.
@@ -19,6 +20,7 @@ func ParsePackage(logname string, r io.Reader) Package {
 // UsingDeclarations is kind of a hack to indicate specializations of Noms containers that need to be generated. These should all be one of ListKind, SetKind, MapKind or RefKind, and Desc should be a CompoundDesc instance.
 // NamedTypes is a lookup table for types defined in this package. These should all be EnumKind or StructKind. When traversing the definition of a given type, you may run into a TypeRef that IsUnresolved(). In that case, look it up by name in the NamedTypes of the appropriate package.
 type Package struct {
+	Name              string
 	Aliases           map[string]string
 	UsingDeclarations []TypeRef
 	NamedTypes        map[string]TypeRef
@@ -27,7 +29,7 @@ type Package struct {
 // TypeRef represents a possibly-symbolic reference to a type.
 // PkgRef will be some kind of reference to another Noms type package, almost certainly a ref.Ref.
 // Name is required for StructKind and EnumKind types, and may be allowed for others if we do type aliases. Named types are 'exported' in that they can be addressed from other type packages.
-// Desc describes the referenced type. It may contain only a NomsKind, in the case of primitives, or it may contain additional information -- e.g.element TypeRefs for compound type specializations, field descriptions for structs, etc. Either way, checking Desc.Kind() allows code to understand how to interpret the rest of the data.
+// Desc describes the referenced type. It may contain only a types.NomsKind, in the case of primitives, or it may contain additional information -- e.g.element TypeRefs for compound type specializations, field descriptions for structs, etc. Either way, checking Desc.Kind() allows code to understand how to interpret the rest of the data.
 // NB: If we weren't looking towards Nomifying these datastructures, we'd just type-switch on Desc instead of using Kind().
 type TypeRef struct {
 	PkgRef string // Not yet used.
@@ -72,37 +74,10 @@ func namespaceName(pkgRef, name string) (out string) {
 
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Int32, or a custom type.
 type TypeDesc interface {
-	Kind() NomsKind
+	Kind() types.NomsKind
 	Equals(other TypeDesc) bool
 	describe() string // For use in tests.
 }
-
-// NomsKind allows a TypeDesc to indicate what kind of type is described.
-type NomsKind int
-
-// All supported kinds of Noms types are enumerated here.
-const (
-	BoolKind NomsKind = iota
-	UInt8Kind
-	UInt16Kind
-	UInt32Kind
-	UInt64Kind
-	Int8Kind
-	Int16Kind
-	Int32Kind
-	Int64Kind
-	Float32Kind
-	Float64Kind
-	StringKind
-	BlobKind
-	ValueKind
-	ListKind
-	MapKind
-	RefKind
-	SetKind
-	EnumKind
-	StructKind
-)
 
 func makePrimitiveTypeRef(p string) TypeRef {
 	return TypeRef{Desc: primitiveToDesc[p]}
@@ -123,10 +98,11 @@ func makePrimitiveTypeRef(p string) TypeRef {
 // String
 // Blob
 // Value
-type PrimitiveDesc NomsKind
+// TypeRef
+type PrimitiveDesc types.NomsKind
 
-func (p PrimitiveDesc) Kind() NomsKind {
-	return NomsKind(p)
+func (p PrimitiveDesc) Kind() types.NomsKind {
+	return types.NomsKind(p)
 }
 
 func (p PrimitiveDesc) Equals(other TypeDesc) bool {
@@ -143,34 +119,35 @@ func (p PrimitiveDesc) describe() string {
 }
 
 var primitiveToDesc = map[string]PrimitiveDesc{
-	"Bool":    PrimitiveDesc(BoolKind),
-	"UInt64":  PrimitiveDesc(UInt64Kind),
-	"UInt32":  PrimitiveDesc(UInt32Kind),
-	"UInt16":  PrimitiveDesc(UInt16Kind),
-	"UInt8":   PrimitiveDesc(UInt8Kind),
-	"Int64":   PrimitiveDesc(Int64Kind),
-	"Int32":   PrimitiveDesc(Int32Kind),
-	"Int16":   PrimitiveDesc(Int16Kind),
-	"Int8":    PrimitiveDesc(Int8Kind),
-	"Float64": PrimitiveDesc(Float64Kind),
-	"Float32": PrimitiveDesc(Float32Kind),
-	"String":  PrimitiveDesc(StringKind),
-	"Blob":    PrimitiveDesc(BlobKind),
-	"Value":   PrimitiveDesc(ValueKind),
+	"Bool":    PrimitiveDesc(types.BoolKind),
+	"UInt64":  PrimitiveDesc(types.UInt64Kind),
+	"UInt32":  PrimitiveDesc(types.UInt32Kind),
+	"UInt16":  PrimitiveDesc(types.UInt16Kind),
+	"UInt8":   PrimitiveDesc(types.UInt8Kind),
+	"Int64":   PrimitiveDesc(types.Int64Kind),
+	"Int32":   PrimitiveDesc(types.Int32Kind),
+	"Int16":   PrimitiveDesc(types.Int16Kind),
+	"Int8":    PrimitiveDesc(types.Int8Kind),
+	"Float64": PrimitiveDesc(types.Float64Kind),
+	"Float32": PrimitiveDesc(types.Float32Kind),
+	"String":  PrimitiveDesc(types.StringKind),
+	"Blob":    PrimitiveDesc(types.BlobKind),
+	"Value":   PrimitiveDesc(types.ValueKind),
+	"TypeRef": PrimitiveDesc(types.TypeRefKind),
 }
 
-func makeCompoundTypeRef(k NomsKind, e []TypeRef) TypeRef {
+func makeCompoundTypeRef(k types.NomsKind, e []TypeRef) TypeRef {
 	return TypeRef{Desc: CompoundDesc{k, e}}
 }
 
 // CompoundDesc describes a List, Map, Set or Ref type.
 // ElemTypes indicates what type or types are in the container indicated by kind, e.g. Map key and value or Set element.
 type CompoundDesc struct {
-	kind      NomsKind
+	kind      types.NomsKind
 	ElemTypes []TypeRef
 }
 
-func (c CompoundDesc) Kind() NomsKind {
+func (c CompoundDesc) Kind() types.NomsKind {
 	return c.kind
 }
 
@@ -194,13 +171,13 @@ func (c CompoundDesc) describe() string {
 		return strings.Join(out, ", ")
 	}
 	switch c.kind {
-	case ListKind:
+	case types.ListKind:
 		return "List(" + descElems() + ")"
-	case MapKind:
+	case types.MapKind:
 		return "Map(" + descElems() + ")"
-	case RefKind:
+	case types.RefKind:
 		return "Ref(" + descElems() + ")"
-	case SetKind:
+	case types.SetKind:
 		return "Set(" + descElems() + ")"
 	default:
 		panic(fmt.Errorf("Kind is not compound: %v", c.kind))
@@ -216,8 +193,8 @@ type EnumDesc struct {
 	IDs []string
 }
 
-func (e EnumDesc) Kind() NomsKind {
-	return EnumKind
+func (e EnumDesc) Kind() types.NomsKind {
+	return types.EnumKind
 }
 
 func (e EnumDesc) Equals(other TypeDesc) bool {
@@ -271,8 +248,8 @@ type StructDesc struct {
 	Union  *UnionDesc
 }
 
-func (s StructDesc) Kind() NomsKind {
-	return StructKind
+func (s StructDesc) Kind() types.NomsKind {
+	return types.StructKind
 }
 
 func (s StructDesc) Equals(other TypeDesc) bool {
