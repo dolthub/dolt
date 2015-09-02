@@ -34,9 +34,10 @@ func NewLevelDBStore(dir string) *LevelDBStore {
 	d.Exp.NotEmpty(dir)
 	d.Exp.NoError(os.MkdirAll(dir, 0700))
 	db, err := leveldb.OpenFile(dir, &opt.Options{
-		Compression: opt.NoCompression,
-		Filter:      filter.NewBloomFilter(10), // 10 bits/key
-		WriteBuffer: 1 << 24,                   // 16MiB
+		Compression:            opt.NoCompression,
+		Filter:                 filter.NewBloomFilter(10), // 10 bits/key
+		OpenFilesCacheCapacity: 240,                       // To stay under OSX 255 max open fd (plus 15, for good measure, because using 255 still hit the limit)
+		WriteBuffer:            1 << 24,                   // 16MiB
 	})
 	d.Chk.NoError(err)
 	return &LevelDBStore{db, &sync.Mutex{}, 0}
