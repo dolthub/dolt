@@ -8,14 +8,6 @@ var React = require('react');
 var SlideShow = require('./slideshow.js');
 var TagCloud = require('./tagcloud.js');
 
-var containerStyle = {
-  display: 'flex',
-};
-
-var slideShowStyle = {
-  flex: 1,
-};
-
 var Root = React.createClass({
   mixins: [ImmutableRenderMixin],
 
@@ -69,11 +61,7 @@ var Root = React.createClass({
     }
 
     return (
-      <div style={containerStyle}>
-        <div style={slideShowStyle}>
-          <SlideShow ds={dataset} tags={selectedTags}/>
-        </div>
-      </div>
+      <SlideShow ds={dataset} tags={selectedTags}/>
     );
   },
 });
