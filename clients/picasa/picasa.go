@@ -23,17 +23,18 @@ import (
 )
 
 var (
-	apiKeyFlag       = flag.String("api-key", "616896568902-1lau1f46nbvi0miree13bgjtvarl6dp7.apps.googleusercontent.com", "API keys for google can be created at https://console.developers.google.com")
-	apiKeySecretFlag = flag.String("api-key-secret", "OTnF6N3eH-ZXVmw4mZWeL2sh", "API keys for flickr can be created at https://console.developers.google.com")
+	apiKeyFlag       = flag.String("api-key", "", "API keys for google can be created at https://console.developers.google.com")
+	apiKeySecretFlag = flag.String("api-key-secret", "", "API keys for flickr can be created at https://console.developers.google.com")
 	albumIdFlag      = flag.String("album-id", "", "Import a specific album, identified by id")
 	ds               *dataset.Dataset
 	httpClient       *http.Client
 )
 
 func googleOAuth() *http.Client {
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 2929})
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	d.Chk.NoError(err)
+	
 	redirectURL := "http://" + l.Addr().String()
-
 	conf := &oauth2.Config{
 		ClientID:     *apiKeyFlag,
 		ClientSecret: *apiKeySecretFlag,
@@ -43,11 +44,12 @@ func googleOAuth() *http.Client {
 		},
 		Endpoint: google.Endpoint,
 	}
-	// Redirect user to Google's consent page to ask for permission
-	// for the scopes specified above.
 	rand1 := rand.New(rand.NewSource(time.Now().UnixNano()))
 	state := fmt.Sprintf("%v", rand1.Uint32())
 	url := conf.AuthCodeURL(state)
+	
+	// Redirect user to Google's consent page to ask for permission
+	// for the scopes specified above.
 	fmt.Printf("Visit the URL for the auth dialog: %v\n", url)
 	code, returnedState := awaitOAuthResponse(l)
 	d.Chk.True(state == returnedState, "Oauth state is not correct")
@@ -60,7 +62,7 @@ func googleOAuth() *http.Client {
 	return client
 }
 
-func awaitOAuthResponse(l *net.TCPListener) (string, string) {
+func awaitOAuthResponse(l net.Listener) (string, string) {
 	var code, state string
 
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -254,7 +256,6 @@ func getAlbums(client *http.Client) types.Value {
 	callPicasaApi(client, "user/default?alt=json", &response)
 	feed := response.Feed
 
-	//	var albums = make([]Album, len(response.Feed.Entry))
 	var nomsAlbums = types.NewSet()
 	for _, entry := range feed.Entry {
 		_, _, nomsPhotos := getAlbum(client, entry.Id.V)
