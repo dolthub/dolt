@@ -1,24 +1,25 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2"
-	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2/google"
 	"io"
 	"io/ioutil"
-	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
-	"bytes"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/marshal"
 	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2"
+	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2/google"
 )
 
 var (
@@ -44,15 +45,17 @@ func googleOAuth() *http.Client {
 	}
 	// Redirect user to Google's consent page to ask for permission
 	// for the scopes specified above.
-	url := conf.AuthCodeURL("12345")
+	rand1 := rand.New(rand.NewSource(time.Now().UnixNano()))
+	state := fmt.Sprintf("%v", rand1.Uint32())
+	url := conf.AuthCodeURL(state)
 	fmt.Printf("Visit the URL for the auth dialog: %v\n", url)
-	code, _ := awaitOAuthResponse(l)
+	code, returnedState := awaitOAuthResponse(l)
+	d.Chk.True(state == returnedState, "Oauth state is not correct")
 
 	// Handle the exchange code to initiate a transport.
 	tok, err := conf.Exchange(oauth2.NoContext, code)
-	if err != nil {
-		log.Fatal(err)
-	}
+	d.Chk.NoError(err)
+
 	client := conf.Client(oauth2.NoContext, tok)
 	return client
 }
@@ -66,8 +69,10 @@ func awaitOAuthResponse(l *net.TCPListener) (string, string) {
 			state = r.URL.Query().Get("state")
 			w.Header().Add("content-type", "text/plain")
 			fmt.Fprintf(w, "Authorized")
-			fmt.Println("Authorization received -- Closing listener")
 			l.Close()
+		} else if err := r.URL.Query().Get("error"); err != "" {
+			l.Close()
+			d.Chk.Fail(err)
 		}
 	})}
 	srv.Serve(l)
@@ -75,27 +80,21 @@ func awaitOAuthResponse(l *net.TCPListener) (string, string) {
 	return code, state
 }
 
-func callPicasaApi(client *http.Client, path string, response interface{}) string {
-	var js string
+func callPicasaApi(client *http.Client, path string, response interface{}) {
 	url := "https://picasaweb.google.com/data/feed/api/" + path
 	req, e1 := http.NewRequest("GET", url, nil)
-	if e1 != nil {
-		fmt.Printf("http.NewRequest returned err", e1)
-	}
+	d.Chk.NoError(e1)
+
 	req.Header.Add("GData-Version", "2")
 	resp, e2 := client.Do(req)
-	if e2 != nil {
-		fmt.Printf("client.Do returned err", e2)
-	} else {
-		defer resp.Body.Close()
-		buf, _ := ioutil.ReadAll(resp.Body)
-		js = string(buf)
-		if e3 := json.Unmarshal(buf, response); e3 != nil {
-			log.Fatal(e3, ", json:", js)
-		}
-	}
+	d.Chk.NoError(e2)
 
-	return js
+	defer resp.Body.Close()
+	buf, e3 := ioutil.ReadAll(resp.Body)
+	d.Chk.NoError(e3)
+	
+	e4 := json.Unmarshal(buf, response);
+	d.Chk.NoError(e4)
 }
 
 type Photo struct {
@@ -131,7 +130,8 @@ func getPhotoReader(url string) io.ReadCloser {
 func getPhoto(url string) *bytes.Reader {
 	photoReader := getPhotoReader(url)
 	defer photoReader.Close()
-	buf, _ := ioutil.ReadAll(photoReader)
+	buf, err := ioutil.ReadAll(photoReader)
+	d.Chk.NoError(err)
 	return bytes.NewReader(buf)
 }
 
