@@ -81,23 +81,26 @@ function decodeSet(input, ref, getChunk) {
 
 function decodeCompoundBlob(value, ref, getChunk) {
   // {"cb":["sha1-x",lengthX,"sha1-y",lengthY]}
-  return Promise.all(
-      value
-          .filter((v, i) => i % 2 === 0)
-          .map(v => readValue(v, getChunk)))
-      .then(childBlobs => new Blob(childBlobs));
+  return new Ref(ref, () => {
+    return Promise.all(
+        value
+            .filter((v, i) => i % 2 === 0)
+            .map(v => readValue(v, getChunk)))
+        .then(childBlobs => new Blob(childBlobs));
+  });
 }
 
 function decodeCompoundList(value, ref, getChunk) {
   // {"cl":["sha1-x",lengthX,"sha1-y",lengthY]}
-  return Promise.all(
-      value
-          .filter((v, i) => i % 2 === 0)
-          // v is a string representing the ref here.
-          .map(v => decodeRef(v, ref, getChunk).deref()))
-      .then(childLists => Immutable.List(childLists).flatten(1));
+  return new Ref(ref, () => {
+    return Promise.all(
+        value
+            .filter((v, i) => i % 2 === 0)
+            // v is a string representing the ref here.
+            .map(v => decodeRef(v, ref, getChunk).deref()))
+        .then(childLists => Immutable.List(childLists).flatten(1));
+  });
 }
-
 
 function decodeRef(ref, _, getChunk) {
   return new Ref(ref, () => {
@@ -106,11 +109,11 @@ function decodeRef(ref, _, getChunk) {
 }
 
 function decodeInt(value) {
-  return Promise.resolve(Number.parseInt(value));
+  return Promise.resolve(parseInt(value));
 }
 
 function decodeFloat(value) {
-  return Promise.resolve(Number.parseFloat(value));
+  return Promise.resolve(parseFloat(value));
 }
 
 var decode = {
@@ -170,23 +173,23 @@ function readBlobAsText(blob) {
 }
 
 function readValue(ref, getChunk) {
-  return getChunk(ref).then(
-    response => response.blob()).then(
-    blob => readBlobAsText(blob.slice(0, 2)).then(
-      header => {
-        var body = blob.slice(2);
-        switch (header) {
-          case 'j ':
-            return readBlobAsText(body).then(
-              data => decodeValue(JSON.parse(data), ref, getChunk));
-          case 'b ':
-            return Promise.resolve(body);
-          default :
-            throw Error('Unsupported encoding: ' + data[0]);
-        }
-      }
-    )
-  );
+  return getChunk(ref)
+      .then(response => response.blob())
+      .then(blob => {
+        return readBlobAsText(blob.slice(0, 2))
+            .then(header => {
+              var body = blob.slice(2);
+              switch (header) {
+                case 'j ':
+                  return readBlobAsText(body)
+                      .then(data => decodeValue(JSON.parse(data), ref, getChunk));
+                case 'b ':
+                  return Promise.resolve(body);
+                default :
+                  throw Error('Unsupported encoding: ' + header);
+              }
+            });
+      });
 }
 
 module.exports = {
