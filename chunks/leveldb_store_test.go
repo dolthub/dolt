@@ -21,7 +21,7 @@ func (suite *LevelDBStoreTestSuite) SetupTest() {
 	var err error
 	suite.dir, err = ioutil.TempDir(os.TempDir(), "")
 	suite.NoError(err)
-	store := NewLevelDBStore(suite.dir)
+	store := NewLevelDBStore(suite.dir, 0)
 	suite.putCountFn = func() int {
 		return store.putCount
 	}
