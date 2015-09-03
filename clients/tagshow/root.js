@@ -39,7 +39,7 @@ var Root = React.createClass({
   },
 
   handleTagChoose: function(tags) {
-    this.props.updateQuery(this.props.qs.set('tags', tags.toArray().join(',')));
+    this.props.updateQuery(this.props.qs.set('tags', tags.toArray().join(',')).set('show', 1));
   },
 
   render: function() {
@@ -51,7 +51,7 @@ var Root = React.createClass({
       .then(ref => ref.deref());
 
     var selectedTags = this.getSelectedTags();
-    if (selectedTags.size === 0) {
+    if (!this.props.qs.get('show')) {
       return (
         <TagCloud
           ds={dataset}
