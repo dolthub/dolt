@@ -6,6 +6,7 @@ var React = require('react');
 
 var tagStyle = {
   display: 'block',
+  whiteSpace: 'nowrap',
 };
 
 var TagCloud = React.createClass({
