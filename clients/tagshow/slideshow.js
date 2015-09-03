@@ -6,11 +6,22 @@ var noms = require('noms')
 var React = require('react');
 
 var containerStyle = {
+  position: 'absolute',
+  left: 0,
+  top: 0,
+  width: '100%',
+  height: '100%',
+  overflow: 'hidden',
+
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
 };
 
 var imageStyle = {
-  maxHeight: 300,
-  marginRight: 7,
+  width: '100%',
+  height: '100%',
+  objectFit: 'contain',
 };
 
 var SlideShow = React.createClass({
@@ -24,7 +35,17 @@ var SlideShow = React.createClass({
   getInitialState: function() {
     return {
       photos: Immutable.Set(),
+      index: 0,
+      nextSlideTime: 0,
     }
+  },
+
+  handleTimeout: function() {
+    var newIndex = this.state.index + 1;
+    if (newIndex >= this.state.photos.size) {
+      newIndex = 0;
+    }
+    this.setState({index: newIndex});
   },
 
   render: function() {
@@ -36,21 +57,33 @@ var SlideShow = React.createClass({
             .valueSeq()
             .map(ref => ref.deref()))
       }).then(sets => {
-        this.setState({photos: Immutable.Set(sets[0]).intersect(...sets)})
+        this.setState({
+          photos:
+            Immutable.List(
+              Immutable.Set(sets[0])
+                  .intersect(...sets)
+                  // This sorts the photos deterministically, by the ref of their image
+                  // blob.
+                  // TODO: Sort by create date if it ends up that the common image type
+                  // has a create date.
+                  .sort((a, b) => a.ref < b.ref)
+            )
+        });
       });
 
-    return <div style={containerStyle}>{
-      this.state.photos
-        .sort(
-          // This sorts the photos deterministically, by the ref of their image
-          // blob.
-          // TODO: Sort by create date if it ends up that the common image type
-          // has a create date.
-          (a, b) => a.ref < b.ref)
-        .map(
-          photoRef => <Item key={photoRef.ref} photoRef={photoRef}/>)
-        .toArray()
-    }</div>
+    var photoRef = this.state.photos.get(this.state.index);
+    if (!photoRef) {
+      return null;
+    }
+
+    return (
+      <div style={containerStyle}>
+        <Item
+          key={photoRef.ref}
+          photoRef={photoRef}
+          onTimeout={this.handleTimeout.bind(this)} />
+      </div>
+    );
   },
 });
 
@@ -58,6 +91,7 @@ var Item = React.createClass({
   mixins: [ImmutableRenderMixin],
 
   propTypes: {
+    onTimeout: React.PropTypes.func.isRequired,
     photoRef: React.PropTypes.instanceOf(noms.Ref),
   },
 
@@ -66,6 +100,20 @@ var Item = React.createClass({
       blob: null,
       tags: Immutable.Set(),
     };
+  },
+
+  componentDidMount: function() {
+    this.setState({
+      timerId: window.setTimeout(this.props.onTimeout, 3000),
+    });
+  },
+
+  componentWillUnmount: function() {
+    window.clearTimeout(this.state.timerId);
+  },
+
+  handleLoad: function(e) {
+    URL.revokeObjectURL(e.target.src);
   },
 
   render: function() {
@@ -82,11 +130,10 @@ var Item = React.createClass({
     }
 
     return (
-      <div style={{display:'inline-block'}}>
-        <img style={imageStyle} src={URL.createObjectURL(this.state.blob)}/>
-        <br/>
-        {this.state.tags.join(', ')}
-      </div>
+      <img
+        style={imageStyle}
+        src={URL.createObjectURL(this.state.blob)}
+        onLoad={this.handleLoad}/>
     );
   },
 });
