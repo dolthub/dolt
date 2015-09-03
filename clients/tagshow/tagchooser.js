@@ -24,23 +24,22 @@ var TagChooser = React.createClass({
 
   render: function() {
     return (
-      <table width="100%">
-        <tr>
-          <td style={{verticalAlign: 'top'}}>
-            <form onSubmit={this.handleSubmit}>
-              <input type="submit" value="OK!"/>
-              <br/>
-              <TagList
-                ds={this.props.ds}
-                selected={this.props.selectedTags}
-                onChange={this.props.onChange}/>
-            </form>
-          </td>
-          <td style={{verticalAlign: 'top'}} width="100%">
+      <form style={{display:'flex', flexDirection:'column', height:'100%'}} onSubmit={this.handleSubmit}>
+        <div style={{display:'flex', flex:1}}>
+          <div style={{overflowX:'hidden', overflowY:'auto', marginRight:'1em'}}>
+            <TagList
+              ds={this.props.ds}
+              selected={this.props.selectedTags}
+              onChange={this.props.onChange}/>
+          </div>
+          <div style={{flex:1, overflowX:'hidden', overflowY:'auto', padding:'1em'}}>
             <Preview photos={this.props.selectedPhotos}/>
-          </td>
-        </tr>
-      </table>
+          </div>
+        </div>
+        <div style={{textAlign:'center'}}>
+          <input style={{fontSize:'2em', fontWeight:'bold', margin:'1em', width:'50%'}} type="submit" value="PUSH BUTTON"/>
+        </div>
+      </form>
     );
   },
 });

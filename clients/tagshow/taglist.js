@@ -6,6 +6,8 @@ var React = require('react');
 
 var tagStyle = {
   display: 'block',
+  margin: '3px',
+  marginRight: '25px',
   whiteSpace: 'nowrap',
 };
 
