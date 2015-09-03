@@ -6,7 +6,7 @@ var ImmutableRenderMixin = require('react-immutable-render-mixin');
 var noms = require('noms')
 var React = require('react');
 var SlideShow = require('./slideshow.js');
-var TagCloud = require('./tagcloud.js');
+var TagChooser = require('./tagchooser.js');
 
 var Root = React.createClass({
   mixins: [ImmutableRenderMixin],
@@ -53,7 +53,7 @@ var Root = React.createClass({
     var selectedTags = this.getSelectedTags();
     if (!this.props.qs.get('show')) {
       return (
-        <TagCloud
+        <TagChooser
           ds={dataset}
           selected={this.getSelectedTags()}
           onChoose={this.handleTagChoose}/>
