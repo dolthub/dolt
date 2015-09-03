@@ -25,7 +25,7 @@ class Ref{
   }
 
   hashCode() {
-    return parseInt(this.ref.slice(0, 8), 16);
+    return parseInt(this.ref.slice(-8), 16);
   }
 
   // BUG 88 (instance of is failing in dev build)
