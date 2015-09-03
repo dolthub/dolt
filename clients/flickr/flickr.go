@@ -105,7 +105,7 @@ func checkAuth() bool {
 }
 
 func authUser() {
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	l, err := net.Listen("tcp", "127.0.0.1:0")
 	d.Chk.NoError(err)
 
 	callbackURL := "http://" + l.Addr().String()
@@ -116,7 +116,7 @@ func authUser() {
 	d.Chk.NoError(err)
 
 	authUrl := oauthClient.AuthorizationURL(tempCred, nil)
-	fmt.Printf("Go to the following URL to authorize: %v\n", authUrl)
+	fmt.Printf("Visit the following URL to authorize access to your Flickr data: %v\n", authUrl)
 	err = awaitOAuthResponse(l, tempCred)
 	d.Chk.NoError(err)
 
