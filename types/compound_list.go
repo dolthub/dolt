@@ -43,8 +43,12 @@ func newListChunker(cs chunks.ChunkSource) *listChunker {
 
 // newListChunkerFromList creates a new listChunker copying the elements from l up to startIdx
 func newListChunkerFromList(l compoundList, startIdx uint64) *listChunker {
-	lc := newListChunker(l.cs)
 	si := findSubIndex(startIdx, l.offsets)
+	return newListChunkerFromListWithSubindex(l, startIdx, si)
+}
+
+func newListChunkerFromListWithSubindex(l compoundList, startIdx uint64, si int) *listChunker {
+	lc := newListChunker(l.cs)
 	lc.futures = make([]Future, si)
 	copy(lc.futures, l.futures)
 	lc.offsets = make([]uint64, si)
@@ -179,27 +183,9 @@ func (cl compoundList) Set(idx uint64, v Value) List {
 }
 
 func (cl compoundList) Append(vs ...Value) List {
-	// Redo chunking from last chunk.
-	d.Chk.False(cl.Empty())
-	d.Chk.True(len(cl.futures) > 1)
-
-	l := len(cl.offsets)
-	offsets := make([]uint64, l-1, l)
-	copy(offsets, cl.offsets)
-	l = len(cl.futures)
-	lists := make([]Future, l-1, l)
-	copy(lists, cl.futures)
-	lastList := cl.futures[l-1].Deref(cl.cs).(List)
-
-	lc := newListChunker(cl.cs)
-	lc.futures = lists
-	lc.offsets = offsets
-
-	// Append elements from last list again.
-	it := newListIterator(lastList)
-	for f, done := it.next(); !done; f, done = it.next() {
-		lc.writeFuture(f)
-	}
+	startIdx := cl.Len()
+	si := len(cl.offsets) - 1
+	lc := newListChunkerFromListWithSubindex(cl, startIdx, si)
 	for _, v := range vs {
 		lc.writeValue(v)
 	}
