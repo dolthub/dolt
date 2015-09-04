@@ -30,14 +30,14 @@ type LevelDBStore struct {
 	putCount int // for testing
 }
 
-func NewLevelDBStore(dir string) *LevelDBStore {
+func NewLevelDBStore(dir string, maxFileHandles int) *LevelDBStore {
 	d.Exp.NotEmpty(dir)
 	d.Exp.NoError(os.MkdirAll(dir, 0700))
 	db, err := leveldb.OpenFile(dir, &opt.Options{
 		Compression:            opt.NoCompression,
 		Filter:                 filter.NewBloomFilter(10), // 10 bits/key
-		OpenFilesCacheCapacity: 240,                       // To stay under OSX 255 max open fd (plus 15, for good measure, because using 255 still hit the limit)
-		WriteBuffer:            1 << 24,                   // 16MiB
+		OpenFilesCacheCapacity: maxFileHandles,
+		WriteBuffer:            1 << 24, // 16MiB
 	})
 	d.Chk.NoError(err)
 	return &LevelDBStore{db, &sync.Mutex{}, 0}
@@ -100,12 +100,14 @@ func (l *LevelDBStore) write(ref ref.Ref, buff *bytes.Buffer) {
 }
 
 type ldbStoreFlags struct {
-	dir *string
+	dir            *string
+	maxFileHandles *int
 }
 
 func levelDBFlags(prefix string) ldbStoreFlags {
 	return ldbStoreFlags{
 		flag.String(prefix+"ldb", "", "directory to use for a LevelDB-backed chunkstore"),
+		flag.Int(prefix+"ldb-max-file-handles", 24, "max number of open file handles"),
 	}
 }
 
@@ -113,6 +115,6 @@ func (f ldbStoreFlags) createStore() ChunkStore {
 	if *f.dir == "" {
 		return nil
 	} else {
-		return NewLevelDBStore(*f.dir)
+		return NewLevelDBStore(*f.dir, *f.maxFileHandles)
 	}
 }
