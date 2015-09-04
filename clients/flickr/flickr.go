@@ -282,7 +282,7 @@ func getPhotoReader(url string) io.ReadCloser {
 	return resp.Body
 }
 
-func awaitOAuthResponse(l *net.TCPListener, tempCred *oauth.Credentials) error {
+func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) error {
 	var handlerError error
 
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
