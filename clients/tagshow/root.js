@@ -6,7 +6,7 @@ var ImmutableRenderMixin = require('react-immutable-render-mixin');
 var noms = require('noms')
 var React = require('react');
 var SlideShow = require('./slideshow.js');
-var TagCloud = require('./tagcloud.js');
+var TagChooser = require('./tagchooser.js');
 
 var Root = React.createClass({
   mixins: [ImmutableRenderMixin],
@@ -20,7 +20,7 @@ var Root = React.createClass({
   getInitialState: function() {
     return {
       selected: Immutable.Set(),
-      selectedPhotos: Immutable.Set(),
+      selectedPhotos: Immutable.List(),
     };
   },
 
@@ -38,8 +38,36 @@ var Root = React.createClass({
     return Immutable.Set(tags);
   },
 
-  handleTagChoose: function(tags) {
+  setSelectedPhotos: function(ds, selectedTags) {
+    ds
+      .then(head => head.get('value').deref())
+      .then(tags => {
+        return Promise.all(
+          tags.filter((v, t) => selectedTags.has(t))
+            .valueSeq()
+            .map(ref => ref.deref()))
+      }).then(sets => {
+        this.setState({
+          selectedPhotos:
+            Immutable.List(
+              Immutable.Set(sets[0])
+                  .intersect(...sets)
+                  // This sorts the photos deterministically, by the ref of their image
+                  // blob.
+                  // TODO: Sort by create date if it ends up that the common image type
+                  // has a create date.
+                  .sort((a, b) => a.ref < b.ref)
+            )
+        });
+      });
+  },
+
+  handleTagsChange: function(tags) {
     this.props.updateQuery(this.props.qs.set('tags', tags.toArray().join(',')));
+  },
+
+  handleTagsConfirm: function() {
+    this.props.updateQuery(this.props.qs.set('show', 1));
   },
 
   render: function() {
@@ -49,19 +77,23 @@ var Root = React.createClass({
 
     var dataset = noms.getDataset(this.props.pRoot, this.props.qs.get('ds'))
       .then(ref => ref.deref());
-
     var selectedTags = this.getSelectedTags();
-    if (selectedTags.size === 0) {
+
+    this.setSelectedPhotos(dataset, selectedTags);
+
+    if (!this.props.qs.get('show') || selectedTags.isEmpty()) {
       return (
-        <TagCloud
+        <TagChooser
           ds={dataset}
-          selected={this.getSelectedTags()}
-          onChoose={this.handleTagChoose}/>
+          selectedPhotos={this.state.selectedPhotos}
+          selectedTags={this.getSelectedTags()}
+          onChange={this.handleTagsChange}
+          onConfirm={this.handleTagsConfirm}/>
       );
     }
 
     return (
-      <SlideShow ds={dataset} tags={selectedTags}/>
+      <SlideShow ds={dataset} photos={this.state.selectedPhotos}/>
     );
   },
 });
