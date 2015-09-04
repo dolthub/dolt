@@ -33,7 +33,7 @@ func NewBlob(r io.Reader) (Blob, error) {
 	for {
 		buf := bytes.Buffer{}
 		n, err := copyChunk(&buf, r)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			return nil, err
 		}
 
@@ -46,6 +46,10 @@ func NewBlob(r io.Reader) (Blob, error) {
 		offsets = append(offsets, length)
 		blob = newBlobLeaf(buf.Bytes())
 		blobs = append(blobs, futureFromValue(blob))
+
+		if err == io.EOF {
+			break
+		}
 	}
 
 	if length == 0 {
@@ -73,23 +77,23 @@ func copyChunk(dst io.Writer, src io.Reader) (n uint64, err error) {
 	p := []byte{0}
 
 	for {
-		_, err = src.Read(p)
-		if err != nil {
-			if err == io.EOF {
-				return n, nil
-			}
-			return
+		l, rerr := src.Read(p)
+		n += uint64(l)
+
+		// io.Reader can return data and error at the same time, so we need to write before considering the error.
+		h.Write(p[:l])
+		_, werr := dst.Write(p[:l])
+
+		if rerr != nil {
+			return n, rerr
 		}
 
-		h.Write(p)
-		_, err = dst.Write(p)
-		if err != nil {
-			return
+		if werr != nil {
+			return n, werr
 		}
-		n++
 
 		if h.Sum32()&blobPattern == blobPattern {
-			return
+			return n, nil
 		}
 	}
 }
