@@ -1,0 +1,8 @@
+notify:
+  slack:
+    webhook_url: 'https://hooks.slack.com/services/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'
+    username: 'drone'
+    channel: '#robot-spam'
+    on_started: false
+    on_success: true
+    on_failure: true
