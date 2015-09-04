@@ -24,7 +24,7 @@ var Photo = React.createClass({
     this.props.photoRef.deref()
       .then(p => this.setState({photo: p}));
 
-    if (!this.state.photo) {
+    if (this.state.photo === null) {
       return null;
     }
 

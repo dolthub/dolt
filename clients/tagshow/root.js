@@ -66,7 +66,7 @@ var Root = React.createClass({
     this.props.updateQuery(this.props.qs.set('tags', tags.toArray().join(',')));
   },
 
-  handleTagsChoose: function() {
+  handleTagsConfirm: function() {
     this.props.updateQuery(this.props.qs.set('show', 1));
   },
 
@@ -88,7 +88,7 @@ var Root = React.createClass({
           selectedPhotos={this.state.selectedPhotos}
           selectedTags={this.getSelectedTags()}
           onChange={this.handleTagsChange}
-          onChoose={this.handleTagsChoose}/>
+          onConfirm={this.handleTagsConfirm}/>
       );
     }
 
