@@ -8,8 +8,8 @@ var React = require('react');
 
 var photoStyle = {
   display: 'inline-block',
-  marginRight: '1em',
-  maxHeight: 300,
+  marginRight: 5,
+  height: 300,
 };
 
 var Preview = React.createClass({

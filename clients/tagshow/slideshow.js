@@ -19,12 +19,6 @@ var containerStyle = {
   justifyContent: 'center',
 };
 
-var imageStyle = {
-  width: '100%',
-  height: '100%',
-  objectFit: 'contain',
-};
-
 var SlideShow = React.createClass({
   mixins: [ImmutableRenderMixin],
 
@@ -78,7 +72,7 @@ var Item = React.createClass({
     };
   },
 
-  componentDidMount: function() {
+  setTimeout: function() {
     this.setState({
       timerId: window.setTimeout(this.props.onTimeout, 3000),
     });
@@ -89,10 +83,17 @@ var Item = React.createClass({
   },
 
   render: function() {
+    var style = {
+      objectFit: 'contain',
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+
     return (
       <Photo
+        onLoad={this.setTimeout}
         photoRef={this.props.photoRef}
-        style={imageStyle}/>
+        style={style}/>
     );
   },
 });

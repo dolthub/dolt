@@ -9,37 +9,46 @@ var Photo = React.createClass({
   mixins: [ImmutableRenderMixin],
 
   propTypes: {
-    onTimeout: React.PropTypes.func.isRequired,
+    onLoad: React.PropTypes.func,
     photoRef: React.PropTypes.instanceOf(noms.Ref),
     style: React.PropTypes.object,
   },
 
   getInitialState: function() {
     return {
-      blob: null,
-    };
-  },
-
-  handleLoad: function(e) {
-    URL.revokeObjectURL(e.target.src);
+      photo: null,
+    }
   },
 
   render: function() {
-    this.props.photoRef.deref().then(
-      p => p.get('image').deref()).then(
-      b => this.setState({blob: b}));
+    this.props.photoRef.deref()
+      .then(p => this.setState({photo: p}));
 
-    if (this.state.blob == null) {
-      return <span style={this.props.style}>loading...</span>;
+    if (!this.state.photo) {
+      return null;
     }
 
     return (
       <img
         style={this.props.style}
-        src={URL.createObjectURL(this.state.blob)}
-        onLoad={this.handleLoad}/>
+        src={this.getURL()}
+        onLoad={this.props.onLoad}/>
     );
   },
+
+  getURL: function() {
+    var url = "http://localhost:8001/?ref=" +
+        this.state.photo.get('image').ref;
+
+    if (this.props.style.width) {
+      url += "&maxw=" + this.props.style.width;
+    }
+    if (this.props.style.height) {
+      url += "&maxh=" + this.props.style.height;
+    }
+
+    return url;
+  }
 });
 
 module.exports = React.createFactory(Photo);
