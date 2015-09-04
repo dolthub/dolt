@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"flag"
 	"fmt"
 	"image"
@@ -56,9 +57,18 @@ func handleRequest(w http.ResponseWriter, req *http.Request) {
 		maxh := getConstraintParam(req, "maxh", math.MaxUint16)
 
 		img = resize.Thumbnail(uint(maxw), uint(maxh), img, resize.NearestNeighbor)
-		w.Header().Set("Content-type", format)
-		err = png.Encode(w, img)
 
+		switch format {
+		case "gif", "jpeg", "png":
+			w.Header().Set("Content-type", "image/"+format)
+		default:
+		}
+
+		w.Header().Set("Content-encoding", "gzip")
+		gz := gzip.NewWriter(w)
+		err = png.Encode(gz, img)
+		d.Chk.NoError(err)
+		err = gz.Flush()
 		d.Chk.NoError(err)
 	})
 
