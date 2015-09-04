@@ -23,8 +23,22 @@ import (
 )
 
 var (
-	apiKeyFlag       = flag.String("api-key", "", "API keys for Google can be created at https://console.developers.google.com")
-	apiKeySecretFlag = flag.String("api-key-secret", "", "API keys for Google can be created at https://console.developers.google.com")
+	apiKeyUsage = `To create Google API credentials, follow these steps:
+    	1) go to http://console.developers.google.com/start
+    	2) from the "Select a project" pull down menu, choose "Create a project..."
+    	3) Fill in the "Project name" field (e.g. Picasa Importer)
+    	4) Agree to the terms and conditions and hit continue.
+    	5) Click on the "Select a project" pull down menu and choose "Manage all projects..."
+    	6) Click on the project you just created. On the new page, in the sidebar menu,
+    		click “APIs and auth”. In the submenu that opens up, click "Credentials".
+    	7) In the popup, click on the "Add credentials" pulldown and select "OAuth 2.0 client ID".
+    	8) Click the "Configure consent screen" button and fill in the "Product name" field.
+    		All other fields on this page are optional. Now click the save button.
+    	9) Select "Other" from the list of “Application Type” and fill in the “Name” field
+    		(e.g. Picasa Importer) and click the “Create” button.
+    	Your credentials will be displayed in a popup. Copy them to a safe place.`
+	apiKeyFlag       = flag.String("api-key", "", apiKeyUsage)
+	apiKeySecretFlag = flag.String("api-key-secret", "", "See -api-key for help creating an api-key-secret")
 	albumIdFlag      = flag.String("album-id", "", "Import a specific album, identified by id")
 	ds               *dataset.Dataset
 	httpClient       *http.Client
