@@ -7,7 +7,7 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 )
-
+asdfasf
 func AssertSymEq(assert *assert.Assertions, a, b Value) {
 	assert.True(a.Equals(b))
 	assert.True(b.Equals(a))
