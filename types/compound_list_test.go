@@ -1,9 +1,7 @@
 package types
 
 import (
-	"io/ioutil"
-	"os"
-	"regexp"
+	"math/rand"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
@@ -38,25 +36,18 @@ func getTestCompoundList(t *testing.T) List {
 	return cl
 }
 
-func getWordsInAlice(t *testing.T) []Value {
-	assert := assert.New(t)
-	f, err := os.Open("alice-short.txt")
-	assert.NoError(err)
-	defer f.Close()
-
-	bs, err := ioutil.ReadAll(f)
-	assert.NoError(err)
-	re := regexp.MustCompile(`(?:\w|\d)+`)
-	fields := re.FindAllString(string(bs), -1)
-	vs := make([]Value, len(fields), len(fields))
-	for i, s := range fields {
-		vs[i] = NewString(s)
+func getRandomValues() []Value {
+	rand.Seed(42)
+	n := int(2500)
+	vs := make([]Value, n, n)
+	for i, _ := range vs {
+		vs[i] = Int32(rand.Int31())
 	}
 	return vs
 }
 
-func getAliceList(t *testing.T) compoundList {
-	return newCompoundListFromValues(getWordsInAlice(t), nil).(compoundList)
+func getRandomList() compoundList {
+	return newCompoundListFromValues(getRandomValues(), nil).(compoundList)
 }
 
 func TestCompoundListLen(t *testing.T) {
@@ -65,8 +56,8 @@ func TestCompoundListLen(t *testing.T) {
 	assert.Equal(uint64(5), cl.Len())
 	assert.False(cl.Empty())
 
-	al := getAliceList(t)
-	assert.Equal(uint64(5747), al.Len())
+	rl := getRandomList()
+	assert.Equal(uint64(2500), rl.Len())
 }
 
 func TestCompoundListChunks(t *testing.T) {
@@ -137,18 +128,18 @@ func TestCompoundListAppend(t *testing.T) {
 	assert.Equal(2, len(cl2.futures))
 
 	// It should not matter how the list was made
-	words := getWordsInAlice(t)
-	al1 := newCompoundListFromValues(words, nil)
-	al2 := newCompoundListFromValues(words[0:len(words)/2], nil)
-	al2 = al2.Append(words[len(words)/2:]...)
-	assert.True(al1.Equals(al2))
+	words := getRandomValues()
+	rl1 := newCompoundListFromValues(words, nil)
+	rl2 := newCompoundListFromValues(words[0:len(words)/2], nil)
+	rl2 = rl2.Append(words[len(words)/2:]...)
+	assert.True(rl1.Equals(rl2))
 
-	al3 := NewList()
+	rl3 := NewList()
 	for _, w := range words {
-		al3 = al3.Append(w)
+		rl3 = rl3.Append(w)
 	}
-	assert.Equal(int(al1.Len()), int(al3.Len()))
-	assert.True(al1.Equals(al3))
+	assert.Equal(int(rl1.Len()), int(rl3.Len()))
+	assert.True(rl1.Equals(rl3))
 }
 
 func TestCompoundListSlice(t *testing.T) {
