@@ -5,6 +5,8 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
+type MapFunc func(v Value) interface{}
+
 type List interface {
 	Len() uint64
 	Empty() bool
@@ -20,6 +22,9 @@ type List interface {
 	Release()
 	Equals(other Value) bool
 	Chunks() (futures []Future)
+	Map(mf MapFunc) []interface{}
+	MapP(concurrency int, mf MapFunc) []interface{}
+	mapInternal(sem chan int, mf MapFunc) []interface{}
 }
 
 func NewList(v ...Value) List {
