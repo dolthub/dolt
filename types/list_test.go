@@ -1,6 +1,8 @@
 package types
 
 import (
+	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
@@ -175,4 +177,63 @@ func TestListFutures(t *testing.T) {
 
 	assert.Len(l.Chunks(), 1)
 	assert.EqualValues(r, l.Chunks()[0].Ref())
+}
+
+func TestListMap(t *testing.T) {
+	assert := assert.New(t)
+
+	testMap := func(concurrency, listLen int) {
+		cs := &chunks.TestStore{}
+		futures := make([]Future, listLen)
+		for i := 0; i < listLen; i++ {
+			r := WriteValue(Int64(i), cs)
+			futures[i] = futureFromRef(r)
+		}
+
+		l := listFromFutures(futures, cs)
+
+		cur := 0
+		mu := sync.Mutex{}
+		getCur := func() int {
+			mu.Lock()
+			defer mu.Unlock()
+			return cur
+		}
+
+		// Note: The only way I can think of to test that concurrency doesn't go above target is a time out, which is obviously bad.
+		expectConcurreny := concurrency
+		if concurrency == 0 {
+			expectConcurreny = runtime.NumCPU()
+		}
+
+		mf := func(v Value) interface{} {
+			mu.Lock()
+			cur++
+			mu.Unlock()
+
+			for getCur() < expectConcurreny {
+			}
+
+			i := Int64FromVal(v)
+			return int64(i * i)
+		}
+
+		var mapped []interface{}
+		if concurrency == 1 {
+			mapped = l.Map(mf)
+		} else {
+			mapped = l.MapP(concurrency, mf)
+		}
+
+		assert.Equal(uint64(len(mapped)), l.Len())
+
+		for i, v := range mapped {
+			val := v.(int64)
+			assert.Equal(val, int64(i*i))
+		}
+	}
+
+	testMap(0, 100)
+	testMap(10, 1000)
+	testMap(1, 100000)
 }
