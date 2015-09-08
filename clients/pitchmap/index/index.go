@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"runtime"
 	"strconv"
+	"sync"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/clients/util"
@@ -107,30 +109,43 @@ func processInning(m types.Map) map[string][]Pitch {
 }
 
 func getIndex(input types.List) MapOfStringToListOfPitch {
+	mu := sync.Mutex{}
+	pitchers := NewMapOfStringToString()
+
 	// Walk through the list in inputDataset and basically switch
 	// on the top-level key to know if it's an inning or a pitcher.
-	pitchCounts := NewMapOfStringToListOfPitch()
-	pitchers := NewMapOfStringToString()
-	for i := uint64(0); i < input.Len(); i++ {
-		m := input.Get(i).(types.Map)
-
-		// TODO: This really sucks
-		input.Release()
+	innings := input.MapP(512, func(item types.Value) interface{} {
+		m := item.(types.Map)
 
 		if key := types.NewString("inning"); m.Has(key) {
-			for idStr, p := range processInning(m.Get(key).(types.Map)) {
-				id := types.NewString(idStr)
-				pitches := NewListOfPitch()
-				if pitchCounts.Has(id) {
-					pitches = pitchCounts.Get(id)
-				}
-				pitchCounts = pitchCounts.Set(id, pitches.Append(p...))
-			}
-		} else if key := types.NewString("Player"); m.Has(key) {
+			return processInning(m.Get(key).(types.Map))
+		}
+
+		if key := types.NewString("Player"); m.Has(key) {
 			id, name := processPitcher(m.Get(key).(types.Map))
 			if id.String() != "" && name.String() != "" {
+				mu.Lock()
 				pitchers = pitchers.Set(id, name)
+				mu.Unlock()
 			}
+		}
+
+		return nil
+	})
+
+	pitchCounts := NewMapOfStringToListOfPitch()
+	for _, inning := range innings {
+		if inning == nil {
+			continue
+		}
+
+		for idStr, p := range inning.(map[string][]Pitch) {
+			id := types.NewString(idStr)
+			pitches := NewListOfPitch()
+			if pitchCounts.Has(id) {
+				pitches = pitchCounts.Get(id)
+			}
+			pitchCounts = pitchCounts.Set(id, pitches.Append(p...))
 		}
 	}
 
@@ -148,6 +163,7 @@ func getIndex(input types.List) MapOfStringToListOfPitch {
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	csFlags := chunks.NewFlags()
 	flag.Parse()
 

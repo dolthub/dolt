@@ -1,17 +1,20 @@
 package types
 
 import (
+	"sync"
+
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 )
 
 func futureFromRef(ref ref.Ref) Future {
-	return &unresolvedFuture{ref: ref}
+	return &unresolvedFuture{ref: ref, mu: &sync.Mutex{}}
 }
 
 type unresolvedFuture struct {
 	val Value
 	ref ref.Ref
+	mu  *sync.Mutex
 }
 
 func (f *unresolvedFuture) Val() Value {
@@ -19,6 +22,8 @@ func (f *unresolvedFuture) Val() Value {
 }
 
 func (f *unresolvedFuture) Deref(cs chunks.ChunkSource) Value {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.val != nil {
 		return f.val
 	}

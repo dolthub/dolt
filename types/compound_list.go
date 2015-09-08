@@ -2,7 +2,9 @@ package types
 
 import (
 	"crypto/sha1"
+	"runtime"
 	"sort"
+	"sync"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/kch42/buzhash"
 	"github.com/attic-labs/noms/chunks"
@@ -151,6 +153,55 @@ func findSubIndex(idx uint64, offsets []uint64) int {
 
 func (cl compoundList) Get(idx uint64) Value {
 	return cl.getFuture(idx).Deref(cl.cs)
+}
+
+func (cl compoundList) Map(mf MapFunc) []interface{} {
+	return cl.MapP(1, mf)
+}
+
+func (cl compoundList) MapP(concurrency int, mf MapFunc) []interface{} {
+	var limit chan int
+	if concurrency == 0 {
+		limit = make(chan int, runtime.NumCPU())
+	} else {
+		limit = make(chan int, concurrency)
+	}
+
+	return cl.mapInternal(limit, mf)
+}
+
+func (cl compoundList) mapInternal(sem chan int, mf MapFunc) []interface{} {
+	values := make([]interface{}, cl.Len(), cl.Len())
+
+	mu := sync.Mutex{}
+	wg := sync.WaitGroup{}
+
+	// TODO: We're spinning up one goroutine for each meta chunk in the list on top of one goroutine per concurrent |mf|. There's probably a more correct way to do this.
+	for si := uint64(0); si < uint64(len(cl.futures)); si++ {
+		wg.Add(1)
+
+		go func(si uint64) {
+			defer wg.Done()
+
+			f := cl.futures[si]
+			l := f.Deref(cl.cs).(List)
+			f.Release()
+
+			sv := l.mapInternal(sem, mf)
+			mu.Lock()
+			defer mu.Unlock()
+
+			idx := 0
+			if si > 0 {
+				idx += int(cl.offsets[si-1])
+			}
+
+			copy(values[idx:], sv)
+		}(si)
+	}
+
+	wg.Wait()
+	return values
 }
 
 func (cl compoundList) getFuture(idx uint64) Future {
