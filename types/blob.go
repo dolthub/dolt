@@ -25,6 +25,10 @@ type Blob interface {
 	Reader() io.ReadSeeker
 }
 
+func NewEmptyBlob() Blob {
+	return newBlobLeaf([]byte{})
+}
+
 func NewBlob(r io.Reader) (Blob, error) {
 	length := uint64(0)
 	offsets := []uint64{}

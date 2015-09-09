@@ -1,0 +1,79 @@
+// {{.Name}}
+
+type {{.Name}} struct {
+	m types.Map
+}
+
+type {{.Name}}Def map[{{defType .KeyType}}]{{defType .ValueType}}
+
+type {{.Name}}IterCallback (func(k {{userType .KeyType}}, v {{userType .ValueType}}) (stop bool))
+
+func New{{.Name}}() {{.Name}} {
+	return {{.Name}}{types.NewMap()}
+}
+
+func (def {{.Name}}Def) New() {{.Name}} {
+	kv := make([]types.Value, 0, len(def)*2)
+	for k, v := range def {
+		kv = append(kv, {{defToValue "k" .KeyType}}, {{defToValue "v" .ValueType}})
+	}
+	return {{.Name}}{types.NewMap(kv...)}
+}
+
+func (self {{.Name}}) Def() {{.Name}}Def {
+	def := make(map[{{defType .KeyType}}]{{defType .ValueType}})
+	self.m.Iter(func(k, v types.Value) bool {
+		def[{{valueToDef "k" .KeyType}}] = {{valueToDef "v" .ValueType}}
+		return false
+	})
+	return def
+}
+
+func {{.Name}}FromVal(p types.Value) {{.Name}} {
+	// TODO: Validate here
+	return {{.Name}}{p.(types.Map)}
+}
+
+func (m {{.Name}}) NomsValue() types.Value {
+	return m.m
+}
+
+func (m {{.Name}}) Equals(p {{.Name}}) bool {
+	return m.m.Equals(p.m)
+}
+
+func (m {{.Name}}) Ref() ref.Ref {
+	return m.m.Ref()
+}
+
+func (m {{.Name}}) Empty() bool {
+	return m.m.Empty()
+}
+
+func (m {{.Name}}) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m {{.Name}}) Has(p {{userType .KeyType}}) bool {
+	return m.m.Has({{userToValue "p" .KeyType}})
+}
+
+func (m {{.Name}}) Get(p {{userType .KeyType}}) {{userType .ValueType}} {
+	return {{valueToUser (printf "m.m.Get(%s)" (userToValue "p" .KeyType)) .ValueType}}
+}
+
+func (m {{.Name}}) Set(k {{userType .KeyType}}, v {{userType .ValueType}}) {{.Name}} {
+	return {{.Name}}{m.m.Set({{userToValue "k" .KeyType}}, {{userToValue "v" .ValueType}})}
+}
+
+// TODO: Implement SetM?
+
+func (m {{.Name}}) Remove(p {{userType .KeyType}}) {{.Name}} {
+	return {{.Name}}{m.m.Remove({{userToValue "p" .KeyType}})}
+}
+
+func (m {{.Name}}) Iter(cb {{.Name}}IterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb({{valueToUser "k" .KeyType}}, {{valueToUser "v" .ValueType}})
+	})
+}

@@ -1,0 +1,16 @@
+struct StructPrimitives {
+  UInt64: UInt64
+  UInt32: UInt32
+  UInt16: UInt16
+  UInt8: UInt8
+  Int64: Int64
+  Int32: Int32
+  Int16: Int16
+  Int8: Int8
+  Float64: Float64
+  Float32: Float32
+  Bool: Bool
+  String: String
+  Blob: Blob
+  Value: Value
+}

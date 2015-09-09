@@ -1,0 +1,102 @@
+// {{.Name}}
+
+type {{.Name}} struct {
+	s types.Set
+}
+
+type {{.Name}}Def map[{{defType .ElemType}}]bool
+
+type {{.Name}}IterCallback (func(p {{userType .ElemType}}) (stop bool))
+
+func New{{.Name}}() {{.Name}} {
+	return {{.Name}}{types.NewSet()}
+}
+
+func (def {{.Name}}Def) New() {{.Name}} {
+  l := make([]types.Value, len(def))
+	i := 0
+  for d, _ := range def  {
+    l[i] = {{defToValue "d" .ElemType}}
+		i++
+  }
+  return {{.Name}}{types.NewSet(l...)}
+}
+
+func (s {{.Name}}) Def() {{.Name}}Def {
+	def := make(map[{{defType .ElemType}}]bool, s.Len())
+	s.s.Iter(func(v types.Value) bool {
+		def[{{valueToDef "v" .ElemType}}] = true
+		return false
+	})
+	return def
+}
+
+func {{.Name}}FromVal(p types.Value) {{.Name}} {
+	return {{.Name}}{p.(types.Set)}
+}
+
+func (s {{.Name}}) NomsValue() types.Value {
+	return s.s
+}
+
+func (s {{.Name}}) Equals(p {{.Name}}) bool {
+	return s.s.Equals(p.s)
+}
+
+func (s {{.Name}}) Ref() ref.Ref {
+	return s.s.Ref()
+}
+
+func (s {{.Name}}) Empty() bool {
+	return s.s.Empty()
+}
+
+func (s {{.Name}}) Len() uint64 {
+	return s.s.Len()
+}
+
+func (s {{.Name}}) Has(p {{userType .ElemType}}) bool {
+	return s.s.Has({{userToValue "p" .ElemType}})
+}
+
+func (s {{.Name}}) Iter(cb {{.Name}}IterCallback) {
+	s.s.Iter(func(v types.Value) bool {
+		return cb({{valueToUser "v" .ElemType}})
+	})
+}
+
+func (s {{.Name}}) Insert(p ...{{userType .ElemType}}) {{.Name}} {
+	return {{.Name}}{s.s.Insert(s.fromElemSlice(p)...)}
+}
+
+func (s {{.Name}}) Remove(p ...{{userType .ElemType}}) {{.Name}} {
+	return {{.Name}}{s.s.Remove(s.fromElemSlice(p)...)}
+}
+
+func (s {{.Name}}) Union(others ...{{.Name}}) {{.Name}} {
+	return {{.Name}}{s.s.Union(s.fromStructSlice(others)...)}
+}
+
+func (s {{.Name}}) Subtract(others ...{{.Name}}) {{.Name}} {
+	return {{.Name}}{s.s.Subtract(s.fromStructSlice(others)...)}
+}
+
+func (s {{.Name}}) Any() {{userType .ElemType}} {
+	return {{valueToUser "s.s.Any()" .ElemType}}
+}
+
+func (s {{.Name}}) fromStructSlice(p []{{.Name}}) []types.Set {
+	r := make([]types.Set, len(p))
+	for i, v := range p {
+		r[i] = v.s
+	}
+	return r
+}
+
+func (s {{.Name}}) fromElemSlice(p []{{userType .ElemType}}) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = {{userToValue "v" .ElemType}}
+	}
+	return r
+}

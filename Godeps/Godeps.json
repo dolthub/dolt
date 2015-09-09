@@ -73,6 +73,14 @@
 			"Rev": "397fe7649477ff2e8ced8fc0b2696f781e53745a"
 		},
 		{
+			"ImportPath": "golang.org/x/tools/go/ast/astutil",
+			"Rev": "c262de870b618eed648983aa994b03bc04641c72"
+		},
+		{
+			"ImportPath": "golang.org/x/tools/imports",
+			"Rev": "c262de870b618eed648983aa994b03bc04641c72"
+		},
+		{
 			"ImportPath": "google.golang.org/cloud/compute/metadata",
 			"Rev": "157e4dbaa1bc2e0fa2e7de752639dc5d711fdfa6"
 		},

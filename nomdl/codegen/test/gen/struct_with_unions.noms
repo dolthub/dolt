@@ -1,0 +1,10 @@
+struct StructWithUnions {
+  A: union {
+    B: Float64
+    C: String
+  }
+  D: union {
+    E: Float64
+    F: String
+  }
+}

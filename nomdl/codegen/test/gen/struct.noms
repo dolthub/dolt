@@ -1,0 +1,4 @@
+struct Struct {
+  S: String
+  B: Bool
+}

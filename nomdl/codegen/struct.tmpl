@@ -1,0 +1,111 @@
+// {{.Name}}
+
+type {{.Name}}Def struct {
+	{{range .Fields}}{{.Name}} {{defType .T}}
+	{{end}}{{if .HasUnion}}__unionIndex uint32
+	__unionValue interface{}
+{{end}}}
+
+type {{.Name}} struct {
+	l types.List
+}
+
+func New{{.Name}}() {{.Name}} {
+	return {{.Name}}{types.NewList(
+			{{range .Fields}}{{valueZero .T}},
+			{{end}}{{if .HasUnion}}types.UInt32(0),
+			{{valueZero .UnionZeroType}},{{end}}
+		)}
+}
+
+func (def {{.Name}}Def) New() {{.Name}} {
+	return {{.Name}}{
+		types.NewList(
+		{{range .Fields}}{{defToValue (print "def." .Name) .T}},
+		{{end}}{{if .HasUnion}}types.UInt32(def.__unionIndex),
+		def.__unionDefToValue(),
+	{{end}}
+	)}
+}
+
+{{$unionOffset := .UnionOffset}}
+
+func (self {{.Name}}) Def() {{.Name}}Def {
+	return {{.Name}}Def{
+		{{range $index, $field := .Fields}}{{valueToDef (print "self.l.Get(" $index ")") .T}},
+		{{end}}{{if .HasUnion}}uint32(self.l.Get({{$unionOffset}}).(types.UInt32)),
+		self.__unionValueToDef(),{{end}}
+	}
+}
+
+{{if .HasUnion}}
+func (def {{.Name}}Def) __unionDefToValue() types.Value {
+	switch def.__unionIndex {
+	{{range $index, $field := .Choices}}case {{$index}}:
+		return {{defToValue (printf "def.__unionValue.(%s)" (defType .T)) .T}}
+	{{end}}}
+	panic("unreachable")
+}
+
+func (self {{.Name}}) __unionValueToDef() interface{} {
+	switch uint32(self.l.Get({{$unionOffset}}).(types.UInt32)) {
+	{{range $index, $field := .Choices}}case {{$index}}:
+		return {{valueToDef (printf "self.l.Get(%d)" (add $unionOffset 1)) .T}}
+	{{end}}}
+	panic("unreachable")
+}
+{{end}}
+
+func {{.Name}}FromVal(val types.Value) {{.Name}} {
+	// TODO: Validate here
+	return {{.Name}}{val.(types.List)}
+}
+
+func (self {{.Name}}) NomsValue() types.Value {
+	return self.l
+}
+
+func (self {{.Name}}) Equals(p {{.Name}}) bool {
+	return self.l.Equals(p.l)
+}
+
+func (self {{.Name}}) Ref() ref.Ref {
+	return self.l.Ref()
+}
+
+{{$name := .Name}}
+{{range $index, $field := .Fields}}
+func (self {{$name}}) {{.Name}}() {{userType .T}} {
+	return {{valueToUser (printf "self.l.Get(%d)" $index) .T}}
+}
+
+func (self {{$name}}) Set{{.Name}}(val {{userType .T}}) {{$name}} {
+	return {{$name}}{self.l.Set({{$index}}, {{userToValue "val" .T}})}
+}
+{{end}}
+
+{{range $index, $field := .Choices}}
+func (self {{$name}}) {{.Name}}() (val {{userType .T}}, ok bool) {
+	if self.l.Get({{$unionOffset}}).(types.UInt32) != {{$index}} {
+		return
+	}
+	return {{valueToUser (printf "self.l.Get(%d)" (add $unionOffset 1)) .T}}, true
+}
+
+func (self {{$name}}) Set{{.Name}}(val {{userType .T}}) {{$name}} {
+	return {{$name}}{self.l.Set({{$unionOffset}}, types.UInt32({{$index}})).Set({{add $unionOffset 1}}, {{userToValue "val" .T}})}
+}
+
+func (def {{$name}}Def) {{.Name}}() (val {{defType .T}}, ok bool) {
+	if def.__unionIndex != {{$index}} {
+		return
+	}
+	return def.__unionValue.({{defType .T}}), true
+}
+
+func (def {{$name}}Def) Set{{.Name}}(val {{defType .T}}) {{$name}}Def {
+	def.__unionIndex = {{$index}}
+	def.__unionValue = val
+	return def
+}
+{{end}}
