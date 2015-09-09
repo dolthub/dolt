@@ -23,14 +23,25 @@ import (
 const (
 	rootPath         = "/root/"
 	refPath          = "/ref/"
+	getRefsPath      = "/getRefs/"
 	targetBufferSize = 1 << 16 // 64k (compressed)
+	readBufferSize   = 1 << 12 // 4k
+	readLimit        = 6       // Experimentally, 5 was dimishing returns, 1 for good measure
+	writeLimit       = 6
 )
 
+type readRequest struct {
+	r  ref.Ref
+	ch chan io.ReadCloser
+}
+
 type httpStoreClient struct {
-	host        *url.URL
-	cb          *chunkBuffer
-	wg          *sync.WaitGroup
-	uploadLimit chan int
+	host       *url.URL
+	readQueue  chan readRequest
+	readLimit  chan int
+	cb         *chunkBuffer
+	wg         *sync.WaitGroup
+	writeLimit chan int
 }
 
 type httpStoreServer struct {
@@ -47,9 +58,11 @@ func NewHttpStoreClient(host string) *httpStoreClient {
 	d.Exp.Equal(*u, url.URL{Scheme: u.Scheme, Host: u.Host})
 	return &httpStoreClient{
 		u,
+		make(chan readRequest, readBufferSize),
+		make(chan int, readLimit),
 		newChunkBuffer(),
 		&sync.WaitGroup{},
-		make(chan int, 8),
+		make(chan int, writeLimit),
 	}
 }
 
@@ -59,17 +72,40 @@ func NewHttpStoreServer(cs ChunkStore, port int) *httpStoreServer {
 	}
 }
 
-func (c *httpStoreClient) Get(ref ref.Ref) io.ReadCloser {
-	// GET http://<host>/ref/<sha1-xxx>. Response will be chunk data if present, 404 if absent.
-	res := c.requestRef(ref, "GET", nil)
+func (c *httpStoreClient) Get(r ref.Ref) io.ReadCloser {
+	ch := make(chan io.ReadCloser)
+	c.readQueue <- readRequest{r, ch}
+	c.readLimit <- 1
+	go c.sendReadRequests()
+	out := <-ch
+	return out
+}
 
-	d.Chk.True(res.StatusCode == http.StatusOK || res.StatusCode == http.StatusNotFound, "Unexpected response: %s", http.StatusText(res.StatusCode))
-	if res.StatusCode == http.StatusOK {
-		return res.Body
+func (c *httpStoreClient) sendReadRequests() {
+	refs := make(map[ref.Ref]bool)
+	reqs := make(map[ref.Ref][]chan io.ReadCloser)
+
+	done := false
+	for !done {
+		select {
+		case req := <-c.readQueue:
+			r := req.r
+			reqs[r] = append(reqs[r], req.ch)
+			refs[r] = true
+		default:
+			done = true
+		}
 	}
 
-	closeResponse(res)
-	return nil
+	cs := &MemoryStore{}
+	c.getRefs(refs, cs)
+	<-c.readLimit
+
+	for r, chs := range reqs {
+		for _, ch := range chs {
+			ch <- cs.Get(r)
+		}
+	}
 }
 
 func (c *httpStoreClient) Has(ref ref.Ref) bool {
@@ -101,14 +137,14 @@ func (c *httpStoreClient) flushBuffered() {
 	c.cb.finish()
 
 	c.wg.Add(1)
-	c.uploadLimit <- 1
+	c.writeLimit <- 1 // TODO: This may block writes, fix so that when the upload limit is hit, incoming writes simply buffer but return immediately
 	go func(body *bytes.Buffer) {
 		res := c.requestRef(ref.Ref{}, "POST", body)
 		defer closeResponse(res)
 
 		d.Chk.Equal(res.StatusCode, http.StatusCreated, "Unexpected response: %s", http.StatusText(res.StatusCode))
 
-		<-c.uploadLimit
+		<-c.writeLimit
 		c.wg.Done()
 	}(c.cb.buff)
 	c.cb = newChunkBuffer()
@@ -131,6 +167,27 @@ func (c *httpStoreClient) requestRef(r ref.Ref, method string, body io.Reader) *
 	res, err := http.DefaultClient.Do(req)
 	d.Chk.NoError(err)
 	return res
+}
+
+func (c *httpStoreClient) getRefs(refs map[ref.Ref]bool, cs ChunkStore) {
+	// POST http://<host>/getRefs/. Post query: ref=sha1---&ref=sha1---& Response will be chunk data if present, 404 if absent.
+	u := *c.host
+	u.Path = getRefsPath
+	values := &url.Values{}
+	for r, _ := range refs {
+		values.Add("ref", r.String())
+	}
+
+	req, err := http.NewRequest("POST", u.String(), strings.NewReader(values.Encode()))
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	d.Chk.NoError(err)
+
+	res, err := http.DefaultClient.Do(req)
+	d.Chk.NoError(err)
+	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
+
+	deserializeToChunkStore(res.Body, cs)
+	closeResponse(res)
 }
 
 func (c *httpStoreClient) Root() ref.Ref {
@@ -175,7 +232,7 @@ func (c *httpStoreClient) requestRoot(method string, current, last ref.Ref) *htt
 	return res
 }
 
-func (s *httpStoreServer) handleRequestRef(w http.ResponseWriter, req *http.Request) {
+func (s *httpStoreServer) handleRef(w http.ResponseWriter, req *http.Request) {
 	err := d.Try(func() {
 		if req.Method == "POST" {
 			deserializeToChunkStore(req.Body, s.cs)
@@ -218,7 +275,41 @@ func (s *httpStoreServer) handleRequestRef(w http.ResponseWriter, req *http.Requ
 	}
 }
 
-func (s *httpStoreServer) handleRequestRoot(w http.ResponseWriter, req *http.Request) {
+func (s *httpStoreServer) handleGetRefs(w http.ResponseWriter, req *http.Request) {
+	err := d.Try(func() {
+		d.Exp.Equal("POST", req.Method)
+
+		req.ParseForm()
+		refs := req.Form["ref"]
+		d.Exp.True(len(refs) > 0)
+
+		cb := newChunkBuffer()
+		for _, refStr := range refs {
+			r := ref.Parse(refStr)
+			reader := s.cs.Get(r)
+			if reader != nil {
+				buff := &bytes.Buffer{}
+				_, err := io.Copy(buff, reader)
+				d.Chk.NoError(err)
+				reader.Close()
+				cb.appendChunk(buff)
+			}
+		}
+		cb.finish()
+
+		_, err := io.Copy(w, cb.buff)
+		d.Chk.NoError(err)
+
+		w.Header().Add("Content-Type", "application/octet-stream")
+	})
+
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+		return
+	}
+}
+
+func (s *httpStoreServer) handleRoot(w http.ResponseWriter, req *http.Request) {
 	err := d.Try(func() {
 		switch req.Method {
 		case "GET":
@@ -272,8 +363,10 @@ func (s *httpStoreServer) Run() {
 	s.l = &l
 
 	mux := http.NewServeMux()
-	mux.HandleFunc(refPath, http.HandlerFunc(s.handleRequestRef))
-	mux.HandleFunc(rootPath, http.HandlerFunc(s.handleRequestRoot))
+
+	mux.HandleFunc(refPath, http.HandlerFunc(s.handleRef))
+	mux.HandleFunc(getRefsPath, http.HandlerFunc(s.handleGetRefs))
+	mux.HandleFunc(rootPath, http.HandlerFunc(s.handleRoot))
 
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
