@@ -1,0 +1,170 @@
+{
+package main
+
+func main() {
+	if len(os.Args) != 2 {
+		log.Fatal("Usage: grammar 'EXPR'")
+	}
+	got, err := ParseFile(os.Args[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+	program := got.(Package)
+	fmt.Println(program.packageName)
+	for _, l := range program.usingDeclarations {
+		fmt.Println(l.Describe())
+	}
+	for _, l := range program.structs {
+		fmt.Println(l.Describe())
+	}
+}
+}
+
+Package <- p:PackageName dd:Definition+ EOF {
+	aliases := map[string]string{}
+	usings := []CompoundType{}
+	structs := map[string]StructType{}
+	enums := map[string]EnumType{}
+	for _, d := range dd.([]interface{}) {
+		switch d := d.(type) {
+		case Alias:
+			if _, present := aliases[d.name]; present {
+				return nil, fmt.Errorf("Redefinition of " + d.name)
+			}
+			aliases[d.name] = d.target
+		case CompoundType:
+			usings = append(usings, d)
+		case StructType:
+			if _, present := structs[d.name]; present {
+				return nil, fmt.Errorf("Redefinition of " + d.name)
+			}
+			structs[d.name] = d
+		case EnumType:
+			if _, present := enums[d.name]; present {
+				return nil, fmt.Errorf("Redefinition of " + d.name)
+			}
+			enums[d.name] = d
+		default:
+			return nil, fmt.Errorf("Unknown definition: %v", d)
+		}
+	}
+	return Package{p.(string), aliases, usings, structs, enums}, nil
+}
+
+PackageName <- `package` _ n:QuotedString _ {
+	return n.(string), nil
+}
+
+Definition <- Struct / Using / Alias / Enum
+
+Alias <- `alias` _ i:Ident _ `=` _ `import` _ q:QuotedString _ {
+	return Alias{i.(string), q.(string)}, nil
+}
+
+Enum <- `enum` _ id:Ident _ `{` _ l:EnumEntry+ _ `}` _{
+	entries := l.([]interface{})
+	ids := make([]string, len(entries))
+	for i, e := range entries {
+		ids[i] = e.(string)
+	}
+	return EnumType{id.(string), ids}, nil
+}
+
+EnumEntry <- i:Ident _ {
+	return i.(string), nil
+}
+
+
+Using <- `using` _ ct:CompoundType _ {
+	return ct, nil
+}
+
+
+Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
+	ll := l.([]interface{})
+	var u UnionType
+	fields := make([]Field, 0, len(ll))
+	for _, e := range ll {
+		switch e := e.(type) {
+		case UnionType:
+			if len(u.choices) != 0 {
+				return nil, fmt.Errorf("Only one anonymous union per struct.")
+			}
+			u = e
+		case Field:
+			fields = append(fields, e)
+		default:
+			return nil, fmt.Errorf("Structs must be made up of field declarations and at most one anonymous union.")
+		}
+	}
+	return StructType{i.(string), fields, u}, nil
+}
+
+StructEntry <- Union / Field
+
+
+Union <- `union` _ `{` _ u:Field+ _ `}` _ {
+	uu := u.([]interface{})
+	fields := make([]Field, len(uu))
+	for i, f := range uu {
+		fields[i] = f.(Field)
+	}
+	return UnionType{fields}, nil
+}
+
+Field <- i:Ident _ `:` t:Type _ {
+	return Field{i.(string), t.(Type)}, nil
+}
+
+Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
+	switch t := t.(type) {
+	case Type:
+		return t, nil
+	case string:
+		return NamedType{t}, nil
+	default:
+		return nil, fmt.Errorf("%v is %T, not something that satisfies Type.", t, t)
+	}
+}
+
+CompoundType <- `List` `(` t:Type `)` {
+	return CompoundType{ListKind, []Type{t.(Type)}}, nil
+} / `Map` `(` k:Type `,` _ v:Type `)` {
+	return CompoundType{MapKind, []Type{k.(Type), v.(Type)}}, nil
+} / `Set` `(` t:Type `)` {
+	return CompoundType{SetKind, []Type{t.(Type)}}, nil
+} / `Ref` `(` t:Type `)` {
+	return CompoundType{RefKind, []Type{t.(Type)}}, nil
+}
+
+TypeArgumentList <- l:(Type ',' _)* t:Type {
+	first := l.([]interface{})
+	out := make([]Type, len(first), len(first) + 1)
+	for i, tt := range first {
+		n := tt.([]interface{})[0].(Type)
+		out[i] = n
+	}
+	return append(out, t.(Type)), nil
+}
+
+PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value`) {
+	return PrimitiveToKind[string(p.([]uint8))], nil
+}
+
+QuotedString <- `"` n:NamespaceIdent `"` {
+	return n.(string), nil
+}
+
+NamespaceIdent <- (Ident '.')* Ident {
+	return string(c.text), nil
+}
+
+Ident <- [\pL_] [\pL\pN_]* {
+	return string(c.text), nil
+}
+
+_ "optional whitespace" <- [\r\n\t\pZ]* {
+	return nil, nil
+}
+
+EOF <- _ !.
