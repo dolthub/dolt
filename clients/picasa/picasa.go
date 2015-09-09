@@ -13,13 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2"
+	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2/google"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/marshal"
 	"github.com/attic-labs/noms/types"
-	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2"
-	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2/google"
 )
 
 var (
@@ -73,6 +73,7 @@ func main() {
 		flag.Usage()
 		return
 	}
+	defer ds.Close()
 
 	var client *http.Client
 	refreshToken := getRefreshToken()
@@ -100,7 +101,7 @@ func getRefreshToken() string {
 	return oauthToken.RefreshToken
 }
 
-func tryRefreshToken(refreshToken string) (*http.Client) {
+func tryRefreshToken(refreshToken string) *http.Client {
 	var client *http.Client
 
 	if refreshToken != "" {
@@ -162,7 +163,7 @@ func getAlbum(client *http.Client, albumId string) (types.Value, types.Value, ty
 				} `json:"gphoto$timestamp"`
 				Title struct {
 					V string `json:"$t"`
-				 }
+				}
 				Width struct {
 					V string `json:"$t"`
 				} `json:"gphoto$width"`
@@ -208,24 +209,24 @@ func getAlbum(client *http.Client, albumId string) (types.Value, types.Value, ty
 func getAlbums(client *http.Client) types.Value {
 	response := struct {
 		Feed struct {
-				 UserName struct {
-							  V string `json:"$t"`
-						  } `json:"gphoto$nickname"`
-				 Entry []struct {
-					 Id struct {
-							V string `json:"$t"`
-						} `json:"gphoto$id"`
-					 NumPhotos struct {
-							V int `json:"$t"`
-						} `json:"gphoto$numphotos"`
-					 Title struct {
-							V string `json:"$t"`
-						}
-				 }
-				 UserId struct {
-							  V string `json:"$t"`
-						  } `json:"gphoto$user"`
-			 }
+			UserName struct {
+				V string `json:"$t"`
+			} `json:"gphoto$nickname"`
+			Entry []struct {
+				Id struct {
+					V string `json:"$t"`
+				} `json:"gphoto$id"`
+				NumPhotos struct {
+					V int `json:"$t"`
+				} `json:"gphoto$numphotos"`
+				Title struct {
+					V string `json:"$t"`
+				}
+			}
+			UserId struct {
+				V string `json:"$t"`
+			} `json:"gphoto$user"`
+		}
 	}{}
 
 	callPicasaApi(client, "user/default?alt=json", &response)
@@ -307,8 +308,8 @@ func baseConfig(redirectUrl string) *oauth2.Config {
 		ClientID:     *apiKeyFlag,
 		ClientSecret: *apiKeySecretFlag,
 		RedirectURL:  redirectUrl,
-		Scopes: []string{ "https://picasaweb.google.com/data" },
-		Endpoint: google.Endpoint,
+		Scopes:       []string{"https://picasaweb.google.com/data"},
+		Endpoint:     google.Endpoint,
 	}
 }
 

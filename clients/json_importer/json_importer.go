@@ -19,6 +19,7 @@ func main() {
 		flag.Usage()
 		return
 	}
+	defer ds.Close()
 
 	url := flag.Arg(0)
 	if ds == nil || url == "" {

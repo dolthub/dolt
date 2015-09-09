@@ -38,7 +38,6 @@ type readRequest struct {
 type httpStoreClient struct {
 	host       *url.URL
 	readQueue  chan readRequest
-	readLimit  chan int
 	cb         *chunkBuffer
 	wg         *sync.WaitGroup
 	writeLimit chan int
@@ -56,14 +55,19 @@ func NewHttpStoreClient(host string) *httpStoreClient {
 	d.Exp.NoError(err)
 	d.Exp.True(u.Scheme == "http" || u.Scheme == "https")
 	d.Exp.Equal(*u, url.URL{Scheme: u.Scheme, Host: u.Host})
-	return &httpStoreClient{
+	client := &httpStoreClient{
 		u,
 		make(chan readRequest, readBufferSize),
-		make(chan int, readLimit),
 		newChunkBuffer(),
 		&sync.WaitGroup{},
 		make(chan int, writeLimit),
 	}
+
+	for i := 0; i < readLimit; i++ {
+		go client.sendReadRequests()
+	}
+
+	return client
 }
 
 func NewHttpStoreServer(cs ChunkStore, port int) *httpStoreServer {
@@ -75,35 +79,33 @@ func NewHttpStoreServer(cs ChunkStore, port int) *httpStoreServer {
 func (c *httpStoreClient) Get(r ref.Ref) io.ReadCloser {
 	ch := make(chan io.ReadCloser)
 	c.readQueue <- readRequest{r, ch}
-	c.readLimit <- 1
-	go c.sendReadRequests()
-	out := <-ch
-	return out
+	return <-ch
 }
 
 func (c *httpStoreClient) sendReadRequests() {
-	refs := make(map[ref.Ref]bool)
-	reqs := make(map[ref.Ref][]chan io.ReadCloser)
+	for req := range c.readQueue {
+		reqs := []readRequest{req}
 
-	done := false
-	for !done {
-		select {
-		case req := <-c.readQueue:
-			r := req.r
-			reqs[r] = append(reqs[r], req.ch)
-			refs[r] = true
-		default:
-			done = true
+	loop:
+		for {
+			select {
+			case req := <-c.readQueue:
+				reqs = append(reqs, req)
+			default:
+				break loop
+			}
 		}
-	}
 
-	cs := &MemoryStore{}
-	c.getRefs(refs, cs)
-	<-c.readLimit
+		refs := make(map[ref.Ref]bool)
+		for _, req := range reqs {
+			refs[req.r] = true
+		}
 
-	for r, chs := range reqs {
-		for _, ch := range chs {
-			ch <- cs.Get(r)
+		cs := &MemoryStore{}
+		c.getRefs(refs, cs)
+
+		for _, req := range reqs {
+			req.ch <- cs.Get(req.r)
 		}
 	}
 }
@@ -230,6 +232,12 @@ func (c *httpStoreClient) requestRoot(method string, current, last ref.Ref) *htt
 	d.Chk.NoError(err)
 
 	return res
+}
+
+func (c *httpStoreClient) Close() error {
+	c.wg.Wait()
+	close(c.readQueue)
+	return nil
 }
 
 func (s *httpStoreServer) handleRef(w http.ResponseWriter, req *http.Request) {

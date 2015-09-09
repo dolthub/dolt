@@ -8,6 +8,7 @@ import (
 
 // ChunkStore is the core storage abstraction in noms. We can put data anyplace we have a ChunkStore implementation for.
 type ChunkStore interface {
+	io.Closer
 	ChunkSource
 	ChunkSink
 	RootTracker

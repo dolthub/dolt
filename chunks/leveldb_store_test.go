@@ -30,5 +30,6 @@ func (suite *LevelDBStoreTestSuite) SetupTest() {
 }
 
 func (suite *LevelDBStoreTestSuite) TearDownTest() {
+	suite.store.Close()
 	os.Remove(suite.dir)
 }

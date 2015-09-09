@@ -61,6 +61,7 @@ func main() {
 		flag.Usage()
 		return
 	}
+	defer ds.Close()
 
 	getUser()
 	if *albumIdFlag != "" {

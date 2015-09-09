@@ -18,6 +18,7 @@ func main() {
 		flag.Usage()
 		return
 	}
+	defer ds.Close()
 
 	lastVal := uint64(0)
 	if commit, ok := ds.MaybeHead(); ok {

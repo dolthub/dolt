@@ -172,6 +172,8 @@ func main() {
 		flag.Usage()
 		return
 	}
+	defer cs.Close()
+
 	err := d.Try(func() {
 		if util.MaybeStartCPUProfile() {
 			defer util.StopCPUProfile()

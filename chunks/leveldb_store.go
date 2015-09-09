@@ -99,6 +99,11 @@ func (l *LevelDBStore) write(ref ref.Ref, buff *bytes.Buffer) {
 	l.putCount += 1
 }
 
+func (l *LevelDBStore) Close() error {
+	l.db.Close()
+	return nil
+}
+
 type ldbStoreFlags struct {
 	dir            *string
 	maxFileHandles *int

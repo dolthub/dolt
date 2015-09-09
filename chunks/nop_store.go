@@ -31,6 +31,10 @@ func (ms *NopStore) Put() ChunkWriter {
 
 func (ms *NopStore) write(ref ref.Ref, buff *bytes.Buffer) {}
 
+func (ms *NopStore) Close() error {
+	return nil
+}
+
 type nopStoreFlags struct {
 	use *bool
 }

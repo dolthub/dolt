@@ -20,6 +20,7 @@ func (suite *ReadThroughStoreTestSuite) SetupTest() {
 }
 
 func (suite *ReadThroughStoreTestSuite) TearDownTest() {
+	suite.store.Close()
 }
 
 func (suite *LevelDBStoreTestSuite) TestReadThroughStoreGet() {
