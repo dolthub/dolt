@@ -25,6 +25,8 @@ func main() {
 		flag.Usage()
 		return
 	}
+	defer source.Close()
+	defer sink.Close()
 
 	err := d.Try(func() {
 		if util.MaybeStartCPUProfile() {

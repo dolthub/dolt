@@ -33,6 +33,7 @@ func main() {
 	go func() {
 		<-c
 		server.Stop()
+		cs.Close()
 	}()
 
 	d.Try(func() {

@@ -27,6 +27,7 @@ func main() {
 		flag.Usage()
 		return
 	}
+	defer cs.Close()
 
 	var inputRef ref.Ref
 	err := d.Try(func() {

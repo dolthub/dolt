@@ -60,6 +60,10 @@ func (ds *Dataset) CommitWithParents(v types.Value, p datas.SetOfCommit) (Datase
 	return Dataset{store, ds.id}, ok
 }
 
+func (ds *Dataset) Close() {
+	ds.store.Close()
+}
+
 type datasetFlags struct {
 	chunks.Flags
 	datasetID *string

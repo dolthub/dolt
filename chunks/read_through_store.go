@@ -2,6 +2,7 @@ package chunks
 
 import (
 	"io"
+	"io/ioutil"
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -13,13 +14,14 @@ import (
 // used and the value gets cached in the caching store. All writes go directly
 // to the backing store.
 type ReadThroughStore struct {
+	io.Closer
 	cachingStore ChunkStore
 	backingStore ChunkStore
 	putCount     int
 }
 
 func NewReadThroughStore(cachingStore ChunkStore, backingStore ChunkStore) ReadThroughStore {
-	return ReadThroughStore{cachingStore, backingStore, 0}
+	return ReadThroughStore{ioutil.NopCloser(nil), cachingStore, backingStore, 0}
 }
 
 // forwardCloser closes multiple io.Closer objects.

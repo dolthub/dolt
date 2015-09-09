@@ -49,6 +49,10 @@ func (ms *MemoryStore) Len() int {
 	return len(ms.data)
 }
 
+func (l *MemoryStore) Close() error {
+	return nil
+}
+
 type memoryStoreFlags struct {
 	use *bool
 }

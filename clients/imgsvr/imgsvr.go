@@ -11,7 +11,10 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/nfnt/resize"
 	"github.com/attic-labs/noms/chunks"
@@ -22,7 +25,7 @@ import (
 
 var (
 	port = flag.Int("port", 8001, "")
-	cs   chunks.ChunkSource
+	cs   chunks.ChunkStore
 )
 
 func main() {
@@ -34,10 +37,21 @@ func main() {
 		return
 	}
 
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: *port})
+	l, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	d.Chk.NoError(err)
 
 	srv := &http.Server{Handler: http.HandlerFunc(handleRequest)}
+
+	// Shutdown server gracefully so that profile may be written
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGTERM)
+	go func() {
+		<-c
+		l.Close()
+		cs.Close()
+	}()
+
 	srv.Serve(l)
 }
 

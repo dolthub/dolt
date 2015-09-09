@@ -35,6 +35,7 @@ func main() {
 			flag.Usage()
 			return
 		}
+		defer ds.Close()
 
 		if util.MaybeStartCPUProfile() {
 			defer util.StopCPUProfile()

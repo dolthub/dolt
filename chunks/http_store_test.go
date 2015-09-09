@@ -30,6 +30,7 @@ func (suite *HttpStoreTestSuite) SetupTest() {
 }
 
 func (suite *HttpStoreTestSuite) TearDownTest() {
+	suite.store.Close()
 	suite.server.Stop()
 
 	// Stop will have closed it's side of an existing KeepAlive socket. The next request will fail.

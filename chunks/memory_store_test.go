@@ -19,4 +19,5 @@ func (suite *MemoryStoreTestSuite) SetupTest() {
 }
 
 func (suite *MemoryStoreTestSuite) TearDownTest() {
+	suite.store.Close()
 }
