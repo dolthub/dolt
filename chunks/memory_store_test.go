@@ -1,6 +1,7 @@
 package chunks
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
@@ -20,4 +21,12 @@ func (suite *MemoryStoreTestSuite) SetupTest() {
 
 func (suite *MemoryStoreTestSuite) TearDownTest() {
 	suite.store.Close()
+}
+
+func (suite *MemoryStoreTestSuite) TestBadSerialization() {
+	bad := []byte{0, 1} // Not enough bytes to read first length
+	ms := &MemoryStore{}
+	suite.Panics(func() {
+		Deserialize(bytes.NewReader(bad), ms)
+	})
 }

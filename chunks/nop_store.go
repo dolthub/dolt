@@ -1,7 +1,6 @@
 package chunks
 
 import (
-	"bytes"
 	"flag"
 	"io"
 
@@ -29,7 +28,7 @@ func (ms *NopStore) Put() ChunkWriter {
 	return newChunkWriter(ms.write)
 }
 
-func (ms *NopStore) write(ref ref.Ref, buff *bytes.Buffer) {}
+func (ms *NopStore) write(ref ref.Ref, data []byte) {}
 
 func (ms *NopStore) Close() error {
 	return nil

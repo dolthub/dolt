@@ -1,8 +1,11 @@
 package chunks
 
 import (
+	"bytes"
+	"encoding/binary"
 	"io"
 
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -24,14 +27,66 @@ type RootTracker interface {
 type ChunkSource interface {
 	// Get gets a reader for the value of the Ref in the store. If the ref is absent from the store nil is returned.
 	Get(ref ref.Ref) io.ReadCloser
+
+	// Returns true iff the value at the address |ref| is contained in the source
+	Has(ref ref.Ref) bool
 }
 
 // ChunkSink is a place to put chunks.
 type ChunkSink interface {
 	Put() ChunkWriter
+}
 
-	// Returns true iff the value at the address |ref| is contained in the source
-	Has(ref ref.Ref) bool
+/*
+	Chunk Serialization:
+		Chunk 0
+		Chunk 1
+		 ..
+		Chunk N
+
+	Chunk:
+		Len   // 4-byte int
+		Data  // len(Data) == Len
+*/
+
+func Serialize(w io.Writer, refs map[ref.Ref]bool, cs ChunkSource) {
+	// TODO: If ChunkSource could provide the length of a chunk without having to buffer it, this could be completely streaming.
+	chunk := &bytes.Buffer{}
+	for r, _ := range refs {
+		chunk.Reset()
+		r := cs.Get(r)
+		if r == nil {
+			continue
+		}
+
+		_, err := io.Copy(chunk, r)
+		d.Chk.NoError(err)
+
+		// Because of chunking at higher levels, no chunk should never be more than 4GB
+		chunkSize := uint32(len(chunk.Bytes()))
+		err = binary.Write(w, binary.LittleEndian, chunkSize)
+		d.Chk.NoError(err)
+
+		n, err := io.Copy(w, chunk)
+		d.Chk.NoError(err)
+		d.Chk.Equal(uint32(n), chunkSize)
+	}
+}
+
+func Deserialize(r io.Reader, cs ChunkSink) {
+	for {
+		chunkSize := uint32(0)
+		err := binary.Read(r, binary.LittleEndian, &chunkSize)
+		if err == io.EOF {
+			break
+		}
+		d.Chk.NoError(err)
+
+		w := cs.Put()
+		_, err = io.CopyN(w, r, int64(chunkSize))
+		d.Chk.NoError(err)
+		w.Close()
+	}
 }
 
 // NewFlags creates a new instance of Flags, which declares a number of ChunkStore-related command-line flags using the golang flag package. Call this before flag.Parse().

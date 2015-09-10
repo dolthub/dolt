@@ -34,7 +34,7 @@ func (ms *MemoryStore) Put() ChunkWriter {
 	return newChunkWriter(ms.write)
 }
 
-func (ms *MemoryStore) write(r ref.Ref, buff *bytes.Buffer) {
+func (ms *MemoryStore) write(r ref.Ref, data []byte) {
 	if ms.Has(r) {
 		return
 	}
@@ -42,7 +42,7 @@ func (ms *MemoryStore) write(r ref.Ref, buff *bytes.Buffer) {
 	if ms.data == nil {
 		ms.data = map[ref.Ref][]byte{}
 	}
-	ms.data[r] = buff.Bytes()
+	ms.data[r] = data
 }
 
 func (ms *MemoryStore) Len() int {
