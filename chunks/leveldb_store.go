@@ -88,13 +88,13 @@ func (l *LevelDBStore) Put() ChunkWriter {
 	return newChunkWriter(l.write)
 }
 
-func (l *LevelDBStore) write(ref ref.Ref, buff *bytes.Buffer) {
+func (l *LevelDBStore) write(ref ref.Ref, data []byte) {
 	if l.Has(ref) {
 		return
 	}
 
 	key := toChunkKey(ref)
-	err := l.db.Put(key, buff.Bytes(), nil)
+	err := l.db.Put(key, data, nil)
 	d.Chk.NoError(err)
 	l.putCount += 1
 }
