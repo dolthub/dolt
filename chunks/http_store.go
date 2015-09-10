@@ -41,6 +41,7 @@ type httpStoreClient struct {
 	cb         *chunkBuffer
 	wg         *sync.WaitGroup
 	writeLimit chan int
+	wmu        *sync.Mutex
 }
 
 type httpStoreServer struct {
@@ -61,6 +62,7 @@ func NewHttpStoreClient(host string) *httpStoreClient {
 		newChunkBuffer(),
 		&sync.WaitGroup{},
 		make(chan int, writeLimit),
+		&sync.Mutex{},
 	}
 
 	for i := 0; i < readLimit; i++ {
@@ -125,6 +127,9 @@ func (c *httpStoreClient) Put() ChunkWriter {
 }
 
 func (c *httpStoreClient) write(r ref.Ref, buff *bytes.Buffer) {
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+
 	c.cb.appendChunk(buff)
 	if c.cb.isFull() {
 		c.flushBuffered()
