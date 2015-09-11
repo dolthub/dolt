@@ -1,13 +1,18 @@
 {
-package main
+package parse
+
+type alias struct {
+	Name   string
+	Target string
+}
 
 type namespaceIdent struct {
-	namespace string
-	id string
+	Namespace string
+	ID string
 }
 }
 
-Package <- p:PackageName dd:Definition+ EOF {
+Package <- _ dd:Definition+ _ EOF {
 	aliases := map[string]string{}
 	usings := []TypeRef{}
 	named := map[string]TypeRef{}
@@ -21,7 +26,7 @@ Package <- p:PackageName dd:Definition+ EOF {
 			}
 			aliases[d.Name] = d.Target
 		case TypeRef:
-			switch d.Kind() {
+			switch d.Desc.Kind() {
 			default:
 				return nil, fmt.Errorf("%v can't be defined at the top-level", d)
 			case ListKind, MapKind, RefKind, SetKind:
@@ -34,12 +39,7 @@ Package <- p:PackageName dd:Definition+ EOF {
 			}
 		}
 	}
-	return Package{p.(string), aliases, usings, named}, nil
-}
-
-PackageName <- `package` _ n:QuotedNamespaceIdent _ {
-	nsi := n.(namespaceIdent)
-	return nsi.namespace + "." + nsi.id, nil
+	return Package{aliases, usings, named}, nil
 }
 
 Definition <- Struct / Using / Alias / Enum
@@ -54,7 +54,7 @@ Enum <- `enum` _ id:Ident _ `{` _ l:EnumEntry+ _ `}` _{
 	for i, e := range entries {
 		ids[i] = e.(string)
 	}
-	return MakeEnumTypeRef(id.(string), ids), nil
+	return makeEnumTypeRef(id.(string), ids), nil
 }
 
 EnumEntry <- i:Ident _ {
@@ -69,22 +69,22 @@ Using <- `using` _ ct:CompoundType _ {
 
 Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 	ll := l.([]interface{})
-	var u UnionDesc
+	var u *UnionDesc
 	fields := make([]Field, 0, len(ll))
 	for _, e := range ll {
 		switch e := e.(type) {
 		case UnionDesc:
-			if len(u.choices) != 0 {
+			if u != nil {
 				return nil, fmt.Errorf("Only one anonymous union per struct.")
 			}
-			u = e
+			u = &e
 		case Field:
 			fields = append(fields, e)
 		default:
 			return nil, fmt.Errorf("Structs must be made up of field declarations and at most one anonymous union.")
 		}
 	}
-	return MakeStructTypeRef(i.(string), fields, u), nil
+	return makeStructTypeRef(i.(string), fields, u), nil
 }
 
 StructEntry <- Union / Field
@@ -110,24 +110,24 @@ Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
 	case UnionDesc:
 		return TypeRef{Desc:t}, nil
 	case namespaceIdent:
-		return TypeRef{PkgRef:t.namespace, Name:t.id}, nil
+		return TypeRef{PkgRef:t.Namespace, Name:t.ID}, nil
 	default:
 		return nil, fmt.Errorf("%v is %T, not something that satisfies TypeRef", t, t)
 	}
 }
 
 CompoundType <- `List` `(` t:Type `)` {
-	return MakeCompoundTypeRef(ListKind, []TypeRef{t.(TypeRef)}), nil
+	return makeCompoundTypeRef(ListKind, []TypeRef{t.(TypeRef)}), nil
 } / `Map` `(` k:Type `,` _ v:Type `)` {
-	return MakeCompoundTypeRef(MapKind, []TypeRef{k.(TypeRef), v.(TypeRef)}), nil
+	return makeCompoundTypeRef(MapKind, []TypeRef{k.(TypeRef), v.(TypeRef)}), nil
 } / `Set` `(` t:Type `)` {
-	return MakeCompoundTypeRef(SetKind, []TypeRef{t.(TypeRef)}), nil
+	return makeCompoundTypeRef(SetKind, []TypeRef{t.(TypeRef)}), nil
 } / `Ref` `(` t:Type `)` {
-	return MakeCompoundTypeRef(RefKind, []TypeRef{t.(TypeRef)}), nil
+	return makeCompoundTypeRef(RefKind, []TypeRef{t.(TypeRef)}), nil
 }
 
 PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value`) {
-	return MakePrimitiveTypeRef(string(p.([]uint8))), nil
+	return makePrimitiveTypeRef(string(p.([]uint8))), nil
 }
 
 QuotedString <- `"` n:String `"` {
@@ -136,10 +136,6 @@ QuotedString <- `"` n:String `"` {
 
 String <- [^"]* {
 	return string(c.text), nil
-}
-
-QuotedNamespaceIdent <- `"` n:NamespaceIdent `"` {
-	return n, nil
 }
 
 NamespaceIdent <- n:(Ident '.')* id:Ident {
