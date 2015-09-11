@@ -4,7 +4,9 @@ var noms = require('noms');
 var React = require('react');
 var Map = require('./map.js');
 
-noms.getDataset('mlb/heatmap')
+noms.getRoot()
+    .then(ref => noms.readValue(ref, noms.getChunk))
+    .then(ref => noms.getDataset(ref.deref(), 'mlb/heatmap'))
     .then(getPitchers)
     .then(renderPitchersList);
 
