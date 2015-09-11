@@ -2,6 +2,7 @@ package chunks
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"encoding/binary"
 	"io"
 
@@ -45,6 +46,7 @@ type ChunkSink interface {
 		Chunk N
 
 	Chunk:
+		Ref   // 20-byte sha1 hash
 		Len   // 4-byte int
 		Data  // len(Data) == Len
 */
@@ -54,12 +56,17 @@ func Serialize(w io.Writer, refs map[ref.Ref]bool, cs ChunkSource) {
 	chunk := &bytes.Buffer{}
 	for r, _ := range refs {
 		chunk.Reset()
-		r := cs.Get(r)
-		if r == nil {
+		reader := cs.Get(r)
+		if reader == nil {
 			continue
 		}
 
-		_, err := io.Copy(chunk, r)
+		digest := r.Digest()
+		n, err := io.Copy(w, bytes.NewReader(digest[:]))
+		d.Chk.NoError(err)
+		d.Chk.Equal(int64(sha1.Size), n)
+
+		_, err = io.Copy(chunk, reader)
 		d.Chk.NoError(err)
 
 		// Because of chunking at higher levels, no chunk should never be more than 4GB
@@ -67,7 +74,7 @@ func Serialize(w io.Writer, refs map[ref.Ref]bool, cs ChunkSource) {
 		err = binary.Write(w, binary.LittleEndian, chunkSize)
 		d.Chk.NoError(err)
 
-		n, err := io.Copy(w, chunk)
+		n, err = io.Copy(w, chunk)
 		d.Chk.NoError(err)
 		d.Chk.Equal(uint32(n), chunkSize)
 	}
@@ -75,17 +82,23 @@ func Serialize(w io.Writer, refs map[ref.Ref]bool, cs ChunkSource) {
 
 func Deserialize(r io.Reader, cs ChunkSink) {
 	for {
-		chunkSize := uint32(0)
-		err := binary.Read(r, binary.LittleEndian, &chunkSize)
+		digest := ref.Sha1Digest{}
+		n, err := io.ReadFull(r, digest[:])
 		if err == io.EOF {
 			break
 		}
+		d.Chk.NoError(err)
+		d.Chk.Equal(int(sha1.Size), n)
+
+		chunkSize := uint32(0)
+		err = binary.Read(r, binary.LittleEndian, &chunkSize)
 		d.Chk.NoError(err)
 
 		w := cs.Put()
 		_, err = io.CopyN(w, r, int64(chunkSize))
 		d.Chk.NoError(err)
 		w.Close()
+		d.Chk.Equal(w.Ref(), ref.New(digest))
 	}
 }
 
