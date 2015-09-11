@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"image"
 	_ "image/gif"
-	_ "image/jpeg"
+	"image/jpeg"
 	"image/png"
 	"math"
 	"net"
@@ -72,17 +72,19 @@ func handleRequest(w http.ResponseWriter, req *http.Request) {
 
 		img = resize.Thumbnail(uint(maxw), uint(maxh), img, resize.NearestNeighbor)
 
-		switch format {
-		case "gif", "jpeg", "png":
-			w.Header().Set("Content-type", "image/"+format)
-		default:
-		}
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
 
 		w.Header().Set("Content-encoding", "gzip")
-		gz := gzip.NewWriter(w)
-		err = png.Encode(gz, img)
-		d.Chk.NoError(err)
-		err = gz.Flush()
+
+		switch format {
+		case "gif", "png":
+			w.Header().Set("Content-type", "image/png")
+			err = png.Encode(gz, img)
+		case "jpeg":
+			w.Header().Set("Content-type", "image/jpeg")
+			err = jpeg.Encode(gz, img, nil)
+		}
 		d.Chk.NoError(err)
 	})
 
