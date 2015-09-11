@@ -1,11 +1,10 @@
 package main
 
 import (
-	"compress/gzip"
 	"flag"
 	"fmt"
 	"image"
-	_ "image/gif"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"math"
@@ -72,18 +71,15 @@ func handleRequest(w http.ResponseWriter, req *http.Request) {
 
 		img = resize.Thumbnail(uint(maxw), uint(maxh), img, resize.NearestNeighbor)
 
-		gz := gzip.NewWriter(w)
-		defer gz.Close()
-
-		w.Header().Set("Content-encoding", "gzip")
+		w.Header().Set("Content-type", "image/"+format)
 
 		switch format {
-		case "gif", "png":
-			w.Header().Set("Content-type", "image/png")
-			err = png.Encode(gz, img)
+		case "gif":
+			err = gif.Encode(w, img, nil)
+		case "png":
+			err = png.Encode(w, img)
 		case "jpeg":
-			w.Header().Set("Content-type", "image/jpeg")
-			err = jpeg.Encode(gz, img, nil)
+			err = jpeg.Encode(w, img, nil)
 		}
 		d.Chk.NoError(err)
 	})
