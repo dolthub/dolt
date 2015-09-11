@@ -162,33 +162,23 @@ function decodeValue(value, ref, getChunk) {
   return decodeTaggedValue(value, ref, getChunk);
 }
 
-function readBlobAsText(blob) {
-  return new Promise((res, rej) => {
-    var reader = new FileReader();
-    reader.addEventListener('loadend',
-      () => res(reader.result));
-    reader.addEventListener('error', rej);
-    reader.readAsText(blob);
-  });
-}
+var textDecoder = new TextDecoder();
 
 function readValue(ref, getChunk) {
   return getChunk(ref)
-      .then(response => response.blob())
-      .then(blob => {
-        return readBlobAsText(blob.slice(0, 2))
-            .then(header => {
-              var body = blob.slice(2);
-              switch (header) {
-                case 'j ':
-                  return readBlobAsText(body)
-                      .then(data => decodeValue(JSON.parse(data), ref, getChunk));
-                case 'b ':
-                  return Promise.resolve(body);
-                default :
-                  throw Error('Unsupported encoding: ' + header);
-              }
-            });
+      .then(chunk => {
+        var hBytes = new Uint8Array(chunk.slice(0, 2));
+        var header = String.fromCharCode(hBytes[0], hBytes[1]);
+        var body = chunk.slice(2);
+
+        switch (header) {
+          case 'j ':
+            return decodeValue(JSON.parse(textDecoder.decode(body)), ref, getChunk)
+          case 'b ':
+            return body;
+          default :
+            throw Error('Unsupported encoding: ' + header);
+        }
       });
 }
 
