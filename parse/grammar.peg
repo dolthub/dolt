@@ -30,6 +30,11 @@ Package <- _ dd:Definition+ _ EOF {
 			default:
 				return nil, fmt.Errorf("%v can't be defined at the top-level", d)
 			case ListKind, MapKind, RefKind, SetKind:
+				for _, u := range usings {
+					if u.Equals(d) {
+						return nil, fmt.Errorf("%v is a duplicate using declaration", d)
+					}
+				}
 				usings = append(usings, d)
 			case EnumKind, StructKind:
 				if _, present := named[d.Name]; present {
@@ -48,7 +53,7 @@ Alias <- `alias` _ i:Ident _ `=` _ `import` _ q:QuotedString _ {
 	return alias{i.(string), q.(string)}, nil
 }
 
-Enum <- `enum` _ id:Ident _ `{` _ l:EnumEntry+ _ `}` _{
+Enum <- `enum` _ id:Ident _ `{` _ l:EnumEntry+ _ `}` _ {
 	entries := l.([]interface{})
 	ids := make([]string, len(entries))
 	for i, e := range entries {
@@ -99,7 +104,7 @@ Union <- `union` _ `{` _ u:Field+ _ `}` _ {
 	return UnionDesc{fields}, nil
 }
 
-Field <- i:Ident _ `:` t:Type _ {
+Field <- i:Ident _ `:` _ t:Type _ {
 	return Field{i.(string), t.(TypeRef)}, nil
 }
 
@@ -134,9 +139,11 @@ QuotedString <- `"` n:String `"` {
 	return n.(string), nil
 }
 
-String <- [^"]* {
+String <- (StringPiece `\"` StringPiece `\"` StringPiece / StringPiece) {
 	return string(c.text), nil
 }
+
+StringPiece <- (`\` !`"` / [^"\\])*
 
 NamespaceIdent <- n:(Ident '.')* id:Ident {
 	nn := n.([]interface{})

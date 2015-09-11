@@ -40,12 +40,19 @@ func (t TypeRef) IsUnresolved() bool {
 	return t.Desc == nil
 }
 
+func (t TypeRef) Equals(other TypeRef) bool {
+	if t.IsUnresolved() {
+		return t.PkgRef == other.PkgRef && t.Name == other.Name
+	}
+	return t.PkgRef == other.PkgRef && t.Name == other.Name && t.Desc.Equals(other.Desc)
+}
+
 // The describe() methods generate text that should parse into the struct being described.
 // TODO: Figure out a way that they can exist only in the test file.
 func (t TypeRef) describe() string {
 	seg := []string{}
 	if t.Name != "" {
-		seg = append(seg, fmt.Sprintf(t.Name))
+		seg = append(seg, t.Name)
 	}
 	if t.Desc != nil {
 		seg = append(seg, t.Desc.describe())
@@ -56,6 +63,7 @@ func (t TypeRef) describe() string {
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Int32, or a custom type.
 type TypeDesc interface {
 	Kind() NomsKind
+	Equals(other TypeDesc) bool
 	describe() string // For use in tests.
 }
 
@@ -112,6 +120,10 @@ func (p PrimitiveDesc) Kind() NomsKind {
 	return NomsKind(p)
 }
 
+func (p PrimitiveDesc) Equals(other TypeDesc) bool {
+	return p.Kind() == other.Kind()
+}
+
 func (p PrimitiveDesc) describe() string {
 	for k, v := range primitiveToDesc {
 		if p == v {
@@ -153,15 +165,26 @@ func (c CompoundDesc) Kind() NomsKind {
 	return c.kind
 }
 
+func (c CompoundDesc) Equals(other TypeDesc) bool {
+	if c.Kind() != other.Kind() {
+		return false
+	}
+	out := true
+	for i, e := range other.(CompoundDesc).ElemTypes {
+		out = out && e.Equals(c.ElemTypes[i])
+	}
+	return out
+}
+
 func (c CompoundDesc) describe() string {
 	descElems := func() string {
 		out := make([]string, len(c.ElemTypes))
 		for i, e := range c.ElemTypes {
 			if e.Name != "" {
 				out[i] = e.Name
-				continue
+			} else {
+				out[i] = e.Desc.describe()
 			}
-			out[i] = e.Desc.describe()
 		}
 		return strings.Join(out, ", ")
 	}
@@ -192,6 +215,17 @@ func (e EnumDesc) Kind() NomsKind {
 	return EnumKind
 }
 
+func (e EnumDesc) Equals(other TypeDesc) bool {
+	if e.Kind() != other.Kind() {
+		return false
+	}
+	out := true
+	for i, id := range other.(EnumDesc).IDs {
+		out = out && id == e.IDs[i]
+	}
+	return out
+}
+
 func (e EnumDesc) describe() string {
 	return "enum: { " + strings.Join(e.IDs, "\n") + "}\n"
 }
@@ -205,8 +239,19 @@ type UnionDesc struct {
 	Choices []Field
 }
 
-func (n UnionDesc) Kind() NomsKind {
+func (u UnionDesc) Kind() NomsKind {
 	return UnionKind
+}
+
+func (u UnionDesc) Equals(other TypeDesc) bool {
+	if u.Kind() != other.Kind() {
+		return false
+	}
+	out := true
+	for i, c := range other.(UnionDesc).Choices {
+		out = out && u.Choices[i].Equals(c)
+	}
+	return out
 }
 
 func (u UnionDesc) describe() (out string) {
@@ -224,6 +269,10 @@ type Field struct {
 	T    TypeRef
 }
 
+func (f Field) Equals(other Field) bool {
+	return f.Name == other.Name && f.T.Equals(other.T)
+}
+
 // StructDesc describes a custom Noms Struct.
 // Structs can contain at most one anonymous union, so Union may be nil.
 type StructDesc struct {
@@ -237,6 +286,17 @@ func makeStructTypeRef(n string, f []Field, u *UnionDesc) TypeRef {
 
 func (s StructDesc) Kind() NomsKind {
 	return StructKind
+}
+
+func (s StructDesc) Equals(other TypeDesc) bool {
+	if s.Kind() != other.Kind() {
+		return false
+	}
+	out := true
+	for i, f := range other.(StructDesc).Fields {
+		out = out && s.Fields[i].Equals(f)
+	}
+	return out
 }
 
 func (s StructDesc) describe() (out string) {

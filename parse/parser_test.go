@@ -10,9 +10,8 @@ import (
 )
 
 const (
-	importByRef = `alias Noms = import "sha1-ffffffff"`
-	union       = "union { bool :Bool t2 :Blob }"
-	structTmpl  = "struct %s { %s %s }"
+	union      = "union { bool :Bool t2 :Blob }"
+	structTmpl = "struct %s { %s %s }"
 )
 
 func TestParserTestSuite(t *testing.T) {
@@ -21,6 +20,18 @@ func TestParserTestSuite(t *testing.T) {
 
 type ParserTestSuite struct {
 	suite.Suite
+}
+
+func (suite *ParserTestSuite) TestAlias() {
+	importTmpl := `alias Noms = import "%s"`
+	ref := "sha1-ffffffff"
+	path := `some/path/\"quotes\"/path`
+
+	pkg := ParsePackage("", strings.NewReader(fmt.Sprintf(importTmpl, ref)))
+	suite.Equal(ref, pkg.Aliases["Noms"])
+
+	pkg = ParsePackage("", strings.NewReader(fmt.Sprintf(importTmpl, path)))
+	suite.Equal(path, pkg.Aliases["Noms"])
 }
 
 func (suite *ParserTestSuite) TestUsing() {
@@ -60,12 +71,6 @@ func (suite *ParserTestSuite) TestBadStructParse() {
 	badName := "struct *ff { a :Bool }"
 	panics(badName, "Struct must have legal name.")
 
-	badType := "struct str { a: Bool }"
-	panics(badType, "Field type must be prefixed with ':'.")
-
-	nonType := "struct str { a: GInt32 }"
-	panics(nonType, "Nontypes must be rejected.")
-
 	twoAnonUnion := fmt.Sprintf(structTmpl, "str", union, union)
 	panics(twoAnonUnion, "Can't have two anonymous unions.")
 
@@ -77,7 +82,7 @@ func (suite *ParserTestSuite) TestStructParse() {
 		suite.NotPanics(func() { ParsePackage("", strings.NewReader(test)) }, test)
 	}
 
-	oneLine := "struct str { a :Bool b :Blob}"
+	oneLine := "struct str { a :Bool b : Blob c: Blob }"
 	notPanics(oneLine)
 
 	noSpace := "struct str{a:Bool}"
