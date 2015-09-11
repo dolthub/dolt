@@ -24,18 +24,15 @@ func (suite *HttpStoreTestSuite) SetupTest() {
 	// This call to a non-existing URL allows us to exit being sure that the server started. Otherwise, we sometimes get races with Stop() below.
 	req, err := http.NewRequest("GET", "http://localhost:8000/notHere", nil)
 	suite.NoError(err)
-	res, err := http.DefaultClient.Do(req)
-	suite.NoError(err)
-	suite.Equal(res.StatusCode, http.StatusNotFound)
+	http.DefaultClient.Do(req)
 }
 
 func (suite *HttpStoreTestSuite) TearDownTest() {
 	suite.store.Close()
 	suite.server.Stop()
 
-	// Stop will have closed it's side of an existing KeepAlive socket. The next request will fail.
+	// Stop may have closed its side of an existing KeepAlive socket. In that case, the next call will clear the pending failure.
 	req, err := http.NewRequest("GET", "http://localhost:8000/notHere", nil)
 	suite.NoError(err)
-	_, err = http.DefaultClient.Do(req)
-	suite.Error(err)
+	http.DefaultClient.Do(req)
 }
