@@ -97,11 +97,11 @@ StructEntry <- Union / Field
 
 Union <- `union` _ `{` _ u:Field+ _ `}` _ {
 	uu := u.([]interface{})
-	fields := make([]Field, len(uu))
-	for i, f := range uu {
-		fields[i] = f.(Field)
+	desc := UnionDesc{Choices: make([]Field, 0, len(uu))}
+	for _, f := range uu {
+		desc.Choices = append(desc.Choices, f.(Field))
 	}
-	return UnionDesc{fields}, nil
+	return desc, nil
 }
 
 Field <- i:Ident _ `:` _ t:Type _ {
