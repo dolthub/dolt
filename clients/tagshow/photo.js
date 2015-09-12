@@ -4,6 +4,7 @@ var Immutable = require('immutable');
 var ImmutableRenderMixin = require('react-immutable-render-mixin');
 var noms = require('noms')
 var React = require('react');
+var server = 'http://localhost:8001';
 
 var Photo = React.createClass({
   mixins: [ImmutableRenderMixin],
@@ -37,7 +38,7 @@ var Photo = React.createClass({
   },
 
   getURL: function() {
-    var url = "http://localhost:8001/?ref=" +
+    var url = server + "/?ref=" +
         this.state.photo.get('image').ref;
 
     if (this.props.style.width) {
@@ -52,3 +53,6 @@ var Photo = React.createClass({
 });
 
 module.exports = React.createFactory(Photo);
+module.exports.setServer = function(val) {
+  server = val;
+};
