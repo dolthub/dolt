@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -183,14 +182,29 @@ func getAlbums() {
 	}
 }
 
-func getAlbumPhotos(id string) SetOfPhoto {
+func getAlbumPhotos(id string) SetOfRemotePhoto {
 	response := struct {
 		flickrCall
 		Photoset struct {
 			Photo []struct {
-				Id    string `json:"id"`
-				Title string `json:"title"`
-				Tags  string `json:"tags"`
+				Id             string      `json:"id"`
+				Title          string      `json:"title"`
+				Tags           string      `json:"tags"`
+				ThumbURL       string      `json:"url_t"`
+				ThumbWidth     interface{} `json:"width_t"`
+				ThumbHeight    interface{} `json:"height_t"`
+				SmallURL       string      `json:"url_s"`
+				SmallWidth     interface{} `json:"width_s"`
+				SmallHeight    interface{} `json:"height_s"`
+				MediumURL      string      `json:"url_m"`
+				MediumWidth    interface{} `json:"width_m"`
+				MediumHeight   interface{} `json:"height_m"`
+				LargeURL       string      `json:"url_l"`
+				LargeWidth     interface{} `json:"width_l"`
+				LargeHeight    interface{} `json:"height_l"`
+				OriginalURL    string      `json:"url_o"`
+				OriginalWidth  interface{} `json:"width_o"`
+				OriginalHeight interface{} `json:"height_o"`
 			} `json:"photo"`
 		} `json:"photoset"`
 	}{}
@@ -199,31 +213,28 @@ func getAlbumPhotos(id string) SetOfPhoto {
 	err := callFlickrAPI("flickr.photosets.getPhotos", &response, &map[string]string{
 		"photoset_id": id,
 		"user_id":     user.Id().String(),
-		"extras":      "tags",
+		"extras":      "tags,url_t,url_s,url_m,url_l,url_o",
 	})
 	d.Chk.NoError(err)
 
-	photos := types.NewSet()
+	photos := NewSetOfRemotePhoto()
 	for _, p := range response.Photoset.Photo {
-		url, w, h := getOriginalUrl(p.Id)
-		fmt.Printf(" . %v\n", url)
-		photoReader := getPhotoReader(url)
-		defer photoReader.Close()
-		b, err := types.NewBlob(photoReader)
-		d.Chk.NoError(err)
-		photo := NewPhoto().
+		photo := NewRemotePhoto().
 			SetId(types.NewString(p.Id)).
-			SetImage(b).
 			SetTags(getTags(p.Tags)).
-			SetTitle(types.NewString(p.Title)).
-			SetUrl(types.NewString(url)).
-			SetWidth(types.UInt32(w)).
-			SetHeight(types.UInt32(h))
-		// The photo is big, so write it out now to release the memory.
-		r := types.WriteValue(photo.NomsValue(), ds.Store())
-		photos = photos.Insert(types.Ref{r})
+			SetTitle(types.NewString(p.Title))
+
+		sizes := NewMapOfSizeToString()
+		sizes = addSize(sizes, p.ThumbURL, p.ThumbWidth, p.ThumbHeight)
+		sizes = addSize(sizes, p.SmallURL, p.SmallWidth, p.SmallHeight)
+		sizes = addSize(sizes, p.MediumURL, p.MediumWidth, p.MediumHeight)
+		sizes = addSize(sizes, p.LargeURL, p.LargeWidth, p.LargeHeight)
+		sizes = addSize(sizes, p.OriginalURL, p.OriginalWidth, p.OriginalHeight)
+		photo = photo.SetSizes(sizes)
+
+		photos = photos.Insert(photo)
 	}
-	return SetOfPhotoFromVal(photos)
+	return photos
 }
 
 func getTags(tagStr string) (res SetOfString) {
@@ -237,50 +248,26 @@ func getTags(tagStr string) (res SetOfString) {
 	return res
 }
 
-func getOriginalUrl(id string) (string, uint32, uint32) {
-	response := struct {
-		flickrCall
-		Sizes struct {
-			Size []struct {
-				Label  string      `json:"label"`
-				Source string      `json:"source"`
-				Width  interface{} `json:"width"`
-				Height interface{} `json:"height"`
-			} `json:"size"`
-		} `json:"sizes"`
-	}{}
-
-	err := callFlickrAPI("flickr.photos.getSizes", &response, &map[string]string{
-		"photo_id": id,
-	})
-	d.Chk.NoError(err)
-
-	for _, p := range response.Sizes.Size {
-		if p.Label == "Original" {
-			dim := func(v interface{}) uint32 {
-				switch v := v.(type) {
-				case float64:
-					return uint32(v)
-				case string:
-					i, err := strconv.Atoi(v)
-					d.Chk.NoError(err)
-					return uint32(i)
-				default:
-					d.Chk.Fail("Unexpected value for image width or height: %+v", v)
-					return 0
-				}
-			}
-			return p.Source, dim(p.Width), dim(p.Height)
+func addSize(sizes MapOfSizeToString, url string, width interface{}, height interface{}) MapOfSizeToString {
+	getDim := func(v interface{}) types.UInt32 {
+		switch v := v.(type) {
+		case float64:
+			return types.UInt32(uint32(v))
+		case string:
+			i, err := strconv.Atoi(v)
+			d.Chk.NoError(err)
+			return types.UInt32(uint32(i))
+		default:
+			d.Chk.Fail(fmt.Sprintf("Unexpected value for image width or height: %+v", v))
+			return types.UInt32(uint32(0))
 		}
 	}
-	d.Chk.Fail(fmt.Sprintf("No Original image size found photo: %v", id))
-	return "NOT REACHED", 0, 0
-}
-
-func getPhotoReader(url string) io.ReadCloser {
-	resp, err := httpClient.Get(url)
-	d.Chk.NoError(err)
-	return resp.Body
+	if url == "" {
+		return sizes
+	}
+	return sizes.Set(
+		NewSize().SetWidth(getDim(width)).SetHeight(getDim(height)),
+		types.NewString(url))
 }
 
 func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) error {
