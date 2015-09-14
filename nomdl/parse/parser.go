@@ -49,15 +49,25 @@ func (t TypeRef) Equals(other TypeRef) bool {
 
 // The describe() methods generate text that should parse into the struct being described.
 // TODO: Figure out a way that they can exist only in the test file.
-func (t TypeRef) describe() string {
-	seg := []string{}
+func (t TypeRef) describe() (out string) {
 	if t.Name != "" {
-		seg = append(seg, t.Name)
+		out += namespaceName(t.PkgRef, t.Name) + "\n"
 	}
 	if t.Desc != nil {
-		seg = append(seg, t.Desc.describe())
+		out += t.Desc.describe() + "\n"
 	}
-	return strings.Join(seg, "\n")
+	return
+}
+
+func namespaceName(pkgRef, name string) (out string) {
+	d.Chk.True(pkgRef == "" || (pkgRef != "" && name != ""), "If a TypeRef's PkgRef is set, so must Name be.")
+	if pkgRef != "" {
+		out = pkgRef + "."
+	}
+	if name != "" {
+		out += name
+	}
+	return
 }
 
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Int32, or a custom type.
@@ -180,11 +190,7 @@ func (c CompoundDesc) describe() string {
 	descElems := func() string {
 		out := make([]string, len(c.ElemTypes))
 		for i, e := range c.ElemTypes {
-			if e.Name != "" {
-				out[i] = e.Name
-			} else {
-				out[i] = e.Desc.describe()
-			}
+			out[i] = e.describe()
 		}
 		return strings.Join(out, ", ")
 	}
@@ -299,6 +305,17 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 		}
 	}
 	return true
+}
+
+// GetNamedUnions returns a map of field index to TypeDesc for all named union fields in s.
+func (s StructDesc) GetNamedUnions() map[int]*UnionDesc {
+	structs := map[int]*UnionDesc{}
+	for i, f := range s.Fields {
+		if u, ok := f.T.Desc.(UnionDesc); ok {
+			structs[i] = &u
+		}
+	}
+	return structs
 }
 
 func (s StructDesc) describe() (out string) {
