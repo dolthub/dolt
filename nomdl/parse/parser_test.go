@@ -71,6 +71,15 @@ func (suite *ParserTestSuite) TestBadStructParse() {
 	badName := "struct *ff { a :Bool }"
 	panics(badName, "Struct must have legal name.")
 
+	dupName := "struct str { a :Bool a :Bool }"
+	panics(dupName, "Fields must have unique names.")
+
+	dupNameInUnion := "struct s { union { a: Bool a :Int32 } }"
+	panics(dupNameInUnion, "union choices must have unique names.")
+
+	dupNameInNamedUnion := "struct s { u :union { a: Bool a :Int32 } }"
+	panics(dupNameInNamedUnion, "union choices must have unique names.")
+
 	twoAnonUnion := fmt.Sprintf(structTmpl, "str", union, union)
 	panics(twoAnonUnion, "Can't have two anonymous unions.")
 
@@ -161,7 +170,7 @@ func (suite *ParserTestSuite) TestStruct() {
 		}),
 	}
 	namedTypeField := Field{"otherStruct", makeTypeRef("", "Other")}
-	namespacedTypeField := Field{"otherStruct", makeTypeRef("Elsewhere", "Other")}
+	namespacedTypeField := Field{"namespacedStruct", makeTypeRef("Elsewhere", "Other")}
 	union := UnionDesc{[]Field{
 		Field{"a", makePrimitiveTypeRef("Int32")},
 		Field{"n", makeTypeRef("NN", "Other")},

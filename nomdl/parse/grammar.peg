@@ -75,6 +75,7 @@ Using <- `using` _ ct:CompoundType _ {
 Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 	ll := l.([]interface{})
 	var u *UnionDesc
+	fieldNames := map[string]bool{}
 	fields := make([]Field, 0, len(ll))
 	for _, e := range ll {
 		switch e := e.(type) {
@@ -84,6 +85,10 @@ Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 			}
 			u = &e
 		case Field:
+			if fieldNames[e.Name] {
+				return nil, fmt.Errorf("Redefinition of field %s in struct %s", e.Name, i.(string))
+			}
+			fieldNames[e.Name] = true
 			fields = append(fields, e)
 		default:
 			return nil, fmt.Errorf("Structs must be made up of field declarations and at most one anonymous union.")
@@ -97,9 +102,15 @@ StructEntry <- Union / Field
 
 Union <- `union` _ `{` _ u:Field+ _ `}` _ {
 	uu := u.([]interface{})
+	choiceNames := map[string]bool{}
 	desc := UnionDesc{Choices: make([]Field, 0, len(uu))}
 	for _, f := range uu {
-		desc.Choices = append(desc.Choices, f.(Field))
+		ff := f.(Field)
+		if choiceNames[ff.Name] {
+			return nil, fmt.Errorf("Redefinition of union choice %s", ff.Name)
+		}
+		choiceNames[ff.Name] = true
+		desc.Choices = append(desc.Choices, ff)
 	}
 	return desc, nil
 }

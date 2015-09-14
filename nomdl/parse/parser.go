@@ -244,14 +244,15 @@ func (u UnionDesc) Kind() NomsKind {
 }
 
 func (u UnionDesc) Equals(other TypeDesc) bool {
-	if u.Kind() != other.Kind() {
+	if u.Kind() != other.Kind() || len(u.Choices) != len(other.(UnionDesc).Choices) {
 		return false
 	}
-	out := true
 	for i, c := range other.(UnionDesc).Choices {
-		out = out && u.Choices[i].Equals(c)
+		if !u.Choices[i].Equals(c) {
+			return false
+		}
 	}
-	return out
+	return true
 }
 
 func (u UnionDesc) describe() (out string) {
@@ -273,6 +274,10 @@ func (f Field) Equals(other Field) bool {
 	return f.Name == other.Name && f.T.Equals(other.T)
 }
 
+func makeStructTypeRef(n string, f []Field, u *UnionDesc) TypeRef {
+	return TypeRef{Name: n, Desc: StructDesc{f, u}}
+}
+
 // StructDesc describes a custom Noms Struct.
 // Structs can contain at most one anonymous union, so Union may be nil.
 type StructDesc struct {
@@ -280,23 +285,20 @@ type StructDesc struct {
 	Union  *UnionDesc
 }
 
-func makeStructTypeRef(n string, f []Field, u *UnionDesc) TypeRef {
-	return TypeRef{Name: n, Desc: StructDesc{f, u}}
-}
-
 func (s StructDesc) Kind() NomsKind {
 	return StructKind
 }
 
 func (s StructDesc) Equals(other TypeDesc) bool {
-	if s.Kind() != other.Kind() {
+	if s.Kind() != other.Kind() || len(s.Fields) != len(other.(StructDesc).Fields) {
 		return false
 	}
-	out := true
 	for i, f := range other.(StructDesc).Fields {
-		out = out && s.Fields[i].Equals(f)
+		if !s.Fields[i].Equals(f) {
+			return false
+		}
 	}
-	return out
+	return true
 }
 
 func (s StructDesc) describe() (out string) {
