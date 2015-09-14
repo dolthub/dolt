@@ -6,6 +6,13 @@ type alias struct {
 	Target string
 }
 
+// Field represents a Struct field or a Union choice.
+// Neither Name nor T is allowed to be a zero-value, though T may be an unresolved TypeRef.
+type field struct {
+	Name string
+	T    TypeRef
+}
+
 type namespaceIdent struct {
 	Namespace string
 	ID string
@@ -75,7 +82,7 @@ Using <- `using` _ ct:CompoundType _ {
 Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 	ll := l.([]interface{})
 	var u *UnionDesc
-	fields := make([]Field, 0, len(ll))
+	fields := map[string]TypeRef{}
 	for _, e := range ll {
 		switch e := e.(type) {
 		case UnionDesc:
@@ -83,8 +90,11 @@ Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 				return nil, fmt.Errorf("Only one anonymous union per struct.")
 			}
 			u = &e
-		case Field:
-			fields = append(fields, e)
+		case field:
+			if _, present := fields[e.Name]; present {
+				return nil, fmt.Errorf("Redefinition of field %s in struct %s", e.Name, i.(string))
+			}
+			fields[e.Name] = e.T
 		default:
 			return nil, fmt.Errorf("Structs must be made up of field declarations and at most one anonymous union.")
 		}
@@ -97,15 +107,19 @@ StructEntry <- Union / Field
 
 Union <- `union` _ `{` _ u:Field+ _ `}` _ {
 	uu := u.([]interface{})
-	desc := UnionDesc{Choices: make([]Field, 0, len(uu))}
+	choices := map[string]TypeRef{}
 	for _, f := range uu {
-		desc.Choices = append(desc.Choices, f.(Field))
+		ff := f.(field)
+		if _, present := choices[ff.Name]; present {
+			return nil, fmt.Errorf("Redefinition of union choice %s", ff.Name)
+		}
+		choices[ff.Name] = ff.T
 	}
-	return desc, nil
+	return UnionDesc{Choices: choices}, nil
 }
 
 Field <- i:Ident _ `:` _ t:Type _ {
-	return Field{i.(string), t.(TypeRef)}, nil
+	return field{i.(string), t.(TypeRef)}, nil
 }
 
 Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {

@@ -71,13 +71,21 @@ func (suite *ParserTestSuite) TestBadStructParse() {
 	badName := "struct *ff { a :Bool }"
 	panics(badName, "Struct must have legal name.")
 
+	dupName := "struct str { a :Bool a :Bool }"
+	panics(dupName, "Fields must have unique names.")
+
+	dupNameInUnion := "struct s { union { a: Bool a :Int32 } }"
+	panics(dupNameInUnion, "union choices must have unique names.")
+
+	dupNameInNamedUnion := "struct s { u :union { a: Bool a :Int32 } }"
+	panics(dupNameInNamedUnion, "union choices must have unique names.")
+
 	twoAnonUnion := fmt.Sprintf(structTmpl, "str", union, union)
 	panics(twoAnonUnion, "Can't have two anonymous unions.")
 
 }
 
 func (suite *ParserTestSuite) TestStructParse() {
-
 	notPanics := func(test string) {
 		suite.NotPanics(func() { ParsePackage("", strings.NewReader(test)) }, test)
 	}
@@ -103,8 +111,8 @@ func (suite *ParserTestSuite) TestStructParse() {
 }
 
 func (s StructDesc) fieldsToString() (out string) {
-	for _, f := range s.Fields {
-		out += f.Name + " :" + f.T.describe() + "\n"
+	for n, t := range s.Fields {
+		out += n + " :" + t.describe() + "\n"
 	}
 	return
 }
@@ -114,6 +122,10 @@ func (s StructDesc) unionToString() string {
 		return ""
 	}
 	return s.Union.describe()
+}
+
+func (f field) toMap() map[string]TypeRef {
+	return map[string]TypeRef{f.Name: f.T}
 }
 
 func (suite *ParserTestSuite) TestStruct() {
@@ -147,51 +159,52 @@ func (suite *ParserTestSuite) TestStruct() {
 		}
 	}
 
-	primField := Field{"a", makePrimitiveTypeRef("Int64")}
-	compoundField := Field{"set", makeCompoundTypeRef(SetKind, []TypeRef{makePrimitiveTypeRef("String")})}
-	compoundOfCompoundField := Field{
+	primField := field{"a", makePrimitiveTypeRef("Int64")}
+	compoundField := field{"set", makeCompoundTypeRef(SetKind, []TypeRef{makePrimitiveTypeRef("String")})}
+	compoundOfCompoundField := field{
 		"listOfSet",
 		makeCompoundTypeRef(ListKind, []TypeRef{
 			makeCompoundTypeRef(SetKind, []TypeRef{makePrimitiveTypeRef("String")})})}
-	mapOfNamedTypeField := Field{
+	mapOfNamedTypeField := field{
 		"mapOfStructToOther",
 		makeCompoundTypeRef(MapKind, []TypeRef{
 			makeTypeRef("", "Struct"),
 			makeTypeRef("Elsewhere", "Other"),
 		}),
 	}
-	namedTypeField := Field{"otherStruct", makeTypeRef("", "Other")}
-	namespacedTypeField := Field{"otherStruct", makeTypeRef("Elsewhere", "Other")}
-	union := UnionDesc{[]Field{
-		Field{"a", makePrimitiveTypeRef("Int32")},
-		Field{"n", makeTypeRef("NN", "Other")},
-		Field{"c", makePrimitiveTypeRef("UInt32")}}}
+	namedTypeField := field{"otherStruct", makeTypeRef("", "Other")}
+	namespacedTypeField := field{"otherStruct", makeTypeRef("Elsewhere", "Other")}
+	union := UnionDesc{map[string]TypeRef{
+		"a": makePrimitiveTypeRef("Int32"),
+		"n": makeTypeRef("NN", "Other"),
+		"c": makePrimitiveTypeRef("UInt32"),
+	}}
 
-	simpleRef := makeStructTypeRef("Simple", []Field{primField}, nil)
-	withAnonUnionRef := makeStructTypeRef("WithAnon", []Field{primField}, &union)
-	anonUnionFirstRef := makeStructTypeRef("WithAnonFirst", []Field{primField}, &union)
-	compoundRef := makeStructTypeRef("Compound", []Field{compoundField}, &union)
-	compoundOfCompoundRef := makeStructTypeRef("CofC", []Field{compoundOfCompoundField}, &union)
-	namedRef := makeStructTypeRef("Named", []Field{namedTypeField}, &union)
-	namespacedRef := makeStructTypeRef("Namespaced", []Field{namespacedTypeField}, &union)
-	mapFieldRef := makeStructTypeRef("MapStruct", []Field{mapOfNamedTypeField}, &union)
-	multiRef := makeStructTypeRef("Multi", []Field{
-		primField,
-		namedTypeField,
-		namespacedTypeField,
-		compoundField,
-		compoundOfCompoundField,
-		Field{"namedUnion", TypeRef{Desc: &union}},
+	simpleRef := makeStructTypeRef("Simple", primField.toMap(), nil)
+	withAnonUnionRef := makeStructTypeRef("WithAnon", primField.toMap(), &union)
+	anonUnionFirstRef := makeStructTypeRef("WithAnonFirst", primField.toMap(), &union)
+	compoundRef := makeStructTypeRef("Compound", compoundField.toMap(), &union)
+	compoundOfCompoundRef := makeStructTypeRef("CofC", compoundOfCompoundField.toMap(), &union)
+	namedRef := makeStructTypeRef("Named", namedTypeField.toMap(), &union)
+	namespacedRef := makeStructTypeRef("Namespaced", namespacedTypeField.toMap(), &union)
+	mapFieldRef := makeStructTypeRef("MapStruct", mapOfNamedTypeField.toMap(), &union)
+	multiRef := makeStructTypeRef("Multi", map[string]TypeRef{
+		primField.Name:               primField.T,
+		namedTypeField.Name:          namedTypeField.T,
+		namespacedTypeField.Name:     namespacedTypeField.T,
+		compoundField.Name:           compoundField.T,
+		compoundOfCompoundField.Name: compoundOfCompoundField.T,
+		"namedUnion":                 TypeRef{Desc: &union},
 	}, &union)
-	withNamedUnionRef := makeStructTypeRef("NamedAndAnon", []Field{
-		Field{"namedUnion", TypeRef{Desc: &union}},
+	withNamedUnionRef := makeStructTypeRef("NamedAndAnon", map[string]TypeRef{
+		"namedUnion": TypeRef{Desc: &union},
 	}, &union)
-	onlyNamedUnionRef := makeStructTypeRef("NamedUnionOnly", []Field{
-		Field{"namedUnion", TypeRef{Desc: &union}},
+	onlyNamedUnionRef := makeStructTypeRef("NamedUnionOnly", map[string]TypeRef{
+		"namedUnion": TypeRef{Desc: &union},
 	}, nil)
-	multiNamedUnionRef := makeStructTypeRef("TwoNamedAndAnon", []Field{
-		Field{"namedUnion1", TypeRef{Desc: &union}},
-		Field{"namedUnion2", TypeRef{Desc: &union}},
+	multiNamedUnionRef := makeStructTypeRef("TwoNamedAndAnon", map[string]TypeRef{
+		"namedUnion1": TypeRef{Desc: &union},
+		"namedUnion2": TypeRef{Desc: &union},
 	}, &union)
 
 	defns := []string{
