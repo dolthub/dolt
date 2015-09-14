@@ -23,6 +23,7 @@ function getDatasetIds(pRoot) {
 }
 
 module.exports = {
+  setServer: store.setServer,
   getRoot: store.getRoot,
   getDataset: getDataset,
   getDatasetIds: getDatasetIds,

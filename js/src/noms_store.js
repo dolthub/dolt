@@ -2,17 +2,17 @@
 
 require('whatwg-fetch');
 
-var host = function(host) {
-  var i = host.indexOf(':');
-  return i < 0 ? host : host.substring(0, i);
-}(location.host);
-var nomsPort = '8000';
-var nomsServer = location.protocol + '//' + host + ':' + nomsPort;
+var rpc = null;
 
-var rpc = {
-  getRefs: nomsServer + '/getRefs/',
-  root: nomsServer + '/root/',
-};
+function setDefaultServer() {
+  var host = location.host;
+  var i = host.indexOf(':');
+  host = i < 0 ? host : host.substring(0, i);
+  var nomsPort = 8000;
+  var nomsServer = location.protocol + '//' + host + ':' + nomsPort;
+  setServer(nomsServer);
+}
+setDefaultServer();
 
 // Note that chrome limits the number of active xhrs to the same security origin to 6, more than that just sit in the 'stalled' state.
 var maxReads = 3;
@@ -147,7 +147,16 @@ function getRoot() {
   });
 }
 
+function setServer(url) {
+  rpc = {
+    getRefs: url + '/getRefs/',
+    ref: url + '/ref',
+    root: url + '/root',
+  };
+}
+
 module.exports = {
   getChunk,
   getRoot,
+  setServer,
 };
