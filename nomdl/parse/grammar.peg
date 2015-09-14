@@ -1,0 +1,165 @@
+{
+package parse
+
+type alias struct {
+	Name   string
+	Target string
+}
+
+type namespaceIdent struct {
+	Namespace string
+	ID string
+}
+}
+
+Package <- _ dd:Definition+ _ EOF {
+	aliases := map[string]string{}
+	usings := []TypeRef{}
+	named := map[string]TypeRef{}
+	for _, d := range dd.([]interface{}) {
+		switch d := d.(type) {
+		default:
+			return nil, fmt.Errorf("Unknown definition: %v", d)
+		case alias:
+			if _, present := aliases[d.Name]; present {
+				return nil, fmt.Errorf("Redefinition of " + d.Name)
+			}
+			aliases[d.Name] = d.Target
+		case TypeRef:
+			switch d.Desc.Kind() {
+			default:
+				return nil, fmt.Errorf("%v can't be defined at the top-level", d)
+			case ListKind, MapKind, RefKind, SetKind:
+				for _, u := range usings {
+					if u.Equals(d) {
+						return nil, fmt.Errorf("%v is a duplicate using declaration", d)
+					}
+				}
+				usings = append(usings, d)
+			case EnumKind, StructKind:
+				if _, present := named[d.Name]; present {
+					return nil, fmt.Errorf("Redefinition of " + d.Name)
+				}
+				named[d.Name] = d
+			}
+		}
+	}
+	return Package{aliases, usings, named}, nil
+}
+
+Definition <- Struct / Using / Alias / Enum
+
+Alias <- `alias` _ i:Ident _ `=` _ `import` _ q:QuotedString _ {
+	return alias{i.(string), q.(string)}, nil
+}
+
+Enum <- `enum` _ id:Ident _ `{` _ l:EnumEntry+ _ `}` _ {
+	entries := l.([]interface{})
+	ids := make([]string, len(entries))
+	for i, e := range entries {
+		ids[i] = e.(string)
+	}
+	return makeEnumTypeRef(id.(string), ids), nil
+}
+
+EnumEntry <- i:Ident _ {
+	return i.(string), nil
+}
+
+
+Using <- `using` _ ct:CompoundType _ {
+	return ct, nil
+}
+
+
+Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
+	ll := l.([]interface{})
+	var u *UnionDesc
+	fields := make([]Field, 0, len(ll))
+	for _, e := range ll {
+		switch e := e.(type) {
+		case UnionDesc:
+			if u != nil {
+				return nil, fmt.Errorf("Only one anonymous union per struct.")
+			}
+			u = &e
+		case Field:
+			fields = append(fields, e)
+		default:
+			return nil, fmt.Errorf("Structs must be made up of field declarations and at most one anonymous union.")
+		}
+	}
+	return makeStructTypeRef(i.(string), fields, u), nil
+}
+
+StructEntry <- Union / Field
+
+
+Union <- `union` _ `{` _ u:Field+ _ `}` _ {
+	uu := u.([]interface{})
+	desc := UnionDesc{Choices: make([]Field, 0, len(uu))}
+	for _, f := range uu {
+		desc.Choices = append(desc.Choices, f.(Field))
+	}
+	return desc, nil
+}
+
+Field <- i:Ident _ `:` _ t:Type _ {
+	return Field{i.(string), t.(TypeRef)}, nil
+}
+
+Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
+	switch t := t.(type) {
+	case TypeRef:
+		return t, nil
+	case UnionDesc:
+		return TypeRef{Desc:t}, nil
+	case namespaceIdent:
+		return TypeRef{PkgRef:t.Namespace, Name:t.ID}, nil
+	default:
+		return nil, fmt.Errorf("%v is %T, not something that satisfies TypeRef", t, t)
+	}
+}
+
+CompoundType <- `List` `(` t:Type `)` {
+	return makeCompoundTypeRef(ListKind, []TypeRef{t.(TypeRef)}), nil
+} / `Map` `(` k:Type `,` _ v:Type `)` {
+	return makeCompoundTypeRef(MapKind, []TypeRef{k.(TypeRef), v.(TypeRef)}), nil
+} / `Set` `(` t:Type `)` {
+	return makeCompoundTypeRef(SetKind, []TypeRef{t.(TypeRef)}), nil
+} / `Ref` `(` t:Type `)` {
+	return makeCompoundTypeRef(RefKind, []TypeRef{t.(TypeRef)}), nil
+}
+
+PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value`) {
+	return makePrimitiveTypeRef(string(p.([]uint8))), nil
+}
+
+QuotedString <- `"` n:String `"` {
+	return n.(string), nil
+}
+
+String <- (StringPiece `\"` StringPiece `\"` StringPiece / StringPiece) {
+	return string(c.text), nil
+}
+
+StringPiece <- (`\` !`"` / [^"\\])*
+
+NamespaceIdent <- n:(Ident '.')* id:Ident {
+	nn := n.([]interface{})
+	ns := make([]string, len(nn))
+	for i, e := range nn {
+		ns[i] = e.([]interface{})[0].(string)
+	}
+	return namespaceIdent{strings.Join(ns, "."), id.(string)}, nil
+}
+
+Ident <- [\pL_] [\pL\pN_]* {
+	return string(c.text), nil
+}
+
+_ "optional whitespace" <- [\r\n\t\pZ]* {
+	return nil, nil
+}
+
+EOF <- _ !.
