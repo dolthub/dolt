@@ -38,7 +38,7 @@ Package <- _ dd:Definition+ _ EOF {
 				usings = append(usings, d)
 			case EnumKind, StructKind:
 				if _, present := named[d.Name]; present {
-					return nil, fmt.Errorf("Redefinition of enum " + d.Name)
+					return nil, fmt.Errorf("Redefinition of " + d.Name)
 				}
 				named[d.Name] = d
 			}
