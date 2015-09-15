@@ -143,7 +143,7 @@ func getAlbum(id string) Album {
 	})
 	d.Chk.NoError(err)
 
-	fmt.Printf("\nPhotoset: %v\n", response.Photoset.Title)
+	fmt.Printf("Photoset: %v\n", response.Photoset.Title.Content)
 
 	photos := getAlbumPhotos(id)
 	return NewAlbum().
@@ -177,16 +177,12 @@ func getAlbums() MapOfStringToAlbum {
 	}
 
 	albums := NewMapOfStringToAlbum()
-loop:
 	for {
-		select {
-		case a := <-out:
-			albums = albums.Set(a.Id(), a)
-		default:
-			if albums.Len() == uint64(len(response.Photosets.Photoset)) {
-				break loop
-			}
+		if albums.Len() == uint64(len(response.Photosets.Photoset)) {
+			break
 		}
+		a := <-out
+		albums = albums.Set(a.Id(), a)
 	}
 
 	return albums
