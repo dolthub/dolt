@@ -40,12 +40,6 @@ Package <- _ dd:Definition+ _ EOF {
 				if _, present := named[d.Name]; present {
 					return nil, fmt.Errorf("Redefinition of enum " + d.Name)
 				}
-				if d.Desc.Kind() == StructKind {
-					namedUnions := d.Desc.(StructDesc).GetNamedUnions()
-					for i, u := range namedUnions {
-						d.Desc.(StructDesc).Fields[i].T = makeStructTypeRef("", nil, u)
-					}
-				}
 				named[d.Name] = d
 			}
 		}
@@ -130,7 +124,7 @@ Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
 	case TypeRef:
 		return t, nil
 	case UnionDesc:
-		return TypeRef{Desc:t}, nil
+		return makeStructTypeRef("", nil, &t), nil
 	case namespaceIdent:
 		return TypeRef{PkgRef:t.Namespace, Name:t.ID}, nil
 	default:

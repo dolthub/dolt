@@ -126,31 +126,31 @@ func (suite *ParserTestSuite) TestEnum() {
 type ParsedResultTestSuite struct {
 	suite.Suite
 
-	primField               Field
-	compoundField           Field
-	compoundOfCompoundField Field
-	mapOfNamedTypeField     Field
-	namedTypeField          Field
-	namespacedTypeField     Field
+	primField               testField
+	compoundField           testField
+	compoundOfCompoundField testField
+	mapOfNamedTypeField     testField
+	namedTypeField          testField
+	namespacedTypeField     testField
 	union                   UnionDesc
 }
 
 func (suite *ParsedResultTestSuite) SetupTest() {
-	suite.primField = Field{"a", makePrimitiveTypeRef("Int64")}
-	suite.compoundField = Field{"set", makeCompoundTypeRef(SetKind, []TypeRef{makePrimitiveTypeRef("String")})}
-	suite.compoundOfCompoundField = Field{
+	suite.primField = testField{"a", makePrimitiveTypeRef("Int64")}
+	suite.compoundField = testField{"set", makeCompoundTypeRef(SetKind, []TypeRef{makePrimitiveTypeRef("String")})}
+	suite.compoundOfCompoundField = testField{
 		"listOfSet",
 		makeCompoundTypeRef(ListKind, []TypeRef{
 			makeCompoundTypeRef(SetKind, []TypeRef{makePrimitiveTypeRef("String")})})}
-	suite.mapOfNamedTypeField = Field{
+	suite.mapOfNamedTypeField = testField{
 		"mapOfStructToOther",
 		makeCompoundTypeRef(MapKind, []TypeRef{
 			makeTypeRef("", "Struct"),
 			makeTypeRef("Elsewhere", "Other"),
 		}),
 	}
-	suite.namedTypeField = Field{"otherStruct", makeTypeRef("", "Other")}
-	suite.namespacedTypeField = Field{"namespacedStruct", makeTypeRef("Elsewhere", "Other")}
+	suite.namedTypeField = testField{"otherStruct", makeTypeRef("", "Other")}
+	suite.namespacedTypeField = testField{"namespacedStruct", makeTypeRef("Elsewhere", "Other")}
 	suite.union = UnionDesc{[]Field{
 		Field{"a", makePrimitiveTypeRef("Int32")},
 		Field{"n", makeTypeRef("NN", "Other")},
@@ -158,70 +158,87 @@ func (suite *ParsedResultTestSuite) SetupTest() {
 	}}
 }
 
-func (suite *ParsedResultTestSuite) toText(s TypeRef) string {
-	suite.Equal(StructKind, s.Desc.Kind())
-	desc := s.Desc.(StructDesc)
-	return fmt.Sprintf(structTmpl, s.Name, desc.fieldsToString(), desc.unionToString())
+type structTestCase struct {
+	Name   string
+	Union  *UnionDesc
+	Fields []testField
 }
 
-func (s StructDesc) fieldsToString() (out string) {
+func makeStructTestCase(n string, u *UnionDesc, fields ...testField) structTestCase {
+	return structTestCase{n, u, fields}
+}
+
+func (s structTestCase) toText() string {
+	return fmt.Sprintf(structTmpl, s.Name, s.fieldsToString(), s.unionToString())
+}
+
+func (s structTestCase) fieldsToString() (out string) {
 	for _, f := range s.Fields {
-		out += f.Name + " :" + f.T.describe() + "\n"
+		out += f.Name + " :" + f.D.describe() + "\n"
 	}
 	return
 }
 
-func (s StructDesc) unionToString() string {
+func (s structTestCase) unionToString() string {
 	if s.Union == nil {
 		return ""
 	}
 	return s.Union.describe()
 }
 
-func (suite *ParsedResultTestSuite) checkStruct(pkg Package, str TypeRef) {
-	suite.Equal(StructKind, str.Desc.Kind())
-	strFields := str.Desc.(StructDesc).Fields
-	strUnion := str.Desc.(StructDesc).Union
+type testField struct {
+	Name string
+	D    describable
+}
 
-	typ := pkg.NamedTypes[str.Name]
+func (t testField) toField() Field {
+	return Field{t.Name, t.D.(TypeRef)}
+}
+
+type describable interface {
+	describe() string
+}
+
+func (suite *ParsedResultTestSuite) checkStruct(pkg Package, s structTestCase) {
+	typ := pkg.NamedTypes[s.Name]
 	typFields := typ.Desc.(StructDesc).Fields
 	typUnion := typ.Desc.(StructDesc).Union
 
-	suite.Equal(str.Name, typ.Name)
-	suite.Len(typFields, len(strFields))
-	for i, f := range strFields {
+	suite.Equal(s.Name, typ.Name)
+	suite.Len(typFields, len(s.Fields))
+	for i, f := range s.Fields {
 		// Named unions are syntactic sugar for a struct Field that points to an anonymous struct containing an anonymous union.
-		// So, if the field in the input was of UnionKind...
-		if f.T.Desc != nil && f.T.Desc.Kind() == UnionKind {
+		// So, if the field in the test input was a union...
+		if desc, ok := f.D.(*UnionDesc); ok {
 			// ...make sure the names are the same...
 			suite.Equal(f.Name, typFields[i].Name)
 			if tfd, ok := typFields[i].T.Desc.(StructDesc); ok {
 				// ...and that the IR has a TypeRef of StructKind with no fields, but an anonymous union.
 				suite.Len(tfd.Fields, 0)
 				suite.NotNil(tfd.Union)
-				suite.EqualValues(f.T.Desc, tfd.Union)
+				suite.EqualValues(desc, tfd.Union)
 			} else {
 				suite.Fail("Named unions must be parsed as anonymous structs containing an anonymous union.", "%#v", typFields[i])
 			}
 		} else {
-			suite.EqualValues(f, typFields[i])
+			suite.EqualValues(s.Fields[i].toField(), typFields[i])
 		}
 	}
-	if strUnion != nil && suite.NotNil(typUnion) {
-		suite.Len(typUnion.Choices, len(strUnion.Choices))
-		for i := range strUnion.Choices {
-			suite.EqualValues(strUnion.Choices[i], typUnion.Choices[i])
+	if s.Union != nil && suite.NotNil(typUnion) {
+		suite.Len(typUnion.Choices, len(s.Union.Choices))
+		for i := range s.Union.Choices {
+			suite.EqualValues(s.Union.Choices[i], typUnion.Choices[i])
 		}
 	} else {
-		suite.EqualValues(strUnion, typUnion, "If strUnion is nil, so should typUnion be.")
+		suite.EqualValues(s.Union, typUnion, "If s.Union is nil, so should typUnion be.")
 	}
 
 }
 
-func (suite *ParsedResultTestSuite) parseAndCheckStructs(structs ...TypeRef) {
+func (suite *ParsedResultTestSuite) parseAndCheckStructs(structs ...structTestCase) {
 	pkgDef := ""
 	for _, s := range structs {
-		pkgDef += suite.toText(s) + "\n"
+		pkgDef += s.toText() + "\n"
 	}
 	err := d.Try(func() {
 		pkg := ParsePackage("", strings.NewReader(pkgDef))
@@ -233,89 +250,89 @@ func (suite *ParsedResultTestSuite) parseAndCheckStructs(structs ...TypeRef) {
 }
 
 func (suite *ParsedResultTestSuite) TestPrimitiveField() {
-	suite.parseAndCheckStructs(makeStructTypeRef("Simple", []Field{suite.primField}, nil))
+	suite.parseAndCheckStructs(makeStructTestCase("Simple", nil, suite.primField))
 }
 
 func (suite *ParsedResultTestSuite) TestAnonUnion() {
-	suite.parseAndCheckStructs(makeStructTypeRef("WithAnon", []Field{suite.primField}, &suite.union))
+	suite.parseAndCheckStructs(makeStructTestCase("WithAnon", &suite.union, suite.primField))
 }
 
 func (suite *ParsedResultTestSuite) TestAnonUnionFirst() {
-	anonUnionFirstRef := makeStructTypeRef("WithAnonFirst", []Field{suite.primField}, &suite.union)
+	anonUnionFirst := makeStructTestCase("WithAnonFirst", &suite.union, suite.primField)
 
-	pkgDef := fmt.Sprintf(structTmpl, anonUnionFirstRef.Name, anonUnionFirstRef.Desc.(StructDesc).unionToString(), anonUnionFirstRef.Desc.(StructDesc).fieldsToString())
+	pkgDef := fmt.Sprintf(structTmpl, anonUnionFirst.Name, anonUnionFirst.unionToString(), anonUnionFirst.fieldsToString())
 	err := d.Try(func() {
 		pkg := ParsePackage("", strings.NewReader(pkgDef))
-		suite.checkStruct(pkg, anonUnionFirstRef)
+		suite.checkStruct(pkg, anonUnionFirst)
 	})
 	suite.NoError(err, pkgDef)
 }
 
 func (suite *ParsedResultTestSuite) TestCompoundField() {
-	suite.parseAndCheckStructs(makeStructTypeRef("Compound", []Field{suite.compoundField}, &suite.union))
+	suite.parseAndCheckStructs(makeStructTestCase("Compound", &suite.union, suite.compoundField))
 }
 
 func (suite *ParsedResultTestSuite) TestCompoundOfCompoundField() {
-	suite.parseAndCheckStructs(makeStructTypeRef("CofC", []Field{suite.compoundOfCompoundField}, &suite.union))
+	suite.parseAndCheckStructs(makeStructTestCase("CofC", &suite.union, suite.compoundOfCompoundField))
 }
 
 func (suite *ParsedResultTestSuite) TestNamedTypeField() {
-	suite.parseAndCheckStructs(makeStructTypeRef("Named", []Field{suite.namedTypeField}, &suite.union))
+	suite.parseAndCheckStructs(makeStructTestCase("Named", &suite.union, suite.namedTypeField))
 }
 
 func (suite *ParsedResultTestSuite) TestNamespacedTypeField() {
-	suite.parseAndCheckStructs(makeStructTypeRef("Namespaced", []Field{suite.namespacedTypeField}, &suite.union))
+	suite.parseAndCheckStructs(makeStructTestCase("Namespaced", &suite.union, suite.namespacedTypeField))
 }
 
 func (suite *ParsedResultTestSuite) TestMapOfNamedTypeField() {
-	suite.parseAndCheckStructs(makeStructTypeRef("MapStruct", []Field{suite.mapOfNamedTypeField}, &suite.union))
+	suite.parseAndCheckStructs(makeStructTestCase("MapStruct", &suite.union, suite.mapOfNamedTypeField))
 }
 
 func (suite *ParsedResultTestSuite) TestMultipleFields() {
-	suite.parseAndCheckStructs(makeStructTypeRef("Multi", []Field{
-		Field{suite.primField.Name, suite.primField.T},
-		Field{suite.namedTypeField.Name, suite.namedTypeField.T},
-		Field{suite.namespacedTypeField.Name, suite.namespacedTypeField.T},
-		Field{suite.compoundField.Name, suite.compoundField.T},
-		Field{suite.compoundOfCompoundField.Name, suite.compoundOfCompoundField.T},
-		Field{"namedUnion", TypeRef{Desc: &suite.union}},
-	}, &suite.union))
+	suite.parseAndCheckStructs(makeStructTestCase("Multi", &suite.union,
+		suite.primField,
+		suite.namedTypeField,
+		suite.namespacedTypeField,
+		suite.compoundField,
+		suite.compoundOfCompoundField,
+		testField{"namedUnion", &suite.union},
+	))
 }
 
 func (suite *ParsedResultTestSuite) TestNamedAndAnonUnion() {
-	suite.parseAndCheckStructs(makeStructTypeRef("NamedAndAnon", []Field{
-		Field{"namedUnion", TypeRef{Desc: &suite.union}},
-	}, &suite.union))
+	suite.parseAndCheckStructs(makeStructTestCase("NamedAndAnon", &suite.union,
+		testField{"namedUnion", &suite.union},
+	))
 }
 
 func (suite *ParsedResultTestSuite) TestNamedUnionOnly() {
-	suite.parseAndCheckStructs(makeStructTypeRef("NamedUnionOnly", []Field{
-		Field{"namedUnion", TypeRef{Desc: &suite.union}},
-	}, nil))
+	suite.parseAndCheckStructs(makeStructTestCase("NamedUnionOnly", nil,
+		testField{"namedUnion", &suite.union},
+	))
 }
 
 func (suite *ParsedResultTestSuite) TestTwoNamedAndAnonUnion() {
-	suite.parseAndCheckStructs(makeStructTypeRef("TwoNamedAndAnon", []Field{
-		Field{"namedUnion1", TypeRef{Desc: &suite.union}},
-		Field{"namedUnion2", TypeRef{Desc: &suite.union}},
-	}, &suite.union))
+	suite.parseAndCheckStructs(makeStructTestCase("TwoNamedAndAnon", &suite.union,
+		testField{"namedUnion1", &suite.union},
+		testField{"namedUnion2", &suite.union},
+	))
 }
 
 func (suite *ParsedResultTestSuite) TestMultipleStructs() {
-	defns := []TypeRef{
-		makeStructTypeRef("Simple", []Field{suite.primField}, nil),
-		makeStructTypeRef("Compound", []Field{suite.compoundField}, nil),
-		makeStructTypeRef("CompoundWithUnion", []Field{suite.compoundField}, &suite.union),
-		makeStructTypeRef("TwoNamedAndAnon", []Field{
-			Field{"namedUnion1", TypeRef{Desc: &suite.union}},
-			Field{"namedUnion2", TypeRef{Desc: &suite.union}},
-		}, &suite.union),
-		makeStructTypeRef("Multi", []Field{
-			Field{suite.primField.Name, suite.primField.T},
-			Field{suite.namespacedTypeField.Name, suite.namespacedTypeField.T},
-			Field{suite.compoundField.Name, suite.compoundField.T},
-			Field{"namedUnion", TypeRef{Desc: &suite.union}},
-		}, &suite.union),
+	defns := []structTestCase{
+		makeStructTestCase("Simple", nil, suite.primField),
+		makeStructTestCase("Compound", nil, suite.compoundField),
+		makeStructTestCase("CompoundWithUnion", &suite.union, suite.compoundField),
+		makeStructTestCase("TwoNamedAndAnon", &suite.union,
+			testField{"namedUnion1", &suite.union},
+			testField{"namedUnion2", &suite.union},
+		),
+		makeStructTestCase("Multi", &suite.union,
+			suite.primField,
+			suite.namespacedTypeField,
+			suite.compoundField,
+			testField{"namedUnion", &suite.union},
+		),
 	}
 	suite.parseAndCheckStructs(defns...)
 }

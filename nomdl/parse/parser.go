@@ -100,7 +100,6 @@ const (
 	MapKind
 	RefKind
 	SetKind
-	UnionKind
 	EnumKind
 	StructKind
 )
@@ -236,32 +235,13 @@ func (e EnumDesc) describe() string {
 	return "enum: { " + strings.Join(e.IDs, "\n") + "}\n"
 }
 
-func makeUnionTypeRef(c []Field) TypeRef {
-	return TypeRef{Desc: UnionDesc{c}}
-}
-
 // UnionDesc represents each choice as a Field, akin to a StructDesc.
+// NB: UnionDesc DOES NOT SATISFY TypeDesc, as Union is not a first-class Noms Type.
 type UnionDesc struct {
 	Choices []Field
 }
 
-func (u UnionDesc) Kind() NomsKind {
-	return UnionKind
-}
-
-func (u UnionDesc) Equals(other TypeDesc) bool {
-	if u.Kind() != other.Kind() || len(u.Choices) != len(other.(UnionDesc).Choices) {
-		return false
-	}
-	for i, c := range other.(UnionDesc).Choices {
-		if !u.Choices[i].Equals(c) {
-			return false
-		}
-	}
-	return true
-}
-
-func (u UnionDesc) describe() (out string) {
+func (u *UnionDesc) describe() (out string) {
 	out = "union {\n"
 	for _, c := range u.Choices {
 		out += fmt.Sprintf("  %s :%s\n", c.Name, c.T.describe())
@@ -307,21 +287,9 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 	return true
 }
 
-// GetNamedUnions returns a map of field index to TypeDesc for all named union fields in s.
-func (s StructDesc) GetNamedUnions() map[int]*UnionDesc {
-	structs := map[int]*UnionDesc{}
-	for i, f := range s.Fields {
-		if u, ok := f.T.Desc.(UnionDesc); ok {
-			structs[i] = &u
-		}
-	}
-	return structs
-}
-
 func (s StructDesc) describe() (out string) {
-	out = ""
-	if len(s.Union.Choices) != 0 {
-		out += fmt.Sprintf("  anon %s\n", s.Union.describe())
+	if s.Union != nil {
+		out += s.Union.describe()
 	}
 	for _, f := range s.Fields {
 		out += fmt.Sprintf("  %s: %s\n", f.Name, f.T.describe())
