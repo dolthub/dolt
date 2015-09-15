@@ -64,9 +64,10 @@ func main() {
 
 	getUser()
 	if *albumIdFlag != "" {
-		getAlbum(*albumIdFlag)
+		album := getAlbum(*albumIdFlag)
+		user = user.SetAlbums(user.Albums().Set(album.Id(), album))
 	} else {
-		getAlbums()
+		user = user.SetAlbums(getAlbums())
 	}
 	commitUser()
 }
@@ -125,7 +126,7 @@ func authUser() {
 	}
 }
 
-func getAlbum(id string) {
+func getAlbum(id string) Album {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -144,24 +145,14 @@ func getAlbum(id string) {
 
 	fmt.Printf("\nPhotoset: %v\n", response.Photoset.Title)
 
-	// TODO: Retrieving a field which hasn't been set will crash, so we have to reach inside and test the untyped
-	var albums MapOfStringToAlbum
-	if !user.NomsValue().Has(types.NewString("albums")) {
-		albums = NewMapOfStringToAlbum()
-	} else {
-		albums = user.Albums()
-	}
-
 	photos := getAlbumPhotos(id)
-	album := NewAlbum().
+	return NewAlbum().
 		SetId(types.NewString(id)).
 		SetTitle(types.NewString(response.Photoset.Title.Content)).
 		SetPhotos(photos)
-	albums = albums.Set(types.NewString(id), album)
-	user = user.SetAlbums(albums)
 }
 
-func getAlbums() {
+func getAlbums() MapOfStringToAlbum {
 	response := struct {
 		flickrCall
 		Photosets struct {
@@ -177,9 +168,28 @@ func getAlbums() {
 	err := callFlickrAPI("flickr.photosets.getList", &response, nil)
 	d.Chk.NoError(err)
 
+	out := make(chan Album, len(response.Photosets.Photoset))
 	for _, p := range response.Photosets.Photoset {
-		getAlbum(p.Id)
+		p := p
+		go func() {
+			out <- getAlbum(p.Id)
+		}()
 	}
+
+	albums := NewMapOfStringToAlbum()
+loop:
+	for {
+		select {
+		case a := <-out:
+			albums = albums.Set(a.Id(), a)
+		default:
+			if albums.Len() == uint64(len(response.Photosets.Photoset)) {
+				break loop
+			}
+		}
+	}
+
+	return albums
 }
 
 func getAlbumPhotos(id string) SetOfRemotePhoto {
