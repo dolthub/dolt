@@ -124,7 +124,7 @@ Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
 	case TypeRef:
 		return t, nil
 	case UnionDesc:
-		return TypeRef{Desc:t}, nil
+		return makeStructTypeRef("", nil, &t), nil
 	case namespaceIdent:
 		return TypeRef{PkgRef:t.Namespace, Name:t.ID}, nil
 	default:
@@ -132,13 +132,13 @@ Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
 	}
 }
 
-CompoundType <- `List` `(` t:Type `)` {
+CompoundType <- `List` _ `(` _ t:Type _ `)` _ {
 	return makeCompoundTypeRef(ListKind, []TypeRef{t.(TypeRef)}), nil
-} / `Map` `(` k:Type `,` _ v:Type `)` {
+} / `Map` _ `(` _ k:Type _ `,` _ v:Type _ `)` _ {
 	return makeCompoundTypeRef(MapKind, []TypeRef{k.(TypeRef), v.(TypeRef)}), nil
-} / `Set` `(` t:Type `)` {
+} / `Set` _ `(` _ t:Type _ `)` _ {
 	return makeCompoundTypeRef(SetKind, []TypeRef{t.(TypeRef)}), nil
-} / `Ref` `(` t:Type `)` {
+} / `Ref` _ `(` _ t:Type _ `)` _ {
 	return makeCompoundTypeRef(RefKind, []TypeRef{t.(TypeRef)}), nil
 }
 

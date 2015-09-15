@@ -49,15 +49,25 @@ func (t TypeRef) Equals(other TypeRef) bool {
 
 // The describe() methods generate text that should parse into the struct being described.
 // TODO: Figure out a way that they can exist only in the test file.
-func (t TypeRef) describe() string {
-	seg := []string{}
+func (t TypeRef) describe() (out string) {
 	if t.Name != "" {
-		seg = append(seg, t.Name)
+		out += namespaceName(t.PkgRef, t.Name) + "\n"
 	}
 	if t.Desc != nil {
-		seg = append(seg, t.Desc.describe())
+		out += t.Desc.describe() + "\n"
 	}
-	return strings.Join(seg, "\n")
+	return
+}
+
+func namespaceName(pkgRef, name string) (out string) {
+	d.Chk.True(pkgRef == "" || (pkgRef != "" && name != ""), "If a TypeRef's PkgRef is set, so must Name be.")
+	if pkgRef != "" {
+		out = pkgRef + "."
+	}
+	if name != "" {
+		out += name
+	}
+	return
 }
 
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Int32, or a custom type.
@@ -90,7 +100,6 @@ const (
 	MapKind
 	RefKind
 	SetKind
-	UnionKind
 	EnumKind
 	StructKind
 )
@@ -180,11 +189,7 @@ func (c CompoundDesc) describe() string {
 	descElems := func() string {
 		out := make([]string, len(c.ElemTypes))
 		for i, e := range c.ElemTypes {
-			if e.Name != "" {
-				out[i] = e.Name
-			} else {
-				out[i] = e.Desc.describe()
-			}
+			out[i] = e.describe()
 		}
 		return strings.Join(out, ", ")
 	}
@@ -230,32 +235,13 @@ func (e EnumDesc) describe() string {
 	return "enum: { " + strings.Join(e.IDs, "\n") + "}\n"
 }
 
-func makeUnionTypeRef(c []Field) TypeRef {
-	return TypeRef{Desc: UnionDesc{c}}
-}
-
 // UnionDesc represents each choice as a Field, akin to a StructDesc.
+// NB: UnionDesc DOES NOT SATISFY TypeDesc, as Union is not a first-class Noms Type.
 type UnionDesc struct {
 	Choices []Field
 }
 
-func (u UnionDesc) Kind() NomsKind {
-	return UnionKind
-}
-
-func (u UnionDesc) Equals(other TypeDesc) bool {
-	if u.Kind() != other.Kind() || len(u.Choices) != len(other.(UnionDesc).Choices) {
-		return false
-	}
-	for i, c := range other.(UnionDesc).Choices {
-		if !u.Choices[i].Equals(c) {
-			return false
-		}
-	}
-	return true
-}
-
-func (u UnionDesc) describe() (out string) {
+func (u *UnionDesc) describe() (out string) {
 	out = "union {\n"
 	for _, c := range u.Choices {
 		out += fmt.Sprintf("  %s :%s\n", c.Name, c.T.describe())
@@ -302,9 +288,8 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 }
 
 func (s StructDesc) describe() (out string) {
-	out = ""
-	if len(s.Union.Choices) != 0 {
-		out += fmt.Sprintf("  anon %s\n", s.Union.describe())
+	if s.Union != nil {
+		out += s.Union.describe()
 	}
 	for _, f := range s.Fields {
 		out += fmt.Sprintf("  %s: %s\n", f.Name, f.T.describe())
