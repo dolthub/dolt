@@ -8,66 +8,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-// MapOfStringToAlbum
-
-type MapOfStringToAlbum struct {
-	m types.Map
-}
-
-type MapOfStringToAlbumIterCallback (func(k types.String, v Album) (stop bool))
-
-func NewMapOfStringToAlbum() MapOfStringToAlbum {
-	return MapOfStringToAlbum{types.NewMap()}
-}
-
-func MapOfStringToAlbumFromVal(p types.Value) MapOfStringToAlbum {
-	return MapOfStringToAlbum{p.(types.Map)}
-}
-
-func (m MapOfStringToAlbum) NomsValue() types.Map {
-	return m.m
-}
-
-func (m MapOfStringToAlbum) Equals(p MapOfStringToAlbum) bool {
-	return m.m.Equals(p.m)
-}
-
-func (m MapOfStringToAlbum) Ref() ref.Ref {
-	return m.m.Ref()
-}
-
-func (m MapOfStringToAlbum) Empty() bool {
-	return m.m.Empty()
-}
-
-func (m MapOfStringToAlbum) Len() uint64 {
-	return m.m.Len()
-}
-
-func (m MapOfStringToAlbum) Has(p types.String) bool {
-	return m.m.Has(p)
-}
-
-func (m MapOfStringToAlbum) Get(p types.String) Album {
-	return AlbumFromVal(m.m.Get(p))
-}
-
-func (m MapOfStringToAlbum) Set(k types.String, v Album) MapOfStringToAlbum {
-	return MapOfStringToAlbumFromVal(m.m.Set(k, v.NomsValue()))
-}
-
-// TODO: Implement SetM?
-
-func (m MapOfStringToAlbum) Remove(p types.String) MapOfStringToAlbum {
-	return MapOfStringToAlbumFromVal(m.m.Remove(p))
-}
-
-func (m MapOfStringToAlbum) Iter(cb MapOfStringToAlbumIterCallback) {
-	m.m.Iter(func(k, v types.Value) bool {
-		return cb(types.StringFromVal(k), AlbumFromVal(v))
-	})
-}
-
 // User
 
 type User struct {
@@ -182,81 +122,81 @@ func (s Album) SetId(p types.String) Album {
 	return AlbumFromVal(s.m.Set(types.NewString("id"), p))
 }
 
-func (s Album) Photos() SetOfPhoto {
-	return SetOfPhotoFromVal(s.m.Get(types.NewString("photos")))
+func (s Album) Photos() SetOfRemotePhoto {
+	return SetOfRemotePhotoFromVal(s.m.Get(types.NewString("photos")))
 }
 
-func (s Album) SetPhotos(p SetOfPhoto) Album {
+func (s Album) SetPhotos(p SetOfRemotePhoto) Album {
 	return AlbumFromVal(s.m.Set(types.NewString("photos"), p.NomsValue()))
 }
 
-// SetOfPhoto
+// SetOfRemotePhoto
 
-type SetOfPhoto struct {
+type SetOfRemotePhoto struct {
 	s types.Set
 }
 
-type SetOfPhotoIterCallback (func(p Photo) (stop bool))
+type SetOfRemotePhotoIterCallback (func(p RemotePhoto) (stop bool))
 
-func NewSetOfPhoto() SetOfPhoto {
-	return SetOfPhoto{types.NewSet()}
+func NewSetOfRemotePhoto() SetOfRemotePhoto {
+	return SetOfRemotePhoto{types.NewSet()}
 }
 
-func SetOfPhotoFromVal(p types.Value) SetOfPhoto {
-	return SetOfPhoto{p.(types.Set)}
+func SetOfRemotePhotoFromVal(p types.Value) SetOfRemotePhoto {
+	return SetOfRemotePhoto{p.(types.Set)}
 }
 
-func (s SetOfPhoto) NomsValue() types.Set {
+func (s SetOfRemotePhoto) NomsValue() types.Set {
 	return s.s
 }
 
-func (s SetOfPhoto) Equals(p SetOfPhoto) bool {
+func (s SetOfRemotePhoto) Equals(p SetOfRemotePhoto) bool {
 	return s.s.Equals(p.s)
 }
 
-func (s SetOfPhoto) Ref() ref.Ref {
+func (s SetOfRemotePhoto) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s SetOfPhoto) Empty() bool {
+func (s SetOfRemotePhoto) Empty() bool {
 	return s.s.Empty()
 }
 
-func (s SetOfPhoto) Len() uint64 {
+func (s SetOfRemotePhoto) Len() uint64 {
 	return s.s.Len()
 }
 
-func (s SetOfPhoto) Has(p Photo) bool {
+func (s SetOfRemotePhoto) Has(p RemotePhoto) bool {
 	return s.s.Has(p.NomsValue())
 }
 
-func (s SetOfPhoto) Iter(cb SetOfPhotoIterCallback) {
+func (s SetOfRemotePhoto) Iter(cb SetOfRemotePhotoIterCallback) {
 	s.s.Iter(func(v types.Value) bool {
-		return cb(PhotoFromVal(v))
+		return cb(RemotePhotoFromVal(v))
 	})
 }
 
-func (s SetOfPhoto) Insert(p ...Photo) SetOfPhoto {
-	return SetOfPhoto{s.s.Insert(s.fromElemSlice(p)...)}
+func (s SetOfRemotePhoto) Insert(p ...RemotePhoto) SetOfRemotePhoto {
+	return SetOfRemotePhoto{s.s.Insert(s.fromElemSlice(p)...)}
 }
 
-func (s SetOfPhoto) Remove(p ...Photo) SetOfPhoto {
-	return SetOfPhoto{s.s.Remove(s.fromElemSlice(p)...)}
+func (s SetOfRemotePhoto) Remove(p ...RemotePhoto) SetOfRemotePhoto {
+	return SetOfRemotePhoto{s.s.Remove(s.fromElemSlice(p)...)}
 }
 
-func (s SetOfPhoto) Union(others ...SetOfPhoto) SetOfPhoto {
-	return SetOfPhoto{s.s.Union(s.fromStructSlice(others)...)}
+func (s SetOfRemotePhoto) Union(others ...SetOfRemotePhoto) SetOfRemotePhoto {
+	return SetOfRemotePhoto{s.s.Union(s.fromStructSlice(others)...)}
 }
 
-func (s SetOfPhoto) Subtract(others ...SetOfPhoto) SetOfPhoto {
-	return SetOfPhoto{s.s.Subtract(s.fromStructSlice(others)...)}
+func (s SetOfRemotePhoto) Subtract(others ...SetOfRemotePhoto) SetOfRemotePhoto {
+	return SetOfRemotePhoto{s.s.Subtract(s.fromStructSlice(others)...)}
 }
 
-func (s SetOfPhoto) Any() Photo {
-	return PhotoFromVal(s.s.Any())
+func (s SetOfRemotePhoto) Any() RemotePhoto {
+	return RemotePhotoFromVal(s.s.Any())
 }
 
-func (s SetOfPhoto) fromStructSlice(p []SetOfPhoto) []types.Set {
+func (s SetOfRemotePhoto) fromStructSlice(p []SetOfRemotePhoto) []types.Set {
 	r := make([]types.Set, len(p))
 	for i, v := range p {
 		r[i] = v.s
@@ -264,7 +204,7 @@ func (s SetOfPhoto) fromStructSlice(p []SetOfPhoto) []types.Set {
 	return r
 }
 
-func (s SetOfPhoto) fromElemSlice(p []Photo) []types.Value {
+func (s SetOfRemotePhoto) fromElemSlice(p []RemotePhoto) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
 		r[i] = v.NomsValue()
@@ -272,89 +212,133 @@ func (s SetOfPhoto) fromElemSlice(p []Photo) []types.Value {
 	return r
 }
 
-// Photo
+// MapOfStringToAlbum
 
-type Photo struct {
+type MapOfStringToAlbum struct {
 	m types.Map
 }
 
-func NewPhoto() Photo {
-	return Photo{
-		types.NewMap(types.NewString("$name"), types.NewString("Photo")),
+type MapOfStringToAlbumIterCallback (func(k types.String, v Album) (stop bool))
+
+func NewMapOfStringToAlbum() MapOfStringToAlbum {
+	return MapOfStringToAlbum{types.NewMap()}
+}
+
+func MapOfStringToAlbumFromVal(p types.Value) MapOfStringToAlbum {
+	return MapOfStringToAlbum{p.(types.Map)}
+}
+
+func (m MapOfStringToAlbum) NomsValue() types.Map {
+	return m.m
+}
+
+func (m MapOfStringToAlbum) Equals(p MapOfStringToAlbum) bool {
+	return m.m.Equals(p.m)
+}
+
+func (m MapOfStringToAlbum) Ref() ref.Ref {
+	return m.m.Ref()
+}
+
+func (m MapOfStringToAlbum) Empty() bool {
+	return m.m.Empty()
+}
+
+func (m MapOfStringToAlbum) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m MapOfStringToAlbum) Has(p types.String) bool {
+	return m.m.Has(p)
+}
+
+func (m MapOfStringToAlbum) Get(p types.String) Album {
+	return AlbumFromVal(m.m.Get(p))
+}
+
+func (m MapOfStringToAlbum) Set(k types.String, v Album) MapOfStringToAlbum {
+	return MapOfStringToAlbumFromVal(m.m.Set(k, v.NomsValue()))
+}
+
+// TODO: Implement SetM?
+
+func (m MapOfStringToAlbum) Remove(p types.String) MapOfStringToAlbum {
+	return MapOfStringToAlbumFromVal(m.m.Remove(p))
+}
+
+func (m MapOfStringToAlbum) Iter(cb MapOfStringToAlbumIterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(types.StringFromVal(k), AlbumFromVal(v))
+	})
+}
+
+// RemotePhoto
+
+type RemotePhoto struct {
+	m types.Map
+}
+
+func NewRemotePhoto() RemotePhoto {
+	return RemotePhoto{
+		types.NewMap(types.NewString("$name"), types.NewString("RemotePhoto")),
 	}
 }
 
-func PhotoFromVal(v types.Value) Photo {
-	return Photo{v.(types.Map)}
+func RemotePhotoFromVal(v types.Value) RemotePhoto {
+	return RemotePhoto{v.(types.Map)}
 }
 
 // TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
-func (s Photo) NomsValue() types.Map {
+func (s RemotePhoto) NomsValue() types.Map {
 	return s.m
 }
 
-func (s Photo) Equals(p Photo) bool {
+func (s RemotePhoto) Equals(p RemotePhoto) bool {
 	return s.m.Equals(p.m)
 }
 
-func (s Photo) Ref() ref.Ref {
+func (s RemotePhoto) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Photo) Width() types.UInt32 {
-	return types.UInt32FromVal(s.m.Get(types.NewString("width")))
+func (s RemotePhoto) Sizes() MapOfSizeToString {
+	return MapOfSizeToStringFromVal(s.m.Get(types.NewString("sizes")))
 }
 
-func (s Photo) SetWidth(p types.UInt32) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("width"), p))
+func (s RemotePhoto) SetSizes(p MapOfSizeToString) RemotePhoto {
+	return RemotePhotoFromVal(s.m.Set(types.NewString("sizes"), p.NomsValue()))
 }
 
-func (s Photo) Title() types.String {
+func (s RemotePhoto) Title() types.String {
 	return types.StringFromVal(s.m.Get(types.NewString("title")))
 }
 
-func (s Photo) SetTitle(p types.String) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("title"), p))
+func (s RemotePhoto) SetTitle(p types.String) RemotePhoto {
+	return RemotePhotoFromVal(s.m.Set(types.NewString("title"), p))
 }
 
-func (s Photo) Id() types.String {
+func (s RemotePhoto) Id() types.String {
 	return types.StringFromVal(s.m.Get(types.NewString("id")))
 }
 
-func (s Photo) SetId(p types.String) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("id"), p))
+func (s RemotePhoto) SetId(p types.String) RemotePhoto {
+	return RemotePhotoFromVal(s.m.Set(types.NewString("id"), p))
 }
 
-func (s Photo) Tags() SetOfString {
+func (s RemotePhoto) Tags() SetOfString {
 	return SetOfStringFromVal(s.m.Get(types.NewString("tags")))
 }
 
-func (s Photo) SetTags(p SetOfString) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("tags"), p.NomsValue()))
+func (s RemotePhoto) SetTags(p SetOfString) RemotePhoto {
+	return RemotePhotoFromVal(s.m.Set(types.NewString("tags"), p.NomsValue()))
 }
 
-func (s Photo) Height() types.UInt32 {
-	return types.UInt32FromVal(s.m.Get(types.NewString("height")))
-}
-
-func (s Photo) SetHeight(p types.UInt32) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("height"), p))
-}
-
-func (s Photo) Image() types.Blob {
-	return types.BlobFromVal(s.m.Get(types.NewString("image")))
-}
-
-func (s Photo) SetImage(p types.Blob) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("image"), p))
-}
-
-func (s Photo) Url() types.String {
+func (s RemotePhoto) Url() types.String {
 	return types.StringFromVal(s.m.Get(types.NewString("url")))
 }
 
-func (s Photo) SetUrl(p types.String) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("url"), p))
+func (s RemotePhoto) SetUrl(p types.String) RemotePhoto {
+	return RemotePhotoFromVal(s.m.Set(types.NewString("url"), p))
 }
 
 // SetOfString
@@ -437,5 +421,110 @@ func (s SetOfString) fromElemSlice(p []types.String) []types.Value {
 		r[i] = v
 	}
 	return r
+}
+
+// MapOfSizeToString
+
+type MapOfSizeToString struct {
+	m types.Map
+}
+
+type MapOfSizeToStringIterCallback (func(k Size, v types.String) (stop bool))
+
+func NewMapOfSizeToString() MapOfSizeToString {
+	return MapOfSizeToString{types.NewMap()}
+}
+
+func MapOfSizeToStringFromVal(p types.Value) MapOfSizeToString {
+	return MapOfSizeToString{p.(types.Map)}
+}
+
+func (m MapOfSizeToString) NomsValue() types.Map {
+	return m.m
+}
+
+func (m MapOfSizeToString) Equals(p MapOfSizeToString) bool {
+	return m.m.Equals(p.m)
+}
+
+func (m MapOfSizeToString) Ref() ref.Ref {
+	return m.m.Ref()
+}
+
+func (m MapOfSizeToString) Empty() bool {
+	return m.m.Empty()
+}
+
+func (m MapOfSizeToString) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m MapOfSizeToString) Has(p Size) bool {
+	return m.m.Has(p.NomsValue())
+}
+
+func (m MapOfSizeToString) Get(p Size) types.String {
+	return types.StringFromVal(m.m.Get(p.NomsValue()))
+}
+
+func (m MapOfSizeToString) Set(k Size, v types.String) MapOfSizeToString {
+	return MapOfSizeToStringFromVal(m.m.Set(k.NomsValue(), v))
+}
+
+// TODO: Implement SetM?
+
+func (m MapOfSizeToString) Remove(p Size) MapOfSizeToString {
+	return MapOfSizeToStringFromVal(m.m.Remove(p.NomsValue()))
+}
+
+func (m MapOfSizeToString) Iter(cb MapOfSizeToStringIterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(SizeFromVal(k), types.StringFromVal(v))
+	})
+}
+
+// Size
+
+type Size struct {
+	m types.Map
+}
+
+func NewSize() Size {
+	return Size{
+		types.NewMap(types.NewString("$name"), types.NewString("Size")),
+	}
+}
+
+func SizeFromVal(v types.Value) Size {
+	return Size{v.(types.Map)}
+}
+
+// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
+func (s Size) NomsValue() types.Map {
+	return s.m
+}
+
+func (s Size) Equals(p Size) bool {
+	return s.m.Equals(p.m)
+}
+
+func (s Size) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s Size) Width() types.UInt32 {
+	return types.UInt32FromVal(s.m.Get(types.NewString("width")))
+}
+
+func (s Size) SetWidth(p types.UInt32) Size {
+	return SizeFromVal(s.m.Set(types.NewString("width"), p))
+}
+
+func (s Size) Height() types.UInt32 {
+	return types.UInt32FromVal(s.m.Get(types.NewString("height")))
+}
+
+func (s Size) SetHeight(p types.UInt32) Size {
+	return SizeFromVal(s.m.Set(types.NewString("height"), p))
 }
 

@@ -14,7 +14,7 @@ func main() {
 		types.NewString("$name"), types.NewString("Album"),
 		types.NewString("id"), types.NewString("string"),
 		types.NewString("title"), types.NewString("string"),
-		types.NewString("photos"), util.PhotoSetTypeDef))
+		types.NewString("photos"), util.RemotePhotoSetTypeDef))
 
 	albumMap := ng.AddType(types.NewMap(
 		types.NewString("$type"), types.NewString("noms.MapDef"),
