@@ -103,7 +103,7 @@ func (gen *codeGen) defType(t parse.TypeRef) string {
 	case parse.ListKind, parse.MapKind, parse.SetKind, parse.StructKind:
 		return gen.userName(t) + "Def"
 	case parse.RefKind:
-		panic("not yet implemented")
+		return "ref.Ref"
 	case parse.ValueKind:
 		return "types.Value"
 	}
@@ -118,10 +118,8 @@ func (gen *codeGen) userType(t parse.TypeRef) string {
 		return "types.Blob"
 	case parse.BoolKind, parse.Float32Kind, parse.Float64Kind, parse.Int16Kind, parse.Int32Kind, parse.Int64Kind, parse.Int8Kind, parse.StringKind, parse.UInt16Kind, parse.UInt32Kind, parse.UInt64Kind, parse.UInt8Kind:
 		return strings.ToLower(primitiveKindToString(k))
-	case parse.EnumKind, parse.ListKind, parse.MapKind, parse.SetKind, parse.StructKind:
+	case parse.EnumKind, parse.ListKind, parse.MapKind, parse.RefKind, parse.SetKind, parse.StructKind:
 		return gen.userName(t)
-	case parse.RefKind:
-		panic("not yet implemented")
 	case parse.ValueKind:
 		return "types.Value"
 	}
@@ -140,7 +138,7 @@ func (gen *codeGen) defToValue(val string, t parse.TypeRef) string {
 	case parse.ListKind, parse.MapKind, parse.SetKind, parse.StructKind:
 		return fmt.Sprintf("%s.New().NomsValue()", val)
 	case parse.RefKind:
-		panic("not yet implemented")
+		return fmt.Sprintf("types.Ref{R: %s}", val)
 	}
 	panic("unreachable")
 }
@@ -157,7 +155,7 @@ func (gen *codeGen) valueToDef(val string, t parse.TypeRef) string {
 	case parse.ListKind, parse.MapKind, parse.SetKind, parse.StructKind:
 		return fmt.Sprintf("%s.Def()", gen.valueToUser(val, t))
 	case parse.RefKind:
-		panic("not yet implemented")
+		return fmt.Sprintf("%s.Ref()", val)
 	case parse.ValueKind:
 		return val // Value type has no Def
 	}
@@ -234,10 +232,8 @@ func (gen *codeGen) userToValue(val string, t parse.TypeRef) string {
 		return val
 	case parse.BoolKind, parse.EnumKind, parse.Float32Kind, parse.Float64Kind, parse.Int16Kind, parse.Int32Kind, parse.Int64Kind, parse.Int8Kind, parse.StringKind, parse.UInt16Kind, parse.UInt32Kind, parse.UInt64Kind, parse.UInt8Kind:
 		return gen.nativeToValue(val, t)
-	case parse.ListKind, parse.MapKind, parse.SetKind, parse.StructKind:
+	case parse.ListKind, parse.MapKind, parse.RefKind, parse.SetKind, parse.StructKind:
 		return fmt.Sprintf("%s.NomsValue()", val)
-	case parse.RefKind:
-		panic("not yet implemented")
 	}
 	panic("unreachable")
 }
@@ -250,10 +246,8 @@ func (gen *codeGen) valueToUser(val string, t parse.TypeRef) string {
 		return fmt.Sprintf("%s.(types.Blob)", val)
 	case parse.BoolKind, parse.EnumKind, parse.Float32Kind, parse.Float64Kind, parse.Int16Kind, parse.Int32Kind, parse.Int64Kind, parse.Int8Kind, parse.StringKind, parse.UInt16Kind, parse.UInt32Kind, parse.UInt64Kind, parse.UInt8Kind:
 		return gen.valueToNative(val, t)
-	case parse.ListKind, parse.MapKind, parse.SetKind, parse.StructKind:
+	case parse.ListKind, parse.MapKind, parse.RefKind, parse.SetKind, parse.StructKind:
 		return fmt.Sprintf("%sFromVal(%s)", gen.userName(t), val)
-	case parse.RefKind:
-		panic("not yet implemented")
 	case parse.ValueKind:
 		return val
 	}
@@ -275,7 +269,7 @@ func (gen *codeGen) userZero(t parse.TypeRef) string {
 	case parse.ListKind, parse.MapKind, parse.SetKind:
 		return fmt.Sprintf("New%s()", gen.userType(t))
 	case parse.RefKind:
-		panic("not yet implemented")
+		return fmt.Sprintf("%s{ref.Ref{}}", gen.userType(t))
 	case parse.StringKind:
 		return `""`
 	case parse.ValueKind:
@@ -302,7 +296,7 @@ func (gen *codeGen) valueZero(t parse.TypeRef) string {
 	case parse.MapKind:
 		return "types.NewMap()"
 	case parse.RefKind:
-		panic("not yet implemented")
+		return "types.Ref{R: ref.Ref{}}"
 	case parse.SetKind:
 		return "types.NewSet()"
 	case parse.StringKind:
@@ -330,7 +324,7 @@ func (gen *codeGen) userName(t parse.TypeRef) string {
 		elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
 		return fmt.Sprintf("MapOf%sTo%s", gen.userName(elemTypes[0]), gen.userName(elemTypes[1]))
 	case parse.RefKind:
-		panic("not yet implemented")
+		return fmt.Sprintf("RefOf%s", gen.userName(t.Desc.(parse.CompoundDesc).ElemTypes[0]))
 	case parse.SetKind:
 		return fmt.Sprintf("SetOf%s", gen.userName(t.Desc.(parse.CompoundDesc).ElemTypes[0]))
 	case parse.StructKind:
@@ -397,7 +391,7 @@ func (gen *codeGen) write(t parse.TypeRef) {
 	case parse.MapKind:
 		gen.writeMap(t)
 	case parse.RefKind:
-		panic("not yet implemented")
+		gen.writeRef(t)
 	case parse.SetKind:
 		gen.writeSet(t)
 	case parse.StructKind:
@@ -470,6 +464,19 @@ func (gen *codeGen) writeMap(t parse.TypeRef) {
 	gen.writeTemplate("map.tmpl", t, data)
 	gen.write(elemTypes[0])
 	gen.write(elemTypes[1])
+}
+
+func (gen *codeGen) writeRef(t parse.TypeRef) {
+	elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
+	data := struct {
+		Name     string
+		ElemType parse.TypeRef
+	}{
+		gen.userName(t),
+		elemTypes[0],
+	}
+	gen.writeTemplate("ref.tmpl", t, data)
+	gen.write(elemTypes[0])
 }
 
 func (gen *codeGen) writeSet(t parse.TypeRef) {

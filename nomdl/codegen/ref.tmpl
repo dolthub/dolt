@@ -1,0 +1,34 @@
+// {{.Name}}
+
+type {{.Name}} struct {
+	r ref.Ref
+}
+
+func New{{.Name}}(r ref.Ref) {{.Name}} {
+	return {{.Name}}{r}
+}
+
+func (r {{.Name}}) Ref() ref.Ref {
+	return r.r
+}
+
+func (r {{.Name}}) Equals(other {{.Name}}) bool {
+	return r.Ref() == other.Ref()
+}
+
+func (r {{.Name}}) NomsValue() types.Value {
+	return types.Ref{R: r.r}
+}
+
+func {{.Name}}FromVal(p types.Value) {{.Name}} {
+	return {{.Name}}{p.(types.Ref).Ref()}
+}
+
+func (r {{.Name}}) GetValue(cs chunks.ChunkSource) {{userType .ElemType}} {
+	return {{valueToUser "types.ReadValue(r.r, cs)" .ElemType}}
+}
+
+func (r {{.Name}}) SetValue(val {{userType .ElemType}}, cs chunks.ChunkSink) {{.Name}} {
+	ref := types.WriteValue({{userToValue "val" .ElemType}}, cs)
+	return {{.Name}}{ref}
+}
