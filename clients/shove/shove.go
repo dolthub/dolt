@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"runtime"
 
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
@@ -12,16 +13,20 @@ import (
 )
 
 var (
-	localDsFlags  = dataset.NewFlagsWithPrefix("local-")
-	remoteDsFlags = dataset.NewFlagsWithPrefix("remote-")
+	sinkDsFlags   = dataset.NewFlagsWithPrefix("sink-")
+	sourceDsFlags = dataset.NewFlagsWithPrefix("source-")
+	p             = flag.Uint("p", 512, "parallelism")
 )
 
 func main() {
+	cpuCount := runtime.NumCPU()
+	runtime.GOMAXPROCS(cpuCount)
+
 	flag.Parse()
 
-	source := remoteDsFlags.CreateDataset()
-	sink := localDsFlags.CreateDataset()
-	if source == nil || sink == nil {
+	source := sourceDsFlags.CreateDataset()
+	sink := sinkDsFlags.CreateDataset()
+	if source == nil || sink == nil || *p == 0 {
 		flag.Usage()
 		return
 	}
@@ -33,14 +38,18 @@ func main() {
 			defer util.StopCPUProfile()
 		}
 
-		newHeadRef := source.Head().Ref()
-		currentHeadRef := ref.Ref{}
+		sourceHeadRef := source.Head().Ref()
+		sinkHeadRef := ref.Ref{}
 		if currentHead, ok := sink.MaybeHead(); ok {
-			currentHeadRef = currentHead.Ref()
+			sinkHeadRef = currentHead.Ref()
 		}
-		refs := sync.DiffHeadsByRef(currentHeadRef, newHeadRef, source.Store())
-		sync.CopyChunks(refs, source.Store(), sink.Store())
-		for ok := false; !ok; *sink, ok = sync.SetNewHead(newHeadRef, *sink) {
+
+		if sourceHeadRef == sinkHeadRef {
+			return
+		}
+
+		sync.CopyReachableChunksP(sourceHeadRef, sinkHeadRef, source.Store(), sink.Store(), int(*p))
+		for ok := false; !ok; *sink, ok = sync.SetNewHead(sourceHeadRef, *sink) {
 			continue
 		}
 

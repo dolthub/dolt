@@ -26,35 +26,71 @@ func validateRefAsCommit(r ref.Ref, cs chunks.ChunkSource) datas.Commit {
 	return datas.CommitFromVal(v)
 }
 
-// DiffHeadsByRef takes two Refs, validates that both refer to Heads in the given ChunkSource, and then returns the set of Refs that can be reached from 'big', but not 'small'.
-func DiffHeadsByRef(small, big ref.Ref, cs chunks.ChunkSource) []ref.Ref {
-	if small != (ref.Ref{}) {
-		validateRefAsCommit(small, cs)
-	}
-	validateRefAsCommit(big, cs)
-	return walk.Difference(small, big, cs)
-}
-
-// CopyChunks reads each Ref in refs out of src and writes it into sink.
-func CopyChunks(refs []ref.Ref, src chunks.ChunkSource, sink chunks.ChunkSink) {
-	copy := func(ref ref.Ref) {
-		reader := src.Get(ref)
-		defer reader.Close()
-		d.Exp.NotNil(reader, "Attempt to copy ref which wasn't found: %+v", ref)
-
-		writer := sink.Put()
-		defer writer.Close()
-		_, err := io.Copy(writer, reader)
-		d.Exp.NoError(err)
-	}
-	for _, ref := range refs {
-		copy(ref)
-	}
-	return
-}
-
 // SetNewHead takes the Ref of the desired new Head of ds, the chunk for which should already exist in the Dataset. It validates that the Ref points to an existing chunk that decodes to the correct type of value and then commits it to ds, returning a new Dataset with newHeadRef set and ok set to true. In the event that the commit fails, ok is set to false and a new up-to-date Dataset is returned WITHOUT newHeadRef in it. The caller should try again using this new Dataset.
 func SetNewHead(newHeadRef ref.Ref, ds dataset.Dataset) (dataset.Dataset, bool) {
 	commit := validateRefAsCommit(newHeadRef, ds.Store())
 	return ds.CommitWithParents(commit.Value(), datas.SetOfCommitFromVal(commit.Parents()))
+}
+
+// Copys all chunks reachable from (and including) |r| but excluding all chunks reachable from (and including) |exclude| in |source| to |sink|.
+func CopyReachableChunksP(r, exclude ref.Ref, source chunks.ChunkSource, sink chunks.ChunkSink, concurrency int) {
+	excludeRefs := map[ref.Ref]bool{}
+	hasRef := func(r ref.Ref) bool {
+		return excludeRefs[r]
+	}
+
+	if exclude != (ref.Ref{}) {
+		refChan := make(chan ref.Ref, 1024)
+		addRef := func(r ref.Ref) {
+			refChan <- r
+		}
+
+		go func() {
+			walk.AllP(exclude, source, addRef, concurrency)
+			close(refChan)
+		}()
+
+		for r := range refChan {
+			excludeRefs[r] = true
+		}
+	}
+
+	tcs := &teeChunkSource{source, sink}
+	walk.SomeP(r, tcs, hasRef, concurrency)
+}
+
+// teeChunkSource just serves the purpose of writing to |sink| every chunk that is read from |source|.
+type teeChunkSource struct {
+	source chunks.ChunkSource
+	sink   chunks.ChunkSink
+}
+
+func (trs *teeChunkSource) Get(ref ref.Ref) io.ReadCloser {
+	r := trs.source.Get(ref)
+	if r == nil {
+		return nil
+	}
+
+	w := trs.sink.Put()
+	tr := io.TeeReader(r, w)
+	return forwardCloser{tr, []io.Closer{r, w}}
+}
+
+func (trs *teeChunkSource) Has(ref ref.Ref) bool {
+	return trs.source.Has(ref)
+}
+
+// forwardCloser closes multiple io.Closer objects.
+type forwardCloser struct {
+	io.Reader
+	cs []io.Closer
+}
+
+func (fc forwardCloser) Close() error {
+	for _, c := range fc.cs {
+		if err := c.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
