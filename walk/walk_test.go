@@ -25,9 +25,9 @@ func (suite *WalkAllTestSuite) SetupTest() {
 
 func (suite *WalkAllTestSuite) walkWorker(r ref.Ref, expected int) {
 	actual := 0
-	All(r, suite.cs, func(r ref.Ref) {
+	AllP(r, suite.cs, func(r ref.Ref) {
 		actual++
-	})
+	}, 1)
 	suite.Equal(expected, actual)
 }
 
@@ -85,19 +85,19 @@ func (suite *WalkTestSuite) SetupTest() {
 
 func (suite *WalkTestSuite) TestStopWalkImmediately() {
 	actual := 0
-	Some(suite.storeAndRef(types.NewList(types.NewSet(), types.NewList())), suite.cs, func(r ref.Ref) bool {
+	SomeP(suite.storeAndRef(types.NewList(types.NewSet(), types.NewList())), suite.cs, func(r ref.Ref) bool {
 		actual++
 		return true
-	})
+	}, 1)
 	suite.Equal(1, actual)
 }
 
 func (suite *WalkTestSuite) skipWorker(composite types.Value) (reached []ref.Ref) {
-	Some(suite.storeAndRef(composite), suite.cs, func(r ref.Ref) bool {
+	SomeP(suite.storeAndRef(composite), suite.cs, func(r ref.Ref) bool {
 		suite.NotEqual(r, suite.deadValue.Ref(), "Should never have reached %+v", suite.deadValue)
 		reached = append(reached, r)
 		return r == suite.mustSkip.Ref()
-	})
+	}, 1)
 	return
 }
 
