@@ -174,7 +174,7 @@ func TestMapEmpty(t *testing.T) {
 func TestMapFutures(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := &chunks.TestStore{}
+	cs := chunks.NewTestStore()
 	k := NewString("hello")
 	kRef := WriteValue(k, cs)
 	f := futureFromRef(kRef)

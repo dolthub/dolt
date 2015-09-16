@@ -62,7 +62,7 @@ func TestCompoundListLen(t *testing.T) {
 
 func TestCompoundListChunks(t *testing.T) {
 	assert := assert.New(t)
-	cs := &chunks.MemoryStore{}
+	cs := chunks.NewMemoryStore()
 
 	cl := getFakeCompoundList("hi", "bye")
 	assert.Equal(0, len(cl.Chunks()))
@@ -89,7 +89,7 @@ func TestCompoundListGet(t *testing.T) {
 
 func TestCompoundListReadWriteValue(t *testing.T) {
 	assert := assert.New(t)
-	cs := &chunks.MemoryStore{}
+	cs := chunks.NewMemoryStore()
 	cl := getFakeCompoundList("hi", "bye")
 	r := WriteValue(cl, cs)
 	v := ReadValue(r, cs)

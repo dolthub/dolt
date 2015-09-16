@@ -12,12 +12,12 @@ import (
 )
 
 func createTestDataset(name string) dataset.Dataset {
-	t := &chunks.TestStore{}
+	t := chunks.NewTestStore()
 	return dataset.NewDataset(datas.NewDataStore(t), name)
 }
 
 func TestValidateRef(t *testing.T) {
-	cs := &chunks.TestStore{}
+	cs := chunks.NewTestStore()
 	r := types.WriteValue(types.Bool(true), cs)
 
 	assert.Panics(t, func() { validateRefAsCommit(r, cs) })
@@ -88,7 +88,7 @@ func TestPullFirstCommit(t *testing.T) {
 }
 
 func TestFailedCopyChunks(t *testing.T) {
-	cs := &chunks.MemoryStore{}
+	cs := chunks.NewMemoryStore()
 	r := ref.Parse("sha1-0000000000000000000000000000000000000000")
 	assert.Panics(t, func() { CopyReachableChunksP(r, ref.Ref{}, cs, cs, 1) })
 }

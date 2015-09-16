@@ -168,7 +168,7 @@ func TestListRemoveAt(t *testing.T) {
 func TestListFutures(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := &chunks.TestStore{}
+	cs := chunks.NewTestStore()
 	v := NewString("hello")
 	r := WriteValue(v, cs)
 	f := futureFromRef(r)
@@ -183,7 +183,7 @@ func TestListMap(t *testing.T) {
 	assert := assert.New(t)
 
 	testMap := func(concurrency, listLen int) {
-		cs := &chunks.TestStore{}
+		cs := chunks.NewTestStore()
 		futures := make([]Future, listLen)
 		for i := 0; i < listLen; i++ {
 			r := WriteValue(Int64(i), cs)

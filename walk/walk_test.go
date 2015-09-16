@@ -20,7 +20,7 @@ type WalkAllTestSuite struct {
 }
 
 func (suite *WalkAllTestSuite) SetupTest() {
-	suite.cs = &chunks.TestStore{}
+	suite.cs = chunks.NewTestStore()
 }
 
 func (suite *WalkAllTestSuite) walkWorker(r ref.Ref, expected int) {
@@ -80,7 +80,7 @@ func (suite *WalkTestSuite) SetupTest() {
 	suite.shouldSee = types.NewList(types.NewString("zzz"))
 	suite.deadValue = types.UInt64(0xDEADBEEF)
 	suite.mustSkip = types.NewList(suite.deadValue)
-	suite.cs = &chunks.TestStore{}
+	suite.cs = chunks.NewTestStore()
 }
 
 func (suite *WalkTestSuite) TestStopWalkImmediately() {
