@@ -16,22 +16,22 @@ import (
 	"syscall"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/nfnt/resize"
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
 var (
 	port = flag.Int("port", 8001, "")
-	cs   chunks.ChunkStore
+	ds   datas.DataStore
 )
 
 func main() {
-	flags := chunks.NewFlags()
+	flags := datas.NewFlags()
 	flag.Parse()
-	cs = flags.CreateStore()
-	if cs == nil {
+	ds, ok := flags.CreateDataStore()
+	if !ok {
 		flag.Usage()
 		return
 	}
@@ -48,7 +48,7 @@ func main() {
 	go func() {
 		<-c
 		l.Close()
-		cs.Close()
+		ds.Close()
 	}()
 
 	srv.Serve(l)
@@ -57,7 +57,7 @@ func main() {
 func handleRequest(w http.ResponseWriter, req *http.Request) {
 	err := d.Try(func() {
 		r := ref.Parse(req.URL.Query().Get("ref"))
-		b := types.ReadValue(r, cs).(types.Blob)
+		b := types.ReadValue(r, ds).(types.Blob)
 		if b == nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return

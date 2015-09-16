@@ -85,7 +85,7 @@ func (l *LevelDBStore) Has(ref ref.Ref) bool {
 }
 
 func (l *LevelDBStore) Put() ChunkWriter {
-	return newChunkWriter(l.write)
+	return NewChunkWriter(l.write)
 }
 
 func (l *LevelDBStore) write(ref ref.Ref, data []byte) {

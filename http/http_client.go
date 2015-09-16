@@ -1,28 +1,23 @@
-package chunks
+package http
 
 import (
 	"bytes"
 	"compress/gzip"
 	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
 	"sync"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
 const (
-	rootPath         = "/root/"
-	refPath          = "/ref/"
-	getRefsPath      = "/getRefs/"
-	postRefsPath     = "/postRefs/"
 	targetBufferSize = 1 << 16 // 64k (compressed)
 	readBufferSize   = 1 << 12 // 4k
 	writeBufferSize  = 1 << 12 // 4k
@@ -38,8 +33,8 @@ type readRequest struct {
 // readBatch represents a set of queued read requests, each of which are blocking on a receive channel for a response. It implements ChunkSink so that the responses can be directly deserialized and streamed back to callers.
 type readBatch map[ref.Ref][]chan io.ReadCloser
 
-func (rrg *readBatch) Put() ChunkWriter {
-	return NewChunkWriter(rrg.write)
+func (rrg *readBatch) Put() chunks.ChunkWriter {
+	return chunks.NewChunkWriter(rrg.write)
 }
 
 func (rrg *readBatch) write(r ref.Ref, data []byte) {
@@ -64,7 +59,7 @@ type writeRequest struct {
 	data []byte
 }
 
-type httpStoreClient struct {
+type HttpClient struct {
 	host       *url.URL
 	readQueue  chan readRequest
 	writeQueue chan writeRequest
@@ -73,19 +68,12 @@ type httpStoreClient struct {
 	wmu        *sync.Mutex
 }
 
-type httpStoreServer struct {
-	cs    ChunkStore
-	port  int
-	l     *net.Listener
-	conns map[net.Conn]http.ConnState
-}
-
-func NewHttpStoreClient(host string) *httpStoreClient {
+func NewHttpClient(host string) *HttpClient {
 	u, err := url.Parse(host)
 	d.Exp.NoError(err)
 	d.Exp.True(u.Scheme == "http" || u.Scheme == "https")
 	d.Exp.Equal(*u, url.URL{Scheme: u.Scheme, Host: u.Host})
-	client := &httpStoreClient{
+	client := &HttpClient{
 		u,
 		make(chan readRequest, readBufferSize),
 		make(chan writeRequest, writeBufferSize),
@@ -105,19 +93,13 @@ func NewHttpStoreClient(host string) *httpStoreClient {
 	return client
 }
 
-func NewHttpStoreServer(cs ChunkStore, port int) *httpStoreServer {
-	return &httpStoreServer{
-		cs, port, nil, map[net.Conn]http.ConnState{},
-	}
-}
-
-func (c *httpStoreClient) Get(r ref.Ref) io.ReadCloser {
+func (c *HttpClient) Get(r ref.Ref) io.ReadCloser {
 	ch := make(chan io.ReadCloser)
 	c.readQueue <- readRequest{r, ch}
 	return <-ch
 }
 
-func (c *httpStoreClient) sendReadRequests() {
+func (c *HttpClient) sendReadRequests() {
 	for req := range c.readQueue {
 		reqs := readBatch{}
 		refs := map[ref.Ref]bool{}
@@ -143,7 +125,7 @@ func (c *httpStoreClient) sendReadRequests() {
 	}
 }
 
-func (c *httpStoreClient) Has(ref ref.Ref) bool {
+func (c *HttpClient) Has(ref ref.Ref) bool {
 	// HEAD http://<host>/ref/<sha1-xxx>. Response will be 200 if present, 404 if absent.
 	res := c.requestRef(ref, "HEAD", nil)
 	defer closeResponse(res)
@@ -152,12 +134,12 @@ func (c *httpStoreClient) Has(ref ref.Ref) bool {
 	return res.StatusCode == http.StatusOK
 }
 
-func (c *httpStoreClient) Put() ChunkWriter {
+func (c *HttpClient) Put() chunks.ChunkWriter {
 	// POST http://<host>/ref/. Body is a serialized chunkBuffer. Response will be 201.
-	return NewChunkWriter(c.write)
+	return chunks.NewChunkWriter(c.write)
 }
 
-func (c *httpStoreClient) write(r ref.Ref, data []byte) {
+func (c *HttpClient) write(r ref.Ref, data []byte) {
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
 	if c.written[r] {
@@ -169,13 +151,17 @@ func (c *httpStoreClient) write(r ref.Ref, data []byte) {
 	c.writeQueue <- writeRequest{r, data}
 }
 
-func (c *httpStoreClient) sendWriteRequests() {
+func (c *HttpClient) sendWriteRequests() {
 	for req := range c.writeQueue {
-		ms := &MemoryStore{}
+		ms := &chunks.MemoryStore{}
 		refs := map[ref.Ref]bool{}
 
 		addReq := func(req writeRequest) {
-			ms.write(req.r, req.data)
+			w := ms.Put()
+			_, err := io.Copy(w, bytes.NewReader(req.data))
+			d.Chk.NoError(err)
+			r := w.Ref()
+			d.Chk.Equal(req.r, r)
 			refs[req.r] = true
 		}
 		addReq(req)
@@ -198,10 +184,10 @@ func (c *httpStoreClient) sendWriteRequests() {
 	}
 }
 
-func (c *httpStoreClient) postRefs(refs map[ref.Ref]bool, cs ChunkSource) {
+func (c *HttpClient) postRefs(refs map[ref.Ref]bool, cs chunks.ChunkSource) {
 	body := &bytes.Buffer{}
 	gw := gzip.NewWriter(body)
-	Serialize(gw, refs, cs)
+	chunks.Serialize(gw, refs, cs)
 	gw.Close()
 
 	url := *c.host
@@ -219,7 +205,7 @@ func (c *httpStoreClient) postRefs(refs map[ref.Ref]bool, cs ChunkSource) {
 	closeResponse(res)
 }
 
-func (c *httpStoreClient) requestRef(r ref.Ref, method string, body io.Reader) *http.Response {
+func (c *HttpClient) requestRef(r ref.Ref, method string, body io.Reader) *http.Response {
 	url := *c.host
 	url.Path = refPath
 	if (r != ref.Ref{}) {
@@ -238,7 +224,7 @@ func (c *httpStoreClient) requestRef(r ref.Ref, method string, body io.Reader) *
 	return res
 }
 
-func (c *httpStoreClient) getRefs(refs map[ref.Ref]bool, cs ChunkSink) {
+func (c *HttpClient) getRefs(refs map[ref.Ref]bool, cs chunks.ChunkSink) {
 	// POST http://<host>/getRefs/. Post body: ref=sha1---&ref=sha1---& Response will be chunk data if present, 404 if absent.
 	u := *c.host
 	u.Path = getRefsPath
@@ -265,10 +251,10 @@ func (c *httpStoreClient) getRefs(refs map[ref.Ref]bool, cs ChunkSink) {
 		reader = gr
 	}
 
-	Deserialize(reader, cs)
+	chunks.Deserialize(reader, cs)
 }
 
-func (c *httpStoreClient) Root() ref.Ref {
+func (c *HttpClient) Root() ref.Ref {
 	// GET http://<host>/root. Response will be ref of root.
 	res := c.requestRoot("GET", ref.Ref{}, ref.Ref{})
 	defer closeResponse(res)
@@ -279,7 +265,7 @@ func (c *httpStoreClient) Root() ref.Ref {
 	return ref.Parse(string(data))
 }
 
-func (c *httpStoreClient) UpdateRoot(current, last ref.Ref) bool {
+func (c *HttpClient) UpdateRoot(current, last ref.Ref) bool {
 	// POST http://<host>root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
 	c.wg.Wait()
 
@@ -294,7 +280,7 @@ func (c *httpStoreClient) UpdateRoot(current, last ref.Ref) bool {
 	return res.StatusCode == http.StatusOK
 }
 
-func (c *httpStoreClient) requestRoot(method string, current, last ref.Ref) *http.Response {
+func (c *HttpClient) requestRoot(method string, current, last ref.Ref) *http.Response {
 	u := *c.host
 	u.Path = rootPath
 	if method == "POST" {
@@ -314,135 +300,11 @@ func (c *httpStoreClient) requestRoot(method string, current, last ref.Ref) *htt
 	return res
 }
 
-func (c *httpStoreClient) Close() error {
+func (c *HttpClient) Close() error {
 	c.wg.Wait()
 	close(c.readQueue)
 	close(c.writeQueue)
 	return nil
-}
-
-func (s *httpStoreServer) handleRef(w http.ResponseWriter, req *http.Request) {
-	err := d.Try(func() {
-		refStr := ""
-		pathParts := strings.Split(req.URL.Path[1:], "/")
-		if len(pathParts) > 1 {
-			refStr = pathParts[1]
-		}
-		r := ref.Parse(refStr)
-
-		switch req.Method {
-		case "GET":
-			reader := s.cs.Get(r)
-			if reader == nil {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-
-			defer reader.Close()
-			_, err := io.Copy(w, reader)
-			d.Chk.NoError(err)
-			w.Header().Add("Content-Type", "application/octet-stream")
-			w.Header().Add("Cache-Control", "max-age=31536000") // 1 year
-
-		case "HEAD":
-			if !s.cs.Has(r) {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-		default:
-			d.Exp.Fail("Unexpected method: ", req.Method)
-		}
-	})
-
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
-		return
-	}
-}
-
-func (s *httpStoreServer) handlePostRefs(w http.ResponseWriter, req *http.Request) {
-	err := d.Try(func() {
-		d.Exp.Equal("POST", req.Method)
-
-		var reader io.Reader = req.Body
-		if strings.Contains(req.Header.Get("Content-Encoding"), "gzip") {
-			gr, err := gzip.NewReader(reader)
-			d.Exp.NoError(err)
-			defer gr.Close()
-			reader = gr
-		}
-
-		Deserialize(reader, s.cs)
-		w.WriteHeader(http.StatusCreated)
-	})
-
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
-		return
-	}
-}
-
-func (s *httpStoreServer) handleGetRefs(w http.ResponseWriter, req *http.Request) {
-	err := d.Try(func() {
-		d.Exp.Equal("POST", req.Method)
-
-		req.ParseForm()
-		refStrs := req.PostForm["ref"]
-		d.Exp.True(len(refStrs) > 0)
-
-		refs := map[ref.Ref]bool{}
-		for _, refStr := range refStrs {
-			r := ref.Parse(refStr)
-			refs[r] = true
-		}
-
-		w.Header().Add("Content-Type", "application/octet-stream")
-
-		writer := w.(io.Writer)
-		if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
-			w.Header().Add("Content-Encoding", "gzip")
-			gw := gzip.NewWriter(w)
-			defer gw.Close()
-			writer = gw
-		}
-
-		Serialize(writer, refs, s.cs)
-	})
-
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
-		return
-	}
-}
-
-func (s *httpStoreServer) handleRoot(w http.ResponseWriter, req *http.Request) {
-	err := d.Try(func() {
-		switch req.Method {
-		case "GET":
-			rootRef := s.cs.Root()
-			fmt.Fprintf(w, "%v", rootRef.String())
-			w.Header().Add("content-type", "text/plain")
-
-		case "POST":
-			params := req.URL.Query()
-			tokens := params["last"]
-			d.Exp.Len(tokens, 1)
-			last := ref.Parse(tokens[0])
-			tokens = params["current"]
-			d.Exp.Len(tokens, 1)
-			current := ref.Parse(tokens[0])
-
-			if !s.cs.UpdateRoot(current, last) {
-				w.WriteHeader(http.StatusConflict)
-				return
-			}
-		}
-	})
-
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
-		return
-	}
 }
 
 // In order for keep alive to work we must read to EOF on every response. We may want to add a timeout so that a server that left its connection open can't cause all of ports to be eaten up.
@@ -453,60 +315,20 @@ func closeResponse(res *http.Response) error {
 	return res.Body.Close()
 }
 
-func (s *httpStoreServer) connState(c net.Conn, cs http.ConnState) {
-	switch cs {
-	case http.StateNew, http.StateActive, http.StateIdle:
-		s.conns[c] = cs
-	default:
-		delete(s.conns, c)
-	}
-}
-
-// Blocks while the server is listening. Running on a separate go routine is supported.
-func (s *httpStoreServer) Run() {
-	l, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
-	d.Chk.NoError(err)
-	s.l = &l
-
-	mux := http.NewServeMux()
-
-	mux.HandleFunc(refPath, http.HandlerFunc(s.handleRef))
-	mux.HandleFunc(getRefsPath, http.HandlerFunc(s.handleGetRefs))
-	mux.HandleFunc(postRefsPath, http.HandlerFunc(s.handlePostRefs))
-	mux.HandleFunc(rootPath, http.HandlerFunc(s.handleRoot))
-
-	srv := &http.Server{
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Add("Access-Control-Allow-Origin", "*")
-			mux.ServeHTTP(w, r)
-		}),
-		ConnState: s.connState,
-	}
-	srv.Serve(l)
-}
-
-// Will cause the server to stop listening and an existing call to Run() to continue.
-func (s *httpStoreServer) Stop() {
-	(*s.l).Close()
-	for c, _ := range s.conns {
-		c.Close()
-	}
-}
-
-type httpStoreFlags struct {
+type Flags struct {
 	host *string
 }
 
-func httpFlags(prefix string) httpStoreFlags {
-	return httpStoreFlags{
-		flag.String(prefix+"h", "", "httpstore host to connect to"),
+func NewFlagsWithPrefix(prefix string) Flags {
+	return Flags{
+		flag.String(prefix+"h", "", "http host to connect to"),
 	}
 }
 
-func (h httpStoreFlags) createStore() ChunkStore {
+func (h Flags) CreateClient() *HttpClient {
 	if *h.host == "" {
 		return nil
 	} else {
-		return NewHttpStoreClient(*h.host)
+		return NewHttpClient(*h.host)
 	}
 }

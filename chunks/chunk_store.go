@@ -110,7 +110,6 @@ func NewFlags() Flags {
 // NewFlagsWithPrefix creates a new instance of Flags with the names of all flags declared therein prefixed by the given string.
 func NewFlagsWithPrefix(prefix string) Flags {
 	return Flags{
-		httpFlags(prefix),
 		levelDBFlags(prefix),
 		memoryFlags(prefix),
 		nopFlags(prefix),
@@ -119,7 +118,6 @@ func NewFlagsWithPrefix(prefix string) Flags {
 
 // Flags abstracts away definitions for and handling of command-line flags for all ChunkStore implementations.
 type Flags struct {
-	http   httpStoreFlags
 	ldb    ldbStoreFlags
 	memory memoryStoreFlags
 	nop    nopStoreFlags
@@ -127,8 +125,7 @@ type Flags struct {
 
 // CreateStore creates a ChunkStore implementation based on the values of command-line flags.
 func (f Flags) CreateStore() (cs ChunkStore) {
-	if cs = f.http.createStore(); cs != nil {
-	} else if cs = f.ldb.createStore(); cs != nil {
+	if cs = f.ldb.createStore(); cs != nil {
 	} else if cs = f.memory.createStore(); cs != nil {
 	} else if cs = f.nop.createStore(); cs != nil {
 	}

@@ -16,11 +16,11 @@ type MemoryStoreTestSuite struct {
 }
 
 func (suite *MemoryStoreTestSuite) SetupTest() {
-	suite.store = &MemoryStore{}
+	suite.Store = &MemoryStore{}
 }
 
 func (suite *MemoryStoreTestSuite) TearDownTest() {
-	suite.store.Close()
+	suite.Store.Close()
 }
 
 func (suite *MemoryStoreTestSuite) TestBadSerialization() {

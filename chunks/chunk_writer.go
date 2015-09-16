@@ -28,7 +28,7 @@ type chunkWriter struct {
 	ref    ref.Ref
 }
 
-func newChunkWriter(write writeFn) *chunkWriter {
+func NewChunkWriter(write writeFn) ChunkWriter {
 	b := &bytes.Buffer{}
 	h := ref.NewHash()
 	return &chunkWriter{
