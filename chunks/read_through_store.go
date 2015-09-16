@@ -1,6 +1,7 @@
 package chunks
 
 import (
+	"bytes"
 	"io"
 	"io/ioutil"
 
@@ -24,34 +25,22 @@ func NewReadThroughStore(cachingStore ChunkStore, backingStore ChunkStore) ReadT
 	return ReadThroughStore{ioutil.NopCloser(nil), cachingStore, backingStore, 0}
 }
 
-// forwardCloser closes multiple io.Closer objects.
-type forwardCloser struct {
-	io.Reader
-	cs []io.Closer
-}
-
-func (fc forwardCloser) Close() error {
-	for _, c := range fc.cs {
-		if err := c.Close(); err != nil {
-			return err
-		}
+func (rts ReadThroughStore) Get(ref ref.Ref) []byte {
+	data := rts.cachingStore.Get(ref)
+	if data != nil {
+		return data
 	}
-	return nil
-}
-
-func (rts ReadThroughStore) Get(ref ref.Ref) io.ReadCloser {
-	r := rts.cachingStore.Get(ref)
-	if r != nil {
-		return r
-	}
-	r = rts.backingStore.Get(ref)
-	if r == nil {
-		return r
+	data = rts.backingStore.Get(ref)
+	if data == nil {
+		return data
 	}
 
 	w := rts.cachingStore.Put()
-	tr := io.TeeReader(r, w)
-	return forwardCloser{tr, []io.Closer{r, w}}
+	_, err := io.Copy(w, bytes.NewReader(data))
+	d.Chk.NoError(err)
+	w.Close()
+
+	return data
 }
 
 type readThroughChunkWriter struct {

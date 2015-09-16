@@ -13,7 +13,7 @@ func TestDatasetCommitTracker(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	id2 := "othertestdataset"
-	ms := &chunks.MemoryStore{}
+	ms := chunks.NewMemoryStore()
 
 	ds1 := NewDataset(datas.NewDataStore(ms), id1)
 	ds1Commit := types.NewString("Commit value for " + id1)
@@ -37,7 +37,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	id2 := "othertestdataset"
-	ms := &chunks.MemoryStore{}
+	ms := chunks.NewMemoryStore()
 
 	getDS := func(id string) Dataset {
 		store := datas.NewDataStore(ms)

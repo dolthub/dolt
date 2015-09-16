@@ -1,12 +1,14 @@
 package http
 
 import (
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
@@ -14,22 +16,24 @@ import (
 )
 
 const (
-	rootPath     = "/root/"
-	refPath      = "/ref/"
-	getRefsPath  = "/getRefs/"
-	postRefsPath = "/postRefs/"
+	rootPath          = "/root/"
+	refPath           = "/ref/"
+	getRefsPath       = "/getRefs/"
+	postRefsPath      = "/postRefs/"
+	maxConcurrentPuts = 64
 )
 
 type httpServer struct {
-	cs    chunks.ChunkStore
-	port  int
-	l     *net.Listener
-	conns map[net.Conn]http.ConnState
+	cs         chunks.ChunkStore
+	port       int
+	l          *net.Listener
+	conns      map[net.Conn]http.ConnState
+	writeLimit chan struct{}
 }
 
 func NewHttpServer(cs chunks.ChunkStore, port int) *httpServer {
 	return &httpServer{
-		cs, port, nil, map[net.Conn]http.ConnState{},
+		cs, port, nil, map[net.Conn]http.ConnState{}, make(chan struct{}, maxConcurrentPuts),
 	}
 }
 
@@ -44,14 +48,13 @@ func (s *httpServer) handleRef(w http.ResponseWriter, req *http.Request) {
 
 		switch req.Method {
 		case "GET":
-			reader := s.cs.Get(r)
-			if reader == nil {
+			data := s.cs.Get(r)
+			if data == nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
 
-			defer reader.Close()
-			_, err := io.Copy(w, reader)
+			_, err := io.Copy(w, bytes.NewReader(data))
 			d.Chk.NoError(err)
 			w.Header().Add("Content-Type", "application/octet-stream")
 			w.Header().Add("Cache-Control", "max-age=31536000") // 1 year
@@ -84,7 +87,28 @@ func (s *httpServer) handlePostRefs(w http.ResponseWriter, req *http.Request) {
 			reader = gr
 		}
 
-		chunks.Deserialize(reader, s.cs)
+		ch, err := chunks.Deserialize(reader)
+		wg := sync.WaitGroup{}
+		for c := range ch {
+			wg.Add(1)
+
+			s.writeLimit <- struct{}{}
+			c := c
+			go func() {
+				defer func() {
+					wg.Done()
+					<-s.writeLimit
+				}()
+
+				w := s.cs.Put()
+				defer w.Close()
+				_, err := io.Copy(w, bytes.NewReader(c.Data))
+				d.Chk.NoError(err)
+			}()
+		}
+
+		wg.Wait()
+		d.Chk.NoChannelError(err)
 		w.WriteHeader(http.StatusCreated)
 	})
 
@@ -102,14 +126,7 @@ func (s *httpServer) handleGetRefs(w http.ResponseWriter, req *http.Request) {
 		refStrs := req.PostForm["ref"]
 		d.Exp.True(len(refStrs) > 0)
 
-		refs := map[ref.Ref]bool{}
-		for _, refStr := range refStrs {
-			r := ref.Parse(refStr)
-			refs[r] = true
-		}
-
 		w.Header().Add("Content-Type", "application/octet-stream")
-
 		writer := w.(io.Writer)
 		if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
 			w.Header().Add("Content-Encoding", "gzip")
@@ -118,7 +135,21 @@ func (s *httpServer) handleGetRefs(w http.ResponseWriter, req *http.Request) {
 			writer = gw
 		}
 
-		chunks.Serialize(writer, refs, s.cs)
+		data := make(chan chunks.Chunk, 64)
+		done, err := chunks.Serialize(writer, data)
+
+		for _, refStr := range refStrs {
+			r := ref.Parse(refStr)
+			d := s.cs.Get(r)
+			if d == nil {
+				continue
+			}
+
+			data <- chunks.Chunk{r, d}
+		}
+		close(data)
+		<-done
+		d.Chk.NoChannelError(err)
 	})
 
 	if err != nil {

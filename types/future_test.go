@@ -19,7 +19,7 @@ func TestResolvedFuture(t *testing.T) {
 func TestUnresolvedFuture(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := &chunks.TestStore{}
+	cs := chunks.NewTestStore()
 	v := NewString("hello")
 	r := WriteValue(v, cs)
 
@@ -35,7 +35,7 @@ func TestUnresolvedFuture(t *testing.T) {
 
 func TestEqualsFastPath(t *testing.T) {
 	assert := assert.New(t)
-	cs := &chunks.MemoryStore{}
+	cs := chunks.NewMemoryStore()
 
 	v := Int32(1)
 	r := WriteValue(v, cs)
