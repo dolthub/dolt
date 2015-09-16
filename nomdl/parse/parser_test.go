@@ -23,6 +23,14 @@ type ParserTestSuite struct {
 	suite.Suite
 }
 
+func (suite *ParserTestSuite) parsePanics(test, msg string) {
+	suite.Panics(func() { ParsePackage("", strings.NewReader(test)) }, msg)
+}
+
+func (suite *ParserTestSuite) parseNotPanics(test string) {
+	suite.NotPanics(func() { ParsePackage("", strings.NewReader(test)) }, test)
+}
+
 func (suite *ParserTestSuite) TestAlias() {
 	importTmpl := `alias Noms = import "%s"`
 	ref := "sha1-ffffffff"
@@ -59,56 +67,92 @@ func (suite *ParserTestSuite) TestBadUsing() {
 }
 
 func (suite *ParserTestSuite) TestBadStructParse() {
-	panics := func(test, msg string) {
-		suite.Panics(func() { ParsePackage("", strings.NewReader(test)) }, msg)
-	}
-
 	noFields := "struct str { }"
-	panics(noFields, "Struct must have fields.")
+	suite.parsePanics(noFields, "Struct must have fields.")
 
 	noName := "struct { a :Bool }"
-	panics(noName, "Struct must have name.")
+	suite.parsePanics(noName, "Struct must have name.")
 
 	badName := "struct *ff { a :Bool }"
-	panics(badName, "Struct must have legal name.")
+	suite.parsePanics(badName, "Struct must have legal name.")
 
 	dupName := "struct str { a :Bool a :Bool }"
-	panics(dupName, "Fields must have unique names.")
+	suite.parsePanics(dupName, "Fields must have unique names.")
 
 	dupNameInUnion := "struct s { union { a: Bool a :Int32 } }"
-	panics(dupNameInUnion, "union choices must have unique names.")
+	suite.parsePanics(dupNameInUnion, "union choices must have unique names.")
 
 	dupNameInNamedUnion := "struct s { u :union { a: Bool a :Int32 } }"
-	panics(dupNameInNamedUnion, "union choices must have unique names.")
+	suite.parsePanics(dupNameInNamedUnion, "union choices must have unique names.")
 
 	twoAnonUnion := fmt.Sprintf(structTmpl, "str", union, union)
-	panics(twoAnonUnion, "Can't have two anonymous unions.")
-
+	suite.parsePanics(twoAnonUnion, "Can't have two anonymous unions.")
 }
 
 func (suite *ParserTestSuite) TestStructParse() {
-
-	notPanics := func(test string) {
-		suite.NotPanics(func() { ParsePackage("", strings.NewReader(test)) }, test)
-	}
-
 	oneLine := "struct str { a :Bool b : Blob c: Blob }"
-	notPanics(oneLine)
+	suite.parseNotPanics(oneLine)
 
 	noSpace := "struct str{a:Bool}"
-	notPanics(noSpace)
+	suite.parseNotPanics(noSpace)
 
-	multiLine := "struct str {\na :Bool\n}"
-	notPanics(multiLine)
+	multiLine := "\nstruct str {\na :Bool\n}"
+	suite.parseNotPanics(multiLine)
 
 	anonUnion := fmt.Sprintf(structTmpl, "str", "a :Bool\n", union)
-	notPanics(anonUnion)
+	suite.parseNotPanics(anonUnion)
 
 	namedUnions := fmt.Sprintf(structTmpl, "str", "a :Bool\nun1 :"+union, "un2 :"+union)
-	notPanics(namedUnions)
+	suite.parseNotPanics(namedUnions)
 
 	for k := range primitiveToDesc {
-		notPanics(fmt.Sprintf(structTmpl, "s", "a :"+k, ""))
+		suite.parseNotPanics(fmt.Sprintf(structTmpl, "s", "a :"+k, ""))
+	}
+}
+
+func (suite *ParserTestSuite) TestComment() {
+	comments := []string{
+		"/* Yo\n*/struct str { a :Bool }",
+		"struct str { a :Bool }\n/* Yo*/",
+		"/* Yo\n * is my name */\nstruct str { a :Bool }",
+		"/* Yo *//* is my name */struct str { a :Bool }",
+		"struct /*Yo*/ s { a :Bool }",
+		"struct s /*Yo*/ { a :Bool }",
+		"struct s { /*Yo*/ a :Bool }",
+		"struct s { a /*Yo*/ :Bool }",
+		"struct s { a :/*Yo*/ Bool }",
+		"struct s { a :Bool/*Yo*/}",
+		"// Yo\nstruct str { a :Bool }",
+		"struct str { a :Bool }\n// Yo",
+		"\n  // Yo   \t\nstruct str { a :Bool }\n   /*More Yo*/",
+		`// Yo //
+		// Yo Again
+		struct str { a :Bool }`,
+		`struct /* // up in here */s {
+			a :Bool//Field a
+		}`,
+		`struct s {
+			a :Bool //Field a
+			// Not a field
+		}
+		/* More talk */
+		struct t { b :Bool }`,
+	}
+	for _, c := range comments {
+		suite.parseNotPanics(c)
+	}
+}
+
+func (suite *ParserTestSuite) TestBadComment() {
+	comments := []string{
+		"st/* Yo */ruct str { a :Bool }",
+		"struct str { a :Bool }\n* Yo*/",
+		"/* Yo *\nstruct str { a :Bool }",
+		"struct str // OOps { a :Bool }",
+		"struct str { a :Bool }\n/ Yo",
+	}
+	for _, c := range comments {
+		suite.parsePanics(c, c)
 	}
 }
 
@@ -264,6 +308,28 @@ func (suite *ParsedResultTestSuite) TestAnonUnionFirst() {
 	err := d.Try(func() {
 		pkg := ParsePackage("", strings.NewReader(pkgDef))
 		suite.checkStruct(pkg, anonUnionFirst)
+	})
+	suite.NoError(err, pkgDef)
+}
+
+func (suite *ParsedResultTestSuite) TestCommentNextToName() {
+	withComment := makeStructTestCase("WithComment", &suite.union, suite.primField)
+
+	pkgDef := fmt.Sprintf(structTmpl, "/* Oy! */"+withComment.Name, withComment.unionToString(), withComment.fieldsToString())
+	err := d.Try(func() {
+		pkg := ParsePackage("", strings.NewReader(pkgDef))
+		suite.checkStruct(pkg, withComment)
+	})
+	suite.NoError(err, pkgDef)
+}
+
+func (suite *ParsedResultTestSuite) TestCommentAmongFields() {
+	withComment := makeStructTestCase("WithComment", &suite.union, suite.primField)
+
+	pkgDef := fmt.Sprintf(structTmpl, withComment.Name, withComment.fieldsToString()+"\n// Nope\n", withComment.unionToString())
+	err := d.Try(func() {
+		pkg := ParsePackage("", strings.NewReader(pkgDef))
+		suite.checkStruct(pkg, withComment)
 	})
 	suite.NoError(err, pkgDef)
 }

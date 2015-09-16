@@ -169,8 +169,14 @@ Ident <- [\pL_] [\pL\pN_]* {
 	return string(c.text), nil
 }
 
-_ "optional whitespace" <- [\r\n\t\pZ]* {
+_ "optional whitespace" <- WS (Comment WS)* {
 	return nil, nil
 }
+
+WS <- [\r\n\t\pZ]*
+
+Comment <- `//` [^\n]* / MultilineComment
+
+MultilineComment <- `/*` (`*` !`/` / [^*])* `*/`
 
 EOF <- _ !.
