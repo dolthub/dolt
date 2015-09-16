@@ -26,10 +26,10 @@ func (suite *LevelDBStoreTestSuite) SetupTest() {
 		return store.putCount
 	}
 
-	suite.store = store
+	suite.Store = store
 }
 
 func (suite *LevelDBStoreTestSuite) TearDownTest() {
-	suite.store.Close()
+	suite.Store.Close()
 	os.Remove(suite.dir)
 }

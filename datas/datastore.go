@@ -3,6 +3,7 @@ package datas
 import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/http"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -109,4 +110,33 @@ func getAncestors(commits SetOfCommit) SetOfCommit {
 		return
 	})
 	return ancestors
+}
+
+type Flags struct {
+	cflags chunks.Flags
+	hflags http.Flags
+}
+
+func NewFlags() Flags {
+	return NewFlagsWithPrefix("")
+}
+
+func NewFlagsWithPrefix(prefix string) Flags {
+	return Flags{
+		chunks.NewFlagsWithPrefix(prefix),
+		http.NewFlagsWithPrefix(prefix),
+	}
+}
+
+func (f Flags) CreateDataStore() (DataStore, bool) {
+	cs := f.cflags.CreateStore()
+	if cs == nil {
+		cs = f.hflags.CreateClient()
+		if cs == nil {
+			return DataStore{}, false
+		}
+	}
+
+	ds := NewDataStore(cs)
+	return ds, true
 }

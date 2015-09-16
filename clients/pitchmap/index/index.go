@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
@@ -164,21 +163,21 @@ func getIndex(input types.List) MapOfStringToListOfPitch {
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	csFlags := chunks.NewFlags()
+	flags := datas.NewFlags()
 	flag.Parse()
 
-	cs := csFlags.CreateStore()
-	if cs == nil || *inputID == "" || *outputID == "" {
+	ds, ok := flags.CreateDataStore()
+	if !ok || *inputID == "" || *outputID == "" {
 		flag.Usage()
 		return
 	}
-	defer cs.Close()
+	defer ds.Close()
 
 	err := d.Try(func() {
 		if util.MaybeStartCPUProfile() {
 			defer util.StopCPUProfile()
 		}
-		dataStore := datas.NewDataStore(cs)
+		dataStore := datas.NewDataStore(ds)
 		inputDataset := dataset.NewDataset(dataStore, *inputID)
 		outputDataset := dataset.NewDataset(dataStore, *outputID)
 

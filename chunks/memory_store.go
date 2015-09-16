@@ -31,7 +31,7 @@ func (ms *MemoryStore) Has(r ref.Ref) bool {
 }
 
 func (ms *MemoryStore) Put() ChunkWriter {
-	return newChunkWriter(ms.write)
+	return NewChunkWriter(ms.write)
 }
 
 func (ms *MemoryStore) write(r ref.Ref, data []byte) {

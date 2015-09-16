@@ -3,7 +3,6 @@ package dataset
 import (
 	"flag"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset/mgmt"
@@ -65,7 +64,7 @@ func (ds *Dataset) Close() {
 }
 
 type datasetFlags struct {
-	chunks.Flags
+	datas.Flags
 	datasetID *string
 }
 
@@ -75,7 +74,7 @@ func NewFlags() datasetFlags {
 
 func NewFlagsWithPrefix(prefix string) datasetFlags {
 	return datasetFlags{
-		chunks.NewFlagsWithPrefix(prefix),
+		datas.NewFlagsWithPrefix(prefix),
 		flag.String(prefix+"ds", "", "dataset id to store data for"),
 	}
 }
@@ -84,12 +83,11 @@ func (f datasetFlags) CreateDataset() *Dataset {
 	if *f.datasetID == "" {
 		return nil
 	}
-	cs := f.Flags.CreateStore()
-	if cs == nil {
+	rootDS, ok := f.Flags.CreateDataStore()
+	if !ok {
 		return nil
 	}
 
-	rootDS := datas.NewDataStore(cs)
 	ds := NewDataset(rootDS, *f.datasetID)
 	return &ds
 }

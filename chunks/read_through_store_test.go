@@ -16,11 +16,11 @@ type ReadThroughStoreTestSuite struct {
 }
 
 func (suite *ReadThroughStoreTestSuite) SetupTest() {
-	suite.store = NewReadThroughStore(&MemoryStore{}, &TestStore{})
+	suite.Store = NewReadThroughStore(&MemoryStore{}, &TestStore{})
 }
 
 func (suite *ReadThroughStoreTestSuite) TearDownTest() {
-	suite.store.Close()
+	suite.Store.Close()
 }
 
 func (suite *LevelDBStoreTestSuite) TestReadThroughStoreGet() {
