@@ -6,8 +6,6 @@ type {{.Name}} struct {
 
 type {{.Name}}Def map[{{defType .KeyType}}]{{defType .ValueType}}
 
-type {{.Name}}IterCallback (func(k {{userType .KeyType}}, v {{userType .ValueType}}) (stop bool))
-
 func New{{.Name}}() {{.Name}} {
 	return {{.Name}}{types.NewMap()}
 }
@@ -72,8 +70,31 @@ func (m {{.Name}}) Remove(p {{userType .KeyType}}) {{.Name}} {
 	return {{.Name}}{m.m.Remove({{userToValue "p" .KeyType}})}
 }
 
+type {{.Name}}IterCallback func(k {{userType .KeyType}}, v {{userType .ValueType}}) (stop bool)
+
 func (m {{.Name}}) Iter(cb {{.Name}}IterCallback) {
 	m.m.Iter(func(k, v types.Value) bool {
 		return cb({{valueToUser "k" .KeyType}}, {{valueToUser "v" .ValueType}})
 	})
+}
+
+type {{.Name}}IterAllCallback func(k {{userType .KeyType}}, v {{userType .ValueType}})
+
+func (m {{.Name}}) IterAll(cb {{.Name}}IterAllCallback) {
+	m.m.IterAll(func(k, v types.Value) {
+		cb({{valueToUser "k" .KeyType}}, {{valueToUser "v" .ValueType}})
+	})
+}
+
+
+type {{.Name}}FilterCallback func(k {{userType .KeyType}}, v {{userType .ValueType}}) (keep bool)
+
+func (m {{.Name}}) Filter(cb {{.Name}}FilterCallback) {{.Name}} {
+	nm := New{{.Name}}()
+	m.IterAll(func(k {{userType .KeyType}}, v {{userType .ValueType}}) {
+		if cb(k, v) {
+			nm = nm.Set(k, v)
+		}
+	})
+	return nm
 }
