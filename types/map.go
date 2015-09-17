@@ -83,10 +83,40 @@ func (fm Map) Iter(cb mapIterCallback) {
 	for _, entry := range fm.m {
 		k := entry.key.Deref(fm.cs)
 		v := entry.value.Deref(fm.cs)
+		entry.key.Release()
+		entry.value.Release()
 		if cb(k, v) {
 			break
 		}
 	}
+}
+
+type mapIterAllCallback func(key, value Value)
+
+func (fm Map) IterAll(cb mapIterAllCallback) {
+	for _, entry := range fm.m {
+		k := entry.key.Deref(fm.cs)
+		v := entry.value.Deref(fm.cs)
+		cb(k, v)
+		entry.key.Release()
+		entry.value.Release()
+	}
+}
+
+type mapFilterCallback func(key, value Value) (keep bool)
+
+func (fm Map) Filter(cb mapFilterCallback) Map {
+	nm := NewMap()
+	for _, entry := range fm.m {
+		k := entry.key.Deref(fm.cs)
+		v := entry.value.Deref(fm.cs)
+		if cb(k, v) {
+			nm = nm.Set(k, v)
+		}
+		entry.key.Release()
+		entry.value.Release()
+	}
+	return nm
 }
 
 func (fm Map) Ref() ref.Ref {

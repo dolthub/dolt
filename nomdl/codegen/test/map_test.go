@@ -60,3 +60,45 @@ func TestValueMapValue(t *testing.T) {
 	m2 := MapOfStringToValueFromVal(val)
 	assert.True(m.Equals(m2))
 }
+
+func TestMapIter(t *testing.T) {
+	assert := assert.New(t)
+	m := MapOfBoolToStringDef{true: "hi", false: "bye"}.New()
+	acc := NewMapOfBoolToString()
+	m.Iter(func(k bool, v string) bool {
+		acc = acc.Set(k, v)
+		return false
+	})
+	assert.True(m.Equals(acc))
+
+	acc = NewMapOfBoolToString()
+	m.Iter(func(k bool, v string) bool {
+		return true
+	})
+	assert.True(acc.Empty())
+}
+
+func TestMapIterAll(t *testing.T) {
+	assert := assert.New(t)
+	m := MapOfBoolToStringDef{true: "hi", false: "bye"}.New()
+	acc := NewMapOfBoolToString()
+	m.IterAll(func(k bool, v string) {
+		acc = acc.Set(k, v)
+	})
+	assert.True(m.Equals(acc))
+}
+
+func TestMapFilter(t *testing.T) {
+	assert := assert.New(t)
+	m := MapOfBoolToStringDef{true: "hi", false: "bye"}.New()
+	m2 := m.Filter(func(k bool, v string) bool {
+		return k
+	})
+	assert.True(NewMapOfBoolToString().Set(true, "hi").Equals(m2))
+
+	m3 := m.Filter(func(k bool, v string) bool {
+		return v == "bye"
+	})
+	assert.True(NewMapOfBoolToString().Set(false, "bye").Equals(m3))
+
+}

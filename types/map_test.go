@@ -135,6 +135,16 @@ func TestMapIter(t *testing.T) {
 	assert.True(got(NewString("a"), Int32(0)) || got(NewString("b"), Int32(1)))
 }
 
+func TestMapFilter(t *testing.T) {
+	assert := assert.New(t)
+
+	m := NewMap(Int8(0), NewString("a"), Int8(1), NewString("b"), Int8(2), NewString("c"))
+	m2 := m.Filter(func(k, v Value) bool {
+		return k.Equals(Int8(0)) || v.Equals(NewString("c"))
+	})
+	assert.True(NewMap(Int8(0), NewString("a"), Int8(2), NewString("c")).Equals(m2))
+}
+
 func TestMapEquals(t *testing.T) {
 	assert := assert.New(t)
 	m1 := NewMap()

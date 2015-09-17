@@ -15,8 +15,6 @@ type MapOfBoolToString struct {
 
 type MapOfBoolToStringDef map[bool]string
 
-type MapOfBoolToStringIterCallback (func(k bool, v string) (stop bool))
-
 func NewMapOfBoolToString() MapOfBoolToString {
 	return MapOfBoolToString{types.NewMap()}
 }
@@ -81,10 +79,32 @@ func (m MapOfBoolToString) Remove(p bool) MapOfBoolToString {
 	return MapOfBoolToString{m.m.Remove(types.Bool(p))}
 }
 
+type MapOfBoolToStringIterCallback func(k bool, v string) (stop bool)
+
 func (m MapOfBoolToString) Iter(cb MapOfBoolToStringIterCallback) {
 	m.m.Iter(func(k, v types.Value) bool {
 		return cb(bool(k.(types.Bool)), v.(types.String).String())
 	})
+}
+
+type MapOfBoolToStringIterAllCallback func(k bool, v string)
+
+func (m MapOfBoolToString) IterAll(cb MapOfBoolToStringIterAllCallback) {
+	m.m.IterAll(func(k, v types.Value) {
+		cb(bool(k.(types.Bool)), v.(types.String).String())
+	})
+}
+
+type MapOfBoolToStringFilterCallback func(k bool, v string) (keep bool)
+
+func (m MapOfBoolToString) Filter(cb MapOfBoolToStringFilterCallback) MapOfBoolToString {
+	nm := NewMapOfBoolToString()
+	m.IterAll(func(k bool, v string) {
+		if cb(k, v) {
+			nm = nm.Set(k, v)
+		}
+	})
+	return nm
 }
 
 // MapOfStringToValue
@@ -94,8 +114,6 @@ type MapOfStringToValue struct {
 }
 
 type MapOfStringToValueDef map[string]types.Value
-
-type MapOfStringToValueIterCallback (func(k string, v types.Value) (stop bool))
 
 func NewMapOfStringToValue() MapOfStringToValue {
 	return MapOfStringToValue{types.NewMap()}
@@ -161,8 +179,30 @@ func (m MapOfStringToValue) Remove(p string) MapOfStringToValue {
 	return MapOfStringToValue{m.m.Remove(types.NewString(p))}
 }
 
+type MapOfStringToValueIterCallback func(k string, v types.Value) (stop bool)
+
 func (m MapOfStringToValue) Iter(cb MapOfStringToValueIterCallback) {
 	m.m.Iter(func(k, v types.Value) bool {
 		return cb(k.(types.String).String(), v)
 	})
+}
+
+type MapOfStringToValueIterAllCallback func(k string, v types.Value)
+
+func (m MapOfStringToValue) IterAll(cb MapOfStringToValueIterAllCallback) {
+	m.m.IterAll(func(k, v types.Value) {
+		cb(k.(types.String).String(), v)
+	})
+}
+
+type MapOfStringToValueFilterCallback func(k string, v types.Value) (keep bool)
+
+func (m MapOfStringToValue) Filter(cb MapOfStringToValueFilterCallback) MapOfStringToValue {
+	nm := NewMapOfStringToValue()
+	m.IterAll(func(k string, v types.Value) {
+		if cb(k, v) {
+			nm = nm.Set(k, v)
+		}
+	})
+	return nm
 }
