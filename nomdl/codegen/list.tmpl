@@ -86,3 +86,31 @@ func (l {{.Name}}) fromElemSlice(p []{{userType .ElemType}}) []types.Value {
 	}
 	return r
 }
+
+type {{.Name}}IterCallback func(v {{userType .ElemType}}) (stop bool)
+
+func (l {{.Name}}) Iter(f {{.Name}}IterCallback) {
+	l.l.Iter(func(v types.Value) bool {
+		return f({{valueToUser "v" .ElemType}})
+	})
+}
+
+type {{.Name}}IterAllCallback func(v {{userType .ElemType}})
+
+func (l {{.Name}}) IterAll(f {{.Name}}IterAllCallback) {
+	l.l.IterAll(func(v types.Value) {
+		f({{valueToUser "v" .ElemType}})
+	})
+}
+
+type {{.Name}}FilterCallback func(v {{userType .ElemType}}) (keep bool)
+
+func (l {{.Name}}) Filter(f {{.Name}}FilterCallback) {{.Name}} {
+	nl := New{{.Name}}()
+	l.IterAll(func(v {{userType .ElemType}}) {
+		if f(v) {
+			nl = nl.Append(v)
+		}
+	})
+	return nl
+}

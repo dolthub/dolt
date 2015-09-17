@@ -34,6 +34,23 @@ func (l listLeaf) Get(idx uint64) Value {
 	return l.getFuture(idx).Deref(l.cs)
 }
 
+func (l listLeaf) Iter(f listIterFunc) {
+	for _, fut := range l.list {
+		if f(fut.Deref(l.cs)) {
+			fut.Release()
+			break
+		}
+		fut.Release()
+	}
+}
+
+func (l listLeaf) IterAll(f listIterAllFunc) {
+	for _, fut := range l.list {
+		f(fut.Deref(l.cs))
+		fut.Release()
+	}
+}
+
 func (l listLeaf) Map(mf MapFunc) []interface{} {
 	return l.MapP(1, mf)
 }

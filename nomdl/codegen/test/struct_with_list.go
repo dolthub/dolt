@@ -185,3 +185,31 @@ func (l ListOfUInt8) fromElemSlice(p []uint8) []types.Value {
 	}
 	return r
 }
+
+type ListOfUInt8IterCallback func(v uint8) (stop bool)
+
+func (l ListOfUInt8) Iter(f ListOfUInt8IterCallback) {
+	l.l.Iter(func(v types.Value) bool {
+		return f(uint8(v.(types.UInt8)))
+	})
+}
+
+type ListOfUInt8IterAllCallback func(v uint8)
+
+func (l ListOfUInt8) IterAll(f ListOfUInt8IterAllCallback) {
+	l.l.IterAll(func(v types.Value) {
+		f(uint8(v.(types.UInt8)))
+	})
+}
+
+type ListOfUInt8FilterCallback func(v uint8) (keep bool)
+
+func (l ListOfUInt8) Filter(f ListOfUInt8FilterCallback) ListOfUInt8 {
+	nl := NewListOfUInt8()
+	l.IterAll(func(v uint8) {
+		if f(v) {
+			nl = nl.Append(v)
+		}
+	})
+	return nl
+}

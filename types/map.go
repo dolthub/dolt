@@ -77,7 +77,7 @@ func (fm Map) Remove(k Value) Map {
 	return newMapFromData(m, fm.cs)
 }
 
-type mapIterCallback func(key, value Value) bool
+type mapIterCallback func(key, value Value) (stop bool)
 
 func (fm Map) Iter(cb mapIterCallback) {
 	for _, entry := range fm.m {

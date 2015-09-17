@@ -5,6 +5,9 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
+type listIterFunc func(v Value) (stop bool)
+type listIterAllFunc func(v Value)
+
 type MapFunc func(v Value) interface{}
 
 type List interface {
@@ -22,6 +25,8 @@ type List interface {
 	Release()
 	Equals(other Value) bool
 	Chunks() (futures []Future)
+	Iter(f listIterFunc)
+	IterAll(f listIterAllFunc)
 	Map(mf MapFunc) []interface{}
 	MapP(concurrency int, mf MapFunc) []interface{}
 	mapInternal(sem chan int, mf MapFunc) []interface{}

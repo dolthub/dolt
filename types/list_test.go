@@ -237,3 +237,55 @@ func TestListMap(t *testing.T) {
 	testMap(10, 1000)
 	testMap(1, 100000)
 }
+
+func TestListIter(t *testing.T) {
+	assert := assert.New(t)
+
+	l := NewList(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	acc := []int32{}
+	i := 0
+	l.Iter(func(v Value) bool {
+		i++
+		acc = append(acc, int32(v.(Int32)))
+		return i > 2
+	})
+	assert.Equal([]int32{0, 1, 2}, acc)
+
+	cl := getFakeCompoundList("abc", "def")
+	acc2 := []string{}
+	cl.Iter(func(v Value) bool {
+		acc2 = append(acc2, v.(String).String())
+		return false
+	})
+	assert.Equal([]string{"a", "b", "c", "d", "e", "f"}, acc2)
+
+	cl2 := getFakeCompoundList("abc", "def")
+	acc3 := []string{}
+	i = 0
+	cl2.Iter(func(v Value) bool {
+		i++
+		acc3 = append(acc3, v.(String).String())
+		return i > 3
+	})
+	assert.Equal([]string{"a", "b", "c", "d"}, acc3)
+}
+
+func TestListIterAll(t *testing.T) {
+	assert := assert.New(t)
+
+	l := NewList(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	acc := []int32{}
+	i := 0
+	l.IterAll(func(v Value) {
+		i++
+		acc = append(acc, int32(v.(Int32)))
+	})
+	assert.Equal([]int32{0, 1, 2, 3, 4}, acc)
+
+	cl := getFakeCompoundList("abc", "def")
+	acc2 := []string{}
+	cl.IterAll(func(v Value) {
+		acc2 = append(acc2, v.(String).String())
+	})
+	assert.Equal([]string{"a", "b", "c", "d", "e", "f"}, acc2)
+}
