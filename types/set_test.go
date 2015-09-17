@@ -138,3 +138,49 @@ func TestSetFutures(t *testing.T) {
 	assert.Len(s.Chunks(), 1)
 	assert.EqualValues(r, s.Chunks()[0].Ref())
 }
+
+func TestSetIter(t *testing.T) {
+	assert := assert.New(t)
+
+	s := NewSet(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	acc := NewSet()
+	s.Iter(func(v Value) bool {
+		_, ok := v.(Int32)
+		assert.True(ok)
+		acc = acc.Insert(v)
+		return false
+	})
+	assert.True(s.Equals(acc))
+
+	acc = NewSet()
+	s.Iter(func(v Value) bool {
+		return true
+	})
+	assert.True(acc.Empty())
+}
+
+func TestSetIterAll(t *testing.T) {
+	assert := assert.New(t)
+
+	s := NewSet(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	acc := NewSet()
+	s.IterAll(func(v Value) {
+		_, ok := v.(Int32)
+		assert.True(ok)
+		acc = acc.Insert(v)
+	})
+	assert.True(s.Equals(acc))
+}
+
+func TestSetFilter(t *testing.T) {
+	assert := assert.New(t)
+
+	s := NewSet(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	s2 := s.Filter(func(v Value) bool {
+		i, ok := v.(Int32)
+		assert.True(ok)
+		return i%2 == 0
+	})
+
+	assert.True(NewSet(Int32(0), Int32(2), Int32(4)).Equals(s2))
+}

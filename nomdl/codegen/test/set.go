@@ -15,8 +15,6 @@ type SetOfBool struct {
 
 type SetOfBoolDef map[bool]bool
 
-type SetOfBoolIterCallback (func(p bool) (stop bool))
-
 func NewSetOfBool() SetOfBool {
 	return SetOfBool{types.NewSet()}
 }
@@ -68,10 +66,32 @@ func (s SetOfBool) Has(p bool) bool {
 	return s.s.Has(types.Bool(p))
 }
 
+type SetOfBoolIterCallback func(p bool) (stop bool)
+
 func (s SetOfBool) Iter(cb SetOfBoolIterCallback) {
 	s.s.Iter(func(v types.Value) bool {
 		return cb(bool(v.(types.Bool)))
 	})
+}
+
+type SetOfBoolIterAllCallback func(p bool)
+
+func (s SetOfBool) IterAll(cb SetOfBoolIterAllCallback) {
+	s.s.IterAll(func(v types.Value) {
+		cb(bool(v.(types.Bool)))
+	})
+}
+
+type SetOfBoolFilterCallback func(p bool) (keep bool)
+
+func (s SetOfBool) Filter(cb SetOfBoolFilterCallback) SetOfBool {
+	ns := NewSetOfBool()
+	s.IterAll(func(v bool) {
+		if cb(v) {
+			ns = ns.Insert(v)
+		}
+	})
+	return ns
 }
 
 func (s SetOfBool) Insert(p ...bool) SetOfBool {

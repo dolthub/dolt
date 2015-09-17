@@ -229,8 +229,6 @@ type SetOfUInt8 struct {
 
 type SetOfUInt8Def map[uint8]bool
 
-type SetOfUInt8IterCallback (func(p uint8) (stop bool))
-
 func NewSetOfUInt8() SetOfUInt8 {
 	return SetOfUInt8{types.NewSet()}
 }
@@ -282,10 +280,32 @@ func (s SetOfUInt8) Has(p uint8) bool {
 	return s.s.Has(types.UInt8(p))
 }
 
+type SetOfUInt8IterCallback func(p uint8) (stop bool)
+
 func (s SetOfUInt8) Iter(cb SetOfUInt8IterCallback) {
 	s.s.Iter(func(v types.Value) bool {
 		return cb(uint8(v.(types.UInt8)))
 	})
+}
+
+type SetOfUInt8IterAllCallback func(p uint8)
+
+func (s SetOfUInt8) IterAll(cb SetOfUInt8IterAllCallback) {
+	s.s.IterAll(func(v types.Value) {
+		cb(uint8(v.(types.UInt8)))
+	})
+}
+
+type SetOfUInt8FilterCallback func(p uint8) (keep bool)
+
+func (s SetOfUInt8) Filter(cb SetOfUInt8FilterCallback) SetOfUInt8 {
+	ns := NewSetOfUInt8()
+	s.IterAll(func(v uint8) {
+		if cb(v) {
+			ns = ns.Insert(v)
+		}
+	})
+	return ns
 }
 
 func (s SetOfUInt8) Insert(p ...uint8) SetOfUInt8 {
