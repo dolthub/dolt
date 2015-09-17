@@ -8,6 +8,51 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// Pitch
+
+type Pitch struct {
+	m types.Map
+}
+
+func NewPitch() Pitch {
+	return Pitch{
+		types.NewMap(types.NewString("$name"), types.NewString("Pitch")),
+	}
+}
+
+func PitchFromVal(v types.Value) Pitch {
+	return Pitch{v.(types.Map)}
+}
+
+// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
+func (s Pitch) NomsValue() types.Map {
+	return s.m
+}
+
+func (s Pitch) Equals(p Pitch) bool {
+	return s.m.Equals(p.m)
+}
+
+func (s Pitch) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s Pitch) Z() types.Float64 {
+	return types.Float64FromVal(s.m.Get(types.NewString("Z")))
+}
+
+func (s Pitch) SetZ(p types.Float64) Pitch {
+	return PitchFromVal(s.m.Set(types.NewString("Z"), p))
+}
+
+func (s Pitch) X() types.Float64 {
+	return types.Float64FromVal(s.m.Get(types.NewString("X")))
+}
+
+func (s Pitch) SetX(p types.Float64) Pitch {
+	return PitchFromVal(s.m.Set(types.NewString("X"), p))
+}
+
 // ListOfPitch
 
 type ListOfPitch struct {
@@ -80,66 +125,6 @@ func (l ListOfPitch) fromElemSlice(p []Pitch) []types.Value {
 	return r
 }
 
-// MapOfStringToListOfPitch
-
-type MapOfStringToListOfPitch struct {
-	m types.Map
-}
-
-type MapOfStringToListOfPitchIterCallback (func(k types.String, v ListOfPitch) (stop bool))
-
-func NewMapOfStringToListOfPitch() MapOfStringToListOfPitch {
-	return MapOfStringToListOfPitch{types.NewMap()}
-}
-
-func MapOfStringToListOfPitchFromVal(p types.Value) MapOfStringToListOfPitch {
-	return MapOfStringToListOfPitch{p.(types.Map)}
-}
-
-func (m MapOfStringToListOfPitch) NomsValue() types.Map {
-	return m.m
-}
-
-func (m MapOfStringToListOfPitch) Equals(p MapOfStringToListOfPitch) bool {
-	return m.m.Equals(p.m)
-}
-
-func (m MapOfStringToListOfPitch) Ref() ref.Ref {
-	return m.m.Ref()
-}
-
-func (m MapOfStringToListOfPitch) Empty() bool {
-	return m.m.Empty()
-}
-
-func (m MapOfStringToListOfPitch) Len() uint64 {
-	return m.m.Len()
-}
-
-func (m MapOfStringToListOfPitch) Has(p types.String) bool {
-	return m.m.Has(p)
-}
-
-func (m MapOfStringToListOfPitch) Get(p types.String) ListOfPitch {
-	return ListOfPitchFromVal(m.m.Get(p))
-}
-
-func (m MapOfStringToListOfPitch) Set(k types.String, v ListOfPitch) MapOfStringToListOfPitch {
-	return MapOfStringToListOfPitchFromVal(m.m.Set(k, v.NomsValue()))
-}
-
-// TODO: Implement SetM?
-
-func (m MapOfStringToListOfPitch) Remove(p types.String) MapOfStringToListOfPitch {
-	return MapOfStringToListOfPitchFromVal(m.m.Remove(p))
-}
-
-func (m MapOfStringToListOfPitch) Iter(cb MapOfStringToListOfPitchIterCallback) {
-	m.m.Iter(func(k, v types.Value) bool {
-		return cb(types.StringFromVal(k), ListOfPitchFromVal(v))
-	})
-}
-
 // MapOfStringToString
 
 type MapOfStringToString struct {
@@ -200,48 +185,63 @@ func (m MapOfStringToString) Iter(cb MapOfStringToStringIterCallback) {
 	})
 }
 
-// Pitch
+// MapOfStringToListOfPitch
 
-type Pitch struct {
+type MapOfStringToListOfPitch struct {
 	m types.Map
 }
 
-func NewPitch() Pitch {
-	return Pitch{
-		types.NewMap(types.NewString("$name"), types.NewString("Pitch")),
-	}
+type MapOfStringToListOfPitchIterCallback (func(k types.String, v ListOfPitch) (stop bool))
+
+func NewMapOfStringToListOfPitch() MapOfStringToListOfPitch {
+	return MapOfStringToListOfPitch{types.NewMap()}
 }
 
-func PitchFromVal(v types.Value) Pitch {
-	return Pitch{v.(types.Map)}
+func MapOfStringToListOfPitchFromVal(p types.Value) MapOfStringToListOfPitch {
+	return MapOfStringToListOfPitch{p.(types.Map)}
 }
 
-// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
-func (s Pitch) NomsValue() types.Map {
-	return s.m
+func (m MapOfStringToListOfPitch) NomsValue() types.Map {
+	return m.m
 }
 
-func (s Pitch) Equals(p Pitch) bool {
-	return s.m.Equals(p.m)
+func (m MapOfStringToListOfPitch) Equals(p MapOfStringToListOfPitch) bool {
+	return m.m.Equals(p.m)
 }
 
-func (s Pitch) Ref() ref.Ref {
-	return s.m.Ref()
+func (m MapOfStringToListOfPitch) Ref() ref.Ref {
+	return m.m.Ref()
 }
 
-func (s Pitch) Z() types.Float64 {
-	return types.Float64FromVal(s.m.Get(types.NewString("Z")))
+func (m MapOfStringToListOfPitch) Empty() bool {
+	return m.m.Empty()
 }
 
-func (s Pitch) SetZ(p types.Float64) Pitch {
-	return PitchFromVal(s.m.Set(types.NewString("Z"), p))
+func (m MapOfStringToListOfPitch) Len() uint64 {
+	return m.m.Len()
 }
 
-func (s Pitch) X() types.Float64 {
-	return types.Float64FromVal(s.m.Get(types.NewString("X")))
+func (m MapOfStringToListOfPitch) Has(p types.String) bool {
+	return m.m.Has(p)
 }
 
-func (s Pitch) SetX(p types.Float64) Pitch {
-	return PitchFromVal(s.m.Set(types.NewString("X"), p))
+func (m MapOfStringToListOfPitch) Get(p types.String) ListOfPitch {
+	return ListOfPitchFromVal(m.m.Get(p))
+}
+
+func (m MapOfStringToListOfPitch) Set(k types.String, v ListOfPitch) MapOfStringToListOfPitch {
+	return MapOfStringToListOfPitchFromVal(m.m.Set(k, v.NomsValue()))
+}
+
+// TODO: Implement SetM?
+
+func (m MapOfStringToListOfPitch) Remove(p types.String) MapOfStringToListOfPitch {
+	return MapOfStringToListOfPitchFromVal(m.m.Remove(p))
+}
+
+func (m MapOfStringToListOfPitch) Iter(cb MapOfStringToListOfPitchIterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(types.StringFromVal(k), ListOfPitchFromVal(v))
+	})
 }
 

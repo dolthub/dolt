@@ -32,6 +32,27 @@ func TestMapHasRemove(t *testing.T) {
 	assert.False(m3.Has(NewString("foo")))
 }
 
+func TestMapFirst(t *testing.T) {
+	assert := assert.New(t)
+	m1 := NewMap()
+	k, v := m1.First()
+	assert.Nil(k)
+	assert.Nil(v)
+
+	m1 = m1.Set(NewString("foo"), NewString("bar"))
+	m1 = m1.Set(NewString("hot"), NewString("dog"))
+	ak, av := m1.First()
+	var ek, ev Value
+
+	m1.Iter(func(k, v Value) (stop bool) {
+		ek, ev = k, v
+		return true
+	})
+
+	assert.True(ek.Equals(ak))
+	assert.True(ev.Equals(av))
+}
+
 func TestMapSetGet(t *testing.T) {
 	assert := assert.New(t)
 	m1 := NewMap()

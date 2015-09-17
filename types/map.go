@@ -24,6 +24,15 @@ func mapFromFutures(f []Future, cs chunks.ChunkSource) Map {
 	return newMapFromData(buildMapData(mapData{}, f), cs)
 }
 
+func (fm Map) First() (Value, Value) {
+	if len(fm.m) == 0 {
+		return nil, nil
+	} else {
+		entry := fm.m[0]
+		return entry.key.Deref(fm.cs), entry.value.Deref(fm.cs)
+	}
+}
+
 func (fm Map) Len() uint64 {
 	return uint64(len(fm.m))
 }

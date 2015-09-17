@@ -26,21 +26,25 @@ var (
 type NG struct {
 	w       io.WriteCloser
 	written types.Set
-	toWrite types.Set
+
+	// typename -> type
+	// We use a map rather than a set because we want order to be stable across builds
+	// If we used a set, order would be based on ref, which changes as the types change
+	toWrite types.Map
 }
 
 func New(outFile string) NG {
 	f, err := os.OpenFile(outFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	d.Chk.NoError(err)
-	return NG{w: f, written: types.NewSet(), toWrite: types.NewSet()}
+	return NG{w: f, written: types.NewSet(), toWrite: types.NewMap()}
 }
 
 func (ng *NG) WriteGo(pkg string) {
 	headerTmpl.Execute(ng.w, struct{ PackageName string }{pkg})
 
 	for !ng.toWrite.Empty() {
-		t := ng.toWrite.Any()
-		ng.toWrite = ng.toWrite.Remove(t)
+		n, t := ng.toWrite.First()
+		ng.toWrite = ng.toWrite.Remove(n)
 		ng.written = ng.written.Insert(t)
 		ng.writeType(t.(types.Map))
 	}
@@ -54,10 +58,11 @@ func (ng *NG) AddType(val types.Value) types.Value {
 		// Nothing to do, the type is primitive
 		return val
 	case types.Map:
-		if ng.written.Has(val) || ng.toWrite.Has(val) {
+		name := types.NewString(getGoTypeName(val))
+		if ng.written.Has(val) || ng.toWrite.Has(name) {
 			return val
 		}
-		ng.toWrite = ng.toWrite.Insert(val)
+		ng.toWrite = ng.toWrite.Set(name, val)
 	default:
 		d.Chk.Fail(fmt.Sprintf("Unexpected typedef: %+v", val))
 	}
