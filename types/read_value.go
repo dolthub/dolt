@@ -1,7 +1,6 @@
 package types
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,12 +14,13 @@ import (
 // ReadValue reads and decodes a value from a chunk source. It is not considered an error for the requested chunk to be absent from cs; in this case, the function simply returns nil, nil.
 func ReadValue(r ref.Ref, cs chunks.ChunkSource) Value {
 	d.Chk.NotNil(cs)
-	data := cs.Get(r)
-	if data == nil {
+	reader := cs.Get(r)
+	if reader == nil {
 		return nil
 	}
+	defer reader.Close()
 
-	i := enc.Decode(bytes.NewReader(data))
+	i := enc.Decode(reader)
 
 	return fromEncodeable(i, cs).Deref(cs)
 }

@@ -128,7 +128,7 @@ func TestSetAny(t *testing.T) {
 func TestSetFutures(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewTestStore()
+	cs := &chunks.TestStore{}
 	v := NewString("hello")
 	r := WriteValue(v, cs)
 	f := futureFromRef(r)

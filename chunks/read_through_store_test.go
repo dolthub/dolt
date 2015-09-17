@@ -1,6 +1,7 @@
 package chunks
 
 import (
+	"io/ioutil"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
@@ -15,7 +16,7 @@ type ReadThroughStoreTestSuite struct {
 }
 
 func (suite *ReadThroughStoreTestSuite) SetupTest() {
-	suite.Store = NewReadThroughStore(NewMemoryStore(), NewTestStore())
+	suite.Store = NewReadThroughStore(&MemoryStore{}, &TestStore{})
 }
 
 func (suite *ReadThroughStoreTestSuite) TearDownTest() {
@@ -23,7 +24,7 @@ func (suite *ReadThroughStoreTestSuite) TearDownTest() {
 }
 
 func (suite *LevelDBStoreTestSuite) TestReadThroughStoreGet() {
-	bs := NewTestStore()
+	bs := &TestStore{}
 
 	// Prepopulate the backing store with "abc".
 	input := "abc"
@@ -39,12 +40,15 @@ func (suite *LevelDBStoreTestSuite) TestReadThroughStoreGet() {
 	suite.Equal(1, bs.Writes)
 	suite.Equal(0, bs.Reads)
 
-	cs := NewTestStore()
+	cs := &TestStore{}
 	rts := NewReadThroughStore(cs, bs)
 
 	// Now read "abc". It is not yet in the cache so we hit the backing store.
-	data := rts.Get(ref)
+	reader := rts.Get(ref)
+	data, err := ioutil.ReadAll(reader)
+	suite.NoError(err)
 	suite.Equal(input, string(data))
+	reader.Close()
 
 	suite.Equal(1, bs.Len())
 	suite.Equal(1, cs.Len())
@@ -54,8 +58,11 @@ func (suite *LevelDBStoreTestSuite) TestReadThroughStoreGet() {
 	suite.Equal(1, bs.Reads)
 
 	// Reading it again should not hit the backing store.
-	data = rts.Get(ref)
+	reader = rts.Get(ref)
+	data, err = ioutil.ReadAll(reader)
+	suite.NoError(err)
 	suite.Equal(input, string(data))
+	reader.Close()
 
 	suite.Equal(1, bs.Len())
 	suite.Equal(1, cs.Len())
@@ -66,8 +73,8 @@ func (suite *LevelDBStoreTestSuite) TestReadThroughStoreGet() {
 }
 
 func (suite *LevelDBStoreTestSuite) TestReadThroughStorePut() {
-	bs := NewTestStore()
-	cs := NewTestStore()
+	bs := &TestStore{}
+	cs := &TestStore{}
 	rts := NewReadThroughStore(cs, bs)
 
 	// Storing "abc" should store it to both backing and caching store.

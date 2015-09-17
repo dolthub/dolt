@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
-	"github.com/attic-labs/noms/d"
 )
 
 func TestMemoryStoreTestSuite(t *testing.T) {
@@ -17,7 +16,7 @@ type MemoryStoreTestSuite struct {
 }
 
 func (suite *MemoryStoreTestSuite) SetupTest() {
-	suite.Store = NewMemoryStore()
+	suite.Store = &MemoryStore{}
 }
 
 func (suite *MemoryStoreTestSuite) TearDownTest() {
@@ -26,8 +25,8 @@ func (suite *MemoryStoreTestSuite) TearDownTest() {
 
 func (suite *MemoryStoreTestSuite) TestBadSerialization() {
 	bad := []byte{0, 1} // Not enough bytes to read first length
-	chunks, err := Deserialize(bytes.NewReader(bad))
-	for _ = range chunks {
-	}
-	d.Chk.NoChannelError(err)
+	ms := &MemoryStore{}
+	suite.Panics(func() {
+		Deserialize(bytes.NewReader(bad), ms)
+	})
 }

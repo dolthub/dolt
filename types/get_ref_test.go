@@ -20,7 +20,7 @@ func TestGetRef(t *testing.T) {
 
 func TestEnsureRef(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	cs := &chunks.MemoryStore{}
 	count := byte(1)
 	mockGetRef := func(v Value) ref.Ref {
 		d := ref.Sha1Digest{}

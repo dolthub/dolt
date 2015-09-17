@@ -7,9 +7,7 @@ import (
 )
 
 var (
-	Chk = &Assertions{
-		assert.New(&panicker{}),
-	}
+	Chk = assert.New(&panicker{})
 	// Exp provides the same API as Chk, but the resulting panics can be caught by d.Try()
 	Exp = assert.New(&recoverablePanicker{})
 )
@@ -26,17 +24,4 @@ type recoverablePanicker struct {
 
 func (s recoverablePanicker) Errorf(format string, args ...interface{}) {
 	panic(UsageError{fmt.Sprintf(format, args...)})
-}
-
-type Assertions struct {
-	*assert.Assertions
-}
-
-func (a *Assertions) NoChannelError(err <-chan interface{}) {
-	select {
-	case error, _ := <-err:
-		a.NotNil(error)
-	default:
-		break
-	}
 }

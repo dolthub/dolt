@@ -2,6 +2,7 @@ package chunks
 
 import (
 	"flag"
+	"io"
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -14,7 +15,7 @@ type NopStore struct {
 }
 
 // Get panics in NopStore! Since the data wasn't stored, you sure can't Get it.
-func (ms *NopStore) Get(ref ref.Ref) []byte {
+func (ms *NopStore) Get(ref ref.Ref) io.ReadCloser {
 	d.Chk.Fail("Whoops, you shouldn't have called this!")
 	return nil
 }

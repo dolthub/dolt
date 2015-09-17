@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"bytes"
 	"io"
 
 	"github.com/attic-labs/noms/chunks"
@@ -66,19 +65,32 @@ type teeChunkSource struct {
 	sink   chunks.ChunkSink
 }
 
-func (trs *teeChunkSource) Get(ref ref.Ref) []byte {
-	data := trs.source.Get(ref)
-	if data == nil {
+func (trs *teeChunkSource) Get(ref ref.Ref) io.ReadCloser {
+	r := trs.source.Get(ref)
+	if r == nil {
 		return nil
 	}
 
 	w := trs.sink.Put()
-	_, err := io.Copy(w, bytes.NewReader(data))
-	d.Chk.NoError(err)
-	w.Close()
-	return data
+	tr := io.TeeReader(r, w)
+	return forwardCloser{tr, []io.Closer{r, w}}
 }
 
 func (trs *teeChunkSource) Has(ref ref.Ref) bool {
 	return trs.source.Has(ref)
+}
+
+// forwardCloser closes multiple io.Closer objects.
+type forwardCloser struct {
+	io.Reader
+	cs []io.Closer
+}
+
+func (fc forwardCloser) Close() error {
+	for _, c := range fc.cs {
+		if err := c.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }

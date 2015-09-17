@@ -10,7 +10,7 @@ import (
 
 func TestWalkAll(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	cs := &chunks.MemoryStore{}
 
 	write := func(v Value) Value {
 		WriteValue(v, cs)

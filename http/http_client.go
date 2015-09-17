@@ -27,18 +27,22 @@ const (
 
 type readRequest struct {
 	r  ref.Ref
-	ch chan []byte
+	ch chan io.ReadCloser
 }
 
-// readBatch represents a set of queued read requests, each of which are blocking on a receive channel for a response.
-type readBatch map[ref.Ref][]chan []byte
+// readBatch represents a set of queued read requests, each of which are blocking on a receive channel for a response. It implements ChunkSink so that the responses can be directly deserialized and streamed back to callers.
+type readBatch map[ref.Ref][]chan io.ReadCloser
 
-func (rrg *readBatch) write(chunk chunks.Chunk) {
-	for _, ch := range (*rrg)[chunk.Ref] {
-		ch <- chunk.Data
+func (rrg *readBatch) Put() chunks.ChunkWriter {
+	return chunks.NewChunkWriter(rrg.write)
+}
+
+func (rrg *readBatch) write(r ref.Ref, data []byte) {
+	for _, ch := range (*rrg)[r] {
+		ch <- ioutil.NopCloser(bytes.NewReader(data))
 	}
 
-	delete(*rrg, chunk.Ref)
+	delete(*rrg, r)
 }
 
 // Callers to Get() must receive nil if the corresponding chunk wasn't in the response from the server (i.e. it wasn't found).
@@ -89,8 +93,8 @@ func NewHttpClient(host string) *HttpClient {
 	return client
 }
 
-func (c *HttpClient) Get(r ref.Ref) []byte {
-	ch := make(chan []byte)
+func (c *HttpClient) Get(r ref.Ref) io.ReadCloser {
+	ch := make(chan io.ReadCloser)
 	c.readQueue <- readRequest{r, ch}
 	return <-ch
 }
@@ -116,11 +120,7 @@ func (c *HttpClient) sendReadRequests() {
 			}
 		}
 
-		chunks, err := c.getRefs(refs)
-		for chunk := range chunks {
-			reqs.write(chunk)
-		}
-		d.Chk.NoChannelError(err)
+		c.getRefs(refs, &reqs)
 		reqs.respondToFailedReads()
 	}
 }
@@ -153,7 +153,7 @@ func (c *HttpClient) write(r ref.Ref, data []byte) {
 
 func (c *HttpClient) sendWriteRequests() {
 	for req := range c.writeQueue {
-		ms := chunks.NewMemoryStore()
+		ms := &chunks.MemoryStore{}
 		refs := map[ref.Ref]bool{}
 
 		addReq := func(req writeRequest) {
@@ -187,13 +187,7 @@ func (c *HttpClient) sendWriteRequests() {
 func (c *HttpClient) postRefs(refs map[ref.Ref]bool, cs chunks.ChunkSource) {
 	body := &bytes.Buffer{}
 	gw := gzip.NewWriter(body)
-	data := make(chan chunks.Chunk, 64)
-	done, _ := chunks.Serialize(gw, data)
-	for r, _ := range refs {
-		data <- chunks.Chunk{r, cs.Get(r)}
-	}
-	close(data)
-	<-done
+	chunks.Serialize(gw, refs, cs)
 	gw.Close()
 
 	url := *c.host
@@ -230,7 +224,7 @@ func (c *HttpClient) requestRef(r ref.Ref, method string, body io.Reader) *http.
 	return res
 }
 
-func (c *HttpClient) getRefs(refs map[ref.Ref]bool) (<-chan chunks.Chunk, <-chan interface{}) {
+func (c *HttpClient) getRefs(refs map[ref.Ref]bool, cs chunks.ChunkSink) {
 	// POST http://<host>/getRefs/. Post body: ref=sha1---&ref=sha1---& Response will be chunk data if present, 404 if absent.
 	u := *c.host
 	u.Path = getRefsPath
@@ -257,7 +251,7 @@ func (c *HttpClient) getRefs(refs map[ref.Ref]bool) (<-chan chunks.Chunk, <-chan
 		reader = gr
 	}
 
-	return chunks.Deserialize(reader)
+	chunks.Deserialize(reader, cs)
 }
 
 func (c *HttpClient) Root() ref.Ref {

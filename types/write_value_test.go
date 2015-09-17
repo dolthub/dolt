@@ -16,7 +16,7 @@ func TestWriteValue(t *testing.T) {
 	var s *chunks.MemoryStore
 
 	testEncode := func(expected string, v Value) ref.Ref {
-		s = chunks.NewMemoryStore()
+		s = &chunks.MemoryStore{}
 		r := WriteValue(v, s)
 
 		// Assuming that MemoryStore works correctly, we don't need to check the actual serialization, only the hash. Neat.
@@ -35,7 +35,7 @@ func TestWriteValue(t *testing.T) {
 
 func TestWriteBlobLeaf(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	cs := &chunks.MemoryStore{}
 
 	buf := bytes.NewBuffer([]byte{})
 	b1, err := NewBlob(buf)
