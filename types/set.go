@@ -81,10 +81,36 @@ func (fm Set) Iter(cb setIterCallback) {
 	// TODO: sort iteration order
 	for _, f := range fm.m {
 		v := f.Deref(fm.cs)
+		f.Release()
 		if cb(v) {
 			break
 		}
 	}
+}
+
+type setIterAllCallback func(v Value)
+
+func (fm Set) IterAll(cb setIterAllCallback) {
+	// TODO: sort iteration order
+	for _, f := range fm.m {
+		cb(f.Deref(fm.cs))
+		f.Release()
+	}
+}
+
+type setFilterCallback func(v Value) (keep bool)
+
+func (fm Set) Filter(cb setFilterCallback) Set {
+	ns := NewSet()
+	// TODO: sort iteration order
+	for _, f := range fm.m {
+		v := f.Deref(fm.cs)
+		if cb(v) {
+			ns = ns.Insert(v)
+		}
+		f.Release()
+	}
+	return ns
 }
 
 func (fm Set) Any() Value {

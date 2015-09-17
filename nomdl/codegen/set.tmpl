@@ -6,8 +6,6 @@ type {{.Name}} struct {
 
 type {{.Name}}Def map[{{defType .ElemType}}]bool
 
-type {{.Name}}IterCallback (func(p {{userType .ElemType}}) (stop bool))
-
 func New{{.Name}}() {{.Name}} {
 	return {{.Name}}{types.NewSet()}
 }
@@ -59,10 +57,32 @@ func (s {{.Name}}) Has(p {{userType .ElemType}}) bool {
 	return s.s.Has({{userToValue "p" .ElemType}})
 }
 
+type {{.Name}}IterCallback func(p {{userType .ElemType}}) (stop bool)
+
 func (s {{.Name}}) Iter(cb {{.Name}}IterCallback) {
 	s.s.Iter(func(v types.Value) bool {
 		return cb({{valueToUser "v" .ElemType}})
 	})
+}
+
+type {{.Name}}IterAllCallback func(p {{userType .ElemType}})
+
+func (s {{.Name}}) IterAll(cb {{.Name}}IterAllCallback) {
+	s.s.IterAll(func(v types.Value) {
+		cb({{valueToUser "v" .ElemType}})
+	})
+}
+
+type {{.Name}}FilterCallback func(p {{userType .ElemType}}) (keep bool)
+
+func (s {{.Name}}) Filter(cb {{.Name}}FilterCallback) {{.Name}} {
+	ns := New{{.Name}}()
+	s.IterAll(func(v {{userType .ElemType}}) {
+		if cb(v) {
+			ns = ns.Insert(v)
+		}
+	})
+	return ns
 }
 
 func (s {{.Name}}) Insert(p ...{{userType .ElemType}}) {{.Name}} {
