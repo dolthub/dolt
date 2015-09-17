@@ -1,0 +1,9 @@
+struct Pitch {
+  X: Float64
+  Z: Float64
+}
+
+using List(Map(String, Value))
+using Map(String, List(Pitch))
+using Map(String, String)
+using Map(String, Value)
