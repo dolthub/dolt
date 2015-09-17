@@ -1,25 +1,21 @@
 package chunks
 
 import (
-	"io"
-	"io/ioutil"
+	"sync"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/ref"
 )
 
 func assertInputInStore(input string, ref ref.Ref, s ChunkStore, assert *assert.Assertions) {
-	reader := s.Get(ref)
-	assert.NotNil(reader)
-	defer reader.Close()
-	data, err := ioutil.ReadAll(reader)
-	assert.NoError(err)
+	data := s.Get(ref)
+	assert.NotNil(data)
 	assert.Equal(input, string(data))
 }
 
 func assertInputNotInStore(input string, ref ref.Ref, s ChunkStore, assert *assert.Assertions) {
-	reader := s.Get(ref)
-	assert.Nil(reader)
+	data := s.Get(ref)
+	assert.Nil(data)
 }
 
 type TestStore struct {
@@ -28,7 +24,15 @@ type TestStore struct {
 	Writes int
 }
 
-func (s *TestStore) Get(ref ref.Ref) io.ReadCloser {
+func NewTestStore() *TestStore {
+	return &TestStore{
+		MemoryStore: MemoryStore{
+			mu: &sync.Mutex{},
+		},
+	}
+}
+
+func (s *TestStore) Get(ref ref.Ref) []byte {
 	s.Reads++
 	return s.MemoryStore.Get(ref)
 }

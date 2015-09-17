@@ -13,7 +13,7 @@ import (
 
 func TestTolerateUngettableRefs(t *testing.T) {
 	assert := assert.New(t)
-	v := ReadValue(ref.Ref{}, &chunks.TestStore{})
+	v := ReadValue(ref.Ref{}, chunks.NewTestStore())
 	assert.Nil(v)
 }
 

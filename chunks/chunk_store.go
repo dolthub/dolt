@@ -27,7 +27,7 @@ type RootTracker interface {
 // ChunkSource is a place to get chunks from.
 type ChunkSource interface {
 	// Get gets a reader for the value of the Ref in the store. If the ref is absent from the store nil is returned.
-	Get(ref ref.Ref) io.ReadCloser
+	Get(ref ref.Ref) []byte
 
 	// Returns true iff the value at the address |ref| is contained in the source
 	Has(ref ref.Ref) bool
@@ -51,36 +51,34 @@ type ChunkSink interface {
 		Data  // len(Data) == Len
 */
 
-func Serialize(w io.Writer, refs map[ref.Ref]bool, cs ChunkSource) {
-	// TODO: If ChunkSource could provide the length of a chunk without having to buffer it, this could be completely streaming.
-	chunk := &bytes.Buffer{}
-	for r, _ := range refs {
-		chunk.Reset()
-		reader := cs.Get(r)
-		if reader == nil {
-			continue
-		}
+type Chunk struct {
+	Ref  ref.Ref
+	Data []byte
+}
 
-		digest := r.Digest()
+// Serialize reads |chunks|, serializing each to |w|. The caller is responsible for closing |chunks|.
+func Serialize(w io.Writer, chunks <-chan Chunk) {
+	for chunk := range chunks {
+		d.Chk.NotNil(chunk.Data)
+
+		digest := chunk.Ref.Digest()
 		n, err := io.Copy(w, bytes.NewReader(digest[:]))
 		d.Chk.NoError(err)
 		d.Chk.Equal(int64(sha1.Size), n)
 
-		_, err = io.Copy(chunk, reader)
-		d.Chk.NoError(err)
-
 		// Because of chunking at higher levels, no chunk should never be more than 4GB
-		chunkSize := uint32(len(chunk.Bytes()))
+		chunkSize := uint32(len(chunk.Data))
 		err = binary.Write(w, binary.LittleEndian, chunkSize)
 		d.Chk.NoError(err)
 
-		n, err = io.Copy(w, chunk)
+		n, err = io.Copy(w, bytes.NewReader(chunk.Data))
 		d.Chk.NoError(err)
 		d.Chk.Equal(uint32(n), chunkSize)
 	}
 }
 
-func Deserialize(r io.Reader, cs ChunkSink) {
+// Deserialize reads off of |r|, sending chunks to |chunks|. When EOF is reached, it closes |chunks|.
+func Deserialize(r io.Reader, chunks chan<- Chunk) {
 	for {
 		digest := ref.Sha1Digest{}
 		n, err := io.ReadFull(r, digest[:])
@@ -94,12 +92,13 @@ func Deserialize(r io.Reader, cs ChunkSink) {
 		err = binary.Read(r, binary.LittleEndian, &chunkSize)
 		d.Chk.NoError(err)
 
-		w := cs.Put()
-		_, err = io.CopyN(w, r, int64(chunkSize))
+		chunk := &bytes.Buffer{}
+		_, err = io.CopyN(chunk, r, int64(chunkSize))
 		d.Chk.NoError(err)
-		w.Close()
-		d.Chk.Equal(w.Ref(), ref.New(digest))
+
+		chunks <- Chunk{ref.New(digest), chunk.Bytes()}
 	}
+	close(chunks)
 }
 
 // NewFlags creates a new instance of Flags, which declares a number of ChunkStore-related command-line flags using the golang flag package. Call this before flag.Parse().

@@ -63,7 +63,7 @@ func TestCompoundBlobReader(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 	assert := assert.New(t)
-	cs := &chunks.MemoryStore{}
+	cs := chunks.NewMemoryStore()
 
 	cb := getTestCompoundBlob("hello", "world")
 	bs, err := ioutil.ReadAll(cb.Reader())
@@ -244,7 +244,7 @@ func TestCompoundBlobLen(t *testing.T) {
 
 func TestCompoundBlobChunks(t *testing.T) {
 	assert := assert.New(t)
-	cs := &chunks.MemoryStore{}
+	cs := chunks.NewMemoryStore()
 
 	cb := getTestCompoundBlob("hello", "world")
 	assert.Equal(0, len(cb.Chunks()))

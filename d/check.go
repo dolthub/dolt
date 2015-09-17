@@ -8,6 +8,7 @@ import (
 
 var (
 	Chk = assert.New(&panicker{})
+
 	// Exp provides the same API as Chk, but the resulting panics can be caught by d.Try()
 	Exp = assert.New(&recoverablePanicker{})
 )

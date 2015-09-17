@@ -1,10 +1,7 @@
 package chunks
 
 import (
-	"bytes"
 	"flag"
-	"io"
-	"io/ioutil"
 	"os"
 	"sync"
 
@@ -66,7 +63,7 @@ func (l *LevelDBStore) UpdateRoot(current, last ref.Ref) bool {
 	return true
 }
 
-func (l *LevelDBStore) Get(ref ref.Ref) io.ReadCloser {
+func (l *LevelDBStore) Get(ref ref.Ref) []byte {
 	key := toChunkKey(ref)
 	chunk, err := l.db.Get(key, nil)
 	if err == errors.ErrNotFound {
@@ -74,7 +71,7 @@ func (l *LevelDBStore) Get(ref ref.Ref) io.ReadCloser {
 	}
 	d.Chk.NoError(err)
 
-	return ioutil.NopCloser(bytes.NewReader(chunk))
+	return chunk
 }
 
 func (l *LevelDBStore) Has(ref ref.Ref) bool {

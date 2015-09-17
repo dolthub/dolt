@@ -10,7 +10,7 @@ import (
 
 func TestDataStoreCommit(t *testing.T) {
 	assert := assert.New(t)
-	chunks := &chunks.MemoryStore{}
+	chunks := chunks.NewMemoryStore()
 	ds := NewDataStore(chunks)
 
 	_, ok := ds.MaybeHead()
@@ -60,7 +60,7 @@ func TestDataStoreCommit(t *testing.T) {
 func TestDataStoreConcurrency(t *testing.T) {
 	assert := assert.New(t)
 
-	chunks := &chunks.MemoryStore{}
+	chunks := chunks.NewMemoryStore()
 	ds := NewDataStore(chunks)
 
 	// Setup:

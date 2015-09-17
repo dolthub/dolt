@@ -16,7 +16,7 @@ type MemoryStoreTestSuite struct {
 }
 
 func (suite *MemoryStoreTestSuite) SetupTest() {
-	suite.Store = &MemoryStore{}
+	suite.Store = NewMemoryStore()
 }
 
 func (suite *MemoryStoreTestSuite) TearDownTest() {
@@ -25,8 +25,8 @@ func (suite *MemoryStoreTestSuite) TearDownTest() {
 
 func (suite *MemoryStoreTestSuite) TestBadSerialization() {
 	bad := []byte{0, 1} // Not enough bytes to read first length
-	ms := &MemoryStore{}
+	chunks := make(chan Chunk)
 	suite.Panics(func() {
-		Deserialize(bytes.NewReader(bad), ms)
+		Deserialize(bytes.NewReader(bad), chunks)
 	})
 }
