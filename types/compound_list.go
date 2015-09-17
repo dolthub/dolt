@@ -155,6 +155,33 @@ func (cl compoundList) Get(idx uint64) Value {
 	return cl.getFuture(idx).Deref(cl.cs)
 }
 
+func (cl compoundList) Iter(f listIterFunc) {
+	it := newListIterator(cl)
+	for {
+		fut, done := it.next()
+		if done {
+			break
+		}
+		if f(fut.Deref(cl.cs)) {
+			fut.Release()
+			break
+		}
+		fut.Release()
+	}
+}
+
+func (cl compoundList) IterAll(f listIterAllFunc) {
+	it := newListIterator(cl)
+	for {
+		fut, done := it.next()
+		if done {
+			break
+		}
+		f(fut.Deref(cl.cs))
+		fut.Release()
+	}
+}
+
 func (cl compoundList) Map(mf MapFunc) []interface{} {
 	return cl.MapP(1, mf)
 }
