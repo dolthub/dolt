@@ -15,60 +15,62 @@ type StructDef struct {
 }
 
 type Struct struct {
-	l types.List
+	m types.Map
 }
 
 func NewStruct() Struct {
-	return Struct{types.NewList(
-		types.NewString(""),
-		types.Bool(false),
+	return Struct{types.NewMap(
+		types.NewString("$name"), types.NewString("Struct"),
+		types.NewString("S"), types.NewString(""),
+		types.NewString("B"), types.Bool(false),
 	)}
 }
 
 func (def StructDef) New() Struct {
 	return Struct{
-		types.NewList(
-			types.NewString(def.S),
-			types.Bool(def.B),
+		types.NewMap(
+			types.NewString("$name"), types.NewString("Struct"),
+			types.NewString("S"), types.NewString(def.S),
+			types.NewString("B"), types.Bool(def.B),
 		)}
 }
 
 func (self Struct) Def() StructDef {
 	return StructDef{
-		self.l.Get(0).(types.String).String(),
-		bool(self.l.Get(1).(types.Bool)),
+		self.m.Get(types.NewString("S")).(types.String).String(),
+		bool(self.m.Get(types.NewString("B")).(types.Bool)),
 	}
 }
 
 func StructFromVal(val types.Value) Struct {
 	// TODO: Validate here
-	return Struct{val.(types.List)}
+	return Struct{val.(types.Map)}
 }
 
 func (self Struct) NomsValue() types.Value {
-	return self.l
+	return self.m
 }
 
-func (self Struct) Equals(p Struct) bool {
-	return self.l.Equals(p.l)
+func (self Struct) Equals(other Struct) bool {
+	return self.m.Equals(other.m)
 }
 
 func (self Struct) Ref() ref.Ref {
-	return self.l.Ref()
+	return self.m.Ref()
 }
 
 func (self Struct) S() string {
-	return self.l.Get(0).(types.String).String()
+	return self.m.Get(types.NewString("S")).(types.String).String()
 }
 
 func (self Struct) SetS(val string) Struct {
-	return Struct{self.l.Set(0, types.NewString(val))}
+	return Struct{self.m.Set(types.NewString("S"), types.NewString(val))}
 }
 
 func (self Struct) B() bool {
-	return bool(self.l.Get(1).(types.Bool))
+	return bool(self.m.Get(types.NewString("B")).(types.Bool))
 }
 
 func (self Struct) SetB(val bool) Struct {
-	return Struct{self.l.Set(1, types.Bool(val))}
+	return Struct{self.m.Set(types.NewString("B"), types.Bool(val))}
 }

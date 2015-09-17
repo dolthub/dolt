@@ -15,62 +15,64 @@ type StructWithUnionsDef struct {
 }
 
 type StructWithUnions struct {
-	l types.List
+	m types.Map
 }
 
 func NewStructWithUnions() StructWithUnions {
-	return StructWithUnions{types.NewList(
-		New__unionOfBOfFloat64AndCOfString().NomsValue(),
-		New__unionOfEOfFloat64AndFOfString().NomsValue(),
+	return StructWithUnions{types.NewMap(
+		types.NewString("$name"), types.NewString("StructWithUnions"),
+		types.NewString("A"), New__unionOfBOfFloat64AndCOfString().NomsValue(),
+		types.NewString("D"), New__unionOfEOfFloat64AndFOfString().NomsValue(),
 	)}
 }
 
 func (def StructWithUnionsDef) New() StructWithUnions {
 	return StructWithUnions{
-		types.NewList(
-			def.A.New().NomsValue(),
-			def.D.New().NomsValue(),
+		types.NewMap(
+			types.NewString("$name"), types.NewString("StructWithUnions"),
+			types.NewString("A"), def.A.New().NomsValue(),
+			types.NewString("D"), def.D.New().NomsValue(),
 		)}
 }
 
 func (self StructWithUnions) Def() StructWithUnionsDef {
 	return StructWithUnionsDef{
-		__unionOfBOfFloat64AndCOfStringFromVal(self.l.Get(0)).Def(),
-		__unionOfEOfFloat64AndFOfStringFromVal(self.l.Get(1)).Def(),
+		__unionOfBOfFloat64AndCOfStringFromVal(self.m.Get(types.NewString("A"))).Def(),
+		__unionOfEOfFloat64AndFOfStringFromVal(self.m.Get(types.NewString("D"))).Def(),
 	}
 }
 
 func StructWithUnionsFromVal(val types.Value) StructWithUnions {
 	// TODO: Validate here
-	return StructWithUnions{val.(types.List)}
+	return StructWithUnions{val.(types.Map)}
 }
 
 func (self StructWithUnions) NomsValue() types.Value {
-	return self.l
+	return self.m
 }
 
-func (self StructWithUnions) Equals(p StructWithUnions) bool {
-	return self.l.Equals(p.l)
+func (self StructWithUnions) Equals(other StructWithUnions) bool {
+	return self.m.Equals(other.m)
 }
 
 func (self StructWithUnions) Ref() ref.Ref {
-	return self.l.Ref()
+	return self.m.Ref()
 }
 
 func (self StructWithUnions) A() __unionOfBOfFloat64AndCOfString {
-	return __unionOfBOfFloat64AndCOfStringFromVal(self.l.Get(0))
+	return __unionOfBOfFloat64AndCOfStringFromVal(self.m.Get(types.NewString("A")))
 }
 
 func (self StructWithUnions) SetA(val __unionOfBOfFloat64AndCOfString) StructWithUnions {
-	return StructWithUnions{self.l.Set(0, val.NomsValue())}
+	return StructWithUnions{self.m.Set(types.NewString("A"), val.NomsValue())}
 }
 
 func (self StructWithUnions) D() __unionOfEOfFloat64AndFOfString {
-	return __unionOfEOfFloat64AndFOfStringFromVal(self.l.Get(1))
+	return __unionOfEOfFloat64AndFOfStringFromVal(self.m.Get(types.NewString("D")))
 }
 
 func (self StructWithUnions) SetD(val __unionOfEOfFloat64AndFOfString) StructWithUnions {
-	return StructWithUnions{self.l.Set(1, val.NomsValue())}
+	return StructWithUnions{self.m.Set(types.NewString("D"), val.NomsValue())}
 }
 
 // __unionOfBOfFloat64AndCOfString
@@ -81,27 +83,29 @@ type __unionOfBOfFloat64AndCOfStringDef struct {
 }
 
 type __unionOfBOfFloat64AndCOfString struct {
-	l types.List
+	m types.Map
 }
 
 func New__unionOfBOfFloat64AndCOfString() __unionOfBOfFloat64AndCOfString {
-	return __unionOfBOfFloat64AndCOfString{types.NewList(
-		types.UInt32(0),
-		types.Float64(0),
+	return __unionOfBOfFloat64AndCOfString{types.NewMap(
+		types.NewString("$name"), types.NewString("__unionOfBOfFloat64AndCOfString"),
+		types.NewString("$unionIndex"), types.UInt32(0),
+		types.NewString("$unionValue"), types.Float64(0),
 	)}
 }
 
 func (def __unionOfBOfFloat64AndCOfStringDef) New() __unionOfBOfFloat64AndCOfString {
 	return __unionOfBOfFloat64AndCOfString{
-		types.NewList(
-			types.UInt32(def.__unionIndex),
-			def.__unionDefToValue(),
+		types.NewMap(
+			types.NewString("$name"), types.NewString("__unionOfBOfFloat64AndCOfString"),
+			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
+			types.NewString("$unionValue"), def.__unionDefToValue(),
 		)}
 }
 
 func (self __unionOfBOfFloat64AndCOfString) Def() __unionOfBOfFloat64AndCOfStringDef {
 	return __unionOfBOfFloat64AndCOfStringDef{
-		uint32(self.l.Get(0).(types.UInt32)),
+		uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
 		self.__unionValueToDef(),
 	}
 }
@@ -117,41 +121,41 @@ func (def __unionOfBOfFloat64AndCOfStringDef) __unionDefToValue() types.Value {
 }
 
 func (self __unionOfBOfFloat64AndCOfString) __unionValueToDef() interface{} {
-	switch uint32(self.l.Get(0).(types.UInt32)) {
+	switch uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)) {
 	case 0:
-		return float64(self.l.Get(1).(types.Float64))
+		return float64(self.m.Get(types.NewString("$unionValue")).(types.Float64))
 	case 1:
-		return self.l.Get(1).(types.String).String()
+		return self.m.Get(types.NewString("$unionValue")).(types.String).String()
 	}
 	panic("unreachable")
 }
 
 func __unionOfBOfFloat64AndCOfStringFromVal(val types.Value) __unionOfBOfFloat64AndCOfString {
 	// TODO: Validate here
-	return __unionOfBOfFloat64AndCOfString{val.(types.List)}
+	return __unionOfBOfFloat64AndCOfString{val.(types.Map)}
 }
 
 func (self __unionOfBOfFloat64AndCOfString) NomsValue() types.Value {
-	return self.l
+	return self.m
 }
 
-func (self __unionOfBOfFloat64AndCOfString) Equals(p __unionOfBOfFloat64AndCOfString) bool {
-	return self.l.Equals(p.l)
+func (self __unionOfBOfFloat64AndCOfString) Equals(other __unionOfBOfFloat64AndCOfString) bool {
+	return self.m.Equals(other.m)
 }
 
 func (self __unionOfBOfFloat64AndCOfString) Ref() ref.Ref {
-	return self.l.Ref()
+	return self.m.Ref()
 }
 
 func (self __unionOfBOfFloat64AndCOfString) B() (val float64, ok bool) {
-	if self.l.Get(0).(types.UInt32) != 0 {
+	if self.m.Get(types.NewString("$unionIndex")).(types.UInt32) != 0 {
 		return
 	}
-	return float64(self.l.Get(1).(types.Float64)), true
+	return float64(self.m.Get(types.NewString("$unionValue")).(types.Float64)), true
 }
 
 func (self __unionOfBOfFloat64AndCOfString) SetB(val float64) __unionOfBOfFloat64AndCOfString {
-	return __unionOfBOfFloat64AndCOfString{self.l.Set(0, types.UInt32(0)).Set(1, types.Float64(val))}
+	return __unionOfBOfFloat64AndCOfString{self.m.Set(types.NewString("$unionIndex"), types.UInt32(0)).Set(types.NewString("$unionValue"), types.Float64(val))}
 }
 
 func (def __unionOfBOfFloat64AndCOfStringDef) B() (val float64, ok bool) {
@@ -168,14 +172,14 @@ func (def __unionOfBOfFloat64AndCOfStringDef) SetB(val float64) __unionOfBOfFloa
 }
 
 func (self __unionOfBOfFloat64AndCOfString) C() (val string, ok bool) {
-	if self.l.Get(0).(types.UInt32) != 1 {
+	if self.m.Get(types.NewString("$unionIndex")).(types.UInt32) != 1 {
 		return
 	}
-	return self.l.Get(1).(types.String).String(), true
+	return self.m.Get(types.NewString("$unionValue")).(types.String).String(), true
 }
 
 func (self __unionOfBOfFloat64AndCOfString) SetC(val string) __unionOfBOfFloat64AndCOfString {
-	return __unionOfBOfFloat64AndCOfString{self.l.Set(0, types.UInt32(1)).Set(1, types.NewString(val))}
+	return __unionOfBOfFloat64AndCOfString{self.m.Set(types.NewString("$unionIndex"), types.UInt32(1)).Set(types.NewString("$unionValue"), types.NewString(val))}
 }
 
 func (def __unionOfBOfFloat64AndCOfStringDef) C() (val string, ok bool) {
@@ -199,27 +203,29 @@ type __unionOfEOfFloat64AndFOfStringDef struct {
 }
 
 type __unionOfEOfFloat64AndFOfString struct {
-	l types.List
+	m types.Map
 }
 
 func New__unionOfEOfFloat64AndFOfString() __unionOfEOfFloat64AndFOfString {
-	return __unionOfEOfFloat64AndFOfString{types.NewList(
-		types.UInt32(0),
-		types.Float64(0),
+	return __unionOfEOfFloat64AndFOfString{types.NewMap(
+		types.NewString("$name"), types.NewString("__unionOfEOfFloat64AndFOfString"),
+		types.NewString("$unionIndex"), types.UInt32(0),
+		types.NewString("$unionValue"), types.Float64(0),
 	)}
 }
 
 func (def __unionOfEOfFloat64AndFOfStringDef) New() __unionOfEOfFloat64AndFOfString {
 	return __unionOfEOfFloat64AndFOfString{
-		types.NewList(
-			types.UInt32(def.__unionIndex),
-			def.__unionDefToValue(),
+		types.NewMap(
+			types.NewString("$name"), types.NewString("__unionOfEOfFloat64AndFOfString"),
+			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
+			types.NewString("$unionValue"), def.__unionDefToValue(),
 		)}
 }
 
 func (self __unionOfEOfFloat64AndFOfString) Def() __unionOfEOfFloat64AndFOfStringDef {
 	return __unionOfEOfFloat64AndFOfStringDef{
-		uint32(self.l.Get(0).(types.UInt32)),
+		uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
 		self.__unionValueToDef(),
 	}
 }
@@ -235,41 +241,41 @@ func (def __unionOfEOfFloat64AndFOfStringDef) __unionDefToValue() types.Value {
 }
 
 func (self __unionOfEOfFloat64AndFOfString) __unionValueToDef() interface{} {
-	switch uint32(self.l.Get(0).(types.UInt32)) {
+	switch uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)) {
 	case 0:
-		return float64(self.l.Get(1).(types.Float64))
+		return float64(self.m.Get(types.NewString("$unionValue")).(types.Float64))
 	case 1:
-		return self.l.Get(1).(types.String).String()
+		return self.m.Get(types.NewString("$unionValue")).(types.String).String()
 	}
 	panic("unreachable")
 }
 
 func __unionOfEOfFloat64AndFOfStringFromVal(val types.Value) __unionOfEOfFloat64AndFOfString {
 	// TODO: Validate here
-	return __unionOfEOfFloat64AndFOfString{val.(types.List)}
+	return __unionOfEOfFloat64AndFOfString{val.(types.Map)}
 }
 
 func (self __unionOfEOfFloat64AndFOfString) NomsValue() types.Value {
-	return self.l
+	return self.m
 }
 
-func (self __unionOfEOfFloat64AndFOfString) Equals(p __unionOfEOfFloat64AndFOfString) bool {
-	return self.l.Equals(p.l)
+func (self __unionOfEOfFloat64AndFOfString) Equals(other __unionOfEOfFloat64AndFOfString) bool {
+	return self.m.Equals(other.m)
 }
 
 func (self __unionOfEOfFloat64AndFOfString) Ref() ref.Ref {
-	return self.l.Ref()
+	return self.m.Ref()
 }
 
 func (self __unionOfEOfFloat64AndFOfString) E() (val float64, ok bool) {
-	if self.l.Get(0).(types.UInt32) != 0 {
+	if self.m.Get(types.NewString("$unionIndex")).(types.UInt32) != 0 {
 		return
 	}
-	return float64(self.l.Get(1).(types.Float64)), true
+	return float64(self.m.Get(types.NewString("$unionValue")).(types.Float64)), true
 }
 
 func (self __unionOfEOfFloat64AndFOfString) SetE(val float64) __unionOfEOfFloat64AndFOfString {
-	return __unionOfEOfFloat64AndFOfString{self.l.Set(0, types.UInt32(0)).Set(1, types.Float64(val))}
+	return __unionOfEOfFloat64AndFOfString{self.m.Set(types.NewString("$unionIndex"), types.UInt32(0)).Set(types.NewString("$unionValue"), types.Float64(val))}
 }
 
 func (def __unionOfEOfFloat64AndFOfStringDef) E() (val float64, ok bool) {
@@ -286,14 +292,14 @@ func (def __unionOfEOfFloat64AndFOfStringDef) SetE(val float64) __unionOfEOfFloa
 }
 
 func (self __unionOfEOfFloat64AndFOfString) F() (val string, ok bool) {
-	if self.l.Get(0).(types.UInt32) != 1 {
+	if self.m.Get(types.NewString("$unionIndex")).(types.UInt32) != 1 {
 		return
 	}
-	return self.l.Get(1).(types.String).String(), true
+	return self.m.Get(types.NewString("$unionValue")).(types.String).String(), true
 }
 
 func (self __unionOfEOfFloat64AndFOfString) SetF(val string) __unionOfEOfFloat64AndFOfString {
-	return __unionOfEOfFloat64AndFOfString{self.l.Set(0, types.UInt32(1)).Set(1, types.NewString(val))}
+	return __unionOfEOfFloat64AndFOfString{self.m.Set(types.NewString("$unionIndex"), types.UInt32(1)).Set(types.NewString("$unionValue"), types.NewString(val))}
 }
 
 func (def __unionOfEOfFloat64AndFOfStringDef) F() (val string, ok bool) {

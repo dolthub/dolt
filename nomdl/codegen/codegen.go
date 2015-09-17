@@ -40,12 +40,12 @@ func main() {
 	gen := NewCodeGen(&buf, pkg)
 	gen.WritePackage(*packageFlag)
 
+	bs, err := imports.Process(*outFlag, buf.Bytes(), nil)
+	d.Chk.NoError(err)
+
 	outFile, err := os.OpenFile(*outFlag, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	d.Chk.NoError(err)
 	defer outFile.Close()
-
-	bs, err := imports.Process(*outFlag, buf.Bytes(), nil)
-	d.Chk.NoError(err)
 
 	io.Copy(outFile, bytes.NewBuffer(bs))
 }
@@ -76,9 +76,6 @@ func (gen *codeGen) readTemplates() *template.Template {
 			"valueToUser": gen.valueToUser,
 			"userZero":    gen.userZero,
 			"valueZero":   gen.valueZero,
-			"add": func(a, b int) int {
-				return a + b
-			},
 		}).ParseGlob(glob))
 }
 
@@ -422,14 +419,12 @@ func (gen *codeGen) writeStruct(t parse.TypeRef) {
 		Name          string
 		Fields        []parse.Field
 		Choices       []parse.Field
-		UnionOffset   int
 		HasUnion      bool
 		UnionZeroType parse.TypeRef
 	}{
 		gen.userName(t),
 		desc.Fields,
 		nil,
-		len(desc.Fields),
 		desc.Union != nil,
 		parse.TypeRef{Desc: parse.PrimitiveDesc(parse.UInt32Kind)},
 	}
