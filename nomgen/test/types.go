@@ -8,6 +8,66 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// MapOfStringToFloat64
+
+type MapOfStringToFloat64 struct {
+	m types.Map
+}
+
+type MapOfStringToFloat64IterCallback (func(k types.String, v types.Float64) (stop bool))
+
+func NewMapOfStringToFloat64() MapOfStringToFloat64 {
+	return MapOfStringToFloat64{types.NewMap()}
+}
+
+func MapOfStringToFloat64FromVal(p types.Value) MapOfStringToFloat64 {
+	return MapOfStringToFloat64{p.(types.Map)}
+}
+
+func (m MapOfStringToFloat64) NomsValue() types.Map {
+	return m.m
+}
+
+func (m MapOfStringToFloat64) Equals(p MapOfStringToFloat64) bool {
+	return m.m.Equals(p.m)
+}
+
+func (m MapOfStringToFloat64) Ref() ref.Ref {
+	return m.m.Ref()
+}
+
+func (m MapOfStringToFloat64) Empty() bool {
+	return m.m.Empty()
+}
+
+func (m MapOfStringToFloat64) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m MapOfStringToFloat64) Has(p types.String) bool {
+	return m.m.Has(p)
+}
+
+func (m MapOfStringToFloat64) Get(p types.String) types.Float64 {
+	return types.Float64FromVal(m.m.Get(p))
+}
+
+func (m MapOfStringToFloat64) Set(k types.String, v types.Float64) MapOfStringToFloat64 {
+	return MapOfStringToFloat64FromVal(m.m.Set(k, v))
+}
+
+// TODO: Implement SetM?
+
+func (m MapOfStringToFloat64) Remove(p types.String) MapOfStringToFloat64 {
+	return MapOfStringToFloat64FromVal(m.m.Remove(p))
+}
+
+func (m MapOfStringToFloat64) Iter(cb MapOfStringToFloat64IterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(types.StringFromVal(k), types.Float64FromVal(v))
+	})
+}
+
 // MyTestSet
 
 type MyTestSet struct {
@@ -90,64 +150,41 @@ func (s MyTestSet) fromElemSlice(p []types.UInt32) []types.Value {
 	return r
 }
 
-// MapOfTestStructToSetOfBool
+// TestStruct
 
-type MapOfTestStructToSetOfBool struct {
+type TestStruct struct {
 	m types.Map
 }
 
-type MapOfTestStructToSetOfBoolIterCallback (func(k TestStruct, v SetOfBool) (stop bool))
-
-func NewMapOfTestStructToSetOfBool() MapOfTestStructToSetOfBool {
-	return MapOfTestStructToSetOfBool{types.NewMap()}
+func NewTestStruct() TestStruct {
+	return TestStruct{
+		types.NewMap(types.NewString("$name"), types.NewString("TestStruct")),
+	}
 }
 
-func MapOfTestStructToSetOfBoolFromVal(p types.Value) MapOfTestStructToSetOfBool {
-	return MapOfTestStructToSetOfBool{p.(types.Map)}
+func TestStructFromVal(v types.Value) TestStruct {
+	return TestStruct{v.(types.Map)}
 }
 
-func (m MapOfTestStructToSetOfBool) NomsValue() types.Map {
-	return m.m
+// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
+func (s TestStruct) NomsValue() types.Map {
+	return s.m
 }
 
-func (m MapOfTestStructToSetOfBool) Equals(p MapOfTestStructToSetOfBool) bool {
-	return m.m.Equals(p.m)
+func (s TestStruct) Equals(p TestStruct) bool {
+	return s.m.Equals(p.m)
 }
 
-func (m MapOfTestStructToSetOfBool) Ref() ref.Ref {
-	return m.m.Ref()
+func (s TestStruct) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (m MapOfTestStructToSetOfBool) Empty() bool {
-	return m.m.Empty()
+func (s TestStruct) Title() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("title")))
 }
 
-func (m MapOfTestStructToSetOfBool) Len() uint64 {
-	return m.m.Len()
-}
-
-func (m MapOfTestStructToSetOfBool) Has(p TestStruct) bool {
-	return m.m.Has(p.NomsValue())
-}
-
-func (m MapOfTestStructToSetOfBool) Get(p TestStruct) SetOfBool {
-	return SetOfBoolFromVal(m.m.Get(p.NomsValue()))
-}
-
-func (m MapOfTestStructToSetOfBool) Set(k TestStruct, v SetOfBool) MapOfTestStructToSetOfBool {
-	return MapOfTestStructToSetOfBoolFromVal(m.m.Set(k.NomsValue(), v.NomsValue()))
-}
-
-// TODO: Implement SetM?
-
-func (m MapOfTestStructToSetOfBool) Remove(p TestStruct) MapOfTestStructToSetOfBool {
-	return MapOfTestStructToSetOfBoolFromVal(m.m.Remove(p.NomsValue()))
-}
-
-func (m MapOfTestStructToSetOfBool) Iter(cb MapOfTestStructToSetOfBoolIterCallback) {
-	m.m.Iter(func(k, v types.Value) bool {
-		return cb(TestStructFromVal(k), SetOfBoolFromVal(v))
-	})
+func (s TestStruct) SetTitle(p types.String) TestStruct {
+	return TestStructFromVal(s.m.Set(types.NewString("title"), p))
 }
 
 // ListOfInt32
@@ -222,101 +259,64 @@ func (l ListOfInt32) fromElemSlice(p []types.Int32) []types.Value {
 	return r
 }
 
-// MapOfStringToFloat64
+// MapOfTestStructToSetOfBool
 
-type MapOfStringToFloat64 struct {
+type MapOfTestStructToSetOfBool struct {
 	m types.Map
 }
 
-type MapOfStringToFloat64IterCallback (func(k types.String, v types.Float64) (stop bool))
+type MapOfTestStructToSetOfBoolIterCallback (func(k TestStruct, v SetOfBool) (stop bool))
 
-func NewMapOfStringToFloat64() MapOfStringToFloat64 {
-	return MapOfStringToFloat64{types.NewMap()}
+func NewMapOfTestStructToSetOfBool() MapOfTestStructToSetOfBool {
+	return MapOfTestStructToSetOfBool{types.NewMap()}
 }
 
-func MapOfStringToFloat64FromVal(p types.Value) MapOfStringToFloat64 {
-	return MapOfStringToFloat64{p.(types.Map)}
+func MapOfTestStructToSetOfBoolFromVal(p types.Value) MapOfTestStructToSetOfBool {
+	return MapOfTestStructToSetOfBool{p.(types.Map)}
 }
 
-func (m MapOfStringToFloat64) NomsValue() types.Map {
+func (m MapOfTestStructToSetOfBool) NomsValue() types.Map {
 	return m.m
 }
 
-func (m MapOfStringToFloat64) Equals(p MapOfStringToFloat64) bool {
+func (m MapOfTestStructToSetOfBool) Equals(p MapOfTestStructToSetOfBool) bool {
 	return m.m.Equals(p.m)
 }
 
-func (m MapOfStringToFloat64) Ref() ref.Ref {
+func (m MapOfTestStructToSetOfBool) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
-func (m MapOfStringToFloat64) Empty() bool {
+func (m MapOfTestStructToSetOfBool) Empty() bool {
 	return m.m.Empty()
 }
 
-func (m MapOfStringToFloat64) Len() uint64 {
+func (m MapOfTestStructToSetOfBool) Len() uint64 {
 	return m.m.Len()
 }
 
-func (m MapOfStringToFloat64) Has(p types.String) bool {
-	return m.m.Has(p)
+func (m MapOfTestStructToSetOfBool) Has(p TestStruct) bool {
+	return m.m.Has(p.NomsValue())
 }
 
-func (m MapOfStringToFloat64) Get(p types.String) types.Float64 {
-	return types.Float64FromVal(m.m.Get(p))
+func (m MapOfTestStructToSetOfBool) Get(p TestStruct) SetOfBool {
+	return SetOfBoolFromVal(m.m.Get(p.NomsValue()))
 }
 
-func (m MapOfStringToFloat64) Set(k types.String, v types.Float64) MapOfStringToFloat64 {
-	return MapOfStringToFloat64FromVal(m.m.Set(k, v))
+func (m MapOfTestStructToSetOfBool) Set(k TestStruct, v SetOfBool) MapOfTestStructToSetOfBool {
+	return MapOfTestStructToSetOfBoolFromVal(m.m.Set(k.NomsValue(), v.NomsValue()))
 }
 
 // TODO: Implement SetM?
 
-func (m MapOfStringToFloat64) Remove(p types.String) MapOfStringToFloat64 {
-	return MapOfStringToFloat64FromVal(m.m.Remove(p))
+func (m MapOfTestStructToSetOfBool) Remove(p TestStruct) MapOfTestStructToSetOfBool {
+	return MapOfTestStructToSetOfBoolFromVal(m.m.Remove(p.NomsValue()))
 }
 
-func (m MapOfStringToFloat64) Iter(cb MapOfStringToFloat64IterCallback) {
+func (m MapOfTestStructToSetOfBool) Iter(cb MapOfTestStructToSetOfBoolIterCallback) {
 	m.m.Iter(func(k, v types.Value) bool {
-		return cb(types.StringFromVal(k), types.Float64FromVal(v))
+		return cb(TestStructFromVal(k), SetOfBoolFromVal(v))
 	})
-}
-
-// TestStruct
-
-type TestStruct struct {
-	m types.Map
-}
-
-func NewTestStruct() TestStruct {
-	return TestStruct{
-		types.NewMap(types.NewString("$name"), types.NewString("TestStruct")),
-	}
-}
-
-func TestStructFromVal(v types.Value) TestStruct {
-	return TestStruct{v.(types.Map)}
-}
-
-// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
-func (s TestStruct) NomsValue() types.Map {
-	return s.m
-}
-
-func (s TestStruct) Equals(p TestStruct) bool {
-	return s.m.Equals(p.m)
-}
-
-func (s TestStruct) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s TestStruct) Title() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("title")))
-}
-
-func (s TestStruct) SetTitle(p types.String) TestStruct {
-	return TestStructFromVal(s.m.Set(types.NewString("title"), p))
 }
 
 // SetOfBool

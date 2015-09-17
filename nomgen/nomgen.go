@@ -53,12 +53,12 @@ func (ng *NG) WriteGo(pkg string) {
 }
 
 func (ng *NG) AddType(val types.Value) types.Value {
-	name := getGoTypeName(val)
 	switch val := val.(type) {
 	case types.String:
 		// Nothing to do, the type is primitive
 		return val
 	case types.Map:
+		name := types.NewString(getGoTypeName(val))
 		if ng.written.Has(val) || ng.toWrite.Has(name) {
 			return val
 		}
