@@ -3,6 +3,7 @@ package util
 import "github.com/attic-labs/noms/types"
 
 var (
+	Geoposition           types.Map
 	PhotoTypeDef          types.Map
 	PhotoSetTypeDef       types.Map
 	RemotePhotoTypeDef    types.Map
@@ -10,6 +11,13 @@ var (
 )
 
 func init() {
+	Geoposition = types.NewMap(
+		types.NewString("$type"), types.NewString("noms.StructDef"),
+		types.NewString("$name"), types.NewString("Geoposition"),
+		types.NewString("latitude"), types.NewString("float32"),
+		types.NewString("longitude"), types.NewString("float32"),
+	)
+
 	stringSet := types.NewMap(
 		types.NewString("$type"), types.NewString("noms.SetDef"),
 		types.NewString("elem"), types.NewString("string"))
@@ -18,6 +26,7 @@ func init() {
 		types.NewString("$type"), types.NewString("noms.StructDef"),
 		types.NewString("$name"), types.NewString("Photo"),
 		types.NewString("height"), types.NewString("uint32"),
+		types.NewString("geoposition"), Geoposition,
 		types.NewString("id"), types.NewString("string"),
 		types.NewString("image"), types.NewString("blob"),
 		types.NewString("tags"), stringSet,

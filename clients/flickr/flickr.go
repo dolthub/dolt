@@ -202,6 +202,8 @@ func getAlbumPhotos(id string) SetOfRemotePhoto {
 				SmallURL       string      `json:"url_s"`
 				SmallWidth     interface{} `json:"width_s"`
 				SmallHeight    interface{} `json:"height_s"`
+				Latitude       interface{} `json:"latitude"`
+				Longitude      interface{} `json:"longitude"`
 				MediumURL      string      `json:"url_m"`
 				MediumWidth    interface{} `json:"width_m"`
 				MediumHeight   interface{} `json:"height_m"`
@@ -219,11 +221,12 @@ func getAlbumPhotos(id string) SetOfRemotePhoto {
 	err := callFlickrAPI("flickr.photosets.getPhotos", &response, &map[string]string{
 		"photoset_id": id,
 		"user_id":     user.Id().String(),
-		"extras":      "tags,url_t,url_s,url_m,url_l,url_o",
+		"extras":      "geo,tags,url_t,url_s,url_m,url_l,url_o",
 	})
 	d.Chk.NoError(err)
 
 	photos := NewSetOfRemotePhoto()
+
 	for _, p := range response.Photoset.Photo {
 		photo := NewRemotePhoto().
 			SetId(types.NewString(p.Id)).
@@ -237,6 +240,16 @@ func getAlbumPhotos(id string) SetOfRemotePhoto {
 		sizes = addSize(sizes, p.LargeURL, p.LargeWidth, p.LargeHeight)
 		sizes = addSize(sizes, p.OriginalURL, p.OriginalWidth, p.OriginalHeight)
 		photo = photo.SetSizes(sizes)
+
+		lat := deFlickr(p.Latitude)
+		lon := deFlickr(p.Longitude)
+
+		if lat != 0.0 && lon != 0.0 {
+			photo = photo.SetGeoposition(
+				NewGeoposition().
+					SetLatitude(types.Float32(lat)).
+					SetLongitude(types.Float32(lon)))
+		}
 
 		photos = photos.Insert(photo)
 	}
@@ -252,6 +265,19 @@ func getTags(tagStr string) (res SetOfString) {
 		res = res.Insert(types.NewString(tag))
 	}
 	return res
+}
+
+func deFlickr(argh interface{}) float32 {
+	switch argh := argh.(type) {
+	case float64:
+		return float32(argh)
+	case string:
+		f64, err := strconv.ParseFloat(argh, 32)
+		d.Chk.NoError(err)
+		return float32(f64)
+	default:
+		return 0.0
+	}
 }
 
 func addSize(sizes MapOfSizeToString, url string, width interface{}, height interface{}) MapOfSizeToString {

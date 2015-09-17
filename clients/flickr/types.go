@@ -204,6 +204,14 @@ func (s RemotePhoto) SetTags(p SetOfString) RemotePhoto {
 	return RemotePhotoFromVal(s.m.Set(types.NewString("tags"), p.NomsValue()))
 }
 
+func (s RemotePhoto) Geoposition() Geoposition {
+	return GeopositionFromVal(s.m.Get(types.NewString("geoposition")))
+}
+
+func (s RemotePhoto) SetGeoposition(p Geoposition) RemotePhoto {
+	return RemotePhotoFromVal(s.m.Set(types.NewString("geoposition"), p.NomsValue()))
+}
+
 func (s RemotePhoto) Url() types.String {
 	return types.StringFromVal(s.m.Get(types.NewString("url")))
 }
@@ -292,6 +300,51 @@ func (s SetOfString) fromElemSlice(p []types.String) []types.Value {
 		r[i] = v
 	}
 	return r
+}
+
+// Geoposition
+
+type Geoposition struct {
+	m types.Map
+}
+
+func NewGeoposition() Geoposition {
+	return Geoposition{
+		types.NewMap(types.NewString("$name"), types.NewString("Geoposition")),
+	}
+}
+
+func GeopositionFromVal(v types.Value) Geoposition {
+	return Geoposition{v.(types.Map)}
+}
+
+// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
+func (s Geoposition) NomsValue() types.Map {
+	return s.m
+}
+
+func (s Geoposition) Equals(p Geoposition) bool {
+	return s.m.Equals(p.m)
+}
+
+func (s Geoposition) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s Geoposition) Longitude() types.Float32 {
+	return types.Float32FromVal(s.m.Get(types.NewString("longitude")))
+}
+
+func (s Geoposition) SetLongitude(p types.Float32) Geoposition {
+	return GeopositionFromVal(s.m.Set(types.NewString("longitude"), p))
+}
+
+func (s Geoposition) Latitude() types.Float32 {
+	return types.Float32FromVal(s.m.Get(types.NewString("latitude")))
+}
+
+func (s Geoposition) SetLatitude(p types.Float32) Geoposition {
+	return GeopositionFromVal(s.m.Set(types.NewString("latitude"), p))
 }
 
 // User
