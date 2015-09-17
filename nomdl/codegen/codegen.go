@@ -12,7 +12,7 @@ import (
 	"strings"
 	"text/template"
 
-	"golang.org/x/tools/imports"
+	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/tools/imports"
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/nomdl/parse"
