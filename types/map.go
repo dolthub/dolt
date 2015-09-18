@@ -123,12 +123,11 @@ func (fm Map) Ref() ref.Ref {
 	return ensureRef(fm.ref, fm)
 }
 
-func (fm Map) Equals(other Value) (res bool) {
-	if other == nil {
-		return false
-	} else {
-		return fm.Ref() == other.Ref()
+func (m Map) Equals(other Value) (res bool) {
+	if other, ok := other.(Map); ok {
+		return m.Ref() == other.Ref()
 	}
+	return false
 }
 
 func (fm Map) Chunks() (futures []Future) {

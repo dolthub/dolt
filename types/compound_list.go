@@ -309,10 +309,10 @@ func (cl compoundList) Release() {
 }
 
 func (cl compoundList) Equals(other Value) bool {
-	if other == nil {
-		return false
+	if other, ok := other.(compoundList); ok {
+		return cl.Ref() == other.Ref()
 	}
-	return cl.Ref() == other.Ref()
+	return false
 }
 
 // startsChunk determines if idx refers to the first element in one of cl's chunks.

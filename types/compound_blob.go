@@ -112,8 +112,8 @@ func (cb compoundBlob) Ref() ref.Ref {
 }
 
 func (cb compoundBlob) Equals(other Value) bool {
-	if other == nil {
-		return false
+	if other, ok := other.(compoundBlob); ok {
+		return cb.Ref() == other.Ref()
 	}
-	return cb.Ref() == other.Ref()
+	return false
 }

@@ -40,9 +40,5 @@ func futureEqualsValue(f Future, v Value) bool {
 }
 
 func futureFromValue(v Value) Future {
-	if r, ok := v.(Ref); ok {
-		return &unresolvedFuture{ref: r.Ref()}
-	} else {
-		return resolvedFuture{v}
-	}
+	return resolvedFuture{v}
 }
