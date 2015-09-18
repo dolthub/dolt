@@ -36,10 +36,9 @@ func (bl blobLeaf) Chunks() []Future {
 	return nil
 }
 
-func (fb blobLeaf) Equals(other Value) bool {
-	if other == nil {
-		return false
-	} else {
-		return fb.Ref() == other.Ref()
+func (bl blobLeaf) Equals(other Value) bool {
+	if other, ok := other.(blobLeaf); ok {
+		return bl.Ref() == other.Ref()
 	}
+	return false
 }

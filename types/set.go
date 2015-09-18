@@ -125,11 +125,10 @@ func (fs Set) Ref() ref.Ref {
 }
 
 func (fs Set) Equals(other Value) bool {
-	if other == nil {
-		return false
-	} else {
+	if other, ok := other.(Set); ok {
 		return fs.Ref() == other.Ref()
 	}
+	return false
 }
 
 func (fs Set) Chunks() (futures []Future) {

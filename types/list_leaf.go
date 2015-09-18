@@ -146,11 +146,10 @@ func (l listLeaf) Release() {
 }
 
 func (l listLeaf) Equals(other Value) bool {
-	if other == nil {
-		return false
-	} else {
+	if other, ok := other.(listLeaf); ok {
 		return l.Ref() == other.Ref()
 	}
+	return false
 }
 
 func (l listLeaf) Chunks() (futures []Future) {

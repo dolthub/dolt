@@ -27,12 +27,11 @@ func (fs String) Ref() ref.Ref {
 	return ensureRef(fs.ref, fs)
 }
 
-func (fs String) Equals(other Value) bool {
-	if other == nil {
-		return false
-	} else {
-		return fs.Ref() == other.Ref()
+func (s String) Equals(other Value) bool {
+	if other, ok := other.(String); ok {
+		return s.Ref() == other.Ref()
 	}
+	return false
 }
 
 func (fs String) Chunks() []Future {

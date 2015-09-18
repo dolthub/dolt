@@ -80,5 +80,11 @@ func TestPrimitiveEquals(t *testing.T) {
 				assert.False(f1().Equals(f2()))
 			}
 		}
+		v := f1()
+		if v != nil {
+			r := Ref{R: v.Ref()}
+			assert.False(r.Equals(v))
+			assert.False(v.Equals(r))
+		}
 	}
 }
