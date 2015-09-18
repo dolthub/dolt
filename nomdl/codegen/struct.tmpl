@@ -7,33 +7,33 @@ type {{.Name}}Def struct {
 {{end}}}
 
 type {{.Name}} struct {
-	l types.List
+	m types.Map
 }
 
 func New{{.Name}}() {{.Name}} {
-	return {{.Name}}{types.NewList(
-			{{range .Fields}}{{valueZero .T}},
-			{{end}}{{if .HasUnion}}types.UInt32(0),
-			{{valueZero .UnionZeroType}},{{end}}
+	return {{.Name}}{types.NewMap(
+			types.NewString("$name"), types.NewString("{{.Name}}"),
+			{{range .Fields}}types.NewString("{{.Name}}"), {{valueZero .T}},
+			{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(0),
+			types.NewString("$unionValue"), {{valueZero .UnionZeroType}},{{end}}
 		)}
 }
 
 func (def {{.Name}}Def) New() {{.Name}} {
 	return {{.Name}}{
-		types.NewList(
-		{{range .Fields}}{{defToValue (print "def." .Name) .T}},
-		{{end}}{{if .HasUnion}}types.UInt32(def.__unionIndex),
-		def.__unionDefToValue(),
-	{{end}}
+		types.NewMap(
+			types.NewString("$name"), types.NewString("{{.Name}}"),
+			{{range .Fields}}types.NewString("{{.Name}}"), {{defToValue (print "def." .Name) .T}},
+			{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
+			types.NewString("$unionValue"), def.__unionDefToValue(),
+		{{end}}
 	)}
 }
 
-{{$unionOffset := .UnionOffset}}
-
 func (self {{.Name}}) Def() {{.Name}}Def {
 	return {{.Name}}Def{
-		{{range $index, $field := .Fields}}{{valueToDef (print "self.l.Get(" $index ")") .T}},
-		{{end}}{{if .HasUnion}}uint32(self.l.Get({{$unionOffset}}).(types.UInt32)),
+		{{range .Fields}}{{valueToDef (printf `self.m.Get(types.NewString("%s"))` .Name) .T}},
+		{{end}}{{if .HasUnion}}uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
 		self.__unionValueToDef(),{{end}}
 	}
 }
@@ -48,9 +48,9 @@ func (def {{.Name}}Def) __unionDefToValue() types.Value {
 }
 
 func (self {{.Name}}) __unionValueToDef() interface{} {
-	switch uint32(self.l.Get({{$unionOffset}}).(types.UInt32)) {
+	switch uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)) {
 	{{range $index, $field := .Choices}}case {{$index}}:
-		return {{valueToDef (printf "self.l.Get(%d)" (add $unionOffset 1)) .T}}
+		return {{valueToDef `self.m.Get(types.NewString("$unionValue"))` .T}}
 	{{end}}}
 	panic("unreachable")
 }
@@ -58,42 +58,42 @@ func (self {{.Name}}) __unionValueToDef() interface{} {
 
 func {{.Name}}FromVal(val types.Value) {{.Name}} {
 	// TODO: Validate here
-	return {{.Name}}{val.(types.List)}
+	return {{.Name}}{val.(types.Map)}
 }
 
 func (self {{.Name}}) NomsValue() types.Value {
-	return self.l
+	return self.m
 }
 
-func (self {{.Name}}) Equals(p {{.Name}}) bool {
-	return self.l.Equals(p.l)
+func (self {{.Name}}) Equals(other {{.Name}}) bool {
+	return self.m.Equals(other.m)
 }
 
 func (self {{.Name}}) Ref() ref.Ref {
-	return self.l.Ref()
+	return self.m.Ref()
 }
 
 {{$name := .Name}}
 {{range $index, $field := .Fields}}
 func (self {{$name}}) {{.Name}}() {{userType .T}} {
-	return {{valueToUser (printf "self.l.Get(%d)" $index) .T}}
+	return {{valueToUser (printf `self.m.Get(types.NewString("%s"))` .Name) .T}}
 }
 
 func (self {{$name}}) Set{{.Name}}(val {{userType .T}}) {{$name}} {
-	return {{$name}}{self.l.Set({{$index}}, {{userToValue "val" .T}})}
+	return {{$name}}{self.m.Set(types.NewString("{{.Name}}"), {{userToValue "val" .T}})}
 }
 {{end}}
 
 {{range $index, $field := .Choices}}
 func (self {{$name}}) {{.Name}}() (val {{userType .T}}, ok bool) {
-	if self.l.Get({{$unionOffset}}).(types.UInt32) != {{$index}} {
+	if self.m.Get(types.NewString("$unionIndex")).(types.UInt32) != {{$index}} {
 		return
 	}
-	return {{valueToUser (printf "self.l.Get(%d)" (add $unionOffset 1)) .T}}, true
+	return {{valueToUser `self.m.Get(types.NewString("$unionValue"))` .T}}, true
 }
 
 func (self {{$name}}) Set{{.Name}}(val {{userType .T}}) {{$name}} {
-	return {{$name}}{self.l.Set({{$unionOffset}}, types.UInt32({{$index}})).Set({{add $unionOffset 1}}, {{userToValue "val" .T}})}
+	return {{$name}}{self.m.Set(types.NewString("$unionIndex"), types.UInt32({{$index}})).Set(types.NewString("$unionValue"), {{userToValue "val" .T}})}
 }
 
 func (def {{$name}}Def) {{.Name}}() (val {{defType .T}}, ok bool) {
