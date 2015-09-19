@@ -141,7 +141,7 @@ type ListOfGeonode struct {
 	l types.List
 }
 
-type ListOfGeonodeIterCallback (func(p Geonode) (stop bool))
+type ListOfGeonodeIterCallback (func (p Geonode) (stop bool))
 
 func NewListOfGeonode() ListOfGeonode {
 	return ListOfGeonode{types.NewList()}
@@ -343,3 +343,4 @@ func (m MapOfStringToQuadTree) Iter(cb MapOfStringToQuadTreeIterCallback) {
 		return cb(types.StringFromVal(k), QuadTreeFromVal(v))
 	})
 }
+

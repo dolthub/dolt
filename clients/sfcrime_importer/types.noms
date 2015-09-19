@@ -1,0 +1,20 @@
+struct Geoposition {
+	Latitude: Float32
+ 	Longitude: Float32
+}
+
+struct Incident {
+	ID: Int64
+	Category: String
+	Description: String
+	DayOfWeek: String
+	Date: String
+	Time: String
+	PdDistrict: String
+	Resolution: String
+	Address: String
+	Geoposition: Geoposition
+	PdID: String
+}
+
+using List(Incident)

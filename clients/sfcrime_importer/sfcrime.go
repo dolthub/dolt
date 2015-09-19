@@ -4,20 +4,30 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
+    "github.com/attic-labs/noms/chunks"
+    "github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
-	"io"
 	"math"
 	"os"
 	"strconv"
+    "sync"
 	"time"
 )
 
+// data can be obtained using: 
+// wget --output-document=sfcrime.csv https://data.sfgov.org/api/views/tmnf-yvry/rows.csv?accessType=DOWNLOAD
 var (
 	limitFlag = flag.Int("limit", math.MaxInt32, "limit number of rows that are imported")
     inputFlag = flag.String("input-file", "", "path to .csv file containing sfcrime data")
+    quietFlag = flag.Bool("quiet", false, "suppress printing of messages")
+    numIncidents = 0
+    rowsRead = 0
+    start = time.Now()
 )
+
+const maxListSize = 1e5
 
 func main() {
 	dsFlags := dataset.NewFlags()
@@ -29,107 +39,142 @@ func main() {
 	}
 	defer ds.Close()
 
-	start := time.Now()
 	csvfile, err := os.Open(*inputFlag)
-
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-
 	defer csvfile.Close()
+
+    if util.MaybeStartCPUProfile() {
+        defer util.StopCPUProfile()
+    }
 
 	reader := csv.NewReader(csvfile)
 
-	minLon := types.Float32(180)
-	minLat := types.Float32(90)
-	maxLat := types.Float32(-90)
-	maxLon := types.Float32(-180)
+	minLon := float32(180)
+	minLat := float32(90)
+	maxLat := float32(-90)
+ 	maxLon := float32(-180)
+    
+    // read the header row and discard it
 	_, err = reader.Read()
-	incidents := []types.Value{}
-	numBadRows := 0
-	numDataRows := 0
-	cont := true
-	for r, err := reader.Read(); cont && err == nil; r, err = reader.Read() {
-		numDataRows++
+    outLiers := 0
+	limitExceeded := false
+    iChan, rChan := getNomsWriter(ds.Store())
+    refs := []types.Value{}
+
+    // Start a go routine to add incident refs to the list as they are ready
+    var wg sync.WaitGroup
+    go func() {
+        wg.Add(1)
+        for ref := range rChan {
+            refs = append(refs, ref)
+        }
+        wg.Done()
+    }()
+    
+	for r, err := reader.Read(); !limitExceeded && err == nil; r, err = reader.Read() {
+        rowsRead++
 		id, _ := strconv.ParseInt(r[0], 10, 64)
 		lon64, _ := strconv.ParseFloat(r[9], 32)
 		lat64, _ := strconv.ParseFloat(r[10], 32)
-		lon := types.Float32(float32(lon64))
-		lat := types.Float32(float32(lat64))
-		geoposition := NewGeoposition().
-			SetLatitude(lat).
-			SetLongitude(lon)
-		incident := NewIncident().
-			SetID(types.Int64(id)).
-			SetCategory(types.NewString(r[1])).
-			SetDescription(types.NewString(r[2])).
-			SetDayOfWeek(types.NewString(r[3])).
-			SetDate(types.NewString(r[4])).
-			SetTime(types.NewString(r[5])).
-			SetPdDistrict(types.NewString(r[6])).
-			SetResolution(types.NewString(r[7])).
-			SetAddress(types.NewString(r[8])).
-			SetGeoposition(geoposition).
-			SetPdID(types.NewString(r[12]))
+		geopos := GeopositionDef{Latitude: float32(lat64), Longitude: float32(lon64)}
+		incident := IncidentDef{
+            ID: id,
+            Category: r[1],
+            Description: r[2],
+            DayOfWeek: r[3],
+            Date: r[4],
+            Time: r[5],
+            PdDistrict: r[6],
+            Resolution: r[7],
+            Address: r[8],
+            Geoposition: geopos,
+            PdID: r[12],
+        }
 
-		if lat > 35 && lat < 40 && lon > -125 && lon < 120 {
-			minLat = min(minLat, lat)
-			maxLat = max(maxLat, lat)
-			minLon = min(minLon, lon)
-			maxLon = max(maxLon, lon)
-
-			incidents = append(incidents, incident.NomsValue())
+		if geopos.Latitude > 35 && geopos.Latitude < 40 && geopos.Longitude > -125 && geopos.Longitude < 120 {
+			minLat = min(minLat, geopos.Latitude)
+			maxLat = max(maxLat, geopos.Latitude)
+			minLon = min(minLon, geopos.Longitude)
+			maxLon = max(maxLon, geopos.Longitude)
+			iChan <- &incident
 		} else {
-			numBadRows++
-			//			fmt.Println("Bad lat/lon value in row:", i, "lat:", y, "lon:", x)
+			outLiers++
 		}
-		if len(incidents)%1e5 == 0 {
-			fmt.Printf("Added %d incidents, elapsed time: %.2f secs\n", len(incidents), time.Now().Sub(start).Seconds())
-		}
-		if len(incidents) >= *limitFlag {
-			cont = false
+		if !*quietFlag && rowsRead%maxListSize == 0 {
+            fmt.Printf("Processed %d rows, %d incidents, elapsed time: %.2f secs\n", rowsRead, numIncidents, time.Now().Sub(start).Seconds())
+        }
+		if rowsRead >= *limitFlag {
+            limitExceeded = true
 		}
 	}
+    
+    close(iChan)
+    wg.Wait()
+    
+    incidentRefs := types.NewList(refs...)
+    if !*quietFlag {
+        fmt.Printf("Converting refs list to noms list: %.2f secs\n", time.Now().Sub(start).Seconds())
+    }
+    _, ok := ds.Commit(incidentRefs)
+    d.Exp.True(ok, "Could not commit due to conflicting edit")
 
-    printDataStats(numDataRows, len(incidents), numBadRows, minLat, minLon, maxLat, maxLon)
-    if err != nil && err != io.EOF {
-        fmt.Println(err)
-        os.Exit(1)
+    if !*quietFlag {
+        fmt.Printf("Commit completed, elaspsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
+        printDataStats(rowsRead, numIncidents, outLiers, minLat, minLon, maxLat, maxLon)
     }
 
-	nomsIncidents := types.NewList(incidents...)
-	fmt.Printf("Incident slice converted to types.list, elapsedTime: %.2f secs\n", time.Now().Sub(start).Seconds())
-	_, ok := ds.Commit(nomsIncidents)
-    d.Exp.True(ok, "Could not commit due to conflicting edit")
-	
-    fmt.Printf("Commit completed, elaspsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
-    fmt.Println("Ref of list containing Incidents:", nomsIncidents.Ref())
+    fmt.Printf("Ref of list containing Incidents: %s, , elaspsed time: %.2f secs\n", incidentRefs.Ref(), time.Now().Sub(start).Seconds())
 }
 
-func printDataStats(rows, rowsInserted, badRows int, minLat, minLon, maxLat, maxLon types.Float32) {
+func getNomsWriter(cs chunks.ChunkSink) (iChan chan *IncidentDef, rChan chan types.Ref) {
+    iChan = make(chan *IncidentDef, 3000)
+    rChan = make(chan types.Ref, 3000)
+    var wg sync.WaitGroup
+    for i := 0; i < 32; i++ {
+        wg.Add(1)
+        go func() {
+            for incidentDef := range iChan {
+                v := incidentDef.New()
+                r := types.WriteValue(v.NomsValue(), cs)
+                rChan <- types.Ref{R: r}
+            }
+            wg.Done()
+        }()
+    }
+    
+    go func() {
+        wg.Wait()
+        close(rChan)
+    }()
+    
+    return
+}
+
+func printDataStats(rows, rowsInserted, badRows int, minLat, minLon, maxLat, maxLon float32) {
 	template := `Dataset Info:
     Number of rows: %d
     Incidents inserted: %d
-    Rows skipped because of bad data: %d
+    Incidents not inserted due to outlying coordinates: %d
     Minimum latitude: %f,
     Minimum longitude: %f
     Maximum latitude: %f
     Maximum longitude: %f
     `
 	fmt.Printf(template, rows, rowsInserted, badRows, minLat, minLon, maxLat, maxLon)
-
-	fmt.Printf("Minimum Georectangle(%.2f, %.2f, %.2f,%.2f)\n",
+	fmt.Printf("Minimum Georectangle(%.2f, %.2f, %.2f, %.2f)\n",
 		toFixedCeil(float32(maxLat), 2), toFixedFloor(float32(minLon), 2), toFixedFloor(float32(minLat), 2), toFixedCeil(float32(maxLon), 2))
 }
 
 // Utility functions
-func min(x, y types.Float32) types.Float32 {
-	return types.Float32(math.Min(float64(x), float64(y)))
+func min(x, y float32) float32 {
+	return float32(math.Min(float64(x), float64(y)))
 }
 
-func max(x, y types.Float32) types.Float32 {
-	return types.Float32(math.Max(float64(x), float64(y)))
+func max(x, y float32) float32 {
+	return float32(math.Max(float64(x), float64(y)))
 }
 
 func (p Geoposition) String() string {

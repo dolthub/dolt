@@ -52,7 +52,7 @@ func (r Georectangle) ContainsPoint(p Geoposition) bool {
 }
 
 // Split creates one new rectangle for each quadrant in "r"
-func (r Georectangle) Split() map[string]Georectangle {
+func (r Georectangle) Split() (tlRect, blRect, trRect, brRect Georectangle) {
 	//    fmt.Println("Splitting:", r)
 	maxLat := float32(r.TopLeft().Latitude())
 	minLon := float32(r.TopLeft().Longitude())
@@ -60,16 +60,13 @@ func (r Georectangle) Split() map[string]Georectangle {
 	maxLon := float32(r.BottomRight().Longitude())
 	midLat := ((maxLat - minLat) / 2) + minLat
 	midLon := ((maxLon - minLon) / 2) + minLon
-	res := map[string]Georectangle{
-		tl: CreateNewGeorectangle(maxLat, minLon, midLat, midLon),
-		bl: CreateNewGeorectangle(midLat, minLon, minLat, midLon),
-		tr: CreateNewGeorectangle(maxLat, midLon, midLat, maxLon),
-		br: CreateNewGeorectangle(midLat, midLon, minLat, maxLon),
-	}
-	//    for k, v := range res {
-	//        fmt.Println(k, "->", v)
-	//    }
-	return res
+
+	tlRect = CreateNewGeorectangle(maxLat, minLon, midLat, midLon)
+	blRect = CreateNewGeorectangle(midLat, minLon, minLat, midLon)
+	trRect = CreateNewGeorectangle(maxLat, midLon, midLat, maxLon)
+	brRect = CreateNewGeorectangle(midLat, midLon, minLat, maxLon)
+
+	return
 }
 
 func (r Georectangle) String() string {
