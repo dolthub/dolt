@@ -1,10 +1,10 @@
 struct StructWithUnionField {
-  A: Float32
+  a: Float32
   union {
-    B: Float64
-    C: String
-    D: Blob
-    E: Value
-    F: Set(UInt8)
+    b: Float64
+    c: String
+    d: Blob
+    e: Value
+    f: Set(UInt8)
   }
 }

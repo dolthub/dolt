@@ -117,6 +117,7 @@ func (gen *codeGen) readTemplates() *template.Template {
 			"valueToUser": gen.valueToUser,
 			"userZero":    gen.userZero,
 			"valueZero":   gen.valueZero,
+			"title":       strings.Title,
 		}).ParseGlob(glob))
 }
 
@@ -377,7 +378,7 @@ func (gen *codeGen) userName(t parse.TypeRef) string {
 				if i > 0 {
 					s += "And"
 				}
-				s += f.Name + "Of" + gen.userName(f.T)
+				s += strings.Title(f.Name) + "Of" + gen.userName(f.T)
 			}
 			return s
 		}

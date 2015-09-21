@@ -4,5 +4,5 @@ type {{.Name}} uint32
 
 {{$name := .Name}}
 const ({{range $index, $id := .Ids}}
-	{{$id}}{{if eq $index 0}} {{$name}} = iota{{end}}{{end}}
+	{{title $id}}{{if eq $index 0}} {{$name}} = iota{{end}}{{end}}
 )

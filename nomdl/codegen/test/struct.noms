@@ -1,4 +1,4 @@
 struct Struct {
-  S: String
-  B: Bool
+  s: String
+  b: Bool
 }

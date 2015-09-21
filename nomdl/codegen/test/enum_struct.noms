@@ -1,9 +1,9 @@
 enum Handedness {
-  Right
-  Left
-  Switch
+  right
+  left
+  switch
 }
 
 struct EnumStruct {
-  Hand: Handedness
+  hand: Handedness
 }

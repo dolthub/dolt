@@ -12,10 +12,10 @@ func TestAccessors(t *testing.T) {
 	assert := assert.New(t)
 
 	def := StructPrimitivesDef{
-		UInt64:  uint64(1),
-		UInt32:  uint32(2),
-		UInt16:  uint16(3),
-		UInt8:   uint8(4),
+		Uint64:  uint64(1),
+		Uint32:  uint32(2),
+		Uint16:  uint16(3),
+		Uint8:   uint8(4),
 		Int64:   int64(5),
 		Int32:   int32(6),
 		Int16:   int16(7),
@@ -30,29 +30,29 @@ func TestAccessors(t *testing.T) {
 
 	st := def.New()
 
-	assert.Equal(uint64(1), st.UInt64())
-	st.SetUInt64(uint64(11))
-	assert.Equal(uint64(1), st.UInt64())
-	st = st.SetUInt64(uint64(11))
-	assert.Equal(uint64(11), st.UInt64())
+	assert.Equal(uint64(1), st.Uint64())
+	st.SetUint64(uint64(11))
+	assert.Equal(uint64(1), st.Uint64())
+	st = st.SetUint64(uint64(11))
+	assert.Equal(uint64(11), st.Uint64())
 
-	assert.Equal(uint32(2), st.UInt32())
-	st.SetUInt32(uint32(22))
-	assert.Equal(uint32(2), st.UInt32())
-	st = st.SetUInt32(uint32(22))
-	assert.Equal(uint32(22), st.UInt32())
+	assert.Equal(uint32(2), st.Uint32())
+	st.SetUint32(uint32(22))
+	assert.Equal(uint32(2), st.Uint32())
+	st = st.SetUint32(uint32(22))
+	assert.Equal(uint32(22), st.Uint32())
 
-	assert.Equal(uint16(3), st.UInt16())
-	st.SetUInt16(uint16(33))
-	assert.Equal(uint16(3), st.UInt16())
-	st = st.SetUInt16(uint16(33))
-	assert.Equal(uint16(33), st.UInt16())
+	assert.Equal(uint16(3), st.Uint16())
+	st.SetUint16(uint16(33))
+	assert.Equal(uint16(3), st.Uint16())
+	st = st.SetUint16(uint16(33))
+	assert.Equal(uint16(33), st.Uint16())
 
-	assert.Equal(uint8(4), st.UInt8())
-	st.SetUInt8(uint8(44))
-	assert.Equal(uint8(4), st.UInt8())
-	st = st.SetUInt8(uint8(44))
-	assert.Equal(uint8(44), st.UInt8())
+	assert.Equal(uint8(4), st.Uint8())
+	st.SetUint8(uint8(44))
+	assert.Equal(uint8(4), st.Uint8())
+	st = st.SetUint8(uint8(44))
+	assert.Equal(uint8(44), st.Uint8())
 
 	assert.Equal(int64(5), st.Int64())
 	st.SetInt64(int64(55))
