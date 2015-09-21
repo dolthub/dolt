@@ -8,9 +8,9 @@ import (
 )
 
 func assertInputInStore(input string, ref ref.Ref, s ChunkStore, assert *assert.Assertions) {
-	data := s.Get(ref)
-	assert.NotNil(data)
-	assert.Equal(input, string(data))
+	chunk := s.Get(ref)
+	assert.False(chunk.IsEmpty())
+	assert.Equal(input, string(chunk.Data()))
 }
 
 func assertInputNotInStore(input string, ref ref.Ref, s ChunkStore, assert *assert.Assertions) {
@@ -32,7 +32,7 @@ func NewTestStore() *TestStore {
 	}
 }
 
-func (s *TestStore) Get(ref ref.Ref) []byte {
+func (s *TestStore) Get(ref ref.Ref) Chunk {
 	s.Reads++
 	return s.MemoryStore.Get(ref)
 }
@@ -41,7 +41,7 @@ func (s *TestStore) Has(ref ref.Ref) bool {
 	return s.MemoryStore.Has(ref)
 }
 
-func (s *TestStore) Put() ChunkWriter {
+func (s *TestStore) Put(c Chunk) {
 	s.Writes++
-	return s.MemoryStore.Put()
+	s.MemoryStore.Put(c)
 }

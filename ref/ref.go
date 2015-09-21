@@ -1,10 +1,12 @@
 package ref
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"hash"
+	"io"
 	"regexp"
 
 	"github.com/attic-labs/noms/d"
@@ -38,6 +40,13 @@ func New(digest Sha1Digest) Ref {
 // NewHash creates a new instance of the hash we use for refs.
 func NewHash() hash.Hash {
 	return sha1.New()
+}
+
+func FromData(data []byte) Ref {
+	h := NewHash()
+	_, err := io.Copy(h, bytes.NewReader(data))
+	d.Chk.NoError(err)
+	return FromHash(h)
 }
 
 func FromHash(h hash.Hash) Ref {

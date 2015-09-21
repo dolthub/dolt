@@ -27,10 +27,9 @@ func (suite *LevelDBStoreTestSuite) TestReadThroughStoreGet() {
 
 	// Prepopulate the backing store with "abc".
 	input := "abc"
-	w := bs.Put()
-	_, err := w.Write([]byte(input))
-	suite.NoError(err)
-	ref := w.Ref()
+	c := NewChunk([]byte(input))
+	bs.Put(c)
+	ref := c.Ref()
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
 	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", ref.String())
@@ -43,8 +42,8 @@ func (suite *LevelDBStoreTestSuite) TestReadThroughStoreGet() {
 	rts := NewReadThroughStore(cs, bs)
 
 	// Now read "abc". It is not yet in the cache so we hit the backing store.
-	data := rts.Get(ref)
-	suite.Equal(input, string(data))
+	chunk := rts.Get(ref)
+	suite.Equal(input, string(chunk.Data()))
 
 	suite.Equal(1, bs.Len())
 	suite.Equal(1, cs.Len())
@@ -54,8 +53,8 @@ func (suite *LevelDBStoreTestSuite) TestReadThroughStoreGet() {
 	suite.Equal(1, bs.Reads)
 
 	// Reading it again should not hit the backing store.
-	data = rts.Get(ref)
-	suite.Equal(input, string(data))
+	chunk = rts.Get(ref)
+	suite.Equal(input, string(chunk.Data()))
 
 	suite.Equal(1, bs.Len())
 	suite.Equal(1, cs.Len())
@@ -72,10 +71,9 @@ func (suite *LevelDBStoreTestSuite) TestReadThroughStorePut() {
 
 	// Storing "abc" should store it to both backing and caching store.
 	input := "abc"
-	w := rts.Put()
-	_, err := w.Write([]byte(input))
-	suite.NoError(err)
-	ref := w.Ref()
+	c := NewChunk([]byte(input))
+	rts.Put(c)
+	ref := c.Ref()
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
 	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", ref.String())

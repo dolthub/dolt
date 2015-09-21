@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
@@ -48,13 +47,13 @@ func (s *httpServer) handleRef(w http.ResponseWriter, req *http.Request) {
 
 		switch req.Method {
 		case "GET":
-			data := s.cs.Get(r)
-			if data == nil {
+			chunk := s.cs.Get(r)
+			if chunk.IsEmpty() {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
 
-			_, err := io.Copy(w, bytes.NewReader(data))
+			_, err := io.Copy(w, bytes.NewReader(chunk.Data()))
 			d.Chk.NoError(err)
 			w.Header().Add("Content-Type", "application/octet-stream")
 			w.Header().Add("Cache-Control", "max-age=31536000") // 1 year
@@ -87,29 +86,7 @@ func (s *httpServer) handlePostRefs(w http.ResponseWriter, req *http.Request) {
 			reader = gr
 		}
 
-		ch := make(chan chunks.Chunk, 64)
-		go chunks.Deserialize(reader, ch)
-
-		wg := sync.WaitGroup{}
-		for c := range ch {
-			wg.Add(1)
-
-			s.writeLimit <- struct{}{}
-			c := c
-			go func() {
-				defer func() {
-					wg.Done()
-					<-s.writeLimit
-				}()
-
-				w := s.cs.Put()
-				defer w.Close()
-				_, err := io.Copy(w, bytes.NewReader(c.Data))
-				d.Chk.NoError(err)
-			}()
-		}
-
-		wg.Wait()
+		chunks.Deserialize(reader, s.cs)
 		w.WriteHeader(http.StatusCreated)
 	})
 
@@ -127,6 +104,11 @@ func (s *httpServer) handleGetRefs(w http.ResponseWriter, req *http.Request) {
 		refStrs := req.PostForm["ref"]
 		d.Exp.True(len(refStrs) > 0)
 
+		refs := make([]ref.Ref, 0)
+		for _, refStr := range refStrs {
+			refs = append(refs, ref.Parse(refStr))
+		}
+
 		w.Header().Add("Content-Type", "application/octet-stream")
 		writer := w.(io.Writer)
 		if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
@@ -136,24 +118,14 @@ func (s *httpServer) handleGetRefs(w http.ResponseWriter, req *http.Request) {
 			writer = gw
 		}
 
-		data := make(chan chunks.Chunk, 64)
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			chunks.Serialize(writer, data)
-			wg.Done()
-		}()
-		for _, refStr := range refStrs {
-			r := ref.Parse(refStr)
-			d := s.cs.Get(r)
-			if d == nil {
-				continue
+		sz := chunks.NewSerializer(writer)
+		for _, r := range refs {
+			c := s.cs.Get(r)
+			if !c.IsEmpty() {
+				sz.Put(c)
 			}
-
-			data <- chunks.Chunk{r, d}
 		}
-		close(data)
-		wg.Wait()
+		sz.Close()
 	})
 
 	if err != nil {

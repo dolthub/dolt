@@ -27,38 +27,34 @@ const (
 
 type readRequest struct {
 	r  ref.Ref
-	ch chan []byte
+	ch chan chunks.Chunk
 }
 
 // readBatch represents a set of queued read requests, each of which are blocking on a receive channel for a response.
-type readBatch map[ref.Ref][]chan []byte
+type readBatch map[ref.Ref][]chan chunks.Chunk
 
-func (rrg *readBatch) write(chunk chunks.Chunk) {
-	for _, ch := range (*rrg)[chunk.Ref] {
-		ch <- chunk.Data
+func (rrg *readBatch) Put(c chunks.Chunk) {
+	for _, ch := range (*rrg)[c.Ref()] {
+		ch <- c
 	}
 
-	delete(*rrg, chunk.Ref)
+	delete(*rrg, c.Ref())
 }
 
 // Callers to Get() must receive nil if the corresponding chunk wasn't in the response from the server (i.e. it wasn't found).
-func (rrq *readBatch) respondToFailedReads() {
+func (rrq *readBatch) Close() error {
 	for _, chs := range *rrq {
 		for _, ch := range chs {
-			ch <- nil
+			ch <- chunks.EmptyChunk
 		}
 	}
-}
-
-type writeRequest struct {
-	r    ref.Ref
-	data []byte
+	return nil
 }
 
 type HttpClient struct {
 	host       *url.URL
 	readQueue  chan readRequest
-	writeQueue chan writeRequest
+	writeQueue chan chunks.Chunk
 	wg         *sync.WaitGroup
 	written    map[ref.Ref]bool
 	wmu        *sync.Mutex
@@ -72,7 +68,7 @@ func NewHttpClient(host string) *HttpClient {
 	client := &HttpClient{
 		u,
 		make(chan readRequest, readBufferSize),
-		make(chan writeRequest, writeBufferSize),
+		make(chan chunks.Chunk, writeBufferSize),
 		&sync.WaitGroup{},
 		map[ref.Ref]bool{},
 		&sync.Mutex{},
@@ -89,8 +85,8 @@ func NewHttpClient(host string) *HttpClient {
 	return client
 }
 
-func (c *HttpClient) Get(r ref.Ref) []byte {
-	ch := make(chan []byte)
+func (c *HttpClient) Get(r ref.Ref) chunks.Chunk {
+	ch := make(chan chunks.Chunk)
 	c.readQueue <- readRequest{r, ch}
 	return <-ch
 }
@@ -116,12 +112,8 @@ func (c *HttpClient) sendReadRequests() {
 			}
 		}
 
-		chs := make(chan chunks.Chunk, 64)
-		go c.getRefs(refs, chs)
-		for c := range chs {
-			reqs.write(c)
-		}
-		reqs.respondToFailedReads()
+		c.getRefs(refs, &reqs)
+		reqs.Close()
 	}
 }
 
@@ -134,72 +126,49 @@ func (c *HttpClient) Has(ref ref.Ref) bool {
 	return res.StatusCode == http.StatusOK
 }
 
-func (c *HttpClient) Put() chunks.ChunkWriter {
+func (c *HttpClient) Put(chunk chunks.Chunk) {
 	// POST http://<host>/ref/. Body is a serialized chunkBuffer. Response will be 201.
-	return chunks.NewChunkWriter(c.write)
-}
-
-func (c *HttpClient) write(r ref.Ref, data []byte) {
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
-	if c.written[r] {
+	if c.written[chunk.Ref()] {
 		return
 	}
-	c.written[r] = true
+	c.written[chunk.Ref()] = true
 
 	c.wg.Add(1)
-	c.writeQueue <- writeRequest{r, data}
+	c.writeQueue <- chunk
 }
 
 func (c *HttpClient) sendWriteRequests() {
-	for req := range c.writeQueue {
-		ms := chunks.NewMemoryStore()
-		refs := map[ref.Ref]bool{}
-
-		addReq := func(req writeRequest) {
-			w := ms.Put()
-			_, err := io.Copy(w, bytes.NewReader(req.data))
-			d.Chk.NoError(err)
-			r := w.Ref()
-			d.Chk.Equal(req.r, r)
-			refs[req.r] = true
-		}
-		addReq(req)
+	for chunk := range c.writeQueue {
+		chs := make([]chunks.Chunk, 0)
+		chs = append(chs, chunk)
 
 	loop:
 		for {
 			select {
-			case req := <-c.writeQueue:
-				addReq(req)
+			case chunk := <-c.writeQueue:
+				chs = append(chs, chunk)
 			default:
 				break loop
 			}
 		}
 
-		c.postRefs(refs, ms)
-
-		for _, _ = range refs {
+		c.postRefs(chs)
+		for _, _ = range chs {
 			c.wg.Done()
 		}
 	}
 }
 
-func (c *HttpClient) postRefs(refs map[ref.Ref]bool, cs chunks.ChunkSource) {
+func (c *HttpClient) postRefs(chs []chunks.Chunk) {
 	body := &bytes.Buffer{}
 	gw := gzip.NewWriter(body)
-
-	wg := sync.WaitGroup{}
-	data := make(chan chunks.Chunk, 64)
-	wg.Add(1)
-	go func() {
-		chunks.Serialize(gw, data)
-		wg.Done()
-	}()
-	for r, _ := range refs {
-		data <- chunks.Chunk{r, cs.Get(r)}
+	sz := chunks.NewSerializer(gw)
+	for _, chunk := range chs {
+		sz.Put(chunk)
 	}
-	close(data)
-	wg.Wait()
+	sz.Close()
 	gw.Close()
 
 	url := *c.host
@@ -236,7 +205,7 @@ func (c *HttpClient) requestRef(r ref.Ref, method string, body io.Reader) *http.
 	return res
 }
 
-func (c *HttpClient) getRefs(refs map[ref.Ref]bool, chs chan<- chunks.Chunk) {
+func (c *HttpClient) getRefs(refs map[ref.Ref]bool, cs chunks.ChunkSink) {
 	// POST http://<host>/getRefs/. Post body: ref=sha1---&ref=sha1---& Response will be chunk data if present, 404 if absent.
 	u := *c.host
 	u.Path = getRefsPath
@@ -263,7 +232,7 @@ func (c *HttpClient) getRefs(refs map[ref.Ref]bool, chs chan<- chunks.Chunk) {
 		reader = gr
 	}
 
-	chunks.Deserialize(reader, chs)
+	chunks.Deserialize(reader, cs)
 }
 
 func (c *HttpClient) Root() ref.Ref {
