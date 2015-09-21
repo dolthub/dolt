@@ -9,12 +9,6 @@ import (
 
 // StructWithUnionField
 
-type StructWithUnionFieldDef struct {
-	A            float32
-	__unionIndex uint32
-	__unionValue interface{}
-}
-
 type StructWithUnionField struct {
 	m types.Map
 }
@@ -26,6 +20,12 @@ func NewStructWithUnionField() StructWithUnionField {
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	)}
+}
+
+type StructWithUnionFieldDef struct {
+	A            float32
+	__unionIndex uint32
+	__unionValue interface{}
 }
 
 func (def StructWithUnionFieldDef) New() StructWithUnionField {
@@ -229,11 +229,11 @@ type SetOfUInt8 struct {
 	s types.Set
 }
 
-type SetOfUInt8Def map[uint8]bool
-
 func NewSetOfUInt8() SetOfUInt8 {
 	return SetOfUInt8{types.NewSet()}
 }
+
+type SetOfUInt8Def map[uint8]bool
 
 func (def SetOfUInt8Def) New() SetOfUInt8 {
 	l := make([]types.Value, len(def))

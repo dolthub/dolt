@@ -9,11 +9,6 @@ import (
 
 // Struct
 
-type StructDef struct {
-	S string
-	B bool
-}
-
 type Struct struct {
 	m types.Map
 }
@@ -24,6 +19,11 @@ func NewStruct() Struct {
 		types.NewString("S"), types.NewString(""),
 		types.NewString("B"), types.Bool(false),
 	)}
+}
+
+type StructDef struct {
+	S string
+	B bool
 }
 
 func (def StructDef) New() Struct {

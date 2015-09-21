@@ -13,11 +13,11 @@ type SetOfBool struct {
 	s types.Set
 }
 
-type SetOfBoolDef map[bool]bool
-
 func NewSetOfBool() SetOfBool {
 	return SetOfBool{types.NewSet()}
 }
+
+type SetOfBoolDef map[bool]bool
 
 func (def SetOfBoolDef) New() SetOfBool {
 	l := make([]types.Value, len(def))

@@ -9,11 +9,6 @@ import (
 
 // StructWithUnions
 
-type StructWithUnionsDef struct {
-	A __unionOfBOfFloat64AndCOfStringDef
-	D __unionOfEOfFloat64AndFOfStringDef
-}
-
 type StructWithUnions struct {
 	m types.Map
 }
@@ -24,6 +19,11 @@ func NewStructWithUnions() StructWithUnions {
 		types.NewString("A"), New__unionOfBOfFloat64AndCOfString().NomsValue(),
 		types.NewString("D"), New__unionOfEOfFloat64AndFOfString().NomsValue(),
 	)}
+}
+
+type StructWithUnionsDef struct {
+	A __unionOfBOfFloat64AndCOfStringDef
+	D __unionOfEOfFloat64AndFOfStringDef
 }
 
 func (def StructWithUnionsDef) New() StructWithUnions {
@@ -77,11 +77,6 @@ func (self StructWithUnions) SetD(val __unionOfEOfFloat64AndFOfString) StructWit
 
 // __unionOfBOfFloat64AndCOfString
 
-type __unionOfBOfFloat64AndCOfStringDef struct {
-	__unionIndex uint32
-	__unionValue interface{}
-}
-
 type __unionOfBOfFloat64AndCOfString struct {
 	m types.Map
 }
@@ -92,6 +87,11 @@ func New__unionOfBOfFloat64AndCOfString() __unionOfBOfFloat64AndCOfString {
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	)}
+}
+
+type __unionOfBOfFloat64AndCOfStringDef struct {
+	__unionIndex uint32
+	__unionValue interface{}
 }
 
 func (def __unionOfBOfFloat64AndCOfStringDef) New() __unionOfBOfFloat64AndCOfString {
@@ -197,11 +197,6 @@ func (def __unionOfBOfFloat64AndCOfStringDef) SetC(val string) __unionOfBOfFloat
 
 // __unionOfEOfFloat64AndFOfString
 
-type __unionOfEOfFloat64AndFOfStringDef struct {
-	__unionIndex uint32
-	__unionValue interface{}
-}
-
 type __unionOfEOfFloat64AndFOfString struct {
 	m types.Map
 }
@@ -212,6 +207,11 @@ func New__unionOfEOfFloat64AndFOfString() __unionOfEOfFloat64AndFOfString {
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	)}
+}
+
+type __unionOfEOfFloat64AndFOfStringDef struct {
+	__unionIndex uint32
+	__unionValue interface{}
 }
 
 func (def __unionOfEOfFloat64AndFOfStringDef) New() __unionOfEOfFloat64AndFOfString {

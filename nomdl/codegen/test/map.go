@@ -13,11 +13,11 @@ type MapOfBoolToString struct {
 	m types.Map
 }
 
-type MapOfBoolToStringDef map[bool]string
-
 func NewMapOfBoolToString() MapOfBoolToString {
 	return MapOfBoolToString{types.NewMap()}
 }
+
+type MapOfBoolToStringDef map[bool]string
 
 func (def MapOfBoolToStringDef) New() MapOfBoolToString {
 	kv := make([]types.Value, 0, len(def)*2)
@@ -113,11 +113,11 @@ type MapOfStringToValue struct {
 	m types.Map
 }
 
-type MapOfStringToValueDef map[string]types.Value
-
 func NewMapOfStringToValue() MapOfStringToValue {
 	return MapOfStringToValue{types.NewMap()}
 }
+
+type MapOfStringToValueDef map[string]types.Value
 
 func (def MapOfStringToValueDef) New() MapOfStringToValue {
 	kv := make([]types.Value, 0, len(def)*2)

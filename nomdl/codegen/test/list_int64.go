@@ -13,11 +13,11 @@ type ListOfInt64 struct {
 	l types.List
 }
 
-type ListOfInt64Def []int64
-
 func NewListOfInt64() ListOfInt64 {
 	return ListOfInt64{types.NewList()}
 }
+
+type ListOfInt64Def []int64
 
 func (def ListOfInt64Def) New() ListOfInt64 {
 	l := make([]types.Value, len(def))
@@ -27,17 +27,17 @@ func (def ListOfInt64Def) New() ListOfInt64 {
 	return ListOfInt64{types.NewList(l...)}
 }
 
-func ListOfInt64FromVal(val types.Value) ListOfInt64 {
-	// TODO: Validate here
-	return ListOfInt64{val.(types.List)}
-}
-
 func (self ListOfInt64) Def() ListOfInt64Def {
 	l := make([]int64, self.Len())
 	for i := uint64(0); i < self.Len(); i++ {
 		l[i] = int64(self.l.Get(i).(types.Int64))
 	}
 	return l
+}
+
+func ListOfInt64FromVal(val types.Value) ListOfInt64 {
+	// TODO: Validate here
+	return ListOfInt64{val.(types.List)}
 }
 
 func (self ListOfInt64) NomsValue() types.Value {

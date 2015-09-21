@@ -4,28 +4,31 @@ type {{.Name}} struct {
 	m types.Map
 }
 
-type {{.Name}}Def map[{{defType .KeyType}}]{{defType .ValueType}}
 
 func New{{.Name}}() {{.Name}} {
 	return {{.Name}}{types.NewMap()}
 }
 
-func (def {{.Name}}Def) New() {{.Name}} {
-	kv := make([]types.Value, 0, len(def)*2)
-	for k, v := range def {
-		kv = append(kv, {{defToValue "k" .KeyType}}, {{defToValue "v" .ValueType}})
-	}
-	return {{.Name}}{types.NewMap(kv...)}
-}
+{{if .CanUseDef}}
+	type {{.Name}}Def map[{{defType .KeyType}}]{{defType .ValueType}}
 
-func (self {{.Name}}) Def() {{.Name}}Def {
-	def := make(map[{{defType .KeyType}}]{{defType .ValueType}})
-	self.m.Iter(func(k, v types.Value) bool {
-		def[{{valueToDef "k" .KeyType}}] = {{valueToDef "v" .ValueType}}
-		return false
-	})
-	return def
-}
+	func (def {{.Name}}Def) New() {{.Name}} {
+		kv := make([]types.Value, 0, len(def)*2)
+		for k, v := range def {
+			kv = append(kv, {{defToValue "k" .KeyType}}, {{defToValue "v" .ValueType}})
+		}
+		return {{.Name}}{types.NewMap(kv...)}
+	}
+
+	func (self {{.Name}}) Def() {{.Name}}Def {
+		def := make(map[{{defType .KeyType}}]{{defType .ValueType}})
+		self.m.Iter(func(k, v types.Value) bool {
+			def[{{valueToDef "k" .KeyType}}] = {{valueToDef "v" .ValueType}}
+			return false
+		})
+		return def
+	}
+{{end}}
 
 func {{.Name}}FromVal(p types.Value) {{.Name}} {
 	// TODO: Validate here

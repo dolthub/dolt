@@ -9,10 +9,6 @@ import (
 
 // EnumStruct
 
-type EnumStructDef struct {
-	Hand Handedness
-}
-
 type EnumStruct struct {
 	m types.Map
 }
@@ -22,6 +18,10 @@ func NewEnumStruct() EnumStruct {
 		types.NewString("$name"), types.NewString("EnumStruct"),
 		types.NewString("Hand"), types.Int32(0),
 	)}
+}
+
+type EnumStructDef struct {
+	Hand Handedness
 }
 
 func (def EnumStructDef) New() EnumStruct {

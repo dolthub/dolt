@@ -1,11 +1,5 @@
 // {{.Name}}
 
-type {{.Name}}Def struct {
-	{{range .Fields}}{{title .Name}} {{defType .T}}
-	{{end}}{{if .HasUnion}}__unionIndex uint32
-	__unionValue interface{}
-{{end}}}
-
 type {{.Name}} struct {
 	m types.Map
 }
@@ -19,41 +13,50 @@ func New{{.Name}}() {{.Name}} {
 		)}
 }
 
-func (def {{.Name}}Def) New() {{.Name}} {
-	return {{.Name}}{
-		types.NewMap(
-			types.NewString("$name"), types.NewString("{{.Name}}"),
-			{{range .Fields}}types.NewString("{{title .Name}}"), {{defToValue (print "def." (title .Name)) .T}},
-			{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
-			types.NewString("$unionValue"), def.__unionDefToValue(),
-		{{end}}
-	)}
-}
+{{if .CanUseDef}}
+	type {{.Name}}Def struct {
+		{{range .Fields}}{{title .Name}} {{defType .T}}
+		{{end}}{{if .HasUnion}}__unionIndex uint32
+		__unionValue interface{}
+	{{end}}}
 
-func (self {{.Name}}) Def() {{.Name}}Def {
-	return {{.Name}}Def{
-		{{range .Fields}}{{valueToDef (printf `self.m.Get(types.NewString("%s"))` (title .Name)) .T}},
-		{{end}}{{if .HasUnion}}uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
-		self.__unionValueToDef(),{{end}}
+
+	func (def {{.Name}}Def) New() {{.Name}} {
+		return {{.Name}}{
+			types.NewMap(
+				types.NewString("$name"), types.NewString("{{.Name}}"),
+				{{range .Fields}}types.NewString("{{title .Name}}"), {{defToValue (print "def." (title .Name)) .T}},
+				{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
+				types.NewString("$unionValue"), def.__unionDefToValue(),
+			{{end}}
+		)}
 	}
-}
 
-{{if .HasUnion}}
-func (def {{.Name}}Def) __unionDefToValue() types.Value {
-	switch def.__unionIndex {
-	{{range $index, $field := .Choices}}case {{$index}}:
-		return {{defToValue (printf "def.__unionValue.(%s)" (defType .T)) .T}}
-	{{end}}}
-	panic("unreachable")
-}
+	func (self {{.Name}}) Def() {{.Name}}Def {
+		return {{.Name}}Def{
+			{{range .Fields}}{{valueToDef (printf `self.m.Get(types.NewString("%s"))` (title .Name)) .T}},
+			{{end}}{{if .HasUnion}}uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
+			self.__unionValueToDef(),{{end}}
+		}
+	}
 
-func (self {{.Name}}) __unionValueToDef() interface{} {
-	switch uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)) {
-	{{range $index, $field := .Choices}}case {{$index}}:
-		return {{valueToDef `self.m.Get(types.NewString("$unionValue"))` .T}}
-	{{end}}}
-	panic("unreachable")
-}
+	{{if .HasUnion}}
+		func (def {{.Name}}Def) __unionDefToValue() types.Value {
+			switch def.__unionIndex {
+			{{range $index, $field := .Choices}}case {{$index}}:
+				return {{defToValue (printf "def.__unionValue.(%s)" (defType .T)) .T}}
+			{{end}}}
+			panic("unreachable")
+		}
+
+		func (self {{.Name}}) __unionValueToDef() interface{} {
+			switch uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)) {
+			{{range $index, $field := .Choices}}case {{$index}}:
+				return {{valueToDef `self.m.Get(types.NewString("$unionValue"))` .T}}
+			{{end}}}
+			panic("unreachable")
+		}
+	{{end}}
 {{end}}
 
 func {{.Name}}FromVal(val types.Value) {{.Name}} {
@@ -84,28 +87,31 @@ func (self {{$name}}) Set{{title .Name}}(val {{userType .T}}) {{$name}} {
 }
 {{end}}
 
+{{$canUseDef := .CanUseDef}}
 {{range $index, $field := .Choices}}
-func (self {{$name}}) {{title .Name}}() (val {{userType .T}}, ok bool) {
-	if self.m.Get(types.NewString("$unionIndex")).(types.UInt32) != {{$index}} {
-		return
+	func (self {{$name}}) {{title .Name}}() (val {{userType .T}}, ok bool) {
+		if self.m.Get(types.NewString("$unionIndex")).(types.UInt32) != {{$index}} {
+			return
+		}
+		return {{valueToUser `self.m.Get(types.NewString("$unionValue"))` .T}}, true
 	}
-	return {{valueToUser `self.m.Get(types.NewString("$unionValue"))` .T}}, true
-}
 
-func (self {{$name}}) Set{{title .Name}}(val {{userType .T}}) {{$name}} {
-	return {{$name}}{self.m.Set(types.NewString("$unionIndex"), types.UInt32({{$index}})).Set(types.NewString("$unionValue"), {{userToValue "val" .T}})}
-}
-
-func (def {{$name}}Def) {{title .Name}}() (val {{defType .T}}, ok bool) {
-	if def.__unionIndex != {{$index}} {
-		return
+	func (self {{$name}}) Set{{title .Name}}(val {{userType .T}}) {{$name}} {
+		return {{$name}}{self.m.Set(types.NewString("$unionIndex"), types.UInt32({{$index}})).Set(types.NewString("$unionValue"), {{userToValue "val" .T}})}
 	}
-	return def.__unionValue.({{defType .T}}), true
-}
 
-func (def {{$name}}Def) Set{{title .Name}}(val {{defType .T}}) {{$name}}Def {
-	def.__unionIndex = {{$index}}
-	def.__unionValue = val
-	return def
-}
+	{{if $canUseDef}}
+		func (def {{$name}}Def) {{title .Name}}() (val {{defType .T}}, ok bool) {
+			if def.__unionIndex != {{$index}} {
+				return
+			}
+			return def.__unionValue.({{defType .T}}), true
+		}
+
+		func (def {{$name}}Def) Set{{title .Name}}(val {{defType .T}}) {{$name}}Def {
+			def.__unionIndex = {{$index}}
+			def.__unionValue = val
+			return def
+		}
+	{{end}}
 {{end}}

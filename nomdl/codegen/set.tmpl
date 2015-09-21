@@ -4,30 +4,32 @@ type {{.Name}} struct {
 	s types.Set
 }
 
-type {{.Name}}Def map[{{defType .ElemType}}]bool
-
 func New{{.Name}}() {{.Name}} {
 	return {{.Name}}{types.NewSet()}
 }
 
-func (def {{.Name}}Def) New() {{.Name}} {
-  l := make([]types.Value, len(def))
-	i := 0
-  for d, _ := range def  {
-    l[i] = {{defToValue "d" .ElemType}}
-		i++
-  }
-  return {{.Name}}{types.NewSet(l...)}
-}
+{{if .CanUseDef}}
+	type {{.Name}}Def map[{{defType .ElemType}}]bool
 
-func (s {{.Name}}) Def() {{.Name}}Def {
-	def := make(map[{{defType .ElemType}}]bool, s.Len())
-	s.s.Iter(func(v types.Value) bool {
-		def[{{valueToDef "v" .ElemType}}] = true
-		return false
-	})
-	return def
-}
+	func (def {{.Name}}Def) New() {{.Name}} {
+		l := make([]types.Value, len(def))
+		i := 0
+		for d, _ := range def  {
+			l[i] = {{defToValue "d" .ElemType}}
+			i++
+		}
+		return {{.Name}}{types.NewSet(l...)}
+	}
+
+	func (s {{.Name}}) Def() {{.Name}}Def {
+		def := make(map[{{defType .ElemType}}]bool, s.Len())
+		s.s.Iter(func(v types.Value) bool {
+			def[{{valueToDef "v" .ElemType}}] = true
+			return false
+		})
+		return def
+	}
+{{end}}
 
 func {{.Name}}FromVal(p types.Value) {{.Name}} {
 	return {{.Name}}{p.(types.Set)}

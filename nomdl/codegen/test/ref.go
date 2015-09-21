@@ -49,11 +49,11 @@ type ListOfString struct {
 	l types.List
 }
 
-type ListOfStringDef []string
-
 func NewListOfString() ListOfString {
 	return ListOfString{types.NewList()}
 }
+
+type ListOfStringDef []string
 
 func (def ListOfStringDef) New() ListOfString {
 	l := make([]types.Value, len(def))
@@ -63,17 +63,17 @@ func (def ListOfStringDef) New() ListOfString {
 	return ListOfString{types.NewList(l...)}
 }
 
-func ListOfStringFromVal(val types.Value) ListOfString {
-	// TODO: Validate here
-	return ListOfString{val.(types.List)}
-}
-
 func (self ListOfString) Def() ListOfStringDef {
 	l := make([]string, self.Len())
 	for i := uint64(0); i < self.Len(); i++ {
 		l[i] = self.l.Get(i).(types.String).String()
 	}
 	return l
+}
+
+func ListOfStringFromVal(val types.Value) ListOfString {
+	// TODO: Validate here
+	return ListOfString{val.(types.List)}
 }
 
 func (self ListOfString) NomsValue() types.Value {
@@ -166,11 +166,11 @@ type ListOfRefOfFloat32 struct {
 	l types.List
 }
 
-type ListOfRefOfFloat32Def []ref.Ref
-
 func NewListOfRefOfFloat32() ListOfRefOfFloat32 {
 	return ListOfRefOfFloat32{types.NewList()}
 }
+
+type ListOfRefOfFloat32Def []ref.Ref
 
 func (def ListOfRefOfFloat32Def) New() ListOfRefOfFloat32 {
 	l := make([]types.Value, len(def))
@@ -180,17 +180,17 @@ func (def ListOfRefOfFloat32Def) New() ListOfRefOfFloat32 {
 	return ListOfRefOfFloat32{types.NewList(l...)}
 }
 
-func ListOfRefOfFloat32FromVal(val types.Value) ListOfRefOfFloat32 {
-	// TODO: Validate here
-	return ListOfRefOfFloat32{val.(types.List)}
-}
-
 func (self ListOfRefOfFloat32) Def() ListOfRefOfFloat32Def {
 	l := make([]ref.Ref, self.Len())
 	for i := uint64(0); i < self.Len(); i++ {
 		l[i] = self.l.Get(i).Ref()
 	}
 	return l
+}
+
+func ListOfRefOfFloat32FromVal(val types.Value) ListOfRefOfFloat32 {
+	// TODO: Validate here
+	return ListOfRefOfFloat32{val.(types.List)}
 }
 
 func (self ListOfRefOfFloat32) NomsValue() types.Value {
@@ -314,10 +314,6 @@ func (r RefOfFloat32) SetValue(val float32, cs chunks.ChunkSink) RefOfFloat32 {
 
 // StructWithRef
 
-type StructWithRefDef struct {
-	R ref.Ref
-}
-
 type StructWithRef struct {
 	m types.Map
 }
@@ -327,6 +323,10 @@ func NewStructWithRef() StructWithRef {
 		types.NewString("$name"), types.NewString("StructWithRef"),
 		types.NewString("R"), types.Ref{R: ref.Ref{}},
 	)}
+}
+
+type StructWithRefDef struct {
+	R ref.Ref
 }
 
 func (def StructWithRefDef) New() StructWithRef {
@@ -409,11 +409,11 @@ type SetOfFloat32 struct {
 	s types.Set
 }
 
-type SetOfFloat32Def map[float32]bool
-
 func NewSetOfFloat32() SetOfFloat32 {
 	return SetOfFloat32{types.NewSet()}
 }
+
+type SetOfFloat32Def map[float32]bool
 
 func (def SetOfFloat32Def) New() SetOfFloat32 {
 	l := make([]types.Value, len(def))

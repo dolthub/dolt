@@ -9,13 +9,6 @@ import (
 
 // StructWithList
 
-type StructWithListDef struct {
-	L ListOfUInt8Def
-	B bool
-	S string
-	I int64
-}
-
 type StructWithList struct {
 	m types.Map
 }
@@ -28,6 +21,13 @@ func NewStructWithList() StructWithList {
 		types.NewString("S"), types.NewString(""),
 		types.NewString("I"), types.Int64(0),
 	)}
+}
+
+type StructWithListDef struct {
+	L ListOfUInt8Def
+	B bool
+	S string
+	I int64
 }
 
 func (def StructWithListDef) New() StructWithList {
@@ -105,11 +105,11 @@ type ListOfUInt8 struct {
 	l types.List
 }
 
-type ListOfUInt8Def []uint8
-
 func NewListOfUInt8() ListOfUInt8 {
 	return ListOfUInt8{types.NewList()}
 }
+
+type ListOfUInt8Def []uint8
 
 func (def ListOfUInt8Def) New() ListOfUInt8 {
 	l := make([]types.Value, len(def))
@@ -119,17 +119,17 @@ func (def ListOfUInt8Def) New() ListOfUInt8 {
 	return ListOfUInt8{types.NewList(l...)}
 }
 
-func ListOfUInt8FromVal(val types.Value) ListOfUInt8 {
-	// TODO: Validate here
-	return ListOfUInt8{val.(types.List)}
-}
-
 func (self ListOfUInt8) Def() ListOfUInt8Def {
 	l := make([]uint8, self.Len())
 	for i := uint64(0); i < self.Len(); i++ {
 		l[i] = uint8(self.l.Get(i).(types.UInt8))
 	}
 	return l
+}
+
+func ListOfUInt8FromVal(val types.Value) ListOfUInt8 {
+	// TODO: Validate here
+	return ListOfUInt8{val.(types.List)}
 }
 
 func (self ListOfUInt8) NomsValue() types.Value {

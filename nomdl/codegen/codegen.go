@@ -133,7 +133,7 @@ func (gen *codeGen) readTemplates() *template.Template {
 // in the templates.
 
 func (gen *codeGen) defType(t parse.TypeRef) string {
-	t = gen.lookup(t)
+	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
 	case parse.BlobKind:
@@ -153,7 +153,7 @@ func (gen *codeGen) defType(t parse.TypeRef) string {
 }
 
 func (gen *codeGen) userType(t parse.TypeRef) string {
-	t = gen.lookup(t)
+	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
 	case parse.BlobKind:
@@ -169,7 +169,7 @@ func (gen *codeGen) userType(t parse.TypeRef) string {
 }
 
 func (gen *codeGen) defToValue(val string, t parse.TypeRef) string {
-	t = gen.lookup(t)
+	t = gen.resolve(t)
 	switch t.Desc.Kind() {
 	case parse.BlobKind, parse.ValueKind:
 		return val // Blob & Value type has no Def
@@ -186,7 +186,7 @@ func (gen *codeGen) defToValue(val string, t parse.TypeRef) string {
 }
 
 func (gen *codeGen) valueToDef(val string, t parse.TypeRef) string {
-	t = gen.lookup(t)
+	t = gen.resolve(t)
 	switch t.Desc.Kind() {
 	case parse.BlobKind:
 		return gen.valueToUser(val, t)
@@ -239,7 +239,7 @@ func primitiveKindToString(k parse.NomsKind) string {
 }
 
 func (gen *codeGen) nativeToValue(val string, t parse.TypeRef) string {
-	t = gen.lookup(t)
+	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
 	case parse.BoolKind, parse.Float32Kind, parse.Float64Kind, parse.Int16Kind, parse.Int32Kind, parse.Int64Kind, parse.Int8Kind, parse.UInt16Kind, parse.UInt32Kind, parse.UInt64Kind, parse.UInt8Kind:
@@ -267,7 +267,7 @@ func (gen *codeGen) valueToNative(val string, t parse.TypeRef) string {
 }
 
 func (gen *codeGen) userToValue(val string, t parse.TypeRef) string {
-	t = gen.lookup(t)
+	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
 	case parse.BlobKind, parse.ValueKind:
@@ -281,7 +281,7 @@ func (gen *codeGen) userToValue(val string, t parse.TypeRef) string {
 }
 
 func (gen *codeGen) valueToUser(val string, t parse.TypeRef) string {
-	t = gen.lookup(t)
+	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
 	case parse.BlobKind:
@@ -297,7 +297,7 @@ func (gen *codeGen) valueToUser(val string, t parse.TypeRef) string {
 }
 
 func (gen *codeGen) userZero(t parse.TypeRef) string {
-	t = gen.lookup(t)
+	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
 	case parse.BlobKind:
@@ -322,7 +322,7 @@ func (gen *codeGen) userZero(t parse.TypeRef) string {
 }
 
 func (gen *codeGen) valueZero(t parse.TypeRef) string {
-	t = gen.lookup(t)
+	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
 	case parse.BlobKind:
@@ -353,7 +353,7 @@ func (gen *codeGen) valueZero(t parse.TypeRef) string {
 }
 
 func (gen *codeGen) userName(t parse.TypeRef) string {
-	t = gen.lookup(t)
+	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
 	case parse.BlobKind, parse.BoolKind, parse.Float32Kind, parse.Float64Kind, parse.Int16Kind, parse.Int32Kind, parse.Int64Kind, parse.Int8Kind, parse.StringKind, parse.UInt16Kind, parse.UInt32Kind, parse.UInt64Kind, parse.UInt8Kind, parse.ValueKind:
@@ -387,7 +387,7 @@ func (gen *codeGen) userName(t parse.TypeRef) string {
 	panic("unreachable")
 }
 
-func (gen *codeGen) lookup(t parse.TypeRef) parse.TypeRef {
+func (gen *codeGen) resolve(t parse.TypeRef) parse.TypeRef {
 	if !t.IsUnresolved() {
 		return t
 	}
@@ -418,7 +418,7 @@ func (gen *codeGen) WritePackage(packageName string) {
 }
 
 func (gen *codeGen) write(t parse.TypeRef) {
-	t = gen.lookup(t)
+	t = gen.resolve(t)
 	if gen.written[gen.userName(t)] {
 		return
 	}
@@ -457,12 +457,14 @@ func (gen *codeGen) writeStruct(t parse.TypeRef) {
 		Choices       []parse.Field
 		HasUnion      bool
 		UnionZeroType parse.TypeRef
+		CanUseDef     bool
 	}{
 		gen.userName(t),
 		desc.Fields,
 		nil,
 		desc.Union != nil,
 		parse.TypeRef{Desc: parse.PrimitiveDesc(parse.UInt32Kind)},
+		gen.canUseDef(t),
 	}
 	if data.HasUnion {
 		data.Choices = desc.Union.Choices
@@ -482,11 +484,13 @@ func (gen *codeGen) writeStruct(t parse.TypeRef) {
 func (gen *codeGen) writeList(t parse.TypeRef) {
 	elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
 	data := struct {
-		Name     string
-		ElemType parse.TypeRef
+		Name      string
+		ElemType  parse.TypeRef
+		CanUseDef bool
 	}{
 		gen.userName(t),
 		elemTypes[0],
+		gen.canUseDef(t),
 	}
 	gen.writeTemplate("list.tmpl", t, data)
 	gen.write(elemTypes[0])
@@ -498,10 +502,12 @@ func (gen *codeGen) writeMap(t parse.TypeRef) {
 		Name      string
 		KeyType   parse.TypeRef
 		ValueType parse.TypeRef
+		CanUseDef bool
 	}{
 		gen.userName(t),
 		elemTypes[0],
 		elemTypes[1],
+		gen.canUseDef(t),
 	}
 	gen.writeTemplate("map.tmpl", t, data)
 	gen.write(elemTypes[0])
@@ -524,11 +530,13 @@ func (gen *codeGen) writeRef(t parse.TypeRef) {
 func (gen *codeGen) writeSet(t parse.TypeRef) {
 	elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
 	data := struct {
-		Name     string
-		ElemType parse.TypeRef
+		Name      string
+		ElemType  parse.TypeRef
+		CanUseDef bool
 	}{
 		gen.userName(t),
 		elemTypes[0],
+		gen.canUseDef(t),
 	}
 	gen.writeTemplate("set.tmpl", t, data)
 	gen.write(elemTypes[0])
@@ -543,4 +551,32 @@ func (gen *codeGen) writeEnum(t parse.TypeRef) {
 		t.Desc.(parse.EnumDesc).IDs,
 	}
 	gen.writeTemplate("enum.tmpl", t, data)
+}
+
+// We use a go map as the def for Set and Map. These cannot have a key that is a
+// Set, Map or a List because slices and maps are not comparable in go.
+func (gen *codeGen) canUseDef(t parse.TypeRef) bool {
+	return gen.canUseDefRec(t, false)
+}
+
+func (gen *codeGen) canUseDefRec(t parse.TypeRef, deep bool) bool {
+	t = gen.resolve(t)
+	switch t.Desc.Kind() {
+	case parse.ListKind:
+		return !deep && gen.canUseDefRec(t.Desc.(parse.CompoundDesc).ElemTypes[0], deep)
+	case parse.SetKind:
+		return !deep && gen.canUseDefRec(t.Desc.(parse.CompoundDesc).ElemTypes[0], true)
+	case parse.MapKind:
+		elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
+		return !deep && gen.canUseDefRec(elemTypes[0], true) && gen.canUseDefRec(elemTypes[1], false)
+	case parse.StructKind:
+		for _, f := range t.Desc.(parse.StructDesc).Fields {
+			if !gen.canUseDefRec(f.T, deep) {
+				return false
+			}
+		}
+		return true
+	default:
+		return true
+	}
 }
