@@ -63,15 +63,15 @@ func (l *LevelDBStore) UpdateRoot(current, last ref.Ref) bool {
 	return true
 }
 
-func (l *LevelDBStore) Get(ref ref.Ref) []byte {
+func (l *LevelDBStore) Get(ref ref.Ref) Chunk {
 	key := toChunkKey(ref)
-	chunk, err := l.db.Get(key, nil)
+	data, err := l.db.Get(key, nil)
 	if err == errors.ErrNotFound {
-		return nil
+		return EmptyChunk
 	}
 	d.Chk.NoError(err)
 
-	return chunk
+	return NewChunkWithRef(ref, data)
 }
 
 func (l *LevelDBStore) Has(ref ref.Ref) bool {
@@ -81,17 +81,12 @@ func (l *LevelDBStore) Has(ref ref.Ref) bool {
 	return exists
 }
 
-func (l *LevelDBStore) Put() ChunkWriter {
-	return NewChunkWriter(l.write)
-}
-
-func (l *LevelDBStore) write(ref ref.Ref, data []byte) {
-	if l.Has(ref) {
+func (l *LevelDBStore) Put(c Chunk) {
+	if l.Has(c.Ref()) {
 		return
 	}
 
-	key := toChunkKey(ref)
-	err := l.db.Put(key, data, nil)
+	err := l.db.Put(toChunkKey(c.Ref()), c.Data(), nil)
 	d.Chk.NoError(err)
 	l.putCount += 1
 }

@@ -9,7 +9,7 @@ import (
 
 // An in-memory implementation of store.ChunkStore. Useful mainly for tests.
 type MemoryStore struct {
-	data map[ref.Ref][]byte
+	data map[ref.Ref]Chunk
 	memoryRootTracker
 	mu *sync.Mutex
 }
@@ -20,13 +20,13 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
-func (ms *MemoryStore) Get(ref ref.Ref) []byte {
+func (ms *MemoryStore) Get(ref ref.Ref) Chunk {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
-	if b, ok := ms.data[ref]; ok {
-		return b
+	if c, ok := ms.data[ref]; ok {
+		return c
 	}
-	return nil
+	return EmptyChunk
 }
 
 func (ms *MemoryStore) Has(r ref.Ref) bool {
@@ -39,21 +39,17 @@ func (ms *MemoryStore) Has(r ref.Ref) bool {
 	return ok
 }
 
-func (ms *MemoryStore) Put() ChunkWriter {
-	return NewChunkWriter(ms.write)
-}
-
-func (ms *MemoryStore) write(r ref.Ref, data []byte) {
-	if ms.Has(r) {
+func (ms *MemoryStore) Put(c Chunk) {
+	if ms.Has(c.Ref()) {
 		return
 	}
 
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	if ms.data == nil {
-		ms.data = map[ref.Ref][]byte{}
+		ms.data = map[ref.Ref]Chunk{}
 	}
-	ms.data[r] = data
+	ms.data[c.Ref()] = c
 }
 
 func (ms *MemoryStore) Len() int {

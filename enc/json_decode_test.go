@@ -16,12 +16,9 @@ func TestJSONDecode(t *testing.T) {
 
 	put := func(s string) ref.Ref {
 		s += "\n"
-		w := cs.Put()
-		_, err := w.Write([]byte(s))
-		assert.NoError(err)
-		r := w.Ref()
-		assert.NotNil(r)
-		return r
+		c := chunks.NewChunk([]byte(s))
+		cs.Put(c)
+		return c.Ref()
 	}
 
 	emptyListRef := put(`j {"list":[]}`)

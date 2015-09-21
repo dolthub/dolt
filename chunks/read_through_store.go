@@ -1,11 +1,9 @@
 package chunks
 
 import (
-	"bytes"
 	"io"
 	"io/ioutil"
 
-	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -25,58 +23,27 @@ func NewReadThroughStore(cachingStore ChunkStore, backingStore ChunkStore) ReadT
 	return ReadThroughStore{ioutil.NopCloser(nil), cachingStore, backingStore, 0}
 }
 
-func (rts ReadThroughStore) Get(ref ref.Ref) []byte {
-	data := rts.cachingStore.Get(ref)
-	if data != nil {
-		return data
+func (rts ReadThroughStore) Get(ref ref.Ref) Chunk {
+	c := rts.cachingStore.Get(ref)
+	if !c.IsEmpty() {
+		return c
 	}
-	data = rts.backingStore.Get(ref)
-	if data == nil {
-		return data
+	c = rts.backingStore.Get(ref)
+	if c.IsEmpty() {
+		return c
 	}
 
-	w := rts.cachingStore.Put()
-	_, err := io.Copy(w, bytes.NewReader(data))
-	d.Chk.NoError(err)
-	w.Close()
-
-	return data
-}
-
-type readThroughChunkWriter struct {
-	cws []ChunkWriter
-}
-
-func (w readThroughChunkWriter) Ref() (r ref.Ref) {
-	for _, cw := range w.cws {
-		r = cw.Ref()
-	}
-	return
-}
-
-func (w readThroughChunkWriter) Write(p []byte) (n int, err error) {
-	for _, cw := range w.cws {
-		n, err = cw.Write(p)
-		d.Chk.NoError(err)
-	}
-	return
-}
-
-func (w readThroughChunkWriter) Close() (err error) {
-	for _, cw := range w.cws {
-		cw.Close()
-	}
-	return
+	rts.cachingStore.Put(c)
+	return c
 }
 
 func (rts ReadThroughStore) Has(ref ref.Ref) bool {
 	return rts.cachingStore.Has(ref) || rts.backingStore.Has(ref)
 }
 
-func (rts ReadThroughStore) Put() ChunkWriter {
-	bw := rts.backingStore.Put()
-	cw := rts.cachingStore.Put()
-	return readThroughChunkWriter{[]ChunkWriter{bw, cw}}
+func (rts ReadThroughStore) Put(c Chunk) {
+	rts.backingStore.Put(c)
+	rts.cachingStore.Put(c)
 }
 
 func (rts ReadThroughStore) Root() ref.Ref {

@@ -13,10 +13,9 @@ type ChunkStoreTestSuite struct {
 
 func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	input := "abc"
-	w := suite.Store.Put()
-	_, err := w.Write([]byte(input))
-	suite.NoError(err)
-	ref := w.Ref()
+	c := NewChunk([]byte(input))
+	suite.Store.Put(c)
+	ref := c.Ref()
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
 	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", ref.String())
@@ -30,10 +29,9 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	}
 
 	// Re-writing the same data should be idempotent and should not result in a second put
-	w = suite.Store.Put()
-	_, err = w.Write([]byte(input))
-	suite.NoError(err)
-	suite.Equal(ref, w.Ref())
+	c = NewChunk([]byte(input))
+	suite.Store.Put(c)
+	suite.Equal(ref, c.Ref())
 	assertInputInStore(input, ref, suite.Store, suite.Assert())
 
 	if suite.putCountFn != nil {
@@ -43,7 +41,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreWriteAfterCloseFails() {
 	input := "abc"
-	w := suite.Store.Put()
+	w := NewChunkWriter()
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
@@ -51,45 +49,25 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreWriteAfterCloseFails() {
 	suite.Panics(func() { w.Write([]byte(input)) }, "Write() after Close() should barf!")
 }
 
-func (suite *ChunkStoreTestSuite) TestChunkStoreWriteAfterRefFails() {
+func (suite *ChunkStoreTestSuite) TestChunkStoreWriteAfterChunkFails() {
 	input := "abc"
-	w := suite.Store.Put()
+	w := NewChunkWriter()
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
-	_ = w.Ref()
+	_ = w.Chunk()
 	suite.NoError(err)
 	suite.Panics(func() { w.Write([]byte(input)) }, "Write() after Close() should barf!")
 }
 
-func (suite *ChunkStoreTestSuite) TestChunkStorePutWithRefAfterClose() {
+func (suite *ChunkStoreTestSuite) TestChunkStoreChunkCloses() {
 	input := "abc"
-	w := suite.Store.Put()
+	w := NewChunkWriter()
 	_, err := w.Write([]byte(input))
 	suite.NoError(err)
 
-	suite.NoError(w.Close())
-	ref := w.Ref() // Ref() after Close() should work...
-
-	suite.Store.UpdateRoot(ref, suite.Store.Root()) // Commit writes
-
-	// And reading the data via the API should work...
-	assertInputInStore(input, ref, suite.Store, suite.Assert())
-}
-
-func (suite *ChunkStoreTestSuite) TestChunkStorePutWithMultipleRef() {
-	input := "abc"
-	w := suite.Store.Put()
-	_, err := w.Write([]byte(input))
-	suite.NoError(err)
-
-	w.Ref()
-	ref := w.Ref() // Multiple calls to Ref() should work...
-
-	suite.Store.UpdateRoot(ref, suite.Store.Root()) // Commit writes
-
-	// And reading the data via the API should work...
-	assertInputInStore(input, ref, suite.Store, suite.Assert())
+	w.Chunk()
+	suite.Panics(func() { w.Write([]byte(input)) }, "Write() after Close() should barf!")
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreRoot() {
@@ -110,6 +88,6 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreRoot() {
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreGetNonExisting() {
 	ref := ref.Parse("sha1-1111111111111111111111111111111111111111")
-	r := suite.Store.Get(ref)
-	suite.Nil(r)
+	c := suite.Store.Get(ref)
+	suite.True(c.IsEmpty())
 }

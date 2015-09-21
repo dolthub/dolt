@@ -15,9 +15,11 @@ func WriteValue(v Value, cs chunks.ChunkSink) ref.Ref {
 	d.Chk.NotNil(cs)
 
 	e := toEncodeable(v, cs)
-	dst := cs.Put()
-	enc.Encode(dst, e)
-	return dst.Ref()
+	w := chunks.NewChunkWriter()
+	enc.Encode(w, e)
+	c := w.Chunk()
+	cs.Put(c)
+	return c.Ref()
 }
 
 func toEncodeable(v Value, cs chunks.ChunkSink) interface{} {

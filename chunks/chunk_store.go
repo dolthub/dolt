@@ -1,18 +1,13 @@
 package chunks
 
 import (
-	"bytes"
-	"crypto/sha1"
-	"encoding/binary"
 	"io"
 
-	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
 // ChunkStore is the core storage abstraction in noms. We can put data anyplace we have a ChunkStore implementation for.
 type ChunkStore interface {
-	io.Closer
 	ChunkSource
 	ChunkSink
 	RootTracker
@@ -27,7 +22,7 @@ type RootTracker interface {
 // ChunkSource is a place to get chunks from.
 type ChunkSource interface {
 	// Get gets a reader for the value of the Ref in the store. If the ref is absent from the store nil is returned.
-	Get(ref ref.Ref) []byte
+	Get(ref ref.Ref) Chunk
 
 	// Returns true iff the value at the address |ref| is contained in the source
 	Has(ref ref.Ref) bool
@@ -35,70 +30,8 @@ type ChunkSource interface {
 
 // ChunkSink is a place to put chunks.
 type ChunkSink interface {
-	Put() ChunkWriter
-}
-
-/*
-	Chunk Serialization:
-		Chunk 0
-		Chunk 1
-		 ..
-		Chunk N
-
-	Chunk:
-		Ref   // 20-byte sha1 hash
-		Len   // 4-byte int
-		Data  // len(Data) == Len
-*/
-
-type Chunk struct {
-	Ref  ref.Ref
-	Data []byte
-}
-
-// Serialize reads |chunks|, serializing each to |w|. The caller is responsible for closing |chunks|.
-func Serialize(w io.Writer, chunks <-chan Chunk) {
-	for chunk := range chunks {
-		d.Chk.NotNil(chunk.Data)
-
-		digest := chunk.Ref.Digest()
-		n, err := io.Copy(w, bytes.NewReader(digest[:]))
-		d.Chk.NoError(err)
-		d.Chk.Equal(int64(sha1.Size), n)
-
-		// Because of chunking at higher levels, no chunk should never be more than 4GB
-		chunkSize := uint32(len(chunk.Data))
-		err = binary.Write(w, binary.LittleEndian, chunkSize)
-		d.Chk.NoError(err)
-
-		n, err = io.Copy(w, bytes.NewReader(chunk.Data))
-		d.Chk.NoError(err)
-		d.Chk.Equal(uint32(n), chunkSize)
-	}
-}
-
-// Deserialize reads off of |r|, sending chunks to |chunks|. When EOF is reached, it closes |chunks|.
-func Deserialize(r io.Reader, chunks chan<- Chunk) {
-	for {
-		digest := ref.Sha1Digest{}
-		n, err := io.ReadFull(r, digest[:])
-		if err == io.EOF {
-			break
-		}
-		d.Chk.NoError(err)
-		d.Chk.Equal(int(sha1.Size), n)
-
-		chunkSize := uint32(0)
-		err = binary.Read(r, binary.LittleEndian, &chunkSize)
-		d.Chk.NoError(err)
-
-		chunk := &bytes.Buffer{}
-		_, err = io.CopyN(chunk, r, int64(chunkSize))
-		d.Chk.NoError(err)
-
-		chunks <- Chunk{ref.New(digest), chunk.Bytes()}
-	}
-	close(chunks)
+	Put(c Chunk)
+	io.Closer
 }
 
 // NewFlags creates a new instance of Flags, which declares a number of ChunkStore-related command-line flags using the golang flag package. Call this before flag.Parse().

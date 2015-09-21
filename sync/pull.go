@@ -1,9 +1,6 @@
 package sync
 
 import (
-	"bytes"
-	"io"
-
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
@@ -66,17 +63,14 @@ type teeChunkSource struct {
 	sink   chunks.ChunkSink
 }
 
-func (trs *teeChunkSource) Get(ref ref.Ref) []byte {
-	data := trs.source.Get(ref)
-	if data == nil {
-		return nil
+func (trs *teeChunkSource) Get(ref ref.Ref) chunks.Chunk {
+	c := trs.source.Get(ref)
+	if c.IsEmpty() {
+		return c
 	}
 
-	w := trs.sink.Put()
-	_, err := io.Copy(w, bytes.NewReader(data))
-	d.Chk.NoError(err)
-	w.Close()
-	return data
+	trs.sink.Put(c)
+	return c
 }
 
 func (trs *teeChunkSource) Has(ref ref.Ref) bool {
