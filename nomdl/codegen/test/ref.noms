@@ -2,5 +2,5 @@ using Ref(List(String))
 using List(Ref(Float32))
 
 struct StructWithRef {
-  R: Ref(Set(Float32))
+  r: Ref(Set(Float32))
 }

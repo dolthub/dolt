@@ -1,6 +1,6 @@
 struct StructWithList {
-  L: List(UInt8)
-  B: Bool
-  S: String
-  I: Int64
+  l: List(UInt8)
+  b: Bool
+  s: String
+  i: Int64
 }

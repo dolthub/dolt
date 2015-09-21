@@ -10,10 +10,10 @@ import (
 // StructPrimitives
 
 type StructPrimitivesDef struct {
-	UInt64  uint64
-	UInt32  uint32
-	UInt16  uint16
-	UInt8   uint8
+	Uint64  uint64
+	Uint32  uint32
+	Uint16  uint16
+	Uint8   uint8
 	Int64   int64
 	Int32   int32
 	Int16   int16
@@ -33,10 +33,10 @@ type StructPrimitives struct {
 func NewStructPrimitives() StructPrimitives {
 	return StructPrimitives{types.NewMap(
 		types.NewString("$name"), types.NewString("StructPrimitives"),
-		types.NewString("UInt64"), types.UInt64(0),
-		types.NewString("UInt32"), types.UInt32(0),
-		types.NewString("UInt16"), types.UInt16(0),
-		types.NewString("UInt8"), types.UInt8(0),
+		types.NewString("Uint64"), types.UInt64(0),
+		types.NewString("Uint32"), types.UInt32(0),
+		types.NewString("Uint16"), types.UInt16(0),
+		types.NewString("Uint8"), types.UInt8(0),
 		types.NewString("Int64"), types.Int64(0),
 		types.NewString("Int32"), types.Int32(0),
 		types.NewString("Int16"), types.Int16(0),
@@ -54,10 +54,10 @@ func (def StructPrimitivesDef) New() StructPrimitives {
 	return StructPrimitives{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructPrimitives"),
-			types.NewString("UInt64"), types.UInt64(def.UInt64),
-			types.NewString("UInt32"), types.UInt32(def.UInt32),
-			types.NewString("UInt16"), types.UInt16(def.UInt16),
-			types.NewString("UInt8"), types.UInt8(def.UInt8),
+			types.NewString("Uint64"), types.UInt64(def.Uint64),
+			types.NewString("Uint32"), types.UInt32(def.Uint32),
+			types.NewString("Uint16"), types.UInt16(def.Uint16),
+			types.NewString("Uint8"), types.UInt8(def.Uint8),
 			types.NewString("Int64"), types.Int64(def.Int64),
 			types.NewString("Int32"), types.Int32(def.Int32),
 			types.NewString("Int16"), types.Int16(def.Int16),
@@ -73,10 +73,10 @@ func (def StructPrimitivesDef) New() StructPrimitives {
 
 func (self StructPrimitives) Def() StructPrimitivesDef {
 	return StructPrimitivesDef{
-		uint64(self.m.Get(types.NewString("UInt64")).(types.UInt64)),
-		uint32(self.m.Get(types.NewString("UInt32")).(types.UInt32)),
-		uint16(self.m.Get(types.NewString("UInt16")).(types.UInt16)),
-		uint8(self.m.Get(types.NewString("UInt8")).(types.UInt8)),
+		uint64(self.m.Get(types.NewString("Uint64")).(types.UInt64)),
+		uint32(self.m.Get(types.NewString("Uint32")).(types.UInt32)),
+		uint16(self.m.Get(types.NewString("Uint16")).(types.UInt16)),
+		uint8(self.m.Get(types.NewString("Uint8")).(types.UInt8)),
 		int64(self.m.Get(types.NewString("Int64")).(types.Int64)),
 		int32(self.m.Get(types.NewString("Int32")).(types.Int32)),
 		int16(self.m.Get(types.NewString("Int16")).(types.Int16)),
@@ -107,36 +107,36 @@ func (self StructPrimitives) Ref() ref.Ref {
 	return self.m.Ref()
 }
 
-func (self StructPrimitives) UInt64() uint64 {
-	return uint64(self.m.Get(types.NewString("UInt64")).(types.UInt64))
+func (self StructPrimitives) Uint64() uint64 {
+	return uint64(self.m.Get(types.NewString("Uint64")).(types.UInt64))
 }
 
-func (self StructPrimitives) SetUInt64(val uint64) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("UInt64"), types.UInt64(val))}
+func (self StructPrimitives) SetUint64(val uint64) StructPrimitives {
+	return StructPrimitives{self.m.Set(types.NewString("Uint64"), types.UInt64(val))}
 }
 
-func (self StructPrimitives) UInt32() uint32 {
-	return uint32(self.m.Get(types.NewString("UInt32")).(types.UInt32))
+func (self StructPrimitives) Uint32() uint32 {
+	return uint32(self.m.Get(types.NewString("Uint32")).(types.UInt32))
 }
 
-func (self StructPrimitives) SetUInt32(val uint32) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("UInt32"), types.UInt32(val))}
+func (self StructPrimitives) SetUint32(val uint32) StructPrimitives {
+	return StructPrimitives{self.m.Set(types.NewString("Uint32"), types.UInt32(val))}
 }
 
-func (self StructPrimitives) UInt16() uint16 {
-	return uint16(self.m.Get(types.NewString("UInt16")).(types.UInt16))
+func (self StructPrimitives) Uint16() uint16 {
+	return uint16(self.m.Get(types.NewString("Uint16")).(types.UInt16))
 }
 
-func (self StructPrimitives) SetUInt16(val uint16) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("UInt16"), types.UInt16(val))}
+func (self StructPrimitives) SetUint16(val uint16) StructPrimitives {
+	return StructPrimitives{self.m.Set(types.NewString("Uint16"), types.UInt16(val))}
 }
 
-func (self StructPrimitives) UInt8() uint8 {
-	return uint8(self.m.Get(types.NewString("UInt8")).(types.UInt8))
+func (self StructPrimitives) Uint8() uint8 {
+	return uint8(self.m.Get(types.NewString("Uint8")).(types.UInt8))
 }
 
-func (self StructPrimitives) SetUInt8(val uint8) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("UInt8"), types.UInt8(val))}
+func (self StructPrimitives) SetUint8(val uint8) StructPrimitives {
+	return StructPrimitives{self.m.Set(types.NewString("Uint8"), types.UInt8(val))}
 }
 
 func (self StructPrimitives) Int64() int64 {
