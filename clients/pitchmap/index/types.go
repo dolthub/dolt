@@ -7,6 +7,223 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// ListOfMapOfStringToValue
+
+type ListOfMapOfStringToValue struct {
+	l types.List
+}
+
+type ListOfMapOfStringToValueDef []MapOfStringToValueDef
+
+func NewListOfMapOfStringToValue() ListOfMapOfStringToValue {
+	return ListOfMapOfStringToValue{types.NewList()}
+}
+
+func (def ListOfMapOfStringToValueDef) New() ListOfMapOfStringToValue {
+	l := make([]types.Value, len(def))
+	for i, d := range def {
+		l[i] = d.New().NomsValue()
+	}
+	return ListOfMapOfStringToValue{types.NewList(l...)}
+}
+
+func ListOfMapOfStringToValueFromVal(val types.Value) ListOfMapOfStringToValue {
+	// TODO: Validate here
+	return ListOfMapOfStringToValue{val.(types.List)}
+}
+
+func (self ListOfMapOfStringToValue) Def() ListOfMapOfStringToValueDef {
+	l := make([]MapOfStringToValueDef, self.Len())
+	for i := uint64(0); i < self.Len(); i++ {
+		l[i] = MapOfStringToValueFromVal(self.l.Get(i)).Def()
+	}
+	return l
+}
+
+func (self ListOfMapOfStringToValue) NomsValue() types.Value {
+	return self.l
+}
+
+func (l ListOfMapOfStringToValue) Equals(p ListOfMapOfStringToValue) bool {
+	return l.l.Equals(p.l)
+}
+
+func (l ListOfMapOfStringToValue) Ref() ref.Ref {
+	return l.l.Ref()
+}
+
+func (l ListOfMapOfStringToValue) Len() uint64 {
+	return l.l.Len()
+}
+
+func (l ListOfMapOfStringToValue) Empty() bool {
+	return l.Len() == uint64(0)
+}
+
+func (self ListOfMapOfStringToValue) Get(i uint64) MapOfStringToValue {
+	return MapOfStringToValueFromVal(self.l.Get(i))
+}
+
+func (l ListOfMapOfStringToValue) Slice(idx uint64, end uint64) ListOfMapOfStringToValue {
+	return ListOfMapOfStringToValue{l.l.Slice(idx, end)}
+}
+
+func (self ListOfMapOfStringToValue) Set(i uint64, val MapOfStringToValue) ListOfMapOfStringToValue {
+	return ListOfMapOfStringToValue{self.l.Set(i, val.NomsValue())}
+}
+
+func (l ListOfMapOfStringToValue) Append(v ...MapOfStringToValue) ListOfMapOfStringToValue {
+	return ListOfMapOfStringToValue{l.l.Append(l.fromElemSlice(v)...)}
+}
+
+func (l ListOfMapOfStringToValue) Insert(idx uint64, v ...MapOfStringToValue) ListOfMapOfStringToValue {
+	return ListOfMapOfStringToValue{l.l.Insert(idx, l.fromElemSlice(v)...)}
+}
+
+func (l ListOfMapOfStringToValue) Remove(idx uint64, end uint64) ListOfMapOfStringToValue {
+	return ListOfMapOfStringToValue{l.l.Remove(idx, end)}
+}
+
+func (l ListOfMapOfStringToValue) RemoveAt(idx uint64) ListOfMapOfStringToValue {
+	return ListOfMapOfStringToValue{(l.l.RemoveAt(idx))}
+}
+
+func (l ListOfMapOfStringToValue) fromElemSlice(p []MapOfStringToValue) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v.NomsValue()
+	}
+	return r
+}
+
+type ListOfMapOfStringToValueIterCallback func(v MapOfStringToValue) (stop bool)
+
+func (l ListOfMapOfStringToValue) Iter(cb ListOfMapOfStringToValueIterCallback) {
+	l.l.Iter(func(v types.Value) bool {
+		return cb(MapOfStringToValueFromVal(v))
+	})
+}
+
+type ListOfMapOfStringToValueIterAllCallback func(v MapOfStringToValue)
+
+func (l ListOfMapOfStringToValue) IterAll(cb ListOfMapOfStringToValueIterAllCallback) {
+	l.l.IterAll(func(v types.Value) {
+		cb(MapOfStringToValueFromVal(v))
+	})
+}
+
+type ListOfMapOfStringToValueFilterCallback func(v MapOfStringToValue) (keep bool)
+
+func (l ListOfMapOfStringToValue) Filter(cb ListOfMapOfStringToValueFilterCallback) ListOfMapOfStringToValue {
+	nl := NewListOfMapOfStringToValue()
+	l.IterAll(func(v MapOfStringToValue) {
+		if cb(v) {
+			nl = nl.Append(v)
+		}
+	})
+	return nl
+}
+
+// MapOfStringToValue
+
+type MapOfStringToValue struct {
+	m types.Map
+}
+
+type MapOfStringToValueDef map[string]types.Value
+
+func NewMapOfStringToValue() MapOfStringToValue {
+	return MapOfStringToValue{types.NewMap()}
+}
+
+func (def MapOfStringToValueDef) New() MapOfStringToValue {
+	kv := make([]types.Value, 0, len(def)*2)
+	for k, v := range def {
+		kv = append(kv, types.NewString(k), v)
+	}
+	return MapOfStringToValue{types.NewMap(kv...)}
+}
+
+func (self MapOfStringToValue) Def() MapOfStringToValueDef {
+	def := make(map[string]types.Value)
+	self.m.Iter(func(k, v types.Value) bool {
+		def[k.(types.String).String()] = v
+		return false
+	})
+	return def
+}
+
+func MapOfStringToValueFromVal(p types.Value) MapOfStringToValue {
+	// TODO: Validate here
+	return MapOfStringToValue{p.(types.Map)}
+}
+
+func (m MapOfStringToValue) NomsValue() types.Value {
+	return m.m
+}
+
+func (m MapOfStringToValue) Equals(p MapOfStringToValue) bool {
+	return m.m.Equals(p.m)
+}
+
+func (m MapOfStringToValue) Ref() ref.Ref {
+	return m.m.Ref()
+}
+
+func (m MapOfStringToValue) Empty() bool {
+	return m.m.Empty()
+}
+
+func (m MapOfStringToValue) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m MapOfStringToValue) Has(p string) bool {
+	return m.m.Has(types.NewString(p))
+}
+
+func (m MapOfStringToValue) Get(p string) types.Value {
+	return m.m.Get(types.NewString(p))
+}
+
+func (m MapOfStringToValue) Set(k string, v types.Value) MapOfStringToValue {
+	return MapOfStringToValue{m.m.Set(types.NewString(k), v)}
+}
+
+// TODO: Implement SetM?
+
+func (m MapOfStringToValue) Remove(p string) MapOfStringToValue {
+	return MapOfStringToValue{m.m.Remove(types.NewString(p))}
+}
+
+type MapOfStringToValueIterCallback func(k string, v types.Value) (stop bool)
+
+func (m MapOfStringToValue) Iter(cb MapOfStringToValueIterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(k.(types.String).String(), v)
+	})
+}
+
+type MapOfStringToValueIterAllCallback func(k string, v types.Value)
+
+func (m MapOfStringToValue) IterAll(cb MapOfStringToValueIterAllCallback) {
+	m.m.IterAll(func(k, v types.Value) {
+		cb(k.(types.String).String(), v)
+	})
+}
+
+type MapOfStringToValueFilterCallback func(k string, v types.Value) (keep bool)
+
+func (m MapOfStringToValue) Filter(cb MapOfStringToValueFilterCallback) MapOfStringToValue {
+	nm := NewMapOfStringToValue()
+	m.IterAll(func(k string, v types.Value) {
+		if cb(k, v) {
+			nm = nm.Set(k, v)
+		}
+	})
+	return nm
+}
+
 // MapOfStringToListOfPitch
 
 type MapOfStringToListOfPitch struct {
@@ -390,221 +607,4 @@ func (m MapOfStringToString) Filter(cb MapOfStringToStringFilterCallback) MapOfS
 		}
 	})
 	return nm
-}
-
-// MapOfStringToValue
-
-type MapOfStringToValue struct {
-	m types.Map
-}
-
-type MapOfStringToValueDef map[string]types.Value
-
-func NewMapOfStringToValue() MapOfStringToValue {
-	return MapOfStringToValue{types.NewMap()}
-}
-
-func (def MapOfStringToValueDef) New() MapOfStringToValue {
-	kv := make([]types.Value, 0, len(def)*2)
-	for k, v := range def {
-		kv = append(kv, types.NewString(k), v)
-	}
-	return MapOfStringToValue{types.NewMap(kv...)}
-}
-
-func (self MapOfStringToValue) Def() MapOfStringToValueDef {
-	def := make(map[string]types.Value)
-	self.m.Iter(func(k, v types.Value) bool {
-		def[k.(types.String).String()] = v
-		return false
-	})
-	return def
-}
-
-func MapOfStringToValueFromVal(p types.Value) MapOfStringToValue {
-	// TODO: Validate here
-	return MapOfStringToValue{p.(types.Map)}
-}
-
-func (m MapOfStringToValue) NomsValue() types.Value {
-	return m.m
-}
-
-func (m MapOfStringToValue) Equals(p MapOfStringToValue) bool {
-	return m.m.Equals(p.m)
-}
-
-func (m MapOfStringToValue) Ref() ref.Ref {
-	return m.m.Ref()
-}
-
-func (m MapOfStringToValue) Empty() bool {
-	return m.m.Empty()
-}
-
-func (m MapOfStringToValue) Len() uint64 {
-	return m.m.Len()
-}
-
-func (m MapOfStringToValue) Has(p string) bool {
-	return m.m.Has(types.NewString(p))
-}
-
-func (m MapOfStringToValue) Get(p string) types.Value {
-	return m.m.Get(types.NewString(p))
-}
-
-func (m MapOfStringToValue) Set(k string, v types.Value) MapOfStringToValue {
-	return MapOfStringToValue{m.m.Set(types.NewString(k), v)}
-}
-
-// TODO: Implement SetM?
-
-func (m MapOfStringToValue) Remove(p string) MapOfStringToValue {
-	return MapOfStringToValue{m.m.Remove(types.NewString(p))}
-}
-
-type MapOfStringToValueIterCallback func(k string, v types.Value) (stop bool)
-
-func (m MapOfStringToValue) Iter(cb MapOfStringToValueIterCallback) {
-	m.m.Iter(func(k, v types.Value) bool {
-		return cb(k.(types.String).String(), v)
-	})
-}
-
-type MapOfStringToValueIterAllCallback func(k string, v types.Value)
-
-func (m MapOfStringToValue) IterAll(cb MapOfStringToValueIterAllCallback) {
-	m.m.IterAll(func(k, v types.Value) {
-		cb(k.(types.String).String(), v)
-	})
-}
-
-type MapOfStringToValueFilterCallback func(k string, v types.Value) (keep bool)
-
-func (m MapOfStringToValue) Filter(cb MapOfStringToValueFilterCallback) MapOfStringToValue {
-	nm := NewMapOfStringToValue()
-	m.IterAll(func(k string, v types.Value) {
-		if cb(k, v) {
-			nm = nm.Set(k, v)
-		}
-	})
-	return nm
-}
-
-// ListOfMapOfStringToValue
-
-type ListOfMapOfStringToValue struct {
-	l types.List
-}
-
-type ListOfMapOfStringToValueDef []MapOfStringToValueDef
-
-func NewListOfMapOfStringToValue() ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{types.NewList()}
-}
-
-func (def ListOfMapOfStringToValueDef) New() ListOfMapOfStringToValue {
-	l := make([]types.Value, len(def))
-	for i, d := range def {
-		l[i] = d.New().NomsValue()
-	}
-	return ListOfMapOfStringToValue{types.NewList(l...)}
-}
-
-func ListOfMapOfStringToValueFromVal(val types.Value) ListOfMapOfStringToValue {
-	// TODO: Validate here
-	return ListOfMapOfStringToValue{val.(types.List)}
-}
-
-func (self ListOfMapOfStringToValue) Def() ListOfMapOfStringToValueDef {
-	l := make([]MapOfStringToValueDef, self.Len())
-	for i := uint64(0); i < self.Len(); i++ {
-		l[i] = MapOfStringToValueFromVal(self.l.Get(i)).Def()
-	}
-	return l
-}
-
-func (self ListOfMapOfStringToValue) NomsValue() types.Value {
-	return self.l
-}
-
-func (l ListOfMapOfStringToValue) Equals(p ListOfMapOfStringToValue) bool {
-	return l.l.Equals(p.l)
-}
-
-func (l ListOfMapOfStringToValue) Ref() ref.Ref {
-	return l.l.Ref()
-}
-
-func (l ListOfMapOfStringToValue) Len() uint64 {
-	return l.l.Len()
-}
-
-func (l ListOfMapOfStringToValue) Empty() bool {
-	return l.Len() == uint64(0)
-}
-
-func (self ListOfMapOfStringToValue) Get(i uint64) MapOfStringToValue {
-	return MapOfStringToValueFromVal(self.l.Get(i))
-}
-
-func (l ListOfMapOfStringToValue) Slice(idx uint64, end uint64) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Slice(idx, end)}
-}
-
-func (self ListOfMapOfStringToValue) Set(i uint64, val MapOfStringToValue) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{self.l.Set(i, val.NomsValue())}
-}
-
-func (l ListOfMapOfStringToValue) Append(v ...MapOfStringToValue) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Append(l.fromElemSlice(v)...)}
-}
-
-func (l ListOfMapOfStringToValue) Insert(idx uint64, v ...MapOfStringToValue) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Insert(idx, l.fromElemSlice(v)...)}
-}
-
-func (l ListOfMapOfStringToValue) Remove(idx uint64, end uint64) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Remove(idx, end)}
-}
-
-func (l ListOfMapOfStringToValue) RemoveAt(idx uint64) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{(l.l.RemoveAt(idx))}
-}
-
-func (l ListOfMapOfStringToValue) fromElemSlice(p []MapOfStringToValue) []types.Value {
-	r := make([]types.Value, len(p))
-	for i, v := range p {
-		r[i] = v.NomsValue()
-	}
-	return r
-}
-
-type ListOfMapOfStringToValueIterCallback func(v MapOfStringToValue) (stop bool)
-
-func (l ListOfMapOfStringToValue) Iter(cb ListOfMapOfStringToValueIterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb(MapOfStringToValueFromVal(v))
-	})
-}
-
-type ListOfMapOfStringToValueIterAllCallback func(v MapOfStringToValue)
-
-func (l ListOfMapOfStringToValue) IterAll(cb ListOfMapOfStringToValueIterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb(MapOfStringToValueFromVal(v))
-	})
-}
-
-type ListOfMapOfStringToValueFilterCallback func(v MapOfStringToValue) (keep bool)
-
-func (l ListOfMapOfStringToValue) Filter(cb ListOfMapOfStringToValueFilterCallback) ListOfMapOfStringToValue {
-	nl := NewListOfMapOfStringToValue()
-	l.IterAll(func(v MapOfStringToValue) {
-		if cb(v) {
-			nl = nl.Append(v)
-		}
-	})
-	return nl
 }

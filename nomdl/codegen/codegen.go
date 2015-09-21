@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -24,30 +27,68 @@ var (
 	packageFlag = flag.String("package", "", "The name of the go package to write")
 )
 
+const ext = ".noms"
+
 func main() {
 	flag.Parse()
-	if *inFlag == "" || *outFlag == "" || *packageFlag == "" {
-		flag.Usage()
+
+	packageName := getGoPackageName()
+	if *inFlag != "" {
+		out := *outFlag
+		if out == "" {
+			out = getOutFileName(*inFlag)
+		}
+		generate(packageName, *inFlag, out)
 		return
 	}
 
-	inFile, err := os.Open(*inFlag)
+	// Generate code from all .noms file in the current directory
+	nomsFiles, err := filepath.Glob("*" + ext)
+	d.Chk.NoError(err)
+	for _, n := range nomsFiles {
+		generate(packageName, n, getOutFileName(n))
+	}
+}
+
+func getOutFileName(in string) string {
+	return in[:len(in)-len(ext)] + ".go"
+}
+
+func generate(packageName, in, out string) {
+	inFile, err := os.Open(in)
 	d.Chk.NoError(err)
 	defer inFile.Close()
 
 	var buf bytes.Buffer
 	pkg := parse.ParsePackage("", inFile)
 	gen := NewCodeGen(&buf, pkg)
-	gen.WritePackage(*packageFlag)
+	gen.WritePackage(packageName)
 
-	bs, err := imports.Process(*outFlag, buf.Bytes(), nil)
+	bs, err := imports.Process(out, buf.Bytes(), nil)
 	d.Chk.NoError(err)
 
-	outFile, err := os.OpenFile(*outFlag, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	outFile, err := os.OpenFile(out, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	d.Chk.NoError(err)
 	defer outFile.Close()
 
 	io.Copy(outFile, bytes.NewBuffer(bs))
+}
+
+func getGoPackageName() string {
+	if *packageFlag != "" {
+		return *packageFlag
+	}
+
+	// It is illegal to have multiple go files in the same directory with different package names.
+	// We can therefore just pick the first one and get the package name from there.
+	goFiles, err := filepath.Glob("*.go")
+	d.Chk.NoError(err)
+	d.Chk.True(len(goFiles) > 0)
+
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, goFiles[0], nil, parser.PackageClauseOnly)
+	d.Chk.NoError(err)
+	return f.Name.String()
 }
 
 type codeGen struct {
