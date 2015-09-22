@@ -1,0 +1,4 @@
+struct Tree {
+  // TODO: Add parent pointer
+  children: List(Tree)
+}
