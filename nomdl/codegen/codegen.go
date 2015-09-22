@@ -556,74 +556,33 @@ func (gen *codeGen) writeEnum(t parse.TypeRef) {
 // We use a go map as the def for Set and Map. These cannot have a key that is a
 // Set, Map or a List because slices and maps are not comparable in go.
 func (gen *codeGen) canUseDef(t parse.TypeRef) bool {
-	cache := map[string]bool{}
-
-	var rec func(t parse.TypeRef, inKey bool) bool
-	rec = func(t parse.TypeRef, inKey bool) bool {
-		t = gen.resolve(t)
-		switch t.Desc.Kind() {
-		case parse.ListKind:
-			return !inKey && rec(t.Desc.(parse.CompoundDesc).ElemTypes[0], inKey)
-		case parse.SetKind:
-			return !inKey && rec(t.Desc.(parse.CompoundDesc).ElemTypes[0], true)
-		case parse.MapKind:
-			elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
-			return !inKey && rec(elemTypes[0], true) && rec(elemTypes[1], false)
-		case parse.StructKind:
-			userName := gen.userName(t)
-			// Only structs can be recursive
-			if b, ok := cache[userName]; ok {
-				return b
-			}
-
-			if gen.isStructRecursive(t) {
-				cache[userName] = false
-				return false
-			}
-
-			cache[userName] = true
-			for _, f := range t.Desc.(parse.StructDesc).Fields {
-				if f.T.Equals(t) {
-					cache[userName] = false
-					return false
-				}
-				if !rec(f.T, inKey) {
-					cache[userName] = false
-					return false
-				}
-			}
-			return true
-		default:
-			return true
-		}
-	}
-
-	return rec(t, false)
+	visited := map[string]bool{}
+	return gen.canUseDefRec(t, visited, false)
 }
 
-func (gen *codeGen) isStructRecursive(t parse.TypeRef) bool {
-	// A go struct cannot refer to itself unless there is an intermediate slice or map.
-	top := true
-	var rec func(t2 parse.TypeRef) bool
-	rec = func(t2 parse.TypeRef) bool {
-		if top {
-			top = false
-		} else if t2.Equals(t) {
+func (gen *codeGen) canUseDefRec(t parse.TypeRef, visited map[string]bool, inKey bool) bool {
+	t = gen.resolve(t)
+	switch t.Desc.Kind() {
+	case parse.ListKind:
+		return !inKey && gen.canUseDefRec(t.Desc.(parse.CompoundDesc).ElemTypes[0], visited, inKey)
+	case parse.SetKind:
+		return !inKey && gen.canUseDefRec(t.Desc.(parse.CompoundDesc).ElemTypes[0], visited, true)
+	case parse.MapKind:
+		elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
+		return !inKey && gen.canUseDefRec(elemTypes[0], visited, true) && gen.canUseDefRec(elemTypes[1], visited, false)
+	case parse.StructKind:
+		// Only structs can be recursive
+		if visited[gen.userName(t)] {
 			return true
 		}
-		t2 = gen.resolve(t2)
-		switch t2.Desc.Kind() {
-		case parse.StructKind:
-			for _, f := range t2.Desc.(parse.StructDesc).Fields {
-				if rec(f.T) {
-					return true
-				}
+		visited[gen.userName(t)] = true
+		for _, f := range t.Desc.(parse.StructDesc).Fields {
+			if !gen.canUseDefRec(f.T, visited, inKey) {
+				return false
 			}
-			return false
-		default:
-			return false
 		}
+		return true
+	default:
+		return true
 	}
-
-	return rec(t)
 }
