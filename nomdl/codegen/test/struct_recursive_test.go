@@ -24,3 +24,23 @@ func TestStructRecursiveChildren(t *testing.T) {
 	assert.Equal(uint64(0), root.Children().Get(0).Children().Len())
 	assert.Equal(uint64(1), root.Children().Get(1).Children().Len())
 }
+
+func TestStructRecursiveParent(t *testing.T) {
+	assert := assert.New(t)
+
+	root := NewTreeWithParent().SetChildren(
+		NewListOfTreeWithParent().Append(
+			NewTreeWithParent(),
+			NewTreeWithParent().SetChildren(
+				NewListOfTreeWithParent().Append(
+					NewTreeWithParent(),
+				),
+			),
+		),
+	)
+	// Cannot set the Parent in an immutable tree ;-)
+
+	assert.Equal(uint64(2), root.Children().Len())
+	assert.Equal(uint64(0), root.Children().Get(0).Children().Len())
+	assert.Equal(uint64(1), root.Children().Get(1).Children().Len())
+}
