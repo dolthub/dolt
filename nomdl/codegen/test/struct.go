@@ -30,8 +30,8 @@ func NewStruct() Struct {
 	return Struct{types.NewMap(
 		types.NewString("$name"), types.NewString("Struct"),
 		types.NewString("$type"), types.MakeTypeRef(types.NewString("Struct"), __testPackageInFile_struct_Ref()),
-		types.NewString("S"), types.NewString(""),
-		types.NewString("B"), types.Bool(false),
+		types.NewString("s"), types.NewString(""),
+		types.NewString("b"), types.Bool(false),
 	)}
 }
 
@@ -45,15 +45,15 @@ func (def StructDef) New() Struct {
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Struct"),
 			types.NewString("$type"), types.MakeTypeRef(types.NewString("Struct"), __testPackageInFile_struct_Ref()),
-			types.NewString("S"), types.NewString(def.S),
-			types.NewString("B"), types.Bool(def.B),
+			types.NewString("s"), types.NewString(def.S),
+			types.NewString("b"), types.Bool(def.B),
 		)}
 }
 
 func (self Struct) Def() StructDef {
 	return StructDef{
-		self.m.Get(types.NewString("S")).(types.String).String(),
-		bool(self.m.Get(types.NewString("B")).(types.Bool)),
+		self.m.Get(types.NewString("s")).(types.String).String(),
+		bool(self.m.Get(types.NewString("b")).(types.Bool)),
 	}
 }
 
@@ -90,17 +90,17 @@ func (self Struct) Type() types.TypeRef {
 }
 
 func (self Struct) S() string {
-	return self.m.Get(types.NewString("S")).(types.String).String()
+	return self.m.Get(types.NewString("s")).(types.String).String()
 }
 
 func (self Struct) SetS(val string) Struct {
-	return Struct{self.m.Set(types.NewString("S"), types.NewString(val))}
+	return Struct{self.m.Set(types.NewString("s"), types.NewString(val))}
 }
 
 func (self Struct) B() bool {
-	return bool(self.m.Get(types.NewString("B")).(types.Bool))
+	return bool(self.m.Get(types.NewString("b")).(types.Bool))
 }
 
 func (self Struct) SetB(val bool) Struct {
-	return Struct{self.m.Set(types.NewString("B"), types.Bool(val))}
+	return Struct{self.m.Set(types.NewString("b"), types.Bool(val))}
 }

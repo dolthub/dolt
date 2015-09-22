@@ -30,8 +30,8 @@ func NewStructWithUnions() StructWithUnions {
 	return StructWithUnions{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithUnions"),
 		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnions"), __testPackageInFile_struct_with_unions_Ref()),
-		types.NewString("A"), New__unionOfBOfFloat64AndCOfString().NomsValue(),
-		types.NewString("D"), New__unionOfEOfFloat64AndFOfString().NomsValue(),
+		types.NewString("a"), New__unionOfBOfFloat64AndCOfString().NomsValue(),
+		types.NewString("d"), New__unionOfEOfFloat64AndFOfString().NomsValue(),
 	)}
 }
 
@@ -45,15 +45,15 @@ func (def StructWithUnionsDef) New() StructWithUnions {
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithUnions"),
 			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnions"), __testPackageInFile_struct_with_unions_Ref()),
-			types.NewString("A"), def.A.New().NomsValue(),
-			types.NewString("D"), def.D.New().NomsValue(),
+			types.NewString("a"), def.A.New().NomsValue(),
+			types.NewString("d"), def.D.New().NomsValue(),
 		)}
 }
 
 func (self StructWithUnions) Def() StructWithUnionsDef {
 	return StructWithUnionsDef{
-		__unionOfBOfFloat64AndCOfStringFromVal(self.m.Get(types.NewString("A"))).Def(),
-		__unionOfEOfFloat64AndFOfStringFromVal(self.m.Get(types.NewString("D"))).Def(),
+		__unionOfBOfFloat64AndCOfStringFromVal(self.m.Get(types.NewString("a"))).Def(),
+		__unionOfEOfFloat64AndFOfStringFromVal(self.m.Get(types.NewString("d"))).Def(),
 	}
 }
 
@@ -92,19 +92,19 @@ func (self StructWithUnions) Type() types.TypeRef {
 }
 
 func (self StructWithUnions) A() __unionOfBOfFloat64AndCOfString {
-	return __unionOfBOfFloat64AndCOfStringFromVal(self.m.Get(types.NewString("A")))
+	return __unionOfBOfFloat64AndCOfStringFromVal(self.m.Get(types.NewString("a")))
 }
 
 func (self StructWithUnions) SetA(val __unionOfBOfFloat64AndCOfString) StructWithUnions {
-	return StructWithUnions{self.m.Set(types.NewString("A"), val.NomsValue())}
+	return StructWithUnions{self.m.Set(types.NewString("a"), val.NomsValue())}
 }
 
 func (self StructWithUnions) D() __unionOfEOfFloat64AndFOfString {
-	return __unionOfEOfFloat64AndFOfStringFromVal(self.m.Get(types.NewString("D")))
+	return __unionOfEOfFloat64AndFOfStringFromVal(self.m.Get(types.NewString("d")))
 }
 
 func (self StructWithUnions) SetD(val __unionOfEOfFloat64AndFOfString) StructWithUnions {
-	return StructWithUnions{self.m.Set(types.NewString("D"), val.NomsValue())}
+	return StructWithUnions{self.m.Set(types.NewString("d"), val.NomsValue())}
 }
 
 // __unionOfBOfFloat64AndCOfString

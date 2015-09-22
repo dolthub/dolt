@@ -30,10 +30,10 @@ func NewStructWithList() StructWithList {
 	return StructWithList{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithList"),
 		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithList"), __testPackageInFile_struct_with_list_Ref()),
-		types.NewString("L"), types.NewList(),
-		types.NewString("B"), types.Bool(false),
-		types.NewString("S"), types.NewString(""),
-		types.NewString("I"), types.Int64(0),
+		types.NewString("l"), types.NewList(),
+		types.NewString("b"), types.Bool(false),
+		types.NewString("s"), types.NewString(""),
+		types.NewString("i"), types.Int64(0),
 	)}
 }
 
@@ -49,19 +49,19 @@ func (def StructWithListDef) New() StructWithList {
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithList"),
 			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithList"), __testPackageInFile_struct_with_list_Ref()),
-			types.NewString("L"), def.L.New().NomsValue(),
-			types.NewString("B"), types.Bool(def.B),
-			types.NewString("S"), types.NewString(def.S),
-			types.NewString("I"), types.Int64(def.I),
+			types.NewString("l"), def.L.New().NomsValue(),
+			types.NewString("b"), types.Bool(def.B),
+			types.NewString("s"), types.NewString(def.S),
+			types.NewString("i"), types.Int64(def.I),
 		)}
 }
 
 func (self StructWithList) Def() StructWithListDef {
 	return StructWithListDef{
-		ListOfUInt8FromVal(self.m.Get(types.NewString("L"))).Def(),
-		bool(self.m.Get(types.NewString("B")).(types.Bool)),
-		self.m.Get(types.NewString("S")).(types.String).String(),
-		int64(self.m.Get(types.NewString("I")).(types.Int64)),
+		ListOfUInt8FromVal(self.m.Get(types.NewString("l"))).Def(),
+		bool(self.m.Get(types.NewString("b")).(types.Bool)),
+		self.m.Get(types.NewString("s")).(types.String).String(),
+		int64(self.m.Get(types.NewString("i")).(types.Int64)),
 	}
 }
 
@@ -100,35 +100,35 @@ func (self StructWithList) Type() types.TypeRef {
 }
 
 func (self StructWithList) L() ListOfUInt8 {
-	return ListOfUInt8FromVal(self.m.Get(types.NewString("L")))
+	return ListOfUInt8FromVal(self.m.Get(types.NewString("l")))
 }
 
 func (self StructWithList) SetL(val ListOfUInt8) StructWithList {
-	return StructWithList{self.m.Set(types.NewString("L"), val.NomsValue())}
+	return StructWithList{self.m.Set(types.NewString("l"), val.NomsValue())}
 }
 
 func (self StructWithList) B() bool {
-	return bool(self.m.Get(types.NewString("B")).(types.Bool))
+	return bool(self.m.Get(types.NewString("b")).(types.Bool))
 }
 
 func (self StructWithList) SetB(val bool) StructWithList {
-	return StructWithList{self.m.Set(types.NewString("B"), types.Bool(val))}
+	return StructWithList{self.m.Set(types.NewString("b"), types.Bool(val))}
 }
 
 func (self StructWithList) S() string {
-	return self.m.Get(types.NewString("S")).(types.String).String()
+	return self.m.Get(types.NewString("s")).(types.String).String()
 }
 
 func (self StructWithList) SetS(val string) StructWithList {
-	return StructWithList{self.m.Set(types.NewString("S"), types.NewString(val))}
+	return StructWithList{self.m.Set(types.NewString("s"), types.NewString(val))}
 }
 
 func (self StructWithList) I() int64 {
-	return int64(self.m.Get(types.NewString("I")).(types.Int64))
+	return int64(self.m.Get(types.NewString("i")).(types.Int64))
 }
 
 func (self StructWithList) SetI(val int64) StructWithList {
-	return StructWithList{self.m.Set(types.NewString("I"), types.Int64(val))}
+	return StructWithList{self.m.Set(types.NewString("i"), types.Int64(val))}
 }
 
 // ListOfUInt8

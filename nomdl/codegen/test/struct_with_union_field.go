@@ -30,7 +30,7 @@ func NewStructWithUnionField() StructWithUnionField {
 	return StructWithUnionField{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithUnionField"),
 		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnionField"), __testPackageInFile_struct_with_union_field_Ref()),
-		types.NewString("A"), types.Float32(0),
+		types.NewString("a"), types.Float32(0),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	)}
@@ -47,7 +47,7 @@ func (def StructWithUnionFieldDef) New() StructWithUnionField {
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithUnionField"),
 			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnionField"), __testPackageInFile_struct_with_union_field_Ref()),
-			types.NewString("A"), types.Float32(def.A),
+			types.NewString("a"), types.Float32(def.A),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
 		)}
@@ -55,7 +55,7 @@ func (def StructWithUnionFieldDef) New() StructWithUnionField {
 
 func (self StructWithUnionField) Def() StructWithUnionFieldDef {
 	return StructWithUnionFieldDef{
-		float32(self.m.Get(types.NewString("A")).(types.Float32)),
+		float32(self.m.Get(types.NewString("a")).(types.Float32)),
 		uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
 		self.__unionValueToDef(),
 	}
@@ -131,11 +131,11 @@ func (self StructWithUnionField) Type() types.TypeRef {
 }
 
 func (self StructWithUnionField) A() float32 {
-	return float32(self.m.Get(types.NewString("A")).(types.Float32))
+	return float32(self.m.Get(types.NewString("a")).(types.Float32))
 }
 
 func (self StructWithUnionField) SetA(val float32) StructWithUnionField {
-	return StructWithUnionField{self.m.Set(types.NewString("A"), types.Float32(val))}
+	return StructWithUnionField{self.m.Set(types.NewString("a"), types.Float32(val))}
 }
 
 func (self StructWithUnionField) B() (val float64, ok bool) {
