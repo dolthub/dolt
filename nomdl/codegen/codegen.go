@@ -556,22 +556,28 @@ func (gen *codeGen) writeEnum(t parse.TypeRef) {
 // We use a go map as the def for Set and Map. These cannot have a key that is a
 // Set, Map or a List because slices and maps are not comparable in go.
 func (gen *codeGen) canUseDef(t parse.TypeRef) bool {
-	return gen.canUseDefRec(t, false)
+	visited := map[string]bool{}
+	return gen.canUseDefRec(t, visited, false)
 }
 
-func (gen *codeGen) canUseDefRec(t parse.TypeRef, deep bool) bool {
+func (gen *codeGen) canUseDefRec(t parse.TypeRef, visited map[string]bool, inKey bool) bool {
 	t = gen.resolve(t)
 	switch t.Desc.Kind() {
 	case parse.ListKind:
-		return !deep && gen.canUseDefRec(t.Desc.(parse.CompoundDesc).ElemTypes[0], deep)
+		return !inKey && gen.canUseDefRec(t.Desc.(parse.CompoundDesc).ElemTypes[0], visited, inKey)
 	case parse.SetKind:
-		return !deep && gen.canUseDefRec(t.Desc.(parse.CompoundDesc).ElemTypes[0], true)
+		return !inKey && gen.canUseDefRec(t.Desc.(parse.CompoundDesc).ElemTypes[0], visited, true)
 	case parse.MapKind:
 		elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
-		return !deep && gen.canUseDefRec(elemTypes[0], true) && gen.canUseDefRec(elemTypes[1], false)
+		return !inKey && gen.canUseDefRec(elemTypes[0], visited, true) && gen.canUseDefRec(elemTypes[1], visited, false)
 	case parse.StructKind:
+		// Only structs can be recursive
+		if visited[gen.userName(t)] {
+			return true
+		}
+		visited[gen.userName(t)] = true
 		for _, f := range t.Desc.(parse.StructDesc).Fields {
-			if !gen.canUseDefRec(f.T, deep) {
+			if !gen.canUseDefRec(f.T, visited, inKey) {
 				return false
 			}
 		}
