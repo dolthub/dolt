@@ -179,3 +179,149 @@ func (l ListOfTree) Filter(cb ListOfTreeFilterCallback) ListOfTree {
 	})
 	return nl
 }
+
+// TreeWithParent
+
+type TreeWithParent struct {
+	m types.Map
+}
+
+func NewTreeWithParent() TreeWithParent {
+	return TreeWithParent{types.NewMap(
+		types.NewString("$name"), types.NewString("TreeWithParent"),
+		types.NewString("Children"), types.NewList(),
+		types.NewString("Parent"), NewTreeWithParent().NomsValue(),
+	)}
+}
+
+func TreeWithParentFromVal(val types.Value) TreeWithParent {
+	// TODO: Validate here
+	return TreeWithParent{val.(types.Map)}
+}
+
+func (self TreeWithParent) NomsValue() types.Value {
+	return self.m
+}
+
+func (self TreeWithParent) Equals(other TreeWithParent) bool {
+	return self.m.Equals(other.m)
+}
+
+func (self TreeWithParent) Ref() ref.Ref {
+	return self.m.Ref()
+}
+
+func (self TreeWithParent) Children() ListOfTreeWithParent {
+	return ListOfTreeWithParentFromVal(self.m.Get(types.NewString("Children")))
+}
+
+func (self TreeWithParent) SetChildren(val ListOfTreeWithParent) TreeWithParent {
+	return TreeWithParent{self.m.Set(types.NewString("Children"), val.NomsValue())}
+}
+
+func (self TreeWithParent) Parent() TreeWithParent {
+	return TreeWithParentFromVal(self.m.Get(types.NewString("Parent")))
+}
+
+func (self TreeWithParent) SetParent(val TreeWithParent) TreeWithParent {
+	return TreeWithParent{self.m.Set(types.NewString("Parent"), val.NomsValue())}
+}
+
+// ListOfTreeWithParent
+
+type ListOfTreeWithParent struct {
+	l types.List
+}
+
+func NewListOfTreeWithParent() ListOfTreeWithParent {
+	return ListOfTreeWithParent{types.NewList()}
+}
+
+func ListOfTreeWithParentFromVal(val types.Value) ListOfTreeWithParent {
+	// TODO: Validate here
+	return ListOfTreeWithParent{val.(types.List)}
+}
+
+func (self ListOfTreeWithParent) NomsValue() types.Value {
+	return self.l
+}
+
+func (l ListOfTreeWithParent) Equals(p ListOfTreeWithParent) bool {
+	return l.l.Equals(p.l)
+}
+
+func (l ListOfTreeWithParent) Ref() ref.Ref {
+	return l.l.Ref()
+}
+
+func (l ListOfTreeWithParent) Len() uint64 {
+	return l.l.Len()
+}
+
+func (l ListOfTreeWithParent) Empty() bool {
+	return l.Len() == uint64(0)
+}
+
+func (self ListOfTreeWithParent) Get(i uint64) TreeWithParent {
+	return TreeWithParentFromVal(self.l.Get(i))
+}
+
+func (l ListOfTreeWithParent) Slice(idx uint64, end uint64) ListOfTreeWithParent {
+	return ListOfTreeWithParent{l.l.Slice(idx, end)}
+}
+
+func (self ListOfTreeWithParent) Set(i uint64, val TreeWithParent) ListOfTreeWithParent {
+	return ListOfTreeWithParent{self.l.Set(i, val.NomsValue())}
+}
+
+func (l ListOfTreeWithParent) Append(v ...TreeWithParent) ListOfTreeWithParent {
+	return ListOfTreeWithParent{l.l.Append(l.fromElemSlice(v)...)}
+}
+
+func (l ListOfTreeWithParent) Insert(idx uint64, v ...TreeWithParent) ListOfTreeWithParent {
+	return ListOfTreeWithParent{l.l.Insert(idx, l.fromElemSlice(v)...)}
+}
+
+func (l ListOfTreeWithParent) Remove(idx uint64, end uint64) ListOfTreeWithParent {
+	return ListOfTreeWithParent{l.l.Remove(idx, end)}
+}
+
+func (l ListOfTreeWithParent) RemoveAt(idx uint64) ListOfTreeWithParent {
+	return ListOfTreeWithParent{(l.l.RemoveAt(idx))}
+}
+
+func (l ListOfTreeWithParent) fromElemSlice(p []TreeWithParent) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v.NomsValue()
+	}
+	return r
+}
+
+type ListOfTreeWithParentIterCallback func(v TreeWithParent) (stop bool)
+
+func (l ListOfTreeWithParent) Iter(cb ListOfTreeWithParentIterCallback) {
+	l.l.Iter(func(v types.Value) bool {
+		return cb(TreeWithParentFromVal(v))
+	})
+}
+
+type ListOfTreeWithParentIterAllCallback func(v TreeWithParent)
+
+func (l ListOfTreeWithParent) IterAll(cb ListOfTreeWithParentIterAllCallback) {
+	l.l.IterAll(func(v types.Value) {
+		cb(TreeWithParentFromVal(v))
+	})
+}
+
+type ListOfTreeWithParentFilterCallback func(v TreeWithParent) (keep bool)
+
+func (l ListOfTreeWithParent) Filter(cb ListOfTreeWithParentFilterCallback) ListOfTreeWithParent {
+	nl := NewListOfTreeWithParent()
+	l.IterAll(func(v TreeWithParent) {
+		if cb(v) {
+			nl = nl.Append(v)
+		}
+	})
+	return nl
+}

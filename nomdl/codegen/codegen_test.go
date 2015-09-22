@@ -116,4 +116,33 @@ func TestCanUseDef(t *testing.T) {
 		assertCanUseDef(fmt.Sprintf("using %s", line), false, false)
 		assertCanUseDef(fmt.Sprintf("struct S { x: %s }", line), false, false)
 	}
+
+	good = `
+		struct T1 {
+			children: List(T1)
+		}
+		struct T2 {
+			children: Set(T2)
+		}
+		struct T3 {
+			children: Map(T3, T3)
+		}
+		struct T4 {
+			children: Ref(T4)
+		}
+		`
+	assertCanUseDef(good, true, true)
+
+	bad = `
+		struct T1 {
+			parent: T1
+		}
+		struct T2 {
+			parent: I
+		}
+		struct I {
+			v: T2
+		}
+		`
+	assertCanUseDef(bad, false, false)
 }
