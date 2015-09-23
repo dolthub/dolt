@@ -2,7 +2,8 @@
   "name": "noms",
   "main": "dist/noms.js",
   "dependencies": {
-    "immutable": "^3.7.4"
+    "immutable": "^3.7.4",
+    "text-encoding": "^0.5.2"
   },
   "devDependencies": {
     "babel": "^5.6.23",
