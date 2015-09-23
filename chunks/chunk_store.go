@@ -33,33 +33,3 @@ type ChunkSink interface {
 	Put(c Chunk)
 	io.Closer
 }
-
-// NewFlags creates a new instance of Flags, which declares a number of ChunkStore-related command-line flags using the golang flag package. Call this before flag.Parse().
-func NewFlags() Flags {
-	return NewFlagsWithPrefix("")
-}
-
-// NewFlagsWithPrefix creates a new instance of Flags with the names of all flags declared therein prefixed by the given string.
-func NewFlagsWithPrefix(prefix string) Flags {
-	return Flags{
-		levelDBFlags(prefix),
-		memoryFlags(prefix),
-		nopFlags(prefix),
-	}
-}
-
-// Flags abstracts away definitions for and handling of command-line flags for all ChunkStore implementations.
-type Flags struct {
-	ldb    ldbStoreFlags
-	memory memoryStoreFlags
-	nop    nopStoreFlags
-}
-
-// CreateStore creates a ChunkStore implementation based on the values of command-line flags.
-func (f Flags) CreateStore() (cs ChunkStore) {
-	if cs = f.ldb.createStore(); cs != nil {
-	} else if cs = f.memory.createStore(); cs != nil {
-	} else if cs = f.nop.createStore(); cs != nil {
-	}
-	return cs
-}

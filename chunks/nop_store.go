@@ -30,17 +30,17 @@ func (ms *NopStore) Close() error {
 	return nil
 }
 
-type nopStoreFlags struct {
+type NopStoreFlags struct {
 	use *bool
 }
 
-func nopFlags(prefix string) nopStoreFlags {
-	return nopStoreFlags{
+func NopFlags(prefix string) NopStoreFlags {
+	return NopStoreFlags{
 		flag.Bool(prefix+"nop", false, "use a /dev/null-esque chunkstore"),
 	}
 }
 
-func (f nopStoreFlags) createStore() ChunkStore {
+func (f NopStoreFlags) CreateStore() ChunkStore {
 	if *f.use {
 		return &NopStore{}
 	} else {
