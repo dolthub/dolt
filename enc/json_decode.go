@@ -176,9 +176,9 @@ func jsonDecodeSet(input []interface{}) Set {
 func jsonDecodeTypeRef(input map[string]interface{}) TypeRef {
 	var ok bool
 	name, ok := input["name"].(string)
-	d.Exp.True(ok, "Name field of type must be string, not %+v", input["name"])
+	d.Exp.True(ok, "Name field of type must be string, not %T (%#v)", input["name"], input["name"])
 	kind, ok := jsonDecodeValue(input["kind"]).(uint8)
-	d.Exp.True(ok, "Kind field of type must be uint8, not %+v", input["kind"])
+	d.Exp.True(ok, "Kind field of type must be uint8, not %T, (%#v)", input["kind"], input["kind"])
 	pkgRef := ref.Ref{}
 	if input["pkgRef"] != nil {
 		pkgRef, ok = jsonDecodeValue(input["pkgRef"]).(ref.Ref)
@@ -189,5 +189,4 @@ func jsonDecodeTypeRef(input map[string]interface{}) TypeRef {
 		desc = jsonDecodeValue(input["desc"])
 	}
 	return TypeRef{PkgRef: pkgRef, Name: name, Kind: kind, Desc: desc}
-
 }

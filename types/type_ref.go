@@ -71,11 +71,10 @@ func (t TypeRef) Ref() ref.Ref {
 }
 
 func (t TypeRef) Equals(other Value) (res bool) {
-	if other == nil {
-		return false
-	} else {
+	if other, ok := other.(TypeRef); ok {
 		return t.Ref() == other.Ref()
 	}
+	return false
 }
 
 func (t TypeRef) Chunks() (out []Future) {

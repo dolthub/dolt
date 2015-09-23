@@ -105,8 +105,8 @@ type codeGen struct {
 	templates *template.Template
 }
 
-func NewCodeGen(w io.Writer, fileid string, pkg parse.Package) *codeGen {
-	gen := &codeGen{w, pkg, fileid, map[string]bool{}, nil}
+func NewCodeGen(w io.Writer, fileID string, pkg parse.Package) *codeGen {
+	gen := &codeGen{w, pkg, fileID, map[string]bool{}, nil}
 	gen.templates = gen.readTemplates()
 	return gen
 }
@@ -421,7 +421,8 @@ func (gen *codeGen) toTypesTypeRef(t parse.TypeRef) string {
 	if t.IsUnresolved() {
 		// needs to be pkgRef
 		return fmt.Sprintf(`types.MakeTypeRef(types.NewString("%s"), types.Ref{})`, t.Name)
-	} else if types.IsPrimitiveKind(t.Desc.Kind()) {
+	}
+	if types.IsPrimitiveKind(t.Desc.Kind()) {
 		return fmt.Sprintf("types.MakePrimitiveTypeRef(types.%sKind)", kindToString(t.Desc.Kind()))
 	}
 	switch desc := t.Desc.(type) {
@@ -432,7 +433,11 @@ func (gen *codeGen) toTypesTypeRef(t parse.TypeRef) string {
 		}
 		return fmt.Sprintf(`types.MakeCompoundTypeRef(types.NewString("%s"), types.%sKind, %s)`, t.Name, kindToString(t.Desc.Kind()), strings.Join(typerefs, ", "))
 	case parse.EnumDesc:
-		d.Chk.Fail("Don't think these ever wind up nested.")
+		ids := ""
+		for _, id := range desc.IDs {
+			ids += fmt.Sprintf(`types.NewString("%s"),`, id) + "\n"
+		}
+		return fmt.Sprintf(`types.MakeEnumTypeRef(types.NewString("%s"), []types.String{%s})`, t.Name, ids)
 	case parse.StructDesc:
 		flatten := func(f []parse.Field) string {
 			out := make([]string, 0, len(f))
