@@ -1,6 +1,7 @@
 'use strict';
 
 var Immutable = require('immutable');
+var TextDecoder = require('text-encoding').TextDecoder; // Polyfill for Safari
 
 var isRef = {};
 

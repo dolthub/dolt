@@ -4,6 +4,16 @@ const {assert} = require('chai');
 const {readValue, Ref} = require('../src/decode.js');
 const Immutable = require('immutable');
 
+function stringToArrayBufferPromise(string) {
+  return new Promise((resolve, reject) => {
+    var reader = new FileReader();
+    reader.addEventListener('loadend', () => {
+      resolve(reader.result);
+    });
+    reader.readAsArrayBuffer(new Blob([string]));
+  });
+}
+
 suite('decode.js', function() {
 
   function testPrimitive(name, expected, data) {
@@ -11,11 +21,7 @@ suite('decode.js', function() {
       let ref = 'sha1-c0ffee';
       readValue(ref, (r) => {
         assert.equal(ref, r);
-        return Promise.resolve({
-          blob() {
-            return new Blob([data]);
-          }
-        });
+        return stringToArrayBufferPromise(data);
       }).then(value => {
         assert.equal(expected, value);
       }).then(done, done);
@@ -49,11 +55,7 @@ suite('decode.js', function() {
       let ref = 'sha1-c0ffee';
       chunks[ref] = data;
       readValue(ref, (r) => {
-        return Promise.resolve({
-          blob() {
-            return new Blob([chunks[r]]);
-          }
-        });
+        return stringToArrayBufferPromise(chunks[r]);
       }).then(ref => {
         assert.instanceOf(ref, Ref);
         return ref.deref();
@@ -87,14 +89,10 @@ suite('decode.js', function() {
     let ref = 'sha1-c0ffee';
     readValue(ref, (r) => {
       assert.equal(ref, r);
-      return Promise.resolve({
-        blob() {
-          return new Blob([data]);
-        }
-      });
-    }).then(blob => {
-      assert.instanceOf(blob, Blob);
-      assert.equal(3, blob.size);
+      return stringToArrayBufferPromise(data);
+    }).then(chunk => {
+      assert.instanceOf(chunk, ArrayBuffer);
+      assert.equal(3, chunk.byteLength);
     }).then(done, done);
   });
 
