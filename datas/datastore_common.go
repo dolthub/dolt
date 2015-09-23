@@ -7,7 +7,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-type DataStoreCommon struct {
+type dataStoreCommon struct {
 	chunks.ChunkStore
 	head *Commit
 }
@@ -17,20 +17,20 @@ func commitFromRef(commitRef ref.Ref, cs chunks.ChunkSource) *Commit {
 	return &c
 }
 
-func (ds *DataStoreCommon) MaybeHead() (Commit, bool) {
+func (ds *dataStoreCommon) MaybeHead() (Commit, bool) {
 	if ds.head == nil {
 		return NewCommit(), false
 	}
 	return *ds.head, true
 }
 
-func (ds *DataStoreCommon) Head() Commit {
+func (ds *dataStoreCommon) Head() Commit {
 	c, ok := ds.MaybeHead()
 	d.Chk.True(ok, "DataStore has no Head.")
 	return c
 }
 
-func (ds *DataStoreCommon) commit(v types.Value) bool {
+func (ds *dataStoreCommon) commit(v types.Value) bool {
 	p := NewSetOfCommit()
 	if head, ok := ds.MaybeHead(); ok {
 		p = p.Insert(head)
@@ -38,12 +38,12 @@ func (ds *DataStoreCommon) commit(v types.Value) bool {
 	return ds.commitWithParents(v, p)
 }
 
-func (ds *DataStoreCommon) commitWithParents(v types.Value, p SetOfCommit) bool {
+func (ds *dataStoreCommon) commitWithParents(v types.Value, p SetOfCommit) bool {
 	return ds.doCommit(NewCommit().SetParents(p.NomsValue()).SetValue(v))
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current head. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will fail if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
-func (ds *DataStoreCommon) doCommit(commit Commit) bool {
+func (ds *dataStoreCommon) doCommit(commit Commit) bool {
 	currentRootRef := ds.Root()
 
 	// Note: |currentHead| may be different from ds.head and *must* be consistent with currentRootRef.

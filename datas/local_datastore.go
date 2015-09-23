@@ -8,23 +8,23 @@ import (
 
 // DataStore provides versioned storage for noms values. Each DataStore instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new DataStore, representing a new moment in history.
 type LocalDataStore struct {
-	DataStoreCommon
+	dataStoreCommon
 }
 
 func newLocalDataStore(cs chunks.ChunkStore) *LocalDataStore {
 	rootRef := cs.Root()
 	if rootRef == (ref.Ref{}) {
-		return &LocalDataStore{DataStoreCommon{cs, nil}}
+		return &LocalDataStore{dataStoreCommon{cs, nil}}
 	}
 
-	return &LocalDataStore{DataStoreCommon{cs, commitFromRef(rootRef, cs)}}
+	return &LocalDataStore{dataStoreCommon{cs, commitFromRef(rootRef, cs)}}
 }
 
-func newDataStoreInternal(cs chunks.ChunkStore) DataStoreCommon {
+func newDataStoreInternal(cs chunks.ChunkStore) dataStoreCommon {
 	if (cs.Root() == ref.Ref{}) {
-		return DataStoreCommon{cs, nil}
+		return dataStoreCommon{cs, nil}
 	}
-	return DataStoreCommon{cs, commitFromRef(cs.Root(), cs)}
+	return dataStoreCommon{cs, commitFromRef(cs.Root(), cs)}
 }
 
 func (lds *LocalDataStore) Commit(v types.Value) (DataStore, bool) {
