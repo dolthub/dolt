@@ -5,16 +5,21 @@ package {{.Name}}
 import "github.com/attic-labs/noms/types"
 
 {{if .HasTypes}}
+var __{{.Name}}PackageInFile_{{.FileID}}_CachedRef = types.Ref{}
+
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __{{.Name}}PackageInFile_{{.FileID}}_Ref() types.Ref {
-	p := types.PackageDef{
-		Types: types.MapOfStringToTypeRefDef{
-			{{range $name, $t := .NamedTypes}}
-			"{{$name}}": __typeRefOf{{$name}}(),{{end}}
-		},
-	}.New()
-	return types.Ref{R: types.RegisterPackage(&p)}
+	if types.LookupPackage(__{{.Name}}PackageInFile_{{.FileID}}_CachedRef.Ref()) == nil {
+		p := types.PackageDef{
+			Types: types.MapOfStringToTypeRefDef{
+				{{range $name, $t := .NamedTypes}}
+				"{{$name}}": __typeRefOf{{$name}}(),{{end}}
+			},
+		}.New()
+		__{{.Name}}PackageInFile_{{.FileID}}_CachedRef = types.Ref{R: types.RegisterPackage(&p)}
+	}
+	return __{{.Name}}PackageInFile_{{.FileID}}_CachedRef
 }
 {{end}}

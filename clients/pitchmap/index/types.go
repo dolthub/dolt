@@ -7,17 +7,22 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var __mainPackageInFile_types_CachedRef = types.Ref{}
+
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __mainPackageInFile_types_Ref() types.Ref {
-	p := types.PackageDef{
-		Types: types.MapOfStringToTypeRefDef{
+	if types.LookupPackage(__mainPackageInFile_types_CachedRef.Ref()) == nil {
+		p := types.PackageDef{
+			Types: types.MapOfStringToTypeRefDef{
 
-			"Pitch": __typeRefOfPitch(),
-		},
-	}.New()
-	return types.Ref{R: types.RegisterPackage(&p)}
+				"Pitch": __typeRefOfPitch(),
+			},
+		}.New()
+		__mainPackageInFile_types_CachedRef = types.Ref{R: types.RegisterPackage(&p)}
+	}
+	return __mainPackageInFile_types_CachedRef
 }
 
 // ListOfMapOfStringToValue

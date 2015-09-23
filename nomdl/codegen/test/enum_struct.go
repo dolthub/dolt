@@ -7,18 +7,23 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var __testPackageInFile_enum_struct_CachedRef = types.Ref{}
+
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_enum_struct_Ref() types.Ref {
-	p := types.PackageDef{
-		Types: types.MapOfStringToTypeRefDef{
+	if types.LookupPackage(__testPackageInFile_enum_struct_CachedRef.Ref()) == nil {
+		p := types.PackageDef{
+			Types: types.MapOfStringToTypeRefDef{
 
-			"EnumStruct": __typeRefOfEnumStruct(),
-			"Handedness": __typeRefOfHandedness(),
-		},
-	}.New()
-	return types.Ref{R: types.RegisterPackage(&p)}
+				"EnumStruct": __typeRefOfEnumStruct(),
+				"Handedness": __typeRefOfHandedness(),
+			},
+		}.New()
+		__testPackageInFile_enum_struct_CachedRef = types.Ref{R: types.RegisterPackage(&p)}
+	}
+	return __testPackageInFile_enum_struct_CachedRef
 }
 
 // EnumStruct
