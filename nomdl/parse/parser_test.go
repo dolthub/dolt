@@ -7,6 +7,7 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/types"
 )
 
 const (
@@ -51,11 +52,11 @@ using List(Noms.Commit)
 	pkg := ParsePackage("", strings.NewReader(usingDecls))
 	suite.Len(pkg.UsingDeclarations, 2)
 
-	suite.Equal(MapKind, pkg.UsingDeclarations[0].Desc.Kind())
+	suite.Equal(types.MapKind, pkg.UsingDeclarations[0].Desc.Kind())
 	suite.EqualValues([]TypeRef{makePrimitiveTypeRef("String"), makeTypeRef("", "Simple")},
 		pkg.UsingDeclarations[0].Desc.(CompoundDesc).ElemTypes)
 
-	suite.Equal(ListKind, pkg.UsingDeclarations[1].Desc.Kind())
+	suite.Equal(types.ListKind, pkg.UsingDeclarations[1].Desc.Kind())
 	suite.EqualValues([]TypeRef{makeTypeRef("Noms", "Commit")},
 		pkg.UsingDeclarations[1].Desc.(CompoundDesc).ElemTypes)
 }
@@ -181,14 +182,14 @@ type ParsedResultTestSuite struct {
 
 func (suite *ParsedResultTestSuite) SetupTest() {
 	suite.primField = testField{"a", makePrimitiveTypeRef("Int64")}
-	suite.compoundField = testField{"set", makeCompoundTypeRef(SetKind, []TypeRef{makePrimitiveTypeRef("String")})}
+	suite.compoundField = testField{"set", makeCompoundTypeRef(types.SetKind, []TypeRef{makePrimitiveTypeRef("String")})}
 	suite.compoundOfCompoundField = testField{
 		"listOfSet",
-		makeCompoundTypeRef(ListKind, []TypeRef{
-			makeCompoundTypeRef(SetKind, []TypeRef{makePrimitiveTypeRef("String")})})}
+		makeCompoundTypeRef(types.ListKind, []TypeRef{
+			makeCompoundTypeRef(types.SetKind, []TypeRef{makePrimitiveTypeRef("String")})})}
 	suite.mapOfNamedTypeField = testField{
 		"mapOfStructToOther",
-		makeCompoundTypeRef(MapKind, []TypeRef{
+		makeCompoundTypeRef(types.MapKind, []TypeRef{
 			makeTypeRef("", "Struct"),
 			makeTypeRef("Elsewhere", "Other"),
 		}),

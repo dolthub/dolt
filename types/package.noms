@@ -1,0 +1,4 @@
+struct Package {
+	Dependencies :Set(Ref(Package))
+	Types :Map(String, TypeRef)
+}

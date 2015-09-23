@@ -79,6 +79,9 @@ function decodeSet(input, ref, getChunk) {
   });
 }
 
+function decodeType(input, ref, getChunk) {
+}
+
 function decodeCompoundBlob(value, ref, getChunk) {
   // {"cb":["sha1-x",lengthX,"sha1-y",lengthY]}
   return new Ref(ref, () => {
@@ -127,6 +130,7 @@ var decode = {
   map: decodeMap,
   ref: decodeRef,
   set: decodeSet,
+  type: decodeType,
   uint8: decodeInt,
   uint16: decodeInt,
   uint32: decodeInt,

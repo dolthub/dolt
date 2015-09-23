@@ -7,6 +7,7 @@ type {{.Name}} struct {
 func New{{.Name}}() {{.Name}} {
 	return {{.Name}}{types.NewMap(
 			types.NewString("$name"), types.NewString("{{.Name}}"),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("{{.Name}}"), __{{.PackageName}}PackageInFile_{{.FileID}}_Ref()),
 			{{range .Fields}}types.NewString("{{title .Name}}"), {{valueZero .T}},
 			{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(0),
 			types.NewString("$unionValue"), {{valueZero .UnionZeroType}},{{end}}
@@ -20,11 +21,11 @@ func New{{.Name}}() {{.Name}} {
 		__unionValue interface{}
 	{{end}}}
 
-
 	func (def {{.Name}}Def) New() {{.Name}} {
 		return {{.Name}}{
 			types.NewMap(
 				types.NewString("$name"), types.NewString("{{.Name}}"),
+				types.NewString("$type"), types.MakeTypeRef(types.NewString("{{.Name}}"), __{{.PackageName}}PackageInFile_{{.FileID}}_Ref()),
 				{{range .Fields}}types.NewString("{{title .Name}}"), {{defToValue (print "def." (title .Name)) .T}},
 				{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 				types.NewString("$unionValue"), def.__unionDefToValue(),
@@ -59,6 +60,20 @@ func New{{.Name}}() {{.Name}} {
 	{{end}}
 {{end}}
 
+// Creates and returns a Noms Value that describes {{.Name}}.
+func __typeRefOf{{.Name}}() types.TypeRef {
+	return types.MakeStructTypeRef(types.NewString("{{.Name}}"),
+		types.NewList(
+			{{range .Fields}}types.NewString("{{.Name}}"), {{toTypesTypeRef .T}},
+			{{end}}
+		),
+		{{if .HasUnion}}types.NewList(
+			{{range .Choices}}types.NewString("{{.Name}}"), {{toTypesTypeRef .T}},
+			{{end}}
+		){{else}}nil{{end}})
+
+}
+
 func {{.Name}}FromVal(val types.Value) {{.Name}} {
 	// TODO: Validate here
 	return {{.Name}}{val.(types.Map)}
@@ -74,6 +89,10 @@ func (self {{.Name}}) Equals(other {{.Name}}) bool {
 
 func (self {{.Name}}) Ref() ref.Ref {
 	return self.m.Ref()
+}
+
+func (self {{.Name}}) Type() types.TypeRef {
+	return self.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 {{$name := .Name}}

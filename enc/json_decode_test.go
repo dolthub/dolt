@@ -1,6 +1,7 @@
 package enc
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -76,6 +77,16 @@ func TestJSONDecode(t *testing.T) {
 `, Set{})
 	testDecode(`j {"set":[false,{"int32":42},"hotdog",{"ref":"sha1-58bdf8e374b39f9b1e8a64784cf5c09601f4b7ea"},{"ref":"sha1-dca2a4be23d4455487bb588c6a0ab1b9ee07757e"}]}
 `, SetFromItems(false, int32(42), "hotdog", emptyListRef, emptyMapRef))
+
+	// TypeRefs
+	testDecode(`j {"type":{"kind":{"uint8":0},"name":""}}
+`, TypeRef{Kind: 0})
+	ref1 := ref.New(ref.Sha1Digest{0xde, 0xad, 0xbe, 0xef})
+	ref2 := ref.New(ref.Sha1Digest{0xbe, 0xef, 0xca, 0xfe})
+	testDecode(fmt.Sprintf(`j {"type":{"desc":{"list":[{"ref":"%s"},{"ref":"%s"}]},"kind":{"uint8":15},"name":""}}
+`, ref1, ref2), TypeRef{ref.Ref{}, "", 15, []interface{}{ref1, ref2}})
+	testDecode(`j {"type":{"desc":{"list":["f","g"]},"kind":{"uint8":18},"name":"enum"}}
+`, TypeRef{ref.Ref{}, "enum", 18, []interface{}{"f", "g"}})
 
 	// Blob (compound)
 	// echo -n 'b Hello' | sha1sum

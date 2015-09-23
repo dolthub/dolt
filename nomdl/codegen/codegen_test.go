@@ -31,7 +31,7 @@ func assertOutput(inPath, goldenPath string, t *testing.T) {
 
 	var buf bytes.Buffer
 	pkg := parse.ParsePackage("", inFile)
-	gen := NewCodeGen(&buf, pkg)
+	gen := NewCodeGen(&buf, getBareFileName(inPath), pkg)
 	gen.WritePackage("test")
 
 	bs, err := imports.Process("", buf.Bytes(), nil)
@@ -54,7 +54,7 @@ func TestCanUseDef(t *testing.T) {
 
 	assertCanUseDef := func(s string, using, named bool) {
 		pkg := parse.ParsePackage("", bytes.NewBufferString(s))
-		gen := NewCodeGen(nil, pkg)
+		gen := NewCodeGen(nil, "fakefile", pkg)
 		for _, t := range pkg.UsingDeclarations {
 			assert.Equal(using, gen.canUseDef(t), s)
 		}

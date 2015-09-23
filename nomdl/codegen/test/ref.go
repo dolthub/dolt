@@ -8,6 +8,19 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// This function builds up a Noms value that describes the type
+// package implemented by this file and registers it with the global
+// type package definition cache.
+func __testPackageInFile_ref_Ref() types.Ref {
+	p := types.PackageDef{
+		Types: types.MapOfStringToTypeRefDef{
+
+			"StructWithRef": __typeRefOfStructWithRef(),
+		},
+	}.New()
+	return types.Ref{R: types.RegisterPackage(&p)}
+}
+
 // RefOfListOfString
 
 type RefOfListOfString struct {
@@ -321,6 +334,7 @@ type StructWithRef struct {
 func NewStructWithRef() StructWithRef {
 	return StructWithRef{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithRef"),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_Ref()),
 		types.NewString("R"), types.Ref{R: ref.Ref{}},
 	)}
 }
@@ -333,6 +347,7 @@ func (def StructWithRefDef) New() StructWithRef {
 	return StructWithRef{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithRef"),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_Ref()),
 			types.NewString("R"), types.Ref{R: def.R},
 		)}
 }
@@ -341,6 +356,16 @@ func (self StructWithRef) Def() StructWithRefDef {
 	return StructWithRefDef{
 		self.m.Get(types.NewString("R")).Ref(),
 	}
+}
+
+// Creates and returns a Noms Value that describes StructWithRef.
+func __typeRefOfStructWithRef() types.TypeRef {
+	return types.MakeStructTypeRef(types.NewString("StructWithRef"),
+		types.NewList(
+			types.NewString("r"), types.MakeCompoundTypeRef(types.NewString(""), types.RefKind, types.MakeCompoundTypeRef(types.NewString(""), types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind))),
+		),
+		nil)
+
 }
 
 func StructWithRefFromVal(val types.Value) StructWithRef {
@@ -358,6 +383,10 @@ func (self StructWithRef) Equals(other StructWithRef) bool {
 
 func (self StructWithRef) Ref() ref.Ref {
 	return self.m.Ref()
+}
+
+func (self StructWithRef) Type() types.TypeRef {
+	return self.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (self StructWithRef) R() RefOfSetOfFloat32 {

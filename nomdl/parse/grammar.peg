@@ -29,14 +29,14 @@ Package <- _ dd:Definition+ _ EOF {
 			switch d.Desc.Kind() {
 			default:
 				return nil, fmt.Errorf("%v can't be defined at the top-level", d)
-			case ListKind, MapKind, RefKind, SetKind:
+			case types.ListKind, types.MapKind, types.RefKind, types.SetKind:
 				for _, u := range usings {
 					if u.Equals(d) {
 						return nil, fmt.Errorf("%v is a duplicate using declaration", d)
 					}
 				}
 				usings = append(usings, d)
-			case EnumKind, StructKind:
+			case types.EnumKind, types.StructKind:
 				if _, present := named[d.Name]; present {
 					return nil, fmt.Errorf("Redefinition of " + d.Name)
 				}
@@ -44,7 +44,7 @@ Package <- _ dd:Definition+ _ EOF {
 			}
 		}
 	}
-	return Package{aliases, usings, named}, nil
+	return Package{"", aliases, usings, named}, nil
 }
 
 Definition <- Struct / Using / Alias / Enum
@@ -133,16 +133,16 @@ Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
 }
 
 CompoundType <- `List` _ `(` _ t:Type _ `)` _ {
-	return makeCompoundTypeRef(ListKind, []TypeRef{t.(TypeRef)}), nil
+	return makeCompoundTypeRef(types.ListKind, []TypeRef{t.(TypeRef)}), nil
 } / `Map` _ `(` _ k:Type _ `,` _ v:Type _ `)` _ {
-	return makeCompoundTypeRef(MapKind, []TypeRef{k.(TypeRef), v.(TypeRef)}), nil
+	return makeCompoundTypeRef(types.MapKind, []TypeRef{k.(TypeRef), v.(TypeRef)}), nil
 } / `Set` _ `(` _ t:Type _ `)` _ {
-	return makeCompoundTypeRef(SetKind, []TypeRef{t.(TypeRef)}), nil
+	return makeCompoundTypeRef(types.SetKind, []TypeRef{t.(TypeRef)}), nil
 } / `Ref` _ `(` _ t:Type _ `)` _ {
-	return makeCompoundTypeRef(RefKind, []TypeRef{t.(TypeRef)}), nil
+	return makeCompoundTypeRef(types.RefKind, []TypeRef{t.(TypeRef)}), nil
 }
 
-PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value`) {
+PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `TypeRef`) {
 	return makePrimitiveTypeRef(string(p.([]uint8))), nil
 }
 

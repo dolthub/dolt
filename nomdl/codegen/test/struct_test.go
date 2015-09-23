@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/types"
 )
 
 func TestDef(t *testing.T) {
@@ -32,4 +33,14 @@ func TestValue(t *testing.T) {
 	val := st.NomsValue()
 	st2 := StructFromVal(val)
 	assert.True(st.Equals(st2))
+}
+
+func TestType(t *testing.T) {
+	assert := assert.New(t)
+
+	def := StructDef{"hi", true}
+	st := def.New()
+	typ := st.Type()
+	assert.EqualValues(types.NewString("Struct"), typ.Name())
+	assert.EqualValues(__testPackageInFile_struct_Ref(), typ.PackageRef())
 }

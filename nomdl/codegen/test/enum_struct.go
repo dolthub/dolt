@@ -7,6 +7,20 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// This function builds up a Noms value that describes the type
+// package implemented by this file and registers it with the global
+// type package definition cache.
+func __testPackageInFile_enum_struct_Ref() types.Ref {
+	p := types.PackageDef{
+		Types: types.MapOfStringToTypeRefDef{
+
+			"EnumStruct": __typeRefOfEnumStruct(),
+			"Handedness": __typeRefOfHandedness(),
+		},
+	}.New()
+	return types.Ref{R: types.RegisterPackage(&p)}
+}
+
 // EnumStruct
 
 type EnumStruct struct {
@@ -16,6 +30,7 @@ type EnumStruct struct {
 func NewEnumStruct() EnumStruct {
 	return EnumStruct{types.NewMap(
 		types.NewString("$name"), types.NewString("EnumStruct"),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("EnumStruct"), __testPackageInFile_enum_struct_Ref()),
 		types.NewString("Hand"), types.Int32(0),
 	)}
 }
@@ -28,6 +43,7 @@ func (def EnumStructDef) New() EnumStruct {
 	return EnumStruct{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("EnumStruct"),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("EnumStruct"), __testPackageInFile_enum_struct_Ref()),
 			types.NewString("Hand"), types.Int32(def.Hand),
 		)}
 }
@@ -36,6 +52,16 @@ func (self EnumStruct) Def() EnumStructDef {
 	return EnumStructDef{
 		Handedness(self.m.Get(types.NewString("Hand")).(types.Int32)),
 	}
+}
+
+// Creates and returns a Noms Value that describes EnumStruct.
+func __typeRefOfEnumStruct() types.TypeRef {
+	return types.MakeStructTypeRef(types.NewString("EnumStruct"),
+		types.NewList(
+			types.NewString("hand"), types.MakeTypeRef(types.NewString("Handedness"), types.Ref{}),
+		),
+		nil)
+
 }
 
 func EnumStructFromVal(val types.Value) EnumStruct {
@@ -55,6 +81,10 @@ func (self EnumStruct) Ref() ref.Ref {
 	return self.m.Ref()
 }
 
+func (self EnumStruct) Type() types.TypeRef {
+	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+}
+
 func (self EnumStruct) Hand() Handedness {
 	return Handedness(self.m.Get(types.NewString("Hand")).(types.Int32))
 }
@@ -72,3 +102,14 @@ const (
 	Left
 	Switch
 )
+
+// Creates and returns a Noms Value that describes Handedness.
+func __typeRefOfHandedness() types.TypeRef {
+	return types.MakeEnumTypeRef(types.NewString("Handedness"), []types.String{
+
+		types.NewString("right"),
+		types.NewString("left"),
+		types.NewString("switch"),
+	})
+
+}

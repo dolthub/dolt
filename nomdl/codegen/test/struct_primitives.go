@@ -7,6 +7,19 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// This function builds up a Noms value that describes the type
+// package implemented by this file and registers it with the global
+// type package definition cache.
+func __testPackageInFile_struct_primitives_Ref() types.Ref {
+	p := types.PackageDef{
+		Types: types.MapOfStringToTypeRefDef{
+
+			"StructPrimitives": __typeRefOfStructPrimitives(),
+		},
+	}.New()
+	return types.Ref{R: types.RegisterPackage(&p)}
+}
+
 // StructPrimitives
 
 type StructPrimitives struct {
@@ -16,6 +29,7 @@ type StructPrimitives struct {
 func NewStructPrimitives() StructPrimitives {
 	return StructPrimitives{types.NewMap(
 		types.NewString("$name"), types.NewString("StructPrimitives"),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructPrimitives"), __testPackageInFile_struct_primitives_Ref()),
 		types.NewString("Uint64"), types.UInt64(0),
 		types.NewString("Uint32"), types.UInt32(0),
 		types.NewString("Uint16"), types.UInt16(0),
@@ -54,6 +68,7 @@ func (def StructPrimitivesDef) New() StructPrimitives {
 	return StructPrimitives{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructPrimitives"),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructPrimitives"), __testPackageInFile_struct_primitives_Ref()),
 			types.NewString("Uint64"), types.UInt64(def.Uint64),
 			types.NewString("Uint32"), types.UInt32(def.Uint32),
 			types.NewString("Uint16"), types.UInt16(def.Uint16),
@@ -90,6 +105,29 @@ func (self StructPrimitives) Def() StructPrimitivesDef {
 	}
 }
 
+// Creates and returns a Noms Value that describes StructPrimitives.
+func __typeRefOfStructPrimitives() types.TypeRef {
+	return types.MakeStructTypeRef(types.NewString("StructPrimitives"),
+		types.NewList(
+			types.NewString("uint64"), types.MakePrimitiveTypeRef(types.UInt64Kind),
+			types.NewString("uint32"), types.MakePrimitiveTypeRef(types.UInt32Kind),
+			types.NewString("uint16"), types.MakePrimitiveTypeRef(types.UInt16Kind),
+			types.NewString("uint8"), types.MakePrimitiveTypeRef(types.UInt8Kind),
+			types.NewString("int64"), types.MakePrimitiveTypeRef(types.Int64Kind),
+			types.NewString("int32"), types.MakePrimitiveTypeRef(types.Int32Kind),
+			types.NewString("int16"), types.MakePrimitiveTypeRef(types.Int16Kind),
+			types.NewString("int8"), types.MakePrimitiveTypeRef(types.Int8Kind),
+			types.NewString("float64"), types.MakePrimitiveTypeRef(types.Float64Kind),
+			types.NewString("float32"), types.MakePrimitiveTypeRef(types.Float32Kind),
+			types.NewString("bool"), types.MakePrimitiveTypeRef(types.BoolKind),
+			types.NewString("string"), types.MakePrimitiveTypeRef(types.StringKind),
+			types.NewString("blob"), types.MakePrimitiveTypeRef(types.BlobKind),
+			types.NewString("value"), types.MakePrimitiveTypeRef(types.ValueKind),
+		),
+		nil)
+
+}
+
 func StructPrimitivesFromVal(val types.Value) StructPrimitives {
 	// TODO: Validate here
 	return StructPrimitives{val.(types.Map)}
@@ -105,6 +143,10 @@ func (self StructPrimitives) Equals(other StructPrimitives) bool {
 
 func (self StructPrimitives) Ref() ref.Ref {
 	return self.m.Ref()
+}
+
+func (self StructPrimitives) Type() types.TypeRef {
+	return self.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (self StructPrimitives) Uint64() uint64 {
