@@ -2,6 +2,7 @@ package chunks
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"sync"
 
@@ -22,13 +23,14 @@ func toChunkKey(r ref.Ref) []byte {
 }
 
 type LevelDBStore struct {
-	db                   *leveldb.DB
-	mu                   *sync.Mutex
-	putCount             int // for testing
-	concurrentWriteLimit chan struct{}
+	db                           *leveldb.DB
+	mu                           *sync.Mutex
+	concurrentWriteLimit         chan struct{}
+	getCount, hasCount, putCount int
+	dumpStats                    bool
 }
 
-func NewLevelDBStore(dir string, maxFileHandles int) *LevelDBStore {
+func NewLevelDBStore(dir string, maxFileHandles int, dumpStats bool) *LevelDBStore {
 	d.Exp.NotEmpty(dir)
 	d.Exp.NoError(os.MkdirAll(dir, 0700))
 	db, err := leveldb.OpenFile(dir, &opt.Options{
@@ -39,10 +41,10 @@ func NewLevelDBStore(dir string, maxFileHandles int) *LevelDBStore {
 	})
 	d.Chk.NoError(err)
 	return &LevelDBStore{
-		db,
-		&sync.Mutex{},
-		0,
-		make(chan struct{}, maxFileHandles),
+		db:                   db,
+		mu:                   &sync.Mutex{},
+		concurrentWriteLimit: make(chan struct{}, maxFileHandles),
+		dumpStats:            dumpStats,
 	}
 }
 
@@ -72,6 +74,7 @@ func (l *LevelDBStore) UpdateRoot(current, last ref.Ref) bool {
 func (l *LevelDBStore) Get(ref ref.Ref) Chunk {
 	key := toChunkKey(ref)
 	data, err := l.db.Get(key, nil)
+	l.getCount++
 	if err == errors.ErrNotFound {
 		return EmptyChunk
 	}
@@ -84,6 +87,7 @@ func (l *LevelDBStore) Has(ref ref.Ref) bool {
 	key := toChunkKey(ref)
 	exists, err := l.db.Has(key, &opt.ReadOptions{DontFillCache: true}) // This isn't really a "read", so don't signal the cache to treat it as one.
 	d.Chk.NoError(err)
+	l.hasCount++
 	return exists
 }
 
@@ -95,24 +99,32 @@ func (l *LevelDBStore) Put(c Chunk) {
 	l.concurrentWriteLimit <- struct{}{}
 	err := l.db.Put(toChunkKey(c.Ref()), c.Data(), nil)
 	d.Chk.NoError(err)
-	l.putCount += 1
+	l.putCount++
 	<-l.concurrentWriteLimit
 }
 
 func (l *LevelDBStore) Close() error {
 	l.db.Close()
+	if l.dumpStats {
+		fmt.Println("--LevelDB Stats--")
+		fmt.Println("GetCount: ", l.getCount)
+		fmt.Println("HasCount: ", l.hasCount)
+		fmt.Println("PutCount: ", l.putCount)
+	}
 	return nil
 }
 
 type LevelDBStoreFlags struct {
 	dir            *string
 	maxFileHandles *int
+	dumpStats      *bool
 }
 
 func LevelDBFlags(prefix string) LevelDBStoreFlags {
 	return LevelDBStoreFlags{
 		flag.String(prefix+"ldb", "", "directory to use for a LevelDB-backed chunkstore"),
 		flag.Int(prefix+"ldb-max-file-handles", 24, "max number of open file handles"),
+		flag.Bool(prefix+"ldb-dump-stats", false, "print get/has/put counts on close"),
 	}
 }
 
@@ -120,6 +132,6 @@ func (f LevelDBStoreFlags) CreateStore() ChunkStore {
 	if *f.dir == "" {
 		return nil
 	} else {
-		return NewLevelDBStore(*f.dir, *f.maxFileHandles)
+		return NewLevelDBStore(*f.dir, *f.maxFileHandles, *f.dumpStats)
 	}
 }
