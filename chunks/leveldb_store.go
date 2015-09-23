@@ -96,19 +96,19 @@ func (l *LevelDBStore) Close() error {
 	return nil
 }
 
-type ldbStoreFlags struct {
+type LevelDBStoreFlags struct {
 	dir            *string
 	maxFileHandles *int
 }
 
-func levelDBFlags(prefix string) ldbStoreFlags {
-	return ldbStoreFlags{
+func LevelDBFlags(prefix string) LevelDBStoreFlags {
+	return LevelDBStoreFlags{
 		flag.String(prefix+"ldb", "", "directory to use for a LevelDB-backed chunkstore"),
 		flag.Int(prefix+"ldb-max-file-handles", 24, "max number of open file handles"),
 	}
 }
 
-func (f ldbStoreFlags) createStore() ChunkStore {
+func (f LevelDBStoreFlags) CreateStore() ChunkStore {
 	if *f.dir == "" {
 		return nil
 	} else {

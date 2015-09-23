@@ -62,17 +62,17 @@ func (l *MemoryStore) Close() error {
 	return nil
 }
 
-type memoryStoreFlags struct {
+type MemoryStoreFlags struct {
 	use *bool
 }
 
-func memoryFlags(prefix string) memoryStoreFlags {
-	return memoryStoreFlags{
+func MemoryFlags(prefix string) MemoryStoreFlags {
+	return MemoryStoreFlags{
 		flag.Bool(prefix+"mem", false, "use a memory-based (ephemeral, and private to this application) chunkstore"),
 	}
 }
 
-func (f memoryStoreFlags) createStore() ChunkStore {
+func (f MemoryStoreFlags) CreateStore() ChunkStore {
 	if *f.use {
 		return NewMemoryStore()
 	} else {
