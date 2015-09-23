@@ -23,15 +23,16 @@ const (
 )
 
 type httpServer struct {
-	cs    chunks.ChunkStore
-	port  int
-	l     *net.Listener
-	conns map[net.Conn]http.ConnState
+	cs         chunks.ChunkStore
+	port       int
+	l          *net.Listener
+	conns      map[net.Conn]http.ConnState
+	writeLimit chan struct{}
 }
 
 func NewHttpServer(cs chunks.ChunkStore, port int) *httpServer {
 	return &httpServer{
-		cs, port, nil, map[net.Conn]http.ConnState{},
+		cs, port, nil, map[net.Conn]http.ConnState{}, make(chan struct{}, maxConcurrentPuts),
 	}
 }
 
