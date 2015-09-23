@@ -6,6 +6,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// DataStore provides versioned storage for noms values. Each DataStore instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new DataStore, representing a new moment in history.
 type DataStore interface {
 	chunks.ChunkStore
 
