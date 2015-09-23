@@ -420,7 +420,7 @@ func (gen *codeGen) userName(t parse.TypeRef) string {
 func (gen *codeGen) toTypesTypeRef(t parse.TypeRef) string {
 	if t.IsUnresolved() {
 		// needs to be pkgRef
-		return fmt.Sprintf(`types.MakeTypeRef(types.NewString("%s"), types.Ref{})`, t.Name)
+		return fmt.Sprintf(`types.MakeTypeRef("%s", types.Ref{})`, t.Name)
 	}
 	if types.IsPrimitiveKind(t.Desc.Kind()) {
 		return fmt.Sprintf("types.MakePrimitiveTypeRef(types.%sKind)", kindToString(t.Desc.Kind()))
@@ -431,30 +431,26 @@ func (gen *codeGen) toTypesTypeRef(t parse.TypeRef) string {
 		for i, t := range desc.ElemTypes {
 			typerefs[i] = gen.toTypesTypeRef(t)
 		}
-		return fmt.Sprintf(`types.MakeCompoundTypeRef(types.NewString("%s"), types.%sKind, %s)`, t.Name, kindToString(t.Desc.Kind()), strings.Join(typerefs, ", "))
+		return fmt.Sprintf(`types.MakeCompoundTypeRef("%s", types.%sKind, %s)`, t.Name, kindToString(t.Desc.Kind()), strings.Join(typerefs, ", "))
 	case parse.EnumDesc:
-		ids := ""
-		for _, id := range desc.IDs {
-			ids += fmt.Sprintf(`types.NewString("%s"),`, id) + "\n"
-		}
-		return fmt.Sprintf(`types.MakeEnumTypeRef(types.NewString("%s"), []types.String{%s})`, t.Name, ids)
+		return fmt.Sprintf(`types.MakeEnumTypeRef("%s", %s)`, t.Name, strings.Join(desc.IDs, ", "))
 	case parse.StructDesc:
 		flatten := func(f []parse.Field) string {
 			out := make([]string, 0, len(f))
 			for _, field := range f {
-				out = append(out, fmt.Sprintf(`types.NewString("%s"), %s,`, field.Name, gen.toTypesTypeRef(field.T)))
+				out = append(out, fmt.Sprintf(`types.Field{"%s", %s},`, field.Name, gen.toTypesTypeRef(field.T)))
 			}
 			return strings.Join(out, "\n")
 		}
 		fields := "nil"
 		choices := "nil"
 		if len(desc.Fields) != 0 {
-			fields = fmt.Sprintf("types.NewList(%s)", flatten(desc.Fields))
+			fields = fmt.Sprintf("[]types.Field{%s})", flatten(desc.Fields))
 		}
 		if desc.Union != nil {
-			choices = fmt.Sprintf("types.NewList(%s)", flatten(desc.Union.Choices))
+			choices = fmt.Sprintf("[]types.Field{%s}", flatten(desc.Union.Choices))
 		}
-		return fmt.Sprintf(`types.MakeStructTypeRef(types.NewString("%s"), %s, %s)`, t.Name, fields, choices)
+		return fmt.Sprintf(`types.MakeStructTypeRef("%s", %s, %s)`, t.Name, fields, choices)
 	default:
 		d.Chk.Fail("Unknown TypeDesc.", "%#v (%T)", desc, desc)
 	}

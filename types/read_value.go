@@ -67,10 +67,10 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 		if i.PkgRef != (ref.Ref{}) {
 			d.Chk.Equal(ValueKind, kind)
 			d.Chk.Nil(i.Desc)
-			return futureFromValue(MakeTypeRef(NewString(i.Name), Ref{R: i.PkgRef}))
+			return futureFromValue(MakeTypeRef(i.Name, Ref{R: i.PkgRef}))
 		}
 		desc := typeDescFromInterface(kind, i.Desc, cs)
-		return futureFromValue(buildType(NewString(i.Name), kind, desc))
+		return futureFromValue(buildType(i.Name, kind, desc))
 	case enc.CompoundBlob:
 		blobs := make([]Future, len(i.Blobs))
 		for idx, blobRef := range i.Blobs {

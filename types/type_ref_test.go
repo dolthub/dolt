@@ -14,15 +14,16 @@ func TestTypes(t *testing.T) {
 	boolType := MakePrimitiveTypeRef(BoolKind)
 	uint8Type := MakePrimitiveTypeRef(UInt8Kind)
 	stringType := MakePrimitiveTypeRef(StringKind)
-	mapType := MakeCompoundTypeRef(NewString("MapOfStringToUInt8"), MapKind, stringType, uint8Type)
-	setType := MakeCompoundTypeRef(NewString("SetOfString"), SetKind, stringType)
-	mahType := MakeStructTypeRef(NewString("MahStruct"), NewList(
-		NewString("Field1"), stringType,
-		NewString("Field2"), boolType), nil)
-	otherType := MakeStructTypeRef(NewString("MahOtherStruct"), nil,
-		NewList(
-			NewString("StructField"), mahType,
-			NewString("StringField"), stringType))
+	mapType := MakeCompoundTypeRef("MapOfStringToUInt8", MapKind, stringType, uint8Type)
+	setType := MakeCompoundTypeRef("SetOfString", SetKind, stringType)
+	mahType := MakeStructTypeRef("MahStruct", []Field{
+		Field{"Field1", stringType},
+		Field{"Field2", boolType},
+	}, nil)
+	otherType := MakeStructTypeRef("MahOtherStruct", nil, []Field{
+		Field{"StructField", mahType},
+		Field{"StringField", stringType},
+	})
 
 	mRef := WriteValue(mapType, cs)
 	setRef := WriteValue(setType, cs)
@@ -44,7 +45,7 @@ func TestTypeWithPkgRef(t *testing.T) {
 	}.New()
 
 	pkgRef := RegisterPackage(&pkg)
-	unresolvedType := MakeTypeRef(NewString("Spin"), Ref{R: pkgRef})
+	unresolvedType := MakeTypeRef("Spin", Ref{R: pkgRef})
 	unresolvedRef := WriteValue(unresolvedType, cs)
 
 	assert.EqualValues(pkgRef, ReadValue(unresolvedRef, cs).Chunks()[0].Ref())

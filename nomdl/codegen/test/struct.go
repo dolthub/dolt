@@ -31,7 +31,7 @@ type Struct struct {
 func NewStruct() Struct {
 	return Struct{types.NewMap(
 		types.NewString("$name"), types.NewString("Struct"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("Struct"), __testPackageInFile_struct_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef("Struct", __testPackageInFile_struct_CachedRef),
 		types.NewString("s"), types.NewString(""),
 		types.NewString("b"), types.Bool(false),
 	)}
@@ -46,7 +46,7 @@ func (def StructDef) New() Struct {
 	return Struct{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Struct"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("Struct"), __testPackageInFile_struct_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef("Struct", __testPackageInFile_struct_CachedRef),
 			types.NewString("s"), types.NewString(def.S),
 			types.NewString("b"), types.Bool(def.B),
 		)}
@@ -61,11 +61,11 @@ func (self Struct) Def() StructDef {
 
 // Creates and returns a Noms Value that describes Struct.
 func __typeRefOfStruct() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("Struct"),
-		types.NewList(
-			types.NewString("s"), types.MakePrimitiveTypeRef(types.StringKind),
-			types.NewString("b"), types.MakePrimitiveTypeRef(types.BoolKind),
-		),
+	return types.MakeStructTypeRef("Struct",
+		[]types.Field{
+			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind)},
+			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind)},
+		},
 		nil)
 
 }

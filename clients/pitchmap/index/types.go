@@ -465,7 +465,7 @@ type Pitch struct {
 func NewPitch() Pitch {
 	return Pitch{types.NewMap(
 		types.NewString("$name"), types.NewString("Pitch"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("Pitch"), __mainPackageInFile_types_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef("Pitch", __mainPackageInFile_types_CachedRef),
 		types.NewString("X"), types.Float64(0),
 		types.NewString("Z"), types.Float64(0),
 	)}
@@ -480,7 +480,7 @@ func (def PitchDef) New() Pitch {
 	return Pitch{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Pitch"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("Pitch"), __mainPackageInFile_types_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef("Pitch", __mainPackageInFile_types_CachedRef),
 			types.NewString("X"), types.Float64(def.X),
 			types.NewString("Z"), types.Float64(def.Z),
 		)}
@@ -495,11 +495,11 @@ func (self Pitch) Def() PitchDef {
 
 // Creates and returns a Noms Value that describes Pitch.
 func __typeRefOfPitch() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("Pitch"),
-		types.NewList(
-			types.NewString("X"), types.MakePrimitiveTypeRef(types.Float64Kind),
-			types.NewString("Z"), types.MakePrimitiveTypeRef(types.Float64Kind),
-		),
+	return types.MakeStructTypeRef("Pitch",
+		[]types.Field{
+			types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind)},
+			types.Field{"Z", types.MakePrimitiveTypeRef(types.Float64Kind)},
+		},
 		nil)
 
 }
