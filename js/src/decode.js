@@ -81,6 +81,35 @@ function decodeSet(input, ref, getChunk) {
 }
 
 function decodeType(input, ref, getChunk) {
+  return new Ref(ref, () => {
+    // We always have a kind an a name.
+    let p = decodeValue(input.name, ref, getChunk).then(name => {
+      return decodeValue(input.kind, ref, getChunk).then(kind => {
+        return {name, kind};
+      });
+    });
+
+    // Package is not yet implemented. Just use null for now.
+    if (input.pkgRef) {
+      throw new Error('Not implemented')
+    } else {
+      p = p.then(({name, kind}) => ({name, kind, pkg: null}));
+    }
+
+    // If desc is present it is a list
+    p = p.then(({name, kind, pkg}) => {
+      if (!input.desc) {
+        return {name, kind, pkg, desc: null};
+      }
+      return decodeValue(input.desc, ref, getChunk).deref().then(desc => {
+        return {name, kind, pkg, desc};
+      });
+    });
+
+    return p.then(obj => {
+      return Immutable.Map(obj);
+    });
+  });
 }
 
 function decodeCompoundBlob(value, ref, getChunk) {

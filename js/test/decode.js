@@ -84,6 +84,32 @@ suite('decode.js', function() {
     assert.isTrue(Immutable.List.of(true, false).equals(value));
   });
 
+  testCompound('type', 'j {"type":{"kind":{"uint8":0},"name":""}}', value => {
+    assert.isTrue(Immutable.Map.isMap(value));
+    assert.equal(value.get('kind'), 0);
+    assert.equal(value.get('name'), '');
+  });
+
+  testCompound('type with desc', 'j {"type":{"kind":{"uint8":14},"name":"T","desc":{"list":[{"ref":"sha1-list"},{"ref":"sha1-map"}]}}}', value => {
+    assert.isTrue(Immutable.Map.isMap(value));
+    assert.equal(value.get('kind'), 14);
+    assert.equal(value.get('name'), 'T');
+    assert.isTrue(Immutable.List.isList(value.get('desc')));
+    assert.equal(2, value.get('desc').size);
+    assert.isTrue(Ref.isRef(value.get('desc').get(0)));
+    assert.isTrue(Ref.isRef(value.get('desc').get(1)));
+  });
+
+testCompound('type enum', 'j {"type":{"desc":{"list":["f","g"]},"kind":{"uint8":18},"name":"enum"}}', value => {
+  assert.isTrue(Immutable.Map.isMap(value));
+  assert.equal(value.get('kind'), 18);
+  assert.equal(value.get('name'), 'enum');
+  assert.isTrue(Immutable.List.isList(value.get('desc')));
+  assert.equal(2, value.get('desc').size);
+  assert.equal('f', value.get('desc').get(0));
+  assert.equal('g', value.get('desc').get(1));
+});
+
   test('blob', done => {
     let data = 'b abc';
     let ref = 'sha1-c0ffee';
