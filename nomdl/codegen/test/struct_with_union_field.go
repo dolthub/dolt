@@ -31,7 +31,7 @@ type StructWithUnionField struct {
 func NewStructWithUnionField() StructWithUnionField {
 	return StructWithUnionField{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithUnionField"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnionField"), __testPackageInFile_struct_with_union_field_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef("StructWithUnionField", __testPackageInFile_struct_with_union_field_CachedRef),
 		types.NewString("a"), types.Float32(0),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
@@ -48,7 +48,7 @@ func (def StructWithUnionFieldDef) New() StructWithUnionField {
 	return StructWithUnionField{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithUnionField"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnionField"), __testPackageInFile_struct_with_union_field_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef("StructWithUnionField", __testPackageInFile_struct_with_union_field_CachedRef),
 			types.NewString("a"), types.Float32(def.A),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
@@ -97,17 +97,17 @@ func (self StructWithUnionField) __unionValueToDef() interface{} {
 
 // Creates and returns a Noms Value that describes StructWithUnionField.
 func __typeRefOfStructWithUnionField() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("StructWithUnionField"),
-		types.NewList(
-			types.NewString("a"), types.MakePrimitiveTypeRef(types.Float32Kind),
-		),
-		types.NewList(
-			types.NewString("b"), types.MakePrimitiveTypeRef(types.Float64Kind),
-			types.NewString("c"), types.MakePrimitiveTypeRef(types.StringKind),
-			types.NewString("d"), types.MakePrimitiveTypeRef(types.BlobKind),
-			types.NewString("e"), types.MakePrimitiveTypeRef(types.ValueKind),
-			types.NewString("f"), types.MakeCompoundTypeRef(types.NewString(""), types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)),
-		))
+	return types.MakeStructTypeRef("StructWithUnionField",
+		[]types.Field{
+			types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind)},
+		},
+		[]types.Field{
+			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind)},
+			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind)},
+			types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind)},
+			types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind)},
+			types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind))},
+		})
 
 }
 

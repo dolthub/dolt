@@ -31,7 +31,7 @@ type Tree struct {
 func NewTree() Tree {
 	return Tree{types.NewMap(
 		types.NewString("$name"), types.NewString("Tree"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("Tree"), __testPackageInFile_struct_recursive_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef("Tree", __testPackageInFile_struct_recursive_CachedRef),
 		types.NewString("children"), types.NewList(),
 	)}
 }
@@ -44,7 +44,7 @@ func (def TreeDef) New() Tree {
 	return Tree{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Tree"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("Tree"), __testPackageInFile_struct_recursive_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef("Tree", __testPackageInFile_struct_recursive_CachedRef),
 			types.NewString("children"), def.Children.New().NomsValue(),
 		)}
 }
@@ -57,10 +57,10 @@ func (self Tree) Def() TreeDef {
 
 // Creates and returns a Noms Value that describes Tree.
 func __typeRefOfTree() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("Tree"),
-		types.NewList(
-			types.NewString("children"), types.MakeCompoundTypeRef(types.NewString(""), types.ListKind, types.MakeTypeRef(types.NewString("Tree"), types.Ref{})),
-		),
+	return types.MakeStructTypeRef("Tree",
+		[]types.Field{
+			types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", types.Ref{}))},
+		},
 		nil)
 
 }

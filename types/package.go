@@ -46,11 +46,11 @@ func (self Package) Def() PackageDef {
 
 // Creates and returns a Noms Value that describes Package.
 func __typeRefOfPackage() TypeRef {
-	return MakeStructTypeRef(NewString("Package"),
-		NewList(
-			NewString("Dependencies"), MakeCompoundTypeRef(NewString(""), SetKind, MakeCompoundTypeRef(NewString(""), RefKind, MakeTypeRef(NewString("Package"), Ref{}))),
-			NewString("Types"), MakeCompoundTypeRef(NewString(""), MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind)),
-		),
+	return MakeStructTypeRef("Package",
+		[]Field{
+			Field{"Dependencies", MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", Ref{})))},
+			Field{"Types", MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind))},
+		},
 		nil)
 
 }

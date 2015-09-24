@@ -7,7 +7,7 @@ type {{.Name}} struct {
 func New{{.Name}}() {{.Name}} {
 	return {{.Name}}{types.NewMap(
 			types.NewString("$name"), types.NewString("{{.Name}}"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("{{.Name}}"), __{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef("{{.Name}}", __{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef),
 			{{range .Fields}}types.NewString("{{.Name}}"), {{valueZero .T}},
 			{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(0),
 			types.NewString("$unionValue"), {{valueZero .UnionZeroType}},{{end}}
@@ -25,7 +25,7 @@ func New{{.Name}}() {{.Name}} {
 		return {{.Name}}{
 			types.NewMap(
 				types.NewString("$name"), types.NewString("{{.Name}}"),
-				types.NewString("$type"), types.MakeTypeRef(types.NewString("{{.Name}}"), __{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef),
+				types.NewString("$type"), types.MakeTypeRef("{{.Name}}", __{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef),
 				{{range .Fields}}types.NewString("{{.Name}}"), {{defToValue (print "def." (title .Name)) .T}},
 				{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 				types.NewString("$unionValue"), def.__unionDefToValue(),
@@ -62,15 +62,15 @@ func New{{.Name}}() {{.Name}} {
 
 // Creates and returns a Noms Value that describes {{.Name}}.
 func __typeRefOf{{.Name}}() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("{{.Name}}"),
-		types.NewList(
-			{{range .Fields}}types.NewString("{{.Name}}"), {{toTypesTypeRef .T}},
+	return types.MakeStructTypeRef("{{.Name}}",
+		[]types.Field{
+			{{range .Fields}}types.Field{"{{.Name}}", {{toTypesTypeRef .T}}},
 			{{end}}
-		),
-		{{if .HasUnion}}types.NewList(
-			{{range .Choices}}types.NewString("{{.Name}}"), {{toTypesTypeRef .T}},
+		},
+		{{if .HasUnion}}[]types.Field{
+			{{range .Choices}}types.Field{"{{.Name}}", {{toTypesTypeRef .T}}},
 			{{end}}
-		){{else}}nil{{end}})
+		}{{else}}nil{{end}})
 
 }
 

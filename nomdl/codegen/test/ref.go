@@ -336,7 +336,7 @@ type StructWithRef struct {
 func NewStructWithRef() StructWithRef {
 	return StructWithRef{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithRef"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef("StructWithRef", __testPackageInFile_ref_CachedRef),
 		types.NewString("r"), types.Ref{R: ref.Ref{}},
 	)}
 }
@@ -349,7 +349,7 @@ func (def StructWithRefDef) New() StructWithRef {
 	return StructWithRef{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithRef"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef("StructWithRef", __testPackageInFile_ref_CachedRef),
 			types.NewString("r"), types.Ref{R: def.R},
 		)}
 }
@@ -362,10 +362,10 @@ func (self StructWithRef) Def() StructWithRefDef {
 
 // Creates and returns a Noms Value that describes StructWithRef.
 func __typeRefOfStructWithRef() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("StructWithRef"),
-		types.NewList(
-			types.NewString("r"), types.MakeCompoundTypeRef(types.NewString(""), types.RefKind, types.MakeCompoundTypeRef(types.NewString(""), types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind))),
-		),
+	return types.MakeStructTypeRef("StructWithRef",
+		[]types.Field{
+			types.Field{"r", types.MakeCompoundTypeRef("", types.RefKind, types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind)))},
+		},
 		nil)
 
 }

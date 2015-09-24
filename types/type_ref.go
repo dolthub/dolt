@@ -14,6 +14,7 @@ import (
 // If Kind refers to Enum, then Desc is a List(String) describing the enumerated values.
 // Name is optional.
 // pkgRef is optional. If set, then pkgRef + name address a type defined in another package.
+// TODO Merge this type with parse.TypeRef BUG 338
 type TypeRef struct {
 	kind   NomsKind
 	pkgRef *Ref
@@ -125,10 +126,10 @@ func IsPrimitiveKind(k NomsKind) bool {
 }
 
 func MakePrimitiveTypeRef(k NomsKind) TypeRef {
-	return buildType(NewString(""), k, nil)
+	return buildType("", k, nil)
 }
 
-func MakeCompoundTypeRef(name String, kind NomsKind, elemTypes ...TypeRef) TypeRef {
+func MakeCompoundTypeRef(name string, kind NomsKind, elemTypes ...TypeRef) TypeRef {
 	if len(elemTypes) == 1 {
 		d.Chk.NotEqual(MapKind, kind, "MapKind requires 2 element types.")
 		return buildType(name, kind, elemTypes[0])
@@ -138,37 +139,52 @@ func MakeCompoundTypeRef(name String, kind NomsKind, elemTypes ...TypeRef) TypeR
 	return buildType(name, kind, NewList(elemTypes[0], elemTypes[1]))
 }
 
-func MakeEnumTypeRef(name String, ids []String) TypeRef {
+func MakeEnumTypeRef(name string, ids ...string) TypeRef {
 	vids := make([]Value, len(ids))
 	for i, id := range ids {
-		vids[i] = id
+		vids[i] = NewString(id)
 	}
 	return buildType(name, EnumKind, NewList(vids...))
 }
 
-func MakeStructTypeRef(name String, fields, choices List) TypeRef {
+func MakeStructTypeRef(name string, fields, choices []Field) TypeRef {
+	listify := func(fields []Field) List {
+		v := make([]Value, 2*len(fields))
+		for i, f := range fields {
+			v[2*i] = NewString(f.Name)
+			v[2*i+1] = f.T
+		}
+		return NewList(v...)
+	}
 	desc := NewMap()
 	if fields != nil {
-		desc = desc.Set(NewString("fields"), fields)
+		desc = desc.Set(NewString("fields"), listify(fields))
 	}
 	if choices != nil {
-		desc = desc.Set(NewString("choices"), choices)
+		desc = desc.Set(NewString("choices"), listify(choices))
 	}
 	return buildType(name, StructKind, desc)
 }
 
-func MakeTypeRef(name String, pkg Ref) TypeRef {
-	return TypeRef{name: name, pkgRef: &pkg, kind: ValueKind}
+// Field represents a Struct field or a Union choice.
+// Neither Name nor T is allowed to be a zero-value, though T may be an unresolved TypeRef.
+type Field struct {
+	Name string
+	T    TypeRef
 }
 
-func buildType(name String, kind NomsKind, desc Value) TypeRef {
+func MakeTypeRef(name string, pkg Ref) TypeRef {
+	return TypeRef{name: NewString(name), pkgRef: &pkg, kind: ValueKind}
+}
+
+func buildType(name string, kind NomsKind, desc Value) TypeRef {
 	if IsPrimitiveKind(kind) {
 		d.Chk.Nil(desc, "Primitive TypeRefs have no description.")
-		return TypeRef{name: name, kind: kind}
+		return TypeRef{name: NewString(name), kind: kind}
 	}
 	switch kind {
 	case ListKind, RefKind, SetKind, MapKind, EnumKind, StructKind:
-		return TypeRef{name: name, kind: kind, desc: desc}
+		return TypeRef{name: NewString(name), kind: kind, desc: desc}
 	default:
 		d.Exp.Fail("Unrecognized Kind:", "%v", kind)
 		panic("unreachable")

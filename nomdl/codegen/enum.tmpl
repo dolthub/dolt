@@ -9,10 +9,6 @@ const ({{range $index, $id := .Ids}}
 
 // Creates and returns a Noms Value that describes {{.Name}}.
 func __typeRefOf{{.Name}}() types.TypeRef {
-	return types.MakeEnumTypeRef(types.NewString("{{.Name}}"), []types.String{
-			{{range $index, $id := .Ids}}
-			types.NewString("{{$id}}"),{{end}}
-		})
-
+	return types.MakeEnumTypeRef("{{.Name}}", {{range $index, $id := .Ids}}{{if gt $index 0}}, {{end}}"{{$id}}"{{end}})
 }
 

@@ -31,7 +31,7 @@ type StructWithUnions struct {
 func NewStructWithUnions() StructWithUnions {
 	return StructWithUnions{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithUnions"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnions"), __testPackageInFile_struct_with_unions_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef("StructWithUnions", __testPackageInFile_struct_with_unions_CachedRef),
 		types.NewString("a"), New__unionOfBOfFloat64AndCOfString().NomsValue(),
 		types.NewString("d"), New__unionOfEOfFloat64AndFOfString().NomsValue(),
 	)}
@@ -46,7 +46,7 @@ func (def StructWithUnionsDef) New() StructWithUnions {
 	return StructWithUnions{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithUnions"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnions"), __testPackageInFile_struct_with_unions_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef("StructWithUnions", __testPackageInFile_struct_with_unions_CachedRef),
 			types.NewString("a"), def.A.New().NomsValue(),
 			types.NewString("d"), def.D.New().NomsValue(),
 		)}
@@ -61,13 +61,13 @@ func (self StructWithUnions) Def() StructWithUnionsDef {
 
 // Creates and returns a Noms Value that describes StructWithUnions.
 func __typeRefOfStructWithUnions() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("StructWithUnions"),
-		types.NewList(
-			types.NewString("a"), types.MakeStructTypeRef(types.NewString(""), nil, types.NewList(types.NewString("b"), types.MakePrimitiveTypeRef(types.Float64Kind),
-				types.NewString("c"), types.MakePrimitiveTypeRef(types.StringKind))),
-			types.NewString("d"), types.MakeStructTypeRef(types.NewString(""), nil, types.NewList(types.NewString("e"), types.MakePrimitiveTypeRef(types.Float64Kind),
-				types.NewString("f"), types.MakePrimitiveTypeRef(types.StringKind))),
-		),
+	return types.MakeStructTypeRef("StructWithUnions",
+		[]types.Field{
+			types.Field{"a", types.MakeStructTypeRef("", nil, []types.Field{types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind)},
+				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind)}})},
+			types.Field{"d", types.MakeStructTypeRef("", nil, []types.Field{types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind)},
+				types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind)}})},
+		},
 		nil)
 
 }
@@ -118,7 +118,7 @@ type __unionOfBOfFloat64AndCOfString struct {
 func New__unionOfBOfFloat64AndCOfString() __unionOfBOfFloat64AndCOfString {
 	return __unionOfBOfFloat64AndCOfString{types.NewMap(
 		types.NewString("$name"), types.NewString("__unionOfBOfFloat64AndCOfString"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfBOfFloat64AndCOfString"), __testPackageInFile_struct_with_unions_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef("__unionOfBOfFloat64AndCOfString", __testPackageInFile_struct_with_unions_CachedRef),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	)}
@@ -133,7 +133,7 @@ func (def __unionOfBOfFloat64AndCOfStringDef) New() __unionOfBOfFloat64AndCOfStr
 	return __unionOfBOfFloat64AndCOfString{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("__unionOfBOfFloat64AndCOfString"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfBOfFloat64AndCOfString"), __testPackageInFile_struct_with_unions_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef("__unionOfBOfFloat64AndCOfString", __testPackageInFile_struct_with_unions_CachedRef),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
 		)}
@@ -168,12 +168,12 @@ func (self __unionOfBOfFloat64AndCOfString) __unionValueToDef() interface{} {
 
 // Creates and returns a Noms Value that describes __unionOfBOfFloat64AndCOfString.
 func __typeRefOf__unionOfBOfFloat64AndCOfString() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("__unionOfBOfFloat64AndCOfString"),
-		types.NewList(),
-		types.NewList(
-			types.NewString("b"), types.MakePrimitiveTypeRef(types.Float64Kind),
-			types.NewString("c"), types.MakePrimitiveTypeRef(types.StringKind),
-		))
+	return types.MakeStructTypeRef("__unionOfBOfFloat64AndCOfString",
+		[]types.Field{},
+		[]types.Field{
+			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind)},
+			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind)},
+		})
 
 }
 
@@ -255,7 +255,7 @@ type __unionOfEOfFloat64AndFOfString struct {
 func New__unionOfEOfFloat64AndFOfString() __unionOfEOfFloat64AndFOfString {
 	return __unionOfEOfFloat64AndFOfString{types.NewMap(
 		types.NewString("$name"), types.NewString("__unionOfEOfFloat64AndFOfString"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfEOfFloat64AndFOfString"), __testPackageInFile_struct_with_unions_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef("__unionOfEOfFloat64AndFOfString", __testPackageInFile_struct_with_unions_CachedRef),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	)}
@@ -270,7 +270,7 @@ func (def __unionOfEOfFloat64AndFOfStringDef) New() __unionOfEOfFloat64AndFOfStr
 	return __unionOfEOfFloat64AndFOfString{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("__unionOfEOfFloat64AndFOfString"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfEOfFloat64AndFOfString"), __testPackageInFile_struct_with_unions_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef("__unionOfEOfFloat64AndFOfString", __testPackageInFile_struct_with_unions_CachedRef),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
 		)}
@@ -305,12 +305,12 @@ func (self __unionOfEOfFloat64AndFOfString) __unionValueToDef() interface{} {
 
 // Creates and returns a Noms Value that describes __unionOfEOfFloat64AndFOfString.
 func __typeRefOf__unionOfEOfFloat64AndFOfString() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("__unionOfEOfFloat64AndFOfString"),
-		types.NewList(),
-		types.NewList(
-			types.NewString("e"), types.MakePrimitiveTypeRef(types.Float64Kind),
-			types.NewString("f"), types.MakePrimitiveTypeRef(types.StringKind),
-		))
+	return types.MakeStructTypeRef("__unionOfEOfFloat64AndFOfString",
+		[]types.Field{},
+		[]types.Field{
+			types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind)},
+			types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind)},
+		})
 
 }
 

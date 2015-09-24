@@ -31,7 +31,7 @@ type StructWithList struct {
 func NewStructWithList() StructWithList {
 	return StructWithList{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithList"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithList"), __testPackageInFile_struct_with_list_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef("StructWithList", __testPackageInFile_struct_with_list_CachedRef),
 		types.NewString("l"), types.NewList(),
 		types.NewString("b"), types.Bool(false),
 		types.NewString("s"), types.NewString(""),
@@ -50,7 +50,7 @@ func (def StructWithListDef) New() StructWithList {
 	return StructWithList{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithList"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithList"), __testPackageInFile_struct_with_list_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef("StructWithList", __testPackageInFile_struct_with_list_CachedRef),
 			types.NewString("l"), def.L.New().NomsValue(),
 			types.NewString("b"), types.Bool(def.B),
 			types.NewString("s"), types.NewString(def.S),
@@ -69,13 +69,13 @@ func (self StructWithList) Def() StructWithListDef {
 
 // Creates and returns a Noms Value that describes StructWithList.
 func __typeRefOfStructWithList() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("StructWithList"),
-		types.NewList(
-			types.NewString("l"), types.MakeCompoundTypeRef(types.NewString(""), types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)),
-			types.NewString("b"), types.MakePrimitiveTypeRef(types.BoolKind),
-			types.NewString("s"), types.MakePrimitiveTypeRef(types.StringKind),
-			types.NewString("i"), types.MakePrimitiveTypeRef(types.Int64Kind),
-		),
+	return types.MakeStructTypeRef("StructWithList",
+		[]types.Field{
+			types.Field{"l", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind))},
+			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind)},
+			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind)},
+			types.Field{"i", types.MakePrimitiveTypeRef(types.Int64Kind)},
+		},
 		nil)
 
 }
