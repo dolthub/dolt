@@ -638,41 +638,73 @@ func (gen *codeGen) writeEnum(t parse.TypeRef) {
 	gen.writeTemplate("enum.tmpl", t, data)
 }
 
-// We use a go map as the def for Set and Map. These cannot have a key that is a
-// Set, Map or a List because slices and maps are not comparable in go.
 func (gen *codeGen) canUseDef(t parse.TypeRef) bool {
 	cache := map[string]bool{}
 
-	var rec func(t parse.TypeRef, inKey bool) bool
-	rec = func(t parse.TypeRef, inKey bool) bool {
+	var rec func(t parse.TypeRef) bool
+	rec = func(t parse.TypeRef) bool {
 		t = gen.resolve(t)
 		switch t.Desc.Kind() {
 		case types.ListKind:
-			return !inKey && rec(t.Desc.(parse.CompoundDesc).ElemTypes[0], inKey)
+			return rec(t.Desc.(parse.CompoundDesc).ElemTypes[0])
 		case types.SetKind:
-			return !inKey && rec(t.Desc.(parse.CompoundDesc).ElemTypes[0], true)
+			elemType := t.Desc.(parse.CompoundDesc).ElemTypes[0]
+			return !gen.containsNonComparable(elemType) && rec(elemType)
 		case types.MapKind:
 			elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
-			return !inKey && rec(elemTypes[0], true) && rec(elemTypes[1], false)
+			return !gen.containsNonComparable(elemTypes[0]) && rec(elemTypes[0]) && rec(elemTypes[1])
 		case types.StructKind:
-			// Only structs can be recursive
 			userName := gen.userName(t)
 			if b, ok := cache[userName]; ok {
 				return b
 			}
-			cache[userName] = false
+			cache[userName] = true
 			for _, f := range t.Desc.(parse.StructDesc).Fields {
-				if !rec(f.T, inKey) {
+				if f.T.Equals(t) || !rec(f.T) {
 					cache[userName] = false
 					return false
 				}
 			}
-			cache[userName] = true
 			return true
 		default:
 			return true
 		}
 	}
 
-	return rec(t, false)
+	return rec(t)
+}
+
+// We use a go map as the def for Set and Map. These cannot have a key that is a
+// Set, Map or a List because slices and maps are not comparable in go.
+func (gen *codeGen) containsNonComparable(t parse.TypeRef) bool {
+	cache := map[string]bool{}
+
+	var rec func(t parse.TypeRef) bool
+	rec = func(t parse.TypeRef) bool {
+		t = gen.resolve(t)
+		switch t.Desc.Kind() {
+		case types.ListKind, types.MapKind, types.SetKind:
+			return true
+		case types.StructKind:
+			// Only structs can be recursive
+			userName := gen.userName(t)
+			if b, ok := cache[userName]; ok {
+				return b
+			}
+			// If we get here in a recursive call we will mark it as not having a non comparable value. If it does then that will
+			// get handled higher up in the call chain.
+			cache[userName] = false
+			for _, f := range t.Desc.(parse.StructDesc).Fields {
+				if rec(f.T) {
+					cache[userName] = true
+					return true
+				}
+			}
+			return cache[userName]
+		default:
+			return false
+		}
+	}
+
+	return rec(t)
 }
