@@ -335,7 +335,7 @@ func NewStructWithRef() StructWithRef {
 	return StructWithRef{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithRef"),
 		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_Ref()),
-		types.NewString("R"), types.Ref{R: ref.Ref{}},
+		types.NewString("r"), types.Ref{R: ref.Ref{}},
 	)}
 }
 
@@ -348,13 +348,13 @@ func (def StructWithRefDef) New() StructWithRef {
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithRef"),
 			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_Ref()),
-			types.NewString("R"), types.Ref{R: def.R},
+			types.NewString("r"), types.Ref{R: def.R},
 		)}
 }
 
 func (self StructWithRef) Def() StructWithRefDef {
 	return StructWithRefDef{
-		self.m.Get(types.NewString("R")).Ref(),
+		self.m.Get(types.NewString("r")).Ref(),
 	}
 }
 
@@ -390,11 +390,11 @@ func (self StructWithRef) Type() types.TypeRef {
 }
 
 func (self StructWithRef) R() RefOfSetOfFloat32 {
-	return RefOfSetOfFloat32FromVal(self.m.Get(types.NewString("R")))
+	return RefOfSetOfFloat32FromVal(self.m.Get(types.NewString("r")))
 }
 
 func (self StructWithRef) SetR(val RefOfSetOfFloat32) StructWithRef {
-	return StructWithRef{self.m.Set(types.NewString("R"), val.NomsValue())}
+	return StructWithRef{self.m.Set(types.NewString("r"), val.NomsValue())}
 }
 
 // RefOfSetOfFloat32

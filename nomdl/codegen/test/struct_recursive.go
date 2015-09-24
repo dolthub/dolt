@@ -30,7 +30,7 @@ func NewTree() Tree {
 	return Tree{types.NewMap(
 		types.NewString("$name"), types.NewString("Tree"),
 		types.NewString("$type"), types.MakeTypeRef(types.NewString("Tree"), __testPackageInFile_struct_recursive_Ref()),
-		types.NewString("Children"), types.NewList(),
+		types.NewString("children"), types.NewList(),
 	)}
 }
 
@@ -43,13 +43,13 @@ func (def TreeDef) New() Tree {
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Tree"),
 			types.NewString("$type"), types.MakeTypeRef(types.NewString("Tree"), __testPackageInFile_struct_recursive_Ref()),
-			types.NewString("Children"), def.Children.New().NomsValue(),
+			types.NewString("children"), def.Children.New().NomsValue(),
 		)}
 }
 
 func (self Tree) Def() TreeDef {
 	return TreeDef{
-		ListOfTreeFromVal(self.m.Get(types.NewString("Children"))).Def(),
+		ListOfTreeFromVal(self.m.Get(types.NewString("children"))).Def(),
 	}
 }
 
@@ -85,11 +85,11 @@ func (self Tree) Type() types.TypeRef {
 }
 
 func (self Tree) Children() ListOfTree {
-	return ListOfTreeFromVal(self.m.Get(types.NewString("Children")))
+	return ListOfTreeFromVal(self.m.Get(types.NewString("children")))
 }
 
 func (self Tree) SetChildren(val ListOfTree) Tree {
-	return Tree{self.m.Set(types.NewString("Children"), val.NomsValue())}
+	return Tree{self.m.Set(types.NewString("children"), val.NomsValue())}
 }
 
 // ListOfTree

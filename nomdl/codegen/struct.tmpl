@@ -8,7 +8,7 @@ func New{{.Name}}() {{.Name}} {
 	return {{.Name}}{types.NewMap(
 			types.NewString("$name"), types.NewString("{{.Name}}"),
 			types.NewString("$type"), types.MakeTypeRef(types.NewString("{{.Name}}"), __{{.PackageName}}PackageInFile_{{.FileID}}_Ref()),
-			{{range .Fields}}types.NewString("{{title .Name}}"), {{valueZero .T}},
+			{{range .Fields}}types.NewString("{{.Name}}"), {{valueZero .T}},
 			{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(0),
 			types.NewString("$unionValue"), {{valueZero .UnionZeroType}},{{end}}
 		)}
@@ -26,7 +26,7 @@ func New{{.Name}}() {{.Name}} {
 			types.NewMap(
 				types.NewString("$name"), types.NewString("{{.Name}}"),
 				types.NewString("$type"), types.MakeTypeRef(types.NewString("{{.Name}}"), __{{.PackageName}}PackageInFile_{{.FileID}}_Ref()),
-				{{range .Fields}}types.NewString("{{title .Name}}"), {{defToValue (print "def." (title .Name)) .T}},
+				{{range .Fields}}types.NewString("{{.Name}}"), {{defToValue (print "def." (title .Name)) .T}},
 				{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 				types.NewString("$unionValue"), def.__unionDefToValue(),
 			{{end}}
@@ -35,7 +35,7 @@ func New{{.Name}}() {{.Name}} {
 
 	func (self {{.Name}}) Def() {{.Name}}Def {
 		return {{.Name}}Def{
-			{{range .Fields}}{{valueToDef (printf `self.m.Get(types.NewString("%s"))` (title .Name)) .T}},
+			{{range .Fields}}{{valueToDef (printf `self.m.Get(types.NewString("%s"))` .Name) .T}},
 			{{end}}{{if .HasUnion}}uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
 			self.__unionValueToDef(),{{end}}
 		}
@@ -98,11 +98,11 @@ func (self {{.Name}}) Type() types.TypeRef {
 {{$name := .Name}}
 {{range $index, $field := .Fields}}
 func (self {{$name}}) {{title .Name}}() {{userType .T}} {
-	return {{valueToUser (printf `self.m.Get(types.NewString("%s"))` (title .Name)) .T}}
+	return {{valueToUser (printf `self.m.Get(types.NewString("%s"))` .Name) .T}}
 }
 
 func (self {{$name}}) Set{{title .Name}}(val {{userType .T}}) {{$name}} {
-	return {{$name}}{self.m.Set(types.NewString("{{title .Name}}"), {{userToValue "val" .T}})}
+	return {{$name}}{self.m.Set(types.NewString("{{.Name}}"), {{userToValue "val" .T}})}
 }
 {{end}}
 
