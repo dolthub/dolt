@@ -56,10 +56,10 @@ func TestCanUseDef(t *testing.T) {
 		pkg := parse.ParsePackage("", bytes.NewBufferString(s))
 		gen := NewCodeGen(nil, "fakefile", pkg)
 		for _, t := range pkg.UsingDeclarations {
-			assert.Equal(using, gen.canUseDef(t), s)
+			assert.Equal(using, gen.canUseDef(t))
 		}
 		for _, t := range pkg.NamedTypes {
-			assert.Equal(named, gen.canUseDef(t), s)
+			assert.Equal(named, gen.canUseDef(t))
 		}
 	}
 
@@ -99,6 +99,15 @@ func TestCanUseDef(t *testing.T) {
 		using Map(WithMap, Int8)
 		`
 	assertCanUseDef(bad, false, true)
+
+	bad = `
+		struct Commit {
+			value: Value
+			parents: Set(Commit)
+		}
+		using Set(Commit)
+		`
+	assertCanUseDef(bad, false, false)
 
 	bad = `
 		Set(Set(Int8))

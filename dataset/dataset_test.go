@@ -30,7 +30,7 @@ func TestDatasetCommitTracker(t *testing.T) {
 	assert.False(ds2.Head().Value().Equals(ds1Commit))
 	assert.False(ds1.Head().Value().Equals(ds2Commit))
 
-	assert.Equal("sha1-3c54d36480262f0626dd3706ebbdf7f791320cb0", ms.Root().String())
+	assert.Equal("sha1-c77d9a32af2000870294a19881948ad835d62aee", ms.Root().String())
 }
 
 func TestExplicitBranchUsingDatasets(t *testing.T) {
