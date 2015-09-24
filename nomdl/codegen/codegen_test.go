@@ -79,6 +79,13 @@ func TestCanUseDef(t *testing.T) {
 		`
 	assertCanUseDef(good, true, true)
 
+	good = `
+		struct Tree {
+		  children: List(Tree)
+		}
+		`
+	assertCanUseDef(good, true, true)
+
 	bad := `
 		struct WithList {
 			x: List(Int8)
@@ -105,7 +112,6 @@ func TestCanUseDef(t *testing.T) {
 			value: Value
 			parents: Set(Commit)
 		}
-		using Set(Commit)
 		`
 	assertCanUseDef(bad, false, false)
 
