@@ -33,11 +33,11 @@ func New{{.Name}}() {{.Name}} {
 		)}
 	}
 
-	func (self {{.Name}}) Def() {{.Name}}Def {
+	func (s {{.Name}}) Def() {{.Name}}Def {
 		return {{.Name}}Def{
-			{{range .Fields}}{{valueToDef (printf `self.m.Get(types.NewString("%s"))` .Name) .T}},
-			{{end}}{{if .HasUnion}}uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
-			self.__unionValueToDef(),{{end}}
+			{{range .Fields}}{{valueToDef (printf `s.m.Get(types.NewString("%s"))` .Name) .T}},
+			{{end}}{{if .HasUnion}}uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
+			s.__unionValueToDef(),{{end}}
 		}
 	}
 
@@ -50,10 +50,10 @@ func New{{.Name}}() {{.Name}} {
 			panic("unreachable")
 		}
 
-		func (self {{.Name}}) __unionValueToDef() interface{} {
-			switch uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)) {
+		func (s {{.Name}}) __unionValueToDef() interface{} {
+			switch uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32)) {
 			{{range $index, $field := .Choices}}case {{$index}}:
-				return {{valueToDef `self.m.Get(types.NewString("$unionValue"))` .T}}
+				return {{valueToDef `s.m.Get(types.NewString("$unionValue"))` .T}}
 			{{end}}}
 			panic("unreachable")
 		}
@@ -79,44 +79,44 @@ func {{.Name}}FromVal(val types.Value) {{.Name}} {
 	return {{.Name}}{val.(types.Map)}
 }
 
-func (self {{.Name}}) NomsValue() types.Value {
-	return self.m
+func (s {{.Name}}) NomsValue() types.Value {
+	return s.m
 }
 
-func (self {{.Name}}) Equals(other {{.Name}}) bool {
-	return self.m.Equals(other.m)
+func (s {{.Name}}) Equals(other {{.Name}}) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self {{.Name}}) Ref() ref.Ref {
-	return self.m.Ref()
+func (s {{.Name}}) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self {{.Name}}) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s {{.Name}}) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 {{$name := .Name}}
 {{range $index, $field := .Fields}}
-func (self {{$name}}) {{title .Name}}() {{userType .T}} {
-	return {{valueToUser (printf `self.m.Get(types.NewString("%s"))` .Name) .T}}
+func (s {{$name}}) {{title .Name}}() {{userType .T}} {
+	return {{valueToUser (printf `s.m.Get(types.NewString("%s"))` .Name) .T}}
 }
 
-func (self {{$name}}) Set{{title .Name}}(val {{userType .T}}) {{$name}} {
-	return {{$name}}{self.m.Set(types.NewString("{{.Name}}"), {{userToValue "val" .T}})}
+func (s {{$name}}) Set{{title .Name}}(val {{userType .T}}) {{$name}} {
+	return {{$name}}{s.m.Set(types.NewString("{{.Name}}"), {{userToValue "val" .T}})}
 }
 {{end}}
 
 {{$canUseDef := .CanUseDef}}
 {{range $index, $field := .Choices}}
-	func (self {{$name}}) {{title .Name}}() (val {{userType .T}}, ok bool) {
-		if self.m.Get(types.NewString("$unionIndex")).(types.UInt32) != {{$index}} {
+	func (s {{$name}}) {{title .Name}}() (val {{userType .T}}, ok bool) {
+		if s.m.Get(types.NewString("$unionIndex")).(types.UInt32) != {{$index}} {
 			return
 		}
-		return {{valueToUser `self.m.Get(types.NewString("$unionValue"))` .T}}, true
+		return {{valueToUser `s.m.Get(types.NewString("$unionValue"))` .T}}, true
 	}
 
-	func (self {{$name}}) Set{{title .Name}}(val {{userType .T}}) {{$name}} {
-		return {{$name}}{self.m.Set(types.NewString("$unionIndex"), types.UInt32({{$index}})).Set(types.NewString("$unionValue"), {{userToValue "val" .T}})}
+	func (s {{$name}}) Set{{title .Name}}(val {{userType .T}}) {{$name}} {
+		return {{$name}}{s.m.Set(types.NewString("$unionIndex"), types.UInt32({{$index}})).Set(types.NewString("$unionValue"), {{userToValue "val" .T}})}
 	}
 
 	{{if $canUseDef}}

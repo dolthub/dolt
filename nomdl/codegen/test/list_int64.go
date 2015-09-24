@@ -27,12 +27,12 @@ func (def ListOfInt64Def) New() ListOfInt64 {
 	return ListOfInt64{types.NewList(l...)}
 }
 
-func (self ListOfInt64) Def() ListOfInt64Def {
-	l := make([]int64, self.Len())
-	for i := uint64(0); i < self.Len(); i++ {
-		l[i] = int64(self.l.Get(i).(types.Int64))
+func (l ListOfInt64) Def() ListOfInt64Def {
+	d := make([]int64, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = int64(l.l.Get(i).(types.Int64))
 	}
-	return l
+	return d
 }
 
 func ListOfInt64FromVal(val types.Value) ListOfInt64 {
@@ -40,8 +40,8 @@ func ListOfInt64FromVal(val types.Value) ListOfInt64 {
 	return ListOfInt64{val.(types.List)}
 }
 
-func (self ListOfInt64) NomsValue() types.Value {
-	return self.l
+func (l ListOfInt64) NomsValue() types.Value {
+	return l.l
 }
 
 func (l ListOfInt64) Equals(p ListOfInt64) bool {
@@ -60,16 +60,16 @@ func (l ListOfInt64) Empty() bool {
 	return l.Len() == uint64(0)
 }
 
-func (self ListOfInt64) Get(i uint64) int64 {
-	return int64(self.l.Get(i).(types.Int64))
+func (l ListOfInt64) Get(i uint64) int64 {
+	return int64(l.l.Get(i).(types.Int64))
 }
 
 func (l ListOfInt64) Slice(idx uint64, end uint64) ListOfInt64 {
 	return ListOfInt64{l.l.Slice(idx, end)}
 }
 
-func (self ListOfInt64) Set(i uint64, val int64) ListOfInt64 {
-	return ListOfInt64{self.l.Set(i, types.Int64(val))}
+func (l ListOfInt64) Set(i uint64, val int64) ListOfInt64 {
+	return ListOfInt64{l.l.Set(i, types.Int64(val))}
 }
 
 func (l ListOfInt64) Append(v ...int64) ListOfInt64 {

@@ -27,9 +27,9 @@ func (def MapOfBoolToStringDef) New() MapOfBoolToString {
 	return MapOfBoolToString{types.NewMap(kv...)}
 }
 
-func (self MapOfBoolToString) Def() MapOfBoolToStringDef {
+func (m MapOfBoolToString) Def() MapOfBoolToStringDef {
 	def := make(map[bool]string)
-	self.m.Iter(func(k, v types.Value) bool {
+	m.m.Iter(func(k, v types.Value) bool {
 		def[bool(k.(types.Bool))] = v.(types.String).String()
 		return false
 	})
@@ -127,9 +127,9 @@ func (def MapOfStringToValueDef) New() MapOfStringToValue {
 	return MapOfStringToValue{types.NewMap(kv...)}
 }
 
-func (self MapOfStringToValue) Def() MapOfStringToValueDef {
+func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 	def := make(map[string]types.Value)
-	self.m.Iter(func(k, v types.Value) bool {
+	m.m.Iter(func(k, v types.Value) bool {
 		def[k.(types.String).String()] = v
 		return false
 	})

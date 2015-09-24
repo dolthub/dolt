@@ -50,9 +50,9 @@ func (def EnumStructDef) New() EnumStruct {
 		)}
 }
 
-func (self EnumStruct) Def() EnumStructDef {
+func (s EnumStruct) Def() EnumStructDef {
 	return EnumStructDef{
-		Handedness(self.m.Get(types.NewString("hand")).(types.Int32)),
+		Handedness(s.m.Get(types.NewString("hand")).(types.Int32)),
 	}
 }
 
@@ -71,28 +71,28 @@ func EnumStructFromVal(val types.Value) EnumStruct {
 	return EnumStruct{val.(types.Map)}
 }
 
-func (self EnumStruct) NomsValue() types.Value {
-	return self.m
+func (s EnumStruct) NomsValue() types.Value {
+	return s.m
 }
 
-func (self EnumStruct) Equals(other EnumStruct) bool {
-	return self.m.Equals(other.m)
+func (s EnumStruct) Equals(other EnumStruct) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self EnumStruct) Ref() ref.Ref {
-	return self.m.Ref()
+func (s EnumStruct) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self EnumStruct) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s EnumStruct) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self EnumStruct) Hand() Handedness {
-	return Handedness(self.m.Get(types.NewString("hand")).(types.Int32))
+func (s EnumStruct) Hand() Handedness {
+	return Handedness(s.m.Get(types.NewString("hand")).(types.Int32))
 }
 
-func (self EnumStruct) SetHand(val Handedness) EnumStruct {
-	return EnumStruct{self.m.Set(types.NewString("hand"), types.Int32(val))}
+func (s EnumStruct) SetHand(val Handedness) EnumStruct {
+	return EnumStruct{s.m.Set(types.NewString("hand"), types.Int32(val))}
 }
 
 // Handedness
