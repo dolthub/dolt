@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/attic-labs/noms",
-	"GoVersion": "go1.5",
+	"GoVersion": "go1.5.1",
 	"Packages": [
 		"./..."
 	],
@@ -47,18 +47,18 @@
 		},
 		{
 			"ImportPath": "github.com/stretchr/testify/assert",
-			"Comment": "v1.0-36-gacfa84d",
-			"Rev": "acfa84d4543a981cf308682732f84872d4296ac5"
+			"Comment": "v1.0-45-gbcd32dc",
+			"Rev": "bcd32dcc8b1e09b14f55703dcf891fdd82561143"
 		},
 		{
 			"ImportPath": "github.com/stretchr/testify/require",
-			"Comment": "v1.0-36-gacfa84d",
-			"Rev": "acfa84d4543a981cf308682732f84872d4296ac5"
+			"Comment": "v1.0-45-gbcd32dc",
+			"Rev": "bcd32dcc8b1e09b14f55703dcf891fdd82561143"
 		},
 		{
 			"ImportPath": "github.com/stretchr/testify/suite",
-			"Comment": "v1.0-36-gacfa84d",
-			"Rev": "acfa84d4543a981cf308682732f84872d4296ac5"
+			"Comment": "v1.0-45-gbcd32dc",
+			"Rev": "bcd32dcc8b1e09b14f55703dcf891fdd82561143"
 		},
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
