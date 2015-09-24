@@ -7,22 +7,19 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __testPackageInFile_struct_with_union_field_CachedRef = types.Ref{}
+var __testPackageInFile_struct_with_union_field_CachedRef = __testPackageInFile_struct_with_union_field_Ref()
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_struct_with_union_field_Ref() types.Ref {
-	if types.LookupPackage(__testPackageInFile_struct_with_union_field_CachedRef.Ref()) == nil {
-		p := types.PackageDef{
-			Types: types.MapOfStringToTypeRefDef{
+	p := types.PackageDef{
+		Types: types.MapOfStringToTypeRefDef{
 
-				"StructWithUnionField": __typeRefOfStructWithUnionField(),
-			},
-		}.New()
-		__testPackageInFile_struct_with_union_field_CachedRef = types.Ref{R: types.RegisterPackage(&p)}
-	}
-	return __testPackageInFile_struct_with_union_field_CachedRef
+			"StructWithUnionField": __typeRefOfStructWithUnionField(),
+		},
+	}.New()
+	return types.Ref{R: types.RegisterPackage(&p)}
 }
 
 // StructWithUnionField
@@ -34,7 +31,7 @@ type StructWithUnionField struct {
 func NewStructWithUnionField() StructWithUnionField {
 	return StructWithUnionField{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithUnionField"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnionField"), __testPackageInFile_struct_with_union_field_Ref()),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnionField"), __testPackageInFile_struct_with_union_field_CachedRef),
 		types.NewString("a"), types.Float32(0),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
@@ -51,7 +48,7 @@ func (def StructWithUnionFieldDef) New() StructWithUnionField {
 	return StructWithUnionField{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithUnionField"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnionField"), __testPackageInFile_struct_with_union_field_Ref()),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnionField"), __testPackageInFile_struct_with_union_field_CachedRef),
 			types.NewString("a"), types.Float32(def.A),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),

@@ -8,22 +8,19 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __testPackageInFile_ref_CachedRef = types.Ref{}
+var __testPackageInFile_ref_CachedRef = __testPackageInFile_ref_Ref()
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_ref_Ref() types.Ref {
-	if types.LookupPackage(__testPackageInFile_ref_CachedRef.Ref()) == nil {
-		p := types.PackageDef{
-			Types: types.MapOfStringToTypeRefDef{
+	p := types.PackageDef{
+		Types: types.MapOfStringToTypeRefDef{
 
-				"StructWithRef": __typeRefOfStructWithRef(),
-			},
-		}.New()
-		__testPackageInFile_ref_CachedRef = types.Ref{R: types.RegisterPackage(&p)}
-	}
-	return __testPackageInFile_ref_CachedRef
+			"StructWithRef": __typeRefOfStructWithRef(),
+		},
+	}.New()
+	return types.Ref{R: types.RegisterPackage(&p)}
 }
 
 // RefOfListOfString
@@ -339,7 +336,7 @@ type StructWithRef struct {
 func NewStructWithRef() StructWithRef {
 	return StructWithRef{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithRef"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_Ref()),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_CachedRef),
 		types.NewString("r"), types.Ref{R: ref.Ref{}},
 	)}
 }
@@ -352,7 +349,7 @@ func (def StructWithRefDef) New() StructWithRef {
 	return StructWithRef{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithRef"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_Ref()),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_CachedRef),
 			types.NewString("r"), types.Ref{R: def.R},
 		)}
 }

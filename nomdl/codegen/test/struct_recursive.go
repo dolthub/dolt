@@ -7,22 +7,19 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __testPackageInFile_struct_recursive_CachedRef = types.Ref{}
+var __testPackageInFile_struct_recursive_CachedRef = __testPackageInFile_struct_recursive_Ref()
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_struct_recursive_Ref() types.Ref {
-	if types.LookupPackage(__testPackageInFile_struct_recursive_CachedRef.Ref()) == nil {
-		p := types.PackageDef{
-			Types: types.MapOfStringToTypeRefDef{
+	p := types.PackageDef{
+		Types: types.MapOfStringToTypeRefDef{
 
-				"Tree": __typeRefOfTree(),
-			},
-		}.New()
-		__testPackageInFile_struct_recursive_CachedRef = types.Ref{R: types.RegisterPackage(&p)}
-	}
-	return __testPackageInFile_struct_recursive_CachedRef
+			"Tree": __typeRefOfTree(),
+		},
+	}.New()
+	return types.Ref{R: types.RegisterPackage(&p)}
 }
 
 // Tree
@@ -34,7 +31,7 @@ type Tree struct {
 func NewTree() Tree {
 	return Tree{types.NewMap(
 		types.NewString("$name"), types.NewString("Tree"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("Tree"), __testPackageInFile_struct_recursive_Ref()),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("Tree"), __testPackageInFile_struct_recursive_CachedRef),
 		types.NewString("children"), types.NewList(),
 	)}
 }
@@ -47,7 +44,7 @@ func (def TreeDef) New() Tree {
 	return Tree{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Tree"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("Tree"), __testPackageInFile_struct_recursive_Ref()),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("Tree"), __testPackageInFile_struct_recursive_CachedRef),
 			types.NewString("children"), def.Children.New().NomsValue(),
 		)}
 }

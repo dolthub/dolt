@@ -7,22 +7,19 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __testPackageInFile_struct_primitives_CachedRef = types.Ref{}
+var __testPackageInFile_struct_primitives_CachedRef = __testPackageInFile_struct_primitives_Ref()
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_struct_primitives_Ref() types.Ref {
-	if types.LookupPackage(__testPackageInFile_struct_primitives_CachedRef.Ref()) == nil {
-		p := types.PackageDef{
-			Types: types.MapOfStringToTypeRefDef{
+	p := types.PackageDef{
+		Types: types.MapOfStringToTypeRefDef{
 
-				"StructPrimitives": __typeRefOfStructPrimitives(),
-			},
-		}.New()
-		__testPackageInFile_struct_primitives_CachedRef = types.Ref{R: types.RegisterPackage(&p)}
-	}
-	return __testPackageInFile_struct_primitives_CachedRef
+			"StructPrimitives": __typeRefOfStructPrimitives(),
+		},
+	}.New()
+	return types.Ref{R: types.RegisterPackage(&p)}
 }
 
 // StructPrimitives
@@ -34,7 +31,7 @@ type StructPrimitives struct {
 func NewStructPrimitives() StructPrimitives {
 	return StructPrimitives{types.NewMap(
 		types.NewString("$name"), types.NewString("StructPrimitives"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructPrimitives"), __testPackageInFile_struct_primitives_Ref()),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructPrimitives"), __testPackageInFile_struct_primitives_CachedRef),
 		types.NewString("uint64"), types.UInt64(0),
 		types.NewString("uint32"), types.UInt32(0),
 		types.NewString("uint16"), types.UInt16(0),
@@ -73,7 +70,7 @@ func (def StructPrimitivesDef) New() StructPrimitives {
 	return StructPrimitives{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructPrimitives"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructPrimitives"), __testPackageInFile_struct_primitives_Ref()),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructPrimitives"), __testPackageInFile_struct_primitives_CachedRef),
 			types.NewString("uint64"), types.UInt64(def.Uint64),
 			types.NewString("uint32"), types.UInt32(def.Uint32),
 			types.NewString("uint16"), types.UInt16(def.Uint16),

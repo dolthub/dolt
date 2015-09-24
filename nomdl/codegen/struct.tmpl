@@ -7,7 +7,7 @@ type {{.Name}} struct {
 func New{{.Name}}() {{.Name}} {
 	return {{.Name}}{types.NewMap(
 			types.NewString("$name"), types.NewString("{{.Name}}"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("{{.Name}}"), __{{.PackageName}}PackageInFile_{{.FileID}}_Ref()),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("{{.Name}}"), __{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef),
 			{{range .Fields}}types.NewString("{{.Name}}"), {{valueZero .T}},
 			{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(0),
 			types.NewString("$unionValue"), {{valueZero .UnionZeroType}},{{end}}
@@ -25,7 +25,7 @@ func New{{.Name}}() {{.Name}} {
 		return {{.Name}}{
 			types.NewMap(
 				types.NewString("$name"), types.NewString("{{.Name}}"),
-				types.NewString("$type"), types.MakeTypeRef(types.NewString("{{.Name}}"), __{{.PackageName}}PackageInFile_{{.FileID}}_Ref()),
+				types.NewString("$type"), types.MakeTypeRef(types.NewString("{{.Name}}"), __{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef),
 				{{range .Fields}}types.NewString("{{.Name}}"), {{defToValue (print "def." (title .Name)) .T}},
 				{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 				types.NewString("$unionValue"), def.__unionDefToValue(),
