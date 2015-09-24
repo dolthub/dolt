@@ -7,6 +7,8 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
+
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -463,7 +465,7 @@ type Pitch struct {
 func NewPitch() Pitch {
 	return Pitch{types.NewMap(
 		types.NewString("$name"), types.NewString("Pitch"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("Pitch"), __mainPackageInFile_types_Ref()),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("Pitch"), __mainPackageInFile_types_CachedRef),
 		types.NewString("X"), types.Float64(0),
 		types.NewString("Z"), types.Float64(0),
 	)}
@@ -478,7 +480,7 @@ func (def PitchDef) New() Pitch {
 	return Pitch{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Pitch"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("Pitch"), __mainPackageInFile_types_Ref()),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("Pitch"), __mainPackageInFile_types_CachedRef),
 			types.NewString("X"), types.Float64(def.X),
 			types.NewString("Z"), types.Float64(def.Z),
 		)}

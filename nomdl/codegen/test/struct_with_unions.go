@@ -7,6 +7,8 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var __testPackageInFile_struct_with_unions_CachedRef = __testPackageInFile_struct_with_unions_Ref()
+
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -29,7 +31,7 @@ type StructWithUnions struct {
 func NewStructWithUnions() StructWithUnions {
 	return StructWithUnions{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithUnions"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnions"), __testPackageInFile_struct_with_unions_Ref()),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnions"), __testPackageInFile_struct_with_unions_CachedRef),
 		types.NewString("a"), New__unionOfBOfFloat64AndCOfString().NomsValue(),
 		types.NewString("d"), New__unionOfEOfFloat64AndFOfString().NomsValue(),
 	)}
@@ -44,7 +46,7 @@ func (def StructWithUnionsDef) New() StructWithUnions {
 	return StructWithUnions{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithUnions"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnions"), __testPackageInFile_struct_with_unions_Ref()),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithUnions"), __testPackageInFile_struct_with_unions_CachedRef),
 			types.NewString("a"), def.A.New().NomsValue(),
 			types.NewString("d"), def.D.New().NomsValue(),
 		)}
@@ -116,7 +118,7 @@ type __unionOfBOfFloat64AndCOfString struct {
 func New__unionOfBOfFloat64AndCOfString() __unionOfBOfFloat64AndCOfString {
 	return __unionOfBOfFloat64AndCOfString{types.NewMap(
 		types.NewString("$name"), types.NewString("__unionOfBOfFloat64AndCOfString"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfBOfFloat64AndCOfString"), __testPackageInFile_struct_with_unions_Ref()),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfBOfFloat64AndCOfString"), __testPackageInFile_struct_with_unions_CachedRef),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	)}
@@ -131,7 +133,7 @@ func (def __unionOfBOfFloat64AndCOfStringDef) New() __unionOfBOfFloat64AndCOfStr
 	return __unionOfBOfFloat64AndCOfString{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("__unionOfBOfFloat64AndCOfString"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfBOfFloat64AndCOfString"), __testPackageInFile_struct_with_unions_Ref()),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfBOfFloat64AndCOfString"), __testPackageInFile_struct_with_unions_CachedRef),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
 		)}
@@ -253,7 +255,7 @@ type __unionOfEOfFloat64AndFOfString struct {
 func New__unionOfEOfFloat64AndFOfString() __unionOfEOfFloat64AndFOfString {
 	return __unionOfEOfFloat64AndFOfString{types.NewMap(
 		types.NewString("$name"), types.NewString("__unionOfEOfFloat64AndFOfString"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfEOfFloat64AndFOfString"), __testPackageInFile_struct_with_unions_Ref()),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfEOfFloat64AndFOfString"), __testPackageInFile_struct_with_unions_CachedRef),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	)}
@@ -268,7 +270,7 @@ func (def __unionOfEOfFloat64AndFOfStringDef) New() __unionOfEOfFloat64AndFOfStr
 	return __unionOfEOfFloat64AndFOfString{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("__unionOfEOfFloat64AndFOfString"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfEOfFloat64AndFOfString"), __testPackageInFile_struct_with_unions_Ref()),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("__unionOfEOfFloat64AndFOfString"), __testPackageInFile_struct_with_unions_CachedRef),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
 		)}

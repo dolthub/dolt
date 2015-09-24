@@ -7,6 +7,8 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var __testPackageInFile_struct_with_list_CachedRef = __testPackageInFile_struct_with_list_Ref()
+
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -29,7 +31,7 @@ type StructWithList struct {
 func NewStructWithList() StructWithList {
 	return StructWithList{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithList"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithList"), __testPackageInFile_struct_with_list_Ref()),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithList"), __testPackageInFile_struct_with_list_CachedRef),
 		types.NewString("l"), types.NewList(),
 		types.NewString("b"), types.Bool(false),
 		types.NewString("s"), types.NewString(""),
@@ -48,7 +50,7 @@ func (def StructWithListDef) New() StructWithList {
 	return StructWithList{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithList"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithList"), __testPackageInFile_struct_with_list_Ref()),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithList"), __testPackageInFile_struct_with_list_CachedRef),
 			types.NewString("l"), def.L.New().NomsValue(),
 			types.NewString("b"), types.Bool(def.B),
 			types.NewString("s"), types.NewString(def.S),

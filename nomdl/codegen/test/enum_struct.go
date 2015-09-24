@@ -7,6 +7,8 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var __testPackageInFile_enum_struct_CachedRef = __testPackageInFile_enum_struct_Ref()
+
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -30,7 +32,7 @@ type EnumStruct struct {
 func NewEnumStruct() EnumStruct {
 	return EnumStruct{types.NewMap(
 		types.NewString("$name"), types.NewString("EnumStruct"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("EnumStruct"), __testPackageInFile_enum_struct_Ref()),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("EnumStruct"), __testPackageInFile_enum_struct_CachedRef),
 		types.NewString("hand"), types.Int32(0),
 	)}
 }
@@ -43,7 +45,7 @@ func (def EnumStructDef) New() EnumStruct {
 	return EnumStruct{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("EnumStruct"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("EnumStruct"), __testPackageInFile_enum_struct_Ref()),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("EnumStruct"), __testPackageInFile_enum_struct_CachedRef),
 			types.NewString("hand"), types.Int32(def.Hand),
 		)}
 }

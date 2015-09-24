@@ -8,6 +8,8 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var __testPackageInFile_ref_CachedRef = __testPackageInFile_ref_Ref()
+
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -334,7 +336,7 @@ type StructWithRef struct {
 func NewStructWithRef() StructWithRef {
 	return StructWithRef{types.NewMap(
 		types.NewString("$name"), types.NewString("StructWithRef"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_Ref()),
+		types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_CachedRef),
 		types.NewString("r"), types.Ref{R: ref.Ref{}},
 	)}
 }
@@ -347,7 +349,7 @@ func (def StructWithRefDef) New() StructWithRef {
 	return StructWithRef{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("StructWithRef"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_Ref()),
+			types.NewString("$type"), types.MakeTypeRef(types.NewString("StructWithRef"), __testPackageInFile_ref_CachedRef),
 			types.NewString("r"), types.Ref{R: def.R},
 		)}
 }

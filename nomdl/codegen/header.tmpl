@@ -5,6 +5,8 @@ package {{.Name}}
 import "github.com/attic-labs/noms/types"
 
 {{if .HasTypes}}
+var __{{.Name}}PackageInFile_{{.FileID}}_CachedRef = __{{.Name}}PackageInFile_{{.FileID}}_Ref()
+
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
