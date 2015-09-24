@@ -1,4 +1,4 @@
-package http
+package chunks
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -27,13 +27,13 @@ const (
 
 type readRequest struct {
 	r  ref.Ref
-	ch chan chunks.Chunk
+	ch chan Chunk
 }
 
 // readBatch represents a set of queued read requests, each of which are blocking on a receive channel for a response.
-type readBatch map[ref.Ref][]chan chunks.Chunk
+type readBatch map[ref.Ref][]chan Chunk
 
-func (rrg *readBatch) Put(c chunks.Chunk) {
+func (rrg *readBatch) Put(c Chunk) {
 	for _, ch := range (*rrg)[c.Ref()] {
 		ch <- c
 	}
@@ -45,30 +45,30 @@ func (rrg *readBatch) Put(c chunks.Chunk) {
 func (rrq *readBatch) Close() error {
 	for _, chs := range *rrq {
 		for _, ch := range chs {
-			ch <- chunks.EmptyChunk
+			ch <- EmptyChunk
 		}
 	}
 	return nil
 }
 
-type HttpClient struct {
+type HttpStore struct {
 	host       *url.URL
 	readQueue  chan readRequest
-	writeQueue chan chunks.Chunk
+	writeQueue chan Chunk
 	wg         *sync.WaitGroup
 	written    map[ref.Ref]bool
 	wmu        *sync.Mutex
 }
 
-func NewHttpClient(host string) *HttpClient {
+func NewHttpStore(host string) *HttpStore {
 	u, err := url.Parse(host)
 	d.Exp.NoError(err)
 	d.Exp.True(u.Scheme == "http" || u.Scheme == "https")
 	d.Exp.Equal(*u, url.URL{Scheme: u.Scheme, Host: u.Host})
-	client := &HttpClient{
+	client := &HttpStore{
 		u,
 		make(chan readRequest, readBufferSize),
-		make(chan chunks.Chunk, writeBufferSize),
+		make(chan Chunk, writeBufferSize),
 		&sync.WaitGroup{},
 		map[ref.Ref]bool{},
 		&sync.Mutex{},
@@ -85,13 +85,17 @@ func NewHttpClient(host string) *HttpClient {
 	return client
 }
 
-func (c *HttpClient) Get(r ref.Ref) chunks.Chunk {
-	ch := make(chan chunks.Chunk)
+func (c *HttpStore) Host() *url.URL {
+	return c.host
+}
+
+func (c *HttpStore) Get(r ref.Ref) Chunk {
+	ch := make(chan Chunk)
 	c.readQueue <- readRequest{r, ch}
 	return <-ch
 }
 
-func (c *HttpClient) sendReadRequests() {
+func (c *HttpStore) sendReadRequests() {
 	for req := range c.readQueue {
 		reqs := readBatch{}
 		refs := map[ref.Ref]bool{}
@@ -117,7 +121,7 @@ func (c *HttpClient) sendReadRequests() {
 	}
 }
 
-func (c *HttpClient) Has(ref ref.Ref) bool {
+func (c *HttpStore) Has(ref ref.Ref) bool {
 	// HEAD http://<host>/ref/<sha1-xxx>. Response will be 200 if present, 404 if absent.
 	res := c.requestRef(ref, "HEAD", nil)
 	defer closeResponse(res)
@@ -126,7 +130,7 @@ func (c *HttpClient) Has(ref ref.Ref) bool {
 	return res.StatusCode == http.StatusOK
 }
 
-func (c *HttpClient) Put(chunk chunks.Chunk) {
+func (c *HttpStore) Put(chunk Chunk) {
 	// POST http://<host>/ref/. Body is a serialized chunkBuffer. Response will be 201.
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
@@ -139,9 +143,9 @@ func (c *HttpClient) Put(chunk chunks.Chunk) {
 	c.writeQueue <- chunk
 }
 
-func (c *HttpClient) sendWriteRequests() {
+func (c *HttpStore) sendWriteRequests() {
 	for chunk := range c.writeQueue {
-		chs := make([]chunks.Chunk, 0)
+		chs := make([]Chunk, 0)
 		chs = append(chs, chunk)
 
 	loop:
@@ -161,10 +165,10 @@ func (c *HttpClient) sendWriteRequests() {
 	}
 }
 
-func (c *HttpClient) postRefs(chs []chunks.Chunk) {
+func (c *HttpStore) postRefs(chs []Chunk) {
 	body := &bytes.Buffer{}
 	gw := gzip.NewWriter(body)
-	sz := chunks.NewSerializer(gw)
+	sz := NewSerializer(gw)
 	for _, chunk := range chs {
 		sz.Put(chunk)
 	}
@@ -172,7 +176,7 @@ func (c *HttpClient) postRefs(chs []chunks.Chunk) {
 	gw.Close()
 
 	url := *c.host
-	url.Path = postRefsPath
+	url.Path = constants.PostRefsPath
 	req, err := http.NewRequest("POST", url.String(), body)
 	d.Chk.NoError(err)
 
@@ -186,9 +190,9 @@ func (c *HttpClient) postRefs(chs []chunks.Chunk) {
 	closeResponse(res)
 }
 
-func (c *HttpClient) requestRef(r ref.Ref, method string, body io.Reader) *http.Response {
+func (c *HttpStore) requestRef(r ref.Ref, method string, body io.Reader) *http.Response {
 	url := *c.host
-	url.Path = refPath
+	url.Path = constants.RefPath
 	if (r != ref.Ref{}) {
 		url.Path = path.Join(url.Path, r.String())
 	}
@@ -205,10 +209,10 @@ func (c *HttpClient) requestRef(r ref.Ref, method string, body io.Reader) *http.
 	return res
 }
 
-func (c *HttpClient) getRefs(refs map[ref.Ref]bool, cs chunks.ChunkSink) {
+func (c *HttpStore) getRefs(refs map[ref.Ref]bool, cs ChunkSink) {
 	// POST http://<host>/getRefs/. Post body: ref=sha1---&ref=sha1---& Response will be chunk data if present, 404 if absent.
 	u := *c.host
-	u.Path = getRefsPath
+	u.Path = constants.GetRefsPath
 	values := &url.Values{}
 	for r, _ := range refs {
 		values.Add("ref", r.String())
@@ -232,10 +236,10 @@ func (c *HttpClient) getRefs(refs map[ref.Ref]bool, cs chunks.ChunkSink) {
 		reader = gr
 	}
 
-	chunks.Deserialize(reader, cs)
+	Deserialize(reader, cs)
 }
 
-func (c *HttpClient) Root() ref.Ref {
+func (c *HttpStore) Root() ref.Ref {
 	// GET http://<host>/root. Response will be ref of root.
 	res := c.requestRoot("GET", ref.Ref{}, ref.Ref{})
 	defer closeResponse(res)
@@ -246,7 +250,7 @@ func (c *HttpClient) Root() ref.Ref {
 	return ref.Parse(string(data))
 }
 
-func (c *HttpClient) UpdateRoot(current, last ref.Ref) bool {
+func (c *HttpStore) UpdateRoot(current, last ref.Ref) bool {
 	// POST http://<host>root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
 	c.wg.Wait()
 
@@ -261,9 +265,9 @@ func (c *HttpClient) UpdateRoot(current, last ref.Ref) bool {
 	return res.StatusCode == http.StatusOK
 }
 
-func (c *HttpClient) requestRoot(method string, current, last ref.Ref) *http.Response {
+func (c *HttpStore) requestRoot(method string, current, last ref.Ref) *http.Response {
 	u := *c.host
-	u.Path = rootPath
+	u.Path = constants.RootPath
 	if method == "POST" {
 		d.Exp.True(current != ref.Ref{})
 		params := url.Values{}
@@ -281,7 +285,7 @@ func (c *HttpClient) requestRoot(method string, current, last ref.Ref) *http.Res
 	return res
 }
 
-func (c *HttpClient) Close() error {
+func (c *HttpStore) Close() error {
 	c.wg.Wait()
 	close(c.readQueue)
 	close(c.writeQueue)
@@ -296,20 +300,20 @@ func closeResponse(res *http.Response) error {
 	return res.Body.Close()
 }
 
-type Flags struct {
+type HttpStoreFlags struct {
 	host *string
 }
 
-func NewFlagsWithPrefix(prefix string) Flags {
-	return Flags{
+func HttpFlags(prefix string) HttpStoreFlags {
+	return HttpStoreFlags{
 		flag.String(prefix+"h", "", "http host to connect to"),
 	}
 }
 
-func (h Flags) CreateClient() *HttpClient {
+func (h HttpStoreFlags) CreateStore() ChunkStore {
 	if *h.host == "" {
 		return nil
 	} else {
-		return NewHttpClient(*h.host)
+		return NewHttpStore(*h.host)
 	}
 }

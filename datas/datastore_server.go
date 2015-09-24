@@ -1,4 +1,4 @@
-package http
+package datas
 
 import (
 	"bytes"
@@ -10,32 +10,46 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
-const (
-	rootPath          = "/root/"
-	refPath           = "/ref/"
-	getRefsPath       = "/getRefs/"
-	postRefsPath      = "/postRefs/"
-	maxConcurrentPuts = 64
-)
-
-type httpServer struct {
-	cs    chunks.ChunkStore
+type dataStoreServer struct {
+	ds    DataStore
 	port  int
 	l     *net.Listener
 	conns map[net.Conn]http.ConnState
 }
 
-func NewHttpServer(cs chunks.ChunkStore, port int) *httpServer {
-	return &httpServer{
-		cs, port, nil, map[net.Conn]http.ConnState{},
+func NewDataStoreServer(ds DataStore, port int) *dataStoreServer {
+	return &dataStoreServer{
+		ds, port, nil, map[net.Conn]http.ConnState{},
 	}
 }
 
-func (s *httpServer) handleRef(w http.ResponseWriter, req *http.Request) {
+func (s *dataStoreServer) handleGetReachable(r ref.Ref, w http.ResponseWriter, req *http.Request) {
+	excludeRef := ref.Ref{}
+	exclude := req.URL.Query().Get("exclude")
+	if exclude != "" {
+		excludeRef = ref.Parse(exclude)
+	}
+
+	w.Header().Add("Content-Type", "application/octet-stream")
+	writer := w.(io.Writer)
+	if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Add("Content-Encoding", "gzip")
+		gw := gzip.NewWriter(w)
+		defer gw.Close()
+		writer = gw
+	}
+
+	sz := chunks.NewSerializer(writer)
+	s.ds.CopyReachableChunksP(r, excludeRef, sz, 512)
+	sz.Close()
+}
+
+func (s *dataStoreServer) handleRef(w http.ResponseWriter, req *http.Request) {
 	err := d.Try(func() {
 		refStr := ""
 		pathParts := strings.Split(req.URL.Path[1:], "/")
@@ -46,7 +60,12 @@ func (s *httpServer) handleRef(w http.ResponseWriter, req *http.Request) {
 
 		switch req.Method {
 		case "GET":
-			chunk := s.cs.Get(r)
+			all := req.URL.Query().Get("all")
+			if all == "true" {
+				s.handleGetReachable(r, w, req)
+				return
+			}
+			chunk := s.ds.Get(r)
 			if chunk.IsEmpty() {
 				w.WriteHeader(http.StatusNotFound)
 				return
@@ -58,7 +77,7 @@ func (s *httpServer) handleRef(w http.ResponseWriter, req *http.Request) {
 			w.Header().Add("Cache-Control", "max-age=31536000") // 1 year
 
 		case "HEAD":
-			if !s.cs.Has(r) {
+			if !s.ds.Has(r) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -73,7 +92,7 @@ func (s *httpServer) handleRef(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (s *httpServer) handlePostRefs(w http.ResponseWriter, req *http.Request) {
+func (s *dataStoreServer) handlePostRefs(w http.ResponseWriter, req *http.Request) {
 	err := d.Try(func() {
 		d.Exp.Equal("POST", req.Method)
 
@@ -85,7 +104,7 @@ func (s *httpServer) handlePostRefs(w http.ResponseWriter, req *http.Request) {
 			reader = gr
 		}
 
-		chunks.Deserialize(reader, s.cs)
+		chunks.Deserialize(reader, s.ds)
 		w.WriteHeader(http.StatusCreated)
 	})
 
@@ -95,7 +114,7 @@ func (s *httpServer) handlePostRefs(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (s *httpServer) handleGetRefs(w http.ResponseWriter, req *http.Request) {
+func (s *dataStoreServer) handleGetRefs(w http.ResponseWriter, req *http.Request) {
 	err := d.Try(func() {
 		d.Exp.Equal("POST", req.Method)
 
@@ -119,7 +138,7 @@ func (s *httpServer) handleGetRefs(w http.ResponseWriter, req *http.Request) {
 
 		sz := chunks.NewSerializer(writer)
 		for _, r := range refs {
-			c := s.cs.Get(r)
+			c := s.ds.Get(r)
 			if !c.IsEmpty() {
 				sz.Put(c)
 			}
@@ -133,11 +152,11 @@ func (s *httpServer) handleGetRefs(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (s *httpServer) handleRoot(w http.ResponseWriter, req *http.Request) {
+func (s *dataStoreServer) handleRoot(w http.ResponseWriter, req *http.Request) {
 	err := d.Try(func() {
 		switch req.Method {
 		case "GET":
-			rootRef := s.cs.Root()
+			rootRef := s.ds.Root()
 			fmt.Fprintf(w, "%v", rootRef.String())
 			w.Header().Add("content-type", "text/plain")
 
@@ -150,7 +169,7 @@ func (s *httpServer) handleRoot(w http.ResponseWriter, req *http.Request) {
 			d.Exp.Len(tokens, 1)
 			current := ref.Parse(tokens[0])
 
-			if !s.cs.UpdateRoot(current, last) {
+			if !s.ds.UpdateRoot(current, last) {
 				w.WriteHeader(http.StatusConflict)
 				return
 			}
@@ -163,7 +182,7 @@ func (s *httpServer) handleRoot(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (s *httpServer) connState(c net.Conn, cs http.ConnState) {
+func (s *dataStoreServer) connState(c net.Conn, cs http.ConnState) {
 	switch cs {
 	case http.StateNew, http.StateActive, http.StateIdle:
 		s.conns[c] = cs
@@ -172,18 +191,18 @@ func (s *httpServer) connState(c net.Conn, cs http.ConnState) {
 	}
 }
 
-// Blocks while the server is listening. Running on a separate go routine is supported.
-func (s *httpServer) Run() {
+// Blocks while the dataStoreServer is listening. Running on a separate go routine is supported.
+func (s *dataStoreServer) Run() {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	d.Chk.NoError(err)
 	s.l = &l
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc(refPath, http.HandlerFunc(s.handleRef))
-	mux.HandleFunc(getRefsPath, http.HandlerFunc(s.handleGetRefs))
-	mux.HandleFunc(postRefsPath, http.HandlerFunc(s.handlePostRefs))
-	mux.HandleFunc(rootPath, http.HandlerFunc(s.handleRoot))
+	mux.HandleFunc(constants.RefPath, http.HandlerFunc(s.handleRef))
+	mux.HandleFunc(constants.GetRefsPath, http.HandlerFunc(s.handleGetRefs))
+	mux.HandleFunc(constants.PostRefsPath, http.HandlerFunc(s.handlePostRefs))
+	mux.HandleFunc(constants.RootPath, http.HandlerFunc(s.handleRoot))
 
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -195,8 +214,8 @@ func (s *httpServer) Run() {
 	srv.Serve(l)
 }
 
-// Will cause the server to stop listening and an existing call to Run() to continue.
-func (s *httpServer) Stop() {
+// Will cause the dataStoreServer to stop listening and an existing call to Run() to continue.
+func (s *dataStoreServer) Stop() {
 	(*s.l).Close()
 	for c, _ := range s.conns {
 		c.Close()

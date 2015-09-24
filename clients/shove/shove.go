@@ -8,8 +8,6 @@ import (
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/sync"
 )
 
 var (
@@ -38,20 +36,7 @@ func main() {
 			defer util.StopCPUProfile()
 		}
 
-		sourceHeadRef := source.Head().Ref()
-		sinkHeadRef := ref.Ref{}
-		if currentHead, ok := sink.MaybeHead(); ok {
-			sinkHeadRef = currentHead.Ref()
-		}
-
-		if sourceHeadRef == sinkHeadRef {
-			return
-		}
-
-		sync.CopyReachableChunksP(sourceHeadRef, sinkHeadRef, source.Store(), sink.Store(), int(*p))
-		for ok := false; !ok; *sink, ok = sync.SetNewHead(sourceHeadRef, *sink) {
-			continue
-		}
+		*sink = sink.Pull(*source, int(*p))
 
 		util.MaybeWriteMemProfile()
 	})

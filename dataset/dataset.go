@@ -6,6 +6,7 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset/mgmt"
+	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -57,6 +58,47 @@ func (ds *Dataset) CommitWithParents(v types.Value, p datas.SetOfCommit) (Datase
 	sets = mgmt.SetDatasetHead(sets, ds.id, newCommit.NomsValue())
 	store, ok := mgmt.CommitDatasets(ds.store, sets)
 	return Dataset{store, ds.id}, ok
+}
+
+func (ds *Dataset) Pull(source Dataset, concurrency int) Dataset {
+	sink := *ds
+	sourceHeadRef := source.Head().Ref()
+	sinkHeadRef := ref.Ref{}
+	if currentHead, ok := sink.MaybeHead(); ok {
+		sinkHeadRef = currentHead.Ref()
+	}
+
+	if sourceHeadRef == sinkHeadRef {
+		return sink
+	}
+
+	source.Store().CopyReachableChunksP(sourceHeadRef, sinkHeadRef, sink.Store(), concurrency)
+	for ok := false; !ok; sink, ok = sink.SetNewHead(sourceHeadRef) {
+		continue
+	}
+
+	return sink
+}
+
+func (ds *Dataset) validateRefAsCommit(r ref.Ref) datas.Commit {
+	v := types.ReadValue(r, ds.store)
+
+	d.Exp.NotNil(v, "%v cannot be found", r)
+
+	// TODO: Replace this weird recover stuff below once we have a way to determine if a Value is an instance of a custom struct type. BUG #133
+	defer func() {
+		if r := recover(); r != nil {
+			d.Exp.Fail("Not a Commit:", "%+v", v)
+		}
+	}()
+
+	return datas.CommitFromVal(v)
+}
+
+// SetNewHead takes the Ref of the desired new Head of ds, the chunk for which should already exist in the Dataset. It validates that the Ref points to an existing chunk that decodes to the correct type of value and then commits it to ds, returning a new Dataset with newHeadRef set and ok set to true. In the event that the commit fails, ok is set to false and a new up-to-date Dataset is returned WITHOUT newHeadRef in it. The caller should try again using this new Dataset.
+func (ds *Dataset) SetNewHead(newHeadRef ref.Ref) (Dataset, bool) {
+	commit := ds.validateRefAsCommit(newHeadRef)
+	return ds.CommitWithParents(commit.Value(), commit.Parents())
 }
 
 func (ds *Dataset) Close() {

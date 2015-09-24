@@ -9,7 +9,6 @@ import (
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/http"
 )
 
 var (
@@ -25,7 +24,7 @@ func main() {
 		return
 	}
 
-	server := http.NewHttpServer(ds, *port)
+	server := datas.NewDataStoreServer(ds, *port)
 
 	// Shutdown server gracefully so that profile may be written
 	c := make(chan os.Signal, 1)
