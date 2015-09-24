@@ -27,7 +27,7 @@ func validateRefAsCommit(r ref.Ref, cs chunks.ChunkSource) datas.Commit {
 // SetNewHead takes the Ref of the desired new Head of ds, the chunk for which should already exist in the Dataset. It validates that the Ref points to an existing chunk that decodes to the correct type of value and then commits it to ds, returning a new Dataset with newHeadRef set and ok set to true. In the event that the commit fails, ok is set to false and a new up-to-date Dataset is returned WITHOUT newHeadRef in it. The caller should try again using this new Dataset.
 func SetNewHead(newHeadRef ref.Ref, ds dataset.Dataset) (dataset.Dataset, bool) {
 	commit := validateRefAsCommit(newHeadRef, ds.Store())
-	return ds.CommitWithParents(commit.Value(), datas.SetOfCommitFromVal(commit.Parents()))
+	return ds.CommitWithParents(commit.Value(), commit.Parents())
 }
 
 // Copys all chunks reachable from (and including) |r| but excluding all chunks reachable from (and including) |exclude| in |source| to |sink|.

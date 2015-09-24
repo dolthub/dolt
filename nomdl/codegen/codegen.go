@@ -641,33 +641,38 @@ func (gen *codeGen) writeEnum(t parse.TypeRef) {
 // We use a go map as the def for Set and Map. These cannot have a key that is a
 // Set, Map or a List because slices and maps are not comparable in go.
 func (gen *codeGen) canUseDef(t parse.TypeRef) bool {
-	visited := map[string]bool{}
-	return gen.canUseDefRec(t, visited, false)
-}
+	cache := map[string]bool{}
 
-func (gen *codeGen) canUseDefRec(t parse.TypeRef, visited map[string]bool, inKey bool) bool {
-	t = gen.resolve(t)
-	switch t.Desc.Kind() {
-	case types.ListKind:
-		return !inKey && gen.canUseDefRec(t.Desc.(parse.CompoundDesc).ElemTypes[0], visited, inKey)
-	case types.SetKind:
-		return !inKey && gen.canUseDefRec(t.Desc.(parse.CompoundDesc).ElemTypes[0], visited, true)
-	case types.MapKind:
-		elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
-		return !inKey && gen.canUseDefRec(elemTypes[0], visited, true) && gen.canUseDefRec(elemTypes[1], visited, false)
-	case types.StructKind:
-		// Only structs can be recursive
-		if visited[gen.userName(t)] {
+	var rec func(t parse.TypeRef, inKey bool) bool
+	rec = func(t parse.TypeRef, inKey bool) bool {
+		t = gen.resolve(t)
+		switch t.Desc.Kind() {
+		case types.ListKind:
+			return !inKey && rec(t.Desc.(parse.CompoundDesc).ElemTypes[0], inKey)
+		case types.SetKind:
+			return !inKey && rec(t.Desc.(parse.CompoundDesc).ElemTypes[0], true)
+		case types.MapKind:
+			elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
+			return !inKey && rec(elemTypes[0], true) && rec(elemTypes[1], false)
+		case types.StructKind:
+			// Only structs can be recursive
+			userName := gen.userName(t)
+			if b, ok := cache[userName]; ok {
+				return b
+			}
+			cache[userName] = false
+			for _, f := range t.Desc.(parse.StructDesc).Fields {
+				if !rec(f.T, inKey) {
+					cache[userName] = false
+					return false
+				}
+			}
+			cache[userName] = true
+			return true
+		default:
 			return true
 		}
-		visited[gen.userName(t)] = true
-		for _, f := range t.Desc.(parse.StructDesc).Fields {
-			if !gen.canUseDefRec(f.T, visited, inKey) {
-				return false
-			}
-		}
-		return true
-	default:
-		return true
 	}
+
+	return rec(t, false)
 }

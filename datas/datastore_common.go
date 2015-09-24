@@ -39,7 +39,7 @@ func (ds *dataStoreCommon) commit(v types.Value) bool {
 }
 
 func (ds *dataStoreCommon) commitWithParents(v types.Value, p SetOfCommit) bool {
-	return ds.doCommit(NewCommit().SetParents(p.NomsValue()).SetValue(v))
+	return ds.doCommit(NewCommit().SetParents(p).SetValue(v))
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current head. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will fail if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
@@ -86,7 +86,7 @@ func getAncestors(commits SetOfCommit) SetOfCommit {
 	ancestors := NewSetOfCommit()
 	commits.Iter(func(c Commit) (stop bool) {
 		ancestors =
-			ancestors.Union(SetOfCommitFromVal(c.Parents()))
+			ancestors.Union(c.Parents())
 		return
 	})
 	return ancestors
