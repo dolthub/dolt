@@ -2,7 +2,7 @@ package datas
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/http"
+	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -21,6 +21,8 @@ type DataStore interface {
 
 	// CommitWithParents updates the commit that a datastore points at. The new Commit is constructed using v and p. If the update cannot be performed, e.g., because of a conflict, CommitWithParents returns 'false'. The newest snapshot of the datastore is always returned.
 	CommitWithParents(v types.Value, p SetOfCommit) (DataStore, bool)
+
+	CopyReachableChunksP(r, exclude ref.Ref, sink chunks.ChunkSink, concurrency int)
 }
 
 func NewDataStore(cs chunks.ChunkStore) DataStore {
@@ -31,7 +33,7 @@ type Flags struct {
 	ldb    chunks.LevelDBStoreFlags
 	memory chunks.MemoryStoreFlags
 	nop    chunks.NopStoreFlags
-	hflags http.Flags
+	hflags chunks.HttpStoreFlags
 }
 
 func NewFlags() Flags {
@@ -43,7 +45,7 @@ func NewFlagsWithPrefix(prefix string) Flags {
 		chunks.LevelDBFlags(prefix),
 		chunks.MemoryFlags(prefix),
 		chunks.NopFlags(prefix),
-		http.NewFlagsWithPrefix(prefix),
+		chunks.HttpFlags(prefix),
 	}
 }
 
@@ -52,12 +54,15 @@ func (f Flags) CreateDataStore() (DataStore, bool) {
 	if cs = f.ldb.CreateStore(); cs != nil {
 	} else if cs = f.memory.CreateStore(); cs != nil {
 	} else if cs = f.nop.CreateStore(); cs != nil {
-	} else if cs = f.hflags.CreateClient(); cs != nil {
 	}
 
-	if cs == nil {
-		return &LocalDataStore{}, false
+	if cs != nil {
+		return newLocalDataStore(cs), true
 	}
 
-	return newLocalDataStore(cs), true
+	if cs = f.hflags.CreateStore(); cs != nil {
+		return newRemoteDataStore(cs), true
+	}
+
+	return &LocalDataStore{}, false
 }

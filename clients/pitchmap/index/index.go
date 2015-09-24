@@ -167,9 +167,8 @@ func main() {
 		if util.MaybeStartCPUProfile() {
 			defer util.StopCPUProfile()
 		}
-		dataStore := datas.NewDataStore(ds)
-		inputDataset := dataset.NewDataset(dataStore, *inputID)
-		outputDataset := dataset.NewDataset(dataStore, *outputID)
+		inputDataset := dataset.NewDataset(ds, *inputID)
+		outputDataset := dataset.NewDataset(ds, *outputID)
 
 		input := types.ListFromVal(inputDataset.Head().Value())
 		output := getIndex(input).NomsValue()

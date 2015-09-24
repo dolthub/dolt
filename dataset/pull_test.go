@@ -1,4 +1,4 @@
-package sync
+package dataset
 
 import (
 	"testing"
@@ -6,21 +6,19 @@ import (
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
-func createTestDataset(name string) dataset.Dataset {
-	t := chunks.NewTestStore()
-	return dataset.NewDataset(datas.NewDataStore(t), name)
+func createTestDataset(name string) Dataset {
+	return NewDataset(datas.NewDataStore(chunks.NewTestStore()), name)
 }
 
 func TestValidateRef(t *testing.T) {
-	cs := chunks.NewTestStore()
-	r := types.WriteValue(types.Bool(true), cs)
+	ds := createTestDataset("test")
+	r := types.WriteValue(types.Bool(true), ds.Store())
 
-	assert.Panics(t, func() { validateRefAsCommit(r, cs) })
+	assert.Panics(t, func() { ds.validateRefAsCommit(r) })
 }
 
 func TestPull(t *testing.T) {
@@ -52,8 +50,7 @@ func TestPull(t *testing.T) {
 	source, ok = source.Commit(updatedValue)
 	assert.True(ok)
 
-	CopyReachableChunksP(source.Head().Ref(), sink.Head().Ref(), source.Store(), sink.Store(), 1)
-	sink, ok = SetNewHead(source.Head().Ref(), sink)
+	sink = sink.Pull(source, 1)
 	assert.True(ok)
 	assert.True(source.Head().Equals(sink.Head()))
 }
@@ -71,24 +68,13 @@ func TestPullFirstCommit(t *testing.T) {
 	source, ok := source.Commit(initialValue)
 	assert.True(ok)
 
-	sinkHeadRef := func() ref.Ref {
-		head, ok := sink.MaybeHead()
-		if ok {
-			return head.Ref()
-		}
-		return ref.Ref{}
-	}()
-
-	CopyReachableChunksP(source.Head().Ref(), sinkHeadRef, source.Store(), sink.Store(), 1)
-	CopyReachableChunksP(source.Head().Ref(), sinkHeadRef, source.Store(), sink.Store(), 1)
-	sink, ok = SetNewHead(source.Head().Ref(), sink)
-	assert.True(ok)
+	sink = sink.Pull(source, 1)
 	assert.True(source.Head().Equals(sink.Head()))
 
 }
 
 func TestFailedCopyChunks(t *testing.T) {
-	cs := chunks.NewMemoryStore()
+	ds := createTestDataset("test")
 	r := ref.Parse("sha1-0000000000000000000000000000000000000000")
-	assert.Panics(t, func() { CopyReachableChunksP(r, ref.Ref{}, cs, cs, 1) })
+	assert.Panics(t, func() { ds.Store().CopyReachableChunksP(r, ref.Ref{}, ds.Store(), 1) })
 }
