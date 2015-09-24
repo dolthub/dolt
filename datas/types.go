@@ -7,6 +7,8 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var __datasPackageInFile_types_CachedRef = __datasPackageInFile_types_Ref()
+
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -29,7 +31,7 @@ type Commit struct {
 func NewCommit() Commit {
 	return Commit{types.NewMap(
 		types.NewString("$name"), types.NewString("Commit"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("Commit"), __datasPackageInFile_types_Ref()),
+		types.NewString("$type"), types.MakeTypeRef("Commit", __datasPackageInFile_types_CachedRef),
 		types.NewString("value"), types.Bool(false),
 		types.NewString("parents"), types.NewSet(),
 	)}
@@ -37,11 +39,11 @@ func NewCommit() Commit {
 
 // Creates and returns a Noms Value that describes Commit.
 func __typeRefOfCommit() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("Commit"),
-		types.NewList(
-			types.NewString("value"), types.MakePrimitiveTypeRef(types.ValueKind),
-			types.NewString("parents"), types.MakeCompoundTypeRef(types.NewString(""), types.SetKind, types.MakeTypeRef(types.NewString("Commit"), types.Ref{})),
-		),
+	return types.MakeStructTypeRef("Commit",
+		[]types.Field{
+			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind)},
+			types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", types.Ref{}))},
+		},
 		nil)
 
 }
