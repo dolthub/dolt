@@ -18,7 +18,7 @@ func TestGetDataset(t *testing.T) {
 	assert.Nil(dataset)
 	datasets = SetDatasetHead(datasets, "testdataset", types.Int32(42))
 	dataset = getDataset(datasets, "testdataset")
-	assert.Equal("testdataset", dataset.Id().String())
+	assert.Equal("testdataset", dataset.Id())
 }
 
 func TestSetDatasetRoot(t *testing.T) {
