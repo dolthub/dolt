@@ -50,10 +50,9 @@ func (def EnumStructDef) New() EnumStruct {
 		)}
 }
 
-func (self EnumStruct) Def() EnumStructDef {
-	return EnumStructDef{
-		Handedness(self.m.Get(types.NewString("hand")).(types.Int32)),
-	}
+func (s EnumStruct) Def() (d EnumStructDef) {
+	d.Hand = Handedness(s.m.Get(types.NewString("hand")).(types.Int32))
+	return
 }
 
 // Creates and returns a Noms Value that describes EnumStruct.

@@ -354,10 +354,9 @@ func (def StructWithRefDef) New() StructWithRef {
 		)}
 }
 
-func (self StructWithRef) Def() StructWithRefDef {
-	return StructWithRefDef{
-		self.m.Get(types.NewString("r")).Ref(),
-	}
+func (s StructWithRef) Def() (d StructWithRefDef) {
+	d.R = s.m.Get(types.NewString("r")).Ref()
+	return
 }
 
 // Creates and returns a Noms Value that describes StructWithRef.

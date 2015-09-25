@@ -486,11 +486,10 @@ func (def PitchDef) New() Pitch {
 		)}
 }
 
-func (self Pitch) Def() PitchDef {
-	return PitchDef{
-		float64(self.m.Get(types.NewString("X")).(types.Float64)),
-		float64(self.m.Get(types.NewString("Z")).(types.Float64)),
-	}
+func (s Pitch) Def() (d PitchDef) {
+	d.X = float64(s.m.Get(types.NewString("X")).(types.Float64))
+	d.Z = float64(s.m.Get(types.NewString("Z")).(types.Float64))
+	return
 }
 
 // Creates and returns a Noms Value that describes Pitch.

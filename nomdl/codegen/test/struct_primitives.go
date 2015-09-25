@@ -88,23 +88,22 @@ func (def StructPrimitivesDef) New() StructPrimitives {
 		)}
 }
 
-func (self StructPrimitives) Def() StructPrimitivesDef {
-	return StructPrimitivesDef{
-		uint64(self.m.Get(types.NewString("uint64")).(types.UInt64)),
-		uint32(self.m.Get(types.NewString("uint32")).(types.UInt32)),
-		uint16(self.m.Get(types.NewString("uint16")).(types.UInt16)),
-		uint8(self.m.Get(types.NewString("uint8")).(types.UInt8)),
-		int64(self.m.Get(types.NewString("int64")).(types.Int64)),
-		int32(self.m.Get(types.NewString("int32")).(types.Int32)),
-		int16(self.m.Get(types.NewString("int16")).(types.Int16)),
-		int8(self.m.Get(types.NewString("int8")).(types.Int8)),
-		float64(self.m.Get(types.NewString("float64")).(types.Float64)),
-		float32(self.m.Get(types.NewString("float32")).(types.Float32)),
-		bool(self.m.Get(types.NewString("bool")).(types.Bool)),
-		self.m.Get(types.NewString("string")).(types.String).String(),
-		self.m.Get(types.NewString("blob")).(types.Blob),
-		self.m.Get(types.NewString("value")),
-	}
+func (s StructPrimitives) Def() (d StructPrimitivesDef) {
+	d.Uint64 = uint64(s.m.Get(types.NewString("uint64")).(types.UInt64))
+	d.Uint32 = uint32(s.m.Get(types.NewString("uint32")).(types.UInt32))
+	d.Uint16 = uint16(s.m.Get(types.NewString("uint16")).(types.UInt16))
+	d.Uint8 = uint8(s.m.Get(types.NewString("uint8")).(types.UInt8))
+	d.Int64 = int64(s.m.Get(types.NewString("int64")).(types.Int64))
+	d.Int32 = int32(s.m.Get(types.NewString("int32")).(types.Int32))
+	d.Int16 = int16(s.m.Get(types.NewString("int16")).(types.Int16))
+	d.Int8 = int8(s.m.Get(types.NewString("int8")).(types.Int8))
+	d.Float64 = float64(s.m.Get(types.NewString("float64")).(types.Float64))
+	d.Float32 = float32(s.m.Get(types.NewString("float32")).(types.Float32))
+	d.Bool = bool(s.m.Get(types.NewString("bool")).(types.Bool))
+	d.String = s.m.Get(types.NewString("string")).(types.String).String()
+	d.Blob = s.m.Get(types.NewString("blob")).(types.Blob)
+	d.Value = s.m.Get(types.NewString("value"))
+	return
 }
 
 // Creates and returns a Noms Value that describes StructPrimitives.

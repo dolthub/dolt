@@ -1,0 +1,4 @@
+struct OptionalStruct {
+  s: optional String
+  b: optional Bool
+}

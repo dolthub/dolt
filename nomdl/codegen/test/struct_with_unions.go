@@ -52,11 +52,10 @@ func (def StructWithUnionsDef) New() StructWithUnions {
 		)}
 }
 
-func (self StructWithUnions) Def() StructWithUnionsDef {
-	return StructWithUnionsDef{
-		__unionOfBOfFloat64AndCOfStringFromVal(self.m.Get(types.NewString("a"))).Def(),
-		__unionOfEOfFloat64AndFOfStringFromVal(self.m.Get(types.NewString("d"))).Def(),
-	}
+func (s StructWithUnions) Def() (d StructWithUnionsDef) {
+	d.A = __unionOfBOfFloat64AndCOfStringFromVal(s.m.Get(types.NewString("a"))).Def()
+	d.D = __unionOfEOfFloat64AndFOfStringFromVal(s.m.Get(types.NewString("d"))).Def()
+	return
 }
 
 // Creates and returns a Noms Value that describes StructWithUnions.
@@ -139,11 +138,10 @@ func (def __unionOfBOfFloat64AndCOfStringDef) New() __unionOfBOfFloat64AndCOfStr
 		)}
 }
 
-func (self __unionOfBOfFloat64AndCOfString) Def() __unionOfBOfFloat64AndCOfStringDef {
-	return __unionOfBOfFloat64AndCOfStringDef{
-		uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
-		self.__unionValueToDef(),
-	}
+func (s __unionOfBOfFloat64AndCOfString) Def() (d __unionOfBOfFloat64AndCOfStringDef) {
+	d.__unionIndex = uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32))
+	d.__unionValue = s.__unionValueToDef()
+	return
 }
 
 func (def __unionOfBOfFloat64AndCOfStringDef) __unionDefToValue() types.Value {
@@ -276,11 +274,10 @@ func (def __unionOfEOfFloat64AndFOfStringDef) New() __unionOfEOfFloat64AndFOfStr
 		)}
 }
 
-func (self __unionOfEOfFloat64AndFOfString) Def() __unionOfEOfFloat64AndFOfStringDef {
-	return __unionOfEOfFloat64AndFOfStringDef{
-		uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
-		self.__unionValueToDef(),
-	}
+func (s __unionOfEOfFloat64AndFOfString) Def() (d __unionOfEOfFloat64AndFOfStringDef) {
+	d.__unionIndex = uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32))
+	d.__unionValue = s.__unionValueToDef()
+	return
 }
 
 func (def __unionOfEOfFloat64AndFOfStringDef) __unionDefToValue() types.Value {

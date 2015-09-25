@@ -175,11 +175,10 @@ func (def DatasetDef) New() Dataset {
 		)}
 }
 
-func (self Dataset) Def() DatasetDef {
-	return DatasetDef{
-		self.m.Get(types.NewString("id")).(types.String).String(),
-		self.m.Get(types.NewString("head")),
-	}
+func (s Dataset) Def() (d DatasetDef) {
+	d.Id = s.m.Get(types.NewString("id")).(types.String).String()
+	d.Head = s.m.Get(types.NewString("head"))
+	return
 }
 
 // Creates and returns a Noms Value that describes Dataset.

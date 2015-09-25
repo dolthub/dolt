@@ -52,11 +52,10 @@ func (def StructDef) New() Struct {
 		)}
 }
 
-func (self Struct) Def() StructDef {
-	return StructDef{
-		self.m.Get(types.NewString("s")).(types.String).String(),
-		bool(self.m.Get(types.NewString("b")).(types.Bool)),
-	}
+func (s Struct) Def() (d StructDef) {
+	d.S = s.m.Get(types.NewString("s")).(types.String).String()
+	d.B = bool(s.m.Get(types.NewString("b")).(types.Bool))
+	return
 }
 
 // Creates and returns a Noms Value that describes Struct.

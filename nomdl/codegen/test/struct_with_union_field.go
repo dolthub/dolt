@@ -55,12 +55,11 @@ func (def StructWithUnionFieldDef) New() StructWithUnionField {
 		)}
 }
 
-func (self StructWithUnionField) Def() StructWithUnionFieldDef {
-	return StructWithUnionFieldDef{
-		float32(self.m.Get(types.NewString("a")).(types.Float32)),
-		uint32(self.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
-		self.__unionValueToDef(),
-	}
+func (s StructWithUnionField) Def() (d StructWithUnionFieldDef) {
+	d.A = float32(s.m.Get(types.NewString("a")).(types.Float32))
+	d.__unionIndex = uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32))
+	d.__unionValue = s.__unionValueToDef()
+	return
 }
 
 func (def StructWithUnionFieldDef) __unionDefToValue() types.Value {

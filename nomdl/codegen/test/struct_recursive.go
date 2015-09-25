@@ -49,10 +49,9 @@ func (def TreeDef) New() Tree {
 		)}
 }
 
-func (self Tree) Def() TreeDef {
-	return TreeDef{
-		ListOfTreeFromVal(self.m.Get(types.NewString("children"))).Def(),
-	}
+func (s Tree) Def() (d TreeDef) {
+	d.Children = ListOfTreeFromVal(s.m.Get(types.NewString("children"))).Def()
+	return
 }
 
 // Creates and returns a Noms Value that describes Tree.
