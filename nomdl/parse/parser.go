@@ -229,12 +229,13 @@ func (u *UnionDesc) describe() (out string) {
 // Field represents a Struct field or a Union choice.
 // Neither Name nor T is allowed to be a zero-value, though T may be an unresolved TypeRef.
 type Field struct {
-	Name string
-	T    TypeRef
+	Name     string
+	T        TypeRef
+	Optional bool
 }
 
 func (f Field) Equals(other Field) bool {
-	return f.Name == other.Name && f.T.Equals(other.T)
+	return f.Name == other.Name && f.Optional == other.Optional && f.T.Equals(other.T)
 }
 
 func makeStructTypeRef(n string, f []Field, u *UnionDesc) TypeRef {
@@ -269,7 +270,11 @@ func (s StructDesc) describe() (out string) {
 		out += s.Union.describe()
 	}
 	for _, f := range s.Fields {
-		out += fmt.Sprintf("  %s: %s\n", f.Name, f.T.describe())
+		opt := ""
+		if f.Optional {
+			opt = " optional"
+		}
+		out += fmt.Sprintf("  %s:%s %s\n", f.Name, opt, f.T.describe())
 	}
 	return
 }
