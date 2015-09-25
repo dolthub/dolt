@@ -104,7 +104,7 @@ func (s *dataStoreServer) handlePostRefs(w http.ResponseWriter, req *http.Reques
 			reader = gr
 		}
 
-		chunks.Deserialize(reader, s.ds)
+		chunks.Deserialize(reader, s.ds, nil)
 		w.WriteHeader(http.StatusCreated)
 	})
 

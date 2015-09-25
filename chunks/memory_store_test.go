@@ -27,6 +27,6 @@ func (suite *MemoryStoreTestSuite) TestBadSerialization() {
 	bad := []byte{0, 1} // Not enough bytes to read first length
 	ms := NewMemoryStore()
 	suite.Panics(func() {
-		Deserialize(bytes.NewReader(bad), ms)
+		Deserialize(bytes.NewReader(bad), ms, nil)
 	})
 }

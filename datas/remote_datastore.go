@@ -75,7 +75,7 @@ func (lds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, cs chunks.C
 	}
 
 	fmt.Println("Receiving")
-	chunks.Deserialize(reader, cs)
+	chunks.Deserialize(reader, cs, nil)
 	fmt.Println("Done")
 }
 

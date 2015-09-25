@@ -236,7 +236,8 @@ func (c *HttpStore) getRefs(refs map[ref.Ref]bool, cs ChunkSink) {
 		reader = gr
 	}
 
-	Deserialize(reader, cs)
+	rl := make(chan struct{}, 1) // Rate limit to 1 because there are already N goroutines waiting on responses, all we need to do is send the Chunks back through their channels.
+	Deserialize(reader, cs, rl)
 }
 
 func (c *HttpStore) Root() ref.Ref {
