@@ -63,10 +63,10 @@ func (self StructWithUnions) Def() StructWithUnionsDef {
 func __typeRefOfStructWithUnions() types.TypeRef {
 	return types.MakeStructTypeRef("StructWithUnions",
 		[]types.Field{
-			types.Field{"a", types.MakeStructTypeRef("", nil, []types.Field{types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind)},
-				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind)}})},
-			types.Field{"d", types.MakeStructTypeRef("", nil, []types.Field{types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind)},
-				types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind)}})},
+			types.Field{"a", types.MakeStructTypeRef("", nil, []types.Field{types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false}}), false},
+			types.Field{"d", types.MakeStructTypeRef("", nil, []types.Field{types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false}}), false},
 		},
 		nil)
 
@@ -171,8 +171,8 @@ func __typeRefOf__unionOfBOfFloat64AndCOfString() types.TypeRef {
 	return types.MakeStructTypeRef("__unionOfBOfFloat64AndCOfString",
 		[]types.Field{},
 		[]types.Field{
-			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind)},
-			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind)},
+			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
 		})
 
 }
@@ -308,8 +308,8 @@ func __typeRefOf__unionOfEOfFloat64AndFOfString() types.TypeRef {
 	return types.MakeStructTypeRef("__unionOfEOfFloat64AndFOfString",
 		[]types.Field{},
 		[]types.Field{
-			types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind)},
-			types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind)},
+			types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
 		})
 
 }

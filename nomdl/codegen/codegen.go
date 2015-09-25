@@ -438,7 +438,7 @@ func (gen *codeGen) toTypesTypeRef(t parse.TypeRef) string {
 		flatten := func(f []parse.Field) string {
 			out := make([]string, 0, len(f))
 			for _, field := range f {
-				out = append(out, fmt.Sprintf(`types.Field{"%s", %s},`, field.Name, gen.toTypesTypeRef(field.T)))
+				out = append(out, fmt.Sprintf(`types.Field{"%s", %s, %t},`, field.Name, gen.toTypesTypeRef(field.T), field.Optional))
 			}
 			return strings.Join(out, "\n")
 		}

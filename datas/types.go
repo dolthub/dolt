@@ -41,8 +41,8 @@ func NewCommit() Commit {
 func __typeRefOfCommit() types.TypeRef {
 	return types.MakeStructTypeRef("Commit",
 		[]types.Field{
-			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind)},
-			types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", types.Ref{}))},
+			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
+			types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", types.Ref{})), false},
 		},
 		nil)
 

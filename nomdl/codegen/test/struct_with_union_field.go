@@ -99,14 +99,14 @@ func (self StructWithUnionField) __unionValueToDef() interface{} {
 func __typeRefOfStructWithUnionField() types.TypeRef {
 	return types.MakeStructTypeRef("StructWithUnionField",
 		[]types.Field{
-			types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind)},
+			types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
 		},
 		[]types.Field{
-			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind)},
-			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind)},
-			types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind)},
-			types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind)},
-			types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind))},
+			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
+			types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
+			types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
 		})
 
 }

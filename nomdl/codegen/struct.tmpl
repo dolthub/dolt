@@ -64,11 +64,11 @@ func New{{.Name}}() {{.Name}} {
 func __typeRefOf{{.Name}}() types.TypeRef {
 	return types.MakeStructTypeRef("{{.Name}}",
 		[]types.Field{
-			{{range .Fields}}types.Field{"{{.Name}}", {{toTypesTypeRef .T}}},
+			{{range .Fields}}types.Field{"{{.Name}}", {{toTypesTypeRef .T}}, {{.Optional}}},
 			{{end}}
 		},
 		{{if .HasUnion}}[]types.Field{
-			{{range .Choices}}types.Field{"{{.Name}}", {{toTypesTypeRef .T}}},
+			{{range .Choices}}types.Field{"{{.Name}}", {{toTypesTypeRef .T}}, {{.Optional}}},
 			{{end}}
 		}{{else}}nil{{end}})
 

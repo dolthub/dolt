@@ -71,10 +71,10 @@ func (self StructWithList) Def() StructWithListDef {
 func __typeRefOfStructWithList() types.TypeRef {
 	return types.MakeStructTypeRef("StructWithList",
 		[]types.Field{
-			types.Field{"l", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind))},
-			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind)},
-			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind)},
-			types.Field{"i", types.MakePrimitiveTypeRef(types.Int64Kind)},
+			types.Field{"l", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
+			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"i", types.MakePrimitiveTypeRef(types.Int64Kind), false},
 		},
 		nil)
 

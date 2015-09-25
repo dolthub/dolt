@@ -60,7 +60,7 @@ func (self EnumStruct) Def() EnumStructDef {
 func __typeRefOfEnumStruct() types.TypeRef {
 	return types.MakeStructTypeRef("EnumStruct",
 		[]types.Field{
-			types.Field{"hand", types.MakeTypeRef("Handedness", types.Ref{})},
+			types.Field{"hand", types.MakeTypeRef("Handedness", types.Ref{}), false},
 		},
 		nil)
 

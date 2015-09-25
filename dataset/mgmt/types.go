@@ -186,8 +186,8 @@ func (self Dataset) Def() DatasetDef {
 func __typeRefOfDataset() types.TypeRef {
 	return types.MakeStructTypeRef("Dataset",
 		[]types.Field{
-			types.Field{"id", types.MakePrimitiveTypeRef(types.StringKind)},
-			types.Field{"head", types.MakePrimitiveTypeRef(types.ValueKind)},
+			types.Field{"id", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"head", types.MakePrimitiveTypeRef(types.ValueKind), false},
 		},
 		nil)
 

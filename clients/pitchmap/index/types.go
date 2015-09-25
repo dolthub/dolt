@@ -497,8 +497,8 @@ func (self Pitch) Def() PitchDef {
 func __typeRefOfPitch() types.TypeRef {
 	return types.MakeStructTypeRef("Pitch",
 		[]types.Field{
-			types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind)},
-			types.Field{"Z", types.MakePrimitiveTypeRef(types.Float64Kind)},
+			types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"Z", types.MakePrimitiveTypeRef(types.Float64Kind), false},
 		},
 		nil)
 

@@ -63,8 +63,8 @@ func (self Struct) Def() StructDef {
 func __typeRefOfStruct() types.TypeRef {
 	return types.MakeStructTypeRef("Struct",
 		[]types.Field{
-			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind)},
-			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind)},
+			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
 		},
 		nil)
 

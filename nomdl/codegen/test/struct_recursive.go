@@ -59,7 +59,7 @@ func (self Tree) Def() TreeDef {
 func __typeRefOfTree() types.TypeRef {
 	return types.MakeStructTypeRef("Tree",
 		[]types.Field{
-			types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", types.Ref{}))},
+			types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", types.Ref{})), false},
 		},
 		nil)
 

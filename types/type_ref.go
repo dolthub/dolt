@@ -169,8 +169,9 @@ func MakeStructTypeRef(name string, fields, choices []Field) TypeRef {
 // Field represents a Struct field or a Union choice.
 // Neither Name nor T is allowed to be a zero-value, though T may be an unresolved TypeRef.
 type Field struct {
-	Name string
-	T    TypeRef
+	Name     string
+	T        TypeRef
+	Optional bool
 }
 
 func MakeTypeRef(name string, pkg Ref) TypeRef {
