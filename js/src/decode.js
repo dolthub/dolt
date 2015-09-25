@@ -44,82 +44,67 @@ function recursiveRef(ref) {
 }
 
 function decodeMap(input, ref, getChunk) {
-  return new Ref(ref, () => {
-    return Promise.all(input.map((value) => {
-      return decodeValue(value, ref, getChunk);
-    })).then((values) => {
-      var pairs = [];
-      for (var i = 0; i < input.length; i += 2) {
-        pairs.push([values[i], values[i+1]]);
-      }
-      var value = Immutable.Map(pairs);
-      return value;
-    });
+  return Promise.all(input.map((value) => {
+    return decodeValue(value, ref, getChunk);
+  })).then((values) => {
+    let map = Immutable.Map().asMutable()
+    for (var i = 0; i < input.length; i += 2) {
+      map = map.set(values[i], values[i + 1])
+    }
+    return map.asImmutable();
   });
 }
 
 function decodeList(input, ref, getChunk) {
-  return new Ref(ref, () => {
-    return Promise.all(input.map((value) => {
-      return decodeValue(value, ref, getChunk);
-    })).then((values) => {
-      var value = Immutable.List(values);
-      return value;
-    });
+  return Promise.all(input.map((value) => {
+    return decodeValue(value, ref, getChunk);
+  })).then((values) => {
+    return Immutable.List(values);
   });
 }
 
 function decodeSet(input, ref, getChunk) {
-  return new Ref(ref, () => {
-    return Promise.all(input.map((value) => {
-      return decodeValue(value, ref, getChunk);
-    })).then((values) => {
-      var value = Immutable.Set(values);
-      return value;
-    });
+  return Promise.all(input.map((value) => {
+    return decodeValue(value, ref, getChunk);
+  })).then((values) => {
+    return Immutable.Set(values);
   });
 }
 
 function decodeType(input, ref, getChunk) {
   // {"type":{"desc":{"map":["fields",{"ref":"sha1-..."}]},"kind":{"uint8":19},"name":"Package"}}
   // {"type":{"kind":{"uint8":13},"name":"Commit","pkgRef":{"ref":"sha1-..."}}}
-  return new Ref(ref, () => {
-    // input is a js object where the values are encoded. Decode all the values
-    // and create an Immutable.Map when the decoding of these values have been
-    // resolved.
-    let keys = Object.keys(input);
-    let map = Immutable.Map().asImmutable();
-    return Promise.all(keys.map(k => decodeValue(input[k], ref, getChunk)))
-        .then(values => {
-          values.forEach((v, i) => {
-            map = map.set(keys[i], v);
-          });
-          return map.asImmutable();
+  // input is a js object where the values are encoded. Decode all the values
+  // and create an Immutable.Map when the decoding of these values have been
+  // resolved.
+  let keys = Object.keys(input);
+  let map = Immutable.Map().asMutable();
+  return Promise.all(keys.map(k => decodeValue(input[k], ref, getChunk)))
+      .then(values => {
+        values.forEach((v, i) => {
+          map = map.set(keys[i], v);
         });
-  });
+        return map.asImmutable();
+      });
 }
 
 function decodeCompoundBlob(value, ref, getChunk) {
   // {"cb":["sha1-x",lengthX,"sha1-y",lengthY]}
-  return new Ref(ref, () => {
-    return Promise.all(
-        value
-            .filter((v, i) => i % 2 === 0)
-            .map(v => readValue(v, getChunk)))
-        .then(childBlobs => new Blob(childBlobs));
-  });
+  return Promise.all(
+      value
+          .filter((v, i) => i % 2 === 0)
+          .map(v => readValue(v, getChunk)))
+      .then(childBlobs => new Blob(childBlobs));
 }
 
 function decodeCompoundList(value, ref, getChunk) {
   // {"cl":["sha1-x",lengthX,"sha1-y",lengthY]}
-  return new Ref(ref, () => {
-    return Promise.all(
-        value
-            .filter((v, i) => i % 2 === 0)
-            // v is a string representing the ref here.
-            .map(v => decodeRef(v, ref, getChunk).deref()))
-        .then(childLists => Immutable.List(childLists).flatten(1));
-  });
+  return Promise.all(
+      value
+          .filter((v, i) => i % 2 === 0)
+          // v is a string representing the ref here.
+          .map(v => decodeRef(v, ref, getChunk).deref()))
+      .then(childLists => Immutable.List(childLists).flatten(1));
 }
 
 function decodeRef(ref, _, getChunk) {
@@ -204,6 +189,6 @@ function readValue(ref, getChunk) {
 }
 
 module.exports = {
-  readValue: readValue,
-  Ref: Ref
+  readValue,
+  Ref
 };
