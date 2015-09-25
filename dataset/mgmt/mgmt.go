@@ -19,7 +19,7 @@ func CommitDatasets(ds datas.DataStore, datasets SetOfDataset) (datas.DataStore,
 
 func getDataset(datasets SetOfDataset, datasetID string) (r *Dataset) {
 	datasets.Iter(func(dataset Dataset) (stop bool) {
-		if dataset.Id().String() == datasetID {
+		if dataset.Id() == datasetID {
 			r = &dataset
 			stop = true
 		}
@@ -37,7 +37,7 @@ func GetDatasetHead(datasets SetOfDataset, datasetID string) types.Value {
 }
 
 func SetDatasetHead(datasets SetOfDataset, datasetID string, val types.Value) SetOfDataset {
-	newDataset := NewDataset().SetId(types.NewString(datasetID)).SetHead(val)
+	newDataset := NewDataset().SetId(datasetID).SetHead(val)
 	dataset := getDataset(datasets, datasetID)
 	if dataset == nil {
 		return datasets.Insert(newDataset)
