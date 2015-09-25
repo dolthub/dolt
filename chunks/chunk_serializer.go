@@ -73,8 +73,8 @@ func (sz *serializer) Close() error {
 	return nil
 }
 
-// Deserialize reads off of |reader| until EOF, sending chunks to |cs|.
-func Deserialize(reader io.Reader, cs ChunkSink) {
+// Deserialize reads off of |reader| until EOF, sending chunks to |cs|. If |rateLimit| is non-nill, concurrency will be limited to the available capacity of the channel.
+func Deserialize(reader io.Reader, cs ChunkSink, rateLimit chan struct{}) {
 	wg := sync.WaitGroup{}
 
 	for {
@@ -99,9 +99,15 @@ func Deserialize(reader io.Reader, cs ChunkSink) {
 		d.Chk.Equal(r, c.Ref())
 
 		wg.Add(1)
+		if rateLimit != nil {
+			rateLimit <- struct{}{}
+		}
 		go func() {
 			cs.Put(c)
 			wg.Done()
+			if rateLimit != nil {
+				<-rateLimit
+			}
 		}()
 	}
 
