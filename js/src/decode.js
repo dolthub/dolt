@@ -81,6 +81,22 @@ function decodeSet(input, ref, getChunk) {
 }
 
 function decodeType(input, ref, getChunk) {
+  // {"type":{"desc":{"map":["fields",{"ref":"sha1-..."}]},"kind":{"uint8":19},"name":"Package"}}
+  // {"type":{"kind":{"uint8":13},"name":"Commit","pkgRef":{"ref":"sha1-..."}}}
+  return new Ref(ref, () => {
+    // input is a js object where the values are encoded. Decode all the values
+    // and create an Immutable.Map when the decoding of these values have been
+    // resolved.
+    let keys = Object.keys(input);
+    let map = Immutable.Map().asImmutable();
+    return Promise.all(keys.map(k => decodeValue(input[k], ref, getChunk)))
+        .then(values => {
+          values.forEach((v, i) => {
+            map = map.set(keys[i], v);
+          });
+          return map.asImmutable();
+        });
+  });
 }
 
 function decodeCompoundBlob(value, ref, getChunk) {
