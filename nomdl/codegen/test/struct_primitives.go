@@ -134,130 +134,130 @@ func StructPrimitivesFromVal(val types.Value) StructPrimitives {
 	return StructPrimitives{val.(types.Map)}
 }
 
-func (self StructPrimitives) NomsValue() types.Value {
-	return self.m
+func (s StructPrimitives) NomsValue() types.Value {
+	return s.m
 }
 
-func (self StructPrimitives) Equals(other StructPrimitives) bool {
-	return self.m.Equals(other.m)
+func (s StructPrimitives) Equals(other StructPrimitives) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self StructPrimitives) Ref() ref.Ref {
-	return self.m.Ref()
+func (s StructPrimitives) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self StructPrimitives) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s StructPrimitives) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self StructPrimitives) Uint64() uint64 {
-	return uint64(self.m.Get(types.NewString("uint64")).(types.UInt64))
+func (s StructPrimitives) Uint64() uint64 {
+	return uint64(s.m.Get(types.NewString("uint64")).(types.UInt64))
 }
 
-func (self StructPrimitives) SetUint64(val uint64) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("uint64"), types.UInt64(val))}
+func (s StructPrimitives) SetUint64(val uint64) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("uint64"), types.UInt64(val))}
 }
 
-func (self StructPrimitives) Uint32() uint32 {
-	return uint32(self.m.Get(types.NewString("uint32")).(types.UInt32))
+func (s StructPrimitives) Uint32() uint32 {
+	return uint32(s.m.Get(types.NewString("uint32")).(types.UInt32))
 }
 
-func (self StructPrimitives) SetUint32(val uint32) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("uint32"), types.UInt32(val))}
+func (s StructPrimitives) SetUint32(val uint32) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("uint32"), types.UInt32(val))}
 }
 
-func (self StructPrimitives) Uint16() uint16 {
-	return uint16(self.m.Get(types.NewString("uint16")).(types.UInt16))
+func (s StructPrimitives) Uint16() uint16 {
+	return uint16(s.m.Get(types.NewString("uint16")).(types.UInt16))
 }
 
-func (self StructPrimitives) SetUint16(val uint16) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("uint16"), types.UInt16(val))}
+func (s StructPrimitives) SetUint16(val uint16) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("uint16"), types.UInt16(val))}
 }
 
-func (self StructPrimitives) Uint8() uint8 {
-	return uint8(self.m.Get(types.NewString("uint8")).(types.UInt8))
+func (s StructPrimitives) Uint8() uint8 {
+	return uint8(s.m.Get(types.NewString("uint8")).(types.UInt8))
 }
 
-func (self StructPrimitives) SetUint8(val uint8) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("uint8"), types.UInt8(val))}
+func (s StructPrimitives) SetUint8(val uint8) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("uint8"), types.UInt8(val))}
 }
 
-func (self StructPrimitives) Int64() int64 {
-	return int64(self.m.Get(types.NewString("int64")).(types.Int64))
+func (s StructPrimitives) Int64() int64 {
+	return int64(s.m.Get(types.NewString("int64")).(types.Int64))
 }
 
-func (self StructPrimitives) SetInt64(val int64) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("int64"), types.Int64(val))}
+func (s StructPrimitives) SetInt64(val int64) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("int64"), types.Int64(val))}
 }
 
-func (self StructPrimitives) Int32() int32 {
-	return int32(self.m.Get(types.NewString("int32")).(types.Int32))
+func (s StructPrimitives) Int32() int32 {
+	return int32(s.m.Get(types.NewString("int32")).(types.Int32))
 }
 
-func (self StructPrimitives) SetInt32(val int32) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("int32"), types.Int32(val))}
+func (s StructPrimitives) SetInt32(val int32) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("int32"), types.Int32(val))}
 }
 
-func (self StructPrimitives) Int16() int16 {
-	return int16(self.m.Get(types.NewString("int16")).(types.Int16))
+func (s StructPrimitives) Int16() int16 {
+	return int16(s.m.Get(types.NewString("int16")).(types.Int16))
 }
 
-func (self StructPrimitives) SetInt16(val int16) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("int16"), types.Int16(val))}
+func (s StructPrimitives) SetInt16(val int16) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("int16"), types.Int16(val))}
 }
 
-func (self StructPrimitives) Int8() int8 {
-	return int8(self.m.Get(types.NewString("int8")).(types.Int8))
+func (s StructPrimitives) Int8() int8 {
+	return int8(s.m.Get(types.NewString("int8")).(types.Int8))
 }
 
-func (self StructPrimitives) SetInt8(val int8) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("int8"), types.Int8(val))}
+func (s StructPrimitives) SetInt8(val int8) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("int8"), types.Int8(val))}
 }
 
-func (self StructPrimitives) Float64() float64 {
-	return float64(self.m.Get(types.NewString("float64")).(types.Float64))
+func (s StructPrimitives) Float64() float64 {
+	return float64(s.m.Get(types.NewString("float64")).(types.Float64))
 }
 
-func (self StructPrimitives) SetFloat64(val float64) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("float64"), types.Float64(val))}
+func (s StructPrimitives) SetFloat64(val float64) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("float64"), types.Float64(val))}
 }
 
-func (self StructPrimitives) Float32() float32 {
-	return float32(self.m.Get(types.NewString("float32")).(types.Float32))
+func (s StructPrimitives) Float32() float32 {
+	return float32(s.m.Get(types.NewString("float32")).(types.Float32))
 }
 
-func (self StructPrimitives) SetFloat32(val float32) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("float32"), types.Float32(val))}
+func (s StructPrimitives) SetFloat32(val float32) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("float32"), types.Float32(val))}
 }
 
-func (self StructPrimitives) Bool() bool {
-	return bool(self.m.Get(types.NewString("bool")).(types.Bool))
+func (s StructPrimitives) Bool() bool {
+	return bool(s.m.Get(types.NewString("bool")).(types.Bool))
 }
 
-func (self StructPrimitives) SetBool(val bool) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("bool"), types.Bool(val))}
+func (s StructPrimitives) SetBool(val bool) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("bool"), types.Bool(val))}
 }
 
-func (self StructPrimitives) String() string {
-	return self.m.Get(types.NewString("string")).(types.String).String()
+func (s StructPrimitives) String() string {
+	return s.m.Get(types.NewString("string")).(types.String).String()
 }
 
-func (self StructPrimitives) SetString(val string) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("string"), types.NewString(val))}
+func (s StructPrimitives) SetString(val string) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("string"), types.NewString(val))}
 }
 
-func (self StructPrimitives) Blob() types.Blob {
-	return self.m.Get(types.NewString("blob")).(types.Blob)
+func (s StructPrimitives) Blob() types.Blob {
+	return s.m.Get(types.NewString("blob")).(types.Blob)
 }
 
-func (self StructPrimitives) SetBlob(val types.Blob) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("blob"), val)}
+func (s StructPrimitives) SetBlob(val types.Blob) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("blob"), val)}
 }
 
-func (self StructPrimitives) Value() types.Value {
-	return self.m.Get(types.NewString("value"))
+func (s StructPrimitives) Value() types.Value {
+	return s.m.Get(types.NewString("value"))
 }
 
-func (self StructPrimitives) SetValue(val types.Value) StructPrimitives {
-	return StructPrimitives{self.m.Set(types.NewString("value"), val)}
+func (s StructPrimitives) SetValue(val types.Value) StructPrimitives {
+	return StructPrimitives{s.m.Set(types.NewString("value"), val)}
 }

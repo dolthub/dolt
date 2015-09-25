@@ -84,52 +84,52 @@ func StructWithListFromVal(val types.Value) StructWithList {
 	return StructWithList{val.(types.Map)}
 }
 
-func (self StructWithList) NomsValue() types.Value {
-	return self.m
+func (s StructWithList) NomsValue() types.Value {
+	return s.m
 }
 
-func (self StructWithList) Equals(other StructWithList) bool {
-	return self.m.Equals(other.m)
+func (s StructWithList) Equals(other StructWithList) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self StructWithList) Ref() ref.Ref {
-	return self.m.Ref()
+func (s StructWithList) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self StructWithList) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s StructWithList) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self StructWithList) L() ListOfUInt8 {
-	return ListOfUInt8FromVal(self.m.Get(types.NewString("l")))
+func (s StructWithList) L() ListOfUInt8 {
+	return ListOfUInt8FromVal(s.m.Get(types.NewString("l")))
 }
 
-func (self StructWithList) SetL(val ListOfUInt8) StructWithList {
-	return StructWithList{self.m.Set(types.NewString("l"), val.NomsValue())}
+func (s StructWithList) SetL(val ListOfUInt8) StructWithList {
+	return StructWithList{s.m.Set(types.NewString("l"), val.NomsValue())}
 }
 
-func (self StructWithList) B() bool {
-	return bool(self.m.Get(types.NewString("b")).(types.Bool))
+func (s StructWithList) B() bool {
+	return bool(s.m.Get(types.NewString("b")).(types.Bool))
 }
 
-func (self StructWithList) SetB(val bool) StructWithList {
-	return StructWithList{self.m.Set(types.NewString("b"), types.Bool(val))}
+func (s StructWithList) SetB(val bool) StructWithList {
+	return StructWithList{s.m.Set(types.NewString("b"), types.Bool(val))}
 }
 
-func (self StructWithList) S() string {
-	return self.m.Get(types.NewString("s")).(types.String).String()
+func (s StructWithList) S() string {
+	return s.m.Get(types.NewString("s")).(types.String).String()
 }
 
-func (self StructWithList) SetS(val string) StructWithList {
-	return StructWithList{self.m.Set(types.NewString("s"), types.NewString(val))}
+func (s StructWithList) SetS(val string) StructWithList {
+	return StructWithList{s.m.Set(types.NewString("s"), types.NewString(val))}
 }
 
-func (self StructWithList) I() int64 {
-	return int64(self.m.Get(types.NewString("i")).(types.Int64))
+func (s StructWithList) I() int64 {
+	return int64(s.m.Get(types.NewString("i")).(types.Int64))
 }
 
-func (self StructWithList) SetI(val int64) StructWithList {
-	return StructWithList{self.m.Set(types.NewString("i"), types.Int64(val))}
+func (s StructWithList) SetI(val int64) StructWithList {
+	return StructWithList{s.m.Set(types.NewString("i"), types.Int64(val))}
 }
 
 // ListOfUInt8
@@ -152,12 +152,12 @@ func (def ListOfUInt8Def) New() ListOfUInt8 {
 	return ListOfUInt8{types.NewList(l...)}
 }
 
-func (self ListOfUInt8) Def() ListOfUInt8Def {
-	l := make([]uint8, self.Len())
-	for i := uint64(0); i < self.Len(); i++ {
-		l[i] = uint8(self.l.Get(i).(types.UInt8))
+func (l ListOfUInt8) Def() ListOfUInt8Def {
+	d := make([]uint8, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = uint8(l.l.Get(i).(types.UInt8))
 	}
-	return l
+	return d
 }
 
 func ListOfUInt8FromVal(val types.Value) ListOfUInt8 {
@@ -165,8 +165,8 @@ func ListOfUInt8FromVal(val types.Value) ListOfUInt8 {
 	return ListOfUInt8{val.(types.List)}
 }
 
-func (self ListOfUInt8) NomsValue() types.Value {
-	return self.l
+func (l ListOfUInt8) NomsValue() types.Value {
+	return l.l
 }
 
 func (l ListOfUInt8) Equals(p ListOfUInt8) bool {
@@ -185,16 +185,16 @@ func (l ListOfUInt8) Empty() bool {
 	return l.Len() == uint64(0)
 }
 
-func (self ListOfUInt8) Get(i uint64) uint8 {
-	return uint8(self.l.Get(i).(types.UInt8))
+func (l ListOfUInt8) Get(i uint64) uint8 {
+	return uint8(l.l.Get(i).(types.UInt8))
 }
 
 func (l ListOfUInt8) Slice(idx uint64, end uint64) ListOfUInt8 {
 	return ListOfUInt8{l.l.Slice(idx, end)}
 }
 
-func (self ListOfUInt8) Set(i uint64, val uint8) ListOfUInt8 {
-	return ListOfUInt8{self.l.Set(i, types.UInt8(val))}
+func (l ListOfUInt8) Set(i uint64, val uint8) ListOfUInt8 {
+	return ListOfUInt8{l.l.Set(i, types.UInt8(val))}
 }
 
 func (l ListOfUInt8) Append(v ...uint8) ListOfUInt8 {

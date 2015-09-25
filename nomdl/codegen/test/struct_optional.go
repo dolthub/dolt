@@ -76,20 +76,20 @@ func OptionalStructFromVal(val types.Value) OptionalStruct {
 	return OptionalStruct{val.(types.Map)}
 }
 
-func (self OptionalStruct) NomsValue() types.Value {
-	return self.m
+func (s OptionalStruct) NomsValue() types.Value {
+	return s.m
 }
 
-func (self OptionalStruct) Equals(other OptionalStruct) bool {
-	return self.m.Equals(other.m)
+func (s OptionalStruct) Equals(other OptionalStruct) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self OptionalStruct) Ref() ref.Ref {
-	return self.m.Ref()
+func (s OptionalStruct) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self OptionalStruct) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s OptionalStruct) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (s OptionalStruct) S() (v string, ok bool) {
@@ -100,8 +100,8 @@ func (s OptionalStruct) S() (v string, ok bool) {
 	return
 }
 
-func (self OptionalStruct) SetS(val string) OptionalStruct {
-	return OptionalStruct{self.m.Set(types.NewString("s"), types.NewString(val))}
+func (s OptionalStruct) SetS(val string) OptionalStruct {
+	return OptionalStruct{s.m.Set(types.NewString("s"), types.NewString(val))}
 }
 
 func (s OptionalStruct) B() (v bool, ok bool) {
@@ -112,6 +112,6 @@ func (s OptionalStruct) B() (v bool, ok bool) {
 	return
 }
 
-func (self OptionalStruct) SetB(val bool) OptionalStruct {
-	return OptionalStruct{self.m.Set(types.NewString("b"), types.Bool(val))}
+func (s OptionalStruct) SetB(val bool) OptionalStruct {
+	return OptionalStruct{s.m.Set(types.NewString("b"), types.Bool(val))}
 }

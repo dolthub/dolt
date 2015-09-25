@@ -197,34 +197,34 @@ func DatasetFromVal(val types.Value) Dataset {
 	return Dataset{val.(types.Map)}
 }
 
-func (self Dataset) NomsValue() types.Value {
-	return self.m
+func (s Dataset) NomsValue() types.Value {
+	return s.m
 }
 
-func (self Dataset) Equals(other Dataset) bool {
-	return self.m.Equals(other.m)
+func (s Dataset) Equals(other Dataset) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self Dataset) Ref() ref.Ref {
-	return self.m.Ref()
+func (s Dataset) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self Dataset) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s Dataset) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self Dataset) Id() string {
-	return self.m.Get(types.NewString("id")).(types.String).String()
+func (s Dataset) Id() string {
+	return s.m.Get(types.NewString("id")).(types.String).String()
 }
 
-func (self Dataset) SetId(val string) Dataset {
-	return Dataset{self.m.Set(types.NewString("id"), types.NewString(val))}
+func (s Dataset) SetId(val string) Dataset {
+	return Dataset{s.m.Set(types.NewString("id"), types.NewString(val))}
 }
 
-func (self Dataset) Head() types.Value {
-	return self.m.Get(types.NewString("head"))
+func (s Dataset) Head() types.Value {
+	return s.m.Get(types.NewString("head"))
 }
 
-func (self Dataset) SetHead(val types.Value) Dataset {
-	return Dataset{self.m.Set(types.NewString("head"), val)}
+func (s Dataset) SetHead(val types.Value) Dataset {
+	return Dataset{s.m.Set(types.NewString("head"), val)}
 }

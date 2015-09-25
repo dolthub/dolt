@@ -20,9 +20,9 @@ func New{{.Name}}() {{.Name}} {
 		return {{.Name}}{types.NewMap(kv...)}
 	}
 
-	func (self {{.Name}}) Def() {{.Name}}Def {
+	func (m {{.Name}}) Def() {{.Name}}Def {
 		def := make(map[{{defType .KeyType}}]{{defType .ValueType}})
-		self.m.Iter(func(k, v types.Value) bool {
+		m.m.Iter(func(k, v types.Value) bool {
 			def[{{valueToDef "k" .KeyType}}] = {{valueToDef "v" .ValueType}}
 			return false
 		})

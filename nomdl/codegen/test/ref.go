@@ -78,12 +78,12 @@ func (def ListOfStringDef) New() ListOfString {
 	return ListOfString{types.NewList(l...)}
 }
 
-func (self ListOfString) Def() ListOfStringDef {
-	l := make([]string, self.Len())
-	for i := uint64(0); i < self.Len(); i++ {
-		l[i] = self.l.Get(i).(types.String).String()
+func (l ListOfString) Def() ListOfStringDef {
+	d := make([]string, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = l.l.Get(i).(types.String).String()
 	}
-	return l
+	return d
 }
 
 func ListOfStringFromVal(val types.Value) ListOfString {
@@ -91,8 +91,8 @@ func ListOfStringFromVal(val types.Value) ListOfString {
 	return ListOfString{val.(types.List)}
 }
 
-func (self ListOfString) NomsValue() types.Value {
-	return self.l
+func (l ListOfString) NomsValue() types.Value {
+	return l.l
 }
 
 func (l ListOfString) Equals(p ListOfString) bool {
@@ -111,16 +111,16 @@ func (l ListOfString) Empty() bool {
 	return l.Len() == uint64(0)
 }
 
-func (self ListOfString) Get(i uint64) string {
-	return self.l.Get(i).(types.String).String()
+func (l ListOfString) Get(i uint64) string {
+	return l.l.Get(i).(types.String).String()
 }
 
 func (l ListOfString) Slice(idx uint64, end uint64) ListOfString {
 	return ListOfString{l.l.Slice(idx, end)}
 }
 
-func (self ListOfString) Set(i uint64, val string) ListOfString {
-	return ListOfString{self.l.Set(i, types.NewString(val))}
+func (l ListOfString) Set(i uint64, val string) ListOfString {
+	return ListOfString{l.l.Set(i, types.NewString(val))}
 }
 
 func (l ListOfString) Append(v ...string) ListOfString {
@@ -195,12 +195,12 @@ func (def ListOfRefOfFloat32Def) New() ListOfRefOfFloat32 {
 	return ListOfRefOfFloat32{types.NewList(l...)}
 }
 
-func (self ListOfRefOfFloat32) Def() ListOfRefOfFloat32Def {
-	l := make([]ref.Ref, self.Len())
-	for i := uint64(0); i < self.Len(); i++ {
-		l[i] = self.l.Get(i).Ref()
+func (l ListOfRefOfFloat32) Def() ListOfRefOfFloat32Def {
+	d := make([]ref.Ref, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = l.l.Get(i).Ref()
 	}
-	return l
+	return d
 }
 
 func ListOfRefOfFloat32FromVal(val types.Value) ListOfRefOfFloat32 {
@@ -208,8 +208,8 @@ func ListOfRefOfFloat32FromVal(val types.Value) ListOfRefOfFloat32 {
 	return ListOfRefOfFloat32{val.(types.List)}
 }
 
-func (self ListOfRefOfFloat32) NomsValue() types.Value {
-	return self.l
+func (l ListOfRefOfFloat32) NomsValue() types.Value {
+	return l.l
 }
 
 func (l ListOfRefOfFloat32) Equals(p ListOfRefOfFloat32) bool {
@@ -228,16 +228,16 @@ func (l ListOfRefOfFloat32) Empty() bool {
 	return l.Len() == uint64(0)
 }
 
-func (self ListOfRefOfFloat32) Get(i uint64) RefOfFloat32 {
-	return RefOfFloat32FromVal(self.l.Get(i))
+func (l ListOfRefOfFloat32) Get(i uint64) RefOfFloat32 {
+	return RefOfFloat32FromVal(l.l.Get(i))
 }
 
 func (l ListOfRefOfFloat32) Slice(idx uint64, end uint64) ListOfRefOfFloat32 {
 	return ListOfRefOfFloat32{l.l.Slice(idx, end)}
 }
 
-func (self ListOfRefOfFloat32) Set(i uint64, val RefOfFloat32) ListOfRefOfFloat32 {
-	return ListOfRefOfFloat32{self.l.Set(i, val.NomsValue())}
+func (l ListOfRefOfFloat32) Set(i uint64, val RefOfFloat32) ListOfRefOfFloat32 {
+	return ListOfRefOfFloat32{l.l.Set(i, val.NomsValue())}
 }
 
 func (l ListOfRefOfFloat32) Append(v ...RefOfFloat32) ListOfRefOfFloat32 {
@@ -374,28 +374,28 @@ func StructWithRefFromVal(val types.Value) StructWithRef {
 	return StructWithRef{val.(types.Map)}
 }
 
-func (self StructWithRef) NomsValue() types.Value {
-	return self.m
+func (s StructWithRef) NomsValue() types.Value {
+	return s.m
 }
 
-func (self StructWithRef) Equals(other StructWithRef) bool {
-	return self.m.Equals(other.m)
+func (s StructWithRef) Equals(other StructWithRef) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self StructWithRef) Ref() ref.Ref {
-	return self.m.Ref()
+func (s StructWithRef) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self StructWithRef) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s StructWithRef) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self StructWithRef) R() RefOfSetOfFloat32 {
-	return RefOfSetOfFloat32FromVal(self.m.Get(types.NewString("r")))
+func (s StructWithRef) R() RefOfSetOfFloat32 {
+	return RefOfSetOfFloat32FromVal(s.m.Get(types.NewString("r")))
 }
 
-func (self StructWithRef) SetR(val RefOfSetOfFloat32) StructWithRef {
-	return StructWithRef{self.m.Set(types.NewString("r"), val.NomsValue())}
+func (s StructWithRef) SetR(val RefOfSetOfFloat32) StructWithRef {
+	return StructWithRef{s.m.Set(types.NewString("r"), val.NomsValue())}
 }
 
 // RefOfSetOfFloat32
