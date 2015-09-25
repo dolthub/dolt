@@ -100,14 +100,14 @@ func __typeRefOfStructWithUnionField() types.TypeRef {
 		[]types.Field{
 			types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
 		},
-		[]types.Field{
+		types.Choices{
 			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
 			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
 			types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
 			types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
 			types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
-		})
-
+		},
+	)
 }
 
 func StructWithUnionFieldFromVal(val types.Value) StructWithUnionField {

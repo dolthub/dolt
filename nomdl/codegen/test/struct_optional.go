@@ -67,8 +67,8 @@ func __typeRefOfOptionalStruct() types.TypeRef {
 			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), true},
 			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), true},
 		},
-		nil)
-
+		types.Choices{},
+	)
 }
 
 func OptionalStructFromVal(val types.Value) OptionalStruct {

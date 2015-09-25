@@ -365,8 +365,8 @@ func __typeRefOfStructWithRef() types.TypeRef {
 		[]types.Field{
 			types.Field{"r", types.MakeCompoundTypeRef("", types.RefKind, types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind))), false},
 		},
-		nil)
-
+		types.Choices{},
+	)
 }
 
 func StructWithRefFromVal(val types.Value) StructWithRef {

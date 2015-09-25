@@ -100,7 +100,7 @@ func makeTypeEncodeable(t TypeRef, cs chunks.ChunkSink) interface{} {
 	if p != nil {
 		pkgRef = WriteValue(p.NomsValue(), cs)
 	}
-	return enc.TypeRef{PkgRef: pkgRef, Name: t.Name().String(), Kind: uint8(t.kind), Desc: toEncodeable(t.desc, cs)}
+	return enc.TypeRef{PkgRef: pkgRef, Name: t.Name(), Kind: uint8(t.Kind()), Desc: toEncodeable(t.Desc.ToValue(), cs)}
 }
 
 func processChild(f Future, cs chunks.ChunkSink) interface{} {

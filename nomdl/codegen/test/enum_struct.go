@@ -61,8 +61,8 @@ func __typeRefOfEnumStruct() types.TypeRef {
 		[]types.Field{
 			types.Field{"hand", types.MakeTypeRef("Handedness", types.Ref{}), false},
 		},
-		nil)
-
+		types.Choices{},
+	)
 }
 
 func EnumStructFromVal(val types.Value) EnumStruct {
@@ -106,5 +106,8 @@ const (
 
 // Creates and returns a Noms Value that describes Handedness.
 func __typeRefOfHandedness() types.TypeRef {
-	return types.MakeEnumTypeRef("Handedness", "right", "left", "switch")
+	return types.MakeEnumTypeRef("Handedness", "right",
+		"left",
+		"switch",
+	)
 }

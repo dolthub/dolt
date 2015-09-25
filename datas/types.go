@@ -44,8 +44,8 @@ func __typeRefOfCommit() types.TypeRef {
 			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
 			types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", types.Ref{})), false},
 		},
-		nil)
-
+		types.Choices{},
+	)
 }
 
 func CommitFromVal(val types.Value) Commit {

@@ -140,7 +140,7 @@ func (gen *codeGen) readTemplates() *template.Template {
 // These naming conventions are used for the conversion functions available
 // in the templates.
 
-func (gen *codeGen) defType(t parse.TypeRef) string {
+func (gen *codeGen) defType(t types.TypeRef) string {
 	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
@@ -162,7 +162,7 @@ func (gen *codeGen) defType(t parse.TypeRef) string {
 	panic("unreachable")
 }
 
-func (gen *codeGen) userType(t parse.TypeRef) string {
+func (gen *codeGen) userType(t types.TypeRef) string {
 	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
@@ -180,7 +180,7 @@ func (gen *codeGen) userType(t parse.TypeRef) string {
 	panic("unreachable")
 }
 
-func (gen *codeGen) defToValue(val string, t parse.TypeRef) string {
+func (gen *codeGen) defToValue(val string, t types.TypeRef) string {
 	t = gen.resolve(t)
 	switch t.Desc.Kind() {
 	case types.BlobKind, types.ValueKind, types.TypeRefKind:
@@ -197,7 +197,7 @@ func (gen *codeGen) defToValue(val string, t parse.TypeRef) string {
 	panic("unreachable")
 }
 
-func (gen *codeGen) valueToDef(val string, t parse.TypeRef) string {
+func (gen *codeGen) valueToDef(val string, t types.TypeRef) string {
 	t = gen.resolve(t)
 	switch t.Desc.Kind() {
 	case types.BlobKind:
@@ -218,51 +218,13 @@ func (gen *codeGen) valueToDef(val string, t parse.TypeRef) string {
 	panic("unreachable")
 }
 
-func kindToString(k types.NomsKind) string {
-	switch k {
-	case types.BlobKind:
-		return "Blob"
-	case types.BoolKind:
-		return "Bool"
-	case types.Float32Kind:
-		return "Float32"
-	case types.Float64Kind:
-		return "Float64"
-	case types.Int16Kind:
-		return "Int16"
-	case types.Int32Kind:
-		return "Int32"
-	case types.Int64Kind:
-		return "Int64"
-	case types.Int8Kind:
-		return "Int8"
-	case types.StringKind:
-		return "String"
-	case types.UInt16Kind:
-		return "UInt16"
-	case types.UInt32Kind:
-		return "UInt32"
-	case types.UInt64Kind:
-		return "UInt64"
-	case types.UInt8Kind:
-		return "UInt8"
-	case types.ValueKind:
-		return "Value"
-	case types.TypeRefKind:
-		return "TypeRef"
-	case types.ListKind:
-		return "List"
-	case types.MapKind:
-		return "Map"
-	case types.RefKind:
-		return "Ref"
-	case types.SetKind:
-		return "Set"
-	}
-	panic("unreachable")
+func kindToString(k types.NomsKind) (out string) {
+	out = types.KindToString[k]
+	d.Chk.NotEmpty(out, "Unknown NomsKind %d", k)
+	return
 }
 
-func (gen *codeGen) nativeToValue(val string, t parse.TypeRef) string {
+func (gen *codeGen) nativeToValue(val string, t types.TypeRef) string {
 	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
@@ -276,7 +238,7 @@ func (gen *codeGen) nativeToValue(val string, t parse.TypeRef) string {
 	panic("unreachable")
 }
 
-func (gen *codeGen) valueToNative(val string, t parse.TypeRef) string {
+func (gen *codeGen) valueToNative(val string, t types.TypeRef) string {
 	k := t.Desc.Kind()
 	switch k {
 	case types.EnumKind:
@@ -290,7 +252,7 @@ func (gen *codeGen) valueToNative(val string, t parse.TypeRef) string {
 	panic("unreachable")
 }
 
-func (gen *codeGen) userToValue(val string, t parse.TypeRef) string {
+func (gen *codeGen) userToValue(val string, t types.TypeRef) string {
 	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
@@ -304,7 +266,7 @@ func (gen *codeGen) userToValue(val string, t parse.TypeRef) string {
 	panic("unreachable")
 }
 
-func (gen *codeGen) valueToUser(val string, t parse.TypeRef) string {
+func (gen *codeGen) valueToUser(val string, t types.TypeRef) string {
 	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
@@ -322,7 +284,7 @@ func (gen *codeGen) valueToUser(val string, t parse.TypeRef) string {
 	panic("unreachable")
 }
 
-func (gen *codeGen) userZero(t parse.TypeRef) string {
+func (gen *codeGen) userZero(t types.TypeRef) string {
 	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
@@ -349,7 +311,7 @@ func (gen *codeGen) userZero(t parse.TypeRef) string {
 	panic("unreachable")
 }
 
-func (gen *codeGen) valueZero(t parse.TypeRef) string {
+func (gen *codeGen) valueZero(t types.TypeRef) string {
 	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
@@ -382,29 +344,29 @@ func (gen *codeGen) valueZero(t parse.TypeRef) string {
 	panic("unreachable")
 }
 
-func (gen *codeGen) userName(t parse.TypeRef) string {
+func (gen *codeGen) userName(t types.TypeRef) string {
 	t = gen.resolve(t)
 	k := t.Desc.Kind()
 	switch k {
 	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeRefKind:
 		return kindToString(k)
 	case types.EnumKind:
-		return t.Name
+		return t.Name()
 	case types.ListKind:
-		return fmt.Sprintf("ListOf%s", gen.userName(t.Desc.(parse.CompoundDesc).ElemTypes[0]))
+		return fmt.Sprintf("ListOf%s", gen.userName(t.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.MapKind:
-		elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
+		elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 		return fmt.Sprintf("MapOf%sTo%s", gen.userName(elemTypes[0]), gen.userName(elemTypes[1]))
 	case types.RefKind:
-		return fmt.Sprintf("RefOf%s", gen.userName(t.Desc.(parse.CompoundDesc).ElemTypes[0]))
+		return fmt.Sprintf("RefOf%s", gen.userName(t.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.SetKind:
-		return fmt.Sprintf("SetOf%s", gen.userName(t.Desc.(parse.CompoundDesc).ElemTypes[0]))
+		return fmt.Sprintf("SetOf%s", gen.userName(t.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.StructKind:
 		// We get an empty name when we have a struct that is used as union
-		if t.Name == "" {
-			union := t.Desc.(parse.StructDesc).Union
+		if t.Name() == "" {
+			choices := t.Desc.(types.StructDesc).Union
 			s := "__unionOf"
-			for i, f := range union.Choices {
+			for i, f := range choices {
 				if i > 0 {
 					s += "And"
 				}
@@ -412,56 +374,50 @@ func (gen *codeGen) userName(t parse.TypeRef) string {
 			}
 			return s
 		}
-		return t.Name
+		return t.Name()
 	}
 	panic("unreachable")
 }
 
-func (gen *codeGen) toTypesTypeRef(t parse.TypeRef) string {
+func (gen *codeGen) toTypesTypeRef(t types.TypeRef) string {
 	if t.IsUnresolved() {
 		// needs to be pkgRef
-		return fmt.Sprintf(`types.MakeTypeRef("%s", types.Ref{})`, t.Name)
+		return fmt.Sprintf(`types.MakeTypeRef("%s", types.Ref{})`, t.Name())
 	}
 	if types.IsPrimitiveKind(t.Desc.Kind()) {
 		return fmt.Sprintf("types.MakePrimitiveTypeRef(types.%sKind)", kindToString(t.Desc.Kind()))
 	}
 	switch desc := t.Desc.(type) {
-	case parse.CompoundDesc:
+	case types.CompoundDesc:
 		typerefs := make([]string, len(desc.ElemTypes))
 		for i, t := range desc.ElemTypes {
 			typerefs[i] = gen.toTypesTypeRef(t)
 		}
-		return fmt.Sprintf(`types.MakeCompoundTypeRef("%s", types.%sKind, %s)`, t.Name, kindToString(t.Desc.Kind()), strings.Join(typerefs, ", "))
-	case parse.EnumDesc:
-		return fmt.Sprintf(`types.MakeEnumTypeRef("%s", %s)`, t.Name, strings.Join(desc.IDs, ", "))
-	case parse.StructDesc:
-		flatten := func(f []parse.Field) string {
+		return fmt.Sprintf(`types.MakeCompoundTypeRef("%s", types.%sKind, %s)`, t.Name(), kindToString(t.Desc.Kind()), strings.Join(typerefs, ", "))
+	case types.EnumDesc:
+		return fmt.Sprintf(`types.MakeEnumTypeRef("%s", %s)`, t.Name(), strings.Join(desc.IDs, ", "))
+	case types.StructDesc:
+		flatten := func(f []types.Field) string {
 			out := make([]string, 0, len(f))
 			for _, field := range f {
 				out = append(out, fmt.Sprintf(`types.Field{"%s", %s, %t},`, field.Name, gen.toTypesTypeRef(field.T), field.Optional))
 			}
 			return strings.Join(out, "\n")
 		}
-		fields := "nil"
-		choices := "nil"
-		if len(desc.Fields) != 0 {
-			fields = fmt.Sprintf("[]types.Field{%s})", flatten(desc.Fields))
-		}
-		if desc.Union != nil {
-			choices = fmt.Sprintf("[]types.Field{%s}", flatten(desc.Union.Choices))
-		}
-		return fmt.Sprintf(`types.MakeStructTypeRef("%s", %s, %s)`, t.Name, fields, choices)
+		fields := fmt.Sprintf("[]types.Field{%s}", flatten(desc.Fields))
+		choices := fmt.Sprintf("types.Choices{%s}", flatten(desc.Union))
+		return fmt.Sprintf(`types.MakeStructTypeRef("%s", %s, %s)`, t.Name(), fields, choices)
 	default:
 		d.Chk.Fail("Unknown TypeDesc.", "%#v (%T)", desc, desc)
 	}
 	panic("ain't done")
 }
 
-func (gen *codeGen) resolve(t parse.TypeRef) parse.TypeRef {
+func (gen *codeGen) resolve(t types.TypeRef) types.TypeRef {
 	if !t.IsUnresolved() {
 		return t
 	}
-	return gen.pkg.NamedTypes[t.Name]
+	return gen.pkg.NamedTypes[t.Name()]
 }
 
 func (gen *codeGen) WritePackage(packageName string) {
@@ -470,7 +426,7 @@ func (gen *codeGen) WritePackage(packageName string) {
 		HasTypes   bool
 		FileID     string
 		Name       string
-		NamedTypes map[string]parse.TypeRef
+		NamedTypes map[string]types.TypeRef
 	}{
 		len(gen.pkg.NamedTypes) > 0,
 		gen.fileid,
@@ -485,7 +441,7 @@ func (gen *codeGen) WritePackage(packageName string) {
 	}
 
 	names := make([]string, 0, len(gen.pkg.NamedTypes))
-	for n, _ := range gen.pkg.NamedTypes {
+	for n := range gen.pkg.NamedTypes {
 		names = append(names, n)
 	}
 	sort.Strings(names)
@@ -494,7 +450,7 @@ func (gen *codeGen) WritePackage(packageName string) {
 	}
 }
 
-func (gen *codeGen) write(t parse.TypeRef) {
+func (gen *codeGen) write(t types.TypeRef) {
 	t = gen.resolve(t)
 	if gen.written[gen.userName(t)] {
 		return
@@ -520,22 +476,22 @@ func (gen *codeGen) write(t parse.TypeRef) {
 	}
 }
 
-func (gen *codeGen) writeTemplate(tmpl string, t parse.TypeRef, data interface{}) {
+func (gen *codeGen) writeTemplate(tmpl string, t types.TypeRef, data interface{}) {
 	err := gen.templates.ExecuteTemplate(gen.w, tmpl, data)
 	d.Exp.NoError(err)
 	gen.written[gen.userName(t)] = true
 }
 
-func (gen *codeGen) writeStruct(t parse.TypeRef) {
-	desc := t.Desc.(parse.StructDesc)
+func (gen *codeGen) writeStruct(t types.TypeRef) {
+	desc := t.Desc.(types.StructDesc)
 	data := struct {
 		FileID        string
 		PackageName   string
 		Name          string
-		Fields        []parse.Field
-		Choices       []parse.Field
+		Fields        []types.Field
+		Choices       types.Choices
 		HasUnion      bool
-		UnionZeroType parse.TypeRef
+		UnionZeroType types.TypeRef
 		CanUseDef     bool
 	}{
 		gen.fileid,
@@ -544,11 +500,11 @@ func (gen *codeGen) writeStruct(t parse.TypeRef) {
 		desc.Fields,
 		nil,
 		desc.Union != nil,
-		parse.TypeRef{Desc: parse.PrimitiveDesc(types.UInt32Kind)},
+		types.MakePrimitiveTypeRef(types.UInt32Kind),
 		gen.canUseDef(t),
 	}
 	if data.HasUnion {
-		data.Choices = desc.Union.Choices
+		data.Choices = desc.Union
 		data.UnionZeroType = data.Choices[0].T
 	}
 	gen.writeTemplate("struct.tmpl", t, data)
@@ -556,17 +512,17 @@ func (gen *codeGen) writeStruct(t parse.TypeRef) {
 		gen.write(f.T)
 	}
 	if data.HasUnion {
-		for _, f := range desc.Union.Choices {
+		for _, f := range desc.Union {
 			gen.write(f.T)
 		}
 	}
 }
 
-func (gen *codeGen) writeList(t parse.TypeRef) {
-	elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
+func (gen *codeGen) writeList(t types.TypeRef) {
+	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		Name      string
-		ElemType  parse.TypeRef
+		ElemType  types.TypeRef
 		CanUseDef bool
 	}{
 		gen.userName(t),
@@ -577,12 +533,12 @@ func (gen *codeGen) writeList(t parse.TypeRef) {
 	gen.write(elemTypes[0])
 }
 
-func (gen *codeGen) writeMap(t parse.TypeRef) {
-	elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
+func (gen *codeGen) writeMap(t types.TypeRef) {
+	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		Name      string
-		KeyType   parse.TypeRef
-		ValueType parse.TypeRef
+		KeyType   types.TypeRef
+		ValueType types.TypeRef
 		CanUseDef bool
 	}{
 		gen.userName(t),
@@ -595,11 +551,11 @@ func (gen *codeGen) writeMap(t parse.TypeRef) {
 	gen.write(elemTypes[1])
 }
 
-func (gen *codeGen) writeRef(t parse.TypeRef) {
-	elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
+func (gen *codeGen) writeRef(t types.TypeRef) {
+	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		Name     string
-		ElemType parse.TypeRef
+		ElemType types.TypeRef
 	}{
 		gen.userName(t),
 		elemTypes[0],
@@ -608,11 +564,11 @@ func (gen *codeGen) writeRef(t parse.TypeRef) {
 	gen.write(elemTypes[0])
 }
 
-func (gen *codeGen) writeSet(t parse.TypeRef) {
-	elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
+func (gen *codeGen) writeSet(t types.TypeRef) {
+	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		Name      string
-		ElemType  parse.TypeRef
+		ElemType  types.TypeRef
 		CanUseDef bool
 	}{
 		gen.userName(t),
@@ -623,31 +579,31 @@ func (gen *codeGen) writeSet(t parse.TypeRef) {
 	gen.write(elemTypes[0])
 }
 
-func (gen *codeGen) writeEnum(t parse.TypeRef) {
+func (gen *codeGen) writeEnum(t types.TypeRef) {
 	data := struct {
 		Name string
 		Ids  []string
 	}{
-		t.Name,
-		t.Desc.(parse.EnumDesc).IDs,
+		t.Name(),
+		t.Desc.(types.EnumDesc).IDs,
 	}
 	gen.writeTemplate("enum.tmpl", t, data)
 }
 
-func (gen *codeGen) canUseDef(t parse.TypeRef) bool {
+func (gen *codeGen) canUseDef(t types.TypeRef) bool {
 	cache := map[string]bool{}
 
-	var rec func(t parse.TypeRef) bool
-	rec = func(t parse.TypeRef) bool {
+	var rec func(t types.TypeRef) bool
+	rec = func(t types.TypeRef) bool {
 		t = gen.resolve(t)
 		switch t.Desc.Kind() {
 		case types.ListKind:
-			return rec(t.Desc.(parse.CompoundDesc).ElemTypes[0])
+			return rec(t.Desc.(types.CompoundDesc).ElemTypes[0])
 		case types.SetKind:
-			elemType := t.Desc.(parse.CompoundDesc).ElemTypes[0]
+			elemType := t.Desc.(types.CompoundDesc).ElemTypes[0]
 			return !gen.containsNonComparable(elemType) && rec(elemType)
 		case types.MapKind:
-			elemTypes := t.Desc.(parse.CompoundDesc).ElemTypes
+			elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 			return !gen.containsNonComparable(elemTypes[0]) && rec(elemTypes[0]) && rec(elemTypes[1])
 		case types.StructKind:
 			userName := gen.userName(t)
@@ -655,7 +611,7 @@ func (gen *codeGen) canUseDef(t parse.TypeRef) bool {
 				return b
 			}
 			cache[userName] = true
-			for _, f := range t.Desc.(parse.StructDesc).Fields {
+			for _, f := range t.Desc.(types.StructDesc).Fields {
 				if f.T.Equals(t) || !rec(f.T) {
 					cache[userName] = false
 					return false
@@ -672,11 +628,11 @@ func (gen *codeGen) canUseDef(t parse.TypeRef) bool {
 
 // We use a go map as the def for Set and Map. These cannot have a key that is a
 // Set, Map or a List because slices and maps are not comparable in go.
-func (gen *codeGen) containsNonComparable(t parse.TypeRef) bool {
+func (gen *codeGen) containsNonComparable(t types.TypeRef) bool {
 	cache := map[string]bool{}
 
-	var rec func(t parse.TypeRef) bool
-	rec = func(t parse.TypeRef) bool {
+	var rec func(t types.TypeRef) bool
+	rec = func(t types.TypeRef) bool {
 		t = gen.resolve(t)
 		switch t.Desc.Kind() {
 		case types.ListKind, types.MapKind, types.SetKind:
@@ -690,7 +646,7 @@ func (gen *codeGen) containsNonComparable(t parse.TypeRef) bool {
 			// If we get here in a recursive call we will mark it as not having a non comparable value. If it does then that will
 			// get handled higher up in the call chain.
 			cache[userName] = false
-			for _, f := range t.Desc.(parse.StructDesc).Fields {
+			for _, f := range t.Desc.(types.StructDesc).Fields {
 				if rec(f.T) {
 					cache[userName] = true
 					return true
