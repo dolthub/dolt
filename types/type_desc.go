@@ -115,11 +115,12 @@ func (c CompoundDesc) Equals(other TypeDesc) bool {
 	if c.Kind() != other.Kind() {
 		return false
 	}
-	out := true
 	for i, e := range other.(CompoundDesc).ElemTypes {
-		out = out && e.Equals(c.ElemTypes[i])
+		if !e.Equals(c.ElemTypes[i]) {
+			return false
+		}
 	}
-	return out
+	return true
 }
 
 func (c CompoundDesc) ToValue() Value {
@@ -188,8 +189,7 @@ func (e EnumDesc) Describe() string {
 	return "enum: { " + strings.Join(e.IDs, "\n") + "}\n"
 }
 
-// UnionDesc represents each choice as a Field, akin to a StructDesc.
-// NB: UnionDesc DOES NOT SATISFY TypeDesc, as Union is not a first-class Noms Type.
+// Choices represents a union, with each choice as a Field..
 type Choices []Field
 
 func (u Choices) Describe() (out string) {
@@ -245,6 +245,12 @@ func (s StructDesc) ToValue() Value {
 	return desc
 }
 
+// StructDescFromMap builds a StructDesc from a Noms Map that looks like
+// {
+//   fields:  ["field1", TypeRef1, "field2", TypeRef2...],
+//   choices: ["choice1", TypeRef1...]
+// }
+// Either fields or choices may be the empty List.
 func StructDescFromMap(m Map) StructDesc {
 	fl := m.Get(NewString("fields")).(List)
 	cl := m.Get(NewString("choices")).(List)
