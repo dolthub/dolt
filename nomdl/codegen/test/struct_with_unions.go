@@ -62,13 +62,13 @@ func (s StructWithUnions) Def() (d StructWithUnionsDef) {
 func __typeRefOfStructWithUnions() types.TypeRef {
 	return types.MakeStructTypeRef("StructWithUnions",
 		[]types.Field{
-			types.Field{"a", types.MakeStructTypeRef("", nil, []types.Field{types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"a", types.MakeStructTypeRef("", []types.Field{}, types.Choices{types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
 				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false}}), false},
-			types.Field{"d", types.MakeStructTypeRef("", nil, []types.Field{types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"d", types.MakeStructTypeRef("", []types.Field{}, types.Choices{types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
 				types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false}}), false},
 		},
-		nil)
-
+		types.Choices{},
+	)
 }
 
 func StructWithUnionsFromVal(val types.Value) StructWithUnions {
@@ -168,11 +168,11 @@ func (s __unionOfBOfFloat64AndCOfString) __unionValueToDef() interface{} {
 func __typeRefOf__unionOfBOfFloat64AndCOfString() types.TypeRef {
 	return types.MakeStructTypeRef("__unionOfBOfFloat64AndCOfString",
 		[]types.Field{},
-		[]types.Field{
+		types.Choices{
 			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
 			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
-		})
-
+		},
+	)
 }
 
 func __unionOfBOfFloat64AndCOfStringFromVal(val types.Value) __unionOfBOfFloat64AndCOfString {
@@ -304,11 +304,11 @@ func (s __unionOfEOfFloat64AndFOfString) __unionValueToDef() interface{} {
 func __typeRefOf__unionOfEOfFloat64AndFOfString() types.TypeRef {
 	return types.MakeStructTypeRef("__unionOfEOfFloat64AndFOfString",
 		[]types.Field{},
-		[]types.Field{
+		types.Choices{
 			types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
 			types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
-		})
-
+		},
+	)
 }
 
 func __unionOfEOfFloat64AndFOfStringFromVal(val types.Value) __unionOfEOfFloat64AndFOfString {

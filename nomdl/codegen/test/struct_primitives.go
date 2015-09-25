@@ -125,8 +125,8 @@ func __typeRefOfStructPrimitives() types.TypeRef {
 			types.Field{"blob", types.MakePrimitiveTypeRef(types.BlobKind), false},
 			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
 		},
-		nil)
-
+		types.Choices{},
+	)
 }
 
 func StructPrimitivesFromVal(val types.Value) StructPrimitives {

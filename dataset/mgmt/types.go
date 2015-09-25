@@ -188,8 +188,8 @@ func __typeRefOfDataset() types.TypeRef {
 			types.Field{"id", types.MakePrimitiveTypeRef(types.StringKind), false},
 			types.Field{"head", types.MakePrimitiveTypeRef(types.ValueKind), false},
 		},
-		nil)
-
+		types.Choices{},
+	)
 }
 
 func DatasetFromVal(val types.Value) Dataset {

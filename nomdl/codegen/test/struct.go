@@ -65,8 +65,8 @@ func __typeRefOfStruct() types.TypeRef {
 			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
 			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
 		},
-		nil)
-
+		types.Choices{},
+	)
 }
 
 func StructFromVal(val types.Value) Struct {

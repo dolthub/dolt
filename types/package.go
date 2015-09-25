@@ -51,7 +51,7 @@ func __typeRefOfPackage() TypeRef {
 			Field{"Dependencies", MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", Ref{}))), false},
 			Field{"Types", MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind)), false},
 		},
-		nil)
+		Choices{})
 
 }
 

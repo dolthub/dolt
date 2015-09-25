@@ -60,8 +60,8 @@ func __typeRefOfTree() types.TypeRef {
 		[]types.Field{
 			types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", types.Ref{})), false},
 		},
-		nil)
-
+		types.Choices{},
+	)
 }
 
 func TreeFromVal(val types.Value) Tree {

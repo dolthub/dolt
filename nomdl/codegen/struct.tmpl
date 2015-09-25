@@ -68,11 +68,11 @@ func __typeRefOf{{.Name}}() types.TypeRef {
 			{{range .Fields}}types.Field{"{{.Name}}", {{toTypesTypeRef .T}}, {{.Optional}}},
 			{{end}}
 		},
-		{{if .HasUnion}}[]types.Field{
+		types.Choices{
 			{{range .Choices}}types.Field{"{{.Name}}", {{toTypesTypeRef .T}}, {{.Optional}}},
 			{{end}}
-		}{{else}}nil{{end}})
-
+		},
+	)
 }
 
 func {{.Name}}FromVal(val types.Value) {{.Name}} {

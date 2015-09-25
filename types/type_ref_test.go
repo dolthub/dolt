@@ -18,9 +18,9 @@ func TestTypes(t *testing.T) {
 	setType := MakeCompoundTypeRef("SetOfString", SetKind, stringType)
 	mahType := MakeStructTypeRef("MahStruct", []Field{
 		Field{"Field1", stringType, false},
-		Field{"Field2", boolType, false},
-	}, nil)
-	otherType := MakeStructTypeRef("MahOtherStruct", nil, []Field{
+		Field{"Field2", boolType, true},
+	}, Choices{})
+	otherType := MakeStructTypeRef("MahOtherStruct", []Field{}, Choices{
 		Field{"StructField", mahType, false},
 		Field{"StringField", stringType, false},
 	})

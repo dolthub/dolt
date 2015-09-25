@@ -499,8 +499,8 @@ func __typeRefOfPitch() types.TypeRef {
 			types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind), false},
 			types.Field{"Z", types.MakePrimitiveTypeRef(types.Float64Kind), false},
 		},
-		nil)
-
+		types.Choices{},
+	)
 }
 
 func PitchFromVal(val types.Value) Pitch {

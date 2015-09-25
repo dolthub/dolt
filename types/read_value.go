@@ -70,7 +70,7 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 			return futureFromValue(MakeTypeRef(i.Name, Ref{R: i.PkgRef}))
 		}
 		desc := typeDescFromInterface(kind, i.Desc, cs)
-		return futureFromValue(buildType(i.Name, kind, desc))
+		return futureFromValue(buildType(i.Name, desc))
 	case enc.CompoundBlob:
 		blobs := make([]Future, len(i.Blobs))
 		for idx, blobRef := range i.Blobs {
@@ -107,27 +107,32 @@ func futureSetFromIterable(items []interface{}, cs chunks.ChunkSource) Future {
 	return futureFromValue(setFromFutures(output, cs))
 }
 
-func typeDescFromInterface(kind NomsKind, i interface{}, cs chunks.ChunkSource) Value {
+func typeDescFromInterface(kind NomsKind, i interface{}, cs chunks.ChunkSource) TypeDesc {
 	if IsPrimitiveKind(kind) {
-		d.Chk.Nil(i, "Primitive TypeRefs have no description.")
-		return nil
+		d.Chk.Nil(i, "Primitive TypeRefs have no serialized description.")
+		return PrimitiveDesc(kind)
 	}
 	switch kind {
 	case ListKind, RefKind, SetKind:
-		return fromEncodeable(i.(enc.TypeRef), cs).Deref(cs)
+		return CompoundDesc{kind, []TypeRef{fromEncodeable(i, cs).Deref(cs).(TypeRef)}}
 	case MapKind:
 		items := i.([]interface{})
 		d.Chk.Len(items, 2)
-		return listFromFutures(futuresFromIterable(items, cs), cs)
+		elemTypes := []TypeRef{
+			fromEncodeable(items[0], cs).Deref(cs).(TypeRef),
+			fromEncodeable(items[1], cs).Deref(cs).(TypeRef),
+		}
+		return CompoundDesc{kind, elemTypes}
 	case EnumKind:
 		items := i.([]interface{})
-		for _, item := range items {
-			d.Chk.IsType("", item, "Each enumeration must be a string.")
+		ids := make([]string, len(items))
+		for idx, item := range items {
+			ids[idx] = item.(string)
 		}
-		return listFromFutures(futuresFromIterable(items, cs), cs)
+		return EnumDesc{ids}
 	case StructKind:
 		items := i.(enc.Map)
-		return mapFromFutures(futuresFromIterable(items, cs), cs)
+		return StructDescFromMap(mapFromFutures(futuresFromIterable(items, cs), cs))
 	default:
 		d.Exp.Fail("Unrecognized Kind:", "%v", kind)
 		panic("unreachable")

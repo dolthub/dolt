@@ -75,8 +75,8 @@ func __typeRefOfStructWithList() types.TypeRef {
 			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
 			types.Field{"i", types.MakePrimitiveTypeRef(types.Int64Kind), false},
 		},
-		nil)
-
+		types.Choices{},
+	)
 }
 
 func StructWithListFromVal(val types.Value) StructWithList {
