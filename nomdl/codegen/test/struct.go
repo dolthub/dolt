@@ -52,19 +52,18 @@ func (def StructDef) New() Struct {
 		)}
 }
 
-func (s Struct) Def() StructDef {
-	return StructDef{
-		s.m.Get(types.NewString("s")).(types.String).String(),
-		bool(s.m.Get(types.NewString("b")).(types.Bool)),
-	}
+func (s Struct) Def() (d StructDef) {
+	d.S = s.m.Get(types.NewString("s")).(types.String).String()
+	d.B = bool(s.m.Get(types.NewString("b")).(types.Bool))
+	return
 }
 
 // Creates and returns a Noms Value that describes Struct.
 func __typeRefOfStruct() types.TypeRef {
 	return types.MakeStructTypeRef("Struct",
 		[]types.Field{
-			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind)},
-			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind)},
+			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
 		},
 		nil)
 

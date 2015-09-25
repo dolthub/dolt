@@ -486,19 +486,18 @@ func (def PitchDef) New() Pitch {
 		)}
 }
 
-func (s Pitch) Def() PitchDef {
-	return PitchDef{
-		float64(s.m.Get(types.NewString("X")).(types.Float64)),
-		float64(s.m.Get(types.NewString("Z")).(types.Float64)),
-	}
+func (s Pitch) Def() (d PitchDef) {
+	d.X = float64(s.m.Get(types.NewString("X")).(types.Float64))
+	d.Z = float64(s.m.Get(types.NewString("Z")).(types.Float64))
+	return
 }
 
 // Creates and returns a Noms Value that describes Pitch.
 func __typeRefOfPitch() types.TypeRef {
 	return types.MakeStructTypeRef("Pitch",
 		[]types.Field{
-			types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind)},
-			types.Field{"Z", types.MakePrimitiveTypeRef(types.Float64Kind)},
+			types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"Z", types.MakePrimitiveTypeRef(types.Float64Kind), false},
 		},
 		nil)
 

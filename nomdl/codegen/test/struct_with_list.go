@@ -58,23 +58,22 @@ func (def StructWithListDef) New() StructWithList {
 		)}
 }
 
-func (s StructWithList) Def() StructWithListDef {
-	return StructWithListDef{
-		ListOfUInt8FromVal(s.m.Get(types.NewString("l"))).Def(),
-		bool(s.m.Get(types.NewString("b")).(types.Bool)),
-		s.m.Get(types.NewString("s")).(types.String).String(),
-		int64(s.m.Get(types.NewString("i")).(types.Int64)),
-	}
+func (s StructWithList) Def() (d StructWithListDef) {
+	d.L = ListOfUInt8FromVal(s.m.Get(types.NewString("l"))).Def()
+	d.B = bool(s.m.Get(types.NewString("b")).(types.Bool))
+	d.S = s.m.Get(types.NewString("s")).(types.String).String()
+	d.I = int64(s.m.Get(types.NewString("i")).(types.Int64))
+	return
 }
 
 // Creates and returns a Noms Value that describes StructWithList.
 func __typeRefOfStructWithList() types.TypeRef {
 	return types.MakeStructTypeRef("StructWithList",
 		[]types.Field{
-			types.Field{"l", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind))},
-			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind)},
-			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind)},
-			types.Field{"i", types.MakePrimitiveTypeRef(types.Int64Kind)},
+			types.Field{"l", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
+			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"i", types.MakePrimitiveTypeRef(types.Int64Kind), false},
 		},
 		nil)
 

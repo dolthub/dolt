@@ -50,17 +50,16 @@ func (def EnumStructDef) New() EnumStruct {
 		)}
 }
 
-func (s EnumStruct) Def() EnumStructDef {
-	return EnumStructDef{
-		Handedness(s.m.Get(types.NewString("hand")).(types.Int32)),
-	}
+func (s EnumStruct) Def() (d EnumStructDef) {
+	d.Hand = Handedness(s.m.Get(types.NewString("hand")).(types.Int32))
+	return
 }
 
 // Creates and returns a Noms Value that describes EnumStruct.
 func __typeRefOfEnumStruct() types.TypeRef {
 	return types.MakeStructTypeRef("EnumStruct",
 		[]types.Field{
-			types.Field{"hand", types.MakeTypeRef("Handedness", types.Ref{})},
+			types.Field{"hand", types.MakeTypeRef("Handedness", types.Ref{}), false},
 		},
 		nil)
 

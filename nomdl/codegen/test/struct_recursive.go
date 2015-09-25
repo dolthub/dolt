@@ -49,17 +49,16 @@ func (def TreeDef) New() Tree {
 		)}
 }
 
-func (s Tree) Def() TreeDef {
-	return TreeDef{
-		ListOfTreeFromVal(s.m.Get(types.NewString("children"))).Def(),
-	}
+func (s Tree) Def() (d TreeDef) {
+	d.Children = ListOfTreeFromVal(s.m.Get(types.NewString("children"))).Def()
+	return
 }
 
 // Creates and returns a Noms Value that describes Tree.
 func __typeRefOfTree() types.TypeRef {
 	return types.MakeStructTypeRef("Tree",
 		[]types.Field{
-			types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", types.Ref{}))},
+			types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", types.Ref{})), false},
 		},
 		nil)
 

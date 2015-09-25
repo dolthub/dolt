@@ -88,43 +88,42 @@ func (def StructPrimitivesDef) New() StructPrimitives {
 		)}
 }
 
-func (s StructPrimitives) Def() StructPrimitivesDef {
-	return StructPrimitivesDef{
-		uint64(s.m.Get(types.NewString("uint64")).(types.UInt64)),
-		uint32(s.m.Get(types.NewString("uint32")).(types.UInt32)),
-		uint16(s.m.Get(types.NewString("uint16")).(types.UInt16)),
-		uint8(s.m.Get(types.NewString("uint8")).(types.UInt8)),
-		int64(s.m.Get(types.NewString("int64")).(types.Int64)),
-		int32(s.m.Get(types.NewString("int32")).(types.Int32)),
-		int16(s.m.Get(types.NewString("int16")).(types.Int16)),
-		int8(s.m.Get(types.NewString("int8")).(types.Int8)),
-		float64(s.m.Get(types.NewString("float64")).(types.Float64)),
-		float32(s.m.Get(types.NewString("float32")).(types.Float32)),
-		bool(s.m.Get(types.NewString("bool")).(types.Bool)),
-		s.m.Get(types.NewString("string")).(types.String).String(),
-		s.m.Get(types.NewString("blob")).(types.Blob),
-		s.m.Get(types.NewString("value")),
-	}
+func (s StructPrimitives) Def() (d StructPrimitivesDef) {
+	d.Uint64 = uint64(s.m.Get(types.NewString("uint64")).(types.UInt64))
+	d.Uint32 = uint32(s.m.Get(types.NewString("uint32")).(types.UInt32))
+	d.Uint16 = uint16(s.m.Get(types.NewString("uint16")).(types.UInt16))
+	d.Uint8 = uint8(s.m.Get(types.NewString("uint8")).(types.UInt8))
+	d.Int64 = int64(s.m.Get(types.NewString("int64")).(types.Int64))
+	d.Int32 = int32(s.m.Get(types.NewString("int32")).(types.Int32))
+	d.Int16 = int16(s.m.Get(types.NewString("int16")).(types.Int16))
+	d.Int8 = int8(s.m.Get(types.NewString("int8")).(types.Int8))
+	d.Float64 = float64(s.m.Get(types.NewString("float64")).(types.Float64))
+	d.Float32 = float32(s.m.Get(types.NewString("float32")).(types.Float32))
+	d.Bool = bool(s.m.Get(types.NewString("bool")).(types.Bool))
+	d.String = s.m.Get(types.NewString("string")).(types.String).String()
+	d.Blob = s.m.Get(types.NewString("blob")).(types.Blob)
+	d.Value = s.m.Get(types.NewString("value"))
+	return
 }
 
 // Creates and returns a Noms Value that describes StructPrimitives.
 func __typeRefOfStructPrimitives() types.TypeRef {
 	return types.MakeStructTypeRef("StructPrimitives",
 		[]types.Field{
-			types.Field{"uint64", types.MakePrimitiveTypeRef(types.UInt64Kind)},
-			types.Field{"uint32", types.MakePrimitiveTypeRef(types.UInt32Kind)},
-			types.Field{"uint16", types.MakePrimitiveTypeRef(types.UInt16Kind)},
-			types.Field{"uint8", types.MakePrimitiveTypeRef(types.UInt8Kind)},
-			types.Field{"int64", types.MakePrimitiveTypeRef(types.Int64Kind)},
-			types.Field{"int32", types.MakePrimitiveTypeRef(types.Int32Kind)},
-			types.Field{"int16", types.MakePrimitiveTypeRef(types.Int16Kind)},
-			types.Field{"int8", types.MakePrimitiveTypeRef(types.Int8Kind)},
-			types.Field{"float64", types.MakePrimitiveTypeRef(types.Float64Kind)},
-			types.Field{"float32", types.MakePrimitiveTypeRef(types.Float32Kind)},
-			types.Field{"bool", types.MakePrimitiveTypeRef(types.BoolKind)},
-			types.Field{"string", types.MakePrimitiveTypeRef(types.StringKind)},
-			types.Field{"blob", types.MakePrimitiveTypeRef(types.BlobKind)},
-			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind)},
+			types.Field{"uint64", types.MakePrimitiveTypeRef(types.UInt64Kind), false},
+			types.Field{"uint32", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+			types.Field{"uint16", types.MakePrimitiveTypeRef(types.UInt16Kind), false},
+			types.Field{"uint8", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
+			types.Field{"int64", types.MakePrimitiveTypeRef(types.Int64Kind), false},
+			types.Field{"int32", types.MakePrimitiveTypeRef(types.Int32Kind), false},
+			types.Field{"int16", types.MakePrimitiveTypeRef(types.Int16Kind), false},
+			types.Field{"int8", types.MakePrimitiveTypeRef(types.Int8Kind), false},
+			types.Field{"float64", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"float32", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+			types.Field{"bool", types.MakePrimitiveTypeRef(types.BoolKind), false},
+			types.Field{"string", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"blob", types.MakePrimitiveTypeRef(types.BlobKind), false},
+			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
 		},
 		nil)
 

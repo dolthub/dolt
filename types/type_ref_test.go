@@ -17,12 +17,12 @@ func TestTypes(t *testing.T) {
 	mapType := MakeCompoundTypeRef("MapOfStringToUInt8", MapKind, stringType, uint8Type)
 	setType := MakeCompoundTypeRef("SetOfString", SetKind, stringType)
 	mahType := MakeStructTypeRef("MahStruct", []Field{
-		Field{"Field1", stringType},
-		Field{"Field2", boolType},
+		Field{"Field1", stringType, false},
+		Field{"Field2", boolType, false},
 	}, nil)
 	otherType := MakeStructTypeRef("MahOtherStruct", nil, []Field{
-		Field{"StructField", mahType},
-		Field{"StringField", stringType},
+		Field{"StructField", mahType, false},
+		Field{"StringField", stringType, false},
 	})
 
 	mRef := WriteValue(mapType, cs)

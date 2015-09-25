@@ -52,21 +52,20 @@ func (def StructWithUnionsDef) New() StructWithUnions {
 		)}
 }
 
-func (s StructWithUnions) Def() StructWithUnionsDef {
-	return StructWithUnionsDef{
-		__unionOfBOfFloat64AndCOfStringFromVal(s.m.Get(types.NewString("a"))).Def(),
-		__unionOfEOfFloat64AndFOfStringFromVal(s.m.Get(types.NewString("d"))).Def(),
-	}
+func (s StructWithUnions) Def() (d StructWithUnionsDef) {
+	d.A = __unionOfBOfFloat64AndCOfStringFromVal(s.m.Get(types.NewString("a"))).Def()
+	d.D = __unionOfEOfFloat64AndFOfStringFromVal(s.m.Get(types.NewString("d"))).Def()
+	return
 }
 
 // Creates and returns a Noms Value that describes StructWithUnions.
 func __typeRefOfStructWithUnions() types.TypeRef {
 	return types.MakeStructTypeRef("StructWithUnions",
 		[]types.Field{
-			types.Field{"a", types.MakeStructTypeRef("", nil, []types.Field{types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind)},
-				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind)}})},
-			types.Field{"d", types.MakeStructTypeRef("", nil, []types.Field{types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind)},
-				types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind)}})},
+			types.Field{"a", types.MakeStructTypeRef("", nil, []types.Field{types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false}}), false},
+			types.Field{"d", types.MakeStructTypeRef("", nil, []types.Field{types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false}}), false},
 		},
 		nil)
 
@@ -139,11 +138,10 @@ func (def __unionOfBOfFloat64AndCOfStringDef) New() __unionOfBOfFloat64AndCOfStr
 		)}
 }
 
-func (s __unionOfBOfFloat64AndCOfString) Def() __unionOfBOfFloat64AndCOfStringDef {
-	return __unionOfBOfFloat64AndCOfStringDef{
-		uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
-		s.__unionValueToDef(),
-	}
+func (s __unionOfBOfFloat64AndCOfString) Def() (d __unionOfBOfFloat64AndCOfStringDef) {
+	d.__unionIndex = uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32))
+	d.__unionValue = s.__unionValueToDef()
+	return
 }
 
 func (def __unionOfBOfFloat64AndCOfStringDef) __unionDefToValue() types.Value {
@@ -171,8 +169,8 @@ func __typeRefOf__unionOfBOfFloat64AndCOfString() types.TypeRef {
 	return types.MakeStructTypeRef("__unionOfBOfFloat64AndCOfString",
 		[]types.Field{},
 		[]types.Field{
-			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind)},
-			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind)},
+			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
 		})
 
 }
@@ -276,11 +274,10 @@ func (def __unionOfEOfFloat64AndFOfStringDef) New() __unionOfEOfFloat64AndFOfStr
 		)}
 }
 
-func (s __unionOfEOfFloat64AndFOfString) Def() __unionOfEOfFloat64AndFOfStringDef {
-	return __unionOfEOfFloat64AndFOfStringDef{
-		uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
-		s.__unionValueToDef(),
-	}
+func (s __unionOfEOfFloat64AndFOfString) Def() (d __unionOfEOfFloat64AndFOfStringDef) {
+	d.__unionIndex = uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32))
+	d.__unionValue = s.__unionValueToDef()
+	return
 }
 
 func (def __unionOfEOfFloat64AndFOfStringDef) __unionDefToValue() types.Value {
@@ -308,8 +305,8 @@ func __typeRefOf__unionOfEOfFloat64AndFOfString() types.TypeRef {
 	return types.MakeStructTypeRef("__unionOfEOfFloat64AndFOfString",
 		[]types.Field{},
 		[]types.Field{
-			types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind)},
-			types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind)},
+			types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
 		})
 
 }

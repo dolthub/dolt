@@ -354,17 +354,16 @@ func (def StructWithRefDef) New() StructWithRef {
 		)}
 }
 
-func (s StructWithRef) Def() StructWithRefDef {
-	return StructWithRefDef{
-		s.m.Get(types.NewString("r")).Ref(),
-	}
+func (s StructWithRef) Def() (d StructWithRefDef) {
+	d.R = s.m.Get(types.NewString("r")).Ref()
+	return
 }
 
 // Creates and returns a Noms Value that describes StructWithRef.
 func __typeRefOfStructWithRef() types.TypeRef {
 	return types.MakeStructTypeRef("StructWithRef",
 		[]types.Field{
-			types.Field{"r", types.MakeCompoundTypeRef("", types.RefKind, types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind)))},
+			types.Field{"r", types.MakeCompoundTypeRef("", types.RefKind, types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind))), false},
 		},
 		nil)
 

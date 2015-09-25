@@ -175,19 +175,18 @@ func (def DatasetDef) New() Dataset {
 		)}
 }
 
-func (s Dataset) Def() DatasetDef {
-	return DatasetDef{
-		s.m.Get(types.NewString("id")).(types.String).String(),
-		s.m.Get(types.NewString("head")),
-	}
+func (s Dataset) Def() (d DatasetDef) {
+	d.Id = s.m.Get(types.NewString("id")).(types.String).String()
+	d.Head = s.m.Get(types.NewString("head"))
+	return
 }
 
 // Creates and returns a Noms Value that describes Dataset.
 func __typeRefOfDataset() types.TypeRef {
 	return types.MakeStructTypeRef("Dataset",
 		[]types.Field{
-			types.Field{"id", types.MakePrimitiveTypeRef(types.StringKind)},
-			types.Field{"head", types.MakePrimitiveTypeRef(types.ValueKind)},
+			types.Field{"id", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"head", types.MakePrimitiveTypeRef(types.ValueKind), false},
 		},
 		nil)
 

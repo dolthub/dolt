@@ -47,14 +47,21 @@ func (fm Map) Has(key Value) bool {
 }
 
 func (fm Map) Get(key Value) Value {
+	if v, ok := fm.MaybeGet(key); ok {
+		return v
+	}
+	return nil
+}
+
+func (fm Map) MaybeGet(key Value) (v Value, ok bool) {
 	idx := indexMapData(fm.m, key.Ref())
 	if idx < len(fm.m) {
 		entry := fm.m[idx]
 		if futureEqualsValue(entry.key, key) {
-			return entry.value.Deref(fm.cs)
+			return entry.value.Deref(fm.cs), true
 		}
 	}
-	return nil
+	return
 }
 
 func (fm Map) Set(key Value, val Value) Map {

@@ -55,12 +55,11 @@ func (def StructWithUnionFieldDef) New() StructWithUnionField {
 		)}
 }
 
-func (s StructWithUnionField) Def() StructWithUnionFieldDef {
-	return StructWithUnionFieldDef{
-		float32(s.m.Get(types.NewString("a")).(types.Float32)),
-		uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32)),
-		s.__unionValueToDef(),
-	}
+func (s StructWithUnionField) Def() (d StructWithUnionFieldDef) {
+	d.A = float32(s.m.Get(types.NewString("a")).(types.Float32))
+	d.__unionIndex = uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32))
+	d.__unionValue = s.__unionValueToDef()
+	return
 }
 
 func (def StructWithUnionFieldDef) __unionDefToValue() types.Value {
@@ -99,14 +98,14 @@ func (s StructWithUnionField) __unionValueToDef() interface{} {
 func __typeRefOfStructWithUnionField() types.TypeRef {
 	return types.MakeStructTypeRef("StructWithUnionField",
 		[]types.Field{
-			types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind)},
+			types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
 		},
 		[]types.Field{
-			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind)},
-			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind)},
-			types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind)},
-			types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind)},
-			types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind))},
+			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
+			types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
+			types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
 		})
 
 }
