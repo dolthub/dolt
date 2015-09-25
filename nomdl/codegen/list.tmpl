@@ -19,12 +19,12 @@ func New{{.Name}}() {{.Name}} {
 		return {{.Name}}{types.NewList(l...)}
 	}
 
-	func (self {{.Name}}) Def() {{.Name}}Def {
-		l := make([]{{defType .ElemType}}, self.Len())
-		for i := uint64(0); i < self.Len(); i++ {
-			l[i] = {{valueToDef "self.l.Get(i)" .ElemType }}
+	func (l {{.Name}}) Def() {{.Name}}Def {
+		d := make([]{{defType .ElemType}}, l.Len())
+		for i := uint64(0); i < l.Len(); i++ {
+			d[i] = {{valueToDef "l.l.Get(i)" .ElemType }}
 		}
-		return l
+		return d
 	}
 {{end}}
 
@@ -34,8 +34,8 @@ func {{.Name}}FromVal(val types.Value) {{.Name}} {
 }
 
 
-func (self {{.Name}}) NomsValue() types.Value {
-	return self.l
+func (l {{.Name}}) NomsValue() types.Value {
+	return l.l
 }
 
 func (l {{.Name}}) Equals(p {{.Name}}) bool {
@@ -54,16 +54,16 @@ func (l {{.Name}}) Empty() bool {
 	return l.Len() == uint64(0)
 }
 
-func (self {{.Name}}) Get(i uint64) {{userType .ElemType}} {
-	return {{valueToUser "self.l.Get(i)" .ElemType}}
+func (l {{.Name}}) Get(i uint64) {{userType .ElemType}} {
+	return {{valueToUser "l.l.Get(i)" .ElemType}}
 }
 
 func (l {{.Name}}) Slice(idx uint64, end uint64) {{.Name}} {
 	return {{.Name}}{l.l.Slice(idx, end)}
 }
 
-func (self {{.Name}}) Set(i uint64, val {{userType .ElemType}}) {{.Name}} {
-	return {{.Name}}{self.l.Set(i, {{userToValue "val" .ElemType}})}
+func (l {{.Name}}) Set(i uint64, val {{userType .ElemType}}) {{.Name}} {
+	return {{.Name}}{l.l.Set(i, {{userToValue "val" .ElemType}})}
 }
 
 func (l {{.Name}}) Append(v ...{{userType .ElemType}}) {{.Name}} {

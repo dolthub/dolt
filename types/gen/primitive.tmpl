@@ -1,8 +1,8 @@
 type {{.NomsType}} {{.GoType}}
 
-func (self {{.NomsType}}) Equals(other Value) bool {
+func (p {{.NomsType}}) Equals(other Value) bool {
 	if other, ok := other.({{.NomsType}}); ok {
-		return self == other
+		return p == other
 	}
 	return false
 }
@@ -22,4 +22,3 @@ func {{.NomsType}}FromVal(v Value) {{.NomsType}} {
 func (v {{.NomsType}}) ToPrimitive() interface{} {
 	return {{.GoType}}(v)
 }
-

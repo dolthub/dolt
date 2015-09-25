@@ -42,12 +42,12 @@ func (def ListOfMapOfStringToValueDef) New() ListOfMapOfStringToValue {
 	return ListOfMapOfStringToValue{types.NewList(l...)}
 }
 
-func (self ListOfMapOfStringToValue) Def() ListOfMapOfStringToValueDef {
-	l := make([]MapOfStringToValueDef, self.Len())
-	for i := uint64(0); i < self.Len(); i++ {
-		l[i] = MapOfStringToValueFromVal(self.l.Get(i)).Def()
+func (l ListOfMapOfStringToValue) Def() ListOfMapOfStringToValueDef {
+	d := make([]MapOfStringToValueDef, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = MapOfStringToValueFromVal(l.l.Get(i)).Def()
 	}
-	return l
+	return d
 }
 
 func ListOfMapOfStringToValueFromVal(val types.Value) ListOfMapOfStringToValue {
@@ -55,8 +55,8 @@ func ListOfMapOfStringToValueFromVal(val types.Value) ListOfMapOfStringToValue {
 	return ListOfMapOfStringToValue{val.(types.List)}
 }
 
-func (self ListOfMapOfStringToValue) NomsValue() types.Value {
-	return self.l
+func (l ListOfMapOfStringToValue) NomsValue() types.Value {
+	return l.l
 }
 
 func (l ListOfMapOfStringToValue) Equals(p ListOfMapOfStringToValue) bool {
@@ -75,16 +75,16 @@ func (l ListOfMapOfStringToValue) Empty() bool {
 	return l.Len() == uint64(0)
 }
 
-func (self ListOfMapOfStringToValue) Get(i uint64) MapOfStringToValue {
-	return MapOfStringToValueFromVal(self.l.Get(i))
+func (l ListOfMapOfStringToValue) Get(i uint64) MapOfStringToValue {
+	return MapOfStringToValueFromVal(l.l.Get(i))
 }
 
 func (l ListOfMapOfStringToValue) Slice(idx uint64, end uint64) ListOfMapOfStringToValue {
 	return ListOfMapOfStringToValue{l.l.Slice(idx, end)}
 }
 
-func (self ListOfMapOfStringToValue) Set(i uint64, val MapOfStringToValue) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{self.l.Set(i, val.NomsValue())}
+func (l ListOfMapOfStringToValue) Set(i uint64, val MapOfStringToValue) ListOfMapOfStringToValue {
+	return ListOfMapOfStringToValue{l.l.Set(i, val.NomsValue())}
 }
 
 func (l ListOfMapOfStringToValue) Append(v ...MapOfStringToValue) ListOfMapOfStringToValue {
@@ -159,9 +159,9 @@ func (def MapOfStringToValueDef) New() MapOfStringToValue {
 	return MapOfStringToValue{types.NewMap(kv...)}
 }
 
-func (self MapOfStringToValue) Def() MapOfStringToValueDef {
+func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 	def := make(map[string]types.Value)
-	self.m.Iter(func(k, v types.Value) bool {
+	m.m.Iter(func(k, v types.Value) bool {
 		def[k.(types.String).String()] = v
 		return false
 	})
@@ -259,9 +259,9 @@ func (def MapOfStringToListOfPitchDef) New() MapOfStringToListOfPitch {
 	return MapOfStringToListOfPitch{types.NewMap(kv...)}
 }
 
-func (self MapOfStringToListOfPitch) Def() MapOfStringToListOfPitchDef {
+func (m MapOfStringToListOfPitch) Def() MapOfStringToListOfPitchDef {
 	def := make(map[string]ListOfPitchDef)
-	self.m.Iter(func(k, v types.Value) bool {
+	m.m.Iter(func(k, v types.Value) bool {
 		def[k.(types.String).String()] = ListOfPitchFromVal(v).Def()
 		return false
 	})
@@ -359,12 +359,12 @@ func (def ListOfPitchDef) New() ListOfPitch {
 	return ListOfPitch{types.NewList(l...)}
 }
 
-func (self ListOfPitch) Def() ListOfPitchDef {
-	l := make([]PitchDef, self.Len())
-	for i := uint64(0); i < self.Len(); i++ {
-		l[i] = PitchFromVal(self.l.Get(i)).Def()
+func (l ListOfPitch) Def() ListOfPitchDef {
+	d := make([]PitchDef, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = PitchFromVal(l.l.Get(i)).Def()
 	}
-	return l
+	return d
 }
 
 func ListOfPitchFromVal(val types.Value) ListOfPitch {
@@ -372,8 +372,8 @@ func ListOfPitchFromVal(val types.Value) ListOfPitch {
 	return ListOfPitch{val.(types.List)}
 }
 
-func (self ListOfPitch) NomsValue() types.Value {
-	return self.l
+func (l ListOfPitch) NomsValue() types.Value {
+	return l.l
 }
 
 func (l ListOfPitch) Equals(p ListOfPitch) bool {
@@ -392,16 +392,16 @@ func (l ListOfPitch) Empty() bool {
 	return l.Len() == uint64(0)
 }
 
-func (self ListOfPitch) Get(i uint64) Pitch {
-	return PitchFromVal(self.l.Get(i))
+func (l ListOfPitch) Get(i uint64) Pitch {
+	return PitchFromVal(l.l.Get(i))
 }
 
 func (l ListOfPitch) Slice(idx uint64, end uint64) ListOfPitch {
 	return ListOfPitch{l.l.Slice(idx, end)}
 }
 
-func (self ListOfPitch) Set(i uint64, val Pitch) ListOfPitch {
-	return ListOfPitch{self.l.Set(i, val.NomsValue())}
+func (l ListOfPitch) Set(i uint64, val Pitch) ListOfPitch {
+	return ListOfPitch{l.l.Set(i, val.NomsValue())}
 }
 
 func (l ListOfPitch) Append(v ...Pitch) ListOfPitch {
@@ -486,10 +486,10 @@ func (def PitchDef) New() Pitch {
 		)}
 }
 
-func (self Pitch) Def() PitchDef {
+func (s Pitch) Def() PitchDef {
 	return PitchDef{
-		float64(self.m.Get(types.NewString("X")).(types.Float64)),
-		float64(self.m.Get(types.NewString("Z")).(types.Float64)),
+		float64(s.m.Get(types.NewString("X")).(types.Float64)),
+		float64(s.m.Get(types.NewString("Z")).(types.Float64)),
 	}
 }
 
@@ -509,36 +509,36 @@ func PitchFromVal(val types.Value) Pitch {
 	return Pitch{val.(types.Map)}
 }
 
-func (self Pitch) NomsValue() types.Value {
-	return self.m
+func (s Pitch) NomsValue() types.Value {
+	return s.m
 }
 
-func (self Pitch) Equals(other Pitch) bool {
-	return self.m.Equals(other.m)
+func (s Pitch) Equals(other Pitch) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self Pitch) Ref() ref.Ref {
-	return self.m.Ref()
+func (s Pitch) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self Pitch) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s Pitch) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self Pitch) X() float64 {
-	return float64(self.m.Get(types.NewString("X")).(types.Float64))
+func (s Pitch) X() float64 {
+	return float64(s.m.Get(types.NewString("X")).(types.Float64))
 }
 
-func (self Pitch) SetX(val float64) Pitch {
-	return Pitch{self.m.Set(types.NewString("X"), types.Float64(val))}
+func (s Pitch) SetX(val float64) Pitch {
+	return Pitch{s.m.Set(types.NewString("X"), types.Float64(val))}
 }
 
-func (self Pitch) Z() float64 {
-	return float64(self.m.Get(types.NewString("Z")).(types.Float64))
+func (s Pitch) Z() float64 {
+	return float64(s.m.Get(types.NewString("Z")).(types.Float64))
 }
 
-func (self Pitch) SetZ(val float64) Pitch {
-	return Pitch{self.m.Set(types.NewString("Z"), types.Float64(val))}
+func (s Pitch) SetZ(val float64) Pitch {
+	return Pitch{s.m.Set(types.NewString("Z"), types.Float64(val))}
 }
 
 // MapOfStringToString
@@ -561,9 +561,9 @@ func (def MapOfStringToStringDef) New() MapOfStringToString {
 	return MapOfStringToString{types.NewMap(kv...)}
 }
 
-func (self MapOfStringToString) Def() MapOfStringToStringDef {
+func (m MapOfStringToString) Def() MapOfStringToStringDef {
 	def := make(map[string]string)
-	self.m.Iter(func(k, v types.Value) bool {
+	m.m.Iter(func(k, v types.Value) bool {
 		def[k.(types.String).String()] = v.(types.String).String()
 		return false
 	})

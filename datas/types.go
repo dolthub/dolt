@@ -53,36 +53,36 @@ func CommitFromVal(val types.Value) Commit {
 	return Commit{val.(types.Map)}
 }
 
-func (self Commit) NomsValue() types.Value {
-	return self.m
+func (s Commit) NomsValue() types.Value {
+	return s.m
 }
 
-func (self Commit) Equals(other Commit) bool {
-	return self.m.Equals(other.m)
+func (s Commit) Equals(other Commit) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self Commit) Ref() ref.Ref {
-	return self.m.Ref()
+func (s Commit) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self Commit) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s Commit) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self Commit) Value() types.Value {
-	return self.m.Get(types.NewString("value"))
+func (s Commit) Value() types.Value {
+	return s.m.Get(types.NewString("value"))
 }
 
-func (self Commit) SetValue(val types.Value) Commit {
-	return Commit{self.m.Set(types.NewString("value"), val)}
+func (s Commit) SetValue(val types.Value) Commit {
+	return Commit{s.m.Set(types.NewString("value"), val)}
 }
 
-func (self Commit) Parents() SetOfCommit {
-	return SetOfCommitFromVal(self.m.Get(types.NewString("parents")))
+func (s Commit) Parents() SetOfCommit {
+	return SetOfCommitFromVal(s.m.Get(types.NewString("parents")))
 }
 
-func (self Commit) SetParents(val SetOfCommit) Commit {
-	return Commit{self.m.Set(types.NewString("parents"), val.NomsValue())}
+func (s Commit) SetParents(val SetOfCommit) Commit {
+	return Commit{s.m.Set(types.NewString("parents"), val.NomsValue())}
 }
 
 // SetOfCommit

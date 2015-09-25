@@ -52,10 +52,10 @@ func (def StructDef) New() Struct {
 		)}
 }
 
-func (self Struct) Def() StructDef {
+func (s Struct) Def() StructDef {
 	return StructDef{
-		self.m.Get(types.NewString("s")).(types.String).String(),
-		bool(self.m.Get(types.NewString("b")).(types.Bool)),
+		s.m.Get(types.NewString("s")).(types.String).String(),
+		bool(s.m.Get(types.NewString("b")).(types.Bool)),
 	}
 }
 
@@ -75,34 +75,34 @@ func StructFromVal(val types.Value) Struct {
 	return Struct{val.(types.Map)}
 }
 
-func (self Struct) NomsValue() types.Value {
-	return self.m
+func (s Struct) NomsValue() types.Value {
+	return s.m
 }
 
-func (self Struct) Equals(other Struct) bool {
-	return self.m.Equals(other.m)
+func (s Struct) Equals(other Struct) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self Struct) Ref() ref.Ref {
-	return self.m.Ref()
+func (s Struct) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self Struct) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s Struct) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self Struct) S() string {
-	return self.m.Get(types.NewString("s")).(types.String).String()
+func (s Struct) S() string {
+	return s.m.Get(types.NewString("s")).(types.String).String()
 }
 
-func (self Struct) SetS(val string) Struct {
-	return Struct{self.m.Set(types.NewString("s"), types.NewString(val))}
+func (s Struct) SetS(val string) Struct {
+	return Struct{s.m.Set(types.NewString("s"), types.NewString(val))}
 }
 
-func (self Struct) B() bool {
-	return bool(self.m.Get(types.NewString("b")).(types.Bool))
+func (s Struct) B() bool {
+	return bool(s.m.Get(types.NewString("b")).(types.Bool))
 }
 
-func (self Struct) SetB(val bool) Struct {
-	return Struct{self.m.Set(types.NewString("b"), types.Bool(val))}
+func (s Struct) SetB(val bool) Struct {
+	return Struct{s.m.Set(types.NewString("b"), types.Bool(val))}
 }

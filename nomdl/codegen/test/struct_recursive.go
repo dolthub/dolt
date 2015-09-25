@@ -49,9 +49,9 @@ func (def TreeDef) New() Tree {
 		)}
 }
 
-func (self Tree) Def() TreeDef {
+func (s Tree) Def() TreeDef {
 	return TreeDef{
-		ListOfTreeFromVal(self.m.Get(types.NewString("children"))).Def(),
+		ListOfTreeFromVal(s.m.Get(types.NewString("children"))).Def(),
 	}
 }
 
@@ -70,28 +70,28 @@ func TreeFromVal(val types.Value) Tree {
 	return Tree{val.(types.Map)}
 }
 
-func (self Tree) NomsValue() types.Value {
-	return self.m
+func (s Tree) NomsValue() types.Value {
+	return s.m
 }
 
-func (self Tree) Equals(other Tree) bool {
-	return self.m.Equals(other.m)
+func (s Tree) Equals(other Tree) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self Tree) Ref() ref.Ref {
-	return self.m.Ref()
+func (s Tree) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self Tree) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s Tree) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self Tree) Children() ListOfTree {
-	return ListOfTreeFromVal(self.m.Get(types.NewString("children")))
+func (s Tree) Children() ListOfTree {
+	return ListOfTreeFromVal(s.m.Get(types.NewString("children")))
 }
 
-func (self Tree) SetChildren(val ListOfTree) Tree {
-	return Tree{self.m.Set(types.NewString("children"), val.NomsValue())}
+func (s Tree) SetChildren(val ListOfTree) Tree {
+	return Tree{s.m.Set(types.NewString("children"), val.NomsValue())}
 }
 
 // ListOfTree
@@ -114,12 +114,12 @@ func (def ListOfTreeDef) New() ListOfTree {
 	return ListOfTree{types.NewList(l...)}
 }
 
-func (self ListOfTree) Def() ListOfTreeDef {
-	l := make([]TreeDef, self.Len())
-	for i := uint64(0); i < self.Len(); i++ {
-		l[i] = TreeFromVal(self.l.Get(i)).Def()
+func (l ListOfTree) Def() ListOfTreeDef {
+	d := make([]TreeDef, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = TreeFromVal(l.l.Get(i)).Def()
 	}
-	return l
+	return d
 }
 
 func ListOfTreeFromVal(val types.Value) ListOfTree {
@@ -127,8 +127,8 @@ func ListOfTreeFromVal(val types.Value) ListOfTree {
 	return ListOfTree{val.(types.List)}
 }
 
-func (self ListOfTree) NomsValue() types.Value {
-	return self.l
+func (l ListOfTree) NomsValue() types.Value {
+	return l.l
 }
 
 func (l ListOfTree) Equals(p ListOfTree) bool {
@@ -147,16 +147,16 @@ func (l ListOfTree) Empty() bool {
 	return l.Len() == uint64(0)
 }
 
-func (self ListOfTree) Get(i uint64) Tree {
-	return TreeFromVal(self.l.Get(i))
+func (l ListOfTree) Get(i uint64) Tree {
+	return TreeFromVal(l.l.Get(i))
 }
 
 func (l ListOfTree) Slice(idx uint64, end uint64) ListOfTree {
 	return ListOfTree{l.l.Slice(idx, end)}
 }
 
-func (self ListOfTree) Set(i uint64, val Tree) ListOfTree {
-	return ListOfTree{self.l.Set(i, val.NomsValue())}
+func (l ListOfTree) Set(i uint64, val Tree) ListOfTree {
+	return ListOfTree{l.l.Set(i, val.NomsValue())}
 }
 
 func (l ListOfTree) Append(v ...Tree) ListOfTree {
