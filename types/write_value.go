@@ -13,12 +13,25 @@ type primitive interface {
 
 func WriteValue(v Value, cs chunks.ChunkSink) ref.Ref {
 	d.Chk.NotNil(cs)
+	return writeValueInternal(v, cs)
+}
 
+func writeChildValueInternal(v Value, cs chunks.ChunkSink) ref.Ref {
+	if cs == nil {
+		return v.Ref()
+	}
+
+	return writeValueInternal(v, cs)
+}
+
+func writeValueInternal(v Value, cs chunks.ChunkSink) ref.Ref {
 	e := toEncodeable(v, cs)
 	w := chunks.NewChunkWriter()
 	enc.Encode(w, e)
 	c := w.Chunk()
-	cs.Put(c)
+	if cs != nil {
+		cs.Put(c)
+	}
 	return c.Ref()
 }
 
@@ -98,7 +111,7 @@ func makeTypeEncodeable(t TypeRef, cs chunks.ChunkSink) interface{} {
 	pkgRef := t.PackageRef().Ref()
 	p := LookupPackage(pkgRef)
 	if p != nil {
-		pkgRef = WriteValue(p.NomsValue(), cs)
+		pkgRef = writeChildValueInternal(p.NomsValue(), cs)
 	}
 	return enc.TypeRef{PkgRef: pkgRef, Name: t.Name(), Kind: uint8(t.Kind()), Desc: toEncodeable(t.Desc.ToValue(), cs)}
 }
@@ -113,7 +126,7 @@ func processChild(f Future, cs chunks.ChunkSink) interface{} {
 	switch v := v.(type) {
 	// Blobs, lists, maps, and sets are always out-of-line
 	case Blob, List, Map, Set:
-		return WriteValue(v, cs)
+		return writeChildValueInternal(v, cs)
 	default:
 		// Other types are always inline.
 		return toEncodeable(v, cs)
