@@ -1,9 +1,6 @@
 package types
 
-import (
-	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
-)
+import "github.com/attic-labs/noms/ref"
 
 var getRefOverride func(v Value) ref.Ref
 
@@ -15,7 +12,7 @@ func getRef(v Value) ref.Ref {
 }
 
 func getRefNoOverride(v Value) ref.Ref {
-	return WriteValue(v, &chunks.NopStore{})
+	return writeValueInternal(v, nil)
 }
 
 func ensureRef(r *ref.Ref, v Value) ref.Ref {
