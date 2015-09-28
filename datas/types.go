@@ -109,10 +109,16 @@ func (s SetOfCommit) Ref() ref.Ref {
 }
 
 // A Noms Value that describes SetOfCommit.
-var __typeRefForSetOfCommit = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", ref.Ref{}))
+var __typeRefForSetOfCommit = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", __datasPackageInFile_types_CachedRef))
 
 func (m SetOfCommit) TypeRef() types.TypeRef {
 	return __typeRefForSetOfCommit
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForSetOfCommit, func(v types.Value) types.NomsValue {
+		return SetOfCommitFromVal(v)
+	})
 }
 
 func (s SetOfCommit) Empty() bool {

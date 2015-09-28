@@ -38,7 +38,7 @@ func NewEnumStruct() EnumStruct {
 	return EnumStruct{types.NewMap(
 		types.NewString("$name"), types.NewString("EnumStruct"),
 		types.NewString("$type"), types.MakeTypeRef("EnumStruct", __testPackageInFile_enum_struct_CachedRef),
-		types.NewString("hand"), types.Int32(0),
+		types.NewString("hand"), types.UInt32(0),
 	)}
 }
 
@@ -51,12 +51,12 @@ func (def EnumStructDef) New() EnumStruct {
 		types.NewMap(
 			types.NewString("$name"), types.NewString("EnumStruct"),
 			types.NewString("$type"), types.MakeTypeRef("EnumStruct", __testPackageInFile_enum_struct_CachedRef),
-			types.NewString("hand"), types.Int32(def.Hand),
+			types.NewString("hand"), types.UInt32(def.Hand),
 		)}
 }
 
 func (s EnumStruct) Def() (d EnumStructDef) {
-	d.Hand = Handedness(s.m.Get(types.NewString("hand")).(types.Int32))
+	d.Hand = Handedness(s.m.Get(types.NewString("hand")).(types.UInt32))
 	return
 }
 
@@ -84,11 +84,11 @@ func (s EnumStruct) Ref() ref.Ref {
 }
 
 func (s EnumStruct) Hand() Handedness {
-	return Handedness(s.m.Get(types.NewString("hand")).(types.Int32))
+	return Handedness(s.m.Get(types.NewString("hand")).(types.UInt32))
 }
 
 func (s EnumStruct) SetHand(val Handedness) EnumStruct {
-	return EnumStruct{s.m.Set(types.NewString("hand"), types.Int32(val))}
+	return EnumStruct{s.m.Set(types.NewString("hand"), types.UInt32(val))}
 }
 
 // Handedness

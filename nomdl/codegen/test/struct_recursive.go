@@ -136,10 +136,16 @@ func (l ListOfTree) Ref() ref.Ref {
 }
 
 // A Noms Value that describes ListOfTree.
-var __typeRefForListOfTree = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", ref.Ref{}))
+var __typeRefForListOfTree = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", __testPackageInFile_struct_recursive_CachedRef))
 
 func (m ListOfTree) TypeRef() types.TypeRef {
 	return __typeRefForListOfTree
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForListOfTree, func(v types.Value) types.NomsValue {
+		return ListOfTreeFromVal(v)
+	})
 }
 
 func (l ListOfTree) Len() uint64 {

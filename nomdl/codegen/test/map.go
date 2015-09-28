@@ -60,6 +60,12 @@ func (m MapOfBoolToString) TypeRef() types.TypeRef {
 	return __typeRefForMapOfBoolToString
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForMapOfBoolToString, func(v types.Value) types.NomsValue {
+		return MapOfBoolToStringFromVal(v)
+	})
+}
+
 func (m MapOfBoolToString) Empty() bool {
 	return m.m.Empty()
 }
@@ -165,6 +171,12 @@ var __typeRefForMapOfStringToValue = types.MakeCompoundTypeRef("", types.MapKind
 
 func (m MapOfStringToValue) TypeRef() types.TypeRef {
 	return __typeRefForMapOfStringToValue
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.NomsValue {
+		return MapOfStringToValueFromVal(v)
+	})
 }
 
 func (m MapOfStringToValue) Empty() bool {

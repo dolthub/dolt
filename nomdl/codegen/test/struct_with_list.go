@@ -181,6 +181,12 @@ func (m ListOfUInt8) TypeRef() types.TypeRef {
 	return __typeRefForListOfUInt8
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForListOfUInt8, func(v types.Value) types.NomsValue {
+		return ListOfUInt8FromVal(v)
+	})
+}
+
 func (l ListOfUInt8) Len() uint64 {
 	return l.l.Len()
 }

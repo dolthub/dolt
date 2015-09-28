@@ -76,10 +76,16 @@ func (s SetOfDataset) Ref() ref.Ref {
 }
 
 // A Noms Value that describes SetOfDataset.
-var __typeRefForSetOfDataset = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Dataset", ref.Ref{}))
+var __typeRefForSetOfDataset = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Dataset", __mgmtPackageInFile_types_CachedRef))
 
 func (m SetOfDataset) TypeRef() types.TypeRef {
 	return __typeRefForSetOfDataset
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForSetOfDataset, func(v types.Value) types.NomsValue {
+		return SetOfDatasetFromVal(v)
+	})
 }
 
 func (s SetOfDataset) Empty() bool {

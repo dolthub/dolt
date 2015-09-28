@@ -21,6 +21,10 @@ func TestEncode(t *testing.T) {
 	dst.Reset()
 	Encode(dst, "foo")
 	assert.Equal("j \"foo\"\n", string(dst.Bytes()))
+
+	dst.Reset()
+	Encode(dst, typedValueWrapper{[]interface{}{42}})
+	assert.Equal("t [42]\n", string(dst.Bytes()))
 }
 
 func TestInvalidDecode(t *testing.T) {
@@ -50,4 +54,9 @@ func TestSelectBlobDecoder(t *testing.T) {
 	_, err := io.Copy(out, decoded.(io.Reader))
 	assert.NoError(err)
 	assert.EqualValues([]byte{0x2B}, out.Bytes())
+}
+
+func TestSelectTypedDecoder(t *testing.T) {
+	v := Decode(bytes.NewBufferString(`t [42]`))
+	assert.Equal(t, typedValueWrapper{[]interface{}{float64(42)}}, v)
 }

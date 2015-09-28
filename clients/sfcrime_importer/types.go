@@ -90,10 +90,16 @@ func (l ListOfIncident) Ref() ref.Ref {
 }
 
 // A Noms Value that describes ListOfIncident.
-var __typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Incident", ref.Ref{}))
+var __typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef))
 
 func (m ListOfIncident) TypeRef() types.TypeRef {
 	return __typeRefForListOfIncident
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForListOfIncident, func(v types.Value) types.NomsValue {
+		return ListOfIncidentFromVal(v)
+	})
 }
 
 func (l ListOfIncident) Len() uint64 {

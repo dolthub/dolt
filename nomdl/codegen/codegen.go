@@ -280,7 +280,7 @@ func (gen *codeGen) defToValue(val string, t types.TypeRef) string {
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return gen.nativeToValue(val, t)
 	case types.EnumKind:
-		return fmt.Sprintf("types.Int32(%s)", val)
+		return fmt.Sprintf("types.UInt32(%s)", val)
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.New().NomsValue()", val)
 	case types.RefKind:
@@ -297,7 +297,7 @@ func (gen *codeGen) valueToDef(val string, t types.TypeRef) string {
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return gen.valueToNative(val, t)
 	case types.EnumKind:
-		return fmt.Sprintf("%s(%s.(types.Int32))", gen.userName(t), val)
+		return fmt.Sprintf("%s(%s.(types.UInt32))", gen.userName(t), val)
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.Def()", gen.valueToUser(val, t))
 	case types.RefKind:
@@ -323,7 +323,7 @@ func (gen *codeGen) nativeToValue(val string, t types.TypeRef) string {
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return fmt.Sprintf("types.%s(%s)", kindToString(k), val)
 	case types.EnumKind:
-		return fmt.Sprintf("types.Int32(%s)", val)
+		return fmt.Sprintf("types.UInt32(%s)", val)
 	case types.StringKind:
 		return "types.NewString(" + val + ")"
 	}
@@ -334,7 +334,7 @@ func (gen *codeGen) valueToNative(val string, t types.TypeRef) string {
 	k := t.Desc.Kind()
 	switch k {
 	case types.EnumKind:
-		return fmt.Sprintf("%s(%s.(types.Int32))", gen.userType(t), val)
+		return fmt.Sprintf("%s(%s.(types.UInt32))", gen.userType(t), val)
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		n := kindToString(k)
 		return fmt.Sprintf("%s(%s.(types.%s))", strings.ToLower(n), val, n)
@@ -412,7 +412,7 @@ func (gen *codeGen) valueZero(t types.TypeRef) string {
 	case types.BoolKind:
 		return "types.Bool(false)"
 	case types.EnumKind:
-		return "types.Int32(0)"
+		return "types.UInt32(0)"
 	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return fmt.Sprintf("types.%s(0)", kindToString(k))
 	case types.ListKind:
@@ -471,11 +471,13 @@ func (gen *codeGen) userName(t types.TypeRef) string {
 	panic("unreachable")
 }
 
-func (gen *codeGen) toTypesTypeRef(t types.TypeRef) string {
+func (gen *codeGen) toTypesTypeRef(t types.TypeRef, fileID, packageName string) string {
 	if t.IsUnresolved() {
 		refCode := "ref.Ref{}"
 		if t.PackageRef() != (ref.Ref{}) {
 			refCode = fmt.Sprintf(`ref.Parse("%s")`, t.PackageRef().String())
+		} else if fileID != "" {
+			refCode = fmt.Sprintf("__%sPackageInFile_%s_CachedRef", packageName, fileID)
 		}
 		return fmt.Sprintf(`types.MakeTypeRef("%s", %s)`, t.Name(), refCode)
 	}
@@ -486,7 +488,7 @@ func (gen *codeGen) toTypesTypeRef(t types.TypeRef) string {
 	case types.CompoundDesc:
 		typerefs := make([]string, len(desc.ElemTypes))
 		for i, t := range desc.ElemTypes {
-			typerefs[i] = gen.toTypesTypeRef(t)
+			typerefs[i] = gen.toTypesTypeRef(t, fileID, packageName)
 		}
 		return fmt.Sprintf(`types.MakeCompoundTypeRef("%s", types.%sKind, %s)`, t.Name(), kindToString(t.Desc.Kind()), strings.Join(typerefs, ", "))
 	case types.EnumDesc:
@@ -495,7 +497,7 @@ func (gen *codeGen) toTypesTypeRef(t types.TypeRef) string {
 		flatten := func(f []types.Field) string {
 			out := make([]string, 0, len(f))
 			for _, field := range f {
-				out = append(out, fmt.Sprintf(`types.Field{"%s", %s, %t},`, field.Name, gen.toTypesTypeRef(field.T), field.Optional))
+				out = append(out, fmt.Sprintf(`types.Field{"%s", %s, %t},`, field.Name, gen.toTypesTypeRef(field.T, fileID, packageName), field.Optional))
 			}
 			return strings.Join(out, "\n")
 		}
@@ -618,11 +620,15 @@ func (gen *codeGen) writeStruct(t types.TypeRef) {
 func (gen *codeGen) writeList(t types.TypeRef) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
-		Name      string
-		Type      types.TypeRef
-		ElemType  types.TypeRef
-		CanUseDef bool
+		FileID      string
+		PackageName string
+		Name        string
+		Type        types.TypeRef
+		ElemType    types.TypeRef
+		CanUseDef   bool
 	}{
+		gen.fileid,
+		gen.pkg.Name,
 		gen.userName(t),
 		t,
 		elemTypes[0],
@@ -635,12 +641,16 @@ func (gen *codeGen) writeList(t types.TypeRef) {
 func (gen *codeGen) writeMap(t types.TypeRef) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
-		Name      string
-		Type      types.TypeRef
-		KeyType   types.TypeRef
-		ValueType types.TypeRef
-		CanUseDef bool
+		FileID      string
+		PackageName string
+		Name        string
+		Type        types.TypeRef
+		KeyType     types.TypeRef
+		ValueType   types.TypeRef
+		CanUseDef   bool
 	}{
+		gen.fileid,
+		gen.pkg.Name,
 		gen.userName(t),
 		t,
 		elemTypes[0],
@@ -655,10 +665,14 @@ func (gen *codeGen) writeMap(t types.TypeRef) {
 func (gen *codeGen) writeRef(t types.TypeRef) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
-		Name     string
-		Type     types.TypeRef
-		ElemType types.TypeRef
+		FileID      string
+		PackageName string
+		Name        string
+		Type        types.TypeRef
+		ElemType    types.TypeRef
 	}{
+		gen.fileid,
+		gen.pkg.Name,
 		gen.userName(t),
 		t,
 		elemTypes[0],
@@ -670,11 +684,15 @@ func (gen *codeGen) writeRef(t types.TypeRef) {
 func (gen *codeGen) writeSet(t types.TypeRef) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
-		Name      string
-		Type      types.TypeRef
-		ElemType  types.TypeRef
-		CanUseDef bool
+		FileID      string
+		PackageName string
+		Name        string
+		Type        types.TypeRef
+		ElemType    types.TypeRef
+		CanUseDef   bool
 	}{
+		gen.fileid,
+		gen.pkg.Name,
 		gen.userName(t),
 		t,
 		elemTypes[0],
@@ -686,10 +704,14 @@ func (gen *codeGen) writeSet(t types.TypeRef) {
 
 func (gen *codeGen) writeEnum(t types.TypeRef) {
 	data := struct {
-		Name string
-		Type types.TypeRef
-		Ids  []string
+		FileID      string
+		PackageName string
+		Name        string
+		Type        types.TypeRef
+		Ids         []string
 	}{
+		gen.fileid,
+		gen.pkg.Name,
 		t.Name(),
 		t,
 		t.Desc.(types.EnumDesc).IDs,

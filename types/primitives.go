@@ -347,3 +347,4 @@ var typeRefForFloat64 = MakePrimitiveTypeRef(Float64Kind)
 func (v Float64) TypeRef() TypeRef {
 	return typeRefForFloat64
 }
+

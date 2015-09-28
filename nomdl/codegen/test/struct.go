@@ -28,6 +28,136 @@ func __testPackageInFile_struct_Ref() ref.Ref {
 	return types.RegisterPackage(&p)
 }
 
+// ListOfStruct
+
+type ListOfStruct struct {
+	l types.List
+}
+
+func NewListOfStruct() ListOfStruct {
+	return ListOfStruct{types.NewList()}
+}
+
+type ListOfStructDef []StructDef
+
+func (def ListOfStructDef) New() ListOfStruct {
+	l := make([]types.Value, len(def))
+	for i, d := range def {
+		l[i] = d.New().NomsValue()
+	}
+	return ListOfStruct{types.NewList(l...)}
+}
+
+func (l ListOfStruct) Def() ListOfStructDef {
+	d := make([]StructDef, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = StructFromVal(l.l.Get(i)).Def()
+	}
+	return d
+}
+
+func ListOfStructFromVal(val types.Value) ListOfStruct {
+	// TODO: Validate here
+	return ListOfStruct{val.(types.List)}
+}
+
+func (l ListOfStruct) NomsValue() types.Value {
+	return l.l
+}
+
+func (l ListOfStruct) Equals(p ListOfStruct) bool {
+	return l.l.Equals(p.l)
+}
+
+func (l ListOfStruct) Ref() ref.Ref {
+	return l.l.Ref()
+}
+
+// A Noms Value that describes ListOfStruct.
+var __typeRefForListOfStruct = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Struct", __testPackageInFile_struct_CachedRef))
+
+func (m ListOfStruct) TypeRef() types.TypeRef {
+	return __typeRefForListOfStruct
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForListOfStruct, func(v types.Value) types.NomsValue {
+		return ListOfStructFromVal(v)
+	})
+}
+
+func (l ListOfStruct) Len() uint64 {
+	return l.l.Len()
+}
+
+func (l ListOfStruct) Empty() bool {
+	return l.Len() == uint64(0)
+}
+
+func (l ListOfStruct) Get(i uint64) Struct {
+	return StructFromVal(l.l.Get(i))
+}
+
+func (l ListOfStruct) Slice(idx uint64, end uint64) ListOfStruct {
+	return ListOfStruct{l.l.Slice(idx, end)}
+}
+
+func (l ListOfStruct) Set(i uint64, val Struct) ListOfStruct {
+	return ListOfStruct{l.l.Set(i, val.NomsValue())}
+}
+
+func (l ListOfStruct) Append(v ...Struct) ListOfStruct {
+	return ListOfStruct{l.l.Append(l.fromElemSlice(v)...)}
+}
+
+func (l ListOfStruct) Insert(idx uint64, v ...Struct) ListOfStruct {
+	return ListOfStruct{l.l.Insert(idx, l.fromElemSlice(v)...)}
+}
+
+func (l ListOfStruct) Remove(idx uint64, end uint64) ListOfStruct {
+	return ListOfStruct{l.l.Remove(idx, end)}
+}
+
+func (l ListOfStruct) RemoveAt(idx uint64) ListOfStruct {
+	return ListOfStruct{(l.l.RemoveAt(idx))}
+}
+
+func (l ListOfStruct) fromElemSlice(p []Struct) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v.NomsValue()
+	}
+	return r
+}
+
+type ListOfStructIterCallback func(v Struct, i uint64) (stop bool)
+
+func (l ListOfStruct) Iter(cb ListOfStructIterCallback) {
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(StructFromVal(v), i)
+	})
+}
+
+type ListOfStructIterAllCallback func(v Struct, i uint64)
+
+func (l ListOfStruct) IterAll(cb ListOfStructIterAllCallback) {
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(StructFromVal(v), i)
+	})
+}
+
+type ListOfStructFilterCallback func(v Struct, i uint64) (keep bool)
+
+func (l ListOfStruct) Filter(cb ListOfStructFilterCallback) ListOfStruct {
+	nl := NewListOfStruct()
+	l.IterAll(func(v Struct, i uint64) {
+		if cb(v, i) {
+			nl = nl.Append(v)
+		}
+	})
+	return nl
+}
+
 // Struct
 
 type Struct struct {

@@ -16,8 +16,6 @@ func (r {{.Name}}) Equals(other {{.Name}}) bool {
 	return r.Ref() == other.Ref()
 }
 
-{{template "type_ref.tmpl" .}}
-
 func (r {{.Name}}) NomsValue() types.Value {
 	return types.Ref{R: r.r}
 }
@@ -25,6 +23,8 @@ func (r {{.Name}}) NomsValue() types.Value {
 func {{.Name}}FromVal(p types.Value) {{.Name}} {
 	return {{.Name}}{p.(types.Ref).Ref()}
 }
+
+{{template "type_ref.tmpl" .}}
 
 func (r {{.Name}}) GetValue(cs chunks.ChunkSource) {{userType .ElemType}} {
 	return {{valueToUser "types.ReadValue(r.r, cs)" .ElemType}}

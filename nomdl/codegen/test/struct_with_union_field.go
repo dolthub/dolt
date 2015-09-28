@@ -310,6 +310,12 @@ func (m SetOfUInt8) TypeRef() types.TypeRef {
 	return __typeRefForSetOfUInt8
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForSetOfUInt8, func(v types.Value) types.NomsValue {
+		return SetOfUInt8FromVal(v)
+	})
+}
+
 func (s SetOfUInt8) Empty() bool {
 	return s.s.Empty()
 }

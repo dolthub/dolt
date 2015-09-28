@@ -31,12 +31,19 @@ import (
 	"github.com/attic-labs/noms/d"
 )
 
+// typedValue is used to tag an object so that Encode will encode it using the typed serialization format.
+type typedValue interface {
+	TypedValue() []interface{}
+}
+
 // Encode serializes v into dst, and panics on unsupported types.
 func Encode(dst io.Writer, v interface{}) {
 	d.Chk.NotNil(dst)
 	switch v := v.(type) {
 	case io.Reader:
 		blobLeafEncode(dst, v)
+	case typedValue:
+		typedEncode(dst, v)
 	default:
 		jsonEncode(dst, v)
 	}
@@ -55,6 +62,8 @@ func Decode(r io.Reader) interface{} {
 		return jsonDecode(buffered)
 	} else if bytes.Equal(prefix, blobTag) {
 		return blobLeafDecode(buffered)
+	} else if bytes.Equal(prefix, typedTag) {
+		return typedDecode(buffered)
 	}
 
 	d.Exp.Fail(fmt.Sprintf("Unsupported chunk tag: %+v", prefix))

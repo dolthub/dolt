@@ -151,6 +151,9 @@ func (fm Map) Chunks() (futures []Future) {
 }
 
 func (fm Map) TypeRef() TypeRef {
+	if v, ok := fm.MaybeGet(NewString("$type")); ok {
+		return v.(TypeRef)
+	}
 	// TODO: The key and value type needs to be configurable.
 	return MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))
 }

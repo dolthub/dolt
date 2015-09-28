@@ -21,6 +21,10 @@ func ReadValue(r ref.Ref, cs chunks.ChunkSource) Value {
 
 	i := enc.Decode(bytes.NewReader(c.Data()))
 
+	if i, ok := i.(typedValueWrapper); ok {
+		return fromTypedEncodeable(i, cs).NomsValue()
+	}
+
 	return fromEncodeable(i, cs).Deref(cs)
 }
 

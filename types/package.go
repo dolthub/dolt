@@ -253,7 +253,7 @@ func (s SetOfRefOfPackage) Ref() ref.Ref {
 }
 
 // A Noms Value that describes SetOfRefOfPackage.
-var __typeRefForSetOfRefOfPackage = MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", ref.Ref{})))
+var __typeRefForSetOfRefOfPackage = MakeCompoundTypeRef("", SetKind, __typeRefForPackage)
 
 func (m SetOfRefOfPackage) TypeRef() TypeRef {
 	return __typeRefForSetOfRefOfPackage
@@ -362,7 +362,7 @@ func (r RefOfPackage) Equals(other RefOfPackage) bool {
 }
 
 // A Noms Value that describes RefOfPackage.
-var __typeRefForRefOfPackage = MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", ref.Ref{}))
+var __typeRefForRefOfPackage = MakeCompoundTypeRef("", RefKind, __typeRefForPackage)
 
 func (m RefOfPackage) TypeRef() TypeRef {
 	return __typeRefForRefOfPackage

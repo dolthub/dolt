@@ -11,7 +11,12 @@ type primitive interface {
 	ToPrimitive() interface{}
 }
 
-func WriteValue(v Value, cs chunks.ChunkSink) ref.Ref {
+type NomsValue interface {
+	NomsValue() Value
+	TypeRef() TypeRef
+}
+
+func WriteValue(v interface{}, cs chunks.ChunkSink) ref.Ref {
 	d.Chk.NotNil(cs)
 	return writeValueInternal(v, cs)
 }
@@ -24,7 +29,7 @@ func writeChildValueInternal(v Value, cs chunks.ChunkSink) ref.Ref {
 	return writeValueInternal(v, cs)
 }
 
-func writeValueInternal(v Value, cs chunks.ChunkSink) ref.Ref {
+func writeValueInternal(v interface{}, cs chunks.ChunkSink) ref.Ref {
 	e := toEncodeable(v, cs)
 	w := chunks.NewChunkWriter()
 	enc.Encode(w, e)
@@ -35,12 +40,14 @@ func writeValueInternal(v Value, cs chunks.ChunkSink) ref.Ref {
 	return c.Ref()
 }
 
-func toEncodeable(v Value, cs chunks.ChunkSink) interface{} {
+func toEncodeable(v interface{}, cs chunks.ChunkSink) interface{} {
 	switch v := v.(type) {
 	case blobLeaf:
 		return v.Reader()
 	case compoundBlob:
 		return encCompoundBlobFromCompoundBlob(v, cs)
+	case NomsValue:
+		return encNomsValue(v, cs)
 	case compoundList:
 		return encCompoundListFromCompoundList(v, cs)
 	case listLeaf:

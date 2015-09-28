@@ -59,6 +59,12 @@ func (m ListOfInt64) TypeRef() types.TypeRef {
 	return __typeRefForListOfInt64
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForListOfInt64, func(v types.Value) types.NomsValue {
+		return ListOfInt64FromVal(v)
+	})
+}
+
 func (l ListOfInt64) Len() uint64 {
 	return l.l.Len()
 }

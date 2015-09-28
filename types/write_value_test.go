@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"crypto/sha1"
+	"fmt"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
@@ -15,7 +16,7 @@ func TestWriteValue(t *testing.T) {
 
 	var s *chunks.MemoryStore
 
-	testEncode := func(expected string, v Value) ref.Ref {
+	testEncode := func(expected string, v interface{}) ref.Ref {
 		s = chunks.NewMemoryStore()
 		r := WriteValue(v, s)
 
@@ -29,7 +30,11 @@ func TestWriteValue(t *testing.T) {
 	b, err := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01, 0x02}))
 	assert.NoError(err)
 	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), b)
-	testEncode(string("j \"foo\"\n"), NewString("foo"))
+	testEncode("j \"foo\"\n", NewString("foo"))
+
+	tref := MakePrimitiveTypeRef(StringKind)
+	nomsValueString := testNomsValue{tref, NewString("hi")}
+	testEncode(fmt.Sprintf("t [%d,\"hi\"]\n", StringKind), nomsValueString)
 }
 
 func TestWriteBlobLeaf(t *testing.T) {

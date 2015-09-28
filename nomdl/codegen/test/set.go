@@ -61,6 +61,12 @@ func (m SetOfBool) TypeRef() types.TypeRef {
 	return __typeRefForSetOfBool
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForSetOfBool, func(v types.Value) types.NomsValue {
+		return SetOfBoolFromVal(v)
+	})
+}
+
 func (s SetOfBool) Empty() bool {
 	return s.s.Empty()
 }

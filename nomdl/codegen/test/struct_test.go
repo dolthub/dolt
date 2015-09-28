@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/types"
 )
 
 func TestDef(t *testing.T) {
@@ -41,5 +42,5 @@ func TestTypeRef(t *testing.T) {
 	st := def.New()
 	typ := st.TypeRef()
 	assert.Equal("Struct", typ.Name())
-	assert.EqualValues(__testPackageInFile_struct_Ref(), typ.PackageRef())
+	assert.Equal(types.TypeRefKind, typ.Kind())
 }
