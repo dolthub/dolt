@@ -4,10 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math"
+	"runtime"
+	"sync/atomic"
 	"time"
 
-	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
@@ -16,21 +16,20 @@ import (
 )
 
 var (
-	datasFlags   = datas.NewFlags()
-	inputRefStr  = flag.String("input-ref", "", "ref to find photos from within input chunkstore")
-	outputDs     = flag.String("output-ds", "", "dataset to store data in.")
-	limitFlag    = flag.Int("limit", math.MaxInt32, "limit size of quadtree")
-	quietFlag    = flag.Bool("quiet", false, "suppress printing of progress statements")
-	nodetypeFlag = flag.String("nodetype", "", "type of object to insert into quadtree")
-	commit       = flag.Bool("commit", true, "commit the quadtree to nomsdb")
+	datasFlags  = datas.NewFlags()
+	inputRefStr = flag.String("input-ref", "", "ref to list containing nodes")
+	outputDs    = flag.String("output-ds", "", "dataset to store data in.")
+	quietFlag   = flag.Bool("quiet", false, "suppress printing of progress statements")
+	commit      = flag.Bool("commit", true, "commit the quadtree to nomsdb")
 )
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.Parse()
 	start := time.Now()
 
 	datastore, ok := datasFlags.CreateDataStore()
-	if !ok || *inputRefStr == "" || *outputDs == "" || *nodetypeFlag == "" {
+	if !ok || *inputRefStr == "" || *outputDs == "" {
 		flag.Usage()
 		return
 	}
@@ -54,10 +53,8 @@ func main() {
 		Path:           "",
 		Georectangle:   gr,
 	}
-	fmt.Printf("quadTreeRoot: %+v\n", qtRoot.Georectangle)
-
-	if util.MaybeStartCPUProfile() {
-		defer util.StopCPUProfile()
+	if !*quietFlag {
+		fmt.Printf("quadTreeRoot: %+v\n", qtRoot.Georectangle)
 	}
 
 	val := types.ReadValue(inputRef, dataset.Store())
@@ -66,17 +63,31 @@ func main() {
 		fmt.Printf("Reading from nodeList: %d items, elapsed time: %.2f secs\n", list.Len(), secsSince(start))
 	}
 
-	nodesAppended := 0
-	list.Iter(func(n Node) bool {
-		nodeDef := NodeDef{Geoposition: n.Geoposition().Def(), Reference: n.Ref()}
-		qtRoot.Append(&nodeDef)
+	nChan := make(chan *NodeDef, 1024)
+	nodesConverted := uint32(0)
+	go func() {
+		list.l.MapP(64, func(v types.Value) interface{} {
+			n := NodeFromVal(v)
+			nodeDef := &NodeDef{Geoposition: n.Geoposition().Def(), Reference: n.Ref()}
+			nChan <- nodeDef
+			nConverted := atomic.AddUint32(&nodesConverted, 1)
+			if !*quietFlag && nConverted%1e5 == 0 {
+				fmt.Printf("Nodes Converted: %d, elapsed time: %.2f secs\n", nodesConverted, secsSince(start))
+			}
+			return nil
+		})
+		close(nChan)
+	}()
+
+	nodesAppended := uint32(0)
+	for nodeDef := range nChan {
+		qtRoot.Append(nodeDef)
 		nodesAppended++
 		if !*quietFlag && nodesAppended%1e5 == 0 {
 			fmt.Printf("Nodes Appended: %d, elapsed time: %.2f secs\n", nodesAppended, secsSince(start))
 			qtRoot.Analyze()
 		}
-		return nodesAppended >= *limitFlag
-	})
+	}
 
 	if !*quietFlag {
 		fmt.Printf("Nodes Appended: %d, elapsed time: %.2f secs\n", nodesAppended, secsSince(start))
@@ -84,10 +95,19 @@ func main() {
 	}
 
 	if *commit {
-		_, ok = dataset.Commit(qtRoot.New().NomsValue())
+		if !*quietFlag {
+			fmt.Printf("Calling SaveToNoms(), elapsed time: %.2f secs\n", secsSince(start))
+		}
+		nomsQtRoot := qtRoot.SaveToNoms(dataset.Store(), start)
+		if !*quietFlag {
+			fmt.Printf("Calling Commit(), elapsed time: %.2f secs\n", secsSince(start))
+		}
+		_, ok = dataset.Commit(nomsQtRoot.NomsValue())
 		d.Chk.True(ok, "Could not commit due to conflicting edit")
-		fmt.Printf("Commit completed, elapsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
+		if !*quietFlag {
+			fmt.Printf("Commit completed, elapsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
+		}
 	}
 
-	fmt.Println(dataset.Store().Root().String())
+	fmt.Println("QuadTree ref:", dataset.Store().Root().String())
 }
