@@ -1,0 +1,30 @@
+html, body, svg {
+	padding: 0;
+	margin: 0;
+}
+
+.node {
+	cursor: pointer;
+	transition: transform 200ms;
+}
+
+.node .icon {
+	fill: rgb(176, 196, 222);
+	stroke: steelblue;
+	stroke-width: 1.5px;
+}
+
+.node .icon.open {
+	fill: rgb(255, 255, 255);
+}
+
+.node text {
+	font-size: 10px;
+	font-family: "Menlo", monospace;
+}
+
+.link {
+	fill: none;
+	stroke: #ccc;
+	stroke-width: 1.5px;
+}
