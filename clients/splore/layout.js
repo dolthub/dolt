@@ -2,7 +2,6 @@
 
 var Node = require('./node.js');
 var React = require('react');
-var sprintf = require('sprintf-js').sprintf;
 
 var Layout = React.createClass({
   propTypes: {
@@ -11,7 +10,7 @@ var Layout = React.createClass({
     tree: React.PropTypes.object.isRequired,
   },
 
-  render: function() {
+  render() {
     var children = [];
     var edges = [];
     var lookup = {};
@@ -65,7 +64,7 @@ var Layout = React.createClass({
       var from = lookup[e[0]];
       var to = lookup[e[1]];
       children.push(
-        <path key={'p' + e[0] + '-' + e[1]} className='link' d={sprintf('M%f,%fL%f,%f', getX(from), getY(from), getX(to), getY(to))}/>);
+        <path key={'p' + e[0] + '-' + e[1]} className='link' d={`M${getX(from)},${getY(from)}L${getX(to)},${getY(to)}`}/>);
     });
 
     var sortOrder = (elm => elm.type == 'path' ? 0 : 1);
@@ -79,7 +78,7 @@ var Layout = React.createClass({
 
     return (
       <svg width={maxX + spaceX} height={maxY + spaceY}>
-        <g transform={sprintf('translate(%d, %d)', spaceX, translateY)}>
+        <g transform={`translate(${spaceX}, ${translateY})`}>
           {children}
         </g>
       </svg>

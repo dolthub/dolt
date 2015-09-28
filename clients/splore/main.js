@@ -9,7 +9,7 @@ var React = require('react');
 var Ref = require('noms').Ref
 var sprintf = require('sprintf-js').sprintf;
 
-var data = {nodes:{}, links:{}};
+var data = {nodes: {}, links: {}};
 var rootRef = null;
 
 window.onload = function() {
@@ -17,11 +17,13 @@ window.onload = function() {
   var w = window.innerWidth;
   var h = window.innerHeight;
 
-  noms.getRoot().then((ref) => {
+  noms.getRoot().then(ref => {
     rootRef = ref;
     handleChunkLoad(ref, new Ref(ref));
   });
-}
+};
+
+window.onresize = render;
 
 function handleChunkLoad(ref, val, fromRef) {
   var counter = 0
@@ -79,8 +81,6 @@ function handleChunkLoad(ref, val, fromRef) {
         name: val.ref.substr(5, 6),
       };
     }
-
-    // TODO: structs
 
     return id
   };
