@@ -6,7 +6,7 @@ var Immutable = require('immutable');
 var noms = require('noms');
 var queryString = require('query-string');
 var React = require('react');
-var Ref = require('noms').Ref
+var {Ref} = require('noms');
 var sprintf = require('sprintf-js').sprintf;
 
 var data = {nodes: {}, links: {}};
@@ -73,6 +73,10 @@ function handleChunkLoad(ref, val, fromRef) {
         .forEach(k => {
           // TODO: handle non-string keys
           var kid = process(ref, k, id);
+
+          // Start map keys open, just makes it easier to use.
+          data.nodes[kid].isOpen = true;
+
           process(ref, val.get(k), kid);
         });
     } else if (val instanceof Ref) {
