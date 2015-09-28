@@ -21,6 +21,7 @@ func __mainPackageInFile_types_Ref() types.Ref {
 			"Georectangle": __typeRefOfGeorectangle(),
 			"Node":         __typeRefOfNode(),
 			"QuadTree":     __typeRefOfQuadTree(),
+			"SQuadTree":    __typeRefOfSQuadTree(),
 		},
 	}.New()
 	return types.Ref{R: types.RegisterPackage(&p)}
@@ -664,4 +665,392 @@ func (m MapOfStringToQuadTree) Filter(cb MapOfStringToQuadTreeFilterCallback) Ma
 		}
 	})
 	return nm
+}
+
+// SQuadTree
+
+type SQuadTree struct {
+	m types.Map
+}
+
+func NewSQuadTree() SQuadTree {
+	return SQuadTree{types.NewMap(
+		types.NewString("$name"), types.NewString("SQuadTree"),
+		types.NewString("$type"), types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef),
+		types.NewString("Nodes"), types.NewList(),
+		types.NewString("Tiles"), types.NewMap(),
+		types.NewString("Depth"), types.UInt8(0),
+		types.NewString("NumDescendents"), types.UInt32(0),
+		types.NewString("Path"), types.NewString(""),
+		types.NewString("Georectangle"), NewGeorectangle().NomsValue(),
+	)}
+}
+
+type SQuadTreeDef struct {
+	Nodes          ListOfRefOfValueDef
+	Tiles          MapOfStringToRefOfSQuadTreeDef
+	Depth          uint8
+	NumDescendents uint32
+	Path           string
+	Georectangle   GeorectangleDef
+}
+
+func (def SQuadTreeDef) New() SQuadTree {
+	return SQuadTree{
+		types.NewMap(
+			types.NewString("$name"), types.NewString("SQuadTree"),
+			types.NewString("$type"), types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef),
+			types.NewString("Nodes"), def.Nodes.New().NomsValue(),
+			types.NewString("Tiles"), def.Tiles.New().NomsValue(),
+			types.NewString("Depth"), types.UInt8(def.Depth),
+			types.NewString("NumDescendents"), types.UInt32(def.NumDescendents),
+			types.NewString("Path"), types.NewString(def.Path),
+			types.NewString("Georectangle"), def.Georectangle.New().NomsValue(),
+		)}
+}
+
+func (s SQuadTree) Def() (d SQuadTreeDef) {
+	d.Nodes = ListOfRefOfValueFromVal(s.m.Get(types.NewString("Nodes"))).Def()
+	d.Tiles = MapOfStringToRefOfSQuadTreeFromVal(s.m.Get(types.NewString("Tiles"))).Def()
+	d.Depth = uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
+	d.NumDescendents = uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
+	d.Path = s.m.Get(types.NewString("Path")).(types.String).String()
+	d.Georectangle = GeorectangleFromVal(s.m.Get(types.NewString("Georectangle"))).Def()
+	return
+}
+
+// Creates and returns a Noms Value that describes SQuadTree.
+func __typeRefOfSQuadTree() types.TypeRef {
+	return types.MakeStructTypeRef("SQuadTree",
+		[]types.Field{
+			types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))), false},
+			types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef("SQuadTree", types.Ref{}))), false},
+			types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
+			types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+			types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Georectangle", types.MakeTypeRef("Georectangle", types.Ref{}), false},
+		},
+		types.Choices{},
+	)
+}
+
+func SQuadTreeFromVal(val types.Value) SQuadTree {
+	// TODO: Validate here
+	return SQuadTree{val.(types.Map)}
+}
+
+func (s SQuadTree) NomsValue() types.Value {
+	return s.m
+}
+
+func (s SQuadTree) Equals(other SQuadTree) bool {
+	return s.m.Equals(other.m)
+}
+
+func (s SQuadTree) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s SQuadTree) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
+}
+
+func (s SQuadTree) Nodes() ListOfRefOfValue {
+	return ListOfRefOfValueFromVal(s.m.Get(types.NewString("Nodes")))
+}
+
+func (s SQuadTree) SetNodes(val ListOfRefOfValue) SQuadTree {
+	return SQuadTree{s.m.Set(types.NewString("Nodes"), val.NomsValue())}
+}
+
+func (s SQuadTree) Tiles() MapOfStringToRefOfSQuadTree {
+	return MapOfStringToRefOfSQuadTreeFromVal(s.m.Get(types.NewString("Tiles")))
+}
+
+func (s SQuadTree) SetTiles(val MapOfStringToRefOfSQuadTree) SQuadTree {
+	return SQuadTree{s.m.Set(types.NewString("Tiles"), val.NomsValue())}
+}
+
+func (s SQuadTree) Depth() uint8 {
+	return uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
+}
+
+func (s SQuadTree) SetDepth(val uint8) SQuadTree {
+	return SQuadTree{s.m.Set(types.NewString("Depth"), types.UInt8(val))}
+}
+
+func (s SQuadTree) NumDescendents() uint32 {
+	return uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
+}
+
+func (s SQuadTree) SetNumDescendents(val uint32) SQuadTree {
+	return SQuadTree{s.m.Set(types.NewString("NumDescendents"), types.UInt32(val))}
+}
+
+func (s SQuadTree) Path() string {
+	return s.m.Get(types.NewString("Path")).(types.String).String()
+}
+
+func (s SQuadTree) SetPath(val string) SQuadTree {
+	return SQuadTree{s.m.Set(types.NewString("Path"), types.NewString(val))}
+}
+
+func (s SQuadTree) Georectangle() Georectangle {
+	return GeorectangleFromVal(s.m.Get(types.NewString("Georectangle")))
+}
+
+func (s SQuadTree) SetGeorectangle(val Georectangle) SQuadTree {
+	return SQuadTree{s.m.Set(types.NewString("Georectangle"), val.NomsValue())}
+}
+
+// ListOfRefOfValue
+
+type ListOfRefOfValue struct {
+	l types.List
+}
+
+func NewListOfRefOfValue() ListOfRefOfValue {
+	return ListOfRefOfValue{types.NewList()}
+}
+
+type ListOfRefOfValueDef []ref.Ref
+
+func (def ListOfRefOfValueDef) New() ListOfRefOfValue {
+	l := make([]types.Value, len(def))
+	for i, d := range def {
+		l[i] = types.Ref{R: d}
+	}
+	return ListOfRefOfValue{types.NewList(l...)}
+}
+
+func (l ListOfRefOfValue) Def() ListOfRefOfValueDef {
+	d := make([]ref.Ref, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = l.l.Get(i).Ref()
+	}
+	return d
+}
+
+func ListOfRefOfValueFromVal(val types.Value) ListOfRefOfValue {
+	// TODO: Validate here
+	return ListOfRefOfValue{val.(types.List)}
+}
+
+func (l ListOfRefOfValue) NomsValue() types.Value {
+	return l.l
+}
+
+func (l ListOfRefOfValue) Equals(p ListOfRefOfValue) bool {
+	return l.l.Equals(p.l)
+}
+
+func (l ListOfRefOfValue) Ref() ref.Ref {
+	return l.l.Ref()
+}
+
+func (l ListOfRefOfValue) Len() uint64 {
+	return l.l.Len()
+}
+
+func (l ListOfRefOfValue) Empty() bool {
+	return l.Len() == uint64(0)
+}
+
+func (l ListOfRefOfValue) Get(i uint64) RefOfValue {
+	return RefOfValueFromVal(l.l.Get(i))
+}
+
+func (l ListOfRefOfValue) Slice(idx uint64, end uint64) ListOfRefOfValue {
+	return ListOfRefOfValue{l.l.Slice(idx, end)}
+}
+
+func (l ListOfRefOfValue) Set(i uint64, val RefOfValue) ListOfRefOfValue {
+	return ListOfRefOfValue{l.l.Set(i, val.NomsValue())}
+}
+
+func (l ListOfRefOfValue) Append(v ...RefOfValue) ListOfRefOfValue {
+	return ListOfRefOfValue{l.l.Append(l.fromElemSlice(v)...)}
+}
+
+func (l ListOfRefOfValue) Insert(idx uint64, v ...RefOfValue) ListOfRefOfValue {
+	return ListOfRefOfValue{l.l.Insert(idx, l.fromElemSlice(v)...)}
+}
+
+func (l ListOfRefOfValue) Remove(idx uint64, end uint64) ListOfRefOfValue {
+	return ListOfRefOfValue{l.l.Remove(idx, end)}
+}
+
+func (l ListOfRefOfValue) RemoveAt(idx uint64) ListOfRefOfValue {
+	return ListOfRefOfValue{(l.l.RemoveAt(idx))}
+}
+
+func (l ListOfRefOfValue) fromElemSlice(p []RefOfValue) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v.NomsValue()
+	}
+	return r
+}
+
+type ListOfRefOfValueIterCallback func(v RefOfValue) (stop bool)
+
+func (l ListOfRefOfValue) Iter(cb ListOfRefOfValueIterCallback) {
+	l.l.Iter(func(v types.Value) bool {
+		return cb(RefOfValueFromVal(v))
+	})
+}
+
+type ListOfRefOfValueIterAllCallback func(v RefOfValue)
+
+func (l ListOfRefOfValue) IterAll(cb ListOfRefOfValueIterAllCallback) {
+	l.l.IterAll(func(v types.Value) {
+		cb(RefOfValueFromVal(v))
+	})
+}
+
+type ListOfRefOfValueFilterCallback func(v RefOfValue) (keep bool)
+
+func (l ListOfRefOfValue) Filter(cb ListOfRefOfValueFilterCallback) ListOfRefOfValue {
+	nl := NewListOfRefOfValue()
+	l.IterAll(func(v RefOfValue) {
+		if cb(v) {
+			nl = nl.Append(v)
+		}
+	})
+	return nl
+}
+
+// MapOfStringToRefOfSQuadTree
+
+type MapOfStringToRefOfSQuadTree struct {
+	m types.Map
+}
+
+func NewMapOfStringToRefOfSQuadTree() MapOfStringToRefOfSQuadTree {
+	return MapOfStringToRefOfSQuadTree{types.NewMap()}
+}
+
+type MapOfStringToRefOfSQuadTreeDef map[string]ref.Ref
+
+func (def MapOfStringToRefOfSQuadTreeDef) New() MapOfStringToRefOfSQuadTree {
+	kv := make([]types.Value, 0, len(def)*2)
+	for k, v := range def {
+		kv = append(kv, types.NewString(k), types.Ref{R: v})
+	}
+	return MapOfStringToRefOfSQuadTree{types.NewMap(kv...)}
+}
+
+func (m MapOfStringToRefOfSQuadTree) Def() MapOfStringToRefOfSQuadTreeDef {
+	def := make(map[string]ref.Ref)
+	m.m.Iter(func(k, v types.Value) bool {
+		def[k.(types.String).String()] = v.Ref()
+		return false
+	})
+	return def
+}
+
+func MapOfStringToRefOfSQuadTreeFromVal(p types.Value) MapOfStringToRefOfSQuadTree {
+	// TODO: Validate here
+	return MapOfStringToRefOfSQuadTree{p.(types.Map)}
+}
+
+func (m MapOfStringToRefOfSQuadTree) NomsValue() types.Value {
+	return m.m
+}
+
+func (m MapOfStringToRefOfSQuadTree) Equals(p MapOfStringToRefOfSQuadTree) bool {
+	return m.m.Equals(p.m)
+}
+
+func (m MapOfStringToRefOfSQuadTree) Ref() ref.Ref {
+	return m.m.Ref()
+}
+
+func (m MapOfStringToRefOfSQuadTree) Empty() bool {
+	return m.m.Empty()
+}
+
+func (m MapOfStringToRefOfSQuadTree) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m MapOfStringToRefOfSQuadTree) Has(p string) bool {
+	return m.m.Has(types.NewString(p))
+}
+
+func (m MapOfStringToRefOfSQuadTree) Get(p string) RefOfSQuadTree {
+	return RefOfSQuadTreeFromVal(m.m.Get(types.NewString(p)))
+}
+
+func (m MapOfStringToRefOfSQuadTree) Set(k string, v RefOfSQuadTree) MapOfStringToRefOfSQuadTree {
+	return MapOfStringToRefOfSQuadTree{m.m.Set(types.NewString(k), v.NomsValue())}
+}
+
+// TODO: Implement SetM?
+
+func (m MapOfStringToRefOfSQuadTree) Remove(p string) MapOfStringToRefOfSQuadTree {
+	return MapOfStringToRefOfSQuadTree{m.m.Remove(types.NewString(p))}
+}
+
+type MapOfStringToRefOfSQuadTreeIterCallback func(k string, v RefOfSQuadTree) (stop bool)
+
+func (m MapOfStringToRefOfSQuadTree) Iter(cb MapOfStringToRefOfSQuadTreeIterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(k.(types.String).String(), RefOfSQuadTreeFromVal(v))
+	})
+}
+
+type MapOfStringToRefOfSQuadTreeIterAllCallback func(k string, v RefOfSQuadTree)
+
+func (m MapOfStringToRefOfSQuadTree) IterAll(cb MapOfStringToRefOfSQuadTreeIterAllCallback) {
+	m.m.IterAll(func(k, v types.Value) {
+		cb(k.(types.String).String(), RefOfSQuadTreeFromVal(v))
+	})
+}
+
+type MapOfStringToRefOfSQuadTreeFilterCallback func(k string, v RefOfSQuadTree) (keep bool)
+
+func (m MapOfStringToRefOfSQuadTree) Filter(cb MapOfStringToRefOfSQuadTreeFilterCallback) MapOfStringToRefOfSQuadTree {
+	nm := NewMapOfStringToRefOfSQuadTree()
+	m.IterAll(func(k string, v RefOfSQuadTree) {
+		if cb(k, v) {
+			nm = nm.Set(k, v)
+		}
+	})
+	return nm
+}
+
+// RefOfSQuadTree
+
+type RefOfSQuadTree struct {
+	r ref.Ref
+}
+
+func NewRefOfSQuadTree(r ref.Ref) RefOfSQuadTree {
+	return RefOfSQuadTree{r}
+}
+
+func (r RefOfSQuadTree) Ref() ref.Ref {
+	return r.r
+}
+
+func (r RefOfSQuadTree) Equals(other RefOfSQuadTree) bool {
+	return r.Ref() == other.Ref()
+}
+
+func (r RefOfSQuadTree) NomsValue() types.Value {
+	return types.Ref{R: r.r}
+}
+
+func RefOfSQuadTreeFromVal(p types.Value) RefOfSQuadTree {
+	return RefOfSQuadTree{p.(types.Ref).Ref()}
+}
+
+func (r RefOfSQuadTree) GetValue(cs chunks.ChunkSource) SQuadTree {
+	return SQuadTreeFromVal(types.ReadValue(r.r, cs))
+}
+
+func (r RefOfSQuadTree) SetValue(val SQuadTree, cs chunks.ChunkSink) RefOfSQuadTree {
+	ref := types.WriteValue(val.NomsValue(), cs)
+	return RefOfSQuadTree{ref}
 }

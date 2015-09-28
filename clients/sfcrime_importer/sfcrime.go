@@ -4,18 +4,18 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
-	"math"
-	"os"
-	"sort"
-	"strconv"
-	"sync"
-	"time"
-
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
+	"math"
+	"os"
+	"runtime"
+	"sort"
+	"strconv"
+	"sync"
+	"time"
 )
 
 // data can be obtained using:
@@ -48,6 +48,7 @@ func (a refIndexList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a refIndexList) Less(i, j int) bool { return a[i].index < a[j].index }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	dsFlags := dataset.NewFlags()
 	flag.Parse()
 	ds := dsFlags.CreateDataset()
@@ -84,9 +85,9 @@ func main() {
 	refs := []types.Value{}
 
 	// Start a go routine to add incident refs to the list as they are ready
-	var wg sync.WaitGroup
+	var refWg sync.WaitGroup
 	go func() {
-		wg.Add(1)
+		refWg.Add(1)
 		for ref := range rChan {
 			refList = append(refList, ref)
 		}
@@ -94,10 +95,11 @@ func main() {
 		for _, r := range refList {
 			refs = append(refs, r.ref)
 		}
-		wg.Done()
+		refWg.Done()
 	}()
 
 	index := 0
+
 	for r, err := reader.Read(); !limitExceeded && err == nil; r, err = reader.Read() {
 		rowsRead++
 		id, _ := strconv.ParseInt(r[0], 10, 64)
@@ -137,7 +139,7 @@ func main() {
 	}
 
 	close(iChan)
-	wg.Wait()
+	refWg.Wait()
 
 	incidentRefs := types.NewList(refs...)
 	if !*quietFlag {

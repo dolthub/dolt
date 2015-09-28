@@ -1,9 +1,12 @@
 package main
 
 import (
-	//    "fmt"
 	"fmt"
+	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/types"
+	"sync"
 	"time"
 )
 
@@ -18,24 +21,22 @@ const (
 
 var (
 	quadrants = []string{tl, bl, tr, br}
+	saveCount = 0
 )
 
 // Query returns a slice of Nodes that are a maximum of "kilometers" away from "p"
 func (qt *QuadTree) Query(p GeopositionDef, kilometers float64) (GeorectangleDef, []Node) {
 	r := p.BoundingRectangle(kilometers)
-	fmt.Printf("Query, p: %v, klms: %f, boundingRect: %v", p, kilometers, r)
 	nodes := qt.Search(r, p, float32(kilometers))
 	return r, nodes
 }
 
 // Search returns a slice of Nodes that are within "r" and a maximum of "kilometers" away from "p"
 func (qt *QuadTree) Search(r GeorectangleDef, p GeopositionDef, kilometers float32) []Node {
-	fmt.Printf("Search, qt: %p, path %s, depth: %d\n", qt, qt.Path(), qt.Depth())
 	nodes := []Node{}
 	if qt.Tiles().Len() > 0 {
 		for _, q := range quadrants {
 			tile := qt.Tiles().Get(q)
-			fmt.Printf("Search: testing quadrant: %11s, depth: %d, path: %s\n", q, tile.Depth(), tile.Path())
 			if tile.Georectangle().Def().IntersectsRect(r) {
 				tnodes := tile.Search(r, p, kilometers)
 				nodes = append(nodes, tnodes...)
@@ -79,6 +80,10 @@ func (qt QuadTreeDef) Search(r GeorectangleDef, p GeopositionDef, kilometers flo
 	}
 
 	return nodes
+}
+
+func (qt *QuadTreeDef) hasTiles() bool {
+	return len(qt.Tiles) > 0
 }
 
 // MTraverseCb declares type of function used as callback in Traverse method.
@@ -191,8 +196,59 @@ func (qt *QuadTreeDef) makeChildren() {
 	qt.Tiles[br] = CreateNewQuadTreeDef(qt.Depth+1, qt.Path+"d", brRect)
 }
 
-func (qt *QuadTreeDef) hasTiles() bool {
-	return len(qt.Tiles) > 0
+func (qt *QuadTreeDef) SaveToNoms(cs chunks.ChunkSink, start time.Time) *SQuadTree {
+	wChan := make(chan *SQuadTree, 1024)
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			for sqt := range wChan {
+				types.WriteValue(sqt.NomsValue(), cs)
+			}
+			wg.Done()
+		}()
+	}
+
+	if util.MaybeStartCPUProfile() {
+		defer util.StopCPUProfile()
+	}
+
+	sqt := qt.saveNodeToNoms(wChan, cs, start)
+	close(wChan)
+	wg.Wait()
+	return sqt
+}
+
+func (qt *QuadTreeDef) saveNodeToNoms(wChan chan *SQuadTree, cs chunks.ChunkSink, start time.Time) *SQuadTree {
+	tileRefs := MapOfStringToRefOfSQuadTreeDef{}
+	nrefs := make(ListOfRefOfValueDef, 0, len(qt.Nodes))
+	if qt.hasTiles() {
+		for q, tile := range qt.Tiles {
+			child := tile.saveNodeToNoms(wChan, cs, start)
+			ref := child.NomsValue().Ref()
+			tileRefs[q] = ref
+		}
+	} else if len(qt.Nodes) > 0 {
+		for _, n := range qt.Nodes {
+			nrefs = append(nrefs, n.Reference)
+		}
+	}
+	sqt := SQuadTreeDef{
+		Nodes:          nrefs,
+		Tiles:          tileRefs,
+		Depth:          qt.Depth,
+		NumDescendents: qt.NumDescendents,
+		Path:           qt.Path,
+		Georectangle:   qt.Georectangle,
+	}.New()
+	sqtp := &sqt
+
+	wChan <- sqtp
+	saveCount++
+	if saveCount%1e4 == 0 && !*quietFlag {
+		fmt.Printf("Nodes Saved: %d, elapsed time: %.2f secs\n", saveCount, secsSince(start))
+	}
+	return sqtp
 }
 
 func max(x, y uint8) uint8 {
