@@ -1,7 +1,6 @@
 'use strict';
 
 var classNames = require('classnames');
-var sprintf = require('sprintf-js').sprintf;
 var React = require('react');
 
 var Node = React.createClass({
@@ -17,14 +16,14 @@ var Node = React.createClass({
     onToggle: React.PropTypes.func.isRequired,
   },
 
-  getInitialState: function() {
+  getInitialState() {
     return {
       x: this.props.fromX,
       y: this.props.fromY,
     };
   },
 
-  render: function() {
+  render() {
     if (this.state.x != this.props.x ||
         this.state.y != this.props.y) {
       window.requestAnimationFrame(() => this.setState({
@@ -35,10 +34,7 @@ var Node = React.createClass({
 
     var textAnchor = 'start';
     var textX = 10;
-    var translate = sprintf(
-      'translate3d(%fpx,%fpx,0)',
-      this.state.x,
-      this.state.y);
+    var translate = `translate3d(${this.state.x}px, ${this.state.y}px, 0)`;
 
     if (this.props.canOpen) {
       textAnchor = 'end';
@@ -55,7 +51,7 @@ var Node = React.createClass({
     );
   },
 
-  getShape: function() {
+  getShape() {
     var className = classNames('icon', {open:this.props.isOpen});
     switch (this.props.shape) {
       case 'circle':

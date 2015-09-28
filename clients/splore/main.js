@@ -7,7 +7,6 @@ var noms = require('noms');
 var queryString = require('query-string');
 var React = require('react');
 var {Ref} = require('noms');
-var sprintf = require('sprintf-js').sprintf;
 
 var data = {nodes: {}, links: {}};
 var rootRef = null;
@@ -55,19 +54,19 @@ function handleChunkLoad(ref, val, fromRef) {
     }
 
     if (val instanceof Blob) {
-      data.nodes[id] = {name: sprintf('Blob (%d)', val.size)};
+      data.nodes[id] = {name: `Blob (${val.size})`};
     } else if (Immutable.List.isList(val)) {
-      data.nodes[id] = {name: sprintf('List (%d)', val.size)};
+      data.nodes[id] = {name: `List (${val.size})`};
       val.forEach(c => process(ref, c, id));
     } else if (Immutable.Set.isSet(val)) {
-      data.nodes[id] = {name: sprintf('Set (%d)', val.size)};
+      data.nodes[id] = {name: `Set (${val.size})`};
       val.forEach(c => process(ref, c, id));
     } else if (Immutable.Map.isMap(val)) {
       var structName = val.get('$name');
       if (structName) {
         data.nodes[id] = {name: structName};
       } else {
-        data.nodes[id] = {name: sprintf('Map (%d)', val.size)};
+        data.nodes[id] = {name: `Map (${val.size})`};
       }
       val.keySeq().filter(k => k != '$name')
         .forEach(k => {
@@ -86,7 +85,7 @@ function handleChunkLoad(ref, val, fromRef) {
       };
     }
 
-    return id
+    return id;
   };
 
   process(ref, val, fromRef);
