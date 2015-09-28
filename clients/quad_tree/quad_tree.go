@@ -152,19 +152,19 @@ func (qt *QuadTreeDef) split() {
 }
 
 func (qt *QuadTreeDef) tileContaining(p GeopositionDef) (quadrant string, tile QuadTreeDef) {
-    d.Chk.True(qt.hasTiles(), "tileContaining method called on QuadTree node with no tiles")
+	d.Chk.True(qt.hasTiles(), "tileContaining method called on QuadTree node with no tiles")
 
-    if qt.Tiles[tl].Georectangle.ContainsPoint(p) {
-        quadrant, tile = tl, qt.Tiles[tl]
-    } else if qt.Tiles[bl].Georectangle.ContainsPoint(p) {
-        quadrant, tile = bl, qt.Tiles[bl]
-    } else if qt.Tiles[tr].Georectangle.ContainsPoint(p) {
-        quadrant, tile = tr, qt.Tiles[tr]
-    } else if qt.Tiles[br].Georectangle.ContainsPoint(p) {
-        quadrant, tile = br, qt.Tiles[br]
-    }
+	if qt.Tiles[tl].Georectangle.ContainsPoint(p) {
+		quadrant, tile = tl, qt.Tiles[tl]
+	} else if qt.Tiles[bl].Georectangle.ContainsPoint(p) {
+		quadrant, tile = bl, qt.Tiles[bl]
+	} else if qt.Tiles[tr].Georectangle.ContainsPoint(p) {
+		quadrant, tile = tr, qt.Tiles[tr]
+	} else if qt.Tiles[br].Georectangle.ContainsPoint(p) {
+		quadrant, tile = br, qt.Tiles[br]
+	}
 
-    return quadrant, tile
+	return quadrant, tile
 }
 
 // CreateNewQuadTreeDef is a convenience method for creating a new QuadTreeDef.
@@ -199,7 +199,7 @@ func max(x, y uint8) uint8 {
 	if x >= y {
 		return x
 	}
-    return y
+	return y
 }
 
 func secsSince(start time.Time) float64 {

@@ -8,6 +8,8 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
+
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -33,7 +35,7 @@ type Geoposition struct {
 func NewGeoposition() Geoposition {
 	return Geoposition{types.NewMap(
 		types.NewString("$name"), types.NewString("Geoposition"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("Geoposition"), __mainPackageInFile_types_Ref()),
+		types.NewString("$type"), types.MakeTypeRef("Geoposition", __mainPackageInFile_types_CachedRef),
 		types.NewString("Latitude"), types.Float32(0),
 		types.NewString("Longitude"), types.Float32(0),
 	)}
@@ -48,28 +50,27 @@ func (def GeopositionDef) New() Geoposition {
 	return Geoposition{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Geoposition"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("Geoposition"), __mainPackageInFile_types_Ref()),
+			types.NewString("$type"), types.MakeTypeRef("Geoposition", __mainPackageInFile_types_CachedRef),
 			types.NewString("Latitude"), types.Float32(def.Latitude),
 			types.NewString("Longitude"), types.Float32(def.Longitude),
 		)}
 }
 
-func (self Geoposition) Def() GeopositionDef {
-	return GeopositionDef{
-		float32(self.m.Get(types.NewString("Latitude")).(types.Float32)),
-		float32(self.m.Get(types.NewString("Longitude")).(types.Float32)),
-	}
+func (s Geoposition) Def() (d GeopositionDef) {
+	d.Latitude = float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
+	d.Longitude = float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
+	return
 }
 
 // Creates and returns a Noms Value that describes Geoposition.
 func __typeRefOfGeoposition() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("Geoposition"),
-		types.NewList(
-			types.NewString("Latitude"), types.MakePrimitiveTypeRef(types.Float32Kind),
-			types.NewString("Longitude"), types.MakePrimitiveTypeRef(types.Float32Kind),
-		),
-		nil)
-
+	return types.MakeStructTypeRef("Geoposition",
+		[]types.Field{
+			types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+			types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+		},
+		types.Choices{},
+	)
 }
 
 func GeopositionFromVal(val types.Value) Geoposition {
@@ -77,36 +78,36 @@ func GeopositionFromVal(val types.Value) Geoposition {
 	return Geoposition{val.(types.Map)}
 }
 
-func (self Geoposition) NomsValue() types.Value {
-	return self.m
+func (s Geoposition) NomsValue() types.Value {
+	return s.m
 }
 
-func (self Geoposition) Equals(other Geoposition) bool {
-	return self.m.Equals(other.m)
+func (s Geoposition) Equals(other Geoposition) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self Geoposition) Ref() ref.Ref {
-	return self.m.Ref()
+func (s Geoposition) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self Geoposition) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s Geoposition) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self Geoposition) Latitude() float32 {
-	return float32(self.m.Get(types.NewString("Latitude")).(types.Float32))
+func (s Geoposition) Latitude() float32 {
+	return float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
 }
 
-func (self Geoposition) SetLatitude(val float32) Geoposition {
-	return Geoposition{self.m.Set(types.NewString("Latitude"), types.Float32(val))}
+func (s Geoposition) SetLatitude(val float32) Geoposition {
+	return Geoposition{s.m.Set(types.NewString("Latitude"), types.Float32(val))}
 }
 
-func (self Geoposition) Longitude() float32 {
-	return float32(self.m.Get(types.NewString("Longitude")).(types.Float32))
+func (s Geoposition) Longitude() float32 {
+	return float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
 }
 
-func (self Geoposition) SetLongitude(val float32) Geoposition {
-	return Geoposition{self.m.Set(types.NewString("Longitude"), types.Float32(val))}
+func (s Geoposition) SetLongitude(val float32) Geoposition {
+	return Geoposition{s.m.Set(types.NewString("Longitude"), types.Float32(val))}
 }
 
 // Georectangle
@@ -118,7 +119,7 @@ type Georectangle struct {
 func NewGeorectangle() Georectangle {
 	return Georectangle{types.NewMap(
 		types.NewString("$name"), types.NewString("Georectangle"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("Georectangle"), __mainPackageInFile_types_Ref()),
+		types.NewString("$type"), types.MakeTypeRef("Georectangle", __mainPackageInFile_types_CachedRef),
 		types.NewString("TopLeft"), NewGeoposition().NomsValue(),
 		types.NewString("BottomRight"), NewGeoposition().NomsValue(),
 	)}
@@ -133,28 +134,27 @@ func (def GeorectangleDef) New() Georectangle {
 	return Georectangle{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Georectangle"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("Georectangle"), __mainPackageInFile_types_Ref()),
+			types.NewString("$type"), types.MakeTypeRef("Georectangle", __mainPackageInFile_types_CachedRef),
 			types.NewString("TopLeft"), def.TopLeft.New().NomsValue(),
 			types.NewString("BottomRight"), def.BottomRight.New().NomsValue(),
 		)}
 }
 
-func (self Georectangle) Def() GeorectangleDef {
-	return GeorectangleDef{
-		GeopositionFromVal(self.m.Get(types.NewString("TopLeft"))).Def(),
-		GeopositionFromVal(self.m.Get(types.NewString("BottomRight"))).Def(),
-	}
+func (s Georectangle) Def() (d GeorectangleDef) {
+	d.TopLeft = GeopositionFromVal(s.m.Get(types.NewString("TopLeft"))).Def()
+	d.BottomRight = GeopositionFromVal(s.m.Get(types.NewString("BottomRight"))).Def()
+	return
 }
 
 // Creates and returns a Noms Value that describes Georectangle.
 func __typeRefOfGeorectangle() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("Georectangle"),
-		types.NewList(
-			types.NewString("TopLeft"), types.MakeTypeRef(types.NewString("Geoposition"), types.Ref{}),
-			types.NewString("BottomRight"), types.MakeTypeRef(types.NewString("Geoposition"), types.Ref{}),
-		),
-		nil)
-
+	return types.MakeStructTypeRef("Georectangle",
+		[]types.Field{
+			types.Field{"TopLeft", types.MakeTypeRef("Geoposition", types.Ref{}), false},
+			types.Field{"BottomRight", types.MakeTypeRef("Geoposition", types.Ref{}), false},
+		},
+		types.Choices{},
+	)
 }
 
 func GeorectangleFromVal(val types.Value) Georectangle {
@@ -162,36 +162,36 @@ func GeorectangleFromVal(val types.Value) Georectangle {
 	return Georectangle{val.(types.Map)}
 }
 
-func (self Georectangle) NomsValue() types.Value {
-	return self.m
+func (s Georectangle) NomsValue() types.Value {
+	return s.m
 }
 
-func (self Georectangle) Equals(other Georectangle) bool {
-	return self.m.Equals(other.m)
+func (s Georectangle) Equals(other Georectangle) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self Georectangle) Ref() ref.Ref {
-	return self.m.Ref()
+func (s Georectangle) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self Georectangle) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s Georectangle) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self Georectangle) TopLeft() Geoposition {
-	return GeopositionFromVal(self.m.Get(types.NewString("TopLeft")))
+func (s Georectangle) TopLeft() Geoposition {
+	return GeopositionFromVal(s.m.Get(types.NewString("TopLeft")))
 }
 
-func (self Georectangle) SetTopLeft(val Geoposition) Georectangle {
-	return Georectangle{self.m.Set(types.NewString("TopLeft"), val.NomsValue())}
+func (s Georectangle) SetTopLeft(val Geoposition) Georectangle {
+	return Georectangle{s.m.Set(types.NewString("TopLeft"), val.NomsValue())}
 }
 
-func (self Georectangle) BottomRight() Geoposition {
-	return GeopositionFromVal(self.m.Get(types.NewString("BottomRight")))
+func (s Georectangle) BottomRight() Geoposition {
+	return GeopositionFromVal(s.m.Get(types.NewString("BottomRight")))
 }
 
-func (self Georectangle) SetBottomRight(val Geoposition) Georectangle {
-	return Georectangle{self.m.Set(types.NewString("BottomRight"), val.NomsValue())}
+func (s Georectangle) SetBottomRight(val Geoposition) Georectangle {
+	return Georectangle{s.m.Set(types.NewString("BottomRight"), val.NomsValue())}
 }
 
 // Node
@@ -203,7 +203,7 @@ type Node struct {
 func NewNode() Node {
 	return Node{types.NewMap(
 		types.NewString("$name"), types.NewString("Node"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("Node"), __mainPackageInFile_types_Ref()),
+		types.NewString("$type"), types.MakeTypeRef("Node", __mainPackageInFile_types_CachedRef),
 		types.NewString("Geoposition"), NewGeoposition().NomsValue(),
 		types.NewString("Reference"), types.Ref{R: ref.Ref{}},
 	)}
@@ -218,28 +218,27 @@ func (def NodeDef) New() Node {
 	return Node{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Node"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("Node"), __mainPackageInFile_types_Ref()),
+			types.NewString("$type"), types.MakeTypeRef("Node", __mainPackageInFile_types_CachedRef),
 			types.NewString("Geoposition"), def.Geoposition.New().NomsValue(),
 			types.NewString("Reference"), types.Ref{R: def.Reference},
 		)}
 }
 
-func (self Node) Def() NodeDef {
-	return NodeDef{
-		GeopositionFromVal(self.m.Get(types.NewString("Geoposition"))).Def(),
-		self.m.Get(types.NewString("Reference")).Ref(),
-	}
+func (s Node) Def() (d NodeDef) {
+	d.Geoposition = GeopositionFromVal(s.m.Get(types.NewString("Geoposition"))).Def()
+	d.Reference = s.m.Get(types.NewString("Reference")).Ref()
+	return
 }
 
 // Creates and returns a Noms Value that describes Node.
 func __typeRefOfNode() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("Node"),
-		types.NewList(
-			types.NewString("Geoposition"), types.MakeTypeRef(types.NewString("Geoposition"), types.Ref{}),
-			types.NewString("Reference"), types.MakeCompoundTypeRef(types.NewString(""), types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind)),
-		),
-		nil)
-
+	return types.MakeStructTypeRef("Node",
+		[]types.Field{
+			types.Field{"Geoposition", types.MakeTypeRef("Geoposition", types.Ref{}), false},
+			types.Field{"Reference", types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind)), false},
+		},
+		types.Choices{},
+	)
 }
 
 func NodeFromVal(val types.Value) Node {
@@ -247,36 +246,36 @@ func NodeFromVal(val types.Value) Node {
 	return Node{val.(types.Map)}
 }
 
-func (self Node) NomsValue() types.Value {
-	return self.m
+func (s Node) NomsValue() types.Value {
+	return s.m
 }
 
-func (self Node) Equals(other Node) bool {
-	return self.m.Equals(other.m)
+func (s Node) Equals(other Node) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self Node) Ref() ref.Ref {
-	return self.m.Ref()
+func (s Node) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self Node) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s Node) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self Node) Geoposition() Geoposition {
-	return GeopositionFromVal(self.m.Get(types.NewString("Geoposition")))
+func (s Node) Geoposition() Geoposition {
+	return GeopositionFromVal(s.m.Get(types.NewString("Geoposition")))
 }
 
-func (self Node) SetGeoposition(val Geoposition) Node {
-	return Node{self.m.Set(types.NewString("Geoposition"), val.NomsValue())}
+func (s Node) SetGeoposition(val Geoposition) Node {
+	return Node{s.m.Set(types.NewString("Geoposition"), val.NomsValue())}
 }
 
-func (self Node) Reference() RefOfValue {
-	return RefOfValueFromVal(self.m.Get(types.NewString("Reference")))
+func (s Node) Reference() RefOfValue {
+	return RefOfValueFromVal(s.m.Get(types.NewString("Reference")))
 }
 
-func (self Node) SetReference(val RefOfValue) Node {
-	return Node{self.m.Set(types.NewString("Reference"), val.NomsValue())}
+func (s Node) SetReference(val RefOfValue) Node {
+	return Node{s.m.Set(types.NewString("Reference"), val.NomsValue())}
 }
 
 // RefOfValue
@@ -323,7 +322,7 @@ type QuadTree struct {
 func NewQuadTree() QuadTree {
 	return QuadTree{types.NewMap(
 		types.NewString("$name"), types.NewString("QuadTree"),
-		types.NewString("$type"), types.MakeTypeRef(types.NewString("QuadTree"), __mainPackageInFile_types_Ref()),
+		types.NewString("$type"), types.MakeTypeRef("QuadTree", __mainPackageInFile_types_CachedRef),
 		types.NewString("Nodes"), types.NewList(),
 		types.NewString("Tiles"), types.NewMap(),
 		types.NewString("Depth"), types.UInt8(0),
@@ -346,7 +345,7 @@ func (def QuadTreeDef) New() QuadTree {
 	return QuadTree{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("QuadTree"),
-			types.NewString("$type"), types.MakeTypeRef(types.NewString("QuadTree"), __mainPackageInFile_types_Ref()),
+			types.NewString("$type"), types.MakeTypeRef("QuadTree", __mainPackageInFile_types_CachedRef),
 			types.NewString("Nodes"), def.Nodes.New().NomsValue(),
 			types.NewString("Tiles"), def.Tiles.New().NomsValue(),
 			types.NewString("Depth"), types.UInt8(def.Depth),
@@ -356,30 +355,29 @@ func (def QuadTreeDef) New() QuadTree {
 		)}
 }
 
-func (self QuadTree) Def() QuadTreeDef {
-	return QuadTreeDef{
-		ListOfNodeFromVal(self.m.Get(types.NewString("Nodes"))).Def(),
-		MapOfStringToQuadTreeFromVal(self.m.Get(types.NewString("Tiles"))).Def(),
-		uint8(self.m.Get(types.NewString("Depth")).(types.UInt8)),
-		uint32(self.m.Get(types.NewString("NumDescendents")).(types.UInt32)),
-		self.m.Get(types.NewString("Path")).(types.String).String(),
-		GeorectangleFromVal(self.m.Get(types.NewString("Georectangle"))).Def(),
-	}
+func (s QuadTree) Def() (d QuadTreeDef) {
+	d.Nodes = ListOfNodeFromVal(s.m.Get(types.NewString("Nodes"))).Def()
+	d.Tiles = MapOfStringToQuadTreeFromVal(s.m.Get(types.NewString("Tiles"))).Def()
+	d.Depth = uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
+	d.NumDescendents = uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
+	d.Path = s.m.Get(types.NewString("Path")).(types.String).String()
+	d.Georectangle = GeorectangleFromVal(s.m.Get(types.NewString("Georectangle"))).Def()
+	return
 }
 
 // Creates and returns a Noms Value that describes QuadTree.
 func __typeRefOfQuadTree() types.TypeRef {
-	return types.MakeStructTypeRef(types.NewString("QuadTree"),
-		types.NewList(
-			types.NewString("Nodes"), types.MakeCompoundTypeRef(types.NewString(""), types.ListKind, types.MakeTypeRef(types.NewString("Node"), types.Ref{})),
-			types.NewString("Tiles"), types.MakeCompoundTypeRef(types.NewString(""), types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(types.NewString("QuadTree"), types.Ref{})),
-			types.NewString("Depth"), types.MakePrimitiveTypeRef(types.UInt8Kind),
-			types.NewString("NumDescendents"), types.MakePrimitiveTypeRef(types.UInt32Kind),
-			types.NewString("Path"), types.MakePrimitiveTypeRef(types.StringKind),
-			types.NewString("Georectangle"), types.MakeTypeRef(types.NewString("Georectangle"), types.Ref{}),
-		),
-		nil)
-
+	return types.MakeStructTypeRef("QuadTree",
+		[]types.Field{
+			types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Node", types.Ref{})), false},
+			types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("QuadTree", types.Ref{})), false},
+			types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
+			types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+			types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Georectangle", types.MakeTypeRef("Georectangle", types.Ref{}), false},
+		},
+		types.Choices{},
+	)
 }
 
 func QuadTreeFromVal(val types.Value) QuadTree {
@@ -387,68 +385,68 @@ func QuadTreeFromVal(val types.Value) QuadTree {
 	return QuadTree{val.(types.Map)}
 }
 
-func (self QuadTree) NomsValue() types.Value {
-	return self.m
+func (s QuadTree) NomsValue() types.Value {
+	return s.m
 }
 
-func (self QuadTree) Equals(other QuadTree) bool {
-	return self.m.Equals(other.m)
+func (s QuadTree) Equals(other QuadTree) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self QuadTree) Ref() ref.Ref {
-	return self.m.Ref()
+func (s QuadTree) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self QuadTree) Type() types.TypeRef {
-	return self.m.Get(types.NewString("$type")).(types.TypeRef)
+func (s QuadTree) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self QuadTree) Nodes() ListOfNode {
-	return ListOfNodeFromVal(self.m.Get(types.NewString("Nodes")))
+func (s QuadTree) Nodes() ListOfNode {
+	return ListOfNodeFromVal(s.m.Get(types.NewString("Nodes")))
 }
 
-func (self QuadTree) SetNodes(val ListOfNode) QuadTree {
-	return QuadTree{self.m.Set(types.NewString("Nodes"), val.NomsValue())}
+func (s QuadTree) SetNodes(val ListOfNode) QuadTree {
+	return QuadTree{s.m.Set(types.NewString("Nodes"), val.NomsValue())}
 }
 
-func (self QuadTree) Tiles() MapOfStringToQuadTree {
-	return MapOfStringToQuadTreeFromVal(self.m.Get(types.NewString("Tiles")))
+func (s QuadTree) Tiles() MapOfStringToQuadTree {
+	return MapOfStringToQuadTreeFromVal(s.m.Get(types.NewString("Tiles")))
 }
 
-func (self QuadTree) SetTiles(val MapOfStringToQuadTree) QuadTree {
-	return QuadTree{self.m.Set(types.NewString("Tiles"), val.NomsValue())}
+func (s QuadTree) SetTiles(val MapOfStringToQuadTree) QuadTree {
+	return QuadTree{s.m.Set(types.NewString("Tiles"), val.NomsValue())}
 }
 
-func (self QuadTree) Depth() uint8 {
-	return uint8(self.m.Get(types.NewString("Depth")).(types.UInt8))
+func (s QuadTree) Depth() uint8 {
+	return uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
 }
 
-func (self QuadTree) SetDepth(val uint8) QuadTree {
-	return QuadTree{self.m.Set(types.NewString("Depth"), types.UInt8(val))}
+func (s QuadTree) SetDepth(val uint8) QuadTree {
+	return QuadTree{s.m.Set(types.NewString("Depth"), types.UInt8(val))}
 }
 
-func (self QuadTree) NumDescendents() uint32 {
-	return uint32(self.m.Get(types.NewString("NumDescendents")).(types.UInt32))
+func (s QuadTree) NumDescendents() uint32 {
+	return uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
 }
 
-func (self QuadTree) SetNumDescendents(val uint32) QuadTree {
-	return QuadTree{self.m.Set(types.NewString("NumDescendents"), types.UInt32(val))}
+func (s QuadTree) SetNumDescendents(val uint32) QuadTree {
+	return QuadTree{s.m.Set(types.NewString("NumDescendents"), types.UInt32(val))}
 }
 
-func (self QuadTree) Path() string {
-	return self.m.Get(types.NewString("Path")).(types.String).String()
+func (s QuadTree) Path() string {
+	return s.m.Get(types.NewString("Path")).(types.String).String()
 }
 
-func (self QuadTree) SetPath(val string) QuadTree {
-	return QuadTree{self.m.Set(types.NewString("Path"), types.NewString(val))}
+func (s QuadTree) SetPath(val string) QuadTree {
+	return QuadTree{s.m.Set(types.NewString("Path"), types.NewString(val))}
 }
 
-func (self QuadTree) Georectangle() Georectangle {
-	return GeorectangleFromVal(self.m.Get(types.NewString("Georectangle")))
+func (s QuadTree) Georectangle() Georectangle {
+	return GeorectangleFromVal(s.m.Get(types.NewString("Georectangle")))
 }
 
-func (self QuadTree) SetGeorectangle(val Georectangle) QuadTree {
-	return QuadTree{self.m.Set(types.NewString("Georectangle"), val.NomsValue())}
+func (s QuadTree) SetGeorectangle(val Georectangle) QuadTree {
+	return QuadTree{s.m.Set(types.NewString("Georectangle"), val.NomsValue())}
 }
 
 // ListOfNode
@@ -471,12 +469,12 @@ func (def ListOfNodeDef) New() ListOfNode {
 	return ListOfNode{types.NewList(l...)}
 }
 
-func (self ListOfNode) Def() ListOfNodeDef {
-	l := make([]NodeDef, self.Len())
-	for i := uint64(0); i < self.Len(); i++ {
-		l[i] = NodeFromVal(self.l.Get(i)).Def()
+func (l ListOfNode) Def() ListOfNodeDef {
+	d := make([]NodeDef, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = NodeFromVal(l.l.Get(i)).Def()
 	}
-	return l
+	return d
 }
 
 func ListOfNodeFromVal(val types.Value) ListOfNode {
@@ -484,8 +482,8 @@ func ListOfNodeFromVal(val types.Value) ListOfNode {
 	return ListOfNode{val.(types.List)}
 }
 
-func (self ListOfNode) NomsValue() types.Value {
-	return self.l
+func (l ListOfNode) NomsValue() types.Value {
+	return l.l
 }
 
 func (l ListOfNode) Equals(p ListOfNode) bool {
@@ -504,16 +502,16 @@ func (l ListOfNode) Empty() bool {
 	return l.Len() == uint64(0)
 }
 
-func (self ListOfNode) Get(i uint64) Node {
-	return NodeFromVal(self.l.Get(i))
+func (l ListOfNode) Get(i uint64) Node {
+	return NodeFromVal(l.l.Get(i))
 }
 
 func (l ListOfNode) Slice(idx uint64, end uint64) ListOfNode {
 	return ListOfNode{l.l.Slice(idx, end)}
 }
 
-func (self ListOfNode) Set(i uint64, val Node) ListOfNode {
-	return ListOfNode{self.l.Set(i, val.NomsValue())}
+func (l ListOfNode) Set(i uint64, val Node) ListOfNode {
+	return ListOfNode{l.l.Set(i, val.NomsValue())}
 }
 
 func (l ListOfNode) Append(v ...Node) ListOfNode {
@@ -588,9 +586,9 @@ func (def MapOfStringToQuadTreeDef) New() MapOfStringToQuadTree {
 	return MapOfStringToQuadTree{types.NewMap(kv...)}
 }
 
-func (self MapOfStringToQuadTree) Def() MapOfStringToQuadTreeDef {
+func (m MapOfStringToQuadTree) Def() MapOfStringToQuadTreeDef {
 	def := make(map[string]QuadTreeDef)
-	self.m.Iter(func(k, v types.Value) bool {
+	m.m.Iter(func(k, v types.Value) bool {
 		def[k.(types.String).String()] = QuadTreeFromVal(v).Def()
 		return false
 	})
