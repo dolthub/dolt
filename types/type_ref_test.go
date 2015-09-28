@@ -41,7 +41,7 @@ func TestTypeWithPkgRef(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	pkg := PackageDef{
-		Types: MapOfStringToTypeRefDef{"Spin": MakePrimitiveTypeRef(Float64Kind)},
+		NamedTypes: MapOfStringToTypeRefDef{"Spin": MakePrimitiveTypeRef(Float64Kind)},
 	}.New()
 
 	pkgRef := RegisterPackage(&pkg)

@@ -65,7 +65,7 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 	case enc.TypeRef:
 		kind := NomsKind(i.Kind)
 		if i.PkgRef != (ref.Ref{}) {
-			d.Chk.Equal(ValueKind, kind)
+			d.Chk.Equal(TypeRefKind, kind)
 			d.Chk.Nil(i.Desc)
 			return futureFromValue(MakeTypeRef(i.Name, Ref{R: i.PkgRef}))
 		}

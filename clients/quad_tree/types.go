@@ -15,7 +15,7 @@ var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
 // type package definition cache.
 func __mainPackageInFile_types_Ref() types.Ref {
 	p := types.PackageDef{
-		Types: types.MapOfStringToTypeRefDef{
+		NamedTypes: types.MapOfStringToTypeRefDef{
 
 			"Geoposition":  __typeRefOfGeoposition(),
 			"Georectangle": __typeRefOfGeorectangle(),

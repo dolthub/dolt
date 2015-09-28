@@ -1,4 +1,4 @@
-package parse
+package pkg
 
 import (
 	"fmt"
@@ -25,11 +25,11 @@ type ParserTestSuite struct {
 }
 
 func (suite *ParserTestSuite) parsePanics(test, msg string) {
-	suite.Panics(func() { ParsePackage("", strings.NewReader(test)) }, msg)
+	suite.Panics(func() { runParser("", strings.NewReader(test)) }, msg)
 }
 
 func (suite *ParserTestSuite) parseNotPanics(test string) {
-	suite.NotPanics(func() { ParsePackage("", strings.NewReader(test)) }, test)
+	suite.NotPanics(func() { runParser("", strings.NewReader(test)) }, test)
 }
 
 func (suite *ParserTestSuite) TestAlias() {
@@ -37,10 +37,10 @@ func (suite *ParserTestSuite) TestAlias() {
 	ref := "sha1-ffffffff"
 	path := `some/path/\"quotes\"/path`
 
-	pkg := ParsePackage("", strings.NewReader(fmt.Sprintf(importTmpl, ref)))
+	pkg := runParser("", strings.NewReader(fmt.Sprintf(importTmpl, ref)))
 	suite.Equal(ref, pkg.Aliases["Noms"])
 
-	pkg = ParsePackage("", strings.NewReader(fmt.Sprintf(importTmpl, path)))
+	pkg = runParser("", strings.NewReader(fmt.Sprintf(importTmpl, path)))
 	suite.Equal(path, pkg.Aliases["Noms"])
 }
 
@@ -49,7 +49,7 @@ func (suite *ParserTestSuite) TestUsing() {
 using Map(String, Simple)
 using List(Noms.Commit)
 `
-	pkg := ParsePackage("", strings.NewReader(usingDecls))
+	pkg := runParser("", strings.NewReader(usingDecls))
 	suite.Len(pkg.UsingDeclarations, 2)
 
 	suite.Equal(types.MapKind, pkg.UsingDeclarations[0].Desc.Kind())
@@ -62,9 +62,9 @@ using List(Noms.Commit)
 }
 
 func (suite *ParserTestSuite) TestBadUsing() {
-	suite.Panics(func() { ParsePackage("", strings.NewReader("using Blob")) }, "Can't 'use' a primitive.")
-	suite.Panics(func() { ParsePackage("", strings.NewReader("using Noms.Commit")) }, "Can't 'use' a type from another package.")
-	suite.Panics(func() { ParsePackage("", strings.NewReader("using f@(k")) }, "Can't 'use' illegal identifier.")
+	suite.Panics(func() { runParser("", strings.NewReader("using Blob")) }, "Can't 'use' a primitive.")
+	suite.Panics(func() { runParser("", strings.NewReader("using Noms.Commit")) }, "Can't 'use' a type from another package.")
+	suite.Panics(func() { runParser("", strings.NewReader("using f@(k")) }, "Can't 'use' illegal identifier.")
 }
 
 func (suite *ParserTestSuite) TestBadStructParse() {
@@ -180,7 +180,7 @@ func (suite *ParserTestSuite) TestEnum() {
 	ids := []string{"e1", "e2", "e4"}
 	enum := fmt.Sprintf(enumTmpl, name, strings.Join(ids, "\n"))
 
-	pkg := ParsePackage("", strings.NewReader(enum))
+	pkg := runParser("", strings.NewReader(enum))
 	suite.Equal(name, pkg.NamedTypes[name].Name())
 	suite.EqualValues(ids, pkg.NamedTypes[name].Desc.(types.EnumDesc).IDs)
 }
@@ -268,7 +268,7 @@ type describable interface {
 	Describe() string
 }
 
-func (suite *ParsedResultTestSuite) checkStruct(pkg Package, s structTestCase) {
+func (suite *ParsedResultTestSuite) checkStruct(pkg intermediate, s structTestCase) {
 	typ := pkg.NamedTypes[s.Name]
 	typFields := typ.Desc.(types.StructDesc).Fields
 	typUnion := typ.Desc.(types.StructDesc).Union
@@ -311,7 +311,7 @@ func (suite *ParsedResultTestSuite) parseAndCheckStructs(structs ...structTestCa
 		pkgDef += s.toText() + "\n"
 	}
 	err := d.Try(func() {
-		pkg := ParsePackage("", strings.NewReader(pkgDef))
+		pkg := runParser("", strings.NewReader(pkgDef))
 		for _, s := range structs {
 			suite.checkStruct(pkg, s)
 		}
@@ -336,7 +336,7 @@ func (suite *ParsedResultTestSuite) TestAnonUnionFirst() {
 
 	pkgDef := fmt.Sprintf(structTmpl, anonUnionFirst.Name, anonUnionFirst.unionToString(), anonUnionFirst.fieldsToString())
 	err := d.Try(func() {
-		pkg := ParsePackage("", strings.NewReader(pkgDef))
+		pkg := runParser("", strings.NewReader(pkgDef))
 		suite.checkStruct(pkg, anonUnionFirst)
 	})
 	suite.NoError(err, pkgDef)
@@ -347,7 +347,7 @@ func (suite *ParsedResultTestSuite) TestCommentNextToName() {
 
 	pkgDef := fmt.Sprintf(structTmpl, "/* Oy! */"+withComment.Name, withComment.unionToString(), withComment.fieldsToString())
 	err := d.Try(func() {
-		pkg := ParsePackage("", strings.NewReader(pkgDef))
+		pkg := runParser("", strings.NewReader(pkgDef))
 		suite.checkStruct(pkg, withComment)
 	})
 	suite.NoError(err, pkgDef)
@@ -358,7 +358,7 @@ func (suite *ParsedResultTestSuite) TestCommentAmongFields() {
 
 	pkgDef := fmt.Sprintf(structTmpl, withComment.Name, withComment.fieldsToString()+"\n// Nope\n", withComment.unionToString())
 	err := d.Try(func() {
-		pkg := ParsePackage("", strings.NewReader(pkgDef))
+		pkg := runParser("", strings.NewReader(pkgDef))
 		suite.checkStruct(pkg, withComment)
 	})
 	suite.NoError(err, pkgDef)

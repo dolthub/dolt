@@ -74,6 +74,10 @@ func (t TypeRef) NamespacedName() string {
 	return t.name.compose()
 }
 
+func (t TypeRef) Namespace() string {
+	return t.name.namespace
+}
+
 func (t TypeRef) Ref() ref.Ref {
 	return ensureRef(t.ref, t)
 }

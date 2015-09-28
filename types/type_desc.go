@@ -85,7 +85,7 @@ func primitiveToDesc(p string) PrimitiveDesc {
 type UnresolvedDesc struct{}
 
 func (u UnresolvedDesc) Kind() NomsKind {
-	return ValueKind
+	return TypeRefKind
 }
 
 func (u UnresolvedDesc) Equals(other TypeDesc) bool {

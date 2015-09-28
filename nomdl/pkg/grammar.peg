@@ -1,5 +1,5 @@
 {
-package parse
+package pkg
 
 type alias struct {
 	Name   string
@@ -44,7 +44,7 @@ Package <- _ dd:Definition+ _ EOF {
 			}
 		}
 	}
-	return Package{"", aliases, usings, named}, nil
+	return intermediate{"", aliases, usings, named}, nil
 }
 
 Definition <- Struct / Using / Alias / Enum

@@ -10,14 +10,16 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/tools/imports"
+	"github.com/attic-labs/noms/chunks"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/nomdl/parse"
+	"github.com/attic-labs/noms/nomdl/pkg"
 )
 
 func assertOutput(inPath, goldenPath string, t *testing.T) {
 	assert := assert.New(t)
+	emptyCS := chunks.NewMemoryStore() // Will be ChunkSource containing imports
 
 	inFile, err := os.Open(inPath)
 	assert.NoError(err)
@@ -30,7 +32,7 @@ func assertOutput(inPath, goldenPath string, t *testing.T) {
 	d.Chk.NoError(err)
 
 	var buf bytes.Buffer
-	pkg := parse.ParsePackage("", inFile)
+	pkg := pkg.ParseNomDL("", inFile, emptyCS)
 	gen := NewCodeGen(&buf, getBareFileName(inPath), pkg)
 	gen.WritePackage("test")
 
@@ -51,9 +53,10 @@ func TestGeneratedFiles(t *testing.T) {
 
 func TestCanUseDef(t *testing.T) {
 	assert := assert.New(t)
+	emptyCS := chunks.NewMemoryStore() // Will be ChunkSource containing imports
 
 	assertCanUseDef := func(s string, using, named bool) {
-		pkg := parse.ParsePackage("", bytes.NewBufferString(s))
+		pkg := pkg.ParseNomDL("", bytes.NewBufferString(s), emptyCS)
 		gen := NewCodeGen(nil, "fakefile", pkg)
 		for _, t := range pkg.UsingDeclarations {
 			assert.Equal(using, gen.canUseDef(t))
