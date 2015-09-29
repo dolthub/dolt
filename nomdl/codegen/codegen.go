@@ -17,10 +17,10 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/tools/imports"
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/types"
-
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/nomdl/pkg"
+	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/types"
 )
 
 var (
@@ -383,8 +383,11 @@ func (gen *codeGen) userName(t types.TypeRef) string {
 
 func (gen *codeGen) toTypesTypeRef(t types.TypeRef) string {
 	if t.IsUnresolved() {
-		// needs to be pkgRef
-		return fmt.Sprintf(`types.MakeTypeRef("%s", types.Ref{})`, t.Name())
+		refCode := "ref.Ref{}"
+		if t.PackageRef() != (ref.Ref{}) {
+			refCode = fmt.Sprintf(`ref.Parse("%s")`, t.PackageRef().String())
+		}
+		return fmt.Sprintf(`types.MakeTypeRef("%s", %s)`, t.Name(), refCode)
 	}
 	if types.IsPrimitiveKind(t.Desc.Kind()) {
 		return fmt.Sprintf("types.MakePrimitiveTypeRef(types.%sKind)", kindToString(t.Desc.Kind()))

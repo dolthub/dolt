@@ -59,11 +59,11 @@ func (t TypeRef) Kind() NomsKind {
 	return t.Desc.Kind()
 }
 
-func (t TypeRef) PackageRef() Ref {
+func (t TypeRef) PackageRef() ref.Ref {
 	if t.pkgRef == nil {
-		return Ref{}
+		return ref.Ref{}
 	}
-	return *t.pkgRef
+	return t.pkgRef.R
 }
 
 func (t TypeRef) Name() string {
@@ -126,8 +126,8 @@ func MakeStructTypeRef(name string, fields []Field, choices Choices) TypeRef {
 	return buildType(name, StructDesc{fields, choices})
 }
 
-func MakeTypeRef(n string, pkg Ref) TypeRef {
-	return TypeRef{name: name{name: n}, pkgRef: &pkg, Desc: UnresolvedDesc{}, ref: &ref.Ref{}}
+func MakeTypeRef(n string, pkg ref.Ref) TypeRef {
+	return TypeRef{name: name{name: n}, pkgRef: &Ref{R: pkg}, Desc: UnresolvedDesc{}, ref: &ref.Ref{}}
 }
 
 func MakeExternalTypeRef(namespace, n string) TypeRef {

@@ -12,14 +12,14 @@ var __testPackageInFile_struct_optional_CachedRef = __testPackageInFile_struct_o
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __testPackageInFile_struct_optional_Ref() types.Ref {
+func __testPackageInFile_struct_optional_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
 			"OptionalStruct": __typeRefOfOptionalStruct(),
 		},
 	}.New()
-	return types.Ref{R: types.RegisterPackage(&p)}
+	return types.RegisterPackage(&p)
 }
 
 // OptionalStruct

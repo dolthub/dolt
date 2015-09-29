@@ -51,7 +51,7 @@ func (self Package) Def() PackageDef {
 func __typeRefOfPackage() TypeRef {
 	return MakeStructTypeRef("Package",
 		[]Field{
-			Field{"Dependencies", MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", Ref{}))), false},
+			Field{"Dependencies", MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", ref.Ref{}))), false},
 			Field{"NamedTypes", MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind)), false},
 		},
 		Choices{})
