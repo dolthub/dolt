@@ -58,20 +58,39 @@ func (suite *ImportTestSuite) TestGetDeps() {
 	suite.True(ok, "%s is a dep; should have been found.", suite.nestedRef.String())
 }
 
+func (suite *ImportTestSuite) TestResolveNamespace() {
+	deps := GetDeps(types.SetOfRefOfPackageDef{suite.importRef: true}, suite.cs)
+	t := resolveNamespace(types.MakeExternalTypeRef("Other", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
+	suite.EqualValues(types.MakeTypeRef("ForeignEnum", types.Ref{R: suite.importRef}), t)
+}
+
+func (suite *ImportTestSuite) TestUnknownAlias() {
+	deps := GetDeps(types.SetOfRefOfPackageDef{suite.importRef: true}, suite.cs)
+	suite.Panics(func() {
+		resolveNamespace(types.MakeExternalTypeRef("Bother", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
+	})
+}
+
+func (suite *ImportTestSuite) TestUnknownImportedType() {
+	deps := GetDeps(types.SetOfRefOfPackageDef{suite.importRef: true}, suite.cs)
+	suite.Panics(func() {
+		resolveNamespace(types.MakeExternalTypeRef("Other", "NotThere"), map[string]ref.Ref{"Other": suite.importRef}, deps)
+	})
+}
+
+func (suite *ImportTestSuite) TestDetectFreeVariable() {
+	ls := types.MakeStructTypeRef("Local", []types.Field{
+		types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
+		types.Field{"n", types.MakeTypeRef("OtherLocal", types.Ref{}), false},
+	},
+		types.Choices{})
+	suite.Panics(func() {
+		resolveNamespaces(map[string]types.TypeRef{"Local": ls}, map[string]ref.Ref{}, map[ref.Ref]types.PackageDef{})
+	})
+}
+
 func (suite *ImportTestSuite) TestImports() {
 	logname := "testing"
-	r := strings.NewReader(fmt.Sprintf(`
-		alias Other = import "%s"
-		struct Local1 {
-			a: Other.ForeignStruct
-			b: Int16
-			c: Local2
-		}
-		struct Local2 {
-			a: Bool
-			b: Other.ForeignEnum
-		}`, suite.importRef))
-	p := ParseNomDL(logname, r, suite.cs)
 
 	find := func(n string, tref types.TypeRef) types.Field {
 		suite.Equal(types.StructKind, tref.Kind())
@@ -84,6 +103,43 @@ func (suite *ImportTestSuite) TestImports() {
 		return types.Field{}
 	}
 
+	findChoice := func(n string, tref types.TypeRef) types.Field {
+		suite.Equal(types.StructKind, tref.Kind())
+		for _, f := range tref.Desc.(types.StructDesc).Union {
+			if f.Name == n {
+				return f
+			}
+		}
+		suite.Fail("Could not find choice", "%s not present", n)
+		return types.Field{}
+	}
+
+	r := strings.NewReader(fmt.Sprintf(`
+		alias Other = import "%s"
+		struct Local1 {
+			a: Other.ForeignStruct
+			b: Int16
+			c: Local2
+		}
+		struct Local2 {
+			a: Bool
+			b: Other.ForeignEnum
+		}
+		struct Union {
+			union {
+				a: Other.ForeignStruct
+				b: Local2
+			}
+		}
+		struct WithUnion {
+			a: Other.ForeignStruct
+			b: union {
+				s: Local1
+				t: Other.ForeignEnum
+			}
+		}`, suite.importRef))
+	p := ParseNomDL(logname, r, suite.cs)
+
 	named := p.NamedTypes["Local1"]
 	field := find("a", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef().Ref())
@@ -92,5 +148,20 @@ func (suite *ImportTestSuite) TestImports() {
 
 	named = p.NamedTypes["Local2"]
 	field = find("b", named)
+	suite.EqualValues(suite.importRef, field.T.PackageRef().Ref())
+
+	named = p.NamedTypes["Union"]
+	field = findChoice("a", named)
+	suite.EqualValues(suite.importRef, field.T.PackageRef().Ref())
+	field = findChoice("b", named)
+	suite.EqualValues(types.Ref{}, field.T.PackageRef())
+
+	named = p.NamedTypes["WithUnion"]
+	field = find("a", named)
+	suite.EqualValues(suite.importRef, field.T.PackageRef().Ref())
+	namedUnion := find("b", named).T
+	field = findChoice("s", namedUnion)
+	suite.EqualValues(types.Ref{}, field.T.PackageRef())
+	field = findChoice("t", namedUnion)
 	suite.EqualValues(suite.importRef, field.T.PackageRef().Ref())
 }

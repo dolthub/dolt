@@ -18,7 +18,7 @@ func ParseNomDL(logname string, r io.Reader, cs chunks.ChunkSource) Parsed {
 	for _, target := range aliases {
 		depRefs[target] = true
 	}
-	resolveAliases(i.NamedTypes, aliases, GetDeps(depRefs, cs))
+	resolveNamespaces(i.NamedTypes, aliases, GetDeps(depRefs, cs))
 	return Parsed{
 		types.PackageDef{Dependencies: depRefs, NamedTypes: i.NamedTypes},
 		i.Name,
@@ -71,7 +71,7 @@ func resolveImports(pkg intermediate) map[string]ref.Ref {
 	return aliases
 }
 
-func resolveAliases(namedTypes map[string]types.TypeRef, aliases map[string]ref.Ref, deps map[ref.Ref]types.PackageDef) {
+func resolveNamespaces(namedTypes map[string]types.TypeRef, aliases map[string]ref.Ref, deps map[ref.Ref]types.PackageDef) {
 	var rec func(t types.TypeRef) types.TypeRef
 	resolveFields := func(fields []types.Field) {
 		for idx, f := range fields {
@@ -82,7 +82,7 @@ func resolveAliases(namedTypes map[string]types.TypeRef, aliases map[string]ref.
 					d.Exp.True(ok, "Could not find type %s in current package.", f.T.Name())
 					continue
 				}
-				f.T = resolveAlias(f.T, aliases, deps)
+				f.T = resolveNamespace(f.T, aliases, deps)
 			} else {
 				f.T = rec(f.T)
 			}
@@ -99,7 +99,7 @@ func resolveAliases(namedTypes map[string]types.TypeRef, aliases map[string]ref.
 
 	for n, t := range namedTypes {
 		if t.IsUnresolved() {
-			namedTypes[n] = resolveAlias(t, aliases, deps)
+			namedTypes[n] = resolveNamespace(t, aliases, deps)
 			continue
 		}
 		namedTypes[n] = rec(t)
@@ -107,7 +107,7 @@ func resolveAliases(namedTypes map[string]types.TypeRef, aliases map[string]ref.
 
 }
 
-func resolveAlias(t types.TypeRef, aliases map[string]ref.Ref, deps map[ref.Ref]types.PackageDef) types.TypeRef {
+func resolveNamespace(t types.TypeRef, aliases map[string]ref.Ref, deps map[ref.Ref]types.PackageDef) types.TypeRef {
 	target, ok := aliases[t.Namespace()]
 	d.Exp.True(ok, "Could not find import aliased to %s", t.Namespace())
 	_, ok = deps[target].NamedTypes[t.Name()]
