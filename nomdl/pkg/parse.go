@@ -77,7 +77,7 @@ func resolveNamespaces(namedTypes map[string]types.TypeRef, aliases map[string]r
 		for idx, f := range fields {
 			if f.T.IsUnresolved() {
 				if f.T.Namespace() == "" {
-					d.Chk.Equal(types.Ref{}, f.T.PackageRef())
+					d.Chk.Equal(ref.Ref{}, f.T.PackageRef())
 					_, ok := namedTypes[f.T.Name()]
 					d.Exp.True(ok, "Could not find type %s in current package.", f.T.Name())
 					continue
@@ -112,5 +112,5 @@ func resolveNamespace(t types.TypeRef, aliases map[string]ref.Ref, deps map[ref.
 	d.Exp.True(ok, "Could not find import aliased to %s", t.Namespace())
 	_, ok = deps[target].NamedTypes[t.Name()]
 	d.Exp.True(ok, "Could not find type %s in package %s (aliased to %s).", t.Name(), target.String(), t.Namespace())
-	return types.MakeTypeRef(t.Name(), types.Ref{R: target})
+	return types.MakeTypeRef(t.Name(), target)
 }

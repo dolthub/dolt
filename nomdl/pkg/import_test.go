@@ -35,7 +35,7 @@ func (suite *ImportTestSuite) SetupTest() {
 
 	fs := types.MakeStructTypeRef("ForeignStruct", []types.Field{
 		types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
-		types.Field{"n", types.MakeTypeRef("NestedDepStruct", types.Ref{R: suite.nestedRef}), false},
+		types.Field{"n", types.MakeTypeRef("NestedDepStruct", suite.nestedRef), false},
 	},
 		types.Choices{})
 	fe := types.MakeEnumTypeRef("ForeignEnum", "uno", "dos")
@@ -61,7 +61,7 @@ func (suite *ImportTestSuite) TestGetDeps() {
 func (suite *ImportTestSuite) TestResolveNamespace() {
 	deps := GetDeps(types.SetOfRefOfPackageDef{suite.importRef: true}, suite.cs)
 	t := resolveNamespace(types.MakeExternalTypeRef("Other", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
-	suite.EqualValues(types.MakeTypeRef("ForeignEnum", types.Ref{R: suite.importRef}), t)
+	suite.EqualValues(types.MakeTypeRef("ForeignEnum", suite.importRef), t)
 }
 
 func (suite *ImportTestSuite) TestUnknownAlias() {
@@ -81,7 +81,7 @@ func (suite *ImportTestSuite) TestUnknownImportedType() {
 func (suite *ImportTestSuite) TestDetectFreeVariable() {
 	ls := types.MakeStructTypeRef("Local", []types.Field{
 		types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
-		types.Field{"n", types.MakeTypeRef("OtherLocal", types.Ref{}), false},
+		types.Field{"n", types.MakeTypeRef("OtherLocal", ref.Ref{}), false},
 	},
 		types.Choices{})
 	suite.Panics(func() {
@@ -142,26 +142,26 @@ func (suite *ImportTestSuite) TestImports() {
 
 	named := p.NamedTypes["Local1"]
 	field := find("a", named)
-	suite.EqualValues(suite.importRef, field.T.PackageRef().Ref())
+	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	field = find("c", named)
-	suite.EqualValues(types.Ref{}, field.T.PackageRef())
+	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 
 	named = p.NamedTypes["Local2"]
 	field = find("b", named)
-	suite.EqualValues(suite.importRef, field.T.PackageRef().Ref())
+	suite.EqualValues(suite.importRef, field.T.PackageRef())
 
 	named = p.NamedTypes["Union"]
 	field = findChoice("a", named)
-	suite.EqualValues(suite.importRef, field.T.PackageRef().Ref())
+	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	field = findChoice("b", named)
-	suite.EqualValues(types.Ref{}, field.T.PackageRef())
+	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 
 	named = p.NamedTypes["WithUnion"]
 	field = find("a", named)
-	suite.EqualValues(suite.importRef, field.T.PackageRef().Ref())
+	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	namedUnion := find("b", named).T
 	field = findChoice("s", namedUnion)
-	suite.EqualValues(types.Ref{}, field.T.PackageRef())
+	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 	field = findChoice("t", namedUnion)
-	suite.EqualValues(suite.importRef, field.T.PackageRef().Ref())
+	suite.EqualValues(suite.importRef, field.T.PackageRef())
 }

@@ -12,14 +12,14 @@ var __testPackageInFile_struct_with_unions_CachedRef = __testPackageInFile_struc
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __testPackageInFile_struct_with_unions_Ref() types.Ref {
+func __testPackageInFile_struct_with_unions_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
 			"StructWithUnions": __typeRefOfStructWithUnions(),
 		},
 	}.New()
-	return types.Ref{R: types.RegisterPackage(&p)}
+	return types.RegisterPackage(&p)
 }
 
 // StructWithUnions

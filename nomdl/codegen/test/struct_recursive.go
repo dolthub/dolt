@@ -12,14 +12,14 @@ var __testPackageInFile_struct_recursive_CachedRef = __testPackageInFile_struct_
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __testPackageInFile_struct_recursive_Ref() types.Ref {
+func __testPackageInFile_struct_recursive_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
 			"Tree": __typeRefOfTree(),
 		},
 	}.New()
-	return types.Ref{R: types.RegisterPackage(&p)}
+	return types.RegisterPackage(&p)
 }
 
 // Tree
@@ -58,7 +58,7 @@ func (s Tree) Def() (d TreeDef) {
 func __typeRefOfTree() types.TypeRef {
 	return types.MakeStructTypeRef("Tree",
 		[]types.Field{
-			types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", types.Ref{})), false},
+			types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", ref.Ref{})), false},
 		},
 		types.Choices{},
 	)

@@ -12,14 +12,14 @@ var __datasPackageInFile_types_CachedRef = __datasPackageInFile_types_Ref()
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __datasPackageInFile_types_Ref() types.Ref {
+func __datasPackageInFile_types_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
 			"Commit": __typeRefOfCommit(),
 		},
 	}.New()
-	return types.Ref{R: types.RegisterPackage(&p)}
+	return types.RegisterPackage(&p)
 }
 
 // Commit
@@ -42,7 +42,7 @@ func __typeRefOfCommit() types.TypeRef {
 	return types.MakeStructTypeRef("Commit",
 		[]types.Field{
 			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
-			types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", types.Ref{})), false},
+			types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", ref.Ref{})), false},
 		},
 		types.Choices{},
 	)

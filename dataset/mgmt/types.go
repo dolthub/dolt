@@ -12,14 +12,14 @@ var __mgmtPackageInFile_types_CachedRef = __mgmtPackageInFile_types_Ref()
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __mgmtPackageInFile_types_Ref() types.Ref {
+func __mgmtPackageInFile_types_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
 			"Dataset": __typeRefOfDataset(),
 		},
 	}.New()
-	return types.Ref{R: types.RegisterPackage(&p)}
+	return types.RegisterPackage(&p)
 }
 
 // SetOfDataset

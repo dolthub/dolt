@@ -108,7 +108,7 @@ func makeSetEncodeable(s Set, cs chunks.ChunkSink) interface{} {
 }
 
 func makeTypeEncodeable(t TypeRef, cs chunks.ChunkSink) interface{} {
-	pkgRef := t.PackageRef().Ref()
+	pkgRef := t.PackageRef()
 	p := LookupPackage(pkgRef)
 	if p != nil {
 		pkgRef = writeChildValueInternal(p.NomsValue(), cs)

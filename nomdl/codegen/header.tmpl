@@ -2,21 +2,19 @@
 
 package {{.Name}}
 
-import "github.com/attic-labs/noms/types"
-
 {{if .HasTypes}}
 var __{{.Name}}PackageInFile_{{.FileID}}_CachedRef = __{{.Name}}PackageInFile_{{.FileID}}_Ref()
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __{{.Name}}PackageInFile_{{.FileID}}_Ref() types.Ref {
+func __{{.Name}}PackageInFile_{{.FileID}}_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 			{{range $name, $t := .NamedTypes}}
 			"{{$name}}": __typeRefOf{{$name}}(),{{end}}
 		},
 	}.New()
-	return types.Ref{R: types.RegisterPackage(&p)}
+	return types.RegisterPackage(&p)
 }
 {{end}}

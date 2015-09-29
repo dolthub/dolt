@@ -45,7 +45,7 @@ func TestTypeWithPkgRef(t *testing.T) {
 	}.New()
 
 	pkgRef := RegisterPackage(&pkg)
-	unresolvedType := MakeTypeRef("Spin", Ref{R: pkgRef})
+	unresolvedType := MakeTypeRef("Spin", pkgRef)
 	unresolvedRef := WriteValue(unresolvedType, cs)
 
 	assert.EqualValues(pkgRef, ReadValue(unresolvedRef, cs).Chunks()[0].Ref())
