@@ -24,3 +24,5 @@ struct SQuadTree {
 	Path: String
 	Georectangle: Georectangle
 }
+
+using List(Incident)

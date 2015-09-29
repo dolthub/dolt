@@ -25,6 +25,246 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 	return types.RegisterPackage(&p)
 }
 
+// ListOfIncident
+
+type ListOfIncident struct {
+	l types.List
+}
+
+func NewListOfIncident() ListOfIncident {
+	return ListOfIncident{types.NewList()}
+}
+
+type ListOfIncidentDef []IncidentDef
+
+func (def ListOfIncidentDef) New() ListOfIncident {
+	l := make([]types.Value, len(def))
+	for i, d := range def {
+		l[i] = d.New().NomsValue()
+	}
+	return ListOfIncident{types.NewList(l...)}
+}
+
+func (l ListOfIncident) Def() ListOfIncidentDef {
+	d := make([]IncidentDef, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = IncidentFromVal(l.l.Get(i)).Def()
+	}
+	return d
+}
+
+func ListOfIncidentFromVal(val types.Value) ListOfIncident {
+	// TODO: Validate here
+	return ListOfIncident{val.(types.List)}
+}
+
+func (l ListOfIncident) NomsValue() types.Value {
+	return l.l
+}
+
+func (l ListOfIncident) Equals(p ListOfIncident) bool {
+	return l.l.Equals(p.l)
+}
+
+func (l ListOfIncident) Ref() ref.Ref {
+	return l.l.Ref()
+}
+
+func (l ListOfIncident) Len() uint64 {
+	return l.l.Len()
+}
+
+func (l ListOfIncident) Empty() bool {
+	return l.Len() == uint64(0)
+}
+
+func (l ListOfIncident) Get(i uint64) Incident {
+	return IncidentFromVal(l.l.Get(i))
+}
+
+func (l ListOfIncident) Slice(idx uint64, end uint64) ListOfIncident {
+	return ListOfIncident{l.l.Slice(idx, end)}
+}
+
+func (l ListOfIncident) Set(i uint64, val Incident) ListOfIncident {
+	return ListOfIncident{l.l.Set(i, val.NomsValue())}
+}
+
+func (l ListOfIncident) Append(v ...Incident) ListOfIncident {
+	return ListOfIncident{l.l.Append(l.fromElemSlice(v)...)}
+}
+
+func (l ListOfIncident) Insert(idx uint64, v ...Incident) ListOfIncident {
+	return ListOfIncident{l.l.Insert(idx, l.fromElemSlice(v)...)}
+}
+
+func (l ListOfIncident) Remove(idx uint64, end uint64) ListOfIncident {
+	return ListOfIncident{l.l.Remove(idx, end)}
+}
+
+func (l ListOfIncident) RemoveAt(idx uint64) ListOfIncident {
+	return ListOfIncident{(l.l.RemoveAt(idx))}
+}
+
+func (l ListOfIncident) fromElemSlice(p []Incident) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v.NomsValue()
+	}
+	return r
+}
+
+type ListOfIncidentIterCallback func(v Incident) (stop bool)
+
+func (l ListOfIncident) Iter(cb ListOfIncidentIterCallback) {
+	l.l.Iter(func(v types.Value) bool {
+		return cb(IncidentFromVal(v))
+	})
+}
+
+type ListOfIncidentIterAllCallback func(v Incident)
+
+func (l ListOfIncident) IterAll(cb ListOfIncidentIterAllCallback) {
+	l.l.IterAll(func(v types.Value) {
+		cb(IncidentFromVal(v))
+	})
+}
+
+type ListOfIncidentFilterCallback func(v Incident) (keep bool)
+
+func (l ListOfIncident) Filter(cb ListOfIncidentFilterCallback) ListOfIncident {
+	nl := NewListOfIncident()
+	l.IterAll(func(v Incident) {
+		if cb(v) {
+			nl = nl.Append(v)
+		}
+	})
+	return nl
+}
+
+// Incident
+
+type Incident struct {
+	m types.Map
+}
+
+func NewIncident() Incident {
+	return Incident{types.NewMap(
+		types.NewString("$name"), types.NewString("Incident"),
+		types.NewString("$type"), types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef),
+		types.NewString("Category"), types.NewString(""),
+		types.NewString("Description"), types.NewString(""),
+		types.NewString("Address"), types.NewString(""),
+		types.NewString("Date"), types.NewString(""),
+		types.NewString("Geoposition"), NewGeoposition().NomsValue(),
+	)}
+}
+
+type IncidentDef struct {
+	Category    string
+	Description string
+	Address     string
+	Date        string
+	Geoposition GeopositionDef
+}
+
+func (def IncidentDef) New() Incident {
+	return Incident{
+		types.NewMap(
+			types.NewString("$name"), types.NewString("Incident"),
+			types.NewString("$type"), types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef),
+			types.NewString("Category"), types.NewString(def.Category),
+			types.NewString("Description"), types.NewString(def.Description),
+			types.NewString("Address"), types.NewString(def.Address),
+			types.NewString("Date"), types.NewString(def.Date),
+			types.NewString("Geoposition"), def.Geoposition.New().NomsValue(),
+		)}
+}
+
+func (s Incident) Def() (d IncidentDef) {
+	d.Category = s.m.Get(types.NewString("Category")).(types.String).String()
+	d.Description = s.m.Get(types.NewString("Description")).(types.String).String()
+	d.Address = s.m.Get(types.NewString("Address")).(types.String).String()
+	d.Date = s.m.Get(types.NewString("Date")).(types.String).String()
+	d.Geoposition = GeopositionFromVal(s.m.Get(types.NewString("Geoposition"))).Def()
+	return
+}
+
+// Creates and returns a Noms Value that describes Incident.
+func __typeRefOfIncident() types.TypeRef {
+	return types.MakeStructTypeRef("Incident",
+		[]types.Field{
+			types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Geoposition", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
+		},
+		types.Choices{},
+	)
+}
+
+func IncidentFromVal(val types.Value) Incident {
+	// TODO: Validate here
+	return Incident{val.(types.Map)}
+}
+
+func (s Incident) NomsValue() types.Value {
+	return s.m
+}
+
+func (s Incident) Equals(other Incident) bool {
+	return s.m.Equals(other.m)
+}
+
+func (s Incident) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s Incident) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
+}
+
+func (s Incident) Category() string {
+	return s.m.Get(types.NewString("Category")).(types.String).String()
+}
+
+func (s Incident) SetCategory(val string) Incident {
+	return Incident{s.m.Set(types.NewString("Category"), types.NewString(val))}
+}
+
+func (s Incident) Description() string {
+	return s.m.Get(types.NewString("Description")).(types.String).String()
+}
+
+func (s Incident) SetDescription(val string) Incident {
+	return Incident{s.m.Set(types.NewString("Description"), types.NewString(val))}
+}
+
+func (s Incident) Address() string {
+	return s.m.Get(types.NewString("Address")).(types.String).String()
+}
+
+func (s Incident) SetAddress(val string) Incident {
+	return Incident{s.m.Set(types.NewString("Address"), types.NewString(val))}
+}
+
+func (s Incident) Date() string {
+	return s.m.Get(types.NewString("Date")).(types.String).String()
+}
+
+func (s Incident) SetDate(val string) Incident {
+	return Incident{s.m.Set(types.NewString("Date"), types.NewString(val))}
+}
+
+func (s Incident) Geoposition() Geoposition {
+	return GeopositionFromVal(s.m.Get(types.NewString("Geoposition")))
+}
+
+func (s Incident) SetGeoposition(val Geoposition) Incident {
+	return Incident{s.m.Set(types.NewString("Geoposition"), val.NomsValue())}
+}
+
 // Geoposition
 
 type Geoposition struct {
@@ -193,129 +433,6 @@ func (s Georectangle) SetBottomRight(val Geoposition) Georectangle {
 	return Georectangle{s.m.Set(types.NewString("BottomRight"), val.NomsValue())}
 }
 
-// Incident
-
-type Incident struct {
-	m types.Map
-}
-
-func NewIncident() Incident {
-	return Incident{types.NewMap(
-		types.NewString("$name"), types.NewString("Incident"),
-		types.NewString("$type"), types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef),
-		types.NewString("Category"), types.NewString(""),
-		types.NewString("Description"), types.NewString(""),
-		types.NewString("Address"), types.NewString(""),
-		types.NewString("Date"), types.NewString(""),
-		types.NewString("Geoposition"), NewGeoposition().NomsValue(),
-	)}
-}
-
-type IncidentDef struct {
-	Category    string
-	Description string
-	Address     string
-	Date        string
-	Geoposition GeopositionDef
-}
-
-func (def IncidentDef) New() Incident {
-	return Incident{
-		types.NewMap(
-			types.NewString("$name"), types.NewString("Incident"),
-			types.NewString("$type"), types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef),
-			types.NewString("Category"), types.NewString(def.Category),
-			types.NewString("Description"), types.NewString(def.Description),
-			types.NewString("Address"), types.NewString(def.Address),
-			types.NewString("Date"), types.NewString(def.Date),
-			types.NewString("Geoposition"), def.Geoposition.New().NomsValue(),
-		)}
-}
-
-func (s Incident) Def() (d IncidentDef) {
-	d.Category = s.m.Get(types.NewString("Category")).(types.String).String()
-	d.Description = s.m.Get(types.NewString("Description")).(types.String).String()
-	d.Address = s.m.Get(types.NewString("Address")).(types.String).String()
-	d.Date = s.m.Get(types.NewString("Date")).(types.String).String()
-	d.Geoposition = GeopositionFromVal(s.m.Get(types.NewString("Geoposition"))).Def()
-	return
-}
-
-// Creates and returns a Noms Value that describes Incident.
-func __typeRefOfIncident() types.TypeRef {
-	return types.MakeStructTypeRef("Incident",
-		[]types.Field{
-			types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Geoposition", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
-		},
-		types.Choices{},
-	)
-}
-
-func IncidentFromVal(val types.Value) Incident {
-	// TODO: Validate here
-	return Incident{val.(types.Map)}
-}
-
-func (s Incident) NomsValue() types.Value {
-	return s.m
-}
-
-func (s Incident) Equals(other Incident) bool {
-	return s.m.Equals(other.m)
-}
-
-func (s Incident) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s Incident) Type() types.TypeRef {
-	return s.m.Get(types.NewString("$type")).(types.TypeRef)
-}
-
-func (s Incident) Category() string {
-	return s.m.Get(types.NewString("Category")).(types.String).String()
-}
-
-func (s Incident) SetCategory(val string) Incident {
-	return Incident{s.m.Set(types.NewString("Category"), types.NewString(val))}
-}
-
-func (s Incident) Description() string {
-	return s.m.Get(types.NewString("Description")).(types.String).String()
-}
-
-func (s Incident) SetDescription(val string) Incident {
-	return Incident{s.m.Set(types.NewString("Description"), types.NewString(val))}
-}
-
-func (s Incident) Address() string {
-	return s.m.Get(types.NewString("Address")).(types.String).String()
-}
-
-func (s Incident) SetAddress(val string) Incident {
-	return Incident{s.m.Set(types.NewString("Address"), types.NewString(val))}
-}
-
-func (s Incident) Date() string {
-	return s.m.Get(types.NewString("Date")).(types.String).String()
-}
-
-func (s Incident) SetDate(val string) Incident {
-	return Incident{s.m.Set(types.NewString("Date"), types.NewString(val))}
-}
-
-func (s Incident) Geoposition() Geoposition {
-	return GeopositionFromVal(s.m.Get(types.NewString("Geoposition")))
-}
-
-func (s Incident) SetGeoposition(val Geoposition) Incident {
-	return Incident{s.m.Set(types.NewString("Geoposition"), val.NomsValue())}
-}
-
 // SQuadTree
 
 type SQuadTree struct {
@@ -450,123 +567,6 @@ func (s SQuadTree) Georectangle() Georectangle {
 
 func (s SQuadTree) SetGeorectangle(val Georectangle) SQuadTree {
 	return SQuadTree{s.m.Set(types.NewString("Georectangle"), val.NomsValue())}
-}
-
-// ListOfIncident
-
-type ListOfIncident struct {
-	l types.List
-}
-
-func NewListOfIncident() ListOfIncident {
-	return ListOfIncident{types.NewList()}
-}
-
-type ListOfIncidentDef []IncidentDef
-
-func (def ListOfIncidentDef) New() ListOfIncident {
-	l := make([]types.Value, len(def))
-	for i, d := range def {
-		l[i] = d.New().NomsValue()
-	}
-	return ListOfIncident{types.NewList(l...)}
-}
-
-func (l ListOfIncident) Def() ListOfIncidentDef {
-	d := make([]IncidentDef, l.Len())
-	for i := uint64(0); i < l.Len(); i++ {
-		d[i] = IncidentFromVal(l.l.Get(i)).Def()
-	}
-	return d
-}
-
-func ListOfIncidentFromVal(val types.Value) ListOfIncident {
-	// TODO: Validate here
-	return ListOfIncident{val.(types.List)}
-}
-
-func (l ListOfIncident) NomsValue() types.Value {
-	return l.l
-}
-
-func (l ListOfIncident) Equals(p ListOfIncident) bool {
-	return l.l.Equals(p.l)
-}
-
-func (l ListOfIncident) Ref() ref.Ref {
-	return l.l.Ref()
-}
-
-func (l ListOfIncident) Len() uint64 {
-	return l.l.Len()
-}
-
-func (l ListOfIncident) Empty() bool {
-	return l.Len() == uint64(0)
-}
-
-func (l ListOfIncident) Get(i uint64) Incident {
-	return IncidentFromVal(l.l.Get(i))
-}
-
-func (l ListOfIncident) Slice(idx uint64, end uint64) ListOfIncident {
-	return ListOfIncident{l.l.Slice(idx, end)}
-}
-
-func (l ListOfIncident) Set(i uint64, val Incident) ListOfIncident {
-	return ListOfIncident{l.l.Set(i, val.NomsValue())}
-}
-
-func (l ListOfIncident) Append(v ...Incident) ListOfIncident {
-	return ListOfIncident{l.l.Append(l.fromElemSlice(v)...)}
-}
-
-func (l ListOfIncident) Insert(idx uint64, v ...Incident) ListOfIncident {
-	return ListOfIncident{l.l.Insert(idx, l.fromElemSlice(v)...)}
-}
-
-func (l ListOfIncident) Remove(idx uint64, end uint64) ListOfIncident {
-	return ListOfIncident{l.l.Remove(idx, end)}
-}
-
-func (l ListOfIncident) RemoveAt(idx uint64) ListOfIncident {
-	return ListOfIncident{(l.l.RemoveAt(idx))}
-}
-
-func (l ListOfIncident) fromElemSlice(p []Incident) []types.Value {
-	r := make([]types.Value, len(p))
-	for i, v := range p {
-		r[i] = v.NomsValue()
-	}
-	return r
-}
-
-type ListOfIncidentIterCallback func(v Incident) (stop bool)
-
-func (l ListOfIncident) Iter(cb ListOfIncidentIterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb(IncidentFromVal(v))
-	})
-}
-
-type ListOfIncidentIterAllCallback func(v Incident)
-
-func (l ListOfIncident) IterAll(cb ListOfIncidentIterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb(IncidentFromVal(v))
-	})
-}
-
-type ListOfIncidentFilterCallback func(v Incident) (keep bool)
-
-func (l ListOfIncident) Filter(cb ListOfIncidentFilterCallback) ListOfIncident {
-	nl := NewListOfIncident()
-	l.IterAll(func(v Incident) {
-		if cb(v) {
-			nl = nl.Append(v)
-		}
-	})
-	return nl
 }
 
 // MapOfStringToSQuadTree
