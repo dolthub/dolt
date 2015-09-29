@@ -30,6 +30,7 @@ func TestType(t *testing.T) {
 				}
 			}
 		}
+		assert.Fail("Did not find desired field", "Field name: %s", s)
 		return TypeRef{ref: &ref.Ref{}}
 	}
 	tr := find("Dependencies")
@@ -39,7 +40,7 @@ func TestType(t *testing.T) {
 			assert.EqualValues(name, elemType.Desc.ToValue().(TypeRef).Name())
 		}
 	}
-	tr = find("Types")
+	tr = find("NamedTypes")
 	if assert.Equal(MapKind, tr.Kind()) {
 		desc := tr.Desc.ToValue().(List)
 		assert.Equal(StringKind, desc.Get(0).(TypeRef).Kind())

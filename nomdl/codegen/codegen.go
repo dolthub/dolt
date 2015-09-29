@@ -16,10 +16,11 @@ import (
 	"text/template"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/tools/imports"
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/types"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/nomdl/parse"
+	"github.com/attic-labs/noms/nomdl/pkg"
 )
 
 var (
@@ -61,12 +62,13 @@ func getBareFileName(in string) string {
 }
 
 func generate(packageName, in, out string) {
+	emptyCS := chunks.NewMemoryStore() // Will be ChunkSource containing imports
 	inFile, err := os.Open(in)
 	d.Chk.NoError(err)
 	defer inFile.Close()
 
 	var buf bytes.Buffer
-	pkg := parse.ParsePackage("", inFile)
+	pkg := pkg.ParseNomDL("", inFile, emptyCS)
 	gen := NewCodeGen(&buf, getBareFileName(in), pkg)
 	gen.WritePackage(packageName)
 
@@ -99,13 +101,13 @@ func getGoPackageName() string {
 
 type codeGen struct {
 	w         io.Writer
-	pkg       parse.Package
+	pkg       pkg.Parsed
 	fileid    string
 	written   map[string]bool
 	templates *template.Template
 }
 
-func NewCodeGen(w io.Writer, fileID string, pkg parse.Package) *codeGen {
+func NewCodeGen(w io.Writer, fileID string, pkg pkg.Parsed) *codeGen {
 	gen := &codeGen{w, pkg, fileID, map[string]bool{}, nil}
 	gen.templates = gen.readTemplates()
 	return gen

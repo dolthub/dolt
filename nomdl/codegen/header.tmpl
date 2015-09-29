@@ -12,7 +12,7 @@ var __{{.Name}}PackageInFile_{{.FileID}}_CachedRef = __{{.Name}}PackageInFile_{{
 // type package definition cache.
 func __{{.Name}}PackageInFile_{{.FileID}}_Ref() types.Ref {
 	p := types.PackageDef{
-		Types: types.MapOfStringToTypeRefDef{
+		NamedTypes: types.MapOfStringToTypeRefDef{
 			{{range $name, $t := .NamedTypes}}
 			"{{$name}}": __typeRefOf{{$name}}(),{{end}}
 		},

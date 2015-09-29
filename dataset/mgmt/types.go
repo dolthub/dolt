@@ -14,7 +14,7 @@ var __mgmtPackageInFile_types_CachedRef = __mgmtPackageInFile_types_Ref()
 // type package definition cache.
 func __mgmtPackageInFile_types_Ref() types.Ref {
 	p := types.PackageDef{
-		Types: types.MapOfStringToTypeRefDef{
+		NamedTypes: types.MapOfStringToTypeRefDef{
 
 			"Dataset": __typeRefOfDataset(),
 		},

@@ -14,7 +14,7 @@ var __testPackageInFile_struct_with_list_CachedRef = __testPackageInFile_struct_
 // type package definition cache.
 func __testPackageInFile_struct_with_list_Ref() types.Ref {
 	p := types.PackageDef{
-		Types: types.MapOfStringToTypeRefDef{
+		NamedTypes: types.MapOfStringToTypeRefDef{
 
 			"StructWithList": __typeRefOfStructWithList(),
 		},

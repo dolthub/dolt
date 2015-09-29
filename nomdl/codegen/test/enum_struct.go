@@ -14,7 +14,7 @@ var __testPackageInFile_enum_struct_CachedRef = __testPackageInFile_enum_struct_
 // type package definition cache.
 func __testPackageInFile_enum_struct_Ref() types.Ref {
 	p := types.PackageDef{
-		Types: types.MapOfStringToTypeRefDef{
+		NamedTypes: types.MapOfStringToTypeRefDef{
 
 			"EnumStruct": __typeRefOfEnumStruct(),
 			"Handedness": __typeRefOfHandedness(),
