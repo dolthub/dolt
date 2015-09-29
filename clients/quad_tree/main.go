@@ -20,7 +20,6 @@ var (
 	inputRefStr = flag.String("input-ref", "", "ref to list containing nodes")
 	outputDs    = flag.String("output-ds", "", "dataset to store data in.")
 	quietFlag   = flag.Bool("quiet", false, "suppress printing of progress statements")
-	commit      = flag.Bool("commit", true, "commit the quadtree to nomsdb")
 )
 
 func main() {
@@ -92,22 +91,17 @@ func main() {
 	if !*quietFlag {
 		fmt.Printf("Nodes Appended: %d, elapsed time: %.2f secs\n", nodesAppended, secsSince(start))
 		qtRoot.Analyze()
+		fmt.Printf("Calling SaveToNoms(), elapsed time: %.2f secs\n", secsSince(start))
 	}
 
-	if *commit {
-		if !*quietFlag {
-			fmt.Printf("Calling SaveToNoms(), elapsed time: %.2f secs\n", secsSince(start))
-		}
-		nomsQtRoot := qtRoot.SaveToNoms(dataset.Store(), start)
-		if !*quietFlag {
-			fmt.Printf("Calling Commit(), elapsed time: %.2f secs\n", secsSince(start))
-		}
-		_, ok = dataset.Commit(nomsQtRoot.NomsValue())
-		d.Chk.True(ok, "Could not commit due to conflicting edit")
-		if !*quietFlag {
-			fmt.Printf("Commit completed, elapsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
-		}
+	nomsQtRoot := qtRoot.SaveToNoms(dataset.Store(), start)
+	if !*quietFlag {
+		fmt.Printf("Calling Commit(), elapsed time: %.2f secs\n", secsSince(start))
 	}
-
-	fmt.Println("QuadTree ref:", dataset.Store().Root().String())
+	_, ok = dataset.Commit(nomsQtRoot.NomsValue())
+	d.Chk.True(ok, "Could not commit due to conflicting edit")
+	if !*quietFlag {
+		fmt.Printf("Commit completed, elapsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
+	}
+	fmt.Println("QuadTree ref:", nomsQtRoot.NomsValue().Ref())
 }
