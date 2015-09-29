@@ -1,0 +1,26 @@
+struct Geoposition {
+	Latitude: Float32
+ 	Longitude: Float32
+}
+
+struct Georectangle {
+	TopLeft: Geoposition
+	BottomRight: Geoposition
+}
+
+struct Incident {
+	Category: String
+	Description: String
+	Address: String
+	Date: String
+	Geoposition: Geoposition
+}
+
+struct SQuadTree {
+	Nodes: List(Incident)
+	Tiles: Map(String, SQuadTree)
+	Depth: UInt8
+	NumDescendents: UInt32
+	Path: String
+	Georectangle: Georectangle
+}
