@@ -56,9 +56,6 @@ suite('decode.js', function() {
       chunks[ref] = data;
       readValue(ref, (r) => {
         return stringToArrayBufferPromise(chunks[r]);
-      }).then(ref => {
-        assert.instanceOf(ref, Ref);
-        return ref.deref();
       }).then(func)
       .then(done, done);
     });
@@ -80,8 +77,11 @@ suite('decode.js', function() {
   });
 
   testCompound('ref', 'j {"ref":"sha1-list"}', value => {
-    assert.isTrue(Immutable.List.isList(value));
-    assert.isTrue(Immutable.List.of(true, false).equals(value));
+    assert.isTrue(Ref.isRef(value))
+    return value.deref().then(value => {
+      assert.isTrue(Immutable.List.isList(value));
+      assert.isTrue(Immutable.List.of(true, false).equals(value));
+    });
   });
 
   testCompound('type', 'j {"type":{"kind":{"uint8":0},"name":""}}', value => {
@@ -94,26 +94,23 @@ suite('decode.js', function() {
     assert.isTrue(Immutable.Map.isMap(value));
     assert.equal(value.get('kind'), 14);
     assert.equal(value.get('name'), 'T');
-    assert.isTrue(Ref.isRef(value.get('desc')));
-    return value.get('desc').deref().then(list => {
-      assert.isTrue(Immutable.List.isList(list));
-      assert.equal(2, list.size);
-      assert.isTrue(Ref.isRef(list.get(0)));
-      assert.isTrue(Ref.isRef(list.get(1)));
-    });
+    let list = value.get('desc');
+    assert.isTrue(Immutable.List.isList(list));
+    assert.isTrue(Immutable.List.isList(list));
+    assert.equal(2, list.size);
+    assert.isTrue(Ref.isRef(list.get(0)));
+    assert.isTrue(Ref.isRef(list.get(1)));
   });
 
   testCompound('type enum', 'j {"type":{"desc":{"list":["f","g"]},"kind":{"uint8":18},"name":"enum"}}', value => {
     assert.isTrue(Immutable.Map.isMap(value));
     assert.equal(value.get('kind'), 18);
     assert.equal(value.get('name'), 'enum');
-    assert.isTrue(Ref.isRef(value.get('desc')));
-    return value.get('desc').deref().then(list => {
-      assert.isTrue(Immutable.List.isList(list));
-      assert.equal(2, list.size);
-      assert.equal('f', list.get(0));
-      assert.equal('g', list.get(1));
-    })
+    let list = value.get('desc');
+    assert.isTrue(Immutable.List.isList(list));
+    assert.equal(2, list.size);
+    assert.equal('f', list.get(0));
+    assert.equal('g', list.get(1));
   });
 
   testCompound('type with pkg', 'j {"type":{"kind":{"uint8":13},"name":"Commit","pkgRef":{"ref":"sha1-map"}}}', value => {

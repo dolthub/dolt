@@ -5,8 +5,10 @@ var React = require('react');
 var Map = require('./map.js');
 
 noms.getRoot()
-    .then(ref => noms.readValue(ref, noms.getChunk))
-    .then(ref => noms.getDataset(ref.deref(), 'mlb/heatmap'))
+    .then(ref => {
+      var pRoot = noms.readValue(ref, noms.getChunk);
+      return noms.getDataset(pRoot, 'mlb/heatmap');
+    })
     .then(getPitchers)
     .then(renderPitchersList);
 

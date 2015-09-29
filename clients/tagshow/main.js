@@ -30,8 +30,7 @@ function render() {
   // more frequently (e.g., in response to window resize), then this should
   // get moved someplace else.
   var pRoot = noms.getRoot()
-      .then(ref => noms.readValue(ref, noms.getChunk))
-      .then(ref => ref.deref());
+      .then(ref => noms.readValue(ref, noms.getChunk));
 
   React.render(
     <Root
