@@ -1,5 +1,6 @@
-var store = require('./noms_store.js')
-var decode = require('./decode.js')
+const {getChunk, getRoot, setServer} = require('./noms_store.js')
+const {getRef, readValue, Ref} = require('./decode.js')
+
 
 function getDataset(pRoot, id) {
   return pRoot
@@ -23,12 +24,12 @@ function getDatasetIds(pRoot) {
 }
 
 module.exports = {
-  setServer: store.setServer,
-  getRoot: store.getRoot,
-  getDataset: getDataset,
-  getDatasetIds: getDatasetIds,
-  getChunk: store.getChunk,
-  readValue: decode.readValue,
-  getRef: decode.getRef,
-  Ref: decode.Ref
+  getChunk,
+  getDataset,
+  getDatasetIds,
+  getRef,
+  getRoot,
+  readValue,
+  Ref,
+  setServer,
 };

@@ -104,7 +104,6 @@ function handleToggle(id) {
       render();
     } else {
       noms.readValue(id, noms.getChunk)
-        .then(chunkRef => chunkRef.deref())
         .then(chunk => handleChunkLoad(id, chunk, id));
     }
   }
