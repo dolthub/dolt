@@ -86,8 +86,8 @@ func main() {
 
 	// Start a go routine to add incident refs to the list as they are ready
 	var refWg sync.WaitGroup
+	refWg.Add(1)
 	go func() {
-		refWg.Add(1)
 		for ref := range rChan {
 			refList = append(refList, ref)
 		}
