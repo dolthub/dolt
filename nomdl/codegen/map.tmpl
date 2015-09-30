@@ -47,6 +47,8 @@ func (m {{.Name}}) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
+{{template "type_ref.tmpl" .}}
+
 func (m {{.Name}}) Empty() bool {
 	return m.m.Empty()
 }

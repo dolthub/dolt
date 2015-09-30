@@ -73,6 +73,9 @@ func generate(packageName, in, out string) {
 	gen.WritePackage(packageName)
 
 	bs, err := imports.Process(out, buf.Bytes(), nil)
+	if err != nil {
+		fmt.Println(buf.String())
+	}
 	d.Chk.NoError(err)
 
 	outFile, err := os.OpenFile(out, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
@@ -400,7 +403,7 @@ func (gen *codeGen) toTypesTypeRef(t types.TypeRef) string {
 		}
 		return fmt.Sprintf(`types.MakeCompoundTypeRef("%s", types.%sKind, %s)`, t.Name(), kindToString(t.Desc.Kind()), strings.Join(typerefs, ", "))
 	case types.EnumDesc:
-		return fmt.Sprintf(`types.MakeEnumTypeRef("%s", %s)`, t.Name(), strings.Join(desc.IDs, ", "))
+		return fmt.Sprintf(`types.MakeEnumTypeRef("%s", "%s")`, t.Name(), strings.Join(desc.IDs, `", "`))
 	case types.StructDesc:
 		flatten := func(f []types.Field) string {
 			out := make([]string, 0, len(f))
@@ -409,9 +412,9 @@ func (gen *codeGen) toTypesTypeRef(t types.TypeRef) string {
 			}
 			return strings.Join(out, "\n")
 		}
-		fields := fmt.Sprintf("[]types.Field{%s}", flatten(desc.Fields))
-		choices := fmt.Sprintf("types.Choices{%s}", flatten(desc.Union))
-		return fmt.Sprintf(`types.MakeStructTypeRef("%s", %s, %s)`, t.Name(), fields, choices)
+		fields := fmt.Sprintf("[]types.Field{\n%s\n}", flatten(desc.Fields))
+		choices := fmt.Sprintf("types.Choices{\n%s\n}", flatten(desc.Union))
+		return fmt.Sprintf("types.MakeStructTypeRef(\"%s\",\n%s,\n%s,\n)", t.Name(), fields, choices)
 	default:
 		d.Chk.Fail("Unknown TypeDesc.", "%#v (%T)", desc, desc)
 	}
@@ -493,6 +496,7 @@ func (gen *codeGen) writeStruct(t types.TypeRef) {
 		FileID        string
 		PackageName   string
 		Name          string
+		Type          types.TypeRef
 		Fields        []types.Field
 		Choices       types.Choices
 		HasUnion      bool
@@ -502,6 +506,7 @@ func (gen *codeGen) writeStruct(t types.TypeRef) {
 		gen.fileid,
 		gen.pkg.Name,
 		gen.userName(t),
+		t,
 		desc.Fields,
 		nil,
 		desc.Union != nil,
@@ -527,10 +532,12 @@ func (gen *codeGen) writeList(t types.TypeRef) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		Name      string
+		Type      types.TypeRef
 		ElemType  types.TypeRef
 		CanUseDef bool
 	}{
 		gen.userName(t),
+		t,
 		elemTypes[0],
 		gen.canUseDef(t),
 	}
@@ -542,11 +549,13 @@ func (gen *codeGen) writeMap(t types.TypeRef) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		Name      string
+		Type      types.TypeRef
 		KeyType   types.TypeRef
 		ValueType types.TypeRef
 		CanUseDef bool
 	}{
 		gen.userName(t),
+		t,
 		elemTypes[0],
 		elemTypes[1],
 		gen.canUseDef(t),
@@ -560,9 +569,11 @@ func (gen *codeGen) writeRef(t types.TypeRef) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		Name     string
+		Type     types.TypeRef
 		ElemType types.TypeRef
 	}{
 		gen.userName(t),
+		t,
 		elemTypes[0],
 	}
 	gen.writeTemplate("ref.tmpl", t, data)
@@ -573,10 +584,12 @@ func (gen *codeGen) writeSet(t types.TypeRef) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		Name      string
+		Type      types.TypeRef
 		ElemType  types.TypeRef
 		CanUseDef bool
 	}{
 		gen.userName(t),
+		t,
 		elemTypes[0],
 		gen.canUseDef(t),
 	}
@@ -587,9 +600,11 @@ func (gen *codeGen) writeSet(t types.TypeRef) {
 func (gen *codeGen) writeEnum(t types.TypeRef) {
 	data := struct {
 		Name string
+		Type types.TypeRef
 		Ids  []string
 	}{
 		t.Name(),
+		t,
 		t.Desc.(types.EnumDesc).IDs,
 	}
 	gen.writeTemplate("enum.tmpl", t, data)

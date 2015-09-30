@@ -9,6 +9,20 @@ import (
 
 // Package
 
+type Package struct {
+	m Map
+}
+
+func NewPackage() Package {
+	return Package{NewMap(
+		NewString("$name"), NewString("Package"),
+		NewString("$type"), __typeRefForPackage,
+
+		NewString("Dependencies"), NewSet(),
+		NewString("NamedTypes"), NewMap(),
+	)}
+}
+
 // PackageDef defines a Package object, which represents a Noms type package.
 // Dependencies is a set of refs that point to other type packages required to resolve all the types in this pacakge.
 // NamedTypes is a lookup table for types defined in this package. These should all be EnumKind or StructKind. When traversing the definition of a given type, you may run into a TypeRef that IsUnresolved(). In that case, look it up by name in the NamedTypes of the appropriate package.
@@ -17,45 +31,33 @@ type PackageDef struct {
 	NamedTypes   MapOfStringToTypeRefDef
 }
 
-type Package struct {
-	m Map
-}
-
-func NewPackage() Package {
-	return Package{NewMap(
-		NewString("$name"), NewString("Package"),
-		NewString("$type"), __typeRefOfPackage(),
-		NewString("Dependencies"), NewSet(),
-		NewString("NamedTypes"), NewMap(),
-	)}
-}
-
 func (def PackageDef) New() Package {
 	return Package{
 		NewMap(
 			NewString("$name"), NewString("Package"),
-			NewString("$type"), __typeRefOfPackage(),
+			NewString("$type"), __typeRefForPackage,
 			NewString("Dependencies"), def.Dependencies.New().NomsValue(),
 			NewString("NamedTypes"), def.NamedTypes.New().NomsValue(),
 		)}
 }
 
-func (self Package) Def() PackageDef {
-	return PackageDef{
-		SetOfRefOfPackageFromVal(self.m.Get(NewString("Dependencies"))).Def(),
-		MapOfStringToTypeRefFromVal(self.m.Get(NewString("NamedTypes"))).Def(),
-	}
+func (s Package) Def() (d PackageDef) {
+	d.Dependencies = SetOfRefOfPackageFromVal(s.m.Get(NewString("Dependencies"))).Def()
+	d.NamedTypes = MapOfStringToTypeRefFromVal(s.m.Get(NewString("NamedTypes"))).Def()
+	return
 }
 
-// Creates and returns a Noms Value that describes Package.
-func __typeRefOfPackage() TypeRef {
-	return MakeStructTypeRef("Package",
-		[]Field{
-			Field{"Dependencies", MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", ref.Ref{}))), false},
-			Field{"NamedTypes", MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind)), false},
-		},
-		Choices{})
+// A Noms Value that describes Package.
+var __typeRefForPackage = MakeStructTypeRef("Package",
+	[]Field{
+		Field{"Dependencies", MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", ref.Ref{}))), false},
+		Field{"NamedTypes", MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind)), false},
+	},
+	Choices{},
+)
 
+func (m Package) TypeRef() TypeRef {
+	return __typeRefForPackage
 }
 
 func PackageFromVal(val Value) Package {
@@ -63,36 +65,36 @@ func PackageFromVal(val Value) Package {
 	return Package{val.(Map)}
 }
 
-func (self Package) NomsValue() Value {
-	return self.m
+func (s Package) NomsValue() Value {
+	return s.m
 }
 
-func (self Package) Equals(other Package) bool {
-	return self.m.Equals(other.m)
+func (s Package) Equals(other Package) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self Package) Ref() ref.Ref {
-	return self.m.Ref()
+func (s Package) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self Package) Type() TypeRef {
-	return self.m.Get(NewString("$type")).(TypeRef)
+func (s Package) Type() TypeRef {
+	return s.m.Get(NewString("$type")).(TypeRef)
 }
 
-func (self Package) Dependencies() SetOfRefOfPackage {
-	return SetOfRefOfPackageFromVal(self.m.Get(NewString("Dependencies")))
+func (s Package) Dependencies() SetOfRefOfPackage {
+	return SetOfRefOfPackageFromVal(s.m.Get(NewString("Dependencies")))
 }
 
-func (self Package) SetDependencies(val SetOfRefOfPackage) Package {
-	return Package{self.m.Set(NewString("Dependencies"), val.NomsValue())}
+func (s Package) SetDependencies(val SetOfRefOfPackage) Package {
+	return Package{s.m.Set(NewString("Dependencies"), val.NomsValue())}
 }
 
-func (self Package) NamedTypes() MapOfStringToTypeRef {
-	return MapOfStringToTypeRefFromVal(self.m.Get(NewString("NamedTypes")))
+func (s Package) NamedTypes() MapOfStringToTypeRef {
+	return MapOfStringToTypeRefFromVal(s.m.Get(NewString("NamedTypes")))
 }
 
-func (self Package) SetTypes(val MapOfStringToTypeRef) Package {
-	return Package{self.m.Set(NewString("NamedTypes"), val.NomsValue())}
+func (s Package) SetNamedTypes(val MapOfStringToTypeRef) Package {
+	return Package{s.m.Set(NewString("NamedTypes"), val.NomsValue())}
 }
 
 // SetOfRefOfPackage
@@ -101,11 +103,11 @@ type SetOfRefOfPackage struct {
 	s Set
 }
 
-type SetOfRefOfPackageDef map[ref.Ref]bool
-
 func NewSetOfRefOfPackage() SetOfRefOfPackage {
 	return SetOfRefOfPackage{NewSet()}
 }
+
+type SetOfRefOfPackageDef map[ref.Ref]bool
 
 func (def SetOfRefOfPackageDef) New() SetOfRefOfPackage {
 	l := make([]Value, len(def))
@@ -140,6 +142,13 @@ func (s SetOfRefOfPackage) Equals(p SetOfRefOfPackage) bool {
 
 func (s SetOfRefOfPackage) Ref() ref.Ref {
 	return s.s.Ref()
+}
+
+// A Noms Value that describes SetOfRefOfPackage.
+var __typeRefForSetOfRefOfPackage = MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", ref.Ref{})))
+
+func (m SetOfRefOfPackage) TypeRef() TypeRef {
+	return __typeRefForSetOfRefOfPackage
 }
 
 func (s SetOfRefOfPackage) Empty() bool {
@@ -236,6 +245,13 @@ func (r RefOfPackage) Equals(other RefOfPackage) bool {
 	return r.Ref() == other.Ref()
 }
 
+// A Noms Value that describes RefOfPackage.
+var __typeRefForRefOfPackage = MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", ref.Ref{}))
+
+func (m RefOfPackage) TypeRef() TypeRef {
+	return __typeRefForRefOfPackage
+}
+
 func (r RefOfPackage) NomsValue() Value {
 	return Ref{R: r.r}
 }
@@ -259,11 +275,11 @@ type MapOfStringToTypeRef struct {
 	m Map
 }
 
-type MapOfStringToTypeRefDef map[string]TypeRef
-
 func NewMapOfStringToTypeRef() MapOfStringToTypeRef {
 	return MapOfStringToTypeRef{NewMap()}
 }
+
+type MapOfStringToTypeRefDef map[string]TypeRef
 
 func (def MapOfStringToTypeRefDef) New() MapOfStringToTypeRef {
 	kv := make([]Value, 0, len(def)*2)
@@ -273,9 +289,9 @@ func (def MapOfStringToTypeRefDef) New() MapOfStringToTypeRef {
 	return MapOfStringToTypeRef{NewMap(kv...)}
 }
 
-func (self MapOfStringToTypeRef) Def() MapOfStringToTypeRefDef {
+func (m MapOfStringToTypeRef) Def() MapOfStringToTypeRefDef {
 	def := make(map[string]TypeRef)
-	self.m.Iter(func(k, v Value) bool {
+	m.m.Iter(func(k, v Value) bool {
 		def[k.(String).String()] = v.(TypeRef)
 		return false
 	})
@@ -297,6 +313,13 @@ func (m MapOfStringToTypeRef) Equals(p MapOfStringToTypeRef) bool {
 
 func (m MapOfStringToTypeRef) Ref() ref.Ref {
 	return m.m.Ref()
+}
+
+// A Noms Value that describes MapOfStringToTypeRef.
+var __typeRefForMapOfStringToTypeRef = MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind))
+
+func (m MapOfStringToTypeRef) TypeRef() TypeRef {
+	return __typeRefForMapOfStringToTypeRef
 }
 
 func (m MapOfStringToTypeRef) Empty() bool {

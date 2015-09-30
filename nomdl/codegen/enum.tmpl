@@ -7,9 +7,5 @@ const ({{range $index, $id := .Ids}}
 	{{title $id}}{{if eq $index 0}} {{$name}} = iota{{end}}{{end}}
 )
 
-// Creates and returns a Noms Value that describes {{.Name}}.
-func __typeRefOf{{.Name}}() types.TypeRef {
-	return types.MakeEnumTypeRef("{{.Name}}", {{range $id := .Ids}}"{{$id}}",
-	{{end}})
-}
-
+// A Noms Value that describes {{.Name}}.
+var __typeRefFor{{.Name}} = {{toTypesTypeRef .Type}}

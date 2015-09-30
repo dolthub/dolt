@@ -1,4 +1,4 @@
 struct Package {
-	Dependencies :Set(Ref(Package))
-	Types :Map(String, TypeRef)
+	Dependencies: Set(Ref(Package))
+	NamedTypes: Map(String, TypeRef)
 }

@@ -46,6 +46,8 @@ func (l {{.Name}}) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
+{{template "type_ref.tmpl" .}}
+
 func (l {{.Name}}) Len() uint64 {
 	return l.l.Len()
 }

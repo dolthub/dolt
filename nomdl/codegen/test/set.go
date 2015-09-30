@@ -54,6 +54,13 @@ func (s SetOfBool) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
+// A Noms Value that describes SetOfBool.
+var __typeRefForSetOfBool = types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.BoolKind))
+
+func (m SetOfBool) TypeRef() types.TypeRef {
+	return __typeRefForSetOfBool
+}
+
 func (s SetOfBool) Empty() bool {
 	return s.s.Empty()
 }

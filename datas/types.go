@@ -16,7 +16,7 @@ func __datasPackageInFile_types_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"Commit": __typeRefOfCommit(),
+			"Commit": __typeRefForCommit,
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -37,15 +37,17 @@ func NewCommit() Commit {
 	)}
 }
 
-// Creates and returns a Noms Value that describes Commit.
-func __typeRefOfCommit() types.TypeRef {
-	return types.MakeStructTypeRef("Commit",
-		[]types.Field{
-			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
-			types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", ref.Ref{})), false},
-		},
-		types.Choices{},
-	)
+// A Noms Value that describes Commit.
+var __typeRefForCommit = types.MakeStructTypeRef("Commit",
+	[]types.Field{
+		types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
+		types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", ref.Ref{})), false},
+	},
+	types.Choices{},
+)
+
+func (m Commit) TypeRef() types.TypeRef {
+	return __typeRefForCommit
 }
 
 func CommitFromVal(val types.Value) Commit {
@@ -109,6 +111,13 @@ func (s SetOfCommit) Equals(p SetOfCommit) bool {
 
 func (s SetOfCommit) Ref() ref.Ref {
 	return s.s.Ref()
+}
+
+// A Noms Value that describes SetOfCommit.
+var __typeRefForSetOfCommit = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", ref.Ref{}))
+
+func (m SetOfCommit) TypeRef() types.TypeRef {
+	return __typeRefForSetOfCommit
 }
 
 func (s SetOfCommit) Empty() bool {

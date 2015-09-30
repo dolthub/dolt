@@ -1,0 +1,6 @@
+// A Noms Value that describes {{.Name}}.
+var __typeRefFor{{.Name}} = {{toTypesTypeRef .Type}}
+
+func (m {{.Name}}) TypeRef() types.TypeRef {
+	return __typeRefFor{{.Name}}
+}

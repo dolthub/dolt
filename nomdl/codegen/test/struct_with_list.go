@@ -16,7 +16,7 @@ func __testPackageInFile_struct_with_list_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"StructWithList": __typeRefOfStructWithList(),
+			"StructWithList": __typeRefForStructWithList,
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -66,17 +66,19 @@ func (s StructWithList) Def() (d StructWithListDef) {
 	return
 }
 
-// Creates and returns a Noms Value that describes StructWithList.
-func __typeRefOfStructWithList() types.TypeRef {
-	return types.MakeStructTypeRef("StructWithList",
-		[]types.Field{
-			types.Field{"l", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
-			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
-			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"i", types.MakePrimitiveTypeRef(types.Int64Kind), false},
-		},
-		types.Choices{},
-	)
+// A Noms Value that describes StructWithList.
+var __typeRefForStructWithList = types.MakeStructTypeRef("StructWithList",
+	[]types.Field{
+		types.Field{"l", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+		types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
+		types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"i", types.MakePrimitiveTypeRef(types.Int64Kind), false},
+	},
+	types.Choices{},
+)
+
+func (m StructWithList) TypeRef() types.TypeRef {
+	return __typeRefForStructWithList
 }
 
 func StructWithListFromVal(val types.Value) StructWithList {
@@ -175,6 +177,13 @@ func (l ListOfUInt8) Equals(p ListOfUInt8) bool {
 
 func (l ListOfUInt8) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+// A Noms Value that describes ListOfUInt8.
+var __typeRefForListOfUInt8 = types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
+
+func (m ListOfUInt8) TypeRef() types.TypeRef {
+	return __typeRefForListOfUInt8
 }
 
 func (l ListOfUInt8) Len() uint64 {

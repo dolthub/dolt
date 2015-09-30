@@ -16,7 +16,7 @@ func __testPackageInFile_struct_recursive_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"Tree": __typeRefOfTree(),
+			"Tree": __typeRefForTree,
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -54,14 +54,16 @@ func (s Tree) Def() (d TreeDef) {
 	return
 }
 
-// Creates and returns a Noms Value that describes Tree.
-func __typeRefOfTree() types.TypeRef {
-	return types.MakeStructTypeRef("Tree",
-		[]types.Field{
-			types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", ref.Ref{})), false},
-		},
-		types.Choices{},
-	)
+// A Noms Value that describes Tree.
+var __typeRefForTree = types.MakeStructTypeRef("Tree",
+	[]types.Field{
+		types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", ref.Ref{})), false},
+	},
+	types.Choices{},
+)
+
+func (m Tree) TypeRef() types.TypeRef {
+	return __typeRefForTree
 }
 
 func TreeFromVal(val types.Value) Tree {
@@ -136,6 +138,13 @@ func (l ListOfTree) Equals(p ListOfTree) bool {
 
 func (l ListOfTree) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+// A Noms Value that describes ListOfTree.
+var __typeRefForListOfTree = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", ref.Ref{}))
+
+func (m ListOfTree) TypeRef() types.TypeRef {
+	return __typeRefForListOfTree
 }
 
 func (l ListOfTree) Len() uint64 {

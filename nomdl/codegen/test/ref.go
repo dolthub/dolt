@@ -17,7 +17,7 @@ func __testPackageInFile_ref_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"StructWithRef": __typeRefOfStructWithRef(),
+			"StructWithRef": __typeRefForStructWithRef,
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -39,6 +39,13 @@ func (r RefOfListOfString) Ref() ref.Ref {
 
 func (r RefOfListOfString) Equals(other RefOfListOfString) bool {
 	return r.Ref() == other.Ref()
+}
+
+// A Noms Value that describes RefOfListOfString.
+var __typeRefForRefOfListOfString = types.MakeCompoundTypeRef("", types.RefKind, types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.StringKind)))
+
+func (m RefOfListOfString) TypeRef() types.TypeRef {
+	return __typeRefForRefOfListOfString
 }
 
 func (r RefOfListOfString) NomsValue() types.Value {
@@ -101,6 +108,13 @@ func (l ListOfString) Equals(p ListOfString) bool {
 
 func (l ListOfString) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+// A Noms Value that describes ListOfString.
+var __typeRefForListOfString = types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.StringKind))
+
+func (m ListOfString) TypeRef() types.TypeRef {
+	return __typeRefForListOfString
 }
 
 func (l ListOfString) Len() uint64 {
@@ -220,6 +234,13 @@ func (l ListOfRefOfFloat32) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
+// A Noms Value that describes ListOfRefOfFloat32.
+var __typeRefForListOfRefOfFloat32 = types.MakeCompoundTypeRef("", types.ListKind, types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.Float32Kind)))
+
+func (m ListOfRefOfFloat32) TypeRef() types.TypeRef {
+	return __typeRefForListOfRefOfFloat32
+}
+
 func (l ListOfRefOfFloat32) Len() uint64 {
 	return l.l.Len()
 }
@@ -310,6 +331,13 @@ func (r RefOfFloat32) Equals(other RefOfFloat32) bool {
 	return r.Ref() == other.Ref()
 }
 
+// A Noms Value that describes RefOfFloat32.
+var __typeRefForRefOfFloat32 = types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.Float32Kind))
+
+func (m RefOfFloat32) TypeRef() types.TypeRef {
+	return __typeRefForRefOfFloat32
+}
+
 func (r RefOfFloat32) NomsValue() types.Value {
 	return types.Ref{R: r.r}
 }
@@ -359,14 +387,16 @@ func (s StructWithRef) Def() (d StructWithRefDef) {
 	return
 }
 
-// Creates and returns a Noms Value that describes StructWithRef.
-func __typeRefOfStructWithRef() types.TypeRef {
-	return types.MakeStructTypeRef("StructWithRef",
-		[]types.Field{
-			types.Field{"r", types.MakeCompoundTypeRef("", types.RefKind, types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind))), false},
-		},
-		types.Choices{},
-	)
+// A Noms Value that describes StructWithRef.
+var __typeRefForStructWithRef = types.MakeStructTypeRef("StructWithRef",
+	[]types.Field{
+		types.Field{"r", types.MakeCompoundTypeRef("", types.RefKind, types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind))), false},
+	},
+	types.Choices{},
+)
+
+func (m StructWithRef) TypeRef() types.TypeRef {
+	return __typeRefForStructWithRef
 }
 
 func StructWithRefFromVal(val types.Value) StructWithRef {
@@ -414,6 +444,13 @@ func (r RefOfSetOfFloat32) Ref() ref.Ref {
 
 func (r RefOfSetOfFloat32) Equals(other RefOfSetOfFloat32) bool {
 	return r.Ref() == other.Ref()
+}
+
+// A Noms Value that describes RefOfSetOfFloat32.
+var __typeRefForRefOfSetOfFloat32 = types.MakeCompoundTypeRef("", types.RefKind, types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind)))
+
+func (m RefOfSetOfFloat32) TypeRef() types.TypeRef {
+	return __typeRefForRefOfSetOfFloat32
 }
 
 func (r RefOfSetOfFloat32) NomsValue() types.Value {
@@ -478,6 +515,13 @@ func (s SetOfFloat32) Equals(p SetOfFloat32) bool {
 
 func (s SetOfFloat32) Ref() ref.Ref {
 	return s.s.Ref()
+}
+
+// A Noms Value that describes SetOfFloat32.
+var __typeRefForSetOfFloat32 = types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind))
+
+func (m SetOfFloat32) TypeRef() types.TypeRef {
+	return __typeRefForSetOfFloat32
 }
 
 func (s SetOfFloat32) Empty() bool {

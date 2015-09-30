@@ -52,6 +52,13 @@ func (l ListOfInt64) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
+// A Noms Value that describes ListOfInt64.
+var __typeRefForListOfInt64 = types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.Int64Kind))
+
+func (m ListOfInt64) TypeRef() types.TypeRef {
+	return __typeRefForListOfInt64
+}
+
 func (l ListOfInt64) Len() uint64 {
 	return l.l.Len()
 }

@@ -16,7 +16,7 @@ func __testPackageInFile_struct_with_unions_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"StructWithUnions": __typeRefOfStructWithUnions(),
+			"StructWithUnions": __typeRefForStructWithUnions,
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -58,17 +58,29 @@ func (s StructWithUnions) Def() (d StructWithUnionsDef) {
 	return
 }
 
-// Creates and returns a Noms Value that describes StructWithUnions.
-func __typeRefOfStructWithUnions() types.TypeRef {
-	return types.MakeStructTypeRef("StructWithUnions",
-		[]types.Field{
-			types.Field{"a", types.MakeStructTypeRef("", []types.Field{}, types.Choices{types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false}}), false},
-			types.Field{"d", types.MakeStructTypeRef("", []types.Field{}, types.Choices{types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-				types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false}}), false},
-		},
-		types.Choices{},
-	)
+// A Noms Value that describes StructWithUnions.
+var __typeRefForStructWithUnions = types.MakeStructTypeRef("StructWithUnions",
+	[]types.Field{
+		types.Field{"a", types.MakeStructTypeRef("",
+			[]types.Field{},
+			types.Choices{
+				types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
+			},
+		), false},
+		types.Field{"d", types.MakeStructTypeRef("",
+			[]types.Field{},
+			types.Choices{
+				types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
+			},
+		), false},
+	},
+	types.Choices{},
+)
+
+func (m StructWithUnions) TypeRef() types.TypeRef {
+	return __typeRefForStructWithUnions
 }
 
 func StructWithUnionsFromVal(val types.Value) StructWithUnions {
@@ -164,15 +176,17 @@ func (s __unionOfBOfFloat64AndCOfString) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
-// Creates and returns a Noms Value that describes __unionOfBOfFloat64AndCOfString.
-func __typeRefOf__unionOfBOfFloat64AndCOfString() types.TypeRef {
-	return types.MakeStructTypeRef("__unionOfBOfFloat64AndCOfString",
-		[]types.Field{},
-		types.Choices{
-			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
-		},
-	)
+// A Noms Value that describes __unionOfBOfFloat64AndCOfString.
+var __typeRefFor__unionOfBOfFloat64AndCOfString = types.MakeStructTypeRef("",
+	[]types.Field{},
+	types.Choices{
+		types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+		types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
+	},
+)
+
+func (m __unionOfBOfFloat64AndCOfString) TypeRef() types.TypeRef {
+	return __typeRefFor__unionOfBOfFloat64AndCOfString
 }
 
 func __unionOfBOfFloat64AndCOfStringFromVal(val types.Value) __unionOfBOfFloat64AndCOfString {
@@ -300,15 +314,17 @@ func (s __unionOfEOfFloat64AndFOfString) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
-// Creates and returns a Noms Value that describes __unionOfEOfFloat64AndFOfString.
-func __typeRefOf__unionOfEOfFloat64AndFOfString() types.TypeRef {
-	return types.MakeStructTypeRef("__unionOfEOfFloat64AndFOfString",
-		[]types.Field{},
-		types.Choices{
-			types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-			types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
-		},
-	)
+// A Noms Value that describes __unionOfEOfFloat64AndFOfString.
+var __typeRefFor__unionOfEOfFloat64AndFOfString = types.MakeStructTypeRef("",
+	[]types.Field{},
+	types.Choices{
+		types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+		types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
+	},
+)
+
+func (m __unionOfEOfFloat64AndFOfString) TypeRef() types.TypeRef {
+	return __typeRefFor__unionOfEOfFloat64AndFOfString
 }
 
 func __unionOfEOfFloat64AndFOfStringFromVal(val types.Value) __unionOfEOfFloat64AndFOfString {

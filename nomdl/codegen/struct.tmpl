@@ -61,19 +61,7 @@ func New{{.Name}}() {{.Name}} {
 	{{end}}
 {{end}}
 
-// Creates and returns a Noms Value that describes {{.Name}}.
-func __typeRefOf{{.Name}}() types.TypeRef {
-	return types.MakeStructTypeRef("{{.Name}}",
-		[]types.Field{
-			{{range .Fields}}types.Field{"{{.Name}}", {{toTypesTypeRef .T}}, {{.Optional}}},
-			{{end}}
-		},
-		types.Choices{
-			{{range .Choices}}types.Field{"{{.Name}}", {{toTypesTypeRef .T}}, {{.Optional}}},
-			{{end}}
-		},
-	)
-}
+{{template "type_ref.tmpl" .}}
 
 func {{.Name}}FromVal(val types.Value) {{.Name}} {
 	// TODO: Validate here

@@ -16,7 +16,7 @@ func __mgmtPackageInFile_types_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"Dataset": __typeRefOfDataset(),
+			"Dataset": __typeRefForDataset,
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -67,6 +67,13 @@ func (s SetOfDataset) Equals(p SetOfDataset) bool {
 
 func (s SetOfDataset) Ref() ref.Ref {
 	return s.s.Ref()
+}
+
+// A Noms Value that describes SetOfDataset.
+var __typeRefForSetOfDataset = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Dataset", ref.Ref{}))
+
+func (m SetOfDataset) TypeRef() types.TypeRef {
+	return __typeRefForSetOfDataset
 }
 
 func (s SetOfDataset) Empty() bool {
@@ -181,15 +188,17 @@ func (s Dataset) Def() (d DatasetDef) {
 	return
 }
 
-// Creates and returns a Noms Value that describes Dataset.
-func __typeRefOfDataset() types.TypeRef {
-	return types.MakeStructTypeRef("Dataset",
-		[]types.Field{
-			types.Field{"id", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"head", types.MakePrimitiveTypeRef(types.ValueKind), false},
-		},
-		types.Choices{},
-	)
+// A Noms Value that describes Dataset.
+var __typeRefForDataset = types.MakeStructTypeRef("Dataset",
+	[]types.Field{
+		types.Field{"id", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"head", types.MakePrimitiveTypeRef(types.ValueKind), false},
+	},
+	types.Choices{},
+)
+
+func (m Dataset) TypeRef() types.TypeRef {
+	return __typeRefForDataset
 }
 
 func DatasetFromVal(val types.Value) Dataset {

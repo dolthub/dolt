@@ -16,7 +16,7 @@ func __testPackageInFile_struct_with_union_field_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"StructWithUnionField": __typeRefOfStructWithUnionField(),
+			"StructWithUnionField": __typeRefForStructWithUnionField,
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -94,20 +94,22 @@ func (s StructWithUnionField) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
-// Creates and returns a Noms Value that describes StructWithUnionField.
-func __typeRefOfStructWithUnionField() types.TypeRef {
-	return types.MakeStructTypeRef("StructWithUnionField",
-		[]types.Field{
-			types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-		},
-		types.Choices{
-			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
-			types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
-			types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
-		},
-	)
+// A Noms Value that describes StructWithUnionField.
+var __typeRefForStructWithUnionField = types.MakeStructTypeRef("StructWithUnionField",
+	[]types.Field{
+		types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+	},
+	types.Choices{
+		types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+		types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
+		types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
+		types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+	},
+)
+
+func (m StructWithUnionField) TypeRef() types.TypeRef {
+	return __typeRefForStructWithUnionField
 }
 
 func StructWithUnionFieldFromVal(val types.Value) StructWithUnionField {
@@ -304,6 +306,13 @@ func (s SetOfUInt8) Equals(p SetOfUInt8) bool {
 
 func (s SetOfUInt8) Ref() ref.Ref {
 	return s.s.Ref()
+}
+
+// A Noms Value that describes SetOfUInt8.
+var __typeRefForSetOfUInt8 = types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
+
+func (m SetOfUInt8) TypeRef() types.TypeRef {
+	return __typeRefForSetOfUInt8
 }
 
 func (s SetOfUInt8) Empty() bool {

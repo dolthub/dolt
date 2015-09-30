@@ -16,6 +16,8 @@ func (r {{.Name}}) Equals(other {{.Name}}) bool {
 	return r.Ref() == other.Ref()
 }
 
+{{template "type_ref.tmpl" .}}
+
 func (r {{.Name}}) NomsValue() types.Value {
 	return types.Ref{R: r.r}
 }

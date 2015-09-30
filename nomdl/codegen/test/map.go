@@ -53,6 +53,13 @@ func (m MapOfBoolToString) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
+// A Noms Value that describes MapOfBoolToString.
+var __typeRefForMapOfBoolToString = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.BoolKind), types.MakePrimitiveTypeRef(types.StringKind))
+
+func (m MapOfBoolToString) TypeRef() types.TypeRef {
+	return __typeRefForMapOfBoolToString
+}
+
 func (m MapOfBoolToString) Empty() bool {
 	return m.m.Empty()
 }
@@ -151,6 +158,13 @@ func (m MapOfStringToValue) Equals(p MapOfStringToValue) bool {
 
 func (m MapOfStringToValue) Ref() ref.Ref {
 	return m.m.Ref()
+}
+
+// A Noms Value that describes MapOfStringToValue.
+var __typeRefForMapOfStringToValue = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
+
+func (m MapOfStringToValue) TypeRef() types.TypeRef {
+	return __typeRefForMapOfStringToValue
 }
 
 func (m MapOfStringToValue) Empty() bool {

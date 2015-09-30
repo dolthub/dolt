@@ -16,10 +16,10 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"Geoposition":  __typeRefOfGeoposition(),
-			"Georectangle": __typeRefOfGeorectangle(),
-			"Incident":     __typeRefOfIncident(),
-			"SQuadTree":    __typeRefOfSQuadTree(),
+			"Geoposition":  __typeRefForGeoposition,
+			"Georectangle": __typeRefForGeorectangle,
+			"Incident":     __typeRefForIncident,
+			"SQuadTree":    __typeRefForSQuadTree,
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -68,6 +68,13 @@ func (l ListOfIncident) Equals(p ListOfIncident) bool {
 
 func (l ListOfIncident) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+// A Noms Value that describes ListOfIncident.
+var __typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Incident", ref.Ref{}))
+
+func (m ListOfIncident) TypeRef() types.TypeRef {
+	return __typeRefForListOfIncident
 }
 
 func (l ListOfIncident) Len() uint64 {
@@ -190,18 +197,20 @@ func (s Incident) Def() (d IncidentDef) {
 	return
 }
 
-// Creates and returns a Noms Value that describes Incident.
-func __typeRefOfIncident() types.TypeRef {
-	return types.MakeStructTypeRef("Incident",
-		[]types.Field{
-			types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Geoposition", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
-		},
-		types.Choices{},
-	)
+// A Noms Value that describes Incident.
+var __typeRefForIncident = types.MakeStructTypeRef("Incident",
+	[]types.Field{
+		types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"Geoposition", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
+	},
+	types.Choices{},
+)
+
+func (m Incident) TypeRef() types.TypeRef {
+	return __typeRefForIncident
 }
 
 func IncidentFromVal(val types.Value) Incident {
@@ -301,15 +310,17 @@ func (s Geoposition) Def() (d GeopositionDef) {
 	return
 }
 
-// Creates and returns a Noms Value that describes Geoposition.
-func __typeRefOfGeoposition() types.TypeRef {
-	return types.MakeStructTypeRef("Geoposition",
-		[]types.Field{
-			types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-			types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-		},
-		types.Choices{},
-	)
+// A Noms Value that describes Geoposition.
+var __typeRefForGeoposition = types.MakeStructTypeRef("Geoposition",
+	[]types.Field{
+		types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+		types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+	},
+	types.Choices{},
+)
+
+func (m Geoposition) TypeRef() types.TypeRef {
+	return __typeRefForGeoposition
 }
 
 func GeopositionFromVal(val types.Value) Geoposition {
@@ -385,15 +396,17 @@ func (s Georectangle) Def() (d GeorectangleDef) {
 	return
 }
 
-// Creates and returns a Noms Value that describes Georectangle.
-func __typeRefOfGeorectangle() types.TypeRef {
-	return types.MakeStructTypeRef("Georectangle",
-		[]types.Field{
-			types.Field{"TopLeft", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
-			types.Field{"BottomRight", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
-		},
-		types.Choices{},
-	)
+// A Noms Value that describes Georectangle.
+var __typeRefForGeorectangle = types.MakeStructTypeRef("Georectangle",
+	[]types.Field{
+		types.Field{"TopLeft", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
+		types.Field{"BottomRight", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
+	},
+	types.Choices{},
+)
+
+func (m Georectangle) TypeRef() types.TypeRef {
+	return __typeRefForGeorectangle
 }
 
 func GeorectangleFromVal(val types.Value) Georectangle {
@@ -485,19 +498,21 @@ func (s SQuadTree) Def() (d SQuadTreeDef) {
 	return
 }
 
-// Creates and returns a Noms Value that describes SQuadTree.
-func __typeRefOfSQuadTree() types.TypeRef {
-	return types.MakeStructTypeRef("SQuadTree",
-		[]types.Field{
-			types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Incident", ref.Ref{})), false},
-			types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("SQuadTree", ref.Ref{})), false},
-			types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
-			types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-			types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Georectangle", types.MakeTypeRef("Georectangle", ref.Ref{}), false},
-		},
-		types.Choices{},
-	)
+// A Noms Value that describes SQuadTree.
+var __typeRefForSQuadTree = types.MakeStructTypeRef("SQuadTree",
+	[]types.Field{
+		types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Incident", ref.Ref{})), false},
+		types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("SQuadTree", ref.Ref{})), false},
+		types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
+		types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+		types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"Georectangle", types.MakeTypeRef("Georectangle", ref.Ref{}), false},
+	},
+	types.Choices{},
+)
+
+func (m SQuadTree) TypeRef() types.TypeRef {
+	return __typeRefForSQuadTree
 }
 
 func SQuadTreeFromVal(val types.Value) SQuadTree {
@@ -613,6 +628,13 @@ func (m MapOfStringToSQuadTree) Equals(p MapOfStringToSQuadTree) bool {
 
 func (m MapOfStringToSQuadTree) Ref() ref.Ref {
 	return m.m.Ref()
+}
+
+// A Noms Value that describes MapOfStringToSQuadTree.
+var __typeRefForMapOfStringToSQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("SQuadTree", ref.Ref{}))
+
+func (m MapOfStringToSQuadTree) TypeRef() types.TypeRef {
+	return __typeRefForMapOfStringToSQuadTree
 }
 
 func (m MapOfStringToSQuadTree) Empty() bool {

@@ -7,17 +7,33 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
+
+// This function builds up a Noms value that describes the type
+// package implemented by this file and registers it with the global
+// type package definition cache.
+func __mainPackageInFile_types_Ref() ref.Ref {
+	p := types.PackageDef{
+		NamedTypes: types.MapOfStringToTypeRefDef{
+
+			"Geoposition": __typeRefForGeoposition,
+			"Incident":    __typeRefForIncident,
+		},
+	}.New()
+	return types.RegisterPackage(&p)
+}
+
 // ListOfIncident
 
 type ListOfIncident struct {
 	l types.List
 }
 
-type ListOfIncidentDef []IncidentDef
-
 func NewListOfIncident() ListOfIncident {
 	return ListOfIncident{types.NewList()}
 }
+
+type ListOfIncidentDef []IncidentDef
 
 func (def ListOfIncidentDef) New() ListOfIncident {
 	l := make([]types.Value, len(def))
@@ -27,21 +43,21 @@ func (def ListOfIncidentDef) New() ListOfIncident {
 	return ListOfIncident{types.NewList(l...)}
 }
 
+func (l ListOfIncident) Def() ListOfIncidentDef {
+	d := make([]IncidentDef, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = IncidentFromVal(l.l.Get(i)).Def()
+	}
+	return d
+}
+
 func ListOfIncidentFromVal(val types.Value) ListOfIncident {
 	// TODO: Validate here
 	return ListOfIncident{val.(types.List)}
 }
 
-func (self ListOfIncident) Def() ListOfIncidentDef {
-	l := make([]IncidentDef, self.Len())
-	for i := uint64(0); i < self.Len(); i++ {
-		l[i] = IncidentFromVal(self.l.Get(i)).Def()
-	}
-	return l
-}
-
-func (self ListOfIncident) NomsValue() types.Value {
-	return self.l
+func (l ListOfIncident) NomsValue() types.Value {
+	return l.l
 }
 
 func (l ListOfIncident) Equals(p ListOfIncident) bool {
@@ -52,6 +68,13 @@ func (l ListOfIncident) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
+// A Noms Value that describes ListOfIncident.
+var __typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Incident", ref.Ref{}))
+
+func (m ListOfIncident) TypeRef() types.TypeRef {
+	return __typeRefForListOfIncident
+}
+
 func (l ListOfIncident) Len() uint64 {
 	return l.l.Len()
 }
@@ -60,16 +83,16 @@ func (l ListOfIncident) Empty() bool {
 	return l.Len() == uint64(0)
 }
 
-func (self ListOfIncident) Get(i uint64) Incident {
-	return IncidentFromVal(self.l.Get(i))
+func (l ListOfIncident) Get(i uint64) Incident {
+	return IncidentFromVal(l.l.Get(i))
 }
 
 func (l ListOfIncident) Slice(idx uint64, end uint64) ListOfIncident {
 	return ListOfIncident{l.l.Slice(idx, end)}
 }
 
-func (self ListOfIncident) Set(i uint64, val Incident) ListOfIncident {
-	return ListOfIncident{self.l.Set(i, val.NomsValue())}
+func (l ListOfIncident) Set(i uint64, val Incident) ListOfIncident {
+	return ListOfIncident{l.l.Set(i, val.NomsValue())}
 }
 
 func (l ListOfIncident) Append(v ...Incident) ListOfIncident {
@@ -126,20 +149,6 @@ func (l ListOfIncident) Filter(cb ListOfIncidentFilterCallback) ListOfIncident {
 
 // Incident
 
-type IncidentDef struct {
-	ID          int64
-	Category    string
-	Description string
-	DayOfWeek   string
-	Date        string
-	Time        string
-	PdDistrict  string
-	Resolution  string
-	Address     string
-	Geoposition GeopositionDef
-	PdID        string
-}
-
 type Incident struct {
 	m types.Map
 }
@@ -147,6 +156,7 @@ type Incident struct {
 func NewIncident() Incident {
 	return Incident{types.NewMap(
 		types.NewString("$name"), types.NewString("Incident"),
+		types.NewString("$type"), types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef),
 		types.NewString("ID"), types.Int64(0),
 		types.NewString("Category"), types.NewString(""),
 		types.NewString("Description"), types.NewString(""),
@@ -161,10 +171,25 @@ func NewIncident() Incident {
 	)}
 }
 
+type IncidentDef struct {
+	ID          int64
+	Category    string
+	Description string
+	DayOfWeek   string
+	Date        string
+	Time        string
+	PdDistrict  string
+	Resolution  string
+	Address     string
+	Geoposition GeopositionDef
+	PdID        string
+}
+
 func (def IncidentDef) New() Incident {
 	return Incident{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Incident"),
+			types.NewString("$type"), types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef),
 			types.NewString("ID"), types.Int64(def.ID),
 			types.NewString("Category"), types.NewString(def.Category),
 			types.NewString("Description"), types.NewString(def.Description),
@@ -179,20 +204,41 @@ func (def IncidentDef) New() Incident {
 		)}
 }
 
-func (self Incident) Def() IncidentDef {
-	return IncidentDef{
-		int64(self.m.Get(types.NewString("ID")).(types.Int64)),
-		self.m.Get(types.NewString("Category")).(types.String).String(),
-		self.m.Get(types.NewString("Description")).(types.String).String(),
-		self.m.Get(types.NewString("DayOfWeek")).(types.String).String(),
-		self.m.Get(types.NewString("Date")).(types.String).String(),
-		self.m.Get(types.NewString("Time")).(types.String).String(),
-		self.m.Get(types.NewString("PdDistrict")).(types.String).String(),
-		self.m.Get(types.NewString("Resolution")).(types.String).String(),
-		self.m.Get(types.NewString("Address")).(types.String).String(),
-		GeopositionFromVal(self.m.Get(types.NewString("Geoposition"))).Def(),
-		self.m.Get(types.NewString("PdID")).(types.String).String(),
-	}
+func (s Incident) Def() (d IncidentDef) {
+	d.ID = int64(s.m.Get(types.NewString("ID")).(types.Int64))
+	d.Category = s.m.Get(types.NewString("Category")).(types.String).String()
+	d.Description = s.m.Get(types.NewString("Description")).(types.String).String()
+	d.DayOfWeek = s.m.Get(types.NewString("DayOfWeek")).(types.String).String()
+	d.Date = s.m.Get(types.NewString("Date")).(types.String).String()
+	d.Time = s.m.Get(types.NewString("Time")).(types.String).String()
+	d.PdDistrict = s.m.Get(types.NewString("PdDistrict")).(types.String).String()
+	d.Resolution = s.m.Get(types.NewString("Resolution")).(types.String).String()
+	d.Address = s.m.Get(types.NewString("Address")).(types.String).String()
+	d.Geoposition = GeopositionFromVal(s.m.Get(types.NewString("Geoposition"))).Def()
+	d.PdID = s.m.Get(types.NewString("PdID")).(types.String).String()
+	return
+}
+
+// A Noms Value that describes Incident.
+var __typeRefForIncident = types.MakeStructTypeRef("Incident",
+	[]types.Field{
+		types.Field{"ID", types.MakePrimitiveTypeRef(types.Int64Kind), false},
+		types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"DayOfWeek", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"Time", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"PdDistrict", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"Resolution", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
+		types.Field{"Geoposition", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
+		types.Field{"PdID", types.MakePrimitiveTypeRef(types.StringKind), false},
+	},
+	types.Choices{},
+)
+
+func (m Incident) TypeRef() types.TypeRef {
+	return __typeRefForIncident
 }
 
 func IncidentFromVal(val types.Value) Incident {
@@ -200,112 +246,111 @@ func IncidentFromVal(val types.Value) Incident {
 	return Incident{val.(types.Map)}
 }
 
-func (self Incident) NomsValue() types.Value {
-	return self.m
+func (s Incident) NomsValue() types.Value {
+	return s.m
 }
 
-func (self Incident) Equals(other Incident) bool {
-	return self.m.Equals(other.m)
+func (s Incident) Equals(other Incident) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self Incident) Ref() ref.Ref {
-	return self.m.Ref()
+func (s Incident) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self Incident) ID() int64 {
-	return int64(self.m.Get(types.NewString("ID")).(types.Int64))
+func (s Incident) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self Incident) SetID(val int64) Incident {
-	return Incident{self.m.Set(types.NewString("ID"), types.Int64(val))}
+func (s Incident) ID() int64 {
+	return int64(s.m.Get(types.NewString("ID")).(types.Int64))
 }
 
-func (self Incident) Category() string {
-	return self.m.Get(types.NewString("Category")).(types.String).String()
+func (s Incident) SetID(val int64) Incident {
+	return Incident{s.m.Set(types.NewString("ID"), types.Int64(val))}
 }
 
-func (self Incident) SetCategory(val string) Incident {
-	return Incident{self.m.Set(types.NewString("Category"), types.NewString(val))}
+func (s Incident) Category() string {
+	return s.m.Get(types.NewString("Category")).(types.String).String()
 }
 
-func (self Incident) Description() string {
-	return self.m.Get(types.NewString("Description")).(types.String).String()
+func (s Incident) SetCategory(val string) Incident {
+	return Incident{s.m.Set(types.NewString("Category"), types.NewString(val))}
 }
 
-func (self Incident) SetDescription(val string) Incident {
-	return Incident{self.m.Set(types.NewString("Description"), types.NewString(val))}
+func (s Incident) Description() string {
+	return s.m.Get(types.NewString("Description")).(types.String).String()
 }
 
-func (self Incident) DayOfWeek() string {
-	return self.m.Get(types.NewString("DayOfWeek")).(types.String).String()
+func (s Incident) SetDescription(val string) Incident {
+	return Incident{s.m.Set(types.NewString("Description"), types.NewString(val))}
 }
 
-func (self Incident) SetDayOfWeek(val string) Incident {
-	return Incident{self.m.Set(types.NewString("DayOfWeek"), types.NewString(val))}
+func (s Incident) DayOfWeek() string {
+	return s.m.Get(types.NewString("DayOfWeek")).(types.String).String()
 }
 
-func (self Incident) Date() string {
-	return self.m.Get(types.NewString("Date")).(types.String).String()
+func (s Incident) SetDayOfWeek(val string) Incident {
+	return Incident{s.m.Set(types.NewString("DayOfWeek"), types.NewString(val))}
 }
 
-func (self Incident) SetDate(val string) Incident {
-	return Incident{self.m.Set(types.NewString("Date"), types.NewString(val))}
+func (s Incident) Date() string {
+	return s.m.Get(types.NewString("Date")).(types.String).String()
 }
 
-func (self Incident) Time() string {
-	return self.m.Get(types.NewString("Time")).(types.String).String()
+func (s Incident) SetDate(val string) Incident {
+	return Incident{s.m.Set(types.NewString("Date"), types.NewString(val))}
 }
 
-func (self Incident) SetTime(val string) Incident {
-	return Incident{self.m.Set(types.NewString("Time"), types.NewString(val))}
+func (s Incident) Time() string {
+	return s.m.Get(types.NewString("Time")).(types.String).String()
 }
 
-func (self Incident) PdDistrict() string {
-	return self.m.Get(types.NewString("PdDistrict")).(types.String).String()
+func (s Incident) SetTime(val string) Incident {
+	return Incident{s.m.Set(types.NewString("Time"), types.NewString(val))}
 }
 
-func (self Incident) SetPdDistrict(val string) Incident {
-	return Incident{self.m.Set(types.NewString("PdDistrict"), types.NewString(val))}
+func (s Incident) PdDistrict() string {
+	return s.m.Get(types.NewString("PdDistrict")).(types.String).String()
 }
 
-func (self Incident) Resolution() string {
-	return self.m.Get(types.NewString("Resolution")).(types.String).String()
+func (s Incident) SetPdDistrict(val string) Incident {
+	return Incident{s.m.Set(types.NewString("PdDistrict"), types.NewString(val))}
 }
 
-func (self Incident) SetResolution(val string) Incident {
-	return Incident{self.m.Set(types.NewString("Resolution"), types.NewString(val))}
+func (s Incident) Resolution() string {
+	return s.m.Get(types.NewString("Resolution")).(types.String).String()
 }
 
-func (self Incident) Address() string {
-	return self.m.Get(types.NewString("Address")).(types.String).String()
+func (s Incident) SetResolution(val string) Incident {
+	return Incident{s.m.Set(types.NewString("Resolution"), types.NewString(val))}
 }
 
-func (self Incident) SetAddress(val string) Incident {
-	return Incident{self.m.Set(types.NewString("Address"), types.NewString(val))}
+func (s Incident) Address() string {
+	return s.m.Get(types.NewString("Address")).(types.String).String()
 }
 
-func (self Incident) Geoposition() Geoposition {
-	return GeopositionFromVal(self.m.Get(types.NewString("Geoposition")))
+func (s Incident) SetAddress(val string) Incident {
+	return Incident{s.m.Set(types.NewString("Address"), types.NewString(val))}
 }
 
-func (self Incident) SetGeoposition(val Geoposition) Incident {
-	return Incident{self.m.Set(types.NewString("Geoposition"), val.NomsValue())}
+func (s Incident) Geoposition() Geoposition {
+	return GeopositionFromVal(s.m.Get(types.NewString("Geoposition")))
 }
 
-func (self Incident) PdID() string {
-	return self.m.Get(types.NewString("PdID")).(types.String).String()
+func (s Incident) SetGeoposition(val Geoposition) Incident {
+	return Incident{s.m.Set(types.NewString("Geoposition"), val.NomsValue())}
 }
 
-func (self Incident) SetPdID(val string) Incident {
-	return Incident{self.m.Set(types.NewString("PdID"), types.NewString(val))}
+func (s Incident) PdID() string {
+	return s.m.Get(types.NewString("PdID")).(types.String).String()
+}
+
+func (s Incident) SetPdID(val string) Incident {
+	return Incident{s.m.Set(types.NewString("PdID"), types.NewString(val))}
 }
 
 // Geoposition
-
-type GeopositionDef struct {
-	Latitude  float32
-	Longitude float32
-}
 
 type Geoposition struct {
 	m types.Map
@@ -314,25 +359,44 @@ type Geoposition struct {
 func NewGeoposition() Geoposition {
 	return Geoposition{types.NewMap(
 		types.NewString("$name"), types.NewString("Geoposition"),
+		types.NewString("$type"), types.MakeTypeRef("Geoposition", __mainPackageInFile_types_CachedRef),
 		types.NewString("Latitude"), types.Float32(0),
 		types.NewString("Longitude"), types.Float32(0),
 	)}
+}
+
+type GeopositionDef struct {
+	Latitude  float32
+	Longitude float32
 }
 
 func (def GeopositionDef) New() Geoposition {
 	return Geoposition{
 		types.NewMap(
 			types.NewString("$name"), types.NewString("Geoposition"),
+			types.NewString("$type"), types.MakeTypeRef("Geoposition", __mainPackageInFile_types_CachedRef),
 			types.NewString("Latitude"), types.Float32(def.Latitude),
 			types.NewString("Longitude"), types.Float32(def.Longitude),
 		)}
 }
 
-func (self Geoposition) Def() GeopositionDef {
-	return GeopositionDef{
-		float32(self.m.Get(types.NewString("Latitude")).(types.Float32)),
-		float32(self.m.Get(types.NewString("Longitude")).(types.Float32)),
-	}
+func (s Geoposition) Def() (d GeopositionDef) {
+	d.Latitude = float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
+	d.Longitude = float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
+	return
+}
+
+// A Noms Value that describes Geoposition.
+var __typeRefForGeoposition = types.MakeStructTypeRef("Geoposition",
+	[]types.Field{
+		types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+		types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+	},
+	types.Choices{},
+)
+
+func (m Geoposition) TypeRef() types.TypeRef {
+	return __typeRefForGeoposition
 }
 
 func GeopositionFromVal(val types.Value) Geoposition {
@@ -340,30 +404,34 @@ func GeopositionFromVal(val types.Value) Geoposition {
 	return Geoposition{val.(types.Map)}
 }
 
-func (self Geoposition) NomsValue() types.Value {
-	return self.m
+func (s Geoposition) NomsValue() types.Value {
+	return s.m
 }
 
-func (self Geoposition) Equals(other Geoposition) bool {
-	return self.m.Equals(other.m)
+func (s Geoposition) Equals(other Geoposition) bool {
+	return s.m.Equals(other.m)
 }
 
-func (self Geoposition) Ref() ref.Ref {
-	return self.m.Ref()
+func (s Geoposition) Ref() ref.Ref {
+	return s.m.Ref()
 }
 
-func (self Geoposition) Latitude() float32 {
-	return float32(self.m.Get(types.NewString("Latitude")).(types.Float32))
+func (s Geoposition) Type() types.TypeRef {
+	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
-func (self Geoposition) SetLatitude(val float32) Geoposition {
-	return Geoposition{self.m.Set(types.NewString("Latitude"), types.Float32(val))}
+func (s Geoposition) Latitude() float32 {
+	return float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
 }
 
-func (self Geoposition) Longitude() float32 {
-	return float32(self.m.Get(types.NewString("Longitude")).(types.Float32))
+func (s Geoposition) SetLatitude(val float32) Geoposition {
+	return Geoposition{s.m.Set(types.NewString("Latitude"), types.Float32(val))}
 }
 
-func (self Geoposition) SetLongitude(val float32) Geoposition {
-	return Geoposition{self.m.Set(types.NewString("Longitude"), types.Float32(val))}
+func (s Geoposition) Longitude() float32 {
+	return float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
+}
+
+func (s Geoposition) SetLongitude(val float32) Geoposition {
+	return Geoposition{s.m.Set(types.NewString("Longitude"), types.Float32(val))}
 }

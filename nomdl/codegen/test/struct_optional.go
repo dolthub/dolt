@@ -16,7 +16,7 @@ func __testPackageInFile_struct_optional_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"OptionalStruct": __typeRefOfOptionalStruct(),
+			"OptionalStruct": __typeRefForOptionalStruct,
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -60,15 +60,17 @@ func (s OptionalStruct) Def() (d OptionalStructDef) {
 	return
 }
 
-// Creates and returns a Noms Value that describes OptionalStruct.
-func __typeRefOfOptionalStruct() types.TypeRef {
-	return types.MakeStructTypeRef("OptionalStruct",
-		[]types.Field{
-			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), true},
-			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), true},
-		},
-		types.Choices{},
-	)
+// A Noms Value that describes OptionalStruct.
+var __typeRefForOptionalStruct = types.MakeStructTypeRef("OptionalStruct",
+	[]types.Field{
+		types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), true},
+		types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), true},
+	},
+	types.Choices{},
+)
+
+func (m OptionalStruct) TypeRef() types.TypeRef {
+	return __typeRefForOptionalStruct
 }
 
 func OptionalStructFromVal(val types.Value) OptionalStruct {
