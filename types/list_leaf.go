@@ -160,3 +160,8 @@ func (l listLeaf) Chunks() (futures []Future) {
 	}
 	return
 }
+
+func (cl listLeaf) TypeRef() TypeRef {
+	// TODO: The element type needs to be configurable.
+	return MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
+}

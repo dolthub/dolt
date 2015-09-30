@@ -184,3 +184,9 @@ func TestSetFilter(t *testing.T) {
 
 	assert.True(NewSet(Int32(0), Int32(2), Int32(4)).Equals(s2))
 }
+
+func TestSetTypeRef(t *testing.T) {
+	assert := assert.New(t)
+	s := NewSet()
+	assert.True(s.TypeRef().Equals(MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(ValueKind))))
+}

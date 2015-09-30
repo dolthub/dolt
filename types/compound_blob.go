@@ -117,3 +117,7 @@ func (cb compoundBlob) Equals(other Value) bool {
 	}
 	return false
 }
+
+func (cb compoundBlob) TypeRef() TypeRef {
+	return typeRefForBlob
+}

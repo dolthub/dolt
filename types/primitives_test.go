@@ -29,3 +29,26 @@ func TestPrimitives(t *testing.T) {
 		}
 	}
 }
+
+func TestPrimitivesTypeRef(t *testing.T) {
+	data := []struct {
+		v Value
+		k NomsKind
+	}{
+		{Bool(false), BoolKind},
+		{Int8(0), Int8Kind},
+		{Int16(0), Int16Kind},
+		{Int32(0), Int32Kind},
+		{Int64(0), Int64Kind},
+		{Float32(0), Float32Kind},
+		{Float64(0), Float64Kind},
+		{UInt8(0), UInt8Kind},
+		{UInt16(0), UInt16Kind},
+		{UInt32(0), UInt32Kind},
+		{UInt64(0), UInt64Kind},
+	}
+
+	for _, d := range data {
+		assert.True(t, d.v.TypeRef().Equals(MakePrimitiveTypeRef(d.k)))
+	}
+}

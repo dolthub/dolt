@@ -22,3 +22,10 @@ func {{.NomsType}}FromVal(v Value) {{.NomsType}} {
 func (v {{.NomsType}}) ToPrimitive() interface{} {
 	return {{.GoType}}(v)
 }
+
+var typeRefFor{{.NomsType}} = MakePrimitiveTypeRef({{.NomsType}}Kind)
+
+func (v {{.NomsType}}) TypeRef() TypeRef {
+	return typeRefFor{{.NomsType}}
+}
+

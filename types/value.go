@@ -9,4 +9,5 @@ type Value interface {
 	Equals(other Value) bool
 	Ref() ref.Ref
 	Chunks() []Future
+	TypeRef() TypeRef
 }

@@ -51,3 +51,7 @@ func TestTypeWithPkgRef(t *testing.T) {
 	assert.EqualValues(pkgRef, ReadValue(unresolvedRef, cs).Chunks()[0].Ref())
 	assert.NotNil(ReadValue(pkgRef, cs))
 }
+
+func TestTypeRefTypeRef(t *testing.T) {
+	assert.True(t, MakePrimitiveTypeRef(BoolKind).TypeRef().Equals(MakePrimitiveTypeRef(TypeRefKind)))
+}

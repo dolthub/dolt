@@ -150,6 +150,11 @@ func (fm Map) Chunks() (futures []Future) {
 	return
 }
 
+func (fm Map) TypeRef() TypeRef {
+	// TODO: The key and value type needs to be configurable.
+	return MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))
+}
+
 type mapEntry struct {
 	key   Future
 	value Future

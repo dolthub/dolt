@@ -38,6 +38,12 @@ func (fs String) Chunks() []Future {
 	return nil
 }
 
+var typeRefForString = MakePrimitiveTypeRef(StringKind)
+
+func (fs String) TypeRef() TypeRef {
+	return typeRefForString
+}
+
 func StringFromVal(v Value) String {
 	return v.(String)
 }

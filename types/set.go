@@ -140,6 +140,11 @@ func (fs Set) Chunks() (futures []Future) {
 	return
 }
 
+func (fs Set) TypeRef() TypeRef {
+	// TODO: The element type needs to be configurable.
+	return MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(ValueKind))
+}
+
 func newSetFromData(m setData, cs chunks.ChunkSource) Set {
 	return Set{m, cs, &ref.Ref{}}
 }

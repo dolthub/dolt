@@ -36,6 +36,10 @@ func (bl blobLeaf) Chunks() []Future {
 	return nil
 }
 
+func (bl blobLeaf) TypeRef() TypeRef {
+	return typeRefForBlob
+}
+
 func (bl blobLeaf) Equals(other Value) bool {
 	if other, ok := other.(blobLeaf); ok {
 		return bl.Ref() == other.Ref()

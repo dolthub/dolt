@@ -100,6 +100,12 @@ func (t TypeRef) Chunks() (out []Future) {
 	return
 }
 
+var typeRefForTypeRef = MakePrimitiveTypeRef(TypeRefKind)
+
+func (t TypeRef) TypeRef() TypeRef {
+	return typeRefForTypeRef
+}
+
 func MakePrimitiveTypeRef(k NomsKind) TypeRef {
 	return buildType("", PrimitiveDesc(k))
 }

@@ -18,6 +18,8 @@ const (
 	blobWindowSize = 64
 )
 
+var typeRefForBlob = MakePrimitiveTypeRef(BlobKind)
+
 type Blob interface {
 	Value
 	Len() uint64

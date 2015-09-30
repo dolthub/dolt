@@ -222,3 +222,9 @@ func TestCompoundListRemove(t *testing.T) {
 	assert.True(UInt8(3).Equals(l4.Get(1)))
 	assert.True(UInt8(5).Equals(l4.Get(2)))
 }
+
+func TestCompoundListTypeRef(t *testing.T) {
+	assert := assert.New(t)
+	cl := getFakeCompoundList("hi", "bye")
+	assert.True(cl.TypeRef().Equals(MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))))
+}

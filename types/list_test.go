@@ -289,3 +289,9 @@ func TestListIterAll(t *testing.T) {
 	})
 	assert.Equal([]string{"a", "b", "c", "d", "e", "f"}, acc2)
 }
+
+func TestListTypeRef(t *testing.T) {
+	assert := assert.New(t)
+	l := NewList(Int32(0))
+	assert.True(l.TypeRef().Equals(MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))))
+}

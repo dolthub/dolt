@@ -315,6 +315,11 @@ func (cl compoundList) Equals(other Value) bool {
 	return false
 }
 
+func (cl compoundList) TypeRef() TypeRef {
+	// TODO: The element type needs to be configurable.
+	return MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
+}
+
 // startsChunk determines if idx refers to the first element in one of cl's chunks.
 // If so, it also returns the index of the chunk into which idx points.
 func (cl compoundList) startsChunk(idx uint64) (bool, uint64) {

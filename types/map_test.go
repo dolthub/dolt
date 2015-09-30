@@ -215,3 +215,9 @@ func TestMapFutures(t *testing.T) {
 	assert.Len(m.Chunks(), 1)
 	assert.EqualValues(kRef, m.Chunks()[0].Ref())
 }
+
+func TestMapTypeRef(t *testing.T) {
+	assert := assert.New(t)
+	m := NewMap()
+	assert.True(m.TypeRef().Equals(MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))))
+}

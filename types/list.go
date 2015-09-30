@@ -25,6 +25,7 @@ type List interface {
 	Release()
 	Equals(other Value) bool
 	Chunks() (futures []Future)
+	TypeRef() TypeRef
 	Iter(f listIterFunc)
 	IterAll(f listIterAllFunc)
 	Map(mf MapFunc) []interface{}
