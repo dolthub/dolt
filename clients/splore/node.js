@@ -9,11 +9,12 @@ var Node = React.createClass({
     isOpen: React.PropTypes.bool.isRequired,
     shape: React.PropTypes.string.isRequired,
     text: React.PropTypes.string.isRequired,
+    title: React.PropTypes.string,
     fromX: React.PropTypes.number.isRequired,
     fromY: React.PropTypes.number.isRequired,
     x: React.PropTypes.number.isRequired,
     y: React.PropTypes.number.isRequired,
-    onToggle: React.PropTypes.func.isRequired,
+    onClick: React.PropTypes.func.isRequired,
   },
 
   getInitialState() {
@@ -42,11 +43,12 @@ var Node = React.createClass({
     }
 
     return (
-      <g className='node' onClick={this.props.onToggle} style={{transform:translate}}>
+      <g className='node' onClick={this.props.onClick} style={{transform:translate}}>
         {this.getShape()}
         <text x={textX} dy='.35em' textAnchor={textAnchor}>
           {this.props.text}
         </text>
+        <title>{this.props.title}</title>
       </g>
     );
   },

@@ -82,6 +82,7 @@ function handleChunkLoad(ref, val, fromRef) {
       data.nodes[id] = {
         canOpen: true,
         name: val.ref.substr(5, 6),
+        fullName: val.ref,
       };
     }
 
@@ -92,7 +93,14 @@ function handleChunkLoad(ref, val, fromRef) {
   render();
 }
 
-function handleToggle(id) {
+function handleNodeClick(e, id) {
+  if (e.altKey) {
+    if (data.nodes[id].fullName) {
+      window.prompt("Full ref", data.nodes[id].fullName);
+    }
+    return;
+  }
+
   if (id.indexOf('/') > -1) {
     if (data.links[id] && data.links[id].length > 0) {
       data.nodes[id].isOpen = !Boolean(data.nodes[id].isOpen);
@@ -112,5 +120,5 @@ function handleToggle(id) {
 function render() {
   var dt = new buchheim.TreeNode(data, rootRef, null, 0, 0, {});
   buchheim.layout(dt);
-  React.render(<Layout tree={dt} data={data} onToggle={handleToggle}/>, document.body);
+  React.render(<Layout tree={dt} data={data} onNodeClick={handleNodeClick}/>, document.body);
 }
