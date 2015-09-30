@@ -10,6 +10,8 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+this does not compile
+
 type Dataset struct {
 	store datas.DataStore
 	id    string
