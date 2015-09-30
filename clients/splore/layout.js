@@ -6,7 +6,7 @@ var React = require('react');
 var Layout = React.createClass({
   propTypes: {
     data: React.PropTypes.object.isRequired,
-    onToggle: React.PropTypes.func.isRequired,
+    onNodeClick: React.PropTypes.func.isRequired,
     tree: React.PropTypes.object.isRequired,
   },
 
@@ -28,6 +28,11 @@ var Layout = React.createClass({
       var hasChildren = treeNode.data.canOpen || links.length > 0;
       var x = getX(treeNode);
       var y = getY(treeNode);
+      var title = '';
+
+      if (treeNode.data.fullName) {
+        title = 'Alt-click for full ref'
+      }
 
       maxX = Math.max(x + spaceX, maxX);
       minY = Math.min(y, minY);
@@ -42,9 +47,10 @@ var Layout = React.createClass({
           x={x}
           y={y}
           text={treeNode.data.name}
+          title={title}
           canOpen={hasChildren}
           isOpen={!hasChildren || Boolean(treeNode.data.isOpen)}
-          onToggle={() => this.props.onToggle(treeNode.id)}/>);
+          onClick={(e) => this.props.onNodeClick(e, treeNode.id)}/>);
       children.push(n);
       lookup[treeNode.id] = treeNode;
 
