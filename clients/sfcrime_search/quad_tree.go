@@ -1,9 +1,5 @@
 package main
 
-import (
-//    "fmt"
-)
-
 const (
 	maxNodes = 16
 	maxDepth = 10
@@ -34,7 +30,7 @@ func (qt *SQuadTree) Search(r GeorectangleDef, p GeopositionDef, kilometers floa
 			}
 		}
 	} else if qt.Nodes().Len() > 0 {
-		qt.Nodes().Iter(func(n Incident) bool {
+		qt.Nodes().Iter(func(n Incident, i uint64) bool {
 			if p.DistanceTo(n.Geoposition().Def()) < kilometers {
 				nodes = append(nodes, n)
 			}

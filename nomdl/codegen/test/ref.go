@@ -161,28 +161,28 @@ func (l ListOfString) fromElemSlice(p []string) []types.Value {
 	return r
 }
 
-type ListOfStringIterCallback func(v string) (stop bool)
+type ListOfStringIterCallback func(v string, i uint64) (stop bool)
 
 func (l ListOfString) Iter(cb ListOfStringIterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb(v.(types.String).String())
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(v.(types.String).String(), i)
 	})
 }
 
-type ListOfStringIterAllCallback func(v string)
+type ListOfStringIterAllCallback func(v string, i uint64)
 
 func (l ListOfString) IterAll(cb ListOfStringIterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb(v.(types.String).String())
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(v.(types.String).String(), i)
 	})
 }
 
-type ListOfStringFilterCallback func(v string) (keep bool)
+type ListOfStringFilterCallback func(v string, i uint64) (keep bool)
 
 func (l ListOfString) Filter(cb ListOfStringFilterCallback) ListOfString {
 	nl := NewListOfString()
-	l.IterAll(func(v string) {
-		if cb(v) {
+	l.IterAll(func(v string, i uint64) {
+		if cb(v, i) {
 			nl = nl.Append(v)
 		}
 	})
@@ -285,28 +285,28 @@ func (l ListOfRefOfFloat32) fromElemSlice(p []RefOfFloat32) []types.Value {
 	return r
 }
 
-type ListOfRefOfFloat32IterCallback func(v RefOfFloat32) (stop bool)
+type ListOfRefOfFloat32IterCallback func(v RefOfFloat32, i uint64) (stop bool)
 
 func (l ListOfRefOfFloat32) Iter(cb ListOfRefOfFloat32IterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb(RefOfFloat32FromVal(v))
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(RefOfFloat32FromVal(v), i)
 	})
 }
 
-type ListOfRefOfFloat32IterAllCallback func(v RefOfFloat32)
+type ListOfRefOfFloat32IterAllCallback func(v RefOfFloat32, i uint64)
 
 func (l ListOfRefOfFloat32) IterAll(cb ListOfRefOfFloat32IterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb(RefOfFloat32FromVal(v))
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(RefOfFloat32FromVal(v), i)
 	})
 }
 
-type ListOfRefOfFloat32FilterCallback func(v RefOfFloat32) (keep bool)
+type ListOfRefOfFloat32FilterCallback func(v RefOfFloat32, i uint64) (keep bool)
 
 func (l ListOfRefOfFloat32) Filter(cb ListOfRefOfFloat32FilterCallback) ListOfRefOfFloat32 {
 	nl := NewListOfRefOfFloat32()
-	l.IterAll(func(v RefOfFloat32) {
-		if cb(v) {
+	l.IterAll(func(v RefOfFloat32, i uint64) {
+		if cb(v, i) {
 			nl = nl.Append(v)
 		}
 	})

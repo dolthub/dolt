@@ -65,7 +65,7 @@ func main() {
 	nChan := make(chan *NodeDef, 1024)
 	nodesConverted := uint32(0)
 	go func() {
-		list.l.MapP(64, func(v types.Value) interface{} {
+		list.l.MapP(64, func(v types.Value, i uint64) interface{} {
 			n := NodeFromVal(v)
 			nodeDef := &NodeDef{Geoposition: n.Geoposition().Def(), Reference: n.Ref()}
 			nChan <- nodeDef

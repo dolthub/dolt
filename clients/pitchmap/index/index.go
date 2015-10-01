@@ -104,7 +104,7 @@ func getIndex(input types.List) MapOfStringToListOfPitch {
 
 	// Walk through the list in inputDataset and basically switch
 	// on the top-level key to know if it's an inning or a pitcher.
-	innings := input.MapP(512, func(item types.Value) interface{} {
+	innings := input.MapP(512, func(item types.Value, i uint64) interface{} {
 		m := MapOfStringToValueFromVal(item)
 
 		if key := "inning"; m.Has(key) {

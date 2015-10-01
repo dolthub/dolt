@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/types"
-	"sync"
-	"time"
 )
 
 const (
@@ -43,7 +44,7 @@ func (qt *QuadTree) Search(r GeorectangleDef, p GeopositionDef, kilometers float
 			}
 		}
 	} else if qt.Nodes().Len() > 0 {
-		qt.Nodes().Iter(func(n Node) bool {
+		qt.Nodes().Iter(func(n Node, i uint64) bool {
 			if p.DistanceTo(n.Geoposition().Def()) < kilometers {
 				nodes = append(nodes, n)
 			}

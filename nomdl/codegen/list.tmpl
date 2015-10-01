@@ -92,28 +92,28 @@ func (l {{.Name}}) fromElemSlice(p []{{userType .ElemType}}) []types.Value {
 	return r
 }
 
-type {{.Name}}IterCallback func(v {{userType .ElemType}}) (stop bool)
+type {{.Name}}IterCallback func(v {{userType .ElemType}}, i uint64) (stop bool)
 
 func (l {{.Name}}) Iter(cb {{.Name}}IterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb({{valueToUser "v" .ElemType}})
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb({{valueToUser "v" .ElemType}}, i)
 	})
 }
 
-type {{.Name}}IterAllCallback func(v {{userType .ElemType}})
+type {{.Name}}IterAllCallback func(v {{userType .ElemType}}, i uint64)
 
 func (l {{.Name}}) IterAll(cb {{.Name}}IterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb({{valueToUser "v" .ElemType}})
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb({{valueToUser "v" .ElemType}}, i)
 	})
 }
 
-type {{.Name}}FilterCallback func(v {{userType .ElemType}}) (keep bool)
+type {{.Name}}FilterCallback func(v {{userType .ElemType}}, i uint64) (keep bool)
 
 func (l {{.Name}}) Filter(cb {{.Name}}FilterCallback) {{.Name}} {
 	nl := New{{.Name}}()
-	l.IterAll(func(v {{userType .ElemType}}) {
-		if cb(v) {
+	l.IterAll(func(v {{userType .ElemType}}, i uint64) {
+		if cb(v, i) {
 			nl = nl.Append(v)
 		}
 	})

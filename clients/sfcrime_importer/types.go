@@ -119,28 +119,28 @@ func (l ListOfIncident) fromElemSlice(p []Incident) []types.Value {
 	return r
 }
 
-type ListOfIncidentIterCallback func(v Incident) (stop bool)
+type ListOfIncidentIterCallback func(v Incident, i uint64) (stop bool)
 
 func (l ListOfIncident) Iter(cb ListOfIncidentIterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb(IncidentFromVal(v))
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(IncidentFromVal(v), i)
 	})
 }
 
-type ListOfIncidentIterAllCallback func(v Incident)
+type ListOfIncidentIterAllCallback func(v Incident, i uint64)
 
 func (l ListOfIncident) IterAll(cb ListOfIncidentIterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb(IncidentFromVal(v))
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(IncidentFromVal(v), i)
 	})
 }
 
-type ListOfIncidentFilterCallback func(v Incident) (keep bool)
+type ListOfIncidentFilterCallback func(v Incident, i uint64) (keep bool)
 
 func (l ListOfIncident) Filter(cb ListOfIncidentFilterCallback) ListOfIncident {
 	nl := NewListOfIncident()
-	l.IterAll(func(v Incident) {
-		if cb(v) {
+	l.IterAll(func(v Incident, i uint64) {
+		if cb(v, i) {
 			nl = nl.Append(v)
 		}
 	})

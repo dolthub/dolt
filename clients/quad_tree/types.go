@@ -561,28 +561,28 @@ func (l ListOfNode) fromElemSlice(p []Node) []types.Value {
 	return r
 }
 
-type ListOfNodeIterCallback func(v Node) (stop bool)
+type ListOfNodeIterCallback func(v Node, i uint64) (stop bool)
 
 func (l ListOfNode) Iter(cb ListOfNodeIterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb(NodeFromVal(v))
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(NodeFromVal(v), i)
 	})
 }
 
-type ListOfNodeIterAllCallback func(v Node)
+type ListOfNodeIterAllCallback func(v Node, i uint64)
 
 func (l ListOfNode) IterAll(cb ListOfNodeIterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb(NodeFromVal(v))
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(NodeFromVal(v), i)
 	})
 }
 
-type ListOfNodeFilterCallback func(v Node) (keep bool)
+type ListOfNodeFilterCallback func(v Node, i uint64) (keep bool)
 
 func (l ListOfNode) Filter(cb ListOfNodeFilterCallback) ListOfNode {
 	nl := NewListOfNode()
-	l.IterAll(func(v Node) {
-		if cb(v) {
+	l.IterAll(func(v Node, i uint64) {
+		if cb(v, i) {
 			nl = nl.Append(v)
 		}
 	})
@@ -930,28 +930,28 @@ func (l ListOfRefOfValue) fromElemSlice(p []RefOfValue) []types.Value {
 	return r
 }
 
-type ListOfRefOfValueIterCallback func(v RefOfValue) (stop bool)
+type ListOfRefOfValueIterCallback func(v RefOfValue, i uint64) (stop bool)
 
 func (l ListOfRefOfValue) Iter(cb ListOfRefOfValueIterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb(RefOfValueFromVal(v))
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(RefOfValueFromVal(v), i)
 	})
 }
 
-type ListOfRefOfValueIterAllCallback func(v RefOfValue)
+type ListOfRefOfValueIterAllCallback func(v RefOfValue, i uint64)
 
 func (l ListOfRefOfValue) IterAll(cb ListOfRefOfValueIterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb(RefOfValueFromVal(v))
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(RefOfValueFromVal(v), i)
 	})
 }
 
-type ListOfRefOfValueFilterCallback func(v RefOfValue) (keep bool)
+type ListOfRefOfValueFilterCallback func(v RefOfValue, i uint64) (keep bool)
 
 func (l ListOfRefOfValue) Filter(cb ListOfRefOfValueFilterCallback) ListOfRefOfValue {
 	nl := NewListOfRefOfValue()
-	l.IterAll(func(v RefOfValue) {
-		if cb(v) {
+	l.IterAll(func(v RefOfValue, i uint64) {
+		if cb(v, i) {
 			nl = nl.Append(v)
 		}
 	})

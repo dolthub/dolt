@@ -103,28 +103,28 @@ func (l ListOfInt64) fromElemSlice(p []int64) []types.Value {
 	return r
 }
 
-type ListOfInt64IterCallback func(v int64) (stop bool)
+type ListOfInt64IterCallback func(v int64, i uint64) (stop bool)
 
 func (l ListOfInt64) Iter(cb ListOfInt64IterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb(int64(v.(types.Int64)))
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(int64(v.(types.Int64)), i)
 	})
 }
 
-type ListOfInt64IterAllCallback func(v int64)
+type ListOfInt64IterAllCallback func(v int64, i uint64)
 
 func (l ListOfInt64) IterAll(cb ListOfInt64IterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb(int64(v.(types.Int64)))
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(int64(v.(types.Int64)), i)
 	})
 }
 
-type ListOfInt64FilterCallback func(v int64) (keep bool)
+type ListOfInt64FilterCallback func(v int64, i uint64) (keep bool)
 
 func (l ListOfInt64) Filter(cb ListOfInt64FilterCallback) ListOfInt64 {
 	nl := NewListOfInt64()
-	l.IterAll(func(v int64) {
-		if cb(v) {
+	l.IterAll(func(v int64, i uint64) {
+		if cb(v, i) {
 			nl = nl.Append(v)
 		}
 	})

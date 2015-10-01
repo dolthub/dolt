@@ -35,8 +35,8 @@ func (l listLeaf) Get(idx uint64) Value {
 }
 
 func (l listLeaf) Iter(f listIterFunc) {
-	for _, fut := range l.list {
-		if f(fut.Deref(l.cs)) {
+	for i, fut := range l.list {
+		if f(fut.Deref(l.cs), uint64(i)) {
 			fut.Release()
 			break
 		}
@@ -45,8 +45,8 @@ func (l listLeaf) Iter(f listIterFunc) {
 }
 
 func (l listLeaf) IterAll(f listIterAllFunc) {
-	for _, fut := range l.list {
-		f(fut.Deref(l.cs))
+	for i, fut := range l.list {
+		f(fut.Deref(l.cs), uint64(i))
 		fut.Release()
 	}
 }
@@ -63,10 +63,10 @@ func (l listLeaf) MapP(concurrency int, mf MapFunc) []interface{} {
 		limit = make(chan int, concurrency)
 	}
 
-	return l.mapInternal(limit, mf)
+	return l.mapInternal(limit, mf, 0)
 }
 
-func (l listLeaf) mapInternal(sem chan int, mf MapFunc) []interface{} {
+func (l listLeaf) mapInternal(sem chan int, mf MapFunc, offset uint64) []interface{} {
 	values := make([]interface{}, l.Len(), l.Len())
 
 	mu := sync.Mutex{}
@@ -83,7 +83,7 @@ func (l listLeaf) mapInternal(sem chan int, mf MapFunc) []interface{} {
 			v := f.Deref(l.cs)
 			f.Release()
 
-			c := mf(v)
+			c := mf(v, idx+offset)
 			<-sem
 
 			mu.Lock()

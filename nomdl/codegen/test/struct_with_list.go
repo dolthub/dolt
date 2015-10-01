@@ -230,28 +230,28 @@ func (l ListOfUInt8) fromElemSlice(p []uint8) []types.Value {
 	return r
 }
 
-type ListOfUInt8IterCallback func(v uint8) (stop bool)
+type ListOfUInt8IterCallback func(v uint8, i uint64) (stop bool)
 
 func (l ListOfUInt8) Iter(cb ListOfUInt8IterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb(uint8(v.(types.UInt8)))
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(uint8(v.(types.UInt8)), i)
 	})
 }
 
-type ListOfUInt8IterAllCallback func(v uint8)
+type ListOfUInt8IterAllCallback func(v uint8, i uint64)
 
 func (l ListOfUInt8) IterAll(cb ListOfUInt8IterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb(uint8(v.(types.UInt8)))
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(uint8(v.(types.UInt8)), i)
 	})
 }
 
-type ListOfUInt8FilterCallback func(v uint8) (keep bool)
+type ListOfUInt8FilterCallback func(v uint8, i uint64) (keep bool)
 
 func (l ListOfUInt8) Filter(cb ListOfUInt8FilterCallback) ListOfUInt8 {
 	nl := NewListOfUInt8()
-	l.IterAll(func(v uint8) {
-		if cb(v) {
+	l.IterAll(func(v uint8, i uint64) {
+		if cb(v, i) {
 			nl = nl.Append(v)
 		}
 	})

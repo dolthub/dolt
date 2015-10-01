@@ -5,10 +5,10 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-type listIterFunc func(v Value) (stop bool)
-type listIterAllFunc func(v Value)
+type listIterFunc func(v Value, index uint64) (stop bool)
+type listIterAllFunc func(v Value, index uint64)
 
-type MapFunc func(v Value) interface{}
+type MapFunc func(v Value, index uint64) interface{}
 
 type List interface {
 	Len() uint64
@@ -30,7 +30,7 @@ type List interface {
 	IterAll(f listIterAllFunc)
 	Map(mf MapFunc) []interface{}
 	MapP(concurrency int, mf MapFunc) []interface{}
-	mapInternal(sem chan int, mf MapFunc) []interface{}
+	mapInternal(sem chan int, mf MapFunc, offset uint64) []interface{}
 }
 
 func NewList(v ...Value) List {

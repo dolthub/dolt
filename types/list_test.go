@@ -206,7 +206,7 @@ func TestListMap(t *testing.T) {
 			expectConcurreny = runtime.NumCPU()
 		}
 
-		mf := func(v Value) interface{} {
+		mf := func(v Value, index uint64) interface{} {
 			mu.Lock()
 			cur++
 			mu.Unlock()
@@ -215,6 +215,7 @@ func TestListMap(t *testing.T) {
 			}
 
 			i := Int64FromVal(v)
+			assert.Equal(uint64(i), index, "%d == %d", i, index)
 			return int64(i * i)
 		}
 
@@ -243,8 +244,9 @@ func TestListIter(t *testing.T) {
 
 	l := NewList(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
 	acc := []int32{}
-	i := 0
-	l.Iter(func(v Value) bool {
+	i := uint64(0)
+	l.Iter(func(v Value, index uint64) bool {
+		assert.Equal(i, index)
 		i++
 		acc = append(acc, int32(v.(Int32)))
 		return i > 2
@@ -253,7 +255,7 @@ func TestListIter(t *testing.T) {
 
 	cl := getFakeCompoundList("abc", "def")
 	acc2 := []string{}
-	cl.Iter(func(v Value) bool {
+	cl.Iter(func(v Value, i uint64) bool {
 		acc2 = append(acc2, v.(String).String())
 		return false
 	})
@@ -261,8 +263,9 @@ func TestListIter(t *testing.T) {
 
 	cl2 := getFakeCompoundList("abc", "def")
 	acc3 := []string{}
-	i = 0
-	cl2.Iter(func(v Value) bool {
+	i = uint64(0)
+	cl2.Iter(func(v Value, index uint64) bool {
+		assert.Equal(i, index)
 		i++
 		acc3 = append(acc3, v.(String).String())
 		return i > 3
@@ -275,8 +278,9 @@ func TestListIterAll(t *testing.T) {
 
 	l := NewList(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
 	acc := []int32{}
-	i := 0
-	l.IterAll(func(v Value) {
+	i := uint64(0)
+	l.IterAll(func(v Value, index uint64) {
+		assert.Equal(i, index)
 		i++
 		acc = append(acc, int32(v.(Int32)))
 	})
@@ -284,7 +288,7 @@ func TestListIterAll(t *testing.T) {
 
 	cl := getFakeCompoundList("abc", "def")
 	acc2 := []string{}
-	cl.IterAll(func(v Value) {
+	cl.IterAll(func(v Value, i uint64) {
 		acc2 = append(acc2, v.(String).String())
 	})
 	assert.Equal([]string{"a", "b", "c", "d", "e", "f"}, acc2)

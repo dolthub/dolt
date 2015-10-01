@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"strconv"
+
 	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2"
 	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2/google"
 	"github.com/attic-labs/noms/clients/util"
@@ -23,7 +25,6 @@ import (
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/marshal"
 	"github.com/attic-labs/noms/types"
-	"strconv"
 )
 
 const maxProcs = 25

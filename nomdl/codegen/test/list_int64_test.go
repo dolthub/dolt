@@ -33,20 +33,28 @@ func TestListInt64Def(t *testing.T) {
 }
 
 func TestListIter(t *testing.T) {
+	assert := assert.New(t)
 	l := ListOfInt64Def{0, 1, 2, 3, 4}.New()
 	acc := ListOfInt64Def{}
-	l.Iter(func(v int64) (stop bool) {
+	i := uint64(0)
+	l.Iter(func(v int64, index uint64) (stop bool) {
+		assert.Equal(i, index)
 		stop = v == 2
 		acc = append(acc, v)
+		i++
 		return
 	})
-	assert.Equal(t, ListOfInt64Def{0, 1, 2}, acc)
+	assert.Equal(ListOfInt64Def{0, 1, 2}, acc)
 }
 
 func TestListFilter(t *testing.T) {
+	assert := assert.New(t)
 	l := ListOfInt64Def{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}.New()
-	l2 := l.Filter(func(v int64) bool {
+	i := uint64(0)
+	l2 := l.Filter(func(v int64, index uint64) bool {
+		assert.Equal(i, index)
+		i++
 		return v%2 == 0
 	})
-	assert.Equal(t, ListOfInt64Def{0, 2, 4, 6, 8}, l2.Def())
+	assert.Equal(ListOfInt64Def{0, 2, 4, 6, 8}, l2.Def())
 }

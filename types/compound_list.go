@@ -157,28 +157,32 @@ func (cl compoundList) Get(idx uint64) Value {
 
 func (cl compoundList) Iter(f listIterFunc) {
 	it := newListIterator(cl)
+	i := uint64(0)
 	for {
 		fut, done := it.next()
 		if done {
 			break
 		}
-		if f(fut.Deref(cl.cs)) {
+		if f(fut.Deref(cl.cs), i) {
 			fut.Release()
 			break
 		}
 		fut.Release()
+		i++
 	}
 }
 
 func (cl compoundList) IterAll(f listIterAllFunc) {
 	it := newListIterator(cl)
+	i := uint64(0)
 	for {
 		fut, done := it.next()
 		if done {
 			break
 		}
-		f(fut.Deref(cl.cs))
+		f(fut.Deref(cl.cs), i)
 		fut.Release()
+		i++
 	}
 }
 
@@ -194,10 +198,10 @@ func (cl compoundList) MapP(concurrency int, mf MapFunc) []interface{} {
 		limit = make(chan int, concurrency)
 	}
 
-	return cl.mapInternal(limit, mf)
+	return cl.mapInternal(limit, mf, 0)
 }
 
-func (cl compoundList) mapInternal(sem chan int, mf MapFunc) []interface{} {
+func (cl compoundList) mapInternal(sem chan int, mf MapFunc, offset uint64) []interface{} {
 	values := make([]interface{}, cl.Len(), cl.Len())
 
 	mu := sync.Mutex{}
@@ -214,14 +218,14 @@ func (cl compoundList) mapInternal(sem chan int, mf MapFunc) []interface{} {
 			l := f.Deref(cl.cs).(List)
 			f.Release()
 
-			sv := l.mapInternal(sem, mf)
+			idx := uint64(0)
+			if si > 0 {
+				idx += cl.offsets[si-1]
+			}
+
+			sv := l.mapInternal(sem, mf, idx+offset)
 			mu.Lock()
 			defer mu.Unlock()
-
-			idx := 0
-			if si > 0 {
-				idx += int(cl.offsets[si-1])
-			}
 
 			copy(values[idx:], sv)
 		}(si)

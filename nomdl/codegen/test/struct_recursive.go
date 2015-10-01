@@ -191,28 +191,28 @@ func (l ListOfTree) fromElemSlice(p []Tree) []types.Value {
 	return r
 }
 
-type ListOfTreeIterCallback func(v Tree) (stop bool)
+type ListOfTreeIterCallback func(v Tree, i uint64) (stop bool)
 
 func (l ListOfTree) Iter(cb ListOfTreeIterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb(TreeFromVal(v))
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(TreeFromVal(v), i)
 	})
 }
 
-type ListOfTreeIterAllCallback func(v Tree)
+type ListOfTreeIterAllCallback func(v Tree, i uint64)
 
 func (l ListOfTree) IterAll(cb ListOfTreeIterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb(TreeFromVal(v))
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(TreeFromVal(v), i)
 	})
 }
 
-type ListOfTreeFilterCallback func(v Tree) (keep bool)
+type ListOfTreeFilterCallback func(v Tree, i uint64) (keep bool)
 
 func (l ListOfTree) Filter(cb ListOfTreeFilterCallback) ListOfTree {
 	nl := NewListOfTree()
-	l.IterAll(func(v Tree) {
-		if cb(v) {
+	l.IterAll(func(v Tree, i uint64) {
+		if cb(v, i) {
 			nl = nl.Append(v)
 		}
 	})

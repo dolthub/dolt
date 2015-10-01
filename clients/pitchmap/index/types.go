@@ -118,28 +118,28 @@ func (l ListOfMapOfStringToValue) fromElemSlice(p []MapOfStringToValue) []types.
 	return r
 }
 
-type ListOfMapOfStringToValueIterCallback func(v MapOfStringToValue) (stop bool)
+type ListOfMapOfStringToValueIterCallback func(v MapOfStringToValue, i uint64) (stop bool)
 
 func (l ListOfMapOfStringToValue) Iter(cb ListOfMapOfStringToValueIterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb(MapOfStringToValueFromVal(v))
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(MapOfStringToValueFromVal(v), i)
 	})
 }
 
-type ListOfMapOfStringToValueIterAllCallback func(v MapOfStringToValue)
+type ListOfMapOfStringToValueIterAllCallback func(v MapOfStringToValue, i uint64)
 
 func (l ListOfMapOfStringToValue) IterAll(cb ListOfMapOfStringToValueIterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb(MapOfStringToValueFromVal(v))
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(MapOfStringToValueFromVal(v), i)
 	})
 }
 
-type ListOfMapOfStringToValueFilterCallback func(v MapOfStringToValue) (keep bool)
+type ListOfMapOfStringToValueFilterCallback func(v MapOfStringToValue, i uint64) (keep bool)
 
 func (l ListOfMapOfStringToValue) Filter(cb ListOfMapOfStringToValueFilterCallback) ListOfMapOfStringToValue {
 	nl := NewListOfMapOfStringToValue()
-	l.IterAll(func(v MapOfStringToValue) {
-		if cb(v) {
+	l.IterAll(func(v MapOfStringToValue, i uint64) {
+		if cb(v, i) {
 			nl = nl.Append(v)
 		}
 	})
@@ -456,28 +456,28 @@ func (l ListOfPitch) fromElemSlice(p []Pitch) []types.Value {
 	return r
 }
 
-type ListOfPitchIterCallback func(v Pitch) (stop bool)
+type ListOfPitchIterCallback func(v Pitch, i uint64) (stop bool)
 
 func (l ListOfPitch) Iter(cb ListOfPitchIterCallback) {
-	l.l.Iter(func(v types.Value) bool {
-		return cb(PitchFromVal(v))
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(PitchFromVal(v), i)
 	})
 }
 
-type ListOfPitchIterAllCallback func(v Pitch)
+type ListOfPitchIterAllCallback func(v Pitch, i uint64)
 
 func (l ListOfPitch) IterAll(cb ListOfPitchIterAllCallback) {
-	l.l.IterAll(func(v types.Value) {
-		cb(PitchFromVal(v))
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(PitchFromVal(v), i)
 	})
 }
 
-type ListOfPitchFilterCallback func(v Pitch) (keep bool)
+type ListOfPitchFilterCallback func(v Pitch, i uint64) (keep bool)
 
 func (l ListOfPitch) Filter(cb ListOfPitchFilterCallback) ListOfPitch {
 	nl := NewListOfPitch()
-	l.IterAll(func(v Pitch) {
-		if cb(v) {
+	l.IterAll(func(v Pitch, i uint64) {
+		if cb(v, i) {
 			nl = nl.Append(v)
 		}
 	})
