@@ -6,14 +6,15 @@ import (
 	"log"
 	"time"
 
-	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 	"net"
 	"net/http"
 	"sort"
 	"strings"
+
+	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/datas"
+	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/types"
 )
 
 var (
@@ -120,7 +121,11 @@ func searchWithList(gp GeopositionDef, ds datas.DataStore) []Incident {
 	}
 	results := []Incident{}
 	incidentList := ListOfIncidentFromVal(val)
+	t0 := time.Now()
 	for i := uint64(0); i < incidentList.Len(); i++ {
+		if i%uint64(10000) == 0 {
+			fmt.Printf("%.2f%%: %v\n", float64(i)/float64(incidentList.Len())*float64(100), time.Now().Sub(t0))
+		}
 		incident := incidentList.Get(i)
 		if incident.Geoposition().Def().DistanceTo(gp) <= float32(*distanceFlag) {
 			results = append(results, incident)
