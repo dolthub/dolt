@@ -15,16 +15,21 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
+type connectionState struct {
+	c  net.Conn
+	cs http.ConnState
+}
+
 type dataStoreServer struct {
-	ds    DataStore
-	port  int
-	l     *net.Listener
-	conns map[net.Conn]http.ConnState
+	ds     DataStore
+	port   int
+	l      *net.Listener
+	csChan chan *connectionState
 }
 
 func NewDataStoreServer(ds DataStore, port int) *dataStoreServer {
 	return &dataStoreServer{
-		ds, port, nil, map[net.Conn]http.ConnState{},
+		ds, port, nil, make(chan *connectionState, 16),
 	}
 }
 
@@ -183,12 +188,7 @@ func (s *dataStoreServer) handleRoot(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *dataStoreServer) connState(c net.Conn, cs http.ConnState) {
-	switch cs {
-	case http.StateNew, http.StateActive, http.StateIdle:
-		s.conns[c] = cs
-	default:
-		delete(s.conns, c)
-	}
+	s.csChan <- &connectionState{c, cs}
 }
 
 // Blocks while the dataStoreServer is listening. Running on a separate go routine is supported.
@@ -211,13 +211,27 @@ func (s *dataStoreServer) Run() {
 		}),
 		ConnState: s.connState,
 	}
+
+	go func() {
+		m := map[net.Conn]http.ConnState{}
+		for connState := range s.csChan {
+			switch connState.cs {
+			case http.StateNew, http.StateActive, http.StateIdle:
+				m[connState.c] = connState.cs
+			default:
+				delete(m, connState.c)
+			}
+		}
+		for c := range m {
+			c.Close()
+		}
+	}()
+
 	srv.Serve(l)
 }
 
 // Will cause the dataStoreServer to stop listening and an existing call to Run() to continue.
 func (s *dataStoreServer) Stop() {
 	(*s.l).Close()
-	for c, _ := range s.conns {
-		c.Close()
-	}
+	close(s.csChan)
 }
