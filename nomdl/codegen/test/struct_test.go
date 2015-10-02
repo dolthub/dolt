@@ -34,12 +34,12 @@ func TestValue(t *testing.T) {
 	assert.True(st.Equals(st2))
 }
 
-func TestType(t *testing.T) {
+func TestTypeRef(t *testing.T) {
 	assert := assert.New(t)
 
 	def := StructDef{"hi", true}
 	st := def.New()
-	typ := st.Type()
+	typ := st.TypeRef()
 	assert.Equal("Struct", typ.Name())
 	assert.EqualValues(__testPackageInFile_struct_Ref(), typ.PackageRef())
 }

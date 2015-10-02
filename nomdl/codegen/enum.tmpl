@@ -6,6 +6,3 @@ type {{.Name}} uint32
 const ({{range $index, $id := .Ids}}
 	{{title $id}}{{if eq $index 0}} {{$name}} = iota{{end}}{{end}}
 )
-
-// A Noms Value that describes {{.Name}}.
-var __typeRefFor{{.Name}} = {{toTypesTypeRef .Type}}

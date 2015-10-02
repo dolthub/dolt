@@ -16,7 +16,25 @@ func __testPackageInFile_struct_with_unions_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"StructWithUnions": __typeRefForStructWithUnions,
+			"StructWithUnions": types.MakeStructTypeRef("StructWithUnions",
+				[]types.Field{
+					types.Field{"a", types.MakeStructTypeRef("",
+						[]types.Field{},
+						types.Choices{
+							types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+							types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
+						},
+					), false},
+					types.Field{"d", types.MakeStructTypeRef("",
+						[]types.Field{},
+						types.Choices{
+							types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+							types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
+						},
+					), false},
+				},
+				types.Choices{},
+			),
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -58,26 +76,7 @@ func (s StructWithUnions) Def() (d StructWithUnionsDef) {
 	return
 }
 
-// A Noms Value that describes StructWithUnions.
-var __typeRefForStructWithUnions = types.MakeStructTypeRef("StructWithUnions",
-	[]types.Field{
-		types.Field{"a", types.MakeStructTypeRef("",
-			[]types.Field{},
-			types.Choices{
-				types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
-			},
-		), false},
-		types.Field{"d", types.MakeStructTypeRef("",
-			[]types.Field{},
-			types.Choices{
-				types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-				types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
-			},
-		), false},
-	},
-	types.Choices{},
-)
+var __typeRefForStructWithUnions = types.MakeTypeRef("StructWithUnions", __testPackageInFile_struct_with_unions_CachedRef)
 
 func (m StructWithUnions) TypeRef() types.TypeRef {
 	return __typeRefForStructWithUnions
@@ -98,10 +97,6 @@ func (s StructWithUnions) Equals(other StructWithUnions) bool {
 
 func (s StructWithUnions) Ref() ref.Ref {
 	return s.m.Ref()
-}
-
-func (s StructWithUnions) Type() types.TypeRef {
-	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (s StructWithUnions) A() __unionOfBOfFloat64AndCOfString {
@@ -176,14 +171,7 @@ func (s __unionOfBOfFloat64AndCOfString) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
-// A Noms Value that describes __unionOfBOfFloat64AndCOfString.
-var __typeRefFor__unionOfBOfFloat64AndCOfString = types.MakeStructTypeRef("",
-	[]types.Field{},
-	types.Choices{
-		types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-		types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
-	},
-)
+var __typeRefFor__unionOfBOfFloat64AndCOfString = types.MakeTypeRef("__unionOfBOfFloat64AndCOfString", __testPackageInFile_struct_with_unions_CachedRef)
 
 func (m __unionOfBOfFloat64AndCOfString) TypeRef() types.TypeRef {
 	return __typeRefFor__unionOfBOfFloat64AndCOfString
@@ -204,10 +192,6 @@ func (s __unionOfBOfFloat64AndCOfString) Equals(other __unionOfBOfFloat64AndCOfS
 
 func (s __unionOfBOfFloat64AndCOfString) Ref() ref.Ref {
 	return s.m.Ref()
-}
-
-func (s __unionOfBOfFloat64AndCOfString) Type() types.TypeRef {
-	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (s __unionOfBOfFloat64AndCOfString) B() (val float64, ok bool) {
@@ -314,14 +298,7 @@ func (s __unionOfEOfFloat64AndFOfString) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
-// A Noms Value that describes __unionOfEOfFloat64AndFOfString.
-var __typeRefFor__unionOfEOfFloat64AndFOfString = types.MakeStructTypeRef("",
-	[]types.Field{},
-	types.Choices{
-		types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-		types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
-	},
-)
+var __typeRefFor__unionOfEOfFloat64AndFOfString = types.MakeTypeRef("__unionOfEOfFloat64AndFOfString", __testPackageInFile_struct_with_unions_CachedRef)
 
 func (m __unionOfEOfFloat64AndFOfString) TypeRef() types.TypeRef {
 	return __typeRefFor__unionOfEOfFloat64AndFOfString
@@ -342,10 +319,6 @@ func (s __unionOfEOfFloat64AndFOfString) Equals(other __unionOfEOfFloat64AndFOfS
 
 func (s __unionOfEOfFloat64AndFOfString) Ref() ref.Ref {
 	return s.m.Ref()
-}
-
-func (s __unionOfEOfFloat64AndFOfString) Type() types.TypeRef {
-	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (s __unionOfEOfFloat64AndFOfString) E() (val float64, ok bool) {

@@ -12,9 +12,10 @@ func __{{.Name}}PackageInFile_{{.FileID}}_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 			{{range $name, $t := .NamedTypes}}
-			"{{$name}}": __typeRefFor{{$name}},{{end}}
+			"{{$name}}": {{toTypesTypeRef $t}},{{end}}
 		},
 	}.New()
 	return types.RegisterPackage(&p)
 }
 {{end}}
+

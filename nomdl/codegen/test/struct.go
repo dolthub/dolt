@@ -16,7 +16,13 @@ func __testPackageInFile_struct_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"Struct": __typeRefForStruct,
+			"Struct": types.MakeStructTypeRef("Struct",
+				[]types.Field{
+					types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
+					types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
+				},
+				types.Choices{},
+			),
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -58,14 +64,7 @@ func (s Struct) Def() (d StructDef) {
 	return
 }
 
-// A Noms Value that describes Struct.
-var __typeRefForStruct = types.MakeStructTypeRef("Struct",
-	[]types.Field{
-		types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
-		types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
-	},
-	types.Choices{},
-)
+var __typeRefForStruct = types.MakeTypeRef("Struct", __testPackageInFile_struct_CachedRef)
 
 func (m Struct) TypeRef() types.TypeRef {
 	return __typeRefForStruct
@@ -86,10 +85,6 @@ func (s Struct) Equals(other Struct) bool {
 
 func (s Struct) Ref() ref.Ref {
 	return s.m.Ref()
-}
-
-func (s Struct) Type() types.TypeRef {
-	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (s Struct) S() string {

@@ -16,8 +16,13 @@ func __testPackageInFile_enum_struct_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"EnumStruct": __typeRefForEnumStruct,
-			"Handedness": __typeRefForHandedness,
+			"EnumStruct": types.MakeStructTypeRef("EnumStruct",
+				[]types.Field{
+					types.Field{"hand", types.MakeTypeRef("Handedness", ref.Ref{}), false},
+				},
+				types.Choices{},
+			),
+			"Handedness": types.MakeEnumTypeRef("Handedness", "right", "left", "switch"),
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -55,13 +60,7 @@ func (s EnumStruct) Def() (d EnumStructDef) {
 	return
 }
 
-// A Noms Value that describes EnumStruct.
-var __typeRefForEnumStruct = types.MakeStructTypeRef("EnumStruct",
-	[]types.Field{
-		types.Field{"hand", types.MakeTypeRef("Handedness", ref.Ref{}), false},
-	},
-	types.Choices{},
-)
+var __typeRefForEnumStruct = types.MakeTypeRef("EnumStruct", __testPackageInFile_enum_struct_CachedRef)
 
 func (m EnumStruct) TypeRef() types.TypeRef {
 	return __typeRefForEnumStruct
@@ -84,10 +83,6 @@ func (s EnumStruct) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s EnumStruct) Type() types.TypeRef {
-	return s.m.Get(types.NewString("$type")).(types.TypeRef)
-}
-
 func (s EnumStruct) Hand() Handedness {
 	return Handedness(s.m.Get(types.NewString("hand")).(types.Int32))
 }
@@ -105,6 +100,3 @@ const (
 	Left
 	Switch
 )
-
-// A Noms Value that describes Handedness.
-var __typeRefForHandedness = types.MakeEnumTypeRef("Handedness", "right", "left", "switch")

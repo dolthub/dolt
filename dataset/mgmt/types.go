@@ -16,7 +16,13 @@ func __mgmtPackageInFile_types_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"Dataset": __typeRefForDataset,
+			"Dataset": types.MakeStructTypeRef("Dataset",
+				[]types.Field{
+					types.Field{"id", types.MakePrimitiveTypeRef(types.StringKind), false},
+					types.Field{"head", types.MakePrimitiveTypeRef(types.ValueKind), false},
+				},
+				types.Choices{},
+			),
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -188,14 +194,7 @@ func (s Dataset) Def() (d DatasetDef) {
 	return
 }
 
-// A Noms Value that describes Dataset.
-var __typeRefForDataset = types.MakeStructTypeRef("Dataset",
-	[]types.Field{
-		types.Field{"id", types.MakePrimitiveTypeRef(types.StringKind), false},
-		types.Field{"head", types.MakePrimitiveTypeRef(types.ValueKind), false},
-	},
-	types.Choices{},
-)
+var __typeRefForDataset = types.MakeTypeRef("Dataset", __mgmtPackageInFile_types_CachedRef)
 
 func (m Dataset) TypeRef() types.TypeRef {
 	return __typeRefForDataset
@@ -216,10 +215,6 @@ func (s Dataset) Equals(other Dataset) bool {
 
 func (s Dataset) Ref() ref.Ref {
 	return s.m.Ref()
-}
-
-func (s Dataset) Type() types.TypeRef {
-	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (s Dataset) Id() string {

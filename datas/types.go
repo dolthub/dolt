@@ -16,7 +16,13 @@ func __datasPackageInFile_types_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"Commit": __typeRefForCommit,
+			"Commit": types.MakeStructTypeRef("Commit",
+				[]types.Field{
+					types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
+					types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", ref.Ref{})), false},
+				},
+				types.Choices{},
+			),
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -37,14 +43,7 @@ func NewCommit() Commit {
 	)}
 }
 
-// A Noms Value that describes Commit.
-var __typeRefForCommit = types.MakeStructTypeRef("Commit",
-	[]types.Field{
-		types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
-		types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", ref.Ref{})), false},
-	},
-	types.Choices{},
-)
+var __typeRefForCommit = types.MakeTypeRef("Commit", __datasPackageInFile_types_CachedRef)
 
 func (m Commit) TypeRef() types.TypeRef {
 	return __typeRefForCommit
@@ -65,10 +64,6 @@ func (s Commit) Equals(other Commit) bool {
 
 func (s Commit) Ref() ref.Ref {
 	return s.m.Ref()
-}
-
-func (s Commit) Type() types.TypeRef {
-	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (s Commit) Value() types.Value {

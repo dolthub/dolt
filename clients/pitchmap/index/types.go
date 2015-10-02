@@ -16,7 +16,13 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"Pitch": __typeRefForPitch,
+			"Pitch": types.MakeStructTypeRef("Pitch",
+				[]types.Field{
+					types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+					types.Field{"Z", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				},
+				types.Choices{},
+			),
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -520,14 +526,7 @@ func (s Pitch) Def() (d PitchDef) {
 	return
 }
 
-// A Noms Value that describes Pitch.
-var __typeRefForPitch = types.MakeStructTypeRef("Pitch",
-	[]types.Field{
-		types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-		types.Field{"Z", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-	},
-	types.Choices{},
-)
+var __typeRefForPitch = types.MakeTypeRef("Pitch", __mainPackageInFile_types_CachedRef)
 
 func (m Pitch) TypeRef() types.TypeRef {
 	return __typeRefForPitch
@@ -548,10 +547,6 @@ func (s Pitch) Equals(other Pitch) bool {
 
 func (s Pitch) Ref() ref.Ref {
 	return s.m.Ref()
-}
-
-func (s Pitch) Type() types.TypeRef {
-	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (s Pitch) X() float64 {

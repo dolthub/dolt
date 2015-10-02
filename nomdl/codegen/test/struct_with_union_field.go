@@ -16,7 +16,18 @@ func __testPackageInFile_struct_with_union_field_Ref() ref.Ref {
 	p := types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{
 
-			"StructWithUnionField": __typeRefForStructWithUnionField,
+			"StructWithUnionField": types.MakeStructTypeRef("StructWithUnionField",
+				[]types.Field{
+					types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+				},
+				types.Choices{
+					types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+					types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
+					types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
+					types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
+					types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+				},
+			),
 		},
 	}.New()
 	return types.RegisterPackage(&p)
@@ -94,19 +105,7 @@ func (s StructWithUnionField) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
-// A Noms Value that describes StructWithUnionField.
-var __typeRefForStructWithUnionField = types.MakeStructTypeRef("StructWithUnionField",
-	[]types.Field{
-		types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-	},
-	types.Choices{
-		types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-		types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
-		types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
-		types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
-		types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
-	},
-)
+var __typeRefForStructWithUnionField = types.MakeTypeRef("StructWithUnionField", __testPackageInFile_struct_with_union_field_CachedRef)
 
 func (m StructWithUnionField) TypeRef() types.TypeRef {
 	return __typeRefForStructWithUnionField
@@ -127,10 +126,6 @@ func (s StructWithUnionField) Equals(other StructWithUnionField) bool {
 
 func (s StructWithUnionField) Ref() ref.Ref {
 	return s.m.Ref()
-}
-
-func (s StructWithUnionField) Type() types.TypeRef {
-	return s.m.Get(types.NewString("$type")).(types.TypeRef)
 }
 
 func (s StructWithUnionField) A() float32 {
