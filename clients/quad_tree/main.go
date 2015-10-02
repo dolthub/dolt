@@ -65,7 +65,7 @@ func main() {
 	nChan := make(chan *NodeDef, 1024)
 	nodesConverted := uint32(0)
 	go func() {
-		list.l.MapP(64, func(v types.Value, i uint64) interface{} {
+		list.l.IterAllP(64, func(v types.Value, i uint64) {
 			n := NodeFromVal(v)
 			nodeDef := &NodeDef{Geoposition: n.Geoposition().Def(), Reference: n.Ref()}
 			nChan <- nodeDef
@@ -73,7 +73,6 @@ func main() {
 			if !*quietFlag && nConverted%1e5 == 0 {
 				fmt.Printf("Nodes Converted: %d, elapsed time: %.2f secs\n", nodesConverted, secsSince(start))
 			}
-			return nil
 		})
 		close(nChan)
 	}()

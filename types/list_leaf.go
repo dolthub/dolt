@@ -51,6 +51,39 @@ func (l listLeaf) IterAll(f listIterAllFunc) {
 	}
 }
 
+func (l listLeaf) IterAllP(concurrency int, f listIterAllFunc) {
+	var limit chan int
+	if concurrency == 0 {
+		limit = make(chan int, runtime.NumCPU())
+	} else {
+		limit = make(chan int, concurrency)
+	}
+
+	l.iterInternal(limit, f, 0)
+}
+
+func (l listLeaf) iterInternal(sem chan int, lf listIterAllFunc, offset uint64) {
+	wg := sync.WaitGroup{}
+
+	for idx := uint64(0); idx < l.Len(); idx++ {
+		wg.Add(1)
+
+		sem <- 1
+		go func(idx uint64) {
+			defer wg.Done()
+
+			f := l.list[idx]
+			v := f.Deref(l.cs)
+			f.Release()
+
+			lf(v, idx+offset)
+			<-sem
+		}(idx)
+	}
+
+	wg.Wait()
+}
+
 func (l listLeaf) Map(mf MapFunc) []interface{} {
 	return l.MapP(1, mf)
 }
@@ -68,7 +101,6 @@ func (l listLeaf) MapP(concurrency int, mf MapFunc) []interface{} {
 
 func (l listLeaf) mapInternal(sem chan int, mf MapFunc, offset uint64) []interface{} {
 	values := make([]interface{}, l.Len(), l.Len())
-
 	mu := sync.Mutex{}
 	wg := sync.WaitGroup{}
 

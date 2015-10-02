@@ -28,6 +28,8 @@ type List interface {
 	TypeRef() TypeRef
 	Iter(f listIterFunc)
 	IterAll(f listIterAllFunc)
+	IterAllP(concurrency int, f listIterAllFunc)
+	iterInternal(sem chan int, f listIterAllFunc, offset uint64)
 	Map(mf MapFunc) []interface{}
 	MapP(concurrency int, mf MapFunc) []interface{}
 	mapInternal(sem chan int, mf MapFunc, offset uint64) []interface{}

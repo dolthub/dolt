@@ -294,6 +294,64 @@ func TestListIterAll(t *testing.T) {
 	assert.Equal([]string{"a", "b", "c", "d", "e", "f"}, acc2)
 }
 
+func TestListIterAllP(t *testing.T) {
+	assert := assert.New(t)
+
+	testIter := func(concurrency, listLen int) {
+		cs := chunks.NewTestStore()
+		futures := make([]Future, listLen)
+		for i := 0; i < listLen; i++ {
+			r := WriteValue(Int64(i), cs)
+			futures[i] = futureFromRef(r)
+		}
+
+		l := listFromFutures(futures, cs)
+
+		cur := 0
+		mu := sync.Mutex{}
+		getCur := func() int {
+			mu.Lock()
+			defer mu.Unlock()
+			return cur
+		}
+
+		expectConcurreny := concurrency
+		if concurrency == 0 {
+			expectConcurreny = runtime.NumCPU()
+		}
+		visited := make([]bool, listLen, listLen)
+		lf := func(v Value, index uint64) {
+			mu.Lock()
+			cur++
+			mu.Unlock()
+
+			for getCur() < expectConcurreny {
+			}
+
+			i := Int64FromVal(v)
+			visited[index] = true
+			assert.Equal(uint64(i), index, "%d == %d", i, index)
+		}
+
+		if concurrency == 1 {
+			l.IterAll(lf)
+		} else {
+			l.IterAllP(concurrency, lf)
+		}
+		numVisited := 0
+		for _, visit := range visited {
+			if visit {
+				numVisited++
+			}
+		}
+		assert.Equal(listLen, numVisited, "IterAllP was not called with every index")
+	}
+	testIter(0, 100)
+	testIter(10, 1000)
+	testIter(1, 100000)
+	testIter(64, 100000)
+}
+
 func TestListTypeRef(t *testing.T) {
 	assert := assert.New(t)
 	l := NewList(Int32(0))

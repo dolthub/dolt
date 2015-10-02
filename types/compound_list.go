@@ -186,8 +186,45 @@ func (cl compoundList) IterAll(f listIterAllFunc) {
 	}
 }
 
+func (cl compoundList) IterAllP(concurrency int, f listIterAllFunc) {
+	var limit chan int
+	if concurrency == 0 {
+		limit = make(chan int, runtime.NumCPU())
+	} else {
+		limit = make(chan int, concurrency)
+	}
+
+	cl.iterInternal(limit, f, 0)
+}
+
 func (cl compoundList) Map(mf MapFunc) []interface{} {
 	return cl.MapP(1, mf)
+}
+
+func (cl compoundList) iterInternal(sem chan int, lf listIterAllFunc, offset uint64) {
+	wg := sync.WaitGroup{}
+
+	// TODO: We're spinning up one goroutine for each meta chunk in the list on top of one goroutine per concurrent |mf|. There's probably a more correct way to do this.
+	for si := uint64(0); si < uint64(len(cl.futures)); si++ {
+		wg.Add(1)
+
+		go func(si uint64) {
+			defer wg.Done()
+
+			f := cl.futures[si]
+			l := f.Deref(cl.cs).(List)
+			f.Release()
+
+			offset1 := uint64(0)
+			if si > 0 {
+				offset1 += cl.offsets[si-1]
+			}
+
+			l.iterInternal(sem, lf, offset1)
+		}(si)
+	}
+
+	wg.Wait()
 }
 
 func (cl compoundList) MapP(concurrency int, mf MapFunc) []interface{} {
