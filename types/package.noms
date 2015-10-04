@@ -1,3 +1,5 @@
+using Set(Package)
+
 struct Package {
 	Dependencies: Set(Ref(Package))
 	NamedTypes: Map(String, TypeRef)

@@ -9,10 +9,10 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-// ParseNomDL reads a Noms package specification from r and returns a Package. Errors will be annotated with logname and thrown.
-func ParseNomDL(logname string, r io.Reader, cs chunks.ChunkSource) Parsed {
-	i := runParser(logname, r)
-
+// ParseNomDL reads a Noms package specification from r and returns a Package. Errors will be annotated with packageName and thrown.
+func ParseNomDL(packageName string, r io.Reader, cs chunks.ChunkSource) Parsed {
+	i := runParser(packageName, r)
+	i.Name = packageName
 	aliases := resolveImports(i)
 	depRefs := types.SetOfRefOfPackageDef{}
 	for _, target := range aliases {
