@@ -43,6 +43,10 @@ func (t TypeRef) IsUnresolved() bool {
 	return ok
 }
 
+func (t TypeRef) HasPackageRef() bool {
+	return t.pkgRef != nil
+}
+
 // Describe() methods generate text that should parse into the struct being described.
 // TODO: Figure out a way that they can exist only in the test file.
 func (t TypeRef) Describe() (out string) {
@@ -76,6 +80,10 @@ func (t TypeRef) NamespacedName() string {
 
 func (t TypeRef) Namespace() string {
 	return t.name.namespace
+}
+
+func (t TypeRef) MakeImported(pkg ref.Ref) TypeRef {
+	return TypeRef{name: name{name: t.Name()}, pkgRef: &Ref{R: pkg}, Desc: t.Desc, ref: &ref.Ref{}}
 }
 
 func (t TypeRef) Ref() ref.Ref {
@@ -130,19 +138,6 @@ func MakeEnumTypeRef(name string, ids ...string) TypeRef {
 
 func MakeStructTypeRef(name string, fields []Field, choices Choices) TypeRef {
 	return buildType(name, StructDesc{fields, choices})
-}
-
-func MakeImportedTypeRef(k NomsKind, n string, pkg ref.Ref) TypeRef {
-	var desc TypeDesc
-	switch k {
-	default:
-		d.Chk.Fail("Must be StructKind or EnumKind")
-	case StructKind:
-		desc = StructDesc{}
-	case EnumKind:
-		desc = EnumDesc{}
-	}
-	return TypeRef{name: name{name: n}, pkgRef: &Ref{R: pkg}, Desc: desc, ref: &ref.Ref{}}
 }
 
 func MakeTypeRef(n string, pkg ref.Ref) TypeRef {

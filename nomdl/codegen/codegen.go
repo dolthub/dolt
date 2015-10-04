@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"go/build"
 	"go/parser"
 	"go/token"
 	"io"
@@ -65,16 +66,19 @@ func main() {
 	if h, ok := pkgDS.MaybeHead(); ok {
 		// Will panic on failure. Can do better once generated collections implement types.Value.
 		types.SetOfRefOfPackageFromVal(h.Value())
-		log.Fatalf("Dataset %s must contain a SetOfRefOfPackage", *pkgDSFlag)
 	}
 
+	depsDir, err := filepath.Abs(*depsDirFlag)
+	if err != nil {
+		log.Fatalf("Could not canonicalize -deps-dir: %v", err)
+	}
 	packageName := getGoPackageName()
 	if *inFlag != "" {
 		out := *outFlag
 		if out == "" {
 			out = getOutFileName(*inFlag)
 		}
-		generate(packageName, *inFlag, out, *depsDirFlag, pkgDS)
+		generate(packageName, *inFlag, out, depsDir, pkgDS)
 		return
 	}
 
@@ -82,7 +86,7 @@ func main() {
 	nomsFiles, err := filepath.Glob("*" + ext)
 	d.Chk.NoError(err)
 	for _, n := range nomsFiles {
-		pkgDS = generate(packageName, n, getOutFileName(n), *depsDirFlag, pkgDS)
+		pkgDS = generate(packageName, n, getOutFileName(n), depsDir, pkgDS)
 	}
 }
 
@@ -94,11 +98,9 @@ func generate(packageName, in, out, depsDir string, pkgDS dataset.Dataset) datas
 	p := pkg.ParseNomDL(packageName, inFile, pkgDS.Store())
 
 	// Generate code for all p's deps first.
-	pVal := p.New()
-	generateDepCode(depsDir, pVal, pkgDS.Store())
-	deps := derefDeps(pVal, pkgDS.Store()) // Maybe should cache p.New
+	deps := generateDepCode(depsDir, p.New(), pkgDS.Store())
 
-	generateAndEmit(getBareFileName(in), out, p, deps)
+	generateAndEmit(getBareFileName(in), out, importPaths(depsDir, deps), deps, p)
 
 	// Since we're just building up a set of refs to all the packages in pkgDS, simply retrying is the logical response to commit failure.
 	for ok := false; !ok; pkgDS, ok = pkgDS.Commit(buildSetOfRefOfPackage(p, pkgDS).NomsValue()) {
@@ -106,36 +108,32 @@ func generate(packageName, in, out, depsDir string, pkgDS dataset.Dataset) datas
 	return pkgDS
 }
 
-// It seems like there's a bunch of wasteful dereffing between this and derefDeps. Figure out how to do this better.
-func generateDepCode(depsDir string, p types.Package, cs chunks.ChunkSource) {
+type depsMap map[ref.Ref]types.Package
+
+func generateDepCode(depsDir string, p types.Package, cs chunks.ChunkSource) depsMap {
+	deps := depsMap{}
 	p.Dependencies().IterAll(func(r types.RefOfPackage) {
 		p := r.GetValue(cs)
-		deps := derefDeps(p, cs)
+		pDeps := map[ref.Ref]types.Package{}
+		if !p.Dependencies().Empty() {
+			pDeps = generateDepCode(depsDir, p, cs)
+		}
 		tag := toTag(p.Ref().String())
 		parsed := pkg.Parsed{PackageDef: p.Def(), Name: tag}
-		generateAndEmit(tag, filepath.Join(depsDir, tag, tag+".go"), parsed, deps)
-		if !p.Dependencies().Empty() {
-			generateDepCode(depsDir, p, cs)
-		}
-	})
-}
+		generateAndEmit(tag, filepath.Join(depsDir, tag, tag+".go"), importPaths(depsDir, pDeps), pDeps, parsed)
 
-func derefDeps(p types.Package, cs chunks.ChunkSource) map[types.RefOfPackage]types.Package {
-	deps := map[types.RefOfPackage]types.Package{}
-	p.Dependencies().IterAll(func(r types.RefOfPackage) {
-		deps[r] = r.GetValue(cs)
+		for depRef, dep := range pDeps {
+			deps[depRef] = dep
+		}
+		deps[r.Ref()] = p
 	})
 	return deps
 }
 
-func toTag(s string) string {
-	return strings.Replace(s, "-", "_", -1)
-}
-
-func generateAndEmit(tag, out string, p pkg.Parsed, deps map[types.RefOfPackage]types.Package) {
+func generateAndEmit(tag, out string, importPaths []string, deps depsMap, p pkg.Parsed) {
 	var buf bytes.Buffer
-	gen := NewCodeGen(&buf, tag, p, deps)
-	gen.WritePackage(p.Name) // FIXME, no need to take name
+	gen := NewCodeGen(&buf, tag, importPaths, deps, p)
+	gen.WritePackage()
 
 	bs, err := imports.Process(out, buf.Bytes(), nil)
 	if err != nil {
@@ -150,6 +148,20 @@ func generateAndEmit(tag, out string, p pkg.Parsed, deps map[types.RefOfPackage]
 	defer outFile.Close()
 
 	io.Copy(outFile, bytes.NewBuffer(bs))
+}
+
+func importPaths(depsDir string, deps depsMap) (paths []string) {
+	for depRef := range deps {
+		depDir := filepath.Join(depsDir, toTag(depRef.String()))
+		goPkg, err := build.Default.ImportDir(depDir, build.FindOnly)
+		d.Chk.NoError(err)
+		paths = append(paths, goPkg.ImportPath)
+	}
+	return
+}
+
+func toTag(s string) string {
+	return strings.Replace(s, "-", "_", -1)
 }
 
 func buildSetOfRefOfPackage(pkg pkg.Parsed, ds dataset.Dataset) types.SetOfRefOfPackage {
@@ -191,14 +203,15 @@ func getGoPackageName() string {
 type codeGen struct {
 	w         io.Writer
 	pkg       pkg.Parsed
-	deps      map[types.RefOfPackage]types.Package
+	deps      depsMap
 	fileid    string
+	imports   []string
 	written   map[string]bool
 	templates *template.Template
 }
 
-func NewCodeGen(w io.Writer, fileID string, pkg pkg.Parsed, deps map[types.RefOfPackage]types.Package) *codeGen {
-	gen := &codeGen{w, pkg, deps, fileID, map[string]bool{}, nil}
+func NewCodeGen(w io.Writer, fileID string, importPaths []string, deps depsMap, pkg pkg.Parsed) *codeGen {
+	gen := &codeGen{w, pkg, deps, fileID, importPaths, map[string]bool{}, nil}
 	gen.templates = gen.readTemplates()
 	return gen
 }
@@ -217,7 +230,7 @@ func (gen *codeGen) readTemplates() *template.Template {
 			"userZero":       gen.userZero,
 			"valueZero":      gen.valueZero,
 			"title":          strings.Title,
-			"toTypesTypeRef": gen.toTypesTypeRef,
+			"toTypesTypeRef": toTypeRef,
 		}).ParseGlob(glob))
 }
 
@@ -310,12 +323,6 @@ func (gen *codeGen) valueToDef(val string, t types.TypeRef) string {
 	panic("unreachable")
 }
 
-func kindToString(k types.NomsKind) (out string) {
-	out = types.KindToString[k]
-	d.Chk.NotEmpty(out, "Unknown NomsKind %d", k)
-	return
-}
-
 func (gen *codeGen) nativeToValue(val string, t types.TypeRef) string {
 	t = gen.resolve(t)
 	k := t.Desc.Kind()
@@ -394,8 +401,8 @@ func (gen *codeGen) userZero(t types.TypeRef) string {
 		return fmt.Sprintf("%s{ref.Ref{}}", gen.userType(t))
 	case types.StringKind:
 		return `""`
-    case types.StructKind:
-        return fmt.Sprintf("New%s()", gen.userName(t))
+	case types.StructKind:
+		return fmt.Sprintf("New%s()", gen.userName(t))
 	case types.ValueKind:
 		// TODO: This is where a null Value would have been useful.
 		return "types.Bool(false)"
@@ -428,7 +435,11 @@ func (gen *codeGen) valueZero(t types.TypeRef) string {
 	case types.StringKind:
 		return `types.NewString("")`
 	case types.StructKind:
-		return fmt.Sprintf("New%s().NomsValue()", gen.userName(t))
+		userName := gen.userName(t)
+		if period := strings.LastIndex(userName, "."); period != -1 {
+			return fmt.Sprintf("%sNew%s().NomsValue()", userName[:period+1], userName[period+1:])
+		}
+		return fmt.Sprintf("New%s().NomsValue()", userName)
 	case types.ValueKind:
 		// TODO: This is where a null Value would have been useful.
 		return "types.Bool(false)"
@@ -445,15 +456,22 @@ func (gen *codeGen) userName(t types.TypeRef) string {
 	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeRefKind:
 		return kindToString(k)
 	case types.EnumKind:
+		if t.HasPackageRef() {
+			return toTag(t.PackageRef().String()) + "." + t.Name()
+		}
 		return t.Name()
 	case types.ListKind:
+		// TODO: change naming to allow for imported types. Issue #294.
 		return fmt.Sprintf("ListOf%s", gen.userName(t.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.MapKind:
+		// TODO: change naming to allow for imported types. Issue #294.
 		elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 		return fmt.Sprintf("MapOf%sTo%s", gen.userName(elemTypes[0]), gen.userName(elemTypes[1]))
 	case types.RefKind:
+		// TODO: change naming to allow for imported types. Issue #294.
 		return fmt.Sprintf("RefOf%s", gen.userName(t.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.SetKind:
+		// TODO: change naming to allow for imported types. Issue #294.
 		return fmt.Sprintf("SetOf%s", gen.userName(t.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.StructKind:
 		// We get an empty name when we have a struct that is used as union
@@ -464,25 +482,31 @@ func (gen *codeGen) userName(t types.TypeRef) string {
 				if i > 0 {
 					s += "And"
 				}
-				s += strings.Title(f.Name) + "Of" + gen.userName(f.T)
+				s += strings.Title(f.Name) + "Of" + gen.userName(f.T) // TODO: change naming to allow for imported types. Issue #294.
 			}
 			return s
+		}
+		if t.HasPackageRef() {
+			return toTag(t.PackageRef().String()) + "." + t.Name()
 		}
 		return t.Name()
 	}
 	panic("unreachable")
 }
 
-func (gen *codeGen) toTypesTypeRef(t types.TypeRef, fileID, packageName string) string {
-	if t.IsUnresolved() {
-		refCode := "ref.Ref{}"
-		if t.PackageRef() != (ref.Ref{}) {
-			refCode = fmt.Sprintf(`ref.Parse("%s")`, t.PackageRef().String())
-		} else if fileID != "" {
-			refCode = fmt.Sprintf("__%sPackageInFile_%s_CachedRef", packageName, fileID)
-		}
+func toTypeRef(t types.TypeRef, fileID, packageName string) string {
+	if t.HasPackageRef() {
+		refCode := fmt.Sprintf(`ref.Parse("%s")`, t.PackageRef().String())
 		return fmt.Sprintf(`types.MakeTypeRef("%s", %s)`, t.Name(), refCode)
 	}
+	if t.IsUnresolved() && fileID != "" {
+		refCode := fmt.Sprintf("__%sPackageInFile_%s_CachedRef", packageName, fileID)
+		return fmt.Sprintf(`types.MakeTypeRef("%s", %s)`, t.Name(), refCode)
+	}
+	if t.IsUnresolved() {
+		return fmt.Sprintf(`types.MakeTypeRef("%s", %s)`, t.Name(), "ref.Ref{}")
+	}
+
 	if types.IsPrimitiveKind(t.Desc.Kind()) {
 		return fmt.Sprintf("types.MakePrimitiveTypeRef(types.%sKind)", kindToString(t.Desc.Kind()))
 	}
@@ -490,7 +514,7 @@ func (gen *codeGen) toTypesTypeRef(t types.TypeRef, fileID, packageName string) 
 	case types.CompoundDesc:
 		typerefs := make([]string, len(desc.ElemTypes))
 		for i, t := range desc.ElemTypes {
-			typerefs[i] = gen.toTypesTypeRef(t, fileID, packageName)
+			typerefs[i] = toTypeRef(t, fileID, packageName)
 		}
 		return fmt.Sprintf(`types.MakeCompoundTypeRef("%s", types.%sKind, %s)`, t.Name(), kindToString(t.Desc.Kind()), strings.Join(typerefs, ", "))
 	case types.EnumDesc:
@@ -499,7 +523,7 @@ func (gen *codeGen) toTypesTypeRef(t types.TypeRef, fileID, packageName string) 
 		flatten := func(f []types.Field) string {
 			out := make([]string, 0, len(f))
 			for _, field := range f {
-				out = append(out, fmt.Sprintf(`types.Field{"%s", %s, %t},`, field.Name, gen.toTypesTypeRef(field.T, fileID, packageName), field.Optional))
+				out = append(out, fmt.Sprintf(`types.Field{"%s", %s, %t},`, field.Name, toTypeRef(field.T, fileID, packageName), field.Optional))
 			}
 			return strings.Join(out, "\n")
 		}
@@ -509,26 +533,43 @@ func (gen *codeGen) toTypesTypeRef(t types.TypeRef, fileID, packageName string) 
 	default:
 		d.Chk.Fail("Unknown TypeDesc.", "%#v (%T)", desc, desc)
 	}
-	panic("ain't done")
+	panic("Unreachable")
+}
+
+func kindToString(k types.NomsKind) (out string) {
+	out = types.KindToString[k]
+	d.Chk.NotEmpty(out, "Unknown NomsKind %d", k)
+	return
 }
 
 func (gen *codeGen) resolve(t types.TypeRef) types.TypeRef {
 	if !t.IsUnresolved() {
 		return t
 	}
-	return gen.pkg.NamedTypes[t.Name()]
+	if !t.HasPackageRef() {
+		return gen.pkg.NamedTypes[t.Name()]
+	}
+
+	dep, ok := gen.deps[t.PackageRef()]
+	d.Chk.True(ok, "Package %s is referenced in %+v, but is not a dependency.", t.PackageRef().String(), t)
+	depTypes := dep.NamedTypes()
+	d.Chk.True(depTypes.Has(t.Name()), "Cannot import type %s from package %s.", t.Name(), t.PackageRef().String())
+	return depTypes.Get(t.Name()).MakeImported(t.PackageRef())
 }
 
-func (gen *codeGen) WritePackage(packageName string) {
-	gen.pkg.Name = packageName
+func (gen *codeGen) WritePackage() {
 	data := struct {
+		HasImports bool
 		HasTypes   bool
 		FileID     string
+		Imports    []string
 		Name       string
 		NamedTypes map[string]types.TypeRef
 	}{
+		len(gen.imports) > 0,
 		len(gen.pkg.NamedTypes) > 0,
 		gen.fileid,
+		gen.imports,
 		gen.pkg.Name,
 		gen.pkg.NamedTypes,
 	}
@@ -551,7 +592,8 @@ func (gen *codeGen) WritePackage(packageName string) {
 
 func (gen *codeGen) write(t types.TypeRef) {
 	t = gen.resolve(t)
-	if gen.written[gen.userName(t)] {
+	// If t has a package reference, then it represents an imported type, so we shouldn't generate code for it.
+	if gen.written[gen.userName(t)] || t.HasPackageRef() {
 		return
 	}
 	k := t.Desc.Kind()

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -23,6 +25,10 @@ func assertOutput(inPath, goldenPath string, t *testing.T) {
 	assert := assert.New(t)
 	emptyCS := chunks.NewMemoryStore() // Will be ChunkSource containing imports
 
+	depsDir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(depsDir)
+
 	inFile, err := os.Open(inPath)
 	assert.NoError(err)
 	defer inFile.Close()
@@ -34,9 +40,9 @@ func assertOutput(inPath, goldenPath string, t *testing.T) {
 	d.Chk.NoError(err)
 
 	var buf bytes.Buffer
-	pkg := pkg.ParseNomDL("", inFile, emptyCS)
-	gen := NewCodeGen(&buf, getBareFileName(inPath), pkg, map[types.RefOfPackage]types.Package{})
-	gen.WritePackage("test")
+	pkg := pkg.ParseNomDL("test", inFile, emptyCS)
+	gen := NewCodeGen(&buf, getBareFileName(inPath), nil, depsMap{}, pkg)
+	gen.WritePackage()
 
 	bs, err := imports.Process("", buf.Bytes(), nil)
 	d.Chk.NoError(err)
@@ -57,9 +63,13 @@ func TestCanUseDef(t *testing.T) {
 	assert := assert.New(t)
 	emptyCS := chunks.NewMemoryStore()
 
+	depsDir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(depsDir)
+
 	assertCanUseDef := func(s string, using, named bool) {
-		pkg := pkg.ParseNomDL("", bytes.NewBufferString(s), emptyCS)
-		gen := NewCodeGen(nil, "fakefile", pkg, map[types.RefOfPackage]types.Package{})
+		pkg := pkg.ParseNomDL("fakefile", bytes.NewBufferString(s), emptyCS)
+		gen := NewCodeGen(nil, "fakefile", nil, depsMap{}, pkg)
 		for _, t := range pkg.UsingDeclarations {
 			assert.Equal(using, gen.canUseDef(t))
 		}
@@ -138,27 +148,64 @@ func TestCanUseDef(t *testing.T) {
 	}
 }
 
-func TestDerefDeps(t *testing.T) {
+func TestImportedTypes(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
+	pkgDS := dataset.NewDataset(ds, "packages")
 
-	leaf1 := types.NewPackage()
-	leaf1Ref := types.WriteValue(leaf1.NomsValue(), cs)
-	leaf2 := types.PackageDef{NamedTypes: types.MapOfStringToTypeRefDef{"foo": types.MakePrimitiveTypeRef(types.BoolKind)}}.New()
-	leaf2Ref := types.WriteValue(leaf2.NomsValue(), cs)
+	dir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(dir)
 
-	depender := types.PackageDef{Dependencies: types.SetOfRefOfPackageDef{leaf1Ref: true}}.New()
-	dependerRef := types.WriteValue(depender.NomsValue(), cs)
+	imported := types.PackageDef{
+		NamedTypes: types.MapOfStringToTypeRefDef{
+			"E1": types.MakeEnumTypeRef("E1", "a", "b"),
+			"S1": types.MakeStructTypeRef("S1", []types.Field{
+				types.Field{"f", types.MakePrimitiveTypeRef(types.BoolKind), false},
+			}, types.Choices{})},
+	}.New()
+	importedRef := types.WriteValue(imported.NomsValue(), ds)
+	pkgDS, ok := pkgDS.Commit(types.NewSetOfRefOfPackage().Insert(types.NewRefOfPackage(importedRef)).NomsValue())
+	assert.True(ok)
+	good := fmt.Sprintf(`
+		alias Other = import "%s"
 
-	top := types.PackageDef{Dependencies: types.SetOfRefOfPackageDef{leaf2Ref: true, dependerRef: true}}.New()
-	types.RegisterPackage(&top)
+		struct Simple {
+			E: Other.E1
+			S: Other.S1
+		}
+		`, importedRef)
 
-	immediateDeps := derefDeps(top, cs)
-	assert.Len(immediateDeps, 2)
-	_, ok := immediateDeps[types.NewRefOfPackage(leaf1Ref)]
-	assert.False(ok)
-	assert.True(immediateDeps[types.NewRefOfPackage(leaf2Ref)].Equals(leaf2))
-	assert.True(immediateDeps[types.NewRefOfPackage(dependerRef)].Equals(depender))
+	inFile := filepath.Join(dir, "in.noms")
+	err = ioutil.WriteFile(inFile, []byte(good), 0600)
+	assert.NoError(err)
+
+	depsDir := filepath.Join(thisFileDir(), "deps")
+	defer os.RemoveAll(depsDir)
+
+	pkgDS = generate("name", inFile, filepath.Join(dir, "out.go"), depsDir, pkgDS)
+
+	// outFiles, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	// assert.NoError(err)
+	// depFiles, err := filepath.Glob(filepath.Join(depsDir, "*", "*.go"))
+	// assert.NoError(err)
+	// for _, file := range append(outFiles, depFiles...) {
+	// 	b, _ := ioutil.ReadFile(file)
+	// 	fmt.Printf("%s\n***************\n%s\n", file, b)
+	// }
+
+	// importedSha := toTag(importedRef.String())
+	// b, _ = ioutil.ReadFile(filepath.Join(dir, importedSha, importedSha+".go"))
+	// fmt.Printf("%s\n", b)
+	// s := types.SetOfRefOfPackageFromVal(pkgDS.Head().Value())
+	// assert.EqualValues(1, s.Len())
+	// tr := s.Any().GetValue(ds).NamedTypes().Get("Simple")
+	// assert.EqualValues(types.StructKind, tr.Kind())
+}
+
+func thisFileDir() string {
+	_, filename, _, _ := runtime.Caller(1)
+	return path.Dir(filename)
 }
 
 func TestGenerateDeps(t *testing.T) {

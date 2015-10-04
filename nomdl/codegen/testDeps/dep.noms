@@ -1,0 +1,6 @@
+alias leaf = import "sha1-f1a192312c01fb47e8e329471242e475eb7001a4"
+
+struct D {
+  structField: leaf.S
+  enumField: leaf.E
+}

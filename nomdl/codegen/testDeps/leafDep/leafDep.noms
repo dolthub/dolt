@@ -1,0 +1,10 @@
+struct S {
+  s: String
+  b: Bool
+}
+
+enum E {
+  e1
+  e2
+  e3
+}
