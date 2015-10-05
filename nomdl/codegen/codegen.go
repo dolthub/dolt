@@ -94,13 +94,13 @@ func generate(packageName, in, out, depsDir string, pkgDS dataset.Dataset) datas
 	p := pkg.ParseNomDL(packageName, inFile, pkgDS.Store())
 
 	// Generate code for all p's deps first.
-	generateDepCode(depsDir, p.New(), pkgDS.Store())
-	deps := derefDeps(p.New(), pkgDS.Store()) // Maybe should cache p.New
+	pVal := p.New()
+	generateDepCode(depsDir, pVal, pkgDS.Store())
+	deps := derefDeps(pVal, pkgDS.Store()) // Maybe should cache p.New
 
 	generateAndEmit(getBareFileName(in), out, p, deps)
 
-	// Since we're just building of a set of refs to all the packages in pkgDS, simply retrying is
-	// the logical response to commit failure.
+	// Since we're just building up a set of refs to all the packages in pkgDS, simply retrying is the logical response to commit failure.
 	for ok := false; !ok; pkgDS, ok = pkgDS.Commit(buildSetOfRefOfPackage(p, pkgDS).NomsValue()) {
 	}
 	return pkgDS

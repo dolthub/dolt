@@ -283,6 +283,7 @@ type SetOfRefOfPackageIterAllCallback func(p RefOfPackage)
 
 func (s SetOfRefOfPackage) IterAll(cb SetOfRefOfPackageIterAllCallback) {
 	// IT'S A HAAAAAACK!
+	// Currently, ReadValue() automatically derefs refs. So, in some cases the value passed to the callback by s.s.IterAll() is actually a Package instead of Ref(Package). This works around that until we've fixed it.
 	s.s.IterAll(func(v Value) {
 		if r, ok := v.(Ref); ok {
 			cb(RefOfPackageFromVal(r))
@@ -322,6 +323,7 @@ func (s SetOfRefOfPackage) Subtract(others ...SetOfRefOfPackage) SetOfRefOfPacka
 
 func (s SetOfRefOfPackage) Any() RefOfPackage {
 	// IT'S A HAAAAAACK!
+	// Currently, ReadValue() automatically derefs refs. So, in some cases the value returned by s.s.Any() is actually a Package instead of Ref(Package). This works around that until we've fixed it.
 	return RefOfPackage{PackageFromVal(s.s.Any()).Ref()}
 }
 

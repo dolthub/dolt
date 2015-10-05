@@ -150,11 +150,10 @@ func TestDerefDeps(t *testing.T) {
 	depender := types.PackageDef{Dependencies: types.SetOfRefOfPackageDef{leaf1Ref: true}}.New()
 	dependerRef := types.WriteValue(depender.NomsValue(), cs)
 
-	// Need to write out top and read it back in to deal with broken SetOfRefOfPackage
 	top := types.PackageDef{Dependencies: types.SetOfRefOfPackageDef{leaf2Ref: true, dependerRef: true}}.New()
-	topRef := types.WriteValue(top.NomsValue(), cs)
+	types.RegisterPackage(&top)
 
-	immediateDeps := derefDeps(types.NewRefOfPackage(topRef).GetValue(cs), cs)
+	immediateDeps := derefDeps(top, cs)
 	assert.Len(immediateDeps, 2)
 	_, ok := immediateDeps[types.NewRefOfPackage(leaf1Ref)]
 	assert.False(ok)
@@ -177,11 +176,10 @@ func TestGenerateDeps(t *testing.T) {
 	depender := types.PackageDef{Dependencies: types.SetOfRefOfPackageDef{leaf1Ref: true}}.New()
 	dependerRef := types.WriteValue(depender.NomsValue(), cs)
 
-	// Need to write out top and read it back in to deal with broken SetOfRefOfPackage
 	top := types.PackageDef{Dependencies: types.SetOfRefOfPackageDef{leaf2Ref: true, dependerRef: true}}.New()
-	topRef := types.WriteValue(top.NomsValue(), cs)
+	types.RegisterPackage(&top)
 
-	generateDepCode(dir, types.NewRefOfPackage(topRef).GetValue(cs), cs)
+	generateDepCode(dir, top, cs)
 
 	leaf1Path := filepath.Join(dir, toTag(leaf1.Ref().String()), toTag(leaf1.Ref().String())+".go")
 	leaf2Path := filepath.Join(dir, toTag(leaf2.Ref().String()), toTag(leaf2.Ref().String())+".go")
