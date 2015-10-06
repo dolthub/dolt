@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -18,21 +19,54 @@ import (
 	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/tools/imports"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/datas"
+	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/nomdl/pkg"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
 var (
+	depsDirFlag = flag.String("deps-dir", "", "Directory where code generated for dependencies will be written")
 	inFlag      = flag.String("in", "", "The name of the noms file to read")
 	outFlag     = flag.String("out", "", "The name of the go file to write")
+	pkgDSFlag   = flag.String("package-ds", "", "The dataset to read/write packages from/to.")
 	packageFlag = flag.String("package", "", "The name of the go package to write")
 )
 
 const ext = ".noms"
 
 func main() {
+	flags := datas.NewFlags()
 	flag.Parse()
+
+	ds, ok := flags.CreateDataStore()
+	if !ok {
+		ds = datas.NewDataStore(chunks.NewMemoryStore())
+	}
+	defer ds.Close()
+
+	if *pkgDSFlag != "" {
+		if !ok {
+			log.Print("Package dataset provided, but DataStore could not be opened.")
+			flag.Usage()
+			return
+		}
+		if *depsDirFlag == "" {
+			log.Print("Package dataset provided, but no output directory for generated dependency code.")
+			flag.Usage()
+			return
+		}
+	} else {
+		log.Print("No package dataset provided; will be unable to process imports.")
+	}
+	pkgDS := dataset.NewDataset(ds, *pkgDSFlag)
+	// Ensure that, if pkgDS has stuff in it, its head is a SetOfRefOfPackage.
+	if h, ok := pkgDS.MaybeHead(); ok {
+		// Will panic on failure. Can do better once generated collections implement types.Value.
+		types.SetOfRefOfPackageFromVal(h.Value())
+		log.Fatalf("Dataset %s must contain a SetOfRefOfPackage", *pkgDSFlag)
+	}
 
 	packageName := getGoPackageName()
 	if *inFlag != "" {
@@ -40,7 +74,7 @@ func main() {
 		if out == "" {
 			out = getOutFileName(*inFlag)
 		}
-		generate(packageName, *inFlag, out)
+		generate(packageName, *inFlag, out, *depsDirFlag, pkgDS)
 		return
 	}
 
@@ -48,8 +82,84 @@ func main() {
 	nomsFiles, err := filepath.Glob("*" + ext)
 	d.Chk.NoError(err)
 	for _, n := range nomsFiles {
-		generate(packageName, n, getOutFileName(n))
+		pkgDS = generate(packageName, n, getOutFileName(n), *depsDirFlag, pkgDS)
 	}
+}
+
+func generate(packageName, in, out, depsDir string, pkgDS dataset.Dataset) dataset.Dataset {
+	inFile, err := os.Open(in)
+	d.Chk.NoError(err)
+	defer inFile.Close()
+
+	p := pkg.ParseNomDL(packageName, inFile, pkgDS.Store())
+
+	// Generate code for all p's deps first.
+	pVal := p.New()
+	generateDepCode(depsDir, pVal, pkgDS.Store())
+	deps := derefDeps(pVal, pkgDS.Store()) // Maybe should cache p.New
+
+	generateAndEmit(getBareFileName(in), out, p, deps)
+
+	// Since we're just building up a set of refs to all the packages in pkgDS, simply retrying is the logical response to commit failure.
+	for ok := false; !ok; pkgDS, ok = pkgDS.Commit(buildSetOfRefOfPackage(p, pkgDS).NomsValue()) {
+	}
+	return pkgDS
+}
+
+// It seems like there's a bunch of wasteful dereffing between this and derefDeps. Figure out how to do this better.
+func generateDepCode(depsDir string, p types.Package, cs chunks.ChunkSource) {
+	p.Dependencies().IterAll(func(r types.RefOfPackage) {
+		p := r.GetValue(cs)
+		deps := derefDeps(p, cs)
+		tag := toTag(p.Ref().String())
+		parsed := pkg.Parsed{PackageDef: p.Def(), Name: tag}
+		generateAndEmit(tag, filepath.Join(depsDir, tag, tag+".go"), parsed, deps)
+		if !p.Dependencies().Empty() {
+			generateDepCode(depsDir, p, cs)
+		}
+	})
+}
+
+func derefDeps(p types.Package, cs chunks.ChunkSource) map[types.RefOfPackage]types.Package {
+	deps := map[types.RefOfPackage]types.Package{}
+	p.Dependencies().IterAll(func(r types.RefOfPackage) {
+		deps[r] = r.GetValue(cs)
+	})
+	return deps
+}
+
+func toTag(s string) string {
+	return strings.Replace(s, "-", "_", -1)
+}
+
+func generateAndEmit(tag, out string, p pkg.Parsed, deps map[types.RefOfPackage]types.Package) {
+	var buf bytes.Buffer
+	gen := NewCodeGen(&buf, tag, p, deps)
+	gen.WritePackage(p.Name) // FIXME, no need to take name
+
+	bs, err := imports.Process(out, buf.Bytes(), nil)
+	if err != nil {
+		fmt.Println(buf.String())
+	}
+	d.Chk.NoError(err)
+
+	d.Chk.NoError(os.MkdirAll(filepath.Dir(out), 0700))
+
+	outFile, err := os.OpenFile(out, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	d.Chk.NoError(err)
+	defer outFile.Close()
+
+	io.Copy(outFile, bytes.NewBuffer(bs))
+}
+
+func buildSetOfRefOfPackage(pkg pkg.Parsed, ds dataset.Dataset) types.SetOfRefOfPackage {
+	// Can do better once generated collections implement types.Value.
+	s := types.NewSetOfRefOfPackage()
+	if h, ok := ds.MaybeHead(); ok {
+		s = types.SetOfRefOfPackageFromVal(h.Value())
+	}
+	r := types.WriteValue(pkg.New().NomsValue(), ds.Store())
+	return s.Insert(types.NewRefOfPackage(r))
 }
 
 func getOutFileName(in string) string {
@@ -59,30 +169,6 @@ func getOutFileName(in string) string {
 func getBareFileName(in string) string {
 	base := filepath.Base(in)
 	return base[:len(base)-len(filepath.Ext(base))]
-}
-
-func generate(packageName, in, out string) {
-	emptyCS := chunks.NewMemoryStore() // Will be ChunkSource containing imports
-	inFile, err := os.Open(in)
-	d.Chk.NoError(err)
-	defer inFile.Close()
-
-	var buf bytes.Buffer
-	pkg := pkg.ParseNomDL("", inFile, emptyCS)
-	gen := NewCodeGen(&buf, getBareFileName(in), pkg)
-	gen.WritePackage(packageName)
-
-	bs, err := imports.Process(out, buf.Bytes(), nil)
-	if err != nil {
-		fmt.Println(buf.String())
-	}
-	d.Chk.NoError(err)
-
-	outFile, err := os.OpenFile(out, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	d.Chk.NoError(err)
-	defer outFile.Close()
-
-	io.Copy(outFile, bytes.NewBuffer(bs))
 }
 
 func getGoPackageName() string {
@@ -105,13 +191,14 @@ func getGoPackageName() string {
 type codeGen struct {
 	w         io.Writer
 	pkg       pkg.Parsed
+	deps      map[types.RefOfPackage]types.Package
 	fileid    string
 	written   map[string]bool
 	templates *template.Template
 }
 
-func NewCodeGen(w io.Writer, fileID string, pkg pkg.Parsed) *codeGen {
-	gen := &codeGen{w, pkg, fileID, map[string]bool{}, nil}
+func NewCodeGen(w io.Writer, fileID string, pkg pkg.Parsed, deps map[types.RefOfPackage]types.Package) *codeGen {
+	gen := &codeGen{w, pkg, deps, fileID, map[string]bool{}, nil}
 	gen.templates = gen.readTemplates()
 	return gen
 }
@@ -509,7 +596,7 @@ func (gen *codeGen) writeStruct(t types.TypeRef) {
 		t,
 		desc.Fields,
 		nil,
-		desc.Union != nil,
+		len(desc.Union) != 0,
 		types.MakePrimitiveTypeRef(types.UInt32Kind),
 		gen.canUseDef(t),
 	}

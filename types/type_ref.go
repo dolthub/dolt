@@ -132,6 +132,19 @@ func MakeStructTypeRef(name string, fields []Field, choices Choices) TypeRef {
 	return buildType(name, StructDesc{fields, choices})
 }
 
+func MakeImportedTypeRef(k NomsKind, n string, pkg ref.Ref) TypeRef {
+	var desc TypeDesc
+	switch k {
+	default:
+		d.Chk.Fail("Must be StructKind or EnumKind")
+	case StructKind:
+		desc = StructDesc{}
+	case EnumKind:
+		desc = EnumDesc{}
+	}
+	return TypeRef{name: name{name: n}, pkgRef: &Ref{R: pkg}, Desc: desc, ref: &ref.Ref{}}
+}
+
 func MakeTypeRef(n string, pkg ref.Ref) TypeRef {
 	return TypeRef{name: name{name: n}, pkgRef: &Ref{R: pkg}, Desc: UnresolvedDesc{}, ref: &ref.Ref{}}
 }
