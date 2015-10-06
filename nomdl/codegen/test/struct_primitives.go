@@ -130,6 +130,12 @@ func (m StructPrimitives) TypeRef() types.TypeRef {
 	return __typeRefForStructPrimitives
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForStructPrimitives, func(v types.Value) types.NomsValue {
+		return StructPrimitivesFromVal(v)
+	})
+}
+
 func StructPrimitivesFromVal(val types.Value) StructPrimitives {
 	// TODO: Validate here
 	return StructPrimitives{val.(types.Map)}
@@ -139,12 +145,19 @@ func (s StructPrimitives) NomsValue() types.Value {
 	return s.m
 }
 
-func (s StructPrimitives) Equals(other StructPrimitives) bool {
-	return s.m.Equals(other.m)
+func (s StructPrimitives) Equals(other types.Value) bool {
+	if other, ok := other.(StructPrimitives); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s StructPrimitives) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s StructPrimitives) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s StructPrimitives) Uint64() uint64 {

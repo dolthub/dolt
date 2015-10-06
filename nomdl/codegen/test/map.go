@@ -45,12 +45,19 @@ func (m MapOfBoolToString) NomsValue() types.Value {
 	return m.m
 }
 
-func (m MapOfBoolToString) Equals(p MapOfBoolToString) bool {
-	return m.m.Equals(p.m)
+func (m MapOfBoolToString) Equals(other types.Value) bool {
+	if other, ok := other.(MapOfBoolToString); ok {
+		return m.m.Equals(other.m)
+	}
+	return false
 }
 
 func (m MapOfBoolToString) Ref() ref.Ref {
 	return m.m.Ref()
+}
+
+func (m MapOfBoolToString) Chunks() []types.Future {
+	return m.m.Chunks()
 }
 
 // A Noms Value that describes MapOfBoolToString.
@@ -158,12 +165,19 @@ func (m MapOfStringToValue) NomsValue() types.Value {
 	return m.m
 }
 
-func (m MapOfStringToValue) Equals(p MapOfStringToValue) bool {
-	return m.m.Equals(p.m)
+func (m MapOfStringToValue) Equals(other types.Value) bool {
+	if other, ok := other.(MapOfStringToValue); ok {
+		return m.m.Equals(other.m)
+	}
+	return false
 }
 
 func (m MapOfStringToValue) Ref() ref.Ref {
 	return m.m.Ref()
+}
+
+func (m MapOfStringToValue) Chunks() []types.Future {
+	return m.m.Chunks()
 }
 
 // A Noms Value that describes MapOfStringToValue.

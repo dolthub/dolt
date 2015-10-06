@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/types"
 )
 
 func TestEnum(t *testing.T) {
@@ -32,4 +34,12 @@ func TestEnumValue(t *testing.T) {
 	val := st.NomsValue()
 	st2 := EnumStructFromVal(val)
 	assert.True(st.Equals(st2))
+}
+
+func TestEnumIsValue(t *testing.T) {
+	cs := chunks.NewMemoryStore()
+	var v types.Value = NewEnumStruct()
+	ref := types.WriteValue(v, cs)
+	v2 := types.ReadValue(ref, cs)
+	assert.True(t, v.Equals(v2))
 }

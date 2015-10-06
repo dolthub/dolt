@@ -46,12 +46,19 @@ func (s SetOfBool) NomsValue() types.Value {
 	return s.s
 }
 
-func (s SetOfBool) Equals(p SetOfBool) bool {
-	return s.s.Equals(p.s)
+func (s SetOfBool) Equals(other types.Value) bool {
+	if other, ok := other.(SetOfBool); ok {
+		return s.s.Equals(other.s)
+	}
+	return false
 }
 
 func (s SetOfBool) Ref() ref.Ref {
 	return s.s.Ref()
+}
+
+func (s SetOfBool) Chunks() []types.Future {
+	return s.s.Chunks()
 }
 
 // A Noms Value that describes SetOfBool.

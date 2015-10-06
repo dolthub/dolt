@@ -107,6 +107,12 @@ func (m Geoposition) TypeRef() types.TypeRef {
 	return __typeRefForGeoposition
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForGeoposition, func(v types.Value) types.NomsValue {
+		return GeopositionFromVal(v)
+	})
+}
+
 func GeopositionFromVal(val types.Value) Geoposition {
 	// TODO: Validate here
 	return Geoposition{val.(types.Map)}
@@ -116,12 +122,19 @@ func (s Geoposition) NomsValue() types.Value {
 	return s.m
 }
 
-func (s Geoposition) Equals(other Geoposition) bool {
-	return s.m.Equals(other.m)
+func (s Geoposition) Equals(other types.Value) bool {
+	if other, ok := other.(Geoposition); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s Geoposition) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s Geoposition) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s Geoposition) Latitude() float32 {
@@ -182,6 +195,12 @@ func (m Georectangle) TypeRef() types.TypeRef {
 	return __typeRefForGeorectangle
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForGeorectangle, func(v types.Value) types.NomsValue {
+		return GeorectangleFromVal(v)
+	})
+}
+
 func GeorectangleFromVal(val types.Value) Georectangle {
 	// TODO: Validate here
 	return Georectangle{val.(types.Map)}
@@ -191,12 +210,19 @@ func (s Georectangle) NomsValue() types.Value {
 	return s.m
 }
 
-func (s Georectangle) Equals(other Georectangle) bool {
-	return s.m.Equals(other.m)
+func (s Georectangle) Equals(other types.Value) bool {
+	if other, ok := other.(Georectangle); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s Georectangle) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s Georectangle) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s Georectangle) TopLeft() Geoposition {
@@ -257,6 +283,12 @@ func (m Node) TypeRef() types.TypeRef {
 	return __typeRefForNode
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForNode, func(v types.Value) types.NomsValue {
+		return NodeFromVal(v)
+	})
+}
+
 func NodeFromVal(val types.Value) Node {
 	// TODO: Validate here
 	return Node{val.(types.Map)}
@@ -266,12 +298,19 @@ func (s Node) NomsValue() types.Value {
 	return s.m
 }
 
-func (s Node) Equals(other Node) bool {
-	return s.m.Equals(other.m)
+func (s Node) Equals(other types.Value) bool {
+	if other, ok := other.(Node); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s Node) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s Node) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s Node) Geoposition() Geoposition {
@@ -304,8 +343,15 @@ func (r RefOfValue) Ref() ref.Ref {
 	return r.r
 }
 
-func (r RefOfValue) Equals(other RefOfValue) bool {
-	return r.Ref() == other.Ref()
+func (r RefOfValue) Equals(other types.Value) bool {
+	if other, ok := other.(RefOfValue); ok {
+		return r.r == other.r
+	}
+	return false
+}
+
+func (r RefOfValue) Chunks() []types.Future {
+	return nil
 }
 
 func (r RefOfValue) NomsValue() types.Value {
@@ -396,6 +442,12 @@ func (m QuadTree) TypeRef() types.TypeRef {
 	return __typeRefForQuadTree
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForQuadTree, func(v types.Value) types.NomsValue {
+		return QuadTreeFromVal(v)
+	})
+}
+
 func QuadTreeFromVal(val types.Value) QuadTree {
 	// TODO: Validate here
 	return QuadTree{val.(types.Map)}
@@ -405,12 +457,19 @@ func (s QuadTree) NomsValue() types.Value {
 	return s.m
 }
 
-func (s QuadTree) Equals(other QuadTree) bool {
-	return s.m.Equals(other.m)
+func (s QuadTree) Equals(other types.Value) bool {
+	if other, ok := other.(QuadTree); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s QuadTree) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s QuadTree) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s QuadTree) Nodes() ListOfNode {
@@ -498,12 +557,19 @@ func (l ListOfNode) NomsValue() types.Value {
 	return l.l
 }
 
-func (l ListOfNode) Equals(p ListOfNode) bool {
-	return l.l.Equals(p.l)
+func (l ListOfNode) Equals(other types.Value) bool {
+	if other, ok := other.(ListOfNode); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
 }
 
 func (l ListOfNode) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+func (l ListOfNode) Chunks() []types.Future {
+	return l.l.Chunks()
 }
 
 // A Noms Value that describes ListOfNode.
@@ -629,12 +695,19 @@ func (m MapOfStringToQuadTree) NomsValue() types.Value {
 	return m.m
 }
 
-func (m MapOfStringToQuadTree) Equals(p MapOfStringToQuadTree) bool {
-	return m.m.Equals(p.m)
+func (m MapOfStringToQuadTree) Equals(other types.Value) bool {
+	if other, ok := other.(MapOfStringToQuadTree); ok {
+		return m.m.Equals(other.m)
+	}
+	return false
 }
 
 func (m MapOfStringToQuadTree) Ref() ref.Ref {
 	return m.m.Ref()
+}
+
+func (m MapOfStringToQuadTree) Chunks() []types.Future {
+	return m.m.Chunks()
 }
 
 // A Noms Value that describes MapOfStringToQuadTree.
@@ -762,6 +835,12 @@ func (m SQuadTree) TypeRef() types.TypeRef {
 	return __typeRefForSQuadTree
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForSQuadTree, func(v types.Value) types.NomsValue {
+		return SQuadTreeFromVal(v)
+	})
+}
+
 func SQuadTreeFromVal(val types.Value) SQuadTree {
 	// TODO: Validate here
 	return SQuadTree{val.(types.Map)}
@@ -771,12 +850,19 @@ func (s SQuadTree) NomsValue() types.Value {
 	return s.m
 }
 
-func (s SQuadTree) Equals(other SQuadTree) bool {
-	return s.m.Equals(other.m)
+func (s SQuadTree) Equals(other types.Value) bool {
+	if other, ok := other.(SQuadTree); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s SQuadTree) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s SQuadTree) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s SQuadTree) Nodes() ListOfRefOfValue {
@@ -864,12 +950,19 @@ func (l ListOfRefOfValue) NomsValue() types.Value {
 	return l.l
 }
 
-func (l ListOfRefOfValue) Equals(p ListOfRefOfValue) bool {
-	return l.l.Equals(p.l)
+func (l ListOfRefOfValue) Equals(other types.Value) bool {
+	if other, ok := other.(ListOfRefOfValue); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
 }
 
 func (l ListOfRefOfValue) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+func (l ListOfRefOfValue) Chunks() []types.Future {
+	return l.l.Chunks()
 }
 
 // A Noms Value that describes ListOfRefOfValue.
@@ -995,12 +1088,19 @@ func (m MapOfStringToRefOfSQuadTree) NomsValue() types.Value {
 	return m.m
 }
 
-func (m MapOfStringToRefOfSQuadTree) Equals(p MapOfStringToRefOfSQuadTree) bool {
-	return m.m.Equals(p.m)
+func (m MapOfStringToRefOfSQuadTree) Equals(other types.Value) bool {
+	if other, ok := other.(MapOfStringToRefOfSQuadTree); ok {
+		return m.m.Equals(other.m)
+	}
+	return false
 }
 
 func (m MapOfStringToRefOfSQuadTree) Ref() ref.Ref {
 	return m.m.Ref()
+}
+
+func (m MapOfStringToRefOfSQuadTree) Chunks() []types.Future {
+	return m.m.Chunks()
 }
 
 // A Noms Value that describes MapOfStringToRefOfSQuadTree.
@@ -1084,8 +1184,15 @@ func (r RefOfSQuadTree) Ref() ref.Ref {
 	return r.r
 }
 
-func (r RefOfSQuadTree) Equals(other RefOfSQuadTree) bool {
-	return r.Ref() == other.Ref()
+func (r RefOfSQuadTree) Equals(other types.Value) bool {
+	if other, ok := other.(RefOfSQuadTree); ok {
+		return r.r == other.r
+	}
+	return false
+}
+
+func (r RefOfSQuadTree) Chunks() []types.Future {
+	return nil
 }
 
 func (r RefOfSQuadTree) NomsValue() types.Value {

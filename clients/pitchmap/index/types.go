@@ -65,12 +65,19 @@ func (l ListOfMapOfStringToValue) NomsValue() types.Value {
 	return l.l
 }
 
-func (l ListOfMapOfStringToValue) Equals(p ListOfMapOfStringToValue) bool {
-	return l.l.Equals(p.l)
+func (l ListOfMapOfStringToValue) Equals(other types.Value) bool {
+	if other, ok := other.(ListOfMapOfStringToValue); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
 }
 
 func (l ListOfMapOfStringToValue) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+func (l ListOfMapOfStringToValue) Chunks() []types.Future {
+	return l.l.Chunks()
 }
 
 // A Noms Value that describes ListOfMapOfStringToValue.
@@ -196,12 +203,19 @@ func (m MapOfStringToValue) NomsValue() types.Value {
 	return m.m
 }
 
-func (m MapOfStringToValue) Equals(p MapOfStringToValue) bool {
-	return m.m.Equals(p.m)
+func (m MapOfStringToValue) Equals(other types.Value) bool {
+	if other, ok := other.(MapOfStringToValue); ok {
+		return m.m.Equals(other.m)
+	}
+	return false
 }
 
 func (m MapOfStringToValue) Ref() ref.Ref {
 	return m.m.Ref()
+}
+
+func (m MapOfStringToValue) Chunks() []types.Future {
+	return m.m.Chunks()
 }
 
 // A Noms Value that describes MapOfStringToValue.
@@ -309,12 +323,19 @@ func (m MapOfStringToListOfPitch) NomsValue() types.Value {
 	return m.m
 }
 
-func (m MapOfStringToListOfPitch) Equals(p MapOfStringToListOfPitch) bool {
-	return m.m.Equals(p.m)
+func (m MapOfStringToListOfPitch) Equals(other types.Value) bool {
+	if other, ok := other.(MapOfStringToListOfPitch); ok {
+		return m.m.Equals(other.m)
+	}
+	return false
 }
 
 func (m MapOfStringToListOfPitch) Ref() ref.Ref {
 	return m.m.Ref()
+}
+
+func (m MapOfStringToListOfPitch) Chunks() []types.Future {
+	return m.m.Chunks()
 }
 
 // A Noms Value that describes MapOfStringToListOfPitch.
@@ -421,12 +442,19 @@ func (l ListOfPitch) NomsValue() types.Value {
 	return l.l
 }
 
-func (l ListOfPitch) Equals(p ListOfPitch) bool {
-	return l.l.Equals(p.l)
+func (l ListOfPitch) Equals(other types.Value) bool {
+	if other, ok := other.(ListOfPitch); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
 }
 
 func (l ListOfPitch) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+func (l ListOfPitch) Chunks() []types.Future {
+	return l.l.Chunks()
 }
 
 // A Noms Value that describes ListOfPitch.
@@ -556,6 +584,12 @@ func (m Pitch) TypeRef() types.TypeRef {
 	return __typeRefForPitch
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForPitch, func(v types.Value) types.NomsValue {
+		return PitchFromVal(v)
+	})
+}
+
 func PitchFromVal(val types.Value) Pitch {
 	// TODO: Validate here
 	return Pitch{val.(types.Map)}
@@ -565,12 +599,19 @@ func (s Pitch) NomsValue() types.Value {
 	return s.m
 }
 
-func (s Pitch) Equals(other Pitch) bool {
-	return s.m.Equals(other.m)
+func (s Pitch) Equals(other types.Value) bool {
+	if other, ok := other.(Pitch); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s Pitch) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s Pitch) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s Pitch) X() float64 {
@@ -627,12 +668,19 @@ func (m MapOfStringToString) NomsValue() types.Value {
 	return m.m
 }
 
-func (m MapOfStringToString) Equals(p MapOfStringToString) bool {
-	return m.m.Equals(p.m)
+func (m MapOfStringToString) Equals(other types.Value) bool {
+	if other, ok := other.(MapOfStringToString); ok {
+		return m.m.Equals(other.m)
+	}
+	return false
 }
 
 func (m MapOfStringToString) Ref() ref.Ref {
 	return m.m.Ref()
+}
+
+func (m MapOfStringToString) Chunks() []types.Future {
+	return m.m.Chunks()
 }
 
 // A Noms Value that describes MapOfStringToString.

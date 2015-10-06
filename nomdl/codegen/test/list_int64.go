@@ -44,12 +44,19 @@ func (l ListOfInt64) NomsValue() types.Value {
 	return l.l
 }
 
-func (l ListOfInt64) Equals(p ListOfInt64) bool {
-	return l.l.Equals(p.l)
+func (l ListOfInt64) Equals(other types.Value) bool {
+	if other, ok := other.(ListOfInt64); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
 }
 
 func (l ListOfInt64) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+func (l ListOfInt64) Chunks() []types.Future {
+	return l.l.Chunks()
 }
 
 // A Noms Value that describes ListOfInt64.

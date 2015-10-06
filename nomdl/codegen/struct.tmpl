@@ -67,6 +67,12 @@ func (m {{.Name}}) TypeRef() types.TypeRef {
 	return __typeRefFor{{.Name}}
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefFor{{.Name}}, func(v types.Value) types.NomsValue {
+		return {{.Name}}FromVal(v)
+	})
+}
+
 func {{.Name}}FromVal(val types.Value) {{.Name}} {
 	// TODO: Validate here
 	return {{.Name}}{val.(types.Map)}
@@ -76,12 +82,19 @@ func (s {{.Name}}) NomsValue() types.Value {
 	return s.m
 }
 
-func (s {{.Name}}) Equals(other {{.Name}}) bool {
-	return s.m.Equals(other.m)
+func (s {{.Name}}) Equals(other types.Value) bool {
+	if other, ok := other.({{.Name}}); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s {{.Name}}) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s {{.Name}}) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 {{$name := .Name}}

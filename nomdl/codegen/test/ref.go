@@ -42,8 +42,15 @@ func (r RefOfListOfString) Ref() ref.Ref {
 	return r.r
 }
 
-func (r RefOfListOfString) Equals(other RefOfListOfString) bool {
-	return r.Ref() == other.Ref()
+func (r RefOfListOfString) Equals(other types.Value) bool {
+	if other, ok := other.(RefOfListOfString); ok {
+		return r.r == other.r
+	}
+	return false
+}
+
+func (r RefOfListOfString) Chunks() []types.Future {
+	return nil
 }
 
 func (r RefOfListOfString) NomsValue() types.Value {
@@ -113,12 +120,19 @@ func (l ListOfString) NomsValue() types.Value {
 	return l.l
 }
 
-func (l ListOfString) Equals(p ListOfString) bool {
-	return l.l.Equals(p.l)
+func (l ListOfString) Equals(other types.Value) bool {
+	if other, ok := other.(ListOfString); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
 }
 
 func (l ListOfString) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+func (l ListOfString) Chunks() []types.Future {
+	return l.l.Chunks()
 }
 
 // A Noms Value that describes ListOfString.
@@ -243,12 +257,19 @@ func (l ListOfRefOfFloat32) NomsValue() types.Value {
 	return l.l
 }
 
-func (l ListOfRefOfFloat32) Equals(p ListOfRefOfFloat32) bool {
-	return l.l.Equals(p.l)
+func (l ListOfRefOfFloat32) Equals(other types.Value) bool {
+	if other, ok := other.(ListOfRefOfFloat32); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
 }
 
 func (l ListOfRefOfFloat32) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+func (l ListOfRefOfFloat32) Chunks() []types.Future {
+	return l.l.Chunks()
 }
 
 // A Noms Value that describes ListOfRefOfFloat32.
@@ -350,8 +371,15 @@ func (r RefOfFloat32) Ref() ref.Ref {
 	return r.r
 }
 
-func (r RefOfFloat32) Equals(other RefOfFloat32) bool {
-	return r.Ref() == other.Ref()
+func (r RefOfFloat32) Equals(other types.Value) bool {
+	if other, ok := other.(RefOfFloat32); ok {
+		return r.r == other.r
+	}
+	return false
+}
+
+func (r RefOfFloat32) Chunks() []types.Future {
+	return nil
 }
 
 func (r RefOfFloat32) NomsValue() types.Value {
@@ -422,6 +450,12 @@ func (m StructWithRef) TypeRef() types.TypeRef {
 	return __typeRefForStructWithRef
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForStructWithRef, func(v types.Value) types.NomsValue {
+		return StructWithRefFromVal(v)
+	})
+}
+
 func StructWithRefFromVal(val types.Value) StructWithRef {
 	// TODO: Validate here
 	return StructWithRef{val.(types.Map)}
@@ -431,12 +465,19 @@ func (s StructWithRef) NomsValue() types.Value {
 	return s.m
 }
 
-func (s StructWithRef) Equals(other StructWithRef) bool {
-	return s.m.Equals(other.m)
+func (s StructWithRef) Equals(other types.Value) bool {
+	if other, ok := other.(StructWithRef); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s StructWithRef) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s StructWithRef) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s StructWithRef) R() RefOfSetOfFloat32 {
@@ -461,8 +502,15 @@ func (r RefOfSetOfFloat32) Ref() ref.Ref {
 	return r.r
 }
 
-func (r RefOfSetOfFloat32) Equals(other RefOfSetOfFloat32) bool {
-	return r.Ref() == other.Ref()
+func (r RefOfSetOfFloat32) Equals(other types.Value) bool {
+	if other, ok := other.(RefOfSetOfFloat32); ok {
+		return r.r == other.r
+	}
+	return false
+}
+
+func (r RefOfSetOfFloat32) Chunks() []types.Future {
+	return nil
 }
 
 func (r RefOfSetOfFloat32) NomsValue() types.Value {
@@ -534,12 +582,19 @@ func (s SetOfFloat32) NomsValue() types.Value {
 	return s.s
 }
 
-func (s SetOfFloat32) Equals(p SetOfFloat32) bool {
-	return s.s.Equals(p.s)
+func (s SetOfFloat32) Equals(other types.Value) bool {
+	if other, ok := other.(SetOfFloat32); ok {
+		return s.s.Equals(other.s)
+	}
+	return false
 }
 
 func (s SetOfFloat32) Ref() ref.Ref {
 	return s.s.Ref()
+}
+
+func (s SetOfFloat32) Chunks() []types.Future {
+	return s.s.Chunks()
 }
 
 // A Noms Value that describes SetOfFloat32.

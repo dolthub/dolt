@@ -65,6 +65,12 @@ func (m Tree) TypeRef() types.TypeRef {
 	return __typeRefForTree
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForTree, func(v types.Value) types.NomsValue {
+		return TreeFromVal(v)
+	})
+}
+
 func TreeFromVal(val types.Value) Tree {
 	// TODO: Validate here
 	return Tree{val.(types.Map)}
@@ -74,12 +80,19 @@ func (s Tree) NomsValue() types.Value {
 	return s.m
 }
 
-func (s Tree) Equals(other Tree) bool {
-	return s.m.Equals(other.m)
+func (s Tree) Equals(other types.Value) bool {
+	if other, ok := other.(Tree); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s Tree) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s Tree) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s Tree) Children() ListOfTree {
@@ -127,12 +140,19 @@ func (l ListOfTree) NomsValue() types.Value {
 	return l.l
 }
 
-func (l ListOfTree) Equals(p ListOfTree) bool {
-	return l.l.Equals(p.l)
+func (l ListOfTree) Equals(other types.Value) bool {
+	if other, ok := other.(ListOfTree); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
 }
 
 func (l ListOfTree) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+func (l ListOfTree) Chunks() []types.Future {
+	return l.l.Chunks()
 }
 
 // A Noms Value that describes ListOfTree.

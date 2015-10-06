@@ -111,6 +111,12 @@ func (m StructWithUnionField) TypeRef() types.TypeRef {
 	return __typeRefForStructWithUnionField
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForStructWithUnionField, func(v types.Value) types.NomsValue {
+		return StructWithUnionFieldFromVal(v)
+	})
+}
+
 func StructWithUnionFieldFromVal(val types.Value) StructWithUnionField {
 	// TODO: Validate here
 	return StructWithUnionField{val.(types.Map)}
@@ -120,12 +126,19 @@ func (s StructWithUnionField) NomsValue() types.Value {
 	return s.m
 }
 
-func (s StructWithUnionField) Equals(other StructWithUnionField) bool {
-	return s.m.Equals(other.m)
+func (s StructWithUnionField) Equals(other types.Value) bool {
+	if other, ok := other.(StructWithUnionField); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s StructWithUnionField) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s StructWithUnionField) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s StructWithUnionField) A() float32 {
@@ -295,12 +308,19 @@ func (s SetOfUInt8) NomsValue() types.Value {
 	return s.s
 }
 
-func (s SetOfUInt8) Equals(p SetOfUInt8) bool {
-	return s.s.Equals(p.s)
+func (s SetOfUInt8) Equals(other types.Value) bool {
+	if other, ok := other.(SetOfUInt8); ok {
+		return s.s.Equals(other.s)
+	}
+	return false
 }
 
 func (s SetOfUInt8) Ref() ref.Ref {
 	return s.s.Ref()
+}
+
+func (s SetOfUInt8) Chunks() []types.Future {
+	return s.s.Chunks()
 }
 
 // A Noms Value that describes SetOfUInt8.

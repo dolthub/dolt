@@ -80,6 +80,12 @@ func (m StructWithList) TypeRef() types.TypeRef {
 	return __typeRefForStructWithList
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForStructWithList, func(v types.Value) types.NomsValue {
+		return StructWithListFromVal(v)
+	})
+}
+
 func StructWithListFromVal(val types.Value) StructWithList {
 	// TODO: Validate here
 	return StructWithList{val.(types.Map)}
@@ -89,12 +95,19 @@ func (s StructWithList) NomsValue() types.Value {
 	return s.m
 }
 
-func (s StructWithList) Equals(other StructWithList) bool {
-	return s.m.Equals(other.m)
+func (s StructWithList) Equals(other types.Value) bool {
+	if other, ok := other.(StructWithList); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s StructWithList) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s StructWithList) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s StructWithList) L() ListOfUInt8 {
@@ -166,12 +179,19 @@ func (l ListOfUInt8) NomsValue() types.Value {
 	return l.l
 }
 
-func (l ListOfUInt8) Equals(p ListOfUInt8) bool {
-	return l.l.Equals(p.l)
+func (l ListOfUInt8) Equals(other types.Value) bool {
+	if other, ok := other.(ListOfUInt8); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
 }
 
 func (l ListOfUInt8) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+func (l ListOfUInt8) Chunks() []types.Future {
+	return l.l.Chunks()
 }
 
 // A Noms Value that describes ListOfUInt8.

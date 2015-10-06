@@ -66,6 +66,12 @@ func (m EnumStruct) TypeRef() types.TypeRef {
 	return __typeRefForEnumStruct
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForEnumStruct, func(v types.Value) types.NomsValue {
+		return EnumStructFromVal(v)
+	})
+}
+
 func EnumStructFromVal(val types.Value) EnumStruct {
 	// TODO: Validate here
 	return EnumStruct{val.(types.Map)}
@@ -75,12 +81,19 @@ func (s EnumStruct) NomsValue() types.Value {
 	return s.m
 }
 
-func (s EnumStruct) Equals(other EnumStruct) bool {
-	return s.m.Equals(other.m)
+func (s EnumStruct) Equals(other types.Value) bool {
+	if other, ok := other.(EnumStruct); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s EnumStruct) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s EnumStruct) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s EnumStruct) Hand() Handedness {

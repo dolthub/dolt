@@ -31,6 +31,6 @@ func RegisterFromValFunction(t TypeRef, f toNomsValueFunc) {
 
 func ToNomsValueFromTypeRef(t TypeRef, v Value) NomsValue {
 	f, ok := toNomsValueMap[t.Ref()]
-	d.Chk.True(ok)
+	d.Chk.True(ok, "Missing to noms value function for: %s", t.Describe())
 	return f(v)
 }

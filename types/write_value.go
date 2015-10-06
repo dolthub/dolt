@@ -12,8 +12,8 @@ type primitive interface {
 }
 
 type NomsValue interface {
+	Value
 	NomsValue() Value
-	TypeRef() TypeRef
 }
 
 func WriteValue(v interface{}, cs chunks.ChunkSink) ref.Ref {

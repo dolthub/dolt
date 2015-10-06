@@ -72,6 +72,12 @@ func (m OptionalStruct) TypeRef() types.TypeRef {
 	return __typeRefForOptionalStruct
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForOptionalStruct, func(v types.Value) types.NomsValue {
+		return OptionalStructFromVal(v)
+	})
+}
+
 func OptionalStructFromVal(val types.Value) OptionalStruct {
 	// TODO: Validate here
 	return OptionalStruct{val.(types.Map)}
@@ -81,12 +87,19 @@ func (s OptionalStruct) NomsValue() types.Value {
 	return s.m
 }
 
-func (s OptionalStruct) Equals(other OptionalStruct) bool {
-	return s.m.Equals(other.m)
+func (s OptionalStruct) Equals(other types.Value) bool {
+	if other, ok := other.(OptionalStruct); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s OptionalStruct) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s OptionalStruct) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s OptionalStruct) S() (v string, ok bool) {

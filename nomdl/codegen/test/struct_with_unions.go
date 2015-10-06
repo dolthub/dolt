@@ -82,6 +82,12 @@ func (m StructWithUnions) TypeRef() types.TypeRef {
 	return __typeRefForStructWithUnions
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForStructWithUnions, func(v types.Value) types.NomsValue {
+		return StructWithUnionsFromVal(v)
+	})
+}
+
 func StructWithUnionsFromVal(val types.Value) StructWithUnions {
 	// TODO: Validate here
 	return StructWithUnions{val.(types.Map)}
@@ -91,12 +97,19 @@ func (s StructWithUnions) NomsValue() types.Value {
 	return s.m
 }
 
-func (s StructWithUnions) Equals(other StructWithUnions) bool {
-	return s.m.Equals(other.m)
+func (s StructWithUnions) Equals(other types.Value) bool {
+	if other, ok := other.(StructWithUnions); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s StructWithUnions) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s StructWithUnions) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s StructWithUnions) A() __unionOfBOfFloat64AndCOfString {
@@ -177,6 +190,12 @@ func (m __unionOfBOfFloat64AndCOfString) TypeRef() types.TypeRef {
 	return __typeRefFor__unionOfBOfFloat64AndCOfString
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefFor__unionOfBOfFloat64AndCOfString, func(v types.Value) types.NomsValue {
+		return __unionOfBOfFloat64AndCOfStringFromVal(v)
+	})
+}
+
 func __unionOfBOfFloat64AndCOfStringFromVal(val types.Value) __unionOfBOfFloat64AndCOfString {
 	// TODO: Validate here
 	return __unionOfBOfFloat64AndCOfString{val.(types.Map)}
@@ -186,12 +205,19 @@ func (s __unionOfBOfFloat64AndCOfString) NomsValue() types.Value {
 	return s.m
 }
 
-func (s __unionOfBOfFloat64AndCOfString) Equals(other __unionOfBOfFloat64AndCOfString) bool {
-	return s.m.Equals(other.m)
+func (s __unionOfBOfFloat64AndCOfString) Equals(other types.Value) bool {
+	if other, ok := other.(__unionOfBOfFloat64AndCOfString); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s __unionOfBOfFloat64AndCOfString) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s __unionOfBOfFloat64AndCOfString) B() (val float64, ok bool) {
@@ -304,6 +330,12 @@ func (m __unionOfEOfFloat64AndFOfString) TypeRef() types.TypeRef {
 	return __typeRefFor__unionOfEOfFloat64AndFOfString
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefFor__unionOfEOfFloat64AndFOfString, func(v types.Value) types.NomsValue {
+		return __unionOfEOfFloat64AndFOfStringFromVal(v)
+	})
+}
+
 func __unionOfEOfFloat64AndFOfStringFromVal(val types.Value) __unionOfEOfFloat64AndFOfString {
 	// TODO: Validate here
 	return __unionOfEOfFloat64AndFOfString{val.(types.Map)}
@@ -313,12 +345,19 @@ func (s __unionOfEOfFloat64AndFOfString) NomsValue() types.Value {
 	return s.m
 }
 
-func (s __unionOfEOfFloat64AndFOfString) Equals(other __unionOfEOfFloat64AndFOfString) bool {
-	return s.m.Equals(other.m)
+func (s __unionOfEOfFloat64AndFOfString) Equals(other types.Value) bool {
+	if other, ok := other.(__unionOfEOfFloat64AndFOfString); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s __unionOfEOfFloat64AndFOfString) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s __unionOfEOfFloat64AndFOfString) E() (val float64, ok bool) {

@@ -12,8 +12,15 @@ func (r {{.Name}}) Ref() ref.Ref {
 	return r.r
 }
 
-func (r {{.Name}}) Equals(other {{.Name}}) bool {
-	return r.Ref() == other.Ref()
+func (r {{.Name}}) Equals(other types.Value) bool {
+	if other, ok := other.({{.Name}}); ok {
+		return r.r == other.r
+	}
+	return false
+}
+
+func (r {{.Name}}) Chunks() []types.Future {
+	return nil
 }
 
 func (r {{.Name}}) NomsValue() types.Value {

@@ -65,12 +65,19 @@ func (l ListOfStruct) NomsValue() types.Value {
 	return l.l
 }
 
-func (l ListOfStruct) Equals(p ListOfStruct) bool {
-	return l.l.Equals(p.l)
+func (l ListOfStruct) Equals(other types.Value) bool {
+	if other, ok := other.(ListOfStruct); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
 }
 
 func (l ListOfStruct) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+func (l ListOfStruct) Chunks() []types.Future {
+	return l.l.Chunks()
 }
 
 // A Noms Value that describes ListOfStruct.
@@ -200,6 +207,12 @@ func (m Struct) TypeRef() types.TypeRef {
 	return __typeRefForStruct
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForStruct, func(v types.Value) types.NomsValue {
+		return StructFromVal(v)
+	})
+}
+
 func StructFromVal(val types.Value) Struct {
 	// TODO: Validate here
 	return Struct{val.(types.Map)}
@@ -209,12 +222,19 @@ func (s Struct) NomsValue() types.Value {
 	return s.m
 }
 
-func (s Struct) Equals(other Struct) bool {
-	return s.m.Equals(other.m)
+func (s Struct) Equals(other types.Value) bool {
+	if other, ok := other.(Struct); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s Struct) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s Struct) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s Struct) S() string {

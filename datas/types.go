@@ -49,6 +49,12 @@ func (m Commit) TypeRef() types.TypeRef {
 	return __typeRefForCommit
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForCommit, func(v types.Value) types.NomsValue {
+		return CommitFromVal(v)
+	})
+}
+
 func CommitFromVal(val types.Value) Commit {
 	// TODO: Validate here
 	return Commit{val.(types.Map)}
@@ -58,12 +64,19 @@ func (s Commit) NomsValue() types.Value {
 	return s.m
 }
 
-func (s Commit) Equals(other Commit) bool {
-	return s.m.Equals(other.m)
+func (s Commit) Equals(other types.Value) bool {
+	if other, ok := other.(Commit); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s Commit) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s Commit) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s Commit) Value() types.Value {
@@ -100,12 +113,19 @@ func (s SetOfCommit) NomsValue() types.Value {
 	return s.s
 }
 
-func (s SetOfCommit) Equals(p SetOfCommit) bool {
-	return s.s.Equals(p.s)
+func (s SetOfCommit) Equals(other types.Value) bool {
+	if other, ok := other.(SetOfCommit); ok {
+		return s.s.Equals(other.s)
+	}
+	return false
 }
 
 func (s SetOfCommit) Ref() ref.Ref {
 	return s.s.Ref()
+}
+
+func (s SetOfCommit) Chunks() []types.Future {
+	return s.s.Chunks()
 }
 
 // A Noms Value that describes SetOfCommit.

@@ -18,6 +18,18 @@ func (v valueAsNomsValue) TypeRef() TypeRef {
 	return v.TypeRef()
 }
 
+func (v valueAsNomsValue) Ref() ref.Ref {
+	return v.Ref()
+}
+
+func (v valueAsNomsValue) Chunks() []Future {
+	return v.Chunks()
+}
+
+func (v valueAsNomsValue) Equals(other Value) bool {
+	return v.Equals(other)
+}
+
 func fromTypedEncodeable(w typedValueWrapper, cs chunks.ChunkSource) NomsValue {
 	i := w.TypedValue()
 	r := newJsonArrayReader(i, cs)

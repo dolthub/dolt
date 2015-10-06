@@ -8,16 +8,16 @@ import (
 )
 
 type testNomsValue struct {
+	Value
 	t TypeRef
-	v Value
+}
+
+func (nv testNomsValue) NomsValue() Value {
+	return nv.Value
 }
 
 func (nv testNomsValue) TypeRef() TypeRef {
 	return nv.t
-}
-
-func (nv testNomsValue) NomsValue() Value {
-	return nv.v
 }
 
 func TestWrite(t *testing.T) {

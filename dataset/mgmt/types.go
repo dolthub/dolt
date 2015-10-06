@@ -67,12 +67,19 @@ func (s SetOfDataset) NomsValue() types.Value {
 	return s.s
 }
 
-func (s SetOfDataset) Equals(p SetOfDataset) bool {
-	return s.s.Equals(p.s)
+func (s SetOfDataset) Equals(other types.Value) bool {
+	if other, ok := other.(SetOfDataset); ok {
+		return s.s.Equals(other.s)
+	}
+	return false
 }
 
 func (s SetOfDataset) Ref() ref.Ref {
 	return s.s.Ref()
+}
+
+func (s SetOfDataset) Chunks() []types.Future {
+	return s.s.Chunks()
 }
 
 // A Noms Value that describes SetOfDataset.
@@ -206,6 +213,12 @@ func (m Dataset) TypeRef() types.TypeRef {
 	return __typeRefForDataset
 }
 
+func init() {
+	types.RegisterFromValFunction(__typeRefForDataset, func(v types.Value) types.NomsValue {
+		return DatasetFromVal(v)
+	})
+}
+
 func DatasetFromVal(val types.Value) Dataset {
 	// TODO: Validate here
 	return Dataset{val.(types.Map)}
@@ -215,12 +228,19 @@ func (s Dataset) NomsValue() types.Value {
 	return s.m
 }
 
-func (s Dataset) Equals(other Dataset) bool {
-	return s.m.Equals(other.m)
+func (s Dataset) Equals(other types.Value) bool {
+	if other, ok := other.(Dataset); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s Dataset) Ref() ref.Ref {
 	return s.m.Ref()
+}
+
+func (s Dataset) Chunks() []types.Future {
+	return s.m.Chunks()
 }
 
 func (s Dataset) Id() string {

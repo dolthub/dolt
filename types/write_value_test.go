@@ -33,7 +33,7 @@ func TestWriteValue(t *testing.T) {
 	testEncode("j \"foo\"\n", NewString("foo"))
 
 	tref := MakePrimitiveTypeRef(StringKind)
-	nomsValueString := testNomsValue{tref, NewString("hi")}
+	nomsValueString := testNomsValue{Value: NewString("hi"), t: tref}
 	testEncode(fmt.Sprintf("t [%d,\"hi\"]\n", StringKind), nomsValueString)
 }
 

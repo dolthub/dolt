@@ -38,12 +38,19 @@ func (l {{.Name}}) NomsValue() types.Value {
 	return l.l
 }
 
-func (l {{.Name}}) Equals(p {{.Name}}) bool {
-	return l.l.Equals(p.l)
+func (l {{.Name}}) Equals(other types.Value) bool {
+	if other, ok := other.({{.Name}}); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
 }
 
 func (l {{.Name}}) Ref() ref.Ref {
 	return l.l.Ref()
+}
+
+func (l {{.Name}}) Chunks() []types.Future {
+	return l.l.Chunks()
 }
 
 {{template "type_ref.tmpl" .}}
