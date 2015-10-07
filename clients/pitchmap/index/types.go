@@ -247,6 +247,14 @@ func (m MapOfStringToValue) Get(p string) types.Value {
 	return m.m.Get(types.NewString(p))
 }
 
+func (m MapOfStringToValue) MaybeGet(p string) (types.Value, bool) {
+	v, ok := m.m.MaybeGet(types.NewString(p))
+	if !ok {
+		return types.Bool(false), false
+	}
+	return v, ok
+}
+
 func (m MapOfStringToValue) Set(k string, v types.Value) MapOfStringToValue {
 	return MapOfStringToValue{m.m.Set(types.NewString(k), v)}
 }
@@ -365,6 +373,14 @@ func (m MapOfStringToListOfPitch) Has(p string) bool {
 
 func (m MapOfStringToListOfPitch) Get(p string) ListOfPitch {
 	return ListOfPitchFromVal(m.m.Get(types.NewString(p)))
+}
+
+func (m MapOfStringToListOfPitch) MaybeGet(p string) (ListOfPitch, bool) {
+	v, ok := m.m.MaybeGet(types.NewString(p))
+	if !ok {
+		return NewListOfPitch(), false
+	}
+	return ListOfPitchFromVal(v), ok
 }
 
 func (m MapOfStringToListOfPitch) Set(k string, v ListOfPitch) MapOfStringToListOfPitch {
@@ -710,6 +726,14 @@ func (m MapOfStringToString) Has(p string) bool {
 
 func (m MapOfStringToString) Get(p string) string {
 	return m.m.Get(types.NewString(p)).(types.String).String()
+}
+
+func (m MapOfStringToString) MaybeGet(p string) (string, bool) {
+	v, ok := m.m.MaybeGet(types.NewString(p))
+	if !ok {
+		return "", false
+	}
+	return v.(types.String).String(), ok
 }
 
 func (m MapOfStringToString) Set(k string, v string) MapOfStringToString {

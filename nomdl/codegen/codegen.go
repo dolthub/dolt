@@ -394,6 +394,8 @@ func (gen *codeGen) userZero(t types.TypeRef) string {
 		return fmt.Sprintf("%s{ref.Ref{}}", gen.userType(t))
 	case types.StringKind:
 		return `""`
+    case types.StructKind:
+        return fmt.Sprintf("New%s()", gen.userName(t))
 	case types.ValueKind:
 		// TODO: This is where a null Value would have been useful.
 		return "types.Bool(false)"

@@ -72,6 +72,14 @@ func (m {{.Name}}) Get(p {{userType .KeyType}}) {{userType .ValueType}} {
 	return {{valueToUser (printf "m.m.Get(%s)" (userToValue "p" .KeyType)) .ValueType}}
 }
 
+func (m {{.Name}}) MaybeGet(p {{userType .KeyType}}) ({{userType .ValueType}}, bool) {
+    v, ok := m.m.MaybeGet({{userToValue "p" .KeyType}})
+    if !ok {
+    	return {{userZero .ValueType}}, false
+    }
+	return {{valueToUser "v" .ValueType}}, ok
+}
+
 func (m {{.Name}}) Set(k {{userType .KeyType}}, v {{userType .ValueType}}) {{.Name}} {
 	return {{.Name}}{m.m.Set({{userToValue "k" .KeyType}}, {{userToValue "v" .ValueType}})}
 }

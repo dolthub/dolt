@@ -89,6 +89,14 @@ func (m MapOfBoolToString) Get(p bool) string {
 	return m.m.Get(types.Bool(p)).(types.String).String()
 }
 
+func (m MapOfBoolToString) MaybeGet(p bool) (string, bool) {
+	v, ok := m.m.MaybeGet(types.Bool(p))
+	if !ok {
+		return "", false
+	}
+	return v.(types.String).String(), ok
+}
+
 func (m MapOfBoolToString) Set(k bool, v string) MapOfBoolToString {
 	return MapOfBoolToString{m.m.Set(types.Bool(k), types.NewString(v))}
 }
@@ -207,6 +215,14 @@ func (m MapOfStringToValue) Has(p string) bool {
 
 func (m MapOfStringToValue) Get(p string) types.Value {
 	return m.m.Get(types.NewString(p))
+}
+
+func (m MapOfStringToValue) MaybeGet(p string) (types.Value, bool) {
+	v, ok := m.m.MaybeGet(types.NewString(p))
+	if !ok {
+		return types.Bool(false), false
+	}
+	return v, ok
 }
 
 func (m MapOfStringToValue) Set(k string, v types.Value) MapOfStringToValue {
