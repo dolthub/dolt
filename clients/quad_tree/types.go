@@ -739,6 +739,14 @@ func (m MapOfStringToQuadTree) Get(p string) QuadTree {
 	return QuadTreeFromVal(m.m.Get(types.NewString(p)))
 }
 
+func (m MapOfStringToQuadTree) MaybeGet(p string) (QuadTree, bool) {
+	v, ok := m.m.MaybeGet(types.NewString(p))
+	if !ok {
+		return NewQuadTree(), false
+	}
+	return QuadTreeFromVal(v), ok
+}
+
 func (m MapOfStringToQuadTree) Set(k string, v QuadTree) MapOfStringToQuadTree {
 	return MapOfStringToQuadTree{m.m.Set(types.NewString(k), v.NomsValue())}
 }
@@ -1130,6 +1138,14 @@ func (m MapOfStringToRefOfSQuadTree) Has(p string) bool {
 
 func (m MapOfStringToRefOfSQuadTree) Get(p string) RefOfSQuadTree {
 	return RefOfSQuadTreeFromVal(m.m.Get(types.NewString(p)))
+}
+
+func (m MapOfStringToRefOfSQuadTree) MaybeGet(p string) (RefOfSQuadTree, bool) {
+	v, ok := m.m.MaybeGet(types.NewString(p))
+	if !ok {
+		return RefOfSQuadTree{ref.Ref{}}, false
+	}
+	return RefOfSQuadTreeFromVal(v), ok
 }
 
 func (m MapOfStringToRefOfSQuadTree) Set(k string, v RefOfSQuadTree) MapOfStringToRefOfSQuadTree {

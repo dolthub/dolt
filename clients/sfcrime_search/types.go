@@ -711,6 +711,14 @@ func (m MapOfStringToSQuadTree) Get(p string) SQuadTree {
 	return SQuadTreeFromVal(m.m.Get(types.NewString(p)))
 }
 
+func (m MapOfStringToSQuadTree) MaybeGet(p string) (SQuadTree, bool) {
+	v, ok := m.m.MaybeGet(types.NewString(p))
+	if !ok {
+		return NewSQuadTree(), false
+	}
+	return SQuadTreeFromVal(v), ok
+}
+
 func (m MapOfStringToSQuadTree) Set(k string, v SQuadTree) MapOfStringToSQuadTree {
 	return MapOfStringToSQuadTree{m.m.Set(types.NewString(k), v.NomsValue())}
 }

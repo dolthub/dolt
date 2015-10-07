@@ -100,5 +100,18 @@ func TestMapFilter(t *testing.T) {
 		return v == "bye"
 	})
 	assert.True(NewMapOfBoolToString().Set(false, "bye").Equals(m3))
+}
 
+func TestMapMaybeGet(t *testing.T) {
+	assert := assert.New(t)
+	m := NewMapOfStringToValue()
+	k1 := "key1"
+	k2 := "key2"
+	v1 := types.NewString("SomeValue")
+	m = m.Set(k1, v1)
+	v, ok := m.MaybeGet(k1)
+	assert.True(ok)
+	assert.Equal(v1, v)
+	v, ok = m.MaybeGet(k2)
+	assert.False(ok)
 }
