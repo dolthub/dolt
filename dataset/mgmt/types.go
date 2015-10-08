@@ -83,13 +83,14 @@ func (s SetOfDataset) Chunks() []types.Future {
 }
 
 // A Noms Value that describes SetOfDataset.
-var __typeRefForSetOfDataset = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Dataset", __mgmtPackageInFile_types_CachedRef))
+var __typeRefForSetOfDataset types.TypeRef
 
 func (m SetOfDataset) TypeRef() types.TypeRef {
 	return __typeRefForSetOfDataset
 }
 
 func init() {
+	__typeRefForSetOfDataset = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Dataset", __mgmtPackageInFile_types_CachedRef))
 	types.RegisterFromValFunction(__typeRefForSetOfDataset, func(v types.Value) types.NomsValue {
 		return SetOfDatasetFromVal(v)
 	})

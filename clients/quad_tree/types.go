@@ -363,13 +363,14 @@ func RefOfValueFromVal(p types.Value) RefOfValue {
 }
 
 // A Noms Value that describes RefOfValue.
-var __typeRefForRefOfValue = types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))
+var __typeRefForRefOfValue types.TypeRef
 
 func (m RefOfValue) TypeRef() types.TypeRef {
 	return __typeRefForRefOfValue
 }
 
 func init() {
+	__typeRefForRefOfValue = types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))
 	types.RegisterFromValFunction(__typeRefForRefOfValue, func(v types.Value) types.NomsValue {
 		return RefOfValueFromVal(v)
 	})
@@ -573,13 +574,14 @@ func (l ListOfNode) Chunks() []types.Future {
 }
 
 // A Noms Value that describes ListOfNode.
-var __typeRefForListOfNode = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Node", __mainPackageInFile_types_CachedRef))
+var __typeRefForListOfNode types.TypeRef
 
 func (m ListOfNode) TypeRef() types.TypeRef {
 	return __typeRefForListOfNode
 }
 
 func init() {
+	__typeRefForListOfNode = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Node", __mainPackageInFile_types_CachedRef))
 	types.RegisterFromValFunction(__typeRefForListOfNode, func(v types.Value) types.NomsValue {
 		return ListOfNodeFromVal(v)
 	})
@@ -711,13 +713,14 @@ func (m MapOfStringToQuadTree) Chunks() []types.Future {
 }
 
 // A Noms Value that describes MapOfStringToQuadTree.
-var __typeRefForMapOfStringToQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("QuadTree", __mainPackageInFile_types_CachedRef))
+var __typeRefForMapOfStringToQuadTree types.TypeRef
 
 func (m MapOfStringToQuadTree) TypeRef() types.TypeRef {
 	return __typeRefForMapOfStringToQuadTree
 }
 
 func init() {
+	__typeRefForMapOfStringToQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("QuadTree", __mainPackageInFile_types_CachedRef))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToQuadTree, func(v types.Value) types.NomsValue {
 		return MapOfStringToQuadTreeFromVal(v)
 	})
@@ -974,13 +977,14 @@ func (l ListOfRefOfValue) Chunks() []types.Future {
 }
 
 // A Noms Value that describes ListOfRefOfValue.
-var __typeRefForListOfRefOfValue = types.MakeCompoundTypeRef("", types.ListKind, types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind)))
+var __typeRefForListOfRefOfValue types.TypeRef
 
 func (m ListOfRefOfValue) TypeRef() types.TypeRef {
 	return __typeRefForListOfRefOfValue
 }
 
 func init() {
+	__typeRefForListOfRefOfValue = types.MakeCompoundTypeRef("", types.ListKind, types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind)))
 	types.RegisterFromValFunction(__typeRefForListOfRefOfValue, func(v types.Value) types.NomsValue {
 		return ListOfRefOfValueFromVal(v)
 	})
@@ -1112,13 +1116,14 @@ func (m MapOfStringToRefOfSQuadTree) Chunks() []types.Future {
 }
 
 // A Noms Value that describes MapOfStringToRefOfSQuadTree.
-var __typeRefForMapOfStringToRefOfSQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef)))
+var __typeRefForMapOfStringToRefOfSQuadTree types.TypeRef
 
 func (m MapOfStringToRefOfSQuadTree) TypeRef() types.TypeRef {
 	return __typeRefForMapOfStringToRefOfSQuadTree
 }
 
 func init() {
+	__typeRefForMapOfStringToRefOfSQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef)))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToRefOfSQuadTree, func(v types.Value) types.NomsValue {
 		return MapOfStringToRefOfSQuadTreeFromVal(v)
 	})
@@ -1220,13 +1225,14 @@ func RefOfSQuadTreeFromVal(p types.Value) RefOfSQuadTree {
 }
 
 // A Noms Value that describes RefOfSQuadTree.
-var __typeRefForRefOfSQuadTree = types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef))
+var __typeRefForRefOfSQuadTree types.TypeRef
 
 func (m RefOfSQuadTree) TypeRef() types.TypeRef {
 	return __typeRefForRefOfSQuadTree
 }
 
 func init() {
+	__typeRefForRefOfSQuadTree = types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef))
 	types.RegisterFromValFunction(__typeRefForRefOfSQuadTree, func(v types.Value) types.NomsValue {
 		return RefOfSQuadTreeFromVal(v)
 	})

@@ -61,13 +61,14 @@ func (m MapOfBoolToString) Chunks() []types.Future {
 }
 
 // A Noms Value that describes MapOfBoolToString.
-var __typeRefForMapOfBoolToString = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.BoolKind), types.MakePrimitiveTypeRef(types.StringKind))
+var __typeRefForMapOfBoolToString types.TypeRef
 
 func (m MapOfBoolToString) TypeRef() types.TypeRef {
 	return __typeRefForMapOfBoolToString
 }
 
 func init() {
+	__typeRefForMapOfBoolToString = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.BoolKind), types.MakePrimitiveTypeRef(types.StringKind))
 	types.RegisterFromValFunction(__typeRefForMapOfBoolToString, func(v types.Value) types.NomsValue {
 		return MapOfBoolToStringFromVal(v)
 	})
@@ -189,13 +190,14 @@ func (m MapOfStringToValue) Chunks() []types.Future {
 }
 
 // A Noms Value that describes MapOfStringToValue.
-var __typeRefForMapOfStringToValue = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
+var __typeRefForMapOfStringToValue types.TypeRef
 
 func (m MapOfStringToValue) TypeRef() types.TypeRef {
 	return __typeRefForMapOfStringToValue
 }
 
 func init() {
+	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.NomsValue {
 		return MapOfStringToValueFromVal(v)
 	})

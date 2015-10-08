@@ -81,13 +81,14 @@ func (l ListOfStruct) Chunks() []types.Future {
 }
 
 // A Noms Value that describes ListOfStruct.
-var __typeRefForListOfStruct = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Struct", __testPackageInFile_struct_CachedRef))
+var __typeRefForListOfStruct types.TypeRef
 
 func (m ListOfStruct) TypeRef() types.TypeRef {
 	return __typeRefForListOfStruct
 }
 
 func init() {
+	__typeRefForListOfStruct = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Struct", __testPackageInFile_struct_CachedRef))
 	types.RegisterFromValFunction(__typeRefForListOfStruct, func(v types.Value) types.NomsValue {
 		return ListOfStructFromVal(v)
 	})

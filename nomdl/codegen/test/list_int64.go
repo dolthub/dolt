@@ -60,13 +60,14 @@ func (l ListOfInt64) Chunks() []types.Future {
 }
 
 // A Noms Value that describes ListOfInt64.
-var __typeRefForListOfInt64 = types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.Int64Kind))
+var __typeRefForListOfInt64 types.TypeRef
 
 func (m ListOfInt64) TypeRef() types.TypeRef {
 	return __typeRefForListOfInt64
 }
 
 func init() {
+	__typeRefForListOfInt64 = types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.Int64Kind))
 	types.RegisterFromValFunction(__typeRefForListOfInt64, func(v types.Value) types.NomsValue {
 		return ListOfInt64FromVal(v)
 	})

@@ -3,18 +3,21 @@ package types
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/ref"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestType(t *testing.T) {
 	assert := assert.New(t)
 
 	st := NewPackage()
-	typ := st.Type()
+	typ := st.TypeRef()
 	name := "Package"
 	assert.EqualValues(name, typ.Name())
-	assert.Equal(StructKind, typ.Kind())
+	assert.Equal(TypeRefKind, typ.Kind())
+	assert.Equal(__typesPackageInFile_package_CachedRef, typ.PackageRef())
+
+	typ = LookupPackage(__typesPackageInFile_package_CachedRef).NamedTypes().Get(name)
 	desc := typ.Desc.ToValue().(Map)
 	fields := desc.Get(NewString("fields")).(List)
 	choices := desc.Get(NewString("choices")).(List)

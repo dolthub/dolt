@@ -62,13 +62,14 @@ func (s SetOfBool) Chunks() []types.Future {
 }
 
 // A Noms Value that describes SetOfBool.
-var __typeRefForSetOfBool = types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.BoolKind))
+var __typeRefForSetOfBool types.TypeRef
 
 func (m SetOfBool) TypeRef() types.TypeRef {
 	return __typeRefForSetOfBool
 }
 
 func init() {
+	__typeRefForSetOfBool = types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.BoolKind))
 	types.RegisterFromValFunction(__typeRefForSetOfBool, func(v types.Value) types.NomsValue {
 		return SetOfBoolFromVal(v)
 	})

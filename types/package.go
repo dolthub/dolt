@@ -7,6 +7,26 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
+var __typesPackageInFile_package_CachedRef ref.Ref
+
+// This function builds up a Noms value that describes the type
+// package implemented by this file and registers it with the global
+// type package definition cache.
+func init() {
+	p := PackageDef{
+		NamedTypes: MapOfStringToTypeRefDef{
+			"Package": MakeStructTypeRef("Package",
+				[]Field{
+					Field{"Dependencies", MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", ref.Ref{}))), false},
+					Field{"NamedTypes", MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind)), false},
+				},
+				Choices{},
+			),
+		},
+	}.New()
+	__typesPackageInFile_package_CachedRef = RegisterPackage(&p)
+}
+
 // SetOfPackage
 
 type SetOfPackage struct {
@@ -25,19 +45,33 @@ func (s SetOfPackage) NomsValue() Value {
 	return s.s
 }
 
-func (s SetOfPackage) Equals(p SetOfPackage) bool {
-	return s.s.Equals(p.s)
+func (s SetOfPackage) Equals(other Value) bool {
+	if other, ok := other.(SetOfPackage); ok {
+		return s.s.Equals(other.s)
+	}
+	return false
 }
 
 func (s SetOfPackage) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
+func (s SetOfPackage) Chunks() []Future {
+	return s.s.Chunks()
+}
+
 // A Noms Value that describes SetOfPackage.
-var __typeRefForSetOfPackage = MakeCompoundTypeRef("", SetKind, MakeTypeRef("Package", ref.Ref{}))
+var __typeRefForSetOfPackage TypeRef
 
 func (m SetOfPackage) TypeRef() TypeRef {
 	return __typeRefForSetOfPackage
+}
+
+func init() {
+	__typeRefForSetOfPackage = MakeCompoundTypeRef("", SetKind, MakeTypeRef("Package", __typesPackageInFile_package_CachedRef))
+	RegisterFromValFunction(__typeRefForSetOfPackage, func(v Value) NomsValue {
+		return SetOfPackageFromVal(v)
+	})
 }
 
 func (s SetOfPackage) Empty() bool {
@@ -125,7 +159,7 @@ type Package struct {
 func NewPackage() Package {
 	return Package{NewMap(
 		NewString("$name"), NewString("Package"),
-		NewString("$type"), __typeRefForPackage,
+		NewString("$type"), MakeTypeRef("Package", __typesPackageInFile_package_CachedRef),
 		NewString("Dependencies"), NewSet(),
 		NewString("NamedTypes"), NewMap(),
 	)}
@@ -143,7 +177,7 @@ func (def PackageDef) New() Package {
 	return Package{
 		NewMap(
 			NewString("$name"), NewString("Package"),
-			NewString("$type"), __typeRefForPackage,
+			NewString("$type"), MakeTypeRef("Package", __typesPackageInFile_package_CachedRef),
 			NewString("Dependencies"), def.Dependencies.New().NomsValue(),
 			NewString("NamedTypes"), def.NamedTypes.New().NomsValue(),
 		)}
@@ -155,17 +189,17 @@ func (s Package) Def() (d PackageDef) {
 	return
 }
 
-// A Noms Value that describes Package.
-var __typeRefForPackage = MakeStructTypeRef("Package",
-	[]Field{
-		Field{"Dependencies", MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", ref.Ref{}))), false},
-		Field{"NamedTypes", MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind)), false},
-	},
-	Choices{},
-)
+var __typeRefForPackage TypeRef
 
 func (m Package) TypeRef() TypeRef {
 	return __typeRefForPackage
+}
+
+func init() {
+	__typeRefForPackage = MakeTypeRef("Package", __typesPackageInFile_package_CachedRef)
+	RegisterFromValFunction(__typeRefForPackage, func(v Value) NomsValue {
+		return PackageFromVal(v)
+	})
 }
 
 func PackageFromVal(val Value) Package {
@@ -177,16 +211,19 @@ func (s Package) NomsValue() Value {
 	return s.m
 }
 
-func (s Package) Equals(other Package) bool {
-	return s.m.Equals(other.m)
+func (s Package) Equals(other Value) bool {
+	if other, ok := other.(Package); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
 }
 
 func (s Package) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Package) Type() TypeRef {
-	return s.m.Get(NewString("$type")).(TypeRef)
+func (s Package) Chunks() []Future {
+	return s.m.Chunks()
 }
 
 func (s Package) Dependencies() SetOfRefOfPackage {
@@ -244,19 +281,33 @@ func (s SetOfRefOfPackage) NomsValue() Value {
 	return s.s
 }
 
-func (s SetOfRefOfPackage) Equals(p SetOfRefOfPackage) bool {
-	return s.s.Equals(p.s)
+func (s SetOfRefOfPackage) Equals(other Value) bool {
+	if other, ok := other.(SetOfRefOfPackage); ok {
+		return s.s.Equals(other.s)
+	}
+	return false
 }
 
 func (s SetOfRefOfPackage) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
+func (s SetOfRefOfPackage) Chunks() []Future {
+	return s.s.Chunks()
+}
+
 // A Noms Value that describes SetOfRefOfPackage.
-var __typeRefForSetOfRefOfPackage = MakeCompoundTypeRef("", SetKind, __typeRefForPackage)
+var __typeRefForSetOfRefOfPackage TypeRef
 
 func (m SetOfRefOfPackage) TypeRef() TypeRef {
 	return __typeRefForSetOfRefOfPackage
+}
+
+func init() {
+	__typeRefForSetOfRefOfPackage = MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", __typesPackageInFile_package_CachedRef)))
+	RegisterFromValFunction(__typeRefForSetOfRefOfPackage, func(v Value) NomsValue {
+		return SetOfRefOfPackageFromVal(v)
+	})
 }
 
 func (s SetOfRefOfPackage) Empty() bool {
@@ -357,15 +408,15 @@ func (r RefOfPackage) Ref() ref.Ref {
 	return r.r
 }
 
-func (r RefOfPackage) Equals(other RefOfPackage) bool {
-	return r.Ref() == other.Ref()
+func (r RefOfPackage) Equals(other Value) bool {
+	if other, ok := other.(RefOfPackage); ok {
+		return r.r == other.r
+	}
+	return false
 }
 
-// A Noms Value that describes RefOfPackage.
-var __typeRefForRefOfPackage = MakeCompoundTypeRef("", RefKind, __typeRefForPackage)
-
-func (m RefOfPackage) TypeRef() TypeRef {
-	return __typeRefForRefOfPackage
+func (r RefOfPackage) Chunks() []Future {
+	return nil
 }
 
 func (r RefOfPackage) NomsValue() Value {
@@ -374,6 +425,20 @@ func (r RefOfPackage) NomsValue() Value {
 
 func RefOfPackageFromVal(p Value) RefOfPackage {
 	return RefOfPackage{p.(Ref).Ref()}
+}
+
+// A Noms Value that describes RefOfPackage.
+var __typeRefForRefOfPackage TypeRef
+
+func (m RefOfPackage) TypeRef() TypeRef {
+	return __typeRefForRefOfPackage
+}
+
+func init() {
+	__typeRefForRefOfPackage = MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", __typesPackageInFile_package_CachedRef))
+	RegisterFromValFunction(__typeRefForRefOfPackage, func(v Value) NomsValue {
+		return RefOfPackageFromVal(v)
+	})
 }
 
 func (r RefOfPackage) GetValue(cs chunks.ChunkSource) Package {
@@ -423,19 +488,33 @@ func (m MapOfStringToTypeRef) NomsValue() Value {
 	return m.m
 }
 
-func (m MapOfStringToTypeRef) Equals(p MapOfStringToTypeRef) bool {
-	return m.m.Equals(p.m)
+func (m MapOfStringToTypeRef) Equals(other Value) bool {
+	if other, ok := other.(MapOfStringToTypeRef); ok {
+		return m.m.Equals(other.m)
+	}
+	return false
 }
 
 func (m MapOfStringToTypeRef) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
+func (m MapOfStringToTypeRef) Chunks() []Future {
+	return m.m.Chunks()
+}
+
 // A Noms Value that describes MapOfStringToTypeRef.
-var __typeRefForMapOfStringToTypeRef = MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind))
+var __typeRefForMapOfStringToTypeRef TypeRef
 
 func (m MapOfStringToTypeRef) TypeRef() TypeRef {
 	return __typeRefForMapOfStringToTypeRef
+}
+
+func init() {
+	__typeRefForMapOfStringToTypeRef = MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind))
+	RegisterFromValFunction(__typeRefForMapOfStringToTypeRef, func(v Value) NomsValue {
+		return MapOfStringToTypeRefFromVal(v)
+	})
 }
 
 func (m MapOfStringToTypeRef) Empty() bool {

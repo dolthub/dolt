@@ -324,13 +324,14 @@ func (s SetOfUInt8) Chunks() []types.Future {
 }
 
 // A Noms Value that describes SetOfUInt8.
-var __typeRefForSetOfUInt8 = types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
+var __typeRefForSetOfUInt8 types.TypeRef
 
 func (m SetOfUInt8) TypeRef() types.TypeRef {
 	return __typeRefForSetOfUInt8
 }
 
 func init() {
+	__typeRefForSetOfUInt8 = types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
 	types.RegisterFromValFunction(__typeRefForSetOfUInt8, func(v types.Value) types.NomsValue {
 		return SetOfUInt8FromVal(v)
 	})

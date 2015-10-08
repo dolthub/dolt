@@ -28,43 +28,45 @@ func TestRead(t *testing.T) {
 	assert.True(r.atEnd())
 }
 
-func parseJson(s string) (v []interface{}) {
-	dec := json.NewDecoder(strings.NewReader(s))
+func parseJson(s string, vs ...interface{}) (v []interface{}) {
+	dec := json.NewDecoder(strings.NewReader(fmt.Sprintf(s, vs...)))
 	dec.Decode(&v)
 	return
 }
 
-func TestReadTypeRef(t *testing.T) {
-	assert := assert.New(t)
+func TestReadTypeRefAsTag(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson(`[0, true]`)
-	r := newJsonArrayReader(a, cs)
-	k := r.readKind()
-	assert.Equal(BoolKind, k)
+	test := func(expected TypeRef, s string, vs ...interface{}) {
+		a := parseJson(s, vs...)
+		r := newJsonArrayReader(a, cs)
+		tr := r.readTypeRefAsTag()
+		assert.True(t, expected.Equals(tr))
+	}
 
-	r = newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
-	assert.Equal(BoolKind, tr.Kind())
-	b := r.readTopLevelValue(tr, nil).NomsValue()
-	assert.EqualValues(Bool(true), b)
+	test(MakePrimitiveTypeRef(BoolKind), "[%d, true]", BoolKind)
+	test(MakePrimitiveTypeRef(TypeRefKind), "[%d, %d]", TypeRefKind, BoolKind)
+	test(MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(BoolKind)), "[%d, %d, true, false]", ListKind, BoolKind)
+
+	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
+	test(MakeTypeRef("S", r), `[%d, "%s", "S"]`, TypeRefKind, r.String())
+
+	test(MakePrimitiveTypeRef(TypeRefKind), `[%d, %d, "%s", "S"]`, TypeRefKind, TypeRefKind, r.String())
 }
 
 func TestReadListOfInt32(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson(fmt.Sprintf("[%d, %d, 0, 1, 2, 3]", ListKind, Int32Kind))
+	a := parseJson("[%d, %d, 0, 1, 2, 3]", ListKind, Int32Kind)
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
 
+	tr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int32Kind))
 	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+		return valueAsNomsValue{v, tr}
 	})
 
-	assert.Equal(ListKind, tr.Kind())
-	assert.Equal(Int32Kind, tr.Desc.(CompoundDesc).ElemTypes[0].Kind())
-	l := r.readList(tr, nil).NomsValue()
+	l := r.readTopLevelValue().NomsValue()
 	assert.EqualValues(NewList(Int32(0), Int32(1), Int32(2), Int32(3)), l)
 }
 
@@ -72,19 +74,15 @@ func TestReadListOfValue(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson(fmt.Sprintf(`[%d, %d, %d, 1, %d, "hi", %d, true]`, ListKind, ValueKind, Int32Kind, StringKind, BoolKind))
+	a := parseJson(`[%d, %d, %d, 1, %d, "hi", %d, true]`, ListKind, ValueKind, Int32Kind, StringKind, BoolKind)
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
 
 	listTr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
-
 	RegisterFromValFunction(listTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+		return valueAsNomsValue{v, listTr}
 	})
 
-	assert.Equal(ListKind, tr.Kind())
-	assert.Equal(ValueKind, tr.Desc.(CompoundDesc).ElemTypes[0].Kind())
-	l := r.readList(tr, nil).NomsValue()
+	l := r.readTopLevelValue().NomsValue()
 	assert.EqualValues(NewList(Int32(1), NewString("hi"), Bool(true)), l)
 }
 
@@ -92,17 +90,15 @@ func TestReadValueListOfInt8(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson(fmt.Sprintf(`[%d, %d, %d, [0, 1, 2]]`, ValueKind, ListKind, Int8Kind))
+	a := parseJson(`[%d, %d, %d, [0, 1, 2]]`, ValueKind, ListKind, Int8Kind)
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
-	listTr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int8Kind))
 
+	listTr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int8Kind))
 	RegisterFromValFunction(listTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+		return valueAsNomsValue{v, listTr}
 	})
 
-	assert.Equal(ValueKind, tr.Kind())
-	l := r.readTopLevelValue(tr, nil).NomsValue()
+	l := r.readTopLevelValue().NomsValue()
 	assert.EqualValues(NewList(Int8(0), Int8(1), Int8(2)), l)
 }
 
@@ -110,18 +106,15 @@ func TestReadMapOfInt64ToFloat64(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson(fmt.Sprintf("[%d, %d, %d, 0, 1, 2, 3]", MapKind, Int64Kind, Float64Kind))
+	a := parseJson("[%d, %d, %d, 0, 1, 2, 3]", MapKind, Int64Kind, Float64Kind)
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
 
+	tr := MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(Int64Kind), MakePrimitiveTypeRef(Float64Kind))
 	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+		return valueAsNomsValue{v, tr}
 	})
 
-	assert.Equal(MapKind, tr.Kind())
-	assert.Equal(Int64Kind, tr.Desc.(CompoundDesc).ElemTypes[0].Kind())
-	assert.Equal(Float64Kind, tr.Desc.(CompoundDesc).ElemTypes[1].Kind())
-	m := r.readMap(tr, nil).NomsValue()
+	m := r.readTopLevelValue().NomsValue()
 	assert.EqualValues(NewMap(Int64(0), Float64(1), Int64(2), Float64(3)), m)
 }
 
@@ -129,17 +122,15 @@ func TestReadValueMapOfUInt64ToUInt32(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson(fmt.Sprintf("[%d, %d, %d, %d, [0, 1, 2, 3]]", ValueKind, MapKind, UInt64Kind, UInt32Kind))
+	a := parseJson("[%d, %d, %d, %d, [0, 1, 2, 3]]", ValueKind, MapKind, UInt64Kind, UInt32Kind)
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
-	mapTr := MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(UInt64Kind), MakePrimitiveTypeRef(UInt32Kind))
 
+	mapTr := MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(UInt64Kind), MakePrimitiveTypeRef(UInt32Kind))
 	RegisterFromValFunction(mapTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+		return valueAsNomsValue{v, mapTr}
 	})
 
-	assert.Equal(ValueKind, tr.Kind())
-	m := r.readTopLevelValue(tr, nil).NomsValue()
+	m := r.readTopLevelValue().NomsValue()
 	assert.True(NewMap(UInt64(0), UInt32(1), UInt64(2), UInt32(3)).Equals(m))
 }
 
@@ -147,17 +138,15 @@ func TestReadSetOfUInt8(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson(fmt.Sprintf("[%d, %d, 0, 1, 2, 3]", SetKind, UInt8Kind))
+	a := parseJson("[%d, %d, 0, 1, 2, 3]", SetKind, UInt8Kind)
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
 
+	tr := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(UInt8Kind))
 	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+		return valueAsNomsValue{v, tr}
 	})
 
-	assert.Equal(SetKind, tr.Kind())
-	assert.Equal(UInt8Kind, tr.Desc.(CompoundDesc).ElemTypes[0].Kind())
-	s := r.readSet(tr, nil).NomsValue()
+	s := r.readTopLevelValue().NomsValue()
 	assert.EqualValues(NewSet(UInt8(0), UInt8(1), UInt8(2), UInt8(3)), s)
 }
 
@@ -165,31 +154,21 @@ func TestReadValueSetOfUInt16(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson(fmt.Sprintf("[%d, %d, %d, [0, 1, 2, 3]]", ValueKind, SetKind, UInt16Kind))
+	a := parseJson("[%d, %d, %d, [0, 1, 2, 3]]", ValueKind, SetKind, UInt16Kind)
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
 
 	setTr := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(UInt16Kind))
-
 	RegisterFromValFunction(setTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+		return valueAsNomsValue{v, setTr}
 	})
 
-	assert.Equal(ValueKind, tr.Kind())
-	m := r.readTopLevelValue(tr, nil).NomsValue()
-	assert.True(NewSet(UInt16(0), UInt16(1), UInt16(2), UInt16(3)).Equals(m))
+	s := r.readTopLevelValue().NomsValue()
+	assert.True(NewSet(UInt16(0), UInt16(1), UInt16(2), UInt16(3)).Equals(s))
 }
 
 func TestReadStruct(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
-
-	// Cannot use parse since it is in a different package that depends on types!
-	// struct A1 {
-	//   x: Float32
-	//   b: Bool
-	//   s: String
-	// }
 
 	tref := MakeStructTypeRef("A1", []Field{
 		Field{"x", MakePrimitiveTypeRef(Int16Kind), false},
@@ -197,22 +176,21 @@ func TestReadStruct(t *testing.T) {
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 	}, Choices{})
 	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("A1", tref))
-	ref := RegisterPackage(&pkg)
+	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
-	a := parseJson(fmt.Sprintf(`[%d, "%s", "A1", 42, "hi", true]`, TypeRefKind, ref.String()))
+	a := parseJson(`[%d, "%s", "A1", 42, "hi", true]`, TypeRefKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
 
-	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+	structTr := MakeTypeRef("A1", pkgRef)
+	RegisterFromValFunction(structTr, func(v Value) NomsValue {
+		return valueAsNomsValue{v, structTr}
 	})
 
-	assert.Equal(TypeRefKind, tr.Kind())
-	v := r.readExternal(tr).NomsValue().(Map)
+	v := r.readTopLevelValue().NomsValue().(Map)
 
 	assert.True(v.Get(NewString("$name")).Equals(NewString("A1")))
-	assert.True(v.Get(NewString("$type")).Equals(tr))
+	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Int16(42)))
 	assert.True(v.Get(NewString("s")).Equals(NewString("hi")))
 	assert.True(v.Get(NewString("b")).Equals(Bool(true)))
@@ -222,15 +200,6 @@ func TestReadStructUnion(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	// Cannot use parse since it is in a different package that depends on types!
-	// struct A2 {
-	//   x: Float32
-	//   union {
-	//     b: Bool
-	//     s: String
-	//   }
-	// }
-
 	tref := MakeStructTypeRef("A2", []Field{
 		Field{"x", MakePrimitiveTypeRef(Float32Kind), false},
 	}, Choices{
@@ -238,21 +207,20 @@ func TestReadStructUnion(t *testing.T) {
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	})
 	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("A2", tref))
-	ref := RegisterPackage(&pkg)
+	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJson(fmt.Sprintf(`[%d, "%s", "A2", 42, 1, "hi"]`, TypeRefKind, ref.String()))
+	a := parseJson(`[%d, "%s", "A2", 42, 1, "hi"]`, TypeRefKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
 
-	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+	structTr := MakeTypeRef("A2", pkgRef)
+	RegisterFromValFunction(structTr, func(v Value) NomsValue {
+		return valueAsNomsValue{v, structTr}
 	})
 
-	assert.Equal(TypeRefKind, tr.Kind())
-	v := r.readExternal(tr).NomsValue().(Map)
+	v := r.readTopLevelValue().NomsValue().(Map)
 
 	assert.True(v.Get(NewString("$name")).Equals(NewString("A2")))
-	assert.True(v.Get(NewString("$type")).Equals(tr))
+	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Float32(42)))
 	assert.False(v.Has(NewString("b")))
 	assert.False(v.Has(NewString("s")))
@@ -264,35 +232,27 @@ func TestReadStructOptional(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	// Cannot use parse since it is in a different package that depends on types!
-	// struct A3 {
-	//   x: Float32
-	//   s: optional String
-	//   b: optional Bool
-	// }
-
 	tref := MakeStructTypeRef("A3", []Field{
 		Field{"x", MakePrimitiveTypeRef(Float32Kind), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), true},
 		Field{"b", MakePrimitiveTypeRef(BoolKind), true},
 	}, Choices{})
 	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("A3", tref))
-	ref := RegisterPackage(&pkg)
+	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
-	a := parseJson(fmt.Sprintf(`[%d, "%s", "A3", 42, false, true, false]`, TypeRefKind, ref.String()))
+	a := parseJson(`[%d, "%s", "A3", 42, false, true, false]`, TypeRefKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
 
-	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+	structTr := MakeTypeRef("A3", pkgRef)
+	RegisterFromValFunction(structTr, func(v Value) NomsValue {
+		return valueAsNomsValue{v, structTr}
 	})
 
-	assert.Equal(TypeRefKind, tr.Kind())
-	v := r.readExternal(tr).NomsValue().(Map)
+	v := r.readTopLevelValue().NomsValue().(Map)
 
 	assert.True(v.Get(NewString("$name")).Equals(NewString("A3")))
-	assert.True(v.Get(NewString("$type")).Equals(tr))
+	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Float32(42)))
 	assert.False(v.Has(NewString("s")))
 	assert.True(v.Get(NewString("b")).Equals(Bool(false)))
@@ -302,7 +262,6 @@ func TestReadStructWithList(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	// Cannot use parse since it is in a different package that depends on types!
 	// struct A4 {
 	//   b: Bool
 	//   l: List(Int32)
@@ -315,26 +274,26 @@ func TestReadStructWithList(t *testing.T) {
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	}, Choices{})
 	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("A4", tref))
-	ref := RegisterPackage(&pkg)
+	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
-	a := parseJson(fmt.Sprintf(`[%d, "%s", "A4", true, [0, 1, 2], "hi"]`, TypeRefKind, ref.String()))
+	a := parseJson(`[%d, "%s", "A4", true, [0, 1, 2], "hi"]`, TypeRefKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
+
+	structTr := MakeTypeRef("A4", pkgRef)
+	RegisterFromValFunction(structTr, func(v Value) NomsValue {
+		return valueAsNomsValue{v, structTr}
+	})
+
 	l32Tr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int32Kind))
-
-	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
-	})
 	RegisterFromValFunction(l32Tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+		return valueAsNomsValue{v, l32Tr}
 	})
 
-	assert.Equal(TypeRefKind, tr.Kind())
-	v := r.readExternal(tr).NomsValue().(Map)
+	v := r.readTopLevelValue().NomsValue().(Map)
 
 	assert.True(v.Get(NewString("$name")).Equals(NewString("A4")))
-	assert.True(v.Get(NewString("$type")).Equals(tr))
+	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("b")).Equals(Bool(true)))
 	assert.True(v.Get(NewString("l")).Equals(NewList(Int32(0), Int32(1), Int32(2))))
 	assert.True(v.Get(NewString("s")).Equals(NewString("hi")))
@@ -344,7 +303,6 @@ func TestReadStructWithValue(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	// Cannot use parse since it is in a different package that depends on types!
 	// struct A5 {
 	//   b: Bool
 	//   v: Value
@@ -357,22 +315,21 @@ func TestReadStructWithValue(t *testing.T) {
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	}, Choices{})
 	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("A5", tref))
-	ref := RegisterPackage(&pkg)
+	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
-	a := parseJson(fmt.Sprintf(`[%d, "%s", "A5", true, %d, 42, "hi"]`, TypeRefKind, ref.String(), UInt8Kind))
+	a := parseJson(`[%d, "%s", "A5", true, %d, 42, "hi"]`, TypeRefKind, pkgRef.String(), UInt8Kind)
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
 
-	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+	structTr := MakeTypeRef("A5", pkgRef)
+	RegisterFromValFunction(structTr, func(v Value) NomsValue {
+		return valueAsNomsValue{v, structTr}
 	})
 
-	assert.Equal(TypeRefKind, tr.Kind())
-	v := r.readExternal(tr).NomsValue().(Map)
+	v := r.readTopLevelValue().NomsValue().(Map)
 
 	assert.True(v.Get(NewString("$name")).Equals(NewString("A5")))
-	assert.True(v.Get(NewString("$type")).Equals(tr))
+	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("b")).Equals(Bool(true)))
 	assert.True(v.Get(NewString("v")).Equals(UInt8(42)))
 	assert.True(v.Get(NewString("s")).Equals(NewString("hi")))
@@ -382,7 +339,6 @@ func TestReadValueStruct(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	// Cannot use parse since it is in a different package that depends on types!
 	// struct A1 {
 	//   x: Float32
 	//   b: Bool
@@ -398,17 +354,15 @@ func TestReadValueStruct(t *testing.T) {
 	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
-	a := parseJson(fmt.Sprintf(`[%d, %d, "%s", "A1", 42, "hi", true]`, ValueKind, TypeRefKind, pkgRef.String()))
+	a := parseJson(`[%d, %d, "%s", "A1", 42, "hi", true]`, ValueKind, TypeRefKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
 
 	structTr := MakeTypeRef("A1", pkgRef)
 	RegisterFromValFunction(structTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+		return valueAsNomsValue{v, structTr}
 	})
 
-	assert.Equal(ValueKind, tr.Kind())
-	v := r.readTopLevelValue(tr, &pkg).NomsValue().(Map)
+	v := r.readTopLevelValue().NomsValue().(Map)
 
 	assert.True(v.Get(NewString("$name")).Equals(NewString("A1")))
 	assert.True(v.Get(NewString("$type")).Equals(structTr))
@@ -423,14 +377,13 @@ func TestReadEnum(t *testing.T) {
 
 	tref := MakeEnumTypeRef("E", "a", "b", "c")
 	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("E", tref))
-	ref := RegisterPackage(&pkg)
+	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
-	a := parseJson(fmt.Sprintf(`[%d, "%s", "E", 1]`, TypeRefKind, ref.String()))
+	a := parseJson(`[%d, "%s", "E", 1]`, TypeRefKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
-	assert.Equal(TypeRefKind, tr.Kind())
-	v := r.readExternal(tr).NomsValue()
+
+	v := r.readTopLevelValue().NomsValue()
 	assert.Equal(uint32(1), uint32(v.(UInt32)))
 }
 
@@ -440,14 +393,13 @@ func TestReadValueEnum(t *testing.T) {
 
 	tref := MakeEnumTypeRef("E", "a", "b", "c")
 	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("E", tref))
-	ref := RegisterPackage(&pkg)
+	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
-	a := parseJson(fmt.Sprintf(`[%d, %d, "%s", "E", 1]`, ValueKind, TypeRefKind, ref.String()))
+	a := parseJson(`[%d, %d, "%s", "E", 1]`, ValueKind, TypeRefKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
-	assert.Equal(ValueKind, tr.Kind())
-	v := r.readTopLevelValue(tr, &pkg).NomsValue()
+
+	v := r.readTopLevelValue().NomsValue()
 	assert.Equal(uint32(1), uint32(v.(UInt32)))
 }
 
@@ -457,16 +409,16 @@ func TestReadRef(t *testing.T) {
 
 	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
 
-	a := parseJson(fmt.Sprintf(`[%d, %d, "%s"]`, RefKind, UInt32Kind, r.String()))
+	a := parseJson(`[%d, %d, "%s"]`, RefKind, UInt32Kind, r.String())
 	reader := newJsonArrayReader(a, cs)
-	tr := reader.readTypeRef()
-	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+
+	refTr := MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(UInt32Kind))
+	RegisterFromValFunction(refTr, func(v Value) NomsValue {
+		return valueAsNomsValue{v, refTr}
 	})
-	assert.Equal(RefKind, tr.Kind())
-	assert.Equal(UInt32Kind, tr.Desc.(CompoundDesc).ElemTypes[0].Kind())
-	rOut := reader.readRefValue(tr).NomsValue()
-	assert.True(Ref{r}.Equals(rOut))
+
+	v := reader.readTopLevelValue().NomsValue()
+	assert.True(Ref{r}.Equals(v))
 }
 
 func TestReadValueRef(t *testing.T) {
@@ -475,24 +427,22 @@ func TestReadValueRef(t *testing.T) {
 
 	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
 
-	a := parseJson(fmt.Sprintf(`[%d, %d, %d, "%s"]`, ValueKind, RefKind, UInt32Kind, r.String()))
+	a := parseJson(`[%d, %d, %d, "%s"]`, ValueKind, RefKind, UInt32Kind, r.String())
 	reader := newJsonArrayReader(a, cs)
-	tr := reader.readTypeRef()
 
 	refTypeRef := MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(UInt32Kind))
 	RegisterFromValFunction(refTypeRef, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+		return valueAsNomsValue{v, refTypeRef}
 	})
-	assert.Equal(ValueKind, tr.Kind())
-	rOut := reader.readTopLevelValue(tr, nil).NomsValue()
-	assert.True(Ref{r}.Equals(rOut))
+
+	v := reader.readTopLevelValue().NomsValue()
+	assert.True(Ref{r}.Equals(v))
 }
 
 func TestReadStructWithEnum(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	// Cannot use parse since it is in a different package that depends on types!
 	// enum E {
 	//   a
 	//   b
@@ -513,21 +463,96 @@ func TestReadStructWithEnum(t *testing.T) {
 	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
-	a := parseJson(fmt.Sprintf(`[%d, "%s", "A1", 42, 1, true]`, TypeRefKind, pkgRef.String()))
+	a := parseJson(`[%d, "%s", "A1", 42, 1, true]`, TypeRefKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
-	tr := r.readTypeRef()
 
-	// structTr := MakeTypeRef("A1", ref)
-	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v}
+	structTr := MakeTypeRef("A1", pkgRef)
+	RegisterFromValFunction(structTr, func(v Value) NomsValue {
+		return valueAsNomsValue{v, structTr}
 	})
 
-	assert.Equal(TypeRefKind, tr.Kind())
-	v := r.readTopLevelValue(tr, &pkg).NomsValue().(Map)
+	v := r.readTopLevelValue().NomsValue().(Map)
 
 	assert.True(v.Get(NewString("$name")).Equals(NewString("A1")))
-	assert.True(v.Get(NewString("$type")).Equals(tr))
+	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Int16(42)))
 	assert.True(v.Get(NewString("e")).Equals(UInt32(1)))
 	assert.True(v.Get(NewString("b")).Equals(Bool(true)))
+}
+
+func TestReadTypeRefValue(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+
+	test := func(expected TypeRef, json string, vs ...interface{}) {
+		a := parseJson(json, vs...)
+		r := newJsonArrayReader(a, cs)
+		tr := r.readTopLevelValue().NomsValue()
+		assert.True(expected.Equals(tr))
+	}
+
+	test(MakePrimitiveTypeRef(Int32Kind),
+		`[%d, %d]`, TypeRefKind, Int32Kind)
+	test(MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(BoolKind)),
+		`[%d, %d, [%d]]`, TypeRefKind, ListKind, BoolKind)
+	test(MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(BoolKind), MakePrimitiveTypeRef(StringKind)),
+		`[%d, %d, [%d, %d]]`, TypeRefKind, MapKind, BoolKind, StringKind)
+	test(MakeEnumTypeRef("E", "a", "b", "c"),
+		`[%d, %d, "E", ["a", "b", "c"]]`, TypeRefKind, EnumKind)
+
+	test(MakeStructTypeRef("S", []Field{
+		Field{"x", MakePrimitiveTypeRef(Int16Kind), false},
+		Field{"v", MakePrimitiveTypeRef(ValueKind), true},
+	}, Choices{}),
+		`[%d, %d, "S", ["x", %d, false, "v", %d, true], []]`, TypeRefKind, StructKind, Int16Kind, ValueKind)
+
+	test(MakeStructTypeRef("S", []Field{}, Choices{
+		Field{"x", MakePrimitiveTypeRef(Int16Kind), false},
+		Field{"v", MakePrimitiveTypeRef(ValueKind), false},
+	}),
+		`[%d, %d, "S", [], ["x", %d, false, "v", %d, false]]`, TypeRefKind, StructKind, Int16Kind, ValueKind)
+
+	pkgRef := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
+	test(MakeTypeRef("E", pkgRef), `[%d, %d, "%s", "E"]`, TypeRefKind, TypeRefKind, pkgRef.String())
+
+	test(MakeStructTypeRef("S", []Field{
+		Field{"e", MakeTypeRef("E", pkgRef), false},
+		Field{"x", MakePrimitiveTypeRef(Int64Kind), false},
+	}, Choices{}),
+		`[%d, %d, "S", ["e", %d, "%s", "E", false, "x", %d, false], []]`, TypeRefKind, StructKind, TypeRefKind, pkgRef.String(), Int64Kind)
+}
+
+func TestReadPackage(t *testing.T) {
+	cs := chunks.NewMemoryStore()
+	pkg := PackageDef{
+		NamedTypes: MapOfStringToTypeRefDef{
+			"EnumStruct": MakeStructTypeRef("EnumStruct",
+				[]Field{
+					Field{"hand", MakeTypeRef("Handedness", ref.Ref{}), false},
+				},
+				Choices{},
+			),
+			"Handedness": MakeEnumTypeRef("Handedness", "right", "left", "switch"),
+		},
+	}.New()
+
+	// struct Package {
+	// 	Dependencies: Set(Ref(Package))
+	// 	NamedTypes: Map(String, TypeRef)
+	// }
+
+	a := []interface{}{
+		float64(TypeRefKind), __typesPackageInFile_package_CachedRef.String(), "Package",
+		[]interface{}{}, // Dependencies
+		[]interface{}{
+			"Handedness", float64(EnumKind), "Handedness", []interface{}{"right", "left", "switch"},
+			"EnumStruct", float64(StructKind), "EnumStruct", []interface{}{
+				"hand", float64(TypeRefKind), "sha1-0000000000000000000000000000000000000000", "Handedness", false,
+			},
+			[]interface{}{},
+		},
+	}
+	r := newJsonArrayReader(a, cs)
+	pkg2 := r.readTopLevelValue().(Package)
+	assert.True(t, pkg.Equals(pkg2))
 }

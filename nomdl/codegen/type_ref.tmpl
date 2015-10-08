@@ -1,11 +1,12 @@
 // A Noms Value that describes {{.Name}}.
-var __typeRefFor{{.Name}} = {{toTypesTypeRef .Type .FileID .PackageName}}
+var __typeRefFor{{.Name}} types.TypeRef
 
 func (m {{.Name}}) TypeRef() types.TypeRef {
 	return __typeRefFor{{.Name}}
 }
 
 func init() {
+	__typeRefFor{{.Name}} = {{toTypesTypeRef .Type .FileID .PackageName}}
 	types.RegisterFromValFunction(__typeRefFor{{.Name}}, func(v types.Value) types.NomsValue {
 		return {{.Name}}FromVal(v)
 	})

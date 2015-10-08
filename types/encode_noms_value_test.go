@@ -7,36 +7,13 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-type testNomsValue struct {
-	Value
-	t TypeRef
-}
-
-func (nv testNomsValue) NomsValue() Value {
-	return nv.Value
-}
-
-func (nv testNomsValue) TypeRef() TypeRef {
-	return nv.t
-}
-
-func TestWrite(t *testing.T) {
-	assert := assert.New(t)
-
-	w := newJsonArrayWriter()
-	w.writeTypeRef(MakePrimitiveTypeRef(UInt64Kind))
-
-	assert.EqualValues([]interface{}{UInt64Kind}, *w)
-}
-
 func TestWritePrimitives(t *testing.T) {
 	assert := assert.New(t)
 
 	f := func(k NomsKind, v Value, ex interface{}) {
 		w := newJsonArrayWriter()
 		tref := MakePrimitiveTypeRef(k)
-		w.writeTypeRef(tref)
-		w.writeValue(tref, v, nil)
+		w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 		assert.EqualValues([]interface{}{k, ex}, *w)
 	}
 
@@ -64,8 +41,7 @@ func TestWriteList(t *testing.T) {
 	v := NewList(Int32(0), Int32(1), Int32(2), Int32(3))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeList(tref, v, nil)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{ListKind, Int32Kind, int32(0), int32(1), int32(2), int32(3)}, *w)
 }
 
@@ -77,8 +53,7 @@ func TestWriteListOfList(t *testing.T) {
 	v := NewList(NewList(Int16(0)), NewList(Int16(1), Int16(2), Int16(3)))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeList(tref, v, nil)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{ListKind, ListKind, Int16Kind, []interface{}{int16(0)}, []interface{}{int16(1), int16(2), int16(3)}}, *w)
 }
 
@@ -89,8 +64,7 @@ func TestWriteSet(t *testing.T) {
 	v := NewSet(UInt32(0), UInt32(1), UInt32(2), UInt32(3))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeSet(tref, v, nil)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	// the order of the elements is based on the ref of the value.
 	assert.EqualValues([]interface{}{SetKind, UInt32Kind, uint32(3), uint32(1), uint32(0), uint32(2)}, *w)
 }
@@ -103,8 +77,7 @@ func TestWriteSetOfSet(t *testing.T) {
 	v := NewSet(NewSet(Int32(0)), NewSet(Int32(1), Int32(2), Int32(3)))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeSet(tref, v, nil)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	// the order of the elements is based on the ref of the value.
 	assert.EqualValues([]interface{}{SetKind, SetKind, Int32Kind, []interface{}{int32(0)}, []interface{}{int32(1), int32(3), int32(2)}}, *w)
 }
@@ -116,8 +89,7 @@ func TestWriteMap(t *testing.T) {
 	v := NewMap(NewString("a"), Bool(false), NewString("b"), Bool(true))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeMap(tref, v, nil)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	// the order of the elements is based on the ref of the value.
 	assert.EqualValues([]interface{}{MapKind, StringKind, BoolKind, "a", false, "b", true}, *w)
 }
@@ -131,8 +103,7 @@ func TestWriteMapOfMap(t *testing.T) {
 	v := NewMap(NewMap(NewString("a"), Int64(0)), NewSet(Bool(true)))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeMap(tref, v, nil)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	// the order of the elements is based on the ref of the value.
 	assert.EqualValues([]interface{}{MapKind, MapKind, StringKind, Int64Kind, SetKind, BoolKind, []interface{}{"a", int64(0)}, []interface{}{true}}, *w)
 }
@@ -147,8 +118,7 @@ func TestWriteEmptyStruct(t *testing.T) {
 	v := NewMap()
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeExternal(tref, v, &pkg)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{TypeRefKind, pkgRef.String(), "S"}, *w)
 }
 
@@ -165,8 +135,7 @@ func TestWriteStruct(t *testing.T) {
 	v := NewMap(NewString("x"), Int8(42), NewString("b"), Bool(true))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeExternal(tref, v, &pkg)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{TypeRefKind, pkgRef.String(), "S", int8(42), true}, *w)
 }
 
@@ -183,15 +152,13 @@ func TestWriteStructOptionalField(t *testing.T) {
 	v := NewMap(NewString("x"), Int8(42), NewString("b"), Bool(true))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeExternal(tref, v, &pkg)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{TypeRefKind, pkgRef.String(), "S", true, int8(42), true}, *w)
 
 	v = NewMap(NewString("b"), Bool(true))
 
 	w = newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeExternal(tref, v, &pkg)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{TypeRefKind, pkgRef.String(), "S", false, true}, *w)
 }
 
@@ -210,15 +177,13 @@ func TestWriteStructWithUnion(t *testing.T) {
 	v := NewMap(NewString("x"), Int8(42), NewString("$unionIndex"), UInt32(1), NewString("$unionValue"), NewString("hi"))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeExternal(tref, v, &pkg)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{TypeRefKind, pkgRef.String(), "S", int8(42), uint32(1), "hi"}, *w)
 
 	v = NewMap(NewString("x"), Int8(42), NewString("$unionIndex"), UInt32(0), NewString("$unionValue"), Bool(true))
 
 	w = newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeExternal(tref, v, &pkg)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{TypeRefKind, pkgRef.String(), "S", int8(42), uint32(0), true}, *w)
 }
 
@@ -234,14 +199,12 @@ func TestWriteStructWithList(t *testing.T) {
 	v := NewMap(NewString("l"), NewList(NewString("a"), NewString("b")))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeExternal(tref, v, &pkg)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{TypeRefKind, pkgRef.String(), "S", []interface{}{"a", "b"}}, *w)
 
 	v = NewMap(NewString("l"), NewList())
 	w = newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeExternal(tref, v, &pkg)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{TypeRefKind, pkgRef.String(), "S", []interface{}{}}, *w)
 }
 
@@ -260,8 +223,7 @@ func TestWriteStructWithStruct(t *testing.T) {
 	v := NewMap(NewString("s"), NewMap(NewString("x"), Int32(42)))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeExternal(tref, v, &pkg)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{TypeRefKind, pkgRef.String(), "S", int32(42)}, *w)
 }
 
@@ -275,8 +237,7 @@ func TestWriteEnum(t *testing.T) {
 	v := UInt32(1)
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeExternal(tref, v, &pkg)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{TypeRefKind, pkgRef.String(), "E", uint32(1)}, *w)
 }
 
@@ -291,8 +252,7 @@ func TestWriteListOfEnum(t *testing.T) {
 	v := NewList(UInt32(0), UInt32(1), UInt32(2))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeList(tref, v, &pkg)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{ListKind, TypeRefKind, pkgRef.String(), "E", uint32(0), uint32(1), uint32(2)}, *w)
 }
 
@@ -316,8 +276,7 @@ func TestWriteListOfValue(t *testing.T) {
 	)
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeList(tref, v, nil)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 
 	assert.EqualValues([]interface{}{ListKind, ValueKind,
 		BoolKind, true,
@@ -349,20 +308,133 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 	v := NewList(NewMap(NewString("$type"), st, NewString("x"), Int32(42)))
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	w.writeList(tref, v, &pkg)
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{ListKind, ValueKind, TypeRefKind, pkgRef.String(), "S", int32(42)}, *w)
+}
+
+func TestWriteListOfValueWithTypeRefs(t *testing.T) {
+	assert := assert.New(t)
+
+	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("S",
+		MakeStructTypeRef("S", []Field{
+			Field{"x", MakePrimitiveTypeRef(Int32Kind), false},
+		}, Choices{})))
+	pkgRef := RegisterPackage(&pkg)
+
+	tref := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
+	v := NewList(
+		Bool(true),
+		MakePrimitiveTypeRef(Int32Kind),
+		MakePrimitiveTypeRef(TypeRefKind),
+		MakeTypeRef("S", pkgRef),
+	)
+
+	w := newJsonArrayWriter()
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
+	assert.EqualValues([]interface{}{ListKind, ValueKind,
+		BoolKind, true,
+		TypeRefKind, Int32Kind,
+		TypeRefKind, TypeRefKind,
+		TypeRefKind, TypeRefKind, pkgRef.String(), "S",
+	}, *w)
 }
 
 func TestWriteRef(t *testing.T) {
 	assert := assert.New(t)
 
 	tref := MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(UInt32Kind))
+	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
+	v := Ref{R: r}
 
 	w := newJsonArrayWriter()
-	w.writeTypeRef(tref)
-	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-	w.writeRef(r)
-
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	assert.EqualValues([]interface{}{RefKind, UInt32Kind, r.String()}, *w)
+}
+
+func TestWriteTypeRefValue(t *testing.T) {
+	assert := assert.New(t)
+
+	test := func(expected []interface{}, v TypeRef) {
+		w := newJsonArrayWriter()
+		nv := valueAsNomsValue{Value: v, t: MakePrimitiveTypeRef(TypeRefKind)}
+		w.writeTopLevelValue(nv)
+		assert.EqualValues(expected, *w)
+	}
+
+	test([]interface{}{TypeRefKind, Int32Kind}, MakePrimitiveTypeRef(Int32Kind))
+	test([]interface{}{TypeRefKind, ListKind, []interface{}{BoolKind}},
+		MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(BoolKind)))
+	test([]interface{}{TypeRefKind, MapKind, []interface{}{BoolKind, StringKind}},
+		MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(BoolKind), MakePrimitiveTypeRef(StringKind)))
+	test([]interface{}{TypeRefKind, EnumKind, "E", []interface{}{"a", "b", "c"}},
+		MakeEnumTypeRef("E", "a", "b", "c"))
+
+	test([]interface{}{TypeRefKind, StructKind, "S", []interface{}{"x", Int16Kind, false, "v", ValueKind, true}, []interface{}{}},
+		MakeStructTypeRef("S", []Field{
+			Field{"x", MakePrimitiveTypeRef(Int16Kind), false},
+			Field{"v", MakePrimitiveTypeRef(ValueKind), true},
+		}, Choices{}))
+
+	test([]interface{}{TypeRefKind, StructKind, "S", []interface{}{}, []interface{}{"x", Int16Kind, false, "v", ValueKind, false}},
+		MakeStructTypeRef("S", []Field{}, Choices{
+			Field{"x", MakePrimitiveTypeRef(Int16Kind), false},
+			Field{"v", MakePrimitiveTypeRef(ValueKind), false},
+		}))
+
+	pkgRef := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
+	test([]interface{}{TypeRefKind, TypeRefKind, pkgRef.String(), "E"},
+		MakeTypeRef("E", pkgRef))
+
+	test([]interface{}{TypeRefKind, StructKind, "S", []interface{}{"e", TypeRefKind, pkgRef.String(), "E", false, "x", Int64Kind, false}, []interface{}{}},
+		MakeStructTypeRef("S", []Field{
+			Field{"e", MakeTypeRef("E", pkgRef), false},
+			Field{"x", MakePrimitiveTypeRef(Int64Kind), false},
+		}, Choices{}))
+}
+
+func TestWriteListOfTypeRefs(t *testing.T) {
+	assert := assert.New(t)
+
+	tref := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(TypeRefKind))
+	v := NewList(MakePrimitiveTypeRef(BoolKind), MakeEnumTypeRef("E", "a", "b", "c"), MakePrimitiveTypeRef(StringKind))
+
+	w := newJsonArrayWriter()
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
+	assert.EqualValues([]interface{}{ListKind, TypeRefKind, BoolKind, EnumKind, "E", []interface{}{"a", "b", "c"}, StringKind}, *w)
+}
+
+func TestWritePackage(t *testing.T) {
+	pkg := PackageDef{
+		NamedTypes: MapOfStringToTypeRefDef{
+			"EnumStruct": MakeStructTypeRef("EnumStruct",
+				[]Field{
+					Field{"hand", MakeTypeRef("Handedness", ref.Ref{}), false},
+				},
+				Choices{},
+			),
+			"Handedness": MakeEnumTypeRef("Handedness", "right", "left", "switch"),
+		},
+	}.New()
+
+	w := newJsonArrayWriter()
+	w.writeTopLevelValue(pkg)
+
+	// struct Package {
+	// 	Dependencies: Set(Ref(Package))
+	// 	NamedTypes: Map(String, TypeRef)
+	// }
+
+	exp := []interface{}{
+		TypeRefKind, __typesPackageInFile_package_CachedRef.String(), "Package",
+		[]interface{}{}, // Dependencies
+		[]interface{}{
+			"Handedness", EnumKind, "Handedness", []interface{}{"right", "left", "switch"},
+			"EnumStruct", StructKind, "EnumStruct", []interface{}{
+				"hand", TypeRefKind, "sha1-0000000000000000000000000000000000000000", "Handedness", false,
+			},
+			[]interface{}{},
+		},
+	}
+
+	assert.EqualValues(t, exp, w.toArray())
 }

@@ -129,13 +129,14 @@ func (s SetOfCommit) Chunks() []types.Future {
 }
 
 // A Noms Value that describes SetOfCommit.
-var __typeRefForSetOfCommit = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", __datasPackageInFile_types_CachedRef))
+var __typeRefForSetOfCommit types.TypeRef
 
 func (m SetOfCommit) TypeRef() types.TypeRef {
 	return __typeRefForSetOfCommit
 }
 
 func init() {
+	__typeRefForSetOfCommit = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", __datasPackageInFile_types_CachedRef))
 	types.RegisterFromValFunction(__typeRefForSetOfCommit, func(v types.Value) types.NomsValue {
 		return SetOfCommitFromVal(v)
 	})

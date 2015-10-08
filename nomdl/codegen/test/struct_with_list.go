@@ -195,13 +195,14 @@ func (l ListOfUInt8) Chunks() []types.Future {
 }
 
 // A Noms Value that describes ListOfUInt8.
-var __typeRefForListOfUInt8 = types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
+var __typeRefForListOfUInt8 types.TypeRef
 
 func (m ListOfUInt8) TypeRef() types.TypeRef {
 	return __typeRefForListOfUInt8
 }
 
 func init() {
+	__typeRefForListOfUInt8 = types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
 	types.RegisterFromValFunction(__typeRefForListOfUInt8, func(v types.Value) types.NomsValue {
 		return ListOfUInt8FromVal(v)
 	})

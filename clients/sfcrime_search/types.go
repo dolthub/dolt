@@ -109,13 +109,14 @@ func (l ListOfIncident) Chunks() []types.Future {
 }
 
 // A Noms Value that describes ListOfIncident.
-var __typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef))
+var __typeRefForListOfIncident types.TypeRef
 
 func (m ListOfIncident) TypeRef() types.TypeRef {
 	return __typeRefForListOfIncident
 }
 
 func init() {
+	__typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef))
 	types.RegisterFromValFunction(__typeRefForListOfIncident, func(v types.Value) types.NomsValue {
 		return ListOfIncidentFromVal(v)
 	})
@@ -683,13 +684,14 @@ func (m MapOfStringToSQuadTree) Chunks() []types.Future {
 }
 
 // A Noms Value that describes MapOfStringToSQuadTree.
-var __typeRefForMapOfStringToSQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef))
+var __typeRefForMapOfStringToSQuadTree types.TypeRef
 
 func (m MapOfStringToSQuadTree) TypeRef() types.TypeRef {
 	return __typeRefForMapOfStringToSQuadTree
 }
 
 func init() {
+	__typeRefForMapOfStringToSQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToSQuadTree, func(v types.Value) types.NomsValue {
 		return MapOfStringToSQuadTreeFromVal(v)
 	})

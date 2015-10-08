@@ -81,13 +81,14 @@ func (l ListOfMapOfStringToValue) Chunks() []types.Future {
 }
 
 // A Noms Value that describes ListOfMapOfStringToValue.
-var __typeRefForListOfMapOfStringToValue = types.MakeCompoundTypeRef("", types.ListKind, types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind)))
+var __typeRefForListOfMapOfStringToValue types.TypeRef
 
 func (m ListOfMapOfStringToValue) TypeRef() types.TypeRef {
 	return __typeRefForListOfMapOfStringToValue
 }
 
 func init() {
+	__typeRefForListOfMapOfStringToValue = types.MakeCompoundTypeRef("", types.ListKind, types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind)))
 	types.RegisterFromValFunction(__typeRefForListOfMapOfStringToValue, func(v types.Value) types.NomsValue {
 		return ListOfMapOfStringToValueFromVal(v)
 	})
@@ -219,13 +220,14 @@ func (m MapOfStringToValue) Chunks() []types.Future {
 }
 
 // A Noms Value that describes MapOfStringToValue.
-var __typeRefForMapOfStringToValue = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
+var __typeRefForMapOfStringToValue types.TypeRef
 
 func (m MapOfStringToValue) TypeRef() types.TypeRef {
 	return __typeRefForMapOfStringToValue
 }
 
 func init() {
+	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.NomsValue {
 		return MapOfStringToValueFromVal(v)
 	})
@@ -347,13 +349,14 @@ func (m MapOfStringToListOfPitch) Chunks() []types.Future {
 }
 
 // A Noms Value that describes MapOfStringToListOfPitch.
-var __typeRefForMapOfStringToListOfPitch = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Pitch", __mainPackageInFile_types_CachedRef)))
+var __typeRefForMapOfStringToListOfPitch types.TypeRef
 
 func (m MapOfStringToListOfPitch) TypeRef() types.TypeRef {
 	return __typeRefForMapOfStringToListOfPitch
 }
 
 func init() {
+	__typeRefForMapOfStringToListOfPitch = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Pitch", __mainPackageInFile_types_CachedRef)))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToListOfPitch, func(v types.Value) types.NomsValue {
 		return MapOfStringToListOfPitchFromVal(v)
 	})
@@ -474,13 +477,14 @@ func (l ListOfPitch) Chunks() []types.Future {
 }
 
 // A Noms Value that describes ListOfPitch.
-var __typeRefForListOfPitch = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Pitch", __mainPackageInFile_types_CachedRef))
+var __typeRefForListOfPitch types.TypeRef
 
 func (m ListOfPitch) TypeRef() types.TypeRef {
 	return __typeRefForListOfPitch
 }
 
 func init() {
+	__typeRefForListOfPitch = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Pitch", __mainPackageInFile_types_CachedRef))
 	types.RegisterFromValFunction(__typeRefForListOfPitch, func(v types.Value) types.NomsValue {
 		return ListOfPitchFromVal(v)
 	})
@@ -700,13 +704,14 @@ func (m MapOfStringToString) Chunks() []types.Future {
 }
 
 // A Noms Value that describes MapOfStringToString.
-var __typeRefForMapOfStringToString = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.StringKind))
+var __typeRefForMapOfStringToString types.TypeRef
 
 func (m MapOfStringToString) TypeRef() types.TypeRef {
 	return __typeRefForMapOfStringToString
 }
 
 func init() {
+	__typeRefForMapOfStringToString = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.StringKind))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToString, func(v types.Value) types.NomsValue {
 		return MapOfStringToStringFromVal(v)
 	})
