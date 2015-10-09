@@ -67,59 +67,52 @@ func (w *jsonArrayWriter) writeTypeRefAsTag(t TypeRef) {
 func (w *jsonArrayWriter) writeTopLevelValue(v NomsValue) {
 	tr := v.TypeRef()
 	w.writeTypeRefAsTag(tr)
-	w.writeValueWithoutTag(v.NomsValue(), tr, nil)
+	w.writeValue(v.NomsValue(), tr, nil)
 }
 
-func (w *jsonArrayWriter) writeValueWithoutTag(v Value, tr TypeRef, pkg *Package) {
+func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 	switch tr.Kind() {
 	case BlobKind:
 		panic("not yet implemented")
 	case BoolKind, Float32Kind, Float64Kind, Int16Kind, Int32Kind, Int64Kind, Int8Kind, UInt16Kind, UInt32Kind, UInt64Kind, UInt8Kind:
 		w.write(v.(primitive).ToPrimitive())
 	case ListKind:
+		w2 := newJsonArrayWriter()
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
 		v.(List).IterAll(func(v Value, i uint64) {
-			w.writeValue(v, elemType, pkg)
+			w2.writeValue(v, elemType, pkg)
 		})
+		w.write(w2.toArray())
 	case MapKind:
+		w2 := newJsonArrayWriter()
 		elemTypes := tr.Desc.(CompoundDesc).ElemTypes
 		v.(Map).IterAll(func(k, v Value) {
-			w.writeValue(k, elemTypes[0], pkg)
-			w.writeValue(v, elemTypes[1], pkg)
+			w2.writeValue(k, elemTypes[0], pkg)
+			w2.writeValue(v, elemTypes[1], pkg)
 		})
+		w.write(w2.toArray())
 	case RefKind:
 		w.writeRef(v.Ref())
 	case SetKind:
+		w2 := newJsonArrayWriter()
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
 		v.(Set).IterAll(func(v Value) {
-			w.writeValue(v, elemType, pkg)
+			w2.writeValue(v, elemType, pkg)
 		})
+		w.write(w2.toArray())
 	case StringKind:
 		w.write(v.(String).String())
 	case TypeRefKind:
-		pkg := LookupPackage(tr.PackageRef())
+		pkgRef := tr.PackageRef()
+		if pkgRef != (ref.Ref{}) {
+			pkg = LookupPackage(tr.PackageRef())
+		}
 		w.writeTypeRefKindValue(v, tr, pkg)
-	case ValueKind:
-		d.Chk.Fail("Should be handled by callers")
-	default:
-		d.Chk.Fail("Unknown NomsKind")
-	}
-}
-
-func (w *jsonArrayWriter) writeValue(v Value, t TypeRef, pkg *Package) {
-	k := t.Kind()
-	switch k {
-	case ListKind, MapKind, SetKind:
-		w2 := newJsonArrayWriter()
-		w2.writeValueWithoutTag(v, t, pkg)
-		w.write(w2.toArray())
-	case TypeRefKind:
-		w.writeTypeRefKindValue(v, t, pkg)
 	case ValueKind:
 		w.writeTypeRefAsTag(v.TypeRef())
 		w.writeValue(v, v.TypeRef(), pkg)
 	default:
-		w.writeValueWithoutTag(v, t, pkg)
+		d.Chk.Fail("Unknown NomsKind")
 	}
 }
 

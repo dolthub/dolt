@@ -105,7 +105,7 @@ func (r *jsonArrayReader) readList(t TypeRef, pkg *Package) NomsValue {
 	ll := []Value{}
 	elemType := desc.ElemTypes[0]
 	for !r.atEnd() {
-		v := r.readTopLevelValueWithoutTag(elemType, pkg)
+		v := r.readValueWithoutTag(elemType, pkg)
 		ll = append(ll, v.NomsValue())
 	}
 
@@ -117,7 +117,7 @@ func (r *jsonArrayReader) readSet(t TypeRef, pkg *Package) NomsValue {
 	ll := []Value{}
 	elemType := desc.ElemTypes[0]
 	for !r.atEnd() {
-		v := r.readTopLevelValueWithoutTag(elemType, pkg)
+		v := r.readValueWithoutTag(elemType, pkg)
 		ll = append(ll, v.NomsValue())
 	}
 	return ToNomsValueFromTypeRef(t, NewSet(ll...))
@@ -129,8 +129,8 @@ func (r *jsonArrayReader) readMap(t TypeRef, pkg *Package) NomsValue {
 	keyType := desc.ElemTypes[0]
 	valueType := desc.ElemTypes[1]
 	for !r.atEnd() {
-		k := r.readTopLevelValueWithoutTag(keyType, pkg)
-		v := r.readTopLevelValueWithoutTag(valueType, pkg)
+		k := r.readValueWithoutTag(keyType, pkg)
+		v := r.readValueWithoutTag(valueType, pkg)
 		ll = append(ll, k.NomsValue(), v.NomsValue())
 	}
 	return ToNomsValueFromTypeRef(t, NewMap(ll...))
@@ -148,10 +148,10 @@ func (r *jsonArrayReader) readRefValue(t TypeRef) NomsValue {
 
 func (r *jsonArrayReader) readTopLevelValue() NomsValue {
 	t := r.readTypeRefAsTag()
-	return r.readTopLevelValueWithoutTag(t, nil)
+	return r.readValueWithoutTag(t, nil)
 }
 
-func (r *jsonArrayReader) readTopLevelValueWithoutTag(t TypeRef, pkg *Package) NomsValue {
+func (r *jsonArrayReader) readValueWithoutTag(t TypeRef, pkg *Package) NomsValue {
 	switch t.Kind() {
 	case BoolKind:
 		return valueAsNomsValue{Bool(r.read().(bool)), t}
@@ -184,29 +184,22 @@ func (r *jsonArrayReader) readTopLevelValueWithoutTag(t TypeRef, pkg *Package) N
 		t := r.readTypeRefAsTag()
 		return r.readValueWithoutTag(t, pkg)
 	case ListKind:
-		return r.readList(t, pkg)
+		r2 := newJsonArrayReader(r.readArray(), r.cs)
+		return r2.readList(t, pkg)
 	case MapKind:
-		return r.readMap(t, pkg)
+		r2 := newJsonArrayReader(r.readArray(), r.cs)
+		return r2.readMap(t, pkg)
 	case RefKind:
 		return r.readRefValue(t)
 	case SetKind:
-		return r.readSet(t, pkg)
+		r2 := newJsonArrayReader(r.readArray(), r.cs)
+		return r2.readSet(t, pkg)
 	case EnumKind, StructKind:
 		panic("not allowed")
 	case TypeRefKind:
 		return r.readTypeRefKindToValue(t, pkg)
 	}
 	panic("not reachable")
-}
-
-func (r *jsonArrayReader) readValueWithoutTag(t TypeRef, pkg *Package) NomsValue {
-	switch t.Kind() {
-	case ListKind, MapKind, SetKind:
-		r2 := newJsonArrayReader(r.readArray(), r.cs)
-		return r2.readTopLevelValueWithoutTag(t, pkg)
-	}
-
-	return r.readTopLevelValueWithoutTag(t, pkg)
 }
 
 func (r *jsonArrayReader) readTypeRefKindToValue(t TypeRef, pkg *Package) NomsValue {

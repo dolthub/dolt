@@ -42,7 +42,7 @@ func TestWriteList(t *testing.T) {
 
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
-	assert.EqualValues([]interface{}{ListKind, Int32Kind, int32(0), int32(1), int32(2), int32(3)}, *w)
+	assert.EqualValues([]interface{}{ListKind, Int32Kind, []interface{}{int32(0), int32(1), int32(2), int32(3)}}, *w)
 }
 
 func TestWriteListOfList(t *testing.T) {
@@ -54,7 +54,8 @@ func TestWriteListOfList(t *testing.T) {
 
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
-	assert.EqualValues([]interface{}{ListKind, ListKind, Int16Kind, []interface{}{int16(0)}, []interface{}{int16(1), int16(2), int16(3)}}, *w)
+	assert.EqualValues([]interface{}{ListKind, ListKind, Int16Kind,
+		[]interface{}{[]interface{}{int16(0)}, []interface{}{int16(1), int16(2), int16(3)}}}, *w)
 }
 
 func TestWriteSet(t *testing.T) {
@@ -66,7 +67,7 @@ func TestWriteSet(t *testing.T) {
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	// the order of the elements is based on the ref of the value.
-	assert.EqualValues([]interface{}{SetKind, UInt32Kind, uint32(3), uint32(1), uint32(0), uint32(2)}, *w)
+	assert.EqualValues([]interface{}{SetKind, UInt32Kind, []interface{}{uint32(3), uint32(1), uint32(0), uint32(2)}}, *w)
 }
 
 func TestWriteSetOfSet(t *testing.T) {
@@ -79,7 +80,7 @@ func TestWriteSetOfSet(t *testing.T) {
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	// the order of the elements is based on the ref of the value.
-	assert.EqualValues([]interface{}{SetKind, SetKind, Int32Kind, []interface{}{int32(0)}, []interface{}{int32(1), int32(3), int32(2)}}, *w)
+	assert.EqualValues([]interface{}{SetKind, SetKind, Int32Kind, []interface{}{[]interface{}{int32(0)}, []interface{}{int32(1), int32(3), int32(2)}}}, *w)
 }
 
 func TestWriteMap(t *testing.T) {
@@ -91,7 +92,7 @@ func TestWriteMap(t *testing.T) {
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	// the order of the elements is based on the ref of the value.
-	assert.EqualValues([]interface{}{MapKind, StringKind, BoolKind, "a", false, "b", true}, *w)
+	assert.EqualValues([]interface{}{MapKind, StringKind, BoolKind, []interface{}{"a", false, "b", true}}, *w)
 }
 
 func TestWriteMapOfMap(t *testing.T) {
@@ -105,7 +106,7 @@ func TestWriteMapOfMap(t *testing.T) {
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 	// the order of the elements is based on the ref of the value.
-	assert.EqualValues([]interface{}{MapKind, MapKind, StringKind, Int64Kind, SetKind, BoolKind, []interface{}{"a", int64(0)}, []interface{}{true}}, *w)
+	assert.EqualValues([]interface{}{MapKind, MapKind, StringKind, Int64Kind, SetKind, BoolKind, []interface{}{[]interface{}{"a", int64(0)}, []interface{}{true}}}, *w)
 }
 
 func TestWriteEmptyStruct(t *testing.T) {
@@ -253,7 +254,7 @@ func TestWriteListOfEnum(t *testing.T) {
 
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
-	assert.EqualValues([]interface{}{ListKind, TypeRefKind, pkgRef.String(), "E", uint32(0), uint32(1), uint32(2)}, *w)
+	assert.EqualValues([]interface{}{ListKind, TypeRefKind, pkgRef.String(), "E", []interface{}{uint32(0), uint32(1), uint32(2)}}, *w)
 }
 
 func TestWriteListOfValue(t *testing.T) {
@@ -278,7 +279,7 @@ func TestWriteListOfValue(t *testing.T) {
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
 
-	assert.EqualValues([]interface{}{ListKind, ValueKind,
+	assert.EqualValues([]interface{}{ListKind, ValueKind, []interface{}{
 		BoolKind, true,
 		UInt8Kind, uint8(1),
 		UInt16Kind, uint16(1),
@@ -291,7 +292,7 @@ func TestWriteListOfValue(t *testing.T) {
 		Float32Kind, float32(1),
 		Float64Kind, float64(1),
 		StringKind, "hi",
-	}, *w)
+	}}, *w)
 }
 
 func TestWriteListOfValueWithStruct(t *testing.T) {
@@ -309,7 +310,7 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
-	assert.EqualValues([]interface{}{ListKind, ValueKind, TypeRefKind, pkgRef.String(), "S", int32(42)}, *w)
+	assert.EqualValues([]interface{}{ListKind, ValueKind, []interface{}{TypeRefKind, pkgRef.String(), "S", int32(42)}}, *w)
 }
 
 func TestWriteListOfValueWithTypeRefs(t *testing.T) {
@@ -331,12 +332,12 @@ func TestWriteListOfValueWithTypeRefs(t *testing.T) {
 
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
-	assert.EqualValues([]interface{}{ListKind, ValueKind,
+	assert.EqualValues([]interface{}{ListKind, ValueKind, []interface{}{
 		BoolKind, true,
 		TypeRefKind, Int32Kind,
 		TypeRefKind, TypeRefKind,
 		TypeRefKind, TypeRefKind, pkgRef.String(), "S",
-	}, *w)
+	}}, *w)
 }
 
 func TestWriteRef(t *testing.T) {
@@ -400,7 +401,7 @@ func TestWriteListOfTypeRefs(t *testing.T) {
 
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
-	assert.EqualValues([]interface{}{ListKind, TypeRefKind, BoolKind, EnumKind, "E", []interface{}{"a", "b", "c"}, StringKind}, *w)
+	assert.EqualValues([]interface{}{ListKind, TypeRefKind, []interface{}{BoolKind, EnumKind, "E", []interface{}{"a", "b", "c"}, StringKind}}, *w)
 }
 
 func TestWritePackage(t *testing.T) {

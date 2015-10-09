@@ -58,7 +58,7 @@ func TestReadListOfInt32(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson("[%d, %d, 0, 1, 2, 3]", ListKind, Int32Kind)
+	a := parseJson("[%d, %d, [0, 1, 2, 3]]", ListKind, Int32Kind)
 	r := newJsonArrayReader(a, cs)
 
 	tr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int32Kind))
@@ -74,7 +74,7 @@ func TestReadListOfValue(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson(`[%d, %d, %d, 1, %d, "hi", %d, true]`, ListKind, ValueKind, Int32Kind, StringKind, BoolKind)
+	a := parseJson(`[%d, %d, [%d, 1, %d, "hi", %d, true]]`, ListKind, ValueKind, Int32Kind, StringKind, BoolKind)
 	r := newJsonArrayReader(a, cs)
 
 	listTr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
@@ -106,7 +106,7 @@ func TestReadMapOfInt64ToFloat64(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson("[%d, %d, %d, 0, 1, 2, 3]", MapKind, Int64Kind, Float64Kind)
+	a := parseJson("[%d, %d, %d, [0, 1, 2, 3]]", MapKind, Int64Kind, Float64Kind)
 	r := newJsonArrayReader(a, cs)
 
 	tr := MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(Int64Kind), MakePrimitiveTypeRef(Float64Kind))
@@ -138,7 +138,7 @@ func TestReadSetOfUInt8(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson("[%d, %d, 0, 1, 2, 3]", SetKind, UInt8Kind)
+	a := parseJson("[%d, %d, [0, 1, 2, 3]]", SetKind, UInt8Kind)
 	r := newJsonArrayReader(a, cs)
 
 	tr := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(UInt8Kind))
