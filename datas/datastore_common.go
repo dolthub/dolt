@@ -47,10 +47,16 @@ func (ds *dataStoreCommon) doCommit(commit Commit) bool {
 	currentRootRef := ds.Root()
 
 	// Note: |currentHead| may be different from ds.head and *must* be consistent with currentRootRef.
-	// If ds.head is nil, then any commit is allowed.
+	// If currentRoot or currentHead is nil, then any commit is allowed.
+	emptyRef := ref.Ref{}
+	dsHeadRef := emptyRef
 	if ds.head != nil {
-		var currentHead Commit
-		if currentRootRef == ds.head.Ref() {
+		dsHeadRef = ds.head.Ref()
+	}
+
+	var currentHead Commit
+	if currentRootRef != emptyRef {
+		if currentRootRef == dsHeadRef {
 			currentHead = *ds.head
 		} else {
 			currentHead = *commitFromRef(currentRootRef, ds)
