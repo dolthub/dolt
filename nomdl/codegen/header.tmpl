@@ -2,6 +2,13 @@
 
 package {{.Name}}
 
+{{if .HasImports}}
+import (
+	{{range $imp := .Imports}}"{{$imp}}"
+	{{end}}
+)
+{{end}}
+
 {{if .HasTypes}}
 var __{{.Name}}PackageInFile_{{.FileID}}_CachedRef = __{{.Name}}PackageInFile_{{.FileID}}_Ref()
 

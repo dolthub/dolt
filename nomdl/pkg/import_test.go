@@ -18,7 +18,9 @@ func TestImportSuite(t *testing.T) {
 type ImportTestSuite struct {
 	suite.Suite
 	cs        chunks.ChunkStore
+	imported  types.Package
 	importRef ref.Ref
+	nested    types.Package
 	nestedRef ref.Ref
 }
 
@@ -29,9 +31,10 @@ func (suite *ImportTestSuite) SetupTest() {
 		types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
 		types.Field{"i", types.MakePrimitiveTypeRef(types.Int8Kind), false},
 	})
-	suite.nestedRef = types.WriteValue(types.PackageDef{
+	suite.nested = types.PackageDef{
 		NamedTypes: types.MapOfStringToTypeRefDef{"NestedDepStruct": ns},
-	}.New().NomsValue(), suite.cs)
+	}.New()
+	suite.nestedRef = types.WriteValue(suite.nested.NomsValue(), suite.cs)
 
 	fs := types.MakeStructTypeRef("ForeignStruct", []types.Field{
 		types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
@@ -39,11 +42,11 @@ func (suite *ImportTestSuite) SetupTest() {
 	},
 		types.Choices{})
 	fe := types.MakeEnumTypeRef("ForeignEnum", "uno", "dos")
-
-	suite.importRef = types.WriteValue(types.PackageDef{
+	suite.imported = types.PackageDef{
 		Dependencies: types.SetOfRefOfPackageDef{suite.nestedRef: true},
 		NamedTypes:   types.MapOfStringToTypeRefDef{"ForeignStruct": fs, "ForeignEnum": fe},
-	}.New().NomsValue(), suite.cs)
+	}.New()
+	suite.importRef = types.WriteValue(suite.imported.NomsValue(), suite.cs)
 }
 
 func (suite *ImportTestSuite) TestGetDeps() {
@@ -52,7 +55,7 @@ func (suite *ImportTestSuite) TestGetDeps() {
 	imported, ok := deps[suite.importRef]
 	suite.True(ok, "%s is a dep; should have been found.", suite.importRef.String())
 
-	deps = GetDeps(imported.Dependencies, suite.cs)
+	deps = GetDeps(imported.Dependencies().Def(), suite.cs)
 	suite.Len(deps, 1)
 	imported, ok = deps[suite.nestedRef]
 	suite.True(ok, "%s is a dep; should have been found.", suite.nestedRef.String())
@@ -85,7 +88,7 @@ func (suite *ImportTestSuite) TestDetectFreeVariable() {
 	},
 		types.Choices{})
 	suite.Panics(func() {
-		resolveNamespaces(map[string]types.TypeRef{"Local": ls}, map[string]ref.Ref{}, map[ref.Ref]types.PackageDef{})
+		resolveNamespaces(map[string]types.TypeRef{"Local": ls}, map[string]ref.Ref{}, map[ref.Ref]types.Package{})
 	})
 }
 

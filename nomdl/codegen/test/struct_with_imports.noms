@@ -1,0 +1,11 @@
+alias dep = import "sha1-f9397427926127f67d8f3edb21c92bf642262e9b"
+
+enum E {
+	E1
+	Ignored
+}
+
+struct ImportUser {
+	importedStruct :dep.D
+	enum :E
+}

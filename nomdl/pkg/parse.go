@@ -27,12 +27,12 @@ func ParseNomDL(packageName string, r io.Reader, cs chunks.ChunkSource) Parsed {
 }
 
 // GetDeps reads the types.Package objects referred to by depRefs out of cs and returns a map of ref: PackageDef.
-func GetDeps(depRefs types.SetOfRefOfPackageDef, cs chunks.ChunkSource) map[ref.Ref]types.PackageDef {
-	deps := map[ref.Ref]types.PackageDef{}
+func GetDeps(depRefs types.SetOfRefOfPackageDef, cs chunks.ChunkSource) map[ref.Ref]types.Package {
+	deps := map[ref.Ref]types.Package{}
 	for depRef := range depRefs {
 		v := types.ReadValue(depRef, cs)
 		d.Chk.NotNil(v, "Importing package by ref %s failed.", depRef.String())
-		deps[depRef] = types.PackageFromVal(v).Def()
+		deps[depRef] = types.PackageFromVal(v)
 	}
 	return deps
 }
@@ -71,7 +71,7 @@ func resolveImports(pkg intermediate) map[string]ref.Ref {
 	return aliases
 }
 
-func resolveNamespaces(namedTypes map[string]types.TypeRef, aliases map[string]ref.Ref, deps map[ref.Ref]types.PackageDef) {
+func resolveNamespaces(namedTypes map[string]types.TypeRef, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) {
 	var rec func(t types.TypeRef) types.TypeRef
 	resolveFields := func(fields []types.Field) {
 		for idx, f := range fields {
@@ -107,10 +107,9 @@ func resolveNamespaces(namedTypes map[string]types.TypeRef, aliases map[string]r
 
 }
 
-func resolveNamespace(t types.TypeRef, aliases map[string]ref.Ref, deps map[ref.Ref]types.PackageDef) types.TypeRef {
+func resolveNamespace(t types.TypeRef, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) types.TypeRef {
 	target, ok := aliases[t.Namespace()]
 	d.Exp.True(ok, "Could not find import aliased to %s", t.Namespace())
-	_, ok = deps[target].NamedTypes[t.Name()]
-	d.Exp.True(ok, "Could not find type %s in package %s (aliased to %s).", t.Name(), target.String(), t.Namespace())
+	d.Exp.True(deps[target].NamedTypes().Has(t.Name()), "Could not find type %s in package %s (aliased to %s).", t.Name(), target.String(), t.Namespace())
 	return types.MakeTypeRef(t.Name(), target)
 }
