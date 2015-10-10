@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"go/build"
+	"go/parser"
+	"go/token"
 	"io/ioutil"
 	"os"
 	"path"
@@ -183,24 +186,28 @@ func TestImportedTypes(t *testing.T) {
 	depsDir := filepath.Join(thisFileDir(), "deps")
 	defer os.RemoveAll(depsDir)
 
-	pkgDS = generate("name", inFile, filepath.Join(dir, "out.go"), depsDir, pkgDS)
+	outFile := filepath.Join(dir, "out.go")
+	pkgDS = generate("name", inFile, outFile, depsDir, pkgDS)
 
-	// outFiles, err := filepath.Glob(filepath.Join(dir, "*.go"))
-	// assert.NoError(err)
-	// depFiles, err := filepath.Glob(filepath.Join(depsDir, "*", "*.go"))
-	// assert.NoError(err)
-	// for _, file := range append(outFiles, depFiles...) {
-	// 	b, _ := ioutil.ReadFile(file)
-	// 	fmt.Printf("%s\n***************\n%s\n", file, b)
-	// }
+	// Check that dependency code was generated.
+	expectedDepPkgAbs := filepath.Join(depsDir, toTag(importedRef.String()))
+	_, err = os.Stat(expectedDepPkgAbs)
+	assert.NoError(err)
 
-	// importedSha := toTag(importedRef.String())
-	// b, _ = ioutil.ReadFile(filepath.Join(dir, importedSha, importedSha+".go"))
-	// fmt.Printf("%s\n", b)
-	// s := types.SetOfRefOfPackageFromVal(pkgDS.Head().Value())
-	// assert.EqualValues(1, s.Len())
-	// tr := s.Any().GetValue(ds).NamedTypes().Get("Simple")
-	// assert.EqualValues(types.StructKind, tr.Kind())
+	// Get the imports from out.go
+	ast, err := parser.ParseFile(token.NewFileSet(), outFile, nil, parser.ImportsOnly)
+	assert.NoError(err)
+	imports := []string{}
+	for _, s := range ast.Imports {
+		//Strip enclosing quotes from s.Path.Value
+		imports = append(imports, s.Path.Value[1:len(s.Path.Value)-1])
+	}
+	// Get the canonical import path for the generated dependency code.
+	expectedDepPkg, err := build.ImportDir(expectedDepPkgAbs, build.FindOnly)
+	assert.NoError(err)
+
+	// Make sure that out.go imported the dependency code.
+	assert.Contains(imports, expectedDepPkg.ImportPath)
 }
 
 func thisFileDir() string {

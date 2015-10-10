@@ -114,10 +114,7 @@ func generateDepCode(depsDir string, p types.Package, cs chunks.ChunkSource) dep
 	deps := depsMap{}
 	p.Dependencies().IterAll(func(r types.RefOfPackage) {
 		p := r.GetValue(cs)
-		pDeps := map[ref.Ref]types.Package{}
-		if !p.Dependencies().Empty() {
-			pDeps = generateDepCode(depsDir, p, cs)
-		}
+		pDeps := generateDepCode(depsDir, p, cs)
 		tag := toTag(p.Ref().String())
 		parsed := pkg.Parsed{PackageDef: p.Def(), Name: tag}
 		generateAndEmit(tag, filepath.Join(depsDir, tag, tag+".go"), importPaths(depsDir, pDeps), pDeps, parsed)
@@ -496,15 +493,13 @@ func (gen *codeGen) userName(t types.TypeRef) string {
 
 func toTypeRef(t types.TypeRef, fileID, packageName string) string {
 	if t.HasPackageRef() {
-		refCode := fmt.Sprintf(`ref.Parse("%s")`, t.PackageRef().String())
-		return fmt.Sprintf(`types.MakeTypeRef("%s", %s)`, t.Name(), refCode)
+		return fmt.Sprintf(`types.MakeTypeRef("%s", ref.Parse("%s"))`, t.Name(), t.PackageRef().String())
 	}
 	if t.IsUnresolved() && fileID != "" {
-		refCode := fmt.Sprintf("__%sPackageInFile_%s_CachedRef", packageName, fileID)
-		return fmt.Sprintf(`types.MakeTypeRef("%s", %s)`, t.Name(), refCode)
+		return fmt.Sprintf(`types.MakeTypeRef("%s", __%sPackageInFile_%s_CachedRef)`, t.Name(), packageName, fileID)
 	}
 	if t.IsUnresolved() {
-		return fmt.Sprintf(`types.MakeTypeRef("%s", %s)`, t.Name(), "ref.Ref{}")
+		return fmt.Sprintf(`types.MakeTypeRef("%s", ref.Ref{})`, t.Name())
 	}
 
 	if types.IsPrimitiveKind(t.Desc.Kind()) {
