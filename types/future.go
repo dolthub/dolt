@@ -42,3 +42,18 @@ func futureEqualsValue(f Future, v Value) bool {
 func futureFromValue(v Value) Future {
 	return resolvedFuture{v}
 }
+
+func appendChunks(chunks []Future, f Future) []Future {
+	if uf, ok := f.(*unresolvedFuture); ok {
+		chunks = append(chunks, uf)
+	} else if f != nil {
+		v := f.Val()
+		if v != nil {
+			if r, ok := v.(Ref); ok {
+				chunks = append(chunks, futureFromRef(r.Ref()))
+			}
+		}
+	}
+
+	return chunks
+}

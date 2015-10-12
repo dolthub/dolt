@@ -44,3 +44,12 @@ func TestTypeRef(t *testing.T) {
 	assert.Equal("Struct", typ.Name())
 	assert.Equal(types.TypeRefKind, typ.Kind())
 }
+
+func TestStructChunks(t *testing.T) {
+	assert := assert.New(t)
+
+	st := StructDef{"hi", true}.New()
+	cs := st.Chunks()
+	// One chunk for the TypeRef
+	assert.Len(cs, 1)
+}

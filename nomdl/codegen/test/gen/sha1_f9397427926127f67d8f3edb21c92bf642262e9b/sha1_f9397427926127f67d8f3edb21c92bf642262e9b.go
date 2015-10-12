@@ -97,8 +97,10 @@ func (s D) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s D) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s D) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s D) StructField() sha1_f1a192312c01fb47e8e329471242e475eb7001a4.S {

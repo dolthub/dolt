@@ -245,8 +245,10 @@ func (s ImportUser) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s ImportUser) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s ImportUser) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s ImportUser) ImportedStruct() sha1_f9397427926127f67d8f3edb21c92bf642262e9b.D {

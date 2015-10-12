@@ -108,8 +108,10 @@ func (s StructWithUnions) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s StructWithUnions) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s StructWithUnions) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s StructWithUnions) A() __unionOfBOfFloat64AndCOfString {
@@ -216,8 +218,10 @@ func (s __unionOfBOfFloat64AndCOfString) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s __unionOfBOfFloat64AndCOfString) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s __unionOfBOfFloat64AndCOfString) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s __unionOfBOfFloat64AndCOfString) B() (val float64, ok bool) {
@@ -356,8 +360,10 @@ func (s __unionOfEOfFloat64AndFOfString) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s __unionOfEOfFloat64AndFOfString) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s __unionOfEOfFloat64AndFOfString) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s __unionOfEOfFloat64AndFOfString) E() (val float64, ok bool) {

@@ -78,8 +78,10 @@ func (s SetOfDataset) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s SetOfDataset) Chunks() []types.Future {
-	return s.s.Chunks()
+func (s SetOfDataset) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.s.Chunks()...)
+	return
 }
 
 // A Noms Value that describes SetOfDataset.
@@ -240,8 +242,10 @@ func (s Dataset) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Dataset) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Dataset) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Dataset) Id() string {

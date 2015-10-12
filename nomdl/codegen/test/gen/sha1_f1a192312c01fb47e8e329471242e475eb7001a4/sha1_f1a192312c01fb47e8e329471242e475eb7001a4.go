@@ -107,8 +107,10 @@ func (s S) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s S) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s S) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s S) S() string {

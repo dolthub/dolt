@@ -93,8 +93,10 @@ func (s {{.Name}}) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s {{.Name}}) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s {{.Name}}) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 {{$name := .Name}}

@@ -92,8 +92,10 @@ func (s EnumStruct) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s EnumStruct) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s EnumStruct) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s EnumStruct) Hand() Handedness {

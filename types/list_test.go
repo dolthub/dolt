@@ -357,3 +357,15 @@ func TestListTypeRef(t *testing.T) {
 	l := NewList(Int32(0))
 	assert.True(l.TypeRef().Equals(MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))))
 }
+
+func TestListChunks(t *testing.T) {
+	assert := assert.New(t)
+
+	l1 := NewList(Int32(0))
+	c1 := l1.Chunks()
+	assert.Len(c1, 0)
+
+	l2 := NewList(Ref{R: Int32(0).Ref()})
+	c2 := l2.Chunks()
+	assert.Len(c2, 1)
+}

@@ -50,8 +50,10 @@ func (m {{.Name}}) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
-func (m {{.Name}}) Chunks() []types.Future {
-	return m.m.Chunks()
+func (m {{.Name}}) Chunks() (futures []types.Future) {
+	futures = append(futures, m.TypeRef().Chunks()...)
+	futures = append(futures, m.m.Chunks()...)
+	return
 }
 
 {{template "type_ref.tmpl" .}}

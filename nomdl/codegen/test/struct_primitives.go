@@ -156,8 +156,10 @@ func (s StructPrimitives) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s StructPrimitives) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s StructPrimitives) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s StructPrimitives) Uint64() uint64 {

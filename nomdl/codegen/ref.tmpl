@@ -20,7 +20,7 @@ func (r {{.Name}}) Equals(other types.Value) bool {
 }
 
 func (r {{.Name}}) Chunks() []types.Future {
-	return nil
+	return r.TypeRef().Chunks()
 }
 
 func (r {{.Name}}) NomsValue() types.Value {

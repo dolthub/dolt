@@ -58,3 +58,11 @@ func TestListFilter(t *testing.T) {
 	})
 	assert.Equal(ListOfInt64Def{0, 2, 4, 6, 8}, l2.Def())
 }
+
+func TestListChunks(t *testing.T) {
+	assert := assert.New(t)
+
+	l := ListOfInt64Def{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}.New()
+	cs := l.Chunks()
+	assert.Len(cs, 0)
+}

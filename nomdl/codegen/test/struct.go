@@ -76,8 +76,10 @@ func (l ListOfStruct) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l ListOfStruct) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l ListOfStruct) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 // A Noms Value that describes ListOfStruct.
@@ -234,8 +236,10 @@ func (s Struct) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Struct) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Struct) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Struct) S() string {

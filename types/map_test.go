@@ -221,3 +221,19 @@ func TestMapTypeRef(t *testing.T) {
 	m := NewMap()
 	assert.True(m.TypeRef().Equals(MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))))
 }
+
+func TestMapChunks(t *testing.T) {
+	assert := assert.New(t)
+
+	l1 := NewMap(Int32(0), Int32(1))
+	c1 := l1.Chunks()
+	assert.Len(c1, 0)
+
+	l2 := NewMap(Ref{R: Int32(0).Ref()}, Int32(1))
+	c2 := l2.Chunks()
+	assert.Len(c2, 1)
+
+	l3 := NewMap(Int32(0), Ref{R: Int32(1).Ref()})
+	c3 := l3.Chunks()
+	assert.Len(c3, 1)
+}

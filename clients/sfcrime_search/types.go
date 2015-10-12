@@ -104,8 +104,10 @@ func (l ListOfIncident) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l ListOfIncident) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l ListOfIncident) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 // A Noms Value that describes ListOfIncident.
@@ -274,8 +276,10 @@ func (s Incident) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Incident) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Incident) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Incident) Category() string {
@@ -386,8 +390,10 @@ func (s Geoposition) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Geoposition) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Geoposition) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Geoposition) Latitude() float32 {
@@ -474,8 +480,10 @@ func (s Georectangle) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Georectangle) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Georectangle) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Georectangle) TopLeft() Geoposition {
@@ -578,8 +586,10 @@ func (s SQuadTree) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s SQuadTree) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s SQuadTree) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s SQuadTree) Nodes() ListOfIncident {
@@ -679,8 +689,10 @@ func (m MapOfStringToSQuadTree) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
-func (m MapOfStringToSQuadTree) Chunks() []types.Future {
-	return m.m.Chunks()
+func (m MapOfStringToSQuadTree) Chunks() (futures []types.Future) {
+	futures = append(futures, m.TypeRef().Chunks()...)
+	futures = append(futures, m.m.Chunks()...)
+	return
 }
 
 // A Noms Value that describes MapOfStringToSQuadTree.

@@ -138,14 +138,9 @@ func (m Map) Equals(other Value) (res bool) {
 }
 
 func (fm Map) Chunks() (futures []Future) {
-	appendIfUnresolved := func(f Future) {
-		if f, ok := f.(*unresolvedFuture); ok {
-			futures = append(futures, f)
-		}
-	}
 	for _, entry := range fm.m {
-		appendIfUnresolved(entry.key)
-		appendIfUnresolved(entry.value)
+		futures = appendChunks(futures, entry.key)
+		futures = appendChunks(futures, entry.value)
 	}
 	return
 }

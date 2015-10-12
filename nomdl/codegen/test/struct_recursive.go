@@ -91,8 +91,10 @@ func (s Tree) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Tree) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Tree) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Tree) Children() ListOfTree {
@@ -151,8 +153,10 @@ func (l ListOfTree) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l ListOfTree) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l ListOfTree) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 // A Noms Value that describes ListOfTree.

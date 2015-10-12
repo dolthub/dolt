@@ -86,3 +86,30 @@ func TestStructWithRef(t *testing.T) {
 	set2 := r2.GetValue(cs)
 	assert.True(set.Equals(set2))
 }
+
+func TestListOfRefChunks(t *testing.T) {
+	assert := assert.New(t)
+
+	a := types.Float32(0)
+	ra := a.Ref()
+
+	l := NewListOfRefOfFloat32()
+	r := NewRefOfFloat32(ra)
+
+	assert.Len(l.Chunks(), 0)
+
+	l2 := l.Append(r)
+	assert.Len(l2.Chunks(), 1)
+}
+
+func TestStructWithRefChunks(t *testing.T) {
+	assert := assert.New(t)
+
+	set := SetOfFloat32Def{0: true}.New()
+	str := StructWithRefDef{
+		R: set.Ref(),
+	}.New()
+
+	// 1 for the TypeRef and 1 for the ref in the R field.
+	assert.Len(str.Chunks(), 2)
+}

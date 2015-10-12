@@ -98,8 +98,10 @@ func (s OptionalStruct) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s OptionalStruct) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s OptionalStruct) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s OptionalStruct) S() (v string, ok bool) {

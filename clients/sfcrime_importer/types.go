@@ -92,8 +92,10 @@ func (l ListOfIncident) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l ListOfIncident) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l ListOfIncident) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 // A Noms Value that describes ListOfIncident.
@@ -286,8 +288,10 @@ func (s Incident) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Incident) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Incident) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Incident) ID() int64 {
@@ -446,8 +450,10 @@ func (s Geoposition) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Geoposition) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Geoposition) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Geoposition) Latitude() float32 {

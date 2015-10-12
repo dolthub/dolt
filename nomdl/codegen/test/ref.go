@@ -50,7 +50,7 @@ func (r RefOfListOfString) Equals(other types.Value) bool {
 }
 
 func (r RefOfListOfString) Chunks() []types.Future {
-	return nil
+	return r.TypeRef().Chunks()
 }
 
 func (r RefOfListOfString) NomsValue() types.Value {
@@ -132,8 +132,10 @@ func (l ListOfString) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l ListOfString) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l ListOfString) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 // A Noms Value that describes ListOfString.
@@ -270,8 +272,10 @@ func (l ListOfRefOfFloat32) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l ListOfRefOfFloat32) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l ListOfRefOfFloat32) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 // A Noms Value that describes ListOfRefOfFloat32.
@@ -382,7 +386,7 @@ func (r RefOfFloat32) Equals(other types.Value) bool {
 }
 
 func (r RefOfFloat32) Chunks() []types.Future {
-	return nil
+	return r.TypeRef().Chunks()
 }
 
 func (r RefOfFloat32) NomsValue() types.Value {
@@ -480,8 +484,10 @@ func (s StructWithRef) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s StructWithRef) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s StructWithRef) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s StructWithRef) R() RefOfSetOfFloat32 {
@@ -514,7 +520,7 @@ func (r RefOfSetOfFloat32) Equals(other types.Value) bool {
 }
 
 func (r RefOfSetOfFloat32) Chunks() []types.Future {
-	return nil
+	return r.TypeRef().Chunks()
 }
 
 func (r RefOfSetOfFloat32) NomsValue() types.Value {
@@ -598,8 +604,10 @@ func (s SetOfFloat32) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s SetOfFloat32) Chunks() []types.Future {
-	return s.s.Chunks()
+func (s SetOfFloat32) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.s.Chunks()...)
+	return
 }
 
 // A Noms Value that describes SetOfFloat32.

@@ -27,9 +27,7 @@ func (co compoundObject) Len() uint64 {
 
 func (co compoundObject) Chunks() (futures []Future) {
 	for _, f := range co.futures {
-		if f, ok := f.(*unresolvedFuture); ok {
-			futures = append(futures, f)
-		}
+		futures = appendChunks(futures, f)
 	}
 	return
 }

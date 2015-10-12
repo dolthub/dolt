@@ -49,8 +49,10 @@ func (l {{.Name}}) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l {{.Name}}) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l {{.Name}}) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 {{template "type_ref.tmpl" .}}

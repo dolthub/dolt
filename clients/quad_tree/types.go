@@ -133,8 +133,10 @@ func (s Geoposition) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Geoposition) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Geoposition) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Geoposition) Latitude() float32 {
@@ -221,8 +223,10 @@ func (s Georectangle) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Georectangle) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Georectangle) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Georectangle) TopLeft() Geoposition {
@@ -309,8 +313,10 @@ func (s Node) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Node) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Node) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Node) Geoposition() Geoposition {
@@ -351,7 +357,7 @@ func (r RefOfValue) Equals(other types.Value) bool {
 }
 
 func (r RefOfValue) Chunks() []types.Future {
-	return nil
+	return r.TypeRef().Chunks()
 }
 
 func (r RefOfValue) NomsValue() types.Value {
@@ -469,8 +475,10 @@ func (s QuadTree) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s QuadTree) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s QuadTree) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s QuadTree) Nodes() ListOfNode {
@@ -569,8 +577,10 @@ func (l ListOfNode) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l ListOfNode) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l ListOfNode) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 // A Noms Value that describes ListOfNode.
@@ -708,8 +718,10 @@ func (m MapOfStringToQuadTree) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
-func (m MapOfStringToQuadTree) Chunks() []types.Future {
-	return m.m.Chunks()
+func (m MapOfStringToQuadTree) Chunks() (futures []types.Future) {
+	futures = append(futures, m.TypeRef().Chunks()...)
+	futures = append(futures, m.m.Chunks()...)
+	return
 }
 
 // A Noms Value that describes MapOfStringToQuadTree.
@@ -872,8 +884,10 @@ func (s SQuadTree) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s SQuadTree) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s SQuadTree) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s SQuadTree) Nodes() ListOfRefOfValue {
@@ -972,8 +986,10 @@ func (l ListOfRefOfValue) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l ListOfRefOfValue) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l ListOfRefOfValue) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 // A Noms Value that describes ListOfRefOfValue.
@@ -1111,8 +1127,10 @@ func (m MapOfStringToRefOfSQuadTree) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
-func (m MapOfStringToRefOfSQuadTree) Chunks() []types.Future {
-	return m.m.Chunks()
+func (m MapOfStringToRefOfSQuadTree) Chunks() (futures []types.Future) {
+	futures = append(futures, m.TypeRef().Chunks()...)
+	futures = append(futures, m.m.Chunks()...)
+	return
 }
 
 // A Noms Value that describes MapOfStringToRefOfSQuadTree.
@@ -1213,7 +1231,7 @@ func (r RefOfSQuadTree) Equals(other types.Value) bool {
 }
 
 func (r RefOfSQuadTree) Chunks() []types.Future {
-	return nil
+	return r.TypeRef().Chunks()
 }
 
 func (r RefOfSQuadTree) NomsValue() types.Value {

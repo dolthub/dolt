@@ -75,8 +75,10 @@ func (s Commit) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Commit) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Commit) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Commit) Value() types.Value {
@@ -124,8 +126,10 @@ func (s SetOfCommit) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s SetOfCommit) Chunks() []types.Future {
-	return s.s.Chunks()
+func (s SetOfCommit) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.s.Chunks()...)
+	return
 }
 
 // A Noms Value that describes SetOfCommit.

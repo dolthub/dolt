@@ -106,8 +106,10 @@ func (s StructWithList) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s StructWithList) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s StructWithList) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s StructWithList) L() ListOfUInt8 {
@@ -190,8 +192,10 @@ func (l ListOfUInt8) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l ListOfUInt8) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l ListOfUInt8) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 // A Noms Value that describes ListOfUInt8.

@@ -186,9 +186,7 @@ func (l listLeaf) Equals(other Value) bool {
 
 func (l listLeaf) Chunks() (futures []Future) {
 	for _, f := range l.list {
-		if f, ok := f.(*unresolvedFuture); ok {
-			futures = append(futures, f)
-		}
+		futures = appendChunks(futures, f)
 	}
 	return
 }

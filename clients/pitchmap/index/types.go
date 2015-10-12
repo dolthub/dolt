@@ -76,8 +76,10 @@ func (l ListOfMapOfStringToValue) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l ListOfMapOfStringToValue) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l ListOfMapOfStringToValue) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 // A Noms Value that describes ListOfMapOfStringToValue.
@@ -215,8 +217,10 @@ func (m MapOfStringToValue) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
-func (m MapOfStringToValue) Chunks() []types.Future {
-	return m.m.Chunks()
+func (m MapOfStringToValue) Chunks() (futures []types.Future) {
+	futures = append(futures, m.TypeRef().Chunks()...)
+	futures = append(futures, m.m.Chunks()...)
+	return
 }
 
 // A Noms Value that describes MapOfStringToValue.
@@ -344,8 +348,10 @@ func (m MapOfStringToListOfPitch) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
-func (m MapOfStringToListOfPitch) Chunks() []types.Future {
-	return m.m.Chunks()
+func (m MapOfStringToListOfPitch) Chunks() (futures []types.Future) {
+	futures = append(futures, m.TypeRef().Chunks()...)
+	futures = append(futures, m.m.Chunks()...)
+	return
 }
 
 // A Noms Value that describes MapOfStringToListOfPitch.
@@ -472,8 +478,10 @@ func (l ListOfPitch) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l ListOfPitch) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l ListOfPitch) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 // A Noms Value that describes ListOfPitch.
@@ -630,8 +638,10 @@ func (s Pitch) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Pitch) Chunks() []types.Future {
-	return s.m.Chunks()
+func (s Pitch) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Pitch) X() float64 {
@@ -699,8 +709,10 @@ func (m MapOfStringToString) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
-func (m MapOfStringToString) Chunks() []types.Future {
-	return m.m.Chunks()
+func (m MapOfStringToString) Chunks() (futures []types.Future) {
+	futures = append(futures, m.TypeRef().Chunks()...)
+	futures = append(futures, m.m.Chunks()...)
+	return
 }
 
 // A Noms Value that describes MapOfStringToString.

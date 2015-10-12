@@ -57,8 +57,10 @@ func (s SetOfBool) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s SetOfBool) Chunks() []types.Future {
-	return s.s.Chunks()
+func (s SetOfBool) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.s.Chunks()...)
+	return
 }
 
 // A Noms Value that describes SetOfBool.

@@ -133,9 +133,7 @@ func (fs Set) Equals(other Value) bool {
 
 func (fs Set) Chunks() (futures []Future) {
 	for _, f := range fs.m {
-		if f, ok := f.(*unresolvedFuture); ok {
-			futures = append(futures, f)
-		}
+		futures = appendChunks(futures, f)
 	}
 	return
 }

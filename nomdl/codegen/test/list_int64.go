@@ -55,8 +55,10 @@ func (l ListOfInt64) Ref() ref.Ref {
 	return l.l.Ref()
 }
 
-func (l ListOfInt64) Chunks() []types.Future {
-	return l.l.Chunks()
+func (l ListOfInt64) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
 // A Noms Value that describes ListOfInt64.
