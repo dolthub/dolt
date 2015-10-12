@@ -96,3 +96,76 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	assert.True(ds1.Head().Value().Equals(d))
 
 }
+
+func TestTwoClientsWithEmptyDataset(t *testing.T) {
+	assert := assert.New(t)
+	id1 := "testdataset"
+	ms := chunks.NewMemoryStore()
+
+	getDS := func(id string) Dataset {
+		store := datas.NewDataStore(ms)
+		return NewDataset(store, id)
+	}
+	dsx := getDS(id1)
+	dsy := getDS(id1)
+
+	// dsx: || -> |a|
+	a := types.NewString("a")
+	dsx, ok := dsx.Commit(a)
+	assert.True(ok)
+	assert.True(dsx.Head().Value().Equals(a))
+
+	// dsy: || -> |b|
+	_, ok = dsy.MaybeHead()
+	assert.False(ok)
+	b := types.NewString("b")
+	dsy, ok = dsy.Commit(b)
+	assert.False(ok)
+	// Commit failed, but ds1 now has latest head, so we should be able to just try again.
+	// dsy: |a| -> |b|
+	dsy, ok = dsy.Commit(b)
+	assert.True(ok)
+	assert.True(dsy.Head().Value().Equals(b))
+}
+
+func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
+	assert := assert.New(t)
+	id1 := "testdataset"
+	ms := chunks.NewMemoryStore()
+
+	getDS := func(id string) Dataset {
+		store := datas.NewDataStore(ms)
+		return NewDataset(store, id)
+	}
+
+	a := types.NewString("a")
+	{
+		// ds1: || -> |a|
+		ds1 := getDS(id1)
+		ds1, ok := ds1.Commit(a)
+		assert.True(ok)
+		assert.True(ds1.Head().Value().Equals(a))
+	}
+
+	dsx := getDS(id1)
+	dsy := getDS(id1)
+
+	// dsx: |a| -> |b|
+	assert.True(dsx.Head().Value().Equals(a))
+	b := types.NewString("b")
+	dsx, ok := dsx.Commit(b)
+	assert.True(ok)
+	assert.True(dsx.Head().Value().Equals(b))
+
+	// dsy: |a| -> |c|
+	assert.True(dsy.Head().Value().Equals(a))
+	c := types.NewString("c")
+	dsy, ok = dsy.Commit(c)
+	assert.False(ok)
+	assert.True(dsy.Head().Value().Equals(b))
+	// Commit failed, but dsy now has latest head, so we should be able to just try again.
+	// dsy: |b| -> |c|
+	dsy, ok = dsy.Commit(c)
+	assert.True(ok)
+	assert.True(dsy.Head().Value().Equals(c))
+}

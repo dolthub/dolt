@@ -46,11 +46,11 @@ func (ds *dataStoreCommon) commitWithParents(v types.Value, p SetOfCommit) bool 
 func (ds *dataStoreCommon) doCommit(commit Commit) bool {
 	currentRootRef := ds.Root()
 
-	// Note: |currentHead| may be different from ds.head and *must* be consistent with currentRootRef.
-	// If ds.head is nil, then any commit is allowed.
-	if ds.head != nil {
-		var currentHead Commit
-		if currentRootRef == ds.head.Ref() {
+    // First commit is always fast-foward.
+    if currentRootRef != ref.EmptyRef {
+        // Note: |currentHead| may be different from ds.head and *must* be consistent with currentRootRef.
+        var currentHead Commit
+        if ds.head != nil && currentRootRef == ds.head.Ref() {
 			currentHead = *ds.head
 		} else {
 			currentHead = *commitFromRef(currentRootRef, ds)
