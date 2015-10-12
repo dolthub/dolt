@@ -34,9 +34,9 @@ go test ./...
 ```
 cd <noms>/clients/counter
 go build
-./counter -fs="/tmp/foo" -ds="foo"
-./counter -fs="/tmp/foo" -ds="foo"
-./counter -fs="/tmp/foo" -ds="foo"
+./counter -ldb=/tmp/foo -ds=foo
+./counter -ldb=/tmp/foo -ds=foo
+./counter -ldb=/tmp/foo -ds=foo
 ```
 
 rejoice!
@@ -45,7 +45,7 @@ You can see the raw data:
 
 ```
 ls /tmp/foo
-cat /tmp/foo/root
+cat /tmp/foo/*.log | strings
 ```
 
 You can also explore the data visually. Follow the instructions in `clients/explore`.
