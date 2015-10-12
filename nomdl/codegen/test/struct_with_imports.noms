@@ -9,3 +9,5 @@ struct ImportUser {
 	importedStruct :dep.D
 	enum :E
 }
+
+using List(dep.D)

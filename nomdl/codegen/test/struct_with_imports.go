@@ -30,6 +30,144 @@ func __testPackageInFile_struct_with_imports_Ref() ref.Ref {
 	return types.RegisterPackage(&p)
 }
 
+// ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D
+
+type ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D struct {
+	l types.List
+}
+
+func NewListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D() ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D {
+	return ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D{types.NewList()}
+}
+
+type ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_DDef []sha1_f9397427926127f67d8f3edb21c92bf642262e9b.DDef
+
+func (def ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_DDef) New() ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D {
+	l := make([]types.Value, len(def))
+	for i, d := range def {
+		l[i] = d.New().NomsValue()
+	}
+	return ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D{types.NewList(l...)}
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Def() ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_DDef {
+	d := make([]sha1_f9397427926127f67d8f3edb21c92bf642262e9b.DDef, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = sha1_f9397427926127f67d8f3edb21c92bf642262e9b.DFromVal(l.l.Get(i)).Def()
+	}
+	return d
+}
+
+func ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_DFromVal(val types.Value) ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D {
+	// TODO: Validate here
+	return ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D{val.(types.List)}
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) NomsValue() types.Value {
+	return l.l
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Equals(other types.Value) bool {
+	if other, ok := other.(ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Ref() ref.Ref {
+	return l.l.Ref()
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Chunks() []types.Future {
+	return l.l.Chunks()
+}
+
+// A Noms Value that describes ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D.
+var __typeRefForListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D types.TypeRef
+
+func (m ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) TypeRef() types.TypeRef {
+	return __typeRefForListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D
+}
+
+func init() {
+	__typeRefForListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("D", ref.Parse("sha1-f9397427926127f67d8f3edb21c92bf642262e9b")))
+	types.RegisterFromValFunction(__typeRefForListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D, func(v types.Value) types.NomsValue {
+		return ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_DFromVal(v)
+	})
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Len() uint64 {
+	return l.l.Len()
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Empty() bool {
+	return l.Len() == uint64(0)
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Get(i uint64) sha1_f9397427926127f67d8f3edb21c92bf642262e9b.D {
+	return sha1_f9397427926127f67d8f3edb21c92bf642262e9b.DFromVal(l.l.Get(i))
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Slice(idx uint64, end uint64) ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D {
+	return ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D{l.l.Slice(idx, end)}
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Set(i uint64, val sha1_f9397427926127f67d8f3edb21c92bf642262e9b.D) ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D {
+	return ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D{l.l.Set(i, val.NomsValue())}
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Append(v ...sha1_f9397427926127f67d8f3edb21c92bf642262e9b.D) ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D {
+	return ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D{l.l.Append(l.fromElemSlice(v)...)}
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Insert(idx uint64, v ...sha1_f9397427926127f67d8f3edb21c92bf642262e9b.D) ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D {
+	return ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D{l.l.Insert(idx, l.fromElemSlice(v)...)}
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Remove(idx uint64, end uint64) ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D {
+	return ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D{l.l.Remove(idx, end)}
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) RemoveAt(idx uint64) ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D {
+	return ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D{(l.l.RemoveAt(idx))}
+}
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) fromElemSlice(p []sha1_f9397427926127f67d8f3edb21c92bf642262e9b.D) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v.NomsValue()
+	}
+	return r
+}
+
+type ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_DIterCallback func(v sha1_f9397427926127f67d8f3edb21c92bf642262e9b.D, i uint64) (stop bool)
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Iter(cb ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_DIterCallback) {
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(sha1_f9397427926127f67d8f3edb21c92bf642262e9b.DFromVal(v), i)
+	})
+}
+
+type ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_DIterAllCallback func(v sha1_f9397427926127f67d8f3edb21c92bf642262e9b.D, i uint64)
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) IterAll(cb ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_DIterAllCallback) {
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(sha1_f9397427926127f67d8f3edb21c92bf642262e9b.DFromVal(v), i)
+	})
+}
+
+type ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_DFilterCallback func(v sha1_f9397427926127f67d8f3edb21c92bf642262e9b.D, i uint64) (keep bool)
+
+func (l ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D) Filter(cb ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_DFilterCallback) ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D {
+	nl := NewListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_D()
+	l.IterAll(func(v sha1_f9397427926127f67d8f3edb21c92bf642262e9b.D, i uint64) {
+		if cb(v, i) {
+			nl = nl.Append(v)
+		}
+	})
+	return nl
+}
+
 // E
 
 type E uint32

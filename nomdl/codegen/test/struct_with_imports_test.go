@@ -35,3 +35,18 @@ func TestWithImportsDef(t *testing.T) {
 	assert.Equal(true, ddef.StructField.B)
 	assert.Equal(leaf.E2, ddef.EnumField)
 }
+
+func TestListOfImportsDef(t *testing.T) {
+	assert := assert.New(t)
+	lDef := ListOfsha1_f9397427926127f67d8f3edb21c92bf642262e9b_DDef{
+		dep.DDef{EnumField: leaf.E3},
+		dep.DDef{EnumField: leaf.E2},
+		dep.DDef{EnumField: leaf.E1},
+	}
+
+	l := lDef.New()
+	assert.EqualValues(3, l.Len())
+	assert.EqualValues(leaf.E3, l.Get(0).EnumField())
+	assert.EqualValues(leaf.E2, l.Get(1).EnumField())
+	assert.EqualValues(leaf.E1, l.Get(2).EnumField())
+}
