@@ -88,7 +88,8 @@ func (suite *ImportTestSuite) TestDetectFreeVariable() {
 	},
 		types.Choices{})
 	suite.Panics(func() {
-		resolveNamespaces(map[string]types.TypeRef{"Local": ls}, map[string]ref.Ref{}, map[ref.Ref]types.Package{})
+		inter := intermediate{NamedTypes: map[string]types.TypeRef{"Local": ls}}
+		resolveNamespaces(&inter, map[string]ref.Ref{}, map[ref.Ref]types.Package{})
 	})
 }
 
@@ -119,6 +120,9 @@ func (suite *ImportTestSuite) TestImports() {
 
 	r := strings.NewReader(fmt.Sprintf(`
 		alias Other = import "%s"
+
+		using List(Other.ForeignEnum)
+		using List(Local1)
 		struct Local1 {
 			a: Other.ForeignStruct
 			b: Int16
@@ -167,4 +171,11 @@ func (suite *ImportTestSuite) TestImports() {
 	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 	field = findChoice("t", namedUnion)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
+
+	usings := p.UsingDeclarations
+	suite.Len(usings, 2)
+	suite.EqualValues(types.ListKind, usings[0].Kind())
+	suite.EqualValues(suite.importRef, usings[0].Desc.(types.CompoundDesc).ElemTypes[0].PackageRef())
+	suite.EqualValues(types.ListKind, usings[1].Kind())
+	suite.EqualValues("Local1", usings[1].Desc.(types.CompoundDesc).ElemTypes[0].Name())
 }

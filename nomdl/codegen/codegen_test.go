@@ -20,6 +20,7 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
+	"github.com/attic-labs/noms/nomdl/codegen/code"
 	"github.com/attic-labs/noms/nomdl/pkg"
 	"github.com/attic-labs/noms/types"
 )
@@ -135,7 +136,7 @@ func TestCanUseDef(t *testing.T) {
 
 	bad = `
 		Set(Set(Int8))
-		Set(Map(Int, Int8))
+		Set(Map(Int8, Int8))
 		Set(List(Int8))
 		Map(Set(Int8), Int8)
 		Map(Map(Int8, Int8), Int8)
@@ -173,6 +174,7 @@ func TestImportedTypes(t *testing.T) {
 	good := fmt.Sprintf(`
 		alias Other = import "%s"
 
+		using List(Other.S1)
 		struct Simple {
 			E: Other.E1
 			S: Other.S1
@@ -190,7 +192,7 @@ func TestImportedTypes(t *testing.T) {
 	pkgDS = generate("name", inFile, outFile, depsDir, pkgDS)
 
 	// Check that dependency code was generated.
-	expectedDepPkgAbs := filepath.Join(depsDir, toTag(importedRef.String()))
+	expectedDepPkgAbs := filepath.Join(depsDir, code.ToTag(importedRef.String()))
 	_, err = os.Stat(expectedDepPkgAbs)
 	assert.NoError(err)
 
@@ -235,9 +237,9 @@ func TestGenerateDeps(t *testing.T) {
 
 	generateDepCode(dir, top, cs)
 
-	leaf1Path := filepath.Join(dir, toTag(leaf1.Ref().String()), toTag(leaf1.Ref().String())+".go")
-	leaf2Path := filepath.Join(dir, toTag(leaf2.Ref().String()), toTag(leaf2.Ref().String())+".go")
-	leaf3Path := filepath.Join(dir, toTag(depender.Ref().String()), toTag(depender.Ref().String())+".go")
+	leaf1Path := filepath.Join(dir, code.ToTag(leaf1.Ref().String()), code.ToTag(leaf1.Ref().String())+".go")
+	leaf2Path := filepath.Join(dir, code.ToTag(leaf2.Ref().String()), code.ToTag(leaf2.Ref().String())+".go")
+	leaf3Path := filepath.Join(dir, code.ToTag(depender.Ref().String()), code.ToTag(depender.Ref().String())+".go")
 	_, err = os.Stat(leaf1Path)
 	assert.NoError(err)
 	_, err = os.Stat(leaf2Path)
