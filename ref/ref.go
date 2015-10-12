@@ -14,7 +14,8 @@ import (
 
 var (
 	// In the future we will allow different digest types, so this will get more complicated. For now sha1 is fine.
-	pattern = regexp.MustCompile("^sha1-([0-9a-f]{40})$")
+	pattern  = regexp.MustCompile("^sha1-([0-9a-f]{40})$")
+	EmptyRef = Ref{}
 )
 
 type Sha1Digest [sha1.Size]byte
