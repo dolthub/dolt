@@ -1,6 +1,9 @@
 package types
 
 import (
+	"encoding/base64"
+	"strings"
+
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -100,6 +103,14 @@ func (r *jsonArrayReader) readTypeRefAsTag() TypeRef {
 	panic("unreachable")
 }
 
+func (r *jsonArrayReader) readBlob(t TypeRef) NomsValue {
+	s := r.readString()
+	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(s))
+	b, err := NewBlob(decoder)
+	d.Exp.NoError(err)
+	return valueAsNomsValue{b, t}
+}
+
 func (r *jsonArrayReader) readList(t TypeRef, pkg *Package) NomsValue {
 	desc := t.Desc.(CompoundDesc)
 	ll := []Value{}
@@ -153,6 +164,8 @@ func (r *jsonArrayReader) readTopLevelValue() NomsValue {
 
 func (r *jsonArrayReader) readValueWithoutTag(t TypeRef, pkg *Package) NomsValue {
 	switch t.Kind() {
+	case BlobKind:
+		return r.readBlob(t)
 	case BoolKind:
 		return valueAsNomsValue{Bool(r.read().(bool)), t}
 	case UInt8Kind:
@@ -177,8 +190,6 @@ func (r *jsonArrayReader) readValueWithoutTag(t TypeRef, pkg *Package) NomsValue
 		return valueAsNomsValue{Float64(r.read().(float64)), t}
 	case StringKind:
 		return valueAsNomsValue{NewString(r.readString()), t}
-	case BlobKind:
-		panic("not implemented")
 	case ValueKind:
 		// The value is always tagged
 		t := r.readTypeRefAsTag()

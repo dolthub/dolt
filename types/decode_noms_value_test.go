@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -52,6 +53,41 @@ func TestReadTypeRefAsTag(t *testing.T) {
 	test(MakeTypeRef("S", r), `[%d, "%s", "S"]`, TypeRefKind, r.String())
 
 	test(MakePrimitiveTypeRef(TypeRefKind), `[%d, %d, "%s", "S"]`, TypeRefKind, TypeRefKind, r.String())
+}
+
+func TestReadPrimitives(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := chunks.NewMemoryStore()
+
+	test := func(expected Value, s string, vs ...interface{}) {
+		a := parseJson(s, vs...)
+		r := newJsonArrayReader(a, cs)
+		v := r.readTopLevelValue().NomsValue()
+		assert.True(expected.Equals(v))
+	}
+
+	test(Bool(true), "[%d, true]", BoolKind)
+
+	test(Bool(true), "[%d, true]", BoolKind)
+	test(Bool(false), "[%d, false]", BoolKind)
+
+	test(UInt8(0), "[%d, 0]", UInt8Kind)
+	test(UInt16(0), "[%d, 0]", UInt16Kind)
+	test(UInt32(0), "[%d, 0]", UInt32Kind)
+	test(UInt64(0), "[%d, 0]", UInt64Kind)
+	test(Int8(0), "[%d, 0]", Int8Kind)
+	test(Int16(0), "[%d, 0]", Int16Kind)
+	test(Int32(0), "[%d, 0]", Int32Kind)
+	test(Int64(0), "[%d, 0]", Int64Kind)
+	test(Float32(0), "[%d, 0]", Float32Kind)
+	test(Float64(0), "[%d, 0]", Float64Kind)
+
+	test(NewString("hi"), `[%d, "hi"]`, StringKind)
+
+	blob, err := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
+	assert.NoError(err)
+	test(blob, `[%d, "AAE="]`, BlobKind)
 }
 
 func TestReadListOfInt32(t *testing.T) {
@@ -478,6 +514,38 @@ func TestReadStructWithEnum(t *testing.T) {
 	assert.True(v.Get(NewString("x")).Equals(Int16(42)))
 	assert.True(v.Get(NewString("e")).Equals(UInt32(1)))
 	assert.True(v.Get(NewString("b")).Equals(Bool(true)))
+}
+
+func TestReadStructWithBlob(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+
+	// struct A5 {
+	//   b: Blob
+	// }
+
+	tref := MakeStructTypeRef("A5", []Field{
+		Field{"b", MakePrimitiveTypeRef(BlobKind), false},
+	}, Choices{})
+	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("A5", tref))
+	pkgRef := RegisterPackage(&pkg)
+
+	// TODO: Should use ordinal of type and not name
+	a := parseJson(`[%d, "%s", "A5", "AAE="]`, TypeRefKind, pkgRef.String())
+	r := newJsonArrayReader(a, cs)
+
+	structTr := MakeTypeRef("A5", pkgRef)
+	RegisterFromValFunction(structTr, func(v Value) NomsValue {
+		return valueAsNomsValue{v, structTr}
+	})
+
+	v := r.readTopLevelValue().NomsValue().(Map)
+
+	assert.True(v.Get(NewString("$name")).Equals(NewString("A5")))
+	assert.True(v.Get(NewString("$type")).Equals(structTr))
+	blob, err := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
+	assert.NoError(err)
+	assert.True(v.Get(NewString("b")).Equals(blob))
 }
 
 func TestReadTypeRefValue(t *testing.T) {

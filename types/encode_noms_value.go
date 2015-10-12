@@ -1,6 +1,10 @@
 package types
 
 import (
+	"bytes"
+	"encoding/base64"
+	"io"
+
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -73,7 +77,7 @@ func (w *jsonArrayWriter) writeTopLevelValue(v NomsValue) {
 func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 	switch tr.Kind() {
 	case BlobKind:
-		panic("not yet implemented")
+		w.writeBlob(v.(Blob))
 	case BoolKind, Float32Kind, Float64Kind, Int16Kind, Int32Kind, Int64Kind, Int8Kind, UInt16Kind, UInt32Kind, UInt64Kind, UInt8Kind:
 		w.write(v.(primitive).ToPrimitive())
 	case ListKind:
@@ -180,6 +184,16 @@ func (w *jsonArrayWriter) writeTypeRefKindValue(v Value, tr TypeRef, pkg *Packag
 			w.writeStruct(v.(Map), typeDef, pkg)
 		}
 	}
+}
+
+func (w *jsonArrayWriter) writeBlob(b Blob) {
+	var buf bytes.Buffer
+	encoder := base64.NewEncoder(base64.StdEncoding, &buf)
+	n, err := io.Copy(encoder, b.Reader())
+	encoder.Close()
+	d.Exp.Equal(uint64(n), b.Len())
+	d.Exp.NoError(err)
+	w.write(buf.String())
 }
 
 func (w *jsonArrayWriter) writeStruct(m Map, t TypeRef, pkg *Package) {

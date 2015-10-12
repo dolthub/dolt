@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
@@ -32,6 +33,10 @@ func TestWritePrimitives(t *testing.T) {
 	f(Float64Kind, Float64(0), float64(0))
 
 	f(StringKind, NewString("hi"), "hi")
+
+	blob, err := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
+	assert.NoError(err)
+	f(BlobKind, blob, "AAE=")
 }
 
 func TestWriteList(t *testing.T) {
@@ -228,6 +233,23 @@ func TestWriteStructWithStruct(t *testing.T) {
 	assert.EqualValues([]interface{}{TypeRefKind, pkgRef.String(), "S", int32(42)}, *w)
 }
 
+func TestWriteStructWithBlob(t *testing.T) {
+	assert := assert.New(t)
+
+	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("S",
+		MakeStructTypeRef("S", []Field{
+			Field{"b", MakePrimitiveTypeRef(BlobKind), false},
+		}, Choices{})))
+	pkgRef := RegisterPackage(&pkg)
+	tref := MakeTypeRef("S", pkgRef)
+	b, _ := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
+	v := NewMap(NewString("b"), b)
+
+	w := newJsonArrayWriter()
+	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
+	assert.EqualValues([]interface{}{TypeRefKind, pkgRef.String(), "S", "AAE="}, *w)
+}
+
 func TestWriteEnum(t *testing.T) {
 	assert := assert.New(t)
 
@@ -261,6 +283,7 @@ func TestWriteListOfValue(t *testing.T) {
 	assert := assert.New(t)
 
 	tref := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
+	blob, _ := NewBlob(bytes.NewBuffer([]byte{0x01}))
 	v := NewList(
 		Bool(true),
 		UInt8(1),
@@ -274,6 +297,7 @@ func TestWriteListOfValue(t *testing.T) {
 		Float32(1),
 		Float64(1),
 		NewString("hi"),
+		blob,
 	)
 
 	w := newJsonArrayWriter()
@@ -292,6 +316,7 @@ func TestWriteListOfValue(t *testing.T) {
 		Float32Kind, float32(1),
 		Float64Kind, float64(1),
 		StringKind, "hi",
+		BlobKind, "AQ==",
 	}}, *w)
 }
 
