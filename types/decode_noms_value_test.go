@@ -68,8 +68,6 @@ func TestReadPrimitives(t *testing.T) {
 	}
 
 	test(Bool(true), "[%d, true]", BoolKind)
-
-	test(Bool(true), "[%d, true]", BoolKind)
 	test(Bool(false), "[%d, false]", BoolKind)
 
 	test(UInt8(0), "[%d, 0]", UInt8Kind)
