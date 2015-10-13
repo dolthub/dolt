@@ -14,11 +14,11 @@ var __typesPackageInFile_package_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := PackageDef{
-		NamedTypes: MapOfStringToTypeRefDef{
-			"Package": MakeStructTypeRef("Package",
+		Types: ListOfTypeRefDef{
+			MakeStructTypeRef("Package",
 				[]Field{
 					Field{"Dependencies", MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", ref.Ref{}))), false},
-					Field{"NamedTypes", MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind)), false},
+					Field{"Types", MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(TypeRefKind)), false},
 				},
 				Choices{},
 			),
@@ -56,8 +56,10 @@ func (s SetOfPackage) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s SetOfPackage) Chunks() []Future {
-	return s.s.Chunks()
+func (s SetOfPackage) Chunks() (futures []Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.s.Chunks()...)
+	return
 }
 
 // A Noms Value that describes SetOfPackage.
@@ -161,7 +163,7 @@ func NewPackage() Package {
 		NewString("$name"), NewString("Package"),
 		NewString("$type"), MakeTypeRef("Package", __typesPackageInFile_package_CachedRef),
 		NewString("Dependencies"), NewSet(),
-		NewString("NamedTypes"), NewMap(),
+		NewString("Types"), NewList(),
 	)}
 }
 
@@ -170,7 +172,7 @@ func NewPackage() Package {
 // NamedTypes is a lookup table for types defined in this package. These should all be EnumKind or StructKind. When traversing the definition of a given type, you may run into a TypeRef that IsUnresolved(). In that case, look it up by name in the NamedTypes of the appropriate package.
 type PackageDef struct {
 	Dependencies SetOfRefOfPackageDef
-	NamedTypes   MapOfStringToTypeRefDef
+	Types ListOfTypeRefDef
 }
 
 func (def PackageDef) New() Package {
@@ -179,13 +181,13 @@ func (def PackageDef) New() Package {
 			NewString("$name"), NewString("Package"),
 			NewString("$type"), MakeTypeRef("Package", __typesPackageInFile_package_CachedRef),
 			NewString("Dependencies"), def.Dependencies.New().NomsValue(),
-			NewString("NamedTypes"), def.NamedTypes.New().NomsValue(),
+			NewString("Types"), def.Types.New().NomsValue(),
 		)}
 }
 
 func (s Package) Def() (d PackageDef) {
 	d.Dependencies = SetOfRefOfPackageFromVal(s.m.Get(NewString("Dependencies"))).Def()
-	d.NamedTypes = MapOfStringToTypeRefFromVal(s.m.Get(NewString("NamedTypes"))).Def()
+	d.Types = ListOfTypeRefFromVal(s.m.Get(NewString("Types"))).Def()
 	return
 }
 
@@ -222,8 +224,10 @@ func (s Package) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Package) Chunks() []Future {
-	return s.m.Chunks()
+func (s Package) Chunks() (futures []Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
 }
 
 func (s Package) Dependencies() SetOfRefOfPackage {
@@ -234,12 +238,12 @@ func (s Package) SetDependencies(val SetOfRefOfPackage) Package {
 	return Package{s.m.Set(NewString("Dependencies"), val.NomsValue())}
 }
 
-func (s Package) NamedTypes() MapOfStringToTypeRef {
-	return MapOfStringToTypeRefFromVal(s.m.Get(NewString("NamedTypes")))
+func (s Package) Types() ListOfTypeRef {
+	return ListOfTypeRefFromVal(s.m.Get(NewString("Types")))
 }
 
-func (s Package) SetNamedTypes(val MapOfStringToTypeRef) Package {
-	return Package{s.m.Set(NewString("NamedTypes"), val.NomsValue())}
+func (s Package) SetOrderedTypes(val ListOfTypeRef) Package {
+	return Package{s.m.Set(NewString("Types"), val.NomsValue())}
 }
 
 // SetOfRefOfPackage
@@ -292,8 +296,10 @@ func (s SetOfRefOfPackage) Ref() ref.Ref {
 	return s.s.Ref()
 }
 
-func (s SetOfRefOfPackage) Chunks() []Future {
-	return s.s.Chunks()
+func (s SetOfRefOfPackage) Chunks() (futures []Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.s.Chunks()...)
+	return
 }
 
 // A Noms Value that describes SetOfRefOfPackage.
@@ -416,7 +422,7 @@ func (r RefOfPackage) Equals(other Value) bool {
 }
 
 func (r RefOfPackage) Chunks() []Future {
-	return nil
+	return r.TypeRef().Chunks()
 }
 
 func (r RefOfPackage) NomsValue() Value {
@@ -450,123 +456,142 @@ func (r RefOfPackage) SetValue(val Package, cs chunks.ChunkSink) RefOfPackage {
 	return RefOfPackage{ref}
 }
 
-// MapOfStringToTypeRef
+// ListOfTypeRef
 
-type MapOfStringToTypeRef struct {
-	m Map
+type ListOfTypeRef struct {
+	l List
 }
 
-func NewMapOfStringToTypeRef() MapOfStringToTypeRef {
-	return MapOfStringToTypeRef{NewMap()}
+func NewListOfTypeRef() ListOfTypeRef {
+	return ListOfTypeRef{NewList()}
 }
 
-type MapOfStringToTypeRefDef map[string]TypeRef
+type ListOfTypeRefDef []TypeRef
 
-func (def MapOfStringToTypeRefDef) New() MapOfStringToTypeRef {
-	kv := make([]Value, 0, len(def)*2)
-	for k, v := range def {
-		kv = append(kv, NewString(k), v)
+func (def ListOfTypeRefDef) New() ListOfTypeRef {
+	l := make([]Value, len(def))
+	for i, d := range def {
+		l[i] = d
 	}
-	return MapOfStringToTypeRef{NewMap(kv...)}
+	return ListOfTypeRef{NewList(l...)}
 }
 
-func (m MapOfStringToTypeRef) Def() MapOfStringToTypeRefDef {
-	def := make(map[string]TypeRef)
-	m.m.Iter(func(k, v Value) bool {
-		def[k.(String).String()] = v.(TypeRef)
-		return false
-	})
-	return def
+func (l ListOfTypeRef) Def() ListOfTypeRefDef {
+	d := make([]TypeRef, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = l.l.Get(i).(TypeRef)
+	}
+	return d
 }
 
-func MapOfStringToTypeRefFromVal(p Value) MapOfStringToTypeRef {
+func ListOfTypeRefFromVal(val Value) ListOfTypeRef {
 	// TODO: Validate here
-	return MapOfStringToTypeRef{p.(Map)}
+	return ListOfTypeRef{val.(List)}
 }
 
-func (m MapOfStringToTypeRef) NomsValue() Value {
-	return m.m
+func (l ListOfTypeRef) NomsValue() Value {
+	return l.l
 }
 
-func (m MapOfStringToTypeRef) Equals(other Value) bool {
-	if other, ok := other.(MapOfStringToTypeRef); ok {
-		return m.m.Equals(other.m)
+func (l ListOfTypeRef) Equals(other Value) bool {
+	if other, ok := other.(ListOfTypeRef); ok {
+		return l.l.Equals(other.l)
 	}
 	return false
 }
 
-func (m MapOfStringToTypeRef) Ref() ref.Ref {
-	return m.m.Ref()
+func (l ListOfTypeRef) Ref() ref.Ref {
+	return l.l.Ref()
 }
 
-func (m MapOfStringToTypeRef) Chunks() []Future {
-	return m.m.Chunks()
+func (l ListOfTypeRef) Chunks() (futures []Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
 }
 
-// A Noms Value that describes MapOfStringToTypeRef.
-var __typeRefForMapOfStringToTypeRef TypeRef
+// A Noms Value that describes ListOfTypeRef.
+var __typeRefForListOfTypeRef TypeRef
 
-func (m MapOfStringToTypeRef) TypeRef() TypeRef {
-	return __typeRefForMapOfStringToTypeRef
+func (m ListOfTypeRef) TypeRef() TypeRef {
+	return __typeRefForListOfTypeRef
 }
 
 func init() {
-	__typeRefForMapOfStringToTypeRef = MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(TypeRefKind))
-	RegisterFromValFunction(__typeRefForMapOfStringToTypeRef, func(v Value) NomsValue {
-		return MapOfStringToTypeRefFromVal(v)
+	__typeRefForListOfTypeRef = MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(TypeRefKind))
+	RegisterFromValFunction(__typeRefForListOfTypeRef, func(v Value) NomsValue {
+		return ListOfTypeRefFromVal(v)
 	})
 }
 
-func (m MapOfStringToTypeRef) Empty() bool {
-	return m.m.Empty()
+func (l ListOfTypeRef) Len() uint64 {
+	return l.l.Len()
 }
 
-func (m MapOfStringToTypeRef) Len() uint64 {
-	return m.m.Len()
+func (l ListOfTypeRef) Empty() bool {
+	return l.Len() == uint64(0)
 }
 
-func (m MapOfStringToTypeRef) Has(p string) bool {
-	return m.m.Has(NewString(p))
+func (l ListOfTypeRef) Get(i uint64) TypeRef {
+	return l.l.Get(i).(TypeRef)
 }
 
-func (m MapOfStringToTypeRef) Get(p string) TypeRef {
-	return m.m.Get(NewString(p)).(TypeRef)
+func (l ListOfTypeRef) Slice(idx uint64, end uint64) ListOfTypeRef {
+	return ListOfTypeRef{l.l.Slice(idx, end)}
 }
 
-func (m MapOfStringToTypeRef) Set(k string, v TypeRef) MapOfStringToTypeRef {
-	return MapOfStringToTypeRef{m.m.Set(NewString(k), v)}
+func (l ListOfTypeRef) Set(i uint64, val TypeRef) ListOfTypeRef {
+	return ListOfTypeRef{l.l.Set(i, val)}
 }
 
-// TODO: Implement SetM?
-
-func (m MapOfStringToTypeRef) Remove(p string) MapOfStringToTypeRef {
-	return MapOfStringToTypeRef{m.m.Remove(NewString(p))}
+func (l ListOfTypeRef) Append(v ...TypeRef) ListOfTypeRef {
+	return ListOfTypeRef{l.l.Append(l.fromElemSlice(v)...)}
 }
 
-type MapOfStringToTypeRefIterCallback func(k string, v TypeRef) (stop bool)
+func (l ListOfTypeRef) Insert(idx uint64, v ...TypeRef) ListOfTypeRef {
+	return ListOfTypeRef{l.l.Insert(idx, l.fromElemSlice(v)...)}
+}
 
-func (m MapOfStringToTypeRef) Iter(cb MapOfStringToTypeRefIterCallback) {
-	m.m.Iter(func(k, v Value) bool {
-		return cb(k.(String).String(), v.(TypeRef))
+func (l ListOfTypeRef) Remove(idx uint64, end uint64) ListOfTypeRef {
+	return ListOfTypeRef{l.l.Remove(idx, end)}
+}
+
+func (l ListOfTypeRef) RemoveAt(idx uint64) ListOfTypeRef {
+	return ListOfTypeRef{(l.l.RemoveAt(idx))}
+}
+
+func (l ListOfTypeRef) fromElemSlice(p []TypeRef) []Value {
+	r := make([]Value, len(p))
+	for i, v := range p {
+		r[i] = v
+	}
+	return r
+}
+
+type ListOfTypeRefIterCallback func(v TypeRef, i uint64) (stop bool)
+
+func (l ListOfTypeRef) Iter(cb ListOfTypeRefIterCallback) {
+	l.l.Iter(func(v Value, i uint64) bool {
+		return cb(v.(TypeRef), i)
 	})
 }
 
-type MapOfStringToTypeRefIterAllCallback func(k string, v TypeRef)
+type ListOfTypeRefIterAllCallback func(v TypeRef, i uint64)
 
-func (m MapOfStringToTypeRef) IterAll(cb MapOfStringToTypeRefIterAllCallback) {
-	m.m.IterAll(func(k, v Value) {
-		cb(k.(String).String(), v.(TypeRef))
+func (l ListOfTypeRef) IterAll(cb ListOfTypeRefIterAllCallback) {
+	l.l.IterAll(func(v Value, i uint64) {
+		cb(v.(TypeRef), i)
 	})
 }
 
-type MapOfStringToTypeRefFilterCallback func(k string, v TypeRef) (keep bool)
+type ListOfTypeRefFilterCallback func(v TypeRef, i uint64) (keep bool)
 
-func (m MapOfStringToTypeRef) Filter(cb MapOfStringToTypeRefFilterCallback) MapOfStringToTypeRef {
-	nm := NewMapOfStringToTypeRef()
-	m.IterAll(func(k string, v TypeRef) {
-		if cb(k, v) {
-			nm = nm.Set(k, v)
+func (l ListOfTypeRef) Filter(cb ListOfTypeRefFilterCallback) ListOfTypeRef {
+	nl := NewListOfTypeRef()
+	l.IterAll(func(v TypeRef, i uint64) {
+		if cb(v, i) {
+			nl = nl.Append(v)
 		}
 	})
-	return nm
+	return nl
 }

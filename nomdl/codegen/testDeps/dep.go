@@ -15,9 +15,9 @@ var __testPackageInFile_dep_CachedRef = __testPackageInFile_dep_Ref()
 // type package definition cache.
 func __testPackageInFile_dep_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"D": types.MakeStructTypeRef("D",
+			types.MakeStructTypeRef("D",
 				[]types.Field{
 					types.Field{"structField", types.MakeTypeRef("S", ref.Parse("sha1-f1a192312c01fb47e8e329471242e475eb7001a4")), false},
 					types.Field{"enumField", types.MakeTypeRef("E", ref.Parse("sha1-f1a192312c01fb47e8e329471242e475eb7001a4")), false},

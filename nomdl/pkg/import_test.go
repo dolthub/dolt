@@ -32,7 +32,7 @@ func (suite *ImportTestSuite) SetupTest() {
 		types.Field{"i", types.MakePrimitiveTypeRef(types.Int8Kind), false},
 	})
 	suite.nested = types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{"NestedDepStruct": ns},
+		Types: types.ListOfTypeRefDef{ns},
 	}.New()
 	suite.nestedRef = types.WriteValue(suite.nested.NomsValue(), suite.cs)
 
@@ -44,7 +44,7 @@ func (suite *ImportTestSuite) SetupTest() {
 	fe := types.MakeEnumTypeRef("ForeignEnum", "uno", "dos")
 	suite.imported = types.PackageDef{
 		Dependencies: types.SetOfRefOfPackageDef{suite.nestedRef: true},
-		NamedTypes:   types.MapOfStringToTypeRefDef{"ForeignStruct": fs, "ForeignEnum": fe},
+		Types:        types.ListOfTypeRefDef{fs, fe},
 	}.New()
 	suite.importRef = types.WriteValue(suite.imported.NomsValue(), suite.cs)
 }
@@ -88,7 +88,7 @@ func (suite *ImportTestSuite) TestDetectFreeVariable() {
 	},
 		types.Choices{})
 	suite.Panics(func() {
-		inter := intermediate{NamedTypes: map[string]types.TypeRef{"Local": ls}}
+		inter := intermediate{Types: []types.TypeRef{ls}}
 		resolveNamespaces(&inter, map[string]ref.Ref{}, map[ref.Ref]types.Package{})
 	})
 }
@@ -147,23 +147,23 @@ func (suite *ImportTestSuite) TestImports() {
 		}`, suite.importRef))
 	p := ParseNomDL(logname, r, suite.cs)
 
-	named := p.NamedTypes["Local1"]
+	named := p.Types[0]
 	field := find("a", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	field = find("c", named)
 	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 
-	named = p.NamedTypes["Local2"]
+	named = p.Types[1]
 	field = find("b", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 
-	named = p.NamedTypes["Union"]
+	named = p.Types[2]
 	field = findChoice("a", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	field = findChoice("b", named)
 	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 
-	named = p.NamedTypes["WithUnion"]
+	named = p.Types[3]
 	field = find("a", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	namedUnion := find("b", named).T

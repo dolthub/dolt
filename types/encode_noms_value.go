@@ -174,7 +174,7 @@ func (w *jsonArrayWriter) writeTypeRefKindValue(v Value, tr TypeRef, pkg *Packag
 			pkg = LookupPackage(pkgRef)
 		}
 
-		typeDef := pkg.NamedTypes().Get(tr.Name())
+		typeDef := pkg.GetNamedType(tr.Name())
 
 		k := typeDef.Kind()
 		if k == EnumKind {

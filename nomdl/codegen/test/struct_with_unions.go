@@ -14,9 +14,9 @@ var __testPackageInFile_struct_with_unions_CachedRef = __testPackageInFile_struc
 // type package definition cache.
 func __testPackageInFile_struct_with_unions_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"StructWithUnions": types.MakeStructTypeRef("StructWithUnions",
+			types.MakeStructTypeRef("StructWithUnions",
 				[]types.Field{
 					types.Field{"a", types.MakeStructTypeRef("",
 						[]types.Field{},

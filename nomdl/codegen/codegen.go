@@ -13,7 +13,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"text/template"
 
@@ -238,14 +237,13 @@ func (gen *codeGen) Resolve(t types.TypeRef) types.TypeRef {
 		return t
 	}
 	if !t.HasPackageRef() {
-		return gen.pkg.NamedTypes[t.Name()]
+		return gen.pkg.GetNamedType(t.Name())
 	}
 
 	dep, ok := gen.deps[t.PackageRef()]
 	d.Chk.True(ok, "Package %s is referenced in %+v, but is not a dependency.", t.PackageRef().String(), t)
-	depTypes := dep.NamedTypes()
-	d.Chk.True(depTypes.Has(t.Name()), "Cannot import type %s from package %s.", t.Name(), t.PackageRef().String())
-	return depTypes.Get(t.Name()).MakeImported(t.PackageRef())
+	d.Chk.True(dep.HasNamedType(t.Name()), "Cannot import type %s from package %s.", t.Name(), t.PackageRef().String())
+	return dep.GetNamedType(t.Name()).MakeImported(t.PackageRef())
 }
 
 func (gen *codeGen) WritePackage() {
@@ -255,14 +253,14 @@ func (gen *codeGen) WritePackage() {
 		FileID     string
 		Imports    []string
 		Name       string
-		NamedTypes map[string]types.TypeRef
+		Types      []types.TypeRef
 	}{
 		len(gen.imports) > 0,
-		len(gen.pkg.NamedTypes) > 0,
+		len(gen.pkg.Types) > 0,
 		gen.fileid,
 		gen.imports,
 		gen.pkg.Name,
-		gen.pkg.NamedTypes,
+		gen.pkg.Types,
 	}
 	err := gen.templates.ExecuteTemplate(gen.w, "header.tmpl", data)
 	d.Exp.NoError(err)
@@ -271,13 +269,8 @@ func (gen *codeGen) WritePackage() {
 		gen.write(t)
 	}
 
-	names := make([]string, 0, len(gen.pkg.NamedTypes))
-	for n := range gen.pkg.NamedTypes {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	for _, n := range names {
-		gen.write(gen.pkg.NamedTypes[n])
+	for _, t := range gen.pkg.Types {
+		gen.write(t)
 	}
 }
 

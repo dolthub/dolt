@@ -77,7 +77,7 @@ func TestCanUseDef(t *testing.T) {
 		for _, t := range pkg.UsingDeclarations {
 			assert.Equal(using, gen.canUseDef(t))
 		}
-		for _, t := range pkg.NamedTypes {
+		for _, t := range pkg.Types {
 			assert.Equal(named, gen.canUseDef(t))
 		}
 	}
@@ -162,9 +162,9 @@ func TestImportedTypes(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	imported := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
-			"E1": types.MakeEnumTypeRef("E1", "a", "b"),
-			"S1": types.MakeStructTypeRef("S1", []types.Field{
+		Types: types.ListOfTypeRefDef{
+			types.MakeEnumTypeRef("E1", "a", "b"),
+			types.MakeStructTypeRef("S1", []types.Field{
 				types.Field{"f", types.MakePrimitiveTypeRef(types.BoolKind), false},
 			}, types.Choices{})},
 	}.New()
@@ -224,9 +224,9 @@ func TestGenerateDeps(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
-	leaf1 := types.PackageDef{NamedTypes: types.MapOfStringToTypeRefDef{"e1": types.MakeEnumTypeRef("e1", "a", "b")}}.New()
+	leaf1 := types.PackageDef{Types: types.ListOfTypeRefDef{types.MakeEnumTypeRef("e1", "a", "b")}}.New()
 	leaf1Ref := types.WriteValue(leaf1.NomsValue(), cs)
-	leaf2 := types.PackageDef{NamedTypes: types.MapOfStringToTypeRefDef{"foo": types.MakePrimitiveTypeRef(types.BoolKind)}}.New()
+	leaf2 := types.PackageDef{Types: types.ListOfTypeRefDef{types.MakePrimitiveTypeRef(types.BoolKind)}}.New()
 	leaf2Ref := types.WriteValue(leaf2.NomsValue(), cs)
 
 	depender := types.PackageDef{Dependencies: types.SetOfRefOfPackageDef{leaf1Ref: true}}.New()
@@ -263,6 +263,6 @@ func TestCommitNewPackages(t *testing.T) {
 	pkgDS = generate("name", inFile, filepath.Join(dir, "out.go"), dir, pkgDS)
 	s := types.SetOfRefOfPackageFromVal(pkgDS.Head().Value())
 	assert.EqualValues(1, s.Len())
-	tr := s.Any().GetValue(ds).NamedTypes().Get("Simple")
+	tr := s.Any().GetValue(ds).GetNamedType("Simple")
 	assert.EqualValues(types.StructKind, tr.Kind())
 }

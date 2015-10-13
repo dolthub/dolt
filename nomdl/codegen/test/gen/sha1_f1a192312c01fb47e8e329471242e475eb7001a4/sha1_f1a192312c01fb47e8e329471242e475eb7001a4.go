@@ -14,10 +14,10 @@ var __sha1_f1a192312c01fb47e8e329471242e475eb7001a4PackageInFile_sha1_f1a192312c
 // type package definition cache.
 func __sha1_f1a192312c01fb47e8e329471242e475eb7001a4PackageInFile_sha1_f1a192312c01fb47e8e329471242e475eb7001a4_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"E": types.MakeEnumTypeRef("E", "e1", "e2", "e3"),
-			"S": types.MakeStructTypeRef("S",
+			types.MakeEnumTypeRef("E", "e1", "e2", "e3"),
+			types.MakeStructTypeRef("S",
 				[]types.Field{
 					types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
 					types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},

@@ -14,15 +14,15 @@ var __testPackageInFile_enum_struct_CachedRef = __testPackageInFile_enum_struct_
 // type package definition cache.
 func __testPackageInFile_enum_struct_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"EnumStruct": types.MakeStructTypeRef("EnumStruct",
+			types.MakeStructTypeRef("EnumStruct",
 				[]types.Field{
 					types.Field{"hand", types.MakeTypeRef("Handedness", ref.Ref{}), false},
 				},
 				types.Choices{},
 			),
-			"Handedness": types.MakeEnumTypeRef("Handedness", "right", "left", "switch"),
+			types.MakeEnumTypeRef("Handedness", "right", "left", "switch"),
 		},
 	}.New()
 	return types.RegisterPackage(&p)

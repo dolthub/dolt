@@ -15,10 +15,10 @@ var __testPackageInFile_struct_with_imports_CachedRef = __testPackageInFile_stru
 // type package definition cache.
 func __testPackageInFile_struct_with_imports_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"E": types.MakeEnumTypeRef("E", "E1", "Ignored"),
-			"ImportUser": types.MakeStructTypeRef("ImportUser",
+			types.MakeEnumTypeRef("E", "E1", "Ignored"),
+			types.MakeStructTypeRef("ImportUser",
 				[]types.Field{
 					types.Field{"importedStruct", types.MakeTypeRef("D", ref.Parse("sha1-f9397427926127f67d8f3edb21c92bf642262e9b")), false},
 					types.Field{"enum", types.MakeTypeRef("E", ref.Ref{}), false},

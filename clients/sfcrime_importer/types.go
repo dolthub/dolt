@@ -14,16 +14,16 @@ var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
 // type package definition cache.
 func __mainPackageInFile_types_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"Geoposition": types.MakeStructTypeRef("Geoposition",
+			types.MakeStructTypeRef("Geoposition",
 				[]types.Field{
 					types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
 					types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
 				},
 				types.Choices{},
 			),
-			"Incident": types.MakeStructTypeRef("Incident",
+			types.MakeStructTypeRef("Incident",
 				[]types.Field{
 					types.Field{"ID", types.MakePrimitiveTypeRef(types.Int64Kind), false},
 					types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},

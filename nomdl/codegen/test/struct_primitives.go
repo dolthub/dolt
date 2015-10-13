@@ -14,9 +14,9 @@ var __testPackageInFile_struct_primitives_CachedRef = __testPackageInFile_struct
 // type package definition cache.
 func __testPackageInFile_struct_primitives_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"StructPrimitives": types.MakeStructTypeRef("StructPrimitives",
+			types.MakeStructTypeRef("StructPrimitives",
 				[]types.Field{
 					types.Field{"uint64", types.MakePrimitiveTypeRef(types.UInt64Kind), false},
 					types.Field{"uint32", types.MakePrimitiveTypeRef(types.UInt32Kind), false},

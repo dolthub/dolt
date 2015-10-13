@@ -21,18 +21,17 @@ func (res *testResolver) Resolve(t types.TypeRef) types.TypeRef {
 
 	dep, ok := res.deps[t.PackageRef()]
 	res.assert.True(ok, "Package %s is referenced in %+v, but is not a dependency.", t.PackageRef().String(), t)
-	depTypes := dep.NamedTypes()
-	res.assert.True(depTypes.Has(t.Name()), "Cannot import type %s from package %s.", t.Name(), t.PackageRef().String())
-	return depTypes.Get(t.Name()).MakeImported(t.PackageRef())
+	res.assert.True(dep.HasNamedType(t.Name()), "Cannot import type %s from package %s.", t.Name(), t.PackageRef().String())
+	return dep.GetNamedType(t.Name()).MakeImported(t.PackageRef())
 }
 
 func TestUserName(t *testing.T) {
 	assert := assert.New(t)
 
 	imported := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
-			"E1": types.MakeEnumTypeRef("E1", "a", "b"),
-			"S1": types.MakeStructTypeRef("S1", []types.Field{
+		Types: types.ListOfTypeRefDef{
+			types.MakeEnumTypeRef("E1", "a", "b"),
+			types.MakeStructTypeRef("S1", []types.Field{
 				types.Field{"f", types.MakePrimitiveTypeRef(types.BoolKind), false},
 			}, types.Choices{})},
 	}.New()

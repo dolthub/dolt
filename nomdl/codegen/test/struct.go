@@ -14,9 +14,9 @@ var __testPackageInFile_struct_CachedRef = __testPackageInFile_struct_Ref()
 // type package definition cache.
 func __testPackageInFile_struct_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"Struct": types.MakeStructTypeRef("Struct",
+			types.MakeStructTypeRef("Struct",
 				[]types.Field{
 					types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
 					types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},

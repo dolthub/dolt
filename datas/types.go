@@ -14,9 +14,9 @@ var __datasPackageInFile_types_CachedRef = __datasPackageInFile_types_Ref()
 // type package definition cache.
 func __datasPackageInFile_types_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"Commit": types.MakeStructTypeRef("Commit",
+			types.MakeStructTypeRef("Commit",
 				[]types.Field{
 					types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
 					types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", ref.Ref{})), false},

@@ -117,7 +117,7 @@ func TestWriteMapOfMap(t *testing.T) {
 func TestWriteEmptyStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("S",
+	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{}, Choices{})))
 	pkgRef := RegisterPackage(&pkg)
 	tref := MakeTypeRef("S", pkgRef)
@@ -131,7 +131,7 @@ func TestWriteEmptyStruct(t *testing.T) {
 func TestWriteStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("S",
+	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"x", MakePrimitiveTypeRef(Int8Kind), false},
 			Field{"b", MakePrimitiveTypeRef(BoolKind), false},
@@ -148,7 +148,7 @@ func TestWriteStruct(t *testing.T) {
 func TestWriteStructOptionalField(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("S",
+	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"x", MakePrimitiveTypeRef(Int8Kind), true},
 			Field{"b", MakePrimitiveTypeRef(BoolKind), false},
@@ -171,7 +171,7 @@ func TestWriteStructOptionalField(t *testing.T) {
 func TestWriteStructWithUnion(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("S",
+	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"x", MakePrimitiveTypeRef(Int8Kind), false},
 		}, Choices{
@@ -196,7 +196,7 @@ func TestWriteStructWithUnion(t *testing.T) {
 func TestWriteStructWithList(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("S",
+	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"l", MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(StringKind)), false},
 		}, Choices{})))
@@ -217,10 +217,10 @@ func TestWriteStructWithList(t *testing.T) {
 func TestWriteStructWithStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("S2",
+	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S2", []Field{
 			Field{"x", MakePrimitiveTypeRef(Int32Kind), false},
-		}, Choices{})).Set("S",
+		}, Choices{}),
 		MakeStructTypeRef("S", []Field{
 			Field{"s", MakeTypeRef("S2", ref.Ref{}), false},
 		}, Choices{})))
@@ -236,7 +236,7 @@ func TestWriteStructWithStruct(t *testing.T) {
 func TestWriteStructWithBlob(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("S",
+	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"b", MakePrimitiveTypeRef(BlobKind), false},
 		}, Choices{})))
@@ -253,7 +253,7 @@ func TestWriteStructWithBlob(t *testing.T) {
 func TestWriteEnum(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("E",
+	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
 		MakeEnumTypeRef("E", "a", "b", "c")))
 	pkgRef := RegisterPackage(&pkg)
 	tref := MakeTypeRef("E", pkgRef)
@@ -267,7 +267,7 @@ func TestWriteEnum(t *testing.T) {
 func TestWriteListOfEnum(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("E",
+	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
 		MakeEnumTypeRef("E", "a", "b", "c")))
 	pkgRef := RegisterPackage(&pkg)
 	et := MakeTypeRef("E", pkgRef)
@@ -323,7 +323,7 @@ func TestWriteListOfValue(t *testing.T) {
 func TestWriteListOfValueWithStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("S",
+	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"x", MakePrimitiveTypeRef(Int32Kind), false},
 		}, Choices{})))
@@ -341,7 +341,7 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 func TestWriteListOfValueWithTypeRefs(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetNamedTypes(NewMapOfStringToTypeRef().Set("S",
+	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"x", MakePrimitiveTypeRef(Int32Kind), false},
 		}, Choices{})))
@@ -431,14 +431,14 @@ func TestWriteListOfTypeRefs(t *testing.T) {
 
 func TestWritePackage(t *testing.T) {
 	pkg := PackageDef{
-		NamedTypes: MapOfStringToTypeRefDef{
-			"EnumStruct": MakeStructTypeRef("EnumStruct",
+		Types: ListOfTypeRefDef{
+			MakeStructTypeRef("EnumStruct",
 				[]Field{
 					Field{"hand", MakeTypeRef("Handedness", ref.Ref{}), false},
 				},
 				Choices{},
 			),
-			"Handedness": MakeEnumTypeRef("Handedness", "right", "left", "switch"),
+			MakeEnumTypeRef("Handedness", "right", "left", "switch"),
 		},
 	}.New()
 
@@ -447,18 +447,17 @@ func TestWritePackage(t *testing.T) {
 
 	// struct Package {
 	// 	Dependencies: Set(Ref(Package))
-	// 	NamedTypes: Map(String, TypeRef)
+	// 	Types: List(TypeRef)
 	// }
 
 	exp := []interface{}{
 		TypeRefKind, __typesPackageInFile_package_CachedRef.String(), "Package",
 		[]interface{}{}, // Dependencies
 		[]interface{}{
-			"Handedness", EnumKind, "Handedness", []interface{}{"right", "left", "switch"},
-			"EnumStruct", StructKind, "EnumStruct", []interface{}{
+			StructKind, "EnumStruct", []interface{}{
 				"hand", TypeRefKind, "sha1-0000000000000000000000000000000000000000", "Handedness", false,
-			},
-			[]interface{}{},
+			}, []interface{}{},
+			EnumKind, "Handedness", []interface{}{"right", "left", "switch"},
 		},
 	}
 

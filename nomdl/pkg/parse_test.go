@@ -181,8 +181,8 @@ func (suite *ParserTestSuite) TestEnum() {
 	enum := fmt.Sprintf(enumTmpl, name, strings.Join(ids, "\n"))
 
 	pkg := runParser("", strings.NewReader(enum))
-	suite.Equal(name, pkg.NamedTypes[name].Name())
-	suite.EqualValues(ids, pkg.NamedTypes[name].Desc.(types.EnumDesc).IDs)
+	suite.Equal(name, pkg.GetNamedType(name).Name())
+	suite.EqualValues(ids, pkg.GetNamedType(name).Desc.(types.EnumDesc).IDs)
 }
 
 type ParsedResultTestSuite struct {
@@ -269,7 +269,7 @@ type describable interface {
 }
 
 func (suite *ParsedResultTestSuite) checkStruct(pkg intermediate, s structTestCase) {
-	typ := pkg.NamedTypes[s.Name]
+	typ := pkg.GetNamedType(s.Name)
 	typFields := typ.Desc.(types.StructDesc).Fields
 	typUnion := typ.Desc.(types.StructDesc).Union
 

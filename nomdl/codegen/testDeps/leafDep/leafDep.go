@@ -14,10 +14,10 @@ var __testPackageInFile_leafDep_CachedRef = __testPackageInFile_leafDep_Ref()
 // type package definition cache.
 func __testPackageInFile_leafDep_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"E": types.MakeEnumTypeRef("E", "e1", "e2", "e3"),
-			"S": types.MakeStructTypeRef("S",
+			types.MakeEnumTypeRef("E", "e1", "e2", "e3"),
+			types.MakeStructTypeRef("S",
 				[]types.Field{
 					types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
 					types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},

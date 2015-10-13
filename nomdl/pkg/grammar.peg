@@ -15,7 +15,8 @@ type namespaceIdent struct {
 Package <- _ dd:Definition+ _ EOF {
 	aliases := map[string]string{}
 	usings := []types.TypeRef{}
-	named := map[string]types.TypeRef{}
+	seenTypes := map[string]bool{}
+	orderedTypes := []types.TypeRef{}
 	for _, d := range dd.([]interface{}) {
 		switch d := d.(type) {
 		default:
@@ -37,14 +38,15 @@ Package <- _ dd:Definition+ _ EOF {
 				}
 				usings = append(usings, d)
 			case types.EnumKind, types.StructKind:
-				if _, present := named[d.Name()]; present {
+				if seenTypes[d.Name()] {
 					return nil, fmt.Errorf("Redefinition of " + d.Name())
 				}
-				named[d.Name()] = d
+				seenTypes[d.Name()] = true
+				orderedTypes = append(orderedTypes, d)
 			}
 		}
 	}
-	return intermediate{"", aliases, usings, named}, nil
+	return intermediate{"", aliases, usings, orderedTypes, nil}, nil
 }
 
 Definition <- Struct / Using / Alias / Enum

@@ -15,30 +15,30 @@ var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
 // type package definition cache.
 func __mainPackageInFile_types_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"Geoposition": types.MakeStructTypeRef("Geoposition",
+			types.MakeStructTypeRef("Geoposition",
 				[]types.Field{
 					types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
 					types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
 				},
 				types.Choices{},
 			),
-			"Georectangle": types.MakeStructTypeRef("Georectangle",
+			types.MakeStructTypeRef("Georectangle",
 				[]types.Field{
 					types.Field{"TopLeft", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
 					types.Field{"BottomRight", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
 				},
 				types.Choices{},
 			),
-			"Node": types.MakeStructTypeRef("Node",
+			types.MakeStructTypeRef("Node",
 				[]types.Field{
 					types.Field{"Geoposition", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
 					types.Field{"Reference", types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind)), false},
 				},
 				types.Choices{},
 			),
-			"QuadTree": types.MakeStructTypeRef("QuadTree",
+			types.MakeStructTypeRef("QuadTree",
 				[]types.Field{
 					types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Node", ref.Ref{})), false},
 					types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("QuadTree", ref.Ref{})), false},
@@ -49,7 +49,7 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 				},
 				types.Choices{},
 			),
-			"SQuadTree": types.MakeStructTypeRef("SQuadTree",
+			types.MakeStructTypeRef("SQuadTree",
 				[]types.Field{
 					types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))), false},
 					types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef("SQuadTree", ref.Ref{}))), false},

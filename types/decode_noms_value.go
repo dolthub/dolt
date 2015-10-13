@@ -225,7 +225,8 @@ func (r *jsonArrayReader) readTypeRefKindToValue(t TypeRef, pkg *Package) NomsVa
 		pkg = pkg2
 	}
 
-	typeDef := pkg.NamedTypes().Get(name)
+	typeDef := pkg.GetNamedType(name)
+
 	if typeDef.Kind() == EnumKind {
 		return r.readEnum(t)
 	}

@@ -20,9 +20,10 @@ func ParseNomDL(packageName string, r io.Reader, cs chunks.ChunkSource) Parsed {
 	}
 	resolveNamespaces(&i, aliases, GetDeps(depRefs, cs))
 	return Parsed{
-		types.PackageDef{Dependencies: depRefs, NamedTypes: i.NamedTypes},
+		types.PackageDef{Dependencies: depRefs, Types: i.Types},
 		i.Name,
 		i.UsingDeclarations,
+		i.Types,
 	}
 }
 
@@ -43,13 +44,43 @@ type Parsed struct {
 	types.PackageDef
 	Name              string
 	UsingDeclarations []types.TypeRef
+	Types             []types.TypeRef
 }
 
 type intermediate struct {
 	Name              string
 	Aliases           map[string]string
 	UsingDeclarations []types.TypeRef
-	NamedTypes        map[string]types.TypeRef
+	Types             []types.TypeRef
+}
+
+func findTypeByName(n string, ts []types.TypeRef) (types.TypeRef, bool) {
+	for _, t := range ts {
+		if n == t.Name() {
+			return t, true
+		}
+	}
+	return types.TypeRef{}, false
+}
+
+func (p Parsed) GetNamedType(name string) types.TypeRef {
+	t, _ := findTypeByName(name, p.Types)
+	return t
+}
+
+func (i *intermediate) GetNamedType(name string) types.TypeRef {
+	t, _ := findTypeByName(name, i.Types)
+	return t
+}
+
+func (i *intermediate) checkLocal(t types.TypeRef) bool {
+	if t.Namespace() == "" {
+		d.Chk.Equal(ref.Ref{}, t.PackageRef())
+		_, ok := findTypeByName(t.Name(), i.Types)
+		d.Exp.True(ok, "Could not find type %s in current package.", t.Name())
+		return true
+	}
+	return false
 }
 
 func runParser(logname string, r io.Reader) intermediate {
@@ -76,7 +107,7 @@ func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref
 	resolveFields := func(fields []types.Field) {
 		for idx, f := range fields {
 			if f.T.IsUnresolved() {
-				if checkLocal(f.T, p.NamedTypes) {
+				if p.checkLocal(f.T) {
 					continue
 				}
 				f.T = resolveNamespace(f.T, aliases, deps)
@@ -88,7 +119,7 @@ func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref
 	}
 	rec = func(t types.TypeRef) types.TypeRef {
 		if t.IsUnresolved() {
-			if checkLocal(t, p.NamedTypes) {
+			if p.checkLocal(t) {
 				return t
 			}
 			t = resolveNamespace(t, aliases, deps)
@@ -106,27 +137,17 @@ func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref
 		return t
 	}
 
-	for n, t := range p.NamedTypes {
-		p.NamedTypes[n] = rec(t)
+	for i, t := range p.Types {
+		p.Types[i] = rec(t)
 	}
 	for i, t := range p.UsingDeclarations {
 		p.UsingDeclarations[i] = rec(t)
 	}
 }
 
-func checkLocal(t types.TypeRef, namedTypes map[string]types.TypeRef) bool {
-	if t.Namespace() == "" {
-		d.Chk.Equal(ref.Ref{}, t.PackageRef())
-		_, ok := namedTypes[t.Name()]
-		d.Exp.True(ok, "Could not find type %s in current package.", t.Name())
-		return true
-	}
-	return false
-}
-
 func resolveNamespace(t types.TypeRef, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) types.TypeRef {
 	target, ok := aliases[t.Namespace()]
 	d.Exp.True(ok, "Could not find import aliased to %s", t.Namespace())
-	d.Exp.True(deps[target].NamedTypes().Has(t.Name()), "Could not find type %s in package %s (aliased to %s).", t.Name(), target.String(), t.Namespace())
+	d.Exp.True(deps[target].HasNamedType(t.Name()), "Could not find type %s in package %s (aliased to %s).", t.Name(), target.String(), t.Namespace())
 	return types.MakeTypeRef(t.Name(), target)
 }

@@ -15,9 +15,9 @@ var __sha1_f9397427926127f67d8f3edb21c92bf642262e9bPackageInFile_sha1_f939742792
 // type package definition cache.
 func __sha1_f9397427926127f67d8f3edb21c92bf642262e9bPackageInFile_sha1_f9397427926127f67d8f3edb21c92bf642262e9b_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"D": types.MakeStructTypeRef("D",
+			types.MakeStructTypeRef("D",
 				[]types.Field{
 					types.Field{"structField", types.MakeTypeRef("S", ref.Parse("sha1-f1a192312c01fb47e8e329471242e475eb7001a4")), false},
 					types.Field{"enumField", types.MakeTypeRef("E", ref.Parse("sha1-f1a192312c01fb47e8e329471242e475eb7001a4")), false},

@@ -14,9 +14,9 @@ var __testPackageInFile_struct_recursive_CachedRef = __testPackageInFile_struct_
 // type package definition cache.
 func __testPackageInFile_struct_recursive_Ref() ref.Ref {
 	p := types.PackageDef{
-		NamedTypes: types.MapOfStringToTypeRefDef{
+		Types: types.ListOfTypeRefDef{
 
-			"Tree": types.MakeStructTypeRef("Tree",
+			types.MakeStructTypeRef("Tree",
 				[]types.Field{
 					types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", ref.Ref{})), false},
 				},
