@@ -9,65 +9,73 @@ import (
 
 type dataStoreCommon struct {
 	chunks.ChunkStore
-	head *Commit
+	datasets *MapOfStringToCommit
 }
 
-func commitFromRef(commitRef ref.Ref, cs chunks.ChunkSource) *Commit {
-	c := CommitFromVal(types.ReadValue(commitRef, cs))
+func datasetsFromRef(datasetsRef ref.Ref, cs chunks.ChunkSource) *MapOfStringToCommit {
+	c := MapOfStringToCommitFromVal(types.ReadValue(datasetsRef, cs))
 	return &c
 }
 
-func (ds *dataStoreCommon) MaybeHead() (Commit, bool) {
-	if ds.head == nil {
+func (ds *dataStoreCommon) MaybeHead(datasetID string) (Commit, bool) {
+	if ds.datasets != nil {
+		return ds.datasets.MaybeGet(datasetID)
+	} else {
 		return NewCommit(), false
 	}
-	return *ds.head, true
 }
 
-func (ds *dataStoreCommon) Head() Commit {
-	c, ok := ds.MaybeHead()
+func (ds *dataStoreCommon) Head(datasetID string) Commit {
+	c, ok := ds.MaybeHead(datasetID)
 	d.Chk.True(ok, "DataStore has no Head.")
 	return c
 }
 
-func (ds *dataStoreCommon) commit(v types.Value) bool {
-	p := NewSetOfCommit()
-	if head, ok := ds.MaybeHead(); ok {
-		p = p.Insert(head)
+func (ds *dataStoreCommon) Datasets() MapOfStringToCommit {
+	if ds.datasets == nil {
+		return NewMapOfStringToCommit()
+	} else {
+		return *ds.datasets
 	}
-	return ds.commitWithParents(v, p)
 }
 
-func (ds *dataStoreCommon) commitWithParents(v types.Value, p SetOfCommit) bool {
-	return ds.doCommit(NewCommit().SetParents(p).SetValue(v))
+func (ds *dataStoreCommon) commit(datasetID string, commit Commit) bool {
+	return ds.doCommit(datasetID, commit)
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current head. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will fail if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
-func (ds *dataStoreCommon) doCommit(commit Commit) bool {
+func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) bool {
 	currentRootRef := ds.Root()
+	var currentDatasets MapOfStringToCommit
+	if ds.datasets != nil && currentRootRef == ds.datasets.Ref() {
+		currentDatasets = *ds.datasets
+	} else if currentRootRef != (ref.Ref{}) {
+		currentDatasets = *datasetsFromRef(currentRootRef, ds)
+	} else {
+		currentDatasets = NewMapOfStringToCommit()
+	}
 
-    // First commit is always fast-foward.
-    if currentRootRef != ref.EmptyRef {
-        // Note: |currentHead| may be different from ds.head and *must* be consistent with currentRootRef.
-        var currentHead Commit
-        if ds.head != nil && currentRootRef == ds.head.Ref() {
-			currentHead = *ds.head
-		} else {
-			currentHead = *commitFromRef(currentRootRef, ds)
-		}
+	// First commit in store is always fast-foward.
+	if currentRootRef != (ref.Ref{}) {
+		var currentHead Commit
+		currentHead, hasHead := currentDatasets.MaybeGet(datasetID)
 
-		// Allow only fast-forward commits.
-		if commit.Equals(currentHead) {
-			return true
-		} else if !descendsFrom(commit, currentHead) {
-			return false
+		// First commit in dataset is always fast-foward.
+		if hasHead {
+			// Allow only fast-forward commits.
+			if commit.Equals(currentHead) {
+				return true
+			} else if !descendsFrom(commit, currentHead) {
+				return false
+			}
 		}
 	}
-	// TODO: This Commit will be orphaned if this UpdateRoot below fails
-	newRootRef := types.WriteValue(commit.NomsValue(), ds)
+	// TODO: This Commit will be orphaned if the UpdateRoot below fails
+	currentDatasets = currentDatasets.Set(datasetID, commit)
+	newRootRef := types.WriteValue(currentDatasets.NomsValue(), ds)
 
-	ok := ds.UpdateRoot(newRootRef, currentRootRef)
-	return ok
+	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
+	return ds.UpdateRoot(newRootRef, currentRootRef)
 }
 
 func descendsFrom(commit, currentHead Commit) bool {

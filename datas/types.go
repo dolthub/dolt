@@ -28,6 +28,116 @@ func __datasPackageInFile_types_Ref() ref.Ref {
 	return types.RegisterPackage(&p)
 }
 
+// MapOfStringToCommit
+
+type MapOfStringToCommit struct {
+	m types.Map
+}
+
+func NewMapOfStringToCommit() MapOfStringToCommit {
+	return MapOfStringToCommit{types.NewMap()}
+}
+
+func MapOfStringToCommitFromVal(p types.Value) MapOfStringToCommit {
+	// TODO: Validate here
+	return MapOfStringToCommit{p.(types.Map)}
+}
+
+func (m MapOfStringToCommit) NomsValue() types.Value {
+	return m.m
+}
+
+func (m MapOfStringToCommit) Equals(other types.Value) bool {
+	if other, ok := other.(MapOfStringToCommit); ok {
+		return m.m.Equals(other.m)
+	}
+	return false
+}
+
+func (m MapOfStringToCommit) Ref() ref.Ref {
+	return m.m.Ref()
+}
+
+func (m MapOfStringToCommit) Chunks() []types.Future {
+	return m.m.Chunks()
+}
+
+// A Noms Value that describes MapOfStringToCommit.
+var __typeRefForMapOfStringToCommit types.TypeRef
+
+func (m MapOfStringToCommit) TypeRef() types.TypeRef {
+	return __typeRefForMapOfStringToCommit
+}
+
+func init() {
+	__typeRefForMapOfStringToCommit = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("Commit", __datasPackageInFile_types_CachedRef))
+	types.RegisterFromValFunction(__typeRefForMapOfStringToCommit, func(v types.Value) types.NomsValue {
+		return MapOfStringToCommitFromVal(v)
+	})
+}
+
+func (m MapOfStringToCommit) Empty() bool {
+	return m.m.Empty()
+}
+
+func (m MapOfStringToCommit) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m MapOfStringToCommit) Has(p string) bool {
+	return m.m.Has(types.NewString(p))
+}
+
+func (m MapOfStringToCommit) Get(p string) Commit {
+	return CommitFromVal(m.m.Get(types.NewString(p)))
+}
+
+func (m MapOfStringToCommit) MaybeGet(p string) (Commit, bool) {
+	v, ok := m.m.MaybeGet(types.NewString(p))
+	if !ok {
+		return NewCommit(), false
+	}
+	return CommitFromVal(v), ok
+}
+
+func (m MapOfStringToCommit) Set(k string, v Commit) MapOfStringToCommit {
+	return MapOfStringToCommit{m.m.Set(types.NewString(k), v.NomsValue())}
+}
+
+// TODO: Implement SetM?
+
+func (m MapOfStringToCommit) Remove(p string) MapOfStringToCommit {
+	return MapOfStringToCommit{m.m.Remove(types.NewString(p))}
+}
+
+type MapOfStringToCommitIterCallback func(k string, v Commit) (stop bool)
+
+func (m MapOfStringToCommit) Iter(cb MapOfStringToCommitIterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(k.(types.String).String(), CommitFromVal(v))
+	})
+}
+
+type MapOfStringToCommitIterAllCallback func(k string, v Commit)
+
+func (m MapOfStringToCommit) IterAll(cb MapOfStringToCommitIterAllCallback) {
+	m.m.IterAll(func(k, v types.Value) {
+		cb(k.(types.String).String(), CommitFromVal(v))
+	})
+}
+
+type MapOfStringToCommitFilterCallback func(k string, v Commit) (keep bool)
+
+func (m MapOfStringToCommit) Filter(cb MapOfStringToCommitFilterCallback) MapOfStringToCommit {
+	nm := NewMapOfStringToCommit()
+	m.IterAll(func(k string, v Commit) {
+		if cb(k, v) {
+			nm = nm.Set(k, v)
+		}
+	})
+	return nm
+}
+
 // Commit
 
 type Commit struct {

@@ -13,7 +13,6 @@ import (
 	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 )
 
 // DataStore provides versioned storage for noms values. Each DataStore instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new DataStore, representing a new moment in history.
@@ -27,20 +26,15 @@ func newRemoteDataStore(cs chunks.ChunkStore) *RemoteDataStore {
 		return &RemoteDataStore{dataStoreCommon{cs, nil}}
 	}
 
-	return &RemoteDataStore{dataStoreCommon{cs, commitFromRef(rootRef, cs)}}
+	return &RemoteDataStore{dataStoreCommon{cs, datasetsFromRef(rootRef, cs)}}
 }
 
 func (lds *RemoteDataStore) host() *url.URL {
 	return lds.dataStoreCommon.ChunkStore.(*chunks.HttpStore).Host()
 }
 
-func (lds *RemoteDataStore) Commit(v types.Value) (DataStore, bool) {
-	ok := lds.commit(v)
-	return newRemoteDataStore(lds.ChunkStore), ok
-}
-
-func (lds *RemoteDataStore) CommitWithParents(v types.Value, p SetOfCommit) (DataStore, bool) {
-	ok := lds.commitWithParents(v, p)
+func (lds *RemoteDataStore) Commit(datasetID string, commit Commit) (DataStore, bool) {
+	ok := lds.commit(datasetID, commit)
 	return newRemoteDataStore(lds.ChunkStore), ok
 }
 
