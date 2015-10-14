@@ -23,7 +23,6 @@ func ParseNomDL(packageName string, r io.Reader, cs chunks.ChunkSource) Parsed {
 		types.PackageDef{Dependencies: depRefs, Types: i.Types},
 		i.Name,
 		i.UsingDeclarations,
-		i.Types,
 	}
 }
 
@@ -44,7 +43,6 @@ type Parsed struct {
 	types.PackageDef
 	Name              string
 	UsingDeclarations []types.TypeRef
-	Types             []types.TypeRef
 }
 
 type intermediate struct {

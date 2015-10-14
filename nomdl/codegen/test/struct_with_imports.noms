@@ -1,4 +1,4 @@
-alias dep = import "sha1-f9397427926127f67d8f3edb21c92bf642262e9b"
+alias dep = import "sha1-afe4d81896c95439605cca7c1b4cb6ab9ba7cfd3"
 
 enum E {
 	E1

@@ -16,7 +16,6 @@ func __testPackageInFile_leafDep_Ref() ref.Ref {
 	p := types.PackageDef{
 		Types: types.ListOfTypeRefDef{
 
-			types.MakeEnumTypeRef("E", "e1", "e2", "e3"),
 			types.MakeStructTypeRef("S",
 				[]types.Field{
 					types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
@@ -24,20 +23,11 @@ func __testPackageInFile_leafDep_Ref() ref.Ref {
 				},
 				types.Choices{},
 			),
+			types.MakeEnumTypeRef("E", "e1", "e2", "e3"),
 		},
 	}.New()
 	return types.RegisterPackage(&p)
 }
-
-// E
-
-type E uint32
-
-const (
-	E1 E = iota
-	E2
-	E3
-)
 
 // S
 
@@ -128,3 +118,13 @@ func (s S) B() bool {
 func (s S) SetB(val bool) S {
 	return S{s.m.Set(types.NewString("b"), types.Bool(val))}
 }
+
+// E
+
+type E uint32
+
+const (
+	E1 E = iota
+	E2
+	E3
+)
