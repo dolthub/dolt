@@ -7,9 +7,9 @@ import (
 	"log"
 	"os"
 
+	id3go "github.com/attic-labs/noms/Godeps/_workspace/src/github.com/mikkyang/id3-go"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
-	id3go "github.com/mikkyang/id3-go"
 )
 
 var (
