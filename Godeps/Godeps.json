@@ -14,6 +14,10 @@
 			"Rev": "87ef56c6f157ac80caf824a9779dddc6f69c6580"
 		},
 		{
+			"ImportPath": "github.com/djimenez/iconv-go",
+			"Rev": "5f6a5a4f0011195c0147545149ad54f4adb54757"
+		},
+		{
 			"ImportPath": "github.com/fatih/structs",
 			"Rev": "a9f7daa9c2729e97450c2da2feda19130a367d8f"
 		},
