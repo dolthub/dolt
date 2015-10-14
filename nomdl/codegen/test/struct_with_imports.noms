@@ -1,4 +1,4 @@
-alias dep = import "sha1-afe4d81896c95439605cca7c1b4cb6ab9ba7cfd3"
+alias dep = import "../testDeps/dep.noms"
 
 enum E {
 	E1

@@ -44,7 +44,7 @@ func assertOutput(inPath, goldenPath string, t *testing.T) {
 	d.Chk.NoError(err)
 
 	var buf bytes.Buffer
-	pkg := pkg.ParseNomDL("test", inFile, emptyCS)
+	pkg := pkg.ParseNomDL("test", inFile, filepath.Dir(inPath), emptyCS)
 	gen := NewCodeGen(&buf, getBareFileName(inPath), nil, depsMap{}, pkg)
 	gen.WritePackage()
 
@@ -72,7 +72,7 @@ func TestCanUseDef(t *testing.T) {
 	defer os.RemoveAll(depsDir)
 
 	assertCanUseDef := func(s string, using, named bool) {
-		pkg := pkg.ParseNomDL("fakefile", bytes.NewBufferString(s), emptyCS)
+		pkg := pkg.ParseNomDL("fakefile", bytes.NewBufferString(s), "", emptyCS)
 		gen := NewCodeGen(nil, "fakefile", nil, depsMap{}, pkg)
 		for _, t := range pkg.UsingDeclarations {
 			assert.Equal(using, gen.canUseDef(t))

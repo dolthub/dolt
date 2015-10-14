@@ -2,6 +2,9 @@ package pkg
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -94,8 +97,6 @@ func (suite *ImportTestSuite) TestDetectFreeVariable() {
 }
 
 func (suite *ImportTestSuite) TestImports() {
-	logname := "testing"
-
 	find := func(n string, tref types.TypeRef) types.Field {
 		suite.Equal(types.StructKind, tref.Kind())
 		for _, f := range tref.Desc.(types.StructDesc).Fields {
@@ -106,7 +107,6 @@ func (suite *ImportTestSuite) TestImports() {
 		suite.Fail("Could not find field", "%s not present", n)
 		return types.Field{}
 	}
-
 	findChoice := func(n string, tref types.TypeRef) types.Field {
 		suite.Equal(types.StructKind, tref.Kind())
 		for _, f := range tref.Desc.(types.StructDesc).Union {
@@ -117,9 +117,26 @@ func (suite *ImportTestSuite) TestImports() {
 		suite.Fail("Could not find choice", "%s not present", n)
 		return types.Field{}
 	}
+	refFromNomsFile := func(path string) ref.Ref {
+		cs := chunks.NewMemoryStore()
+		inFile, err := os.Open(path)
+		suite.NoError(err)
+		defer inFile.Close()
+		parsedDep := ParseNomDL("", inFile, filepath.Dir(path), cs)
+		return types.WriteValue(parsedDep.New().NomsValue(), cs)
+	}
+
+	dir, err := ioutil.TempDir("", "")
+	suite.NoError(err)
+	defer os.RemoveAll(dir)
+
+	byPathNomDL := filepath.Join(dir, "filedep.noms")
+	err = ioutil.WriteFile(byPathNomDL, []byte("struct FromFile{i:Int8}"), 0600)
+	suite.NoError(err)
 
 	r := strings.NewReader(fmt.Sprintf(`
 		alias Other = import "%s"
+		alias ByPath = import "%s"
 
 		using List(Other.ForeignEnum)
 		using List(Local1)
@@ -129,7 +146,7 @@ func (suite *ImportTestSuite) TestImports() {
 			c: Local2
 		}
 		struct Local2 {
-			a: Bool
+			a: ByPath.FromFile
 			b: Other.ForeignEnum
 		}
 		struct Union {
@@ -144,8 +161,8 @@ func (suite *ImportTestSuite) TestImports() {
 				s: Local1
 				t: Other.ForeignEnum
 			}
-		}`, suite.importRef))
-	p := ParseNomDL(logname, r, suite.cs)
+		}`, suite.importRef, filepath.Base(byPathNomDL)))
+	p := ParseNomDL("testing", r, dir, suite.cs)
 
 	named := p.Types[0]
 	field := find("a", named)
@@ -154,6 +171,8 @@ func (suite *ImportTestSuite) TestImports() {
 	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 
 	named = p.Types[1]
+	field = find("a", named)
+	suite.EqualValues(refFromNomsFile(byPathNomDL), field.T.PackageRef())
 	field = find("b", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 
