@@ -1,6 +1,0 @@
-struct Dataset {
-  id: String
-  head: Value
-}
-
-using Set(Dataset)

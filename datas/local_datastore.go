@@ -3,7 +3,6 @@ package datas
 import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/walk"
 )
 
@@ -18,16 +17,11 @@ func newLocalDataStore(cs chunks.ChunkStore) *LocalDataStore {
 		return &LocalDataStore{dataStoreCommon{cs, nil}}
 	}
 
-	return &LocalDataStore{dataStoreCommon{cs, commitFromRef(rootRef, cs)}}
+	return &LocalDataStore{dataStoreCommon{cs, datasetsFromRef(rootRef, cs)}}
 }
 
-func (lds *LocalDataStore) Commit(v types.Value) (DataStore, bool) {
-	ok := lds.commit(v)
-	return newLocalDataStore(lds.ChunkStore), ok
-}
-
-func (lds *LocalDataStore) CommitWithParents(v types.Value, p SetOfCommit) (DataStore, bool) {
-	ok := lds.commitWithParents(v, p)
+func (lds *LocalDataStore) Commit(datasetID string, commit Commit) (DataStore, bool) {
+	ok := lds.commit(datasetID, commit)
 	return newLocalDataStore(lds.ChunkStore), ok
 }
 

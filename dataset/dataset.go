@@ -5,7 +5,6 @@ import (
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/dataset/mgmt"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -25,12 +24,7 @@ func (ds *Dataset) Store() datas.DataStore {
 
 // MaybeHead returns the current Head Commit of this Dataset, which contains the current root of the Dataset's value tree, if available. If not, it returns a new Commit and 'false'.
 func (ds *Dataset) MaybeHead() (datas.Commit, bool) {
-	sets := mgmt.GetDatasets(ds.store)
-	head := mgmt.GetDatasetHead(sets, ds.id)
-	if head == nil {
-		return datas.NewCommit(), false
-	}
-	return datas.CommitFromVal(head), true
+	return ds.Store().MaybeHead(ds.id)
 }
 
 // Head returns the current head Commit, which contains the current root of the Dataset's value tree.
@@ -54,9 +48,7 @@ func (ds *Dataset) Commit(v types.Value) (Dataset, bool) {
 // If the update cannot be performed, e.g., because of a conflict, CommitWithParents returns 'false' and the current snapshot of the dataset so that the client can merge the changes and try again.
 func (ds *Dataset) CommitWithParents(v types.Value, p datas.SetOfCommit) (Dataset, bool) {
 	newCommit := datas.NewCommit().SetParents(p).SetValue(v)
-	sets := mgmt.GetDatasets(ds.store)
-	sets = mgmt.SetDatasetHead(sets, ds.id, newCommit.NomsValue())
-	store, ok := mgmt.CommitDatasets(ds.store, sets)
+	store, ok := ds.Store().Commit(ds.id, newCommit)
 	return Dataset{store, ds.id}, ok
 }
 

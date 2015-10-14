@@ -2,3 +2,5 @@ struct Commit {
   value: Value
   parents: Set(Commit)
 }
+
+using Map(String, Commit)

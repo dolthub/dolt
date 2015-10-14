@@ -30,7 +30,12 @@ func TestDatasetCommitTracker(t *testing.T) {
 	assert.False(ds2.Head().Value().Equals(ds1Commit))
 	assert.False(ds1.Head().Value().Equals(ds2Commit))
 
-	assert.Equal("sha1-018203db5f23522729c1b3a2e9afc785553000dc", ms.Root().String())
+	assert.Equal("sha1-683b97bc3fc533143812f91a524f41781e454c27", ms.Root().String())
+}
+
+func newDS(id string, ms *chunks.MemoryStore) Dataset {
+	store := datas.NewDataStore(ms)
+	return NewDataset(store, id)
 }
 
 func TestExplicitBranchUsingDatasets(t *testing.T) {
@@ -39,11 +44,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	id2 := "othertestdataset"
 	ms := chunks.NewMemoryStore()
 
-	getDS := func(id string) Dataset {
-		store := datas.NewDataStore(ms)
-		return NewDataset(store, id)
-	}
-	ds1 := getDS(id1)
+	ds1 := newDS(id1, ms)
 
 	// ds1: |a|
 	a := types.NewString("a")
@@ -53,7 +54,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a|
 	//        \ds2
-	ds2 := getDS(id2)
+	ds2 := newDS(id2, ms)
 	ds2, ok = ds2.Commit(ds1.Head().Value())
 	assert.True(ok)
 	assert.True(ds2.Head().Value().Equals(a))
@@ -61,20 +62,12 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	// ds1: |a| <- |b|
 	b := types.NewString("b")
 	ds1, ok = ds1.Commit(b)
-	assert.False(ok)
-	assert.True(ds1.Head().Value().Equals(a))
-	// Commit failed, but ds1 didn't change, so we should be able to just try again.
-	ds1, ok = ds1.Commit(b)
 	assert.True(ok)
 	assert.True(ds1.Head().Value().Equals(b))
 
 	// ds1: |a|    <- |b|
 	//        \ds2 <- |c|
 	c := types.NewString("c")
-	ds2, ok = ds2.Commit(c)
-	assert.False(ok)
-	assert.True(ds2.Head().Value().Equals(a))
-	// Commit failed, but ds2 didn't change, so we should be able to just try again.
 	ds2, ok = ds2.Commit(c)
 	assert.True(ok)
 	assert.True(ds2.Head().Value().Equals(c))
@@ -88,13 +81,8 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	assert.True(ds2.Head().Value().Equals(d))
 
 	ds1, ok = ds1.CommitWithParents(d, mergeParents)
-	assert.False(ok)
-	assert.True(ds1.Head().Value().Equals(b))
-	// Commit failed, but while ds2 changed, ds1 didn't.
-	ds1, ok = ds1.CommitWithParents(d, mergeParents)
 	assert.True(ok)
 	assert.True(ds1.Head().Value().Equals(d))
-
 }
 
 func TestTwoClientsWithEmptyDataset(t *testing.T) {
@@ -102,12 +90,8 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 	id1 := "testdataset"
 	ms := chunks.NewMemoryStore()
 
-	getDS := func(id string) Dataset {
-		store := datas.NewDataStore(ms)
-		return NewDataset(store, id)
-	}
-	dsx := getDS(id1)
-	dsy := getDS(id1)
+	dsx := newDS(id1, ms)
+	dsy := newDS(id1, ms)
 
 	// dsx: || -> |a|
 	a := types.NewString("a")
@@ -133,22 +117,17 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	id1 := "testdataset"
 	ms := chunks.NewMemoryStore()
 
-	getDS := func(id string) Dataset {
-		store := datas.NewDataStore(ms)
-		return NewDataset(store, id)
-	}
-
 	a := types.NewString("a")
 	{
 		// ds1: || -> |a|
-		ds1 := getDS(id1)
+		ds1 := newDS(id1, ms)
 		ds1, ok := ds1.Commit(a)
 		assert.True(ok)
 		assert.True(ds1.Head().Value().Equals(a))
 	}
 
-	dsx := getDS(id1)
-	dsy := getDS(id1)
+	dsx := newDS(id1, ms)
+	dsy := newDS(id1, ms)
 
 	// dsx: |a| -> |b|
 	assert.True(dsx.Head().Value().Equals(a))
