@@ -1,0 +1,9 @@
+struct Song {
+  Title: String
+  Artist: String
+  Album: String
+  Year: String
+  Mp3: Blob
+}
+
+using List(Song)
