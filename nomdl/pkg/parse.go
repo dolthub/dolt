@@ -2,6 +2,8 @@ package pkg
 
 import (
 	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
@@ -10,15 +12,15 @@ import (
 )
 
 // ParseNomDL reads a Noms package specification from r and returns a Package. Errors will be annotated with packageName and thrown.
-func ParseNomDL(packageName string, r io.Reader, cs chunks.ChunkSource) Parsed {
+func ParseNomDL(packageName string, r io.Reader, includePath string, cs chunks.ChunkStore) Parsed {
 	i := runParser(packageName, r)
 	i.Name = packageName
-	aliases := resolveImports(i)
+	imports := resolveImports(i.Aliases, includePath, cs)
 	depRefs := types.SetOfRefOfPackageDef{}
-	for _, target := range aliases {
+	for _, target := range imports {
 		depRefs[target] = true
 	}
-	resolveNamespaces(&i, aliases, GetDeps(depRefs, cs))
+	resolveNamespaces(&i, imports, GetDeps(depRefs, cs))
 	return Parsed{
 		types.PackageDef{Dependencies: depRefs, Types: i.Types},
 		i.Name,
@@ -27,7 +29,7 @@ func ParseNomDL(packageName string, r io.Reader, cs chunks.ChunkSource) Parsed {
 }
 
 // GetDeps reads the types.Package objects referred to by depRefs out of cs and returns a map of ref: PackageDef.
-func GetDeps(depRefs types.SetOfRefOfPackageDef, cs chunks.ChunkSource) map[ref.Ref]types.Package {
+func GetDeps(depRefs types.SetOfRefOfPackageDef, cs chunks.ChunkStore) map[ref.Ref]types.Package {
 	deps := map[ref.Ref]types.Package{}
 	for depRef := range depRefs {
 		v := types.ReadValue(depRef, cs)
@@ -87,17 +89,29 @@ func runParser(logname string, r io.Reader) intermediate {
 	return got.(intermediate)
 }
 
-func resolveImports(pkg intermediate) map[string]ref.Ref {
-	aliases := map[string]ref.Ref{}
+func resolveImports(aliases map[string]string, includePath string, cs chunks.ChunkStore) map[string]ref.Ref {
+	canonicalize := func(path string) string {
+		if filepath.IsAbs(path) {
+			return path
+		}
+		return filepath.Join(includePath, path)
+	}
+	imports := map[string]ref.Ref{}
 
-	for alias, target := range pkg.Aliases {
+	for alias, target := range aliases {
 		var r ref.Ref
 		if d.Try(func() { r = ref.Parse(target) }) != nil {
-			continue // will support import by path later
+			canonical := canonicalize(target)
+			inFile, err := os.Open(canonical)
+			d.Chk.NoError(err)
+			defer inFile.Close()
+			parsedDep := ParseNomDL(alias, inFile, filepath.Dir(canonical), cs)
+			imports[alias] = types.WriteValue(parsedDep.New().NomsValue(), cs)
+		} else {
+			imports[alias] = r
 		}
-		aliases[alias] = r
 	}
-	return aliases
+	return imports
 }
 
 func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) {

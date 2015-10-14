@@ -95,7 +95,7 @@ func generate(packageName, in, out, depsDir string, pkgDS dataset.Dataset) datas
 	d.Chk.NoError(err)
 	defer inFile.Close()
 
-	p := pkg.ParseNomDL(packageName, inFile, pkgDS.Store())
+	p := pkg.ParseNomDL(packageName, inFile, filepath.Dir(in), pkgDS.Store())
 
 	// Generate code for all p's deps first.
 	deps := generateDepCode(depsDir, p.New(), pkgDS.Store())
@@ -103,7 +103,7 @@ func generate(packageName, in, out, depsDir string, pkgDS dataset.Dataset) datas
 	generateAndEmit(getBareFileName(in), out, importPaths(depsDir, deps), deps, p)
 
 	// Since we're just building up a set of refs to all the packages in pkgDS, simply retrying is the logical response to commit failure.
-	for ok := false; !ok; pkgDS, ok = pkgDS.Commit(buildSetOfRefOfPackage(p, pkgDS).NomsValue()) {
+	for ok := false; !ok; pkgDS, ok = pkgDS.Commit(buildSetOfRefOfPackage(p, deps, pkgDS).NomsValue()) {
 	}
 	return pkgDS
 }
@@ -157,11 +157,16 @@ func importPaths(depsDir string, deps depsMap) (paths []string) {
 	return
 }
 
-func buildSetOfRefOfPackage(pkg pkg.Parsed, ds dataset.Dataset) types.SetOfRefOfPackage {
+func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) types.SetOfRefOfPackage {
 	// Can do better once generated collections implement types.Value.
 	s := types.NewSetOfRefOfPackage()
 	if h, ok := ds.MaybeHead(); ok {
 		s = types.SetOfRefOfPackageFromVal(h.Value())
+	}
+	for _, dep := range deps {
+		// Writing the deps into ds should be redundant at this point, but do it to be sure.
+		// TODO: consider moving all dataset work over into nomdl/pkg BUG 409
+		s = s.Insert(types.NewRefOfPackage(types.WriteValue(dep.NomsValue(), ds.Store())))
 	}
 	r := types.WriteValue(pkg.New().NomsValue(), ds.Store())
 	return s.Insert(types.NewRefOfPackage(r))
