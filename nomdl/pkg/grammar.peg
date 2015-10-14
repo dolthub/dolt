@@ -46,7 +46,7 @@ Package <- _ dd:Definition+ _ EOF {
 			}
 		}
 	}
-	return intermediate{"", aliases, usings, orderedTypes, nil}, nil
+	return intermediate{"", aliases, usings, orderedTypes}, nil
 }
 
 Definition <- Struct / Using / Alias / Enum

@@ -16,17 +16,27 @@ func __testPackageInFile_enum_struct_Ref() ref.Ref {
 	p := types.PackageDef{
 		Types: types.ListOfTypeRefDef{
 
+			types.MakeEnumTypeRef("Handedness", "right", "left", "switch"),
 			types.MakeStructTypeRef("EnumStruct",
 				[]types.Field{
 					types.Field{"hand", types.MakeTypeRef("Handedness", ref.Ref{}), false},
 				},
 				types.Choices{},
 			),
-			types.MakeEnumTypeRef("Handedness", "right", "left", "switch"),
 		},
 	}.New()
 	return types.RegisterPackage(&p)
 }
+
+// Handedness
+
+type Handedness uint32
+
+const (
+	Right Handedness = iota
+	Left
+	Switch
+)
 
 // EnumStruct
 
@@ -105,13 +115,3 @@ func (s EnumStruct) Hand() Handedness {
 func (s EnumStruct) SetHand(val Handedness) EnumStruct {
 	return EnumStruct{s.m.Set(types.NewString("hand"), types.UInt32(val))}
 }
-
-// Handedness
-
-type Handedness uint32
-
-const (
-	Right Handedness = iota
-	Left
-	Switch
-)

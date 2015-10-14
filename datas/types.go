@@ -58,8 +58,10 @@ func (m MapOfStringToCommit) Ref() ref.Ref {
 	return m.m.Ref()
 }
 
-func (m MapOfStringToCommit) Chunks() []types.Future {
-	return m.m.Chunks()
+func (m MapOfStringToCommit) Chunks() (futures []types.Future) {
+	futures = append(futures, m.TypeRef().Chunks()...)
+	futures = append(futures, m.m.Chunks()...)
+	return
 }
 
 // A Noms Value that describes MapOfStringToCommit.
