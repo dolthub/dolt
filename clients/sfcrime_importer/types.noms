@@ -1,7 +1,4 @@
-struct Geoposition {
-	Latitude: Float32
- 	Longitude: Float32
-}
+alias geo = import "../util/geotypes.noms"
 
 struct Incident {
 	ID: Int64
@@ -13,7 +10,7 @@ struct Incident {
 	PdDistrict: String
 	Resolution: String
 	Address: String
-	Geoposition: Geoposition
+	Geoposition: geo.Geoposition
 	PdID: String
 }
 
