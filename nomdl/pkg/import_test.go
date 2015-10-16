@@ -40,7 +40,7 @@ func (suite *ImportTestSuite) SetupTest() {
 	suite.nestedRef = types.WriteValue(suite.nested.NomsValue(), suite.cs)
 
 	fs := types.MakeStructTypeRef("ForeignStruct", []types.Field{
-		types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
+		types.Field{"b", types.MakeTypeRef(ref.Ref{}, 1), false},
 		types.Field{"n", types.MakeTypeRef(suite.nestedRef, 0), false},
 	},
 		types.Choices{})
@@ -66,28 +66,28 @@ func (suite *ImportTestSuite) TestGetDeps() {
 
 func (suite *ImportTestSuite) TestResolveNamespace() {
 	deps := GetDeps(types.SetOfRefOfPackageDef{suite.importRef: true}, suite.cs)
-	t := resolveNamespace(types.MakeExternalTypeRef("Other", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
+	t := resolveNamespace(types.MakeUnresolvedTypeRef("Other", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
 	suite.EqualValues(types.MakeTypeRef(suite.importRef, 1), t)
 }
 
 func (suite *ImportTestSuite) TestUnknownAlias() {
 	deps := GetDeps(types.SetOfRefOfPackageDef{suite.importRef: true}, suite.cs)
 	suite.Panics(func() {
-		resolveNamespace(types.MakeExternalTypeRef("Bother", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
+		resolveNamespace(types.MakeUnresolvedTypeRef("Bother", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
 	})
 }
 
 func (suite *ImportTestSuite) TestUnknownImportedType() {
 	deps := GetDeps(types.SetOfRefOfPackageDef{suite.importRef: true}, suite.cs)
 	suite.Panics(func() {
-		resolveNamespace(types.MakeExternalTypeRef("Other", "NotThere"), map[string]ref.Ref{"Other": suite.importRef}, deps)
+		resolveNamespace(types.MakeUnresolvedTypeRef("Other", "NotThere"), map[string]ref.Ref{"Other": suite.importRef}, deps)
 	})
 }
 
 func (suite *ImportTestSuite) TestDetectFreeVariable() {
 	ls := types.MakeStructTypeRef("Local", []types.Field{
 		types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
-		types.Field{"n", types.MakeExternalTypeRef("", "OtherLocal"), false},
+		types.Field{"n", types.MakeUnresolvedTypeRef("", "OtherLocal"), false},
 	},
 		types.Choices{})
 	suite.Panics(func() {

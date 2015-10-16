@@ -22,6 +22,7 @@ import (
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/nomdl/codegen/code"
 	"github.com/attic-labs/noms/nomdl/pkg"
+	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -166,11 +167,13 @@ func TestImportedTypes(t *testing.T) {
 			types.MakeEnumTypeRef("E1", "a", "b"),
 			types.MakeStructTypeRef("S1", []types.Field{
 				types.Field{"f", types.MakePrimitiveTypeRef(types.BoolKind), false},
+				types.Field{"e", types.MakeTypeRef(ref.Ref{}, 0), false},
 			}, types.Choices{})},
 	}.New()
 	importedRef := types.WriteValue(imported.NomsValue(), ds)
 	pkgDS, ok := pkgDS.Commit(types.NewSetOfRefOfPackage().Insert(types.NewRefOfPackage(importedRef)).NomsValue())
 	assert.True(ok)
+
 	good := fmt.Sprintf(`
 		alias Other = import "%s"
 

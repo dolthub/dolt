@@ -14,7 +14,7 @@ func TestType(t *testing.T) {
 	typ := st.TypeRef()
 	ordinal := int16(0)
 	assert.Equal(ordinal, typ.Ordinal())
-	assert.Equal(TypeRefKind, typ.Kind())
+	assert.Equal(UnresolvedKind, typ.Kind())
 	assert.Equal(__typesPackageInFile_package_CachedRef, typ.PackageRef())
 
 	typ = LookupPackage(__typesPackageInFile_package_CachedRef).Types().Get(0)

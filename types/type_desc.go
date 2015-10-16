@@ -89,7 +89,7 @@ type UnresolvedDesc struct {
 }
 
 func (u UnresolvedDesc) Kind() NomsKind {
-	return TypeRefKind
+	return UnresolvedKind
 }
 
 func (u UnresolvedDesc) Equals(other TypeDesc) bool {

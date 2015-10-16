@@ -44,10 +44,6 @@ func (r *jsonArrayReader) read() interface{} {
 	return v
 }
 
-func (r *jsonArrayReader) peek() interface{} {
-	return r.a[r.i]
-}
-
 func (r *jsonArrayReader) atEnd() bool {
 	return r.i >= len(r.a)
 }
@@ -84,12 +80,8 @@ func (r *jsonArrayReader) readTypeRefAsTag() TypeRef {
 		valueType := r.readTypeRefAsTag()
 		return MakeCompoundTypeRef("", kind, keyType, valueType)
 	case TypeRefKind:
-		// TypeRefKind can mean that we have a TypeRef primitive or a TypeRef pointing to a TypeRef in a Package. Do a lookahead.
-		i := r.peek()
-		if _, ok := i.(float64); ok {
-			return MakePrimitiveTypeRef(TypeRefKind)
-		}
-
+		return MakePrimitiveTypeRef(TypeRefKind)
+	case UnresolvedKind:
 		pkgRef := r.readRef()
 		ordinal := int16(r.read().(float64))
 		return MakeTypeRef(pkgRef, ordinal)
@@ -208,15 +200,18 @@ func (r *jsonArrayReader) readValueWithoutTag(t TypeRef, pkg *Package) NomsValue
 		panic("not allowed")
 	case TypeRefKind:
 		return r.readTypeRefKindToValue(t, pkg)
+	case UnresolvedKind:
+		return r.readUnresolvedKindToValue(t, pkg)
 	}
 	panic("not reachable")
 }
 
 func (r *jsonArrayReader) readTypeRefKindToValue(t TypeRef, pkg *Package) NomsValue {
-	if _, ok := t.Desc.(PrimitiveDesc); ok {
-		return valueAsNomsValue{r.readTypeRefAsValue(pkg), t}
-	}
+	d.Chk.IsType(PrimitiveDesc(0), t.Desc)
+	return valueAsNomsValue{r.readTypeRefAsValue(pkg), t}
+}
 
+func (r *jsonArrayReader) readUnresolvedKindToValue(t TypeRef, pkg *Package) NomsValue {
 	d.Chk.True(t.IsUnresolved())
 	pkgRef := t.PackageRef()
 	ordinal := t.Ordinal()
@@ -275,8 +270,7 @@ func (r *jsonArrayReader) readTypeRefAsValue(pkg *Package) TypeRef {
 			choices = append(choices, Field{Name: fieldName, T: fieldType, Optional: optional})
 		}
 		return MakeStructTypeRef(name, fields, choices)
-
-	case TypeRefKind:
+	case UnresolvedKind:
 		pkgRef := r.readRef()
 		ordinal := int16(r.read().(float64))
 		return MakeTypeRef(pkgRef, ordinal)

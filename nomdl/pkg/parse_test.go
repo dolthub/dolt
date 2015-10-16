@@ -55,10 +55,10 @@ using List(Noms.Commit)
 
 	suite.Equal(types.MapKind, pkg.UsingDeclarations[0].Desc.Kind())
 	suite.True(types.MakePrimitiveTypeRef(types.StringKind).Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[0]))
-	suite.True(types.MakeExternalTypeRef("", "Simple").Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[1]))
+	suite.True(types.MakeUnresolvedTypeRef("", "Simple").Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[1]))
 
 	suite.Equal(types.ListKind, pkg.UsingDeclarations[1].Desc.Kind())
-	suite.EqualValues([]types.TypeRef{types.MakeExternalTypeRef("Noms", "Commit")},
+	suite.EqualValues([]types.TypeRef{types.MakeUnresolvedTypeRef("Noms", "Commit")},
 		pkg.UsingDeclarations[1].Desc.(types.CompoundDesc).ElemTypes)
 }
 
@@ -211,15 +211,15 @@ func (suite *ParsedResultTestSuite) SetupTest() {
 	suite.mapOfNamedTypeField = testField{
 		"mapOfStructToOther",
 		types.MakeCompoundTypeRef("", types.MapKind,
-			types.MakeExternalTypeRef("", "Struct"),
-			types.MakeExternalTypeRef("Elsewhere", "Other"),
+			types.MakeUnresolvedTypeRef("", "Struct"),
+			types.MakeUnresolvedTypeRef("Elsewhere", "Other"),
 		),
 		false}
-	suite.namedTypeField = testField{"otherStruct", types.MakeExternalTypeRef("", "Other"), false}
-	suite.namespacedTypeField = testField{"namespacedStruct", types.MakeExternalTypeRef("Elsewhere", "Other"), false}
+	suite.namedTypeField = testField{"otherStruct", types.MakeUnresolvedTypeRef("", "Other"), false}
+	suite.namespacedTypeField = testField{"namespacedStruct", types.MakeUnresolvedTypeRef("Elsewhere", "Other"), false}
 	suite.union = types.Choices{
 		types.Field{"a", types.MakePrimitiveTypeRef(types.Int32Kind), false},
-		types.Field{"n", types.MakeExternalTypeRef("NN", "Other"), false},
+		types.Field{"n", types.MakeUnresolvedTypeRef("NN", "Other"), false},
 		types.Field{"c", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
 	}
 }

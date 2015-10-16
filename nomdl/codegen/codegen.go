@@ -99,7 +99,6 @@ func generate(packageName, in, out, depsDir string, pkgDS dataset.Dataset) datas
 
 	// Generate code for all p's deps first.
 	deps := generateDepCode(depsDir, p.New(), pkgDS.Store())
-
 	generateAndEmit(getBareFileName(in), out, importPaths(depsDir, deps), deps, p)
 
 	// Since we're just building up a set of refs to all the packages in pkgDS, simply retrying is the logical response to commit failure.
@@ -486,18 +485,22 @@ func (gen *codeGen) writeEnum(t types.TypeRef, ordinal int) {
 func (gen *codeGen) canUseDef(t types.TypeRef) bool {
 	cache := map[string]bool{}
 
-	var rec func(t types.TypeRef) bool
-	rec = func(t types.TypeRef) bool {
-		rt := gen.Resolve(t)
+	var rec func(t types.TypeRef, p types.Package) bool
+	rec = func(t types.TypeRef, p types.Package) bool {
+		if t.HasPackageRef() {
+			p = gen.deps[t.PackageRef()]
+			d.Chk.NotNil(p)
+		}
+		rt := resolveInPackage(t, &p)
 		switch rt.Kind() {
 		case types.ListKind:
-			return rec(rt.Desc.(types.CompoundDesc).ElemTypes[0])
+			return rec(rt.Desc.(types.CompoundDesc).ElemTypes[0], p)
 		case types.SetKind:
 			elemType := rt.Desc.(types.CompoundDesc).ElemTypes[0]
-			return !gen.containsNonComparable(elemType) && rec(elemType)
+			return !gen.containsNonComparable(elemType) && rec(elemType, p)
 		case types.MapKind:
 			elemTypes := rt.Desc.(types.CompoundDesc).ElemTypes
-			return !gen.containsNonComparable(elemTypes[0]) && rec(elemTypes[0]) && rec(elemTypes[1])
+			return !gen.containsNonComparable(elemTypes[0]) && rec(elemTypes[0], p) && rec(elemTypes[1], p)
 		case types.StructKind:
 			userName := gen.generator.UserName(t)
 			if b, ok := cache[userName]; ok {
@@ -505,7 +508,7 @@ func (gen *codeGen) canUseDef(t types.TypeRef) bool {
 			}
 			cache[userName] = true
 			for _, f := range rt.Desc.(types.StructDesc).Fields {
-				if f.T.Equals(t) || !rec(f.T) {
+				if f.T.Equals(t) || !rec(f.T, p) {
 					cache[userName] = false
 					return false
 				}
@@ -516,7 +519,8 @@ func (gen *codeGen) canUseDef(t types.TypeRef) bool {
 		}
 	}
 
-	return rec(t)
+	// TODO: pkg.Parsed.New() gets called too often. Figure out whether we generally want a Package or a PackageDef and modify pkg.Parsed accordingly. BUG 420
+	return rec(t, gen.pkg.New())
 }
 
 // We use a go map as the def for Set and Map. These cannot have a key that is a
@@ -524,9 +528,13 @@ func (gen *codeGen) canUseDef(t types.TypeRef) bool {
 func (gen *codeGen) containsNonComparable(t types.TypeRef) bool {
 	cache := map[string]bool{}
 
-	var rec func(t types.TypeRef) bool
-	rec = func(t types.TypeRef) bool {
-		t = gen.Resolve(t)
+	var rec func(t types.TypeRef, p types.Package) bool
+	rec = func(t types.TypeRef, p types.Package) bool {
+		if t.HasPackageRef() {
+			p = gen.deps[t.PackageRef()]
+			d.Chk.NotNil(p)
+		}
+		t = resolveInPackage(t, &p)
 		switch t.Desc.Kind() {
 		case types.ListKind, types.MapKind, types.SetKind:
 			return true
@@ -540,7 +548,7 @@ func (gen *codeGen) containsNonComparable(t types.TypeRef) bool {
 			// get handled higher up in the call chain.
 			cache[userName] = false
 			for _, f := range t.Desc.(types.StructDesc).Fields {
-				if rec(f.T) {
+				if rec(f.T, p) {
 					cache[userName] = true
 					return true
 				}
@@ -550,6 +558,13 @@ func (gen *codeGen) containsNonComparable(t types.TypeRef) bool {
 			return false
 		}
 	}
+	// TODO: pkg.Parsed.New() gets called too often. Figure out whether we generally want a Package or a PackageDef and modify pkg.Parsed accordingly. BUG 420
+	return rec(t, gen.pkg.New())
+}
 
-	return rec(t)
+func resolveInPackage(t types.TypeRef, p *types.Package) types.TypeRef {
+	if !t.IsUnresolved() {
+		return t
+	}
+	return p.Types().Get(uint64(t.Ordinal()))
 }
