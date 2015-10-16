@@ -211,7 +211,7 @@ func expandStruct(t types.TypeRef, ordinal int) []types.TypeRef {
 			if f.T.Kind() == types.StructKind {
 				newTypeRefs := expandStruct(f.T, ordinal)
 				ts = append(ts, newTypeRefs...)
-				rv[i] = types.Field{f.Name, types.MakeTypeRef(t.PackageRef(), int16(ordinal)), f.Optional}
+				rv[i] = types.Field{f.Name, types.MakeTypeRef(ref.Ref{}, int16(ordinal)), f.Optional}
 				ordinal += len(newTypeRefs)
 			} else {
 				rv[i] = f

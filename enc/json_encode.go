@@ -42,10 +42,9 @@ type Map []interface{}
 type Set []interface{}
 
 type TypeRef struct {
-	PkgRef ref.Ref
-	Name   string
-	Kind   uint8
-	Desc   interface{}
+	Name string
+	Kind uint8
+	Desc interface{}
 }
 
 func jsonEncode(dst io.Writer, v interface{}) {
@@ -178,9 +177,6 @@ func getJSONTypeRef(t TypeRef) interface{} {
 	body := map[string]interface{}{
 		"name": getJSONPrimitive(t.Name),
 		"kind": getJSONPrimitive(t.Kind),
-	}
-	if t.PkgRef != (ref.Ref{}) {
-		body["pkgRef"] = getJSON(t.PkgRef)
 	}
 	if t.Desc != nil {
 		body["desc"] = getJSON(t.Desc)

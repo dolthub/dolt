@@ -7,6 +7,7 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -296,7 +297,7 @@ func (suite *ParsedResultTestSuite) checkStruct(pkg intermediate, s structTestCa
 			// and  the TypeRef points to somewhere else.
 			suite.True(typFields[i].T.IsUnresolved())
 			suite.True(typFields[i].T.Ordinal() > 0)
-			suite.Equal(typ.PackageRef(), typFields[i].T.PackageRef())
+			suite.Equal(ref.Ref{}, typFields[i].T.PackageRef())
 		} else {
 			suite.EqualValues(s.Fields[i].toField(), typFields[i])
 		}

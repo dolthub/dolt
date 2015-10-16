@@ -115,12 +115,14 @@ func makeSetEncodeable(s Set, cs chunks.ChunkSink) interface{} {
 }
 
 func makeTypeEncodeable(t TypeRef, cs chunks.ChunkSink) interface{} {
-	pkgRef := t.PackageRef()
-	p := LookupPackage(pkgRef)
-	if p != nil {
-		pkgRef = writeChildValueInternal(p.NomsValue(), cs)
+	if t.HasPackageRef() {
+		pkgRef := t.PackageRef()
+		p := LookupPackage(pkgRef)
+		if p != nil {
+			pkgRef = writeChildValueInternal(p.NomsValue(), cs)
+		}
 	}
-	return enc.TypeRef{PkgRef: pkgRef, Name: t.Name(), Kind: uint8(t.Kind()), Desc: toEncodeable(t.Desc.ToValue(), cs)}
+	return enc.TypeRef{Name: t.Name(), Kind: uint8(t.Kind()), Desc: toEncodeable(t.Desc.ToValue(), cs)}
 }
 
 func processChild(f Future, cs chunks.ChunkSink) interface{} {

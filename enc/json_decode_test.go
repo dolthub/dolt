@@ -82,13 +82,13 @@ func TestJSONDecode(t *testing.T) {
 	ref1 := ref.New(ref.Sha1Digest{0xde, 0xad, 0xbe, 0xef})
 	ref2 := ref.New(ref.Sha1Digest{0xbe, 0xef, 0xca, 0xfe})
 	testDecode(fmt.Sprintf(`j {"type":{"desc":{"list":[{"ref":"%s"},{"ref":"%s"}]},"kind":{"uint8":15},"name":""}}
-`, ref1, ref2), TypeRef{ref.Ref{}, "", 15, []interface{}{ref1, ref2}})
+`, ref1, ref2), TypeRef{"", 15, []interface{}{ref1, ref2}})
 	testDecode(`j {"type":{"desc":{"list":["f","g"]},"kind":{"uint8":18},"name":"enum"}}
-`, TypeRef{ref.Ref{}, "enum", 18, []interface{}{"f", "g"}})
+`, TypeRef{"enum", 18, []interface{}{"f", "g"}})
 
 	pkgRef := ref1
-	testDecode(fmt.Sprintf(`j {"type":{"name":"","kind":{"uint8":20},"pkgRef":{"ref":"%s"},"desc":{"int16":42}}}
-`, pkgRef), TypeRef{Kind: 20, Name: "", PkgRef: pkgRef, Desc: int16(42)})
+	testDecode(fmt.Sprintf(`j {"type":{"name":"","kind":{"uint8":20},"desc":{"list":[{"ref":"%s"},{"int16":42}]}}}
+`, pkgRef), TypeRef{Kind: 20, Name: "", Desc: []interface{}{pkgRef, int16(42)}})
 
 	// Blob (compound)
 	// echo -n 'b Hello' | sha1sum

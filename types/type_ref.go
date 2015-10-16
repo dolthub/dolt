@@ -15,10 +15,8 @@ import (
 // If Kind() refers to Struct, then Desc is {"fields": [name, type, ...], "choices": [name, type, ...]}.
 // If Kind() refers to Enum, then Desc is a List(String) describing the enumerated values.
 type TypeRef struct {
-	// TODO: pkgRef only makes sense on UnresolvedDesc
-	pkgRef *Ref
-	name   name
-	Desc   TypeDesc
+	name name
+	Desc TypeDesc
 
 	ref *ref.Ref
 }
@@ -45,7 +43,7 @@ func (t TypeRef) IsUnresolved() bool {
 }
 
 func (t TypeRef) HasPackageRef() bool {
-	return t.pkgRef != nil && t.pkgRef.Ref() != ref.Ref{}
+	return t.IsUnresolved() && t.PackageRef() != ref.Ref{}
 }
 
 // Describe() methods generate text that should parse into the struct being described.
@@ -65,10 +63,9 @@ func (t TypeRef) Kind() NomsKind {
 }
 
 func (t TypeRef) PackageRef() ref.Ref {
-	if t.pkgRef == nil {
-		return ref.Ref{}
-	}
-	return t.pkgRef.R
+	desc, ok := t.Desc.(UnresolvedDesc)
+	d.Chk.True(ok, "PackageRef only works on unresolved type refs")
+	return desc.pkgRef
 }
 
 func (t TypeRef) Ordinal() int16 {
@@ -104,9 +101,6 @@ func (t TypeRef) Equals(other Value) (res bool) {
 }
 
 func (t TypeRef) Chunks() (out []Future) {
-	if t.pkgRef != nil {
-		out = append(out, futureFromRef(t.pkgRef.Ref()))
-	}
 	v := t.Desc.ToValue()
 	if v != nil {
 		out = append(out, v.Chunks()...)
@@ -148,11 +142,11 @@ func MakeStructTypeRef(name string, fields []Field, choices Choices) TypeRef {
 
 func MakeTypeRef(pkgRef ref.Ref, ordinal int16) TypeRef {
 	d.Chk.True(ordinal >= 0)
-	return TypeRef{pkgRef: &Ref{R: pkgRef}, Desc: UnresolvedDesc{ordinal}, ref: &ref.Ref{}}
+	return TypeRef{Desc: UnresolvedDesc{pkgRef, ordinal}, ref: &ref.Ref{}}
 }
 
 func MakeExternalTypeRef(namespace, n string) TypeRef {
-	return TypeRef{name: name{namespace, n}, Desc: UnresolvedDesc{-1}, ref: &ref.Ref{}}
+	return TypeRef{name: name{namespace, n}, Desc: UnresolvedDesc{ordinal: -1}, ref: &ref.Ref{}}
 }
 
 func buildType(n string, desc TypeDesc) TypeRef {

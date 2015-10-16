@@ -69,9 +69,9 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 	case enc.TypeRef:
 		kind := NomsKind(i.Kind)
 		desc := typeDescFromInterface(kind, i.Desc, cs)
-		if i.PkgRef != (ref.Ref{}) {
+		if desc, ok := desc.(UnresolvedDesc); ok {
 			d.Chk.Equal(TypeRefKind, kind)
-			return futureFromValue(MakeTypeRef(i.PkgRef, desc.(UnresolvedDesc).ordinal))
+			return futureFromValue(MakeTypeRef(desc.pkgRef, desc.ordinal))
 		}
 		return futureFromValue(buildType(i.Name, desc))
 	case enc.CompoundBlob:
@@ -133,8 +133,10 @@ func typeDescFromInterface(kind NomsKind, i interface{}, cs chunks.ChunkSource) 
 		items := i.(enc.Map)
 		return StructDescFromMap(mapFromFutures(futuresFromIterable(items, cs), cs))
 	case TypeRefKind:
-		ordinal := i.(int16)
-		return UnresolvedDesc{ordinal}
+		items := i.([]interface{})
+		pkgRef := items[0].(ref.Ref)
+		ordinal := items[1].(int16)
+		return UnresolvedDesc{pkgRef, ordinal}
 	default:
 		if IsPrimitiveKind(kind) {
 			d.Chk.Nil(i, "Primitive TypeRefs have no serialized description.")

@@ -50,6 +50,7 @@ func TestStructChunks(t *testing.T) {
 
 	st := StructDef{"hi", true}.New()
 	cs := st.Chunks()
+
 	// One chunk for the TypeRef
 	assert.Len(cs, 1)
 }

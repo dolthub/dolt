@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/ref"
 )
 
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Int32, or a custom type.
@@ -83,6 +84,7 @@ func primitiveToDesc(p string) PrimitiveDesc {
 }
 
 type UnresolvedDesc struct {
+	pkgRef  ref.Ref
 	ordinal int16
 }
 
@@ -91,11 +93,14 @@ func (u UnresolvedDesc) Kind() NomsKind {
 }
 
 func (u UnresolvedDesc) Equals(other TypeDesc) bool {
-	return u.Kind() == other.Kind()
+	if other, ok := other.(UnresolvedDesc); ok {
+		return u.pkgRef == other.pkgRef && u.ordinal == other.ordinal
+	}
+	return false
 }
 
 func (u UnresolvedDesc) ToValue() Value {
-	return Int16(u.ordinal)
+	return NewList(Ref{R: u.pkgRef}, Int16(u.ordinal))
 }
 
 func (u UnresolvedDesc) Describe() string {

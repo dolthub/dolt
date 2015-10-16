@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
-	leaf "github.com/attic-labs/noms/nomdl/codegen/test/gen/sha1_dc8e81fd56fb5ec3e9ee05cea736ffbb439fc652"
-	dep "github.com/attic-labs/noms/nomdl/codegen/test/gen/sha1_ef3f508f523126f2a7ca06d1764d03c0f66d70e1"
+	leaf "github.com/attic-labs/noms/nomdl/codegen/test/gen/sha1_98b6b6ab264682e37158e48a36684fa1f32afdc9"
+	dep "github.com/attic-labs/noms/nomdl/codegen/test/gen/sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5"
 )
 
 func TestWithImportsDef(t *testing.T) {
@@ -38,7 +38,7 @@ func TestWithImportsDef(t *testing.T) {
 
 func TestListOfImportsDef(t *testing.T) {
 	assert := assert.New(t)
-	lDef := ListOfsha1_ef3f508f523126f2a7ca06d1764d03c0f66d70e1_DDef{
+	lDef := ListOfsha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5_DDef{
 		dep.DDef{EnumField: leaf.E3},
 		dep.DDef{EnumField: leaf.E2},
 		dep.DDef{EnumField: leaf.E1},

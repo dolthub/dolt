@@ -82,18 +82,18 @@ func TestJsonEncode(t *testing.T) {
 	// TypeRefs
 	expected = `j {"type":{"kind":{"uint8":0},"name":""}}
 `
-	testEncode(expected, TypeRef{ref.Ref{}, "", 0, nil})
+	testEncode(expected, TypeRef{"", 0, nil})
 	expected = fmt.Sprintf(`j {"type":{"desc":{"list":[{"ref":"%s"},{"ref":"%s"}]},"kind":{"uint8":15},"name":""}}
 `, ref1, ref2)
-	testEncode(expected, TypeRef{ref.Ref{}, "", 15, []interface{}{ref1, ref2}})
+	testEncode(expected, TypeRef{"", 15, []interface{}{ref1, ref2}})
 	expected = `j {"type":{"desc":{"list":["f","g"]},"kind":{"uint8":18},"name":"enum"}}
 `
-	testEncode(expected, TypeRef{ref.Ref{}, "enum", 18, []interface{}{"f", "g"}})
+	testEncode(expected, TypeRef{"enum", 18, []interface{}{"f", "g"}})
 
 	pkgRef := ref1
-	expected = fmt.Sprintf(`j {"type":{"desc":{"int16":42},"kind":{"uint8":20},"name":"","pkgRef":{"ref":"%s"}}}
+	expected = fmt.Sprintf(`j {"type":{"desc":{"list":[{"ref":"%s"},{"int16":42}]},"kind":{"uint8":20},"name":""}}
 `, pkgRef)
-	testEncode(expected, TypeRef{Kind: 20, Name: "", PkgRef: pkgRef, Desc: int16(42)})
+	testEncode(expected, TypeRef{Kind: 20, Name: "", Desc: []interface{}{pkgRef, int16(42)}})
 
 	// Blob (compound)
 	testEncode(fmt.Sprintf(`j {"cb":["%s",2]}

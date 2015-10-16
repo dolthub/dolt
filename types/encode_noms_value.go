@@ -58,7 +58,7 @@ func (w *jsonArrayWriter) writeTypeRefAsTag(t TypeRef) {
 			w.writeTypeRefAsTag(elemType)
 		}
 	case TypeRefKind:
-		if _, ok := t.Desc.(PrimitiveDesc); !ok {
+		if t.IsUnresolved() {
 			pkgRef := t.PackageRef()
 			d.Chk.NotEqual(ref.Ref{}, pkgRef)
 			w.writeRef(pkgRef)
@@ -106,8 +106,7 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 	case StringKind:
 		w.write(v.(String).String())
 	case TypeRefKind:
-		pkgRef := tr.PackageRef()
-		if pkgRef != (ref.Ref{}) {
+		if tr.HasPackageRef() {
 			pkg = LookupPackage(tr.PackageRef())
 		}
 		w.writeTypeRefKindValue(v, tr, pkg)
@@ -153,7 +152,7 @@ func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
 		}
 		w.write(choiceWriter.toArray())
 	case TypeRefKind:
-		if _, ok := v.Desc.(PrimitiveDesc); !ok {
+		if v.IsUnresolved() {
 			w.writeRef(v.PackageRef())
 			w.write(v.Ordinal())
 		}

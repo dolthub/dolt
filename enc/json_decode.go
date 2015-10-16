@@ -179,14 +179,9 @@ func jsonDecodeTypeRef(input map[string]interface{}) TypeRef {
 	d.Exp.True(ok, "Name field of type must be string, not %T (%#v)", input["name"], input["name"])
 	kind, ok := jsonDecodeValue(input["kind"]).(uint8)
 	d.Exp.True(ok, "Kind field of type must be uint8, not %T, (%#v)", input["kind"], input["kind"])
-	pkgRef := ref.Ref{}
-	if input["pkgRef"] != nil {
-		pkgRef, ok = jsonDecodeValue(input["pkgRef"]).(ref.Ref)
-		d.Exp.True(ok, "If present, pkgRef field of type must be ref.Ref, not %+v", input["pkgRef"])
-	}
 	var desc interface{}
 	if input["desc"] != nil {
 		desc = jsonDecodeValue(input["desc"])
 	}
-	return TypeRef{PkgRef: pkgRef, Name: name, Kind: kind, Desc: desc}
+	return TypeRef{Name: name, Kind: kind, Desc: desc}
 }

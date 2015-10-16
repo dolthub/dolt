@@ -217,6 +217,7 @@ func (r *jsonArrayReader) readTypeRefKindToValue(t TypeRef, pkg *Package) NomsVa
 		return valueAsNomsValue{r.readTypeRefAsValue(pkg), t}
 	}
 
+	d.Chk.True(t.IsUnresolved())
 	pkgRef := t.PackageRef()
 	ordinal := t.Ordinal()
 	pkg2 := LookupPackage(pkgRef)
