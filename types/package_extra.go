@@ -1,23 +1,13 @@
 package types
 
-func (p Package) maybeGetNamedType(n string) (t TypeRef, found bool) {
+func (p Package) GetOrdinal(n string) (ordinal int64) {
+	ordinal = -1
 	p.Types().Iter(func(tr TypeRef, i uint64) (stop bool) {
-		if tr.Name() == n {
-			t = tr
-			found = true
+		if tr.Name() == n && tr.Namespace() == "" {
+			ordinal = int64(i)
 			stop = true
 		}
 		return
 	})
 	return
-}
-
-func (p Package) GetNamedType(n string) TypeRef {
-	t, _ := p.maybeGetNamedType(n)
-	return t
-}
-
-func (p Package) HasNamedType(n string) bool {
-	_, b := p.maybeGetNamedType(n)
-	return b
 }

@@ -115,7 +115,7 @@ func generateDepCode(depsDir string, p types.Package, cs chunks.ChunkSource) dep
 	p.Dependencies().IterAll(func(r types.RefOfPackage) {
 		p := r.GetValue(cs)
 		pDeps := generateDepCode(depsDir, p, cs)
-		tag := code.ToTag(p.Ref().String())
+		tag := code.ToTag(p.Ref())
 		parsed := pkg.Parsed{PackageDef: p.Def(), Name: tag}
 		generateAndEmit(tag, filepath.Join(depsDir, tag, tag+".go"), importPaths(depsDir, pDeps), pDeps, parsed)
 
@@ -149,7 +149,7 @@ func generateAndEmit(tag, out string, importPaths []string, deps depsMap, p pkg.
 
 func importPaths(depsDir string, deps depsMap) (paths []string) {
 	for depRef := range deps {
-		depDir := filepath.Join(depsDir, code.ToTag(depRef.String()))
+		depDir := filepath.Join(depsDir, code.ToTag(depRef))
 		goPkg, err := build.Default.ImportDir(depDir, build.FindOnly)
 		d.Chk.NoError(err)
 		paths = append(paths, goPkg.ImportPath)
@@ -242,13 +242,12 @@ func (gen *codeGen) Resolve(t types.TypeRef) types.TypeRef {
 		return t
 	}
 	if !t.HasPackageRef() {
-		return gen.pkg.GetNamedType(t.Name())
+		return gen.pkg.Types[t.Ordinal()]
 	}
 
 	dep, ok := gen.deps[t.PackageRef()]
 	d.Chk.True(ok, "Package %s is referenced in %+v, but is not a dependency.", t.PackageRef().String(), t)
-	d.Chk.True(dep.HasNamedType(t.Name()), "Cannot import type %s from package %s.", t.Name(), t.PackageRef().String())
-	return dep.GetNamedType(t.Name()).MakeImported(t.PackageRef())
+	return dep.Types().Get(uint64(t.Ordinal()))
 }
 
 func (gen *codeGen) WritePackage() {
@@ -271,26 +270,27 @@ func (gen *codeGen) WritePackage() {
 	d.Exp.NoError(err)
 
 	for _, t := range gen.pkg.UsingDeclarations {
-		gen.write(t)
+		gen.write(t, -1)
 	}
 
-	for _, t := range gen.pkg.Types {
-		gen.write(t)
+	for i, t := range gen.pkg.Types {
+		gen.write(t, i)
 	}
 }
 
-func (gen *codeGen) write(t types.TypeRef) {
-	t = gen.Resolve(t)
-	// If t has a package reference, then it represents an imported type, so we shouldn't generate code for it.
-	if gen.written[gen.generator.UserName(t)] || t.HasPackageRef() {
+// write generates the code for the given type.
+// ordinal can be -1 in the case where we are in a non top level recursive call. In those cases the ordinal is ignored.
+func (gen *codeGen) write(t types.TypeRef, ordinal int) {
+	// If t is unresolved, it represents an imported type (or local reference), so we shouldn't generate code for it.
+	if gen.written[gen.generator.UserName(t)] || t.IsUnresolved() {
 		return
 	}
-	k := t.Desc.Kind()
+	k := t.Kind()
 	switch k {
 	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeRefKind:
 		return
 	case types.EnumKind:
-		gen.writeEnum(t)
+		gen.writeEnum(t, ordinal)
 	case types.ListKind:
 		gen.writeList(t)
 	case types.MapKind:
@@ -300,7 +300,7 @@ func (gen *codeGen) write(t types.TypeRef) {
 	case types.SetKind:
 		gen.writeSet(t)
 	case types.StructKind:
-		gen.writeStruct(t)
+		gen.writeStruct(t, ordinal)
 	default:
 		panic("unreachable")
 	}
@@ -312,13 +312,15 @@ func (gen *codeGen) writeTemplate(tmpl string, t types.TypeRef, data interface{}
 	gen.written[gen.generator.UserName(t)] = true
 }
 
-func (gen *codeGen) writeStruct(t types.TypeRef) {
+func (gen *codeGen) writeStruct(t types.TypeRef, ordinal int) {
+	d.Chk.True(ordinal >= 0)
 	desc := t.Desc.(types.StructDesc)
 	data := struct {
 		FileID        string
 		PackageName   string
 		Name          string
 		Type          types.TypeRef
+		Ordinal       int
 		Fields        []types.Field
 		Choices       types.Choices
 		HasUnion      bool
@@ -329,23 +331,25 @@ func (gen *codeGen) writeStruct(t types.TypeRef) {
 		gen.pkg.Name,
 		gen.generator.UserName(t),
 		t,
+		ordinal,
 		desc.Fields,
 		nil,
 		len(desc.Union) != 0,
 		types.MakePrimitiveTypeRef(types.UInt32Kind),
 		gen.canUseDef(t),
 	}
+
 	if data.HasUnion {
 		data.Choices = desc.Union
 		data.UnionZeroType = data.Choices[0].T
 	}
 	gen.writeTemplate("struct.tmpl", t, data)
 	for _, f := range desc.Fields {
-		gen.write(f.T)
+		gen.write(f.T, -1)
 	}
 	if data.HasUnion {
 		for _, f := range desc.Union {
-			gen.write(f.T)
+			gen.write(f.T, -1)
 		}
 	}
 }
@@ -368,7 +372,7 @@ func (gen *codeGen) writeList(t types.TypeRef) {
 		gen.canUseDef(t),
 	}
 	gen.writeTemplate("list.tmpl", t, data)
-	gen.write(elemTypes[0])
+	gen.write(elemTypes[0], -1)
 }
 
 func (gen *codeGen) writeMap(t types.TypeRef) {
@@ -391,8 +395,8 @@ func (gen *codeGen) writeMap(t types.TypeRef) {
 		gen.canUseDef(t),
 	}
 	gen.writeTemplate("map.tmpl", t, data)
-	gen.write(elemTypes[0])
-	gen.write(elemTypes[1])
+	gen.write(elemTypes[0], -1)
+	gen.write(elemTypes[1], -1)
 }
 
 func (gen *codeGen) writeRef(t types.TypeRef) {
@@ -411,7 +415,7 @@ func (gen *codeGen) writeRef(t types.TypeRef) {
 		elemTypes[0],
 	}
 	gen.writeTemplate("ref.tmpl", t, data)
-	gen.write(elemTypes[0])
+	gen.write(elemTypes[0], -1)
 }
 
 func (gen *codeGen) writeSet(t types.TypeRef) {
@@ -432,49 +436,53 @@ func (gen *codeGen) writeSet(t types.TypeRef) {
 		gen.canUseDef(t),
 	}
 	gen.writeTemplate("set.tmpl", t, data)
-	gen.write(elemTypes[0])
+	gen.write(elemTypes[0], -1)
 }
 
-func (gen *codeGen) writeEnum(t types.TypeRef) {
+func (gen *codeGen) writeEnum(t types.TypeRef, ordinal int) {
+	d.Chk.True(ordinal >= 0)
 	data := struct {
 		FileID      string
 		PackageName string
 		Name        string
 		Type        types.TypeRef
+		Ordinal     int
 		Ids         []string
 	}{
 		gen.fileid,
 		gen.pkg.Name,
 		t.Name(),
 		t,
+		ordinal,
 		t.Desc.(types.EnumDesc).IDs,
 	}
+
 	gen.writeTemplate("enum.tmpl", t, data)
 }
 
-func (gen *codeGen) canUseDef(t types.TypeRef) bool {
+func (gen *codeGen) canUseDef(tx types.TypeRef) bool {
 	cache := map[string]bool{}
 
-	var rec func(t types.TypeRef) bool
-	rec = func(t types.TypeRef) bool {
-		t = gen.Resolve(t)
-		switch t.Desc.Kind() {
+	var rec func(ttt types.TypeRef) bool
+	rec = func(ttt types.TypeRef) bool {
+		t2 := gen.Resolve(ttt)
+		switch t2.Kind() {
 		case types.ListKind:
-			return rec(t.Desc.(types.CompoundDesc).ElemTypes[0])
+			return rec(t2.Desc.(types.CompoundDesc).ElemTypes[0])
 		case types.SetKind:
-			elemType := t.Desc.(types.CompoundDesc).ElemTypes[0]
+			elemType := t2.Desc.(types.CompoundDesc).ElemTypes[0]
 			return !gen.containsNonComparable(elemType) && rec(elemType)
 		case types.MapKind:
-			elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
+			elemTypes := t2.Desc.(types.CompoundDesc).ElemTypes
 			return !gen.containsNonComparable(elemTypes[0]) && rec(elemTypes[0]) && rec(elemTypes[1])
 		case types.StructKind:
-			userName := gen.generator.UserName(t)
+			userName := gen.generator.UserName(ttt)
 			if b, ok := cache[userName]; ok {
 				return b
 			}
 			cache[userName] = true
-			for _, f := range t.Desc.(types.StructDesc).Fields {
-				if f.T.Equals(t) || !rec(f.T) {
+			for _, f := range t2.Desc.(types.StructDesc).Fields {
+				if f.T.Equals(ttt) || !rec(f.T) {
 					cache[userName] = false
 					return false
 				}
@@ -485,7 +493,7 @@ func (gen *codeGen) canUseDef(t types.TypeRef) bool {
 		}
 	}
 
-	return rec(t)
+	return rec(tx)
 }
 
 // We use a go map as the def for Set and Map. These cannot have a key that is a

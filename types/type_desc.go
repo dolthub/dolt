@@ -82,7 +82,9 @@ func primitiveToDesc(p string) PrimitiveDesc {
 	panic("Unreachable")
 }
 
-type UnresolvedDesc struct{}
+type UnresolvedDesc struct {
+	ordinal int16
+}
 
 func (u UnresolvedDesc) Kind() NomsKind {
 	return TypeRefKind
@@ -93,7 +95,7 @@ func (u UnresolvedDesc) Equals(other TypeDesc) bool {
 }
 
 func (u UnresolvedDesc) ToValue() Value {
-	return nil
+	return Int16(u.ordinal)
 }
 
 func (u UnresolvedDesc) Describe() string {

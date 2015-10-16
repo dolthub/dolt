@@ -17,7 +17,7 @@ func init() {
 		Types: ListOfTypeRefDef{
 			MakeStructTypeRef("Package",
 				[]Field{
-					Field{"Dependencies", MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", ref.Ref{}))), false},
+					Field{"Dependencies", MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef(ref.Ref{}, 0))), false},
 					Field{"Types", MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(TypeRefKind)), false},
 				},
 				Choices{},
@@ -70,7 +70,7 @@ func (m SetOfPackage) TypeRef() TypeRef {
 }
 
 func init() {
-	__typeRefForSetOfPackage = MakeCompoundTypeRef("", SetKind, MakeTypeRef("Package", __typesPackageInFile_package_CachedRef))
+	__typeRefForSetOfPackage = MakeCompoundTypeRef("", SetKind, MakeTypeRef(__typesPackageInFile_package_CachedRef, 0))
 	RegisterFromValFunction(__typeRefForSetOfPackage, func(v Value) NomsValue {
 		return SetOfPackageFromVal(v)
 	})
@@ -160,8 +160,7 @@ type Package struct {
 
 func NewPackage() Package {
 	return Package{NewMap(
-		NewString("$name"), NewString("Package"),
-		NewString("$type"), MakeTypeRef("Package", __typesPackageInFile_package_CachedRef),
+		NewString("$type"), MakeTypeRef(__typesPackageInFile_package_CachedRef, 0),
 		NewString("Dependencies"), NewSet(),
 		NewString("Types"), NewList(),
 	)}
@@ -172,14 +171,13 @@ func NewPackage() Package {
 // NamedTypes is a lookup table for types defined in this package. These should all be EnumKind or StructKind. When traversing the definition of a given type, you may run into a TypeRef that IsUnresolved(). In that case, look it up by name in the NamedTypes of the appropriate package.
 type PackageDef struct {
 	Dependencies SetOfRefOfPackageDef
-	Types ListOfTypeRefDef
+	Types        ListOfTypeRefDef
 }
 
 func (def PackageDef) New() Package {
 	return Package{
 		NewMap(
-			NewString("$name"), NewString("Package"),
-			NewString("$type"), MakeTypeRef("Package", __typesPackageInFile_package_CachedRef),
+			NewString("$type"), MakeTypeRef(__typesPackageInFile_package_CachedRef, 0),
 			NewString("Dependencies"), def.Dependencies.New().NomsValue(),
 			NewString("Types"), def.Types.New().NomsValue(),
 		)}
@@ -198,7 +196,7 @@ func (m Package) TypeRef() TypeRef {
 }
 
 func init() {
-	__typeRefForPackage = MakeTypeRef("Package", __typesPackageInFile_package_CachedRef)
+	__typeRefForPackage = MakeTypeRef(__typesPackageInFile_package_CachedRef, 0)
 	RegisterFromValFunction(__typeRefForPackage, func(v Value) NomsValue {
 		return PackageFromVal(v)
 	})
@@ -310,7 +308,7 @@ func (m SetOfRefOfPackage) TypeRef() TypeRef {
 }
 
 func init() {
-	__typeRefForSetOfRefOfPackage = MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", __typesPackageInFile_package_CachedRef)))
+	__typeRefForSetOfRefOfPackage = MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakeTypeRef(__typesPackageInFile_package_CachedRef, 0)))
 	RegisterFromValFunction(__typeRefForSetOfRefOfPackage, func(v Value) NomsValue {
 		return SetOfRefOfPackageFromVal(v)
 	})
@@ -441,7 +439,7 @@ func (m RefOfPackage) TypeRef() TypeRef {
 }
 
 func init() {
-	__typeRefForRefOfPackage = MakeCompoundTypeRef("", RefKind, MakeTypeRef("Package", __typesPackageInFile_package_CachedRef))
+	__typeRefForRefOfPackage = MakeCompoundTypeRef("", RefKind, MakeTypeRef(__typesPackageInFile_package_CachedRef, 0))
 	RegisterFromValFunction(__typeRefForRefOfPackage, func(v Value) NomsValue {
 		return RefOfPackageFromVal(v)
 	})

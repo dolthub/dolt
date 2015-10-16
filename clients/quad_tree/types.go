@@ -26,37 +26,37 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 			),
 			types.MakeStructTypeRef("Georectangle",
 				[]types.Field{
-					types.Field{"TopLeft", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
-					types.Field{"BottomRight", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
+					types.Field{"TopLeft", types.MakeTypeRef(ref.Ref{}, 0), false},
+					types.Field{"BottomRight", types.MakeTypeRef(ref.Ref{}, 0), false},
 				},
 				types.Choices{},
 			),
 			types.MakeStructTypeRef("Node",
 				[]types.Field{
-					types.Field{"Geoposition", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
+					types.Field{"Geoposition", types.MakeTypeRef(ref.Ref{}, 0), false},
 					types.Field{"Reference", types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind)), false},
 				},
 				types.Choices{},
 			),
 			types.MakeStructTypeRef("QuadTree",
 				[]types.Field{
-					types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Node", ref.Ref{})), false},
-					types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("QuadTree", ref.Ref{})), false},
+					types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Ref{}, 2)), false},
+					types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(ref.Ref{}, 3)), false},
 					types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
 					types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
 					types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Georectangle", types.MakeTypeRef("Georectangle", ref.Ref{}), false},
+					types.Field{"Georectangle", types.MakeTypeRef(ref.Ref{}, 1), false},
 				},
 				types.Choices{},
 			),
 			types.MakeStructTypeRef("SQuadTree",
 				[]types.Field{
 					types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))), false},
-					types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef("SQuadTree", ref.Ref{}))), false},
+					types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef(ref.Ref{}, 4))), false},
 					types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
 					types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
 					types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Georectangle", types.MakeTypeRef("Georectangle", ref.Ref{}), false},
+					types.Field{"Georectangle", types.MakeTypeRef(ref.Ref{}, 1), false},
 				},
 				types.Choices{},
 			),
@@ -73,8 +73,7 @@ type Geoposition struct {
 
 func NewGeoposition() Geoposition {
 	return Geoposition{types.NewMap(
-		types.NewString("$name"), types.NewString("Geoposition"),
-		types.NewString("$type"), types.MakeTypeRef("Geoposition", __mainPackageInFile_types_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 		types.NewString("Latitude"), types.Float32(0),
 		types.NewString("Longitude"), types.Float32(0),
 	)}
@@ -88,8 +87,7 @@ type GeopositionDef struct {
 func (def GeopositionDef) New() Geoposition {
 	return Geoposition{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("Geoposition"),
-			types.NewString("$type"), types.MakeTypeRef("Geoposition", __mainPackageInFile_types_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 			types.NewString("Latitude"), types.Float32(def.Latitude),
 			types.NewString("Longitude"), types.Float32(def.Longitude),
 		)}
@@ -101,7 +99,7 @@ func (s Geoposition) Def() (d GeopositionDef) {
 	return
 }
 
-var __typeRefForGeoposition = types.MakeTypeRef("Geoposition", __mainPackageInFile_types_CachedRef)
+var __typeRefForGeoposition = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
 
 func (m Geoposition) TypeRef() types.TypeRef {
 	return __typeRefForGeoposition
@@ -163,8 +161,7 @@ type Georectangle struct {
 
 func NewGeorectangle() Georectangle {
 	return Georectangle{types.NewMap(
-		types.NewString("$name"), types.NewString("Georectangle"),
-		types.NewString("$type"), types.MakeTypeRef("Georectangle", __mainPackageInFile_types_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
 		types.NewString("TopLeft"), NewGeoposition().NomsValue(),
 		types.NewString("BottomRight"), NewGeoposition().NomsValue(),
 	)}
@@ -178,8 +175,7 @@ type GeorectangleDef struct {
 func (def GeorectangleDef) New() Georectangle {
 	return Georectangle{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("Georectangle"),
-			types.NewString("$type"), types.MakeTypeRef("Georectangle", __mainPackageInFile_types_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
 			types.NewString("TopLeft"), def.TopLeft.New().NomsValue(),
 			types.NewString("BottomRight"), def.BottomRight.New().NomsValue(),
 		)}
@@ -191,7 +187,7 @@ func (s Georectangle) Def() (d GeorectangleDef) {
 	return
 }
 
-var __typeRefForGeorectangle = types.MakeTypeRef("Georectangle", __mainPackageInFile_types_CachedRef)
+var __typeRefForGeorectangle = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1)
 
 func (m Georectangle) TypeRef() types.TypeRef {
 	return __typeRefForGeorectangle
@@ -253,8 +249,7 @@ type Node struct {
 
 func NewNode() Node {
 	return Node{types.NewMap(
-		types.NewString("$name"), types.NewString("Node"),
-		types.NewString("$type"), types.MakeTypeRef("Node", __mainPackageInFile_types_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2),
 		types.NewString("Geoposition"), NewGeoposition().NomsValue(),
 		types.NewString("Reference"), types.Ref{R: ref.Ref{}},
 	)}
@@ -268,8 +263,7 @@ type NodeDef struct {
 func (def NodeDef) New() Node {
 	return Node{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("Node"),
-			types.NewString("$type"), types.MakeTypeRef("Node", __mainPackageInFile_types_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2),
 			types.NewString("Geoposition"), def.Geoposition.New().NomsValue(),
 			types.NewString("Reference"), types.Ref{R: def.Reference},
 		)}
@@ -281,7 +275,7 @@ func (s Node) Def() (d NodeDef) {
 	return
 }
 
-var __typeRefForNode = types.MakeTypeRef("Node", __mainPackageInFile_types_CachedRef)
+var __typeRefForNode = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2)
 
 func (m Node) TypeRef() types.TypeRef {
 	return __typeRefForNode
@@ -399,8 +393,7 @@ type QuadTree struct {
 
 func NewQuadTree() QuadTree {
 	return QuadTree{types.NewMap(
-		types.NewString("$name"), types.NewString("QuadTree"),
-		types.NewString("$type"), types.MakeTypeRef("QuadTree", __mainPackageInFile_types_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 3),
 		types.NewString("Nodes"), types.NewList(),
 		types.NewString("Tiles"), types.NewMap(),
 		types.NewString("Depth"), types.UInt8(0),
@@ -422,8 +415,7 @@ type QuadTreeDef struct {
 func (def QuadTreeDef) New() QuadTree {
 	return QuadTree{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("QuadTree"),
-			types.NewString("$type"), types.MakeTypeRef("QuadTree", __mainPackageInFile_types_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 3),
 			types.NewString("Nodes"), def.Nodes.New().NomsValue(),
 			types.NewString("Tiles"), def.Tiles.New().NomsValue(),
 			types.NewString("Depth"), types.UInt8(def.Depth),
@@ -443,7 +435,7 @@ func (s QuadTree) Def() (d QuadTreeDef) {
 	return
 }
 
-var __typeRefForQuadTree = types.MakeTypeRef("QuadTree", __mainPackageInFile_types_CachedRef)
+var __typeRefForQuadTree = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 3)
 
 func (m QuadTree) TypeRef() types.TypeRef {
 	return __typeRefForQuadTree
@@ -591,7 +583,7 @@ func (m ListOfNode) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfNode = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Node", __mainPackageInFile_types_CachedRef))
+	__typeRefForListOfNode = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2))
 	types.RegisterFromValFunction(__typeRefForListOfNode, func(v types.Value) types.NomsValue {
 		return ListOfNodeFromVal(v)
 	})
@@ -732,7 +724,7 @@ func (m MapOfStringToQuadTree) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("QuadTree", __mainPackageInFile_types_CachedRef))
+	__typeRefForMapOfStringToQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 3))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToQuadTree, func(v types.Value) types.NomsValue {
 		return MapOfStringToQuadTreeFromVal(v)
 	})
@@ -808,8 +800,7 @@ type SQuadTree struct {
 
 func NewSQuadTree() SQuadTree {
 	return SQuadTree{types.NewMap(
-		types.NewString("$name"), types.NewString("SQuadTree"),
-		types.NewString("$type"), types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 4),
 		types.NewString("Nodes"), types.NewList(),
 		types.NewString("Tiles"), types.NewMap(),
 		types.NewString("Depth"), types.UInt8(0),
@@ -831,8 +822,7 @@ type SQuadTreeDef struct {
 func (def SQuadTreeDef) New() SQuadTree {
 	return SQuadTree{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("SQuadTree"),
-			types.NewString("$type"), types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 4),
 			types.NewString("Nodes"), def.Nodes.New().NomsValue(),
 			types.NewString("Tiles"), def.Tiles.New().NomsValue(),
 			types.NewString("Depth"), types.UInt8(def.Depth),
@@ -852,7 +842,7 @@ func (s SQuadTree) Def() (d SQuadTreeDef) {
 	return
 }
 
-var __typeRefForSQuadTree = types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef)
+var __typeRefForSQuadTree = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 4)
 
 func (m SQuadTree) TypeRef() types.TypeRef {
 	return __typeRefForSQuadTree
@@ -1141,7 +1131,7 @@ func (m MapOfStringToRefOfSQuadTree) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToRefOfSQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef)))
+	__typeRefForMapOfStringToRefOfSQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 4)))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToRefOfSQuadTree, func(v types.Value) types.NomsValue {
 		return MapOfStringToRefOfSQuadTreeFromVal(v)
 	})
@@ -1250,7 +1240,7 @@ func (m RefOfSQuadTree) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForRefOfSQuadTree = types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef("SQuadTree", __mainPackageInFile_types_CachedRef))
+	__typeRefForRefOfSQuadTree = types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 4))
 	types.RegisterFromValFunction(__typeRefForRefOfSQuadTree, func(v types.Value) types.NomsValue {
 		return RefOfSQuadTreeFromVal(v)
 	})

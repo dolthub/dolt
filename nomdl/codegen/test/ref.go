@@ -428,8 +428,7 @@ type StructWithRef struct {
 
 func NewStructWithRef() StructWithRef {
 	return StructWithRef{types.NewMap(
-		types.NewString("$name"), types.NewString("StructWithRef"),
-		types.NewString("$type"), types.MakeTypeRef("StructWithRef", __testPackageInFile_ref_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_ref_CachedRef, 0),
 		types.NewString("r"), types.Ref{R: ref.Ref{}},
 	)}
 }
@@ -441,8 +440,7 @@ type StructWithRefDef struct {
 func (def StructWithRefDef) New() StructWithRef {
 	return StructWithRef{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("StructWithRef"),
-			types.NewString("$type"), types.MakeTypeRef("StructWithRef", __testPackageInFile_ref_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_ref_CachedRef, 0),
 			types.NewString("r"), types.Ref{R: def.R},
 		)}
 }
@@ -452,7 +450,7 @@ func (s StructWithRef) Def() (d StructWithRefDef) {
 	return
 }
 
-var __typeRefForStructWithRef = types.MakeTypeRef("StructWithRef", __testPackageInFile_ref_CachedRef)
+var __typeRefForStructWithRef = types.MakeTypeRef(__testPackageInFile_ref_CachedRef, 0)
 
 func (m StructWithRef) TypeRef() types.TypeRef {
 	return __typeRefForStructWithRef

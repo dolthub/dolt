@@ -37,12 +37,23 @@ Package <- _ dd:Definition+ _ EOF {
 					}
 				}
 				usings = append(usings, d)
-			case types.EnumKind, types.StructKind:
+			case types.EnumKind:
 				if seenTypes[d.Name()] {
 					return nil, fmt.Errorf("Redefinition of " + d.Name())
 				}
 				seenTypes[d.Name()] = true
 				orderedTypes = append(orderedTypes, d)
+			case types.StructKind:
+				ds := expandStruct(d, len(orderedTypes))
+				for _, d := range ds {
+					if d.Name() != "" {
+						if seenTypes[d.Name()] {
+							return nil, fmt.Errorf("Redefinition of " + d.Name())
+						}
+						seenTypes[d.Name()] = true
+					}
+					orderedTypes = append(orderedTypes, d)
+				}
 			}
 		}
 	}

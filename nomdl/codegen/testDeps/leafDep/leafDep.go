@@ -37,8 +37,7 @@ type S struct {
 
 func NewS() S {
 	return S{types.NewMap(
-		types.NewString("$name"), types.NewString("S"),
-		types.NewString("$type"), types.MakeTypeRef("S", __testPackageInFile_leafDep_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_leafDep_CachedRef, 0),
 		types.NewString("s"), types.NewString(""),
 		types.NewString("b"), types.Bool(false),
 	)}
@@ -52,8 +51,7 @@ type SDef struct {
 func (def SDef) New() S {
 	return S{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("S"),
-			types.NewString("$type"), types.MakeTypeRef("S", __testPackageInFile_leafDep_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_leafDep_CachedRef, 0),
 			types.NewString("s"), types.NewString(def.S),
 			types.NewString("b"), types.Bool(def.B),
 		)}
@@ -65,7 +63,7 @@ func (s S) Def() (d SDef) {
 	return
 }
 
-var __typeRefForS = types.MakeTypeRef("S", __testPackageInFile_leafDep_CachedRef)
+var __typeRefForS = types.MakeTypeRef(__testPackageInFile_leafDep_CachedRef, 0)
 
 func (m S) TypeRef() types.TypeRef {
 	return __typeRefForS

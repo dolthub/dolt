@@ -362,7 +362,7 @@ func (m MapOfStringToListOfPitch) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToListOfPitch = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Pitch", __mainPackageInFile_types_CachedRef)))
+	__typeRefForMapOfStringToListOfPitch = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToListOfPitch, func(v types.Value) types.NomsValue {
 		return MapOfStringToListOfPitchFromVal(v)
 	})
@@ -492,7 +492,7 @@ func (m ListOfPitch) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfPitch = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Pitch", __mainPackageInFile_types_CachedRef))
+	__typeRefForListOfPitch = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfPitch, func(v types.Value) types.NomsValue {
 		return ListOfPitchFromVal(v)
 	})
@@ -568,96 +568,6 @@ func (l ListOfPitch) Filter(cb ListOfPitchFilterCallback) ListOfPitch {
 		}
 	})
 	return nl
-}
-
-// Pitch
-
-type Pitch struct {
-	m types.Map
-}
-
-func NewPitch() Pitch {
-	return Pitch{types.NewMap(
-		types.NewString("$name"), types.NewString("Pitch"),
-		types.NewString("$type"), types.MakeTypeRef("Pitch", __mainPackageInFile_types_CachedRef),
-		types.NewString("X"), types.Float64(0),
-		types.NewString("Z"), types.Float64(0),
-	)}
-}
-
-type PitchDef struct {
-	X float64
-	Z float64
-}
-
-func (def PitchDef) New() Pitch {
-	return Pitch{
-		types.NewMap(
-			types.NewString("$name"), types.NewString("Pitch"),
-			types.NewString("$type"), types.MakeTypeRef("Pitch", __mainPackageInFile_types_CachedRef),
-			types.NewString("X"), types.Float64(def.X),
-			types.NewString("Z"), types.Float64(def.Z),
-		)}
-}
-
-func (s Pitch) Def() (d PitchDef) {
-	d.X = float64(s.m.Get(types.NewString("X")).(types.Float64))
-	d.Z = float64(s.m.Get(types.NewString("Z")).(types.Float64))
-	return
-}
-
-var __typeRefForPitch = types.MakeTypeRef("Pitch", __mainPackageInFile_types_CachedRef)
-
-func (m Pitch) TypeRef() types.TypeRef {
-	return __typeRefForPitch
-}
-
-func init() {
-	types.RegisterFromValFunction(__typeRefForPitch, func(v types.Value) types.NomsValue {
-		return PitchFromVal(v)
-	})
-}
-
-func PitchFromVal(val types.Value) Pitch {
-	// TODO: Validate here
-	return Pitch{val.(types.Map)}
-}
-
-func (s Pitch) NomsValue() types.Value {
-	return s.m
-}
-
-func (s Pitch) Equals(other types.Value) bool {
-	if other, ok := other.(Pitch); ok {
-		return s.m.Equals(other.m)
-	}
-	return false
-}
-
-func (s Pitch) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s Pitch) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
-	return
-}
-
-func (s Pitch) X() float64 {
-	return float64(s.m.Get(types.NewString("X")).(types.Float64))
-}
-
-func (s Pitch) SetX(val float64) Pitch {
-	return Pitch{s.m.Set(types.NewString("X"), types.Float64(val))}
-}
-
-func (s Pitch) Z() float64 {
-	return float64(s.m.Get(types.NewString("Z")).(types.Float64))
-}
-
-func (s Pitch) SetZ(val float64) Pitch {
-	return Pitch{s.m.Set(types.NewString("Z"), types.Float64(val))}
 }
 
 // MapOfStringToString
@@ -789,4 +699,92 @@ func (m MapOfStringToString) Filter(cb MapOfStringToStringFilterCallback) MapOfS
 		}
 	})
 	return nm
+}
+
+// Pitch
+
+type Pitch struct {
+	m types.Map
+}
+
+func NewPitch() Pitch {
+	return Pitch{types.NewMap(
+		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
+		types.NewString("X"), types.Float64(0),
+		types.NewString("Z"), types.Float64(0),
+	)}
+}
+
+type PitchDef struct {
+	X float64
+	Z float64
+}
+
+func (def PitchDef) New() Pitch {
+	return Pitch{
+		types.NewMap(
+			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
+			types.NewString("X"), types.Float64(def.X),
+			types.NewString("Z"), types.Float64(def.Z),
+		)}
+}
+
+func (s Pitch) Def() (d PitchDef) {
+	d.X = float64(s.m.Get(types.NewString("X")).(types.Float64))
+	d.Z = float64(s.m.Get(types.NewString("Z")).(types.Float64))
+	return
+}
+
+var __typeRefForPitch = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
+
+func (m Pitch) TypeRef() types.TypeRef {
+	return __typeRefForPitch
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForPitch, func(v types.Value) types.NomsValue {
+		return PitchFromVal(v)
+	})
+}
+
+func PitchFromVal(val types.Value) Pitch {
+	// TODO: Validate here
+	return Pitch{val.(types.Map)}
+}
+
+func (s Pitch) NomsValue() types.Value {
+	return s.m
+}
+
+func (s Pitch) Equals(other types.Value) bool {
+	if other, ok := other.(Pitch); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
+}
+
+func (s Pitch) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s Pitch) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
+}
+
+func (s Pitch) X() float64 {
+	return float64(s.m.Get(types.NewString("X")).(types.Float64))
+}
+
+func (s Pitch) SetX(val float64) Pitch {
+	return Pitch{s.m.Set(types.NewString("X"), types.Float64(val))}
+}
+
+func (s Pitch) Z() float64 {
+	return float64(s.m.Get(types.NewString("Z")).(types.Float64))
+}
+
+func (s Pitch) SetZ(val float64) Pitch {
+	return Pitch{s.m.Set(types.NewString("Z"), types.Float64(val))}
 }

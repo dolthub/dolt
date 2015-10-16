@@ -181,8 +181,9 @@ func (suite *ParserTestSuite) TestEnum() {
 	enum := fmt.Sprintf(enumTmpl, name, strings.Join(ids, "\n"))
 
 	pkg := runParser("", strings.NewReader(enum))
-	suite.Equal(name, pkg.GetNamedType(name).Name())
-	suite.EqualValues(ids, pkg.GetNamedType(name).Desc.(types.EnumDesc).IDs)
+	t := pkg.Types[0]
+	suite.Equal(name, t.Name())
+	suite.EqualValues(ids, t.Desc.(types.EnumDesc).IDs)
 }
 
 type ParsedResultTestSuite struct {
@@ -268,8 +269,18 @@ type describable interface {
 	Describe() string
 }
 
+func (suite *ParsedResultTestSuite) findTypeByName(n string, ts []types.TypeRef) types.TypeRef {
+	for _, t := range ts {
+		if n == t.Name() {
+			return t
+		}
+	}
+	suite.Fail("Failed to find type by name")
+	return types.TypeRef{}
+}
+
 func (suite *ParsedResultTestSuite) checkStruct(pkg intermediate, s structTestCase) {
-	typ := pkg.GetNamedType(s.Name)
+	typ := suite.findTypeByName(s.Name, pkg.Types)
 	typFields := typ.Desc.(types.StructDesc).Fields
 	typUnion := typ.Desc.(types.StructDesc).Union
 
@@ -278,23 +289,19 @@ func (suite *ParsedResultTestSuite) checkStruct(pkg intermediate, s structTestCa
 	for i, f := range s.Fields {
 		// Named unions are syntactic sugar for a struct Field that points to an anonymous struct containing an anonymous union.
 		// So, if the field in the test input was a union...
-		if desc, ok := f.D.(types.Choices); ok {
+		if _, ok := f.D.(types.Choices); ok {
 			// ...make sure the names are the same...
 			suite.Equal(f.Name, typFields[i].Name)
 			suite.Equal(f.Optional, typFields[i].Optional)
-			if tfd, ok := typFields[i].T.Desc.(types.StructDesc); ok {
-				// ...and that the IR has a types.TypeRef of StructKind with no fields, but an anonymous union.
-				suite.Len(tfd.Fields, 0)
-				suite.NotNil(tfd.Union)
-				suite.EqualValues(desc, tfd.Union)
-			} else {
-				suite.Fail("Named unions must be parsed as anonymous structs containing an anonymous union.", "%#v", typFields[i])
-			}
+			// and  the TypeRef points to somewhere else.
+			suite.True(typFields[i].T.IsUnresolved())
+			suite.True(typFields[i].T.Ordinal() > 0)
+			suite.Equal(typ.PackageRef(), typFields[i].T.PackageRef())
 		} else {
 			suite.EqualValues(s.Fields[i].toField(), typFields[i])
 		}
 	}
-	if s.Union != nil && suite.NotNil(typUnion) {
+	if s.Union != nil && suite.NotEmpty(typUnion) {
 		suite.Len(typUnion, len(s.Union))
 		for i := range s.Union {
 			suite.EqualValues(s.Union[i], typUnion[i])
@@ -434,4 +441,35 @@ func (suite *ParsedResultTestSuite) TestMultipleStructs() {
 		),
 	}
 	suite.parseAndCheckStructs(defns...)
+}
+
+func (suite *ParsedResultTestSuite) TestExpandStruct() {
+	code := `
+		struct T {
+			x: Int32
+			u: union {
+				s: String
+				b: Bool
+			}
+		}
+		`
+	pkg := runParser("", strings.NewReader(code))
+	suite.Len(pkg.Types, 2)
+
+	{
+		code := `
+			struct T {
+				a: union {
+					b: String
+					c: Bool
+				}
+				d: union {
+					e: String
+					f: Bool
+				}
+			}
+			`
+		pkg := runParser("", strings.NewReader(code))
+		suite.Len(pkg.Types, 3)
+	}
 }

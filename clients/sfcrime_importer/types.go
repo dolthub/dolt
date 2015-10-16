@@ -34,7 +34,7 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 					types.Field{"PdDistrict", types.MakePrimitiveTypeRef(types.StringKind), false},
 					types.Field{"Resolution", types.MakePrimitiveTypeRef(types.StringKind), false},
 					types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Geoposition", types.MakeTypeRef("Geoposition", ref.Ref{}), false},
+					types.Field{"Geoposition", types.MakeTypeRef(ref.Ref{}, 0), false},
 					types.Field{"PdID", types.MakePrimitiveTypeRef(types.StringKind), false},
 				},
 				types.Choices{},
@@ -106,7 +106,7 @@ func (m ListOfIncident) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef))
+	__typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1))
 	types.RegisterFromValFunction(__typeRefForListOfIncident, func(v types.Value) types.NomsValue {
 		return ListOfIncidentFromVal(v)
 	})
@@ -184,6 +184,94 @@ func (l ListOfIncident) Filter(cb ListOfIncidentFilterCallback) ListOfIncident {
 	return nl
 }
 
+// Geoposition
+
+type Geoposition struct {
+	m types.Map
+}
+
+func NewGeoposition() Geoposition {
+	return Geoposition{types.NewMap(
+		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
+		types.NewString("Latitude"), types.Float32(0),
+		types.NewString("Longitude"), types.Float32(0),
+	)}
+}
+
+type GeopositionDef struct {
+	Latitude  float32
+	Longitude float32
+}
+
+func (def GeopositionDef) New() Geoposition {
+	return Geoposition{
+		types.NewMap(
+			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
+			types.NewString("Latitude"), types.Float32(def.Latitude),
+			types.NewString("Longitude"), types.Float32(def.Longitude),
+		)}
+}
+
+func (s Geoposition) Def() (d GeopositionDef) {
+	d.Latitude = float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
+	d.Longitude = float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
+	return
+}
+
+var __typeRefForGeoposition = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
+
+func (m Geoposition) TypeRef() types.TypeRef {
+	return __typeRefForGeoposition
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForGeoposition, func(v types.Value) types.NomsValue {
+		return GeopositionFromVal(v)
+	})
+}
+
+func GeopositionFromVal(val types.Value) Geoposition {
+	// TODO: Validate here
+	return Geoposition{val.(types.Map)}
+}
+
+func (s Geoposition) NomsValue() types.Value {
+	return s.m
+}
+
+func (s Geoposition) Equals(other types.Value) bool {
+	if other, ok := other.(Geoposition); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
+}
+
+func (s Geoposition) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s Geoposition) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
+}
+
+func (s Geoposition) Latitude() float32 {
+	return float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
+}
+
+func (s Geoposition) SetLatitude(val float32) Geoposition {
+	return Geoposition{s.m.Set(types.NewString("Latitude"), types.Float32(val))}
+}
+
+func (s Geoposition) Longitude() float32 {
+	return float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
+}
+
+func (s Geoposition) SetLongitude(val float32) Geoposition {
+	return Geoposition{s.m.Set(types.NewString("Longitude"), types.Float32(val))}
+}
+
 // Incident
 
 type Incident struct {
@@ -192,8 +280,7 @@ type Incident struct {
 
 func NewIncident() Incident {
 	return Incident{types.NewMap(
-		types.NewString("$name"), types.NewString("Incident"),
-		types.NewString("$type"), types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
 		types.NewString("ID"), types.Int64(0),
 		types.NewString("Category"), types.NewString(""),
 		types.NewString("Description"), types.NewString(""),
@@ -225,8 +312,7 @@ type IncidentDef struct {
 func (def IncidentDef) New() Incident {
 	return Incident{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("Incident"),
-			types.NewString("$type"), types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
 			types.NewString("ID"), types.Int64(def.ID),
 			types.NewString("Category"), types.NewString(def.Category),
 			types.NewString("Description"), types.NewString(def.Description),
@@ -256,7 +342,7 @@ func (s Incident) Def() (d IncidentDef) {
 	return
 }
 
-var __typeRefForIncident = types.MakeTypeRef("Incident", __mainPackageInFile_types_CachedRef)
+var __typeRefForIncident = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1)
 
 func (m Incident) TypeRef() types.TypeRef {
 	return __typeRefForIncident
@@ -380,94 +466,4 @@ func (s Incident) PdID() string {
 
 func (s Incident) SetPdID(val string) Incident {
 	return Incident{s.m.Set(types.NewString("PdID"), types.NewString(val))}
-}
-
-// Geoposition
-
-type Geoposition struct {
-	m types.Map
-}
-
-func NewGeoposition() Geoposition {
-	return Geoposition{types.NewMap(
-		types.NewString("$name"), types.NewString("Geoposition"),
-		types.NewString("$type"), types.MakeTypeRef("Geoposition", __mainPackageInFile_types_CachedRef),
-		types.NewString("Latitude"), types.Float32(0),
-		types.NewString("Longitude"), types.Float32(0),
-	)}
-}
-
-type GeopositionDef struct {
-	Latitude  float32
-	Longitude float32
-}
-
-func (def GeopositionDef) New() Geoposition {
-	return Geoposition{
-		types.NewMap(
-			types.NewString("$name"), types.NewString("Geoposition"),
-			types.NewString("$type"), types.MakeTypeRef("Geoposition", __mainPackageInFile_types_CachedRef),
-			types.NewString("Latitude"), types.Float32(def.Latitude),
-			types.NewString("Longitude"), types.Float32(def.Longitude),
-		)}
-}
-
-func (s Geoposition) Def() (d GeopositionDef) {
-	d.Latitude = float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
-	d.Longitude = float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
-	return
-}
-
-var __typeRefForGeoposition = types.MakeTypeRef("Geoposition", __mainPackageInFile_types_CachedRef)
-
-func (m Geoposition) TypeRef() types.TypeRef {
-	return __typeRefForGeoposition
-}
-
-func init() {
-	types.RegisterFromValFunction(__typeRefForGeoposition, func(v types.Value) types.NomsValue {
-		return GeopositionFromVal(v)
-	})
-}
-
-func GeopositionFromVal(val types.Value) Geoposition {
-	// TODO: Validate here
-	return Geoposition{val.(types.Map)}
-}
-
-func (s Geoposition) NomsValue() types.Value {
-	return s.m
-}
-
-func (s Geoposition) Equals(other types.Value) bool {
-	if other, ok := other.(Geoposition); ok {
-		return s.m.Equals(other.m)
-	}
-	return false
-}
-
-func (s Geoposition) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s Geoposition) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
-	return
-}
-
-func (s Geoposition) Latitude() float32 {
-	return float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
-}
-
-func (s Geoposition) SetLatitude(val float32) Geoposition {
-	return Geoposition{s.m.Set(types.NewString("Latitude"), types.Float32(val))}
-}
-
-func (s Geoposition) Longitude() float32 {
-	return float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
-}
-
-func (s Geoposition) SetLongitude(val float32) Geoposition {
-	return Geoposition{s.m.Set(types.NewString("Longitude"), types.Float32(val))}
 }

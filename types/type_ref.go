@@ -6,7 +6,7 @@ import (
 )
 
 // TypeRef structs define and describe Noms types, both custom and built-in.
-// pkgRef is optional. If set, then pkgRef + name address a type defined in another package.
+// pkgRef is optional. If set, then pkgRef + ordinal address a type defined in another package.
 // name is required for StructKind and EnumKind types, and may be allowed for others if we do type aliases. Named types are 'exported' in that they can be addressed from other type packages.
 // Desc describes the referenced type. It may contain only a types.NomsKind, in the case of primitives, or it may contain additional information -- e.g. element TypeRefs for compound type specializations, field descriptions for structs, etc. Either way, checking Desc.Kind() allows code to understand how to interpret the rest of the data.
 // If Kind() refers to a primitive, then Desc is empty.
@@ -15,6 +15,7 @@ import (
 // If Kind() refers to Struct, then Desc is {"fields": [name, type, ...], "choices": [name, type, ...]}.
 // If Kind() refers to Enum, then Desc is a List(String) describing the enumerated values.
 type TypeRef struct {
+	// TODO: pkgRef only makes sense on UnresolvedDesc
 	pkgRef *Ref
 	name   name
 	Desc   TypeDesc
@@ -37,14 +38,14 @@ func (n name) compose() (out string) {
 	return
 }
 
-// IsUnresolved returns true if t doesn't contain description information. The caller should look the type up by Name in the NamedTypes of the appropriate Package.
+// IsUnresolved returns true if t doesn't contain description information. The caller should look the type up by Ordinal in the Types of the appropriate Package.
 func (t TypeRef) IsUnresolved() bool {
 	_, ok := t.Desc.(UnresolvedDesc)
 	return ok
 }
 
 func (t TypeRef) HasPackageRef() bool {
-	return t.pkgRef != nil
+	return t.pkgRef != nil && t.pkgRef.Ref() != ref.Ref{}
 }
 
 // Describe() methods generate text that should parse into the struct being described.
@@ -70,6 +71,15 @@ func (t TypeRef) PackageRef() ref.Ref {
 	return t.pkgRef.R
 }
 
+func (t TypeRef) Ordinal() int16 {
+	d.Chk.True(t.HasOrdinal(), "Ordinal has not been set")
+	return t.Desc.(UnresolvedDesc).ordinal
+}
+
+func (t TypeRef) HasOrdinal() bool {
+	return t.IsUnresolved() && t.Desc.(UnresolvedDesc).ordinal >= 0
+}
+
 func (t TypeRef) Name() string {
 	return t.name.name
 }
@@ -80,10 +90,6 @@ func (t TypeRef) NamespacedName() string {
 
 func (t TypeRef) Namespace() string {
 	return t.name.namespace
-}
-
-func (t TypeRef) MakeImported(pkg ref.Ref) TypeRef {
-	return TypeRef{name: name{name: t.Name()}, pkgRef: &Ref{R: pkg}, Desc: t.Desc, ref: &ref.Ref{}}
 }
 
 func (t TypeRef) Ref() ref.Ref {
@@ -140,12 +146,13 @@ func MakeStructTypeRef(name string, fields []Field, choices Choices) TypeRef {
 	return buildType(name, StructDesc{fields, choices})
 }
 
-func MakeTypeRef(n string, pkg ref.Ref) TypeRef {
-	return TypeRef{name: name{name: n}, pkgRef: &Ref{R: pkg}, Desc: UnresolvedDesc{}, ref: &ref.Ref{}}
+func MakeTypeRef(pkgRef ref.Ref, ordinal int16) TypeRef {
+	d.Chk.True(ordinal >= 0)
+	return TypeRef{pkgRef: &Ref{R: pkgRef}, Desc: UnresolvedDesc{ordinal}, ref: &ref.Ref{}}
 }
 
 func MakeExternalTypeRef(namespace, n string) TypeRef {
-	return TypeRef{name: name{namespace, n}, Desc: UnresolvedDesc{}, ref: &ref.Ref{}}
+	return TypeRef{name: name{namespace, n}, Desc: UnresolvedDesc{-1}, ref: &ref.Ref{}}
 }
 
 func buildType(n string, desc TypeDesc) TypeRef {

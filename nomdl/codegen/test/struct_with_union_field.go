@@ -41,8 +41,7 @@ type StructWithUnionField struct {
 
 func NewStructWithUnionField() StructWithUnionField {
 	return StructWithUnionField{types.NewMap(
-		types.NewString("$name"), types.NewString("StructWithUnionField"),
-		types.NewString("$type"), types.MakeTypeRef("StructWithUnionField", __testPackageInFile_struct_with_union_field_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_union_field_CachedRef, 0),
 		types.NewString("a"), types.Float32(0),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
@@ -58,8 +57,7 @@ type StructWithUnionFieldDef struct {
 func (def StructWithUnionFieldDef) New() StructWithUnionField {
 	return StructWithUnionField{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("StructWithUnionField"),
-			types.NewString("$type"), types.MakeTypeRef("StructWithUnionField", __testPackageInFile_struct_with_union_field_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_union_field_CachedRef, 0),
 			types.NewString("a"), types.Float32(def.A),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
@@ -105,7 +103,7 @@ func (s StructWithUnionField) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
-var __typeRefForStructWithUnionField = types.MakeTypeRef("StructWithUnionField", __testPackageInFile_struct_with_union_field_CachedRef)
+var __typeRefForStructWithUnionField = types.MakeTypeRef(__testPackageInFile_struct_with_union_field_CachedRef, 0)
 
 func (m StructWithUnionField) TypeRef() types.TypeRef {
 	return __typeRefForStructWithUnionField

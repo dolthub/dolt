@@ -90,6 +90,11 @@ func TestJsonEncode(t *testing.T) {
 `
 	testEncode(expected, TypeRef{ref.Ref{}, "enum", 18, []interface{}{"f", "g"}})
 
+	pkgRef := ref1
+	expected = fmt.Sprintf(`j {"type":{"desc":{"int16":42},"kind":{"uint8":20},"name":"","pkgRef":{"ref":"%s"}}}
+`, pkgRef)
+	testEncode(expected, TypeRef{Kind: 20, Name: "", PkgRef: pkgRef, Desc: int16(42)})
+
 	// Blob (compound)
 	testEncode(fmt.Sprintf(`j {"cb":["%s",2]}
 `, ref2), CompoundBlob{[]uint64{2}, []ref.Ref{ref2}})

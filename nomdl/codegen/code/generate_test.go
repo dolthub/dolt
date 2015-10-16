@@ -19,10 +19,13 @@ func (res *testResolver) Resolve(t types.TypeRef) types.TypeRef {
 		return t
 	}
 
+	if !t.HasPackageRef() {
+		res.assert.Fail("Test does not handle local references")
+	}
+
 	dep, ok := res.deps[t.PackageRef()]
 	res.assert.True(ok, "Package %s is referenced in %+v, but is not a dependency.", t.PackageRef().String(), t)
-	res.assert.True(dep.HasNamedType(t.Name()), "Cannot import type %s from package %s.", t.Name(), t.PackageRef().String())
-	return dep.GetNamedType(t.Name()).MakeImported(t.PackageRef())
+	return dep.Types().Get(uint64(t.Ordinal()))
 }
 
 func TestUserName(t *testing.T) {
@@ -46,6 +49,6 @@ func TestUserName(t *testing.T) {
 	g := Generator{&res}
 	assert.Equal(localStructName, g.UserName(resolved))
 
-	listOfImported := types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("S1", imported.Ref()))
-	assert.Equal(fmt.Sprintf("ListOf%s_%s", ToTag(imported.Ref().String()), "S1"), g.UserName(listOfImported))
+	listOfImported := types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(imported.Ref(), 1))
+	assert.Equal(fmt.Sprintf("ListOf%s_%s", ToTag(imported.Ref()), "S1"), g.UserName(listOfImported))
 }

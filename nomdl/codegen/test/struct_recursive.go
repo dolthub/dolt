@@ -18,7 +18,7 @@ func __testPackageInFile_struct_recursive_Ref() ref.Ref {
 
 			types.MakeStructTypeRef("Tree",
 				[]types.Field{
-					types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", ref.Ref{})), false},
+					types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
 				},
 				types.Choices{},
 			),
@@ -35,8 +35,7 @@ type Tree struct {
 
 func NewTree() Tree {
 	return Tree{types.NewMap(
-		types.NewString("$name"), types.NewString("Tree"),
-		types.NewString("$type"), types.MakeTypeRef("Tree", __testPackageInFile_struct_recursive_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_recursive_CachedRef, 0),
 		types.NewString("children"), types.NewList(),
 	)}
 }
@@ -48,8 +47,7 @@ type TreeDef struct {
 func (def TreeDef) New() Tree {
 	return Tree{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("Tree"),
-			types.NewString("$type"), types.MakeTypeRef("Tree", __testPackageInFile_struct_recursive_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_recursive_CachedRef, 0),
 			types.NewString("children"), def.Children.New().NomsValue(),
 		)}
 }
@@ -59,7 +57,7 @@ func (s Tree) Def() (d TreeDef) {
 	return
 }
 
-var __typeRefForTree = types.MakeTypeRef("Tree", __testPackageInFile_struct_recursive_CachedRef)
+var __typeRefForTree = types.MakeTypeRef(__testPackageInFile_struct_recursive_CachedRef, 0)
 
 func (m Tree) TypeRef() types.TypeRef {
 	return __typeRefForTree
@@ -167,7 +165,7 @@ func (m ListOfTree) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfTree = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Tree", __testPackageInFile_struct_recursive_CachedRef))
+	__typeRefForListOfTree = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__testPackageInFile_struct_recursive_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfTree, func(v types.Value) types.NomsValue {
 		return ListOfTreeFromVal(v)
 	})

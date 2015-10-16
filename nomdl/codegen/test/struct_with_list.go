@@ -38,8 +38,7 @@ type StructWithList struct {
 
 func NewStructWithList() StructWithList {
 	return StructWithList{types.NewMap(
-		types.NewString("$name"), types.NewString("StructWithList"),
-		types.NewString("$type"), types.MakeTypeRef("StructWithList", __testPackageInFile_struct_with_list_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_list_CachedRef, 0),
 		types.NewString("l"), types.NewList(),
 		types.NewString("b"), types.Bool(false),
 		types.NewString("s"), types.NewString(""),
@@ -57,8 +56,7 @@ type StructWithListDef struct {
 func (def StructWithListDef) New() StructWithList {
 	return StructWithList{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("StructWithList"),
-			types.NewString("$type"), types.MakeTypeRef("StructWithList", __testPackageInFile_struct_with_list_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_list_CachedRef, 0),
 			types.NewString("l"), def.L.New().NomsValue(),
 			types.NewString("b"), types.Bool(def.B),
 			types.NewString("s"), types.NewString(def.S),
@@ -74,7 +72,7 @@ func (s StructWithList) Def() (d StructWithListDef) {
 	return
 }
 
-var __typeRefForStructWithList = types.MakeTypeRef("StructWithList", __testPackageInFile_struct_with_list_CachedRef)
+var __typeRefForStructWithList = types.MakeTypeRef(__testPackageInFile_struct_with_list_CachedRef, 0)
 
 func (m StructWithList) TypeRef() types.TypeRef {
 	return __typeRefForStructWithList

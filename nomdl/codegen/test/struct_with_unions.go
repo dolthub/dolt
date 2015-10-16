@@ -18,22 +18,24 @@ func __testPackageInFile_struct_with_unions_Ref() ref.Ref {
 
 			types.MakeStructTypeRef("StructWithUnions",
 				[]types.Field{
-					types.Field{"a", types.MakeStructTypeRef("",
-						[]types.Field{},
-						types.Choices{
-							types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-							types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
-						},
-					), false},
-					types.Field{"d", types.MakeStructTypeRef("",
-						[]types.Field{},
-						types.Choices{
-							types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-							types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
-						},
-					), false},
+					types.Field{"a", types.MakeTypeRef(ref.Ref{}, 1), false},
+					types.Field{"d", types.MakeTypeRef(ref.Ref{}, 2), false},
 				},
 				types.Choices{},
+			),
+			types.MakeStructTypeRef("",
+				[]types.Field{},
+				types.Choices{
+					types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+					types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
+				},
+			),
+			types.MakeStructTypeRef("",
+				[]types.Field{},
+				types.Choices{
+					types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+					types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
+				},
 			),
 		},
 	}.New()
@@ -48,8 +50,7 @@ type StructWithUnions struct {
 
 func NewStructWithUnions() StructWithUnions {
 	return StructWithUnions{types.NewMap(
-		types.NewString("$name"), types.NewString("StructWithUnions"),
-		types.NewString("$type"), types.MakeTypeRef("StructWithUnions", __testPackageInFile_struct_with_unions_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 0),
 		types.NewString("a"), New__unionOfBOfFloat64AndCOfString().NomsValue(),
 		types.NewString("d"), New__unionOfEOfFloat64AndFOfString().NomsValue(),
 	)}
@@ -63,8 +64,7 @@ type StructWithUnionsDef struct {
 func (def StructWithUnionsDef) New() StructWithUnions {
 	return StructWithUnions{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("StructWithUnions"),
-			types.NewString("$type"), types.MakeTypeRef("StructWithUnions", __testPackageInFile_struct_with_unions_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 0),
 			types.NewString("a"), def.A.New().NomsValue(),
 			types.NewString("d"), def.D.New().NomsValue(),
 		)}
@@ -76,7 +76,7 @@ func (s StructWithUnions) Def() (d StructWithUnionsDef) {
 	return
 }
 
-var __typeRefForStructWithUnions = types.MakeTypeRef("StructWithUnions", __testPackageInFile_struct_with_unions_CachedRef)
+var __typeRefForStructWithUnions = types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 0)
 
 func (m StructWithUnions) TypeRef() types.TypeRef {
 	return __typeRefForStructWithUnions
@@ -138,8 +138,7 @@ type __unionOfBOfFloat64AndCOfString struct {
 
 func New__unionOfBOfFloat64AndCOfString() __unionOfBOfFloat64AndCOfString {
 	return __unionOfBOfFloat64AndCOfString{types.NewMap(
-		types.NewString("$name"), types.NewString("__unionOfBOfFloat64AndCOfString"),
-		types.NewString("$type"), types.MakeTypeRef("__unionOfBOfFloat64AndCOfString", __testPackageInFile_struct_with_unions_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 1),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	)}
@@ -153,8 +152,7 @@ type __unionOfBOfFloat64AndCOfStringDef struct {
 func (def __unionOfBOfFloat64AndCOfStringDef) New() __unionOfBOfFloat64AndCOfString {
 	return __unionOfBOfFloat64AndCOfString{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("__unionOfBOfFloat64AndCOfString"),
-			types.NewString("$type"), types.MakeTypeRef("__unionOfBOfFloat64AndCOfString", __testPackageInFile_struct_with_unions_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 1),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
 		)}
@@ -186,7 +184,7 @@ func (s __unionOfBOfFloat64AndCOfString) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
-var __typeRefFor__unionOfBOfFloat64AndCOfString = types.MakeTypeRef("__unionOfBOfFloat64AndCOfString", __testPackageInFile_struct_with_unions_CachedRef)
+var __typeRefFor__unionOfBOfFloat64AndCOfString = types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 1)
 
 func (m __unionOfBOfFloat64AndCOfString) TypeRef() types.TypeRef {
 	return __typeRefFor__unionOfBOfFloat64AndCOfString
@@ -280,8 +278,7 @@ type __unionOfEOfFloat64AndFOfString struct {
 
 func New__unionOfEOfFloat64AndFOfString() __unionOfEOfFloat64AndFOfString {
 	return __unionOfEOfFloat64AndFOfString{types.NewMap(
-		types.NewString("$name"), types.NewString("__unionOfEOfFloat64AndFOfString"),
-		types.NewString("$type"), types.MakeTypeRef("__unionOfEOfFloat64AndFOfString", __testPackageInFile_struct_with_unions_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 2),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	)}
@@ -295,8 +292,7 @@ type __unionOfEOfFloat64AndFOfStringDef struct {
 func (def __unionOfEOfFloat64AndFOfStringDef) New() __unionOfEOfFloat64AndFOfString {
 	return __unionOfEOfFloat64AndFOfString{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("__unionOfEOfFloat64AndFOfString"),
-			types.NewString("$type"), types.MakeTypeRef("__unionOfEOfFloat64AndFOfString", __testPackageInFile_struct_with_unions_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 2),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
 		)}
@@ -328,7 +324,7 @@ func (s __unionOfEOfFloat64AndFOfString) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
-var __typeRefFor__unionOfEOfFloat64AndFOfString = types.MakeTypeRef("__unionOfEOfFloat64AndFOfString", __testPackageInFile_struct_with_unions_CachedRef)
+var __typeRefFor__unionOfEOfFloat64AndFOfString = types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 2)
 
 func (m __unionOfEOfFloat64AndFOfString) TypeRef() types.TypeRef {
 	return __typeRefFor__unionOfEOfFloat64AndFOfString

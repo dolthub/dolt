@@ -90,7 +90,7 @@ func (m ListOfStruct) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfStruct = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef("Struct", __testPackageInFile_struct_CachedRef))
+	__typeRefForListOfStruct = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfStruct, func(v types.Value) types.NomsValue {
 		return ListOfStructFromVal(v)
 	})
@@ -176,8 +176,7 @@ type Struct struct {
 
 func NewStruct() Struct {
 	return Struct{types.NewMap(
-		types.NewString("$name"), types.NewString("Struct"),
-		types.NewString("$type"), types.MakeTypeRef("Struct", __testPackageInFile_struct_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0),
 		types.NewString("s"), types.NewString(""),
 		types.NewString("b"), types.Bool(false),
 	)}
@@ -191,8 +190,7 @@ type StructDef struct {
 func (def StructDef) New() Struct {
 	return Struct{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("Struct"),
-			types.NewString("$type"), types.MakeTypeRef("Struct", __testPackageInFile_struct_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0),
 			types.NewString("s"), types.NewString(def.S),
 			types.NewString("b"), types.Bool(def.B),
 		)}
@@ -204,7 +202,7 @@ func (s Struct) Def() (d StructDef) {
 	return
 }
 
-var __typeRefForStruct = types.MakeTypeRef("Struct", __testPackageInFile_struct_CachedRef)
+var __typeRefForStruct = types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0)
 
 func (m Struct) TypeRef() types.TypeRef {
 	return __typeRefForStruct

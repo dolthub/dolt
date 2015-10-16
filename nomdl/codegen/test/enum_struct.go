@@ -19,7 +19,7 @@ func __testPackageInFile_enum_struct_Ref() ref.Ref {
 			types.MakeEnumTypeRef("Handedness", "right", "left", "switch"),
 			types.MakeStructTypeRef("EnumStruct",
 				[]types.Field{
-					types.Field{"hand", types.MakeTypeRef("Handedness", ref.Ref{}), false},
+					types.Field{"hand", types.MakeTypeRef(ref.Ref{}, 0), false},
 				},
 				types.Choices{},
 			),
@@ -46,8 +46,7 @@ type EnumStruct struct {
 
 func NewEnumStruct() EnumStruct {
 	return EnumStruct{types.NewMap(
-		types.NewString("$name"), types.NewString("EnumStruct"),
-		types.NewString("$type"), types.MakeTypeRef("EnumStruct", __testPackageInFile_enum_struct_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_enum_struct_CachedRef, 1),
 		types.NewString("hand"), types.UInt32(0),
 	)}
 }
@@ -59,8 +58,7 @@ type EnumStructDef struct {
 func (def EnumStructDef) New() EnumStruct {
 	return EnumStruct{
 		types.NewMap(
-			types.NewString("$name"), types.NewString("EnumStruct"),
-			types.NewString("$type"), types.MakeTypeRef("EnumStruct", __testPackageInFile_enum_struct_CachedRef),
+			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_enum_struct_CachedRef, 1),
 			types.NewString("hand"), types.UInt32(def.Hand),
 		)}
 }
@@ -70,7 +68,7 @@ func (s EnumStruct) Def() (d EnumStructDef) {
 	return
 }
 
-var __typeRefForEnumStruct = types.MakeTypeRef("EnumStruct", __testPackageInFile_enum_struct_CachedRef)
+var __typeRefForEnumStruct = types.MakeTypeRef(__testPackageInFile_enum_struct_CachedRef, 1)
 
 func (m EnumStruct) TypeRef() types.TypeRef {
 	return __typeRefForEnumStruct

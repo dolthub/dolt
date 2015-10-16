@@ -19,7 +19,7 @@ func __datasPackageInFile_types_Ref() ref.Ref {
 			types.MakeStructTypeRef("Commit",
 				[]types.Field{
 					types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
-					types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", ref.Ref{})), false},
+					types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
 				},
 				types.Choices{},
 			),
@@ -72,7 +72,7 @@ func (m MapOfStringToCommit) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToCommit = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef("Commit", __datasPackageInFile_types_CachedRef))
+	__typeRefForMapOfStringToCommit = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToCommit, func(v types.Value) types.NomsValue {
 		return MapOfStringToCommitFromVal(v)
 	})
@@ -148,14 +148,13 @@ type Commit struct {
 
 func NewCommit() Commit {
 	return Commit{types.NewMap(
-		types.NewString("$name"), types.NewString("Commit"),
-		types.NewString("$type"), types.MakeTypeRef("Commit", __datasPackageInFile_types_CachedRef),
+		types.NewString("$type"), types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0),
 		types.NewString("value"), types.Bool(false),
 		types.NewString("parents"), types.NewSet(),
 	)}
 }
 
-var __typeRefForCommit = types.MakeTypeRef("Commit", __datasPackageInFile_types_CachedRef)
+var __typeRefForCommit = types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)
 
 func (m Commit) TypeRef() types.TypeRef {
 	return __typeRefForCommit
@@ -252,7 +251,7 @@ func (m SetOfCommit) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForSetOfCommit = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef("Commit", __datasPackageInFile_types_CachedRef))
+	__typeRefForSetOfCommit = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForSetOfCommit, func(v types.Value) types.NomsValue {
 		return SetOfCommitFromVal(v)
 	})

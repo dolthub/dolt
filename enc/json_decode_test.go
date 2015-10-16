@@ -86,6 +86,10 @@ func TestJSONDecode(t *testing.T) {
 	testDecode(`j {"type":{"desc":{"list":["f","g"]},"kind":{"uint8":18},"name":"enum"}}
 `, TypeRef{ref.Ref{}, "enum", 18, []interface{}{"f", "g"}})
 
+	pkgRef := ref1
+	testDecode(fmt.Sprintf(`j {"type":{"name":"","kind":{"uint8":20},"pkgRef":{"ref":"%s"},"desc":{"int16":42}}}
+`, pkgRef), TypeRef{Kind: 20, Name: "", PkgRef: pkgRef, Desc: int16(42)})
+
 	// Blob (compound)
 	// echo -n 'b Hello' | sha1sum
 	blr := ref.Parse("sha1-c35018551e725bd2ab45166b69d15fda00b161c1")

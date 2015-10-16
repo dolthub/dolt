@@ -12,8 +12,8 @@ func TestType(t *testing.T) {
 
 	st := NewPackage()
 	typ := st.TypeRef()
-	name := "Package"
-	assert.EqualValues(name, typ.Name())
+	ordinal := int16(0)
+	assert.Equal(ordinal, typ.Ordinal())
 	assert.Equal(TypeRefKind, typ.Kind())
 	assert.Equal(__typesPackageInFile_package_CachedRef, typ.PackageRef())
 
@@ -38,7 +38,7 @@ func TestType(t *testing.T) {
 	if assert.Equal(SetKind, tr.Kind()) {
 		elemType := tr.Desc.ToValue().(TypeRef)
 		if assert.Equal(RefKind, elemType.Kind()) {
-			assert.EqualValues(name, elemType.Desc.ToValue().(TypeRef).Name())
+			assert.Equal(ordinal, elemType.Desc.ToValue().(TypeRef).Ordinal())
 		}
 	}
 	tr = find("Types")

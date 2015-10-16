@@ -192,7 +192,7 @@ func TestImportedTypes(t *testing.T) {
 	pkgDS = generate("name", inFile, outFile, depsDir, pkgDS)
 
 	// Check that dependency code was generated.
-	expectedDepPkgAbs := filepath.Join(depsDir, code.ToTag(importedRef.String()))
+	expectedDepPkgAbs := filepath.Join(depsDir, code.ToTag(importedRef))
 	_, err = os.Stat(expectedDepPkgAbs)
 	assert.NoError(err)
 
@@ -237,9 +237,9 @@ func TestGenerateDeps(t *testing.T) {
 
 	generateDepCode(dir, top, cs)
 
-	leaf1Path := filepath.Join(dir, code.ToTag(leaf1.Ref().String()), code.ToTag(leaf1.Ref().String())+".go")
-	leaf2Path := filepath.Join(dir, code.ToTag(leaf2.Ref().String()), code.ToTag(leaf2.Ref().String())+".go")
-	leaf3Path := filepath.Join(dir, code.ToTag(depender.Ref().String()), code.ToTag(depender.Ref().String())+".go")
+	leaf1Path := filepath.Join(dir, code.ToTag(leaf1.Ref()), code.ToTag(leaf1.Ref())+".go")
+	leaf2Path := filepath.Join(dir, code.ToTag(leaf2.Ref()), code.ToTag(leaf2.Ref())+".go")
+	leaf3Path := filepath.Join(dir, code.ToTag(depender.Ref()), code.ToTag(depender.Ref())+".go")
 	_, err = os.Stat(leaf1Path)
 	assert.NoError(err)
 	_, err = os.Stat(leaf2Path)
@@ -263,6 +263,6 @@ func TestCommitNewPackages(t *testing.T) {
 	pkgDS = generate("name", inFile, filepath.Join(dir, "out.go"), dir, pkgDS)
 	s := types.SetOfRefOfPackageFromVal(pkgDS.Head().Value())
 	assert.EqualValues(1, s.Len())
-	tr := s.Any().GetValue(ds).GetNamedType("Simple")
+	tr := s.Any().GetValue(ds).Types().Get(0)
 	assert.EqualValues(types.StructKind, tr.Kind())
 }

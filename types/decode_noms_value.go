@@ -91,9 +91,8 @@ func (r *jsonArrayReader) readTypeRefAsTag() TypeRef {
 		}
 
 		pkgRef := r.readRef()
-		// TODO: Should be the ordinal
-		name := r.readString()
-		return MakeTypeRef(name, pkgRef)
+		ordinal := int16(r.read().(float64))
+		return MakeTypeRef(pkgRef, ordinal)
 	}
 
 	if IsPrimitiveKind(kind) {
@@ -219,13 +218,13 @@ func (r *jsonArrayReader) readTypeRefKindToValue(t TypeRef, pkg *Package) NomsVa
 	}
 
 	pkgRef := t.PackageRef()
-	name := t.Name()
+	ordinal := t.Ordinal()
 	pkg2 := LookupPackage(pkgRef)
 	if pkg2 != nil {
 		pkg = pkg2
 	}
 
-	typeDef := pkg.GetNamedType(name)
+	typeDef := pkg.Types().Get(uint64(ordinal))
 
 	if typeDef.Kind() == EnumKind {
 		return r.readEnum(t)
@@ -278,8 +277,8 @@ func (r *jsonArrayReader) readTypeRefAsValue(pkg *Package) TypeRef {
 
 	case TypeRefKind:
 		pkgRef := r.readRef()
-		name := r.readString()
-		return MakeTypeRef(name, pkgRef)
+		ordinal := int16(r.read().(float64))
+		return MakeTypeRef(pkgRef, ordinal)
 	}
 
 	d.Chk.True(IsPrimitiveKind(k))
@@ -308,10 +307,10 @@ func fixupTypeRef(tr TypeRef, pkg *Package) TypeRef {
 		}
 		return MakeStructTypeRef(tr.Name(), fields, choices)
 	case UnresolvedDesc:
-		if tr.PackageRef() != (ref.Ref{}) {
+		if tr.HasPackageRef() {
 			return tr
 		}
-		return MakeTypeRef(tr.Name(), pkg.Ref())
+		return MakeTypeRef(pkg.Ref(), tr.Ordinal())
 	}
 	if tr.Kind() == TypeRefKind {
 	}
@@ -325,7 +324,6 @@ func (r *jsonArrayReader) readStruct(typeDef, typeRef TypeRef, pkg *Package) Nom
 	// We've read `[StructKind, sha1, name` at this point
 	desc := typeDef.Desc.(StructDesc)
 	m := NewMap(
-		NewString("$name"), NewString(typeRef.Name()),
 		NewString("$type"), typeRef)
 
 	for _, f := range desc.Fields {

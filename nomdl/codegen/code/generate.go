@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -28,8 +29,8 @@ type Generator struct {
 
 // DefType returns a string containing the Go type that should be used as the 'Def' for the Noms type described by t.
 func (gen Generator) DefType(t types.TypeRef) string {
-	t = gen.R.Resolve(t)
-	k := t.Desc.Kind()
+	rt := gen.R.Resolve(t)
+	k := rt.Kind()
 	switch k {
 	case types.BlobKind:
 		return "types.Blob"
@@ -51,8 +52,8 @@ func (gen Generator) DefType(t types.TypeRef) string {
 
 // UserType returns a string containing the Go type that should be used when the Noms type described by t needs to be returned by a generated getter or taken as a parameter to a generated setter.
 func (gen Generator) UserType(t types.TypeRef) string {
-	t = gen.R.Resolve(t)
-	k := t.Desc.Kind()
+	rt := gen.R.Resolve(t)
+	k := rt.Kind()
 	switch k {
 	case types.BlobKind:
 		return "types.Blob"
@@ -71,7 +72,7 @@ func (gen Generator) UserType(t types.TypeRef) string {
 // DefToValue returns a string containing Go code to convert an instance of a Def type (named val) to a Noms types.Value of the type described by t.
 func (gen Generator) DefToValue(val string, t types.TypeRef) string {
 	t = gen.R.Resolve(t)
-	switch t.Desc.Kind() {
+	switch t.Kind() {
 	case types.BlobKind, types.ValueKind, types.TypeRefKind:
 		return val // Blob & Value type has no Def
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
@@ -88,12 +89,12 @@ func (gen Generator) DefToValue(val string, t types.TypeRef) string {
 
 // ValueToDef returns a string containing Go code to convert an instance of a types.Value (val) into the Def type appropriate for t.
 func (gen Generator) ValueToDef(val string, t types.TypeRef) string {
-	t = gen.R.Resolve(t)
-	switch t.Desc.Kind() {
+	rt := gen.R.Resolve(t)
+	switch rt.Kind() {
 	case types.BlobKind:
-		return gen.ValueToUser(val, t)
+		return gen.ValueToUser(val, rt)
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
-		return gen.ValueToNative(val, t)
+		return gen.ValueToNative(val, rt)
 	case types.EnumKind:
 		return fmt.Sprintf("%s(%s.(types.UInt32))", gen.UserName(t), val)
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
@@ -103,7 +104,7 @@ func (gen Generator) ValueToDef(val string, t types.TypeRef) string {
 	case types.ValueKind:
 		return val // Value type has no Def
 	case types.TypeRefKind:
-		return gen.ValueToUser(val, t)
+		return gen.ValueToUser(val, rt)
 	}
 	panic("unreachable")
 }
@@ -111,7 +112,7 @@ func (gen Generator) ValueToDef(val string, t types.TypeRef) string {
 // NativeToValue returns a string containing Go code to convert an instance of a native type (named val) to a Noms types.Value of the type described by t.
 func (gen Generator) NativeToValue(val string, t types.TypeRef) string {
 	t = gen.R.Resolve(t)
-	k := t.Desc.Kind()
+	k := t.Kind()
 	switch k {
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return fmt.Sprintf("types.%s(%s)", kindToString(k), val)
@@ -125,10 +126,8 @@ func (gen Generator) NativeToValue(val string, t types.TypeRef) string {
 
 // ValueToNative returns a string containing Go code to convert an instance of a types.Value (val) into the native type appropriate for t.
 func (gen Generator) ValueToNative(val string, t types.TypeRef) string {
-	k := t.Desc.Kind()
+	k := t.Kind()
 	switch k {
-	case types.EnumKind:
-		return fmt.Sprintf("%s(%s.(types.UInt32))", gen.UserType(t), val)
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		n := kindToString(k)
 		return fmt.Sprintf("%s(%s.(types.%s))", strings.ToLower(n), val, n)
@@ -141,7 +140,7 @@ func (gen Generator) ValueToNative(val string, t types.TypeRef) string {
 // UserToValue returns a string containing Go code to convert an instance of a User type (named val) to a Noms types.Value of the type described by t. For Go primitive types, this will use NativeToValue(). For other types, their UserType is a Noms types.Value (or a wrapper around one), so this is more-or-less a pass-through.
 func (gen Generator) UserToValue(val string, t types.TypeRef) string {
 	t = gen.R.Resolve(t)
-	k := t.Desc.Kind()
+	k := t.Kind()
 	switch k {
 	case types.BlobKind, types.ValueKind, types.TypeRefKind:
 		return val
@@ -155,13 +154,15 @@ func (gen Generator) UserToValue(val string, t types.TypeRef) string {
 
 // ValueToUser returns a string containing Go code to convert an instance of a types.Value (val) into the User type appropriate for t. For Go primitives, this will use ValueToNative().
 func (gen Generator) ValueToUser(val string, t types.TypeRef) string {
-	t = gen.R.Resolve(t)
-	k := t.Desc.Kind()
+	rt := gen.R.Resolve(t)
+	k := rt.Kind()
 	switch k {
 	case types.BlobKind:
 		return fmt.Sprintf("%s.(types.Blob)", val)
-	case types.BoolKind, types.EnumKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
-		return gen.ValueToNative(val, t)
+	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+		return gen.ValueToNative(val, rt)
+	case types.EnumKind:
+		return fmt.Sprintf("%s(%s.(types.UInt32))", gen.UserName(t), val)
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%sFromVal(%s)", gen.UserName(t), val)
 	case types.ValueKind:
@@ -175,7 +176,7 @@ func (gen Generator) ValueToUser(val string, t types.TypeRef) string {
 // UserZero returns a string containing Go code to create an uninitialized instance of the User type appropriate for t.
 func (gen Generator) UserZero(t types.TypeRef) string {
 	t = gen.R.Resolve(t)
-	k := t.Desc.Kind()
+	k := t.Kind()
 	switch k {
 	case types.BlobKind:
 		return "types.NewEmptyBlob()"
@@ -204,8 +205,8 @@ func (gen Generator) UserZero(t types.TypeRef) string {
 
 // ValueZero returns a string containing Go code to create an uninitialized instance of the Noms types.Value appropriate for t.
 func (gen Generator) ValueZero(t types.TypeRef) string {
-	t = gen.R.Resolve(t)
-	k := t.Desc.Kind()
+	rt := gen.R.Resolve(t)
+	k := rt.Kind()
 	switch k {
 	case types.BlobKind:
 		return "types.NewEmptyBlob()"
@@ -226,12 +227,10 @@ func (gen Generator) ValueZero(t types.TypeRef) string {
 	case types.StringKind:
 		return `types.NewString("")`
 	case types.StructKind:
-		components := gen.userNameComponents(t)
-		d.Chk.True(len(components) == 1 || len(components) == 2)
-		if len(components) == 2 {
-			return fmt.Sprintf("%s.New%s().NomsValue()", components[0], components[1])
+		if t.HasPackageRef() {
+			return fmt.Sprintf("%s.New%s().NomsValue()", ToTag(t.PackageRef()), rt.Name())
 		}
-		return fmt.Sprintf("New%s().NomsValue()", components[0])
+		return fmt.Sprintf("New%s().NomsValue()", gen.UserName(rt))
 	case types.ValueKind:
 		// TODO: This is where a null Value would have been useful.
 		return "types.Bool(false)"
@@ -243,71 +242,70 @@ func (gen Generator) ValueZero(t types.TypeRef) string {
 
 // UserName returns the name of the User type appropriate for t, taking into account Noms types imported from other packages.
 func (gen Generator) UserName(t types.TypeRef) string {
-	t = gen.R.Resolve(t)
-	toID := func(t types.TypeRef) string {
-		return strings.Join(gen.userNameComponents(t), "_")
-	}
-	k := t.Desc.Kind()
+	rt := gen.R.Resolve(t)
+	k := rt.Kind()
 	switch k {
 	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeRefKind:
 		return kindToString(k)
 	case types.EnumKind:
 		if t.HasPackageRef() {
-			return ToTag(t.PackageRef().String()) + "." + t.Name()
+			return ToTag(t.PackageRef()) + "." + rt.Name()
 		}
-		return t.Name()
+		return rt.Name()
 	case types.ListKind:
-		return fmt.Sprintf("ListOf%s", toID(t.Desc.(types.CompoundDesc).ElemTypes[0]))
+		return fmt.Sprintf("ListOf%s", gen.refToId(rt.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.MapKind:
-		elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
-		return fmt.Sprintf("MapOf%sTo%s", toID(elemTypes[0]), toID(elemTypes[1]))
+		elemTypes := rt.Desc.(types.CompoundDesc).ElemTypes
+		return fmt.Sprintf("MapOf%sTo%s", gen.refToId(elemTypes[0]), gen.refToId(elemTypes[1]))
 	case types.RefKind:
-		return fmt.Sprintf("RefOf%s", toID(t.Desc.(types.CompoundDesc).ElemTypes[0]))
+		return fmt.Sprintf("RefOf%s", gen.refToId(rt.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.SetKind:
-		return fmt.Sprintf("SetOf%s", toID(t.Desc.(types.CompoundDesc).ElemTypes[0]))
+		return fmt.Sprintf("SetOf%s", gen.refToId(rt.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.StructKind:
 		// We get an empty name when we have a struct that is used as union
-		if t.Name() == "" {
-			choices := t.Desc.(types.StructDesc).Union
+		if rt.Name() == "" {
+			choices := rt.Desc.(types.StructDesc).Union
 			s := "__unionOf"
 			for i, f := range choices {
 				if i > 0 {
 					s += "And"
 				}
-				s += strings.Title(f.Name) + "Of" + toID(f.T)
+				s += strings.Title(f.Name) + "Of" + gen.refToId(f.T)
 			}
 			return s
 		}
+
 		if t.HasPackageRef() {
-			return ToTag(t.PackageRef().String()) + "." + t.Name()
+			return ToTag(t.PackageRef()) + "." + rt.Name()
 		}
-		return t.Name()
+		return rt.Name()
 	}
 	panic("unreachable")
 }
 
-func (gen Generator) userNameComponents(t types.TypeRef) []string {
-	userName := gen.UserName(t)
-	if period := strings.LastIndex(userName, "."); period != -1 {
-		return []string{userName[:period], userName[period+1:]}
+func (gen Generator) refToId(t types.TypeRef) string {
+	if !t.IsUnresolved() || !t.HasPackageRef() {
+		return gen.UserName(t)
 	}
-	return []string{userName}
+	rt := gen.R.Resolve(t)
+	return fmt.Sprintf("%s_%s", ToTag(t.PackageRef()), gen.UserName(rt))
 }
 
 // ToTypeRef returns a string containing Go code that instantiates a types.TypeRef instance equivalent to t.
 func (gen Generator) ToTypeRef(t types.TypeRef, fileID, packageName string) string {
 	if t.HasPackageRef() {
-		return fmt.Sprintf(`types.MakeTypeRef("%s", ref.Parse("%s"))`, t.Name(), t.PackageRef().String())
+		return fmt.Sprintf(`types.MakeTypeRef(ref.Parse("%s"), %d)`, t.PackageRef().String(), t.Ordinal())
 	}
 	if t.IsUnresolved() && fileID != "" {
-		return fmt.Sprintf(`types.MakeTypeRef("%s", __%sPackageInFile_%s_CachedRef)`, t.Name(), packageName, fileID)
+		return fmt.Sprintf(`types.MakeTypeRef(__%sPackageInFile_%s_CachedRef, %d)`, packageName, fileID, t.Ordinal())
 	}
 	if t.IsUnresolved() {
-		return fmt.Sprintf(`types.MakeTypeRef("%s", ref.Ref{})`, t.Name())
+		d.Chk.True(t.HasOrdinal(), "%s does not have an ordinal set", t.Name())
+		return fmt.Sprintf(`types.MakeTypeRef(ref.Ref{}, %d)`, t.Ordinal())
 	}
 
-	if types.IsPrimitiveKind(t.Desc.Kind()) {
-		return fmt.Sprintf("types.MakePrimitiveTypeRef(types.%sKind)", kindToString(t.Desc.Kind()))
+	if types.IsPrimitiveKind(t.Kind()) {
+		return fmt.Sprintf("types.MakePrimitiveTypeRef(types.%sKind)", kindToString(t.Kind()))
 	}
 	switch desc := t.Desc.(type) {
 	case types.CompoundDesc:
@@ -315,7 +313,7 @@ func (gen Generator) ToTypeRef(t types.TypeRef, fileID, packageName string) stri
 		for i, t := range desc.ElemTypes {
 			typerefs[i] = gen.ToTypeRef(t, fileID, packageName)
 		}
-		return fmt.Sprintf(`types.MakeCompoundTypeRef("%s", types.%sKind, %s)`, t.Name(), kindToString(t.Desc.Kind()), strings.Join(typerefs, ", "))
+		return fmt.Sprintf(`types.MakeCompoundTypeRef("%s", types.%sKind, %s)`, t.Name(), kindToString(t.Kind()), strings.Join(typerefs, ", "))
 	case types.EnumDesc:
 		return fmt.Sprintf(`types.MakeEnumTypeRef("%s", "%s")`, t.Name(), strings.Join(desc.IDs, `", "`))
 	case types.StructDesc:
@@ -337,8 +335,8 @@ func (gen Generator) ToTypeRef(t types.TypeRef, fileID, packageName string) stri
 
 // ToTag replaces "-" characters in s with "_", so it can be used in a Go identifier.
 // TODO: replace other illegal chars as well?
-func ToTag(s string) string {
-	return strings.Replace(s, "-", "_", -1)
+func ToTag(r ref.Ref) string {
+	return strings.Replace(r.String(), "-", "_", -1)
 }
 
 func kindToString(k types.NomsKind) (out string) {

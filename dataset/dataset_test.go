@@ -30,7 +30,7 @@ func TestDatasetCommitTracker(t *testing.T) {
 	assert.False(ds2.Head().Value().Equals(ds1Commit))
 	assert.False(ds1.Head().Value().Equals(ds2Commit))
 
-	assert.Equal("sha1-0bb09fae271fa06c6c3e4a799be552335e0e3400", ms.Root().String())
+	assert.Equal("sha1-5bca1a5b327422318ef19c68f8b3a82a80507bad", ms.Root().String())
 }
 
 func newDS(id string, ms *chunks.MemoryStore) Dataset {

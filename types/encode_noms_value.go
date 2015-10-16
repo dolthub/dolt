@@ -59,11 +59,10 @@ func (w *jsonArrayWriter) writeTypeRefAsTag(t TypeRef) {
 		}
 	case TypeRefKind:
 		if _, ok := t.Desc.(PrimitiveDesc); !ok {
-			r := t.PackageRef()
-			d.Chk.NotEqual(ref.Ref{}, r)
-			w.writeRef(r)
-			// TODO: Should be ordinal instead of name.
-			w.write(t.Name())
+			pkgRef := t.PackageRef()
+			d.Chk.NotEqual(ref.Ref{}, pkgRef)
+			w.writeRef(pkgRef)
+			w.write(t.Ordinal())
 		}
 	}
 }
@@ -156,7 +155,7 @@ func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
 	case TypeRefKind:
 		if _, ok := v.Desc.(PrimitiveDesc); !ok {
 			w.writeRef(v.PackageRef())
-			w.write(v.Name())
+			w.write(v.Ordinal())
 		}
 	default:
 		d.Chk.True(IsPrimitiveKind(k), v.Describe())
@@ -174,7 +173,7 @@ func (w *jsonArrayWriter) writeTypeRefKindValue(v Value, tr TypeRef, pkg *Packag
 			pkg = LookupPackage(pkgRef)
 		}
 
-		typeDef := pkg.GetNamedType(tr.Name())
+		typeDef := pkg.Types().Get(uint64(tr.Ordinal()))
 
 		k := typeDef.Kind()
 		if k == EnumKind {

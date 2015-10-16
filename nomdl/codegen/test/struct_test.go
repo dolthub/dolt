@@ -41,7 +41,7 @@ func TestTypeRef(t *testing.T) {
 	def := StructDef{"hi", true}
 	st := def.New()
 	typ := st.TypeRef()
-	assert.Equal("Struct", typ.Name())
+	assert.Equal("", typ.Name())
 	assert.Equal(types.TypeRefKind, typ.Kind())
 }
 
