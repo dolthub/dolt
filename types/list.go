@@ -2,7 +2,6 @@ package types
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
 )
 
 type listIterFunc func(v Value, index uint64) (stop bool)
@@ -11,6 +10,7 @@ type listIterAllFunc func(v Value, index uint64)
 type MapFunc func(v Value, index uint64) interface{}
 
 type List interface {
+	Value
 	Len() uint64
 	Empty() bool
 	Get(idx uint64) Value
@@ -21,11 +21,7 @@ type List interface {
 	Insert(idx uint64, v ...Value) List
 	Remove(start uint64, end uint64) List
 	RemoveAt(idx uint64) List
-	Ref() ref.Ref
 	Release()
-	Equals(other Value) bool
-	Chunks() (futures []Future)
-	TypeRef() TypeRef
 	Iter(f listIterFunc)
 	IterAll(f listIterAllFunc)
 	IterAllP(concurrency int, f listIterAllFunc)
