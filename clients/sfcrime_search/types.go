@@ -56,146 +56,6 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 	return types.RegisterPackage(&p)
 }
 
-// ListOfIncident
-
-type ListOfIncident struct {
-	l types.List
-}
-
-func NewListOfIncident() ListOfIncident {
-	return ListOfIncident{types.NewList()}
-}
-
-type ListOfIncidentDef []IncidentDef
-
-func (def ListOfIncidentDef) New() ListOfIncident {
-	l := make([]types.Value, len(def))
-	for i, d := range def {
-		l[i] = d.New().NomsValue()
-	}
-	return ListOfIncident{types.NewList(l...)}
-}
-
-func (l ListOfIncident) Def() ListOfIncidentDef {
-	d := make([]IncidentDef, l.Len())
-	for i := uint64(0); i < l.Len(); i++ {
-		d[i] = IncidentFromVal(l.l.Get(i)).Def()
-	}
-	return d
-}
-
-func ListOfIncidentFromVal(val types.Value) ListOfIncident {
-	// TODO: Validate here
-	return ListOfIncident{val.(types.List)}
-}
-
-func (l ListOfIncident) NomsValue() types.Value {
-	return l.l
-}
-
-func (l ListOfIncident) Equals(other types.Value) bool {
-	if other, ok := other.(ListOfIncident); ok {
-		return l.l.Equals(other.l)
-	}
-	return false
-}
-
-func (l ListOfIncident) Ref() ref.Ref {
-	return l.l.Ref()
-}
-
-func (l ListOfIncident) Chunks() (futures []types.Future) {
-	futures = append(futures, l.TypeRef().Chunks()...)
-	futures = append(futures, l.l.Chunks()...)
-	return
-}
-
-// A Noms Value that describes ListOfIncident.
-var __typeRefForListOfIncident types.TypeRef
-
-func (m ListOfIncident) TypeRef() types.TypeRef {
-	return __typeRefForListOfIncident
-}
-
-func init() {
-	__typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2))
-	types.RegisterFromValFunction(__typeRefForListOfIncident, func(v types.Value) types.NomsValue {
-		return ListOfIncidentFromVal(v)
-	})
-}
-
-func (l ListOfIncident) Len() uint64 {
-	return l.l.Len()
-}
-
-func (l ListOfIncident) Empty() bool {
-	return l.Len() == uint64(0)
-}
-
-func (l ListOfIncident) Get(i uint64) Incident {
-	return IncidentFromVal(l.l.Get(i))
-}
-
-func (l ListOfIncident) Slice(idx uint64, end uint64) ListOfIncident {
-	return ListOfIncident{l.l.Slice(idx, end)}
-}
-
-func (l ListOfIncident) Set(i uint64, val Incident) ListOfIncident {
-	return ListOfIncident{l.l.Set(i, val.NomsValue())}
-}
-
-func (l ListOfIncident) Append(v ...Incident) ListOfIncident {
-	return ListOfIncident{l.l.Append(l.fromElemSlice(v)...)}
-}
-
-func (l ListOfIncident) Insert(idx uint64, v ...Incident) ListOfIncident {
-	return ListOfIncident{l.l.Insert(idx, l.fromElemSlice(v)...)}
-}
-
-func (l ListOfIncident) Remove(idx uint64, end uint64) ListOfIncident {
-	return ListOfIncident{l.l.Remove(idx, end)}
-}
-
-func (l ListOfIncident) RemoveAt(idx uint64) ListOfIncident {
-	return ListOfIncident{(l.l.RemoveAt(idx))}
-}
-
-func (l ListOfIncident) fromElemSlice(p []Incident) []types.Value {
-	r := make([]types.Value, len(p))
-	for i, v := range p {
-		r[i] = v.NomsValue()
-	}
-	return r
-}
-
-type ListOfIncidentIterCallback func(v Incident, i uint64) (stop bool)
-
-func (l ListOfIncident) Iter(cb ListOfIncidentIterCallback) {
-	l.l.Iter(func(v types.Value, i uint64) bool {
-		return cb(IncidentFromVal(v), i)
-	})
-}
-
-type ListOfIncidentIterAllCallback func(v Incident, i uint64)
-
-func (l ListOfIncident) IterAll(cb ListOfIncidentIterAllCallback) {
-	l.l.IterAll(func(v types.Value, i uint64) {
-		cb(IncidentFromVal(v), i)
-	})
-}
-
-type ListOfIncidentFilterCallback func(v Incident, i uint64) (keep bool)
-
-func (l ListOfIncident) Filter(cb ListOfIncidentFilterCallback) ListOfIncident {
-	nl := NewListOfIncident()
-	l.IterAll(func(v Incident, i uint64) {
-		if cb(v, i) {
-			nl = nl.Append(v)
-		}
-	})
-	return nl
-}
-
 // Geoposition
 
 type Geoposition struct {
@@ -630,6 +490,146 @@ func (s SQuadTree) Georectangle() Georectangle {
 
 func (s SQuadTree) SetGeorectangle(val Georectangle) SQuadTree {
 	return SQuadTree{s.m.Set(types.NewString("Georectangle"), val.NomsValue())}
+}
+
+// ListOfIncident
+
+type ListOfIncident struct {
+	l types.List
+}
+
+func NewListOfIncident() ListOfIncident {
+	return ListOfIncident{types.NewList()}
+}
+
+type ListOfIncidentDef []IncidentDef
+
+func (def ListOfIncidentDef) New() ListOfIncident {
+	l := make([]types.Value, len(def))
+	for i, d := range def {
+		l[i] = d.New().NomsValue()
+	}
+	return ListOfIncident{types.NewList(l...)}
+}
+
+func (l ListOfIncident) Def() ListOfIncidentDef {
+	d := make([]IncidentDef, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = IncidentFromVal(l.l.Get(i)).Def()
+	}
+	return d
+}
+
+func ListOfIncidentFromVal(val types.Value) ListOfIncident {
+	// TODO: Validate here
+	return ListOfIncident{val.(types.List)}
+}
+
+func (l ListOfIncident) NomsValue() types.Value {
+	return l.l
+}
+
+func (l ListOfIncident) Equals(other types.Value) bool {
+	if other, ok := other.(ListOfIncident); ok {
+		return l.l.Equals(other.l)
+	}
+	return false
+}
+
+func (l ListOfIncident) Ref() ref.Ref {
+	return l.l.Ref()
+}
+
+func (l ListOfIncident) Chunks() (futures []types.Future) {
+	futures = append(futures, l.TypeRef().Chunks()...)
+	futures = append(futures, l.l.Chunks()...)
+	return
+}
+
+// A Noms Value that describes ListOfIncident.
+var __typeRefForListOfIncident types.TypeRef
+
+func (m ListOfIncident) TypeRef() types.TypeRef {
+	return __typeRefForListOfIncident
+}
+
+func init() {
+	__typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2))
+	types.RegisterFromValFunction(__typeRefForListOfIncident, func(v types.Value) types.NomsValue {
+		return ListOfIncidentFromVal(v)
+	})
+}
+
+func (l ListOfIncident) Len() uint64 {
+	return l.l.Len()
+}
+
+func (l ListOfIncident) Empty() bool {
+	return l.Len() == uint64(0)
+}
+
+func (l ListOfIncident) Get(i uint64) Incident {
+	return IncidentFromVal(l.l.Get(i))
+}
+
+func (l ListOfIncident) Slice(idx uint64, end uint64) ListOfIncident {
+	return ListOfIncident{l.l.Slice(idx, end)}
+}
+
+func (l ListOfIncident) Set(i uint64, val Incident) ListOfIncident {
+	return ListOfIncident{l.l.Set(i, val.NomsValue())}
+}
+
+func (l ListOfIncident) Append(v ...Incident) ListOfIncident {
+	return ListOfIncident{l.l.Append(l.fromElemSlice(v)...)}
+}
+
+func (l ListOfIncident) Insert(idx uint64, v ...Incident) ListOfIncident {
+	return ListOfIncident{l.l.Insert(idx, l.fromElemSlice(v)...)}
+}
+
+func (l ListOfIncident) Remove(idx uint64, end uint64) ListOfIncident {
+	return ListOfIncident{l.l.Remove(idx, end)}
+}
+
+func (l ListOfIncident) RemoveAt(idx uint64) ListOfIncident {
+	return ListOfIncident{(l.l.RemoveAt(idx))}
+}
+
+func (l ListOfIncident) fromElemSlice(p []Incident) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v.NomsValue()
+	}
+	return r
+}
+
+type ListOfIncidentIterCallback func(v Incident, i uint64) (stop bool)
+
+func (l ListOfIncident) Iter(cb ListOfIncidentIterCallback) {
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(IncidentFromVal(v), i)
+	})
+}
+
+type ListOfIncidentIterAllCallback func(v Incident, i uint64)
+
+func (l ListOfIncident) IterAll(cb ListOfIncidentIterAllCallback) {
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(IncidentFromVal(v), i)
+	})
+}
+
+type ListOfIncidentFilterCallback func(v Incident, i uint64) (keep bool)
+
+func (l ListOfIncident) Filter(cb ListOfIncidentFilterCallback) ListOfIncident {
+	nl := NewListOfIncident()
+	l.IterAll(func(v Incident, i uint64) {
+		if cb(v, i) {
+			nl = nl.Append(v)
+		}
+	})
+	return nl
 }
 
 // MapOfStringToSQuadTree

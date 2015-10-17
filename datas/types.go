@@ -28,6 +28,74 @@ func __datasPackageInFile_types_Ref() ref.Ref {
 	return types.RegisterPackage(&p)
 }
 
+// Commit
+
+type Commit struct {
+	m types.Map
+}
+
+func NewCommit() Commit {
+	return Commit{types.NewMap(
+		types.NewString("$type"), types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0),
+		types.NewString("value"), types.Bool(false),
+		types.NewString("parents"), types.NewSet(),
+	)}
+}
+
+var __typeRefForCommit = types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)
+
+func (m Commit) TypeRef() types.TypeRef {
+	return __typeRefForCommit
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForCommit, func(v types.Value) types.NomsValue {
+		return CommitFromVal(v)
+	})
+}
+
+func CommitFromVal(val types.Value) Commit {
+	// TODO: Validate here
+	return Commit{val.(types.Map)}
+}
+
+func (s Commit) NomsValue() types.Value {
+	return s.m
+}
+
+func (s Commit) Equals(other types.Value) bool {
+	if other, ok := other.(Commit); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
+}
+
+func (s Commit) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s Commit) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
+}
+
+func (s Commit) Value() types.Value {
+	return s.m.Get(types.NewString("value"))
+}
+
+func (s Commit) SetValue(val types.Value) Commit {
+	return Commit{s.m.Set(types.NewString("value"), val)}
+}
+
+func (s Commit) Parents() SetOfCommit {
+	return SetOfCommitFromVal(s.m.Get(types.NewString("parents")))
+}
+
+func (s Commit) SetParents(val SetOfCommit) Commit {
+	return Commit{s.m.Set(types.NewString("parents"), val.NomsValue())}
+}
+
 // MapOfStringToCommit
 
 type MapOfStringToCommit struct {
@@ -138,74 +206,6 @@ func (m MapOfStringToCommit) Filter(cb MapOfStringToCommitFilterCallback) MapOfS
 		}
 	})
 	return nm
-}
-
-// Commit
-
-type Commit struct {
-	m types.Map
-}
-
-func NewCommit() Commit {
-	return Commit{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0),
-		types.NewString("value"), types.Bool(false),
-		types.NewString("parents"), types.NewSet(),
-	)}
-}
-
-var __typeRefForCommit = types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)
-
-func (m Commit) TypeRef() types.TypeRef {
-	return __typeRefForCommit
-}
-
-func init() {
-	types.RegisterFromValFunction(__typeRefForCommit, func(v types.Value) types.NomsValue {
-		return CommitFromVal(v)
-	})
-}
-
-func CommitFromVal(val types.Value) Commit {
-	// TODO: Validate here
-	return Commit{val.(types.Map)}
-}
-
-func (s Commit) NomsValue() types.Value {
-	return s.m
-}
-
-func (s Commit) Equals(other types.Value) bool {
-	if other, ok := other.(Commit); ok {
-		return s.m.Equals(other.m)
-	}
-	return false
-}
-
-func (s Commit) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s Commit) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
-	return
-}
-
-func (s Commit) Value() types.Value {
-	return s.m.Get(types.NewString("value"))
-}
-
-func (s Commit) SetValue(val types.Value) Commit {
-	return Commit{s.m.Set(types.NewString("value"), val)}
-}
-
-func (s Commit) Parents() SetOfCommit {
-	return SetOfCommitFromVal(s.m.Get(types.NewString("parents")))
-}
-
-func (s Commit) SetParents(val SetOfCommit) Commit {
-	return Commit{s.m.Set(types.NewString("parents"), val.NomsValue())}
 }
 
 // SetOfCommit

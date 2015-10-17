@@ -205,6 +205,7 @@ type codeGen struct {
 	fileid    string
 	imports   []string
 	written   map[string]bool
+	toWrite   []types.TypeRef
 	generator *code.Generator
 	templates *template.Template
 }
@@ -213,7 +214,7 @@ type resolver struct {
 }
 
 func NewCodeGen(w io.Writer, fileID string, importPaths []string, deps depsMap, pkg pkg.Parsed) *codeGen {
-	gen := &codeGen{w, pkg, deps, fileID, importPaths, map[string]bool{}, nil, nil}
+	gen := &codeGen{w, pkg, deps, fileID, importPaths, map[string]bool{}, []types.TypeRef{}, nil, nil}
 	gen.generator = &code.Generator{R: gen}
 	gen.templates = gen.readTemplates()
 	return gen
@@ -269,28 +270,45 @@ func (gen *codeGen) WritePackage() {
 	err := gen.templates.ExecuteTemplate(gen.w, "header.tmpl", data)
 	d.Exp.NoError(err)
 
-	for _, t := range gen.pkg.UsingDeclarations {
-		gen.write(t, -1)
+	for i, t := range gen.pkg.Types {
+		gen.writeTopLevel(t, i)
 	}
 
-	for i, t := range gen.pkg.Types {
-		gen.write(t, i)
+	for _, t := range gen.pkg.UsingDeclarations {
+		gen.write(t)
+	}
+
+	for len(gen.toWrite) > 0 {
+		t := gen.toWrite[0]
+		gen.toWrite = gen.toWrite[1:]
+		gen.write(t)
+	}
+}
+
+func (gen *codeGen) shouldBeWritten(t types.TypeRef) bool {
+	return !t.IsUnresolved() && !gen.written[gen.generator.UserName(t)]
+}
+
+func (gen *codeGen) writeTopLevel(t types.TypeRef, ordinal int) {
+	switch t.Kind() {
+	case types.EnumKind:
+		gen.writeEnum(t, ordinal)
+	case types.StructKind:
+		gen.writeStruct(t, ordinal)
+	default:
+		gen.write(t)
 	}
 }
 
 // write generates the code for the given type.
-// ordinal can be -1 in the case where we are in a non top level recursive call. In those cases the ordinal is ignored.
-func (gen *codeGen) write(t types.TypeRef, ordinal int) {
-	// If t is unresolved, it represents an imported type (or local reference), so we shouldn't generate code for it.
-	if gen.written[gen.generator.UserName(t)] || t.IsUnresolved() {
+func (gen *codeGen) write(t types.TypeRef) {
+	if !gen.shouldBeWritten(t) {
 		return
 	}
 	k := t.Kind()
 	switch k {
 	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeRefKind:
 		return
-	case types.EnumKind:
-		gen.writeEnum(t, ordinal)
 	case types.ListKind:
 		gen.writeList(t)
 	case types.MapKind:
@@ -299,11 +317,16 @@ func (gen *codeGen) write(t types.TypeRef, ordinal int) {
 		gen.writeRef(t)
 	case types.SetKind:
 		gen.writeSet(t)
-	case types.StructKind:
-		gen.writeStruct(t, ordinal)
 	default:
 		panic("unreachable")
 	}
+}
+
+func (gen *codeGen) writeLater(t types.TypeRef) {
+	if !gen.shouldBeWritten(t) {
+		return
+	}
+	gen.toWrite = append(gen.toWrite, t)
 }
 
 func (gen *codeGen) writeTemplate(tmpl string, t types.TypeRef, data interface{}) {
@@ -345,11 +368,11 @@ func (gen *codeGen) writeStruct(t types.TypeRef, ordinal int) {
 	}
 	gen.writeTemplate("struct.tmpl", t, data)
 	for _, f := range desc.Fields {
-		gen.write(f.T, -1)
+		gen.writeLater(f.T)
 	}
 	if data.HasUnion {
 		for _, f := range desc.Union {
-			gen.write(f.T, -1)
+			gen.writeLater(f.T)
 		}
 	}
 }
@@ -372,7 +395,7 @@ func (gen *codeGen) writeList(t types.TypeRef) {
 		gen.canUseDef(t),
 	}
 	gen.writeTemplate("list.tmpl", t, data)
-	gen.write(elemTypes[0], -1)
+	gen.writeLater(elemTypes[0])
 }
 
 func (gen *codeGen) writeMap(t types.TypeRef) {
@@ -395,8 +418,8 @@ func (gen *codeGen) writeMap(t types.TypeRef) {
 		gen.canUseDef(t),
 	}
 	gen.writeTemplate("map.tmpl", t, data)
-	gen.write(elemTypes[0], -1)
-	gen.write(elemTypes[1], -1)
+	gen.writeLater(elemTypes[0])
+	gen.writeLater(elemTypes[1])
 }
 
 func (gen *codeGen) writeRef(t types.TypeRef) {
@@ -415,7 +438,7 @@ func (gen *codeGen) writeRef(t types.TypeRef) {
 		elemTypes[0],
 	}
 	gen.writeTemplate("ref.tmpl", t, data)
-	gen.write(elemTypes[0], -1)
+	gen.writeLater(elemTypes[0])
 }
 
 func (gen *codeGen) writeSet(t types.TypeRef) {
@@ -436,7 +459,7 @@ func (gen *codeGen) writeSet(t types.TypeRef) {
 		gen.canUseDef(t),
 	}
 	gen.writeTemplate("set.tmpl", t, data)
-	gen.write(elemTypes[0], -1)
+	gen.writeLater(elemTypes[0])
 }
 
 func (gen *codeGen) writeEnum(t types.TypeRef, ordinal int) {

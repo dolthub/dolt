@@ -329,62 +329,6 @@ func (s Node) SetReference(val RefOfValue) Node {
 	return Node{s.m.Set(types.NewString("Reference"), val.NomsValue())}
 }
 
-// RefOfValue
-
-type RefOfValue struct {
-	r ref.Ref
-}
-
-func NewRefOfValue(r ref.Ref) RefOfValue {
-	return RefOfValue{r}
-}
-
-func (r RefOfValue) Ref() ref.Ref {
-	return r.r
-}
-
-func (r RefOfValue) Equals(other types.Value) bool {
-	if other, ok := other.(RefOfValue); ok {
-		return r.r == other.r
-	}
-	return false
-}
-
-func (r RefOfValue) Chunks() []types.Future {
-	return r.TypeRef().Chunks()
-}
-
-func (r RefOfValue) NomsValue() types.Value {
-	return types.Ref{R: r.r}
-}
-
-func RefOfValueFromVal(p types.Value) RefOfValue {
-	return RefOfValue{p.(types.Ref).Ref()}
-}
-
-// A Noms Value that describes RefOfValue.
-var __typeRefForRefOfValue types.TypeRef
-
-func (m RefOfValue) TypeRef() types.TypeRef {
-	return __typeRefForRefOfValue
-}
-
-func init() {
-	__typeRefForRefOfValue = types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))
-	types.RegisterFromValFunction(__typeRefForRefOfValue, func(v types.Value) types.NomsValue {
-		return RefOfValueFromVal(v)
-	})
-}
-
-func (r RefOfValue) GetValue(cs chunks.ChunkSource) types.Value {
-	return types.ReadValue(r.r, cs)
-}
-
-func (r RefOfValue) SetValue(val types.Value, cs chunks.ChunkSink) RefOfValue {
-	ref := types.WriteValue(val, cs)
-	return RefOfValue{ref}
-}
-
 // QuadTree
 
 type QuadTree struct {
@@ -519,6 +463,198 @@ func (s QuadTree) Georectangle() Georectangle {
 
 func (s QuadTree) SetGeorectangle(val Georectangle) QuadTree {
 	return QuadTree{s.m.Set(types.NewString("Georectangle"), val.NomsValue())}
+}
+
+// SQuadTree
+
+type SQuadTree struct {
+	m types.Map
+}
+
+func NewSQuadTree() SQuadTree {
+	return SQuadTree{types.NewMap(
+		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 4),
+		types.NewString("Nodes"), types.NewList(),
+		types.NewString("Tiles"), types.NewMap(),
+		types.NewString("Depth"), types.UInt8(0),
+		types.NewString("NumDescendents"), types.UInt32(0),
+		types.NewString("Path"), types.NewString(""),
+		types.NewString("Georectangle"), NewGeorectangle().NomsValue(),
+	)}
+}
+
+type SQuadTreeDef struct {
+	Nodes          ListOfRefOfValueDef
+	Tiles          MapOfStringToRefOfSQuadTreeDef
+	Depth          uint8
+	NumDescendents uint32
+	Path           string
+	Georectangle   GeorectangleDef
+}
+
+func (def SQuadTreeDef) New() SQuadTree {
+	return SQuadTree{
+		types.NewMap(
+			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 4),
+			types.NewString("Nodes"), def.Nodes.New().NomsValue(),
+			types.NewString("Tiles"), def.Tiles.New().NomsValue(),
+			types.NewString("Depth"), types.UInt8(def.Depth),
+			types.NewString("NumDescendents"), types.UInt32(def.NumDescendents),
+			types.NewString("Path"), types.NewString(def.Path),
+			types.NewString("Georectangle"), def.Georectangle.New().NomsValue(),
+		)}
+}
+
+func (s SQuadTree) Def() (d SQuadTreeDef) {
+	d.Nodes = ListOfRefOfValueFromVal(s.m.Get(types.NewString("Nodes"))).Def()
+	d.Tiles = MapOfStringToRefOfSQuadTreeFromVal(s.m.Get(types.NewString("Tiles"))).Def()
+	d.Depth = uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
+	d.NumDescendents = uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
+	d.Path = s.m.Get(types.NewString("Path")).(types.String).String()
+	d.Georectangle = GeorectangleFromVal(s.m.Get(types.NewString("Georectangle"))).Def()
+	return
+}
+
+var __typeRefForSQuadTree = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 4)
+
+func (m SQuadTree) TypeRef() types.TypeRef {
+	return __typeRefForSQuadTree
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForSQuadTree, func(v types.Value) types.NomsValue {
+		return SQuadTreeFromVal(v)
+	})
+}
+
+func SQuadTreeFromVal(val types.Value) SQuadTree {
+	// TODO: Validate here
+	return SQuadTree{val.(types.Map)}
+}
+
+func (s SQuadTree) NomsValue() types.Value {
+	return s.m
+}
+
+func (s SQuadTree) Equals(other types.Value) bool {
+	if other, ok := other.(SQuadTree); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
+}
+
+func (s SQuadTree) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s SQuadTree) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
+}
+
+func (s SQuadTree) Nodes() ListOfRefOfValue {
+	return ListOfRefOfValueFromVal(s.m.Get(types.NewString("Nodes")))
+}
+
+func (s SQuadTree) SetNodes(val ListOfRefOfValue) SQuadTree {
+	return SQuadTree{s.m.Set(types.NewString("Nodes"), val.NomsValue())}
+}
+
+func (s SQuadTree) Tiles() MapOfStringToRefOfSQuadTree {
+	return MapOfStringToRefOfSQuadTreeFromVal(s.m.Get(types.NewString("Tiles")))
+}
+
+func (s SQuadTree) SetTiles(val MapOfStringToRefOfSQuadTree) SQuadTree {
+	return SQuadTree{s.m.Set(types.NewString("Tiles"), val.NomsValue())}
+}
+
+func (s SQuadTree) Depth() uint8 {
+	return uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
+}
+
+func (s SQuadTree) SetDepth(val uint8) SQuadTree {
+	return SQuadTree{s.m.Set(types.NewString("Depth"), types.UInt8(val))}
+}
+
+func (s SQuadTree) NumDescendents() uint32 {
+	return uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
+}
+
+func (s SQuadTree) SetNumDescendents(val uint32) SQuadTree {
+	return SQuadTree{s.m.Set(types.NewString("NumDescendents"), types.UInt32(val))}
+}
+
+func (s SQuadTree) Path() string {
+	return s.m.Get(types.NewString("Path")).(types.String).String()
+}
+
+func (s SQuadTree) SetPath(val string) SQuadTree {
+	return SQuadTree{s.m.Set(types.NewString("Path"), types.NewString(val))}
+}
+
+func (s SQuadTree) Georectangle() Georectangle {
+	return GeorectangleFromVal(s.m.Get(types.NewString("Georectangle")))
+}
+
+func (s SQuadTree) SetGeorectangle(val Georectangle) SQuadTree {
+	return SQuadTree{s.m.Set(types.NewString("Georectangle"), val.NomsValue())}
+}
+
+// RefOfValue
+
+type RefOfValue struct {
+	r ref.Ref
+}
+
+func NewRefOfValue(r ref.Ref) RefOfValue {
+	return RefOfValue{r}
+}
+
+func (r RefOfValue) Ref() ref.Ref {
+	return r.r
+}
+
+func (r RefOfValue) Equals(other types.Value) bool {
+	if other, ok := other.(RefOfValue); ok {
+		return r.r == other.r
+	}
+	return false
+}
+
+func (r RefOfValue) Chunks() []types.Future {
+	return r.TypeRef().Chunks()
+}
+
+func (r RefOfValue) NomsValue() types.Value {
+	return types.Ref{R: r.r}
+}
+
+func RefOfValueFromVal(p types.Value) RefOfValue {
+	return RefOfValue{p.(types.Ref).Ref()}
+}
+
+// A Noms Value that describes RefOfValue.
+var __typeRefForRefOfValue types.TypeRef
+
+func (m RefOfValue) TypeRef() types.TypeRef {
+	return __typeRefForRefOfValue
+}
+
+func init() {
+	__typeRefForRefOfValue = types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))
+	types.RegisterFromValFunction(__typeRefForRefOfValue, func(v types.Value) types.NomsValue {
+		return RefOfValueFromVal(v)
+	})
+}
+
+func (r RefOfValue) GetValue(cs chunks.ChunkSource) types.Value {
+	return types.ReadValue(r.r, cs)
+}
+
+func (r RefOfValue) SetValue(val types.Value, cs chunks.ChunkSink) RefOfValue {
+	ref := types.WriteValue(val, cs)
+	return RefOfValue{ref}
 }
 
 // ListOfNode
@@ -790,142 +926,6 @@ func (m MapOfStringToQuadTree) Filter(cb MapOfStringToQuadTreeFilterCallback) Ma
 		}
 	})
 	return nm
-}
-
-// SQuadTree
-
-type SQuadTree struct {
-	m types.Map
-}
-
-func NewSQuadTree() SQuadTree {
-	return SQuadTree{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 4),
-		types.NewString("Nodes"), types.NewList(),
-		types.NewString("Tiles"), types.NewMap(),
-		types.NewString("Depth"), types.UInt8(0),
-		types.NewString("NumDescendents"), types.UInt32(0),
-		types.NewString("Path"), types.NewString(""),
-		types.NewString("Georectangle"), NewGeorectangle().NomsValue(),
-	)}
-}
-
-type SQuadTreeDef struct {
-	Nodes          ListOfRefOfValueDef
-	Tiles          MapOfStringToRefOfSQuadTreeDef
-	Depth          uint8
-	NumDescendents uint32
-	Path           string
-	Georectangle   GeorectangleDef
-}
-
-func (def SQuadTreeDef) New() SQuadTree {
-	return SQuadTree{
-		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 4),
-			types.NewString("Nodes"), def.Nodes.New().NomsValue(),
-			types.NewString("Tiles"), def.Tiles.New().NomsValue(),
-			types.NewString("Depth"), types.UInt8(def.Depth),
-			types.NewString("NumDescendents"), types.UInt32(def.NumDescendents),
-			types.NewString("Path"), types.NewString(def.Path),
-			types.NewString("Georectangle"), def.Georectangle.New().NomsValue(),
-		)}
-}
-
-func (s SQuadTree) Def() (d SQuadTreeDef) {
-	d.Nodes = ListOfRefOfValueFromVal(s.m.Get(types.NewString("Nodes"))).Def()
-	d.Tiles = MapOfStringToRefOfSQuadTreeFromVal(s.m.Get(types.NewString("Tiles"))).Def()
-	d.Depth = uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
-	d.NumDescendents = uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
-	d.Path = s.m.Get(types.NewString("Path")).(types.String).String()
-	d.Georectangle = GeorectangleFromVal(s.m.Get(types.NewString("Georectangle"))).Def()
-	return
-}
-
-var __typeRefForSQuadTree = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 4)
-
-func (m SQuadTree) TypeRef() types.TypeRef {
-	return __typeRefForSQuadTree
-}
-
-func init() {
-	types.RegisterFromValFunction(__typeRefForSQuadTree, func(v types.Value) types.NomsValue {
-		return SQuadTreeFromVal(v)
-	})
-}
-
-func SQuadTreeFromVal(val types.Value) SQuadTree {
-	// TODO: Validate here
-	return SQuadTree{val.(types.Map)}
-}
-
-func (s SQuadTree) NomsValue() types.Value {
-	return s.m
-}
-
-func (s SQuadTree) Equals(other types.Value) bool {
-	if other, ok := other.(SQuadTree); ok {
-		return s.m.Equals(other.m)
-	}
-	return false
-}
-
-func (s SQuadTree) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s SQuadTree) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
-	return
-}
-
-func (s SQuadTree) Nodes() ListOfRefOfValue {
-	return ListOfRefOfValueFromVal(s.m.Get(types.NewString("Nodes")))
-}
-
-func (s SQuadTree) SetNodes(val ListOfRefOfValue) SQuadTree {
-	return SQuadTree{s.m.Set(types.NewString("Nodes"), val.NomsValue())}
-}
-
-func (s SQuadTree) Tiles() MapOfStringToRefOfSQuadTree {
-	return MapOfStringToRefOfSQuadTreeFromVal(s.m.Get(types.NewString("Tiles")))
-}
-
-func (s SQuadTree) SetTiles(val MapOfStringToRefOfSQuadTree) SQuadTree {
-	return SQuadTree{s.m.Set(types.NewString("Tiles"), val.NomsValue())}
-}
-
-func (s SQuadTree) Depth() uint8 {
-	return uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
-}
-
-func (s SQuadTree) SetDepth(val uint8) SQuadTree {
-	return SQuadTree{s.m.Set(types.NewString("Depth"), types.UInt8(val))}
-}
-
-func (s SQuadTree) NumDescendents() uint32 {
-	return uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
-}
-
-func (s SQuadTree) SetNumDescendents(val uint32) SQuadTree {
-	return SQuadTree{s.m.Set(types.NewString("NumDescendents"), types.UInt32(val))}
-}
-
-func (s SQuadTree) Path() string {
-	return s.m.Get(types.NewString("Path")).(types.String).String()
-}
-
-func (s SQuadTree) SetPath(val string) SQuadTree {
-	return SQuadTree{s.m.Set(types.NewString("Path"), types.NewString(val))}
-}
-
-func (s SQuadTree) Georectangle() Georectangle {
-	return GeorectangleFromVal(s.m.Get(types.NewString("Georectangle")))
-}
-
-func (s SQuadTree) SetGeorectangle(val Georectangle) SQuadTree {
-	return SQuadTree{s.m.Set(types.NewString("Georectangle"), val.NomsValue())}
 }
 
 // ListOfRefOfValue

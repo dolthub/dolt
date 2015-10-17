@@ -28,6 +28,94 @@ func __testPackageInFile_struct_Ref() ref.Ref {
 	return types.RegisterPackage(&p)
 }
 
+// Struct
+
+type Struct struct {
+	m types.Map
+}
+
+func NewStruct() Struct {
+	return Struct{types.NewMap(
+		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0),
+		types.NewString("s"), types.NewString(""),
+		types.NewString("b"), types.Bool(false),
+	)}
+}
+
+type StructDef struct {
+	S string
+	B bool
+}
+
+func (def StructDef) New() Struct {
+	return Struct{
+		types.NewMap(
+			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0),
+			types.NewString("s"), types.NewString(def.S),
+			types.NewString("b"), types.Bool(def.B),
+		)}
+}
+
+func (s Struct) Def() (d StructDef) {
+	d.S = s.m.Get(types.NewString("s")).(types.String).String()
+	d.B = bool(s.m.Get(types.NewString("b")).(types.Bool))
+	return
+}
+
+var __typeRefForStruct = types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0)
+
+func (m Struct) TypeRef() types.TypeRef {
+	return __typeRefForStruct
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForStruct, func(v types.Value) types.NomsValue {
+		return StructFromVal(v)
+	})
+}
+
+func StructFromVal(val types.Value) Struct {
+	// TODO: Validate here
+	return Struct{val.(types.Map)}
+}
+
+func (s Struct) NomsValue() types.Value {
+	return s.m
+}
+
+func (s Struct) Equals(other types.Value) bool {
+	if other, ok := other.(Struct); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
+}
+
+func (s Struct) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s Struct) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
+}
+
+func (s Struct) S() string {
+	return s.m.Get(types.NewString("s")).(types.String).String()
+}
+
+func (s Struct) SetS(val string) Struct {
+	return Struct{s.m.Set(types.NewString("s"), types.NewString(val))}
+}
+
+func (s Struct) B() bool {
+	return bool(s.m.Get(types.NewString("b")).(types.Bool))
+}
+
+func (s Struct) SetB(val bool) Struct {
+	return Struct{s.m.Set(types.NewString("b"), types.Bool(val))}
+}
+
 // ListOfStruct
 
 type ListOfStruct struct {
@@ -166,92 +254,4 @@ func (l ListOfStruct) Filter(cb ListOfStructFilterCallback) ListOfStruct {
 		}
 	})
 	return nl
-}
-
-// Struct
-
-type Struct struct {
-	m types.Map
-}
-
-func NewStruct() Struct {
-	return Struct{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0),
-		types.NewString("s"), types.NewString(""),
-		types.NewString("b"), types.Bool(false),
-	)}
-}
-
-type StructDef struct {
-	S string
-	B bool
-}
-
-func (def StructDef) New() Struct {
-	return Struct{
-		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0),
-			types.NewString("s"), types.NewString(def.S),
-			types.NewString("b"), types.Bool(def.B),
-		)}
-}
-
-func (s Struct) Def() (d StructDef) {
-	d.S = s.m.Get(types.NewString("s")).(types.String).String()
-	d.B = bool(s.m.Get(types.NewString("b")).(types.Bool))
-	return
-}
-
-var __typeRefForStruct = types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0)
-
-func (m Struct) TypeRef() types.TypeRef {
-	return __typeRefForStruct
-}
-
-func init() {
-	types.RegisterFromValFunction(__typeRefForStruct, func(v types.Value) types.NomsValue {
-		return StructFromVal(v)
-	})
-}
-
-func StructFromVal(val types.Value) Struct {
-	// TODO: Validate here
-	return Struct{val.(types.Map)}
-}
-
-func (s Struct) NomsValue() types.Value {
-	return s.m
-}
-
-func (s Struct) Equals(other types.Value) bool {
-	if other, ok := other.(Struct); ok {
-		return s.m.Equals(other.m)
-	}
-	return false
-}
-
-func (s Struct) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s Struct) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
-	return
-}
-
-func (s Struct) S() string {
-	return s.m.Get(types.NewString("s")).(types.String).String()
-}
-
-func (s Struct) SetS(val string) Struct {
-	return Struct{s.m.Set(types.NewString("s"), types.NewString(val))}
-}
-
-func (s Struct) B() bool {
-	return bool(s.m.Get(types.NewString("b")).(types.Bool))
-}
-
-func (s Struct) SetB(val bool) Struct {
-	return Struct{s.m.Set(types.NewString("b"), types.Bool(val))}
 }

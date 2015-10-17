@@ -30,6 +30,103 @@ func __testPackageInFile_struct_with_imports_Ref() ref.Ref {
 	return types.RegisterPackage(&p)
 }
 
+// E
+
+type E uint32
+
+const (
+	E1 E = iota
+	Ignored
+)
+
+// ImportUser
+
+type ImportUser struct {
+	m types.Map
+}
+
+func NewImportUser() ImportUser {
+	return ImportUser{types.NewMap(
+		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 1),
+		types.NewString("importedStruct"), sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5.NewD().NomsValue(),
+		types.NewString("enum"), types.UInt32(0),
+	)}
+}
+
+type ImportUserDef struct {
+	ImportedStruct sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5.DDef
+	Enum           E
+}
+
+func (def ImportUserDef) New() ImportUser {
+	return ImportUser{
+		types.NewMap(
+			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 1),
+			types.NewString("importedStruct"), def.ImportedStruct.New().NomsValue(),
+			types.NewString("enum"), types.UInt32(def.Enum),
+		)}
+}
+
+func (s ImportUser) Def() (d ImportUserDef) {
+	d.ImportedStruct = sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5.DFromVal(s.m.Get(types.NewString("importedStruct"))).Def()
+	d.Enum = E(s.m.Get(types.NewString("enum")).(types.UInt32))
+	return
+}
+
+var __typeRefForImportUser = types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 1)
+
+func (m ImportUser) TypeRef() types.TypeRef {
+	return __typeRefForImportUser
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForImportUser, func(v types.Value) types.NomsValue {
+		return ImportUserFromVal(v)
+	})
+}
+
+func ImportUserFromVal(val types.Value) ImportUser {
+	// TODO: Validate here
+	return ImportUser{val.(types.Map)}
+}
+
+func (s ImportUser) NomsValue() types.Value {
+	return s.m
+}
+
+func (s ImportUser) Equals(other types.Value) bool {
+	if other, ok := other.(ImportUser); ok {
+		return s.m.Equals(other.m)
+	}
+	return false
+}
+
+func (s ImportUser) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s ImportUser) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
+}
+
+func (s ImportUser) ImportedStruct() sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5.D {
+	return sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5.DFromVal(s.m.Get(types.NewString("importedStruct")))
+}
+
+func (s ImportUser) SetImportedStruct(val sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5.D) ImportUser {
+	return ImportUser{s.m.Set(types.NewString("importedStruct"), val.NomsValue())}
+}
+
+func (s ImportUser) Enum() E {
+	return E(s.m.Get(types.NewString("enum")).(types.UInt32))
+}
+
+func (s ImportUser) SetEnum(val E) ImportUser {
+	return ImportUser{s.m.Set(types.NewString("enum"), types.UInt32(val))}
+}
+
 // ListOfsha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5_D
 
 type ListOfsha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5_D struct {
@@ -168,101 +265,4 @@ func (l ListOfsha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5_D) Filter(cb ListOfs
 		}
 	})
 	return nl
-}
-
-// E
-
-type E uint32
-
-const (
-	E1 E = iota
-	Ignored
-)
-
-// ImportUser
-
-type ImportUser struct {
-	m types.Map
-}
-
-func NewImportUser() ImportUser {
-	return ImportUser{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 1),
-		types.NewString("importedStruct"), sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5.NewD().NomsValue(),
-		types.NewString("enum"), types.UInt32(0),
-	)}
-}
-
-type ImportUserDef struct {
-	ImportedStruct sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5.DDef
-	Enum           E
-}
-
-func (def ImportUserDef) New() ImportUser {
-	return ImportUser{
-		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 1),
-			types.NewString("importedStruct"), def.ImportedStruct.New().NomsValue(),
-			types.NewString("enum"), types.UInt32(def.Enum),
-		)}
-}
-
-func (s ImportUser) Def() (d ImportUserDef) {
-	d.ImportedStruct = sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5.DFromVal(s.m.Get(types.NewString("importedStruct"))).Def()
-	d.Enum = E(s.m.Get(types.NewString("enum")).(types.UInt32))
-	return
-}
-
-var __typeRefForImportUser = types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 1)
-
-func (m ImportUser) TypeRef() types.TypeRef {
-	return __typeRefForImportUser
-}
-
-func init() {
-	types.RegisterFromValFunction(__typeRefForImportUser, func(v types.Value) types.NomsValue {
-		return ImportUserFromVal(v)
-	})
-}
-
-func ImportUserFromVal(val types.Value) ImportUser {
-	// TODO: Validate here
-	return ImportUser{val.(types.Map)}
-}
-
-func (s ImportUser) NomsValue() types.Value {
-	return s.m
-}
-
-func (s ImportUser) Equals(other types.Value) bool {
-	if other, ok := other.(ImportUser); ok {
-		return s.m.Equals(other.m)
-	}
-	return false
-}
-
-func (s ImportUser) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s ImportUser) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
-	return
-}
-
-func (s ImportUser) ImportedStruct() sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5.D {
-	return sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5.DFromVal(s.m.Get(types.NewString("importedStruct")))
-}
-
-func (s ImportUser) SetImportedStruct(val sha1_d64765d6f185e4e5f7d9e67d1fc4e084b38229f5.D) ImportUser {
-	return ImportUser{s.m.Set(types.NewString("importedStruct"), val.NomsValue())}
-}
-
-func (s ImportUser) Enum() E {
-	return E(s.m.Get(types.NewString("enum")).(types.UInt32))
-}
-
-func (s ImportUser) SetEnum(val E) ImportUser {
-	return ImportUser{s.m.Set(types.NewString("enum"), types.UInt32(val))}
 }
