@@ -78,7 +78,7 @@ func TestCanUseDef(t *testing.T) {
 		for _, t := range pkg.UsingDeclarations {
 			assert.Equal(using, gen.canUseDef(t))
 		}
-		for _, t := range pkg.Types {
+		for _, t := range pkg.Types().Def() {
 			assert.Equal(named, gen.canUseDef(t))
 		}
 	}

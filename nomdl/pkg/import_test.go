@@ -123,7 +123,7 @@ func (suite *ImportTestSuite) TestImports() {
 		suite.NoError(err)
 		defer inFile.Close()
 		parsedDep := ParseNomDL("", inFile, filepath.Dir(path), cs)
-		return types.WriteValue(parsedDep.New().NomsValue(), cs)
+		return types.WriteValue(parsedDep.NomsValue(), cs)
 	}
 
 	dir, err := ioutil.TempDir("", "")
@@ -164,34 +164,34 @@ func (suite *ImportTestSuite) TestImports() {
 		}`, suite.importRef, filepath.Base(byPathNomDL)))
 	p := ParseNomDL("testing", r, dir, suite.cs)
 
-	named := p.Types[0]
+	named := p.Types().Get(0)
 	suite.Equal("Local1", named.Name())
 	field := find("a", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	field = find("c", named)
 	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 
-	named = p.Types[1]
+	named = p.Types().Get(1)
 	suite.Equal("Local2", named.Name())
 	field = find("a", named)
 	suite.EqualValues(refFromNomsFile(byPathNomDL), field.T.PackageRef())
 	field = find("b", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 
-	named = p.Types[2]
+	named = p.Types().Get(2)
 	suite.Equal("Union", named.Name())
 	field = findChoice("a", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	field = findChoice("b", named)
 	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 
-	named = p.Types[3]
+	named = p.Types().Get(3)
 	suite.Equal("WithUnion", named.Name())
 	field = find("a", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	namedUnion := find("b", named).T
 	suite.True(namedUnion.IsUnresolved())
-	namedUnion = p.Types[namedUnion.Ordinal()]
+	namedUnion = p.Types().Get(uint64(namedUnion.Ordinal()))
 	field = findChoice("s", namedUnion)
 	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 	field = findChoice("t", namedUnion)
