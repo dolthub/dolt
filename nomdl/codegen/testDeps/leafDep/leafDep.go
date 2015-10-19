@@ -13,19 +13,17 @@ var __testPackageInFile_leafDep_CachedRef = __testPackageInFile_leafDep_Ref()
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_leafDep_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("S",
-				[]types.Field{
-					types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
-				},
-				types.Choices{},
-			),
-			types.MakeEnumTypeRef("E", "e1", "e2", "e3"),
-		},
-	}.New()
+		types.MakeStructTypeRef("S",
+			[]types.Field{
+				types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
+			},
+			types.Choices{},
+		),
+		types.MakeEnumTypeRef("E", "e1", "e2", "e3"),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 

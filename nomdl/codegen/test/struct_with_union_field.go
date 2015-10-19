@@ -13,23 +13,21 @@ var __testPackageInFile_struct_with_union_field_CachedRef = __testPackageInFile_
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_struct_with_union_field_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("StructWithUnionField",
-				[]types.Field{
-					types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-				},
-				types.Choices{
-					types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-					types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
-					types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
-					types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
-				},
-			),
-		},
-	}.New()
+		types.MakeStructTypeRef("StructWithUnionField",
+			[]types.Field{
+				types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+			},
+			types.Choices{
+				types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
+				types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
+				types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+			},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 

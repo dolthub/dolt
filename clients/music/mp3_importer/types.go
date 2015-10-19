@@ -13,21 +13,19 @@ var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __mainPackageInFile_types_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("Song",
-				[]types.Field{
-					types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Artist", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Album", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Year", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Mp3", types.MakePrimitiveTypeRef(types.BlobKind), false},
-				},
-				types.Choices{},
-			),
-		},
-	}.New()
+		types.MakeStructTypeRef("Song",
+			[]types.Field{
+				types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Artist", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Album", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Year", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Mp3", types.MakePrimitiveTypeRef(types.BlobKind), false},
+			},
+			types.Choices{},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 

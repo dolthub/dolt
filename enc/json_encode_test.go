@@ -102,4 +102,12 @@ func TestJsonEncode(t *testing.T) {
 	// List (compound)
 	testEncode(fmt.Sprintf(`j {"cl":["%s",2]}
 `, ref2), CompoundList{[]uint64{2}, []ref.Ref{ref2}})
+
+	// Package
+	testEncode(`j {"package":{"dependencies":[],"types":[]}}
+`, Package{Types: []TypeRef{}, Dependencies: []ref.Ref{}})
+	testEncode(`j {"package":{"dependencies":[],"types":[{"type":{"kind":{"uint8":0},"name":""}}]}}
+`, Package{Types: []TypeRef{TypeRef{Kind: 0, Name: ""}}, Dependencies: []ref.Ref{}})
+	testEncode(fmt.Sprintf(`j {"package":{"dependencies":[{"ref":"%s"}],"types":[]}}
+`, ref1), Package{Types: []TypeRef{}, Dependencies: []ref.Ref{ref1}})
 }

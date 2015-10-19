@@ -13,18 +13,16 @@ var __testPackageInFile_enum_struct_CachedRef = __testPackageInFile_enum_struct_
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_enum_struct_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeEnumTypeRef("Handedness", "right", "left", "switch"),
-			types.MakeStructTypeRef("EnumStruct",
-				[]types.Field{
-					types.Field{"hand", types.MakeTypeRef(ref.Ref{}, 0), false},
-				},
-				types.Choices{},
-			),
-		},
-	}.New()
+		types.MakeEnumTypeRef("Handedness", "right", "left", "switch"),
+		types.MakeStructTypeRef("EnumStruct",
+			[]types.Field{
+				types.Field{"hand", types.MakeTypeRef(ref.Ref{}, 0), false},
+			},
+			types.Choices{},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 

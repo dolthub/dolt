@@ -13,30 +13,28 @@ var __testPackageInFile_struct_primitives_CachedRef = __testPackageInFile_struct
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_struct_primitives_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("StructPrimitives",
-				[]types.Field{
-					types.Field{"uint64", types.MakePrimitiveTypeRef(types.UInt64Kind), false},
-					types.Field{"uint32", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-					types.Field{"uint16", types.MakePrimitiveTypeRef(types.UInt16Kind), false},
-					types.Field{"uint8", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
-					types.Field{"int64", types.MakePrimitiveTypeRef(types.Int64Kind), false},
-					types.Field{"int32", types.MakePrimitiveTypeRef(types.Int32Kind), false},
-					types.Field{"int16", types.MakePrimitiveTypeRef(types.Int16Kind), false},
-					types.Field{"int8", types.MakePrimitiveTypeRef(types.Int8Kind), false},
-					types.Field{"float64", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-					types.Field{"float32", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-					types.Field{"bool", types.MakePrimitiveTypeRef(types.BoolKind), false},
-					types.Field{"string", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"blob", types.MakePrimitiveTypeRef(types.BlobKind), false},
-					types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
-				},
-				types.Choices{},
-			),
-		},
-	}.New()
+		types.MakeStructTypeRef("StructPrimitives",
+			[]types.Field{
+				types.Field{"uint64", types.MakePrimitiveTypeRef(types.UInt64Kind), false},
+				types.Field{"uint32", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+				types.Field{"uint16", types.MakePrimitiveTypeRef(types.UInt16Kind), false},
+				types.Field{"uint8", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
+				types.Field{"int64", types.MakePrimitiveTypeRef(types.Int64Kind), false},
+				types.Field{"int32", types.MakePrimitiveTypeRef(types.Int32Kind), false},
+				types.Field{"int16", types.MakePrimitiveTypeRef(types.Int16Kind), false},
+				types.Field{"int8", types.MakePrimitiveTypeRef(types.Int8Kind), false},
+				types.Field{"float64", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"float32", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+				types.Field{"bool", types.MakePrimitiveTypeRef(types.BoolKind), false},
+				types.Field{"string", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"blob", types.MakePrimitiveTypeRef(types.BlobKind), false},
+				types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
+			},
+			types.Choices{},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 

@@ -88,6 +88,12 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 		}
 		cl := newCompoundList(i.Offsets, lists, cs)
 		return futureFromValue(cl)
+	case enc.Package:
+		types := make([]TypeRef, len(i.Types))
+		for idx, t := range i.Types {
+			types[idx] = fromEncodeable(t, cs).Deref(cs).(TypeRef)
+		}
+		return futureFromValue(Package{types, i.Dependencies, &ref.Ref{}})
 	default:
 		d.Exp.Fail("Unknown encodeable", "%+v", i)
 	}

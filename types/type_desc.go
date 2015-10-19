@@ -17,21 +17,22 @@ type TypeDesc interface {
 }
 
 // PrimitiveDesc implements TypeDesc for all primitive Noms types:
+// Blob
 // Bool
-// UInt8
-// UInt16
-// UInt32
-// UInt64
-// Int8
+// Float32
+// Float64
 // Int16
 // Int32
 // Int64
-// Float32
-// Float64
+// Int8
+// Package
 // String
-// Blob
-// Value
 // TypeRef
+// UInt16
+// UInt32
+// UInt64
+// UInt8
+// Value
 type PrimitiveDesc NomsKind
 
 func (p PrimitiveDesc) Kind() NomsKind {
@@ -59,17 +60,18 @@ var KindToString = map[NomsKind]string{
 	Int32Kind:   "Int32",
 	Int64Kind:   "Int64",
 	Int8Kind:    "Int8",
+	ListKind:    "List",
+	MapKind:     "Map",
+	PackageKind: "Package",
+	RefKind:     "Ref",
+	SetKind:     "Set",
 	StringKind:  "String",
+	TypeRefKind: "TypeRef",
 	UInt16Kind:  "UInt16",
 	UInt32Kind:  "UInt32",
 	UInt64Kind:  "UInt64",
 	UInt8Kind:   "UInt8",
 	ValueKind:   "Value",
-	TypeRefKind: "TypeRef",
-	ListKind:    "List",
-	MapKind:     "Map",
-	RefKind:     "Ref",
-	SetKind:     "Set",
 }
 
 func primitiveToDesc(p string) PrimitiveDesc {

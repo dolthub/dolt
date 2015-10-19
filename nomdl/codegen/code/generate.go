@@ -40,6 +40,8 @@ func (gen Generator) DefType(t types.TypeRef) string {
 		return gen.UserName(t)
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return gen.UserName(t) + "Def"
+	case types.PackageKind:
+		return "types.Package"
 	case types.RefKind:
 		return "ref.Ref"
 	case types.ValueKind:
@@ -61,6 +63,8 @@ func (gen Generator) UserType(t types.TypeRef) string {
 		return strings.ToLower(kindToString(k))
 	case types.EnumKind, types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return gen.UserName(t)
+	case types.PackageKind:
+		return "types.Package"
 	case types.ValueKind:
 		return "types.Value"
 	case types.TypeRefKind:
@@ -73,8 +77,8 @@ func (gen Generator) UserType(t types.TypeRef) string {
 func (gen Generator) DefToValue(val string, t types.TypeRef) string {
 	t = gen.R.Resolve(t)
 	switch t.Kind() {
-	case types.BlobKind, types.ValueKind, types.TypeRefKind:
-		return val // Blob & Value type has no Def
+	case types.BlobKind, types.PackageKind, types.ValueKind, types.TypeRefKind:
+		return val // No special Def representation
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return gen.NativeToValue(val, t)
 	case types.EnumKind:
@@ -91,8 +95,8 @@ func (gen Generator) DefToValue(val string, t types.TypeRef) string {
 func (gen Generator) ValueToDef(val string, t types.TypeRef) string {
 	rt := gen.R.Resolve(t)
 	switch rt.Kind() {
-	case types.BlobKind:
-		return gen.ValueToUser(val, rt)
+	case types.BlobKind, types.PackageKind, types.TypeRefKind:
+		return gen.ValueToUser(val, rt) // No special Def representation
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return gen.ValueToNative(val, rt)
 	case types.EnumKind:
@@ -102,9 +106,7 @@ func (gen Generator) ValueToDef(val string, t types.TypeRef) string {
 	case types.RefKind:
 		return fmt.Sprintf("%s.Ref()", val)
 	case types.ValueKind:
-		return val // Value type has no Def
-	case types.TypeRefKind:
-		return gen.ValueToUser(val, rt)
+		return val // Value is already a Value
 	}
 	panic("unreachable")
 }
@@ -142,7 +144,7 @@ func (gen Generator) UserToValue(val string, t types.TypeRef) string {
 	t = gen.R.Resolve(t)
 	k := t.Kind()
 	switch k {
-	case types.BlobKind, types.ValueKind, types.TypeRefKind:
+	case types.BlobKind, types.PackageKind, types.ValueKind, types.TypeRefKind:
 		return val
 	case types.BoolKind, types.EnumKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return gen.NativeToValue(val, t)
@@ -165,6 +167,8 @@ func (gen Generator) ValueToUser(val string, t types.TypeRef) string {
 		return fmt.Sprintf("%s(%s.(types.UInt32))", gen.UserName(t), val)
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%sFromVal(%s)", gen.UserName(t), val)
+	case types.PackageKind:
+		return fmt.Sprintf("%s.(types.Package)", val)
 	case types.ValueKind:
 		return val
 	case types.TypeRefKind:
@@ -186,14 +190,12 @@ func (gen Generator) UserZero(t types.TypeRef) string {
 		return fmt.Sprintf("%s(0)", gen.UserType(t))
 	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return fmt.Sprintf("%s(0)", strings.ToLower(kindToString(k)))
-	case types.ListKind, types.MapKind, types.SetKind:
+	case types.ListKind, types.MapKind, types.PackageKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("New%s()", gen.UserType(t))
 	case types.RefKind:
 		return fmt.Sprintf("%s{ref.Ref{}}", gen.UserType(t))
 	case types.StringKind:
 		return `""`
-	case types.StructKind:
-		return fmt.Sprintf("New%s()", gen.UserName(t))
 	case types.ValueKind:
 		// TODO: This is where a null Value would have been useful.
 		return "types.Bool(false)"
@@ -220,6 +222,8 @@ func (gen Generator) ValueZero(t types.TypeRef) string {
 		return "types.NewList()"
 	case types.MapKind:
 		return "types.NewMap()"
+	case types.PackageKind:
+		return "types.NewPackage()"
 	case types.RefKind:
 		return "types.Ref{R: ref.Ref{}}"
 	case types.SetKind:
@@ -232,7 +236,7 @@ func (gen Generator) ValueZero(t types.TypeRef) string {
 		}
 		return fmt.Sprintf("New%s().NomsValue()", gen.UserName(rt))
 	case types.ValueKind:
-		// TODO: This is where a null Value would have been useful.
+		// TODO: Use nil here
 		return "types.Bool(false)"
 	case types.TypeRefKind:
 		return "types.TypeRef{}"
@@ -245,7 +249,7 @@ func (gen Generator) UserName(t types.TypeRef) string {
 	rt := gen.R.Resolve(t)
 	k := rt.Kind()
 	switch k {
-	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeRefKind:
+	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeRefKind:
 		return kindToString(k)
 	case types.EnumKind:
 		if t.HasPackageRef() {

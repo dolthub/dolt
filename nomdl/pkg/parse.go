@@ -16,29 +16,34 @@ func ParseNomDL(packageName string, r io.Reader, includePath string, cs chunks.C
 	i := runParser(packageName, r)
 	i.Name = packageName
 	imports := resolveImports(i.Aliases, includePath, cs)
-	depRefs := types.SetOfRefOfPackageDef{}
+	depsSet := make(map[ref.Ref]bool, len(imports))
+	deps := make([]ref.Ref, 0, len(imports))
 	for _, target := range imports {
-		depRefs[target] = true
+		if !depsSet[target] {
+			deps = append(deps, target)
+		}
+		depsSet[target] = true
+
 	}
 
 	resolveLocalOrdinals(&i)
-	resolveNamespaces(&i, imports, GetDeps(depRefs, cs))
+	resolveNamespaces(&i, imports, GetDeps(deps, cs))
 	return Parsed{
-		types.PackageDef{Dependencies: depRefs, Types: i.Types}.New(),
+		types.NewPackage(i.Types, deps),
 		i.Name,
 		i.UsingDeclarations,
 	}
 }
 
 // GetDeps reads the types.Package objects referred to by depRefs out of cs and returns a map of ref: PackageDef.
-func GetDeps(depRefs types.SetOfRefOfPackageDef, cs chunks.ChunkStore) map[ref.Ref]types.Package {
-	deps := map[ref.Ref]types.Package{}
-	for depRef := range depRefs {
+func GetDeps(deps []ref.Ref, cs chunks.ChunkStore) map[ref.Ref]types.Package {
+	depsMap := map[ref.Ref]types.Package{}
+	for _, depRef := range deps {
 		v := types.ReadValue(depRef, cs)
 		d.Chk.NotNil(v, "Importing package by ref %s failed.", depRef.String())
-		deps[depRef] = types.PackageFromVal(v)
+		depsMap[depRef] = v.(types.Package)
 	}
-	return deps
+	return depsMap
 }
 
 // Parsed represents a parsed Noms type package, which has some additional metadata beyond that which is present in a types.Package.
@@ -96,7 +101,7 @@ func resolveImports(aliases map[string]string, includePath string, cs chunks.Chu
 			d.Chk.NoError(err)
 			defer inFile.Close()
 			parsedDep := ParseNomDL(alias, inFile, filepath.Dir(canonical), cs)
-			imports[alias] = types.WriteValue(parsedDep.NomsValue(), cs)
+			imports[alias] = types.WriteValue(parsedDep.Package, cs)
 		} else {
 			imports[alias] = r
 		}

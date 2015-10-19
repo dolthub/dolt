@@ -97,6 +97,10 @@ func jsonDecodeTaggedValue(m map[string]interface{}) interface{} {
 			if v, ok := v.(map[string]interface{}); ok {
 				return jsonDecodeTypeRef(v)
 			}
+		case "package":
+			if v, ok := v.(map[string]interface{}); ok {
+				return jsonDecodePackage(v)
+			}
 		}
 		break
 	}
@@ -174,7 +178,6 @@ func jsonDecodeSet(input []interface{}) Set {
 }
 
 func jsonDecodeTypeRef(input map[string]interface{}) TypeRef {
-	var ok bool
 	name, ok := input["name"].(string)
 	d.Exp.True(ok, "Name field of type must be string, not %T (%#v)", input["name"], input["name"])
 	kind, ok := jsonDecodeValue(input["kind"]).(uint8)
@@ -184,4 +187,23 @@ func jsonDecodeTypeRef(input map[string]interface{}) TypeRef {
 		desc = jsonDecodeValue(input["desc"])
 	}
 	return TypeRef{Name: name, Kind: kind, Desc: desc}
+}
+
+func jsonDecodePackage(input map[string]interface{}) Package {
+	arr, ok := input["types"].([]interface{})
+	d.Exp.True(ok, "Types field of package must be an array, not %T (%#v)", input["types"], input["types"])
+	types := make([]TypeRef, len(arr))
+	for i, a := range arr {
+		types[i], ok = jsonDecodeValue(a).(TypeRef)
+		d.Exp.True(ok, "Types field of package must be an array of type refs, not %T (%#v)", a, a)
+	}
+
+	arr, ok = input["dependencies"].([]interface{})
+	d.Exp.True(ok, "Dependencies field of package must be an array, not %T (%#v)", input["dependencies"], input["dependencies"])
+	deps := make([]ref.Ref, len(arr))
+	for i, a := range arr {
+		deps[i] = jsonDecodeValue(a).(ref.Ref)
+		d.Exp.True(ok, "Dependencies field of package must be an array of refs, not %T (%#v)", a, a)
+	}
+	return Package{Types: types, Dependencies: deps}
 }

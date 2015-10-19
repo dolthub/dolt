@@ -4,7 +4,7 @@ package main
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/clients/gen/sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee"
+	"github.com/attic-labs/noms/clients/gen/sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -15,40 +15,38 @@ var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __mainPackageInFile_types_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("Node",
-				[]types.Field{
-					types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-3bfd4da1c27a6472279b96d731b47e58e8832dee"), 0), false},
-					types.Field{"Reference", types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind)), false},
-				},
-				types.Choices{},
-			),
-			types.MakeStructTypeRef("QuadTree",
-				[]types.Field{
-					types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
-					types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(ref.Ref{}, 1)), false},
-					types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
-					types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-					types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Georectangle", types.MakeTypeRef(ref.Parse("sha1-3bfd4da1c27a6472279b96d731b47e58e8832dee"), 1), false},
-				},
-				types.Choices{},
-			),
-			types.MakeStructTypeRef("SQuadTree",
-				[]types.Field{
-					types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))), false},
-					types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef(ref.Ref{}, 2))), false},
-					types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
-					types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-					types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Georectangle", types.MakeTypeRef(ref.Parse("sha1-3bfd4da1c27a6472279b96d731b47e58e8832dee"), 1), false},
-				},
-				types.Choices{},
-			),
-		},
-	}.New()
+		types.MakeStructTypeRef("Node",
+			[]types.Field{
+				types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-52bbaa7c5bcb39759981ccb12ee457f21fa7517d"), 0), false},
+				types.Field{"Reference", types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind)), false},
+			},
+			types.Choices{},
+		),
+		types.MakeStructTypeRef("QuadTree",
+			[]types.Field{
+				types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
+				types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(ref.Ref{}, 1)), false},
+				types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
+				types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+				types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Georectangle", types.MakeTypeRef(ref.Parse("sha1-52bbaa7c5bcb39759981ccb12ee457f21fa7517d"), 1), false},
+			},
+			types.Choices{},
+		),
+		types.MakeStructTypeRef("SQuadTree",
+			[]types.Field{
+				types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeCompoundTypeRef("", types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))), false},
+				types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef(ref.Ref{}, 2))), false},
+				types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
+				types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+				types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Georectangle", types.MakeTypeRef(ref.Parse("sha1-52bbaa7c5bcb39759981ccb12ee457f21fa7517d"), 1), false},
+			},
+			types.Choices{},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 
@@ -61,13 +59,13 @@ type Node struct {
 func NewNode() Node {
 	return Node{types.NewMap(
 		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
-		types.NewString("Geoposition"), sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.NewGeoposition().NomsValue(),
+		types.NewString("Geoposition"), sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.NewGeoposition().NomsValue(),
 		types.NewString("Reference"), types.Ref{R: ref.Ref{}},
 	)}
 }
 
 type NodeDef struct {
-	Geoposition sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeopositionDef
+	Geoposition sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeopositionDef
 	Reference   ref.Ref
 }
 
@@ -81,7 +79,7 @@ func (def NodeDef) New() Node {
 }
 
 func (s Node) Def() (d NodeDef) {
-	d.Geoposition = sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeopositionFromVal(s.m.Get(types.NewString("Geoposition"))).Def()
+	d.Geoposition = sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeopositionFromVal(s.m.Get(types.NewString("Geoposition"))).Def()
 	d.Reference = s.m.Get(types.NewString("Reference")).Ref()
 	return
 }
@@ -124,11 +122,11 @@ func (s Node) Chunks() (futures []types.Future) {
 	return
 }
 
-func (s Node) Geoposition() sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.Geoposition {
-	return sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeopositionFromVal(s.m.Get(types.NewString("Geoposition")))
+func (s Node) Geoposition() sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.Geoposition {
+	return sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeopositionFromVal(s.m.Get(types.NewString("Geoposition")))
 }
 
-func (s Node) SetGeoposition(val sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.Geoposition) Node {
+func (s Node) SetGeoposition(val sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.Geoposition) Node {
 	return Node{s.m.Set(types.NewString("Geoposition"), val.NomsValue())}
 }
 
@@ -154,7 +152,7 @@ func NewQuadTree() QuadTree {
 		types.NewString("Depth"), types.UInt8(0),
 		types.NewString("NumDescendents"), types.UInt32(0),
 		types.NewString("Path"), types.NewString(""),
-		types.NewString("Georectangle"), sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.NewGeorectangle().NomsValue(),
+		types.NewString("Georectangle"), sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.NewGeorectangle().NomsValue(),
 	)}
 }
 
@@ -164,7 +162,7 @@ type QuadTreeDef struct {
 	Depth          uint8
 	NumDescendents uint32
 	Path           string
-	Georectangle   sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeorectangleDef
+	Georectangle   sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeorectangleDef
 }
 
 func (def QuadTreeDef) New() QuadTree {
@@ -186,7 +184,7 @@ func (s QuadTree) Def() (d QuadTreeDef) {
 	d.Depth = uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
 	d.NumDescendents = uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
 	d.Path = s.m.Get(types.NewString("Path")).(types.String).String()
-	d.Georectangle = sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeorectangleFromVal(s.m.Get(types.NewString("Georectangle"))).Def()
+	d.Georectangle = sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeorectangleFromVal(s.m.Get(types.NewString("Georectangle"))).Def()
 	return
 }
 
@@ -268,11 +266,11 @@ func (s QuadTree) SetPath(val string) QuadTree {
 	return QuadTree{s.m.Set(types.NewString("Path"), types.NewString(val))}
 }
 
-func (s QuadTree) Georectangle() sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.Georectangle {
-	return sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeorectangleFromVal(s.m.Get(types.NewString("Georectangle")))
+func (s QuadTree) Georectangle() sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.Georectangle {
+	return sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeorectangleFromVal(s.m.Get(types.NewString("Georectangle")))
 }
 
-func (s QuadTree) SetGeorectangle(val sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.Georectangle) QuadTree {
+func (s QuadTree) SetGeorectangle(val sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.Georectangle) QuadTree {
 	return QuadTree{s.m.Set(types.NewString("Georectangle"), val.NomsValue())}
 }
 
@@ -290,7 +288,7 @@ func NewSQuadTree() SQuadTree {
 		types.NewString("Depth"), types.UInt8(0),
 		types.NewString("NumDescendents"), types.UInt32(0),
 		types.NewString("Path"), types.NewString(""),
-		types.NewString("Georectangle"), sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.NewGeorectangle().NomsValue(),
+		types.NewString("Georectangle"), sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.NewGeorectangle().NomsValue(),
 	)}
 }
 
@@ -300,7 +298,7 @@ type SQuadTreeDef struct {
 	Depth          uint8
 	NumDescendents uint32
 	Path           string
-	Georectangle   sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeorectangleDef
+	Georectangle   sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeorectangleDef
 }
 
 func (def SQuadTreeDef) New() SQuadTree {
@@ -322,7 +320,7 @@ func (s SQuadTree) Def() (d SQuadTreeDef) {
 	d.Depth = uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
 	d.NumDescendents = uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
 	d.Path = s.m.Get(types.NewString("Path")).(types.String).String()
-	d.Georectangle = sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeorectangleFromVal(s.m.Get(types.NewString("Georectangle"))).Def()
+	d.Georectangle = sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeorectangleFromVal(s.m.Get(types.NewString("Georectangle"))).Def()
 	return
 }
 
@@ -404,11 +402,11 @@ func (s SQuadTree) SetPath(val string) SQuadTree {
 	return SQuadTree{s.m.Set(types.NewString("Path"), types.NewString(val))}
 }
 
-func (s SQuadTree) Georectangle() sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.Georectangle {
-	return sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeorectangleFromVal(s.m.Get(types.NewString("Georectangle")))
+func (s SQuadTree) Georectangle() sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.Georectangle {
+	return sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeorectangleFromVal(s.m.Get(types.NewString("Georectangle")))
 }
 
-func (s SQuadTree) SetGeorectangle(val sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.Georectangle) SQuadTree {
+func (s SQuadTree) SetGeorectangle(val sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.Georectangle) SQuadTree {
 	return SQuadTree{s.m.Set(types.NewString("Georectangle"), val.NomsValue())}
 }
 

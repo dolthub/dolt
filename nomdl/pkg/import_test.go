@@ -34,10 +34,8 @@ func (suite *ImportTestSuite) SetupTest() {
 		types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
 		types.Field{"i", types.MakePrimitiveTypeRef(types.Int8Kind), false},
 	})
-	suite.nested = types.PackageDef{
-		Types: types.ListOfTypeRefDef{ns},
-	}.New()
-	suite.nestedRef = types.WriteValue(suite.nested.NomsValue(), suite.cs)
+	suite.nested = types.NewPackage([]types.TypeRef{ns}, []ref.Ref{})
+	suite.nestedRef = types.WriteValue(suite.nested, suite.cs)
 
 	fs := types.MakeStructTypeRef("ForeignStruct", []types.Field{
 		types.Field{"b", types.MakeTypeRef(ref.Ref{}, 1), false},
@@ -45,40 +43,37 @@ func (suite *ImportTestSuite) SetupTest() {
 	},
 		types.Choices{})
 	fe := types.MakeEnumTypeRef("ForeignEnum", "uno", "dos")
-	suite.imported = types.PackageDef{
-		Dependencies: types.SetOfRefOfPackageDef{suite.nestedRef: true},
-		Types:        types.ListOfTypeRefDef{fs, fe},
-	}.New()
-	suite.importRef = types.WriteValue(suite.imported.NomsValue(), suite.cs)
+	suite.imported = types.NewPackage([]types.TypeRef{fs, fe}, []ref.Ref{suite.nestedRef})
+	suite.importRef = types.WriteValue(suite.imported, suite.cs)
 }
 
 func (suite *ImportTestSuite) TestGetDeps() {
-	deps := GetDeps(types.SetOfRefOfPackageDef{suite.importRef: true}, suite.cs)
+	deps := GetDeps([]ref.Ref{suite.importRef}, suite.cs)
 	suite.Len(deps, 1)
 	imported, ok := deps[suite.importRef]
 	suite.True(ok, "%s is a dep; should have been found.", suite.importRef.String())
 
-	deps = GetDeps(imported.Dependencies().Def(), suite.cs)
+	deps = GetDeps(imported.Dependencies(), suite.cs)
 	suite.Len(deps, 1)
 	imported, ok = deps[suite.nestedRef]
 	suite.True(ok, "%s is a dep; should have been found.", suite.nestedRef.String())
 }
 
 func (suite *ImportTestSuite) TestResolveNamespace() {
-	deps := GetDeps(types.SetOfRefOfPackageDef{suite.importRef: true}, suite.cs)
+	deps := GetDeps([]ref.Ref{suite.importRef}, suite.cs)
 	t := resolveNamespace(types.MakeUnresolvedTypeRef("Other", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
 	suite.EqualValues(types.MakeTypeRef(suite.importRef, 1), t)
 }
 
 func (suite *ImportTestSuite) TestUnknownAlias() {
-	deps := GetDeps(types.SetOfRefOfPackageDef{suite.importRef: true}, suite.cs)
+	deps := GetDeps([]ref.Ref{suite.importRef}, suite.cs)
 	suite.Panics(func() {
 		resolveNamespace(types.MakeUnresolvedTypeRef("Bother", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
 	})
 }
 
 func (suite *ImportTestSuite) TestUnknownImportedType() {
-	deps := GetDeps(types.SetOfRefOfPackageDef{suite.importRef: true}, suite.cs)
+	deps := GetDeps([]ref.Ref{suite.importRef}, suite.cs)
 	suite.Panics(func() {
 		resolveNamespace(types.MakeUnresolvedTypeRef("Other", "NotThere"), map[string]ref.Ref{"Other": suite.importRef}, deps)
 	})
@@ -123,7 +118,7 @@ func (suite *ImportTestSuite) TestImports() {
 		suite.NoError(err)
 		defer inFile.Close()
 		parsedDep := ParseNomDL("", inFile, filepath.Dir(path), cs)
-		return types.WriteValue(parsedDep.NomsValue(), cs)
+		return types.WriteValue(parsedDep.Package, cs)
 	}
 
 	dir, err := ioutil.TempDir("", "")
@@ -164,34 +159,34 @@ func (suite *ImportTestSuite) TestImports() {
 		}`, suite.importRef, filepath.Base(byPathNomDL)))
 	p := ParseNomDL("testing", r, dir, suite.cs)
 
-	named := p.Types().Get(0)
+	named := p.Types()[0]
 	suite.Equal("Local1", named.Name())
 	field := find("a", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	field = find("c", named)
 	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 
-	named = p.Types().Get(1)
+	named = p.Types()[1]
 	suite.Equal("Local2", named.Name())
 	field = find("a", named)
 	suite.EqualValues(refFromNomsFile(byPathNomDL), field.T.PackageRef())
 	field = find("b", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 
-	named = p.Types().Get(2)
+	named = p.Types()[2]
 	suite.Equal("Union", named.Name())
 	field = findChoice("a", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	field = findChoice("b", named)
 	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 
-	named = p.Types().Get(3)
+	named = p.Types()[3]
 	suite.Equal("WithUnion", named.Name())
 	field = find("a", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	namedUnion := find("b", named).T
 	suite.True(namedUnion.IsUnresolved())
-	namedUnion = p.Types().Get(uint64(namedUnion.Ordinal()))
+	namedUnion = p.Types()[namedUnion.Ordinal()]
 	field = findChoice("s", namedUnion)
 	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
 	field = findChoice("t", namedUnion)

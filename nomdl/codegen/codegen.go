@@ -112,8 +112,8 @@ type depsMap map[ref.Ref]types.Package
 
 func generateDepCode(depsDir string, p types.Package, cs chunks.ChunkSource) depsMap {
 	deps := depsMap{}
-	p.Dependencies().IterAll(func(r types.RefOfPackage) {
-		p := r.GetValue(cs)
+	for _, r := range p.Dependencies() {
+		p := types.ReadValue(r, cs).(types.Package)
 		pDeps := generateDepCode(depsDir, p, cs)
 		tag := code.ToTag(p.Ref())
 		parsed := pkg.Parsed{Package: p, Name: tag}
@@ -122,8 +122,8 @@ func generateDepCode(depsDir string, p types.Package, cs chunks.ChunkSource) dep
 		for depRef, dep := range pDeps {
 			deps[depRef] = dep
 		}
-		deps[r.Ref()] = p
-	})
+		deps[r] = p
+	}
 	return deps
 }
 
@@ -166,9 +166,9 @@ func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) ty
 	for _, dep := range deps {
 		// Writing the deps into ds should be redundant at this point, but do it to be sure.
 		// TODO: consider moving all dataset work over into nomdl/pkg BUG 409
-		s = s.Insert(types.NewRefOfPackage(types.WriteValue(dep.NomsValue(), ds.Store())))
+		s = s.Insert(types.NewRefOfPackage(types.WriteValue(dep, ds.Store())))
 	}
-	r := types.WriteValue(pkg.NomsValue(), ds.Store())
+	r := types.WriteValue(pkg.Package, ds.Store())
 	return s.Insert(types.NewRefOfPackage(r))
 }
 
@@ -243,16 +243,16 @@ func (gen *codeGen) Resolve(t types.TypeRef) types.TypeRef {
 		return t
 	}
 	if !t.HasPackageRef() {
-		return gen.pkg.Types().Get(uint64(t.Ordinal()))
+		return gen.pkg.Types()[t.Ordinal()]
 	}
 
 	dep, ok := gen.deps[t.PackageRef()]
 	d.Chk.True(ok, "Package %s is referenced in %+v, but is not a dependency.", t.PackageRef().String(), t)
-	return dep.Types().Get(uint64(t.Ordinal()))
+	return dep.Types()[t.Ordinal()]
 }
 
 func (gen *codeGen) WritePackage() {
-	pkgTypes := gen.pkg.Types().Def()
+	pkgTypes := gen.pkg.Types()
 	data := struct {
 		HasImports bool
 		HasTypes   bool
@@ -308,7 +308,7 @@ func (gen *codeGen) write(t types.TypeRef) {
 	}
 	k := t.Kind()
 	switch k {
-	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeRefKind:
+	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeRefKind:
 		return
 	case types.ListKind:
 		gen.writeList(t)
@@ -567,5 +567,5 @@ func resolveInPackage(t types.TypeRef, p *types.Package) types.TypeRef {
 	if !t.IsUnresolved() {
 		return t
 	}
-	return p.Types().Get(uint64(t.Ordinal()))
+	return p.Types()[t.Ordinal()]
 }

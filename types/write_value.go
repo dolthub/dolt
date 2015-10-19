@@ -64,7 +64,13 @@ func toEncodeable(v interface{}, cs chunks.ChunkSink) interface{} {
 		return v.String()
 	case TypeRef:
 		return makeTypeEncodeable(v, cs)
+	case Package:
+		return makePackageEncodeable(v, cs)
 	default:
+		if v == nil {
+			return v
+		}
+		d.Chk.Fail("Unexpected type: %T, %#v", v, v)
 		return v
 	}
 }
@@ -119,10 +125,18 @@ func makeTypeEncodeable(t TypeRef, cs chunks.ChunkSink) interface{} {
 		pkgRef := t.PackageRef()
 		p := LookupPackage(pkgRef)
 		if p != nil {
-			pkgRef = writeChildValueInternal(p.NomsValue(), cs)
+			pkgRef = writeChildValueInternal(*p, cs)
 		}
 	}
 	return enc.TypeRef{Name: t.Name(), Kind: uint8(t.Kind()), Desc: toEncodeable(t.Desc.ToValue(), cs)}
+}
+
+func makePackageEncodeable(p Package, cs chunks.ChunkSink) interface{} {
+	types := make([]enc.TypeRef, len(p.types))
+	for i, t := range p.types {
+		types[i] = makeTypeEncodeable(t, cs).(enc.TypeRef)
+	}
+	return enc.Package{Types: types, Dependencies: p.dependencies}
 }
 
 func processChild(f Future, cs chunks.ChunkSink) interface{} {

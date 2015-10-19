@@ -13,32 +13,30 @@ var __testPackageInFile_struct_with_unions_CachedRef = __testPackageInFile_struc
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_struct_with_unions_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("StructWithUnions",
-				[]types.Field{
-					types.Field{"a", types.MakeTypeRef(ref.Ref{}, 1), false},
-					types.Field{"d", types.MakeTypeRef(ref.Ref{}, 2), false},
-				},
-				types.Choices{},
-			),
-			types.MakeStructTypeRef("",
-				[]types.Field{},
-				types.Choices{
-					types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-					types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
-				},
-			),
-			types.MakeStructTypeRef("",
-				[]types.Field{},
-				types.Choices{
-					types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-					types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
-				},
-			),
-		},
-	}.New()
+		types.MakeStructTypeRef("StructWithUnions",
+			[]types.Field{
+				types.Field{"a", types.MakeTypeRef(ref.Ref{}, 1), false},
+				types.Field{"d", types.MakeTypeRef(ref.Ref{}, 2), false},
+			},
+			types.Choices{},
+		),
+		types.MakeStructTypeRef("",
+			[]types.Field{},
+			types.Choices{
+				types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
+			},
+		),
+		types.MakeStructTypeRef("",
+			[]types.Field{},
+			types.Choices{
+				types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
+			},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 

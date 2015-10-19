@@ -35,6 +35,13 @@ func TestWriteValue(t *testing.T) {
 	tref := MakePrimitiveTypeRef(StringKind)
 	nomsValueString := valueAsNomsValue{Value: NewString("hi"), t: tref}
 	testEncode(fmt.Sprintf("t [%d,\"hi\"]\n", StringKind), nomsValueString)
+
+	testEncode(`j {"package":{"dependencies":[],"types":[]}}
+`, Package{types: []TypeRef{}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
+	ref1 := testEncode(`j {"package":{"dependencies":[],"types":[{"type":{"kind":{"uint8":0},"name":""}}]}}
+`, Package{types: []TypeRef{MakePrimitiveTypeRef(BoolKind)}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
+	testEncode(fmt.Sprintf(`j {"package":{"dependencies":[{"ref":"%s"}],"types":[]}}
+`, ref1), Package{types: []TypeRef{}, dependencies: []ref.Ref{ref1}, ref: &ref.Ref{}})
 }
 
 func TestWriteBlobLeaf(t *testing.T) {

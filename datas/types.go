@@ -13,18 +13,16 @@ var __datasPackageInFile_types_CachedRef = __datasPackageInFile_types_Ref()
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __datasPackageInFile_types_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("Commit",
-				[]types.Field{
-					types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
-					types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
-				},
-				types.Choices{},
-			),
-		},
-	}.New()
+		types.MakeStructTypeRef("Commit",
+			[]types.Field{
+				types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
+				types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
+			},
+			types.Choices{},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 

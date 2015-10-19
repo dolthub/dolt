@@ -92,6 +92,18 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 			w2.writeValue(v, elemTypes[1], pkg)
 		})
 		w.write(w2.toArray())
+	case PackageKind:
+		ptr := MakePrimitiveTypeRef(TypeRefKind)
+		w2 := newJsonArrayWriter()
+		for _, v := range v.(Package).types {
+			w2.writeValue(v, ptr, pkg)
+		}
+		w.write(w2.toArray())
+		w3 := newJsonArrayWriter()
+		for _, r := range v.(Package).dependencies {
+			w3.writeRef(r)
+		}
+		w.write(w3.toArray())
 	case RefKind:
 		w.writeRef(v.Ref())
 	case SetKind:
@@ -167,7 +179,7 @@ func (w *jsonArrayWriter) writeTypeRefKindValue(v Value, tr TypeRef, pkg *Packag
 
 // writeUnresolvedKindValue writes either a struct or an enum
 func (w *jsonArrayWriter) writeUnresolvedKindValue(v Value, tr TypeRef, pkg *Package) {
-	typeDef := pkg.Types().Get(uint64(tr.Ordinal()))
+	typeDef := pkg.types[tr.Ordinal()]
 	switch typeDef.Kind() {
 	default:
 		d.Chk.Fail("An Unresolved TypeRef can only reference a StructKind or Enum Kind.", "Actually referenced: %+v", typeDef)

@@ -13,18 +13,16 @@ var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __mainPackageInFile_types_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("Pitch",
-				[]types.Field{
-					types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-					types.Field{"Z", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-				},
-				types.Choices{},
-			),
-		},
-	}.New()
+		types.MakeStructTypeRef("Pitch",
+			[]types.Field{
+				types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"Z", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			},
+			types.Choices{},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 

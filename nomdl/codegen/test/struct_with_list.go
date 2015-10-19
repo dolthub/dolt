@@ -13,20 +13,18 @@ var __testPackageInFile_struct_with_list_CachedRef = __testPackageInFile_struct_
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_struct_with_list_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("StructWithList",
-				[]types.Field{
-					types.Field{"l", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
-					types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
-					types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"i", types.MakePrimitiveTypeRef(types.Int64Kind), false},
-				},
-				types.Choices{},
-			),
-		},
-	}.New()
+		types.MakeStructTypeRef("StructWithList",
+			[]types.Field{
+				types.Field{"l", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+				types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
+				types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"i", types.MakePrimitiveTypeRef(types.Int64Kind), false},
+			},
+			types.Choices{},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 

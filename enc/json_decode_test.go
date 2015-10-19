@@ -117,6 +117,14 @@ func TestJSONDecode(t *testing.T) {
 	cl2 := CompoundList{[]uint64{5, 6, 12}, []ref.Ref{llr, llr2, llr3}}
 	testDecode(`j {"cl":["sha1-c35018551e725bd2ab45166b69d15fda00b161c1",5,"sha1-641283a12b475ed58ba510517c1224a912e934a6",1,"sha1-8169c017ce2779f3f66bfe27ee2313d71f7698b9",6]}
 `, cl2)
+
+	// Package
+	testDecode(`j {"package":{"dependencies":[],"types":[]}}
+`, Package{Types: []TypeRef{}, Dependencies: []ref.Ref{}})
+	testDecode(`j {"package":{"dependencies":[],"types":[{"type":{"kind":{"uint8":0},"name":""}}]}}
+`, Package{Types: []TypeRef{TypeRef{Kind: 0, Name: ""}}, Dependencies: []ref.Ref{}})
+	testDecode(fmt.Sprintf(`j {"package":{"dependencies":[{"ref":"%s"}],"types":[]}}
+`, ref1), Package{Types: []TypeRef{}, Dependencies: []ref.Ref{ref1}})
 }
 
 func TestCompoundBlobJSONDecodeInvalidFormat(t *testing.T) {

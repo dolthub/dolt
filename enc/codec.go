@@ -19,6 +19,7 @@
 //   - enc.Set of any encodeable type
 //   - enc.CompoundBlob, a struct containing metadata for encoding a chunked blob.
 //   - enc.CompoundList, a struct containing metadata for encoding a chunked list.
+//   - enc.Package, a struct containing metadata for encoding a package.
 //   - TODO: Add support for structs, and make CompoundBlob/CompoundList use that. BUG #165
 package enc
 

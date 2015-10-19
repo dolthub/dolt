@@ -209,7 +209,7 @@ func TestReadStruct(t *testing.T) {
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 	}, Choices{})
-	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, 42, "hi", true]`, UnresolvedKind, pkgRef.String())
@@ -238,7 +238,7 @@ func TestReadStructUnion(t *testing.T) {
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	})
-	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, 42, 1, "hi"]`, UnresolvedKind, pkgRef.String())
@@ -268,7 +268,7 @@ func TestReadStructOptional(t *testing.T) {
 		Field{"s", MakePrimitiveTypeRef(StringKind), true},
 		Field{"b", MakePrimitiveTypeRef(BoolKind), true},
 	}, Choices{})
-	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, 42, false, true, false]`, UnresolvedKind, pkgRef.String())
@@ -302,7 +302,7 @@ func TestReadStructWithList(t *testing.T) {
 		Field{"l", MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int32Kind)), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	}, Choices{})
-	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, true, [0, 1, 2], "hi"]`, UnresolvedKind, pkgRef.String())
@@ -341,7 +341,7 @@ func TestReadStructWithValue(t *testing.T) {
 		Field{"v", MakePrimitiveTypeRef(ValueKind), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	}, Choices{})
-	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, true, %d, 42, "hi"]`, UnresolvedKind, pkgRef.String(), UInt8Kind)
@@ -375,7 +375,7 @@ func TestReadValueStruct(t *testing.T) {
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 	}, Choices{})
-	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, %d, "%s", 0, 42, "hi", true]`, ValueKind, UnresolvedKind, pkgRef.String())
@@ -399,7 +399,7 @@ func TestReadEnum(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	tref := MakeEnumTypeRef("E", "a", "b", "c")
-	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, 1]`, UnresolvedKind, pkgRef.String())
@@ -414,7 +414,7 @@ func TestReadValueEnum(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	tref := MakeEnumTypeRef("E", "a", "b", "c")
-	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, %d, "%s", 0, 1]`, ValueKind, UnresolvedKind, pkgRef.String())
@@ -480,7 +480,7 @@ func TestReadStructWithEnum(t *testing.T) {
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 	}, Choices{})
 	enumTref := MakeEnumTypeRef("E", "a", "b", "c")
-	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(structTref, enumTref))
+	pkg := NewPackage([]TypeRef{structTref, enumTref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, 42, 1, true]`, UnresolvedKind, pkgRef.String())
@@ -510,7 +510,7 @@ func TestReadStructWithBlob(t *testing.T) {
 	tref := MakeStructTypeRef("A5", []Field{
 		Field{"b", MakePrimitiveTypeRef(BlobKind), false},
 	}, Choices{})
-	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, "AAE="]`, UnresolvedKind, pkgRef.String())
@@ -573,17 +573,15 @@ func TestReadTypeRefValue(t *testing.T) {
 
 func TestReadPackage(t *testing.T) {
 	cs := chunks.NewMemoryStore()
-	pkg := PackageDef{
-		Types: ListOfTypeRefDef{
-			MakeStructTypeRef("EnumStruct",
-				[]Field{
-					Field{"hand", MakeTypeRef(ref.Ref{}, 1), false},
-				},
-				Choices{},
-			),
-			MakeEnumTypeRef("Handedness", "right", "left", "switch"),
-		},
-	}.New()
+	pkg := NewPackage([]TypeRef{
+		MakeStructTypeRef("EnumStruct",
+			[]Field{
+				Field{"hand", MakeTypeRef(ref.Ref{}, 1), false},
+			},
+			Choices{},
+		),
+		MakeEnumTypeRef("Handedness", "right", "left", "switch"),
+	}, []ref.Ref{})
 
 	// struct Package {
 	// 	Dependencies: Set(Ref(Package))
@@ -591,16 +589,29 @@ func TestReadPackage(t *testing.T) {
 	// }
 
 	a := []interface{}{
-		float64(UnresolvedKind), __typesPackageInFile_package_CachedRef.String(), float64(0),
-		[]interface{}{}, // Dependencies
+		float64(PackageKind),
 		[]interface{}{ // Types
 			float64(StructKind), "EnumStruct", []interface{}{
 				"hand", float64(UnresolvedKind), "sha1-0000000000000000000000000000000000000000", float64(1), false,
 			}, []interface{}{},
 			float64(EnumKind), "Handedness", []interface{}{"right", "left", "switch"},
 		},
+		[]interface{}{}, // Dependencies
 	}
 	r := newJsonArrayReader(a, cs)
-	pkg2 := r.readTopLevelValue().(Package)
+	pkg2 := r.readTopLevelValue().NomsValue().(Package)
 	assert.True(t, pkg.Equals(pkg2))
+}
+
+func TestReadPackage2(t *testing.T) {
+	cs := chunks.NewMemoryStore()
+
+	rr := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
+	setTref := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(UInt32Kind))
+	pkg := NewPackage([]TypeRef{setTref}, []ref.Ref{rr})
+
+	a := []interface{}{float64(PackageKind), []interface{}{float64(SetKind), []interface{}{float64(UInt32Kind)}}, []interface{}{rr.String()}}
+	r := newJsonArrayReader(a, cs)
+	v := r.readTopLevelValue().NomsValue().(Package)
+	assert.True(t, pkg.Equals(v))
 }

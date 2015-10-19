@@ -13,46 +13,44 @@ var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __mainPackageInFile_types_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("Geoposition",
-				[]types.Field{
-					types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-					types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-				},
-				types.Choices{},
-			),
-			types.MakeStructTypeRef("Georectangle",
-				[]types.Field{
-					types.Field{"TopLeft", types.MakeTypeRef(ref.Ref{}, 0), false},
-					types.Field{"BottomRight", types.MakeTypeRef(ref.Ref{}, 0), false},
-				},
-				types.Choices{},
-			),
-			types.MakeStructTypeRef("Incident",
-				[]types.Field{
-					types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Geoposition", types.MakeTypeRef(ref.Ref{}, 0), false},
-				},
-				types.Choices{},
-			),
-			types.MakeStructTypeRef("SQuadTree",
-				[]types.Field{
-					types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Ref{}, 2)), false},
-					types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(ref.Ref{}, 3)), false},
-					types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
-					types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-					types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Georectangle", types.MakeTypeRef(ref.Ref{}, 1), false},
-				},
-				types.Choices{},
-			),
-		},
-	}.New()
+		types.MakeStructTypeRef("Geoposition",
+			[]types.Field{
+				types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+				types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+			},
+			types.Choices{},
+		),
+		types.MakeStructTypeRef("Georectangle",
+			[]types.Field{
+				types.Field{"TopLeft", types.MakeTypeRef(ref.Ref{}, 0), false},
+				types.Field{"BottomRight", types.MakeTypeRef(ref.Ref{}, 0), false},
+			},
+			types.Choices{},
+		),
+		types.MakeStructTypeRef("Incident",
+			[]types.Field{
+				types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Geoposition", types.MakeTypeRef(ref.Ref{}, 0), false},
+			},
+			types.Choices{},
+		),
+		types.MakeStructTypeRef("SQuadTree",
+			[]types.Field{
+				types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Ref{}, 2)), false},
+				types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(ref.Ref{}, 3)), false},
+				types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
+				types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+				types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Georectangle", types.MakeTypeRef(ref.Ref{}, 1), false},
+			},
+			types.Choices{},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 

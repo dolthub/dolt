@@ -47,6 +47,11 @@ type TypeRef struct {
 	Desc interface{}
 }
 
+type Package struct {
+	Types        []TypeRef
+	Dependencies []ref.Ref
+}
+
 func jsonEncode(dst io.Writer, v interface{}) {
 	var j interface{}
 	j = getJSON(v)
@@ -70,6 +75,8 @@ func getJSON(v interface{}) interface{} {
 		return getJSONMap(v)
 	case Set:
 		return getJSONSet(v)
+	case Package:
+		return getJSONPackage(v)
 	default:
 		return getJSONPrimitive(v)
 	}
@@ -182,6 +189,22 @@ func getJSONTypeRef(t TypeRef) interface{} {
 		body["desc"] = getJSON(t.Desc)
 	}
 	return map[string]interface{}{"type": body}
+}
+
+func getJSONPackage(p Package) interface{} {
+	types := make([]interface{}, len(p.Types))
+	deps := make([]interface{}, len(p.Dependencies))
+	for i, t := range p.Types {
+		types[i] = getJSONTypeRef(t)
+	}
+	for i, d := range p.Dependencies {
+		deps[i] = getJSONPrimitive(d)
+	}
+	body := map[string]interface{}{
+		"types":        types,
+		"dependencies": deps,
+	}
+	return map[string]interface{}{"package": body}
 }
 
 func getJSONIterable(tag string, items []interface{}) interface{} {

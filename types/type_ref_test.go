@@ -45,9 +45,7 @@ func TestTypeWithPkgRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg := PackageDef{
-		Types: ListOfTypeRefDef{MakePrimitiveTypeRef(Float64Kind)},
-	}.New()
+	pkg := NewPackage([]TypeRef{MakePrimitiveTypeRef(Float64Kind)}, []ref.Ref{})
 
 	pkgRef := RegisterPackage(&pkg)
 	unresolvedType := MakeTypeRef(pkgRef, 42)

@@ -13,17 +13,15 @@ var __testPackageInFile_struct_recursive_CachedRef = __testPackageInFile_struct_
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_struct_recursive_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("Tree",
-				[]types.Field{
-					types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
-				},
-				types.Choices{},
-			),
-		},
-	}.New()
+		types.MakeStructTypeRef("Tree",
+			[]types.Field{
+				types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
+			},
+			types.Choices{},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 

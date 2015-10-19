@@ -3,7 +3,7 @@
 package main
 
 import (
-	"github.com/attic-labs/noms/clients/gen/sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee"
+	"github.com/attic-labs/noms/clients/gen/sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -14,27 +14,25 @@ var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __mainPackageInFile_types_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("Incident",
-				[]types.Field{
-					types.Field{"ID", types.MakePrimitiveTypeRef(types.Int64Kind), false},
-					types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"DayOfWeek", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Time", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"PdDistrict", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Resolution", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-3bfd4da1c27a6472279b96d731b47e58e8832dee"), 0), false},
-					types.Field{"PdID", types.MakePrimitiveTypeRef(types.StringKind), false},
-				},
-				types.Choices{},
-			),
-		},
-	}.New()
+		types.MakeStructTypeRef("Incident",
+			[]types.Field{
+				types.Field{"ID", types.MakePrimitiveTypeRef(types.Int64Kind), false},
+				types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"DayOfWeek", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Time", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"PdDistrict", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Resolution", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-52bbaa7c5bcb39759981ccb12ee457f21fa7517d"), 0), false},
+				types.Field{"PdID", types.MakePrimitiveTypeRef(types.StringKind), false},
+			},
+			types.Choices{},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 
@@ -56,7 +54,7 @@ func NewIncident() Incident {
 		types.NewString("PdDistrict"), types.NewString(""),
 		types.NewString("Resolution"), types.NewString(""),
 		types.NewString("Address"), types.NewString(""),
-		types.NewString("Geoposition"), sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.NewGeoposition().NomsValue(),
+		types.NewString("Geoposition"), sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.NewGeoposition().NomsValue(),
 		types.NewString("PdID"), types.NewString(""),
 	)}
 }
@@ -71,7 +69,7 @@ type IncidentDef struct {
 	PdDistrict  string
 	Resolution  string
 	Address     string
-	Geoposition sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeopositionDef
+	Geoposition sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeopositionDef
 	PdID        string
 }
 
@@ -103,7 +101,7 @@ func (s Incident) Def() (d IncidentDef) {
 	d.PdDistrict = s.m.Get(types.NewString("PdDistrict")).(types.String).String()
 	d.Resolution = s.m.Get(types.NewString("Resolution")).(types.String).String()
 	d.Address = s.m.Get(types.NewString("Address")).(types.String).String()
-	d.Geoposition = sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeopositionFromVal(s.m.Get(types.NewString("Geoposition"))).Def()
+	d.Geoposition = sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeopositionFromVal(s.m.Get(types.NewString("Geoposition"))).Def()
 	d.PdID = s.m.Get(types.NewString("PdID")).(types.String).String()
 	return
 }
@@ -218,11 +216,11 @@ func (s Incident) SetAddress(val string) Incident {
 	return Incident{s.m.Set(types.NewString("Address"), types.NewString(val))}
 }
 
-func (s Incident) Geoposition() sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.Geoposition {
-	return sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeopositionFromVal(s.m.Get(types.NewString("Geoposition")))
+func (s Incident) Geoposition() sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.Geoposition {
+	return sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeopositionFromVal(s.m.Get(types.NewString("Geoposition")))
 }
 
-func (s Incident) SetGeoposition(val sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.Geoposition) Incident {
+func (s Incident) SetGeoposition(val sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.Geoposition) Incident {
 	return Incident{s.m.Set(types.NewString("Geoposition"), val.NomsValue())}
 }
 

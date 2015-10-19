@@ -142,6 +142,22 @@ func (r *jsonArrayReader) readEnum(t TypeRef) NomsValue {
 	return valueAsNomsValue{UInt32(r.read().(float64)), t}
 }
 
+func (r *jsonArrayReader) readPackage(t TypeRef, pkg *Package) NomsValue {
+	r2 := newJsonArrayReader(r.readArray(), r.cs)
+	types := []TypeRef{}
+	for !r2.atEnd() {
+		types = append(types, r2.readTypeRefAsValue(pkg))
+	}
+
+	r3 := newJsonArrayReader(r.readArray(), r.cs)
+	deps := []ref.Ref{}
+	for !r3.atEnd() {
+		deps = append(deps, r3.readRef())
+	}
+
+	return valueAsNomsValue{NewPackage(types, deps), t}
+}
+
 func (r *jsonArrayReader) readRefValue(t TypeRef) NomsValue {
 	ref := r.readRef()
 	v := Ref{R: ref}
@@ -191,6 +207,8 @@ func (r *jsonArrayReader) readValueWithoutTag(t TypeRef, pkg *Package) NomsValue
 	case MapKind:
 		r2 := newJsonArrayReader(r.readArray(), r.cs)
 		return r2.readMap(t, pkg)
+	case PackageKind:
+		return r.readPackage(t, pkg)
 	case RefKind:
 		return r.readRefValue(t)
 	case SetKind:
@@ -220,7 +238,7 @@ func (r *jsonArrayReader) readUnresolvedKindToValue(t TypeRef, pkg *Package) Nom
 		pkg = pkg2
 	}
 
-	typeDef := pkg.Types().Get(uint64(ordinal))
+	typeDef := pkg.types[ordinal]
 
 	if typeDef.Kind() == EnumKind {
 		return r.readEnum(t)

@@ -13,18 +13,16 @@ var __testPackageInFile_struct_optional_CachedRef = __testPackageInFile_struct_o
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __testPackageInFile_struct_optional_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 
-			types.MakeStructTypeRef("OptionalStruct",
-				[]types.Field{
-					types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), true},
-					types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), true},
-				},
-				types.Choices{},
-			),
-		},
-	}.New()
+		types.MakeStructTypeRef("OptionalStruct",
+			[]types.Field{
+				types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), true},
+				types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), true},
+			},
+			types.Choices{},
+		),
+	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 

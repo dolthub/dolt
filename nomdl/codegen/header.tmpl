@@ -16,12 +16,10 @@ var __{{.Name}}PackageInFile_{{.FileID}}_CachedRef = __{{.Name}}PackageInFile_{{
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func __{{.Name}}PackageInFile_{{.FileID}}_Ref() ref.Ref {
-	p := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
+	p := types.NewPackage([]types.TypeRef{
 			{{range $t := .Types}}
 			{{toTypesTypeRef $t "" ""}},{{end}}
-		},
-	}.New()
+		}, []ref.Ref{})
 	return types.RegisterPackage(&p)
 }
 {{end}}

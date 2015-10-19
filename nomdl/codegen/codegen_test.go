@@ -78,7 +78,7 @@ func TestCanUseDef(t *testing.T) {
 		for _, t := range pkg.UsingDeclarations {
 			assert.Equal(using, gen.canUseDef(t))
 		}
-		for _, t := range pkg.Types().Def() {
+		for _, t := range pkg.Types() {
 			assert.Equal(named, gen.canUseDef(t))
 		}
 	}
@@ -162,15 +162,14 @@ func TestImportedTypes(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
-	imported := types.PackageDef{
-		Types: types.ListOfTypeRefDef{
-			types.MakeEnumTypeRef("E1", "a", "b"),
-			types.MakeStructTypeRef("S1", []types.Field{
-				types.Field{"f", types.MakePrimitiveTypeRef(types.BoolKind), false},
-				types.Field{"e", types.MakeTypeRef(ref.Ref{}, 0), false},
-			}, types.Choices{})},
-	}.New()
-	importedRef := types.WriteValue(imported.NomsValue(), ds)
+	imported := types.NewPackage([]types.TypeRef{
+		types.MakeEnumTypeRef("E1", "a", "b"),
+		types.MakeStructTypeRef("S1", []types.Field{
+			types.Field{"f", types.MakePrimitiveTypeRef(types.BoolKind), false},
+			types.Field{"e", types.MakeTypeRef(ref.Ref{}, 0), false},
+		}, types.Choices{}),
+	}, []ref.Ref{})
+	importedRef := types.WriteValue(imported, ds)
 	pkgDS, ok := pkgDS.Commit(types.NewSetOfRefOfPackage().Insert(types.NewRefOfPackage(importedRef)).NomsValue())
 	assert.True(ok)
 
@@ -227,15 +226,15 @@ func TestGenerateDeps(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
-	leaf1 := types.PackageDef{Types: types.ListOfTypeRefDef{types.MakeEnumTypeRef("e1", "a", "b")}}.New()
-	leaf1Ref := types.WriteValue(leaf1.NomsValue(), cs)
-	leaf2 := types.PackageDef{Types: types.ListOfTypeRefDef{types.MakePrimitiveTypeRef(types.BoolKind)}}.New()
-	leaf2Ref := types.WriteValue(leaf2.NomsValue(), cs)
+	leaf1 := types.NewPackage([]types.TypeRef{types.MakeEnumTypeRef("e1", "a", "b")}, []ref.Ref{})
+	leaf1Ref := types.WriteValue(leaf1, cs)
+	leaf2 := types.NewPackage([]types.TypeRef{types.MakePrimitiveTypeRef(types.BoolKind)}, []ref.Ref{})
+	leaf2Ref := types.WriteValue(leaf2, cs)
 
-	depender := types.PackageDef{Dependencies: types.SetOfRefOfPackageDef{leaf1Ref: true}}.New()
-	dependerRef := types.WriteValue(depender.NomsValue(), cs)
+	depender := types.NewPackage([]types.TypeRef{}, []ref.Ref{leaf1Ref})
+	dependerRef := types.WriteValue(depender, cs)
 
-	top := types.PackageDef{Dependencies: types.SetOfRefOfPackageDef{leaf2Ref: true, dependerRef: true}}.New()
+	top := types.NewPackage([]types.TypeRef{}, []ref.Ref{leaf2Ref, dependerRef})
 	types.RegisterPackage(&top)
 
 	generateDepCode(dir, top, cs)
@@ -266,6 +265,6 @@ func TestCommitNewPackages(t *testing.T) {
 	pkgDS = generate("name", inFile, filepath.Join(dir, "out.go"), dir, pkgDS)
 	s := types.SetOfRefOfPackageFromVal(pkgDS.Head().Value())
 	assert.EqualValues(1, s.Len())
-	tr := s.Any().GetValue(ds).Types().Get(0)
+	tr := s.Any().GetValue(ds).Types()[0]
 	assert.EqualValues(types.StructKind, tr.Kind())
 }
