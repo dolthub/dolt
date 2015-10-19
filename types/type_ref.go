@@ -145,7 +145,7 @@ func MakeTypeRef(pkgRef ref.Ref, ordinal int16) TypeRef {
 	return TypeRef{Desc: UnresolvedDesc{pkgRef, ordinal}, ref: &ref.Ref{}}
 }
 
-func MakeExternalTypeRef(namespace, n string) TypeRef {
+func MakeUnresolvedTypeRef(namespace, n string) TypeRef {
 	return TypeRef{name: name{namespace, n}, Desc: UnresolvedDesc{ordinal: -1}, ref: &ref.Ref{}}
 }
 
@@ -154,7 +154,7 @@ func buildType(n string, desc TypeDesc) TypeRef {
 		return TypeRef{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
 	}
 	switch desc.Kind() {
-	case ListKind, RefKind, SetKind, MapKind, EnumKind, StructKind:
+	case ListKind, RefKind, SetKind, MapKind, EnumKind, StructKind, UnresolvedKind:
 		return TypeRef{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
 	default:
 		d.Exp.Fail("Unrecognized Kind:", "%v", desc.Kind())

@@ -70,7 +70,7 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 		kind := NomsKind(i.Kind)
 		desc := typeDescFromInterface(kind, i.Desc, cs)
 		if desc, ok := desc.(UnresolvedDesc); ok {
-			d.Chk.Equal(TypeRefKind, kind)
+			d.Chk.Equal(UnresolvedKind, kind)
 			return futureFromValue(MakeTypeRef(desc.pkgRef, desc.ordinal))
 		}
 		return futureFromValue(buildType(i.Name, desc))
@@ -132,7 +132,7 @@ func typeDescFromInterface(kind NomsKind, i interface{}, cs chunks.ChunkSource) 
 	case StructKind:
 		items := i.(enc.Map)
 		return StructDescFromMap(mapFromFutures(futuresFromIterable(items, cs), cs))
-	case TypeRefKind:
+	case UnresolvedKind:
 		items := i.([]interface{})
 		pkgRef := items[0].(ref.Ref)
 		ordinal := items[1].(int16)
