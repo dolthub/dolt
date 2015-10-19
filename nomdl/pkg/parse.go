@@ -24,7 +24,7 @@ func ParseNomDL(packageName string, r io.Reader, includePath string, cs chunks.C
 	resolveLocalOrdinals(&i)
 	resolveNamespaces(&i, imports, GetDeps(depRefs, cs))
 	return Parsed{
-		types.PackageDef{Dependencies: depRefs, Types: i.Types},
+		types.PackageDef{Dependencies: depRefs, Types: i.Types}.New(),
 		i.Name,
 		i.UsingDeclarations,
 	}
@@ -44,7 +44,7 @@ func GetDeps(depRefs types.SetOfRefOfPackageDef, cs chunks.ChunkStore) map[ref.R
 // Parsed represents a parsed Noms type package, which has some additional metadata beyond that which is present in a types.Package.
 // UsingDeclarations is kind of a hack to indicate specializations of Noms containers that need to be generated. These should all be one of ListKind, SetKind, MapKind or RefKind, and Desc should be a CompoundDesc instance.
 type Parsed struct {
-	types.PackageDef
+	types.Package
 	Name              string
 	UsingDeclarations []types.TypeRef
 }
@@ -96,7 +96,7 @@ func resolveImports(aliases map[string]string, includePath string, cs chunks.Chu
 			d.Chk.NoError(err)
 			defer inFile.Close()
 			parsedDep := ParseNomDL(alias, inFile, filepath.Dir(canonical), cs)
-			imports[alias] = types.WriteValue(parsedDep.New().NomsValue(), cs)
+			imports[alias] = types.WriteValue(parsedDep.NomsValue(), cs)
 		} else {
 			imports[alias] = r
 		}

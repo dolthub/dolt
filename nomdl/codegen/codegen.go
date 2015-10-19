@@ -99,7 +99,7 @@ func generate(packageName, in, out, depsDir string, pkgDS dataset.Dataset) datas
 	p := pkg.ParseNomDL(packageName, inFile, filepath.Dir(in), pkgDS.Store())
 
 	// Generate code for all p's deps first.
-	deps := generateDepCode(depsDir, p.New(), pkgDS.Store())
+	deps := generateDepCode(depsDir, p.Package, pkgDS.Store())
 	generateAndEmit(getBareFileName(in), out, importPaths(depsDir, deps), deps, p)
 
 	// Since we're just building up a set of refs to all the packages in pkgDS, simply retrying is the logical response to commit failure.
@@ -116,7 +116,7 @@ func generateDepCode(depsDir string, p types.Package, cs chunks.ChunkSource) dep
 		p := r.GetValue(cs)
 		pDeps := generateDepCode(depsDir, p, cs)
 		tag := code.ToTag(p.Ref())
-		parsed := pkg.Parsed{PackageDef: p.Def(), Name: tag}
+		parsed := pkg.Parsed{Package: p, Name: tag}
 		generateAndEmit(tag, filepath.Join(depsDir, tag, tag+".go"), importPaths(depsDir, pDeps), pDeps, parsed)
 
 		for depRef, dep := range pDeps {
@@ -168,7 +168,7 @@ func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) ty
 		// TODO: consider moving all dataset work over into nomdl/pkg BUG 409
 		s = s.Insert(types.NewRefOfPackage(types.WriteValue(dep.NomsValue(), ds.Store())))
 	}
-	r := types.WriteValue(pkg.New().NomsValue(), ds.Store())
+	r := types.WriteValue(pkg.NomsValue(), ds.Store())
 	return s.Insert(types.NewRefOfPackage(r))
 }
 
@@ -243,7 +243,7 @@ func (gen *codeGen) Resolve(t types.TypeRef) types.TypeRef {
 		return t
 	}
 	if !t.HasPackageRef() {
-		return gen.pkg.Types[t.Ordinal()]
+		return gen.pkg.Types().Get(uint64(t.Ordinal()))
 	}
 
 	dep, ok := gen.deps[t.PackageRef()]
@@ -252,6 +252,7 @@ func (gen *codeGen) Resolve(t types.TypeRef) types.TypeRef {
 }
 
 func (gen *codeGen) WritePackage() {
+	pkgTypes := gen.pkg.Types().Def()
 	data := struct {
 		HasImports bool
 		HasTypes   bool
@@ -261,16 +262,16 @@ func (gen *codeGen) WritePackage() {
 		Types      []types.TypeRef
 	}{
 		len(gen.imports) > 0,
-		len(gen.pkg.Types) > 0,
+		len(pkgTypes) > 0,
 		gen.fileid,
 		gen.imports,
 		gen.pkg.Name,
-		gen.pkg.Types,
+		pkgTypes,
 	}
 	err := gen.templates.ExecuteTemplate(gen.w, "header.tmpl", data)
 	d.Exp.NoError(err)
 
-	for i, t := range gen.pkg.Types {
+	for i, t := range pkgTypes {
 		gen.writeTopLevel(t, i)
 	}
 
@@ -520,8 +521,7 @@ func (gen *codeGen) canUseDef(t types.TypeRef) bool {
 		}
 	}
 
-	// TODO: pkg.Parsed.New() gets called too often. Figure out whether we generally want a Package or a PackageDef and modify pkg.Parsed accordingly. BUG 420
-	return rec(t, gen.pkg.New())
+	return rec(t, gen.pkg.Package)
 }
 
 // We use a go map as the def for Set and Map. These cannot have a key that is a
@@ -559,8 +559,8 @@ func (gen *codeGen) containsNonComparable(t types.TypeRef) bool {
 			return false
 		}
 	}
-	// TODO: pkg.Parsed.New() gets called too often. Figure out whether we generally want a Package or a PackageDef and modify pkg.Parsed accordingly. BUG 420
-	return rec(t, gen.pkg.New())
+
+	return rec(t, gen.pkg.Package)
 }
 
 func resolveInPackage(t types.TypeRef, p *types.Package) types.TypeRef {
