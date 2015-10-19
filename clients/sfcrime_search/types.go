@@ -3,6 +3,7 @@
 package main
 
 import (
+	"github.com/attic-labs/noms/clients/gen/sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -15,219 +16,29 @@ var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
 func __mainPackageInFile_types_Ref() ref.Ref {
 	p := types.NewPackage([]types.TypeRef{
 
-		types.MakeStructTypeRef("Geoposition",
-			[]types.Field{
-				types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-				types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-			},
-			types.Choices{},
-		),
-		types.MakeStructTypeRef("Georectangle",
-			[]types.Field{
-				types.Field{"TopLeft", types.MakeTypeRef(ref.Ref{}, 0), false},
-				types.Field{"BottomRight", types.MakeTypeRef(ref.Ref{}, 0), false},
-			},
-			types.Choices{},
-		),
 		types.MakeStructTypeRef("Incident",
 			[]types.Field{
 				types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Geoposition", types.MakeTypeRef(ref.Ref{}, 0), false},
+				types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-52bbaa7c5bcb39759981ccb12ee457f21fa7517d"), 0), false},
 			},
 			types.Choices{},
 		),
 		types.MakeStructTypeRef("SQuadTree",
 			[]types.Field{
-				types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Ref{}, 2)), false},
-				types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(ref.Ref{}, 3)), false},
+				types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
+				types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(ref.Ref{}, 1)), false},
 				types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
 				types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
 				types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Georectangle", types.MakeTypeRef(ref.Ref{}, 1), false},
+				types.Field{"Georectangle", types.MakeTypeRef(ref.Parse("sha1-52bbaa7c5bcb39759981ccb12ee457f21fa7517d"), 1), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{})
 	return types.RegisterPackage(&p)
-}
-
-// Geoposition
-
-type Geoposition struct {
-	m types.Map
-}
-
-func NewGeoposition() Geoposition {
-	return Geoposition{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
-		types.NewString("Latitude"), types.Float32(0),
-		types.NewString("Longitude"), types.Float32(0),
-	)}
-}
-
-type GeopositionDef struct {
-	Latitude  float32
-	Longitude float32
-}
-
-func (def GeopositionDef) New() Geoposition {
-	return Geoposition{
-		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
-			types.NewString("Latitude"), types.Float32(def.Latitude),
-			types.NewString("Longitude"), types.Float32(def.Longitude),
-		)}
-}
-
-func (s Geoposition) Def() (d GeopositionDef) {
-	d.Latitude = float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
-	d.Longitude = float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
-	return
-}
-
-var __typeRefForGeoposition = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
-
-func (m Geoposition) TypeRef() types.TypeRef {
-	return __typeRefForGeoposition
-}
-
-func init() {
-	types.RegisterFromValFunction(__typeRefForGeoposition, func(v types.Value) types.NomsValue {
-		return GeopositionFromVal(v)
-	})
-}
-
-func GeopositionFromVal(val types.Value) Geoposition {
-	// TODO: Validate here
-	return Geoposition{val.(types.Map)}
-}
-
-func (s Geoposition) NomsValue() types.Value {
-	return s.m
-}
-
-func (s Geoposition) Equals(other types.Value) bool {
-	if other, ok := other.(Geoposition); ok {
-		return s.m.Equals(other.m)
-	}
-	return false
-}
-
-func (s Geoposition) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s Geoposition) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
-	return
-}
-
-func (s Geoposition) Latitude() float32 {
-	return float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
-}
-
-func (s Geoposition) SetLatitude(val float32) Geoposition {
-	return Geoposition{s.m.Set(types.NewString("Latitude"), types.Float32(val))}
-}
-
-func (s Geoposition) Longitude() float32 {
-	return float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
-}
-
-func (s Geoposition) SetLongitude(val float32) Geoposition {
-	return Geoposition{s.m.Set(types.NewString("Longitude"), types.Float32(val))}
-}
-
-// Georectangle
-
-type Georectangle struct {
-	m types.Map
-}
-
-func NewGeorectangle() Georectangle {
-	return Georectangle{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
-		types.NewString("TopLeft"), NewGeoposition().NomsValue(),
-		types.NewString("BottomRight"), NewGeoposition().NomsValue(),
-	)}
-}
-
-type GeorectangleDef struct {
-	TopLeft     GeopositionDef
-	BottomRight GeopositionDef
-}
-
-func (def GeorectangleDef) New() Georectangle {
-	return Georectangle{
-		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
-			types.NewString("TopLeft"), def.TopLeft.New().NomsValue(),
-			types.NewString("BottomRight"), def.BottomRight.New().NomsValue(),
-		)}
-}
-
-func (s Georectangle) Def() (d GeorectangleDef) {
-	d.TopLeft = GeopositionFromVal(s.m.Get(types.NewString("TopLeft"))).Def()
-	d.BottomRight = GeopositionFromVal(s.m.Get(types.NewString("BottomRight"))).Def()
-	return
-}
-
-var __typeRefForGeorectangle = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1)
-
-func (m Georectangle) TypeRef() types.TypeRef {
-	return __typeRefForGeorectangle
-}
-
-func init() {
-	types.RegisterFromValFunction(__typeRefForGeorectangle, func(v types.Value) types.NomsValue {
-		return GeorectangleFromVal(v)
-	})
-}
-
-func GeorectangleFromVal(val types.Value) Georectangle {
-	// TODO: Validate here
-	return Georectangle{val.(types.Map)}
-}
-
-func (s Georectangle) NomsValue() types.Value {
-	return s.m
-}
-
-func (s Georectangle) Equals(other types.Value) bool {
-	if other, ok := other.(Georectangle); ok {
-		return s.m.Equals(other.m)
-	}
-	return false
-}
-
-func (s Georectangle) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s Georectangle) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
-	return
-}
-
-func (s Georectangle) TopLeft() Geoposition {
-	return GeopositionFromVal(s.m.Get(types.NewString("TopLeft")))
-}
-
-func (s Georectangle) SetTopLeft(val Geoposition) Georectangle {
-	return Georectangle{s.m.Set(types.NewString("TopLeft"), val.NomsValue())}
-}
-
-func (s Georectangle) BottomRight() Geoposition {
-	return GeopositionFromVal(s.m.Get(types.NewString("BottomRight")))
-}
-
-func (s Georectangle) SetBottomRight(val Geoposition) Georectangle {
-	return Georectangle{s.m.Set(types.NewString("BottomRight"), val.NomsValue())}
 }
 
 // Incident
@@ -238,12 +49,12 @@ type Incident struct {
 
 func NewIncident() Incident {
 	return Incident{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2),
+		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 		types.NewString("Category"), types.NewString(""),
 		types.NewString("Description"), types.NewString(""),
 		types.NewString("Address"), types.NewString(""),
 		types.NewString("Date"), types.NewString(""),
-		types.NewString("Geoposition"), NewGeoposition().NomsValue(),
+		types.NewString("Geoposition"), sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.NewGeoposition().NomsValue(),
 	)}
 }
 
@@ -252,13 +63,13 @@ type IncidentDef struct {
 	Description string
 	Address     string
 	Date        string
-	Geoposition GeopositionDef
+	Geoposition sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeopositionDef
 }
 
 func (def IncidentDef) New() Incident {
 	return Incident{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2),
+			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 			types.NewString("Category"), types.NewString(def.Category),
 			types.NewString("Description"), types.NewString(def.Description),
 			types.NewString("Address"), types.NewString(def.Address),
@@ -272,11 +83,11 @@ func (s Incident) Def() (d IncidentDef) {
 	d.Description = s.m.Get(types.NewString("Description")).(types.String).String()
 	d.Address = s.m.Get(types.NewString("Address")).(types.String).String()
 	d.Date = s.m.Get(types.NewString("Date")).(types.String).String()
-	d.Geoposition = GeopositionFromVal(s.m.Get(types.NewString("Geoposition"))).Def()
+	d.Geoposition = sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeopositionFromVal(s.m.Get(types.NewString("Geoposition"))).Def()
 	return
 }
 
-var __typeRefForIncident = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2)
+var __typeRefForIncident = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
 
 func (m Incident) TypeRef() types.TypeRef {
 	return __typeRefForIncident
@@ -346,11 +157,11 @@ func (s Incident) SetDate(val string) Incident {
 	return Incident{s.m.Set(types.NewString("Date"), types.NewString(val))}
 }
 
-func (s Incident) Geoposition() Geoposition {
-	return GeopositionFromVal(s.m.Get(types.NewString("Geoposition")))
+func (s Incident) Geoposition() sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.Geoposition {
+	return sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeopositionFromVal(s.m.Get(types.NewString("Geoposition")))
 }
 
-func (s Incident) SetGeoposition(val Geoposition) Incident {
+func (s Incident) SetGeoposition(val sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.Geoposition) Incident {
 	return Incident{s.m.Set(types.NewString("Geoposition"), val.NomsValue())}
 }
 
@@ -362,13 +173,13 @@ type SQuadTree struct {
 
 func NewSQuadTree() SQuadTree {
 	return SQuadTree{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 3),
+		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
 		types.NewString("Nodes"), types.NewList(),
 		types.NewString("Tiles"), types.NewMap(),
 		types.NewString("Depth"), types.UInt8(0),
 		types.NewString("NumDescendents"), types.UInt32(0),
 		types.NewString("Path"), types.NewString(""),
-		types.NewString("Georectangle"), NewGeorectangle().NomsValue(),
+		types.NewString("Georectangle"), sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.NewGeorectangle().NomsValue(),
 	)}
 }
 
@@ -378,13 +189,13 @@ type SQuadTreeDef struct {
 	Depth          uint8
 	NumDescendents uint32
 	Path           string
-	Georectangle   GeorectangleDef
+	Georectangle   sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeorectangleDef
 }
 
 func (def SQuadTreeDef) New() SQuadTree {
 	return SQuadTree{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 3),
+			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
 			types.NewString("Nodes"), def.Nodes.New().NomsValue(),
 			types.NewString("Tiles"), def.Tiles.New().NomsValue(),
 			types.NewString("Depth"), types.UInt8(def.Depth),
@@ -400,11 +211,11 @@ func (s SQuadTree) Def() (d SQuadTreeDef) {
 	d.Depth = uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
 	d.NumDescendents = uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
 	d.Path = s.m.Get(types.NewString("Path")).(types.String).String()
-	d.Georectangle = GeorectangleFromVal(s.m.Get(types.NewString("Georectangle"))).Def()
+	d.Georectangle = sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeorectangleFromVal(s.m.Get(types.NewString("Georectangle"))).Def()
 	return
 }
 
-var __typeRefForSQuadTree = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 3)
+var __typeRefForSQuadTree = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1)
 
 func (m SQuadTree) TypeRef() types.TypeRef {
 	return __typeRefForSQuadTree
@@ -482,11 +293,11 @@ func (s SQuadTree) SetPath(val string) SQuadTree {
 	return SQuadTree{s.m.Set(types.NewString("Path"), types.NewString(val))}
 }
 
-func (s SQuadTree) Georectangle() Georectangle {
-	return GeorectangleFromVal(s.m.Get(types.NewString("Georectangle")))
+func (s SQuadTree) Georectangle() sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.Georectangle {
+	return sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.GeorectangleFromVal(s.m.Get(types.NewString("Georectangle")))
 }
 
-func (s SQuadTree) SetGeorectangle(val Georectangle) SQuadTree {
+func (s SQuadTree) SetGeorectangle(val sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d.Georectangle) SQuadTree {
 	return SQuadTree{s.m.Set(types.NewString("Georectangle"), val.NomsValue())}
 }
 
@@ -552,7 +363,7 @@ func (m ListOfIncident) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2))
+	__typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfIncident, func(v types.Value) types.NomsValue {
 		return ListOfIncidentFromVal(v)
 	})
@@ -693,7 +504,7 @@ func (m MapOfStringToSQuadTree) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToSQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 3))
+	__typeRefForMapOfStringToSQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToSQuadTree, func(v types.Value) types.NomsValue {
 		return MapOfStringToSQuadTreeFromVal(v)
 	})
