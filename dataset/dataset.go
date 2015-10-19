@@ -15,6 +15,7 @@ type Dataset struct {
 }
 
 func NewDataset(store datas.DataStore, datasetID string) Dataset {
+	d.Exp.NotEmpty(datasetID, "Cannot create an unnamed Dataset.")
 	return Dataset{store, datasetID}
 }
 

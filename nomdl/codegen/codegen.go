@@ -60,6 +60,7 @@ func main() {
 		}
 	} else {
 		log.Print("No package dataset provided; will be unable to process imports.")
+		*pkgDSFlag = "default"
 	}
 	pkgDS := dataset.NewDataset(ds, *pkgDSFlag)
 	// Ensure that, if pkgDS has stuff in it, its head is a SetOfRefOfPackage.
