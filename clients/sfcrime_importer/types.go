@@ -3,6 +3,7 @@
 package main
 
 import (
+	"github.com/attic-labs/noms/clients/gen/sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -16,13 +17,6 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 	p := types.PackageDef{
 		Types: types.ListOfTypeRefDef{
 
-			types.MakeStructTypeRef("Geoposition",
-				[]types.Field{
-					types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-					types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-				},
-				types.Choices{},
-			),
 			types.MakeStructTypeRef("Incident",
 				[]types.Field{
 					types.Field{"ID", types.MakePrimitiveTypeRef(types.Int64Kind), false},
@@ -34,7 +28,7 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 					types.Field{"PdDistrict", types.MakePrimitiveTypeRef(types.StringKind), false},
 					types.Field{"Resolution", types.MakePrimitiveTypeRef(types.StringKind), false},
 					types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
-					types.Field{"Geoposition", types.MakeTypeRef(ref.Ref{}, 0), false},
+					types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-3bfd4da1c27a6472279b96d731b47e58e8832dee"), 0), false},
 					types.Field{"PdID", types.MakePrimitiveTypeRef(types.StringKind), false},
 				},
 				types.Choices{},
@@ -42,94 +36,6 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 		},
 	}.New()
 	return types.RegisterPackage(&p)
-}
-
-// Geoposition
-
-type Geoposition struct {
-	m types.Map
-}
-
-func NewGeoposition() Geoposition {
-	return Geoposition{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
-		types.NewString("Latitude"), types.Float32(0),
-		types.NewString("Longitude"), types.Float32(0),
-	)}
-}
-
-type GeopositionDef struct {
-	Latitude  float32
-	Longitude float32
-}
-
-func (def GeopositionDef) New() Geoposition {
-	return Geoposition{
-		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
-			types.NewString("Latitude"), types.Float32(def.Latitude),
-			types.NewString("Longitude"), types.Float32(def.Longitude),
-		)}
-}
-
-func (s Geoposition) Def() (d GeopositionDef) {
-	d.Latitude = float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
-	d.Longitude = float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
-	return
-}
-
-var __typeRefForGeoposition = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
-
-func (m Geoposition) TypeRef() types.TypeRef {
-	return __typeRefForGeoposition
-}
-
-func init() {
-	types.RegisterFromValFunction(__typeRefForGeoposition, func(v types.Value) types.NomsValue {
-		return GeopositionFromVal(v)
-	})
-}
-
-func GeopositionFromVal(val types.Value) Geoposition {
-	// TODO: Validate here
-	return Geoposition{val.(types.Map)}
-}
-
-func (s Geoposition) NomsValue() types.Value {
-	return s.m
-}
-
-func (s Geoposition) Equals(other types.Value) bool {
-	if other, ok := other.(Geoposition); ok {
-		return s.m.Equals(other.m)
-	}
-	return false
-}
-
-func (s Geoposition) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s Geoposition) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
-	return
-}
-
-func (s Geoposition) Latitude() float32 {
-	return float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
-}
-
-func (s Geoposition) SetLatitude(val float32) Geoposition {
-	return Geoposition{s.m.Set(types.NewString("Latitude"), types.Float32(val))}
-}
-
-func (s Geoposition) Longitude() float32 {
-	return float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
-}
-
-func (s Geoposition) SetLongitude(val float32) Geoposition {
-	return Geoposition{s.m.Set(types.NewString("Longitude"), types.Float32(val))}
 }
 
 // Incident
@@ -140,7 +46,7 @@ type Incident struct {
 
 func NewIncident() Incident {
 	return Incident{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
+		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 		types.NewString("ID"), types.Int64(0),
 		types.NewString("Category"), types.NewString(""),
 		types.NewString("Description"), types.NewString(""),
@@ -150,7 +56,7 @@ func NewIncident() Incident {
 		types.NewString("PdDistrict"), types.NewString(""),
 		types.NewString("Resolution"), types.NewString(""),
 		types.NewString("Address"), types.NewString(""),
-		types.NewString("Geoposition"), NewGeoposition().NomsValue(),
+		types.NewString("Geoposition"), sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.NewGeoposition().NomsValue(),
 		types.NewString("PdID"), types.NewString(""),
 	)}
 }
@@ -165,14 +71,14 @@ type IncidentDef struct {
 	PdDistrict  string
 	Resolution  string
 	Address     string
-	Geoposition GeopositionDef
+	Geoposition sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeopositionDef
 	PdID        string
 }
 
 func (def IncidentDef) New() Incident {
 	return Incident{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
+			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 			types.NewString("ID"), types.Int64(def.ID),
 			types.NewString("Category"), types.NewString(def.Category),
 			types.NewString("Description"), types.NewString(def.Description),
@@ -197,12 +103,12 @@ func (s Incident) Def() (d IncidentDef) {
 	d.PdDistrict = s.m.Get(types.NewString("PdDistrict")).(types.String).String()
 	d.Resolution = s.m.Get(types.NewString("Resolution")).(types.String).String()
 	d.Address = s.m.Get(types.NewString("Address")).(types.String).String()
-	d.Geoposition = GeopositionFromVal(s.m.Get(types.NewString("Geoposition"))).Def()
+	d.Geoposition = sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeopositionFromVal(s.m.Get(types.NewString("Geoposition"))).Def()
 	d.PdID = s.m.Get(types.NewString("PdID")).(types.String).String()
 	return
 }
 
-var __typeRefForIncident = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1)
+var __typeRefForIncident = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
 
 func (m Incident) TypeRef() types.TypeRef {
 	return __typeRefForIncident
@@ -312,11 +218,11 @@ func (s Incident) SetAddress(val string) Incident {
 	return Incident{s.m.Set(types.NewString("Address"), types.NewString(val))}
 }
 
-func (s Incident) Geoposition() Geoposition {
-	return GeopositionFromVal(s.m.Get(types.NewString("Geoposition")))
+func (s Incident) Geoposition() sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.Geoposition {
+	return sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.GeopositionFromVal(s.m.Get(types.NewString("Geoposition")))
 }
 
-func (s Incident) SetGeoposition(val Geoposition) Incident {
+func (s Incident) SetGeoposition(val sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee.Geoposition) Incident {
 	return Incident{s.m.Set(types.NewString("Geoposition"), val.NomsValue())}
 }
 
@@ -390,7 +296,7 @@ func (m ListOfIncident) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1))
+	__typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfIncident, func(v types.Value) types.NomsValue {
 		return ListOfIncidentFromVal(v)
 	})

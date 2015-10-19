@@ -1,15 +1,7 @@
-struct Geoposition {
-	Latitude: Float32
- 	Longitude: Float32
-}
-
-struct Georectangle {
-	TopLeft: Geoposition
-	BottomRight: Geoposition
-}
+alias Geo = import "../util/geotypes.noms"
 
 struct Node {
-	Geoposition: Geoposition
+	Geoposition: Geo.Geoposition
 	Reference: Ref(Value)
 }
 
@@ -19,7 +11,7 @@ struct QuadTree {
 	Depth: UInt8
 	NumDescendents: UInt32
 	Path: String
-	Georectangle: Georectangle
+	Georectangle: Geo.Georectangle
 }
 
 struct SQuadTree {
@@ -28,5 +20,5 @@ struct SQuadTree {
 	Depth: UInt8
 	NumDescendents: UInt32
 	Path: String
-	Georectangle: Georectangle
+	Georectangle: Geo.Georectangle
 }

@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	geo "github.com/attic-labs/noms/clients/gen/sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
@@ -43,7 +44,10 @@ func main() {
 		log.Fatalf("Invalid inputRef: %v", *inputRefStr)
 	}
 
-	gr := GeorectangleDef{GeopositionDef{37.83, -122.52}, GeopositionDef{37.70, -122.36}}
+	gr := geo.GeorectangleDef{
+		TopLeft:     geo.GeopositionDef{Latitude: 37.83, Longitude: -122.52},
+		BottomRight: geo.GeopositionDef{Latitude: 37.70, Longitude: -122.36},
+	}
 	qtRoot := QuadTreeDef{
 		Nodes:          ListOfNodeDef{},
 		Tiles:          MapOfStringToQuadTreeDef{},

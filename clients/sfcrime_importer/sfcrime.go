@@ -4,11 +4,6 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
-	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/clients/util"
-	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/types"
 	"math"
 	"os"
 	"runtime"
@@ -16,6 +11,13 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/attic-labs/noms/chunks"
+	geo "github.com/attic-labs/noms/clients/gen/sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee"
+	"github.com/attic-labs/noms/clients/util"
+	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/dataset"
+	"github.com/attic-labs/noms/types"
 )
 
 // data can be obtained using:
@@ -105,7 +107,7 @@ func main() {
 		id, _ := strconv.ParseInt(r[0], 10, 64)
 		lon64, _ := strconv.ParseFloat(r[9], 32)
 		lat64, _ := strconv.ParseFloat(r[10], 32)
-		geopos := GeopositionDef{Latitude: float32(lat64), Longitude: float32(lon64)}
+		geopos := geo.GeopositionDef{Latitude: float32(lat64), Longitude: float32(lon64)}
 		incident := IncidentDef{
 			ID:          id,
 			Category:    r[1],
@@ -202,10 +204,6 @@ func min(x, y float32) float32 {
 
 func max(x, y float32) float32 {
 	return float32(math.Max(float64(x), float64(y)))
-}
-
-func (p Geoposition) String() string {
-	return fmt.Sprintf("Geoposition(lat: %f, lon: %f", p.Latitude(), p.Longitude())
 }
 
 func toFixedFloor(num float32, precision int) float32 {
