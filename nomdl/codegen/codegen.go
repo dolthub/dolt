@@ -460,29 +460,29 @@ func (gen *codeGen) writeEnum(t types.TypeRef, ordinal int) {
 	gen.writeTemplate("enum.tmpl", t, data)
 }
 
-func (gen *codeGen) canUseDef(tx types.TypeRef) bool {
+func (gen *codeGen) canUseDef(t types.TypeRef) bool {
 	cache := map[string]bool{}
 
-	var rec func(ttt types.TypeRef) bool
-	rec = func(ttt types.TypeRef) bool {
-		t2 := gen.Resolve(ttt)
-		switch t2.Kind() {
+	var rec func(t types.TypeRef) bool
+	rec = func(t types.TypeRef) bool {
+		rt := gen.Resolve(t)
+		switch rt.Kind() {
 		case types.ListKind:
-			return rec(t2.Desc.(types.CompoundDesc).ElemTypes[0])
+			return rec(rt.Desc.(types.CompoundDesc).ElemTypes[0])
 		case types.SetKind:
-			elemType := t2.Desc.(types.CompoundDesc).ElemTypes[0]
+			elemType := rt.Desc.(types.CompoundDesc).ElemTypes[0]
 			return !gen.containsNonComparable(elemType) && rec(elemType)
 		case types.MapKind:
-			elemTypes := t2.Desc.(types.CompoundDesc).ElemTypes
+			elemTypes := rt.Desc.(types.CompoundDesc).ElemTypes
 			return !gen.containsNonComparable(elemTypes[0]) && rec(elemTypes[0]) && rec(elemTypes[1])
 		case types.StructKind:
-			userName := gen.generator.UserName(ttt)
+			userName := gen.generator.UserName(t)
 			if b, ok := cache[userName]; ok {
 				return b
 			}
 			cache[userName] = true
-			for _, f := range t2.Desc.(types.StructDesc).Fields {
-				if f.T.Equals(ttt) || !rec(f.T) {
+			for _, f := range rt.Desc.(types.StructDesc).Fields {
+				if f.T.Equals(t) || !rec(f.T) {
 					cache[userName] = false
 					return false
 				}
@@ -493,7 +493,7 @@ func (gen *codeGen) canUseDef(tx types.TypeRef) bool {
 		}
 	}
 
-	return rec(tx)
+	return rec(t)
 }
 
 // We use a go map as the def for Set and Map. These cannot have a key that is a
