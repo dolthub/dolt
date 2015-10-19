@@ -117,7 +117,7 @@ func TestWriteMapOfMap(t *testing.T) {
 func TestWriteEmptyStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{}, Choices{})))
 	pkgRef := RegisterPackage(&pkg)
 	tref := MakeTypeRef(pkgRef, 0)
@@ -131,7 +131,7 @@ func TestWriteEmptyStruct(t *testing.T) {
 func TestWriteStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"x", MakePrimitiveTypeRef(Int8Kind), false},
 			Field{"b", MakePrimitiveTypeRef(BoolKind), false},
@@ -148,7 +148,7 @@ func TestWriteStruct(t *testing.T) {
 func TestWriteStructOptionalField(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"x", MakePrimitiveTypeRef(Int8Kind), true},
 			Field{"b", MakePrimitiveTypeRef(BoolKind), false},
@@ -171,7 +171,7 @@ func TestWriteStructOptionalField(t *testing.T) {
 func TestWriteStructWithUnion(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"x", MakePrimitiveTypeRef(Int8Kind), false},
 		}, Choices{
@@ -196,7 +196,7 @@ func TestWriteStructWithUnion(t *testing.T) {
 func TestWriteStructWithList(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"l", MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(StringKind)), false},
 		}, Choices{})))
@@ -217,7 +217,7 @@ func TestWriteStructWithList(t *testing.T) {
 func TestWriteStructWithStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S2", []Field{
 			Field{"x", MakePrimitiveTypeRef(Int32Kind), false},
 		}, Choices{}),
@@ -236,7 +236,7 @@ func TestWriteStructWithStruct(t *testing.T) {
 func TestWriteStructWithBlob(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"b", MakePrimitiveTypeRef(BlobKind), false},
 		}, Choices{})))
@@ -253,7 +253,7 @@ func TestWriteStructWithBlob(t *testing.T) {
 func TestWriteEnum(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(
 		MakeEnumTypeRef("E", "a", "b", "c")))
 	pkgRef := RegisterPackage(&pkg)
 	tref := MakeTypeRef(pkgRef, 0)
@@ -267,7 +267,7 @@ func TestWriteEnum(t *testing.T) {
 func TestWriteListOfEnum(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(
 		MakeEnumTypeRef("E", "a", "b", "c")))
 	pkgRef := RegisterPackage(&pkg)
 	et := MakeTypeRef(pkgRef, 0)
@@ -323,7 +323,7 @@ func TestWriteListOfValue(t *testing.T) {
 func TestWriteListOfValueWithStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"x", MakePrimitiveTypeRef(Int32Kind), false},
 		}, Choices{})))
@@ -341,7 +341,7 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 func TestWriteListOfValueWithTypeRefs(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(
 		MakeStructTypeRef("S", []Field{
 			Field{"x", MakePrimitiveTypeRef(Int32Kind), false},
 		}, Choices{})))

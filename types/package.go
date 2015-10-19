@@ -240,7 +240,7 @@ func (s Package) Types() ListOfTypeRef {
 	return ListOfTypeRefFromVal(s.m.Get(NewString("Types")))
 }
 
-func (s Package) SetOrderedTypes(val ListOfTypeRef) Package {
+func (s Package) SetTypes(val ListOfTypeRef) Package {
 	return Package{s.m.Set(NewString("Types"), val.NomsValue())}
 }
 

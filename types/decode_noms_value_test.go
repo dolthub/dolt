@@ -209,7 +209,7 @@ func TestReadStruct(t *testing.T) {
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 	}, Choices{})
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
 	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
@@ -239,7 +239,7 @@ func TestReadStructUnion(t *testing.T) {
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	})
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, 42, 1, "hi"]`, TypeRefKind, pkgRef.String())
@@ -269,7 +269,7 @@ func TestReadStructOptional(t *testing.T) {
 		Field{"s", MakePrimitiveTypeRef(StringKind), true},
 		Field{"b", MakePrimitiveTypeRef(BoolKind), true},
 	}, Choices{})
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
 	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
@@ -304,7 +304,7 @@ func TestReadStructWithList(t *testing.T) {
 		Field{"l", MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int32Kind)), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	}, Choices{})
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
 	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
@@ -344,7 +344,7 @@ func TestReadStructWithValue(t *testing.T) {
 		Field{"v", MakePrimitiveTypeRef(ValueKind), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	}, Choices{})
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
 	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
@@ -379,7 +379,7 @@ func TestReadValueStruct(t *testing.T) {
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 	}, Choices{})
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
 	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
@@ -404,7 +404,7 @@ func TestReadEnum(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	tref := MakeEnumTypeRef("E", "a", "b", "c")
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
 	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
@@ -420,7 +420,7 @@ func TestReadValueEnum(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	tref := MakeEnumTypeRef("E", "a", "b", "c")
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
 	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
@@ -487,7 +487,7 @@ func TestReadStructWithEnum(t *testing.T) {
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 	}, Choices{})
 	enumTref := MakeEnumTypeRef("E", "a", "b", "c")
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(structTref, enumTref))
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(structTref, enumTref))
 	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
@@ -518,7 +518,7 @@ func TestReadStructWithBlob(t *testing.T) {
 	tref := MakeStructTypeRef("A5", []Field{
 		Field{"b", MakePrimitiveTypeRef(BlobKind), false},
 	}, Choices{})
-	pkg := NewPackage().SetOrderedTypes(NewListOfTypeRef().Append(tref))
+	pkg := NewPackage().SetTypes(NewListOfTypeRef().Append(tref))
 	pkgRef := RegisterPackage(&pkg)
 
 	// TODO: Should use ordinal of type and not name
