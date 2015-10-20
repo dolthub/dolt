@@ -14,7 +14,6 @@ var __sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517dPackageInFile_sha1_52bbaa7c5b
 // type package definition cache.
 func __sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517dPackageInFile_sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d_Ref() ref.Ref {
 	p := types.NewPackage([]types.TypeRef{
-
 		types.MakeStructTypeRef("Geoposition",
 			[]types.Field{
 				types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},

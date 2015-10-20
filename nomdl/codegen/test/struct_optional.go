@@ -14,7 +14,6 @@ var __testPackageInFile_struct_optional_CachedRef = __testPackageInFile_struct_o
 // type package definition cache.
 func __testPackageInFile_struct_optional_Ref() ref.Ref {
 	p := types.NewPackage([]types.TypeRef{
-
 		types.MakeStructTypeRef("OptionalStruct",
 			[]types.Field{
 				types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), true},

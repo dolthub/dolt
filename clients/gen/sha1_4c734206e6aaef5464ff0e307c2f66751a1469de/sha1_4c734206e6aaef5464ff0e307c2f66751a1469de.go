@@ -15,7 +15,6 @@ var __sha1_4c734206e6aaef5464ff0e307c2f66751a1469dePackageInFile_sha1_4c734206e6
 // type package definition cache.
 func __sha1_4c734206e6aaef5464ff0e307c2f66751a1469dePackageInFile_sha1_4c734206e6aaef5464ff0e307c2f66751a1469de_Ref() ref.Ref {
 	p := types.NewPackage([]types.TypeRef{
-
 		types.MakeStructTypeRef("RemotePhoto",
 			[]types.Field{
 				types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
@@ -34,7 +33,9 @@ func __sha1_4c734206e6aaef5464ff0e307c2f66751a1469dePackageInFile_sha1_4c734206e
 			},
 			types.Choices{},
 		),
-	}, []ref.Ref{})
+	}, []ref.Ref{
+		ref.Parse("sha1-52bbaa7c5bcb39759981ccb12ee457f21fa7517d"),
+	})
 	return types.RegisterPackage(&p)
 }
 

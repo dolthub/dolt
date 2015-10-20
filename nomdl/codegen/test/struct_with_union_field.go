@@ -14,7 +14,6 @@ var __testPackageInFile_struct_with_union_field_CachedRef = __testPackageInFile_
 // type package definition cache.
 func __testPackageInFile_struct_with_union_field_Ref() ref.Ref {
 	p := types.NewPackage([]types.TypeRef{
-
 		types.MakeStructTypeRef("StructWithUnionField",
 			[]types.Field{
 				types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},

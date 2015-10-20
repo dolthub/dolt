@@ -254,17 +254,19 @@ func (gen *codeGen) Resolve(t types.TypeRef) types.TypeRef {
 func (gen *codeGen) WritePackage() {
 	pkgTypes := gen.pkg.Types()
 	data := struct {
-		HasImports bool
-		HasTypes   bool
-		FileID     string
-		Imports    []string
-		Name       string
-		Types      []types.TypeRef
+		HasImports   bool
+		HasTypes     bool
+		FileID       string
+		Imports      []string
+		Dependencies []ref.Ref
+		Name         string
+		Types        []types.TypeRef
 	}{
 		len(gen.imports) > 0,
 		len(pkgTypes) > 0,
 		gen.fileid,
 		gen.imports,
+		gen.pkg.Dependencies(),
 		gen.pkg.Name,
 		pkgTypes,
 	}

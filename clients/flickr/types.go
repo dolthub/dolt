@@ -15,7 +15,6 @@ var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
 // type package definition cache.
 func __mainPackageInFile_types_Ref() ref.Ref {
 	p := types.NewPackage([]types.TypeRef{
-
 		types.MakeStructTypeRef("User",
 			[]types.Field{
 				types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
@@ -34,7 +33,9 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 			},
 			types.Choices{},
 		),
-	}, []ref.Ref{})
+	}, []ref.Ref{
+		ref.Parse("sha1-4c734206e6aaef5464ff0e307c2f66751a1469de"),
+	})
 	return types.RegisterPackage(&p)
 }
 

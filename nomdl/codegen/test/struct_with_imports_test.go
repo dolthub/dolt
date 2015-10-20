@@ -6,6 +6,7 @@ import (
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	leaf "github.com/attic-labs/noms/nomdl/codegen/test/gen/sha1_8bbcfa69bdfc9953c4034f8591964e0387983910"
 	dep "github.com/attic-labs/noms/nomdl/codegen/test/gen/sha1_fa6ca544e2613ecf1ac0467b3d655d8305c6ae8c"
+	"github.com/attic-labs/noms/types"
 )
 
 func TestWithImportsDef(t *testing.T) {
@@ -49,4 +50,14 @@ func TestListOfImportsDef(t *testing.T) {
 	assert.EqualValues(leaf.E3, l.Get(0).EnumField())
 	assert.EqualValues(leaf.E2, l.Get(1).EnumField())
 	assert.EqualValues(leaf.E1, l.Get(2).EnumField())
+}
+
+func TestDepsAndPackageRefs(t *testing.T) {
+	assert := assert.New(t)
+	tr := NewImportUser().ImportedStruct().TypeRef()
+	assert.Equal(types.UnresolvedKind, tr.Kind())
+	assert.True(tr.HasPackageRef())
+	p := types.LookupPackage(tr.PackageRef())
+	assert.NotNil(p)
+	assert.IsType(types.Package{}, *p)
 }

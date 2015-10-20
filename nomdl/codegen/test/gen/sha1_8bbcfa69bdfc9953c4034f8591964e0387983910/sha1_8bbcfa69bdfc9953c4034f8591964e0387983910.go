@@ -14,7 +14,6 @@ var __sha1_8bbcfa69bdfc9953c4034f8591964e0387983910PackageInFile_sha1_8bbcfa69bd
 // type package definition cache.
 func __sha1_8bbcfa69bdfc9953c4034f8591964e0387983910PackageInFile_sha1_8bbcfa69bdfc9953c4034f8591964e0387983910_Ref() ref.Ref {
 	p := types.NewPackage([]types.TypeRef{
-
 		types.MakeStructTypeRef("S",
 			[]types.Field{
 				types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},

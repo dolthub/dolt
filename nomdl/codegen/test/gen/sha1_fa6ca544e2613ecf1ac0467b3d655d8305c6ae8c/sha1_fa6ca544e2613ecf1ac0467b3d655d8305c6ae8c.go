@@ -15,7 +15,6 @@ var __sha1_fa6ca544e2613ecf1ac0467b3d655d8305c6ae8cPackageInFile_sha1_fa6ca544e2
 // type package definition cache.
 func __sha1_fa6ca544e2613ecf1ac0467b3d655d8305c6ae8cPackageInFile_sha1_fa6ca544e2613ecf1ac0467b3d655d8305c6ae8c_Ref() ref.Ref {
 	p := types.NewPackage([]types.TypeRef{
-
 		types.MakeStructTypeRef("D",
 			[]types.Field{
 				types.Field{"structField", types.MakeTypeRef(ref.Parse("sha1-8bbcfa69bdfc9953c4034f8591964e0387983910"), 0), false},
@@ -29,7 +28,9 @@ func __sha1_fa6ca544e2613ecf1ac0467b3d655d8305c6ae8cPackageInFile_sha1_fa6ca544e
 			},
 			types.Choices{},
 		),
-	}, []ref.Ref{})
+	}, []ref.Ref{
+		ref.Parse("sha1-8bbcfa69bdfc9953c4034f8591964e0387983910"),
+	})
 	return types.RegisterPackage(&p)
 }
 
