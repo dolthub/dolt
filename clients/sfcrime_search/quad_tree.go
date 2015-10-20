@@ -1,7 +1,7 @@
 package main
 
 import (
-	geo "github.com/attic-labs/noms/clients/gen/sha1_3bfd4da1c27a6472279b96d731b47e58e8832dee"
+	geo "github.com/attic-labs/noms/clients/gen/sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d"
 	"github.com/attic-labs/noms/clients/util"
 )
 
