@@ -14,10 +14,11 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/garyburd/go-oauth/oauth"
+	img "github.com/attic-labs/noms/clients/gen/sha1_4c734206e6aaef5464ff0e307c2f66751a1469de"
+	geo "github.com/attic-labs/noms/clients/gen/sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/types"
 )
 
 var (
@@ -101,7 +102,7 @@ func checkAuth() bool {
 		return false
 	}
 
-	user = user.SetId(types.NewString(response.User.Id)).SetName(types.NewString(response.User.Username.Content))
+	user = user.SetId(response.User.Id).SetName(response.User.Username.Content)
 	return true
 }
 
@@ -139,7 +140,7 @@ func getAlbum(id string) Album {
 
 	err := callFlickrAPI("flickr.photosets.getInfo", &response, &map[string]string{
 		"photoset_id": id,
-		"user_id":     user.Id().String(),
+		"user_id":     user.Id(),
 	})
 	d.Chk.NoError(err)
 
@@ -147,8 +148,8 @@ func getAlbum(id string) Album {
 
 	photos := getAlbumPhotos(id)
 	return NewAlbum().
-		SetId(types.NewString(id)).
-		SetTitle(types.NewString(response.Photoset.Title.Content)).
+		SetId(id).
+		SetTitle(response.Photoset.Title.Content).
 		SetPhotos(photos)
 }
 
@@ -188,7 +189,7 @@ func getAlbums() MapOfStringToAlbum {
 	return albums
 }
 
-func getAlbumPhotos(id string) SetOfRemotePhoto {
+func getAlbumPhotos(id string) SetOfsha1_4c734206e6aaef5464ff0e307c2f66751a1469de_RemotePhoto {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -220,20 +221,21 @@ func getAlbumPhotos(id string) SetOfRemotePhoto {
 	// TODO: Implement paging. This call returns a maximum of 500 pictures in each response.
 	err := callFlickrAPI("flickr.photosets.getPhotos", &response, &map[string]string{
 		"photoset_id": id,
-		"user_id":     user.Id().String(),
+		"user_id":     user.Id(),
 		"extras":      "geo,tags,url_t,url_s,url_m,url_l,url_o",
 	})
 	d.Chk.NoError(err)
 
-	photos := NewSetOfRemotePhoto()
+	photos := NewSetOfsha1_4c734206e6aaef5464ff0e307c2f66751a1469de_RemotePhoto()
 
 	for _, p := range response.Photoset.Photo {
-		photo := NewRemotePhoto().
-			SetId(types.NewString(p.Id)).
-			SetTags(getTags(p.Tags)).
-			SetTitle(types.NewString(p.Title))
+		photo := img.RemotePhotoDef{
+			Id:    p.Id,
+			Title: p.Title,
+			Tags:  getTags(p.Tags),
+		}.New()
 
-		sizes := NewMapOfSizeToString()
+		sizes := img.NewMapOfSizeToString()
 		sizes = addSize(sizes, p.ThumbURL, p.ThumbWidth, p.ThumbHeight)
 		sizes = addSize(sizes, p.SmallURL, p.SmallWidth, p.SmallHeight)
 		sizes = addSize(sizes, p.MediumURL, p.MediumWidth, p.MediumHeight)
@@ -243,28 +245,27 @@ func getAlbumPhotos(id string) SetOfRemotePhoto {
 
 		lat := deFlickr(p.Latitude)
 		lon := deFlickr(p.Longitude)
-
 		if lat != 0.0 && lon != 0.0 {
-			photo = photo.SetGeoposition(
-				NewGeoposition().
-					SetLatitude(types.Float32(lat)).
-					SetLongitude(types.Float32(lon)))
+			photo = photo.SetGeoposition(geo.GeopositionDef{lat, lon}.New())
 		}
 
 		photos = photos.Insert(photo)
 	}
+
 	return photos
 }
 
-func getTags(tagStr string) (res SetOfString) {
-	res = NewSetOfString()
+func getTags(tagStr string) (tags img.SetOfStringDef) {
+	tags = img.SetOfStringDef{}
+
 	if tagStr == "" {
 		return
 	}
+
 	for _, tag := range strings.Split(tagStr, " ") {
-		res = res.Insert(types.NewString(tag))
+		tags[tag] = true
 	}
-	return res
+	return
 }
 
 func deFlickr(argh interface{}) float32 {
@@ -280,26 +281,25 @@ func deFlickr(argh interface{}) float32 {
 	}
 }
 
-func addSize(sizes MapOfSizeToString, url string, width interface{}, height interface{}) MapOfSizeToString {
-	getDim := func(v interface{}) types.UInt32 {
+func addSize(sizes img.MapOfSizeToString, url string, width interface{}, height interface{}) img.MapOfSizeToString {
+	getDim := func(v interface{}) uint32 {
 		switch v := v.(type) {
 		case float64:
-			return types.UInt32(uint32(v))
+			return uint32(v)
 		case string:
 			i, err := strconv.Atoi(v)
 			d.Chk.NoError(err)
-			return types.UInt32(uint32(i))
+			return uint32(i)
 		default:
 			d.Chk.Fail(fmt.Sprintf("Unexpected value for image width or height: %+v", v))
-			return types.UInt32(uint32(0))
+			return uint32(0)
 		}
 	}
 	if url == "" {
 		return sizes
 	}
-	return sizes.Set(
-		NewSize().SetWidth(getDim(width)).SetHeight(getDim(height)),
-		types.NewString(url))
+
+	return sizes.Set(img.SizeDef{getDim(width), getDim(height)}.New(), url)
 }
 
 func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) error {
@@ -313,7 +313,7 @@ func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) error {
 			fmt.Fprintf(w, "%v", handlerError)
 		} else {
 			fmt.Fprintf(w, "Authorized")
-			user = user.SetOAuthToken(types.NewString(cred.Token)).SetOAuthSecret(types.NewString(cred.Secret))
+			user = user.SetOAuthToken(cred.Token).SetOAuthSecret(cred.Secret)
 		}
 		l.Close()
 	})}
@@ -330,8 +330,8 @@ func commitUser() {
 
 func callFlickrAPI(method string, response interface{}, args *map[string]string) error {
 	tokenCred := &oauth.Credentials{
-		user.OAuthToken().String(),
-		user.OAuthSecret().String(),
+		user.OAuthToken(),
+		user.OAuthSecret(),
 	}
 
 	values := url.Values{

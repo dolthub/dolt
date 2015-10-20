@@ -1,0 +1,18 @@
+alias Geo = import "geo.noms"
+
+struct RemotePhoto {
+  Id: String
+  Title: String
+  Url: String
+  Geoposition: Geo.Geoposition
+  Sizes: Map(Size, String)
+  Tags: Set(String)
+}
+
+struct Size {
+  Width: UInt32
+  Height: UInt32
+}
+
+using Map(Size, String)
+using Set(String)

@@ -1,4 +1,4 @@
-alias Geo = import "../util/geotypes.noms"
+alias Geo = import "../types/geo.noms"
 
 struct Node {
 	Geoposition: Geo.Geoposition
