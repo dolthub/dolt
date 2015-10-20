@@ -165,7 +165,14 @@ func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
 		w.write(choiceWriter.toArray())
 	case UnresolvedKind:
 		w.writeRef(v.PackageRef())
-		w.write(v.Ordinal())
+		// Don't use Ordinal() here since we might need to serialize a TypeRef that hasn't gotten a valid ordinal yet.
+		ordinal := v.Desc.(UnresolvedDesc).ordinal
+		w.write(ordinal)
+		if ordinal == -1 {
+			w.write(v.Namespace())
+			w.write(v.Name())
+		}
+
 	default:
 		d.Chk.True(IsPrimitiveKind(k), v.Describe())
 	}

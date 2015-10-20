@@ -84,6 +84,7 @@ func (r *jsonArrayReader) readTypeRefAsTag() TypeRef {
 	case UnresolvedKind:
 		pkgRef := r.readRef()
 		ordinal := int16(r.read().(float64))
+		d.Chk.NotEqual(int16(-1), ordinal)
 		return MakeTypeRef(pkgRef, ordinal)
 	}
 
@@ -291,6 +292,12 @@ func (r *jsonArrayReader) readTypeRefAsValue(pkg *Package) TypeRef {
 	case UnresolvedKind:
 		pkgRef := r.readRef()
 		ordinal := int16(r.read().(float64))
+		if ordinal == -1 {
+			namespace := r.readString()
+			name := r.readString()
+			d.Chk.Equal(ref.Ref{}, pkgRef, "Unresolved TypeRefs may not have a package ref")
+			return MakeUnresolvedTypeRef(namespace, name)
+		}
 		return MakeTypeRef(pkgRef, ordinal)
 	}
 
