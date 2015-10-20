@@ -193,6 +193,7 @@ func (s *dataStoreServer) connState(c net.Conn, cs http.ConnState) {
 
 // Blocks while the dataStoreServer is listening. Running on a separate go routine is supported.
 func (s *dataStoreServer) Run() {
+	fmt.Printf("Listening on port %d...\n", s.port)
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	d.Chk.NoError(err)
 	s.l = &l
