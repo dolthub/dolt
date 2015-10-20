@@ -1,4 +1,4 @@
-alias Geo = import "../util/geotypes.noms"
+alias Geo = import "../types/geo.noms"
 
 struct Incident {
 	Category: String
