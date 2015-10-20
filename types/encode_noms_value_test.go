@@ -416,6 +416,9 @@ func TestWriteTypeRefValue(t *testing.T) {
 			Field{"e", MakeTypeRef(pkgRef, 123), false},
 			Field{"x", MakePrimitiveTypeRef(Int64Kind), false},
 		}, Choices{}))
+
+	test([]interface{}{TypeRefKind, UnresolvedKind, ref.Ref{}.String(), int16(-1), "ns", "n"},
+		MakeUnresolvedTypeRef("ns", "n"))
 }
 
 func TestWriteListOfTypeRefs(t *testing.T) {

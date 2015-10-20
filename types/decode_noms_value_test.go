@@ -569,6 +569,8 @@ func TestReadTypeRefValue(t *testing.T) {
 		Field{"x", MakePrimitiveTypeRef(Int64Kind), false},
 	}, Choices{}),
 		`[%d, %d, "S", ["e", %d, "%s", 123, false, "x", %d, false], []]`, TypeRefKind, StructKind, UnresolvedKind, pkgRef.String(), Int64Kind)
+
+	test(MakeUnresolvedTypeRef("ns", "n"), `[%d, %d, "%s", -1, "ns", "n"]`, TypeRefKind, UnresolvedKind, ref.Ref{}.String())
 }
 
 func TestReadPackage(t *testing.T) {
