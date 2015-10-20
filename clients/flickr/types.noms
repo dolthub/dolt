@@ -1,0 +1,18 @@
+alias Img = import "../types/photo.noms"
+
+struct User {
+  Id: String
+  Name: String
+  OAuthToken: String
+  OAuthSecret: String
+  Albums: Map(String, Album)
+}
+
+struct Album {
+  Id: String
+  Title: String
+  Photos: Set(Img.RemotePhoto)
+}
+
+using Map(String, Album)
+using Set(Img.RemotePhoto)
