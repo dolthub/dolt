@@ -72,7 +72,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreChunkCloses() {
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreRoot() {
 	oldRoot := suite.Store.Root()
-	suite.Equal(oldRoot, ref.Ref{})
+	suite.True(oldRoot.IsEmpty())
 
 	bogusRoot := ref.Parse("sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5") // sha1("Bogus, Dude")
 	newRoot := ref.Parse("sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd")   // sha1("Hello, World")

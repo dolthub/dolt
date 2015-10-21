@@ -22,7 +22,7 @@ type RemoteDataStore struct {
 
 func newRemoteDataStore(cs chunks.ChunkStore) *RemoteDataStore {
 	rootRef := cs.Root()
-	if rootRef == (ref.Ref{}) {
+	if rootRef.IsEmpty() {
 		return &RemoteDataStore{dataStoreCommon{cs, nil}}
 	}
 
@@ -46,7 +46,7 @@ func (lds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, cs chunks.C
 
 	values := &url.Values{}
 	values.Add("all", "true")
-	if exclude != (ref.Ref{}) {
+	if !exclude.IsEmpty() {
 		values.Add("exclude", exclude.String())
 	}
 	u.RawQuery = values.Encode()

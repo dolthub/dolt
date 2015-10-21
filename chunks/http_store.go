@@ -193,7 +193,7 @@ func (c *HttpStore) postRefs(chs []Chunk) {
 func (c *HttpStore) requestRef(r ref.Ref, method string, body io.Reader) *http.Response {
 	url := *c.host
 	url.Path = constants.RefPath
-	if (r != ref.Ref{}) {
+	if !r.IsEmpty() {
 		url.Path = path.Join(url.Path, r.String())
 	}
 
@@ -270,7 +270,7 @@ func (c *HttpStore) requestRoot(method string, current, last ref.Ref) *http.Resp
 	u := *c.host
 	u.Path = constants.RootPath
 	if method == "POST" {
-		d.Exp.True(current != ref.Ref{})
+		d.Exp.False(current.IsEmpty())
 		params := url.Values{}
 		params.Add("last", last.String())
 		params.Add("current", current.String())
