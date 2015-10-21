@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-func SkipTestDataStoreCommit(t *testing.T) {
+func TestDataStoreCommit(t *testing.T) {
 	assert := assert.New(t)
 	chunks := chunks.NewMemoryStore()
 	ds := NewDataStore(chunks)
@@ -34,7 +34,7 @@ func SkipTestDataStoreCommit(t *testing.T) {
 
 	// |a| <- |b|
 	b := types.NewString("b")
-	bCommit := NewCommit().SetValue(b).SetParents(NewSetOfCommit().Insert(aCommit))
+	bCommit := NewCommit().SetValue(b).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(aCommit.Ref())))
 	ds, ok = ds.Commit(datasetID, bCommit)
 	assert.True(ok)
 	assert.True(ds.Head(datasetID).Value().Equals(b))
@@ -50,7 +50,7 @@ func SkipTestDataStoreCommit(t *testing.T) {
 
 	// |a| <- |b| <- |d|
 	d := types.NewString("d")
-	dCommit := NewCommit().SetValue(d).SetParents(NewSetOfCommit().Insert(bCommit))
+	dCommit := NewCommit().SetValue(d).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(bCommit.Ref())))
 	ds, ok = ds.Commit(datasetID, dCommit)
 	assert.True(ok)
 	assert.True(ds.Head(datasetID).Value().Equals(d))
@@ -71,7 +71,7 @@ func SkipTestDataStoreCommit(t *testing.T) {
 	assert.Equal(uint64(2), datasets2.Len())
 }
 
-func SkipTestDataStoreConcurrency(t *testing.T) {
+func TestDataStoreConcurrency(t *testing.T) {
 	assert := assert.New(t)
 
 	chunks := chunks.NewMemoryStore()
@@ -84,7 +84,7 @@ func SkipTestDataStoreConcurrency(t *testing.T) {
 	aCommit := NewCommit().SetValue(a)
 	ds, ok := ds.Commit(datasetID, aCommit)
 	b := types.NewString("b")
-	bCommit := NewCommit().SetValue(b).SetParents(NewSetOfCommit().Insert(aCommit))
+	bCommit := NewCommit().SetValue(b).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(aCommit.Ref())))
 	ds, ok = ds.Commit(datasetID, bCommit)
 	assert.True(ok)
 	assert.True(ds.Head(datasetID).Value().Equals(b))
@@ -95,7 +95,7 @@ func SkipTestDataStoreConcurrency(t *testing.T) {
 	// Change 1:
 	// |a| <- |b| <- |c|
 	c := types.NewString("c")
-	cCommit := NewCommit().SetValue(c).SetParents(NewSetOfCommit().Insert(bCommit))
+	cCommit := NewCommit().SetValue(c).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(bCommit.Ref())))
 	ds, ok = ds.Commit(datasetID, cCommit)
 	assert.True(ok)
 	assert.True(ds.Head(datasetID).Value().Equals(c))
@@ -104,7 +104,7 @@ func SkipTestDataStoreConcurrency(t *testing.T) {
 	// |a| <- |b| <- |e|
 	// Should be disallowed, DataStore returned by Commit() should have |c| as Head.
 	e := types.NewString("e")
-	eCommit := NewCommit().SetValue(e).SetParents(NewSetOfCommit().Insert(bCommit))
+	eCommit := NewCommit().SetValue(e).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(bCommit.Ref())))
 	ds2, ok = ds2.Commit(datasetID, eCommit)
 	assert.False(ok)
 	assert.True(ds.Head(datasetID).Value().Equals(c))

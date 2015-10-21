@@ -15,8 +15,8 @@ type DataStore interface {
 	// Head returns the current head Commit, which contains the current root of the DataStore's value tree.
 	Head(datasetID string) Commit
 
-	// Datasets returns the root of the datastore which is a MapOfStringToCommit where string is a datasetID.
-	Datasets() MapOfStringToCommit
+	// Datasets returns the root of the datastore which is a MapOfStringToRefOfCommit where string is a datasetID.
+	Datasets() MapOfStringToRefOfCommit
 
 	// Commit updates the commit that a datastore points at. The new Commit is constructed using v and the current Head. If the update cannot be performed, e.g., because of a conflict, Commit returns 'false'. The newest snapshot of the datastore is always returned.
 	Commit(datasetID string, commit Commit) (DataStore, bool)
