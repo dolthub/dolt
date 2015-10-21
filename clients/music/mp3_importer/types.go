@@ -31,7 +31,8 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 // Song
 
 type Song struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewSong() Song {
@@ -42,7 +43,7 @@ func NewSong() Song {
 		types.NewString("Album"), types.NewString(""),
 		types.NewString("Year"), types.NewString(""),
 		types.NewString("Mp3"), types.NewEmptyBlob(),
-	)}
+	), &ref.Ref{}}
 }
 
 type SongDef struct {
@@ -62,7 +63,7 @@ func (def SongDef) New() Song {
 			types.NewString("Album"), types.NewString(def.Album),
 			types.NewString("Year"), types.NewString(def.Year),
 			types.NewString("Mp3"), def.Mp3,
-		)}
+		), &ref.Ref{}}
 }
 
 func (s Song) Def() (d SongDef) {
@@ -81,29 +82,38 @@ func (m Song) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefForSong, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForSong, func(v types.Value) types.Value {
 		return SongFromVal(v)
 	})
 }
 
 func SongFromVal(val types.Value) Song {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(Song); ok {
+		return val
+	}
 	// TODO: Validate here
-	return Song{val.(types.Map)}
+	return Song{val.(types.Map), &ref.Ref{}}
 }
 
 func (s Song) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s Song) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s Song) Equals(other types.Value) bool {
 	if other, ok := other.(Song); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s Song) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s Song) Chunks() (futures []types.Future) {
@@ -117,7 +127,7 @@ func (s Song) Title() string {
 }
 
 func (s Song) SetTitle(val string) Song {
-	return Song{s.m.Set(types.NewString("Title"), types.NewString(val))}
+	return Song{s.m.Set(types.NewString("Title"), types.NewString(val)), &ref.Ref{}}
 }
 
 func (s Song) Artist() string {
@@ -125,7 +135,7 @@ func (s Song) Artist() string {
 }
 
 func (s Song) SetArtist(val string) Song {
-	return Song{s.m.Set(types.NewString("Artist"), types.NewString(val))}
+	return Song{s.m.Set(types.NewString("Artist"), types.NewString(val)), &ref.Ref{}}
 }
 
 func (s Song) Album() string {
@@ -133,7 +143,7 @@ func (s Song) Album() string {
 }
 
 func (s Song) SetAlbum(val string) Song {
-	return Song{s.m.Set(types.NewString("Album"), types.NewString(val))}
+	return Song{s.m.Set(types.NewString("Album"), types.NewString(val)), &ref.Ref{}}
 }
 
 func (s Song) Year() string {
@@ -141,7 +151,7 @@ func (s Song) Year() string {
 }
 
 func (s Song) SetYear(val string) Song {
-	return Song{s.m.Set(types.NewString("Year"), types.NewString(val))}
+	return Song{s.m.Set(types.NewString("Year"), types.NewString(val)), &ref.Ref{}}
 }
 
 func (s Song) Mp3() types.Blob {
@@ -149,17 +159,18 @@ func (s Song) Mp3() types.Blob {
 }
 
 func (s Song) SetMp3(val types.Blob) Song {
-	return Song{s.m.Set(types.NewString("Mp3"), val)}
+	return Song{s.m.Set(types.NewString("Mp3"), val), &ref.Ref{}}
 }
 
 // ListOfSong
 
 type ListOfSong struct {
-	l types.List
+	l   types.List
+	ref *ref.Ref
 }
 
 func NewListOfSong() ListOfSong {
-	return ListOfSong{types.NewList()}
+	return ListOfSong{types.NewList(), &ref.Ref{}}
 }
 
 type ListOfSongDef []SongDef
@@ -167,37 +178,46 @@ type ListOfSongDef []SongDef
 func (def ListOfSongDef) New() ListOfSong {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
-		l[i] = d.New().NomsValue()
+		l[i] = d.New()
 	}
-	return ListOfSong{types.NewList(l...)}
+	return ListOfSong{types.NewList(l...), &ref.Ref{}}
 }
 
 func (l ListOfSong) Def() ListOfSongDef {
 	d := make([]SongDef, l.Len())
 	for i := uint64(0); i < l.Len(); i++ {
-		d[i] = SongFromVal(l.l.Get(i)).Def()
+		d[i] = l.l.Get(i).(Song).Def()
 	}
 	return d
 }
 
 func ListOfSongFromVal(val types.Value) ListOfSong {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(ListOfSong); ok {
+		return val
+	}
 	// TODO: Validate here
-	return ListOfSong{val.(types.List)}
+	return ListOfSong{val.(types.List), &ref.Ref{}}
 }
 
 func (l ListOfSong) NomsValue() types.Value {
+	// TODO: Remove this
+	return l
+}
+
+func (l ListOfSong) InternalImplementation() types.List {
 	return l.l
 }
 
 func (l ListOfSong) Equals(other types.Value) bool {
 	if other, ok := other.(ListOfSong); ok {
-		return l.l.Equals(other.l)
+		return l.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (l ListOfSong) Ref() ref.Ref {
-	return l.l.Ref()
+	return types.EnsureRef(l.ref, l)
 }
 
 func (l ListOfSong) Chunks() (futures []types.Future) {
@@ -215,7 +235,7 @@ func (m ListOfSong) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfSong = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
-	types.RegisterFromValFunction(__typeRefForListOfSong, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForListOfSong, func(v types.Value) types.Value {
 		return ListOfSongFromVal(v)
 	})
 }
@@ -229,37 +249,37 @@ func (l ListOfSong) Empty() bool {
 }
 
 func (l ListOfSong) Get(i uint64) Song {
-	return SongFromVal(l.l.Get(i))
+	return l.l.Get(i).(Song)
 }
 
 func (l ListOfSong) Slice(idx uint64, end uint64) ListOfSong {
-	return ListOfSong{l.l.Slice(idx, end)}
+	return ListOfSong{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfSong) Set(i uint64, val Song) ListOfSong {
-	return ListOfSong{l.l.Set(i, val.NomsValue())}
+	return ListOfSong{l.l.Set(i, val), &ref.Ref{}}
 }
 
 func (l ListOfSong) Append(v ...Song) ListOfSong {
-	return ListOfSong{l.l.Append(l.fromElemSlice(v)...)}
+	return ListOfSong{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfSong) Insert(idx uint64, v ...Song) ListOfSong {
-	return ListOfSong{l.l.Insert(idx, l.fromElemSlice(v)...)}
+	return ListOfSong{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfSong) Remove(idx uint64, end uint64) ListOfSong {
-	return ListOfSong{l.l.Remove(idx, end)}
+	return ListOfSong{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfSong) RemoveAt(idx uint64) ListOfSong {
-	return ListOfSong{(l.l.RemoveAt(idx))}
+	return ListOfSong{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l ListOfSong) fromElemSlice(p []Song) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
-		r[i] = v.NomsValue()
+		r[i] = v
 	}
 	return r
 }
@@ -268,7 +288,7 @@ type ListOfSongIterCallback func(v Song, i uint64) (stop bool)
 
 func (l ListOfSong) Iter(cb ListOfSongIterCallback) {
 	l.l.Iter(func(v types.Value, i uint64) bool {
-		return cb(SongFromVal(v), i)
+		return cb(v.(Song), i)
 	})
 }
 
@@ -276,7 +296,7 @@ type ListOfSongIterAllCallback func(v Song, i uint64)
 
 func (l ListOfSong) IterAll(cb ListOfSongIterAllCallback) {
 	l.l.IterAll(func(v types.Value, i uint64) {
-		cb(SongFromVal(v), i)
+		cb(v.(Song), i)
 	})
 }
 

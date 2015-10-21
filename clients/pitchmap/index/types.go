@@ -28,7 +28,8 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 // Pitch
 
 type Pitch struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewPitch() Pitch {
@@ -36,7 +37,7 @@ func NewPitch() Pitch {
 		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 		types.NewString("X"), types.Float64(0),
 		types.NewString("Z"), types.Float64(0),
-	)}
+	), &ref.Ref{}}
 }
 
 type PitchDef struct {
@@ -50,7 +51,7 @@ func (def PitchDef) New() Pitch {
 			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 			types.NewString("X"), types.Float64(def.X),
 			types.NewString("Z"), types.Float64(def.Z),
-		)}
+		), &ref.Ref{}}
 }
 
 func (s Pitch) Def() (d PitchDef) {
@@ -66,29 +67,38 @@ func (m Pitch) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefForPitch, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForPitch, func(v types.Value) types.Value {
 		return PitchFromVal(v)
 	})
 }
 
 func PitchFromVal(val types.Value) Pitch {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(Pitch); ok {
+		return val
+	}
 	// TODO: Validate here
-	return Pitch{val.(types.Map)}
+	return Pitch{val.(types.Map), &ref.Ref{}}
 }
 
 func (s Pitch) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s Pitch) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s Pitch) Equals(other types.Value) bool {
 	if other, ok := other.(Pitch); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s Pitch) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s Pitch) Chunks() (futures []types.Future) {
@@ -102,7 +112,7 @@ func (s Pitch) X() float64 {
 }
 
 func (s Pitch) SetX(val float64) Pitch {
-	return Pitch{s.m.Set(types.NewString("X"), types.Float64(val))}
+	return Pitch{s.m.Set(types.NewString("X"), types.Float64(val)), &ref.Ref{}}
 }
 
 func (s Pitch) Z() float64 {
@@ -110,17 +120,18 @@ func (s Pitch) Z() float64 {
 }
 
 func (s Pitch) SetZ(val float64) Pitch {
-	return Pitch{s.m.Set(types.NewString("Z"), types.Float64(val))}
+	return Pitch{s.m.Set(types.NewString("Z"), types.Float64(val)), &ref.Ref{}}
 }
 
 // ListOfMapOfStringToValue
 
 type ListOfMapOfStringToValue struct {
-	l types.List
+	l   types.List
+	ref *ref.Ref
 }
 
 func NewListOfMapOfStringToValue() ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{types.NewList()}
+	return ListOfMapOfStringToValue{types.NewList(), &ref.Ref{}}
 }
 
 type ListOfMapOfStringToValueDef []MapOfStringToValueDef
@@ -128,37 +139,46 @@ type ListOfMapOfStringToValueDef []MapOfStringToValueDef
 func (def ListOfMapOfStringToValueDef) New() ListOfMapOfStringToValue {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
-		l[i] = d.New().NomsValue()
+		l[i] = d.New()
 	}
-	return ListOfMapOfStringToValue{types.NewList(l...)}
+	return ListOfMapOfStringToValue{types.NewList(l...), &ref.Ref{}}
 }
 
 func (l ListOfMapOfStringToValue) Def() ListOfMapOfStringToValueDef {
 	d := make([]MapOfStringToValueDef, l.Len())
 	for i := uint64(0); i < l.Len(); i++ {
-		d[i] = MapOfStringToValueFromVal(l.l.Get(i)).Def()
+		d[i] = l.l.Get(i).(MapOfStringToValue).Def()
 	}
 	return d
 }
 
 func ListOfMapOfStringToValueFromVal(val types.Value) ListOfMapOfStringToValue {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(ListOfMapOfStringToValue); ok {
+		return val
+	}
 	// TODO: Validate here
-	return ListOfMapOfStringToValue{val.(types.List)}
+	return ListOfMapOfStringToValue{val.(types.List), &ref.Ref{}}
 }
 
 func (l ListOfMapOfStringToValue) NomsValue() types.Value {
+	// TODO: Remove this
+	return l
+}
+
+func (l ListOfMapOfStringToValue) InternalImplementation() types.List {
 	return l.l
 }
 
 func (l ListOfMapOfStringToValue) Equals(other types.Value) bool {
 	if other, ok := other.(ListOfMapOfStringToValue); ok {
-		return l.l.Equals(other.l)
+		return l.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (l ListOfMapOfStringToValue) Ref() ref.Ref {
-	return l.l.Ref()
+	return types.EnsureRef(l.ref, l)
 }
 
 func (l ListOfMapOfStringToValue) Chunks() (futures []types.Future) {
@@ -176,7 +196,7 @@ func (m ListOfMapOfStringToValue) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfMapOfStringToValue = types.MakeCompoundTypeRef("", types.ListKind, types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind)))
-	types.RegisterFromValFunction(__typeRefForListOfMapOfStringToValue, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForListOfMapOfStringToValue, func(v types.Value) types.Value {
 		return ListOfMapOfStringToValueFromVal(v)
 	})
 }
@@ -190,37 +210,37 @@ func (l ListOfMapOfStringToValue) Empty() bool {
 }
 
 func (l ListOfMapOfStringToValue) Get(i uint64) MapOfStringToValue {
-	return MapOfStringToValueFromVal(l.l.Get(i))
+	return l.l.Get(i).(MapOfStringToValue)
 }
 
 func (l ListOfMapOfStringToValue) Slice(idx uint64, end uint64) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Slice(idx, end)}
+	return ListOfMapOfStringToValue{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfMapOfStringToValue) Set(i uint64, val MapOfStringToValue) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Set(i, val.NomsValue())}
+	return ListOfMapOfStringToValue{l.l.Set(i, val), &ref.Ref{}}
 }
 
 func (l ListOfMapOfStringToValue) Append(v ...MapOfStringToValue) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Append(l.fromElemSlice(v)...)}
+	return ListOfMapOfStringToValue{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfMapOfStringToValue) Insert(idx uint64, v ...MapOfStringToValue) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Insert(idx, l.fromElemSlice(v)...)}
+	return ListOfMapOfStringToValue{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfMapOfStringToValue) Remove(idx uint64, end uint64) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Remove(idx, end)}
+	return ListOfMapOfStringToValue{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfMapOfStringToValue) RemoveAt(idx uint64) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{(l.l.RemoveAt(idx))}
+	return ListOfMapOfStringToValue{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l ListOfMapOfStringToValue) fromElemSlice(p []MapOfStringToValue) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
-		r[i] = v.NomsValue()
+		r[i] = v
 	}
 	return r
 }
@@ -229,7 +249,7 @@ type ListOfMapOfStringToValueIterCallback func(v MapOfStringToValue, i uint64) (
 
 func (l ListOfMapOfStringToValue) Iter(cb ListOfMapOfStringToValueIterCallback) {
 	l.l.Iter(func(v types.Value, i uint64) bool {
-		return cb(MapOfStringToValueFromVal(v), i)
+		return cb(v.(MapOfStringToValue), i)
 	})
 }
 
@@ -237,7 +257,7 @@ type ListOfMapOfStringToValueIterAllCallback func(v MapOfStringToValue, i uint64
 
 func (l ListOfMapOfStringToValue) IterAll(cb ListOfMapOfStringToValueIterAllCallback) {
 	l.l.IterAll(func(v types.Value, i uint64) {
-		cb(MapOfStringToValueFromVal(v), i)
+		cb(v.(MapOfStringToValue), i)
 	})
 }
 
@@ -256,11 +276,12 @@ func (l ListOfMapOfStringToValue) Filter(cb ListOfMapOfStringToValueFilterCallba
 // MapOfStringToListOfPitch
 
 type MapOfStringToListOfPitch struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewMapOfStringToListOfPitch() MapOfStringToListOfPitch {
-	return MapOfStringToListOfPitch{types.NewMap()}
+	return MapOfStringToListOfPitch{types.NewMap(), &ref.Ref{}}
 }
 
 type MapOfStringToListOfPitchDef map[string]ListOfPitchDef
@@ -268,38 +289,47 @@ type MapOfStringToListOfPitchDef map[string]ListOfPitchDef
 func (def MapOfStringToListOfPitchDef) New() MapOfStringToListOfPitch {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
-		kv = append(kv, types.NewString(k), v.New().NomsValue())
+		kv = append(kv, types.NewString(k), v.New())
 	}
-	return MapOfStringToListOfPitch{types.NewMap(kv...)}
+	return MapOfStringToListOfPitch{types.NewMap(kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToListOfPitch) Def() MapOfStringToListOfPitchDef {
 	def := make(map[string]ListOfPitchDef)
 	m.m.Iter(func(k, v types.Value) bool {
-		def[k.(types.String).String()] = ListOfPitchFromVal(v).Def()
+		def[k.(types.String).String()] = v.(ListOfPitch).Def()
 		return false
 	})
 	return def
 }
 
-func MapOfStringToListOfPitchFromVal(p types.Value) MapOfStringToListOfPitch {
+func MapOfStringToListOfPitchFromVal(val types.Value) MapOfStringToListOfPitch {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(MapOfStringToListOfPitch); ok {
+		return val
+	}
 	// TODO: Validate here
-	return MapOfStringToListOfPitch{p.(types.Map)}
+	return MapOfStringToListOfPitch{val.(types.Map), &ref.Ref{}}
 }
 
 func (m MapOfStringToListOfPitch) NomsValue() types.Value {
+	// TODO: Remove this
+	return m
+}
+
+func (m MapOfStringToListOfPitch) InternalImplementation() types.Map {
 	return m.m
 }
 
 func (m MapOfStringToListOfPitch) Equals(other types.Value) bool {
 	if other, ok := other.(MapOfStringToListOfPitch); ok {
-		return m.m.Equals(other.m)
+		return m.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (m MapOfStringToListOfPitch) Ref() ref.Ref {
-	return m.m.Ref()
+	return types.EnsureRef(m.ref, m)
 }
 
 func (m MapOfStringToListOfPitch) Chunks() (futures []types.Future) {
@@ -317,7 +347,7 @@ func (m MapOfStringToListOfPitch) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForMapOfStringToListOfPitch = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)))
-	types.RegisterFromValFunction(__typeRefForMapOfStringToListOfPitch, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForMapOfStringToListOfPitch, func(v types.Value) types.Value {
 		return MapOfStringToListOfPitchFromVal(v)
 	})
 }
@@ -335,7 +365,7 @@ func (m MapOfStringToListOfPitch) Has(p string) bool {
 }
 
 func (m MapOfStringToListOfPitch) Get(p string) ListOfPitch {
-	return ListOfPitchFromVal(m.m.Get(types.NewString(p)))
+	return m.m.Get(types.NewString(p)).(ListOfPitch)
 }
 
 func (m MapOfStringToListOfPitch) MaybeGet(p string) (ListOfPitch, bool) {
@@ -343,24 +373,24 @@ func (m MapOfStringToListOfPitch) MaybeGet(p string) (ListOfPitch, bool) {
 	if !ok {
 		return NewListOfPitch(), false
 	}
-	return ListOfPitchFromVal(v), ok
+	return v.(ListOfPitch), ok
 }
 
 func (m MapOfStringToListOfPitch) Set(k string, v ListOfPitch) MapOfStringToListOfPitch {
-	return MapOfStringToListOfPitch{m.m.Set(types.NewString(k), v.NomsValue())}
+	return MapOfStringToListOfPitch{m.m.Set(types.NewString(k), v), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToListOfPitch) Remove(p string) MapOfStringToListOfPitch {
-	return MapOfStringToListOfPitch{m.m.Remove(types.NewString(p))}
+	return MapOfStringToListOfPitch{m.m.Remove(types.NewString(p)), &ref.Ref{}}
 }
 
 type MapOfStringToListOfPitchIterCallback func(k string, v ListOfPitch) (stop bool)
 
 func (m MapOfStringToListOfPitch) Iter(cb MapOfStringToListOfPitchIterCallback) {
 	m.m.Iter(func(k, v types.Value) bool {
-		return cb(k.(types.String).String(), ListOfPitchFromVal(v))
+		return cb(k.(types.String).String(), v.(ListOfPitch))
 	})
 }
 
@@ -368,7 +398,7 @@ type MapOfStringToListOfPitchIterAllCallback func(k string, v ListOfPitch)
 
 func (m MapOfStringToListOfPitch) IterAll(cb MapOfStringToListOfPitchIterAllCallback) {
 	m.m.IterAll(func(k, v types.Value) {
-		cb(k.(types.String).String(), ListOfPitchFromVal(v))
+		cb(k.(types.String).String(), v.(ListOfPitch))
 	})
 }
 
@@ -387,11 +417,12 @@ func (m MapOfStringToListOfPitch) Filter(cb MapOfStringToListOfPitchFilterCallba
 // MapOfStringToString
 
 type MapOfStringToString struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewMapOfStringToString() MapOfStringToString {
-	return MapOfStringToString{types.NewMap()}
+	return MapOfStringToString{types.NewMap(), &ref.Ref{}}
 }
 
 type MapOfStringToStringDef map[string]string
@@ -401,7 +432,7 @@ func (def MapOfStringToStringDef) New() MapOfStringToString {
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), types.NewString(v))
 	}
-	return MapOfStringToString{types.NewMap(kv...)}
+	return MapOfStringToString{types.NewMap(kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToString) Def() MapOfStringToStringDef {
@@ -413,24 +444,33 @@ func (m MapOfStringToString) Def() MapOfStringToStringDef {
 	return def
 }
 
-func MapOfStringToStringFromVal(p types.Value) MapOfStringToString {
+func MapOfStringToStringFromVal(val types.Value) MapOfStringToString {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(MapOfStringToString); ok {
+		return val
+	}
 	// TODO: Validate here
-	return MapOfStringToString{p.(types.Map)}
+	return MapOfStringToString{val.(types.Map), &ref.Ref{}}
 }
 
 func (m MapOfStringToString) NomsValue() types.Value {
+	// TODO: Remove this
+	return m
+}
+
+func (m MapOfStringToString) InternalImplementation() types.Map {
 	return m.m
 }
 
 func (m MapOfStringToString) Equals(other types.Value) bool {
 	if other, ok := other.(MapOfStringToString); ok {
-		return m.m.Equals(other.m)
+		return m.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (m MapOfStringToString) Ref() ref.Ref {
-	return m.m.Ref()
+	return types.EnsureRef(m.ref, m)
 }
 
 func (m MapOfStringToString) Chunks() (futures []types.Future) {
@@ -448,7 +488,7 @@ func (m MapOfStringToString) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForMapOfStringToString = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterFromValFunction(__typeRefForMapOfStringToString, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForMapOfStringToString, func(v types.Value) types.Value {
 		return MapOfStringToStringFromVal(v)
 	})
 }
@@ -478,13 +518,13 @@ func (m MapOfStringToString) MaybeGet(p string) (string, bool) {
 }
 
 func (m MapOfStringToString) Set(k string, v string) MapOfStringToString {
-	return MapOfStringToString{m.m.Set(types.NewString(k), types.NewString(v))}
+	return MapOfStringToString{m.m.Set(types.NewString(k), types.NewString(v)), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToString) Remove(p string) MapOfStringToString {
-	return MapOfStringToString{m.m.Remove(types.NewString(p))}
+	return MapOfStringToString{m.m.Remove(types.NewString(p)), &ref.Ref{}}
 }
 
 type MapOfStringToStringIterCallback func(k string, v string) (stop bool)
@@ -518,11 +558,12 @@ func (m MapOfStringToString) Filter(cb MapOfStringToStringFilterCallback) MapOfS
 // MapOfStringToValue
 
 type MapOfStringToValue struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewMapOfStringToValue() MapOfStringToValue {
-	return MapOfStringToValue{types.NewMap()}
+	return MapOfStringToValue{types.NewMap(), &ref.Ref{}}
 }
 
 type MapOfStringToValueDef map[string]types.Value
@@ -532,7 +573,7 @@ func (def MapOfStringToValueDef) New() MapOfStringToValue {
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), v)
 	}
-	return MapOfStringToValue{types.NewMap(kv...)}
+	return MapOfStringToValue{types.NewMap(kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToValue) Def() MapOfStringToValueDef {
@@ -544,24 +585,33 @@ func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 	return def
 }
 
-func MapOfStringToValueFromVal(p types.Value) MapOfStringToValue {
+func MapOfStringToValueFromVal(val types.Value) MapOfStringToValue {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(MapOfStringToValue); ok {
+		return val
+	}
 	// TODO: Validate here
-	return MapOfStringToValue{p.(types.Map)}
+	return MapOfStringToValue{val.(types.Map), &ref.Ref{}}
 }
 
 func (m MapOfStringToValue) NomsValue() types.Value {
+	// TODO: Remove this
+	return m
+}
+
+func (m MapOfStringToValue) InternalImplementation() types.Map {
 	return m.m
 }
 
 func (m MapOfStringToValue) Equals(other types.Value) bool {
 	if other, ok := other.(MapOfStringToValue); ok {
-		return m.m.Equals(other.m)
+		return m.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (m MapOfStringToValue) Ref() ref.Ref {
-	return m.m.Ref()
+	return types.EnsureRef(m.ref, m)
 }
 
 func (m MapOfStringToValue) Chunks() (futures []types.Future) {
@@ -579,7 +629,7 @@ func (m MapOfStringToValue) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
-	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.Value {
 		return MapOfStringToValueFromVal(v)
 	})
 }
@@ -609,13 +659,13 @@ func (m MapOfStringToValue) MaybeGet(p string) (types.Value, bool) {
 }
 
 func (m MapOfStringToValue) Set(k string, v types.Value) MapOfStringToValue {
-	return MapOfStringToValue{m.m.Set(types.NewString(k), v)}
+	return MapOfStringToValue{m.m.Set(types.NewString(k), v), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToValue) Remove(p string) MapOfStringToValue {
-	return MapOfStringToValue{m.m.Remove(types.NewString(p))}
+	return MapOfStringToValue{m.m.Remove(types.NewString(p)), &ref.Ref{}}
 }
 
 type MapOfStringToValueIterCallback func(k string, v types.Value) (stop bool)
@@ -649,11 +699,12 @@ func (m MapOfStringToValue) Filter(cb MapOfStringToValueFilterCallback) MapOfStr
 // ListOfPitch
 
 type ListOfPitch struct {
-	l types.List
+	l   types.List
+	ref *ref.Ref
 }
 
 func NewListOfPitch() ListOfPitch {
-	return ListOfPitch{types.NewList()}
+	return ListOfPitch{types.NewList(), &ref.Ref{}}
 }
 
 type ListOfPitchDef []PitchDef
@@ -661,37 +712,46 @@ type ListOfPitchDef []PitchDef
 func (def ListOfPitchDef) New() ListOfPitch {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
-		l[i] = d.New().NomsValue()
+		l[i] = d.New()
 	}
-	return ListOfPitch{types.NewList(l...)}
+	return ListOfPitch{types.NewList(l...), &ref.Ref{}}
 }
 
 func (l ListOfPitch) Def() ListOfPitchDef {
 	d := make([]PitchDef, l.Len())
 	for i := uint64(0); i < l.Len(); i++ {
-		d[i] = PitchFromVal(l.l.Get(i)).Def()
+		d[i] = l.l.Get(i).(Pitch).Def()
 	}
 	return d
 }
 
 func ListOfPitchFromVal(val types.Value) ListOfPitch {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(ListOfPitch); ok {
+		return val
+	}
 	// TODO: Validate here
-	return ListOfPitch{val.(types.List)}
+	return ListOfPitch{val.(types.List), &ref.Ref{}}
 }
 
 func (l ListOfPitch) NomsValue() types.Value {
+	// TODO: Remove this
+	return l
+}
+
+func (l ListOfPitch) InternalImplementation() types.List {
 	return l.l
 }
 
 func (l ListOfPitch) Equals(other types.Value) bool {
 	if other, ok := other.(ListOfPitch); ok {
-		return l.l.Equals(other.l)
+		return l.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (l ListOfPitch) Ref() ref.Ref {
-	return l.l.Ref()
+	return types.EnsureRef(l.ref, l)
 }
 
 func (l ListOfPitch) Chunks() (futures []types.Future) {
@@ -709,7 +769,7 @@ func (m ListOfPitch) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfPitch = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
-	types.RegisterFromValFunction(__typeRefForListOfPitch, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForListOfPitch, func(v types.Value) types.Value {
 		return ListOfPitchFromVal(v)
 	})
 }
@@ -723,37 +783,37 @@ func (l ListOfPitch) Empty() bool {
 }
 
 func (l ListOfPitch) Get(i uint64) Pitch {
-	return PitchFromVal(l.l.Get(i))
+	return l.l.Get(i).(Pitch)
 }
 
 func (l ListOfPitch) Slice(idx uint64, end uint64) ListOfPitch {
-	return ListOfPitch{l.l.Slice(idx, end)}
+	return ListOfPitch{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfPitch) Set(i uint64, val Pitch) ListOfPitch {
-	return ListOfPitch{l.l.Set(i, val.NomsValue())}
+	return ListOfPitch{l.l.Set(i, val), &ref.Ref{}}
 }
 
 func (l ListOfPitch) Append(v ...Pitch) ListOfPitch {
-	return ListOfPitch{l.l.Append(l.fromElemSlice(v)...)}
+	return ListOfPitch{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfPitch) Insert(idx uint64, v ...Pitch) ListOfPitch {
-	return ListOfPitch{l.l.Insert(idx, l.fromElemSlice(v)...)}
+	return ListOfPitch{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfPitch) Remove(idx uint64, end uint64) ListOfPitch {
-	return ListOfPitch{l.l.Remove(idx, end)}
+	return ListOfPitch{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfPitch) RemoveAt(idx uint64) ListOfPitch {
-	return ListOfPitch{(l.l.RemoveAt(idx))}
+	return ListOfPitch{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l ListOfPitch) fromElemSlice(p []Pitch) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
-		r[i] = v.NomsValue()
+		r[i] = v
 	}
 	return r
 }
@@ -762,7 +822,7 @@ type ListOfPitchIterCallback func(v Pitch, i uint64) (stop bool)
 
 func (l ListOfPitch) Iter(cb ListOfPitchIterCallback) {
 	l.l.Iter(func(v types.Value, i uint64) bool {
-		return cb(PitchFromVal(v), i)
+		return cb(v.(Pitch), i)
 	})
 }
 
@@ -770,7 +830,7 @@ type ListOfPitchIterAllCallback func(v Pitch, i uint64)
 
 func (l ListOfPitch) IterAll(cb ListOfPitchIterAllCallback) {
 	l.l.IterAll(func(v types.Value, i uint64) {
-		cb(PitchFromVal(v), i)
+		cb(v.(Pitch), i)
 	})
 }
 

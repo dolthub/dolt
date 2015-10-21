@@ -1,4 +1,4 @@
-alias leaf = import "sha1-8bbcfa69bdfc9953c4034f8591964e0387983910"
+alias leaf = import "sha1-bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288"
 
 struct D {
   structField: leaf.S

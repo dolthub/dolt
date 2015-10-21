@@ -3,7 +3,7 @@ package util
 import (
 	"math"
 
-	geo "github.com/attic-labs/noms/clients/gen/sha1_52bbaa7c5bcb39759981ccb12ee457f21fa7517d"
+	geo "github.com/attic-labs/noms/clients/gen/sha1_fb09d21d144c518467325465327d46489cff7c47"
 )
 
 const (

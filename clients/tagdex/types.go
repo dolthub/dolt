@@ -37,30 +37,6 @@ func (s RemotePhoto) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s RemotePhoto) Sizes() MapOfSizeToString {
-	return MapOfSizeToStringFromVal(s.m.Get(types.NewString("sizes")))
-}
-
-func (s RemotePhoto) SetSizes(p MapOfSizeToString) RemotePhoto {
-	return RemotePhotoFromVal(s.m.Set(types.NewString("sizes"), p.NomsValue()))
-}
-
-func (s RemotePhoto) Title() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("title")))
-}
-
-func (s RemotePhoto) SetTitle(p types.String) RemotePhoto {
-	return RemotePhotoFromVal(s.m.Set(types.NewString("title"), p))
-}
-
-func (s RemotePhoto) Id() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("id")))
-}
-
-func (s RemotePhoto) SetId(p types.String) RemotePhoto {
-	return RemotePhotoFromVal(s.m.Set(types.NewString("id"), p))
-}
-
 func (s RemotePhoto) Tags() SetOfString {
 	return SetOfStringFromVal(s.m.Get(types.NewString("tags")))
 }
@@ -77,12 +53,96 @@ func (s RemotePhoto) SetGeoposition(p Geoposition) RemotePhoto {
 	return RemotePhotoFromVal(s.m.Set(types.NewString("geoposition"), p.NomsValue()))
 }
 
+func (s RemotePhoto) Id() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("id")))
+}
+
+func (s RemotePhoto) SetId(p types.String) RemotePhoto {
+	return RemotePhotoFromVal(s.m.Set(types.NewString("id"), p))
+}
+
+func (s RemotePhoto) Title() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("title")))
+}
+
+func (s RemotePhoto) SetTitle(p types.String) RemotePhoto {
+	return RemotePhotoFromVal(s.m.Set(types.NewString("title"), p))
+}
+
+func (s RemotePhoto) Sizes() MapOfSizeToString {
+	return MapOfSizeToStringFromVal(s.m.Get(types.NewString("sizes")))
+}
+
+func (s RemotePhoto) SetSizes(p MapOfSizeToString) RemotePhoto {
+	return RemotePhotoFromVal(s.m.Set(types.NewString("sizes"), p.NomsValue()))
+}
+
 func (s RemotePhoto) Url() types.String {
 	return types.StringFromVal(s.m.Get(types.NewString("url")))
 }
 
 func (s RemotePhoto) SetUrl(p types.String) RemotePhoto {
 	return RemotePhotoFromVal(s.m.Set(types.NewString("url"), p))
+}
+
+// MapOfSizeToString
+
+type MapOfSizeToString struct {
+	m types.Map
+}
+
+type MapOfSizeToStringIterCallback (func(k Size, v types.String) (stop bool))
+
+func NewMapOfSizeToString() MapOfSizeToString {
+	return MapOfSizeToString{types.NewMap()}
+}
+
+func MapOfSizeToStringFromVal(p types.Value) MapOfSizeToString {
+	return MapOfSizeToString{p.(types.Map)}
+}
+
+func (m MapOfSizeToString) NomsValue() types.Map {
+	return m.m
+}
+
+func (m MapOfSizeToString) Equals(p MapOfSizeToString) bool {
+	return m.m.Equals(p.m)
+}
+
+func (m MapOfSizeToString) Ref() ref.Ref {
+	return m.m.Ref()
+}
+
+func (m MapOfSizeToString) Empty() bool {
+	return m.m.Empty()
+}
+
+func (m MapOfSizeToString) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m MapOfSizeToString) Has(p Size) bool {
+	return m.m.Has(p.NomsValue())
+}
+
+func (m MapOfSizeToString) Get(p Size) types.String {
+	return types.StringFromVal(m.m.Get(p.NomsValue()))
+}
+
+func (m MapOfSizeToString) Set(k Size, v types.String) MapOfSizeToString {
+	return MapOfSizeToStringFromVal(m.m.Set(k.NomsValue(), v))
+}
+
+// TODO: Implement SetM?
+
+func (m MapOfSizeToString) Remove(p Size) MapOfSizeToString {
+	return MapOfSizeToStringFromVal(m.m.Remove(p.NomsValue()))
+}
+
+func (m MapOfSizeToString) Iter(cb MapOfSizeToStringIterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(SizeFromVal(k), types.StringFromVal(v))
+	})
 }
 
 // SetOfString
@@ -167,6 +227,51 @@ func (s SetOfString) fromElemSlice(p []types.String) []types.Value {
 	return r
 }
 
+// Size
+
+type Size struct {
+	m types.Map
+}
+
+func NewSize() Size {
+	return Size{
+		types.NewMap(types.NewString("$name"), types.NewString("Size")),
+	}
+}
+
+func SizeFromVal(v types.Value) Size {
+	return Size{v.(types.Map)}
+}
+
+// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
+func (s Size) NomsValue() types.Map {
+	return s.m
+}
+
+func (s Size) Equals(p Size) bool {
+	return s.m.Equals(p.m)
+}
+
+func (s Size) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s Size) Width() types.UInt32 {
+	return types.UInt32FromVal(s.m.Get(types.NewString("width")))
+}
+
+func (s Size) SetWidth(p types.UInt32) Size {
+	return SizeFromVal(s.m.Set(types.NewString("width"), p))
+}
+
+func (s Size) Height() types.UInt32 {
+	return types.UInt32FromVal(s.m.Get(types.NewString("height")))
+}
+
+func (s Size) SetHeight(p types.UInt32) Size {
+	return SizeFromVal(s.m.Set(types.NewString("height"), p))
+}
+
 // Photo
 
 type Photo struct {
@@ -196,52 +301,12 @@ func (s Photo) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Photo) Width() types.UInt32 {
-	return types.UInt32FromVal(s.m.Get(types.NewString("width")))
-}
-
-func (s Photo) SetWidth(p types.UInt32) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("width"), p))
-}
-
-func (s Photo) Title() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("title")))
-}
-
-func (s Photo) SetTitle(p types.String) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("title"), p))
-}
-
-func (s Photo) Id() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("id")))
-}
-
-func (s Photo) SetId(p types.String) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("id"), p))
-}
-
 func (s Photo) Tags() SetOfString {
 	return SetOfStringFromVal(s.m.Get(types.NewString("tags")))
 }
 
 func (s Photo) SetTags(p SetOfString) Photo {
 	return PhotoFromVal(s.m.Set(types.NewString("tags"), p.NomsValue()))
-}
-
-func (s Photo) Height() types.UInt32 {
-	return types.UInt32FromVal(s.m.Get(types.NewString("height")))
-}
-
-func (s Photo) SetHeight(p types.UInt32) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("height"), p))
-}
-
-func (s Photo) Geoposition() Geoposition {
-	return GeopositionFromVal(s.m.Get(types.NewString("geoposition")))
-}
-
-func (s Photo) SetGeoposition(p Geoposition) Photo {
-	return PhotoFromVal(s.m.Set(types.NewString("geoposition"), p.NomsValue()))
 }
 
 func (s Photo) Image() types.Blob {
@@ -252,117 +317,52 @@ func (s Photo) SetImage(p types.Blob) Photo {
 	return PhotoFromVal(s.m.Set(types.NewString("image"), p))
 }
 
+func (s Photo) Width() types.UInt32 {
+	return types.UInt32FromVal(s.m.Get(types.NewString("width")))
+}
+
+func (s Photo) SetWidth(p types.UInt32) Photo {
+	return PhotoFromVal(s.m.Set(types.NewString("width"), p))
+}
+
+func (s Photo) Geoposition() Geoposition {
+	return GeopositionFromVal(s.m.Get(types.NewString("geoposition")))
+}
+
+func (s Photo) SetGeoposition(p Geoposition) Photo {
+	return PhotoFromVal(s.m.Set(types.NewString("geoposition"), p.NomsValue()))
+}
+
+func (s Photo) Id() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("id")))
+}
+
+func (s Photo) SetId(p types.String) Photo {
+	return PhotoFromVal(s.m.Set(types.NewString("id"), p))
+}
+
+func (s Photo) Height() types.UInt32 {
+	return types.UInt32FromVal(s.m.Get(types.NewString("height")))
+}
+
+func (s Photo) SetHeight(p types.UInt32) Photo {
+	return PhotoFromVal(s.m.Set(types.NewString("height"), p))
+}
+
+func (s Photo) Title() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("title")))
+}
+
+func (s Photo) SetTitle(p types.String) Photo {
+	return PhotoFromVal(s.m.Set(types.NewString("title"), p))
+}
+
 func (s Photo) Url() types.String {
 	return types.StringFromVal(s.m.Get(types.NewString("url")))
 }
 
 func (s Photo) SetUrl(p types.String) Photo {
 	return PhotoFromVal(s.m.Set(types.NewString("url"), p))
-}
-
-// Geoposition
-
-type Geoposition struct {
-	m types.Map
-}
-
-func NewGeoposition() Geoposition {
-	return Geoposition{
-		types.NewMap(types.NewString("$name"), types.NewString("Geoposition")),
-	}
-}
-
-func GeopositionFromVal(v types.Value) Geoposition {
-	return Geoposition{v.(types.Map)}
-}
-
-// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
-func (s Geoposition) NomsValue() types.Map {
-	return s.m
-}
-
-func (s Geoposition) Equals(p Geoposition) bool {
-	return s.m.Equals(p.m)
-}
-
-func (s Geoposition) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s Geoposition) Longitude() types.Float32 {
-	return types.Float32FromVal(s.m.Get(types.NewString("longitude")))
-}
-
-func (s Geoposition) SetLongitude(p types.Float32) Geoposition {
-	return GeopositionFromVal(s.m.Set(types.NewString("longitude"), p))
-}
-
-func (s Geoposition) Latitude() types.Float32 {
-	return types.Float32FromVal(s.m.Get(types.NewString("latitude")))
-}
-
-func (s Geoposition) SetLatitude(p types.Float32) Geoposition {
-	return GeopositionFromVal(s.m.Set(types.NewString("latitude"), p))
-}
-
-// MapOfSizeToString
-
-type MapOfSizeToString struct {
-	m types.Map
-}
-
-type MapOfSizeToStringIterCallback (func(k Size, v types.String) (stop bool))
-
-func NewMapOfSizeToString() MapOfSizeToString {
-	return MapOfSizeToString{types.NewMap()}
-}
-
-func MapOfSizeToStringFromVal(p types.Value) MapOfSizeToString {
-	return MapOfSizeToString{p.(types.Map)}
-}
-
-func (m MapOfSizeToString) NomsValue() types.Map {
-	return m.m
-}
-
-func (m MapOfSizeToString) Equals(p MapOfSizeToString) bool {
-	return m.m.Equals(p.m)
-}
-
-func (m MapOfSizeToString) Ref() ref.Ref {
-	return m.m.Ref()
-}
-
-func (m MapOfSizeToString) Empty() bool {
-	return m.m.Empty()
-}
-
-func (m MapOfSizeToString) Len() uint64 {
-	return m.m.Len()
-}
-
-func (m MapOfSizeToString) Has(p Size) bool {
-	return m.m.Has(p.NomsValue())
-}
-
-func (m MapOfSizeToString) Get(p Size) types.String {
-	return types.StringFromVal(m.m.Get(p.NomsValue()))
-}
-
-func (m MapOfSizeToString) Set(k Size, v types.String) MapOfSizeToString {
-	return MapOfSizeToStringFromVal(m.m.Set(k.NomsValue(), v))
-}
-
-// TODO: Implement SetM?
-
-func (m MapOfSizeToString) Remove(p Size) MapOfSizeToString {
-	return MapOfSizeToStringFromVal(m.m.Remove(p.NomsValue()))
-}
-
-func (m MapOfSizeToString) Iter(cb MapOfSizeToStringIterCallback) {
-	m.m.Iter(func(k, v types.Value) bool {
-		return cb(SizeFromVal(k), types.StringFromVal(v))
-	})
 }
 
 // MapOfStringToSet
@@ -425,48 +425,48 @@ func (m MapOfStringToSet) Iter(cb MapOfStringToSetIterCallback) {
 	})
 }
 
-// Size
+// Geoposition
 
-type Size struct {
+type Geoposition struct {
 	m types.Map
 }
 
-func NewSize() Size {
-	return Size{
-		types.NewMap(types.NewString("$name"), types.NewString("Size")),
+func NewGeoposition() Geoposition {
+	return Geoposition{
+		types.NewMap(types.NewString("$name"), types.NewString("Geoposition")),
 	}
 }
 
-func SizeFromVal(v types.Value) Size {
-	return Size{v.(types.Map)}
+func GeopositionFromVal(v types.Value) Geoposition {
+	return Geoposition{v.(types.Map)}
 }
 
 // TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
-func (s Size) NomsValue() types.Map {
+func (s Geoposition) NomsValue() types.Map {
 	return s.m
 }
 
-func (s Size) Equals(p Size) bool {
+func (s Geoposition) Equals(p Geoposition) bool {
 	return s.m.Equals(p.m)
 }
 
-func (s Size) Ref() ref.Ref {
+func (s Geoposition) Ref() ref.Ref {
 	return s.m.Ref()
 }
 
-func (s Size) Width() types.UInt32 {
-	return types.UInt32FromVal(s.m.Get(types.NewString("width")))
+func (s Geoposition) Latitude() types.Float32 {
+	return types.Float32FromVal(s.m.Get(types.NewString("latitude")))
 }
 
-func (s Size) SetWidth(p types.UInt32) Size {
-	return SizeFromVal(s.m.Set(types.NewString("width"), p))
+func (s Geoposition) SetLatitude(p types.Float32) Geoposition {
+	return GeopositionFromVal(s.m.Set(types.NewString("latitude"), p))
 }
 
-func (s Size) Height() types.UInt32 {
-	return types.UInt32FromVal(s.m.Get(types.NewString("height")))
+func (s Geoposition) Longitude() types.Float32 {
+	return types.Float32FromVal(s.m.Get(types.NewString("longitude")))
 }
 
-func (s Size) SetHeight(p types.UInt32) Size {
-	return SizeFromVal(s.m.Set(types.NewString("height"), p))
+func (s Geoposition) SetLongitude(p types.Float32) Geoposition {
+	return GeopositionFromVal(s.m.Set(types.NewString("longitude"), p))
 }
 

@@ -29,7 +29,8 @@ func __testPackageInFile_leafDep_Ref() ref.Ref {
 // S
 
 type S struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewS() S {
@@ -37,7 +38,7 @@ func NewS() S {
 		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_leafDep_CachedRef, 0),
 		types.NewString("s"), types.NewString(""),
 		types.NewString("b"), types.Bool(false),
-	)}
+	), &ref.Ref{}}
 }
 
 type SDef struct {
@@ -51,7 +52,7 @@ func (def SDef) New() S {
 			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_leafDep_CachedRef, 0),
 			types.NewString("s"), types.NewString(def.S),
 			types.NewString("b"), types.Bool(def.B),
-		)}
+		), &ref.Ref{}}
 }
 
 func (s S) Def() (d SDef) {
@@ -67,29 +68,38 @@ func (m S) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefForS, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForS, func(v types.Value) types.Value {
 		return SFromVal(v)
 	})
 }
 
 func SFromVal(val types.Value) S {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(S); ok {
+		return val
+	}
 	// TODO: Validate here
-	return S{val.(types.Map)}
+	return S{val.(types.Map), &ref.Ref{}}
 }
 
 func (s S) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s S) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s S) Equals(other types.Value) bool {
 	if other, ok := other.(S); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s S) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s S) Chunks() (futures []types.Future) {
@@ -103,7 +113,7 @@ func (s S) S() string {
 }
 
 func (s S) SetS(val string) S {
-	return S{s.m.Set(types.NewString("s"), types.NewString(val))}
+	return S{s.m.Set(types.NewString("s"), types.NewString(val)), &ref.Ref{}}
 }
 
 func (s S) B() bool {
@@ -111,7 +121,7 @@ func (s S) B() bool {
 }
 
 func (s S) SetB(val bool) S {
-	return S{s.m.Set(types.NewString("b"), types.Bool(val))}
+	return S{s.m.Set(types.NewString("b"), types.Bool(val)), &ref.Ref{}}
 }
 
 // E

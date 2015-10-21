@@ -41,7 +41,7 @@ func TestRefFromValAndNomsValue(t *testing.T) {
 	r2 := NewRefOfListOfString(l.Ref())
 	assert.True(r.Equals(r2))
 
-	rv2 := r.NomsValue()
+	rv2 := types.Ref{R: r.InternalImplementation()}
 	assert.True(rv.Equals(rv2))
 }
 
@@ -79,10 +79,10 @@ func TestStructWithRef(t *testing.T) {
 
 	assert.Panics(func() { r2.GetValue(cs) })
 
-	types.WriteValue(str.NomsValue(), cs)
+	types.WriteValue(str, cs)
 	assert.Panics(func() { r2.GetValue(cs) })
 
-	types.WriteValue(set.NomsValue(), cs)
+	types.WriteValue(set, cs)
 	set2 := r2.GetValue(cs)
 	assert.True(set.Equals(set2))
 }

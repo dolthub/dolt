@@ -28,15 +28,16 @@ func __datasPackageInFile_types_Ref() ref.Ref {
 // Commit
 
 type Commit struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewCommit() Commit {
 	return Commit{types.NewMap(
 		types.NewString("$type"), types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0),
 		types.NewString("value"), types.Bool(false),
-		types.NewString("parents"), types.NewSet(),
-	)}
+		types.NewString("parents"), NewSetOfCommit(),
+	), &ref.Ref{}}
 }
 
 var __typeRefForCommit = types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)
@@ -46,29 +47,38 @@ func (m Commit) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefForCommit, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForCommit, func(v types.Value) types.Value {
 		return CommitFromVal(v)
 	})
 }
 
 func CommitFromVal(val types.Value) Commit {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(Commit); ok {
+		return val
+	}
 	// TODO: Validate here
-	return Commit{val.(types.Map)}
+	return Commit{val.(types.Map), &ref.Ref{}}
 }
 
 func (s Commit) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s Commit) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s Commit) Equals(other types.Value) bool {
 	if other, ok := other.(Commit); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s Commit) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s Commit) Chunks() (futures []types.Future) {
@@ -82,45 +92,55 @@ func (s Commit) Value() types.Value {
 }
 
 func (s Commit) SetValue(val types.Value) Commit {
-	return Commit{s.m.Set(types.NewString("value"), val)}
+	return Commit{s.m.Set(types.NewString("value"), val), &ref.Ref{}}
 }
 
 func (s Commit) Parents() SetOfCommit {
-	return SetOfCommitFromVal(s.m.Get(types.NewString("parents")))
+	return s.m.Get(types.NewString("parents")).(SetOfCommit)
 }
 
 func (s Commit) SetParents(val SetOfCommit) Commit {
-	return Commit{s.m.Set(types.NewString("parents"), val.NomsValue())}
+	return Commit{s.m.Set(types.NewString("parents"), val), &ref.Ref{}}
 }
 
 // MapOfStringToCommit
 
 type MapOfStringToCommit struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewMapOfStringToCommit() MapOfStringToCommit {
-	return MapOfStringToCommit{types.NewMap()}
+	return MapOfStringToCommit{types.NewMap(), &ref.Ref{}}
 }
 
-func MapOfStringToCommitFromVal(p types.Value) MapOfStringToCommit {
+func MapOfStringToCommitFromVal(val types.Value) MapOfStringToCommit {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(MapOfStringToCommit); ok {
+		return val
+	}
 	// TODO: Validate here
-	return MapOfStringToCommit{p.(types.Map)}
+	return MapOfStringToCommit{val.(types.Map), &ref.Ref{}}
 }
 
 func (m MapOfStringToCommit) NomsValue() types.Value {
+	// TODO: Remove this
+	return m
+}
+
+func (m MapOfStringToCommit) InternalImplementation() types.Map {
 	return m.m
 }
 
 func (m MapOfStringToCommit) Equals(other types.Value) bool {
 	if other, ok := other.(MapOfStringToCommit); ok {
-		return m.m.Equals(other.m)
+		return m.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (m MapOfStringToCommit) Ref() ref.Ref {
-	return m.m.Ref()
+	return types.EnsureRef(m.ref, m)
 }
 
 func (m MapOfStringToCommit) Chunks() (futures []types.Future) {
@@ -138,7 +158,7 @@ func (m MapOfStringToCommit) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForMapOfStringToCommit = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0))
-	types.RegisterFromValFunction(__typeRefForMapOfStringToCommit, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForMapOfStringToCommit, func(v types.Value) types.Value {
 		return MapOfStringToCommitFromVal(v)
 	})
 }
@@ -156,7 +176,7 @@ func (m MapOfStringToCommit) Has(p string) bool {
 }
 
 func (m MapOfStringToCommit) Get(p string) Commit {
-	return CommitFromVal(m.m.Get(types.NewString(p)))
+	return m.m.Get(types.NewString(p)).(Commit)
 }
 
 func (m MapOfStringToCommit) MaybeGet(p string) (Commit, bool) {
@@ -164,24 +184,24 @@ func (m MapOfStringToCommit) MaybeGet(p string) (Commit, bool) {
 	if !ok {
 		return NewCommit(), false
 	}
-	return CommitFromVal(v), ok
+	return v.(Commit), ok
 }
 
 func (m MapOfStringToCommit) Set(k string, v Commit) MapOfStringToCommit {
-	return MapOfStringToCommit{m.m.Set(types.NewString(k), v.NomsValue())}
+	return MapOfStringToCommit{m.m.Set(types.NewString(k), v), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToCommit) Remove(p string) MapOfStringToCommit {
-	return MapOfStringToCommit{m.m.Remove(types.NewString(p))}
+	return MapOfStringToCommit{m.m.Remove(types.NewString(p)), &ref.Ref{}}
 }
 
 type MapOfStringToCommitIterCallback func(k string, v Commit) (stop bool)
 
 func (m MapOfStringToCommit) Iter(cb MapOfStringToCommitIterCallback) {
 	m.m.Iter(func(k, v types.Value) bool {
-		return cb(k.(types.String).String(), CommitFromVal(v))
+		return cb(k.(types.String).String(), v.(Commit))
 	})
 }
 
@@ -189,7 +209,7 @@ type MapOfStringToCommitIterAllCallback func(k string, v Commit)
 
 func (m MapOfStringToCommit) IterAll(cb MapOfStringToCommitIterAllCallback) {
 	m.m.IterAll(func(k, v types.Value) {
-		cb(k.(types.String).String(), CommitFromVal(v))
+		cb(k.(types.String).String(), v.(Commit))
 	})
 }
 
@@ -208,30 +228,40 @@ func (m MapOfStringToCommit) Filter(cb MapOfStringToCommitFilterCallback) MapOfS
 // SetOfCommit
 
 type SetOfCommit struct {
-	s types.Set
+	s   types.Set
+	ref *ref.Ref
 }
 
 func NewSetOfCommit() SetOfCommit {
-	return SetOfCommit{types.NewSet()}
+	return SetOfCommit{types.NewSet(), &ref.Ref{}}
 }
 
-func SetOfCommitFromVal(p types.Value) SetOfCommit {
-	return SetOfCommit{p.(types.Set)}
+func SetOfCommitFromVal(val types.Value) SetOfCommit {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(SetOfCommit); ok {
+		return val
+	}
+	return SetOfCommit{val.(types.Set), &ref.Ref{}}
 }
 
 func (s SetOfCommit) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s SetOfCommit) InternalImplementation() types.Set {
 	return s.s
 }
 
 func (s SetOfCommit) Equals(other types.Value) bool {
 	if other, ok := other.(SetOfCommit); ok {
-		return s.s.Equals(other.s)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s SetOfCommit) Ref() ref.Ref {
-	return s.s.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s SetOfCommit) Chunks() (futures []types.Future) {
@@ -249,7 +279,7 @@ func (m SetOfCommit) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSetOfCommit = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0))
-	types.RegisterFromValFunction(__typeRefForSetOfCommit, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForSetOfCommit, func(v types.Value) types.Value {
 		return SetOfCommitFromVal(v)
 	})
 }
@@ -263,14 +293,14 @@ func (s SetOfCommit) Len() uint64 {
 }
 
 func (s SetOfCommit) Has(p Commit) bool {
-	return s.s.Has(p.NomsValue())
+	return s.s.Has(p)
 }
 
 type SetOfCommitIterCallback func(p Commit) (stop bool)
 
 func (s SetOfCommit) Iter(cb SetOfCommitIterCallback) {
 	s.s.Iter(func(v types.Value) bool {
-		return cb(CommitFromVal(v))
+		return cb(v.(Commit))
 	})
 }
 
@@ -278,7 +308,7 @@ type SetOfCommitIterAllCallback func(p Commit)
 
 func (s SetOfCommit) IterAll(cb SetOfCommitIterAllCallback) {
 	s.s.IterAll(func(v types.Value) {
-		cb(CommitFromVal(v))
+		cb(v.(Commit))
 	})
 }
 
@@ -295,23 +325,23 @@ func (s SetOfCommit) Filter(cb SetOfCommitFilterCallback) SetOfCommit {
 }
 
 func (s SetOfCommit) Insert(p ...Commit) SetOfCommit {
-	return SetOfCommit{s.s.Insert(s.fromElemSlice(p)...)}
+	return SetOfCommit{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfCommit) Remove(p ...Commit) SetOfCommit {
-	return SetOfCommit{s.s.Remove(s.fromElemSlice(p)...)}
+	return SetOfCommit{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfCommit) Union(others ...SetOfCommit) SetOfCommit {
-	return SetOfCommit{s.s.Union(s.fromStructSlice(others)...)}
+	return SetOfCommit{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
 func (s SetOfCommit) Subtract(others ...SetOfCommit) SetOfCommit {
-	return SetOfCommit{s.s.Subtract(s.fromStructSlice(others)...)}
+	return SetOfCommit{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
 func (s SetOfCommit) Any() Commit {
-	return CommitFromVal(s.s.Any())
+	return s.s.Any().(Commit)
 }
 
 func (s SetOfCommit) fromStructSlice(p []SetOfCommit) []types.Set {
@@ -325,7 +355,7 @@ func (s SetOfCommit) fromStructSlice(p []SetOfCommit) []types.Set {
 func (s SetOfCommit) fromElemSlice(p []Commit) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
-		r[i] = v.NomsValue()
+		r[i] = v
 	}
 	return r
 }

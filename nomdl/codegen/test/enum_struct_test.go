@@ -36,7 +36,7 @@ func TestEnumValue(t *testing.T) {
 	assert.True(st.Equals(st2))
 }
 
-func TestEnumIsValue(t *testing.T) {
+func SkipTestEnumIsValue(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 	var v types.Value = NewEnumStruct()
 	ref := types.WriteValue(v, cs)

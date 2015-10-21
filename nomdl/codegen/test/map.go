@@ -10,11 +10,12 @@ import (
 // MapOfBoolToString
 
 type MapOfBoolToString struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewMapOfBoolToString() MapOfBoolToString {
-	return MapOfBoolToString{types.NewMap()}
+	return MapOfBoolToString{types.NewMap(), &ref.Ref{}}
 }
 
 type MapOfBoolToStringDef map[bool]string
@@ -24,7 +25,7 @@ func (def MapOfBoolToStringDef) New() MapOfBoolToString {
 	for k, v := range def {
 		kv = append(kv, types.Bool(k), types.NewString(v))
 	}
-	return MapOfBoolToString{types.NewMap(kv...)}
+	return MapOfBoolToString{types.NewMap(kv...), &ref.Ref{}}
 }
 
 func (m MapOfBoolToString) Def() MapOfBoolToStringDef {
@@ -36,24 +37,33 @@ func (m MapOfBoolToString) Def() MapOfBoolToStringDef {
 	return def
 }
 
-func MapOfBoolToStringFromVal(p types.Value) MapOfBoolToString {
+func MapOfBoolToStringFromVal(val types.Value) MapOfBoolToString {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(MapOfBoolToString); ok {
+		return val
+	}
 	// TODO: Validate here
-	return MapOfBoolToString{p.(types.Map)}
+	return MapOfBoolToString{val.(types.Map), &ref.Ref{}}
 }
 
 func (m MapOfBoolToString) NomsValue() types.Value {
+	// TODO: Remove this
+	return m
+}
+
+func (m MapOfBoolToString) InternalImplementation() types.Map {
 	return m.m
 }
 
 func (m MapOfBoolToString) Equals(other types.Value) bool {
 	if other, ok := other.(MapOfBoolToString); ok {
-		return m.m.Equals(other.m)
+		return m.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (m MapOfBoolToString) Ref() ref.Ref {
-	return m.m.Ref()
+	return types.EnsureRef(m.ref, m)
 }
 
 func (m MapOfBoolToString) Chunks() (futures []types.Future) {
@@ -71,7 +81,7 @@ func (m MapOfBoolToString) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForMapOfBoolToString = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.BoolKind), types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterFromValFunction(__typeRefForMapOfBoolToString, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForMapOfBoolToString, func(v types.Value) types.Value {
 		return MapOfBoolToStringFromVal(v)
 	})
 }
@@ -101,13 +111,13 @@ func (m MapOfBoolToString) MaybeGet(p bool) (string, bool) {
 }
 
 func (m MapOfBoolToString) Set(k bool, v string) MapOfBoolToString {
-	return MapOfBoolToString{m.m.Set(types.Bool(k), types.NewString(v))}
+	return MapOfBoolToString{m.m.Set(types.Bool(k), types.NewString(v)), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfBoolToString) Remove(p bool) MapOfBoolToString {
-	return MapOfBoolToString{m.m.Remove(types.Bool(p))}
+	return MapOfBoolToString{m.m.Remove(types.Bool(p)), &ref.Ref{}}
 }
 
 type MapOfBoolToStringIterCallback func(k bool, v string) (stop bool)
@@ -141,11 +151,12 @@ func (m MapOfBoolToString) Filter(cb MapOfBoolToStringFilterCallback) MapOfBoolT
 // MapOfStringToValue
 
 type MapOfStringToValue struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewMapOfStringToValue() MapOfStringToValue {
-	return MapOfStringToValue{types.NewMap()}
+	return MapOfStringToValue{types.NewMap(), &ref.Ref{}}
 }
 
 type MapOfStringToValueDef map[string]types.Value
@@ -155,7 +166,7 @@ func (def MapOfStringToValueDef) New() MapOfStringToValue {
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), v)
 	}
-	return MapOfStringToValue{types.NewMap(kv...)}
+	return MapOfStringToValue{types.NewMap(kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToValue) Def() MapOfStringToValueDef {
@@ -167,24 +178,33 @@ func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 	return def
 }
 
-func MapOfStringToValueFromVal(p types.Value) MapOfStringToValue {
+func MapOfStringToValueFromVal(val types.Value) MapOfStringToValue {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(MapOfStringToValue); ok {
+		return val
+	}
 	// TODO: Validate here
-	return MapOfStringToValue{p.(types.Map)}
+	return MapOfStringToValue{val.(types.Map), &ref.Ref{}}
 }
 
 func (m MapOfStringToValue) NomsValue() types.Value {
+	// TODO: Remove this
+	return m
+}
+
+func (m MapOfStringToValue) InternalImplementation() types.Map {
 	return m.m
 }
 
 func (m MapOfStringToValue) Equals(other types.Value) bool {
 	if other, ok := other.(MapOfStringToValue); ok {
-		return m.m.Equals(other.m)
+		return m.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (m MapOfStringToValue) Ref() ref.Ref {
-	return m.m.Ref()
+	return types.EnsureRef(m.ref, m)
 }
 
 func (m MapOfStringToValue) Chunks() (futures []types.Future) {
@@ -202,7 +222,7 @@ func (m MapOfStringToValue) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
-	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.Value {
 		return MapOfStringToValueFromVal(v)
 	})
 }
@@ -232,13 +252,13 @@ func (m MapOfStringToValue) MaybeGet(p string) (types.Value, bool) {
 }
 
 func (m MapOfStringToValue) Set(k string, v types.Value) MapOfStringToValue {
-	return MapOfStringToValue{m.m.Set(types.NewString(k), v)}
+	return MapOfStringToValue{m.m.Set(types.NewString(k), v), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToValue) Remove(p string) MapOfStringToValue {
-	return MapOfStringToValue{m.m.Remove(types.NewString(p))}
+	return MapOfStringToValue{m.m.Remove(types.NewString(p)), &ref.Ref{}}
 }
 
 type MapOfStringToValueIterCallback func(k string, v types.Value) (stop bool)
