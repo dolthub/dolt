@@ -1,11 +1,12 @@
 // {{.Name}}
 
 type {{.Name}} struct {
-	l types.List
+	l   types.List
+	ref *ref.Ref
 }
 
 func New{{.Name}}() {{.Name}} {
-	return {{.Name}}{types.NewList()}
+	return {{.Name}}{types.NewList(), &ref.Ref{}}
 }
 
 {{if .CanUseDef}}
@@ -16,7 +17,7 @@ func New{{.Name}}() {{.Name}} {
 		for i, d := range def {
 			l[i] = {{defToValue "d" .ElemType }}
 		}
-		return {{.Name}}{types.NewList(l...)}
+		return {{.Name}}{types.NewList(l...), &ref.Ref{}}
 	}
 
 	func (l {{.Name}}) Def() {{.Name}}Def {
@@ -29,24 +30,32 @@ func New{{.Name}}() {{.Name}} {
 {{end}}
 
 func {{.Name}}FromVal(val types.Value) {{.Name}} {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.({{.Name}}); ok {
+		return val
+	}
 	// TODO: Validate here
-	return {{.Name}}{val.(types.List)}
+	return {{.Name}}{val.(types.List), &ref.Ref{}}
 }
 
-
 func (l {{.Name}}) NomsValue() types.Value {
+	// TODO: Remove this
+	return l
+}
+
+func (l {{.Name}}) InternalImplementation() types.List {
 	return l.l
 }
 
 func (l {{.Name}}) Equals(other types.Value) bool {
 	if other, ok := other.({{.Name}}); ok {
-		return l.l.Equals(other.l)
+		return l.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (l {{.Name}}) Ref() ref.Ref {
-	return l.l.Ref()
+	return types.EnsureRef(l.ref, l)
 }
 
 func (l {{.Name}}) Chunks() (futures []types.Future) {
@@ -70,27 +79,27 @@ func (l {{.Name}}) Get(i uint64) {{userType .ElemType}} {
 }
 
 func (l {{.Name}}) Slice(idx uint64, end uint64) {{.Name}} {
-	return {{.Name}}{l.l.Slice(idx, end)}
+	return {{.Name}}{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l {{.Name}}) Set(i uint64, val {{userType .ElemType}}) {{.Name}} {
-	return {{.Name}}{l.l.Set(i, {{userToValue "val" .ElemType}})}
+	return {{.Name}}{l.l.Set(i, {{userToValue "val" .ElemType}}), &ref.Ref{}}
 }
 
 func (l {{.Name}}) Append(v ...{{userType .ElemType}}) {{.Name}} {
-	return {{.Name}}{l.l.Append(l.fromElemSlice(v)...)}
+	return {{.Name}}{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l {{.Name}}) Insert(idx uint64, v ...{{userType .ElemType}}) {{.Name}} {
-	return {{.Name}}{l.l.Insert(idx, l.fromElemSlice(v)...)}
+	return {{.Name}}{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l {{.Name}}) Remove(idx uint64, end uint64) {{.Name}} {
-	return {{.Name}}{l.l.Remove(idx, end)}
+	return {{.Name}}{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l {{.Name}}) RemoveAt(idx uint64) {{.Name}} {
-	return {{.Name}}{(l.l.RemoveAt(idx))}
+	return {{.Name}}{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l {{.Name}}) fromElemSlice(p []{{userType .ElemType}}) []types.Value {

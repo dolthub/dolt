@@ -121,7 +121,7 @@ func (fm Set) Any() Value {
 }
 
 func (fs Set) Ref() ref.Ref {
-	return ensureRef(fs.ref, fs)
+	return EnsureRef(fs.ref, fs)
 }
 
 func (fs Set) Equals(other Value) bool {
@@ -138,9 +138,16 @@ func (fs Set) Chunks() (futures []Future) {
 	return
 }
 
+var setTypeRef = MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(ValueKind))
+
 func (fs Set) TypeRef() TypeRef {
-	// TODO: The element type needs to be configurable.
-	return MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(ValueKind))
+	return setTypeRef
+}
+
+func init() {
+	RegisterFromValFunction(setTypeRef, func(v Value) Value {
+		return v.(Set)
+	})
 }
 
 func newSetFromData(m setData, cs chunks.ChunkSource) Set {

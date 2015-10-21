@@ -1,20 +1,21 @@
 // {{.Name}}
 
 type {{.Name}} struct {
-	r ref.Ref
+	r   ref.Ref
+	ref *ref.Ref
 }
 
 func New{{.Name}}(r ref.Ref) {{.Name}} {
-	return {{.Name}}{r}
+	return {{.Name}}{r, &ref.Ref{}}
 }
 
 func (r {{.Name}}) Ref() ref.Ref {
-	return r.r
+	return types.EnsureRef(r.ref, r)
 }
 
 func (r {{.Name}}) Equals(other types.Value) bool {
 	if other, ok := other.({{.Name}}); ok {
-		return r.r == other.r
+		return r.Ref() == other.Ref()
 	}
 	return false
 }
@@ -24,11 +25,20 @@ func (r {{.Name}}) Chunks() []types.Future {
 }
 
 func (r {{.Name}}) NomsValue() types.Value {
-	return types.Ref{R: r.r}
+	// TODO: Remove this
+	return r
 }
 
-func {{.Name}}FromVal(p types.Value) {{.Name}} {
-	return {{.Name}}{p.(types.Ref).Ref()}
+func (r {{.Name}}) InternalImplementation() ref.Ref {
+	return r.r
+}
+
+func {{.Name}}FromVal(val types.Value) {{.Name}} {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.({{.Name}}); ok {
+		return val
+	}
+	return {{.Name}}{val.(types.Ref).Ref(), &ref.Ref{}}
 }
 
 {{template "type_ref.tmpl" .}}
@@ -38,6 +48,5 @@ func (r {{.Name}}) GetValue(cs chunks.ChunkSource) {{userType .ElemType}} {
 }
 
 func (r {{.Name}}) SetValue(val {{userType .ElemType}}, cs chunks.ChunkSink) {{.Name}} {
-	ref := types.WriteValue({{userToValue "val" .ElemType}}, cs)
-	return {{.Name}}{ref}
+	return {{.Name}}{types.WriteValue({{userToValue "val" .ElemType}}, cs), &ref.Ref{}}
 }

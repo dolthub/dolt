@@ -72,7 +72,7 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) bool {
 	}
 	// TODO: This Commit will be orphaned if the UpdateRoot below fails
 	currentDatasets = currentDatasets.Set(datasetID, commit)
-	newRootRef := types.WriteValue(currentDatasets.NomsValue(), ds)
+	newRootRef := types.WriteValue(currentDatasets, ds)
 
 	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
 	return ds.UpdateRoot(newRootRef, currentRootRef)

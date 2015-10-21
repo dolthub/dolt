@@ -127,7 +127,7 @@ func (fm Map) Filter(cb mapFilterCallback) Map {
 }
 
 func (fm Map) Ref() ref.Ref {
-	return ensureRef(fm.ref, fm)
+	return EnsureRef(fm.ref, fm)
 }
 
 func (m Map) Equals(other Value) (res bool) {
@@ -145,12 +145,20 @@ func (fm Map) Chunks() (futures []Future) {
 	return
 }
 
+var mapTypeRef = MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))
+
 func (fm Map) TypeRef() TypeRef {
+	// TODO: remove $type fields. BUG 450
 	if v, ok := fm.MaybeGet(NewString("$type")); ok {
 		return v.(TypeRef)
 	}
-	// TODO: The key and value type needs to be configurable.
-	return MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))
+	return mapTypeRef
+}
+
+func init() {
+	RegisterFromValFunction(mapTypeRef, func(v Value) Value {
+		return v.(Map)
+	})
 }
 
 type mapEntry struct {

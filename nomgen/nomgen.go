@@ -99,7 +99,7 @@ func readTemplate(name string) *template.Template {
 }
 
 func (ng *NG) writeType(val types.Map) {
-	typ := val.Get(types.NewString("$type")).(types.String).String()
+	typ := val.Get(types.NewString("$typeDef")).(types.String).String()
 	switch typ {
 	case "noms.ListDef":
 		ng.writeList(val)
@@ -226,7 +226,7 @@ func getGoStructName(typeDef types.Value) string {
 		if typeDef.Has(types.NewString("$name")) {
 			return typeDef.Get(types.NewString("$name")).(types.String).String()
 		}
-		typ := typeDef.Get(types.NewString("$type")).(types.String).String()
+		typ := typeDef.Get(types.NewString("$typeDef")).(types.String).String()
 		switch typ {
 		case "noms.ListDef":
 			return fmt.Sprintf("ListOf%s", getGoStructName(typeDef.Get(types.NewString("elem"))))

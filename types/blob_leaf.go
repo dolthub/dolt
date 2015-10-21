@@ -29,7 +29,7 @@ func (bl blobLeaf) Len() uint64 {
 }
 
 func (bl blobLeaf) Ref() ref.Ref {
-	return ensureRef(bl.ref, bl)
+	return EnsureRef(bl.ref, bl)
 }
 
 func (bl blobLeaf) Chunks() []Future {

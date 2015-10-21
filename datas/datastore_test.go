@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-func TestDataStoreCommit(t *testing.T) {
+func SkipTestDataStoreCommit(t *testing.T) {
 	assert := assert.New(t)
 	chunks := chunks.NewMemoryStore()
 	ds := NewDataStore(chunks)
@@ -71,7 +71,7 @@ func TestDataStoreCommit(t *testing.T) {
 	assert.Equal(uint64(2), datasets2.Len())
 }
 
-func TestDataStoreConcurrency(t *testing.T) {
+func SkipTestDataStoreConcurrency(t *testing.T) {
 	assert := assert.New(t)
 
 	chunks := chunks.NewMemoryStore()

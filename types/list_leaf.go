@@ -167,7 +167,7 @@ func (l listLeaf) RemoveAt(idx uint64) List {
 }
 
 func (l listLeaf) Ref() ref.Ref {
-	return ensureRef(l.ref, l)
+	return EnsureRef(l.ref, l)
 }
 
 // BUG 141
@@ -192,6 +192,5 @@ func (l listLeaf) Chunks() (futures []Future) {
 }
 
 func (cl listLeaf) TypeRef() TypeRef {
-	// TODO: The element type needs to be configurable.
-	return MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
+	return listTypeRef
 }

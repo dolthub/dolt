@@ -90,7 +90,7 @@ func (t TypeRef) Namespace() string {
 }
 
 func (t TypeRef) Ref() ref.Ref {
-	return ensureRef(t.ref, t)
+	return EnsureRef(t.ref, t)
 }
 
 func (t TypeRef) Equals(other Value) (res bool) {

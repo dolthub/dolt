@@ -20,7 +20,7 @@ func (p Package) Equals(other Value) bool {
 }
 
 func (p Package) Ref() ref.Ref {
-	return ensureRef(p.ref, p)
+	return EnsureRef(p.ref, p)
 }
 
 func (p Package) Chunks() (futures []Future) {

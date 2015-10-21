@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
@@ -10,7 +11,7 @@ import (
 
 func TestGetRef(t *testing.T) {
 	assert := assert.New(t)
-	input := "j false\n"
+	input := fmt.Sprintf("t [%d,false]\n", BoolKind)
 	h := ref.NewHash()
 	h.Write([]byte(input))
 	expected := ref.FromHash(h)

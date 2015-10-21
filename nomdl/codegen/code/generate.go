@@ -84,9 +84,10 @@ func (gen Generator) DefToValue(val string, t types.TypeRef) string {
 	case types.EnumKind:
 		return fmt.Sprintf("types.UInt32(%s)", val)
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
-		return fmt.Sprintf("%s.New().NomsValue()", val)
+		return fmt.Sprintf("%s.New()", val)
 	case types.RefKind:
-		return fmt.Sprintf("types.Ref{R: %s}", val)
+		// TODO: This looks suspicious. This can have a namespace. BUG 449
+		return fmt.Sprintf("New%s(%s)", gen.UserType(t), val)
 	}
 	panic("unreachable")
 }
@@ -144,12 +145,10 @@ func (gen Generator) UserToValue(val string, t types.TypeRef) string {
 	t = gen.R.Resolve(t)
 	k := t.Kind()
 	switch k {
-	case types.BlobKind, types.PackageKind, types.ValueKind, types.TypeRefKind:
+	case types.BlobKind, types.ListKind, types.MapKind, types.PackageKind, types.RefKind, types.SetKind, types.StructKind, types.TypeRefKind, types.ValueKind:
 		return val
 	case types.BoolKind, types.EnumKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return gen.NativeToValue(val, t)
-	case types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
-		return fmt.Sprintf("%s.NomsValue()", val)
 	}
 	panic("unreachable")
 }
@@ -166,7 +165,7 @@ func (gen Generator) ValueToUser(val string, t types.TypeRef) string {
 	case types.EnumKind:
 		return fmt.Sprintf("%s(%s.(types.UInt32))", gen.UserName(t), val)
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
-		return fmt.Sprintf("%sFromVal(%s)", gen.UserName(t), val)
+		return fmt.Sprintf("%s.(%s)", val, gen.UserName(t))
 	case types.PackageKind:
 		return fmt.Sprintf("%s.(types.Package)", val)
 	case types.ValueKind:
@@ -191,16 +190,18 @@ func (gen Generator) UserZero(t types.TypeRef) string {
 	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return fmt.Sprintf("%s(0)", strings.ToLower(kindToString(k)))
 	case types.ListKind, types.MapKind, types.PackageKind, types.SetKind, types.StructKind:
+		// TODO: namespace BUG 449
 		return fmt.Sprintf("New%s()", gen.UserType(t))
 	case types.RefKind:
-		return fmt.Sprintf("%s{ref.Ref{}}", gen.UserType(t))
+		// TODO: namespace BUG 449
+		return fmt.Sprintf("New%s(ref.Ref{})", gen.UserType(t))
 	case types.StringKind:
 		return `""`
 	case types.ValueKind:
 		// TODO: This is where a null Value would have been useful.
 		return "types.Bool(false)"
 	case types.TypeRefKind:
-		return "types.TypeRef{}"
+		return "types.TypeRef{R: ref.Ref{}}"
 	}
 	panic("unreachable")
 }
@@ -218,23 +219,17 @@ func (gen Generator) ValueZero(t types.TypeRef) string {
 		return "types.UInt32(0)"
 	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return fmt.Sprintf("types.%s(0)", kindToString(k))
-	case types.ListKind:
-		return "types.NewList()"
-	case types.MapKind:
-		return "types.NewMap()"
+	case types.ListKind, types.MapKind, types.RefKind, types.SetKind:
+		return gen.UserZero(t)
 	case types.PackageKind:
 		return "types.NewPackage()"
-	case types.RefKind:
-		return "types.Ref{R: ref.Ref{}}"
-	case types.SetKind:
-		return "types.NewSet()"
 	case types.StringKind:
 		return `types.NewString("")`
 	case types.StructKind:
 		if t.HasPackageRef() {
-			return fmt.Sprintf("%s.New%s().NomsValue()", ToTag(t.PackageRef()), rt.Name())
+			return fmt.Sprintf("%s.New%s()", ToTag(t.PackageRef()), rt.Name())
 		}
-		return fmt.Sprintf("New%s().NomsValue()", gen.UserName(rt))
+		return fmt.Sprintf("New%s()", gen.UserName(rt))
 	case types.ValueKind:
 		// TODO: Use nil here
 		return "types.Bool(false)"

@@ -204,38 +204,39 @@ var unmarshalTests = []unmarshalTest{
 	{in: strIntMap(si{"key", 2}), ptr: mapAddr(map[string]int32{"old": 0, "key": 1}), out: map[string]int32{"key": 2}},
 
 	// embedded structs
-	{
-		in:  marshaledEmbedsPlus,
-		ptr: new(Top),
-		out: Top{
-			Level0: 1,
-			Embed0: Embed0{
-				Level1b: 2,
-				Level1c: 3,
-			},
-			Embed0a: &Embed0a{
-				Level1a: 5,
-				Level1b: 6,
-			},
-			Embed0b: &Embed0b{
-				Level1a: 8,
-				Level1b: 9,
-				Level1c: 10,
-				Level1d: 11,
-				Level1e: 12,
-			},
-			Loop: Loop{
-				Loop1: 13,
-				Loop2: 14,
-			},
-			Embed0p: Embed0p{
-				Point: image.Point{X: 15, Y: 16},
-			},
-			Embed0q: Embed0q{
-				Point: Point{Z: 17},
-			},
-		},
-	},
+	// TODO: The ordering of the fields is based on the map iteration order. BUG 396
+	// {
+	// 	in:  marshaledEmbedsPlus,
+	// 	ptr: new(Top),
+	// 	out: Top{
+	// 		Level0: 1,
+	// 		Embed0: Embed0{
+	// 			Level1b: 2,
+	// 			Level1c: 3,
+	// 		},
+	// 		Embed0a: &Embed0a{
+	// 			Level1a: 5,
+	// 			Level1b: 6,
+	// 		},
+	// 		Embed0b: &Embed0b{
+	// 			Level1a: 8,
+	// 			Level1b: 9,
+	// 			Level1c: 10,
+	// 			Level1d: 11,
+	// 			Level1e: 12,
+	// 		},
+	// 		Loop: Loop{
+	// 			Loop1: 13,
+	// 			Loop2: 14,
+	// 		},
+	// 		Embed0p: Embed0p{
+	// 			Point: image.Point{X: 15, Y: 16},
+	// 		},
+	// 		Embed0q: Embed0q{
+	// 			Point: Point{Z: 17},
+	// 		},
+	// 	},
+	// },
 	// TODO: The ordering of the fields is based on the map iteration order. BUG 396
 	// {
 	// 	in:  types.NewMap(types.NewString("hello"), types.Int32(1)),
@@ -256,9 +257,10 @@ var unmarshalTests = []unmarshalTest{
 }
 
 // marshaledEmbeds (from marshal_test.go) plus some unexported fields.
-var marshaledEmbedsPlus = func() types.Map {
-	return marshaledEmbeds.Set(types.NewString("x"), types.Int32(4))
-}()
+// BUG 396
+// var marshaledEmbedsPlus = func() types.Map {
+// 	return marshaledEmbeds.Set(types.NewString("x"), types.Int32(4))
+// }()
 
 // allValue (from marshal_test.go) with some fields overridden to match how we handle nil in various cases.
 var allValueUnmarshal = func() All {

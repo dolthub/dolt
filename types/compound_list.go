@@ -340,7 +340,7 @@ func (cl compoundList) RemoveAt(idx uint64) List {
 }
 
 func (cl compoundList) Ref() ref.Ref {
-	return ensureRef(cl.ref, cl)
+	return EnsureRef(cl.ref, cl)
 }
 
 func (cl compoundList) Release() {
@@ -357,8 +357,7 @@ func (cl compoundList) Equals(other Value) bool {
 }
 
 func (cl compoundList) TypeRef() TypeRef {
-	// TODO: The element type needs to be configurable.
-	return MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
+	return listTypeRef
 }
 
 // startsChunk determines if idx refers to the first element in one of cl's chunks.

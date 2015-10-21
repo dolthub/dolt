@@ -1,7 +1,8 @@
 // {{.Name}}
 
 type {{.Name}} struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func New{{.Name}}() {{.Name}} {
@@ -10,7 +11,7 @@ func New{{.Name}}() {{.Name}} {
 			{{range .Fields}}{{if (not .Optional)}}types.NewString("{{.Name}}"), {{valueZero .T}},
 			{{end}}{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(0),
 			types.NewString("$unionValue"), {{valueZero .UnionZeroType}},{{end}}
-		)}
+		), &ref.Ref{}}
 }
 
 {{if .CanUseDef}}
@@ -28,7 +29,7 @@ func New{{.Name}}() {{.Name}} {
 				{{end}}{{if .HasUnion}}types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 				types.NewString("$unionValue"), def.__unionDefToValue(),
 			{{end}}
-		)}
+		), &ref.Ref{}}
 	}
 
 	func (s {{.Name}}) Def() (d {{.Name}}Def) {
@@ -66,29 +67,38 @@ func (m {{.Name}}) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefFor{{.Name}}, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefFor{{.Name}}, func(v types.Value) types.Value {
 		return {{.Name}}FromVal(v)
 	})
 }
 
 func {{.Name}}FromVal(val types.Value) {{.Name}} {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.({{.Name}}); ok {
+		return val
+	}
 	// TODO: Validate here
-	return {{.Name}}{val.(types.Map)}
+	return {{.Name}}{val.(types.Map), &ref.Ref{}}
 }
 
 func (s {{.Name}}) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s {{.Name}}) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s {{.Name}}) Equals(other types.Value) bool {
 	if other, ok := other.({{.Name}}); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s {{.Name}}) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s {{.Name}}) Chunks() (futures []types.Future) {
@@ -113,7 +123,7 @@ func (s {{$name}}) {{title .Name}}() {{userType .T}} {
 }
 {{end}}
 func (s {{$name}}) Set{{title .Name}}(val {{userType .T}}) {{$name}} {
-	return {{$name}}{s.m.Set(types.NewString("{{.Name}}"), {{userToValue "val" .T}})}
+	return {{$name}}{s.m.Set(types.NewString("{{.Name}}"), {{userToValue "val" .T}}), &ref.Ref{}}
 }
 {{end}}
 
@@ -127,7 +137,7 @@ func (s {{$name}}) Set{{title .Name}}(val {{userType .T}}) {{$name}} {
 	}
 
 	func (s {{$name}}) Set{{title .Name}}(val {{userType .T}}) {{$name}} {
-		return {{$name}}{s.m.Set(types.NewString("$unionIndex"), types.UInt32({{$index}})).Set(types.NewString("$unionValue"), {{userToValue "val" .T}})}
+		return {{$name}}{s.m.Set(types.NewString("$unionIndex"), types.UInt32({{$index}})).Set(types.NewString("$unionValue"), {{userToValue "val" .T}}), &ref.Ref{}}
 	}
 
 	{{if $canUseDef}}

@@ -49,9 +49,27 @@ func (suite *WalkAllTestSuite) TestWalkComposites() {
 	suite.walkWorker(suite.storeAndRef(types.NewMap(types.Int32(8), types.Bool(true), types.Int32(0), types.Bool(false))), 1)
 }
 
+func (suite *WalkAllTestSuite) NewList(vs ...types.Value) types.Ref {
+	v := types.NewList(vs...)
+	r := types.WriteValue(v, suite.cs)
+	return types.Ref{R: r}
+}
+
+func (suite *WalkAllTestSuite) NewMap(vs ...types.Value) types.Ref {
+	v := types.NewMap(vs...)
+	r := types.WriteValue(v, suite.cs)
+	return types.Ref{R: r}
+}
+
+func (suite *WalkAllTestSuite) NewSet(vs ...types.Value) types.Ref {
+	v := types.NewSet(vs...)
+	r := types.WriteValue(v, suite.cs)
+	return types.Ref{R: r}
+}
+
 func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
-	suite.walkWorker(suite.storeAndRef(types.NewList(types.NewSet(), types.Int32(8))), 2)
-	suite.walkWorker(suite.storeAndRef(types.NewSet(types.NewList(), types.NewSet())), 3)
+	suite.walkWorker(suite.storeAndRef(types.NewList(suite.NewSet(), types.Int32(8))), 2)
+	suite.walkWorker(suite.storeAndRef(types.NewSet(suite.NewList(), suite.NewSet())), 3)
 	// {"string": "string",
 	//  "list": [false true],
 	//  "map": {"nested": "string"}
@@ -61,26 +79,26 @@ func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
 	// }
 	nested := types.NewMap(
 		types.NewString("string"), types.NewString("string"),
-		types.NewString("list"), types.NewList(types.Bool(false), types.Bool(true)),
-		types.NewString("map"), types.NewMap(types.NewString("nested"), types.NewString("string")),
-		types.NewString("mtlist"), types.NewList(),
-		types.NewString("set"), types.NewSet(types.Int32(5), types.Int32(7), types.Int32(8)),
-		types.NewList(), types.NewString("wow"))
+		types.NewString("list"), suite.NewList(types.Bool(false), types.Bool(true)),
+		types.NewString("map"), suite.NewMap(types.NewString("nested"), types.NewString("string")),
+		types.NewString("mtlist"), suite.NewList(),
+		types.NewString("set"), suite.NewSet(types.Int32(5), types.Int32(7), types.Int32(8)),
+		suite.NewList(), types.NewString("wow"))
 	suite.walkWorker(suite.storeAndRef(nested), 6)
 }
 
 type WalkTestSuite struct {
 	WalkAllTestSuite
-	shouldSee types.Value
-	mustSkip  types.List
+	shouldSee types.Ref
+	mustSkip  types.Ref
 	deadValue types.Value
 }
 
 func (suite *WalkTestSuite) SetupTest() {
-	suite.shouldSee = types.NewList(types.NewString("zzz"))
-	suite.deadValue = types.UInt64(0xDEADBEEF)
-	suite.mustSkip = types.NewList(suite.deadValue)
 	suite.cs = chunks.NewTestStore()
+	suite.shouldSee = suite.NewList(types.NewString("zzz"))
+	suite.deadValue = types.UInt64(0xDEADBEEF)
+	suite.mustSkip = suite.NewList(suite.deadValue)
 }
 
 func (suite *WalkTestSuite) TestStopWalkImmediately() {
@@ -121,7 +139,7 @@ func (suite *WalkTestSuite) TestSkipSetElement() {
 }
 
 func (suite *WalkTestSuite) TestSkipMapValue() {
-	shouldAlsoSee := types.NewSet(types.NewString("Also good"))
+	shouldAlsoSee := suite.NewSet(types.NewString("Also good"))
 	wholeMap := types.NewMap(suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []types.Value{wholeMap, suite.mustSkip, shouldAlsoSee, suite.shouldSee, suite.shouldSee} {
