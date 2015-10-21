@@ -13,7 +13,7 @@ type LocalDataStore struct {
 
 func newLocalDataStore(cs chunks.ChunkStore) *LocalDataStore {
 	rootRef := cs.Root()
-	if rootRef == (ref.Ref{}) {
+	if rootRef.IsEmpty() {
 		return &LocalDataStore{dataStoreCommon{cs, nil}}
 	}
 
@@ -32,7 +32,7 @@ func (lds *LocalDataStore) CopyReachableChunksP(r, exclude ref.Ref, sink chunks.
 		return excludeRefs[r]
 	}
 
-	if exclude != (ref.Ref{}) {
+	if !exclude.IsEmpty() {
 		refChan := make(chan ref.Ref, 1024)
 		addRef := func(r ref.Ref) {
 			refChan <- r

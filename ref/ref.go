@@ -14,7 +14,8 @@ import (
 
 var (
 	// In the future we will allow different digest types, so this will get more complicated. For now sha1 is fine.
-	pattern = regexp.MustCompile("^sha1-([0-9a-f]{40})$")
+	pattern  = regexp.MustCompile("^sha1-([0-9a-f]{40})$")
+	emptyRef = Ref{}
 )
 
 type Sha1Digest [sha1.Size]byte
@@ -27,6 +28,10 @@ type Ref struct {
 // Digest returns a *copy* of the digest that backs Ref.
 func (r Ref) Digest() Sha1Digest {
 	return r.digest
+}
+
+func (r Ref) IsEmpty() bool {
+	return r.digest == emptyRef.digest
 }
 
 func (r Ref) String() string {

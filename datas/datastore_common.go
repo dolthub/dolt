@@ -49,14 +49,14 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) bool {
 	var currentDatasets MapOfStringToCommit
 	if ds.datasets != nil && currentRootRef == ds.datasets.Ref() {
 		currentDatasets = *ds.datasets
-	} else if currentRootRef != (ref.Ref{}) {
+	} else if !currentRootRef.IsEmpty() {
 		currentDatasets = *datasetsFromRef(currentRootRef, ds)
 	} else {
 		currentDatasets = NewMapOfStringToCommit()
 	}
 
 	// First commit in store is always fast-foward.
-	if currentRootRef != (ref.Ref{}) {
+	if !currentRootRef.IsEmpty() {
 		var currentHead Commit
 		currentHead, hasHead := currentDatasets.MaybeGet(datasetID)
 

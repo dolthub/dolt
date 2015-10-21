@@ -295,7 +295,7 @@ func (r *jsonArrayReader) readTypeRefAsValue(pkg *Package) TypeRef {
 		if ordinal == -1 {
 			namespace := r.readString()
 			name := r.readString()
-			d.Chk.Equal(ref.Ref{}, pkgRef, "Unresolved TypeRefs may not have a package ref")
+			d.Chk.True(pkgRef.IsEmpty(), "Unresolved TypeRefs may not have a package ref")
 			return MakeUnresolvedTypeRef(namespace, name)
 		}
 		return MakeTypeRef(pkgRef, ordinal)

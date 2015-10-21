@@ -68,3 +68,14 @@ func TestFromHash(t *testing.T) {
 	r := FromHash(h)
 	assert.Equal(t, "sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r.String())
 }
+
+func TestIsEmpty(t *testing.T) {
+	r1 := Ref{}
+	assert.True(t, r1.IsEmpty())
+
+	r2 := Parse("sha1-0000000000000000000000000000000000000000")
+	assert.True(t, r2.IsEmpty())
+
+	r3 := Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
+	assert.False(t, r3.IsEmpty())
+}

@@ -16,7 +16,7 @@ func getRefNoOverride(v Value) ref.Ref {
 }
 
 func ensureRef(r *ref.Ref, v Value) ref.Ref {
-	if *r == (ref.Ref{}) {
+	if r.IsEmpty() {
 		*r = getRef(v)
 	}
 	return *r
