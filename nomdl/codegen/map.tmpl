@@ -39,11 +39,6 @@ func {{.Name}}FromVal(val types.Value) {{.Name}} {
 	return {{.Name}}{val.(types.Map), &ref.Ref{}}
 }
 
-func (m {{.Name}}) NomsValue() types.Value {
-	// TODO: Remove this
-	return m
-}
-
 func (m {{.Name}}) InternalImplementation() types.Map {
 	return m.m
 }

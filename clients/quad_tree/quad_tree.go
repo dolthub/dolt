@@ -205,7 +205,7 @@ func (qt *QuadTreeDef) SaveToNoms(cs chunks.ChunkSink, start time.Time) *SQuadTr
 		wg.Add(1)
 		go func() {
 			for sqt := range wChan {
-				types.WriteValue(sqt.NomsValue(), cs)
+				types.WriteValue(sqt, cs)
 			}
 			wg.Done()
 		}()
@@ -227,7 +227,7 @@ func (qt *QuadTreeDef) saveNodeToNoms(wChan chan *SQuadTree, cs chunks.ChunkSink
 	if qt.hasTiles() {
 		for q, tile := range qt.Tiles {
 			child := tile.saveNodeToNoms(wChan, cs, start)
-			ref := child.NomsValue().Ref()
+			ref := child.Ref()
 			tileRefs[q] = ref
 		}
 	} else if len(qt.Nodes) > 0 {

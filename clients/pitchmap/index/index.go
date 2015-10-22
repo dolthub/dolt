@@ -171,7 +171,7 @@ func main() {
 		outputDataset := dataset.NewDataset(ds, *outputID)
 
 		input := types.ListFromVal(inputDataset.Head().Value())
-		output := getIndex(input).NomsValue()
+		output := getIndex(input)
 
 		_, ok := outputDataset.Commit(output)
 		d.Exp.True(ok, "Could not commit due to conflicting edit")

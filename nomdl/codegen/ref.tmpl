@@ -24,11 +24,6 @@ func (r {{.Name}}) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
 }
 
-func (r {{.Name}}) NomsValue() types.Value {
-	// TODO: Remove this
-	return r
-}
-
 func (r {{.Name}}) InternalImplementation() ref.Ref {
 	return r.r
 }

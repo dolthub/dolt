@@ -324,7 +324,7 @@ func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) error {
 
 func commitUser() {
 	ok := false
-	*ds, ok = ds.Commit(user.NomsValue())
+	*ds, ok = ds.Commit(user)
 	d.Exp.True(ok, "Could not commit due to conflicting edit")
 }
 

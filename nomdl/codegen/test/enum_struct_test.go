@@ -31,7 +31,7 @@ func TestEnumValue(t *testing.T) {
 
 	def := EnumStructDef{Switch}
 	st := def.New()
-	val := st.NomsValue()
+	val := st
 	st2 := EnumStructFromVal(val)
 	assert.True(st.Equals(st2))
 }

@@ -170,7 +170,7 @@ func TestImportedTypes(t *testing.T) {
 		}, types.Choices{}),
 	}, []ref.Ref{})
 	importedRef := types.WriteValue(imported, ds)
-	pkgDS, ok := pkgDS.Commit(types.NewSetOfRefOfPackage().Insert(types.NewRefOfPackage(importedRef)).NomsValue())
+	pkgDS, ok := pkgDS.Commit(types.NewSetOfRefOfPackage().Insert(types.NewRefOfPackage(importedRef)))
 	assert.True(ok)
 
 	good := fmt.Sprintf(`

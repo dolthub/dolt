@@ -40,11 +40,6 @@ func {{.Name}}FromVal(val types.Value) {{.Name}} {
 	return {{.Name}}{val.(types.Set), &ref.Ref{}}
 }
 
-func (s {{.Name}}) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s {{.Name}}) InternalImplementation() types.Set {
 	return s.s
 }

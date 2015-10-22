@@ -44,7 +44,7 @@ func addMp3(ds *dataset.Dataset, filename string) {
 		Mp3:    mp3_data,
 	}.New()
 	songs := readSongsFromDataset(ds).Append(new_song)
-	if _, ok := ds.Commit(songs.NomsValue()); ok {
+	if _, ok := ds.Commit(songs); ok {
 		fmt.Println("Successfully committed", filename)
 		printSong(new_song)
 	} else {

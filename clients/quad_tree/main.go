@@ -101,10 +101,10 @@ func main() {
 	if !*quietFlag {
 		fmt.Printf("Calling Commit(), elapsed time: %.2f secs\n", secsSince(start))
 	}
-	_, ok = dataset.Commit(nomsQtRoot.NomsValue())
+	_, ok = dataset.Commit(nomsQtRoot)
 	d.Chk.True(ok, "Could not commit due to conflicting edit")
 	if !*quietFlag {
 		fmt.Printf("Commit completed, elapsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
 	}
-	fmt.Println("QuadTree ref:", nomsQtRoot.NomsValue().Ref())
+	fmt.Println("QuadTree ref:", nomsQtRoot.Ref())
 }

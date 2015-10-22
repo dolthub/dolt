@@ -46,7 +46,7 @@ func TestMapValue(t *testing.T) {
 
 	def := MapOfBoolToStringDef{true: "hi", false: "bye"}
 	m := def.New()
-	val := m.NomsValue()
+	val := m
 	m2 := MapOfBoolToStringFromVal(val)
 	assert.True(m.Equals(m2))
 }
@@ -56,7 +56,7 @@ func TestValueMapValue(t *testing.T) {
 
 	def := MapOfStringToValueDef{"s": types.NewString("s"), "i": types.Int32(42)}
 	m := def.New()
-	val := m.NomsValue()
+	val := m
 	m2 := MapOfStringToValueFromVal(val)
 	assert.True(m.Equals(m2))
 }
