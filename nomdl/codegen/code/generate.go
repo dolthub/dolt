@@ -75,19 +75,18 @@ func (gen Generator) UserType(t types.TypeRef) string {
 
 // DefToValue returns a string containing Go code to convert an instance of a Def type (named val) to a Noms types.Value of the type described by t.
 func (gen Generator) DefToValue(val string, t types.TypeRef) string {
-	t = gen.R.Resolve(t)
-	switch t.Kind() {
+	rt := gen.R.Resolve(t)
+	switch rt.Kind() {
 	case types.BlobKind, types.PackageKind, types.ValueKind, types.TypeRefKind:
 		return val // No special Def representation
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
-		return gen.NativeToValue(val, t)
+		return gen.NativeToValue(val, rt)
 	case types.EnumKind:
 		return fmt.Sprintf("types.UInt32(%s)", val)
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.New()", val)
 	case types.RefKind:
-		// TODO: This looks suspicious. This can have a namespace. BUG 449
-		return fmt.Sprintf("New%s(%s)", gen.UserType(t), val)
+		return fmt.Sprintf("New%s(%s)", gen.UserName(rt), val)
 	}
 	panic("unreachable")
 }
@@ -178,8 +177,8 @@ func (gen Generator) ValueToUser(val string, t types.TypeRef) string {
 
 // UserZero returns a string containing Go code to create an uninitialized instance of the User type appropriate for t.
 func (gen Generator) UserZero(t types.TypeRef) string {
-	t = gen.R.Resolve(t)
-	k := t.Kind()
+	rt := gen.R.Resolve(t)
+	k := rt.Kind()
 	switch k {
 	case types.BlobKind:
 		return "types.NewEmptyBlob()"
@@ -190,11 +189,9 @@ func (gen Generator) UserZero(t types.TypeRef) string {
 	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return fmt.Sprintf("%s(0)", strings.ToLower(kindToString(k)))
 	case types.ListKind, types.MapKind, types.PackageKind, types.SetKind, types.StructKind:
-		// TODO: namespace BUG 449
-		return fmt.Sprintf("New%s()", gen.UserType(t))
+		return gen.newUserName(t, rt)
 	case types.RefKind:
-		// TODO: namespace BUG 449
-		return fmt.Sprintf("New%s(ref.Ref{})", gen.UserType(t))
+		return fmt.Sprintf("New%s(ref.Ref{})", gen.UserName(rt))
 	case types.StringKind:
 		return `""`
 	case types.ValueKind:
@@ -204,6 +201,13 @@ func (gen Generator) UserZero(t types.TypeRef) string {
 		return "types.TypeRef{R: ref.Ref{}}"
 	}
 	panic("unreachable")
+}
+
+func (gen Generator) newUserName(t, rt types.TypeRef) string {
+	if t.HasPackageRef() {
+		return fmt.Sprintf("%s.New%s()", ToTag(t.PackageRef()), gen.UserName(rt))
+	}
+	return fmt.Sprintf("New%s()", gen.UserName(rt))
 }
 
 // ValueZero returns a string containing Go code to create an uninitialized instance of the Noms types.Value appropriate for t.
@@ -226,10 +230,7 @@ func (gen Generator) ValueZero(t types.TypeRef) string {
 	case types.StringKind:
 		return `types.NewString("")`
 	case types.StructKind:
-		if t.HasPackageRef() {
-			return fmt.Sprintf("%s.New%s()", ToTag(t.PackageRef()), rt.Name())
-		}
-		return fmt.Sprintf("New%s()", gen.UserName(rt))
+		return gen.newUserName(t, rt)
 	case types.ValueKind:
 		// TODO: Use nil here
 		return "types.Bool(false)"
