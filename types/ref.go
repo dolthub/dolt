@@ -23,7 +23,14 @@ func (r Ref) Chunks() []Future {
 	return nil
 }
 
+var refTypeRef = MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(ValueKind))
+
 func (r Ref) TypeRef() TypeRef {
-	// TODO: The element type needs to be configurable.
-	return MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(ValueKind))
+	return refTypeRef
+}
+
+func init() {
+	RegisterFromValFunction(refTypeRef, func(v Value) Value {
+		return v.(Ref)
+	})
 }

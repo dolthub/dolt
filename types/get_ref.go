@@ -15,7 +15,7 @@ func getRefNoOverride(v Value) ref.Ref {
 	return writeValueInternal(v, nil)
 }
 
-func ensureRef(r *ref.Ref, v Value) ref.Ref {
+func EnsureRef(r *ref.Ref, v Value) ref.Ref {
 	if r.IsEmpty() {
 		*r = getRef(v)
 	}

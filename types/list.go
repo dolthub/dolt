@@ -54,3 +54,11 @@ func listFromFutures(list []Future, cs chunks.ChunkSource) List {
 func ListFromVal(v Value) List {
 	return v.(List)
 }
+
+var listTypeRef = MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
+
+func init() {
+	RegisterFromValFunction(listTypeRef, func(v Value) Value {
+		return v.(List)
+	})
+}

@@ -24,7 +24,7 @@ func (fs String) String() string {
 }
 
 func (fs String) Ref() ref.Ref {
-	return ensureRef(fs.ref, fs)
+	return EnsureRef(fs.ref, fs)
 }
 
 func (s String) Equals(other Value) bool {

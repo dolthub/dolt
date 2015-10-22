@@ -49,8 +49,8 @@ func appendChunks(chunks []Future, f Future) []Future {
 	} else if f != nil {
 		v := f.Val()
 		if v != nil {
-			if r, ok := v.(Ref); ok {
-				chunks = append(chunks, futureFromRef(r.Ref()))
+			if v.TypeRef().Kind() == RefKind {
+				chunks = append(chunks, futureFromRef(v.Ref()))
 			}
 		}
 	}

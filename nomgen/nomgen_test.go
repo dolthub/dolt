@@ -28,21 +28,21 @@ func (suite *NomgenTestSuite) TearDownTest() {
 
 func (suite *NomgenTestSuite) TestListSmokeTest() {
 	suite.ng.AddType(types.NewMap(
-		types.NewString("$type"), types.NewString("noms.ListDef"),
+		types.NewString("$typeDef"), types.NewString("noms.ListDef"),
 		types.NewString("elem"), types.NewString("int32")))
 	suite.ng.WriteGo("test")
 }
 
 func (suite *NomgenTestSuite) TestSetSmokeTest() {
 	suite.ng.AddType(types.NewMap(
-		types.NewString("$type"), types.NewString("noms.SetDef"),
+		types.NewString("$typeDef"), types.NewString("noms.SetDef"),
 		types.NewString("elem"), types.NewString("int32")))
 	suite.ng.WriteGo("test")
 }
 
 func (suite *NomgenTestSuite) TestMapSmokeTest() {
 	suite.ng.AddType(types.NewMap(
-		types.NewString("$type"), types.NewString("noms.MapDef"),
+		types.NewString("$typeDef"), types.NewString("noms.MapDef"),
 		types.NewString("key"), types.NewString("int32"),
 		types.NewString("value"), types.NewString("bool")))
 
@@ -51,7 +51,7 @@ func (suite *NomgenTestSuite) TestMapSmokeTest() {
 
 func (suite *NomgenTestSuite) TestStructSmokeTest() {
 	suite.ng.AddType(types.NewMap(
-		types.NewString("$type"), types.NewString("noms.StructDef"),
+		types.NewString("$typeDef"), types.NewString("noms.StructDef"),
 		types.NewString("$name"), types.NewString("MyStruct"),
 		types.NewString("key"), types.NewString("int32"),
 		types.NewString("value"), types.NewString("bool")))

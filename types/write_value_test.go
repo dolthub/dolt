@@ -16,7 +16,7 @@ func TestWriteValue(t *testing.T) {
 
 	var s *chunks.MemoryStore
 
-	testEncode := func(expected string, v interface{}) ref.Ref {
+	testEncode := func(expected string, v Value) ref.Ref {
 		s = chunks.NewMemoryStore()
 		r := WriteValue(v, s)
 
@@ -30,18 +30,12 @@ func TestWriteValue(t *testing.T) {
 	b, err := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01, 0x02}))
 	assert.NoError(err)
 	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), b)
-	testEncode("j \"foo\"\n", NewString("foo"))
 
-	tref := MakePrimitiveTypeRef(StringKind)
-	nomsValueString := valueAsNomsValue{Value: NewString("hi"), t: tref}
-	testEncode(fmt.Sprintf("t [%d,\"hi\"]\n", StringKind), nomsValueString)
+	testEncode(fmt.Sprintf("t [%d,\"hi\"]\n", StringKind), NewString("hi"))
 
-	testEncode(`j {"package":{"dependencies":[],"types":[]}}
-`, Package{types: []TypeRef{}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
-	ref1 := testEncode(`j {"package":{"dependencies":[],"types":[{"type":{"kind":{"uint8":0},"name":""}}]}}
-`, Package{types: []TypeRef{MakePrimitiveTypeRef(BoolKind)}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
-	testEncode(fmt.Sprintf(`j {"package":{"dependencies":[{"ref":"%s"}],"types":[]}}
-`, ref1), Package{types: []TypeRef{}, dependencies: []ref.Ref{ref1}, ref: &ref.Ref{}})
+	testEncode(fmt.Sprintf("t [%d,[],[]]\n", PackageKind), Package{types: []TypeRef{}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
+	ref1 := testEncode(fmt.Sprintf("t [%d,[%d],[]]\n", PackageKind, BoolKind), Package{types: []TypeRef{MakePrimitiveTypeRef(BoolKind)}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
+	testEncode(fmt.Sprintf("t [%d,[],[\"%s\"]]\n", PackageKind, ref1), Package{types: []TypeRef{}, dependencies: []ref.Ref{ref1}, ref: &ref.Ref{}})
 }
 
 func TestWriteBlobLeaf(t *testing.T) {

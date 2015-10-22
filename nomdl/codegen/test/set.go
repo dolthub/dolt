@@ -10,11 +10,12 @@ import (
 // SetOfBool
 
 type SetOfBool struct {
-	s types.Set
+	s   types.Set
+	ref *ref.Ref
 }
 
 func NewSetOfBool() SetOfBool {
-	return SetOfBool{types.NewSet()}
+	return SetOfBool{types.NewSet(), &ref.Ref{}}
 }
 
 type SetOfBoolDef map[bool]bool
@@ -26,7 +27,7 @@ func (def SetOfBoolDef) New() SetOfBool {
 		l[i] = types.Bool(d)
 		i++
 	}
-	return SetOfBool{types.NewSet(l...)}
+	return SetOfBool{types.NewSet(l...), &ref.Ref{}}
 }
 
 func (s SetOfBool) Def() SetOfBoolDef {
@@ -38,23 +39,32 @@ func (s SetOfBool) Def() SetOfBoolDef {
 	return def
 }
 
-func SetOfBoolFromVal(p types.Value) SetOfBool {
-	return SetOfBool{p.(types.Set)}
+func SetOfBoolFromVal(val types.Value) SetOfBool {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(SetOfBool); ok {
+		return val
+	}
+	return SetOfBool{val.(types.Set), &ref.Ref{}}
 }
 
 func (s SetOfBool) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s SetOfBool) InternalImplementation() types.Set {
 	return s.s
 }
 
 func (s SetOfBool) Equals(other types.Value) bool {
 	if other, ok := other.(SetOfBool); ok {
-		return s.s.Equals(other.s)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s SetOfBool) Ref() ref.Ref {
-	return s.s.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s SetOfBool) Chunks() (futures []types.Future) {
@@ -72,7 +82,7 @@ func (m SetOfBool) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSetOfBool = types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.BoolKind))
-	types.RegisterFromValFunction(__typeRefForSetOfBool, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForSetOfBool, func(v types.Value) types.Value {
 		return SetOfBoolFromVal(v)
 	})
 }
@@ -118,19 +128,19 @@ func (s SetOfBool) Filter(cb SetOfBoolFilterCallback) SetOfBool {
 }
 
 func (s SetOfBool) Insert(p ...bool) SetOfBool {
-	return SetOfBool{s.s.Insert(s.fromElemSlice(p)...)}
+	return SetOfBool{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfBool) Remove(p ...bool) SetOfBool {
-	return SetOfBool{s.s.Remove(s.fromElemSlice(p)...)}
+	return SetOfBool{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfBool) Union(others ...SetOfBool) SetOfBool {
-	return SetOfBool{s.s.Union(s.fromStructSlice(others)...)}
+	return SetOfBool{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
 func (s SetOfBool) Subtract(others ...SetOfBool) SetOfBool {
-	return SetOfBool{s.s.Subtract(s.fromStructSlice(others)...)}
+	return SetOfBool{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
 func (s SetOfBool) Any() bool {

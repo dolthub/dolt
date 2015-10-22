@@ -28,13 +28,14 @@ func __testPackageInFile_struct_optional_Ref() ref.Ref {
 // OptionalStruct
 
 type OptionalStruct struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewOptionalStruct() OptionalStruct {
 	return OptionalStruct{types.NewMap(
 		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_optional_CachedRef, 0),
-	)}
+	), &ref.Ref{}}
 }
 
 type OptionalStructDef struct {
@@ -48,7 +49,7 @@ func (def OptionalStructDef) New() OptionalStruct {
 			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_optional_CachedRef, 0),
 			types.NewString("s"), types.NewString(def.S),
 			types.NewString("b"), types.Bool(def.B),
-		)}
+		), &ref.Ref{}}
 }
 
 func (s OptionalStruct) Def() (d OptionalStructDef) {
@@ -68,29 +69,38 @@ func (m OptionalStruct) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefForOptionalStruct, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForOptionalStruct, func(v types.Value) types.Value {
 		return OptionalStructFromVal(v)
 	})
 }
 
 func OptionalStructFromVal(val types.Value) OptionalStruct {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(OptionalStruct); ok {
+		return val
+	}
 	// TODO: Validate here
-	return OptionalStruct{val.(types.Map)}
+	return OptionalStruct{val.(types.Map), &ref.Ref{}}
 }
 
 func (s OptionalStruct) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s OptionalStruct) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s OptionalStruct) Equals(other types.Value) bool {
 	if other, ok := other.(OptionalStruct); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s OptionalStruct) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s OptionalStruct) Chunks() (futures []types.Future) {
@@ -108,7 +118,7 @@ func (s OptionalStruct) S() (v string, ok bool) {
 }
 
 func (s OptionalStruct) SetS(val string) OptionalStruct {
-	return OptionalStruct{s.m.Set(types.NewString("s"), types.NewString(val))}
+	return OptionalStruct{s.m.Set(types.NewString("s"), types.NewString(val)), &ref.Ref{}}
 }
 
 func (s OptionalStruct) B() (v bool, ok bool) {
@@ -120,5 +130,5 @@ func (s OptionalStruct) B() (v bool, ok bool) {
 }
 
 func (s OptionalStruct) SetB(val bool) OptionalStruct {
-	return OptionalStruct{s.m.Set(types.NewString("b"), types.Bool(val))}
+	return OptionalStruct{s.m.Set(types.NewString("b"), types.Bool(val)), &ref.Ref{}}
 }

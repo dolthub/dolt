@@ -30,17 +30,18 @@ func __testPackageInFile_struct_with_list_Ref() ref.Ref {
 // StructWithList
 
 type StructWithList struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewStructWithList() StructWithList {
 	return StructWithList{types.NewMap(
 		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_list_CachedRef, 0),
-		types.NewString("l"), types.NewList(),
+		types.NewString("l"), NewListOfUInt8(),
 		types.NewString("b"), types.Bool(false),
 		types.NewString("s"), types.NewString(""),
 		types.NewString("i"), types.Int64(0),
-	)}
+	), &ref.Ref{}}
 }
 
 type StructWithListDef struct {
@@ -54,15 +55,15 @@ func (def StructWithListDef) New() StructWithList {
 	return StructWithList{
 		types.NewMap(
 			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_list_CachedRef, 0),
-			types.NewString("l"), def.L.New().NomsValue(),
+			types.NewString("l"), def.L.New(),
 			types.NewString("b"), types.Bool(def.B),
 			types.NewString("s"), types.NewString(def.S),
 			types.NewString("i"), types.Int64(def.I),
-		)}
+		), &ref.Ref{}}
 }
 
 func (s StructWithList) Def() (d StructWithListDef) {
-	d.L = ListOfUInt8FromVal(s.m.Get(types.NewString("l"))).Def()
+	d.L = s.m.Get(types.NewString("l")).(ListOfUInt8).Def()
 	d.B = bool(s.m.Get(types.NewString("b")).(types.Bool))
 	d.S = s.m.Get(types.NewString("s")).(types.String).String()
 	d.I = int64(s.m.Get(types.NewString("i")).(types.Int64))
@@ -76,29 +77,38 @@ func (m StructWithList) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefForStructWithList, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForStructWithList, func(v types.Value) types.Value {
 		return StructWithListFromVal(v)
 	})
 }
 
 func StructWithListFromVal(val types.Value) StructWithList {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(StructWithList); ok {
+		return val
+	}
 	// TODO: Validate here
-	return StructWithList{val.(types.Map)}
+	return StructWithList{val.(types.Map), &ref.Ref{}}
 }
 
 func (s StructWithList) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s StructWithList) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s StructWithList) Equals(other types.Value) bool {
 	if other, ok := other.(StructWithList); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s StructWithList) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s StructWithList) Chunks() (futures []types.Future) {
@@ -108,11 +118,11 @@ func (s StructWithList) Chunks() (futures []types.Future) {
 }
 
 func (s StructWithList) L() ListOfUInt8 {
-	return ListOfUInt8FromVal(s.m.Get(types.NewString("l")))
+	return s.m.Get(types.NewString("l")).(ListOfUInt8)
 }
 
 func (s StructWithList) SetL(val ListOfUInt8) StructWithList {
-	return StructWithList{s.m.Set(types.NewString("l"), val.NomsValue())}
+	return StructWithList{s.m.Set(types.NewString("l"), val), &ref.Ref{}}
 }
 
 func (s StructWithList) B() bool {
@@ -120,7 +130,7 @@ func (s StructWithList) B() bool {
 }
 
 func (s StructWithList) SetB(val bool) StructWithList {
-	return StructWithList{s.m.Set(types.NewString("b"), types.Bool(val))}
+	return StructWithList{s.m.Set(types.NewString("b"), types.Bool(val)), &ref.Ref{}}
 }
 
 func (s StructWithList) S() string {
@@ -128,7 +138,7 @@ func (s StructWithList) S() string {
 }
 
 func (s StructWithList) SetS(val string) StructWithList {
-	return StructWithList{s.m.Set(types.NewString("s"), types.NewString(val))}
+	return StructWithList{s.m.Set(types.NewString("s"), types.NewString(val)), &ref.Ref{}}
 }
 
 func (s StructWithList) I() int64 {
@@ -136,17 +146,18 @@ func (s StructWithList) I() int64 {
 }
 
 func (s StructWithList) SetI(val int64) StructWithList {
-	return StructWithList{s.m.Set(types.NewString("i"), types.Int64(val))}
+	return StructWithList{s.m.Set(types.NewString("i"), types.Int64(val)), &ref.Ref{}}
 }
 
 // ListOfUInt8
 
 type ListOfUInt8 struct {
-	l types.List
+	l   types.List
+	ref *ref.Ref
 }
 
 func NewListOfUInt8() ListOfUInt8 {
-	return ListOfUInt8{types.NewList()}
+	return ListOfUInt8{types.NewList(), &ref.Ref{}}
 }
 
 type ListOfUInt8Def []uint8
@@ -156,7 +167,7 @@ func (def ListOfUInt8Def) New() ListOfUInt8 {
 	for i, d := range def {
 		l[i] = types.UInt8(d)
 	}
-	return ListOfUInt8{types.NewList(l...)}
+	return ListOfUInt8{types.NewList(l...), &ref.Ref{}}
 }
 
 func (l ListOfUInt8) Def() ListOfUInt8Def {
@@ -168,23 +179,32 @@ func (l ListOfUInt8) Def() ListOfUInt8Def {
 }
 
 func ListOfUInt8FromVal(val types.Value) ListOfUInt8 {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(ListOfUInt8); ok {
+		return val
+	}
 	// TODO: Validate here
-	return ListOfUInt8{val.(types.List)}
+	return ListOfUInt8{val.(types.List), &ref.Ref{}}
 }
 
 func (l ListOfUInt8) NomsValue() types.Value {
+	// TODO: Remove this
+	return l
+}
+
+func (l ListOfUInt8) InternalImplementation() types.List {
 	return l.l
 }
 
 func (l ListOfUInt8) Equals(other types.Value) bool {
 	if other, ok := other.(ListOfUInt8); ok {
-		return l.l.Equals(other.l)
+		return l.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (l ListOfUInt8) Ref() ref.Ref {
-	return l.l.Ref()
+	return types.EnsureRef(l.ref, l)
 }
 
 func (l ListOfUInt8) Chunks() (futures []types.Future) {
@@ -202,7 +222,7 @@ func (m ListOfUInt8) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfUInt8 = types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
-	types.RegisterFromValFunction(__typeRefForListOfUInt8, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForListOfUInt8, func(v types.Value) types.Value {
 		return ListOfUInt8FromVal(v)
 	})
 }
@@ -220,27 +240,27 @@ func (l ListOfUInt8) Get(i uint64) uint8 {
 }
 
 func (l ListOfUInt8) Slice(idx uint64, end uint64) ListOfUInt8 {
-	return ListOfUInt8{l.l.Slice(idx, end)}
+	return ListOfUInt8{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfUInt8) Set(i uint64, val uint8) ListOfUInt8 {
-	return ListOfUInt8{l.l.Set(i, types.UInt8(val))}
+	return ListOfUInt8{l.l.Set(i, types.UInt8(val)), &ref.Ref{}}
 }
 
 func (l ListOfUInt8) Append(v ...uint8) ListOfUInt8 {
-	return ListOfUInt8{l.l.Append(l.fromElemSlice(v)...)}
+	return ListOfUInt8{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfUInt8) Insert(idx uint64, v ...uint8) ListOfUInt8 {
-	return ListOfUInt8{l.l.Insert(idx, l.fromElemSlice(v)...)}
+	return ListOfUInt8{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfUInt8) Remove(idx uint64, end uint64) ListOfUInt8 {
-	return ListOfUInt8{l.l.Remove(idx, end)}
+	return ListOfUInt8{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfUInt8) RemoveAt(idx uint64) ListOfUInt8 {
-	return ListOfUInt8{(l.l.RemoveAt(idx))}
+	return ListOfUInt8{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l ListOfUInt8) fromElemSlice(p []uint8) []types.Value {

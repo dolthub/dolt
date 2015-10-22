@@ -7,7 +7,7 @@ func (m {{.Name}}) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefFor{{.Name}} = {{toTypesTypeRef .Type .FileID .PackageName}}
-	types.RegisterFromValFunction(__typeRefFor{{.Name}}, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefFor{{.Name}}, func(v types.Value) types.Value {
 		return {{.Name}}FromVal(v)
 	})
 }

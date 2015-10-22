@@ -23,7 +23,7 @@ func (tv typedValue) TypedValue() []interface{} {
 	return tv.v
 }
 
-func encNomsValue(v NomsValue, cs chunks.ChunkSink) typedValue {
+func encNomsValue(v Value, cs chunks.ChunkSink) typedValue {
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(v)
 	return typedValue{w.toArray()}
@@ -65,10 +65,10 @@ func (w *jsonArrayWriter) writeTypeRefAsTag(t TypeRef) {
 	}
 }
 
-func (w *jsonArrayWriter) writeTopLevelValue(v NomsValue) {
+func (w *jsonArrayWriter) writeTopLevelValue(v Value) {
 	tr := v.TypeRef()
 	w.writeTypeRefAsTag(tr)
-	w.writeValue(v.NomsValue(), tr, nil)
+	w.writeValue(v, tr, nil)
 }
 
 func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
@@ -80,14 +80,14 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 	case ListKind:
 		w2 := newJsonArrayWriter()
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
-		v.(List).IterAll(func(v Value, i uint64) {
+		getListFromListKind(v).IterAll(func(v Value, i uint64) {
 			w2.writeValue(v, elemType, pkg)
 		})
 		w.write(w2.toArray())
 	case MapKind:
 		w2 := newJsonArrayWriter()
 		elemTypes := tr.Desc.(CompoundDesc).ElemTypes
-		v.(Map).IterAll(func(k, v Value) {
+		getMapFromMapKind(v).IterAll(func(k, v Value) {
 			w2.writeValue(k, elemTypes[0], pkg)
 			w2.writeValue(v, elemTypes[1], pkg)
 		})
@@ -105,11 +105,11 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 		}
 		w.write(w3.toArray())
 	case RefKind:
-		w.writeRef(v.Ref())
+		w.writeRef(getRefFromRefKind(v))
 	case SetKind:
 		w2 := newJsonArrayWriter()
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
-		v.(Set).IterAll(func(v Value) {
+		getSetFromSetKind(v).IterAll(func(v Value) {
 			w2.writeValue(v, elemType, pkg)
 		})
 		w.write(w2.toArray())
@@ -128,6 +128,55 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 	default:
 		d.Chk.Fail("Unknown NomsKind")
 	}
+}
+
+// TODO: This is ugly. BUG 452
+type listImplementation interface {
+	InternalImplementation() List
+}
+
+type mapImplementation interface {
+	InternalImplementation() Map
+}
+
+type refImplementation interface {
+	InternalImplementation() ref.Ref
+}
+
+type setImplementation interface {
+	InternalImplementation() Set
+}
+
+func getListFromListKind(v Value) List {
+	if v, ok := v.(List); ok {
+		return v
+	}
+	return v.(listImplementation).InternalImplementation()
+}
+
+func getMapFromMapKind(v Value) Map {
+	if v, ok := v.(Map); ok {
+		return v
+	}
+	return v.(mapImplementation).InternalImplementation()
+}
+
+func getRefFromRefKind(v Value) ref.Ref {
+	if v, ok := v.(Ref); ok {
+		return v.Ref()
+	}
+	return v.(refImplementation).InternalImplementation()
+}
+
+func getSetFromSetKind(v Value) Set {
+	if v, ok := v.(Set); ok {
+		return v
+	}
+	return v.(setImplementation).InternalImplementation()
+}
+
+func getMapFromStructKind(v Value) Map {
+	return getMapFromMapKind(v)
 }
 
 func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
@@ -172,7 +221,6 @@ func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
 			w.write(v.Namespace())
 			w.write(v.Name())
 		}
-
 	default:
 		d.Chk.True(IsPrimitiveKind(k), v.Describe())
 	}
@@ -193,7 +241,7 @@ func (w *jsonArrayWriter) writeUnresolvedKindValue(v Value, tr TypeRef, pkg *Pac
 	case EnumKind:
 		w.write(uint32(v.(UInt32)))
 	case StructKind:
-		w.writeStruct(v.(Map), typeDef, pkg)
+		w.writeStruct(getMapFromStructKind(v), typeDef, pkg)
 	}
 }
 

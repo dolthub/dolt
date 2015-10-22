@@ -28,7 +28,8 @@ func __testPackageInFile_struct_Ref() ref.Ref {
 // Struct
 
 type Struct struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewStruct() Struct {
@@ -36,7 +37,7 @@ func NewStruct() Struct {
 		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0),
 		types.NewString("s"), types.NewString(""),
 		types.NewString("b"), types.Bool(false),
-	)}
+	), &ref.Ref{}}
 }
 
 type StructDef struct {
@@ -50,7 +51,7 @@ func (def StructDef) New() Struct {
 			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0),
 			types.NewString("s"), types.NewString(def.S),
 			types.NewString("b"), types.Bool(def.B),
-		)}
+		), &ref.Ref{}}
 }
 
 func (s Struct) Def() (d StructDef) {
@@ -66,29 +67,38 @@ func (m Struct) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefForStruct, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForStruct, func(v types.Value) types.Value {
 		return StructFromVal(v)
 	})
 }
 
 func StructFromVal(val types.Value) Struct {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(Struct); ok {
+		return val
+	}
 	// TODO: Validate here
-	return Struct{val.(types.Map)}
+	return Struct{val.(types.Map), &ref.Ref{}}
 }
 
 func (s Struct) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s Struct) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s Struct) Equals(other types.Value) bool {
 	if other, ok := other.(Struct); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s Struct) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s Struct) Chunks() (futures []types.Future) {
@@ -102,7 +112,7 @@ func (s Struct) S() string {
 }
 
 func (s Struct) SetS(val string) Struct {
-	return Struct{s.m.Set(types.NewString("s"), types.NewString(val))}
+	return Struct{s.m.Set(types.NewString("s"), types.NewString(val)), &ref.Ref{}}
 }
 
 func (s Struct) B() bool {
@@ -110,17 +120,18 @@ func (s Struct) B() bool {
 }
 
 func (s Struct) SetB(val bool) Struct {
-	return Struct{s.m.Set(types.NewString("b"), types.Bool(val))}
+	return Struct{s.m.Set(types.NewString("b"), types.Bool(val)), &ref.Ref{}}
 }
 
 // ListOfStruct
 
 type ListOfStruct struct {
-	l types.List
+	l   types.List
+	ref *ref.Ref
 }
 
 func NewListOfStruct() ListOfStruct {
-	return ListOfStruct{types.NewList()}
+	return ListOfStruct{types.NewList(), &ref.Ref{}}
 }
 
 type ListOfStructDef []StructDef
@@ -128,37 +139,46 @@ type ListOfStructDef []StructDef
 func (def ListOfStructDef) New() ListOfStruct {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
-		l[i] = d.New().NomsValue()
+		l[i] = d.New()
 	}
-	return ListOfStruct{types.NewList(l...)}
+	return ListOfStruct{types.NewList(l...), &ref.Ref{}}
 }
 
 func (l ListOfStruct) Def() ListOfStructDef {
 	d := make([]StructDef, l.Len())
 	for i := uint64(0); i < l.Len(); i++ {
-		d[i] = StructFromVal(l.l.Get(i)).Def()
+		d[i] = l.l.Get(i).(Struct).Def()
 	}
 	return d
 }
 
 func ListOfStructFromVal(val types.Value) ListOfStruct {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(ListOfStruct); ok {
+		return val
+	}
 	// TODO: Validate here
-	return ListOfStruct{val.(types.List)}
+	return ListOfStruct{val.(types.List), &ref.Ref{}}
 }
 
 func (l ListOfStruct) NomsValue() types.Value {
+	// TODO: Remove this
+	return l
+}
+
+func (l ListOfStruct) InternalImplementation() types.List {
 	return l.l
 }
 
 func (l ListOfStruct) Equals(other types.Value) bool {
 	if other, ok := other.(ListOfStruct); ok {
-		return l.l.Equals(other.l)
+		return l.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (l ListOfStruct) Ref() ref.Ref {
-	return l.l.Ref()
+	return types.EnsureRef(l.ref, l)
 }
 
 func (l ListOfStruct) Chunks() (futures []types.Future) {
@@ -176,7 +196,7 @@ func (m ListOfStruct) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfStruct = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0))
-	types.RegisterFromValFunction(__typeRefForListOfStruct, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForListOfStruct, func(v types.Value) types.Value {
 		return ListOfStructFromVal(v)
 	})
 }
@@ -190,37 +210,37 @@ func (l ListOfStruct) Empty() bool {
 }
 
 func (l ListOfStruct) Get(i uint64) Struct {
-	return StructFromVal(l.l.Get(i))
+	return l.l.Get(i).(Struct)
 }
 
 func (l ListOfStruct) Slice(idx uint64, end uint64) ListOfStruct {
-	return ListOfStruct{l.l.Slice(idx, end)}
+	return ListOfStruct{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfStruct) Set(i uint64, val Struct) ListOfStruct {
-	return ListOfStruct{l.l.Set(i, val.NomsValue())}
+	return ListOfStruct{l.l.Set(i, val), &ref.Ref{}}
 }
 
 func (l ListOfStruct) Append(v ...Struct) ListOfStruct {
-	return ListOfStruct{l.l.Append(l.fromElemSlice(v)...)}
+	return ListOfStruct{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfStruct) Insert(idx uint64, v ...Struct) ListOfStruct {
-	return ListOfStruct{l.l.Insert(idx, l.fromElemSlice(v)...)}
+	return ListOfStruct{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfStruct) Remove(idx uint64, end uint64) ListOfStruct {
-	return ListOfStruct{l.l.Remove(idx, end)}
+	return ListOfStruct{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfStruct) RemoveAt(idx uint64) ListOfStruct {
-	return ListOfStruct{(l.l.RemoveAt(idx))}
+	return ListOfStruct{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l ListOfStruct) fromElemSlice(p []Struct) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
-		r[i] = v.NomsValue()
+		r[i] = v
 	}
 	return r
 }
@@ -229,7 +249,7 @@ type ListOfStructIterCallback func(v Struct, i uint64) (stop bool)
 
 func (l ListOfStruct) Iter(cb ListOfStructIterCallback) {
 	l.l.Iter(func(v types.Value, i uint64) bool {
-		return cb(StructFromVal(v), i)
+		return cb(v.(Struct), i)
 	})
 }
 
@@ -237,7 +257,7 @@ type ListOfStructIterAllCallback func(v Struct, i uint64)
 
 func (l ListOfStruct) IterAll(cb ListOfStructIterAllCallback) {
 	l.l.IterAll(func(v types.Value, i uint64) {
-		cb(StructFromVal(v), i)
+		cb(v.(Struct), i)
 	})
 }
 

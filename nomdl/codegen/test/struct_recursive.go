@@ -27,14 +27,15 @@ func __testPackageInFile_struct_recursive_Ref() ref.Ref {
 // Tree
 
 type Tree struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewTree() Tree {
 	return Tree{types.NewMap(
 		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_recursive_CachedRef, 0),
-		types.NewString("children"), types.NewList(),
-	)}
+		types.NewString("children"), NewListOfTree(),
+	), &ref.Ref{}}
 }
 
 type TreeDef struct {
@@ -45,12 +46,12 @@ func (def TreeDef) New() Tree {
 	return Tree{
 		types.NewMap(
 			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_recursive_CachedRef, 0),
-			types.NewString("children"), def.Children.New().NomsValue(),
-		)}
+			types.NewString("children"), def.Children.New(),
+		), &ref.Ref{}}
 }
 
 func (s Tree) Def() (d TreeDef) {
-	d.Children = ListOfTreeFromVal(s.m.Get(types.NewString("children"))).Def()
+	d.Children = s.m.Get(types.NewString("children")).(ListOfTree).Def()
 	return
 }
 
@@ -61,29 +62,38 @@ func (m Tree) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefForTree, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForTree, func(v types.Value) types.Value {
 		return TreeFromVal(v)
 	})
 }
 
 func TreeFromVal(val types.Value) Tree {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(Tree); ok {
+		return val
+	}
 	// TODO: Validate here
-	return Tree{val.(types.Map)}
+	return Tree{val.(types.Map), &ref.Ref{}}
 }
 
 func (s Tree) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s Tree) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s Tree) Equals(other types.Value) bool {
 	if other, ok := other.(Tree); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s Tree) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s Tree) Chunks() (futures []types.Future) {
@@ -93,21 +103,22 @@ func (s Tree) Chunks() (futures []types.Future) {
 }
 
 func (s Tree) Children() ListOfTree {
-	return ListOfTreeFromVal(s.m.Get(types.NewString("children")))
+	return s.m.Get(types.NewString("children")).(ListOfTree)
 }
 
 func (s Tree) SetChildren(val ListOfTree) Tree {
-	return Tree{s.m.Set(types.NewString("children"), val.NomsValue())}
+	return Tree{s.m.Set(types.NewString("children"), val), &ref.Ref{}}
 }
 
 // ListOfTree
 
 type ListOfTree struct {
-	l types.List
+	l   types.List
+	ref *ref.Ref
 }
 
 func NewListOfTree() ListOfTree {
-	return ListOfTree{types.NewList()}
+	return ListOfTree{types.NewList(), &ref.Ref{}}
 }
 
 type ListOfTreeDef []TreeDef
@@ -115,37 +126,46 @@ type ListOfTreeDef []TreeDef
 func (def ListOfTreeDef) New() ListOfTree {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
-		l[i] = d.New().NomsValue()
+		l[i] = d.New()
 	}
-	return ListOfTree{types.NewList(l...)}
+	return ListOfTree{types.NewList(l...), &ref.Ref{}}
 }
 
 func (l ListOfTree) Def() ListOfTreeDef {
 	d := make([]TreeDef, l.Len())
 	for i := uint64(0); i < l.Len(); i++ {
-		d[i] = TreeFromVal(l.l.Get(i)).Def()
+		d[i] = l.l.Get(i).(Tree).Def()
 	}
 	return d
 }
 
 func ListOfTreeFromVal(val types.Value) ListOfTree {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(ListOfTree); ok {
+		return val
+	}
 	// TODO: Validate here
-	return ListOfTree{val.(types.List)}
+	return ListOfTree{val.(types.List), &ref.Ref{}}
 }
 
 func (l ListOfTree) NomsValue() types.Value {
+	// TODO: Remove this
+	return l
+}
+
+func (l ListOfTree) InternalImplementation() types.List {
 	return l.l
 }
 
 func (l ListOfTree) Equals(other types.Value) bool {
 	if other, ok := other.(ListOfTree); ok {
-		return l.l.Equals(other.l)
+		return l.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (l ListOfTree) Ref() ref.Ref {
-	return l.l.Ref()
+	return types.EnsureRef(l.ref, l)
 }
 
 func (l ListOfTree) Chunks() (futures []types.Future) {
@@ -163,7 +183,7 @@ func (m ListOfTree) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfTree = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__testPackageInFile_struct_recursive_CachedRef, 0))
-	types.RegisterFromValFunction(__typeRefForListOfTree, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForListOfTree, func(v types.Value) types.Value {
 		return ListOfTreeFromVal(v)
 	})
 }
@@ -177,37 +197,37 @@ func (l ListOfTree) Empty() bool {
 }
 
 func (l ListOfTree) Get(i uint64) Tree {
-	return TreeFromVal(l.l.Get(i))
+	return l.l.Get(i).(Tree)
 }
 
 func (l ListOfTree) Slice(idx uint64, end uint64) ListOfTree {
-	return ListOfTree{l.l.Slice(idx, end)}
+	return ListOfTree{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfTree) Set(i uint64, val Tree) ListOfTree {
-	return ListOfTree{l.l.Set(i, val.NomsValue())}
+	return ListOfTree{l.l.Set(i, val), &ref.Ref{}}
 }
 
 func (l ListOfTree) Append(v ...Tree) ListOfTree {
-	return ListOfTree{l.l.Append(l.fromElemSlice(v)...)}
+	return ListOfTree{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfTree) Insert(idx uint64, v ...Tree) ListOfTree {
-	return ListOfTree{l.l.Insert(idx, l.fromElemSlice(v)...)}
+	return ListOfTree{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfTree) Remove(idx uint64, end uint64) ListOfTree {
-	return ListOfTree{l.l.Remove(idx, end)}
+	return ListOfTree{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfTree) RemoveAt(idx uint64) ListOfTree {
-	return ListOfTree{(l.l.RemoveAt(idx))}
+	return ListOfTree{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l ListOfTree) fromElemSlice(p []Tree) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
-		r[i] = v.NomsValue()
+		r[i] = v
 	}
 	return r
 }
@@ -216,7 +236,7 @@ type ListOfTreeIterCallback func(v Tree, i uint64) (stop bool)
 
 func (l ListOfTree) Iter(cb ListOfTreeIterCallback) {
 	l.l.Iter(func(v types.Value, i uint64) bool {
-		return cb(TreeFromVal(v), i)
+		return cb(v.(Tree), i)
 	})
 }
 
@@ -224,7 +244,7 @@ type ListOfTreeIterAllCallback func(v Tree, i uint64)
 
 func (l ListOfTree) IterAll(cb ListOfTreeIterAllCallback) {
 	l.l.IterAll(func(v types.Value, i uint64) {
-		cb(TreeFromVal(v), i)
+		cb(v.(Tree), i)
 	})
 }
 

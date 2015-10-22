@@ -22,7 +22,7 @@ func (v valueAsNomsValue) TypeRef() TypeRef {
 	return v.t
 }
 
-func fromTypedEncodeable(w typedValueWrapper, cs chunks.ChunkSource) NomsValue {
+func fromTypedEncodeable(w typedValueWrapper, cs chunks.ChunkSource) Value {
 	i := w.TypedValue()
 	r := newJsonArrayReader(i, cs)
 	return r.readTopLevelValue()
@@ -95,38 +95,38 @@ func (r *jsonArrayReader) readTypeRefAsTag() TypeRef {
 	panic("unreachable")
 }
 
-func (r *jsonArrayReader) readBlob(t TypeRef) NomsValue {
+func (r *jsonArrayReader) readBlob(t TypeRef) Value {
 	s := r.readString()
 	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(s))
 	b, err := NewBlob(decoder)
 	d.Exp.NoError(err)
-	return valueAsNomsValue{b, t}
+	return b
 }
 
-func (r *jsonArrayReader) readList(t TypeRef, pkg *Package) NomsValue {
+func (r *jsonArrayReader) readList(t TypeRef, pkg *Package) Value {
 	desc := t.Desc.(CompoundDesc)
 	ll := []Value{}
 	elemType := desc.ElemTypes[0]
 	for !r.atEnd() {
 		v := r.readValueWithoutTag(elemType, pkg)
-		ll = append(ll, v.NomsValue())
+		ll = append(ll, v)
 	}
 
 	return ToNomsValueFromTypeRef(t, NewList(ll...))
 }
 
-func (r *jsonArrayReader) readSet(t TypeRef, pkg *Package) NomsValue {
+func (r *jsonArrayReader) readSet(t TypeRef, pkg *Package) Value {
 	desc := t.Desc.(CompoundDesc)
 	ll := []Value{}
 	elemType := desc.ElemTypes[0]
 	for !r.atEnd() {
 		v := r.readValueWithoutTag(elemType, pkg)
-		ll = append(ll, v.NomsValue())
+		ll = append(ll, v)
 	}
 	return ToNomsValueFromTypeRef(t, NewSet(ll...))
 }
 
-func (r *jsonArrayReader) readMap(t TypeRef, pkg *Package) NomsValue {
+func (r *jsonArrayReader) readMap(t TypeRef, pkg *Package) Value {
 	desc := t.Desc.(CompoundDesc)
 	ll := []Value{}
 	keyType := desc.ElemTypes[0]
@@ -134,16 +134,16 @@ func (r *jsonArrayReader) readMap(t TypeRef, pkg *Package) NomsValue {
 	for !r.atEnd() {
 		k := r.readValueWithoutTag(keyType, pkg)
 		v := r.readValueWithoutTag(valueType, pkg)
-		ll = append(ll, k.NomsValue(), v.NomsValue())
+		ll = append(ll, k, v)
 	}
 	return ToNomsValueFromTypeRef(t, NewMap(ll...))
 }
 
-func (r *jsonArrayReader) readEnum(t TypeRef) NomsValue {
+func (r *jsonArrayReader) readEnum(t TypeRef) Value {
 	return valueAsNomsValue{UInt32(r.read().(float64)), t}
 }
 
-func (r *jsonArrayReader) readPackage(t TypeRef, pkg *Package) NomsValue {
+func (r *jsonArrayReader) readPackage(t TypeRef, pkg *Package) Value {
 	r2 := newJsonArrayReader(r.readArray(), r.cs)
 	types := []TypeRef{}
 	for !r2.atEnd() {
@@ -156,48 +156,48 @@ func (r *jsonArrayReader) readPackage(t TypeRef, pkg *Package) NomsValue {
 		deps = append(deps, r3.readRef())
 	}
 
-	return valueAsNomsValue{NewPackage(types, deps), t}
+	return NewPackage(types, deps)
 }
 
-func (r *jsonArrayReader) readRefValue(t TypeRef) NomsValue {
+func (r *jsonArrayReader) readRefValue(t TypeRef) Value {
 	ref := r.readRef()
 	v := Ref{R: ref}
 	return ToNomsValueFromTypeRef(t, v)
 }
 
-func (r *jsonArrayReader) readTopLevelValue() NomsValue {
+func (r *jsonArrayReader) readTopLevelValue() Value {
 	t := r.readTypeRefAsTag()
 	return r.readValueWithoutTag(t, nil)
 }
 
-func (r *jsonArrayReader) readValueWithoutTag(t TypeRef, pkg *Package) NomsValue {
+func (r *jsonArrayReader) readValueWithoutTag(t TypeRef, pkg *Package) Value {
 	switch t.Kind() {
 	case BlobKind:
 		return r.readBlob(t)
 	case BoolKind:
-		return valueAsNomsValue{Bool(r.read().(bool)), t}
+		return Bool(r.read().(bool))
 	case UInt8Kind:
-		return valueAsNomsValue{UInt8(r.read().(float64)), t}
+		return UInt8(r.read().(float64))
 	case UInt16Kind:
-		return valueAsNomsValue{UInt16(r.read().(float64)), t}
+		return UInt16(r.read().(float64))
 	case UInt32Kind:
-		return valueAsNomsValue{UInt32(r.read().(float64)), t}
+		return UInt32(r.read().(float64))
 	case UInt64Kind:
-		return valueAsNomsValue{UInt64(r.read().(float64)), t}
+		return UInt64(r.read().(float64))
 	case Int8Kind:
-		return valueAsNomsValue{Int8(r.read().(float64)), t}
+		return Int8(r.read().(float64))
 	case Int16Kind:
-		return valueAsNomsValue{Int16(r.read().(float64)), t}
+		return Int16(r.read().(float64))
 	case Int32Kind:
-		return valueAsNomsValue{Int32(r.read().(float64)), t}
+		return Int32(r.read().(float64))
 	case Int64Kind:
-		return valueAsNomsValue{Int64(r.read().(float64)), t}
+		return Int64(r.read().(float64))
 	case Float32Kind:
-		return valueAsNomsValue{Float32(r.read().(float64)), t}
+		return Float32(r.read().(float64))
 	case Float64Kind:
-		return valueAsNomsValue{Float64(r.read().(float64)), t}
+		return Float64(r.read().(float64))
 	case StringKind:
-		return valueAsNomsValue{NewString(r.readString()), t}
+		return NewString(r.readString())
 	case ValueKind:
 		// The value is always tagged
 		t := r.readTypeRefAsTag()
@@ -225,12 +225,12 @@ func (r *jsonArrayReader) readValueWithoutTag(t TypeRef, pkg *Package) NomsValue
 	panic("not reachable")
 }
 
-func (r *jsonArrayReader) readTypeRefKindToValue(t TypeRef, pkg *Package) NomsValue {
+func (r *jsonArrayReader) readTypeRefKindToValue(t TypeRef, pkg *Package) Value {
 	d.Chk.IsType(PrimitiveDesc(0), t.Desc)
-	return valueAsNomsValue{r.readTypeRefAsValue(pkg), t}
+	return r.readTypeRefAsValue(pkg)
 }
 
-func (r *jsonArrayReader) readUnresolvedKindToValue(t TypeRef, pkg *Package) NomsValue {
+func (r *jsonArrayReader) readUnresolvedKindToValue(t TypeRef, pkg *Package) Value {
 	d.Chk.True(t.IsUnresolved())
 	pkgRef := t.PackageRef()
 	ordinal := t.Ordinal()
@@ -337,7 +337,7 @@ func fixupTypeRef(tr TypeRef, pkg *Package) TypeRef {
 	panic("unreachable")
 }
 
-func (r *jsonArrayReader) readStruct(typeDef, typeRef TypeRef, pkg *Package) NomsValue {
+func (r *jsonArrayReader) readStruct(typeDef, typeRef TypeRef, pkg *Package) Value {
 	typeRef = fixupTypeRef(typeRef, pkg)
 	typeDef = fixupTypeRef(typeDef, pkg)
 
@@ -351,18 +351,18 @@ func (r *jsonArrayReader) readStruct(typeDef, typeRef TypeRef, pkg *Package) Nom
 			b := r.read().(bool)
 			if b {
 				v := r.readValueWithoutTag(f.T, pkg)
-				m = m.Set(NewString(f.Name), v.NomsValue())
+				m = m.Set(NewString(f.Name), v)
 			}
 		} else {
 			v := r.readValueWithoutTag(f.T, pkg)
-			m = m.Set(NewString(f.Name), v.NomsValue())
+			m = m.Set(NewString(f.Name), v)
 		}
 	}
 	if len(desc.Union) > 0 {
 		i := uint32(r.read().(float64))
 		m = m.Set(NewString("$unionIndex"), UInt32(i))
 		v := r.readValueWithoutTag(desc.Union[i].T, pkg)
-		m = m.Set(NewString("$unionValue"), v.NomsValue())
+		m = m.Set(NewString("$unionValue"), v)
 	}
 
 	return ToNomsValueFromTypeRef(typeRef, m)

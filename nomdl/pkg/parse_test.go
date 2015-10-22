@@ -58,8 +58,9 @@ using List(Noms.Commit)
 	suite.True(types.MakeUnresolvedTypeRef("", "Simple").Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[1]))
 
 	suite.Equal(types.ListKind, pkg.UsingDeclarations[1].Desc.Kind())
-	suite.EqualValues([]types.TypeRef{types.MakeUnresolvedTypeRef("Noms", "Commit")},
-		pkg.UsingDeclarations[1].Desc.(types.CompoundDesc).ElemTypes)
+	elemTypes := pkg.UsingDeclarations[1].Desc.(types.CompoundDesc).ElemTypes
+	suite.Len(elemTypes, 1)
+	suite.True(types.MakeUnresolvedTypeRef("Noms", "Commit").Equals(elemTypes[0]))
 }
 
 func (suite *ParserTestSuite) TestBadUsing() {

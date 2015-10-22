@@ -10,11 +10,12 @@ import (
 // ListOfInt64
 
 type ListOfInt64 struct {
-	l types.List
+	l   types.List
+	ref *ref.Ref
 }
 
 func NewListOfInt64() ListOfInt64 {
-	return ListOfInt64{types.NewList()}
+	return ListOfInt64{types.NewList(), &ref.Ref{}}
 }
 
 type ListOfInt64Def []int64
@@ -24,7 +25,7 @@ func (def ListOfInt64Def) New() ListOfInt64 {
 	for i, d := range def {
 		l[i] = types.Int64(d)
 	}
-	return ListOfInt64{types.NewList(l...)}
+	return ListOfInt64{types.NewList(l...), &ref.Ref{}}
 }
 
 func (l ListOfInt64) Def() ListOfInt64Def {
@@ -36,23 +37,32 @@ func (l ListOfInt64) Def() ListOfInt64Def {
 }
 
 func ListOfInt64FromVal(val types.Value) ListOfInt64 {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(ListOfInt64); ok {
+		return val
+	}
 	// TODO: Validate here
-	return ListOfInt64{val.(types.List)}
+	return ListOfInt64{val.(types.List), &ref.Ref{}}
 }
 
 func (l ListOfInt64) NomsValue() types.Value {
+	// TODO: Remove this
+	return l
+}
+
+func (l ListOfInt64) InternalImplementation() types.List {
 	return l.l
 }
 
 func (l ListOfInt64) Equals(other types.Value) bool {
 	if other, ok := other.(ListOfInt64); ok {
-		return l.l.Equals(other.l)
+		return l.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (l ListOfInt64) Ref() ref.Ref {
-	return l.l.Ref()
+	return types.EnsureRef(l.ref, l)
 }
 
 func (l ListOfInt64) Chunks() (futures []types.Future) {
@@ -70,7 +80,7 @@ func (m ListOfInt64) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfInt64 = types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.Int64Kind))
-	types.RegisterFromValFunction(__typeRefForListOfInt64, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForListOfInt64, func(v types.Value) types.Value {
 		return ListOfInt64FromVal(v)
 	})
 }
@@ -88,27 +98,27 @@ func (l ListOfInt64) Get(i uint64) int64 {
 }
 
 func (l ListOfInt64) Slice(idx uint64, end uint64) ListOfInt64 {
-	return ListOfInt64{l.l.Slice(idx, end)}
+	return ListOfInt64{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfInt64) Set(i uint64, val int64) ListOfInt64 {
-	return ListOfInt64{l.l.Set(i, types.Int64(val))}
+	return ListOfInt64{l.l.Set(i, types.Int64(val)), &ref.Ref{}}
 }
 
 func (l ListOfInt64) Append(v ...int64) ListOfInt64 {
-	return ListOfInt64{l.l.Append(l.fromElemSlice(v)...)}
+	return ListOfInt64{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfInt64) Insert(idx uint64, v ...int64) ListOfInt64 {
-	return ListOfInt64{l.l.Insert(idx, l.fromElemSlice(v)...)}
+	return ListOfInt64{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfInt64) Remove(idx uint64, end uint64) ListOfInt64 {
-	return ListOfInt64{l.l.Remove(idx, end)}
+	return ListOfInt64{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfInt64) RemoveAt(idx uint64) ListOfInt64 {
-	return ListOfInt64{(l.l.RemoveAt(idx))}
+	return ListOfInt64{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l ListOfInt64) fromElemSlice(p []int64) []types.Value {

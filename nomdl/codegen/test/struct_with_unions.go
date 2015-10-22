@@ -42,15 +42,16 @@ func __testPackageInFile_struct_with_unions_Ref() ref.Ref {
 // StructWithUnions
 
 type StructWithUnions struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewStructWithUnions() StructWithUnions {
 	return StructWithUnions{types.NewMap(
 		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 0),
-		types.NewString("a"), New__unionOfBOfFloat64AndCOfString().NomsValue(),
-		types.NewString("d"), New__unionOfEOfFloat64AndFOfString().NomsValue(),
-	)}
+		types.NewString("a"), New__unionOfBOfFloat64AndCOfString(),
+		types.NewString("d"), New__unionOfEOfFloat64AndFOfString(),
+	), &ref.Ref{}}
 }
 
 type StructWithUnionsDef struct {
@@ -62,14 +63,14 @@ func (def StructWithUnionsDef) New() StructWithUnions {
 	return StructWithUnions{
 		types.NewMap(
 			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 0),
-			types.NewString("a"), def.A.New().NomsValue(),
-			types.NewString("d"), def.D.New().NomsValue(),
-		)}
+			types.NewString("a"), def.A.New(),
+			types.NewString("d"), def.D.New(),
+		), &ref.Ref{}}
 }
 
 func (s StructWithUnions) Def() (d StructWithUnionsDef) {
-	d.A = __unionOfBOfFloat64AndCOfStringFromVal(s.m.Get(types.NewString("a"))).Def()
-	d.D = __unionOfEOfFloat64AndFOfStringFromVal(s.m.Get(types.NewString("d"))).Def()
+	d.A = s.m.Get(types.NewString("a")).(__unionOfBOfFloat64AndCOfString).Def()
+	d.D = s.m.Get(types.NewString("d")).(__unionOfEOfFloat64AndFOfString).Def()
 	return
 }
 
@@ -80,29 +81,38 @@ func (m StructWithUnions) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefForStructWithUnions, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForStructWithUnions, func(v types.Value) types.Value {
 		return StructWithUnionsFromVal(v)
 	})
 }
 
 func StructWithUnionsFromVal(val types.Value) StructWithUnions {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(StructWithUnions); ok {
+		return val
+	}
 	// TODO: Validate here
-	return StructWithUnions{val.(types.Map)}
+	return StructWithUnions{val.(types.Map), &ref.Ref{}}
 }
 
 func (s StructWithUnions) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s StructWithUnions) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s StructWithUnions) Equals(other types.Value) bool {
 	if other, ok := other.(StructWithUnions); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s StructWithUnions) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s StructWithUnions) Chunks() (futures []types.Future) {
@@ -112,25 +122,26 @@ func (s StructWithUnions) Chunks() (futures []types.Future) {
 }
 
 func (s StructWithUnions) A() __unionOfBOfFloat64AndCOfString {
-	return __unionOfBOfFloat64AndCOfStringFromVal(s.m.Get(types.NewString("a")))
+	return s.m.Get(types.NewString("a")).(__unionOfBOfFloat64AndCOfString)
 }
 
 func (s StructWithUnions) SetA(val __unionOfBOfFloat64AndCOfString) StructWithUnions {
-	return StructWithUnions{s.m.Set(types.NewString("a"), val.NomsValue())}
+	return StructWithUnions{s.m.Set(types.NewString("a"), val), &ref.Ref{}}
 }
 
 func (s StructWithUnions) D() __unionOfEOfFloat64AndFOfString {
-	return __unionOfEOfFloat64AndFOfStringFromVal(s.m.Get(types.NewString("d")))
+	return s.m.Get(types.NewString("d")).(__unionOfEOfFloat64AndFOfString)
 }
 
 func (s StructWithUnions) SetD(val __unionOfEOfFloat64AndFOfString) StructWithUnions {
-	return StructWithUnions{s.m.Set(types.NewString("d"), val.NomsValue())}
+	return StructWithUnions{s.m.Set(types.NewString("d"), val), &ref.Ref{}}
 }
 
 // __unionOfBOfFloat64AndCOfString
 
 type __unionOfBOfFloat64AndCOfString struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func New__unionOfBOfFloat64AndCOfString() __unionOfBOfFloat64AndCOfString {
@@ -138,7 +149,7 @@ func New__unionOfBOfFloat64AndCOfString() __unionOfBOfFloat64AndCOfString {
 		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 1),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
-	)}
+	), &ref.Ref{}}
 }
 
 type __unionOfBOfFloat64AndCOfStringDef struct {
@@ -152,7 +163,7 @@ func (def __unionOfBOfFloat64AndCOfStringDef) New() __unionOfBOfFloat64AndCOfStr
 			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 1),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
-		)}
+		), &ref.Ref{}}
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Def() (d __unionOfBOfFloat64AndCOfStringDef) {
@@ -188,29 +199,38 @@ func (m __unionOfBOfFloat64AndCOfString) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefFor__unionOfBOfFloat64AndCOfString, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefFor__unionOfBOfFloat64AndCOfString, func(v types.Value) types.Value {
 		return __unionOfBOfFloat64AndCOfStringFromVal(v)
 	})
 }
 
 func __unionOfBOfFloat64AndCOfStringFromVal(val types.Value) __unionOfBOfFloat64AndCOfString {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(__unionOfBOfFloat64AndCOfString); ok {
+		return val
+	}
 	// TODO: Validate here
-	return __unionOfBOfFloat64AndCOfString{val.(types.Map)}
+	return __unionOfBOfFloat64AndCOfString{val.(types.Map), &ref.Ref{}}
 }
 
 func (s __unionOfBOfFloat64AndCOfString) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s __unionOfBOfFloat64AndCOfString) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Equals(other types.Value) bool {
 	if other, ok := other.(__unionOfBOfFloat64AndCOfString); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Chunks() (futures []types.Future) {
@@ -227,7 +247,7 @@ func (s __unionOfBOfFloat64AndCOfString) B() (val float64, ok bool) {
 }
 
 func (s __unionOfBOfFloat64AndCOfString) SetB(val float64) __unionOfBOfFloat64AndCOfString {
-	return __unionOfBOfFloat64AndCOfString{s.m.Set(types.NewString("$unionIndex"), types.UInt32(0)).Set(types.NewString("$unionValue"), types.Float64(val))}
+	return __unionOfBOfFloat64AndCOfString{s.m.Set(types.NewString("$unionIndex"), types.UInt32(0)).Set(types.NewString("$unionValue"), types.Float64(val)), &ref.Ref{}}
 }
 
 func (def __unionOfBOfFloat64AndCOfStringDef) B() (val float64, ok bool) {
@@ -251,7 +271,7 @@ func (s __unionOfBOfFloat64AndCOfString) C() (val string, ok bool) {
 }
 
 func (s __unionOfBOfFloat64AndCOfString) SetC(val string) __unionOfBOfFloat64AndCOfString {
-	return __unionOfBOfFloat64AndCOfString{s.m.Set(types.NewString("$unionIndex"), types.UInt32(1)).Set(types.NewString("$unionValue"), types.NewString(val))}
+	return __unionOfBOfFloat64AndCOfString{s.m.Set(types.NewString("$unionIndex"), types.UInt32(1)).Set(types.NewString("$unionValue"), types.NewString(val)), &ref.Ref{}}
 }
 
 func (def __unionOfBOfFloat64AndCOfStringDef) C() (val string, ok bool) {
@@ -270,7 +290,8 @@ func (def __unionOfBOfFloat64AndCOfStringDef) SetC(val string) __unionOfBOfFloat
 // __unionOfEOfFloat64AndFOfString
 
 type __unionOfEOfFloat64AndFOfString struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func New__unionOfEOfFloat64AndFOfString() __unionOfEOfFloat64AndFOfString {
@@ -278,7 +299,7 @@ func New__unionOfEOfFloat64AndFOfString() __unionOfEOfFloat64AndFOfString {
 		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 2),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
-	)}
+	), &ref.Ref{}}
 }
 
 type __unionOfEOfFloat64AndFOfStringDef struct {
@@ -292,7 +313,7 @@ func (def __unionOfEOfFloat64AndFOfStringDef) New() __unionOfEOfFloat64AndFOfStr
 			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 2),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
-		)}
+		), &ref.Ref{}}
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Def() (d __unionOfEOfFloat64AndFOfStringDef) {
@@ -328,29 +349,38 @@ func (m __unionOfEOfFloat64AndFOfString) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefFor__unionOfEOfFloat64AndFOfString, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefFor__unionOfEOfFloat64AndFOfString, func(v types.Value) types.Value {
 		return __unionOfEOfFloat64AndFOfStringFromVal(v)
 	})
 }
 
 func __unionOfEOfFloat64AndFOfStringFromVal(val types.Value) __unionOfEOfFloat64AndFOfString {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(__unionOfEOfFloat64AndFOfString); ok {
+		return val
+	}
 	// TODO: Validate here
-	return __unionOfEOfFloat64AndFOfString{val.(types.Map)}
+	return __unionOfEOfFloat64AndFOfString{val.(types.Map), &ref.Ref{}}
 }
 
 func (s __unionOfEOfFloat64AndFOfString) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s __unionOfEOfFloat64AndFOfString) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Equals(other types.Value) bool {
 	if other, ok := other.(__unionOfEOfFloat64AndFOfString); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Chunks() (futures []types.Future) {
@@ -367,7 +397,7 @@ func (s __unionOfEOfFloat64AndFOfString) E() (val float64, ok bool) {
 }
 
 func (s __unionOfEOfFloat64AndFOfString) SetE(val float64) __unionOfEOfFloat64AndFOfString {
-	return __unionOfEOfFloat64AndFOfString{s.m.Set(types.NewString("$unionIndex"), types.UInt32(0)).Set(types.NewString("$unionValue"), types.Float64(val))}
+	return __unionOfEOfFloat64AndFOfString{s.m.Set(types.NewString("$unionIndex"), types.UInt32(0)).Set(types.NewString("$unionValue"), types.Float64(val)), &ref.Ref{}}
 }
 
 func (def __unionOfEOfFloat64AndFOfStringDef) E() (val float64, ok bool) {
@@ -391,7 +421,7 @@ func (s __unionOfEOfFloat64AndFOfString) F() (val string, ok bool) {
 }
 
 func (s __unionOfEOfFloat64AndFOfString) SetF(val string) __unionOfEOfFloat64AndFOfString {
-	return __unionOfEOfFloat64AndFOfString{s.m.Set(types.NewString("$unionIndex"), types.UInt32(1)).Set(types.NewString("$unionValue"), types.NewString(val))}
+	return __unionOfEOfFloat64AndFOfString{s.m.Set(types.NewString("$unionIndex"), types.UInt32(1)).Set(types.NewString("$unionValue"), types.NewString(val)), &ref.Ref{}}
 }
 
 func (def __unionOfEOfFloat64AndFOfStringDef) F() (val string, ok bool) {

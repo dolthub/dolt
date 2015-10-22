@@ -33,7 +33,8 @@ func __testPackageInFile_struct_with_union_field_Ref() ref.Ref {
 // StructWithUnionField
 
 type StructWithUnionField struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewStructWithUnionField() StructWithUnionField {
@@ -42,7 +43,7 @@ func NewStructWithUnionField() StructWithUnionField {
 		types.NewString("a"), types.Float32(0),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
-	)}
+	), &ref.Ref{}}
 }
 
 type StructWithUnionFieldDef struct {
@@ -58,7 +59,7 @@ func (def StructWithUnionFieldDef) New() StructWithUnionField {
 			types.NewString("a"), types.Float32(def.A),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
-		)}
+		), &ref.Ref{}}
 }
 
 func (s StructWithUnionField) Def() (d StructWithUnionFieldDef) {
@@ -79,7 +80,7 @@ func (def StructWithUnionFieldDef) __unionDefToValue() types.Value {
 	case 3:
 		return def.__unionValue.(types.Value)
 	case 4:
-		return def.__unionValue.(SetOfUInt8Def).New().NomsValue()
+		return def.__unionValue.(SetOfUInt8Def).New()
 	}
 	panic("unreachable")
 }
@@ -95,7 +96,7 @@ func (s StructWithUnionField) __unionValueToDef() interface{} {
 	case 3:
 		return s.m.Get(types.NewString("$unionValue"))
 	case 4:
-		return SetOfUInt8FromVal(s.m.Get(types.NewString("$unionValue"))).Def()
+		return s.m.Get(types.NewString("$unionValue")).(SetOfUInt8).Def()
 	}
 	panic("unreachable")
 }
@@ -107,29 +108,38 @@ func (m StructWithUnionField) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefForStructWithUnionField, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForStructWithUnionField, func(v types.Value) types.Value {
 		return StructWithUnionFieldFromVal(v)
 	})
 }
 
 func StructWithUnionFieldFromVal(val types.Value) StructWithUnionField {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(StructWithUnionField); ok {
+		return val
+	}
 	// TODO: Validate here
-	return StructWithUnionField{val.(types.Map)}
+	return StructWithUnionField{val.(types.Map), &ref.Ref{}}
 }
 
 func (s StructWithUnionField) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s StructWithUnionField) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s StructWithUnionField) Equals(other types.Value) bool {
 	if other, ok := other.(StructWithUnionField); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s StructWithUnionField) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s StructWithUnionField) Chunks() (futures []types.Future) {
@@ -143,7 +153,7 @@ func (s StructWithUnionField) A() float32 {
 }
 
 func (s StructWithUnionField) SetA(val float32) StructWithUnionField {
-	return StructWithUnionField{s.m.Set(types.NewString("a"), types.Float32(val))}
+	return StructWithUnionField{s.m.Set(types.NewString("a"), types.Float32(val)), &ref.Ref{}}
 }
 
 func (s StructWithUnionField) B() (val float64, ok bool) {
@@ -154,7 +164,7 @@ func (s StructWithUnionField) B() (val float64, ok bool) {
 }
 
 func (s StructWithUnionField) SetB(val float64) StructWithUnionField {
-	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(0)).Set(types.NewString("$unionValue"), types.Float64(val))}
+	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(0)).Set(types.NewString("$unionValue"), types.Float64(val)), &ref.Ref{}}
 }
 
 func (def StructWithUnionFieldDef) B() (val float64, ok bool) {
@@ -178,7 +188,7 @@ func (s StructWithUnionField) C() (val string, ok bool) {
 }
 
 func (s StructWithUnionField) SetC(val string) StructWithUnionField {
-	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(1)).Set(types.NewString("$unionValue"), types.NewString(val))}
+	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(1)).Set(types.NewString("$unionValue"), types.NewString(val)), &ref.Ref{}}
 }
 
 func (def StructWithUnionFieldDef) C() (val string, ok bool) {
@@ -202,7 +212,7 @@ func (s StructWithUnionField) D() (val types.Blob, ok bool) {
 }
 
 func (s StructWithUnionField) SetD(val types.Blob) StructWithUnionField {
-	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(2)).Set(types.NewString("$unionValue"), val)}
+	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(2)).Set(types.NewString("$unionValue"), val), &ref.Ref{}}
 }
 
 func (def StructWithUnionFieldDef) D() (val types.Blob, ok bool) {
@@ -226,7 +236,7 @@ func (s StructWithUnionField) E() (val types.Value, ok bool) {
 }
 
 func (s StructWithUnionField) SetE(val types.Value) StructWithUnionField {
-	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(3)).Set(types.NewString("$unionValue"), val)}
+	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(3)).Set(types.NewString("$unionValue"), val), &ref.Ref{}}
 }
 
 func (def StructWithUnionFieldDef) E() (val types.Value, ok bool) {
@@ -246,11 +256,11 @@ func (s StructWithUnionField) F() (val SetOfUInt8, ok bool) {
 	if s.m.Get(types.NewString("$unionIndex")).(types.UInt32) != 4 {
 		return
 	}
-	return SetOfUInt8FromVal(s.m.Get(types.NewString("$unionValue"))), true
+	return s.m.Get(types.NewString("$unionValue")).(SetOfUInt8), true
 }
 
 func (s StructWithUnionField) SetF(val SetOfUInt8) StructWithUnionField {
-	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(4)).Set(types.NewString("$unionValue"), val.NomsValue())}
+	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(4)).Set(types.NewString("$unionValue"), val), &ref.Ref{}}
 }
 
 func (def StructWithUnionFieldDef) F() (val SetOfUInt8Def, ok bool) {
@@ -269,11 +279,12 @@ func (def StructWithUnionFieldDef) SetF(val SetOfUInt8Def) StructWithUnionFieldD
 // SetOfUInt8
 
 type SetOfUInt8 struct {
-	s types.Set
+	s   types.Set
+	ref *ref.Ref
 }
 
 func NewSetOfUInt8() SetOfUInt8 {
-	return SetOfUInt8{types.NewSet()}
+	return SetOfUInt8{types.NewSet(), &ref.Ref{}}
 }
 
 type SetOfUInt8Def map[uint8]bool
@@ -285,7 +296,7 @@ func (def SetOfUInt8Def) New() SetOfUInt8 {
 		l[i] = types.UInt8(d)
 		i++
 	}
-	return SetOfUInt8{types.NewSet(l...)}
+	return SetOfUInt8{types.NewSet(l...), &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Def() SetOfUInt8Def {
@@ -297,23 +308,32 @@ func (s SetOfUInt8) Def() SetOfUInt8Def {
 	return def
 }
 
-func SetOfUInt8FromVal(p types.Value) SetOfUInt8 {
-	return SetOfUInt8{p.(types.Set)}
+func SetOfUInt8FromVal(val types.Value) SetOfUInt8 {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(SetOfUInt8); ok {
+		return val
+	}
+	return SetOfUInt8{val.(types.Set), &ref.Ref{}}
 }
 
 func (s SetOfUInt8) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s SetOfUInt8) InternalImplementation() types.Set {
 	return s.s
 }
 
 func (s SetOfUInt8) Equals(other types.Value) bool {
 	if other, ok := other.(SetOfUInt8); ok {
-		return s.s.Equals(other.s)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s SetOfUInt8) Ref() ref.Ref {
-	return s.s.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s SetOfUInt8) Chunks() (futures []types.Future) {
@@ -331,7 +351,7 @@ func (m SetOfUInt8) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSetOfUInt8 = types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
-	types.RegisterFromValFunction(__typeRefForSetOfUInt8, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForSetOfUInt8, func(v types.Value) types.Value {
 		return SetOfUInt8FromVal(v)
 	})
 }
@@ -377,19 +397,19 @@ func (s SetOfUInt8) Filter(cb SetOfUInt8FilterCallback) SetOfUInt8 {
 }
 
 func (s SetOfUInt8) Insert(p ...uint8) SetOfUInt8 {
-	return SetOfUInt8{s.s.Insert(s.fromElemSlice(p)...)}
+	return SetOfUInt8{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Remove(p ...uint8) SetOfUInt8 {
-	return SetOfUInt8{s.s.Remove(s.fromElemSlice(p)...)}
+	return SetOfUInt8{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Union(others ...SetOfUInt8) SetOfUInt8 {
-	return SetOfUInt8{s.s.Union(s.fromStructSlice(others)...)}
+	return SetOfUInt8{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Subtract(others ...SetOfUInt8) SetOfUInt8 {
-	return SetOfUInt8{s.s.Subtract(s.fromStructSlice(others)...)}
+	return SetOfUInt8{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Any() uint8 {

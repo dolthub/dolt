@@ -5,7 +5,7 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-type toNomsValueFunc func(v Value) NomsValue
+type toNomsValueFunc func(v Value) Value
 
 var (
 	packages       map[ref.Ref]*Package        = map[ref.Ref]*Package{}
@@ -29,7 +29,7 @@ func RegisterFromValFunction(t TypeRef, f toNomsValueFunc) {
 	toNomsValueMap[t.Ref()] = f
 }
 
-func ToNomsValueFromTypeRef(t TypeRef, v Value) NomsValue {
+func ToNomsValueFromTypeRef(t TypeRef, v Value) Value {
 	f, ok := toNomsValueMap[t.Ref()]
 	d.Chk.True(ok, "Missing to noms value function for: %s", t.Describe())
 	return f(v)

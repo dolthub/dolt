@@ -108,7 +108,7 @@ func (cbr *compoundBlobReader) updateReader() error {
 }
 
 func (cb compoundBlob) Ref() ref.Ref {
-	return ensureRef(cb.ref, cb)
+	return EnsureRef(cb.ref, cb)
 }
 
 func (cb compoundBlob) Equals(other Value) bool {

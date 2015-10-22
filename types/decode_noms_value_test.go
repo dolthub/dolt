@@ -63,7 +63,7 @@ func TestReadPrimitives(t *testing.T) {
 	test := func(expected Value, s string, vs ...interface{}) {
 		a := parseJson(s, vs...)
 		r := newJsonArrayReader(a, cs)
-		v := r.readTopLevelValue().NomsValue()
+		v := r.readTopLevelValue()
 		assert.True(expected.Equals(v))
 	}
 
@@ -96,11 +96,11 @@ func TestReadListOfInt32(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	tr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int32Kind))
-	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, tr}
+	RegisterFromValFunction(tr, func(v Value) Value {
+		return v
 	})
 
-	l := r.readTopLevelValue().NomsValue()
+	l := r.readTopLevelValue()
 	assert.EqualValues(NewList(Int32(0), Int32(1), Int32(2), Int32(3)), l)
 }
 
@@ -112,11 +112,11 @@ func TestReadListOfValue(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	listTr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
-	RegisterFromValFunction(listTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, listTr}
+	RegisterFromValFunction(listTr, func(v Value) Value {
+		return v
 	})
 
-	l := r.readTopLevelValue().NomsValue()
+	l := r.readTopLevelValue()
 	assert.EqualValues(NewList(Int32(1), NewString("hi"), Bool(true)), l)
 }
 
@@ -128,11 +128,11 @@ func TestReadValueListOfInt8(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	listTr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int8Kind))
-	RegisterFromValFunction(listTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, listTr}
+	RegisterFromValFunction(listTr, func(v Value) Value {
+		return v
 	})
 
-	l := r.readTopLevelValue().NomsValue()
+	l := r.readTopLevelValue()
 	assert.EqualValues(NewList(Int8(0), Int8(1), Int8(2)), l)
 }
 
@@ -144,11 +144,11 @@ func TestReadMapOfInt64ToFloat64(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	tr := MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(Int64Kind), MakePrimitiveTypeRef(Float64Kind))
-	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, tr}
+	RegisterFromValFunction(tr, func(v Value) Value {
+		return v
 	})
 
-	m := r.readTopLevelValue().NomsValue()
+	m := r.readTopLevelValue()
 	assert.EqualValues(NewMap(Int64(0), Float64(1), Int64(2), Float64(3)), m)
 }
 
@@ -160,11 +160,11 @@ func TestReadValueMapOfUInt64ToUInt32(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	mapTr := MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(UInt64Kind), MakePrimitiveTypeRef(UInt32Kind))
-	RegisterFromValFunction(mapTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, mapTr}
+	RegisterFromValFunction(mapTr, func(v Value) Value {
+		return v
 	})
 
-	m := r.readTopLevelValue().NomsValue()
+	m := r.readTopLevelValue()
 	assert.True(NewMap(UInt64(0), UInt32(1), UInt64(2), UInt32(3)).Equals(m))
 }
 
@@ -176,11 +176,11 @@ func TestReadSetOfUInt8(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	tr := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(UInt8Kind))
-	RegisterFromValFunction(tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, tr}
+	RegisterFromValFunction(tr, func(v Value) Value {
+		return v
 	})
 
-	s := r.readTopLevelValue().NomsValue()
+	s := r.readTopLevelValue()
 	assert.EqualValues(NewSet(UInt8(0), UInt8(1), UInt8(2), UInt8(3)), s)
 }
 
@@ -192,11 +192,11 @@ func TestReadValueSetOfUInt16(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	setTr := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(UInt16Kind))
-	RegisterFromValFunction(setTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, setTr}
+	RegisterFromValFunction(setTr, func(v Value) Value {
+		return v
 	})
 
-	s := r.readTopLevelValue().NomsValue()
+	s := r.readTopLevelValue()
 	assert.True(NewSet(UInt16(0), UInt16(1), UInt16(2), UInt16(3)).Equals(s))
 }
 
@@ -216,11 +216,11 @@ func TestReadStruct(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	structTr := MakeTypeRef(pkgRef, 0)
-	RegisterFromValFunction(structTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, structTr}
+	RegisterFromValFunction(structTr, func(v Value) Value {
+		return v
 	})
 
-	v := r.readTopLevelValue().NomsValue().(Map)
+	v := r.readTopLevelValue().(Map)
 
 	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Int16(42)))
@@ -245,11 +245,11 @@ func TestReadStructUnion(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	structTr := MakeTypeRef(pkgRef, 0)
-	RegisterFromValFunction(structTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, structTr}
+	RegisterFromValFunction(structTr, func(v Value) Value {
+		return v
 	})
 
-	v := r.readTopLevelValue().NomsValue().(Map)
+	v := r.readTopLevelValue().(Map)
 
 	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Float32(42)))
@@ -275,11 +275,11 @@ func TestReadStructOptional(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	structTr := MakeTypeRef(pkgRef, 0)
-	RegisterFromValFunction(structTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, structTr}
+	RegisterFromValFunction(structTr, func(v Value) Value {
+		return v
 	})
 
-	v := r.readTopLevelValue().NomsValue().(Map)
+	v := r.readTopLevelValue().(Map)
 
 	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Float32(42)))
@@ -309,16 +309,16 @@ func TestReadStructWithList(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	structTr := MakeTypeRef(pkgRef, 0)
-	RegisterFromValFunction(structTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, structTr}
+	RegisterFromValFunction(structTr, func(v Value) Value {
+		return v
 	})
 
 	l32Tr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int32Kind))
-	RegisterFromValFunction(l32Tr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, l32Tr}
+	RegisterFromValFunction(l32Tr, func(v Value) Value {
+		return v
 	})
 
-	v := r.readTopLevelValue().NomsValue().(Map)
+	v := r.readTopLevelValue().(Map)
 
 	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("b")).Equals(Bool(true)))
@@ -348,11 +348,11 @@ func TestReadStructWithValue(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	structTr := MakeTypeRef(pkgRef, 0)
-	RegisterFromValFunction(structTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, structTr}
+	RegisterFromValFunction(structTr, func(v Value) Value {
+		return v
 	})
 
-	v := r.readTopLevelValue().NomsValue().(Map)
+	v := r.readTopLevelValue().(Map)
 
 	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("b")).Equals(Bool(true)))
@@ -382,11 +382,11 @@ func TestReadValueStruct(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	structTr := MakeTypeRef(pkgRef, 0)
-	RegisterFromValFunction(structTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, structTr}
+	RegisterFromValFunction(structTr, func(v Value) Value {
+		return v
 	})
 
-	v := r.readTopLevelValue().NomsValue().(Map)
+	v := r.readTopLevelValue().(Map)
 
 	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Int16(42)))
@@ -405,7 +405,8 @@ func TestReadEnum(t *testing.T) {
 	a := parseJson(`[%d, "%s", 0, 1]`, UnresolvedKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
 
-	v := r.readTopLevelValue().NomsValue()
+	// TODO: Figure out what we want to do with enums. BUG 391
+	v := r.readTopLevelValue().(valueAsNomsValue).NomsValue()
 	assert.Equal(uint32(1), uint32(v.(UInt32)))
 }
 
@@ -420,7 +421,8 @@ func TestReadValueEnum(t *testing.T) {
 	a := parseJson(`[%d, %d, "%s", 0, 1]`, ValueKind, UnresolvedKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
 
-	v := r.readTopLevelValue().NomsValue()
+	// TODO: Figure out what we want to do with enums. BUG 391
+	v := r.readTopLevelValue().(valueAsNomsValue).NomsValue()
 	assert.Equal(uint32(1), uint32(v.(UInt32)))
 }
 
@@ -434,11 +436,11 @@ func TestReadRef(t *testing.T) {
 	reader := newJsonArrayReader(a, cs)
 
 	refTr := MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(UInt32Kind))
-	RegisterFromValFunction(refTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, refTr}
+	RegisterFromValFunction(refTr, func(v Value) Value {
+		return v
 	})
 
-	v := reader.readTopLevelValue().NomsValue()
+	v := reader.readTopLevelValue()
 	assert.True(Ref{r}.Equals(v))
 }
 
@@ -452,11 +454,11 @@ func TestReadValueRef(t *testing.T) {
 	reader := newJsonArrayReader(a, cs)
 
 	refTypeRef := MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(UInt32Kind))
-	RegisterFromValFunction(refTypeRef, func(v Value) NomsValue {
-		return valueAsNomsValue{v, refTypeRef}
+	RegisterFromValFunction(refTypeRef, func(v Value) Value {
+		return v
 	})
 
-	v := reader.readTopLevelValue().NomsValue()
+	v := reader.readTopLevelValue()
 	assert.True(Ref{r}.Equals(v))
 }
 
@@ -487,11 +489,11 @@ func TestReadStructWithEnum(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	structTr := MakeTypeRef(pkgRef, 0)
-	RegisterFromValFunction(structTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, structTr}
+	RegisterFromValFunction(structTr, func(v Value) Value {
+		return v
 	})
 
-	v := r.readTopLevelValue().NomsValue().(Map)
+	v := r.readTopLevelValue().(Map)
 
 	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Int16(42)))
@@ -517,11 +519,11 @@ func TestReadStructWithBlob(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 
 	structTr := MakeTypeRef(pkgRef, 0)
-	RegisterFromValFunction(structTr, func(v Value) NomsValue {
-		return valueAsNomsValue{v, structTr}
+	RegisterFromValFunction(structTr, func(v Value) Value {
+		return v
 	})
 
-	v := r.readTopLevelValue().NomsValue().(Map)
+	v := r.readTopLevelValue().(Map)
 
 	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	blob, err := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
@@ -536,7 +538,7 @@ func TestReadTypeRefValue(t *testing.T) {
 	test := func(expected TypeRef, json string, vs ...interface{}) {
 		a := parseJson(json, vs...)
 		r := newJsonArrayReader(a, cs)
-		tr := r.readTopLevelValue().NomsValue()
+		tr := r.readTopLevelValue()
 		assert.True(expected.Equals(tr))
 	}
 
@@ -601,7 +603,7 @@ func TestReadPackage(t *testing.T) {
 		[]interface{}{}, // Dependencies
 	}
 	r := newJsonArrayReader(a, cs)
-	pkg2 := r.readTopLevelValue().NomsValue().(Package)
+	pkg2 := r.readTopLevelValue().(Package)
 	assert.True(t, pkg.Equals(pkg2))
 }
 
@@ -614,6 +616,6 @@ func TestReadPackage2(t *testing.T) {
 
 	a := []interface{}{float64(PackageKind), []interface{}{float64(SetKind), []interface{}{float64(UInt32Kind)}}, []interface{}{rr.String()}}
 	r := newJsonArrayReader(a, cs)
-	v := r.readTopLevelValue().NomsValue().(Package)
+	v := r.readTopLevelValue().(Package)
 	assert.True(t, pkg.Equals(v))
 }

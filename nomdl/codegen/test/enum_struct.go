@@ -38,14 +38,15 @@ const (
 // EnumStruct
 
 type EnumStruct struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
 func NewEnumStruct() EnumStruct {
 	return EnumStruct{types.NewMap(
 		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_enum_struct_CachedRef, 1),
 		types.NewString("hand"), types.UInt32(0),
-	)}
+	), &ref.Ref{}}
 }
 
 type EnumStructDef struct {
@@ -57,7 +58,7 @@ func (def EnumStructDef) New() EnumStruct {
 		types.NewMap(
 			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_enum_struct_CachedRef, 1),
 			types.NewString("hand"), types.UInt32(def.Hand),
-		)}
+		), &ref.Ref{}}
 }
 
 func (s EnumStruct) Def() (d EnumStructDef) {
@@ -72,29 +73,38 @@ func (m EnumStruct) TypeRef() types.TypeRef {
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefForEnumStruct, func(v types.Value) types.NomsValue {
+	types.RegisterFromValFunction(__typeRefForEnumStruct, func(v types.Value) types.Value {
 		return EnumStructFromVal(v)
 	})
 }
 
 func EnumStructFromVal(val types.Value) EnumStruct {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(EnumStruct); ok {
+		return val
+	}
 	// TODO: Validate here
-	return EnumStruct{val.(types.Map)}
+	return EnumStruct{val.(types.Map), &ref.Ref{}}
 }
 
 func (s EnumStruct) NomsValue() types.Value {
+	// TODO: Remove this
+	return s
+}
+
+func (s EnumStruct) InternalImplementation() types.Map {
 	return s.m
 }
 
 func (s EnumStruct) Equals(other types.Value) bool {
 	if other, ok := other.(EnumStruct); ok {
-		return s.m.Equals(other.m)
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (s EnumStruct) Ref() ref.Ref {
-	return s.m.Ref()
+	return types.EnsureRef(s.ref, s)
 }
 
 func (s EnumStruct) Chunks() (futures []types.Future) {
@@ -108,5 +118,5 @@ func (s EnumStruct) Hand() Handedness {
 }
 
 func (s EnumStruct) SetHand(val Handedness) EnumStruct {
-	return EnumStruct{s.m.Set(types.NewString("hand"), types.UInt32(val))}
+	return EnumStruct{s.m.Set(types.NewString("hand"), types.UInt32(val)), &ref.Ref{}}
 }

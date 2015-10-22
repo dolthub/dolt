@@ -1,12 +1,12 @@
 // {{.Name}}
 
 type {{.Name}} struct {
-	m types.Map
+	m   types.Map
+	ref *ref.Ref
 }
 
-
 func New{{.Name}}() {{.Name}} {
-	return {{.Name}}{types.NewMap()}
+	return {{.Name}}{types.NewMap(), &ref.Ref{}}
 }
 
 {{if .CanUseDef}}
@@ -17,7 +17,7 @@ func New{{.Name}}() {{.Name}} {
 		for k, v := range def {
 			kv = append(kv, {{defToValue "k" .KeyType}}, {{defToValue "v" .ValueType}})
 		}
-		return {{.Name}}{types.NewMap(kv...)}
+		return {{.Name}}{types.NewMap(kv...), &ref.Ref{}}
 	}
 
 	func (m {{.Name}}) Def() {{.Name}}Def {
@@ -30,24 +30,33 @@ func New{{.Name}}() {{.Name}} {
 	}
 {{end}}
 
-func {{.Name}}FromVal(p types.Value) {{.Name}} {
+func {{.Name}}FromVal(val types.Value) {{.Name}} {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.({{.Name}}); ok {
+		return val
+	}
 	// TODO: Validate here
-	return {{.Name}}{p.(types.Map)}
+	return {{.Name}}{val.(types.Map), &ref.Ref{}}
 }
 
 func (m {{.Name}}) NomsValue() types.Value {
+	// TODO: Remove this
+	return m
+}
+
+func (m {{.Name}}) InternalImplementation() types.Map {
 	return m.m
 }
 
 func (m {{.Name}}) Equals(other types.Value) bool {
 	if other, ok := other.({{.Name}}); ok {
-		return m.m.Equals(other.m)
+		return m.Ref() == other.Ref()
 	}
 	return false
 }
 
 func (m {{.Name}}) Ref() ref.Ref {
-	return m.m.Ref()
+	return types.EnsureRef(m.ref, m)
 }
 
 func (m {{.Name}}) Chunks() (futures []types.Future) {
@@ -83,13 +92,13 @@ func (m {{.Name}}) MaybeGet(p {{userType .KeyType}}) ({{userType .ValueType}}, b
 }
 
 func (m {{.Name}}) Set(k {{userType .KeyType}}, v {{userType .ValueType}}) {{.Name}} {
-	return {{.Name}}{m.m.Set({{userToValue "k" .KeyType}}, {{userToValue "v" .ValueType}})}
+	return {{.Name}}{m.m.Set({{userToValue "k" .KeyType}}, {{userToValue "v" .ValueType}}), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m {{.Name}}) Remove(p {{userType .KeyType}}) {{.Name}} {
-	return {{.Name}}{m.m.Remove({{userToValue "p" .KeyType}})}
+	return {{.Name}}{m.m.Remove({{userToValue "p" .KeyType}}), &ref.Ref{}}
 }
 
 type {{.Name}}IterCallback func(k {{userType .KeyType}}, v {{userType .ValueType}}) (stop bool)
