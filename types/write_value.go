@@ -118,12 +118,5 @@ func processChild(f Future, cs chunks.ChunkSink) interface{} {
 
 	v := f.Val()
 	d.Exp.NotNil(v)
-	switch v := v.(type) {
-	// Blobs, lists, maps, and sets are always out-of-line
-	case Blob, List, Map, Set:
-		return writeChildValueInternal(v, cs)
-	default:
-		// Other types are always inline.
-		return toEncodeable(v, cs)
-	}
+	return writeChildValueInternal(v, cs)
 }
