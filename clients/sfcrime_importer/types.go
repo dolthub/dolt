@@ -47,7 +47,6 @@ type Incident struct {
 
 func NewIncident() Incident {
 	return Incident{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 		types.NewString("ID"), types.Int64(0),
 		types.NewString("Category"), types.NewString(""),
 		types.NewString("Description"), types.NewString(""),
@@ -79,7 +78,6 @@ type IncidentDef struct {
 func (def IncidentDef) New() Incident {
 	return Incident{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 			types.NewString("ID"), types.Int64(def.ID),
 			types.NewString("Category"), types.NewString(def.Category),
 			types.NewString("Description"), types.NewString(def.Description),

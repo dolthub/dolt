@@ -33,9 +33,7 @@ type OptionalStruct struct {
 }
 
 func NewOptionalStruct() OptionalStruct {
-	return OptionalStruct{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_optional_CachedRef, 0),
-	), &ref.Ref{}}
+	return OptionalStruct{types.NewMap(), &ref.Ref{}}
 }
 
 type OptionalStructDef struct {
@@ -46,7 +44,6 @@ type OptionalStructDef struct {
 func (def OptionalStructDef) New() OptionalStruct {
 	return OptionalStruct{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_optional_CachedRef, 0),
 			types.NewString("s"), types.NewString(def.S),
 			types.NewString("b"), types.Bool(def.B),
 		), &ref.Ref{}}

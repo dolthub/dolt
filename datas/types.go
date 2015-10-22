@@ -35,7 +35,6 @@ type Commit struct {
 
 func NewCommit() Commit {
 	return Commit{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0),
 		types.NewString("value"), types.Bool(false),
 		types.NewString("parents"), NewSetOfRefOfCommit(),
 	), &ref.Ref{}}
@@ -49,7 +48,6 @@ type CommitDef struct {
 func (def CommitDef) New() Commit {
 	return Commit{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0),
 			types.NewString("value"), def.Value,
 			types.NewString("parents"), def.Parents.New(),
 		), &ref.Ref{}}

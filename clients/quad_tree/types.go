@@ -61,7 +61,6 @@ type Node struct {
 
 func NewNode() Node {
 	return Node{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 		types.NewString("Geoposition"), sha1_fb09d21d144c518467325465327d46489cff7c47.NewGeoposition(),
 		types.NewString("Reference"), NewRefOfValue(ref.Ref{}),
 	), &ref.Ref{}}
@@ -75,7 +74,6 @@ type NodeDef struct {
 func (def NodeDef) New() Node {
 	return Node{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 			types.NewString("Geoposition"), def.Geoposition.New(),
 			types.NewString("Reference"), NewRefOfValue(def.Reference),
 		), &ref.Ref{}}
@@ -154,7 +152,6 @@ type QuadTree struct {
 
 func NewQuadTree() QuadTree {
 	return QuadTree{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
 		types.NewString("Nodes"), NewListOfNode(),
 		types.NewString("Tiles"), NewMapOfStringToQuadTree(),
 		types.NewString("Depth"), types.UInt8(0),
@@ -176,7 +173,6 @@ type QuadTreeDef struct {
 func (def QuadTreeDef) New() QuadTree {
 	return QuadTree{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
 			types.NewString("Nodes"), def.Nodes.New(),
 			types.NewString("Tiles"), def.Tiles.New(),
 			types.NewString("Depth"), types.UInt8(def.Depth),
@@ -295,7 +291,6 @@ type SQuadTree struct {
 
 func NewSQuadTree() SQuadTree {
 	return SQuadTree{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2),
 		types.NewString("Nodes"), NewListOfRefOfValue(),
 		types.NewString("Tiles"), NewMapOfStringToRefOfSQuadTree(),
 		types.NewString("Depth"), types.UInt8(0),
@@ -317,7 +312,6 @@ type SQuadTreeDef struct {
 func (def SQuadTreeDef) New() SQuadTree {
 	return SQuadTree{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2),
 			types.NewString("Nodes"), def.Nodes.New(),
 			types.NewString("Tiles"), def.Tiles.New(),
 			types.NewString("Depth"), types.UInt8(def.Depth),

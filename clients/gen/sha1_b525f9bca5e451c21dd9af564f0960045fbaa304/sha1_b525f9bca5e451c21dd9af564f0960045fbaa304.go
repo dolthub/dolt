@@ -49,7 +49,6 @@ type RemotePhoto struct {
 
 func NewRemotePhoto() RemotePhoto {
 	return RemotePhoto{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef, 0),
 		types.NewString("Id"), types.NewString(""),
 		types.NewString("Title"), types.NewString(""),
 		types.NewString("Url"), types.NewString(""),
@@ -71,7 +70,6 @@ type RemotePhotoDef struct {
 func (def RemotePhotoDef) New() RemotePhoto {
 	return RemotePhoto{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef, 0),
 			types.NewString("Id"), types.NewString(def.Id),
 			types.NewString("Title"), types.NewString(def.Title),
 			types.NewString("Url"), types.NewString(def.Url),
@@ -190,7 +188,6 @@ type Size struct {
 
 func NewSize() Size {
 	return Size{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef, 1),
 		types.NewString("Width"), types.UInt32(0),
 		types.NewString("Height"), types.UInt32(0),
 	), &ref.Ref{}}
@@ -204,7 +201,6 @@ type SizeDef struct {
 func (def SizeDef) New() Size {
 	return Size{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef, 1),
 			types.NewString("Width"), types.UInt32(def.Width),
 			types.NewString("Height"), types.UInt32(def.Height),
 		), &ref.Ref{}}

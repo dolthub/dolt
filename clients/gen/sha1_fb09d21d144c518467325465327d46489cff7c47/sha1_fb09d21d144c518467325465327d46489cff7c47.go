@@ -41,7 +41,6 @@ type Geoposition struct {
 
 func NewGeoposition() Geoposition {
 	return Geoposition{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef, 0),
 		types.NewString("Latitude"), types.Float32(0),
 		types.NewString("Longitude"), types.Float32(0),
 	), &ref.Ref{}}
@@ -55,7 +54,6 @@ type GeopositionDef struct {
 func (def GeopositionDef) New() Geoposition {
 	return Geoposition{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef, 0),
 			types.NewString("Latitude"), types.Float32(def.Latitude),
 			types.NewString("Longitude"), types.Float32(def.Longitude),
 		), &ref.Ref{}}
@@ -134,7 +132,6 @@ type Georectangle struct {
 
 func NewGeorectangle() Georectangle {
 	return Georectangle{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef, 1),
 		types.NewString("TopLeft"), NewGeoposition(),
 		types.NewString("BottomRight"), NewGeoposition(),
 	), &ref.Ref{}}
@@ -148,7 +145,6 @@ type GeorectangleDef struct {
 func (def GeorectangleDef) New() Georectangle {
 	return Georectangle{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef, 1),
 			types.NewString("TopLeft"), def.TopLeft.New(),
 			types.NewString("BottomRight"), def.BottomRight.New(),
 		), &ref.Ref{}}

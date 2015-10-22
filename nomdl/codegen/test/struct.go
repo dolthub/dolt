@@ -34,7 +34,6 @@ type Struct struct {
 
 func NewStruct() Struct {
 	return Struct{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0),
 		types.NewString("s"), types.NewString(""),
 		types.NewString("b"), types.Bool(false),
 	), &ref.Ref{}}
@@ -48,7 +47,6 @@ type StructDef struct {
 func (def StructDef) New() Struct {
 	return Struct{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_CachedRef, 0),
 			types.NewString("s"), types.NewString(def.S),
 			types.NewString("b"), types.Bool(def.B),
 		), &ref.Ref{}}

@@ -49,7 +49,6 @@ type User struct {
 
 func NewUser() User {
 	return User{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 		types.NewString("Id"), types.NewString(""),
 		types.NewString("Name"), types.NewString(""),
 		types.NewString("OAuthToken"), types.NewString(""),
@@ -149,7 +148,6 @@ type Album struct {
 
 func NewAlbum() Album {
 	return Album{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
 		types.NewString("Id"), types.NewString(""),
 		types.NewString("Title"), types.NewString(""),
 		types.NewString("Photos"), NewSetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto(),

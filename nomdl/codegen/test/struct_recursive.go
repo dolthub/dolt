@@ -33,7 +33,6 @@ type Tree struct {
 
 func NewTree() Tree {
 	return Tree{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_recursive_CachedRef, 0),
 		types.NewString("children"), NewListOfTree(),
 	), &ref.Ref{}}
 }
@@ -45,7 +44,6 @@ type TreeDef struct {
 func (def TreeDef) New() Tree {
 	return Tree{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_recursive_CachedRef, 0),
 			types.NewString("children"), def.Children.New(),
 		), &ref.Ref{}}
 }

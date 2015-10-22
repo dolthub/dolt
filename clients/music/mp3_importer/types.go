@@ -37,7 +37,6 @@ type Song struct {
 
 func NewSong() Song {
 	return Song{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 		types.NewString("Title"), types.NewString(""),
 		types.NewString("Artist"), types.NewString(""),
 		types.NewString("Album"), types.NewString(""),
@@ -57,7 +56,6 @@ type SongDef struct {
 func (def SongDef) New() Song {
 	return Song{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 			types.NewString("Title"), types.NewString(def.Title),
 			types.NewString("Artist"), types.NewString(def.Artist),
 			types.NewString("Album"), types.NewString(def.Album),

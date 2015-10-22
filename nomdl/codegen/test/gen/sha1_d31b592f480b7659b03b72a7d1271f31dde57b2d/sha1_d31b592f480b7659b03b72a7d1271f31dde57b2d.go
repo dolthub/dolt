@@ -44,7 +44,6 @@ type D struct {
 
 func NewD() D {
 	return D{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef, 0),
 		types.NewString("structField"), sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288.NewS(),
 		types.NewString("enumField"), types.UInt32(0),
 	), &ref.Ref{}}
@@ -58,7 +57,6 @@ type DDef struct {
 func (def DDef) New() D {
 	return D{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef, 0),
 			types.NewString("structField"), def.StructField.New(),
 			types.NewString("enumField"), types.UInt32(def.EnumField),
 		), &ref.Ref{}}
@@ -137,7 +135,6 @@ type DUser struct {
 
 func NewDUser() DUser {
 	return DUser{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef, 1),
 		types.NewString("Dfield"), NewD(),
 	), &ref.Ref{}}
 }
@@ -149,7 +146,6 @@ type DUserDef struct {
 func (def DUserDef) New() DUser {
 	return DUser{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef, 1),
 			types.NewString("Dfield"), def.Dfield.New(),
 		), &ref.Ref{}}
 }

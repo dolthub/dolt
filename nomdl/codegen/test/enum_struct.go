@@ -44,7 +44,6 @@ type EnumStruct struct {
 
 func NewEnumStruct() EnumStruct {
 	return EnumStruct{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_enum_struct_CachedRef, 1),
 		types.NewString("hand"), types.UInt32(0),
 	), &ref.Ref{}}
 }
@@ -56,7 +55,6 @@ type EnumStructDef struct {
 func (def EnumStructDef) New() EnumStruct {
 	return EnumStruct{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_enum_struct_CachedRef, 1),
 			types.NewString("hand"), types.UInt32(def.Hand),
 		), &ref.Ref{}}
 }

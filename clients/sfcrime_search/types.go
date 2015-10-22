@@ -52,7 +52,6 @@ type Incident struct {
 
 func NewIncident() Incident {
 	return Incident{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 		types.NewString("Category"), types.NewString(""),
 		types.NewString("Description"), types.NewString(""),
 		types.NewString("Address"), types.NewString(""),
@@ -72,7 +71,6 @@ type IncidentDef struct {
 func (def IncidentDef) New() Incident {
 	return Incident{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 			types.NewString("Category"), types.NewString(def.Category),
 			types.NewString("Description"), types.NewString(def.Description),
 			types.NewString("Address"), types.NewString(def.Address),
@@ -181,7 +179,6 @@ type SQuadTree struct {
 
 func NewSQuadTree() SQuadTree {
 	return SQuadTree{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
 		types.NewString("Nodes"), NewListOfIncident(),
 		types.NewString("Tiles"), NewMapOfStringToSQuadTree(),
 		types.NewString("Depth"), types.UInt8(0),
@@ -203,7 +200,6 @@ type SQuadTreeDef struct {
 func (def SQuadTreeDef) New() SQuadTree {
 	return SQuadTree{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1),
 			types.NewString("Nodes"), def.Nodes.New(),
 			types.NewString("Tiles"), def.Tiles.New(),
 			types.NewString("Depth"), types.UInt8(def.Depth),

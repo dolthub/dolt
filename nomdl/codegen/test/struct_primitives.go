@@ -46,7 +46,6 @@ type StructPrimitives struct {
 
 func NewStructPrimitives() StructPrimitives {
 	return StructPrimitives{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_primitives_CachedRef, 0),
 		types.NewString("uint64"), types.UInt64(0),
 		types.NewString("uint32"), types.UInt32(0),
 		types.NewString("uint16"), types.UInt16(0),
@@ -84,7 +83,6 @@ type StructPrimitivesDef struct {
 func (def StructPrimitivesDef) New() StructPrimitives {
 	return StructPrimitives{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_primitives_CachedRef, 0),
 			types.NewString("uint64"), types.UInt64(def.Uint64),
 			types.NewString("uint32"), types.UInt32(def.Uint32),
 			types.NewString("uint16"), types.UInt16(def.Uint16),

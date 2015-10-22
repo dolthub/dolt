@@ -34,7 +34,6 @@ type Pitch struct {
 
 func NewPitch() Pitch {
 	return Pitch{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 		types.NewString("X"), types.Float64(0),
 		types.NewString("Z"), types.Float64(0),
 	), &ref.Ref{}}
@@ -48,7 +47,6 @@ type PitchDef struct {
 func (def PitchDef) New() Pitch {
 	return Pitch{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0),
 			types.NewString("X"), types.Float64(def.X),
 			types.NewString("Z"), types.Float64(def.Z),
 		), &ref.Ref{}}

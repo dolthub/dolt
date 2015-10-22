@@ -36,7 +36,6 @@ type StructWithList struct {
 
 func NewStructWithList() StructWithList {
 	return StructWithList{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_list_CachedRef, 0),
 		types.NewString("l"), NewListOfUInt8(),
 		types.NewString("b"), types.Bool(false),
 		types.NewString("s"), types.NewString(""),
@@ -54,7 +53,6 @@ type StructWithListDef struct {
 func (def StructWithListDef) New() StructWithList {
 	return StructWithList{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_list_CachedRef, 0),
 			types.NewString("l"), def.L.New(),
 			types.NewString("b"), types.Bool(def.B),
 			types.NewString("s"), types.NewString(def.S),

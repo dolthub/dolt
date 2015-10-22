@@ -34,7 +34,6 @@ type StructWithRef struct {
 
 func NewStructWithRef() StructWithRef {
 	return StructWithRef{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_ref_CachedRef, 0),
 		types.NewString("r"), NewRefOfSetOfFloat32(ref.Ref{}),
 	), &ref.Ref{}}
 }
@@ -46,7 +45,6 @@ type StructWithRefDef struct {
 func (def StructWithRefDef) New() StructWithRef {
 	return StructWithRef{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_ref_CachedRef, 0),
 			types.NewString("r"), NewRefOfSetOfFloat32(def.R),
 		), &ref.Ref{}}
 }

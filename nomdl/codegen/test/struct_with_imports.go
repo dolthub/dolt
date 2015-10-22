@@ -48,7 +48,6 @@ type ImportUser struct {
 
 func NewImportUser() ImportUser {
 	return ImportUser{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 1),
 		types.NewString("importedStruct"), sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d.NewD(),
 		types.NewString("enum"), types.UInt32(0),
 	), &ref.Ref{}}
@@ -62,7 +61,6 @@ type ImportUserDef struct {
 func (def ImportUserDef) New() ImportUser {
 	return ImportUser{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 1),
 			types.NewString("importedStruct"), def.ImportedStruct.New(),
 			types.NewString("enum"), types.UInt32(def.Enum),
 		), &ref.Ref{}}

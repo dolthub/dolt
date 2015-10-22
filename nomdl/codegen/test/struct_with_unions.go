@@ -48,7 +48,6 @@ type StructWithUnions struct {
 
 func NewStructWithUnions() StructWithUnions {
 	return StructWithUnions{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 0),
 		types.NewString("a"), New__unionOfBOfFloat64AndCOfString(),
 		types.NewString("d"), New__unionOfEOfFloat64AndFOfString(),
 	), &ref.Ref{}}
@@ -62,7 +61,6 @@ type StructWithUnionsDef struct {
 func (def StructWithUnionsDef) New() StructWithUnions {
 	return StructWithUnions{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 0),
 			types.NewString("a"), def.A.New(),
 			types.NewString("d"), def.D.New(),
 		), &ref.Ref{}}
@@ -141,7 +139,6 @@ type __unionOfBOfFloat64AndCOfString struct {
 
 func New__unionOfBOfFloat64AndCOfString() __unionOfBOfFloat64AndCOfString {
 	return __unionOfBOfFloat64AndCOfString{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 1),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	), &ref.Ref{}}
@@ -155,7 +152,6 @@ type __unionOfBOfFloat64AndCOfStringDef struct {
 func (def __unionOfBOfFloat64AndCOfStringDef) New() __unionOfBOfFloat64AndCOfString {
 	return __unionOfBOfFloat64AndCOfString{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 1),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
 		), &ref.Ref{}}
@@ -286,7 +282,6 @@ type __unionOfEOfFloat64AndFOfString struct {
 
 func New__unionOfEOfFloat64AndFOfString() __unionOfEOfFloat64AndFOfString {
 	return __unionOfEOfFloat64AndFOfString{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 2),
 		types.NewString("$unionIndex"), types.UInt32(0),
 		types.NewString("$unionValue"), types.Float64(0),
 	), &ref.Ref{}}
@@ -300,7 +295,6 @@ type __unionOfEOfFloat64AndFOfStringDef struct {
 func (def __unionOfEOfFloat64AndFOfStringDef) New() __unionOfEOfFloat64AndFOfString {
 	return __unionOfEOfFloat64AndFOfString{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 2),
 			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
 			types.NewString("$unionValue"), def.__unionDefToValue(),
 		), &ref.Ref{}}

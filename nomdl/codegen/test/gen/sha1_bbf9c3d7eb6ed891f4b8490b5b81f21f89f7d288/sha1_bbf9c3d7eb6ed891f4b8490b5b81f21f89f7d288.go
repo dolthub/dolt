@@ -35,7 +35,6 @@ type S struct {
 
 func NewS() S {
 	return S{types.NewMap(
-		types.NewString("$type"), types.MakeTypeRef(__sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef, 0),
 		types.NewString("s"), types.NewString(""),
 		types.NewString("b"), types.Bool(false),
 	), &ref.Ref{}}
@@ -49,7 +48,6 @@ type SDef struct {
 func (def SDef) New() S {
 	return S{
 		types.NewMap(
-			types.NewString("$type"), types.MakeTypeRef(__sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef, 0),
 			types.NewString("s"), types.NewString(def.S),
 			types.NewString("b"), types.Bool(def.B),
 		), &ref.Ref{}}
