@@ -45,7 +45,7 @@ type D struct {
 func NewD() D {
 	return D{types.NewMap(
 		types.NewString("structField"), sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288.NewS(),
-		types.NewString("enumField"), types.UInt32(0),
+		types.NewString("enumField"), sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288.NewE(),
 	), &ref.Ref{}}
 }
 
@@ -58,13 +58,13 @@ func (def DDef) New() D {
 	return D{
 		types.NewMap(
 			types.NewString("structField"), def.StructField.New(),
-			types.NewString("enumField"), types.UInt32(def.EnumField),
+			types.NewString("enumField"), def.EnumField,
 		), &ref.Ref{}}
 }
 
 func (s D) Def() (d DDef) {
 	d.StructField = s.m.Get(types.NewString("structField")).(sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288.S).Def()
-	d.EnumField = sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288.E(s.m.Get(types.NewString("enumField")).(types.UInt32))
+	d.EnumField = s.m.Get(types.NewString("enumField")).(sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288.E)
 	return
 }
 
@@ -119,11 +119,11 @@ func (s D) SetStructField(val sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288.S) D
 }
 
 func (s D) EnumField() sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288.E {
-	return sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288.E(s.m.Get(types.NewString("enumField")).(types.UInt32))
+	return s.m.Get(types.NewString("enumField")).(sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288.E)
 }
 
 func (s D) SetEnumField(val sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288.E) D {
-	return D{s.m.Set(types.NewString("enumField"), types.UInt32(val)), &ref.Ref{}}
+	return D{s.m.Set(types.NewString("enumField"), val), &ref.Ref{}}
 }
 
 // DUser

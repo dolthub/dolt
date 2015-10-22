@@ -140,7 +140,7 @@ func (r *jsonArrayReader) readMap(t TypeRef, pkg *Package) Value {
 }
 
 func (r *jsonArrayReader) readEnum(t TypeRef) Value {
-	return valueAsNomsValue{UInt32(r.read().(float64)), t}
+	return ToNomsValueFromTypeRef(t, UInt32(r.read().(float64)))
 }
 
 func (r *jsonArrayReader) readPackage(t TypeRef, pkg *Package) Value {

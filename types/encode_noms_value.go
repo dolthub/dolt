@@ -131,6 +131,10 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 }
 
 // TODO: This is ugly. BUG 452
+type enumImplementation interface {
+	InternalImplementation() uint32
+}
+
 type listImplementation interface {
 	InternalImplementation() List
 }
@@ -145,6 +149,10 @@ type refImplementation interface {
 
 type setImplementation interface {
 	InternalImplementation() Set
+}
+
+func getEnumFromEnumKind(v Value) uint32 {
+	return v.(enumImplementation).InternalImplementation()
 }
 
 func getListFromListKind(v Value) List {
@@ -239,7 +247,7 @@ func (w *jsonArrayWriter) writeUnresolvedKindValue(v Value, tr TypeRef, pkg *Pac
 	default:
 		d.Chk.Fail("An Unresolved TypeRef can only reference a StructKind or Enum Kind.", "Actually referenced: %+v", typeDef)
 	case EnumKind:
-		w.write(uint32(v.(UInt32)))
+		w.write(getEnumFromEnumKind(v))
 	case StructKind:
 		w.writeStruct(getMapFromStructKind(v), typeDef, pkg)
 	}

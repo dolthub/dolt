@@ -35,6 +35,42 @@ const (
 	Switch
 )
 
+func NewHandedness() Handedness {
+	return Handedness(0)
+}
+
+var __typeRefForHandedness = types.MakeTypeRef(__testPackageInFile_enum_struct_CachedRef, 0)
+
+func (e Handedness) TypeRef() types.TypeRef {
+	return __typeRefForHandedness
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForHandedness, func(v types.Value) types.Value {
+		return Handedness(uint32(v.(types.UInt32)))
+	})
+}
+
+func (e Handedness) InternalImplementation() uint32 {
+	return uint32(e)
+}
+
+func (e Handedness) Equals(other types.Value) bool {
+	if other, ok := other.(Handedness); ok {
+		return e == other
+	}
+	return false
+}
+
+func (e Handedness) Ref() ref.Ref {
+	throwaway := ref.Ref{}
+	return types.EnsureRef(&throwaway, e)
+}
+
+func (e Handedness) Chunks() []types.Future {
+	return nil
+}
+
 // EnumStruct
 
 type EnumStruct struct {
@@ -44,7 +80,7 @@ type EnumStruct struct {
 
 func NewEnumStruct() EnumStruct {
 	return EnumStruct{types.NewMap(
-		types.NewString("hand"), types.UInt32(0),
+		types.NewString("hand"), NewHandedness(),
 	), &ref.Ref{}}
 }
 
@@ -55,12 +91,12 @@ type EnumStructDef struct {
 func (def EnumStructDef) New() EnumStruct {
 	return EnumStruct{
 		types.NewMap(
-			types.NewString("hand"), types.UInt32(def.Hand),
+			types.NewString("hand"), def.Hand,
 		), &ref.Ref{}}
 }
 
 func (s EnumStruct) Def() (d EnumStructDef) {
-	d.Hand = Handedness(s.m.Get(types.NewString("hand")).(types.UInt32))
+	d.Hand = s.m.Get(types.NewString("hand")).(Handedness)
 	return
 }
 
@@ -107,9 +143,9 @@ func (s EnumStruct) Chunks() (futures []types.Future) {
 }
 
 func (s EnumStruct) Hand() Handedness {
-	return Handedness(s.m.Get(types.NewString("hand")).(types.UInt32))
+	return s.m.Get(types.NewString("hand")).(Handedness)
 }
 
 func (s EnumStruct) SetHand(val Handedness) EnumStruct {
-	return EnumStruct{s.m.Set(types.NewString("hand"), types.UInt32(val)), &ref.Ref{}}
+	return EnumStruct{s.m.Set(types.NewString("hand"), val), &ref.Ref{}}
 }

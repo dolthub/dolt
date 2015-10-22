@@ -126,3 +126,39 @@ const (
 	E2
 	E3
 )
+
+func NewE() E {
+	return E(0)
+}
+
+var __typeRefForE = types.MakeTypeRef(__sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef, 1)
+
+func (e E) TypeRef() types.TypeRef {
+	return __typeRefForE
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForE, func(v types.Value) types.Value {
+		return E(uint32(v.(types.UInt32)))
+	})
+}
+
+func (e E) InternalImplementation() uint32 {
+	return uint32(e)
+}
+
+func (e E) Equals(other types.Value) bool {
+	if other, ok := other.(E); ok {
+		return e == other
+	}
+	return false
+}
+
+func (e E) Ref() ref.Ref {
+	throwaway := ref.Ref{}
+	return types.EnsureRef(&throwaway, e)
+}
+
+func (e E) Chunks() []types.Future {
+	return nil
+}
