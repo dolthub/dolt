@@ -6,3 +6,40 @@ type {{.Name}} uint32
 const ({{range $index, $id := .Ids}}
 	{{title $id}}{{if eq $index 0}} {{$name}} = iota{{end}}{{end}}
 )
+
+func New{{.Name}}() {{.Name}} {
+	return {{.Name}}(0)
+}
+
+var __typeRefFor{{.Name}} = types.MakeTypeRef(__{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef, {{.Ordinal}})
+
+func (e {{.Name}}) TypeRef() types.TypeRef {
+	return __typeRefFor{{.Name}}
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefFor{{.Name}}, func(v types.Value) types.Value {
+		return {{.Name}}(uint32(v.(types.UInt32)))
+	})
+}
+
+func (e {{.Name}}) InternalImplementation() uint32 {
+	return uint32(e)
+}
+
+func (e {{.Name}}) Equals(other types.Value) bool {
+	if other, ok := other.({{.Name}}); ok {
+		return e == other
+	}
+	return false
+}
+
+func (e {{.Name}}) Ref() ref.Ref {
+	throwaway := ref.Ref{}
+	return types.EnsureRef(&throwaway, e)
+}
+
+func (e {{.Name}}) Chunks() []types.Future {
+	return nil
+}
+

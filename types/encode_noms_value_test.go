@@ -288,18 +288,29 @@ func TestWriteStructWithBlob(t *testing.T) {
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), "AAE="}, *w)
 }
 
-func SkipTestWriteEnum(t *testing.T) {
-	// BUG 391
+type testEnum struct {
+	UInt32
+	t TypeRef
+}
+
+func (e testEnum) TypeRef() TypeRef {
+	return e.t
+}
+
+func (e testEnum) InternalImplementation() uint32 {
+	return uint32(e.UInt32)
+}
+
+func TestWriteEnum(t *testing.T) {
 	assert := assert.New(t)
 
 	pkg := NewPackage([]TypeRef{
 		MakeEnumTypeRef("E", "a", "b", "c")}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	tref := MakeTypeRef(pkgRef, 0)
-	v := UInt32(1)
 
 	w := newJsonArrayWriter()
-	w.writeTopLevelValue(valueAsNomsValue{Value: v, t: tref})
+	w.writeTopLevelValue(testEnum{UInt32: UInt32(1), t: tref})
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), uint32(1)}, *w)
 }
 
@@ -311,7 +322,7 @@ func TestWriteListOfEnum(t *testing.T) {
 	pkgRef := RegisterPackage(&pkg)
 	et := MakeTypeRef(pkgRef, 0)
 	tref := MakeCompoundTypeRef("", ListKind, et)
-	v := NewList(UInt32(0), UInt32(1), UInt32(2))
+	v := NewList(testEnum{UInt32(0), et}, testEnum{UInt32(1), et}, testEnum{UInt32(2), et})
 
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(testList{List: v, t: tref})
