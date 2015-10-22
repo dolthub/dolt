@@ -148,10 +148,6 @@ func (fm Map) Chunks() (futures []Future) {
 var mapTypeRef = MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))
 
 func (fm Map) TypeRef() TypeRef {
-	// TODO: remove $type fields. BUG 450
-	if v, ok := fm.MaybeGet(NewString("$type")); ok {
-		return v.(TypeRef)
-	}
 	return mapTypeRef
 }
 

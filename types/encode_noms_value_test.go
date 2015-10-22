@@ -370,7 +370,7 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 
 	tref := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
 	st := MakeTypeRef(pkgRef, 0)
-	v := NewList(NewMap(NewString("$type"), st, NewString("x"), Int32(42)))
+	v := NewList(testMap{Map: NewMap(NewString("x"), Int32(42)), t: st})
 
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(testList{List: v, t: tref})

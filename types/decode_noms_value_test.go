@@ -222,7 +222,6 @@ func TestReadStruct(t *testing.T) {
 
 	v := r.readTopLevelValue().(Map)
 
-	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Int16(42)))
 	assert.True(v.Get(NewString("s")).Equals(NewString("hi")))
 	assert.True(v.Get(NewString("b")).Equals(Bool(true)))
@@ -251,7 +250,6 @@ func TestReadStructUnion(t *testing.T) {
 
 	v := r.readTopLevelValue().(Map)
 
-	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Float32(42)))
 	assert.False(v.Has(NewString("b")))
 	assert.False(v.Has(NewString("s")))
@@ -281,7 +279,6 @@ func TestReadStructOptional(t *testing.T) {
 
 	v := r.readTopLevelValue().(Map)
 
-	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Float32(42)))
 	assert.False(v.Has(NewString("s")))
 	assert.True(v.Get(NewString("b")).Equals(Bool(false)))
@@ -320,7 +317,6 @@ func TestReadStructWithList(t *testing.T) {
 
 	v := r.readTopLevelValue().(Map)
 
-	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("b")).Equals(Bool(true)))
 	assert.True(v.Get(NewString("l")).Equals(NewList(Int32(0), Int32(1), Int32(2))))
 	assert.True(v.Get(NewString("s")).Equals(NewString("hi")))
@@ -354,7 +350,6 @@ func TestReadStructWithValue(t *testing.T) {
 
 	v := r.readTopLevelValue().(Map)
 
-	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("b")).Equals(Bool(true)))
 	assert.True(v.Get(NewString("v")).Equals(UInt8(42)))
 	assert.True(v.Get(NewString("s")).Equals(NewString("hi")))
@@ -388,7 +383,6 @@ func TestReadValueStruct(t *testing.T) {
 
 	v := r.readTopLevelValue().(Map)
 
-	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Int16(42)))
 	assert.True(v.Get(NewString("s")).Equals(NewString("hi")))
 	assert.True(v.Get(NewString("b")).Equals(Bool(true)))
@@ -497,7 +491,6 @@ func TestReadStructWithEnum(t *testing.T) {
 
 	v := r.readTopLevelValue().(Map)
 
-	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	assert.True(v.Get(NewString("x")).Equals(Int16(42)))
 	assert.True(v.Get(NewString("e")).Equals(UInt32(1)))
 	assert.True(v.Get(NewString("b")).Equals(Bool(true)))
@@ -527,7 +520,6 @@ func TestReadStructWithBlob(t *testing.T) {
 
 	v := r.readTopLevelValue().(Map)
 
-	assert.True(v.Get(NewString("$type")).Equals(structTr))
 	blob, err := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	assert.NoError(err)
 	assert.True(v.Get(NewString("b")).Equals(blob))

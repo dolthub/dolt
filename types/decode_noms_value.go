@@ -343,8 +343,7 @@ func (r *jsonArrayReader) readStruct(typeDef, typeRef TypeRef, pkg *Package) Val
 
 	// We've read `[StructKind, sha1, name` at this point
 	desc := typeDef.Desc.(StructDesc)
-	m := NewMap(
-		NewString("$type"), typeRef)
+	m := NewMap()
 
 	for _, f := range desc.Fields {
 		if f.Optional {
