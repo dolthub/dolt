@@ -39,6 +39,42 @@ const (
 	Ignored
 )
 
+func NewE() E {
+	return E(0)
+}
+
+var __typeRefForE = types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 0)
+
+func (e E) TypeRef() types.TypeRef {
+	return __typeRefForE
+}
+
+func init() {
+	types.RegisterFromValFunction(__typeRefForE, func(v types.Value) types.Value {
+		return E(uint32(v.(types.UInt32)))
+	})
+}
+
+func (e E) InternalImplementation() uint32 {
+	return uint32(e)
+}
+
+func (e E) Equals(other types.Value) bool {
+	if other, ok := other.(E); ok {
+		return e == other
+	}
+	return false
+}
+
+func (e E) Ref() ref.Ref {
+	throwaway := ref.Ref{}
+	return types.EnsureRef(&throwaway, e)
+}
+
+func (e E) Chunks() []types.Future {
+	return nil
+}
+
 // ImportUser
 
 type ImportUser struct {
@@ -49,7 +85,7 @@ type ImportUser struct {
 func NewImportUser() ImportUser {
 	return ImportUser{types.NewMap(
 		types.NewString("importedStruct"), sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d.NewD(),
-		types.NewString("enum"), types.UInt32(0),
+		types.NewString("enum"), NewE(),
 	), &ref.Ref{}}
 }
 
@@ -62,13 +98,13 @@ func (def ImportUserDef) New() ImportUser {
 	return ImportUser{
 		types.NewMap(
 			types.NewString("importedStruct"), def.ImportedStruct.New(),
-			types.NewString("enum"), types.UInt32(def.Enum),
+			types.NewString("enum"), def.Enum,
 		), &ref.Ref{}}
 }
 
 func (s ImportUser) Def() (d ImportUserDef) {
 	d.ImportedStruct = s.m.Get(types.NewString("importedStruct")).(sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d.D).Def()
-	d.Enum = E(s.m.Get(types.NewString("enum")).(types.UInt32))
+	d.Enum = s.m.Get(types.NewString("enum")).(E)
 	return
 }
 
@@ -123,11 +159,11 @@ func (s ImportUser) SetImportedStruct(val sha1_d31b592f480b7659b03b72a7d1271f31d
 }
 
 func (s ImportUser) Enum() E {
-	return E(s.m.Get(types.NewString("enum")).(types.UInt32))
+	return s.m.Get(types.NewString("enum")).(E)
 }
 
 func (s ImportUser) SetEnum(val E) ImportUser {
-	return ImportUser{s.m.Set(types.NewString("enum"), types.UInt32(val)), &ref.Ref{}}
+	return ImportUser{s.m.Set(types.NewString("enum"), val), &ref.Ref{}}
 }
 
 // ListOfsha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_D
