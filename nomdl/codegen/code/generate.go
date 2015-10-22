@@ -116,8 +116,6 @@ func (gen Generator) NativeToValue(val string, t types.TypeRef) string {
 	switch k {
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return fmt.Sprintf("types.%s(%s)", kindToString(k), val)
-	case types.EnumKind:
-		return val
 	case types.StringKind:
 		return "types.NewString(" + val + ")"
 	}
