@@ -82,11 +82,6 @@ func SFromVal(val types.Value) S {
 	return S{val.(types.Map), &ref.Ref{}}
 }
 
-func (s S) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s S) InternalImplementation() types.Map {
 	return s.m
 }

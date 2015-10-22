@@ -91,11 +91,6 @@ func DFromVal(val types.Value) D {
 	return D{val.(types.Map), &ref.Ref{}}
 }
 
-func (s D) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s D) InternalImplementation() types.Map {
 	return s.m
 }
@@ -183,11 +178,6 @@ func DUserFromVal(val types.Value) DUser {
 	}
 	// TODO: Validate here
 	return DUser{val.(types.Map), &ref.Ref{}}
-}
-
-func (s DUser) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
 }
 
 func (s DUser) InternalImplementation() types.Map {

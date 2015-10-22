@@ -88,11 +88,6 @@ func GeopositionFromVal(val types.Value) Geoposition {
 	return Geoposition{val.(types.Map), &ref.Ref{}}
 }
 
-func (s Geoposition) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s Geoposition) InternalImplementation() types.Map {
 	return s.m
 }
@@ -184,11 +179,6 @@ func GeorectangleFromVal(val types.Value) Georectangle {
 	}
 	// TODO: Validate here
 	return Georectangle{val.(types.Map), &ref.Ref{}}
-}
-
-func (s Georectangle) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
 }
 
 func (s Georectangle) InternalImplementation() types.Map {

@@ -46,11 +46,6 @@ func MapOfBoolToStringFromVal(val types.Value) MapOfBoolToString {
 	return MapOfBoolToString{val.(types.Map), &ref.Ref{}}
 }
 
-func (m MapOfBoolToString) NomsValue() types.Value {
-	// TODO: Remove this
-	return m
-}
-
 func (m MapOfBoolToString) InternalImplementation() types.Map {
 	return m.m
 }
@@ -185,11 +180,6 @@ func MapOfStringToValueFromVal(val types.Value) MapOfStringToValue {
 	}
 	// TODO: Validate here
 	return MapOfStringToValue{val.(types.Map), &ref.Ref{}}
-}
-
-func (m MapOfStringToValue) NomsValue() types.Value {
-	// TODO: Remove this
-	return m
 }
 
 func (m MapOfStringToValue) InternalImplementation() types.Map {

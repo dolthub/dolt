@@ -28,7 +28,7 @@ func TestSetValue(t *testing.T) {
 
 	def := SetOfBoolDef{true: true}
 	m := def.New()
-	val := m.NomsValue()
+	val := m
 	s2 := SetOfBoolFromVal(val)
 	assert.True(m.Equals(s2))
 }

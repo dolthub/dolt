@@ -95,11 +95,6 @@ func StructWithUnionsFromVal(val types.Value) StructWithUnions {
 	return StructWithUnions{val.(types.Map), &ref.Ref{}}
 }
 
-func (s StructWithUnions) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s StructWithUnions) InternalImplementation() types.Map {
 	return s.m
 }
@@ -211,11 +206,6 @@ func __unionOfBOfFloat64AndCOfStringFromVal(val types.Value) __unionOfBOfFloat64
 	}
 	// TODO: Validate here
 	return __unionOfBOfFloat64AndCOfString{val.(types.Map), &ref.Ref{}}
-}
-
-func (s __unionOfBOfFloat64AndCOfString) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
 }
 
 func (s __unionOfBOfFloat64AndCOfString) InternalImplementation() types.Map {
@@ -361,11 +351,6 @@ func __unionOfEOfFloat64AndFOfStringFromVal(val types.Value) __unionOfEOfFloat64
 	}
 	// TODO: Validate here
 	return __unionOfEOfFloat64AndFOfString{val.(types.Map), &ref.Ref{}}
-}
-
-func (s __unionOfEOfFloat64AndFOfString) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
 }
 
 func (s __unionOfEOfFloat64AndFOfString) InternalImplementation() types.Map {

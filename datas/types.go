@@ -82,11 +82,6 @@ func CommitFromVal(val types.Value) Commit {
 	return Commit{val.(types.Map), &ref.Ref{}}
 }
 
-func (s Commit) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s Commit) InternalImplementation() types.Map {
 	return s.m
 }
@@ -161,11 +156,6 @@ func MapOfStringToRefOfCommitFromVal(val types.Value) MapOfStringToRefOfCommit {
 	}
 	// TODO: Validate here
 	return MapOfStringToRefOfCommit{val.(types.Map), &ref.Ref{}}
-}
-
-func (m MapOfStringToRefOfCommit) NomsValue() types.Value {
-	// TODO: Remove this
-	return m
 }
 
 func (m MapOfStringToRefOfCommit) InternalImplementation() types.Map {
@@ -305,11 +295,6 @@ func SetOfRefOfCommitFromVal(val types.Value) SetOfRefOfCommit {
 	return SetOfRefOfCommit{val.(types.Set), &ref.Ref{}}
 }
 
-func (s SetOfRefOfCommit) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s SetOfRefOfCommit) InternalImplementation() types.Set {
 	return s.s
 }
@@ -445,11 +430,6 @@ func (r RefOfCommit) Equals(other types.Value) bool {
 
 func (r RefOfCommit) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
-}
-
-func (r RefOfCommit) NomsValue() types.Value {
-	// TODO: Remove this
-	return r
 }
 
 func (r RefOfCommit) InternalImplementation() ref.Ref {

@@ -96,11 +96,6 @@ func SongFromVal(val types.Value) Song {
 	return Song{val.(types.Map), &ref.Ref{}}
 }
 
-func (s Song) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s Song) InternalImplementation() types.Map {
 	return s.m
 }
@@ -198,11 +193,6 @@ func ListOfSongFromVal(val types.Value) ListOfSong {
 	}
 	// TODO: Validate here
 	return ListOfSong{val.(types.List), &ref.Ref{}}
-}
-
-func (l ListOfSong) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
 }
 
 func (l ListOfSong) InternalImplementation() types.List {

@@ -112,11 +112,6 @@ func RemotePhotoFromVal(val types.Value) RemotePhoto {
 	return RemotePhoto{val.(types.Map), &ref.Ref{}}
 }
 
-func (s RemotePhoto) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s RemotePhoto) InternalImplementation() types.Map {
 	return s.m
 }
@@ -242,11 +237,6 @@ func SizeFromVal(val types.Value) Size {
 	return Size{val.(types.Map), &ref.Ref{}}
 }
 
-func (s Size) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s Size) InternalImplementation() types.Map {
 	return s.m
 }
@@ -321,11 +311,6 @@ func MapOfSizeToStringFromVal(val types.Value) MapOfSizeToString {
 	}
 	// TODO: Validate here
 	return MapOfSizeToString{val.(types.Map), &ref.Ref{}}
-}
-
-func (m MapOfSizeToString) NomsValue() types.Value {
-	// TODO: Remove this
-	return m
 }
 
 func (m MapOfSizeToString) InternalImplementation() types.Map {
@@ -463,11 +448,6 @@ func SetOfStringFromVal(val types.Value) SetOfString {
 		return val
 	}
 	return SetOfString{val.(types.Set), &ref.Ref{}}
-}
-
-func (s SetOfString) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
 }
 
 func (s SetOfString) InternalImplementation() types.Set {

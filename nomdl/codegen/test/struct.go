@@ -81,11 +81,6 @@ func StructFromVal(val types.Value) Struct {
 	return Struct{val.(types.Map), &ref.Ref{}}
 }
 
-func (s Struct) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s Struct) InternalImplementation() types.Map {
 	return s.m
 }
@@ -159,11 +154,6 @@ func ListOfStructFromVal(val types.Value) ListOfStruct {
 	}
 	// TODO: Validate here
 	return ListOfStruct{val.(types.List), &ref.Ref{}}
-}
-
-func (l ListOfStruct) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
 }
 
 func (l ListOfStruct) InternalImplementation() types.List {

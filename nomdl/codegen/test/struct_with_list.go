@@ -91,11 +91,6 @@ func StructWithListFromVal(val types.Value) StructWithList {
 	return StructWithList{val.(types.Map), &ref.Ref{}}
 }
 
-func (s StructWithList) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s StructWithList) InternalImplementation() types.Map {
 	return s.m
 }
@@ -185,11 +180,6 @@ func ListOfUInt8FromVal(val types.Value) ListOfUInt8 {
 	}
 	// TODO: Validate here
 	return ListOfUInt8{val.(types.List), &ref.Ref{}}
-}
-
-func (l ListOfUInt8) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
 }
 
 func (l ListOfUInt8) InternalImplementation() types.List {

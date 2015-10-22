@@ -141,11 +141,6 @@ func StructPrimitivesFromVal(val types.Value) StructPrimitives {
 	return StructPrimitives{val.(types.Map), &ref.Ref{}}
 }
 
-func (s StructPrimitives) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s StructPrimitives) InternalImplementation() types.Map {
 	return s.m
 }

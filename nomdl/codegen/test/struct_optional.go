@@ -83,11 +83,6 @@ func OptionalStructFromVal(val types.Value) OptionalStruct {
 	return OptionalStruct{val.(types.Map), &ref.Ref{}}
 }
 
-func (s OptionalStruct) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s OptionalStruct) InternalImplementation() types.Map {
 	return s.m
 }

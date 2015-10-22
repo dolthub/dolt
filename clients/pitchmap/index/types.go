@@ -81,11 +81,6 @@ func PitchFromVal(val types.Value) Pitch {
 	return Pitch{val.(types.Map), &ref.Ref{}}
 }
 
-func (s Pitch) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s Pitch) InternalImplementation() types.Map {
 	return s.m
 }
@@ -159,11 +154,6 @@ func ListOfMapOfStringToValueFromVal(val types.Value) ListOfMapOfStringToValue {
 	}
 	// TODO: Validate here
 	return ListOfMapOfStringToValue{val.(types.List), &ref.Ref{}}
-}
-
-func (l ListOfMapOfStringToValue) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
 }
 
 func (l ListOfMapOfStringToValue) InternalImplementation() types.List {
@@ -312,11 +302,6 @@ func MapOfStringToListOfPitchFromVal(val types.Value) MapOfStringToListOfPitch {
 	return MapOfStringToListOfPitch{val.(types.Map), &ref.Ref{}}
 }
 
-func (m MapOfStringToListOfPitch) NomsValue() types.Value {
-	// TODO: Remove this
-	return m
-}
-
 func (m MapOfStringToListOfPitch) InternalImplementation() types.Map {
 	return m.m
 }
@@ -451,11 +436,6 @@ func MapOfStringToStringFromVal(val types.Value) MapOfStringToString {
 	}
 	// TODO: Validate here
 	return MapOfStringToString{val.(types.Map), &ref.Ref{}}
-}
-
-func (m MapOfStringToString) NomsValue() types.Value {
-	// TODO: Remove this
-	return m
 }
 
 func (m MapOfStringToString) InternalImplementation() types.Map {
@@ -594,11 +574,6 @@ func MapOfStringToValueFromVal(val types.Value) MapOfStringToValue {
 	return MapOfStringToValue{val.(types.Map), &ref.Ref{}}
 }
 
-func (m MapOfStringToValue) NomsValue() types.Value {
-	// TODO: Remove this
-	return m
-}
-
 func (m MapOfStringToValue) InternalImplementation() types.Map {
 	return m.m
 }
@@ -732,11 +707,6 @@ func ListOfPitchFromVal(val types.Value) ListOfPitch {
 	}
 	// TODO: Validate here
 	return ListOfPitch{val.(types.List), &ref.Ref{}}
-}
-
-func (l ListOfPitch) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
 }
 
 func (l ListOfPitch) InternalImplementation() types.List {

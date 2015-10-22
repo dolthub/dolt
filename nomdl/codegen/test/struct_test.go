@@ -30,7 +30,7 @@ func TestValue(t *testing.T) {
 
 	def := StructDef{"hi", true}
 	st := def.New()
-	val := st.NomsValue()
+	val := st
 	st2 := StructFromVal(val)
 	assert.True(st.Equals(st2))
 }

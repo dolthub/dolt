@@ -108,11 +108,6 @@ func NodeFromVal(val types.Value) Node {
 	return Node{val.(types.Map), &ref.Ref{}}
 }
 
-func (s Node) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s Node) InternalImplementation() types.Map {
 	return s.m
 }
@@ -220,11 +215,6 @@ func QuadTreeFromVal(val types.Value) QuadTree {
 	}
 	// TODO: Validate here
 	return QuadTree{val.(types.Map), &ref.Ref{}}
-}
-
-func (s QuadTree) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
 }
 
 func (s QuadTree) InternalImplementation() types.Map {
@@ -368,11 +358,6 @@ func SQuadTreeFromVal(val types.Value) SQuadTree {
 	return SQuadTree{val.(types.Map), &ref.Ref{}}
 }
 
-func (s SQuadTree) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s SQuadTree) InternalImplementation() types.Map {
 	return s.m
 }
@@ -468,11 +453,6 @@ func (r RefOfValue) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
 }
 
-func (r RefOfValue) NomsValue() types.Value {
-	// TODO: Remove this
-	return r
-}
-
 func (r RefOfValue) InternalImplementation() ref.Ref {
 	return r.r
 }
@@ -543,11 +523,6 @@ func ListOfNodeFromVal(val types.Value) ListOfNode {
 	}
 	// TODO: Validate here
 	return ListOfNode{val.(types.List), &ref.Ref{}}
-}
-
-func (l ListOfNode) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
 }
 
 func (l ListOfNode) InternalImplementation() types.List {
@@ -696,11 +671,6 @@ func MapOfStringToQuadTreeFromVal(val types.Value) MapOfStringToQuadTree {
 	return MapOfStringToQuadTree{val.(types.Map), &ref.Ref{}}
 }
 
-func (m MapOfStringToQuadTree) NomsValue() types.Value {
-	// TODO: Remove this
-	return m
-}
-
 func (m MapOfStringToQuadTree) InternalImplementation() types.Map {
 	return m.m
 }
@@ -834,11 +804,6 @@ func ListOfRefOfValueFromVal(val types.Value) ListOfRefOfValue {
 	}
 	// TODO: Validate here
 	return ListOfRefOfValue{val.(types.List), &ref.Ref{}}
-}
-
-func (l ListOfRefOfValue) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
 }
 
 func (l ListOfRefOfValue) InternalImplementation() types.List {
@@ -987,11 +952,6 @@ func MapOfStringToRefOfSQuadTreeFromVal(val types.Value) MapOfStringToRefOfSQuad
 	return MapOfStringToRefOfSQuadTree{val.(types.Map), &ref.Ref{}}
 }
 
-func (m MapOfStringToRefOfSQuadTree) NomsValue() types.Value {
-	// TODO: Remove this
-	return m
-}
-
 func (m MapOfStringToRefOfSQuadTree) InternalImplementation() types.Map {
 	return m.m
 }
@@ -1113,11 +1073,6 @@ func (r RefOfSQuadTree) Equals(other types.Value) bool {
 
 func (r RefOfSQuadTree) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
-}
-
-func (r RefOfSQuadTree) NomsValue() types.Value {
-	// TODO: Remove this
-	return r
 }
 
 func (r RefOfSQuadTree) InternalImplementation() ref.Ref {

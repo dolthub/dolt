@@ -47,11 +47,6 @@ func SetOfBoolFromVal(val types.Value) SetOfBool {
 	return SetOfBool{val.(types.Set), &ref.Ref{}}
 }
 
-func (s SetOfBool) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s SetOfBool) InternalImplementation() types.Set {
 	return s.s
 }

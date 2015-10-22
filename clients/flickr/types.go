@@ -79,11 +79,6 @@ func UserFromVal(val types.Value) User {
 	return User{val.(types.Map), &ref.Ref{}}
 }
 
-func (s User) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s User) InternalImplementation() types.Map {
 	return s.m
 }
@@ -182,11 +177,6 @@ func AlbumFromVal(val types.Value) Album {
 	return Album{val.(types.Map), &ref.Ref{}}
 }
 
-func (s Album) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s Album) InternalImplementation() types.Map {
 	return s.m
 }
@@ -250,11 +240,6 @@ func MapOfStringToAlbumFromVal(val types.Value) MapOfStringToAlbum {
 	}
 	// TODO: Validate here
 	return MapOfStringToAlbum{val.(types.Map), &ref.Ref{}}
-}
-
-func (m MapOfStringToAlbum) NomsValue() types.Value {
-	// TODO: Remove this
-	return m
 }
 
 func (m MapOfStringToAlbum) InternalImplementation() types.Map {
@@ -371,11 +356,6 @@ func SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhotoFromVal(val t
 		return val
 	}
 	return SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto{val.(types.Set), &ref.Ref{}}
-}
-
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
 }
 
 func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) InternalImplementation() types.Set {

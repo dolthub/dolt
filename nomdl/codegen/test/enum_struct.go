@@ -87,11 +87,6 @@ func EnumStructFromVal(val types.Value) EnumStruct {
 	return EnumStruct{val.(types.Map), &ref.Ref{}}
 }
 
-func (s EnumStruct) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s EnumStruct) InternalImplementation() types.Map {
 	return s.m
 }

@@ -111,11 +111,6 @@ func IncidentFromVal(val types.Value) Incident {
 	return Incident{val.(types.Map), &ref.Ref{}}
 }
 
-func (s Incident) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s Incident) InternalImplementation() types.Map {
 	return s.m
 }
@@ -249,11 +244,6 @@ func SQuadTreeFromVal(val types.Value) SQuadTree {
 	return SQuadTree{val.(types.Map), &ref.Ref{}}
 }
 
-func (s SQuadTree) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s SQuadTree) InternalImplementation() types.Map {
 	return s.m
 }
@@ -359,11 +349,6 @@ func ListOfIncidentFromVal(val types.Value) ListOfIncident {
 	}
 	// TODO: Validate here
 	return ListOfIncident{val.(types.List), &ref.Ref{}}
-}
-
-func (l ListOfIncident) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
 }
 
 func (l ListOfIncident) InternalImplementation() types.List {
@@ -510,11 +495,6 @@ func MapOfStringToSQuadTreeFromVal(val types.Value) MapOfStringToSQuadTree {
 	}
 	// TODO: Validate here
 	return MapOfStringToSQuadTree{val.(types.Map), &ref.Ref{}}
-}
-
-func (m MapOfStringToSQuadTree) NomsValue() types.Value {
-	// TODO: Remove this
-	return m
 }
 
 func (m MapOfStringToSQuadTree) InternalImplementation() types.Map {

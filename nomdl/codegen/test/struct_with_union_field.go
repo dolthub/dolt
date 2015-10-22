@@ -122,11 +122,6 @@ func StructWithUnionFieldFromVal(val types.Value) StructWithUnionField {
 	return StructWithUnionField{val.(types.Map), &ref.Ref{}}
 }
 
-func (s StructWithUnionField) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s StructWithUnionField) InternalImplementation() types.Map {
 	return s.m
 }
@@ -314,11 +309,6 @@ func SetOfUInt8FromVal(val types.Value) SetOfUInt8 {
 		return val
 	}
 	return SetOfUInt8{val.(types.Set), &ref.Ref{}}
-}
-
-func (s SetOfUInt8) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
 }
 
 func (s SetOfUInt8) InternalImplementation() types.Set {

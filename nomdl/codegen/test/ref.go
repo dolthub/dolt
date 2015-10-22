@@ -77,11 +77,6 @@ func StructWithRefFromVal(val types.Value) StructWithRef {
 	return StructWithRef{val.(types.Map), &ref.Ref{}}
 }
 
-func (s StructWithRef) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s StructWithRef) InternalImplementation() types.Map {
 	return s.m
 }
@@ -135,11 +130,6 @@ func (r RefOfListOfString) Equals(other types.Value) bool {
 
 func (r RefOfListOfString) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
-}
-
-func (r RefOfListOfString) NomsValue() types.Value {
-	// TODO: Remove this
-	return r
 }
 
 func (r RefOfListOfString) InternalImplementation() ref.Ref {
@@ -212,11 +202,6 @@ func ListOfRefOfFloat32FromVal(val types.Value) ListOfRefOfFloat32 {
 	}
 	// TODO: Validate here
 	return ListOfRefOfFloat32{val.(types.List), &ref.Ref{}}
-}
-
-func (l ListOfRefOfFloat32) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
 }
 
 func (l ListOfRefOfFloat32) InternalImplementation() types.List {
@@ -352,11 +337,6 @@ func (r RefOfSetOfFloat32) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
 }
 
-func (r RefOfSetOfFloat32) NomsValue() types.Value {
-	// TODO: Remove this
-	return r
-}
-
 func (r RefOfSetOfFloat32) InternalImplementation() ref.Ref {
 	return r.r
 }
@@ -427,11 +407,6 @@ func ListOfStringFromVal(val types.Value) ListOfString {
 	}
 	// TODO: Validate here
 	return ListOfString{val.(types.List), &ref.Ref{}}
-}
-
-func (l ListOfString) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
 }
 
 func (l ListOfString) InternalImplementation() types.List {
@@ -567,11 +542,6 @@ func (r RefOfFloat32) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
 }
 
-func (r RefOfFloat32) NomsValue() types.Value {
-	// TODO: Remove this
-	return r
-}
-
 func (r RefOfFloat32) InternalImplementation() ref.Ref {
 	return r.r
 }
@@ -644,11 +614,6 @@ func SetOfFloat32FromVal(val types.Value) SetOfFloat32 {
 		return val
 	}
 	return SetOfFloat32{val.(types.Set), &ref.Ref{}}
-}
-
-func (s SetOfFloat32) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
 }
 
 func (s SetOfFloat32) InternalImplementation() types.Set {

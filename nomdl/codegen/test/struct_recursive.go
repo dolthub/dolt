@@ -76,11 +76,6 @@ func TreeFromVal(val types.Value) Tree {
 	return Tree{val.(types.Map), &ref.Ref{}}
 }
 
-func (s Tree) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s Tree) InternalImplementation() types.Map {
 	return s.m
 }
@@ -146,11 +141,6 @@ func ListOfTreeFromVal(val types.Value) ListOfTree {
 	}
 	// TODO: Validate here
 	return ListOfTree{val.(types.List), &ref.Ref{}}
-}
-
-func (l ListOfTree) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
 }
 
 func (l ListOfTree) InternalImplementation() types.List {

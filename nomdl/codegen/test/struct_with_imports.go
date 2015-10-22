@@ -95,11 +95,6 @@ func ImportUserFromVal(val types.Value) ImportUser {
 	return ImportUser{val.(types.Map), &ref.Ref{}}
 }
 
-func (s ImportUser) NomsValue() types.Value {
-	// TODO: Remove this
-	return s
-}
-
 func (s ImportUser) InternalImplementation() types.Map {
 	return s.m
 }
@@ -173,11 +168,6 @@ func ListOfsha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_DFromVal(val types.Valu
 	}
 	// TODO: Validate here
 	return ListOfsha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_D{val.(types.List), &ref.Ref{}}
-}
-
-func (l ListOfsha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_D) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
 }
 
 func (l ListOfsha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_D) InternalImplementation() types.List {

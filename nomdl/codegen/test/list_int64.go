@@ -45,11 +45,6 @@ func ListOfInt64FromVal(val types.Value) ListOfInt64 {
 	return ListOfInt64{val.(types.List), &ref.Ref{}}
 }
 
-func (l ListOfInt64) NomsValue() types.Value {
-	// TODO: Remove this
-	return l
-}
-
 func (l ListOfInt64) InternalImplementation() types.List {
 	return l.l
 }
