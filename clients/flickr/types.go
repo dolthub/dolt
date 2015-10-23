@@ -9,12 +9,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
+var __mainPackageInFile_types_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __mainPackageInFile_types_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("User",
 			[]types.Field{
@@ -37,7 +37,7 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 	}, []ref.Ref{
 		ref.Parse("sha1-b525f9bca5e451c21dd9af564f0960045fbaa304"),
 	})
-	return types.RegisterPackage(&p)
+	__mainPackageInFile_types_CachedRef = types.RegisterPackage(&p)
 }
 
 // User
@@ -57,13 +57,14 @@ func NewUser() User {
 	), &ref.Ref{}}
 }
 
-var __typeRefForUser = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
+var __typeRefForUser types.TypeRef
 
 func (m User) TypeRef() types.TypeRef {
 	return __typeRefForUser
 }
 
 func init() {
+	__typeRefForUser = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForUser, func(v types.Value) types.Value {
 		return UserFromVal(v)
 	})
@@ -154,13 +155,14 @@ func NewAlbum() Album {
 	), &ref.Ref{}}
 }
 
-var __typeRefForAlbum = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1)
+var __typeRefForAlbum types.TypeRef
 
 func (m Album) TypeRef() types.TypeRef {
 	return __typeRefForAlbum
 }
 
 func init() {
+	__typeRefForAlbum = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForAlbum, func(v types.Value) types.Value {
 		return AlbumFromVal(v)
 	})

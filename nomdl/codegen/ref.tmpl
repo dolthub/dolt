@@ -1,3 +1,5 @@
+{{$typesPackage := .TypesPackage}}
+
 // {{.Name}}
 
 type {{.Name}} struct {
@@ -10,17 +12,17 @@ func New{{.Name}}(r ref.Ref) {{.Name}} {
 }
 
 func (r {{.Name}}) Ref() ref.Ref {
-	return types.EnsureRef(r.ref, r)
+	return {{$typesPackage}}EnsureRef(r.ref, r)
 }
 
-func (r {{.Name}}) Equals(other types.Value) bool {
+func (r {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
 	if other, ok := other.({{.Name}}); ok {
 		return r.Ref() == other.Ref()
 	}
 	return false
 }
 
-func (r {{.Name}}) Chunks() []types.Future {
+func (r {{.Name}}) Chunks() []{{$typesPackage}}Future {
 	return r.TypeRef().Chunks()
 }
 
@@ -28,20 +30,20 @@ func (r {{.Name}}) InternalImplementation() ref.Ref {
 	return r.r
 }
 
-func {{.Name}}FromVal(val types.Value) {{.Name}} {
+func {{.Name}}FromVal(val {{$typesPackage}}Value) {{.Name}} {
 	// TODO: Do we still need FromVal?
 	if val, ok := val.({{.Name}}); ok {
 		return val
 	}
-	return {{.Name}}{val.(types.Ref).Ref(), &ref.Ref{}}
+	return {{.Name}}{val.({{$typesPackage}}Ref).Ref(), &ref.Ref{}}
 }
 
 {{template "type_ref.tmpl" .}}
 
 func (r {{.Name}}) GetValue(cs chunks.ChunkSource) {{userType .ElemType}} {
-	return {{valueToUser "types.ReadValue(r.r, cs)" .ElemType}}
+	return {{valueToUser (printf "%sReadValue(r.r, cs)" $typesPackage) .ElemType}}
 }
 
 func (r {{.Name}}) SetValue(val {{userType .ElemType}}, cs chunks.ChunkSink) {{.Name}} {
-	return {{.Name}}{types.WriteValue({{userToValue "val" .ElemType}}, cs), &ref.Ref{}}
+	return {{.Name}}{ {{$typesPackage}}WriteValue({{userToValue "val" .ElemType}}, cs), &ref.Ref{}}
 }

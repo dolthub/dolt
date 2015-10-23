@@ -45,7 +45,7 @@ func TestUserName(t *testing.T) {
 		types.Field{"a", types.MakePrimitiveTypeRef(types.Int8Kind), false},
 	}, types.Choices{})
 
-	g := Generator{&res}
+	g := Generator{R: &res}
 	assert.Equal(localStructName, g.UserName(resolved))
 
 	listOfImported := types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(imported.Ref(), 1))

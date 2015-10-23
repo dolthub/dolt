@@ -8,12 +8,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __datasPackageInFile_types_CachedRef = __datasPackageInFile_types_Ref()
+var __datasPackageInFile_types_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __datasPackageInFile_types_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("Commit",
 			[]types.Field{
@@ -23,7 +23,7 @@ func __datasPackageInFile_types_Ref() ref.Ref {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	return types.RegisterPackage(&p)
+	__datasPackageInFile_types_CachedRef = types.RegisterPackage(&p)
 }
 
 // Commit
@@ -59,13 +59,14 @@ func (s Commit) Def() (d CommitDef) {
 	return
 }
 
-var __typeRefForCommit = types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)
+var __typeRefForCommit types.TypeRef
 
 func (m Commit) TypeRef() types.TypeRef {
 	return __typeRefForCommit
 }
 
 func init() {
+	__typeRefForCommit = types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForCommit, func(v types.Value) types.Value {
 		return CommitFromVal(v)
 	})

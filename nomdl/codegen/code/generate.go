@@ -24,7 +24,8 @@ type Resolver interface {
 
 // Generator provides methods for generating code snippets from both resolved and unresolved types.TypeRefs. In the latter case, it uses R to resolve the types.TypeRef before generating code.
 type Generator struct {
-	R Resolver
+	R            Resolver
+	TypesPackage string
 }
 
 // DefType returns a string containing the Go type that should be used as the 'Def' for the Noms type described by t.
@@ -33,7 +34,7 @@ func (gen Generator) DefType(t types.TypeRef) string {
 	k := rt.Kind()
 	switch k {
 	case types.BlobKind:
-		return "types.Blob"
+		return fmt.Sprintf("%sBlob", gen.TypesPackage)
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return strings.ToLower(kindToString(k))
 	case types.EnumKind:
@@ -41,13 +42,13 @@ func (gen Generator) DefType(t types.TypeRef) string {
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return gen.UserName(t) + "Def"
 	case types.PackageKind:
-		return "types.Package"
+		return fmt.Sprintf("%sPackage", gen.TypesPackage)
 	case types.RefKind:
 		return "ref.Ref"
 	case types.ValueKind:
-		return "types.Value"
+		return fmt.Sprintf("%sValue", gen.TypesPackage)
 	case types.TypeRefKind:
-		return "types.TypeRef"
+		return fmt.Sprintf("%sTypeRef", gen.TypesPackage)
 	}
 	panic("unreachable")
 }
@@ -58,17 +59,17 @@ func (gen Generator) UserType(t types.TypeRef) string {
 	k := rt.Kind()
 	switch k {
 	case types.BlobKind:
-		return "types.Blob"
+		return fmt.Sprintf("%sBlob", gen.TypesPackage)
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return strings.ToLower(kindToString(k))
 	case types.EnumKind, types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return gen.UserName(t)
 	case types.PackageKind:
-		return "types.Package"
+		return fmt.Sprintf("%sPackage", gen.TypesPackage)
 	case types.ValueKind:
-		return "types.Value"
+		return fmt.Sprintf("%sValue", gen.TypesPackage)
 	case types.TypeRefKind:
-		return "types.TypeRef"
+		return fmt.Sprintf("%sTypeRef", gen.TypesPackage)
 	}
 	panic("unreachable")
 }
@@ -115,9 +116,9 @@ func (gen Generator) NativeToValue(val string, t types.TypeRef) string {
 	k := t.Kind()
 	switch k {
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
-		return fmt.Sprintf("types.%s(%s)", kindToString(k), val)
+		return fmt.Sprintf("%s%s(%s)", gen.TypesPackage, kindToString(k), val)
 	case types.StringKind:
-		return "types.NewString(" + val + ")"
+		return fmt.Sprintf("%sNewString(%s)", gen.TypesPackage, val)
 	}
 	panic("unreachable")
 }
@@ -128,9 +129,9 @@ func (gen Generator) ValueToNative(val string, t types.TypeRef) string {
 	switch k {
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		n := kindToString(k)
-		return fmt.Sprintf("%s(%s.(types.%s))", strings.ToLower(n), val, n)
+		return fmt.Sprintf("%s(%s.(%s%s))", strings.ToLower(n), val, gen.TypesPackage, n)
 	case types.StringKind:
-		return val + ".(types.String).String()"
+		return fmt.Sprintf("%s.(%sString).String()", val, gen.TypesPackage)
 	}
 	panic("unreachable")
 }
@@ -154,17 +155,17 @@ func (gen Generator) ValueToUser(val string, t types.TypeRef) string {
 	k := rt.Kind()
 	switch k {
 	case types.BlobKind:
-		return fmt.Sprintf("%s.(types.Blob)", val)
+		return fmt.Sprintf("%s.(%sBlob)", val, gen.TypesPackage)
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return gen.ValueToNative(val, rt)
 	case types.EnumKind, types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.(%s)", val, gen.UserName(t))
 	case types.PackageKind:
-		return fmt.Sprintf("%s.(types.Package)", val)
+		return fmt.Sprintf("%s.(%sPackage)", val, gen.TypesPackage)
 	case types.ValueKind:
 		return val
 	case types.TypeRefKind:
-		return fmt.Sprintf("%s.(types.TypeRef)", val)
+		return fmt.Sprintf("%s.(%sTypeRef)", val, gen.TypesPackage)
 	}
 	panic("unreachable")
 }
@@ -175,7 +176,7 @@ func (gen Generator) UserZero(t types.TypeRef) string {
 	k := rt.Kind()
 	switch k {
 	case types.BlobKind:
-		return "types.NewEmptyBlob()"
+		return fmt.Sprintf("%sNewEmptyBlob()", gen.TypesPackage)
 	case types.BoolKind:
 		return "false"
 	case types.EnumKind:
@@ -190,9 +191,9 @@ func (gen Generator) UserZero(t types.TypeRef) string {
 		return `""`
 	case types.ValueKind:
 		// TODO: This is where a null Value would have been useful.
-		return "types.Bool(false)"
+		return fmt.Sprintf("%sBool(false)", gen.TypesPackage)
 	case types.TypeRefKind:
-		return "types.TypeRef{R: ref.Ref{}}"
+		return fmt.Sprintf("%sTypeRef{R: ref.Ref{}}", gen.TypesPackage)
 	}
 	panic("unreachable")
 }
@@ -210,26 +211,26 @@ func (gen Generator) ValueZero(t types.TypeRef) string {
 	k := rt.Kind()
 	switch k {
 	case types.BlobKind:
-		return "types.NewEmptyBlob()"
+		return fmt.Sprintf("%sNewEmptyBlob()", gen.TypesPackage)
 	case types.BoolKind:
-		return "types.Bool(false)"
+		return fmt.Sprintf("%sBool(false)", gen.TypesPackage)
 	case types.EnumKind:
 		return gen.UserZero(t)
 	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
-		return fmt.Sprintf("types.%s(0)", kindToString(k))
+		return fmt.Sprintf("%s%s(0)", gen.TypesPackage, kindToString(k))
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind:
 		return gen.UserZero(t)
 	case types.PackageKind:
-		return "types.NewPackage()"
+		return fmt.Sprintf("%sNewPackage()", gen.TypesPackage)
 	case types.StringKind:
-		return `types.NewString("")`
+		return fmt.Sprintf(`%sNewString("")`, gen.TypesPackage)
 	case types.StructKind:
 		return gen.newUserName(t, rt)
 	case types.ValueKind:
 		// TODO: Use nil here
-		return "types.Bool(false)"
+		return fmt.Sprintf("%sBool(false)", gen.TypesPackage)
 	case types.TypeRefKind:
-		return "types.TypeRef{}"
+		return fmt.Sprintf("%sTypeRef{R: ref.Ref{}}", gen.TypesPackage)
 	}
 	panic("unreachable")
 }
@@ -288,18 +289,18 @@ func (gen Generator) refToId(t types.TypeRef) string {
 // ToTypeRef returns a string containing Go code that instantiates a types.TypeRef instance equivalent to t.
 func (gen Generator) ToTypeRef(t types.TypeRef, fileID, packageName string) string {
 	if t.HasPackageRef() {
-		return fmt.Sprintf(`types.MakeTypeRef(ref.Parse("%s"), %d)`, t.PackageRef().String(), t.Ordinal())
+		return fmt.Sprintf(`%sMakeTypeRef(ref.Parse("%s"), %d)`, gen.TypesPackage, t.PackageRef().String(), t.Ordinal())
 	}
 	if t.IsUnresolved() && fileID != "" {
-		return fmt.Sprintf(`types.MakeTypeRef(__%sPackageInFile_%s_CachedRef, %d)`, packageName, fileID, t.Ordinal())
+		return fmt.Sprintf(`%sMakeTypeRef(__%sPackageInFile_%s_CachedRef, %d)`, gen.TypesPackage, packageName, fileID, t.Ordinal())
 	}
 	if t.IsUnresolved() {
 		d.Chk.True(t.HasOrdinal(), "%s does not have an ordinal set", t.Name())
-		return fmt.Sprintf(`types.MakeTypeRef(ref.Ref{}, %d)`, t.Ordinal())
+		return fmt.Sprintf(`%sMakeTypeRef(ref.Ref{}, %d)`, gen.TypesPackage, t.Ordinal())
 	}
 
 	if types.IsPrimitiveKind(t.Kind()) {
-		return fmt.Sprintf("types.MakePrimitiveTypeRef(types.%sKind)", kindToString(t.Kind()))
+		return fmt.Sprintf("%sMakePrimitiveTypeRef(%s%sKind)", gen.TypesPackage, gen.TypesPackage, kindToString(t.Kind()))
 	}
 	switch desc := t.Desc.(type) {
 	case types.CompoundDesc:
@@ -307,20 +308,20 @@ func (gen Generator) ToTypeRef(t types.TypeRef, fileID, packageName string) stri
 		for i, t := range desc.ElemTypes {
 			typerefs[i] = gen.ToTypeRef(t, fileID, packageName)
 		}
-		return fmt.Sprintf(`types.MakeCompoundTypeRef("%s", types.%sKind, %s)`, t.Name(), kindToString(t.Kind()), strings.Join(typerefs, ", "))
+		return fmt.Sprintf(`%sMakeCompoundTypeRef("%s", %s%sKind, %s)`, gen.TypesPackage, t.Name(), gen.TypesPackage, kindToString(t.Kind()), strings.Join(typerefs, ", "))
 	case types.EnumDesc:
-		return fmt.Sprintf(`types.MakeEnumTypeRef("%s", "%s")`, t.Name(), strings.Join(desc.IDs, `", "`))
+		return fmt.Sprintf(`%sMakeEnumTypeRef("%s", "%s")`, gen.TypesPackage, t.Name(), strings.Join(desc.IDs, `", "`))
 	case types.StructDesc:
 		flatten := func(f []types.Field) string {
 			out := make([]string, 0, len(f))
 			for _, field := range f {
-				out = append(out, fmt.Sprintf(`types.Field{"%s", %s, %t},`, field.Name, gen.ToTypeRef(field.T, fileID, packageName), field.Optional))
+				out = append(out, fmt.Sprintf(`%sField{"%s", %s, %t},`, gen.TypesPackage, field.Name, gen.ToTypeRef(field.T, fileID, packageName), field.Optional))
 			}
 			return strings.Join(out, "\n")
 		}
-		fields := fmt.Sprintf("[]types.Field{\n%s\n}", flatten(desc.Fields))
-		choices := fmt.Sprintf("types.Choices{\n%s\n}", flatten(desc.Union))
-		return fmt.Sprintf("types.MakeStructTypeRef(\"%s\",\n%s,\n%s,\n)", t.Name(), fields, choices)
+		fields := fmt.Sprintf("[]%sField{\n%s\n}", gen.TypesPackage, flatten(desc.Fields))
+		choices := fmt.Sprintf("%sChoices{\n%s\n}", gen.TypesPackage, flatten(desc.Union))
+		return fmt.Sprintf("%sMakeStructTypeRef(\"%s\",\n%s,\n%s,\n)", gen.TypesPackage, t.Name(), fields, choices)
 	default:
 		d.Chk.Fail("Unknown TypeDesc.", "%#v (%T)", desc, desc)
 	}

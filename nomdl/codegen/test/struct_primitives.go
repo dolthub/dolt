@@ -7,12 +7,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __testPackageInFile_struct_primitives_CachedRef = __testPackageInFile_struct_primitives_Ref()
+var __testPackageInFile_struct_primitives_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __testPackageInFile_struct_primitives_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("StructPrimitives",
 			[]types.Field{
@@ -34,7 +34,7 @@ func __testPackageInFile_struct_primitives_Ref() ref.Ref {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	return types.RegisterPackage(&p)
+	__testPackageInFile_struct_primitives_CachedRef = types.RegisterPackage(&p)
 }
 
 // StructPrimitives
@@ -118,13 +118,14 @@ func (s StructPrimitives) Def() (d StructPrimitivesDef) {
 	return
 }
 
-var __typeRefForStructPrimitives = types.MakeTypeRef(__testPackageInFile_struct_primitives_CachedRef, 0)
+var __typeRefForStructPrimitives types.TypeRef
 
 func (m StructPrimitives) TypeRef() types.TypeRef {
 	return __typeRefForStructPrimitives
 }
 
 func init() {
+	__typeRefForStructPrimitives = types.MakeTypeRef(__testPackageInFile_struct_primitives_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForStructPrimitives, func(v types.Value) types.Value {
 		return StructPrimitivesFromVal(v)
 	})
