@@ -20,7 +20,7 @@ func datasetsFromRef(datasetsRef ref.Ref, cs chunks.ChunkSource) *MapOfStringToR
 func (ds *dataStoreCommon) MaybeHead(datasetID string) (Commit, bool) {
 	if ds.datasets != nil {
 		if r, ok := ds.datasets.MaybeGet(datasetID); ok {
-			return r.GetValue(ds), true
+			return r.TargetValue(ds), true
 		}
 	}
 	return NewCommit(), false
@@ -98,7 +98,7 @@ func descendsFrom(commitRef, currentHeadRef RefOfCommit, cs chunks.ChunkSource) 
 func getAncestors(commits SetOfRefOfCommit, cs chunks.ChunkSource) SetOfRefOfCommit {
 	ancestors := NewSetOfRefOfCommit()
 	commits.Iter(func(r RefOfCommit) (stop bool) {
-		c := r.GetValue(cs)
+		c := r.TargetValue(cs)
 		ancestors =
 			ancestors.Union(c.Parents())
 		return

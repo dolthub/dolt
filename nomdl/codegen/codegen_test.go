@@ -227,6 +227,6 @@ func TestCommitNewPackages(t *testing.T) {
 	pkgDS = generate("name", inFile, filepath.Join(dir, "out.go"), dir, map[string]bool{}, pkgDS)
 	s := types.SetOfRefOfPackageFromVal(pkgDS.Head().Value())
 	assert.EqualValues(1, s.Len())
-	tr := s.Any().GetValue(ds).Types()[0]
+	tr := s.Any().TargetValue(ds).Types()[0]
 	assert.EqualValues(types.StructKind, tr.Kind())
 }

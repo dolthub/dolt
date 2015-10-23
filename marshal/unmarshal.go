@@ -346,10 +346,10 @@ func unmarshalRef(nom types.Ref, v reflect.Value) {
 
 	// Decoding into nil interface? Stuff a string in there.
 	if v.Kind() == reflect.Interface && v.NumMethod() == 0 {
-		v.Set(reflect.ValueOf(nom.Ref().String()))
+		v.Set(reflect.ValueOf(nom.TargetRef().String()))
 		return
 	} else if v.Kind() == reflect.Struct && v.Type() == refRefType {
-		v.Set(reflect.ValueOf(nom.Ref()))
+		v.Set(reflect.ValueOf(nom.TargetRef()))
 		return
 	}
 
@@ -359,14 +359,14 @@ func unmarshalRef(nom types.Ref, v reflect.Value) {
 		d.Exp.Fail(invalidTypeMsg(reflect.TypeOf(nom).Name(), origType))
 		return
 	case reflect.String:
-		v.SetString(nom.Ref().String())
+		v.SetString(nom.TargetRef().String())
 		return
 	case reflect.Slice:
 		if v.Type().Elem().Kind() == reflect.Uint8 {
 			// A byte-slice
-			digestLen := len(nom.Ref().Digest())
+			digestLen := len(nom.TargetRef().Digest())
 			v.Set(reflect.MakeSlice(v.Type(), digestLen, digestLen))
-			reflect.Copy(v, reflect.ValueOf(nom.Ref().Digest()))
+			reflect.Copy(v, reflect.ValueOf(nom.TargetRef().Digest()))
 			return
 		}
 		d.Exp.Fail(invalidTypeMsg(reflect.TypeOf(nom).Name(), origType))

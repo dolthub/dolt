@@ -180,12 +180,12 @@ var unmarshalTests = []unmarshalTest{
 
 	// ref tests
 	{
-		in:  types.Ref{R: ref.Parse("sha1-ffffffffffffffffffffffffffffffffffffffff")},
+		in:  types.NewRef(ref.Parse("sha1-ffffffffffffffffffffffffffffffffffffffff")),
 		ptr: new(string),
 		out: "sha1-" + strings.Repeat("f", 40),
 	},
 	{
-		in:  types.Ref{R: ref.Parse("sha1-ffffffffffffffffffffffffffffffffffffffff")},
+		in:  types.NewRef(ref.Parse("sha1-ffffffffffffffffffffffffffffffffffffffff")),
 		ptr: &[]byte{},
 		out: byteSlice(0xff, len(ref.Sha1Digest{})),
 	},

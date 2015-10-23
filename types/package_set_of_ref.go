@@ -162,12 +162,16 @@ func (s SetOfRefOfPackage) fromElemSlice(p []RefOfPackage) []Value {
 // RefOfPackage
 
 type RefOfPackage struct {
-	r   ref.Ref
-	ref *ref.Ref
+	target ref.Ref
+	ref    *ref.Ref
 }
 
-func NewRefOfPackage(r ref.Ref) RefOfPackage {
-	return RefOfPackage{r, &ref.Ref{}}
+func NewRefOfPackage(target ref.Ref) RefOfPackage {
+	return RefOfPackage{target, &ref.Ref{}}
+}
+
+func (r RefOfPackage) TargetRef() ref.Ref {
+	return r.target
 }
 
 func (r RefOfPackage) Ref() ref.Ref {
@@ -185,16 +189,12 @@ func (r RefOfPackage) Chunks() []Future {
 	return r.TypeRef().Chunks()
 }
 
-func (r RefOfPackage) InternalImplementation() ref.Ref {
-	return r.r
-}
-
 func RefOfPackageFromVal(val Value) RefOfPackage {
 	// TODO: Do we still need FromVal?
 	if val, ok := val.(RefOfPackage); ok {
 		return val
 	}
-	return RefOfPackage{val.(Ref).Ref(), &ref.Ref{}}
+	return NewRefOfPackage(val.(Ref).TargetRef())
 }
 
 // A Noms Value that describes RefOfPackage.
@@ -211,10 +211,10 @@ func init() {
 	})
 }
 
-func (r RefOfPackage) GetValue(cs chunks.ChunkSource) Package {
-	return ReadValue(r.r, cs).(Package)
+func (r RefOfPackage) TargetValue(cs chunks.ChunkSource) Package {
+	return ReadValue(r.target, cs).(Package)
 }
 
-func (r RefOfPackage) SetValue(val Package, cs chunks.ChunkSink) RefOfPackage {
-	return RefOfPackage{WriteValue(val, cs), &ref.Ref{}}
+func (r RefOfPackage) SetTargetValue(val Package, cs chunks.ChunkSink) RefOfPackage {
+	return NewRefOfPackage(WriteValue(val, cs))
 }

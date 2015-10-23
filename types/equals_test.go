@@ -82,7 +82,7 @@ func TestPrimitiveEquals(t *testing.T) {
 		}
 		v := f1()
 		if v != nil {
-			r := Ref{R: v.Ref()}
+			r := NewRef(v.Ref())
 			assert.False(r.Equals(v))
 			assert.False(v.Equals(r))
 		}

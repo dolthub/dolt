@@ -198,7 +198,7 @@ func TestSetChunks(t *testing.T) {
 	c1 := l1.Chunks()
 	assert.Len(c1, 0)
 
-	l2 := NewSet(Ref{R: Int32(0).Ref()})
+	l2 := NewSet(NewRef(Int32(0).Ref()))
 	c2 := l2.Chunks()
 	assert.Len(c2, 1)
 }

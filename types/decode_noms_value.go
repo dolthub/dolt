@@ -161,7 +161,7 @@ func (r *jsonArrayReader) readPackage(t TypeRef, pkg *Package) Value {
 
 func (r *jsonArrayReader) readRefValue(t TypeRef) Value {
 	ref := r.readRef()
-	v := Ref{R: ref}
+	v := NewRef(ref)
 	return ToNomsValueFromTypeRef(t, v)
 }
 

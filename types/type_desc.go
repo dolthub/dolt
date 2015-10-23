@@ -102,7 +102,7 @@ func (u UnresolvedDesc) Equals(other TypeDesc) bool {
 }
 
 func (u UnresolvedDesc) ToValue() Value {
-	return NewList(Ref{R: u.pkgRef}, Int16(u.ordinal))
+	return NewList(NewRef(u.pkgRef), Int16(u.ordinal))
 }
 
 func (u UnresolvedDesc) Describe() string {

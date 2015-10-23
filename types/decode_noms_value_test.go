@@ -441,7 +441,7 @@ func TestReadRef(t *testing.T) {
 	})
 
 	v := reader.readTopLevelValue()
-	assert.True(Ref{r}.Equals(v))
+	assert.True(NewRef(r).Equals(v))
 }
 
 func TestReadValueRef(t *testing.T) {
@@ -459,7 +459,7 @@ func TestReadValueRef(t *testing.T) {
 	})
 
 	v := reader.readTopLevelValue()
-	assert.True(Ref{r}.Equals(v))
+	assert.True(NewRef(r).Equals(v))
 }
 
 func TestReadStructWithEnum(t *testing.T) {

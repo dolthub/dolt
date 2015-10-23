@@ -144,7 +144,7 @@ type mapImplementation interface {
 }
 
 type refImplementation interface {
-	InternalImplementation() ref.Ref
+	TargetRef() ref.Ref
 }
 
 type setImplementation interface {
@@ -170,10 +170,7 @@ func getMapFromMapKind(v Value) Map {
 }
 
 func getRefFromRefKind(v Value) ref.Ref {
-	if v, ok := v.(Ref); ok {
-		return v.Ref()
-	}
-	return v.(refImplementation).InternalImplementation()
+	return v.(refImplementation).TargetRef()
 }
 
 func getSetFromSetKind(v Value) Set {

@@ -424,16 +424,16 @@ func (r testRef) TypeRef() TypeRef {
 	return r.t
 }
 
-func (r testRef) InternalImplementation() ref.Ref {
-	return r.Value.Ref()
+func (r testRef) TargetRef() ref.Ref {
+	return r.Value.(Ref).TargetRef()
 }
 
 func TestWriteRef(t *testing.T) {
 	assert := assert.New(t)
 
 	tref := MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(UInt32Kind))
-	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-	v := Ref{R: r}
+	r := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
+	v := NewRef(r)
 
 	w := newJsonArrayWriter()
 	w.writeTopLevelValue(testRef{Value: v, t: tref})
@@ -531,7 +531,7 @@ func TestWritePackage2(t *testing.T) {
 	assert := assert.New(t)
 
 	setTref := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(UInt32Kind))
-	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
+	r := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
 	v := Package{[]TypeRef{setTref}, []ref.Ref{r}, &ref.Ref{}}
 
 	w := newJsonArrayWriter()

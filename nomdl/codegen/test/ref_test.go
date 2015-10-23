@@ -21,15 +21,15 @@ func TestRef(t *testing.T) {
 	v := types.ReadValue(l.Ref(), cs)
 	assert.Nil(v)
 
-	assert.Panics(func() { r.GetValue(cs) })
+	assert.Panics(func() { r.TargetValue(cs) })
 
-	r2 := r.SetValue(l, cs)
+	r2 := r.SetTargetValue(l, cs)
 	assert.True(r.Equals(r2))
-	v2 := r2.GetValue(cs)
-	v3 := r.GetValue(cs)
+	v2 := r2.TargetValue(cs)
+	v3 := r.TargetValue(cs)
 	assert.True(v2.Equals(v3))
 
-	r3 := r2.SetValue(l2, cs)
+	r3 := r2.SetTargetValue(l2, cs)
 	assert.False(r.Equals(r3))
 }
 
@@ -37,12 +37,12 @@ func TestRefFromValAndNomsValue(t *testing.T) {
 	assert := assert.New(t)
 
 	l := gen.ListOfStringDef{"a", "b", "c"}.New()
-	rv := types.Ref{R: l.Ref()}
+	rv := types.NewRef(l.Ref())
 	r := gen.RefOfListOfStringFromVal(rv)
 	r2 := gen.NewRefOfListOfString(l.Ref())
 	assert.True(r.Equals(r2))
 
-	rv2 := types.Ref{R: r.InternalImplementation()}
+	rv2 := types.NewRef(r.TargetRef())
 	assert.True(rv.Equals(rv2))
 }
 
@@ -59,10 +59,10 @@ func TestListOfRef(t *testing.T) {
 	r2 := l.Get(0)
 	assert.True(r.Equals(r2))
 
-	l = l.Set(0, r.SetValue(1, cs))
+	l = l.Set(0, r.SetTargetValue(1, cs))
 	r3 := l.Get(0)
 	assert.False(r.Equals(r3))
-	assert.Panics(func() { r.GetValue(cs) })
+	assert.Panics(func() { r.TargetValue(cs) })
 }
 
 func TestStructWithRef(t *testing.T) {
@@ -78,13 +78,13 @@ func TestStructWithRef(t *testing.T) {
 	r2 := gen.NewRefOfSetOfFloat32(set.Ref())
 	assert.True(r.Equals(r2))
 
-	assert.Panics(func() { r2.GetValue(cs) })
+	assert.Panics(func() { r2.TargetValue(cs) })
 
 	types.WriteValue(str, cs)
-	assert.Panics(func() { r2.GetValue(cs) })
+	assert.Panics(func() { r2.TargetValue(cs) })
 
 	types.WriteValue(set, cs)
-	set2 := r2.GetValue(cs)
+	set2 := r2.TargetValue(cs)
 	assert.True(set.Equals(set2))
 }
 
