@@ -10,7 +10,7 @@ import (
 )
 
 // Chunk is a unit of stored data in noms
-type Chunk struct {
+type xChunk struct {
 	r    ref.Ref
 	data []byte
 }
