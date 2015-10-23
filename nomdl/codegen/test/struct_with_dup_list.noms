@@ -1,0 +1,3 @@
+struct StructWithDupList {
+  l: List(UInt8)
+}

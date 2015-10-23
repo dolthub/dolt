@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/chunks"
-	geo "github.com/attic-labs/noms/clients/gen/sha1_fb09d21d144c518467325465327d46489cff7c47"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
@@ -107,7 +106,7 @@ func main() {
 		id, _ := strconv.ParseInt(r[0], 10, 64)
 		lon64, _ := strconv.ParseFloat(r[9], 32)
 		lat64, _ := strconv.ParseFloat(r[10], 32)
-		geopos := geo.GeopositionDef{Latitude: float32(lat64), Longitude: float32(lon64)}
+		geopos := GeopositionDef{Latitude: float32(lat64), Longitude: float32(lon64)}
 		incident := IncidentDef{
 			ID:          id,
 			Category:    r[1],

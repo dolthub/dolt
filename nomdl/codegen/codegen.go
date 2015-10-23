@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"go/build"
 	"go/parser"
 	"go/token"
 	"io"
@@ -28,7 +27,7 @@ import (
 )
 
 var (
-	depsDirFlag = flag.String("deps-dir", "", "Directory where code generated for dependencies will be written")
+	outDirFlag  = flag.String("out-dir", "", "Directory where generated code will be written")
 	inFlag      = flag.String("in", "", "The name of the noms file to read")
 	outFlag     = flag.String("out", "", "The name of the go file to write")
 	pkgDSFlag   = flag.String("package-ds", "", "The dataset to read/write packages from/to.")
@@ -53,15 +52,11 @@ func main() {
 			flag.Usage()
 			return
 		}
-		if *depsDirFlag == "" {
-			log.Print("Package dataset provided, but no output directory for generated dependency code.")
-			flag.Usage()
-			return
-		}
 	} else {
 		log.Print("No package dataset provided; will be unable to process imports.")
 		*pkgDSFlag = "default"
 	}
+
 	pkgDS := dataset.NewDataset(ds, *pkgDSFlag)
 	// Ensure that, if pkgDS has stuff in it, its head is a SetOfRefOfPackage.
 	if h, ok := pkgDS.MaybeHead(); ok {
@@ -69,29 +64,28 @@ func main() {
 		types.SetOfRefOfPackageFromVal(h.Value())
 	}
 
-	depsDir, err := filepath.Abs(*depsDirFlag)
-	if err != nil {
-		log.Fatalf("Could not canonicalize -deps-dir: %v", err)
-	}
-	packageName := getGoPackageName()
 	if *inFlag != "" {
 		out := *outFlag
 		if out == "" {
 			out = getOutFileName(*inFlag)
 		}
-		generate(packageName, *inFlag, out, depsDir, pkgDS)
+		generate(getGoPackageName(), *inFlag, out, filepath.Dir(out), map[string]bool{}, pkgDS)
 		return
 	}
 
 	// Generate code from all .noms file in the current directory
 	nomsFiles, err := filepath.Glob("*" + ext)
-	d.Chk.NoError(err)
+
+	outDir, err := filepath.Abs(*outDirFlag)
+	d.Chk.NoError(err, "Could not canonicalize -out-dir: %v", err)
+	packageName := getGoPackageName()
+	written := map[string]bool{}
 	for _, n := range nomsFiles {
-		pkgDS = generate(packageName, n, getOutFileName(n), depsDir, pkgDS)
+		pkgDS = generate(packageName, n, filepath.Join(outDir, getOutFileName(n)), outDir, written, pkgDS)
 	}
 }
 
-func generate(packageName, in, out, depsDir string, pkgDS dataset.Dataset) dataset.Dataset {
+func generate(packageName, in, out, outDir string, written map[string]bool, pkgDS dataset.Dataset) dataset.Dataset {
 	inFile, err := os.Open(in)
 	d.Chk.NoError(err)
 	defer inFile.Close()
@@ -99,8 +93,8 @@ func generate(packageName, in, out, depsDir string, pkgDS dataset.Dataset) datas
 	p := pkg.ParseNomDL(packageName, inFile, filepath.Dir(in), pkgDS.Store())
 
 	// Generate code for all p's deps first.
-	deps := generateDepCode(depsDir, p.Package, pkgDS.Store())
-	generateAndEmit(getBareFileName(in), out, importPaths(depsDir, deps), deps, p)
+	deps := generateDepCode(packageName, outDir, written, p.Package, pkgDS.Store())
+	generateAndEmit(getBareFileName(in), out, written, deps, p)
 
 	// Since we're just building up a set of refs to all the packages in pkgDS, simply retrying is the logical response to commit failure.
 	for ok := false; !ok; pkgDS, ok = pkgDS.Commit(buildSetOfRefOfPackage(p, deps, pkgDS)) {
@@ -110,14 +104,14 @@ func generate(packageName, in, out, depsDir string, pkgDS dataset.Dataset) datas
 
 type depsMap map[ref.Ref]types.Package
 
-func generateDepCode(depsDir string, p types.Package, cs chunks.ChunkSource) depsMap {
+func generateDepCode(packageName, outDir string, written map[string]bool, p types.Package, cs chunks.ChunkSource) depsMap {
 	deps := depsMap{}
 	for _, r := range p.Dependencies() {
 		p := types.ReadValue(r, cs).(types.Package)
-		pDeps := generateDepCode(depsDir, p, cs)
+		pDeps := generateDepCode(packageName, outDir, written, p, cs)
 		tag := code.ToTag(p.Ref())
-		parsed := pkg.Parsed{Package: p, Name: tag}
-		generateAndEmit(tag, filepath.Join(depsDir, tag, tag+".go"), importPaths(depsDir, pDeps), pDeps, parsed)
+		parsed := pkg.Parsed{Package: p, Name: packageName}
+		generateAndEmit(tag, filepath.Join(outDir, tag+".go"), written, pDeps, parsed)
 
 		for depRef, dep := range pDeps {
 			deps[depRef] = dep
@@ -127,9 +121,9 @@ func generateDepCode(depsDir string, p types.Package, cs chunks.ChunkSource) dep
 	return deps
 }
 
-func generateAndEmit(tag, out string, importPaths []string, deps depsMap, p pkg.Parsed) {
+func generateAndEmit(tag, out string, written map[string]bool, deps depsMap, p pkg.Parsed) {
 	var buf bytes.Buffer
-	gen := NewCodeGen(&buf, tag, importPaths, deps, p)
+	gen := newCodeGen(&buf, tag, written, deps, p)
 	gen.WritePackage()
 
 	bs, err := imports.Process(out, buf.Bytes(), nil)
@@ -145,16 +139,6 @@ func generateAndEmit(tag, out string, importPaths []string, deps depsMap, p pkg.
 	defer outFile.Close()
 
 	io.Copy(outFile, bytes.NewBuffer(bs))
-}
-
-func importPaths(depsDir string, deps depsMap) (paths []string) {
-	for depRef := range deps {
-		depDir := filepath.Join(depsDir, code.ToTag(depRef))
-		goPkg, err := build.Default.ImportDir(depDir, build.FindOnly)
-		d.Chk.NoError(err)
-		paths = append(paths, goPkg.ImportPath)
-	}
-	return
 }
 
 func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) types.SetOfRefOfPackage {
@@ -185,6 +169,9 @@ func getGoPackageName() string {
 	if *packageFlag != "" {
 		return *packageFlag
 	}
+	if *outDirFlag != "" {
+		return filepath.Base(*outDirFlag)
+	}
 
 	// It is illegal to have multiple go files in the same directory with different package names.
 	// We can therefore just pick the first one and get the package name from there.
@@ -202,7 +189,6 @@ type codeGen struct {
 	w          io.Writer
 	pkg        pkg.Parsed
 	deps       depsMap
-	imports    []string
 	written    map[string]bool
 	toWrite    []types.TypeRef
 	generator  *code.Generator
@@ -213,12 +199,12 @@ type codeGen struct {
 type resolver struct {
 }
 
-func NewCodeGen(w io.Writer, fileID string, importPaths []string, deps depsMap, pkg pkg.Parsed) *codeGen {
+func newCodeGen(w io.Writer, fileID string, written map[string]bool, deps depsMap, pkg pkg.Parsed) *codeGen {
 	typesPackage := "types."
 	if pkg.Name == "types" {
 		typesPackage = ""
 	}
-	gen := &codeGen{w, pkg, deps, importPaths, map[string]bool{}, []types.TypeRef{}, nil, nil, sharedData{
+	gen := &codeGen{w, pkg, deps, written, []types.TypeRef{}, nil, nil, sharedData{
 		fileID,
 		pkg.Name,
 		typesPackage,
@@ -269,17 +255,13 @@ func (gen *codeGen) WritePackage() {
 	pkgTypes := gen.pkg.Types()
 	data := struct {
 		sharedData
-		HasImports   bool
 		HasTypes     bool
-		Imports      []string
 		Dependencies []ref.Ref
 		Name         string
 		Types        []types.TypeRef
 	}{
 		gen.sharedData,
-		len(gen.imports) > 0,
 		len(pkgTypes) > 0,
-		gen.imports,
 		gen.pkg.Dependencies(),
 		gen.pkg.Name,
 		pkgTypes,
@@ -303,7 +285,15 @@ func (gen *codeGen) WritePackage() {
 }
 
 func (gen *codeGen) shouldBeWritten(t types.TypeRef) bool {
-	return !t.IsUnresolved() && !gen.written[gen.generator.UserName(t)]
+	if t.IsUnresolved() {
+		return false
+	}
+	if t.Kind() == types.EnumKind || t.Kind() == types.StructKind {
+		name := gen.generator.UserName(t)
+		d.Chk.False(gen.written[name], "Multiple definitions of type named %s", name)
+		return true
+	}
+	return !gen.written[gen.generator.UserName(t)]
 }
 
 func (gen *codeGen) writeTopLevel(t types.TypeRef, ordinal int) {

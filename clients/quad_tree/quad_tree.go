@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/chunks"
-	geo "github.com/attic-labs/noms/clients/gen/sha1_fb09d21d144c518467325465327d46489cff7c47"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/types"
@@ -27,26 +26,26 @@ var (
 )
 
 // Query returns a slice of Nodes that are a maximum of "kilometers" away from "p"
-func (qt *QuadTree) Query(p geo.GeopositionDef, kilometers float64) (geo.GeorectangleDef, []Node) {
-	r := util.BoundingRectangle(p, kilometers)
+func (qt *QuadTree) Query(p GeopositionDef, kilometers float64) (GeorectangleDef, []Node) {
+	r := BoundingRectangle(p, kilometers)
 	nodes := qt.Search(r, p, float32(kilometers))
 	return r, nodes
 }
 
 // Search returns a slice of Nodes that are within "r" and a maximum of "kilometers" away from "p"
-func (qt *QuadTree) Search(r geo.GeorectangleDef, p geo.GeopositionDef, kilometers float32) []Node {
+func (qt *QuadTree) Search(r GeorectangleDef, p GeopositionDef, kilometers float32) []Node {
 	nodes := []Node{}
 	if qt.Tiles().Len() > 0 {
 		for _, q := range quadrants {
 			tile := qt.Tiles().Get(q)
-			if util.IntersectsRect(tile.Georectangle().Def(), r) {
+			if IntersectsRect(tile.Georectangle().Def(), r) {
 				tnodes := tile.Search(r, p, kilometers)
 				nodes = append(nodes, tnodes...)
 			}
 		}
 	} else if qt.Nodes().Len() > 0 {
 		qt.Nodes().Iter(func(n Node, i uint64) bool {
-			if util.DistanceTo(p, n.Geoposition().Def()) < kilometers {
+			if DistanceTo(p, n.Geoposition().Def()) < kilometers {
 				nodes = append(nodes, n)
 			}
 			return false
@@ -57,25 +56,25 @@ func (qt *QuadTree) Search(r geo.GeorectangleDef, p geo.GeopositionDef, kilomete
 }
 
 // Query returns a slice of NodeDefs that are a maximum of "kilometers" away from "p"
-func (qt *QuadTreeDef) Query(p geo.GeopositionDef, kilometers float64) ListOfNodeDef {
-	r := util.BoundingRectangle(p, kilometers)
+func (qt *QuadTreeDef) Query(p GeopositionDef, kilometers float64) ListOfNodeDef {
+	r := BoundingRectangle(p, kilometers)
 	return qt.Search(r, p, float32(kilometers))
 }
 
 // Search returns a slice of NodeDefs that are within "r" and a maximum of "kilometers" away from "p"
-func (qt QuadTreeDef) Search(r geo.GeorectangleDef, p geo.GeopositionDef, kilometers float32) ListOfNodeDef {
+func (qt QuadTreeDef) Search(r GeorectangleDef, p GeopositionDef, kilometers float32) ListOfNodeDef {
 	nodes := ListOfNodeDef{}
 	if qt.hasTiles() {
 		for _, q := range quadrants {
 			tile := qt.Tiles[q]
-			if util.IntersectsRect(tile.Georectangle, r) {
+			if IntersectsRect(tile.Georectangle, r) {
 				tnodes := tile.Search(r, p, kilometers)
 				nodes = append(nodes, tnodes...)
 			}
 		}
 	} else if len(qt.Nodes) > 0 {
 		for _, n := range qt.Nodes {
-			if util.DistanceTo(p, n.Geoposition) < kilometers {
+			if DistanceTo(p, n.Geoposition) < kilometers {
 				nodes = append(nodes, n)
 			}
 		}
@@ -158,16 +157,16 @@ func (qt *QuadTreeDef) split() {
 	qt.Nodes = ListOfNodeDef{}
 }
 
-func (qt *QuadTreeDef) tileContaining(p geo.GeopositionDef) (quadrant string, tile QuadTreeDef) {
+func (qt *QuadTreeDef) tileContaining(p GeopositionDef) (quadrant string, tile QuadTreeDef) {
 	d.Chk.True(qt.hasTiles(), "tileContaining method called on QuadTree node with no tiles")
 
-	if util.ContainsPoint(qt.Tiles[tl].Georectangle, p) {
+	if ContainsPoint(qt.Tiles[tl].Georectangle, p) {
 		quadrant, tile = tl, qt.Tiles[tl]
-	} else if util.ContainsPoint(qt.Tiles[bl].Georectangle, p) {
+	} else if ContainsPoint(qt.Tiles[bl].Georectangle, p) {
 		quadrant, tile = bl, qt.Tiles[bl]
-	} else if util.ContainsPoint(qt.Tiles[tr].Georectangle, p) {
+	} else if ContainsPoint(qt.Tiles[tr].Georectangle, p) {
 		quadrant, tile = tr, qt.Tiles[tr]
-	} else if util.ContainsPoint(qt.Tiles[br].Georectangle, p) {
+	} else if ContainsPoint(qt.Tiles[br].Georectangle, p) {
 		quadrant, tile = br, qt.Tiles[br]
 	}
 
@@ -175,7 +174,7 @@ func (qt *QuadTreeDef) tileContaining(p geo.GeopositionDef) (quadrant string, ti
 }
 
 // CreateNewQuadTreeDef is a convenience method for creating a new QuadTreeDef.
-func CreateNewQuadTreeDef(depth uint8, path string, rect geo.GeorectangleDef) QuadTreeDef {
+func CreateNewQuadTreeDef(depth uint8, path string, rect GeorectangleDef) QuadTreeDef {
 	nodes := make(ListOfNodeDef, 0, maxNodes)
 	qt := QuadTreeDef{
 		Nodes:          nodes,
@@ -191,7 +190,7 @@ func CreateNewQuadTreeDef(depth uint8, path string, rect geo.GeorectangleDef) Qu
 // makeChildren() handles the dirty work of splitting up the Georectangle in qt
 // into 4 quadrants
 func (qt *QuadTreeDef) makeChildren() {
-	tlRect, blRect, trRect, brRect := util.Split(qt.Georectangle)
+	tlRect, blRect, trRect, brRect := Split(qt.Georectangle)
 	qt.Tiles[tl] = CreateNewQuadTreeDef(qt.Depth+1, qt.Path+"a", tlRect)
 	qt.Tiles[bl] = CreateNewQuadTreeDef(qt.Depth+1, qt.Path+"b", blRect)
 	qt.Tiles[tr] = CreateNewQuadTreeDef(qt.Depth+1, qt.Path+"c", trRect)

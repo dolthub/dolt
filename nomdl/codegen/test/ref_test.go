@@ -5,6 +5,7 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -12,10 +13,10 @@ func TestRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	l := ListOfStringDef{"a", "b", "c"}.New()
-	l2 := ListOfStringDef{"d", "e", "f"}.New()
+	l := gen.ListOfStringDef{"a", "b", "c"}.New()
+	l2 := gen.ListOfStringDef{"d", "e", "f"}.New()
 	lRef := l.Ref()
-	r := NewRefOfListOfString(lRef)
+	r := gen.NewRefOfListOfString(lRef)
 
 	v := types.ReadValue(l.Ref(), cs)
 	assert.Nil(v)
@@ -35,10 +36,10 @@ func TestRef(t *testing.T) {
 func TestRefFromValAndNomsValue(t *testing.T) {
 	assert := assert.New(t)
 
-	l := ListOfStringDef{"a", "b", "c"}.New()
+	l := gen.ListOfStringDef{"a", "b", "c"}.New()
 	rv := types.Ref{R: l.Ref()}
-	r := RefOfListOfStringFromVal(rv)
-	r2 := NewRefOfListOfString(l.Ref())
+	r := gen.RefOfListOfStringFromVal(rv)
+	r2 := gen.NewRefOfListOfString(l.Ref())
 	assert.True(r.Equals(r2))
 
 	rv2 := types.Ref{R: r.InternalImplementation()}
@@ -52,8 +53,8 @@ func TestListOfRef(t *testing.T) {
 	a := types.Float32(0)
 	ra := a.Ref()
 
-	l := NewListOfRefOfFloat32()
-	r := NewRefOfFloat32(ra)
+	l := gen.NewListOfRefOfFloat32()
+	r := gen.NewRefOfFloat32(ra)
 	l = l.Append(r)
 	r2 := l.Get(0)
 	assert.True(r.Equals(r2))
@@ -68,13 +69,13 @@ func TestStructWithRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	set := SetOfFloat32Def{0: true, 1: true, 2: true}.New()
-	str := StructWithRefDef{
+	set := gen.SetOfFloat32Def{0: true, 1: true, 2: true}.New()
+	str := gen.StructWithRefDef{
 		R: set.Ref(),
 	}.New()
 
 	r := str.R()
-	r2 := NewRefOfSetOfFloat32(set.Ref())
+	r2 := gen.NewRefOfSetOfFloat32(set.Ref())
 	assert.True(r.Equals(r2))
 
 	assert.Panics(func() { r2.GetValue(cs) })
@@ -93,8 +94,8 @@ func TestListOfRefChunks(t *testing.T) {
 	a := types.Float32(0)
 	ra := a.Ref()
 
-	l := NewListOfRefOfFloat32()
-	r := NewRefOfFloat32(ra)
+	l := gen.NewListOfRefOfFloat32()
+	r := gen.NewRefOfFloat32(ra)
 
 	assert.Len(l.Chunks(), 0)
 
@@ -105,8 +106,8 @@ func TestListOfRefChunks(t *testing.T) {
 func TestStructWithRefChunks(t *testing.T) {
 	assert := assert.New(t)
 
-	set := SetOfFloat32Def{0: true}.New()
-	str := StructWithRefDef{
+	set := gen.SetOfFloat32Def{0: true}.New()
+	str := gen.StructWithRefDef{
 		R: set.Ref(),
 	}.New()
 

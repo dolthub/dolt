@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 	"github.com/attic-labs/noms/types"
 )
 
 func TestMapDef(t *testing.T) {
 	assert := assert.New(t)
 
-	def := MapOfBoolToStringDef{true: "hi", false: "bye"}
+	def := gen.MapOfBoolToStringDef{true: "hi", false: "bye"}
 	m := def.New()
 
 	assert.Equal(uint64(2), m.Len())
@@ -20,14 +21,14 @@ func TestMapDef(t *testing.T) {
 	def2 := m.Def()
 	assert.Equal(def, def2)
 
-	m2 := NewMapOfBoolToString().Set(true, "hi").Set(false, "bye")
+	m2 := gen.NewMapOfBoolToString().Set(true, "hi").Set(false, "bye")
 	assert.True(m.Equals(m2))
 }
 
 func TestValueMapDef(t *testing.T) {
 	assert := assert.New(t)
 
-	def := MapOfStringToValueDef{"s": types.NewString("s"), "i": types.Int32(42)}
+	def := gen.MapOfStringToValueDef{"s": types.NewString("s"), "i": types.Int32(42)}
 	m := def.New()
 
 	assert.Equal(uint64(2), m.Len())
@@ -37,41 +38,41 @@ func TestValueMapDef(t *testing.T) {
 	def2 := m.Def()
 	assert.Equal(def, def2)
 
-	m2 := NewMapOfStringToValue().Set("s", types.NewString("s")).Set("i", types.Int32(42))
+	m2 := gen.NewMapOfStringToValue().Set("s", types.NewString("s")).Set("i", types.Int32(42))
 	assert.True(m.Equals(m2))
 }
 
 func TestMapValue(t *testing.T) {
 	assert := assert.New(t)
 
-	def := MapOfBoolToStringDef{true: "hi", false: "bye"}
+	def := gen.MapOfBoolToStringDef{true: "hi", false: "bye"}
 	m := def.New()
 	val := m
-	m2 := MapOfBoolToStringFromVal(val)
+	m2 := gen.MapOfBoolToStringFromVal(val)
 	assert.True(m.Equals(m2))
 }
 
 func TestValueMapValue(t *testing.T) {
 	assert := assert.New(t)
 
-	def := MapOfStringToValueDef{"s": types.NewString("s"), "i": types.Int32(42)}
+	def := gen.MapOfStringToValueDef{"s": types.NewString("s"), "i": types.Int32(42)}
 	m := def.New()
 	val := m
-	m2 := MapOfStringToValueFromVal(val)
+	m2 := gen.MapOfStringToValueFromVal(val)
 	assert.True(m.Equals(m2))
 }
 
 func TestMapIter(t *testing.T) {
 	assert := assert.New(t)
-	m := MapOfBoolToStringDef{true: "hi", false: "bye"}.New()
-	acc := NewMapOfBoolToString()
+	m := gen.MapOfBoolToStringDef{true: "hi", false: "bye"}.New()
+	acc := gen.NewMapOfBoolToString()
 	m.Iter(func(k bool, v string) bool {
 		acc = acc.Set(k, v)
 		return false
 	})
 	assert.True(m.Equals(acc))
 
-	acc = NewMapOfBoolToString()
+	acc = gen.NewMapOfBoolToString()
 	m.Iter(func(k bool, v string) bool {
 		return true
 	})
@@ -80,8 +81,8 @@ func TestMapIter(t *testing.T) {
 
 func TestMapIterAll(t *testing.T) {
 	assert := assert.New(t)
-	m := MapOfBoolToStringDef{true: "hi", false: "bye"}.New()
-	acc := NewMapOfBoolToString()
+	m := gen.MapOfBoolToStringDef{true: "hi", false: "bye"}.New()
+	acc := gen.NewMapOfBoolToString()
 	m.IterAll(func(k bool, v string) {
 		acc = acc.Set(k, v)
 	})
@@ -90,21 +91,21 @@ func TestMapIterAll(t *testing.T) {
 
 func TestMapFilter(t *testing.T) {
 	assert := assert.New(t)
-	m := MapOfBoolToStringDef{true: "hi", false: "bye"}.New()
+	m := gen.MapOfBoolToStringDef{true: "hi", false: "bye"}.New()
 	m2 := m.Filter(func(k bool, v string) bool {
 		return k
 	})
-	assert.True(NewMapOfBoolToString().Set(true, "hi").Equals(m2))
+	assert.True(gen.NewMapOfBoolToString().Set(true, "hi").Equals(m2))
 
 	m3 := m.Filter(func(k bool, v string) bool {
 		return v == "bye"
 	})
-	assert.True(NewMapOfBoolToString().Set(false, "bye").Equals(m3))
+	assert.True(gen.NewMapOfBoolToString().Set(false, "bye").Equals(m3))
 }
 
 func TestMapMaybeGet(t *testing.T) {
 	assert := assert.New(t)
-	m := NewMapOfStringToValue()
+	m := gen.NewMapOfStringToValue()
 	k1 := "key1"
 	k2 := "key2"
 	v1 := types.NewString("SomeValue")

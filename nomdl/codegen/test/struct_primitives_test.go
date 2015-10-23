@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 	"github.com/attic-labs/noms/types"
 )
 
 func TestAccessors(t *testing.T) {
 	assert := assert.New(t)
 
-	def := StructPrimitivesDef{
+	def := gen.StructPrimitivesDef{
 		Uint64:  uint64(1),
 		Uint32:  uint32(2),
 		Uint16:  uint16(3),
@@ -120,7 +121,7 @@ func TestAccessors(t *testing.T) {
 func TestStructBackingMapKeyNames(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewStructPrimitives().SetBool(true)
+	s := gen.NewStructPrimitives().SetBool(true)
 
 	assert.True(bool(s.InternalImplementation().Get(types.NewString("bool")).(types.Bool)))
 }

@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 )
 
 func TestSetDef(t *testing.T) {
 	assert := assert.New(t)
 
-	def := SetOfBoolDef{true: true}
+	def := gen.SetOfBoolDef{true: true}
 	s := def.New()
 
 	assert.Equal(uint64(1), s.Len())
@@ -19,32 +20,32 @@ func TestSetDef(t *testing.T) {
 	def2 := s.Def()
 	assert.Equal(def, def2)
 
-	s2 := NewSetOfBool().Insert(true)
+	s2 := gen.NewSetOfBool().Insert(true)
 	assert.True(s.Equals(s2))
 }
 
 func TestSetValue(t *testing.T) {
 	assert := assert.New(t)
 
-	def := SetOfBoolDef{true: true}
+	def := gen.SetOfBoolDef{true: true}
 	m := def.New()
 	val := m
-	s2 := SetOfBoolFromVal(val)
+	s2 := gen.SetOfBoolFromVal(val)
 	assert.True(m.Equals(s2))
 }
 
 func TestSetOfBoolIter(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSetOfBool().Insert(true, false)
-	acc := NewSetOfBool()
+	s := gen.NewSetOfBool().Insert(true, false)
+	acc := gen.NewSetOfBool()
 	s.Iter(func(v bool) bool {
 		acc = acc.Insert(v)
 		return false
 	})
 	assert.True(s.Equals(acc))
 
-	acc = NewSetOfBool()
+	acc = gen.NewSetOfBool()
 	s.Iter(func(v bool) bool {
 		return true
 	})
@@ -54,8 +55,8 @@ func TestSetOfBoolIter(t *testing.T) {
 func TestSetOfBoolIterAll(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSetOfBool().Insert(true, false)
-	acc := NewSetOfBool()
+	s := gen.NewSetOfBool().Insert(true, false)
+	acc := gen.NewSetOfBool()
 	s.IterAll(func(v bool) {
 		acc = acc.Insert(v)
 	})
@@ -65,9 +66,9 @@ func TestSetOfBoolIterAll(t *testing.T) {
 func TestSetOfBoolFilter(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSetOfBool().Insert(true, false)
+	s := gen.NewSetOfBool().Insert(true, false)
 	s2 := s.Filter(func(v bool) bool {
 		return v
 	})
-	assert.True(NewSetOfBool().Insert(true).Equals(s2))
+	assert.True(gen.NewSetOfBool().Insert(true).Equals(s2))
 }
