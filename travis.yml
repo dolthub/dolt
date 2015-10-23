@@ -2,6 +2,3 @@ language: go
 
 go:
   - 1.5
-
-notifications:
-  slack: atticlabs:qmHiRjaLBhOoFgpHBeeoWajC
