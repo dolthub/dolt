@@ -1,7 +1,0 @@
-language: go
-
-go:
-  - 1.5
-
-notifications:
-  slack: atticlabs:TrfE2bADv8HsrkLXgXvh09TP
