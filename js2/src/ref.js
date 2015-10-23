@@ -65,7 +65,7 @@ class Ref {
 
   static parse(s: string): Ref {
     let m = s.match(pattern);
-    if (m === null) {
+    if (m == null) {
       throw Error('Could not parse ref: ' + s);
     }
 
