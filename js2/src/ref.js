@@ -65,6 +65,10 @@ class Ref {
 
   static parse(s: string): Ref {
     let m = s.match(pattern);
+    if (m == null) {
+      throw Error('Could not parse ref: ' + s);
+    }
+
     return new Ref(hexToUint8(m[1]));
   }
 
