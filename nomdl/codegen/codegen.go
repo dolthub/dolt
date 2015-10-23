@@ -103,7 +103,7 @@ func generate(packageName, in, out, depsDir string, pkgDS dataset.Dataset) datas
 	generateAndEmit(getBareFileName(in), out, importPaths(depsDir, deps), deps, p)
 
 	// Since we're just building up a set of refs to all the packages in pkgDS, simply retrying is the logical response to commit failure.
-	for ok := false; !ok; pkgDS, ok = pkgDS.Commit(buildSetOfRefOfPackage(p, deps, pkgDS).NomsValue()) {
+	for ok := false; !ok; pkgDS, ok = pkgDS.Commit(buildSetOfRefOfPackage(p, deps, pkgDS)) {
 	}
 	return pkgDS
 }
@@ -199,23 +199,31 @@ func getGoPackageName() string {
 }
 
 type codeGen struct {
-	w         io.Writer
-	pkg       pkg.Parsed
-	deps      depsMap
-	fileid    string
-	imports   []string
-	written   map[string]bool
-	toWrite   []types.TypeRef
-	generator *code.Generator
-	templates *template.Template
+	w          io.Writer
+	pkg        pkg.Parsed
+	deps       depsMap
+	imports    []string
+	written    map[string]bool
+	toWrite    []types.TypeRef
+	generator  *code.Generator
+	templates  *template.Template
+	sharedData sharedData
 }
 
 type resolver struct {
 }
 
 func NewCodeGen(w io.Writer, fileID string, importPaths []string, deps depsMap, pkg pkg.Parsed) *codeGen {
-	gen := &codeGen{w, pkg, deps, fileID, importPaths, map[string]bool{}, []types.TypeRef{}, nil, nil}
-	gen.generator = &code.Generator{R: gen}
+	typesPackage := "types."
+	if pkg.Name == "types" {
+		typesPackage = ""
+	}
+	gen := &codeGen{w, pkg, deps, importPaths, map[string]bool{}, []types.TypeRef{}, nil, nil, sharedData{
+		fileID,
+		pkg.Name,
+		typesPackage,
+	}}
+	gen.generator = &code.Generator{R: gen, TypesPackage: typesPackage}
 	gen.templates = gen.readTemplates()
 	return gen
 }
@@ -251,20 +259,26 @@ func (gen *codeGen) Resolve(t types.TypeRef) types.TypeRef {
 	return dep.Types()[t.Ordinal()]
 }
 
+type sharedData struct {
+	FileID       string
+	PackageName  string
+	TypesPackage string
+}
+
 func (gen *codeGen) WritePackage() {
 	pkgTypes := gen.pkg.Types()
 	data := struct {
+		sharedData
 		HasImports   bool
 		HasTypes     bool
-		FileID       string
 		Imports      []string
 		Dependencies []ref.Ref
 		Name         string
 		Types        []types.TypeRef
 	}{
+		gen.sharedData,
 		len(gen.imports) > 0,
 		len(pkgTypes) > 0,
-		gen.fileid,
 		gen.imports,
 		gen.pkg.Dependencies(),
 		gen.pkg.Name,
@@ -342,8 +356,7 @@ func (gen *codeGen) writeStruct(t types.TypeRef, ordinal int) {
 	d.Chk.True(ordinal >= 0)
 	desc := t.Desc.(types.StructDesc)
 	data := struct {
-		FileID        string
-		PackageName   string
+		sharedData
 		Name          string
 		Type          types.TypeRef
 		Ordinal       int
@@ -353,8 +366,7 @@ func (gen *codeGen) writeStruct(t types.TypeRef, ordinal int) {
 		UnionZeroType types.TypeRef
 		CanUseDef     bool
 	}{
-		gen.fileid,
-		gen.pkg.Name,
+		gen.sharedData,
 		gen.generator.UserName(t),
 		t,
 		ordinal,
@@ -383,15 +395,13 @@ func (gen *codeGen) writeStruct(t types.TypeRef, ordinal int) {
 func (gen *codeGen) writeList(t types.TypeRef) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
-		FileID      string
-		PackageName string
-		Name        string
-		Type        types.TypeRef
-		ElemType    types.TypeRef
-		CanUseDef   bool
+		sharedData
+		Name      string
+		Type      types.TypeRef
+		ElemType  types.TypeRef
+		CanUseDef bool
 	}{
-		gen.fileid,
-		gen.pkg.Name,
+		gen.sharedData,
 		gen.generator.UserName(t),
 		t,
 		elemTypes[0],
@@ -404,16 +414,14 @@ func (gen *codeGen) writeList(t types.TypeRef) {
 func (gen *codeGen) writeMap(t types.TypeRef) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
-		FileID      string
-		PackageName string
-		Name        string
-		Type        types.TypeRef
-		KeyType     types.TypeRef
-		ValueType   types.TypeRef
-		CanUseDef   bool
+		sharedData
+		Name      string
+		Type      types.TypeRef
+		KeyType   types.TypeRef
+		ValueType types.TypeRef
+		CanUseDef bool
 	}{
-		gen.fileid,
-		gen.pkg.Name,
+		gen.sharedData,
 		gen.generator.UserName(t),
 		t,
 		elemTypes[0],
@@ -428,14 +436,12 @@ func (gen *codeGen) writeMap(t types.TypeRef) {
 func (gen *codeGen) writeRef(t types.TypeRef) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
-		FileID      string
-		PackageName string
-		Name        string
-		Type        types.TypeRef
-		ElemType    types.TypeRef
+		sharedData
+		Name     string
+		Type     types.TypeRef
+		ElemType types.TypeRef
 	}{
-		gen.fileid,
-		gen.pkg.Name,
+		gen.sharedData,
 		gen.generator.UserName(t),
 		t,
 		elemTypes[0],
@@ -447,15 +453,13 @@ func (gen *codeGen) writeRef(t types.TypeRef) {
 func (gen *codeGen) writeSet(t types.TypeRef) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
-		FileID      string
-		PackageName string
-		Name        string
-		Type        types.TypeRef
-		ElemType    types.TypeRef
-		CanUseDef   bool
+		sharedData
+		Name      string
+		Type      types.TypeRef
+		ElemType  types.TypeRef
+		CanUseDef bool
 	}{
-		gen.fileid,
-		gen.pkg.Name,
+		gen.sharedData,
 		gen.generator.UserName(t),
 		t,
 		elemTypes[0],
@@ -468,15 +472,13 @@ func (gen *codeGen) writeSet(t types.TypeRef) {
 func (gen *codeGen) writeEnum(t types.TypeRef, ordinal int) {
 	d.Chk.True(ordinal >= 0)
 	data := struct {
-		FileID      string
-		PackageName string
-		Name        string
-		Type        types.TypeRef
-		Ordinal     int
-		Ids         []string
+		sharedData
+		Name    string
+		Type    types.TypeRef
+		Ordinal int
+		Ids     []string
 	}{
-		gen.fileid,
-		gen.pkg.Name,
+		gen.sharedData,
 		t.Name(),
 		t,
 		ordinal,

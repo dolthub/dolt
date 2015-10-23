@@ -1,23 +1,25 @@
+{{$typesPackage := .TypesPackage}}
+
 // {{.Name}}
 
 type {{.Name}} struct {
-	l   types.List
+	l   {{$typesPackage}}List
 	ref *ref.Ref
 }
 
 func New{{.Name}}() {{.Name}} {
-	return {{.Name}}{types.NewList(), &ref.Ref{}}
+	return {{.Name}}{ {{$typesPackage}}NewList(), &ref.Ref{}}
 }
 
 {{if .CanUseDef}}
 	type {{.Name}}Def []{{defType .ElemType}}
 
 	func (def {{.Name}}Def) New() {{.Name}} {
-		l := make([]types.Value, len(def))
+		l := make([]{{$typesPackage}}Value, len(def))
 		for i, d := range def {
 			l[i] = {{defToValue "d" .ElemType }}
 		}
-		return {{.Name}}{types.NewList(l...), &ref.Ref{}}
+		return {{.Name}}{ {{$typesPackage}}NewList(l...), &ref.Ref{}}
 	}
 
 	func (l {{.Name}}) Def() {{.Name}}Def {
@@ -29,20 +31,20 @@ func New{{.Name}}() {{.Name}} {
 	}
 {{end}}
 
-func {{.Name}}FromVal(val types.Value) {{.Name}} {
+func {{.Name}}FromVal(val {{$typesPackage}}Value) {{.Name}} {
 	// TODO: Do we still need FromVal?
 	if val, ok := val.({{.Name}}); ok {
 		return val
 	}
 	// TODO: Validate here
-	return {{.Name}}{val.(types.List), &ref.Ref{}}
+	return {{.Name}}{val.({{$typesPackage}}List), &ref.Ref{}}
 }
 
-func (l {{.Name}}) InternalImplementation() types.List {
+func (l {{.Name}}) InternalImplementation() {{$typesPackage}}List {
 	return l.l
 }
 
-func (l {{.Name}}) Equals(other types.Value) bool {
+func (l {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
 	if other, ok := other.({{.Name}}); ok {
 		return l.Ref() == other.Ref()
 	}
@@ -50,10 +52,10 @@ func (l {{.Name}}) Equals(other types.Value) bool {
 }
 
 func (l {{.Name}}) Ref() ref.Ref {
-	return types.EnsureRef(l.ref, l)
+	return {{$typesPackage}}EnsureRef(l.ref, l)
 }
 
-func (l {{.Name}}) Chunks() (futures []types.Future) {
+func (l {{.Name}}) Chunks() (futures []{{$typesPackage}}Future) {
 	futures = append(futures, l.TypeRef().Chunks()...)
 	futures = append(futures, l.l.Chunks()...)
 	return
@@ -97,8 +99,8 @@ func (l {{.Name}}) RemoveAt(idx uint64) {{.Name}} {
 	return {{.Name}}{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
-func (l {{.Name}}) fromElemSlice(p []{{userType .ElemType}}) []types.Value {
-	r := make([]types.Value, len(p))
+func (l {{.Name}}) fromElemSlice(p []{{userType .ElemType}}) []{{$typesPackage}}Value {
+	r := make([]{{$typesPackage}}Value, len(p))
 	for i, v := range p {
 		r[i] = {{userToValue "v" .ElemType}}
 	}
@@ -108,7 +110,7 @@ func (l {{.Name}}) fromElemSlice(p []{{userType .ElemType}}) []types.Value {
 type {{.Name}}IterCallback func(v {{userType .ElemType}}, i uint64) (stop bool)
 
 func (l {{.Name}}) Iter(cb {{.Name}}IterCallback) {
-	l.l.Iter(func(v types.Value, i uint64) bool {
+	l.l.Iter(func(v {{$typesPackage}}Value, i uint64) bool {
 		return cb({{valueToUser "v" .ElemType}}, i)
 	})
 }
@@ -116,7 +118,7 @@ func (l {{.Name}}) Iter(cb {{.Name}}IterCallback) {
 type {{.Name}}IterAllCallback func(v {{userType .ElemType}}, i uint64)
 
 func (l {{.Name}}) IterAll(cb {{.Name}}IterAllCallback) {
-	l.l.IterAll(func(v types.Value, i uint64) {
+	l.l.IterAll(func(v {{$typesPackage}}Value, i uint64) {
 		cb({{valueToUser "v" .ElemType}}, i)
 	})
 }

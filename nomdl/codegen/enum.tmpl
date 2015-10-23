@@ -1,3 +1,5 @@
+{{$typesPackage := .TypesPackage}}
+
 // {{.Name}}
 
 type {{.Name}} uint32
@@ -11,15 +13,16 @@ func New{{.Name}}() {{.Name}} {
 	return {{.Name}}(0)
 }
 
-var __typeRefFor{{.Name}} = types.MakeTypeRef(__{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef, {{.Ordinal}})
+var __typeRefFor{{.Name}} {{$typesPackage}}TypeRef
 
-func (e {{.Name}}) TypeRef() types.TypeRef {
+func (e {{.Name}}) TypeRef() {{$typesPackage}}TypeRef {
 	return __typeRefFor{{.Name}}
 }
 
 func init() {
-	types.RegisterFromValFunction(__typeRefFor{{.Name}}, func(v types.Value) types.Value {
-		return {{.Name}}(uint32(v.(types.UInt32)))
+	__typeRefFor{{.Name}} = {{$typesPackage}}MakeTypeRef(__{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef, {{.Ordinal}})
+	{{$typesPackage}}RegisterFromValFunction(__typeRefFor{{.Name}}, func(v {{$typesPackage}}Value) {{$typesPackage}}Value {
+		return {{.Name}}(uint32(v.({{$typesPackage}}UInt32)))
 	})
 }
 
@@ -27,7 +30,7 @@ func (e {{.Name}}) InternalImplementation() uint32 {
 	return uint32(e)
 }
 
-func (e {{.Name}}) Equals(other types.Value) bool {
+func (e {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
 	if other, ok := other.({{.Name}}); ok {
 		return e == other
 	}
@@ -36,10 +39,10 @@ func (e {{.Name}}) Equals(other types.Value) bool {
 
 func (e {{.Name}}) Ref() ref.Ref {
 	throwaway := ref.Ref{}
-	return types.EnsureRef(&throwaway, e)
+	return {{$typesPackage}}EnsureRef(&throwaway, e)
 }
 
-func (e {{.Name}}) Chunks() []types.Future {
+func (e {{.Name}}) Chunks() []{{$typesPackage}}Future {
 	return nil
 }
 

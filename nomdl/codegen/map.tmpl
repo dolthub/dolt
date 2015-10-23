@@ -1,28 +1,30 @@
+{{$typesPackage := .TypesPackage}}
+
 // {{.Name}}
 
 type {{.Name}} struct {
-	m   types.Map
+	m   {{$typesPackage}}Map
 	ref *ref.Ref
 }
 
 func New{{.Name}}() {{.Name}} {
-	return {{.Name}}{types.NewMap(), &ref.Ref{}}
+	return {{.Name}}{ {{$typesPackage}}NewMap(), &ref.Ref{}}
 }
 
 {{if .CanUseDef}}
 	type {{.Name}}Def map[{{defType .KeyType}}]{{defType .ValueType}}
 
 	func (def {{.Name}}Def) New() {{.Name}} {
-		kv := make([]types.Value, 0, len(def)*2)
+		kv := make([]{{$typesPackage}}Value, 0, len(def)*2)
 		for k, v := range def {
 			kv = append(kv, {{defToValue "k" .KeyType}}, {{defToValue "v" .ValueType}})
 		}
-		return {{.Name}}{types.NewMap(kv...), &ref.Ref{}}
+		return {{.Name}}{ {{$typesPackage}}NewMap(kv...), &ref.Ref{}}
 	}
 
 	func (m {{.Name}}) Def() {{.Name}}Def {
 		def := make(map[{{defType .KeyType}}]{{defType .ValueType}})
-		m.m.Iter(func(k, v types.Value) bool {
+		m.m.Iter(func(k, v {{$typesPackage}}Value) bool {
 			def[{{valueToDef "k" .KeyType}}] = {{valueToDef "v" .ValueType}}
 			return false
 		})
@@ -30,20 +32,20 @@ func New{{.Name}}() {{.Name}} {
 	}
 {{end}}
 
-func {{.Name}}FromVal(val types.Value) {{.Name}} {
+func {{.Name}}FromVal(val {{$typesPackage}}Value) {{.Name}} {
 	// TODO: Do we still need FromVal?
 	if val, ok := val.({{.Name}}); ok {
 		return val
 	}
 	// TODO: Validate here
-	return {{.Name}}{val.(types.Map), &ref.Ref{}}
+	return {{.Name}}{val.({{$typesPackage}}Map), &ref.Ref{}}
 }
 
-func (m {{.Name}}) InternalImplementation() types.Map {
+func (m {{.Name}}) InternalImplementation() {{$typesPackage}}Map {
 	return m.m
 }
 
-func (m {{.Name}}) Equals(other types.Value) bool {
+func (m {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
 	if other, ok := other.({{.Name}}); ok {
 		return m.Ref() == other.Ref()
 	}
@@ -51,10 +53,10 @@ func (m {{.Name}}) Equals(other types.Value) bool {
 }
 
 func (m {{.Name}}) Ref() ref.Ref {
-	return types.EnsureRef(m.ref, m)
+	return {{$typesPackage}}EnsureRef(m.ref, m)
 }
 
-func (m {{.Name}}) Chunks() (futures []types.Future) {
+func (m {{.Name}}) Chunks() (futures []{{$typesPackage}}Future) {
 	futures = append(futures, m.TypeRef().Chunks()...)
 	futures = append(futures, m.m.Chunks()...)
 	return
@@ -99,7 +101,7 @@ func (m {{.Name}}) Remove(p {{userType .KeyType}}) {{.Name}} {
 type {{.Name}}IterCallback func(k {{userType .KeyType}}, v {{userType .ValueType}}) (stop bool)
 
 func (m {{.Name}}) Iter(cb {{.Name}}IterCallback) {
-	m.m.Iter(func(k, v types.Value) bool {
+	m.m.Iter(func(k, v {{$typesPackage}}Value) bool {
 		return cb({{valueToUser "k" .KeyType}}, {{valueToUser "v" .ValueType}})
 	})
 }
@@ -107,7 +109,7 @@ func (m {{.Name}}) Iter(cb {{.Name}}IterCallback) {
 type {{.Name}}IterAllCallback func(k {{userType .KeyType}}, v {{userType .ValueType}})
 
 func (m {{.Name}}) IterAll(cb {{.Name}}IterAllCallback) {
-	m.m.IterAll(func(k, v types.Value) {
+	m.m.IterAll(func(k, v {{$typesPackage}}Value) {
 		cb({{valueToUser "k" .KeyType}}, {{valueToUser "v" .ValueType}})
 	})
 }
