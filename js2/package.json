@@ -1,0 +1,17 @@
+{
+  "name": "newjs",
+  "main": "dist/noms.js",
+  "dependencies": {
+    "rusha": "^0.8.3"
+  },
+  "devDependencies": {
+    "babel": "^5.6.23",
+    "chai": "^3.2.0",
+    "mocha": "^2.3.0"
+  },
+  "scripts": {
+    "start": "babel -w src/ -d dist/",
+    "build": "babel src/ -d dist/",
+    "test": "babel src/ -d dist/; flow; mocha --ui tdd dist/"
+  }
+}
