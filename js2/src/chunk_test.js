@@ -23,6 +23,10 @@ suite('Chunk', () => {
     assert.isFalse(c.isEmpty());
   });
 
+  test('failOnPurpose', () => {
+    assert.isTrue(false);
+  });
+
   test('isEmpty', () => {
     function assertChunkIsEmpty(c: Chunk) {
       assert.strictEqual(c.data.length, 0);
