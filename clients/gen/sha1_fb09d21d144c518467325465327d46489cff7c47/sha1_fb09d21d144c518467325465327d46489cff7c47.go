@@ -7,12 +7,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef = __sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_Ref()
+var __sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("Geoposition",
 			[]types.Field{
@@ -29,7 +29,7 @@ func __sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d1
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	return types.RegisterPackage(&p)
+	__sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef = types.RegisterPackage(&p)
 }
 
 // Geoposition
@@ -65,13 +65,14 @@ func (s Geoposition) Def() (d GeopositionDef) {
 	return
 }
 
-var __typeRefForGeoposition = types.MakeTypeRef(__sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef, 0)
+var __typeRefForGeoposition types.TypeRef
 
 func (m Geoposition) TypeRef() types.TypeRef {
 	return __typeRefForGeoposition
 }
 
 func init() {
+	__typeRefForGeoposition = types.MakeTypeRef(__sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForGeoposition, func(v types.Value) types.Value {
 		return GeopositionFromVal(v)
 	})
@@ -156,13 +157,14 @@ func (s Georectangle) Def() (d GeorectangleDef) {
 	return
 }
 
-var __typeRefForGeorectangle = types.MakeTypeRef(__sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef, 1)
+var __typeRefForGeorectangle types.TypeRef
 
 func (m Georectangle) TypeRef() types.TypeRef {
 	return __typeRefForGeorectangle
 }
 
 func init() {
+	__typeRefForGeorectangle = types.MakeTypeRef(__sha1_fb09d21d144c518467325465327d46489cff7c47PackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForGeorectangle, func(v types.Value) types.Value {
 		return GeorectangleFromVal(v)
 	})

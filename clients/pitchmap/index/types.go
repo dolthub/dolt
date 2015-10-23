@@ -7,12 +7,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
+var __mainPackageInFile_types_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __mainPackageInFile_types_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("Pitch",
 			[]types.Field{
@@ -22,7 +22,7 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	return types.RegisterPackage(&p)
+	__mainPackageInFile_types_CachedRef = types.RegisterPackage(&p)
 }
 
 // Pitch
@@ -58,13 +58,14 @@ func (s Pitch) Def() (d PitchDef) {
 	return
 }
 
-var __typeRefForPitch = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
+var __typeRefForPitch types.TypeRef
 
 func (m Pitch) TypeRef() types.TypeRef {
 	return __typeRefForPitch
 }
 
 func init() {
+	__typeRefForPitch = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForPitch, func(v types.Value) types.Value {
 		return PitchFromVal(v)
 	})

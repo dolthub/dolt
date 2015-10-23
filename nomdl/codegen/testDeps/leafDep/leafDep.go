@@ -7,12 +7,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __testPackageInFile_leafDep_CachedRef = __testPackageInFile_leafDep_Ref()
+var __testPackageInFile_leafDep_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __testPackageInFile_leafDep_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("S",
 			[]types.Field{
@@ -23,7 +23,7 @@ func __testPackageInFile_leafDep_Ref() ref.Ref {
 		),
 		types.MakeEnumTypeRef("E", "e1", "e2", "e3"),
 	}, []ref.Ref{})
-	return types.RegisterPackage(&p)
+	__testPackageInFile_leafDep_CachedRef = types.RegisterPackage(&p)
 }
 
 // S
@@ -59,13 +59,14 @@ func (s S) Def() (d SDef) {
 	return
 }
 
-var __typeRefForS = types.MakeTypeRef(__testPackageInFile_leafDep_CachedRef, 0)
+var __typeRefForS types.TypeRef
 
 func (m S) TypeRef() types.TypeRef {
 	return __typeRefForS
 }
 
 func init() {
+	__typeRefForS = types.MakeTypeRef(__testPackageInFile_leafDep_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForS, func(v types.Value) types.Value {
 		return SFromVal(v)
 	})
@@ -131,13 +132,14 @@ func NewE() E {
 	return E(0)
 }
 
-var __typeRefForE = types.MakeTypeRef(__testPackageInFile_leafDep_CachedRef, 1)
+var __typeRefForE types.TypeRef
 
 func (e E) TypeRef() types.TypeRef {
 	return __typeRefForE
 }
 
 func init() {
+	__typeRefForE = types.MakeTypeRef(__testPackageInFile_leafDep_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForE, func(v types.Value) types.Value {
 		return E(uint32(v.(types.UInt32)))
 	})

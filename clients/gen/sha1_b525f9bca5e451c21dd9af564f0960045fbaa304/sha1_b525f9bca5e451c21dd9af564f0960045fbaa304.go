@@ -9,12 +9,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef = __sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_Ref()
+var __sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("RemotePhoto",
 			[]types.Field{
@@ -37,7 +37,7 @@ func __sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca
 	}, []ref.Ref{
 		ref.Parse("sha1-fb09d21d144c518467325465327d46489cff7c47"),
 	})
-	return types.RegisterPackage(&p)
+	__sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef = types.RegisterPackage(&p)
 }
 
 // RemotePhoto
@@ -89,13 +89,14 @@ func (s RemotePhoto) Def() (d RemotePhotoDef) {
 	return
 }
 
-var __typeRefForRemotePhoto = types.MakeTypeRef(__sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef, 0)
+var __typeRefForRemotePhoto types.TypeRef
 
 func (m RemotePhoto) TypeRef() types.TypeRef {
 	return __typeRefForRemotePhoto
 }
 
 func init() {
+	__typeRefForRemotePhoto = types.MakeTypeRef(__sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForRemotePhoto, func(v types.Value) types.Value {
 		return RemotePhotoFromVal(v)
 	})
@@ -212,13 +213,14 @@ func (s Size) Def() (d SizeDef) {
 	return
 }
 
-var __typeRefForSize = types.MakeTypeRef(__sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef, 1)
+var __typeRefForSize types.TypeRef
 
 func (m Size) TypeRef() types.TypeRef {
 	return __typeRefForSize
 }
 
 func init() {
+	__typeRefForSize = types.MakeTypeRef(__sha1_b525f9bca5e451c21dd9af564f0960045fbaa304PackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForSize, func(v types.Value) types.Value {
 		return SizeFromVal(v)
 	})

@@ -7,12 +7,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef = __sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_Ref()
+var __sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("S",
 			[]types.Field{
@@ -23,7 +23,7 @@ func __sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7e
 		),
 		types.MakeEnumTypeRef("E", "e1", "e2", "e3"),
 	}, []ref.Ref{})
-	return types.RegisterPackage(&p)
+	__sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef = types.RegisterPackage(&p)
 }
 
 // S
@@ -59,13 +59,14 @@ func (s S) Def() (d SDef) {
 	return
 }
 
-var __typeRefForS = types.MakeTypeRef(__sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef, 0)
+var __typeRefForS types.TypeRef
 
 func (m S) TypeRef() types.TypeRef {
 	return __typeRefForS
 }
 
 func init() {
+	__typeRefForS = types.MakeTypeRef(__sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForS, func(v types.Value) types.Value {
 		return SFromVal(v)
 	})
@@ -131,13 +132,14 @@ func NewE() E {
 	return E(0)
 }
 
-var __typeRefForE = types.MakeTypeRef(__sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef, 1)
+var __typeRefForE types.TypeRef
 
 func (e E) TypeRef() types.TypeRef {
 	return __typeRefForE
 }
 
 func init() {
+	__typeRefForE = types.MakeTypeRef(__sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288PackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForE, func(v types.Value) types.Value {
 		return E(uint32(v.(types.UInt32)))
 	})

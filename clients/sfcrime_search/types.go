@@ -9,12 +9,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
+var __mainPackageInFile_types_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __mainPackageInFile_types_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("Incident",
 			[]types.Field{
@@ -40,7 +40,7 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 	}, []ref.Ref{
 		ref.Parse("sha1-fb09d21d144c518467325465327d46489cff7c47"),
 	})
-	return types.RegisterPackage(&p)
+	__mainPackageInFile_types_CachedRef = types.RegisterPackage(&p)
 }
 
 // Incident
@@ -88,13 +88,14 @@ func (s Incident) Def() (d IncidentDef) {
 	return
 }
 
-var __typeRefForIncident = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
+var __typeRefForIncident types.TypeRef
 
 func (m Incident) TypeRef() types.TypeRef {
 	return __typeRefForIncident
 }
 
 func init() {
+	__typeRefForIncident = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForIncident, func(v types.Value) types.Value {
 		return IncidentFromVal(v)
 	})
@@ -219,13 +220,14 @@ func (s SQuadTree) Def() (d SQuadTreeDef) {
 	return
 }
 
-var __typeRefForSQuadTree = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1)
+var __typeRefForSQuadTree types.TypeRef
 
 func (m SQuadTree) TypeRef() types.TypeRef {
 	return __typeRefForSQuadTree
 }
 
 func init() {
+	__typeRefForSQuadTree = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForSQuadTree, func(v types.Value) types.Value {
 		return SQuadTreeFromVal(v)
 	})

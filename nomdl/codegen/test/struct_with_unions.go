@@ -7,12 +7,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __testPackageInFile_struct_with_unions_CachedRef = __testPackageInFile_struct_with_unions_Ref()
+var __testPackageInFile_struct_with_unions_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __testPackageInFile_struct_with_unions_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("StructWithUnions",
 			[]types.Field{
@@ -36,7 +36,7 @@ func __testPackageInFile_struct_with_unions_Ref() ref.Ref {
 			},
 		),
 	}, []ref.Ref{})
-	return types.RegisterPackage(&p)
+	__testPackageInFile_struct_with_unions_CachedRef = types.RegisterPackage(&p)
 }
 
 // StructWithUnions
@@ -72,13 +72,14 @@ func (s StructWithUnions) Def() (d StructWithUnionsDef) {
 	return
 }
 
-var __typeRefForStructWithUnions = types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 0)
+var __typeRefForStructWithUnions types.TypeRef
 
 func (m StructWithUnions) TypeRef() types.TypeRef {
 	return __typeRefForStructWithUnions
 }
 
 func init() {
+	__typeRefForStructWithUnions = types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForStructWithUnions, func(v types.Value) types.Value {
 		return StructWithUnionsFromVal(v)
 	})
@@ -183,13 +184,14 @@ func (s __unionOfBOfFloat64AndCOfString) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
-var __typeRefFor__unionOfBOfFloat64AndCOfString = types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 1)
+var __typeRefFor__unionOfBOfFloat64AndCOfString types.TypeRef
 
 func (m __unionOfBOfFloat64AndCOfString) TypeRef() types.TypeRef {
 	return __typeRefFor__unionOfBOfFloat64AndCOfString
 }
 
 func init() {
+	__typeRefFor__unionOfBOfFloat64AndCOfString = types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefFor__unionOfBOfFloat64AndCOfString, func(v types.Value) types.Value {
 		return __unionOfBOfFloat64AndCOfStringFromVal(v)
 	})
@@ -326,13 +328,14 @@ func (s __unionOfEOfFloat64AndFOfString) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
-var __typeRefFor__unionOfEOfFloat64AndFOfString = types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 2)
+var __typeRefFor__unionOfEOfFloat64AndFOfString types.TypeRef
 
 func (m __unionOfEOfFloat64AndFOfString) TypeRef() types.TypeRef {
 	return __typeRefFor__unionOfEOfFloat64AndFOfString
 }
 
 func init() {
+	__typeRefFor__unionOfEOfFloat64AndFOfString = types.MakeTypeRef(__testPackageInFile_struct_with_unions_CachedRef, 2)
 	types.RegisterFromValFunction(__typeRefFor__unionOfEOfFloat64AndFOfString, func(v types.Value) types.Value {
 		return __unionOfEOfFloat64AndFOfStringFromVal(v)
 	})

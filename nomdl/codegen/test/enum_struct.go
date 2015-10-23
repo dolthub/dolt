@@ -7,12 +7,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __testPackageInFile_enum_struct_CachedRef = __testPackageInFile_enum_struct_Ref()
+var __testPackageInFile_enum_struct_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __testPackageInFile_enum_struct_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeEnumTypeRef("Handedness", "right", "left", "switch"),
 		types.MakeStructTypeRef("EnumStruct",
@@ -22,7 +22,7 @@ func __testPackageInFile_enum_struct_Ref() ref.Ref {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	return types.RegisterPackage(&p)
+	__testPackageInFile_enum_struct_CachedRef = types.RegisterPackage(&p)
 }
 
 // Handedness
@@ -39,13 +39,14 @@ func NewHandedness() Handedness {
 	return Handedness(0)
 }
 
-var __typeRefForHandedness = types.MakeTypeRef(__testPackageInFile_enum_struct_CachedRef, 0)
+var __typeRefForHandedness types.TypeRef
 
 func (e Handedness) TypeRef() types.TypeRef {
 	return __typeRefForHandedness
 }
 
 func init() {
+	__typeRefForHandedness = types.MakeTypeRef(__testPackageInFile_enum_struct_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForHandedness, func(v types.Value) types.Value {
 		return Handedness(uint32(v.(types.UInt32)))
 	})
@@ -100,13 +101,14 @@ func (s EnumStruct) Def() (d EnumStructDef) {
 	return
 }
 
-var __typeRefForEnumStruct = types.MakeTypeRef(__testPackageInFile_enum_struct_CachedRef, 1)
+var __typeRefForEnumStruct types.TypeRef
 
 func (m EnumStruct) TypeRef() types.TypeRef {
 	return __typeRefForEnumStruct
 }
 
 func init() {
+	__typeRefForEnumStruct = types.MakeTypeRef(__testPackageInFile_enum_struct_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForEnumStruct, func(v types.Value) types.Value {
 		return EnumStructFromVal(v)
 	})

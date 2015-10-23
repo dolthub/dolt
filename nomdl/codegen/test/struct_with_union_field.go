@@ -7,12 +7,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __testPackageInFile_struct_with_union_field_CachedRef = __testPackageInFile_struct_with_union_field_Ref()
+var __testPackageInFile_struct_with_union_field_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __testPackageInFile_struct_with_union_field_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("StructWithUnionField",
 			[]types.Field{
@@ -27,7 +27,7 @@ func __testPackageInFile_struct_with_union_field_Ref() ref.Ref {
 			},
 		),
 	}, []ref.Ref{})
-	return types.RegisterPackage(&p)
+	__testPackageInFile_struct_with_union_field_CachedRef = types.RegisterPackage(&p)
 }
 
 // StructWithUnionField
@@ -99,13 +99,14 @@ func (s StructWithUnionField) __unionValueToDef() interface{} {
 	panic("unreachable")
 }
 
-var __typeRefForStructWithUnionField = types.MakeTypeRef(__testPackageInFile_struct_with_union_field_CachedRef, 0)
+var __typeRefForStructWithUnionField types.TypeRef
 
 func (m StructWithUnionField) TypeRef() types.TypeRef {
 	return __typeRefForStructWithUnionField
 }
 
 func init() {
+	__typeRefForStructWithUnionField = types.MakeTypeRef(__testPackageInFile_struct_with_union_field_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForStructWithUnionField, func(v types.Value) types.Value {
 		return StructWithUnionFieldFromVal(v)
 	})

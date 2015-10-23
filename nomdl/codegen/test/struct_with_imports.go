@@ -9,12 +9,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __testPackageInFile_struct_with_imports_CachedRef = __testPackageInFile_struct_with_imports_Ref()
+var __testPackageInFile_struct_with_imports_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __testPackageInFile_struct_with_imports_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeEnumTypeRef("E", "E1", "Ignored"),
 		types.MakeStructTypeRef("ImportUser",
@@ -27,7 +27,7 @@ func __testPackageInFile_struct_with_imports_Ref() ref.Ref {
 	}, []ref.Ref{
 		ref.Parse("sha1-d31b592f480b7659b03b72a7d1271f31dde57b2d"),
 	})
-	return types.RegisterPackage(&p)
+	__testPackageInFile_struct_with_imports_CachedRef = types.RegisterPackage(&p)
 }
 
 // E
@@ -43,13 +43,14 @@ func NewE() E {
 	return E(0)
 }
 
-var __typeRefForE = types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 0)
+var __typeRefForE types.TypeRef
 
 func (e E) TypeRef() types.TypeRef {
 	return __typeRefForE
 }
 
 func init() {
+	__typeRefForE = types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForE, func(v types.Value) types.Value {
 		return E(uint32(v.(types.UInt32)))
 	})
@@ -108,13 +109,14 @@ func (s ImportUser) Def() (d ImportUserDef) {
 	return
 }
 
-var __typeRefForImportUser = types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 1)
+var __typeRefForImportUser types.TypeRef
 
 func (m ImportUser) TypeRef() types.TypeRef {
 	return __typeRefForImportUser
 }
 
 func init() {
+	__typeRefForImportUser = types.MakeTypeRef(__testPackageInFile_struct_with_imports_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForImportUser, func(v types.Value) types.Value {
 		return ImportUserFromVal(v)
 	})

@@ -10,12 +10,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_types_CachedRef = __mainPackageInFile_types_Ref()
+var __mainPackageInFile_types_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __mainPackageInFile_types_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("Node",
 			[]types.Field{
@@ -49,7 +49,7 @@ func __mainPackageInFile_types_Ref() ref.Ref {
 	}, []ref.Ref{
 		ref.Parse("sha1-fb09d21d144c518467325465327d46489cff7c47"),
 	})
-	return types.RegisterPackage(&p)
+	__mainPackageInFile_types_CachedRef = types.RegisterPackage(&p)
 }
 
 // Node
@@ -85,13 +85,14 @@ func (s Node) Def() (d NodeDef) {
 	return
 }
 
-var __typeRefForNode = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
+var __typeRefForNode types.TypeRef
 
 func (m Node) TypeRef() types.TypeRef {
 	return __typeRefForNode
 }
 
 func init() {
+	__typeRefForNode = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForNode, func(v types.Value) types.Value {
 		return NodeFromVal(v)
 	})
@@ -192,13 +193,14 @@ func (s QuadTree) Def() (d QuadTreeDef) {
 	return
 }
 
-var __typeRefForQuadTree = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1)
+var __typeRefForQuadTree types.TypeRef
 
 func (m QuadTree) TypeRef() types.TypeRef {
 	return __typeRefForQuadTree
 }
 
 func init() {
+	__typeRefForQuadTree = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForQuadTree, func(v types.Value) types.Value {
 		return QuadTreeFromVal(v)
 	})
@@ -331,13 +333,14 @@ func (s SQuadTree) Def() (d SQuadTreeDef) {
 	return
 }
 
-var __typeRefForSQuadTree = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2)
+var __typeRefForSQuadTree types.TypeRef
 
 func (m SQuadTree) TypeRef() types.TypeRef {
 	return __typeRefForSQuadTree
 }
 
 func init() {
+	__typeRefForSQuadTree = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 2)
 	types.RegisterFromValFunction(__typeRefForSQuadTree, func(v types.Value) types.Value {
 		return SQuadTreeFromVal(v)
 	})

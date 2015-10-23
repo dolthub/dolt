@@ -9,12 +9,12 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef = __sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_Ref()
+var __sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
-func __sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_Ref() ref.Ref {
+func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("D",
 			[]types.Field{
@@ -32,7 +32,7 @@ func __sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f4
 	}, []ref.Ref{
 		ref.Parse("sha1-bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288"),
 	})
-	return types.RegisterPackage(&p)
+	__sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef = types.RegisterPackage(&p)
 }
 
 // D
@@ -68,13 +68,14 @@ func (s D) Def() (d DDef) {
 	return
 }
 
-var __typeRefForD = types.MakeTypeRef(__sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef, 0)
+var __typeRefForD types.TypeRef
 
 func (m D) TypeRef() types.TypeRef {
 	return __typeRefForD
 }
 
 func init() {
+	__typeRefForD = types.MakeTypeRef(__sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForD, func(v types.Value) types.Value {
 		return DFromVal(v)
 	})
@@ -155,13 +156,14 @@ func (s DUser) Def() (d DUserDef) {
 	return
 }
 
-var __typeRefForDUser = types.MakeTypeRef(__sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef, 1)
+var __typeRefForDUser types.TypeRef
 
 func (m DUser) TypeRef() types.TypeRef {
 	return __typeRefForDUser
 }
 
 func init() {
+	__typeRefForDUser = types.MakeTypeRef(__sha1_d31b592f480b7659b03b72a7d1271f31dde57b2dPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForDUser, func(v types.Value) types.Value {
 		return DUserFromVal(v)
 	})
