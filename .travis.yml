@@ -1,6 +1,12 @@
 language: go
 go:
 - 1.5
+before_script:
+- pushd js2
+- npm install
+- npm build
+- npm test
+- popd
 notifications:
   slack:
     on_failure: always
