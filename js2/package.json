@@ -12,6 +12,7 @@
   "scripts": {
     "start": "babel -w src/ -d dist/",
     "build": "babel src/ -d dist/",
-    "test": "babel src/ -d dist/; flow; mocha --ui tdd dist/"
+    "pretest": "babel src/ -d dist/; flow",
+    "test": "mocha --ui tdd dist/"
   }
 }
