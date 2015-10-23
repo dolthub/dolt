@@ -9,21 +9,31 @@ import (
 )
 
 type listLeaf struct {
-	list []Future
-	ref  *ref.Ref
-	cs   chunks.ChunkSource
+	values []Value
+	ref    *ref.Ref
 }
 
 func newListLeaf(v ...Value) List {
-	return listLeafFromFutures(valuesToFutures(v), nil)
+	// Copy because Noms values are supposed to be immutable and Go allows v to be reused (thus mutable).
+	values := make([]Value, len(v))
+	copy(values, v)
+	return newListLeafNoCopy(values)
 }
 
-func listLeafFromFutures(list []Future, cs chunks.ChunkSource) List {
-	return listLeaf{list, &ref.Ref{}, cs}
+func newListLeafNoCopy(values []Value) List {
+	return listLeaf{values, &ref.Ref{}}
+}
+
+func listLeafFromFutures(fs []Future, cs chunks.ChunkSource) List {
+	values := make([]Value, len(fs))
+	for i, f := range fs {
+		values[i] = f.Deref(cs)
+	}
+	return newListLeafNoCopy(values)
 }
 
 func (l listLeaf) Len() uint64 {
-	return uint64(len(l.list))
+	return uint64(len(l.values))
 }
 
 func (l listLeaf) Empty() bool {
@@ -31,23 +41,20 @@ func (l listLeaf) Empty() bool {
 }
 
 func (l listLeaf) Get(idx uint64) Value {
-	return l.getFuture(idx).Deref(l.cs)
+	return l.values[idx]
 }
 
 func (l listLeaf) Iter(f listIterFunc) {
-	for i, fut := range l.list {
-		if f(fut.Deref(l.cs), uint64(i)) {
-			fut.Release()
+	for i, v := range l.values {
+		if f(v, uint64(i)) {
 			break
 		}
-		fut.Release()
 	}
 }
 
 func (l listLeaf) IterAll(f listIterAllFunc) {
-	for i, fut := range l.list {
-		f(fut.Deref(l.cs), uint64(i))
-		fut.Release()
+	for i, v := range l.values {
+		f(v, uint64(i))
 	}
 }
 
@@ -71,11 +78,7 @@ func (l listLeaf) iterInternal(sem chan int, lf listIterAllFunc, offset uint64) 
 		sem <- 1
 		go func(idx uint64) {
 			defer wg.Done()
-
-			f := l.list[idx]
-			v := f.Deref(l.cs)
-			f.Release()
-
+			v := l.values[idx]
 			lf(v, idx+offset)
 			<-sem
 		}(idx)
@@ -110,14 +113,9 @@ func (l listLeaf) mapInternal(sem chan int, mf MapFunc, offset uint64) []interfa
 		sem <- 1
 		go func(idx uint64) {
 			defer wg.Done()
-
-			f := l.list[idx]
-			v := f.Deref(l.cs)
-			f.Release()
-
+			v := l.values[idx]
 			c := mf(v, idx+offset)
 			<-sem
-
 			mu.Lock()
 			values[idx] = c
 			mu.Unlock()
@@ -129,37 +127,38 @@ func (l listLeaf) mapInternal(sem chan int, mf MapFunc, offset uint64) []interfa
 }
 
 func (l listLeaf) getFuture(idx uint64) Future {
-	return l.list[idx]
+	return futureFromValue(l.values[idx])
 }
 
 func (l listLeaf) Slice(start uint64, end uint64) List {
-	return listFromFutures(l.list[start:end], l.cs)
+	return newListLeafNoCopy(l.values[start:end])
 }
 
 func (l listLeaf) Set(idx uint64, v Value) List {
-	b := make([]Future, len(l.list))
-	copy(b, l.list)
-	b[idx] = futureFromValue(v)
-	return listFromFutures(b, l.cs)
+	values := make([]Value, len(l.values))
+	copy(values, l.values)
+	values[idx] = v
+	return newListLeafNoCopy(values)
 }
 
 func (l listLeaf) Append(v ...Value) List {
-	return listFromFutures(append(l.list, valuesToFutures(v)...), l.cs)
+	values := append(l.values, v...)
+	return newListLeafNoCopy(values)
 }
 
 func (l listLeaf) Insert(idx uint64, v ...Value) List {
-	b := make([]Future, len(l.list)+len(v))
-	copy(b, l.list[:idx])
-	copy(b[idx:], valuesToFutures(v))
-	copy(b[idx+uint64(len(v)):], l.list[idx:])
-	return listFromFutures(b, l.cs)
+	values := make([]Value, len(l.values)+len(v))
+	copy(values, l.values[:idx])
+	copy(values[idx:], v)
+	copy(values[idx+uint64(len(v)):], l.values[idx:])
+	return newListLeafNoCopy(values)
 }
 
 func (l listLeaf) Remove(start uint64, end uint64) List {
-	b := make([]Future, uint64(len(l.list))-(end-start))
-	copy(b, l.list[:start])
-	copy(b[start:], l.list[end:])
-	return listFromFutures(b, l.cs)
+	values := make([]Value, uint64(len(l.values))-(end-start))
+	copy(values, l.values[:start])
+	copy(values[start:], l.values[end:])
+	return newListLeafNoCopy(values)
 }
 
 func (l listLeaf) RemoveAt(idx uint64) List {
@@ -172,9 +171,7 @@ func (l listLeaf) Ref() ref.Ref {
 
 // BUG 141
 func (l listLeaf) Release() {
-	for _, f := range l.list {
-		f.Release()
-	}
+	// TODO: Remove?
 }
 
 func (l listLeaf) Equals(other Value) bool {
@@ -185,8 +182,8 @@ func (l listLeaf) Equals(other Value) bool {
 }
 
 func (l listLeaf) Chunks() (futures []Future) {
-	for _, f := range l.list {
-		futures = appendChunks(futures, f)
+	for _, v := range l.values {
+		futures = appendValueToChunks(futures, v)
 	}
 	return
 }

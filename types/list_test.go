@@ -165,20 +165,6 @@ func TestListRemoveAt(t *testing.T) {
 	})
 }
 
-func TestListFutures(t *testing.T) {
-	assert := assert.New(t)
-
-	cs := chunks.NewTestStore()
-	v := NewString("hello")
-	r := WriteValue(v, cs)
-	f := futureFromRef(r)
-
-	l := listFromFutures([]Future{f, futureFromValue(Int64(0xbeefcafe))}, cs)
-
-	assert.Len(l.Chunks(), 1)
-	assert.EqualValues(r, l.Chunks()[0].Ref())
-}
-
 func TestListMap(t *testing.T) {
 	assert := assert.New(t)
 

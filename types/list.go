@@ -32,7 +32,7 @@ type List interface {
 }
 
 func NewList(v ...Value) List {
-	return newCompoundListFromValues(v, nil)
+	return newListLeaf(v...)
 }
 
 func valuesToFutures(list []Value) []Future {

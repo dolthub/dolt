@@ -27,12 +27,14 @@ func TestWalkAll(t *testing.T) {
 	m := write(NewMap(b, i, f, s))
 	se := write(NewSet(b, i, f, s, bl))
 	l2 := write(NewList(l))
-	l3 := write(getTestCompoundList(t))
+	// BUG 465
+	// l3 := write(getTestCompoundList(t))
 
-	l3Expected := NewSet(l3)
-	for i := 0; i < 0xff; i++ {
-		l3Expected = l3Expected.Insert(UInt8(i))
-	}
+	// BUG 465
+	// l3Expected := NewSet(l3)
+	// for i := 0; i < 0xff; i++ {
+	// 	l3Expected = l3Expected.Insert(UInt8(i))
+	// }
 
 	tests := []struct {
 		v        Value
@@ -47,7 +49,8 @@ func TestWalkAll(t *testing.T) {
 		{m, NewSet(m, b, i, f, s)},
 		{se, NewSet(se, b, i, f, s, bl)},
 		{l2, NewSet(l2, l, b, i, f, s, bl)},
-		{l3, l3Expected},
+		// BUG 465
+		// {l3, l3Expected},
 	}
 
 	for _, t := range tests {
