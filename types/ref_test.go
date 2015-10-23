@@ -6,10 +6,6 @@ import (
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 )
 
-func TestIntentionalFail(t *testing.T) {
-	assert.Fail(t, "Intentional fail to test Travis CI")
-}
-
 func TestRefInList(t *testing.T) {
 	assert := assert.New(t)
 	l := NewList()
