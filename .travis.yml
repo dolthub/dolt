@@ -2,9 +2,8 @@ language: go
 go:
 - 1.5
 before_script:
-- sudo npm install -g n
-- sudo n stable
 - pushd js2
+- npm version
 - npm install
 - npm build
 - npm test
