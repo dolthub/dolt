@@ -14,8 +14,6 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/garyburd/go-oauth/oauth"
-	img "github.com/attic-labs/noms/clients/gen/sha1_b525f9bca5e451c21dd9af564f0960045fbaa304"
-	geo "github.com/attic-labs/noms/clients/gen/sha1_fb09d21d144c518467325465327d46489cff7c47"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
@@ -189,7 +187,7 @@ func getAlbums() MapOfStringToAlbum {
 	return albums
 }
 
-func getAlbumPhotos(id string) SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto {
+func getAlbumPhotos(id string) SetOfRemotePhoto {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -226,16 +224,16 @@ func getAlbumPhotos(id string) SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa30
 	})
 	d.Chk.NoError(err)
 
-	photos := NewSetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto()
+	photos := NewSetOfRemotePhoto()
 
 	for _, p := range response.Photoset.Photo {
-		photo := img.RemotePhotoDef{
+		photo := RemotePhotoDef{
 			Id:    p.Id,
 			Title: p.Title,
 			Tags:  getTags(p.Tags),
 		}.New()
 
-		sizes := img.NewMapOfSizeToString()
+		sizes := NewMapOfSizeToString()
 		sizes = addSize(sizes, p.ThumbURL, p.ThumbWidth, p.ThumbHeight)
 		sizes = addSize(sizes, p.SmallURL, p.SmallWidth, p.SmallHeight)
 		sizes = addSize(sizes, p.MediumURL, p.MediumWidth, p.MediumHeight)
@@ -246,7 +244,7 @@ func getAlbumPhotos(id string) SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa30
 		lat := deFlickr(p.Latitude)
 		lon := deFlickr(p.Longitude)
 		if lat != 0.0 && lon != 0.0 {
-			photo = photo.SetGeoposition(geo.GeopositionDef{lat, lon}.New())
+			photo = photo.SetGeoposition(GeopositionDef{lat, lon}.New())
 		}
 
 		photos = photos.Insert(photo)
@@ -255,8 +253,8 @@ func getAlbumPhotos(id string) SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa30
 	return photos
 }
 
-func getTags(tagStr string) (tags img.SetOfStringDef) {
-	tags = img.SetOfStringDef{}
+func getTags(tagStr string) (tags SetOfStringDef) {
+	tags = SetOfStringDef{}
 
 	if tagStr == "" {
 		return
@@ -281,7 +279,7 @@ func deFlickr(argh interface{}) float32 {
 	}
 }
 
-func addSize(sizes img.MapOfSizeToString, url string, width interface{}, height interface{}) img.MapOfSizeToString {
+func addSize(sizes MapOfSizeToString, url string, width interface{}, height interface{}) MapOfSizeToString {
 	getDim := func(v interface{}) uint32 {
 		switch v := v.(type) {
 		case float64:
@@ -299,7 +297,7 @@ func addSize(sizes img.MapOfSizeToString, url string, width interface{}, height 
 		return sizes
 	}
 
-	return sizes.Set(img.SizeDef{getDim(width), getDim(height)}.New(), url)
+	return sizes.Set(SizeDef{getDim(width), getDim(height)}.New(), url)
 }
 
 func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) error {

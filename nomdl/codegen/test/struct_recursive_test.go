@@ -4,17 +4,18 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 )
 
 func TestStructRecursiveChildren(t *testing.T) {
 	assert := assert.New(t)
 
-	root := TreeDef{
-		Children: []TreeDef{
-			TreeDef{},
-			TreeDef{
-				Children: []TreeDef{
-					TreeDef{},
+	root := gen.TreeDef{
+		Children: []gen.TreeDef{
+			gen.TreeDef{},
+			gen.TreeDef{
+				Children: []gen.TreeDef{
+					gen.TreeDef{},
 				},
 			},
 		},

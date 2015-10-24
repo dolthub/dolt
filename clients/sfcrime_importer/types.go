@@ -3,8 +3,6 @@
 package main
 
 import (
-	"github.com/attic-labs/noms/clients/gen/sha1_fb09d21d144c518467325465327d46489cff7c47"
-
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -56,7 +54,7 @@ func NewIncident() Incident {
 		types.NewString("PdDistrict"), types.NewString(""),
 		types.NewString("Resolution"), types.NewString(""),
 		types.NewString("Address"), types.NewString(""),
-		types.NewString("Geoposition"), sha1_fb09d21d144c518467325465327d46489cff7c47.NewGeoposition(),
+		types.NewString("Geoposition"), NewGeoposition(),
 		types.NewString("PdID"), types.NewString(""),
 	), &ref.Ref{}}
 }
@@ -71,7 +69,7 @@ type IncidentDef struct {
 	PdDistrict  string
 	Resolution  string
 	Address     string
-	Geoposition sha1_fb09d21d144c518467325465327d46489cff7c47.GeopositionDef
+	Geoposition GeopositionDef
 	PdID        string
 }
 
@@ -102,7 +100,7 @@ func (s Incident) Def() (d IncidentDef) {
 	d.PdDistrict = s.m.Get(types.NewString("PdDistrict")).(types.String).String()
 	d.Resolution = s.m.Get(types.NewString("Resolution")).(types.String).String()
 	d.Address = s.m.Get(types.NewString("Address")).(types.String).String()
-	d.Geoposition = s.m.Get(types.NewString("Geoposition")).(sha1_fb09d21d144c518467325465327d46489cff7c47.Geoposition).Def()
+	d.Geoposition = s.m.Get(types.NewString("Geoposition")).(Geoposition).Def()
 	d.PdID = s.m.Get(types.NewString("PdID")).(types.String).String()
 	return
 }
@@ -222,11 +220,11 @@ func (s Incident) SetAddress(val string) Incident {
 	return Incident{s.m.Set(types.NewString("Address"), types.NewString(val)), &ref.Ref{}}
 }
 
-func (s Incident) Geoposition() sha1_fb09d21d144c518467325465327d46489cff7c47.Geoposition {
-	return s.m.Get(types.NewString("Geoposition")).(sha1_fb09d21d144c518467325465327d46489cff7c47.Geoposition)
+func (s Incident) Geoposition() Geoposition {
+	return s.m.Get(types.NewString("Geoposition")).(Geoposition)
 }
 
-func (s Incident) SetGeoposition(val sha1_fb09d21d144c518467325465327d46489cff7c47.Geoposition) Incident {
+func (s Incident) SetGeoposition(val Geoposition) Incident {
 	return Incident{s.m.Set(types.NewString("Geoposition"), val), &ref.Ref{}}
 }
 

@@ -1,9 +1,7 @@
-package util
+package main
 
 import (
 	"math"
-
-	geo "github.com/attic-labs/noms/clients/gen/sha1_fb09d21d144c518467325465327d46489cff7c47"
 )
 
 const (
@@ -12,32 +10,32 @@ const (
 )
 
 // Latitude64 casts the Latitude value to a float64 for convenience.
-func Latitude64(p geo.GeopositionDef) float64 {
+func Latitude64(p GeopositionDef) float64 {
 	return float64(p.Latitude)
 }
 
 // Longitude64 casts the Longitude value to a float64 for convenience.
-func Longitude64(p geo.GeopositionDef) float64 {
+func Longitude64(p GeopositionDef) float64 {
 	return float64(p.Longitude)
 }
 
 // TopLeftOf returns true if it is above and to the left of "o"
-func TopLeftOf(p geo.GeopositionDef, o geo.GeopositionDef) bool {
+func TopLeftOf(p GeopositionDef, o GeopositionDef) bool {
 	return p.Latitude > o.Latitude && p.Longitude < o.Longitude
 }
 
 // BelowRightOf returns true if it's below and to the right of "o"
-func BelowRightOf(p geo.GeopositionDef, o geo.GeopositionDef) bool {
+func BelowRightOf(p GeopositionDef, o GeopositionDef) bool {
 	return p.Latitude < o.Latitude && p.Longitude > o.Longitude
 }
 
 // TopLeftOrSameOf returns true if it is above and to the left of "o"
-func TopLeftOrSameOf(p geo.GeopositionDef, o geo.GeopositionDef) bool {
+func TopLeftOrSameOf(p GeopositionDef, o GeopositionDef) bool {
 	return p.Latitude >= o.Latitude && p.Longitude <= o.Longitude
 }
 
 // BelowRightOrSameOf returns true if it's below and to the right of "o"
-func BelowRightOrSameOf(p geo.GeopositionDef, o geo.GeopositionDef) bool {
+func BelowRightOrSameOf(p GeopositionDef, o GeopositionDef) bool {
 	return p.Latitude <= o.Latitude && p.Longitude >= o.Longitude
 }
 
@@ -45,7 +43,7 @@ func BelowRightOrSameOf(p geo.GeopositionDef, o geo.GeopositionDef) bool {
 // by transposing the origin point the passed in distance (in kilometers)
 // by the passed in compass bearing (in degrees).
 // Original Implementation from: http://www.movable-type.co.uk/scripts/latlong.html
-func PointAtDistanceAndBearing(p geo.GeopositionDef, dist float64, bearing float64) *geo.GeopositionDef {
+func PointAtDistanceAndBearing(p GeopositionDef, dist float64, bearing float64) *GeopositionDef {
 	dr := dist / EarthRadius
 
 	bearing = bearing * (math.Pi / 180.0)
@@ -67,12 +65,12 @@ func PointAtDistanceAndBearing(p geo.GeopositionDef, dist float64, bearing float
 	lat2 = lat2 * (180.0 / math.Pi)
 	lng2 = lng2 * (180.0 / math.Pi)
 
-	return &geo.GeopositionDef{Latitude: float32(lat2), Longitude: float32(lng2)}
+	return &GeopositionDef{Latitude: float32(lat2), Longitude: float32(lng2)}
 }
 
 // DistanceTo calculates the Haversine distance between two points in kilometers.
 // Original Implementation from: http://www.movable-type.co.uk/scripts/latlong.html
-func DistanceTo(p geo.GeopositionDef, o geo.GeopositionDef) float32 {
+func DistanceTo(p GeopositionDef, o GeopositionDef) float32 {
 	dLat := (Latitude64(o) - Latitude64(p)) * (math.Pi / 180.0)
 	dLon := (Longitude64(o) - Longitude64(p)) * (math.Pi / 180.0)
 
@@ -92,35 +90,35 @@ func DistanceTo(p geo.GeopositionDef, o geo.GeopositionDef) float32 {
 // BoundingRectangle calculates a rectangle whose sides east/west and north/south.
 // The center of the rectangle is "p" and each side is "2 * radius" in length.
 // A radius value of 1 equals 1 kilometer.
-func BoundingRectangle(p geo.GeopositionDef, radius float64) geo.GeorectangleDef {
+func BoundingRectangle(p GeopositionDef, radius float64) GeorectangleDef {
 	northPoint := PointAtDistanceAndBearing(p, radius, 0)
 	eastPoint := PointAtDistanceAndBearing(p, radius, 90)
 	southPoint := PointAtDistanceAndBearing(p, radius, 180)
 	westPoint := PointAtDistanceAndBearing(p, radius, 270)
 
-	return geo.GeorectangleDef{
-		TopLeft:     geo.GeopositionDef{Latitude: northPoint.Latitude, Longitude: westPoint.Longitude},
-		BottomRight: geo.GeopositionDef{Latitude: southPoint.Latitude, Longitude: eastPoint.Longitude},
+	return GeorectangleDef{
+		TopLeft:     GeopositionDef{Latitude: northPoint.Latitude, Longitude: westPoint.Longitude},
+		BottomRight: GeopositionDef{Latitude: southPoint.Latitude, Longitude: eastPoint.Longitude},
 	}
 }
 
 // IntersectsRect returns true if "o" intersects r
-func IntersectsRect(r geo.GeorectangleDef, o geo.GeorectangleDef) bool {
+func IntersectsRect(r GeorectangleDef, o GeorectangleDef) bool {
 	return TopLeftOf(r.TopLeft, o.BottomRight) && BelowRightOf(r.BottomRight, o.TopLeft)
 }
 
 // ContainsRect returns true if "o" is within r
-func ContainsRect(r geo.GeorectangleDef, o geo.GeorectangleDef) bool {
+func ContainsRect(r GeorectangleDef, o GeorectangleDef) bool {
 	return TopLeftOrSameOf(r.TopLeft, o.TopLeft) && BelowRightOrSameOf(r.BottomRight, o.BottomRight)
 }
 
 // ContainsPoint returns true if p is contained in r
-func ContainsPoint(r geo.GeorectangleDef, p geo.GeopositionDef) bool {
+func ContainsPoint(r GeorectangleDef, p GeopositionDef) bool {
 	return TopLeftOrSameOf(r.TopLeft, p) && BelowRightOf(r.BottomRight, p)
 }
 
 // Split creates one new rectangle for each quadrant in "r"
-func Split(r geo.GeorectangleDef) (tlRect, blRect, trRect, brRect geo.GeorectangleDef) {
+func Split(r GeorectangleDef) (tlRect, blRect, trRect, brRect GeorectangleDef) {
 	maxLat := r.TopLeft.Latitude
 	minLon := r.TopLeft.Longitude
 	minLat := r.BottomRight.Latitude
@@ -128,21 +126,21 @@ func Split(r geo.GeorectangleDef) (tlRect, blRect, trRect, brRect geo.Georectang
 	midLat := ((maxLat - minLat) / 2) + minLat
 	midLon := ((maxLon - minLon) / 2) + minLon
 
-	tlRect = geo.GeorectangleDef{
-		TopLeft:     geo.GeopositionDef{Latitude: maxLat, Longitude: minLon},
-		BottomRight: geo.GeopositionDef{Latitude: midLat, Longitude: midLon},
+	tlRect = GeorectangleDef{
+		TopLeft:     GeopositionDef{Latitude: maxLat, Longitude: minLon},
+		BottomRight: GeopositionDef{Latitude: midLat, Longitude: midLon},
 	}
-	blRect = geo.GeorectangleDef{
-		TopLeft:     geo.GeopositionDef{Latitude: midLat, Longitude: minLon},
-		BottomRight: geo.GeopositionDef{Latitude: minLat, Longitude: midLon},
+	blRect = GeorectangleDef{
+		TopLeft:     GeopositionDef{Latitude: midLat, Longitude: minLon},
+		BottomRight: GeopositionDef{Latitude: minLat, Longitude: midLon},
 	}
-	trRect = geo.GeorectangleDef{
-		TopLeft:     geo.GeopositionDef{Latitude: maxLat, Longitude: midLon},
-		BottomRight: geo.GeopositionDef{Latitude: midLat, Longitude: maxLon},
+	trRect = GeorectangleDef{
+		TopLeft:     GeopositionDef{Latitude: maxLat, Longitude: midLon},
+		BottomRight: GeopositionDef{Latitude: midLat, Longitude: maxLon},
 	}
-	brRect = geo.GeorectangleDef{
-		TopLeft:     geo.GeopositionDef{Latitude: midLat, Longitude: midLon},
-		BottomRight: geo.GeopositionDef{Latitude: minLat, Longitude: maxLon},
+	brRect = GeorectangleDef{
+		TopLeft:     GeopositionDef{Latitude: midLat, Longitude: midLon},
+		BottomRight: GeopositionDef{Latitude: minLat, Longitude: maxLon},
 	}
 
 	return

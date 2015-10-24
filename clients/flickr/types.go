@@ -3,8 +3,6 @@
 package main
 
 import (
-	"github.com/attic-labs/noms/clients/gen/sha1_b525f9bca5e451c21dd9af564f0960045fbaa304"
-
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -151,7 +149,7 @@ func NewAlbum() Album {
 	return Album{types.NewMap(
 		types.NewString("Id"), types.NewString(""),
 		types.NewString("Title"), types.NewString(""),
-		types.NewString("Photos"), NewSetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto(),
+		types.NewString("Photos"), NewSetOfRemotePhoto(),
 	), &ref.Ref{}}
 }
 
@@ -214,11 +212,11 @@ func (s Album) SetTitle(val string) Album {
 	return Album{s.m.Set(types.NewString("Title"), types.NewString(val)), &ref.Ref{}}
 }
 
-func (s Album) Photos() SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto {
-	return s.m.Get(types.NewString("Photos")).(SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto)
+func (s Album) Photos() SetOfRemotePhoto {
+	return s.m.Get(types.NewString("Photos")).(SetOfRemotePhoto)
 }
 
-func (s Album) SetPhotos(val SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Album {
+func (s Album) SetPhotos(val SetOfRemotePhoto) Album {
 	return Album{s.m.Set(types.NewString("Photos"), val), &ref.Ref{}}
 }
 
@@ -339,93 +337,93 @@ func (m MapOfStringToAlbum) Filter(cb MapOfStringToAlbumFilterCallback) MapOfStr
 	return nm
 }
 
-// SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto
+// SetOfRemotePhoto
 
-type SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto struct {
+type SetOfRemotePhoto struct {
 	s   types.Set
 	ref *ref.Ref
 }
 
-func NewSetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto() SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto {
-	return SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto{types.NewSet(), &ref.Ref{}}
+func NewSetOfRemotePhoto() SetOfRemotePhoto {
+	return SetOfRemotePhoto{types.NewSet(), &ref.Ref{}}
 }
 
-func SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhotoFromVal(val types.Value) SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto {
+func SetOfRemotePhotoFromVal(val types.Value) SetOfRemotePhoto {
 	// TODO: Do we still need FromVal?
-	if val, ok := val.(SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto); ok {
+	if val, ok := val.(SetOfRemotePhoto); ok {
 		return val
 	}
-	return SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto{val.(types.Set), &ref.Ref{}}
+	return SetOfRemotePhoto{val.(types.Set), &ref.Ref{}}
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) InternalImplementation() types.Set {
+func (s SetOfRemotePhoto) InternalImplementation() types.Set {
 	return s.s
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Equals(other types.Value) bool {
-	if other, ok := other.(SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto); ok {
+func (s SetOfRemotePhoto) Equals(other types.Value) bool {
+	if other, ok := other.(SetOfRemotePhoto); ok {
 		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Ref() ref.Ref {
+func (s SetOfRemotePhoto) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Chunks() (futures []types.Future) {
+func (s SetOfRemotePhoto) Chunks() (futures []types.Future) {
 	futures = append(futures, s.TypeRef().Chunks()...)
 	futures = append(futures, s.s.Chunks()...)
 	return
 }
 
-// A Noms Value that describes SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto.
-var __typeRefForSetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto types.TypeRef
+// A Noms Value that describes SetOfRemotePhoto.
+var __typeRefForSetOfRemotePhoto types.TypeRef
 
-func (m SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) TypeRef() types.TypeRef {
-	return __typeRefForSetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto
+func (m SetOfRemotePhoto) TypeRef() types.TypeRef {
+	return __typeRefForSetOfRemotePhoto
 }
 
 func init() {
-	__typeRefForSetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef(ref.Parse("sha1-b525f9bca5e451c21dd9af564f0960045fbaa304"), 0))
-	types.RegisterFromValFunction(__typeRefForSetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto, func(v types.Value) types.Value {
-		return SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhotoFromVal(v)
+	__typeRefForSetOfRemotePhoto = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef(ref.Parse("sha1-b525f9bca5e451c21dd9af564f0960045fbaa304"), 0))
+	types.RegisterFromValFunction(__typeRefForSetOfRemotePhoto, func(v types.Value) types.Value {
+		return SetOfRemotePhotoFromVal(v)
 	})
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Empty() bool {
+func (s SetOfRemotePhoto) Empty() bool {
 	return s.s.Empty()
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Len() uint64 {
+func (s SetOfRemotePhoto) Len() uint64 {
 	return s.s.Len()
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Has(p sha1_b525f9bca5e451c21dd9af564f0960045fbaa304.RemotePhoto) bool {
+func (s SetOfRemotePhoto) Has(p RemotePhoto) bool {
 	return s.s.Has(p)
 }
 
-type SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhotoIterCallback func(p sha1_b525f9bca5e451c21dd9af564f0960045fbaa304.RemotePhoto) (stop bool)
+type SetOfRemotePhotoIterCallback func(p RemotePhoto) (stop bool)
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Iter(cb SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhotoIterCallback) {
+func (s SetOfRemotePhoto) Iter(cb SetOfRemotePhotoIterCallback) {
 	s.s.Iter(func(v types.Value) bool {
-		return cb(v.(sha1_b525f9bca5e451c21dd9af564f0960045fbaa304.RemotePhoto))
+		return cb(v.(RemotePhoto))
 	})
 }
 
-type SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhotoIterAllCallback func(p sha1_b525f9bca5e451c21dd9af564f0960045fbaa304.RemotePhoto)
+type SetOfRemotePhotoIterAllCallback func(p RemotePhoto)
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) IterAll(cb SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhotoIterAllCallback) {
+func (s SetOfRemotePhoto) IterAll(cb SetOfRemotePhotoIterAllCallback) {
 	s.s.IterAll(func(v types.Value) {
-		cb(v.(sha1_b525f9bca5e451c21dd9af564f0960045fbaa304.RemotePhoto))
+		cb(v.(RemotePhoto))
 	})
 }
 
-type SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhotoFilterCallback func(p sha1_b525f9bca5e451c21dd9af564f0960045fbaa304.RemotePhoto) (keep bool)
+type SetOfRemotePhotoFilterCallback func(p RemotePhoto) (keep bool)
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Filter(cb SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhotoFilterCallback) SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto {
-	ns := NewSetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto()
-	s.IterAll(func(v sha1_b525f9bca5e451c21dd9af564f0960045fbaa304.RemotePhoto) {
+func (s SetOfRemotePhoto) Filter(cb SetOfRemotePhotoFilterCallback) SetOfRemotePhoto {
+	ns := NewSetOfRemotePhoto()
+	s.IterAll(func(v RemotePhoto) {
 		if cb(v) {
 			ns = ns.Insert(v)
 		}
@@ -433,27 +431,27 @@ func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Filter(c
 	return ns
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Insert(p ...sha1_b525f9bca5e451c21dd9af564f0960045fbaa304.RemotePhoto) SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto {
-	return SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
+func (s SetOfRemotePhoto) Insert(p ...RemotePhoto) SetOfRemotePhoto {
+	return SetOfRemotePhoto{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Remove(p ...sha1_b525f9bca5e451c21dd9af564f0960045fbaa304.RemotePhoto) SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto {
-	return SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
+func (s SetOfRemotePhoto) Remove(p ...RemotePhoto) SetOfRemotePhoto {
+	return SetOfRemotePhoto{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Union(others ...SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto {
-	return SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
+func (s SetOfRemotePhoto) Union(others ...SetOfRemotePhoto) SetOfRemotePhoto {
+	return SetOfRemotePhoto{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Subtract(others ...SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto {
-	return SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}}
+func (s SetOfRemotePhoto) Subtract(others ...SetOfRemotePhoto) SetOfRemotePhoto {
+	return SetOfRemotePhoto{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) Any() sha1_b525f9bca5e451c21dd9af564f0960045fbaa304.RemotePhoto {
-	return s.s.Any().(sha1_b525f9bca5e451c21dd9af564f0960045fbaa304.RemotePhoto)
+func (s SetOfRemotePhoto) Any() RemotePhoto {
+	return s.s.Any().(RemotePhoto)
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) fromStructSlice(p []SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) []types.Set {
+func (s SetOfRemotePhoto) fromStructSlice(p []SetOfRemotePhoto) []types.Set {
 	r := make([]types.Set, len(p))
 	for i, v := range p {
 		r[i] = v.s
@@ -461,7 +459,7 @@ func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) fromStru
 	return r
 }
 
-func (s SetOfsha1_b525f9bca5e451c21dd9af564f0960045fbaa304_RemotePhoto) fromElemSlice(p []sha1_b525f9bca5e451c21dd9af564f0960045fbaa304.RemotePhoto) []types.Value {
+func (s SetOfRemotePhoto) fromElemSlice(p []RemotePhoto) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
 		r[i] = v

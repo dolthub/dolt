@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	geo "github.com/attic-labs/noms/clients/gen/sha1_fb09d21d144c518467325465327d46489cff7c47"
-	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/ref"
@@ -56,7 +54,7 @@ func main() {
 		return
 	}
 
-	gp := geo.GeopositionDef{Latitude: float32(*latFlag), Longitude: float32(*lonFlag)}
+	gp := GeopositionDef{Latitude: float32(*latFlag), Longitude: float32(*lonFlag)}
 	var incidents []Incident
 	if *quadTreeRefFlag != "" {
 		incidents = searchWithQuadTree(gp, datastore)
@@ -80,7 +78,7 @@ func main() {
 	fmt.Printf("Done, elapsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
 }
 
-func searchWithQuadTree(gp geo.GeopositionDef, ds datas.DataStore) []Incident {
+func searchWithQuadTree(gp GeopositionDef, ds datas.DataStore) []Incident {
 	argName := "quadtree-ref"
 	expectedClass := "SQuadTree"
 	val := readRefValue(*quadTreeRefFlag, argName, ds)
@@ -93,7 +91,7 @@ func searchWithQuadTree(gp geo.GeopositionDef, ds datas.DataStore) []Incident {
 		log.Fatalf("Value found for quad-tree-ref argument has type: %+v", m.Get(types.NewString("$name")))
 	}
 	sqtRoot = SQuadTreeFromVal(val)
-	if !util.ContainsPoint(sqtRoot.Georectangle().Def(), gp) {
+	if !ContainsPoint(sqtRoot.Georectangle().Def(), gp) {
 		log.Fatalf("lat/lon: %+v is not within sf area: %+v\n", gp, sqtRoot.Georectangle().Def())
 	}
 	gr, results := sqtRoot.Query(gp, *distanceFlag)
@@ -101,7 +99,7 @@ func searchWithQuadTree(gp geo.GeopositionDef, ds datas.DataStore) []Incident {
 	return results
 }
 
-func searchWithList(gp geo.GeopositionDef, ds datas.DataStore) []Incident {
+func searchWithList(gp GeopositionDef, ds datas.DataStore) []Incident {
 	argName := "incident-list-ref"
 	expectedClass := "Incident"
 	val := readRefValue(*incidentListRefFlag, argName, ds)
@@ -128,7 +126,7 @@ func searchWithList(gp geo.GeopositionDef, ds datas.DataStore) []Incident {
 			fmt.Printf("%.2f%%: %v\n", float64(i)/float64(incidentList.Len())*float64(100), time.Now().Sub(t0))
 		}
 		incident := incidentList.Get(i)
-		if util.DistanceTo(incident.Geoposition().Def(), gp) <= float32(*distanceFlag) {
+		if DistanceTo(incident.Geoposition().Def(), gp) <= float32(*distanceFlag) {
 			results = append(results, incident)
 		}
 	}

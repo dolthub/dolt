@@ -4,14 +4,10 @@
 
 package {{.Name}}
 
-{{if .HasImports}}
 import (
-	{{range $imp := .Imports}}"{{$imp}}"
-	{{end}}
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
-{{end}}
 
 {{if .HasTypes}}
 var __{{.Name}}PackageInFile_{{.FileID}}_CachedRef ref.Ref

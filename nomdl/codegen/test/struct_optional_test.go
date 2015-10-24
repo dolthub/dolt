@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 )
 
 func TestOptionalStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	str := NewOptionalStruct()
+	str := gen.NewOptionalStruct()
 
 	_, ok := str.S()
 	assert.False(ok)
@@ -31,7 +32,7 @@ func TestOptionalStruct(t *testing.T) {
 func TestOptionalStructDef(t *testing.T) {
 	assert := assert.New(t)
 
-	def := OptionalStructDef{}
+	def := gen.OptionalStructDef{}
 	str := def.New()
 	s, ok := str.S()
 	assert.True(ok)
@@ -48,8 +49,8 @@ func TestOptionalStructDef(t *testing.T) {
 func TestOptionalStructDefFromNew(t *testing.T) {
 	assert := assert.New(t)
 
-	str := NewOptionalStruct().SetB(true)
+	str := gen.NewOptionalStruct().SetB(true)
 	def := str.Def()
-	def2 := OptionalStructDef{B: true}
+	def2 := gen.OptionalStructDef{B: true}
 	assert.Equal(def, def2)
 }

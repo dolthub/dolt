@@ -4,8 +4,6 @@ package main
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/clients/gen/sha1_fb09d21d144c518467325465327d46489cff7c47"
-
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -61,13 +59,13 @@ type Node struct {
 
 func NewNode() Node {
 	return Node{types.NewMap(
-		types.NewString("Geoposition"), sha1_fb09d21d144c518467325465327d46489cff7c47.NewGeoposition(),
+		types.NewString("Geoposition"), NewGeoposition(),
 		types.NewString("Reference"), NewRefOfValue(ref.Ref{}),
 	), &ref.Ref{}}
 }
 
 type NodeDef struct {
-	Geoposition sha1_fb09d21d144c518467325465327d46489cff7c47.GeopositionDef
+	Geoposition GeopositionDef
 	Reference   ref.Ref
 }
 
@@ -80,7 +78,7 @@ func (def NodeDef) New() Node {
 }
 
 func (s Node) Def() (d NodeDef) {
-	d.Geoposition = s.m.Get(types.NewString("Geoposition")).(sha1_fb09d21d144c518467325465327d46489cff7c47.Geoposition).Def()
+	d.Geoposition = s.m.Get(types.NewString("Geoposition")).(Geoposition).Def()
 	d.Reference = s.m.Get(types.NewString("Reference")).Ref()
 	return
 }
@@ -128,11 +126,11 @@ func (s Node) Chunks() (futures []types.Future) {
 	return
 }
 
-func (s Node) Geoposition() sha1_fb09d21d144c518467325465327d46489cff7c47.Geoposition {
-	return s.m.Get(types.NewString("Geoposition")).(sha1_fb09d21d144c518467325465327d46489cff7c47.Geoposition)
+func (s Node) Geoposition() Geoposition {
+	return s.m.Get(types.NewString("Geoposition")).(Geoposition)
 }
 
-func (s Node) SetGeoposition(val sha1_fb09d21d144c518467325465327d46489cff7c47.Geoposition) Node {
+func (s Node) SetGeoposition(val Geoposition) Node {
 	return Node{s.m.Set(types.NewString("Geoposition"), val), &ref.Ref{}}
 }
 
@@ -158,7 +156,7 @@ func NewQuadTree() QuadTree {
 		types.NewString("Depth"), types.UInt8(0),
 		types.NewString("NumDescendents"), types.UInt32(0),
 		types.NewString("Path"), types.NewString(""),
-		types.NewString("Georectangle"), sha1_fb09d21d144c518467325465327d46489cff7c47.NewGeorectangle(),
+		types.NewString("Georectangle"), NewGeorectangle(),
 	), &ref.Ref{}}
 }
 
@@ -168,7 +166,7 @@ type QuadTreeDef struct {
 	Depth          uint8
 	NumDescendents uint32
 	Path           string
-	Georectangle   sha1_fb09d21d144c518467325465327d46489cff7c47.GeorectangleDef
+	Georectangle   GeorectangleDef
 }
 
 func (def QuadTreeDef) New() QuadTree {
@@ -189,7 +187,7 @@ func (s QuadTree) Def() (d QuadTreeDef) {
 	d.Depth = uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
 	d.NumDescendents = uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
 	d.Path = s.m.Get(types.NewString("Path")).(types.String).String()
-	d.Georectangle = s.m.Get(types.NewString("Georectangle")).(sha1_fb09d21d144c518467325465327d46489cff7c47.Georectangle).Def()
+	d.Georectangle = s.m.Get(types.NewString("Georectangle")).(Georectangle).Def()
 	return
 }
 
@@ -276,11 +274,11 @@ func (s QuadTree) SetPath(val string) QuadTree {
 	return QuadTree{s.m.Set(types.NewString("Path"), types.NewString(val)), &ref.Ref{}}
 }
 
-func (s QuadTree) Georectangle() sha1_fb09d21d144c518467325465327d46489cff7c47.Georectangle {
-	return s.m.Get(types.NewString("Georectangle")).(sha1_fb09d21d144c518467325465327d46489cff7c47.Georectangle)
+func (s QuadTree) Georectangle() Georectangle {
+	return s.m.Get(types.NewString("Georectangle")).(Georectangle)
 }
 
-func (s QuadTree) SetGeorectangle(val sha1_fb09d21d144c518467325465327d46489cff7c47.Georectangle) QuadTree {
+func (s QuadTree) SetGeorectangle(val Georectangle) QuadTree {
 	return QuadTree{s.m.Set(types.NewString("Georectangle"), val), &ref.Ref{}}
 }
 
@@ -298,7 +296,7 @@ func NewSQuadTree() SQuadTree {
 		types.NewString("Depth"), types.UInt8(0),
 		types.NewString("NumDescendents"), types.UInt32(0),
 		types.NewString("Path"), types.NewString(""),
-		types.NewString("Georectangle"), sha1_fb09d21d144c518467325465327d46489cff7c47.NewGeorectangle(),
+		types.NewString("Georectangle"), NewGeorectangle(),
 	), &ref.Ref{}}
 }
 
@@ -308,7 +306,7 @@ type SQuadTreeDef struct {
 	Depth          uint8
 	NumDescendents uint32
 	Path           string
-	Georectangle   sha1_fb09d21d144c518467325465327d46489cff7c47.GeorectangleDef
+	Georectangle   GeorectangleDef
 }
 
 func (def SQuadTreeDef) New() SQuadTree {
@@ -329,7 +327,7 @@ func (s SQuadTree) Def() (d SQuadTreeDef) {
 	d.Depth = uint8(s.m.Get(types.NewString("Depth")).(types.UInt8))
 	d.NumDescendents = uint32(s.m.Get(types.NewString("NumDescendents")).(types.UInt32))
 	d.Path = s.m.Get(types.NewString("Path")).(types.String).String()
-	d.Georectangle = s.m.Get(types.NewString("Georectangle")).(sha1_fb09d21d144c518467325465327d46489cff7c47.Georectangle).Def()
+	d.Georectangle = s.m.Get(types.NewString("Georectangle")).(Georectangle).Def()
 	return
 }
 
@@ -416,11 +414,11 @@ func (s SQuadTree) SetPath(val string) SQuadTree {
 	return SQuadTree{s.m.Set(types.NewString("Path"), types.NewString(val)), &ref.Ref{}}
 }
 
-func (s SQuadTree) Georectangle() sha1_fb09d21d144c518467325465327d46489cff7c47.Georectangle {
-	return s.m.Get(types.NewString("Georectangle")).(sha1_fb09d21d144c518467325465327d46489cff7c47.Georectangle)
+func (s SQuadTree) Georectangle() Georectangle {
+	return s.m.Get(types.NewString("Georectangle")).(Georectangle)
 }
 
-func (s SQuadTree) SetGeorectangle(val sha1_fb09d21d144c518467325465327d46489cff7c47.Georectangle) SQuadTree {
+func (s SQuadTree) SetGeorectangle(val Georectangle) SQuadTree {
 	return SQuadTree{s.m.Set(types.NewString("Georectangle"), val), &ref.Ref{}}
 }
 

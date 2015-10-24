@@ -180,11 +180,11 @@ func (gen Generator) UserZero(t types.TypeRef) string {
 	case types.BoolKind:
 		return "false"
 	case types.EnumKind:
-		return gen.newUserName(t, rt)
+		return fmt.Sprintf("New%s()", gen.UserName(rt))
 	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return fmt.Sprintf("%s(0)", strings.ToLower(kindToString(k)))
 	case types.ListKind, types.MapKind, types.PackageKind, types.SetKind, types.StructKind:
-		return gen.newUserName(t, rt)
+		return fmt.Sprintf("New%s()", gen.UserName(rt))
 	case types.RefKind:
 		return fmt.Sprintf("New%s(ref.Ref{})", gen.UserName(rt))
 	case types.StringKind:
@@ -196,13 +196,6 @@ func (gen Generator) UserZero(t types.TypeRef) string {
 		return fmt.Sprintf("%sTypeRef{R: ref.Ref{}}", gen.TypesPackage)
 	}
 	panic("unreachable")
-}
-
-func (gen Generator) newUserName(t, rt types.TypeRef) string {
-	if t.HasPackageRef() {
-		return fmt.Sprintf("%s.New%s()", ToTag(t.PackageRef()), gen.UserName(rt))
-	}
-	return fmt.Sprintf("New%s()", gen.UserName(rt))
 }
 
 // ValueZero returns a string containing Go code to create an uninitialized instance of the Noms types.Value appropriate for t.
@@ -225,7 +218,7 @@ func (gen Generator) ValueZero(t types.TypeRef) string {
 	case types.StringKind:
 		return fmt.Sprintf(`%sNewString("")`, gen.TypesPackage)
 	case types.StructKind:
-		return gen.newUserName(t, rt)
+		return fmt.Sprintf("New%s()", gen.UserName(rt))
 	case types.ValueKind:
 		// TODO: Use nil here
 		return fmt.Sprintf("%sBool(false)", gen.TypesPackage)
@@ -243,9 +236,6 @@ func (gen Generator) UserName(t types.TypeRef) string {
 	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeRefKind:
 		return kindToString(k)
 	case types.EnumKind:
-		if t.HasPackageRef() {
-			return ToTag(t.PackageRef()) + "." + rt.Name()
-		}
 		return rt.Name()
 	case types.ListKind:
 		return fmt.Sprintf("ListOf%s", gen.refToId(rt.Desc.(types.CompoundDesc).ElemTypes[0]))
@@ -269,10 +259,6 @@ func (gen Generator) UserName(t types.TypeRef) string {
 			}
 			return s
 		}
-
-		if t.HasPackageRef() {
-			return ToTag(t.PackageRef()) + "." + rt.Name()
-		}
 		return rt.Name()
 	}
 	panic("unreachable")
@@ -282,8 +268,7 @@ func (gen Generator) refToId(t types.TypeRef) string {
 	if !t.IsUnresolved() || !t.HasPackageRef() {
 		return gen.UserName(t)
 	}
-	rt := gen.R.Resolve(t)
-	return fmt.Sprintf("%s_%s", ToTag(t.PackageRef()), gen.UserName(rt))
+	return gen.UserName(gen.R.Resolve(t))
 }
 
 // ToTypeRef returns a string containing Go code that instantiates a types.TypeRef instance equivalent to t.

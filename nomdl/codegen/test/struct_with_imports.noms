@@ -1,13 +1,13 @@
 alias dep = import "../testDeps/dep.noms"
 
-enum E {
-	E1
+enum LocalE {
+	LocalE1
 	Ignored
 }
 
 struct ImportUser {
 	importedStruct :dep.D
-	enum :E
+	enum :LocalE
 }
 
 using List(dep.D)
