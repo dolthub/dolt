@@ -4,6 +4,9 @@ go:
 before_script:
 - pushd js2
 - npm version
+- nvm install stable
+- nvm use stable
+- npm version
 - npm install
 - npm build
 - npm test
