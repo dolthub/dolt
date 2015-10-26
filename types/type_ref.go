@@ -6,14 +6,13 @@ import (
 )
 
 // TypeRef structs define and describe Noms types, both custom and built-in.
-// pkgRef is optional. If set, then pkgRef + ordinal address a type defined in another package.
 // name is required for StructKind and EnumKind types, and may be allowed for others if we do type aliases. Named types are 'exported' in that they can be addressed from other type packages.
-// Desc describes the referenced type. It may contain only a types.NomsKind, in the case of primitives, or it may contain additional information -- e.g. element TypeRefs for compound type specializations, field descriptions for structs, etc. Either way, checking Desc.Kind() allows code to understand how to interpret the rest of the data.
+// Desc provided more details of the type. It may contain only a types.NomsKind, in the case of primitives, or it may contain additional information -- e.g. element TypeRefs for compound type specializations, field descriptions for structs, etc. Either way, checking Kind() allows code to understand how to interpret the rest of the data.
 // If Kind() refers to a primitive, then Desc is empty.
-// If Kind() refers to List, Set or Ref, then Desc is a TypeRef describing the element type.
-// If Kind() refers to Map, then Desc is a 2-element List(TypeRef), describing the key and value types respectively.
-// If Kind() refers to Struct, then Desc is {"fields": [name, type, ...], "choices": [name, type, ...]}.
+// If Kind() refers to List, Map, Set or Ref, then Desc is a list of TypeRefs describing the element type(s).
+// If Kind() refers to Struct, then Desc is {[name, type, ...], [name, type, ...]}.
 // If Kind() refers to Enum, then Desc is a List(String) describing the enumerated values.
+// If Kind() refers to an UnresolvedKind, then Desc contains a PackageRef, which is the Ref of the package where the type definition is defined. The ordinal, if not -1, is the index into the Types list of the package. If the Name is set then the ordinal needs to be found.
 type TypeRef struct {
 	name name
 	Desc TypeDesc
@@ -122,14 +121,14 @@ func MakePrimitiveTypeRefByString(p string) TypeRef {
 	return buildType("", primitiveToDesc(p))
 }
 
-func MakeCompoundTypeRef(name string, kind NomsKind, elemTypes ...TypeRef) TypeRef {
+func MakeCompoundTypeRef(kind NomsKind, elemTypes ...TypeRef) TypeRef {
 	if len(elemTypes) == 1 {
 		d.Chk.NotEqual(MapKind, kind, "MapKind requires 2 element types.")
 	} else {
 		d.Chk.Equal(MapKind, kind)
 		d.Chk.Len(elemTypes, 2, "MapKind requires 2 element types.")
 	}
-	return buildType(name, CompoundDesc{kind, elemTypes})
+	return buildType("", CompoundDesc{kind, elemTypes})
 }
 
 func MakeEnumTypeRef(name string, ids ...string) TypeRef {

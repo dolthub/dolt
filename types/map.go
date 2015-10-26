@@ -145,7 +145,7 @@ func (fm Map) Chunks() (futures []Future) {
 	return
 }
 
-var mapTypeRef = MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))
+var mapTypeRef = MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))
 
 func (fm Map) TypeRef() TypeRef {
 	return mapTypeRef

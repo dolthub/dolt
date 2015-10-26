@@ -26,8 +26,8 @@ func init() {
 		),
 		types.MakeStructTypeRef("SQuadTree",
 			[]types.Field{
-				types.Field{"Nodes", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
-				types.Field{"Tiles", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(ref.Ref{}, 1)), false},
+				types.Field{"Nodes", types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
+				types.Field{"Tiles", types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(ref.Ref{}, 1)), false},
 				types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
 				types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
 				types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
@@ -376,7 +376,7 @@ func (m ListOfIncident) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
+	__typeRefForListOfIncident = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfIncident, func(v types.Value) types.Value {
 		return ListOfIncidentFromVal(v)
 	})
@@ -522,7 +522,7 @@ func (m MapOfStringToSQuadTree) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToSQuadTree = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1))
+	__typeRefForMapOfStringToSQuadTree = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToSQuadTree, func(v types.Value) types.Value {
 		return MapOfStringToSQuadTreeFromVal(v)
 	})

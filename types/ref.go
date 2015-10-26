@@ -33,7 +33,7 @@ func (r Ref) TargetRef() ref.Ref {
 	return r.target
 }
 
-var refTypeRef = MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(ValueKind))
+var refTypeRef = MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(ValueKind))
 
 func (r Ref) TypeRef() TypeRef {
 	return refTypeRef

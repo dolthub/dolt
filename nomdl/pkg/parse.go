@@ -129,10 +129,10 @@ func resolveLocalOrdinals(p *intermediate) {
 
 		switch t.Kind() {
 		case types.ListKind, types.SetKind, types.RefKind:
-			return types.MakeCompoundTypeRef(t.Name(), t.Kind(), rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
+			return types.MakeCompoundTypeRef(t.Kind(), rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
 		case types.MapKind:
 			elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
-			return types.MakeCompoundTypeRef(t.Name(), t.Kind(), rec(elemTypes[0]), rec(elemTypes[1]))
+			return types.MakeCompoundTypeRef(t.Kind(), rec(elemTypes[0]), rec(elemTypes[1]))
 		case types.StructKind:
 			resolveFields(t.Desc.(types.StructDesc).Fields)
 			resolveFields(t.Desc.(types.StructDesc).Union)
@@ -174,10 +174,10 @@ func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref
 		}
 		switch t.Kind() {
 		case types.ListKind, types.SetKind, types.RefKind:
-			return types.MakeCompoundTypeRef(t.Name(), t.Kind(), rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
+			return types.MakeCompoundTypeRef(t.Kind(), rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
 		case types.MapKind:
 			elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
-			return types.MakeCompoundTypeRef(t.Name(), t.Kind(), rec(elemTypes[0]), rec(elemTypes[1]))
+			return types.MakeCompoundTypeRef(t.Kind(), rec(elemTypes[0]), rec(elemTypes[1]))
 		case types.StructKind:
 			resolveFields(t.Desc.(types.StructDesc).Fields)
 			resolveFields(t.Desc.(types.StructDesc).Union)

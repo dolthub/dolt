@@ -51,7 +51,7 @@ func ListFromVal(v Value) List {
 	return v.(List)
 }
 
-var listTypeRef = MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
+var listTypeRef = MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))
 
 func init() {
 	RegisterFromValFunction(listTypeRef, func(v Value) Value {

@@ -48,6 +48,6 @@ func TestUserName(t *testing.T) {
 	g := Generator{R: &res}
 	assert.Equal(localStructName, g.UserName(resolved))
 
-	listOfImported := types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(imported.Ref(), 1))
+	listOfImported := types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(imported.Ref(), 1))
 	assert.Equal(fmt.Sprintf("ListOfS1"), g.UserName(listOfImported))
 }

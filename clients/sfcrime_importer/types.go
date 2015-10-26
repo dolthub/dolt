@@ -303,7 +303,7 @@ func (m ListOfIncident) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfIncident = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
+	__typeRefForListOfIncident = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfIncident, func(v types.Value) types.Value {
 		return ListOfIncidentFromVal(v)
 	})

@@ -77,7 +77,7 @@ func (m SetOfRefOfPackage) TypeRef() TypeRef {
 }
 
 func init() {
-	__typeRefForSetOfRefOfPackage = MakeCompoundTypeRef("", SetKind, MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(PackageKind)))
+	__typeRefForSetOfRefOfPackage = MakeCompoundTypeRef(SetKind, MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(PackageKind)))
 	RegisterFromValFunction(__typeRefForSetOfRefOfPackage, func(v Value) Value {
 		return SetOfRefOfPackageFromVal(v)
 	})
@@ -205,7 +205,7 @@ func (m RefOfPackage) TypeRef() TypeRef {
 }
 
 func init() {
-	__typeRefForRefOfPackage = MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(PackageKind))
+	__typeRefForRefOfPackage = MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(PackageKind))
 	RegisterFromValFunction(__typeRefForRefOfPackage, func(v Value) Value {
 		return RefOfPackageFromVal(v)
 	})

@@ -15,8 +15,8 @@ func TestTypes(t *testing.T) {
 	boolType := MakePrimitiveTypeRef(BoolKind)
 	uint8Type := MakePrimitiveTypeRef(UInt8Kind)
 	stringType := MakePrimitiveTypeRef(StringKind)
-	mapType := MakeCompoundTypeRef("MapOfStringToUInt8", MapKind, stringType, uint8Type)
-	setType := MakeCompoundTypeRef("SetOfString", SetKind, stringType)
+	mapType := MakeCompoundTypeRef(MapKind, stringType, uint8Type)
+	setType := MakeCompoundTypeRef(SetKind, stringType)
 	mahType := MakeStructTypeRef("MahStruct", []Field{
 		Field{"Field1", stringType, false},
 		Field{"Field2", boolType, true},

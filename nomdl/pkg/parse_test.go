@@ -204,14 +204,14 @@ type ParsedResultTestSuite struct {
 func (suite *ParsedResultTestSuite) SetupTest() {
 	suite.primField = testField{"a", types.MakePrimitiveTypeRef(types.Int64Kind), false}
 	suite.primOptionalField = testField{"b", types.MakePrimitiveTypeRef(types.Float64Kind), true}
-	suite.compoundField = testField{"set", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.StringKind)), false}
+	suite.compoundField = testField{"set", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind)), false}
 	suite.compoundOfCompoundField = testField{
 		"listOfSet",
-		types.MakeCompoundTypeRef("", types.ListKind,
-			types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.StringKind))), false}
+		types.MakeCompoundTypeRef(types.ListKind,
+			types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind))), false}
 	suite.mapOfNamedTypeField = testField{
 		"mapOfStructToOther",
-		types.MakeCompoundTypeRef("", types.MapKind,
+		types.MakeCompoundTypeRef(types.MapKind,
 			types.MakeUnresolvedTypeRef("", "Struct"),
 			types.MakeUnresolvedTypeRef("Elsewhere", "Other"),
 		),

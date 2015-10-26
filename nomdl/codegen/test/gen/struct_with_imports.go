@@ -233,7 +233,7 @@ func (m ListOfD) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfD = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Parse("sha1-d31b592f480b7659b03b72a7d1271f31dde57b2d"), 0))
+	__typeRefForListOfD = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(ref.Parse("sha1-d31b592f480b7659b03b72a7d1271f31dde57b2d"), 0))
 	types.RegisterFromValFunction(__typeRefForListOfD, func(v types.Value) types.Value {
 		return ListOfDFromVal(v)
 	})

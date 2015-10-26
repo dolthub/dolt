@@ -23,7 +23,7 @@ func init() {
 				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
 				types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
-				types.Field{"f", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+				types.Field{"f", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
 			},
 		),
 	}, []ref.Ref{})
@@ -339,7 +339,7 @@ func (m SetOfUInt8) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForSetOfUInt8 = types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
+	__typeRefForSetOfUInt8 = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
 	types.RegisterFromValFunction(__typeRefForSetOfUInt8, func(v types.Value) types.Value {
 		return SetOfUInt8FromVal(v)
 	})

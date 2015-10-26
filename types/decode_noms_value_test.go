@@ -47,7 +47,7 @@ func TestReadTypeRefAsTag(t *testing.T) {
 
 	test(MakePrimitiveTypeRef(BoolKind), "[%d, true]", BoolKind)
 	test(MakePrimitiveTypeRef(TypeRefKind), "[%d, %d]", TypeRefKind, BoolKind)
-	test(MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(BoolKind)), "[%d, %d, true, false]", ListKind, BoolKind)
+	test(MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(BoolKind)), "[%d, %d, true, false]", ListKind, BoolKind)
 
 	pkgRef := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
 	test(MakeTypeRef(pkgRef, 42), `[%d, "%s", 42]`, UnresolvedKind, pkgRef.String())
@@ -95,7 +95,7 @@ func TestReadListOfInt32(t *testing.T) {
 	a := parseJson("[%d, %d, [0, 1, 2, 3]]", ListKind, Int32Kind)
 	r := newJsonArrayReader(a, cs)
 
-	tr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int32Kind))
+	tr := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(Int32Kind))
 	RegisterFromValFunction(tr, func(v Value) Value {
 		return v
 	})
@@ -111,7 +111,7 @@ func TestReadListOfValue(t *testing.T) {
 	a := parseJson(`[%d, %d, [%d, 1, %d, "hi", %d, true]]`, ListKind, ValueKind, Int32Kind, StringKind, BoolKind)
 	r := newJsonArrayReader(a, cs)
 
-	listTr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
+	listTr := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))
 	RegisterFromValFunction(listTr, func(v Value) Value {
 		return v
 	})
@@ -127,7 +127,7 @@ func TestReadValueListOfInt8(t *testing.T) {
 	a := parseJson(`[%d, %d, %d, [0, 1, 2]]`, ValueKind, ListKind, Int8Kind)
 	r := newJsonArrayReader(a, cs)
 
-	listTr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int8Kind))
+	listTr := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(Int8Kind))
 	RegisterFromValFunction(listTr, func(v Value) Value {
 		return v
 	})
@@ -143,7 +143,7 @@ func TestReadMapOfInt64ToFloat64(t *testing.T) {
 	a := parseJson("[%d, %d, %d, [0, 1, 2, 3]]", MapKind, Int64Kind, Float64Kind)
 	r := newJsonArrayReader(a, cs)
 
-	tr := MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(Int64Kind), MakePrimitiveTypeRef(Float64Kind))
+	tr := MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(Int64Kind), MakePrimitiveTypeRef(Float64Kind))
 	RegisterFromValFunction(tr, func(v Value) Value {
 		return v
 	})
@@ -159,7 +159,7 @@ func TestReadValueMapOfUInt64ToUInt32(t *testing.T) {
 	a := parseJson("[%d, %d, %d, %d, [0, 1, 2, 3]]", ValueKind, MapKind, UInt64Kind, UInt32Kind)
 	r := newJsonArrayReader(a, cs)
 
-	mapTr := MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(UInt64Kind), MakePrimitiveTypeRef(UInt32Kind))
+	mapTr := MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(UInt64Kind), MakePrimitiveTypeRef(UInt32Kind))
 	RegisterFromValFunction(mapTr, func(v Value) Value {
 		return v
 	})
@@ -175,7 +175,7 @@ func TestReadSetOfUInt8(t *testing.T) {
 	a := parseJson("[%d, %d, [0, 1, 2, 3]]", SetKind, UInt8Kind)
 	r := newJsonArrayReader(a, cs)
 
-	tr := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(UInt8Kind))
+	tr := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(UInt8Kind))
 	RegisterFromValFunction(tr, func(v Value) Value {
 		return v
 	})
@@ -191,7 +191,7 @@ func TestReadValueSetOfUInt16(t *testing.T) {
 	a := parseJson("[%d, %d, %d, [0, 1, 2, 3]]", ValueKind, SetKind, UInt16Kind)
 	r := newJsonArrayReader(a, cs)
 
-	setTr := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(UInt16Kind))
+	setTr := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(UInt16Kind))
 	RegisterFromValFunction(setTr, func(v Value) Value {
 		return v
 	})
@@ -296,7 +296,7 @@ func TestReadStructWithList(t *testing.T) {
 
 	tref := MakeStructTypeRef("A4", []Field{
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
-		Field{"l", MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int32Kind)), false},
+		Field{"l", MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(Int32Kind)), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	}, Choices{})
 	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
@@ -310,7 +310,7 @@ func TestReadStructWithList(t *testing.T) {
 		return v
 	})
 
-	l32Tr := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int32Kind))
+	l32Tr := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(Int32Kind))
 	RegisterFromValFunction(l32Tr, func(v Value) Value {
 		return v
 	})
@@ -435,7 +435,7 @@ func TestReadRef(t *testing.T) {
 	a := parseJson(`[%d, %d, "%s"]`, RefKind, UInt32Kind, r.String())
 	reader := newJsonArrayReader(a, cs)
 
-	refTr := MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(UInt32Kind))
+	refTr := MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(UInt32Kind))
 	RegisterFromValFunction(refTr, func(v Value) Value {
 		return v
 	})
@@ -453,7 +453,7 @@ func TestReadValueRef(t *testing.T) {
 	a := parseJson(`[%d, %d, %d, "%s"]`, ValueKind, RefKind, UInt32Kind, r.String())
 	reader := newJsonArrayReader(a, cs)
 
-	refTypeRef := MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(UInt32Kind))
+	refTypeRef := MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(UInt32Kind))
 	RegisterFromValFunction(refTypeRef, func(v Value) Value {
 		return v
 	})
@@ -546,9 +546,9 @@ func TestReadTypeRefValue(t *testing.T) {
 
 	test(MakePrimitiveTypeRef(Int32Kind),
 		`[%d, %d]`, TypeRefKind, Int32Kind)
-	test(MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(BoolKind)),
+	test(MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(BoolKind)),
 		`[%d, %d, [%d]]`, TypeRefKind, ListKind, BoolKind)
-	test(MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(BoolKind), MakePrimitiveTypeRef(StringKind)),
+	test(MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(BoolKind), MakePrimitiveTypeRef(StringKind)),
 		`[%d, %d, [%d, %d]]`, TypeRefKind, MapKind, BoolKind, StringKind)
 	test(MakeEnumTypeRef("E", "a", "b", "c"),
 		`[%d, %d, "E", ["a", "b", "c"]]`, TypeRefKind, EnumKind)
@@ -613,7 +613,7 @@ func TestReadPackage2(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	rr := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-	setTref := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(UInt32Kind))
+	setTref := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(UInt32Kind))
 	pkg := NewPackage([]TypeRef{setTref}, []ref.Ref{rr})
 
 	a := []interface{}{float64(PackageKind), []interface{}{float64(SetKind), []interface{}{float64(UInt32Kind)}}, []interface{}{rr.String()}}

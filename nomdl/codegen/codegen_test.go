@@ -157,13 +157,13 @@ func TestSkipDuplicateTypes(t *testing.T) {
 	leaf1 := types.NewPackage([]types.TypeRef{
 		types.MakeEnumTypeRef("E1", "a", "b"),
 		types.MakeStructTypeRef("S1", []types.Field{
-			types.Field{"f", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt16Kind)), false},
+			types.Field{"f", types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.UInt16Kind)), false},
 			types.Field{"e", types.MakeTypeRef(ref.Ref{}, 0), false},
 		}, types.Choices{}),
 	}, []ref.Ref{})
 	leaf2 := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("S2", []types.Field{
-			types.Field{"f", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt16Kind)), false},
+			types.Field{"f", types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.UInt16Kind)), false},
 		}, types.Choices{}),
 	}, []ref.Ref{})
 

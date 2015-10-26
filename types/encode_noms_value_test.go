@@ -54,7 +54,7 @@ func (l testList) InternalImplementation() List {
 func TestWriteList(t *testing.T) {
 	assert := assert.New(t)
 
-	tref := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int32Kind))
+	tref := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(Int32Kind))
 	v := NewList(Int32(0), Int32(1), Int32(2), Int32(3))
 
 	w := newJsonArrayWriter()
@@ -65,8 +65,8 @@ func TestWriteList(t *testing.T) {
 func TestWriteListOfList(t *testing.T) {
 	assert := assert.New(t)
 
-	it := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(Int16Kind))
-	tref := MakeCompoundTypeRef("", ListKind, it)
+	it := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(Int16Kind))
+	tref := MakeCompoundTypeRef(ListKind, it)
 	v := NewList(NewList(Int16(0)), NewList(Int16(1), Int16(2), Int16(3)))
 
 	w := newJsonArrayWriter()
@@ -91,7 +91,7 @@ func (s testSet) InternalImplementation() Set {
 func TestWriteSet(t *testing.T) {
 	assert := assert.New(t)
 
-	tref := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(UInt32Kind))
+	tref := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(UInt32Kind))
 	v := NewSet(UInt32(3), UInt32(1), UInt32(2), UInt32(0))
 
 	w := newJsonArrayWriter()
@@ -103,8 +103,8 @@ func TestWriteSet(t *testing.T) {
 func TestWriteSetOfSet(t *testing.T) {
 	assert := assert.New(t)
 
-	st := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(Int32Kind))
-	tref := MakeCompoundTypeRef("", SetKind, st)
+	st := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(Int32Kind))
+	tref := MakeCompoundTypeRef(SetKind, st)
 	v := NewSet(NewSet(Int32(0)), NewSet(Int32(1), Int32(2), Int32(3)))
 
 	w := newJsonArrayWriter()
@@ -129,7 +129,7 @@ func (m testMap) InternalImplementation() Map {
 func TestWriteMap(t *testing.T) {
 	assert := assert.New(t)
 
-	tref := MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(BoolKind))
+	tref := MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(BoolKind))
 	v := NewMap(NewString("a"), Bool(false), NewString("b"), Bool(true))
 
 	w := newJsonArrayWriter()
@@ -141,9 +141,9 @@ func TestWriteMap(t *testing.T) {
 func TestWriteMapOfMap(t *testing.T) {
 	assert := assert.New(t)
 
-	kt := MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(Int64Kind))
-	vt := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(BoolKind))
-	tref := MakeCompoundTypeRef("", MapKind, kt, vt)
+	kt := MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(Int64Kind))
+	vt := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(BoolKind))
+	tref := MakeCompoundTypeRef(MapKind, kt, vt)
 	v := NewMap(NewMap(NewString("a"), Int64(0)), NewSet(Bool(true)))
 
 	w := newJsonArrayWriter()
@@ -236,7 +236,7 @@ func TestWriteStructWithList(t *testing.T) {
 
 	pkg := NewPackage([]TypeRef{
 		MakeStructTypeRef("S", []Field{
-			Field{"l", MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(StringKind)), false},
+			Field{"l", MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(StringKind)), false},
 		}, Choices{})}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	tref := MakeTypeRef(pkgRef, 0)
@@ -321,7 +321,7 @@ func TestWriteListOfEnum(t *testing.T) {
 		MakeEnumTypeRef("E", "a", "b", "c")}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	et := MakeTypeRef(pkgRef, 0)
-	tref := MakeCompoundTypeRef("", ListKind, et)
+	tref := MakeCompoundTypeRef(ListKind, et)
 	v := NewList(testEnum{UInt32(0), et}, testEnum{UInt32(1), et}, testEnum{UInt32(2), et})
 
 	w := newJsonArrayWriter()
@@ -332,7 +332,7 @@ func TestWriteListOfEnum(t *testing.T) {
 func TestWriteListOfValue(t *testing.T) {
 	assert := assert.New(t)
 
-	tref := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
+	tref := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))
 	blob, _ := NewBlob(bytes.NewBuffer([]byte{0x01}))
 	v := NewList(
 		Bool(true),
@@ -379,7 +379,7 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 		}, Choices{})}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
-	tref := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
+	tref := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))
 	st := MakeTypeRef(pkgRef, 0)
 	v := NewList(testMap{Map: NewMap(NewString("x"), Int32(42)), t: st})
 
@@ -397,7 +397,7 @@ func TestWriteListOfValueWithTypeRefs(t *testing.T) {
 		}, Choices{})}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
-	tref := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))
+	tref := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))
 	v := NewList(
 		Bool(true),
 		MakePrimitiveTypeRef(Int32Kind),
@@ -431,7 +431,7 @@ func (r testRef) TargetRef() ref.Ref {
 func TestWriteRef(t *testing.T) {
 	assert := assert.New(t)
 
-	tref := MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(UInt32Kind))
+	tref := MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(UInt32Kind))
 	r := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
 	v := NewRef(r)
 
@@ -451,9 +451,9 @@ func TestWriteTypeRefValue(t *testing.T) {
 
 	test([]interface{}{TypeRefKind, Int32Kind}, MakePrimitiveTypeRef(Int32Kind))
 	test([]interface{}{TypeRefKind, ListKind, []interface{}{BoolKind}},
-		MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(BoolKind)))
+		MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(BoolKind)))
 	test([]interface{}{TypeRefKind, MapKind, []interface{}{BoolKind, StringKind}},
-		MakeCompoundTypeRef("", MapKind, MakePrimitiveTypeRef(BoolKind), MakePrimitiveTypeRef(StringKind)))
+		MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(BoolKind), MakePrimitiveTypeRef(StringKind)))
 	test([]interface{}{TypeRefKind, EnumKind, "E", []interface{}{"a", "b", "c"}},
 		MakeEnumTypeRef("E", "a", "b", "c"))
 
@@ -486,7 +486,7 @@ func TestWriteTypeRefValue(t *testing.T) {
 func TestWriteListOfTypeRefs(t *testing.T) {
 	assert := assert.New(t)
 
-	tref := MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(TypeRefKind))
+	tref := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(TypeRefKind))
 	v := NewList(MakePrimitiveTypeRef(BoolKind), MakeEnumTypeRef("E", "a", "b", "c"), MakePrimitiveTypeRef(StringKind))
 
 	w := newJsonArrayWriter()
@@ -530,7 +530,7 @@ func TestWritePackage(t *testing.T) {
 func TestWritePackage2(t *testing.T) {
 	assert := assert.New(t)
 
-	setTref := MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(UInt32Kind))
+	setTref := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(UInt32Kind))
 	r := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
 	v := Package{[]TypeRef{setTref}, []ref.Ref{r}, &ref.Ref{}}
 
