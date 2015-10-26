@@ -12,9 +12,4 @@ before_script:
 - npm test
 - popd
 notifications:
-  slack:
-    atticlabs: TrfE2bADv8HsrkLXgXvh09TP
-    on_pull_requests: false
-    on_failure: always
-    on_success: change
-    on_start: never
+  slack: atticlabs:TrfE2bADv8HsrkLXgXvh09TP
