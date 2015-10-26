@@ -47,10 +47,6 @@ func jsonDecodeTaggedValue(m map[string]interface{}) interface{} {
 			if v, ok := v.([]interface{}); ok {
 				return jsonDecodeCompoundBlob(v)
 			}
-		case "cl":
-			if v, ok := v.([]interface{}); ok {
-				return jsonDecodeCompoundList(v)
-			}
 		case "int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64":
 			// Go decodes all JSON numbers as float64
 			if v, ok := v.(float64); ok {
@@ -123,11 +119,6 @@ func toUint64(v interface{}) (uint64, error) {
 func jsonDecodeCompoundBlob(input []interface{}) interface{} {
 	offsets, refs := jsonDecodeCompoundObject(input)
 	return CompoundBlob{offsets, refs}
-}
-
-func jsonDecodeCompoundList(input []interface{}) interface{} {
-	offsets, refs := jsonDecodeCompoundObject(input)
-	return CompoundList{offsets, refs}
 }
 
 func jsonDecodeCompoundObject(input []interface{}) ([]uint64, []ref.Ref) {

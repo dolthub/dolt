@@ -57,3 +57,11 @@ func appendChunks(chunks []Future, f Future) []Future {
 
 	return chunks
 }
+
+func appendValueToChunks(chunks []Future, v Value) []Future {
+	if v.TypeRef().Kind() == RefKind {
+		// TODO: Wrong ref here. We don't want the Ref of the Ref Value but the ref of the value it is referring to. BUG 464
+		chunks = append(chunks, futureFromRef(v.Ref()))
+	}
+	return chunks
+}

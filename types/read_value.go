@@ -81,13 +81,6 @@ func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
 		}
 		cb := newCompoundBlob(i.Offsets, blobs, cs)
 		return futureFromValue(cb)
-	case enc.CompoundList:
-		lists := make([]Future, len(i.Lists))
-		for idx, listRef := range i.Lists {
-			lists[idx] = fromEncodeable(listRef, cs)
-		}
-		cl := newCompoundList(i.Offsets, lists, cs)
-		return futureFromValue(cl)
 	case enc.Package:
 		types := make([]TypeRef, len(i.Types))
 		for idx, t := range i.Types {

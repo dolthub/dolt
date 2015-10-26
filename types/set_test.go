@@ -133,7 +133,7 @@ func TestSetFutures(t *testing.T) {
 	r := WriteValue(v, cs)
 	f := futureFromRef(r)
 
-	s := listFromFutures([]Future{f, futureFromValue(Int64(0xbeefcafe))}, cs)
+	s := setFromFutures([]Future{f, futureFromValue(Int64(0xbeefcafe))}, cs)
 
 	assert.Len(s.Chunks(), 1)
 	assert.EqualValues(r, s.Chunks()[0].Ref())

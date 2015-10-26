@@ -32,7 +32,7 @@ type List interface {
 }
 
 func NewList(v ...Value) List {
-	return newCompoundListFromValues(v, nil)
+	return newListLeaf(v...)
 }
 
 func valuesToFutures(list []Value) []Future {
@@ -44,11 +44,7 @@ func valuesToFutures(list []Value) []Future {
 }
 
 func listFromFutures(list []Future, cs chunks.ChunkSource) List {
-	lc := newListChunker(cs)
-	for _, f := range list {
-		lc.writeFuture(f)
-	}
-	return lc.makeList()
+	return listLeafFromFutures(list, cs)
 }
 
 func ListFromVal(v Value) List {
