@@ -70,7 +70,7 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) bool {
 			if commitRef.Equals(currentHeadRef) {
 				return true
 			}
-			if !descendsFrom(commit, commitRef, currentHeadRef, ds) {
+			if !descendsFrom(commit, currentHeadRef, ds) {
 				return false
 			}
 		}
@@ -83,29 +83,23 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) bool {
 	return ds.UpdateRoot(newRootRef, currentRootRef)
 }
 
-func descendsFrom(commit Commit, commitRef, currentHeadRef RefOfCommit, cs chunks.ChunkSource) bool {
+func descendsFrom(commit Commit, currentHeadRef RefOfCommit, cs chunks.ChunkSource) bool {
 	// BFS because the common case is that the ancestor is only a step or two away
-	ancestors := NewSetOfRefOfCommit().Insert(commitRef)
+	ancestors := commit.Parents()
 	for !ancestors.Has(currentHeadRef) {
 		if ancestors.Empty() {
 			return false
 		}
-		ancestors = getAncestors(commit, ancestors, cs)
+		ancestors = getAncestors(ancestors, cs)
 	}
 	return true
 }
 
-func getAncestors(commit Commit, commits SetOfRefOfCommit, cs chunks.ChunkSource) SetOfRefOfCommit {
+func getAncestors(commits SetOfRefOfCommit, cs chunks.ChunkSource) SetOfRefOfCommit {
 	ancestors := NewSetOfRefOfCommit()
-	commits.Iter(func(r RefOfCommit) (stop bool) {
-		var c Commit
-		if r.TargetRef() == commit.Ref() {
-			c = commit
-		} else {
-			c = r.TargetValue(cs)
-		}
+	commits.IterAll(func(r RefOfCommit) {
+		c := r.TargetValue(cs)
 		ancestors = ancestors.Union(c.Parents())
-		return
 	})
 	return ancestors
 }
