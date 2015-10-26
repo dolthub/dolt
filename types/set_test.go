@@ -188,7 +188,7 @@ func TestSetFilter(t *testing.T) {
 func TestSetTypeRef(t *testing.T) {
 	assert := assert.New(t)
 	s := NewSet()
-	assert.True(s.TypeRef().Equals(MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(ValueKind))))
+	assert.True(s.TypeRef().Equals(MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))))
 }
 
 func TestSetChunks(t *testing.T) {

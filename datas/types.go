@@ -18,7 +18,7 @@ func init() {
 		types.MakeStructTypeRef("Commit",
 			[]types.Field{
 				types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
-				types.Field{"parents", types.MakeCompoundTypeRef("", types.SetKind, types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef(ref.Ref{}, 0))), false},
+				types.Field{"parents", types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Ref{}, 0))), false},
 			},
 			types.Choices{},
 		),
@@ -186,7 +186,7 @@ func (m MapOfStringToRefOfCommit) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToRefOfCommit = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)))
+	__typeRefForMapOfStringToRefOfCommit = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToRefOfCommit, func(v types.Value) types.Value {
 		return MapOfStringToRefOfCommitFromVal(v)
 	})
@@ -323,7 +323,7 @@ func (m SetOfRefOfCommit) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForSetOfRefOfCommit = types.MakeCompoundTypeRef("", types.SetKind, types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)))
+	__typeRefForSetOfRefOfCommit = types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)))
 	types.RegisterFromValFunction(__typeRefForSetOfRefOfCommit, func(v types.Value) types.Value {
 		return SetOfRefOfCommitFromVal(v)
 	})
@@ -451,7 +451,7 @@ func (m RefOfCommit) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForRefOfCommit = types.MakeCompoundTypeRef("", types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0))
+	__typeRefForRefOfCommit = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForRefOfCommit, func(v types.Value) types.Value {
 		return RefOfCommitFromVal(v)
 	})

@@ -74,11 +74,11 @@ func (r *jsonArrayReader) readTypeRefAsTag() TypeRef {
 	switch kind {
 	case ListKind, SetKind, RefKind:
 		elemType := r.readTypeRefAsTag()
-		return MakeCompoundTypeRef("", kind, elemType)
+		return MakeCompoundTypeRef(kind, elemType)
 	case MapKind:
 		keyType := r.readTypeRefAsTag()
 		valueType := r.readTypeRefAsTag()
-		return MakeCompoundTypeRef("", kind, keyType, valueType)
+		return MakeCompoundTypeRef(kind, keyType, valueType)
 	case TypeRefKind:
 		return MakePrimitiveTypeRef(TypeRefKind)
 	case UnresolvedKind:
@@ -267,7 +267,7 @@ func (r *jsonArrayReader) readTypeRefAsValue(pkg *Package) TypeRef {
 			t := r2.readTypeRefAsValue(pkg)
 			elemTypes = append(elemTypes, t)
 		}
-		return MakeCompoundTypeRef("", k, elemTypes...)
+		return MakeCompoundTypeRef(k, elemTypes...)
 	case StructKind:
 		name := r.readString()
 
@@ -315,7 +315,7 @@ func fixupTypeRef(tr TypeRef, pkg *Package) TypeRef {
 		for i, elemType := range desc.ElemTypes {
 			elemTypes[i] = fixupTypeRef(elemType, pkg)
 		}
-		return MakeCompoundTypeRef(tr.Name(), tr.Kind(), elemTypes...)
+		return MakeCompoundTypeRef(tr.Kind(), elemTypes...)
 	case StructDesc:
 		fields := make([]Field, len(desc.Fields))
 		for i, f := range desc.Fields {

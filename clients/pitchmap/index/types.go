@@ -184,7 +184,7 @@ func (m ListOfMapOfStringToValue) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfMapOfStringToValue = types.MakeCompoundTypeRef("", types.ListKind, types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind)))
+	__typeRefForListOfMapOfStringToValue = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind)))
 	types.RegisterFromValFunction(__typeRefForListOfMapOfStringToValue, func(v types.Value) types.Value {
 		return ListOfMapOfStringToValueFromVal(v)
 	})
@@ -330,7 +330,7 @@ func (m MapOfStringToListOfPitch) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToListOfPitch = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)))
+	__typeRefForMapOfStringToListOfPitch = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToListOfPitch, func(v types.Value) types.Value {
 		return MapOfStringToListOfPitchFromVal(v)
 	})
@@ -466,7 +466,7 @@ func (m MapOfStringToString) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToString = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.StringKind))
+	__typeRefForMapOfStringToString = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.StringKind))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToString, func(v types.Value) types.Value {
 		return MapOfStringToStringFromVal(v)
 	})
@@ -602,7 +602,7 @@ func (m MapOfStringToValue) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
+	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.Value {
 		return MapOfStringToValueFromVal(v)
 	})
@@ -737,7 +737,7 @@ func (m ListOfPitch) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfPitch = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
+	__typeRefForListOfPitch = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfPitch, func(v types.Value) types.Value {
 		return ListOfPitchFromVal(v)
 	})

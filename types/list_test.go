@@ -341,7 +341,7 @@ func TestListIterAllP(t *testing.T) {
 func TestListTypeRef(t *testing.T) {
 	assert := assert.New(t)
 	l := NewList(Int32(0))
-	assert.True(l.TypeRef().Equals(MakeCompoundTypeRef("", ListKind, MakePrimitiveTypeRef(ValueKind))))
+	assert.True(l.TypeRef().Equals(MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))))
 }
 
 func TestListChunks(t *testing.T) {

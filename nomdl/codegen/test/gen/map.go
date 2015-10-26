@@ -75,7 +75,7 @@ func (m MapOfBoolToString) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfBoolToString = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.BoolKind), types.MakePrimitiveTypeRef(types.StringKind))
+	__typeRefForMapOfBoolToString = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.BoolKind), types.MakePrimitiveTypeRef(types.StringKind))
 	types.RegisterFromValFunction(__typeRefForMapOfBoolToString, func(v types.Value) types.Value {
 		return MapOfBoolToStringFromVal(v)
 	})
@@ -211,7 +211,7 @@ func (m MapOfStringToValue) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
+	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.Value {
 		return MapOfStringToValueFromVal(v)
 	})

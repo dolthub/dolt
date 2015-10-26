@@ -76,7 +76,7 @@ func (m SetOfBool) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForSetOfBool = types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.BoolKind))
+	__typeRefForSetOfBool = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.BoolKind))
 	types.RegisterFromValFunction(__typeRefForSetOfBool, func(v types.Value) types.Value {
 		return SetOfBoolFromVal(v)
 	})

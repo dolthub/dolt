@@ -16,7 +16,7 @@ func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("Tree",
 			[]types.Field{
-				types.Field{"children", types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
+				types.Field{"children", types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
 			},
 			types.Choices{},
 		),
@@ -171,7 +171,7 @@ func (m ListOfTree) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfTree = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__genPackageInFile_struct_recursive_CachedRef, 0))
+	__typeRefForListOfTree = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__genPackageInFile_struct_recursive_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfTree, func(v types.Value) types.Value {
 		return ListOfTreeFromVal(v)
 	})

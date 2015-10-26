@@ -74,7 +74,7 @@ func (m ListOfInt64) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfInt64 = types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.Int64Kind))
+	__typeRefForListOfInt64 = types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.Int64Kind))
 	types.RegisterFromValFunction(__typeRefForListOfInt64, func(v types.Value) types.Value {
 		return ListOfInt64FromVal(v)
 	})

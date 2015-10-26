@@ -20,7 +20,7 @@ func init() {
 				types.Field{"Name", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"OAuthToken", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"OAuthSecret", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Albums", types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(ref.Ref{}, 1)), false},
+				types.Field{"Albums", types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(ref.Ref{}, 1)), false},
 			},
 			types.Choices{},
 		),
@@ -28,7 +28,7 @@ func init() {
 			[]types.Field{
 				types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Photos", types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef(ref.Parse("sha1-b525f9bca5e451c21dd9af564f0960045fbaa304"), 0)), false},
+				types.Field{"Photos", types.MakeCompoundTypeRef(types.SetKind, types.MakeTypeRef(ref.Parse("sha1-b525f9bca5e451c21dd9af564f0960045fbaa304"), 0)), false},
 			},
 			types.Choices{},
 		),
@@ -269,7 +269,7 @@ func (m MapOfStringToAlbum) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToAlbum = types.MakeCompoundTypeRef("", types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1))
+	__typeRefForMapOfStringToAlbum = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 1))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToAlbum, func(v types.Value) types.Value {
 		return MapOfStringToAlbumFromVal(v)
 	})
@@ -385,7 +385,7 @@ func (m SetOfRemotePhoto) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForSetOfRemotePhoto = types.MakeCompoundTypeRef("", types.SetKind, types.MakeTypeRef(ref.Parse("sha1-b525f9bca5e451c21dd9af564f0960045fbaa304"), 0))
+	__typeRefForSetOfRemotePhoto = types.MakeCompoundTypeRef(types.SetKind, types.MakeTypeRef(ref.Parse("sha1-b525f9bca5e451c21dd9af564f0960045fbaa304"), 0))
 	types.RegisterFromValFunction(__typeRefForSetOfRemotePhoto, func(v types.Value) types.Value {
 		return SetOfRemotePhotoFromVal(v)
 	})

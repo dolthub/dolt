@@ -20,8 +20,8 @@ func init() {
 				types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"Url", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-fb09d21d144c518467325465327d46489cff7c47"), 0), false},
-				types.Field{"Sizes", types.MakeCompoundTypeRef("", types.MapKind, types.MakeTypeRef(ref.Ref{}, 1), types.MakePrimitiveTypeRef(types.StringKind)), false},
-				types.Field{"Tags", types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.StringKind)), false},
+				types.Field{"Sizes", types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(ref.Ref{}, 1), types.MakePrimitiveTypeRef(types.StringKind)), false},
+				types.Field{"Tags", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind)), false},
 			},
 			types.Choices{},
 		),
@@ -338,7 +338,7 @@ func (m MapOfSizeToString) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfSizeToString = types.MakeCompoundTypeRef("", types.MapKind, types.MakeTypeRef(__mainPackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef, 1), types.MakePrimitiveTypeRef(types.StringKind))
+	__typeRefForMapOfSizeToString = types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(__mainPackageInFile_sha1_b525f9bca5e451c21dd9af564f0960045fbaa304_CachedRef, 1), types.MakePrimitiveTypeRef(types.StringKind))
 	types.RegisterFromValFunction(__typeRefForMapOfSizeToString, func(v types.Value) types.Value {
 		return MapOfSizeToStringFromVal(v)
 	})
@@ -475,7 +475,7 @@ func (m SetOfString) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForSetOfString = types.MakeCompoundTypeRef("", types.SetKind, types.MakePrimitiveTypeRef(types.StringKind))
+	__typeRefForSetOfString = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind))
 	types.RegisterFromValFunction(__typeRefForSetOfString, func(v types.Value) types.Value {
 		return SetOfStringFromVal(v)
 	})

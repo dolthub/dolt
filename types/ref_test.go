@@ -41,5 +41,5 @@ func TestRefTypeRef(t *testing.T) {
 	assert := assert.New(t)
 	l := NewList()
 	r := NewRef(l.Ref())
-	assert.True(r.TypeRef().Equals(MakeCompoundTypeRef("", RefKind, MakePrimitiveTypeRef(ValueKind))))
+	assert.True(r.TypeRef().Equals(MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(ValueKind))))
 }

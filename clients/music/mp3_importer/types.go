@@ -223,7 +223,7 @@ func (m ListOfSong) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfSong = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
+	__typeRefForListOfSong = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfSong, func(v types.Value) types.Value {
 		return ListOfSongFromVal(v)
 	})

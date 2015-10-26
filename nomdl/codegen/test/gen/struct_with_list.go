@@ -16,7 +16,7 @@ func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("StructWithList",
 			[]types.Field{
-				types.Field{"l", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+				types.Field{"l", types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
 				types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
 				types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"i", types.MakePrimitiveTypeRef(types.Int64Kind), false},

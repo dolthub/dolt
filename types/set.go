@@ -138,7 +138,7 @@ func (fs Set) Chunks() (futures []Future) {
 	return
 }
 
-var setTypeRef = MakeCompoundTypeRef("", SetKind, MakePrimitiveTypeRef(ValueKind))
+var setTypeRef = MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))
 
 func (fs Set) TypeRef() TypeRef {
 	return setTypeRef

@@ -184,7 +184,7 @@ func (m ListOfStruct) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfStruct = types.MakeCompoundTypeRef("", types.ListKind, types.MakeTypeRef(__genPackageInFile_struct_CachedRef, 0))
+	__typeRefForListOfStruct = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__genPackageInFile_struct_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfStruct, func(v types.Value) types.Value {
 		return ListOfStructFromVal(v)
 	})

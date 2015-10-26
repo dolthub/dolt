@@ -16,7 +16,7 @@ func init() {
 	p := types.NewPackage([]types.TypeRef{
 		types.MakeStructTypeRef("StructWithDupList",
 			[]types.Field{
-				types.Field{"l", types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+				types.Field{"l", types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
 			},
 			types.Choices{},
 		),
@@ -171,7 +171,7 @@ func (m ListOfUInt8) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfUInt8 = types.MakeCompoundTypeRef("", types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
+	__typeRefForListOfUInt8 = types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
 	types.RegisterFromValFunction(__typeRefForListOfUInt8, func(v types.Value) types.Value {
 		return ListOfUInt8FromVal(v)
 	})

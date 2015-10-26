@@ -293,7 +293,7 @@ func (gen Generator) ToTypeRef(t types.TypeRef, fileID, packageName string) stri
 		for i, t := range desc.ElemTypes {
 			typerefs[i] = gen.ToTypeRef(t, fileID, packageName)
 		}
-		return fmt.Sprintf(`%sMakeCompoundTypeRef("%s", %s%sKind, %s)`, gen.TypesPackage, t.Name(), gen.TypesPackage, kindToString(t.Kind()), strings.Join(typerefs, ", "))
+		return fmt.Sprintf(`%sMakeCompoundTypeRef(%s%sKind, %s)`, gen.TypesPackage, gen.TypesPackage, kindToString(t.Kind()), strings.Join(typerefs, ", "))
 	case types.EnumDesc:
 		return fmt.Sprintf(`%sMakeEnumTypeRef("%s", "%s")`, gen.TypesPackage, t.Name(), strings.Join(desc.IDs, `", "`))
 	case types.StructDesc:
