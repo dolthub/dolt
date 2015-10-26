@@ -167,7 +167,7 @@ func getNomsWriter(cs chunks.ChunkSink) (iChan chan incidentWithIndex, rChan cha
 			for incidentRecord := range iChan {
 				v := incidentRecord.incident.New()
 				r := types.WriteValue(v, cs)
-				rChan <- refIndex{types.Ref{R: r}, incidentRecord.index}
+				rChan <- refIndex{types.NewRef(r), incidentRecord.index}
 			}
 			wg.Done()
 		}()

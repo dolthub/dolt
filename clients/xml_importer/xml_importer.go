@@ -14,6 +14,7 @@ import (
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
+	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -93,10 +94,10 @@ func main() {
 				file.Close()
 
 				nomsObj := util.NomsValueFromDecodedJSON(object)
-				r := types.Ref{}
+				r := types.NewRef(ref.Ref{})
 
 				if !*noIO {
-					r = types.Ref{types.WriteValue(nomsObj, ds.Store())}
+					r = types.NewRef(types.WriteValue(nomsObj, ds.Store()))
 				}
 
 				refsChan <- refIndex{r, f.index}

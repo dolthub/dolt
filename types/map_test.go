@@ -229,11 +229,11 @@ func TestMapChunks(t *testing.T) {
 	c1 := l1.Chunks()
 	assert.Len(c1, 0)
 
-	l2 := NewMap(Ref{R: Int32(0).Ref()}, Int32(1))
+	l2 := NewMap(NewRef(Int32(0).Ref()), Int32(1))
 	c2 := l2.Chunks()
 	assert.Len(c2, 1)
 
-	l3 := NewMap(Int32(0), Ref{R: Int32(1).Ref()})
+	l3 := NewMap(Int32(0), NewRef(Int32(1).Ref()))
 	c3 := l3.Chunks()
 	assert.Len(c3, 1)
 }

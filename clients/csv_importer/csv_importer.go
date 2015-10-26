@@ -99,7 +99,7 @@ func main() {
 				m = m.Set(types.NewString(keys[i]), types.NewString(v))
 			}
 
-			r := types.Ref{types.WriteValue(m, ds.Store())}
+			r := types.NewRef(types.WriteValue(m, ds.Store()))
 			refChan <- refIndex{r, row.index}
 		}
 	}

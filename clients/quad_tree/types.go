@@ -425,12 +425,16 @@ func (s SQuadTree) SetGeorectangle(val Georectangle) SQuadTree {
 // RefOfValue
 
 type RefOfValue struct {
-	r   ref.Ref
-	ref *ref.Ref
+	target ref.Ref
+	ref    *ref.Ref
 }
 
-func NewRefOfValue(r ref.Ref) RefOfValue {
-	return RefOfValue{r, &ref.Ref{}}
+func NewRefOfValue(target ref.Ref) RefOfValue {
+	return RefOfValue{target, &ref.Ref{}}
+}
+
+func (r RefOfValue) TargetRef() ref.Ref {
+	return r.target
 }
 
 func (r RefOfValue) Ref() ref.Ref {
@@ -448,16 +452,12 @@ func (r RefOfValue) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
 }
 
-func (r RefOfValue) InternalImplementation() ref.Ref {
-	return r.r
-}
-
 func RefOfValueFromVal(val types.Value) RefOfValue {
 	// TODO: Do we still need FromVal?
 	if val, ok := val.(RefOfValue); ok {
 		return val
 	}
-	return RefOfValue{val.(types.Ref).Ref(), &ref.Ref{}}
+	return NewRefOfValue(val.(types.Ref).TargetRef())
 }
 
 // A Noms Value that describes RefOfValue.
@@ -474,12 +474,12 @@ func init() {
 	})
 }
 
-func (r RefOfValue) GetValue(cs chunks.ChunkSource) types.Value {
-	return types.ReadValue(r.r, cs)
+func (r RefOfValue) TargetValue(cs chunks.ChunkSource) types.Value {
+	return types.ReadValue(r.target, cs)
 }
 
-func (r RefOfValue) SetValue(val types.Value, cs chunks.ChunkSink) RefOfValue {
-	return RefOfValue{types.WriteValue(val, cs), &ref.Ref{}}
+func (r RefOfValue) SetTargetValue(val types.Value, cs chunks.ChunkSink) RefOfValue {
+	return NewRefOfValue(types.WriteValue(val, cs))
 }
 
 // ListOfNode
@@ -1047,12 +1047,16 @@ func (m MapOfStringToRefOfSQuadTree) Filter(cb MapOfStringToRefOfSQuadTreeFilter
 // RefOfSQuadTree
 
 type RefOfSQuadTree struct {
-	r   ref.Ref
-	ref *ref.Ref
+	target ref.Ref
+	ref    *ref.Ref
 }
 
-func NewRefOfSQuadTree(r ref.Ref) RefOfSQuadTree {
-	return RefOfSQuadTree{r, &ref.Ref{}}
+func NewRefOfSQuadTree(target ref.Ref) RefOfSQuadTree {
+	return RefOfSQuadTree{target, &ref.Ref{}}
+}
+
+func (r RefOfSQuadTree) TargetRef() ref.Ref {
+	return r.target
 }
 
 func (r RefOfSQuadTree) Ref() ref.Ref {
@@ -1070,16 +1074,12 @@ func (r RefOfSQuadTree) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
 }
 
-func (r RefOfSQuadTree) InternalImplementation() ref.Ref {
-	return r.r
-}
-
 func RefOfSQuadTreeFromVal(val types.Value) RefOfSQuadTree {
 	// TODO: Do we still need FromVal?
 	if val, ok := val.(RefOfSQuadTree); ok {
 		return val
 	}
-	return RefOfSQuadTree{val.(types.Ref).Ref(), &ref.Ref{}}
+	return NewRefOfSQuadTree(val.(types.Ref).TargetRef())
 }
 
 // A Noms Value that describes RefOfSQuadTree.
@@ -1096,10 +1096,10 @@ func init() {
 	})
 }
 
-func (r RefOfSQuadTree) GetValue(cs chunks.ChunkSource) SQuadTree {
-	return types.ReadValue(r.r, cs).(SQuadTree)
+func (r RefOfSQuadTree) TargetValue(cs chunks.ChunkSource) SQuadTree {
+	return types.ReadValue(r.target, cs).(SQuadTree)
 }
 
-func (r RefOfSQuadTree) SetValue(val SQuadTree, cs chunks.ChunkSink) RefOfSQuadTree {
-	return RefOfSQuadTree{types.WriteValue(val, cs), &ref.Ref{}}
+func (r RefOfSQuadTree) SetTargetValue(val SQuadTree, cs chunks.ChunkSink) RefOfSQuadTree {
+	return NewRefOfSQuadTree(types.WriteValue(val, cs))
 }

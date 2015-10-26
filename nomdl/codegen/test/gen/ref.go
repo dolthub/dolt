@@ -108,12 +108,16 @@ func (s StructWithRef) SetR(val RefOfSetOfFloat32) StructWithRef {
 // RefOfListOfString
 
 type RefOfListOfString struct {
-	r   ref.Ref
-	ref *ref.Ref
+	target ref.Ref
+	ref    *ref.Ref
 }
 
-func NewRefOfListOfString(r ref.Ref) RefOfListOfString {
-	return RefOfListOfString{r, &ref.Ref{}}
+func NewRefOfListOfString(target ref.Ref) RefOfListOfString {
+	return RefOfListOfString{target, &ref.Ref{}}
+}
+
+func (r RefOfListOfString) TargetRef() ref.Ref {
+	return r.target
 }
 
 func (r RefOfListOfString) Ref() ref.Ref {
@@ -131,16 +135,12 @@ func (r RefOfListOfString) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
 }
 
-func (r RefOfListOfString) InternalImplementation() ref.Ref {
-	return r.r
-}
-
 func RefOfListOfStringFromVal(val types.Value) RefOfListOfString {
 	// TODO: Do we still need FromVal?
 	if val, ok := val.(RefOfListOfString); ok {
 		return val
 	}
-	return RefOfListOfString{val.(types.Ref).Ref(), &ref.Ref{}}
+	return NewRefOfListOfString(val.(types.Ref).TargetRef())
 }
 
 // A Noms Value that describes RefOfListOfString.
@@ -157,12 +157,12 @@ func init() {
 	})
 }
 
-func (r RefOfListOfString) GetValue(cs chunks.ChunkSource) ListOfString {
-	return types.ReadValue(r.r, cs).(ListOfString)
+func (r RefOfListOfString) TargetValue(cs chunks.ChunkSource) ListOfString {
+	return types.ReadValue(r.target, cs).(ListOfString)
 }
 
-func (r RefOfListOfString) SetValue(val ListOfString, cs chunks.ChunkSink) RefOfListOfString {
-	return RefOfListOfString{types.WriteValue(val, cs), &ref.Ref{}}
+func (r RefOfListOfString) SetTargetValue(val ListOfString, cs chunks.ChunkSink) RefOfListOfString {
+	return NewRefOfListOfString(types.WriteValue(val, cs))
 }
 
 // ListOfRefOfFloat32
@@ -313,12 +313,16 @@ func (l ListOfRefOfFloat32) Filter(cb ListOfRefOfFloat32FilterCallback) ListOfRe
 // RefOfSetOfFloat32
 
 type RefOfSetOfFloat32 struct {
-	r   ref.Ref
-	ref *ref.Ref
+	target ref.Ref
+	ref    *ref.Ref
 }
 
-func NewRefOfSetOfFloat32(r ref.Ref) RefOfSetOfFloat32 {
-	return RefOfSetOfFloat32{r, &ref.Ref{}}
+func NewRefOfSetOfFloat32(target ref.Ref) RefOfSetOfFloat32 {
+	return RefOfSetOfFloat32{target, &ref.Ref{}}
+}
+
+func (r RefOfSetOfFloat32) TargetRef() ref.Ref {
+	return r.target
 }
 
 func (r RefOfSetOfFloat32) Ref() ref.Ref {
@@ -336,16 +340,12 @@ func (r RefOfSetOfFloat32) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
 }
 
-func (r RefOfSetOfFloat32) InternalImplementation() ref.Ref {
-	return r.r
-}
-
 func RefOfSetOfFloat32FromVal(val types.Value) RefOfSetOfFloat32 {
 	// TODO: Do we still need FromVal?
 	if val, ok := val.(RefOfSetOfFloat32); ok {
 		return val
 	}
-	return RefOfSetOfFloat32{val.(types.Ref).Ref(), &ref.Ref{}}
+	return NewRefOfSetOfFloat32(val.(types.Ref).TargetRef())
 }
 
 // A Noms Value that describes RefOfSetOfFloat32.
@@ -362,12 +362,12 @@ func init() {
 	})
 }
 
-func (r RefOfSetOfFloat32) GetValue(cs chunks.ChunkSource) SetOfFloat32 {
-	return types.ReadValue(r.r, cs).(SetOfFloat32)
+func (r RefOfSetOfFloat32) TargetValue(cs chunks.ChunkSource) SetOfFloat32 {
+	return types.ReadValue(r.target, cs).(SetOfFloat32)
 }
 
-func (r RefOfSetOfFloat32) SetValue(val SetOfFloat32, cs chunks.ChunkSink) RefOfSetOfFloat32 {
-	return RefOfSetOfFloat32{types.WriteValue(val, cs), &ref.Ref{}}
+func (r RefOfSetOfFloat32) SetTargetValue(val SetOfFloat32, cs chunks.ChunkSink) RefOfSetOfFloat32 {
+	return NewRefOfSetOfFloat32(types.WriteValue(val, cs))
 }
 
 // ListOfString
@@ -518,12 +518,16 @@ func (l ListOfString) Filter(cb ListOfStringFilterCallback) ListOfString {
 // RefOfFloat32
 
 type RefOfFloat32 struct {
-	r   ref.Ref
-	ref *ref.Ref
+	target ref.Ref
+	ref    *ref.Ref
 }
 
-func NewRefOfFloat32(r ref.Ref) RefOfFloat32 {
-	return RefOfFloat32{r, &ref.Ref{}}
+func NewRefOfFloat32(target ref.Ref) RefOfFloat32 {
+	return RefOfFloat32{target, &ref.Ref{}}
+}
+
+func (r RefOfFloat32) TargetRef() ref.Ref {
+	return r.target
 }
 
 func (r RefOfFloat32) Ref() ref.Ref {
@@ -541,16 +545,12 @@ func (r RefOfFloat32) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
 }
 
-func (r RefOfFloat32) InternalImplementation() ref.Ref {
-	return r.r
-}
-
 func RefOfFloat32FromVal(val types.Value) RefOfFloat32 {
 	// TODO: Do we still need FromVal?
 	if val, ok := val.(RefOfFloat32); ok {
 		return val
 	}
-	return RefOfFloat32{val.(types.Ref).Ref(), &ref.Ref{}}
+	return NewRefOfFloat32(val.(types.Ref).TargetRef())
 }
 
 // A Noms Value that describes RefOfFloat32.
@@ -567,12 +567,12 @@ func init() {
 	})
 }
 
-func (r RefOfFloat32) GetValue(cs chunks.ChunkSource) float32 {
-	return float32(types.ReadValue(r.r, cs).(types.Float32))
+func (r RefOfFloat32) TargetValue(cs chunks.ChunkSource) float32 {
+	return float32(types.ReadValue(r.target, cs).(types.Float32))
 }
 
-func (r RefOfFloat32) SetValue(val float32, cs chunks.ChunkSink) RefOfFloat32 {
-	return RefOfFloat32{types.WriteValue(types.Float32(val), cs), &ref.Ref{}}
+func (r RefOfFloat32) SetTargetValue(val float32, cs chunks.ChunkSink) RefOfFloat32 {
+	return NewRefOfFloat32(types.WriteValue(types.Float32(val), cs))
 }
 
 // SetOfFloat32

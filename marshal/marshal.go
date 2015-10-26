@@ -222,7 +222,7 @@ func newTypeEncoder(t reflect.Type) encoderFunc {
 }
 
 func invalidValueEncoder(v reflect.Value) types.Value {
-	return types.Ref{R: ref.Ref{}} // Eh?
+	return types.NewRef(ref.Ref{}) // Eh?
 }
 
 func boolEncoder(v reflect.Value) types.Value {
@@ -325,9 +325,9 @@ func readerEncoder(v reflect.Value) types.Value {
 // Noms has no notion of a general-purpose nil value. Thus, if struct encoding encounters a field that holds a nil pointer or interface, it skips it even if that field doesn't have the omitempty option set. Nil maps and slices are encoded as an empty Noms map, set, list or blob as appropriate.
 func (se *structEncoder) encode(v reflect.Value) types.Value {
 	if v.Type() == refRefType {
-		typesRef := types.Ref{}
-		reflect.ValueOf(&typesRef.R).Elem().Set(v)
-		return typesRef
+		r := ref.Ref{}
+		reflect.ValueOf(&r).Elem().Set(v)
+		return types.NewRef(r)
 	}
 	nom := types.NewMap()
 	for i, f := range se.fields {

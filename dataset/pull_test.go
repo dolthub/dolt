@@ -24,19 +24,19 @@ func TestValidateRef(t *testing.T) {
 func NewList(ds Dataset, vs ...types.Value) types.Ref {
 	v := types.NewList(vs...)
 	r := types.WriteValue(v, ds.store)
-	return types.Ref{R: r}
+	return types.NewRef(r)
 }
 
 func NewMap(ds Dataset, vs ...types.Value) types.Ref {
 	v := types.NewMap(vs...)
 	r := types.WriteValue(v, ds.store)
-	return types.Ref{R: r}
+	return types.NewRef(r)
 }
 
 func NewSet(ds Dataset, vs ...types.Value) types.Ref {
 	v := types.NewSet(vs...)
 	r := types.WriteValue(v, ds.store)
-	return types.Ref{R: r}
+	return types.NewRef(r)
 }
 
 func SkipTestPull(t *testing.T) {

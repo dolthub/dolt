@@ -408,12 +408,16 @@ func (s SetOfRefOfCommit) fromElemSlice(p []RefOfCommit) []types.Value {
 // RefOfCommit
 
 type RefOfCommit struct {
-	r   ref.Ref
-	ref *ref.Ref
+	target ref.Ref
+	ref    *ref.Ref
 }
 
-func NewRefOfCommit(r ref.Ref) RefOfCommit {
-	return RefOfCommit{r, &ref.Ref{}}
+func NewRefOfCommit(target ref.Ref) RefOfCommit {
+	return RefOfCommit{target, &ref.Ref{}}
+}
+
+func (r RefOfCommit) TargetRef() ref.Ref {
+	return r.target
 }
 
 func (r RefOfCommit) Ref() ref.Ref {
@@ -431,16 +435,12 @@ func (r RefOfCommit) Chunks() []types.Future {
 	return r.TypeRef().Chunks()
 }
 
-func (r RefOfCommit) InternalImplementation() ref.Ref {
-	return r.r
-}
-
 func RefOfCommitFromVal(val types.Value) RefOfCommit {
 	// TODO: Do we still need FromVal?
 	if val, ok := val.(RefOfCommit); ok {
 		return val
 	}
-	return RefOfCommit{val.(types.Ref).Ref(), &ref.Ref{}}
+	return NewRefOfCommit(val.(types.Ref).TargetRef())
 }
 
 // A Noms Value that describes RefOfCommit.
@@ -457,10 +457,10 @@ func init() {
 	})
 }
 
-func (r RefOfCommit) GetValue(cs chunks.ChunkSource) Commit {
-	return types.ReadValue(r.r, cs).(Commit)
+func (r RefOfCommit) TargetValue(cs chunks.ChunkSource) Commit {
+	return types.ReadValue(r.target, cs).(Commit)
 }
 
-func (r RefOfCommit) SetValue(val Commit, cs chunks.ChunkSink) RefOfCommit {
-	return RefOfCommit{types.WriteValue(val, cs), &ref.Ref{}}
+func (r RefOfCommit) SetTargetValue(val Commit, cs chunks.ChunkSink) RefOfCommit {
+	return NewRefOfCommit(types.WriteValue(val, cs))
 }

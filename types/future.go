@@ -43,6 +43,10 @@ func futureFromValue(v Value) Future {
 	return resolvedFuture{v}
 }
 
+type targetRef interface {
+	TargetRef() ref.Ref
+}
+
 func appendChunks(chunks []Future, f Future) []Future {
 	if uf, ok := f.(*unresolvedFuture); ok {
 		chunks = append(chunks, uf)
@@ -50,7 +54,7 @@ func appendChunks(chunks []Future, f Future) []Future {
 		v := f.Val()
 		if v != nil {
 			if v.TypeRef().Kind() == RefKind {
-				chunks = append(chunks, futureFromRef(v.Ref()))
+				chunks = append(chunks, futureFromRef(v.(targetRef).TargetRef()))
 			}
 		}
 	}
@@ -60,8 +64,7 @@ func appendChunks(chunks []Future, f Future) []Future {
 
 func appendValueToChunks(chunks []Future, v Value) []Future {
 	if v.TypeRef().Kind() == RefKind {
-		// TODO: Wrong ref here. We don't want the Ref of the Ref Value but the ref of the value it is referring to. BUG 464
-		chunks = append(chunks, futureFromRef(v.Ref()))
+		chunks = append(chunks, futureFromRef(v.(targetRef).TargetRef()))
 	}
 	return chunks
 }

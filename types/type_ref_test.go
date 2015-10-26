@@ -51,7 +51,8 @@ func TestTypeWithPkgRef(t *testing.T) {
 	unresolvedType := MakeTypeRef(pkgRef, 42)
 	unresolvedRef := WriteValue(unresolvedType, cs)
 
-	assert.EqualValues(pkgRef, ReadValue(unresolvedRef, cs).Chunks()[0].Ref())
+	v := ReadValue(unresolvedRef, cs)
+	assert.EqualValues(pkgRef, v.Chunks()[0].Ref())
 	assert.NotNil(ReadValue(pkgRef, cs))
 }
 

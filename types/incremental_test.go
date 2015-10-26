@@ -110,7 +110,7 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	expectedItem := UInt32(42)
 	ref := WriteValue(expectedItem, cs)
 
-	expected := NewList(Ref{ref})
+	expected := NewList(NewRef(ref))
 	ref = WriteValue(expected, cs)
 	actualVar := ReadValue(ref, cs)
 

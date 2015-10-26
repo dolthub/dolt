@@ -198,7 +198,7 @@ func getPhotos(album Album, albumIndex int) (nomsPhotoList types.List) {
 	sort.Sort(ByIndex(refMessages))
 	nomsPhotoList = types.NewList()
 	for _, refMsg := range refMessages {
-		nomsPhotoList = nomsPhotoList.Append(types.Ref{R: refMsg.Ref})
+		nomsPhotoList = nomsPhotoList.Append(types.NewRef(refMsg.Ref))
 	}
 
 	if !*quietFlag {
