@@ -14,28 +14,29 @@ class MemoryStore {
     this._root = new Ref();
   }
 
-  get root(): Ref {
+  async getRoot(): Promise<Ref> {
     return this._root;
   }
 
-  updateRoot(current: Ref, last: Ref): boolean {
+  async updateRoot(current: Ref, last: Ref): Promise<boolean> {
     if (!this._root.equals(last)) {
-      return false
+      return false;
     }
 
     this._root = current;
     return true;
   }
 
-  get(ref: Ref): Chunk {
+  async get(ref: Ref): Promise<Chunk> {
     var c = this._data[ref.toString()];
     if (c == null) {
       c = Chunk.emptyChunk;
     }
+
     return c;
   }
 
-  has(ref: Ref): boolean {
+  async has(ref: Ref): Promise<boolean> {
     return this._data[ref.toString()] == null;
   }
 
