@@ -14,7 +14,7 @@ before_script:
 notifications:
   email:
     recipients:
-      - aa@attic.io
+      - aa@attic.io # has email rules to filter out PRs then forward to slack
     on_failure: always
-    on_success: change
+    on_success: always
     on_start: never
