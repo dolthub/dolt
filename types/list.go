@@ -44,11 +44,7 @@ func valuesToFutures(list []Value) []Future {
 }
 
 func listFromFutures(list []Future, cs chunks.ChunkSource) List {
-	lc := newListChunker(cs)
-	for _, f := range list {
-		lc.writeFuture(f)
-	}
-	return lc.makeList()
+	return listLeafFromFutures(list, cs)
 }
 
 func ListFromVal(v Value) List {

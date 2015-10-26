@@ -239,7 +239,7 @@ func TestListIter(t *testing.T) {
 	})
 	assert.Equal([]int32{0, 1, 2}, acc)
 
-	cl := getFakeCompoundList("abc", "def")
+	cl := NewList(NewString("a"), NewString("b"), NewString("c"), NewString("d"), NewString("e"), NewString("f"))
 	acc2 := []string{}
 	cl.Iter(func(v Value, i uint64) bool {
 		acc2 = append(acc2, v.(String).String())
@@ -247,7 +247,7 @@ func TestListIter(t *testing.T) {
 	})
 	assert.Equal([]string{"a", "b", "c", "d", "e", "f"}, acc2)
 
-	cl2 := getFakeCompoundList("abc", "def")
+	cl2 := cl
 	acc3 := []string{}
 	i = uint64(0)
 	cl2.Iter(func(v Value, index uint64) bool {
@@ -272,7 +272,7 @@ func TestListIterAll(t *testing.T) {
 	})
 	assert.Equal([]int32{0, 1, 2, 3, 4}, acc)
 
-	cl := getFakeCompoundList("abc", "def")
+	cl := NewList(NewString("a"), NewString("b"), NewString("c"), NewString("d"), NewString("e"), NewString("f"))
 	acc2 := []string{}
 	cl.IterAll(func(v Value, i uint64) {
 		acc2 = append(acc2, v.(String).String())

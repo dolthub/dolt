@@ -37,10 +37,6 @@ func doTreeWalk2(f Future, cs chunks.ChunkSource, cb SomeCallback, skip bool) {
 	v := f.Deref(cs)
 
 	switch v := v.(type) {
-	case compoundList:
-		for _, f := range v.futures {
-			doTreeWalk2(f, cs, cb, true)
-		}
 	case listLeaf:
 		for _, v := range v.values {
 			f := futureFromValue(v)

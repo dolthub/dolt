@@ -31,13 +31,13 @@ var (
 
 func isEncodedOutOfLine(v Value) int {
 	switch v.(type) {
-	case blobLeaf, compoundBlob, Set, List, Map:
+	case Ref:
 		return 1
 	}
 	return 0
 }
 
-func SkipTestIncrementalLoadList(t *testing.T) {
+func TestIncrementalLoadList(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
 
@@ -51,17 +51,6 @@ func SkipTestIncrementalLoadList(t *testing.T) {
 	assert.Equal(1, expectedCount)
 	// There will be one read per chunk.
 	chunkReads := make([]int, expected.Len())
-	if cl, ok := actual.(compoundList); ok {
-		reads := 0
-		start := uint64(0)
-		for _, end := range cl.offsets {
-			reads++
-			for i := start; i < end; i++ {
-				chunkReads[i] = reads
-			}
-			start = end
-		}
-	}
 	for i := uint64(0); i < expected.Len(); i++ {
 		v := actual.Get(i)
 		assert.True(expected.Get(i).Equals(v))

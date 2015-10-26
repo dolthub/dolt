@@ -38,11 +38,15 @@ func TestListLeafIteratorAt(t *testing.T) {
 	assert.True(l.Slice(2, l.Len()).Equals(l2))
 }
 
-func SkipTestCompoundListIterator(t *testing.T) {
-	// BUG 465
+func TestCompoundListIterator(t *testing.T) {
 	assert := assert.New(t)
 
-	l := getTestCompoundList(t)
+	uint8List := make([]Value, 256)
+	for i, _ := range uint8List {
+		uint8List[i] = UInt8(i)
+	}
+
+	l := NewList(uint8List...)
 	l2 := NewList()
 	it := newListIterator(l)
 	i := 0
@@ -51,15 +55,19 @@ func SkipTestCompoundListIterator(t *testing.T) {
 		assert.True(UInt8(i).Equals(f.Deref(nil)))
 		i++
 	}
-	assert.Equal(255, i)
+	assert.Equal(256, i)
 	assert.True(l.Equals(l2))
 }
 
-func SkipTestCompoundListIteratorAt(t *testing.T) {
-	// BUG 465
+func TestCompoundListIteratorAt(t *testing.T) {
 	assert := assert.New(t)
 
-	l := getTestCompoundList(t)
+	uint8List := make([]Value, 256)
+	for i, _ := range uint8List {
+		uint8List[i] = UInt8(i)
+	}
+
+	l := NewList(uint8List...)
 	l2 := NewList()
 	it := newListIteratorAt(l, 100)
 	i := 100
@@ -68,6 +76,6 @@ func SkipTestCompoundListIteratorAt(t *testing.T) {
 		assert.True(UInt8(i).Equals(f.Deref(nil)))
 		i++
 	}
-	assert.Equal(255, i)
+	assert.Equal(256, i)
 	assert.True(l.Slice(100, l.Len()).Equals(l2))
 }
