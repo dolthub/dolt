@@ -62,6 +62,15 @@ func TestDigest(t *testing.T) {
 	assert.NotEqual(t, r.Digest(), d)
 }
 
+func TestDigestSlice(t *testing.T) {
+	r := New(Sha1Digest{})
+	d := r.DigestSlice()
+	assert.Equal(t, r.DigestSlice(), d)
+	// DigestSlice() must return a copy otherwise things get weird.
+	d[0] = 0x01
+	assert.NotEqual(t, r.DigestSlice(), d)
+}
+
 func TestFromHash(t *testing.T) {
 	h := sha1.New()
 	h.Write([]byte("abc"))
@@ -78,4 +87,38 @@ func TestIsEmpty(t *testing.T) {
 
 	r3 := Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
 	assert.False(t, r3.IsEmpty())
+}
+
+func TestLess(t *testing.T) {
+	assert := assert.New(t)
+
+	r1 := Parse("sha1-0000000000000000000000000000000000000001")
+	r2 := Parse("sha1-0000000000000000000000000000000000000002")
+
+	assert.False(Less(r1, r1))
+	assert.True(Less(r1, r2))
+	assert.False(Less(r2, r1))
+	assert.False(Less(r2, r2))
+
+	r0 := Ref{}
+	assert.False(Less(r0, r0))
+	assert.True(Less(r0, r2))
+	assert.False(Less(r2, r0))
+}
+
+func TestGreater(t *testing.T) {
+	assert := assert.New(t)
+
+	r1 := Parse("sha1-0000000000000000000000000000000000000001")
+	r2 := Parse("sha1-0000000000000000000000000000000000000002")
+
+	assert.False(Greater(r1, r1))
+	assert.False(Greater(r1, r2))
+	assert.True(Greater(r2, r1))
+	assert.False(Greater(r2, r2))
+
+	r0 := Ref{}
+	assert.False(Greater(r0, r0))
+	assert.False(Greater(r0, r2))
+	assert.True(Greater(r2, r0))
 }
