@@ -34,6 +34,10 @@ func (r Ref) IsEmpty() bool {
 	return r.digest == emptyRef.digest
 }
 
+func (r Ref) DigestSlice() []byte {
+	return r.digest[:]
+}
+
 func (r Ref) String() string {
 	return fmt.Sprintf("sha1-%s", hex.EncodeToString(r.digest[:]))
 }
@@ -91,4 +95,8 @@ func Less(r1, r2 Ref) bool {
 		}
 	}
 	return false
+}
+
+func Greater(r1, r2 Ref) bool {
+	return !Less(r1, r2) && r1 != r2
 }
