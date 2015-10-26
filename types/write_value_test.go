@@ -60,3 +60,38 @@ func TestWriteBlobLeaf(t *testing.T) {
 	// echo -n 'b Hello, World!' | sha1sum
 	assert.Equal("sha1-135fe1453330547994b2ce8a1b238adfbd7df87e", r2.String())
 }
+
+func TestWritePackageWhenValueIsWritten(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+
+	pkg1 := NewPackage([]TypeRef{
+		MakeStructTypeRef("S", []Field{
+			Field{"X", MakePrimitiveTypeRef(Int32Kind), false},
+		}, Choices{}),
+	}, []ref.Ref{})
+	// Don't write package
+	pkgRef1 := RegisterPackage(&pkg1)
+
+	m := NewMap(NewString("X"), Int32(42))
+	tref := MakeTypeRef(pkgRef1, 0)
+	WriteValue(testMap{Map: m, t: tref}, cs)
+
+	pkg2 := ReadValue(pkgRef1, cs)
+	assert.True(pkg1.Equals(pkg2))
+}
+
+func TestWritePackageDepWhenPackageIsWritten(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+
+	pkg1 := NewPackage([]TypeRef{}, []ref.Ref{})
+	// Don't write package
+	pkgRef1 := RegisterPackage(&pkg1)
+
+	pkg2 := NewPackage([]TypeRef{}, []ref.Ref{pkgRef1})
+	WriteValue(pkg2, cs)
+
+	pkg3 := ReadValue(pkgRef1, cs)
+	assert.True(pkg1.Equals(pkg3))
+}
