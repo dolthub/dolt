@@ -1,7 +1,5 @@
 package main
 
-this still does not compile!
-
 import (
 	"encoding/json"
 	"errors"
