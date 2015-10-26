@@ -12,9 +12,9 @@ before_script:
 - npm test
 - popd
 notifications:
-  email:
-    recipients:
-      - aa@attic.io
+  slack:
+    rooms:
+      - atticlabs:TrfE2bADv8HsrkLXgXvh09TP#general
     on_failure: always
     on_success: change
     on_start: never
