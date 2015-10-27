@@ -1,0 +1,17 @@
+alias geo = import "geo.noms"
+
+struct Incident {
+	ID: Int64
+	Category: String
+	Description: String
+	DayOfWeek: String
+	Date: String
+	Time: String
+	PdDistrict: String
+	Resolution: String
+	Address: String
+	Geoposition: geo.Geoposition
+	PdID: String
+}
+
+using List(Ref(Incident))

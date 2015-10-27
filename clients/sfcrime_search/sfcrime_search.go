@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attic-labs/noms/clients/common"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/ref"
@@ -23,7 +24,7 @@ var (
 	latFlag             = flag.Float64("lat", 0.0, "latitude of point to search for crime instances")
 	lonFlag             = flag.Float64("lon", 0.0, "longitude of point to search for crime instances")
 	distanceFlag        = flag.Float64("distance", 0.5, "distince in kilometers from point to search for crime instances")
-	sqtRoot             SQuadTree
+	sqtRoot             common.SQuadTree
 )
 
 const (
@@ -54,8 +55,8 @@ func main() {
 		return
 	}
 
-	gp := GeopositionDef{Latitude: float32(*latFlag), Longitude: float32(*lonFlag)}
-	var incidents []Incident
+	gp := common.GeopositionDef{Latitude: float32(*latFlag), Longitude: float32(*lonFlag)}
+	var incidents []common.Incident
 	if *quadTreeRefFlag != "" {
 		incidents = searchWithQuadTree(gp, datastore)
 	} else if *incidentListRefFlag != "" {
@@ -66,7 +67,7 @@ func main() {
 		return
 	}
 
-	var resDefs []IncidentDef
+	var resDefs []common.IncidentDef
 	for _, incident := range incidents {
 		resDefs = append(resDefs, incident.Def())
 	}
@@ -78,11 +79,11 @@ func main() {
 	fmt.Printf("Done, elapsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
 }
 
-func searchWithQuadTree(gp GeopositionDef, ds datas.DataStore) []Incident {
+func searchWithQuadTree(gp common.GeopositionDef, ds datas.DataStore) []common.Incident {
 	argName := "quadtree-ref"
 	r := readRef(*quadTreeRefFlag, argName)
-	sqtRoot := types.ReadValue(r, ds).(SQuadTree)
-	if !ContainsPoint(sqtRoot.Georectangle().Def(), gp) {
+	sqtRoot := types.ReadValue(r, ds).(common.SQuadTree)
+	if !common.ContainsPoint(sqtRoot.Georectangle().Def(), gp) {
 		log.Fatalf("lat/lon: %+v is not within sf area: %+v\n", gp, sqtRoot.Georectangle().Def())
 	}
 	gr, results := sqtRoot.Query(gp, *distanceFlag, ds)
@@ -90,7 +91,7 @@ func searchWithQuadTree(gp GeopositionDef, ds datas.DataStore) []Incident {
 	return results
 }
 
-func searchWithList(gp GeopositionDef, ds datas.DataStore) []Incident {
+func searchWithList(gp common.GeopositionDef, ds datas.DataStore) []common.Incident {
 	argName := "incident-list-ref"
 	r := readRef(*incidentListRefFlag, argName)
 	val := types.ReadValue(r, ds)
@@ -101,15 +102,15 @@ func searchWithList(gp GeopositionDef, ds datas.DataStore) []Incident {
 	if l.Len() == 0 {
 		log.Fatalf("Value for %s argument is an empty list\n", argName)
 	}
-	results := []Incident{}
-	incidentList := ListOfRefOfValueFromVal(val)
+	results := []common.Incident{}
+	incidentList := common.ListOfRefOfValueFromVal(val)
 	t0 := time.Now()
 	for i := uint64(0); i < incidentList.Len(); i++ {
 		if i%uint64(10000) == 0 {
 			fmt.Printf("%.2f%%: %v\n", float64(i)/float64(incidentList.Len())*float64(100), time.Now().Sub(t0))
 		}
-		incident := incidentList.Get(i).TargetValue(ds).(Incident)
-		if DistanceTo(incident.Geoposition().Def(), gp) <= float32(*distanceFlag) {
+		incident := incidentList.Get(i).TargetValue(ds).(common.Incident)
+		if common.DistanceTo(incident.Geoposition().Def(), gp) <= float32(*distanceFlag) {
 			results = append(results, incident)
 		}
 	}
@@ -127,7 +128,7 @@ func readRef(rs string, argName string) ref.Ref {
 	return r
 }
 
-type ByDate []IncidentDef
+type ByDate []common.IncidentDef
 
 func (s ByDate) Len() int {
 	return len(s)

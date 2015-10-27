@@ -1,4 +1,4 @@
-package main
+package common
 
 import (
 	"fmt"
@@ -197,7 +197,7 @@ func (qt *QuadTreeDef) makeChildren() {
 	qt.Tiles[br] = CreateNewQuadTreeDef(qt.Depth+1, qt.Path+"d", brRect)
 }
 
-func (qt *QuadTreeDef) SaveToNoms(cs chunks.ChunkSink, start time.Time) *SQuadTree {
+func (qt *QuadTreeDef) SaveToNoms(cs chunks.ChunkSink, start time.Time, quiet bool) *SQuadTree {
 	wChan := make(chan *SQuadTree, 1024)
 	var wg sync.WaitGroup
 	for i := 0; i < 32; i++ {
@@ -214,18 +214,18 @@ func (qt *QuadTreeDef) SaveToNoms(cs chunks.ChunkSink, start time.Time) *SQuadTr
 		defer util.StopCPUProfile()
 	}
 
-	sqt := qt.saveNodeToNoms(wChan, cs, start)
+	sqt := qt.saveNodeToNoms(wChan, cs, start, quiet)
 	close(wChan)
 	wg.Wait()
 	return sqt
 }
 
-func (qt *QuadTreeDef) saveNodeToNoms(wChan chan *SQuadTree, cs chunks.ChunkSink, start time.Time) *SQuadTree {
+func (qt *QuadTreeDef) saveNodeToNoms(wChan chan *SQuadTree, cs chunks.ChunkSink, start time.Time, quiet bool) *SQuadTree {
 	tileRefs := MapOfStringToRefOfSQuadTreeDef{}
 	nrefs := make(ListOfRefOfValueDef, 0, len(qt.Nodes))
 	if qt.hasTiles() {
 		for q, tile := range qt.Tiles {
-			child := tile.saveNodeToNoms(wChan, cs, start)
+			child := tile.saveNodeToNoms(wChan, cs, start, quiet)
 			ref := child.Ref()
 			tileRefs[q] = ref
 		}
@@ -246,8 +246,8 @@ func (qt *QuadTreeDef) saveNodeToNoms(wChan chan *SQuadTree, cs chunks.ChunkSink
 
 	wChan <- sqtp
 	saveCount++
-	if saveCount%1e4 == 0 && !*quietFlag {
-		fmt.Printf("Nodes Saved: %d, elapsed time: %.2f secs\n", saveCount, secsSince(start))
+	if saveCount%1e4 == 0 && !quiet {
+		fmt.Printf("Nodes Saved: %d, elapsed time: %.2f secs\n", saveCount, SecsSince(start))
 	}
 	return sqtp
 }
@@ -259,6 +259,6 @@ func max(x, y uint8) uint8 {
 	return y
 }
 
-func secsSince(start time.Time) float64 {
+func SecsSince(start time.Time) float64 {
 	return time.Now().Sub(start).Seconds()
 }

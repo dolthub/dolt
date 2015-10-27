@@ -1,0 +1,24 @@
+alias Geo = import "geo.noms"
+
+struct Node {
+	Geoposition: Geo.Geoposition
+	Reference: Ref(Value)
+}
+
+struct QuadTree {
+	Nodes: List(Node)
+	Tiles: Map(String, QuadTree)
+	Depth: UInt8
+	NumDescendents: UInt32
+	Path: String
+	Georectangle: Geo.Georectangle
+}
+
+struct SQuadTree {
+	Nodes: List(Ref(Value))
+	Tiles: Map(String, Ref(SQuadTree))
+	Depth: UInt8
+	NumDescendents: UInt32
+	Path: String
+	Georectangle: Geo.Georectangle
+}
