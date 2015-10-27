@@ -79,7 +79,7 @@ func (def NodeDef) New() Node {
 
 func (s Node) Def() (d NodeDef) {
 	d.Geoposition = s.m.Get(types.NewString("Geoposition")).(Geoposition).Def()
-	d.Reference = s.m.Get(types.NewString("Reference")).Ref()
+	d.Reference = s.m.Get(types.NewString("Reference")).(RefOfValue).TargetRef()
 	return
 }
 
@@ -787,7 +787,7 @@ func (def ListOfRefOfValueDef) New() ListOfRefOfValue {
 func (l ListOfRefOfValue) Def() ListOfRefOfValueDef {
 	d := make([]ref.Ref, l.Len())
 	for i := uint64(0); i < l.Len(); i++ {
-		d[i] = l.l.Get(i).Ref()
+		d[i] = l.l.Get(i).(RefOfValue).TargetRef()
 	}
 	return d
 }
@@ -932,7 +932,7 @@ func (def MapOfStringToRefOfSQuadTreeDef) New() MapOfStringToRefOfSQuadTree {
 func (m MapOfStringToRefOfSQuadTree) Def() MapOfStringToRefOfSQuadTreeDef {
 	def := make(map[string]ref.Ref)
 	m.m.Iter(func(k, v types.Value) bool {
-		def[k.(types.String).String()] = v.Ref()
+		def[k.(types.String).String()] = v.(RefOfSQuadTree).TargetRef()
 		return false
 	})
 	return def

@@ -59,6 +59,9 @@ func TestListOfRef(t *testing.T) {
 	r2 := l.Get(0)
 	assert.True(r.Equals(r2))
 
+	def := l.Def()
+	assert.EqualValues(ra, def[0])
+
 	l = l.Set(0, r.SetTargetValue(1, cs))
 	r3 := l.Get(0)
 	assert.False(r.Equals(r3))
@@ -86,6 +89,9 @@ func TestStructWithRef(t *testing.T) {
 	types.WriteValue(set, cs)
 	set2 := r2.TargetValue(cs)
 	assert.True(set.Equals(set2))
+
+	def := str.Def()
+	assert.EqualValues(set.Ref(), def.R)
 }
 
 func TestListOfRefChunks(t *testing.T) {

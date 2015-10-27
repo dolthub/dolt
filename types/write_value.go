@@ -40,21 +40,24 @@ func toEncodeable(v Value, cs chunks.ChunkSink) interface{} {
 	case blobLeaf:
 		return v.Reader()
 	case compoundBlob:
-		return encCompoundBlobFromCompoundBlob(v, cs)
+		tv := processCompoundBlob(v, cs)
+		return encNomsValue(tv, cs)
 	case Package:
 		processPackageChildren(v, cs)
 	}
 	return encNomsValue(v, cs)
 }
 
-func encCompoundBlobFromCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) interface{} {
+func processCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) compoundBlobStruct {
 	refs := make([]ref.Ref, len(cb.futures))
 	for idx, f := range cb.futures {
-		i := processChild(f, cs)
-		// All children of compoundBlob must be Blobs, which get encoded and reffed by processChild.
-		refs[idx] = i.(ref.Ref)
+		processChild(f, cs)
+		refs[idx] = f.Ref()
 	}
-	return enc.CompoundBlob{Offsets: cb.offsets, Blobs: refs}
+	return compoundBlobStructDef{
+		Offsets: cb.offsets,
+		Blobs:   refs,
+	}.New()
 }
 
 func processPackageChildren(p Package, cs chunks.ChunkSink) {

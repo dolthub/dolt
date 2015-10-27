@@ -34,7 +34,7 @@ func (def SetOfRefOfPackageDef) New() SetOfRefOfPackage {
 func (s SetOfRefOfPackage) Def() SetOfRefOfPackageDef {
 	def := make(map[ref.Ref]bool, s.Len())
 	s.s.Iter(func(v Value) bool {
-		def[v.Ref()] = true
+		def[v.(RefOfPackage).TargetRef()] = true
 		return false
 	})
 	return def

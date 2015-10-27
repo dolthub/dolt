@@ -50,7 +50,7 @@ func (def StructWithRefDef) New() StructWithRef {
 }
 
 func (s StructWithRef) Def() (d StructWithRefDef) {
-	d.R = s.m.Get(types.NewString("r")).Ref()
+	d.R = s.m.Get(types.NewString("r")).(RefOfSetOfFloat32).TargetRef()
 	return
 }
 
@@ -189,7 +189,7 @@ func (def ListOfRefOfFloat32Def) New() ListOfRefOfFloat32 {
 func (l ListOfRefOfFloat32) Def() ListOfRefOfFloat32Def {
 	d := make([]ref.Ref, l.Len())
 	for i := uint64(0); i < l.Len(); i++ {
-		d[i] = l.l.Get(i).Ref()
+		d[i] = l.l.Get(i).(RefOfFloat32).TargetRef()
 	}
 	return d
 }
