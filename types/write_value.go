@@ -41,16 +41,8 @@ func toEncodeable(v Value, cs chunks.ChunkSink) interface{} {
 		return v.Reader()
 	case compoundBlob:
 		return encCompoundBlobFromCompoundBlob(v, cs)
-	case List:
-		processListChildren(v, cs)
-	case Map:
-		processMapChildren(v, cs)
 	case Package:
 		processPackageChildren(v, cs)
-	case Set:
-		processSetChildren(v, cs)
-	case TypeRef:
-		processTypeRefChildren(v, cs)
 	}
 	return encNomsValue(v, cs)
 }
@@ -63,40 +55,6 @@ func encCompoundBlobFromCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) inter
 		refs[idx] = i.(ref.Ref)
 	}
 	return enc.CompoundBlob{Offsets: cb.offsets, Blobs: refs}
-}
-
-func processListChildren(l List, cs chunks.ChunkSink) {
-	l.IterAll(func(v Value, i uint64) {
-		writeChildValueInternal(v, cs)
-	})
-}
-
-func processMapChildren(m Map, cs chunks.ChunkSink) {
-	for _, r := range m.m {
-		processChild(r.key, cs)
-		processChild(r.value, cs)
-	}
-}
-
-func processSetChildren(s Set, cs chunks.ChunkSink) {
-	for _, f := range s.m {
-		processChild(f, cs)
-	}
-}
-
-func processTypeRefChildren(t TypeRef, cs chunks.ChunkSink) {
-	if t.HasPackageRef() {
-		pkgRef := t.PackageRef()
-		p := LookupPackage(pkgRef)
-		if p != nil {
-			writeChildValueInternal(*p, cs)
-		}
-	}
-	if desc, ok := t.Desc.(CompoundDesc); ok {
-		for _, t := range desc.ElemTypes {
-			writeChildValueInternal(t, cs)
-		}
-	}
 }
 
 func processPackageChildren(p Package, cs chunks.ChunkSink) {

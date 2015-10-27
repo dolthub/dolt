@@ -239,6 +239,8 @@ func (r *jsonArrayReader) readUnresolvedKindToValue(t TypeRef, pkg *Package) Val
 		pkg = pkg2
 	}
 
+	d.Chk.NotNil(pkg, "Woah, got a nil pkg. pkgRef: %s, ordinal: %d\n", pkgRef, ordinal)
+
 	typeDef := pkg.types[ordinal]
 
 	if typeDef.Kind() == EnumKind {

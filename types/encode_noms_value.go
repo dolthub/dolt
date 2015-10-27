@@ -24,23 +24,26 @@ func (tv typedValue) TypedValue() []interface{} {
 }
 
 func encNomsValue(v Value, cs chunks.ChunkSink) typedValue {
-	w := newJsonArrayWriter()
+	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
 	return typedValue{w.toArray()}
 }
 
-type jsonArrayWriter []interface{}
+type jsonArrayWriter struct {
+	a  []interface{}
+	cs chunks.ChunkSink
+}
 
-func newJsonArrayWriter() *jsonArrayWriter {
-	return &jsonArrayWriter{}
+func newJsonArrayWriter(cs chunks.ChunkSink) *jsonArrayWriter {
+	return &jsonArrayWriter{cs: cs, a: []interface{}{}}
 }
 
 func (w *jsonArrayWriter) write(v interface{}) {
-	*w = append(*w, v)
+	w.a = append(w.a, v)
 }
 
 func (w *jsonArrayWriter) toArray() []interface{} {
-	return *w
+	return w.a
 }
 
 func (w *jsonArrayWriter) writeRef(r ref.Ref) {
@@ -62,6 +65,11 @@ func (w *jsonArrayWriter) writeTypeRefAsTag(t TypeRef) {
 		d.Chk.NotEqual(ref.Ref{}, pkgRef)
 		w.writeRef(pkgRef)
 		w.write(t.Ordinal())
+
+		pkg := LookupPackage(pkgRef)
+		if pkg != nil {
+			writeChildValueInternal(*pkg, w.cs)
+		}
 	}
 }
 
@@ -78,14 +86,14 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 	case BoolKind, Float32Kind, Float64Kind, Int16Kind, Int32Kind, Int64Kind, Int8Kind, UInt16Kind, UInt32Kind, UInt64Kind, UInt8Kind:
 		w.write(v.(primitive).ToPrimitive())
 	case ListKind:
-		w2 := newJsonArrayWriter()
+		w2 := newJsonArrayWriter(w.cs)
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
 		getListFromListKind(v).IterAll(func(v Value, i uint64) {
 			w2.writeValue(v, elemType, pkg)
 		})
 		w.write(w2.toArray())
 	case MapKind:
-		w2 := newJsonArrayWriter()
+		w2 := newJsonArrayWriter(w.cs)
 		elemTypes := tr.Desc.(CompoundDesc).ElemTypes
 		getMapFromMapKind(v).IterAll(func(k, v Value) {
 			w2.writeValue(k, elemTypes[0], pkg)
@@ -94,12 +102,12 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 		w.write(w2.toArray())
 	case PackageKind:
 		ptr := MakePrimitiveTypeRef(TypeRefKind)
-		w2 := newJsonArrayWriter()
+		w2 := newJsonArrayWriter(w.cs)
 		for _, v := range v.(Package).types {
 			w2.writeValue(v, ptr, pkg)
 		}
 		w.write(w2.toArray())
-		w3 := newJsonArrayWriter()
+		w3 := newJsonArrayWriter(w.cs)
 		for _, r := range v.(Package).dependencies {
 			w3.writeRef(r)
 		}
@@ -107,7 +115,7 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 	case RefKind:
 		w.writeRef(getRefFromRefKind(v))
 	case SetKind:
-		w2 := newJsonArrayWriter()
+		w2 := newJsonArrayWriter(w.cs)
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
 		getSetFromSetKind(v).IterAll(func(v Value) {
 			w2.writeValue(v, elemType, pkg)
@@ -190,27 +198,27 @@ func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
 	switch k {
 	case EnumKind:
 		w.write(v.Name())
-		w2 := newJsonArrayWriter()
+		w2 := newJsonArrayWriter(w.cs)
 		for _, id := range v.Desc.(EnumDesc).IDs {
 			w2.write(id)
 		}
 		w.write(w2.toArray())
 	case ListKind, MapKind, RefKind, SetKind:
-		w2 := newJsonArrayWriter()
+		w2 := newJsonArrayWriter(w.cs)
 		for _, elemType := range v.Desc.(CompoundDesc).ElemTypes {
 			w2.writeTypeRefAsValue(elemType)
 		}
 		w.write(w2.toArray())
 	case StructKind:
 		w.write(v.Name())
-		fieldWriter := newJsonArrayWriter()
+		fieldWriter := newJsonArrayWriter(w.cs)
 		for _, field := range v.Desc.(StructDesc).Fields {
 			fieldWriter.write(field.Name)
 			fieldWriter.writeTypeRefAsValue(field.T)
 			fieldWriter.write(field.Optional)
 		}
 		w.write(fieldWriter.toArray())
-		choiceWriter := newJsonArrayWriter()
+		choiceWriter := newJsonArrayWriter(w.cs)
 		for _, choice := range v.Desc.(StructDesc).Union {
 			choiceWriter.write(choice.Name)
 			choiceWriter.writeTypeRefAsValue(choice.T)
@@ -218,7 +226,8 @@ func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
 		}
 		w.write(choiceWriter.toArray())
 	case UnresolvedKind:
-		w.writeRef(v.PackageRef())
+		pkgRef := v.PackageRef()
+		w.writeRef(pkgRef)
 		// Don't use Ordinal() here since we might need to serialize a TypeRef that hasn't gotten a valid ordinal yet.
 		ordinal := v.Desc.(UnresolvedDesc).ordinal
 		w.write(ordinal)
@@ -226,6 +235,12 @@ func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
 			w.write(v.Namespace())
 			w.write(v.Name())
 		}
+
+		pkg := LookupPackage(pkgRef)
+		if pkg != nil {
+			writeChildValueInternal(*pkg, w.cs)
+		}
+
 	default:
 		d.Chk.True(IsPrimitiveKind(k), v.Describe())
 	}
