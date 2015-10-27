@@ -42,7 +42,7 @@ func (t TypeRef) IsUnresolved() bool {
 }
 
 func (t TypeRef) HasPackageRef() bool {
-	return t.IsUnresolved() && t.PackageRef() != ref.Ref{}
+	return t.IsUnresolved() && !t.PackageRef().IsEmpty()
 }
 
 // Describe() methods generate text that should parse into the struct being described.
