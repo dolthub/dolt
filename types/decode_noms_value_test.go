@@ -621,3 +621,27 @@ func TestReadPackage2(t *testing.T) {
 	v := r.readTopLevelValue().(Package)
 	assert.True(t, pkg.Equals(v))
 }
+
+func TestReadPackageThroughChunkSource(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+
+	pkg := NewPackage([]TypeRef{
+		MakeStructTypeRef("S", []Field{
+			Field{"X", MakePrimitiveTypeRef(Int32Kind), false},
+		}, Choices{}),
+	}, []ref.Ref{})
+	// Don't register
+	pkgRef := WriteValue(pkg, cs)
+
+	structTr := MakeTypeRef(pkgRef, 0)
+	RegisterFromValFunction(structTr, func(impl Value) Value {
+		return impl
+	})
+
+	a := parseJson(`[%d, "%s", 0, 42]`, UnresolvedKind, pkgRef.String())
+	r := newJsonArrayReader(a, cs)
+	v := r.readTopLevelValue().(Map)
+
+	assert.True(v.Get(NewString("X")).Equals(Int32(42)))
+}

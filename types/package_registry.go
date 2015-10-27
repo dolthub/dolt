@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -23,6 +24,12 @@ func RegisterPackage(p *Package) (r ref.Ref) {
 	r = p.Ref()
 	packages[r] = p
 	return
+}
+
+func readPackage(r ref.Ref, cs chunks.ChunkSource) *Package {
+	p := ReadValue(r, cs).(Package)
+	RegisterPackage(&p)
+	return &p
 }
 
 func RegisterFromValFunction(t TypeRef, f toNomsValueFunc) {

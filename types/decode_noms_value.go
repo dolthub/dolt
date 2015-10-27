@@ -231,12 +231,17 @@ func (r *jsonArrayReader) readTypeRefKindToValue(t TypeRef, pkg *Package) Value 
 }
 
 func (r *jsonArrayReader) readUnresolvedKindToValue(t TypeRef, pkg *Package) Value {
+	// When we have a struct referencing another struct/enum in the same package the package ref is empty. In that case we use the package that is passed into this function.
 	d.Chk.True(t.IsUnresolved())
 	pkgRef := t.PackageRef()
 	ordinal := t.Ordinal()
-	pkg2 := LookupPackage(pkgRef)
-	if pkg2 != nil {
-		pkg = pkg2
+	if !pkgRef.IsEmpty() {
+		pkg2 := LookupPackage(pkgRef)
+		if pkg2 != nil {
+			pkg = pkg2
+		} else {
+			pkg = readPackage(pkgRef, r.cs)
+		}
 	}
 
 	d.Chk.NotNil(pkg, "Woah, got a nil pkg. pkgRef: %s, ordinal: %d\n", pkgRef, ordinal)
