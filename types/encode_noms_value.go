@@ -10,23 +10,10 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-type typedValueWrapper interface {
-	TypedValue() []interface{}
-}
-
-// typedValue implements enc.typedValue which is used to tag the value for now so that we can trigger a different encoding strategy.
-type typedValue struct {
-	v []interface{}
-}
-
-func (tv typedValue) TypedValue() []interface{} {
-	return tv.v
-}
-
-func encNomsValue(v Value, cs chunks.ChunkSink) typedValue {
+func encNomsValue(v Value, cs chunks.ChunkSink) []interface{} {
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	return typedValue{w.toArray()}
+	return w.toArray()
 }
 
 type jsonArrayWriter struct {

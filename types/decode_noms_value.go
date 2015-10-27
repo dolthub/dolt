@@ -22,8 +22,7 @@ func (v valueAsNomsValue) TypeRef() TypeRef {
 	return v.t
 }
 
-func fromTypedEncodeable(w typedValueWrapper, cs chunks.ChunkSource) Value {
-	i := w.TypedValue()
+func fromTypedEncodeable(i []interface{}, cs chunks.ChunkSource) Value {
 	r := newJsonArrayReader(i, cs)
 	return r.readTopLevelValue()
 }

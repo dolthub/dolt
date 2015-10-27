@@ -19,11 +19,7 @@ func TestEncode(t *testing.T) {
 	assert.Equal([]byte{'b', ' ', 0x00, 0x01, 0x02}, dst.Bytes())
 
 	dst.Reset()
-	Encode(dst, "foo")
-	assert.Equal("j \"foo\"\n", string(dst.Bytes()))
-
-	dst.Reset()
-	Encode(dst, typedValueWrapper{[]interface{}{42}})
+	Encode(dst, []interface{}{42})
 	assert.Equal("t [42]\n", string(dst.Bytes()))
 }
 
@@ -39,13 +35,6 @@ func TestInvalidDecode(t *testing.T) {
 	})
 }
 
-func TestSelectJSONDecoder(t *testing.T) {
-	assert := assert.New(t)
-
-	v := Decode(bytes.NewBufferString(`j "foo"`))
-	assert.EqualValues("foo", v)
-}
-
 func TestSelectBlobDecoder(t *testing.T) {
 	assert := assert.New(t)
 
@@ -58,5 +47,5 @@ func TestSelectBlobDecoder(t *testing.T) {
 
 func TestSelectTypedDecoder(t *testing.T) {
 	v := Decode(bytes.NewBufferString(`t [42]`))
-	assert.Equal(t, typedValueWrapper{[]interface{}{float64(42)}}, v)
+	assert.Equal(t, []interface{}{float64(42)}, v)
 }
