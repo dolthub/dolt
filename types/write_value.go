@@ -58,9 +58,6 @@ func encCompoundBlobFromCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) inter
 }
 
 func processPackageChildren(p Package, cs chunks.ChunkSink) {
-	for _, t := range p.types {
-		writeChildValueInternal(t, cs)
-	}
 	for _, r := range p.dependencies {
 		p := LookupPackage(r)
 		if p != nil {
