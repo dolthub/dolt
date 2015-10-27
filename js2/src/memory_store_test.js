@@ -11,6 +11,7 @@ const MemoryStore = require('./memory_store.js');
 
 suite('MemoryStore', () => {
   async function assertInputInStore(input: string, ref: Ref, ms: MemoryStore) {
+    assert.isTrue(await ms.has(ref));
     let chunk = await ms.get(ref);
     assert.isFalse(chunk.isEmpty());
     assert.strictEqual(input, chunk.data);
@@ -25,8 +26,8 @@ suite('MemoryStore', () => {
     // See http://www.di-mgt.com.au/sha_testvectors.html
     assert.strictEqual('sha1-a9993e364706816aba3e25717850c26c9cd0d89d', c.ref.toString());
 
-    let oldRoot = await ms.getRoot()
-    let result = await ms.updateRoot(c.ref, oldRoot);
+    let oldRoot = await ms.getRoot();
+    await ms.updateRoot(c.ref, oldRoot);
     await assertInputInStore(input, c.ref, ms);
 
     // Re-writing the same data should be idempotent and should not result in a second put

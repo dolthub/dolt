@@ -12,7 +12,7 @@ function uint8ArrayToHex(a: Uint8Array): string {
   let hex = '';
   for (let i = 0; i < a.length; i++) {
     let v = a[i].toString(16);
-    if (v.length == 1) {
+    if (v.length === 1) {
       hex += '0' + v;
     } else {
       hex += v;
@@ -26,7 +26,7 @@ function hexToUint8(s: string): Uint8Array {
   let digest = new Uint8Array(sha1Size);
   for (let i = 0; i < sha1Size; i++) {
     let ch = s.substring(i*2, i*2 + 2);
-    digest[i] = parseInt(ch, 16)
+    digest[i] = parseInt(ch, 16);
   }
 
   return digest;
@@ -41,7 +41,7 @@ class Ref {
 
   isEmpty(): boolean {
     for (let i = 0; i < sha1Size; i++) {
-      if (this.digest[i] != 0) {
+      if (this.digest[i] !== 0) {
         return false;
       }
     }
@@ -51,7 +51,7 @@ class Ref {
 
   equals(other: Ref): boolean {
     for (let i = 0; i < sha1Size; i++) {
-      if (this.digest[i] != other.digest[i]) {
+      if (this.digest[i] !== other.digest[i]) {
         return false;
       }
     }
@@ -65,7 +65,7 @@ class Ref {
 
   static parse(s: string): Ref {
     let m = s.match(pattern);
-    if (m == null) {
+    if (!m) {
       throw Error('Could not parse ref: ' + s);
     }
 

@@ -19,7 +19,7 @@ suite('Chunk', () => {
     let ref = Ref.parse('sha1-0000000000000000000000000000000000000001');
     let c = new Chunk('abc', ref);
     assert.strictEqual(c.data, 'abc');
-    assert.isTrue(c.ref.equals(Ref.parse('sha1-0000000000000000000000000000000000000001')))
+    assert.isTrue(c.ref.equals(Ref.parse('sha1-0000000000000000000000000000000000000001')));
     assert.isFalse(c.isEmpty());
   });
 

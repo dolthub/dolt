@@ -28,8 +28,8 @@ class MemoryStore {
   }
 
   async get(ref: Ref): Promise<Chunk> {
-    var c = this._data[ref.toString()];
-    if (c == null) {
+    let c = this._data[ref.toString()];
+    if (!c) {
       c = Chunk.emptyChunk;
     }
 
@@ -37,7 +37,7 @@ class MemoryStore {
   }
 
   async has(ref: Ref): Promise<boolean> {
-    return this._data[ref.toString()] == null;
+    return this._data[ref.toString()] !== undefined;
   }
 
   put(c: Chunk) {
