@@ -146,7 +146,9 @@ func main() {
 	if !*quietFlag {
 		fmt.Printf("Converting refs list to noms list: %.2f secs\n", time.Now().Sub(start).Seconds())
 	}
-	_, ok := ds.Commit(incidentRefs)
+
+	ref := types.WriteValue(incidentRefs, ds.Store())
+	_, ok := ds.Commit(types.NewRef(ref))
 	d.Exp.True(ok, "Could not commit due to conflicting edit")
 
 	if !*quietFlag {

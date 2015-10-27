@@ -59,8 +59,7 @@ func main() {
 		fmt.Printf("quadTreeRoot: %+v\n", qtRoot.Georectangle)
 	}
 
-	val := types.ReadValue(inputRef, dataset.Store())
-	list := ListOfNodeFromVal(val)
+	list := types.ReadValue(inputRef, dataset.Store()).(types.List)
 	if !*quietFlag {
 		fmt.Printf("Reading from nodeList: %d items, elapsed time: %.2f secs\n", list.Len(), secsSince(start))
 	}
@@ -68,9 +67,11 @@ func main() {
 	nChan := make(chan *NodeDef, 1024)
 	nodesConverted := uint32(0)
 	go func() {
-		list.l.IterAllP(64, func(v types.Value, i uint64) {
-			n := NodeFromVal(v)
-			nodeDef := &NodeDef{Geoposition: n.Geoposition().Def(), Reference: n.Ref()}
+		list.IterAllP(64, func(v types.Value, i uint64) {
+			// Need to replace incident with generic type
+			r := RefOfValueFromVal(v)
+			incident := r.TargetValue(datastore).(Incident)
+			nodeDef := &NodeDef{Geoposition: incident.Geoposition().Def(), Reference: r.TargetRef()}
 			nChan <- nodeDef
 			nConverted := atomic.AddUint32(&nodesConverted, 1)
 			if !*quietFlag && nConverted%1e5 == 0 {
@@ -100,7 +101,7 @@ func main() {
 	if !*quietFlag {
 		fmt.Printf("Calling Commit(), elapsed time: %.2f secs\n", secsSince(start))
 	}
-	_, ok = dataset.Commit(nomsQtRoot)
+	_, ok = dataset.Commit(types.NewRef(nomsQtRoot.Ref()))
 	d.Chk.True(ok, "Could not commit due to conflicting edit")
 	if !*quietFlag {
 		fmt.Printf("Commit completed, elapsed time: %.2f secs\n", time.Now().Sub(start).Seconds())

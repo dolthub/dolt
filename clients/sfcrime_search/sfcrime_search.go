@@ -80,29 +80,20 @@ func main() {
 
 func searchWithQuadTree(gp GeopositionDef, ds datas.DataStore) []Incident {
 	argName := "quadtree-ref"
-	expectedClass := "SQuadTree"
-	val := readRefValue(*quadTreeRefFlag, argName, ds)
-	m, ok := val.(types.Map)
-	if !ok {
-		log.Fatalf("Value for %s argument can not be converted to an object of type: %s\n", argName, expectedClass)
-	}
-	if !m.Get(types.NewString("$name")).Equals(types.NewString(expectedClass)) {
-		fmt.Println(m.Get(types.NewString("$name")), "!=", types.NewString(expectedClass))
-		log.Fatalf("Value found for quad-tree-ref argument has type: %+v", m.Get(types.NewString("$name")))
-	}
-	sqtRoot = SQuadTreeFromVal(val)
+	r := readRef(*quadTreeRefFlag, argName)
+	sqtRoot := types.ReadValue(r, ds).(SQuadTree)
 	if !ContainsPoint(sqtRoot.Georectangle().Def(), gp) {
 		log.Fatalf("lat/lon: %+v is not within sf area: %+v\n", gp, sqtRoot.Georectangle().Def())
 	}
-	gr, results := sqtRoot.Query(gp, *distanceFlag)
+	gr, results := sqtRoot.Query(gp, *distanceFlag, ds)
 	fmt.Printf("bounding Rectangle: %+v, numIncidents: %d\n", gr, len(results))
 	return results
 }
 
 func searchWithList(gp GeopositionDef, ds datas.DataStore) []Incident {
 	argName := "incident-list-ref"
-	expectedClass := "Incident"
-	val := readRefValue(*incidentListRefFlag, argName, ds)
+	r := readRef(*incidentListRefFlag, argName)
+	val := types.ReadValue(r, ds)
 	l, ok := val.(types.List)
 	if !ok {
 		log.Fatalf("Value for %s argument is not a list object\n", argName)
@@ -110,22 +101,14 @@ func searchWithList(gp GeopositionDef, ds datas.DataStore) []Incident {
 	if l.Len() == 0 {
 		log.Fatalf("Value for %s argument is an empty list\n", argName)
 	}
-	elem := l.Get(0)
-	m, ok := elem.(types.Map)
-	if !ok {
-		log.Fatalf("Value for %s argument is not an object of type: %s", argName, expectedClass)
-	}
-	if !m.Get(types.NewString("$name")).Equals(types.NewString(expectedClass)) {
-		log.Fatalf("Found object of type: %v in list supplied by %s argument", m.Get(types.NewString("$name")), argName)
-	}
 	results := []Incident{}
-	incidentList := ListOfIncidentFromVal(val)
+	incidentList := ListOfRefOfValueFromVal(val)
 	t0 := time.Now()
 	for i := uint64(0); i < incidentList.Len(); i++ {
 		if i%uint64(10000) == 0 {
 			fmt.Printf("%.2f%%: %v\n", float64(i)/float64(incidentList.Len())*float64(100), time.Now().Sub(t0))
 		}
-		incident := incidentList.Get(i)
+		incident := incidentList.Get(i).TargetValue(ds).(Incident)
 		if DistanceTo(incident.Geoposition().Def(), gp) <= float32(*distanceFlag) {
 			results = append(results, incident)
 		}
@@ -133,7 +116,7 @@ func searchWithList(gp GeopositionDef, ds datas.DataStore) []Incident {
 	return results
 }
 
-func readRefValue(rs string, argName string, ds datas.DataStore) types.Value {
+func readRef(rs string, argName string) ref.Ref {
 	var r ref.Ref
 	err := d.Try(func() {
 		r = ref.Parse(rs)
@@ -141,11 +124,7 @@ func readRefValue(rs string, argName string, ds datas.DataStore) types.Value {
 	if err != nil {
 		log.Fatalf("Invalid ref for %s arg: %v", argName, *quadTreeRefFlag)
 	}
-	val := types.ReadValue(r, ds)
-	if val == nil {
-		log.Fatalf("Unable to read %s: %s from datastore\n", argName, rs)
-	}
-	return val
+	return r
 }
 
 type ByDate []IncidentDef
