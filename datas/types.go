@@ -142,7 +142,7 @@ func (def MapOfStringToRefOfCommitDef) New() MapOfStringToRefOfCommit {
 func (m MapOfStringToRefOfCommit) Def() MapOfStringToRefOfCommitDef {
 	def := make(map[string]ref.Ref)
 	m.m.Iter(func(k, v types.Value) bool {
-		def[k.(types.String).String()] = v.Ref()
+		def[k.(types.String).String()] = v.(RefOfCommit).TargetRef()
 		return false
 	})
 	return def
@@ -280,7 +280,7 @@ func (def SetOfRefOfCommitDef) New() SetOfRefOfCommit {
 func (s SetOfRefOfCommit) Def() SetOfRefOfCommitDef {
 	def := make(map[ref.Ref]bool, s.Len())
 	s.s.Iter(func(v types.Value) bool {
-		def[v.Ref()] = true
+		def[v.(RefOfCommit).TargetRef()] = true
 		return false
 	})
 	return def

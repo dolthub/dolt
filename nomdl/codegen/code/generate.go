@@ -103,7 +103,7 @@ func (gen Generator) ValueToDef(val string, t types.TypeRef) string {
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.Def()", gen.ValueToUser(val, t))
 	case types.RefKind:
-		return fmt.Sprintf("%s.Ref()", val)
+		return fmt.Sprintf("%s.TargetRef()", gen.ValueToUser(val, t))
 	case types.ValueKind:
 		return val // Value is already a Value
 	}

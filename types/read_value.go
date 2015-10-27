@@ -19,13 +19,18 @@ func ReadValue(r ref.Ref, cs chunks.ChunkSource) Value {
 		return nil
 	}
 
-	i := enc.Decode(bytes.NewReader(c.Data()))
+	v := enc.Decode(bytes.NewReader(c.Data()))
 
-	if i, ok := i.(typedValueWrapper); ok {
-		return fromTypedEncodeable(i, cs)
+	if v, ok := v.(typedValueWrapper); ok {
+		tv := fromTypedEncodeable(v, cs)
+		// TODO: Figure out a better way to achieve this. BUG 490
+		if tv, ok := tv.(compoundBlobStruct); ok {
+			return convertToCompoundBlob(tv, cs)
+		}
+		return tv
 	}
 
-	return fromEncodeable(i, cs).Deref(cs)
+	return fromEncodeable(v, cs).Deref(cs)
 }
 
 func fromEncodeable(i interface{}, cs chunks.ChunkSource) Future {
@@ -152,4 +157,14 @@ func futuresFromIterable(items []interface{}, cs chunks.ChunkSource) (f []Future
 		f[i] = fromEncodeable(inVal, cs)
 	}
 	return
+}
+
+func convertToCompoundBlob(cbs compoundBlobStruct, cs chunks.ChunkSource) compoundBlob {
+	offsets := cbs.Offsets().Def()
+	refs := cbs.Blobs().Def()
+	futures := make([]Future, len(refs))
+	for i, r := range refs {
+		futures[i] = futureFromRef(r)
+	}
+	return newCompoundBlob(offsets, futures, cs)
 }
