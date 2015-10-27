@@ -22,7 +22,9 @@ func TestBlobLeafDecode(t *testing.T) {
 
 	blobLeafDecode := func(r io.Reader) Value {
 		i := enc.Decode(r)
-		return fromEncodeable(i, nil).Deref(nil)
+		b, err := NewBlob(i.(io.Reader))
+		assert.NoError(err)
+		return b
 	}
 
 	reader := bytes.NewBufferString("b ")

@@ -7,15 +7,7 @@ import (
 	"github.com/attic-labs/noms/d"
 )
 
-type typedValueWrapper struct {
-	v []interface{}
-}
-
-func (t typedValueWrapper) TypedValue() []interface{} {
-	return t.v
-}
-
-func typedDecode(reader io.Reader) typedValue {
+func typedDecode(reader io.Reader) []interface{} {
 	prefix := make([]byte, len(typedTag))
 	_, err := io.ReadFull(reader, prefix)
 	d.Exp.NoError(err)
@@ -27,5 +19,5 @@ func typedDecode(reader io.Reader) typedValue {
 	err = json.NewDecoder(reader).Decode(&v)
 	d.Exp.NoError(err)
 
-	return typedValueWrapper{v}
+	return v
 }
