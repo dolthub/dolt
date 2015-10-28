@@ -9,8 +9,11 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var (
+	dsFlags = dataset.NewFlags()
+)
+
 func main() {
-	dsFlags := dataset.NewFlags()
 	flag.Parse()
 
 	ds := dsFlags.CreateDataset()
