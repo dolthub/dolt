@@ -2,10 +2,9 @@
 
 'use strict';
 
-const {suite, test} = require('mocha');
-const {assert} = require('chai');
-
-const Ref = require('./ref.js');
+import {assert} from 'chai';
+import {suite, test} from 'mocha';
+import Ref from './ref.js';
 
 suite('Ref', () => {
   test('parse', () => {

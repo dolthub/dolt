@@ -2,7 +2,7 @@
 
 'use strict';
 
-const Rusha = require('rusha');
+import Rusha from 'rusha';
 
 const r = new Rusha();
 const sha1Size = 20;
@@ -32,7 +32,7 @@ function hexToUint8(s: string): Uint8Array {
   return digest;
 }
 
-class Ref {
+export default class Ref {
   digest: Uint8Array;
 
   constructor(digest: Uint8Array = new Uint8Array(sha1Size)) {
@@ -77,5 +77,3 @@ class Ref {
     return new Ref(new Uint8Array(digest.buffer));
   }
 }
-
-module.exports = Ref;

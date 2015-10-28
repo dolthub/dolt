@@ -2,15 +2,14 @@
 
 'use strict';
 
-const {assert} = require('chai');
-const {suite} = require('mocha');
-
-const test = require('./async_test.js');
-const {JsonArrayReader} = require('./decode.js');
-const MemoryStore = require('./memory_store.js');
-const {Kind} = require('./noms_kind.js');
-const Ref = require('./ref.js');
-const {TypeRef, makePrimitiveTypeRef, makeCompoundTypeRef, makeTypeRef} = require('./type_ref.js');
+import {assert} from 'chai';
+import {JsonArrayReader} from './decode.js';
+import {Kind} from './noms_kind.js';
+import {suite} from 'mocha';
+import {TypeRef, makePrimitiveTypeRef, makeCompoundTypeRef, makeTypeRef} from './type_ref.js';
+import MemoryStore from './memory_store.js';
+import Ref from './ref.js';
+import test from './async_test.js';
 
 suite('Decode', () => {
   test('read', async () => {

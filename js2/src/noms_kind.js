@@ -4,7 +4,7 @@
 
 export type NomsKind = number;
 
-const Kind: {
+export const Kind: {
   Bool: NomsKind,
   UInt8: NomsKind,
   UInt16: NomsKind,
@@ -54,7 +54,7 @@ const Kind: {
   Package: 22
 };
 
-function isPrimitiveKind(k: NomsKind): boolean {
+export function isPrimitiveKind(k: NomsKind): boolean {
   switch (k) {
   case Kind.Bool:
   case Kind.Int8:
@@ -77,5 +77,3 @@ function isPrimitiveKind(k: NomsKind): boolean {
     return false;
   }
 }
-
-module.exports = {isPrimitiveKind, Kind};

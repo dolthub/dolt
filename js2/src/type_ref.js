@@ -2,10 +2,9 @@
 
 'use strict';
 
+import {isPrimitiveKind, Kind} from './noms_kind.js';
+import Ref from './ref.js';
 import type {NomsKind} from './noms_kind.js';
-
-const {isPrimitiveKind, Kind} = require('./noms_kind.js');
-const Ref = require('./ref.js');
 
 type TypeDesc = {
   kind: NomsKind;
@@ -197,4 +196,4 @@ function makeTypeRef(pkgRef: Ref, ordinal: number): TypeRef {
   return new TypeRef('', '', new UnresolvedDesc(pkgRef, ordinal));
 }
 
-module.exports = {CompoundDesc, makeCompoundTypeRef, makePrimitiveTypeRef, makeTypeRef, TypeRef};
+export {CompoundDesc, makeCompoundTypeRef, makePrimitiveTypeRef, makeTypeRef, TypeRef};
