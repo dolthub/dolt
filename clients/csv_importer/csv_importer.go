@@ -74,6 +74,7 @@ func main() {
 	refChan := make(chan refIndex, 4096)
 
 	wg := sync.WaitGroup{}
+	wg.Add(1)
 	index := 0
 	go func() {
 		for {
@@ -89,6 +90,7 @@ func main() {
 			index++
 		}
 
+		wg.Done()
 		close(recordChan)
 	}()
 
