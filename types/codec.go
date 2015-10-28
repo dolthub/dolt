@@ -1,5 +1,4 @@
-// Package enc contains a very low-level encoder/decoder. Serializes from interface{} to an io.Writer and deserializes from an io.Reader into an interface{}.
-package enc
+package types
 
 import (
 	"bufio"
@@ -11,7 +10,7 @@ import (
 )
 
 // Encode serializes v into dst, and panics on unsupported types.
-func Encode(dst io.Writer, v interface{}) {
+func encode(dst io.Writer, v interface{}) {
 	d.Chk.NotNil(dst)
 	switch v := v.(type) {
 	case io.Reader:
@@ -22,7 +21,7 @@ func Encode(dst io.Writer, v interface{}) {
 }
 
 // Decode deserializes data from r into an interface{}, and panics on unsupported encoded types.
-func Decode(r io.Reader) interface{} {
+func decode(r io.Reader) interface{} {
 	d.Chk.NotNil(r)
 
 	// assumes all tags are same size, which they are for now.

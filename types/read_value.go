@@ -7,7 +7,6 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -19,7 +18,7 @@ func ReadValue(r ref.Ref, cs chunks.ChunkSource) Value {
 		return nil
 	}
 
-	v := enc.Decode(bytes.NewReader(c.Data()))
+	v := decode(bytes.NewReader(c.Data()))
 
 	switch v := v.(type) {
 	case io.Reader:

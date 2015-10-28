@@ -7,7 +7,6 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -17,11 +16,11 @@ func TestTolerateUngettableRefs(t *testing.T) {
 	assert.Nil(v)
 }
 
-func TestBlobLeafDecode(t *testing.T) {
+func TestReadValueBlobLeafDecode(t *testing.T) {
 	assert := assert.New(t)
 
 	blobLeafDecode := func(r io.Reader) Value {
-		i := enc.Decode(r)
+		i := decode(r)
 		b, err := NewBlob(i.(io.Reader))
 		assert.NoError(err)
 		return b
