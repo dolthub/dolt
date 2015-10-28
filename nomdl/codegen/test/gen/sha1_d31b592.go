@@ -7,7 +7,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __genPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef ref.Ref
+var __genPackageInFile_sha1_d31b592_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -30,7 +30,7 @@ func init() {
 	}, []ref.Ref{
 		ref.Parse("sha1-bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288"),
 	})
-	__genPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef = types.RegisterPackage(&p)
+	__genPackageInFile_sha1_d31b592_CachedRef = types.RegisterPackage(&p)
 }
 
 // D
@@ -73,7 +73,7 @@ func (m D) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForD = types.MakeTypeRef(__genPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef, 0)
+	__typeRefForD = types.MakeTypeRef(__genPackageInFile_sha1_d31b592_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForD, func(v types.Value) types.Value {
 		return DFromVal(v)
 	})
@@ -161,7 +161,7 @@ func (m DUser) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForDUser = types.MakeTypeRef(__genPackageInFile_sha1_d31b592f480b7659b03b72a7d1271f31dde57b2d_CachedRef, 1)
+	__typeRefForDUser = types.MakeTypeRef(__genPackageInFile_sha1_d31b592_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForDUser, func(v types.Value) types.Value {
 		return DUserFromVal(v)
 	})

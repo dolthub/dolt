@@ -7,7 +7,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef ref.Ref
+var __mainPackageInFile_sha1_fb09d21_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -29,7 +29,7 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	__mainPackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef = types.RegisterPackage(&p)
+	__mainPackageInFile_sha1_fb09d21_CachedRef = types.RegisterPackage(&p)
 }
 
 // Geoposition
@@ -72,7 +72,7 @@ func (m Geoposition) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForGeoposition = types.MakeTypeRef(__mainPackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef, 0)
+	__typeRefForGeoposition = types.MakeTypeRef(__mainPackageInFile_sha1_fb09d21_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForGeoposition, func(v types.Value) types.Value {
 		return GeopositionFromVal(v)
 	})
@@ -164,7 +164,7 @@ func (m Georectangle) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForGeorectangle = types.MakeTypeRef(__mainPackageInFile_sha1_fb09d21d144c518467325465327d46489cff7c47_CachedRef, 1)
+	__typeRefForGeorectangle = types.MakeTypeRef(__mainPackageInFile_sha1_fb09d21_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForGeorectangle, func(v types.Value) types.Value {
 		return GeorectangleFromVal(v)
 	})

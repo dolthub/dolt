@@ -7,7 +7,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __genPackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef ref.Ref
+var __genPackageInFile_sha1_bbf9c3d_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -23,7 +23,7 @@ func init() {
 		),
 		types.MakeEnumTypeRef("E", "e1", "e2", "e3"),
 	}, []ref.Ref{})
-	__genPackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef = types.RegisterPackage(&p)
+	__genPackageInFile_sha1_bbf9c3d_CachedRef = types.RegisterPackage(&p)
 }
 
 // S
@@ -66,7 +66,7 @@ func (m S) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForS = types.MakeTypeRef(__genPackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef, 0)
+	__typeRefForS = types.MakeTypeRef(__genPackageInFile_sha1_bbf9c3d_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForS, func(v types.Value) types.Value {
 		return SFromVal(v)
 	})
@@ -139,7 +139,7 @@ func (e E) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForE = types.MakeTypeRef(__genPackageInFile_sha1_bbf9c3d7eb6ed891f4b8490b5b81f21f89f7d288_CachedRef, 1)
+	__typeRefForE = types.MakeTypeRef(__genPackageInFile_sha1_bbf9c3d_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForE, func(v types.Value) types.Value {
 		return E(uint32(v.(types.UInt32)))
 	})

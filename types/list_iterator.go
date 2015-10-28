@@ -37,4 +37,3 @@ func (it *listLeafIterator) next() (f Future, done bool) {
 	it.i++
 	return
 }
-
