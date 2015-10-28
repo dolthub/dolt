@@ -469,4 +469,3 @@ func (s Geoposition) Longitude() types.Float32 {
 func (s Geoposition) SetLongitude(p types.Float32) Geoposition {
 	return GeopositionFromVal(s.m.Set(types.NewString("longitude"), p))
 }
-

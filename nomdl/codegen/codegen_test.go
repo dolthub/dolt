@@ -199,7 +199,8 @@ func TestGenerateDeps(t *testing.T) {
 	top := types.NewPackage([]types.TypeRef{}, []ref.Ref{leaf2Ref, dependerRef})
 	types.RegisterPackage(&top)
 
-	generateDepCode(filepath.Base(dir), dir, map[string]bool{}, top, cs)
+	localPkgs := refSet{top.Ref(): true}
+	generateDepCode(filepath.Base(dir), dir, map[string]bool{}, top, localPkgs, cs)
 
 	leaf1Path := filepath.Join(dir, code.ToTag(leaf1.Ref())+".go")
 	leaf2Path := filepath.Join(dir, code.ToTag(leaf2.Ref())+".go")
@@ -224,7 +225,9 @@ func TestCommitNewPackages(t *testing.T) {
 	err = ioutil.WriteFile(inFile, []byte("struct Simple{a:Bool}"), 0600)
 	assert.NoError(err)
 
-	pkgDS = generate("name", inFile, filepath.Join(dir, "out.go"), dir, map[string]bool{}, pkgDS)
+	p := parsePackageFile("name", inFile, pkgDS)
+	localPkgs := refSet{p.Ref(): true}
+	pkgDS = generate("name", inFile, filepath.Join(dir, "out.go"), dir, map[string]bool{}, p, localPkgs, pkgDS)
 	s := types.SetOfRefOfPackageFromVal(pkgDS.Head().Value())
 	assert.EqualValues(1, s.Len())
 	tr := s.Any().TargetValue(ds).Types()[0]

@@ -316,7 +316,7 @@ func (gen Generator) ToTypeRef(t types.TypeRef, fileID, packageName string) stri
 // ToTag replaces "-" characters in s with "_", so it can be used in a Go identifier.
 // TODO: replace other illegal chars as well?
 func ToTag(r ref.Ref) string {
-	return strings.Replace(r.String(), "-", "_", -1)
+	return strings.Replace(r.String()[0:12], "-", "_", -1)
 }
 
 func kindToString(k types.NomsKind) (out string) {

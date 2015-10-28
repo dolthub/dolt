@@ -36,6 +36,8 @@ var (
 
 const ext = ".noms"
 
+type refSet map[ref.Ref]bool
+
 func main() {
 	flags := datas.NewFlags()
 	flag.Parse()
@@ -64,12 +66,15 @@ func main() {
 		types.SetOfRefOfPackageFromVal(h.Value())
 	}
 
+	localPkgs := refSet{}
 	if *inFlag != "" {
 		out := *outFlag
 		if out == "" {
 			out = getOutFileName(*inFlag)
 		}
-		generate(getGoPackageName(), *inFlag, out, filepath.Dir(out), map[string]bool{}, pkgDS)
+		p := parsePackageFile(getGoPackageName(), *inFlag, pkgDS)
+		localPkgs[p.Ref()] = true
+		generate(getGoPackageName(), *inFlag, out, filepath.Dir(out), map[string]bool{}, p, localPkgs, pkgDS)
 		return
 	}
 
@@ -80,39 +85,48 @@ func main() {
 	d.Chk.NoError(err, "Could not canonicalize -out-dir: %v", err)
 	packageName := getGoPackageName()
 	written := map[string]bool{}
-	for _, n := range nomsFiles {
-		pkgDS = generate(packageName, n, filepath.Join(outDir, getOutFileName(n)), outDir, written, pkgDS)
+	packages := map[string]pkg.Parsed{}
+	for _, inFile := range nomsFiles {
+		p := parsePackageFile(packageName, inFile, pkgDS)
+		localPkgs[p.Ref()] = true
+		packages[inFile] = p
+	}
+	for inFile, p := range packages {
+		pkgDS = generate(packageName, inFile, filepath.Join(outDir, getOutFileName(inFile)), outDir, written, p, localPkgs, pkgDS)
 	}
 }
 
-func generate(packageName, in, out, outDir string, written map[string]bool, pkgDS dataset.Dataset) dataset.Dataset {
+func parsePackageFile(packageName string, in string, pkgDS dataset.Dataset) pkg.Parsed {
 	inFile, err := os.Open(in)
 	d.Chk.NoError(err)
 	defer inFile.Close()
 
-	p := pkg.ParseNomDL(packageName, inFile, filepath.Dir(in), pkgDS.Store())
+	return pkg.ParseNomDL(packageName, inFile, filepath.Dir(in), pkgDS.Store())
+}
 
+func generate(packageName, in, out, outDir string, written map[string]bool, parsed pkg.Parsed, localPkgs refSet, pkgDS dataset.Dataset) dataset.Dataset {
 	// Generate code for all p's deps first.
-	deps := generateDepCode(packageName, outDir, written, p.Package, pkgDS.Store())
-	generateAndEmit(getBareFileName(in), out, written, deps, p)
+	deps := generateDepCode(packageName, outDir, written, parsed.Package, localPkgs, pkgDS.Store())
+	generateAndEmit(getBareFileName(in), out, written, deps, parsed)
 
 	// Since we're just building up a set of refs to all the packages in pkgDS, simply retrying is the logical response to commit failure.
-	for ok := false; !ok; pkgDS, ok = pkgDS.Commit(buildSetOfRefOfPackage(p, deps, pkgDS)) {
+	for ok := false; !ok; pkgDS, ok = pkgDS.Commit(buildSetOfRefOfPackage(parsed, deps, pkgDS)) {
 	}
 	return pkgDS
 }
 
 type depsMap map[ref.Ref]types.Package
 
-func generateDepCode(packageName, outDir string, written map[string]bool, p types.Package, cs chunks.ChunkSource) depsMap {
+func generateDepCode(packageName, outDir string, written map[string]bool, p types.Package, localPkgs refSet, cs chunks.ChunkSource) depsMap {
 	deps := depsMap{}
 	for _, r := range p.Dependencies() {
 		p := types.ReadValue(r, cs).(types.Package)
-		pDeps := generateDepCode(packageName, outDir, written, p, cs)
+		pDeps := generateDepCode(packageName, outDir, written, p, localPkgs, cs)
 		tag := code.ToTag(p.Ref())
 		parsed := pkg.Parsed{Package: p, Name: packageName}
-		generateAndEmit(tag, filepath.Join(outDir, tag+".go"), written, pDeps, parsed)
-
+		if !localPkgs[parsed.Ref()] {
+			generateAndEmit(tag, filepath.Join(outDir, tag+".go"), written, pDeps, parsed)
+		}
 		for depRef, dep := range pDeps {
 			deps[depRef] = dep
 		}
@@ -157,7 +171,7 @@ func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) ty
 }
 
 func getOutFileName(in string) string {
-	return in[:len(in)-len(ext)] + ".go"
+	return in[:len(in)-len(ext)] + "_noms.go"
 }
 
 func getBareFileName(in string) string {
