@@ -3,10 +3,9 @@ package main
 import (
 	"encoding/csv"
 	"flag"
-	"fmt"
 	"io"
 	"log"
-	"os"
+	"net/http"
 	"runtime"
 	"sort"
 	"sync"
@@ -40,11 +39,6 @@ func main() {
 	cpuCount := runtime.NumCPU()
 	runtime.GOMAXPROCS(cpuCount)
 
-	flag.Usage = func() {
-		fmt.Println("Usage: csv_importer [options] file\n")
-		flag.PrintDefaults()
-	}
-
 	dsFlags := dataset.NewFlags()
 	flag.Parse()
 	ds := dsFlags.CreateDataset()
@@ -54,17 +48,21 @@ func main() {
 	}
 	defer ds.Close()
 
-	path := flag.Arg(0)
-	if ds == nil || path == "" {
+	url := flag.Arg(0)
+	if ds == nil || url == "" {
 		flag.Usage()
 		return
 	}
 
-	res, err := os.Open(path)
-	d.Exp.NoError(err)
-	defer res.Close()
+	res, err := http.Get(url)
+	defer res.Body.Close()
+	if err != nil {
+		log.Fatalf("Error fetching %s: %+v\n", url, err)
+	} else if res.StatusCode != 200 {
+		log.Fatalf("Error fetching %s: %s\n", url, res.Status)
+	}
 
-	r := csv.NewReader(res)
+	r := csv.NewReader(res.Body)
 	r.FieldsPerRecord = 0 // Let first row determine the number of fields.
 
 	keys, err := r.Read()
