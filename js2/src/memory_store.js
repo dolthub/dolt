@@ -2,8 +2,8 @@
 
 'use strict';
 
-const Ref = require('./ref.js');
 const Chunk = require('./chunk.js');
+const Ref = require('./ref.js');
 
 class MemoryStore {
   _data: { [key: string]: Chunk };

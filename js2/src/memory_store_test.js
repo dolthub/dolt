@@ -2,12 +2,13 @@
 
 'use strict';
 
-const {suite} = require('mocha');
-const test = require('./async_test.js');
 const {assert} = require('chai');
+const {suite} = require('mocha');
+
+const test = require('./async_test.js');
 const Chunk = require('./chunk.js');
-const Ref = require('./ref.js');
 const MemoryStore = require('./memory_store.js');
+const Ref = require('./ref.js');
 
 suite('MemoryStore', () => {
   async function assertInputInStore(input: string, ref: Ref, ms: MemoryStore) {

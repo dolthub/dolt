@@ -4,6 +4,7 @@
 
 const {suite, test} = require('mocha');
 const {assert} = require('chai');
+
 const Ref = require('./ref.js');
 
 suite('Ref', () => {
@@ -66,5 +67,4 @@ suite('Ref', () => {
     r = new Ref();
     assert.isTrue(r.isEmpty());
   });
-
 });
