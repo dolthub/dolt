@@ -2,8 +2,9 @@
 
 'use strict';
 
-const {suite, test} = require('mocha');
 const {assert} = require('chai');
+const {suite, test} = require('mocha');
+
 const Chunk = require('./chunk.js');
 const Ref = require('./ref.js');
 

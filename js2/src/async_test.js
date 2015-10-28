@@ -1,6 +1,7 @@
 /* @flow */
 
 'use strict';
+
 const {test: mtest} = require('mocha');
 
 function test(n: string, f: () => ?Promise) {
