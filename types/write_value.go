@@ -3,7 +3,6 @@ package types
 import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/enc"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -27,7 +26,7 @@ func writeChildValueInternal(v Value, cs chunks.ChunkSink) ref.Ref {
 func writeValueInternal(v Value, cs chunks.ChunkSink) ref.Ref {
 	e := toEncodeable(v, cs)
 	w := chunks.NewChunkWriter()
-	enc.Encode(w, e)
+	encode(w, e)
 	c := w.Chunk()
 	if cs != nil {
 		cs.Put(c)

@@ -1,4 +1,4 @@
-package enc
+package types
 
 import (
 	"encoding/json"
@@ -6,6 +6,18 @@ import (
 
 	"github.com/attic-labs/noms/d"
 )
+
+var (
+	typedTag = []byte("t ")
+)
+
+func typedEncode(dst io.Writer, v interface{}) {
+	_, err := dst.Write(typedTag)
+	d.Exp.NoError(err)
+	err = json.NewEncoder(dst).Encode(v)
+	d.Exp.NoError(err)
+	return
+}
 
 func typedDecode(reader io.Reader) []interface{} {
 	prefix := make([]byte, len(typedTag))
