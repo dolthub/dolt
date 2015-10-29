@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	flags        = datas.NewFlags()
-	inputRefFlag = flag.String("input-ref", "", "ref to root of a set of photos")
-	outputID     = flag.String("output-ds", "", "dataset to store index in")
+	flags    = datas.NewFlags()
+	inputRef = flag.String("input-ref", "", "ref to root of a set of photos")
+	outputID = flag.String("output-ds", "", "dataset to store index in")
 )
 
 type targetRef interface {
@@ -27,7 +27,7 @@ func main() {
 	flag.Parse()
 
 	store, ok := flags.CreateDataStore()
-	if !ok || *inputRefFlag == "" || *outputID == "" {
+	if !ok || *inputRef == "" || *outputID == "" {
 		flag.Usage()
 		return
 	}
@@ -35,10 +35,10 @@ func main() {
 
 	var photoSet SetOfRefOfRemotePhoto
 	if d.Try(func() {
-		r := ref.Parse(*inputRefFlag)
+		r := ref.Parse(*inputRef)
 		photoSet = types.ReadValue(r, store).(SetOfRefOfRemotePhoto)
 	}) != nil {
-		log.Fatal("Invalid Ref: %s\n", *inputRefFlag)
+		log.Fatal("Invalid value for -input-ref: %s\n", *inputRef)
 	}
 
 	outputDS := dataset.NewDataset(store, *outputID)
