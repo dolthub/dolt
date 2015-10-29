@@ -208,9 +208,8 @@ func TestMapFutures(t *testing.T) {
 	cs := chunks.NewTestStore()
 	k := NewString("hello")
 	kRef := WriteValue(k, cs)
-	f := futureFromRef(kRef)
 
-	m := mapFromFutures([]Future{f, futureFromValue(Int64(0xbeefcafe))}, cs)
+	m := NewMap(NewRef(kRef), Int64(0xbeefcafe))
 
 	assert.Len(m.Chunks(), 1)
 	assert.EqualValues(kRef, m.Chunks()[0].Ref())

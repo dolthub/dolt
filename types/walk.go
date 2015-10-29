@@ -43,9 +43,11 @@ func doTreeWalk2(f Future, cs chunks.ChunkSource, cb SomeCallback, skip bool) {
 			doTreeWalk(f, cs, cb)
 		}
 	case Map:
-		for _, e := range v.m {
-			doTreeWalk(e.key, cs, cb)
-			doTreeWalk(e.value, cs, cb)
+		for _, e := range v.data {
+			kf := futureFromValue(e.key)
+			doTreeWalk(kf, cs, cb)
+			vf := futureFromValue(e.value)
+			doTreeWalk(vf, cs, cb)
 		}
 	case Set:
 		for _, f := range v.m {
