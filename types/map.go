@@ -9,48 +9,49 @@ import (
 
 type Map struct {
 	data mapData // sorted by entry.key.Ref()
+	t    TypeRef
 	ref  *ref.Ref
 }
 
 type mapData []mapEntry
 
 func NewMap(kv ...Value) Map {
-	return newMapFromData(buildMapData(mapData{}, kv))
+	return newMapFromData(buildMapData(mapData{}, kv), mapTypeRef)
 }
 
-func (fm Map) First() (Value, Value) {
-	if len(fm.data) == 0 {
+func (m Map) First() (Value, Value) {
+	if len(m.data) == 0 {
 		return nil, nil
 	} else {
-		entry := fm.data[0]
+		entry := m.data[0]
 		return entry.key, entry.value
 	}
 }
 
-func (fm Map) Len() uint64 {
-	return uint64(len(fm.data))
+func (m Map) Len() uint64 {
+	return uint64(len(m.data))
 }
 
-func (fm Map) Empty() bool {
-	return fm.Len() == uint64(0)
+func (m Map) Empty() bool {
+	return m.Len() == uint64(0)
 }
 
-func (fm Map) Has(key Value) bool {
-	idx := indexMapData(fm.data, key.Ref())
-	return idx < len(fm.data) && fm.data[idx].key.Equals(key)
+func (m Map) Has(key Value) bool {
+	idx := indexMapData(m.data, key.Ref())
+	return idx < len(m.data) && m.data[idx].key.Equals(key)
 }
 
-func (fm Map) Get(key Value) Value {
-	if v, ok := fm.MaybeGet(key); ok {
+func (m Map) Get(key Value) Value {
+	if v, ok := m.MaybeGet(key); ok {
 		return v
 	}
 	return nil
 }
 
-func (fm Map) MaybeGet(key Value) (v Value, ok bool) {
-	idx := indexMapData(fm.data, key.Ref())
-	if idx < len(fm.data) {
-		entry := fm.data[idx]
+func (m Map) MaybeGet(key Value) (v Value, ok bool) {
+	idx := indexMapData(m.data, key.Ref())
+	if idx < len(m.data) {
+		entry := m.data[idx]
 		if entry.key.Equals(key) {
 			return entry.value, true
 		}
@@ -58,30 +59,30 @@ func (fm Map) MaybeGet(key Value) (v Value, ok bool) {
 	return
 }
 
-func (fm Map) Set(key Value, val Value) Map {
-	return newMapFromData(buildMapData(fm.data, []Value{key, val}))
+func (m Map) Set(key Value, val Value) Map {
+	return newMapFromData(buildMapData(m.data, []Value{key, val}), m.t)
 }
 
-func (fm Map) SetM(kv ...Value) Map {
-	return newMapFromData(buildMapData(fm.data, kv))
+func (m Map) SetM(kv ...Value) Map {
+	return newMapFromData(buildMapData(m.data, kv), m.t)
 }
 
-func (fm Map) Remove(k Value) Map {
-	idx := indexMapData(fm.data, k.Ref())
-	if idx == len(fm.data) || !fm.data[idx].key.Equals(k) {
-		return fm
+func (m Map) Remove(k Value) Map {
+	idx := indexMapData(m.data, k.Ref())
+	if idx == len(m.data) || !m.data[idx].key.Equals(k) {
+		return m
 	}
 
-	m := make(mapData, len(fm.data)-1)
-	copy(m, fm.data[:idx])
-	copy(m[idx:], fm.data[idx+1:])
-	return newMapFromData(m)
+	data := make(mapData, len(m.data)-1)
+	copy(data, m.data[:idx])
+	copy(data[idx:], m.data[idx+1:])
+	return newMapFromData(data, m.t)
 }
 
 type mapIterCallback func(key, value Value) (stop bool)
 
-func (fm Map) Iter(cb mapIterCallback) {
-	for _, entry := range fm.data {
+func (m Map) Iter(cb mapIterCallback) {
+	for _, entry := range m.data {
 		if cb(entry.key, entry.value) {
 			break
 		}
@@ -90,27 +91,27 @@ func (fm Map) Iter(cb mapIterCallback) {
 
 type mapIterAllCallback func(key, value Value)
 
-func (fm Map) IterAll(cb mapIterAllCallback) {
-	for _, entry := range fm.data {
+func (m Map) IterAll(cb mapIterAllCallback) {
+	for _, entry := range m.data {
 		cb(entry.key, entry.value)
 	}
 }
 
 type mapFilterCallback func(key, value Value) (keep bool)
 
-func (fm Map) Filter(cb mapFilterCallback) Map {
+func (m Map) Filter(cb mapFilterCallback) Map {
 	data := mapData{}
-	for _, entry := range fm.data {
+	for _, entry := range m.data {
 		if cb(entry.key, entry.value) {
 			data = append(data, entry)
 		}
 	}
 	// Already sorted.
-	return newMapFromData(data)
+	return newMapFromData(data, m.t)
 }
 
-func (fm Map) Ref() ref.Ref {
-	return EnsureRef(fm.ref, fm)
+func (m Map) Ref() ref.Ref {
+	return EnsureRef(m.ref, m)
 }
 
 func (m Map) Equals(other Value) (res bool) {
@@ -120,8 +121,8 @@ func (m Map) Equals(other Value) (res bool) {
 	return false
 }
 
-func (fm Map) Chunks() (futures []Future) {
-	for _, entry := range fm.data {
+func (m Map) Chunks() (futures []Future) {
+	for _, entry := range m.data {
 		futures = appendValueToChunks(futures, entry.key)
 		futures = appendValueToChunks(futures, entry.value)
 	}
@@ -130,8 +131,8 @@ func (fm Map) Chunks() (futures []Future) {
 
 var mapTypeRef = MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))
 
-func (fm Map) TypeRef() TypeRef {
-	return mapTypeRef
+func (m Map) TypeRef() TypeRef {
+	return m.t
 }
 
 func init() {
@@ -145,8 +146,8 @@ type mapEntry struct {
 	value Value
 }
 
-func newMapFromData(data mapData) Map {
-	return Map{data, &ref.Ref{}}
+func newMapFromData(data mapData, t TypeRef) Map {
+	return Map{data, t, &ref.Ref{}}
 }
 
 func buildMapData(oldData mapData, values []Value) mapData {
