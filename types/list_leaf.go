@@ -4,7 +4,6 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -22,14 +21,6 @@ func newListLeaf(v ...Value) List {
 
 func newListLeafNoCopy(values []Value) List {
 	return listLeaf{values, &ref.Ref{}}
-}
-
-func listLeafFromFutures(fs []Future, cs chunks.ChunkSource) List {
-	values := make([]Value, len(fs))
-	for i, f := range fs {
-		values[i] = f.Deref(cs)
-	}
-	return newListLeafNoCopy(values)
 }
 
 func (l listLeaf) Len() uint64 {
@@ -124,10 +115,6 @@ func (l listLeaf) mapInternal(sem chan int, mf MapFunc, offset uint64) []interfa
 
 	wg.Wait()
 	return values
-}
-
-func (l listLeaf) getFuture(idx uint64) Future {
-	return futureFromValue(l.values[idx])
 }
 
 func (l listLeaf) Slice(start uint64, end uint64) List {

@@ -13,9 +13,9 @@ func TestListLeafIterator(t *testing.T) {
 	l2 := NewList()
 	it := newListIterator(l)
 	i := 0
-	for f, done := it.next(); !done; f, done = it.next() {
-		l2 = l2.Append(f.Deref(nil))
-		assert.True(Int32(i).Equals(f.Deref(nil)))
+	for v, done := it.next(); !done; v, done = it.next() {
+		l2 = l2.Append(v)
+		assert.True(Int32(i).Equals(v))
 		i++
 	}
 	assert.Equal(5, i)
@@ -29,9 +29,9 @@ func TestListLeafIteratorAt(t *testing.T) {
 	l2 := NewList()
 	it := newListIteratorAt(l, 2)
 	i := 2
-	for f, done := it.next(); !done; f, done = it.next() {
-		l2 = l2.Append(f.Deref(nil))
-		assert.True(Int32(i).Equals(f.Deref(nil)))
+	for v, done := it.next(); !done; v, done = it.next() {
+		l2 = l2.Append(v)
+		assert.True(Int32(i).Equals(v))
 		i++
 	}
 	assert.Equal(5, i)
@@ -50,9 +50,9 @@ func TestCompoundListIterator(t *testing.T) {
 	l2 := NewList()
 	it := newListIterator(l)
 	i := 0
-	for f, done := it.next(); !done; f, done = it.next() {
-		l2 = l2.Append(f.Deref(nil))
-		assert.True(UInt8(i).Equals(f.Deref(nil)))
+	for v, done := it.next(); !done; v, done = it.next() {
+		l2 = l2.Append(v)
+		assert.True(UInt8(i).Equals(v))
 		i++
 	}
 	assert.Equal(256, i)
@@ -71,9 +71,9 @@ func TestCompoundListIteratorAt(t *testing.T) {
 	l2 := NewList()
 	it := newListIteratorAt(l, 100)
 	i := 100
-	for f, done := it.next(); !done; f, done = it.next() {
-		l2 = l2.Append(f.Deref(nil))
-		assert.True(UInt8(i).Equals(f.Deref(nil)))
+	for v, done := it.next(); !done; v, done = it.next() {
+		l2 = l2.Append(v)
+		assert.True(UInt8(i).Equals(v))
 		i++
 	}
 	assert.Equal(256, i)
