@@ -2,7 +2,7 @@ package types
 
 // listIterator allows iterating over a List from a given index.
 type listIterator interface {
-	next() (f Future, done bool)
+	next() (l Value, done bool)
 }
 
 func newListIterator(l List) listIterator {
@@ -27,12 +27,12 @@ type listLeafIterator struct {
 	i    uint64
 }
 
-func (it *listLeafIterator) next() (f Future, done bool) {
+func (it *listLeafIterator) next() (v Value, done bool) {
 	if it.i >= it.list.Len() {
 		done = true
 		return
 	}
-	f = it.list.getFuture(it.i)
+	v = it.list.values[it.i]
 	done = false
 	it.i++
 	return

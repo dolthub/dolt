@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
-	"github.com/attic-labs/noms/chunks"
 )
 
 func TestListLen(t *testing.T) {
@@ -169,14 +168,12 @@ func TestListMap(t *testing.T) {
 	assert := assert.New(t)
 
 	testMap := func(concurrency, listLen int) {
-		cs := chunks.NewTestStore()
-		futures := make([]Future, listLen)
+		values := make([]Value, listLen)
 		for i := 0; i < listLen; i++ {
-			r := WriteValue(Int64(i), cs)
-			futures[i] = futureFromRef(r)
+			values[i] = Int64(i)
 		}
 
-		l := listFromFutures(futures, cs)
+		l := NewList(values...)
 
 		cur := 0
 		mu := sync.Mutex{}
@@ -284,14 +281,12 @@ func TestListIterAllP(t *testing.T) {
 	assert := assert.New(t)
 
 	testIter := func(concurrency, listLen int) {
-		cs := chunks.NewTestStore()
-		futures := make([]Future, listLen)
+		values := make([]Value, listLen)
 		for i := 0; i < listLen; i++ {
-			r := WriteValue(Int64(i), cs)
-			futures[i] = futureFromRef(r)
+			values[i] = Int64(i)
 		}
 
-		l := listFromFutures(futures, cs)
+		l := NewList(values...)
 
 		cur := 0
 		mu := sync.Mutex{}
