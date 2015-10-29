@@ -68,197 +68,6 @@ func (m MapOfStringToFloat64) Iter(cb MapOfStringToFloat64IterCallback) {
 	})
 }
 
-// ListOfInt32
-
-type ListOfInt32 struct {
-	l types.List
-}
-
-type ListOfInt32IterCallback (func (p types.Int32) (stop bool))
-
-func NewListOfInt32() ListOfInt32 {
-	return ListOfInt32{types.NewList()}
-}
-
-func ListOfInt32FromVal(p types.Value) ListOfInt32 {
-	return ListOfInt32{p.(types.List)}
-}
-
-func (l ListOfInt32) NomsValue() types.List {
-	return l.l
-}
-
-func (l ListOfInt32) Equals(p ListOfInt32) bool {
-	return l.l.Equals(p.l)
-}
-
-func (l ListOfInt32) Ref() ref.Ref {
-	return l.l.Ref()
-}
-
-func (l ListOfInt32) Len() uint64 {
-	return l.l.Len()
-}
-
-func (l ListOfInt32) Empty() bool {
-	return l.Len() == uint64(0)
-}
-
-func (l ListOfInt32) Get(idx uint64) types.Int32 {
-	return types.Int32FromVal(l.l.Get(idx))
-}
-
-func (l ListOfInt32) Slice(idx uint64, end uint64) ListOfInt32 {
-	return ListOfInt32{l.l.Slice(idx, end)}
-}
-
-func (l ListOfInt32) Set(idx uint64, v types.Int32) ListOfInt32 {
-	return ListOfInt32{l.l.Set(idx, v)}
-}
-
-func (l ListOfInt32) Append(v ...types.Int32) ListOfInt32 {
-	return ListOfInt32{l.l.Append(l.fromElemSlice(v)...)}
-}
-
-func (l ListOfInt32) Insert(idx uint64, v ...types.Int32) ListOfInt32 {
-	return ListOfInt32{l.l.Insert(idx, l.fromElemSlice(v)...)}
-}
-
-func (l ListOfInt32) Remove(idx uint64, end uint64) ListOfInt32 {
-	return ListOfInt32{l.l.Remove(idx, end)}
-}
-
-func (l ListOfInt32) RemoveAt(idx uint64) ListOfInt32 {
-	return ListOfInt32{(l.l.RemoveAt(idx))}
-}
-
-func (l ListOfInt32) fromElemSlice(p []types.Int32) []types.Value {
-	r := make([]types.Value, len(p))
-	for i, v := range p {
-		r[i] = v
-	}
-	return r
-}
-
-// TestStruct
-
-type TestStruct struct {
-	m types.Map
-}
-
-func NewTestStruct() TestStruct {
-	return TestStruct{
-		types.NewMap(types.NewString("$name"), types.NewString("TestStruct")),
-	}
-}
-
-func TestStructFromVal(v types.Value) TestStruct {
-	return TestStruct{v.(types.Map)}
-}
-
-// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
-func (s TestStruct) NomsValue() types.Map {
-	return s.m
-}
-
-func (s TestStruct) Equals(p TestStruct) bool {
-	return s.m.Equals(p.m)
-}
-
-func (s TestStruct) Ref() ref.Ref {
-	return s.m.Ref()
-}
-
-func (s TestStruct) Title() types.String {
-	return types.StringFromVal(s.m.Get(types.NewString("title")))
-}
-
-func (s TestStruct) SetTitle(p types.String) TestStruct {
-	return TestStructFromVal(s.m.Set(types.NewString("title"), p))
-}
-
-// SetOfBool
-
-type SetOfBool struct {
-	s types.Set
-}
-
-type SetOfBoolIterCallback (func(p types.Bool) (stop bool))
-
-func NewSetOfBool() SetOfBool {
-	return SetOfBool{types.NewSet()}
-}
-
-func SetOfBoolFromVal(p types.Value) SetOfBool {
-	return SetOfBool{p.(types.Set)}
-}
-
-func (s SetOfBool) NomsValue() types.Set {
-	return s.s
-}
-
-func (s SetOfBool) Equals(p SetOfBool) bool {
-	return s.s.Equals(p.s)
-}
-
-func (s SetOfBool) Ref() ref.Ref {
-	return s.s.Ref()
-}
-
-func (s SetOfBool) Empty() bool {
-	return s.s.Empty()
-}
-
-func (s SetOfBool) Len() uint64 {
-	return s.s.Len()
-}
-
-func (s SetOfBool) Has(p types.Bool) bool {
-	return s.s.Has(p)
-}
-
-func (s SetOfBool) Iter(cb SetOfBoolIterCallback) {
-	s.s.Iter(func(v types.Value) bool {
-		return cb(types.BoolFromVal(v))
-	})
-}
-
-func (s SetOfBool) Insert(p ...types.Bool) SetOfBool {
-	return SetOfBool{s.s.Insert(s.fromElemSlice(p)...)}
-}
-
-func (s SetOfBool) Remove(p ...types.Bool) SetOfBool {
-	return SetOfBool{s.s.Remove(s.fromElemSlice(p)...)}
-}
-
-func (s SetOfBool) Union(others ...SetOfBool) SetOfBool {
-	return SetOfBool{s.s.Union(s.fromStructSlice(others)...)}
-}
-
-func (s SetOfBool) Subtract(others ...SetOfBool) SetOfBool {
-	return SetOfBool{s.s.Subtract(s.fromStructSlice(others)...)}
-}
-
-func (s SetOfBool) Any() types.Bool {
-	return types.BoolFromVal(s.s.Any())
-}
-
-func (s SetOfBool) fromStructSlice(p []SetOfBool) []types.Set {
-	r := make([]types.Set, len(p))
-	for i, v := range p {
-		r[i] = v.s
-	}
-	return r
-}
-
-func (s SetOfBool) fromElemSlice(p []types.Bool) []types.Value {
-	r := make([]types.Value, len(p))
-	for i, v := range p {
-		r[i] = v
-	}
-	return r
-}
-
 // MapOfTestStructToSetOfBool
 
 type MapOfTestStructToSetOfBool struct {
@@ -317,6 +126,43 @@ func (m MapOfTestStructToSetOfBool) Iter(cb MapOfTestStructToSetOfBoolIterCallba
 	m.m.Iter(func(k, v types.Value) bool {
 		return cb(TestStructFromVal(k), SetOfBoolFromVal(v))
 	})
+}
+
+// TestStruct
+
+type TestStruct struct {
+	m types.Map
+}
+
+func NewTestStruct() TestStruct {
+	return TestStruct{
+		types.NewMap(types.NewString("$name"), types.NewString("TestStruct")),
+	}
+}
+
+func TestStructFromVal(v types.Value) TestStruct {
+	return TestStruct{v.(types.Map)}
+}
+
+// TODO: This was going to be called Value() but it collides with root.value. We need some other place to put the built-in fields like Value() and Equals().
+func (s TestStruct) NomsValue() types.Map {
+	return s.m
+}
+
+func (s TestStruct) Equals(p TestStruct) bool {
+	return s.m.Equals(p.m)
+}
+
+func (s TestStruct) Ref() ref.Ref {
+	return s.m.Ref()
+}
+
+func (s TestStruct) Title() types.String {
+	return types.StringFromVal(s.m.Get(types.NewString("title")))
+}
+
+func (s TestStruct) SetTitle(p types.String) TestStruct {
+	return TestStructFromVal(s.m.Set(types.NewString("title"), p))
 }
 
 // MyTestSet
@@ -394,6 +240,160 @@ func (s MyTestSet) fromStructSlice(p []MyTestSet) []types.Set {
 }
 
 func (s MyTestSet) fromElemSlice(p []types.UInt32) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v
+	}
+	return r
+}
+
+// ListOfInt32
+
+type ListOfInt32 struct {
+	l types.List
+}
+
+type ListOfInt32IterCallback (func (p types.Int32) (stop bool))
+
+func NewListOfInt32() ListOfInt32 {
+	return ListOfInt32{types.NewList()}
+}
+
+func ListOfInt32FromVal(p types.Value) ListOfInt32 {
+	return ListOfInt32{p.(types.List)}
+}
+
+func (l ListOfInt32) NomsValue() types.List {
+	return l.l
+}
+
+func (l ListOfInt32) Equals(p ListOfInt32) bool {
+	return l.l.Equals(p.l)
+}
+
+func (l ListOfInt32) Ref() ref.Ref {
+	return l.l.Ref()
+}
+
+func (l ListOfInt32) Len() uint64 {
+	return l.l.Len()
+}
+
+func (l ListOfInt32) Empty() bool {
+	return l.Len() == uint64(0)
+}
+
+func (l ListOfInt32) Get(idx uint64) types.Int32 {
+	return types.Int32FromVal(l.l.Get(idx))
+}
+
+func (l ListOfInt32) Slice(idx uint64, end uint64) ListOfInt32 {
+	return ListOfInt32{l.l.Slice(idx, end)}
+}
+
+func (l ListOfInt32) Set(idx uint64, v types.Int32) ListOfInt32 {
+	return ListOfInt32{l.l.Set(idx, v)}
+}
+
+func (l ListOfInt32) Append(v ...types.Int32) ListOfInt32 {
+	return ListOfInt32{l.l.Append(l.fromElemSlice(v)...)}
+}
+
+func (l ListOfInt32) Insert(idx uint64, v ...types.Int32) ListOfInt32 {
+	return ListOfInt32{l.l.Insert(idx, l.fromElemSlice(v)...)}
+}
+
+func (l ListOfInt32) Remove(idx uint64, end uint64) ListOfInt32 {
+	return ListOfInt32{l.l.Remove(idx, end)}
+}
+
+func (l ListOfInt32) RemoveAt(idx uint64) ListOfInt32 {
+	return ListOfInt32{(l.l.RemoveAt(idx))}
+}
+
+func (l ListOfInt32) fromElemSlice(p []types.Int32) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v
+	}
+	return r
+}
+
+// SetOfBool
+
+type SetOfBool struct {
+	s types.Set
+}
+
+type SetOfBoolIterCallback (func(p types.Bool) (stop bool))
+
+func NewSetOfBool() SetOfBool {
+	return SetOfBool{types.NewSet()}
+}
+
+func SetOfBoolFromVal(p types.Value) SetOfBool {
+	return SetOfBool{p.(types.Set)}
+}
+
+func (s SetOfBool) NomsValue() types.Set {
+	return s.s
+}
+
+func (s SetOfBool) Equals(p SetOfBool) bool {
+	return s.s.Equals(p.s)
+}
+
+func (s SetOfBool) Ref() ref.Ref {
+	return s.s.Ref()
+}
+
+func (s SetOfBool) Empty() bool {
+	return s.s.Empty()
+}
+
+func (s SetOfBool) Len() uint64 {
+	return s.s.Len()
+}
+
+func (s SetOfBool) Has(p types.Bool) bool {
+	return s.s.Has(p)
+}
+
+func (s SetOfBool) Iter(cb SetOfBoolIterCallback) {
+	s.s.Iter(func(v types.Value) bool {
+		return cb(types.BoolFromVal(v))
+	})
+}
+
+func (s SetOfBool) Insert(p ...types.Bool) SetOfBool {
+	return SetOfBool{s.s.Insert(s.fromElemSlice(p)...)}
+}
+
+func (s SetOfBool) Remove(p ...types.Bool) SetOfBool {
+	return SetOfBool{s.s.Remove(s.fromElemSlice(p)...)}
+}
+
+func (s SetOfBool) Union(others ...SetOfBool) SetOfBool {
+	return SetOfBool{s.s.Union(s.fromStructSlice(others)...)}
+}
+
+func (s SetOfBool) Subtract(others ...SetOfBool) SetOfBool {
+	return SetOfBool{s.s.Subtract(s.fromStructSlice(others)...)}
+}
+
+func (s SetOfBool) Any() types.Bool {
+	return types.BoolFromVal(s.s.Any())
+}
+
+func (s SetOfBool) fromStructSlice(p []SetOfBool) []types.Set {
+	r := make([]types.Set, len(p))
+	for i, v := range p {
+		r[i] = v.s
+	}
+	return r
+}
+
+func (s SetOfBool) fromElemSlice(p []types.Bool) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
 		r[i] = v

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 
@@ -11,11 +12,21 @@ var (
 	typedTag = []byte("t ")
 )
 
+func appendCompactedJSON(dst io.Writer, v interface{}) {
+	buff := &bytes.Buffer{}
+	err := json.NewEncoder(buff).Encode(v)
+	d.Exp.NoError(err)
+	buff2 := &bytes.Buffer{}
+	err = json.Compact(buff2, buff.Bytes())
+	d.Chk.NoError(err)
+	_, err = io.Copy(dst, buff2)
+	d.Chk.NoError(err)
+}
+
 func typedEncode(dst io.Writer, v interface{}) {
 	_, err := dst.Write(typedTag)
 	d.Exp.NoError(err)
-	err = json.NewEncoder(dst).Encode(v)
-	d.Exp.NoError(err)
+	appendCompactedJSON(dst, v)
 	return
 }
 

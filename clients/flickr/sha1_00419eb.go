@@ -7,7 +7,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_b525f9b_CachedRef ref.Ref
+var __mainPackageInFile_sha1_00419eb_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -19,7 +19,7 @@ func init() {
 				types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"Url", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-fb09d21d144c518467325465327d46489cff7c47"), 0), false},
+				types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
 				types.Field{"Sizes", types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(ref.Ref{}, 1), types.MakePrimitiveTypeRef(types.StringKind)), false},
 				types.Field{"Tags", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind)), false},
 			},
@@ -33,9 +33,9 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-fb09d21d144c518467325465327d46489cff7c47"),
+		ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"),
 	})
-	__mainPackageInFile_sha1_b525f9b_CachedRef = types.RegisterPackage(&p)
+	__mainPackageInFile_sha1_00419eb_CachedRef = types.RegisterPackage(&p)
 }
 
 // RemotePhoto
@@ -94,7 +94,7 @@ func (m RemotePhoto) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForRemotePhoto = types.MakeTypeRef(__mainPackageInFile_sha1_b525f9b_CachedRef, 0)
+	__typeRefForRemotePhoto = types.MakeTypeRef(__mainPackageInFile_sha1_00419eb_CachedRef, 0)
 	types.RegisterFromValFunction(__typeRefForRemotePhoto, func(v types.Value) types.Value {
 		return RemotePhotoFromVal(v)
 	})
@@ -218,7 +218,7 @@ func (m Size) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForSize = types.MakeTypeRef(__mainPackageInFile_sha1_b525f9b_CachedRef, 1)
+	__typeRefForSize = types.MakeTypeRef(__mainPackageInFile_sha1_00419eb_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForSize, func(v types.Value) types.Value {
 		return SizeFromVal(v)
 	})
@@ -338,7 +338,7 @@ func (m MapOfSizeToString) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfSizeToString = types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(__mainPackageInFile_sha1_b525f9b_CachedRef, 1), types.MakePrimitiveTypeRef(types.StringKind))
+	__typeRefForMapOfSizeToString = types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(__mainPackageInFile_sha1_00419eb_CachedRef, 1), types.MakePrimitiveTypeRef(types.StringKind))
 	types.RegisterFromValFunction(__typeRefForMapOfSizeToString, func(v types.Value) types.Value {
 		return MapOfSizeToStringFromVal(v)
 	})

@@ -20,7 +20,7 @@ func TestEncode(t *testing.T) {
 
 	dst.Reset()
 	encode(dst, []interface{}{42})
-	assert.Equal("t [42]\n", string(dst.Bytes()))
+	assert.Equal("t [42]", string(dst.Bytes()))
 }
 
 func TestInvalidDecode(t *testing.T) {
