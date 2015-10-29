@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/chunks"
 )
 
 func TestRefInList(t *testing.T) {
@@ -39,7 +40,15 @@ func TestRefInMap(t *testing.T) {
 
 func TestRefTypeRef(t *testing.T) {
 	assert := assert.New(t)
+
+	tr := MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(ValueKind))
+
 	l := NewList()
 	r := NewRef(l.Ref())
-	assert.True(r.TypeRef().Equals(MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(ValueKind))))
+	assert.True(r.TypeRef().Equals(tr))
+
+	cs := chunks.NewMemoryStore()
+	m := NewMap()
+	r2 := r.SetTargetValue(m, cs)
+	assert.True(r2.TypeRef().Equals(tr))
 }
