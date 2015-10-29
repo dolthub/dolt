@@ -59,6 +59,18 @@ export default class Ref {
     return true;
   }
 
+  compare(other: Ref): number {
+    for (let i = 0; i < sha1Size; i++) {
+      if (this.digest[i] < other.digest[i]) {
+        return -1;
+      } else if (this.digest[i] > other.digest[i]) {
+        return 1;
+      }
+    }
+
+    return 0;
+  }
+
   toString(): string {
     return 'sha1-' + uint8ArrayToHex(this.digest);
   }
