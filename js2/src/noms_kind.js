@@ -56,24 +56,24 @@ export const Kind: {
 
 export function isPrimitiveKind(k: NomsKind): boolean {
   switch (k) {
-  case Kind.Bool:
-  case Kind.Int8:
-  case Kind.Int16:
-  case Kind.Int32:
-  case Kind.Int64:
-  case Kind.Float32:
-  case Kind.Float64:
-  case Kind.UInt8:
-  case Kind.UInt16:
-  case Kind.UInt32:
-  case Kind.UInt64:
-  case Kind.String:
-  case Kind.Blob:
-  case Kind.Value:
-  case Kind.TypeRef:
-  case Kind.Package:
-    return true;
-  default:
-    return false;
+    case Kind.Bool:
+    case Kind.Int8:
+    case Kind.Int16:
+    case Kind.Int32:
+    case Kind.Int64:
+    case Kind.Float32:
+    case Kind.Float64:
+    case Kind.UInt8:
+    case Kind.UInt16:
+    case Kind.UInt32:
+    case Kind.UInt64:
+    case Kind.String:
+    case Kind.Blob:
+    case Kind.Value:
+    case Kind.TypeRef:
+    case Kind.Package:
+      return true;
+    default:
+      return false;
   }
 }

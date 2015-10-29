@@ -81,24 +81,24 @@ class JsonArrayReader {
   readTypeRefAsTag(): TypeRef {
     let kind = this.readKind();
     switch (kind) {
-    case Kind.List:
-    case Kind.Set:
-    case Kind.Ref: {
-      let elemType = this.readTypeRefAsTag();
-      return makeCompoundTypeRef(kind, elemType);
-    }
-    case Kind.Map: {
-      let keyType = this.readTypeRefAsTag();
-      let valueType = this.readTypeRefAsTag();
-      return makeCompoundTypeRef(kind, keyType, valueType);
-    }
-    case Kind.TypeRef:
-      return makePrimitiveTypeRef(Kind.TypeRef);
-    case Kind.Unresolved: {
-      let pkgRef = this.readRef();
-      let ordinal = this.readOrdinal();
-      return makeTypeRef(pkgRef, ordinal);
-    }
+      case Kind.List:
+      case Kind.Set:
+      case Kind.Ref: {
+        let elemType = this.readTypeRefAsTag();
+        return makeCompoundTypeRef(kind, elemType);
+      }
+      case Kind.Map: {
+        let keyType = this.readTypeRefAsTag();
+        let valueType = this.readTypeRefAsTag();
+        return makeCompoundTypeRef(kind, keyType, valueType);
+      }
+      case Kind.TypeRef:
+        return makePrimitiveTypeRef(Kind.TypeRef);
+      case Kind.Unresolved: {
+        let pkgRef = this.readRef();
+        let ordinal = this.readOrdinal();
+        return makeTypeRef(pkgRef, ordinal);
+      }
     }
 
     if (isPrimitiveKind(kind)) {
@@ -150,49 +150,49 @@ class JsonArrayReader {
   readValueWithoutTag(t: TypeRef, pkg: ?Ref = null): any {
     // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
-    case Kind.Blob:
-      throw new Error('Not implemented');
-    case Kind.Bool:
-      return this.readBool();
-    case Kind.UInt8:
-    case Kind.UInt16:
-    case Kind.UInt32:
-    case Kind.UInt64:
-    case Kind.Int8:
-    case Kind.Int16:
-    case Kind.Int32:
-    case Kind.Int64:
-    case Kind.Float32:
-    case Kind.Float64:
-      return this.read();
-    case Kind.String:
-      return this.readString();
-    case Kind.Value: {
-      let t2 = this.readTypeRefAsTag();
-      return this.readValueWithoutTag(t2, pkg);
-    }
-    case Kind.List: {
-      let r2 = new JsonArrayReader(this.readArray(), this._cs);
-      return r2.readList(t, pkg);
-    }
-    case Kind.Map: {
-      let r2 = new JsonArrayReader(this.readArray(), this._cs);
-      return r2.readMap(t, pkg);
-    }
-    case Kind.Package:
-      throw new Error('Not implemented');
-    case Kind.Ref:
-      throw new Error('Not implemented');
-    case Kind.Set: {
-      let r2 = new JsonArrayReader(this.readArray(), this._cs);
-      return r2.readSet(t, pkg);
-    }
-    case Kind.Enum:
-    case Kind.Struct:
-      throw new Error('Not allowed');
-    case Kind.TypeRef:
-    case Kind.Unresolved:
-      throw new Error('Not implemented');
+      case Kind.Blob:
+        throw new Error('Not implemented');
+      case Kind.Bool:
+        return this.readBool();
+      case Kind.UInt8:
+      case Kind.UInt16:
+      case Kind.UInt32:
+      case Kind.UInt64:
+      case Kind.Int8:
+      case Kind.Int16:
+      case Kind.Int32:
+      case Kind.Int64:
+      case Kind.Float32:
+      case Kind.Float64:
+        return this.read();
+      case Kind.String:
+        return this.readString();
+      case Kind.Value: {
+        let t2 = this.readTypeRefAsTag();
+        return this.readValueWithoutTag(t2, pkg);
+      }
+      case Kind.List: {
+        let r2 = new JsonArrayReader(this.readArray(), this._cs);
+        return r2.readList(t, pkg);
+      }
+      case Kind.Map: {
+        let r2 = new JsonArrayReader(this.readArray(), this._cs);
+        return r2.readMap(t, pkg);
+      }
+      case Kind.Package:
+        throw new Error('Not implemented');
+      case Kind.Ref:
+        throw new Error('Not implemented');
+      case Kind.Set: {
+        let r2 = new JsonArrayReader(this.readArray(), this._cs);
+        return r2.readSet(t, pkg);
+      }
+      case Kind.Enum:
+      case Kind.Struct:
+        throw new Error('Not allowed');
+      case Kind.TypeRef:
+      case Kind.Unresolved:
+        throw new Error('Not implemented');
     }
 
     throw new Error('Unreached');
