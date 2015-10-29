@@ -11,9 +11,10 @@ import (
 
 type ClientTestSuite struct {
 	suite.Suite
-	TempDir string
-	LdbDir  string
-	out     *os.File
+	LdbFlagName string
+	TempDir     string
+	LdbDir      string
+	out         *os.File
 }
 
 func (suite *ClientTestSuite) SetupSuite() {
@@ -37,13 +38,14 @@ func (suite *ClientTestSuite) Run(m func(), args []string) string {
 	origOut := os.Stdout
 	origErr := os.Stderr
 
-	os.Args = append([]string{"testcmd", "-ldb", suite.LdbDir}, args...)
-	os.Stdout = suite.out
+	ldbFlagName := suite.LdbFlagName
 
-	// TODO: If some tests need this, we can return it as a separate out param. But more convenient to swallow it until then.
-	devnull, err := os.Open(os.DevNull)
-	d.Chk.NoError(err)
-	os.Stderr = devnull
+	if ldbFlagName == "" {
+		ldbFlagName = "-ldb"
+	}
+
+	os.Args = append([]string{"cmd", ldbFlagName, suite.LdbDir}, args...)
+	os.Stdout = suite.out
 
 	defer func() {
 		os.Args = origArgs
@@ -53,7 +55,7 @@ func (suite *ClientTestSuite) Run(m func(), args []string) string {
 
 	m()
 
-	_, err = suite.out.Seek(0, 0)
+	_, err := suite.out.Seek(0, 0)
 	d.Chk.NoError(err)
 	b, err := ioutil.ReadAll(os.Stdout)
 	d.Chk.NoError(err)
