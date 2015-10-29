@@ -157,17 +157,17 @@ function buildType(n: string, desc: TypeDesc): TypeRef {
   }
 
   switch (desc.kind) {
-  case Kind.List:
-  case Kind.Ref:
-  case Kind.Set:
-  case Kind.Map:
-  case Kind.Enum:
-  case Kind.Struct:
-  case Kind.Unresolved:
-    return new TypeRef(n, '', desc);
+    case Kind.List:
+    case Kind.Ref:
+    case Kind.Set:
+    case Kind.Map:
+    case Kind.Enum:
+    case Kind.Struct:
+    case Kind.Unresolved:
+      return new TypeRef(n, '', desc);
 
-  default:
-    throw new Error('Unrecognized Kind: ' + desc.kind);
+    default:
+      throw new Error('Unrecognized Kind: ' + desc.kind);
   }
 }
 
