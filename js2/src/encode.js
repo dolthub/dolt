@@ -33,21 +33,21 @@ class JsonArrayWriter {
     let k = t.kind;
     this.writeKind(k);
     switch (k) {
-    case Kind.Enum:
-    case Kind.Struct:
-      throw new Error('Unreachable');
-    case Kind.List:
-    case Kind.Map:
-    case Kind.Ref:
-    case Kind.Set: {
-      let elemTypes = t.elemTypes;
-      for (let i = 0; i < elemTypes.length; i++) {
-        this.writeTypeRefAsTag(elemTypes[i]);
+      case Kind.Enum:
+      case Kind.Struct:
+        throw new Error('Unreachable');
+      case Kind.List:
+      case Kind.Map:
+      case Kind.Ref:
+      case Kind.Set: {
+        let elemTypes = t.elemTypes;
+        for (let i = 0; i < elemTypes.length; i++) {
+          this.writeTypeRefAsTag(elemTypes[i]);
+        }
+        break;
       }
-      break;
-    }
-    case Kind.Unresolved:
-      throw new Error('Not implemented');
+      case Kind.Unresolved:
+        throw new Error('Not implemented');
     }
   }
 
@@ -58,78 +58,78 @@ class JsonArrayWriter {
 
   writeValue(v: any, t: TypeRef) {
     switch (t.kind) {
-    case Kind.Blob:
-      throw new Error('Not implemented');
-    case Kind.Bool:
-    case Kind.UInt8:
-    case Kind.UInt16:
-    case Kind.UInt32:
-    case Kind.UInt64:
-    case Kind.Int8:
-    case Kind.Int16:
-    case Kind.Int32:
-    case Kind.Int64:
-    case Kind.Float32:
-    case Kind.Float64:
-    case Kind.String:
-      this.write(v); // TODO: Verify value fits in type
-      break;
-    case Kind.List: {
-      let w2 = new JsonArrayWriter(this._cs);
-      let elemType = t.elemTypes[0];
-      if (v instanceof Array) {
-        for (let i = 0; i < v.length; i++) {
-          w2.writeValue(v[i], elemType);
+      case Kind.Blob:
+        throw new Error('Not implemented');
+      case Kind.Bool:
+      case Kind.UInt8:
+      case Kind.UInt16:
+      case Kind.UInt32:
+      case Kind.UInt64:
+      case Kind.Int8:
+      case Kind.Int16:
+      case Kind.Int32:
+      case Kind.Int64:
+      case Kind.Float32:
+      case Kind.Float64:
+      case Kind.String:
+        this.write(v); // TODO: Verify value fits in type
+        break;
+      case Kind.List: {
+        let w2 = new JsonArrayWriter(this._cs);
+        let elemType = t.elemTypes[0];
+        if (v instanceof Array) {
+          for (let i = 0; i < v.length; i++) {
+            w2.writeValue(v[i], elemType);
+          }
+        } else {
+          throw new Error('Attempt to serialize non-list as list');
         }
-      } else {
-        throw new Error('Attempt to serialize non-list as list');
-      }
 
-      this.write(w2.array);
-      break;
-    }
-    case Kind.Set: {
-      let w2 = new JsonArrayWriter(this._cs);
-      let elemType = t.elemTypes[0];
-      if (v instanceof Set) {
-        let elems = [];
-        v.forEach(v => {
-          elems.push(v);
-        });
-        elems = orderValuesByRef(elemType, elems);
-        for (let i = 0; i < elems.length; i++) {
-          w2.writeValue(elems[i], elemType);
+        this.write(w2.array);
+        break;
+      }
+      case Kind.Set: {
+        let w2 = new JsonArrayWriter(this._cs);
+        let elemType = t.elemTypes[0];
+        if (v instanceof Set) {
+          let elems = [];
+          v.forEach(v => {
+            elems.push(v);
+          });
+          elems = orderValuesByRef(elemType, elems);
+          for (let i = 0; i < elems.length; i++) {
+            w2.writeValue(elems[i], elemType);
+          }
+        } else {
+          throw new Error('Attempt to serialize non-set as set');
         }
-      } else {
-        throw new Error('Attempt to serialize non-set as set');
-      }
 
-      this.write(w2.array);
-      break;
-    }
-    case Kind.Map: {
-      let w2 = new JsonArrayWriter(this._cs);
-      let keyType = t.elemTypes[0];
-      let valueType = t.elemTypes[1];
-      if (v instanceof Map) {
-        let elems = [];
-        v.forEach((v, k) => {
-          elems.push(k);
-        });
-        elems = orderValuesByRef(keyType, elems);
-        for (let i = 0; i < elems.length; i++) {
-          w2.writeValue(elems[i], keyType);
-          w2.writeValue(v.get(elems[i]), valueType);
+        this.write(w2.array);
+        break;
+      }
+      case Kind.Map: {
+        let w2 = new JsonArrayWriter(this._cs);
+        let keyType = t.elemTypes[0];
+        let valueType = t.elemTypes[1];
+        if (v instanceof Map) {
+          let elems = [];
+          v.forEach((v, k) => {
+            elems.push(k);
+          });
+          elems = orderValuesByRef(keyType, elems);
+          for (let i = 0; i < elems.length; i++) {
+            w2.writeValue(elems[i], keyType);
+            w2.writeValue(v.get(elems[i]), valueType);
+          }
+        } else {
+          throw new Error('Attempt to serialize non-map as maps');
         }
-      } else {
-        throw new Error('Attempt to serialize non-map as maps');
-      }
 
-      this.write(w2.array);
-      break;
-    }
-    default:
-      throw new Error('Not implemented');
+        this.write(w2.array);
+        break;
+      }
+      default:
+        throw new Error('Not implemented');
     }
   }
 }
