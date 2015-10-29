@@ -2,13 +2,14 @@
 
 'use strict';
 
-import type {ChunkStore} from './chunk_store.js';
-import type {NomsKind} from './noms_kind.js';
-
 import Chunk from './chunk.js';
 import MemoryStore from './memory_store.js';
-import {Kind} from './noms_kind.js';
-import {TypeRef} from './type_ref.js';
+import Ref from './ref.js';
+import type {ChunkStore} from './chunk_store.js';
+import type {NomsKind} from './noms_kind.js';
+import {isPrimitiveKind, Kind} from './noms_kind.js';
+import {makePrimitiveTypeRef, StructDesc, TypeRef} from './type_ref.js';
+import {Package} from './package.js';
 
 const typedTag = 't ';
 
@@ -27,6 +28,10 @@ class JsonArrayWriter {
 
   writeKind(k: NomsKind) {
     this.write(k);
+  }
+
+  writeRef(r: Ref) {
+    this.write(r.toString());
   }
 
   writeTypeRefAsTag(t: TypeRef) {
@@ -75,43 +80,24 @@ class JsonArrayWriter {
         this.write(v); // TODO: Verify value fits in type
         break;
       case Kind.List: {
-        let w2 = new JsonArrayWriter(this._cs);
-        let elemType = t.elemTypes[0];
         if (v instanceof Array) {
+          let w2 = new JsonArrayWriter(this._cs);
+          let elemType = t.elemTypes[0];
           for (let i = 0; i < v.length; i++) {
             w2.writeValue(v[i], elemType);
           }
+          this.write(w2.array);
         } else {
           throw new Error('Attempt to serialize non-list as list');
         }
 
-        this.write(w2.array);
-        break;
-      }
-      case Kind.Set: {
-        let w2 = new JsonArrayWriter(this._cs);
-        let elemType = t.elemTypes[0];
-        if (v instanceof Set) {
-          let elems = [];
-          v.forEach(v => {
-            elems.push(v);
-          });
-          elems = orderValuesByRef(elemType, elems);
-          for (let i = 0; i < elems.length; i++) {
-            w2.writeValue(elems[i], elemType);
-          }
-        } else {
-          throw new Error('Attempt to serialize non-set as set');
-        }
-
-        this.write(w2.array);
         break;
       }
       case Kind.Map: {
-        let w2 = new JsonArrayWriter(this._cs);
-        let keyType = t.elemTypes[0];
-        let valueType = t.elemTypes[1];
         if (v instanceof Map) {
+          let w2 = new JsonArrayWriter(this._cs);
+          let keyType = t.elemTypes[0];
+          let valueType = t.elemTypes[1];
           let elems = [];
           v.forEach((v, k) => {
             elems.push(k);
@@ -121,15 +107,114 @@ class JsonArrayWriter {
             w2.writeValue(elems[i], keyType);
             w2.writeValue(v.get(elems[i]), valueType);
           }
+          this.write(w2.array);
         } else {
           throw new Error('Attempt to serialize non-map as maps');
         }
 
+        break;
+      }
+      case Kind.Package: {
+        if (v instanceof Package) {
+          let ptr = makePrimitiveTypeRef(Kind.TypeRef);
+          let w2 = new JsonArrayWriter(this._cs);
+          for (let i = 0; i < v.types.length; i++) {
+            w2.writeValue(v.types[i], ptr);
+          }
+          this.write(w2.array);
+          let w3 = new JsonArrayWriter(this._cs);
+          for (let i = 0; i < v.dependencies.length; i++) {
+            w3.writeRef(v.dependencies[i]);
+          }
+          this.write(w3.array);
+        } else {
+          throw new Error('Attempt to serialize non-package as package');
+        }
+
+        break;
+      }
+      case Kind.Set: {
+        if (v instanceof Set) {
+          let w2 = new JsonArrayWriter(this._cs);
+          let elemType = t.elemTypes[0];
+          let elems = [];
+          v.forEach(v => {
+            elems.push(v);
+          });
+          elems = orderValuesByRef(elemType, elems);
+          for (let i = 0; i < elems.length; i++) {
+            w2.writeValue(elems[i], elemType);
+          }
+          this.write(w2.array);
+        } else {
+          throw new Error('Attempt to serialize non-set as set');
+        }
+
+        break;
+      }
+      case Kind.TypeRef:
+        if (v instanceof TypeRef) {
+          this.writeTypeRefAsValue(v);
+        } else {
+          throw new Error('Attempt to serialize non-typeref as typeref');
+        }
+        break;
+      default:
+        throw new Error('Not implemented');
+    }
+  }
+
+  writeTypeRefAsValue(t: TypeRef) {
+    let k = t.kind;
+    this.writeKind(k);
+    switch (k) {
+      case Kind.Enum:
+        throw new Error('Not implemented');
+      case Kind.List:
+      case Kind.Map:
+      case Kind.Ref:
+      case Kind.Set: {
+        this.write(t.name);
+        let w2 = new JsonArrayWriter(this._cs);
+        for (let i = 0; t.elemTypes.length; i++) {
+          w2.writeTypeRefAsValue(t.elemTypes[i]);
+        }
         this.write(w2.array);
         break;
       }
-      default:
+      case Kind.Struct: {
+        let desc = t.desc;
+        if (desc instanceof StructDesc) {
+          this.write(t.name);
+          let fieldWriter = new JsonArrayWriter(this._cs);
+          for (let i = 0; i < desc.fields.length; i++) {
+            let field = desc.fields[i];
+            fieldWriter.write(field.name);
+            fieldWriter.writeTypeRefAsValue(field.t);
+            fieldWriter.write(field.optional);
+          }
+          this.write(fieldWriter.array);
+          let choiceWriter = new JsonArrayWriter(this._cs);
+          for (let i = 0; i < desc.union.length; i++) {
+            let choice = desc.union[i];
+            choiceWriter.write(choice.name);
+            choiceWriter.writeTypeRefAsValue(choice.t);
+            choiceWriter.write(choice.optional);
+          }
+          this.write(choiceWriter.array);
+        } else {
+          throw new Error('Attempt to serialize non-struct typeref as struct type-ref');
+        }
+
+        break;
+      }
+      case Kind.Unresolved:
         throw new Error('Not implemented');
+      default: {
+        if (!isPrimitiveKind(k)) {
+          throw new Error('Not implemented.');
+        }
+      }
     }
   }
 }
@@ -148,10 +233,16 @@ function orderValuesByRef(t: TypeRef, a: Array<any>): Array<any> {
 }
 
 function encodeNomsValue(v: any, t: TypeRef): Chunk {
+  // if (v instanceof Package) {
+  //   if (v.dependencies.length > 0) {
+  //     throw new Error('Not implemented');
+  //   }
+  // }
+
   let ms = new MemoryStore(); // TODO: This should be passed in.
   let w = new JsonArrayWriter(ms);
   w.writeTopLevel(t, v);
   return new Chunk(typedTag + JSON.stringify(w.array));
 }
 
-module.exports = {JsonArrayWriter};
+export {encodeNomsValue, JsonArrayWriter};

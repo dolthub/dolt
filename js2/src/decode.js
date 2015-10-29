@@ -2,11 +2,13 @@
 
 'use strict';
 
-import {isPrimitiveKind, Kind} from './noms_kind.js';
-import {makeCompoundTypeRef, makePrimitiveTypeRef, makeTypeRef, TypeRef} from './type_ref.js';
 import Ref from './ref.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
+import {isPrimitiveKind, Kind} from './noms_kind.js';
+import {makeCompoundTypeRef, makePrimitiveTypeRef, makeTypeRef, StructDesc, TypeRef} from './type_ref.js';
+import {lookupPackage, Package} from './package.js';
+
 
 class JsonArrayReader {
   _a: Array<any>;
@@ -108,7 +110,7 @@ class JsonArrayReader {
     throw new Error('Unreachable');
   }
 
-  readList(t: TypeRef, pkg: ?Ref): Array<any> {
+  readList(t: TypeRef, pkg: ?Package): Array<any> {
     let elemType = t.elemTypes[0];
     let list = [];
     while (!this.atEnd()) {
@@ -118,7 +120,7 @@ class JsonArrayReader {
     return list;
   }
 
-  readSet(t: TypeRef, pkg: ?Ref): Set {
+  readSet(t: TypeRef, pkg: ?Package): Set {
     let elemType = t.elemTypes[0];
     let s = new Set();
     while (!this.atEnd()) {
@@ -129,7 +131,7 @@ class JsonArrayReader {
     return s;
   }
 
-  readMap(t: TypeRef, pkg: ?Ref): Map {
+  readMap(t: TypeRef, pkg: ?Package): Map {
     let keyType = t.elemTypes[0];
     let valueType = t.elemTypes[1];
     let m = new Map();
@@ -147,7 +149,7 @@ class JsonArrayReader {
     return this.readValueWithoutTag(t);
   }
 
-  readValueWithoutTag(t: TypeRef, pkg: ?Ref = null): any {
+  readValueWithoutTag(t: TypeRef, pkg: ?Package = null): any {
     // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
       case Kind.Blob:
@@ -192,11 +194,70 @@ class JsonArrayReader {
         throw new Error('Not allowed');
       case Kind.TypeRef:
       case Kind.Unresolved:
-        throw new Error('Not implemented');
+        return this.readUnresolvedKindToValue(t, pkg);
     }
 
     throw new Error('Unreached');
   }
+
+  readUnresolvedKindToValue(t: TypeRef, pkg: ?Package = null): any {
+    let pkgRef = t.packageRef;
+    let ordinal = t.ordinal;
+    if (!pkgRef.isEmpty()) {
+      let pkg2 = lookupPackage(pkgRef);
+      if (!pkg2) {
+        throw new Error('Not implemented');
+      } else {
+        pkg = pkg2;
+      }
+    }
+
+    if (pkg) {
+      let typeDef = pkg.types[ordinal];
+      if (typeDef.kind === Kind.Enum) {
+        throw new Error('Not implemented');
+      }
+
+      if (typeDef.kind !== Kind.Struct) {
+        throw new Error('Attempt to resolve non-struct struct kind');
+      }
+
+      return this.readStruct(typeDef, t, pkg);
+    } else {
+      throw new Error('Woah, got a null pkg. pkgRef: ' + pkgRef.toString() + ' ordinal: ' + ordinal);
+    }
+  }
+
+  readStruct(typeDef: TypeRef, typeRef: TypeRef, pkg: Package): any {
+    // TODO FixupTypeRef?
+    let desc = typeDef.desc;
+    if (desc instanceof StructDesc) {
+      let s = Object.create(null);
+
+      for (let i = 0; i < desc.fields.length; i++) {
+        let field = desc.fields[i];
+
+        if (field.optional) {
+          let b = this.readBool();
+          if (b) {
+            let v = this.readValueWithoutTag(field.t, pkg);
+            s[field.name] = v;
+          }
+        } else {
+          let v = this.readValueWithoutTag(field.t, pkg);
+          s[field.name] = v;
+        }
+      }
+
+      if (desc.union.length > 0) {
+        throw new Error('Not implemented');
+      }
+
+      return s;
+    } else {
+      throw new Error('Attempt to read struct without StructDesc typeref');
+    }
+  }
 }
 
-module.exports = {JsonArrayReader};
+export {JsonArrayReader};

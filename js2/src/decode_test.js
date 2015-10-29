@@ -2,14 +2,15 @@
 
 'use strict';
 
-import {assert} from 'chai';
-import {JsonArrayReader} from './decode.js';
-import {Kind} from './noms_kind.js';
-import {suite} from 'mocha';
-import {TypeRef, makePrimitiveTypeRef, makeCompoundTypeRef, makeTypeRef} from './type_ref.js';
 import MemoryStore from './memory_store.js';
 import Ref from './ref.js';
 import test from './async_test.js';
+import {assert} from 'chai';
+import {JsonArrayReader} from './decode.js';
+import {Kind} from './noms_kind.js';
+import {registerPackage, Package} from './package.js';
+import {suite} from 'mocha';
+import {Field, makeCompoundTypeRef, makePrimitiveTypeRef, makeStructTypeRef, makeTypeRef, TypeRef} from './type_ref.js';
 
 suite('Decode', () => {
   test('read', async () => {
@@ -166,5 +167,22 @@ suite('Decode', () => {
     s.add(3);
 
     assertSetsEqual(s, v);
+  });
+
+  test('test read struct', async () => {
+    let ms = new MemoryStore();
+    let tr = makeStructTypeRef('A1', [
+      new Field('x', makePrimitiveTypeRef(Kind.Int16), false),
+      new Field('s', makePrimitiveTypeRef(Kind.String), false),
+      new Field('b', makePrimitiveTypeRef(Kind.Bool), false)
+    ], []);
+
+    let pkg = new Package([tr], []);
+    registerPackage(pkg);
+
+    let a = [Kind.Unresolved, pkg.ref.toString(), 0, 42, 'hi', true];
+    let r = new JsonArrayReader(a, ms);
+    let v = r.readTopLevelValue();
+    assert.deepEqual({x: 42, s: 'hi', b: true}, v);
   });
 });
