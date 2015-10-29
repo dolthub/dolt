@@ -17,6 +17,7 @@ import (
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
+	"github.com/attic-labs/noms/types"
 )
 
 var (
@@ -73,7 +74,8 @@ func main() {
 
 func getUser() {
 	if commit, ok := ds.MaybeHead(); ok {
-		user = UserFromVal(commit.Value())
+		userRef := commit.Value().(RefOfUser)
+		user = userRef.TargetValue(ds.Store())
 		if checkAuth() {
 			return
 		}
@@ -142,9 +144,10 @@ func getAlbum(id string) Album {
 	})
 	d.Chk.NoError(err)
 
-	fmt.Printf("Photoset: %v\n", response.Photoset.Title.Content)
-
 	photos := getAlbumPhotos(id)
+
+	fmt.Printf("Photoset: %v\nRef: %s\n", response.Photoset.Title.Content, photos.TargetRef())
+
 	return NewAlbum().
 		SetId(id).
 		SetTitle(response.Photoset.Title.Content).
@@ -187,7 +190,7 @@ func getAlbums() MapOfStringToAlbum {
 	return albums
 }
 
-func getAlbumPhotos(id string) SetOfRemotePhoto {
+func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -224,7 +227,7 @@ func getAlbumPhotos(id string) SetOfRemotePhoto {
 	})
 	d.Chk.NoError(err)
 
-	photos := NewSetOfRemotePhoto()
+	photos := NewSetOfRefOfRemotePhoto()
 
 	for _, p := range response.Photoset.Photo {
 		photo := RemotePhotoDef{
@@ -247,10 +250,11 @@ func getAlbumPhotos(id string) SetOfRemotePhoto {
 			photo = photo.SetGeoposition(GeopositionDef{lat, lon}.New())
 		}
 
-		photos = photos.Insert(photo)
+		photos = photos.Insert(NewRefOfRemotePhoto(types.WriteValue(photo, ds.Store())))
 	}
 
-	return photos
+	r := types.WriteValue(photos, ds.Store())
+	return NewRefOfSetOfRefOfRemotePhoto(r)
 }
 
 func getTags(tagStr string) (tags SetOfStringDef) {
@@ -322,7 +326,8 @@ func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) error {
 
 func commitUser() {
 	ok := false
-	*ds, ok = ds.Commit(user)
+	r := NewRefOfUser(types.WriteValue(user, ds.Store()))
+	*ds, ok = ds.Commit(r)
 	d.Exp.True(ok, "Could not commit due to conflicting edit")
 }
 

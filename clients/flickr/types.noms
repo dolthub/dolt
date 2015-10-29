@@ -11,8 +11,8 @@ struct User {
 struct Album {
   Id: String
   Title: String
-  Photos: Set(Img.RemotePhoto)
+  Photos: Ref(Set(Ref(Img.RemotePhoto)))
 }
 
 using Map(String, Album)
-using Set(Img.RemotePhoto)
+using Ref(User)

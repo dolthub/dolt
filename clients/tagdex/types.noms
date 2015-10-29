@@ -1,0 +1,5 @@
+alias Photo = import "../types/photo.noms"
+
+using Map(String, Set(Ref(Photo.RemotePhoto)))
+using Set(Ref(Photo.RemotePhoto))
+using Set(String)
