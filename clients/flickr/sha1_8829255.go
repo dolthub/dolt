@@ -7,20 +7,32 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_00419eb_CachedRef ref.Ref
+var __mainPackageInFile_sha1_8829255_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.TypeRef{
+		types.MakeStructTypeRef("Photo",
+			[]types.Field{
+				types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Url", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
+				types.Field{"Size", types.MakeTypeRef(ref.Ref{}, 2), false},
+				types.Field{"Tags", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind)), false},
+				types.Field{"Image", types.MakePrimitiveTypeRef(types.BlobKind), false},
+			},
+			types.Choices{},
+		),
 		types.MakeStructTypeRef("RemotePhoto",
 			[]types.Field{
 				types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"Url", types.MakePrimitiveTypeRef(types.StringKind), false},
 				types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
-				types.Field{"Sizes", types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(ref.Ref{}, 1), types.MakePrimitiveTypeRef(types.StringKind)), false},
+				types.Field{"Sizes", types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(ref.Ref{}, 2), types.MakePrimitiveTypeRef(types.StringKind)), false},
 				types.Field{"Tags", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind)), false},
 			},
 			types.Choices{},
@@ -35,7 +47,159 @@ func init() {
 	}, []ref.Ref{
 		ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"),
 	})
-	__mainPackageInFile_sha1_00419eb_CachedRef = types.RegisterPackage(&p)
+	__mainPackageInFile_sha1_8829255_CachedRef = types.RegisterPackage(&p)
+}
+
+// Photo
+
+type Photo struct {
+	m   types.Map
+	ref *ref.Ref
+}
+
+func NewPhoto() Photo {
+	return Photo{types.NewMap(
+		types.NewString("Id"), types.NewString(""),
+		types.NewString("Title"), types.NewString(""),
+		types.NewString("Url"), types.NewString(""),
+		types.NewString("Geoposition"), NewGeoposition(),
+		types.NewString("Size"), NewSize(),
+		types.NewString("Tags"), NewSetOfString(),
+		types.NewString("Image"), types.NewEmptyBlob(),
+	), &ref.Ref{}}
+}
+
+type PhotoDef struct {
+	Id          string
+	Title       string
+	Url         string
+	Geoposition GeopositionDef
+	Size        SizeDef
+	Tags        SetOfStringDef
+	Image       types.Blob
+}
+
+func (def PhotoDef) New() Photo {
+	return Photo{
+		types.NewMap(
+			types.NewString("Id"), types.NewString(def.Id),
+			types.NewString("Title"), types.NewString(def.Title),
+			types.NewString("Url"), types.NewString(def.Url),
+			types.NewString("Geoposition"), def.Geoposition.New(),
+			types.NewString("Size"), def.Size.New(),
+			types.NewString("Tags"), def.Tags.New(),
+			types.NewString("Image"), def.Image,
+		), &ref.Ref{}}
+}
+
+func (s Photo) Def() (d PhotoDef) {
+	d.Id = s.m.Get(types.NewString("Id")).(types.String).String()
+	d.Title = s.m.Get(types.NewString("Title")).(types.String).String()
+	d.Url = s.m.Get(types.NewString("Url")).(types.String).String()
+	d.Geoposition = s.m.Get(types.NewString("Geoposition")).(Geoposition).Def()
+	d.Size = s.m.Get(types.NewString("Size")).(Size).Def()
+	d.Tags = s.m.Get(types.NewString("Tags")).(SetOfString).Def()
+	d.Image = s.m.Get(types.NewString("Image")).(types.Blob)
+	return
+}
+
+var __typeRefForPhoto types.TypeRef
+
+func (m Photo) TypeRef() types.TypeRef {
+	return __typeRefForPhoto
+}
+
+func init() {
+	__typeRefForPhoto = types.MakeTypeRef(__mainPackageInFile_sha1_8829255_CachedRef, 0)
+	types.RegisterFromValFunction(__typeRefForPhoto, func(v types.Value) types.Value {
+		return PhotoFromVal(v)
+	})
+}
+
+func PhotoFromVal(val types.Value) Photo {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(Photo); ok {
+		return val
+	}
+	// TODO: Validate here
+	return Photo{val.(types.Map), &ref.Ref{}}
+}
+
+func (s Photo) InternalImplementation() types.Map {
+	return s.m
+}
+
+func (s Photo) Equals(other types.Value) bool {
+	if other, ok := other.(Photo); ok {
+		return s.Ref() == other.Ref()
+	}
+	return false
+}
+
+func (s Photo) Ref() ref.Ref {
+	return types.EnsureRef(s.ref, s)
+}
+
+func (s Photo) Chunks() (futures []types.Future) {
+	futures = append(futures, s.TypeRef().Chunks()...)
+	futures = append(futures, s.m.Chunks()...)
+	return
+}
+
+func (s Photo) Id() string {
+	return s.m.Get(types.NewString("Id")).(types.String).String()
+}
+
+func (s Photo) SetId(val string) Photo {
+	return Photo{s.m.Set(types.NewString("Id"), types.NewString(val)), &ref.Ref{}}
+}
+
+func (s Photo) Title() string {
+	return s.m.Get(types.NewString("Title")).(types.String).String()
+}
+
+func (s Photo) SetTitle(val string) Photo {
+	return Photo{s.m.Set(types.NewString("Title"), types.NewString(val)), &ref.Ref{}}
+}
+
+func (s Photo) Url() string {
+	return s.m.Get(types.NewString("Url")).(types.String).String()
+}
+
+func (s Photo) SetUrl(val string) Photo {
+	return Photo{s.m.Set(types.NewString("Url"), types.NewString(val)), &ref.Ref{}}
+}
+
+func (s Photo) Geoposition() Geoposition {
+	return s.m.Get(types.NewString("Geoposition")).(Geoposition)
+}
+
+func (s Photo) SetGeoposition(val Geoposition) Photo {
+	return Photo{s.m.Set(types.NewString("Geoposition"), val), &ref.Ref{}}
+}
+
+func (s Photo) Size() Size {
+	return s.m.Get(types.NewString("Size")).(Size)
+}
+
+func (s Photo) SetSize(val Size) Photo {
+	return Photo{s.m.Set(types.NewString("Size"), val), &ref.Ref{}}
+}
+
+func (s Photo) Tags() SetOfString {
+	return s.m.Get(types.NewString("Tags")).(SetOfString)
+}
+
+func (s Photo) SetTags(val SetOfString) Photo {
+	return Photo{s.m.Set(types.NewString("Tags"), val), &ref.Ref{}}
+}
+
+func (s Photo) Image() types.Blob {
+	return s.m.Get(types.NewString("Image")).(types.Blob)
+}
+
+func (s Photo) SetImage(val types.Blob) Photo {
+	return Photo{s.m.Set(types.NewString("Image"), val), &ref.Ref{}}
 }
 
 // RemotePhoto
@@ -94,7 +258,7 @@ func (m RemotePhoto) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForRemotePhoto = types.MakeTypeRef(__mainPackageInFile_sha1_00419eb_CachedRef, 0)
+	__typeRefForRemotePhoto = types.MakeTypeRef(__mainPackageInFile_sha1_8829255_CachedRef, 1)
 	types.RegisterFromValFunction(__typeRefForRemotePhoto, func(v types.Value) types.Value {
 		return RemotePhotoFromVal(v)
 	})
@@ -218,7 +382,7 @@ func (m Size) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForSize = types.MakeTypeRef(__mainPackageInFile_sha1_00419eb_CachedRef, 1)
+	__typeRefForSize = types.MakeTypeRef(__mainPackageInFile_sha1_8829255_CachedRef, 2)
 	types.RegisterFromValFunction(__typeRefForSize, func(v types.Value) types.Value {
 		return SizeFromVal(v)
 	})
@@ -268,142 +432,6 @@ func (s Size) Height() uint32 {
 
 func (s Size) SetHeight(val uint32) Size {
 	return Size{s.m.Set(types.NewString("Height"), types.UInt32(val)), &ref.Ref{}}
-}
-
-// MapOfSizeToString
-
-type MapOfSizeToString struct {
-	m   types.Map
-	ref *ref.Ref
-}
-
-func NewMapOfSizeToString() MapOfSizeToString {
-	return MapOfSizeToString{types.NewMap(), &ref.Ref{}}
-}
-
-type MapOfSizeToStringDef map[SizeDef]string
-
-func (def MapOfSizeToStringDef) New() MapOfSizeToString {
-	kv := make([]types.Value, 0, len(def)*2)
-	for k, v := range def {
-		kv = append(kv, k.New(), types.NewString(v))
-	}
-	return MapOfSizeToString{types.NewMap(kv...), &ref.Ref{}}
-}
-
-func (m MapOfSizeToString) Def() MapOfSizeToStringDef {
-	def := make(map[SizeDef]string)
-	m.m.Iter(func(k, v types.Value) bool {
-		def[k.(Size).Def()] = v.(types.String).String()
-		return false
-	})
-	return def
-}
-
-func MapOfSizeToStringFromVal(val types.Value) MapOfSizeToString {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(MapOfSizeToString); ok {
-		return val
-	}
-	// TODO: Validate here
-	return MapOfSizeToString{val.(types.Map), &ref.Ref{}}
-}
-
-func (m MapOfSizeToString) InternalImplementation() types.Map {
-	return m.m
-}
-
-func (m MapOfSizeToString) Equals(other types.Value) bool {
-	if other, ok := other.(MapOfSizeToString); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
-}
-
-func (m MapOfSizeToString) Ref() ref.Ref {
-	return types.EnsureRef(m.ref, m)
-}
-
-func (m MapOfSizeToString) Chunks() (futures []types.Future) {
-	futures = append(futures, m.TypeRef().Chunks()...)
-	futures = append(futures, m.m.Chunks()...)
-	return
-}
-
-// A Noms Value that describes MapOfSizeToString.
-var __typeRefForMapOfSizeToString types.TypeRef
-
-func (m MapOfSizeToString) TypeRef() types.TypeRef {
-	return __typeRefForMapOfSizeToString
-}
-
-func init() {
-	__typeRefForMapOfSizeToString = types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(__mainPackageInFile_sha1_00419eb_CachedRef, 1), types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterFromValFunction(__typeRefForMapOfSizeToString, func(v types.Value) types.Value {
-		return MapOfSizeToStringFromVal(v)
-	})
-}
-
-func (m MapOfSizeToString) Empty() bool {
-	return m.m.Empty()
-}
-
-func (m MapOfSizeToString) Len() uint64 {
-	return m.m.Len()
-}
-
-func (m MapOfSizeToString) Has(p Size) bool {
-	return m.m.Has(p)
-}
-
-func (m MapOfSizeToString) Get(p Size) string {
-	return m.m.Get(p).(types.String).String()
-}
-
-func (m MapOfSizeToString) MaybeGet(p Size) (string, bool) {
-	v, ok := m.m.MaybeGet(p)
-	if !ok {
-		return "", false
-	}
-	return v.(types.String).String(), ok
-}
-
-func (m MapOfSizeToString) Set(k Size, v string) MapOfSizeToString {
-	return MapOfSizeToString{m.m.Set(k, types.NewString(v)), &ref.Ref{}}
-}
-
-// TODO: Implement SetM?
-
-func (m MapOfSizeToString) Remove(p Size) MapOfSizeToString {
-	return MapOfSizeToString{m.m.Remove(p), &ref.Ref{}}
-}
-
-type MapOfSizeToStringIterCallback func(k Size, v string) (stop bool)
-
-func (m MapOfSizeToString) Iter(cb MapOfSizeToStringIterCallback) {
-	m.m.Iter(func(k, v types.Value) bool {
-		return cb(k.(Size), v.(types.String).String())
-	})
-}
-
-type MapOfSizeToStringIterAllCallback func(k Size, v string)
-
-func (m MapOfSizeToString) IterAll(cb MapOfSizeToStringIterAllCallback) {
-	m.m.IterAll(func(k, v types.Value) {
-		cb(k.(Size), v.(types.String).String())
-	})
-}
-
-type MapOfSizeToStringFilterCallback func(k Size, v string) (keep bool)
-
-func (m MapOfSizeToString) Filter(cb MapOfSizeToStringFilterCallback) MapOfSizeToString {
-	nm := NewMapOfSizeToString()
-	m.IterAll(func(k Size, v string) {
-		if cb(k, v) {
-			nm = nm.Set(k, v)
-		}
-	})
-	return nm
 }
 
 // SetOfString
@@ -555,4 +583,140 @@ func (s SetOfString) fromElemSlice(p []string) []types.Value {
 		r[i] = types.NewString(v)
 	}
 	return r
+}
+
+// MapOfSizeToString
+
+type MapOfSizeToString struct {
+	m   types.Map
+	ref *ref.Ref
+}
+
+func NewMapOfSizeToString() MapOfSizeToString {
+	return MapOfSizeToString{types.NewMap(), &ref.Ref{}}
+}
+
+type MapOfSizeToStringDef map[SizeDef]string
+
+func (def MapOfSizeToStringDef) New() MapOfSizeToString {
+	kv := make([]types.Value, 0, len(def)*2)
+	for k, v := range def {
+		kv = append(kv, k.New(), types.NewString(v))
+	}
+	return MapOfSizeToString{types.NewMap(kv...), &ref.Ref{}}
+}
+
+func (m MapOfSizeToString) Def() MapOfSizeToStringDef {
+	def := make(map[SizeDef]string)
+	m.m.Iter(func(k, v types.Value) bool {
+		def[k.(Size).Def()] = v.(types.String).String()
+		return false
+	})
+	return def
+}
+
+func MapOfSizeToStringFromVal(val types.Value) MapOfSizeToString {
+	// TODO: Do we still need FromVal?
+	if val, ok := val.(MapOfSizeToString); ok {
+		return val
+	}
+	// TODO: Validate here
+	return MapOfSizeToString{val.(types.Map), &ref.Ref{}}
+}
+
+func (m MapOfSizeToString) InternalImplementation() types.Map {
+	return m.m
+}
+
+func (m MapOfSizeToString) Equals(other types.Value) bool {
+	if other, ok := other.(MapOfSizeToString); ok {
+		return m.Ref() == other.Ref()
+	}
+	return false
+}
+
+func (m MapOfSizeToString) Ref() ref.Ref {
+	return types.EnsureRef(m.ref, m)
+}
+
+func (m MapOfSizeToString) Chunks() (futures []types.Future) {
+	futures = append(futures, m.TypeRef().Chunks()...)
+	futures = append(futures, m.m.Chunks()...)
+	return
+}
+
+// A Noms Value that describes MapOfSizeToString.
+var __typeRefForMapOfSizeToString types.TypeRef
+
+func (m MapOfSizeToString) TypeRef() types.TypeRef {
+	return __typeRefForMapOfSizeToString
+}
+
+func init() {
+	__typeRefForMapOfSizeToString = types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(__mainPackageInFile_sha1_8829255_CachedRef, 2), types.MakePrimitiveTypeRef(types.StringKind))
+	types.RegisterFromValFunction(__typeRefForMapOfSizeToString, func(v types.Value) types.Value {
+		return MapOfSizeToStringFromVal(v)
+	})
+}
+
+func (m MapOfSizeToString) Empty() bool {
+	return m.m.Empty()
+}
+
+func (m MapOfSizeToString) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m MapOfSizeToString) Has(p Size) bool {
+	return m.m.Has(p)
+}
+
+func (m MapOfSizeToString) Get(p Size) string {
+	return m.m.Get(p).(types.String).String()
+}
+
+func (m MapOfSizeToString) MaybeGet(p Size) (string, bool) {
+	v, ok := m.m.MaybeGet(p)
+	if !ok {
+		return "", false
+	}
+	return v.(types.String).String(), ok
+}
+
+func (m MapOfSizeToString) Set(k Size, v string) MapOfSizeToString {
+	return MapOfSizeToString{m.m.Set(k, types.NewString(v)), &ref.Ref{}}
+}
+
+// TODO: Implement SetM?
+
+func (m MapOfSizeToString) Remove(p Size) MapOfSizeToString {
+	return MapOfSizeToString{m.m.Remove(p), &ref.Ref{}}
+}
+
+type MapOfSizeToStringIterCallback func(k Size, v string) (stop bool)
+
+func (m MapOfSizeToString) Iter(cb MapOfSizeToStringIterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(k.(Size), v.(types.String).String())
+	})
+}
+
+type MapOfSizeToStringIterAllCallback func(k Size, v string)
+
+func (m MapOfSizeToString) IterAll(cb MapOfSizeToStringIterAllCallback) {
+	m.m.IterAll(func(k, v types.Value) {
+		cb(k.(Size), v.(types.String).String())
+	})
+}
+
+type MapOfSizeToStringFilterCallback func(k Size, v string) (keep bool)
+
+func (m MapOfSizeToString) Filter(cb MapOfSizeToStringFilterCallback) MapOfSizeToString {
+	nm := NewMapOfSizeToString()
+	m.IterAll(func(k Size, v string) {
+		if cb(k, v) {
+			nm = nm.Set(k, v)
+		}
+	})
+	return nm
 }
