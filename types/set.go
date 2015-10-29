@@ -3,24 +3,18 @@ package types
 import (
 	"sort"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 )
 
-type setData []Future
+type setData []Value
 
 type Set struct {
-	m   setData // sorted by Ref()
-	cs  chunks.ChunkSource
-	ref *ref.Ref
+	data setData // sorted by Ref()
+	ref  *ref.Ref
 }
 
 func NewSet(v ...Value) Set {
-	return newSetFromData(buildSetData(setData{}, valuesToFutures(v)), nil)
-}
-
-func setFromFutures(f []Future, cs chunks.ChunkSource) Set {
-	return newSetFromData(buildSetData(setData{}, f), cs)
+	return newSetFromData(buildSetData(setData{}, v))
 }
 
 func (fs Set) Empty() bool {
@@ -28,29 +22,29 @@ func (fs Set) Empty() bool {
 }
 
 func (fs Set) Len() uint64 {
-	return uint64(len(fs.m))
+	return uint64(len(fs.data))
 }
 
 func (fs Set) Has(v Value) bool {
-	idx := indexSetData(fs.m, v.Ref())
-	return idx < len(fs.m) && futureEqualsValue(fs.m[idx], v)
+	idx := indexSetData(fs.data, v.Ref())
+	return idx < len(fs.data) && fs.data[idx].Equals(v)
 }
 
 func (fs Set) Insert(values ...Value) Set {
-	return newSetFromData(buildSetData(fs.m, valuesToFutures(values)), fs.cs)
+	return newSetFromData(buildSetData(fs.data, values))
 }
 
 func (fs Set) Remove(values ...Value) Set {
-	m2 := copySetData(fs.m)
+	data := copySetData(fs.data)
 	for _, v := range values {
 		if v != nil {
-			idx := indexSetData(fs.m, v.Ref())
-			if idx < len(fs.m) && futureEqualsValue(fs.m[idx], v) {
-				m2 = append(m2[:idx], m2[idx+1:]...)
+			idx := indexSetData(fs.data, v.Ref())
+			if idx < len(fs.data) && fs.data[idx].Equals(v) {
+				data = append(data[:idx], data[idx+1:]...)
 			}
 		}
 	}
-	return newSetFromData(m2, fs.cs)
+	return newSetFromData(data)
 }
 
 func (fs Set) Union(others ...Set) (result Set) {
@@ -78,10 +72,7 @@ func (fs Set) Subtract(others ...Set) (result Set) {
 type setIterCallback func(v Value) bool
 
 func (fm Set) Iter(cb setIterCallback) {
-	// TODO: sort iteration order
-	for _, f := range fm.m {
-		v := f.Deref(fm.cs)
-		f.Release()
+	for _, v := range fm.data {
 		if cb(v) {
 			break
 		}
@@ -91,31 +82,27 @@ func (fm Set) Iter(cb setIterCallback) {
 type setIterAllCallback func(v Value)
 
 func (fm Set) IterAll(cb setIterAllCallback) {
-	// TODO: sort iteration order
-	for _, f := range fm.m {
-		cb(f.Deref(fm.cs))
-		f.Release()
+	for _, v := range fm.data {
+		cb(v)
 	}
 }
 
 type setFilterCallback func(v Value) (keep bool)
 
 func (fm Set) Filter(cb setFilterCallback) Set {
-	ns := NewSet()
-	// TODO: sort iteration order
-	for _, f := range fm.m {
-		v := f.Deref(fm.cs)
+	data := setData{}
+	for _, v := range fm.data {
 		if cb(v) {
-			ns = ns.Insert(v)
+			data = append(data, v)
 		}
-		f.Release()
 	}
-	return ns
+	// Already sorted.
+	return newSetFromData(data)
 }
 
 func (fm Set) Any() Value {
-	for _, f := range fm.m {
-		return f.Deref(fm.cs)
+	for _, v := range fm.data {
+		return v
 	}
 	return nil
 }
@@ -132,8 +119,8 @@ func (fs Set) Equals(other Value) bool {
 }
 
 func (fs Set) Chunks() (futures []Future) {
-	for _, f := range fs.m {
-		futures = appendChunks(futures, f)
+	for _, v := range fs.data {
+		futures = appendValueToChunks(futures, v)
 	}
 	return
 }
@@ -150,8 +137,8 @@ func init() {
 	})
 }
 
-func newSetFromData(m setData, cs chunks.ChunkSource) Set {
-	return Set{m, cs, &ref.Ref{}}
+func newSetFromData(m setData) Set {
+	return Set{m, &ref.Ref{}}
 }
 
 func copySetData(m setData) setData {
@@ -160,21 +147,21 @@ func copySetData(m setData) setData {
 	return r
 }
 
-func buildSetData(old setData, futures []Future) setData {
-	r := make(setData, len(old), len(old)+len(futures))
-	copy(r, old)
-	for _, f := range futures {
-		idx := indexSetData(r, f.Ref())
-		if idx < len(r) && futuresEqual(r[idx], f) {
+func buildSetData(old setData, values []Value) setData {
+	data := make(setData, len(old), len(old)+len(values))
+	copy(data, old)
+	for _, v := range values {
+		idx := indexSetData(data, v.Ref())
+		if idx < len(data) && data[idx].Equals(v) {
 			// We already have this fellow.
 			continue
 		}
 		// TODO: These repeated copies suck. We're not allocating more memory (because we made the slice with the correct capacity to begin with above - yay!), but still, this is more work than necessary. Perhaps we should use an actual BST for the in-memory state, rather than a flat list.
-		r = append(r, nil)
-		copy(r[idx+1:], r[idx:])
-		r[idx] = f
+		data = append(data, nil)
+		copy(data[idx+1:], data[idx:])
+		data[idx] = v
 	}
-	return r
+	return data
 }
 
 func indexSetData(m setData, r ref.Ref) int {

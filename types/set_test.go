@@ -131,9 +131,7 @@ func TestSetFutures(t *testing.T) {
 	cs := chunks.NewTestStore()
 	v := NewString("hello")
 	r := WriteValue(v, cs)
-	f := futureFromRef(r)
-
-	s := setFromFutures([]Future{f, futureFromValue(Int64(0xbeefcafe))}, cs)
+	s := NewSet(NewRef(r), Int64(0xbeefcafe))
 
 	assert.Len(s.Chunks(), 1)
 	assert.EqualValues(r, s.Chunks()[0].Ref())

@@ -48,7 +48,8 @@ func doTreeWalk2(f Future, cs chunks.ChunkSource, cb SomeCallback, skip bool) {
 			doTreeWalk(e.value, cs, cb)
 		}
 	case Set:
-		for _, f := range v.m {
+		for _, v := range v.data {
+			f := futureFromValue(v)
 			doTreeWalk(f, cs, cb)
 		}
 		// Note: no blob here because we're recursing the value tree, not the chunk tree. We treat each value as one thing, no matter how many chunks it is composed of.
