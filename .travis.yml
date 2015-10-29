@@ -1,6 +1,8 @@
 language: go
 go:
 - 1.5
+script:
+- go test ./...
 before_script:
 - pushd js2
 - npm version
