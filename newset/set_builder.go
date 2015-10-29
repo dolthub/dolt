@@ -1,87 +1,75 @@
 package newset
 
 import (
-	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
-// This file is a giant copy-paste, but the architecture of chunking will likely be written in terms of iteration, so deal with it then.
-type SetBuilder interface {
-	AddItem(r ref.Ref)
-	Build() Set
+// SetBuilder creates a chunked Set implementation. It builds up a sequence of node, chunking them if necessary in the process.
+type SetBuilder struct {
+	current    node
+	chunks     []node
+	chunker    Chunker
+	store      *nodeStore
+	newChunker chunkerFactory
+	newNode    nodeFactory
 }
 
-type leafSetBuilder struct {
-	current flatSet
-	chunks  []flatSet
-	chunker Chunker
-}
+type nodeFactory func(st *nodeStore) node
 
-func NewSetBuilder() SetBuilder {
-	return NewSetBuilderWithChunker(newBuzChunker())
-}
-
-func NewSetBuilderWithChunker(chunker Chunker) SetBuilder {
-	return &leafSetBuilder{chunker: chunker}
-}
-
-func (builder *leafSetBuilder) AddItem(r ref.Ref) {
-	builder.current.d = append(builder.current.d, r)
-	if builder.chunker.Add(r) {
-		builder.chunks = append(builder.chunks, builder.current)
-		builder.current = flatSet{}
+func NewSetBuilder(store *nodeStore, newChunker chunkerFactory) SetBuilder {
+	return SetBuilder{
+		store:      store,
+		chunker:    newChunker(),
+		newChunker: newChunker,
+		newNode:    func(st *nodeStore) node { return leaf{} },
 	}
 }
 
-func (builder *leafSetBuilder) Build() Set {
-	if builder.current.Len() > uint64(0) {
+// Adds the next item to the builder. Items must be added in sort order.
+func (builder *SetBuilder) AddItem(r ref.Ref) {
+	builder.addEntry(r, r)
+}
+
+func (builder *SetBuilder) addEntry(first, r ref.Ref) {
+	var newCurrent node
+	if builder.current == nil {
+		newCurrent = builder.newNode(builder.store).appendRef(first, r)
+	} else {
+		newCurrent = builder.current.appendRef(first, r)
+	}
+	builder.current = newCurrent
+	builder.store.d[builder.current.ref()] = builder.current
+	if builder.chunker.Add(r) {
 		builder.chunks = append(builder.chunks, builder.current)
+		builder.current = nil
+	}
+}
+
+// Build returns the a Set with the canonical set structure of the added items.
+func (builder *SetBuilder) Build() Set {
+	if builder.current != nil {
+		builder.chunks = append(builder.chunks, builder.current)
+	}
+
+	if len(builder.chunks) == 0 {
+		// Nothing was added, this is an empty set.
+		return Set{nil, builder.store, builder.newChunker}
 	}
 
 	if len(builder.chunks) == 1 {
-		d.Chk.NotEqual(0, builder.chunks[0].Len())
-		return builder.chunks[0]
+		// No chunks were created, we're done.
+		return Set{builder.chunks[0], builder.store, builder.newChunker}
 	}
 
-	mcb := newMetaChunkBuilder(builder.chunker.New())
+	// The set components chunked into multiple components. Now we chunk those.
+	internalBuilder := &SetBuilder{
+		store:      builder.store,
+		chunker:    builder.newChunker(),
+		newChunker: builder.newChunker,
+		newNode:    func(st *nodeStore) node { return internal{store: st} },
+	}
 	for _, c := range builder.chunks {
-		mcb.AddItem(c)
+		internalBuilder.addEntry(c.start(), c.ref())
 	}
-
-	return mcb.Build()
-}
-
-type chunkedSetBuilder struct {
-	current chunkedSet
-	sets    []chunkedSet
-	chunker Chunker
-}
-
-func newMetaChunkBuilder(chunker Chunker) chunkedSetBuilder {
-	return chunkedSetBuilder{chunker: chunker}
-}
-
-func (mcb *chunkedSetBuilder) AddItem(s Set) {
-	mcb.current.children = append(mcb.current.children, chunkedSetEntry{s.first(), s})
-	if mcb.chunker.Add(s.Ref()) {
-		mcb.sets = append(mcb.sets, mcb.current)
-		mcb.current = chunkedSet{}
-	}
-}
-
-func (mcb *chunkedSetBuilder) Build() chunkedSet {
-	if mcb.current.Len() > 0 {
-		mcb.sets = append(mcb.sets, mcb.current)
-	}
-
-	if len(mcb.sets) == 1 {
-		d.Chk.NotEqual(0, mcb.sets[0].Len())
-		return mcb.sets[0]
-	}
-
-	b := newMetaChunkBuilder(mcb.chunker.New())
-	for _, s := range mcb.sets {
-		b.AddItem(s)
-	}
-	return b.Build()
+	return internalBuilder.Build()
 }

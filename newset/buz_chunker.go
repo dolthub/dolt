@@ -9,11 +9,17 @@ const (
 	buzPattern = uint32(1<<6 - 1) // Average size of 64 elements
 )
 
+// buzChunker chunks refs using the buzhash algorithm:
+//
+// https://en.wikipedia.org/wiki/Rolling_hash#Cyclic_polynomial
+//
+// Chunk boundaries are triggered when the buzhash state ends with the binary pattern 11111, so the average chunk size will be 64 elements (there is a 1/64 chance of seeing 11111).
+// buzChunker resets the buzhash state on every chunk boundary.
 type buzChunker struct {
 	h *buzhash.BuzHash
 }
 
-func newBuzChunker() *buzChunker {
+func newBuzChunker() Chunker {
 	return &buzChunker{newBuzHash()}
 }
 
@@ -24,10 +30,6 @@ func (c *buzChunker) Add(r ref.Ref) bool {
 		c.h = newBuzHash()
 	}
 	return isBoundary
-}
-
-func (c *buzChunker) New() Chunker {
-	return newBuzChunker()
 }
 
 func newBuzHash() *buzhash.BuzHash {
