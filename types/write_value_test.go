@@ -31,11 +31,11 @@ func TestWriteValue(t *testing.T) {
 	assert.NoError(err)
 	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), b)
 
-	testEncode(fmt.Sprintf("t [%d,\"hi\"]\n", StringKind), NewString("hi"))
+	testEncode(fmt.Sprintf("t [%d,\"hi\"]", StringKind), NewString("hi"))
 
-	testEncode(fmt.Sprintf("t [%d,[],[]]\n", PackageKind), Package{types: []TypeRef{}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
-	ref1 := testEncode(fmt.Sprintf("t [%d,[%d],[]]\n", PackageKind, BoolKind), Package{types: []TypeRef{MakePrimitiveTypeRef(BoolKind)}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
-	testEncode(fmt.Sprintf("t [%d,[],[\"%s\"]]\n", PackageKind, ref1), Package{types: []TypeRef{}, dependencies: []ref.Ref{ref1}, ref: &ref.Ref{}})
+	testEncode(fmt.Sprintf("t [%d,[],[]]", PackageKind), Package{types: []TypeRef{}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
+	ref1 := testEncode(fmt.Sprintf("t [%d,[%d],[]]", PackageKind, BoolKind), Package{types: []TypeRef{MakePrimitiveTypeRef(BoolKind)}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
+	testEncode(fmt.Sprintf("t [%d,[],[\"%s\"]]", PackageKind, ref1), Package{types: []TypeRef{}, dependencies: []ref.Ref{ref1}, ref: &ref.Ref{}})
 }
 
 func TestWriteBlobLeaf(t *testing.T) {

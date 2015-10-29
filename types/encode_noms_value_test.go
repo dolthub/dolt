@@ -102,7 +102,7 @@ func TestWriteSet(t *testing.T) {
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(testSet{Set: v, t: tref})
 	// the order of the elements is based on the ref of the value.
-	assert.EqualValues([]interface{}{SetKind, UInt32Kind, []interface{}{uint32(3), uint32(1), uint32(2), uint32(0)}}, w.toArray())
+	assert.EqualValues([]interface{}{SetKind, UInt32Kind, []interface{}{uint32(1), uint32(3), uint32(0), uint32(2)}}, w.toArray())
 }
 
 func TestWriteSetOfSet(t *testing.T) {
@@ -116,7 +116,7 @@ func TestWriteSetOfSet(t *testing.T) {
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(testSet{Set: v, t: tref})
 	// the order of the elements is based on the ref of the value.
-	assert.EqualValues([]interface{}{SetKind, SetKind, Int32Kind, []interface{}{[]interface{}{int32(1), int32(2), int32(3)}, []interface{}{int32(0)}}}, w.toArray())
+	assert.EqualValues([]interface{}{SetKind, SetKind, Int32Kind, []interface{}{[]interface{}{int32(1), int32(3), int32(2)}, []interface{}{int32(0)}}}, w.toArray())
 }
 
 type testMap struct {

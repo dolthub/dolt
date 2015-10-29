@@ -17,13 +17,13 @@ func init() {
 		types.MakeEnumTypeRef("LocalE", "LocalE1", "Ignored"),
 		types.MakeStructTypeRef("ImportUser",
 			[]types.Field{
-				types.Field{"importedStruct", types.MakeTypeRef(ref.Parse("sha1-d31b592f480b7659b03b72a7d1271f31dde57b2d"), 0), false},
+				types.Field{"importedStruct", types.MakeTypeRef(ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"), 0), false},
 				types.Field{"enum", types.MakeTypeRef(ref.Ref{}, 0), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-d31b592f480b7659b03b72a7d1271f31dde57b2d"),
+		ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"),
 	})
 	__genPackageInFile_struct_with_imports_CachedRef = types.RegisterPackage(&p)
 }
@@ -233,7 +233,7 @@ func (m ListOfD) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForListOfD = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(ref.Parse("sha1-d31b592f480b7659b03b72a7d1271f31dde57b2d"), 0))
+	__typeRefForListOfD = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"), 0))
 	types.RegisterFromValFunction(__typeRefForListOfD, func(v types.Value) types.Value {
 		return ListOfDFromVal(v)
 	})

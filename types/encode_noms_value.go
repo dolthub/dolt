@@ -241,6 +241,7 @@ func (w *jsonArrayWriter) writeTypeRefKindValue(v Value, tr TypeRef, pkg *Packag
 
 // writeUnresolvedKindValue writes either a struct or an enum
 func (w *jsonArrayWriter) writeUnresolvedKindValue(v Value, tr TypeRef, pkg *Package) {
+	d.Chk.NotNil(pkg)
 	typeDef := pkg.types[tr.Ordinal()]
 	switch typeDef.Kind() {
 	default:
