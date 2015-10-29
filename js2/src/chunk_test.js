@@ -2,11 +2,10 @@
 
 'use strict';
 
-const {assert} = require('chai');
-const {suite, test} = require('mocha');
-
-const Chunk = require('./chunk.js');
-const Ref = require('./ref.js');
+import {suite, test} from 'mocha';
+import {assert} from 'chai';
+import Chunk from './chunk.js';
+import Ref from './ref.js';
 
 suite('Chunk', () => {
   test('construct', () => {

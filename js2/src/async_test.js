@@ -2,9 +2,9 @@
 
 'use strict';
 
-const {test: mtest} = require('mocha');
+import {test as mtest} from 'mocha';
 
-function test(n: string, f: () => ?Promise) {
+export default function test(n: string, f: () => ?Promise) {
   mtest(n, done => {
     try {
       const p = f();
@@ -18,5 +18,3 @@ function test(n: string, f: () => ?Promise) {
     }
   });
 }
-
-module.exports = test;

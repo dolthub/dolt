@@ -2,12 +2,11 @@
 
 'use strict';
 
+import {isPrimitiveKind, Kind} from './noms_kind.js';
+import {makeCompoundTypeRef, makePrimitiveTypeRef, makeTypeRef, TypeRef} from './type_ref.js';
+import Ref from './ref.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
-
-const {isPrimitiveKind, Kind} = require('./noms_kind.js');
-const Ref = require('./ref.js');
-const {makeCompoundTypeRef, makePrimitiveTypeRef, makeTypeRef, TypeRef} = require('./type_ref.js');
 
 class JsonArrayReader {
   _a: Array<any>;

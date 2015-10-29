@@ -2,9 +2,9 @@
 
 'use strict';
 
-const Ref = require('./ref.js');
+import Ref from './ref.js';
 
-class Chunk {
+export default class Chunk {
   ref: Ref;
   data: string;
 
@@ -21,5 +21,3 @@ class Chunk {
 }
 
 Chunk.emptyChunk = new Chunk();
-
-module.exports = Chunk;

@@ -2,8 +2,8 @@
 
 'use strict';
 
-const Chunk = require('./chunk.js');
-const Ref = require('./ref.js');
+import Chunk from './chunk.js';
+import Ref from './ref.js';
 
 class MemoryStore {
   _data: { [key: string]: Chunk };
