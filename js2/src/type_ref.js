@@ -71,6 +71,61 @@ class CompoundDesc {
   }
 }
 
+class StructDesc {
+  fields: Array<Field>;
+  union: Array<Field>;
+
+  constructor(fields: Array<Field>, union: Array<Field>) {
+    this.fields = fields;
+    this.union = union;
+  }
+
+  get kind(): NomsKind {
+    return Kind.Struct;
+  }
+
+  equals(other: TypeDesc): boolean {
+    if (other instanceof StructDesc) {
+      if (this.fields.length !== other.fields.length || this.union.length !== other.union.length) {
+        return false;
+      }
+
+      for (let i = 0; i < this.fields.length; i++) {
+        if (!this.fields[i].equals(other.fields[i])) {
+          return false;
+        }
+      }
+
+      for (let i = 0; i < this.union.length; i++) {
+        if (!this.union[i].equals(other.union[i])) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+}
+
+class Field {
+  name: string;
+  t: TypeRef;
+  optional: boolean;
+
+  constructor(name: string, t: TypeRef, optional: boolean) {
+    this.name = name;
+    this.t = t;
+    this.optional = optional;
+  }
+
+  equals(other: Field): boolean {
+    return this.name === other.name && this.t.equals(other.t) && this.optional === other.optional;
+  }
+}
+
+
 class TypeRef {
   _namespace: string;
   _name: string;
@@ -192,8 +247,12 @@ function makeCompoundTypeRef(k: NomsKind, ...elemTypes: Array<TypeRef>): TypeRef
   return buildType('', new CompoundDesc(k, elemTypes));
 }
 
+function makeStructTypeRef(name: string, fields: Array<Field>, choices: Array<Field>): TypeRef {
+  return buildType(name, new StructDesc(fields, choices));
+}
+
 function makeTypeRef(pkgRef: Ref, ordinal: number): TypeRef {
   return new TypeRef('', '', new UnresolvedDesc(pkgRef, ordinal));
 }
 
-export {CompoundDesc, makeCompoundTypeRef, makePrimitiveTypeRef, makeTypeRef, TypeRef};
+export {CompoundDesc, Field, makeCompoundTypeRef, makePrimitiveTypeRef, makeStructTypeRef, makeTypeRef, StructDesc, TypeRef};

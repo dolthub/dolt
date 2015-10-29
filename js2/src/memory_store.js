@@ -5,7 +5,7 @@
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 
-class MemoryStore {
+export default class MemoryStore {
   _data: { [key: string]: Chunk };
   _root: Ref;
 
@@ -50,5 +50,3 @@ class MemoryStore {
 
   close() {}
 }
-
-module.exports = MemoryStore;
