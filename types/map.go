@@ -3,38 +3,32 @@ package types
 import (
 	"sort"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
 type Map struct {
-	m   mapData // sorted by entry.key.Ref()
-	cs  chunks.ChunkSource
-	ref *ref.Ref
+	data mapData // sorted by entry.key.Ref()
+	ref  *ref.Ref
 }
 
 type mapData []mapEntry
 
 func NewMap(kv ...Value) Map {
-	return newMapFromData(buildMapData(mapData{}, valuesToFutures(kv)), nil)
-}
-
-func mapFromFutures(f []Future, cs chunks.ChunkSource) Map {
-	return newMapFromData(buildMapData(mapData{}, f), cs)
+	return newMapFromData(buildMapData(mapData{}, kv))
 }
 
 func (fm Map) First() (Value, Value) {
-	if len(fm.m) == 0 {
+	if len(fm.data) == 0 {
 		return nil, nil
 	} else {
-		entry := fm.m[0]
-		return entry.key.Deref(fm.cs), entry.value.Deref(fm.cs)
+		entry := fm.data[0]
+		return entry.key, entry.value
 	}
 }
 
 func (fm Map) Len() uint64 {
-	return uint64(len(fm.m))
+	return uint64(len(fm.data))
 }
 
 func (fm Map) Empty() bool {
@@ -42,8 +36,8 @@ func (fm Map) Empty() bool {
 }
 
 func (fm Map) Has(key Value) bool {
-	idx := indexMapData(fm.m, key.Ref())
-	return idx < len(fm.m) && futureEqualsValue(fm.m[idx].key, key)
+	idx := indexMapData(fm.data, key.Ref())
+	return idx < len(fm.data) && fm.data[idx].key.Equals(key)
 }
 
 func (fm Map) Get(key Value) Value {
@@ -54,45 +48,41 @@ func (fm Map) Get(key Value) Value {
 }
 
 func (fm Map) MaybeGet(key Value) (v Value, ok bool) {
-	idx := indexMapData(fm.m, key.Ref())
-	if idx < len(fm.m) {
-		entry := fm.m[idx]
-		if futureEqualsValue(entry.key, key) {
-			return entry.value.Deref(fm.cs), true
+	idx := indexMapData(fm.data, key.Ref())
+	if idx < len(fm.data) {
+		entry := fm.data[idx]
+		if entry.key.Equals(key) {
+			return entry.value, true
 		}
 	}
 	return
 }
 
 func (fm Map) Set(key Value, val Value) Map {
-	return newMapFromData(buildMapData(fm.m, valuesToFutures([]Value{key, val})), fm.cs)
+	return newMapFromData(buildMapData(fm.data, []Value{key, val}))
 }
 
 func (fm Map) SetM(kv ...Value) Map {
-	return newMapFromData(buildMapData(fm.m, valuesToFutures(kv)), fm.cs)
+	return newMapFromData(buildMapData(fm.data, kv))
 }
 
 func (fm Map) Remove(k Value) Map {
-	idx := indexMapData(fm.m, k.Ref())
-	if idx == len(fm.m) || !futureEqualsValue(fm.m[idx].key, k) {
+	idx := indexMapData(fm.data, k.Ref())
+	if idx == len(fm.data) || !fm.data[idx].key.Equals(k) {
 		return fm
 	}
 
-	m := make(mapData, len(fm.m)-1)
-	copy(m, fm.m[:idx])
-	copy(m[idx:], fm.m[idx+1:])
-	return newMapFromData(m, fm.cs)
+	m := make(mapData, len(fm.data)-1)
+	copy(m, fm.data[:idx])
+	copy(m[idx:], fm.data[idx+1:])
+	return newMapFromData(m)
 }
 
 type mapIterCallback func(key, value Value) (stop bool)
 
 func (fm Map) Iter(cb mapIterCallback) {
-	for _, entry := range fm.m {
-		k := entry.key.Deref(fm.cs)
-		v := entry.value.Deref(fm.cs)
-		entry.key.Release()
-		entry.value.Release()
-		if cb(k, v) {
+	for _, entry := range fm.data {
+		if cb(entry.key, entry.value) {
 			break
 		}
 	}
@@ -101,29 +91,22 @@ func (fm Map) Iter(cb mapIterCallback) {
 type mapIterAllCallback func(key, value Value)
 
 func (fm Map) IterAll(cb mapIterAllCallback) {
-	for _, entry := range fm.m {
-		k := entry.key.Deref(fm.cs)
-		v := entry.value.Deref(fm.cs)
-		cb(k, v)
-		entry.key.Release()
-		entry.value.Release()
+	for _, entry := range fm.data {
+		cb(entry.key, entry.value)
 	}
 }
 
 type mapFilterCallback func(key, value Value) (keep bool)
 
 func (fm Map) Filter(cb mapFilterCallback) Map {
-	nm := NewMap()
-	for _, entry := range fm.m {
-		k := entry.key.Deref(fm.cs)
-		v := entry.value.Deref(fm.cs)
-		if cb(k, v) {
-			nm = nm.Set(k, v)
+	data := mapData{}
+	for _, entry := range fm.data {
+		if cb(entry.key, entry.value) {
+			data = append(data, entry)
 		}
-		entry.key.Release()
-		entry.value.Release()
 	}
-	return nm
+	// Already sorted.
+	return newMapFromData(data)
 }
 
 func (fm Map) Ref() ref.Ref {
@@ -138,9 +121,9 @@ func (m Map) Equals(other Value) (res bool) {
 }
 
 func (fm Map) Chunks() (futures []Future) {
-	for _, entry := range fm.m {
-		futures = appendChunks(futures, entry.key)
-		futures = appendChunks(futures, entry.value)
+	for _, entry := range fm.data {
+		futures = appendValueToChunks(futures, entry.key)
+		futures = appendValueToChunks(futures, entry.value)
 	}
 	return
 }
@@ -158,37 +141,37 @@ func init() {
 }
 
 type mapEntry struct {
-	key   Future
-	value Future
+	key   Value
+	value Value
 }
 
-func newMapFromData(m mapData, cs chunks.ChunkSource) Map {
-	return Map{m, cs, &ref.Ref{}}
+func newMapFromData(data mapData) Map {
+	return Map{data, &ref.Ref{}}
 }
 
-func buildMapData(oldData mapData, futures []Future) mapData {
+func buildMapData(oldData mapData, values []Value) mapData {
 	// Sadly, d.Chk.Equals() costs too much. BUG #83
-	d.Chk.True(0 == len(futures)%2, "Must specify even number of key/value pairs")
+	d.Chk.True(0 == len(values)%2, "Must specify even number of key/value pairs")
 
-	m := make(mapData, len(oldData), len(oldData)+len(futures))
-	copy(m, oldData)
-	for i := 0; i < len(futures); i += 2 {
-		k := futures[i]
-		v := futures[i+1]
-		idx := indexMapData(m, k.Ref())
-		if idx < len(m) && futuresEqual(m[idx].key, k) {
-			if !futuresEqual(m[idx].value, v) {
-				m[idx] = mapEntry{k, v}
+	data := make(mapData, len(oldData), len(oldData)+len(values))
+	copy(data, oldData)
+	for i := 0; i < len(values); i += 2 {
+		k := values[i]
+		v := values[i+1]
+		idx := indexMapData(data, k.Ref())
+		if idx < len(data) && data[idx].key.Equals(k) {
+			if !data[idx].value.Equals(v) {
+				data[idx] = mapEntry{k, v}
 			}
 			continue
 		}
 
 		// TODO: These repeated copies suck. We're not allocating more memory (because we made the slice with the correct capacity to begin with above - yay!), but still, this is more work than necessary. Perhaps we should use an actual BST for the in-memory state, rather than a flat list.
-		m = append(m, mapEntry{})
-		copy(m[idx+1:], m[idx:])
-		m[idx] = mapEntry{k, v}
+		data = append(data, mapEntry{})
+		copy(data[idx+1:], data[idx:])
+		data[idx] = mapEntry{k, v}
 	}
-	return m
+	return data
 }
 
 func indexMapData(m mapData, r ref.Ref) int {
