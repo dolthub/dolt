@@ -25,7 +25,7 @@ function uint8ArrayToHex(a: Uint8Array): string {
 function hexToUint8(s: string): Uint8Array {
   let digest = new Uint8Array(sha1Size);
   for (let i = 0; i < sha1Size; i++) {
-    let ch = s.substring(i*2, i*2 + 2);
+    let ch = s.substring(i * 2, i * 2 + 2);
     digest[i] = parseInt(ch, 16);
   }
 
