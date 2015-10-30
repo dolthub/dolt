@@ -5,6 +5,8 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 import Ref from './ref.js';
+import {TextEncoder} from 'text-encoding';
+
 
 suite('Ref', () => {
   test('parse', () => {
@@ -49,7 +51,7 @@ suite('Ref', () => {
   });
 
   test('fromData', () => {
-    let r = Ref.fromData('abc');
+    let r = Ref.fromData(new TextEncoder().encode('abc'));
 
     assert.strictEqual('sha1-a9993e364706816aba3e25717850c26c9cd0d89d', r.toString());
   });

@@ -14,13 +14,13 @@ suite('MemoryStore', () => {
     assert.isTrue(await ms.has(ref));
     let chunk = await ms.get(ref);
     assert.isFalse(chunk.isEmpty());
-    assert.strictEqual(input, chunk.data);
+    assert.strictEqual(input, chunk.toString());
   }
 
   test('put', async () => {
     let ms = new MemoryStore();
     let input = 'abc';
-    let c = new Chunk(input);
+    let c = Chunk.fromString(input);
     ms.put(c);
 
     // See http://www.di-mgt.com.au/sha_testvectors.html
@@ -31,7 +31,7 @@ suite('MemoryStore', () => {
     await assertInputInStore(input, c.ref, ms);
 
     // Re-writing the same data should be idempotent and should not result in a second put
-    c = new Chunk(input);
+    c = Chunk.fromString(input);
     ms.put(c);
     await assertInputInStore(input, c.ref, ms);
   });

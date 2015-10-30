@@ -3,21 +3,42 @@
 'use strict';
 
 import Ref from './ref.js';
+import {TextEncoder, TextDecoder} from 'text-encoding';
+
+const decoder = new TextDecoder();
+const encoder = new TextEncoder();
 
 export default class Chunk {
-  ref: Ref;
-  data: string;
+  data: Uint8Array;
+  _ref: ?Ref;
 
-  constructor(data: string = '', ref: ?Ref) {
+  constructor(data: Uint8Array = new Uint8Array(0), ref: ?Ref) {
     this.data = data;
-    this.ref = ref ? ref : Ref.fromData(data);
+    this._ref = ref;
+  }
+
+  get ref(): Ref {
+    if (this._ref) {
+      return this._ref;
+    } else {
+      this._ref = Ref.fromData(this.data);
+      return this._ref;
+    }
   }
 
   isEmpty(): boolean {
     return this.data.length === 0;
   }
 
+  toString(): string {
+    return decoder.decode(this.data);
+  }
+
   static emptyChunk: Chunk;
+
+  static fromString(s: string, ref: ?Ref): Chunk {
+    return new Chunk(encoder.encode(s), ref);
+  }
 }
 
 Chunk.emptyChunk = new Chunk();

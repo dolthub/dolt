@@ -3,7 +3,8 @@
   "main": "dist/noms.js",
   "dependencies": {
     "rusha": "^0.8.3",
-    "flow-bin": "^0.18.1"
+    "flow-bin": "^0.18.1",
+    "text-encoding": "^0.5.2"
   },
   "devDependencies": {
     "babel": "^5.6.23",

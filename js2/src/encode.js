@@ -242,7 +242,7 @@ function encodeNomsValue(v: any, t: TypeRef): Chunk {
   let ms = new MemoryStore(); // TODO: This should be passed in.
   let w = new JsonArrayWriter(ms);
   w.writeTopLevel(t, v);
-  return new Chunk(typedTag + JSON.stringify(w.array));
+  return Chunk.fromString(typedTag + JSON.stringify(w.array));
 }
 
 export {encodeNomsValue, JsonArrayWriter};

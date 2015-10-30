@@ -84,7 +84,7 @@ export default class Ref {
     return new Ref(hexToUint8(m[1]));
   }
 
-  static fromData(data: string): Ref {
+  static fromData(data: Uint8Array): Ref {
     let digest = r.rawDigest(data);
     return new Ref(new Uint8Array(digest.buffer));
   }
