@@ -31,7 +31,7 @@ func (e {{.Name}}) InternalImplementation() uint32 {
 }
 
 func (e {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
-	return other != nil && __typeRefFor{{.Name}}.Equals(other.TypeRef()) && e.Ref() == other.Ref()
+	return e == other
 }
 
 func (e {{.Name}}) Ref() ref.Ref {

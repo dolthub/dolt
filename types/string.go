@@ -28,7 +28,10 @@ func (fs String) Ref() ref.Ref {
 }
 
 func (s String) Equals(other Value) bool {
-	return other != nil && s.Ref() == other.Ref()
+	if other, ok := other.(String); ok {
+		return s.s == other.s
+	}
+	return false
 }
 
 func (fs String) Chunks() []ref.Ref {

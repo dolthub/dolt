@@ -57,7 +57,7 @@ func (e Handedness) InternalImplementation() uint32 {
 }
 
 func (e Handedness) Equals(other types.Value) bool {
-	return other != nil && __typeRefForHandedness.Equals(other.TypeRef()) && e.Ref() == other.Ref()
+	return e == other
 }
 
 func (e Handedness) Ref() ref.Ref {

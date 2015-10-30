@@ -59,7 +59,7 @@ func (e LocalE) InternalImplementation() uint32 {
 }
 
 func (e LocalE) Equals(other types.Value) bool {
-	return other != nil && __typeRefForLocalE.Equals(other.TypeRef()) && e.Ref() == other.Ref()
+	return e == other
 }
 
 func (e LocalE) Ref() ref.Ref {

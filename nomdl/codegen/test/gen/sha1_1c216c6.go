@@ -147,7 +147,7 @@ func (e E) InternalImplementation() uint32 {
 }
 
 func (e E) Equals(other types.Value) bool {
-	return other != nil && __typeRefForE.Equals(other.TypeRef()) && e.Ref() == other.Ref()
+	return e == other
 }
 
 func (e E) Ref() ref.Ref {
