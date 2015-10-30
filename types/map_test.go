@@ -219,6 +219,24 @@ func TestMapTypeRef(t *testing.T) {
 	assert := assert.New(t)
 	m := NewMap()
 	assert.True(m.TypeRef().Equals(MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))))
+
+	tr := MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(Int64Kind))
+	m = newMapFromData(mapData{}, tr)
+	assert.Equal(tr, m.TypeRef())
+
+	m = m.Set(NewString("A"), UInt64(1))
+	assert.Equal(tr, m.TypeRef())
+
+	m = m.SetM(NewString("B"), UInt64(2), NewString("C"), UInt64(2))
+	assert.Equal(tr, m.TypeRef())
+
+	m = m.Remove(NewString("B"))
+	assert.Equal(tr, m.TypeRef())
+
+	m = m.Filter(func(k, v Value) bool {
+		return true
+	})
+	assert.Equal(tr, m.TypeRef())
 }
 
 func TestMapChunks(t *testing.T) {
