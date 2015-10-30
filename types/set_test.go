@@ -193,22 +193,30 @@ func TestSetTypeRef(t *testing.T) {
 	s = newSetFromData(setData{}, tr)
 	assert.Equal(tr, s.TypeRef())
 
-	s = s.Insert(UInt64(0), UInt64(1))
-	assert.Equal(tr, s.TypeRef())
+	s2 := s.Remove(UInt64(1))
+	assert.True(tr.Equals(s2.TypeRef()))
 
-	s = s.Remove(UInt64(1))
-	assert.Equal(tr, s.TypeRef())
+	s2 = s.Subtract(s)
+	assert.True(tr.Equals(s2.TypeRef()))
 
-	s = s.Union(s)
-	assert.Equal(tr, s.TypeRef())
-
-	s = s.Subtract(s)
-	assert.Equal(tr, s.TypeRef())
-
-	s = s.Filter(func(v Value) bool {
+	s2 = s.Filter(func(v Value) bool {
 		return true
 	})
-	assert.Equal(tr, s.TypeRef())
+	assert.True(tr.Equals(s2.TypeRef()))
+
+	s2 = s.Insert(UInt64(0), UInt64(1))
+	assert.True(tr.Equals(s2.TypeRef()))
+
+	s3 := NewSet(UInt64(2))
+	s3.t = s2.t
+	s2 = s.Union(s3)
+	assert.True(tr.Equals(s2.TypeRef()))
+
+	assert.Panics(func() { s.Insert(Bool(true)) })
+	assert.Panics(func() { s.Insert(UInt64(3), Bool(true)) })
+	assert.Panics(func() { s.Union(NewSet(UInt64(2))) })
+	assert.Panics(func() { s.Union(NewSet(Bool(true))) })
+	assert.Panics(func() { s.Union(s, NewSet(Bool(true))) })
 }
 
 func TestSetChunks(t *testing.T) {

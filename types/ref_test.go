@@ -51,4 +51,13 @@ func TestRefTypeRef(t *testing.T) {
 	m := NewMap()
 	r2 := r.SetTargetValue(m, cs)
 	assert.True(r2.TypeRef().Equals(tr))
+
+	b := Bool(true)
+	r2 = r.SetTargetValue(b, cs)
+	r2.t = MakeCompoundTypeRef(RefKind, b.TypeRef())
+
+	r3 := r2.SetTargetValue(Bool(false), cs)
+	assert.True(r2.TypeRef().Equals(r3.TypeRef()))
+
+	assert.Panics(func() { r2.SetTargetValue(Int16(1), cs) })
 }

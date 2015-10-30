@@ -341,19 +341,24 @@ func TestListTypeRef(t *testing.T) {
 	tr := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(UInt8Kind))
 	l2 := newListLeafNoCopy([]Value{UInt8(0), UInt8(1)}, tr)
 	assert.Equal(tr, l2.TypeRef())
-	l2 = l2.Slice(0, 1)
-	assert.Equal(tr, l2.TypeRef())
-	l2 = l2.Set(0, UInt8(11))
-	assert.Equal(tr, l2.TypeRef())
-	l2 = l2.Append(UInt8(2))
-	assert.Equal(tr, l2.TypeRef())
-	l2 = l2.Insert(0, UInt8(3))
-	assert.Equal(tr, l2.TypeRef())
-	l2 = l2.Remove(0, 1)
-	assert.Equal(tr, l2.TypeRef())
-	l2 = l2.RemoveAt(0)
-	assert.Equal(tr, l2.TypeRef())
 
+	l3 := l2.Slice(0, 1)
+	assert.True(tr.Equals(l3.TypeRef()))
+	l3 = l2.Remove(0, 1)
+	assert.True(tr.Equals(l3.TypeRef()))
+	l3 = l2.RemoveAt(0)
+	assert.True(tr.Equals(l3.TypeRef()))
+
+	l3 = l2.Set(0, UInt8(11))
+	assert.True(tr.Equals(l3.TypeRef()))
+	l3 = l2.Append(UInt8(2))
+	assert.True(tr.Equals(l3.TypeRef()))
+	l3 = l2.Insert(0, UInt8(3))
+	assert.True(tr.Equals(l3.TypeRef()))
+
+	assert.Panics(func() { l2.Set(0, NewString("")) })
+	assert.Panics(func() { l2.Append(NewString("")) })
+	assert.Panics(func() { l2.Insert(0, NewString("")) })
 }
 
 func TestListChunks(t *testing.T) {

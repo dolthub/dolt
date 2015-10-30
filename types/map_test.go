@@ -220,23 +220,28 @@ func TestMapTypeRef(t *testing.T) {
 	m := NewMap()
 	assert.True(m.TypeRef().Equals(MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))))
 
-	tr := MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(Int64Kind))
+	tr := MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(UInt64Kind))
 	m = newMapFromData(mapData{}, tr)
 	assert.Equal(tr, m.TypeRef())
 
-	m = m.Set(NewString("A"), UInt64(1))
-	assert.Equal(tr, m.TypeRef())
-
-	m = m.SetM(NewString("B"), UInt64(2), NewString("C"), UInt64(2))
-	assert.Equal(tr, m.TypeRef())
-
-	m = m.Remove(NewString("B"))
-	assert.Equal(tr, m.TypeRef())
+	m2 := m.Remove(NewString("B"))
+	assert.True(tr.Equals(m2.TypeRef()))
 
 	m = m.Filter(func(k, v Value) bool {
 		return true
 	})
-	assert.Equal(tr, m.TypeRef())
+	assert.True(tr.Equals(m2.TypeRef()))
+
+	m2 = m.Set(NewString("A"), UInt64(1))
+	assert.True(tr.Equals(m2.TypeRef()))
+
+	m2 = m.SetM(NewString("B"), UInt64(2), NewString("C"), UInt64(2))
+	assert.True(tr.Equals(m2.TypeRef()))
+
+	assert.Panics(func() { m.Set(NewString("A"), UInt8(1)) })
+	assert.Panics(func() { m.Set(Bool(true), UInt64(1)) })
+	assert.Panics(func() { m.SetM(NewString("B"), UInt64(2), NewString("A"), UInt8(1)) })
+	assert.Panics(func() { m.SetM(NewString("B"), UInt64(2), Bool(true), UInt64(1)) })
 }
 
 func TestMapChunks(t *testing.T) {
