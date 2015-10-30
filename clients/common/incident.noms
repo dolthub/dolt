@@ -1,4 +1,4 @@
-alias geo = import "../types/geo.noms"
+alias geo = import "geo.noms"
 
 struct Incident {
 	ID: Int64
@@ -14,4 +14,4 @@ struct Incident {
 	PdID: String
 }
 
-using List(Incident)
+using List(Ref(Incident))

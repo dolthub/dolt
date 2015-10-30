@@ -1,4 +1,4 @@
-alias Img = import "../types/photo.noms"
+alias Img = import "../common/photo.noms"
 
 struct User {
   Id: String

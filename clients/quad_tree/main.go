@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/attic-labs/noms/clients/common"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
@@ -43,13 +44,13 @@ func main() {
 		log.Fatalf("Invalid inputRef: %v", *inputRefStr)
 	}
 
-	gr := GeorectangleDef{
-		TopLeft:     GeopositionDef{Latitude: 37.83, Longitude: -122.52},
-		BottomRight: GeopositionDef{Latitude: 37.70, Longitude: -122.36},
+	gr := common.GeorectangleDef{
+		TopLeft:     common.GeopositionDef{Latitude: 37.83, Longitude: -122.52},
+		BottomRight: common.GeopositionDef{Latitude: 37.70, Longitude: -122.36},
 	}
-	qtRoot := QuadTreeDef{
-		Nodes:          ListOfNodeDef{},
-		Tiles:          MapOfStringToQuadTreeDef{},
+	qtRoot := common.QuadTreeDef{
+		Nodes:          common.ListOfNodeDef{},
+		Tiles:          common.MapOfStringToQuadTreeDef{},
 		Depth:          0,
 		NumDescendents: 0,
 		Path:           "",
@@ -59,22 +60,23 @@ func main() {
 		fmt.Printf("quadTreeRoot: %+v\n", qtRoot.Georectangle)
 	}
 
-	val := types.ReadValue(inputRef, dataset.Store())
-	list := ListOfNodeFromVal(val)
+	list := types.ReadValue(inputRef, dataset.Store()).(types.List)
 	if !*quietFlag {
-		fmt.Printf("Reading from nodeList: %d items, elapsed time: %.2f secs\n", list.Len(), secsSince(start))
+		fmt.Printf("Reading from nodeList: %d items, elapsed time: %.2f secs\n", list.Len(), SecsSince(start))
 	}
 
-	nChan := make(chan *NodeDef, 1024)
+	nChan := make(chan *common.NodeDef, 1024)
 	nodesConverted := uint32(0)
 	go func() {
-		list.l.IterAllP(64, func(v types.Value, i uint64) {
-			n := NodeFromVal(v)
-			nodeDef := &NodeDef{Geoposition: n.Geoposition().Def(), Reference: n.Ref()}
+		list.IterAllP(64, func(v types.Value, i uint64) {
+			// Need to replace incident with generic type
+			r := common.RefOfValueFromVal(v)
+			incident := r.TargetValue(datastore).(common.Incident)
+			nodeDef := &common.NodeDef{Geoposition: incident.Geoposition().Def(), Reference: r.TargetRef()}
 			nChan <- nodeDef
 			nConverted := atomic.AddUint32(&nodesConverted, 1)
 			if !*quietFlag && nConverted%1e5 == 0 {
-				fmt.Printf("Nodes Converted: %d, elapsed time: %.2f secs\n", nodesConverted, secsSince(start))
+				fmt.Printf("Nodes Converted: %d, elapsed time: %.2f secs\n", nodesConverted, SecsSince(start))
 			}
 		})
 		close(nChan)
@@ -85,25 +87,29 @@ func main() {
 		qtRoot.Append(nodeDef)
 		nodesAppended++
 		if !*quietFlag && nodesAppended%1e5 == 0 {
-			fmt.Printf("Nodes Appended: %d, elapsed time: %.2f secs\n", nodesAppended, secsSince(start))
+			fmt.Printf("Nodes Appended: %d, elapsed time: %.2f secs\n", nodesAppended, SecsSince(start))
 			qtRoot.Analyze()
 		}
 	}
 
 	if !*quietFlag {
-		fmt.Printf("Nodes Appended: %d, elapsed time: %.2f secs\n", nodesAppended, secsSince(start))
+		fmt.Printf("Nodes Appended: %d, elapsed time: %.2f secs\n", nodesAppended, SecsSince(start))
 		qtRoot.Analyze()
-		fmt.Printf("Calling SaveToNoms(), elapsed time: %.2f secs\n", secsSince(start))
+		fmt.Printf("Calling SaveToNoms(), elapsed time: %.2f secs\n", SecsSince(start))
 	}
 
-	nomsQtRoot := qtRoot.SaveToNoms(dataset.Store(), start)
+	nomsQtRoot := qtRoot.SaveToNoms(dataset.Store(), start, *quietFlag)
 	if !*quietFlag {
-		fmt.Printf("Calling Commit(), elapsed time: %.2f secs\n", secsSince(start))
+		fmt.Printf("Calling Commit(), elapsed time: %.2f secs\n", SecsSince(start))
 	}
-	_, ok = dataset.Commit(nomsQtRoot)
+	_, ok = dataset.Commit(types.NewRef(nomsQtRoot.Ref()))
 	d.Chk.True(ok, "Could not commit due to conflicting edit")
 	if !*quietFlag {
 		fmt.Printf("Commit completed, elapsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
 	}
 	fmt.Println("QuadTree ref:", nomsQtRoot.Ref())
+}
+
+func SecsSince(start time.Time) float64 {
+	return time.Now().Sub(start).Seconds()
 }

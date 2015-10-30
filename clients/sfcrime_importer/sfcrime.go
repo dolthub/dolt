@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/clients/common"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
@@ -33,7 +34,7 @@ var (
 const maxListSize = 1e5
 
 type incidentWithIndex struct {
-	incident *IncidentDef
+	incident *common.IncidentDef
 	index    int
 }
 
@@ -106,8 +107,8 @@ func main() {
 		id, _ := strconv.ParseInt(r[0], 10, 64)
 		lon64, _ := strconv.ParseFloat(r[9], 32)
 		lat64, _ := strconv.ParseFloat(r[10], 32)
-		geopos := GeopositionDef{Latitude: float32(lat64), Longitude: float32(lon64)}
-		incident := IncidentDef{
+		geopos := common.GeopositionDef{Latitude: float32(lat64), Longitude: float32(lon64)}
+		incident := common.IncidentDef{
 			ID:          id,
 			Category:    r[1],
 			Description: r[2],
@@ -146,7 +147,9 @@ func main() {
 	if !*quietFlag {
 		fmt.Printf("Converting refs list to noms list: %.2f secs\n", time.Now().Sub(start).Seconds())
 	}
-	_, ok := ds.Commit(incidentRefs)
+
+	ref := types.WriteValue(incidentRefs, ds.Store())
+	_, ok := ds.Commit(types.NewRef(ref))
 	d.Exp.True(ok, "Could not commit due to conflicting edit")
 
 	if !*quietFlag {

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attic-labs/noms/clients/common"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/ref"
@@ -23,7 +24,7 @@ var (
 	latFlag             = flag.Float64("lat", 0.0, "latitude of point to search for crime instances")
 	lonFlag             = flag.Float64("lon", 0.0, "longitude of point to search for crime instances")
 	distanceFlag        = flag.Float64("distance", 0.5, "distince in kilometers from point to search for crime instances")
-	sqtRoot             SQuadTree
+	sqtRoot             common.SQuadTree
 )
 
 const (
@@ -54,8 +55,8 @@ func main() {
 		return
 	}
 
-	gp := GeopositionDef{Latitude: float32(*latFlag), Longitude: float32(*lonFlag)}
-	var incidents []Incident
+	gp := common.GeopositionDef{Latitude: float32(*latFlag), Longitude: float32(*lonFlag)}
+	var incidents []common.Incident
 	if *quadTreeRefFlag != "" {
 		incidents = searchWithQuadTree(gp, datastore)
 	} else if *incidentListRefFlag != "" {
@@ -66,7 +67,7 @@ func main() {
 		return
 	}
 
-	var resDefs []IncidentDef
+	var resDefs []common.IncidentDef
 	for _, incident := range incidents {
 		resDefs = append(resDefs, incident.Def())
 	}
@@ -78,31 +79,22 @@ func main() {
 	fmt.Printf("Done, elapsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
 }
 
-func searchWithQuadTree(gp GeopositionDef, ds datas.DataStore) []Incident {
+func searchWithQuadTree(gp common.GeopositionDef, ds datas.DataStore) []common.Incident {
 	argName := "quadtree-ref"
-	expectedClass := "SQuadTree"
-	val := readRefValue(*quadTreeRefFlag, argName, ds)
-	m, ok := val.(types.Map)
-	if !ok {
-		log.Fatalf("Value for %s argument can not be converted to an object of type: %s\n", argName, expectedClass)
-	}
-	if !m.Get(types.NewString("$name")).Equals(types.NewString(expectedClass)) {
-		fmt.Println(m.Get(types.NewString("$name")), "!=", types.NewString(expectedClass))
-		log.Fatalf("Value found for quad-tree-ref argument has type: %+v", m.Get(types.NewString("$name")))
-	}
-	sqtRoot = SQuadTreeFromVal(val)
-	if !ContainsPoint(sqtRoot.Georectangle().Def(), gp) {
+	r := readRef(*quadTreeRefFlag, argName)
+	sqtRoot := types.ReadValue(r, ds).(common.SQuadTree)
+	if !common.ContainsPoint(sqtRoot.Georectangle().Def(), gp) {
 		log.Fatalf("lat/lon: %+v is not within sf area: %+v\n", gp, sqtRoot.Georectangle().Def())
 	}
-	gr, results := sqtRoot.Query(gp, *distanceFlag)
+	gr, results := sqtRoot.Query(gp, *distanceFlag, ds)
 	fmt.Printf("bounding Rectangle: %+v, numIncidents: %d\n", gr, len(results))
 	return results
 }
 
-func searchWithList(gp GeopositionDef, ds datas.DataStore) []Incident {
+func searchWithList(gp common.GeopositionDef, ds datas.DataStore) []common.Incident {
 	argName := "incident-list-ref"
-	expectedClass := "Incident"
-	val := readRefValue(*incidentListRefFlag, argName, ds)
+	r := readRef(*incidentListRefFlag, argName)
+	val := types.ReadValue(r, ds)
 	l, ok := val.(types.List)
 	if !ok {
 		log.Fatalf("Value for %s argument is not a list object\n", argName)
@@ -110,30 +102,22 @@ func searchWithList(gp GeopositionDef, ds datas.DataStore) []Incident {
 	if l.Len() == 0 {
 		log.Fatalf("Value for %s argument is an empty list\n", argName)
 	}
-	elem := l.Get(0)
-	m, ok := elem.(types.Map)
-	if !ok {
-		log.Fatalf("Value for %s argument is not an object of type: %s", argName, expectedClass)
-	}
-	if !m.Get(types.NewString("$name")).Equals(types.NewString(expectedClass)) {
-		log.Fatalf("Found object of type: %v in list supplied by %s argument", m.Get(types.NewString("$name")), argName)
-	}
-	results := []Incident{}
-	incidentList := ListOfIncidentFromVal(val)
+	results := []common.Incident{}
+	incidentList := common.ListOfRefOfValueFromVal(val)
 	t0 := time.Now()
 	for i := uint64(0); i < incidentList.Len(); i++ {
 		if i%uint64(10000) == 0 {
 			fmt.Printf("%.2f%%: %v\n", float64(i)/float64(incidentList.Len())*float64(100), time.Now().Sub(t0))
 		}
-		incident := incidentList.Get(i)
-		if DistanceTo(incident.Geoposition().Def(), gp) <= float32(*distanceFlag) {
+		incident := incidentList.Get(i).TargetValue(ds).(common.Incident)
+		if common.DistanceTo(incident.Geoposition().Def(), gp) <= float32(*distanceFlag) {
 			results = append(results, incident)
 		}
 	}
 	return results
 }
 
-func readRefValue(rs string, argName string, ds datas.DataStore) types.Value {
+func readRef(rs string, argName string) ref.Ref {
 	var r ref.Ref
 	err := d.Try(func() {
 		r = ref.Parse(rs)
@@ -141,14 +125,10 @@ func readRefValue(rs string, argName string, ds datas.DataStore) types.Value {
 	if err != nil {
 		log.Fatalf("Invalid ref for %s arg: %v", argName, *quadTreeRefFlag)
 	}
-	val := types.ReadValue(r, ds)
-	if val == nil {
-		log.Fatalf("Unable to read %s: %s from datastore\n", argName, rs)
-	}
-	return val
+	return r
 }
 
-type ByDate []IncidentDef
+type ByDate []common.IncidentDef
 
 func (s ByDate) Len() int {
 	return len(s)

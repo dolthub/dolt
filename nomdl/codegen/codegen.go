@@ -171,7 +171,7 @@ func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) ty
 }
 
 func getOutFileName(in string) string {
-	return in[:len(in)-len(ext)] + "_noms.go"
+	return in[:len(in)-len(ext)] + ".noms.go"
 }
 
 func getBareFileName(in string) string {
