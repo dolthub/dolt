@@ -21,7 +21,7 @@ func TestReadValueBlobLeafDecode(t *testing.T) {
 
 	blobLeafDecode := func(r io.Reader) Value {
 		i := decode(r)
-		b, err := NewBlob(i.(io.Reader))
+		b, err := NewMemoryBlob(i.(io.Reader))
 		assert.NoError(err)
 		return b
 	}

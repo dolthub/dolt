@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/base64"
+	"io/ioutil"
 	"strings"
 
 	"github.com/attic-labs/noms/chunks"
@@ -97,9 +98,9 @@ func (r *jsonArrayReader) readTypeRefAsTag() TypeRef {
 func (r *jsonArrayReader) readBlob(t TypeRef) Value {
 	s := r.readString()
 	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(s))
-	b, err := NewBlob(decoder)
+	b, err := ioutil.ReadAll(decoder)
 	d.Exp.NoError(err)
-	return b
+	return newBlobLeaf(b)
 }
 
 func (r *jsonArrayReader) readList(t TypeRef, pkg *Package) Value {

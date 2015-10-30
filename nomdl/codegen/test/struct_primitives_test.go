@@ -104,7 +104,7 @@ func TestAccessors(t *testing.T) {
 	assert.Equal("bye", st.String())
 
 	assert.True(st.Blob().Equals(types.NewEmptyBlob()))
-	b, err := types.NewBlob(strings.NewReader("hello"))
+	b, err := types.NewMemoryBlob(strings.NewReader("hello"))
 	assert.NoError(err)
 	st.SetBlob(b)
 	assert.True(st.Blob().Equals(types.NewEmptyBlob()))

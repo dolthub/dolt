@@ -83,7 +83,7 @@ func TestReadPrimitives(t *testing.T) {
 
 	test(NewString("hi"), `[%d, "hi"]`, StringKind)
 
-	blob, err := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
+	blob, err := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	assert.NoError(err)
 	test(blob, `[%d, "AAE="]`, BlobKind)
 }
@@ -528,7 +528,7 @@ func TestReadStructWithBlob(t *testing.T) {
 
 	v := r.readTopLevelValue().(Map)
 
-	blob, err := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
+	blob, err := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	assert.NoError(err)
 	assert.True(v.Get(NewString("b")).Equals(blob))
 }
