@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/attic-labs/buzhash"
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -31,7 +32,11 @@ func NewEmptyBlob() Blob {
 	return newBlobLeaf([]byte{})
 }
 
-func NewBlob(r io.Reader) (Blob, error) {
+func NewMemoryBlob(r io.Reader) (Blob, error) {
+	return NewBlob(r, chunks.NewMemoryStore())
+}
+
+func NewBlob(r io.Reader, cs chunks.ChunkStore) (Blob, error) {
 	length := uint64(0)
 	offsets := []uint64{}
 	blobs := []Future{}
@@ -51,7 +56,7 @@ func NewBlob(r io.Reader) (Blob, error) {
 		length += n
 		offsets = append(offsets, length)
 		blob = newBlobLeaf(buf.Bytes())
-		blobs = append(blobs, futureFromValue(blob))
+		blobs = append(blobs, futureFromRef(WriteValue(blob, cs)))
 
 		if err == io.EOF {
 			break
@@ -66,7 +71,7 @@ func NewBlob(r io.Reader) (Blob, error) {
 		return blob, nil
 	}
 
-	co := compoundObject{offsets, blobs, &ref.Ref{}, nil}
+	co := compoundObject{offsets, blobs, &ref.Ref{}, cs}
 	co = splitCompoundObject(co, compoundObjectToBlobFuture)
 	return compoundBlob{co}, nil
 }

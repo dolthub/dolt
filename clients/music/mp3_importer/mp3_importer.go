@@ -31,7 +31,7 @@ func addMp3(ds *dataset.Dataset, filename string) {
 	}
 	defer mp3_file.Close()
 
-	mp3_data, err := types.NewBlob(bufio.NewReader(mp3_file))
+	mp3_data, err := types.NewBlob(bufio.NewReader(mp3_file), ds.Store())
 	if err != nil {
 		log.Fatalf("Failed to read mp3 data from %s: %s\n", filename, err)
 	}

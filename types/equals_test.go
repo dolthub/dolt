@@ -44,20 +44,20 @@ func TestPrimitiveEquals(t *testing.T) {
 		func() Value { return NewString("hi") },
 		func() Value { return NewString("bye") },
 		func() Value {
-			v, _ := NewBlob(&bytes.Buffer{})
+			v, _ := NewMemoryBlob(&bytes.Buffer{})
 			return v
 		},
 		func() Value {
-			v, _ := NewBlob(bytes.NewBufferString("hi"))
+			v, _ := NewMemoryBlob(bytes.NewBufferString("hi"))
 			return v
 		},
 		func() Value {
-			v, _ := NewBlob(bytes.NewBufferString("bye"))
+			v, _ := NewMemoryBlob(bytes.NewBufferString("bye"))
 			return v
 		},
 		func() Value {
-			b1, _ := NewBlob(bytes.NewBufferString("hi"))
-			b2, _ := NewBlob(bytes.NewBufferString("bye"))
+			b1, _ := NewMemoryBlob(bytes.NewBufferString("hi"))
+			b2, _ := NewMemoryBlob(bytes.NewBufferString("bye"))
 			return newCompoundBlob([]uint64{2, 5}, []Future{futureFromValue(b1), futureFromValue(b2)}, nil)
 		},
 		func() Value { return NewList() },

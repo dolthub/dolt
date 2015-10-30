@@ -17,13 +17,14 @@ func getTestCompoundBlob(datas ...string) compoundBlob {
 	blobs := make([]Future, len(datas))
 	offsets := make([]uint64, len(datas))
 	length := uint64(0)
+	ms := chunks.NewMemoryStore()
 	for i, s := range datas {
-		b, _ := NewBlob(bytes.NewBufferString(s))
+		b, _ := NewBlob(bytes.NewBufferString(s), ms)
 		blobs[i] = futureFromValue(b)
 		length += uint64(len(s))
 		offsets[i] = length
 	}
-	return newCompoundBlob(offsets, blobs, nil)
+	return newCompoundBlob(offsets, blobs, ms)
 }
 
 type randReader struct {
@@ -53,7 +54,7 @@ func getRandomBlob(t *testing.T) compoundBlob {
 		t.Skip("Skipping test in short mode.")
 	}
 	r := getRandomReader()
-	b, err := NewBlob(r)
+	b, err := NewMemoryBlob(r)
 	assert.NoError(t, err)
 	return b.(compoundBlob)
 }
@@ -266,7 +267,7 @@ func TestCompoundBlobSameChunksWithPrefix(t *testing.T) {
 	buf := bytes.NewBufferString("prefix")
 	r := io.MultiReader(buf, rr)
 
-	b, err := NewBlob(r)
+	b, err := NewMemoryBlob(r)
 	assert.NoError(err)
 	cb2 := b.(compoundBlob)
 
@@ -299,7 +300,7 @@ func TestCompoundBlobSameChunksWithSuffix(t *testing.T) {
 	buf := bytes.NewBufferString("suffix")
 	r := io.MultiReader(rr, buf)
 
-	b, err := NewBlob(r)
+	b, err := NewMemoryBlob(r)
 	assert.NoError(err)
 	cb2 := b.(compoundBlob)
 

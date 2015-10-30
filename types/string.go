@@ -1,10 +1,6 @@
 package types
 
-import (
-	"bytes"
-
-	"github.com/attic-labs/noms/ref"
-)
+import "github.com/attic-labs/noms/ref"
 
 type String struct {
 	s   string
@@ -13,10 +9,6 @@ type String struct {
 
 func NewString(s string) String {
 	return String{s, &ref.Ref{}}
-}
-
-func (fs String) Blob() (Blob, error) {
-	return NewBlob(bytes.NewBufferString(fs.s))
 }
 
 func (fs String) String() string {
