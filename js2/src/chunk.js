@@ -21,8 +21,7 @@ export default class Chunk {
     if (this._ref) {
       return this._ref;
     } else {
-      this._ref = Ref.fromData(this.data);
-      return this._ref;
+      return this._ref = Ref.fromData(this.data);
     }
   }
 
