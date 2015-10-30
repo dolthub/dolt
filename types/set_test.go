@@ -187,6 +187,28 @@ func TestSetTypeRef(t *testing.T) {
 	assert := assert.New(t)
 	s := NewSet()
 	assert.True(s.TypeRef().Equals(MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))))
+
+	tr := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(UInt64Kind))
+
+	s = newSetFromData(setData{}, tr)
+	assert.Equal(tr, s.TypeRef())
+
+	s = s.Insert(UInt64(0), UInt64(1))
+	assert.Equal(tr, s.TypeRef())
+
+	s = s.Remove(UInt64(1))
+	assert.Equal(tr, s.TypeRef())
+
+	s = s.Union(s)
+	assert.Equal(tr, s.TypeRef())
+
+	s = s.Subtract(s)
+	assert.Equal(tr, s.TypeRef())
+
+	s = s.Filter(func(v Value) bool {
+		return true
+	})
+	assert.Equal(tr, s.TypeRef())
 }
 
 func TestSetChunks(t *testing.T) {

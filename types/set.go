@@ -10,45 +10,46 @@ type setData []Value
 
 type Set struct {
 	data setData // sorted by Ref()
+	t    TypeRef
 	ref  *ref.Ref
 }
 
 func NewSet(v ...Value) Set {
-	return newSetFromData(buildSetData(setData{}, v))
+	return newSetFromData(buildSetData(setData{}, v), setTypeRef)
 }
 
-func (fs Set) Empty() bool {
-	return fs.Len() == uint64(0)
+func (s Set) Empty() bool {
+	return s.Len() == uint64(0)
 }
 
-func (fs Set) Len() uint64 {
-	return uint64(len(fs.data))
+func (s Set) Len() uint64 {
+	return uint64(len(s.data))
 }
 
-func (fs Set) Has(v Value) bool {
-	idx := indexSetData(fs.data, v.Ref())
-	return idx < len(fs.data) && fs.data[idx].Equals(v)
+func (s Set) Has(v Value) bool {
+	idx := indexSetData(s.data, v.Ref())
+	return idx < len(s.data) && s.data[idx].Equals(v)
 }
 
-func (fs Set) Insert(values ...Value) Set {
-	return newSetFromData(buildSetData(fs.data, values))
+func (s Set) Insert(values ...Value) Set {
+	return newSetFromData(buildSetData(s.data, values), s.t)
 }
 
-func (fs Set) Remove(values ...Value) Set {
-	data := copySetData(fs.data)
+func (s Set) Remove(values ...Value) Set {
+	data := copySetData(s.data)
 	for _, v := range values {
 		if v != nil {
-			idx := indexSetData(fs.data, v.Ref())
-			if idx < len(fs.data) && fs.data[idx].Equals(v) {
+			idx := indexSetData(s.data, v.Ref())
+			if idx < len(s.data) && s.data[idx].Equals(v) {
 				data = append(data[:idx], data[idx+1:]...)
 			}
 		}
 	}
-	return newSetFromData(data)
+	return newSetFromData(data, s.t)
 }
 
-func (fs Set) Union(others ...Set) (result Set) {
-	result = fs
+func (s Set) Union(others ...Set) Set {
+	result := s
 	for _, other := range others {
 		other.Iter(func(v Value) (stop bool) {
 			result = result.Insert(v)
@@ -58,8 +59,8 @@ func (fs Set) Union(others ...Set) (result Set) {
 	return result
 }
 
-func (fs Set) Subtract(others ...Set) (result Set) {
-	result = fs
+func (s Set) Subtract(others ...Set) Set {
+	result := s
 	for _, other := range others {
 		other.Iter(func(v Value) (stop bool) {
 			result = result.Remove(v)
@@ -71,8 +72,8 @@ func (fs Set) Subtract(others ...Set) (result Set) {
 
 type setIterCallback func(v Value) bool
 
-func (fm Set) Iter(cb setIterCallback) {
-	for _, v := range fm.data {
+func (s Set) Iter(cb setIterCallback) {
+	for _, v := range s.data {
 		if cb(v) {
 			break
 		}
@@ -81,45 +82,45 @@ func (fm Set) Iter(cb setIterCallback) {
 
 type setIterAllCallback func(v Value)
 
-func (fm Set) IterAll(cb setIterAllCallback) {
-	for _, v := range fm.data {
+func (s Set) IterAll(cb setIterAllCallback) {
+	for _, v := range s.data {
 		cb(v)
 	}
 }
 
 type setFilterCallback func(v Value) (keep bool)
 
-func (fm Set) Filter(cb setFilterCallback) Set {
+func (s Set) Filter(cb setFilterCallback) Set {
 	data := setData{}
-	for _, v := range fm.data {
+	for _, v := range s.data {
 		if cb(v) {
 			data = append(data, v)
 		}
 	}
 	// Already sorted.
-	return newSetFromData(data)
+	return newSetFromData(data, s.t)
 }
 
-func (fm Set) Any() Value {
-	for _, v := range fm.data {
+func (s Set) Any() Value {
+	for _, v := range s.data {
 		return v
 	}
 	return nil
 }
 
-func (fs Set) Ref() ref.Ref {
-	return EnsureRef(fs.ref, fs)
+func (s Set) Ref() ref.Ref {
+	return EnsureRef(s.ref, s)
 }
 
-func (fs Set) Equals(other Value) bool {
+func (s Set) Equals(other Value) bool {
 	if other, ok := other.(Set); ok {
-		return fs.Ref() == other.Ref()
+		return s.Ref() == other.Ref()
 	}
 	return false
 }
 
-func (fs Set) Chunks() (futures []Future) {
-	for _, v := range fs.data {
+func (s Set) Chunks() (futures []Future) {
+	for _, v := range s.data {
 		futures = appendValueToChunks(futures, v)
 	}
 	return
@@ -127,8 +128,8 @@ func (fs Set) Chunks() (futures []Future) {
 
 var setTypeRef = MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))
 
-func (fs Set) TypeRef() TypeRef {
-	return setTypeRef
+func (s Set) TypeRef() TypeRef {
+	return s.t
 }
 
 func init() {
@@ -137,8 +138,8 @@ func init() {
 	})
 }
 
-func newSetFromData(m setData) Set {
-	return Set{m, &ref.Ref{}}
+func newSetFromData(m setData, t TypeRef) Set {
+	return Set{m, t, &ref.Ref{}}
 }
 
 func copySetData(m setData) setData {
