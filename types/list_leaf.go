@@ -4,11 +4,13 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
 type listLeaf struct {
 	values []Value
+	t      TypeRef
 	ref    *ref.Ref
 }
 
@@ -16,11 +18,12 @@ func newListLeaf(v ...Value) List {
 	// Copy because Noms values are supposed to be immutable and Go allows v to be reused (thus mutable).
 	values := make([]Value, len(v))
 	copy(values, v)
-	return newListLeafNoCopy(values)
+	return newListLeafNoCopy(values, listTypeRef)
 }
 
-func newListLeafNoCopy(values []Value) List {
-	return listLeaf{values, &ref.Ref{}}
+func newListLeafNoCopy(values []Value, t TypeRef) List {
+	d.Chk.Equal(ListKind, t.Kind())
+	return listLeaf{values, t, &ref.Ref{}}
 }
 
 func (l listLeaf) Len() uint64 {
@@ -118,19 +121,19 @@ func (l listLeaf) mapInternal(sem chan int, mf MapFunc, offset uint64) []interfa
 }
 
 func (l listLeaf) Slice(start uint64, end uint64) List {
-	return newListLeafNoCopy(l.values[start:end])
+	return newListLeafNoCopy(l.values[start:end], l.t)
 }
 
 func (l listLeaf) Set(idx uint64, v Value) List {
 	values := make([]Value, len(l.values))
 	copy(values, l.values)
 	values[idx] = v
-	return newListLeafNoCopy(values)
+	return newListLeafNoCopy(values, l.t)
 }
 
 func (l listLeaf) Append(v ...Value) List {
 	values := append(l.values, v...)
-	return newListLeafNoCopy(values)
+	return newListLeafNoCopy(values, l.t)
 }
 
 func (l listLeaf) Insert(idx uint64, v ...Value) List {
@@ -138,14 +141,14 @@ func (l listLeaf) Insert(idx uint64, v ...Value) List {
 	copy(values, l.values[:idx])
 	copy(values[idx:], v)
 	copy(values[idx+uint64(len(v)):], l.values[idx:])
-	return newListLeafNoCopy(values)
+	return newListLeafNoCopy(values, l.t)
 }
 
 func (l listLeaf) Remove(start uint64, end uint64) List {
 	values := make([]Value, uint64(len(l.values))-(end-start))
 	copy(values, l.values[:start])
 	copy(values[start:], l.values[end:])
-	return newListLeafNoCopy(values)
+	return newListLeafNoCopy(values, l.t)
 }
 
 func (l listLeaf) RemoveAt(idx uint64) List {
@@ -175,6 +178,6 @@ func (l listLeaf) Chunks() (futures []Future) {
 	return
 }
 
-func (cl listLeaf) TypeRef() TypeRef {
-	return listTypeRef
+func (l listLeaf) TypeRef() TypeRef {
+	return l.t
 }
