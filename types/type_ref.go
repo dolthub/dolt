@@ -93,10 +93,7 @@ func (t TypeRef) Ref() ref.Ref {
 }
 
 func (t TypeRef) Equals(other Value) (res bool) {
-	if other, ok := other.(TypeRef); ok {
-		return t.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && t.Ref() == other.Ref()
 }
 
 func (t TypeRef) Chunks() (chunks []ref.Ref) {

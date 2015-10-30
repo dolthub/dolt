@@ -7,8 +7,11 @@ import (
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 )
 
-func TestPrimitiveEquals(t *testing.T) {
+func TestValueEquals(t *testing.T) {
 	assert := assert.New(t)
+
+	r1 := UInt16(1).Ref()
+	r2 := UInt16(2).Ref()
 
 	values := []func() Value{
 		func() Value { return nil },
@@ -67,6 +70,31 @@ func TestPrimitiveEquals(t *testing.T) {
 		func() Value { return NewMap(NewString("a"), NewString("a")) },
 		func() Value { return NewSet() },
 		func() Value { return NewSet(NewString("hi")) },
+
+		func() Value { return MakePrimitiveTypeRef(BoolKind) },
+		func() Value { return MakePrimitiveTypeRef(StringKind) },
+		func() Value { return MakeStructTypeRef("a", []Field{}, Choices{}) },
+		func() Value { return MakeStructTypeRef("b", []Field{}, Choices{}) },
+		func() Value { return MakeEnumTypeRef("E", "a", "b") },
+		func() Value { return MakeEnumTypeRef("E", "a", "b", "c") },
+		func() Value { return MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(UInt64Kind)) },
+		func() Value { return MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(Int64Kind)) },
+		func() Value { return MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(UInt32Kind)) },
+		func() Value { return MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(Int32Kind)) },
+		func() Value { return MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(UInt16Kind)) },
+		func() Value { return MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(Int16Kind)) },
+		func() Value {
+			return MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(UInt8Kind), MakePrimitiveTypeRef(ValueKind))
+		},
+		func() Value {
+			return MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(Int8Kind), MakePrimitiveTypeRef(ValueKind))
+		},
+		func() Value { return MakeTypeRef(r1, 0) },
+		func() Value { return MakeTypeRef(r1, 1) },
+		func() Value { return MakeTypeRef(r2, 0) },
+		func() Value { return MakeUnresolvedTypeRef("ns", "a") },
+		func() Value { return MakeUnresolvedTypeRef("ns", "b") },
+		func() Value { return MakeUnresolvedTypeRef("ns2", "a") },
 	}
 
 	for i, f1 := range values {

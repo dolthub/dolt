@@ -51,10 +51,7 @@ func (m MapOfBoolToString) InternalImplementation() types.Map {
 }
 
 func (m MapOfBoolToString) Equals(other types.Value) bool {
-	if other, ok := other.(MapOfBoolToString); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForMapOfBoolToString.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfBoolToString) Ref() ref.Ref {
@@ -187,10 +184,7 @@ func (m MapOfStringToValue) InternalImplementation() types.Map {
 }
 
 func (m MapOfStringToValue) Equals(other types.Value) bool {
-	if other, ok := other.(MapOfStringToValue); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForMapOfStringToValue.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToValue) Ref() ref.Ref {

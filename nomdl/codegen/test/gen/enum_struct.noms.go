@@ -57,10 +57,7 @@ func (e Handedness) InternalImplementation() uint32 {
 }
 
 func (e Handedness) Equals(other types.Value) bool {
-	if other, ok := other.(Handedness); ok {
-		return e == other
-	}
-	return false
+	return e == other
 }
 
 func (e Handedness) Ref() ref.Ref {
@@ -128,10 +125,7 @@ func (s EnumStruct) InternalImplementation() types.Map {
 }
 
 func (s EnumStruct) Equals(other types.Value) bool {
-	if other, ok := other.(EnumStruct); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForEnumStruct.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s EnumStruct) Ref() ref.Ref {

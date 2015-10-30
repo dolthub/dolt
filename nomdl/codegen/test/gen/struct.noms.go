@@ -85,10 +85,7 @@ func (s Struct) InternalImplementation() types.Map {
 }
 
 func (s Struct) Equals(other types.Value) bool {
-	if other, ok := other.(Struct); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForStruct.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s Struct) Ref() ref.Ref {
@@ -160,10 +157,7 @@ func (l ListOfStruct) InternalImplementation() types.List {
 }
 
 func (l ListOfStruct) Equals(other types.Value) bool {
-	if other, ok := other.(ListOfStruct); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfStruct.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfStruct) Ref() ref.Ref {

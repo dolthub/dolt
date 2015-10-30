@@ -81,10 +81,7 @@ func (s StructWithRef) InternalImplementation() types.Map {
 }
 
 func (s StructWithRef) Equals(other types.Value) bool {
-	if other, ok := other.(StructWithRef); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForStructWithRef.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s StructWithRef) Ref() ref.Ref {
@@ -125,10 +122,7 @@ func (r RefOfListOfString) Ref() ref.Ref {
 }
 
 func (r RefOfListOfString) Equals(other types.Value) bool {
-	if other, ok := other.(RefOfListOfString); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfListOfString.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfListOfString) Chunks() []ref.Ref {
@@ -208,10 +202,7 @@ func (l ListOfRefOfFloat32) InternalImplementation() types.List {
 }
 
 func (l ListOfRefOfFloat32) Equals(other types.Value) bool {
-	if other, ok := other.(ListOfRefOfFloat32); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfRefOfFloat32.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfFloat32) Ref() ref.Ref {
@@ -330,10 +321,7 @@ func (r RefOfSetOfFloat32) Ref() ref.Ref {
 }
 
 func (r RefOfSetOfFloat32) Equals(other types.Value) bool {
-	if other, ok := other.(RefOfSetOfFloat32); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfSetOfFloat32.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfSetOfFloat32) Chunks() []ref.Ref {
@@ -413,10 +401,7 @@ func (l ListOfString) InternalImplementation() types.List {
 }
 
 func (l ListOfString) Equals(other types.Value) bool {
-	if other, ok := other.(ListOfString); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfString.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfString) Ref() ref.Ref {
@@ -535,10 +520,7 @@ func (r RefOfFloat32) Ref() ref.Ref {
 }
 
 func (r RefOfFloat32) Equals(other types.Value) bool {
-	if other, ok := other.(RefOfFloat32); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfFloat32.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfFloat32) Chunks() []ref.Ref {
@@ -620,10 +602,7 @@ func (s SetOfFloat32) InternalImplementation() types.Set {
 }
 
 func (s SetOfFloat32) Equals(other types.Value) bool {
-	if other, ok := other.(SetOfFloat32); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForSetOfFloat32.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfFloat32) Ref() ref.Ref {

@@ -13,10 +13,7 @@ func NewPackage(types []TypeRef, deps []ref.Ref) Package {
 }
 
 func (p Package) Equals(other Value) bool {
-	if other, ok := other.(Package); ok {
-		return p.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && typeRefForPackage.Equals(other.TypeRef()) && p.Ref() == other.Ref()
 }
 
 func (p Package) Ref() ref.Ref {

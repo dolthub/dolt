@@ -20,10 +20,7 @@ func (r {{.Name}}) Ref() ref.Ref {
 }
 
 func (r {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
-	if other, ok := other.({{.Name}}); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefFor{{.Name}}.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
 func (r {{.Name}}) Chunks() []ref.Ref {

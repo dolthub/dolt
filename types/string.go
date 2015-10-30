@@ -21,7 +21,7 @@ func (fs String) Ref() ref.Ref {
 
 func (s String) Equals(other Value) bool {
 	if other, ok := other.(String); ok {
-		return s.Ref() == other.Ref()
+		return s.s == other.s
 	}
 	return false
 }

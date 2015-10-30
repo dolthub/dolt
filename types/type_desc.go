@@ -179,11 +179,16 @@ func (e EnumDesc) Equals(other TypeDesc) bool {
 	if e.Kind() != other.Kind() {
 		return false
 	}
-	out := true
-	for i, id := range other.(EnumDesc).IDs {
-		out = out && id == e.IDs[i]
+	e2 := other.(EnumDesc)
+	if len(e.IDs) != len(e2.IDs) {
+		return false
 	}
-	return out
+	for i, id := range e2.IDs {
+		if id != e.IDs[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (e EnumDesc) ToValue() Value {

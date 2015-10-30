@@ -52,10 +52,7 @@ func (m MapOfStringToSetOfRefOfRemotePhoto) InternalImplementation() types.Map {
 }
 
 func (m MapOfStringToSetOfRefOfRemotePhoto) Equals(other types.Value) bool {
-	if other, ok := other.(MapOfStringToSetOfRefOfRemotePhoto); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForMapOfStringToSetOfRefOfRemotePhoto.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToSetOfRefOfRemotePhoto) Ref() ref.Ref {
@@ -189,10 +186,7 @@ func (s SetOfRefOfRemotePhoto) InternalImplementation() types.Set {
 }
 
 func (s SetOfRefOfRemotePhoto) Equals(other types.Value) bool {
-	if other, ok := other.(SetOfRefOfRemotePhoto); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForSetOfRefOfRemotePhoto.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfRefOfRemotePhoto) Ref() ref.Ref {
@@ -315,10 +309,7 @@ func (r RefOfRemotePhoto) Ref() ref.Ref {
 }
 
 func (r RefOfRemotePhoto) Equals(other types.Value) bool {
-	if other, ok := other.(RefOfRemotePhoto); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfRemotePhoto.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfRemotePhoto) Chunks() []ref.Ref {

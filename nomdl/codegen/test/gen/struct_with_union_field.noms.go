@@ -126,10 +126,7 @@ func (s StructWithUnionField) InternalImplementation() types.Map {
 }
 
 func (s StructWithUnionField) Equals(other types.Value) bool {
-	if other, ok := other.(StructWithUnionField); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForStructWithUnionField.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s StructWithUnionField) Ref() ref.Ref {
@@ -315,10 +312,7 @@ func (s SetOfUInt8) InternalImplementation() types.Set {
 }
 
 func (s SetOfUInt8) Equals(other types.Value) bool {
-	if other, ok := other.(SetOfUInt8); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForSetOfUInt8.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfUInt8) Ref() ref.Ref {

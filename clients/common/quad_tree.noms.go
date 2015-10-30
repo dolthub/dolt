@@ -110,10 +110,7 @@ func (s Node) InternalImplementation() types.Map {
 }
 
 func (s Node) Equals(other types.Value) bool {
-	if other, ok := other.(Node); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForNode.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s Node) Ref() ref.Ref {
@@ -218,10 +215,7 @@ func (s QuadTree) InternalImplementation() types.Map {
 }
 
 func (s QuadTree) Equals(other types.Value) bool {
-	if other, ok := other.(QuadTree); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForQuadTree.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s QuadTree) Ref() ref.Ref {
@@ -358,10 +352,7 @@ func (s SQuadTree) InternalImplementation() types.Map {
 }
 
 func (s SQuadTree) Equals(other types.Value) bool {
-	if other, ok := other.(SQuadTree); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForSQuadTree.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s SQuadTree) Ref() ref.Ref {
@@ -442,10 +433,7 @@ func (r RefOfValue) Ref() ref.Ref {
 }
 
 func (r RefOfValue) Equals(other types.Value) bool {
-	if other, ok := other.(RefOfValue); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfValue.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfValue) Chunks() []ref.Ref {
@@ -525,10 +513,7 @@ func (l ListOfNode) InternalImplementation() types.List {
 }
 
 func (l ListOfNode) Equals(other types.Value) bool {
-	if other, ok := other.(ListOfNode); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfNode.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfNode) Ref() ref.Ref {
@@ -671,10 +656,7 @@ func (m MapOfStringToQuadTree) InternalImplementation() types.Map {
 }
 
 func (m MapOfStringToQuadTree) Equals(other types.Value) bool {
-	if other, ok := other.(MapOfStringToQuadTree); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForMapOfStringToQuadTree.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToQuadTree) Ref() ref.Ref {
@@ -806,10 +788,7 @@ func (l ListOfRefOfValue) InternalImplementation() types.List {
 }
 
 func (l ListOfRefOfValue) Equals(other types.Value) bool {
-	if other, ok := other.(ListOfRefOfValue); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfRefOfValue.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfValue) Ref() ref.Ref {
@@ -952,10 +931,7 @@ func (m MapOfStringToRefOfSQuadTree) InternalImplementation() types.Map {
 }
 
 func (m MapOfStringToRefOfSQuadTree) Equals(other types.Value) bool {
-	if other, ok := other.(MapOfStringToRefOfSQuadTree); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForMapOfStringToRefOfSQuadTree.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToRefOfSQuadTree) Ref() ref.Ref {
@@ -1064,10 +1040,7 @@ func (r RefOfSQuadTree) Ref() ref.Ref {
 }
 
 func (r RefOfSQuadTree) Equals(other types.Value) bool {
-	if other, ok := other.(RefOfSQuadTree); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfSQuadTree.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfSQuadTree) Chunks() []ref.Ref {

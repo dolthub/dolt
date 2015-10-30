@@ -145,10 +145,7 @@ func (s StructPrimitives) InternalImplementation() types.Map {
 }
 
 func (s StructPrimitives) Equals(other types.Value) bool {
-	if other, ok := other.(StructPrimitives); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForStructPrimitives.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s StructPrimitives) Ref() ref.Ref {

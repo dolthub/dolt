@@ -20,10 +20,7 @@ func newRef(target ref.Ref, t TypeRef) Ref {
 }
 
 func (r Ref) Equals(other Value) bool {
-	if other, ok := other.(Ref); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && r.t.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
 func (r Ref) Ref() ref.Ref {

@@ -10,10 +10,7 @@ import (
 type Bool bool
 
 func (p Bool) Equals(other Value) bool {
-	if other, ok := other.(Bool); ok {
-		return p == other
-	}
-	return false
+	return p == other
 }
 
 func (v Bool) Ref() ref.Ref {
@@ -41,10 +38,7 @@ func (v Bool) TypeRef() TypeRef {
 type Int8 int8
 
 func (p Int8) Equals(other Value) bool {
-	if other, ok := other.(Int8); ok {
-		return p == other
-	}
-	return false
+	return p == other
 }
 
 func (v Int8) Ref() ref.Ref {
@@ -72,10 +66,7 @@ func (v Int8) TypeRef() TypeRef {
 type Int16 int16
 
 func (p Int16) Equals(other Value) bool {
-	if other, ok := other.(Int16); ok {
-		return p == other
-	}
-	return false
+	return p == other
 }
 
 func (v Int16) Ref() ref.Ref {
@@ -103,10 +94,7 @@ func (v Int16) TypeRef() TypeRef {
 type Int32 int32
 
 func (p Int32) Equals(other Value) bool {
-	if other, ok := other.(Int32); ok {
-		return p == other
-	}
-	return false
+	return p == other
 }
 
 func (v Int32) Ref() ref.Ref {
@@ -134,10 +122,7 @@ func (v Int32) TypeRef() TypeRef {
 type Int64 int64
 
 func (p Int64) Equals(other Value) bool {
-	if other, ok := other.(Int64); ok {
-		return p == other
-	}
-	return false
+	return p == other
 }
 
 func (v Int64) Ref() ref.Ref {
@@ -165,10 +150,7 @@ func (v Int64) TypeRef() TypeRef {
 type UInt8 uint8
 
 func (p UInt8) Equals(other Value) bool {
-	if other, ok := other.(UInt8); ok {
-		return p == other
-	}
-	return false
+	return p == other
 }
 
 func (v UInt8) Ref() ref.Ref {
@@ -196,10 +178,7 @@ func (v UInt8) TypeRef() TypeRef {
 type UInt16 uint16
 
 func (p UInt16) Equals(other Value) bool {
-	if other, ok := other.(UInt16); ok {
-		return p == other
-	}
-	return false
+	return p == other
 }
 
 func (v UInt16) Ref() ref.Ref {
@@ -227,10 +206,7 @@ func (v UInt16) TypeRef() TypeRef {
 type UInt32 uint32
 
 func (p UInt32) Equals(other Value) bool {
-	if other, ok := other.(UInt32); ok {
-		return p == other
-	}
-	return false
+	return p == other
 }
 
 func (v UInt32) Ref() ref.Ref {
@@ -258,10 +234,7 @@ func (v UInt32) TypeRef() TypeRef {
 type UInt64 uint64
 
 func (p UInt64) Equals(other Value) bool {
-	if other, ok := other.(UInt64); ok {
-		return p == other
-	}
-	return false
+	return p == other
 }
 
 func (v UInt64) Ref() ref.Ref {
@@ -289,10 +262,7 @@ func (v UInt64) TypeRef() TypeRef {
 type Float32 float32
 
 func (p Float32) Equals(other Value) bool {
-	if other, ok := other.(Float32); ok {
-		return p == other
-	}
-	return false
+	return p == other
 }
 
 func (v Float32) Ref() ref.Ref {
@@ -320,10 +290,7 @@ func (v Float32) TypeRef() TypeRef {
 type Float64 float64
 
 func (p Float64) Equals(other Value) bool {
-	if other, ok := other.(Float64); ok {
-		return p == other
-	}
-	return false
+	return p == other
 }
 
 func (v Float64) Ref() ref.Ref {
@@ -347,3 +314,4 @@ var typeRefForFloat64 = MakePrimitiveTypeRef(Float64Kind)
 func (v Float64) TypeRef() TypeRef {
 	return typeRefForFloat64
 }
+

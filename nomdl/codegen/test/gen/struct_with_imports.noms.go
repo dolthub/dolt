@@ -59,10 +59,7 @@ func (e LocalE) InternalImplementation() uint32 {
 }
 
 func (e LocalE) Equals(other types.Value) bool {
-	if other, ok := other.(LocalE); ok {
-		return e == other
-	}
-	return false
+	return e == other
 }
 
 func (e LocalE) Ref() ref.Ref {
@@ -134,10 +131,7 @@ func (s ImportUser) InternalImplementation() types.Map {
 }
 
 func (s ImportUser) Equals(other types.Value) bool {
-	if other, ok := other.(ImportUser); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForImportUser.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s ImportUser) Ref() ref.Ref {
@@ -209,10 +203,7 @@ func (l ListOfD) InternalImplementation() types.List {
 }
 
 func (l ListOfD) Equals(other types.Value) bool {
-	if other, ok := other.(ListOfD); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfD.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfD) Ref() ref.Ref {

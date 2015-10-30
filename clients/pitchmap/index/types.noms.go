@@ -85,10 +85,7 @@ func (s Pitch) InternalImplementation() types.Map {
 }
 
 func (s Pitch) Equals(other types.Value) bool {
-	if other, ok := other.(Pitch); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForPitch.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s Pitch) Ref() ref.Ref {
@@ -160,10 +157,7 @@ func (l ListOfMapOfStringToValue) InternalImplementation() types.List {
 }
 
 func (l ListOfMapOfStringToValue) Equals(other types.Value) bool {
-	if other, ok := other.(ListOfMapOfStringToValue); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfMapOfStringToValue.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfMapOfStringToValue) Ref() ref.Ref {
@@ -306,10 +300,7 @@ func (m MapOfStringToListOfPitch) InternalImplementation() types.Map {
 }
 
 func (m MapOfStringToListOfPitch) Equals(other types.Value) bool {
-	if other, ok := other.(MapOfStringToListOfPitch); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForMapOfStringToListOfPitch.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToListOfPitch) Ref() ref.Ref {
@@ -442,10 +433,7 @@ func (m MapOfStringToString) InternalImplementation() types.Map {
 }
 
 func (m MapOfStringToString) Equals(other types.Value) bool {
-	if other, ok := other.(MapOfStringToString); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForMapOfStringToString.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToString) Ref() ref.Ref {
@@ -578,10 +566,7 @@ func (m MapOfStringToValue) InternalImplementation() types.Map {
 }
 
 func (m MapOfStringToValue) Equals(other types.Value) bool {
-	if other, ok := other.(MapOfStringToValue); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForMapOfStringToValue.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToValue) Ref() ref.Ref {
@@ -713,10 +698,7 @@ func (l ListOfPitch) InternalImplementation() types.List {
 }
 
 func (l ListOfPitch) Equals(other types.Value) bool {
-	if other, ok := other.(ListOfPitch); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfPitch.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfPitch) Ref() ref.Ref {
