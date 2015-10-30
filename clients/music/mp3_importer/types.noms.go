@@ -100,10 +100,7 @@ func (s Song) InternalImplementation() types.Map {
 }
 
 func (s Song) Equals(other types.Value) bool {
-	if other, ok := other.(Song); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForSong.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s Song) Ref() ref.Ref {
@@ -199,10 +196,7 @@ func (l ListOfSong) InternalImplementation() types.List {
 }
 
 func (l ListOfSong) Equals(other types.Value) bool {
-	if other, ok := other.(ListOfSong); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfSong.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfSong) Ref() ref.Ref {

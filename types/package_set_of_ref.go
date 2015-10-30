@@ -53,10 +53,7 @@ func (s SetOfRefOfPackage) InternalImplementation() Set {
 }
 
 func (s SetOfRefOfPackage) Equals(other Value) bool {
-	if other, ok := other.(SetOfRefOfPackage); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForSetOfRefOfPackage.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfRefOfPackage) Ref() ref.Ref {
@@ -179,10 +176,7 @@ func (r RefOfPackage) Ref() ref.Ref {
 }
 
 func (r RefOfPackage) Equals(other Value) bool {
-	if other, ok := other.(RefOfPackage); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfPackage.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfPackage) Chunks() []ref.Ref {

@@ -133,10 +133,7 @@ func (s Incident) InternalImplementation() types.Map {
 }
 
 func (s Incident) Equals(other types.Value) bool {
-	if other, ok := other.(Incident); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForIncident.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s Incident) Ref() ref.Ref {
@@ -280,10 +277,7 @@ func (l ListOfRefOfIncident) InternalImplementation() types.List {
 }
 
 func (l ListOfRefOfIncident) Equals(other types.Value) bool {
-	if other, ok := other.(ListOfRefOfIncident); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfRefOfIncident.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfIncident) Ref() ref.Ref {
@@ -402,10 +396,7 @@ func (r RefOfIncident) Ref() ref.Ref {
 }
 
 func (r RefOfIncident) Equals(other types.Value) bool {
-	if other, ok := other.(RefOfIncident); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfIncident.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfIncident) Chunks() []ref.Ref {

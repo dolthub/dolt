@@ -86,10 +86,7 @@ func (s Commit) InternalImplementation() types.Map {
 }
 
 func (s Commit) Equals(other types.Value) bool {
-	if other, ok := other.(Commit); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForCommit.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s Commit) Ref() ref.Ref {
@@ -162,10 +159,7 @@ func (m MapOfStringToRefOfCommit) InternalImplementation() types.Map {
 }
 
 func (m MapOfStringToRefOfCommit) Equals(other types.Value) bool {
-	if other, ok := other.(MapOfStringToRefOfCommit); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForMapOfStringToRefOfCommit.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToRefOfCommit) Ref() ref.Ref {
@@ -299,10 +293,7 @@ func (s SetOfRefOfCommit) InternalImplementation() types.Set {
 }
 
 func (s SetOfRefOfCommit) Equals(other types.Value) bool {
-	if other, ok := other.(SetOfRefOfCommit); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForSetOfRefOfCommit.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfRefOfCommit) Ref() ref.Ref {
@@ -425,10 +416,7 @@ func (r RefOfCommit) Ref() ref.Ref {
 }
 
 func (r RefOfCommit) Equals(other types.Value) bool {
-	if other, ok := other.(RefOfCommit); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfCommit.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfCommit) Chunks() []ref.Ref {

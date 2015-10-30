@@ -85,10 +85,7 @@ func (s compoundBlobStruct) InternalImplementation() Map {
 }
 
 func (s compoundBlobStruct) Equals(other Value) bool {
-	if other, ok := other.(compoundBlobStruct); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForcompoundBlobStruct.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s compoundBlobStruct) Ref() ref.Ref {
@@ -160,10 +157,7 @@ func (l ListOfUInt64) InternalImplementation() List {
 }
 
 func (l ListOfUInt64) Equals(other Value) bool {
-	if other, ok := other.(ListOfUInt64); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfUInt64.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfUInt64) Ref() ref.Ref {
@@ -305,10 +299,7 @@ func (l ListOfRefOfBlob) InternalImplementation() List {
 }
 
 func (l ListOfRefOfBlob) Equals(other Value) bool {
-	if other, ok := other.(ListOfRefOfBlob); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfRefOfBlob.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfBlob) Ref() ref.Ref {
@@ -427,10 +418,7 @@ func (r RefOfBlob) Ref() ref.Ref {
 }
 
 func (r RefOfBlob) Equals(other Value) bool {
-	if other, ok := other.(RefOfBlob); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfBlob.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfBlob) Chunks() []ref.Ref {

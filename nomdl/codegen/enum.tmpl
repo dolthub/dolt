@@ -31,10 +31,7 @@ func (e {{.Name}}) InternalImplementation() uint32 {
 }
 
 func (e {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
-	if other, ok := other.({{.Name}}); ok {
-		return e == other
-	}
-	return false
+	return other != nil && __typeRefFor{{.Name}}.Equals(other.TypeRef()) && e.Ref() == other.Ref()
 }
 
 func (e {{.Name}}) Ref() ref.Ref {
@@ -45,4 +42,3 @@ func (e {{.Name}}) Ref() ref.Ref {
 func (e {{.Name}}) Chunks() []ref.Ref {
 	return nil
 }
-

@@ -114,10 +114,7 @@ func (s RemotePhoto) InternalImplementation() types.Map {
 }
 
 func (s RemotePhoto) Equals(other types.Value) bool {
-	if other, ok := other.(RemotePhoto); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRemotePhoto.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s RemotePhoto) Ref() ref.Ref {
@@ -238,10 +235,7 @@ func (s Size) InternalImplementation() types.Map {
 }
 
 func (s Size) Equals(other types.Value) bool {
-	if other, ok := other.(Size); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForSize.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s Size) Ref() ref.Ref {
@@ -314,10 +308,7 @@ func (m MapOfSizeToString) InternalImplementation() types.Map {
 }
 
 func (m MapOfSizeToString) Equals(other types.Value) bool {
-	if other, ok := other.(MapOfSizeToString); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForMapOfSizeToString.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfSizeToString) Ref() ref.Ref {
@@ -451,10 +442,7 @@ func (s SetOfString) InternalImplementation() types.Set {
 }
 
 func (s SetOfString) Equals(other types.Value) bool {
-	if other, ok := other.(SetOfString); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForSetOfString.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfString) Ref() ref.Ref {

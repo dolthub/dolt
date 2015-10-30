@@ -52,10 +52,7 @@ func (s SetOfBool) InternalImplementation() types.Set {
 }
 
 func (s SetOfBool) Equals(other types.Value) bool {
-	if other, ok := other.(SetOfBool); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForSetOfBool.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfBool) Ref() ref.Ref {

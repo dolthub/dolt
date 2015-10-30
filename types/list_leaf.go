@@ -165,10 +165,7 @@ func (l listLeaf) Release() {
 }
 
 func (l listLeaf) Equals(other Value) bool {
-	if other, ok := other.(listLeaf); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && l.t.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l listLeaf) Chunks() (chunks []ref.Ref) {

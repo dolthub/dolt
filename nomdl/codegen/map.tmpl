@@ -46,10 +46,7 @@ func (m {{.Name}}) InternalImplementation() {{$typesPackage}}Map {
 }
 
 func (m {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
-	if other, ok := other.({{.Name}}); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefFor{{.Name}}.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m {{.Name}}) Ref() ref.Ref {

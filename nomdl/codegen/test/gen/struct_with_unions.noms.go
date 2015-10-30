@@ -99,10 +99,7 @@ func (s StructWithUnions) InternalImplementation() types.Map {
 }
 
 func (s StructWithUnions) Equals(other types.Value) bool {
-	if other, ok := other.(StructWithUnions); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForStructWithUnions.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s StructWithUnions) Ref() ref.Ref {
@@ -211,10 +208,7 @@ func (s __unionOfBOfFloat64AndCOfString) InternalImplementation() types.Map {
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Equals(other types.Value) bool {
-	if other, ok := other.(__unionOfBOfFloat64AndCOfString); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefFor__unionOfBOfFloat64AndCOfString.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Ref() ref.Ref {
@@ -355,10 +349,7 @@ func (s __unionOfEOfFloat64AndFOfString) InternalImplementation() types.Map {
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Equals(other types.Value) bool {
-	if other, ok := other.(__unionOfEOfFloat64AndFOfString); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefFor__unionOfEOfFloat64AndFOfString.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Ref() ref.Ref {

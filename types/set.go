@@ -113,10 +113,7 @@ func (s Set) Ref() ref.Ref {
 }
 
 func (s Set) Equals(other Value) bool {
-	if other, ok := other.(Set); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && s.t.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s Set) Chunks() (chunks []ref.Ref) {

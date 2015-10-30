@@ -93,10 +93,7 @@ func (s D) InternalImplementation() types.Map {
 }
 
 func (s D) Equals(other types.Value) bool {
-	if other, ok := other.(D); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForD.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s D) Ref() ref.Ref {
@@ -181,10 +178,7 @@ func (s DUser) InternalImplementation() types.Map {
 }
 
 func (s DUser) Equals(other types.Value) bool {
-	if other, ok := other.(DUser); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForDUser.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s DUser) Ref() ref.Ref {

@@ -86,10 +86,7 @@ func (s OptionalStruct) InternalImplementation() types.Map {
 }
 
 func (s OptionalStruct) Equals(other types.Value) bool {
-	if other, ok := other.(OptionalStruct); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForOptionalStruct.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s OptionalStruct) Ref() ref.Ref {

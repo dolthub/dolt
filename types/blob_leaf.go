@@ -41,8 +41,5 @@ func (bl blobLeaf) TypeRef() TypeRef {
 }
 
 func (bl blobLeaf) Equals(other Value) bool {
-	if other, ok := other.(blobLeaf); ok {
-		return bl.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && typeRefForBlob.Equals(other.TypeRef()) && bl.Ref() == other.Ref()
 }

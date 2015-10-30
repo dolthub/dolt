@@ -80,10 +80,7 @@ func (s StructWithDupList) InternalImplementation() types.Map {
 }
 
 func (s StructWithDupList) Equals(other types.Value) bool {
-	if other, ok := other.(StructWithDupList); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForStructWithDupList.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s StructWithDupList) Ref() ref.Ref {
@@ -147,10 +144,7 @@ func (l ListOfUInt8) InternalImplementation() types.List {
 }
 
 func (l ListOfUInt8) Equals(other types.Value) bool {
-	if other, ok := other.(ListOfUInt8); ok {
-		return l.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForListOfUInt8.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfUInt8) Ref() ref.Ref {

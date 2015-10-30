@@ -86,10 +86,7 @@ func (s S) InternalImplementation() types.Map {
 }
 
 func (s S) Equals(other types.Value) bool {
-	if other, ok := other.(S); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForS.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s S) Ref() ref.Ref {
@@ -150,10 +147,7 @@ func (e E) InternalImplementation() uint32 {
 }
 
 func (e E) Equals(other types.Value) bool {
-	if other, ok := other.(E); ok {
-		return e == other
-	}
-	return false
+	return other != nil && __typeRefForE.Equals(other.TypeRef()) && e.Ref() == other.Ref()
 }
 
 func (e E) Ref() ref.Ref {

@@ -114,11 +114,8 @@ func (m Map) Ref() ref.Ref {
 	return EnsureRef(m.ref, m)
 }
 
-func (m Map) Equals(other Value) (res bool) {
-	if other, ok := other.(Map); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+func (m Map) Equals(other Value) bool {
+	return other != nil && m.t.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m Map) Chunks() (chunks []ref.Ref) {
