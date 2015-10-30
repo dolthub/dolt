@@ -2,15 +2,16 @@
 
 'use strict';
 
+import Chunk from './chunk.js';
 import MemoryStore from './memory_store.js';
 import Ref from './ref.js';
 import test from './async_test.js';
 import {assert} from 'chai';
-import {JsonArrayReader} from './decode.js';
+import {decodeNomsValue, JsonArrayReader} from './decode.js';
+import {Field, makeCompoundTypeRef, makePrimitiveTypeRef, makeStructTypeRef, makeTypeRef, TypeRef} from './type_ref.js';
 import {Kind} from './noms_kind.js';
 import {registerPackage, Package} from './package.js';
 import {suite} from 'mocha';
-import {Field, makeCompoundTypeRef, makePrimitiveTypeRef, makeStructTypeRef, makeTypeRef, TypeRef} from './type_ref.js';
 
 suite('Decode', () => {
   test('read', async () => {
@@ -160,12 +161,7 @@ suite('Decode', () => {
     let r = new JsonArrayReader(a, ms);
     let v = r.readTopLevelValue();
 
-    let s = new Set();
-    s.add(0);
-    s.add(1);
-    s.add(2);
-    s.add(3);
-
+    let s = new Set([0, 1, 2, 3]);
     assertSetsEqual(s, v);
   });
 
@@ -184,5 +180,12 @@ suite('Decode', () => {
     let r = new JsonArrayReader(a, ms);
     let v = r.readTopLevelValue();
     assert.deepEqual({x: 42, s: 'hi', b: true}, v);
+  });
+
+  test('decodeNomsValue', async () => {
+    let chunk = Chunk.fromString(`t [${Kind.Value}, ${Kind.Set}, ${Kind.UInt16}, [0, 1, 2, 3]]`);
+    let v = decodeNomsValue(chunk);
+    let s = new Set([0, 1, 2, 3]);
+    assertSetsEqual(s, v);
   });
 });

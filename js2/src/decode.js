@@ -2,13 +2,16 @@
 
 'use strict';
 
+import Chunk from './chunk.js';
+import MemoryStore from './memory_store.js';
 import Ref from './ref.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
-import {makeCompoundTypeRef, makePrimitiveTypeRef, makeTypeRef, StructDesc, TypeRef} from './type_ref.js';
 import {lookupPackage, Package} from './package.js';
+import {makeCompoundTypeRef, makePrimitiveTypeRef, makeTypeRef, StructDesc, TypeRef} from './type_ref.js';
 
+const typedTag = 't ';
 
 class JsonArrayReader {
   _a: Array<any>;
@@ -260,4 +263,19 @@ class JsonArrayReader {
   }
 }
 
-export {JsonArrayReader};
+function decodeNomsValue(chunk: Chunk): any {
+  let tag = new Chunk(new Uint8Array(chunk.data.buffer, 0, 2)).toString();
+
+  switch (tag) {
+    case typedTag: {
+      let ms = new MemoryStore(); // This needs to be handed in.
+      let payload = JSON.parse(new Chunk(new Uint8Array(chunk.data.buffer, 2)).toString());
+      let reader = new JsonArrayReader(payload, ms);
+      return reader.readTopLevelValue();
+    }
+    default:
+      throw new Error('Not implemented');
+  }
+}
+
+export {decodeNomsValue, JsonArrayReader};

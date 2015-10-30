@@ -1,5 +1,5 @@
 {
-  "name": "newjs",
+  "name": "noms",
   "main": "dist/noms.js",
   "dependencies": {
     "rusha": "^0.8.3",
