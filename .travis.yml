@@ -1,8 +1,6 @@
 language: go
 go:
 - 1.5
-script:
-- go test ./...
 before_script:
 - pushd js2
 - npm version
@@ -13,6 +11,9 @@ before_script:
 - npm build
 - npm test
 - popd
+script:
+- export GODEBUG=invalidptr=0
+- go test ./...
 notifications:
   email:
     recipients:
