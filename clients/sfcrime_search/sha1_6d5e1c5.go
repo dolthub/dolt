@@ -102,9 +102,9 @@ func (s Geoposition) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Geoposition) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
+func (s Geoposition) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.m.Chunks()...)
 	return
 }
 
@@ -194,9 +194,9 @@ func (s Georectangle) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Georectangle) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
+func (s Georectangle) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.m.Chunks()...)
 	return
 }
 

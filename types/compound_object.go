@@ -25,9 +25,9 @@ func (co compoundObject) Len() uint64 {
 	return co.offsets[len(co.offsets)-1]
 }
 
-func (co compoundObject) Chunks() (futures []Future) {
+func (co compoundObject) Chunks() (chunks []ref.Ref) {
 	for _, f := range co.futures {
-		futures = appendChunks(futures, f)
+		chunks = appendChunks(chunks, f)
 	}
 	return
 }

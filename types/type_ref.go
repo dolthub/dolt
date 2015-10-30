@@ -99,10 +99,10 @@ func (t TypeRef) Equals(other Value) (res bool) {
 	return false
 }
 
-func (t TypeRef) Chunks() (out []Future) {
+func (t TypeRef) Chunks() (chunks []ref.Ref) {
 	v := t.Desc.ToValue()
 	if v != nil {
-		out = append(out, v.Chunks()...)
+		chunks = append(chunks, v.Chunks()...)
 	}
 	return
 }

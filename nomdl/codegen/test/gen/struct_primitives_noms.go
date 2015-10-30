@@ -155,9 +155,9 @@ func (s StructPrimitives) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s StructPrimitives) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
+func (s StructPrimitives) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.m.Chunks()...)
 	return
 }
 

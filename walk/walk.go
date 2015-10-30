@@ -56,9 +56,9 @@ func doTreeWalkP(r ref.Ref, cs chunks.ChunkSource, cb SomeCallback, concurrency 
 			return
 		}
 
-		for _, cf := range v.Chunks() {
+		for _, c := range v.Chunks() {
 			wg.Add(1)
-			rq.tail() <- cf.Ref()
+			rq.tail() <- c
 		}
 	}
 

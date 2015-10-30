@@ -61,9 +61,9 @@ func (m MapOfBoolToString) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfBoolToString) Chunks() (futures []types.Future) {
-	futures = append(futures, m.TypeRef().Chunks()...)
-	futures = append(futures, m.m.Chunks()...)
+func (m MapOfBoolToString) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
 
@@ -197,9 +197,9 @@ func (m MapOfStringToValue) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToValue) Chunks() (futures []types.Future) {
-	futures = append(futures, m.TypeRef().Chunks()...)
-	futures = append(futures, m.m.Chunks()...)
+func (m MapOfStringToValue) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
 

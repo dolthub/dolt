@@ -212,7 +212,7 @@ func TestMapFutures(t *testing.T) {
 	m := NewMap(NewRef(kRef), Int64(0xbeefcafe))
 
 	assert.Len(m.Chunks(), 1)
-	assert.EqualValues(kRef, m.Chunks()[0].Ref())
+	assert.EqualValues(kRef, m.Chunks()[0])
 }
 
 func TestMapTypeRef(t *testing.T) {

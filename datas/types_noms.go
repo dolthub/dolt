@@ -96,9 +96,9 @@ func (s Commit) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Commit) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
+func (s Commit) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.m.Chunks()...)
 	return
 }
 
@@ -172,9 +172,9 @@ func (m MapOfStringToRefOfCommit) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToRefOfCommit) Chunks() (futures []types.Future) {
-	futures = append(futures, m.TypeRef().Chunks()...)
-	futures = append(futures, m.m.Chunks()...)
+func (m MapOfStringToRefOfCommit) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
 
@@ -309,9 +309,9 @@ func (s SetOfRefOfCommit) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfRefOfCommit) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.s.Chunks()...)
+func (s SetOfRefOfCommit) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
 
@@ -431,7 +431,7 @@ func (r RefOfCommit) Equals(other types.Value) bool {
 	return false
 }
 
-func (r RefOfCommit) Chunks() []types.Future {
+func (r RefOfCommit) Chunks() []ref.Ref {
 	return r.TypeRef().Chunks()
 }
 

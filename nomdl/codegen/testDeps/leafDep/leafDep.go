@@ -96,9 +96,9 @@ func (s S) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s S) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
+func (s S) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.m.Chunks()...)
 	return
 }
 
@@ -161,6 +161,6 @@ func (e E) Ref() ref.Ref {
 	return types.EnsureRef(&throwaway, e)
 }
 
-func (e E) Chunks() []types.Future {
+func (e E) Chunks() []ref.Ref {
 	return nil
 }

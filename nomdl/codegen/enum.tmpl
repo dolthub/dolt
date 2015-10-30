@@ -42,7 +42,7 @@ func (e {{.Name}}) Ref() ref.Ref {
 	return {{$typesPackage}}EnsureRef(&throwaway, e)
 }
 
-func (e {{.Name}}) Chunks() []{{$typesPackage}}Future {
+func (e {{.Name}}) Chunks() []ref.Ref {
 	return nil
 }
 

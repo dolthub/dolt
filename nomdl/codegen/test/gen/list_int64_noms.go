@@ -60,9 +60,9 @@ func (l ListOfInt64) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfInt64) Chunks() (futures []types.Future) {
-	futures = append(futures, l.TypeRef().Chunks()...)
-	futures = append(futures, l.l.Chunks()...)
+func (l ListOfInt64) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
 

@@ -171,9 +171,9 @@ func (l listLeaf) Equals(other Value) bool {
 	return false
 }
 
-func (l listLeaf) Chunks() (futures []Future) {
+func (l listLeaf) Chunks() (chunks []ref.Ref) {
 	for _, v := range l.values {
-		futures = appendValueToChunks(futures, v)
+		chunks = appendValueToChunks(chunks, v)
 	}
 	return
 }

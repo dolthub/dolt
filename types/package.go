@@ -23,12 +23,12 @@ func (p Package) Ref() ref.Ref {
 	return EnsureRef(p.ref, p)
 }
 
-func (p Package) Chunks() (futures []Future) {
+func (p Package) Chunks() (chunks []ref.Ref) {
 	for _, t := range p.types {
-		futures = append(futures, t.Chunks()...)
+		chunks = append(chunks, t.Chunks()...)
 	}
 	for _, d := range p.dependencies {
-		futures = append(futures, futureFromRef(d))
+		chunks = append(chunks, d)
 	}
 	return
 }

@@ -47,14 +47,14 @@ type targetRef interface {
 	TargetRef() ref.Ref
 }
 
-func appendChunks(chunks []Future, f Future) []Future {
+func appendChunks(chunks []ref.Ref, f Future) []ref.Ref {
 	if uf, ok := f.(*unresolvedFuture); ok {
-		chunks = append(chunks, uf)
+		chunks = append(chunks, uf.Ref())
 	} else if f != nil {
 		v := f.Val()
 		if v != nil {
 			if v.TypeRef().Kind() == RefKind {
-				chunks = append(chunks, futureFromRef(v.(targetRef).TargetRef()))
+				chunks = append(chunks, v.(targetRef).TargetRef())
 			}
 		}
 	}
@@ -62,9 +62,9 @@ func appendChunks(chunks []Future, f Future) []Future {
 	return chunks
 }
 
-func appendValueToChunks(chunks []Future, v Value) []Future {
+func appendValueToChunks(chunks []ref.Ref, v Value) []ref.Ref {
 	if v.TypeRef().Kind() == RefKind {
-		chunks = append(chunks, futureFromRef(v.(targetRef).TargetRef()))
+		chunks = append(chunks, v.(targetRef).TargetRef())
 	}
 	return chunks
 }

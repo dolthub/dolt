@@ -34,7 +34,7 @@ func (s String) Equals(other Value) bool {
 	return false
 }
 
-func (fs String) Chunks() []Future {
+func (fs String) Chunks() []ref.Ref {
 	return nil
 }
 

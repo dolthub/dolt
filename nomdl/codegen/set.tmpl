@@ -57,9 +57,9 @@ func (s {{.Name}}) Ref() ref.Ref {
 	return {{$typesPackage}}EnsureRef(s.ref, s)
 }
 
-func (s {{.Name}}) Chunks() (futures []{{$typesPackage}}Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.s.Chunks()...)
+func (s {{.Name}}) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
 

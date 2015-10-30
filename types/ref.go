@@ -30,7 +30,7 @@ func (r Ref) Ref() ref.Ref {
 	return EnsureRef(r.ref, r)
 }
 
-func (r Ref) Chunks() []Future {
+func (r Ref) Chunks() []ref.Ref {
 	return nil
 }
 

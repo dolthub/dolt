@@ -136,9 +136,9 @@ func (s StructWithUnionField) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s StructWithUnionField) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
+func (s StructWithUnionField) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.m.Chunks()...)
 	return
 }
 
@@ -325,9 +325,9 @@ func (s SetOfUInt8) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfUInt8) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.s.Chunks()...)
+func (s SetOfUInt8) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
 

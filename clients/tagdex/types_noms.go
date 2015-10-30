@@ -62,9 +62,9 @@ func (m MapOfStringToSetOfRefOfRemotePhoto) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToSetOfRefOfRemotePhoto) Chunks() (futures []types.Future) {
-	futures = append(futures, m.TypeRef().Chunks()...)
-	futures = append(futures, m.m.Chunks()...)
+func (m MapOfStringToSetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
 
@@ -76,7 +76,7 @@ func (m MapOfStringToSetOfRefOfRemotePhoto) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForMapOfStringToSetOfRefOfRemotePhoto = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-8829255f15d0403222188a23b8ced0afdbee2a97"), 1))))
+	__typeRefForMapOfStringToSetOfRefOfRemotePhoto = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToSetOfRefOfRemotePhoto, func(v types.Value) types.Value {
 		return MapOfStringToSetOfRefOfRemotePhotoFromVal(v)
 	})
@@ -199,9 +199,9 @@ func (s SetOfRefOfRemotePhoto) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfRefOfRemotePhoto) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.s.Chunks()...)
+func (s SetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
 
@@ -213,7 +213,7 @@ func (m SetOfRefOfRemotePhoto) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForSetOfRefOfRemotePhoto = types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-8829255f15d0403222188a23b8ced0afdbee2a97"), 1)))
+	__typeRefForSetOfRefOfRemotePhoto = types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0)))
 	types.RegisterFromValFunction(__typeRefForSetOfRefOfRemotePhoto, func(v types.Value) types.Value {
 		return SetOfRefOfRemotePhotoFromVal(v)
 	})
@@ -321,7 +321,7 @@ func (r RefOfRemotePhoto) Equals(other types.Value) bool {
 	return false
 }
 
-func (r RefOfRemotePhoto) Chunks() []types.Future {
+func (r RefOfRemotePhoto) Chunks() []ref.Ref {
 	return r.TypeRef().Chunks()
 }
 
@@ -341,7 +341,7 @@ func (m RefOfRemotePhoto) TypeRef() types.TypeRef {
 }
 
 func init() {
-	__typeRefForRefOfRemotePhoto = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-8829255f15d0403222188a23b8ced0afdbee2a97"), 1))
+	__typeRefForRefOfRemotePhoto = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))
 	types.RegisterFromValFunction(__typeRefForRefOfRemotePhoto, func(v types.Value) types.Value {
 		return RefOfRemotePhotoFromVal(v)
 	})

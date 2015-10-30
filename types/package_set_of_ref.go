@@ -63,9 +63,9 @@ func (s SetOfRefOfPackage) Ref() ref.Ref {
 	return EnsureRef(s.ref, s)
 }
 
-func (s SetOfRefOfPackage) Chunks() (futures []Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.s.Chunks()...)
+func (s SetOfRefOfPackage) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
 
@@ -185,7 +185,7 @@ func (r RefOfPackage) Equals(other Value) bool {
 	return false
 }
 
-func (r RefOfPackage) Chunks() []Future {
+func (r RefOfPackage) Chunks() []ref.Ref {
 	return r.TypeRef().Chunks()
 }
 

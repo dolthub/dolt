@@ -134,7 +134,7 @@ func TestSetFutures(t *testing.T) {
 	s := NewSet(NewRef(r), Int64(0xbeefcafe))
 
 	assert.Len(s.Chunks(), 1)
-	assert.EqualValues(r, s.Chunks()[0].Ref())
+	assert.EqualValues(r, s.Chunks()[0])
 }
 
 func TestSetIter(t *testing.T) {

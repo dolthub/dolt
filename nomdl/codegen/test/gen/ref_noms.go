@@ -91,9 +91,9 @@ func (s StructWithRef) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s StructWithRef) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
+func (s StructWithRef) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.m.Chunks()...)
 	return
 }
 
@@ -131,7 +131,7 @@ func (r RefOfListOfString) Equals(other types.Value) bool {
 	return false
 }
 
-func (r RefOfListOfString) Chunks() []types.Future {
+func (r RefOfListOfString) Chunks() []ref.Ref {
 	return r.TypeRef().Chunks()
 }
 
@@ -218,9 +218,9 @@ func (l ListOfRefOfFloat32) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfRefOfFloat32) Chunks() (futures []types.Future) {
-	futures = append(futures, l.TypeRef().Chunks()...)
-	futures = append(futures, l.l.Chunks()...)
+func (l ListOfRefOfFloat32) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
 
@@ -336,7 +336,7 @@ func (r RefOfSetOfFloat32) Equals(other types.Value) bool {
 	return false
 }
 
-func (r RefOfSetOfFloat32) Chunks() []types.Future {
+func (r RefOfSetOfFloat32) Chunks() []ref.Ref {
 	return r.TypeRef().Chunks()
 }
 
@@ -423,9 +423,9 @@ func (l ListOfString) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfString) Chunks() (futures []types.Future) {
-	futures = append(futures, l.TypeRef().Chunks()...)
-	futures = append(futures, l.l.Chunks()...)
+func (l ListOfString) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
 
@@ -541,7 +541,7 @@ func (r RefOfFloat32) Equals(other types.Value) bool {
 	return false
 }
 
-func (r RefOfFloat32) Chunks() []types.Future {
+func (r RefOfFloat32) Chunks() []ref.Ref {
 	return r.TypeRef().Chunks()
 }
 
@@ -630,9 +630,9 @@ func (s SetOfFloat32) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfFloat32) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.s.Chunks()...)
+func (s SetOfFloat32) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
 

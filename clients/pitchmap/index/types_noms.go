@@ -95,9 +95,9 @@ func (s Pitch) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Pitch) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
+func (s Pitch) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.m.Chunks()...)
 	return
 }
 
@@ -170,9 +170,9 @@ func (l ListOfMapOfStringToValue) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfMapOfStringToValue) Chunks() (futures []types.Future) {
-	futures = append(futures, l.TypeRef().Chunks()...)
-	futures = append(futures, l.l.Chunks()...)
+func (l ListOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
 
@@ -316,9 +316,9 @@ func (m MapOfStringToListOfPitch) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToListOfPitch) Chunks() (futures []types.Future) {
-	futures = append(futures, m.TypeRef().Chunks()...)
-	futures = append(futures, m.m.Chunks()...)
+func (m MapOfStringToListOfPitch) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
 
@@ -452,9 +452,9 @@ func (m MapOfStringToString) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToString) Chunks() (futures []types.Future) {
-	futures = append(futures, m.TypeRef().Chunks()...)
-	futures = append(futures, m.m.Chunks()...)
+func (m MapOfStringToString) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
 
@@ -588,9 +588,9 @@ func (m MapOfStringToValue) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToValue) Chunks() (futures []types.Future) {
-	futures = append(futures, m.TypeRef().Chunks()...)
-	futures = append(futures, m.m.Chunks()...)
+func (m MapOfStringToValue) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
 
@@ -723,9 +723,9 @@ func (l ListOfPitch) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfPitch) Chunks() (futures []types.Future) {
-	futures = append(futures, l.TypeRef().Chunks()...)
-	futures = append(futures, l.l.Chunks()...)
+func (l ListOfPitch) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
 

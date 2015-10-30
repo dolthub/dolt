@@ -95,9 +95,9 @@ func (s compoundBlobStruct) Ref() ref.Ref {
 	return EnsureRef(s.ref, s)
 }
 
-func (s compoundBlobStruct) Chunks() (futures []Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
+func (s compoundBlobStruct) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.m.Chunks()...)
 	return
 }
 
@@ -170,9 +170,9 @@ func (l ListOfUInt64) Ref() ref.Ref {
 	return EnsureRef(l.ref, l)
 }
 
-func (l ListOfUInt64) Chunks() (futures []Future) {
-	futures = append(futures, l.TypeRef().Chunks()...)
-	futures = append(futures, l.l.Chunks()...)
+func (l ListOfUInt64) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
 
@@ -315,9 +315,9 @@ func (l ListOfRefOfBlob) Ref() ref.Ref {
 	return EnsureRef(l.ref, l)
 }
 
-func (l ListOfRefOfBlob) Chunks() (futures []Future) {
-	futures = append(futures, l.TypeRef().Chunks()...)
-	futures = append(futures, l.l.Chunks()...)
+func (l ListOfRefOfBlob) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
 
@@ -433,7 +433,7 @@ func (r RefOfBlob) Equals(other Value) bool {
 	return false
 }
 
-func (r RefOfBlob) Chunks() []Future {
+func (r RefOfBlob) Chunks() []ref.Ref {
 	return r.TypeRef().Chunks()
 }
 

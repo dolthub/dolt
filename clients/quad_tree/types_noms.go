@@ -120,9 +120,9 @@ func (s Node) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Node) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
+func (s Node) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.m.Chunks()...)
 	return
 }
 
@@ -228,9 +228,9 @@ func (s QuadTree) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s QuadTree) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
+func (s QuadTree) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.m.Chunks()...)
 	return
 }
 
@@ -368,9 +368,9 @@ func (s SQuadTree) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SQuadTree) Chunks() (futures []types.Future) {
-	futures = append(futures, s.TypeRef().Chunks()...)
-	futures = append(futures, s.m.Chunks()...)
+func (s SQuadTree) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.m.Chunks()...)
 	return
 }
 
@@ -448,7 +448,7 @@ func (r RefOfValue) Equals(other types.Value) bool {
 	return false
 }
 
-func (r RefOfValue) Chunks() []types.Future {
+func (r RefOfValue) Chunks() []ref.Ref {
 	return r.TypeRef().Chunks()
 }
 
@@ -535,9 +535,9 @@ func (l ListOfNode) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfNode) Chunks() (futures []types.Future) {
-	futures = append(futures, l.TypeRef().Chunks()...)
-	futures = append(futures, l.l.Chunks()...)
+func (l ListOfNode) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
 
@@ -681,9 +681,9 @@ func (m MapOfStringToQuadTree) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToQuadTree) Chunks() (futures []types.Future) {
-	futures = append(futures, m.TypeRef().Chunks()...)
-	futures = append(futures, m.m.Chunks()...)
+func (m MapOfStringToQuadTree) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
 
@@ -816,9 +816,9 @@ func (l ListOfRefOfValue) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfRefOfValue) Chunks() (futures []types.Future) {
-	futures = append(futures, l.TypeRef().Chunks()...)
-	futures = append(futures, l.l.Chunks()...)
+func (l ListOfRefOfValue) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
 
@@ -962,9 +962,9 @@ func (m MapOfStringToRefOfSQuadTree) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToRefOfSQuadTree) Chunks() (futures []types.Future) {
-	futures = append(futures, m.TypeRef().Chunks()...)
-	futures = append(futures, m.m.Chunks()...)
+func (m MapOfStringToRefOfSQuadTree) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
 
@@ -1070,7 +1070,7 @@ func (r RefOfSQuadTree) Equals(other types.Value) bool {
 	return false
 }
 
-func (r RefOfSQuadTree) Chunks() []types.Future {
+func (r RefOfSQuadTree) Chunks() []ref.Ref {
 	return r.TypeRef().Chunks()
 }
 
