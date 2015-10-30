@@ -7,11 +7,16 @@ import (
 
 type Ref struct {
 	target ref.Ref
+	t      TypeRef
 	ref    *ref.Ref
 }
 
 func NewRef(target ref.Ref) Ref {
-	return Ref{target, &ref.Ref{}}
+	return newRef(target, refTypeRef)
+}
+
+func newRef(target ref.Ref, t TypeRef) Ref {
+	return Ref{target, t, &ref.Ref{}}
 }
 
 func (r Ref) Equals(other Value) bool {
@@ -36,7 +41,7 @@ func (r Ref) TargetRef() ref.Ref {
 var refTypeRef = MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(ValueKind))
 
 func (r Ref) TypeRef() TypeRef {
-	return refTypeRef
+	return r.t
 }
 
 func init() {
@@ -50,5 +55,5 @@ func (r Ref) TargetValue(cs chunks.ChunkSource) Value {
 }
 
 func (r Ref) SetTargetValue(val Value, cs chunks.ChunkSink) Ref {
-	return NewRef(WriteValue(val, cs))
+	return newRef(WriteValue(val, cs), r.t)
 }
