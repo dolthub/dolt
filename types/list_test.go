@@ -339,7 +339,7 @@ func TestListTypeRef(t *testing.T) {
 	assert.True(l.TypeRef().Equals(MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))))
 
 	tr := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(UInt8Kind))
-	l2 := newListLeafNoCopy([]Value{UInt8(0), UInt8(1)}, tr)
+	l2 := newListNoCopy([]Value{UInt8(0), UInt8(1)}, tr)
 	assert.Equal(tr, l2.TypeRef())
 
 	l3 := l2.Slice(0, 1)

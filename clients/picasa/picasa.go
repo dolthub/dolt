@@ -150,7 +150,7 @@ func getAlbums() (nomsUser types.Value) {
 
 func getPhotos(album Album, albumIndex int) (nomsPhotoList types.List) {
 	if album.NumPhotos <= 0 {
-		return nil
+		return types.NewList()
 	}
 	photos := make([]Photo, 0, album.NumPhotos)
 	if !*quietFlag {

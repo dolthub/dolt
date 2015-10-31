@@ -1,33 +1,19 @@
 package types
 
-// listIterator allows iterating over a List from a given index.
-type listIterator interface {
-	next() (l Value, done bool)
+func newListIterator(l List) *listIterator {
+	return &listIterator{l, 0}
 }
 
-func newListIterator(l List) listIterator {
-	switch l := l.(type) {
-	case listLeaf:
-		return &listLeafIterator{l, 0}
-	}
-	panic("Unreachable")
+func newListIteratorAt(l List, idx uint64) *listIterator {
+	return &listIterator{l, idx}
 }
 
-func newListIteratorAt(l List, idx uint64) listIterator {
-	switch l := l.(type) {
-	case listLeaf:
-		return &listLeafIterator{l, idx}
-	}
-	panic("Unreachable")
-}
-
-// listLeafIterator implements listIterator
-type listLeafIterator struct {
-	list listLeaf
+type listIterator struct {
+	list List
 	i    uint64
 }
 
-func (it *listLeafIterator) next() (v Value, done bool) {
+func (it *listIterator) next() (v Value, done bool) {
 	if it.i >= it.list.Len() {
 		done = true
 		return
