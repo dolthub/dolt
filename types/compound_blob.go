@@ -15,8 +15,8 @@ type compoundBlob struct {
 	compoundObject
 }
 
-func newCompoundBlob(offsets []uint64, futures []Future, cs chunks.ChunkSource) compoundBlob {
-	return compoundBlob{compoundObject{offsets, futures, &ref.Ref{}, cs}}
+func newCompoundBlob(offsets []uint64, chunks []ref.Ref, cs chunks.ChunkSource) compoundBlob {
+	return compoundBlob{compoundObject{offsets, chunks, &ref.Ref{}, cs}}
 }
 
 // Reader implements the Blob interface
@@ -32,7 +32,7 @@ type compoundBlobReader struct {
 }
 
 func (cbr *compoundBlobReader) Read(p []byte) (n int, err error) {
-	for cbr.currentBlobIndex < len(cbr.cb.futures) {
+	for cbr.currentBlobIndex < len(cbr.cb.chunks) {
 		if cbr.currentReader == nil {
 			if err = cbr.updateReader(); err != nil {
 				return
@@ -98,8 +98,8 @@ func (cbr *compoundBlobReader) findBlobOffset(abs uint64) int {
 }
 
 func (cbr *compoundBlobReader) updateReader() error {
-	if cbr.currentBlobIndex < len(cbr.cb.futures) {
-		v := cbr.cb.futures[cbr.currentBlobIndex].Deref(cbr.cb.cs)
+	if cbr.currentBlobIndex < len(cbr.cb.chunks) {
+		v := ReadValue(cbr.cb.chunks[cbr.currentBlobIndex], cbr.cb.cs)
 		cbr.currentReader = v.(Blob).Reader()
 	} else {
 		cbr.currentReader = nil

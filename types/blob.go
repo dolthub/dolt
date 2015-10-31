@@ -39,7 +39,7 @@ func NewMemoryBlob(r io.Reader) (Blob, error) {
 func NewBlob(r io.Reader, cs chunks.ChunkStore) (Blob, error) {
 	length := uint64(0)
 	offsets := []uint64{}
-	blobs := []Future{}
+	chunks := []ref.Ref{}
 	var blob blobLeaf
 	for {
 		buf := bytes.Buffer{}
@@ -56,7 +56,7 @@ func NewBlob(r io.Reader, cs chunks.ChunkStore) (Blob, error) {
 		length += n
 		offsets = append(offsets, length)
 		blob = newBlobLeaf(buf.Bytes())
-		blobs = append(blobs, futureFromRef(WriteValue(blob, cs)))
+		chunks = append(chunks, WriteValue(blob, cs))
 
 		if err == io.EOF {
 			break
@@ -67,11 +67,11 @@ func NewBlob(r io.Reader, cs chunks.ChunkStore) (Blob, error) {
 		return newBlobLeaf([]byte{}), nil
 	}
 
-	if len(blobs) == 1 {
+	if len(chunks) == 1 {
 		return blob, nil
 	}
 
-	co := compoundObject{offsets, blobs, &ref.Ref{}, cs}
+	co := compoundObject{offsets, chunks, &ref.Ref{}, cs}
 	co = splitCompoundObject(co, cs)
 	return compoundBlob{co}, nil
 }

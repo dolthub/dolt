@@ -16,7 +16,7 @@ const (
 
 type compoundObject struct {
 	offsets []uint64
-	futures []Future
+	chunks  []ref.Ref
 	ref     *ref.Ref
 	cs      chunks.ChunkSource
 }
@@ -25,41 +25,34 @@ func (co compoundObject) Len() uint64 {
 	return co.offsets[len(co.offsets)-1]
 }
 
-func (co compoundObject) Chunks() (chunks []ref.Ref) {
-	for _, f := range co.futures {
-		chunks = appendChunks(chunks, f)
-	}
-	return
+func (co compoundObject) Chunks() []ref.Ref {
+	return co.chunks
 }
-
-type compoundObjectToFuture func(co compoundObject) Future
 
 // splitCompoundObject chunks a compound list/blob into smaller compound
 // lists/blobs. If no split was made the same compoundObject is returned.
 func splitCompoundObject(co compoundObject, cs chunks.ChunkSink) compoundObject {
 	offsets := []uint64{}
-	futures := []Future{}
+	chunks := []ref.Ref{}
 
-	toFuture := func(co compoundObject) Future {
-		cb := compoundBlob{co}
-		r := WriteValue(cb, cs)
-		return futureFromRef(r)
+	toRef := func(co compoundObject) ref.Ref {
+		return WriteValue(compoundBlob{co}, cs)
 	}
 
 	startIndex := uint64(0)
 	h := buzhash.NewBuzHash(objectWindowSize)
 
 	for i := 0; i < len(co.offsets); i++ {
-		future := co.futures[i]
-		digest := future.Ref().Digest()
+		c := co.chunks[i]
+		digest := c.Digest()
 		_, err := h.Write(digest[:])
 		d.Chk.NoError(err)
 		if h.Sum32()&objectPattern == objectPattern {
 			h = buzhash.NewBuzHash(objectWindowSize)
-			future := makeSubObject(co, startIndex, uint64(i)+1, toFuture)
+			c := makeSubObject(co, startIndex, uint64(i)+1, toRef)
 			startIndex = uint64(i) + 1
 			offsets = append(offsets, co.offsets[i])
-			futures = append(futures, future)
+			chunks = append(chunks, c)
 		}
 	}
 
@@ -70,9 +63,9 @@ func splitCompoundObject(co compoundObject, cs chunks.ChunkSink) compoundObject 
 
 	// Add remaining.
 	if startIndex != uint64(len(co.offsets)) {
-		future := makeSubObject(co, startIndex, uint64(len(co.offsets)), toFuture)
+		c := makeSubObject(co, startIndex, uint64(len(co.offsets)), toRef)
 		offsets = append(offsets, co.offsets[len(co.offsets)-1])
-		futures = append(futures, future)
+		chunks = append(chunks, c)
 	}
 
 	// Single chunk, use original.
@@ -87,17 +80,19 @@ func splitCompoundObject(co compoundObject, cs chunks.ChunkSink) compoundObject 
 	}
 
 	// Split again.
-	return splitCompoundObject(compoundObject{offsets, futures, &ref.Ref{}, co.cs}, cs)
+	return splitCompoundObject(compoundObject{offsets, chunks, &ref.Ref{}, co.cs}, cs)
 }
 
-func makeSubObject(co compoundObject, startIndex, endIndex uint64, toFuture compoundObjectToFuture) Future {
+type compoundObjectToRef func(co compoundObject) ref.Ref
+
+func makeSubObject(co compoundObject, startIndex, endIndex uint64, toRef compoundObjectToRef) ref.Ref {
 	d.Chk.True(endIndex-startIndex > 0)
 	if endIndex-startIndex == 1 {
-		return co.futures[startIndex]
+		return co.chunks[startIndex]
 	}
 
-	futures := make([]Future, endIndex-startIndex)
-	copy(futures, co.futures[startIndex:endIndex])
+	chunks := make([]ref.Ref, endIndex-startIndex)
+	copy(chunks, co.chunks[startIndex:endIndex])
 	offsets := make([]uint64, endIndex-startIndex)
 	startOffset := uint64(0)
 	if startIndex > 0 {
@@ -106,5 +101,5 @@ func makeSubObject(co compoundObject, startIndex, endIndex uint64, toFuture comp
 	for i := startIndex; i < endIndex; i++ {
 		offsets[i-startIndex] = co.offsets[i] - startOffset
 	}
-	return toFuture(compoundObject{offsets, futures, &ref.Ref{}, co.cs})
+	return toRef(compoundObject{offsets, chunks, &ref.Ref{}, co.cs})
 }

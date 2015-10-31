@@ -183,7 +183,7 @@ func (l List) Equals(other Value) bool {
 
 func (l List) Chunks() (chunks []ref.Ref) {
 	for _, v := range l.values {
-		chunks = appendValueToChunks(chunks, v)
+		chunks = appendChunk(chunks, v)
 	}
 	return
 }

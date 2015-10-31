@@ -37,10 +37,6 @@ func ReadValue(r ref.Ref, cs chunks.ChunkSource) Value {
 
 func convertToCompoundBlob(cbs compoundBlobStruct, cs chunks.ChunkSource) compoundBlob {
 	offsets := cbs.Offsets().Def()
-	refs := cbs.Blobs().Def()
-	futures := make([]Future, len(refs))
-	for i, r := range refs {
-		futures[i] = futureFromRef(r)
-	}
-	return newCompoundBlob(offsets, futures, cs)
+	chunks := cbs.Blobs().Def()
+	return newCompoundBlob(offsets, chunks, cs)
 }
