@@ -39,10 +39,6 @@ func futureEqualsValue(f Future, v Value) bool {
 	}
 }
 
-func futureFromValue(v Value) Future {
-	return resolvedFuture{v}
-}
-
 type targetRef interface {
 	TargetRef() ref.Ref
 }

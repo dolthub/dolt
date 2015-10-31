@@ -34,15 +34,17 @@ func (co compoundObject) Chunks() (chunks []ref.Ref) {
 
 type compoundObjectToFuture func(co compoundObject) Future
 
-func compoundObjectToBlobFuture(co compoundObject) Future {
-	return futureFromValue(compoundBlob{co})
-}
-
 // splitCompoundObject chunks a compound list/blob into smaller compound
 // lists/blobs. If no split was made the same compoundObject is returned.
-func splitCompoundObject(co compoundObject, toFuture compoundObjectToFuture) compoundObject {
+func splitCompoundObject(co compoundObject, cs chunks.ChunkSink) compoundObject {
 	offsets := []uint64{}
 	futures := []Future{}
+
+	toFuture := func(co compoundObject) Future {
+		cb := compoundBlob{co}
+		r := WriteValue(cb, cs)
+		return futureFromRef(r)
+	}
 
 	startIndex := uint64(0)
 	h := buzhash.NewBuzHash(objectWindowSize)
@@ -85,7 +87,7 @@ func splitCompoundObject(co compoundObject, toFuture compoundObjectToFuture) com
 	}
 
 	// Split again.
-	return splitCompoundObject(compoundObject{offsets, futures, &ref.Ref{}, co.cs}, toFuture)
+	return splitCompoundObject(compoundObject{offsets, futures, &ref.Ref{}, co.cs}, cs)
 }
 
 func makeSubObject(co compoundObject, startIndex, endIndex uint64, toFuture compoundObjectToFuture) Future {

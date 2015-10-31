@@ -72,7 +72,7 @@ func NewBlob(r io.Reader, cs chunks.ChunkStore) (Blob, error) {
 	}
 
 	co := compoundObject{offsets, blobs, &ref.Ref{}, cs}
-	co = splitCompoundObject(co, compoundObjectToBlobFuture)
+	co = splitCompoundObject(co, cs)
 	return compoundBlob{co}, nil
 }
 
