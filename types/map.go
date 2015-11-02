@@ -60,10 +60,14 @@ func (m Map) MaybeGet(key Value) (v Value, ok bool) {
 }
 
 func (m Map) Set(key Value, val Value) Map {
+	elemTypes := m.t.Desc.(CompoundDesc).ElemTypes
+	assertType(elemTypes[0], key)
+	assertType(elemTypes[1], val)
 	return newMapFromData(buildMapData(m.data, []Value{key, val}), m.t)
 }
 
 func (m Map) SetM(kv ...Value) Map {
+	assertMapElemTypes(m, kv...)
 	return newMapFromData(buildMapData(m.data, kv), m.t)
 }
 
@@ -130,6 +134,10 @@ var mapTypeRef = MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(ValueKind), M
 
 func (m Map) TypeRef() TypeRef {
 	return m.t
+}
+
+func (m Map) elemTypes() []TypeRef {
+	return m.t.Desc.(CompoundDesc).ElemTypes
 }
 
 func init() {

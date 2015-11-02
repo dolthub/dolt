@@ -32,6 +32,7 @@ func (s Set) Has(v Value) bool {
 }
 
 func (s Set) Insert(values ...Value) Set {
+	assertType(s.elemType(), values...)
 	return newSetFromData(buildSetData(s.data, values), s.t)
 }
 
@@ -49,6 +50,7 @@ func (s Set) Remove(values ...Value) Set {
 }
 
 func (s Set) Union(others ...Set) Set {
+	assertSetsSameType(s, others...)
 	result := s
 	for _, other := range others {
 		other.Iter(func(v Value) (stop bool) {
@@ -127,6 +129,10 @@ var setTypeRef = MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))
 
 func (s Set) TypeRef() TypeRef {
 	return s.t
+}
+
+func (s Set) elemType() TypeRef {
+	return s.t.Desc.(CompoundDesc).ElemTypes[0]
 }
 
 func init() {

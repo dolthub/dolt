@@ -52,5 +52,6 @@ func (r Ref) TargetValue(cs chunks.ChunkSource) Value {
 }
 
 func (r Ref) SetTargetValue(val Value, cs chunks.ChunkSink) Ref {
+	assertType(r.t.Desc.(CompoundDesc).ElemTypes[0], val)
 	return newRef(WriteValue(val, cs), r.t)
 }

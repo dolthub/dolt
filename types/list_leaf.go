@@ -125,6 +125,7 @@ func (l listLeaf) Slice(start uint64, end uint64) List {
 }
 
 func (l listLeaf) Set(idx uint64, v Value) List {
+	assertType(l.elemType(), v)
 	values := make([]Value, len(l.values))
 	copy(values, l.values)
 	values[idx] = v
@@ -132,11 +133,13 @@ func (l listLeaf) Set(idx uint64, v Value) List {
 }
 
 func (l listLeaf) Append(v ...Value) List {
+	assertType(l.elemType(), v...)
 	values := append(l.values, v...)
 	return newListLeafNoCopy(values, l.t)
 }
 
 func (l listLeaf) Insert(idx uint64, v ...Value) List {
+	assertType(l.elemType(), v...)
 	values := make([]Value, len(l.values)+len(v))
 	copy(values, l.values[:idx])
 	copy(values[idx:], v)
@@ -177,4 +180,8 @@ func (l listLeaf) Chunks() (chunks []ref.Ref) {
 
 func (l listLeaf) TypeRef() TypeRef {
 	return l.t
+}
+
+func (l listLeaf) elemType() TypeRef {
+	return l.t.Desc.(CompoundDesc).ElemTypes[0]
 }
