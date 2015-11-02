@@ -233,3 +233,14 @@ func TestCommitNewPackages(t *testing.T) {
 	tr := s.Any().TargetValue(ds).Types()[0]
 	assert.EqualValues(types.StructKind, tr.Kind())
 }
+
+func TestMakeGoIdentifier(t *testing.T) {
+	assert := assert.New(t)
+	assert.Equal("hello", makeGoIdentifier("hello"))
+	assert.Equal("hello88", makeGoIdentifier("hello88"))
+	assert.Equal("_88hello", makeGoIdentifier("88hello"))
+	assert.Equal("h_e_l_l_0", makeGoIdentifier("h-e-l-l-0"))
+	assert.Equal("_hello", makeGoIdentifier("\u2318hello"))
+	assert.Equal("he_llo", makeGoIdentifier("he\u2318llo"))
+
+}
