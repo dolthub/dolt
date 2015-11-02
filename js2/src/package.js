@@ -2,10 +2,12 @@
 
 'use strict';
 
+import {readValue} from './decode.js';
 import Ref from './ref.js';
+import type {ChunkStore} from './chunk_store.js';
+import {encodeNomsValue} from './encode.js';
 import {Kind} from './noms_kind.js';
 import {makePrimitiveTypeRef, TypeRef} from './type_ref.js';
-import {encodeNomsValue} from './encode.js';
 
 const packageTypeRef = makePrimitiveTypeRef(Kind.Package);
 
@@ -42,4 +44,14 @@ function registerPackage(p: Package) {
   packageRegistry[p.ref.toString()] = p;
 }
 
-export {lookupPackage, Package, registerPackage};
+async function readPackage(r: Ref, cs: ChunkStore): Promise<Package> {
+  let p = await readValue(r, cs);
+  if (p instanceof Package) {
+    registerPackage(p);
+    return p;
+  } else {
+    throw new Error('Non-package found where package expected.');
+  }
+}
+
+export {lookupPackage, Package, readPackage, registerPackage};

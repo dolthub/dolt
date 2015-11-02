@@ -255,4 +255,18 @@ function makeTypeRef(pkgRef: Ref, ordinal: number): TypeRef {
   return new TypeRef('', '', new UnresolvedDesc(pkgRef, ordinal));
 }
 
-export {CompoundDesc, Field, makeCompoundTypeRef, makePrimitiveTypeRef, makeStructTypeRef, makeTypeRef, StructDesc, TypeRef};
+function makeUnresolvedTypeRef(namespace: string, name: string): TypeRef {
+  return new TypeRef(name, namespace, new UnresolvedDesc(new Ref(), -1));
+}
+
+export {
+  CompoundDesc,
+  Field,
+  makeCompoundTypeRef,
+  makePrimitiveTypeRef,
+  makeStructTypeRef,
+  makeTypeRef,
+  makeUnresolvedTypeRef,
+  StructDesc,
+  TypeRef
+};
