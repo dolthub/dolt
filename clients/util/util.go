@@ -41,11 +41,11 @@ func NomsValueFromDecodedJSON(o interface{}) types.Value {
 		}
 		return out
 	case map[string]interface{}:
-		out := types.NewMap()
+		out := NewMapOfStringToValue()
 		for k, v := range o {
 			nv := NomsValueFromDecodedJSON(v)
 			if nv != nil {
-				out = out.Set(types.NewString(k), nv)
+				out = out.Set(k, nv)
 			}
 		}
 		return out

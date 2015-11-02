@@ -3,6 +3,7 @@
 package main
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -125,147 +126,6 @@ func (s Pitch) SetZ(val float64) Pitch {
 	s._Z = val
 	s.ref = &ref.Ref{}
 	return s
-}
-
-// ListOfMapOfStringToValue
-
-type ListOfMapOfStringToValue struct {
-	l   types.List
-	ref *ref.Ref
-}
-
-func NewListOfMapOfStringToValue() ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{types.NewList(), &ref.Ref{}}
-}
-
-type ListOfMapOfStringToValueDef []MapOfStringToValueDef
-
-func (def ListOfMapOfStringToValueDef) New() ListOfMapOfStringToValue {
-	l := make([]types.Value, len(def))
-	for i, d := range def {
-		l[i] = d.New()
-	}
-	return ListOfMapOfStringToValue{types.NewList(l...), &ref.Ref{}}
-}
-
-func (l ListOfMapOfStringToValue) Def() ListOfMapOfStringToValueDef {
-	d := make([]MapOfStringToValueDef, l.Len())
-	for i := uint64(0); i < l.Len(); i++ {
-		d[i] = l.l.Get(i).(MapOfStringToValue).Def()
-	}
-	return d
-}
-
-func (l ListOfMapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfMapOfStringToValue.Equals(other.TypeRef()) && l.Ref() == other.Ref()
-}
-
-func (l ListOfMapOfStringToValue) Ref() ref.Ref {
-	return types.EnsureRef(l.ref, l)
-}
-
-func (l ListOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
-	chunks = append(chunks, l.l.Chunks()...)
-	return
-}
-
-// A Noms Value that describes ListOfMapOfStringToValue.
-var __typeRefForListOfMapOfStringToValue types.TypeRef
-
-func (m ListOfMapOfStringToValue) TypeRef() types.TypeRef {
-	return __typeRefForListOfMapOfStringToValue
-}
-
-func init() {
-	__typeRefForListOfMapOfStringToValue = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind)))
-	types.RegisterValue(__typeRefForListOfMapOfStringToValue, builderForListOfMapOfStringToValue, readerForListOfMapOfStringToValue)
-}
-
-func builderForListOfMapOfStringToValue(v types.Value) types.Value {
-	return ListOfMapOfStringToValue{v.(types.List), &ref.Ref{}}
-}
-
-func readerForListOfMapOfStringToValue(v types.Value) types.Value {
-	return v.(ListOfMapOfStringToValue).l
-}
-
-func (l ListOfMapOfStringToValue) Len() uint64 {
-	return l.l.Len()
-}
-
-func (l ListOfMapOfStringToValue) Empty() bool {
-	return l.Len() == uint64(0)
-}
-
-func (l ListOfMapOfStringToValue) Get(i uint64) MapOfStringToValue {
-	return l.l.Get(i).(MapOfStringToValue)
-}
-
-func (l ListOfMapOfStringToValue) Slice(idx uint64, end uint64) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Slice(idx, end), &ref.Ref{}}
-}
-
-func (l ListOfMapOfStringToValue) Set(i uint64, val MapOfStringToValue) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Set(i, val), &ref.Ref{}}
-}
-
-func (l ListOfMapOfStringToValue) Append(v ...MapOfStringToValue) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
-}
-
-func (l ListOfMapOfStringToValue) Insert(idx uint64, v ...MapOfStringToValue) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
-}
-
-func (l ListOfMapOfStringToValue) Remove(idx uint64, end uint64) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{l.l.Remove(idx, end), &ref.Ref{}}
-}
-
-func (l ListOfMapOfStringToValue) RemoveAt(idx uint64) ListOfMapOfStringToValue {
-	return ListOfMapOfStringToValue{(l.l.RemoveAt(idx)), &ref.Ref{}}
-}
-
-func (l ListOfMapOfStringToValue) fromElemSlice(p []MapOfStringToValue) []types.Value {
-	r := make([]types.Value, len(p))
-	for i, v := range p {
-		r[i] = v
-	}
-	return r
-}
-
-type ListOfMapOfStringToValueIterCallback func(v MapOfStringToValue, i uint64) (stop bool)
-
-func (l ListOfMapOfStringToValue) Iter(cb ListOfMapOfStringToValueIterCallback) {
-	l.l.Iter(func(v types.Value, i uint64) bool {
-		return cb(v.(MapOfStringToValue), i)
-	})
-}
-
-type ListOfMapOfStringToValueIterAllCallback func(v MapOfStringToValue, i uint64)
-
-func (l ListOfMapOfStringToValue) IterAll(cb ListOfMapOfStringToValueIterAllCallback) {
-	l.l.IterAll(func(v types.Value, i uint64) {
-		cb(v.(MapOfStringToValue), i)
-	})
-}
-
-func (l ListOfMapOfStringToValue) IterAllP(concurrency int, cb ListOfMapOfStringToValueIterAllCallback) {
-	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
-		cb(v.(MapOfStringToValue), i)
-	})
-}
-
-type ListOfMapOfStringToValueFilterCallback func(v MapOfStringToValue, i uint64) (keep bool)
-
-func (l ListOfMapOfStringToValue) Filter(cb ListOfMapOfStringToValueFilterCallback) ListOfMapOfStringToValue {
-	nl := NewListOfMapOfStringToValue()
-	l.IterAll(func(v MapOfStringToValue, i uint64) {
-		if cb(v, i) {
-			nl = nl.Append(v)
-		}
-	})
-	return nl
 }
 
 // MapOfStringToListOfPitch
@@ -394,130 +254,196 @@ func (m MapOfStringToListOfPitch) Filter(cb MapOfStringToListOfPitchFilterCallba
 	return nm
 }
 
-// MapOfStringToString
+// ListOfRefOfMapOfStringToValue
 
-type MapOfStringToString struct {
-	m   types.Map
+type ListOfRefOfMapOfStringToValue struct {
+	l   types.List
 	ref *ref.Ref
 }
 
-func NewMapOfStringToString() MapOfStringToString {
-	return MapOfStringToString{types.NewMap(), &ref.Ref{}}
+func NewListOfRefOfMapOfStringToValue() ListOfRefOfMapOfStringToValue {
+	return ListOfRefOfMapOfStringToValue{types.NewList(), &ref.Ref{}}
 }
 
-type MapOfStringToStringDef map[string]string
+type ListOfRefOfMapOfStringToValueDef []ref.Ref
 
-func (def MapOfStringToStringDef) New() MapOfStringToString {
-	kv := make([]types.Value, 0, len(def)*2)
-	for k, v := range def {
-		kv = append(kv, types.NewString(k), types.NewString(v))
+func (def ListOfRefOfMapOfStringToValueDef) New() ListOfRefOfMapOfStringToValue {
+	l := make([]types.Value, len(def))
+	for i, d := range def {
+		l[i] = NewRefOfMapOfStringToValue(d)
 	}
-	return MapOfStringToString{types.NewMap(kv...), &ref.Ref{}}
+	return ListOfRefOfMapOfStringToValue{types.NewList(l...), &ref.Ref{}}
 }
 
-func (m MapOfStringToString) Def() MapOfStringToStringDef {
-	def := make(map[string]string)
-	m.m.Iter(func(k, v types.Value) bool {
-		def[k.(types.String).String()] = v.(types.String).String()
-		return false
-	})
-	return def
+func (l ListOfRefOfMapOfStringToValue) Def() ListOfRefOfMapOfStringToValueDef {
+	d := make([]ref.Ref, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = l.l.Get(i).(RefOfMapOfStringToValue).TargetRef()
+	}
+	return d
 }
 
-func (m MapOfStringToString) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToString.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+func (l ListOfRefOfMapOfStringToValue) Equals(other types.Value) bool {
+	return other != nil && __typeRefForListOfRefOfMapOfStringToValue.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
 
-func (m MapOfStringToString) Ref() ref.Ref {
-	return types.EnsureRef(m.ref, m)
+func (l ListOfRefOfMapOfStringToValue) Ref() ref.Ref {
+	return types.EnsureRef(l.ref, l)
 }
 
-func (m MapOfStringToString) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.TypeRef().Chunks()...)
-	chunks = append(chunks, m.m.Chunks()...)
+func (l ListOfRefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
 
-// A Noms Value that describes MapOfStringToString.
-var __typeRefForMapOfStringToString types.TypeRef
+// A Noms Value that describes ListOfRefOfMapOfStringToValue.
+var __typeRefForListOfRefOfMapOfStringToValue types.TypeRef
 
-func (m MapOfStringToString) TypeRef() types.TypeRef {
-	return __typeRefForMapOfStringToString
+func (m ListOfRefOfMapOfStringToValue) TypeRef() types.TypeRef {
+	return __typeRefForListOfRefOfMapOfStringToValue
 }
 
 func init() {
-	__typeRefForMapOfStringToString = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterValue(__typeRefForMapOfStringToString, builderForMapOfStringToString, readerForMapOfStringToString)
+	__typeRefForListOfRefOfMapOfStringToValue = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))))
+	types.RegisterValue(__typeRefForListOfRefOfMapOfStringToValue, builderForListOfRefOfMapOfStringToValue, readerForListOfRefOfMapOfStringToValue)
 }
 
-func builderForMapOfStringToString(v types.Value) types.Value {
-	return MapOfStringToString{v.(types.Map), &ref.Ref{}}
+func builderForListOfRefOfMapOfStringToValue(v types.Value) types.Value {
+	return ListOfRefOfMapOfStringToValue{v.(types.List), &ref.Ref{}}
 }
 
-func readerForMapOfStringToString(v types.Value) types.Value {
-	return v.(MapOfStringToString).m
+func readerForListOfRefOfMapOfStringToValue(v types.Value) types.Value {
+	return v.(ListOfRefOfMapOfStringToValue).l
 }
 
-func (m MapOfStringToString) Empty() bool {
-	return m.m.Empty()
+func (l ListOfRefOfMapOfStringToValue) Len() uint64 {
+	return l.l.Len()
 }
 
-func (m MapOfStringToString) Len() uint64 {
-	return m.m.Len()
+func (l ListOfRefOfMapOfStringToValue) Empty() bool {
+	return l.Len() == uint64(0)
 }
 
-func (m MapOfStringToString) Has(p string) bool {
-	return m.m.Has(types.NewString(p))
+func (l ListOfRefOfMapOfStringToValue) Get(i uint64) RefOfMapOfStringToValue {
+	return l.l.Get(i).(RefOfMapOfStringToValue)
 }
 
-func (m MapOfStringToString) Get(p string) string {
-	return m.m.Get(types.NewString(p)).(types.String).String()
+func (l ListOfRefOfMapOfStringToValue) Slice(idx uint64, end uint64) ListOfRefOfMapOfStringToValue {
+	return ListOfRefOfMapOfStringToValue{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
-func (m MapOfStringToString) MaybeGet(p string) (string, bool) {
-	v, ok := m.m.MaybeGet(types.NewString(p))
-	if !ok {
-		return "", false
+func (l ListOfRefOfMapOfStringToValue) Set(i uint64, val RefOfMapOfStringToValue) ListOfRefOfMapOfStringToValue {
+	return ListOfRefOfMapOfStringToValue{l.l.Set(i, val), &ref.Ref{}}
+}
+
+func (l ListOfRefOfMapOfStringToValue) Append(v ...RefOfMapOfStringToValue) ListOfRefOfMapOfStringToValue {
+	return ListOfRefOfMapOfStringToValue{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
+}
+
+func (l ListOfRefOfMapOfStringToValue) Insert(idx uint64, v ...RefOfMapOfStringToValue) ListOfRefOfMapOfStringToValue {
+	return ListOfRefOfMapOfStringToValue{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
+}
+
+func (l ListOfRefOfMapOfStringToValue) Remove(idx uint64, end uint64) ListOfRefOfMapOfStringToValue {
+	return ListOfRefOfMapOfStringToValue{l.l.Remove(idx, end), &ref.Ref{}}
+}
+
+func (l ListOfRefOfMapOfStringToValue) RemoveAt(idx uint64) ListOfRefOfMapOfStringToValue {
+	return ListOfRefOfMapOfStringToValue{(l.l.RemoveAt(idx)), &ref.Ref{}}
+}
+
+func (l ListOfRefOfMapOfStringToValue) fromElemSlice(p []RefOfMapOfStringToValue) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v
 	}
-	return v.(types.String).String(), ok
+	return r
 }
 
-func (m MapOfStringToString) Set(k string, v string) MapOfStringToString {
-	return MapOfStringToString{m.m.Set(types.NewString(k), types.NewString(v)), &ref.Ref{}}
-}
+type ListOfRefOfMapOfStringToValueIterCallback func(v RefOfMapOfStringToValue, i uint64) (stop bool)
 
-// TODO: Implement SetM?
-
-func (m MapOfStringToString) Remove(p string) MapOfStringToString {
-	return MapOfStringToString{m.m.Remove(types.NewString(p)), &ref.Ref{}}
-}
-
-type MapOfStringToStringIterCallback func(k string, v string) (stop bool)
-
-func (m MapOfStringToString) Iter(cb MapOfStringToStringIterCallback) {
-	m.m.Iter(func(k, v types.Value) bool {
-		return cb(k.(types.String).String(), v.(types.String).String())
+func (l ListOfRefOfMapOfStringToValue) Iter(cb ListOfRefOfMapOfStringToValueIterCallback) {
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(v.(RefOfMapOfStringToValue), i)
 	})
 }
 
-type MapOfStringToStringIterAllCallback func(k string, v string)
+type ListOfRefOfMapOfStringToValueIterAllCallback func(v RefOfMapOfStringToValue, i uint64)
 
-func (m MapOfStringToString) IterAll(cb MapOfStringToStringIterAllCallback) {
-	m.m.IterAll(func(k, v types.Value) {
-		cb(k.(types.String).String(), v.(types.String).String())
+func (l ListOfRefOfMapOfStringToValue) IterAll(cb ListOfRefOfMapOfStringToValueIterAllCallback) {
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(v.(RefOfMapOfStringToValue), i)
 	})
 }
 
-type MapOfStringToStringFilterCallback func(k string, v string) (keep bool)
+func (l ListOfRefOfMapOfStringToValue) IterAllP(concurrency int, cb ListOfRefOfMapOfStringToValueIterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
+		cb(v.(RefOfMapOfStringToValue), i)
+	})
+}
 
-func (m MapOfStringToString) Filter(cb MapOfStringToStringFilterCallback) MapOfStringToString {
-	nm := NewMapOfStringToString()
-	m.IterAll(func(k string, v string) {
-		if cb(k, v) {
-			nm = nm.Set(k, v)
+type ListOfRefOfMapOfStringToValueFilterCallback func(v RefOfMapOfStringToValue, i uint64) (keep bool)
+
+func (l ListOfRefOfMapOfStringToValue) Filter(cb ListOfRefOfMapOfStringToValueFilterCallback) ListOfRefOfMapOfStringToValue {
+	nl := NewListOfRefOfMapOfStringToValue()
+	l.IterAll(func(v RefOfMapOfStringToValue, i uint64) {
+		if cb(v, i) {
+			nl = nl.Append(v)
 		}
 	})
-	return nm
+	return nl
+}
+
+// RefOfMapOfStringToValue
+
+type RefOfMapOfStringToValue struct {
+	target ref.Ref
+	ref    *ref.Ref
+}
+
+func NewRefOfMapOfStringToValue(target ref.Ref) RefOfMapOfStringToValue {
+	return RefOfMapOfStringToValue{target, &ref.Ref{}}
+}
+
+func (r RefOfMapOfStringToValue) TargetRef() ref.Ref {
+	return r.target
+}
+
+func (r RefOfMapOfStringToValue) Ref() ref.Ref {
+	return types.EnsureRef(r.ref, r)
+}
+
+func (r RefOfMapOfStringToValue) Equals(other types.Value) bool {
+	return other != nil && __typeRefForRefOfMapOfStringToValue.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+}
+
+func (r RefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
+}
+
+// A Noms Value that describes RefOfMapOfStringToValue.
+var __typeRefForRefOfMapOfStringToValue types.TypeRef
+
+func (m RefOfMapOfStringToValue) TypeRef() types.TypeRef {
+	return __typeRefForRefOfMapOfStringToValue
+}
+
+func init() {
+	__typeRefForRefOfMapOfStringToValue = types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind)))
+	types.RegisterFromValFunction(__typeRefForRefOfMapOfStringToValue, func(v types.Value) types.Value {
+		return NewRefOfMapOfStringToValue(v.(types.Ref).TargetRef())
+	})
+}
+
+func (r RefOfMapOfStringToValue) TargetValue(cs chunks.ChunkSource) MapOfStringToValue {
+	return types.ReadValue(r.target, cs).(MapOfStringToValue)
+}
+
+func (r RefOfMapOfStringToValue) SetTargetValue(val MapOfStringToValue, cs chunks.ChunkSink) RefOfMapOfStringToValue {
+	return NewRefOfMapOfStringToValue(types.WriteValue(val, cs))
 }
 
 // MapOfStringToValue

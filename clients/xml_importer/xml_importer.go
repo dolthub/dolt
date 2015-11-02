@@ -34,7 +34,7 @@ type fileIndex struct {
 }
 
 type refIndex struct {
-	ref   types.Ref
+	ref   ref.Ref
 	index int
 }
 
@@ -84,6 +84,7 @@ func main() {
 
 		wg := sync.WaitGroup{}
 		importXml := func() {
+			expectedType := util.NewMapOfStringToValue()
 			for f := range filesChan {
 				file, err := os.Open(f.path)
 				d.Exp.NoError(err, "Error getting XML")
@@ -94,10 +95,11 @@ func main() {
 				file.Close()
 
 				nomsObj := util.NomsValueFromDecodedJSON(object)
-				r := types.NewRef(ref.Ref{})
+				d.Chk.IsType(expectedType, nomsObj)
+				r := ref.Ref{}
 
 				if !*noIO {
-					r = types.NewRef(types.WriteValue(nomsObj, ds.Store()))
+					r = types.WriteValue(nomsObj, ds.Store())
 				}
 
 				refsChan <- refIndex{r, f.index}
@@ -122,15 +124,13 @@ func main() {
 		}
 		sort.Sort(refList)
 
-		refs := make([]types.Value, 0, len(refList))
-		for _, r := range refList {
-			refs = append(refs, r.ref)
+		refs := make(util.ListOfRefOfMapOfStringToValueDef, len(refList))
+		for idx, r := range refList {
+			refs[idx] = r.ref
 		}
 
-		list := types.NewList(refs...)
-
 		if !*noIO {
-			_, ok := ds.Commit(list)
+			_, ok := ds.Commit(refs.New())
 			d.Exp.True(ok, "Could not commit due to conflicting edit")
 		}
 
