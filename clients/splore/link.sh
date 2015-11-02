@@ -1,4 +1,4 @@
-pushd ../../js
+pushd ../../js2
 npm run build
 ./link.sh
 popd

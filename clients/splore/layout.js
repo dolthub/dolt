@@ -1,44 +1,55 @@
+/* @flow */
+
 'use strict';
 
-var Node = require('./node.js');
-var React = require('react');
+import Node from './node.js';
+import React from 'react';
+import type {NodeGraph} from './buchheim.js';
+import {TreeNode} from './buchheim.js';
 
-var Layout = React.createClass({
-  propTypes: {
-    data: React.PropTypes.object.isRequired,
-    onNodeClick: React.PropTypes.func.isRequired,
-    tree: React.PropTypes.object.isRequired,
-  },
+type Props = {
+  data: NodeGraph,
+  onNodeClick: (e: Event, s: string) => void,
+  tree: TreeNode
+}
 
-  render() {
-    var children = [];
-    var edges = [];
-    var lookup = {};
+export default class Layout extends React.Component {
+  static defaultProps: {};
+  props: Props;
+
+  constructor(props: Props) {
+    super(props);
+  }
+
+  render(): React.Element {
+    let children = [];
+    let edges = [];
+    let lookup = {};
 
     const spaceX = 75;
     const spaceY = 20;
-    var getX = d => d.y * spaceX;
-    var getY = d => d.x * spaceY;
-    var maxX = 0;
-    var minY = 0;
-    var maxY = 0;
+    let getX = d => d.y * spaceX;
+    let getY = d => d.x * spaceY;
+    let maxX = 0;
+    let minY = 0;
+    let maxY = 0;
 
-    var process = (treeNode, fromX, fromY) => {
-      var links = this.props.data.links[treeNode.id] || [];
-      var hasChildren = treeNode.data.canOpen || links.length > 0;
-      var x = getX(treeNode);
-      var y = getY(treeNode);
-      var title = '';
+    let process = (treeNode, fromX, fromY) => {
+      let links = this.props.data.links[treeNode.id] || [];
+      let hasChildren = treeNode.data.canOpen || links.length > 0;
+      let x = getX(treeNode);
+      let y = getY(treeNode);
+      let title = '';
 
       if (treeNode.data.fullName) {
-        title = 'Alt-click for full ref'
+        title = 'Alt-click for full ref';
       }
 
       maxX = Math.max(x + spaceX, maxX);
       minY = Math.min(y, minY);
       maxY = Math.max(y + spaceY, maxY);
 
-      var n = (
+      let n = (
         <Node
           key={'n' + treeNode.id}
           shape='circle'
@@ -67,16 +78,16 @@ var Layout = React.createClass({
     process(this.props.tree, 0, 0);
 
     edges.forEach(e => {
-      var from = lookup[e[0]];
-      var to = lookup[e[1]];
+      let from = lookup[e[0]];
+      let to = lookup[e[1]];
       children.push(
         <path key={'p' + e[0] + '-' + e[1]} className='link' d={`M${getX(from)},${getY(from)}L${getX(to)},${getY(to)}`}/>);
     });
 
-    var sortOrder = (elm => elm.type == 'path' ? 0 : 1);
+    let sortOrder = (elm => elm.type === 'path' ? 0 : 1);
     children.sort((a, b) => sortOrder(a) - sortOrder(b));
 
-    var translateY = spaceY;
+    let translateY = spaceY;
     if (minY < 0) {
       translateY -= minY;
       maxY -= minY;
@@ -89,7 +100,5 @@ var Layout = React.createClass({
         </g>
       </svg>
     );
-  },
-});
-
-module.exports = React.createFactory(Layout);
+  }
+}

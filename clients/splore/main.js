@@ -1,41 +1,43 @@
+/* @flow */
+
 'use strict';
 
-var buchheim = require('./buchheim.js');
-var Layout = require('./layout.js');
-var Immutable = require('immutable');
-var noms = require('noms');
-var queryString = require('query-string');
-var React = require('react');
-var {Ref} = require('noms');
+import {layout, NodeGraph, TreeNode} from './buchheim.js';
+import Layout from './layout.js';
+import React from 'react'; //eslint-disable-line no-unused-vars
+import ReactDOM from 'react-dom';
+import {readValue, HttpStore, Ref} from 'noms';
 
-var data = {nodes: {}, links: {}};
-var rootRef = null;
+let data: NodeGraph = {nodes: {}, links: {}};
+let rootRef: Ref;
+let httpStore: HttpStore;
+let renderNode: ?HTMLElement;
 
-window.onload = function() {
-  var target = document.getElementById('root');
-  var w = window.innerWidth;
-  var h = window.innerHeight;
+window.addEventListener('load', () => {
+  renderNode = document.getElementById('splore');
+  httpStore = new HttpStore('http://localhost:8000');
 
-  noms.getRoot().then(ref => {
+  httpStore.getRoot().then(ref => {
     rootRef = ref;
-    handleChunkLoad(ref, new Ref(ref));
+    handleChunkLoad(ref, ref);
   });
-};
+});
 
 window.onresize = render;
 
-function handleChunkLoad(ref, val, fromRef) {
-  var counter = 0
-  var process = (ref, val, fromId) => {
-    if (typeof val == 'undefined') {
+function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
+  let counter = 0;
+
+  function process(ref, val, fromId): ?string {
+    if (typeof val === 'undefined') {
       return null;
     }
 
     // Assign a unique ID to this node.
     // We don't use the noms ref because we only want to represent values as shared in the graph if they are actually in the same chunk.
-    var id;
+    let id;
     if (val instanceof Ref) {
-      id = val.ref;
+      id = val.toString();
     } else {
       id = ref + '/' + counter++;
     }
@@ -55,48 +57,65 @@ function handleChunkLoad(ref, val, fromRef) {
 
     if (val instanceof Blob) {
       data.nodes[id] = {name: `Blob (${val.size})`};
-    } else if (Immutable.List.isList(val)) {
-      data.nodes[id] = {name: `List (${val.size})`};
+    } else if (Array.isArray(val)) {
+      data.nodes[id] = {name: `List (${val.length})`};
       val.forEach(c => process(ref, c, id));
-    } else if (Immutable.Set.isSet(val)) {
+    } else if (val instanceof Set) {
       data.nodes[id] = {name: `Set (${val.size})`};
       val.forEach(c => process(ref, c, id));
-    } else if (Immutable.Map.isMap(val)) {
-      var structName = val.get('$name');
-      if (structName) {
-        data.nodes[id] = {name: structName};
-      } else {
-        data.nodes[id] = {name: `Map (${val.size})`};
-      }
-      val.keySeq().filter(k => k != '$name')
-        .forEach(k => {
-          // TODO: handle non-string keys
-          var kid = process(ref, k, id);
-
+    } else if (val instanceof Map) {
+      data.nodes[id] = {name: `Map (${val.size})`};
+      val.forEach((v, k) => {
+        // TODO: handle non-string keys
+        let kid = process(ref, k, id);
+        if (kid) {
           // Start map keys open, just makes it easier to use.
           data.nodes[kid].isOpen = true;
 
-          process(ref, val.get(k), kid);
-        });
+          process(ref, v, kid);
+        } else {
+          throw new Error('No kid id.');
+        }
+      });
     } else if (val instanceof Ref) {
+      let refStr = val.toString();
       data.nodes[id] = {
         canOpen: true,
-        name: val.ref.substr(5, 6),
-        fullName: val.ref,
+        name: refStr.substr(5, 6),
+        fullName: refStr
       };
+    } else if (val._typeRef) {
+      // Struct
+      let structName = val._typeRef.name;
+      data.nodes[id] = {name: structName};
+      Object.keys(val).forEach(k => {
+        if (k === '_typeRef') {
+          return;
+        }
+        // TODO: handle non-string keys
+        let kid = process(ref, k, id);
+        if (kid) {
+          // Start map keys open, just makes it easier to use.
+          data.nodes[kid].isOpen = true;
+
+          process(ref, val[k], kid);
+        } else {
+          throw new Error('No kid id.');
+        }
+      });
     }
 
     return id;
-  };
+  }
 
   process(ref, val, fromRef);
   render();
 }
 
-function handleNodeClick(e, id) {
+function handleNodeClick(e: Event, id: string) {
   if (e.altKey) {
     if (data.nodes[id].fullName) {
-      window.prompt("Full ref", data.nodes[id].fullName);
+      window.prompt('Full ref', data.nodes[id].fullName);
     }
     return;
   }
@@ -111,14 +130,15 @@ function handleNodeClick(e, id) {
     if (data.links[id] || !data.nodes[id].isOpen) {
       render();
     } else {
-      noms.readValue(id, noms.getChunk)
-        .then(chunk => handleChunkLoad(id, chunk, id));
+      readValue(Ref.parse(id), httpStore).then(value => {
+        handleChunkLoad(id, value, id);
+      });
     }
   }
 }
 
 function render() {
-  var dt = new buchheim.TreeNode(data, rootRef, null, 0, 0, {});
-  buchheim.layout(dt);
-  React.render(<Layout tree={dt} data={data} onNodeClick={handleNodeClick}/>, document.body);
+  let dt = new TreeNode(data, rootRef.toString(), null, 0, 0, {});
+  layout(dt);
+  ReactDOM.render(<Layout tree={dt} data={data} onNodeClick={handleNodeClick}/>, renderNode);
 }

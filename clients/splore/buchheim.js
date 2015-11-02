@@ -1,3 +1,5 @@
+/* @flow */
+
 'use strict';
 
 // JavaScript implementation of Christoph Buchheim, Michael Jünger, Sebastian Leipert's tree layout algorithm. See: http://dl.acm.org/citation.cfm?id=729576.
@@ -5,16 +7,51 @@
 // Thanks also to Bill Mill for the explanation and Python sample code: http://billmill.org/pymag-trees/.
 
 // TreeNode represents one node of the tree visualization.
-class TreeNode {
-  constructor(data, id, parent, depth, number, seen) {  
+
+function assertNotNull<T>(v: ?T): T {
+  if (v !== null && v !== undefined) {
+    return v;
+  }
+
+  throw new Error('Non-null assertion failed');
+}
+
+export type NodeData = {
+  name: string,
+  fullName: string,
+  isOpen: boolean,
+  canOpen: boolean
+};
+
+export type NodeGraph = {
+  nodes: {[key: string]: NodeData},
+  links: {[key: string]: Array<string>}
+};
+
+export class TreeNode {
+  x: number;
+  y: number;
+  data: NodeData;
+  id: string;
+  children: Array<TreeNode>;
+  parent: ?TreeNode;
+  thread: ?TreeNode;
+  offset: number;
+  ancestor: TreeNode;
+  change: number;
+  shift: number;
+  number: number;
+  mod: number;
+
+  constructor(graph: NodeGraph, id: string, parent: ?TreeNode, depth: number, number: number, seen: {[key: string]: boolean}) {
     seen[id] = true;
     this.x = -1;
     this.y = depth;
-    this.data = data.nodes[id];
+    this.data = graph.nodes[id];
     this.id = id;
-    this.children = ((this.data.isOpen && data.links[id]) || [])
+    this.children = ((this.data.isOpen && graph.links[id]) || [])
       .filter(cid => !(cid in seen))
-      .map((cid, i) => new TreeNode(data, cid, this, depth+1, i+1, seen));
+      .map((cid, i) => new TreeNode(graph, cid, this, depth + 1, i + 1, seen));
     this.parent = parent;
     this.thread = null;
     this.offset = 0;
@@ -25,24 +62,24 @@ class TreeNode {
     this.mod = 0;
   }
 
-  left() {
+  left(): ?TreeNode {
     if (this.children.length > 0) {
       return this.children[0];
     }
     return this.thread;
   }
 
-  right() {
+  right(): ?TreeNode {
     if (this.children.length > 0) {
       return this.children[this.children.length - 1];
     }
     return this.thread;
   }
 
-  leftBrother() {
-    var n = null;
+  leftBrother(): ?TreeNode {
+    let n = null;
     if (this.parent) {
-      for (var node of this.parent.children) {
+      for (let node of this.parent.children) {
         if (node === this) {
           return n;
         } else {
@@ -53,8 +90,8 @@ class TreeNode {
     return n;
   }
 
-  getLeftMostSibling() {
-    if (this.parent && this != this.parent.children[0]) {
+  getLeftMostSibling(): ?TreeNode {
+    if (this.parent && this !== this.parent.children[0]) {
       return this.parent.children[0];
     } else {
       return null;
@@ -62,31 +99,29 @@ class TreeNode {
   }
 }
 
-function layout(tree) {
+export function layout(tree: TreeNode): void{
   firstWalk(tree, 1);
   secondWalk(tree, 0, 0);
 }
 
-function firstWalk(v, distance) {
+function firstWalk(v: TreeNode, distance: number): void {
   if (v.children.length === 0) {
     if (v.getLeftMostSibling()) {
-      v.x = v.leftBrother().x + distance;
+      v.x = assertNotNull(v.leftBrother()).x + distance;
     } else {
       v.x = 0;
     }
   } else {
-    var defaultAncestor = v.children[0];
-    for (var w of v.children) {
+    let defaultAncestor = v.children[0];
+    for (let w of v.children) {
       firstWalk(w, distance);
       defaultAncestor = apportion(w, defaultAncestor, distance);
     }
     executeShifts(v);
 
-    var midpoint = (v.children[0].x + v.children[v.children.length - 1].x) / 2;
+    let midpoint = (v.children[0].x + v.children[v.children.length - 1].x) / 2;
 
-    var ell = v.children[0];
-    var arr = v.children[v.children.length - 1];
-    var w = v.leftBrother();
+    let w = v.leftBrother();
     if (w) {
       v.x = w.x + distance;
       v.mod = v.x - midpoint;
@@ -94,30 +129,28 @@ function firstWalk(v, distance) {
       v.x = midpoint;
     }
   }
-
-  return v;
 }
 
-function apportion(v, defaultAncestor, distance) {
-  var w = v.leftBrother();
-  if (w != null) {
-    var vir = v;
-    var vor = v;
-    var vil = w;
-    var vol = v.getLeftMostSibling();
-    var sir = v.mod;
-    var sor = v.mod;
-    var sil = vil.mod;
-    var sol = vol.mod;
+function apportion(v: TreeNode, defaultAncestor: TreeNode, distance: number): TreeNode {
+  let w = v.leftBrother();
+  if (w !== null) {
+    let vir = v;
+    let vor = v;
+    let vil = assertNotNull(w);
+    let vol = assertNotNull(v.getLeftMostSibling());
+    let sir = v.mod;
+    let sor = v.mod;
+    let sil = vil.mod;
+    let sol = vol.mod;
     while (vil.right() && vir.left()) {
-      vil = vil.right();
-      vir = vir.left();
-      vol = vol.left();
-      vor = vor.right();
-      vor.ancestor = v
-      var shift = (vil.x + sil) - (vir.x + sir) + distance;
+      vil = assertNotNull(vil.right());
+      vir = assertNotNull(vir.left());
+      vol = assertNotNull(vol.left());
+      vor = assertNotNull(vor.right());
+      vor.ancestor = v;
+      let shift = (vil.x + sil) - (vir.x + sir) + distance;
       if (shift > 0) {
-        var a = ancestor(vil, v, defaultAncestor);
+        let a = ancestor(vil, v, defaultAncestor);
         moveSubtree(a, v, shift);
         sir = sir + shift;
         sor = sor + shift;
@@ -138,11 +171,11 @@ function apportion(v, defaultAncestor, distance) {
       defaultAncestor = v;
     }
   }
-  return defaultAncestor
+  return defaultAncestor;
 }
 
-function moveSubtree(wl, wr, shift) {
-  var subtrees = wr.number - wl.number;
+function moveSubtree(wl: TreeNode, wr: TreeNode, shift: number): void {
+  let subtrees = wr.number - wl.number;
   wr.change -= shift / subtrees;
   wr.shift += shift;
   wl.change += shift / subtrees;
@@ -150,11 +183,11 @@ function moveSubtree(wl, wr, shift) {
   wr.mod += shift;
 }
 
-function executeShifts(v) {
-  var shift = 0;
-  var change = 0;
-  for (var i = v.children.length - 1; i >= 0; i--) {
-    var w = v.children[i];
+function executeShifts(v: TreeNode): void {
+  let shift = 0;
+  let change = 0;
+  for (let i = v.children.length - 1; i >= 0; i--) {
+    let w = v.children[i];
     w.x += shift;
     w.mod += shift;
     change += w.change;
@@ -162,21 +195,19 @@ function executeShifts(v) {
   }
 }
 
-function ancestor(vil, v, defaultAncestor) {
-  if (v.parent.children.indexOf(vil.ancestor) > -1) {
+function ancestor(vil: TreeNode, v: TreeNode, defaultAncestor: TreeNode): TreeNode {
+  if (v.parent && v.parent.children.indexOf(vil.ancestor) > -1) {
     return vil.ancestor;
   } else {
     return defaultAncestor;
   }
 }
 
-function secondWalk(v, m, depth) {
-  v.x += m
-  v.y = depth
+function secondWalk(v: TreeNode, m: number, depth: number): void {
+  v.x += m;
+  v.y = depth;
 
-  for (var w of v.children) {
-    secondWalk(w, m + v.mod, depth+1)
+  for (let w of v.children) {
+    secondWalk(w, m + v.mod, depth + 1);
   }
 }
-
-module.exports = {TreeNode, layout};

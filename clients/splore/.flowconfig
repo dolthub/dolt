@@ -1,0 +1,10 @@
+[ignore]
+.*/node_modules/react/.*
+
+[include]
+
+[libs]
+
+[options]
+unsafe.enable_getters_and_setters=true
+munge_underscores=true
