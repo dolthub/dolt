@@ -35,10 +35,6 @@ func splitCompoundObject(co compoundObject, cs chunks.ChunkSink) compoundObject 
 	offsets := []uint64{}
 	chunks := []ref.Ref{}
 
-	toRef := func(co compoundObject) ref.Ref {
-		return WriteValue(compoundBlob{co}, cs)
-	}
-
 	startIndex := uint64(0)
 	h := buzhash.NewBuzHash(objectWindowSize)
 
@@ -49,7 +45,7 @@ func splitCompoundObject(co compoundObject, cs chunks.ChunkSink) compoundObject 
 		d.Chk.NoError(err)
 		if h.Sum32()&objectPattern == objectPattern {
 			h = buzhash.NewBuzHash(objectWindowSize)
-			c := makeSubObject(co, startIndex, uint64(i)+1, toRef)
+			c := makeSubObject(co, startIndex, uint64(i)+1, cs)
 			startIndex = uint64(i) + 1
 			offsets = append(offsets, co.offsets[i])
 			chunks = append(chunks, c)
@@ -63,7 +59,7 @@ func splitCompoundObject(co compoundObject, cs chunks.ChunkSink) compoundObject 
 
 	// Add remaining.
 	if startIndex != uint64(len(co.offsets)) {
-		c := makeSubObject(co, startIndex, uint64(len(co.offsets)), toRef)
+		c := makeSubObject(co, startIndex, uint64(len(co.offsets)), cs)
 		offsets = append(offsets, co.offsets[len(co.offsets)-1])
 		chunks = append(chunks, c)
 	}
@@ -83,9 +79,7 @@ func splitCompoundObject(co compoundObject, cs chunks.ChunkSink) compoundObject 
 	return splitCompoundObject(compoundObject{offsets, chunks, &ref.Ref{}, co.cs}, cs)
 }
 
-type compoundObjectToRef func(co compoundObject) ref.Ref
-
-func makeSubObject(co compoundObject, startIndex, endIndex uint64, toRef compoundObjectToRef) ref.Ref {
+func makeSubObject(co compoundObject, startIndex, endIndex uint64, cs chunks.ChunkSink) ref.Ref {
 	d.Chk.True(endIndex-startIndex > 0)
 	if endIndex-startIndex == 1 {
 		return co.chunks[startIndex]
@@ -101,5 +95,5 @@ func makeSubObject(co compoundObject, startIndex, endIndex uint64, toRef compoun
 	for i := startIndex; i < endIndex; i++ {
 		offsets[i-startIndex] = co.offsets[i] - startOffset
 	}
-	return toRef(compoundObject{offsets, chunks, &ref.Ref{}, co.cs})
+	return WriteValue(compoundBlob{compoundObject{offsets, chunks, &ref.Ref{}, co.cs}}, cs)
 }
