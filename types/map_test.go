@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
-	"github.com/attic-labs/noms/chunks"
 )
 
 func TestNewMap(t *testing.T) {
@@ -200,19 +199,6 @@ func TestMapEmpty(t *testing.T) {
 	assert.False(m.Empty())
 	m = m.Set(NewList(), NewMap())
 	assert.False(m.Empty())
-}
-
-func TestMapFutures(t *testing.T) {
-	assert := assert.New(t)
-
-	cs := chunks.NewTestStore()
-	k := NewString("hello")
-	kRef := WriteValue(k, cs)
-
-	m := NewMap(NewRef(kRef), Int64(0xbeefcafe))
-
-	assert.Len(m.Chunks(), 1)
-	assert.EqualValues(kRef, m.Chunks()[0])
 }
 
 func TestMapTypeRef(t *testing.T) {

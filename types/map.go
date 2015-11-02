@@ -124,8 +124,8 @@ func (m Map) Equals(other Value) bool {
 
 func (m Map) Chunks() (chunks []ref.Ref) {
 	for _, entry := range m.data {
-		chunks = appendValueToChunks(chunks, entry.key)
-		chunks = appendValueToChunks(chunks, entry.value)
+		chunks = appendChunk(chunks, entry.key)
+		chunks = appendChunk(chunks, entry.value)
 	}
 	return
 }

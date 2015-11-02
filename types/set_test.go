@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
-	"github.com/attic-labs/noms/chunks"
 )
 
 func TestSetLen(t *testing.T) {
@@ -123,18 +122,6 @@ func TestSetAny(t *testing.T) {
 	assert.NotNil(s.Any())
 	s = s.Insert(Int32(2))
 	assert.NotNil(s.Any())
-}
-
-func TestSetFutures(t *testing.T) {
-	assert := assert.New(t)
-
-	cs := chunks.NewTestStore()
-	v := NewString("hello")
-	r := WriteValue(v, cs)
-	s := NewSet(NewRef(r), Int64(0xbeefcafe))
-
-	assert.Len(s.Chunks(), 1)
-	assert.EqualValues(r, s.Chunks()[0])
 }
 
 func TestSetIter(t *testing.T) {

@@ -48,14 +48,9 @@ func toEncodeable(v Value, cs chunks.ChunkSink) interface{} {
 }
 
 func processCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) compoundBlobStruct {
-	refs := make([]ref.Ref, len(cb.futures))
-	for idx, f := range cb.futures {
-		processChild(f, cs)
-		refs[idx] = f.Ref()
-	}
 	return compoundBlobStructDef{
 		Offsets: cb.offsets,
-		Blobs:   refs,
+		Blobs:   cb.chunks,
 	}.New()
 }
 
@@ -66,14 +61,4 @@ func processPackageChildren(p Package, cs chunks.ChunkSink) {
 			writeChildValueInternal(*p, cs)
 		}
 	}
-}
-
-func processChild(f Future, cs chunks.ChunkSink) interface{} {
-	if v, ok := f.(*unresolvedFuture); ok {
-		return v.Ref()
-	}
-
-	v := f.Val()
-	d.Exp.NotNil(v)
-	return writeChildValueInternal(v, cs)
 }
