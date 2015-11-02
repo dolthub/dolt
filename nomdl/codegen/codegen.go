@@ -11,9 +11,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"text/template"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/tools/imports"
 	"github.com/attic-labs/noms/chunks"
@@ -27,11 +30,13 @@ import (
 )
 
 var (
-	outDirFlag  = flag.String("out-dir", "", "Directory where generated code will be written")
+	outDirFlag  = flag.String("out-dir", ".", "Directory where generated code will be written")
 	inFlag      = flag.String("in", "", "The name of the noms file to read")
-	outFlag     = flag.String("out", "", "The name of the go file to write")
 	pkgDSFlag   = flag.String("package-ds", "", "The dataset to read/write packages from/to.")
 	packageFlag = flag.String("package", "", "The name of the go package to write")
+
+	idRegexp    = regexp.MustCompile(`[_\pL][_\pL\pN]*`)
+	illegalRune = regexp.MustCompile(`[^_\pL\pN]`)
 )
 
 const ext = ".noms"
@@ -67,23 +72,21 @@ func main() {
 	}
 
 	localPkgs := refSet{}
+	outDir, err := filepath.Abs(*outDirFlag)
+	d.Chk.NoError(err, "Could not canonicalize -out-dir: %v", err)
+	packageName := getGoPackageName(outDir)
+
 	if *inFlag != "" {
-		out := *outFlag
-		if out == "" {
-			out = getOutFileName(*inFlag)
-		}
-		p := parsePackageFile(getGoPackageName(), *inFlag, pkgDS)
+		out := getOutFileName(*inFlag)
+		p := parsePackageFile(packageName, *inFlag, pkgDS)
 		localPkgs[p.Ref()] = true
-		generate(getGoPackageName(), *inFlag, out, filepath.Dir(out), map[string]bool{}, p, localPkgs, pkgDS)
+		generate(packageName, *inFlag, filepath.Join(outDir, out), outDir, map[string]bool{}, p, localPkgs, pkgDS)
 		return
 	}
 
 	// Generate code from all .noms file in the current directory
 	nomsFiles, err := filepath.Glob("*" + ext)
 
-	outDir, err := filepath.Abs(*outDirFlag)
-	d.Chk.NoError(err, "Could not canonicalize -out-dir: %v", err)
-	packageName := getGoPackageName()
 	written := map[string]bool{}
 	packages := map[string]pkg.Parsed{}
 	for _, inFile := range nomsFiles {
@@ -179,24 +182,34 @@ func getBareFileName(in string) string {
 	return base[:len(base)-len(filepath.Ext(base))]
 }
 
-func getGoPackageName() string {
+func getGoPackageName(outDir string) string {
 	if *packageFlag != "" {
+		d.Exp.True(idRegexp.MatchString(*packageFlag), "%s is not a legal Go identifier.", *packageFlag)
 		return *packageFlag
-	}
-	if *outDirFlag != "" {
-		return filepath.Base(*outDirFlag)
 	}
 
 	// It is illegal to have multiple go files in the same directory with different package names.
 	// We can therefore just pick the first one and get the package name from there.
-	goFiles, err := filepath.Glob("*.go")
+	goFiles, err := filepath.Glob(filepath.Join(outDir, "*.go"))
 	d.Chk.NoError(err)
-	d.Chk.True(len(goFiles) > 0)
+	if len(goFiles) == 0 {
+		d.Exp.NotEmpty(outDir, "Cannot convert empty path into a Go package name.")
+		return makeGoIdentifier(filepath.Base(outDir))
+	}
+	d.Chk.True(len(goFiles) > 0, "No Go files in current directory; cannot infer pacakge name.")
 
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, goFiles[0], nil, parser.PackageClauseOnly)
 	d.Chk.NoError(err)
 	return f.Name.String()
+}
+
+func makeGoIdentifier(in string) string {
+	d.Chk.NotEmpty(in, "Cannot convert empty string to legal Go identifier.")
+	if r, _ := utf8.DecodeRuneInString(in); unicode.IsNumber(r) {
+		in = "_" + in
+	}
+	return illegalRune.ReplaceAllLiteralString(in, "_")
 }
 
 type codeGen struct {
@@ -208,9 +221,6 @@ type codeGen struct {
 	generator  *code.Generator
 	templates  *template.Template
 	sharedData sharedData
-}
-
-type resolver struct {
 }
 
 func newCodeGen(w io.Writer, fileID string, written map[string]bool, deps depsMap, pkg pkg.Parsed) *codeGen {
