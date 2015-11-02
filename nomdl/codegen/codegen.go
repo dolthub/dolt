@@ -77,7 +77,7 @@ func main() {
 	packageName := getGoPackageName(outDir)
 
 	if *inFlag != "" {
-		out := getOutFileName(*inFlag)
+		out := getOutFileName(filepath.Base(*inFlag))
 		p := parsePackageFile(packageName, *inFlag, pkgDS)
 		localPkgs[p.Ref()] = true
 		generate(packageName, *inFlag, filepath.Join(outDir, out), outDir, map[string]bool{}, p, localPkgs, pkgDS)
