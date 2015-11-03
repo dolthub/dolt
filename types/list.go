@@ -195,7 +195,3 @@ func (l List) TypeRef() TypeRef {
 func (l List) elemType() TypeRef {
 	return l.t.Desc.(CompoundDesc).ElemTypes[0]
 }
-
-func ListFromVal(v Value) List {
-	return v.(List)
-}

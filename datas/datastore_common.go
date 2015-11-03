@@ -13,7 +13,7 @@ type dataStoreCommon struct {
 }
 
 func datasetsFromRef(datasetsRef ref.Ref, cs chunks.ChunkSource) *MapOfStringToRefOfCommit {
-	c := MapOfStringToRefOfCommitFromVal(types.ReadValue(datasetsRef, cs))
+	c := types.ReadValue(datasetsRef, cs).(MapOfStringToRefOfCommit)
 	return &c
 }
 

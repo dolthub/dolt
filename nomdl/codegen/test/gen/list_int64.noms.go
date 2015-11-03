@@ -36,15 +36,6 @@ func (l ListOfInt64) Def() ListOfInt64Def {
 	return d
 }
 
-func ListOfInt64FromVal(val types.Value) ListOfInt64 {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ListOfInt64); ok {
-		return val
-	}
-	// TODO: Validate here
-	return ListOfInt64{val.(types.List), &ref.Ref{}}
-}
-
 func (l ListOfInt64) InternalImplementation() types.List {
 	return l.l
 }
@@ -73,7 +64,7 @@ func (m ListOfInt64) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForListOfInt64 = types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.Int64Kind))
 	types.RegisterFromValFunction(__typeRefForListOfInt64, func(v types.Value) types.Value {
-		return ListOfInt64FromVal(v)
+		return ListOfInt64{v.(types.List), &ref.Ref{}}
 	})
 }
 

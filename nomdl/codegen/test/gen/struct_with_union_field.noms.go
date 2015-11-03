@@ -306,14 +306,6 @@ func (s SetOfUInt8) Def() SetOfUInt8Def {
 	return def
 }
 
-func SetOfUInt8FromVal(val types.Value) SetOfUInt8 {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(SetOfUInt8); ok {
-		return val
-	}
-	return SetOfUInt8{val.(types.Set), &ref.Ref{}}
-}
-
 func (s SetOfUInt8) InternalImplementation() types.Set {
 	return s.s
 }
@@ -342,7 +334,7 @@ func (m SetOfUInt8) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForSetOfUInt8 = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
 	types.RegisterFromValFunction(__typeRefForSetOfUInt8, func(v types.Value) types.Value {
-		return SetOfUInt8FromVal(v)
+		return SetOfUInt8{v.(types.Set), &ref.Ref{}}
 	})
 }
 

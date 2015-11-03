@@ -164,15 +164,6 @@ func (l ListOfStruct) Def() ListOfStructDef {
 	return d
 }
 
-func ListOfStructFromVal(val types.Value) ListOfStruct {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ListOfStruct); ok {
-		return val
-	}
-	// TODO: Validate here
-	return ListOfStruct{val.(types.List), &ref.Ref{}}
-}
-
 func (l ListOfStruct) InternalImplementation() types.List {
 	return l.l
 }
@@ -201,7 +192,7 @@ func (m ListOfStruct) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForListOfStruct = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__genPackageInFile_struct_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfStruct, func(v types.Value) types.Value {
-		return ListOfStructFromVal(v)
+		return ListOfStruct{v.(types.List), &ref.Ref{}}
 	})
 }
 

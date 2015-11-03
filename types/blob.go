@@ -76,10 +76,6 @@ func NewBlob(r io.Reader, cs chunks.ChunkStore) (Blob, error) {
 	return compoundBlob{co}, nil
 }
 
-func BlobFromVal(v Value) Blob {
-	return v.(Blob)
-}
-
 // copyChunk copies from src to dst until a chunk boundary is found.
 // It returns the number of bytes copied and the earliest error encountered while copying.
 // copyChunk never returns an io.EOF error, instead it returns the number of bytes read up to the io.EOF.

@@ -33,19 +33,6 @@ func TestRef(t *testing.T) {
 	assert.False(r.Equals(r3))
 }
 
-func TestRefFromValAndNomsValue(t *testing.T) {
-	assert := assert.New(t)
-
-	l := gen.ListOfStringDef{"a", "b", "c"}.New()
-	rv := types.NewRef(l.Ref())
-	r := gen.RefOfListOfStringFromVal(rv)
-	r2 := gen.NewRefOfListOfString(l.Ref())
-	assert.True(r.Equals(r2))
-
-	rv2 := types.NewRef(r.TargetRef())
-	assert.True(rv.Equals(rv2))
-}
-
 func TestListOfRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()

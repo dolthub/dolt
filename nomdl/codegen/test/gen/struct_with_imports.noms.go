@@ -211,15 +211,6 @@ func (l ListOfD) Def() ListOfDDef {
 	return d
 }
 
-func ListOfDFromVal(val types.Value) ListOfD {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ListOfD); ok {
-		return val
-	}
-	// TODO: Validate here
-	return ListOfD{val.(types.List), &ref.Ref{}}
-}
-
 func (l ListOfD) InternalImplementation() types.List {
 	return l.l
 }
@@ -248,7 +239,7 @@ func (m ListOfD) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForListOfD = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"), 0))
 	types.RegisterFromValFunction(__typeRefForListOfD, func(v types.Value) types.Value {
-		return ListOfDFromVal(v)
+		return ListOfD{v.(types.List), &ref.Ref{}}
 	})
 }
 

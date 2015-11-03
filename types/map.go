@@ -185,7 +185,3 @@ func indexMapData(m mapData, r ref.Ref) int {
 		return !ref.Less(m[i].key.Ref(), r)
 	})
 }
-
-func MapFromVal(v Value) Map {
-	return v.(Map)
-}

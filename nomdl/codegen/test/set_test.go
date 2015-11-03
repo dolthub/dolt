@@ -24,16 +24,6 @@ func TestSetDef(t *testing.T) {
 	assert.True(s.Equals(s2))
 }
 
-func TestSetValue(t *testing.T) {
-	assert := assert.New(t)
-
-	def := gen.SetOfBoolDef{true: true}
-	m := def.New()
-	val := m
-	s2 := gen.SetOfBoolFromVal(val)
-	assert.True(m.Equals(s2))
-}
-
 func TestSetOfBoolIter(t *testing.T) {
 	assert := assert.New(t)
 

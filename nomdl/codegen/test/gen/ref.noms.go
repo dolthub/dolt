@@ -147,14 +147,6 @@ func (r RefOfListOfString) Chunks() (chunks []ref.Ref) {
 	return
 }
 
-func RefOfListOfStringFromVal(val types.Value) RefOfListOfString {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(RefOfListOfString); ok {
-		return val
-	}
-	return NewRefOfListOfString(val.(types.Ref).TargetRef())
-}
-
 // A Noms Value that describes RefOfListOfString.
 var __typeRefForRefOfListOfString types.TypeRef
 
@@ -165,7 +157,7 @@ func (m RefOfListOfString) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForRefOfListOfString = types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.StringKind)))
 	types.RegisterFromValFunction(__typeRefForRefOfListOfString, func(v types.Value) types.Value {
-		return RefOfListOfStringFromVal(v)
+		return NewRefOfListOfString(v.(types.Ref).TargetRef())
 	})
 }
 
@@ -206,15 +198,6 @@ func (l ListOfRefOfFloat32) Def() ListOfRefOfFloat32Def {
 	return d
 }
 
-func ListOfRefOfFloat32FromVal(val types.Value) ListOfRefOfFloat32 {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ListOfRefOfFloat32); ok {
-		return val
-	}
-	// TODO: Validate here
-	return ListOfRefOfFloat32{val.(types.List), &ref.Ref{}}
-}
-
 func (l ListOfRefOfFloat32) InternalImplementation() types.List {
 	return l.l
 }
@@ -243,7 +226,7 @@ func (m ListOfRefOfFloat32) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForListOfRefOfFloat32 = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakePrimitiveTypeRef(types.Float32Kind)))
 	types.RegisterFromValFunction(__typeRefForListOfRefOfFloat32, func(v types.Value) types.Value {
-		return ListOfRefOfFloat32FromVal(v)
+		return ListOfRefOfFloat32{v.(types.List), &ref.Ref{}}
 	})
 }
 
@@ -348,14 +331,6 @@ func (r RefOfSetOfFloat32) Chunks() (chunks []ref.Ref) {
 	return
 }
 
-func RefOfSetOfFloat32FromVal(val types.Value) RefOfSetOfFloat32 {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(RefOfSetOfFloat32); ok {
-		return val
-	}
-	return NewRefOfSetOfFloat32(val.(types.Ref).TargetRef())
-}
-
 // A Noms Value that describes RefOfSetOfFloat32.
 var __typeRefForRefOfSetOfFloat32 types.TypeRef
 
@@ -366,7 +341,7 @@ func (m RefOfSetOfFloat32) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForRefOfSetOfFloat32 = types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind)))
 	types.RegisterFromValFunction(__typeRefForRefOfSetOfFloat32, func(v types.Value) types.Value {
-		return RefOfSetOfFloat32FromVal(v)
+		return NewRefOfSetOfFloat32(v.(types.Ref).TargetRef())
 	})
 }
 
@@ -407,15 +382,6 @@ func (l ListOfString) Def() ListOfStringDef {
 	return d
 }
 
-func ListOfStringFromVal(val types.Value) ListOfString {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ListOfString); ok {
-		return val
-	}
-	// TODO: Validate here
-	return ListOfString{val.(types.List), &ref.Ref{}}
-}
-
 func (l ListOfString) InternalImplementation() types.List {
 	return l.l
 }
@@ -444,7 +410,7 @@ func (m ListOfString) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForListOfString = types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.StringKind))
 	types.RegisterFromValFunction(__typeRefForListOfString, func(v types.Value) types.Value {
-		return ListOfStringFromVal(v)
+		return ListOfString{v.(types.List), &ref.Ref{}}
 	})
 }
 
@@ -549,14 +515,6 @@ func (r RefOfFloat32) Chunks() (chunks []ref.Ref) {
 	return
 }
 
-func RefOfFloat32FromVal(val types.Value) RefOfFloat32 {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(RefOfFloat32); ok {
-		return val
-	}
-	return NewRefOfFloat32(val.(types.Ref).TargetRef())
-}
-
 // A Noms Value that describes RefOfFloat32.
 var __typeRefForRefOfFloat32 types.TypeRef
 
@@ -567,7 +525,7 @@ func (m RefOfFloat32) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForRefOfFloat32 = types.MakeCompoundTypeRef(types.RefKind, types.MakePrimitiveTypeRef(types.Float32Kind))
 	types.RegisterFromValFunction(__typeRefForRefOfFloat32, func(v types.Value) types.Value {
-		return RefOfFloat32FromVal(v)
+		return NewRefOfFloat32(v.(types.Ref).TargetRef())
 	})
 }
 
@@ -611,14 +569,6 @@ func (s SetOfFloat32) Def() SetOfFloat32Def {
 	return def
 }
 
-func SetOfFloat32FromVal(val types.Value) SetOfFloat32 {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(SetOfFloat32); ok {
-		return val
-	}
-	return SetOfFloat32{val.(types.Set), &ref.Ref{}}
-}
-
 func (s SetOfFloat32) InternalImplementation() types.Set {
 	return s.s
 }
@@ -647,7 +597,7 @@ func (m SetOfFloat32) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForSetOfFloat32 = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind))
 	types.RegisterFromValFunction(__typeRefForSetOfFloat32, func(v types.Value) types.Value {
-		return SetOfFloat32FromVal(v)
+		return SetOfFloat32{v.(types.Set), &ref.Ref{}}
 	})
 }
 

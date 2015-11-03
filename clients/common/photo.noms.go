@@ -363,15 +363,6 @@ func (m MapOfSizeToString) Def() MapOfSizeToStringDef {
 	return def
 }
 
-func MapOfSizeToStringFromVal(val types.Value) MapOfSizeToString {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(MapOfSizeToString); ok {
-		return val
-	}
-	// TODO: Validate here
-	return MapOfSizeToString{val.(types.Map), &ref.Ref{}}
-}
-
 func (m MapOfSizeToString) InternalImplementation() types.Map {
 	return m.m
 }
@@ -400,7 +391,7 @@ func (m MapOfSizeToString) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForMapOfSizeToString = types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(__commonPackageInFile_photo_CachedRef, 1), types.MakePrimitiveTypeRef(types.StringKind))
 	types.RegisterFromValFunction(__typeRefForMapOfSizeToString, func(v types.Value) types.Value {
-		return MapOfSizeToStringFromVal(v)
+		return MapOfSizeToString{v.(types.Map), &ref.Ref{}}
 	})
 }
 
@@ -498,14 +489,6 @@ func (s SetOfString) Def() SetOfStringDef {
 	return def
 }
 
-func SetOfStringFromVal(val types.Value) SetOfString {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(SetOfString); ok {
-		return val
-	}
-	return SetOfString{val.(types.Set), &ref.Ref{}}
-}
-
 func (s SetOfString) InternalImplementation() types.Set {
 	return s.s
 }
@@ -534,7 +517,7 @@ func (m SetOfString) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForSetOfString = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind))
 	types.RegisterFromValFunction(__typeRefForSetOfString, func(v types.Value) types.Value {
-		return SetOfStringFromVal(v)
+		return SetOfString{v.(types.Set), &ref.Ref{}}
 	})
 }
 

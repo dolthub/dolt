@@ -37,15 +37,6 @@ func (m MapOfBoolToString) Def() MapOfBoolToStringDef {
 	return def
 }
 
-func MapOfBoolToStringFromVal(val types.Value) MapOfBoolToString {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(MapOfBoolToString); ok {
-		return val
-	}
-	// TODO: Validate here
-	return MapOfBoolToString{val.(types.Map), &ref.Ref{}}
-}
-
 func (m MapOfBoolToString) InternalImplementation() types.Map {
 	return m.m
 }
@@ -74,7 +65,7 @@ func (m MapOfBoolToString) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForMapOfBoolToString = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.BoolKind), types.MakePrimitiveTypeRef(types.StringKind))
 	types.RegisterFromValFunction(__typeRefForMapOfBoolToString, func(v types.Value) types.Value {
-		return MapOfBoolToStringFromVal(v)
+		return MapOfBoolToString{v.(types.Map), &ref.Ref{}}
 	})
 }
 
@@ -170,15 +161,6 @@ func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 	return def
 }
 
-func MapOfStringToValueFromVal(val types.Value) MapOfStringToValue {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(MapOfStringToValue); ok {
-		return val
-	}
-	// TODO: Validate here
-	return MapOfStringToValue{val.(types.Map), &ref.Ref{}}
-}
-
 func (m MapOfStringToValue) InternalImplementation() types.Map {
 	return m.m
 }
@@ -207,7 +189,7 @@ func (m MapOfStringToValue) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.Value {
-		return MapOfStringToValueFromVal(v)
+		return MapOfStringToValue{v.(types.Map), &ref.Ref{}}
 	})
 }
 

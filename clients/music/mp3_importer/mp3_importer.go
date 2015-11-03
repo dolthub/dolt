@@ -71,7 +71,7 @@ func listSongs(ds *dataset.Dataset) {
 func readSongsFromDataset(ds *dataset.Dataset) ListOfSong {
 	songs := NewListOfSong()
 	if commit, ok := ds.MaybeHead(); ok {
-		songs = ListOfSongFromVal(commit.Value())
+		songs = commit.Value().(ListOfSong)
 	}
 	return songs
 }

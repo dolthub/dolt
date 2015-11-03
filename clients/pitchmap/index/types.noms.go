@@ -164,15 +164,6 @@ func (l ListOfMapOfStringToValue) Def() ListOfMapOfStringToValueDef {
 	return d
 }
 
-func ListOfMapOfStringToValueFromVal(val types.Value) ListOfMapOfStringToValue {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ListOfMapOfStringToValue); ok {
-		return val
-	}
-	// TODO: Validate here
-	return ListOfMapOfStringToValue{val.(types.List), &ref.Ref{}}
-}
-
 func (l ListOfMapOfStringToValue) InternalImplementation() types.List {
 	return l.l
 }
@@ -201,7 +192,7 @@ func (m ListOfMapOfStringToValue) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForListOfMapOfStringToValue = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind)))
 	types.RegisterFromValFunction(__typeRefForListOfMapOfStringToValue, func(v types.Value) types.Value {
-		return ListOfMapOfStringToValueFromVal(v)
+		return ListOfMapOfStringToValue{v.(types.List), &ref.Ref{}}
 	})
 }
 
@@ -307,15 +298,6 @@ func (m MapOfStringToListOfPitch) Def() MapOfStringToListOfPitchDef {
 	return def
 }
 
-func MapOfStringToListOfPitchFromVal(val types.Value) MapOfStringToListOfPitch {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(MapOfStringToListOfPitch); ok {
-		return val
-	}
-	// TODO: Validate here
-	return MapOfStringToListOfPitch{val.(types.Map), &ref.Ref{}}
-}
-
 func (m MapOfStringToListOfPitch) InternalImplementation() types.Map {
 	return m.m
 }
@@ -344,7 +326,7 @@ func (m MapOfStringToListOfPitch) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForMapOfStringToListOfPitch = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToListOfPitch, func(v types.Value) types.Value {
-		return MapOfStringToListOfPitchFromVal(v)
+		return MapOfStringToListOfPitch{v.(types.Map), &ref.Ref{}}
 	})
 }
 
@@ -440,15 +422,6 @@ func (m MapOfStringToString) Def() MapOfStringToStringDef {
 	return def
 }
 
-func MapOfStringToStringFromVal(val types.Value) MapOfStringToString {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(MapOfStringToString); ok {
-		return val
-	}
-	// TODO: Validate here
-	return MapOfStringToString{val.(types.Map), &ref.Ref{}}
-}
-
 func (m MapOfStringToString) InternalImplementation() types.Map {
 	return m.m
 }
@@ -477,7 +450,7 @@ func (m MapOfStringToString) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForMapOfStringToString = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.StringKind))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToString, func(v types.Value) types.Value {
-		return MapOfStringToStringFromVal(v)
+		return MapOfStringToString{v.(types.Map), &ref.Ref{}}
 	})
 }
 
@@ -573,15 +546,6 @@ func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 	return def
 }
 
-func MapOfStringToValueFromVal(val types.Value) MapOfStringToValue {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(MapOfStringToValue); ok {
-		return val
-	}
-	// TODO: Validate here
-	return MapOfStringToValue{val.(types.Map), &ref.Ref{}}
-}
-
 func (m MapOfStringToValue) InternalImplementation() types.Map {
 	return m.m
 }
@@ -610,7 +574,7 @@ func (m MapOfStringToValue) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.Value {
-		return MapOfStringToValueFromVal(v)
+		return MapOfStringToValue{v.(types.Map), &ref.Ref{}}
 	})
 }
 
@@ -705,15 +669,6 @@ func (l ListOfPitch) Def() ListOfPitchDef {
 	return d
 }
 
-func ListOfPitchFromVal(val types.Value) ListOfPitch {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ListOfPitch); ok {
-		return val
-	}
-	// TODO: Validate here
-	return ListOfPitch{val.(types.List), &ref.Ref{}}
-}
-
 func (l ListOfPitch) InternalImplementation() types.List {
 	return l.l
 }
@@ -742,7 +697,7 @@ func (m ListOfPitch) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForListOfPitch = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfPitch, func(v types.Value) types.Value {
-		return ListOfPitchFromVal(v)
+		return ListOfPitch{v.(types.List), &ref.Ref{}}
 	})
 }
 
