@@ -2,9 +2,10 @@
 
 'use strict';
 
-import {isPrimitiveKind, Kind} from './noms_kind.js';
 import Ref from './ref.js';
 import type {NomsKind} from './noms_kind.js';
+import {invariant} from './assert.js';
+import {isPrimitiveKind, Kind} from './noms_kind.js';
 
 type TypeDesc = {
   kind: NomsKind;
@@ -161,19 +162,13 @@ class TypeRef {
   }
 
   get packageRef(): Ref {
-    if (this._desc instanceof UnresolvedDesc) {
-      return this._desc._pkgRef;
-    }
-
-    throw new Error('PackageRef only works on unresolved type refs');
+    invariant(this._desc instanceof UnresolvedDesc);
+    return this._desc._pkgRef;
   }
 
   get ordinal(): number {
-    if (this._desc instanceof UnresolvedDesc) {
-      return this._desc._ordinal;
-    }
-
-    throw new Error('Ordinal has not been set');
+    invariant(this._desc instanceof UnresolvedDesc);
+    return this._desc._ordinal;
   }
 
   get name(): string {
@@ -198,11 +193,8 @@ class TypeRef {
   }
 
   get elemTypes(): Array<TypeRef> {
-    if (this._desc instanceof CompoundDesc) {
-      return this._desc.elemTypes;
-    }
-
-    throw new Error('Only CompoundDesc have elemTypes');
+    invariant(this._desc instanceof CompoundDesc);
+    return this._desc.elemTypes;
   }
 }
 
@@ -232,16 +224,10 @@ function makePrimitiveTypeRef(k: NomsKind): TypeRef {
 
 function makeCompoundTypeRef(k: NomsKind, ...elemTypes: Array<TypeRef>): TypeRef {
   if (elemTypes.length === 1) {
-    if (k === Kind.Map) {
-      throw new Error('Map requires 2 element types');
-    }
+    invariant(k !== Kind.Map, 'Map requires 2 element types');
   } else {
-    if (k !== Kind.Map) {
-      throw new Error('Only Map can have multiple element types');
-    }
-    if (elemTypes.length !== 2) {
-      throw new Error('Map requires 2 element types');
-    }
+    invariant(k === Kind.Map, 'Only Map can have multiple element types');
+    invariant(elemTypes.length === 2, 'Map requires 2 element types');
   }
 
   return buildType('', new CompoundDesc(k, elemTypes));

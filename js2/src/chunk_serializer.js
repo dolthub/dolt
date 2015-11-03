@@ -4,6 +4,7 @@
 
 import Chunk from './chunk.js';
 import Ref from './ref.js';
+import {invariant} from './assert.js';
 
 const sha1Size = 20;
 const chunkLengthSize = 4; // uint32
@@ -44,9 +45,7 @@ export function deserialize(buffer: ArrayBuffer): Array<Chunk> {
 
   let totalLenth = buffer.byteLength;
   for (let offset = 0; offset < totalLenth;) {
-    if (buffer.byteLength - offset < chunkHeaderSize) {
-      throw new Error('Invalid chunk buffer');
-    }
+    invariant(buffer.byteLength - offset >= chunkHeaderSize, 'Invalid chunk buffer');
 
     let refArray = new Uint8Array(buffer, offset, sha1Size);
     let ref = new Ref(new Uint8Array(refArray));
@@ -57,15 +56,12 @@ export function deserialize(buffer: ArrayBuffer): Array<Chunk> {
     let chunkLength = sizeArray[0];
     offset += chunkLengthSize;
 
-    if (offset + chunkLength > totalLenth) {
-      throw new Error('Invalid chunk buffer');
-    }
+    invariant(offset + chunkLength <= totalLenth, 'Invalid chunk buffer');
 
     let dataArray = new Uint8Array(buffer, offset, chunkLength);
     let chunk = new Chunk(new Uint8Array(dataArray)); // Makes a slice (copy) of the byte sequence from buffer.
-    if (!chunk.ref.equals(ref)) {
-      throw new Error('Serialized ref !== computed ref');
-    }
+
+    invariant(chunk.ref.equals(ref), 'Serialized ref !== computed ref');
 
     offset += chunkLength;
     chunks.push(chunk);
