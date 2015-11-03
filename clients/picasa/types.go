@@ -1,68 +1,5 @@
 package main
 
-import (
-	"bytes"
-
-	"github.com/attic-labs/noms/ref"
-)
-
-// Photo is represents all the info about images that we download from picasa
-// including the image itself
-type Photo struct {
-	NomsName string          `noms:"$name"`
-	Height   int             `noms:"height"`
-	ID       string          `noms:"ID"`
-	Image    *bytes.Reader   `noms:"image"`
-	Tags     map[string]bool `noms:"tags"`
-	Title    string          `noms:"title"`
-	URL      string          `noms:"URL"`
-	Width    int             `noms:"width"`
-}
-
-// Album represents all the info about picassa albums including the list of
-// photos it contains
-type Album struct {
-	ID        string
-	Title     string
-	NumPhotos int
-}
-
-// User represents the user who authenticated and a list of albums.
-type User struct {
-	ID     string
-	Name   string
-	Albums []Album
-}
-
-// PhotoMessage is used for communicating with Go routines that fetch photos
-type PhotoMessage struct {
-	Index int
-	Photo Photo
-}
-
-// RefMessage is used for communicating results of photo fetch back to func main() {
-// program
-type RefMessage struct {
-	Index int
-	Ref   ref.Ref
-}
-
-// ByIndex is used for sorting RefMessages by index field
-type ByIndex []RefMessage
-
-func (slice ByIndex) Len() int {
-	return len(slice)
-}
-
-func (slice ByIndex) Less(i, j int) bool {
-	return slice[i].Index < slice[j].Index
-}
-
-func (slice ByIndex) Swap(i, j int) {
-	slice[i], slice[j] = slice[j], slice[i]
-}
-
-// AlbumJSON is used for unmarshalling results from picasa 'list photos on album' api
 type AlbumJSON struct {
 	Feed struct {
 		UserName struct {
@@ -108,6 +45,13 @@ type AlbumJSON struct {
 			Width struct {
 				V string `json:"$t"`
 			} `json:"gphoto$wIDth"`
+			Geo struct {
+				Point struct {
+					Pos struct {
+						V string `json:"$t"`
+					} `json:"gml$pos"`
+				} `json:"gml$Point"`
+			} `json:"georss$where"`
 		}
 	}
 }

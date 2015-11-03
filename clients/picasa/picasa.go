@@ -11,19 +11,15 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"sort"
-	"strings"
-	"sync"
-	"time"
-
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2"
 	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2/google"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/marshal"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -60,33 +56,37 @@ func main() {
 	}
 	defer ds.Close()
 
-	var cu types.Value
+	var currentUser *User
 	if commit, ok := ds.MaybeHead(); ok {
-		cu = commit.Value()
+		currentUserRef := commit.Value().(RefOfUser)
+		cu := currentUserRef.TargetValue(ds.Store())
+		currentUser = &cu
 	}
 
-	c, refreshToken := doAuthentication(cu)
-	authHTTPClient = c
+	var refreshToken string
+	authHTTPClient, refreshToken = doAuthentication(currentUser)
 
 	// set start after authentication so we don't count that time
 	start = time.Now()
 
-	var nomsUser types.Value
+	var user *User
 	if *albumIDFlag != "" {
-		newNomsUser, newNomsAlbum, _ := getAlbum(*albumIDFlag)
-		if cu != nil {
-			nomsUser = mergeInCurrentAlbums(cu, newNomsUser, newNomsAlbum)
+		newUser := getSingleAlbum(*albumIDFlag)
+		if currentUser != nil {
+			user = mergeInCurrentAlbums(currentUser, newUser)
 		} else {
-			nomsUser = newNomsUser
+			user = newUser
 		}
-		printStats(newNomsUser)
 	} else {
-		nomsUser = getAlbums()
-		printStats(nomsUser)
+		user = getAlbums()
 	}
 
-	nomsUser = setValueInNomsMap(nomsUser, "RefreshToken", types.NewString(refreshToken))
-	_, ok := ds.Commit(nomsUser)
+	printStats(user)
+
+	*user = user.SetRefreshToken(refreshToken)
+	userRef := types.WriteValue(user, ds.Store())
+	fmt.Printf("userRef: %s\n", userRef)
+	_, ok := ds.Commit(NewRefOfUser(userRef))
 	d.Exp.True(ok, "Could not commit due to conflicting edit")
 }
 
@@ -111,55 +111,57 @@ func picasaUsage() {
 	fmt.Fprintf(os.Stderr, "\n%s\n\n", credentialSteps)
 }
 
-func getAlbum(albumID string) (nomsUser types.Value, nomsAlbum types.Value, nomsPhotoList types.Value) {
+func getSingleAlbum(albumID string) *User {
 	aj := AlbumJSON{}
 	path := fmt.Sprintf("user/default/albumid/%s?alt=json&max-results=0", albumID)
 	callPicasaAPI(authHTTPClient, path, &aj)
-	u := User{ID: aj.Feed.UserID.V, Name: aj.Feed.UserName.V}
-	a := Album{ID: aj.Feed.ID.V, Title: aj.Feed.Title.V, NumPhotos: aj.Feed.NumPhotos.V}
-	nomsPhotoList = getPhotos(a, 1)
-	nomsAlbum = marshal.Marshal(a)
-	nomsAlbum = setValueInNomsMap(nomsAlbum, "Photos", nomsPhotoList)
-	nomsUser = marshal.Marshal(u)
-	nomsUser = setValueInNomsMap(nomsUser, "Albums", types.NewList(nomsAlbum))
-	return nomsUser, nomsAlbum, nomsPhotoList
+	u := UserDef{Id: aj.Feed.UserID.V, Name: aj.Feed.UserName.V}.New()
+
+	albums := NewMapOfStringToAlbum()
+	albums = getAlbum(0, aj.Feed.ID.V, aj.Feed.Title.V, uint32(aj.Feed.NumPhotos.V), albums)
+
+	types.WriteValue(albums, ds.Store())
+	u = u.SetAlbums(albums)
+	return &u
 }
 
-func getAlbums() (nomsUser types.Value) {
-	aj := AlbumListJSON{}
-	callPicasaAPI(authHTTPClient, "user/default?alt=json", &aj)
-	user := User{ID: aj.Feed.UserID.V, Name: aj.Feed.UserName.V}
-
+func getAlbums() *User {
+	alj := AlbumListJSON{}
+	callPicasaAPI(authHTTPClient, "user/default?alt=json", &alj)
 	if !*quietFlag {
-		fmt.Printf("Found %d albums\n", len(aj.Feed.Entry))
+		fmt.Printf("Found %d albums\n", len(alj.Feed.Entry))
 	}
-	var nomsAlbumList = types.NewList()
-	for i, entry := range aj.Feed.Entry {
-		a := Album{ID: entry.ID.V, Title: entry.Title.V, NumPhotos: entry.NumPhotos.V}
-		nomsPhotoList := getPhotos(a, i)
-		nomsAlbum := marshal.Marshal(a)
-		nomsAlbum = setValueInNomsMap(nomsAlbum, "Photos", nomsPhotoList)
-		nomsAlbumList = nomsAlbumList.Append(nomsAlbum)
+	albums := NewMapOfStringToAlbum()
+	user := UserDef{Id: alj.Feed.UserID.V, Name: alj.Feed.UserName.V}.New()
+	for i, entry := range alj.Feed.Entry {
+		albums = getAlbum(i, entry.ID.V, entry.Title.V, uint32(entry.NumPhotos.V), albums)
 	}
 
-	nomsUser = marshal.Marshal(user)
-	nomsUser = setValueInNomsMap(nomsUser, "Albums", nomsAlbumList)
-
-	return nomsUser
+	types.WriteValue(albums, ds.Store())
+	user = user.SetAlbums(albums)
+	return &user
 }
 
-func getPhotos(album Album, albumIndex int) (nomsPhotoList types.List) {
-	if album.NumPhotos <= 0 {
-		return types.NewList()
+func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32, albums MapOfStringToAlbum) MapOfStringToAlbum {
+	a := AlbumDef{Id: albumId, Title: albumTitle, NumPhotos: uint32(numPhotos)}.New()
+	remotePhotoRefs := getRemotePhotoRefs(&a, albumIndex)
+	r := types.WriteValue(remotePhotoRefs, ds.Store())
+	a = a.SetPhotos(NewRefOfSetOfRefOfRemotePhoto(r))
+	return albums.Set(a.Id(), a)
+}
+
+func getRemotePhotoRefs(album *Album, albumIndex int) *SetOfRefOfRemotePhoto {
+	if album.NumPhotos() <= 0 {
+		return nil
 	}
-	photos := make([]Photo, 0, album.NumPhotos)
+	remotePhotoRefs := NewSetOfRefOfRemotePhoto()
 	if !*quietFlag {
-		fmt.Printf("Album #%d: %q contains %d photos... ", albumIndex, album.Title, album.NumPhotos)
+		fmt.Printf("Album #%d: %q contains %d photos... ", albumIndex, album.Title(), album.NumPhotos())
 	}
-	for startIndex, foundPhotos := 0, true; album.NumPhotos > len(photos) && foundPhotos; startIndex += 1000 {
+	for startIndex, foundPhotos := 0, true; uint64(album.NumPhotos()) > remotePhotoRefs.Len() && foundPhotos; startIndex += 1000 {
 		foundPhotos = false
 		aj := AlbumJSON{}
-		path := fmt.Sprintf("user/default/albumid/%s?alt=json&max-results=1000", album.ID)
+		path := fmt.Sprintf("user/default/albumid/%s?alt=json&max-results=1000", album.Id())
 		if !*smallFlag {
 			path = fmt.Sprintf("%s%s", path, "&imgmax=d")
 		}
@@ -172,120 +174,54 @@ func getPhotos(album Album, albumIndex int) (nomsPhotoList types.List) {
 			tags := splitTags(e.MediaGroup.Tags.V)
 			height, _ := strconv.Atoi(e.Height.V)
 			width, _ := strconv.Atoi(e.Width.V)
-			p := Photo{
-				NomsName: "Photo",
-				Height:   int(height),
-				ID:       e.ID.V,
-				Tags:     tags,
-				Title:    e.Title.V,
-				URL:      e.Content.Src,
-				Width:    int(width),
-			}
-			photos = append(photos, p)
+			size := SizeDef{Height: uint32(height), Width: uint32(width)}
+			sizes := MapOfSizeToStringDef{}
+			sizes[size] = e.Content.Src
+			geoPos := toGeopos(e.Geo.Point.Pos.V)
+			p := RemotePhotoDef{
+				Id:          e.ID.V,
+				Title:       e.Title.V,
+				Geoposition: geoPos,
+				Url:         e.Content.Src,
+				Sizes:       sizes,
+				Tags:        tags,
+			}.New()
+			r := types.WriteValue(p, ds.Store())
+			remotePhotoRefs = remotePhotoRefs.Insert(NewRefOfRemotePhoto(r))
 		}
 	}
 
-	pChan, rChan := getImageFetcher(len(photos))
-	for i, p := range photos {
-		pChan <- PhotoMessage{i, p}
-	}
-	close(pChan)
-
-	refMessages := make([]RefMessage, 0, album.NumPhotos)
-	for rm := range rChan {
-		refMessages = append(refMessages, rm)
-	}
-	sort.Sort(ByIndex(refMessages))
-	nomsPhotoList = types.NewList()
-	for _, refMsg := range refMessages {
-		nomsPhotoList = nomsPhotoList.Append(types.NewRef(refMsg.Ref))
-	}
-
 	if !*quietFlag {
-		fmt.Printf("fetched %d, elapsed time: %.2f secs\n", nomsPhotoList.Len(), time.Now().Sub(start).Seconds())
+		fmt.Printf("fetched %d, elapsed time: %.2f secs\n", remotePhotoRefs.Len(), time.Now().Sub(start).Seconds())
 	}
-	return nomsPhotoList
+	return &remotePhotoRefs
 }
 
-func getImageFetcher(numPhotos int) (pChan chan PhotoMessage, rChan chan RefMessage) {
-	pChan = make(chan PhotoMessage, numPhotos)
-	rChan = make(chan RefMessage)
-	var wg sync.WaitGroup
-	n := min(numPhotos, maxProcs)
-
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func(fid int) {
-			for msg := range pChan {
-				msg.Photo.Image = getImage(msg.Photo.URL)
-				nomsPhoto := marshal.Marshal(msg.Photo)
-				ref := types.WriteValue(nomsPhoto, ds.Store())
-				rChan <- RefMessage{msg.Index, ref}
-			}
-			wg.Done()
-		}(i)
-	}
-
-	go func() {
-		wg.Wait()
-		close(rChan)
-	}()
-	return
-}
-
-func getImage(url string) *bytes.Reader {
-	pr := getImageReader(url)
-	defer pr.Close()
-	buf, err := ioutil.ReadAll(pr)
-	d.Chk.NoError(err)
-	return bytes.NewReader(buf)
-}
-
-func getImageReader(url string) io.ReadCloser {
-	r, err := cachingHTTPClient.Get(url)
-	d.Chk.NoError(err)
-	return r.Body
-}
-
-func printStats(nomsUser types.Value) {
+func printStats(user *User) {
 	if !*quietFlag {
 		numPhotos := uint64(0)
-		nomsAlbums := getValueInNomsMap(nomsUser, "Albums").(types.List)
-		for i := uint64(0); i < nomsAlbums.Len(); i++ {
-			nomsAlbum := nomsAlbums.Get(i)
-			nomsPhotos := getValueInNomsMap(nomsAlbum, "Photos").(types.List)
-			numPhotos = numPhotos + nomsPhotos.Len()
-		}
+		albums := user.Albums()
+		albums.IterAll(func(id string, album Album) {
+			setOfRefOfPhotos := album.Photos().TargetValue(ds.Store())
+			numPhotos = numPhotos + setOfRefOfPhotos.Len()
+		})
 
-		fmt.Printf("Imported %d album(s), %d photo(s), time: %.2f\n", nomsAlbums.Len(), numPhotos, time.Now().Sub(start).Seconds())
+		fmt.Printf("Imported %d album(s), %d photo(s), time: %.2f\n", albums.Len(), numPhotos, time.Now().Sub(start).Seconds())
 	}
 }
 
-func mergeInCurrentAlbums(cu, newNomsUser, newNomsAlbum types.Value) (nomsUser types.Value) {
-	newAlbumID := getValueInNomsMap(newNomsAlbum, "ID").(types.String).String()
-	oldNomsAlbums := getValueInNomsMap(cu, "Albums").(types.List)
-	newNomsAlbums := types.NewList()
-	inserted := false
-	for i := uint64(0); i < uint64(oldNomsAlbums.Len()); i++ {
-		oldNomsAlbum := oldNomsAlbums.Get(i)
-		oldAlbumID := getValueInNomsMap(oldNomsAlbum, "ID").(types.String).String()
-		if newAlbumID != oldAlbumID {
-			newNomsAlbums = newNomsAlbums.Append(oldNomsAlbum)
-		} else {
-			inserted = true
-			newNomsAlbums = newNomsAlbums.Append(newNomsAlbum)
-		}
-	}
-	if !inserted {
-		newNomsAlbums = newNomsAlbums.Append(newNomsAlbum)
-	}
-	nomsUser = setValueInNomsMap(newNomsUser, "Albums", newNomsAlbums)
-	return
+func mergeInCurrentAlbums(curUser *User, newUser *User) *User {
+	albums := curUser.Albums()
+	newUser.Albums().IterAll(func(id string, a Album) {
+		albums = albums.Set(id, a)
+	})
+	*newUser = newUser.SetAlbums(albums)
+	return newUser
 }
 
-func doAuthentication(currentUser types.Value) (c *http.Client, rt string) {
+func doAuthentication(currentUser *User) (c *http.Client, rt string) {
 	if !*forceAuthFlag && currentUser != nil {
-		rt = getValueInNomsMap(currentUser, "RefreshToken").(types.String).String()
+		rt = currentUser.RefreshToken()
 		c = tryRefreshToken(rt)
 	}
 	if c == nil {
@@ -399,26 +335,27 @@ func baseConfig(redirectURL string) *oauth2.Config {
 }
 
 // General utility functions
-
-func getValueInNomsMap(m types.Value, field string) types.Value {
-	return m.(types.Map).Get(types.NewString(field))
-}
-
-func setValueInNomsMap(m types.Value, field string, value types.Value) types.Value {
-	return m.(types.Map).Set(types.NewString(field), value)
+func toGeopos(s string) GeopositionDef {
+	s1 := strings.TrimSpace(s)
+	geoPos := GeopositionDef{Latitude: 0.0, Longitude: 0.0}
+	if s1 != "" {
+		slice := strings.Split(s1, " ")
+		lat, err := strconv.ParseFloat(slice[0], 32)
+		if err == nil {
+			geoPos.Latitude = float32(lat)
+		}
+		lon, err := strconv.ParseFloat(slice[1], 32)
+		if err == nil {
+			geoPos.Longitude = float32(lon)
+		}
+	}
+	return geoPos
 }
 
 func toJSON(str interface{}) string {
 	v, err := json.Marshal(str)
 	d.Chk.NoError(err)
 	return string(v)
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func splitTags(s string) map[string]bool {
