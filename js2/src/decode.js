@@ -6,9 +6,10 @@ import Chunk from './chunk.js';
 import Ref from './ref.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
+import {Field, makeCompoundTypeRef, makePrimitiveTypeRef, makeStructTypeRef, makeTypeRef, makeUnresolvedTypeRef, StructDesc, TypeRef} from './type_ref.js';
+import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
 import {lookupPackage, Package, readPackage} from './package.js';
-import {Field, makeCompoundTypeRef, makePrimitiveTypeRef, makeStructTypeRef, makeTypeRef, makeUnresolvedTypeRef, StructDesc, TypeRef} from './type_ref.js';
 
 const typedTag = 't ';
 
@@ -33,53 +34,39 @@ class JsonArrayReader {
 
   readString(): string {
     let next = this.read();
-    if (typeof next === 'string') {
-      return next;
-    }
-    throw new Error('Serialization error: expected string, got ' + typeof next);
+    invariant(typeof next === 'string');
+    return next;
   }
 
   readBool(): boolean {
     let next = this.read();
-    if (typeof next === 'boolean') {
-      return next;
-    }
-    throw new Error('Serialization error: expected boolean, got ' + typeof next);
+    invariant(typeof next === 'boolean');
+    return next;
+  }
+
+  readNumber(): number {
+    let next = this.read();
+    invariant(typeof next === 'number');
+    return next;
   }
 
   readOrdinal(): number {
-    let next = this.read();
-    if (typeof next === 'number' && next >= 0) {
-      return next;
-    }
-
-    throw new Error('Serialization error: expected ordinal, got ' + typeof next);
+    return this.readNumber();
   }
 
   readArray(): Array<any> {
     let next = this.read();
-    if (next instanceof Array) {
-      return next;
-    }
-
-    throw new Error('Serialization error: expected Array');
+    invariant(Array.isArray(next));
+    return next;
   }
 
   readKind(): NomsKind {
-    let next = this.read();
-    if (typeof next === 'number') {
-      return next;
-    }
-    throw new Error('Serialization error: expected NomsKind, got ' + typeof next);
+    return this.readNumber();
   }
 
   readRef(): Ref {
-    let next = this.read();
-    if (typeof next === 'string') {
-      return Ref.parse(next);
-    }
-
-    throw new Error('Serialization error: expected Ref, got ' + typeof next);
+    let next = this.readString();
+    return Ref.parse(next);
   }
 
   readTypeRefAsTag(): TypeRef {
@@ -231,20 +218,14 @@ class JsonArrayReader {
       }
     }
 
-    if (pkg) {
-      let typeDef = pkg.types[ordinal];
-      if (typeDef.kind === Kind.Enum) {
-        throw new Error('Not implemented');
-      }
-
-      if (typeDef.kind !== Kind.Struct) {
-        throw new Error('Attempt to resolve non-struct struct kind');
-      }
-
-      return this.readStruct(typeDef, t, pkg);
-    } else {
-      throw new Error('Woah, got a null pkg. pkgRef: ' + pkgRef.toString() + ' ordinal: ' + ordinal);
+    pkg = notNull(pkg);
+    let typeDef = pkg.types[ordinal];
+    if (typeDef.kind === Kind.Enum) {
+      throw new Error('Not implemented');
     }
+
+    invariant(typeDef.kind === Kind.Struct);
+    return this.readStruct(typeDef, t, pkg);
   }
 
   readTypeRefAsValue(pkg: ?Package): TypeRef {
@@ -289,53 +270,47 @@ class JsonArrayReader {
         if (ordinal === -1) {
           let namespace = this.readString();
           let name = this.readString();
-          if (!pkgRef.isEmpty()) {
-            throw new Error('Unresolved TypeRefs may not have a package ref');
-          }
+          invariant(pkgRef.isEmpty(), 'Unresolved TypeRefs may not have a package ref');
 
           return makeUnresolvedTypeRef(namespace, name);
         }
 
         return makeTypeRef(pkgRef, ordinal);
       }
-      default: {
-        if (!isPrimitiveKind(k)) {
-          throw new Error('Not implemented: ' + k);
-        }
-        return makePrimitiveTypeRef(k);
-      }
     }
+
+    invariant(isPrimitiveKind(k));
+    return makePrimitiveTypeRef(k);
+
   }
 
   async readStruct(typeDef: TypeRef, typeRef: TypeRef, pkg: Package): Promise<any> {
     // TODO FixupTypeRef?
     // TODO Make read of sub-values parallel.
     let desc = typeDef.desc;
-    if (desc instanceof StructDesc) {
-      let s: { [key: string]: any } = Object.create(null);
-      s._typeRef = typeDef;  // TODO: Need a better way to add typeRef
+    invariant(desc instanceof StructDesc);
 
-      for (let field of desc.fields) {
-        if (field.optional) {
-          let b = this.readBool();
-          if (b) {
-            let v = await this.readValueWithoutTag(field.t, pkg);
-            s[field.name] = v;
-          }
-        } else {
+    let s: { [key: string]: any } = Object.create(null);
+    s._typeRef = typeDef;  // TODO: Need a better way to add typeRef
+
+    for (let field of desc.fields) {
+      if (field.optional) {
+        let b = this.readBool();
+        if (b) {
           let v = await this.readValueWithoutTag(field.t, pkg);
           s[field.name] = v;
         }
+      } else {
+        let v = await this.readValueWithoutTag(field.t, pkg);
+        s[field.name] = v;
       }
-
-      if (desc.union.length > 0) {
-        throw new Error('Not implemented');
-      }
-
-      return s;
-    } else {
-      throw new Error('Attempt to read struct without StructDesc typeref');
     }
+
+    if (desc.union.length > 0) {
+      throw new Error('Not implemented');
+    }
+
+    return s;
   }
 }
 

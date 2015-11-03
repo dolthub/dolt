@@ -6,6 +6,7 @@ import Chunk from './chunk.js';
 import fetch from 'isomorphic-fetch';
 import Ref from './ref.js';
 import {deserialize} from './chunk_serializer.js';
+import {invariant} from './assert.js';
 
 type ReadRequest = {
   resolve: (c: Chunk) => void,
@@ -94,9 +95,7 @@ export default class HttpStore {
         }
       });
 
-      if (response.status !== 200) {
-        throw new Error('Buffered read failed: ' + response.status);
-      }
+      invariant(response.status === 200, 'Buffered read failed: ' + response.status);
 
       let blob = await response.blob();
       let buffer = await blobToBuffer(blob);
