@@ -28,7 +28,7 @@ func (r Ref) Ref() ref.Ref {
 }
 
 func (r Ref) Chunks() []ref.Ref {
-	return nil
+	return []ref.Ref{r.target}
 }
 
 func (r Ref) TargetRef() ref.Ref {

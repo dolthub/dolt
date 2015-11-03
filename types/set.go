@@ -120,7 +120,7 @@ func (s Set) Equals(other Value) bool {
 
 func (s Set) Chunks() (chunks []ref.Ref) {
 	for _, v := range s.data {
-		chunks = appendChunk(chunks, v)
+		chunks = append(chunks, v.Chunks()...)
 	}
 	return
 }

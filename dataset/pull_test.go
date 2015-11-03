@@ -39,7 +39,7 @@ func NewSet(ds Dataset, vs ...types.Value) types.Ref {
 	return types.NewRef(r)
 }
 
-func SkipTestPull(t *testing.T) {
+func TestPull(t *testing.T) {
 	assert := assert.New(t)
 
 	sink := createTestDataset("sink")
@@ -76,7 +76,7 @@ func SkipTestPull(t *testing.T) {
 	assert.True(source.Head().Equals(sink.Head()))
 }
 
-func SkipTestPullFirstCommit(t *testing.T) {
+func TestPullFirstCommit(t *testing.T) {
 	assert := assert.New(t)
 
 	sink := createTestDataset("sink")
@@ -88,6 +88,24 @@ func SkipTestPullFirstCommit(t *testing.T) {
 
 	NewList(sink)
 	NewList(sink, types.Int32(2))
+
+	source, ok := source.Commit(sourceInitialValue)
+	assert.True(ok)
+
+	sink = sink.Pull(source, 1)
+	assert.True(source.Head().Equals(sink.Head()))
+}
+
+func TestPullDeepRef(t *testing.T) {
+	assert := assert.New(t)
+
+	sink := createTestDataset("sink")
+	source := createTestDataset("source")
+
+	sourceInitialValue := types.NewList(
+		types.NewList(NewList(source)),
+		types.NewSet(NewSet(source)),
+		types.NewMap(NewMap(source), NewMap(source)))
 
 	source, ok := source.Commit(sourceInitialValue)
 	assert.True(ok)

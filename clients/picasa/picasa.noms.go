@@ -117,10 +117,7 @@ func (s User) InternalImplementation() types.Map {
 }
 
 func (s User) Equals(other types.Value) bool {
-	if other, ok := other.(User); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForUser.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s User) Ref() ref.Ref {
@@ -249,10 +246,7 @@ func (s Album) InternalImplementation() types.Map {
 }
 
 func (s Album) Equals(other types.Value) bool {
-	if other, ok := other.(Album); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForAlbum.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s Album) Ref() ref.Ref {
@@ -341,10 +335,7 @@ func (m MapOfStringToAlbum) InternalImplementation() types.Map {
 }
 
 func (m MapOfStringToAlbum) Equals(other types.Value) bool {
-	if other, ok := other.(MapOfStringToAlbum); ok {
-		return m.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForMapOfStringToAlbum.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToAlbum) Ref() ref.Ref {
@@ -457,10 +448,7 @@ func (s SetOfRemotePhoto) InternalImplementation() types.Set {
 }
 
 func (s SetOfRemotePhoto) Equals(other types.Value) bool {
-	if other, ok := other.(SetOfRemotePhoto); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForSetOfRemotePhoto.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfRemotePhoto) Ref() ref.Ref {
@@ -583,14 +571,13 @@ func (r RefOfUser) Ref() ref.Ref {
 }
 
 func (r RefOfUser) Equals(other types.Value) bool {
-	if other, ok := other.(RefOfUser); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfUser.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfUser) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfUser) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfUserFromVal(val types.Value) RefOfUser {
@@ -643,14 +630,13 @@ func (r RefOfSetOfRefOfRemotePhoto) Ref() ref.Ref {
 }
 
 func (r RefOfSetOfRefOfRemotePhoto) Equals(other types.Value) bool {
-	if other, ok := other.(RefOfSetOfRefOfRemotePhoto); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfSetOfRefOfRemotePhoto.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfSetOfRefOfRemotePhoto) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfSetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfSetOfRefOfRemotePhotoFromVal(val types.Value) RefOfSetOfRefOfRemotePhoto {
@@ -728,10 +714,7 @@ func (s SetOfRefOfRemotePhoto) InternalImplementation() types.Set {
 }
 
 func (s SetOfRefOfRemotePhoto) Equals(other types.Value) bool {
-	if other, ok := other.(SetOfRefOfRemotePhoto); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForSetOfRefOfRemotePhoto.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfRefOfRemotePhoto) Ref() ref.Ref {
@@ -854,14 +837,13 @@ func (r RefOfRemotePhoto) Ref() ref.Ref {
 }
 
 func (r RefOfRemotePhoto) Equals(other types.Value) bool {
-	if other, ok := other.(RefOfRemotePhoto); ok {
-		return r.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForRefOfRemotePhoto.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfRemotePhoto) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfRemotePhotoFromVal(val types.Value) RefOfRemotePhoto {

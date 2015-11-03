@@ -436,8 +436,10 @@ func (r RefOfValue) Equals(other types.Value) bool {
 	return other != nil && __typeRefForRefOfValue.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfValue) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfValue) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfValueFromVal(val types.Value) RefOfValue {
@@ -1043,8 +1045,10 @@ func (r RefOfSQuadTree) Equals(other types.Value) bool {
 	return other != nil && __typeRefForRefOfSQuadTree.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfSQuadTree) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfSQuadTree) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfSQuadTreeFromVal(val types.Value) RefOfSQuadTree {

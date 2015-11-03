@@ -12,7 +12,6 @@ import (
 type TypeDesc interface {
 	Kind() NomsKind
 	Equals(other TypeDesc) bool
-	ToValue() Value
 	Describe() string // For use in tests.
 }
 
@@ -41,10 +40,6 @@ func (p PrimitiveDesc) Kind() NomsKind {
 
 func (p PrimitiveDesc) Equals(other TypeDesc) bool {
 	return p.Kind() == other.Kind()
-}
-
-func (p PrimitiveDesc) ToValue() Value {
-	return nil
 }
 
 func (p PrimitiveDesc) Describe() string {
@@ -101,10 +96,6 @@ func (u UnresolvedDesc) Equals(other TypeDesc) bool {
 	return false
 }
 
-func (u UnresolvedDesc) ToValue() Value {
-	return NewList(NewRef(u.pkgRef), Int16(u.ordinal))
-}
-
 func (u UnresolvedDesc) Describe() string {
 	panic("Not reachable.")
 }
@@ -130,18 +121,6 @@ func (c CompoundDesc) Equals(other TypeDesc) bool {
 		}
 	}
 	return true
-}
-
-func (c CompoundDesc) ToValue() Value {
-	switch c.Kind() {
-	case MapKind:
-		return NewList(c.ElemTypes[0], c.ElemTypes[1])
-	case ListKind, RefKind, SetKind:
-		return c.ElemTypes[0]
-	default:
-		d.Chk.Fail("Unknown NomsKind in CompoundDesc.", "%d", c.Kind())
-	}
-	panic("unreachable")
 }
 
 func (c CompoundDesc) Describe() string {
@@ -191,14 +170,6 @@ func (e EnumDesc) Equals(other TypeDesc) bool {
 	return true
 }
 
-func (e EnumDesc) ToValue() Value {
-	vids := make([]Value, len(e.IDs))
-	for i, id := range e.IDs {
-		vids[i] = NewString(id)
-	}
-	return NewList(vids...)
-}
-
 func (e EnumDesc) Describe() string {
 	return "enum: { " + strings.Join(e.IDs, "\n") + "}\n"
 }
@@ -240,42 +211,6 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 		}
 	}
 	return true
-}
-
-func (s StructDesc) ToValue() Value {
-	listify := func(fields []Field) List {
-		v := make([]Value, 3*len(fields))
-		for i, f := range fields {
-			v[3*i] = NewString(f.Name)
-			v[3*i+1] = f.T
-			v[3*i+2] = Bool(f.Optional)
-		}
-		return NewList(v...)
-	}
-	desc := NewMap(
-		NewString("fields"), listify(s.Fields),
-		NewString("choices"), listify(s.Union),
-	)
-	return desc
-}
-
-// StructDescFromMap builds a StructDesc from a Noms Map that looks like
-// {
-//   fields:  ["field1", TypeRef1, "field2", TypeRef2...],
-//   choices: ["choice1", TypeRef1...]
-// }
-// Either fields or choices may be the empty List.
-func StructDescFromMap(m Map) StructDesc {
-	fl := m.Get(NewString("fields")).(List)
-	cl := m.Get(NewString("choices")).(List)
-	s := StructDesc{make([]Field, fl.Len()/3), make(Choices, cl.Len()/3)}
-	for i := uint64(0); i < fl.Len(); i += 3 {
-		s.Fields[i/3] = Field{fl.Get(i).(String).String(), fl.Get(i + 1).(TypeRef), bool(fl.Get(i + 2).(Bool))}
-	}
-	for i := uint64(0); i < cl.Len(); i += 3 {
-		s.Union[i/3] = Field{cl.Get(i).(String).String(), cl.Get(i + 1).(TypeRef), false}
-	}
-	return s
 }
 
 func (s StructDesc) Describe() (out string) {

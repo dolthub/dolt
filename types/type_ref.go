@@ -97,9 +97,16 @@ func (t TypeRef) Equals(other Value) (res bool) {
 }
 
 func (t TypeRef) Chunks() (chunks []ref.Ref) {
-	v := t.Desc.ToValue()
-	if v != nil {
-		chunks = append(chunks, v.Chunks()...)
+	if t.IsUnresolved() {
+		if t.HasPackageRef() {
+			chunks = append(chunks, t.PackageRef())
+		}
+		return
+	}
+	if desc, ok := t.Desc.(CompoundDesc); ok {
+		for _, t := range desc.ElemTypes {
+			chunks = append(chunks, t.Chunks()...)
+		}
 	}
 	return
 }

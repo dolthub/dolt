@@ -92,10 +92,7 @@ func (s Geoposition) InternalImplementation() types.Map {
 }
 
 func (s Geoposition) Equals(other types.Value) bool {
-	if other, ok := other.(Geoposition); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForGeoposition.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s Geoposition) Ref() ref.Ref {
@@ -184,10 +181,7 @@ func (s Georectangle) InternalImplementation() types.Map {
 }
 
 func (s Georectangle) Equals(other types.Value) bool {
-	if other, ok := other.(Georectangle); ok {
-		return s.Ref() == other.Ref()
-	}
-	return false
+	return other != nil && __typeRefForGeorectangle.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
 
 func (s Georectangle) Ref() ref.Ref {

@@ -23,8 +23,10 @@ func (r {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
 	return other != nil && __typeRefFor{{.Name}}.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r {{.Name}}) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r {{.Name}}) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func {{.Name}}FromVal(val {{$typesPackage}}Value) {{.Name}} {

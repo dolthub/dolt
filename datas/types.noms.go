@@ -419,8 +419,10 @@ func (r RefOfCommit) Equals(other types.Value) bool {
 	return other != nil && __typeRefForRefOfCommit.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfCommit) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfCommit) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfCommitFromVal(val types.Value) RefOfCommit {
