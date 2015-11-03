@@ -399,8 +399,10 @@ func (r RefOfIncident) Equals(other types.Value) bool {
 	return other != nil && __typeRefForRefOfIncident.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfIncident) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfIncident) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfIncidentFromVal(val types.Value) RefOfIncident {

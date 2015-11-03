@@ -61,3 +61,12 @@ func TestRefTypeRef(t *testing.T) {
 
 	assert.Panics(func() { r2.SetTargetValue(Int16(1), cs) })
 }
+
+func TestRefChunks(t *testing.T) {
+	assert := assert.New(t)
+
+	l := NewList()
+	r := NewRef(l.Ref())
+	assert.Len(r.Chunks(), 1)
+	assert.Equal(l.Ref(), r.Chunks()[0])
+}

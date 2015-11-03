@@ -179,8 +179,10 @@ func (r RefOfPackage) Equals(other Value) bool {
 	return other != nil && __typeRefForRefOfPackage.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfPackage) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfPackage) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfPackageFromVal(val Value) RefOfPackage {

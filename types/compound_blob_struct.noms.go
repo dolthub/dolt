@@ -421,8 +421,10 @@ func (r RefOfBlob) Equals(other Value) bool {
 	return other != nil && __typeRefForRefOfBlob.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfBlob) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfBlob) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfBlobFromVal(val Value) RefOfBlob {

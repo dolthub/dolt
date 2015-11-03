@@ -312,8 +312,10 @@ func (r RefOfRemotePhoto) Equals(other types.Value) bool {
 	return other != nil && __typeRefForRefOfRemotePhoto.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfRemotePhoto) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfRemotePhotoFromVal(val types.Value) RefOfRemotePhoto {

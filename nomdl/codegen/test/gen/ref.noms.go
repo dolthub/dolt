@@ -125,8 +125,10 @@ func (r RefOfListOfString) Equals(other types.Value) bool {
 	return other != nil && __typeRefForRefOfListOfString.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfListOfString) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfListOfString) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfListOfStringFromVal(val types.Value) RefOfListOfString {
@@ -324,8 +326,10 @@ func (r RefOfSetOfFloat32) Equals(other types.Value) bool {
 	return other != nil && __typeRefForRefOfSetOfFloat32.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfSetOfFloat32) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfSetOfFloat32) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfSetOfFloat32FromVal(val types.Value) RefOfSetOfFloat32 {
@@ -523,8 +527,10 @@ func (r RefOfFloat32) Equals(other types.Value) bool {
 	return other != nil && __typeRefForRefOfFloat32.Equals(other.TypeRef()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfFloat32) Chunks() []ref.Ref {
-	return r.TypeRef().Chunks()
+func (r RefOfFloat32) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
 }
 
 func RefOfFloat32FromVal(val types.Value) RefOfFloat32 {
