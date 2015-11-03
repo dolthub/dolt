@@ -29,15 +29,19 @@ func init() {
 // Commit
 
 type Commit struct {
-	m   types.Map
+	_value   types.Value
+	_parents SetOfRefOfCommit
+
 	ref *ref.Ref
 }
 
 func NewCommit() Commit {
-	return Commit{types.NewMap(
-		types.NewString("value"), types.Bool(false),
-		types.NewString("parents"), NewSetOfRefOfCommit(),
-	), &ref.Ref{}}
+	return Commit{
+		_value:   types.Bool(false),
+		_parents: NewSetOfRefOfCommit(),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type CommitDef struct {
@@ -47,19 +51,20 @@ type CommitDef struct {
 
 func (def CommitDef) New() Commit {
 	return Commit{
-		types.NewMap(
-			types.NewString("value"), def.Value,
-			types.NewString("parents"), def.Parents.New(),
-		), &ref.Ref{}}
+		_value:   def.Value,
+		_parents: def.Parents.New(),
+		ref:      &ref.Ref{},
+	}
 }
 
 func (s Commit) Def() (d CommitDef) {
-	d.Value = s.m.Get(types.NewString("value"))
-	d.Parents = s.m.Get(types.NewString("parents")).(SetOfRefOfCommit).Def()
+	d.Value = s._value
+	d.Parents = s._parents.Def()
 	return
 }
 
 var __typeRefForCommit types.TypeRef
+var __typeDefForCommit types.TypeRef
 
 func (m Commit) TypeRef() types.TypeRef {
 	return __typeRefForCommit
@@ -67,22 +72,35 @@ func (m Commit) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForCommit = types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForCommit, func(v types.Value) types.Value {
-		return CommitFromVal(v)
-	})
+	__typeDefForCommit = types.MakeStructTypeRef("Commit",
+		[]types.Field{
+			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
+			types.Field{"parents", types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0))), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForCommit, builderForCommit)
 }
 
-func CommitFromVal(val types.Value) Commit {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(Commit); ok {
-		return val
+func (s Commit) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"value":   s._value,
+		"parents": s._parents,
 	}
-	// TODO: Validate here
-	return Commit{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForCommit, __typeDefForCommit, m)
 }
 
-func (s Commit) InternalImplementation() types.Map {
-	return s.m
+func builderForCommit() chan types.Value {
+	c := make(chan types.Value)
+	s := Commit{ref: &ref.Ref{}}
+	go func() {
+		s._value = (<-c)
+		s._parents = (<-c).(SetOfRefOfCommit)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s Commit) Equals(other types.Value) bool {
@@ -94,25 +112,30 @@ func (s Commit) Ref() ref.Ref {
 }
 
 func (s Commit) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForCommit.Chunks()...)
+	chunks = append(chunks, s._value.Chunks()...)
+	chunks = append(chunks, s._parents.Chunks()...)
 	return
 }
 
 func (s Commit) Value() types.Value {
-	return s.m.Get(types.NewString("value"))
+	return s._value
 }
 
 func (s Commit) SetValue(val types.Value) Commit {
-	return Commit{s.m.Set(types.NewString("value"), val), &ref.Ref{}}
+	s._value = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Commit) Parents() SetOfRefOfCommit {
-	return s.m.Get(types.NewString("parents")).(SetOfRefOfCommit)
+	return s._parents
 }
 
 func (s Commit) SetParents(val SetOfRefOfCommit) Commit {
-	return Commit{s.m.Set(types.NewString("parents"), val), &ref.Ref{}}
+	s._parents = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // MapOfStringToRefOfCommit

@@ -146,6 +146,10 @@ type setImplementation interface {
 	InternalImplementation() Set
 }
 
+type structImplementation interface {
+	InternalImplementation() Struct
+}
+
 func getEnumFromEnumKind(v Value) uint32 {
 	return v.(enumImplementation).InternalImplementation()
 }
@@ -175,8 +179,11 @@ func getSetFromSetKind(v Value) Set {
 	return v.(setImplementation).InternalImplementation()
 }
 
-func getMapFromStructKind(v Value) Map {
-	return getMapFromMapKind(v)
+func getStructFromStructKind(v Value) Struct {
+	if v, ok := v.(Struct); ok {
+		return v
+	}
+	return v.(structImplementation).InternalImplementation()
 }
 
 func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
@@ -249,7 +256,7 @@ func (w *jsonArrayWriter) writeUnresolvedKindValue(v Value, tr TypeRef, pkg *Pac
 	case EnumKind:
 		w.write(getEnumFromEnumKind(v))
 	case StructKind:
-		w.writeStruct(getMapFromStructKind(v), typeDef, pkg)
+		w.writeStruct(getStructFromStructKind(v), typeDef, pkg)
 	}
 }
 
@@ -263,10 +270,10 @@ func (w *jsonArrayWriter) writeBlob(b Blob) {
 	w.write(buf.String())
 }
 
-func (w *jsonArrayWriter) writeStruct(m Map, t TypeRef, pkg *Package) {
+func (w *jsonArrayWriter) writeStruct(s Struct, t TypeRef, pkg *Package) {
 	desc := t.Desc.(StructDesc)
 	for _, f := range desc.Fields {
-		v, ok := m.MaybeGet(NewString(f.Name))
+		v, ok := s.data[f.Name]
 		if f.Optional {
 			if ok {
 				w.write(true)
@@ -280,9 +287,7 @@ func (w *jsonArrayWriter) writeStruct(m Map, t TypeRef, pkg *Package) {
 		}
 	}
 	if len(desc.Union) > 0 {
-		i := uint32(m.Get(NewString("$unionIndex")).(UInt32))
-		v := m.Get(NewString("$unionValue"))
-		w.write(i)
-		w.writeValue(v, desc.Union[i].T, pkg)
+		w.write(s.unionIndex)
+		w.writeValue(s.unionValue, desc.Union[s.unionIndex].T, pkg)
 	}
 }

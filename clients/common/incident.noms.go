@@ -40,24 +40,37 @@ func init() {
 // Incident
 
 type Incident struct {
-	m   types.Map
+	_ID          int64
+	_Category    string
+	_Description string
+	_DayOfWeek   string
+	_Date        string
+	_Time        string
+	_PdDistrict  string
+	_Resolution  string
+	_Address     string
+	_Geoposition Geoposition
+	_PdID        string
+
 	ref *ref.Ref
 }
 
 func NewIncident() Incident {
-	return Incident{types.NewMap(
-		types.NewString("ID"), types.Int64(0),
-		types.NewString("Category"), types.NewString(""),
-		types.NewString("Description"), types.NewString(""),
-		types.NewString("DayOfWeek"), types.NewString(""),
-		types.NewString("Date"), types.NewString(""),
-		types.NewString("Time"), types.NewString(""),
-		types.NewString("PdDistrict"), types.NewString(""),
-		types.NewString("Resolution"), types.NewString(""),
-		types.NewString("Address"), types.NewString(""),
-		types.NewString("Geoposition"), NewGeoposition(),
-		types.NewString("PdID"), types.NewString(""),
-	), &ref.Ref{}}
+	return Incident{
+		_ID:          int64(0),
+		_Category:    "",
+		_Description: "",
+		_DayOfWeek:   "",
+		_Date:        "",
+		_Time:        "",
+		_PdDistrict:  "",
+		_Resolution:  "",
+		_Address:     "",
+		_Geoposition: NewGeoposition(),
+		_PdID:        "",
+
+		ref: &ref.Ref{},
+	}
 }
 
 type IncidentDef struct {
@@ -76,37 +89,38 @@ type IncidentDef struct {
 
 func (def IncidentDef) New() Incident {
 	return Incident{
-		types.NewMap(
-			types.NewString("ID"), types.Int64(def.ID),
-			types.NewString("Category"), types.NewString(def.Category),
-			types.NewString("Description"), types.NewString(def.Description),
-			types.NewString("DayOfWeek"), types.NewString(def.DayOfWeek),
-			types.NewString("Date"), types.NewString(def.Date),
-			types.NewString("Time"), types.NewString(def.Time),
-			types.NewString("PdDistrict"), types.NewString(def.PdDistrict),
-			types.NewString("Resolution"), types.NewString(def.Resolution),
-			types.NewString("Address"), types.NewString(def.Address),
-			types.NewString("Geoposition"), def.Geoposition.New(),
-			types.NewString("PdID"), types.NewString(def.PdID),
-		), &ref.Ref{}}
+		_ID:          def.ID,
+		_Category:    def.Category,
+		_Description: def.Description,
+		_DayOfWeek:   def.DayOfWeek,
+		_Date:        def.Date,
+		_Time:        def.Time,
+		_PdDistrict:  def.PdDistrict,
+		_Resolution:  def.Resolution,
+		_Address:     def.Address,
+		_Geoposition: def.Geoposition.New(),
+		_PdID:        def.PdID,
+		ref:          &ref.Ref{},
+	}
 }
 
 func (s Incident) Def() (d IncidentDef) {
-	d.ID = int64(s.m.Get(types.NewString("ID")).(types.Int64))
-	d.Category = s.m.Get(types.NewString("Category")).(types.String).String()
-	d.Description = s.m.Get(types.NewString("Description")).(types.String).String()
-	d.DayOfWeek = s.m.Get(types.NewString("DayOfWeek")).(types.String).String()
-	d.Date = s.m.Get(types.NewString("Date")).(types.String).String()
-	d.Time = s.m.Get(types.NewString("Time")).(types.String).String()
-	d.PdDistrict = s.m.Get(types.NewString("PdDistrict")).(types.String).String()
-	d.Resolution = s.m.Get(types.NewString("Resolution")).(types.String).String()
-	d.Address = s.m.Get(types.NewString("Address")).(types.String).String()
-	d.Geoposition = s.m.Get(types.NewString("Geoposition")).(Geoposition).Def()
-	d.PdID = s.m.Get(types.NewString("PdID")).(types.String).String()
+	d.ID = s._ID
+	d.Category = s._Category
+	d.Description = s._Description
+	d.DayOfWeek = s._DayOfWeek
+	d.Date = s._Date
+	d.Time = s._Time
+	d.PdDistrict = s._PdDistrict
+	d.Resolution = s._Resolution
+	d.Address = s._Address
+	d.Geoposition = s._Geoposition.Def()
+	d.PdID = s._PdID
 	return
 }
 
 var __typeRefForIncident types.TypeRef
+var __typeDefForIncident types.TypeRef
 
 func (m Incident) TypeRef() types.TypeRef {
 	return __typeRefForIncident
@@ -114,22 +128,62 @@ func (m Incident) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForIncident = types.MakeTypeRef(__commonPackageInFile_incident_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForIncident, func(v types.Value) types.Value {
-		return IncidentFromVal(v)
-	})
+	__typeDefForIncident = types.MakeStructTypeRef("Incident",
+		[]types.Field{
+			types.Field{"ID", types.MakePrimitiveTypeRef(types.Int64Kind), false},
+			types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"DayOfWeek", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Time", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"PdDistrict", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Resolution", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
+			types.Field{"PdID", types.MakePrimitiveTypeRef(types.StringKind), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForIncident, builderForIncident)
 }
 
-func IncidentFromVal(val types.Value) Incident {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(Incident); ok {
-		return val
+func (s Incident) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"ID":          types.Int64(s._ID),
+		"Category":    types.NewString(s._Category),
+		"Description": types.NewString(s._Description),
+		"DayOfWeek":   types.NewString(s._DayOfWeek),
+		"Date":        types.NewString(s._Date),
+		"Time":        types.NewString(s._Time),
+		"PdDistrict":  types.NewString(s._PdDistrict),
+		"Resolution":  types.NewString(s._Resolution),
+		"Address":     types.NewString(s._Address),
+		"Geoposition": s._Geoposition,
+		"PdID":        types.NewString(s._PdID),
 	}
-	// TODO: Validate here
-	return Incident{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForIncident, __typeDefForIncident, m)
 }
 
-func (s Incident) InternalImplementation() types.Map {
-	return s.m
+func builderForIncident() chan types.Value {
+	c := make(chan types.Value)
+	s := Incident{ref: &ref.Ref{}}
+	go func() {
+		s._ID = int64((<-c).(types.Int64))
+		s._Category = (<-c).(types.String).String()
+		s._Description = (<-c).(types.String).String()
+		s._DayOfWeek = (<-c).(types.String).String()
+		s._Date = (<-c).(types.String).String()
+		s._Time = (<-c).(types.String).String()
+		s._PdDistrict = (<-c).(types.String).String()
+		s._Resolution = (<-c).(types.String).String()
+		s._Address = (<-c).(types.String).String()
+		s._Geoposition = (<-c).(Geoposition)
+		s._PdID = (<-c).(types.String).String()
+
+		c <- s
+	}()
+	return c
 }
 
 func (s Incident) Equals(other types.Value) bool {
@@ -141,97 +195,119 @@ func (s Incident) Ref() ref.Ref {
 }
 
 func (s Incident) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForIncident.Chunks()...)
+	chunks = append(chunks, s._Geoposition.Chunks()...)
 	return
 }
 
 func (s Incident) ID() int64 {
-	return int64(s.m.Get(types.NewString("ID")).(types.Int64))
+	return s._ID
 }
 
 func (s Incident) SetID(val int64) Incident {
-	return Incident{s.m.Set(types.NewString("ID"), types.Int64(val)), &ref.Ref{}}
+	s._ID = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Incident) Category() string {
-	return s.m.Get(types.NewString("Category")).(types.String).String()
+	return s._Category
 }
 
 func (s Incident) SetCategory(val string) Incident {
-	return Incident{s.m.Set(types.NewString("Category"), types.NewString(val)), &ref.Ref{}}
+	s._Category = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Incident) Description() string {
-	return s.m.Get(types.NewString("Description")).(types.String).String()
+	return s._Description
 }
 
 func (s Incident) SetDescription(val string) Incident {
-	return Incident{s.m.Set(types.NewString("Description"), types.NewString(val)), &ref.Ref{}}
+	s._Description = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Incident) DayOfWeek() string {
-	return s.m.Get(types.NewString("DayOfWeek")).(types.String).String()
+	return s._DayOfWeek
 }
 
 func (s Incident) SetDayOfWeek(val string) Incident {
-	return Incident{s.m.Set(types.NewString("DayOfWeek"), types.NewString(val)), &ref.Ref{}}
+	s._DayOfWeek = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Incident) Date() string {
-	return s.m.Get(types.NewString("Date")).(types.String).String()
+	return s._Date
 }
 
 func (s Incident) SetDate(val string) Incident {
-	return Incident{s.m.Set(types.NewString("Date"), types.NewString(val)), &ref.Ref{}}
+	s._Date = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Incident) Time() string {
-	return s.m.Get(types.NewString("Time")).(types.String).String()
+	return s._Time
 }
 
 func (s Incident) SetTime(val string) Incident {
-	return Incident{s.m.Set(types.NewString("Time"), types.NewString(val)), &ref.Ref{}}
+	s._Time = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Incident) PdDistrict() string {
-	return s.m.Get(types.NewString("PdDistrict")).(types.String).String()
+	return s._PdDistrict
 }
 
 func (s Incident) SetPdDistrict(val string) Incident {
-	return Incident{s.m.Set(types.NewString("PdDistrict"), types.NewString(val)), &ref.Ref{}}
+	s._PdDistrict = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Incident) Resolution() string {
-	return s.m.Get(types.NewString("Resolution")).(types.String).String()
+	return s._Resolution
 }
 
 func (s Incident) SetResolution(val string) Incident {
-	return Incident{s.m.Set(types.NewString("Resolution"), types.NewString(val)), &ref.Ref{}}
+	s._Resolution = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Incident) Address() string {
-	return s.m.Get(types.NewString("Address")).(types.String).String()
+	return s._Address
 }
 
 func (s Incident) SetAddress(val string) Incident {
-	return Incident{s.m.Set(types.NewString("Address"), types.NewString(val)), &ref.Ref{}}
+	s._Address = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Incident) Geoposition() Geoposition {
-	return s.m.Get(types.NewString("Geoposition")).(Geoposition)
+	return s._Geoposition
 }
 
 func (s Incident) SetGeoposition(val Geoposition) Incident {
-	return Incident{s.m.Set(types.NewString("Geoposition"), val), &ref.Ref{}}
+	s._Geoposition = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Incident) PdID() string {
-	return s.m.Get(types.NewString("PdID")).(types.String).String()
+	return s._PdID
 }
 
 func (s Incident) SetPdID(val string) Incident {
-	return Incident{s.m.Set(types.NewString("PdID"), types.NewString(val)), &ref.Ref{}}
+	s._PdID = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // ListOfRefOfIncident

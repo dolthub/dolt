@@ -35,15 +35,19 @@ func init() {
 // Geoposition
 
 type Geoposition struct {
-	m   types.Map
+	_Latitude  float32
+	_Longitude float32
+
 	ref *ref.Ref
 }
 
 func NewGeoposition() Geoposition {
-	return Geoposition{types.NewMap(
-		types.NewString("Latitude"), types.Float32(0),
-		types.NewString("Longitude"), types.Float32(0),
-	), &ref.Ref{}}
+	return Geoposition{
+		_Latitude:  float32(0),
+		_Longitude: float32(0),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type GeopositionDef struct {
@@ -53,19 +57,20 @@ type GeopositionDef struct {
 
 func (def GeopositionDef) New() Geoposition {
 	return Geoposition{
-		types.NewMap(
-			types.NewString("Latitude"), types.Float32(def.Latitude),
-			types.NewString("Longitude"), types.Float32(def.Longitude),
-		), &ref.Ref{}}
+		_Latitude:  def.Latitude,
+		_Longitude: def.Longitude,
+		ref:        &ref.Ref{},
+	}
 }
 
 func (s Geoposition) Def() (d GeopositionDef) {
-	d.Latitude = float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
-	d.Longitude = float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
+	d.Latitude = s._Latitude
+	d.Longitude = s._Longitude
 	return
 }
 
 var __typeRefForGeoposition types.TypeRef
+var __typeDefForGeoposition types.TypeRef
 
 func (m Geoposition) TypeRef() types.TypeRef {
 	return __typeRefForGeoposition
@@ -73,22 +78,35 @@ func (m Geoposition) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForGeoposition = types.MakeTypeRef(__mainPackageInFile_sha1_6d5e1c5_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForGeoposition, func(v types.Value) types.Value {
-		return GeopositionFromVal(v)
-	})
+	__typeDefForGeoposition = types.MakeStructTypeRef("Geoposition",
+		[]types.Field{
+			types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+			types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForGeoposition, builderForGeoposition)
 }
 
-func GeopositionFromVal(val types.Value) Geoposition {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(Geoposition); ok {
-		return val
+func (s Geoposition) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"Latitude":  types.Float32(s._Latitude),
+		"Longitude": types.Float32(s._Longitude),
 	}
-	// TODO: Validate here
-	return Geoposition{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForGeoposition, __typeDefForGeoposition, m)
 }
 
-func (s Geoposition) InternalImplementation() types.Map {
-	return s.m
+func builderForGeoposition() chan types.Value {
+	c := make(chan types.Value)
+	s := Geoposition{ref: &ref.Ref{}}
+	go func() {
+		s._Latitude = float32((<-c).(types.Float32))
+		s._Longitude = float32((<-c).(types.Float32))
+
+		c <- s
+	}()
+	return c
 }
 
 func (s Geoposition) Equals(other types.Value) bool {
@@ -100,39 +118,46 @@ func (s Geoposition) Ref() ref.Ref {
 }
 
 func (s Geoposition) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForGeoposition.Chunks()...)
 	return
 }
 
 func (s Geoposition) Latitude() float32 {
-	return float32(s.m.Get(types.NewString("Latitude")).(types.Float32))
+	return s._Latitude
 }
 
 func (s Geoposition) SetLatitude(val float32) Geoposition {
-	return Geoposition{s.m.Set(types.NewString("Latitude"), types.Float32(val)), &ref.Ref{}}
+	s._Latitude = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Geoposition) Longitude() float32 {
-	return float32(s.m.Get(types.NewString("Longitude")).(types.Float32))
+	return s._Longitude
 }
 
 func (s Geoposition) SetLongitude(val float32) Geoposition {
-	return Geoposition{s.m.Set(types.NewString("Longitude"), types.Float32(val)), &ref.Ref{}}
+	s._Longitude = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // Georectangle
 
 type Georectangle struct {
-	m   types.Map
+	_TopLeft     Geoposition
+	_BottomRight Geoposition
+
 	ref *ref.Ref
 }
 
 func NewGeorectangle() Georectangle {
-	return Georectangle{types.NewMap(
-		types.NewString("TopLeft"), NewGeoposition(),
-		types.NewString("BottomRight"), NewGeoposition(),
-	), &ref.Ref{}}
+	return Georectangle{
+		_TopLeft:     NewGeoposition(),
+		_BottomRight: NewGeoposition(),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type GeorectangleDef struct {
@@ -142,19 +167,20 @@ type GeorectangleDef struct {
 
 func (def GeorectangleDef) New() Georectangle {
 	return Georectangle{
-		types.NewMap(
-			types.NewString("TopLeft"), def.TopLeft.New(),
-			types.NewString("BottomRight"), def.BottomRight.New(),
-		), &ref.Ref{}}
+		_TopLeft:     def.TopLeft.New(),
+		_BottomRight: def.BottomRight.New(),
+		ref:          &ref.Ref{},
+	}
 }
 
 func (s Georectangle) Def() (d GeorectangleDef) {
-	d.TopLeft = s.m.Get(types.NewString("TopLeft")).(Geoposition).Def()
-	d.BottomRight = s.m.Get(types.NewString("BottomRight")).(Geoposition).Def()
+	d.TopLeft = s._TopLeft.Def()
+	d.BottomRight = s._BottomRight.Def()
 	return
 }
 
 var __typeRefForGeorectangle types.TypeRef
+var __typeDefForGeorectangle types.TypeRef
 
 func (m Georectangle) TypeRef() types.TypeRef {
 	return __typeRefForGeorectangle
@@ -162,22 +188,35 @@ func (m Georectangle) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForGeorectangle = types.MakeTypeRef(__mainPackageInFile_sha1_6d5e1c5_CachedRef, 1)
-	types.RegisterFromValFunction(__typeRefForGeorectangle, func(v types.Value) types.Value {
-		return GeorectangleFromVal(v)
-	})
+	__typeDefForGeorectangle = types.MakeStructTypeRef("Georectangle",
+		[]types.Field{
+			types.Field{"TopLeft", types.MakeTypeRef(__mainPackageInFile_sha1_6d5e1c5_CachedRef, 0), false},
+			types.Field{"BottomRight", types.MakeTypeRef(__mainPackageInFile_sha1_6d5e1c5_CachedRef, 0), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForGeorectangle, builderForGeorectangle)
 }
 
-func GeorectangleFromVal(val types.Value) Georectangle {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(Georectangle); ok {
-		return val
+func (s Georectangle) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"TopLeft":     s._TopLeft,
+		"BottomRight": s._BottomRight,
 	}
-	// TODO: Validate here
-	return Georectangle{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForGeorectangle, __typeDefForGeorectangle, m)
 }
 
-func (s Georectangle) InternalImplementation() types.Map {
-	return s.m
+func builderForGeorectangle() chan types.Value {
+	c := make(chan types.Value)
+	s := Georectangle{ref: &ref.Ref{}}
+	go func() {
+		s._TopLeft = (<-c).(Geoposition)
+		s._BottomRight = (<-c).(Geoposition)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s Georectangle) Equals(other types.Value) bool {
@@ -189,23 +228,28 @@ func (s Georectangle) Ref() ref.Ref {
 }
 
 func (s Georectangle) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForGeorectangle.Chunks()...)
+	chunks = append(chunks, s._TopLeft.Chunks()...)
+	chunks = append(chunks, s._BottomRight.Chunks()...)
 	return
 }
 
 func (s Georectangle) TopLeft() Geoposition {
-	return s.m.Get(types.NewString("TopLeft")).(Geoposition)
+	return s._TopLeft
 }
 
 func (s Georectangle) SetTopLeft(val Geoposition) Georectangle {
-	return Georectangle{s.m.Set(types.NewString("TopLeft"), val), &ref.Ref{}}
+	s._TopLeft = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Georectangle) BottomRight() Geoposition {
-	return s.m.Get(types.NewString("BottomRight")).(Geoposition)
+	return s._BottomRight
 }
 
 func (s Georectangle) SetBottomRight(val Geoposition) Georectangle {
-	return Georectangle{s.m.Set(types.NewString("BottomRight"), val), &ref.Ref{}}
+	s._BottomRight = val
+	s.ref = &ref.Ref{}
+	return s
 }

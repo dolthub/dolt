@@ -6,11 +6,14 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
+type structBuilderFunc func() chan Value
+
 type toNomsValueFunc func(v Value) Value
 
 var (
-	packages       map[ref.Ref]*Package        = map[ref.Ref]*Package{}
-	toNomsValueMap map[ref.Ref]toNomsValueFunc = map[ref.Ref]toNomsValueFunc{}
+	packages         map[ref.Ref]*Package          = map[ref.Ref]*Package{}
+	toNomsValueMap   map[ref.Ref]toNomsValueFunc   = map[ref.Ref]toNomsValueFunc{}
+	structBuilderMap map[ref.Ref]structBuilderFunc = map[ref.Ref]structBuilderFunc{}
 )
 
 // LookupPackage looks for a Package by ref.Ref in the global cache of Noms type packages.
@@ -37,7 +40,19 @@ func RegisterFromValFunction(t TypeRef, f toNomsValueFunc) {
 }
 
 func ToNomsValueFromTypeRef(t TypeRef, v Value) Value {
-	f, ok := toNomsValueMap[t.Ref()]
-	d.Chk.True(ok, "Missing to noms value function for: %s", t.Describe())
-	return f(v)
+	if f, ok := toNomsValueMap[t.Ref()]; ok {
+		return f(v)
+	}
+	return v
+}
+
+func RegisterStructBuilder(t TypeRef, f structBuilderFunc) {
+	structBuilderMap[t.Ref()] = f
+}
+
+func structBuilderForTypeRef(typeRef, typeDef TypeRef) chan Value {
+	if f, ok := structBuilderMap[typeRef.Ref()]; ok {
+		return f()
+	}
+	return structBuilder(typeRef, typeDef)
 }

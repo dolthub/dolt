@@ -79,28 +79,16 @@ func TestWriteListOfList(t *testing.T) {
 		[]interface{}{[]interface{}{int16(0)}, []interface{}{int16(1), int16(2), int16(3)}}}, w.toArray())
 }
 
-type testSet struct {
-	Set
-	t TypeRef
-}
-
-func (s testSet) TypeRef() TypeRef {
-	return s.t
-}
-
-func (s testSet) InternalImplementation() Set {
-	return s.Set
-}
-
 func TestWriteSet(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
 	tref := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(UInt32Kind))
 	v := NewSet(UInt32(3), UInt32(1), UInt32(2), UInt32(0))
+	v.t = tref
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testSet{Set: v, t: tref})
+	w.writeTopLevelValue(v)
 	// the order of the elements is based on the ref of the value.
 	assert.EqualValues([]interface{}{SetKind, UInt32Kind, []interface{}{uint32(1), uint32(3), uint32(0), uint32(2)}}, w.toArray())
 }
@@ -112,24 +100,12 @@ func TestWriteSetOfSet(t *testing.T) {
 	st := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(Int32Kind))
 	tref := MakeCompoundTypeRef(SetKind, st)
 	v := NewSet(NewSet(Int32(0)), NewSet(Int32(1), Int32(2), Int32(3)))
+	v.t = tref
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testSet{Set: v, t: tref})
+	w.writeTopLevelValue(v)
 	// the order of the elements is based on the ref of the value.
 	assert.EqualValues([]interface{}{SetKind, SetKind, Int32Kind, []interface{}{[]interface{}{int32(1), int32(3), int32(2)}, []interface{}{int32(0)}}}, w.toArray())
-}
-
-type testMap struct {
-	Map
-	t TypeRef
-}
-
-func (m testMap) TypeRef() TypeRef {
-	return m.t
-}
-
-func (m testMap) InternalImplementation() Map {
-	return m.Map
 }
 
 func TestWriteMap(t *testing.T) {
@@ -138,9 +114,10 @@ func TestWriteMap(t *testing.T) {
 
 	tref := MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(BoolKind))
 	v := NewMap(NewString("a"), Bool(false), NewString("b"), Bool(true))
+	v.t = tref
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testMap{Map: v, t: tref})
+	w.writeTopLevelValue(v)
 	// the order of the elements is based on the ref of the value.
 	assert.EqualValues([]interface{}{MapKind, StringKind, BoolKind, []interface{}{"a", false, "b", true}}, w.toArray())
 }
@@ -153,9 +130,10 @@ func TestWriteMapOfMap(t *testing.T) {
 	vt := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(BoolKind))
 	tref := MakeCompoundTypeRef(MapKind, kt, vt)
 	v := NewMap(NewMap(NewString("a"), Int64(0)), NewSet(Bool(true)))
+	v.t = tref
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testMap{Map: v, t: tref})
+	w.writeTopLevelValue(v)
 	// the order of the elements is based on the ref of the value.
 	assert.EqualValues([]interface{}{MapKind, MapKind, StringKind, Int64Kind, SetKind, BoolKind, []interface{}{[]interface{}{"a", int64(0)}, []interface{}{true}}}, w.toArray())
 }
@@ -164,14 +142,14 @@ func TestWriteEmptyStruct(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg := NewPackage([]TypeRef{
-		MakeStructTypeRef("S", []Field{}, Choices{})}, []ref.Ref{})
+	typeDef := MakeStructTypeRef("S", []Field{}, Choices{})
+	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
-	tref := MakeTypeRef(pkgRef, 0)
-	v := NewMap()
+	typeRef := MakeTypeRef(pkgRef, 0)
+	v := NewStruct(typeRef, typeDef, nil)
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testMap{Map: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0)}, w.toArray())
 }
 
@@ -179,17 +157,17 @@ func TestWriteStruct(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg := NewPackage([]TypeRef{
-		MakeStructTypeRef("S", []Field{
-			Field{"x", MakePrimitiveTypeRef(Int8Kind), false},
-			Field{"b", MakePrimitiveTypeRef(BoolKind), false},
-		}, Choices{})}, []ref.Ref{})
+	typeDef := MakeStructTypeRef("S", []Field{
+		Field{"x", MakePrimitiveTypeRef(Int8Kind), false},
+		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
+	}, Choices{})
+	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
-	tref := MakeTypeRef(pkgRef, 0)
-	v := NewMap(NewString("x"), Int8(42), NewString("b"), Bool(true))
+	typeRef := MakeTypeRef(pkgRef, 0)
+	v := NewStruct(typeRef, typeDef, structData{"x": Int8(42), "b": Bool(true)})
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testMap{Map: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), int8(42), true}, w.toArray())
 }
 
@@ -197,23 +175,23 @@ func TestWriteStructOptionalField(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg := NewPackage([]TypeRef{
-		MakeStructTypeRef("S", []Field{
-			Field{"x", MakePrimitiveTypeRef(Int8Kind), true},
-			Field{"b", MakePrimitiveTypeRef(BoolKind), false},
-		}, Choices{})}, []ref.Ref{})
+	typeDef := MakeStructTypeRef("S", []Field{
+		Field{"x", MakePrimitiveTypeRef(Int8Kind), true},
+		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
+	}, Choices{})
+	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
-	tref := MakeTypeRef(pkgRef, 0)
-	v := NewMap(NewString("x"), Int8(42), NewString("b"), Bool(true))
+	typeRef := MakeTypeRef(pkgRef, 0)
+	v := NewStruct(typeRef, typeDef, structData{"x": Int8(42), "b": Bool(true)})
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testMap{Map: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), true, int8(42), true}, w.toArray())
 
-	v = NewMap(NewString("b"), Bool(true))
+	v = NewStruct(typeRef, typeDef, structData{"b": Bool(true)})
 
 	w = newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testMap{Map: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), false, true}, w.toArray())
 }
 
@@ -221,25 +199,25 @@ func TestWriteStructWithUnion(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg := NewPackage([]TypeRef{
-		MakeStructTypeRef("S", []Field{
-			Field{"x", MakePrimitiveTypeRef(Int8Kind), false},
-		}, Choices{
-			Field{"b", MakePrimitiveTypeRef(BoolKind), false},
-			Field{"s", MakePrimitiveTypeRef(StringKind), false},
-		})}, []ref.Ref{})
+	typeDef := MakeStructTypeRef("S", []Field{
+		Field{"x", MakePrimitiveTypeRef(Int8Kind), false},
+	}, Choices{
+		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
+		Field{"s", MakePrimitiveTypeRef(StringKind), false},
+	})
+	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
-	tref := MakeTypeRef(pkgRef, 0)
-	v := NewMap(NewString("x"), Int8(42), NewString("$unionIndex"), UInt32(1), NewString("$unionValue"), NewString("hi"))
+	typeRef := MakeTypeRef(pkgRef, 0)
+	v := NewStruct(typeRef, typeDef, structData{"x": Int8(42), "s": NewString("hi")})
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testMap{Map: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), int8(42), uint32(1), "hi"}, w.toArray())
 
-	v = NewMap(NewString("x"), Int8(42), NewString("$unionIndex"), UInt32(0), NewString("$unionValue"), Bool(true))
+	v = NewStruct(typeRef, typeDef, structData{"x": Int8(42), "b": Bool(true)})
 
 	w = newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testMap{Map: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), int8(42), uint32(0), true}, w.toArray())
 }
 
@@ -247,21 +225,21 @@ func TestWriteStructWithList(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg := NewPackage([]TypeRef{
-		MakeStructTypeRef("S", []Field{
-			Field{"l", MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(StringKind)), false},
-		}, Choices{})}, []ref.Ref{})
+	typeDef := MakeStructTypeRef("S", []Field{
+		Field{"l", MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(StringKind)), false},
+	}, Choices{})
+	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
-	tref := MakeTypeRef(pkgRef, 0)
-	v := NewMap(NewString("l"), NewList(NewString("a"), NewString("b")))
+	typeRef := MakeTypeRef(pkgRef, 0)
 
+	v := NewStruct(typeRef, typeDef, structData{"l": NewList(NewString("a"), NewString("b"))})
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testMap{Map: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), []interface{}{"a", "b"}}, w.toArray())
 
-	v = NewMap(NewString("l"), NewList())
+	v = NewStruct(typeRef, typeDef, structData{"l": NewList()})
 	w = newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testMap{Map: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), []interface{}{}}, w.toArray())
 }
 
@@ -269,19 +247,20 @@ func TestWriteStructWithStruct(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg := NewPackage([]TypeRef{
-		MakeStructTypeRef("S2", []Field{
-			Field{"x", MakePrimitiveTypeRef(Int32Kind), false},
-		}, Choices{}),
-		MakeStructTypeRef("S", []Field{
-			Field{"s", MakeTypeRef(ref.Ref{}, 0), false},
-		}, Choices{})}, []ref.Ref{})
+	s2TypeDef := MakeStructTypeRef("S2", []Field{
+		Field{"x", MakePrimitiveTypeRef(Int32Kind), false},
+	}, Choices{})
+	sTypeDef := MakeStructTypeRef("S", []Field{
+		Field{"s", MakeTypeRef(ref.Ref{}, 0), false},
+	}, Choices{})
+	pkg := NewPackage([]TypeRef{s2TypeDef, sTypeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
-	tref := MakeTypeRef(pkgRef, 1)
-	v := NewMap(NewString("s"), NewMap(NewString("x"), Int32(42)))
+	s2TypeRef := MakeTypeRef(pkgRef, 0)
+	sTypeRef := MakeTypeRef(pkgRef, 1)
 
+	v := NewStruct(sTypeRef, sTypeDef, structData{"s": NewStruct(s2TypeRef, s2TypeDef, structData{"x": Int32(42)})})
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testMap{Map: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(1), int32(42)}, w.toArray())
 }
 
@@ -289,17 +268,17 @@ func TestWriteStructWithBlob(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg := NewPackage([]TypeRef{
-		MakeStructTypeRef("S", []Field{
-			Field{"b", MakePrimitiveTypeRef(BlobKind), false},
-		}, Choices{})}, []ref.Ref{})
+	typeDef := MakeStructTypeRef("S", []Field{
+		Field{"b", MakePrimitiveTypeRef(BlobKind), false},
+	}, Choices{})
+	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
-	tref := MakeTypeRef(pkgRef, 0)
+	typeRef := MakeTypeRef(pkgRef, 0)
 	b, _ := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
-	v := NewMap(NewString("b"), b)
+	v := NewStruct(typeRef, typeDef, structData{"b": b})
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testMap{Map: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), "AAE="}, w.toArray())
 }
 
@@ -392,18 +371,18 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg := NewPackage([]TypeRef{
-		MakeStructTypeRef("S", []Field{
-			Field{"x", MakePrimitiveTypeRef(Int32Kind), false},
-		}, Choices{})}, []ref.Ref{})
+	typeDef := MakeStructTypeRef("S", []Field{
+		Field{"x", MakePrimitiveTypeRef(Int32Kind), false},
+	}, Choices{})
+	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
-
-	tref := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))
-	st := MakeTypeRef(pkgRef, 0)
-	v := NewList(testMap{Map: NewMap(NewString("x"), Int32(42)), t: st})
+	listTypeRef := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))
+	structTypeRef := MakeTypeRef(pkgRef, 0)
+	v := NewList(NewStruct(structTypeRef, typeDef, structData{"x": Int32(42)}))
+	v.t = listTypeRef
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testList{List: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{ListKind, ValueKind, []interface{}{UnresolvedKind, pkgRef.String(), int16(0), int32(42)}}, w.toArray())
 }
 

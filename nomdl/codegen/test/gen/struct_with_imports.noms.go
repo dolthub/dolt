@@ -74,15 +74,19 @@ func (e LocalE) Chunks() []ref.Ref {
 // ImportUser
 
 type ImportUser struct {
-	m   types.Map
+	_importedStruct D
+	_enum           LocalE
+
 	ref *ref.Ref
 }
 
 func NewImportUser() ImportUser {
-	return ImportUser{types.NewMap(
-		types.NewString("importedStruct"), NewD(),
-		types.NewString("enum"), NewLocalE(),
-	), &ref.Ref{}}
+	return ImportUser{
+		_importedStruct: NewD(),
+		_enum:           NewLocalE(),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type ImportUserDef struct {
@@ -92,19 +96,20 @@ type ImportUserDef struct {
 
 func (def ImportUserDef) New() ImportUser {
 	return ImportUser{
-		types.NewMap(
-			types.NewString("importedStruct"), def.ImportedStruct.New(),
-			types.NewString("enum"), def.Enum,
-		), &ref.Ref{}}
+		_importedStruct: def.ImportedStruct.New(),
+		_enum:           def.Enum,
+		ref:             &ref.Ref{},
+	}
 }
 
 func (s ImportUser) Def() (d ImportUserDef) {
-	d.ImportedStruct = s.m.Get(types.NewString("importedStruct")).(D).Def()
-	d.Enum = s.m.Get(types.NewString("enum")).(LocalE)
+	d.ImportedStruct = s._importedStruct.Def()
+	d.Enum = s._enum
 	return
 }
 
 var __typeRefForImportUser types.TypeRef
+var __typeDefForImportUser types.TypeRef
 
 func (m ImportUser) TypeRef() types.TypeRef {
 	return __typeRefForImportUser
@@ -112,22 +117,35 @@ func (m ImportUser) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForImportUser = types.MakeTypeRef(__genPackageInFile_struct_with_imports_CachedRef, 1)
-	types.RegisterFromValFunction(__typeRefForImportUser, func(v types.Value) types.Value {
-		return ImportUserFromVal(v)
-	})
+	__typeDefForImportUser = types.MakeStructTypeRef("ImportUser",
+		[]types.Field{
+			types.Field{"importedStruct", types.MakeTypeRef(ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"), 0), false},
+			types.Field{"enum", types.MakeTypeRef(__genPackageInFile_struct_with_imports_CachedRef, 0), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForImportUser, builderForImportUser)
 }
 
-func ImportUserFromVal(val types.Value) ImportUser {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ImportUser); ok {
-		return val
+func (s ImportUser) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"importedStruct": s._importedStruct,
+		"enum":           s._enum,
 	}
-	// TODO: Validate here
-	return ImportUser{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForImportUser, __typeDefForImportUser, m)
 }
 
-func (s ImportUser) InternalImplementation() types.Map {
-	return s.m
+func builderForImportUser() chan types.Value {
+	c := make(chan types.Value)
+	s := ImportUser{ref: &ref.Ref{}}
+	go func() {
+		s._importedStruct = (<-c).(D)
+		s._enum = (<-c).(LocalE)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s ImportUser) Equals(other types.Value) bool {
@@ -139,25 +157,29 @@ func (s ImportUser) Ref() ref.Ref {
 }
 
 func (s ImportUser) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForImportUser.Chunks()...)
+	chunks = append(chunks, s._importedStruct.Chunks()...)
 	return
 }
 
 func (s ImportUser) ImportedStruct() D {
-	return s.m.Get(types.NewString("importedStruct")).(D)
+	return s._importedStruct
 }
 
 func (s ImportUser) SetImportedStruct(val D) ImportUser {
-	return ImportUser{s.m.Set(types.NewString("importedStruct"), val), &ref.Ref{}}
+	s._importedStruct = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s ImportUser) Enum() LocalE {
-	return s.m.Get(types.NewString("enum")).(LocalE)
+	return s._enum
 }
 
 func (s ImportUser) SetEnum(val LocalE) ImportUser {
-	return ImportUser{s.m.Set(types.NewString("enum"), val), &ref.Ref{}}
+	s._enum = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // ListOfD

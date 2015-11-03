@@ -31,9 +31,9 @@ func TestEnumValue(t *testing.T) {
 	assert := assert.New(t)
 
 	def := gen.EnumStructDef{gen.Switch}
-	st := def.New()
-	val := st
-	st2 := gen.EnumStructFromVal(val)
+	var st types.Value
+	st = def.New()
+	st2 := st.(gen.EnumStruct)
 	assert.True(st.Equals(st2))
 }
 

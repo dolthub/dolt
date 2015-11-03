@@ -27,14 +27,17 @@ func init() {
 // Tree
 
 type Tree struct {
-	m   types.Map
+	_children ListOfTree
+
 	ref *ref.Ref
 }
 
 func NewTree() Tree {
-	return Tree{types.NewMap(
-		types.NewString("children"), NewListOfTree(),
-	), &ref.Ref{}}
+	return Tree{
+		_children: NewListOfTree(),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type TreeDef struct {
@@ -43,17 +46,18 @@ type TreeDef struct {
 
 func (def TreeDef) New() Tree {
 	return Tree{
-		types.NewMap(
-			types.NewString("children"), def.Children.New(),
-		), &ref.Ref{}}
+		_children: def.Children.New(),
+		ref:       &ref.Ref{},
+	}
 }
 
 func (s Tree) Def() (d TreeDef) {
-	d.Children = s.m.Get(types.NewString("children")).(ListOfTree).Def()
+	d.Children = s._children.Def()
 	return
 }
 
 var __typeRefForTree types.TypeRef
+var __typeDefForTree types.TypeRef
 
 func (m Tree) TypeRef() types.TypeRef {
 	return __typeRefForTree
@@ -61,22 +65,32 @@ func (m Tree) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForTree = types.MakeTypeRef(__genPackageInFile_struct_recursive_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForTree, func(v types.Value) types.Value {
-		return TreeFromVal(v)
-	})
+	__typeDefForTree = types.MakeStructTypeRef("Tree",
+		[]types.Field{
+			types.Field{"children", types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__genPackageInFile_struct_recursive_CachedRef, 0)), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForTree, builderForTree)
 }
 
-func TreeFromVal(val types.Value) Tree {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(Tree); ok {
-		return val
+func (s Tree) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"children": s._children,
 	}
-	// TODO: Validate here
-	return Tree{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForTree, __typeDefForTree, m)
 }
 
-func (s Tree) InternalImplementation() types.Map {
-	return s.m
+func builderForTree() chan types.Value {
+	c := make(chan types.Value)
+	s := Tree{ref: &ref.Ref{}}
+	go func() {
+		s._children = (<-c).(ListOfTree)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s Tree) Equals(other types.Value) bool {
@@ -88,17 +102,19 @@ func (s Tree) Ref() ref.Ref {
 }
 
 func (s Tree) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForTree.Chunks()...)
+	chunks = append(chunks, s._children.Chunks()...)
 	return
 }
 
 func (s Tree) Children() ListOfTree {
-	return s.m.Get(types.NewString("children")).(ListOfTree)
+	return s._children
 }
 
 func (s Tree) SetChildren(val ListOfTree) Tree {
-	return Tree{s.m.Set(types.NewString("children"), val), &ref.Ref{}}
+	s._children = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // ListOfTree

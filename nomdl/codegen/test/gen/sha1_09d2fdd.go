@@ -36,15 +36,19 @@ func init() {
 // D
 
 type D struct {
-	m   types.Map
+	_structField S
+	_enumField   E
+
 	ref *ref.Ref
 }
 
 func NewD() D {
-	return D{types.NewMap(
-		types.NewString("structField"), NewS(),
-		types.NewString("enumField"), NewE(),
-	), &ref.Ref{}}
+	return D{
+		_structField: NewS(),
+		_enumField:   NewE(),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type DDef struct {
@@ -54,19 +58,20 @@ type DDef struct {
 
 func (def DDef) New() D {
 	return D{
-		types.NewMap(
-			types.NewString("structField"), def.StructField.New(),
-			types.NewString("enumField"), def.EnumField,
-		), &ref.Ref{}}
+		_structField: def.StructField.New(),
+		_enumField:   def.EnumField,
+		ref:          &ref.Ref{},
+	}
 }
 
 func (s D) Def() (d DDef) {
-	d.StructField = s.m.Get(types.NewString("structField")).(S).Def()
-	d.EnumField = s.m.Get(types.NewString("enumField")).(E)
+	d.StructField = s._structField.Def()
+	d.EnumField = s._enumField
 	return
 }
 
 var __typeRefForD types.TypeRef
+var __typeDefForD types.TypeRef
 
 func (m D) TypeRef() types.TypeRef {
 	return __typeRefForD
@@ -74,22 +79,35 @@ func (m D) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForD = types.MakeTypeRef(__genPackageInFile_sha1_09d2fdd_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForD, func(v types.Value) types.Value {
-		return DFromVal(v)
-	})
+	__typeDefForD = types.MakeStructTypeRef("D",
+		[]types.Field{
+			types.Field{"structField", types.MakeTypeRef(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 0), false},
+			types.Field{"enumField", types.MakeTypeRef(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 1), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForD, builderForD)
 }
 
-func DFromVal(val types.Value) D {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(D); ok {
-		return val
+func (s D) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"structField": s._structField,
+		"enumField":   s._enumField,
 	}
-	// TODO: Validate here
-	return D{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForD, __typeDefForD, m)
 }
 
-func (s D) InternalImplementation() types.Map {
-	return s.m
+func builderForD() chan types.Value {
+	c := make(chan types.Value)
+	s := D{ref: &ref.Ref{}}
+	go func() {
+		s._structField = (<-c).(S)
+		s._enumField = (<-c).(E)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s D) Equals(other types.Value) bool {
@@ -101,38 +119,45 @@ func (s D) Ref() ref.Ref {
 }
 
 func (s D) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForD.Chunks()...)
+	chunks = append(chunks, s._structField.Chunks()...)
 	return
 }
 
 func (s D) StructField() S {
-	return s.m.Get(types.NewString("structField")).(S)
+	return s._structField
 }
 
 func (s D) SetStructField(val S) D {
-	return D{s.m.Set(types.NewString("structField"), val), &ref.Ref{}}
+	s._structField = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s D) EnumField() E {
-	return s.m.Get(types.NewString("enumField")).(E)
+	return s._enumField
 }
 
 func (s D) SetEnumField(val E) D {
-	return D{s.m.Set(types.NewString("enumField"), val), &ref.Ref{}}
+	s._enumField = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // DUser
 
 type DUser struct {
-	m   types.Map
+	_Dfield D
+
 	ref *ref.Ref
 }
 
 func NewDUser() DUser {
-	return DUser{types.NewMap(
-		types.NewString("Dfield"), NewD(),
-	), &ref.Ref{}}
+	return DUser{
+		_Dfield: NewD(),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type DUserDef struct {
@@ -141,17 +166,18 @@ type DUserDef struct {
 
 func (def DUserDef) New() DUser {
 	return DUser{
-		types.NewMap(
-			types.NewString("Dfield"), def.Dfield.New(),
-		), &ref.Ref{}}
+		_Dfield: def.Dfield.New(),
+		ref:     &ref.Ref{},
+	}
 }
 
 func (s DUser) Def() (d DUserDef) {
-	d.Dfield = s.m.Get(types.NewString("Dfield")).(D).Def()
+	d.Dfield = s._Dfield.Def()
 	return
 }
 
 var __typeRefForDUser types.TypeRef
+var __typeDefForDUser types.TypeRef
 
 func (m DUser) TypeRef() types.TypeRef {
 	return __typeRefForDUser
@@ -159,22 +185,32 @@ func (m DUser) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForDUser = types.MakeTypeRef(__genPackageInFile_sha1_09d2fdd_CachedRef, 1)
-	types.RegisterFromValFunction(__typeRefForDUser, func(v types.Value) types.Value {
-		return DUserFromVal(v)
-	})
+	__typeDefForDUser = types.MakeStructTypeRef("DUser",
+		[]types.Field{
+			types.Field{"Dfield", types.MakeTypeRef(__genPackageInFile_sha1_09d2fdd_CachedRef, 0), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForDUser, builderForDUser)
 }
 
-func DUserFromVal(val types.Value) DUser {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(DUser); ok {
-		return val
+func (s DUser) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"Dfield": s._Dfield,
 	}
-	// TODO: Validate here
-	return DUser{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForDUser, __typeDefForDUser, m)
 }
 
-func (s DUser) InternalImplementation() types.Map {
-	return s.m
+func builderForDUser() chan types.Value {
+	c := make(chan types.Value)
+	s := DUser{ref: &ref.Ref{}}
+	go func() {
+		s._Dfield = (<-c).(D)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s DUser) Equals(other types.Value) bool {
@@ -186,15 +222,17 @@ func (s DUser) Ref() ref.Ref {
 }
 
 func (s DUser) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForDUser.Chunks()...)
+	chunks = append(chunks, s._Dfield.Chunks()...)
 	return
 }
 
 func (s DUser) Dfield() D {
-	return s.m.Get(types.NewString("Dfield")).(D)
+	return s._Dfield
 }
 
 func (s DUser) SetDfield(val D) DUser {
-	return DUser{s.m.Set(types.NewString("Dfield"), val), &ref.Ref{}}
+	s._Dfield = val
+	s.ref = &ref.Ref{}
+	return s
 }

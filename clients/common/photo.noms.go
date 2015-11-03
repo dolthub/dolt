@@ -41,19 +41,27 @@ func init() {
 // RemotePhoto
 
 type RemotePhoto struct {
-	m   types.Map
+	_Id          string
+	_Title       string
+	_Url         string
+	_Geoposition Geoposition
+	_Sizes       MapOfSizeToString
+	_Tags        SetOfString
+
 	ref *ref.Ref
 }
 
 func NewRemotePhoto() RemotePhoto {
-	return RemotePhoto{types.NewMap(
-		types.NewString("Id"), types.NewString(""),
-		types.NewString("Title"), types.NewString(""),
-		types.NewString("Url"), types.NewString(""),
-		types.NewString("Geoposition"), NewGeoposition(),
-		types.NewString("Sizes"), NewMapOfSizeToString(),
-		types.NewString("Tags"), NewSetOfString(),
-	), &ref.Ref{}}
+	return RemotePhoto{
+		_Id:          "",
+		_Title:       "",
+		_Url:         "",
+		_Geoposition: NewGeoposition(),
+		_Sizes:       NewMapOfSizeToString(),
+		_Tags:        NewSetOfString(),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type RemotePhotoDef struct {
@@ -67,27 +75,28 @@ type RemotePhotoDef struct {
 
 func (def RemotePhotoDef) New() RemotePhoto {
 	return RemotePhoto{
-		types.NewMap(
-			types.NewString("Id"), types.NewString(def.Id),
-			types.NewString("Title"), types.NewString(def.Title),
-			types.NewString("Url"), types.NewString(def.Url),
-			types.NewString("Geoposition"), def.Geoposition.New(),
-			types.NewString("Sizes"), def.Sizes.New(),
-			types.NewString("Tags"), def.Tags.New(),
-		), &ref.Ref{}}
+		_Id:          def.Id,
+		_Title:       def.Title,
+		_Url:         def.Url,
+		_Geoposition: def.Geoposition.New(),
+		_Sizes:       def.Sizes.New(),
+		_Tags:        def.Tags.New(),
+		ref:          &ref.Ref{},
+	}
 }
 
 func (s RemotePhoto) Def() (d RemotePhotoDef) {
-	d.Id = s.m.Get(types.NewString("Id")).(types.String).String()
-	d.Title = s.m.Get(types.NewString("Title")).(types.String).String()
-	d.Url = s.m.Get(types.NewString("Url")).(types.String).String()
-	d.Geoposition = s.m.Get(types.NewString("Geoposition")).(Geoposition).Def()
-	d.Sizes = s.m.Get(types.NewString("Sizes")).(MapOfSizeToString).Def()
-	d.Tags = s.m.Get(types.NewString("Tags")).(SetOfString).Def()
+	d.Id = s._Id
+	d.Title = s._Title
+	d.Url = s._Url
+	d.Geoposition = s._Geoposition.Def()
+	d.Sizes = s._Sizes.Def()
+	d.Tags = s._Tags.Def()
 	return
 }
 
 var __typeRefForRemotePhoto types.TypeRef
+var __typeDefForRemotePhoto types.TypeRef
 
 func (m RemotePhoto) TypeRef() types.TypeRef {
 	return __typeRefForRemotePhoto
@@ -95,22 +104,47 @@ func (m RemotePhoto) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForRemotePhoto = types.MakeTypeRef(__commonPackageInFile_photo_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForRemotePhoto, func(v types.Value) types.Value {
-		return RemotePhotoFromVal(v)
-	})
+	__typeDefForRemotePhoto = types.MakeStructTypeRef("RemotePhoto",
+		[]types.Field{
+			types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Url", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
+			types.Field{"Sizes", types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(__commonPackageInFile_photo_CachedRef, 1), types.MakePrimitiveTypeRef(types.StringKind)), false},
+			types.Field{"Tags", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind)), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForRemotePhoto, builderForRemotePhoto)
 }
 
-func RemotePhotoFromVal(val types.Value) RemotePhoto {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(RemotePhoto); ok {
-		return val
+func (s RemotePhoto) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"Id":          types.NewString(s._Id),
+		"Title":       types.NewString(s._Title),
+		"Url":         types.NewString(s._Url),
+		"Geoposition": s._Geoposition,
+		"Sizes":       s._Sizes,
+		"Tags":        s._Tags,
 	}
-	// TODO: Validate here
-	return RemotePhoto{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForRemotePhoto, __typeDefForRemotePhoto, m)
 }
 
-func (s RemotePhoto) InternalImplementation() types.Map {
-	return s.m
+func builderForRemotePhoto() chan types.Value {
+	c := make(chan types.Value)
+	s := RemotePhoto{ref: &ref.Ref{}}
+	go func() {
+		s._Id = (<-c).(types.String).String()
+		s._Title = (<-c).(types.String).String()
+		s._Url = (<-c).(types.String).String()
+		s._Geoposition = (<-c).(Geoposition)
+		s._Sizes = (<-c).(MapOfSizeToString)
+		s._Tags = (<-c).(SetOfString)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s RemotePhoto) Equals(other types.Value) bool {
@@ -122,71 +156,89 @@ func (s RemotePhoto) Ref() ref.Ref {
 }
 
 func (s RemotePhoto) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForRemotePhoto.Chunks()...)
+	chunks = append(chunks, s._Geoposition.Chunks()...)
+	chunks = append(chunks, s._Sizes.Chunks()...)
+	chunks = append(chunks, s._Tags.Chunks()...)
 	return
 }
 
 func (s RemotePhoto) Id() string {
-	return s.m.Get(types.NewString("Id")).(types.String).String()
+	return s._Id
 }
 
 func (s RemotePhoto) SetId(val string) RemotePhoto {
-	return RemotePhoto{s.m.Set(types.NewString("Id"), types.NewString(val)), &ref.Ref{}}
+	s._Id = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s RemotePhoto) Title() string {
-	return s.m.Get(types.NewString("Title")).(types.String).String()
+	return s._Title
 }
 
 func (s RemotePhoto) SetTitle(val string) RemotePhoto {
-	return RemotePhoto{s.m.Set(types.NewString("Title"), types.NewString(val)), &ref.Ref{}}
+	s._Title = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s RemotePhoto) Url() string {
-	return s.m.Get(types.NewString("Url")).(types.String).String()
+	return s._Url
 }
 
 func (s RemotePhoto) SetUrl(val string) RemotePhoto {
-	return RemotePhoto{s.m.Set(types.NewString("Url"), types.NewString(val)), &ref.Ref{}}
+	s._Url = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s RemotePhoto) Geoposition() Geoposition {
-	return s.m.Get(types.NewString("Geoposition")).(Geoposition)
+	return s._Geoposition
 }
 
 func (s RemotePhoto) SetGeoposition(val Geoposition) RemotePhoto {
-	return RemotePhoto{s.m.Set(types.NewString("Geoposition"), val), &ref.Ref{}}
+	s._Geoposition = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s RemotePhoto) Sizes() MapOfSizeToString {
-	return s.m.Get(types.NewString("Sizes")).(MapOfSizeToString)
+	return s._Sizes
 }
 
 func (s RemotePhoto) SetSizes(val MapOfSizeToString) RemotePhoto {
-	return RemotePhoto{s.m.Set(types.NewString("Sizes"), val), &ref.Ref{}}
+	s._Sizes = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s RemotePhoto) Tags() SetOfString {
-	return s.m.Get(types.NewString("Tags")).(SetOfString)
+	return s._Tags
 }
 
 func (s RemotePhoto) SetTags(val SetOfString) RemotePhoto {
-	return RemotePhoto{s.m.Set(types.NewString("Tags"), val), &ref.Ref{}}
+	s._Tags = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // Size
 
 type Size struct {
-	m   types.Map
+	_Width  uint32
+	_Height uint32
+
 	ref *ref.Ref
 }
 
 func NewSize() Size {
-	return Size{types.NewMap(
-		types.NewString("Width"), types.UInt32(0),
-		types.NewString("Height"), types.UInt32(0),
-	), &ref.Ref{}}
+	return Size{
+		_Width:  uint32(0),
+		_Height: uint32(0),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type SizeDef struct {
@@ -196,19 +248,20 @@ type SizeDef struct {
 
 func (def SizeDef) New() Size {
 	return Size{
-		types.NewMap(
-			types.NewString("Width"), types.UInt32(def.Width),
-			types.NewString("Height"), types.UInt32(def.Height),
-		), &ref.Ref{}}
+		_Width:  def.Width,
+		_Height: def.Height,
+		ref:     &ref.Ref{},
+	}
 }
 
 func (s Size) Def() (d SizeDef) {
-	d.Width = uint32(s.m.Get(types.NewString("Width")).(types.UInt32))
-	d.Height = uint32(s.m.Get(types.NewString("Height")).(types.UInt32))
+	d.Width = s._Width
+	d.Height = s._Height
 	return
 }
 
 var __typeRefForSize types.TypeRef
+var __typeDefForSize types.TypeRef
 
 func (m Size) TypeRef() types.TypeRef {
 	return __typeRefForSize
@@ -216,22 +269,35 @@ func (m Size) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSize = types.MakeTypeRef(__commonPackageInFile_photo_CachedRef, 1)
-	types.RegisterFromValFunction(__typeRefForSize, func(v types.Value) types.Value {
-		return SizeFromVal(v)
-	})
+	__typeDefForSize = types.MakeStructTypeRef("Size",
+		[]types.Field{
+			types.Field{"Width", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+			types.Field{"Height", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForSize, builderForSize)
 }
 
-func SizeFromVal(val types.Value) Size {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(Size); ok {
-		return val
+func (s Size) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"Width":  types.UInt32(s._Width),
+		"Height": types.UInt32(s._Height),
 	}
-	// TODO: Validate here
-	return Size{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForSize, __typeDefForSize, m)
 }
 
-func (s Size) InternalImplementation() types.Map {
-	return s.m
+func builderForSize() chan types.Value {
+	c := make(chan types.Value)
+	s := Size{ref: &ref.Ref{}}
+	go func() {
+		s._Width = uint32((<-c).(types.UInt32))
+		s._Height = uint32((<-c).(types.UInt32))
+
+		c <- s
+	}()
+	return c
 }
 
 func (s Size) Equals(other types.Value) bool {
@@ -243,25 +309,28 @@ func (s Size) Ref() ref.Ref {
 }
 
 func (s Size) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForSize.Chunks()...)
 	return
 }
 
 func (s Size) Width() uint32 {
-	return uint32(s.m.Get(types.NewString("Width")).(types.UInt32))
+	return s._Width
 }
 
 func (s Size) SetWidth(val uint32) Size {
-	return Size{s.m.Set(types.NewString("Width"), types.UInt32(val)), &ref.Ref{}}
+	s._Width = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Size) Height() uint32 {
-	return uint32(s.m.Get(types.NewString("Height")).(types.UInt32))
+	return s._Height
 }
 
 func (s Size) SetHeight(val uint32) Size {
-	return Size{s.m.Set(types.NewString("Height"), types.UInt32(val)), &ref.Ref{}}
+	s._Height = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // MapOfSizeToString

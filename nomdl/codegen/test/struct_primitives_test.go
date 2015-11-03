@@ -123,5 +123,5 @@ func TestStructBackingMapKeyNames(t *testing.T) {
 
 	s := gen.NewStructPrimitives().SetBool(true)
 
-	assert.True(bool(s.InternalImplementation().Get(types.NewString("bool")).(types.Bool)))
+	assert.True(bool(s.InternalImplementation().Get("bool").(types.Bool)))
 }

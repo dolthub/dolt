@@ -65,17 +65,16 @@ func TestWritePackageWhenValueIsWritten(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg1 := NewPackage([]TypeRef{
-		MakeStructTypeRef("S", []Field{
-			Field{"X", MakePrimitiveTypeRef(Int32Kind), false},
-		}, Choices{}),
-	}, []ref.Ref{})
+	typeDef := MakeStructTypeRef("S", []Field{
+		Field{"X", MakePrimitiveTypeRef(Int32Kind), false},
+	}, Choices{})
+	pkg1 := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
 	// Don't write package
 	pkgRef1 := RegisterPackage(&pkg1)
+	typeRef := MakeTypeRef(pkgRef1, 0)
 
-	m := NewMap(NewString("X"), Int32(42))
-	tref := MakeTypeRef(pkgRef1, 0)
-	WriteValue(testMap{Map: m, t: tref}, cs)
+	s := NewStruct(typeRef, typeDef, structData{"X": Int32(42)})
+	WriteValue(s, cs)
 
 	pkg2 := ReadValue(pkgRef1, cs)
 	assert.True(pkg1.Equals(pkg2))

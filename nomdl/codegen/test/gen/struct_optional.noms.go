@@ -28,12 +28,19 @@ func init() {
 // OptionalStruct
 
 type OptionalStruct struct {
-	m   types.Map
+	_s          string
+	__optionals bool
+	_b          bool
+	__optionalb bool
+
 	ref *ref.Ref
 }
 
 func NewOptionalStruct() OptionalStruct {
-	return OptionalStruct{types.NewMap(), &ref.Ref{}}
+	return OptionalStruct{
+
+		ref: &ref.Ref{},
+	}
 }
 
 type OptionalStructDef struct {
@@ -43,23 +50,26 @@ type OptionalStructDef struct {
 
 func (def OptionalStructDef) New() OptionalStruct {
 	return OptionalStruct{
-		types.NewMap(
-			types.NewString("s"), types.NewString(def.S),
-			types.NewString("b"), types.Bool(def.B),
-		), &ref.Ref{}}
+		_s:          def.S,
+		__optionals: true,
+		_b:          def.B,
+		__optionalb: true,
+		ref:         &ref.Ref{},
+	}
 }
 
 func (s OptionalStruct) Def() (d OptionalStructDef) {
-	if v, ok := s.m.MaybeGet(types.NewString("s")); ok {
-		d.S = v.(types.String).String()
+	if s.__optionals {
+		d.S = s._s
 	}
-	if v, ok := s.m.MaybeGet(types.NewString("b")); ok {
-		d.B = bool(v.(types.Bool))
+	if s.__optionalb {
+		d.B = s._b
 	}
 	return
 }
 
 var __typeRefForOptionalStruct types.TypeRef
+var __typeDefForOptionalStruct types.TypeRef
 
 func (m OptionalStruct) TypeRef() types.TypeRef {
 	return __typeRefForOptionalStruct
@@ -67,22 +77,44 @@ func (m OptionalStruct) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForOptionalStruct = types.MakeTypeRef(__genPackageInFile_struct_optional_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForOptionalStruct, func(v types.Value) types.Value {
-		return OptionalStructFromVal(v)
-	})
+	__typeDefForOptionalStruct = types.MakeStructTypeRef("OptionalStruct",
+		[]types.Field{
+			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), true},
+			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), true},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForOptionalStruct, builderForOptionalStruct)
 }
 
-func OptionalStructFromVal(val types.Value) OptionalStruct {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(OptionalStruct); ok {
-		return val
+func (s OptionalStruct) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{}
+	if s.__optionals {
+		m["s"] = types.NewString(s._s)
 	}
-	// TODO: Validate here
-	return OptionalStruct{val.(types.Map), &ref.Ref{}}
+	if s.__optionalb {
+		m["b"] = types.Bool(s._b)
+	}
+	return types.NewStruct(__typeRefForOptionalStruct, __typeDefForOptionalStruct, m)
 }
 
-func (s OptionalStruct) InternalImplementation() types.Map {
-	return s.m
+func builderForOptionalStruct() chan types.Value {
+	c := make(chan types.Value)
+	s := OptionalStruct{ref: &ref.Ref{}}
+	go func() {
+		s.__optionals = bool((<-c).(types.Bool))
+		if s.__optionals {
+			s._s = (<-c).(types.String).String()
+		}
+		s.__optionalb = bool((<-c).(types.Bool))
+		if s.__optionalb {
+			s._b = bool((<-c).(types.Bool))
+		}
+
+		c <- s
+	}()
+	return c
 }
 
 func (s OptionalStruct) Equals(other types.Value) bool {
@@ -94,31 +126,34 @@ func (s OptionalStruct) Ref() ref.Ref {
 }
 
 func (s OptionalStruct) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForOptionalStruct.Chunks()...)
 	return
 }
 
 func (s OptionalStruct) S() (v string, ok bool) {
-	var vv types.Value
-	if vv, ok = s.m.MaybeGet(types.NewString("s")); ok {
-		v = vv.(types.String).String()
+	if s.__optionals {
+		return s._s, true
 	}
 	return
 }
 
 func (s OptionalStruct) SetS(val string) OptionalStruct {
-	return OptionalStruct{s.m.Set(types.NewString("s"), types.NewString(val)), &ref.Ref{}}
+	s.__optionals = true
+	s._s = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s OptionalStruct) B() (v bool, ok bool) {
-	var vv types.Value
-	if vv, ok = s.m.MaybeGet(types.NewString("b")); ok {
-		v = bool(vv.(types.Bool))
+	if s.__optionalb {
+		return s._b, true
 	}
 	return
 }
 
 func (s OptionalStruct) SetB(val bool) OptionalStruct {
-	return OptionalStruct{s.m.Set(types.NewString("b"), types.Bool(val)), &ref.Ref{}}
+	s.__optionalb = true
+	s._b = val
+	s.ref = &ref.Ref{}
+	return s
 }

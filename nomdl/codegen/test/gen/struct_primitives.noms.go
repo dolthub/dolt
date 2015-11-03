@@ -40,27 +40,43 @@ func init() {
 // StructPrimitives
 
 type StructPrimitives struct {
-	m   types.Map
+	_uint64  uint64
+	_uint32  uint32
+	_uint16  uint16
+	_uint8   uint8
+	_int64   int64
+	_int32   int32
+	_int16   int16
+	_int8    int8
+	_float64 float64
+	_float32 float32
+	_bool    bool
+	_string  string
+	_blob    types.Blob
+	_value   types.Value
+
 	ref *ref.Ref
 }
 
 func NewStructPrimitives() StructPrimitives {
-	return StructPrimitives{types.NewMap(
-		types.NewString("uint64"), types.UInt64(0),
-		types.NewString("uint32"), types.UInt32(0),
-		types.NewString("uint16"), types.UInt16(0),
-		types.NewString("uint8"), types.UInt8(0),
-		types.NewString("int64"), types.Int64(0),
-		types.NewString("int32"), types.Int32(0),
-		types.NewString("int16"), types.Int16(0),
-		types.NewString("int8"), types.Int8(0),
-		types.NewString("float64"), types.Float64(0),
-		types.NewString("float32"), types.Float32(0),
-		types.NewString("bool"), types.Bool(false),
-		types.NewString("string"), types.NewString(""),
-		types.NewString("blob"), types.NewEmptyBlob(),
-		types.NewString("value"), types.Bool(false),
-	), &ref.Ref{}}
+	return StructPrimitives{
+		_uint64:  uint64(0),
+		_uint32:  uint32(0),
+		_uint16:  uint16(0),
+		_uint8:   uint8(0),
+		_int64:   int64(0),
+		_int32:   int32(0),
+		_int16:   int16(0),
+		_int8:    int8(0),
+		_float64: float64(0),
+		_float32: float32(0),
+		_bool:    false,
+		_string:  "",
+		_blob:    types.NewEmptyBlob(),
+		_value:   types.Bool(false),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type StructPrimitivesDef struct {
@@ -82,43 +98,44 @@ type StructPrimitivesDef struct {
 
 func (def StructPrimitivesDef) New() StructPrimitives {
 	return StructPrimitives{
-		types.NewMap(
-			types.NewString("uint64"), types.UInt64(def.Uint64),
-			types.NewString("uint32"), types.UInt32(def.Uint32),
-			types.NewString("uint16"), types.UInt16(def.Uint16),
-			types.NewString("uint8"), types.UInt8(def.Uint8),
-			types.NewString("int64"), types.Int64(def.Int64),
-			types.NewString("int32"), types.Int32(def.Int32),
-			types.NewString("int16"), types.Int16(def.Int16),
-			types.NewString("int8"), types.Int8(def.Int8),
-			types.NewString("float64"), types.Float64(def.Float64),
-			types.NewString("float32"), types.Float32(def.Float32),
-			types.NewString("bool"), types.Bool(def.Bool),
-			types.NewString("string"), types.NewString(def.String),
-			types.NewString("blob"), def.Blob,
-			types.NewString("value"), def.Value,
-		), &ref.Ref{}}
+		_uint64:  def.Uint64,
+		_uint32:  def.Uint32,
+		_uint16:  def.Uint16,
+		_uint8:   def.Uint8,
+		_int64:   def.Int64,
+		_int32:   def.Int32,
+		_int16:   def.Int16,
+		_int8:    def.Int8,
+		_float64: def.Float64,
+		_float32: def.Float32,
+		_bool:    def.Bool,
+		_string:  def.String,
+		_blob:    def.Blob,
+		_value:   def.Value,
+		ref:      &ref.Ref{},
+	}
 }
 
 func (s StructPrimitives) Def() (d StructPrimitivesDef) {
-	d.Uint64 = uint64(s.m.Get(types.NewString("uint64")).(types.UInt64))
-	d.Uint32 = uint32(s.m.Get(types.NewString("uint32")).(types.UInt32))
-	d.Uint16 = uint16(s.m.Get(types.NewString("uint16")).(types.UInt16))
-	d.Uint8 = uint8(s.m.Get(types.NewString("uint8")).(types.UInt8))
-	d.Int64 = int64(s.m.Get(types.NewString("int64")).(types.Int64))
-	d.Int32 = int32(s.m.Get(types.NewString("int32")).(types.Int32))
-	d.Int16 = int16(s.m.Get(types.NewString("int16")).(types.Int16))
-	d.Int8 = int8(s.m.Get(types.NewString("int8")).(types.Int8))
-	d.Float64 = float64(s.m.Get(types.NewString("float64")).(types.Float64))
-	d.Float32 = float32(s.m.Get(types.NewString("float32")).(types.Float32))
-	d.Bool = bool(s.m.Get(types.NewString("bool")).(types.Bool))
-	d.String = s.m.Get(types.NewString("string")).(types.String).String()
-	d.Blob = s.m.Get(types.NewString("blob")).(types.Blob)
-	d.Value = s.m.Get(types.NewString("value"))
+	d.Uint64 = s._uint64
+	d.Uint32 = s._uint32
+	d.Uint16 = s._uint16
+	d.Uint8 = s._uint8
+	d.Int64 = s._int64
+	d.Int32 = s._int32
+	d.Int16 = s._int16
+	d.Int8 = s._int8
+	d.Float64 = s._float64
+	d.Float32 = s._float32
+	d.Bool = s._bool
+	d.String = s._string
+	d.Blob = s._blob
+	d.Value = s._value
 	return
 }
 
 var __typeRefForStructPrimitives types.TypeRef
+var __typeDefForStructPrimitives types.TypeRef
 
 func (m StructPrimitives) TypeRef() types.TypeRef {
 	return __typeRefForStructPrimitives
@@ -126,22 +143,71 @@ func (m StructPrimitives) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForStructPrimitives = types.MakeTypeRef(__genPackageInFile_struct_primitives_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForStructPrimitives, func(v types.Value) types.Value {
-		return StructPrimitivesFromVal(v)
-	})
+	__typeDefForStructPrimitives = types.MakeStructTypeRef("StructPrimitives",
+		[]types.Field{
+			types.Field{"uint64", types.MakePrimitiveTypeRef(types.UInt64Kind), false},
+			types.Field{"uint32", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+			types.Field{"uint16", types.MakePrimitiveTypeRef(types.UInt16Kind), false},
+			types.Field{"uint8", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
+			types.Field{"int64", types.MakePrimitiveTypeRef(types.Int64Kind), false},
+			types.Field{"int32", types.MakePrimitiveTypeRef(types.Int32Kind), false},
+			types.Field{"int16", types.MakePrimitiveTypeRef(types.Int16Kind), false},
+			types.Field{"int8", types.MakePrimitiveTypeRef(types.Int8Kind), false},
+			types.Field{"float64", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"float32", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+			types.Field{"bool", types.MakePrimitiveTypeRef(types.BoolKind), false},
+			types.Field{"string", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"blob", types.MakePrimitiveTypeRef(types.BlobKind), false},
+			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForStructPrimitives, builderForStructPrimitives)
 }
 
-func StructPrimitivesFromVal(val types.Value) StructPrimitives {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(StructPrimitives); ok {
-		return val
+func (s StructPrimitives) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"uint64":  types.UInt64(s._uint64),
+		"uint32":  types.UInt32(s._uint32),
+		"uint16":  types.UInt16(s._uint16),
+		"uint8":   types.UInt8(s._uint8),
+		"int64":   types.Int64(s._int64),
+		"int32":   types.Int32(s._int32),
+		"int16":   types.Int16(s._int16),
+		"int8":    types.Int8(s._int8),
+		"float64": types.Float64(s._float64),
+		"float32": types.Float32(s._float32),
+		"bool":    types.Bool(s._bool),
+		"string":  types.NewString(s._string),
+		"blob":    s._blob,
+		"value":   s._value,
 	}
-	// TODO: Validate here
-	return StructPrimitives{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForStructPrimitives, __typeDefForStructPrimitives, m)
 }
 
-func (s StructPrimitives) InternalImplementation() types.Map {
-	return s.m
+func builderForStructPrimitives() chan types.Value {
+	c := make(chan types.Value)
+	s := StructPrimitives{ref: &ref.Ref{}}
+	go func() {
+		s._uint64 = uint64((<-c).(types.UInt64))
+		s._uint32 = uint32((<-c).(types.UInt32))
+		s._uint16 = uint16((<-c).(types.UInt16))
+		s._uint8 = uint8((<-c).(types.UInt8))
+		s._int64 = int64((<-c).(types.Int64))
+		s._int32 = int32((<-c).(types.Int32))
+		s._int16 = int16((<-c).(types.Int16))
+		s._int8 = int8((<-c).(types.Int8))
+		s._float64 = float64((<-c).(types.Float64))
+		s._float32 = float32((<-c).(types.Float32))
+		s._bool = bool((<-c).(types.Bool))
+		s._string = (<-c).(types.String).String()
+		s._blob = (<-c).(types.Blob)
+		s._value = (<-c)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s StructPrimitives) Equals(other types.Value) bool {
@@ -153,119 +219,148 @@ func (s StructPrimitives) Ref() ref.Ref {
 }
 
 func (s StructPrimitives) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForStructPrimitives.Chunks()...)
+	chunks = append(chunks, s._blob.Chunks()...)
+	chunks = append(chunks, s._value.Chunks()...)
 	return
 }
 
 func (s StructPrimitives) Uint64() uint64 {
-	return uint64(s.m.Get(types.NewString("uint64")).(types.UInt64))
+	return s._uint64
 }
 
 func (s StructPrimitives) SetUint64(val uint64) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("uint64"), types.UInt64(val)), &ref.Ref{}}
+	s._uint64 = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) Uint32() uint32 {
-	return uint32(s.m.Get(types.NewString("uint32")).(types.UInt32))
+	return s._uint32
 }
 
 func (s StructPrimitives) SetUint32(val uint32) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("uint32"), types.UInt32(val)), &ref.Ref{}}
+	s._uint32 = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) Uint16() uint16 {
-	return uint16(s.m.Get(types.NewString("uint16")).(types.UInt16))
+	return s._uint16
 }
 
 func (s StructPrimitives) SetUint16(val uint16) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("uint16"), types.UInt16(val)), &ref.Ref{}}
+	s._uint16 = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) Uint8() uint8 {
-	return uint8(s.m.Get(types.NewString("uint8")).(types.UInt8))
+	return s._uint8
 }
 
 func (s StructPrimitives) SetUint8(val uint8) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("uint8"), types.UInt8(val)), &ref.Ref{}}
+	s._uint8 = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) Int64() int64 {
-	return int64(s.m.Get(types.NewString("int64")).(types.Int64))
+	return s._int64
 }
 
 func (s StructPrimitives) SetInt64(val int64) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("int64"), types.Int64(val)), &ref.Ref{}}
+	s._int64 = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) Int32() int32 {
-	return int32(s.m.Get(types.NewString("int32")).(types.Int32))
+	return s._int32
 }
 
 func (s StructPrimitives) SetInt32(val int32) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("int32"), types.Int32(val)), &ref.Ref{}}
+	s._int32 = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) Int16() int16 {
-	return int16(s.m.Get(types.NewString("int16")).(types.Int16))
+	return s._int16
 }
 
 func (s StructPrimitives) SetInt16(val int16) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("int16"), types.Int16(val)), &ref.Ref{}}
+	s._int16 = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) Int8() int8 {
-	return int8(s.m.Get(types.NewString("int8")).(types.Int8))
+	return s._int8
 }
 
 func (s StructPrimitives) SetInt8(val int8) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("int8"), types.Int8(val)), &ref.Ref{}}
+	s._int8 = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) Float64() float64 {
-	return float64(s.m.Get(types.NewString("float64")).(types.Float64))
+	return s._float64
 }
 
 func (s StructPrimitives) SetFloat64(val float64) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("float64"), types.Float64(val)), &ref.Ref{}}
+	s._float64 = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) Float32() float32 {
-	return float32(s.m.Get(types.NewString("float32")).(types.Float32))
+	return s._float32
 }
 
 func (s StructPrimitives) SetFloat32(val float32) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("float32"), types.Float32(val)), &ref.Ref{}}
+	s._float32 = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) Bool() bool {
-	return bool(s.m.Get(types.NewString("bool")).(types.Bool))
+	return s._bool
 }
 
 func (s StructPrimitives) SetBool(val bool) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("bool"), types.Bool(val)), &ref.Ref{}}
+	s._bool = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) String() string {
-	return s.m.Get(types.NewString("string")).(types.String).String()
+	return s._string
 }
 
 func (s StructPrimitives) SetString(val string) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("string"), types.NewString(val)), &ref.Ref{}}
+	s._string = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) Blob() types.Blob {
-	return s.m.Get(types.NewString("blob")).(types.Blob)
+	return s._blob
 }
 
 func (s StructPrimitives) SetBlob(val types.Blob) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("blob"), val), &ref.Ref{}}
+	s._blob = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructPrimitives) Value() types.Value {
-	return s.m.Get(types.NewString("value"))
+	return s._value
 }
 
 func (s StructPrimitives) SetValue(val types.Value) StructPrimitives {
-	return StructPrimitives{s.m.Set(types.NewString("value"), val), &ref.Ref{}}
+	s._value = val
+	s.ref = &ref.Ref{}
+	return s
 }
