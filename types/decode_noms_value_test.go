@@ -359,38 +359,30 @@ func TestReadEnum(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	tref := MakeEnumTypeRef("E", "a", "b", "c")
-	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
+	typeDef := MakeEnumTypeRef("E", "a", "b", "c")
+	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
-	enumTr := MakeTypeRef(pkgRef, 0)
-	RegisterFromValFunction(enumTr, func(v Value) Value {
-		return testEnum{v.(UInt32), enumTr}
-	})
 
 	a := parseJson(`[%d, "%s", 0, 1]`, UnresolvedKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
 
-	v := r.readTopLevelValue().(testEnum)
-	assert.Equal(uint32(1), uint32(v.UInt32))
+	v := r.readTopLevelValue().(Enum)
+	assert.Equal(uint32(1), v.v)
 }
 
 func TestReadValueEnum(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	tref := MakeEnumTypeRef("E", "a", "b", "c")
-	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
+	typeDef := MakeEnumTypeRef("E", "a", "b", "c")
+	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
-	enumTr := MakeTypeRef(pkgRef, 0)
-	RegisterFromValFunction(enumTr, func(v Value) Value {
-		return testEnum{v.(UInt32), enumTr}
-	})
 
 	a := parseJson(`[%d, %d, "%s", 0, 1]`, ValueKind, UnresolvedKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
 
-	v := r.readTopLevelValue().(testEnum)
-	assert.Equal(uint32(1), uint32(v.UInt32))
+	v := r.readTopLevelValue().(Enum)
+	assert.Equal(uint32(1), v.v)
 }
 
 func TestReadRef(t *testing.T) {
@@ -460,14 +452,11 @@ func TestReadStructWithEnum(t *testing.T) {
 		return v
 	})
 	enumTr := MakeTypeRef(pkgRef, 1)
-	RegisterFromValFunction(enumTr, func(v Value) Value {
-		return testEnum{v.(UInt32), enumTr}
-	})
 
 	v := r.readTopLevelValue().(Struct)
 
 	assert.True(v.Get("x").Equals(Int16(42)))
-	assert.True(v.Get("e").Equals(UInt32(1)))
+	assert.True(v.Get("e").Equals(Enum{1, enumTr}))
 	assert.True(v.Get("b").Equals(Bool(true)))
 }
 

@@ -282,19 +282,6 @@ func TestWriteStructWithBlob(t *testing.T) {
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), "AAE="}, w.toArray())
 }
 
-type testEnum struct {
-	UInt32
-	t TypeRef
-}
-
-func (e testEnum) TypeRef() TypeRef {
-	return e.t
-}
-
-func (e testEnum) InternalImplementation() uint32 {
-	return uint32(e.UInt32)
-}
-
 func TestWriteEnum(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
@@ -305,7 +292,7 @@ func TestWriteEnum(t *testing.T) {
 	tref := MakeTypeRef(pkgRef, 0)
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testEnum{UInt32: UInt32(1), t: tref})
+	w.writeTopLevelValue(Enum{1, tref})
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), uint32(1)}, w.toArray())
 }
 
@@ -318,7 +305,7 @@ func TestWriteListOfEnum(t *testing.T) {
 	pkgRef := RegisterPackage(&pkg)
 	et := MakeTypeRef(pkgRef, 0)
 	tref := MakeCompoundTypeRef(ListKind, et)
-	v := NewList(testEnum{UInt32(0), et}, testEnum{UInt32(1), et}, testEnum{UInt32(2), et})
+	v := NewList(Enum{0, et}, Enum{1, et}, Enum{2, et})
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(testList{List: v, t: tref})
