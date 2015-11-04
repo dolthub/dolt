@@ -210,9 +210,9 @@ function orderValuesByRef(t: TypeRef, a: Array<any>): Array<any> {
 
 function encodeNomsValue(v: any, t: TypeRef): Chunk {
   if (v instanceof Package) {
-    if (v.dependencies.length > 0) {
-      throw new Error('Not implemented');
-    }
+    // if (v.dependencies.length > 0) {
+    //   throw new Error('Not implemented');
+    // }
   }
 
   let ms = new MemoryStore(); // TODO: This should be passed in.

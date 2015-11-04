@@ -103,11 +103,11 @@ class JsonArrayReader {
     let elemType = t.elemTypes[0];
     let list = [];
     while (!this.atEnd()) {
-      let v = this.readValueWithoutTag(elemType, pkg);
+      let v = await this.readValueWithoutTag(elemType, pkg);
       list.push(v);
     }
 
-    return Promise.all(list);
+    return list;
   }
 
   async readSet(t: TypeRef, pkg: ?Package): Promise<Set> {
@@ -118,16 +118,11 @@ class JsonArrayReader {
   async readMap(t: TypeRef, pkg: ?Package): Promise<Map> {
     let keyType = t.elemTypes[0];
     let valueType = t.elemTypes[1];
-    let kv = [];
-    while (!this.atEnd()) {
-      kv.push(this.readValueWithoutTag(keyType, pkg));
-      kv.push(this.readValueWithoutTag(valueType, pkg));
-    }
-
-    kv = await Promise.all(kv);
     let m = new Map();
-    for (let i = 0; i < kv.length; i += 2) {
-      m.set(kv[i], kv[i + 1]);
+    while (!this.atEnd()) {
+      let k = await this.readValueWithoutTag(keyType, pkg);
+      let v = await this.readValueWithoutTag(valueType, pkg);
+      m.set(k, v);
     }
 
     return m;
@@ -149,18 +144,18 @@ class JsonArrayReader {
     return new Package(types, deps);
   }
 
-  async readTopLevelValue(): Promise<any> {
+  readTopLevelValue(): Promise<any> {
     let t = this.readTypeRefAsTag();
     return this.readValueWithoutTag(t);
   }
 
-  async readValueWithoutTag(t: TypeRef, pkg: ?Package = null): Promise<any> {
+  readValueWithoutTag(t: TypeRef, pkg: ?Package = null): Promise<any> {
     // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
       case Kind.Blob:
         throw new Error('Not implemented');
       case Kind.Bool:
-        return this.readBool();
+        return Promise.resolve(this.readBool());
       case Kind.UInt8:
       case Kind.UInt16:
       case Kind.UInt32:
@@ -171,9 +166,9 @@ class JsonArrayReader {
       case Kind.Int64:
       case Kind.Float32:
       case Kind.Float64:
-        return this.read();
+        return Promise.resolve(this.read());
       case Kind.String:
-        return this.readString();
+        return Promise.resolve(this.readString());
       case Kind.Value: {
         let t2 = this.readTypeRefAsTag();
         return this.readValueWithoutTag(t2, pkg);
@@ -187,9 +182,9 @@ class JsonArrayReader {
         return r2.readMap(t, pkg);
       }
       case Kind.Package:
-        return this.readPackage(t, pkg);
+        return Promise.resolve(this.readPackage(t, pkg));
       case Kind.Ref:
-        return this.readRef();
+        return Promise.resolve(this.readRef());
       case Kind.Set: {
         let r2 = new JsonArrayReader(this.readArray(), this._cs);
         return r2.readSet(t, pkg);
@@ -198,7 +193,7 @@ class JsonArrayReader {
       case Kind.Struct:
         throw new Error('Not allowed');
       case Kind.TypeRef:
-        return this.readTypeRefAsValue(pkg);
+        return Promise.resolve(this.readTypeRefAsValue(pkg));
       case Kind.Unresolved:
         return this.readUnresolvedKindToValue(t, pkg);
     }
@@ -286,7 +281,6 @@ class JsonArrayReader {
 
   async readStruct(typeDef: TypeRef, typeRef: TypeRef, pkg: Package): Promise<any> {
     // TODO FixupTypeRef?
-    // TODO Make read of sub-values parallel.
     let desc = typeDef.desc;
     invariant(desc instanceof StructDesc);
 
