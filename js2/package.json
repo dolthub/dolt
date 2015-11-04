@@ -3,7 +3,6 @@
   "main": "dist/noms.js",
   "dependencies": {
     "rusha": "^0.8.3",
-    "flow-bin": "^0.18.1",
     "text-encoding": "^0.5.2",
     "isomorphic-fetch": "^2.2.0"
   },
@@ -13,6 +12,7 @@
     "chai": "^3.2.0",
     "eslint": "^1.7.3",
     "eslint-plugin-react": "^3.6.3",
+    "flow-bin": "^0.18.1",
     "mocha": "^2.3.0"
   },
   "scripts": {

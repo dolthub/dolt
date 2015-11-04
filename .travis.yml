@@ -2,13 +2,18 @@ language: go
 go:
 - 1.5
 before_script:
-- pushd js2
 - npm version
 - nvm install stable
 - nvm use stable
 - npm version
+- pushd js2
 - npm install
-- npm build
+- npm test
+- popd
+- pushd clients/splore
+- npm install
+- ./link.sh
+- npm run build
 - npm test
 - popd
 script:
