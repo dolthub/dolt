@@ -69,7 +69,6 @@ func (s OptionalStruct) Def() (d OptionalStructDef) {
 }
 
 var __typeRefForOptionalStruct types.TypeRef
-var __typeDefForOptionalStruct types.TypeRef
 
 func (m OptionalStruct) TypeRef() types.TypeRef {
 	return __typeRefForOptionalStruct
@@ -77,32 +76,13 @@ func (m OptionalStruct) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForOptionalStruct = types.MakeTypeRef(__genPackageInFile_struct_optional_CachedRef, 0)
-	__typeDefForOptionalStruct = types.MakeStructTypeRef("OptionalStruct",
-		[]types.Field{
-			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), true},
-			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), true},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForOptionalStruct, builderForOptionalStruct)
-}
-
-func (s OptionalStruct) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{}
-	if s.__optionals {
-		m["s"] = types.NewString(s._s)
-	}
-	if s.__optionalb {
-		m["b"] = types.Bool(s._b)
-	}
-	return types.NewStruct(__typeRefForOptionalStruct, __typeDefForOptionalStruct, m)
+	types.RegisterStruct(__typeRefForOptionalStruct, builderForOptionalStruct, readerForOptionalStruct)
 }
 
 func builderForOptionalStruct() chan types.Value {
 	c := make(chan types.Value)
-	s := OptionalStruct{ref: &ref.Ref{}}
 	go func() {
+		s := OptionalStruct{ref: &ref.Ref{}}
 		s.__optionals = bool((<-c).(types.Bool))
 		if s.__optionals {
 			s._s = (<-c).(types.String).String()
@@ -111,8 +91,23 @@ func builderForOptionalStruct() chan types.Value {
 		if s.__optionalb {
 			s._b = bool((<-c).(types.Bool))
 		}
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForOptionalStruct(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(OptionalStruct)
+		c <- types.Bool(s.__optionals)
+		if s.__optionals {
+			c <- types.NewString(s._s)
+		}
+		c <- types.Bool(s.__optionalb)
+		if s.__optionalb {
+			c <- types.Bool(s._b)
+		}
 	}()
 	return c
 }

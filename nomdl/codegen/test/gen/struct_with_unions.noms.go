@@ -77,7 +77,6 @@ func (s StructWithUnions) Def() (d StructWithUnionsDef) {
 }
 
 var __typeRefForStructWithUnions types.TypeRef
-var __typeDefForStructWithUnions types.TypeRef
 
 func (m StructWithUnions) TypeRef() types.TypeRef {
 	return __typeRefForStructWithUnions
@@ -85,33 +84,26 @@ func (m StructWithUnions) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForStructWithUnions = types.MakeTypeRef(__genPackageInFile_struct_with_unions_CachedRef, 0)
-	__typeDefForStructWithUnions = types.MakeStructTypeRef("StructWithUnions",
-		[]types.Field{
-			types.Field{"a", types.MakeTypeRef(__genPackageInFile_struct_with_unions_CachedRef, 1), false},
-			types.Field{"d", types.MakeTypeRef(__genPackageInFile_struct_with_unions_CachedRef, 2), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForStructWithUnions, builderForStructWithUnions)
-}
-
-func (s StructWithUnions) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"a": s._a,
-		"d": s._d,
-	}
-	return types.NewStruct(__typeRefForStructWithUnions, __typeDefForStructWithUnions, m)
+	types.RegisterStruct(__typeRefForStructWithUnions, builderForStructWithUnions, readerForStructWithUnions)
 }
 
 func builderForStructWithUnions() chan types.Value {
 	c := make(chan types.Value)
-	s := StructWithUnions{ref: &ref.Ref{}}
 	go func() {
+		s := StructWithUnions{ref: &ref.Ref{}}
 		s._a = (<-c).(__unionOfBOfFloat64AndCOfString)
 		s._d = (<-c).(__unionOfEOfFloat64AndFOfString)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForStructWithUnions(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(StructWithUnions)
+		c <- s._a
+		c <- s._d
 	}()
 	return c
 }
@@ -187,7 +179,6 @@ func (s __unionOfBOfFloat64AndCOfString) Def() (d __unionOfBOfFloat64AndCOfStrin
 }
 
 var __typeRefFor__unionOfBOfFloat64AndCOfString types.TypeRef
-var __typeDefFor__unionOfBOfFloat64AndCOfString types.TypeRef
 
 func (m __unionOfBOfFloat64AndCOfString) TypeRef() types.TypeRef {
 	return __typeRefFor__unionOfBOfFloat64AndCOfString
@@ -195,30 +186,26 @@ func (m __unionOfBOfFloat64AndCOfString) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefFor__unionOfBOfFloat64AndCOfString = types.MakeTypeRef(__genPackageInFile_struct_with_unions_CachedRef, 1)
-	__typeDefFor__unionOfBOfFloat64AndCOfString = types.MakeStructTypeRef("",
-		[]types.Field{},
-		types.Choices{
-			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
-		},
-	)
-	types.RegisterStructBuilder(__typeRefFor__unionOfBOfFloat64AndCOfString, builderFor__unionOfBOfFloat64AndCOfString)
-}
-
-func (s __unionOfBOfFloat64AndCOfString) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{}
-	m[__typeDefFor__unionOfBOfFloat64AndCOfString.Desc.(types.StructDesc).Union[s.__unionIndex].Name] = s.__unionValue
-	return types.NewStruct(__typeRefFor__unionOfBOfFloat64AndCOfString, __typeDefFor__unionOfBOfFloat64AndCOfString, m)
+	types.RegisterStruct(__typeRefFor__unionOfBOfFloat64AndCOfString, builderFor__unionOfBOfFloat64AndCOfString, readerFor__unionOfBOfFloat64AndCOfString)
 }
 
 func builderFor__unionOfBOfFloat64AndCOfString() chan types.Value {
 	c := make(chan types.Value)
-	s := __unionOfBOfFloat64AndCOfString{ref: &ref.Ref{}}
 	go func() {
+		s := __unionOfBOfFloat64AndCOfString{ref: &ref.Ref{}}
 		s.__unionIndex = uint32((<-c).(types.UInt32))
 		s.__unionValue = <-c
 		c <- s
+	}()
+	return c
+}
+
+func readerFor__unionOfBOfFloat64AndCOfString(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(__unionOfBOfFloat64AndCOfString)
+		c <- types.UInt32(s.__unionIndex)
+		c <- s.__unionValue
 	}()
 	return c
 }
@@ -327,7 +314,6 @@ func (s __unionOfEOfFloat64AndFOfString) Def() (d __unionOfEOfFloat64AndFOfStrin
 }
 
 var __typeRefFor__unionOfEOfFloat64AndFOfString types.TypeRef
-var __typeDefFor__unionOfEOfFloat64AndFOfString types.TypeRef
 
 func (m __unionOfEOfFloat64AndFOfString) TypeRef() types.TypeRef {
 	return __typeRefFor__unionOfEOfFloat64AndFOfString
@@ -335,30 +321,26 @@ func (m __unionOfEOfFloat64AndFOfString) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefFor__unionOfEOfFloat64AndFOfString = types.MakeTypeRef(__genPackageInFile_struct_with_unions_CachedRef, 2)
-	__typeDefFor__unionOfEOfFloat64AndFOfString = types.MakeStructTypeRef("",
-		[]types.Field{},
-		types.Choices{
-			types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-			types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
-		},
-	)
-	types.RegisterStructBuilder(__typeRefFor__unionOfEOfFloat64AndFOfString, builderFor__unionOfEOfFloat64AndFOfString)
-}
-
-func (s __unionOfEOfFloat64AndFOfString) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{}
-	m[__typeDefFor__unionOfEOfFloat64AndFOfString.Desc.(types.StructDesc).Union[s.__unionIndex].Name] = s.__unionValue
-	return types.NewStruct(__typeRefFor__unionOfEOfFloat64AndFOfString, __typeDefFor__unionOfEOfFloat64AndFOfString, m)
+	types.RegisterStruct(__typeRefFor__unionOfEOfFloat64AndFOfString, builderFor__unionOfEOfFloat64AndFOfString, readerFor__unionOfEOfFloat64AndFOfString)
 }
 
 func builderFor__unionOfEOfFloat64AndFOfString() chan types.Value {
 	c := make(chan types.Value)
-	s := __unionOfEOfFloat64AndFOfString{ref: &ref.Ref{}}
 	go func() {
+		s := __unionOfEOfFloat64AndFOfString{ref: &ref.Ref{}}
 		s.__unionIndex = uint32((<-c).(types.UInt32))
 		s.__unionValue = <-c
 		c <- s
+	}()
+	return c
+}
+
+func readerFor__unionOfEOfFloat64AndFOfString(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(__unionOfEOfFloat64AndFOfString)
+		c <- types.UInt32(s.__unionIndex)
+		c <- s.__unionValue
 	}()
 	return c
 }

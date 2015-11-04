@@ -99,7 +99,6 @@ func (s User) Def() (d UserDef) {
 }
 
 var __typeRefForUser types.TypeRef
-var __typeDefForUser types.TypeRef
 
 func (m User) TypeRef() types.TypeRef {
 	return __typeRefForUser
@@ -107,45 +106,34 @@ func (m User) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForUser = types.MakeTypeRef(__mainPackageInFile_picasa_CachedRef, 0)
-	__typeDefForUser = types.MakeStructTypeRef("User",
-		[]types.Field{
-			types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Name", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Albums", types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__mainPackageInFile_picasa_CachedRef, 1)), false},
-			types.Field{"RefreshToken", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"OAuthToken", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"OAuthSecret", types.MakePrimitiveTypeRef(types.StringKind), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForUser, builderForUser)
-}
-
-func (s User) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"Id":           types.NewString(s._Id),
-		"Name":         types.NewString(s._Name),
-		"Albums":       s._Albums,
-		"RefreshToken": types.NewString(s._RefreshToken),
-		"OAuthToken":   types.NewString(s._OAuthToken),
-		"OAuthSecret":  types.NewString(s._OAuthSecret),
-	}
-	return types.NewStruct(__typeRefForUser, __typeDefForUser, m)
+	types.RegisterStruct(__typeRefForUser, builderForUser, readerForUser)
 }
 
 func builderForUser() chan types.Value {
 	c := make(chan types.Value)
-	s := User{ref: &ref.Ref{}}
 	go func() {
+		s := User{ref: &ref.Ref{}}
 		s._Id = (<-c).(types.String).String()
 		s._Name = (<-c).(types.String).String()
 		s._Albums = (<-c).(MapOfStringToAlbum)
 		s._RefreshToken = (<-c).(types.String).String()
 		s._OAuthToken = (<-c).(types.String).String()
 		s._OAuthSecret = (<-c).(types.String).String()
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForUser(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(User)
+		c <- types.NewString(s._Id)
+		c <- types.NewString(s._Name)
+		c <- s._Albums
+		c <- types.NewString(s._RefreshToken)
+		c <- types.NewString(s._OAuthToken)
+		c <- types.NewString(s._OAuthSecret)
 	}()
 	return c
 }
@@ -272,7 +260,6 @@ func (s Album) Def() (d AlbumDef) {
 }
 
 var __typeRefForAlbum types.TypeRef
-var __typeDefForAlbum types.TypeRef
 
 func (m Album) TypeRef() types.TypeRef {
 	return __typeRefForAlbum
@@ -280,39 +267,30 @@ func (m Album) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForAlbum = types.MakeTypeRef(__mainPackageInFile_picasa_CachedRef, 1)
-	__typeDefForAlbum = types.MakeStructTypeRef("Album",
-		[]types.Field{
-			types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"NumPhotos", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-			types.Field{"Photos", types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0)))), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForAlbum, builderForAlbum)
-}
-
-func (s Album) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"Id":        types.NewString(s._Id),
-		"Title":     types.NewString(s._Title),
-		"NumPhotos": types.UInt32(s._NumPhotos),
-		"Photos":    s._Photos,
-	}
-	return types.NewStruct(__typeRefForAlbum, __typeDefForAlbum, m)
+	types.RegisterStruct(__typeRefForAlbum, builderForAlbum, readerForAlbum)
 }
 
 func builderForAlbum() chan types.Value {
 	c := make(chan types.Value)
-	s := Album{ref: &ref.Ref{}}
 	go func() {
+		s := Album{ref: &ref.Ref{}}
 		s._Id = (<-c).(types.String).String()
 		s._Title = (<-c).(types.String).String()
 		s._NumPhotos = uint32((<-c).(types.UInt32))
 		s._Photos = (<-c).(RefOfSetOfRefOfRemotePhoto)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForAlbum(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(Album)
+		c <- types.NewString(s._Id)
+		c <- types.NewString(s._Title)
+		c <- types.UInt32(s._NumPhotos)
+		c <- s._Photos
 	}()
 	return c
 }

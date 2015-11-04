@@ -102,7 +102,6 @@ func (s EnumStruct) Def() (d EnumStructDef) {
 }
 
 var __typeRefForEnumStruct types.TypeRef
-var __typeDefForEnumStruct types.TypeRef
 
 func (m EnumStruct) TypeRef() types.TypeRef {
 	return __typeRefForEnumStruct
@@ -110,30 +109,24 @@ func (m EnumStruct) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForEnumStruct = types.MakeTypeRef(__genPackageInFile_enum_struct_CachedRef, 1)
-	__typeDefForEnumStruct = types.MakeStructTypeRef("EnumStruct",
-		[]types.Field{
-			types.Field{"hand", types.MakeTypeRef(__genPackageInFile_enum_struct_CachedRef, 0), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForEnumStruct, builderForEnumStruct)
-}
-
-func (s EnumStruct) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"hand": s._hand,
-	}
-	return types.NewStruct(__typeRefForEnumStruct, __typeDefForEnumStruct, m)
+	types.RegisterStruct(__typeRefForEnumStruct, builderForEnumStruct, readerForEnumStruct)
 }
 
 func builderForEnumStruct() chan types.Value {
 	c := make(chan types.Value)
-	s := EnumStruct{ref: &ref.Ref{}}
 	go func() {
+		s := EnumStruct{ref: &ref.Ref{}}
 		s._hand = (<-c).(Handedness)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForEnumStruct(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(EnumStruct)
+		c <- s._hand
 	}()
 	return c
 }

@@ -71,7 +71,6 @@ func (s D) Def() (d DDef) {
 }
 
 var __typeRefForD types.TypeRef
-var __typeDefForD types.TypeRef
 
 func (m D) TypeRef() types.TypeRef {
 	return __typeRefForD
@@ -79,33 +78,26 @@ func (m D) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForD = types.MakeTypeRef(__genPackageInFile_sha1_09d2fdd_CachedRef, 0)
-	__typeDefForD = types.MakeStructTypeRef("D",
-		[]types.Field{
-			types.Field{"structField", types.MakeTypeRef(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 0), false},
-			types.Field{"enumField", types.MakeTypeRef(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 1), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForD, builderForD)
-}
-
-func (s D) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"structField": s._structField,
-		"enumField":   s._enumField,
-	}
-	return types.NewStruct(__typeRefForD, __typeDefForD, m)
+	types.RegisterStruct(__typeRefForD, builderForD, readerForD)
 }
 
 func builderForD() chan types.Value {
 	c := make(chan types.Value)
-	s := D{ref: &ref.Ref{}}
 	go func() {
+		s := D{ref: &ref.Ref{}}
 		s._structField = (<-c).(S)
 		s._enumField = (<-c).(E)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForD(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(D)
+		c <- s._structField
+		c <- s._enumField
 	}()
 	return c
 }
@@ -177,7 +169,6 @@ func (s DUser) Def() (d DUserDef) {
 }
 
 var __typeRefForDUser types.TypeRef
-var __typeDefForDUser types.TypeRef
 
 func (m DUser) TypeRef() types.TypeRef {
 	return __typeRefForDUser
@@ -185,30 +176,24 @@ func (m DUser) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForDUser = types.MakeTypeRef(__genPackageInFile_sha1_09d2fdd_CachedRef, 1)
-	__typeDefForDUser = types.MakeStructTypeRef("DUser",
-		[]types.Field{
-			types.Field{"Dfield", types.MakeTypeRef(__genPackageInFile_sha1_09d2fdd_CachedRef, 0), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForDUser, builderForDUser)
-}
-
-func (s DUser) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"Dfield": s._Dfield,
-	}
-	return types.NewStruct(__typeRefForDUser, __typeDefForDUser, m)
+	types.RegisterStruct(__typeRefForDUser, builderForDUser, readerForDUser)
 }
 
 func builderForDUser() chan types.Value {
 	c := make(chan types.Value)
-	s := DUser{ref: &ref.Ref{}}
 	go func() {
+		s := DUser{ref: &ref.Ref{}}
 		s._Dfield = (<-c).(D)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForDUser(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(DUser)
+		c <- s._Dfield
 	}()
 	return c
 }

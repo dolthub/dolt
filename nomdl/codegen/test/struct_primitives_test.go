@@ -117,11 +117,3 @@ func TestAccessors(t *testing.T) {
 	st = st.SetValue(types.NewString("x"))
 	assert.True(st.Value().Equals(types.NewString("x")))
 }
-
-func TestStructBackingMapKeyNames(t *testing.T) {
-	assert := assert.New(t)
-
-	s := gen.NewStructPrimitives().SetBool(true)
-
-	assert.True(bool(s.InternalImplementation().Get("bool").(types.Bool)))
-}

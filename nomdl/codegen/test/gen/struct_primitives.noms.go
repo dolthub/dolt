@@ -135,7 +135,6 @@ func (s StructPrimitives) Def() (d StructPrimitivesDef) {
 }
 
 var __typeRefForStructPrimitives types.TypeRef
-var __typeDefForStructPrimitives types.TypeRef
 
 func (m StructPrimitives) TypeRef() types.TypeRef {
 	return __typeRefForStructPrimitives
@@ -143,53 +142,13 @@ func (m StructPrimitives) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForStructPrimitives = types.MakeTypeRef(__genPackageInFile_struct_primitives_CachedRef, 0)
-	__typeDefForStructPrimitives = types.MakeStructTypeRef("StructPrimitives",
-		[]types.Field{
-			types.Field{"uint64", types.MakePrimitiveTypeRef(types.UInt64Kind), false},
-			types.Field{"uint32", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-			types.Field{"uint16", types.MakePrimitiveTypeRef(types.UInt16Kind), false},
-			types.Field{"uint8", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
-			types.Field{"int64", types.MakePrimitiveTypeRef(types.Int64Kind), false},
-			types.Field{"int32", types.MakePrimitiveTypeRef(types.Int32Kind), false},
-			types.Field{"int16", types.MakePrimitiveTypeRef(types.Int16Kind), false},
-			types.Field{"int8", types.MakePrimitiveTypeRef(types.Int8Kind), false},
-			types.Field{"float64", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-			types.Field{"float32", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-			types.Field{"bool", types.MakePrimitiveTypeRef(types.BoolKind), false},
-			types.Field{"string", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"blob", types.MakePrimitiveTypeRef(types.BlobKind), false},
-			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForStructPrimitives, builderForStructPrimitives)
-}
-
-func (s StructPrimitives) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"uint64":  types.UInt64(s._uint64),
-		"uint32":  types.UInt32(s._uint32),
-		"uint16":  types.UInt16(s._uint16),
-		"uint8":   types.UInt8(s._uint8),
-		"int64":   types.Int64(s._int64),
-		"int32":   types.Int32(s._int32),
-		"int16":   types.Int16(s._int16),
-		"int8":    types.Int8(s._int8),
-		"float64": types.Float64(s._float64),
-		"float32": types.Float32(s._float32),
-		"bool":    types.Bool(s._bool),
-		"string":  types.NewString(s._string),
-		"blob":    s._blob,
-		"value":   s._value,
-	}
-	return types.NewStruct(__typeRefForStructPrimitives, __typeDefForStructPrimitives, m)
+	types.RegisterStruct(__typeRefForStructPrimitives, builderForStructPrimitives, readerForStructPrimitives)
 }
 
 func builderForStructPrimitives() chan types.Value {
 	c := make(chan types.Value)
-	s := StructPrimitives{ref: &ref.Ref{}}
 	go func() {
+		s := StructPrimitives{ref: &ref.Ref{}}
 		s._uint64 = uint64((<-c).(types.UInt64))
 		s._uint32 = uint32((<-c).(types.UInt32))
 		s._uint16 = uint16((<-c).(types.UInt16))
@@ -204,8 +163,29 @@ func builderForStructPrimitives() chan types.Value {
 		s._string = (<-c).(types.String).String()
 		s._blob = (<-c).(types.Blob)
 		s._value = (<-c)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForStructPrimitives(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(StructPrimitives)
+		c <- types.UInt64(s._uint64)
+		c <- types.UInt32(s._uint32)
+		c <- types.UInt16(s._uint16)
+		c <- types.UInt8(s._uint8)
+		c <- types.Int64(s._int64)
+		c <- types.Int32(s._int32)
+		c <- types.Int16(s._int16)
+		c <- types.Int8(s._int8)
+		c <- types.Float64(s._float64)
+		c <- types.Float32(s._float32)
+		c <- types.Bool(s._bool)
+		c <- types.NewString(s._string)
+		c <- s._blob
+		c <- s._value
 	}()
 	return c
 }

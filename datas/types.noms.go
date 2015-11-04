@@ -64,7 +64,6 @@ func (s Commit) Def() (d CommitDef) {
 }
 
 var __typeRefForCommit types.TypeRef
-var __typeDefForCommit types.TypeRef
 
 func (m Commit) TypeRef() types.TypeRef {
 	return __typeRefForCommit
@@ -72,33 +71,26 @@ func (m Commit) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForCommit = types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)
-	__typeDefForCommit = types.MakeStructTypeRef("Commit",
-		[]types.Field{
-			types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
-			types.Field{"parents", types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0))), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForCommit, builderForCommit)
-}
-
-func (s Commit) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"value":   s._value,
-		"parents": s._parents,
-	}
-	return types.NewStruct(__typeRefForCommit, __typeDefForCommit, m)
+	types.RegisterStruct(__typeRefForCommit, builderForCommit, readerForCommit)
 }
 
 func builderForCommit() chan types.Value {
 	c := make(chan types.Value)
-	s := Commit{ref: &ref.Ref{}}
 	go func() {
+		s := Commit{ref: &ref.Ref{}}
 		s._value = (<-c)
 		s._parents = (<-c).(SetOfRefOfCommit)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForCommit(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(Commit)
+		c <- s._value
+		c <- s._parents
 	}()
 	return c
 }

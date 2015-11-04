@@ -46,7 +46,6 @@ func New{{.Name}}() {{.Name}} {
 {{end}}
 
 var __typeRefFor{{.Name}} {{$typesPackage}}TypeRef
-var __typeDefFor{{.Name}} {{$typesPackage}}TypeRef
 
 func (m {{.Name}}) TypeRef() {{$typesPackage}}TypeRef {
 	return __typeRefFor{{.Name}}
@@ -54,37 +53,38 @@ func (m {{.Name}}) TypeRef() {{$typesPackage}}TypeRef {
 
 func init() {
 	__typeRefFor{{.Name}} = {{$typesPackage}}MakeTypeRef(__{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef, {{.Ordinal}})
-	__typeDefFor{{.Name}} = {{toTypesTypeRef .Type .FileID .PackageName}}
-	{{$typesPackage}}RegisterStructBuilder(__typeRefFor{{.Name}}, builderFor{{.Name}})
-}
-
-func (s {{.Name}}) InternalImplementation() {{$typesPackage}}Struct {
-	// TODO: Remove this
-	m := map[string]{{$typesPackage}}Value{
-		{{range .Fields}}{{if (not .Optional)}}"{{.Name}}": {{userToValue (printf "s._%s" .Name) .T}},
-		{{end}}{{end}}
-	}{{range .Fields}}{{if .Optional}}
-	if s.__optional{{.Name}} {
-		m["{{.Name}}"] = {{userToValue (printf "s._%s" .Name) .T}}
-	}{{end}}{{end}}{{if .HasUnion}}
-	m[__typeDefFor{{.Name}}.Desc.({{$typesPackage}}StructDesc).Union[s.__unionIndex].Name] = s.__unionValue{{end}}
-	return {{$typesPackage}}NewStruct(__typeRefFor{{.Name}}, __typeDefFor{{.Name}}, m)
+	{{$typesPackage}}RegisterStruct(__typeRefFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
 }
 
 func builderFor{{.Name}}() chan {{$typesPackage}}Value {
 	c := make(chan {{$typesPackage}}Value)
-	s := {{.Name}}{ref: &ref.Ref{}}
-	go func() { {{range .Fields}}{{if .Optional}}
+	go func() {
+		s := {{.Name}}{ref: &ref.Ref{}}{{range .Fields}}{{if .Optional}}
 		s.__optional{{.Name}} = bool((<-c).({{$typesPackage}}Bool))
 		if s.__optional{{.Name}} {
 			s._{{.Name}} = {{valueToUser "(<-c)" .T}}
 		}{{else}}
 		s._{{.Name}} = {{valueToUser "(<-c)" .T}}{{end}}{{end}}
 		{{if .HasUnion}}s.__unionIndex = uint32((<-c).({{$typesPackage}}UInt32))
-		s.__unionValue = <-c{{end}}
-		c <- s	
+		s.__unionValue = <-c
+		{{end}}c <- s
 	}()
-	return c	
+	return c
+}
+
+func readerFor{{.Name}}(v {{$typesPackage}}Value) chan {{$typesPackage}}Value {
+	c := make(chan {{$typesPackage}}Value)
+	go func() {
+		s := v.({{.Name}}){{range .Fields}}{{if .Optional}}
+		c <- {{$typesPackage}}Bool(s.__optional{{.Name}})
+		if s.__optional{{.Name}} {
+			c <- {{userToValue (printf "s._%s" .Name) .T}}
+		}{{else}}
+		c <- {{userToValue (printf "s._%s" .Name) .T}}{{end}}{{end}}
+		{{if .HasUnion}}c <- {{$typesPackage}}UInt32(s.__unionIndex)
+		c <- s.__unionValue
+	{{end}} }()
+	return c
 }
 
 func (s {{.Name}}) Equals(other {{$typesPackage}}Value) bool {

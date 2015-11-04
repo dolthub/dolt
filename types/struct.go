@@ -184,3 +184,29 @@ func structBuilder(typeRef, typeDef TypeRef) chan Value {
 
 	return c
 }
+
+func structReader(s Struct, typeRef, typeDef TypeRef) chan Value {
+	c := make(chan Value)
+
+	go func() {
+		desc := typeDef.Desc.(StructDesc)
+		for _, f := range desc.Fields {
+			v, ok := s.data[f.Name]
+			if f.Optional {
+				c <- Bool(ok)
+				if ok {
+					c <- v
+				}
+			} else {
+				d.Chk.True(ok)
+				c <- v
+			}
+		}
+		if len(desc.Union) > 0 {
+			c <- UInt32(s.unionIndex)
+			c <- s.unionValue
+		}
+	}()
+
+	return c
+}

@@ -81,7 +81,6 @@ func (s Song) Def() (d SongDef) {
 }
 
 var __typeRefForSong types.TypeRef
-var __typeDefForSong types.TypeRef
 
 func (m Song) TypeRef() types.TypeRef {
 	return __typeRefForSong
@@ -89,42 +88,32 @@ func (m Song) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSong = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
-	__typeDefForSong = types.MakeStructTypeRef("Song",
-		[]types.Field{
-			types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Artist", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Album", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Year", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Mp3", types.MakePrimitiveTypeRef(types.BlobKind), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForSong, builderForSong)
-}
-
-func (s Song) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"Title":  types.NewString(s._Title),
-		"Artist": types.NewString(s._Artist),
-		"Album":  types.NewString(s._Album),
-		"Year":   types.NewString(s._Year),
-		"Mp3":    s._Mp3,
-	}
-	return types.NewStruct(__typeRefForSong, __typeDefForSong, m)
+	types.RegisterStruct(__typeRefForSong, builderForSong, readerForSong)
 }
 
 func builderForSong() chan types.Value {
 	c := make(chan types.Value)
-	s := Song{ref: &ref.Ref{}}
 	go func() {
+		s := Song{ref: &ref.Ref{}}
 		s._Title = (<-c).(types.String).String()
 		s._Artist = (<-c).(types.String).String()
 		s._Album = (<-c).(types.String).String()
 		s._Year = (<-c).(types.String).String()
 		s._Mp3 = (<-c).(types.Blob)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForSong(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(Song)
+		c <- types.NewString(s._Title)
+		c <- types.NewString(s._Artist)
+		c <- types.NewString(s._Album)
+		c <- types.NewString(s._Year)
+		c <- s._Mp3
 	}()
 	return c
 }

@@ -70,7 +70,6 @@ func (s Geoposition) Def() (d GeopositionDef) {
 }
 
 var __typeRefForGeoposition types.TypeRef
-var __typeDefForGeoposition types.TypeRef
 
 func (m Geoposition) TypeRef() types.TypeRef {
 	return __typeRefForGeoposition
@@ -78,33 +77,26 @@ func (m Geoposition) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForGeoposition = types.MakeTypeRef(__commonPackageInFile_geo_CachedRef, 0)
-	__typeDefForGeoposition = types.MakeStructTypeRef("Geoposition",
-		[]types.Field{
-			types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-			types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForGeoposition, builderForGeoposition)
-}
-
-func (s Geoposition) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"Latitude":  types.Float32(s._Latitude),
-		"Longitude": types.Float32(s._Longitude),
-	}
-	return types.NewStruct(__typeRefForGeoposition, __typeDefForGeoposition, m)
+	types.RegisterStruct(__typeRefForGeoposition, builderForGeoposition, readerForGeoposition)
 }
 
 func builderForGeoposition() chan types.Value {
 	c := make(chan types.Value)
-	s := Geoposition{ref: &ref.Ref{}}
 	go func() {
+		s := Geoposition{ref: &ref.Ref{}}
 		s._Latitude = float32((<-c).(types.Float32))
 		s._Longitude = float32((<-c).(types.Float32))
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForGeoposition(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(Geoposition)
+		c <- types.Float32(s._Latitude)
+		c <- types.Float32(s._Longitude)
 	}()
 	return c
 }
@@ -180,7 +172,6 @@ func (s Georectangle) Def() (d GeorectangleDef) {
 }
 
 var __typeRefForGeorectangle types.TypeRef
-var __typeDefForGeorectangle types.TypeRef
 
 func (m Georectangle) TypeRef() types.TypeRef {
 	return __typeRefForGeorectangle
@@ -188,33 +179,26 @@ func (m Georectangle) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForGeorectangle = types.MakeTypeRef(__commonPackageInFile_geo_CachedRef, 1)
-	__typeDefForGeorectangle = types.MakeStructTypeRef("Georectangle",
-		[]types.Field{
-			types.Field{"TopLeft", types.MakeTypeRef(__commonPackageInFile_geo_CachedRef, 0), false},
-			types.Field{"BottomRight", types.MakeTypeRef(__commonPackageInFile_geo_CachedRef, 0), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForGeorectangle, builderForGeorectangle)
-}
-
-func (s Georectangle) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"TopLeft":     s._TopLeft,
-		"BottomRight": s._BottomRight,
-	}
-	return types.NewStruct(__typeRefForGeorectangle, __typeDefForGeorectangle, m)
+	types.RegisterStruct(__typeRefForGeorectangle, builderForGeorectangle, readerForGeorectangle)
 }
 
 func builderForGeorectangle() chan types.Value {
 	c := make(chan types.Value)
-	s := Georectangle{ref: &ref.Ref{}}
 	go func() {
+		s := Georectangle{ref: &ref.Ref{}}
 		s._TopLeft = (<-c).(Geoposition)
 		s._BottomRight = (<-c).(Geoposition)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForGeorectangle(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(Georectangle)
+		c <- s._TopLeft
+		c <- s._BottomRight
 	}()
 	return c
 }

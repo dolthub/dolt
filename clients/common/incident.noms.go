@@ -120,7 +120,6 @@ func (s Incident) Def() (d IncidentDef) {
 }
 
 var __typeRefForIncident types.TypeRef
-var __typeDefForIncident types.TypeRef
 
 func (m Incident) TypeRef() types.TypeRef {
 	return __typeRefForIncident
@@ -128,47 +127,13 @@ func (m Incident) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForIncident = types.MakeTypeRef(__commonPackageInFile_incident_CachedRef, 0)
-	__typeDefForIncident = types.MakeStructTypeRef("Incident",
-		[]types.Field{
-			types.Field{"ID", types.MakePrimitiveTypeRef(types.Int64Kind), false},
-			types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"DayOfWeek", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Time", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"PdDistrict", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Resolution", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
-			types.Field{"PdID", types.MakePrimitiveTypeRef(types.StringKind), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForIncident, builderForIncident)
-}
-
-func (s Incident) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"ID":          types.Int64(s._ID),
-		"Category":    types.NewString(s._Category),
-		"Description": types.NewString(s._Description),
-		"DayOfWeek":   types.NewString(s._DayOfWeek),
-		"Date":        types.NewString(s._Date),
-		"Time":        types.NewString(s._Time),
-		"PdDistrict":  types.NewString(s._PdDistrict),
-		"Resolution":  types.NewString(s._Resolution),
-		"Address":     types.NewString(s._Address),
-		"Geoposition": s._Geoposition,
-		"PdID":        types.NewString(s._PdID),
-	}
-	return types.NewStruct(__typeRefForIncident, __typeDefForIncident, m)
+	types.RegisterStruct(__typeRefForIncident, builderForIncident, readerForIncident)
 }
 
 func builderForIncident() chan types.Value {
 	c := make(chan types.Value)
-	s := Incident{ref: &ref.Ref{}}
 	go func() {
+		s := Incident{ref: &ref.Ref{}}
 		s._ID = int64((<-c).(types.Int64))
 		s._Category = (<-c).(types.String).String()
 		s._Description = (<-c).(types.String).String()
@@ -180,8 +145,26 @@ func builderForIncident() chan types.Value {
 		s._Address = (<-c).(types.String).String()
 		s._Geoposition = (<-c).(Geoposition)
 		s._PdID = (<-c).(types.String).String()
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForIncident(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(Incident)
+		c <- types.Int64(s._ID)
+		c <- types.NewString(s._Category)
+		c <- types.NewString(s._Description)
+		c <- types.NewString(s._DayOfWeek)
+		c <- types.NewString(s._Date)
+		c <- types.NewString(s._Time)
+		c <- types.NewString(s._PdDistrict)
+		c <- types.NewString(s._Resolution)
+		c <- types.NewString(s._Address)
+		c <- s._Geoposition
+		c <- types.NewString(s._PdID)
 	}()
 	return c
 }
