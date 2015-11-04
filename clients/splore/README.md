@@ -9,8 +9,8 @@ This is a generic noms data explorer.
 
 ## Build
 
-* `./link.sh`
-* `npm install`
+* `./link.sh`  # only necessary first time, or if changes have happened in `js2`
+* `npm install`  # only necessary first time, or if deps have changed
 * `npm run build`
 
 ## Run
