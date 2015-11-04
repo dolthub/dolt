@@ -261,7 +261,6 @@ func (w *jsonArrayWriter) writeBlob(b Blob) {
 
 func (w *jsonArrayWriter) writeStruct(v Value, typeRef, typeDef TypeRef, pkg *Package) {
 	typeRef = fixupTypeRef(typeRef, pkg)
-	typeDef = fixupTypeRef(typeDef, pkg)
 
 	c := structReaderForTypeRef(v, typeRef, typeDef)
 	desc := typeDef.Desc.(StructDesc)
