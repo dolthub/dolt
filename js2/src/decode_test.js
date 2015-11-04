@@ -103,7 +103,7 @@ suite('Decode', () => {
     assert.strictEqual(expected.size, actual.size);
     expected.forEach((v, k) => {
       assert.isTrue(actual.has(k));
-      assert.strictEqual(v, actual.get(k));
+      assert.deepEqual(v, actual.get(k));
     });
   }
 
@@ -180,6 +180,42 @@ suite('Decode', () => {
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
     assert.deepEqual({x: 42, s: 'hi', b: true, _typeRef: tr}, v);
+  });
+
+  test('read value map of uint64 to uint32', async () => {
+    let ms = new MemoryStore();
+    let a = [Kind.Value, Kind.Map, Kind.UInt64, Kind.UInt32, [0, 1, 2, 3]];
+    let r = new JsonArrayReader(a, ms);
+    let v = await r.readTopLevelValue();
+
+    let m = new Map();
+    m.set(0, 1);
+    m.set(2, 3);
+
+    assertMapsEqual(m, v);
+  });
+
+  test('test read map of string to struct', async () => {
+    let ms = new MemoryStore();
+    let tr = makeStructTypeRef('s', [
+      new Field('b', makePrimitiveTypeRef(Kind.Bool), false),
+      new Field('i', makePrimitiveTypeRef(Kind.Int32), false)
+    ], []);
+
+    let pkg = new Package([tr], []);
+    registerPackage(pkg);
+
+    let a = [Kind.Value, Kind.Map, Kind.String, Kind.Unresolved, pkg.ref.toString(), 0, ['foo', true, 3, 'bar', false, 2, 'baz', false, 1]];
+
+    let r = new JsonArrayReader(a, ms);
+    let v = await r.readTopLevelValue();
+
+    let m = new Map();
+    m.set('foo', {b: true, i: 3, _typeRef: tr});
+    m.set('bar', {b: false, i: 2, _typeRef: tr});
+    m.set('baz', {b: false, i: 1, _typeRef: tr});
+
+    assertMapsEqual(m, v);
   });
 
   test('decodeNomsValue', async () => {
