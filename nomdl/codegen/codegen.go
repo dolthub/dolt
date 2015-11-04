@@ -245,9 +245,12 @@ func (gen *codeGen) readTemplates() *template.Template {
 		template.FuncMap{
 			"defType":        gen.generator.DefType,
 			"defToValue":     gen.generator.DefToValue,
+			"defToUser":      gen.generator.DefToUser,
+			"mayHaveChunks":  gen.generator.MayHaveChunks,
 			"valueToDef":     gen.generator.ValueToDef,
 			"userType":       gen.generator.UserType,
 			"userToValue":    gen.generator.UserToValue,
+			"userToDef":      gen.generator.UserToDef,
 			"valueToUser":    gen.generator.ValueToUser,
 			"userZero":       gen.generator.UserZero,
 			"valueZero":      gen.generator.ValueZero,

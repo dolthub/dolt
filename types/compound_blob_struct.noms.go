@@ -28,15 +28,19 @@ func init() {
 // compoundBlobStruct
 
 type compoundBlobStruct struct {
-	m   Map
+	_Offsets ListOfUInt64
+	_Blobs   ListOfRefOfBlob
+
 	ref *ref.Ref
 }
 
 func NewcompoundBlobStruct() compoundBlobStruct {
-	return compoundBlobStruct{NewMap(
-		NewString("Offsets"), NewListOfUInt64(),
-		NewString("Blobs"), NewListOfRefOfBlob(),
-	), &ref.Ref{}}
+	return compoundBlobStruct{
+		_Offsets: NewListOfUInt64(),
+		_Blobs:   NewListOfRefOfBlob(),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type compoundBlobStructDef struct {
@@ -46,19 +50,20 @@ type compoundBlobStructDef struct {
 
 func (def compoundBlobStructDef) New() compoundBlobStruct {
 	return compoundBlobStruct{
-		NewMap(
-			NewString("Offsets"), def.Offsets.New(),
-			NewString("Blobs"), def.Blobs.New(),
-		), &ref.Ref{}}
+		_Offsets: def.Offsets.New(),
+		_Blobs:   def.Blobs.New(),
+		ref:      &ref.Ref{},
+	}
 }
 
 func (s compoundBlobStruct) Def() (d compoundBlobStructDef) {
-	d.Offsets = s.m.Get(NewString("Offsets")).(ListOfUInt64).Def()
-	d.Blobs = s.m.Get(NewString("Blobs")).(ListOfRefOfBlob).Def()
+	d.Offsets = s._Offsets.Def()
+	d.Blobs = s._Blobs.Def()
 	return
 }
 
 var __typeRefForcompoundBlobStruct TypeRef
+var __typeDefForcompoundBlobStruct TypeRef
 
 func (m compoundBlobStruct) TypeRef() TypeRef {
 	return __typeRefForcompoundBlobStruct
@@ -66,22 +71,35 @@ func (m compoundBlobStruct) TypeRef() TypeRef {
 
 func init() {
 	__typeRefForcompoundBlobStruct = MakeTypeRef(__typesPackageInFile_compound_blob_struct_CachedRef, 0)
-	RegisterFromValFunction(__typeRefForcompoundBlobStruct, func(v Value) Value {
-		return compoundBlobStructFromVal(v)
-	})
+	__typeDefForcompoundBlobStruct = MakeStructTypeRef("compoundBlobStruct",
+		[]Field{
+			Field{"Offsets", MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(UInt64Kind)), false},
+			Field{"Blobs", MakeCompoundTypeRef(ListKind, MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(BlobKind))), false},
+		},
+		Choices{},
+	)
+	RegisterStructBuilder(__typeRefForcompoundBlobStruct, builderForcompoundBlobStruct)
 }
 
-func compoundBlobStructFromVal(val Value) compoundBlobStruct {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(compoundBlobStruct); ok {
-		return val
+func (s compoundBlobStruct) InternalImplementation() Struct {
+	// TODO: Remove this
+	m := map[string]Value{
+		"Offsets": s._Offsets,
+		"Blobs":   s._Blobs,
 	}
-	// TODO: Validate here
-	return compoundBlobStruct{val.(Map), &ref.Ref{}}
+	return NewStruct(__typeRefForcompoundBlobStruct, __typeDefForcompoundBlobStruct, m)
 }
 
-func (s compoundBlobStruct) InternalImplementation() Map {
-	return s.m
+func builderForcompoundBlobStruct() chan Value {
+	c := make(chan Value)
+	s := compoundBlobStruct{ref: &ref.Ref{}}
+	go func() {
+		s._Offsets = (<-c).(ListOfUInt64)
+		s._Blobs = (<-c).(ListOfRefOfBlob)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s compoundBlobStruct) Equals(other Value) bool {
@@ -93,25 +111,30 @@ func (s compoundBlobStruct) Ref() ref.Ref {
 }
 
 func (s compoundBlobStruct) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForcompoundBlobStruct.Chunks()...)
+	chunks = append(chunks, s._Offsets.Chunks()...)
+	chunks = append(chunks, s._Blobs.Chunks()...)
 	return
 }
 
 func (s compoundBlobStruct) Offsets() ListOfUInt64 {
-	return s.m.Get(NewString("Offsets")).(ListOfUInt64)
+	return s._Offsets
 }
 
 func (s compoundBlobStruct) SetOffsets(val ListOfUInt64) compoundBlobStruct {
-	return compoundBlobStruct{s.m.Set(NewString("Offsets"), val), &ref.Ref{}}
+	s._Offsets = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s compoundBlobStruct) Blobs() ListOfRefOfBlob {
-	return s.m.Get(NewString("Blobs")).(ListOfRefOfBlob)
+	return s._Blobs
 }
 
 func (s compoundBlobStruct) SetBlobs(val ListOfRefOfBlob) compoundBlobStruct {
-	return compoundBlobStruct{s.m.Set(NewString("Blobs"), val), &ref.Ref{}}
+	s._Blobs = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // ListOfUInt64

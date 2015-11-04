@@ -28,15 +28,19 @@ func init() {
 // Pitch
 
 type Pitch struct {
-	m   types.Map
+	_X float64
+	_Z float64
+
 	ref *ref.Ref
 }
 
 func NewPitch() Pitch {
-	return Pitch{types.NewMap(
-		types.NewString("X"), types.Float64(0),
-		types.NewString("Z"), types.Float64(0),
-	), &ref.Ref{}}
+	return Pitch{
+		_X: float64(0),
+		_Z: float64(0),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type PitchDef struct {
@@ -46,19 +50,20 @@ type PitchDef struct {
 
 func (def PitchDef) New() Pitch {
 	return Pitch{
-		types.NewMap(
-			types.NewString("X"), types.Float64(def.X),
-			types.NewString("Z"), types.Float64(def.Z),
-		), &ref.Ref{}}
+		_X:  def.X,
+		_Z:  def.Z,
+		ref: &ref.Ref{},
+	}
 }
 
 func (s Pitch) Def() (d PitchDef) {
-	d.X = float64(s.m.Get(types.NewString("X")).(types.Float64))
-	d.Z = float64(s.m.Get(types.NewString("Z")).(types.Float64))
+	d.X = s._X
+	d.Z = s._Z
 	return
 }
 
 var __typeRefForPitch types.TypeRef
+var __typeDefForPitch types.TypeRef
 
 func (m Pitch) TypeRef() types.TypeRef {
 	return __typeRefForPitch
@@ -66,22 +71,35 @@ func (m Pitch) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForPitch = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForPitch, func(v types.Value) types.Value {
-		return PitchFromVal(v)
-	})
+	__typeDefForPitch = types.MakeStructTypeRef("Pitch",
+		[]types.Field{
+			types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"Z", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForPitch, builderForPitch)
 }
 
-func PitchFromVal(val types.Value) Pitch {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(Pitch); ok {
-		return val
+func (s Pitch) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"X": types.Float64(s._X),
+		"Z": types.Float64(s._Z),
 	}
-	// TODO: Validate here
-	return Pitch{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForPitch, __typeDefForPitch, m)
 }
 
-func (s Pitch) InternalImplementation() types.Map {
-	return s.m
+func builderForPitch() chan types.Value {
+	c := make(chan types.Value)
+	s := Pitch{ref: &ref.Ref{}}
+	go func() {
+		s._X = float64((<-c).(types.Float64))
+		s._Z = float64((<-c).(types.Float64))
+
+		c <- s
+	}()
+	return c
 }
 
 func (s Pitch) Equals(other types.Value) bool {
@@ -93,25 +111,28 @@ func (s Pitch) Ref() ref.Ref {
 }
 
 func (s Pitch) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForPitch.Chunks()...)
 	return
 }
 
 func (s Pitch) X() float64 {
-	return float64(s.m.Get(types.NewString("X")).(types.Float64))
+	return s._X
 }
 
 func (s Pitch) SetX(val float64) Pitch {
-	return Pitch{s.m.Set(types.NewString("X"), types.Float64(val)), &ref.Ref{}}
+	s._X = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Pitch) Z() float64 {
-	return float64(s.m.Get(types.NewString("Z")).(types.Float64))
+	return s._Z
 }
 
 func (s Pitch) SetZ(val float64) Pitch {
-	return Pitch{s.m.Set(types.NewString("Z"), types.Float64(val)), &ref.Ref{}}
+	s._Z = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // ListOfMapOfStringToValue

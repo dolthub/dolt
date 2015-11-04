@@ -5,7 +5,7 @@ import "github.com/attic-labs/noms/d"
 func assertType(t TypeRef, v ...Value) {
 	if t.Kind() != ValueKind {
 		for _, v := range v {
-			d.Chk.True(t.Equals(v.TypeRef()))
+			d.Chk.True(t.Equals(v.TypeRef()), "Invalid type. Expected: %s, found: %s", t.Describe(), v.TypeRef().Describe())
 		}
 	}
 }

@@ -28,14 +28,17 @@ func init() {
 // StructWithRef
 
 type StructWithRef struct {
-	m   types.Map
+	_r RefOfSetOfFloat32
+
 	ref *ref.Ref
 }
 
 func NewStructWithRef() StructWithRef {
-	return StructWithRef{types.NewMap(
-		types.NewString("r"), NewRefOfSetOfFloat32(ref.Ref{}),
-	), &ref.Ref{}}
+	return StructWithRef{
+		_r: NewRefOfSetOfFloat32(ref.Ref{}),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type StructWithRefDef struct {
@@ -44,17 +47,18 @@ type StructWithRefDef struct {
 
 func (def StructWithRefDef) New() StructWithRef {
 	return StructWithRef{
-		types.NewMap(
-			types.NewString("r"), NewRefOfSetOfFloat32(def.R),
-		), &ref.Ref{}}
+		_r:  NewRefOfSetOfFloat32(def.R),
+		ref: &ref.Ref{},
+	}
 }
 
 func (s StructWithRef) Def() (d StructWithRefDef) {
-	d.R = s.m.Get(types.NewString("r")).(RefOfSetOfFloat32).TargetRef()
+	d.R = s._r.TargetRef()
 	return
 }
 
 var __typeRefForStructWithRef types.TypeRef
+var __typeDefForStructWithRef types.TypeRef
 
 func (m StructWithRef) TypeRef() types.TypeRef {
 	return __typeRefForStructWithRef
@@ -62,22 +66,32 @@ func (m StructWithRef) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForStructWithRef = types.MakeTypeRef(__genPackageInFile_ref_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForStructWithRef, func(v types.Value) types.Value {
-		return StructWithRefFromVal(v)
-	})
+	__typeDefForStructWithRef = types.MakeStructTypeRef("StructWithRef",
+		[]types.Field{
+			types.Field{"r", types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind))), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForStructWithRef, builderForStructWithRef)
 }
 
-func StructWithRefFromVal(val types.Value) StructWithRef {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(StructWithRef); ok {
-		return val
+func (s StructWithRef) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"r": s._r,
 	}
-	// TODO: Validate here
-	return StructWithRef{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForStructWithRef, __typeDefForStructWithRef, m)
 }
 
-func (s StructWithRef) InternalImplementation() types.Map {
-	return s.m
+func builderForStructWithRef() chan types.Value {
+	c := make(chan types.Value)
+	s := StructWithRef{ref: &ref.Ref{}}
+	go func() {
+		s._r = (<-c).(RefOfSetOfFloat32)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s StructWithRef) Equals(other types.Value) bool {
@@ -89,17 +103,19 @@ func (s StructWithRef) Ref() ref.Ref {
 }
 
 func (s StructWithRef) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForStructWithRef.Chunks()...)
+	chunks = append(chunks, s._r.Chunks()...)
 	return
 }
 
 func (s StructWithRef) R() RefOfSetOfFloat32 {
-	return s.m.Get(types.NewString("r")).(RefOfSetOfFloat32)
+	return s._r
 }
 
 func (s StructWithRef) SetR(val RefOfSetOfFloat32) StructWithRef {
-	return StructWithRef{s.m.Set(types.NewString("r"), val), &ref.Ref{}}
+	s._r = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // RefOfListOfString

@@ -31,18 +31,25 @@ func init() {
 // Song
 
 type Song struct {
-	m   types.Map
+	_Title  string
+	_Artist string
+	_Album  string
+	_Year   string
+	_Mp3    types.Blob
+
 	ref *ref.Ref
 }
 
 func NewSong() Song {
-	return Song{types.NewMap(
-		types.NewString("Title"), types.NewString(""),
-		types.NewString("Artist"), types.NewString(""),
-		types.NewString("Album"), types.NewString(""),
-		types.NewString("Year"), types.NewString(""),
-		types.NewString("Mp3"), types.NewEmptyBlob(),
-	), &ref.Ref{}}
+	return Song{
+		_Title:  "",
+		_Artist: "",
+		_Album:  "",
+		_Year:   "",
+		_Mp3:    types.NewEmptyBlob(),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type SongDef struct {
@@ -55,25 +62,26 @@ type SongDef struct {
 
 func (def SongDef) New() Song {
 	return Song{
-		types.NewMap(
-			types.NewString("Title"), types.NewString(def.Title),
-			types.NewString("Artist"), types.NewString(def.Artist),
-			types.NewString("Album"), types.NewString(def.Album),
-			types.NewString("Year"), types.NewString(def.Year),
-			types.NewString("Mp3"), def.Mp3,
-		), &ref.Ref{}}
+		_Title:  def.Title,
+		_Artist: def.Artist,
+		_Album:  def.Album,
+		_Year:   def.Year,
+		_Mp3:    def.Mp3,
+		ref:     &ref.Ref{},
+	}
 }
 
 func (s Song) Def() (d SongDef) {
-	d.Title = s.m.Get(types.NewString("Title")).(types.String).String()
-	d.Artist = s.m.Get(types.NewString("Artist")).(types.String).String()
-	d.Album = s.m.Get(types.NewString("Album")).(types.String).String()
-	d.Year = s.m.Get(types.NewString("Year")).(types.String).String()
-	d.Mp3 = s.m.Get(types.NewString("Mp3")).(types.Blob)
+	d.Title = s._Title
+	d.Artist = s._Artist
+	d.Album = s._Album
+	d.Year = s._Year
+	d.Mp3 = s._Mp3
 	return
 }
 
 var __typeRefForSong types.TypeRef
+var __typeDefForSong types.TypeRef
 
 func (m Song) TypeRef() types.TypeRef {
 	return __typeRefForSong
@@ -81,22 +89,44 @@ func (m Song) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSong = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForSong, func(v types.Value) types.Value {
-		return SongFromVal(v)
-	})
+	__typeDefForSong = types.MakeStructTypeRef("Song",
+		[]types.Field{
+			types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Artist", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Album", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Year", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Mp3", types.MakePrimitiveTypeRef(types.BlobKind), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForSong, builderForSong)
 }
 
-func SongFromVal(val types.Value) Song {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(Song); ok {
-		return val
+func (s Song) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"Title":  types.NewString(s._Title),
+		"Artist": types.NewString(s._Artist),
+		"Album":  types.NewString(s._Album),
+		"Year":   types.NewString(s._Year),
+		"Mp3":    s._Mp3,
 	}
-	// TODO: Validate here
-	return Song{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForSong, __typeDefForSong, m)
 }
 
-func (s Song) InternalImplementation() types.Map {
-	return s.m
+func builderForSong() chan types.Value {
+	c := make(chan types.Value)
+	s := Song{ref: &ref.Ref{}}
+	go func() {
+		s._Title = (<-c).(types.String).String()
+		s._Artist = (<-c).(types.String).String()
+		s._Album = (<-c).(types.String).String()
+		s._Year = (<-c).(types.String).String()
+		s._Mp3 = (<-c).(types.Blob)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s Song) Equals(other types.Value) bool {
@@ -108,49 +138,59 @@ func (s Song) Ref() ref.Ref {
 }
 
 func (s Song) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForSong.Chunks()...)
+	chunks = append(chunks, s._Mp3.Chunks()...)
 	return
 }
 
 func (s Song) Title() string {
-	return s.m.Get(types.NewString("Title")).(types.String).String()
+	return s._Title
 }
 
 func (s Song) SetTitle(val string) Song {
-	return Song{s.m.Set(types.NewString("Title"), types.NewString(val)), &ref.Ref{}}
+	s._Title = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Song) Artist() string {
-	return s.m.Get(types.NewString("Artist")).(types.String).String()
+	return s._Artist
 }
 
 func (s Song) SetArtist(val string) Song {
-	return Song{s.m.Set(types.NewString("Artist"), types.NewString(val)), &ref.Ref{}}
+	s._Artist = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Song) Album() string {
-	return s.m.Get(types.NewString("Album")).(types.String).String()
+	return s._Album
 }
 
 func (s Song) SetAlbum(val string) Song {
-	return Song{s.m.Set(types.NewString("Album"), types.NewString(val)), &ref.Ref{}}
+	s._Album = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Song) Year() string {
-	return s.m.Get(types.NewString("Year")).(types.String).String()
+	return s._Year
 }
 
 func (s Song) SetYear(val string) Song {
-	return Song{s.m.Set(types.NewString("Year"), types.NewString(val)), &ref.Ref{}}
+	s._Year = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Song) Mp3() types.Blob {
-	return s.m.Get(types.NewString("Mp3")).(types.Blob)
+	return s._Mp3
 }
 
 func (s Song) SetMp3(val types.Blob) Song {
-	return Song{s.m.Set(types.NewString("Mp3"), val), &ref.Ref{}}
+	s._Mp3 = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // ListOfSong

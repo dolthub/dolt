@@ -90,6 +90,30 @@ func (gen Generator) DefToValue(val string, t types.TypeRef) string {
 	panic("unreachable")
 }
 
+// DefToUser returns a string containing Go code to convert an instance of a Def type (named val) to a User type described by t.
+func (gen Generator) DefToUser(val string, t types.TypeRef) string {
+	rt := gen.R.Resolve(t)
+	switch rt.Kind() {
+	case types.BlobKind, types.BoolKind, types.EnumKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeRefKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind:
+		return val
+	case types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
+		return gen.DefToValue(val, rt)
+	}
+	panic("unreachable")
+}
+
+// MayHaveChunks returns whether the type (t) may contain more chunks.
+func (gen Generator) MayHaveChunks(t types.TypeRef) bool {
+	rt := gen.R.Resolve(t)
+	switch rt.Kind() {
+	case types.BlobKind, types.ListKind, types.MapKind, types.PackageKind, types.RefKind, types.SetKind, types.StructKind, types.TypeRefKind, types.ValueKind:
+		return true
+	case types.BoolKind, types.EnumKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+		return false
+	}
+	panic("unreachable")
+}
+
 // ValueToDef returns a string containing Go code to convert an instance of a types.Value (val) into the Def type appropriate for t.
 func (gen Generator) ValueToDef(val string, t types.TypeRef) string {
 	rt := gen.R.Resolve(t)
@@ -106,6 +130,20 @@ func (gen Generator) ValueToDef(val string, t types.TypeRef) string {
 		return fmt.Sprintf("%s.TargetRef()", gen.ValueToUser(val, t))
 	case types.ValueKind:
 		return val // Value is already a Value
+	}
+	panic("unreachable")
+}
+
+// UserToDef returns a string containing Go code to convert an User value (val) into the Def type appropriate for t.
+func (gen Generator) UserToDef(val string, t types.TypeRef) string {
+	rt := gen.R.Resolve(t)
+	switch rt.Kind() {
+	case types.BlobKind, types.EnumKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeRefKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind:
+		return val
+	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
+		return fmt.Sprintf("%s.Def()", val)
+	case types.RefKind:
+		return fmt.Sprintf("%s.TargetRef()", val)
 	}
 	panic("unreachable")
 }

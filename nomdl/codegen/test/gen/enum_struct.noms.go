@@ -72,14 +72,17 @@ func (e Handedness) Chunks() []ref.Ref {
 // EnumStruct
 
 type EnumStruct struct {
-	m   types.Map
+	_hand Handedness
+
 	ref *ref.Ref
 }
 
 func NewEnumStruct() EnumStruct {
-	return EnumStruct{types.NewMap(
-		types.NewString("hand"), NewHandedness(),
-	), &ref.Ref{}}
+	return EnumStruct{
+		_hand: NewHandedness(),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type EnumStructDef struct {
@@ -88,17 +91,18 @@ type EnumStructDef struct {
 
 func (def EnumStructDef) New() EnumStruct {
 	return EnumStruct{
-		types.NewMap(
-			types.NewString("hand"), def.Hand,
-		), &ref.Ref{}}
+		_hand: def.Hand,
+		ref:   &ref.Ref{},
+	}
 }
 
 func (s EnumStruct) Def() (d EnumStructDef) {
-	d.Hand = s.m.Get(types.NewString("hand")).(Handedness)
+	d.Hand = s._hand
 	return
 }
 
 var __typeRefForEnumStruct types.TypeRef
+var __typeDefForEnumStruct types.TypeRef
 
 func (m EnumStruct) TypeRef() types.TypeRef {
 	return __typeRefForEnumStruct
@@ -106,22 +110,32 @@ func (m EnumStruct) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForEnumStruct = types.MakeTypeRef(__genPackageInFile_enum_struct_CachedRef, 1)
-	types.RegisterFromValFunction(__typeRefForEnumStruct, func(v types.Value) types.Value {
-		return EnumStructFromVal(v)
-	})
+	__typeDefForEnumStruct = types.MakeStructTypeRef("EnumStruct",
+		[]types.Field{
+			types.Field{"hand", types.MakeTypeRef(__genPackageInFile_enum_struct_CachedRef, 0), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForEnumStruct, builderForEnumStruct)
 }
 
-func EnumStructFromVal(val types.Value) EnumStruct {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(EnumStruct); ok {
-		return val
+func (s EnumStruct) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"hand": s._hand,
 	}
-	// TODO: Validate here
-	return EnumStruct{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForEnumStruct, __typeDefForEnumStruct, m)
 }
 
-func (s EnumStruct) InternalImplementation() types.Map {
-	return s.m
+func builderForEnumStruct() chan types.Value {
+	c := make(chan types.Value)
+	s := EnumStruct{ref: &ref.Ref{}}
+	go func() {
+		s._hand = (<-c).(Handedness)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s EnumStruct) Equals(other types.Value) bool {
@@ -133,15 +147,16 @@ func (s EnumStruct) Ref() ref.Ref {
 }
 
 func (s EnumStruct) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForEnumStruct.Chunks()...)
 	return
 }
 
 func (s EnumStruct) Hand() Handedness {
-	return s.m.Get(types.NewString("hand")).(Handedness)
+	return s._hand
 }
 
 func (s EnumStruct) SetHand(val Handedness) EnumStruct {
-	return EnumStruct{s.m.Set(types.NewString("hand"), val), &ref.Ref{}}
+	s._hand = val
+	s.ref = &ref.Ref{}
+	return s
 }

@@ -28,15 +28,19 @@ func init() {
 // Struct
 
 type Struct struct {
-	m   types.Map
+	_s string
+	_b bool
+
 	ref *ref.Ref
 }
 
 func NewStruct() Struct {
-	return Struct{types.NewMap(
-		types.NewString("s"), types.NewString(""),
-		types.NewString("b"), types.Bool(false),
-	), &ref.Ref{}}
+	return Struct{
+		_s: "",
+		_b: false,
+
+		ref: &ref.Ref{},
+	}
 }
 
 type StructDef struct {
@@ -46,19 +50,20 @@ type StructDef struct {
 
 func (def StructDef) New() Struct {
 	return Struct{
-		types.NewMap(
-			types.NewString("s"), types.NewString(def.S),
-			types.NewString("b"), types.Bool(def.B),
-		), &ref.Ref{}}
+		_s:  def.S,
+		_b:  def.B,
+		ref: &ref.Ref{},
+	}
 }
 
 func (s Struct) Def() (d StructDef) {
-	d.S = s.m.Get(types.NewString("s")).(types.String).String()
-	d.B = bool(s.m.Get(types.NewString("b")).(types.Bool))
+	d.S = s._s
+	d.B = s._b
 	return
 }
 
 var __typeRefForStruct types.TypeRef
+var __typeDefForStruct types.TypeRef
 
 func (m Struct) TypeRef() types.TypeRef {
 	return __typeRefForStruct
@@ -66,22 +71,35 @@ func (m Struct) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForStruct = types.MakeTypeRef(__genPackageInFile_struct_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForStruct, func(v types.Value) types.Value {
-		return StructFromVal(v)
-	})
+	__typeDefForStruct = types.MakeStructTypeRef("Struct",
+		[]types.Field{
+			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForStruct, builderForStruct)
 }
 
-func StructFromVal(val types.Value) Struct {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(Struct); ok {
-		return val
+func (s Struct) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"s": types.NewString(s._s),
+		"b": types.Bool(s._b),
 	}
-	// TODO: Validate here
-	return Struct{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForStruct, __typeDefForStruct, m)
 }
 
-func (s Struct) InternalImplementation() types.Map {
-	return s.m
+func builderForStruct() chan types.Value {
+	c := make(chan types.Value)
+	s := Struct{ref: &ref.Ref{}}
+	go func() {
+		s._s = (<-c).(types.String).String()
+		s._b = bool((<-c).(types.Bool))
+
+		c <- s
+	}()
+	return c
 }
 
 func (s Struct) Equals(other types.Value) bool {
@@ -93,25 +111,28 @@ func (s Struct) Ref() ref.Ref {
 }
 
 func (s Struct) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForStruct.Chunks()...)
 	return
 }
 
 func (s Struct) S() string {
-	return s.m.Get(types.NewString("s")).(types.String).String()
+	return s._s
 }
 
 func (s Struct) SetS(val string) Struct {
-	return Struct{s.m.Set(types.NewString("s"), types.NewString(val)), &ref.Ref{}}
+	s._s = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Struct) B() bool {
-	return bool(s.m.Get(types.NewString("b")).(types.Bool))
+	return s._b
 }
 
 func (s Struct) SetB(val bool) Struct {
-	return Struct{s.m.Set(types.NewString("b"), types.Bool(val)), &ref.Ref{}}
+	s._b = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // ListOfStruct

@@ -27,14 +27,17 @@ func init() {
 // StructWithDupList
 
 type StructWithDupList struct {
-	m   types.Map
+	_l ListOfUInt8
+
 	ref *ref.Ref
 }
 
 func NewStructWithDupList() StructWithDupList {
-	return StructWithDupList{types.NewMap(
-		types.NewString("l"), NewListOfUInt8(),
-	), &ref.Ref{}}
+	return StructWithDupList{
+		_l: NewListOfUInt8(),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type StructWithDupListDef struct {
@@ -43,17 +46,18 @@ type StructWithDupListDef struct {
 
 func (def StructWithDupListDef) New() StructWithDupList {
 	return StructWithDupList{
-		types.NewMap(
-			types.NewString("l"), def.L.New(),
-		), &ref.Ref{}}
+		_l:  def.L.New(),
+		ref: &ref.Ref{},
+	}
 }
 
 func (s StructWithDupList) Def() (d StructWithDupListDef) {
-	d.L = s.m.Get(types.NewString("l")).(ListOfUInt8).Def()
+	d.L = s._l.Def()
 	return
 }
 
 var __typeRefForStructWithDupList types.TypeRef
+var __typeDefForStructWithDupList types.TypeRef
 
 func (m StructWithDupList) TypeRef() types.TypeRef {
 	return __typeRefForStructWithDupList
@@ -61,22 +65,32 @@ func (m StructWithDupList) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForStructWithDupList = types.MakeTypeRef(__genPackageInFile_struct_with_dup_list_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForStructWithDupList, func(v types.Value) types.Value {
-		return StructWithDupListFromVal(v)
-	})
+	__typeDefForStructWithDupList = types.MakeStructTypeRef("StructWithDupList",
+		[]types.Field{
+			types.Field{"l", types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForStructWithDupList, builderForStructWithDupList)
 }
 
-func StructWithDupListFromVal(val types.Value) StructWithDupList {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(StructWithDupList); ok {
-		return val
+func (s StructWithDupList) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"l": s._l,
 	}
-	// TODO: Validate here
-	return StructWithDupList{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForStructWithDupList, __typeDefForStructWithDupList, m)
 }
 
-func (s StructWithDupList) InternalImplementation() types.Map {
-	return s.m
+func builderForStructWithDupList() chan types.Value {
+	c := make(chan types.Value)
+	s := StructWithDupList{ref: &ref.Ref{}}
+	go func() {
+		s._l = (<-c).(ListOfUInt8)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s StructWithDupList) Equals(other types.Value) bool {
@@ -88,17 +102,19 @@ func (s StructWithDupList) Ref() ref.Ref {
 }
 
 func (s StructWithDupList) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForStructWithDupList.Chunks()...)
+	chunks = append(chunks, s._l.Chunks()...)
 	return
 }
 
 func (s StructWithDupList) L() ListOfUInt8 {
-	return s.m.Get(types.NewString("l")).(ListOfUInt8)
+	return s._l
 }
 
 func (s StructWithDupList) SetL(val ListOfUInt8) StructWithDupList {
-	return StructWithDupList{s.m.Set(types.NewString("l"), val), &ref.Ref{}}
+	s._l = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // ListOfUInt8

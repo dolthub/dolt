@@ -44,19 +44,27 @@ func init() {
 // User
 
 type User struct {
-	m   types.Map
+	_Id           string
+	_Name         string
+	_Albums       MapOfStringToAlbum
+	_RefreshToken string
+	_OAuthToken   string
+	_OAuthSecret  string
+
 	ref *ref.Ref
 }
 
 func NewUser() User {
-	return User{types.NewMap(
-		types.NewString("Id"), types.NewString(""),
-		types.NewString("Name"), types.NewString(""),
-		types.NewString("Albums"), NewMapOfStringToAlbum(),
-		types.NewString("RefreshToken"), types.NewString(""),
-		types.NewString("OAuthToken"), types.NewString(""),
-		types.NewString("OAuthSecret"), types.NewString(""),
-	), &ref.Ref{}}
+	return User{
+		_Id:           "",
+		_Name:         "",
+		_Albums:       NewMapOfStringToAlbum(),
+		_RefreshToken: "",
+		_OAuthToken:   "",
+		_OAuthSecret:  "",
+
+		ref: &ref.Ref{},
+	}
 }
 
 type UserDef struct {
@@ -70,27 +78,28 @@ type UserDef struct {
 
 func (def UserDef) New() User {
 	return User{
-		types.NewMap(
-			types.NewString("Id"), types.NewString(def.Id),
-			types.NewString("Name"), types.NewString(def.Name),
-			types.NewString("Albums"), def.Albums.New(),
-			types.NewString("RefreshToken"), types.NewString(def.RefreshToken),
-			types.NewString("OAuthToken"), types.NewString(def.OAuthToken),
-			types.NewString("OAuthSecret"), types.NewString(def.OAuthSecret),
-		), &ref.Ref{}}
+		_Id:           def.Id,
+		_Name:         def.Name,
+		_Albums:       def.Albums.New(),
+		_RefreshToken: def.RefreshToken,
+		_OAuthToken:   def.OAuthToken,
+		_OAuthSecret:  def.OAuthSecret,
+		ref:           &ref.Ref{},
+	}
 }
 
 func (s User) Def() (d UserDef) {
-	d.Id = s.m.Get(types.NewString("Id")).(types.String).String()
-	d.Name = s.m.Get(types.NewString("Name")).(types.String).String()
-	d.Albums = s.m.Get(types.NewString("Albums")).(MapOfStringToAlbum).Def()
-	d.RefreshToken = s.m.Get(types.NewString("RefreshToken")).(types.String).String()
-	d.OAuthToken = s.m.Get(types.NewString("OAuthToken")).(types.String).String()
-	d.OAuthSecret = s.m.Get(types.NewString("OAuthSecret")).(types.String).String()
+	d.Id = s._Id
+	d.Name = s._Name
+	d.Albums = s._Albums.Def()
+	d.RefreshToken = s._RefreshToken
+	d.OAuthToken = s._OAuthToken
+	d.OAuthSecret = s._OAuthSecret
 	return
 }
 
 var __typeRefForUser types.TypeRef
+var __typeDefForUser types.TypeRef
 
 func (m User) TypeRef() types.TypeRef {
 	return __typeRefForUser
@@ -98,22 +107,47 @@ func (m User) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForUser = types.MakeTypeRef(__mainPackageInFile_picasa_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForUser, func(v types.Value) types.Value {
-		return UserFromVal(v)
-	})
+	__typeDefForUser = types.MakeStructTypeRef("User",
+		[]types.Field{
+			types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Name", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Albums", types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__mainPackageInFile_picasa_CachedRef, 1)), false},
+			types.Field{"RefreshToken", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"OAuthToken", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"OAuthSecret", types.MakePrimitiveTypeRef(types.StringKind), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForUser, builderForUser)
 }
 
-func UserFromVal(val types.Value) User {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(User); ok {
-		return val
+func (s User) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"Id":           types.NewString(s._Id),
+		"Name":         types.NewString(s._Name),
+		"Albums":       s._Albums,
+		"RefreshToken": types.NewString(s._RefreshToken),
+		"OAuthToken":   types.NewString(s._OAuthToken),
+		"OAuthSecret":  types.NewString(s._OAuthSecret),
 	}
-	// TODO: Validate here
-	return User{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForUser, __typeDefForUser, m)
 }
 
-func (s User) InternalImplementation() types.Map {
-	return s.m
+func builderForUser() chan types.Value {
+	c := make(chan types.Value)
+	s := User{ref: &ref.Ref{}}
+	go func() {
+		s._Id = (<-c).(types.String).String()
+		s._Name = (<-c).(types.String).String()
+		s._Albums = (<-c).(MapOfStringToAlbum)
+		s._RefreshToken = (<-c).(types.String).String()
+		s._OAuthToken = (<-c).(types.String).String()
+		s._OAuthSecret = (<-c).(types.String).String()
+
+		c <- s
+	}()
+	return c
 }
 
 func (s User) Equals(other types.Value) bool {
@@ -125,73 +159,91 @@ func (s User) Ref() ref.Ref {
 }
 
 func (s User) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForUser.Chunks()...)
+	chunks = append(chunks, s._Albums.Chunks()...)
 	return
 }
 
 func (s User) Id() string {
-	return s.m.Get(types.NewString("Id")).(types.String).String()
+	return s._Id
 }
 
 func (s User) SetId(val string) User {
-	return User{s.m.Set(types.NewString("Id"), types.NewString(val)), &ref.Ref{}}
+	s._Id = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s User) Name() string {
-	return s.m.Get(types.NewString("Name")).(types.String).String()
+	return s._Name
 }
 
 func (s User) SetName(val string) User {
-	return User{s.m.Set(types.NewString("Name"), types.NewString(val)), &ref.Ref{}}
+	s._Name = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s User) Albums() MapOfStringToAlbum {
-	return s.m.Get(types.NewString("Albums")).(MapOfStringToAlbum)
+	return s._Albums
 }
 
 func (s User) SetAlbums(val MapOfStringToAlbum) User {
-	return User{s.m.Set(types.NewString("Albums"), val), &ref.Ref{}}
+	s._Albums = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s User) RefreshToken() string {
-	return s.m.Get(types.NewString("RefreshToken")).(types.String).String()
+	return s._RefreshToken
 }
 
 func (s User) SetRefreshToken(val string) User {
-	return User{s.m.Set(types.NewString("RefreshToken"), types.NewString(val)), &ref.Ref{}}
+	s._RefreshToken = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s User) OAuthToken() string {
-	return s.m.Get(types.NewString("OAuthToken")).(types.String).String()
+	return s._OAuthToken
 }
 
 func (s User) SetOAuthToken(val string) User {
-	return User{s.m.Set(types.NewString("OAuthToken"), types.NewString(val)), &ref.Ref{}}
+	s._OAuthToken = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s User) OAuthSecret() string {
-	return s.m.Get(types.NewString("OAuthSecret")).(types.String).String()
+	return s._OAuthSecret
 }
 
 func (s User) SetOAuthSecret(val string) User {
-	return User{s.m.Set(types.NewString("OAuthSecret"), types.NewString(val)), &ref.Ref{}}
+	s._OAuthSecret = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // Album
 
 type Album struct {
-	m   types.Map
+	_Id        string
+	_Title     string
+	_NumPhotos uint32
+	_Photos    RefOfSetOfRefOfRemotePhoto
+
 	ref *ref.Ref
 }
 
 func NewAlbum() Album {
-	return Album{types.NewMap(
-		types.NewString("Id"), types.NewString(""),
-		types.NewString("Title"), types.NewString(""),
-		types.NewString("NumPhotos"), types.UInt32(0),
-		types.NewString("Photos"), NewRefOfSetOfRefOfRemotePhoto(ref.Ref{}),
-	), &ref.Ref{}}
+	return Album{
+		_Id:        "",
+		_Title:     "",
+		_NumPhotos: uint32(0),
+		_Photos:    NewRefOfSetOfRefOfRemotePhoto(ref.Ref{}),
+
+		ref: &ref.Ref{},
+	}
 }
 
 type AlbumDef struct {
@@ -203,23 +255,24 @@ type AlbumDef struct {
 
 func (def AlbumDef) New() Album {
 	return Album{
-		types.NewMap(
-			types.NewString("Id"), types.NewString(def.Id),
-			types.NewString("Title"), types.NewString(def.Title),
-			types.NewString("NumPhotos"), types.UInt32(def.NumPhotos),
-			types.NewString("Photos"), NewRefOfSetOfRefOfRemotePhoto(def.Photos),
-		), &ref.Ref{}}
+		_Id:        def.Id,
+		_Title:     def.Title,
+		_NumPhotos: def.NumPhotos,
+		_Photos:    NewRefOfSetOfRefOfRemotePhoto(def.Photos),
+		ref:        &ref.Ref{},
+	}
 }
 
 func (s Album) Def() (d AlbumDef) {
-	d.Id = s.m.Get(types.NewString("Id")).(types.String).String()
-	d.Title = s.m.Get(types.NewString("Title")).(types.String).String()
-	d.NumPhotos = uint32(s.m.Get(types.NewString("NumPhotos")).(types.UInt32))
-	d.Photos = s.m.Get(types.NewString("Photos")).(RefOfSetOfRefOfRemotePhoto).TargetRef()
+	d.Id = s._Id
+	d.Title = s._Title
+	d.NumPhotos = s._NumPhotos
+	d.Photos = s._Photos.TargetRef()
 	return
 }
 
 var __typeRefForAlbum types.TypeRef
+var __typeDefForAlbum types.TypeRef
 
 func (m Album) TypeRef() types.TypeRef {
 	return __typeRefForAlbum
@@ -227,22 +280,41 @@ func (m Album) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForAlbum = types.MakeTypeRef(__mainPackageInFile_picasa_CachedRef, 1)
-	types.RegisterFromValFunction(__typeRefForAlbum, func(v types.Value) types.Value {
-		return AlbumFromVal(v)
-	})
+	__typeDefForAlbum = types.MakeStructTypeRef("Album",
+		[]types.Field{
+			types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"NumPhotos", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+			types.Field{"Photos", types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0)))), false},
+		},
+		types.Choices{},
+	)
+	types.RegisterStructBuilder(__typeRefForAlbum, builderForAlbum)
 }
 
-func AlbumFromVal(val types.Value) Album {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(Album); ok {
-		return val
+func (s Album) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"Id":        types.NewString(s._Id),
+		"Title":     types.NewString(s._Title),
+		"NumPhotos": types.UInt32(s._NumPhotos),
+		"Photos":    s._Photos,
 	}
-	// TODO: Validate here
-	return Album{val.(types.Map), &ref.Ref{}}
+	return types.NewStruct(__typeRefForAlbum, __typeDefForAlbum, m)
 }
 
-func (s Album) InternalImplementation() types.Map {
-	return s.m
+func builderForAlbum() chan types.Value {
+	c := make(chan types.Value)
+	s := Album{ref: &ref.Ref{}}
+	go func() {
+		s._Id = (<-c).(types.String).String()
+		s._Title = (<-c).(types.String).String()
+		s._NumPhotos = uint32((<-c).(types.UInt32))
+		s._Photos = (<-c).(RefOfSetOfRefOfRemotePhoto)
+
+		c <- s
+	}()
+	return c
 }
 
 func (s Album) Equals(other types.Value) bool {
@@ -254,41 +326,49 @@ func (s Album) Ref() ref.Ref {
 }
 
 func (s Album) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForAlbum.Chunks()...)
+	chunks = append(chunks, s._Photos.Chunks()...)
 	return
 }
 
 func (s Album) Id() string {
-	return s.m.Get(types.NewString("Id")).(types.String).String()
+	return s._Id
 }
 
 func (s Album) SetId(val string) Album {
-	return Album{s.m.Set(types.NewString("Id"), types.NewString(val)), &ref.Ref{}}
+	s._Id = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Album) Title() string {
-	return s.m.Get(types.NewString("Title")).(types.String).String()
+	return s._Title
 }
 
 func (s Album) SetTitle(val string) Album {
-	return Album{s.m.Set(types.NewString("Title"), types.NewString(val)), &ref.Ref{}}
+	s._Title = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Album) NumPhotos() uint32 {
-	return uint32(s.m.Get(types.NewString("NumPhotos")).(types.UInt32))
+	return s._NumPhotos
 }
 
 func (s Album) SetNumPhotos(val uint32) Album {
-	return Album{s.m.Set(types.NewString("NumPhotos"), types.UInt32(val)), &ref.Ref{}}
+	s._NumPhotos = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s Album) Photos() RefOfSetOfRefOfRemotePhoto {
-	return s.m.Get(types.NewString("Photos")).(RefOfSetOfRefOfRemotePhoto)
+	return s._Photos
 }
 
 func (s Album) SetPhotos(val RefOfSetOfRefOfRemotePhoto) Album {
-	return Album{s.m.Set(types.NewString("Photos"), val), &ref.Ref{}}
+	s._Photos = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 // MapOfStringToAlbum

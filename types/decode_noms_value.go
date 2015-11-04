@@ -105,38 +105,44 @@ func (r *jsonArrayReader) readBlob(t TypeRef) Value {
 
 func (r *jsonArrayReader) readList(t TypeRef, pkg *Package) Value {
 	desc := t.Desc.(CompoundDesc)
-	ll := []Value{}
+	data := []Value{}
 	elemType := desc.ElemTypes[0]
 	for !r.atEnd() {
 		v := r.readValueWithoutTag(elemType, pkg)
-		ll = append(ll, v)
+		data = append(data, v)
 	}
 
-	return ToNomsValueFromTypeRef(t, NewList(ll...))
+	// TODO: Skip the List wrapper.
+	return ToNomsValueFromTypeRef(t, newListNoCopy(data, t))
 }
 
 func (r *jsonArrayReader) readSet(t TypeRef, pkg *Package) Value {
 	desc := t.Desc.(CompoundDesc)
-	ll := []Value{}
+	data := setData{}
 	elemType := desc.ElemTypes[0]
 	for !r.atEnd() {
 		v := r.readValueWithoutTag(elemType, pkg)
-		ll = append(ll, v)
+		data = append(data, v)
 	}
-	return ToNomsValueFromTypeRef(t, NewSet(ll...))
+
+	// TODO: Skip the Set wrapper.
+	return ToNomsValueFromTypeRef(t, newSetFromData(data, t))
 }
 
 func (r *jsonArrayReader) readMap(t TypeRef, pkg *Package) Value {
 	desc := t.Desc.(CompoundDesc)
-	ll := []Value{}
+	data := mapData{}
 	keyType := desc.ElemTypes[0]
 	valueType := desc.ElemTypes[1]
+
 	for !r.atEnd() {
 		k := r.readValueWithoutTag(keyType, pkg)
 		v := r.readValueWithoutTag(valueType, pkg)
-		ll = append(ll, k, v)
+		data = append(data, mapEntry{k, v})
 	}
-	return ToNomsValueFromTypeRef(t, NewMap(ll...))
+
+	// TODO: Skip the Map wrapper.
+	return ToNomsValueFromTypeRef(t, newMapFromData(data, t))
 }
 
 func (r *jsonArrayReader) readEnum(t TypeRef) Value {
@@ -339,8 +345,6 @@ func fixupTypeRef(tr TypeRef, pkg *Package) TypeRef {
 		}
 		return MakeTypeRef(pkg.Ref(), tr.Ordinal())
 	}
-	if tr.Kind() == TypeRefKind {
-	}
 	panic("unreachable")
 }
 
@@ -349,27 +353,25 @@ func (r *jsonArrayReader) readStruct(typeDef, typeRef TypeRef, pkg *Package) Val
 	typeDef = fixupTypeRef(typeDef, pkg)
 
 	// We've read `[StructKind, sha1, name` at this point
-	desc := typeDef.Desc.(StructDesc)
-	m := NewMap()
+	c := structBuilderForTypeRef(typeRef, typeDef)
 
+	desc := typeDef.Desc.(StructDesc)
 	for _, f := range desc.Fields {
 		if f.Optional {
 			b := r.read().(bool)
+			c <- Bool(b)
 			if b {
-				v := r.readValueWithoutTag(f.T, pkg)
-				m = m.Set(NewString(f.Name), v)
+				c <- r.readValueWithoutTag(f.T, pkg)
 			}
 		} else {
-			v := r.readValueWithoutTag(f.T, pkg)
-			m = m.Set(NewString(f.Name), v)
+			c <- r.readValueWithoutTag(f.T, pkg)
 		}
 	}
 	if len(desc.Union) > 0 {
-		i := uint32(r.read().(float64))
-		m = m.Set(NewString("$unionIndex"), UInt32(i))
-		v := r.readValueWithoutTag(desc.Union[i].T, pkg)
-		m = m.Set(NewString("$unionValue"), v)
+		unionIndex := uint32(r.read().(float64))
+		c <- UInt32(unionIndex)
+		c <- r.readValueWithoutTag(desc.Union[unionIndex].T, pkg)
 	}
 
-	return ToNomsValueFromTypeRef(typeRef, m)
+	return (<-c).(Value)
 }

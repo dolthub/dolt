@@ -33,73 +33,45 @@ func init() {
 // StructWithUnionField
 
 type StructWithUnionField struct {
-	m   types.Map
-	ref *ref.Ref
+	_a           float32
+	__unionIndex uint32
+	__unionValue types.Value
+	ref          *ref.Ref
 }
 
 func NewStructWithUnionField() StructWithUnionField {
-	return StructWithUnionField{types.NewMap(
-		types.NewString("a"), types.Float32(0),
-		types.NewString("$unionIndex"), types.UInt32(0),
-		types.NewString("$unionValue"), types.Float64(0),
-	), &ref.Ref{}}
+	return StructWithUnionField{
+		_a:           float32(0),
+		__unionIndex: 0,
+		__unionValue: types.Float64(0),
+		ref:          &ref.Ref{},
+	}
 }
 
 type StructWithUnionFieldDef struct {
 	A            float32
 	__unionIndex uint32
-	__unionValue interface{}
+	__unionValue types.Value
 }
 
 func (def StructWithUnionFieldDef) New() StructWithUnionField {
 	return StructWithUnionField{
-		types.NewMap(
-			types.NewString("a"), types.Float32(def.A),
-			types.NewString("$unionIndex"), types.UInt32(def.__unionIndex),
-			types.NewString("$unionValue"), def.__unionDefToValue(),
-		), &ref.Ref{}}
+		_a:           def.A,
+		__unionIndex: def.__unionIndex,
+		__unionValue: def.__unionValue,
+		ref:          &ref.Ref{},
+	}
 }
 
 func (s StructWithUnionField) Def() (d StructWithUnionFieldDef) {
-	d.A = float32(s.m.Get(types.NewString("a")).(types.Float32))
-	d.__unionIndex = uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32))
-	d.__unionValue = s.__unionValueToDef()
+	d.A = s._a
+	d.__unionIndex = s.__unionIndex
+	d.__unionValue = s.__unionValue
 	return
 }
 
-func (def StructWithUnionFieldDef) __unionDefToValue() types.Value {
-	switch def.__unionIndex {
-	case 0:
-		return types.Float64(def.__unionValue.(float64))
-	case 1:
-		return types.NewString(def.__unionValue.(string))
-	case 2:
-		return def.__unionValue.(types.Blob)
-	case 3:
-		return def.__unionValue.(types.Value)
-	case 4:
-		return def.__unionValue.(SetOfUInt8Def).New()
-	}
-	panic("unreachable")
-}
-
-func (s StructWithUnionField) __unionValueToDef() interface{} {
-	switch uint32(s.m.Get(types.NewString("$unionIndex")).(types.UInt32)) {
-	case 0:
-		return float64(s.m.Get(types.NewString("$unionValue")).(types.Float64))
-	case 1:
-		return s.m.Get(types.NewString("$unionValue")).(types.String).String()
-	case 2:
-		return s.m.Get(types.NewString("$unionValue")).(types.Blob)
-	case 3:
-		return s.m.Get(types.NewString("$unionValue"))
-	case 4:
-		return s.m.Get(types.NewString("$unionValue")).(SetOfUInt8).Def()
-	}
-	panic("unreachable")
-}
-
 var __typeRefForStructWithUnionField types.TypeRef
+var __typeDefForStructWithUnionField types.TypeRef
 
 func (m StructWithUnionField) TypeRef() types.TypeRef {
 	return __typeRefForStructWithUnionField
@@ -107,22 +79,40 @@ func (m StructWithUnionField) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForStructWithUnionField = types.MakeTypeRef(__genPackageInFile_struct_with_union_field_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForStructWithUnionField, func(v types.Value) types.Value {
-		return StructWithUnionFieldFromVal(v)
-	})
+	__typeDefForStructWithUnionField = types.MakeStructTypeRef("StructWithUnionField",
+		[]types.Field{
+			types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+		},
+		types.Choices{
+			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
+			types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
+			types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
+			types.Field{"f", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+		},
+	)
+	types.RegisterStructBuilder(__typeRefForStructWithUnionField, builderForStructWithUnionField)
 }
 
-func StructWithUnionFieldFromVal(val types.Value) StructWithUnionField {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(StructWithUnionField); ok {
-		return val
+func (s StructWithUnionField) InternalImplementation() types.Struct {
+	// TODO: Remove this
+	m := map[string]types.Value{
+		"a": types.Float32(s._a),
 	}
-	// TODO: Validate here
-	return StructWithUnionField{val.(types.Map), &ref.Ref{}}
+	m[__typeDefForStructWithUnionField.Desc.(types.StructDesc).Union[s.__unionIndex].Name] = s.__unionValue
+	return types.NewStruct(__typeRefForStructWithUnionField, __typeDefForStructWithUnionField, m)
 }
 
-func (s StructWithUnionField) InternalImplementation() types.Map {
-	return s.m
+func builderForStructWithUnionField() chan types.Value {
+	c := make(chan types.Value)
+	s := StructWithUnionField{ref: &ref.Ref{}}
+	go func() {
+		s._a = float32((<-c).(types.Float32))
+		s.__unionIndex = uint32((<-c).(types.UInt32))
+		s.__unionValue = <-c
+		c <- s
+	}()
+	return c
 }
 
 func (s StructWithUnionField) Equals(other types.Value) bool {
@@ -134,76 +124,87 @@ func (s StructWithUnionField) Ref() ref.Ref {
 }
 
 func (s StructWithUnionField) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
-	chunks = append(chunks, s.m.Chunks()...)
+	chunks = append(chunks, __typeRefForStructWithUnionField.Chunks()...)
+	chunks = append(chunks, s.__unionValue.Chunks()...)
 	return
 }
 
 func (s StructWithUnionField) A() float32 {
-	return float32(s.m.Get(types.NewString("a")).(types.Float32))
+	return s._a
 }
 
 func (s StructWithUnionField) SetA(val float32) StructWithUnionField {
-	return StructWithUnionField{s.m.Set(types.NewString("a"), types.Float32(val)), &ref.Ref{}}
+	s._a = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (s StructWithUnionField) B() (val float64, ok bool) {
-	if s.m.Get(types.NewString("$unionIndex")).(types.UInt32) != 0 {
+	if s.__unionIndex != 0 {
 		return
 	}
-	return float64(s.m.Get(types.NewString("$unionValue")).(types.Float64)), true
+	return float64(s.__unionValue.(types.Float64)), true
 }
 
 func (s StructWithUnionField) SetB(val float64) StructWithUnionField {
-	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(0)).Set(types.NewString("$unionValue"), types.Float64(val)), &ref.Ref{}}
+	s.__unionIndex = 0
+	s.__unionValue = types.Float64(val)
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (def StructWithUnionFieldDef) B() (val float64, ok bool) {
 	if def.__unionIndex != 0 {
 		return
 	}
-	return def.__unionValue.(float64), true
+	return float64(def.__unionValue.(types.Float64)), true
 }
 
 func (def StructWithUnionFieldDef) SetB(val float64) StructWithUnionFieldDef {
 	def.__unionIndex = 0
-	def.__unionValue = val
+	def.__unionValue = types.Float64(val)
 	return def
 }
 
 func (s StructWithUnionField) C() (val string, ok bool) {
-	if s.m.Get(types.NewString("$unionIndex")).(types.UInt32) != 1 {
+	if s.__unionIndex != 1 {
 		return
 	}
-	return s.m.Get(types.NewString("$unionValue")).(types.String).String(), true
+	return s.__unionValue.(types.String).String(), true
 }
 
 func (s StructWithUnionField) SetC(val string) StructWithUnionField {
-	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(1)).Set(types.NewString("$unionValue"), types.NewString(val)), &ref.Ref{}}
+	s.__unionIndex = 1
+	s.__unionValue = types.NewString(val)
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (def StructWithUnionFieldDef) C() (val string, ok bool) {
 	if def.__unionIndex != 1 {
 		return
 	}
-	return def.__unionValue.(string), true
+	return def.__unionValue.(types.String).String(), true
 }
 
 func (def StructWithUnionFieldDef) SetC(val string) StructWithUnionFieldDef {
 	def.__unionIndex = 1
-	def.__unionValue = val
+	def.__unionValue = types.NewString(val)
 	return def
 }
 
 func (s StructWithUnionField) D() (val types.Blob, ok bool) {
-	if s.m.Get(types.NewString("$unionIndex")).(types.UInt32) != 2 {
+	if s.__unionIndex != 2 {
 		return
 	}
-	return s.m.Get(types.NewString("$unionValue")).(types.Blob), true
+	return s.__unionValue.(types.Blob), true
 }
 
 func (s StructWithUnionField) SetD(val types.Blob) StructWithUnionField {
-	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(2)).Set(types.NewString("$unionValue"), val), &ref.Ref{}}
+	s.__unionIndex = 2
+	s.__unionValue = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (def StructWithUnionFieldDef) D() (val types.Blob, ok bool) {
@@ -220,21 +221,24 @@ func (def StructWithUnionFieldDef) SetD(val types.Blob) StructWithUnionFieldDef 
 }
 
 func (s StructWithUnionField) E() (val types.Value, ok bool) {
-	if s.m.Get(types.NewString("$unionIndex")).(types.UInt32) != 3 {
+	if s.__unionIndex != 3 {
 		return
 	}
-	return s.m.Get(types.NewString("$unionValue")), true
+	return s.__unionValue, true
 }
 
 func (s StructWithUnionField) SetE(val types.Value) StructWithUnionField {
-	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(3)).Set(types.NewString("$unionValue"), val), &ref.Ref{}}
+	s.__unionIndex = 3
+	s.__unionValue = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (def StructWithUnionFieldDef) E() (val types.Value, ok bool) {
 	if def.__unionIndex != 3 {
 		return
 	}
-	return def.__unionValue.(types.Value), true
+	return def.__unionValue, true
 }
 
 func (def StructWithUnionFieldDef) SetE(val types.Value) StructWithUnionFieldDef {
@@ -244,26 +248,29 @@ func (def StructWithUnionFieldDef) SetE(val types.Value) StructWithUnionFieldDef
 }
 
 func (s StructWithUnionField) F() (val SetOfUInt8, ok bool) {
-	if s.m.Get(types.NewString("$unionIndex")).(types.UInt32) != 4 {
+	if s.__unionIndex != 4 {
 		return
 	}
-	return s.m.Get(types.NewString("$unionValue")).(SetOfUInt8), true
+	return s.__unionValue.(SetOfUInt8), true
 }
 
 func (s StructWithUnionField) SetF(val SetOfUInt8) StructWithUnionField {
-	return StructWithUnionField{s.m.Set(types.NewString("$unionIndex"), types.UInt32(4)).Set(types.NewString("$unionValue"), val), &ref.Ref{}}
+	s.__unionIndex = 4
+	s.__unionValue = val
+	s.ref = &ref.Ref{}
+	return s
 }
 
 func (def StructWithUnionFieldDef) F() (val SetOfUInt8Def, ok bool) {
 	if def.__unionIndex != 4 {
 		return
 	}
-	return def.__unionValue.(SetOfUInt8Def), true
+	return def.__unionValue.(SetOfUInt8).Def(), true
 }
 
 func (def StructWithUnionFieldDef) SetF(val SetOfUInt8Def) StructWithUnionFieldDef {
 	def.__unionIndex = 4
-	def.__unionValue = val
+	def.__unionValue = val.New()
 	return def
 }
 
