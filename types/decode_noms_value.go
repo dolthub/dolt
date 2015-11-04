@@ -112,6 +112,7 @@ func (r *jsonArrayReader) readList(t TypeRef, pkg *Package) Value {
 		data = append(data, v)
 	}
 
+	t = fixupTypeRef(t, pkg)
 	// TODO: Skip the List wrapper.
 	return ToNomsValueFromTypeRef(t, newListNoCopy(data, t))
 }
@@ -125,6 +126,7 @@ func (r *jsonArrayReader) readSet(t TypeRef, pkg *Package) Value {
 		data = append(data, v)
 	}
 
+	t = fixupTypeRef(t, pkg)
 	// TODO: Skip the Set wrapper.
 	return ToNomsValueFromTypeRef(t, newSetFromData(data, t))
 }
@@ -141,11 +143,13 @@ func (r *jsonArrayReader) readMap(t TypeRef, pkg *Package) Value {
 		data = append(data, mapEntry{k, v})
 	}
 
+	t = fixupTypeRef(t, pkg)
 	// TODO: Skip the Map wrapper.
 	return ToNomsValueFromTypeRef(t, newMapFromData(data, t))
 }
 
-func (r *jsonArrayReader) readEnum(t TypeRef) Value {
+func (r *jsonArrayReader) readEnum(t TypeRef, pkg *Package) Value {
+	t = fixupTypeRef(t, pkg)
 	return ToNomsValueFromTypeRef(t, UInt32(r.read().(float64)))
 }
 
@@ -165,9 +169,10 @@ func (r *jsonArrayReader) readPackage(t TypeRef, pkg *Package) Value {
 	return NewPackage(types, deps)
 }
 
-func (r *jsonArrayReader) readRefValue(t TypeRef) Value {
+func (r *jsonArrayReader) readRefValue(t TypeRef, pkg *Package) Value {
 	ref := r.readRef()
 	v := NewRef(ref)
+	t = fixupTypeRef(t, pkg)
 	return ToNomsValueFromTypeRef(t, v)
 }
 
@@ -217,7 +222,7 @@ func (r *jsonArrayReader) readValueWithoutTag(t TypeRef, pkg *Package) Value {
 	case PackageKind:
 		return r.readPackage(t, pkg)
 	case RefKind:
-		return r.readRefValue(t)
+		return r.readRefValue(t, pkg)
 	case SetKind:
 		r2 := newJsonArrayReader(r.readArray(), r.cs)
 		return r2.readSet(t, pkg)
@@ -255,7 +260,7 @@ func (r *jsonArrayReader) readUnresolvedKindToValue(t TypeRef, pkg *Package) Val
 	typeDef := pkg.types[ordinal]
 
 	if typeDef.Kind() == EnumKind {
-		return r.readEnum(t)
+		return r.readEnum(t, pkg)
 	}
 
 	d.Chk.Equal(StructKind, typeDef.Kind())
@@ -321,7 +326,9 @@ func (r *jsonArrayReader) readTypeRefAsValue(pkg *Package) TypeRef {
 // fixupTypeRef goes trough the object graph of tr and updates the PackageRef to pkg if the the old PackageRef was an empty ref.
 func fixupTypeRef(tr TypeRef, pkg *Package) TypeRef {
 	switch desc := tr.Desc.(type) {
-	case EnumDesc, PrimitiveDesc:
+	case EnumDesc, StructDesc:
+		panic("unreachable")
+	case PrimitiveDesc:
 		return tr
 	case CompoundDesc:
 		elemTypes := make([]TypeRef, len(desc.ElemTypes))
@@ -329,16 +336,6 @@ func fixupTypeRef(tr TypeRef, pkg *Package) TypeRef {
 			elemTypes[i] = fixupTypeRef(elemType, pkg)
 		}
 		return MakeCompoundTypeRef(tr.Kind(), elemTypes...)
-	case StructDesc:
-		fields := make([]Field, len(desc.Fields))
-		for i, f := range desc.Fields {
-			fields[i] = Field{f.Name, fixupTypeRef(f.T, pkg), f.Optional}
-		}
-		choices := make(Choices, len(desc.Union))
-		for i, c := range desc.Union {
-			choices[i] = Field{c.Name, fixupTypeRef(c.T, pkg), c.Optional}
-		}
-		return MakeStructTypeRef(tr.Name(), fields, choices)
 	case UnresolvedDesc:
 		if tr.HasPackageRef() {
 			return tr
@@ -349,10 +346,9 @@ func fixupTypeRef(tr TypeRef, pkg *Package) TypeRef {
 }
 
 func (r *jsonArrayReader) readStruct(typeDef, typeRef TypeRef, pkg *Package) Value {
-	typeRef = fixupTypeRef(typeRef, pkg)
-	typeDef = fixupTypeRef(typeDef, pkg)
-
 	// We've read `[StructKind, sha1, name` at this point
+
+	typeRef = fixupTypeRef(typeRef, pkg)
 	c := structBuilderForTypeRef(typeRef, typeDef)
 
 	desc := typeDef.Desc.(StructDesc)
