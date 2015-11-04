@@ -21,10 +21,6 @@ func (v Bool) Chunks() []ref.Ref {
 	return nil
 }
 
-func BoolFromVal(v Value) Bool {
-	return v.(Bool)
-}
-
 func (v Bool) ToPrimitive() interface{} {
 	return bool(v)
 }
@@ -47,10 +43,6 @@ func (v Int8) Ref() ref.Ref {
 
 func (v Int8) Chunks() []ref.Ref {
 	return nil
-}
-
-func Int8FromVal(v Value) Int8 {
-	return v.(Int8)
 }
 
 func (v Int8) ToPrimitive() interface{} {
@@ -77,10 +69,6 @@ func (v Int16) Chunks() []ref.Ref {
 	return nil
 }
 
-func Int16FromVal(v Value) Int16 {
-	return v.(Int16)
-}
-
 func (v Int16) ToPrimitive() interface{} {
 	return int16(v)
 }
@@ -103,10 +91,6 @@ func (v Int32) Ref() ref.Ref {
 
 func (v Int32) Chunks() []ref.Ref {
 	return nil
-}
-
-func Int32FromVal(v Value) Int32 {
-	return v.(Int32)
 }
 
 func (v Int32) ToPrimitive() interface{} {
@@ -133,10 +117,6 @@ func (v Int64) Chunks() []ref.Ref {
 	return nil
 }
 
-func Int64FromVal(v Value) Int64 {
-	return v.(Int64)
-}
-
 func (v Int64) ToPrimitive() interface{} {
 	return int64(v)
 }
@@ -159,10 +139,6 @@ func (v UInt8) Ref() ref.Ref {
 
 func (v UInt8) Chunks() []ref.Ref {
 	return nil
-}
-
-func UInt8FromVal(v Value) UInt8 {
-	return v.(UInt8)
 }
 
 func (v UInt8) ToPrimitive() interface{} {
@@ -189,10 +165,6 @@ func (v UInt16) Chunks() []ref.Ref {
 	return nil
 }
 
-func UInt16FromVal(v Value) UInt16 {
-	return v.(UInt16)
-}
-
 func (v UInt16) ToPrimitive() interface{} {
 	return uint16(v)
 }
@@ -215,10 +187,6 @@ func (v UInt32) Ref() ref.Ref {
 
 func (v UInt32) Chunks() []ref.Ref {
 	return nil
-}
-
-func UInt32FromVal(v Value) UInt32 {
-	return v.(UInt32)
 }
 
 func (v UInt32) ToPrimitive() interface{} {
@@ -245,10 +213,6 @@ func (v UInt64) Chunks() []ref.Ref {
 	return nil
 }
 
-func UInt64FromVal(v Value) UInt64 {
-	return v.(UInt64)
-}
-
 func (v UInt64) ToPrimitive() interface{} {
 	return uint64(v)
 }
@@ -273,10 +237,6 @@ func (v Float32) Chunks() []ref.Ref {
 	return nil
 }
 
-func Float32FromVal(v Value) Float32 {
-	return v.(Float32)
-}
-
 func (v Float32) ToPrimitive() interface{} {
 	return float32(v)
 }
@@ -299,10 +259,6 @@ func (v Float64) Ref() ref.Ref {
 
 func (v Float64) Chunks() []ref.Ref {
 	return nil
-}
-
-func Float64FromVal(v Value) Float64 {
-	return v.(Float64)
 }
 
 func (v Float64) ToPrimitive() interface{} {

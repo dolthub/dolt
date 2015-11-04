@@ -40,14 +40,6 @@ func (s SetOfRefOfPackage) Def() SetOfRefOfPackageDef {
 	return def
 }
 
-func SetOfRefOfPackageFromVal(val Value) SetOfRefOfPackage {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(SetOfRefOfPackage); ok {
-		return val
-	}
-	return SetOfRefOfPackage{val.(Set), &ref.Ref{}}
-}
-
 func (s SetOfRefOfPackage) InternalImplementation() Set {
 	return s.s
 }
@@ -76,7 +68,8 @@ func (m SetOfRefOfPackage) TypeRef() TypeRef {
 func init() {
 	__typeRefForSetOfRefOfPackage = MakeCompoundTypeRef(SetKind, MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(PackageKind)))
 	RegisterFromValFunction(__typeRefForSetOfRefOfPackage, func(v Value) Value {
-		return SetOfRefOfPackageFromVal(v)
+		return SetOfRefOfPackage{v.(Set), &ref.Ref{}}
+
 	})
 }
 
@@ -185,14 +178,6 @@ func (r RefOfPackage) Chunks() (chunks []ref.Ref) {
 	return
 }
 
-func RefOfPackageFromVal(val Value) RefOfPackage {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(RefOfPackage); ok {
-		return val
-	}
-	return NewRefOfPackage(val.(Ref).TargetRef())
-}
-
 // A Noms Value that describes RefOfPackage.
 var __typeRefForRefOfPackage TypeRef
 
@@ -203,7 +188,7 @@ func (m RefOfPackage) TypeRef() TypeRef {
 func init() {
 	__typeRefForRefOfPackage = MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(PackageKind))
 	RegisterFromValFunction(__typeRefForRefOfPackage, func(v Value) Value {
-		return RefOfPackageFromVal(v)
+		return NewRefOfPackage(v.(Ref).TargetRef())
 	})
 }
 

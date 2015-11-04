@@ -168,15 +168,6 @@ func (m MapOfStringToRefOfCommit) Def() MapOfStringToRefOfCommitDef {
 	return def
 }
 
-func MapOfStringToRefOfCommitFromVal(val types.Value) MapOfStringToRefOfCommit {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(MapOfStringToRefOfCommit); ok {
-		return val
-	}
-	// TODO: Validate here
-	return MapOfStringToRefOfCommit{val.(types.Map), &ref.Ref{}}
-}
-
 func (m MapOfStringToRefOfCommit) InternalImplementation() types.Map {
 	return m.m
 }
@@ -205,7 +196,7 @@ func (m MapOfStringToRefOfCommit) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForMapOfStringToRefOfCommit = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)))
 	types.RegisterFromValFunction(__typeRefForMapOfStringToRefOfCommit, func(v types.Value) types.Value {
-		return MapOfStringToRefOfCommitFromVal(v)
+		return MapOfStringToRefOfCommit{v.(types.Map), &ref.Ref{}}
 	})
 }
 
@@ -303,14 +294,6 @@ func (s SetOfRefOfCommit) Def() SetOfRefOfCommitDef {
 	return def
 }
 
-func SetOfRefOfCommitFromVal(val types.Value) SetOfRefOfCommit {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(SetOfRefOfCommit); ok {
-		return val
-	}
-	return SetOfRefOfCommit{val.(types.Set), &ref.Ref{}}
-}
-
 func (s SetOfRefOfCommit) InternalImplementation() types.Set {
 	return s.s
 }
@@ -339,7 +322,7 @@ func (m SetOfRefOfCommit) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForSetOfRefOfCommit = types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)))
 	types.RegisterFromValFunction(__typeRefForSetOfRefOfCommit, func(v types.Value) types.Value {
-		return SetOfRefOfCommitFromVal(v)
+		return SetOfRefOfCommit{v.(types.Set), &ref.Ref{}}
 	})
 }
 
@@ -448,14 +431,6 @@ func (r RefOfCommit) Chunks() (chunks []ref.Ref) {
 	return
 }
 
-func RefOfCommitFromVal(val types.Value) RefOfCommit {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(RefOfCommit); ok {
-		return val
-	}
-	return NewRefOfCommit(val.(types.Ref).TargetRef())
-}
-
 // A Noms Value that describes RefOfCommit.
 var __typeRefForRefOfCommit types.TypeRef
 
@@ -466,7 +441,7 @@ func (m RefOfCommit) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForRefOfCommit = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForRefOfCommit, func(v types.Value) types.Value {
-		return RefOfCommitFromVal(v)
+		return NewRefOfCommit(v.(types.Ref).TargetRef())
 	})
 }
 

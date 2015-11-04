@@ -67,8 +67,7 @@ func main() {
 	pkgDS := dataset.NewDataset(ds, *pkgDSFlag)
 	// Ensure that, if pkgDS has stuff in it, its head is a SetOfRefOfPackage.
 	if h, ok := pkgDS.MaybeHead(); ok {
-		// Will panic on failure. Can do better once generated collections implement types.Value.
-		types.SetOfRefOfPackageFromVal(h.Value())
+		d.Chk.IsType(types.SetOfRefOfPackage{}, h.Value())
 	}
 
 	localPkgs := refSet{}
@@ -162,7 +161,7 @@ func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) ty
 	// Can do better once generated collections implement types.Value.
 	s := types.NewSetOfRefOfPackage()
 	if h, ok := ds.MaybeHead(); ok {
-		s = types.SetOfRefOfPackageFromVal(h.Value())
+		s = h.Value().(types.SetOfRefOfPackage)
 	}
 	for _, dep := range deps {
 		// Writing the deps into ds should be redundant at this point, but do it to be sure.

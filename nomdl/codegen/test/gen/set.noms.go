@@ -39,14 +39,6 @@ func (s SetOfBool) Def() SetOfBoolDef {
 	return def
 }
 
-func SetOfBoolFromVal(val types.Value) SetOfBool {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(SetOfBool); ok {
-		return val
-	}
-	return SetOfBool{val.(types.Set), &ref.Ref{}}
-}
-
 func (s SetOfBool) InternalImplementation() types.Set {
 	return s.s
 }
@@ -75,7 +67,7 @@ func (m SetOfBool) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForSetOfBool = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.BoolKind))
 	types.RegisterFromValFunction(__typeRefForSetOfBool, func(v types.Value) types.Value {
-		return SetOfBoolFromVal(v)
+		return SetOfBool{v.(types.Set), &ref.Ref{}}
 	})
 }
 

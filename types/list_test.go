@@ -197,7 +197,7 @@ func TestListMap(t *testing.T) {
 			for getCur() < expectConcurreny {
 			}
 
-			i := Int64FromVal(v)
+			i := v.(Int64)
 			assert.Equal(uint64(i), index, "%d == %d", i, index)
 			return int64(i * i)
 		}
@@ -309,7 +309,7 @@ func TestListIterAllP(t *testing.T) {
 			for getCur() < expectConcurreny {
 			}
 
-			i := Int64FromVal(v)
+			i := v.(Int64)
 			visited[index] = true
 			assert.Equal(uint64(i), index, "%d == %d", i, index)
 		}

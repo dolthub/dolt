@@ -339,15 +339,6 @@ func (l ListOfRefOfIncident) Def() ListOfRefOfIncidentDef {
 	return d
 }
 
-func ListOfRefOfIncidentFromVal(val types.Value) ListOfRefOfIncident {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ListOfRefOfIncident); ok {
-		return val
-	}
-	// TODO: Validate here
-	return ListOfRefOfIncident{val.(types.List), &ref.Ref{}}
-}
-
 func (l ListOfRefOfIncident) InternalImplementation() types.List {
 	return l.l
 }
@@ -376,7 +367,7 @@ func (m ListOfRefOfIncident) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForListOfRefOfIncident = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__commonPackageInFile_incident_CachedRef, 0)))
 	types.RegisterFromValFunction(__typeRefForListOfRefOfIncident, func(v types.Value) types.Value {
-		return ListOfRefOfIncidentFromVal(v)
+		return ListOfRefOfIncident{v.(types.List), &ref.Ref{}}
 	})
 }
 
@@ -481,14 +472,6 @@ func (r RefOfIncident) Chunks() (chunks []ref.Ref) {
 	return
 }
 
-func RefOfIncidentFromVal(val types.Value) RefOfIncident {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(RefOfIncident); ok {
-		return val
-	}
-	return NewRefOfIncident(val.(types.Ref).TargetRef())
-}
-
 // A Noms Value that describes RefOfIncident.
 var __typeRefForRefOfIncident types.TypeRef
 
@@ -499,7 +482,7 @@ func (m RefOfIncident) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForRefOfIncident = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__commonPackageInFile_incident_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForRefOfIncident, func(v types.Value) types.Value {
-		return RefOfIncidentFromVal(v)
+		return NewRefOfIncident(v.(types.Ref).TargetRef())
 	})
 }
 

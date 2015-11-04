@@ -103,7 +103,7 @@ func searchWithList(gp common.GeopositionDef, ds datas.DataStore) []common.Incid
 		log.Fatalf("Value for %s argument is an empty list\n", argName)
 	}
 	results := []common.Incident{}
-	incidentList := common.ListOfRefOfValueFromVal(val)
+	incidentList := val.(common.ListOfRefOfValue)
 	t0 := time.Now()
 	for i := uint64(0); i < incidentList.Len(); i++ {
 		if i%uint64(10000) == 0 {

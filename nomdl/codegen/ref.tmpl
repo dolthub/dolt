@@ -29,15 +29,19 @@ func (r {{.Name}}) Chunks() (chunks []ref.Ref) {
 	return
 }
 
-func {{.Name}}FromVal(val {{$typesPackage}}Value) {{.Name}} {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.({{.Name}}); ok {
-		return val
-	}
-	return New{{.Name}}(val.({{$typesPackage}}Ref).TargetRef())
+// A Noms Value that describes {{.Name}}.
+var __typeRefFor{{.Name}} {{$typesPackage}}TypeRef
+
+func (m {{.Name}}) TypeRef() {{$typesPackage}}TypeRef {
+	return __typeRefFor{{.Name}}
 }
 
-{{template "type_ref.tmpl" .}}
+func init() {
+	__typeRefFor{{.Name}} = {{toTypesTypeRef .Type .FileID .PackageName}}
+	{{$typesPackage}}RegisterFromValFunction(__typeRefFor{{.Name}}, func(v {{$typesPackage}}Value) {{$typesPackage}}Value {
+		return New{{.Name}}(v.({{$typesPackage}}Ref).TargetRef())
+	})
+}
 
 func (r {{.Name}}) TargetValue(cs chunks.ChunkSource) {{userType .ElemType}} {
 	return {{valueToUser (printf "%sReadValue(r.target, cs)" $typesPackage) .ElemType}}

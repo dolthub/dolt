@@ -166,15 +166,6 @@ func (l ListOfUInt64) Def() ListOfUInt64Def {
 	return d
 }
 
-func ListOfUInt64FromVal(val Value) ListOfUInt64 {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ListOfUInt64); ok {
-		return val
-	}
-	// TODO: Validate here
-	return ListOfUInt64{val.(List), &ref.Ref{}}
-}
-
 func (l ListOfUInt64) InternalImplementation() List {
 	return l.l
 }
@@ -203,7 +194,7 @@ func (m ListOfUInt64) TypeRef() TypeRef {
 func init() {
 	__typeRefForListOfUInt64 = MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(UInt64Kind))
 	RegisterFromValFunction(__typeRefForListOfUInt64, func(v Value) Value {
-		return ListOfUInt64FromVal(v)
+		return ListOfUInt64{v.(List), &ref.Ref{}}
 	})
 }
 
@@ -308,15 +299,6 @@ func (l ListOfRefOfBlob) Def() ListOfRefOfBlobDef {
 	return d
 }
 
-func ListOfRefOfBlobFromVal(val Value) ListOfRefOfBlob {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ListOfRefOfBlob); ok {
-		return val
-	}
-	// TODO: Validate here
-	return ListOfRefOfBlob{val.(List), &ref.Ref{}}
-}
-
 func (l ListOfRefOfBlob) InternalImplementation() List {
 	return l.l
 }
@@ -345,7 +327,7 @@ func (m ListOfRefOfBlob) TypeRef() TypeRef {
 func init() {
 	__typeRefForListOfRefOfBlob = MakeCompoundTypeRef(ListKind, MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(BlobKind)))
 	RegisterFromValFunction(__typeRefForListOfRefOfBlob, func(v Value) Value {
-		return ListOfRefOfBlobFromVal(v)
+		return ListOfRefOfBlob{v.(List), &ref.Ref{}}
 	})
 }
 
@@ -450,14 +432,6 @@ func (r RefOfBlob) Chunks() (chunks []ref.Ref) {
 	return
 }
 
-func RefOfBlobFromVal(val Value) RefOfBlob {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(RefOfBlob); ok {
-		return val
-	}
-	return NewRefOfBlob(val.(Ref).TargetRef())
-}
-
 // A Noms Value that describes RefOfBlob.
 var __typeRefForRefOfBlob TypeRef
 
@@ -468,7 +442,7 @@ func (m RefOfBlob) TypeRef() TypeRef {
 func init() {
 	__typeRefForRefOfBlob = MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(BlobKind))
 	RegisterFromValFunction(__typeRefForRefOfBlob, func(v Value) Value {
-		return RefOfBlobFromVal(v)
+		return NewRefOfBlob(v.(Ref).TargetRef())
 	})
 }
 

@@ -31,15 +31,6 @@ func New{{.Name}}() {{.Name}} {
 	}
 {{end}}
 
-func {{.Name}}FromVal(val {{$typesPackage}}Value) {{.Name}} {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.({{.Name}}); ok {
-		return val
-	}
-	// TODO: Validate here
-	return {{.Name}}{val.({{$typesPackage}}List), &ref.Ref{}}
-}
-
 func (l {{.Name}}) InternalImplementation() {{$typesPackage}}List {
 	return l.l
 }
@@ -58,7 +49,20 @@ func (l {{.Name}}) Chunks() (chunks []ref.Ref) {
 	return
 }
 
-{{template "type_ref.tmpl" .}}
+// A Noms Value that describes {{.Name}}.
+var __typeRefFor{{.Name}} {{$typesPackage}}TypeRef
+
+func (m {{.Name}}) TypeRef() {{$typesPackage}}TypeRef {
+	return __typeRefFor{{.Name}}
+}
+
+func init() {
+	__typeRefFor{{.Name}} = {{toTypesTypeRef .Type .FileID .PackageName}}
+	{{$typesPackage}}RegisterFromValFunction(__typeRefFor{{.Name}}, func(v {{$typesPackage}}Value) {{$typesPackage}}Value {
+		return {{.Name}}{v.({{$typesPackage}}List), &ref.Ref{}}
+	})
+}
+
 
 func (l {{.Name}}) Len() uint64 {
 	return l.l.Len()

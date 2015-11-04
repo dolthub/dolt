@@ -43,10 +43,9 @@ func processPitches(v types.Value) (pitches []Pitch) {
 		for i := uint64(0); i < v.Len(); i++ {
 			pitches = append(pitches, processPitches(v.Get(i))...)
 		}
-	case types.Map:
-		m := MapOfStringToStringFromVal(v)
-		if checkPitch(m) {
-			pitches = append(pitches, getPitch(m))
+	case MapOfStringToString:
+		if checkPitch(v) {
+			pitches = append(pitches, getPitch(v))
 		}
 	case nil:
 		return // Yes, an at-bat can end with no pitches thrown.
@@ -67,11 +66,11 @@ func processInning(m MapOfStringToValue) map[string][]Pitch {
 	}
 
 	halves := []MapOfStringToValue{
-		MapOfStringToValueFromVal(top),
+		top.(MapOfStringToValue),
 	}
 
 	if bot := m.Get("bottom"); bot != nil {
-		halves = append(halves, MapOfStringToValueFromVal(bot))
+		halves = append(halves, bot.(MapOfStringToValue))
 	}
 
 	addPitch := func(ab MapOfStringToValue) {
@@ -82,16 +81,15 @@ func processInning(m MapOfStringToValue) map[string][]Pitch {
 
 	for _, half := range halves {
 		atbat := half.Get("atbat")
-		switch atbat.(type) {
-		case types.List:
-			abs := ListOfMapOfStringToValueFromVal(atbat)
-			for i := uint64(0); i < abs.Len(); i++ {
-				ab := abs.Get(i)
+		switch atbat := atbat.(type) {
+		case ListOfMapOfStringToValue:
+			for i := uint64(0); i < atbat.Len(); i++ {
+				ab := atbat.Get(i)
 				addPitch(ab)
 			}
-		case types.Map:
+		case MapOfStringToValue:
 			// Apparently, if there's only one, it's encoded directly as a singleton. Yay, data!
-			addPitch(MapOfStringToValueFromVal(atbat))
+			addPitch(atbat)
 		default:
 		}
 	}
@@ -105,14 +103,14 @@ func getIndex(input types.List) MapOfStringToListOfPitch {
 	// Walk through the list in inputDataset and basically switch
 	// on the top-level key to know if it's an inning or a pitcher.
 	innings := input.MapP(512, func(item types.Value, i uint64) interface{} {
-		m := MapOfStringToValueFromVal(item)
+		m := item.(MapOfStringToValue)
 
 		if key := "inning"; m.Has(key) {
-			return processInning(MapOfStringToValueFromVal(m.Get(key)))
+			return processInning(m.Get(key).(MapOfStringToValue))
 		}
 
 		if key := "Player"; m.Has(key) {
-			id, name := processPitcher(MapOfStringToStringFromVal(m.Get(key)))
+			id, name := processPitcher(m.Get(key).(MapOfStringToString))
 			if id != "" && name != "" {
 				mu.Lock()
 				pitchers = pitchers.Set(id, name)
@@ -170,7 +168,7 @@ func main() {
 		inputDataset := dataset.NewDataset(ds, *inputID)
 		outputDataset := dataset.NewDataset(ds, *outputID)
 
-		input := types.ListFromVal(inputDataset.Head().Value())
+		input := inputDataset.Head().Value().(types.List)
 		output := getIndex(input)
 
 		_, ok := outputDataset.Commit(output)

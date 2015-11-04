@@ -173,7 +173,3 @@ func indexSetData(m setData, r ref.Ref) int {
 		return !ref.Less(m[i].Ref(), r)
 	})
 }
-
-func SetFromVal(v Value) Set {
-	return v.(Set)
-}

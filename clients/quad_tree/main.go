@@ -70,7 +70,7 @@ func main() {
 	go func() {
 		list.IterAllP(64, func(v types.Value, i uint64) {
 			// Need to replace incident with generic type
-			r := common.RefOfValueFromVal(v)
+			r := v.(common.RefOfValue)
 			incident := r.TargetValue(datastore).(common.Incident)
 			nodeDef := &common.NodeDef{Geoposition: incident.Geoposition().Def(), Reference: r.TargetRef()}
 			nChan <- nodeDef

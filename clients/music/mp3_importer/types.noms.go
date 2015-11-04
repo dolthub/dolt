@@ -222,15 +222,6 @@ func (l ListOfSong) Def() ListOfSongDef {
 	return d
 }
 
-func ListOfSongFromVal(val types.Value) ListOfSong {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ListOfSong); ok {
-		return val
-	}
-	// TODO: Validate here
-	return ListOfSong{val.(types.List), &ref.Ref{}}
-}
-
 func (l ListOfSong) InternalImplementation() types.List {
 	return l.l
 }
@@ -259,7 +250,7 @@ func (m ListOfSong) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForListOfSong = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfSong, func(v types.Value) types.Value {
-		return ListOfSongFromVal(v)
+		return ListOfSong{v.(types.List), &ref.Ref{}}
 	})
 }
 

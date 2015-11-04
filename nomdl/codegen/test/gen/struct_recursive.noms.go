@@ -146,15 +146,6 @@ func (l ListOfTree) Def() ListOfTreeDef {
 	return d
 }
 
-func ListOfTreeFromVal(val types.Value) ListOfTree {
-	// TODO: Do we still need FromVal?
-	if val, ok := val.(ListOfTree); ok {
-		return val
-	}
-	// TODO: Validate here
-	return ListOfTree{val.(types.List), &ref.Ref{}}
-}
-
 func (l ListOfTree) InternalImplementation() types.List {
 	return l.l
 }
@@ -183,7 +174,7 @@ func (m ListOfTree) TypeRef() types.TypeRef {
 func init() {
 	__typeRefForListOfTree = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__genPackageInFile_struct_recursive_CachedRef, 0))
 	types.RegisterFromValFunction(__typeRefForListOfTree, func(v types.Value) types.Value {
-		return ListOfTreeFromVal(v)
+		return ListOfTree{v.(types.List), &ref.Ref{}}
 	})
 }
 
