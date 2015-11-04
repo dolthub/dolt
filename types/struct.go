@@ -31,8 +31,7 @@ func NewStruct(typeRef, typeDef TypeRef, data structData) Struct {
 
 	desc := typeDef.Desc.(StructDesc)
 	for _, f := range desc.Fields {
-		v, ok := data[f.Name]
-		if ok {
+		if v, ok := data[f.Name]; ok {
 			newData[f.Name] = v
 		} else {
 			d.Chk.True(f.Optional, "Missing required field %s", f.Name)
