@@ -57,7 +57,6 @@ func (s Tree) Def() (d TreeDef) {
 }
 
 var __typeRefForTree types.TypeRef
-var __typeDefForTree types.TypeRef
 
 func (m Tree) TypeRef() types.TypeRef {
 	return __typeRefForTree
@@ -65,30 +64,24 @@ func (m Tree) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForTree = types.MakeTypeRef(__genPackageInFile_struct_recursive_CachedRef, 0)
-	__typeDefForTree = types.MakeStructTypeRef("Tree",
-		[]types.Field{
-			types.Field{"children", types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__genPackageInFile_struct_recursive_CachedRef, 0)), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForTree, builderForTree)
-}
-
-func (s Tree) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"children": s._children,
-	}
-	return types.NewStruct(__typeRefForTree, __typeDefForTree, m)
+	types.RegisterStruct(__typeRefForTree, builderForTree, readerForTree)
 }
 
 func builderForTree() chan types.Value {
 	c := make(chan types.Value)
-	s := Tree{ref: &ref.Ref{}}
 	go func() {
+		s := Tree{ref: &ref.Ref{}}
 		s._children = (<-c).(ListOfTree)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForTree(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(Tree)
+		c <- s._children
 	}()
 	return c
 }

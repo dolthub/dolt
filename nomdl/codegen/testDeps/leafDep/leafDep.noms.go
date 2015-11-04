@@ -64,7 +64,6 @@ func (s S) Def() (d SDef) {
 }
 
 var __typeRefForS types.TypeRef
-var __typeDefForS types.TypeRef
 
 func (m S) TypeRef() types.TypeRef {
 	return __typeRefForS
@@ -72,33 +71,26 @@ func (m S) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForS = types.MakeTypeRef(__leafDepPackageInFile_leafDep_CachedRef, 0)
-	__typeDefForS = types.MakeStructTypeRef("S",
-		[]types.Field{
-			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForS, builderForS)
-}
-
-func (s S) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"s": types.NewString(s._s),
-		"b": types.Bool(s._b),
-	}
-	return types.NewStruct(__typeRefForS, __typeDefForS, m)
+	types.RegisterStruct(__typeRefForS, builderForS, readerForS)
 }
 
 func builderForS() chan types.Value {
 	c := make(chan types.Value)
-	s := S{ref: &ref.Ref{}}
 	go func() {
+		s := S{ref: &ref.Ref{}}
 		s._s = (<-c).(types.String).String()
 		s._b = bool((<-c).(types.Bool))
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForS(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(S)
+		c <- types.NewString(s._s)
+		c <- types.Bool(s._b)
 	}()
 	return c
 }

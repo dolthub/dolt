@@ -146,10 +146,6 @@ type setImplementation interface {
 	InternalImplementation() Set
 }
 
-type structImplementation interface {
-	InternalImplementation() Struct
-}
-
 func getEnumFromEnumKind(v Value) uint32 {
 	return v.(enumImplementation).InternalImplementation()
 }
@@ -177,13 +173,6 @@ func getSetFromSetKind(v Value) Set {
 		return v
 	}
 	return v.(setImplementation).InternalImplementation()
-}
-
-func getStructFromStructKind(v Value) Struct {
-	if v, ok := v.(Struct); ok {
-		return v
-	}
-	return v.(structImplementation).InternalImplementation()
 }
 
 func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
@@ -256,7 +245,7 @@ func (w *jsonArrayWriter) writeUnresolvedKindValue(v Value, tr TypeRef, pkg *Pac
 	case EnumKind:
 		w.write(getEnumFromEnumKind(v))
 	case StructKind:
-		w.writeStruct(getStructFromStructKind(v), typeDef, pkg)
+		w.writeStruct(v, tr, typeDef, pkg)
 	}
 }
 
@@ -270,24 +259,27 @@ func (w *jsonArrayWriter) writeBlob(b Blob) {
 	w.write(buf.String())
 }
 
-func (w *jsonArrayWriter) writeStruct(s Struct, t TypeRef, pkg *Package) {
-	desc := t.Desc.(StructDesc)
+func (w *jsonArrayWriter) writeStruct(v Value, typeRef, typeDef TypeRef, pkg *Package) {
+	typeRef = fixupTypeRef(typeRef, pkg)
+	typeDef = fixupTypeRef(typeDef, pkg)
+
+	c := structReaderForTypeRef(v, typeRef, typeDef)
+	desc := typeDef.Desc.(StructDesc)
+
 	for _, f := range desc.Fields {
-		v, ok := s.data[f.Name]
 		if f.Optional {
+			ok := bool((<-c).(Bool))
+			w.write(ok)
 			if ok {
-				w.write(true)
-				w.writeValue(v, f.T, pkg)
-			} else {
-				w.write(false)
+				w.writeValue(<-c, f.T, pkg)
 			}
 		} else {
-			d.Chk.True(ok)
-			w.writeValue(v, f.T, pkg)
+			w.writeValue(<-c, f.T, pkg)
 		}
 	}
 	if len(desc.Union) > 0 {
-		w.write(s.unionIndex)
-		w.writeValue(s.unionValue, desc.Union[s.unionIndex].T, pkg)
+		unionIndex := uint32((<-c).(UInt32))
+		w.write(unionIndex)
+		w.writeValue(<-c, desc.Union[unionIndex].T, pkg)
 	}
 }

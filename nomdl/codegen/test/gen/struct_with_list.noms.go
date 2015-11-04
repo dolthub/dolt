@@ -75,7 +75,6 @@ func (s StructWithList) Def() (d StructWithListDef) {
 }
 
 var __typeRefForStructWithList types.TypeRef
-var __typeDefForStructWithList types.TypeRef
 
 func (m StructWithList) TypeRef() types.TypeRef {
 	return __typeRefForStructWithList
@@ -83,39 +82,30 @@ func (m StructWithList) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForStructWithList = types.MakeTypeRef(__genPackageInFile_struct_with_list_CachedRef, 0)
-	__typeDefForStructWithList = types.MakeStructTypeRef("StructWithList",
-		[]types.Field{
-			types.Field{"l", types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
-			types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
-			types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"i", types.MakePrimitiveTypeRef(types.Int64Kind), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForStructWithList, builderForStructWithList)
-}
-
-func (s StructWithList) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"l": s._l,
-		"b": types.Bool(s._b),
-		"s": types.NewString(s._s),
-		"i": types.Int64(s._i),
-	}
-	return types.NewStruct(__typeRefForStructWithList, __typeDefForStructWithList, m)
+	types.RegisterStruct(__typeRefForStructWithList, builderForStructWithList, readerForStructWithList)
 }
 
 func builderForStructWithList() chan types.Value {
 	c := make(chan types.Value)
-	s := StructWithList{ref: &ref.Ref{}}
 	go func() {
+		s := StructWithList{ref: &ref.Ref{}}
 		s._l = (<-c).(ListOfUInt8)
 		s._b = bool((<-c).(types.Bool))
 		s._s = (<-c).(types.String).String()
 		s._i = int64((<-c).(types.Int64))
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForStructWithList(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(StructWithList)
+		c <- s._l
+		c <- types.Bool(s._b)
+		c <- types.NewString(s._s)
+		c <- types.Int64(s._i)
 	}()
 	return c
 }

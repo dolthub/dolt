@@ -63,7 +63,6 @@ func (s compoundBlobStruct) Def() (d compoundBlobStructDef) {
 }
 
 var __typeRefForcompoundBlobStruct TypeRef
-var __typeDefForcompoundBlobStruct TypeRef
 
 func (m compoundBlobStruct) TypeRef() TypeRef {
 	return __typeRefForcompoundBlobStruct
@@ -71,33 +70,26 @@ func (m compoundBlobStruct) TypeRef() TypeRef {
 
 func init() {
 	__typeRefForcompoundBlobStruct = MakeTypeRef(__typesPackageInFile_compound_blob_struct_CachedRef, 0)
-	__typeDefForcompoundBlobStruct = MakeStructTypeRef("compoundBlobStruct",
-		[]Field{
-			Field{"Offsets", MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(UInt64Kind)), false},
-			Field{"Blobs", MakeCompoundTypeRef(ListKind, MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(BlobKind))), false},
-		},
-		Choices{},
-	)
-	RegisterStructBuilder(__typeRefForcompoundBlobStruct, builderForcompoundBlobStruct)
-}
-
-func (s compoundBlobStruct) InternalImplementation() Struct {
-	// TODO: Remove this
-	m := map[string]Value{
-		"Offsets": s._Offsets,
-		"Blobs":   s._Blobs,
-	}
-	return NewStruct(__typeRefForcompoundBlobStruct, __typeDefForcompoundBlobStruct, m)
+	RegisterStruct(__typeRefForcompoundBlobStruct, builderForcompoundBlobStruct, readerForcompoundBlobStruct)
 }
 
 func builderForcompoundBlobStruct() chan Value {
 	c := make(chan Value)
-	s := compoundBlobStruct{ref: &ref.Ref{}}
 	go func() {
+		s := compoundBlobStruct{ref: &ref.Ref{}}
 		s._Offsets = (<-c).(ListOfUInt64)
 		s._Blobs = (<-c).(ListOfRefOfBlob)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForcompoundBlobStruct(v Value) chan Value {
+	c := make(chan Value)
+	go func() {
+		s := v.(compoundBlobStruct)
+		c <- s._Offsets
+		c <- s._Blobs
 	}()
 	return c
 }

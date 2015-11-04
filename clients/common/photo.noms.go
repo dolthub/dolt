@@ -96,7 +96,6 @@ func (s RemotePhoto) Def() (d RemotePhotoDef) {
 }
 
 var __typeRefForRemotePhoto types.TypeRef
-var __typeDefForRemotePhoto types.TypeRef
 
 func (m RemotePhoto) TypeRef() types.TypeRef {
 	return __typeRefForRemotePhoto
@@ -104,45 +103,34 @@ func (m RemotePhoto) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForRemotePhoto = types.MakeTypeRef(__commonPackageInFile_photo_CachedRef, 0)
-	__typeDefForRemotePhoto = types.MakeStructTypeRef("RemotePhoto",
-		[]types.Field{
-			types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Url", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
-			types.Field{"Sizes", types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(__commonPackageInFile_photo_CachedRef, 1), types.MakePrimitiveTypeRef(types.StringKind)), false},
-			types.Field{"Tags", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind)), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForRemotePhoto, builderForRemotePhoto)
-}
-
-func (s RemotePhoto) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"Id":          types.NewString(s._Id),
-		"Title":       types.NewString(s._Title),
-		"Url":         types.NewString(s._Url),
-		"Geoposition": s._Geoposition,
-		"Sizes":       s._Sizes,
-		"Tags":        s._Tags,
-	}
-	return types.NewStruct(__typeRefForRemotePhoto, __typeDefForRemotePhoto, m)
+	types.RegisterStruct(__typeRefForRemotePhoto, builderForRemotePhoto, readerForRemotePhoto)
 }
 
 func builderForRemotePhoto() chan types.Value {
 	c := make(chan types.Value)
-	s := RemotePhoto{ref: &ref.Ref{}}
 	go func() {
+		s := RemotePhoto{ref: &ref.Ref{}}
 		s._Id = (<-c).(types.String).String()
 		s._Title = (<-c).(types.String).String()
 		s._Url = (<-c).(types.String).String()
 		s._Geoposition = (<-c).(Geoposition)
 		s._Sizes = (<-c).(MapOfSizeToString)
 		s._Tags = (<-c).(SetOfString)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForRemotePhoto(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(RemotePhoto)
+		c <- types.NewString(s._Id)
+		c <- types.NewString(s._Title)
+		c <- types.NewString(s._Url)
+		c <- s._Geoposition
+		c <- s._Sizes
+		c <- s._Tags
 	}()
 	return c
 }
@@ -261,7 +249,6 @@ func (s Size) Def() (d SizeDef) {
 }
 
 var __typeRefForSize types.TypeRef
-var __typeDefForSize types.TypeRef
 
 func (m Size) TypeRef() types.TypeRef {
 	return __typeRefForSize
@@ -269,33 +256,26 @@ func (m Size) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSize = types.MakeTypeRef(__commonPackageInFile_photo_CachedRef, 1)
-	__typeDefForSize = types.MakeStructTypeRef("Size",
-		[]types.Field{
-			types.Field{"Width", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-			types.Field{"Height", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForSize, builderForSize)
-}
-
-func (s Size) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"Width":  types.UInt32(s._Width),
-		"Height": types.UInt32(s._Height),
-	}
-	return types.NewStruct(__typeRefForSize, __typeDefForSize, m)
+	types.RegisterStruct(__typeRefForSize, builderForSize, readerForSize)
 }
 
 func builderForSize() chan types.Value {
 	c := make(chan types.Value)
-	s := Size{ref: &ref.Ref{}}
 	go func() {
+		s := Size{ref: &ref.Ref{}}
 		s._Width = uint32((<-c).(types.UInt32))
 		s._Height = uint32((<-c).(types.UInt32))
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForSize(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(Size)
+		c <- types.UInt32(s._Width)
+		c <- types.UInt32(s._Height)
 	}()
 	return c
 }

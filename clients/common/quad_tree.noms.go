@@ -88,7 +88,6 @@ func (s Node) Def() (d NodeDef) {
 }
 
 var __typeRefForNode types.TypeRef
-var __typeDefForNode types.TypeRef
 
 func (m Node) TypeRef() types.TypeRef {
 	return __typeRefForNode
@@ -96,33 +95,26 @@ func (m Node) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForNode = types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 0)
-	__typeDefForNode = types.MakeStructTypeRef("Node",
-		[]types.Field{
-			types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
-			types.Field{"Reference", types.MakeCompoundTypeRef(types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind)), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForNode, builderForNode)
-}
-
-func (s Node) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"Geoposition": s._Geoposition,
-		"Reference":   s._Reference,
-	}
-	return types.NewStruct(__typeRefForNode, __typeDefForNode, m)
+	types.RegisterStruct(__typeRefForNode, builderForNode, readerForNode)
 }
 
 func builderForNode() chan types.Value {
 	c := make(chan types.Value)
-	s := Node{ref: &ref.Ref{}}
 	go func() {
+		s := Node{ref: &ref.Ref{}}
 		s._Geoposition = (<-c).(Geoposition)
 		s._Reference = (<-c).(RefOfValue)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForNode(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(Node)
+		c <- s._Geoposition
+		c <- s._Reference
 	}()
 	return c
 }
@@ -220,7 +212,6 @@ func (s QuadTree) Def() (d QuadTreeDef) {
 }
 
 var __typeRefForQuadTree types.TypeRef
-var __typeDefForQuadTree types.TypeRef
 
 func (m QuadTree) TypeRef() types.TypeRef {
 	return __typeRefForQuadTree
@@ -228,45 +219,34 @@ func (m QuadTree) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForQuadTree = types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 1)
-	__typeDefForQuadTree = types.MakeStructTypeRef("QuadTree",
-		[]types.Field{
-			types.Field{"Nodes", types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 0)), false},
-			types.Field{"Tiles", types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 1)), false},
-			types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
-			types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-			types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Georectangle", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 1), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForQuadTree, builderForQuadTree)
-}
-
-func (s QuadTree) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"Nodes":          s._Nodes,
-		"Tiles":          s._Tiles,
-		"Depth":          types.UInt8(s._Depth),
-		"NumDescendents": types.UInt32(s._NumDescendents),
-		"Path":           types.NewString(s._Path),
-		"Georectangle":   s._Georectangle,
-	}
-	return types.NewStruct(__typeRefForQuadTree, __typeDefForQuadTree, m)
+	types.RegisterStruct(__typeRefForQuadTree, builderForQuadTree, readerForQuadTree)
 }
 
 func builderForQuadTree() chan types.Value {
 	c := make(chan types.Value)
-	s := QuadTree{ref: &ref.Ref{}}
 	go func() {
+		s := QuadTree{ref: &ref.Ref{}}
 		s._Nodes = (<-c).(ListOfNode)
 		s._Tiles = (<-c).(MapOfStringToQuadTree)
 		s._Depth = uint8((<-c).(types.UInt8))
 		s._NumDescendents = uint32((<-c).(types.UInt32))
 		s._Path = (<-c).(types.String).String()
 		s._Georectangle = (<-c).(Georectangle)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForQuadTree(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(QuadTree)
+		c <- s._Nodes
+		c <- s._Tiles
+		c <- types.UInt8(s._Depth)
+		c <- types.UInt32(s._NumDescendents)
+		c <- types.NewString(s._Path)
+		c <- s._Georectangle
 	}()
 	return c
 }
@@ -405,7 +385,6 @@ func (s SQuadTree) Def() (d SQuadTreeDef) {
 }
 
 var __typeRefForSQuadTree types.TypeRef
-var __typeDefForSQuadTree types.TypeRef
 
 func (m SQuadTree) TypeRef() types.TypeRef {
 	return __typeRefForSQuadTree
@@ -413,45 +392,34 @@ func (m SQuadTree) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSQuadTree = types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 2)
-	__typeDefForSQuadTree = types.MakeStructTypeRef("SQuadTree",
-		[]types.Field{
-			types.Field{"Nodes", types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))), false},
-			types.Field{"Tiles", types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 2))), false},
-			types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
-			types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-			types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"Georectangle", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 1), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForSQuadTree, builderForSQuadTree)
-}
-
-func (s SQuadTree) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"Nodes":          s._Nodes,
-		"Tiles":          s._Tiles,
-		"Depth":          types.UInt8(s._Depth),
-		"NumDescendents": types.UInt32(s._NumDescendents),
-		"Path":           types.NewString(s._Path),
-		"Georectangle":   s._Georectangle,
-	}
-	return types.NewStruct(__typeRefForSQuadTree, __typeDefForSQuadTree, m)
+	types.RegisterStruct(__typeRefForSQuadTree, builderForSQuadTree, readerForSQuadTree)
 }
 
 func builderForSQuadTree() chan types.Value {
 	c := make(chan types.Value)
-	s := SQuadTree{ref: &ref.Ref{}}
 	go func() {
+		s := SQuadTree{ref: &ref.Ref{}}
 		s._Nodes = (<-c).(ListOfRefOfValue)
 		s._Tiles = (<-c).(MapOfStringToRefOfSQuadTree)
 		s._Depth = uint8((<-c).(types.UInt8))
 		s._NumDescendents = uint32((<-c).(types.UInt32))
 		s._Path = (<-c).(types.String).String()
 		s._Georectangle = (<-c).(Georectangle)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForSQuadTree(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(SQuadTree)
+		c <- s._Nodes
+		c <- s._Tiles
+		c <- types.UInt8(s._Depth)
+		c <- types.UInt32(s._NumDescendents)
+		c <- types.NewString(s._Path)
+		c <- s._Georectangle
 	}()
 	return c
 }

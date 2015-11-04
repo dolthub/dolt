@@ -71,7 +71,6 @@ func (s StructWithUnionField) Def() (d StructWithUnionFieldDef) {
 }
 
 var __typeRefForStructWithUnionField types.TypeRef
-var __typeDefForStructWithUnionField types.TypeRef
 
 func (m StructWithUnionField) TypeRef() types.TypeRef {
 	return __typeRefForStructWithUnionField
@@ -79,38 +78,28 @@ func (m StructWithUnionField) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForStructWithUnionField = types.MakeTypeRef(__genPackageInFile_struct_with_union_field_CachedRef, 0)
-	__typeDefForStructWithUnionField = types.MakeStructTypeRef("StructWithUnionField",
-		[]types.Field{
-			types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-		},
-		types.Choices{
-			types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-			types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
-			types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
-			types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
-			types.Field{"f", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
-		},
-	)
-	types.RegisterStructBuilder(__typeRefForStructWithUnionField, builderForStructWithUnionField)
-}
-
-func (s StructWithUnionField) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"a": types.Float32(s._a),
-	}
-	m[__typeDefForStructWithUnionField.Desc.(types.StructDesc).Union[s.__unionIndex].Name] = s.__unionValue
-	return types.NewStruct(__typeRefForStructWithUnionField, __typeDefForStructWithUnionField, m)
+	types.RegisterStruct(__typeRefForStructWithUnionField, builderForStructWithUnionField, readerForStructWithUnionField)
 }
 
 func builderForStructWithUnionField() chan types.Value {
 	c := make(chan types.Value)
-	s := StructWithUnionField{ref: &ref.Ref{}}
 	go func() {
+		s := StructWithUnionField{ref: &ref.Ref{}}
 		s._a = float32((<-c).(types.Float32))
 		s.__unionIndex = uint32((<-c).(types.UInt32))
 		s.__unionValue = <-c
 		c <- s
+	}()
+	return c
+}
+
+func readerForStructWithUnionField(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(StructWithUnionField)
+		c <- types.Float32(s._a)
+		c <- types.UInt32(s.__unionIndex)
+		c <- s.__unionValue
 	}()
 	return c
 }

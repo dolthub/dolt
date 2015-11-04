@@ -7,13 +7,18 @@ import (
 )
 
 type structBuilderFunc func() chan Value
-
+type structReaderFunc func(v Value) chan Value
 type toNomsValueFunc func(v Value) Value
 
+type structFuncs struct {
+	builder structBuilderFunc
+	reader  structReaderFunc
+}
+
 var (
-	packages         map[ref.Ref]*Package          = map[ref.Ref]*Package{}
-	toNomsValueMap   map[ref.Ref]toNomsValueFunc   = map[ref.Ref]toNomsValueFunc{}
-	structBuilderMap map[ref.Ref]structBuilderFunc = map[ref.Ref]structBuilderFunc{}
+	packages       map[ref.Ref]*Package        = map[ref.Ref]*Package{}
+	toNomsValueMap map[ref.Ref]toNomsValueFunc = map[ref.Ref]toNomsValueFunc{}
+	structFuncMap  map[ref.Ref]structFuncs     = map[ref.Ref]structFuncs{}
 )
 
 // LookupPackage looks for a Package by ref.Ref in the global cache of Noms type packages.
@@ -46,13 +51,20 @@ func ToNomsValueFromTypeRef(t TypeRef, v Value) Value {
 	return v
 }
 
-func RegisterStructBuilder(t TypeRef, f structBuilderFunc) {
-	structBuilderMap[t.Ref()] = f
+func RegisterStruct(t TypeRef, bf structBuilderFunc, rf structReaderFunc) {
+	structFuncMap[t.Ref()] = structFuncs{bf, rf}
 }
 
 func structBuilderForTypeRef(typeRef, typeDef TypeRef) chan Value {
-	if f, ok := structBuilderMap[typeRef.Ref()]; ok {
-		return f()
+	if s, ok := structFuncMap[typeRef.Ref()]; ok {
+		return s.builder()
 	}
 	return structBuilder(typeRef, typeDef)
+}
+
+func structReaderForTypeRef(v Value, typeRef, typeDef TypeRef) chan Value {
+	if s, ok := structFuncMap[typeRef.Ref()]; ok {
+		return s.reader(v)
+	}
+	return structReader(v.(Struct), typeRef, typeDef)
 }

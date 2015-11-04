@@ -57,7 +57,6 @@ func (s StructWithDupList) Def() (d StructWithDupListDef) {
 }
 
 var __typeRefForStructWithDupList types.TypeRef
-var __typeDefForStructWithDupList types.TypeRef
 
 func (m StructWithDupList) TypeRef() types.TypeRef {
 	return __typeRefForStructWithDupList
@@ -65,30 +64,24 @@ func (m StructWithDupList) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForStructWithDupList = types.MakeTypeRef(__genPackageInFile_struct_with_dup_list_CachedRef, 0)
-	__typeDefForStructWithDupList = types.MakeStructTypeRef("StructWithDupList",
-		[]types.Field{
-			types.Field{"l", types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
-		},
-		types.Choices{},
-	)
-	types.RegisterStructBuilder(__typeRefForStructWithDupList, builderForStructWithDupList)
-}
-
-func (s StructWithDupList) InternalImplementation() types.Struct {
-	// TODO: Remove this
-	m := map[string]types.Value{
-		"l": s._l,
-	}
-	return types.NewStruct(__typeRefForStructWithDupList, __typeDefForStructWithDupList, m)
+	types.RegisterStruct(__typeRefForStructWithDupList, builderForStructWithDupList, readerForStructWithDupList)
 }
 
 func builderForStructWithDupList() chan types.Value {
 	c := make(chan types.Value)
-	s := StructWithDupList{ref: &ref.Ref{}}
 	go func() {
+		s := StructWithDupList{ref: &ref.Ref{}}
 		s._l = (<-c).(ListOfUInt8)
-
 		c <- s
+	}()
+	return c
+}
+
+func readerForStructWithDupList(v types.Value) chan types.Value {
+	c := make(chan types.Value)
+	go func() {
+		s := v.(StructWithDupList)
+		c <- s._l
 	}()
 	return c
 }
