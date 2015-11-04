@@ -182,19 +182,6 @@ suite('Decode', () => {
     assert.deepEqual({x: 42, s: 'hi', b: true, _typeRef: tr}, v);
   });
 
-  test('read value map of uint64 to uint32', async () => {
-    let ms = new MemoryStore();
-    let a = [Kind.Value, Kind.Map, Kind.UInt64, Kind.UInt32, [0, 1, 2, 3]];
-    let r = new JsonArrayReader(a, ms);
-    let v = await r.readTopLevelValue();
-
-    let m = new Map();
-    m.set(0, 1);
-    m.set(2, 3);
-
-    assertMapsEqual(m, v);
-  });
-
   test('test read map of string to struct', async () => {
     let ms = new MemoryStore();
     let tr = makeStructTypeRef('s', [
