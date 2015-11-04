@@ -39,10 +39,6 @@ func (s SetOfBool) Def() SetOfBoolDef {
 	return def
 }
 
-func (s SetOfBool) InternalImplementation() types.Set {
-	return s.s
-}
-
 func (s SetOfBool) Equals(other types.Value) bool {
 	return other != nil && __typeRefForSetOfBool.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
@@ -66,9 +62,15 @@ func (m SetOfBool) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSetOfBool = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.BoolKind))
-	types.RegisterFromValFunction(__typeRefForSetOfBool, func(v types.Value) types.Value {
-		return SetOfBool{v.(types.Set), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForSetOfBool, builderForSetOfBool, readerForSetOfBool)
+}
+
+func builderForSetOfBool(v types.Value) types.Value {
+	return SetOfBool{v.(types.Set), &ref.Ref{}}
+}
+
+func readerForSetOfBool(v types.Value) types.Value {
+	return v.(SetOfBool).s
 }
 
 func (s SetOfBool) Empty() bool {

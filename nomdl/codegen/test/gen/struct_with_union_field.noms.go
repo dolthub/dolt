@@ -295,10 +295,6 @@ func (s SetOfUInt8) Def() SetOfUInt8Def {
 	return def
 }
 
-func (s SetOfUInt8) InternalImplementation() types.Set {
-	return s.s
-}
-
 func (s SetOfUInt8) Equals(other types.Value) bool {
 	return other != nil && __typeRefForSetOfUInt8.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
@@ -322,9 +318,15 @@ func (m SetOfUInt8) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSetOfUInt8 = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
-	types.RegisterFromValFunction(__typeRefForSetOfUInt8, func(v types.Value) types.Value {
-		return SetOfUInt8{v.(types.Set), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForSetOfUInt8, builderForSetOfUInt8, readerForSetOfUInt8)
+}
+
+func builderForSetOfUInt8(v types.Value) types.Value {
+	return SetOfUInt8{v.(types.Set), &ref.Ref{}}
+}
+
+func readerForSetOfUInt8(v types.Value) types.Value {
+	return v.(SetOfUInt8).s
 }
 
 func (s SetOfUInt8) Empty() bool {

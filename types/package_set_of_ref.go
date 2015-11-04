@@ -40,10 +40,6 @@ func (s SetOfRefOfPackage) Def() SetOfRefOfPackageDef {
 	return def
 }
 
-func (s SetOfRefOfPackage) InternalImplementation() Set {
-	return s.s
-}
-
 func (s SetOfRefOfPackage) Equals(other Value) bool {
 	return other != nil && __typeRefForSetOfRefOfPackage.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }

@@ -205,10 +205,6 @@ func (l ListOfD) Def() ListOfDDef {
 	return d
 }
 
-func (l ListOfD) InternalImplementation() types.List {
-	return l.l
-}
-
 func (l ListOfD) Equals(other types.Value) bool {
 	return other != nil && __typeRefForListOfD.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
@@ -232,9 +228,15 @@ func (m ListOfD) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfD = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"), 0))
-	types.RegisterFromValFunction(__typeRefForListOfD, func(v types.Value) types.Value {
-		return ListOfD{v.(types.List), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForListOfD, builderForListOfD, readerForListOfD)
+}
+
+func builderForListOfD(v types.Value) types.Value {
+	return ListOfD{v.(types.List), &ref.Ref{}}
+}
+
+func readerForListOfD(v types.Value) types.Value {
+	return v.(ListOfD).l
 }
 
 func (l ListOfD) Len() uint64 {

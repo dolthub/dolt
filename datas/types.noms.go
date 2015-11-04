@@ -160,10 +160,6 @@ func (m MapOfStringToRefOfCommit) Def() MapOfStringToRefOfCommitDef {
 	return def
 }
 
-func (m MapOfStringToRefOfCommit) InternalImplementation() types.Map {
-	return m.m
-}
-
 func (m MapOfStringToRefOfCommit) Equals(other types.Value) bool {
 	return other != nil && __typeRefForMapOfStringToRefOfCommit.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
@@ -187,9 +183,15 @@ func (m MapOfStringToRefOfCommit) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForMapOfStringToRefOfCommit = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)))
-	types.RegisterFromValFunction(__typeRefForMapOfStringToRefOfCommit, func(v types.Value) types.Value {
-		return MapOfStringToRefOfCommit{v.(types.Map), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForMapOfStringToRefOfCommit, builderForMapOfStringToRefOfCommit, readerForMapOfStringToRefOfCommit)
+}
+
+func builderForMapOfStringToRefOfCommit(v types.Value) types.Value {
+	return MapOfStringToRefOfCommit{v.(types.Map), &ref.Ref{}}
+}
+
+func readerForMapOfStringToRefOfCommit(v types.Value) types.Value {
+	return v.(MapOfStringToRefOfCommit).m
 }
 
 func (m MapOfStringToRefOfCommit) Empty() bool {
@@ -286,10 +288,6 @@ func (s SetOfRefOfCommit) Def() SetOfRefOfCommitDef {
 	return def
 }
 
-func (s SetOfRefOfCommit) InternalImplementation() types.Set {
-	return s.s
-}
-
 func (s SetOfRefOfCommit) Equals(other types.Value) bool {
 	return other != nil && __typeRefForSetOfRefOfCommit.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
@@ -313,9 +311,15 @@ func (m SetOfRefOfCommit) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSetOfRefOfCommit = types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)))
-	types.RegisterFromValFunction(__typeRefForSetOfRefOfCommit, func(v types.Value) types.Value {
-		return SetOfRefOfCommit{v.(types.Set), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForSetOfRefOfCommit, builderForSetOfRefOfCommit, readerForSetOfRefOfCommit)
+}
+
+func builderForSetOfRefOfCommit(v types.Value) types.Value {
+	return SetOfRefOfCommit{v.(types.Set), &ref.Ref{}}
+}
+
+func readerForSetOfRefOfCommit(v types.Value) types.Value {
+	return v.(SetOfRefOfCommit).s
 }
 
 func (s SetOfRefOfCommit) Empty() bool {
