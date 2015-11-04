@@ -150,13 +150,15 @@ func (e E) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForE = types.MakeTypeRef(__leafDepPackageInFile_leafDep_CachedRef, 1)
-	types.RegisterFromValFunction(__typeRefForE, func(v types.Value) types.Value {
-		return E(uint32(v.(types.UInt32)))
-	})
+	types.RegisterEnum(__typeRefForE, builderForE, readerForE)
 }
 
-func (e E) InternalImplementation() uint32 {
-	return uint32(e)
+func builderForE(v uint32) types.Value {
+	return E(v)
+}
+
+func readerForE(v types.Value) uint32 {
+	return uint32(v.(E))
 }
 
 func (e E) Equals(other types.Value) bool {

@@ -21,13 +21,15 @@ func (e {{.Name}}) TypeRef() {{$typesPackage}}TypeRef {
 
 func init() {
 	__typeRefFor{{.Name}} = {{$typesPackage}}MakeTypeRef(__{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef, {{.Ordinal}})
-	{{$typesPackage}}RegisterFromValFunction(__typeRefFor{{.Name}}, func(v {{$typesPackage}}Value) {{$typesPackage}}Value {
-		return {{.Name}}(uint32(v.({{$typesPackage}}UInt32)))
-	})
+	{{$typesPackage}}RegisterEnum(__typeRefFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
 }
 
-func (e {{.Name}}) InternalImplementation() uint32 {
-	return uint32(e)
+func builderFor{{.Name}}(v uint32) {{$typesPackage}}Value {
+	return {{.Name}}(v)
+}
+
+func readerFor{{.Name}}(v {{$typesPackage}}Value) uint32 {
+	return uint32(v.({{.Name}}))
 }
 
 func (e {{.Name}}) Equals(other {{$typesPackage}}Value) bool {

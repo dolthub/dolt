@@ -8,6 +8,8 @@ import (
 
 type structBuilderFunc func() chan Value
 type structReaderFunc func(v Value) chan Value
+type enumBuilderFunc func(v uint32) Value
+type enumReaderFunc func(v Value) uint32
 type toNomsValueFunc func(v Value) Value
 
 type structFuncs struct {
@@ -15,10 +17,16 @@ type structFuncs struct {
 	reader  structReaderFunc
 }
 
+type enumFuncs struct {
+	builder enumBuilderFunc
+	reader  enumReaderFunc
+}
+
 var (
 	packages       map[ref.Ref]*Package        = map[ref.Ref]*Package{}
 	toNomsValueMap map[ref.Ref]toNomsValueFunc = map[ref.Ref]toNomsValueFunc{}
 	structFuncMap  map[ref.Ref]structFuncs     = map[ref.Ref]structFuncs{}
+	enumFuncMap    map[ref.Ref]enumFuncs       = map[ref.Ref]enumFuncs{}
 )
 
 // LookupPackage looks for a Package by ref.Ref in the global cache of Noms type packages.
@@ -67,4 +75,22 @@ func structReaderForTypeRef(v Value, typeRef, typeDef TypeRef) chan Value {
 		return s.reader(v)
 	}
 	return structReader(v.(Struct), typeRef, typeDef)
+}
+
+func RegisterEnum(t TypeRef, bf enumBuilderFunc, rf enumReaderFunc) {
+	enumFuncMap[t.Ref()] = enumFuncs{bf, rf}
+}
+
+func enumFromTypeRef(v uint32, t TypeRef) Value {
+	if s, ok := enumFuncMap[t.Ref()]; ok {
+		return s.builder(v)
+	}
+	return newEnum(v, t)
+}
+
+func enumPrimitiveValueFromTypeRef(v Value, t TypeRef) uint32 {
+	if s, ok := enumFuncMap[t.Ref()]; ok {
+		return s.reader(v)
+	}
+	return v.(Enum).v
 }

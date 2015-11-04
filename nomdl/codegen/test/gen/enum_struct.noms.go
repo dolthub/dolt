@@ -47,13 +47,15 @@ func (e Handedness) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForHandedness = types.MakeTypeRef(__genPackageInFile_enum_struct_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForHandedness, func(v types.Value) types.Value {
-		return Handedness(uint32(v.(types.UInt32)))
-	})
+	types.RegisterEnum(__typeRefForHandedness, builderForHandedness, readerForHandedness)
 }
 
-func (e Handedness) InternalImplementation() uint32 {
-	return uint32(e)
+func builderForHandedness(v uint32) types.Value {
+	return Handedness(v)
+}
+
+func readerForHandedness(v types.Value) uint32 {
+	return uint32(v.(Handedness))
 }
 
 func (e Handedness) Equals(other types.Value) bool {

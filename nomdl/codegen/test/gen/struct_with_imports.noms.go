@@ -49,13 +49,15 @@ func (e LocalE) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForLocalE = types.MakeTypeRef(__genPackageInFile_struct_with_imports_CachedRef, 0)
-	types.RegisterFromValFunction(__typeRefForLocalE, func(v types.Value) types.Value {
-		return LocalE(uint32(v.(types.UInt32)))
-	})
+	types.RegisterEnum(__typeRefForLocalE, builderForLocalE, readerForLocalE)
 }
 
-func (e LocalE) InternalImplementation() uint32 {
-	return uint32(e)
+func builderForLocalE(v uint32) types.Value {
+	return LocalE(v)
+}
+
+func readerForLocalE(v types.Value) uint32 {
+	return uint32(v.(LocalE))
 }
 
 func (e LocalE) Equals(other types.Value) bool {
