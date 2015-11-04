@@ -34,10 +34,6 @@ func New{{.Name}}() {{.Name}} {
 	}
 {{end}}
 
-func (s {{.Name}}) InternalImplementation() {{$typesPackage}}Set {
-	return s.s
-}
-
 func (s {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
 	return other != nil && __typeRefFor{{.Name}}.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
@@ -61,9 +57,15 @@ func (m {{.Name}}) TypeRef() {{$typesPackage}}TypeRef {
 
 func init() {
 	__typeRefFor{{.Name}} = {{toTypesTypeRef .Type .FileID .PackageName}}
-	{{$typesPackage}}RegisterFromValFunction(__typeRefFor{{.Name}}, func(v {{$typesPackage}}Value) {{$typesPackage}}Value {
-		return {{.Name}}{v.({{$typesPackage}}Set), &ref.Ref{}}
-	})
+	{{$typesPackage}}RegisterValue(__typeRefFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
+}
+
+func builderFor{{.Name}}(v {{$typesPackage}}Value) {{$typesPackage}}Value {
+	return {{.Name}}{v.({{$typesPackage}}Set), &ref.Ref{}}
+}
+
+func readerFor{{.Name}}(v {{$typesPackage}}Value) {{$typesPackage}}Value {
+	return v.({{.Name}}).s
 }
 
 func (s {{.Name}}) Empty() bool {

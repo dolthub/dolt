@@ -40,28 +40,16 @@ func TestWritePrimitives(t *testing.T) {
 	f(BlobKind, blob, "AAE=")
 }
 
-type testList struct {
-	List
-	t TypeRef
-}
-
-func (l testList) TypeRef() TypeRef {
-	return l.t
-}
-
-func (l testList) InternalImplementation() List {
-	return l.List
-}
-
 func TestWriteList(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
 	tref := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(Int32Kind))
 	v := NewList(Int32(0), Int32(1), Int32(2), Int32(3))
+	v.t = tref
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testList{List: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{ListKind, Int32Kind, []interface{}{int32(0), int32(1), int32(2), int32(3)}}, w.toArray())
 }
 
@@ -71,10 +59,15 @@ func TestWriteListOfList(t *testing.T) {
 
 	it := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(Int16Kind))
 	tref := MakeCompoundTypeRef(ListKind, it)
-	v := NewList(NewList(Int16(0)), NewList(Int16(1), Int16(2), Int16(3)))
+	l1 := NewList(Int16(0))
+	l1.t = it
+	l2 := NewList(Int16(1), Int16(2), Int16(3))
+	l2.t = it
+	v := NewList(l1, l2)
+	v.t = tref
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testList{List: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{ListKind, ListKind, Int16Kind,
 		[]interface{}{[]interface{}{int16(0)}, []interface{}{int16(1), int16(2), int16(3)}}}, w.toArray())
 }
@@ -306,9 +299,10 @@ func TestWriteListOfEnum(t *testing.T) {
 	et := MakeTypeRef(pkgRef, 0)
 	tref := MakeCompoundTypeRef(ListKind, et)
 	v := NewList(Enum{0, et}, Enum{1, et}, Enum{2, et})
+	v.t = tref
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testList{List: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{ListKind, UnresolvedKind, pkgRef.String(), int16(0), []interface{}{uint32(0), uint32(1), uint32(2)}}, w.toArray())
 }
 
@@ -333,9 +327,10 @@ func TestWriteListOfValue(t *testing.T) {
 		NewString("hi"),
 		blob,
 	)
+	v.t = tref
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testList{List: v, t: tref})
+	w.writeTopLevelValue(v)
 
 	assert.EqualValues([]interface{}{ListKind, ValueKind, []interface{}{
 		BoolKind, true,
@@ -390,9 +385,10 @@ func TestWriteListOfValueWithTypeRefs(t *testing.T) {
 		MakePrimitiveTypeRef(TypeRefKind),
 		MakeTypeRef(pkgRef, 0),
 	)
+	v.t = tref
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testList{List: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{ListKind, ValueKind, []interface{}{
 		BoolKind, true,
 		TypeRefKind, Int32Kind,
@@ -477,9 +473,10 @@ func TestWriteListOfTypeRefs(t *testing.T) {
 
 	tref := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(TypeRefKind))
 	v := NewList(MakePrimitiveTypeRef(BoolKind), MakeEnumTypeRef("E", "a", "b", "c"), MakePrimitiveTypeRef(StringKind))
+	v.t = tref
 
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(testList{List: v, t: tref})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{ListKind, TypeRefKind, []interface{}{BoolKind, EnumKind, "E", []interface{}{"a", "b", "c"}, StringKind}}, w.toArray())
 }
 
