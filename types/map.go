@@ -1,7 +1,9 @@
 package types
 
 import (
+	"runtime"
 	"sort"
+	"sync"
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -101,7 +103,28 @@ func (m Map) IterAll(cb mapIterAllCallback) {
 	}
 }
 
-// TODO: Implement IterAllP() BUG 573
+func (m Map) IterAllP(concurrency int, f mapIterAllCallback) {
+	if concurrency == 0 {
+		concurrency = runtime.NumCPU()
+	}
+	sem := make(chan int, concurrency)
+
+	wg := sync.WaitGroup{}
+
+	for idx := range m.data {
+		wg.Add(1)
+
+		sem <- 1
+		go func(idx int) {
+			defer wg.Done()
+			md := m.data[idx]
+			f(md.key, md.value)
+			<-sem
+		}(idx)
+	}
+
+	wg.Wait()
+}
 
 type mapFilterCallback func(key, value Value) (keep bool)
 

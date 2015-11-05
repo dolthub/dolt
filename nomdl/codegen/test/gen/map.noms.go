@@ -121,6 +121,12 @@ func (m MapOfBoolToString) IterAll(cb MapOfBoolToStringIterAllCallback) {
 	})
 }
 
+func (m MapOfBoolToString) IterAllP(concurrency int, cb MapOfBoolToStringIterAllCallback) {
+	m.m.IterAllP(concurrency, func(k, v types.Value) {
+		cb(bool(k.(types.Bool)), v.(types.String).String())
+	})
+}
+
 type MapOfBoolToStringFilterCallback func(k bool, v string) (keep bool)
 
 func (m MapOfBoolToString) Filter(cb MapOfBoolToStringFilterCallback) MapOfBoolToString {
@@ -243,6 +249,12 @@ type MapOfStringToValueIterAllCallback func(k string, v types.Value)
 
 func (m MapOfStringToValue) IterAll(cb MapOfStringToValueIterAllCallback) {
 	m.m.IterAll(func(k, v types.Value) {
+		cb(k.(types.String).String(), v)
+	})
+}
+
+func (m MapOfStringToValue) IterAllP(concurrency int, cb MapOfStringToValueIterAllCallback) {
+	m.m.IterAllP(concurrency, func(k, v types.Value) {
 		cb(k.(types.String).String(), v)
 	})
 }
