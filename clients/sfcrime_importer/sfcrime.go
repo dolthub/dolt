@@ -51,6 +51,12 @@ func (a refIndexList) Less(i, j int) bool { return a[i].index < a[j].index }
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	flag.Usage = func() {
+		fmt.Printf("Usage: %s -ldb=/path/to/db -ds=sfcrime -input-file=/path/to/data.csv\n\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+
 	dsFlags := dataset.NewFlags()
 	flag.Parse()
 	ds := dsFlags.CreateDataset()

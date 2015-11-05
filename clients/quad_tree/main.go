@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -25,6 +26,12 @@ var (
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	flag.Usage = func() {
+		fmt.Printf("Usage: %s -ldb=/path/to/db -input-ref=sha1-xyz -output-ds=quadtree\n\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+
 	flag.Parse()
 	start := time.Now()
 
