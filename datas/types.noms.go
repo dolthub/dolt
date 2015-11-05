@@ -442,9 +442,11 @@ func (m RefOfCommit) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForRefOfCommit = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0))
-	types.RegisterFromValFunction(__typeRefForRefOfCommit, func(v types.Value) types.Value {
-		return NewRefOfCommit(v.(types.Ref).TargetRef())
-	})
+	types.RegisterRef(__typeRefForRefOfCommit, builderForRefOfCommit)
+}
+
+func builderForRefOfCommit(r ref.Ref) types.Value {
+	return NewRefOfCommit(r)
 }
 
 func (r RefOfCommit) TargetValue(cs chunks.ChunkSource) Commit {

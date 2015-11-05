@@ -188,9 +188,11 @@ func (m RefOfPackage) TypeRef() TypeRef {
 
 func init() {
 	__typeRefForRefOfPackage = MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(PackageKind))
-	RegisterFromValFunction(__typeRefForRefOfPackage, func(v Value) Value {
-		return NewRefOfPackage(v.(Ref).TargetRef())
-	})
+	RegisterRef(__typeRefForRefOfPackage, builderForRefOfPackage)
+}
+
+func builderForRefOfPackage(r ref.Ref) Value {
+	return NewRefOfPackage(r)
 }
 
 func (r RefOfPackage) TargetValue(cs chunks.ChunkSource) Package {

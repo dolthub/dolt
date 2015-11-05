@@ -38,9 +38,11 @@ func (m {{.Name}}) TypeRef() {{$typesPackage}}TypeRef {
 
 func init() {
 	__typeRefFor{{.Name}} = {{toTypesTypeRef .Type .FileID .PackageName}}
-	{{$typesPackage}}RegisterFromValFunction(__typeRefFor{{.Name}}, func(v {{$typesPackage}}Value) {{$typesPackage}}Value {
-		return New{{.Name}}(v.({{$typesPackage}}Ref).TargetRef())
-	})
+	{{$typesPackage}}RegisterRef(__typeRefFor{{.Name}}, builderFor{{.Name}})
+}
+
+func builderFor{{.Name}}(r ref.Ref) {{$typesPackage}}Value {
+	return New{{.Name}}(r)
 }
 
 func (r {{.Name}}) TargetValue(cs chunks.ChunkSource) {{userType .ElemType}} {

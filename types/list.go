@@ -20,12 +20,6 @@ type MapFunc func(v Value, index uint64) interface{}
 
 var listTypeRef = MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))
 
-func init() {
-	RegisterFromValFunction(listTypeRef, func(v Value) Value {
-		return v.(List)
-	})
-}
-
 func NewList(v ...Value) List {
 	// Copy because Noms values are supposed to be immutable and Go allows v to be reused (thus mutable).
 	values := make([]Value, len(v))

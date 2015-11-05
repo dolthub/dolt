@@ -472,9 +472,11 @@ func (m RefOfIncident) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForRefOfIncident = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__commonPackageInFile_incident_CachedRef, 0))
-	types.RegisterFromValFunction(__typeRefForRefOfIncident, func(v types.Value) types.Value {
-		return NewRefOfIncident(v.(types.Ref).TargetRef())
-	})
+	types.RegisterRef(__typeRefForRefOfIncident, builderForRefOfIncident)
+}
+
+func builderForRefOfIncident(r ref.Ref) types.Value {
+	return NewRefOfIncident(r)
 }
 
 func (r RefOfIncident) TargetValue(cs chunks.ChunkSource) Incident {

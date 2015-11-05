@@ -320,9 +320,11 @@ func (m RefOfRemotePhoto) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForRefOfRemotePhoto = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))
-	types.RegisterFromValFunction(__typeRefForRefOfRemotePhoto, func(v types.Value) types.Value {
-		return NewRefOfRemotePhoto(v.(types.Ref).TargetRef())
-	})
+	types.RegisterRef(__typeRefForRefOfRemotePhoto, builderForRefOfRemotePhoto)
+}
+
+func builderForRefOfRemotePhoto(r ref.Ref) types.Value {
+	return NewRefOfRemotePhoto(r)
 }
 
 func (r RefOfRemotePhoto) TargetValue(cs chunks.ChunkSource) RemotePhoto {

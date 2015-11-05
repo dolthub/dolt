@@ -109,14 +109,8 @@ func TestReadListOfValue(t *testing.T) {
 
 	a := parseJson(`[%d, %d, [%d, 1, %d, "hi", %d, true]]`, ListKind, ValueKind, Int32Kind, StringKind, BoolKind)
 	r := newJsonArrayReader(a, cs)
-
-	listTr := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))
-	RegisterFromValFunction(listTr, func(v Value) Value {
-		return v
-	})
-
 	l := r.readTopLevelValue()
-	assert.EqualValues(NewList(Int32(1), NewString("hi"), Bool(true)), l)
+	assert.True(NewList(Int32(1), NewString("hi"), Bool(true)).Equals(l))
 }
 
 func TestReadValueListOfInt8(t *testing.T) {
@@ -390,15 +384,8 @@ func TestReadRef(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-
 	a := parseJson(`[%d, %d, "%s"]`, RefKind, UInt32Kind, r.String())
 	reader := newJsonArrayReader(a, cs)
-
-	refTr := MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(UInt32Kind))
-	RegisterFromValFunction(refTr, func(v Value) Value {
-		return v
-	})
-
 	v := reader.readTopLevelValue()
 	assert.True(NewRef(r).Equals(v))
 }
@@ -408,15 +395,8 @@ func TestReadValueRef(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-
 	a := parseJson(`[%d, %d, %d, "%s"]`, ValueKind, RefKind, UInt32Kind, r.String())
 	reader := newJsonArrayReader(a, cs)
-
-	refTypeRef := MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(UInt32Kind))
-	RegisterFromValFunction(refTypeRef, func(v Value) Value {
-		return v
-	})
-
 	v := reader.readTopLevelValue()
 	assert.True(NewRef(r).Equals(v))
 }
@@ -446,13 +426,7 @@ func TestReadStructWithEnum(t *testing.T) {
 
 	a := parseJson(`[%d, "%s", 0, 42, 1, true]`, UnresolvedKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)
-
-	structTr := MakeTypeRef(pkgRef, 0)
-	RegisterFromValFunction(structTr, func(v Value) Value {
-		return v
-	})
 	enumTr := MakeTypeRef(pkgRef, 1)
-
 	v := r.readTopLevelValue().(Struct)
 
 	assert.True(v.Get("x").Equals(Int16(42)))

@@ -477,9 +477,11 @@ func (m RefOfUser) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForRefOfUser = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
-	types.RegisterFromValFunction(__typeRefForRefOfUser, func(v types.Value) types.Value {
-		return NewRefOfUser(v.(types.Ref).TargetRef())
-	})
+	types.RegisterRef(__typeRefForRefOfUser, builderForRefOfUser)
+}
+
+func builderForRefOfUser(r ref.Ref) types.Value {
+	return NewRefOfUser(r)
 }
 
 func (r RefOfUser) TargetValue(cs chunks.ChunkSource) User {
@@ -528,9 +530,11 @@ func (m RefOfSetOfRefOfRemotePhoto) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForRefOfSetOfRefOfRemotePhoto = types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))))
-	types.RegisterFromValFunction(__typeRefForRefOfSetOfRefOfRemotePhoto, func(v types.Value) types.Value {
-		return NewRefOfSetOfRefOfRemotePhoto(v.(types.Ref).TargetRef())
-	})
+	types.RegisterRef(__typeRefForRefOfSetOfRefOfRemotePhoto, builderForRefOfSetOfRefOfRemotePhoto)
+}
+
+func builderForRefOfSetOfRefOfRemotePhoto(r ref.Ref) types.Value {
+	return NewRefOfSetOfRefOfRemotePhoto(r)
 }
 
 func (r RefOfSetOfRefOfRemotePhoto) TargetValue(cs chunks.ChunkSource) SetOfRefOfRemotePhoto {
@@ -727,9 +731,11 @@ func (m RefOfRemotePhoto) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForRefOfRemotePhoto = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))
-	types.RegisterFromValFunction(__typeRefForRefOfRemotePhoto, func(v types.Value) types.Value {
-		return NewRefOfRemotePhoto(v.(types.Ref).TargetRef())
-	})
+	types.RegisterRef(__typeRefForRefOfRemotePhoto, builderForRefOfRemotePhoto)
+}
+
+func builderForRefOfRemotePhoto(r ref.Ref) types.Value {
+	return NewRefOfRemotePhoto(r)
 }
 
 func (r RefOfRemotePhoto) TargetValue(cs chunks.ChunkSource) RemotePhoto {

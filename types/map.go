@@ -142,12 +142,6 @@ func (m Map) elemTypes() []TypeRef {
 	return m.t.Desc.(CompoundDesc).ElemTypes
 }
 
-func init() {
-	RegisterFromValFunction(mapTypeRef, func(v Value) Value {
-		return v.(Map)
-	})
-}
-
 type mapEntry struct {
 	key   Value
 	value Value

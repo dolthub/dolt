@@ -449,9 +449,11 @@ func (m RefOfBlob) TypeRef() TypeRef {
 
 func init() {
 	__typeRefForRefOfBlob = MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(BlobKind))
-	RegisterFromValFunction(__typeRefForRefOfBlob, func(v Value) Value {
-		return NewRefOfBlob(v.(Ref).TargetRef())
-	})
+	RegisterRef(__typeRefForRefOfBlob, builderForRefOfBlob)
+}
+
+func builderForRefOfBlob(r ref.Ref) Value {
+	return NewRefOfBlob(r)
 }
 
 func (r RefOfBlob) TargetValue(cs chunks.ChunkSource) Blob {
