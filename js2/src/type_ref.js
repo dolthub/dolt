@@ -4,6 +4,7 @@
 
 import Ref from './ref.js';
 import type {NomsKind} from './noms_kind.js';
+import {ensureRef} from './get_ref.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
 
@@ -126,23 +127,28 @@ class Field {
   }
 }
 
-
 class TypeRef {
   _namespace: string;
   _name: string;
   _desc: TypeDesc;
   _ref: Ref;
 
-  constructor(name: string = '', namespace: string = '', desc: TypeDesc, ref: Ref = new Ref()) {
+  constructor(name: string = '', namespace: string = '', desc: TypeDesc) {
     this._name = name;
     this._namespace = namespace;
     this._desc = desc;
-    this._ref = ref;
+  }
+
+  get ref(): Ref {
+    return this._ref = ensureRef(this._ref, this, this.typeRef);
+  }
+
+  get typeRef(): TypeRef {
+    return typeRefTypeRef;
   }
 
   equals(other: TypeRef): boolean {
-    // TODO: Go code uses Ref() equality.
-    return this.namespacedName === other.namespacedName && this._desc.equals(other._desc);
+    return this.ref.equals(other.ref);
   }
 
   get kind(): NomsKind {
@@ -245,6 +251,9 @@ function makeUnresolvedTypeRef(namespace: string, name: string): TypeRef {
   return new TypeRef(name, namespace, new UnresolvedDesc(new Ref(), -1));
 }
 
+let typeRefTypeRef = makePrimitiveTypeRef(Kind.TypeRef);
+let packageTypeRef = makePrimitiveTypeRef(Kind.Package);
+
 export {
   CompoundDesc,
   Field,
@@ -254,5 +263,7 @@ export {
   makeTypeRef,
   makeUnresolvedTypeRef,
   StructDesc,
-  TypeRef
+  TypeRef,
+  typeRefTypeRef,
+  packageTypeRef
 };
