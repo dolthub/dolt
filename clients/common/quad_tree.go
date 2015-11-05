@@ -204,7 +204,7 @@ func (qt *QuadTreeDef) SaveToNoms(cs chunks.ChunkSink, start time.Time, quiet bo
 		wg.Add(1)
 		go func() {
 			for sqt := range wChan {
-				types.WriteValue(sqt, cs)
+				types.WriteValue(*sqt, cs)
 			}
 			wg.Done()
 		}()
