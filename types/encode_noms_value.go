@@ -218,24 +218,30 @@ func (w *jsonArrayWriter) writeBlob(b Blob) {
 func (w *jsonArrayWriter) writeStruct(v Value, typeRef, typeDef TypeRef, pkg *Package) {
 	typeRef = fixupTypeRef(typeRef, pkg)
 
-	c := structReaderForTypeRef(v, typeRef, typeDef)
+	i := 0
+	values := structReaderForTypeRef(v, typeRef, typeDef)
 	desc := typeDef.Desc.(StructDesc)
 
 	for _, f := range desc.Fields {
 		if f.Optional {
-			ok := bool((<-c).(Bool))
+			ok := bool(values[i].(Bool))
+			i++
 			w.write(ok)
 			if ok {
-				w.writeValue(<-c, f.T, pkg)
+				w.writeValue(values[i], f.T, pkg)
+				i++
 			}
 		} else {
-			w.writeValue(<-c, f.T, pkg)
+			w.writeValue(values[i], f.T, pkg)
+			i++
 		}
 	}
 	if len(desc.Union) > 0 {
-		unionIndex := uint32((<-c).(UInt32))
+		unionIndex := uint32(values[i].(UInt32))
+		i++
 		w.write(unionIndex)
-		w.writeValue(<-c, desc.Union[unionIndex].T, pkg)
+		w.writeValue(values[i], desc.Union[unionIndex].T, pkg)
+		i++
 	}
 }
 

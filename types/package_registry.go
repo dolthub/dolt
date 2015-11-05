@@ -9,8 +9,8 @@ import (
 type enumBuilderFunc func(v uint32) Value
 type enumReaderFunc func(v Value) uint32
 type refBuilderFunc func(target ref.Ref) Value
-type structBuilderFunc func() chan Value
-type structReaderFunc func(v Value) chan Value
+type structBuilderFunc func(values []Value) Value
+type structReaderFunc func(v Value) []Value
 type valueBuilderFunc func(v Value) Value
 type valueReaderFunc func(v Value) Value
 
@@ -61,14 +61,14 @@ func RegisterStruct(t TypeRef, bf structBuilderFunc, rf structReaderFunc) {
 	structFuncMap[t.Ref()] = structFuncs{bf, rf}
 }
 
-func structBuilderForTypeRef(typeRef, typeDef TypeRef) chan Value {
+func structBuilderForTypeRef(values []Value, typeRef, typeDef TypeRef) Value {
 	if s, ok := structFuncMap[typeRef.Ref()]; ok {
-		return s.builder()
+		return s.builder(values)
 	}
-	return structBuilder(typeRef, typeDef)
+	return structBuilder(values, typeRef, typeDef)
 }
 
-func structReaderForTypeRef(v Value, typeRef, typeDef TypeRef) chan Value {
+func structReaderForTypeRef(v Value, typeRef, typeDef TypeRef) []Value {
 	if s, ok := structFuncMap[typeRef.Ref()]; ok {
 		return s.reader(v)
 	}

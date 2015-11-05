@@ -155,58 +155,55 @@ func (s Struct) findField(n string) (Field, int32, bool) {
 	return Field{}, -1, false
 }
 
-func structBuilder(typeRef, typeDef TypeRef) chan Value {
-	c := make(chan Value)
+func structBuilder(values []Value, typeRef, typeDef TypeRef) Value {
+	i := 0
+	desc := typeDef.Desc.(StructDesc)
+	data := structData{}
+	unionIndex := uint32(0)
+	var unionValue Value
 
-	go func() {
-		desc := typeDef.Desc.(StructDesc)
-		data := structData{}
-		unionIndex := uint32(0)
-		var unionValue Value
-
-		for _, f := range desc.Fields {
-			if f.Optional {
-				b := bool((<-c).(Bool))
-				if b {
-					data[f.Name] = <-c
-				}
-			} else {
-				data[f.Name] = <-c
+	for _, f := range desc.Fields {
+		if f.Optional {
+			b := bool(values[i].(Bool))
+			i++
+			if b {
+				data[f.Name] = values[i]
+				i++
 			}
+		} else {
+			data[f.Name] = values[i]
+			i++
 		}
-		if len(desc.Union) > 0 {
-			unionIndex = uint32((<-c).(UInt32))
-			unionValue = <-c
-		}
+	}
+	if len(desc.Union) > 0 {
+		unionIndex = uint32(values[i].(UInt32))
+		i++
+		unionValue = values[i]
+		i++
+	}
 
-		c <- newStructFromData(data, unionIndex, unionValue, typeRef, typeDef)
-	}()
-
-	return c
+	return newStructFromData(data, unionIndex, unionValue, typeRef, typeDef)
 }
 
-func structReader(s Struct, typeRef, typeDef TypeRef) chan Value {
-	c := make(chan Value)
+func structReader(s Struct, typeRef, typeDef TypeRef) []Value {
+	values := []Value{}
 
-	go func() {
-		desc := typeDef.Desc.(StructDesc)
-		for _, f := range desc.Fields {
-			v, ok := s.data[f.Name]
-			if f.Optional {
-				c <- Bool(ok)
-				if ok {
-					c <- v
-				}
-			} else {
-				d.Chk.True(ok)
-				c <- v
+	desc := typeDef.Desc.(StructDesc)
+	for _, f := range desc.Fields {
+		v, ok := s.data[f.Name]
+		if f.Optional {
+			values = append(values, Bool(ok))
+			if ok {
+				values = append(values, v)
 			}
+		} else {
+			d.Chk.True(ok)
+			values = append(values, v)
 		}
-		if len(desc.Union) > 0 {
-			c <- UInt32(s.unionIndex)
-			c <- s.unionValue
-		}
-	}()
+	}
+	if len(desc.Union) > 0 {
+		values = append(values, UInt32(s.unionIndex), s.unionValue)
+	}
 
-	return c
+	return values
 }
