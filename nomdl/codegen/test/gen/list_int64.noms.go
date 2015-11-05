@@ -36,10 +36,6 @@ func (l ListOfInt64) Def() ListOfInt64Def {
 	return d
 }
 
-func (l ListOfInt64) InternalImplementation() types.List {
-	return l.l
-}
-
 func (l ListOfInt64) Equals(other types.Value) bool {
 	return other != nil && __typeRefForListOfInt64.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
@@ -63,9 +59,15 @@ func (m ListOfInt64) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfInt64 = types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.Int64Kind))
-	types.RegisterFromValFunction(__typeRefForListOfInt64, func(v types.Value) types.Value {
-		return ListOfInt64{v.(types.List), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForListOfInt64, builderForListOfInt64, readerForListOfInt64)
+}
+
+func builderForListOfInt64(v types.Value) types.Value {
+	return ListOfInt64{v.(types.List), &ref.Ref{}}
+}
+
+func readerForListOfInt64(v types.Value) types.Value {
+	return v.(ListOfInt64).l
 }
 
 func (l ListOfInt64) Len() uint64 {

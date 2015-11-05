@@ -40,10 +40,6 @@ func (s SetOfRefOfPackage) Def() SetOfRefOfPackageDef {
 	return def
 }
 
-func (s SetOfRefOfPackage) InternalImplementation() Set {
-	return s.s
-}
-
 func (s SetOfRefOfPackage) Equals(other Value) bool {
 	return other != nil && __typeRefForSetOfRefOfPackage.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
@@ -67,10 +63,15 @@ func (m SetOfRefOfPackage) TypeRef() TypeRef {
 
 func init() {
 	__typeRefForSetOfRefOfPackage = MakeCompoundTypeRef(SetKind, MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(PackageKind)))
-	RegisterFromValFunction(__typeRefForSetOfRefOfPackage, func(v Value) Value {
-		return SetOfRefOfPackage{v.(Set), &ref.Ref{}}
+	RegisterValue(__typeRefForSetOfRefOfPackage, builderForSetOfRefOfPackage, readerForSetOfRefOfPackage)
+}
 
-	})
+func builderForSetOfRefOfPackage(v Value) Value {
+	return SetOfRefOfPackage{v.(Set), &ref.Ref{}}
+}
+
+func readerForSetOfRefOfPackage(v Value) Value {
+	return v.(SetOfRefOfPackage).s
 }
 
 func (s SetOfRefOfPackage) Empty() bool {

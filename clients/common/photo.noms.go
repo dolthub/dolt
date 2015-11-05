@@ -343,10 +343,6 @@ func (m MapOfSizeToString) Def() MapOfSizeToStringDef {
 	return def
 }
 
-func (m MapOfSizeToString) InternalImplementation() types.Map {
-	return m.m
-}
-
 func (m MapOfSizeToString) Equals(other types.Value) bool {
 	return other != nil && __typeRefForMapOfSizeToString.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
@@ -370,9 +366,15 @@ func (m MapOfSizeToString) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForMapOfSizeToString = types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(__commonPackageInFile_photo_CachedRef, 1), types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterFromValFunction(__typeRefForMapOfSizeToString, func(v types.Value) types.Value {
-		return MapOfSizeToString{v.(types.Map), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForMapOfSizeToString, builderForMapOfSizeToString, readerForMapOfSizeToString)
+}
+
+func builderForMapOfSizeToString(v types.Value) types.Value {
+	return MapOfSizeToString{v.(types.Map), &ref.Ref{}}
+}
+
+func readerForMapOfSizeToString(v types.Value) types.Value {
+	return v.(MapOfSizeToString).m
 }
 
 func (m MapOfSizeToString) Empty() bool {
@@ -469,10 +471,6 @@ func (s SetOfString) Def() SetOfStringDef {
 	return def
 }
 
-func (s SetOfString) InternalImplementation() types.Set {
-	return s.s
-}
-
 func (s SetOfString) Equals(other types.Value) bool {
 	return other != nil && __typeRefForSetOfString.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
@@ -496,9 +494,15 @@ func (m SetOfString) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSetOfString = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterFromValFunction(__typeRefForSetOfString, func(v types.Value) types.Value {
-		return SetOfString{v.(types.Set), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForSetOfString, builderForSetOfString, readerForSetOfString)
+}
+
+func builderForSetOfString(v types.Value) types.Value {
+	return SetOfString{v.(types.Set), &ref.Ref{}}
+}
+
+func readerForSetOfString(v types.Value) types.Value {
+	return v.(SetOfString).s
 }
 
 func (s SetOfString) Empty() bool {

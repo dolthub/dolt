@@ -139,10 +139,6 @@ func (l ListOfTree) Def() ListOfTreeDef {
 	return d
 }
 
-func (l ListOfTree) InternalImplementation() types.List {
-	return l.l
-}
-
 func (l ListOfTree) Equals(other types.Value) bool {
 	return other != nil && __typeRefForListOfTree.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
@@ -166,9 +162,15 @@ func (m ListOfTree) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfTree = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__genPackageInFile_struct_recursive_CachedRef, 0))
-	types.RegisterFromValFunction(__typeRefForListOfTree, func(v types.Value) types.Value {
-		return ListOfTree{v.(types.List), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForListOfTree, builderForListOfTree, readerForListOfTree)
+}
+
+func builderForListOfTree(v types.Value) types.Value {
+	return ListOfTree{v.(types.List), &ref.Ref{}}
+}
+
+func readerForListOfTree(v types.Value) types.Value {
+	return v.(ListOfTree).l
 }
 
 func (l ListOfTree) Len() uint64 {

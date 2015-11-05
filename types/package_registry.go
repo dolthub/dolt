@@ -6,27 +6,36 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-type structBuilderFunc func() chan Value
-type structReaderFunc func(v Value) chan Value
 type enumBuilderFunc func(v uint32) Value
 type enumReaderFunc func(v Value) uint32
-type toNomsValueFunc func(v Value) Value
+type structBuilderFunc func() chan Value
+type structReaderFunc func(v Value) chan Value
+type valueBuilderFunc func(v Value) Value
+type valueReaderFunc func(v Value) Value
 
-type structFuncs struct {
-	builder structBuilderFunc
-	reader  structReaderFunc
-}
+type toNomsValueFunc func(v Value) Value
 
 type enumFuncs struct {
 	builder enumBuilderFunc
 	reader  enumReaderFunc
 }
 
+type structFuncs struct {
+	builder structBuilderFunc
+	reader  structReaderFunc
+}
+
+type valueFuncs struct {
+	builder valueBuilderFunc
+	reader  valueReaderFunc
+}
+
 var (
 	packages       map[ref.Ref]*Package        = map[ref.Ref]*Package{}
 	toNomsValueMap map[ref.Ref]toNomsValueFunc = map[ref.Ref]toNomsValueFunc{}
-	structFuncMap  map[ref.Ref]structFuncs     = map[ref.Ref]structFuncs{}
 	enumFuncMap    map[ref.Ref]enumFuncs       = map[ref.Ref]enumFuncs{}
+	structFuncMap  map[ref.Ref]structFuncs     = map[ref.Ref]structFuncs{}
+	valueFuncMap   map[ref.Ref]valueFuncs      = map[ref.Ref]valueFuncs{}
 )
 
 // LookupPackage looks for a Package by ref.Ref in the global cache of Noms type packages.
@@ -93,4 +102,22 @@ func enumPrimitiveValueFromTypeRef(v Value, t TypeRef) uint32 {
 		return s.reader(v)
 	}
 	return v.(Enum).v
+}
+
+func RegisterValue(t TypeRef, bf valueBuilderFunc, rf valueReaderFunc) {
+	valueFuncMap[t.Ref()] = valueFuncs{bf, rf}
+}
+
+func valueFromTypeRef(v Value, t TypeRef) Value {
+	if s, ok := valueFuncMap[t.Ref()]; ok {
+		return s.builder(v)
+	}
+	return v
+}
+
+func internalValueFromTypeRef(v Value, t TypeRef) Value {
+	if s, ok := valueFuncMap[t.Ref()]; ok {
+		return s.reader(v)
+	}
+	return v
 }

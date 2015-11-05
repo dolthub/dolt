@@ -211,10 +211,6 @@ func (l ListOfSong) Def() ListOfSongDef {
 	return d
 }
 
-func (l ListOfSong) InternalImplementation() types.List {
-	return l.l
-}
-
 func (l ListOfSong) Equals(other types.Value) bool {
 	return other != nil && __typeRefForListOfSong.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
@@ -238,9 +234,15 @@ func (m ListOfSong) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfSong = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
-	types.RegisterFromValFunction(__typeRefForListOfSong, func(v types.Value) types.Value {
-		return ListOfSong{v.(types.List), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForListOfSong, builderForListOfSong, readerForListOfSong)
+}
+
+func builderForListOfSong(v types.Value) types.Value {
+	return ListOfSong{v.(types.List), &ref.Ref{}}
+}
+
+func readerForListOfSong(v types.Value) types.Value {
+	return v.(ListOfSong).l
 }
 
 func (l ListOfSong) Len() uint64 {

@@ -322,10 +322,6 @@ func (l ListOfRefOfIncident) Def() ListOfRefOfIncidentDef {
 	return d
 }
 
-func (l ListOfRefOfIncident) InternalImplementation() types.List {
-	return l.l
-}
-
 func (l ListOfRefOfIncident) Equals(other types.Value) bool {
 	return other != nil && __typeRefForListOfRefOfIncident.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
@@ -349,9 +345,15 @@ func (m ListOfRefOfIncident) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfRefOfIncident = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__commonPackageInFile_incident_CachedRef, 0)))
-	types.RegisterFromValFunction(__typeRefForListOfRefOfIncident, func(v types.Value) types.Value {
-		return ListOfRefOfIncident{v.(types.List), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForListOfRefOfIncident, builderForListOfRefOfIncident, readerForListOfRefOfIncident)
+}
+
+func builderForListOfRefOfIncident(v types.Value) types.Value {
+	return ListOfRefOfIncident{v.(types.List), &ref.Ref{}}
+}
+
+func readerForListOfRefOfIncident(v types.Value) types.Value {
+	return v.(ListOfRefOfIncident).l
 }
 
 func (l ListOfRefOfIncident) Len() uint64 {

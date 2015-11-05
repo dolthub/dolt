@@ -156,10 +156,6 @@ func (l ListOfStruct) Def() ListOfStructDef {
 	return d
 }
 
-func (l ListOfStruct) InternalImplementation() types.List {
-	return l.l
-}
-
 func (l ListOfStruct) Equals(other types.Value) bool {
 	return other != nil && __typeRefForListOfStruct.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
@@ -183,9 +179,15 @@ func (m ListOfStruct) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfStruct = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__genPackageInFile_struct_CachedRef, 0))
-	types.RegisterFromValFunction(__typeRefForListOfStruct, func(v types.Value) types.Value {
-		return ListOfStruct{v.(types.List), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForListOfStruct, builderForListOfStruct, readerForListOfStruct)
+}
+
+func builderForListOfStruct(v types.Value) types.Value {
+	return ListOfStruct{v.(types.List), &ref.Ref{}}
+}
+
+func readerForListOfStruct(v types.Value) types.Value {
+	return v.(ListOfStruct).l
 }
 
 func (l ListOfStruct) Len() uint64 {

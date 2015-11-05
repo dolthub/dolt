@@ -10,19 +10,6 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-type valueAsNomsValue struct {
-	Value
-	t TypeRef
-}
-
-func (v valueAsNomsValue) NomsValue() Value {
-	return v.Value
-}
-
-func (v valueAsNomsValue) TypeRef() TypeRef {
-	return v.t
-}
-
 func fromTypedEncodeable(i []interface{}, cs chunks.ChunkSource) Value {
 	r := newJsonArrayReader(i, cs)
 	return r.readTopLevelValue()
@@ -114,7 +101,7 @@ func (r *jsonArrayReader) readList(t TypeRef, pkg *Package) Value {
 
 	t = fixupTypeRef(t, pkg)
 	// TODO: Skip the List wrapper.
-	return ToNomsValueFromTypeRef(t, newListNoCopy(data, t))
+	return valueFromTypeRef(newListNoCopy(data, t), t)
 }
 
 func (r *jsonArrayReader) readSet(t TypeRef, pkg *Package) Value {
@@ -128,7 +115,7 @@ func (r *jsonArrayReader) readSet(t TypeRef, pkg *Package) Value {
 
 	t = fixupTypeRef(t, pkg)
 	// TODO: Skip the Set wrapper.
-	return ToNomsValueFromTypeRef(t, newSetFromData(data, t))
+	return valueFromTypeRef(newSetFromData(data, t), t)
 }
 
 func (r *jsonArrayReader) readMap(t TypeRef, pkg *Package) Value {
@@ -145,7 +132,7 @@ func (r *jsonArrayReader) readMap(t TypeRef, pkg *Package) Value {
 
 	t = fixupTypeRef(t, pkg)
 	// TODO: Skip the Map wrapper.
-	return ToNomsValueFromTypeRef(t, newMapFromData(data, t))
+	return valueFromTypeRef(newMapFromData(data, t), t)
 }
 
 func (r *jsonArrayReader) readEnum(t TypeRef, pkg *Package) Value {

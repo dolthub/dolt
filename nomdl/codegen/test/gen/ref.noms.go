@@ -191,10 +191,6 @@ func (l ListOfRefOfFloat32) Def() ListOfRefOfFloat32Def {
 	return d
 }
 
-func (l ListOfRefOfFloat32) InternalImplementation() types.List {
-	return l.l
-}
-
 func (l ListOfRefOfFloat32) Equals(other types.Value) bool {
 	return other != nil && __typeRefForListOfRefOfFloat32.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
@@ -218,9 +214,15 @@ func (m ListOfRefOfFloat32) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfRefOfFloat32 = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakePrimitiveTypeRef(types.Float32Kind)))
-	types.RegisterFromValFunction(__typeRefForListOfRefOfFloat32, func(v types.Value) types.Value {
-		return ListOfRefOfFloat32{v.(types.List), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForListOfRefOfFloat32, builderForListOfRefOfFloat32, readerForListOfRefOfFloat32)
+}
+
+func builderForListOfRefOfFloat32(v types.Value) types.Value {
+	return ListOfRefOfFloat32{v.(types.List), &ref.Ref{}}
+}
+
+func readerForListOfRefOfFloat32(v types.Value) types.Value {
+	return v.(ListOfRefOfFloat32).l
 }
 
 func (l ListOfRefOfFloat32) Len() uint64 {
@@ -375,10 +377,6 @@ func (l ListOfString) Def() ListOfStringDef {
 	return d
 }
 
-func (l ListOfString) InternalImplementation() types.List {
-	return l.l
-}
-
 func (l ListOfString) Equals(other types.Value) bool {
 	return other != nil && __typeRefForListOfString.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
@@ -402,9 +400,15 @@ func (m ListOfString) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfString = types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterFromValFunction(__typeRefForListOfString, func(v types.Value) types.Value {
-		return ListOfString{v.(types.List), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForListOfString, builderForListOfString, readerForListOfString)
+}
+
+func builderForListOfString(v types.Value) types.Value {
+	return ListOfString{v.(types.List), &ref.Ref{}}
+}
+
+func readerForListOfString(v types.Value) types.Value {
+	return v.(ListOfString).l
 }
 
 func (l ListOfString) Len() uint64 {
@@ -562,10 +566,6 @@ func (s SetOfFloat32) Def() SetOfFloat32Def {
 	return def
 }
 
-func (s SetOfFloat32) InternalImplementation() types.Set {
-	return s.s
-}
-
 func (s SetOfFloat32) Equals(other types.Value) bool {
 	return other != nil && __typeRefForSetOfFloat32.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
@@ -589,9 +589,15 @@ func (m SetOfFloat32) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSetOfFloat32 = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind))
-	types.RegisterFromValFunction(__typeRefForSetOfFloat32, func(v types.Value) types.Value {
-		return SetOfFloat32{v.(types.Set), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForSetOfFloat32, builderForSetOfFloat32, readerForSetOfFloat32)
+}
+
+func builderForSetOfFloat32(v types.Value) types.Value {
+	return SetOfFloat32{v.(types.Set), &ref.Ref{}}
+}
+
+func readerForSetOfFloat32(v types.Value) types.Value {
+	return v.(SetOfFloat32).s
 }
 
 func (s SetOfFloat32) Empty() bool {

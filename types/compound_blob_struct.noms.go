@@ -158,10 +158,6 @@ func (l ListOfUInt64) Def() ListOfUInt64Def {
 	return d
 }
 
-func (l ListOfUInt64) InternalImplementation() List {
-	return l.l
-}
-
 func (l ListOfUInt64) Equals(other Value) bool {
 	return other != nil && __typeRefForListOfUInt64.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
@@ -185,9 +181,15 @@ func (m ListOfUInt64) TypeRef() TypeRef {
 
 func init() {
 	__typeRefForListOfUInt64 = MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(UInt64Kind))
-	RegisterFromValFunction(__typeRefForListOfUInt64, func(v Value) Value {
-		return ListOfUInt64{v.(List), &ref.Ref{}}
-	})
+	RegisterValue(__typeRefForListOfUInt64, builderForListOfUInt64, readerForListOfUInt64)
+}
+
+func builderForListOfUInt64(v Value) Value {
+	return ListOfUInt64{v.(List), &ref.Ref{}}
+}
+
+func readerForListOfUInt64(v Value) Value {
+	return v.(ListOfUInt64).l
 }
 
 func (l ListOfUInt64) Len() uint64 {
@@ -291,10 +293,6 @@ func (l ListOfRefOfBlob) Def() ListOfRefOfBlobDef {
 	return d
 }
 
-func (l ListOfRefOfBlob) InternalImplementation() List {
-	return l.l
-}
-
 func (l ListOfRefOfBlob) Equals(other Value) bool {
 	return other != nil && __typeRefForListOfRefOfBlob.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
@@ -318,9 +316,15 @@ func (m ListOfRefOfBlob) TypeRef() TypeRef {
 
 func init() {
 	__typeRefForListOfRefOfBlob = MakeCompoundTypeRef(ListKind, MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(BlobKind)))
-	RegisterFromValFunction(__typeRefForListOfRefOfBlob, func(v Value) Value {
-		return ListOfRefOfBlob{v.(List), &ref.Ref{}}
-	})
+	RegisterValue(__typeRefForListOfRefOfBlob, builderForListOfRefOfBlob, readerForListOfRefOfBlob)
+}
+
+func builderForListOfRefOfBlob(v Value) Value {
+	return ListOfRefOfBlob{v.(List), &ref.Ref{}}
+}
+
+func readerForListOfRefOfBlob(v Value) Value {
+	return v.(ListOfRefOfBlob).l
 }
 
 func (l ListOfRefOfBlob) Len() uint64 {

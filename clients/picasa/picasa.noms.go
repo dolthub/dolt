@@ -379,10 +379,6 @@ func (m MapOfStringToAlbum) Def() MapOfStringToAlbumDef {
 	return def
 }
 
-func (m MapOfStringToAlbum) InternalImplementation() types.Map {
-	return m.m
-}
-
 func (m MapOfStringToAlbum) Equals(other types.Value) bool {
 	return other != nil && __typeRefForMapOfStringToAlbum.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
@@ -406,9 +402,15 @@ func (m MapOfStringToAlbum) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForMapOfStringToAlbum = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__mainPackageInFile_picasa_CachedRef, 1))
-	types.RegisterFromValFunction(__typeRefForMapOfStringToAlbum, func(v types.Value) types.Value {
-		return MapOfStringToAlbum{v.(types.Map), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForMapOfStringToAlbum, builderForMapOfStringToAlbum, readerForMapOfStringToAlbum)
+}
+
+func builderForMapOfStringToAlbum(v types.Value) types.Value {
+	return MapOfStringToAlbum{v.(types.Map), &ref.Ref{}}
+}
+
+func readerForMapOfStringToAlbum(v types.Value) types.Value {
+	return v.(MapOfStringToAlbum).m
 }
 
 func (m MapOfStringToAlbum) Empty() bool {
@@ -484,10 +486,6 @@ func NewSetOfRemotePhoto() SetOfRemotePhoto {
 	return SetOfRemotePhoto{types.NewSet(), &ref.Ref{}}
 }
 
-func (s SetOfRemotePhoto) InternalImplementation() types.Set {
-	return s.s
-}
-
 func (s SetOfRemotePhoto) Equals(other types.Value) bool {
 	return other != nil && __typeRefForSetOfRemotePhoto.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
@@ -511,9 +509,15 @@ func (m SetOfRemotePhoto) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSetOfRemotePhoto = types.MakeCompoundTypeRef(types.SetKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))
-	types.RegisterFromValFunction(__typeRefForSetOfRemotePhoto, func(v types.Value) types.Value {
-		return SetOfRemotePhoto{v.(types.Set), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForSetOfRemotePhoto, builderForSetOfRemotePhoto, readerForSetOfRemotePhoto)
+}
+
+func builderForSetOfRemotePhoto(v types.Value) types.Value {
+	return SetOfRemotePhoto{v.(types.Set), &ref.Ref{}}
+}
+
+func readerForSetOfRemotePhoto(v types.Value) types.Value {
+	return v.(SetOfRemotePhoto).s
 }
 
 func (s SetOfRemotePhoto) Empty() bool {
@@ -726,10 +730,6 @@ func (s SetOfRefOfRemotePhoto) Def() SetOfRefOfRemotePhotoDef {
 	return def
 }
 
-func (s SetOfRefOfRemotePhoto) InternalImplementation() types.Set {
-	return s.s
-}
-
 func (s SetOfRefOfRemotePhoto) Equals(other types.Value) bool {
 	return other != nil && __typeRefForSetOfRefOfRemotePhoto.Equals(other.TypeRef()) && s.Ref() == other.Ref()
 }
@@ -753,9 +753,15 @@ func (m SetOfRefOfRemotePhoto) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForSetOfRefOfRemotePhoto = types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0)))
-	types.RegisterFromValFunction(__typeRefForSetOfRefOfRemotePhoto, func(v types.Value) types.Value {
-		return SetOfRefOfRemotePhoto{v.(types.Set), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForSetOfRefOfRemotePhoto, builderForSetOfRefOfRemotePhoto, readerForSetOfRefOfRemotePhoto)
+}
+
+func builderForSetOfRefOfRemotePhoto(v types.Value) types.Value {
+	return SetOfRefOfRemotePhoto{v.(types.Set), &ref.Ref{}}
+}
+
+func readerForSetOfRefOfRemotePhoto(v types.Value) types.Value {
+	return v.(SetOfRefOfRemotePhoto).s
 }
 
 func (s SetOfRefOfRemotePhoto) Empty() bool {

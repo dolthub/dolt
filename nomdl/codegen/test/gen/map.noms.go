@@ -37,10 +37,6 @@ func (m MapOfBoolToString) Def() MapOfBoolToStringDef {
 	return def
 }
 
-func (m MapOfBoolToString) InternalImplementation() types.Map {
-	return m.m
-}
-
 func (m MapOfBoolToString) Equals(other types.Value) bool {
 	return other != nil && __typeRefForMapOfBoolToString.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
@@ -64,9 +60,15 @@ func (m MapOfBoolToString) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForMapOfBoolToString = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.BoolKind), types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterFromValFunction(__typeRefForMapOfBoolToString, func(v types.Value) types.Value {
-		return MapOfBoolToString{v.(types.Map), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForMapOfBoolToString, builderForMapOfBoolToString, readerForMapOfBoolToString)
+}
+
+func builderForMapOfBoolToString(v types.Value) types.Value {
+	return MapOfBoolToString{v.(types.Map), &ref.Ref{}}
+}
+
+func readerForMapOfBoolToString(v types.Value) types.Value {
+	return v.(MapOfBoolToString).m
 }
 
 func (m MapOfBoolToString) Empty() bool {
@@ -161,10 +163,6 @@ func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 	return def
 }
 
-func (m MapOfStringToValue) InternalImplementation() types.Map {
-	return m.m
-}
-
 func (m MapOfStringToValue) Equals(other types.Value) bool {
 	return other != nil && __typeRefForMapOfStringToValue.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
@@ -188,9 +186,15 @@ func (m MapOfStringToValue) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
-	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.Value {
-		return MapOfStringToValue{v.(types.Map), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForMapOfStringToValue, builderForMapOfStringToValue, readerForMapOfStringToValue)
+}
+
+func builderForMapOfStringToValue(v types.Value) types.Value {
+	return MapOfStringToValue{v.(types.Map), &ref.Ref{}}
+}
+
+func readerForMapOfStringToValue(v types.Value) types.Value {
+	return v.(MapOfStringToValue).m
 }
 
 func (m MapOfStringToValue) Empty() bool {

@@ -75,14 +75,18 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 	case ListKind:
 		w2 := newJsonArrayWriter(w.cs)
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
-		getListFromListKind(v).IterAll(func(v Value, i uint64) {
+		tr = fixupTypeRef(tr, pkg)
+		l := internalValueFromTypeRef(v, tr)
+		l.(List).IterAll(func(v Value, i uint64) {
 			w2.writeValue(v, elemType, pkg)
 		})
 		w.write(w2.toArray())
 	case MapKind:
 		w2 := newJsonArrayWriter(w.cs)
 		elemTypes := tr.Desc.(CompoundDesc).ElemTypes
-		getMapFromMapKind(v).IterAll(func(k, v Value) {
+		tr = fixupTypeRef(tr, pkg)
+		m := internalValueFromTypeRef(v, tr)
+		m.(Map).IterAll(func(k, v Value) {
 			w2.writeValue(k, elemTypes[0], pkg)
 			w2.writeValue(v, elemTypes[1], pkg)
 		})
@@ -104,7 +108,9 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 	case SetKind:
 		w2 := newJsonArrayWriter(w.cs)
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
-		getSetFromSetKind(v).IterAll(func(v Value) {
+		tr = fixupTypeRef(tr, pkg)
+		s := internalValueFromTypeRef(v, tr)
+		s.(Set).IterAll(func(v Value) {
 			w2.writeValue(v, elemType, pkg)
 		})
 		w.write(w2.toArray())
@@ -126,45 +132,12 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 }
 
 // TODO: This is ugly. BUG 452
-type listImplementation interface {
-	InternalImplementation() List
-}
-
-type mapImplementation interface {
-	InternalImplementation() Map
-}
-
 type refImplementation interface {
 	TargetRef() ref.Ref
 }
 
-type setImplementation interface {
-	InternalImplementation() Set
-}
-
-func getListFromListKind(v Value) List {
-	if v, ok := v.(List); ok {
-		return v
-	}
-	return v.(listImplementation).InternalImplementation()
-}
-
-func getMapFromMapKind(v Value) Map {
-	if v, ok := v.(Map); ok {
-		return v
-	}
-	return v.(mapImplementation).InternalImplementation()
-}
-
 func getRefFromRefKind(v Value) ref.Ref {
 	return v.(refImplementation).TargetRef()
-}
-
-func getSetFromSetKind(v Value) Set {
-	if v, ok := v.(Set); ok {
-		return v
-	}
-	return v.(setImplementation).InternalImplementation()
 }
 
 func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
