@@ -295,11 +295,8 @@ func (l ListOfUInt8) IterAllP(concurrency int, cb ListOfUInt8IterAllCallback) {
 type ListOfUInt8FilterCallback func(v uint8, i uint64) (keep bool)
 
 func (l ListOfUInt8) Filter(cb ListOfUInt8FilterCallback) ListOfUInt8 {
-	nl := NewListOfUInt8()
-	l.IterAll(func(v uint8, i uint64) {
-		if cb(v, i) {
-			nl = nl.Append(v)
-		}
+	out := l.l.Filter(func(v types.Value, i uint64) bool {
+		return cb(uint8(v.(types.UInt8)), i)
 	})
-	return nl
+	return ListOfUInt8{out, &ref.Ref{}}
 }

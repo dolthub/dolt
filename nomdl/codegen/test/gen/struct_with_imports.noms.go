@@ -305,11 +305,8 @@ func (l ListOfD) IterAllP(concurrency int, cb ListOfDIterAllCallback) {
 type ListOfDFilterCallback func(v D, i uint64) (keep bool)
 
 func (l ListOfD) Filter(cb ListOfDFilterCallback) ListOfD {
-	nl := NewListOfD()
-	l.IterAll(func(v D, i uint64) {
-		if cb(v, i) {
-			nl = nl.Append(v)
-		}
+	out := l.l.Filter(func(v types.Value, i uint64) bool {
+		return cb(v.(D), i)
 	})
-	return nl
+	return ListOfD{out, &ref.Ref{}}
 }

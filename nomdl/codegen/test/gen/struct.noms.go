@@ -256,11 +256,8 @@ func (l ListOfStruct) IterAllP(concurrency int, cb ListOfStructIterAllCallback) 
 type ListOfStructFilterCallback func(v Struct, i uint64) (keep bool)
 
 func (l ListOfStruct) Filter(cb ListOfStructFilterCallback) ListOfStruct {
-	nl := NewListOfStruct()
-	l.IterAll(func(v Struct, i uint64) {
-		if cb(v, i) {
-			nl = nl.Append(v)
-		}
+	out := l.l.Filter(func(v types.Value, i uint64) bool {
+		return cb(v.(Struct), i)
 	})
-	return nl
+	return ListOfStruct{out, &ref.Ref{}}
 }

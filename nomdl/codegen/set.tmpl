@@ -105,13 +105,10 @@ func (s {{.Name}}) IterAllP(concurrency int, cb {{.Name}}IterAllCallback) {
 type {{.Name}}FilterCallback func(p {{userType .ElemType}}) (keep bool)
 
 func (s {{.Name}}) Filter(cb {{.Name}}FilterCallback) {{.Name}} {
-	ns := New{{.Name}}()
-	s.IterAll(func(v {{userType .ElemType}}) {
-		if cb(v) {
-			ns = ns.Insert(v)
-		}
+	out := s.s.Filter(func(v {{$typesPackage}}Value) bool {
+		return cb({{valueToUser "v" .ElemType}})
 	})
-	return ns
+	return {{.Name}}{out, &ref.Ref{}}
 }
 
 func (s {{.Name}}) Insert(p ...{{userType .ElemType}}) {{.Name}} {
