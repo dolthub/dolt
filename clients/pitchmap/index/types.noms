@@ -3,7 +3,7 @@ struct Pitch {
   Z: Float64
 }
 
-using List(Map(String, Value))
 using Map(String, List(Pitch))
-using Map(String, String)
+using List(Ref(Map(String, Value)))
+using Ref(Map(String, Value))
 using Map(String, Value)

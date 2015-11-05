@@ -16,10 +16,6 @@ type Set struct {
 	ref  *ref.Ref
 }
 
-type setIterCallback func(v Value) bool
-type setIterAllCallback func(v Value)
-type setFilterCallback func(v Value) (keep bool)
-
 var setTypeRef = MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))
 
 func NewSet(v ...Value) Set {
@@ -80,6 +76,8 @@ func (s Set) Subtract(others ...Set) Set {
 	return result
 }
 
+type setIterCallback func(v Value) bool
+
 func (s Set) Iter(cb setIterCallback) {
 	for _, v := range s.data {
 		if cb(v) {
@@ -87,6 +85,8 @@ func (s Set) Iter(cb setIterCallback) {
 		}
 	}
 }
+
+type setIterAllCallback func(v Value)
 
 func (s Set) IterAll(cb setIterAllCallback) {
 	for _, v := range s.data {
@@ -115,6 +115,8 @@ func (s Set) IterAllP(concurrency int, f setIterAllCallback) {
 
 	wg.Wait()
 }
+
+type setFilterCallback func(v Value) (keep bool)
 
 func (s Set) Filter(cb setFilterCallback) Set {
 	data := setData{}
