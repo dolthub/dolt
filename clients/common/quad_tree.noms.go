@@ -674,6 +674,12 @@ func (l ListOfNode) IterAll(cb ListOfNodeIterAllCallback) {
 	})
 }
 
+func (l ListOfNode) IterAllP(concurrency int, cb ListOfNodeIterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
+		cb(v.(Node), i)
+	})
+}
+
 type ListOfNodeFilterCallback func(v Node, i uint64) (keep bool)
 
 func (l ListOfNode) Filter(cb ListOfNodeFilterCallback) ListOfNode {
@@ -931,6 +937,12 @@ type ListOfRefOfValueIterAllCallback func(v RefOfValue, i uint64)
 
 func (l ListOfRefOfValue) IterAll(cb ListOfRefOfValueIterAllCallback) {
 	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(v.(RefOfValue), i)
+	})
+}
+
+func (l ListOfRefOfValue) IterAllP(concurrency int, cb ListOfRefOfValueIterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
 		cb(v.(RefOfValue), i)
 	})
 }

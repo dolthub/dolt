@@ -350,6 +350,12 @@ func (s SetOfRefOfCommit) IterAll(cb SetOfRefOfCommitIterAllCallback) {
 	})
 }
 
+func (s SetOfRefOfCommit) IterAllP(concurrency int, cb SetOfRefOfCommitIterAllCallback) {
+	s.s.IterAllP(concurrency, func(v types.Value) {
+		cb(v.(RefOfCommit))
+	})
+}
+
 type SetOfRefOfCommitFilterCallback func(p RefOfCommit) (keep bool)
 
 func (s SetOfRefOfCommit) Filter(cb SetOfRefOfCommitFilterCallback) SetOfRefOfCommit {

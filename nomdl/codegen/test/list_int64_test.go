@@ -1,6 +1,7 @@
 package test
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
@@ -46,6 +47,25 @@ func TestListIter(t *testing.T) {
 		return
 	})
 	assert.Equal(gen.ListOfInt64Def{0, 1, 2}, acc)
+}
+
+func TestListIterAllP(t *testing.T) {
+	assert := assert.New(t)
+	l := gen.ListOfInt64Def{0, 1, 2, 3, 4}
+	mu := sync.Mutex{}
+	visited := map[int64]bool{}
+	l.New().IterAllP(2, func(v int64, index uint64) {
+		assert.EqualValues(v, index)
+		mu.Lock()
+		defer mu.Unlock()
+		visited[v] = true
+	})
+
+	if assert.Len(visited, len(l)) {
+		for _, e := range l {
+			assert.True(visited[e])
+		}
+	}
 }
 
 func TestListFilter(t *testing.T) {

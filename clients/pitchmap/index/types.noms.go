@@ -250,6 +250,12 @@ func (l ListOfMapOfStringToValue) IterAll(cb ListOfMapOfStringToValueIterAllCall
 	})
 }
 
+func (l ListOfMapOfStringToValue) IterAllP(concurrency int, cb ListOfMapOfStringToValueIterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
+		cb(v.(MapOfStringToValue), i)
+	})
+}
+
 type ListOfMapOfStringToValueFilterCallback func(v MapOfStringToValue, i uint64) (keep bool)
 
 func (l ListOfMapOfStringToValue) Filter(cb ListOfMapOfStringToValueFilterCallback) ListOfMapOfStringToValue {
@@ -759,6 +765,12 @@ type ListOfPitchIterAllCallback func(v Pitch, i uint64)
 
 func (l ListOfPitch) IterAll(cb ListOfPitchIterAllCallback) {
 	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(v.(Pitch), i)
+	})
+}
+
+func (l ListOfPitch) IterAllP(concurrency int, cb ListOfPitchIterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
 		cb(v.(Pitch), i)
 	})
 }

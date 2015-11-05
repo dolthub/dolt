@@ -357,6 +357,12 @@ func (s SetOfUInt8) IterAll(cb SetOfUInt8IterAllCallback) {
 	})
 }
 
+func (s SetOfUInt8) IterAllP(concurrency int, cb SetOfUInt8IterAllCallback) {
+	s.s.IterAllP(concurrency, func(v types.Value) {
+		cb(uint8(v.(types.UInt8)))
+	})
+}
+
 type SetOfUInt8FilterCallback func(p uint8) (keep bool)
 
 func (s SetOfUInt8) Filter(cb SetOfUInt8FilterCallback) SetOfUInt8 {

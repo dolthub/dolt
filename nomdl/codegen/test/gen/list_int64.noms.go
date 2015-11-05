@@ -130,6 +130,12 @@ func (l ListOfInt64) IterAll(cb ListOfInt64IterAllCallback) {
 	})
 }
 
+func (l ListOfInt64) IterAllP(concurrency int, cb ListOfInt64IterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
+		cb(int64(v.(types.Int64)), i)
+	})
+}
+
 type ListOfInt64FilterCallback func(v int64, i uint64) (keep bool)
 
 func (l ListOfInt64) Filter(cb ListOfInt64FilterCallback) ListOfInt64 {
