@@ -4,13 +4,10 @@
 
 import Ref from './ref.js';
 import type {ChunkStore} from './chunk_store.js';
-import {encodeNomsValue} from './encode.js';
+import {ensureRef} from './get_ref.js';
 import {invariant} from './assert.js';
-import {Kind} from './noms_kind.js';
-import {makePrimitiveTypeRef, TypeRef} from './type_ref.js';
+import {packageTypeRef, TypeRef} from './type_ref.js';
 import {readValue} from './decode.js';
-
-const packageTypeRef = makePrimitiveTypeRef(Kind.Package);
 
 class Package {
   types: Array<TypeRef>;
@@ -23,10 +20,7 @@ class Package {
   }
 
   get ref(): Ref {
-    if (!this._ref) {
-      this._ref = encodeNomsValue(this, this.typeRef).ref;
-    }
-    return this._ref;
+    return this._ref = ensureRef(this._ref, this, this.typeRef);
   }
 
   get typeRef(): TypeRef {

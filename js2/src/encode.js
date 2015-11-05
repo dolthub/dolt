@@ -3,11 +3,10 @@
 'use strict';
 
 import Chunk from './chunk.js';
-import MemoryStore from './memory_store.js';
 import Ref from './ref.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
-import {invariant} from './assert.js';
+import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
 import {lookupPackage, Package} from './package.js';
 import {makePrimitiveTypeRef, StructDesc, TypeRef} from './type_ref.js';
@@ -16,9 +15,9 @@ const typedTag = 't ';
 
 class JsonArrayWriter {
   array: Array<any>;
-  _cs: ChunkStore;
+  _cs: ?ChunkStore;
 
-  constructor(cs: ChunkStore) {
+  constructor(cs: ?ChunkStore) {
     this.array = [];
     this._cs = cs;
   }
@@ -145,7 +144,6 @@ class JsonArrayWriter {
       case Kind.Map:
       case Kind.Ref:
       case Kind.Set: {
-        this.write(t.name);
         let w2 = new JsonArrayWriter(this._cs);
         t.elemTypes.forEach(elem => w2.writeTypeRefAsValue(elem));
         this.write(w2.array);
@@ -183,8 +181,9 @@ class JsonArrayWriter {
 
         let pkg = lookupPackage(pkgRef);
         if (pkg) {
-          throw new Error('Not implemented');
+          writeValue(pkg, pkg.typeRef, notNull(this._cs));
         }
+
         break;
       }
 
@@ -199,26 +198,32 @@ function orderValuesByRef(t: TypeRef, a: Array<any>): Array<any> {
   return a.map(v => {
     return {
       v: v,
-      chunk: encodeNomsValue(v, t)
+      r: encodeNomsValue(v, t, null).ref
     };
   }).sort((a, b) => {
-    return a.chunk.ref.compare(b.chunk.ref);
+    return a.r.compare(b.r);
   }).map(o => {
     return o.v;
   });
 }
 
-function encodeNomsValue(v: any, t: TypeRef): Chunk {
+function encodeNomsValue(v: any, t: TypeRef, cs: ?ChunkStore): Chunk {
   if (v instanceof Package) {
     // if (v.dependencies.length > 0) {
     //   throw new Error('Not implemented');
     // }
   }
 
-  let ms = new MemoryStore(); // TODO: This should be passed in.
-  let w = new JsonArrayWriter(ms);
+  let w = new JsonArrayWriter(cs);
   w.writeTopLevel(t, v);
   return Chunk.fromString(typedTag + JSON.stringify(w.array));
 }
 
-export {encodeNomsValue, JsonArrayWriter};
+function writeValue(v: any, t: TypeRef, cs: ChunkStore): Ref {
+  let chunk = encodeNomsValue(v, t, cs);
+  invariant(!chunk.isEmpty());
+  cs.put(chunk);
+  return chunk.ref;
+}
+
+export {encodeNomsValue, JsonArrayWriter, writeValue};
