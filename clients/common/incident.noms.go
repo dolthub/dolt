@@ -416,6 +416,12 @@ func (l ListOfRefOfIncident) IterAll(cb ListOfRefOfIncidentIterAllCallback) {
 	})
 }
 
+func (l ListOfRefOfIncident) IterAllP(concurrency int, cb ListOfRefOfIncidentIterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
+		cb(v.(RefOfIncident), i)
+	})
+}
+
 type ListOfRefOfIncidentFilterCallback func(v RefOfIncident, i uint64) (keep bool)
 
 func (l ListOfRefOfIncident) Filter(cb ListOfRefOfIncidentFilterCallback) ListOfRefOfIncident {

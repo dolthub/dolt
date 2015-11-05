@@ -233,6 +233,12 @@ func (l ListOfTree) IterAll(cb ListOfTreeIterAllCallback) {
 	})
 }
 
+func (l ListOfTree) IterAllP(concurrency int, cb ListOfTreeIterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
+		cb(v.(Tree), i)
+	})
+}
+
 type ListOfTreeFilterCallback func(v Tree, i uint64) (keep bool)
 
 func (l ListOfTree) Filter(cb ListOfTreeFilterCallback) ListOfTree {

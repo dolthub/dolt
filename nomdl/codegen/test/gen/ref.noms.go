@@ -285,6 +285,12 @@ func (l ListOfRefOfFloat32) IterAll(cb ListOfRefOfFloat32IterAllCallback) {
 	})
 }
 
+func (l ListOfRefOfFloat32) IterAllP(concurrency int, cb ListOfRefOfFloat32IterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
+		cb(v.(RefOfFloat32), i)
+	})
+}
+
 type ListOfRefOfFloat32FilterCallback func(v RefOfFloat32, i uint64) (keep bool)
 
 func (l ListOfRefOfFloat32) Filter(cb ListOfRefOfFloat32FilterCallback) ListOfRefOfFloat32 {
@@ -471,6 +477,12 @@ func (l ListOfString) IterAll(cb ListOfStringIterAllCallback) {
 	})
 }
 
+func (l ListOfString) IterAllP(concurrency int, cb ListOfStringIterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
+		cb(v.(types.String).String(), i)
+	})
+}
+
 type ListOfStringFilterCallback func(v string, i uint64) (keep bool)
 
 func (l ListOfString) Filter(cb ListOfStringFilterCallback) ListOfString {
@@ -624,6 +636,12 @@ type SetOfFloat32IterAllCallback func(p float32)
 
 func (s SetOfFloat32) IterAll(cb SetOfFloat32IterAllCallback) {
 	s.s.IterAll(func(v types.Value) {
+		cb(float32(v.(types.Float32)))
+	})
+}
+
+func (s SetOfFloat32) IterAllP(concurrency int, cb SetOfFloat32IterAllCallback) {
+	s.s.IterAllP(concurrency, func(v types.Value) {
 		cb(float32(v.(types.Float32)))
 	})
 }

@@ -101,6 +101,12 @@ func (s SetOfBool) IterAll(cb SetOfBoolIterAllCallback) {
 	})
 }
 
+func (s SetOfBool) IterAllP(concurrency int, cb SetOfBoolIterAllCallback) {
+	s.s.IterAllP(concurrency, func(v types.Value) {
+		cb(bool(v.(types.Bool)))
+	})
+}
+
 type SetOfBoolFilterCallback func(p bool) (keep bool)
 
 func (s SetOfBool) Filter(cb SetOfBoolFilterCallback) SetOfBool {

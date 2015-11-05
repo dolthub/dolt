@@ -548,6 +548,12 @@ func (s SetOfRemotePhoto) IterAll(cb SetOfRemotePhotoIterAllCallback) {
 	})
 }
 
+func (s SetOfRemotePhoto) IterAllP(concurrency int, cb SetOfRemotePhotoIterAllCallback) {
+	s.s.IterAllP(concurrency, func(v types.Value) {
+		cb(v.(RemotePhoto))
+	})
+}
+
 type SetOfRemotePhotoFilterCallback func(p RemotePhoto) (keep bool)
 
 func (s SetOfRemotePhoto) Filter(cb SetOfRemotePhotoFilterCallback) SetOfRemotePhoto {
@@ -788,6 +794,12 @@ type SetOfRefOfRemotePhotoIterAllCallback func(p RefOfRemotePhoto)
 
 func (s SetOfRefOfRemotePhoto) IterAll(cb SetOfRefOfRemotePhotoIterAllCallback) {
 	s.s.IterAll(func(v types.Value) {
+		cb(v.(RefOfRemotePhoto))
+	})
+}
+
+func (s SetOfRefOfRemotePhoto) IterAllP(concurrency int, cb SetOfRefOfRemotePhotoIterAllCallback) {
+	s.s.IterAllP(concurrency, func(v types.Value) {
 		cb(v.(RefOfRemotePhoto))
 	})
 }

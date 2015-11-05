@@ -252,6 +252,12 @@ func (l ListOfUInt64) IterAll(cb ListOfUInt64IterAllCallback) {
 	})
 }
 
+func (l ListOfUInt64) IterAllP(concurrency int, cb ListOfUInt64IterAllCallback) {
+	l.l.IterAllP(concurrency, func(v Value, i uint64) {
+		cb(uint64(v.(UInt64)), i)
+	})
+}
+
 type ListOfUInt64FilterCallback func(v uint64, i uint64) (keep bool)
 
 func (l ListOfUInt64) Filter(cb ListOfUInt64FilterCallback) ListOfUInt64 {
@@ -383,6 +389,12 @@ type ListOfRefOfBlobIterAllCallback func(v RefOfBlob, i uint64)
 
 func (l ListOfRefOfBlob) IterAll(cb ListOfRefOfBlobIterAllCallback) {
 	l.l.IterAll(func(v Value, i uint64) {
+		cb(v.(RefOfBlob), i)
+	})
+}
+
+func (l ListOfRefOfBlob) IterAllP(concurrency int, cb ListOfRefOfBlobIterAllCallback) {
+	l.l.IterAllP(concurrency, func(v Value, i uint64) {
 		cb(v.(RefOfBlob), i)
 	})
 }

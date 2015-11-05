@@ -299,6 +299,12 @@ func (l ListOfD) IterAll(cb ListOfDIterAllCallback) {
 	})
 }
 
+func (l ListOfD) IterAllP(concurrency int, cb ListOfDIterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
+		cb(v.(D), i)
+	})
+}
+
 type ListOfDFilterCallback func(v D, i uint64) (keep bool)
 
 func (l ListOfD) Filter(cb ListOfDFilterCallback) ListOfD {

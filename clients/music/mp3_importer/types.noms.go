@@ -305,6 +305,12 @@ func (l ListOfSong) IterAll(cb ListOfSongIterAllCallback) {
 	})
 }
 
+func (l ListOfSong) IterAllP(concurrency int, cb ListOfSongIterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
+		cb(v.(Song), i)
+	})
+}
+
 type ListOfSongFilterCallback func(v Song, i uint64) (keep bool)
 
 func (l ListOfSong) Filter(cb ListOfSongFilterCallback) ListOfSong {

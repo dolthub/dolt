@@ -78,16 +78,15 @@ func (l List) IterAllP(concurrency int, f listIterAllFunc) {
 func (l List) iterInternal(sem chan int, lf listIterAllFunc, offset uint64) {
 	wg := sync.WaitGroup{}
 
-	for idx := uint64(0); idx < l.Len(); idx++ {
+	for idx := range l.values {
 		wg.Add(1)
 
 		sem <- 1
 		go func(idx uint64) {
 			defer wg.Done()
-			v := l.values[idx]
-			lf(v, idx+offset)
+			lf(l.values[idx], idx+offset)
 			<-sem
-		}(idx)
+		}(uint64(idx))
 	}
 
 	wg.Wait()

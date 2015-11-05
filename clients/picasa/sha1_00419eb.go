@@ -533,6 +533,12 @@ func (s SetOfString) IterAll(cb SetOfStringIterAllCallback) {
 	})
 }
 
+func (s SetOfString) IterAllP(concurrency int, cb SetOfStringIterAllCallback) {
+	s.s.IterAllP(concurrency, func(v types.Value) {
+		cb(v.(types.String).String())
+	})
+}
+
 type SetOfStringFilterCallback func(p string) (keep bool)
 
 func (s SetOfString) Filter(cb SetOfStringFilterCallback) SetOfString {
