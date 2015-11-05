@@ -79,37 +79,36 @@ func init() {
 	types.RegisterStruct(__typeRefForOptionalStruct, builderForOptionalStruct, readerForOptionalStruct)
 }
 
-func builderForOptionalStruct() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := OptionalStruct{ref: &ref.Ref{}}
-		s.__optionals = bool((<-c).(types.Bool))
-		if s.__optionals {
-			s._s = (<-c).(types.String).String()
-		}
-		s.__optionalb = bool((<-c).(types.Bool))
-		if s.__optionalb {
-			s._b = bool((<-c).(types.Bool))
-		}
-		c <- s
-	}()
-	return c
+func builderForOptionalStruct(values []types.Value) types.Value {
+	i := 0
+	s := OptionalStruct{ref: &ref.Ref{}}
+	s.__optionals = bool(values[i].(types.Bool))
+	i++
+	if s.__optionals {
+		s._s = values[i].(types.String).String()
+		i++
+	}
+	s.__optionalb = bool(values[i].(types.Bool))
+	i++
+	if s.__optionalb {
+		s._b = bool(values[i].(types.Bool))
+		i++
+	}
+	return s
 }
 
-func readerForOptionalStruct(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(OptionalStruct)
-		c <- types.Bool(s.__optionals)
-		if s.__optionals {
-			c <- types.NewString(s._s)
-		}
-		c <- types.Bool(s.__optionalb)
-		if s.__optionalb {
-			c <- types.Bool(s._b)
-		}
-	}()
-	return c
+func readerForOptionalStruct(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(OptionalStruct)
+	values = append(values, types.Bool(s.__optionals))
+	if s.__optionals {
+		values = append(values, types.NewString(s._s))
+	}
+	values = append(values, types.Bool(s.__optionalb))
+	if s.__optionalb {
+		values = append(values, types.Bool(s._b))
+	}
+	return values
 }
 
 func (s OptionalStruct) Equals(other types.Value) bool {

@@ -145,49 +145,58 @@ func init() {
 	types.RegisterStruct(__typeRefForStructPrimitives, builderForStructPrimitives, readerForStructPrimitives)
 }
 
-func builderForStructPrimitives() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := StructPrimitives{ref: &ref.Ref{}}
-		s._uint64 = uint64((<-c).(types.UInt64))
-		s._uint32 = uint32((<-c).(types.UInt32))
-		s._uint16 = uint16((<-c).(types.UInt16))
-		s._uint8 = uint8((<-c).(types.UInt8))
-		s._int64 = int64((<-c).(types.Int64))
-		s._int32 = int32((<-c).(types.Int32))
-		s._int16 = int16((<-c).(types.Int16))
-		s._int8 = int8((<-c).(types.Int8))
-		s._float64 = float64((<-c).(types.Float64))
-		s._float32 = float32((<-c).(types.Float32))
-		s._bool = bool((<-c).(types.Bool))
-		s._string = (<-c).(types.String).String()
-		s._blob = (<-c).(types.Blob)
-		s._value = (<-c)
-		c <- s
-	}()
-	return c
+func builderForStructPrimitives(values []types.Value) types.Value {
+	i := 0
+	s := StructPrimitives{ref: &ref.Ref{}}
+	s._uint64 = uint64(values[i].(types.UInt64))
+	i++
+	s._uint32 = uint32(values[i].(types.UInt32))
+	i++
+	s._uint16 = uint16(values[i].(types.UInt16))
+	i++
+	s._uint8 = uint8(values[i].(types.UInt8))
+	i++
+	s._int64 = int64(values[i].(types.Int64))
+	i++
+	s._int32 = int32(values[i].(types.Int32))
+	i++
+	s._int16 = int16(values[i].(types.Int16))
+	i++
+	s._int8 = int8(values[i].(types.Int8))
+	i++
+	s._float64 = float64(values[i].(types.Float64))
+	i++
+	s._float32 = float32(values[i].(types.Float32))
+	i++
+	s._bool = bool(values[i].(types.Bool))
+	i++
+	s._string = values[i].(types.String).String()
+	i++
+	s._blob = values[i].(types.Blob)
+	i++
+	s._value = values[i]
+	i++
+	return s
 }
 
-func readerForStructPrimitives(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(StructPrimitives)
-		c <- types.UInt64(s._uint64)
-		c <- types.UInt32(s._uint32)
-		c <- types.UInt16(s._uint16)
-		c <- types.UInt8(s._uint8)
-		c <- types.Int64(s._int64)
-		c <- types.Int32(s._int32)
-		c <- types.Int16(s._int16)
-		c <- types.Int8(s._int8)
-		c <- types.Float64(s._float64)
-		c <- types.Float32(s._float32)
-		c <- types.Bool(s._bool)
-		c <- types.NewString(s._string)
-		c <- s._blob
-		c <- s._value
-	}()
-	return c
+func readerForStructPrimitives(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(StructPrimitives)
+	values = append(values, types.UInt64(s._uint64))
+	values = append(values, types.UInt32(s._uint32))
+	values = append(values, types.UInt16(s._uint16))
+	values = append(values, types.UInt8(s._uint8))
+	values = append(values, types.Int64(s._int64))
+	values = append(values, types.Int32(s._int32))
+	values = append(values, types.Int16(s._int16))
+	values = append(values, types.Int8(s._int8))
+	values = append(values, types.Float64(s._float64))
+	values = append(values, types.Float32(s._float32))
+	values = append(values, types.Bool(s._bool))
+	values = append(values, types.NewString(s._string))
+	values = append(values, s._blob)
+	values = append(values, s._value)
+	return values
 }
 
 func (s StructPrimitives) Equals(other types.Value) bool {

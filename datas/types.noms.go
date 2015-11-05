@@ -74,25 +74,22 @@ func init() {
 	types.RegisterStruct(__typeRefForCommit, builderForCommit, readerForCommit)
 }
 
-func builderForCommit() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := Commit{ref: &ref.Ref{}}
-		s._value = (<-c)
-		s._parents = (<-c).(SetOfRefOfCommit)
-		c <- s
-	}()
-	return c
+func builderForCommit(values []types.Value) types.Value {
+	i := 0
+	s := Commit{ref: &ref.Ref{}}
+	s._value = values[i]
+	i++
+	s._parents = values[i].(SetOfRefOfCommit)
+	i++
+	return s
 }
 
-func readerForCommit(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(Commit)
-		c <- s._value
-		c <- s._parents
-	}()
-	return c
+func readerForCommit(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Commit)
+	values = append(values, s._value)
+	values = append(values, s._parents)
+	return values
 }
 
 func (s Commit) Equals(other types.Value) bool {

@@ -106,33 +106,34 @@ func init() {
 	types.RegisterStruct(__typeRefForRemotePhoto, builderForRemotePhoto, readerForRemotePhoto)
 }
 
-func builderForRemotePhoto() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := RemotePhoto{ref: &ref.Ref{}}
-		s._Id = (<-c).(types.String).String()
-		s._Title = (<-c).(types.String).String()
-		s._Url = (<-c).(types.String).String()
-		s._Geoposition = (<-c).(Geoposition)
-		s._Sizes = (<-c).(MapOfSizeToString)
-		s._Tags = (<-c).(SetOfString)
-		c <- s
-	}()
-	return c
+func builderForRemotePhoto(values []types.Value) types.Value {
+	i := 0
+	s := RemotePhoto{ref: &ref.Ref{}}
+	s._Id = values[i].(types.String).String()
+	i++
+	s._Title = values[i].(types.String).String()
+	i++
+	s._Url = values[i].(types.String).String()
+	i++
+	s._Geoposition = values[i].(Geoposition)
+	i++
+	s._Sizes = values[i].(MapOfSizeToString)
+	i++
+	s._Tags = values[i].(SetOfString)
+	i++
+	return s
 }
 
-func readerForRemotePhoto(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(RemotePhoto)
-		c <- types.NewString(s._Id)
-		c <- types.NewString(s._Title)
-		c <- types.NewString(s._Url)
-		c <- s._Geoposition
-		c <- s._Sizes
-		c <- s._Tags
-	}()
-	return c
+func readerForRemotePhoto(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(RemotePhoto)
+	values = append(values, types.NewString(s._Id))
+	values = append(values, types.NewString(s._Title))
+	values = append(values, types.NewString(s._Url))
+	values = append(values, s._Geoposition)
+	values = append(values, s._Sizes)
+	values = append(values, s._Tags)
+	return values
 }
 
 func (s RemotePhoto) Equals(other types.Value) bool {
@@ -259,25 +260,22 @@ func init() {
 	types.RegisterStruct(__typeRefForSize, builderForSize, readerForSize)
 }
 
-func builderForSize() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := Size{ref: &ref.Ref{}}
-		s._Width = uint32((<-c).(types.UInt32))
-		s._Height = uint32((<-c).(types.UInt32))
-		c <- s
-	}()
-	return c
+func builderForSize(values []types.Value) types.Value {
+	i := 0
+	s := Size{ref: &ref.Ref{}}
+	s._Width = uint32(values[i].(types.UInt32))
+	i++
+	s._Height = uint32(values[i].(types.UInt32))
+	i++
+	return s
 }
 
-func readerForSize(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(Size)
-		c <- types.UInt32(s._Width)
-		c <- types.UInt32(s._Height)
-	}()
-	return c
+func readerForSize(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Size)
+	values = append(values, types.UInt32(s._Width))
+	values = append(values, types.UInt32(s._Height))
+	return values
 }
 
 func (s Size) Equals(other types.Value) bool {

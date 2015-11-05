@@ -74,25 +74,22 @@ func init() {
 	types.RegisterStruct(__typeRefForPitch, builderForPitch, readerForPitch)
 }
 
-func builderForPitch() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := Pitch{ref: &ref.Ref{}}
-		s._X = float64((<-c).(types.Float64))
-		s._Z = float64((<-c).(types.Float64))
-		c <- s
-	}()
-	return c
+func builderForPitch(values []types.Value) types.Value {
+	i := 0
+	s := Pitch{ref: &ref.Ref{}}
+	s._X = float64(values[i].(types.Float64))
+	i++
+	s._Z = float64(values[i].(types.Float64))
+	i++
+	return s
 }
 
-func readerForPitch(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(Pitch)
-		c <- types.Float64(s._X)
-		c <- types.Float64(s._Z)
-	}()
-	return c
+func readerForPitch(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Pitch)
+	values = append(values, types.Float64(s._X))
+	values = append(values, types.Float64(s._Z))
+	return values
 }
 
 func (s Pitch) Equals(other types.Value) bool {

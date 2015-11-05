@@ -81,25 +81,22 @@ func init() {
 	types.RegisterStruct(__typeRefForD, builderForD, readerForD)
 }
 
-func builderForD() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := D{ref: &ref.Ref{}}
-		s._structField = (<-c).(S)
-		s._enumField = (<-c).(E)
-		c <- s
-	}()
-	return c
+func builderForD(values []types.Value) types.Value {
+	i := 0
+	s := D{ref: &ref.Ref{}}
+	s._structField = values[i].(S)
+	i++
+	s._enumField = values[i].(E)
+	i++
+	return s
 }
 
-func readerForD(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(D)
-		c <- s._structField
-		c <- s._enumField
-	}()
-	return c
+func readerForD(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(D)
+	values = append(values, s._structField)
+	values = append(values, s._enumField)
+	return values
 }
 
 func (s D) Equals(other types.Value) bool {
@@ -179,23 +176,19 @@ func init() {
 	types.RegisterStruct(__typeRefForDUser, builderForDUser, readerForDUser)
 }
 
-func builderForDUser() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := DUser{ref: &ref.Ref{}}
-		s._Dfield = (<-c).(D)
-		c <- s
-	}()
-	return c
+func builderForDUser(values []types.Value) types.Value {
+	i := 0
+	s := DUser{ref: &ref.Ref{}}
+	s._Dfield = values[i].(D)
+	i++
+	return s
 }
 
-func readerForDUser(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(DUser)
-		c <- s._Dfield
-	}()
-	return c
+func readerForDUser(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(DUser)
+	values = append(values, s._Dfield)
+	return values
 }
 
 func (s DUser) Equals(other types.Value) bool {

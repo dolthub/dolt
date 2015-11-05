@@ -68,23 +68,19 @@ func init() {
 	types.RegisterStruct(__typeRefForStructWithRef, builderForStructWithRef, readerForStructWithRef)
 }
 
-func builderForStructWithRef() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := StructWithRef{ref: &ref.Ref{}}
-		s._r = (<-c).(RefOfSetOfFloat32)
-		c <- s
-	}()
-	return c
+func builderForStructWithRef(values []types.Value) types.Value {
+	i := 0
+	s := StructWithRef{ref: &ref.Ref{}}
+	s._r = values[i].(RefOfSetOfFloat32)
+	i++
+	return s
 }
 
-func readerForStructWithRef(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(StructWithRef)
-		c <- s._r
-	}()
-	return c
+func readerForStructWithRef(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(StructWithRef)
+	values = append(values, s._r)
+	return values
 }
 
 func (s StructWithRef) Equals(other types.Value) bool {

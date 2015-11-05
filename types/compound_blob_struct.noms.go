@@ -73,25 +73,22 @@ func init() {
 	RegisterStruct(__typeRefForcompoundBlobStruct, builderForcompoundBlobStruct, readerForcompoundBlobStruct)
 }
 
-func builderForcompoundBlobStruct() chan Value {
-	c := make(chan Value)
-	go func() {
-		s := compoundBlobStruct{ref: &ref.Ref{}}
-		s._Offsets = (<-c).(ListOfUInt64)
-		s._Blobs = (<-c).(ListOfRefOfBlob)
-		c <- s
-	}()
-	return c
+func builderForcompoundBlobStruct(values []Value) Value {
+	i := 0
+	s := compoundBlobStruct{ref: &ref.Ref{}}
+	s._Offsets = values[i].(ListOfUInt64)
+	i++
+	s._Blobs = values[i].(ListOfRefOfBlob)
+	i++
+	return s
 }
 
-func readerForcompoundBlobStruct(v Value) chan Value {
-	c := make(chan Value)
-	go func() {
-		s := v.(compoundBlobStruct)
-		c <- s._Offsets
-		c <- s._Blobs
-	}()
-	return c
+func readerForcompoundBlobStruct(v Value) []Value {
+	values := []Value{}
+	s := v.(compoundBlobStruct)
+	values = append(values, s._Offsets)
+	values = append(values, s._Blobs)
+	return values
 }
 
 func (s compoundBlobStruct) Equals(other Value) bool {

@@ -80,25 +80,22 @@ func init() {
 	types.RegisterStruct(__typeRefForGeoposition, builderForGeoposition, readerForGeoposition)
 }
 
-func builderForGeoposition() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := Geoposition{ref: &ref.Ref{}}
-		s._Latitude = float32((<-c).(types.Float32))
-		s._Longitude = float32((<-c).(types.Float32))
-		c <- s
-	}()
-	return c
+func builderForGeoposition(values []types.Value) types.Value {
+	i := 0
+	s := Geoposition{ref: &ref.Ref{}}
+	s._Latitude = float32(values[i].(types.Float32))
+	i++
+	s._Longitude = float32(values[i].(types.Float32))
+	i++
+	return s
 }
 
-func readerForGeoposition(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(Geoposition)
-		c <- types.Float32(s._Latitude)
-		c <- types.Float32(s._Longitude)
-	}()
-	return c
+func readerForGeoposition(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Geoposition)
+	values = append(values, types.Float32(s._Latitude))
+	values = append(values, types.Float32(s._Longitude))
+	return values
 }
 
 func (s Geoposition) Equals(other types.Value) bool {
@@ -182,25 +179,22 @@ func init() {
 	types.RegisterStruct(__typeRefForGeorectangle, builderForGeorectangle, readerForGeorectangle)
 }
 
-func builderForGeorectangle() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := Georectangle{ref: &ref.Ref{}}
-		s._TopLeft = (<-c).(Geoposition)
-		s._BottomRight = (<-c).(Geoposition)
-		c <- s
-	}()
-	return c
+func builderForGeorectangle(values []types.Value) types.Value {
+	i := 0
+	s := Georectangle{ref: &ref.Ref{}}
+	s._TopLeft = values[i].(Geoposition)
+	i++
+	s._BottomRight = values[i].(Geoposition)
+	i++
+	return s
 }
 
-func readerForGeorectangle(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(Georectangle)
-		c <- s._TopLeft
-		c <- s._BottomRight
-	}()
-	return c
+func readerForGeorectangle(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Georectangle)
+	values = append(values, s._TopLeft)
+	values = append(values, s._BottomRight)
+	return values
 }
 
 func (s Georectangle) Equals(other types.Value) bool {

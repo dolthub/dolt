@@ -98,25 +98,22 @@ func init() {
 	types.RegisterStruct(__typeRefForNode, builderForNode, readerForNode)
 }
 
-func builderForNode() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := Node{ref: &ref.Ref{}}
-		s._Geoposition = (<-c).(Geoposition)
-		s._Reference = (<-c).(RefOfValue)
-		c <- s
-	}()
-	return c
+func builderForNode(values []types.Value) types.Value {
+	i := 0
+	s := Node{ref: &ref.Ref{}}
+	s._Geoposition = values[i].(Geoposition)
+	i++
+	s._Reference = values[i].(RefOfValue)
+	i++
+	return s
 }
 
-func readerForNode(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(Node)
-		c <- s._Geoposition
-		c <- s._Reference
-	}()
-	return c
+func readerForNode(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Node)
+	values = append(values, s._Geoposition)
+	values = append(values, s._Reference)
+	return values
 }
 
 func (s Node) Equals(other types.Value) bool {
@@ -222,33 +219,34 @@ func init() {
 	types.RegisterStruct(__typeRefForQuadTree, builderForQuadTree, readerForQuadTree)
 }
 
-func builderForQuadTree() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := QuadTree{ref: &ref.Ref{}}
-		s._Nodes = (<-c).(ListOfNode)
-		s._Tiles = (<-c).(MapOfStringToQuadTree)
-		s._Depth = uint8((<-c).(types.UInt8))
-		s._NumDescendents = uint32((<-c).(types.UInt32))
-		s._Path = (<-c).(types.String).String()
-		s._Georectangle = (<-c).(Georectangle)
-		c <- s
-	}()
-	return c
+func builderForQuadTree(values []types.Value) types.Value {
+	i := 0
+	s := QuadTree{ref: &ref.Ref{}}
+	s._Nodes = values[i].(ListOfNode)
+	i++
+	s._Tiles = values[i].(MapOfStringToQuadTree)
+	i++
+	s._Depth = uint8(values[i].(types.UInt8))
+	i++
+	s._NumDescendents = uint32(values[i].(types.UInt32))
+	i++
+	s._Path = values[i].(types.String).String()
+	i++
+	s._Georectangle = values[i].(Georectangle)
+	i++
+	return s
 }
 
-func readerForQuadTree(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(QuadTree)
-		c <- s._Nodes
-		c <- s._Tiles
-		c <- types.UInt8(s._Depth)
-		c <- types.UInt32(s._NumDescendents)
-		c <- types.NewString(s._Path)
-		c <- s._Georectangle
-	}()
-	return c
+func readerForQuadTree(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(QuadTree)
+	values = append(values, s._Nodes)
+	values = append(values, s._Tiles)
+	values = append(values, types.UInt8(s._Depth))
+	values = append(values, types.UInt32(s._NumDescendents))
+	values = append(values, types.NewString(s._Path))
+	values = append(values, s._Georectangle)
+	return values
 }
 
 func (s QuadTree) Equals(other types.Value) bool {
@@ -395,33 +393,34 @@ func init() {
 	types.RegisterStruct(__typeRefForSQuadTree, builderForSQuadTree, readerForSQuadTree)
 }
 
-func builderForSQuadTree() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := SQuadTree{ref: &ref.Ref{}}
-		s._Nodes = (<-c).(ListOfRefOfValue)
-		s._Tiles = (<-c).(MapOfStringToRefOfSQuadTree)
-		s._Depth = uint8((<-c).(types.UInt8))
-		s._NumDescendents = uint32((<-c).(types.UInt32))
-		s._Path = (<-c).(types.String).String()
-		s._Georectangle = (<-c).(Georectangle)
-		c <- s
-	}()
-	return c
+func builderForSQuadTree(values []types.Value) types.Value {
+	i := 0
+	s := SQuadTree{ref: &ref.Ref{}}
+	s._Nodes = values[i].(ListOfRefOfValue)
+	i++
+	s._Tiles = values[i].(MapOfStringToRefOfSQuadTree)
+	i++
+	s._Depth = uint8(values[i].(types.UInt8))
+	i++
+	s._NumDescendents = uint32(values[i].(types.UInt32))
+	i++
+	s._Path = values[i].(types.String).String()
+	i++
+	s._Georectangle = values[i].(Georectangle)
+	i++
+	return s
 }
 
-func readerForSQuadTree(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(SQuadTree)
-		c <- s._Nodes
-		c <- s._Tiles
-		c <- types.UInt8(s._Depth)
-		c <- types.UInt32(s._NumDescendents)
-		c <- types.NewString(s._Path)
-		c <- s._Georectangle
-	}()
-	return c
+func readerForSQuadTree(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(SQuadTree)
+	values = append(values, s._Nodes)
+	values = append(values, s._Tiles)
+	values = append(values, types.UInt8(s._Depth))
+	values = append(values, types.UInt32(s._NumDescendents))
+	values = append(values, types.NewString(s._Path))
+	values = append(values, s._Georectangle)
+	return values
 }
 
 func (s SQuadTree) Equals(other types.Value) bool {

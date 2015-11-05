@@ -87,25 +87,22 @@ func init() {
 	types.RegisterStruct(__typeRefForStructWithUnions, builderForStructWithUnions, readerForStructWithUnions)
 }
 
-func builderForStructWithUnions() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := StructWithUnions{ref: &ref.Ref{}}
-		s._a = (<-c).(__unionOfBOfFloat64AndCOfString)
-		s._d = (<-c).(__unionOfEOfFloat64AndFOfString)
-		c <- s
-	}()
-	return c
+func builderForStructWithUnions(values []types.Value) types.Value {
+	i := 0
+	s := StructWithUnions{ref: &ref.Ref{}}
+	s._a = values[i].(__unionOfBOfFloat64AndCOfString)
+	i++
+	s._d = values[i].(__unionOfEOfFloat64AndFOfString)
+	i++
+	return s
 }
 
-func readerForStructWithUnions(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(StructWithUnions)
-		c <- s._a
-		c <- s._d
-	}()
-	return c
+func readerForStructWithUnions(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(StructWithUnions)
+	values = append(values, s._a)
+	values = append(values, s._d)
+	return values
 }
 
 func (s StructWithUnions) Equals(other types.Value) bool {
@@ -189,25 +186,22 @@ func init() {
 	types.RegisterStruct(__typeRefFor__unionOfBOfFloat64AndCOfString, builderFor__unionOfBOfFloat64AndCOfString, readerFor__unionOfBOfFloat64AndCOfString)
 }
 
-func builderFor__unionOfBOfFloat64AndCOfString() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := __unionOfBOfFloat64AndCOfString{ref: &ref.Ref{}}
-		s.__unionIndex = uint32((<-c).(types.UInt32))
-		s.__unionValue = <-c
-		c <- s
-	}()
-	return c
+func builderFor__unionOfBOfFloat64AndCOfString(values []types.Value) types.Value {
+	i := 0
+	s := __unionOfBOfFloat64AndCOfString{ref: &ref.Ref{}}
+	s.__unionIndex = uint32(values[i].(types.UInt32))
+	i++
+	s.__unionValue = values[i]
+	i++
+	return s
 }
 
-func readerFor__unionOfBOfFloat64AndCOfString(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(__unionOfBOfFloat64AndCOfString)
-		c <- types.UInt32(s.__unionIndex)
-		c <- s.__unionValue
-	}()
-	return c
+func readerFor__unionOfBOfFloat64AndCOfString(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(__unionOfBOfFloat64AndCOfString)
+	values = append(values, types.UInt32(s.__unionIndex))
+	values = append(values, s.__unionValue)
+	return values
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Equals(other types.Value) bool {
@@ -324,25 +318,22 @@ func init() {
 	types.RegisterStruct(__typeRefFor__unionOfEOfFloat64AndFOfString, builderFor__unionOfEOfFloat64AndFOfString, readerFor__unionOfEOfFloat64AndFOfString)
 }
 
-func builderFor__unionOfEOfFloat64AndFOfString() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := __unionOfEOfFloat64AndFOfString{ref: &ref.Ref{}}
-		s.__unionIndex = uint32((<-c).(types.UInt32))
-		s.__unionValue = <-c
-		c <- s
-	}()
-	return c
+func builderFor__unionOfEOfFloat64AndFOfString(values []types.Value) types.Value {
+	i := 0
+	s := __unionOfEOfFloat64AndFOfString{ref: &ref.Ref{}}
+	s.__unionIndex = uint32(values[i].(types.UInt32))
+	i++
+	s.__unionValue = values[i]
+	i++
+	return s
 }
 
-func readerFor__unionOfEOfFloat64AndFOfString(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(__unionOfEOfFloat64AndFOfString)
-		c <- types.UInt32(s.__unionIndex)
-		c <- s.__unionValue
-	}()
-	return c
+func readerFor__unionOfEOfFloat64AndFOfString(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(__unionOfEOfFloat64AndFOfString)
+	values = append(values, types.UInt32(s.__unionIndex))
+	values = append(values, s.__unionValue)
+	return values
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Equals(other types.Value) bool {

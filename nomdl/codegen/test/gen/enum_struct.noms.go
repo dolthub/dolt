@@ -114,23 +114,19 @@ func init() {
 	types.RegisterStruct(__typeRefForEnumStruct, builderForEnumStruct, readerForEnumStruct)
 }
 
-func builderForEnumStruct() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := EnumStruct{ref: &ref.Ref{}}
-		s._hand = (<-c).(Handedness)
-		c <- s
-	}()
-	return c
+func builderForEnumStruct(values []types.Value) types.Value {
+	i := 0
+	s := EnumStruct{ref: &ref.Ref{}}
+	s._hand = values[i].(Handedness)
+	i++
+	return s
 }
 
-func readerForEnumStruct(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(EnumStruct)
-		c <- s._hand
-	}()
-	return c
+func readerForEnumStruct(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(EnumStruct)
+	values = append(values, s._hand)
+	return values
 }
 
 func (s EnumStruct) Equals(other types.Value) bool {

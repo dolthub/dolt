@@ -333,27 +333,24 @@ func fixupTypeRef(tr TypeRef, pkg *Package) TypeRef {
 
 func (r *jsonArrayReader) readStruct(typeDef, typeRef TypeRef, pkg *Package) Value {
 	// We've read `[StructKind, sha1, name` at this point
-
-	typeRef = fixupTypeRef(typeRef, pkg)
-	c := structBuilderForTypeRef(typeRef, typeDef)
-
+	values := []Value{}
 	desc := typeDef.Desc.(StructDesc)
 	for _, f := range desc.Fields {
 		if f.Optional {
 			b := r.read().(bool)
-			c <- Bool(b)
+			values = append(values, Bool(b))
 			if b {
-				c <- r.readValueWithoutTag(f.T, pkg)
+				values = append(values, r.readValueWithoutTag(f.T, pkg))
 			}
 		} else {
-			c <- r.readValueWithoutTag(f.T, pkg)
+			values = append(values, r.readValueWithoutTag(f.T, pkg))
 		}
 	}
 	if len(desc.Union) > 0 {
 		unionIndex := uint32(r.read().(float64))
-		c <- UInt32(unionIndex)
-		c <- r.readValueWithoutTag(desc.Union[unionIndex].T, pkg)
+		values = append(values, UInt32(unionIndex), r.readValueWithoutTag(desc.Union[unionIndex].T, pkg))
 	}
 
-	return (<-c).(Value)
+	typeRef = fixupTypeRef(typeRef, pkg)
+	return structBuilderForTypeRef(values, typeRef, typeDef)
 }

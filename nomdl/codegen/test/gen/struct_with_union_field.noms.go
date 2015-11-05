@@ -81,27 +81,25 @@ func init() {
 	types.RegisterStruct(__typeRefForStructWithUnionField, builderForStructWithUnionField, readerForStructWithUnionField)
 }
 
-func builderForStructWithUnionField() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := StructWithUnionField{ref: &ref.Ref{}}
-		s._a = float32((<-c).(types.Float32))
-		s.__unionIndex = uint32((<-c).(types.UInt32))
-		s.__unionValue = <-c
-		c <- s
-	}()
-	return c
+func builderForStructWithUnionField(values []types.Value) types.Value {
+	i := 0
+	s := StructWithUnionField{ref: &ref.Ref{}}
+	s._a = float32(values[i].(types.Float32))
+	i++
+	s.__unionIndex = uint32(values[i].(types.UInt32))
+	i++
+	s.__unionValue = values[i]
+	i++
+	return s
 }
 
-func readerForStructWithUnionField(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(StructWithUnionField)
-		c <- types.Float32(s._a)
-		c <- types.UInt32(s.__unionIndex)
-		c <- s.__unionValue
-	}()
-	return c
+func readerForStructWithUnionField(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(StructWithUnionField)
+	values = append(values, types.Float32(s._a))
+	values = append(values, types.UInt32(s.__unionIndex))
+	values = append(values, s.__unionValue)
+	return values
 }
 
 func (s StructWithUnionField) Equals(other types.Value) bool {

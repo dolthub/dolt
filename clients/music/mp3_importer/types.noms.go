@@ -91,31 +91,31 @@ func init() {
 	types.RegisterStruct(__typeRefForSong, builderForSong, readerForSong)
 }
 
-func builderForSong() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := Song{ref: &ref.Ref{}}
-		s._Title = (<-c).(types.String).String()
-		s._Artist = (<-c).(types.String).String()
-		s._Album = (<-c).(types.String).String()
-		s._Year = (<-c).(types.String).String()
-		s._Mp3 = (<-c).(types.Blob)
-		c <- s
-	}()
-	return c
+func builderForSong(values []types.Value) types.Value {
+	i := 0
+	s := Song{ref: &ref.Ref{}}
+	s._Title = values[i].(types.String).String()
+	i++
+	s._Artist = values[i].(types.String).String()
+	i++
+	s._Album = values[i].(types.String).String()
+	i++
+	s._Year = values[i].(types.String).String()
+	i++
+	s._Mp3 = values[i].(types.Blob)
+	i++
+	return s
 }
 
-func readerForSong(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(Song)
-		c <- types.NewString(s._Title)
-		c <- types.NewString(s._Artist)
-		c <- types.NewString(s._Album)
-		c <- types.NewString(s._Year)
-		c <- s._Mp3
-	}()
-	return c
+func readerForSong(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Song)
+	values = append(values, types.NewString(s._Title))
+	values = append(values, types.NewString(s._Artist))
+	values = append(values, types.NewString(s._Album))
+	values = append(values, types.NewString(s._Year))
+	values = append(values, s._Mp3)
+	return values
 }
 
 func (s Song) Equals(other types.Value) bool {
