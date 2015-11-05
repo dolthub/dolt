@@ -428,13 +428,10 @@ func (m MapOfSizeToString) IterAll(cb MapOfSizeToStringIterAllCallback) {
 type MapOfSizeToStringFilterCallback func(k Size, v string) (keep bool)
 
 func (m MapOfSizeToString) Filter(cb MapOfSizeToStringFilterCallback) MapOfSizeToString {
-	nm := NewMapOfSizeToString()
-	m.IterAll(func(k Size, v string) {
-		if cb(k, v) {
-			nm = nm.Set(k, v)
-		}
+	out := m.m.Filter(func(k, v types.Value) bool {
+		return cb(k.(Size), v.(types.String).String())
 	})
-	return nm
+	return MapOfSizeToString{out, &ref.Ref{}}
 }
 
 // SetOfString
@@ -540,13 +537,10 @@ func (s SetOfString) IterAllP(concurrency int, cb SetOfStringIterAllCallback) {
 type SetOfStringFilterCallback func(p string) (keep bool)
 
 func (s SetOfString) Filter(cb SetOfStringFilterCallback) SetOfString {
-	ns := NewSetOfString()
-	s.IterAll(func(v string) {
-		if cb(v) {
-			ns = ns.Insert(v)
-		}
+	out := s.s.Filter(func(v types.Value) bool {
+		return cb(v.(types.String).String())
 	})
-	return ns
+	return SetOfString{out, &ref.Ref{}}
 }
 
 func (s SetOfString) Insert(p ...string) SetOfString {

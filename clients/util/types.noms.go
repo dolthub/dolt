@@ -140,13 +140,10 @@ func (l ListOfRefOfMapOfStringToValue) IterAllP(concurrency int, cb ListOfRefOfM
 type ListOfRefOfMapOfStringToValueFilterCallback func(v RefOfMapOfStringToValue, i uint64) (keep bool)
 
 func (l ListOfRefOfMapOfStringToValue) Filter(cb ListOfRefOfMapOfStringToValueFilterCallback) ListOfRefOfMapOfStringToValue {
-	nl := NewListOfRefOfMapOfStringToValue()
-	l.IterAll(func(v RefOfMapOfStringToValue, i uint64) {
-		if cb(v, i) {
-			nl = nl.Append(v)
-		}
+	out := l.l.Filter(func(v types.Value, i uint64) bool {
+		return cb(v.(RefOfMapOfStringToValue), i)
 	})
-	return nl
+	return ListOfRefOfMapOfStringToValue{out, &ref.Ref{}}
 }
 
 // RefOfMapOfStringToValue
@@ -319,11 +316,8 @@ func (m MapOfStringToValue) IterAll(cb MapOfStringToValueIterAllCallback) {
 type MapOfStringToValueFilterCallback func(k string, v types.Value) (keep bool)
 
 func (m MapOfStringToValue) Filter(cb MapOfStringToValueFilterCallback) MapOfStringToValue {
-	nm := NewMapOfStringToValue()
-	m.IterAll(func(k string, v types.Value) {
-		if cb(k, v) {
-			nm = nm.Set(k, v)
-		}
+	out := m.m.Filter(func(k, v types.Value) bool {
+		return cb(k.(types.String).String(), v)
 	})
-	return nm
+	return MapOfStringToValue{out, &ref.Ref{}}
 }

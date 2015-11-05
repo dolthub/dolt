@@ -364,13 +364,10 @@ func (s SetOfUInt8) IterAllP(concurrency int, cb SetOfUInt8IterAllCallback) {
 type SetOfUInt8FilterCallback func(p uint8) (keep bool)
 
 func (s SetOfUInt8) Filter(cb SetOfUInt8FilterCallback) SetOfUInt8 {
-	ns := NewSetOfUInt8()
-	s.IterAll(func(v uint8) {
-		if cb(v) {
-			ns = ns.Insert(v)
-		}
+	out := s.s.Filter(func(v types.Value) bool {
+		return cb(uint8(v.(types.UInt8)))
 	})
-	return ns
+	return SetOfUInt8{out, &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Insert(p ...uint8) SetOfUInt8 {

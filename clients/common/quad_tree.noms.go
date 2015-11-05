@@ -684,13 +684,10 @@ func (l ListOfNode) IterAllP(concurrency int, cb ListOfNodeIterAllCallback) {
 type ListOfNodeFilterCallback func(v Node, i uint64) (keep bool)
 
 func (l ListOfNode) Filter(cb ListOfNodeFilterCallback) ListOfNode {
-	nl := NewListOfNode()
-	l.IterAll(func(v Node, i uint64) {
-		if cb(v, i) {
-			nl = nl.Append(v)
-		}
+	out := l.l.Filter(func(v types.Value, i uint64) bool {
+		return cb(v.(Node), i)
 	})
-	return nl
+	return ListOfNode{out, &ref.Ref{}}
 }
 
 // MapOfStringToQuadTree
@@ -810,13 +807,10 @@ func (m MapOfStringToQuadTree) IterAll(cb MapOfStringToQuadTreeIterAllCallback) 
 type MapOfStringToQuadTreeFilterCallback func(k string, v QuadTree) (keep bool)
 
 func (m MapOfStringToQuadTree) Filter(cb MapOfStringToQuadTreeFilterCallback) MapOfStringToQuadTree {
-	nm := NewMapOfStringToQuadTree()
-	m.IterAll(func(k string, v QuadTree) {
-		if cb(k, v) {
-			nm = nm.Set(k, v)
-		}
+	out := m.m.Filter(func(k, v types.Value) bool {
+		return cb(k.(types.String).String(), v.(QuadTree))
 	})
-	return nm
+	return MapOfStringToQuadTree{out, &ref.Ref{}}
 }
 
 // ListOfRefOfValue
@@ -951,13 +945,10 @@ func (l ListOfRefOfValue) IterAllP(concurrency int, cb ListOfRefOfValueIterAllCa
 type ListOfRefOfValueFilterCallback func(v RefOfValue, i uint64) (keep bool)
 
 func (l ListOfRefOfValue) Filter(cb ListOfRefOfValueFilterCallback) ListOfRefOfValue {
-	nl := NewListOfRefOfValue()
-	l.IterAll(func(v RefOfValue, i uint64) {
-		if cb(v, i) {
-			nl = nl.Append(v)
-		}
+	out := l.l.Filter(func(v types.Value, i uint64) bool {
+		return cb(v.(RefOfValue), i)
 	})
-	return nl
+	return ListOfRefOfValue{out, &ref.Ref{}}
 }
 
 // MapOfStringToRefOfSQuadTree
@@ -1077,13 +1068,10 @@ func (m MapOfStringToRefOfSQuadTree) IterAll(cb MapOfStringToRefOfSQuadTreeIterA
 type MapOfStringToRefOfSQuadTreeFilterCallback func(k string, v RefOfSQuadTree) (keep bool)
 
 func (m MapOfStringToRefOfSQuadTree) Filter(cb MapOfStringToRefOfSQuadTreeFilterCallback) MapOfStringToRefOfSQuadTree {
-	nm := NewMapOfStringToRefOfSQuadTree()
-	m.IterAll(func(k string, v RefOfSQuadTree) {
-		if cb(k, v) {
-			nm = nm.Set(k, v)
-		}
+	out := m.m.Filter(func(k, v types.Value) bool {
+		return cb(k.(types.String).String(), v.(RefOfSQuadTree))
 	})
-	return nm
+	return MapOfStringToRefOfSQuadTree{out, &ref.Ref{}}
 }
 
 // RefOfSQuadTree

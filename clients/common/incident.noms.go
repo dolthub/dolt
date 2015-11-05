@@ -431,13 +431,10 @@ func (l ListOfRefOfIncident) IterAllP(concurrency int, cb ListOfRefOfIncidentIte
 type ListOfRefOfIncidentFilterCallback func(v RefOfIncident, i uint64) (keep bool)
 
 func (l ListOfRefOfIncident) Filter(cb ListOfRefOfIncidentFilterCallback) ListOfRefOfIncident {
-	nl := NewListOfRefOfIncident()
-	l.IterAll(func(v RefOfIncident, i uint64) {
-		if cb(v, i) {
-			nl = nl.Append(v)
-		}
+	out := l.l.Filter(func(v types.Value, i uint64) bool {
+		return cb(v.(RefOfIncident), i)
 	})
-	return nl
+	return ListOfRefOfIncident{out, &ref.Ref{}}
 }
 
 // RefOfIncident

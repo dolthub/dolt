@@ -244,13 +244,10 @@ func (m MapOfStringToRefOfCommit) IterAll(cb MapOfStringToRefOfCommitIterAllCall
 type MapOfStringToRefOfCommitFilterCallback func(k string, v RefOfCommit) (keep bool)
 
 func (m MapOfStringToRefOfCommit) Filter(cb MapOfStringToRefOfCommitFilterCallback) MapOfStringToRefOfCommit {
-	nm := NewMapOfStringToRefOfCommit()
-	m.IterAll(func(k string, v RefOfCommit) {
-		if cb(k, v) {
-			nm = nm.Set(k, v)
-		}
+	out := m.m.Filter(func(k, v types.Value) bool {
+		return cb(k.(types.String).String(), v.(RefOfCommit))
 	})
-	return nm
+	return MapOfStringToRefOfCommit{out, &ref.Ref{}}
 }
 
 // SetOfRefOfCommit
@@ -356,13 +353,10 @@ func (s SetOfRefOfCommit) IterAllP(concurrency int, cb SetOfRefOfCommitIterAllCa
 type SetOfRefOfCommitFilterCallback func(p RefOfCommit) (keep bool)
 
 func (s SetOfRefOfCommit) Filter(cb SetOfRefOfCommitFilterCallback) SetOfRefOfCommit {
-	ns := NewSetOfRefOfCommit()
-	s.IterAll(func(v RefOfCommit) {
-		if cb(v) {
-			ns = ns.Insert(v)
-		}
+	out := s.s.Filter(func(v types.Value) bool {
+		return cb(v.(RefOfCommit))
 	})
-	return ns
+	return SetOfRefOfCommit{out, &ref.Ref{}}
 }
 
 func (s SetOfRefOfCommit) Insert(p ...RefOfCommit) SetOfRefOfCommit {

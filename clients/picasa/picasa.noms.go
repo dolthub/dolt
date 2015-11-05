@@ -466,13 +466,10 @@ func (m MapOfStringToAlbum) IterAll(cb MapOfStringToAlbumIterAllCallback) {
 type MapOfStringToAlbumFilterCallback func(k string, v Album) (keep bool)
 
 func (m MapOfStringToAlbum) Filter(cb MapOfStringToAlbumFilterCallback) MapOfStringToAlbum {
-	nm := NewMapOfStringToAlbum()
-	m.IterAll(func(k string, v Album) {
-		if cb(k, v) {
-			nm = nm.Set(k, v)
-		}
+	out := m.m.Filter(func(k, v types.Value) bool {
+		return cb(k.(types.String).String(), v.(Album))
 	})
-	return nm
+	return MapOfStringToAlbum{out, &ref.Ref{}}
 }
 
 // SetOfRemotePhoto
@@ -557,13 +554,10 @@ func (s SetOfRemotePhoto) IterAllP(concurrency int, cb SetOfRemotePhotoIterAllCa
 type SetOfRemotePhotoFilterCallback func(p RemotePhoto) (keep bool)
 
 func (s SetOfRemotePhoto) Filter(cb SetOfRemotePhotoFilterCallback) SetOfRemotePhoto {
-	ns := NewSetOfRemotePhoto()
-	s.IterAll(func(v RemotePhoto) {
-		if cb(v) {
-			ns = ns.Insert(v)
-		}
+	out := s.s.Filter(func(v types.Value) bool {
+		return cb(v.(RemotePhoto))
 	})
-	return ns
+	return SetOfRemotePhoto{out, &ref.Ref{}}
 }
 
 func (s SetOfRemotePhoto) Insert(p ...RemotePhoto) SetOfRemotePhoto {
@@ -811,13 +805,10 @@ func (s SetOfRefOfRemotePhoto) IterAllP(concurrency int, cb SetOfRefOfRemotePhot
 type SetOfRefOfRemotePhotoFilterCallback func(p RefOfRemotePhoto) (keep bool)
 
 func (s SetOfRefOfRemotePhoto) Filter(cb SetOfRefOfRemotePhotoFilterCallback) SetOfRefOfRemotePhoto {
-	ns := NewSetOfRefOfRemotePhoto()
-	s.IterAll(func(v RefOfRemotePhoto) {
-		if cb(v) {
-			ns = ns.Insert(v)
-		}
+	out := s.s.Filter(func(v types.Value) bool {
+		return cb(v.(RefOfRemotePhoto))
 	})
-	return ns
+	return SetOfRefOfRemotePhoto{out, &ref.Ref{}}
 }
 
 func (s SetOfRefOfRemotePhoto) Insert(p ...RefOfRemotePhoto) SetOfRefOfRemotePhoto {

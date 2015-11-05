@@ -130,13 +130,10 @@ func (m MapOfBoolToString) IterAllP(concurrency int, cb MapOfBoolToStringIterAll
 type MapOfBoolToStringFilterCallback func(k bool, v string) (keep bool)
 
 func (m MapOfBoolToString) Filter(cb MapOfBoolToStringFilterCallback) MapOfBoolToString {
-	nm := NewMapOfBoolToString()
-	m.IterAll(func(k bool, v string) {
-		if cb(k, v) {
-			nm = nm.Set(k, v)
-		}
+	out := m.m.Filter(func(k, v types.Value) bool {
+		return cb(bool(k.(types.Bool)), v.(types.String).String())
 	})
-	return nm
+	return MapOfBoolToString{out, &ref.Ref{}}
 }
 
 // MapOfStringToValue
@@ -262,11 +259,8 @@ func (m MapOfStringToValue) IterAllP(concurrency int, cb MapOfStringToValueIterA
 type MapOfStringToValueFilterCallback func(k string, v types.Value) (keep bool)
 
 func (m MapOfStringToValue) Filter(cb MapOfStringToValueFilterCallback) MapOfStringToValue {
-	nm := NewMapOfStringToValue()
-	m.IterAll(func(k string, v types.Value) {
-		if cb(k, v) {
-			nm = nm.Set(k, v)
-		}
+	out := m.m.Filter(func(k, v types.Value) bool {
+		return cb(k.(types.String).String(), v)
 	})
-	return nm
+	return MapOfStringToValue{out, &ref.Ref{}}
 }

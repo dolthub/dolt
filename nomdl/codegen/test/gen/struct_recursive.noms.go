@@ -238,11 +238,8 @@ func (l ListOfTree) IterAllP(concurrency int, cb ListOfTreeIterAllCallback) {
 type ListOfTreeFilterCallback func(v Tree, i uint64) (keep bool)
 
 func (l ListOfTree) Filter(cb ListOfTreeFilterCallback) ListOfTree {
-	nl := NewListOfTree()
-	l.IterAll(func(v Tree, i uint64) {
-		if cb(v, i) {
-			nl = nl.Append(v)
-		}
+	out := l.l.Filter(func(v types.Value, i uint64) bool {
+		return cb(v.(Tree), i)
 	})
-	return nl
+	return ListOfTree{out, &ref.Ref{}}
 }
