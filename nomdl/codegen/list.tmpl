@@ -134,11 +134,8 @@ func (l {{.Name}}) IterAllP(concurrency int, cb {{.Name}}IterAllCallback) {
 type {{.Name}}FilterCallback func(v {{userType .ElemType}}, i uint64) (keep bool)
 
 func (l {{.Name}}) Filter(cb {{.Name}}FilterCallback) {{.Name}} {
-	nl := New{{.Name}}()
-	l.IterAll(func(v {{userType .ElemType}}, i uint64) {
-		if cb(v, i) {
-			nl = nl.Append(v)
-		}
+	out := l.l.Filter(func(v {{$typesPackage}}Value, i uint64) bool {
+		return cb({{valueToUser "v" .ElemType}}, i)
 	})
-	return nl
+	return {{.Name}}{out, &ref.Ref{}}
 }

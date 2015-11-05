@@ -86,6 +86,18 @@ func (l List) iterInternal(sem chan int, lf listIterAllFunc, offset uint64) {
 	wg.Wait()
 }
 
+type listFilterCallback func(v Value, index uint64) (keep bool)
+
+func (l List) Filter(cb listFilterCallback) List {
+	data := []Value{}
+	for i, v := range l.values {
+		if cb(v, uint64(i)) {
+			data = append(data, v)
+		}
+	}
+	return newListNoCopy(data, l.t)
+}
+
 type MapFunc func(v Value, index uint64) interface{}
 
 func (l List) Map(mf MapFunc) []interface{} {
