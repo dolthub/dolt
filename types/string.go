@@ -30,6 +30,10 @@ func (fs String) Chunks() []ref.Ref {
 	return nil
 }
 
+func (fs String) ChildValues() []Value {
+	return nil
+}
+
 var typeRefForString = MakePrimitiveTypeRef(StringKind)
 
 func (fs String) TypeRef() TypeRef {

@@ -97,6 +97,11 @@ func (s StructWithRef) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s StructWithRef) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._r)
+	return
+}
+
 func (s StructWithRef) R() RefOfSetOfFloat32 {
 	return s._r
 }
@@ -134,6 +139,10 @@ func (r RefOfListOfString) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, r.TypeRef().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
+}
+
+func (r RefOfListOfString) ChildValues() []types.Value {
+	return nil
 }
 
 // A Noms Value that describes RefOfListOfString.
@@ -201,6 +210,10 @@ func (l ListOfRefOfFloat32) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, l.TypeRef().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
+}
+
+func (l ListOfRefOfFloat32) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
 }
 
 // A Noms Value that describes ListOfRefOfFloat32.
@@ -327,6 +340,10 @@ func (r RefOfSetOfFloat32) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (r RefOfSetOfFloat32) ChildValues() []types.Value {
+	return nil
+}
+
 // A Noms Value that describes RefOfSetOfFloat32.
 var __typeRefForRefOfSetOfFloat32 types.TypeRef
 
@@ -392,6 +409,10 @@ func (l ListOfString) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, l.TypeRef().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
+}
+
+func (l ListOfString) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
 }
 
 // A Noms Value that describes ListOfString.
@@ -518,6 +539,10 @@ func (r RefOfFloat32) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (r RefOfFloat32) ChildValues() []types.Value {
+	return nil
+}
+
 // A Noms Value that describes RefOfFloat32.
 var __typeRefForRefOfFloat32 types.TypeRef
 
@@ -586,6 +611,10 @@ func (s SetOfFloat32) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, s.TypeRef().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
+}
+
+func (s SetOfFloat32) ChildValues() []types.Value {
+	return append([]types.Value{}, s.s.ChildValues()...)
 }
 
 // A Noms Value that describes SetOfFloat32.

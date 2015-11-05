@@ -73,6 +73,10 @@ func (e LocalE) Chunks() []ref.Ref {
 	return nil
 }
 
+func (e LocalE) ChildValues() []types.Value {
+	return nil
+}
+
 // ImportUser
 
 type ImportUser struct {
@@ -153,6 +157,12 @@ func (s ImportUser) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s ImportUser) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._importedStruct)
+	ret = append(ret, s._enum)
+	return
+}
+
 func (s ImportUser) ImportedStruct() D {
 	return s._importedStruct
 }
@@ -214,6 +224,10 @@ func (l ListOfD) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, l.TypeRef().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
+}
+
+func (l ListOfD) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
 }
 
 // A Noms Value that describes ListOfD.

@@ -111,6 +111,34 @@ func (t TypeRef) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (t TypeRef) ChildValues() (res []Value) {
+	if t.HasPackageRef() {
+		res = append(res, NewRefOfPackage(t.PackageRef()))
+	}
+	if !t.IsUnresolved() {
+		switch desc := t.Desc.(type) {
+		case CompoundDesc:
+			for _, t := range desc.ElemTypes {
+				res = append(res, t)
+			}
+		case StructDesc:
+			for _, t := range desc.Fields {
+				res = append(res, t.T)
+			}
+			for _, t := range desc.Union {
+				res = append(res, t.T)
+			}
+		case UnresolvedDesc:
+			// Nothing, this is handled by the HasPackageRef() check above
+		case PrimitiveDesc, EnumDesc:
+			// Nothing, these have no child values
+		default:
+			d.Chk.Fail("Unexpected type desc implementation: %#v", t)
+		}
+	}
+	return
+}
+
 var typeRefForTypeRef = MakePrimitiveTypeRef(TypeRefKind)
 
 func (t TypeRef) TypeRef() TypeRef {

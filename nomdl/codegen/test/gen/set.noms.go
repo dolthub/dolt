@@ -53,6 +53,10 @@ func (s SetOfBool) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s SetOfBool) ChildValues() []types.Value {
+	return append([]types.Value{}, s.s.ChildValues()...)
+}
+
 // A Noms Value that describes SetOfBool.
 var __typeRefForSetOfBool types.TypeRef
 

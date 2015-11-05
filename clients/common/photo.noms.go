@@ -152,6 +152,16 @@ func (s RemotePhoto) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s RemotePhoto) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.NewString(s._Id))
+	ret = append(ret, types.NewString(s._Title))
+	ret = append(ret, types.NewString(s._Url))
+	ret = append(ret, s._Geoposition)
+	ret = append(ret, s._Sizes)
+	ret = append(ret, s._Tags)
+	return
+}
+
 func (s RemotePhoto) Id() string {
 	return s._Id
 }
@@ -291,6 +301,12 @@ func (s Size) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s Size) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.UInt32(s._Width))
+	ret = append(ret, types.UInt32(s._Height))
+	return
+}
+
 func (s Size) Width() uint32 {
 	return s._Width
 }
@@ -353,6 +369,10 @@ func (m MapOfSizeToString) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, m.TypeRef().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
+}
+
+func (m MapOfSizeToString) ChildValues() []types.Value {
+	return append([]types.Value{}, m.m.ChildValues()...)
 }
 
 // A Noms Value that describes MapOfSizeToString.
@@ -478,6 +498,10 @@ func (s SetOfString) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, s.TypeRef().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
+}
+
+func (s SetOfString) ChildValues() []types.Value {
+	return append([]types.Value{}, s.s.ChildValues()...)
 }
 
 // A Noms Value that describes SetOfString.

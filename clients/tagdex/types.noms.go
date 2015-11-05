@@ -52,6 +52,10 @@ func (m MapOfStringToSetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (m MapOfStringToSetOfRefOfRemotePhoto) ChildValues() []types.Value {
+	return append([]types.Value{}, m.m.ChildValues()...)
+}
+
 // A Noms Value that describes MapOfStringToSetOfRefOfRemotePhoto.
 var __typeRefForMapOfStringToSetOfRefOfRemotePhoto types.TypeRef
 
@@ -175,6 +179,10 @@ func (s SetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, s.TypeRef().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
+}
+
+func (s SetOfRefOfRemotePhoto) ChildValues() []types.Value {
+	return append([]types.Value{}, s.s.ChildValues()...)
 }
 
 // A Noms Value that describes SetOfRefOfRemotePhoto.
@@ -303,6 +311,10 @@ func (r RefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, r.TypeRef().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
+}
+
+func (r RefOfRemotePhoto) ChildValues() []types.Value {
+	return nil
 }
 
 // A Noms Value that describes RefOfRemotePhoto.

@@ -71,6 +71,10 @@ func (e Handedness) Chunks() []ref.Ref {
 	return nil
 }
 
+func (e Handedness) ChildValues() []types.Value {
+	return nil
+}
+
 // EnumStruct
 
 type EnumStruct struct {
@@ -139,6 +143,11 @@ func (s EnumStruct) Ref() ref.Ref {
 
 func (s EnumStruct) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, __typeRefForEnumStruct.Chunks()...)
+	return
+}
+
+func (s EnumStruct) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._hand)
 	return
 }
 

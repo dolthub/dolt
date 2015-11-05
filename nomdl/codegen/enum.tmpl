@@ -44,3 +44,7 @@ func (e {{.Name}}) Ref() ref.Ref {
 func (e {{.Name}}) Chunks() []ref.Ref {
 	return nil
 }
+
+func (e {{.Name}}) ChildValues() []{{$typesPackage}}Value {
+	return nil
+}

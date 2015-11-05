@@ -50,6 +50,10 @@ func (l ListOfInt64) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (l ListOfInt64) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
+}
+
 // A Noms Value that describes ListOfInt64.
 var __typeRefForListOfInt64 types.TypeRef
 

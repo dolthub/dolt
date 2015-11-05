@@ -73,6 +73,21 @@ func (s Struct) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s Struct) ChildValues() (res []Value) {
+	res = append(res, s.t)
+	for _, f := range s.desc().Fields {
+		if v, ok := s.data[f.Name]; ok {
+			res = append(res, v)
+		} else {
+			d.Chk.True(f.Optional)
+		}
+	}
+	if s.hasUnion() {
+		res = append(res, s.unionValue)
+	}
+	return
+}
+
 func (s Struct) TypeRef() TypeRef {
 	return s.t
 }

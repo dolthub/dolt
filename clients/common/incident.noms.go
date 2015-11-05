@@ -189,6 +189,21 @@ func (s Incident) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s Incident) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.Int64(s._ID))
+	ret = append(ret, types.NewString(s._Category))
+	ret = append(ret, types.NewString(s._Description))
+	ret = append(ret, types.NewString(s._DayOfWeek))
+	ret = append(ret, types.NewString(s._Date))
+	ret = append(ret, types.NewString(s._Time))
+	ret = append(ret, types.NewString(s._PdDistrict))
+	ret = append(ret, types.NewString(s._Resolution))
+	ret = append(ret, types.NewString(s._Address))
+	ret = append(ret, s._Geoposition)
+	ret = append(ret, types.NewString(s._PdID))
+	return
+}
+
 func (s Incident) ID() int64 {
 	return s._ID
 }
@@ -342,6 +357,10 @@ func (l ListOfRefOfIncident) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (l ListOfRefOfIncident) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
+}
+
 // A Noms Value that describes ListOfRefOfIncident.
 var __typeRefForListOfRefOfIncident types.TypeRef
 
@@ -464,6 +483,10 @@ func (r RefOfIncident) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, r.TypeRef().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
+}
+
+func (r RefOfIncident) ChildValues() []types.Value {
+	return nil
 }
 
 // A Noms Value that describes RefOfIncident.

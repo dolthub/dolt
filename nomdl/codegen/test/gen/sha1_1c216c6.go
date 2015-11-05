@@ -105,6 +105,12 @@ func (s S) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s S) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.NewString(s._s))
+	ret = append(ret, types.Bool(s._b))
+	return
+}
+
 func (s S) S() string {
 	return s._s
 }
@@ -168,5 +174,9 @@ func (e E) Ref() ref.Ref {
 }
 
 func (e E) Chunks() []ref.Ref {
+	return nil
+}
+
+func (e E) ChildValues() []types.Value {
 	return nil
 }

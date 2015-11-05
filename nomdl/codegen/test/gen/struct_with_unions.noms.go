@@ -120,6 +120,12 @@ func (s StructWithUnions) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s StructWithUnions) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._a)
+	ret = append(ret, s._d)
+	return
+}
+
 func (s StructWithUnions) A() __unionOfBOfFloat64AndCOfString {
 	return s._a
 }
@@ -215,6 +221,11 @@ func (s __unionOfBOfFloat64AndCOfString) Ref() ref.Ref {
 func (s __unionOfBOfFloat64AndCOfString) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, __typeRefFor__unionOfBOfFloat64AndCOfString.Chunks()...)
 	chunks = append(chunks, s.__unionValue.Chunks()...)
+	return
+}
+
+func (s __unionOfBOfFloat64AndCOfString) ChildValues() (ret []types.Value) {
+	ret = append(ret, s.__unionValue)
 	return
 }
 
@@ -347,6 +358,11 @@ func (s __unionOfEOfFloat64AndFOfString) Ref() ref.Ref {
 func (s __unionOfEOfFloat64AndFOfString) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, __typeRefFor__unionOfEOfFloat64AndFOfString.Chunks()...)
 	chunks = append(chunks, s.__unionValue.Chunks()...)
+	return
+}
+
+func (s __unionOfEOfFloat64AndFOfString) ChildValues() (ret []types.Value) {
+	ret = append(ret, s.__unionValue)
 	return
 }
 

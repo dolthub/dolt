@@ -113,6 +113,12 @@ func (s D) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s D) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._structField)
+	ret = append(ret, s._enumField)
+	return
+}
+
 func (s D) StructField() S {
 	return s._structField
 }
@@ -202,6 +208,11 @@ func (s DUser) Ref() ref.Ref {
 func (s DUser) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, __typeRefForDUser.Chunks()...)
 	chunks = append(chunks, s._Dfield.Chunks()...)
+	return
+}
+
+func (s DUser) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._Dfield)
 	return
 }
 

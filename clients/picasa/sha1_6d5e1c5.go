@@ -111,6 +111,12 @@ func (s Geoposition) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s Geoposition) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.Float32(s._Latitude))
+	ret = append(ret, types.Float32(s._Longitude))
+	return
+}
+
 func (s Geoposition) Latitude() float32 {
 	return s._Latitude
 }
@@ -209,6 +215,12 @@ func (s Georectangle) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, __typeRefForGeorectangle.Chunks()...)
 	chunks = append(chunks, s._TopLeft.Chunks()...)
 	chunks = append(chunks, s._BottomRight.Chunks()...)
+	return
+}
+
+func (s Georectangle) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._TopLeft)
+	ret = append(ret, s._BottomRight)
 	return
 }
 

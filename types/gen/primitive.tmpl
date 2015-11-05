@@ -12,6 +12,10 @@ func (v {{.NomsType}}) Chunks() []ref.Ref {
 	return nil
 }
 
+func (v {{.NomsType}}) ChildValues() []Value {
+	return nil
+}
+
 func (v {{.NomsType}}) ToPrimitive() interface{} {
 	return {{.GoType}}(v)
 }

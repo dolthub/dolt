@@ -24,6 +24,10 @@ func (e Enum) Chunks() []ref.Ref {
 	return nil
 }
 
+func (e Enum) ChildValues() []Value {
+	return nil
+}
+
 func (e Enum) TypeRef() TypeRef {
 	return e.t
 }

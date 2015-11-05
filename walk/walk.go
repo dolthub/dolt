@@ -12,25 +12,25 @@ import (
 
 // SomeCallback takes a ref.Ref and returns a bool indicating whether
 // the current walk should skip the tree descending from value.
-type SomeCallback func(r ref.Ref) bool
+type SomeCallback func(v types.Value) bool
 
 // AllCallback takes a ref and processes it.
-type AllCallback func(r ref.Ref)
+type AllCallback func(v types.Value)
 
 // Some recursively walks over all ref.Refs reachable from r and calls cb on them. If cb ever returns true, the walk will stop recursing on the current ref. If |concurrency| > 1, it is the callers responsibility to make ensure that |cb| is threadsafe.
-func SomeP(r ref.Ref, cs chunks.ChunkSource, cb SomeCallback, concurrency int) {
-	doTreeWalkP(r, cs, cb, concurrency)
+func SomeP(v types.Value, cs chunks.ChunkSource, cb SomeCallback, concurrency int) {
+	doTreeWalkP(v, cs, cb, concurrency)
 }
 
 // All recursively walks over all ref.Refs reachable from r and calls cb on them. If |concurrency| > 1, it is the callers responsibility to make ensure that |cb| is threadsafe.
-func AllP(r ref.Ref, cs chunks.ChunkSource, cb AllCallback, concurrency int) {
-	doTreeWalkP(r, cs, func(r ref.Ref) (skip bool) {
-		cb(r)
+func AllP(v types.Value, cs chunks.ChunkSource, cb AllCallback, concurrency int) {
+	doTreeWalkP(v, cs, func(v types.Value) (skip bool) {
+		cb(v)
 		return
 	}, concurrency)
 }
 
-func doTreeWalkP(r ref.Ref, cs chunks.ChunkSource, cb SomeCallback, concurrency int) {
+func doTreeWalkP(v types.Value, cs chunks.ChunkSource, cb SomeCallback, concurrency int) {
 	rq := newRefQueue()
 	f := newFailure()
 
@@ -38,11 +38,27 @@ func doTreeWalkP(r ref.Ref, cs chunks.ChunkSource, cb SomeCallback, concurrency 
 	mu := sync.Mutex{}
 	wg := sync.WaitGroup{}
 
+	var processVal func(v types.Value)
+	processVal = func(v types.Value) {
+		if cb(v) {
+			return
+		}
+
+		if r, ok := v.(types.RefBase); ok {
+			wg.Add(1)
+			rq.tail() <- r.TargetRef()
+		} else {
+			for _, c := range v.ChildValues() {
+				processVal(c)
+			}
+		}
+	}
+
 	processRef := func(r ref.Ref) {
 		defer wg.Done()
 
 		mu.Lock()
-		skip := cb(r) || visited[r]
+		skip := visited[r]
 		visited[r] = true
 		mu.Unlock()
 
@@ -55,11 +71,7 @@ func doTreeWalkP(r ref.Ref, cs chunks.ChunkSource, cb SomeCallback, concurrency 
 			f.fail(fmt.Errorf("Attempt to copy absent ref:%s", r.String()))
 			return
 		}
-
-		for _, c := range v.Chunks() {
-			wg.Add(1)
-			rq.tail() <- c
-		}
+		processVal(v)
 	}
 
 	iter := func() {
@@ -72,8 +84,7 @@ func doTreeWalkP(r ref.Ref, cs chunks.ChunkSource, cb SomeCallback, concurrency 
 		go iter()
 	}
 
-	wg.Add(1)
-	rq.tail() <- r
+	processVal(v)
 	wg.Wait()
 
 	rq.close()

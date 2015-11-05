@@ -143,6 +143,15 @@ func (s User) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s User) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.NewString(s._Id))
+	ret = append(ret, types.NewString(s._Name))
+	ret = append(ret, types.NewString(s._OAuthToken))
+	ret = append(ret, types.NewString(s._OAuthSecret))
+	ret = append(ret, s._Albums)
+	return
+}
+
 func (s User) Id() string {
 	return s._Id
 }
@@ -281,6 +290,13 @@ func (s Album) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s Album) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.NewString(s._Id))
+	ret = append(ret, types.NewString(s._Title))
+	ret = append(ret, s._Photos)
+	return
+}
+
 func (s Album) Id() string {
 	return s._Id
 }
@@ -353,6 +369,10 @@ func (m MapOfStringToAlbum) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, m.TypeRef().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
+}
+
+func (m MapOfStringToAlbum) ChildValues() []types.Value {
+	return append([]types.Value{}, m.m.ChildValues()...)
 }
 
 // A Noms Value that describes MapOfStringToAlbum.
@@ -463,6 +483,10 @@ func (r RefOfUser) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (r RefOfUser) ChildValues() []types.Value {
+	return nil
+}
+
 // A Noms Value that describes RefOfUser.
 var __typeRefForRefOfUser types.TypeRef
 
@@ -514,6 +538,10 @@ func (r RefOfSetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, r.TypeRef().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
+}
+
+func (r RefOfSetOfRefOfRemotePhoto) ChildValues() []types.Value {
+	return nil
 }
 
 // A Noms Value that describes RefOfSetOfRefOfRemotePhoto.
@@ -584,6 +612,10 @@ func (s SetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, s.TypeRef().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
+}
+
+func (s SetOfRefOfRemotePhoto) ChildValues() []types.Value {
+	return append([]types.Value{}, s.s.ChildValues()...)
 }
 
 // A Noms Value that describes SetOfRefOfRemotePhoto.
@@ -712,6 +744,10 @@ func (r RefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, r.TypeRef().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
+}
+
+func (r RefOfRemotePhoto) ChildValues() []types.Value {
+	return nil
 }
 
 // A Noms Value that describes RefOfRemotePhoto.

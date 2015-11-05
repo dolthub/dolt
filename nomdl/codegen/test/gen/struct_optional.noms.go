@@ -124,6 +124,16 @@ func (s OptionalStruct) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s OptionalStruct) ChildValues() (ret []types.Value) {
+	if s.__optionals {
+		ret = append(ret, types.NewString(s._s))
+	}
+	if s.__optionalb {
+		ret = append(ret, types.Bool(s._b))
+	}
+	return
+}
+
 func (s OptionalStruct) S() (v string, ok bool) {
 	if s.__optionals {
 		return s._s, true

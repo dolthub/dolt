@@ -51,6 +51,10 @@ func (m MapOfBoolToString) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (m MapOfBoolToString) ChildValues() []types.Value {
+	return append([]types.Value{}, m.m.ChildValues()...)
+}
+
 // A Noms Value that describes MapOfBoolToString.
 var __typeRefForMapOfBoolToString types.TypeRef
 
@@ -178,6 +182,10 @@ func (m MapOfStringToValue) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, m.TypeRef().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
+}
+
+func (m MapOfStringToValue) ChildValues() []types.Value {
+	return append([]types.Value{}, m.m.ChildValues()...)
 }
 
 // A Noms Value that describes MapOfStringToValue.

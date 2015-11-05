@@ -36,6 +36,10 @@ func (bl blobLeaf) Chunks() []ref.Ref {
 	return nil
 }
 
+func (bl blobLeaf) ChildValues() []Value {
+	return nil
+}
+
 func (bl blobLeaf) TypeRef() TypeRef {
 	return typeRefForBlob
 }

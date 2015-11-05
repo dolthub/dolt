@@ -30,6 +30,16 @@ func (p Package) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (p Package) ChildValues() (res []Value) {
+	for _, t := range p.types {
+		res = append(res, t)
+	}
+	for _, d := range p.dependencies {
+		res = append(res, NewRefOfPackage(d))
+	}
+	return
+}
+
 var typeRefForPackage = MakePrimitiveTypeRef(PackageKind)
 
 func (p Package) TypeRef() TypeRef {

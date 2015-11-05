@@ -132,6 +132,15 @@ func (s Song) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s Song) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.NewString(s._Title))
+	ret = append(ret, types.NewString(s._Artist))
+	ret = append(ret, types.NewString(s._Album))
+	ret = append(ret, types.NewString(s._Year))
+	ret = append(ret, s._Mp3)
+	return
+}
+
 func (s Song) Title() string {
 	return s._Title
 }
@@ -223,6 +232,10 @@ func (l ListOfSong) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, l.TypeRef().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
+}
+
+func (l ListOfSong) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
 }
 
 // A Noms Value that describes ListOfSong.

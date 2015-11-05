@@ -96,6 +96,11 @@ func (s StructWithDupList) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s StructWithDupList) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._l)
+	return
+}
+
 func (s StructWithDupList) L() ListOfUInt8 {
 	return s._l
 }
