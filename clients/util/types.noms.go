@@ -37,10 +37,6 @@ func (l ListOfRefOfMapOfStringToValue) Def() ListOfRefOfMapOfStringToValueDef {
 	return d
 }
 
-func (l ListOfRefOfMapOfStringToValue) InternalImplementation() types.List {
-	return l.l
-}
-
 func (l ListOfRefOfMapOfStringToValue) Equals(other types.Value) bool {
 	return other != nil && __typeRefForListOfRefOfMapOfStringToValue.Equals(other.TypeRef()) && l.Ref() == other.Ref()
 }
@@ -64,9 +60,15 @@ func (m ListOfRefOfMapOfStringToValue) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForListOfRefOfMapOfStringToValue = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))))
-	types.RegisterFromValFunction(__typeRefForListOfRefOfMapOfStringToValue, func(v types.Value) types.Value {
-		return ListOfRefOfMapOfStringToValue{v.(types.List), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForListOfRefOfMapOfStringToValue, builderForListOfRefOfMapOfStringToValue, readerForListOfRefOfMapOfStringToValue)
+}
+
+func builderForListOfRefOfMapOfStringToValue(v types.Value) types.Value {
+	return ListOfRefOfMapOfStringToValue{v.(types.List), &ref.Ref{}}
+}
+
+func readerForListOfRefOfMapOfStringToValue(v types.Value) types.Value {
+	return v.(ListOfRefOfMapOfStringToValue).l
 }
 
 func (l ListOfRefOfMapOfStringToValue) Len() uint64 {
@@ -129,6 +131,12 @@ func (l ListOfRefOfMapOfStringToValue) IterAll(cb ListOfRefOfMapOfStringToValueI
 	})
 }
 
+func (l ListOfRefOfMapOfStringToValue) IterAllP(concurrency int, cb ListOfRefOfMapOfStringToValueIterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
+		cb(v.(RefOfMapOfStringToValue), i)
+	})
+}
+
 type ListOfRefOfMapOfStringToValueFilterCallback func(v RefOfMapOfStringToValue, i uint64) (keep bool)
 
 func (l ListOfRefOfMapOfStringToValue) Filter(cb ListOfRefOfMapOfStringToValueFilterCallback) ListOfRefOfMapOfStringToValue {
@@ -179,9 +187,11 @@ func (m RefOfMapOfStringToValue) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForRefOfMapOfStringToValue = types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind)))
-	types.RegisterFromValFunction(__typeRefForRefOfMapOfStringToValue, func(v types.Value) types.Value {
-		return NewRefOfMapOfStringToValue(v.(types.Ref).TargetRef())
-	})
+	types.RegisterRef(__typeRefForRefOfMapOfStringToValue, builderForRefOfMapOfStringToValue)
+}
+
+func builderForRefOfMapOfStringToValue(r ref.Ref) types.Value {
+	return NewRefOfMapOfStringToValue(r)
 }
 
 func (r RefOfMapOfStringToValue) TargetValue(cs chunks.ChunkSource) MapOfStringToValue {
@@ -222,10 +232,6 @@ func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 	return def
 }
 
-func (m MapOfStringToValue) InternalImplementation() types.Map {
-	return m.m
-}
-
 func (m MapOfStringToValue) Equals(other types.Value) bool {
 	return other != nil && __typeRefForMapOfStringToValue.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
@@ -249,9 +255,15 @@ func (m MapOfStringToValue) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
-	types.RegisterFromValFunction(__typeRefForMapOfStringToValue, func(v types.Value) types.Value {
-		return MapOfStringToValue{v.(types.Map), &ref.Ref{}}
-	})
+	types.RegisterValue(__typeRefForMapOfStringToValue, builderForMapOfStringToValue, readerForMapOfStringToValue)
+}
+
+func builderForMapOfStringToValue(v types.Value) types.Value {
+	return MapOfStringToValue{v.(types.Map), &ref.Ref{}}
+}
+
+func readerForMapOfStringToValue(v types.Value) types.Value {
+	return v.(MapOfStringToValue).m
 }
 
 func (m MapOfStringToValue) Empty() bool {

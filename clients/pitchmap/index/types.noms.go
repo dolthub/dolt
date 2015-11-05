@@ -433,9 +433,11 @@ func (m RefOfMapOfStringToValue) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForRefOfMapOfStringToValue = types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind)))
-	types.RegisterFromValFunction(__typeRefForRefOfMapOfStringToValue, func(v types.Value) types.Value {
-		return NewRefOfMapOfStringToValue(v.(types.Ref).TargetRef())
-	})
+	types.RegisterRef(__typeRefForRefOfMapOfStringToValue, builderForRefOfMapOfStringToValue)
+}
+
+func builderForRefOfMapOfStringToValue(r ref.Ref) types.Value {
+	return NewRefOfMapOfStringToValue(r)
 }
 
 func (r RefOfMapOfStringToValue) TargetValue(cs chunks.ChunkSource) MapOfStringToValue {
