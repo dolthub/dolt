@@ -14,10 +14,6 @@ type List struct {
 	ref    *ref.Ref
 }
 
-type listIterFunc func(v Value, index uint64) (stop bool)
-type listIterAllFunc func(v Value, index uint64)
-type MapFunc func(v Value, index uint64) interface{}
-
 var listTypeRef = MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))
 
 func NewList(v ...Value) List {
@@ -44,6 +40,8 @@ func (l List) Get(idx uint64) Value {
 	return l.values[idx]
 }
 
+type listIterFunc func(v Value, index uint64) (stop bool)
+
 func (l List) Iter(f listIterFunc) {
 	for i, v := range l.values {
 		if f(v, uint64(i)) {
@@ -51,6 +49,8 @@ func (l List) Iter(f listIterFunc) {
 		}
 	}
 }
+
+type listIterAllFunc func(v Value, index uint64)
 
 func (l List) IterAll(f listIterAllFunc) {
 	for i, v := range l.values {
@@ -85,6 +85,8 @@ func (l List) iterInternal(sem chan int, lf listIterAllFunc, offset uint64) {
 
 	wg.Wait()
 }
+
+type MapFunc func(v Value, index uint64) interface{}
 
 func (l List) Map(mf MapFunc) []interface{} {
 	return l.MapP(1, mf)

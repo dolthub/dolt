@@ -116,6 +116,11 @@ func (m {{.Name}}) IterAll(cb {{.Name}}IterAllCallback) {
 	})
 }
 
+func (m {{.Name}}) IterAllP(concurrency int, cb {{.Name}}IterAllCallback) {
+	m.m.IterAllP(concurrency, func(k, v {{$typesPackage}}Value) {
+		cb({{valueToUser "k" .KeyType}}, {{valueToUser "v" .ValueType}})
+	})
+}
 
 type {{.Name}}FilterCallback func(k {{userType .KeyType}}, v {{userType .ValueType}}) (keep bool)
 
