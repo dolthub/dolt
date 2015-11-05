@@ -125,6 +125,12 @@ func (l {{.Name}}) IterAll(cb {{.Name}}IterAllCallback) {
 	})
 }
 
+func (l {{.Name}}) IterAllP(concurrency int, cb {{.Name}}IterAllCallback) {
+	l.l.IterAllP(concurrency, func(v {{$typesPackage}}Value, i uint64) {
+		cb({{valueToUser "v" .ElemType}}, i)
+	})
+}
+
 type {{.Name}}FilterCallback func(v {{userType .ElemType}}, i uint64) (keep bool)
 
 func (l {{.Name}}) Filter(cb {{.Name}}FilterCallback) {{.Name}} {

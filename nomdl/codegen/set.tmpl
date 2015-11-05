@@ -96,6 +96,12 @@ func (s {{.Name}}) IterAll(cb {{.Name}}IterAllCallback) {
 	})
 }
 
+func (s {{.Name}}) IterAllP(concurrency int, cb {{.Name}}IterAllCallback) {
+	s.s.IterAllP(concurrency, func(v {{$typesPackage}}Value) {
+		cb({{valueToUser "v" .ElemType}})
+	})
+}
+
 type {{.Name}}FilterCallback func(p {{userType .ElemType}}) (keep bool)
 
 func (s {{.Name}}) Filter(cb {{.Name}}FilterCallback) {{.Name}} {

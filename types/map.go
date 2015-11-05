@@ -101,6 +101,8 @@ func (m Map) IterAll(cb mapIterAllCallback) {
 	}
 }
 
+// TODO: Implement IterAllP() BUG 573
+
 type mapFilterCallback func(key, value Value) (keep bool)
 
 func (m Map) Filter(cb mapFilterCallback) Map {

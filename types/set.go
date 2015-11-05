@@ -1,7 +1,9 @@
 package types
 
 import (
+	"runtime"
 	"sort"
+	"sync"
 
 	"github.com/attic-labs/noms/ref"
 )
@@ -12,6 +14,18 @@ type Set struct {
 	data setData // sorted by Ref()
 	t    TypeRef
 	ref  *ref.Ref
+}
+
+type setIterCallback func(v Value) bool
+type setIterAllCallback func(v Value)
+type setFilterCallback func(v Value) (keep bool)
+
+var setTypeRef = MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))
+
+func init() {
+	RegisterFromValFunction(setTypeRef, func(v Value) Value {
+		return v.(Set)
+	})
 }
 
 func NewSet(v ...Value) Set {
@@ -72,8 +86,6 @@ func (s Set) Subtract(others ...Set) Set {
 	return result
 }
 
-type setIterCallback func(v Value) bool
-
 func (s Set) Iter(cb setIterCallback) {
 	for _, v := range s.data {
 		if cb(v) {
@@ -82,15 +94,33 @@ func (s Set) Iter(cb setIterCallback) {
 	}
 }
 
-type setIterAllCallback func(v Value)
-
 func (s Set) IterAll(cb setIterAllCallback) {
 	for _, v := range s.data {
 		cb(v)
 	}
 }
 
-type setFilterCallback func(v Value) (keep bool)
+func (s Set) IterAllP(concurrency int, f setIterAllCallback) {
+	if concurrency == 0 {
+		concurrency = runtime.NumCPU()
+	}
+	sem := make(chan int, concurrency)
+
+	wg := sync.WaitGroup{}
+
+	for idx := range s.data {
+		wg.Add(1)
+
+		sem <- 1
+		go func(idx int) {
+			defer wg.Done()
+			f(s.data[idx])
+			<-sem
+		}(idx)
+	}
+
+	wg.Wait()
+}
 
 func (s Set) Filter(cb setFilterCallback) Set {
 	data := setData{}
@@ -124,21 +154,12 @@ func (s Set) Chunks() (chunks []ref.Ref) {
 	}
 	return
 }
-
-var setTypeRef = MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))
-
 func (s Set) TypeRef() TypeRef {
 	return s.t
 }
 
 func (s Set) elemType() TypeRef {
 	return s.t.Desc.(CompoundDesc).ElemTypes[0]
-}
-
-func init() {
-	RegisterFromValFunction(setTypeRef, func(v Value) Value {
-		return v.(Set)
-	})
 }
 
 func newSetFromData(m setData, t TypeRef) Set {

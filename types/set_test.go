@@ -1,6 +1,8 @@
 package types
 
 import (
+	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
@@ -155,6 +157,60 @@ func TestSetIterAll(t *testing.T) {
 		acc = acc.Insert(v)
 	})
 	assert.True(s.Equals(acc))
+}
+
+func TestSetIterAllP(t *testing.T) {
+	assert := assert.New(t)
+
+	testIter := func(concurrency, setLen int) {
+		values := make([]Value, setLen)
+		for i := 0; i < setLen; i++ {
+			values[i] = UInt64(i)
+		}
+
+		s := NewSet(values...)
+
+		cur := 0
+		mu := sync.Mutex{}
+		getCur := func() int {
+			mu.Lock()
+			defer mu.Unlock()
+			return cur
+		}
+
+		expectConcurreny := concurrency
+		if concurrency == 0 {
+			expectConcurreny = runtime.NumCPU()
+		}
+		visited := make([]bool, setLen)
+		sf := func(v Value) {
+			mu.Lock()
+			cur++
+			mu.Unlock()
+
+			for getCur() < expectConcurreny {
+			}
+
+			visited[v.(UInt64)] = true
+		}
+
+		if concurrency == 1 {
+			s.IterAll(sf)
+		} else {
+			s.IterAllP(concurrency, sf)
+		}
+		numVisited := 0
+		for _, visit := range visited {
+			if visit {
+				numVisited++
+			}
+		}
+		assert.Equal(setLen, numVisited, "IterAllP was not called with every index")
+	}
+	testIter(0, 100)
+	testIter(10, 1000)
+	testIter(1, 100000)
+	testIter(64, 100000)
 }
 
 func TestSetFilter(t *testing.T) {
