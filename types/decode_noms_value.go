@@ -158,9 +158,8 @@ func (r *jsonArrayReader) readPackage(t TypeRef, pkg *Package) Value {
 
 func (r *jsonArrayReader) readRefValue(t TypeRef, pkg *Package) Value {
 	ref := r.readRef()
-	v := NewRef(ref)
 	t = fixupTypeRef(t, pkg)
-	return ToNomsValueFromTypeRef(t, v)
+	return refFromTypeRef(ref, t)
 }
 
 func (r *jsonArrayReader) readTopLevelValue() Value {

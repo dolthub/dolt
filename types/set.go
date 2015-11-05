@@ -22,12 +22,6 @@ type setFilterCallback func(v Value) (keep bool)
 
 var setTypeRef = MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))
 
-func init() {
-	RegisterFromValFunction(setTypeRef, func(v Value) Value {
-		return v.(Set)
-	})
-}
-
 func NewSet(v ...Value) Set {
 	return newSetFromData(buildSetData(setData{}, v), setTypeRef)
 }

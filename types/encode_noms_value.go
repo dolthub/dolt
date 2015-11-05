@@ -104,7 +104,7 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 		}
 		w.write(w3.toArray())
 	case RefKind:
-		w.writeRef(getRefFromRefKind(v))
+		w.writeRef(v.(RefBase).TargetRef())
 	case SetKind:
 		w2 := newJsonArrayWriter(w.cs)
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
@@ -129,15 +129,6 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 	default:
 		d.Chk.Fail("Unknown NomsKind")
 	}
-}
-
-// TODO: This is ugly. BUG 452
-type refImplementation interface {
-	TargetRef() ref.Ref
-}
-
-func getRefFromRefKind(v Value) ref.Ref {
-	return v.(refImplementation).TargetRef()
 }
 
 func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {

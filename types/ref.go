@@ -11,6 +11,10 @@ type Ref struct {
 	ref    *ref.Ref
 }
 
+type RefBase interface {
+	TargetRef() ref.Ref
+}
+
 func NewRef(target ref.Ref) Ref {
 	return newRef(target, refTypeRef)
 }
@@ -39,12 +43,6 @@ var refTypeRef = MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(ValueKind))
 
 func (r Ref) TypeRef() TypeRef {
 	return r.t
-}
-
-func init() {
-	RegisterFromValFunction(refTypeRef, func(v Value) Value {
-		return v.(Ref)
-	})
 }
 
 func (r Ref) TargetValue(cs chunks.ChunkSource) Value {

@@ -538,9 +538,11 @@ func (m RefOfValue) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForRefOfValue = types.MakeCompoundTypeRef(types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))
-	types.RegisterFromValFunction(__typeRefForRefOfValue, func(v types.Value) types.Value {
-		return NewRefOfValue(v.(types.Ref).TargetRef())
-	})
+	types.RegisterRef(__typeRefForRefOfValue, builderForRefOfValue)
+}
+
+func builderForRefOfValue(r ref.Ref) types.Value {
+	return NewRefOfValue(r)
 }
 
 func (r RefOfValue) TargetValue(cs chunks.ChunkSource) types.Value {
@@ -1123,9 +1125,11 @@ func (m RefOfSQuadTree) TypeRef() types.TypeRef {
 
 func init() {
 	__typeRefForRefOfSQuadTree = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 2))
-	types.RegisterFromValFunction(__typeRefForRefOfSQuadTree, func(v types.Value) types.Value {
-		return NewRefOfSQuadTree(v.(types.Ref).TargetRef())
-	})
+	types.RegisterRef(__typeRefForRefOfSQuadTree, builderForRefOfSQuadTree)
+}
+
+func builderForRefOfSQuadTree(r ref.Ref) types.Value {
+	return NewRefOfSQuadTree(r)
 }
 
 func (r RefOfSQuadTree) TargetValue(cs chunks.ChunkSource) SQuadTree {

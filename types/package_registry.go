@@ -8,12 +8,11 @@ import (
 
 type enumBuilderFunc func(v uint32) Value
 type enumReaderFunc func(v Value) uint32
+type refBuilderFunc func(target ref.Ref) Value
 type structBuilderFunc func() chan Value
 type structReaderFunc func(v Value) chan Value
 type valueBuilderFunc func(v Value) Value
 type valueReaderFunc func(v Value) Value
-
-type toNomsValueFunc func(v Value) Value
 
 type enumFuncs struct {
 	builder enumBuilderFunc
@@ -31,11 +30,12 @@ type valueFuncs struct {
 }
 
 var (
-	packages       map[ref.Ref]*Package        = map[ref.Ref]*Package{}
-	toNomsValueMap map[ref.Ref]toNomsValueFunc = map[ref.Ref]toNomsValueFunc{}
-	enumFuncMap    map[ref.Ref]enumFuncs       = map[ref.Ref]enumFuncs{}
-	structFuncMap  map[ref.Ref]structFuncs     = map[ref.Ref]structFuncs{}
-	valueFuncMap   map[ref.Ref]valueFuncs      = map[ref.Ref]valueFuncs{}
+	packages map[ref.Ref]*Package = map[ref.Ref]*Package{}
+
+	enumFuncMap   map[ref.Ref]enumFuncs      = map[ref.Ref]enumFuncs{}
+	refFuncMap    map[ref.Ref]refBuilderFunc = map[ref.Ref]refBuilderFunc{}
+	structFuncMap map[ref.Ref]structFuncs    = map[ref.Ref]structFuncs{}
+	valueFuncMap  map[ref.Ref]valueFuncs     = map[ref.Ref]valueFuncs{}
 )
 
 // LookupPackage looks for a Package by ref.Ref in the global cache of Noms type packages.
@@ -55,17 +55,6 @@ func readPackage(r ref.Ref, cs chunks.ChunkSource) *Package {
 	p := ReadValue(r, cs).(Package)
 	RegisterPackage(&p)
 	return &p
-}
-
-func RegisterFromValFunction(t TypeRef, f toNomsValueFunc) {
-	toNomsValueMap[t.Ref()] = f
-}
-
-func ToNomsValueFromTypeRef(t TypeRef, v Value) Value {
-	if f, ok := toNomsValueMap[t.Ref()]; ok {
-		return f(v)
-	}
-	return v
 }
 
 func RegisterStruct(t TypeRef, bf structBuilderFunc, rf structReaderFunc) {
@@ -120,4 +109,15 @@ func internalValueFromTypeRef(v Value, t TypeRef) Value {
 		return s.reader(v)
 	}
 	return v
+}
+
+func RegisterRef(t TypeRef, bf refBuilderFunc) {
+	refFuncMap[t.Ref()] = bf
+}
+
+func refFromTypeRef(target ref.Ref, t TypeRef) Value {
+	if f, ok := refFuncMap[t.Ref()]; ok {
+		return f(target)
+	}
+	return NewRef(target)
 }
