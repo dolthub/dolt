@@ -85,29 +85,28 @@ func init() {
 	types.RegisterStruct(__typeRefForStructWithList, builderForStructWithList, readerForStructWithList)
 }
 
-func builderForStructWithList() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := StructWithList{ref: &ref.Ref{}}
-		s._l = (<-c).(ListOfUInt8)
-		s._b = bool((<-c).(types.Bool))
-		s._s = (<-c).(types.String).String()
-		s._i = int64((<-c).(types.Int64))
-		c <- s
-	}()
-	return c
+func builderForStructWithList(values []types.Value) types.Value {
+	i := 0
+	s := StructWithList{ref: &ref.Ref{}}
+	s._l = values[i].(ListOfUInt8)
+	i++
+	s._b = bool(values[i].(types.Bool))
+	i++
+	s._s = values[i].(types.String).String()
+	i++
+	s._i = int64(values[i].(types.Int64))
+	i++
+	return s
 }
 
-func readerForStructWithList(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(StructWithList)
-		c <- s._l
-		c <- types.Bool(s._b)
-		c <- types.NewString(s._s)
-		c <- types.Int64(s._i)
-	}()
-	return c
+func readerForStructWithList(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(StructWithList)
+	values = append(values, s._l)
+	values = append(values, types.Bool(s._b))
+	values = append(values, types.NewString(s._s))
+	values = append(values, types.Int64(s._i))
+	return values
 }
 
 func (s StructWithList) Equals(other types.Value) bool {

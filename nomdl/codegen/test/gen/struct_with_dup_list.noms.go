@@ -67,23 +67,19 @@ func init() {
 	types.RegisterStruct(__typeRefForStructWithDupList, builderForStructWithDupList, readerForStructWithDupList)
 }
 
-func builderForStructWithDupList() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := StructWithDupList{ref: &ref.Ref{}}
-		s._l = (<-c).(ListOfUInt8)
-		c <- s
-	}()
-	return c
+func builderForStructWithDupList(values []types.Value) types.Value {
+	i := 0
+	s := StructWithDupList{ref: &ref.Ref{}}
+	s._l = values[i].(ListOfUInt8)
+	i++
+	return s
 }
 
-func readerForStructWithDupList(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(StructWithDupList)
-		c <- s._l
-	}()
-	return c
+func readerForStructWithDupList(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(StructWithDupList)
+	values = append(values, s._l)
+	return values
 }
 
 func (s StructWithDupList) Equals(other types.Value) bool {

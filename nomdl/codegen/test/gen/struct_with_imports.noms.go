@@ -121,25 +121,22 @@ func init() {
 	types.RegisterStruct(__typeRefForImportUser, builderForImportUser, readerForImportUser)
 }
 
-func builderForImportUser() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := ImportUser{ref: &ref.Ref{}}
-		s._importedStruct = (<-c).(D)
-		s._enum = (<-c).(LocalE)
-		c <- s
-	}()
-	return c
+func builderForImportUser(values []types.Value) types.Value {
+	i := 0
+	s := ImportUser{ref: &ref.Ref{}}
+	s._importedStruct = values[i].(D)
+	i++
+	s._enum = values[i].(LocalE)
+	i++
+	return s
 }
 
-func readerForImportUser(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(ImportUser)
-		c <- s._importedStruct
-		c <- s._enum
-	}()
-	return c
+func readerForImportUser(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(ImportUser)
+	values = append(values, s._importedStruct)
+	values = append(values, s._enum)
+	return values
 }
 
 func (s ImportUser) Equals(other types.Value) bool {

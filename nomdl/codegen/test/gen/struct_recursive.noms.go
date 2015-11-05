@@ -67,23 +67,19 @@ func init() {
 	types.RegisterStruct(__typeRefForTree, builderForTree, readerForTree)
 }
 
-func builderForTree() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := Tree{ref: &ref.Ref{}}
-		s._children = (<-c).(ListOfTree)
-		c <- s
-	}()
-	return c
+func builderForTree(values []types.Value) types.Value {
+	i := 0
+	s := Tree{ref: &ref.Ref{}}
+	s._children = values[i].(ListOfTree)
+	i++
+	return s
 }
 
-func readerForTree(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(Tree)
-		c <- s._children
-	}()
-	return c
+func readerForTree(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Tree)
+	values = append(values, s._children)
+	return values
 }
 
 func (s Tree) Equals(other types.Value) bool {

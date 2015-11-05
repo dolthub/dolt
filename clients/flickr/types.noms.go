@@ -102,31 +102,31 @@ func init() {
 	types.RegisterStruct(__typeRefForUser, builderForUser, readerForUser)
 }
 
-func builderForUser() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := User{ref: &ref.Ref{}}
-		s._Id = (<-c).(types.String).String()
-		s._Name = (<-c).(types.String).String()
-		s._OAuthToken = (<-c).(types.String).String()
-		s._OAuthSecret = (<-c).(types.String).String()
-		s._Albums = (<-c).(MapOfStringToAlbum)
-		c <- s
-	}()
-	return c
+func builderForUser(values []types.Value) types.Value {
+	i := 0
+	s := User{ref: &ref.Ref{}}
+	s._Id = values[i].(types.String).String()
+	i++
+	s._Name = values[i].(types.String).String()
+	i++
+	s._OAuthToken = values[i].(types.String).String()
+	i++
+	s._OAuthSecret = values[i].(types.String).String()
+	i++
+	s._Albums = values[i].(MapOfStringToAlbum)
+	i++
+	return s
 }
 
-func readerForUser(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(User)
-		c <- types.NewString(s._Id)
-		c <- types.NewString(s._Name)
-		c <- types.NewString(s._OAuthToken)
-		c <- types.NewString(s._OAuthSecret)
-		c <- s._Albums
-	}()
-	return c
+func readerForUser(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(User)
+	values = append(values, types.NewString(s._Id))
+	values = append(values, types.NewString(s._Name))
+	values = append(values, types.NewString(s._OAuthToken))
+	values = append(values, types.NewString(s._OAuthSecret))
+	values = append(values, s._Albums)
+	return values
 }
 
 func (s User) Equals(other types.Value) bool {
@@ -246,27 +246,25 @@ func init() {
 	types.RegisterStruct(__typeRefForAlbum, builderForAlbum, readerForAlbum)
 }
 
-func builderForAlbum() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := Album{ref: &ref.Ref{}}
-		s._Id = (<-c).(types.String).String()
-		s._Title = (<-c).(types.String).String()
-		s._Photos = (<-c).(RefOfSetOfRefOfRemotePhoto)
-		c <- s
-	}()
-	return c
+func builderForAlbum(values []types.Value) types.Value {
+	i := 0
+	s := Album{ref: &ref.Ref{}}
+	s._Id = values[i].(types.String).String()
+	i++
+	s._Title = values[i].(types.String).String()
+	i++
+	s._Photos = values[i].(RefOfSetOfRefOfRemotePhoto)
+	i++
+	return s
 }
 
-func readerForAlbum(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(Album)
-		c <- types.NewString(s._Id)
-		c <- types.NewString(s._Title)
-		c <- s._Photos
-	}()
-	return c
+func readerForAlbum(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Album)
+	values = append(values, types.NewString(s._Id))
+	values = append(values, types.NewString(s._Title))
+	values = append(values, s._Photos)
+	return values
 }
 
 func (s Album) Equals(other types.Value) bool {

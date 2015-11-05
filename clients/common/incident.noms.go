@@ -130,43 +130,49 @@ func init() {
 	types.RegisterStruct(__typeRefForIncident, builderForIncident, readerForIncident)
 }
 
-func builderForIncident() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := Incident{ref: &ref.Ref{}}
-		s._ID = int64((<-c).(types.Int64))
-		s._Category = (<-c).(types.String).String()
-		s._Description = (<-c).(types.String).String()
-		s._DayOfWeek = (<-c).(types.String).String()
-		s._Date = (<-c).(types.String).String()
-		s._Time = (<-c).(types.String).String()
-		s._PdDistrict = (<-c).(types.String).String()
-		s._Resolution = (<-c).(types.String).String()
-		s._Address = (<-c).(types.String).String()
-		s._Geoposition = (<-c).(Geoposition)
-		s._PdID = (<-c).(types.String).String()
-		c <- s
-	}()
-	return c
+func builderForIncident(values []types.Value) types.Value {
+	i := 0
+	s := Incident{ref: &ref.Ref{}}
+	s._ID = int64(values[i].(types.Int64))
+	i++
+	s._Category = values[i].(types.String).String()
+	i++
+	s._Description = values[i].(types.String).String()
+	i++
+	s._DayOfWeek = values[i].(types.String).String()
+	i++
+	s._Date = values[i].(types.String).String()
+	i++
+	s._Time = values[i].(types.String).String()
+	i++
+	s._PdDistrict = values[i].(types.String).String()
+	i++
+	s._Resolution = values[i].(types.String).String()
+	i++
+	s._Address = values[i].(types.String).String()
+	i++
+	s._Geoposition = values[i].(Geoposition)
+	i++
+	s._PdID = values[i].(types.String).String()
+	i++
+	return s
 }
 
-func readerForIncident(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(Incident)
-		c <- types.Int64(s._ID)
-		c <- types.NewString(s._Category)
-		c <- types.NewString(s._Description)
-		c <- types.NewString(s._DayOfWeek)
-		c <- types.NewString(s._Date)
-		c <- types.NewString(s._Time)
-		c <- types.NewString(s._PdDistrict)
-		c <- types.NewString(s._Resolution)
-		c <- types.NewString(s._Address)
-		c <- s._Geoposition
-		c <- types.NewString(s._PdID)
-	}()
-	return c
+func readerForIncident(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Incident)
+	values = append(values, types.Int64(s._ID))
+	values = append(values, types.NewString(s._Category))
+	values = append(values, types.NewString(s._Description))
+	values = append(values, types.NewString(s._DayOfWeek))
+	values = append(values, types.NewString(s._Date))
+	values = append(values, types.NewString(s._Time))
+	values = append(values, types.NewString(s._PdDistrict))
+	values = append(values, types.NewString(s._Resolution))
+	values = append(values, types.NewString(s._Address))
+	values = append(values, s._Geoposition)
+	values = append(values, types.NewString(s._PdID))
+	return values
 }
 
 func (s Incident) Equals(other types.Value) bool {

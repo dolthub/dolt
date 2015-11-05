@@ -73,25 +73,22 @@ func init() {
 	types.RegisterStruct(__typeRefForStruct, builderForStruct, readerForStruct)
 }
 
-func builderForStruct() chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := Struct{ref: &ref.Ref{}}
-		s._s = (<-c).(types.String).String()
-		s._b = bool((<-c).(types.Bool))
-		c <- s
-	}()
-	return c
+func builderForStruct(values []types.Value) types.Value {
+	i := 0
+	s := Struct{ref: &ref.Ref{}}
+	s._s = values[i].(types.String).String()
+	i++
+	s._b = bool(values[i].(types.Bool))
+	i++
+	return s
 }
 
-func readerForStruct(v types.Value) chan types.Value {
-	c := make(chan types.Value)
-	go func() {
-		s := v.(Struct)
-		c <- types.NewString(s._s)
-		c <- types.Bool(s._b)
-	}()
-	return c
+func readerForStruct(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Struct)
+	values = append(values, types.NewString(s._s))
+	values = append(values, types.Bool(s._b))
+	return values
 }
 
 func (s Struct) Equals(other types.Value) bool {
