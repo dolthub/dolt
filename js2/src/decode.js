@@ -4,6 +4,7 @@
 
 import Chunk from './chunk.js';
 import Ref from './ref.js';
+import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {Field, makeCompoundTypeRef, makePrimitiveTypeRef, makeStructTypeRef, makeTypeRef, makeUnresolvedTypeRef, StructDesc, TypeRef} from './type_ref.js';
@@ -279,13 +280,12 @@ class JsonArrayReader {
 
   }
 
-  async readStruct(typeDef: TypeRef, typeRef: TypeRef, pkg: Package): Promise<any> {
+  async readStruct(typeDef: TypeRef, typeRef: TypeRef, pkg: Package): Promise<Struct> {
     // TODO FixupTypeRef?
     let desc = typeDef.desc;
     invariant(desc instanceof StructDesc);
 
     let s: { [key: string]: any } = Object.create(null);
-    s._typeRef = typeDef;  // TODO: Need a better way to add typeRef
 
     for (let field of desc.fields) {
       if (field.optional) {
@@ -300,11 +300,15 @@ class JsonArrayReader {
       }
     }
 
+    let unionIndex = -1;
     if (desc.union.length > 0) {
-      throw new Error('Not implemented');
+      unionIndex = this.readNumber();
+      let unionField = desc.union[unionIndex];
+      let v = await this.readValueWithoutTag(unionField.t, pkg);
+      s[unionField.name] = v;
     }
 
-    return s;
+    return new Struct(typeRef, typeDef, s);
   }
 }
 

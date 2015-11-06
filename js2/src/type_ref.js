@@ -8,7 +8,7 @@ import {ensureRef} from './get_ref.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
 
-type TypeDesc = {
+export type TypeDesc = {
   kind: NomsKind;
   equals: (other: TypeDesc) => boolean;
 };
@@ -262,8 +262,10 @@ export {
   makeStructTypeRef,
   makeTypeRef,
   makeUnresolvedTypeRef,
+  PrimitiveDesc,
   StructDesc,
   TypeRef,
   typeRefTypeRef,
-  packageTypeRef
+  packageTypeRef,
+  UnresolvedDesc
 };

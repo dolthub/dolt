@@ -5,10 +5,13 @@
 import Chunk from './chunk.js';
 import MemoryStore from './memory_store.js';
 import Ref from './ref.js';
+import Struct from './struct.js';
 import test from './async_test.js';
+import type {TypeDesc} from './type_ref.js';
 import {assert} from 'chai';
 import {decodeNomsValue, JsonArrayReader, readValue} from './decode.js';
 import {Field, makeCompoundTypeRef, makePrimitiveTypeRef, makeStructTypeRef, makeTypeRef, TypeRef} from './type_ref.js';
+import {invariant} from './assert.js';
 import {Kind} from './noms_kind.js';
 import {registerPackage, Package} from './package.js';
 import {suite} from 'mocha';
@@ -165,6 +168,15 @@ suite('Decode', () => {
     assertSetsEqual(s, v);
   });
 
+  function assertStruct(s: Struct, desc: TypeDesc, data: {[key: string]: any}) {
+    invariant(s instanceof Struct);
+    assert.deepEqual(desc, s.desc);
+
+    for (let key in data) {
+      assert.strictEqual(data[key], s.get(key));
+    }
+  }
+
   test('test read struct', async () => {
     let ms = new MemoryStore();
     let tr = makeStructTypeRef('A1', [
@@ -179,7 +191,12 @@ suite('Decode', () => {
     let a = [Kind.Unresolved, pkg.ref.toString(), 0, 42, 'hi', true];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
-    assert.deepEqual({x: 42, s: 'hi', b: true, _typeRef: tr}, v);
+
+    assertStruct(v, tr.desc, {
+      x: 42,
+      s: 'hi',
+      b: true
+    });
   });
 
   test('test read map of string to struct', async () => {
@@ -197,12 +214,12 @@ suite('Decode', () => {
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
-    let m = new Map();
-    m.set('foo', {b: true, i: 3, _typeRef: tr});
-    m.set('bar', {b: false, i: 2, _typeRef: tr});
-    m.set('baz', {b: false, i: 1, _typeRef: tr});
+    invariant(v instanceof Map);
+    assert.strictEqual(3, v.size);
 
-    assertMapsEqual(m, v);
+    assertStruct(v.get('foo'), tr.desc, {b: true, i: 3});
+    assertStruct(v.get('bar'), tr.desc, {b: false, i: 2});
+    assertStruct(v.get('baz'), tr.desc, {b: false, i: 1});
   });
 
   test('decodeNomsValue', async () => {
@@ -222,6 +239,6 @@ suite('Decode', () => {
     let rootMap = await readValue(root, ms);
     let counterRef = rootMap.get('counter');
     let commit = await readValue(counterRef, ms);
-    assert.strictEqual(commit.value, 1);
+    assert.strictEqual(1, commit.get('value'));
   });
 });
