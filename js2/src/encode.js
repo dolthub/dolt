@@ -4,6 +4,7 @@
 
 import Chunk from './chunk.js';
 import Ref from './ref.js';
+import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {invariant, notNull} from './assert.js';
@@ -26,8 +27,16 @@ class JsonArrayWriter {
     this.array.push(v);
   }
 
+  writeBoolean(b: boolean) {
+    this.write(b);
+  }
+
+  writeNumber(n: number) {
+    this.write(n);
+  }
+
   writeKind(k: NomsKind) {
-    this.write(k);
+    this.writeNumber(k);
   }
 
   writeRef(r: Ref) {
@@ -48,8 +57,17 @@ class JsonArrayWriter {
         t.elemTypes.forEach(elemType => this.writeTypeRefAsTag(elemType));
         break;
       }
-      case Kind.Unresolved:
-        throw new Error('Not implemented');
+      case Kind.Unresolved: {
+        let pkgRef = t.packageRef;
+        invariant(!pkgRef.isEmpty());
+        this.writeRef(pkgRef);
+        this.writeNumber(t.ordinal);
+
+        let pkg = lookupPackage(pkgRef);
+        if (pkg && this._cs) {
+          writeValue(pkg, pkg.typeRef, this._cs);
+        }
+      }
     }
   }
 
@@ -58,7 +76,7 @@ class JsonArrayWriter {
     this.writeValue(v, t);
   }
 
-  writeValue(v: any, t: TypeRef) {
+  writeValue(v: any, t: TypeRef, pkg: ?Package) {
     switch (t.kind) {
       case Kind.Blob:
         throw new Error('Not implemented');
@@ -125,10 +143,19 @@ class JsonArrayWriter {
         this.write(w2.array);
         break;
       }
-      case Kind.TypeRef:
+      case Kind.TypeRef: {
         invariant(v instanceof TypeRef);
         this.writeTypeRefAsValue(v);
         break;
+      }
+      case Kind.Unresolved: {
+        if (t.hasPackageRef) {
+          pkg = lookupPackage(t.packageRef);
+        }
+        pkg = notNull(pkg);
+        this.writeUnresolvedKindValue(v, t, pkg);
+        break;
+      }
       default:
         throw new Error('Not implemented');
     }
@@ -180,8 +207,8 @@ class JsonArrayWriter {
         }
 
         let pkg = lookupPackage(pkgRef);
-        if (pkg) {
-          writeValue(pkg, pkg.typeRef, notNull(this._cs));
+        if (pkg && this._cs) {
+          writeValue(pkg, pkg.typeRef, this._cs);
         }
 
         break;
@@ -190,6 +217,46 @@ class JsonArrayWriter {
       default: {
         invariant(isPrimitiveKind(k));
       }
+    }
+  }
+
+  writeUnresolvedKindValue(v: any, t: TypeRef, pkg: Package) {
+    let typeDef = pkg.types[t.ordinal];
+    switch (typeDef.kind) {
+      case Kind.Enum:
+        throw new Error('Not implemented');
+      case Kind.Struct: {
+        invariant(v instanceof Struct);
+        this.writeStruct(v, t, typeDef, pkg);
+        break;
+      }
+      default:
+        throw new Error('Not reached');
+    }
+  }
+
+  writeStruct(s: Struct, typeRef: TypeRef, typeDef: TypeRef, pkg: Package) {
+    let desc = typeDef.desc;
+    invariant(desc instanceof StructDesc);
+    for (let field of desc.fields) {
+      let fieldValue = s.get(field.name);
+      if (field.optional) {
+        if (fieldValue !== undefined) {
+          this.writeBoolean(true);
+          this.writeValue(fieldValue, field.t, pkg);
+        } else {
+          this.writeBoolean(false);
+        }
+      } else {
+        invariant(fieldValue !== undefined);
+        this.writeValue(s.get(field.name), field.t, pkg);
+      }
+    }
+
+    if (s.hasUnion) {
+      let unionField = notNull(s.unionField);
+      this.writeNumber(s.unionIndex);
+      this.writeValue(s.get(unionField.name), unionField.t, pkg);
     }
   }
 }

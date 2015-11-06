@@ -9,6 +9,7 @@ import Ref from './ref.js';
 import {encodeNomsValue} from './encode.js';
 import {readValue} from './decode.js';
 import {TypeRef} from './type_ref.js';
+import Struct from './struct.js';
 
 export {
   Chunk,
@@ -17,5 +18,6 @@ export {
   MemoryStore,
   readValue,
   Ref,
+  Struct,
   TypeRef
 };

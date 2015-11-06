@@ -6,7 +6,7 @@ import {layout, NodeGraph, TreeNode} from './buchheim.js';
 import Layout from './layout.js';
 import React from 'react'; //eslint-disable-line no-unused-vars
 import ReactDOM from 'react-dom';
-import {readValue, HttpStore, Ref} from 'noms';
+import {readValue, HttpStore, Ref, Struct} from 'noms';
 
 let data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
@@ -84,21 +84,19 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         name: refStr.substr(5, 6),
         fullName: refStr
       };
-    } else if (val._typeRef) {
+    } else if (val instanceof Struct) {
       // Struct
-      let structName = val._typeRef.name;
+      let structName = val.typeDef.name;
       data.nodes[id] = {name: structName};
-      Object.keys(val).forEach(k => {
-        if (k === '_typeRef') {
-          return;
-        }
+
+      val.forEach((v, k) => {
         // TODO: handle non-string keys
         let kid = process(ref, k, id);
         if (kid) {
           // Start map keys open, just makes it easier to use.
           data.nodes[kid].isOpen = true;
 
-          process(ref, val[k], kid);
+          process(ref, v, kid);
         } else {
           throw new Error('No kid id.');
         }

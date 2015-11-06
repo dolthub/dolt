@@ -5,11 +5,14 @@
 import {assert} from 'chai';
 import {suite} from 'mocha';
 
-import test from './async_test.js';
-import {JsonArrayWriter} from './encode.js';
 import MemoryStore from './memory_store.js';
+import Ref from './ref.js';
+import Struct from './struct.js';
+import test from './async_test.js';
+import {Field, makeCompoundTypeRef, makePrimitiveTypeRef, makeStructTypeRef, makeTypeRef} from './type_ref.js';
+import {JsonArrayWriter} from './encode.js';
 import {Kind} from './noms_kind.js';
-import {makeCompoundTypeRef, makePrimitiveTypeRef} from './type_ref.js';
+import {Package, registerPackage} from './package.js';
 
 suite('Encode', () => {
   test('write list', async () => {
@@ -80,5 +83,132 @@ suite('Encode', () => {
     v.set(m1, s);
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.Map, Kind.Map, Kind.String, Kind.Int64, Kind.Set, Kind.Bool, [['a', 0], [true]]], w.array);
+  });
+
+  test('write empty struct', async() => {
+    let ms = new MemoryStore();
+    let w = new JsonArrayWriter(ms);
+
+    let typeDef = makeStructTypeRef('S', [], []);
+    let pkg = new Package([typeDef], []);
+    registerPackage(pkg);
+    let pkgRef = pkg.ref;
+    let typeRef = makeTypeRef(pkgRef, 0);
+
+    let v = new Struct(typeRef, typeDef, {});
+
+    w.writeTopLevel(typeRef, v);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0], w.array);
+  });
+
+  test('write struct', async() => {
+    let ms = new MemoryStore();
+    let w = new JsonArrayWriter(ms);
+
+    let typeDef = makeStructTypeRef('S', [
+      new Field('x', makePrimitiveTypeRef(Kind.Int8), false),
+      new Field('b', makePrimitiveTypeRef(Kind.Bool), false)
+    ], []);
+    let pkg = new Package([typeDef], []);
+    registerPackage(pkg);
+    let pkgRef = pkg.ref;
+    let typeRef = makeTypeRef(pkgRef, 0);
+
+    let v = new Struct(typeRef, typeDef, {x: 42, b: true});
+
+    w.writeTopLevel(typeRef, v);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, 42, true], w.array);
+  });
+
+  test('write struct optional field', async() => {
+    let ms = new MemoryStore();
+    let w = new JsonArrayWriter(ms);
+
+    let typeDef = makeStructTypeRef('S', [
+      new Field('x', makePrimitiveTypeRef(Kind.Int8), true),
+      new Field('b', makePrimitiveTypeRef(Kind.Bool), false)
+    ], []);
+    let pkg = new Package([typeDef], []);
+    registerPackage(pkg);
+    let pkgRef = pkg.ref;
+    let typeRef = makeTypeRef(pkgRef, 0);
+
+    let v = new Struct(typeRef, typeDef, {x: 42, b: true});
+    w.writeTopLevel(typeRef, v);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, true, 42, true], w.array);
+
+    v = new Struct(typeRef, typeDef, {b: true});
+    w = new JsonArrayWriter(ms);
+    w.writeTopLevel(typeRef, v);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, false, true], w.array);
+  });
+
+  test('write struct with union', async() => {
+    let ms = new MemoryStore();
+    let w = new JsonArrayWriter(ms);
+
+    let typeDef = makeStructTypeRef('S', [
+      new Field('x', makePrimitiveTypeRef(Kind.Int8), false)
+    ], [
+      new Field('b', makePrimitiveTypeRef(Kind.Bool), false),
+      new Field('s', makePrimitiveTypeRef(Kind.String), false)
+    ]);
+    let pkg = new Package([typeDef], []);
+    registerPackage(pkg);
+    let pkgRef = pkg.ref;
+    let typeRef = makeTypeRef(pkgRef, 0);
+
+    let v = new Struct(typeRef, typeDef, {x: 42, s: 'hi'});
+    w.writeTopLevel(typeRef, v);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, 42, 1, 'hi'], w.array);
+
+    v = new Struct(typeRef, typeDef, {x: 42, b: true});
+    w = new JsonArrayWriter(ms);
+    w.writeTopLevel(typeRef, v);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, 42, 0, true], w.array);
+  });
+
+  test('write struct with list', async() => {
+    let ms = new MemoryStore();
+    let w = new JsonArrayWriter(ms);
+
+    let typeDef = makeStructTypeRef('S', [
+      new Field('l', makeCompoundTypeRef(Kind.List, makePrimitiveTypeRef(Kind.String)), false)
+    ], []);
+    let pkg = new Package([typeDef], []);
+    registerPackage(pkg);
+    let pkgRef = pkg.ref;
+    let typeRef = makeTypeRef(pkgRef, 0);
+
+    let v = new Struct(typeRef, typeDef, {l: ['a', 'b']});
+    w.writeTopLevel(typeRef, v);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, ['a', 'b']], w.array);
+
+    v = new Struct(typeRef, typeDef, {l: []});
+    w = new JsonArrayWriter(ms);
+    w.writeTopLevel(typeRef, v);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, []], w.array);
+  });
+
+  test('write struct with struct', async() => {
+    let ms = new MemoryStore();
+    let w = new JsonArrayWriter(ms);
+
+    let s2TypeDef = makeStructTypeRef('S2', [
+      new Field('x', makePrimitiveTypeRef(Kind.Int32), false)
+    ], []);
+    let sTypeDef = makeStructTypeRef('S', [
+      new Field('s', makeTypeRef(new Ref(), 0), false)
+    ], []);
+
+    let pkg = new Package([s2TypeDef, sTypeDef], []);
+    registerPackage(pkg);
+    let pkgRef = pkg.ref;
+    let s2TypeRef = makeTypeRef(pkgRef, 0);
+    let sTypeRef = makeTypeRef(pkgRef, 1);
+
+    let v = new Struct(sTypeRef, sTypeDef, {s: new Struct(s2TypeRef, s2TypeDef, {x: 42})});
+    w.writeTopLevel(sTypeRef, v);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 1, 42], w.array);
   });
 });
