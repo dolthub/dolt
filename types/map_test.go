@@ -186,9 +186,9 @@ func TestMapIterAllP(t *testing.T) {
 		assert.Equal(mapLen, numVisited, "IterAllP was not called with every map key")
 	}
 	testIter(0, 100)
-	testIter(10, 1000)
-	testIter(1, 100000)
-	testIter(64, 100000)
+	testIter(10, 100)
+	testIter(1, 100)
+	testIter(64, 200)
 }
 
 func TestMapFilter(t *testing.T) {
