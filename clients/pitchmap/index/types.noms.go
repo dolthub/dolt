@@ -131,131 +131,137 @@ func (s Pitch) SetZ(val float64) Pitch {
 	return s
 }
 
-// MapOfStringToListOfPitch
+// MapOfStringToRefOfListOfPitch
 
-type MapOfStringToListOfPitch struct {
+type MapOfStringToRefOfListOfPitch struct {
 	m   types.Map
 	ref *ref.Ref
 }
 
-func NewMapOfStringToListOfPitch() MapOfStringToListOfPitch {
-	return MapOfStringToListOfPitch{types.NewMap(), &ref.Ref{}}
+func NewMapOfStringToRefOfListOfPitch() MapOfStringToRefOfListOfPitch {
+	return MapOfStringToRefOfListOfPitch{types.NewMap(), &ref.Ref{}}
 }
 
-type MapOfStringToListOfPitchDef map[string]ListOfPitchDef
+type MapOfStringToRefOfListOfPitchDef map[string]ref.Ref
 
-func (def MapOfStringToListOfPitchDef) New() MapOfStringToListOfPitch {
+func (def MapOfStringToRefOfListOfPitchDef) New() MapOfStringToRefOfListOfPitch {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
-		kv = append(kv, types.NewString(k), v.New())
+		kv = append(kv, types.NewString(k), NewRefOfListOfPitch(v))
 	}
-	return MapOfStringToListOfPitch{types.NewMap(kv...), &ref.Ref{}}
+	return MapOfStringToRefOfListOfPitch{types.NewMap(kv...), &ref.Ref{}}
 }
 
-func (m MapOfStringToListOfPitch) Def() MapOfStringToListOfPitchDef {
-	def := make(map[string]ListOfPitchDef)
+func (m MapOfStringToRefOfListOfPitch) Def() MapOfStringToRefOfListOfPitchDef {
+	def := make(map[string]ref.Ref)
 	m.m.Iter(func(k, v types.Value) bool {
-		def[k.(types.String).String()] = v.(ListOfPitch).Def()
+		def[k.(types.String).String()] = v.(RefOfListOfPitch).TargetRef()
 		return false
 	})
 	return def
 }
 
-func (m MapOfStringToListOfPitch) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToListOfPitch.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+func (m MapOfStringToRefOfListOfPitch) Equals(other types.Value) bool {
+	return other != nil && __typeRefForMapOfStringToRefOfListOfPitch.Equals(other.TypeRef()) && m.Ref() == other.Ref()
 }
 
-func (m MapOfStringToListOfPitch) Ref() ref.Ref {
+func (m MapOfStringToRefOfListOfPitch) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToListOfPitch) Chunks() (chunks []ref.Ref) {
+func (m MapOfStringToRefOfListOfPitch) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, m.TypeRef().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
 
-func (m MapOfStringToListOfPitch) ChildValues() []types.Value {
+func (m MapOfStringToRefOfListOfPitch) ChildValues() []types.Value {
 	return append([]types.Value{}, m.m.ChildValues()...)
 }
 
-// A Noms Value that describes MapOfStringToListOfPitch.
-var __typeRefForMapOfStringToListOfPitch types.TypeRef
+// A Noms Value that describes MapOfStringToRefOfListOfPitch.
+var __typeRefForMapOfStringToRefOfListOfPitch types.TypeRef
 
-func (m MapOfStringToListOfPitch) TypeRef() types.TypeRef {
-	return __typeRefForMapOfStringToListOfPitch
+func (m MapOfStringToRefOfListOfPitch) TypeRef() types.TypeRef {
+	return __typeRefForMapOfStringToRefOfListOfPitch
 }
 
 func init() {
-	__typeRefForMapOfStringToListOfPitch = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)))
-	types.RegisterValue(__typeRefForMapOfStringToListOfPitch, builderForMapOfStringToListOfPitch, readerForMapOfStringToListOfPitch)
+	__typeRefForMapOfStringToRefOfListOfPitch = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))))
+	types.RegisterValue(__typeRefForMapOfStringToRefOfListOfPitch, builderForMapOfStringToRefOfListOfPitch, readerForMapOfStringToRefOfListOfPitch)
 }
 
-func builderForMapOfStringToListOfPitch(v types.Value) types.Value {
-	return MapOfStringToListOfPitch{v.(types.Map), &ref.Ref{}}
+func builderForMapOfStringToRefOfListOfPitch(v types.Value) types.Value {
+	return MapOfStringToRefOfListOfPitch{v.(types.Map), &ref.Ref{}}
 }
 
-func readerForMapOfStringToListOfPitch(v types.Value) types.Value {
-	return v.(MapOfStringToListOfPitch).m
+func readerForMapOfStringToRefOfListOfPitch(v types.Value) types.Value {
+	return v.(MapOfStringToRefOfListOfPitch).m
 }
 
-func (m MapOfStringToListOfPitch) Empty() bool {
+func (m MapOfStringToRefOfListOfPitch) Empty() bool {
 	return m.m.Empty()
 }
 
-func (m MapOfStringToListOfPitch) Len() uint64 {
+func (m MapOfStringToRefOfListOfPitch) Len() uint64 {
 	return m.m.Len()
 }
 
-func (m MapOfStringToListOfPitch) Has(p string) bool {
+func (m MapOfStringToRefOfListOfPitch) Has(p string) bool {
 	return m.m.Has(types.NewString(p))
 }
 
-func (m MapOfStringToListOfPitch) Get(p string) ListOfPitch {
-	return m.m.Get(types.NewString(p)).(ListOfPitch)
+func (m MapOfStringToRefOfListOfPitch) Get(p string) RefOfListOfPitch {
+	return m.m.Get(types.NewString(p)).(RefOfListOfPitch)
 }
 
-func (m MapOfStringToListOfPitch) MaybeGet(p string) (ListOfPitch, bool) {
+func (m MapOfStringToRefOfListOfPitch) MaybeGet(p string) (RefOfListOfPitch, bool) {
 	v, ok := m.m.MaybeGet(types.NewString(p))
 	if !ok {
-		return NewListOfPitch(), false
+		return NewRefOfListOfPitch(ref.Ref{}), false
 	}
-	return v.(ListOfPitch), ok
+	return v.(RefOfListOfPitch), ok
 }
 
-func (m MapOfStringToListOfPitch) Set(k string, v ListOfPitch) MapOfStringToListOfPitch {
-	return MapOfStringToListOfPitch{m.m.Set(types.NewString(k), v), &ref.Ref{}}
+func (m MapOfStringToRefOfListOfPitch) Set(k string, v RefOfListOfPitch) MapOfStringToRefOfListOfPitch {
+	return MapOfStringToRefOfListOfPitch{m.m.Set(types.NewString(k), v), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
-func (m MapOfStringToListOfPitch) Remove(p string) MapOfStringToListOfPitch {
-	return MapOfStringToListOfPitch{m.m.Remove(types.NewString(p)), &ref.Ref{}}
+func (m MapOfStringToRefOfListOfPitch) Remove(p string) MapOfStringToRefOfListOfPitch {
+	return MapOfStringToRefOfListOfPitch{m.m.Remove(types.NewString(p)), &ref.Ref{}}
 }
 
-type MapOfStringToListOfPitchIterCallback func(k string, v ListOfPitch) (stop bool)
+type MapOfStringToRefOfListOfPitchIterCallback func(k string, v RefOfListOfPitch) (stop bool)
 
-func (m MapOfStringToListOfPitch) Iter(cb MapOfStringToListOfPitchIterCallback) {
+func (m MapOfStringToRefOfListOfPitch) Iter(cb MapOfStringToRefOfListOfPitchIterCallback) {
 	m.m.Iter(func(k, v types.Value) bool {
-		return cb(k.(types.String).String(), v.(ListOfPitch))
+		return cb(k.(types.String).String(), v.(RefOfListOfPitch))
 	})
 }
 
-type MapOfStringToListOfPitchIterAllCallback func(k string, v ListOfPitch)
+type MapOfStringToRefOfListOfPitchIterAllCallback func(k string, v RefOfListOfPitch)
 
-func (m MapOfStringToListOfPitch) IterAll(cb MapOfStringToListOfPitchIterAllCallback) {
+func (m MapOfStringToRefOfListOfPitch) IterAll(cb MapOfStringToRefOfListOfPitchIterAllCallback) {
 	m.m.IterAll(func(k, v types.Value) {
-		cb(k.(types.String).String(), v.(ListOfPitch))
+		cb(k.(types.String).String(), v.(RefOfListOfPitch))
 	})
 }
 
-type MapOfStringToListOfPitchFilterCallback func(k string, v ListOfPitch) (keep bool)
-
-func (m MapOfStringToListOfPitch) Filter(cb MapOfStringToListOfPitchFilterCallback) MapOfStringToListOfPitch {
-	out := m.m.Filter(func(k, v types.Value) bool {
-		return cb(k.(types.String).String(), v.(ListOfPitch))
+func (m MapOfStringToRefOfListOfPitch) IterAllP(concurrency int, cb MapOfStringToRefOfListOfPitchIterAllCallback) {
+	m.m.IterAllP(concurrency, func(k, v types.Value) {
+		cb(k.(types.String).String(), v.(RefOfListOfPitch))
 	})
-	return MapOfStringToListOfPitch{out, &ref.Ref{}}
+}
+
+type MapOfStringToRefOfListOfPitchFilterCallback func(k string, v RefOfListOfPitch) (keep bool)
+
+func (m MapOfStringToRefOfListOfPitch) Filter(cb MapOfStringToRefOfListOfPitchFilterCallback) MapOfStringToRefOfListOfPitch {
+	out := m.m.Filter(func(k, v types.Value) bool {
+		return cb(k.(types.String).String(), v.(RefOfListOfPitch))
+	})
+	return MapOfStringToRefOfListOfPitch{out, &ref.Ref{}}
 }
 
 // ListOfRefOfMapOfStringToValue
@@ -575,6 +581,12 @@ func (m MapOfStringToValue) IterAll(cb MapOfStringToValueIterAllCallback) {
 	})
 }
 
+func (m MapOfStringToValue) IterAllP(concurrency int, cb MapOfStringToValueIterAllCallback) {
+	m.m.IterAllP(concurrency, func(k, v types.Value) {
+		cb(k.(types.String).String(), v)
+	})
+}
+
 type MapOfStringToValueFilterCallback func(k string, v types.Value) (keep bool)
 
 func (m MapOfStringToValue) Filter(cb MapOfStringToValueFilterCallback) MapOfStringToValue {
@@ -724,4 +736,61 @@ func (l ListOfPitch) Filter(cb ListOfPitchFilterCallback) ListOfPitch {
 		return cb(v.(Pitch), i)
 	})
 	return ListOfPitch{out, &ref.Ref{}}
+}
+
+// RefOfListOfPitch
+
+type RefOfListOfPitch struct {
+	target ref.Ref
+	ref    *ref.Ref
+}
+
+func NewRefOfListOfPitch(target ref.Ref) RefOfListOfPitch {
+	return RefOfListOfPitch{target, &ref.Ref{}}
+}
+
+func (r RefOfListOfPitch) TargetRef() ref.Ref {
+	return r.target
+}
+
+func (r RefOfListOfPitch) Ref() ref.Ref {
+	return types.EnsureRef(r.ref, r)
+}
+
+func (r RefOfListOfPitch) Equals(other types.Value) bool {
+	return other != nil && __typeRefForRefOfListOfPitch.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+}
+
+func (r RefOfListOfPitch) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
+}
+
+func (r RefOfListOfPitch) ChildValues() []types.Value {
+	return nil
+}
+
+// A Noms Value that describes RefOfListOfPitch.
+var __typeRefForRefOfListOfPitch types.TypeRef
+
+func (m RefOfListOfPitch) TypeRef() types.TypeRef {
+	return __typeRefForRefOfListOfPitch
+}
+
+func init() {
+	__typeRefForRefOfListOfPitch = types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)))
+	types.RegisterRef(__typeRefForRefOfListOfPitch, builderForRefOfListOfPitch)
+}
+
+func builderForRefOfListOfPitch(r ref.Ref) types.Value {
+	return NewRefOfListOfPitch(r)
+}
+
+func (r RefOfListOfPitch) TargetValue(cs chunks.ChunkSource) ListOfPitch {
+	return types.ReadValue(r.target, cs).(ListOfPitch)
+}
+
+func (r RefOfListOfPitch) SetTargetValue(val ListOfPitch, cs chunks.ChunkSink) RefOfListOfPitch {
+	return NewRefOfListOfPitch(types.WriteValue(val, cs))
 }

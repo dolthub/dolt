@@ -99,7 +99,7 @@ func processInning(m MapOfStringToValue) map[string][]PitchDef {
 	return pitchCounts
 }
 
-func getIndex(input ListOfRefOfMapOfStringToValue, cs chunks.ChunkStore) MapOfStringToListOfPitch {
+func getIndex(input ListOfRefOfMapOfStringToValue, cs chunks.ChunkStore) MapOfStringToRefOfListOfPitch {
 	pitcherMu := sync.Mutex{}
 	inningMu := sync.Mutex{}
 	pitchers := map[string]string{}
@@ -128,17 +128,17 @@ func getIndex(input ListOfRefOfMapOfStringToValue, cs chunks.ChunkStore) MapOfSt
 		}
 	})
 
-	pitchCounts := MapOfStringToListOfPitchDef{}
+	pitchCounts := map[string]ListOfPitchDef{}
 	for _, inning := range innings {
 		for id, p := range inning {
 			pitchCounts[id] = append(pitchCounts[id], p...)
 		}
 	}
 
-	namedPitchCounts := MapOfStringToListOfPitchDef{}
+	namedPitchCounts := MapOfStringToRefOfListOfPitchDef{}
 	for id, p := range pitchCounts {
 		if name, ok := pitchers[id]; d.Chk.True(ok, "Unknown pitcher: %s", id) {
-			namedPitchCounts[name] = p
+			namedPitchCounts[name] = types.WriteValue(p.New(), cs)
 		}
 	}
 	return namedPitchCounts.New()
