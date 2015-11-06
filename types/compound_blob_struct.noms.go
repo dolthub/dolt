@@ -106,6 +106,12 @@ func (s compoundBlobStruct) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s compoundBlobStruct) ChildValues() (ret []Value) {
+	ret = append(ret, s._Offsets)
+	ret = append(ret, s._Blobs)
+	return
+}
+
 func (s compoundBlobStruct) Offsets() ListOfUInt64 {
 	return s._Offsets
 }
@@ -167,6 +173,10 @@ func (l ListOfUInt64) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, l.TypeRef().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
+}
+
+func (l ListOfUInt64) ChildValues() []Value {
+	return append([]Value{}, l.l.ChildValues()...)
 }
 
 // A Noms Value that describes ListOfUInt64.
@@ -307,6 +317,10 @@ func (l ListOfRefOfBlob) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (l ListOfRefOfBlob) ChildValues() []Value {
+	return append([]Value{}, l.l.ChildValues()...)
+}
+
 // A Noms Value that describes ListOfRefOfBlob.
 var __typeRefForListOfRefOfBlob TypeRef
 
@@ -429,6 +443,10 @@ func (r RefOfBlob) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, r.TypeRef().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
+}
+
+func (r RefOfBlob) ChildValues() []Value {
+	return nil
 }
 
 // A Noms Value that describes RefOfBlob.

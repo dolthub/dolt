@@ -155,6 +155,15 @@ func (m Map) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (m Map) ChildValues() []Value {
+	res := make([]Value, 2*len(m.data))
+	for i, entry := range m.data {
+		res[i*2] = entry.key
+		res[i*2+1] = entry.value
+	}
+	return res
+}
+
 var mapTypeRef = MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))
 
 func (m Map) TypeRef() TypeRef {

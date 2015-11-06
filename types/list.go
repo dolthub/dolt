@@ -195,6 +195,10 @@ func (l List) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (l List) ChildValues() []Value {
+	return append([]Value{}, l.values...)
+}
+
 func (l List) TypeRef() TypeRef {
 	return l.t
 }

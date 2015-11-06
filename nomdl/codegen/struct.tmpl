@@ -104,6 +104,14 @@ func (s {{.Name}}) Chunks() (chunks []ref.Ref) {
 	{{end}}return
 }
 
+func (s {{.Name}}) ChildValues() (ret []{{$typesPackage}}Value) {
+	{{range .Fields}}{{if .Optional}}if s.__optional{{.Name}} {
+		{{end}}ret = append(ret, {{userToValue (printf "s._%s" .Name) .T}})
+		{{if .Optional}} }
+	{{end}}{{end}}{{if .HasUnion}}ret = append(ret, s.__unionValue)
+	{{end}}return
+}
+
 {{$name := .Name}}
 {{range $index, $field := .Fields}}
 {{if .Optional}}

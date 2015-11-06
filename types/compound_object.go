@@ -29,6 +29,14 @@ func (co compoundObject) Chunks() []ref.Ref {
 	return co.chunks
 }
 
+func (co compoundObject) ChildValues() []Value {
+	res := make([]Value, len(co.chunks))
+	for i, r := range co.chunks {
+		res[i] = NewRefOfBlob(r)
+	}
+	return res
+}
+
 // splitCompoundObject chunks a compound list/blob into smaller compound
 // lists/blobs. If no split was made the same compoundObject is returned.
 func splitCompoundObject(co compoundObject, cs chunks.ChunkSink) compoundObject {

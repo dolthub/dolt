@@ -150,6 +150,11 @@ func (s Set) Chunks() (chunks []ref.Ref) {
 	}
 	return
 }
+
+func (s Set) ChildValues() []Value {
+	return append([]Value{}, s.data...)
+}
+
 func (s Set) TypeRef() TypeRef {
 	return s.t
 }

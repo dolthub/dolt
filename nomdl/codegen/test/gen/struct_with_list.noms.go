@@ -123,6 +123,14 @@ func (s StructWithList) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s StructWithList) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._l)
+	ret = append(ret, types.Bool(s._b))
+	ret = append(ret, types.NewString(s._s))
+	ret = append(ret, types.Int64(s._i))
+	return
+}
+
 func (s StructWithList) L() ListOfUInt8 {
 	return s._l
 }
@@ -204,6 +212,10 @@ func (l ListOfUInt8) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, l.TypeRef().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
+}
+
+func (l ListOfUInt8) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
 }
 
 // A Noms Value that describes ListOfUInt8.

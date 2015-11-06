@@ -8,6 +8,8 @@ import (
 type Value interface {
 	Equals(other Value) bool
 	Ref() ref.Ref
+	// Returns the immediate children of this value in the DAG, if any, not including TypeRef().
+	ChildValues() []Value
 	Chunks() []ref.Ref
 	TypeRef() TypeRef
 }

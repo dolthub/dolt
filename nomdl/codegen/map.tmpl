@@ -46,6 +46,10 @@ func (m {{.Name}}) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (m {{.Name}}) ChildValues() []{{$typesPackage}}Value {
+	return append([]{{$typesPackage}}Value{}, m.m.ChildValues()...)
+}
+
 // A Noms Value that describes {{.Name}}.
 var __typeRefFor{{.Name}} {{$typesPackage}}TypeRef
 

@@ -104,6 +104,12 @@ func (s Struct) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s Struct) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.NewString(s._s))
+	ret = append(ret, types.Bool(s._b))
+	return
+}
+
 func (s Struct) S() string {
 	return s._s
 }
@@ -165,6 +171,10 @@ func (l ListOfStruct) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, l.TypeRef().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
+}
+
+func (l ListOfStruct) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
 }
 
 // A Noms Value that describes ListOfStruct.

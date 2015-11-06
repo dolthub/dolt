@@ -116,6 +116,12 @@ func (s StructWithUnionField) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s StructWithUnionField) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.Float32(s._a))
+	ret = append(ret, s.__unionValue)
+	return
+}
+
 func (s StructWithUnionField) A() float32 {
 	return s._a
 }
@@ -305,6 +311,10 @@ func (s SetOfUInt8) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, s.TypeRef().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
+}
+
+func (s SetOfUInt8) ChildValues() []types.Value {
+	return append([]types.Value{}, s.s.ChildValues()...)
 }
 
 // A Noms Value that describes SetOfUInt8.

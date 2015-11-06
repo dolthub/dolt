@@ -15,13 +15,15 @@ import (
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/walk"
 )
 
 var (
-	datasFlags  = datas.NewFlags()
-	inputRefStr = flag.String("input-ref", "", "ref to list containing nodes")
-	outputDs    = flag.String("output-ds", "", "dataset to store data in.")
-	quietFlag   = flag.Bool("quiet", false, "suppress printing of progress statements")
+	datasFlags         = datas.NewFlags()
+	inputRefStr        = flag.String("input-ref", "", "ref to list containing nodes")
+	outputDs           = flag.String("output-ds", "", "dataset to store data in.")
+	quietFlag          = flag.Bool("quiet", false, "suppress printing of progress statements")
+	geopositionTypeRef = common.NewGeoposition().TypeRef()
 )
 
 func main() {
@@ -67,25 +69,47 @@ func main() {
 		fmt.Printf("quadTreeRoot: %+v\n", qtRoot.Georectangle)
 	}
 
-	list := types.ReadValue(inputRef, dataset.Store()).(types.List)
-	if !*quietFlag {
-		fmt.Printf("Reading from nodeList: %d items, elapsed time: %.2f secs\n", list.Len(), SecsSince(start))
-	}
-
 	nChan := make(chan *common.NodeDef, 1024)
 	nodesConverted := uint32(0)
+
+	type hasGeoposition interface {
+		Geoposition() common.Geoposition
+	}
+
 	go func() {
-		list.IterAllP(64, func(v types.Value, i uint64) {
-			// Need to replace incident with generic type
-			r := v.(common.RefOfValue)
-			incident := r.TargetValue(datastore).(common.Incident)
-			nodeDef := &common.NodeDef{Geoposition: incident.Geoposition().Def(), Reference: r.TargetRef()}
+		cs := dataset.Store()
+		walk.SomeP(types.ReadValue(inputRef, cs), cs, func(v types.Value) (stop bool) {
+			var g common.Geoposition
+
+			switch v := v.(type) {
+			case hasGeoposition:
+				g = v.Geoposition()
+			case types.Struct:
+				if mg, ok := v.MaybeGet("geo"); ok {
+					if mg, ok := mg.(common.Geoposition); ok {
+						g = mg
+						break
+					}
+				}
+			default:
+				return
+			}
+
+			// TODO: This check is mega bummer. We really only want to consider RefOfStruct, but it's complicated to filter the case of an inline struct out.
+			if !cs.Has(v.Ref()) {
+				return
+			}
+
+			stop = true
+
+			nodeDef := &common.NodeDef{Geoposition: g.Def(), Reference: v.Ref()}
 			nChan <- nodeDef
 			nConverted := atomic.AddUint32(&nodesConverted, 1)
 			if !*quietFlag && nConverted%1e5 == 0 {
 				fmt.Printf("Nodes Converted: %d, elapsed time: %.2f secs\n", nodesConverted, SecsSince(start))
 			}
-		})
+			return
+		}, 64)
 		close(nChan)
 	}()
 

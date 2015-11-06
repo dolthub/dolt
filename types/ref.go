@@ -35,6 +35,10 @@ func (r Ref) Chunks() []ref.Ref {
 	return []ref.Ref{r.target}
 }
 
+func (r Ref) ChildValues() []Value {
+	return nil
+}
+
 func (r Ref) TargetRef() ref.Ref {
 	return r.target
 }

@@ -214,6 +214,24 @@ func (s StructPrimitives) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s StructPrimitives) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.UInt64(s._uint64))
+	ret = append(ret, types.UInt32(s._uint32))
+	ret = append(ret, types.UInt16(s._uint16))
+	ret = append(ret, types.UInt8(s._uint8))
+	ret = append(ret, types.Int64(s._int64))
+	ret = append(ret, types.Int32(s._int32))
+	ret = append(ret, types.Int16(s._int16))
+	ret = append(ret, types.Int8(s._int8))
+	ret = append(ret, types.Float64(s._float64))
+	ret = append(ret, types.Float32(s._float32))
+	ret = append(ret, types.Bool(s._bool))
+	ret = append(ret, types.NewString(s._string))
+	ret = append(ret, s._blob)
+	ret = append(ret, s._value)
+	return
+}
+
 func (s StructPrimitives) Uint64() uint64 {
 	return s._uint64
 }

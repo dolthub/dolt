@@ -51,6 +51,10 @@ func (l ListOfRefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (l ListOfRefOfMapOfStringToValue) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
+}
+
 // A Noms Value that describes ListOfRefOfMapOfStringToValue.
 var __typeRefForListOfRefOfMapOfStringToValue types.TypeRef
 
@@ -175,6 +179,10 @@ func (r RefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (r RefOfMapOfStringToValue) ChildValues() []types.Value {
+	return nil
+}
+
 // A Noms Value that describes RefOfMapOfStringToValue.
 var __typeRefForRefOfMapOfStringToValue types.TypeRef
 
@@ -241,6 +249,10 @@ func (m MapOfStringToValue) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, m.TypeRef().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
+}
+
+func (m MapOfStringToValue) ChildValues() []types.Value {
+	return append([]types.Value{}, m.m.ChildValues()...)
 }
 
 // A Noms Value that describes MapOfStringToValue.

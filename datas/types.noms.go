@@ -107,6 +107,12 @@ func (s Commit) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s Commit) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._value)
+	ret = append(ret, s._parents)
+	return
+}
+
 func (s Commit) Value() types.Value {
 	return s._value
 }
@@ -169,6 +175,10 @@ func (m MapOfStringToRefOfCommit) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, m.TypeRef().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
+}
+
+func (m MapOfStringToRefOfCommit) ChildValues() []types.Value {
+	return append([]types.Value{}, m.m.ChildValues()...)
 }
 
 // A Noms Value that describes MapOfStringToRefOfCommit.
@@ -294,6 +304,10 @@ func (s SetOfRefOfCommit) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, s.TypeRef().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
+}
+
+func (s SetOfRefOfCommit) ChildValues() []types.Value {
+	return append([]types.Value{}, s.s.ChildValues()...)
 }
 
 // A Noms Value that describes SetOfRefOfCommit.
@@ -422,6 +436,10 @@ func (r RefOfCommit) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, r.TypeRef().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
+}
+
+func (r RefOfCommit) ChildValues() []types.Value {
+	return nil
 }
 
 // A Noms Value that describes RefOfCommit.

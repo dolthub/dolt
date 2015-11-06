@@ -21,6 +21,10 @@ func (v Bool) Chunks() []ref.Ref {
 	return nil
 }
 
+func (v Bool) ChildValues() []Value {
+	return nil
+}
+
 func (v Bool) ToPrimitive() interface{} {
 	return bool(v)
 }
@@ -42,6 +46,10 @@ func (v Int8) Ref() ref.Ref {
 }
 
 func (v Int8) Chunks() []ref.Ref {
+	return nil
+}
+
+func (v Int8) ChildValues() []Value {
 	return nil
 }
 
@@ -69,6 +77,10 @@ func (v Int16) Chunks() []ref.Ref {
 	return nil
 }
 
+func (v Int16) ChildValues() []Value {
+	return nil
+}
+
 func (v Int16) ToPrimitive() interface{} {
 	return int16(v)
 }
@@ -90,6 +102,10 @@ func (v Int32) Ref() ref.Ref {
 }
 
 func (v Int32) Chunks() []ref.Ref {
+	return nil
+}
+
+func (v Int32) ChildValues() []Value {
 	return nil
 }
 
@@ -117,6 +133,10 @@ func (v Int64) Chunks() []ref.Ref {
 	return nil
 }
 
+func (v Int64) ChildValues() []Value {
+	return nil
+}
+
 func (v Int64) ToPrimitive() interface{} {
 	return int64(v)
 }
@@ -138,6 +158,10 @@ func (v UInt8) Ref() ref.Ref {
 }
 
 func (v UInt8) Chunks() []ref.Ref {
+	return nil
+}
+
+func (v UInt8) ChildValues() []Value {
 	return nil
 }
 
@@ -165,6 +189,10 @@ func (v UInt16) Chunks() []ref.Ref {
 	return nil
 }
 
+func (v UInt16) ChildValues() []Value {
+	return nil
+}
+
 func (v UInt16) ToPrimitive() interface{} {
 	return uint16(v)
 }
@@ -186,6 +214,10 @@ func (v UInt32) Ref() ref.Ref {
 }
 
 func (v UInt32) Chunks() []ref.Ref {
+	return nil
+}
+
+func (v UInt32) ChildValues() []Value {
 	return nil
 }
 
@@ -213,6 +245,10 @@ func (v UInt64) Chunks() []ref.Ref {
 	return nil
 }
 
+func (v UInt64) ChildValues() []Value {
+	return nil
+}
+
 func (v UInt64) ToPrimitive() interface{} {
 	return uint64(v)
 }
@@ -237,6 +273,10 @@ func (v Float32) Chunks() []ref.Ref {
 	return nil
 }
 
+func (v Float32) ChildValues() []Value {
+	return nil
+}
+
 func (v Float32) ToPrimitive() interface{} {
 	return float32(v)
 }
@@ -258,6 +298,10 @@ func (v Float64) Ref() ref.Ref {
 }
 
 func (v Float64) Chunks() []ref.Ref {
+	return nil
+}
+
+func (v Float64) ChildValues() []Value {
 	return nil
 }
 

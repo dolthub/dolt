@@ -54,6 +54,12 @@ func (s SetOfRefOfPackage) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s SetOfRefOfPackage) ChildValues() (ret []Value) {
+	ret = append(ret, s.TypeRef())
+	ret = append(ret, s.s.ChildValues()...)
+	return
+}
+
 // A Noms Value that describes SetOfRefOfPackage.
 var __typeRefForSetOfRefOfPackage TypeRef
 
@@ -177,6 +183,10 @@ func (r RefOfPackage) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, r.TypeRef().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
+}
+
+func (r RefOfPackage) ChildValues() []Value {
+	return nil
 }
 
 // A Noms Value that describes RefOfPackage.

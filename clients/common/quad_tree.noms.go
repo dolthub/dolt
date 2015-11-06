@@ -131,6 +131,12 @@ func (s Node) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s Node) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._Geoposition)
+	ret = append(ret, s._Reference)
+	return
+}
+
 func (s Node) Geoposition() Geoposition {
 	return s._Geoposition
 }
@@ -262,6 +268,16 @@ func (s QuadTree) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, s._Nodes.Chunks()...)
 	chunks = append(chunks, s._Tiles.Chunks()...)
 	chunks = append(chunks, s._Georectangle.Chunks()...)
+	return
+}
+
+func (s QuadTree) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._Nodes)
+	ret = append(ret, s._Tiles)
+	ret = append(ret, types.UInt8(s._Depth))
+	ret = append(ret, types.UInt32(s._NumDescendents))
+	ret = append(ret, types.NewString(s._Path))
+	ret = append(ret, s._Georectangle)
 	return
 }
 
@@ -439,6 +455,16 @@ func (s SQuadTree) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s SQuadTree) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._Nodes)
+	ret = append(ret, s._Tiles)
+	ret = append(ret, types.UInt8(s._Depth))
+	ret = append(ret, types.UInt32(s._NumDescendents))
+	ret = append(ret, types.NewString(s._Path))
+	ret = append(ret, s._Georectangle)
+	return
+}
+
 func (s SQuadTree) Nodes() ListOfRefOfValue {
 	return s._Nodes
 }
@@ -528,6 +554,10 @@ func (r RefOfValue) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (r RefOfValue) ChildValues() []types.Value {
+	return nil
+}
+
 // A Noms Value that describes RefOfValue.
 var __typeRefForRefOfValue types.TypeRef
 
@@ -593,6 +623,10 @@ func (l ListOfNode) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, l.TypeRef().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
+}
+
+func (l ListOfNode) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
 }
 
 // A Noms Value that describes ListOfNode.
@@ -734,6 +768,10 @@ func (m MapOfStringToQuadTree) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (m MapOfStringToQuadTree) ChildValues() []types.Value {
+	return append([]types.Value{}, m.m.ChildValues()...)
+}
+
 // A Noms Value that describes MapOfStringToQuadTree.
 var __typeRefForMapOfStringToQuadTree types.TypeRef
 
@@ -854,6 +892,10 @@ func (l ListOfRefOfValue) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, l.TypeRef().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
+}
+
+func (l ListOfRefOfValue) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
 }
 
 // A Noms Value that describes ListOfRefOfValue.
@@ -995,6 +1037,10 @@ func (m MapOfStringToRefOfSQuadTree) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (m MapOfStringToRefOfSQuadTree) ChildValues() []types.Value {
+	return append([]types.Value{}, m.m.ChildValues()...)
+}
+
 // A Noms Value that describes MapOfStringToRefOfSQuadTree.
 var __typeRefForMapOfStringToRefOfSQuadTree types.TypeRef
 
@@ -1101,6 +1147,10 @@ func (r RefOfSQuadTree) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, r.TypeRef().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
+}
+
+func (r RefOfSQuadTree) ChildValues() []types.Value {
+	return nil
 }
 
 // A Noms Value that describes RefOfSQuadTree.

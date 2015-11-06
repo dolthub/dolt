@@ -96,6 +96,11 @@ func (s Tree) Chunks() (chunks []ref.Ref) {
 	return
 }
 
+func (s Tree) ChildValues() (ret []types.Value) {
+	ret = append(ret, s._children)
+	return
+}
+
 func (s Tree) Children() ListOfTree {
 	return s._children
 }
@@ -147,6 +152,10 @@ func (l ListOfTree) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, l.TypeRef().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
+}
+
+func (l ListOfTree) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
 }
 
 // A Noms Value that describes ListOfTree.
