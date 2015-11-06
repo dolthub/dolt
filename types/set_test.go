@@ -208,9 +208,9 @@ func TestSetIterAllP(t *testing.T) {
 		assert.Equal(setLen, numVisited, "IterAllP was not called with every index")
 	}
 	testIter(0, 100)
-	testIter(10, 1000)
-	testIter(1, 100000)
-	testIter(64, 100000)
+	testIter(10, 100)
+	testIter(1, 100)
+	testIter(64, 200)
 }
 
 func TestSetFilter(t *testing.T) {
