@@ -3,25 +3,14 @@
 'use strict';
 
 import Chunk from './chunk.js';
-import fetch from 'isomorphic-fetch';
 import Ref from './ref.js';
 import {deserialize} from './chunk_serializer.js';
-import {invariant} from './assert.js';
+import {fetchArrayBuffer, fetchText} from './fetch.js';
 
 type ReadRequest = {
   resolve: (c: Chunk) => void,
   reject: (e: Error) => void
 };
-
-function blobToBuffer(blob: Blob): Promise<ArrayBuffer> {
-  return new Promise((resolve) => {
-    let reader = new FileReader();
-    reader.addEventListener('loadend', () => {
-      resolve(reader.result);
-    });
-    reader.readAsArrayBuffer(blob);
-  });
-}
 
 export default class HttpStore {
   _rpc: {
@@ -49,8 +38,7 @@ export default class HttpStore {
   }
 
   async getRoot(): Promise<Ref> {
-    let r = await fetch(this._rpc.root);
-    let refStr = await r.text();
+    let refStr = await fetchText(this._rpc.root);
     return Ref.parse(refStr);
   }
 
@@ -87,7 +75,7 @@ export default class HttpStore {
     let body = refStrs.map(r => 'ref=' + r).join('&');
 
     try {
-      let response = await fetch(this._rpc.getRefs, {
+      let buffer = await fetchArrayBuffer(this._rpc.getRefs, {
         method: 'post',
         body: body,
         headers: {
@@ -95,10 +83,6 @@ export default class HttpStore {
         }
       });
 
-      invariant(response.status === 200, 'Buffered read failed: ' + response.status);
-
-      let blob = await response.blob();
-      let buffer = await blobToBuffer(blob);
       let chunks = deserialize(buffer);
 
       // Return success

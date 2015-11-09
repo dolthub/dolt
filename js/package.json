@@ -3,8 +3,7 @@
   "main": "dist/noms.js",
   "dependencies": {
     "rusha": "^0.8.3",
-    "text-encoding": "^0.5.2",
-    "isomorphic-fetch": "^2.2.0"
+    "text-encoding": "^0.5.2"
   },
   "devDependencies": {
     "babel": "~5.6.23",
@@ -20,5 +19,8 @@
     "build": "babel src/ -d dist/",
     "pretest": "eslint src/ && flow src/",
     "test": "mocha --ui tdd --reporter dot --compilers js:babel/register src/"
+  },
+  "browser": {
+    "./dist/fetch.js": "./dist/browser/fetch.js"
   }
 }
