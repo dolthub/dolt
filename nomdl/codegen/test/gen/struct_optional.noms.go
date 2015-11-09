@@ -13,7 +13,7 @@ var __genPackageInFile_struct_optional_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("OptionalStruct",
 			[]types.Field{
 				types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), true},
@@ -68,9 +68,9 @@ func (s OptionalStruct) Def() (d OptionalStructDef) {
 	return
 }
 
-var __typeRefForOptionalStruct types.TypeRef
+var __typeRefForOptionalStruct types.Type
 
-func (m OptionalStruct) TypeRef() types.TypeRef {
+func (m OptionalStruct) Type() types.Type {
 	return __typeRefForOptionalStruct
 }
 
@@ -112,7 +112,7 @@ func readerForOptionalStruct(v types.Value) []types.Value {
 }
 
 func (s OptionalStruct) Equals(other types.Value) bool {
-	return other != nil && __typeRefForOptionalStruct.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForOptionalStruct.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s OptionalStruct) Ref() ref.Ref {

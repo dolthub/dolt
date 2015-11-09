@@ -14,7 +14,7 @@ var __mainPackageInFile_types_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("Pitch",
 			[]types.Field{
 				types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind), false},
@@ -63,9 +63,9 @@ func (s Pitch) Def() (d PitchDef) {
 	return
 }
 
-var __typeRefForPitch types.TypeRef
+var __typeRefForPitch types.Type
 
-func (m Pitch) TypeRef() types.TypeRef {
+func (m Pitch) Type() types.Type {
 	return __typeRefForPitch
 }
 
@@ -93,7 +93,7 @@ func readerForPitch(v types.Value) []types.Value {
 }
 
 func (s Pitch) Equals(other types.Value) bool {
-	return other != nil && __typeRefForPitch.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForPitch.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Pitch) Ref() ref.Ref {
@@ -162,7 +162,7 @@ func (m MapOfStringToRefOfListOfPitch) Def() MapOfStringToRefOfListOfPitchDef {
 }
 
 func (m MapOfStringToRefOfListOfPitch) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToRefOfListOfPitch.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+	return other != nil && __typeRefForMapOfStringToRefOfListOfPitch.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToRefOfListOfPitch) Ref() ref.Ref {
@@ -170,7 +170,7 @@ func (m MapOfStringToRefOfListOfPitch) Ref() ref.Ref {
 }
 
 func (m MapOfStringToRefOfListOfPitch) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
@@ -180,9 +180,9 @@ func (m MapOfStringToRefOfListOfPitch) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToRefOfListOfPitch.
-var __typeRefForMapOfStringToRefOfListOfPitch types.TypeRef
+var __typeRefForMapOfStringToRefOfListOfPitch types.Type
 
-func (m MapOfStringToRefOfListOfPitch) TypeRef() types.TypeRef {
+func (m MapOfStringToRefOfListOfPitch) Type() types.Type {
 	return __typeRefForMapOfStringToRefOfListOfPitch
 }
 
@@ -294,7 +294,7 @@ func (l ListOfRefOfMapOfStringToValue) Def() ListOfRefOfMapOfStringToValueDef {
 }
 
 func (l ListOfRefOfMapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfRefOfMapOfStringToValue.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfRefOfMapOfStringToValue.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfMapOfStringToValue) Ref() ref.Ref {
@@ -302,7 +302,7 @@ func (l ListOfRefOfMapOfStringToValue) Ref() ref.Ref {
 }
 
 func (l ListOfRefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -312,9 +312,9 @@ func (l ListOfRefOfMapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfRefOfMapOfStringToValue.
-var __typeRefForListOfRefOfMapOfStringToValue types.TypeRef
+var __typeRefForListOfRefOfMapOfStringToValue types.Type
 
-func (m ListOfRefOfMapOfStringToValue) TypeRef() types.TypeRef {
+func (m ListOfRefOfMapOfStringToValue) Type() types.Type {
 	return __typeRefForListOfRefOfMapOfStringToValue
 }
 
@@ -426,11 +426,11 @@ func (r RefOfMapOfStringToValue) Ref() ref.Ref {
 }
 
 func (r RefOfMapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfMapOfStringToValue.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+	return other != nil && __typeRefForRefOfMapOfStringToValue.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.Type().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
 }
@@ -440,9 +440,9 @@ func (r RefOfMapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfMapOfStringToValue.
-var __typeRefForRefOfMapOfStringToValue types.TypeRef
+var __typeRefForRefOfMapOfStringToValue types.Type
 
-func (m RefOfMapOfStringToValue) TypeRef() types.TypeRef {
+func (m RefOfMapOfStringToValue) Type() types.Type {
 	return __typeRefForRefOfMapOfStringToValue
 }
 
@@ -494,7 +494,7 @@ func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 }
 
 func (m MapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToValue.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+	return other != nil && __typeRefForMapOfStringToValue.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToValue) Ref() ref.Ref {
@@ -502,7 +502,7 @@ func (m MapOfStringToValue) Ref() ref.Ref {
 }
 
 func (m MapOfStringToValue) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
@@ -512,9 +512,9 @@ func (m MapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToValue.
-var __typeRefForMapOfStringToValue types.TypeRef
+var __typeRefForMapOfStringToValue types.Type
 
-func (m MapOfStringToValue) TypeRef() types.TypeRef {
+func (m MapOfStringToValue) Type() types.Type {
 	return __typeRefForMapOfStringToValue
 }
 
@@ -626,7 +626,7 @@ func (l ListOfPitch) Def() ListOfPitchDef {
 }
 
 func (l ListOfPitch) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfPitch.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfPitch.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfPitch) Ref() ref.Ref {
@@ -634,7 +634,7 @@ func (l ListOfPitch) Ref() ref.Ref {
 }
 
 func (l ListOfPitch) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -644,9 +644,9 @@ func (l ListOfPitch) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfPitch.
-var __typeRefForListOfPitch types.TypeRef
+var __typeRefForListOfPitch types.Type
 
-func (m ListOfPitch) TypeRef() types.TypeRef {
+func (m ListOfPitch) Type() types.Type {
 	return __typeRefForListOfPitch
 }
 
@@ -758,11 +758,11 @@ func (r RefOfListOfPitch) Ref() ref.Ref {
 }
 
 func (r RefOfListOfPitch) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfListOfPitch.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+	return other != nil && __typeRefForRefOfListOfPitch.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfListOfPitch) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.Type().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
 }
@@ -772,9 +772,9 @@ func (r RefOfListOfPitch) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfListOfPitch.
-var __typeRefForRefOfListOfPitch types.TypeRef
+var __typeRefForRefOfListOfPitch types.Type
 
-func (m RefOfListOfPitch) TypeRef() types.TypeRef {
+func (m RefOfListOfPitch) Type() types.Type {
 	return __typeRefForRefOfListOfPitch
 }
 

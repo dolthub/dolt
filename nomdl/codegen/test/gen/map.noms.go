@@ -38,7 +38,7 @@ func (m MapOfBoolToString) Def() MapOfBoolToStringDef {
 }
 
 func (m MapOfBoolToString) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfBoolToString.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+	return other != nil && __typeRefForMapOfBoolToString.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfBoolToString) Ref() ref.Ref {
@@ -46,7 +46,7 @@ func (m MapOfBoolToString) Ref() ref.Ref {
 }
 
 func (m MapOfBoolToString) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
@@ -56,9 +56,9 @@ func (m MapOfBoolToString) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfBoolToString.
-var __typeRefForMapOfBoolToString types.TypeRef
+var __typeRefForMapOfBoolToString types.Type
 
-func (m MapOfBoolToString) TypeRef() types.TypeRef {
+func (m MapOfBoolToString) Type() types.Type {
 	return __typeRefForMapOfBoolToString
 }
 
@@ -171,7 +171,7 @@ func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 }
 
 func (m MapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToValue.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+	return other != nil && __typeRefForMapOfStringToValue.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToValue) Ref() ref.Ref {
@@ -179,7 +179,7 @@ func (m MapOfStringToValue) Ref() ref.Ref {
 }
 
 func (m MapOfStringToValue) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
@@ -189,9 +189,9 @@ func (m MapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToValue.
-var __typeRefForMapOfStringToValue types.TypeRef
+var __typeRefForMapOfStringToValue types.Type
 
-func (m MapOfStringToValue) TypeRef() types.TypeRef {
+func (m MapOfStringToValue) Type() types.Type {
 	return __typeRefForMapOfStringToValue
 }
 

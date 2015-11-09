@@ -14,7 +14,7 @@ var __commonPackageInFile_incident_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("Incident",
 			[]types.Field{
 				types.Field{"ID", types.MakePrimitiveTypeRef(types.Int64Kind), false},
@@ -119,9 +119,9 @@ func (s Incident) Def() (d IncidentDef) {
 	return
 }
 
-var __typeRefForIncident types.TypeRef
+var __typeRefForIncident types.Type
 
-func (m Incident) TypeRef() types.TypeRef {
+func (m Incident) Type() types.Type {
 	return __typeRefForIncident
 }
 
@@ -176,7 +176,7 @@ func readerForIncident(v types.Value) []types.Value {
 }
 
 func (s Incident) Equals(other types.Value) bool {
-	return other != nil && __typeRefForIncident.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForIncident.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Incident) Ref() ref.Ref {
@@ -344,7 +344,7 @@ func (l ListOfRefOfIncident) Def() ListOfRefOfIncidentDef {
 }
 
 func (l ListOfRefOfIncident) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfRefOfIncident.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfRefOfIncident.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfIncident) Ref() ref.Ref {
@@ -352,7 +352,7 @@ func (l ListOfRefOfIncident) Ref() ref.Ref {
 }
 
 func (l ListOfRefOfIncident) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -362,9 +362,9 @@ func (l ListOfRefOfIncident) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfRefOfIncident.
-var __typeRefForListOfRefOfIncident types.TypeRef
+var __typeRefForListOfRefOfIncident types.Type
 
-func (m ListOfRefOfIncident) TypeRef() types.TypeRef {
+func (m ListOfRefOfIncident) Type() types.Type {
 	return __typeRefForListOfRefOfIncident
 }
 
@@ -476,11 +476,11 @@ func (r RefOfIncident) Ref() ref.Ref {
 }
 
 func (r RefOfIncident) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfIncident.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+	return other != nil && __typeRefForRefOfIncident.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfIncident) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.Type().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
 }
@@ -490,9 +490,9 @@ func (r RefOfIncident) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfIncident.
-var __typeRefForRefOfIncident types.TypeRef
+var __typeRefForRefOfIncident types.Type
 
-func (m RefOfIncident) TypeRef() types.TypeRef {
+func (m RefOfIncident) Type() types.Type {
 	return __typeRefForRefOfIncident
 }
 

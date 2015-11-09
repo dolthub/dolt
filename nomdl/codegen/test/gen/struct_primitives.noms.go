@@ -13,7 +13,7 @@ var __genPackageInFile_struct_primitives_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("StructPrimitives",
 			[]types.Field{
 				types.Field{"uint64", types.MakePrimitiveTypeRef(types.UInt64Kind), false},
@@ -134,9 +134,9 @@ func (s StructPrimitives) Def() (d StructPrimitivesDef) {
 	return
 }
 
-var __typeRefForStructPrimitives types.TypeRef
+var __typeRefForStructPrimitives types.Type
 
-func (m StructPrimitives) TypeRef() types.TypeRef {
+func (m StructPrimitives) Type() types.Type {
 	return __typeRefForStructPrimitives
 }
 
@@ -200,7 +200,7 @@ func readerForStructPrimitives(v types.Value) []types.Value {
 }
 
 func (s StructPrimitives) Equals(other types.Value) bool {
-	return other != nil && __typeRefForStructPrimitives.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForStructPrimitives.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s StructPrimitives) Ref() ref.Ref {

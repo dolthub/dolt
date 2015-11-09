@@ -13,7 +13,7 @@ var __genPackageInFile_struct_with_unions_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("StructWithUnions",
 			[]types.Field{
 				types.Field{"a", types.MakeTypeRef(ref.Ref{}, 1), false},
@@ -76,9 +76,9 @@ func (s StructWithUnions) Def() (d StructWithUnionsDef) {
 	return
 }
 
-var __typeRefForStructWithUnions types.TypeRef
+var __typeRefForStructWithUnions types.Type
 
-func (m StructWithUnions) TypeRef() types.TypeRef {
+func (m StructWithUnions) Type() types.Type {
 	return __typeRefForStructWithUnions
 }
 
@@ -106,7 +106,7 @@ func readerForStructWithUnions(v types.Value) []types.Value {
 }
 
 func (s StructWithUnions) Equals(other types.Value) bool {
-	return other != nil && __typeRefForStructWithUnions.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForStructWithUnions.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s StructWithUnions) Ref() ref.Ref {
@@ -181,9 +181,9 @@ func (s __unionOfBOfFloat64AndCOfString) Def() (d __unionOfBOfFloat64AndCOfStrin
 	return
 }
 
-var __typeRefFor__unionOfBOfFloat64AndCOfString types.TypeRef
+var __typeRefFor__unionOfBOfFloat64AndCOfString types.Type
 
-func (m __unionOfBOfFloat64AndCOfString) TypeRef() types.TypeRef {
+func (m __unionOfBOfFloat64AndCOfString) Type() types.Type {
 	return __typeRefFor__unionOfBOfFloat64AndCOfString
 }
 
@@ -211,7 +211,7 @@ func readerFor__unionOfBOfFloat64AndCOfString(v types.Value) []types.Value {
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Equals(other types.Value) bool {
-	return other != nil && __typeRefFor__unionOfBOfFloat64AndCOfString.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefFor__unionOfBOfFloat64AndCOfString.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Ref() ref.Ref {
@@ -318,9 +318,9 @@ func (s __unionOfEOfFloat64AndFOfString) Def() (d __unionOfEOfFloat64AndFOfStrin
 	return
 }
 
-var __typeRefFor__unionOfEOfFloat64AndFOfString types.TypeRef
+var __typeRefFor__unionOfEOfFloat64AndFOfString types.Type
 
-func (m __unionOfEOfFloat64AndFOfString) TypeRef() types.TypeRef {
+func (m __unionOfEOfFloat64AndFOfString) Type() types.Type {
 	return __typeRefFor__unionOfEOfFloat64AndFOfString
 }
 
@@ -348,7 +348,7 @@ func readerFor__unionOfEOfFloat64AndFOfString(v types.Value) []types.Value {
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Equals(other types.Value) bool {
-	return other != nil && __typeRefFor__unionOfEOfFloat64AndFOfString.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefFor__unionOfEOfFloat64AndFOfString.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Ref() ref.Ref {

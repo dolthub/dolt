@@ -13,7 +13,7 @@ var __mainPackageInFile_types_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("Song",
 			[]types.Field{
 				types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
@@ -80,9 +80,9 @@ func (s Song) Def() (d SongDef) {
 	return
 }
 
-var __typeRefForSong types.TypeRef
+var __typeRefForSong types.Type
 
-func (m Song) TypeRef() types.TypeRef {
+func (m Song) Type() types.Type {
 	return __typeRefForSong
 }
 
@@ -119,7 +119,7 @@ func readerForSong(v types.Value) []types.Value {
 }
 
 func (s Song) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSong.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForSong.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Song) Ref() ref.Ref {
@@ -221,7 +221,7 @@ func (l ListOfSong) Def() ListOfSongDef {
 }
 
 func (l ListOfSong) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfSong.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfSong.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfSong) Ref() ref.Ref {
@@ -229,7 +229,7 @@ func (l ListOfSong) Ref() ref.Ref {
 }
 
 func (l ListOfSong) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -239,9 +239,9 @@ func (l ListOfSong) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfSong.
-var __typeRefForListOfSong types.TypeRef
+var __typeRefForListOfSong types.Type
 
-func (m ListOfSong) TypeRef() types.TypeRef {
+func (m ListOfSong) Type() types.Type {
 	return __typeRefForListOfSong
 }
 

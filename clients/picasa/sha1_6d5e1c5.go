@@ -13,7 +13,7 @@ var __mainPackageInFile_sha1_6d5e1c5_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("Geoposition",
 			[]types.Field{
 				types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
@@ -69,9 +69,9 @@ func (s Geoposition) Def() (d GeopositionDef) {
 	return
 }
 
-var __typeRefForGeoposition types.TypeRef
+var __typeRefForGeoposition types.Type
 
-func (m Geoposition) TypeRef() types.TypeRef {
+func (m Geoposition) Type() types.Type {
 	return __typeRefForGeoposition
 }
 
@@ -99,7 +99,7 @@ func readerForGeoposition(v types.Value) []types.Value {
 }
 
 func (s Geoposition) Equals(other types.Value) bool {
-	return other != nil && __typeRefForGeoposition.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForGeoposition.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Geoposition) Ref() ref.Ref {
@@ -174,9 +174,9 @@ func (s Georectangle) Def() (d GeorectangleDef) {
 	return
 }
 
-var __typeRefForGeorectangle types.TypeRef
+var __typeRefForGeorectangle types.Type
 
-func (m Georectangle) TypeRef() types.TypeRef {
+func (m Georectangle) Type() types.Type {
 	return __typeRefForGeorectangle
 }
 
@@ -204,7 +204,7 @@ func readerForGeorectangle(v types.Value) []types.Value {
 }
 
 func (s Georectangle) Equals(other types.Value) bool {
-	return other != nil && __typeRefForGeorectangle.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForGeorectangle.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Georectangle) Ref() ref.Ref {

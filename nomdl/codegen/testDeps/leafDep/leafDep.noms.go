@@ -13,7 +13,7 @@ var __leafDepPackageInFile_leafDep_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("S",
 			[]types.Field{
 				types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
@@ -63,9 +63,9 @@ func (s S) Def() (d SDef) {
 	return
 }
 
-var __typeRefForS types.TypeRef
+var __typeRefForS types.Type
 
-func (m S) TypeRef() types.TypeRef {
+func (m S) Type() types.Type {
 	return __typeRefForS
 }
 
@@ -93,7 +93,7 @@ func readerForS(v types.Value) []types.Value {
 }
 
 func (s S) Equals(other types.Value) bool {
-	return other != nil && __typeRefForS.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForS.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s S) Ref() ref.Ref {
@@ -145,9 +145,9 @@ func NewE() E {
 	return E(0)
 }
 
-var __typeRefForE types.TypeRef
+var __typeRefForE types.Type
 
-func (e E) TypeRef() types.TypeRef {
+func (e E) Type() types.Type {
 	return __typeRefForE
 }
 

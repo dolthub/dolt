@@ -13,7 +13,7 @@ var __genPackageInFile_struct_with_imports_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeEnumTypeRef("LocalE", "LocalE1", "Ignored"),
 		types.MakeStructTypeRef("ImportUser",
 			[]types.Field{
@@ -41,9 +41,9 @@ func NewLocalE() LocalE {
 	return LocalE(0)
 }
 
-var __typeRefForLocalE types.TypeRef
+var __typeRefForLocalE types.Type
 
-func (e LocalE) TypeRef() types.TypeRef {
+func (e LocalE) Type() types.Type {
 	return __typeRefForLocalE
 }
 
@@ -114,9 +114,9 @@ func (s ImportUser) Def() (d ImportUserDef) {
 	return
 }
 
-var __typeRefForImportUser types.TypeRef
+var __typeRefForImportUser types.Type
 
-func (m ImportUser) TypeRef() types.TypeRef {
+func (m ImportUser) Type() types.Type {
 	return __typeRefForImportUser
 }
 
@@ -144,7 +144,7 @@ func readerForImportUser(v types.Value) []types.Value {
 }
 
 func (s ImportUser) Equals(other types.Value) bool {
-	return other != nil && __typeRefForImportUser.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForImportUser.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s ImportUser) Ref() ref.Ref {
@@ -213,7 +213,7 @@ func (l ListOfD) Def() ListOfDDef {
 }
 
 func (l ListOfD) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfD.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfD.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfD) Ref() ref.Ref {
@@ -221,7 +221,7 @@ func (l ListOfD) Ref() ref.Ref {
 }
 
 func (l ListOfD) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -231,9 +231,9 @@ func (l ListOfD) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfD.
-var __typeRefForListOfD types.TypeRef
+var __typeRefForListOfD types.Type
 
-func (m ListOfD) TypeRef() types.TypeRef {
+func (m ListOfD) Type() types.Type {
 	return __typeRefForListOfD
 }
 
