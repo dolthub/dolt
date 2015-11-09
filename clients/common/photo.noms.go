@@ -13,7 +13,7 @@ var __commonPackageInFile_photo_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("RemotePhoto",
 			[]types.Field{
 				types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
@@ -95,9 +95,9 @@ func (s RemotePhoto) Def() (d RemotePhotoDef) {
 	return
 }
 
-var __typeRefForRemotePhoto types.TypeRef
+var __typeRefForRemotePhoto types.Type
 
-func (m RemotePhoto) TypeRef() types.TypeRef {
+func (m RemotePhoto) Type() types.Type {
 	return __typeRefForRemotePhoto
 }
 
@@ -137,7 +137,7 @@ func readerForRemotePhoto(v types.Value) []types.Value {
 }
 
 func (s RemotePhoto) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRemotePhoto.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForRemotePhoto.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s RemotePhoto) Ref() ref.Ref {
@@ -259,9 +259,9 @@ func (s Size) Def() (d SizeDef) {
 	return
 }
 
-var __typeRefForSize types.TypeRef
+var __typeRefForSize types.Type
 
-func (m Size) TypeRef() types.TypeRef {
+func (m Size) Type() types.Type {
 	return __typeRefForSize
 }
 
@@ -289,7 +289,7 @@ func readerForSize(v types.Value) []types.Value {
 }
 
 func (s Size) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSize.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForSize.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Size) Ref() ref.Ref {
@@ -358,7 +358,7 @@ func (m MapOfSizeToString) Def() MapOfSizeToStringDef {
 }
 
 func (m MapOfSizeToString) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfSizeToString.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+	return other != nil && __typeRefForMapOfSizeToString.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfSizeToString) Ref() ref.Ref {
@@ -366,7 +366,7 @@ func (m MapOfSizeToString) Ref() ref.Ref {
 }
 
 func (m MapOfSizeToString) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
@@ -376,9 +376,9 @@ func (m MapOfSizeToString) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfSizeToString.
-var __typeRefForMapOfSizeToString types.TypeRef
+var __typeRefForMapOfSizeToString types.Type
 
-func (m MapOfSizeToString) TypeRef() types.TypeRef {
+func (m MapOfSizeToString) Type() types.Type {
 	return __typeRefForMapOfSizeToString
 }
 
@@ -445,6 +445,12 @@ func (m MapOfSizeToString) IterAll(cb MapOfSizeToStringIterAllCallback) {
 	})
 }
 
+func (m MapOfSizeToString) IterAllP(concurrency int, cb MapOfSizeToStringIterAllCallback) {
+	m.m.IterAllP(concurrency, func(k, v types.Value) {
+		cb(k.(Size), v.(types.String).String())
+	})
+}
+
 type MapOfSizeToStringFilterCallback func(k Size, v string) (keep bool)
 
 func (m MapOfSizeToString) Filter(cb MapOfSizeToStringFilterCallback) MapOfSizeToString {
@@ -487,7 +493,7 @@ func (s SetOfString) Def() SetOfStringDef {
 }
 
 func (s SetOfString) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSetOfString.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForSetOfString.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfString) Ref() ref.Ref {
@@ -495,7 +501,7 @@ func (s SetOfString) Ref() ref.Ref {
 }
 
 func (s SetOfString) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
@@ -505,9 +511,9 @@ func (s SetOfString) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfString.
-var __typeRefForSetOfString types.TypeRef
+var __typeRefForSetOfString types.Type
 
-func (m SetOfString) TypeRef() types.TypeRef {
+func (m SetOfString) Type() types.Type {
 	return __typeRefForSetOfString
 }
 

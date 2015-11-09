@@ -14,7 +14,7 @@ var __commonPackageInFile_quad_tree_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("Node",
 			[]types.Field{
 				types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
@@ -87,9 +87,9 @@ func (s Node) Def() (d NodeDef) {
 	return
 }
 
-var __typeRefForNode types.TypeRef
+var __typeRefForNode types.Type
 
-func (m Node) TypeRef() types.TypeRef {
+func (m Node) Type() types.Type {
 	return __typeRefForNode
 }
 
@@ -117,7 +117,7 @@ func readerForNode(v types.Value) []types.Value {
 }
 
 func (s Node) Equals(other types.Value) bool {
-	return other != nil && __typeRefForNode.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForNode.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Node) Ref() ref.Ref {
@@ -214,9 +214,9 @@ func (s QuadTree) Def() (d QuadTreeDef) {
 	return
 }
 
-var __typeRefForQuadTree types.TypeRef
+var __typeRefForQuadTree types.Type
 
-func (m QuadTree) TypeRef() types.TypeRef {
+func (m QuadTree) Type() types.Type {
 	return __typeRefForQuadTree
 }
 
@@ -256,7 +256,7 @@ func readerForQuadTree(v types.Value) []types.Value {
 }
 
 func (s QuadTree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForQuadTree.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForQuadTree.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s QuadTree) Ref() ref.Ref {
@@ -398,9 +398,9 @@ func (s SQuadTree) Def() (d SQuadTreeDef) {
 	return
 }
 
-var __typeRefForSQuadTree types.TypeRef
+var __typeRefForSQuadTree types.Type
 
-func (m SQuadTree) TypeRef() types.TypeRef {
+func (m SQuadTree) Type() types.Type {
 	return __typeRefForSQuadTree
 }
 
@@ -440,7 +440,7 @@ func readerForSQuadTree(v types.Value) []types.Value {
 }
 
 func (s SQuadTree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSQuadTree.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForSQuadTree.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SQuadTree) Ref() ref.Ref {
@@ -545,11 +545,11 @@ func (r RefOfValue) Ref() ref.Ref {
 }
 
 func (r RefOfValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfValue.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+	return other != nil && __typeRefForRefOfValue.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfValue) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.Type().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
 }
@@ -559,9 +559,9 @@ func (r RefOfValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfValue.
-var __typeRefForRefOfValue types.TypeRef
+var __typeRefForRefOfValue types.Type
 
-func (m RefOfValue) TypeRef() types.TypeRef {
+func (m RefOfValue) Type() types.Type {
 	return __typeRefForRefOfValue
 }
 
@@ -612,7 +612,7 @@ func (l ListOfNode) Def() ListOfNodeDef {
 }
 
 func (l ListOfNode) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfNode.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfNode.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfNode) Ref() ref.Ref {
@@ -620,7 +620,7 @@ func (l ListOfNode) Ref() ref.Ref {
 }
 
 func (l ListOfNode) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -630,9 +630,9 @@ func (l ListOfNode) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfNode.
-var __typeRefForListOfNode types.TypeRef
+var __typeRefForListOfNode types.Type
 
-func (m ListOfNode) TypeRef() types.TypeRef {
+func (m ListOfNode) Type() types.Type {
 	return __typeRefForListOfNode
 }
 
@@ -755,7 +755,7 @@ func (m MapOfStringToQuadTree) Def() MapOfStringToQuadTreeDef {
 }
 
 func (m MapOfStringToQuadTree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToQuadTree.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+	return other != nil && __typeRefForMapOfStringToQuadTree.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToQuadTree) Ref() ref.Ref {
@@ -763,7 +763,7 @@ func (m MapOfStringToQuadTree) Ref() ref.Ref {
 }
 
 func (m MapOfStringToQuadTree) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
@@ -773,9 +773,9 @@ func (m MapOfStringToQuadTree) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToQuadTree.
-var __typeRefForMapOfStringToQuadTree types.TypeRef
+var __typeRefForMapOfStringToQuadTree types.Type
 
-func (m MapOfStringToQuadTree) TypeRef() types.TypeRef {
+func (m MapOfStringToQuadTree) Type() types.Type {
 	return __typeRefForMapOfStringToQuadTree
 }
 
@@ -842,6 +842,12 @@ func (m MapOfStringToQuadTree) IterAll(cb MapOfStringToQuadTreeIterAllCallback) 
 	})
 }
 
+func (m MapOfStringToQuadTree) IterAllP(concurrency int, cb MapOfStringToQuadTreeIterAllCallback) {
+	m.m.IterAllP(concurrency, func(k, v types.Value) {
+		cb(k.(types.String).String(), v.(QuadTree))
+	})
+}
+
 type MapOfStringToQuadTreeFilterCallback func(k string, v QuadTree) (keep bool)
 
 func (m MapOfStringToQuadTree) Filter(cb MapOfStringToQuadTreeFilterCallback) MapOfStringToQuadTree {
@@ -881,7 +887,7 @@ func (l ListOfRefOfValue) Def() ListOfRefOfValueDef {
 }
 
 func (l ListOfRefOfValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfRefOfValue.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfRefOfValue.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfValue) Ref() ref.Ref {
@@ -889,7 +895,7 @@ func (l ListOfRefOfValue) Ref() ref.Ref {
 }
 
 func (l ListOfRefOfValue) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -899,9 +905,9 @@ func (l ListOfRefOfValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfRefOfValue.
-var __typeRefForListOfRefOfValue types.TypeRef
+var __typeRefForListOfRefOfValue types.Type
 
-func (m ListOfRefOfValue) TypeRef() types.TypeRef {
+func (m ListOfRefOfValue) Type() types.Type {
 	return __typeRefForListOfRefOfValue
 }
 
@@ -1024,7 +1030,7 @@ func (m MapOfStringToRefOfSQuadTree) Def() MapOfStringToRefOfSQuadTreeDef {
 }
 
 func (m MapOfStringToRefOfSQuadTree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToRefOfSQuadTree.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+	return other != nil && __typeRefForMapOfStringToRefOfSQuadTree.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToRefOfSQuadTree) Ref() ref.Ref {
@@ -1032,7 +1038,7 @@ func (m MapOfStringToRefOfSQuadTree) Ref() ref.Ref {
 }
 
 func (m MapOfStringToRefOfSQuadTree) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
@@ -1042,9 +1048,9 @@ func (m MapOfStringToRefOfSQuadTree) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToRefOfSQuadTree.
-var __typeRefForMapOfStringToRefOfSQuadTree types.TypeRef
+var __typeRefForMapOfStringToRefOfSQuadTree types.Type
 
-func (m MapOfStringToRefOfSQuadTree) TypeRef() types.TypeRef {
+func (m MapOfStringToRefOfSQuadTree) Type() types.Type {
 	return __typeRefForMapOfStringToRefOfSQuadTree
 }
 
@@ -1111,6 +1117,12 @@ func (m MapOfStringToRefOfSQuadTree) IterAll(cb MapOfStringToRefOfSQuadTreeIterA
 	})
 }
 
+func (m MapOfStringToRefOfSQuadTree) IterAllP(concurrency int, cb MapOfStringToRefOfSQuadTreeIterAllCallback) {
+	m.m.IterAllP(concurrency, func(k, v types.Value) {
+		cb(k.(types.String).String(), v.(RefOfSQuadTree))
+	})
+}
+
 type MapOfStringToRefOfSQuadTreeFilterCallback func(k string, v RefOfSQuadTree) (keep bool)
 
 func (m MapOfStringToRefOfSQuadTree) Filter(cb MapOfStringToRefOfSQuadTreeFilterCallback) MapOfStringToRefOfSQuadTree {
@@ -1140,11 +1152,11 @@ func (r RefOfSQuadTree) Ref() ref.Ref {
 }
 
 func (r RefOfSQuadTree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfSQuadTree.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+	return other != nil && __typeRefForRefOfSQuadTree.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfSQuadTree) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.Type().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
 }
@@ -1154,9 +1166,9 @@ func (r RefOfSQuadTree) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfSQuadTree.
-var __typeRefForRefOfSQuadTree types.TypeRef
+var __typeRefForRefOfSQuadTree types.Type
 
-func (m RefOfSQuadTree) TypeRef() types.TypeRef {
+func (m RefOfSQuadTree) Type() types.Type {
 	return __typeRefForRefOfSQuadTree
 }
 

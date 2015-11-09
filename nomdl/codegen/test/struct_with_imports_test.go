@@ -53,7 +53,7 @@ func TestListOfImportsDef(t *testing.T) {
 
 func TestDepsAndPackageRefs(t *testing.T) {
 	assert := assert.New(t)
-	tr := gen.NewImportUser().ImportedStruct().TypeRef()
+	tr := gen.NewImportUser().ImportedStruct().Type()
 	assert.Equal(types.UnresolvedKind, tr.Kind())
 	assert.True(tr.HasPackageRef())
 	p := types.LookupPackage(tr.PackageRef())

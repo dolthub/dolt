@@ -37,7 +37,7 @@ func (w *jsonArrayWriter) writeRef(r ref.Ref) {
 	w.write(r.String())
 }
 
-func (w *jsonArrayWriter) writeTypeRefAsTag(t TypeRef) {
+func (w *jsonArrayWriter) writeTypeRefAsTag(t Type) {
 	k := t.Kind()
 	w.write(k)
 	switch k {
@@ -61,12 +61,12 @@ func (w *jsonArrayWriter) writeTypeRefAsTag(t TypeRef) {
 }
 
 func (w *jsonArrayWriter) writeTopLevelValue(v Value) {
-	tr := v.TypeRef()
+	tr := v.Type()
 	w.writeTypeRefAsTag(tr)
 	w.writeValue(v, tr, nil)
 }
 
-func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
+func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 	switch tr.Kind() {
 	case BlobKind:
 		w.writeBlob(v.(Blob))
@@ -124,14 +124,14 @@ func (w *jsonArrayWriter) writeValue(v Value, tr TypeRef, pkg *Package) {
 		}
 		w.writeUnresolvedKindValue(v, tr, pkg)
 	case ValueKind:
-		w.writeTypeRefAsTag(v.TypeRef())
-		w.writeValue(v, v.TypeRef(), pkg)
+		w.writeTypeRefAsTag(v.Type())
+		w.writeValue(v, v.Type(), pkg)
 	default:
 		d.Chk.Fail("Unknown NomsKind")
 	}
 }
 
-func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
+func (w *jsonArrayWriter) writeTypeRefAsValue(v Type) {
 	k := v.Kind()
 	w.write(k)
 	switch k {
@@ -167,7 +167,7 @@ func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
 	case UnresolvedKind:
 		pkgRef := v.PackageRef()
 		w.writeRef(pkgRef)
-		// Don't use Ordinal() here since we might need to serialize a TypeRef that hasn't gotten a valid ordinal yet.
+		// Don't use Ordinal() here since we might need to serialize a Type that hasn't gotten a valid ordinal yet.
 		ordinal := v.Desc.(UnresolvedDesc).ordinal
 		w.write(ordinal)
 		if ordinal == -1 {
@@ -181,23 +181,23 @@ func (w *jsonArrayWriter) writeTypeRefAsValue(v TypeRef) {
 		}
 
 	default:
-		d.Chk.True(IsPrimitiveKind(k), v.Describe())
+		d.Chk.True(IsPrimitiveKind(k), "Kind: %v Desc: %s\n", v.Kind(), v.Describe())
 	}
 }
 
-// writeTypeRefKindValue writes either a struct, enum or a TypeRef value
-func (w *jsonArrayWriter) writeTypeRefKindValue(v Value, tr TypeRef, pkg *Package) {
-	d.Chk.IsType(TypeRef{}, v)
-	w.writeTypeRefAsValue(v.(TypeRef))
+// writeTypeRefKindValue writes either a struct, enum or a Type value
+func (w *jsonArrayWriter) writeTypeRefKindValue(v Value, tr Type, pkg *Package) {
+	d.Chk.IsType(Type{}, v)
+	w.writeTypeRefAsValue(v.(Type))
 }
 
 // writeUnresolvedKindValue writes either a struct or an enum
-func (w *jsonArrayWriter) writeUnresolvedKindValue(v Value, tr TypeRef, pkg *Package) {
+func (w *jsonArrayWriter) writeUnresolvedKindValue(v Value, tr Type, pkg *Package) {
 	d.Chk.NotNil(pkg)
 	typeDef := pkg.types[tr.Ordinal()]
 	switch typeDef.Kind() {
 	default:
-		d.Chk.Fail("An Unresolved TypeRef can only reference a StructKind or Enum Kind.", "Actually referenced: %+v", typeDef)
+		d.Chk.Fail("An Unresolved Type can only reference a StructKind or Enum Kind.", "Actually referenced: %+v", typeDef)
 	case EnumKind:
 		w.writeEnum(v, tr, pkg)
 	case StructKind:
@@ -215,7 +215,7 @@ func (w *jsonArrayWriter) writeBlob(b Blob) {
 	w.write(buf.String())
 }
 
-func (w *jsonArrayWriter) writeStruct(v Value, typeRef, typeDef TypeRef, pkg *Package) {
+func (w *jsonArrayWriter) writeStruct(v Value, typeRef, typeDef Type, pkg *Package) {
 	typeRef = fixupTypeRef(typeRef, pkg)
 
 	i := 0
@@ -245,7 +245,7 @@ func (w *jsonArrayWriter) writeStruct(v Value, typeRef, typeDef TypeRef, pkg *Pa
 	}
 }
 
-func (w *jsonArrayWriter) writeEnum(v Value, t TypeRef, pkg *Package) {
+func (w *jsonArrayWriter) writeEnum(v Value, t Type, pkg *Package) {
 	t = fixupTypeRef(t, pkg)
 	i := enumPrimitiveValueFromTypeRef(v, t)
 	w.write(i)

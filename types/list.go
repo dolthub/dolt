@@ -10,7 +10,7 @@ import (
 
 type List struct {
 	values []Value
-	t      TypeRef
+	t      Type
 	ref    *ref.Ref
 }
 
@@ -23,7 +23,7 @@ func NewList(v ...Value) List {
 	return newListNoCopy(values, listTypeRef)
 }
 
-func newListNoCopy(values []Value, t TypeRef) List {
+func newListNoCopy(values []Value, t Type) List {
 	d.Chk.Equal(ListKind, t.Kind())
 	return List{values, t, &ref.Ref{}}
 }
@@ -199,10 +199,10 @@ func (l List) ChildValues() []Value {
 	return append([]Value{}, l.values...)
 }
 
-func (l List) TypeRef() TypeRef {
+func (l List) Type() Type {
 	return l.t
 }
 
-func (l List) elemType() TypeRef {
+func (l List) elemType() Type {
 	return l.t.Desc.(CompoundDesc).ElemTypes[0]
 }

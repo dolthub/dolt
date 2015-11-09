@@ -13,7 +13,7 @@ var __genPackageInFile_enum_struct_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeEnumTypeRef("Handedness", "right", "left", "switch"),
 		types.MakeStructTypeRef("EnumStruct",
 			[]types.Field{
@@ -39,9 +39,9 @@ func NewHandedness() Handedness {
 	return Handedness(0)
 }
 
-var __typeRefForHandedness types.TypeRef
+var __typeRefForHandedness types.Type
 
-func (e Handedness) TypeRef() types.TypeRef {
+func (e Handedness) Type() types.Type {
 	return __typeRefForHandedness
 }
 
@@ -107,9 +107,9 @@ func (s EnumStruct) Def() (d EnumStructDef) {
 	return
 }
 
-var __typeRefForEnumStruct types.TypeRef
+var __typeRefForEnumStruct types.Type
 
-func (m EnumStruct) TypeRef() types.TypeRef {
+func (m EnumStruct) Type() types.Type {
 	return __typeRefForEnumStruct
 }
 
@@ -134,7 +134,7 @@ func readerForEnumStruct(v types.Value) []types.Value {
 }
 
 func (s EnumStruct) Equals(other types.Value) bool {
-	return other != nil && __typeRefForEnumStruct.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForEnumStruct.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s EnumStruct) Ref() ref.Ref {

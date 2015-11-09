@@ -5,15 +5,15 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-// TypeRef structs define and describe Noms types, both custom and built-in.
-// name is required for StructKind and EnumKind types, and may be allowed for others if we do type aliases. Named types are 'exported' in that they can be addressed from other type packages.
-// Desc provided more details of the type. It may contain only a types.NomsKind, in the case of primitives, or it may contain additional information -- e.g. element TypeRefs for compound type specializations, field descriptions for structs, etc. Either way, checking Kind() allows code to understand how to interpret the rest of the data.
-// If Kind() refers to a primitive, then Desc is empty.
-// If Kind() refers to List, Map, Set or Ref, then Desc is a list of TypeRefs describing the element type(s).
-// If Kind() refers to Struct, then Desc is {[name, type, ...], [name, type, ...]}.
-// If Kind() refers to Enum, then Desc is a List(String) describing the enumerated values.
+// Type defines and describes Noms types, both custom and built-in.
+// StructKind and EnumKind types, and possibly others if we do type aliases, will have a Name(). Named types are 'exported' in that they can be addressed from other type packages.
+// Desc provides more details of the type. It may contain only a types.NomsKind, in the case of primitives, or it may contain additional information -- e.g. element Types for compound type specializations, field descriptions for structs, etc. Either way, checking Kind() allows code to understand how to interpret the rest of the data.
+// If Kind() refers to a primitive, then Desc has no more info.
+// If Kind() refers to List, Map, Set or Ref, then Desc is a list of Types describing the element type(s).
+// If Kind() refers to Struct, then Desc contains a []Field and Choices.
+// If Kind() refers to Enum, then Desc is a []string describing the enumerated values.
 // If Kind() refers to an UnresolvedKind, then Desc contains a PackageRef, which is the Ref of the package where the type definition is defined. The ordinal, if not -1, is the index into the Types list of the package. If the Name is set then the ordinal needs to be found.
-type TypeRef struct {
+type Type struct {
 	name name
 	Desc TypeDesc
 
@@ -25,7 +25,7 @@ type name struct {
 }
 
 func (n name) compose() (out string) {
-	d.Chk.True(n.namespace == "" || (n.namespace != "" && n.name != ""), "If a TypeRef's namespace is set, so must name be.")
+	d.Chk.True(n.namespace == "" || (n.namespace != "" && n.name != ""), "If a Type's namespace is set, so must name be.")
 	if n.namespace != "" {
 		out = n.namespace + "."
 	}
@@ -36,18 +36,18 @@ func (n name) compose() (out string) {
 }
 
 // IsUnresolved returns true if t doesn't contain description information. The caller should look the type up by Ordinal in the Types of the appropriate Package.
-func (t TypeRef) IsUnresolved() bool {
+func (t Type) IsUnresolved() bool {
 	_, ok := t.Desc.(UnresolvedDesc)
 	return ok
 }
 
-func (t TypeRef) HasPackageRef() bool {
+func (t Type) HasPackageRef() bool {
 	return t.IsUnresolved() && !t.PackageRef().IsEmpty()
 }
 
 // Describe() methods generate text that should parse into the struct being described.
 // TODO: Figure out a way that they can exist only in the test file.
-func (t TypeRef) Describe() (out string) {
+func (t Type) Describe() (out string) {
 	if t.name != (name{}) {
 		out += t.name.compose() + "\n"
 	}
@@ -57,46 +57,42 @@ func (t TypeRef) Describe() (out string) {
 	return
 }
 
-func (t TypeRef) Kind() NomsKind {
+func (t Type) Kind() NomsKind {
 	return t.Desc.Kind()
 }
 
-func (t TypeRef) PackageRef() ref.Ref {
+func (t Type) PackageRef() ref.Ref {
 	desc, ok := t.Desc.(UnresolvedDesc)
 	d.Chk.True(ok, "PackageRef only works on unresolved type refs")
 	return desc.pkgRef
 }
 
-func (t TypeRef) Ordinal() int16 {
+func (t Type) Ordinal() int16 {
 	d.Chk.True(t.HasOrdinal(), "Ordinal has not been set")
 	return t.Desc.(UnresolvedDesc).ordinal
 }
 
-func (t TypeRef) HasOrdinal() bool {
+func (t Type) HasOrdinal() bool {
 	return t.IsUnresolved() && t.Desc.(UnresolvedDesc).ordinal >= 0
 }
 
-func (t TypeRef) Name() string {
+func (t Type) Name() string {
 	return t.name.name
 }
 
-func (t TypeRef) NamespacedName() string {
-	return t.name.compose()
-}
-
-func (t TypeRef) Namespace() string {
+func (t Type) Namespace() string {
 	return t.name.namespace
 }
 
-func (t TypeRef) Ref() ref.Ref {
+func (t Type) Ref() ref.Ref {
 	return EnsureRef(t.ref, t)
 }
 
-func (t TypeRef) Equals(other Value) (res bool) {
+func (t Type) Equals(other Value) (res bool) {
 	return other != nil && t.Ref() == other.Ref()
 }
 
-func (t TypeRef) Chunks() (chunks []ref.Ref) {
+func (t Type) Chunks() (chunks []ref.Ref) {
 	if t.IsUnresolved() {
 		if t.HasPackageRef() {
 			chunks = append(chunks, t.PackageRef())
@@ -111,7 +107,7 @@ func (t TypeRef) Chunks() (chunks []ref.Ref) {
 	return
 }
 
-func (t TypeRef) ChildValues() (res []Value) {
+func (t Type) ChildValues() (res []Value) {
 	if t.HasPackageRef() {
 		res = append(res, NewRefOfPackage(t.PackageRef()))
 	}
@@ -139,21 +135,21 @@ func (t TypeRef) ChildValues() (res []Value) {
 	return
 }
 
-var typeRefForTypeRef = MakePrimitiveTypeRef(TypeRefKind)
+var TypeForTypeRef = MakePrimitiveTypeRef(TypeRefKind)
 
-func (t TypeRef) TypeRef() TypeRef {
-	return typeRefForTypeRef
+func (t Type) Type() Type {
+	return TypeForTypeRef
 }
 
-func MakePrimitiveTypeRef(k NomsKind) TypeRef {
+func MakePrimitiveTypeRef(k NomsKind) Type {
 	return buildType("", PrimitiveDesc(k))
 }
 
-func MakePrimitiveTypeRefByString(p string) TypeRef {
+func MakePrimitiveTypeRefByString(p string) Type {
 	return buildType("", primitiveToDesc(p))
 }
 
-func MakeCompoundTypeRef(kind NomsKind, elemTypes ...TypeRef) TypeRef {
+func MakeCompoundTypeRef(kind NomsKind, elemTypes ...Type) Type {
 	if len(elemTypes) == 1 {
 		d.Chk.NotEqual(MapKind, kind, "MapKind requires 2 element types.")
 	} else {
@@ -163,30 +159,30 @@ func MakeCompoundTypeRef(kind NomsKind, elemTypes ...TypeRef) TypeRef {
 	return buildType("", CompoundDesc{kind, elemTypes})
 }
 
-func MakeEnumTypeRef(name string, ids ...string) TypeRef {
+func MakeEnumTypeRef(name string, ids ...string) Type {
 	return buildType(name, EnumDesc{ids})
 }
 
-func MakeStructTypeRef(name string, fields []Field, choices Choices) TypeRef {
+func MakeStructTypeRef(name string, fields []Field, choices Choices) Type {
 	return buildType(name, StructDesc{fields, choices})
 }
 
-func MakeTypeRef(pkgRef ref.Ref, ordinal int16) TypeRef {
+func MakeTypeRef(pkgRef ref.Ref, ordinal int16) Type {
 	d.Chk.True(ordinal >= 0)
-	return TypeRef{Desc: UnresolvedDesc{pkgRef, ordinal}, ref: &ref.Ref{}}
+	return Type{Desc: UnresolvedDesc{pkgRef, ordinal}, ref: &ref.Ref{}}
 }
 
-func MakeUnresolvedTypeRef(namespace, n string) TypeRef {
-	return TypeRef{name: name{namespace, n}, Desc: UnresolvedDesc{ordinal: -1}, ref: &ref.Ref{}}
+func MakeUnresolvedTypeRef(namespace, n string) Type {
+	return Type{name: name{namespace, n}, Desc: UnresolvedDesc{ordinal: -1}, ref: &ref.Ref{}}
 }
 
-func buildType(n string, desc TypeDesc) TypeRef {
+func buildType(n string, desc TypeDesc) Type {
 	if IsPrimitiveKind(desc.Kind()) {
-		return TypeRef{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
+		return Type{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
 	}
 	switch desc.Kind() {
 	case ListKind, RefKind, SetKind, MapKind, EnumKind, StructKind, UnresolvedKind:
-		return TypeRef{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
+		return Type{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
 	default:
 		d.Exp.Fail("Unrecognized Kind:", "%v", desc.Kind())
 		panic("unreachable")

@@ -40,7 +40,7 @@ func (s SetOfBool) Def() SetOfBoolDef {
 }
 
 func (s SetOfBool) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSetOfBool.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForSetOfBool.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfBool) Ref() ref.Ref {
@@ -48,7 +48,7 @@ func (s SetOfBool) Ref() ref.Ref {
 }
 
 func (s SetOfBool) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
@@ -58,9 +58,9 @@ func (s SetOfBool) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfBool.
-var __typeRefForSetOfBool types.TypeRef
+var __typeRefForSetOfBool types.Type
 
-func (m SetOfBool) TypeRef() types.TypeRef {
+func (m SetOfBool) Type() types.Type {
 	return __typeRefForSetOfBool
 }
 

@@ -45,7 +45,7 @@ func TestTypeWithPkgRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg := NewPackage([]TypeRef{MakePrimitiveTypeRef(Float64Kind)}, []ref.Ref{})
+	pkg := NewPackage([]Type{MakePrimitiveTypeRef(Float64Kind)}, []ref.Ref{})
 
 	pkgRef := RegisterPackage(&pkg)
 	unresolvedType := MakeTypeRef(pkgRef, 42)
@@ -57,5 +57,5 @@ func TestTypeWithPkgRef(t *testing.T) {
 }
 
 func TestTypeRefTypeRef(t *testing.T) {
-	assert.True(t, MakePrimitiveTypeRef(BoolKind).TypeRef().Equals(MakePrimitiveTypeRef(TypeRefKind)))
+	assert.True(t, MakePrimitiveTypeRef(BoolKind).Type().Equals(MakePrimitiveTypeRef(TypeRefKind)))
 }

@@ -264,21 +264,21 @@ type testField struct {
 }
 
 func (t testField) toField() types.Field {
-	return types.Field{t.Name, t.D.(types.TypeRef), t.Optional}
+	return types.Field{t.Name, t.D.(types.Type), t.Optional}
 }
 
 type describable interface {
 	Describe() string
 }
 
-func (suite *ParsedResultTestSuite) findTypeByName(n string, ts []types.TypeRef) types.TypeRef {
+func (suite *ParsedResultTestSuite) findTypeByName(n string, ts []types.Type) types.Type {
 	for _, t := range ts {
 		if n == t.Name() {
 			return t
 		}
 	}
 	suite.Fail("Failed to find type by name")
-	return types.TypeRef{}
+	panic("Unreachable")
 }
 
 func (suite *ParsedResultTestSuite) checkStruct(pkg intermediate, s structTestCase) {
@@ -295,7 +295,7 @@ func (suite *ParsedResultTestSuite) checkStruct(pkg intermediate, s structTestCa
 			// ...make sure the names are the same...
 			suite.Equal(f.Name, typFields[i].Name)
 			suite.Equal(f.Optional, typFields[i].Optional)
-			// and  the TypeRef points to somewhere else.
+			// and  the Type points to somewhere else.
 			suite.True(typFields[i].T.IsUnresolved())
 			suite.True(typFields[i].T.Ordinal() > 0)
 			suite.Equal(ref.Ref{}, typFields[i].T.PackageRef())

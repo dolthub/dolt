@@ -112,9 +112,9 @@ func (cb compoundBlob) Ref() ref.Ref {
 }
 
 func (cb compoundBlob) Equals(other Value) bool {
-	return other != nil && typeRefForBlob.Equals(other.TypeRef()) && cb.Ref() == other.Ref()
+	return other != nil && typeRefForBlob.Equals(other.Type()) && cb.Ref() == other.Ref()
 }
 
-func (cb compoundBlob) TypeRef() TypeRef {
+func (cb compoundBlob) Type() Type {
 	return typeRefForBlob
 }

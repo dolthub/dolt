@@ -336,25 +336,25 @@ func TestListIterAllP(t *testing.T) {
 func TestListTypeRef(t *testing.T) {
 	assert := assert.New(t)
 	l := NewList(Int32(0))
-	assert.True(l.TypeRef().Equals(MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))))
+	assert.True(l.Type().Equals(MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))))
 
 	tr := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(UInt8Kind))
 	l2 := newListNoCopy([]Value{UInt8(0), UInt8(1)}, tr)
-	assert.Equal(tr, l2.TypeRef())
+	assert.Equal(tr, l2.Type())
 
 	l3 := l2.Slice(0, 1)
-	assert.True(tr.Equals(l3.TypeRef()))
+	assert.True(tr.Equals(l3.Type()))
 	l3 = l2.Remove(0, 1)
-	assert.True(tr.Equals(l3.TypeRef()))
+	assert.True(tr.Equals(l3.Type()))
 	l3 = l2.RemoveAt(0)
-	assert.True(tr.Equals(l3.TypeRef()))
+	assert.True(tr.Equals(l3.Type()))
 
 	l3 = l2.Set(0, UInt8(11))
-	assert.True(tr.Equals(l3.TypeRef()))
+	assert.True(tr.Equals(l3.Type()))
 	l3 = l2.Append(UInt8(2))
-	assert.True(tr.Equals(l3.TypeRef()))
+	assert.True(tr.Equals(l3.Type()))
 	l3 = l2.Insert(0, UInt8(3))
-	assert.True(tr.Equals(l3.TypeRef()))
+	assert.True(tr.Equals(l3.Type()))
 
 	assert.Panics(func() { l2.Set(0, NewString("")) })
 	assert.Panics(func() { l2.Append(NewString("")) })

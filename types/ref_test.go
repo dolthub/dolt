@@ -45,19 +45,19 @@ func TestRefTypeRef(t *testing.T) {
 
 	l := NewList()
 	r := NewRef(l.Ref())
-	assert.True(r.TypeRef().Equals(tr))
+	assert.True(r.Type().Equals(tr))
 
 	cs := chunks.NewMemoryStore()
 	m := NewMap()
 	r2 := r.SetTargetValue(m, cs)
-	assert.True(r2.TypeRef().Equals(tr))
+	assert.True(r2.Type().Equals(tr))
 
 	b := Bool(true)
 	r2 = r.SetTargetValue(b, cs)
-	r2.t = MakeCompoundTypeRef(RefKind, b.TypeRef())
+	r2.t = MakeCompoundTypeRef(RefKind, b.Type())
 
 	r3 := r2.SetTargetValue(Bool(false), cs)
-	assert.True(r2.TypeRef().Equals(r3.TypeRef()))
+	assert.True(r2.Type().Equals(r3.Type()))
 
 	assert.Panics(func() { r2.SetTargetValue(Int16(1), cs) })
 }

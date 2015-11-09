@@ -12,7 +12,7 @@ type setData []Value
 
 type Set struct {
 	data setData // sorted by Ref()
-	t    TypeRef
+	t    Type
 	ref  *ref.Ref
 }
 
@@ -141,7 +141,7 @@ func (s Set) Ref() ref.Ref {
 }
 
 func (s Set) Equals(other Value) bool {
-	return other != nil && s.t.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && s.t.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Set) Chunks() (chunks []ref.Ref) {
@@ -155,15 +155,15 @@ func (s Set) ChildValues() []Value {
 	return append([]Value{}, s.data...)
 }
 
-func (s Set) TypeRef() TypeRef {
+func (s Set) Type() Type {
 	return s.t
 }
 
-func (s Set) elemType() TypeRef {
+func (s Set) elemType() Type {
 	return s.t.Desc.(CompoundDesc).ElemTypes[0]
 }
 
-func newSetFromData(m setData, t TypeRef) Set {
+func newSetFromData(m setData, t Type) Set {
 	return Set{m, t, &ref.Ref{}}
 }
 

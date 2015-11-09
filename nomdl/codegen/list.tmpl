@@ -32,7 +32,7 @@ func New{{.Name}}() {{.Name}} {
 {{end}}
 
 func (l {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
-	return other != nil && __typeRefFor{{.Name}}.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefFor{{.Name}}.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l {{.Name}}) Ref() ref.Ref {
@@ -40,7 +40,7 @@ func (l {{.Name}}) Ref() ref.Ref {
 }
 
 func (l {{.Name}}) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -50,9 +50,9 @@ func (l {{.Name}}) ChildValues() []{{$typesPackage}}Value {
 }
 
 // A Noms Value that describes {{.Name}}.
-var __typeRefFor{{.Name}} {{$typesPackage}}TypeRef
+var __typeRefFor{{.Name}} {{$typesPackage}}Type
 
-func (m {{.Name}}) TypeRef() {{$typesPackage}}TypeRef {
+func (m {{.Name}}) Type() {{$typesPackage}}Type {
 	return __typeRefFor{{.Name}}
 }
 

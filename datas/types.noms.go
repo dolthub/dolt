@@ -14,7 +14,7 @@ var __datasPackageInFile_types_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("Commit",
 			[]types.Field{
 				types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
@@ -63,9 +63,9 @@ func (s Commit) Def() (d CommitDef) {
 	return
 }
 
-var __typeRefForCommit types.TypeRef
+var __typeRefForCommit types.Type
 
-func (m Commit) TypeRef() types.TypeRef {
+func (m Commit) Type() types.Type {
 	return __typeRefForCommit
 }
 
@@ -93,7 +93,7 @@ func readerForCommit(v types.Value) []types.Value {
 }
 
 func (s Commit) Equals(other types.Value) bool {
-	return other != nil && __typeRefForCommit.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForCommit.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Commit) Ref() ref.Ref {
@@ -164,7 +164,7 @@ func (m MapOfStringToRefOfCommit) Def() MapOfStringToRefOfCommitDef {
 }
 
 func (m MapOfStringToRefOfCommit) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToRefOfCommit.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+	return other != nil && __typeRefForMapOfStringToRefOfCommit.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToRefOfCommit) Ref() ref.Ref {
@@ -172,7 +172,7 @@ func (m MapOfStringToRefOfCommit) Ref() ref.Ref {
 }
 
 func (m MapOfStringToRefOfCommit) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
@@ -182,9 +182,9 @@ func (m MapOfStringToRefOfCommit) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToRefOfCommit.
-var __typeRefForMapOfStringToRefOfCommit types.TypeRef
+var __typeRefForMapOfStringToRefOfCommit types.Type
 
-func (m MapOfStringToRefOfCommit) TypeRef() types.TypeRef {
+func (m MapOfStringToRefOfCommit) Type() types.Type {
 	return __typeRefForMapOfStringToRefOfCommit
 }
 
@@ -251,6 +251,12 @@ func (m MapOfStringToRefOfCommit) IterAll(cb MapOfStringToRefOfCommitIterAllCall
 	})
 }
 
+func (m MapOfStringToRefOfCommit) IterAllP(concurrency int, cb MapOfStringToRefOfCommitIterAllCallback) {
+	m.m.IterAllP(concurrency, func(k, v types.Value) {
+		cb(k.(types.String).String(), v.(RefOfCommit))
+	})
+}
+
 type MapOfStringToRefOfCommitFilterCallback func(k string, v RefOfCommit) (keep bool)
 
 func (m MapOfStringToRefOfCommit) Filter(cb MapOfStringToRefOfCommitFilterCallback) MapOfStringToRefOfCommit {
@@ -293,7 +299,7 @@ func (s SetOfRefOfCommit) Def() SetOfRefOfCommitDef {
 }
 
 func (s SetOfRefOfCommit) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSetOfRefOfCommit.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForSetOfRefOfCommit.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfRefOfCommit) Ref() ref.Ref {
@@ -301,7 +307,7 @@ func (s SetOfRefOfCommit) Ref() ref.Ref {
 }
 
 func (s SetOfRefOfCommit) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
@@ -311,9 +317,9 @@ func (s SetOfRefOfCommit) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfRefOfCommit.
-var __typeRefForSetOfRefOfCommit types.TypeRef
+var __typeRefForSetOfRefOfCommit types.Type
 
-func (m SetOfRefOfCommit) TypeRef() types.TypeRef {
+func (m SetOfRefOfCommit) Type() types.Type {
 	return __typeRefForSetOfRefOfCommit
 }
 
@@ -429,11 +435,11 @@ func (r RefOfCommit) Ref() ref.Ref {
 }
 
 func (r RefOfCommit) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfCommit.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+	return other != nil && __typeRefForRefOfCommit.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfCommit) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.Type().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
 }
@@ -443,9 +449,9 @@ func (r RefOfCommit) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfCommit.
-var __typeRefForRefOfCommit types.TypeRef
+var __typeRefForRefOfCommit types.Type
 
-func (m RefOfCommit) TypeRef() types.TypeRef {
+func (m RefOfCommit) Type() types.Type {
 	return __typeRefForRefOfCommit
 }
 

@@ -13,7 +13,7 @@ var __typesPackageInFile_compound_blob_struct_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := NewPackage([]TypeRef{
+	p := NewPackage([]Type{
 		MakeStructTypeRef("compoundBlobStruct",
 			[]Field{
 				Field{"Offsets", MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(UInt64Kind)), false},
@@ -62,9 +62,9 @@ func (s compoundBlobStruct) Def() (d compoundBlobStructDef) {
 	return
 }
 
-var __typeRefForcompoundBlobStruct TypeRef
+var __typeRefForcompoundBlobStruct Type
 
-func (m compoundBlobStruct) TypeRef() TypeRef {
+func (m compoundBlobStruct) Type() Type {
 	return __typeRefForcompoundBlobStruct
 }
 
@@ -92,7 +92,7 @@ func readerForcompoundBlobStruct(v Value) []Value {
 }
 
 func (s compoundBlobStruct) Equals(other Value) bool {
-	return other != nil && __typeRefForcompoundBlobStruct.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForcompoundBlobStruct.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s compoundBlobStruct) Ref() ref.Ref {
@@ -162,7 +162,7 @@ func (l ListOfUInt64) Def() ListOfUInt64Def {
 }
 
 func (l ListOfUInt64) Equals(other Value) bool {
-	return other != nil && __typeRefForListOfUInt64.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfUInt64.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfUInt64) Ref() ref.Ref {
@@ -170,7 +170,7 @@ func (l ListOfUInt64) Ref() ref.Ref {
 }
 
 func (l ListOfUInt64) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -180,9 +180,9 @@ func (l ListOfUInt64) ChildValues() []Value {
 }
 
 // A Noms Value that describes ListOfUInt64.
-var __typeRefForListOfUInt64 TypeRef
+var __typeRefForListOfUInt64 Type
 
-func (m ListOfUInt64) TypeRef() TypeRef {
+func (m ListOfUInt64) Type() Type {
 	return __typeRefForListOfUInt64
 }
 
@@ -304,7 +304,7 @@ func (l ListOfRefOfBlob) Def() ListOfRefOfBlobDef {
 }
 
 func (l ListOfRefOfBlob) Equals(other Value) bool {
-	return other != nil && __typeRefForListOfRefOfBlob.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfRefOfBlob.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfBlob) Ref() ref.Ref {
@@ -312,7 +312,7 @@ func (l ListOfRefOfBlob) Ref() ref.Ref {
 }
 
 func (l ListOfRefOfBlob) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -322,9 +322,9 @@ func (l ListOfRefOfBlob) ChildValues() []Value {
 }
 
 // A Noms Value that describes ListOfRefOfBlob.
-var __typeRefForListOfRefOfBlob TypeRef
+var __typeRefForListOfRefOfBlob Type
 
-func (m ListOfRefOfBlob) TypeRef() TypeRef {
+func (m ListOfRefOfBlob) Type() Type {
 	return __typeRefForListOfRefOfBlob
 }
 
@@ -436,11 +436,11 @@ func (r RefOfBlob) Ref() ref.Ref {
 }
 
 func (r RefOfBlob) Equals(other Value) bool {
-	return other != nil && __typeRefForRefOfBlob.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+	return other != nil && __typeRefForRefOfBlob.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfBlob) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.Type().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
 }
@@ -450,9 +450,9 @@ func (r RefOfBlob) ChildValues() []Value {
 }
 
 // A Noms Value that describes RefOfBlob.
-var __typeRefForRefOfBlob TypeRef
+var __typeRefForRefOfBlob Type
 
-func (m RefOfBlob) TypeRef() TypeRef {
+func (m RefOfBlob) Type() Type {
 	return __typeRefForRefOfBlob
 }
 

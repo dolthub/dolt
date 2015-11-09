@@ -38,7 +38,7 @@ func (l ListOfRefOfMapOfStringToValue) Def() ListOfRefOfMapOfStringToValueDef {
 }
 
 func (l ListOfRefOfMapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfRefOfMapOfStringToValue.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfRefOfMapOfStringToValue.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfMapOfStringToValue) Ref() ref.Ref {
@@ -46,7 +46,7 @@ func (l ListOfRefOfMapOfStringToValue) Ref() ref.Ref {
 }
 
 func (l ListOfRefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -56,9 +56,9 @@ func (l ListOfRefOfMapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfRefOfMapOfStringToValue.
-var __typeRefForListOfRefOfMapOfStringToValue types.TypeRef
+var __typeRefForListOfRefOfMapOfStringToValue types.Type
 
-func (m ListOfRefOfMapOfStringToValue) TypeRef() types.TypeRef {
+func (m ListOfRefOfMapOfStringToValue) Type() types.Type {
 	return __typeRefForListOfRefOfMapOfStringToValue
 }
 
@@ -170,11 +170,11 @@ func (r RefOfMapOfStringToValue) Ref() ref.Ref {
 }
 
 func (r RefOfMapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfMapOfStringToValue.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+	return other != nil && __typeRefForRefOfMapOfStringToValue.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.Type().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
 }
@@ -184,9 +184,9 @@ func (r RefOfMapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfMapOfStringToValue.
-var __typeRefForRefOfMapOfStringToValue types.TypeRef
+var __typeRefForRefOfMapOfStringToValue types.Type
 
-func (m RefOfMapOfStringToValue) TypeRef() types.TypeRef {
+func (m RefOfMapOfStringToValue) Type() types.Type {
 	return __typeRefForRefOfMapOfStringToValue
 }
 
@@ -238,7 +238,7 @@ func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 }
 
 func (m MapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToValue.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+	return other != nil && __typeRefForMapOfStringToValue.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToValue) Ref() ref.Ref {
@@ -246,7 +246,7 @@ func (m MapOfStringToValue) Ref() ref.Ref {
 }
 
 func (m MapOfStringToValue) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
@@ -256,9 +256,9 @@ func (m MapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToValue.
-var __typeRefForMapOfStringToValue types.TypeRef
+var __typeRefForMapOfStringToValue types.Type
 
-func (m MapOfStringToValue) TypeRef() types.TypeRef {
+func (m MapOfStringToValue) Type() types.Type {
 	return __typeRefForMapOfStringToValue
 }
 
@@ -321,6 +321,12 @@ type MapOfStringToValueIterAllCallback func(k string, v types.Value)
 
 func (m MapOfStringToValue) IterAll(cb MapOfStringToValueIterAllCallback) {
 	m.m.IterAll(func(k, v types.Value) {
+		cb(k.(types.String).String(), v)
+	})
+}
+
+func (m MapOfStringToValue) IterAllP(concurrency int, cb MapOfStringToValueIterAllCallback) {
+	m.m.IterAllP(concurrency, func(k, v types.Value) {
 		cb(k.(types.String).String(), v)
 	})
 }

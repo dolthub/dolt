@@ -13,7 +13,7 @@ var __genPackageInFile_struct_with_union_field_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("StructWithUnionField",
 			[]types.Field{
 				types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
@@ -70,9 +70,9 @@ func (s StructWithUnionField) Def() (d StructWithUnionFieldDef) {
 	return
 }
 
-var __typeRefForStructWithUnionField types.TypeRef
+var __typeRefForStructWithUnionField types.Type
 
-func (m StructWithUnionField) TypeRef() types.TypeRef {
+func (m StructWithUnionField) Type() types.Type {
 	return __typeRefForStructWithUnionField
 }
 
@@ -103,7 +103,7 @@ func readerForStructWithUnionField(v types.Value) []types.Value {
 }
 
 func (s StructWithUnionField) Equals(other types.Value) bool {
-	return other != nil && __typeRefForStructWithUnionField.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForStructWithUnionField.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s StructWithUnionField) Ref() ref.Ref {
@@ -300,7 +300,7 @@ func (s SetOfUInt8) Def() SetOfUInt8Def {
 }
 
 func (s SetOfUInt8) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSetOfUInt8.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForSetOfUInt8.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfUInt8) Ref() ref.Ref {
@@ -308,7 +308,7 @@ func (s SetOfUInt8) Ref() ref.Ref {
 }
 
 func (s SetOfUInt8) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
@@ -318,9 +318,9 @@ func (s SetOfUInt8) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfUInt8.
-var __typeRefForSetOfUInt8 types.TypeRef
+var __typeRefForSetOfUInt8 types.Type
 
-func (m SetOfUInt8) TypeRef() types.TypeRef {
+func (m SetOfUInt8) Type() types.Type {
 	return __typeRefForSetOfUInt8
 }
 

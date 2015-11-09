@@ -56,7 +56,7 @@ func (r *jsonArrayReader) readRef() ref.Ref {
 	return ref.Parse(s)
 }
 
-func (r *jsonArrayReader) readTypeRefAsTag() TypeRef {
+func (r *jsonArrayReader) readTypeRefAsTag() Type {
 	kind := r.readKind()
 	switch kind {
 	case ListKind, SetKind, RefKind:
@@ -82,7 +82,7 @@ func (r *jsonArrayReader) readTypeRefAsTag() TypeRef {
 	panic("unreachable")
 }
 
-func (r *jsonArrayReader) readBlob(t TypeRef) Value {
+func (r *jsonArrayReader) readBlob(t Type) Value {
 	s := r.readString()
 	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(s))
 	b, err := ioutil.ReadAll(decoder)
@@ -90,7 +90,7 @@ func (r *jsonArrayReader) readBlob(t TypeRef) Value {
 	return newBlobLeaf(b)
 }
 
-func (r *jsonArrayReader) readList(t TypeRef, pkg *Package) Value {
+func (r *jsonArrayReader) readList(t Type, pkg *Package) Value {
 	desc := t.Desc.(CompoundDesc)
 	data := []Value{}
 	elemType := desc.ElemTypes[0]
@@ -104,7 +104,7 @@ func (r *jsonArrayReader) readList(t TypeRef, pkg *Package) Value {
 	return valueFromTypeRef(newListNoCopy(data, t), t)
 }
 
-func (r *jsonArrayReader) readSet(t TypeRef, pkg *Package) Value {
+func (r *jsonArrayReader) readSet(t Type, pkg *Package) Value {
 	desc := t.Desc.(CompoundDesc)
 	data := setData{}
 	elemType := desc.ElemTypes[0]
@@ -118,7 +118,7 @@ func (r *jsonArrayReader) readSet(t TypeRef, pkg *Package) Value {
 	return valueFromTypeRef(newSetFromData(data, t), t)
 }
 
-func (r *jsonArrayReader) readMap(t TypeRef, pkg *Package) Value {
+func (r *jsonArrayReader) readMap(t Type, pkg *Package) Value {
 	desc := t.Desc.(CompoundDesc)
 	data := mapData{}
 	keyType := desc.ElemTypes[0]
@@ -135,14 +135,14 @@ func (r *jsonArrayReader) readMap(t TypeRef, pkg *Package) Value {
 	return valueFromTypeRef(newMapFromData(data, t), t)
 }
 
-func (r *jsonArrayReader) readEnum(t TypeRef, pkg *Package) Value {
+func (r *jsonArrayReader) readEnum(t Type, pkg *Package) Value {
 	t = fixupTypeRef(t, pkg)
 	return enumFromTypeRef(uint32(r.read().(float64)), t)
 }
 
-func (r *jsonArrayReader) readPackage(t TypeRef, pkg *Package) Value {
+func (r *jsonArrayReader) readPackage(t Type, pkg *Package) Value {
 	r2 := newJsonArrayReader(r.readArray(), r.cs)
-	types := []TypeRef{}
+	types := []Type{}
 	for !r2.atEnd() {
 		types = append(types, r2.readTypeRefAsValue(pkg))
 	}
@@ -156,7 +156,7 @@ func (r *jsonArrayReader) readPackage(t TypeRef, pkg *Package) Value {
 	return NewPackage(types, deps)
 }
 
-func (r *jsonArrayReader) readRefValue(t TypeRef, pkg *Package) Value {
+func (r *jsonArrayReader) readRefValue(t Type, pkg *Package) Value {
 	ref := r.readRef()
 	t = fixupTypeRef(t, pkg)
 	return refFromTypeRef(ref, t)
@@ -167,7 +167,7 @@ func (r *jsonArrayReader) readTopLevelValue() Value {
 	return r.readValueWithoutTag(t, nil)
 }
 
-func (r *jsonArrayReader) readValueWithoutTag(t TypeRef, pkg *Package) Value {
+func (r *jsonArrayReader) readValueWithoutTag(t Type, pkg *Package) Value {
 	switch t.Kind() {
 	case BlobKind:
 		return r.readBlob(t)
@@ -222,12 +222,12 @@ func (r *jsonArrayReader) readValueWithoutTag(t TypeRef, pkg *Package) Value {
 	panic("not reachable")
 }
 
-func (r *jsonArrayReader) readTypeRefKindToValue(t TypeRef, pkg *Package) Value {
+func (r *jsonArrayReader) readTypeRefKindToValue(t Type, pkg *Package) Value {
 	d.Chk.IsType(PrimitiveDesc(0), t.Desc)
 	return r.readTypeRefAsValue(pkg)
 }
 
-func (r *jsonArrayReader) readUnresolvedKindToValue(t TypeRef, pkg *Package) Value {
+func (r *jsonArrayReader) readUnresolvedKindToValue(t Type, pkg *Package) Value {
 	// When we have a struct referencing another struct/enum in the same package the package ref is empty. In that case we use the package that is passed into this function.
 	d.Chk.True(t.IsUnresolved())
 	pkgRef := t.PackageRef()
@@ -253,7 +253,7 @@ func (r *jsonArrayReader) readUnresolvedKindToValue(t TypeRef, pkg *Package) Val
 	return r.readStruct(typeDef, t, pkg)
 }
 
-func (r *jsonArrayReader) readTypeRefAsValue(pkg *Package) TypeRef {
+func (r *jsonArrayReader) readTypeRefAsValue(pkg *Package) Type {
 	k := r.readKind()
 	switch k {
 	case EnumKind:
@@ -266,7 +266,7 @@ func (r *jsonArrayReader) readTypeRefAsValue(pkg *Package) TypeRef {
 		return MakeEnumTypeRef(name, ids...)
 	case ListKind, MapKind, RefKind, SetKind:
 		r2 := newJsonArrayReader(r.readArray(), r.cs)
-		elemTypes := []TypeRef{}
+		elemTypes := []Type{}
 		for !r2.atEnd() {
 			t := r2.readTypeRefAsValue(pkg)
 			elemTypes = append(elemTypes, t)
@@ -310,14 +310,14 @@ func (r *jsonArrayReader) readTypeRefAsValue(pkg *Package) TypeRef {
 }
 
 // fixupTypeRef goes trough the object graph of tr and updates the PackageRef to pkg if the the old PackageRef was an empty ref.
-func fixupTypeRef(tr TypeRef, pkg *Package) TypeRef {
+func fixupTypeRef(tr Type, pkg *Package) Type {
 	switch desc := tr.Desc.(type) {
 	case EnumDesc, StructDesc:
 		panic("unreachable")
 	case PrimitiveDesc:
 		return tr
 	case CompoundDesc:
-		elemTypes := make([]TypeRef, len(desc.ElemTypes))
+		elemTypes := make([]Type, len(desc.ElemTypes))
 		for i, elemType := range desc.ElemTypes {
 			elemTypes[i] = fixupTypeRef(elemType, pkg)
 		}
@@ -331,7 +331,7 @@ func fixupTypeRef(tr TypeRef, pkg *Package) TypeRef {
 	panic("unreachable")
 }
 
-func (r *jsonArrayReader) readStruct(typeDef, typeRef TypeRef, pkg *Package) Value {
+func (r *jsonArrayReader) readStruct(typeDef, typeRef Type, pkg *Package) Value {
 	// We've read `[StructKind, sha1, name` at this point
 	values := []Value{}
 	desc := typeDef.Desc.(StructDesc)

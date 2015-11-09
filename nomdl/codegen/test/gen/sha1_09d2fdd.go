@@ -13,7 +13,7 @@ var __genPackageInFile_sha1_09d2fdd_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("D",
 			[]types.Field{
 				types.Field{"structField", types.MakeTypeRef(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 0), false},
@@ -70,9 +70,9 @@ func (s D) Def() (d DDef) {
 	return
 }
 
-var __typeRefForD types.TypeRef
+var __typeRefForD types.Type
 
-func (m D) TypeRef() types.TypeRef {
+func (m D) Type() types.Type {
 	return __typeRefForD
 }
 
@@ -100,7 +100,7 @@ func readerForD(v types.Value) []types.Value {
 }
 
 func (s D) Equals(other types.Value) bool {
-	return other != nil && __typeRefForD.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForD.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s D) Ref() ref.Ref {
@@ -171,9 +171,9 @@ func (s DUser) Def() (d DUserDef) {
 	return
 }
 
-var __typeRefForDUser types.TypeRef
+var __typeRefForDUser types.Type
 
-func (m DUser) TypeRef() types.TypeRef {
+func (m DUser) Type() types.Type {
 	return __typeRefForDUser
 }
 
@@ -198,7 +198,7 @@ func readerForDUser(v types.Value) []types.Value {
 }
 
 func (s DUser) Equals(other types.Value) bool {
-	return other != nil && __typeRefForDUser.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForDUser.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s DUser) Ref() ref.Ref {

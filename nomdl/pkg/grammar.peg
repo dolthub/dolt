@@ -14,9 +14,9 @@ type namespaceIdent struct {
 
 Package <- _ dd:Definition+ _ EOF {
 	aliases := map[string]string{}
-	usings := []types.TypeRef{}
+	usings := []types.Type{}
 	seenTypes := map[string]bool{}
-	orderedTypes := []types.TypeRef{}
+	orderedTypes := []types.Type{}
 	for _, d := range dd.([]interface{}) {
 		switch d := d.(type) {
 		default:
@@ -26,8 +26,8 @@ Package <- _ dd:Definition+ _ EOF {
 				return nil, fmt.Errorf("Redefinition of " + d.Name)
 			}
 			aliases[d.Name] = d.Target
-		case types.TypeRef:
-			switch d.Desc.Kind() {
+		case types.Type:
+			switch d.Kind() {
 			default:
 				return nil, fmt.Errorf("%v can't be defined at the top-level", d)
 			case types.ListKind, types.MapKind, types.RefKind, types.SetKind:
@@ -129,16 +129,16 @@ Union <- `union` _ `{` _ u:UnionField+ _ `}` _ {
 }
 
 Field <- i:Ident _ `:` _ o:(`optional` _)? t:Type _ {
-	return types.Field{i.(string), t.(types.TypeRef), o != nil}, nil
+	return types.Field{i.(string), t.(types.Type), o != nil}, nil
 }
 
 UnionField <- i:Ident _ `:` _ t:Type _ {
-	return types.Field{i.(string), t.(types.TypeRef), false}, nil
+	return types.Field{i.(string), t.(types.Type), false}, nil
 }
 
 Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
 	switch t := t.(type) {
-	case types.TypeRef:
+	case types.Type:
 		return t, nil
 	case types.Choices:
 		return types.MakeStructTypeRef("", nil, t), nil
@@ -150,13 +150,13 @@ Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
 }
 
 CompoundType <- `List` _ `(` _ t:Type _ `)` _ {
-	return types.MakeCompoundTypeRef(types.ListKind, t.(types.TypeRef)), nil
+	return types.MakeCompoundTypeRef(types.ListKind, t.(types.Type)), nil
 } / `Map` _ `(` _ k:Type _ `,` _ v:Type _ `)` _ {
-	return types.MakeCompoundTypeRef(types.MapKind, k.(types.TypeRef), v.(types.TypeRef)), nil
+	return types.MakeCompoundTypeRef(types.MapKind, k.(types.Type), v.(types.Type)), nil
 } / `Set` _ `(` _ t:Type _ `)` _ {
-	return types.MakeCompoundTypeRef(types.SetKind, t.(types.TypeRef)), nil
+	return types.MakeCompoundTypeRef(types.SetKind, t.(types.Type)), nil
 } / `Ref` _ `(` _ t:Type _ `)` _ {
-	return types.MakeCompoundTypeRef(types.RefKind, t.(types.TypeRef)), nil
+	return types.MakeCompoundTypeRef(types.RefKind, t.(types.Type)), nil
 }
 
 PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `TypeRef`) {

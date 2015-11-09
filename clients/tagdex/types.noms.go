@@ -39,7 +39,7 @@ func (m MapOfStringToSetOfRefOfRemotePhoto) Def() MapOfStringToSetOfRefOfRemoteP
 }
 
 func (m MapOfStringToSetOfRefOfRemotePhoto) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToSetOfRefOfRemotePhoto.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+	return other != nil && __typeRefForMapOfStringToSetOfRefOfRemotePhoto.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToSetOfRefOfRemotePhoto) Ref() ref.Ref {
@@ -47,7 +47,7 @@ func (m MapOfStringToSetOfRefOfRemotePhoto) Ref() ref.Ref {
 }
 
 func (m MapOfStringToSetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.TypeRef().Chunks()...)
+	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
@@ -57,9 +57,9 @@ func (m MapOfStringToSetOfRefOfRemotePhoto) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToSetOfRefOfRemotePhoto.
-var __typeRefForMapOfStringToSetOfRefOfRemotePhoto types.TypeRef
+var __typeRefForMapOfStringToSetOfRefOfRemotePhoto types.Type
 
-func (m MapOfStringToSetOfRefOfRemotePhoto) TypeRef() types.TypeRef {
+func (m MapOfStringToSetOfRefOfRemotePhoto) Type() types.Type {
 	return __typeRefForMapOfStringToSetOfRefOfRemotePhoto
 }
 
@@ -126,6 +126,12 @@ func (m MapOfStringToSetOfRefOfRemotePhoto) IterAll(cb MapOfStringToSetOfRefOfRe
 	})
 }
 
+func (m MapOfStringToSetOfRefOfRemotePhoto) IterAllP(concurrency int, cb MapOfStringToSetOfRefOfRemotePhotoIterAllCallback) {
+	m.m.IterAllP(concurrency, func(k, v types.Value) {
+		cb(k.(types.String).String(), v.(SetOfRefOfRemotePhoto))
+	})
+}
+
 type MapOfStringToSetOfRefOfRemotePhotoFilterCallback func(k string, v SetOfRefOfRemotePhoto) (keep bool)
 
 func (m MapOfStringToSetOfRefOfRemotePhoto) Filter(cb MapOfStringToSetOfRefOfRemotePhotoFilterCallback) MapOfStringToSetOfRefOfRemotePhoto {
@@ -168,7 +174,7 @@ func (s SetOfRefOfRemotePhoto) Def() SetOfRefOfRemotePhotoDef {
 }
 
 func (s SetOfRefOfRemotePhoto) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSetOfRefOfRemotePhoto.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForSetOfRefOfRemotePhoto.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfRefOfRemotePhoto) Ref() ref.Ref {
@@ -176,7 +182,7 @@ func (s SetOfRefOfRemotePhoto) Ref() ref.Ref {
 }
 
 func (s SetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
@@ -186,9 +192,9 @@ func (s SetOfRefOfRemotePhoto) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfRefOfRemotePhoto.
-var __typeRefForSetOfRefOfRemotePhoto types.TypeRef
+var __typeRefForSetOfRefOfRemotePhoto types.Type
 
-func (m SetOfRefOfRemotePhoto) TypeRef() types.TypeRef {
+func (m SetOfRefOfRemotePhoto) Type() types.Type {
 	return __typeRefForSetOfRefOfRemotePhoto
 }
 
@@ -304,11 +310,11 @@ func (r RefOfRemotePhoto) Ref() ref.Ref {
 }
 
 func (r RefOfRemotePhoto) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfRemotePhoto.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+	return other != nil && __typeRefForRefOfRemotePhoto.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.Type().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
 }
@@ -318,9 +324,9 @@ func (r RefOfRemotePhoto) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfRemotePhoto.
-var __typeRefForRefOfRemotePhoto types.TypeRef
+var __typeRefForRefOfRemotePhoto types.Type
 
-func (m RefOfRemotePhoto) TypeRef() types.TypeRef {
+func (m RefOfRemotePhoto) Type() types.Type {
 	return __typeRefForRefOfRemotePhoto
 }
 

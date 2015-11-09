@@ -14,7 +14,7 @@ type testResolver struct {
 	deps   map[ref.Ref]types.Package
 }
 
-func (res *testResolver) Resolve(t types.TypeRef) types.TypeRef {
+func (res *testResolver) Resolve(t types.Type) types.Type {
 	if !t.IsUnresolved() {
 		return t
 	}
@@ -31,7 +31,7 @@ func (res *testResolver) Resolve(t types.TypeRef) types.TypeRef {
 func TestUserName(t *testing.T) {
 	assert := assert.New(t)
 
-	imported := types.NewPackage([]types.TypeRef{
+	imported := types.NewPackage([]types.Type{
 		types.MakeEnumTypeRef("E1", "a", "b"),
 		types.MakeStructTypeRef("S1", []types.Field{
 			types.Field{"f", types.MakePrimitiveTypeRef(types.BoolKind), false},

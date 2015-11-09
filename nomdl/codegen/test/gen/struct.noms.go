@@ -13,7 +13,7 @@ var __genPackageInFile_struct_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("Struct",
 			[]types.Field{
 				types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
@@ -62,9 +62,9 @@ func (s Struct) Def() (d StructDef) {
 	return
 }
 
-var __typeRefForStruct types.TypeRef
+var __typeRefForStruct types.Type
 
-func (m Struct) TypeRef() types.TypeRef {
+func (m Struct) Type() types.Type {
 	return __typeRefForStruct
 }
 
@@ -92,7 +92,7 @@ func readerForStruct(v types.Value) []types.Value {
 }
 
 func (s Struct) Equals(other types.Value) bool {
-	return other != nil && __typeRefForStruct.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForStruct.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Struct) Ref() ref.Ref {
@@ -160,7 +160,7 @@ func (l ListOfStruct) Def() ListOfStructDef {
 }
 
 func (l ListOfStruct) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfStruct.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfStruct.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfStruct) Ref() ref.Ref {
@@ -168,7 +168,7 @@ func (l ListOfStruct) Ref() ref.Ref {
 }
 
 func (l ListOfStruct) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -178,9 +178,9 @@ func (l ListOfStruct) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfStruct.
-var __typeRefForListOfStruct types.TypeRef
+var __typeRefForListOfStruct types.Type
 
-func (m ListOfStruct) TypeRef() types.TypeRef {
+func (m ListOfStruct) Type() types.Type {
 	return __typeRefForListOfStruct
 }
 

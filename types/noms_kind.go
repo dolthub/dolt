@@ -30,7 +30,7 @@ const (
 	PackageKind
 )
 
-// IsPrimitiveKind returns true if k represents a Noms primitive type, which excludes collections (List, Map, Set), Refs, Enums, Structs and Unresolved type references.
+// IsPrimitiveKind returns true if k represents a Noms primitive type, which excludes collections (List, Map, Set), Refs, Enums, Structs, Symbolic and Unresolved type references.
 func IsPrimitiveKind(k NomsKind) bool {
 	switch k {
 	case BoolKind, Int8Kind, Int16Kind, Int32Kind, Int64Kind, Float32Kind, Float64Kind, UInt8Kind, UInt16Kind, UInt32Kind, UInt64Kind, StringKind, BlobKind, ValueKind, TypeRefKind, PackageKind:

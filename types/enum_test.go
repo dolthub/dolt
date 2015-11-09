@@ -14,7 +14,7 @@ func TestGenericEnumWriteRead(t *testing.T) {
 
 	typeDefA := MakeEnumTypeRef("EA", "aA", "bA")
 	typeDefB := MakeEnumTypeRef("EB", "aB", "bB")
-	pkg := NewPackage([]TypeRef{typeDefA, typeDefB}, []ref.Ref{})
+	pkg := NewPackage([]Type{typeDefA, typeDefB}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typeRefA := MakeTypeRef(pkgRef, 0)
 	typeRefB := MakeTypeRef(pkgRef, 1)

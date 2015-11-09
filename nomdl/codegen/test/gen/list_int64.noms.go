@@ -37,7 +37,7 @@ func (l ListOfInt64) Def() ListOfInt64Def {
 }
 
 func (l ListOfInt64) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfInt64.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfInt64.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfInt64) Ref() ref.Ref {
@@ -45,7 +45,7 @@ func (l ListOfInt64) Ref() ref.Ref {
 }
 
 func (l ListOfInt64) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -55,9 +55,9 @@ func (l ListOfInt64) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfInt64.
-var __typeRefForListOfInt64 types.TypeRef
+var __typeRefForListOfInt64 types.Type
 
-func (m ListOfInt64) TypeRef() types.TypeRef {
+func (m ListOfInt64) Type() types.Type {
 	return __typeRefForListOfInt64
 }
 

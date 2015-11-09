@@ -202,5 +202,5 @@ func TestCompoundBlobTypeRef(t *testing.T) {
 	assert := assert.New(t)
 
 	cb := getTestCompoundBlob("hello", "world")
-	assert.True(cb.TypeRef().Equals(MakePrimitiveTypeRef(BlobKind)))
+	assert.True(cb.Type().Equals(MakePrimitiveTypeRef(BlobKind)))
 }

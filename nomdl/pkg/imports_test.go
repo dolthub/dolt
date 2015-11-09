@@ -34,7 +34,7 @@ func (suite *ImportTestSuite) SetupTest() {
 		types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
 		types.Field{"i", types.MakePrimitiveTypeRef(types.Int8Kind), false},
 	})
-	suite.nested = types.NewPackage([]types.TypeRef{ns}, []ref.Ref{})
+	suite.nested = types.NewPackage([]types.Type{ns}, []ref.Ref{})
 	suite.nestedRef = types.WriteValue(suite.nested, suite.cs)
 
 	fs := types.MakeStructTypeRef("ForeignStruct", []types.Field{
@@ -43,37 +43,37 @@ func (suite *ImportTestSuite) SetupTest() {
 	},
 		types.Choices{})
 	fe := types.MakeEnumTypeRef("ForeignEnum", "uno", "dos")
-	suite.imported = types.NewPackage([]types.TypeRef{fs, fe}, []ref.Ref{suite.nestedRef})
+	suite.imported = types.NewPackage([]types.Type{fs, fe}, []ref.Ref{suite.nestedRef})
 	suite.importRef = types.WriteValue(suite.imported, suite.cs)
 }
 
 func (suite *ImportTestSuite) TestGetDeps() {
-	deps := GetDeps([]ref.Ref{suite.importRef}, suite.cs)
+	deps := getDeps([]ref.Ref{suite.importRef}, suite.cs)
 	suite.Len(deps, 1)
 	imported, ok := deps[suite.importRef]
 	suite.True(ok, "%s is a dep; should have been found.", suite.importRef.String())
 
-	deps = GetDeps(imported.Dependencies(), suite.cs)
+	deps = getDeps(imported.Dependencies(), suite.cs)
 	suite.Len(deps, 1)
 	imported, ok = deps[suite.nestedRef]
 	suite.True(ok, "%s is a dep; should have been found.", suite.nestedRef.String())
 }
 
 func (suite *ImportTestSuite) TestResolveNamespace() {
-	deps := GetDeps([]ref.Ref{suite.importRef}, suite.cs)
+	deps := getDeps([]ref.Ref{suite.importRef}, suite.cs)
 	t := resolveNamespace(types.MakeUnresolvedTypeRef("Other", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
 	suite.EqualValues(types.MakeTypeRef(suite.importRef, 1), t)
 }
 
 func (suite *ImportTestSuite) TestUnknownAlias() {
-	deps := GetDeps([]ref.Ref{suite.importRef}, suite.cs)
+	deps := getDeps([]ref.Ref{suite.importRef}, suite.cs)
 	suite.Panics(func() {
 		resolveNamespace(types.MakeUnresolvedTypeRef("Bother", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
 	})
 }
 
 func (suite *ImportTestSuite) TestUnknownImportedType() {
-	deps := GetDeps([]ref.Ref{suite.importRef}, suite.cs)
+	deps := getDeps([]ref.Ref{suite.importRef}, suite.cs)
 	suite.Panics(func() {
 		resolveNamespace(types.MakeUnresolvedTypeRef("Other", "NotThere"), map[string]ref.Ref{"Other": suite.importRef}, deps)
 	})
@@ -86,13 +86,13 @@ func (suite *ImportTestSuite) TestDetectFreeVariable() {
 	},
 		types.Choices{})
 	suite.Panics(func() {
-		inter := intermediate{Types: []types.TypeRef{ls}}
+		inter := intermediate{Types: []types.Type{ls}}
 		resolveLocalOrdinals(&inter)
 	})
 }
 
 func (suite *ImportTestSuite) TestImports() {
-	find := func(n string, tref types.TypeRef) types.Field {
+	find := func(n string, tref types.Type) types.Field {
 		suite.Equal(types.StructKind, tref.Kind())
 		for _, f := range tref.Desc.(types.StructDesc).Fields {
 			if f.Name == n {
@@ -102,7 +102,7 @@ func (suite *ImportTestSuite) TestImports() {
 		suite.Fail("Could not find field", "%s not present", n)
 		return types.Field{}
 	}
-	findChoice := func(n string, tref types.TypeRef) types.Field {
+	findChoice := func(n string, tref types.Type) types.Field {
 		suite.Equal(types.StructKind, tref.Kind())
 		for _, f := range tref.Desc.(types.StructDesc).Union {
 			if f.Name == n {

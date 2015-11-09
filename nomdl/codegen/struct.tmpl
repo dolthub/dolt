@@ -45,9 +45,9 @@ func New{{.Name}}() {{.Name}} {
 	}
 {{end}}
 
-var __typeRefFor{{.Name}} {{$typesPackage}}TypeRef
+var __typeRefFor{{.Name}} {{$typesPackage}}Type
 
-func (m {{.Name}}) TypeRef() {{$typesPackage}}TypeRef {
+func (m {{.Name}}) Type() {{$typesPackage}}Type {
 	return __typeRefFor{{.Name}}
 }
 
@@ -88,7 +88,7 @@ func readerFor{{.Name}}(v {{$typesPackage}}Value) []{{$typesPackage}}Value {
 }
 
 func (s {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
-	return other != nil && __typeRefFor{{.Name}}.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefFor{{.Name}}.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s {{.Name}}) Ref() ref.Ref {

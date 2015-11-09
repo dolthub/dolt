@@ -57,65 +57,65 @@ func readPackage(r ref.Ref, cs chunks.ChunkSource) *Package {
 	return &p
 }
 
-func RegisterStruct(t TypeRef, bf structBuilderFunc, rf structReaderFunc) {
+func RegisterStruct(t Type, bf structBuilderFunc, rf structReaderFunc) {
 	structFuncMap[t.Ref()] = structFuncs{bf, rf}
 }
 
-func structBuilderForTypeRef(values []Value, typeRef, typeDef TypeRef) Value {
+func structBuilderForTypeRef(values []Value, typeRef, typeDef Type) Value {
 	if s, ok := structFuncMap[typeRef.Ref()]; ok {
 		return s.builder(values)
 	}
 	return structBuilder(values, typeRef, typeDef)
 }
 
-func structReaderForTypeRef(v Value, typeRef, typeDef TypeRef) []Value {
+func structReaderForTypeRef(v Value, typeRef, typeDef Type) []Value {
 	if s, ok := structFuncMap[typeRef.Ref()]; ok {
 		return s.reader(v)
 	}
 	return structReader(v.(Struct), typeRef, typeDef)
 }
 
-func RegisterEnum(t TypeRef, bf enumBuilderFunc, rf enumReaderFunc) {
+func RegisterEnum(t Type, bf enumBuilderFunc, rf enumReaderFunc) {
 	enumFuncMap[t.Ref()] = enumFuncs{bf, rf}
 }
 
-func enumFromTypeRef(v uint32, t TypeRef) Value {
+func enumFromTypeRef(v uint32, t Type) Value {
 	if s, ok := enumFuncMap[t.Ref()]; ok {
 		return s.builder(v)
 	}
 	return newEnum(v, t)
 }
 
-func enumPrimitiveValueFromTypeRef(v Value, t TypeRef) uint32 {
+func enumPrimitiveValueFromTypeRef(v Value, t Type) uint32 {
 	if s, ok := enumFuncMap[t.Ref()]; ok {
 		return s.reader(v)
 	}
 	return v.(Enum).v
 }
 
-func RegisterValue(t TypeRef, bf valueBuilderFunc, rf valueReaderFunc) {
+func RegisterValue(t Type, bf valueBuilderFunc, rf valueReaderFunc) {
 	valueFuncMap[t.Ref()] = valueFuncs{bf, rf}
 }
 
-func valueFromTypeRef(v Value, t TypeRef) Value {
+func valueFromTypeRef(v Value, t Type) Value {
 	if s, ok := valueFuncMap[t.Ref()]; ok {
 		return s.builder(v)
 	}
 	return v
 }
 
-func internalValueFromTypeRef(v Value, t TypeRef) Value {
+func internalValueFromTypeRef(v Value, t Type) Value {
 	if s, ok := valueFuncMap[t.Ref()]; ok {
 		return s.reader(v)
 	}
 	return v
 }
 
-func RegisterRef(t TypeRef, bf refBuilderFunc) {
+func RegisterRef(t Type, bf refBuilderFunc) {
 	refFuncMap[t.Ref()] = bf
 }
 
-func refFromTypeRef(target ref.Ref, t TypeRef) Value {
+func refFromTypeRef(target ref.Ref, t Type) Value {
 	if f, ok := refFuncMap[t.Ref()]; ok {
 		return f(target)
 	}

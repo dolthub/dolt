@@ -7,7 +7,7 @@ import (
 
 type Ref struct {
 	target ref.Ref
-	t      TypeRef
+	t      Type
 	ref    *ref.Ref
 }
 
@@ -19,12 +19,12 @@ func NewRef(target ref.Ref) Ref {
 	return newRef(target, refTypeRef)
 }
 
-func newRef(target ref.Ref, t TypeRef) Ref {
+func newRef(target ref.Ref, t Type) Ref {
 	return Ref{target, t, &ref.Ref{}}
 }
 
 func (r Ref) Equals(other Value) bool {
-	return other != nil && r.t.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+	return other != nil && r.t.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r Ref) Ref() ref.Ref {
@@ -45,7 +45,7 @@ func (r Ref) TargetRef() ref.Ref {
 
 var refTypeRef = MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(ValueKind))
 
-func (r Ref) TypeRef() TypeRef {
+func (r Ref) Type() Type {
 	return r.t
 }
 

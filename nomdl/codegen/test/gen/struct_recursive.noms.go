@@ -13,7 +13,7 @@ var __genPackageInFile_struct_recursive_CachedRef ref.Ref
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.TypeRef{
+	p := types.NewPackage([]types.Type{
 		types.MakeStructTypeRef("Tree",
 			[]types.Field{
 				types.Field{"children", types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
@@ -56,9 +56,9 @@ func (s Tree) Def() (d TreeDef) {
 	return
 }
 
-var __typeRefForTree types.TypeRef
+var __typeRefForTree types.Type
 
-func (m Tree) TypeRef() types.TypeRef {
+func (m Tree) Type() types.Type {
 	return __typeRefForTree
 }
 
@@ -83,7 +83,7 @@ func readerForTree(v types.Value) []types.Value {
 }
 
 func (s Tree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForTree.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForTree.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Tree) Ref() ref.Ref {
@@ -141,7 +141,7 @@ func (l ListOfTree) Def() ListOfTreeDef {
 }
 
 func (l ListOfTree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfTree.Equals(other.TypeRef()) && l.Ref() == other.Ref()
+	return other != nil && __typeRefForListOfTree.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfTree) Ref() ref.Ref {
@@ -149,7 +149,7 @@ func (l ListOfTree) Ref() ref.Ref {
 }
 
 func (l ListOfTree) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, l.TypeRef().Chunks()...)
+	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
 }
@@ -159,9 +159,9 @@ func (l ListOfTree) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfTree.
-var __typeRefForListOfTree types.TypeRef
+var __typeRefForListOfTree types.Type
 
-func (m ListOfTree) TypeRef() types.TypeRef {
+func (m ListOfTree) Type() types.Type {
 	return __typeRefForListOfTree
 }
 
