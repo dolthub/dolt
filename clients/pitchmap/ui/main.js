@@ -1,54 +1,81 @@
+/* @flow */
+
 'use strict';
 
-var noms = require('noms');
-var React = require('react');
-var Map = require('./map.js');
+import HeatMap from './heat_map.js';
+import React from 'react'; //eslint-disable-line no-unused-lets
+import ReactDOM from 'react-dom';
+import {readValue, HttpStore, Ref} from 'noms';
 
-noms.getRoot()
-    .then(ref => {
-      var pRoot = noms.readValue(ref, noms.getChunk);
-      return noms.getDataset(pRoot, 'mlb/heatmap');
-    })
-    .then(getPitchers)
-    .then(renderPitchersList);
+let httpStore: HttpStore;
+let renderNode: ?HTMLElement;
 
-function getPitchers(datasetRootRef) {
-  return datasetRootRef.deref()
-      .then(datasetRoot => datasetRoot.get('value').deref());
-}
+window.addEventListener('load', async () => {
+  renderNode = document.getElementById('heatmap');
+  httpStore = new HttpStore('http://localhost:8000');
+  let rootRef = await httpStore.getRoot();
+  let datasets = await readValue(rootRef, httpStore);
+  let commitRef = datasets.get('mlb/heatmap');
+  let commit = await readValue(commitRef, httpStore);
+  let pitchersMap = commit.get('value');
+  renderPitchersMap(pitchersMap);
+});
 
-var PitcherList = React.createClass({
-  getInitialState() {
-    var pitchers = this.props.data.map((v, key) => key).toArray();
+type Props = {
+  pitchersMap: Map<string, Ref>
+};
+
+type State = {
+  currentPitcher: string,
+  pitchers: Array<string>
+};
+
+class PitcherList extends React.Component {
+  static defaultProps: {};
+  props: Props;
+  state: State;
+
+  constructor(props) {
+    super(props);
+
+    let pitchers = [];
+    this.props.pitchersMap.forEach((ref, pitcher) => {
+      pitchers.push(pitcher);
+    });
     pitchers.sort();
 
-    return {
+    this.state = {
       currentPitcher: pitchers[0],
       pitchers: pitchers
     };
-  },
+  }
 
-  onChangePitcher(e) {
-    this.setState({ currentPitcher: e.target.value });
-  },
+  setState(state: State) {
+    super.setState(state);
+  }
 
   render() {
-    var currentPitcher = this.state.currentPitcher;
-    var locations = this.props.data.get(currentPitcher);
+    let currentPitcher = this.state.currentPitcher;
+    let pitchListRef = this.props.pitchersMap.get(currentPitcher);
+
+    let onChangePitcher = e => {
+      this.setState({
+        currentPitcher: e.target.value,
+        pitchers: this.state.pitchers
+      });
+    };
 
     return <div>
-      <select onChange={this.onChangePitcher} defaultValue={currentPitcher}>{
-        this.state.pitchers.map((pitcher) => {
-          var isCurrent = currentPitcher === pitcher;
-          return <option key={pitcher} value={pitcher}>{pitcher}</option>
+      <select onChange={onChangePitcher} defaultValue={currentPitcher}>{
+        this.state.pitchers.map(pitcher => {
+          return <option key={pitcher} value={pitcher}>{pitcher}</option>;
         })
       }</select>
-      <Map key={currentPitcher} points={locations}/>
-    </div>
+      <HeatMap key={currentPitcher} pitchListRef={pitchListRef} httpStore={httpStore}/>
+    </div>;
   }
-});
+}
 
-function renderPitchersList(list) {
-  var target = document.getElementById('heatmap');
-  React.render(<PitcherList data={list}/>, target);
+function renderPitchersMap(map: Map) {
+  ReactDOM.render(<PitcherList pitchersMap={map}/>, renderNode);
 }

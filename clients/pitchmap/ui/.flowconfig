@@ -1,0 +1,11 @@
+[ignore]
+.*/node_modules/react/.*
+.*/node_modules/fbjs/flow/.*
+
+[include]
+
+[libs]
+
+[options]
+unsafe.enable_getters_and_setters=true
+munge_underscores=true
