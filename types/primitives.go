@@ -31,7 +31,7 @@ func (v Bool) ToPrimitive() interface{} {
 
 var typeRefForBool = MakePrimitiveTypeRef(BoolKind)
 
-func (v Bool) TypeRef() TypeRef {
+func (v Bool) Type() Type {
 	return typeRefForBool
 }
 
@@ -59,7 +59,7 @@ func (v Int8) ToPrimitive() interface{} {
 
 var typeRefForInt8 = MakePrimitiveTypeRef(Int8Kind)
 
-func (v Int8) TypeRef() TypeRef {
+func (v Int8) Type() Type {
 	return typeRefForInt8
 }
 
@@ -87,7 +87,7 @@ func (v Int16) ToPrimitive() interface{} {
 
 var typeRefForInt16 = MakePrimitiveTypeRef(Int16Kind)
 
-func (v Int16) TypeRef() TypeRef {
+func (v Int16) Type() Type {
 	return typeRefForInt16
 }
 
@@ -115,7 +115,7 @@ func (v Int32) ToPrimitive() interface{} {
 
 var typeRefForInt32 = MakePrimitiveTypeRef(Int32Kind)
 
-func (v Int32) TypeRef() TypeRef {
+func (v Int32) Type() Type {
 	return typeRefForInt32
 }
 
@@ -143,7 +143,7 @@ func (v Int64) ToPrimitive() interface{} {
 
 var typeRefForInt64 = MakePrimitiveTypeRef(Int64Kind)
 
-func (v Int64) TypeRef() TypeRef {
+func (v Int64) Type() Type {
 	return typeRefForInt64
 }
 
@@ -171,7 +171,7 @@ func (v UInt8) ToPrimitive() interface{} {
 
 var typeRefForUInt8 = MakePrimitiveTypeRef(UInt8Kind)
 
-func (v UInt8) TypeRef() TypeRef {
+func (v UInt8) Type() Type {
 	return typeRefForUInt8
 }
 
@@ -199,7 +199,7 @@ func (v UInt16) ToPrimitive() interface{} {
 
 var typeRefForUInt16 = MakePrimitiveTypeRef(UInt16Kind)
 
-func (v UInt16) TypeRef() TypeRef {
+func (v UInt16) Type() Type {
 	return typeRefForUInt16
 }
 
@@ -227,7 +227,7 @@ func (v UInt32) ToPrimitive() interface{} {
 
 var typeRefForUInt32 = MakePrimitiveTypeRef(UInt32Kind)
 
-func (v UInt32) TypeRef() TypeRef {
+func (v UInt32) Type() Type {
 	return typeRefForUInt32
 }
 
@@ -255,7 +255,7 @@ func (v UInt64) ToPrimitive() interface{} {
 
 var typeRefForUInt64 = MakePrimitiveTypeRef(UInt64Kind)
 
-func (v UInt64) TypeRef() TypeRef {
+func (v UInt64) Type() Type {
 	return typeRefForUInt64
 }
 
@@ -283,7 +283,7 @@ func (v Float32) ToPrimitive() interface{} {
 
 var typeRefForFloat32 = MakePrimitiveTypeRef(Float32Kind)
 
-func (v Float32) TypeRef() TypeRef {
+func (v Float32) Type() Type {
 	return typeRefForFloat32
 }
 
@@ -311,7 +311,7 @@ func (v Float64) ToPrimitive() interface{} {
 
 var typeRefForFloat64 = MakePrimitiveTypeRef(Float64Kind)
 
-func (v Float64) TypeRef() TypeRef {
+func (v Float64) Type() Type {
 	return typeRefForFloat64
 }
 

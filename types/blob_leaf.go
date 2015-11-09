@@ -40,10 +40,10 @@ func (bl blobLeaf) ChildValues() []Value {
 	return nil
 }
 
-func (bl blobLeaf) TypeRef() TypeRef {
+func (bl blobLeaf) Type() Type {
 	return typeRefForBlob
 }
 
 func (bl blobLeaf) Equals(other Value) bool {
-	return other != nil && typeRefForBlob.Equals(other.TypeRef()) && bl.Ref() == other.Ref()
+	return other != nil && typeRefForBlob.Equals(other.Type()) && bl.Ref() == other.Ref()
 }

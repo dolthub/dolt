@@ -27,7 +27,7 @@ func ParseNomDL(packageName string, r io.Reader, includePath string, cs chunks.C
 	}
 
 	resolveLocalOrdinals(&i)
-	resolveNamespaces(&i, imports, GetDeps(deps, cs))
+	resolveNamespaces(&i, imports, getDeps(deps, cs))
 	return Parsed{
 		types.NewPackage(i.Types, deps),
 		i.Name,
@@ -35,8 +35,8 @@ func ParseNomDL(packageName string, r io.Reader, includePath string, cs chunks.C
 	}
 }
 
-// GetDeps reads the types.Package objects referred to by depRefs out of cs and returns a map of ref: PackageDef.
-func GetDeps(deps []ref.Ref, cs chunks.ChunkStore) map[ref.Ref]types.Package {
+// getDeps reads the types.Package objects referred to by depRefs out of cs and returns a map of ref: PackageDef.
+func getDeps(deps []ref.Ref, cs chunks.ChunkStore) map[ref.Ref]types.Package {
 	depsMap := map[ref.Ref]types.Package{}
 	for _, depRef := range deps {
 		v := types.ReadValue(depRef, cs)
@@ -51,17 +51,17 @@ func GetDeps(deps []ref.Ref, cs chunks.ChunkStore) map[ref.Ref]types.Package {
 type Parsed struct {
 	types.Package
 	Name              string
-	UsingDeclarations []types.TypeRef
+	UsingDeclarations []types.Type
 }
 
 type intermediate struct {
 	Name              string
 	Aliases           map[string]string
-	UsingDeclarations []types.TypeRef
-	Types             []types.TypeRef
+	UsingDeclarations []types.Type
+	Types             []types.Type
 }
 
-func indexOf(t types.TypeRef, ts []types.TypeRef) int16 {
+func indexOf(t types.Type, ts []types.Type) int16 {
 	for i, tt := range ts {
 		if tt.Name() == t.Name() && tt.Namespace() == "" {
 			return int16(i)
@@ -70,7 +70,7 @@ func indexOf(t types.TypeRef, ts []types.TypeRef) int16 {
 	return -1
 }
 
-func (i *intermediate) checkLocal(t types.TypeRef) bool {
+func (i *intermediate) checkLocal(t types.Type) bool {
 	if t.Namespace() == "" {
 		d.Chk.True(t.HasOrdinal(), "Invalid local reference")
 		return true
@@ -110,14 +110,14 @@ func resolveImports(aliases map[string]string, includePath string, cs chunks.Chu
 }
 
 func resolveLocalOrdinals(p *intermediate) {
-	var rec func(t types.TypeRef) types.TypeRef
+	var rec func(t types.Type) types.Type
 	resolveFields := func(fields []types.Field) {
 		for idx, f := range fields {
 			f.T = rec(f.T)
 			fields[idx] = f
 		}
 	}
-	rec = func(t types.TypeRef) types.TypeRef {
+	rec = func(t types.Type) types.Type {
 		if t.IsUnresolved() {
 			if t.Namespace() == "" && !t.HasOrdinal() {
 				ordinal := indexOf(t, p.Types)
@@ -149,7 +149,7 @@ func resolveLocalOrdinals(p *intermediate) {
 }
 
 func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) {
-	var rec func(t types.TypeRef) types.TypeRef
+	var rec func(t types.Type) types.Type
 	resolveFields := func(fields []types.Field) {
 		for idx, f := range fields {
 			if f.T.IsUnresolved() {
@@ -165,7 +165,7 @@ func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref
 			fields[idx] = f
 		}
 	}
-	rec = func(t types.TypeRef) types.TypeRef {
+	rec = func(t types.Type) types.Type {
 		if t.IsUnresolved() {
 			if p.checkLocal(t) {
 				return t
@@ -195,7 +195,7 @@ func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref
 	}
 }
 
-func resolveNamespace(t types.TypeRef, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) types.TypeRef {
+func resolveNamespace(t types.Type, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) types.Type {
 	pkgRef, ok := aliases[t.Namespace()]
 	d.Exp.True(ok, "Could not find import aliased to %s", t.Namespace())
 	d.Chk.NotEqual("", t.Name())
@@ -205,9 +205,9 @@ func resolveNamespace(t types.TypeRef, aliases map[string]ref.Ref, deps map[ref.
 }
 
 // expandStruct takes a struct definition and expands the internal structs created for unions.
-func expandStruct(t types.TypeRef, ordinal int) []types.TypeRef {
+func expandStruct(t types.Type, ordinal int) []types.Type {
 	d.Chk.Equal(types.StructKind, t.Kind())
-	ts := []types.TypeRef{t}
+	ts := []types.Type{t}
 	ordinal++
 
 	doFields := func(fields []types.Field) []types.Field {

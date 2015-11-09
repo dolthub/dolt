@@ -11,7 +11,7 @@ import (
 
 type Map struct {
 	data mapData // sorted by entry.key.Ref()
-	t    TypeRef
+	t    Type
 	ref  *ref.Ref
 }
 
@@ -144,7 +144,7 @@ func (m Map) Ref() ref.Ref {
 }
 
 func (m Map) Equals(other Value) bool {
-	return other != nil && m.t.Equals(other.TypeRef()) && m.Ref() == other.Ref()
+	return other != nil && m.t.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m Map) Chunks() (chunks []ref.Ref) {
@@ -166,11 +166,11 @@ func (m Map) ChildValues() []Value {
 
 var mapTypeRef = MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))
 
-func (m Map) TypeRef() TypeRef {
+func (m Map) Type() Type {
 	return m.t
 }
 
-func (m Map) elemTypes() []TypeRef {
+func (m Map) elemTypes() []Type {
 	return m.t.Desc.(CompoundDesc).ElemTypes
 }
 
@@ -179,7 +179,7 @@ type mapEntry struct {
 	value Value
 }
 
-func newMapFromData(data mapData, t TypeRef) Map {
+func newMapFromData(data mapData, t Type) Map {
 	return Map{data, t, &ref.Ref{}}
 }
 

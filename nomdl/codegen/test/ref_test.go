@@ -104,6 +104,6 @@ func TestStructWithRefChunks(t *testing.T) {
 		R: set.Ref(),
 	}.New()
 
-	// 1 for the TypeRef and 1 for the ref in the R field.
+	// 1 for the Type and 1 for the ref in the R field.
 	assert.Len(str.Chunks(), 2)
 }

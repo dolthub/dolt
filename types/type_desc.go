@@ -26,7 +26,7 @@ type TypeDesc interface {
 // Int8
 // Package
 // String
-// TypeRef
+// Type
 // UInt16
 // UInt32
 // UInt64
@@ -61,7 +61,7 @@ var KindToString = map[NomsKind]string{
 	RefKind:     "Ref",
 	SetKind:     "Set",
 	StringKind:  "String",
-	TypeRefKind: "TypeRef",
+	TypeRefKind: "Type",
 	UInt16Kind:  "UInt16",
 	UInt32Kind:  "UInt32",
 	UInt64Kind:  "UInt64",
@@ -104,7 +104,7 @@ func (u UnresolvedDesc) Describe() string {
 // ElemTypes indicates what type or types are in the container indicated by kind, e.g. Map key and value or Set element.
 type CompoundDesc struct {
 	kind      NomsKind
-	ElemTypes []TypeRef
+	ElemTypes []Type
 }
 
 func (c CompoundDesc) Kind() NomsKind {
@@ -224,10 +224,10 @@ func (s StructDesc) Describe() (out string) {
 }
 
 // Field represents a Struct field or a Union choice.
-// Neither Name nor T is allowed to be a zero-value, though T may be an unresolved TypeRef.
+// Neither Name nor T is allowed to be a zero-value, though T may be an unresolved Type.
 type Field struct {
 	Name     string
-	T        TypeRef
+	T        Type
 	Optional bool
 }
 

@@ -38,7 +38,7 @@ func parseJson(s string, vs ...interface{}) (v []interface{}) {
 func TestReadTypeRefAsTag(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
-	test := func(expected TypeRef, s string, vs ...interface{}) {
+	test := func(expected Type, s string, vs ...interface{}) {
 		a := parseJson(s, vs...)
 		r := newJsonArrayReader(a, cs)
 		tr := r.readTypeRefAsTag()
@@ -197,7 +197,7 @@ func TestReadStruct(t *testing.T) {
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 	}, Choices{})
-	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
+	pkg := NewPackage([]Type{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, 42, "hi", true]`, UnresolvedKind, pkgRef.String())
@@ -219,7 +219,7 @@ func TestReadStructUnion(t *testing.T) {
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	})
-	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
+	pkg := NewPackage([]Type{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, 42, 1, "hi"]`, UnresolvedKind, pkgRef.String())
@@ -249,7 +249,7 @@ func TestReadStructOptional(t *testing.T) {
 		Field{"s", MakePrimitiveTypeRef(StringKind), true},
 		Field{"b", MakePrimitiveTypeRef(BoolKind), true},
 	}, Choices{})
-	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
+	pkg := NewPackage([]Type{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, 42, false, true, false]`, UnresolvedKind, pkgRef.String())
@@ -280,7 +280,7 @@ func TestReadStructWithList(t *testing.T) {
 		Field{"l", MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(Int32Kind)), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	}, Choices{})
-	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
+	pkg := NewPackage([]Type{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, true, [0, 1, 2], "hi"]`, UnresolvedKind, pkgRef.String())
@@ -310,7 +310,7 @@ func TestReadStructWithValue(t *testing.T) {
 		Field{"v", MakePrimitiveTypeRef(ValueKind), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	}, Choices{})
-	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
+	pkg := NewPackage([]Type{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, true, %d, 42, "hi"]`, UnresolvedKind, pkgRef.String(), UInt8Kind)
@@ -337,7 +337,7 @@ func TestReadValueStruct(t *testing.T) {
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 	}, Choices{})
-	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
+	pkg := NewPackage([]Type{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, %d, "%s", 0, 42, "hi", true]`, ValueKind, UnresolvedKind, pkgRef.String())
@@ -354,7 +354,7 @@ func TestReadEnum(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	typeDef := MakeEnumTypeRef("E", "a", "b", "c")
-	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
+	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, 1]`, UnresolvedKind, pkgRef.String())
@@ -369,7 +369,7 @@ func TestReadValueEnum(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	typeDef := MakeEnumTypeRef("E", "a", "b", "c")
-	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
+	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, %d, "%s", 0, 1]`, ValueKind, UnresolvedKind, pkgRef.String())
@@ -421,7 +421,7 @@ func TestReadStructWithEnum(t *testing.T) {
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 	}, Choices{})
 	enumTref := MakeEnumTypeRef("E", "a", "b", "c")
-	pkg := NewPackage([]TypeRef{structTref, enumTref}, []ref.Ref{})
+	pkg := NewPackage([]Type{structTref, enumTref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, 42, 1, true]`, UnresolvedKind, pkgRef.String())
@@ -445,7 +445,7 @@ func TestReadStructWithBlob(t *testing.T) {
 	tref := MakeStructTypeRef("A5", []Field{
 		Field{"b", MakePrimitiveTypeRef(BlobKind), false},
 	}, Choices{})
-	pkg := NewPackage([]TypeRef{tref}, []ref.Ref{})
+	pkg := NewPackage([]Type{tref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", 0, "AAE="]`, UnresolvedKind, pkgRef.String())
@@ -461,7 +461,7 @@ func TestReadTypeRefValue(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	test := func(expected TypeRef, json string, vs ...interface{}) {
+	test := func(expected Type, json string, vs ...interface{}) {
 		a := parseJson(json, vs...)
 		r := newJsonArrayReader(a, cs)
 		tr := r.readTopLevelValue()
@@ -503,7 +503,7 @@ func TestReadTypeRefValue(t *testing.T) {
 
 func TestReadPackage(t *testing.T) {
 	cs := chunks.NewMemoryStore()
-	pkg := NewPackage([]TypeRef{
+	pkg := NewPackage([]Type{
 		MakeStructTypeRef("EnumStruct",
 			[]Field{
 				Field{"hand", MakeTypeRef(ref.Ref{}, 1), false},
@@ -515,7 +515,7 @@ func TestReadPackage(t *testing.T) {
 
 	// struct Package {
 	// 	Dependencies: Set(Ref(Package))
-	// 	Types: List(TypeRef)
+	// 	Types: List(Type)
 	// }
 
 	a := []interface{}{
@@ -538,7 +538,7 @@ func TestReadPackage2(t *testing.T) {
 
 	rr := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
 	setTref := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(UInt32Kind))
-	pkg := NewPackage([]TypeRef{setTref}, []ref.Ref{rr})
+	pkg := NewPackage([]Type{setTref}, []ref.Ref{rr})
 
 	a := []interface{}{float64(PackageKind), []interface{}{float64(SetKind), []interface{}{float64(UInt32Kind)}}, []interface{}{rr.String()}}
 	r := newJsonArrayReader(a, cs)
@@ -550,7 +550,7 @@ func TestReadPackageThroughChunkSource(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg := NewPackage([]TypeRef{
+	pkg := NewPackage([]Type{
 		MakeStructTypeRef("S", []Field{
 			Field{"X", MakePrimitiveTypeRef(Int32Kind), false},
 		}, Choices{}),

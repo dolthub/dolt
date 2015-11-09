@@ -216,7 +216,7 @@ type codeGen struct {
 	pkg        pkg.Parsed
 	deps       depsMap
 	written    map[string]bool
-	toWrite    []types.TypeRef
+	toWrite    []types.Type
 	generator  *code.Generator
 	templates  *template.Template
 	sharedData sharedData
@@ -227,7 +227,7 @@ func newCodeGen(w io.Writer, fileID string, written map[string]bool, deps depsMa
 	if pkg.Name == "types" {
 		typesPackage = ""
 	}
-	gen := &codeGen{w, pkg, deps, written, []types.TypeRef{}, nil, nil, sharedData{
+	gen := &codeGen{w, pkg, deps, written, []types.Type{}, nil, nil, sharedData{
 		fileID,
 		pkg.Name,
 		typesPackage,
@@ -258,7 +258,7 @@ func (gen *codeGen) readTemplates() *template.Template {
 		}).ParseGlob(glob))
 }
 
-func (gen *codeGen) Resolve(t types.TypeRef) types.TypeRef {
+func (gen *codeGen) Resolve(t types.Type) types.Type {
 	if !t.IsUnresolved() {
 		return t
 	}
@@ -284,7 +284,7 @@ func (gen *codeGen) WritePackage() {
 		HasTypes     bool
 		Dependencies []ref.Ref
 		Name         string
-		Types        []types.TypeRef
+		Types        []types.Type
 	}{
 		gen.sharedData,
 		len(pkgTypes) > 0,
@@ -310,7 +310,7 @@ func (gen *codeGen) WritePackage() {
 	}
 }
 
-func (gen *codeGen) shouldBeWritten(t types.TypeRef) bool {
+func (gen *codeGen) shouldBeWritten(t types.Type) bool {
 	if t.IsUnresolved() {
 		return false
 	}
@@ -322,7 +322,7 @@ func (gen *codeGen) shouldBeWritten(t types.TypeRef) bool {
 	return !gen.written[gen.generator.UserName(t)]
 }
 
-func (gen *codeGen) writeTopLevel(t types.TypeRef, ordinal int) {
+func (gen *codeGen) writeTopLevel(t types.Type, ordinal int) {
 	switch t.Kind() {
 	case types.EnumKind:
 		gen.writeEnum(t, ordinal)
@@ -334,7 +334,7 @@ func (gen *codeGen) writeTopLevel(t types.TypeRef, ordinal int) {
 }
 
 // write generates the code for the given type.
-func (gen *codeGen) write(t types.TypeRef) {
+func (gen *codeGen) write(t types.Type) {
 	if !gen.shouldBeWritten(t) {
 		return
 	}
@@ -355,31 +355,31 @@ func (gen *codeGen) write(t types.TypeRef) {
 	}
 }
 
-func (gen *codeGen) writeLater(t types.TypeRef) {
+func (gen *codeGen) writeLater(t types.Type) {
 	if !gen.shouldBeWritten(t) {
 		return
 	}
 	gen.toWrite = append(gen.toWrite, t)
 }
 
-func (gen *codeGen) writeTemplate(tmpl string, t types.TypeRef, data interface{}) {
+func (gen *codeGen) writeTemplate(tmpl string, t types.Type, data interface{}) {
 	err := gen.templates.ExecuteTemplate(gen.w, tmpl, data)
 	d.Exp.NoError(err)
 	gen.written[gen.generator.UserName(t)] = true
 }
 
-func (gen *codeGen) writeStruct(t types.TypeRef, ordinal int) {
+func (gen *codeGen) writeStruct(t types.Type, ordinal int) {
 	d.Chk.True(ordinal >= 0)
 	desc := t.Desc.(types.StructDesc)
 	data := struct {
 		sharedData
 		Name          string
-		Type          types.TypeRef
+		Type          types.Type
 		Ordinal       int
 		Fields        []types.Field
 		Choices       types.Choices
 		HasUnion      bool
-		UnionZeroType types.TypeRef
+		UnionZeroType types.Type
 		CanUseDef     bool
 	}{
 		gen.sharedData,
@@ -408,13 +408,13 @@ func (gen *codeGen) writeStruct(t types.TypeRef, ordinal int) {
 	}
 }
 
-func (gen *codeGen) writeList(t types.TypeRef) {
+func (gen *codeGen) writeList(t types.Type) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		sharedData
 		Name      string
-		Type      types.TypeRef
-		ElemType  types.TypeRef
+		Type      types.Type
+		ElemType  types.Type
 		CanUseDef bool
 	}{
 		gen.sharedData,
@@ -427,14 +427,14 @@ func (gen *codeGen) writeList(t types.TypeRef) {
 	gen.writeLater(elemTypes[0])
 }
 
-func (gen *codeGen) writeMap(t types.TypeRef) {
+func (gen *codeGen) writeMap(t types.Type) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		sharedData
 		Name      string
-		Type      types.TypeRef
-		KeyType   types.TypeRef
-		ValueType types.TypeRef
+		Type      types.Type
+		KeyType   types.Type
+		ValueType types.Type
 		CanUseDef bool
 	}{
 		gen.sharedData,
@@ -449,13 +449,13 @@ func (gen *codeGen) writeMap(t types.TypeRef) {
 	gen.writeLater(elemTypes[1])
 }
 
-func (gen *codeGen) writeRef(t types.TypeRef) {
+func (gen *codeGen) writeRef(t types.Type) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		sharedData
 		Name     string
-		Type     types.TypeRef
-		ElemType types.TypeRef
+		Type     types.Type
+		ElemType types.Type
 	}{
 		gen.sharedData,
 		gen.generator.UserName(t),
@@ -466,13 +466,13 @@ func (gen *codeGen) writeRef(t types.TypeRef) {
 	gen.writeLater(elemTypes[0])
 }
 
-func (gen *codeGen) writeSet(t types.TypeRef) {
+func (gen *codeGen) writeSet(t types.Type) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		sharedData
 		Name      string
-		Type      types.TypeRef
-		ElemType  types.TypeRef
+		Type      types.Type
+		ElemType  types.Type
 		CanUseDef bool
 	}{
 		gen.sharedData,
@@ -485,12 +485,12 @@ func (gen *codeGen) writeSet(t types.TypeRef) {
 	gen.writeLater(elemTypes[0])
 }
 
-func (gen *codeGen) writeEnum(t types.TypeRef, ordinal int) {
+func (gen *codeGen) writeEnum(t types.Type, ordinal int) {
 	d.Chk.True(ordinal >= 0)
 	data := struct {
 		sharedData
 		Name    string
-		Type    types.TypeRef
+		Type    types.Type
 		Ordinal int
 		Ids     []string
 	}{
@@ -504,11 +504,11 @@ func (gen *codeGen) writeEnum(t types.TypeRef, ordinal int) {
 	gen.writeTemplate("enum.tmpl", t, data)
 }
 
-func (gen *codeGen) canUseDef(t types.TypeRef) bool {
+func (gen *codeGen) canUseDef(t types.Type) bool {
 	cache := map[string]bool{}
 
-	var rec func(t types.TypeRef, p types.Package) bool
-	rec = func(t types.TypeRef, p types.Package) bool {
+	var rec func(t types.Type, p types.Package) bool
+	rec = func(t types.Type, p types.Package) bool {
 		if t.HasPackageRef() {
 			p = gen.deps[t.PackageRef()]
 			d.Chk.NotNil(p)
@@ -546,11 +546,11 @@ func (gen *codeGen) canUseDef(t types.TypeRef) bool {
 
 // We use a go map as the def for Set and Map. These cannot have a key that is a
 // Set, Map or a List because slices and maps are not comparable in go.
-func (gen *codeGen) containsNonComparable(t types.TypeRef) bool {
+func (gen *codeGen) containsNonComparable(t types.Type) bool {
 	cache := map[string]bool{}
 
-	var rec func(t types.TypeRef, p types.Package) bool
-	rec = func(t types.TypeRef, p types.Package) bool {
+	var rec func(t types.Type, p types.Package) bool
+	rec = func(t types.Type, p types.Package) bool {
 		if t.HasPackageRef() {
 			p = gen.deps[t.PackageRef()]
 			d.Chk.NotNil(p)
@@ -583,7 +583,7 @@ func (gen *codeGen) containsNonComparable(t types.TypeRef) bool {
 	return rec(t, gen.pkg.Package)
 }
 
-func resolveInPackage(t types.TypeRef, p *types.Package) types.TypeRef {
+func resolveInPackage(t types.Type, p *types.Package) types.Type {
 	if !t.IsUnresolved() {
 		return t
 	}

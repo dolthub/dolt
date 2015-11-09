@@ -36,6 +36,6 @@ func (fs String) ChildValues() []Value {
 
 var typeRefForString = MakePrimitiveTypeRef(StringKind)
 
-func (fs String) TypeRef() TypeRef {
+func (fs String) Type() Type {
 	return typeRefForString
 }

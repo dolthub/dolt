@@ -22,7 +22,7 @@ func (v {{.NomsType}}) ToPrimitive() interface{} {
 
 var typeRefFor{{.NomsType}} = MakePrimitiveTypeRef({{.NomsType}}Kind)
 
-func (v {{.NomsType}}) TypeRef() TypeRef {
+func (v {{.NomsType}}) Type() Type {
 	return typeRefFor{{.NomsType}}
 }
 

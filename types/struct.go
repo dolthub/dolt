@@ -9,14 +9,14 @@ type structData map[string]Value
 
 type Struct struct {
 	data       structData
-	t          TypeRef
-	typeDef    TypeRef
+	t          Type
+	typeDef    Type
 	unionIndex uint32
 	unionValue Value
 	ref        *ref.Ref
 }
 
-func newStructFromData(data structData, unionIndex uint32, unionValue Value, typeRef, typeDef TypeRef) Struct {
+func newStructFromData(data structData, unionIndex uint32, unionValue Value, typeRef, typeDef Type) Struct {
 	d.Chk.Equal(typeRef.Kind(), UnresolvedKind)
 	d.Chk.True(typeRef.HasPackageRef())
 	d.Chk.True(typeRef.HasOrdinal())
@@ -24,7 +24,7 @@ func newStructFromData(data structData, unionIndex uint32, unionValue Value, typ
 	return Struct{data, typeRef, typeDef, unionIndex, unionValue, &ref.Ref{}}
 }
 
-func NewStruct(typeRef, typeDef TypeRef, data structData) Struct {
+func NewStruct(typeRef, typeDef Type, data structData) Struct {
 	newData := make(structData)
 	unionIndex := uint32(0)
 	var unionValue Value
@@ -49,7 +49,7 @@ func NewStruct(typeRef, typeDef TypeRef, data structData) Struct {
 }
 
 func (s Struct) Equals(other Value) bool {
-	return other != nil && s.t.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && s.t.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Struct) Ref() ref.Ref {
@@ -88,7 +88,7 @@ func (s Struct) ChildValues() (res []Value) {
 	return
 }
 
-func (s Struct) TypeRef() TypeRef {
+func (s Struct) Type() Type {
 	return s.t
 }
 
@@ -170,7 +170,7 @@ func (s Struct) findField(n string) (Field, int32, bool) {
 	return Field{}, -1, false
 }
 
-func structBuilder(values []Value, typeRef, typeDef TypeRef) Value {
+func structBuilder(values []Value, typeRef, typeDef Type) Value {
 	i := 0
 	desc := typeDef.Desc.(StructDesc)
 	data := structData{}
@@ -200,7 +200,7 @@ func structBuilder(values []Value, typeRef, typeDef TypeRef) Value {
 	return newStructFromData(data, unionIndex, unionValue, typeRef, typeDef)
 }
 
-func structReader(s Struct, typeRef, typeDef TypeRef) []Value {
+func structReader(s Struct, typeRef, typeDef Type) []Value {
 	values := []Value{}
 
 	desc := typeDef.Desc.(StructDesc)

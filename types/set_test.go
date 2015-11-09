@@ -229,31 +229,31 @@ func TestSetFilter(t *testing.T) {
 func TestSetTypeRef(t *testing.T) {
 	assert := assert.New(t)
 	s := NewSet()
-	assert.True(s.TypeRef().Equals(MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))))
+	assert.True(s.Type().Equals(MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))))
 
 	tr := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(UInt64Kind))
 
 	s = newSetFromData(setData{}, tr)
-	assert.Equal(tr, s.TypeRef())
+	assert.Equal(tr, s.Type())
 
 	s2 := s.Remove(UInt64(1))
-	assert.True(tr.Equals(s2.TypeRef()))
+	assert.True(tr.Equals(s2.Type()))
 
 	s2 = s.Subtract(s)
-	assert.True(tr.Equals(s2.TypeRef()))
+	assert.True(tr.Equals(s2.Type()))
 
 	s2 = s.Filter(func(v Value) bool {
 		return true
 	})
-	assert.True(tr.Equals(s2.TypeRef()))
+	assert.True(tr.Equals(s2.Type()))
 
 	s2 = s.Insert(UInt64(0), UInt64(1))
-	assert.True(tr.Equals(s2.TypeRef()))
+	assert.True(tr.Equals(s2.Type()))
 
 	s3 := NewSet(UInt64(2))
 	s3.t = s2.t
 	s2 = s.Union(s3)
-	assert.True(tr.Equals(s2.TypeRef()))
+	assert.True(tr.Equals(s2.Type()))
 
 	assert.Panics(func() { s.Insert(Bool(true)) })
 	assert.Panics(func() { s.Insert(UInt64(3), Bool(true)) })

@@ -41,7 +41,7 @@ func TestTypeRef(t *testing.T) {
 
 	def := gen.StructDef{"hi", true}
 	st := def.New()
-	typ := st.TypeRef()
+	typ := st.Type()
 	assert.EqualValues(0, typ.Ordinal())
 	assert.Equal(types.UnresolvedKind, typ.Kind())
 }
@@ -52,6 +52,6 @@ func TestStructChunks(t *testing.T) {
 	st := gen.StructDef{"hi", true}.New()
 	cs := st.Chunks()
 
-	// One chunk for the TypeRef
+	// One chunk for the Type
 	assert.Len(cs, 1)
 }

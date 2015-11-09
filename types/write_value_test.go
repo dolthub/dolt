@@ -33,9 +33,9 @@ func TestWriteValue(t *testing.T) {
 
 	testEncode(fmt.Sprintf("t [%d,\"hi\"]", StringKind), NewString("hi"))
 
-	testEncode(fmt.Sprintf("t [%d,[],[]]", PackageKind), Package{types: []TypeRef{}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
-	ref1 := testEncode(fmt.Sprintf("t [%d,[%d],[]]", PackageKind, BoolKind), Package{types: []TypeRef{MakePrimitiveTypeRef(BoolKind)}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
-	testEncode(fmt.Sprintf("t [%d,[],[\"%s\"]]", PackageKind, ref1), Package{types: []TypeRef{}, dependencies: []ref.Ref{ref1}, ref: &ref.Ref{}})
+	testEncode(fmt.Sprintf("t [%d,[],[]]", PackageKind), Package{types: []Type{}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
+	ref1 := testEncode(fmt.Sprintf("t [%d,[%d],[]]", PackageKind, BoolKind), Package{types: []Type{MakePrimitiveTypeRef(BoolKind)}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
+	testEncode(fmt.Sprintf("t [%d,[],[\"%s\"]]", PackageKind, ref1), Package{types: []Type{}, dependencies: []ref.Ref{ref1}, ref: &ref.Ref{}})
 }
 
 func TestWriteBlobLeaf(t *testing.T) {
@@ -68,7 +68,7 @@ func TestWritePackageWhenValueIsWritten(t *testing.T) {
 	typeDef := MakeStructTypeRef("S", []Field{
 		Field{"X", MakePrimitiveTypeRef(Int32Kind), false},
 	}, Choices{})
-	pkg1 := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
+	pkg1 := NewPackage([]Type{typeDef}, []ref.Ref{})
 	// Don't write package
 	pkgRef1 := RegisterPackage(&pkg1)
 	typeRef := MakeTypeRef(pkgRef1, 0)
@@ -84,11 +84,11 @@ func TestWritePackageDepWhenPackageIsWritten(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg1 := NewPackage([]TypeRef{}, []ref.Ref{})
+	pkg1 := NewPackage([]Type{}, []ref.Ref{})
 	// Don't write package
 	pkgRef1 := RegisterPackage(&pkg1)
 
-	pkg2 := NewPackage([]TypeRef{}, []ref.Ref{pkgRef1})
+	pkg2 := NewPackage([]Type{}, []ref.Ref{pkgRef1})
 	WriteValue(pkg2, cs)
 
 	pkg3 := ReadValue(pkgRef1, cs)

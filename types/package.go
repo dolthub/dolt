@@ -3,17 +3,17 @@ package types
 import "github.com/attic-labs/noms/ref"
 
 type Package struct {
-	types        []TypeRef
+	types        []Type
 	dependencies []ref.Ref
 	ref          *ref.Ref
 }
 
-func NewPackage(types []TypeRef, deps []ref.Ref) Package {
+func NewPackage(types []Type, deps []ref.Ref) Package {
 	return Package{types, deps, &ref.Ref{}}
 }
 
 func (p Package) Equals(other Value) bool {
-	return other != nil && typeRefForPackage.Equals(other.TypeRef()) && p.Ref() == other.Ref()
+	return other != nil && typeRefForPackage.Equals(other.Type()) && p.Ref() == other.Ref()
 }
 
 func (p Package) Ref() ref.Ref {
@@ -42,7 +42,7 @@ func (p Package) ChildValues() (res []Value) {
 
 var typeRefForPackage = MakePrimitiveTypeRef(PackageKind)
 
-func (p Package) TypeRef() TypeRef {
+func (p Package) Type() Type {
 	return typeRefForPackage
 }
 
@@ -60,7 +60,7 @@ func (p Package) Dependencies() []ref.Ref {
 	return p.dependencies
 }
 
-func (p Package) Types() []TypeRef {
+func (p Package) Types() []Type {
 	// TODO: Change API to prevent mutations.
 	return p.types
 }

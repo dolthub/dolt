@@ -41,7 +41,7 @@ func (s SetOfRefOfPackage) Def() SetOfRefOfPackageDef {
 }
 
 func (s SetOfRefOfPackage) Equals(other Value) bool {
-	return other != nil && __typeRefForSetOfRefOfPackage.Equals(other.TypeRef()) && s.Ref() == other.Ref()
+	return other != nil && __typeRefForSetOfRefOfPackage.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfRefOfPackage) Ref() ref.Ref {
@@ -49,21 +49,21 @@ func (s SetOfRefOfPackage) Ref() ref.Ref {
 }
 
 func (s SetOfRefOfPackage) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.TypeRef().Chunks()...)
+	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
 
 func (s SetOfRefOfPackage) ChildValues() (ret []Value) {
-	ret = append(ret, s.TypeRef())
+	ret = append(ret, s.Type())
 	ret = append(ret, s.s.ChildValues()...)
 	return
 }
 
 // A Noms Value that describes SetOfRefOfPackage.
-var __typeRefForSetOfRefOfPackage TypeRef
+var __typeRefForSetOfRefOfPackage Type
 
-func (m SetOfRefOfPackage) TypeRef() TypeRef {
+func (m SetOfRefOfPackage) Type() Type {
 	return __typeRefForSetOfRefOfPackage
 }
 
@@ -176,11 +176,11 @@ func (r RefOfPackage) Ref() ref.Ref {
 }
 
 func (r RefOfPackage) Equals(other Value) bool {
-	return other != nil && __typeRefForRefOfPackage.Equals(other.TypeRef()) && r.Ref() == other.Ref()
+	return other != nil && __typeRefForRefOfPackage.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfPackage) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.TypeRef().Chunks()...)
+	chunks = append(chunks, r.Type().Chunks()...)
 	chunks = append(chunks, r.target)
 	return
 }
@@ -190,9 +190,9 @@ func (r RefOfPackage) ChildValues() []Value {
 }
 
 // A Noms Value that describes RefOfPackage.
-var __typeRefForRefOfPackage TypeRef
+var __typeRefForRefOfPackage Type
 
-func (m RefOfPackage) TypeRef() TypeRef {
+func (m RefOfPackage) Type() Type {
 	return __typeRefForRefOfPackage
 }
 

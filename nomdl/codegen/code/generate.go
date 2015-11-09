@@ -1,4 +1,4 @@
-// Package code provides Generator, which has methods for generating code snippets from a types.TypeRef.
+// Package code provides Generator, which has methods for generating code snippets from a types.Type.
 // Conceptually there are few type spaces here:
 //
 // - Def - MyStructDef, ListOfBoolDef; convenient Go types for working with data from a given Noms Value.
@@ -17,19 +17,19 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-// Resolver provides a single method for resolving an unresolved types.TypeRef.
+// Resolver provides a single method for resolving an unresolved types.Type.
 type Resolver interface {
-	Resolve(t types.TypeRef) types.TypeRef
+	Resolve(t types.Type) types.Type
 }
 
-// Generator provides methods for generating code snippets from both resolved and unresolved types.TypeRefs. In the latter case, it uses R to resolve the types.TypeRef before generating code.
+// Generator provides methods for generating code snippets from both resolved and unresolved types.TypeRefs. In the latter case, it uses R to resolve the types.Type before generating code.
 type Generator struct {
 	R            Resolver
 	TypesPackage string
 }
 
 // DefType returns a string containing the Go type that should be used as the 'Def' for the Noms type described by t.
-func (gen Generator) DefType(t types.TypeRef) string {
+func (gen Generator) DefType(t types.Type) string {
 	rt := gen.R.Resolve(t)
 	k := rt.Kind()
 	switch k {
@@ -48,13 +48,13 @@ func (gen Generator) DefType(t types.TypeRef) string {
 	case types.ValueKind:
 		return fmt.Sprintf("%sValue", gen.TypesPackage)
 	case types.TypeRefKind:
-		return fmt.Sprintf("%sTypeRef", gen.TypesPackage)
+		return fmt.Sprintf("%sType", gen.TypesPackage)
 	}
 	panic("unreachable")
 }
 
 // UserType returns a string containing the Go type that should be used when the Noms type described by t needs to be returned by a generated getter or taken as a parameter to a generated setter.
-func (gen Generator) UserType(t types.TypeRef) string {
+func (gen Generator) UserType(t types.Type) string {
 	rt := gen.R.Resolve(t)
 	k := rt.Kind()
 	switch k {
@@ -69,13 +69,13 @@ func (gen Generator) UserType(t types.TypeRef) string {
 	case types.ValueKind:
 		return fmt.Sprintf("%sValue", gen.TypesPackage)
 	case types.TypeRefKind:
-		return fmt.Sprintf("%sTypeRef", gen.TypesPackage)
+		return fmt.Sprintf("%sType", gen.TypesPackage)
 	}
 	panic("unreachable")
 }
 
 // DefToValue returns a string containing Go code to convert an instance of a Def type (named val) to a Noms types.Value of the type described by t.
-func (gen Generator) DefToValue(val string, t types.TypeRef) string {
+func (gen Generator) DefToValue(val string, t types.Type) string {
 	rt := gen.R.Resolve(t)
 	switch rt.Kind() {
 	case types.BlobKind, types.EnumKind, types.PackageKind, types.ValueKind, types.TypeRefKind:
@@ -91,7 +91,7 @@ func (gen Generator) DefToValue(val string, t types.TypeRef) string {
 }
 
 // DefToUser returns a string containing Go code to convert an instance of a Def type (named val) to a User type described by t.
-func (gen Generator) DefToUser(val string, t types.TypeRef) string {
+func (gen Generator) DefToUser(val string, t types.Type) string {
 	rt := gen.R.Resolve(t)
 	switch rt.Kind() {
 	case types.BlobKind, types.BoolKind, types.EnumKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeRefKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind:
@@ -103,7 +103,7 @@ func (gen Generator) DefToUser(val string, t types.TypeRef) string {
 }
 
 // MayHaveChunks returns whether the type (t) may contain more chunks.
-func (gen Generator) MayHaveChunks(t types.TypeRef) bool {
+func (gen Generator) MayHaveChunks(t types.Type) bool {
 	rt := gen.R.Resolve(t)
 	switch rt.Kind() {
 	case types.BlobKind, types.ListKind, types.MapKind, types.PackageKind, types.RefKind, types.SetKind, types.StructKind, types.TypeRefKind, types.ValueKind:
@@ -115,7 +115,7 @@ func (gen Generator) MayHaveChunks(t types.TypeRef) bool {
 }
 
 // ValueToDef returns a string containing Go code to convert an instance of a types.Value (val) into the Def type appropriate for t.
-func (gen Generator) ValueToDef(val string, t types.TypeRef) string {
+func (gen Generator) ValueToDef(val string, t types.Type) string {
 	rt := gen.R.Resolve(t)
 	switch rt.Kind() {
 	case types.BlobKind, types.PackageKind, types.TypeRefKind:
@@ -135,7 +135,7 @@ func (gen Generator) ValueToDef(val string, t types.TypeRef) string {
 }
 
 // UserToDef returns a string containing Go code to convert an User value (val) into the Def type appropriate for t.
-func (gen Generator) UserToDef(val string, t types.TypeRef) string {
+func (gen Generator) UserToDef(val string, t types.Type) string {
 	rt := gen.R.Resolve(t)
 	switch rt.Kind() {
 	case types.BlobKind, types.EnumKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeRefKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind:
@@ -149,7 +149,7 @@ func (gen Generator) UserToDef(val string, t types.TypeRef) string {
 }
 
 // NativeToValue returns a string containing Go code to convert an instance of a native type (named val) to a Noms types.Value of the type described by t.
-func (gen Generator) NativeToValue(val string, t types.TypeRef) string {
+func (gen Generator) NativeToValue(val string, t types.Type) string {
 	t = gen.R.Resolve(t)
 	k := t.Kind()
 	switch k {
@@ -162,7 +162,7 @@ func (gen Generator) NativeToValue(val string, t types.TypeRef) string {
 }
 
 // ValueToNative returns a string containing Go code to convert an instance of a types.Value (val) into the native type appropriate for t.
-func (gen Generator) ValueToNative(val string, t types.TypeRef) string {
+func (gen Generator) ValueToNative(val string, t types.Type) string {
 	k := t.Kind()
 	switch k {
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
@@ -175,7 +175,7 @@ func (gen Generator) ValueToNative(val string, t types.TypeRef) string {
 }
 
 // UserToValue returns a string containing Go code to convert an instance of a User type (named val) to a Noms types.Value of the type described by t. For Go primitive types, this will use NativeToValue(). For other types, their UserType is a Noms types.Value (or a wrapper around one), so this is more-or-less a pass-through.
-func (gen Generator) UserToValue(val string, t types.TypeRef) string {
+func (gen Generator) UserToValue(val string, t types.Type) string {
 	t = gen.R.Resolve(t)
 	k := t.Kind()
 	switch k {
@@ -188,7 +188,7 @@ func (gen Generator) UserToValue(val string, t types.TypeRef) string {
 }
 
 // ValueToUser returns a string containing Go code to convert an instance of a types.Value (val) into the User type appropriate for t. For Go primitives, this will use ValueToNative().
-func (gen Generator) ValueToUser(val string, t types.TypeRef) string {
+func (gen Generator) ValueToUser(val string, t types.Type) string {
 	rt := gen.R.Resolve(t)
 	k := rt.Kind()
 	switch k {
@@ -203,13 +203,13 @@ func (gen Generator) ValueToUser(val string, t types.TypeRef) string {
 	case types.ValueKind:
 		return val
 	case types.TypeRefKind:
-		return fmt.Sprintf("%s.(%sTypeRef)", val, gen.TypesPackage)
+		return fmt.Sprintf("%s.(%sType)", val, gen.TypesPackage)
 	}
 	panic("unreachable")
 }
 
 // UserZero returns a string containing Go code to create an uninitialized instance of the User type appropriate for t.
-func (gen Generator) UserZero(t types.TypeRef) string {
+func (gen Generator) UserZero(t types.Type) string {
 	rt := gen.R.Resolve(t)
 	k := rt.Kind()
 	switch k {
@@ -231,13 +231,13 @@ func (gen Generator) UserZero(t types.TypeRef) string {
 		// TODO: This is where a null Value would have been useful.
 		return fmt.Sprintf("%sBool(false)", gen.TypesPackage)
 	case types.TypeRefKind:
-		return fmt.Sprintf("%sTypeRef{R: ref.Ref{}}", gen.TypesPackage)
+		return fmt.Sprintf("%sType{R: ref.Ref{}}", gen.TypesPackage)
 	}
 	panic("unreachable")
 }
 
 // ValueZero returns a string containing Go code to create an uninitialized instance of the Noms types.Value appropriate for t.
-func (gen Generator) ValueZero(t types.TypeRef) string {
+func (gen Generator) ValueZero(t types.Type) string {
 	rt := gen.R.Resolve(t)
 	k := rt.Kind()
 	switch k {
@@ -261,13 +261,13 @@ func (gen Generator) ValueZero(t types.TypeRef) string {
 		// TODO: Use nil here
 		return fmt.Sprintf("%sBool(false)", gen.TypesPackage)
 	case types.TypeRefKind:
-		return fmt.Sprintf("%sTypeRef{R: ref.Ref{}}", gen.TypesPackage)
+		return fmt.Sprintf("%sType{R: ref.Ref{}}", gen.TypesPackage)
 	}
 	panic("unreachable")
 }
 
 // UserName returns the name of the User type appropriate for t, taking into account Noms types imported from other packages.
-func (gen Generator) UserName(t types.TypeRef) string {
+func (gen Generator) UserName(t types.Type) string {
 	rt := gen.R.Resolve(t)
 	k := rt.Kind()
 	switch k {
@@ -302,15 +302,15 @@ func (gen Generator) UserName(t types.TypeRef) string {
 	panic("unreachable")
 }
 
-func (gen Generator) refToId(t types.TypeRef) string {
+func (gen Generator) refToId(t types.Type) string {
 	if !t.IsUnresolved() || !t.HasPackageRef() {
 		return gen.UserName(t)
 	}
 	return gen.UserName(gen.R.Resolve(t))
 }
 
-// ToTypeRef returns a string containing Go code that instantiates a types.TypeRef instance equivalent to t.
-func (gen Generator) ToTypeRef(t types.TypeRef, fileID, packageName string) string {
+// ToTypeRef returns a string containing Go code that instantiates a types.Type instance equivalent to t.
+func (gen Generator) ToTypeRef(t types.Type, fileID, packageName string) string {
 	if t.HasPackageRef() {
 		return fmt.Sprintf(`%sMakeTypeRef(ref.Parse("%s"), %d)`, gen.TypesPackage, t.PackageRef().String(), t.Ordinal())
 	}

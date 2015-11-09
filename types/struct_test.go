@@ -14,7 +14,7 @@ func TestGenericStructEquals(t *testing.T) {
 		Field{"x", MakePrimitiveTypeRef(BoolKind), false},
 		Field{"o", MakePrimitiveTypeRef(StringKind), true},
 	}, Choices{})
-	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
+	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typeRef := MakeTypeRef(pkgRef, 0)
 
@@ -33,7 +33,7 @@ func TestGenericStructChunks(t *testing.T) {
 	typeDef := MakeStructTypeRef("S1", []Field{
 		Field{"r", MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(BoolKind)), false},
 	}, Choices{})
-	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
+	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typeRef := MakeTypeRef(pkgRef, 0)
 
@@ -53,7 +53,7 @@ func TestGenericStructChunksOptional(t *testing.T) {
 	typeDef := MakeStructTypeRef("S1", []Field{
 		Field{"r", MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(BoolKind)), true},
 	}, Choices{})
-	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
+	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typeRef := MakeTypeRef(pkgRef, 0)
 
@@ -80,7 +80,7 @@ func TestGenericStructChunksUnion(t *testing.T) {
 		Field{"r", MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(BoolKind)), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	})
-	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
+	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typeRef := MakeTypeRef(pkgRef, 0)
 
@@ -105,7 +105,7 @@ func TestGenericStructNew(t *testing.T) {
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 		Field{"o", MakePrimitiveTypeRef(StringKind), true},
 	}, Choices{})
-	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
+	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typeRef := MakeTypeRef(pkgRef, 0)
 
@@ -134,7 +134,7 @@ func TestGenericStructNewUnion(t *testing.T) {
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 		Field{"o", MakePrimitiveTypeRef(StringKind), false},
 	})
-	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
+	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typeRef := MakeTypeRef(pkgRef, 0)
 
@@ -151,7 +151,7 @@ func TestGenericStructSet(t *testing.T) {
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 		Field{"o", MakePrimitiveTypeRef(StringKind), true},
 	}, Choices{})
-	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
+	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typeRef := MakeTypeRef(pkgRef, 0)
 
@@ -172,7 +172,7 @@ func TestGenericStructSetUnion(t *testing.T) {
 		Field{"b", MakePrimitiveTypeRef(BoolKind), false},
 		Field{"s", MakePrimitiveTypeRef(StringKind), false},
 	})
-	pkg := NewPackage([]TypeRef{typeDef}, []ref.Ref{})
+	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typeRef := MakeTypeRef(pkgRef, 0)
 

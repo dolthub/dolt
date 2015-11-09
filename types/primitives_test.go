@@ -49,6 +49,6 @@ func TestPrimitivesTypeRef(t *testing.T) {
 	}
 
 	for _, d := range data {
-		assert.True(t, d.v.TypeRef().Equals(MakePrimitiveTypeRef(d.k)))
+		assert.True(t, d.v.Type().Equals(MakePrimitiveTypeRef(d.k)))
 	}
 }
