@@ -2,8 +2,6 @@ package pkg
 
 import (
 	"io"
-	"os"
-	"path/filepath"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
@@ -11,20 +9,20 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// Parsed represents a parsed Noms type package, which has some additional metadata beyond that which is present in a types.Package.
+// UsingDeclarations is kind of a hack to indicate specializations of Noms containers that need to be generated. These should all be one of ListKind, SetKind, MapKind or RefKind, and Desc should be a CompoundDesc instance.
+type Parsed struct {
+	types.Package
+	Name              string
+	UsingDeclarations []types.Type
+}
+
 // ParseNomDL reads a Noms package specification from r and returns a Package. Errors will be annotated with packageName and thrown.
 func ParseNomDL(packageName string, r io.Reader, includePath string, cs chunks.ChunkStore) Parsed {
 	i := runParser(packageName, r)
 	i.Name = packageName
 	imports := resolveImports(i.Aliases, includePath, cs)
-	depsSet := make(map[ref.Ref]bool, len(imports))
-	deps := make([]ref.Ref, 0, len(imports))
-	for _, target := range imports {
-		if !depsSet[target] {
-			deps = append(deps, target)
-		}
-		depsSet[target] = true
-
-	}
+	deps := importsToDeps(imports)
 
 	resolveLocalOrdinals(&i)
 	resolveNamespaces(&i, imports, getDeps(deps, cs))
@@ -35,25 +33,6 @@ func ParseNomDL(packageName string, r io.Reader, includePath string, cs chunks.C
 	}
 }
 
-// getDeps reads the types.Package objects referred to by depRefs out of cs and returns a map of ref: PackageDef.
-func getDeps(deps []ref.Ref, cs chunks.ChunkStore) map[ref.Ref]types.Package {
-	depsMap := map[ref.Ref]types.Package{}
-	for _, depRef := range deps {
-		v := types.ReadValue(depRef, cs)
-		d.Chk.NotNil(v, "Importing package by ref %s failed.", depRef.String())
-		depsMap[depRef] = v.(types.Package)
-	}
-	return depsMap
-}
-
-// Parsed represents a parsed Noms type package, which has some additional metadata beyond that which is present in a types.Package.
-// UsingDeclarations is kind of a hack to indicate specializations of Noms containers that need to be generated. These should all be one of ListKind, SetKind, MapKind or RefKind, and Desc should be a CompoundDesc instance.
-type Parsed struct {
-	types.Package
-	Name              string
-	UsingDeclarations []types.Type
-}
-
 type intermediate struct {
 	Name              string
 	Aliases           map[string]string
@@ -61,52 +40,10 @@ type intermediate struct {
 	Types             []types.Type
 }
 
-func indexOf(t types.Type, ts []types.Type) int16 {
-	for i, tt := range ts {
-		if tt.Name() == t.Name() && tt.Namespace() == "" {
-			return int16(i)
-		}
-	}
-	return -1
-}
-
-func (i *intermediate) checkLocal(t types.Type) bool {
-	if t.Namespace() == "" {
-		d.Chk.True(t.HasOrdinal(), "Invalid local reference")
-		return true
-	}
-	return false
-}
-
 func runParser(logname string, r io.Reader) intermediate {
 	got, err := ParseReader(logname, r)
 	d.Exp.NoError(err)
 	return got.(intermediate)
-}
-
-func resolveImports(aliases map[string]string, includePath string, cs chunks.ChunkStore) map[string]ref.Ref {
-	canonicalize := func(path string) string {
-		if filepath.IsAbs(path) {
-			return path
-		}
-		return filepath.Join(includePath, path)
-	}
-	imports := map[string]ref.Ref{}
-
-	for alias, target := range aliases {
-		var r ref.Ref
-		if d.Try(func() { r = ref.Parse(target) }) != nil {
-			canonical := canonicalize(target)
-			inFile, err := os.Open(canonical)
-			d.Chk.NoError(err)
-			defer inFile.Close()
-			parsedDep := ParseNomDL(alias, inFile, filepath.Dir(canonical), cs)
-			imports[alias] = types.WriteValue(parsedDep.Package, cs)
-		} else {
-			imports[alias] = r
-		}
-	}
-	return imports
 }
 
 func resolveLocalOrdinals(p *intermediate) {
@@ -146,6 +83,15 @@ func resolveLocalOrdinals(p *intermediate) {
 	for i, t := range p.UsingDeclarations {
 		p.UsingDeclarations[i] = rec(t)
 	}
+}
+
+func indexOf(t types.Type, ts []types.Type) int16 {
+	for i, tt := range ts {
+		if tt.Name() == t.Name() && tt.Namespace() == "" {
+			return int16(i)
+		}
+	}
+	return -1
 }
 
 func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) {
@@ -193,6 +139,14 @@ func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref
 	for i, t := range p.UsingDeclarations {
 		p.UsingDeclarations[i] = rec(t)
 	}
+}
+
+func (i *intermediate) checkLocal(t types.Type) bool {
+	if t.Namespace() == "" {
+		d.Chk.True(t.HasOrdinal(), "Invalid local reference")
+		return true
+	}
+	return false
 }
 
 func resolveNamespace(t types.Type, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) types.Type {
