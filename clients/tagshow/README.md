@@ -21,10 +21,11 @@ This is a slideshow that displays photos from a noms database having a particula
 
 ## Run
 
-* `../tagdex/tagdex -fs="$HOME/noms/chunks" -input-ref="<ref within chunkstore to look for photos within>" -output-ds="tagdex"`
-* `../server/server -fs="$HOME/noms/chunks" -ds="tagdex"`
+* `../server/server ./server --ldb=/tmp/ldb`
+* `../tagdex/tagdex -h http://localhost:8000  --input-ref="<ref within chunkstore to look for photos within>" --output-ds="tagdex"`
+
 * `python -m SimpleHTTPServer 8081` (expects ../server to run on same host, port 8000)
-* navigate to http://localhost:8081/?tag=
+* navigate to http://localhost:8081/
 
 ## Develop
 

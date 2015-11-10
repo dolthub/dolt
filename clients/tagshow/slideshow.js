@@ -1,12 +1,12 @@
+/* @flow */
+
 'use strict';
 
-var Immutable = require('immutable');
-var ImmutableRenderMixin = require('react-immutable-render-mixin');
-var noms = require('noms');
-var Photo = require('./photo.js');
-var React = require('react');
+import Photo from './photo.js';
+import React from 'react';
+import type {ChunkStore, Ref} from 'noms';
 
-var containerStyle = {
+const containerStyle = {
   position: 'absolute',
   left: 0,
   top: 0,
@@ -16,33 +16,38 @@ var containerStyle = {
 
   display: 'flex',
   alignItems: 'center',
-  justifyContent: 'center',
+  justifyContent: 'center'
 };
 
-var SlideShow = React.createClass({
-  mixins: [ImmutableRenderMixin],
+type DefaultProps = {};
 
-  propTypes: {
-    ds: React.PropTypes.instanceOf(Immutable.Map),
-    photos: React.PropTypes.instanceOf(Immutable.Set),
-  },
+type Props = {
+  store: ChunkStore,
+  photos: Array<Ref>
+};
 
-  getInitialState: function() {
-    return {
-      index: 0,
+type State = {
+  index: number
+};
+
+export default class SlideShow extends React.Component<DefaultProps, Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      index: 0
+    };
+  }
+
+  handleTimeout() {
+    let index = this.state.index + 1;
+    if (index >= this.props.photos.length) {
+      index = 0;
     }
-  },
+    this.setState({index});
+  }
 
-  handleTimeout: function() {
-    var newIndex = this.state.index + 1;
-    if (newIndex >= this.props.photos.size) {
-      newIndex = 0;
-    }
-    this.setState({index: newIndex});
-  },
-
-  render: function() {
-    var photoRef = this.props.photos.get(this.state.index);
+  render() : ?React.Element {
+    let photoRef = this.props.photos[this.state.index];
     if (!photoRef) {
       return null;
     }
@@ -50,52 +55,55 @@ var SlideShow = React.createClass({
     return (
       <div style={containerStyle}>
         <Item
-          key={photoRef.ref}
           photoRef={photoRef}
-          onTimeout={this.handleTimeout.bind(this)} />
+          store={this.props.store}
+          onTimeout={() => this.handleTimeout()} />
       </div>
     );
-  },
-});
+  }
+}
 
-var Item = React.createClass({
-  mixins: [ImmutableRenderMixin],
+type ItemProps = {
+    onTimeout: () => void,
+    photoRef: Ref,
+    store: ChunkStore
+};
 
-  propTypes: {
-    onTimeout: React.PropTypes.func.isRequired,
-    photoRef: React.PropTypes.instanceOf(noms.Ref),
-  },
+type ItemState = {
+  timerId: number
+};
 
-  getInitialState: function() {
-    return {
-      timerId: 0,
+class Item extends React.Component<DefaultProps, ItemProps, ItemState> {
+  constructor(props: ItemProps) {
+    super(props);
+    this.state = {
+      timerId: 0
     };
-  },
+  }
 
-  setTimeout: function() {
+  setTimeout() {
     this.setState({
-      timerId: window.setTimeout(this.props.onTimeout, 3000),
+      timerId: window.setTimeout(this.props.onTimeout, 3000)
     });
-  },
+  }
 
-  componentWillUnmount: function() {
+  componentWillUnmount() {
     window.clearTimeout(this.state.timerId);
-  },
+  }
 
-  render: function() {
-    var style = {
+  render() : React.Element {
+    let style = {
       objectFit: 'contain',
       width: window.innerWidth,
-      height: window.innerHeight,
+      height: window.innerHeight
     };
 
     return (
       <Photo
-        onLoad={this.setTimeout}
+        store={this.props.store}
+        onLoad={() => this.setTimeout()}
         photoRef={this.props.photoRef}
         style={style}/>
     );
-  },
-});
-
-module.exports = React.createFactory(SlideShow);
+  }
+}
