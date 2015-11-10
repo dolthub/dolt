@@ -18,7 +18,7 @@
   "scripts": {
     "start": "babel -w src/ -d dist/",
     "build": "babel src/ -d dist/",
-    "pretest": "eslint src/ && flow src/ && babel src/ -d dist/",
-    "test": "mocha --ui tdd dist/"
+    "pretest": "eslint src/ && flow src/",
+    "test": "mocha --ui tdd --reporter dot --compilers js:babel/register src/"
   }
 }
