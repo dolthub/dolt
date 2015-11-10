@@ -4,22 +4,22 @@
 
 import Ref from './ref.js';
 import {ensureRef} from './get_ref.js';
-import {Field, StructDesc, TypeRef} from './type_ref.js';
+import {Field, StructDesc, Type} from './type.js';
 import {invariant, notNull} from './assert.js';
 
 type StructData = {[key: string]: any};
 
 export default class Struct {
-  typeRef: TypeRef;
+  type: Type;
   desc: StructDesc;
   unionField: ?Field;
 
   _data: StructData;
-  typeDef: TypeRef;
+  typeDef: Type;
   _ref: Ref;
 
-  constructor(typeRef: TypeRef, typeDef: TypeRef, data: StructData) {
-    this.typeRef = typeRef;
+  constructor(type: Type, typeDef: Type, data: StructData) {
+    this.type = type;
     this.typeDef = typeDef;
 
     let desc = typeDef.desc;
@@ -31,7 +31,7 @@ export default class Struct {
   }
 
   get ref(): Ref {
-    return this._ref = ensureRef(this._ref, this, this.typeRef);
+    return this._ref = ensureRef(this._ref, this, this.type);
   }
 
   equals(other: Struct): boolean {
@@ -72,7 +72,7 @@ export default class Struct {
     });
 
     data[key] = value;
-    return new Struct(this.typeRef, this.typeDef, data);
+    return new Struct(this.type, this.typeDef, data);
   }
 
   forEach(callbackfn: (value: any, index: string, field?: Field) => void): void {
@@ -106,7 +106,7 @@ function findField(desc: StructDesc, name: string): [?Field, boolean] {
 }
 
 function validate(s: Struct): ?Field {
-  // TODO: Validate field values match field typeRefs.
+  // TODO: Validate field values match field types.
   let data = s._data;
   let dataCount = Object.keys(data).length;
   s.desc.fields.forEach(field => {

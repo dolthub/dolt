@@ -7,10 +7,10 @@ import MemoryStore from './memory_store.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
 import test from './async_test.js';
-import type {TypeDesc} from './type_ref.js';
+import type {TypeDesc} from './type.js';
 import {assert} from 'chai';
 import {decodeNomsValue, JsonArrayReader, readValue} from './decode.js';
-import {Field, makeCompoundTypeRef, makePrimitiveTypeRef, makeStructTypeRef, makeTypeRef, TypeRef} from './type_ref.js';
+import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType, Type} from './type.js';
 import {invariant} from './assert.js';
 import {Kind} from './noms_kind.js';
 import {registerPackage, Package} from './package.js';
@@ -32,23 +32,23 @@ suite('Decode', () => {
     assert.isTrue(r.atEnd());
   });
 
-  test('read type ref as tag', async () => {
+  test('read type as tag', async () => {
     let ms = new MemoryStore();
 
-    function doTest(expected: TypeRef, a: Array<any>) {
+    function doTest(expected: Type, a: Array<any>) {
       let r = new JsonArrayReader(a, ms);
-      let tr = r.readTypeRefAsTag();
+      let tr = r.readTypeAsTag();
       assert.isTrue(expected.equals(tr));
     }
 
-    doTest(makePrimitiveTypeRef(Kind.Bool), [Kind.Bool, true]);
-    doTest(makePrimitiveTypeRef(Kind.TypeRef), [Kind.TypeRef, Kind.Bool]);
-    doTest(makeCompoundTypeRef(Kind.List, makePrimitiveTypeRef(Kind.Bool)), [Kind.List, Kind.Bool, true, false]);
+    doTest(makePrimitiveType(Kind.Bool), [Kind.Bool, true]);
+    doTest(makePrimitiveType(Kind.Type), [Kind.Type, Kind.Bool]);
+    doTest(makeCompoundType(Kind.List, makePrimitiveType(Kind.Bool)), [Kind.List, Kind.Bool, true, false]);
 
     let pkgRef = Ref.parse('sha1-a9993e364706816aba3e25717850c26c9cd0d89d');
-    doTest(makeTypeRef(pkgRef, 42), [Kind.Unresolved, pkgRef.toString(), 42]);
+    doTest(makeType(pkgRef, 42), [Kind.Unresolved, pkgRef.toString(), 42]);
 
-    doTest(makePrimitiveTypeRef(Kind.TypeRef), [Kind.TypeRef, Kind.TypeRef, pkgRef.toString()]);
+    doTest(makePrimitiveType(Kind.Type), [Kind.Type, Kind.Type, pkgRef.toString()]);
   });
 
   test('read primitives', async () => {
@@ -179,10 +179,10 @@ suite('Decode', () => {
 
   test('test read struct', async () => {
     let ms = new MemoryStore();
-    let tr = makeStructTypeRef('A1', [
-      new Field('x', makePrimitiveTypeRef(Kind.Int16), false),
-      new Field('s', makePrimitiveTypeRef(Kind.String), false),
-      new Field('b', makePrimitiveTypeRef(Kind.Bool), false)
+    let tr = makeStructType('A1', [
+      new Field('x', makePrimitiveType(Kind.Int16), false),
+      new Field('s', makePrimitiveType(Kind.String), false),
+      new Field('b', makePrimitiveType(Kind.Bool), false)
     ], []);
 
     let pkg = new Package([tr], []);
@@ -201,9 +201,9 @@ suite('Decode', () => {
 
   test('test read map of string to struct', async () => {
     let ms = new MemoryStore();
-    let tr = makeStructTypeRef('s', [
-      new Field('b', makePrimitiveTypeRef(Kind.Bool), false),
-      new Field('i', makePrimitiveTypeRef(Kind.Int32), false)
+    let tr = makeStructType('s', [
+      new Field('b', makePrimitiveType(Kind.Bool), false),
+      new Field('i', makePrimitiveType(Kind.Int32), false)
     ], []);
 
     let pkg = new Package([tr], []);

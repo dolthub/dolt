@@ -8,7 +8,7 @@ import MemoryStore from './memory_store.js';
 import Ref from './ref.js';
 import {encodeNomsValue} from './encode.js';
 import {readValue} from './decode.js';
-import {TypeRef} from './type_ref.js';
+import {Type} from './type.js';
 import Struct from './struct.js';
 
 export {
@@ -19,5 +19,5 @@ export {
   readValue,
   Ref,
   Struct,
-  TypeRef
+  Type
 };

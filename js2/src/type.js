@@ -46,9 +46,9 @@ class UnresolvedDesc {
 
 class CompoundDesc {
   kind: NomsKind;
-  elemTypes: Array<TypeRef>;
+  elemTypes: Array<Type>;
 
-  constructor(kind: NomsKind, elemTypes: Array<TypeRef>) {
+  constructor(kind: NomsKind, elemTypes: Array<Type>) {
     this.kind = kind;
     this.elemTypes = elemTypes;
   }
@@ -113,10 +113,10 @@ class StructDesc {
 
 class Field {
   name: string;
-  t: TypeRef;
+  t: Type;
   optional: boolean;
 
-  constructor(name: string, t: TypeRef, optional: boolean) {
+  constructor(name: string, t: Type, optional: boolean) {
     this.name = name;
     this.t = t;
     this.optional = optional;
@@ -127,7 +127,7 @@ class Field {
   }
 }
 
-class TypeRef {
+class Type {
   _namespace: string;
   _name: string;
   _desc: TypeDesc;
@@ -140,14 +140,14 @@ class TypeRef {
   }
 
   get ref(): Ref {
-    return this._ref = ensureRef(this._ref, this, this.typeRef);
+    return this._ref = ensureRef(this._ref, this, this.type);
   }
 
-  get typeRef(): TypeRef {
-    return typeRefTypeRef;
+  get type(): Type {
+    return typeType;
   }
 
-  equals(other: TypeRef): boolean {
+  equals(other: Type): boolean {
     return this.ref.equals(other.ref);
   }
 
@@ -198,15 +198,15 @@ class TypeRef {
     return out;
   }
 
-  get elemTypes(): Array<TypeRef> {
+  get elemTypes(): Array<Type> {
     invariant(this._desc instanceof CompoundDesc);
     return this._desc.elemTypes;
   }
 }
 
-function buildType(n: string, desc: TypeDesc): TypeRef {
+function buildType(n: string, desc: TypeDesc): Type {
   if (isPrimitiveKind(desc.kind)) {
-    return new TypeRef(n, '', desc);
+    return new Type(n, '', desc);
   }
 
   switch (desc.kind) {
@@ -217,18 +217,18 @@ function buildType(n: string, desc: TypeDesc): TypeRef {
     case Kind.Enum:
     case Kind.Struct:
     case Kind.Unresolved:
-      return new TypeRef(n, '', desc);
+      return new Type(n, '', desc);
 
     default:
       throw new Error('Unrecognized Kind: ' + desc.kind);
   }
 }
 
-function makePrimitiveTypeRef(k: NomsKind): TypeRef {
+function makePrimitiveType(k: NomsKind): Type {
   return buildType('', new PrimitiveDesc(k));
 }
 
-function makeCompoundTypeRef(k: NomsKind, ...elemTypes: Array<TypeRef>): TypeRef {
+function makeCompoundType(k: NomsKind, ...elemTypes: Array<Type>): Type {
   if (elemTypes.length === 1) {
     invariant(k !== Kind.Map, 'Map requires 2 element types');
   } else {
@@ -239,33 +239,33 @@ function makeCompoundTypeRef(k: NomsKind, ...elemTypes: Array<TypeRef>): TypeRef
   return buildType('', new CompoundDesc(k, elemTypes));
 }
 
-function makeStructTypeRef(name: string, fields: Array<Field>, choices: Array<Field>): TypeRef {
+function makeStructType(name: string, fields: Array<Field>, choices: Array<Field>): Type {
   return buildType(name, new StructDesc(fields, choices));
 }
 
-function makeTypeRef(pkgRef: Ref, ordinal: number): TypeRef {
-  return new TypeRef('', '', new UnresolvedDesc(pkgRef, ordinal));
+function makeType(pkgRef: Ref, ordinal: number): Type {
+  return new Type('', '', new UnresolvedDesc(pkgRef, ordinal));
 }
 
-function makeUnresolvedTypeRef(namespace: string, name: string): TypeRef {
-  return new TypeRef(name, namespace, new UnresolvedDesc(new Ref(), -1));
+function makeUnresolvedType(namespace: string, name: string): Type {
+  return new Type(name, namespace, new UnresolvedDesc(new Ref(), -1));
 }
 
-let typeRefTypeRef = makePrimitiveTypeRef(Kind.TypeRef);
-let packageTypeRef = makePrimitiveTypeRef(Kind.Package);
+let typeType = makePrimitiveType(Kind.Type);
+let packageType = makePrimitiveType(Kind.Package);
 
 export {
   CompoundDesc,
   Field,
-  makeCompoundTypeRef,
-  makePrimitiveTypeRef,
-  makeStructTypeRef,
-  makeTypeRef,
-  makeUnresolvedTypeRef,
+  makeCompoundType,
+  makePrimitiveType,
+  makeStructType,
+  makeType,
+  makeUnresolvedType,
   PrimitiveDesc,
   StructDesc,
-  TypeRef,
-  typeRefTypeRef,
-  packageTypeRef,
+  Type,
+  typeType,
+  packageType,
   UnresolvedDesc
 };

@@ -6,25 +6,25 @@ import Ref from './ref.js';
 import type {ChunkStore} from './chunk_store.js';
 import {ensureRef} from './get_ref.js';
 import {invariant} from './assert.js';
-import {packageTypeRef, TypeRef} from './type_ref.js';
+import {packageType, Type} from './type.js';
 import {readValue} from './decode.js';
 
 class Package {
-  types: Array<TypeRef>;
+  types: Array<Type>;
   dependencies: Array<Ref>;
   _ref: Ref;
 
-  constructor(types: Array<TypeRef>, dependencies: Array<Ref>) {
+  constructor(types: Array<Type>, dependencies: Array<Ref>) {
     this.types = types;
     this.dependencies = dependencies;
   }
 
   get ref(): Ref {
-    return this._ref = ensureRef(this._ref, this, this.typeRef);
+    return this._ref = ensureRef(this._ref, this, this.type);
   }
 
-  get typeRef(): TypeRef {
-    return packageTypeRef;
+  get type(): Type {
+    return packageType;
   }
 }
 
