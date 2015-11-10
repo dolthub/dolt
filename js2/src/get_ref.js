@@ -4,13 +4,13 @@
 
 import Ref from './ref.js';
 import {encodeNomsValue} from './encode.js';
-import {TypeRef} from './type_ref.js';
+import {Type} from './type.js';
 
-export function getRef(v: any, t: TypeRef): Ref {
+export function getRef(v: any, t: Type): Ref {
   return encodeNomsValue(v, t, null).ref;
 }
 
-export function ensureRef(r: ?Ref, v: any, t: TypeRef): Ref {
+export function ensureRef(r: ?Ref, v: any, t: Type): Ref {
   if (r !== null && r !== undefined && !r.isEmpty()) {
     return r;
   }

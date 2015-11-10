@@ -7,7 +7,7 @@ import Ref from './ref.js';
 import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
-import {Field, makeCompoundTypeRef, makePrimitiveTypeRef, makeStructTypeRef, makeTypeRef, makeUnresolvedTypeRef, StructDesc, TypeRef} from './type_ref.js';
+import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType, makeUnresolvedType, StructDesc, Type} from './type.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
 import {lookupPackage, Package, readPackage} from './package.js';
@@ -70,37 +70,37 @@ class JsonArrayReader {
     return Ref.parse(next);
   }
 
-  readTypeRefAsTag(): TypeRef {
+  readTypeAsTag(): Type {
     let kind = this.readKind();
     switch (kind) {
       case Kind.List:
       case Kind.Set:
       case Kind.Ref: {
-        let elemType = this.readTypeRefAsTag();
-        return makeCompoundTypeRef(kind, elemType);
+        let elemType = this.readTypeAsTag();
+        return makeCompoundType(kind, elemType);
       }
       case Kind.Map: {
-        let keyType = this.readTypeRefAsTag();
-        let valueType = this.readTypeRefAsTag();
-        return makeCompoundTypeRef(kind, keyType, valueType);
+        let keyType = this.readTypeAsTag();
+        let valueType = this.readTypeAsTag();
+        return makeCompoundType(kind, keyType, valueType);
       }
-      case Kind.TypeRef:
-        return makePrimitiveTypeRef(Kind.TypeRef);
+      case Kind.Type:
+        return makePrimitiveType(Kind.Type);
       case Kind.Unresolved: {
         let pkgRef = this.readRef();
         let ordinal = this.readOrdinal();
-        return makeTypeRef(pkgRef, ordinal);
+        return makeType(pkgRef, ordinal);
       }
     }
 
     if (isPrimitiveKind(kind)) {
-      return makePrimitiveTypeRef(kind);
+      return makePrimitiveType(kind);
     }
 
     throw new Error('Unreachable');
   }
 
-  async readList(t: TypeRef, pkg: ?Package): Promise<Array<any>> {
+  async readList(t: Type, pkg: ?Package): Promise<Array<any>> {
     let elemType = t.elemTypes[0];
     let list = [];
     while (!this.atEnd()) {
@@ -111,12 +111,12 @@ class JsonArrayReader {
     return list;
   }
 
-  async readSet(t: TypeRef, pkg: ?Package): Promise<Set> {
+  async readSet(t: Type, pkg: ?Package): Promise<Set> {
     let seq = await this.readList(t, pkg);
     return new Set(seq);
   }
 
-  async readMap(t: TypeRef, pkg: ?Package): Promise<Map> {
+  async readMap(t: Type, pkg: ?Package): Promise<Map> {
     let keyType = t.elemTypes[0];
     let valueType = t.elemTypes[1];
     let m = new Map();
@@ -129,11 +129,11 @@ class JsonArrayReader {
     return m;
   }
 
-  readPackage(t: TypeRef, pkg: ?Package): Package {
+  readPackage(t: Type, pkg: ?Package): Package {
     let r2 = new JsonArrayReader(this.readArray(), this._cs);
     let types = [];
     while (!r2.atEnd()) {
-      types.push(r2.readTypeRefAsValue(pkg));
+      types.push(r2.readTypeAsValue(pkg));
     }
 
     let r3 = new JsonArrayReader(this.readArray(), this._cs);
@@ -146,11 +146,11 @@ class JsonArrayReader {
   }
 
   readTopLevelValue(): Promise<any> {
-    let t = this.readTypeRefAsTag();
+    let t = this.readTypeAsTag();
     return this.readValueWithoutTag(t);
   }
 
-  readValueWithoutTag(t: TypeRef, pkg: ?Package = null): Promise<any> {
+  readValueWithoutTag(t: Type, pkg: ?Package = null): Promise<any> {
     // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
       case Kind.Blob:
@@ -171,7 +171,7 @@ class JsonArrayReader {
       case Kind.String:
         return Promise.resolve(this.readString());
       case Kind.Value: {
-        let t2 = this.readTypeRefAsTag();
+        let t2 = this.readTypeAsTag();
         return this.readValueWithoutTag(t2, pkg);
       }
       case Kind.List: {
@@ -193,8 +193,8 @@ class JsonArrayReader {
       case Kind.Enum:
       case Kind.Struct:
         throw new Error('Not allowed');
-      case Kind.TypeRef:
-        return Promise.resolve(this.readTypeRefAsValue(pkg));
+      case Kind.Type:
+        return Promise.resolve(this.readTypeAsValue(pkg));
       case Kind.Unresolved:
         return this.readUnresolvedKindToValue(t, pkg);
     }
@@ -202,7 +202,7 @@ class JsonArrayReader {
     throw new Error('Unreached');
   }
 
-  async readUnresolvedKindToValue(t: TypeRef, pkg: ?Package = null): Promise<any> {
+  async readUnresolvedKindToValue(t: Type, pkg: ?Package = null): Promise<any> {
     let pkgRef = t.packageRef;
     let ordinal = t.ordinal;
     if (!pkgRef.isEmpty()) {
@@ -224,7 +224,7 @@ class JsonArrayReader {
     return this.readStruct(typeDef, t, pkg);
   }
 
-  readTypeRefAsValue(pkg: ?Package): TypeRef {
+  readTypeAsValue(pkg: ?Package): Type {
     let k = this.readKind();
 
     switch (k) {
@@ -235,12 +235,12 @@ class JsonArrayReader {
       case Kind.Ref:
       case Kind.Set: {
         let r2 = new JsonArrayReader(this.readArray(), this._cs);
-        let elemTypes: Array<TypeRef> = [];
+        let elemTypes: Array<Type> = [];
         while (!r2.atEnd()) {
-          elemTypes.push(r2.readTypeRefAsValue());
+          elemTypes.push(r2.readTypeAsValue());
         }
 
-        return makeCompoundTypeRef(k, ...elemTypes);
+        return makeCompoundType(k, ...elemTypes);
       }
       case Kind.Struct: {
         let name = this.readString();
@@ -249,7 +249,7 @@ class JsonArrayReader {
           let fieldReader = new JsonArrayReader(this.readArray(), this._cs);
           while (!fieldReader.atEnd()) {
             let fieldName = fieldReader.readString();
-            let fieldType = fieldReader.readTypeRefAsValue(pkg);
+            let fieldType = fieldReader.readTypeAsValue(pkg);
             let optional = fieldReader.readBool();
             fields.push(new Field(fieldName, fieldType, optional));
           }
@@ -258,7 +258,7 @@ class JsonArrayReader {
 
         let fields = readFields();
         let choices = readFields();
-        return makeStructTypeRef(name, fields, choices);
+        return makeStructType(name, fields, choices);
       }
       case Kind.Unresolved: {
         let pkgRef = this.readRef();
@@ -266,22 +266,22 @@ class JsonArrayReader {
         if (ordinal === -1) {
           let namespace = this.readString();
           let name = this.readString();
-          invariant(pkgRef.isEmpty(), 'Unresolved TypeRefs may not have a package ref');
+          invariant(pkgRef.isEmpty(), 'Unresolved Types may not have a package ref');
 
-          return makeUnresolvedTypeRef(namespace, name);
+          return makeUnresolvedType(namespace, name);
         }
 
-        return makeTypeRef(pkgRef, ordinal);
+        return makeType(pkgRef, ordinal);
       }
     }
 
     invariant(isPrimitiveKind(k));
-    return makePrimitiveTypeRef(k);
+    return makePrimitiveType(k);
 
   }
 
-  async readStruct(typeDef: TypeRef, typeRef: TypeRef, pkg: Package): Promise<Struct> {
-    // TODO FixupTypeRef?
+  async readStruct(typeDef: Type, type: Type, pkg: Package): Promise<Struct> {
+    // TODO FixupType?
     let desc = typeDef.desc;
     invariant(desc instanceof StructDesc);
 
@@ -308,7 +308,7 @@ class JsonArrayReader {
       s[unionField.name] = v;
     }
 
-    return new Struct(typeRef, typeDef, s);
+    return new Struct(type, typeDef, s);
   }
 }
 

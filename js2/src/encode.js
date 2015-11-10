@@ -10,7 +10,7 @@ import type {NomsKind} from './noms_kind.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
 import {lookupPackage, Package} from './package.js';
-import {makePrimitiveTypeRef, StructDesc, TypeRef} from './type_ref.js';
+import {makePrimitiveType, StructDesc, Type} from './type.js';
 
 const typedTag = 't ';
 
@@ -43,7 +43,7 @@ class JsonArrayWriter {
     this.write(r.toString());
   }
 
-  writeTypeRefAsTag(t: TypeRef) {
+  writeTypeAsTag(t: Type) {
     let k = t.kind;
     this.writeKind(k);
     switch (k) {
@@ -54,7 +54,7 @@ class JsonArrayWriter {
       case Kind.Map:
       case Kind.Ref:
       case Kind.Set: {
-        t.elemTypes.forEach(elemType => this.writeTypeRefAsTag(elemType));
+        t.elemTypes.forEach(elemType => this.writeTypeAsTag(elemType));
         break;
       }
       case Kind.Unresolved: {
@@ -65,18 +65,18 @@ class JsonArrayWriter {
 
         let pkg = lookupPackage(pkgRef);
         if (pkg && this._cs) {
-          writeValue(pkg, pkg.typeRef, this._cs);
+          writeValue(pkg, pkg.type, this._cs);
         }
       }
     }
   }
 
-  writeTopLevel(t: TypeRef, v: any) {
-    this.writeTypeRefAsTag(t);
+  writeTopLevel(t: Type, v: any) {
+    this.writeTypeAsTag(t);
     this.writeValue(v, t);
   }
 
-  writeValue(v: any, t: TypeRef, pkg: ?Package) {
+  writeValue(v: any, t: Type, pkg: ?Package) {
     switch (t.kind) {
       case Kind.Blob:
         throw new Error('Not implemented');
@@ -121,7 +121,7 @@ class JsonArrayWriter {
       }
       case Kind.Package: {
         invariant(v instanceof Package);
-        let ptr = makePrimitiveTypeRef(Kind.TypeRef);
+        let ptr = makePrimitiveType(Kind.Type);
         let w2 = new JsonArrayWriter(this._cs);
         v.types.forEach(type => w2.writeValue(type, ptr));
         this.write(w2.array);
@@ -143,9 +143,9 @@ class JsonArrayWriter {
         this.write(w2.array);
         break;
       }
-      case Kind.TypeRef: {
-        invariant(v instanceof TypeRef);
-        this.writeTypeRefAsValue(v);
+      case Kind.Type: {
+        invariant(v instanceof Type);
+        this.writeTypeAsValue(v);
         break;
       }
       case Kind.Unresolved: {
@@ -161,7 +161,7 @@ class JsonArrayWriter {
     }
   }
 
-  writeTypeRefAsValue(t: TypeRef) {
+  writeTypeAsValue(t: Type) {
     let k = t.kind;
     this.writeKind(k);
     switch (k) {
@@ -172,7 +172,7 @@ class JsonArrayWriter {
       case Kind.Ref:
       case Kind.Set: {
         let w2 = new JsonArrayWriter(this._cs);
-        t.elemTypes.forEach(elem => w2.writeTypeRefAsValue(elem));
+        t.elemTypes.forEach(elem => w2.writeTypeAsValue(elem));
         this.write(w2.array);
         break;
       }
@@ -183,14 +183,14 @@ class JsonArrayWriter {
         let fieldWriter = new JsonArrayWriter(this._cs);
         desc.fields.forEach(field => {
           fieldWriter.write(field.name);
-          fieldWriter.writeTypeRefAsValue(field.t);
+          fieldWriter.writeTypeAsValue(field.t);
           fieldWriter.write(field.optional);
         });
         this.write(fieldWriter.array);
         let choiceWriter = new JsonArrayWriter(this._cs);
         desc.union.forEach(choice => {
           choiceWriter.write(choice.name);
-          choiceWriter.writeTypeRefAsValue(choice.t);
+          choiceWriter.writeTypeAsValue(choice.t);
           choiceWriter.write(choice.optional);
         });
         this.write(choiceWriter.array);
@@ -208,7 +208,7 @@ class JsonArrayWriter {
 
         let pkg = lookupPackage(pkgRef);
         if (pkg && this._cs) {
-          writeValue(pkg, pkg.typeRef, this._cs);
+          writeValue(pkg, pkg.type, this._cs);
         }
 
         break;
@@ -220,7 +220,7 @@ class JsonArrayWriter {
     }
   }
 
-  writeUnresolvedKindValue(v: any, t: TypeRef, pkg: Package) {
+  writeUnresolvedKindValue(v: any, t: Type, pkg: Package) {
     let typeDef = pkg.types[t.ordinal];
     switch (typeDef.kind) {
       case Kind.Enum:
@@ -235,7 +235,7 @@ class JsonArrayWriter {
     }
   }
 
-  writeStruct(s: Struct, typeRef: TypeRef, typeDef: TypeRef, pkg: Package) {
+  writeStruct(s: Struct, type: Type, typeDef: Type, pkg: Package) {
     let desc = typeDef.desc;
     invariant(desc instanceof StructDesc);
     for (let field of desc.fields) {
@@ -261,7 +261,7 @@ class JsonArrayWriter {
   }
 }
 
-function orderValuesByRef(t: TypeRef, a: Array<any>): Array<any> {
+function orderValuesByRef(t: Type, a: Array<any>): Array<any> {
   return a.map(v => {
     return {
       v: v,
@@ -274,7 +274,7 @@ function orderValuesByRef(t: TypeRef, a: Array<any>): Array<any> {
   });
 }
 
-function encodeNomsValue(v: any, t: TypeRef, cs: ?ChunkStore): Chunk {
+function encodeNomsValue(v: any, t: Type, cs: ?ChunkStore): Chunk {
   if (v instanceof Package) {
     // if (v.dependencies.length > 0) {
     //   throw new Error('Not implemented');
@@ -286,7 +286,7 @@ function encodeNomsValue(v: any, t: TypeRef, cs: ?ChunkStore): Chunk {
   return Chunk.fromString(typedTag + JSON.stringify(w.array));
 }
 
-function writeValue(v: any, t: TypeRef, cs: ChunkStore): Ref {
+function writeValue(v: any, t: Type, cs: ChunkStore): Ref {
   let chunk = encodeNomsValue(v, t, cs);
   invariant(!chunk.isEmpty());
   cs.put(chunk);

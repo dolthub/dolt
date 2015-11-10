@@ -25,7 +25,7 @@ export const Kind: {
   Set: NomsKind,
   Enum: NomsKind,
   Struct: NomsKind,
-  TypeRef: NomsKind,
+  Type: NomsKind,
   Unresolved: NomsKind,
   Package: NomsKind
 } = {
@@ -49,7 +49,7 @@ export const Kind: {
   Set: 17,
   Enum: 18,
   Struct: 19,
-  TypeRef: 20,
+  Type: 20,
   Unresolved: 21,
   Package: 22
 };
@@ -70,7 +70,7 @@ export function isPrimitiveKind(k: NomsKind): boolean {
     case Kind.String:
     case Kind.Blob:
     case Kind.Value:
-    case Kind.TypeRef:
+    case Kind.Type:
     case Kind.Package:
       return true;
     default:
