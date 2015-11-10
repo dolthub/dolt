@@ -131,6 +131,22 @@ func TestWriteMapOfMap(t *testing.T) {
 	assert.EqualValues([]interface{}{MapKind, MapKind, StringKind, Int64Kind, SetKind, BoolKind, []interface{}{[]interface{}{"a", int64(0)}, []interface{}{true}}}, w.toArray())
 }
 
+func TestWriteCompoundBlob(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+
+	r1 := ref.Parse("sha1-0000000000000000000000000000000000000001")
+	r2 := ref.Parse("sha1-0000000000000000000000000000000000000002")
+	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
+
+	v := newCompoundBlob([]metaTuple{{r1, UInt64(20)}, {r2, UInt64(40)}, {r3, UInt64(60)}}, cs)
+	w := newJsonArrayWriter(cs)
+	w.writeTopLevelValue(v)
+
+	// the order of the elements is based on the ref of the value.
+	assert.EqualValues([]interface{}{MetaSequenceKind, BlobKind, []interface{}{r1.String(), uint64(20), r2.String(), uint64(40), r3.String(), uint64(60)}}, w.toArray())
+}
+
 func TestWriteEmptyStruct(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()

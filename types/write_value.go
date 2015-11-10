@@ -38,20 +38,10 @@ func toEncodeable(v Value, cs chunks.ChunkSink) interface{} {
 	switch v := v.(type) {
 	case blobLeaf:
 		return v.Reader()
-	case compoundBlob:
-		tv := processCompoundBlob(v, cs)
-		return encNomsValue(tv, cs)
 	case Package:
 		processPackageChildren(v, cs)
 	}
 	return encNomsValue(v, cs)
-}
-
-func processCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) compoundBlobStruct {
-	return compoundBlobStructDef{
-		Offsets: cb.offsets,
-		Blobs:   cb.chunks,
-	}.New()
 }
 
 func processPackageChildren(p Package, cs chunks.ChunkSink) {

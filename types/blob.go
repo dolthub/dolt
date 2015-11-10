@@ -6,7 +6,6 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/attic-labs/buzhash"
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
 )
 
 const (
@@ -38,8 +37,7 @@ func NewMemoryBlob(r io.Reader) (Blob, error) {
 
 func NewBlob(r io.Reader, cs chunks.ChunkStore) (Blob, error) {
 	length := uint64(0)
-	offsets := []uint64{}
-	chunks := []ref.Ref{}
+	tuples := metaSequenceData{}
 	var blob blobLeaf
 	for {
 		buf := bytes.Buffer{}
@@ -54,9 +52,9 @@ func NewBlob(r io.Reader, cs chunks.ChunkStore) (Blob, error) {
 		}
 
 		length += n
-		offsets = append(offsets, length)
 		blob = newBlobLeaf(buf.Bytes())
-		chunks = append(chunks, WriteValue(blob, cs))
+		ref := WriteValue(blob, cs)
+		tuples = append(tuples, metaTuple{ref, UInt64(length)})
 
 		if err == io.EOF {
 			break
@@ -67,13 +65,11 @@ func NewBlob(r io.Reader, cs chunks.ChunkStore) (Blob, error) {
 		return newBlobLeaf([]byte{}), nil
 	}
 
-	if len(chunks) == 1 {
+	if len(tuples) == 1 {
 		return blob, nil
 	}
 
-	co := compoundObject{offsets, chunks, &ref.Ref{}, cs}
-	co = splitCompoundObject(co, cs)
-	return compoundBlob{co}, nil
+	return splitCompoundBlob(newCompoundBlob(tuples, cs), cs), nil
 }
 
 // copyChunk copies from src to dst until a chunk boundary is found.

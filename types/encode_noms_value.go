@@ -57,6 +57,9 @@ func (w *jsonArrayWriter) writeTypeRefAsTag(t Type) {
 		if pkg != nil {
 			writeChildValueInternal(*pkg, w.cs)
 		}
+	case MetaSequenceKind:
+		concreteType := t.Desc.(CompoundDesc).ElemTypes[0]
+		w.writeTypeRefAsTag(concreteType)
 	}
 }
 
@@ -126,6 +129,16 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 	case ValueKind:
 		w.writeTypeRefAsTag(v.Type())
 		w.writeValue(v, v.Type(), pkg)
+	case MetaSequenceKind:
+		w2 := newJsonArrayWriter(w.cs)
+		indexType := indexTypeForMetaSequence(tr)
+		tr = fixupTypeRef(tr, pkg)
+		m := internalValueFromTypeRef(v, tr)
+		for _, tuple := range getDataFromMetaSequence(m) {
+			w2.writeRef(tuple.ref)
+			w2.writeValue(tuple.value, indexType, pkg)
+		}
+		w.write(w2.toArray())
 	default:
 		d.Chk.Fail("Unknown NomsKind")
 	}
@@ -142,7 +155,7 @@ func (w *jsonArrayWriter) writeTypeRefAsValue(v Type) {
 			w2.write(id)
 		}
 		w.write(w2.toArray())
-	case ListKind, MapKind, RefKind, SetKind:
+	case ListKind, MapKind, RefKind, SetKind, MetaSequenceKind:
 		w2 := newJsonArrayWriter(w.cs)
 		for _, elemType := range v.Desc.(CompoundDesc).ElemTypes {
 			w2.writeTypeRefAsValue(elemType)
