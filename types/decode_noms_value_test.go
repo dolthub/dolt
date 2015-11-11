@@ -188,6 +188,25 @@ func TestReadValueSetOfUInt16(t *testing.T) {
 	assert.True(s2.Equals(s))
 }
 
+func TestReadCompoundBlob(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+
+	r1 := ref.Parse("sha1-0000000000000000000000000000000000000001")
+	r2 := ref.Parse("sha1-0000000000000000000000000000000000000002")
+	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
+	a := parseJson(`[%d, %d, ["%s", 20, "%s", 40, "%s", 60]]`, MetaSequenceKind, BlobKind, r1, r2, r3)
+	r := newJsonArrayReader(a, cs)
+
+	m := r.readTopLevelValue()
+	_, ok := m.(compoundBlob)
+	assert.True(ok)
+	m2 := newCompoundBlob([]metaTuple{{r1, UInt64(20)}, {r2, UInt64(40)}, {r3, UInt64(60)}}, cs)
+
+	assert.True(m.Type().Equals(m2.Type()))
+	assert.Equal(m.Ref().String(), m2.Ref().String())
+}
+
 func TestReadStruct(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()

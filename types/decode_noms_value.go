@@ -59,7 +59,7 @@ func (r *jsonArrayReader) readRef() ref.Ref {
 func (r *jsonArrayReader) readTypeRefAsTag() Type {
 	kind := r.readKind()
 	switch kind {
-	case ListKind, SetKind, RefKind:
+	case ListKind, SetKind, RefKind, MetaSequenceKind:
 		elemType := r.readTypeRefAsTag()
 		return MakeCompoundTypeRef(kind, elemType)
 	case MapKind:
@@ -133,6 +133,33 @@ func (r *jsonArrayReader) readMap(t Type, pkg *Package) Value {
 	t = fixupTypeRef(t, pkg)
 	// TODO: Skip the Map wrapper.
 	return valueFromTypeRef(newMapFromData(data, t), t)
+}
+
+func indexTypeForMetaSequence(t Type) Type {
+	desc := t.Desc.(CompoundDesc)
+	concreteType := desc.ElemTypes[0]
+
+	switch concreteType.Kind() {
+	case MapKind, SetKind:
+		return concreteType.Desc.(CompoundDesc).ElemTypes[0]
+	case BlobKind, ListKind:
+		return MakePrimitiveTypeRef(UInt64Kind)
+	}
+
+	panic("unreached")
+}
+
+func (r *jsonArrayReader) readMetaSequence(t Type, pkg *Package) Value {
+	data := metaSequenceData{}
+	indexType := indexTypeForMetaSequence(t)
+	for !r.atEnd() {
+		ref := r.readRef()
+		v := r.readValueWithoutTag(indexType, pkg)
+		data = append(data, metaTuple{ref, v})
+	}
+
+	t = fixupTypeRef(t, pkg)
+	return newMetaSequenceFromData(data, t, r.cs)
 }
 
 func (r *jsonArrayReader) readEnum(t Type, pkg *Package) Value {
@@ -218,6 +245,9 @@ func (r *jsonArrayReader) readValueWithoutTag(t Type, pkg *Package) Value {
 		return r.readTypeRefKindToValue(t, pkg)
 	case UnresolvedKind:
 		return r.readUnresolvedKindToValue(t, pkg)
+	case MetaSequenceKind:
+		r2 := newJsonArrayReader(r.readArray(), r.cs)
+		return r2.readMetaSequence(t, pkg)
 	}
 	panic("not reachable")
 }
@@ -264,7 +294,7 @@ func (r *jsonArrayReader) readTypeRefAsValue(pkg *Package) Type {
 			ids = append(ids, r2.readString())
 		}
 		return MakeEnumTypeRef(name, ids...)
-	case ListKind, MapKind, RefKind, SetKind:
+	case ListKind, MapKind, RefKind, SetKind, MetaSequenceKind:
 		r2 := newJsonArrayReader(r.readArray(), r.cs)
 		elemTypes := []Type{}
 		for !r2.atEnd() {

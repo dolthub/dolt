@@ -43,7 +43,7 @@ func TestEnsureRef(t *testing.T) {
 	}()
 
 	bl := newBlobLeaf([]byte("hi"))
-	cb := newCompoundBlob([]uint64{2}, []ref.Ref{WriteValue(bl, cs)}, cs)
+	cb := newCompoundBlob([]metaTuple{{WriteValue(bl, cs), UInt64(uint64(2))}}, cs)
 
 	values := []Value{
 		newBlobLeaf([]byte{}),

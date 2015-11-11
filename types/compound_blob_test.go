@@ -11,21 +11,18 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
 )
 
 func getTestCompoundBlob(datas ...string) compoundBlob {
-	blobs := make([]ref.Ref, len(datas))
-	offsets := make([]uint64, len(datas))
+	tuples := make([]metaTuple, len(datas))
 	length := uint64(0)
 	ms := chunks.NewMemoryStore()
 	for i, s := range datas {
 		b, _ := NewBlob(bytes.NewBufferString(s), ms)
-		blobs[i] = WriteValue(b, ms)
 		length += uint64(len(s))
-		offsets[i] = length
+		tuples[i] = metaTuple{WriteValue(b, ms), UInt64(length)}
 	}
-	return newCompoundBlob(offsets, blobs, ms)
+	return newCompoundBlob(tuples, ms)
 }
 
 type randReader struct {
@@ -113,7 +110,7 @@ func TestCompoundBlobChunks(t *testing.T) {
 
 	bl1 := newBlobLeaf([]byte("hello"))
 	bl2 := newBlobLeaf([]byte("world"))
-	cb = newCompoundBlob([]uint64{5, 10}, []ref.Ref{WriteValue(bl1, cs), WriteValue(bl2, cs)}, cs)
+	cb = newCompoundBlob([]metaTuple{{WriteValue(bl1, cs), UInt64(uint64(5))}, {WriteValue(bl2, cs), UInt64(uint64(10))}}, cs)
 	assert.Equal(2, len(cb.Chunks()))
 }
 
@@ -139,15 +136,15 @@ func TestCompoundBlobSameChunksWithPrefix(t *testing.T) {
 	//   chunks 31
 
 	assert.Equal(cb2.Len(), cb1.Len()+uint64(6))
-	assert.Equal(2, len(cb1.chunks))
-	assert.Equal(2, len(cb2.chunks))
-	assert.NotEqual(cb1.chunks[0], cb2.chunks[0])
-	assert.Equal(cb1.chunks[1], cb2.chunks[1])
+	assert.Equal(2, len(cb1.tuples))
+	assert.Equal(2, len(cb2.tuples))
+	assert.NotEqual(cb1.tuples[0].ref, cb2.tuples[0].ref)
+	assert.Equal(cb1.tuples[1].ref, cb2.tuples[1].ref)
 
-	chunks1 := ReadValue(cb1.chunks[0], cb1.cs).(compoundBlob).chunks
-	chunks2 := ReadValue(cb2.chunks[0], cb2.cs).(compoundBlob).chunks
-	assert.NotEqual(chunks1[0], chunks2[0])
-	assert.Equal(chunks1[1], chunks2[1])
+	tuples1 := ReadValue(cb1.tuples[0].ref, cb1.cs).(compoundBlob).tuples
+	tuples2 := ReadValue(cb2.tuples[0].ref, cb2.cs).(compoundBlob).tuples
+	assert.NotEqual(tuples1[0].ref, tuples2[0].ref)
+	assert.Equal(tuples1[1].ref, tuples2[1].ref)
 }
 
 func TestCompoundBlobSameChunksWithSuffix(t *testing.T) {
@@ -172,16 +169,16 @@ func TestCompoundBlobSameChunksWithSuffix(t *testing.T) {
 	//   chunks 31 - only last chunk is different
 
 	assert.Equal(cb2.Len(), cb1.Len()+uint64(6))
-	assert.Equal(2, len(cb1.chunks))
-	assert.Equal(len(cb1.chunks), len(cb2.chunks))
-	assert.Equal(cb1.chunks[0], cb2.chunks[0])
-	assert.NotEqual(cb1.chunks[1], cb2.chunks[1])
+	assert.Equal(2, len(cb1.tuples))
+	assert.Equal(len(cb1.tuples), len(cb2.tuples))
+	assert.Equal(cb1.tuples[0].ref, cb2.tuples[0].ref)
+	assert.NotEqual(cb1.tuples[1].ref, cb2.tuples[1].ref)
 
-	chunks1 := ReadValue(cb1.chunks[1], cb1.cs).(compoundBlob).chunks
-	chunks2 := ReadValue(cb2.chunks[1], cb2.cs).(compoundBlob).chunks
-	assert.Equal(chunks1[0], chunks2[0])
-	assert.Equal(chunks1[len(chunks1)-2], chunks2[len(chunks2)-2])
-	assert.NotEqual(chunks1[len(chunks1)-1], chunks2[len(chunks2)-1])
+	tuples1 := ReadValue(cb1.tuples[1].ref, cb1.cs).(compoundBlob).tuples
+	tuples2 := ReadValue(cb2.tuples[1].ref, cb2.cs).(compoundBlob).tuples
+	assert.Equal(tuples1[0].ref, tuples2[0].ref)
+	assert.Equal(tuples1[len(tuples1)-2].ref, tuples2[len(tuples2)-2].ref)
+	assert.NotEqual(tuples1[len(tuples1)-1].ref, tuples2[len(tuples2)-1].ref)
 }
 
 func printBlob(b Blob, indent int) {
@@ -190,10 +187,10 @@ func printBlob(b Blob, indent int) {
 	case blobLeaf:
 		fmt.Printf("%sblobLeaf, len: %d\n", indentString, b.Len())
 	case compoundBlob:
-		fmt.Printf("%scompoundBlob, len: %d, chunks: %d\n", indentString, b.Len(), len(b.offsets))
+		fmt.Printf("%scompoundBlob, len: %d, chunks: %d\n", indentString, b.Len(), len(b.tuples))
 		indent++
-		for _, sb := range b.chunks {
-			printBlob(ReadValue(sb, b.cs).(Blob), indent)
+		for _, t := range b.tuples {
+			printBlob(ReadValue(t.ref, b.cs).(Blob), indent)
 		}
 	}
 }
@@ -202,5 +199,5 @@ func TestCompoundBlobTypeRef(t *testing.T) {
 	assert := assert.New(t)
 
 	cb := getTestCompoundBlob("hello", "world")
-	assert.True(cb.Type().Equals(MakePrimitiveTypeRef(BlobKind)))
+	assert.True(cb.Type().Equals(MakeCompoundTypeRef(MetaSequenceKind, MakePrimitiveTypeRef(BlobKind))))
 }

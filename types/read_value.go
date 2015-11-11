@@ -26,17 +26,7 @@ func ReadValue(r ref.Ref, cs chunks.ChunkSource) Value {
 		d.Chk.NoError(err)
 		return newBlobLeaf(data)
 	case []interface{}:
-		tv := fromTypedEncodeable(v, cs)
-		if tv, ok := tv.(compoundBlobStruct); ok {
-			return convertToCompoundBlob(tv, cs)
-		}
-		return tv
+		return fromTypedEncodeable(v, cs)
 	}
 	panic("Unreachable")
-}
-
-func convertToCompoundBlob(cbs compoundBlobStruct, cs chunks.ChunkSource) compoundBlob {
-	offsets := cbs.Offsets().Def()
-	chunks := cbs.Blobs().Def()
-	return newCompoundBlob(offsets, chunks, cs)
 }
