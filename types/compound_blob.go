@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/attic-labs/buzhash"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -166,69 +165,4 @@ func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
 func (cbr *compoundBlobReader) updateReader() {
 	cbr.currentReader = ReadValue(cbr.cursor.current().ref, cbr.cs).(blobLeaf).Reader()
 	cbr.currentReader.Seek(int64(cbr.chunkOffset), 0)
-}
-
-// splitCompoundBlob chunks a compound list/blob into smaller compound
-// lists/blobs. If no split was made the same compoundBlob is returned.
-func splitCompoundBlob(cb compoundBlob, cs chunks.ChunkSink) compoundBlob {
-	tuples := metaSequenceData{}
-
-	startIndex := uint64(0)
-	h := buzhash.NewBuzHash(objectWindowSize)
-
-	for i := 0; i < len(cb.tuples); i++ {
-		c := cb.tuples[i].ref
-		digest := c.Digest()
-		_, err := h.Write(digest[:])
-		d.Chk.NoError(err)
-		if h.Sum32()&objectPattern == objectPattern {
-			h = buzhash.NewBuzHash(objectWindowSize)
-			c := makeSubObject(cb, startIndex, uint64(i)+1, cs)
-			startIndex = uint64(i) + 1
-			tuples = append(tuples, metaTuple{c, cb.tuples[i].value})
-		}
-	}
-
-	// No split, use original.
-	if startIndex == 0 {
-		return cb
-	}
-
-	// Add remaining.
-	if startIndex != uint64(len(cb.tuples)) {
-		c := makeSubObject(cb, startIndex, uint64(len(cb.tuples)), cs)
-		tuples = append(tuples, metaTuple{c, cb.tuples[len(cb.tuples)-1].value})
-	}
-
-	// Single chunk, use original.
-	if len(tuples) == 1 {
-		return cb
-	}
-
-	// It is possible that the splitting the object produces the exact same
-	// compound object.
-	if len(tuples) == len(cb.tuples) {
-		return cb
-	}
-
-	// Split again.
-	return splitCompoundBlob(newCompoundBlob(tuples, cb.cs), cs)
-}
-
-func makeSubObject(cb compoundBlob, startIndex, endIndex uint64, cs chunks.ChunkSink) ref.Ref {
-	d.Chk.True(endIndex-startIndex > 0)
-	if endIndex-startIndex == 1 {
-		return cb.tuples[startIndex].ref
-	}
-
-	tuples := make([]metaTuple, endIndex-startIndex)
-	copy(tuples, cb.tuples[startIndex:endIndex])
-	startOffset := uint64(0)
-	if startIndex > 0 {
-		startOffset = cb.tuples[startIndex-1].uint64Value()
-	}
-	for i := startIndex; i < endIndex; i++ {
-		tuples[i-startIndex].value = UInt64(cb.tuples[i].uint64Value() - startOffset)
-	}
-	return WriteValue(newCompoundBlob(tuples, cb.cs), cs)
 }

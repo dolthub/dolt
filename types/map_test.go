@@ -222,8 +222,8 @@ func TestMapEquals(t *testing.T) {
 
 func TestMapNotStringKeys(t *testing.T) {
 	assert := assert.New(t)
-	b1, _ := NewMemoryBlob(bytes.NewBufferString("blob1"))
-	b2, _ := NewMemoryBlob(bytes.NewBufferString("blob2"))
+	b1 := NewMemoryBlob(bytes.NewBufferString("blob1"))
+	b2 := NewMemoryBlob(bytes.NewBufferString("blob2"))
 	l := []Value{
 		Bool(true), NewString("true"),
 		Bool(false), NewString("false"),

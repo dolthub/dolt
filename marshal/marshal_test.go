@@ -462,11 +462,7 @@ var pallValue = All{
 
 // Used in creating canned marshaled values below.
 func makeNewBlob(b []byte) types.Blob {
-	blob, err := types.NewMemoryBlob(bytes.NewBuffer(b))
-	if err != nil {
-		panic(err) // Sigh
-	}
-	return blob
+	return types.NewMemoryBlob(bytes.NewBuffer(b))
 }
 
 // Canned marshaled version of allValue

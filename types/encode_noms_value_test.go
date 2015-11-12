@@ -35,8 +35,7 @@ func TestWritePrimitives(t *testing.T) {
 
 	f(StringKind, NewString("hi"), "hi")
 
-	blob, err := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
-	assert.NoError(err)
+	blob := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	f(BlobKind, blob, "AAE=")
 }
 
@@ -283,7 +282,7 @@ func TestWriteStructWithBlob(t *testing.T) {
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typeRef := MakeTypeRef(pkgRef, 0)
-	b, _ := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
+	b := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	v := NewStruct(typeRef, typeDef, structData{"b": b})
 
 	w := newJsonArrayWriter(cs)
@@ -327,7 +326,7 @@ func TestWriteListOfValue(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	tref := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))
-	blob, _ := NewMemoryBlob(bytes.NewBuffer([]byte{0x01}))
+	blob := NewMemoryBlob(bytes.NewBuffer([]byte{0x01}))
 	v := NewList(
 		Bool(true),
 		UInt8(1),

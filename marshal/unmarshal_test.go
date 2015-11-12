@@ -411,11 +411,7 @@ func byteSlice(b byte, times int) (out []byte) {
 }
 
 func blob(b ...byte) types.Blob {
-	blob, err := types.NewMemoryBlob(bytes.NewReader(b))
-	if err != nil {
-		panic(err)
-	}
-	return blob
+	return types.NewMemoryBlob(bytes.NewReader(b))
 }
 
 func list(l ...int) types.List {
