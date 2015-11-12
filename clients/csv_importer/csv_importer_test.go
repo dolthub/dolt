@@ -40,6 +40,8 @@ func (s *testSuite) TestCSVImporter() {
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, 1, false)
 	ds := dataset.NewDataset(datas.NewDataStore(cs), "csv")
+	defer ds.Close()
+
 	l := ds.Head().Value().(types.List)
 	s.Equal(uint64(100), l.Len())
 
@@ -52,4 +54,58 @@ func (s *testSuite) TestCSVImporter() {
 		s.Equal(types.NewString(fmt.Sprintf("%d", i)), m.Get(types.NewString("b")))
 		i++
 	})
+}
+
+func (s *testSuite) TestCSVImporterWithPipe() {
+	oldDelimiter := delimiter
+	newDelimiter := "|"
+	delimiter = &newDelimiter
+	defer func () { delimiter = oldDelimiter }()
+
+	input, err := ioutil.TempFile(s.TempDir, "")
+	d.Chk.NoError(err)
+
+	_, err = input.WriteString("a|b\n1|2\n")
+	d.Chk.NoError(err)
+	out := s.Run(main, []string{"-ds", "csv", input.Name()})
+	s.Equal("", out)
+
+	cs := chunks.NewLevelDBStore(s.LdbDir, 1, false)
+	ds := dataset.NewDataset(datas.NewDataStore(cs), "csv")
+	defer ds.Close()
+
+	l := ds.Head().Value().(types.List)
+	s.Equal(uint64(1), l.Len())
+	v := l.Get(0)
+	m := types.ReadValue(v.(types.Ref).TargetRef(), cs).(types.Map)
+	s.Equal(uint64(2), m.Len())
+	s.Equal(types.NewString("1"), m.Get(types.NewString("a")))
+	s.Equal(types.NewString("2"), m.Get(types.NewString("b")))
+}
+
+func (s *testSuite) TestCSVImporterWithExternalHeader() {
+	oldHeader := header
+	newHeader := "x,y"
+	header = &newHeader
+	defer func () { header = oldHeader }()
+
+	input, err := ioutil.TempFile(s.TempDir, "")
+	d.Chk.NoError(err)
+
+	_, err = input.WriteString("7,8\n")
+	d.Chk.NoError(err)
+	out := s.Run(main, []string{"-ds", "csv", input.Name()})
+	s.Equal("", out)
+
+	cs := chunks.NewLevelDBStore(s.LdbDir, 1, false)
+	ds := dataset.NewDataset(datas.NewDataStore(cs), "csv")
+	defer ds.Close()
+
+	l := ds.Head().Value().(types.List)
+	s.Equal(uint64(1), l.Len())
+	v := l.Get(0)
+	m := types.ReadValue(v.(types.Ref).TargetRef(), cs).(types.Map)
+	s.Equal(uint64(2), m.Len())
+	s.Equal(types.NewString("7"), m.Get(types.NewString("x")))
+	s.Equal(types.NewString("8"), m.Get(types.NewString("y")))
 }
