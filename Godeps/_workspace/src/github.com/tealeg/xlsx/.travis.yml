@@ -1,0 +1,8 @@
+language: go
+
+install:
+  - go get -d -t -v ./... && go build -v ./...
+
+go:
+  - 1.2
+  - 1.3

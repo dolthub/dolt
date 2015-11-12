@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/attic-labs/noms",
-	"GoVersion": "go1.5.1",
+	"GoVersion": "go1.5",
 	"Packages": [
 		"./..."
 	],
@@ -71,6 +71,11 @@
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
 			"Rev": "1a9d62f03ea92815b46fcaab357cfd4df264b1a0"
+		},
+		{
+			"ImportPath": "github.com/tealeg/xlsx",
+			"Comment": "go1.1.2-432-g00c8018",
+			"Rev": "00c80184a679ba367d01240880c358b40b8a53f8"
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",

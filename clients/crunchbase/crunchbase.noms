@@ -1,0 +1,34 @@
+struct Company {
+    Permalink:          String
+    Name:               String
+    HomepageUrl:        String
+    CategoryList:       Set(String)
+    Market:             String
+    FundingTotalUsd:    Float64
+    Status:             String
+    CountryCode:        String
+    StateCode:          String
+    Region:             String
+    City:               String
+    FundingRounds:      UInt16
+    FoundedAt:          String
+    FoundedMonth:       String
+    FoundedYear:        String
+    FirstFundingAt:     String
+    LastFundingAt:      String
+    Rounds:             Set(Ref(Round))
+}
+
+struct Round {
+    CompanyPermalink:       String
+    FundingRoundPermalink:  String
+    FundingRoundType:       String
+    FundingRoundCode:       String
+    FundedAt:               String
+    FundedMonth:            String
+    FundedQuarter:          String
+    FundedYear:             UInt16
+    RaisedAmountUsd:        Float64
+}
+
+using Map(String, Ref(Company))
