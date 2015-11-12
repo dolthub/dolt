@@ -9,7 +9,9 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
@@ -18,6 +20,11 @@ import (
 
 var (
 	p = flag.Uint("p", 512, "parallelism")
+	dsFlags = dataset.NewFlags()
+	// Actually the delimiter uses runes, which can be multiple charcter long.
+	// https://blog.golang.org/strings
+	delimiter = flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
+	header = flag.String("header", "", "header row. If empty, we'll use the first row of the file")
 )
 
 type valuesWithIndex struct {
@@ -45,7 +52,6 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	dsFlags := dataset.NewFlags()
 	flag.Parse()
 	ds := dsFlags.CreateDataset()
 	if ds == nil {
@@ -53,6 +59,12 @@ func main() {
 		return
 	}
 	defer ds.Close()
+
+	if flag.NArg() != 1 {
+		fmt.Printf("Expected exactly one parameter (path) after flags, but you have %d. Maybe you put a flag after the path?\n", flag.NArg())
+		flag.Usage()
+		return
+	}
 
 	path := flag.Arg(0)
 	if ds == nil || path == "" {
@@ -64,7 +76,23 @@ func main() {
 	d.Exp.NoError(err)
 	defer res.Close()
 
-	r := csv.NewReader(res)
+	var input io.Reader
+	if len(*header) == 0 {
+		input = res
+	} else {
+		input = io.MultiReader(
+			strings.NewReader(*header + "\n"),
+			res)
+	}
+
+	comma, err := getDelimiter()
+	if err != nil {
+		fmt.Println(err.Error())
+		flag.Usage()
+		return
+	}
+	r := csv.NewReader(input)
+	r.Comma = comma
 	r.FieldsPerRecord = 0 // Let first row determine the number of fields.
 
 	keys, err := r.Read()
@@ -132,4 +160,21 @@ func main() {
 	value := types.NewList(refs...)
 	_, ok := ds.Commit(value)
 	d.Exp.True(ok, "Could not commit due to conflicting edit")
+}
+
+// Returns the rune contained in *delimiter or an error.
+func getDelimiter() (rune, error) {
+	dlimLen := len(*delimiter)
+	if dlimLen == 0 {
+		return 0, fmt.Errorf("delimiter flag must contain exactly one character (rune), not an empty string")
+	}
+
+	d, runeSize := utf8.DecodeRuneInString(*delimiter)
+	if d == utf8.RuneError {
+		return 0, fmt.Errorf("Invalid utf8 string in delimiter flag: %s", *delimiter)
+	}
+	if dlimLen != runeSize {
+		return 0, fmt.Errorf("delimiter flag is too long. It must contain exactly one character (rune), but instead it is: %s", *delimiter)
+	}
+	return d, nil
 }
