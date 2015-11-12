@@ -5,6 +5,8 @@
 import classNames from 'classnames';
 import React from 'react';
 
+type DefaultProps = {};
+
 type Props = {
   canOpen: boolean,
   isOpen: boolean,
@@ -23,11 +25,7 @@ type State = {
   y: number
 }
 
-export default class Node extends React.Component {
-  static defaultProps: {};
-  props: Props;
-  state: State;
-
+export default class Node extends React.Component<DefaultProps, Props, State> {
   constructor(props: Props) {
     super(props);
 
@@ -35,10 +33,6 @@ export default class Node extends React.Component {
       x: this.props.fromX,
       y: this.props.fromY
     };
-  }
-
-  setState(state: State) {
-    super.setState(state);
   }
 
   render(): React.Element {
@@ -70,7 +64,7 @@ export default class Node extends React.Component {
     );
   }
 
-  getShape() {
+  getShape() : React.Element {
     let className = classNames('icon', {open:this.props.isOpen});
     switch (this.props.shape) {
       case 'circle':
@@ -81,5 +75,6 @@ export default class Node extends React.Component {
       case 'triangle':
         return <polygon className={className} points='0,-4.5 4.5,4.5 -4.5,4.5' rx='1.35' ry='1.35'/>;
     }
+    throw new Error('unreachable');
   }
 }

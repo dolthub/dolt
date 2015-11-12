@@ -18,6 +18,8 @@ function feetToPixels(f: number): number {
   return 0.8 * f * BASE_PX / BASE_FEET;
 }
 
+type DefaultProps = {};
+
 type Props = {
   pitchListRef: Ref,
   httpStore: HttpStore
@@ -28,11 +30,7 @@ type State = {
   pitchList: ?Array<Struct>
 };
 
-export default class HeatMap extends React.Component {
-  static defaultProps: {};
-  props: Props;
-  state: State;
-
+export default class HeatMap extends React.Component<DefaultProps, Props, State> {
   constructor(props: Props) {
     super(props);
 
@@ -40,10 +38,6 @@ export default class HeatMap extends React.Component {
       loaded: false,
       pitchList: null
     };
-  }
-
-  setState(state: State) {
-    super.setState(state);
   }
 
   async loadIfNeeded(): Promise<void> {
