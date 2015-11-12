@@ -1,40 +1,33 @@
+/* @flow */
+
 'use strict';
 
-var Immutable = require('immutable');
-var noms = require('noms');
-var queryString = require('query-string');
-var Photo = require('./photo.js');
-var React = require('react');
-var Root = require('./root.js');
+import {HttpStore} from 'noms';
+import queryString from 'query-string';
+import React from 'react'; // eslint-disable-line no-unused-vars
+import ReactDOM from 'react-dom';
+import Root from './root.js';
 
-window.onload =
-    window.onhashchange = render;
+window.onload = window.onhashchange = render;
 
-function updateQuery(qs) {
-  location.hash = queryString.stringify(qs.toObject());
+function updateQuery(qs: {[key: string]: string}) {
+  location.hash = queryString.stringify(qs);
 }
 
 function render() {
-  var qs = queryString.parse(location.hash);
-  var target = document.getElementById('root');
+  let qs = queryString.parse(location.hash);
+  let target = document.getElementById('root');
 
+  let nomsServer;
   if (qs.server) {
-    noms.setServer(qs.server);
+    nomsServer = qs.server;
+  } else {
+    nomsServer = `${location.protocol}//${location.hostname}:8000`;
   }
 
-  if (qs.img) {
-    Photo.setServer(qs.img);
-  }
+  let store = new HttpStore(nomsServer);
 
-  // NOTE: This actually does a fetch, so if render() starts getting called
-  // more frequently (e.g., in response to window resize), then this should
-  // get moved someplace else.
-  var pRoot = noms.getRoot()
-      .then(ref => noms.readValue(ref, noms.getChunk));
-
-  React.render(
-    <Root
-      qs={Immutable.Map(qs)}
-      pRoot={pRoot}
-      updateQuery={updateQuery}/>, target);
+  ReactDOM.render(
+      <Root qs={qs} store={store} updateQuery={updateQuery}/>,
+      target);
 }

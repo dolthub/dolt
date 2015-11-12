@@ -1,101 +1,126 @@
+/* @flow */
+
 'use strict';
 
-var DataSetPicker = require('./datasetpicker.js');
-var Immutable = require('immutable');
-var ImmutableRenderMixin = require('react-immutable-render-mixin');
-var noms = require('noms')
-var React = require('react');
-var SlideShow = require('./slideshow.js');
-var TagChooser = require('./tagchooser.js');
+import {readValue} from 'noms';
+import DatasetPicker from './datasetpicker.js';
+import React from 'react';
+import SlideShow from './slideshow.js';
+import TagChooser from './tagchooser.js';
+import type {ChunkStore, Ref} from 'noms';
 
-var Root = React.createClass({
-  mixins: [ImmutableRenderMixin],
+type DefaultProps = {};
 
-  propTypes: {
-    pRoot: React.PropTypes.instanceOf(Promise),
-    qs: React.PropTypes.instanceOf(Immutable.Map),
-    updateQuery: React.PropTypes.func.isRequired,
-  },
+type QueryStringObject = {[key: string]: string};
 
-  getInitialState: function() {
-    return {
-      selected: Immutable.Set(),
-      selectedPhotos: Immutable.List(),
+type Props = {
+  store: ChunkStore,
+  qs: QueryStringObject,
+  updateQuery: (qs: QueryStringObject) => void
+};
+
+type State = {
+  selectedTags: Set<string>,
+  selectedPhotos: Array<Ref>,
+  tags: Array<string>
+};
+
+export default class Root extends React.Component<DefaultProps, Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      selectedTags: new Set(),
+      selectedPhotos: [],
+      tags: []
     };
-  },
+  }
 
-  handleDataSetPicked: function(ds) {
-    this.props.updateQuery(this.props.qs.set('ds', ds));
-  },
+  async _updateState(props: Props) : Promise<void> {
+    let selectedTags = this.getSelectedTags(props);
+    let tags = [];
+    let selectedPhotos: Array<Ref> = [];
 
-  getSelectedTags: function() {
-    var tags = this.props.qs.get('tags');
-    if (tags) {
-      tags = tags.split(',');
-    } else {
-      tags = [];
-    }
-    return Immutable.Set(tags);
-  },
-
-  setSelectedPhotos: function(ds, selectedTags) {
-    ds
-      .then(head => head.get('value').deref())
-      .then(tags => {
-        return Promise.all(
-          tags.filter((v, t) => selectedTags.has(t))
-            .valueSeq()
-            .map(ref => ref.deref()))
-      }).then(sets => {
-        this.setState({
-          selectedPhotos:
-            Immutable.List(
-              Immutable.Set(sets[0])
-                  .intersect(...sets)
-                  // This sorts the photos deterministically, by the ref of their image
-                  // blob.
-                  // TODO: Sort by create date if it ends up that the common image type
-                  // has a create date.
-                  .sort((a, b) => a.ref < b.ref)
-            )
-        });
-      });
-  },
-
-  handleTagsChange: function(tags) {
-    this.props.updateQuery(this.props.qs.set('tags', tags.toArray().join(',')));
-  },
-
-  handleTagsConfirm: function() {
-    this.props.updateQuery(this.props.qs.set('show', 1));
-  },
-
-  render: function() {
-    if (!this.props.qs.get('ds')) {
-      return <DataSetPicker pRoot={this.props.pRoot} onChange={this.handleDataSetPicked}/>
+    if (props.qs.ds) {
+      let {store} = props;
+      let rootRef = await props.store.getRoot();
+      let datasets = await readValue(rootRef, props.store);
+      let commitRef = datasets.get(props.qs.ds);
+      let commit = await readValue(commitRef, store);
+      let v = commit.get('value');
+      if (v instanceof Map) {
+        let seenRefs: Set<string> = new Set();
+        for (let [tag, value] of v) {
+          tags.push(tag);
+          if (selectedTags.has(tag) && value instanceof Set) {
+            for (let r of value) {
+              let rs = r.toString();
+              if (!seenRefs.has(rs)) {
+                seenRefs.add(rs);
+                selectedPhotos.push(r);
+              }
+            }
+          }
+        }
+        // This sorts the photos deterministically, by the ref
+        // TODO: Sort by create date if it ends up that the common image type
+        // has a create date.
+        selectedPhotos.sort((a, b) => a.compare(b));
+        tags.sort();
+      }
     }
 
-    var dataset = noms.getDataset(this.props.pRoot, this.props.qs.get('ds'))
-      .then(ref => ref.deref());
-    var selectedTags = this.getSelectedTags();
+    this.setState({selectedTags, tags, selectedPhotos});
+  }
 
-    this.setSelectedPhotos(dataset, selectedTags);
+  componentWillMount() {
+    this._updateState(this.props);
+  }
 
-    if (!this.props.qs.get('show') || selectedTags.isEmpty()) {
-      return (
-        <TagChooser
-          ds={dataset}
+  componentWillReceiveProps(props: Props) {
+    this._updateState(props);
+  }
+
+  handleDataSetPicked(ds: string) {
+    let qs = Object.assign(this.props.qs);
+    qs['ds'] = ds;
+    this.props.updateQuery(qs);
+  }
+
+  getSelectedTags(props: Props) : Set<string> {
+    let tags = props.qs['tags'];
+    if (!tags) {
+      return new Set();
+    }
+    return new Set(tags.split(','));
+  }
+
+  handleTagsChange(selectedTags: Set<string>) {
+    // FIXME: https://github.com/facebook/flow/issues/1059
+    let workaround: any = selectedTags;
+    this.props.qs['tags'] = [...workaround].join(',');
+    this.props.updateQuery(this.props.qs);
+  }
+
+  handleTagsConfirm() {
+    this.props.qs['show'] = '1';
+    this.props.updateQuery(this.props.qs);
+  }
+
+  render() : React.Element {
+    if (!this.props.qs['ds']) {
+      return <DatasetPicker store={this.props.store} onChange={ds => this.handleDataSetPicked(ds)}/>;
+    }
+
+    if (!this.props.qs['show'] || this.state.selectedTags.size === 0) {
+      return <TagChooser
+          store={this.props.store}
+          tags={this.state.tags}
           selectedPhotos={this.state.selectedPhotos}
-          selectedTags={this.getSelectedTags()}
-          onChange={this.handleTagsChange}
-          onConfirm={this.handleTagsConfirm}/>
-      );
+          selectedTags={this.state.selectedTags}
+          onChange={selectedTags => this.handleTagsChange(selectedTags)}
+          onConfirm={() => this.handleTagsConfirm()}/>;
     }
 
-    return (
-      <SlideShow ds={dataset} photos={this.state.selectedPhotos}/>
-    );
-  },
-});
-
-module.exports = React.createFactory(Root);
+    return <SlideShow store={this.props.store} photos={this.state.selectedPhotos}/>;
+  }
+}

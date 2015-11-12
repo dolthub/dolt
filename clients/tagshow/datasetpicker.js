@@ -1,52 +1,71 @@
+/* @flow */
+
 'use strict';
 
-var Immutable = require('immutable');
-var ImmutableRenderMixin = require('react-immutable-render-mixin');
-var noms = require('noms')
-var React = require('react');
+import {invariant} from './assert.js';
+import {readValue} from 'noms';
+import React from 'react';
+import type {ChunkStore} from 'noms';
 
-var DatasetPicker = React.createClass({
-  mixins: [ImmutableRenderMixin],
+type DefaultProps = {
+  selected: string
+};
 
-  propTypes: {
-    pRoot: React.PropTypes.instanceOf(Promise),
-    onChange: React.PropTypes.func.isRequired,
-    selected: React.PropTypes.string,
-  },
+type Props = {
+  store: ChunkStore,
+  onChange: (value: string) => void,
+  selected: string
+};
 
-  getInitialState: function() {
-    return {
-      datasets: Immutable.Set(),
+type State = {
+  datasets: Set<string>
+};
+
+export default class DatasetPicker extends React.Component<DefaultProps, Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      datasets: new Set()
     };
-  },
+  }
 
-  handleSelectChange: function(e) {
+  handleSelectChange(e: Event) {
+    invariant(e.target instanceof HTMLSelectElement);
     this.props.onChange(e.target.value);
-  },
+  }
 
-  render: function() {
-    noms.getDatasetIds(this.props.pRoot).then(
-      datasets => {
-        this.setState({
-          datasets: Immutable.Set.of(...datasets)
-        });
-      }
-    );
+  async _updateDatasets(props: Props) : Promise<void> {
+    let store = props.store;
+    let rootRef = await store.getRoot();
+    let datasets = await readValue(rootRef, store);
+    this.setState({
+      datasets: new Set(datasets.keys())
+    });
+  }
 
+  componentWillMount() {
+    this._updateDatasets(this.props);
+  }
+
+  componentWillReceiveProps(props: Props) {
+    this._updateDatasets(props);
+  }
+
+  render() : React.Element {
+    let options = [];
+    for (let v of this.state.datasets) {
+      options.push(<option value={v} key={v}>{v}</option>);
+    }
     return <form>
       Choose dataset:
       <br/>
       <select value={this.props.selected}
-          onChange={this.handleSelectChange}>
+          onChange={e => this.handleSelectChange(e)}>
         <option/>
-        { 
-          this.state.datasets.map(v => {
-            return <option value={v}>{v}</option>
-          }).toArray()
-        }
+        {options}
       </select>
-    </form>
-  },
-});
+    </form>;
+  }
+}
 
-module.exports = React.createFactory(DatasetPicker);
+DatasetPicker.defaultProps = {selected: ''};

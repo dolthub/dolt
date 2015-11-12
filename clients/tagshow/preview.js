@@ -1,33 +1,24 @@
+/* @flow */
+
 'use strict';
 
-var Immutable = require('immutable');
-var ImmutableRenderMixin = require('react-immutable-render-mixin');
-var noms = require('noms')
-var Photo = require('./photo.js');
-var React = require('react');
+import Photo from './photo.js';
+import React from 'react';
+import type {ChunkStore, Ref} from 'noms';
 
-var photoStyle = {
+const photoStyle = {
   display: 'inline-block',
   marginRight: 5,
-  height: 300,
+  height: 300
 };
 
-var Preview = React.createClass({
-  mixins: [ImmutableRenderMixin],
+type Props = {
+  photos: Array<Ref>,
+  store: ChunkStore
+};
 
-  propTypes: {
-    photos: React.PropTypes.instanceOf(Immutable.List),
-  },
-
-  render: function() {
-    return (
-      <div>
-        {
-          this.props.photos.map(p => <Photo photoRef={p} style={photoStyle}/>).toArray()
-        }
-      </div>
-    );
-  },
-});
-
-module.exports = React.createFactory(Preview);
+export default function Preview(props: Props) : React.Element {
+  return <div>{
+    props.photos.map(r => <Photo key={r.toString()} photoRef={r} store={props.store} style={photoStyle}/>)
+  }</div>;
+}

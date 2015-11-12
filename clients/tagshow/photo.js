@@ -1,61 +1,62 @@
+/* @flow */
+
 'use strict';
 
-var Immutable = require('immutable');
-var ImmutableRenderMixin = require('react-immutable-render-mixin');
-var noms = require('noms')
-var React = require('react');
-var server = 'http://localhost:8001';
+import {readValue} from 'noms';
+import React from 'react';
+import type {ChunkStore, Ref, Struct} from 'noms';
 
-var Photo = React.createClass({
-  mixins: [ImmutableRenderMixin],
+type DefaultProps = {
+  onLoad: () => void,
+};
 
-  propTypes: {
-    onLoad: React.PropTypes.func,
-    photoRef: React.PropTypes.instanceOf(noms.Ref),
-    style: React.PropTypes.object,
-  },
+type Props = {
+  onLoad: () => void,
+  photoRef: Ref,
+  style: Object,
+  store: ChunkStore
+};
 
-  getInitialState: function() {
-    return {
+type State = {
+  photo: ?Struct,
+  sizes: Array<{size: Struct, url: string}>
+};
+
+export default class Photo extends React.Component<DefaultProps, Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = {
       photo: null,
-      sizes: null,
-    }
-  },
-
-  render: function() {
-    this.props.photoRef.deref()
-      .then(p => this.setState({photo: p}));
-
-    if (this.state.photo === null) {
-      return null;
-    }
-
-    var area = function(size) {
-      return size.get('width') * size.get('height');
+      sizes: []
     };
+  }
 
-    if (this.state.photo.has('sizes')) {
-      var p = this.state.photo;
-      this.state.photo.get('sizes').deref()
-        .then(sizeMap => {
-          var sizes = [];
-          sizeMap.forEach((url, sizeRef) => sizes.push({size: sizeRef, url: url}));
-          sizes = sizes.map(size => {
-            return size.size.deref().then(sizeVal => {
-              return sizeVal.set('url', size.url);
-            });
-          });
-          return Promise.all(sizes).then(sizes => {
-            this.setState({
-              sizes: Immutable.Set(sizes).sort((a, b) => area(a) - area(b)),
-            });
-          });
-        });
-    } else {
-      this.setState({sizes: Immutable.Set()});
+  async _updatePhoto(props: Props) : Promise<void> {
+    function area(size: Struct) : number {
+      return size.get('Width') * size.get('Height');
     }
 
-    if (this.state.sizes === null) {
+    let photo = await readValue(props.photoRef, props.store);
+
+    // Sizes is a Map(Size, String) where the string is a URL.
+    let sizes = [];
+    photo.get('Sizes').forEach((url, size) => {
+      sizes.push({size, url});
+    });
+    sizes.sort((a, b) => area(a.size) - area(b.size));
+    this.setState({photo, sizes});
+  }
+
+  componentWillMount() {
+    this._updatePhoto(this.props);
+  }
+
+  componentWillReceiveProps(props: Props) {
+    this._updatePhoto(props);
+  }
+
+  render() : ?React.Element {
+    if (!this.state.photo || this.state.sizes.length === 0) {
       return null;
     }
 
@@ -65,34 +66,19 @@ var Photo = React.createClass({
         src={this.getURL()}
         onLoad={this.props.onLoad}/>
     );
-  },
-
-  getURL: function() {
-    // If there are some remote URLs we can use, just pick the most appropriate size. We need the smallest one that is bigger than our current dimensions.
-    if (!this.state.sizes.isEmpty()) {
-      return this.state.sizes.find((size, url) => {
-        var w = this.props.style.width || 0;
-        var h = this.props.style.height || 0;
-        return size.get('width') >= w && size.get('height') >= h;
-      }, this).get('url');
-    }
-
-    // Otherwise assume there must be an image blob.
-    var url = server + "/?ref=" +
-        this.state.photo.get('image').ref;
-
-    if (this.props.style.width) {
-      url += "&maxw=" + this.props.style.width;
-    }
-    if (this.props.style.height) {
-      url += "&maxh=" + this.props.style.height;
-    }
-
-    return url;
   }
-});
 
-module.exports = React.createFactory(Photo);
-module.exports.setServer = function(val) {
-  server = val;
+  getURL() : string {
+    // If there are some remote URLs we can use, just pick the most appropriate size. We need the smallest one that is bigger than our current dimensions.
+    let sizes = this.state.sizes;
+    let w = this.props.style.width || 0;
+    let h = this.props.style.height || 0;
+    return sizes.find(({size}) => {
+      return size.get('Width') >= w && size.get('Height') >= h;
+    }).url;
+  }
+}
+
+Photo.defaultProps = {
+  onLoad() {}
 };

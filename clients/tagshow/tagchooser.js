@@ -1,80 +1,76 @@
+/* @flow */
+
 'use strict';
 
-var Immutable = require('immutable');
-var ImmutableRenderMixin = require('react-immutable-render-mixin');
-var Preview = require('./preview.js');
-var React = require('react');
-var TagList = require('./taglist.js');
+import Preview from './preview.js';
+import React from 'react';
+import TagList from './taglist.js';
+import type {ChunkStore, Ref} from 'noms';
 
-var styles = {
+const styles = {
   root: {
     display: 'flex',
     flexDirection: 'column',
-    height: '100%',
+    height: '100%'
   },
 
   panes: {
     display: 'flex',
-    flex: 1,
+    flex: 1
   },
 
   left: {
     overflowX: 'hidden',
     overflowY: 'auto',
-    marginRight: '1em',
+    marginRight: '1em'
   },
 
   right: {
     flex: 1,
     overflowX: 'hidden',
     overflowY: 'auto',
-    padding: '1em',
+    padding: '1em'
   },
 
   bottom: {
-    textAlign: 'center',
+    textAlign: 'center'
   },
 
   button: {
-    fontSize:'1.5em',
-    margin:'1em',
-    width:'50%',
-  },
+    fontSize: '1.5em',
+    margin: '1em',
+    width: '50%'
+  }
 };
 
-var TagChooser = React.createClass({
-  mixins: [ImmutableRenderMixin],
+type Props = {
+  store: ChunkStore,
+  tags: Array<string>,
+  selectedPhotos: Array<Ref>,
+  selectedTags: Set<string>,
+  onChange: (selected: Set<string>) => void,
+  onConfirm: () => void
+};
 
-  propTypes: {
-    ds: React.PropTypes.instanceOf(Immutable.Map),
-    selectedPhotos: React.PropTypes.instanceOf(Immutable.Set),
-    selectedTags: React.PropTypes.instanceOf(Immutable.Set),
-    onChange: React.PropTypes.func.isRequired,
-    onConfirm: React.PropTypes.func.isRequired,
-  },
-
-  render: function() {
-    return (
-      <div style={styles.root}>
-        <div style={styles.panes}>
-          <div style={styles.left}>
-            <TagList
-              ds={this.props.ds}
-              selected={this.props.selectedTags}
-              onChange={this.props.onChange}/>
-          </div>
-          <div style={styles.right}>
-            <Preview photos={this.props.selectedPhotos}/>
-          </div>
+export default function TagChooser(props: Props) : React.Element {
+  return (
+    <div style={styles.root}>
+      <div style={styles.panes}>
+        <div style={styles.left}>
+          <TagList
+            tags={props.tags}
+            selected={props.selectedTags}
+            onChange={props.onChange}/>
         </div>
-        <div style={styles.bottom}>
-          <button style={styles.button} onClick={this.props.onConfirm}>
-            PUSH THIS BUTTON
-          </button>
+        <div style={styles.right}>
+          <Preview photos={props.selectedPhotos} store={props.store}/>
         </div>
       </div>
-    );
-  },
-});
-
-module.exports = React.createFactory(TagChooser);
+      <div style={styles.bottom}>
+        <button style={styles.button} onClick={props.onConfirm}>
+          PUSH THIS BUTTON
+        </button>
+      </div>
+    </div>
+  );
+}

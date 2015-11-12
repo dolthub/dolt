@@ -2,8 +2,8 @@
 
 'use strict';
 
-import Chunk from './chunk.js';
-import Ref from './ref.js';
+import type Chunk from './chunk.js';
+import type Ref from './ref.js';
 
 export type ChunkStore = {
   getRoot(): Promise<Ref>;
