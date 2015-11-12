@@ -52,8 +52,8 @@ func (s *testSuite) TestTagdex() {
 	s.True(ok)
 	inputDs.Close()
 
-	out := s.Run(main, []string{"-input-ref", inputRef.String(), "-output-ds", "tagdex-test"})
-	s.Contains(out, "Indexed 5 photos from 5 refs")
+	out := s.Run(main, []string{"-in", "input-test", "-out", "tagdex-test"})
+	s.Contains(out, "Indexed 5 photos from 77 values")
 
 	cs = chunks.NewLevelDBStore(s.LdbDir, 1, false)
 	ds := dataset.NewDataset(datas.NewDataStore(cs), "tagdex-test")
