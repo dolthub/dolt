@@ -13,9 +13,14 @@ let rootRef: Ref;
 let httpStore: HttpStore;
 let renderNode: ?HTMLElement;
 
+const nomsServer: string = process.env.NOMS_SERVER;
+if (!nomsServer) {
+  throw new Error('NOMS_SERVER not set');
+}
+
 window.addEventListener('load', () => {
   renderNode = document.getElementById('splore');
-  httpStore = new HttpStore('http://localhost:8000');
+  httpStore = new HttpStore(nomsServer);
 
   httpStore.getRoot().then(ref => {
     rootRef = ref;

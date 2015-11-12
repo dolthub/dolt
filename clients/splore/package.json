@@ -10,14 +10,15 @@
     "babel-eslint": "^4.1.3",
     "babelify": "^6.1.3",
     "browserify": "^12.0.1",
+    "envify": "^3.4.0",
     "eslint": "^1.7.3",
     "eslint-plugin-react": "^3.6.3",
     "flow-bin": "^0.18.1",
     "watchify": "^3.6"
   },
   "scripts": {
-    "start": "watchify -o out.js -t babelify -v -d main.js",
-    "build": "NODE_ENV=production browserify main.js -t babelify > out.js",
+    "start": "NOMS_SERVER=http://localhost:8000 watchify -o out.js -t babelify -t envify -v -d main.js",
+    "build": "NOMS_SERVER=http://localhost:8000 NODE_ENV=production browserify main.js -t babelify -t envify > out.js",
     "test": "rm -f out.js && eslint *.js && flow"
   }
 }
