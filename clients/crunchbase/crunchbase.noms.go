@@ -15,40 +15,40 @@ var __mainPackageInFile_crunchbase_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("Company",
+		types.MakeStructType("Company",
 			[]types.Field{
-				types.Field{"Permalink", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Name", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"HomepageUrl", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"CategoryList", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind)), false},
-				types.Field{"Market", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"FundingTotalUsd", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-				types.Field{"Status", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"CountryCode", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"StateCode", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Region", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"City", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"FundingRounds", types.MakePrimitiveTypeRef(types.UInt16Kind), false},
-				types.Field{"FoundedAt", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"FoundedMonth", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"FoundedYear", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"FirstFundingAt", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"LastFundingAt", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Rounds", types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Ref{}, 1))), false},
+				types.Field{"Permalink", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Name", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"HomepageUrl", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"CategoryList", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind)), false},
+				types.Field{"Market", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FundingTotalUsd", types.MakePrimitiveType(types.Float64Kind), false},
+				types.Field{"Status", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"CountryCode", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"StateCode", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Region", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"City", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FundingRounds", types.MakePrimitiveType(types.UInt16Kind), false},
+				types.Field{"FoundedAt", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FoundedMonth", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FoundedYear", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FirstFundingAt", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"LastFundingAt", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Rounds", types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Ref{}, 1))), false},
 			},
 			types.Choices{},
 		),
-		types.MakeStructTypeRef("Round",
+		types.MakeStructType("Round",
 			[]types.Field{
-				types.Field{"CompanyPermalink", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"FundingRoundPermalink", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"FundingRoundType", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"FundingRoundCode", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"FundedAt", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"FundedMonth", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"FundedQuarter", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"FundedYear", types.MakePrimitiveTypeRef(types.UInt16Kind), false},
-				types.Field{"RaisedAmountUsd", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"CompanyPermalink", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FundingRoundPermalink", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FundingRoundType", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FundingRoundCode", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FundedAt", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FundedMonth", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FundedQuarter", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FundedYear", types.MakePrimitiveType(types.UInt16Kind), false},
+				types.Field{"RaisedAmountUsd", types.MakePrimitiveType(types.Float64Kind), false},
 			},
 			types.Choices{},
 		),
@@ -173,15 +173,15 @@ func (s Company) Def() (d CompanyDef) {
 	return
 }
 
-var __typeRefForCompany types.Type
+var __typeForCompany types.Type
 
 func (m Company) Type() types.Type {
-	return __typeRefForCompany
+	return __typeForCompany
 }
 
 func init() {
-	__typeRefForCompany = types.MakeTypeRef(__mainPackageInFile_crunchbase_CachedRef, 0)
-	types.RegisterStruct(__typeRefForCompany, builderForCompany, readerForCompany)
+	__typeForCompany = types.MakeType(__mainPackageInFile_crunchbase_CachedRef, 0)
+	types.RegisterStruct(__typeForCompany, builderForCompany, readerForCompany)
 }
 
 func builderForCompany(values []types.Value) types.Value {
@@ -251,7 +251,7 @@ func readerForCompany(v types.Value) []types.Value {
 }
 
 func (s Company) Equals(other types.Value) bool {
-	return other != nil && __typeRefForCompany.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForCompany.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Company) Ref() ref.Ref {
@@ -259,7 +259,7 @@ func (s Company) Ref() ref.Ref {
 }
 
 func (s Company) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForCompany.Chunks()...)
+	chunks = append(chunks, __typeForCompany.Chunks()...)
 	chunks = append(chunks, s._CategoryList.Chunks()...)
 	chunks = append(chunks, s._Rounds.Chunks()...)
 	return
@@ -539,15 +539,15 @@ func (s Round) Def() (d RoundDef) {
 	return
 }
 
-var __typeRefForRound types.Type
+var __typeForRound types.Type
 
 func (m Round) Type() types.Type {
-	return __typeRefForRound
+	return __typeForRound
 }
 
 func init() {
-	__typeRefForRound = types.MakeTypeRef(__mainPackageInFile_crunchbase_CachedRef, 1)
-	types.RegisterStruct(__typeRefForRound, builderForRound, readerForRound)
+	__typeForRound = types.MakeType(__mainPackageInFile_crunchbase_CachedRef, 1)
+	types.RegisterStruct(__typeForRound, builderForRound, readerForRound)
 }
 
 func builderForRound(values []types.Value) types.Value {
@@ -590,7 +590,7 @@ func readerForRound(v types.Value) []types.Value {
 }
 
 func (s Round) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRound.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForRound.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Round) Ref() ref.Ref {
@@ -598,7 +598,7 @@ func (s Round) Ref() ref.Ref {
 }
 
 func (s Round) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForRound.Chunks()...)
+	chunks = append(chunks, __typeForRound.Chunks()...)
 	return
 }
 
@@ -736,7 +736,7 @@ func (m MapOfStringToRefOfCompany) Def() MapOfStringToRefOfCompanyDef {
 }
 
 func (m MapOfStringToRefOfCompany) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToRefOfCompany.Equals(other.Type()) && m.Ref() == other.Ref()
+	return other != nil && __typeForMapOfStringToRefOfCompany.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToRefOfCompany) Ref() ref.Ref {
@@ -754,15 +754,15 @@ func (m MapOfStringToRefOfCompany) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToRefOfCompany.
-var __typeRefForMapOfStringToRefOfCompany types.Type
+var __typeForMapOfStringToRefOfCompany types.Type
 
 func (m MapOfStringToRefOfCompany) Type() types.Type {
-	return __typeRefForMapOfStringToRefOfCompany
+	return __typeForMapOfStringToRefOfCompany
 }
 
 func init() {
-	__typeRefForMapOfStringToRefOfCompany = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__mainPackageInFile_crunchbase_CachedRef, 0)))
-	types.RegisterValue(__typeRefForMapOfStringToRefOfCompany, builderForMapOfStringToRefOfCompany, readerForMapOfStringToRefOfCompany)
+	__typeForMapOfStringToRefOfCompany = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_crunchbase_CachedRef, 0)))
+	types.RegisterValue(__typeForMapOfStringToRefOfCompany, builderForMapOfStringToRefOfCompany, readerForMapOfStringToRefOfCompany)
 }
 
 func builderForMapOfStringToRefOfCompany(v types.Value) types.Value {
@@ -871,7 +871,7 @@ func (s SetOfString) Def() SetOfStringDef {
 }
 
 func (s SetOfString) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSetOfString.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForSetOfString.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfString) Ref() ref.Ref {
@@ -889,15 +889,15 @@ func (s SetOfString) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfString.
-var __typeRefForSetOfString types.Type
+var __typeForSetOfString types.Type
 
 func (m SetOfString) Type() types.Type {
-	return __typeRefForSetOfString
+	return __typeForSetOfString
 }
 
 func init() {
-	__typeRefForSetOfString = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterValue(__typeRefForSetOfString, builderForSetOfString, readerForSetOfString)
+	__typeForSetOfString = types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind))
+	types.RegisterValue(__typeForSetOfString, builderForSetOfString, readerForSetOfString)
 }
 
 func builderForSetOfString(v types.Value) types.Value {
@@ -1020,7 +1020,7 @@ func (s SetOfRefOfRound) Def() SetOfRefOfRoundDef {
 }
 
 func (s SetOfRefOfRound) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSetOfRefOfRound.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForSetOfRefOfRound.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfRefOfRound) Ref() ref.Ref {
@@ -1038,15 +1038,15 @@ func (s SetOfRefOfRound) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfRefOfRound.
-var __typeRefForSetOfRefOfRound types.Type
+var __typeForSetOfRefOfRound types.Type
 
 func (m SetOfRefOfRound) Type() types.Type {
-	return __typeRefForSetOfRefOfRound
+	return __typeForSetOfRefOfRound
 }
 
 func init() {
-	__typeRefForSetOfRefOfRound = types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__mainPackageInFile_crunchbase_CachedRef, 1)))
-	types.RegisterValue(__typeRefForSetOfRefOfRound, builderForSetOfRefOfRound, readerForSetOfRefOfRound)
+	__typeForSetOfRefOfRound = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_crunchbase_CachedRef, 1)))
+	types.RegisterValue(__typeForSetOfRefOfRound, builderForSetOfRefOfRound, readerForSetOfRefOfRound)
 }
 
 func builderForSetOfRefOfRound(v types.Value) types.Value {
@@ -1156,7 +1156,7 @@ func (r RefOfCompany) Ref() ref.Ref {
 }
 
 func (r RefOfCompany) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfCompany.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfCompany.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfCompany) Chunks() (chunks []ref.Ref) {
@@ -1170,15 +1170,15 @@ func (r RefOfCompany) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfCompany.
-var __typeRefForRefOfCompany types.Type
+var __typeForRefOfCompany types.Type
 
 func (m RefOfCompany) Type() types.Type {
-	return __typeRefForRefOfCompany
+	return __typeForRefOfCompany
 }
 
 func init() {
-	__typeRefForRefOfCompany = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__mainPackageInFile_crunchbase_CachedRef, 0))
-	types.RegisterRef(__typeRefForRefOfCompany, builderForRefOfCompany)
+	__typeForRefOfCompany = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_crunchbase_CachedRef, 0))
+	types.RegisterRef(__typeForRefOfCompany, builderForRefOfCompany)
 }
 
 func builderForRefOfCompany(r ref.Ref) types.Value {
@@ -1213,7 +1213,7 @@ func (r RefOfRound) Ref() ref.Ref {
 }
 
 func (r RefOfRound) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfRound.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfRound.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfRound) Chunks() (chunks []ref.Ref) {
@@ -1227,15 +1227,15 @@ func (r RefOfRound) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfRound.
-var __typeRefForRefOfRound types.Type
+var __typeForRefOfRound types.Type
 
 func (m RefOfRound) Type() types.Type {
-	return __typeRefForRefOfRound
+	return __typeForRefOfRound
 }
 
 func init() {
-	__typeRefForRefOfRound = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__mainPackageInFile_crunchbase_CachedRef, 1))
-	types.RegisterRef(__typeRefForRefOfRound, builderForRefOfRound)
+	__typeForRefOfRound = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_crunchbase_CachedRef, 1))
+	types.RegisterRef(__typeForRefOfRound, builderForRefOfRound)
 }
 
 func builderForRefOfRound(r ref.Ref) types.Value {

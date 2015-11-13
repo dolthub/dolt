@@ -270,9 +270,9 @@ func printBlob(b Blob, indent int) {
 	}
 }
 
-func TestCompoundBlobTypeRef(t *testing.T) {
+func TestCompoundBlobType(t *testing.T) {
 	assert := assert.New(t)
 
 	cb := getTestCompoundBlob("hello", "world")
-	assert.True(cb.Type().Equals(MakeCompoundTypeRef(MetaSequenceKind, MakePrimitiveTypeRef(BlobKind))))
+	assert.True(cb.Type().Equals(MakeCompoundType(MetaSequenceKind, MakePrimitiveType(BlobKind))))
 }

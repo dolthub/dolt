@@ -14,9 +14,9 @@ var __genPackageInFile_struct_recursive_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("Tree",
+		types.MakeStructType("Tree",
 			[]types.Field{
-				types.Field{"children", types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
+				types.Field{"children", types.MakeCompoundType(types.ListKind, types.MakeType(ref.Ref{}, 0)), false},
 			},
 			types.Choices{},
 		),
@@ -56,15 +56,15 @@ func (s Tree) Def() (d TreeDef) {
 	return
 }
 
-var __typeRefForTree types.Type
+var __typeForTree types.Type
 
 func (m Tree) Type() types.Type {
-	return __typeRefForTree
+	return __typeForTree
 }
 
 func init() {
-	__typeRefForTree = types.MakeTypeRef(__genPackageInFile_struct_recursive_CachedRef, 0)
-	types.RegisterStruct(__typeRefForTree, builderForTree, readerForTree)
+	__typeForTree = types.MakeType(__genPackageInFile_struct_recursive_CachedRef, 0)
+	types.RegisterStruct(__typeForTree, builderForTree, readerForTree)
 }
 
 func builderForTree(values []types.Value) types.Value {
@@ -83,7 +83,7 @@ func readerForTree(v types.Value) []types.Value {
 }
 
 func (s Tree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForTree.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForTree.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Tree) Ref() ref.Ref {
@@ -91,7 +91,7 @@ func (s Tree) Ref() ref.Ref {
 }
 
 func (s Tree) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForTree.Chunks()...)
+	chunks = append(chunks, __typeForTree.Chunks()...)
 	chunks = append(chunks, s._children.Chunks()...)
 	return
 }
@@ -141,7 +141,7 @@ func (l ListOfTree) Def() ListOfTreeDef {
 }
 
 func (l ListOfTree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfTree.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfTree.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfTree) Ref() ref.Ref {
@@ -159,15 +159,15 @@ func (l ListOfTree) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfTree.
-var __typeRefForListOfTree types.Type
+var __typeForListOfTree types.Type
 
 func (m ListOfTree) Type() types.Type {
-	return __typeRefForListOfTree
+	return __typeForListOfTree
 }
 
 func init() {
-	__typeRefForListOfTree = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__genPackageInFile_struct_recursive_CachedRef, 0))
-	types.RegisterValue(__typeRefForListOfTree, builderForListOfTree, readerForListOfTree)
+	__typeForListOfTree = types.MakeCompoundType(types.ListKind, types.MakeType(__genPackageInFile_struct_recursive_CachedRef, 0))
+	types.RegisterValue(__typeForListOfTree, builderForListOfTree, readerForListOfTree)
 }
 
 func builderForListOfTree(v types.Value) types.Value {

@@ -333,12 +333,12 @@ func TestListIterAllP(t *testing.T) {
 	testIter(64, 100000)
 }
 
-func TestListTypeRef(t *testing.T) {
+func TestListType(t *testing.T) {
 	assert := assert.New(t)
 	l := NewList(Int32(0))
-	assert.True(l.Type().Equals(MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))))
+	assert.True(l.Type().Equals(MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))))
 
-	tr := MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(UInt8Kind))
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(UInt8Kind))
 	l2 := newListNoCopy([]Value{UInt8(0), UInt8(1)}, tr)
 	assert.Equal(tr, l2.Type())
 

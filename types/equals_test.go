@@ -70,30 +70,30 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return NewSet() },
 		func() Value { return NewSet(NewString("hi")) },
 
-		func() Value { return MakePrimitiveTypeRef(BoolKind) },
-		func() Value { return MakePrimitiveTypeRef(StringKind) },
-		func() Value { return MakeStructTypeRef("a", []Field{}, Choices{}) },
-		func() Value { return MakeStructTypeRef("b", []Field{}, Choices{}) },
-		func() Value { return MakeEnumTypeRef("E", "a", "b") },
-		func() Value { return MakeEnumTypeRef("E", "a", "b", "c") },
-		func() Value { return MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(UInt64Kind)) },
-		func() Value { return MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(Int64Kind)) },
-		func() Value { return MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(UInt32Kind)) },
-		func() Value { return MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(Int32Kind)) },
-		func() Value { return MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(UInt16Kind)) },
-		func() Value { return MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(Int16Kind)) },
+		func() Value { return MakePrimitiveType(BoolKind) },
+		func() Value { return MakePrimitiveType(StringKind) },
+		func() Value { return MakeStructType("a", []Field{}, Choices{}) },
+		func() Value { return MakeStructType("b", []Field{}, Choices{}) },
+		func() Value { return MakeEnumType("E", "a", "b") },
+		func() Value { return MakeEnumType("E", "a", "b", "c") },
+		func() Value { return MakeCompoundType(ListKind, MakePrimitiveType(UInt64Kind)) },
+		func() Value { return MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind)) },
+		func() Value { return MakeCompoundType(SetKind, MakePrimitiveType(UInt32Kind)) },
+		func() Value { return MakeCompoundType(SetKind, MakePrimitiveType(Int32Kind)) },
+		func() Value { return MakeCompoundType(RefKind, MakePrimitiveType(UInt16Kind)) },
+		func() Value { return MakeCompoundType(RefKind, MakePrimitiveType(Int16Kind)) },
 		func() Value {
-			return MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(UInt8Kind), MakePrimitiveTypeRef(ValueKind))
+			return MakeCompoundType(MapKind, MakePrimitiveType(UInt8Kind), MakePrimitiveType(ValueKind))
 		},
 		func() Value {
-			return MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(Int8Kind), MakePrimitiveTypeRef(ValueKind))
+			return MakeCompoundType(MapKind, MakePrimitiveType(Int8Kind), MakePrimitiveType(ValueKind))
 		},
-		func() Value { return MakeTypeRef(r1, 0) },
-		func() Value { return MakeTypeRef(r1, 1) },
-		func() Value { return MakeTypeRef(r2, 0) },
-		func() Value { return MakeUnresolvedTypeRef("ns", "a") },
-		func() Value { return MakeUnresolvedTypeRef("ns", "b") },
-		func() Value { return MakeUnresolvedTypeRef("ns2", "a") },
+		func() Value { return MakeType(r1, 0) },
+		func() Value { return MakeType(r1, 1) },
+		func() Value { return MakeType(r2, 0) },
+		func() Value { return MakeUnresolvedType("ns", "a") },
+		func() Value { return MakeUnresolvedType("ns", "b") },
+		func() Value { return MakeUnresolvedType("ns2", "a") },
 	}
 
 	for i, f1 := range values {

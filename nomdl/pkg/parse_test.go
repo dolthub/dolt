@@ -54,13 +54,13 @@ using List(Noms.Commit)
 	suite.Len(pkg.UsingDeclarations, 2)
 
 	suite.Equal(types.MapKind, pkg.UsingDeclarations[0].Desc.Kind())
-	suite.True(types.MakePrimitiveTypeRef(types.StringKind).Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[0]))
-	suite.True(types.MakeUnresolvedTypeRef("", "Simple").Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[1]))
+	suite.True(types.MakePrimitiveType(types.StringKind).Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[0]))
+	suite.True(types.MakeUnresolvedType("", "Simple").Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[1]))
 
 	suite.Equal(types.ListKind, pkg.UsingDeclarations[1].Desc.Kind())
 	elemTypes := pkg.UsingDeclarations[1].Desc.(types.CompoundDesc).ElemTypes
 	suite.Len(elemTypes, 1)
-	suite.True(types.MakeUnresolvedTypeRef("Noms", "Commit").Equals(elemTypes[0]))
+	suite.True(types.MakeUnresolvedType("Noms", "Commit").Equals(elemTypes[0]))
 }
 
 func (suite *ParserTestSuite) TestBadUsing() {
@@ -202,26 +202,26 @@ type ParsedResultTestSuite struct {
 }
 
 func (suite *ParsedResultTestSuite) SetupTest() {
-	suite.primField = testField{"a", types.MakePrimitiveTypeRef(types.Int64Kind), false}
-	suite.primOptionalField = testField{"b", types.MakePrimitiveTypeRef(types.Float64Kind), true}
-	suite.compoundField = testField{"set", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind)), false}
+	suite.primField = testField{"a", types.MakePrimitiveType(types.Int64Kind), false}
+	suite.primOptionalField = testField{"b", types.MakePrimitiveType(types.Float64Kind), true}
+	suite.compoundField = testField{"set", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind)), false}
 	suite.compoundOfCompoundField = testField{
 		"listOfSet",
-		types.MakeCompoundTypeRef(types.ListKind,
-			types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind))), false}
+		types.MakeCompoundType(types.ListKind,
+			types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind))), false}
 	suite.mapOfNamedTypeField = testField{
 		"mapOfStructToOther",
-		types.MakeCompoundTypeRef(types.MapKind,
-			types.MakeUnresolvedTypeRef("", "Struct"),
-			types.MakeUnresolvedTypeRef("Elsewhere", "Other"),
+		types.MakeCompoundType(types.MapKind,
+			types.MakeUnresolvedType("", "Struct"),
+			types.MakeUnresolvedType("Elsewhere", "Other"),
 		),
 		false}
-	suite.namedTypeField = testField{"otherStruct", types.MakeUnresolvedTypeRef("", "Other"), false}
-	suite.namespacedTypeField = testField{"namespacedStruct", types.MakeUnresolvedTypeRef("Elsewhere", "Other"), false}
+	suite.namedTypeField = testField{"otherStruct", types.MakeUnresolvedType("", "Other"), false}
+	suite.namespacedTypeField = testField{"namespacedStruct", types.MakeUnresolvedType("Elsewhere", "Other"), false}
 	suite.union = types.Choices{
-		types.Field{"a", types.MakePrimitiveTypeRef(types.Int32Kind), false},
-		types.Field{"n", types.MakeUnresolvedTypeRef("NN", "Other"), false},
-		types.Field{"c", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+		types.Field{"a", types.MakePrimitiveType(types.Int32Kind), false},
+		types.Field{"n", types.MakeUnresolvedType("NN", "Other"), false},
+		types.Field{"c", types.MakePrimitiveType(types.UInt32Kind), false},
 	}
 }
 

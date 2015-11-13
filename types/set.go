@@ -16,10 +16,10 @@ type Set struct {
 	ref  *ref.Ref
 }
 
-var setTypeRef = MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))
+var setType = MakeCompoundType(SetKind, MakePrimitiveType(ValueKind))
 
 func NewSet(v ...Value) Set {
-	return newSetFromData(buildSetData(setData{}, v), setTypeRef)
+	return newSetFromData(buildSetData(setData{}, v), setType)
 }
 
 func (s Set) Empty() bool {

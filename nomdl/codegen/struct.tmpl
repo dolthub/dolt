@@ -45,15 +45,15 @@ func New{{.Name}}() {{.Name}} {
 	}
 {{end}}
 
-var __typeRefFor{{.Name}} {{$typesPackage}}Type
+var __typeFor{{.Name}} {{$typesPackage}}Type
 
 func (m {{.Name}}) Type() {{$typesPackage}}Type {
-	return __typeRefFor{{.Name}}
+	return __typeFor{{.Name}}
 }
 
 func init() {
-	__typeRefFor{{.Name}} = {{$typesPackage}}MakeTypeRef(__{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef, {{.Ordinal}})
-	{{$typesPackage}}RegisterStruct(__typeRefFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
+	__typeFor{{.Name}} = {{$typesPackage}}MakeType(__{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef, {{.Ordinal}})
+	{{$typesPackage}}RegisterStruct(__typeFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
 }
 
 func builderFor{{.Name}}(values []{{$typesPackage}}Value) {{$typesPackage}}Value {
@@ -88,7 +88,7 @@ func readerFor{{.Name}}(v {{$typesPackage}}Value) []{{$typesPackage}}Value {
 }
 
 func (s {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
-	return other != nil && __typeRefFor{{.Name}}.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeFor{{.Name}}.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s {{.Name}}) Ref() ref.Ref {
@@ -96,7 +96,7 @@ func (s {{.Name}}) Ref() ref.Ref {
 }
 
 func (s {{.Name}}) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefFor{{.Name}}.Chunks()...)
+	chunks = append(chunks, __typeFor{{.Name}}.Chunks()...)
 	{{range .Fields}}{{if mayHaveChunks .T}}{{if .Optional}}if s.__optional{{.Name}} {
 		{{end}}chunks = append(chunks, s._{{.Name}}.Chunks()...)
 		{{if .Optional}} }

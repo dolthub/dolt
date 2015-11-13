@@ -14,21 +14,21 @@ var __commonPackageInFile_photo_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("RemotePhoto",
+		types.MakeStructType("RemotePhoto",
 			[]types.Field{
-				types.Field{"Id", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Url", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
-				types.Field{"Sizes", types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(ref.Ref{}, 1), types.MakePrimitiveTypeRef(types.StringKind)), false},
-				types.Field{"Tags", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind)), false},
+				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Url", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
+				types.Field{"Sizes", types.MakeCompoundType(types.MapKind, types.MakeType(ref.Ref{}, 1), types.MakePrimitiveType(types.StringKind)), false},
+				types.Field{"Tags", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind)), false},
 			},
 			types.Choices{},
 		),
-		types.MakeStructTypeRef("Size",
+		types.MakeStructType("Size",
 			[]types.Field{
-				types.Field{"Width", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-				types.Field{"Height", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
+				types.Field{"Width", types.MakePrimitiveType(types.UInt32Kind), false},
+				types.Field{"Height", types.MakePrimitiveType(types.UInt32Kind), false},
 			},
 			types.Choices{},
 		),
@@ -95,15 +95,15 @@ func (s RemotePhoto) Def() (d RemotePhotoDef) {
 	return
 }
 
-var __typeRefForRemotePhoto types.Type
+var __typeForRemotePhoto types.Type
 
 func (m RemotePhoto) Type() types.Type {
-	return __typeRefForRemotePhoto
+	return __typeForRemotePhoto
 }
 
 func init() {
-	__typeRefForRemotePhoto = types.MakeTypeRef(__commonPackageInFile_photo_CachedRef, 0)
-	types.RegisterStruct(__typeRefForRemotePhoto, builderForRemotePhoto, readerForRemotePhoto)
+	__typeForRemotePhoto = types.MakeType(__commonPackageInFile_photo_CachedRef, 0)
+	types.RegisterStruct(__typeForRemotePhoto, builderForRemotePhoto, readerForRemotePhoto)
 }
 
 func builderForRemotePhoto(values []types.Value) types.Value {
@@ -137,7 +137,7 @@ func readerForRemotePhoto(v types.Value) []types.Value {
 }
 
 func (s RemotePhoto) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRemotePhoto.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForRemotePhoto.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s RemotePhoto) Ref() ref.Ref {
@@ -145,7 +145,7 @@ func (s RemotePhoto) Ref() ref.Ref {
 }
 
 func (s RemotePhoto) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForRemotePhoto.Chunks()...)
+	chunks = append(chunks, __typeForRemotePhoto.Chunks()...)
 	chunks = append(chunks, s._Geoposition.Chunks()...)
 	chunks = append(chunks, s._Sizes.Chunks()...)
 	chunks = append(chunks, s._Tags.Chunks()...)
@@ -259,15 +259,15 @@ func (s Size) Def() (d SizeDef) {
 	return
 }
 
-var __typeRefForSize types.Type
+var __typeForSize types.Type
 
 func (m Size) Type() types.Type {
-	return __typeRefForSize
+	return __typeForSize
 }
 
 func init() {
-	__typeRefForSize = types.MakeTypeRef(__commonPackageInFile_photo_CachedRef, 1)
-	types.RegisterStruct(__typeRefForSize, builderForSize, readerForSize)
+	__typeForSize = types.MakeType(__commonPackageInFile_photo_CachedRef, 1)
+	types.RegisterStruct(__typeForSize, builderForSize, readerForSize)
 }
 
 func builderForSize(values []types.Value) types.Value {
@@ -289,7 +289,7 @@ func readerForSize(v types.Value) []types.Value {
 }
 
 func (s Size) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSize.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForSize.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Size) Ref() ref.Ref {
@@ -297,7 +297,7 @@ func (s Size) Ref() ref.Ref {
 }
 
 func (s Size) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForSize.Chunks()...)
+	chunks = append(chunks, __typeForSize.Chunks()...)
 	return
 }
 
@@ -358,7 +358,7 @@ func (m MapOfSizeToString) Def() MapOfSizeToStringDef {
 }
 
 func (m MapOfSizeToString) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfSizeToString.Equals(other.Type()) && m.Ref() == other.Ref()
+	return other != nil && __typeForMapOfSizeToString.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfSizeToString) Ref() ref.Ref {
@@ -376,15 +376,15 @@ func (m MapOfSizeToString) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfSizeToString.
-var __typeRefForMapOfSizeToString types.Type
+var __typeForMapOfSizeToString types.Type
 
 func (m MapOfSizeToString) Type() types.Type {
-	return __typeRefForMapOfSizeToString
+	return __typeForMapOfSizeToString
 }
 
 func init() {
-	__typeRefForMapOfSizeToString = types.MakeCompoundTypeRef(types.MapKind, types.MakeTypeRef(__commonPackageInFile_photo_CachedRef, 1), types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterValue(__typeRefForMapOfSizeToString, builderForMapOfSizeToString, readerForMapOfSizeToString)
+	__typeForMapOfSizeToString = types.MakeCompoundType(types.MapKind, types.MakeType(__commonPackageInFile_photo_CachedRef, 1), types.MakePrimitiveType(types.StringKind))
+	types.RegisterValue(__typeForMapOfSizeToString, builderForMapOfSizeToString, readerForMapOfSizeToString)
 }
 
 func builderForMapOfSizeToString(v types.Value) types.Value {
@@ -493,7 +493,7 @@ func (s SetOfString) Def() SetOfStringDef {
 }
 
 func (s SetOfString) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSetOfString.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForSetOfString.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfString) Ref() ref.Ref {
@@ -511,15 +511,15 @@ func (s SetOfString) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfString.
-var __typeRefForSetOfString types.Type
+var __typeForSetOfString types.Type
 
 func (m SetOfString) Type() types.Type {
-	return __typeRefForSetOfString
+	return __typeForSetOfString
 }
 
 func init() {
-	__typeRefForSetOfString = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterValue(__typeRefForSetOfString, builderForSetOfString, readerForSetOfString)
+	__typeForSetOfString = types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind))
+	types.RegisterValue(__typeForSetOfString, builderForSetOfString, readerForSetOfString)
 }
 
 func builderForSetOfString(v types.Value) types.Value {

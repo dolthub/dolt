@@ -155,15 +155,15 @@ func TestSkipDuplicateTypes(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	leaf1 := types.NewPackage([]types.Type{
-		types.MakeEnumTypeRef("E1", "a", "b"),
-		types.MakeStructTypeRef("S1", []types.Field{
-			types.Field{"f", types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.UInt16Kind)), false},
-			types.Field{"e", types.MakeTypeRef(ref.Ref{}, 0), false},
+		types.MakeEnumType("E1", "a", "b"),
+		types.MakeStructType("S1", []types.Field{
+			types.Field{"f", types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.UInt16Kind)), false},
+			types.Field{"e", types.MakeType(ref.Ref{}, 0), false},
 		}, types.Choices{}),
 	}, []ref.Ref{})
 	leaf2 := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("S2", []types.Field{
-			types.Field{"f", types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.UInt16Kind)), false},
+		types.MakeStructType("S2", []types.Field{
+			types.Field{"f", types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.UInt16Kind)), false},
 		}, types.Choices{}),
 	}, []ref.Ref{})
 
@@ -188,9 +188,9 @@ func TestGenerateDeps(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
-	leaf1 := types.NewPackage([]types.Type{types.MakeEnumTypeRef("e1", "a", "b")}, []ref.Ref{})
+	leaf1 := types.NewPackage([]types.Type{types.MakeEnumType("e1", "a", "b")}, []ref.Ref{})
 	leaf1Ref := types.WriteValue(leaf1, cs)
-	leaf2 := types.NewPackage([]types.Type{types.MakePrimitiveTypeRef(types.BoolKind)}, []ref.Ref{})
+	leaf2 := types.NewPackage([]types.Type{types.MakePrimitiveType(types.BoolKind)}, []ref.Ref{})
 	leaf2Ref := types.WriteValue(leaf2, cs)
 
 	depender := types.NewPackage([]types.Type{}, []ref.Ref{leaf1Ref})

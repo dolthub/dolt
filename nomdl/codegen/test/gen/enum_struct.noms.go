@@ -14,10 +14,10 @@ var __genPackageInFile_enum_struct_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeEnumTypeRef("Handedness", "right", "left", "switch"),
-		types.MakeStructTypeRef("EnumStruct",
+		types.MakeEnumType("Handedness", "right", "left", "switch"),
+		types.MakeStructType("EnumStruct",
 			[]types.Field{
-				types.Field{"hand", types.MakeTypeRef(ref.Ref{}, 0), false},
+				types.Field{"hand", types.MakeType(ref.Ref{}, 0), false},
 			},
 			types.Choices{},
 		),
@@ -39,15 +39,15 @@ func NewHandedness() Handedness {
 	return Handedness(0)
 }
 
-var __typeRefForHandedness types.Type
+var __typeForHandedness types.Type
 
 func (e Handedness) Type() types.Type {
-	return __typeRefForHandedness
+	return __typeForHandedness
 }
 
 func init() {
-	__typeRefForHandedness = types.MakeTypeRef(__genPackageInFile_enum_struct_CachedRef, 0)
-	types.RegisterEnum(__typeRefForHandedness, builderForHandedness, readerForHandedness)
+	__typeForHandedness = types.MakeType(__genPackageInFile_enum_struct_CachedRef, 0)
+	types.RegisterEnum(__typeForHandedness, builderForHandedness, readerForHandedness)
 }
 
 func builderForHandedness(v uint32) types.Value {
@@ -107,15 +107,15 @@ func (s EnumStruct) Def() (d EnumStructDef) {
 	return
 }
 
-var __typeRefForEnumStruct types.Type
+var __typeForEnumStruct types.Type
 
 func (m EnumStruct) Type() types.Type {
-	return __typeRefForEnumStruct
+	return __typeForEnumStruct
 }
 
 func init() {
-	__typeRefForEnumStruct = types.MakeTypeRef(__genPackageInFile_enum_struct_CachedRef, 1)
-	types.RegisterStruct(__typeRefForEnumStruct, builderForEnumStruct, readerForEnumStruct)
+	__typeForEnumStruct = types.MakeType(__genPackageInFile_enum_struct_CachedRef, 1)
+	types.RegisterStruct(__typeForEnumStruct, builderForEnumStruct, readerForEnumStruct)
 }
 
 func builderForEnumStruct(values []types.Value) types.Value {
@@ -134,7 +134,7 @@ func readerForEnumStruct(v types.Value) []types.Value {
 }
 
 func (s EnumStruct) Equals(other types.Value) bool {
-	return other != nil && __typeRefForEnumStruct.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForEnumStruct.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s EnumStruct) Ref() ref.Ref {
@@ -142,7 +142,7 @@ func (s EnumStruct) Ref() ref.Ref {
 }
 
 func (s EnumStruct) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForEnumStruct.Chunks()...)
+	chunks = append(chunks, __typeForEnumStruct.Chunks()...)
 	return
 }
 

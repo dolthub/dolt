@@ -12,15 +12,15 @@ func TestGenericEnumWriteRead(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	typeDefA := MakeEnumTypeRef("EA", "aA", "bA")
-	typeDefB := MakeEnumTypeRef("EB", "aB", "bB")
+	typeDefA := MakeEnumType("EA", "aA", "bA")
+	typeDefB := MakeEnumType("EB", "aB", "bB")
 	pkg := NewPackage([]Type{typeDefA, typeDefB}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
-	typeRefA := MakeTypeRef(pkgRef, 0)
-	typeRefB := MakeTypeRef(pkgRef, 1)
+	typeA := MakeType(pkgRef, 0)
+	typeB := MakeType(pkgRef, 1)
 
-	vA := Enum{1, typeRefA}
-	vB := Enum{1, typeRefB}
+	vA := Enum{1, typeA}
+	vB := Enum{1, typeB}
 
 	assert.False(vA.Equals(vB))
 

@@ -14,10 +14,10 @@ var __genPackageInFile_struct_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("Struct",
+		types.MakeStructType("Struct",
 			[]types.Field{
-				types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
+				types.Field{"s", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"b", types.MakePrimitiveType(types.BoolKind), false},
 			},
 			types.Choices{},
 		),
@@ -62,15 +62,15 @@ func (s Struct) Def() (d StructDef) {
 	return
 }
 
-var __typeRefForStruct types.Type
+var __typeForStruct types.Type
 
 func (m Struct) Type() types.Type {
-	return __typeRefForStruct
+	return __typeForStruct
 }
 
 func init() {
-	__typeRefForStruct = types.MakeTypeRef(__genPackageInFile_struct_CachedRef, 0)
-	types.RegisterStruct(__typeRefForStruct, builderForStruct, readerForStruct)
+	__typeForStruct = types.MakeType(__genPackageInFile_struct_CachedRef, 0)
+	types.RegisterStruct(__typeForStruct, builderForStruct, readerForStruct)
 }
 
 func builderForStruct(values []types.Value) types.Value {
@@ -92,7 +92,7 @@ func readerForStruct(v types.Value) []types.Value {
 }
 
 func (s Struct) Equals(other types.Value) bool {
-	return other != nil && __typeRefForStruct.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForStruct.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Struct) Ref() ref.Ref {
@@ -100,7 +100,7 @@ func (s Struct) Ref() ref.Ref {
 }
 
 func (s Struct) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForStruct.Chunks()...)
+	chunks = append(chunks, __typeForStruct.Chunks()...)
 	return
 }
 
@@ -160,7 +160,7 @@ func (l ListOfStruct) Def() ListOfStructDef {
 }
 
 func (l ListOfStruct) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfStruct.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfStruct.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfStruct) Ref() ref.Ref {
@@ -178,15 +178,15 @@ func (l ListOfStruct) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfStruct.
-var __typeRefForListOfStruct types.Type
+var __typeForListOfStruct types.Type
 
 func (m ListOfStruct) Type() types.Type {
-	return __typeRefForListOfStruct
+	return __typeForListOfStruct
 }
 
 func init() {
-	__typeRefForListOfStruct = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__genPackageInFile_struct_CachedRef, 0))
-	types.RegisterValue(__typeRefForListOfStruct, builderForListOfStruct, readerForListOfStruct)
+	__typeForListOfStruct = types.MakeCompoundType(types.ListKind, types.MakeType(__genPackageInFile_struct_CachedRef, 0))
+	types.RegisterValue(__typeForListOfStruct, builderForListOfStruct, readerForListOfStruct)
 }
 
 func builderForListOfStruct(v types.Value) types.Value {

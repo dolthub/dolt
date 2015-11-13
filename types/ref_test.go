@@ -38,10 +38,10 @@ func TestRefInMap(t *testing.T) {
 	assert.Equal(int32(1), int32(i.(Int32)))
 }
 
-func TestRefTypeRef(t *testing.T) {
+func TestRefType(t *testing.T) {
 	assert := assert.New(t)
 
-	tr := MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(ValueKind))
+	tr := MakeCompoundType(RefKind, MakePrimitiveType(ValueKind))
 
 	l := NewList()
 	r := NewRef(l.Ref())
@@ -54,7 +54,7 @@ func TestRefTypeRef(t *testing.T) {
 
 	b := Bool(true)
 	r2 = r.SetTargetValue(b, cs)
-	r2.t = MakeCompoundTypeRef(RefKind, b.Type())
+	r2.t = MakeCompoundType(RefKind, b.Type())
 
 	r3 := r2.SetTargetValue(Bool(false), cs)
 	assert.True(r2.Type().Equals(r3.Type()))

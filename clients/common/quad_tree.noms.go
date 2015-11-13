@@ -15,32 +15,32 @@ var __commonPackageInFile_quad_tree_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("Node",
+		types.MakeStructType("Node",
 			[]types.Field{
-				types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
-				types.Field{"Reference", types.MakeCompoundTypeRef(types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind)), false},
+				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
+				types.Field{"Reference", types.MakeCompoundType(types.RefKind, types.MakePrimitiveType(types.ValueKind)), false},
 			},
 			types.Choices{},
 		),
-		types.MakeStructTypeRef("QuadTree",
+		types.MakeStructType("QuadTree",
 			[]types.Field{
-				types.Field{"Nodes", types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(ref.Ref{}, 0)), false},
-				types.Field{"Tiles", types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(ref.Ref{}, 1)), false},
-				types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
-				types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-				types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Georectangle", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 1), false},
+				types.Field{"Nodes", types.MakeCompoundType(types.ListKind, types.MakeType(ref.Ref{}, 0)), false},
+				types.Field{"Tiles", types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeType(ref.Ref{}, 1)), false},
+				types.Field{"Depth", types.MakePrimitiveType(types.UInt8Kind), false},
+				types.Field{"NumDescendents", types.MakePrimitiveType(types.UInt32Kind), false},
+				types.Field{"Path", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Georectangle", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 1), false},
 			},
 			types.Choices{},
 		),
-		types.MakeStructTypeRef("SQuadTree",
+		types.MakeStructType("SQuadTree",
 			[]types.Field{
-				types.Field{"Nodes", types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))), false},
-				types.Field{"Tiles", types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Ref{}, 2))), false},
-				types.Field{"Depth", types.MakePrimitiveTypeRef(types.UInt8Kind), false},
-				types.Field{"NumDescendents", types.MakePrimitiveTypeRef(types.UInt32Kind), false},
-				types.Field{"Path", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Georectangle", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 1), false},
+				types.Field{"Nodes", types.MakeCompoundType(types.ListKind, types.MakeCompoundType(types.RefKind, types.MakePrimitiveType(types.ValueKind))), false},
+				types.Field{"Tiles", types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Ref{}, 2))), false},
+				types.Field{"Depth", types.MakePrimitiveType(types.UInt8Kind), false},
+				types.Field{"NumDescendents", types.MakePrimitiveType(types.UInt32Kind), false},
+				types.Field{"Path", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Georectangle", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 1), false},
 			},
 			types.Choices{},
 		),
@@ -87,15 +87,15 @@ func (s Node) Def() (d NodeDef) {
 	return
 }
 
-var __typeRefForNode types.Type
+var __typeForNode types.Type
 
 func (m Node) Type() types.Type {
-	return __typeRefForNode
+	return __typeForNode
 }
 
 func init() {
-	__typeRefForNode = types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 0)
-	types.RegisterStruct(__typeRefForNode, builderForNode, readerForNode)
+	__typeForNode = types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 0)
+	types.RegisterStruct(__typeForNode, builderForNode, readerForNode)
 }
 
 func builderForNode(values []types.Value) types.Value {
@@ -117,7 +117,7 @@ func readerForNode(v types.Value) []types.Value {
 }
 
 func (s Node) Equals(other types.Value) bool {
-	return other != nil && __typeRefForNode.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForNode.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Node) Ref() ref.Ref {
@@ -125,7 +125,7 @@ func (s Node) Ref() ref.Ref {
 }
 
 func (s Node) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForNode.Chunks()...)
+	chunks = append(chunks, __typeForNode.Chunks()...)
 	chunks = append(chunks, s._Geoposition.Chunks()...)
 	chunks = append(chunks, s._Reference.Chunks()...)
 	return
@@ -214,15 +214,15 @@ func (s QuadTree) Def() (d QuadTreeDef) {
 	return
 }
 
-var __typeRefForQuadTree types.Type
+var __typeForQuadTree types.Type
 
 func (m QuadTree) Type() types.Type {
-	return __typeRefForQuadTree
+	return __typeForQuadTree
 }
 
 func init() {
-	__typeRefForQuadTree = types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 1)
-	types.RegisterStruct(__typeRefForQuadTree, builderForQuadTree, readerForQuadTree)
+	__typeForQuadTree = types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 1)
+	types.RegisterStruct(__typeForQuadTree, builderForQuadTree, readerForQuadTree)
 }
 
 func builderForQuadTree(values []types.Value) types.Value {
@@ -256,7 +256,7 @@ func readerForQuadTree(v types.Value) []types.Value {
 }
 
 func (s QuadTree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForQuadTree.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForQuadTree.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s QuadTree) Ref() ref.Ref {
@@ -264,7 +264,7 @@ func (s QuadTree) Ref() ref.Ref {
 }
 
 func (s QuadTree) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForQuadTree.Chunks()...)
+	chunks = append(chunks, __typeForQuadTree.Chunks()...)
 	chunks = append(chunks, s._Nodes.Chunks()...)
 	chunks = append(chunks, s._Tiles.Chunks()...)
 	chunks = append(chunks, s._Georectangle.Chunks()...)
@@ -398,15 +398,15 @@ func (s SQuadTree) Def() (d SQuadTreeDef) {
 	return
 }
 
-var __typeRefForSQuadTree types.Type
+var __typeForSQuadTree types.Type
 
 func (m SQuadTree) Type() types.Type {
-	return __typeRefForSQuadTree
+	return __typeForSQuadTree
 }
 
 func init() {
-	__typeRefForSQuadTree = types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 2)
-	types.RegisterStruct(__typeRefForSQuadTree, builderForSQuadTree, readerForSQuadTree)
+	__typeForSQuadTree = types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 2)
+	types.RegisterStruct(__typeForSQuadTree, builderForSQuadTree, readerForSQuadTree)
 }
 
 func builderForSQuadTree(values []types.Value) types.Value {
@@ -440,7 +440,7 @@ func readerForSQuadTree(v types.Value) []types.Value {
 }
 
 func (s SQuadTree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSQuadTree.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForSQuadTree.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SQuadTree) Ref() ref.Ref {
@@ -448,7 +448,7 @@ func (s SQuadTree) Ref() ref.Ref {
 }
 
 func (s SQuadTree) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForSQuadTree.Chunks()...)
+	chunks = append(chunks, __typeForSQuadTree.Chunks()...)
 	chunks = append(chunks, s._Nodes.Chunks()...)
 	chunks = append(chunks, s._Tiles.Chunks()...)
 	chunks = append(chunks, s._Georectangle.Chunks()...)
@@ -545,7 +545,7 @@ func (r RefOfValue) Ref() ref.Ref {
 }
 
 func (r RefOfValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfValue.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfValue.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfValue) Chunks() (chunks []ref.Ref) {
@@ -559,15 +559,15 @@ func (r RefOfValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfValue.
-var __typeRefForRefOfValue types.Type
+var __typeForRefOfValue types.Type
 
 func (m RefOfValue) Type() types.Type {
-	return __typeRefForRefOfValue
+	return __typeForRefOfValue
 }
 
 func init() {
-	__typeRefForRefOfValue = types.MakeCompoundTypeRef(types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind))
-	types.RegisterRef(__typeRefForRefOfValue, builderForRefOfValue)
+	__typeForRefOfValue = types.MakeCompoundType(types.RefKind, types.MakePrimitiveType(types.ValueKind))
+	types.RegisterRef(__typeForRefOfValue, builderForRefOfValue)
 }
 
 func builderForRefOfValue(r ref.Ref) types.Value {
@@ -612,7 +612,7 @@ func (l ListOfNode) Def() ListOfNodeDef {
 }
 
 func (l ListOfNode) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfNode.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfNode.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfNode) Ref() ref.Ref {
@@ -630,15 +630,15 @@ func (l ListOfNode) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfNode.
-var __typeRefForListOfNode types.Type
+var __typeForListOfNode types.Type
 
 func (m ListOfNode) Type() types.Type {
-	return __typeRefForListOfNode
+	return __typeForListOfNode
 }
 
 func init() {
-	__typeRefForListOfNode = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 0))
-	types.RegisterValue(__typeRefForListOfNode, builderForListOfNode, readerForListOfNode)
+	__typeForListOfNode = types.MakeCompoundType(types.ListKind, types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 0))
+	types.RegisterValue(__typeForListOfNode, builderForListOfNode, readerForListOfNode)
 }
 
 func builderForListOfNode(v types.Value) types.Value {
@@ -755,7 +755,7 @@ func (m MapOfStringToQuadTree) Def() MapOfStringToQuadTreeDef {
 }
 
 func (m MapOfStringToQuadTree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToQuadTree.Equals(other.Type()) && m.Ref() == other.Ref()
+	return other != nil && __typeForMapOfStringToQuadTree.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToQuadTree) Ref() ref.Ref {
@@ -773,15 +773,15 @@ func (m MapOfStringToQuadTree) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToQuadTree.
-var __typeRefForMapOfStringToQuadTree types.Type
+var __typeForMapOfStringToQuadTree types.Type
 
 func (m MapOfStringToQuadTree) Type() types.Type {
-	return __typeRefForMapOfStringToQuadTree
+	return __typeForMapOfStringToQuadTree
 }
 
 func init() {
-	__typeRefForMapOfStringToQuadTree = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 1))
-	types.RegisterValue(__typeRefForMapOfStringToQuadTree, builderForMapOfStringToQuadTree, readerForMapOfStringToQuadTree)
+	__typeForMapOfStringToQuadTree = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 1))
+	types.RegisterValue(__typeForMapOfStringToQuadTree, builderForMapOfStringToQuadTree, readerForMapOfStringToQuadTree)
 }
 
 func builderForMapOfStringToQuadTree(v types.Value) types.Value {
@@ -887,7 +887,7 @@ func (l ListOfRefOfValue) Def() ListOfRefOfValueDef {
 }
 
 func (l ListOfRefOfValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfRefOfValue.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfRefOfValue.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfValue) Ref() ref.Ref {
@@ -905,15 +905,15 @@ func (l ListOfRefOfValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfRefOfValue.
-var __typeRefForListOfRefOfValue types.Type
+var __typeForListOfRefOfValue types.Type
 
 func (m ListOfRefOfValue) Type() types.Type {
-	return __typeRefForListOfRefOfValue
+	return __typeForListOfRefOfValue
 }
 
 func init() {
-	__typeRefForListOfRefOfValue = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakePrimitiveTypeRef(types.ValueKind)))
-	types.RegisterValue(__typeRefForListOfRefOfValue, builderForListOfRefOfValue, readerForListOfRefOfValue)
+	__typeForListOfRefOfValue = types.MakeCompoundType(types.ListKind, types.MakeCompoundType(types.RefKind, types.MakePrimitiveType(types.ValueKind)))
+	types.RegisterValue(__typeForListOfRefOfValue, builderForListOfRefOfValue, readerForListOfRefOfValue)
 }
 
 func builderForListOfRefOfValue(v types.Value) types.Value {
@@ -1030,7 +1030,7 @@ func (m MapOfStringToRefOfSQuadTree) Def() MapOfStringToRefOfSQuadTreeDef {
 }
 
 func (m MapOfStringToRefOfSQuadTree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToRefOfSQuadTree.Equals(other.Type()) && m.Ref() == other.Ref()
+	return other != nil && __typeForMapOfStringToRefOfSQuadTree.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToRefOfSQuadTree) Ref() ref.Ref {
@@ -1048,15 +1048,15 @@ func (m MapOfStringToRefOfSQuadTree) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToRefOfSQuadTree.
-var __typeRefForMapOfStringToRefOfSQuadTree types.Type
+var __typeForMapOfStringToRefOfSQuadTree types.Type
 
 func (m MapOfStringToRefOfSQuadTree) Type() types.Type {
-	return __typeRefForMapOfStringToRefOfSQuadTree
+	return __typeForMapOfStringToRefOfSQuadTree
 }
 
 func init() {
-	__typeRefForMapOfStringToRefOfSQuadTree = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 2)))
-	types.RegisterValue(__typeRefForMapOfStringToRefOfSQuadTree, builderForMapOfStringToRefOfSQuadTree, readerForMapOfStringToRefOfSQuadTree)
+	__typeForMapOfStringToRefOfSQuadTree = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 2)))
+	types.RegisterValue(__typeForMapOfStringToRefOfSQuadTree, builderForMapOfStringToRefOfSQuadTree, readerForMapOfStringToRefOfSQuadTree)
 }
 
 func builderForMapOfStringToRefOfSQuadTree(v types.Value) types.Value {
@@ -1152,7 +1152,7 @@ func (r RefOfSQuadTree) Ref() ref.Ref {
 }
 
 func (r RefOfSQuadTree) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfSQuadTree.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfSQuadTree.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfSQuadTree) Chunks() (chunks []ref.Ref) {
@@ -1166,15 +1166,15 @@ func (r RefOfSQuadTree) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfSQuadTree.
-var __typeRefForRefOfSQuadTree types.Type
+var __typeForRefOfSQuadTree types.Type
 
 func (m RefOfSQuadTree) Type() types.Type {
-	return __typeRefForRefOfSQuadTree
+	return __typeForRefOfSQuadTree
 }
 
 func init() {
-	__typeRefForRefOfSQuadTree = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__commonPackageInFile_quad_tree_CachedRef, 2))
-	types.RegisterRef(__typeRefForRefOfSQuadTree, builderForRefOfSQuadTree)
+	__typeForRefOfSQuadTree = types.MakeCompoundType(types.RefKind, types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 2))
+	types.RegisterRef(__typeForRefOfSQuadTree, builderForRefOfSQuadTree)
 }
 
 func builderForRefOfSQuadTree(r ref.Ref) types.Value {

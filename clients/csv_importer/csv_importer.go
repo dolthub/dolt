@@ -106,16 +106,16 @@ func main() {
 	for _, key := range keys {
 		fields = append(fields, types.Field{
 			Name: key,
-			T:    types.MakePrimitiveTypeRef(types.StringKind),
+			T:    types.MakePrimitiveType(types.StringKind),
 			// TODO(misha): Think about whether we need fields to be optional.
 			Optional: false,
 		})
 	}
 
-	typeDef := types.MakeStructTypeRef(*name, fields, types.Choices{})
+	typeDef := types.MakeStructType(*name, fields, types.Choices{})
 	pkg := types.NewPackage([]types.Type{typeDef}, []ref.Ref{})
 	pkgRef := types.RegisterPackage(&pkg)
-	typeRef := types.MakeTypeRef(pkgRef, 0)
+	typ := types.MakeType(pkgRef, 0)
 
 	recordChan := make(chan valuesWithIndex, 4096)
 	refChan := make(chan refIndex, 4096)
@@ -147,7 +147,7 @@ func main() {
 			for i, v := range row.values {
 				fields[keys[i]] = types.NewString(v)
 			}
-			newStruct := types.NewStruct(typeRef, typeDef, fields)
+			newStruct := types.NewStruct(typ, typeDef, fields)
 			r := types.NewRef(types.WriteValue(newStruct, ds.Store()))
 			refChan <- refIndex{r, row.index}
 		}

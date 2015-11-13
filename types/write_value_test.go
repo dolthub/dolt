@@ -33,7 +33,7 @@ func TestWriteValue(t *testing.T) {
 	testEncode(fmt.Sprintf("t [%d,\"hi\"]", StringKind), NewString("hi"))
 
 	testEncode(fmt.Sprintf("t [%d,[],[]]", PackageKind), Package{types: []Type{}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
-	ref1 := testEncode(fmt.Sprintf("t [%d,[%d],[]]", PackageKind, BoolKind), Package{types: []Type{MakePrimitiveTypeRef(BoolKind)}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
+	ref1 := testEncode(fmt.Sprintf("t [%d,[%d],[]]", PackageKind, BoolKind), Package{types: []Type{MakePrimitiveType(BoolKind)}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
 	testEncode(fmt.Sprintf("t [%d,[],[\"%s\"]]", PackageKind, ref1), Package{types: []Type{}, dependencies: []ref.Ref{ref1}, ref: &ref.Ref{}})
 }
 
@@ -62,15 +62,15 @@ func TestWritePackageWhenValueIsWritten(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	typeDef := MakeStructTypeRef("S", []Field{
-		Field{"X", MakePrimitiveTypeRef(Int32Kind), false},
+	typeDef := MakeStructType("S", []Field{
+		Field{"X", MakePrimitiveType(Int32Kind), false},
 	}, Choices{})
 	pkg1 := NewPackage([]Type{typeDef}, []ref.Ref{})
 	// Don't write package
 	pkgRef1 := RegisterPackage(&pkg1)
-	typeRef := MakeTypeRef(pkgRef1, 0)
+	typ := MakeType(pkgRef1, 0)
 
-	s := NewStruct(typeRef, typeDef, structData{"X": Int32(42)})
+	s := NewStruct(typ, typeDef, structData{"X": Int32(42)})
 	WriteValue(s, cs)
 
 	pkg2 := ReadValue(pkgRef1, cs)

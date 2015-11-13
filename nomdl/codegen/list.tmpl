@@ -32,7 +32,7 @@ func New{{.Name}}() {{.Name}} {
 {{end}}
 
 func (l {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
-	return other != nil && __typeRefFor{{.Name}}.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeFor{{.Name}}.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l {{.Name}}) Ref() ref.Ref {
@@ -50,15 +50,15 @@ func (l {{.Name}}) ChildValues() []{{$typesPackage}}Value {
 }
 
 // A Noms Value that describes {{.Name}}.
-var __typeRefFor{{.Name}} {{$typesPackage}}Type
+var __typeFor{{.Name}} {{$typesPackage}}Type
 
 func (m {{.Name}}) Type() {{$typesPackage}}Type {
-	return __typeRefFor{{.Name}}
+	return __typeFor{{.Name}}
 }
 
 func init() {
-	__typeRefFor{{.Name}} = {{toTypesTypeRef .Type .FileID .PackageName}}
-	{{$typesPackage}}RegisterValue(__typeRefFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
+	__typeFor{{.Name}} = {{toTypesType .Type .FileID .PackageName}}
+	{{$typesPackage}}RegisterValue(__typeFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
 }
 
 func builderFor{{.Name}}(v {{$typesPackage}}Value) {{$typesPackage}}Value {

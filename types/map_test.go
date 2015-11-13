@@ -258,12 +258,12 @@ func TestMapEmpty(t *testing.T) {
 	assert.False(m.Empty())
 }
 
-func TestMapTypeRef(t *testing.T) {
+func TestMapType(t *testing.T) {
 	assert := assert.New(t)
 	m := NewMap()
-	assert.True(m.Type().Equals(MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))))
+	assert.True(m.Type().Equals(MakeCompoundType(MapKind, MakePrimitiveType(ValueKind), MakePrimitiveType(ValueKind))))
 
-	tr := MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(StringKind), MakePrimitiveTypeRef(UInt64Kind))
+	tr := MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(UInt64Kind))
 	m = newMapFromData(mapData{}, tr)
 	assert.Equal(tr, m.Type())
 

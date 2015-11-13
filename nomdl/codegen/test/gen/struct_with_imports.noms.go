@@ -14,11 +14,11 @@ var __genPackageInFile_struct_with_imports_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeEnumTypeRef("LocalE", "LocalE1", "Ignored"),
-		types.MakeStructTypeRef("ImportUser",
+		types.MakeEnumType("LocalE", "LocalE1", "Ignored"),
+		types.MakeStructType("ImportUser",
 			[]types.Field{
-				types.Field{"importedStruct", types.MakeTypeRef(ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"), 0), false},
-				types.Field{"enum", types.MakeTypeRef(ref.Ref{}, 0), false},
+				types.Field{"importedStruct", types.MakeType(ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"), 0), false},
+				types.Field{"enum", types.MakeType(ref.Ref{}, 0), false},
 			},
 			types.Choices{},
 		),
@@ -41,15 +41,15 @@ func NewLocalE() LocalE {
 	return LocalE(0)
 }
 
-var __typeRefForLocalE types.Type
+var __typeForLocalE types.Type
 
 func (e LocalE) Type() types.Type {
-	return __typeRefForLocalE
+	return __typeForLocalE
 }
 
 func init() {
-	__typeRefForLocalE = types.MakeTypeRef(__genPackageInFile_struct_with_imports_CachedRef, 0)
-	types.RegisterEnum(__typeRefForLocalE, builderForLocalE, readerForLocalE)
+	__typeForLocalE = types.MakeType(__genPackageInFile_struct_with_imports_CachedRef, 0)
+	types.RegisterEnum(__typeForLocalE, builderForLocalE, readerForLocalE)
 }
 
 func builderForLocalE(v uint32) types.Value {
@@ -114,15 +114,15 @@ func (s ImportUser) Def() (d ImportUserDef) {
 	return
 }
 
-var __typeRefForImportUser types.Type
+var __typeForImportUser types.Type
 
 func (m ImportUser) Type() types.Type {
-	return __typeRefForImportUser
+	return __typeForImportUser
 }
 
 func init() {
-	__typeRefForImportUser = types.MakeTypeRef(__genPackageInFile_struct_with_imports_CachedRef, 1)
-	types.RegisterStruct(__typeRefForImportUser, builderForImportUser, readerForImportUser)
+	__typeForImportUser = types.MakeType(__genPackageInFile_struct_with_imports_CachedRef, 1)
+	types.RegisterStruct(__typeForImportUser, builderForImportUser, readerForImportUser)
 }
 
 func builderForImportUser(values []types.Value) types.Value {
@@ -144,7 +144,7 @@ func readerForImportUser(v types.Value) []types.Value {
 }
 
 func (s ImportUser) Equals(other types.Value) bool {
-	return other != nil && __typeRefForImportUser.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForImportUser.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s ImportUser) Ref() ref.Ref {
@@ -152,7 +152,7 @@ func (s ImportUser) Ref() ref.Ref {
 }
 
 func (s ImportUser) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForImportUser.Chunks()...)
+	chunks = append(chunks, __typeForImportUser.Chunks()...)
 	chunks = append(chunks, s._importedStruct.Chunks()...)
 	return
 }
@@ -213,7 +213,7 @@ func (l ListOfD) Def() ListOfDDef {
 }
 
 func (l ListOfD) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfD.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfD.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfD) Ref() ref.Ref {
@@ -231,15 +231,15 @@ func (l ListOfD) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfD.
-var __typeRefForListOfD types.Type
+var __typeForListOfD types.Type
 
 func (m ListOfD) Type() types.Type {
-	return __typeRefForListOfD
+	return __typeForListOfD
 }
 
 func init() {
-	__typeRefForListOfD = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"), 0))
-	types.RegisterValue(__typeRefForListOfD, builderForListOfD, readerForListOfD)
+	__typeForListOfD = types.MakeCompoundType(types.ListKind, types.MakeType(ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"), 0))
+	types.RegisterValue(__typeForListOfD, builderForListOfD, readerForListOfD)
 }
 
 func builderForListOfD(v types.Value) types.Value {

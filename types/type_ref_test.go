@@ -12,21 +12,21 @@ func TestTypes(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	boolType := MakePrimitiveTypeRef(BoolKind)
-	uint8Type := MakePrimitiveTypeRef(UInt8Kind)
-	stringType := MakePrimitiveTypeRef(StringKind)
-	mapType := MakeCompoundTypeRef(MapKind, stringType, uint8Type)
-	setType := MakeCompoundTypeRef(SetKind, stringType)
-	mahType := MakeStructTypeRef("MahStruct", []Field{
+	boolType := MakePrimitiveType(BoolKind)
+	uint8Type := MakePrimitiveType(UInt8Kind)
+	stringType := MakePrimitiveType(StringKind)
+	mapType := MakeCompoundType(MapKind, stringType, uint8Type)
+	setType := MakeCompoundType(SetKind, stringType)
+	mahType := MakeStructType("MahStruct", []Field{
 		Field{"Field1", stringType, false},
 		Field{"Field2", boolType, true},
 	}, Choices{})
-	otherType := MakeStructTypeRef("MahOtherStruct", []Field{}, Choices{
+	otherType := MakeStructType("MahOtherStruct", []Field{}, Choices{
 		Field{"StructField", mahType, false},
 		Field{"StringField", stringType, false},
 	})
 	pkgRef := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
-	trType := MakeTypeRef(pkgRef, 42)
+	trType := MakeType(pkgRef, 42)
 
 	mRef := WriteValue(mapType, cs)
 	setRef := WriteValue(setType, cs)
@@ -45,10 +45,10 @@ func TestTypeWithPkgRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	pkg := NewPackage([]Type{MakePrimitiveTypeRef(Float64Kind)}, []ref.Ref{})
+	pkg := NewPackage([]Type{MakePrimitiveType(Float64Kind)}, []ref.Ref{})
 
 	pkgRef := RegisterPackage(&pkg)
-	unresolvedType := MakeTypeRef(pkgRef, 42)
+	unresolvedType := MakeType(pkgRef, 42)
 	unresolvedRef := WriteValue(unresolvedType, cs)
 
 	v := ReadValue(unresolvedRef, cs)
@@ -56,17 +56,17 @@ func TestTypeWithPkgRef(t *testing.T) {
 	assert.NotNil(ReadValue(pkgRef, cs))
 }
 
-func TestTypeRefTypeRef(t *testing.T) {
-	assert.True(t, MakePrimitiveTypeRef(BoolKind).Type().Equals(MakePrimitiveTypeRef(TypeRefKind)))
+func TestTypeType(t *testing.T) {
+	assert.True(t, MakePrimitiveType(BoolKind).Type().Equals(MakePrimitiveType(TypeKind)))
 }
 
 func TestTypeRefDescribe(t *testing.T) {
 	assert := assert.New(t)
-	boolType := MakePrimitiveTypeRef(BoolKind)
-	uint8Type := MakePrimitiveTypeRef(UInt8Kind)
-	stringType := MakePrimitiveTypeRef(StringKind)
-	mapType := MakeCompoundTypeRef(MapKind, stringType, uint8Type)
-	setType := MakeCompoundTypeRef(SetKind, stringType)
+	boolType := MakePrimitiveType(BoolKind)
+	uint8Type := MakePrimitiveType(UInt8Kind)
+	stringType := MakePrimitiveType(StringKind)
+	mapType := MakeCompoundType(MapKind, stringType, uint8Type)
+	setType := MakeCompoundType(SetKind, stringType)
 
 	assert.Equal("Bool", boolType.Describe())
 	assert.Equal("UInt8", uint8Type.Describe())
@@ -74,13 +74,13 @@ func TestTypeRefDescribe(t *testing.T) {
 	assert.Equal("Map(String, UInt8)", mapType.Describe())
 	assert.Equal("Set(String)", setType.Describe())
 
-	mahType := MakeStructTypeRef("MahStruct", []Field{
+	mahType := MakeStructType("MahStruct", []Field{
 		Field{"Field1", stringType, false},
 		Field{"Field2", boolType, true},
 	}, Choices{})
 	assert.Equal("struct MahStruct {\n  Field1: String\n  Field2: optional Bool\n}", mahType.Describe())
 
-	otherType := MakeStructTypeRef("MahOtherStruct", []Field{
+	otherType := MakeStructType("MahOtherStruct", []Field{
 		Field{"Field1", stringType, false},
 		Field{"Field2", boolType, true},
 	}, Choices{

@@ -14,14 +14,14 @@ var __genPackageInFile_sha1_1c216c6_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("S",
+		types.MakeStructType("S",
 			[]types.Field{
-				types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), false},
+				types.Field{"s", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"b", types.MakePrimitiveType(types.BoolKind), false},
 			},
 			types.Choices{},
 		),
-		types.MakeEnumTypeRef("E", "e1", "e2", "e3"),
+		types.MakeEnumType("E", "e1", "e2", "e3"),
 	}, []ref.Ref{})
 	__genPackageInFile_sha1_1c216c6_CachedRef = types.RegisterPackage(&p)
 }
@@ -63,15 +63,15 @@ func (s S) Def() (d SDef) {
 	return
 }
 
-var __typeRefForS types.Type
+var __typeForS types.Type
 
 func (m S) Type() types.Type {
-	return __typeRefForS
+	return __typeForS
 }
 
 func init() {
-	__typeRefForS = types.MakeTypeRef(__genPackageInFile_sha1_1c216c6_CachedRef, 0)
-	types.RegisterStruct(__typeRefForS, builderForS, readerForS)
+	__typeForS = types.MakeType(__genPackageInFile_sha1_1c216c6_CachedRef, 0)
+	types.RegisterStruct(__typeForS, builderForS, readerForS)
 }
 
 func builderForS(values []types.Value) types.Value {
@@ -93,7 +93,7 @@ func readerForS(v types.Value) []types.Value {
 }
 
 func (s S) Equals(other types.Value) bool {
-	return other != nil && __typeRefForS.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForS.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s S) Ref() ref.Ref {
@@ -101,7 +101,7 @@ func (s S) Ref() ref.Ref {
 }
 
 func (s S) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForS.Chunks()...)
+	chunks = append(chunks, __typeForS.Chunks()...)
 	return
 }
 
@@ -145,15 +145,15 @@ func NewE() E {
 	return E(0)
 }
 
-var __typeRefForE types.Type
+var __typeForE types.Type
 
 func (e E) Type() types.Type {
-	return __typeRefForE
+	return __typeForE
 }
 
 func init() {
-	__typeRefForE = types.MakeTypeRef(__genPackageInFile_sha1_1c216c6_CachedRef, 1)
-	types.RegisterEnum(__typeRefForE, builderForE, readerForE)
+	__typeForE = types.MakeType(__genPackageInFile_sha1_1c216c6_CachedRef, 1)
+	types.RegisterEnum(__typeForE, builderForE, readerForE)
 }
 
 func builderForE(v uint32) types.Value {

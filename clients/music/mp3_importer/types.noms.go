@@ -14,13 +14,13 @@ var __mainPackageInFile_types_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("Song",
+		types.MakeStructType("Song",
 			[]types.Field{
-				types.Field{"Title", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Artist", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Album", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Year", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Mp3", types.MakePrimitiveTypeRef(types.BlobKind), false},
+				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Artist", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Album", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Year", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Mp3", types.MakePrimitiveType(types.BlobKind), false},
 			},
 			types.Choices{},
 		),
@@ -80,15 +80,15 @@ func (s Song) Def() (d SongDef) {
 	return
 }
 
-var __typeRefForSong types.Type
+var __typeForSong types.Type
 
 func (m Song) Type() types.Type {
-	return __typeRefForSong
+	return __typeForSong
 }
 
 func init() {
-	__typeRefForSong = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
-	types.RegisterStruct(__typeRefForSong, builderForSong, readerForSong)
+	__typeForSong = types.MakeType(__mainPackageInFile_types_CachedRef, 0)
+	types.RegisterStruct(__typeForSong, builderForSong, readerForSong)
 }
 
 func builderForSong(values []types.Value) types.Value {
@@ -119,7 +119,7 @@ func readerForSong(v types.Value) []types.Value {
 }
 
 func (s Song) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSong.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForSong.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Song) Ref() ref.Ref {
@@ -127,7 +127,7 @@ func (s Song) Ref() ref.Ref {
 }
 
 func (s Song) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForSong.Chunks()...)
+	chunks = append(chunks, __typeForSong.Chunks()...)
 	chunks = append(chunks, s._Mp3.Chunks()...)
 	return
 }
@@ -221,7 +221,7 @@ func (l ListOfSong) Def() ListOfSongDef {
 }
 
 func (l ListOfSong) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfSong.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfSong.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfSong) Ref() ref.Ref {
@@ -239,15 +239,15 @@ func (l ListOfSong) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfSong.
-var __typeRefForListOfSong types.Type
+var __typeForListOfSong types.Type
 
 func (m ListOfSong) Type() types.Type {
-	return __typeRefForListOfSong
+	return __typeForListOfSong
 }
 
 func init() {
-	__typeRefForListOfSong = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
-	types.RegisterValue(__typeRefForListOfSong, builderForListOfSong, readerForListOfSong)
+	__typeForListOfSong = types.MakeCompoundType(types.ListKind, types.MakeType(__mainPackageInFile_types_CachedRef, 0))
+	types.RegisterValue(__typeForListOfSong, builderForListOfSong, readerForListOfSong)
 }
 
 func builderForListOfSong(v types.Value) types.Value {

@@ -23,14 +23,14 @@ type compoundBlob struct {
 	cs     chunks.ChunkSource
 }
 
-var typeRefForCompoundBlob = MakeCompoundTypeRef(MetaSequenceKind, MakePrimitiveTypeRef(BlobKind))
+var typeForCompoundBlob = MakeCompoundType(MetaSequenceKind, MakePrimitiveType(BlobKind))
 
 func newCompoundBlob(tuples metaSequenceData, cs chunks.ChunkSource) compoundBlob {
-	return buildCompoundBlob(tuples, typeRefForCompoundBlob, cs).(compoundBlob)
+	return buildCompoundBlob(tuples, typeForCompoundBlob, cs).(compoundBlob)
 }
 
 func buildCompoundBlob(tuples metaSequenceData, t Type, cs chunks.ChunkSource) Value {
-	d.Chk.True(t.Equals(typeRefForCompoundBlob))
+	d.Chk.True(t.Equals(typeForCompoundBlob))
 	return compoundBlob{tuples, &ref.Ref{}, cs}
 }
 
@@ -61,7 +61,7 @@ func (cb compoundBlob) lastTuple() metaTuple {
 }
 
 func (cb compoundBlob) Equals(other Value) bool {
-	return other != nil && typeRefForCompoundBlob.Equals(other.Type()) && cb.Ref() == other.Ref()
+	return other != nil && typeForCompoundBlob.Equals(other.Type()) && cb.Ref() == other.Ref()
 }
 
 func (cb compoundBlob) Ref() ref.Ref {
@@ -69,7 +69,7 @@ func (cb compoundBlob) Ref() ref.Ref {
 }
 
 func (cb compoundBlob) Type() Type {
-	return typeRefForCompoundBlob
+	return typeForCompoundBlob
 }
 
 func (cb compoundBlob) ChildValues() []Value {

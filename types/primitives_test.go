@@ -30,7 +30,7 @@ func TestPrimitives(t *testing.T) {
 	}
 }
 
-func TestPrimitivesTypeRef(t *testing.T) {
+func TestPrimitivesType(t *testing.T) {
 	data := []struct {
 		v Value
 		k NomsKind
@@ -49,6 +49,6 @@ func TestPrimitivesTypeRef(t *testing.T) {
 	}
 
 	for _, d := range data {
-		assert.True(t, d.v.Type().Equals(MakePrimitiveTypeRef(d.k)))
+		assert.True(t, d.v.Type().Equals(MakePrimitiveType(d.k)))
 	}
 }

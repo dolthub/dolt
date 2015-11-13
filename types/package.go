@@ -13,7 +13,7 @@ func NewPackage(types []Type, deps []ref.Ref) Package {
 }
 
 func (p Package) Equals(other Value) bool {
-	return other != nil && typeRefForPackage.Equals(other.Type()) && p.Ref() == other.Ref()
+	return other != nil && typeForPackage.Equals(other.Type()) && p.Ref() == other.Ref()
 }
 
 func (p Package) Ref() ref.Ref {
@@ -40,10 +40,10 @@ func (p Package) ChildValues() (res []Value) {
 	return
 }
 
-var typeRefForPackage = MakePrimitiveTypeRef(PackageKind)
+var typeForPackage = MakePrimitiveType(PackageKind)
 
 func (p Package) Type() Type {
-	return typeRefForPackage
+	return typeForPackage
 }
 
 func (p Package) GetOrdinal(n string) (ordinal int64) {

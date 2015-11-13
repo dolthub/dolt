@@ -32,22 +32,22 @@ func TestUserName(t *testing.T) {
 	assert := assert.New(t)
 
 	imported := types.NewPackage([]types.Type{
-		types.MakeEnumTypeRef("E1", "a", "b"),
-		types.MakeStructTypeRef("S1", []types.Field{
-			types.Field{"f", types.MakePrimitiveTypeRef(types.BoolKind), false},
+		types.MakeEnumType("E1", "a", "b"),
+		types.MakeStructType("S1", []types.Field{
+			types.Field{"f", types.MakePrimitiveType(types.BoolKind), false},
 		}, types.Choices{}),
 	}, []ref.Ref{})
 
 	res := testResolver{assert, map[ref.Ref]types.Package{imported.Ref(): imported}}
 
 	localStructName := "Local"
-	resolved := types.MakeStructTypeRef(localStructName, []types.Field{
-		types.Field{"a", types.MakePrimitiveTypeRef(types.Int8Kind), false},
+	resolved := types.MakeStructType(localStructName, []types.Field{
+		types.Field{"a", types.MakePrimitiveType(types.Int8Kind), false},
 	}, types.Choices{})
 
 	g := Generator{R: &res}
 	assert.Equal(localStructName, g.UserName(resolved))
 
-	listOfImported := types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(imported.Ref(), 1))
+	listOfImported := types.MakeCompoundType(types.ListKind, types.MakeType(imported.Ref(), 1))
 	assert.Equal(fmt.Sprintf("ListOfS1"), g.UserName(listOfImported))
 }
