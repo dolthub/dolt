@@ -18,7 +18,7 @@ type Map struct {
 type mapData []mapEntry
 
 func NewMap(kv ...Value) Map {
-	return newMapFromData(buildMapData(mapData{}, kv), mapTypeRef)
+	return newMapFromData(buildMapData(mapData{}, kv), mapType)
 }
 
 func (m Map) First() (Value, Value) {
@@ -164,7 +164,7 @@ func (m Map) ChildValues() []Value {
 	return res
 }
 
-var mapTypeRef = MakeCompoundTypeRef(MapKind, MakePrimitiveTypeRef(ValueKind), MakePrimitiveTypeRef(ValueKind))
+var mapType = MakeCompoundType(MapKind, MakePrimitiveType(ValueKind), MakePrimitiveType(ValueKind))
 
 func (m Map) Type() Type {
 	return m.t

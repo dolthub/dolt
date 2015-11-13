@@ -37,7 +37,7 @@ func (l ListOfInt64) Def() ListOfInt64Def {
 }
 
 func (l ListOfInt64) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfInt64.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfInt64.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfInt64) Ref() ref.Ref {
@@ -55,15 +55,15 @@ func (l ListOfInt64) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfInt64.
-var __typeRefForListOfInt64 types.Type
+var __typeForListOfInt64 types.Type
 
 func (m ListOfInt64) Type() types.Type {
-	return __typeRefForListOfInt64
+	return __typeForListOfInt64
 }
 
 func init() {
-	__typeRefForListOfInt64 = types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.Int64Kind))
-	types.RegisterValue(__typeRefForListOfInt64, builderForListOfInt64, readerForListOfInt64)
+	__typeForListOfInt64 = types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.Int64Kind))
+	types.RegisterValue(__typeForListOfInt64, builderForListOfInt64, readerForListOfInt64)
 }
 
 func builderForListOfInt64(v types.Value) types.Value {

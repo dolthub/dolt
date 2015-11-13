@@ -48,14 +48,13 @@ Here is the diff:
 --- a/nomdl/pkg/grammar.peg
 +++ b/nomdl/pkg/grammar.peg
 @@ -159,7 +159,7 @@ CompoundType <- `List` _ `(` _ t:Type _ `)` _ {
-        return types.MakeCompoundTypeRef(types.RefKind, t.(types.Type)), nil
+        return types.MakeCompoundType(types.RefKind, t.(types.Type)), nil
  }
 
 -PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `Type`) {
 +PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `Type` / `Package`) {
-        return types.MakePrimitiveTypeRefByString(string(p.([]uint8))), nil
+        return types.MakePrimitiveTypeByString(string(p.([]uint8))), nil
  }
  ```
- 
- Once [#577](https://github.com/attic-labs/noms/issues/577) is fixed this will need no manual intervention.
 
+ Once [#577](https://github.com/attic-labs/noms/issues/577) is fixed this will need no manual intervention.

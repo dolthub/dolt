@@ -14,16 +14,16 @@ var __genPackageInFile_sha1_09d2fdd_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("D",
+		types.MakeStructType("D",
 			[]types.Field{
-				types.Field{"structField", types.MakeTypeRef(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 0), false},
-				types.Field{"enumField", types.MakeTypeRef(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 1), false},
+				types.Field{"structField", types.MakeType(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 0), false},
+				types.Field{"enumField", types.MakeType(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 1), false},
 			},
 			types.Choices{},
 		),
-		types.MakeStructTypeRef("DUser",
+		types.MakeStructType("DUser",
 			[]types.Field{
-				types.Field{"Dfield", types.MakeTypeRef(ref.Ref{}, 0), false},
+				types.Field{"Dfield", types.MakeType(ref.Ref{}, 0), false},
 			},
 			types.Choices{},
 		),
@@ -70,15 +70,15 @@ func (s D) Def() (d DDef) {
 	return
 }
 
-var __typeRefForD types.Type
+var __typeForD types.Type
 
 func (m D) Type() types.Type {
-	return __typeRefForD
+	return __typeForD
 }
 
 func init() {
-	__typeRefForD = types.MakeTypeRef(__genPackageInFile_sha1_09d2fdd_CachedRef, 0)
-	types.RegisterStruct(__typeRefForD, builderForD, readerForD)
+	__typeForD = types.MakeType(__genPackageInFile_sha1_09d2fdd_CachedRef, 0)
+	types.RegisterStruct(__typeForD, builderForD, readerForD)
 }
 
 func builderForD(values []types.Value) types.Value {
@@ -100,7 +100,7 @@ func readerForD(v types.Value) []types.Value {
 }
 
 func (s D) Equals(other types.Value) bool {
-	return other != nil && __typeRefForD.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForD.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s D) Ref() ref.Ref {
@@ -108,7 +108,7 @@ func (s D) Ref() ref.Ref {
 }
 
 func (s D) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForD.Chunks()...)
+	chunks = append(chunks, __typeForD.Chunks()...)
 	chunks = append(chunks, s._structField.Chunks()...)
 	return
 }
@@ -171,15 +171,15 @@ func (s DUser) Def() (d DUserDef) {
 	return
 }
 
-var __typeRefForDUser types.Type
+var __typeForDUser types.Type
 
 func (m DUser) Type() types.Type {
-	return __typeRefForDUser
+	return __typeForDUser
 }
 
 func init() {
-	__typeRefForDUser = types.MakeTypeRef(__genPackageInFile_sha1_09d2fdd_CachedRef, 1)
-	types.RegisterStruct(__typeRefForDUser, builderForDUser, readerForDUser)
+	__typeForDUser = types.MakeType(__genPackageInFile_sha1_09d2fdd_CachedRef, 1)
+	types.RegisterStruct(__typeForDUser, builderForDUser, readerForDUser)
 }
 
 func builderForDUser(values []types.Value) types.Value {
@@ -198,7 +198,7 @@ func readerForDUser(v types.Value) []types.Value {
 }
 
 func (s DUser) Equals(other types.Value) bool {
-	return other != nil && __typeRefForDUser.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForDUser.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s DUser) Ref() ref.Ref {
@@ -206,7 +206,7 @@ func (s DUser) Ref() ref.Ref {
 }
 
 func (s DUser) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForDUser.Chunks()...)
+	chunks = append(chunks, __typeForDUser.Chunks()...)
 	chunks = append(chunks, s._Dfield.Chunks()...)
 	return
 }

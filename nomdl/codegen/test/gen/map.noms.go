@@ -38,7 +38,7 @@ func (m MapOfBoolToString) Def() MapOfBoolToStringDef {
 }
 
 func (m MapOfBoolToString) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfBoolToString.Equals(other.Type()) && m.Ref() == other.Ref()
+	return other != nil && __typeForMapOfBoolToString.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfBoolToString) Ref() ref.Ref {
@@ -56,15 +56,15 @@ func (m MapOfBoolToString) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfBoolToString.
-var __typeRefForMapOfBoolToString types.Type
+var __typeForMapOfBoolToString types.Type
 
 func (m MapOfBoolToString) Type() types.Type {
-	return __typeRefForMapOfBoolToString
+	return __typeForMapOfBoolToString
 }
 
 func init() {
-	__typeRefForMapOfBoolToString = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.BoolKind), types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterValue(__typeRefForMapOfBoolToString, builderForMapOfBoolToString, readerForMapOfBoolToString)
+	__typeForMapOfBoolToString = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.BoolKind), types.MakePrimitiveType(types.StringKind))
+	types.RegisterValue(__typeForMapOfBoolToString, builderForMapOfBoolToString, readerForMapOfBoolToString)
 }
 
 func builderForMapOfBoolToString(v types.Value) types.Value {
@@ -171,7 +171,7 @@ func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 }
 
 func (m MapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToValue.Equals(other.Type()) && m.Ref() == other.Ref()
+	return other != nil && __typeForMapOfStringToValue.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToValue) Ref() ref.Ref {
@@ -189,15 +189,15 @@ func (m MapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToValue.
-var __typeRefForMapOfStringToValue types.Type
+var __typeForMapOfStringToValue types.Type
 
 func (m MapOfStringToValue) Type() types.Type {
-	return __typeRefForMapOfStringToValue
+	return __typeForMapOfStringToValue
 }
 
 func init() {
-	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
-	types.RegisterValue(__typeRefForMapOfStringToValue, builderForMapOfStringToValue, readerForMapOfStringToValue)
+	__typeForMapOfStringToValue = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakePrimitiveType(types.ValueKind))
+	types.RegisterValue(__typeForMapOfStringToValue, builderForMapOfStringToValue, readerForMapOfStringToValue)
 }
 
 func builderForMapOfStringToValue(v types.Value) types.Value {

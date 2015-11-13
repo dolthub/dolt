@@ -20,9 +20,8 @@ func (v {{.NomsType}}) ToPrimitive() interface{} {
 	return {{.GoType}}(v)
 }
 
-var typeRefFor{{.NomsType}} = MakePrimitiveTypeRef({{.NomsType}}Kind)
+var typeFor{{.NomsType}} = MakePrimitiveType({{.NomsType}}Kind)
 
 func (v {{.NomsType}}) Type() Type {
-	return typeRefFor{{.NomsType}}
+	return typeFor{{.NomsType}}
 }
-

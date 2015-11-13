@@ -15,10 +15,10 @@ var __datasPackageInFile_types_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("Commit",
+		types.MakeStructType("Commit",
 			[]types.Field{
-				types.Field{"value", types.MakePrimitiveTypeRef(types.ValueKind), false},
-				types.Field{"parents", types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Ref{}, 0))), false},
+				types.Field{"value", types.MakePrimitiveType(types.ValueKind), false},
+				types.Field{"parents", types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Ref{}, 0))), false},
 			},
 			types.Choices{},
 		),
@@ -63,15 +63,15 @@ func (s Commit) Def() (d CommitDef) {
 	return
 }
 
-var __typeRefForCommit types.Type
+var __typeForCommit types.Type
 
 func (m Commit) Type() types.Type {
-	return __typeRefForCommit
+	return __typeForCommit
 }
 
 func init() {
-	__typeRefForCommit = types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)
-	types.RegisterStruct(__typeRefForCommit, builderForCommit, readerForCommit)
+	__typeForCommit = types.MakeType(__datasPackageInFile_types_CachedRef, 0)
+	types.RegisterStruct(__typeForCommit, builderForCommit, readerForCommit)
 }
 
 func builderForCommit(values []types.Value) types.Value {
@@ -93,7 +93,7 @@ func readerForCommit(v types.Value) []types.Value {
 }
 
 func (s Commit) Equals(other types.Value) bool {
-	return other != nil && __typeRefForCommit.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForCommit.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Commit) Ref() ref.Ref {
@@ -101,7 +101,7 @@ func (s Commit) Ref() ref.Ref {
 }
 
 func (s Commit) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForCommit.Chunks()...)
+	chunks = append(chunks, __typeForCommit.Chunks()...)
 	chunks = append(chunks, s._value.Chunks()...)
 	chunks = append(chunks, s._parents.Chunks()...)
 	return
@@ -164,7 +164,7 @@ func (m MapOfStringToRefOfCommit) Def() MapOfStringToRefOfCommitDef {
 }
 
 func (m MapOfStringToRefOfCommit) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToRefOfCommit.Equals(other.Type()) && m.Ref() == other.Ref()
+	return other != nil && __typeForMapOfStringToRefOfCommit.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToRefOfCommit) Ref() ref.Ref {
@@ -182,15 +182,15 @@ func (m MapOfStringToRefOfCommit) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToRefOfCommit.
-var __typeRefForMapOfStringToRefOfCommit types.Type
+var __typeForMapOfStringToRefOfCommit types.Type
 
 func (m MapOfStringToRefOfCommit) Type() types.Type {
-	return __typeRefForMapOfStringToRefOfCommit
+	return __typeForMapOfStringToRefOfCommit
 }
 
 func init() {
-	__typeRefForMapOfStringToRefOfCommit = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)))
-	types.RegisterValue(__typeRefForMapOfStringToRefOfCommit, builderForMapOfStringToRefOfCommit, readerForMapOfStringToRefOfCommit)
+	__typeForMapOfStringToRefOfCommit = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(__datasPackageInFile_types_CachedRef, 0)))
+	types.RegisterValue(__typeForMapOfStringToRefOfCommit, builderForMapOfStringToRefOfCommit, readerForMapOfStringToRefOfCommit)
 }
 
 func builderForMapOfStringToRefOfCommit(v types.Value) types.Value {
@@ -299,7 +299,7 @@ func (s SetOfRefOfCommit) Def() SetOfRefOfCommitDef {
 }
 
 func (s SetOfRefOfCommit) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSetOfRefOfCommit.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForSetOfRefOfCommit.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfRefOfCommit) Ref() ref.Ref {
@@ -317,15 +317,15 @@ func (s SetOfRefOfCommit) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfRefOfCommit.
-var __typeRefForSetOfRefOfCommit types.Type
+var __typeForSetOfRefOfCommit types.Type
 
 func (m SetOfRefOfCommit) Type() types.Type {
-	return __typeRefForSetOfRefOfCommit
+	return __typeForSetOfRefOfCommit
 }
 
 func init() {
-	__typeRefForSetOfRefOfCommit = types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0)))
-	types.RegisterValue(__typeRefForSetOfRefOfCommit, builderForSetOfRefOfCommit, readerForSetOfRefOfCommit)
+	__typeForSetOfRefOfCommit = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(__datasPackageInFile_types_CachedRef, 0)))
+	types.RegisterValue(__typeForSetOfRefOfCommit, builderForSetOfRefOfCommit, readerForSetOfRefOfCommit)
 }
 
 func builderForSetOfRefOfCommit(v types.Value) types.Value {
@@ -435,7 +435,7 @@ func (r RefOfCommit) Ref() ref.Ref {
 }
 
 func (r RefOfCommit) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfCommit.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfCommit.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfCommit) Chunks() (chunks []ref.Ref) {
@@ -449,15 +449,15 @@ func (r RefOfCommit) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfCommit.
-var __typeRefForRefOfCommit types.Type
+var __typeForRefOfCommit types.Type
 
 func (m RefOfCommit) Type() types.Type {
-	return __typeRefForRefOfCommit
+	return __typeForRefOfCommit
 }
 
 func init() {
-	__typeRefForRefOfCommit = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__datasPackageInFile_types_CachedRef, 0))
-	types.RegisterRef(__typeRefForRefOfCommit, builderForRefOfCommit)
+	__typeForRefOfCommit = types.MakeCompoundType(types.RefKind, types.MakeType(__datasPackageInFile_types_CachedRef, 0))
+	types.RegisterRef(__typeForRefOfCommit, builderForRefOfCommit)
 }
 
 func builderForRefOfCommit(r ref.Ref) types.Value {

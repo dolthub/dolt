@@ -18,7 +18,7 @@ const (
 	blobWindowSize = 64
 )
 
-var typeRefForBlob = MakePrimitiveTypeRef(BlobKind)
+var typeForBlob = MakePrimitiveType(BlobKind)
 
 type Blob interface {
 	Value

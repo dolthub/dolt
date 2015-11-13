@@ -226,12 +226,12 @@ func TestSetFilter(t *testing.T) {
 	assert.True(NewSet(Int32(0), Int32(2), Int32(4)).Equals(s2))
 }
 
-func TestSetTypeRef(t *testing.T) {
+func TestSetType(t *testing.T) {
 	assert := assert.New(t)
 	s := NewSet()
-	assert.True(s.Type().Equals(MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(ValueKind))))
+	assert.True(s.Type().Equals(MakeCompoundType(SetKind, MakePrimitiveType(ValueKind))))
 
-	tr := MakeCompoundTypeRef(SetKind, MakePrimitiveTypeRef(UInt64Kind))
+	tr := MakeCompoundType(SetKind, MakePrimitiveType(UInt64Kind))
 
 	s = newSetFromData(setData{}, tr)
 	assert.Equal(tr, s.Type())

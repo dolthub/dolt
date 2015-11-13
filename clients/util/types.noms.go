@@ -38,7 +38,7 @@ func (l ListOfRefOfMapOfStringToValue) Def() ListOfRefOfMapOfStringToValueDef {
 }
 
 func (l ListOfRefOfMapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfRefOfMapOfStringToValue.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfRefOfMapOfStringToValue.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfMapOfStringToValue) Ref() ref.Ref {
@@ -56,15 +56,15 @@ func (l ListOfRefOfMapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfRefOfMapOfStringToValue.
-var __typeRefForListOfRefOfMapOfStringToValue types.Type
+var __typeForListOfRefOfMapOfStringToValue types.Type
 
 func (m ListOfRefOfMapOfStringToValue) Type() types.Type {
-	return __typeRefForListOfRefOfMapOfStringToValue
+	return __typeForListOfRefOfMapOfStringToValue
 }
 
 func init() {
-	__typeRefForListOfRefOfMapOfStringToValue = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))))
-	types.RegisterValue(__typeRefForListOfRefOfMapOfStringToValue, builderForListOfRefOfMapOfStringToValue, readerForListOfRefOfMapOfStringToValue)
+	__typeForListOfRefOfMapOfStringToValue = types.MakeCompoundType(types.ListKind, types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakePrimitiveType(types.ValueKind))))
+	types.RegisterValue(__typeForListOfRefOfMapOfStringToValue, builderForListOfRefOfMapOfStringToValue, readerForListOfRefOfMapOfStringToValue)
 }
 
 func builderForListOfRefOfMapOfStringToValue(v types.Value) types.Value {
@@ -170,7 +170,7 @@ func (r RefOfMapOfStringToValue) Ref() ref.Ref {
 }
 
 func (r RefOfMapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfMapOfStringToValue.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfMapOfStringToValue.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
@@ -184,15 +184,15 @@ func (r RefOfMapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfMapOfStringToValue.
-var __typeRefForRefOfMapOfStringToValue types.Type
+var __typeForRefOfMapOfStringToValue types.Type
 
 func (m RefOfMapOfStringToValue) Type() types.Type {
-	return __typeRefForRefOfMapOfStringToValue
+	return __typeForRefOfMapOfStringToValue
 }
 
 func init() {
-	__typeRefForRefOfMapOfStringToValue = types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind)))
-	types.RegisterRef(__typeRefForRefOfMapOfStringToValue, builderForRefOfMapOfStringToValue)
+	__typeForRefOfMapOfStringToValue = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakePrimitiveType(types.ValueKind)))
+	types.RegisterRef(__typeForRefOfMapOfStringToValue, builderForRefOfMapOfStringToValue)
 }
 
 func builderForRefOfMapOfStringToValue(r ref.Ref) types.Value {
@@ -238,7 +238,7 @@ func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 }
 
 func (m MapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToValue.Equals(other.Type()) && m.Ref() == other.Ref()
+	return other != nil && __typeForMapOfStringToValue.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToValue) Ref() ref.Ref {
@@ -256,15 +256,15 @@ func (m MapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToValue.
-var __typeRefForMapOfStringToValue types.Type
+var __typeForMapOfStringToValue types.Type
 
 func (m MapOfStringToValue) Type() types.Type {
-	return __typeRefForMapOfStringToValue
+	return __typeForMapOfStringToValue
 }
 
 func init() {
-	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
-	types.RegisterValue(__typeRefForMapOfStringToValue, builderForMapOfStringToValue, readerForMapOfStringToValue)
+	__typeForMapOfStringToValue = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakePrimitiveType(types.ValueKind))
+	types.RegisterValue(__typeForMapOfStringToValue, builderForMapOfStringToValue, readerForMapOfStringToValue)
 }
 
 func builderForMapOfStringToValue(v types.Value) types.Value {

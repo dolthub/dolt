@@ -242,19 +242,19 @@ func (gen *codeGen) readTemplates() *template.Template {
 	glob := path.Join(path.Dir(thisfile), "*.tmpl")
 	return template.Must(template.New("").Funcs(
 		template.FuncMap{
-			"defType":        gen.generator.DefType,
-			"defToValue":     gen.generator.DefToValue,
-			"defToUser":      gen.generator.DefToUser,
-			"mayHaveChunks":  gen.generator.MayHaveChunks,
-			"valueToDef":     gen.generator.ValueToDef,
-			"userType":       gen.generator.UserType,
-			"userToValue":    gen.generator.UserToValue,
-			"userToDef":      gen.generator.UserToDef,
-			"valueToUser":    gen.generator.ValueToUser,
-			"userZero":       gen.generator.UserZero,
-			"valueZero":      gen.generator.ValueZero,
-			"title":          strings.Title,
-			"toTypesTypeRef": gen.generator.ToTypeRef,
+			"defType":       gen.generator.DefType,
+			"defToValue":    gen.generator.DefToValue,
+			"defToUser":     gen.generator.DefToUser,
+			"mayHaveChunks": gen.generator.MayHaveChunks,
+			"valueToDef":    gen.generator.ValueToDef,
+			"userType":      gen.generator.UserType,
+			"userToValue":   gen.generator.UserToValue,
+			"userToDef":     gen.generator.UserToDef,
+			"valueToUser":   gen.generator.ValueToUser,
+			"userZero":      gen.generator.UserZero,
+			"valueZero":     gen.generator.ValueZero,
+			"title":         strings.Title,
+			"toTypesType":   gen.generator.ToType,
 		}).ParseGlob(glob))
 }
 
@@ -340,7 +340,7 @@ func (gen *codeGen) write(t types.Type) {
 	}
 	k := t.Kind()
 	switch k {
-	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeRefKind:
+	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeKind:
 		return
 	case types.ListKind:
 		gen.writeList(t)
@@ -389,7 +389,7 @@ func (gen *codeGen) writeStruct(t types.Type, ordinal int) {
 		desc.Fields,
 		nil,
 		len(desc.Union) != 0,
-		types.MakePrimitiveTypeRef(types.UInt32Kind),
+		types.MakePrimitiveType(types.UInt32Kind),
 		gen.canUseDef(t),
 	}
 

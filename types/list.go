@@ -14,13 +14,13 @@ type List struct {
 	ref    *ref.Ref
 }
 
-var listTypeRef = MakeCompoundTypeRef(ListKind, MakePrimitiveTypeRef(ValueKind))
+var listType = MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
 
 func NewList(v ...Value) List {
 	// Copy because Noms values are supposed to be immutable and Go allows v to be reused (thus mutable).
 	values := make([]Value, len(v))
 	copy(values, v)
-	return newListNoCopy(values, listTypeRef)
+	return newListNoCopy(values, listType)
 }
 
 func newListNoCopy(values []Value, t Type) List {

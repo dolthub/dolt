@@ -29,12 +29,11 @@ func (v Bool) ToPrimitive() interface{} {
 	return bool(v)
 }
 
-var typeRefForBool = MakePrimitiveTypeRef(BoolKind)
+var typeForBool = MakePrimitiveType(BoolKind)
 
 func (v Bool) Type() Type {
-	return typeRefForBool
+	return typeForBool
 }
-
 type Int8 int8
 
 func (p Int8) Equals(other Value) bool {
@@ -57,12 +56,11 @@ func (v Int8) ToPrimitive() interface{} {
 	return int8(v)
 }
 
-var typeRefForInt8 = MakePrimitiveTypeRef(Int8Kind)
+var typeForInt8 = MakePrimitiveType(Int8Kind)
 
 func (v Int8) Type() Type {
-	return typeRefForInt8
+	return typeForInt8
 }
-
 type Int16 int16
 
 func (p Int16) Equals(other Value) bool {
@@ -85,12 +83,11 @@ func (v Int16) ToPrimitive() interface{} {
 	return int16(v)
 }
 
-var typeRefForInt16 = MakePrimitiveTypeRef(Int16Kind)
+var typeForInt16 = MakePrimitiveType(Int16Kind)
 
 func (v Int16) Type() Type {
-	return typeRefForInt16
+	return typeForInt16
 }
-
 type Int32 int32
 
 func (p Int32) Equals(other Value) bool {
@@ -113,12 +110,11 @@ func (v Int32) ToPrimitive() interface{} {
 	return int32(v)
 }
 
-var typeRefForInt32 = MakePrimitiveTypeRef(Int32Kind)
+var typeForInt32 = MakePrimitiveType(Int32Kind)
 
 func (v Int32) Type() Type {
-	return typeRefForInt32
+	return typeForInt32
 }
-
 type Int64 int64
 
 func (p Int64) Equals(other Value) bool {
@@ -141,12 +137,11 @@ func (v Int64) ToPrimitive() interface{} {
 	return int64(v)
 }
 
-var typeRefForInt64 = MakePrimitiveTypeRef(Int64Kind)
+var typeForInt64 = MakePrimitiveType(Int64Kind)
 
 func (v Int64) Type() Type {
-	return typeRefForInt64
+	return typeForInt64
 }
-
 type UInt8 uint8
 
 func (p UInt8) Equals(other Value) bool {
@@ -169,12 +164,11 @@ func (v UInt8) ToPrimitive() interface{} {
 	return uint8(v)
 }
 
-var typeRefForUInt8 = MakePrimitiveTypeRef(UInt8Kind)
+var typeForUInt8 = MakePrimitiveType(UInt8Kind)
 
 func (v UInt8) Type() Type {
-	return typeRefForUInt8
+	return typeForUInt8
 }
-
 type UInt16 uint16
 
 func (p UInt16) Equals(other Value) bool {
@@ -197,12 +191,11 @@ func (v UInt16) ToPrimitive() interface{} {
 	return uint16(v)
 }
 
-var typeRefForUInt16 = MakePrimitiveTypeRef(UInt16Kind)
+var typeForUInt16 = MakePrimitiveType(UInt16Kind)
 
 func (v UInt16) Type() Type {
-	return typeRefForUInt16
+	return typeForUInt16
 }
-
 type UInt32 uint32
 
 func (p UInt32) Equals(other Value) bool {
@@ -225,12 +218,11 @@ func (v UInt32) ToPrimitive() interface{} {
 	return uint32(v)
 }
 
-var typeRefForUInt32 = MakePrimitiveTypeRef(UInt32Kind)
+var typeForUInt32 = MakePrimitiveType(UInt32Kind)
 
 func (v UInt32) Type() Type {
-	return typeRefForUInt32
+	return typeForUInt32
 }
-
 type UInt64 uint64
 
 func (p UInt64) Equals(other Value) bool {
@@ -253,12 +245,11 @@ func (v UInt64) ToPrimitive() interface{} {
 	return uint64(v)
 }
 
-var typeRefForUInt64 = MakePrimitiveTypeRef(UInt64Kind)
+var typeForUInt64 = MakePrimitiveType(UInt64Kind)
 
 func (v UInt64) Type() Type {
-	return typeRefForUInt64
+	return typeForUInt64
 }
-
 type Float32 float32
 
 func (p Float32) Equals(other Value) bool {
@@ -281,12 +272,11 @@ func (v Float32) ToPrimitive() interface{} {
 	return float32(v)
 }
 
-var typeRefForFloat32 = MakePrimitiveTypeRef(Float32Kind)
+var typeForFloat32 = MakePrimitiveType(Float32Kind)
 
 func (v Float32) Type() Type {
-	return typeRefForFloat32
+	return typeForFloat32
 }
-
 type Float64 float64
 
 func (p Float64) Equals(other Value) bool {
@@ -309,9 +299,8 @@ func (v Float64) ToPrimitive() interface{} {
 	return float64(v)
 }
 
-var typeRefForFloat64 = MakePrimitiveTypeRef(Float64Kind)
+var typeForFloat64 = MakePrimitiveType(Float64Kind)
 
 func (v Float64) Type() Type {
-	return typeRefForFloat64
+	return typeForFloat64
 }
-

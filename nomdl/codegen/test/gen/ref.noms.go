@@ -15,9 +15,9 @@ var __genPackageInFile_ref_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("StructWithRef",
+		types.MakeStructType("StructWithRef",
 			[]types.Field{
-				types.Field{"r", types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind))), false},
+				types.Field{"r", types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.Float32Kind))), false},
 			},
 			types.Choices{},
 		),
@@ -57,15 +57,15 @@ func (s StructWithRef) Def() (d StructWithRefDef) {
 	return
 }
 
-var __typeRefForStructWithRef types.Type
+var __typeForStructWithRef types.Type
 
 func (m StructWithRef) Type() types.Type {
-	return __typeRefForStructWithRef
+	return __typeForStructWithRef
 }
 
 func init() {
-	__typeRefForStructWithRef = types.MakeTypeRef(__genPackageInFile_ref_CachedRef, 0)
-	types.RegisterStruct(__typeRefForStructWithRef, builderForStructWithRef, readerForStructWithRef)
+	__typeForStructWithRef = types.MakeType(__genPackageInFile_ref_CachedRef, 0)
+	types.RegisterStruct(__typeForStructWithRef, builderForStructWithRef, readerForStructWithRef)
 }
 
 func builderForStructWithRef(values []types.Value) types.Value {
@@ -84,7 +84,7 @@ func readerForStructWithRef(v types.Value) []types.Value {
 }
 
 func (s StructWithRef) Equals(other types.Value) bool {
-	return other != nil && __typeRefForStructWithRef.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForStructWithRef.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s StructWithRef) Ref() ref.Ref {
@@ -92,7 +92,7 @@ func (s StructWithRef) Ref() ref.Ref {
 }
 
 func (s StructWithRef) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForStructWithRef.Chunks()...)
+	chunks = append(chunks, __typeForStructWithRef.Chunks()...)
 	chunks = append(chunks, s._r.Chunks()...)
 	return
 }
@@ -132,7 +132,7 @@ func (r RefOfListOfString) Ref() ref.Ref {
 }
 
 func (r RefOfListOfString) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfListOfString.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfListOfString.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfListOfString) Chunks() (chunks []ref.Ref) {
@@ -146,15 +146,15 @@ func (r RefOfListOfString) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfListOfString.
-var __typeRefForRefOfListOfString types.Type
+var __typeForRefOfListOfString types.Type
 
 func (m RefOfListOfString) Type() types.Type {
-	return __typeRefForRefOfListOfString
+	return __typeForRefOfListOfString
 }
 
 func init() {
-	__typeRefForRefOfListOfString = types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.StringKind)))
-	types.RegisterRef(__typeRefForRefOfListOfString, builderForRefOfListOfString)
+	__typeForRefOfListOfString = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.StringKind)))
+	types.RegisterRef(__typeForRefOfListOfString, builderForRefOfListOfString)
 }
 
 func builderForRefOfListOfString(r ref.Ref) types.Value {
@@ -199,7 +199,7 @@ func (l ListOfRefOfFloat32) Def() ListOfRefOfFloat32Def {
 }
 
 func (l ListOfRefOfFloat32) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfRefOfFloat32.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfRefOfFloat32.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfFloat32) Ref() ref.Ref {
@@ -217,15 +217,15 @@ func (l ListOfRefOfFloat32) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfRefOfFloat32.
-var __typeRefForListOfRefOfFloat32 types.Type
+var __typeForListOfRefOfFloat32 types.Type
 
 func (m ListOfRefOfFloat32) Type() types.Type {
-	return __typeRefForListOfRefOfFloat32
+	return __typeForListOfRefOfFloat32
 }
 
 func init() {
-	__typeRefForListOfRefOfFloat32 = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakePrimitiveTypeRef(types.Float32Kind)))
-	types.RegisterValue(__typeRefForListOfRefOfFloat32, builderForListOfRefOfFloat32, readerForListOfRefOfFloat32)
+	__typeForListOfRefOfFloat32 = types.MakeCompoundType(types.ListKind, types.MakeCompoundType(types.RefKind, types.MakePrimitiveType(types.Float32Kind)))
+	types.RegisterValue(__typeForListOfRefOfFloat32, builderForListOfRefOfFloat32, readerForListOfRefOfFloat32)
 }
 
 func builderForListOfRefOfFloat32(v types.Value) types.Value {
@@ -331,7 +331,7 @@ func (r RefOfSetOfFloat32) Ref() ref.Ref {
 }
 
 func (r RefOfSetOfFloat32) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfSetOfFloat32.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfSetOfFloat32.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfSetOfFloat32) Chunks() (chunks []ref.Ref) {
@@ -345,15 +345,15 @@ func (r RefOfSetOfFloat32) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfSetOfFloat32.
-var __typeRefForRefOfSetOfFloat32 types.Type
+var __typeForRefOfSetOfFloat32 types.Type
 
 func (m RefOfSetOfFloat32) Type() types.Type {
-	return __typeRefForRefOfSetOfFloat32
+	return __typeForRefOfSetOfFloat32
 }
 
 func init() {
-	__typeRefForRefOfSetOfFloat32 = types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind)))
-	types.RegisterRef(__typeRefForRefOfSetOfFloat32, builderForRefOfSetOfFloat32)
+	__typeForRefOfSetOfFloat32 = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.Float32Kind)))
+	types.RegisterRef(__typeForRefOfSetOfFloat32, builderForRefOfSetOfFloat32)
 }
 
 func builderForRefOfSetOfFloat32(r ref.Ref) types.Value {
@@ -398,7 +398,7 @@ func (l ListOfString) Def() ListOfStringDef {
 }
 
 func (l ListOfString) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfString.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfString.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfString) Ref() ref.Ref {
@@ -416,15 +416,15 @@ func (l ListOfString) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfString.
-var __typeRefForListOfString types.Type
+var __typeForListOfString types.Type
 
 func (m ListOfString) Type() types.Type {
-	return __typeRefForListOfString
+	return __typeForListOfString
 }
 
 func init() {
-	__typeRefForListOfString = types.MakeCompoundTypeRef(types.ListKind, types.MakePrimitiveTypeRef(types.StringKind))
-	types.RegisterValue(__typeRefForListOfString, builderForListOfString, readerForListOfString)
+	__typeForListOfString = types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.StringKind))
+	types.RegisterValue(__typeForListOfString, builderForListOfString, readerForListOfString)
 }
 
 func builderForListOfString(v types.Value) types.Value {
@@ -530,7 +530,7 @@ func (r RefOfFloat32) Ref() ref.Ref {
 }
 
 func (r RefOfFloat32) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfFloat32.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfFloat32.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfFloat32) Chunks() (chunks []ref.Ref) {
@@ -544,15 +544,15 @@ func (r RefOfFloat32) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfFloat32.
-var __typeRefForRefOfFloat32 types.Type
+var __typeForRefOfFloat32 types.Type
 
 func (m RefOfFloat32) Type() types.Type {
-	return __typeRefForRefOfFloat32
+	return __typeForRefOfFloat32
 }
 
 func init() {
-	__typeRefForRefOfFloat32 = types.MakeCompoundTypeRef(types.RefKind, types.MakePrimitiveTypeRef(types.Float32Kind))
-	types.RegisterRef(__typeRefForRefOfFloat32, builderForRefOfFloat32)
+	__typeForRefOfFloat32 = types.MakeCompoundType(types.RefKind, types.MakePrimitiveType(types.Float32Kind))
+	types.RegisterRef(__typeForRefOfFloat32, builderForRefOfFloat32)
 }
 
 func builderForRefOfFloat32(r ref.Ref) types.Value {
@@ -600,7 +600,7 @@ func (s SetOfFloat32) Def() SetOfFloat32Def {
 }
 
 func (s SetOfFloat32) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSetOfFloat32.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForSetOfFloat32.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfFloat32) Ref() ref.Ref {
@@ -618,15 +618,15 @@ func (s SetOfFloat32) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfFloat32.
-var __typeRefForSetOfFloat32 types.Type
+var __typeForSetOfFloat32 types.Type
 
 func (m SetOfFloat32) Type() types.Type {
-	return __typeRefForSetOfFloat32
+	return __typeForSetOfFloat32
 }
 
 func init() {
-	__typeRefForSetOfFloat32 = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.Float32Kind))
-	types.RegisterValue(__typeRefForSetOfFloat32, builderForSetOfFloat32, readerForSetOfFloat32)
+	__typeForSetOfFloat32 = types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.Float32Kind))
+	types.RegisterValue(__typeForSetOfFloat32, builderForSetOfFloat32, readerForSetOfFloat32)
 }
 
 func builderForSetOfFloat32(v types.Value) types.Value {

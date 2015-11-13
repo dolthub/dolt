@@ -59,17 +59,17 @@ func resolveLocalOrdinals(p *intermediate) {
 			if t.Namespace() == "" && !t.HasOrdinal() {
 				ordinal := indexOf(t, p.Types)
 				d.Chk.True(ordinal >= 0 && int(ordinal) < len(p.Types), "Invalid reference: %s", t.Name())
-				return types.MakeTypeRef(t.PackageRef(), int16(ordinal))
+				return types.MakeType(t.PackageRef(), int16(ordinal))
 			}
 			return t
 		}
 
 		switch t.Kind() {
 		case types.ListKind, types.SetKind, types.RefKind:
-			return types.MakeCompoundTypeRef(t.Kind(), rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
+			return types.MakeCompoundType(t.Kind(), rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
 		case types.MapKind:
 			elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
-			return types.MakeCompoundTypeRef(t.Kind(), rec(elemTypes[0]), rec(elemTypes[1]))
+			return types.MakeCompoundType(t.Kind(), rec(elemTypes[0]), rec(elemTypes[1]))
 		case types.StructKind:
 			resolveFields(t.Desc.(types.StructDesc).Fields)
 			resolveFields(t.Desc.(types.StructDesc).Union)
@@ -120,10 +120,10 @@ func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref
 		}
 		switch t.Kind() {
 		case types.ListKind, types.SetKind, types.RefKind:
-			return types.MakeCompoundTypeRef(t.Kind(), rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
+			return types.MakeCompoundType(t.Kind(), rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
 		case types.MapKind:
 			elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
-			return types.MakeCompoundTypeRef(t.Kind(), rec(elemTypes[0]), rec(elemTypes[1]))
+			return types.MakeCompoundType(t.Kind(), rec(elemTypes[0]), rec(elemTypes[1]))
 		case types.StructKind:
 			resolveFields(t.Desc.(types.StructDesc).Fields)
 			resolveFields(t.Desc.(types.StructDesc).Union)
@@ -155,7 +155,7 @@ func resolveNamespace(t types.Type, aliases map[string]ref.Ref, deps map[ref.Ref
 	d.Chk.NotEqual("", t.Name())
 	ordinal := deps[pkgRef].GetOrdinal(t.Name())
 	d.Exp.NotEqual(int64(-1), ordinal, "Could not find type %s in package %s (aliased to %s).", t.Name(), pkgRef.String(), t.Namespace())
-	return types.MakeTypeRef(pkgRef, int16(ordinal))
+	return types.MakeType(pkgRef, int16(ordinal))
 }
 
 // expandStruct takes a struct definition and expands the internal structs created for unions.
@@ -168,10 +168,10 @@ func expandStruct(t types.Type, ordinal int) []types.Type {
 		rv := make([]types.Field, len(fields))
 		for i, f := range fields {
 			if f.T.Kind() == types.StructKind {
-				newTypeRefs := expandStruct(f.T, ordinal)
-				ts = append(ts, newTypeRefs...)
-				rv[i] = types.Field{f.Name, types.MakeTypeRef(ref.Ref{}, int16(ordinal)), f.Optional}
-				ordinal += len(newTypeRefs)
+				newType := expandStruct(f.T, ordinal)
+				ts = append(ts, newType...)
+				rv[i] = types.Field{f.Name, types.MakeType(ref.Ref{}, int16(ordinal)), f.Optional}
+				ordinal += len(newType)
 			} else {
 				rv[i] = f
 			}
@@ -188,7 +188,7 @@ func expandStruct(t types.Type, ordinal int) []types.Type {
 	}
 
 	if len(ts) != 1 {
-		ts[0] = types.MakeStructTypeRef(t.Name(), fields, choices)
+		ts[0] = types.MakeStructType(t.Name(), fields, choices)
 	}
 	return ts
 }

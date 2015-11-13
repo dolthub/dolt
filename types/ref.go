@@ -16,7 +16,7 @@ type RefBase interface {
 }
 
 func NewRef(target ref.Ref) Ref {
-	return newRef(target, refTypeRef)
+	return newRef(target, refType)
 }
 
 func newRef(target ref.Ref, t Type) Ref {
@@ -43,7 +43,7 @@ func (r Ref) TargetRef() ref.Ref {
 	return r.target
 }
 
-var refTypeRef = MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(ValueKind))
+var refType = MakeCompoundType(RefKind, MakePrimitiveType(ValueKind))
 
 func (r Ref) Type() Type {
 	return r.t

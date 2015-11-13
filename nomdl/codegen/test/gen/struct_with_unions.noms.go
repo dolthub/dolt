@@ -14,25 +14,25 @@ var __genPackageInFile_struct_with_unions_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("StructWithUnions",
+		types.MakeStructType("StructWithUnions",
 			[]types.Field{
-				types.Field{"a", types.MakeTypeRef(ref.Ref{}, 1), false},
-				types.Field{"d", types.MakeTypeRef(ref.Ref{}, 2), false},
+				types.Field{"a", types.MakeType(ref.Ref{}, 1), false},
+				types.Field{"d", types.MakeType(ref.Ref{}, 2), false},
 			},
 			types.Choices{},
 		),
-		types.MakeStructTypeRef("",
+		types.MakeStructType("",
 			[]types.Field{},
 			types.Choices{
-				types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"b", types.MakePrimitiveType(types.Float64Kind), false},
+				types.Field{"c", types.MakePrimitiveType(types.StringKind), false},
 			},
 		),
-		types.MakeStructTypeRef("",
+		types.MakeStructType("",
 			[]types.Field{},
 			types.Choices{
-				types.Field{"e", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-				types.Field{"f", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"e", types.MakePrimitiveType(types.Float64Kind), false},
+				types.Field{"f", types.MakePrimitiveType(types.StringKind), false},
 			},
 		),
 	}, []ref.Ref{})
@@ -76,15 +76,15 @@ func (s StructWithUnions) Def() (d StructWithUnionsDef) {
 	return
 }
 
-var __typeRefForStructWithUnions types.Type
+var __typeForStructWithUnions types.Type
 
 func (m StructWithUnions) Type() types.Type {
-	return __typeRefForStructWithUnions
+	return __typeForStructWithUnions
 }
 
 func init() {
-	__typeRefForStructWithUnions = types.MakeTypeRef(__genPackageInFile_struct_with_unions_CachedRef, 0)
-	types.RegisterStruct(__typeRefForStructWithUnions, builderForStructWithUnions, readerForStructWithUnions)
+	__typeForStructWithUnions = types.MakeType(__genPackageInFile_struct_with_unions_CachedRef, 0)
+	types.RegisterStruct(__typeForStructWithUnions, builderForStructWithUnions, readerForStructWithUnions)
 }
 
 func builderForStructWithUnions(values []types.Value) types.Value {
@@ -106,7 +106,7 @@ func readerForStructWithUnions(v types.Value) []types.Value {
 }
 
 func (s StructWithUnions) Equals(other types.Value) bool {
-	return other != nil && __typeRefForStructWithUnions.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForStructWithUnions.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s StructWithUnions) Ref() ref.Ref {
@@ -114,7 +114,7 @@ func (s StructWithUnions) Ref() ref.Ref {
 }
 
 func (s StructWithUnions) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForStructWithUnions.Chunks()...)
+	chunks = append(chunks, __typeForStructWithUnions.Chunks()...)
 	chunks = append(chunks, s._a.Chunks()...)
 	chunks = append(chunks, s._d.Chunks()...)
 	return
@@ -181,15 +181,15 @@ func (s __unionOfBOfFloat64AndCOfString) Def() (d __unionOfBOfFloat64AndCOfStrin
 	return
 }
 
-var __typeRefFor__unionOfBOfFloat64AndCOfString types.Type
+var __typeFor__unionOfBOfFloat64AndCOfString types.Type
 
 func (m __unionOfBOfFloat64AndCOfString) Type() types.Type {
-	return __typeRefFor__unionOfBOfFloat64AndCOfString
+	return __typeFor__unionOfBOfFloat64AndCOfString
 }
 
 func init() {
-	__typeRefFor__unionOfBOfFloat64AndCOfString = types.MakeTypeRef(__genPackageInFile_struct_with_unions_CachedRef, 1)
-	types.RegisterStruct(__typeRefFor__unionOfBOfFloat64AndCOfString, builderFor__unionOfBOfFloat64AndCOfString, readerFor__unionOfBOfFloat64AndCOfString)
+	__typeFor__unionOfBOfFloat64AndCOfString = types.MakeType(__genPackageInFile_struct_with_unions_CachedRef, 1)
+	types.RegisterStruct(__typeFor__unionOfBOfFloat64AndCOfString, builderFor__unionOfBOfFloat64AndCOfString, readerFor__unionOfBOfFloat64AndCOfString)
 }
 
 func builderFor__unionOfBOfFloat64AndCOfString(values []types.Value) types.Value {
@@ -211,7 +211,7 @@ func readerFor__unionOfBOfFloat64AndCOfString(v types.Value) []types.Value {
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Equals(other types.Value) bool {
-	return other != nil && __typeRefFor__unionOfBOfFloat64AndCOfString.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeFor__unionOfBOfFloat64AndCOfString.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Ref() ref.Ref {
@@ -219,7 +219,7 @@ func (s __unionOfBOfFloat64AndCOfString) Ref() ref.Ref {
 }
 
 func (s __unionOfBOfFloat64AndCOfString) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefFor__unionOfBOfFloat64AndCOfString.Chunks()...)
+	chunks = append(chunks, __typeFor__unionOfBOfFloat64AndCOfString.Chunks()...)
 	chunks = append(chunks, s.__unionValue.Chunks()...)
 	return
 }
@@ -318,15 +318,15 @@ func (s __unionOfEOfFloat64AndFOfString) Def() (d __unionOfEOfFloat64AndFOfStrin
 	return
 }
 
-var __typeRefFor__unionOfEOfFloat64AndFOfString types.Type
+var __typeFor__unionOfEOfFloat64AndFOfString types.Type
 
 func (m __unionOfEOfFloat64AndFOfString) Type() types.Type {
-	return __typeRefFor__unionOfEOfFloat64AndFOfString
+	return __typeFor__unionOfEOfFloat64AndFOfString
 }
 
 func init() {
-	__typeRefFor__unionOfEOfFloat64AndFOfString = types.MakeTypeRef(__genPackageInFile_struct_with_unions_CachedRef, 2)
-	types.RegisterStruct(__typeRefFor__unionOfEOfFloat64AndFOfString, builderFor__unionOfEOfFloat64AndFOfString, readerFor__unionOfEOfFloat64AndFOfString)
+	__typeFor__unionOfEOfFloat64AndFOfString = types.MakeType(__genPackageInFile_struct_with_unions_CachedRef, 2)
+	types.RegisterStruct(__typeFor__unionOfEOfFloat64AndFOfString, builderFor__unionOfEOfFloat64AndFOfString, readerFor__unionOfEOfFloat64AndFOfString)
 }
 
 func builderFor__unionOfEOfFloat64AndFOfString(values []types.Value) types.Value {
@@ -348,7 +348,7 @@ func readerFor__unionOfEOfFloat64AndFOfString(v types.Value) []types.Value {
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Equals(other types.Value) bool {
-	return other != nil && __typeRefFor__unionOfEOfFloat64AndFOfString.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeFor__unionOfEOfFloat64AndFOfString.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Ref() ref.Ref {
@@ -356,7 +356,7 @@ func (s __unionOfEOfFloat64AndFOfString) Ref() ref.Ref {
 }
 
 func (s __unionOfEOfFloat64AndFOfString) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefFor__unionOfEOfFloat64AndFOfString.Chunks()...)
+	chunks = append(chunks, __typeFor__unionOfEOfFloat64AndFOfString.Chunks()...)
 	chunks = append(chunks, s.__unionValue.Chunks()...)
 	return
 }

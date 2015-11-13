@@ -19,11 +19,11 @@ import (
 )
 
 var (
-	datasFlags         = datas.NewFlags()
-	inputRefStr        = flag.String("input-ref", "", "ref to list containing nodes")
-	outputDs           = flag.String("output-ds", "", "dataset to store data in.")
-	quietFlag          = flag.Bool("quiet", false, "suppress printing of progress statements")
-	geopositionTypeRef = common.NewGeoposition().Type()
+	datasFlags      = datas.NewFlags()
+	inputRefStr     = flag.String("input-ref", "", "ref to list containing nodes")
+	outputDs        = flag.String("output-ds", "", "dataset to store data in.")
+	quietFlag       = flag.Bool("quiet", false, "suppress printing of progress statements")
+	geopositionType = common.NewGeoposition().Type()
 )
 
 func main() {

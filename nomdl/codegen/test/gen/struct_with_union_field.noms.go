@@ -14,16 +14,16 @@ var __genPackageInFile_struct_with_union_field_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("StructWithUnionField",
+		types.MakeStructType("StructWithUnionField",
 			[]types.Field{
-				types.Field{"a", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+				types.Field{"a", types.MakePrimitiveType(types.Float32Kind), false},
 			},
 			types.Choices{
-				types.Field{"b", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-				types.Field{"c", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"d", types.MakePrimitiveTypeRef(types.BlobKind), false},
-				types.Field{"e", types.MakePrimitiveTypeRef(types.ValueKind), false},
-				types.Field{"f", types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind)), false},
+				types.Field{"b", types.MakePrimitiveType(types.Float64Kind), false},
+				types.Field{"c", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"d", types.MakePrimitiveType(types.BlobKind), false},
+				types.Field{"e", types.MakePrimitiveType(types.ValueKind), false},
+				types.Field{"f", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.UInt8Kind)), false},
 			},
 		),
 	}, []ref.Ref{})
@@ -70,15 +70,15 @@ func (s StructWithUnionField) Def() (d StructWithUnionFieldDef) {
 	return
 }
 
-var __typeRefForStructWithUnionField types.Type
+var __typeForStructWithUnionField types.Type
 
 func (m StructWithUnionField) Type() types.Type {
-	return __typeRefForStructWithUnionField
+	return __typeForStructWithUnionField
 }
 
 func init() {
-	__typeRefForStructWithUnionField = types.MakeTypeRef(__genPackageInFile_struct_with_union_field_CachedRef, 0)
-	types.RegisterStruct(__typeRefForStructWithUnionField, builderForStructWithUnionField, readerForStructWithUnionField)
+	__typeForStructWithUnionField = types.MakeType(__genPackageInFile_struct_with_union_field_CachedRef, 0)
+	types.RegisterStruct(__typeForStructWithUnionField, builderForStructWithUnionField, readerForStructWithUnionField)
 }
 
 func builderForStructWithUnionField(values []types.Value) types.Value {
@@ -103,7 +103,7 @@ func readerForStructWithUnionField(v types.Value) []types.Value {
 }
 
 func (s StructWithUnionField) Equals(other types.Value) bool {
-	return other != nil && __typeRefForStructWithUnionField.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForStructWithUnionField.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s StructWithUnionField) Ref() ref.Ref {
@@ -111,7 +111,7 @@ func (s StructWithUnionField) Ref() ref.Ref {
 }
 
 func (s StructWithUnionField) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForStructWithUnionField.Chunks()...)
+	chunks = append(chunks, __typeForStructWithUnionField.Chunks()...)
 	chunks = append(chunks, s.__unionValue.Chunks()...)
 	return
 }
@@ -300,7 +300,7 @@ func (s SetOfUInt8) Def() SetOfUInt8Def {
 }
 
 func (s SetOfUInt8) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSetOfUInt8.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForSetOfUInt8.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfUInt8) Ref() ref.Ref {
@@ -318,15 +318,15 @@ func (s SetOfUInt8) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfUInt8.
-var __typeRefForSetOfUInt8 types.Type
+var __typeForSetOfUInt8 types.Type
 
 func (m SetOfUInt8) Type() types.Type {
-	return __typeRefForSetOfUInt8
+	return __typeForSetOfUInt8
 }
 
 func init() {
-	__typeRefForSetOfUInt8 = types.MakeCompoundTypeRef(types.SetKind, types.MakePrimitiveTypeRef(types.UInt8Kind))
-	types.RegisterValue(__typeRefForSetOfUInt8, builderForSetOfUInt8, readerForSetOfUInt8)
+	__typeForSetOfUInt8 = types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.UInt8Kind))
+	types.RegisterValue(__typeForSetOfUInt8, builderForSetOfUInt8, readerForSetOfUInt8)
 }
 
 func builderForSetOfUInt8(v types.Value) types.Value {

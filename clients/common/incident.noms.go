@@ -15,19 +15,19 @@ var __commonPackageInFile_incident_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("Incident",
+		types.MakeStructType("Incident",
 			[]types.Field{
-				types.Field{"ID", types.MakePrimitiveTypeRef(types.Int64Kind), false},
-				types.Field{"Category", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Description", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"DayOfWeek", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Date", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Time", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"PdDistrict", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Resolution", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Address", types.MakePrimitiveTypeRef(types.StringKind), false},
-				types.Field{"Geoposition", types.MakeTypeRef(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
-				types.Field{"PdID", types.MakePrimitiveTypeRef(types.StringKind), false},
+				types.Field{"ID", types.MakePrimitiveType(types.Int64Kind), false},
+				types.Field{"Category", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Description", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"DayOfWeek", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Date", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Time", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"PdDistrict", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Resolution", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Address", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
+				types.Field{"PdID", types.MakePrimitiveType(types.StringKind), false},
 			},
 			types.Choices{},
 		),
@@ -119,15 +119,15 @@ func (s Incident) Def() (d IncidentDef) {
 	return
 }
 
-var __typeRefForIncident types.Type
+var __typeForIncident types.Type
 
 func (m Incident) Type() types.Type {
-	return __typeRefForIncident
+	return __typeForIncident
 }
 
 func init() {
-	__typeRefForIncident = types.MakeTypeRef(__commonPackageInFile_incident_CachedRef, 0)
-	types.RegisterStruct(__typeRefForIncident, builderForIncident, readerForIncident)
+	__typeForIncident = types.MakeType(__commonPackageInFile_incident_CachedRef, 0)
+	types.RegisterStruct(__typeForIncident, builderForIncident, readerForIncident)
 }
 
 func builderForIncident(values []types.Value) types.Value {
@@ -176,7 +176,7 @@ func readerForIncident(v types.Value) []types.Value {
 }
 
 func (s Incident) Equals(other types.Value) bool {
-	return other != nil && __typeRefForIncident.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForIncident.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Incident) Ref() ref.Ref {
@@ -184,7 +184,7 @@ func (s Incident) Ref() ref.Ref {
 }
 
 func (s Incident) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForIncident.Chunks()...)
+	chunks = append(chunks, __typeForIncident.Chunks()...)
 	chunks = append(chunks, s._Geoposition.Chunks()...)
 	return
 }
@@ -344,7 +344,7 @@ func (l ListOfRefOfIncident) Def() ListOfRefOfIncidentDef {
 }
 
 func (l ListOfRefOfIncident) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfRefOfIncident.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfRefOfIncident.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfIncident) Ref() ref.Ref {
@@ -362,15 +362,15 @@ func (l ListOfRefOfIncident) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfRefOfIncident.
-var __typeRefForListOfRefOfIncident types.Type
+var __typeForListOfRefOfIncident types.Type
 
 func (m ListOfRefOfIncident) Type() types.Type {
-	return __typeRefForListOfRefOfIncident
+	return __typeForListOfRefOfIncident
 }
 
 func init() {
-	__typeRefForListOfRefOfIncident = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__commonPackageInFile_incident_CachedRef, 0)))
-	types.RegisterValue(__typeRefForListOfRefOfIncident, builderForListOfRefOfIncident, readerForListOfRefOfIncident)
+	__typeForListOfRefOfIncident = types.MakeCompoundType(types.ListKind, types.MakeCompoundType(types.RefKind, types.MakeType(__commonPackageInFile_incident_CachedRef, 0)))
+	types.RegisterValue(__typeForListOfRefOfIncident, builderForListOfRefOfIncident, readerForListOfRefOfIncident)
 }
 
 func builderForListOfRefOfIncident(v types.Value) types.Value {
@@ -476,7 +476,7 @@ func (r RefOfIncident) Ref() ref.Ref {
 }
 
 func (r RefOfIncident) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfIncident.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfIncident.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfIncident) Chunks() (chunks []ref.Ref) {
@@ -490,15 +490,15 @@ func (r RefOfIncident) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfIncident.
-var __typeRefForRefOfIncident types.Type
+var __typeForRefOfIncident types.Type
 
 func (m RefOfIncident) Type() types.Type {
-	return __typeRefForRefOfIncident
+	return __typeForRefOfIncident
 }
 
 func init() {
-	__typeRefForRefOfIncident = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(__commonPackageInFile_incident_CachedRef, 0))
-	types.RegisterRef(__typeRefForRefOfIncident, builderForRefOfIncident)
+	__typeForRefOfIncident = types.MakeCompoundType(types.RefKind, types.MakeType(__commonPackageInFile_incident_CachedRef, 0))
+	types.RegisterRef(__typeForRefOfIncident, builderForRefOfIncident)
 }
 
 func builderForRefOfIncident(r ref.Ref) types.Value {

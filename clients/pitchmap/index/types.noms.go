@@ -15,10 +15,10 @@ var __mainPackageInFile_types_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("Pitch",
+		types.MakeStructType("Pitch",
 			[]types.Field{
-				types.Field{"X", types.MakePrimitiveTypeRef(types.Float64Kind), false},
-				types.Field{"Z", types.MakePrimitiveTypeRef(types.Float64Kind), false},
+				types.Field{"X", types.MakePrimitiveType(types.Float64Kind), false},
+				types.Field{"Z", types.MakePrimitiveType(types.Float64Kind), false},
 			},
 			types.Choices{},
 		),
@@ -63,15 +63,15 @@ func (s Pitch) Def() (d PitchDef) {
 	return
 }
 
-var __typeRefForPitch types.Type
+var __typeForPitch types.Type
 
 func (m Pitch) Type() types.Type {
-	return __typeRefForPitch
+	return __typeForPitch
 }
 
 func init() {
-	__typeRefForPitch = types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)
-	types.RegisterStruct(__typeRefForPitch, builderForPitch, readerForPitch)
+	__typeForPitch = types.MakeType(__mainPackageInFile_types_CachedRef, 0)
+	types.RegisterStruct(__typeForPitch, builderForPitch, readerForPitch)
 }
 
 func builderForPitch(values []types.Value) types.Value {
@@ -93,7 +93,7 @@ func readerForPitch(v types.Value) []types.Value {
 }
 
 func (s Pitch) Equals(other types.Value) bool {
-	return other != nil && __typeRefForPitch.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForPitch.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Pitch) Ref() ref.Ref {
@@ -101,7 +101,7 @@ func (s Pitch) Ref() ref.Ref {
 }
 
 func (s Pitch) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForPitch.Chunks()...)
+	chunks = append(chunks, __typeForPitch.Chunks()...)
 	return
 }
 
@@ -162,7 +162,7 @@ func (m MapOfStringToRefOfListOfPitch) Def() MapOfStringToRefOfListOfPitchDef {
 }
 
 func (m MapOfStringToRefOfListOfPitch) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToRefOfListOfPitch.Equals(other.Type()) && m.Ref() == other.Ref()
+	return other != nil && __typeForMapOfStringToRefOfListOfPitch.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToRefOfListOfPitch) Ref() ref.Ref {
@@ -180,15 +180,15 @@ func (m MapOfStringToRefOfListOfPitch) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToRefOfListOfPitch.
-var __typeRefForMapOfStringToRefOfListOfPitch types.Type
+var __typeForMapOfStringToRefOfListOfPitch types.Type
 
 func (m MapOfStringToRefOfListOfPitch) Type() types.Type {
-	return __typeRefForMapOfStringToRefOfListOfPitch
+	return __typeForMapOfStringToRefOfListOfPitch
 }
 
 func init() {
-	__typeRefForMapOfStringToRefOfListOfPitch = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))))
-	types.RegisterValue(__typeRefForMapOfStringToRefOfListOfPitch, builderForMapOfStringToRefOfListOfPitch, readerForMapOfStringToRefOfListOfPitch)
+	__typeForMapOfStringToRefOfListOfPitch = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.ListKind, types.MakeType(__mainPackageInFile_types_CachedRef, 0))))
+	types.RegisterValue(__typeForMapOfStringToRefOfListOfPitch, builderForMapOfStringToRefOfListOfPitch, readerForMapOfStringToRefOfListOfPitch)
 }
 
 func builderForMapOfStringToRefOfListOfPitch(v types.Value) types.Value {
@@ -294,7 +294,7 @@ func (l ListOfRefOfMapOfStringToValue) Def() ListOfRefOfMapOfStringToValueDef {
 }
 
 func (l ListOfRefOfMapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfRefOfMapOfStringToValue.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfRefOfMapOfStringToValue.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfRefOfMapOfStringToValue) Ref() ref.Ref {
@@ -312,15 +312,15 @@ func (l ListOfRefOfMapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfRefOfMapOfStringToValue.
-var __typeRefForListOfRefOfMapOfStringToValue types.Type
+var __typeForListOfRefOfMapOfStringToValue types.Type
 
 func (m ListOfRefOfMapOfStringToValue) Type() types.Type {
-	return __typeRefForListOfRefOfMapOfStringToValue
+	return __typeForListOfRefOfMapOfStringToValue
 }
 
 func init() {
-	__typeRefForListOfRefOfMapOfStringToValue = types.MakeCompoundTypeRef(types.ListKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))))
-	types.RegisterValue(__typeRefForListOfRefOfMapOfStringToValue, builderForListOfRefOfMapOfStringToValue, readerForListOfRefOfMapOfStringToValue)
+	__typeForListOfRefOfMapOfStringToValue = types.MakeCompoundType(types.ListKind, types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakePrimitiveType(types.ValueKind))))
+	types.RegisterValue(__typeForListOfRefOfMapOfStringToValue, builderForListOfRefOfMapOfStringToValue, readerForListOfRefOfMapOfStringToValue)
 }
 
 func builderForListOfRefOfMapOfStringToValue(v types.Value) types.Value {
@@ -426,7 +426,7 @@ func (r RefOfMapOfStringToValue) Ref() ref.Ref {
 }
 
 func (r RefOfMapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfMapOfStringToValue.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfMapOfStringToValue.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
@@ -440,15 +440,15 @@ func (r RefOfMapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfMapOfStringToValue.
-var __typeRefForRefOfMapOfStringToValue types.Type
+var __typeForRefOfMapOfStringToValue types.Type
 
 func (m RefOfMapOfStringToValue) Type() types.Type {
-	return __typeRefForRefOfMapOfStringToValue
+	return __typeForRefOfMapOfStringToValue
 }
 
 func init() {
-	__typeRefForRefOfMapOfStringToValue = types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind)))
-	types.RegisterRef(__typeRefForRefOfMapOfStringToValue, builderForRefOfMapOfStringToValue)
+	__typeForRefOfMapOfStringToValue = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakePrimitiveType(types.ValueKind)))
+	types.RegisterRef(__typeForRefOfMapOfStringToValue, builderForRefOfMapOfStringToValue)
 }
 
 func builderForRefOfMapOfStringToValue(r ref.Ref) types.Value {
@@ -494,7 +494,7 @@ func (m MapOfStringToValue) Def() MapOfStringToValueDef {
 }
 
 func (m MapOfStringToValue) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToValue.Equals(other.Type()) && m.Ref() == other.Ref()
+	return other != nil && __typeForMapOfStringToValue.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToValue) Ref() ref.Ref {
@@ -512,15 +512,15 @@ func (m MapOfStringToValue) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToValue.
-var __typeRefForMapOfStringToValue types.Type
+var __typeForMapOfStringToValue types.Type
 
 func (m MapOfStringToValue) Type() types.Type {
-	return __typeRefForMapOfStringToValue
+	return __typeForMapOfStringToValue
 }
 
 func init() {
-	__typeRefForMapOfStringToValue = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakePrimitiveTypeRef(types.ValueKind))
-	types.RegisterValue(__typeRefForMapOfStringToValue, builderForMapOfStringToValue, readerForMapOfStringToValue)
+	__typeForMapOfStringToValue = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakePrimitiveType(types.ValueKind))
+	types.RegisterValue(__typeForMapOfStringToValue, builderForMapOfStringToValue, readerForMapOfStringToValue)
 }
 
 func builderForMapOfStringToValue(v types.Value) types.Value {
@@ -626,7 +626,7 @@ func (l ListOfPitch) Def() ListOfPitchDef {
 }
 
 func (l ListOfPitch) Equals(other types.Value) bool {
-	return other != nil && __typeRefForListOfPitch.Equals(other.Type()) && l.Ref() == other.Ref()
+	return other != nil && __typeForListOfPitch.Equals(other.Type()) && l.Ref() == other.Ref()
 }
 
 func (l ListOfPitch) Ref() ref.Ref {
@@ -644,15 +644,15 @@ func (l ListOfPitch) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes ListOfPitch.
-var __typeRefForListOfPitch types.Type
+var __typeForListOfPitch types.Type
 
 func (m ListOfPitch) Type() types.Type {
-	return __typeRefForListOfPitch
+	return __typeForListOfPitch
 }
 
 func init() {
-	__typeRefForListOfPitch = types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0))
-	types.RegisterValue(__typeRefForListOfPitch, builderForListOfPitch, readerForListOfPitch)
+	__typeForListOfPitch = types.MakeCompoundType(types.ListKind, types.MakeType(__mainPackageInFile_types_CachedRef, 0))
+	types.RegisterValue(__typeForListOfPitch, builderForListOfPitch, readerForListOfPitch)
 }
 
 func builderForListOfPitch(v types.Value) types.Value {
@@ -758,7 +758,7 @@ func (r RefOfListOfPitch) Ref() ref.Ref {
 }
 
 func (r RefOfListOfPitch) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfListOfPitch.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfListOfPitch.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfListOfPitch) Chunks() (chunks []ref.Ref) {
@@ -772,15 +772,15 @@ func (r RefOfListOfPitch) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfListOfPitch.
-var __typeRefForRefOfListOfPitch types.Type
+var __typeForRefOfListOfPitch types.Type
 
 func (m RefOfListOfPitch) Type() types.Type {
-	return __typeRefForRefOfListOfPitch
+	return __typeForRefOfListOfPitch
 }
 
 func init() {
-	__typeRefForRefOfListOfPitch = types.MakeCompoundTypeRef(types.RefKind, types.MakeCompoundTypeRef(types.ListKind, types.MakeTypeRef(__mainPackageInFile_types_CachedRef, 0)))
-	types.RegisterRef(__typeRefForRefOfListOfPitch, builderForRefOfListOfPitch)
+	__typeForRefOfListOfPitch = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.ListKind, types.MakeType(__mainPackageInFile_types_CachedRef, 0)))
+	types.RegisterRef(__typeForRefOfListOfPitch, builderForRefOfListOfPitch)
 }
 
 func builderForRefOfListOfPitch(r ref.Ref) types.Value {

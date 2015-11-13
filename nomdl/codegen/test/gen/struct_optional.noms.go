@@ -14,10 +14,10 @@ var __genPackageInFile_struct_optional_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("OptionalStruct",
+		types.MakeStructType("OptionalStruct",
 			[]types.Field{
-				types.Field{"s", types.MakePrimitiveTypeRef(types.StringKind), true},
-				types.Field{"b", types.MakePrimitiveTypeRef(types.BoolKind), true},
+				types.Field{"s", types.MakePrimitiveType(types.StringKind), true},
+				types.Field{"b", types.MakePrimitiveType(types.BoolKind), true},
 			},
 			types.Choices{},
 		),
@@ -68,15 +68,15 @@ func (s OptionalStruct) Def() (d OptionalStructDef) {
 	return
 }
 
-var __typeRefForOptionalStruct types.Type
+var __typeForOptionalStruct types.Type
 
 func (m OptionalStruct) Type() types.Type {
-	return __typeRefForOptionalStruct
+	return __typeForOptionalStruct
 }
 
 func init() {
-	__typeRefForOptionalStruct = types.MakeTypeRef(__genPackageInFile_struct_optional_CachedRef, 0)
-	types.RegisterStruct(__typeRefForOptionalStruct, builderForOptionalStruct, readerForOptionalStruct)
+	__typeForOptionalStruct = types.MakeType(__genPackageInFile_struct_optional_CachedRef, 0)
+	types.RegisterStruct(__typeForOptionalStruct, builderForOptionalStruct, readerForOptionalStruct)
 }
 
 func builderForOptionalStruct(values []types.Value) types.Value {
@@ -112,7 +112,7 @@ func readerForOptionalStruct(v types.Value) []types.Value {
 }
 
 func (s OptionalStruct) Equals(other types.Value) bool {
-	return other != nil && __typeRefForOptionalStruct.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForOptionalStruct.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s OptionalStruct) Ref() ref.Ref {
@@ -120,7 +120,7 @@ func (s OptionalStruct) Ref() ref.Ref {
 }
 
 func (s OptionalStruct) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForOptionalStruct.Chunks()...)
+	chunks = append(chunks, __typeForOptionalStruct.Chunks()...)
 	return
 }
 

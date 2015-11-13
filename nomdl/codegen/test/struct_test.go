@@ -36,7 +36,7 @@ func TestValue(t *testing.T) {
 	assert.True(st.Equals(st2))
 }
 
-func TestTypeRef(t *testing.T) {
+func TestType(t *testing.T) {
 	assert := assert.New(t)
 
 	def := gen.StructDef{"hi", true}

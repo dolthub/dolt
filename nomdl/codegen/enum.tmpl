@@ -13,15 +13,15 @@ func New{{.Name}}() {{.Name}} {
 	return {{.Name}}(0)
 }
 
-var __typeRefFor{{.Name}} {{$typesPackage}}Type
+var __typeFor{{.Name}} {{$typesPackage}}Type
 
 func (e {{.Name}}) Type() {{$typesPackage}}Type {
-	return __typeRefFor{{.Name}}
+	return __typeFor{{.Name}}
 }
 
 func init() {
-	__typeRefFor{{.Name}} = {{$typesPackage}}MakeTypeRef(__{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef, {{.Ordinal}})
-	{{$typesPackage}}RegisterEnum(__typeRefFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
+	__typeFor{{.Name}} = {{$typesPackage}}MakeType(__{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef, {{.Ordinal}})
+	{{$typesPackage}}RegisterEnum(__typeFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
 }
 
 func builderFor{{.Name}}(v uint32) {{$typesPackage}}Value {

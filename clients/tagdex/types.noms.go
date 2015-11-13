@@ -39,7 +39,7 @@ func (m MapOfStringToSetOfRefOfRemotePhoto) Def() MapOfStringToSetOfRefOfRemoteP
 }
 
 func (m MapOfStringToSetOfRefOfRemotePhoto) Equals(other types.Value) bool {
-	return other != nil && __typeRefForMapOfStringToSetOfRefOfRemotePhoto.Equals(other.Type()) && m.Ref() == other.Ref()
+	return other != nil && __typeForMapOfStringToSetOfRefOfRemotePhoto.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
 func (m MapOfStringToSetOfRefOfRemotePhoto) Ref() ref.Ref {
@@ -57,15 +57,15 @@ func (m MapOfStringToSetOfRefOfRemotePhoto) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfStringToSetOfRefOfRemotePhoto.
-var __typeRefForMapOfStringToSetOfRefOfRemotePhoto types.Type
+var __typeForMapOfStringToSetOfRefOfRemotePhoto types.Type
 
 func (m MapOfStringToSetOfRefOfRemotePhoto) Type() types.Type {
-	return __typeRefForMapOfStringToSetOfRefOfRemotePhoto
+	return __typeForMapOfStringToSetOfRefOfRemotePhoto
 }
 
 func init() {
-	__typeRefForMapOfStringToSetOfRefOfRemotePhoto = types.MakeCompoundTypeRef(types.MapKind, types.MakePrimitiveTypeRef(types.StringKind), types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))))
-	types.RegisterValue(__typeRefForMapOfStringToSetOfRefOfRemotePhoto, builderForMapOfStringToSetOfRefOfRemotePhoto, readerForMapOfStringToSetOfRefOfRemotePhoto)
+	__typeForMapOfStringToSetOfRefOfRemotePhoto = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))))
+	types.RegisterValue(__typeForMapOfStringToSetOfRefOfRemotePhoto, builderForMapOfStringToSetOfRefOfRemotePhoto, readerForMapOfStringToSetOfRefOfRemotePhoto)
 }
 
 func builderForMapOfStringToSetOfRefOfRemotePhoto(v types.Value) types.Value {
@@ -174,7 +174,7 @@ func (s SetOfRefOfRemotePhoto) Def() SetOfRefOfRemotePhotoDef {
 }
 
 func (s SetOfRefOfRemotePhoto) Equals(other types.Value) bool {
-	return other != nil && __typeRefForSetOfRefOfRemotePhoto.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForSetOfRefOfRemotePhoto.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfRefOfRemotePhoto) Ref() ref.Ref {
@@ -192,15 +192,15 @@ func (s SetOfRefOfRemotePhoto) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfRefOfRemotePhoto.
-var __typeRefForSetOfRefOfRemotePhoto types.Type
+var __typeForSetOfRefOfRemotePhoto types.Type
 
 func (m SetOfRefOfRemotePhoto) Type() types.Type {
-	return __typeRefForSetOfRefOfRemotePhoto
+	return __typeForSetOfRefOfRemotePhoto
 }
 
 func init() {
-	__typeRefForSetOfRefOfRemotePhoto = types.MakeCompoundTypeRef(types.SetKind, types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0)))
-	types.RegisterValue(__typeRefForSetOfRefOfRemotePhoto, builderForSetOfRefOfRemotePhoto, readerForSetOfRefOfRemotePhoto)
+	__typeForSetOfRefOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0)))
+	types.RegisterValue(__typeForSetOfRefOfRemotePhoto, builderForSetOfRefOfRemotePhoto, readerForSetOfRefOfRemotePhoto)
 }
 
 func builderForSetOfRefOfRemotePhoto(v types.Value) types.Value {
@@ -310,7 +310,7 @@ func (r RefOfRemotePhoto) Ref() ref.Ref {
 }
 
 func (r RefOfRemotePhoto) Equals(other types.Value) bool {
-	return other != nil && __typeRefForRefOfRemotePhoto.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfRemotePhoto.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
@@ -324,15 +324,15 @@ func (r RefOfRemotePhoto) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes RefOfRemotePhoto.
-var __typeRefForRefOfRemotePhoto types.Type
+var __typeForRefOfRemotePhoto types.Type
 
 func (m RefOfRemotePhoto) Type() types.Type {
-	return __typeRefForRefOfRemotePhoto
+	return __typeForRefOfRemotePhoto
 }
 
 func init() {
-	__typeRefForRefOfRemotePhoto = types.MakeCompoundTypeRef(types.RefKind, types.MakeTypeRef(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))
-	types.RegisterRef(__typeRefForRefOfRemotePhoto, builderForRefOfRemotePhoto)
+	__typeForRefOfRemotePhoto = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))
+	types.RegisterRef(__typeForRefOfRemotePhoto, builderForRefOfRemotePhoto)
 }
 
 func builderForRefOfRemotePhoto(r ref.Ref) types.Value {

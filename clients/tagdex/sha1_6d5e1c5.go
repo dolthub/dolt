@@ -14,17 +14,17 @@ var __mainPackageInFile_sha1_6d5e1c5_CachedRef ref.Ref
 // type package definition cache.
 func init() {
 	p := types.NewPackage([]types.Type{
-		types.MakeStructTypeRef("Geoposition",
+		types.MakeStructType("Geoposition",
 			[]types.Field{
-				types.Field{"Latitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
-				types.Field{"Longitude", types.MakePrimitiveTypeRef(types.Float32Kind), false},
+				types.Field{"Latitude", types.MakePrimitiveType(types.Float32Kind), false},
+				types.Field{"Longitude", types.MakePrimitiveType(types.Float32Kind), false},
 			},
 			types.Choices{},
 		),
-		types.MakeStructTypeRef("Georectangle",
+		types.MakeStructType("Georectangle",
 			[]types.Field{
-				types.Field{"TopLeft", types.MakeTypeRef(ref.Ref{}, 0), false},
-				types.Field{"BottomRight", types.MakeTypeRef(ref.Ref{}, 0), false},
+				types.Field{"TopLeft", types.MakeType(ref.Ref{}, 0), false},
+				types.Field{"BottomRight", types.MakeType(ref.Ref{}, 0), false},
 			},
 			types.Choices{},
 		),
@@ -69,15 +69,15 @@ func (s Geoposition) Def() (d GeopositionDef) {
 	return
 }
 
-var __typeRefForGeoposition types.Type
+var __typeForGeoposition types.Type
 
 func (m Geoposition) Type() types.Type {
-	return __typeRefForGeoposition
+	return __typeForGeoposition
 }
 
 func init() {
-	__typeRefForGeoposition = types.MakeTypeRef(__mainPackageInFile_sha1_6d5e1c5_CachedRef, 0)
-	types.RegisterStruct(__typeRefForGeoposition, builderForGeoposition, readerForGeoposition)
+	__typeForGeoposition = types.MakeType(__mainPackageInFile_sha1_6d5e1c5_CachedRef, 0)
+	types.RegisterStruct(__typeForGeoposition, builderForGeoposition, readerForGeoposition)
 }
 
 func builderForGeoposition(values []types.Value) types.Value {
@@ -99,7 +99,7 @@ func readerForGeoposition(v types.Value) []types.Value {
 }
 
 func (s Geoposition) Equals(other types.Value) bool {
-	return other != nil && __typeRefForGeoposition.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForGeoposition.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Geoposition) Ref() ref.Ref {
@@ -107,7 +107,7 @@ func (s Geoposition) Ref() ref.Ref {
 }
 
 func (s Geoposition) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForGeoposition.Chunks()...)
+	chunks = append(chunks, __typeForGeoposition.Chunks()...)
 	return
 }
 
@@ -174,15 +174,15 @@ func (s Georectangle) Def() (d GeorectangleDef) {
 	return
 }
 
-var __typeRefForGeorectangle types.Type
+var __typeForGeorectangle types.Type
 
 func (m Georectangle) Type() types.Type {
-	return __typeRefForGeorectangle
+	return __typeForGeorectangle
 }
 
 func init() {
-	__typeRefForGeorectangle = types.MakeTypeRef(__mainPackageInFile_sha1_6d5e1c5_CachedRef, 1)
-	types.RegisterStruct(__typeRefForGeorectangle, builderForGeorectangle, readerForGeorectangle)
+	__typeForGeorectangle = types.MakeType(__mainPackageInFile_sha1_6d5e1c5_CachedRef, 1)
+	types.RegisterStruct(__typeForGeorectangle, builderForGeorectangle, readerForGeorectangle)
 }
 
 func builderForGeorectangle(values []types.Value) types.Value {
@@ -204,7 +204,7 @@ func readerForGeorectangle(v types.Value) []types.Value {
 }
 
 func (s Georectangle) Equals(other types.Value) bool {
-	return other != nil && __typeRefForGeorectangle.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForGeorectangle.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s Georectangle) Ref() ref.Ref {
@@ -212,7 +212,7 @@ func (s Georectangle) Ref() ref.Ref {
 }
 
 func (s Georectangle) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeRefForGeorectangle.Chunks()...)
+	chunks = append(chunks, __typeForGeorectangle.Chunks()...)
 	chunks = append(chunks, s._TopLeft.Chunks()...)
 	chunks = append(chunks, s._BottomRight.Chunks()...)
 	return

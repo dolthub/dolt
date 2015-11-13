@@ -41,7 +41,7 @@ func (s SetOfRefOfPackage) Def() SetOfRefOfPackageDef {
 }
 
 func (s SetOfRefOfPackage) Equals(other Value) bool {
-	return other != nil && __typeRefForSetOfRefOfPackage.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && __typeForSetOfRefOfPackage.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
 func (s SetOfRefOfPackage) Ref() ref.Ref {
@@ -61,15 +61,15 @@ func (s SetOfRefOfPackage) ChildValues() (ret []Value) {
 }
 
 // A Noms Value that describes SetOfRefOfPackage.
-var __typeRefForSetOfRefOfPackage Type
+var __typeForSetOfRefOfPackage Type
 
 func (m SetOfRefOfPackage) Type() Type {
-	return __typeRefForSetOfRefOfPackage
+	return __typeForSetOfRefOfPackage
 }
 
 func init() {
-	__typeRefForSetOfRefOfPackage = MakeCompoundTypeRef(SetKind, MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(PackageKind)))
-	RegisterValue(__typeRefForSetOfRefOfPackage, builderForSetOfRefOfPackage, readerForSetOfRefOfPackage)
+	__typeForSetOfRefOfPackage = MakeCompoundType(SetKind, MakeCompoundType(RefKind, MakePrimitiveType(PackageKind)))
+	RegisterValue(__typeForSetOfRefOfPackage, builderForSetOfRefOfPackage, readerForSetOfRefOfPackage)
 }
 
 func builderForSetOfRefOfPackage(v Value) Value {
@@ -176,7 +176,7 @@ func (r RefOfPackage) Ref() ref.Ref {
 }
 
 func (r RefOfPackage) Equals(other Value) bool {
-	return other != nil && __typeRefForRefOfPackage.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && __typeForRefOfPackage.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r RefOfPackage) Chunks() (chunks []ref.Ref) {
@@ -190,15 +190,15 @@ func (r RefOfPackage) ChildValues() []Value {
 }
 
 // A Noms Value that describes RefOfPackage.
-var __typeRefForRefOfPackage Type
+var __typeForRefOfPackage Type
 
 func (m RefOfPackage) Type() Type {
-	return __typeRefForRefOfPackage
+	return __typeForRefOfPackage
 }
 
 func init() {
-	__typeRefForRefOfPackage = MakeCompoundTypeRef(RefKind, MakePrimitiveTypeRef(PackageKind))
-	RegisterRef(__typeRefForRefOfPackage, builderForRefOfPackage)
+	__typeForRefOfPackage = MakeCompoundType(RefKind, MakePrimitiveType(PackageKind))
+	RegisterRef(__typeForRefOfPackage, builderForRefOfPackage)
 }
 
 func builderForRefOfPackage(r ref.Ref) Value {

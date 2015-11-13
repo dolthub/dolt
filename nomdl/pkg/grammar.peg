@@ -72,7 +72,7 @@ Enum <- `enum` _ id:Ident _ `{` _ l:EnumEntry+ _ `}` _ {
 	for i, e := range entries {
 		ids[i] = e.(string)
 	}
-	return types.MakeEnumTypeRef(id.(string), ids...), nil
+	return types.MakeEnumType(id.(string), ids...), nil
 }
 
 EnumEntry <- i:Ident _ {
@@ -107,7 +107,7 @@ Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 			return nil, fmt.Errorf("Structs must be made up of field declarations and at most one anonymous union.")
 		}
 	}
-	return types.MakeStructTypeRef(i.(string), fields, u), nil
+	return types.MakeStructType(i.(string), fields, u), nil
 }
 
 StructEntry <- Union / Field
@@ -141,26 +141,26 @@ Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
 	case types.Type:
 		return t, nil
 	case types.Choices:
-		return types.MakeStructTypeRef("", nil, t), nil
+		return types.MakeStructType("", nil, t), nil
 	case namespaceIdent:
-		return types.MakeUnresolvedTypeRef(t.Namespace, t.ID), nil
+		return types.MakeUnresolvedType(t.Namespace, t.ID), nil
 	default:
-		return nil, fmt.Errorf("%v is %T, not something that satisfies TypeRef", t, t)
+		return nil, fmt.Errorf("%v is %T, not something that satisfies Type", t, t)
 	}
 }
 
 CompoundType <- `List` _ `(` _ t:Type _ `)` _ {
-	return types.MakeCompoundTypeRef(types.ListKind, t.(types.Type)), nil
+	return types.MakeCompoundType(types.ListKind, t.(types.Type)), nil
 } / `Map` _ `(` _ k:Type _ `,` _ v:Type _ `)` _ {
-	return types.MakeCompoundTypeRef(types.MapKind, k.(types.Type), v.(types.Type)), nil
+	return types.MakeCompoundType(types.MapKind, k.(types.Type), v.(types.Type)), nil
 } / `Set` _ `(` _ t:Type _ `)` _ {
-	return types.MakeCompoundTypeRef(types.SetKind, t.(types.Type)), nil
+	return types.MakeCompoundType(types.SetKind, t.(types.Type)), nil
 } / `Ref` _ `(` _ t:Type _ `)` _ {
-	return types.MakeCompoundTypeRef(types.RefKind, t.(types.Type)), nil
+	return types.MakeCompoundType(types.RefKind, t.(types.Type)), nil
 }
 
-PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `TypeRef`) {
-	return types.MakePrimitiveTypeRefByString(string(p.([]uint8))), nil
+PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `Type`) {
+	return types.MakePrimitiveTypeByString(string(p.([]uint8))), nil
 }
 
 QuotedString <- `"` n:String `"` {

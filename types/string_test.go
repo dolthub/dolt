@@ -28,6 +28,6 @@ func TestStringString(t *testing.T) {
 	assert.Equal("foo", s2.String())
 }
 
-func TestStringTypeRef(t *testing.T) {
-	assert.True(t, NewString("hi").Type().Equals(MakePrimitiveTypeRef(StringKind)))
+func TestStringType(t *testing.T) {
+	assert.True(t, NewString("hi").Type().Equals(MakePrimitiveType(StringKind)))
 }

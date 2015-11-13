@@ -70,7 +70,7 @@ func (t Type) Kind() NomsKind {
 
 func (t Type) PackageRef() ref.Ref {
 	desc, ok := t.Desc.(UnresolvedDesc)
-	d.Chk.True(ok, "PackageRef only works on unresolved type refs")
+	d.Chk.True(ok, "PackageRef only works on unresolved types")
 	return desc.pkgRef
 }
 
@@ -142,21 +142,21 @@ func (t Type) ChildValues() (res []Value) {
 	return
 }
 
-var TypeForTypeRef = MakePrimitiveTypeRef(TypeRefKind)
+var typeForType = MakePrimitiveType(TypeKind)
 
 func (t Type) Type() Type {
-	return TypeForTypeRef
+	return typeForType
 }
 
-func MakePrimitiveTypeRef(k NomsKind) Type {
+func MakePrimitiveType(k NomsKind) Type {
 	return buildType("", PrimitiveDesc(k))
 }
 
-func MakePrimitiveTypeRefByString(p string) Type {
+func MakePrimitiveTypeByString(p string) Type {
 	return buildType("", primitiveToDesc(p))
 }
 
-func MakeCompoundTypeRef(kind NomsKind, elemTypes ...Type) Type {
+func MakeCompoundType(kind NomsKind, elemTypes ...Type) Type {
 	if len(elemTypes) == 1 {
 		d.Chk.NotEqual(MapKind, kind, "MapKind requires 2 element types.")
 		d.Chk.True(kind == RefKind || kind == ListKind || kind == SetKind || kind == MetaSequenceKind)
@@ -167,20 +167,20 @@ func MakeCompoundTypeRef(kind NomsKind, elemTypes ...Type) Type {
 	return buildType("", CompoundDesc{kind, elemTypes})
 }
 
-func MakeEnumTypeRef(name string, ids ...string) Type {
+func MakeEnumType(name string, ids ...string) Type {
 	return buildType(name, EnumDesc{ids})
 }
 
-func MakeStructTypeRef(name string, fields []Field, choices Choices) Type {
+func MakeStructType(name string, fields []Field, choices Choices) Type {
 	return buildType(name, StructDesc{fields, choices})
 }
 
-func MakeTypeRef(pkgRef ref.Ref, ordinal int16) Type {
+func MakeType(pkgRef ref.Ref, ordinal int16) Type {
 	d.Chk.True(ordinal >= 0)
 	return Type{Desc: UnresolvedDesc{pkgRef, ordinal}, ref: &ref.Ref{}}
 }
 
-func MakeUnresolvedTypeRef(namespace, n string) Type {
+func MakeUnresolvedType(namespace, n string) Type {
 	return Type{name: name{namespace, n}, Desc: UnresolvedDesc{ordinal: -1}, ref: &ref.Ref{}}
 }
 

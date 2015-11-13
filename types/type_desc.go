@@ -61,7 +61,7 @@ var KindToString = map[NomsKind]string{
 	RefKind:     "Ref",
 	SetKind:     "Set",
 	StringKind:  "String",
-	TypeRefKind: "Type",
+	TypeKind:    "Type",
 	UInt16Kind:  "UInt16",
 	UInt32Kind:  "UInt32",
 	UInt64Kind:  "UInt64",
