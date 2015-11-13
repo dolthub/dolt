@@ -59,3 +59,34 @@ func TestTypeWithPkgRef(t *testing.T) {
 func TestTypeRefTypeRef(t *testing.T) {
 	assert.True(t, MakePrimitiveTypeRef(BoolKind).Type().Equals(MakePrimitiveTypeRef(TypeRefKind)))
 }
+
+func TestTypeRefDescribe(t *testing.T) {
+	assert := assert.New(t)
+	boolType := MakePrimitiveTypeRef(BoolKind)
+	uint8Type := MakePrimitiveTypeRef(UInt8Kind)
+	stringType := MakePrimitiveTypeRef(StringKind)
+	mapType := MakeCompoundTypeRef(MapKind, stringType, uint8Type)
+	setType := MakeCompoundTypeRef(SetKind, stringType)
+
+	assert.Equal("Bool", boolType.Describe())
+	assert.Equal("UInt8", uint8Type.Describe())
+	assert.Equal("String", stringType.Describe())
+	assert.Equal("Map(String, UInt8)", mapType.Describe())
+	assert.Equal("Set(String)", setType.Describe())
+
+	mahType := MakeStructTypeRef("MahStruct", []Field{
+		Field{"Field1", stringType, false},
+		Field{"Field2", boolType, true},
+	}, Choices{})
+	assert.Equal("struct MahStruct {\n  Field1: String\n  Field2: optional Bool\n}", mahType.Describe())
+
+	otherType := MakeStructTypeRef("MahOtherStruct", []Field{
+		Field{"Field1", stringType, false},
+		Field{"Field2", boolType, true},
+	}, Choices{
+		Field{"UInt8Field", uint8Type, false},
+		Field{"StringField", stringType, false},
+	})
+	assert.Equal("struct MahOtherStruct {\n  Field1: String\n  Field2: optional Bool\n  union {\n    UInt8Field: UInt8\n    StringField: String\n  }\n}", otherType.Describe())
+
+}

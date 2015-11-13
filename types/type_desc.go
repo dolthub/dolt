@@ -97,7 +97,7 @@ func (u UnresolvedDesc) Equals(other TypeDesc) bool {
 }
 
 func (u UnresolvedDesc) Describe() string {
-	panic("Not reachable.")
+	return fmt.Sprintf("Unresolved(%s, %d)", u.pkgRef, u.ordinal)
 }
 
 // CompoundDesc describes a List, Map, Set or Ref type.
@@ -173,16 +173,19 @@ func (e EnumDesc) Equals(other TypeDesc) bool {
 }
 
 func (e EnumDesc) Describe() string {
-	return "enum: { " + strings.Join(e.IDs, "\n") + "}\n"
+	return "{\n  " + strings.Join(e.IDs, "  \n") + "\n}"
 }
 
 // Choices represents a union, with each choice as a Field..
 type Choices []Field
 
-func (u Choices) Describe() (out string) {
-	out = "union {\n"
+func (u Choices) Describe() string {
+	if len(u) == 0 {
+		return ""
+	}
+	out := "  union {\n"
 	for _, c := range u {
-		out += fmt.Sprintf("  %s :%s\n", c.Name, c.T.Describe())
+		out += fmt.Sprintf("    %s: %s\n", c.Name, c.T.Describe())
 	}
 	return out + "  }"
 }
@@ -215,14 +218,19 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 	return true
 }
 
-func (s StructDesc) Describe() (out string) {
-	if s.Union != nil {
-		out += s.Union.Describe()
-	}
+func (s StructDesc) Describe() string {
+	out := "{\n"
 	for _, f := range s.Fields {
-		out += fmt.Sprintf("  %s: %s\n", f.Name, f.T.Describe())
+		optional := ""
+		if f.Optional {
+			optional = "optional "
+		}
+		out += fmt.Sprintf("  %s: %s%s\n", f.Name, optional, f.T.Describe())
 	}
-	return
+	if len(s.Union) > 0 {
+		out += s.Union.Describe() + "\n"
+	}
+	return out + "}"
 }
 
 // Field represents a Struct field or a Union choice.
