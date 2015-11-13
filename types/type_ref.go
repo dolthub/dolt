@@ -48,12 +48,19 @@ func (t Type) HasPackageRef() bool {
 // Describe() methods generate text that should parse into the struct being described.
 // TODO: Figure out a way that they can exist only in the test file.
 func (t Type) Describe() (out string) {
+	switch t.Kind() {
+	case EnumKind:
+		out += "enum "
+	case StructKind:
+		out += "struct "
+	}
 	if t.name != (name{}) {
-		out += t.name.compose() + "\n"
+		out += t.name.compose() + " "
+		if t.IsUnresolved() {
+			return
+		}
 	}
-	if !t.IsUnresolved() {
-		out += t.Desc.Describe() + "\n"
-	}
+	out += t.Desc.Describe()
 	return
 }
 
