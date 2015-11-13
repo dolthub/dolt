@@ -1,4 +1,8 @@
 [ignore]
+.*/node_modules/babel.*
+.*/node_modules/babylon/.*
+.*/node_modules/fbjs/.*
+.*/node_modules/react/.*
 
 [include]
 
