@@ -1,11 +1,11 @@
 package types
 
 import (
-	"bytes"
 	"io"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/attic-labs/buzhash"
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/d"
 )
 
 const (
@@ -23,7 +23,7 @@ var typeRefForBlob = MakePrimitiveTypeRef(BlobKind)
 type Blob interface {
 	Value
 	Len() uint64
-	// BUG 155 - Should provide Seek and Write... Maybe even have Blob implement ReadWriteSeeker
+	// BUG 155 - Should provide Write... Maybe even have Blob implement ReadWriteSeeker
 	Reader() io.ReadSeeker
 }
 
@@ -31,72 +31,82 @@ func NewEmptyBlob() Blob {
 	return newBlobLeaf([]byte{})
 }
 
-func NewMemoryBlob(r io.Reader) (Blob, error) {
+func NewMemoryBlob(r io.Reader) Blob {
 	return NewBlob(r, chunks.NewMemoryStore())
 }
 
-func NewBlob(r io.Reader, cs chunks.ChunkStore) (Blob, error) {
-	length := uint64(0)
-	tuples := metaSequenceData{}
-	var blob blobLeaf
-	for {
-		buf := bytes.Buffer{}
-		n, err := copyChunk(&buf, r)
-		if err != nil && err != io.EOF {
-			return nil, err
-		}
+func blobLeafIsBoundary() isBoundaryFn {
+	h := buzhash.NewBuzHash(blobWindowSize)
 
-		if n == 0 {
-			// Don't add empty chunk.
-			break
-		}
-
-		length += n
-		blob = newBlobLeaf(buf.Bytes())
-		ref := WriteValue(blob, cs)
-		tuples = append(tuples, metaTuple{ref, UInt64(length)})
-
-		if err == io.EOF {
-			break
-		}
+	return func(item sequenceItem) bool {
+		b, ok := item.(byte)
+		d.Chk.True(ok)
+		return h.HashByte(b)&blobPattern == blobPattern
 	}
-
-	if length == 0 {
-		return newBlobLeaf([]byte{}), nil
-	}
-
-	if len(tuples) == 1 {
-		return blob, nil
-	}
-
-	return splitCompoundBlob(newCompoundBlob(tuples, cs), cs), nil
 }
 
-// copyChunk copies from src to dst until a chunk boundary is found.
-// It returns the number of bytes copied and the earliest error encountered while copying.
-// copyChunk never returns an io.EOF error, instead it returns the number of bytes read up to the io.EOF.
-func copyChunk(dst io.Writer, src io.Reader) (n uint64, err error) {
-	h := buzhash.NewBuzHash(blobWindowSize)
-	p := []byte{0}
+func newBlobLeafChunk(cs chunks.ChunkStore) makeChunkFn {
+	return func(items []sequenceItem) (sequenceItem, interface{}) {
+		buff := make([]byte, len(items))
 
+		for i, v := range items {
+			b, ok := v.(byte)
+			d.Chk.True(ok)
+			buff[i] = b
+		}
+
+		leaf := newBlobLeaf(buff)
+		ref := WriteValue(leaf, cs)
+		return metaTuple{ref, UInt64(uint64(len(buff)))}, leaf
+	}
+}
+
+func compoundBlobIsBoundary() isBoundaryFn {
+	h := buzhash.NewBuzHash(objectWindowSize)
+
+	return func(item sequenceItem) bool {
+		mt, ok := item.(metaTuple)
+		d.Chk.True(ok)
+		digest := mt.ref.Digest()
+		_, err := h.Write(digest[:])
+		d.Chk.NoError(err)
+		return h.Sum32()&objectPattern == objectPattern
+	}
+}
+
+func newCompoundBlobChunk(cs chunks.ChunkStore) makeChunkFn {
+	return func(items []sequenceItem) (sequenceItem, interface{}) {
+		tuples := make(metaSequenceData, len(items))
+		offsetSum := uint64(0)
+
+		for i, v := range items {
+			mt, ok := v.(metaTuple)
+			d.Chk.True(ok)
+			offsetSum += mt.uint64Value()
+			mt.value = UInt64(offsetSum)
+			tuples[i] = mt
+		}
+
+		meta := newCompoundBlob(tuples, cs)
+		ref := WriteValue(meta, cs)
+		return metaTuple{ref, UInt64(offsetSum)}, meta
+	}
+}
+
+func NewBlob(r io.Reader, cs chunks.ChunkStore) Blob {
+	seq := newSequenceChunker(newBlobLeafChunk(cs), newCompoundBlobChunk(cs), blobLeafIsBoundary(), compoundBlobIsBoundary())
+	buf := []byte{0}
 	for {
-		l, rerr := src.Read(p)
-		n += uint64(l)
-
-		// io.Reader can return data and error at the same time, so we need to write before considering the error.
-		h.Write(p[:l])
-		_, werr := dst.Write(p[:l])
-
-		if rerr != nil {
-			return n, rerr
+		n, err := r.Read(buf)
+		d.Chk.True(n <= 1)
+		if n == 1 {
+			seq.Append(buf[0])
 		}
-
-		if werr != nil {
-			return n, werr
-		}
-
-		if h.Sum32()&blobPattern == blobPattern {
-			return n, nil
+		if err != nil {
+			d.Chk.Equal(io.EOF, err)
+			break
 		}
 	}
+	_, blob := seq.Done()
+	return blob.(Blob)
 }

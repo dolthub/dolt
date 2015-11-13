@@ -317,8 +317,7 @@ func isNilPtrOrNilInterface(v reflect.Value) bool {
 
 func readerEncoder(v reflect.Value) types.Value {
 	d.Chk.True(v.Type().Implements(readerType))
-	blob, err := types.NewMemoryBlob(v.Interface().(io.Reader))
-	d.Exp.NoError(err, "Failed to marshal reader into blob")
+	blob := types.NewMemoryBlob(v.Interface().(io.Reader))
 	return blob
 }
 
@@ -398,14 +397,9 @@ func newMapEncoder(t reflect.Type) encoderFunc {
 
 func encodeByteSlice(v reflect.Value) types.Value {
 	if v.IsNil() {
-		nom, _ := types.NewMemoryBlob(&bytes.Buffer{})
-		return nom
+		return types.NewMemoryBlob(&bytes.Buffer{})
 	}
-	nom, err := types.NewMemoryBlob(bytes.NewReader(v.Bytes()))
-	if err != nil {
-		panic(err)
-	}
-	return nom
+	return types.NewMemoryBlob(bytes.NewReader(v.Bytes()))
 }
 
 func newSliceEncoder(t reflect.Type) encoderFunc {

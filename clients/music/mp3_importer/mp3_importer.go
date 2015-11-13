@@ -31,17 +31,12 @@ func addMp3(ds *dataset.Dataset, filename string) {
 	}
 	defer mp3_file.Close()
 
-	mp3_data, err := types.NewBlob(bufio.NewReader(mp3_file), ds.Store())
-	if err != nil {
-		log.Fatalf("Failed to read mp3 data from %s: %s\n", filename, err)
-	}
-
 	new_song := SongDef{
 		Title:  id3.Title(),
 		Artist: id3.Artist(),
 		Album:  id3.Album(),
 		Year:   id3.Year(),
-		Mp3:    mp3_data,
+		Mp3:    types.NewBlob(bufio.NewReader(mp3_file), ds.Store()),
 	}.New()
 	songs := readSongsFromDataset(ds).Append(new_song)
 	if _, ok := ds.Commit(songs); ok {

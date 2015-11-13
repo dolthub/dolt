@@ -83,8 +83,7 @@ func TestReadPrimitives(t *testing.T) {
 
 	test(NewString("hi"), `[%d, "hi"]`, StringKind)
 
-	blob, err := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
-	assert.NoError(err)
+	blob := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	test(blob, `[%d, "AAE="]`, BlobKind)
 }
 
@@ -471,8 +470,7 @@ func TestReadStructWithBlob(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
-	blob, err := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
-	assert.NoError(err)
+	blob := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	assert.True(v.Get("b").Equals(blob))
 }
 

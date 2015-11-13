@@ -48,21 +48,18 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return NewString("hi") },
 		func() Value { return NewString("bye") },
 		func() Value {
-			v, _ := NewMemoryBlob(&bytes.Buffer{})
-			return v
+			return NewMemoryBlob(&bytes.Buffer{})
 		},
 		func() Value {
-			v, _ := NewMemoryBlob(bytes.NewBufferString("hi"))
-			return v
+			return NewMemoryBlob(bytes.NewBufferString("hi"))
 		},
 		func() Value {
-			v, _ := NewMemoryBlob(bytes.NewBufferString("bye"))
-			return v
+			return NewMemoryBlob(bytes.NewBufferString("bye"))
 		},
 		func() Value {
 			ms := chunks.NewMemoryStore()
-			b1, _ := NewBlob(bytes.NewBufferString("hi"), ms)
-			b2, _ := NewBlob(bytes.NewBufferString("bye"), ms)
+			b1 := NewBlob(bytes.NewBufferString("hi"), ms)
+			b2 := NewBlob(bytes.NewBufferString("bye"), ms)
 			return newCompoundBlob([]metaTuple{{WriteValue(b1, ms), UInt64(uint64(2))}, {WriteValue(b2, ms), UInt64(uint64(5))}}, ms)
 		},
 		func() Value { return NewList() },
