@@ -1,4 +1,4 @@
-pushd ../../js2
+pushd ../../js
 npm install
 npm run build
 ./link.sh

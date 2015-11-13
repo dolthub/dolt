@@ -6,7 +6,7 @@ before_script:
 - nvm install stable
 - nvm use stable
 - npm version
-- pushd js2
+- pushd js
 - npm install
 - npm test
 - popd
