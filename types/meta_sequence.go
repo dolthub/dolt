@@ -7,6 +7,13 @@ import (
 
 // metaSequence is a logical abstraction, but has no concrete "base" implementation. A Meta Sequence is a non-leaf (internal) node of a "probably" tree, which results from the chunking of an ordered or unordered sequence of values.
 
+type metaSequence interface {
+	tupleAt(idx int) metaTuple
+	lastTuple() metaTuple
+	tupleCount() int
+	Ref() ref.Ref
+}
+
 type metaTuple struct {
 	ref   ref.Ref
 	value Value

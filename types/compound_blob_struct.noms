@@ -1,5 +1,0 @@
-struct compoundBlobStruct {
-  Offsets: List(UInt64) // The offsets of the end of the related blobs.
-  // TODO: Rename to Chunks.
-  Blobs:   List(Ref(Blob))
-}
