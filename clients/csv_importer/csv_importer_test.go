@@ -48,10 +48,9 @@ func (s *testSuite) TestCSVImporter() {
 	i := uint64(0)
 	l.IterAll(func(v types.Value, j uint64) {
 		s.Equal(i, j)
-		m := types.ReadValue(v.(types.Ref).TargetRef(), cs).(types.Map)
-		s.Equal(uint64(2), m.Len())
-		s.Equal(types.NewString(fmt.Sprintf("a%d", i)), m.Get(types.NewString("a")))
-		s.Equal(types.NewString(fmt.Sprintf("%d", i)), m.Get(types.NewString("b")))
+		st := types.ReadValue(v.(types.Ref).TargetRef(), cs).(types.Struct)
+		s.Equal(types.NewString(fmt.Sprintf("a%d", i)), st.Get("a"))
+		s.Equal(types.NewString(fmt.Sprintf("%d", i)), st.Get("b"))
 		i++
 	})
 }
@@ -60,7 +59,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 	oldDelimiter := delimiter
 	newDelimiter := "|"
 	delimiter = &newDelimiter
-	defer func () { delimiter = oldDelimiter }()
+	defer func() { delimiter = oldDelimiter }()
 
 	input, err := ioutil.TempFile(s.TempDir, "")
 	d.Chk.NoError(err)
@@ -77,17 +76,16 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 	l := ds.Head().Value().(types.List)
 	s.Equal(uint64(1), l.Len())
 	v := l.Get(0)
-	m := types.ReadValue(v.(types.Ref).TargetRef(), cs).(types.Map)
-	s.Equal(uint64(2), m.Len())
-	s.Equal(types.NewString("1"), m.Get(types.NewString("a")))
-	s.Equal(types.NewString("2"), m.Get(types.NewString("b")))
+	st := types.ReadValue(v.(types.Ref).TargetRef(), cs).(types.Struct)
+	s.Equal(types.NewString("1"), st.Get("a"))
+	s.Equal(types.NewString("2"), st.Get("b"))
 }
 
 func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	oldHeader := header
 	newHeader := "x,y"
 	header = &newHeader
-	defer func () { header = oldHeader }()
+	defer func() { header = oldHeader }()
 
 	input, err := ioutil.TempFile(s.TempDir, "")
 	d.Chk.NoError(err)
@@ -104,8 +102,7 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	l := ds.Head().Value().(types.List)
 	s.Equal(uint64(1), l.Len())
 	v := l.Get(0)
-	m := types.ReadValue(v.(types.Ref).TargetRef(), cs).(types.Map)
-	s.Equal(uint64(2), m.Len())
-	s.Equal(types.NewString("7"), m.Get(types.NewString("x")))
-	s.Equal(types.NewString("8"), m.Get(types.NewString("y")))
+	st := types.ReadValue(v.(types.Ref).TargetRef(), cs).(types.Struct)
+	s.Equal(types.NewString("7"), st.Get("x"))
+	s.Equal(types.NewString("8"), st.Get("y"))
 }

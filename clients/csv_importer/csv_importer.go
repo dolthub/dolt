@@ -15,16 +15,18 @@ import (
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
+	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
 var (
-	p = flag.Uint("p", 512, "parallelism")
+	p       = flag.Uint("p", 512, "parallelism")
 	dsFlags = dataset.NewFlags()
 	// Actually the delimiter uses runes, which can be multiple charcter long.
 	// https://blog.golang.org/strings
 	delimiter = flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
-	header = flag.String("header", "", "header row. If empty, we'll use the first row of the file")
+	header    = flag.String("header", "", "header row. If empty, we'll use the first row of the file")
+	name      = flag.String("name", "Row", "struct name. The user-visible name to give to the struct type that will hold each row of data.")
 )
 
 type valuesWithIndex struct {
@@ -81,7 +83,7 @@ func main() {
 		input = res
 	} else {
 		input = io.MultiReader(
-			strings.NewReader(*header + "\n"),
+			strings.NewReader(*header+"\n"),
 			res)
 	}
 
@@ -99,6 +101,21 @@ func main() {
 	if err != nil {
 		log.Fatalln("Error decoding CSV: ", err)
 	}
+
+	fields := make([]types.Field, 0, len(keys))
+	for _, key := range keys {
+		fields = append(fields, types.Field{
+			Name: key,
+			T:    types.MakePrimitiveTypeRef(types.StringKind),
+			// TODO(misha): Think about whether we need fields to be optional.
+			Optional: false,
+		})
+	}
+
+	typeDef := types.MakeStructTypeRef(*name, fields, types.Choices{})
+	pkg := types.NewPackage([]types.Type{typeDef}, []ref.Ref{})
+	pkgRef := types.RegisterPackage(&pkg)
+	typeRef := types.MakeTypeRef(pkgRef, 0)
 
 	recordChan := make(chan valuesWithIndex, 4096)
 	refChan := make(chan refIndex, 4096)
@@ -126,12 +143,12 @@ func main() {
 
 	rowsToNoms := func() {
 		for row := range recordChan {
-			m := types.NewMap()
+			fields := make(map[string]types.Value)
 			for i, v := range row.values {
-				m = m.Set(types.NewString(keys[i]), types.NewString(v))
+				fields[keys[i]] = types.NewString(v)
 			}
-
-			r := types.NewRef(types.WriteValue(m, ds.Store()))
+			newStruct := types.NewStruct(typeRef, typeDef, fields)
+			r := types.NewRef(types.WriteValue(newStruct, ds.Store()))
 			refChan <- refIndex{r, row.index}
 		}
 	}
