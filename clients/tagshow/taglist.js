@@ -11,34 +11,28 @@ const tagStyle = {
   whiteSpace: 'nowrap'
 };
 
-type DefaultProps = {};
-
 type Props = {
   selected: Set<string>,
   tags: Array<string>,
   onChange: (selected: Set<string>) => void
 };
 
-type State = {};
+function handleChange(props: Props, tag: string) {
+  let selected = new Set(props.selected);
+  selected.has(tag) ? selected.delete(tag) : selected.add(tag);
+  props.onChange(selected);
+}
 
-export default class TagList extends React.Component<DefaultProps, Props, State> {
-  handleChange(tag: string) {
-    let selected = this.props.selected;
-    selected.has(tag) ? selected.delete(tag) : selected.add(tag);
-    this.props.onChange(new Set(selected));
-  }
+export default function TagList(props: Props) : React.Element {
+  let tags = [...props.tags].sort();
+  let labels = tags.map(tag => {
+    return <label style={tagStyle} key={tag}>
+      <input type="checkbox" name="tc"
+        checked={props.selected.has(tag)}
+        onChange={() => handleChange(props, tag) }/>
+      {tag}
+    </label>;
+  });
 
-  render() : React.Element {
-    let tags = [...this.props.tags].sort();
-    let labels = tags.map(tag => {
-      return <label style={tagStyle} key={tag}>
-        <input type="checkbox" name="tc"
-          checked={this.props.selected.has(tag)}
-          onChange={() => this.handleChange(tag) }/>
-        {tag}
-      </label>;
-    });
-
-    return <div>{labels}</div>;
-  }
+  return <div>{labels}</div>;
 }

@@ -4,6 +4,7 @@
 
 import {invariant} from './assert.js';
 import {readValue} from 'noms';
+import eq from './eq.js';
 import React from 'react';
 import type {ChunkStore} from 'noms';
 
@@ -38,20 +39,19 @@ export default class DatasetPicker extends React.Component<DefaultProps, Props, 
     let store = props.store;
     let rootRef = await store.getRoot();
     let datasets = await readValue(rootRef, store);
+    invariant(datasets instanceof Map);
     this.setState({
       datasets: new Set(datasets.keys())
     });
   }
 
-  componentWillMount() {
-    this._updateDatasets(this.props);
-  }
-
-  componentWillReceiveProps(props: Props) {
-    this._updateDatasets(props);
+  shouldComponentUpdate(nextProps: Props, nextState: State) : boolean {
+    return !eq(nextProps, this.props) || !eq(nextState, this.state);
   }
 
   render() : React.Element {
+    this._updateDatasets(this.props);
+
     let options = [];
     for (let v of this.state.datasets) {
       options.push(<option value={v} key={v}>{v}</option>);

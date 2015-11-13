@@ -4,6 +4,7 @@
 
 import {readValue} from 'noms';
 import DatasetPicker from './datasetpicker.js';
+import eq from './eq.js';
 import React from 'react';
 import SlideShow from './slideshow.js';
 import TagChooser from './tagchooser.js';
@@ -67,27 +68,22 @@ export default class Root extends React.Component<DefaultProps, Props, State> {
         selectedPhotos.sort((a, b) => a.compare(b));
         tags.sort();
       }
+
+      this.setState({selectedTags, tags, selectedPhotos});
     }
-
-    this.setState({selectedTags, tags, selectedPhotos});
   }
 
-  componentWillMount() {
-    this._updateState(this.props);
-  }
-
-  componentWillReceiveProps(props: Props) {
-    this._updateState(props);
+  shouldComponentUpdate(nextProps: Props, nextState: State) : boolean {
+    return !eq(nextProps, this.props) || !eq(nextState, this.state);
   }
 
   handleDataSetPicked(ds: string) {
-    let qs = Object.assign(this.props.qs);
-    qs['ds'] = ds;
+    let qs = Object.assign({}, this.props.qs, {ds});
     this.props.updateQuery(qs);
   }
 
   getSelectedTags(props: Props) : Set<string> {
-    let tags = props.qs['tags'];
+    let tags = props.qs.tags;
     if (!tags) {
       return new Set();
     }
@@ -97,21 +93,24 @@ export default class Root extends React.Component<DefaultProps, Props, State> {
   handleTagsChange(selectedTags: Set<string>) {
     // FIXME: https://github.com/facebook/flow/issues/1059
     let workaround: any = selectedTags;
-    this.props.qs['tags'] = [...workaround].join(',');
-    this.props.updateQuery(this.props.qs);
+    let tags = [...workaround].join(',');
+    let qs = Object.assign({}, this.props.qs, {tags});
+    this.props.updateQuery(qs);
   }
 
   handleTagsConfirm() {
-    this.props.qs['show'] = '1';
-    this.props.updateQuery(this.props.qs);
+    let qs = Object.assign({}, this.props.qs, {show: '1'});
+    this.props.updateQuery(qs);
   }
 
   render() : React.Element {
-    if (!this.props.qs['ds']) {
+    this._updateState(this.props);
+
+    if (!this.props.qs.ds) {
       return <DatasetPicker store={this.props.store} onChange={ds => this.handleDataSetPicked(ds)}/>;
     }
 
-    if (!this.props.qs['show'] || this.state.selectedTags.size === 0) {
+    if (!this.props.qs.show || this.state.selectedTags.size === 0) {
       return <TagChooser
           store={this.props.store}
           tags={this.state.tags}
