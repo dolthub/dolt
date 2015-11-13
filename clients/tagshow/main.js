@@ -15,7 +15,7 @@ function updateQuery(qs: {[key: string]: string}) {
 }
 
 function render() {
-  let qs = queryString.parse(location.hash);
+  let qs = Object.freeze(queryString.parse(location.hash));
   let target = document.getElementById('root');
 
   let nomsServer;

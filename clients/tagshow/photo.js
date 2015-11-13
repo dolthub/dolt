@@ -3,6 +3,7 @@
 'use strict';
 
 import {readValue} from 'noms';
+import eq from './eq.js';
 import React from 'react';
 import type {ChunkStore, Ref, Struct} from 'noms';
 
@@ -31,6 +32,10 @@ export default class Photo extends React.Component<DefaultProps, Props, State> {
     };
   }
 
+  shouldComponentUpdate(nextProps: Props, nextState: State) : boolean {
+    return !eq(nextProps, this.props) || !eq(nextState, this.state);
+  }
+
   async _updatePhoto(props: Props) : Promise<void> {
     function area(size: Struct) : number {
       return size.get('Width') * size.get('Height');
@@ -47,15 +52,9 @@ export default class Photo extends React.Component<DefaultProps, Props, State> {
     this.setState({photo, sizes});
   }
 
-  componentWillMount() {
-    this._updatePhoto(this.props);
-  }
-
-  componentWillReceiveProps(props: Props) {
-    this._updatePhoto(props);
-  }
-
   render() : ?React.Element {
+    this._updatePhoto(this.props);
+
     if (!this.state.photo || this.state.sizes.length === 0) {
       return null;
     }
