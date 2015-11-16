@@ -1,7 +1,6 @@
 package types
 
 import (
-	"crypto/sha1"
 	"errors"
 	"io"
 
@@ -10,17 +9,12 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-const (
-	objectWindowSize = 8 * sha1.Size
-	objectPattern    = uint32(1<<6 - 1) // Average size of 64 elements
-)
-
 // compoundBlob represents a list of Blobs.
 // It implements the Blob interface.
 type compoundBlob struct {
-	tuples metaSequenceData
-	ref    *ref.Ref
-	cs     chunks.ChunkSource
+	metaSequenceObject
+	ref *ref.Ref
+	cs  chunks.ChunkSource
 }
 
 var typeForCompoundBlob = MakeCompoundType(MetaSequenceKind, MakePrimitiveType(BlobKind))
@@ -31,7 +25,7 @@ func newCompoundBlob(tuples metaSequenceData, cs chunks.ChunkSource) compoundBlo
 
 func buildCompoundBlob(tuples metaSequenceData, t Type, cs chunks.ChunkSource) Value {
 	d.Chk.True(t.Equals(typeForCompoundBlob))
-	return compoundBlob{tuples, &ref.Ref{}, cs}
+	return compoundBlob{metaSequenceObject{tuples, typeForCompoundBlob}, &ref.Ref{}, cs}
 }
 
 func getSequenceData(v Value) metaSequenceData {
@@ -47,44 +41,12 @@ func (cb compoundBlob) Reader() io.ReadSeeker {
 	return &compoundBlobReader{cursor: newMetaSequenceCursor(cb, cb.cs), length: length, cs: cb.cs}
 }
 
-// MetaSequence
-func (cb compoundBlob) tupleAt(idx int) metaTuple {
-	return cb.tuples[idx]
-}
-
-func (cb compoundBlob) tupleCount() int {
-	return len(cb.tuples)
-}
-
-func (cb compoundBlob) lastTuple() metaTuple {
-	return cb.tuples[cb.tupleCount()-1]
-}
-
 func (cb compoundBlob) Equals(other Value) bool {
-	return other != nil && typeForCompoundBlob.Equals(other.Type()) && cb.Ref() == other.Ref()
+	return other != nil && cb.t.Equals(other.Type()) && cb.Ref() == other.Ref()
 }
 
 func (cb compoundBlob) Ref() ref.Ref {
 	return EnsureRef(cb.ref, cb)
-}
-
-func (cb compoundBlob) Type() Type {
-	return typeForCompoundBlob
-}
-
-func (cb compoundBlob) ChildValues() []Value {
-	res := make([]Value, len(cb.tuples))
-	for i, t := range cb.tuples {
-		res[i] = NewRefOfBlob(t.ref)
-	}
-	return res
-}
-
-func (cb compoundBlob) Chunks() (chunks []ref.Ref) {
-	for _, tuple := range cb.tuples {
-		chunks = append(chunks, tuple.ref)
-	}
-	return
 }
 
 func (cb compoundBlob) Len() uint64 {
