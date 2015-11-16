@@ -191,7 +191,7 @@ type ListOfD struct {
 }
 
 func NewListOfD() ListOfD {
-	return ListOfD{types.NewList(), &ref.Ref{}}
+	return ListOfD{types.NewTypedList(__typeForListOfD), &ref.Ref{}}
 }
 
 type ListOfDDef []DDef
@@ -201,7 +201,7 @@ func (def ListOfDDef) New() ListOfD {
 	for i, d := range def {
 		l[i] = d.New()
 	}
-	return ListOfD{types.NewList(l...), &ref.Ref{}}
+	return ListOfD{types.NewTypedList(__typeForListOfD, l...), &ref.Ref{}}
 }
 
 func (l ListOfD) Def() ListOfDDef {

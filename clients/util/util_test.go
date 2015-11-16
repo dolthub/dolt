@@ -43,11 +43,13 @@ func (suite *LibTestSuite) TestCompositeTypes() {
 		"list":   types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
 		"map":    MapOfStringToValueDef{"nested": types.NewString("string")}.New(),
 	}.New()
-	suite.EqualValues(m, NomsValueFromDecodedJSON(map[string]interface{}{
+	o := NomsValueFromDecodedJSON(map[string]interface{}{
 		"string": "string",
 		"list":   []interface{}{false, true},
 		"map":    map[string]interface{}{"nested": "string"},
-	}))
+	})
+
+	suite.True(m.Equals(o))
 }
 
 func (suite *LibTestSuite) TestPanicOnUnsupportedType() {

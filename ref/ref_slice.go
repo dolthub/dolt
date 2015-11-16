@@ -7,7 +7,7 @@ func (rs RefSlice) Len() int {
 }
 
 func (rs RefSlice) Less(i, j int) bool {
-	return Less(rs[i], rs[j])
+	return rs[i].Less(rs[j])
 }
 
 func (rs RefSlice) Swap(i, j int) {

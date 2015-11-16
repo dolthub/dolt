@@ -141,7 +141,7 @@ type MapOfStringToRefOfCommit struct {
 }
 
 func NewMapOfStringToRefOfCommit() MapOfStringToRefOfCommit {
-	return MapOfStringToRefOfCommit{types.NewMap(), &ref.Ref{}}
+	return MapOfStringToRefOfCommit{types.NewTypedMap(__typeForMapOfStringToRefOfCommit), &ref.Ref{}}
 }
 
 type MapOfStringToRefOfCommitDef map[string]ref.Ref
@@ -151,7 +151,7 @@ func (def MapOfStringToRefOfCommitDef) New() MapOfStringToRefOfCommit {
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), NewRefOfCommit(v))
 	}
-	return MapOfStringToRefOfCommit{types.NewMap(kv...), &ref.Ref{}}
+	return MapOfStringToRefOfCommit{types.NewTypedMap(__typeForMapOfStringToRefOfCommit, kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToRefOfCommit) Def() MapOfStringToRefOfCommitDef {
@@ -274,7 +274,7 @@ type SetOfRefOfCommit struct {
 }
 
 func NewSetOfRefOfCommit() SetOfRefOfCommit {
-	return SetOfRefOfCommit{types.NewSet(), &ref.Ref{}}
+	return SetOfRefOfCommit{types.NewTypedSet(__typeForSetOfRefOfCommit), &ref.Ref{}}
 }
 
 type SetOfRefOfCommitDef map[ref.Ref]bool
@@ -286,7 +286,7 @@ func (def SetOfRefOfCommitDef) New() SetOfRefOfCommit {
 		l[i] = NewRefOfCommit(d)
 		i++
 	}
-	return SetOfRefOfCommit{types.NewSet(l...), &ref.Ref{}}
+	return SetOfRefOfCommit{types.NewTypedSet(__typeForSetOfRefOfCommit, l...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfCommit) Def() SetOfRefOfCommitDef {

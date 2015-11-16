@@ -25,3 +25,9 @@ var typeFor{{.NomsType}} = MakePrimitiveType({{.NomsType}}Kind)
 func (v {{.NomsType}}) Type() Type {
 	return typeFor{{.NomsType}}
 }
+
+{{if .IsOrdered}}
+func (v {{.NomsType}}) Less(other OrderedValue) bool {
+  return v < other.({{.NomsType}})
+}
+{{end}}

@@ -15,7 +15,7 @@ type ListOfInt64 struct {
 }
 
 func NewListOfInt64() ListOfInt64 {
-	return ListOfInt64{types.NewList(), &ref.Ref{}}
+	return ListOfInt64{types.NewTypedList(__typeForListOfInt64), &ref.Ref{}}
 }
 
 type ListOfInt64Def []int64
@@ -25,7 +25,7 @@ func (def ListOfInt64Def) New() ListOfInt64 {
 	for i, d := range def {
 		l[i] = types.Int64(d)
 	}
-	return ListOfInt64{types.NewList(l...), &ref.Ref{}}
+	return ListOfInt64{types.NewTypedList(__typeForListOfInt64, l...), &ref.Ref{}}
 }
 
 func (l ListOfInt64) Def() ListOfInt64Def {

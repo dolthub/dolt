@@ -119,7 +119,7 @@ type ListOfTree struct {
 }
 
 func NewListOfTree() ListOfTree {
-	return ListOfTree{types.NewList(), &ref.Ref{}}
+	return ListOfTree{types.NewTypedList(__typeForListOfTree), &ref.Ref{}}
 }
 
 type ListOfTreeDef []TreeDef
@@ -129,7 +129,7 @@ func (def ListOfTreeDef) New() ListOfTree {
 	for i, d := range def {
 		l[i] = d.New()
 	}
-	return ListOfTree{types.NewList(l...), &ref.Ref{}}
+	return ListOfTree{types.NewTypedList(__typeForListOfTree, l...), &ref.Ref{}}
 }
 
 func (l ListOfTree) Def() ListOfTreeDef {

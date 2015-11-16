@@ -95,15 +95,15 @@ func TestLess(t *testing.T) {
 	r1 := Parse("sha1-0000000000000000000000000000000000000001")
 	r2 := Parse("sha1-0000000000000000000000000000000000000002")
 
-	assert.False(Less(r1, r1))
-	assert.True(Less(r1, r2))
-	assert.False(Less(r2, r1))
-	assert.False(Less(r2, r2))
+	assert.False(r1.Less(r1))
+	assert.True(r1.Less(r2))
+	assert.False(r2.Less(r1))
+	assert.False(r2.Less(r2))
 
 	r0 := Ref{}
-	assert.False(Less(r0, r0))
-	assert.True(Less(r0, r2))
-	assert.False(Less(r2, r0))
+	assert.False(r0.Less(r0))
+	assert.True(r0.Less(r2))
+	assert.False(r2.Less(r0))
 }
 
 func TestGreater(t *testing.T) {
@@ -112,13 +112,13 @@ func TestGreater(t *testing.T) {
 	r1 := Parse("sha1-0000000000000000000000000000000000000001")
 	r2 := Parse("sha1-0000000000000000000000000000000000000002")
 
-	assert.False(Greater(r1, r1))
-	assert.False(Greater(r1, r2))
-	assert.True(Greater(r2, r1))
-	assert.False(Greater(r2, r2))
+	assert.False(r1.Greater(r1))
+	assert.False(r1.Greater(r2))
+	assert.True(r2.Greater(r1))
+	assert.False(r2.Greater(r2))
 
 	r0 := Ref{}
-	assert.False(Greater(r0, r0))
-	assert.False(Greater(r0, r2))
-	assert.True(Greater(r2, r0))
+	assert.False(r0.Greater(r0))
+	assert.False(r0.Greater(r2))
+	assert.True(r2.Greater(r0))
 }

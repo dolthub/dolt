@@ -8,7 +8,7 @@ type {{.Name}} struct {
 }
 
 func New{{.Name}}() {{.Name}} {
-	return {{.Name}}{ {{$typesPackage}}NewList(), &ref.Ref{}}
+	return {{.Name}}{ {{$typesPackage}}NewTypedList(__typeFor{{.Name}}), &ref.Ref{}}
 }
 
 {{if .CanUseDef}}
@@ -19,7 +19,7 @@ func New{{.Name}}() {{.Name}} {
 		for i, d := range def {
 			l[i] = {{defToValue "d" .ElemType }}
 		}
-		return {{.Name}}{ {{$typesPackage}}NewList(l...), &ref.Ref{}}
+		return {{.Name}}{ {{$typesPackage}}NewTypedList(__typeFor{{.Name}}, l...), &ref.Ref{}}
 	}
 
 	func (l {{.Name}}) Def() {{.Name}}Def {

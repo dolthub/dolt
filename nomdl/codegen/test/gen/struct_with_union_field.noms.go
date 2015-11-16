@@ -275,7 +275,7 @@ type SetOfUInt8 struct {
 }
 
 func NewSetOfUInt8() SetOfUInt8 {
-	return SetOfUInt8{types.NewSet(), &ref.Ref{}}
+	return SetOfUInt8{types.NewTypedSet(__typeForSetOfUInt8), &ref.Ref{}}
 }
 
 type SetOfUInt8Def map[uint8]bool
@@ -287,7 +287,7 @@ func (def SetOfUInt8Def) New() SetOfUInt8 {
 		l[i] = types.UInt8(d)
 		i++
 	}
-	return SetOfUInt8{types.NewSet(l...), &ref.Ref{}}
+	return SetOfUInt8{types.NewTypedSet(__typeForSetOfUInt8, l...), &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Def() SetOfUInt8Def {

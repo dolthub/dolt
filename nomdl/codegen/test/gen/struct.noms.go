@@ -138,7 +138,7 @@ type ListOfStruct struct {
 }
 
 func NewListOfStruct() ListOfStruct {
-	return ListOfStruct{types.NewList(), &ref.Ref{}}
+	return ListOfStruct{types.NewTypedList(__typeForListOfStruct), &ref.Ref{}}
 }
 
 type ListOfStructDef []StructDef
@@ -148,7 +148,7 @@ func (def ListOfStructDef) New() ListOfStruct {
 	for i, d := range def {
 		l[i] = d.New()
 	}
-	return ListOfStruct{types.NewList(l...), &ref.Ref{}}
+	return ListOfStruct{types.NewTypedList(__typeForListOfStruct, l...), &ref.Ref{}}
 }
 
 func (l ListOfStruct) Def() ListOfStructDef {

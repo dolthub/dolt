@@ -80,12 +80,8 @@ func Parse(s string) (r Ref) {
 	return
 }
 
-// Less compares two Refs, returning true if the first is less than the second.
-// This can be called a lot, so performance and avoiding creating garbage may be important.
-// Particularly, d.Chk.Equals{Value} does reflection, and this can be expensive, so avoid it here.
-func Less(r1, r2 Ref) bool {
-	d1, d2 := r1.digest, r2.digest
-	d.Chk.True(len(d1) == len(d2)) // BUG #83
+func (r Ref) Less(other Ref) bool {
+	d1, d2 := r.digest, other.digest
 	for k := 0; k < len(d1); k++ {
 		b1, b2 := d1[k], d2[k]
 		if b1 < b2 {
@@ -94,9 +90,10 @@ func Less(r1, r2 Ref) bool {
 			return false
 		}
 	}
+
 	return false
 }
 
-func Greater(r1, r2 Ref) bool {
-	return !Less(r1, r2) && r1 != r2
+func (r Ref) Greater(other Ref) bool {
+	return !r.Less(other) && r != other
 }

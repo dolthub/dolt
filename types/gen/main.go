@@ -18,7 +18,7 @@ var (
 )
 
 func main() {
-	types := []string{"Bool", "Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64", "Float32", "Float64"}
+	types := map[string]bool{"Bool": false, "Int8": true, "Int16": true, "Int32": true, "Int64": true, "UInt8": true, "UInt16": true, "UInt32": true, "UInt64": true, "Float32": true, "Float64": true}
 
 	f, err := os.OpenFile("primitives.go", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
@@ -28,12 +28,13 @@ func main() {
 
 	headerTempl.Execute(f, nil)
 
-	for _, t := range types {
+	for t, ordered := range types {
 		goType := strings.ToLower(t)
 		primitiveTempl.Execute(f, struct {
-			NomsType string
-			GoType   string
-		}{t, goType})
+			NomsType  string
+			GoType    string
+			IsOrdered bool
+		}{t, goType, ordered})
 	}
 }
 

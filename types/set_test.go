@@ -213,6 +213,134 @@ func TestSetIterAllP(t *testing.T) {
 	testIter(64, 200)
 }
 
+func testSetOrder(assert *assert.Assertions, valueType Type, value []Value, expectOrdering []Value) {
+	mapTr := MakeCompoundType(SetKind, valueType)
+	m := NewTypedSet(mapTr, value...)
+	i := 0
+	m.IterAll(func(value Value) {
+		assert.Equal(expectOrdering[i].Ref().String(), value.Ref().String())
+		i += 1
+	})
+}
+
+func TestSetOrdering(t *testing.T) {
+	assert := assert.New(t)
+
+	testSetOrder(assert,
+		MakePrimitiveType(StringKind),
+		[]Value{
+			NewString("a"),
+			NewString("z"),
+			NewString("b"),
+			NewString("y"),
+			NewString("c"),
+			NewString("x"),
+		},
+		[]Value{
+			NewString("a"),
+			NewString("b"),
+			NewString("c"),
+			NewString("x"),
+			NewString("y"),
+			NewString("z"),
+		},
+	)
+
+	testSetOrder(assert,
+		MakePrimitiveType(UInt64Kind),
+		[]Value{
+			UInt64(0),
+			UInt64(1000),
+			UInt64(1),
+			UInt64(100),
+			UInt64(2),
+			UInt64(10),
+		},
+		[]Value{
+			UInt64(0),
+			UInt64(1),
+			UInt64(2),
+			UInt64(10),
+			UInt64(100),
+			UInt64(1000),
+		},
+	)
+
+	testSetOrder(assert,
+		MakePrimitiveType(Int16Kind),
+		[]Value{
+			Int16(0),
+			Int16(-30),
+			Int16(25),
+			Int16(1002),
+			Int16(-5050),
+			Int16(23),
+		},
+		[]Value{
+			Int16(-5050),
+			Int16(-30),
+			Int16(0),
+			Int16(23),
+			Int16(25),
+			Int16(1002),
+		},
+	)
+
+	testSetOrder(assert,
+		MakePrimitiveType(Float32Kind),
+		[]Value{
+			Float32(0.0001),
+			Float32(0.000001),
+			Float32(1),
+			Float32(25.01e3),
+			Float32(-32.231123e5),
+			Float32(23),
+		},
+		[]Value{
+			Float32(-32.231123e5),
+			Float32(0.000001),
+			Float32(0.0001),
+			Float32(1),
+			Float32(23),
+			Float32(25.01e3),
+		},
+	)
+
+	testSetOrder(assert,
+		MakePrimitiveType(ValueKind),
+		[]Value{
+			NewString("a"),
+			NewString("z"),
+			NewString("b"),
+			NewString("y"),
+			NewString("c"),
+			NewString("x"),
+		},
+		// Ordered by ref
+		[]Value{
+			NewString("x"),
+			NewString("c"),
+			NewString("y"),
+			NewString("z"),
+			NewString("a"),
+			NewString("b"),
+		},
+	)
+
+	testSetOrder(assert,
+		MakePrimitiveType(BoolKind),
+		[]Value{
+			Bool(true),
+			Bool(false),
+		},
+		// Ordered by ref
+		[]Value{
+			Bool(true),
+			Bool(false),
+		},
+	)
+}
+
 func TestSetFilter(t *testing.T) {
 	assert := assert.New(t)
 

@@ -179,7 +179,7 @@ type ListOfUInt8 struct {
 }
 
 func NewListOfUInt8() ListOfUInt8 {
-	return ListOfUInt8{types.NewList(), &ref.Ref{}}
+	return ListOfUInt8{types.NewTypedList(__typeForListOfUInt8), &ref.Ref{}}
 }
 
 type ListOfUInt8Def []uint8
@@ -189,7 +189,7 @@ func (def ListOfUInt8Def) New() ListOfUInt8 {
 	for i, d := range def {
 		l[i] = types.UInt8(d)
 	}
-	return ListOfUInt8{types.NewList(l...), &ref.Ref{}}
+	return ListOfUInt8{types.NewTypedList(__typeForListOfUInt8, l...), &ref.Ref{}}
 }
 
 func (l ListOfUInt8) Def() ListOfUInt8Def {

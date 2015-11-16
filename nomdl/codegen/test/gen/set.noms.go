@@ -15,7 +15,7 @@ type SetOfBool struct {
 }
 
 func NewSetOfBool() SetOfBool {
-	return SetOfBool{types.NewSet(), &ref.Ref{}}
+	return SetOfBool{types.NewTypedSet(__typeForSetOfBool), &ref.Ref{}}
 }
 
 type SetOfBoolDef map[bool]bool
@@ -27,7 +27,7 @@ func (def SetOfBoolDef) New() SetOfBool {
 		l[i] = types.Bool(d)
 		i++
 	}
-	return SetOfBool{types.NewSet(l...), &ref.Ref{}}
+	return SetOfBool{types.NewTypedSet(__typeForSetOfBool, l...), &ref.Ref{}}
 }
 
 func (s SetOfBool) Def() SetOfBoolDef {

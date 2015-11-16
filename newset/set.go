@@ -40,7 +40,7 @@ func (s Set) Put(put ref.Ref) Set {
 			case has:
 			case put == r:
 				has = true
-			case ref.Less(put, r):
+			case put.Less(r):
 				sb.AddItem(put)
 				has = true
 			}

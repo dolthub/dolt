@@ -63,7 +63,7 @@ func (node leaf) fmt(indent int) string {
 
 func (node leaf) searchForIndex(r ref.Ref) int {
 	return sort.Search(len(node.d), func(i int) bool {
-		return !ref.Less(node.d[i], r)
+		return !node.d[i].Less(r)
 	})
 }
 

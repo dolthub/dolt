@@ -16,7 +16,7 @@ type MapOfStringToSetOfRefOfRemotePhoto struct {
 }
 
 func NewMapOfStringToSetOfRefOfRemotePhoto() MapOfStringToSetOfRefOfRemotePhoto {
-	return MapOfStringToSetOfRefOfRemotePhoto{types.NewMap(), &ref.Ref{}}
+	return MapOfStringToSetOfRefOfRemotePhoto{types.NewTypedMap(__typeForMapOfStringToSetOfRefOfRemotePhoto), &ref.Ref{}}
 }
 
 type MapOfStringToSetOfRefOfRemotePhotoDef map[string]SetOfRefOfRemotePhotoDef
@@ -26,7 +26,7 @@ func (def MapOfStringToSetOfRefOfRemotePhotoDef) New() MapOfStringToSetOfRefOfRe
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), v.New())
 	}
-	return MapOfStringToSetOfRefOfRemotePhoto{types.NewMap(kv...), &ref.Ref{}}
+	return MapOfStringToSetOfRefOfRemotePhoto{types.NewTypedMap(__typeForMapOfStringToSetOfRefOfRemotePhoto, kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToSetOfRefOfRemotePhoto) Def() MapOfStringToSetOfRefOfRemotePhotoDef {
@@ -149,7 +149,7 @@ type SetOfRefOfRemotePhoto struct {
 }
 
 func NewSetOfRefOfRemotePhoto() SetOfRefOfRemotePhoto {
-	return SetOfRefOfRemotePhoto{types.NewSet(), &ref.Ref{}}
+	return SetOfRefOfRemotePhoto{types.NewTypedSet(__typeForSetOfRefOfRemotePhoto), &ref.Ref{}}
 }
 
 type SetOfRefOfRemotePhotoDef map[ref.Ref]bool
@@ -161,7 +161,7 @@ func (def SetOfRefOfRemotePhotoDef) New() SetOfRefOfRemotePhoto {
 		l[i] = NewRefOfRemotePhoto(d)
 		i++
 	}
-	return SetOfRefOfRemotePhoto{types.NewSet(l...), &ref.Ref{}}
+	return SetOfRefOfRemotePhoto{types.NewTypedSet(__typeForSetOfRefOfRemotePhoto, l...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfRemotePhoto) Def() SetOfRefOfRemotePhotoDef {
