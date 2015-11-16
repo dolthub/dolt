@@ -15,7 +15,7 @@
     "radix": 2,
     "semi": 2,
     "space-after-keywords": 2,
-    "space-before-function-paren": [2, "never"],
+    "space-before-function-paren": 0,
     "space-infix-ops": 2,
     "space-in-parens": [2, "never"]
   },

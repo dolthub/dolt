@@ -266,8 +266,6 @@ class JsonArrayReader {
         if (ordinal === -1) {
           let namespace = this.readString();
           let name = this.readString();
-          invariant(pkgRef.isEmpty(), 'Unresolved Types may not have a package ref');
-
           return makeUnresolvedType(namespace, name);
         }
 
