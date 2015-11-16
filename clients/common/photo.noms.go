@@ -335,7 +335,7 @@ type MapOfSizeToString struct {
 }
 
 func NewMapOfSizeToString() MapOfSizeToString {
-	return MapOfSizeToString{types.NewMap(), &ref.Ref{}}
+	return MapOfSizeToString{types.NewTypedMap(__typeForMapOfSizeToString), &ref.Ref{}}
 }
 
 type MapOfSizeToStringDef map[SizeDef]string
@@ -345,7 +345,7 @@ func (def MapOfSizeToStringDef) New() MapOfSizeToString {
 	for k, v := range def {
 		kv = append(kv, k.New(), types.NewString(v))
 	}
-	return MapOfSizeToString{types.NewMap(kv...), &ref.Ref{}}
+	return MapOfSizeToString{types.NewTypedMap(__typeForMapOfSizeToString, kv...), &ref.Ref{}}
 }
 
 func (m MapOfSizeToString) Def() MapOfSizeToStringDef {
@@ -468,7 +468,7 @@ type SetOfString struct {
 }
 
 func NewSetOfString() SetOfString {
-	return SetOfString{types.NewSet(), &ref.Ref{}}
+	return SetOfString{types.NewTypedSet(__typeForSetOfString), &ref.Ref{}}
 }
 
 type SetOfStringDef map[string]bool
@@ -480,7 +480,7 @@ func (def SetOfStringDef) New() SetOfString {
 		l[i] = types.NewString(d)
 		i++
 	}
-	return SetOfString{types.NewSet(l...), &ref.Ref{}}
+	return SetOfString{types.NewTypedSet(__typeForSetOfString, l...), &ref.Ref{}}
 }
 
 func (s SetOfString) Def() SetOfStringDef {

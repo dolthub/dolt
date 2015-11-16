@@ -590,7 +590,7 @@ type ListOfNode struct {
 }
 
 func NewListOfNode() ListOfNode {
-	return ListOfNode{types.NewList(), &ref.Ref{}}
+	return ListOfNode{types.NewTypedList(__typeForListOfNode), &ref.Ref{}}
 }
 
 type ListOfNodeDef []NodeDef
@@ -600,7 +600,7 @@ func (def ListOfNodeDef) New() ListOfNode {
 	for i, d := range def {
 		l[i] = d.New()
 	}
-	return ListOfNode{types.NewList(l...), &ref.Ref{}}
+	return ListOfNode{types.NewTypedList(__typeForListOfNode, l...), &ref.Ref{}}
 }
 
 func (l ListOfNode) Def() ListOfNodeDef {
@@ -732,7 +732,7 @@ type MapOfStringToQuadTree struct {
 }
 
 func NewMapOfStringToQuadTree() MapOfStringToQuadTree {
-	return MapOfStringToQuadTree{types.NewMap(), &ref.Ref{}}
+	return MapOfStringToQuadTree{types.NewTypedMap(__typeForMapOfStringToQuadTree), &ref.Ref{}}
 }
 
 type MapOfStringToQuadTreeDef map[string]QuadTreeDef
@@ -742,7 +742,7 @@ func (def MapOfStringToQuadTreeDef) New() MapOfStringToQuadTree {
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), v.New())
 	}
-	return MapOfStringToQuadTree{types.NewMap(kv...), &ref.Ref{}}
+	return MapOfStringToQuadTree{types.NewTypedMap(__typeForMapOfStringToQuadTree, kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToQuadTree) Def() MapOfStringToQuadTreeDef {
@@ -865,7 +865,7 @@ type ListOfRefOfValue struct {
 }
 
 func NewListOfRefOfValue() ListOfRefOfValue {
-	return ListOfRefOfValue{types.NewList(), &ref.Ref{}}
+	return ListOfRefOfValue{types.NewTypedList(__typeForListOfRefOfValue), &ref.Ref{}}
 }
 
 type ListOfRefOfValueDef []ref.Ref
@@ -875,7 +875,7 @@ func (def ListOfRefOfValueDef) New() ListOfRefOfValue {
 	for i, d := range def {
 		l[i] = NewRefOfValue(d)
 	}
-	return ListOfRefOfValue{types.NewList(l...), &ref.Ref{}}
+	return ListOfRefOfValue{types.NewTypedList(__typeForListOfRefOfValue, l...), &ref.Ref{}}
 }
 
 func (l ListOfRefOfValue) Def() ListOfRefOfValueDef {
@@ -1007,7 +1007,7 @@ type MapOfStringToRefOfSQuadTree struct {
 }
 
 func NewMapOfStringToRefOfSQuadTree() MapOfStringToRefOfSQuadTree {
-	return MapOfStringToRefOfSQuadTree{types.NewMap(), &ref.Ref{}}
+	return MapOfStringToRefOfSQuadTree{types.NewTypedMap(__typeForMapOfStringToRefOfSQuadTree), &ref.Ref{}}
 }
 
 type MapOfStringToRefOfSQuadTreeDef map[string]ref.Ref
@@ -1017,7 +1017,7 @@ func (def MapOfStringToRefOfSQuadTreeDef) New() MapOfStringToRefOfSQuadTree {
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), NewRefOfSQuadTree(v))
 	}
-	return MapOfStringToRefOfSQuadTree{types.NewMap(kv...), &ref.Ref{}}
+	return MapOfStringToRefOfSQuadTree{types.NewTypedMap(__typeForMapOfStringToRefOfSQuadTree, kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToRefOfSQuadTree) Def() MapOfStringToRefOfSQuadTreeDef {

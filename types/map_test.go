@@ -248,6 +248,134 @@ func TestMapNotStringKeys(t *testing.T) {
 	assert.Nil(m1.Get(Int32(42)))
 }
 
+func testMapOrder(assert *assert.Assertions, keyType, valueType Type, tuples []Value, expectOrdering []Value) {
+	mapTr := MakeCompoundType(MapKind, keyType, valueType)
+	m := NewTypedMap(mapTr, tuples...)
+	i := 0
+	m.IterAll(func(key, value Value) {
+		assert.Equal(expectOrdering[i].Ref().String(), key.Ref().String())
+		i++
+	})
+}
+
+func TestMapOrdering(t *testing.T) {
+	assert := assert.New(t)
+
+	testMapOrder(assert,
+		MakePrimitiveType(StringKind), MakePrimitiveType(StringKind),
+		[]Value{
+			NewString("a"), NewString("unused"),
+			NewString("z"), NewString("unused"),
+			NewString("b"), NewString("unused"),
+			NewString("y"), NewString("unused"),
+			NewString("c"), NewString("unused"),
+			NewString("x"), NewString("unused"),
+		},
+		[]Value{
+			NewString("a"),
+			NewString("b"),
+			NewString("c"),
+			NewString("x"),
+			NewString("y"),
+			NewString("z"),
+		},
+	)
+
+	testMapOrder(assert,
+		MakePrimitiveType(UInt64Kind), MakePrimitiveType(StringKind),
+		[]Value{
+			UInt64(0), NewString("unused"),
+			UInt64(1000), NewString("unused"),
+			UInt64(1), NewString("unused"),
+			UInt64(100), NewString("unused"),
+			UInt64(2), NewString("unused"),
+			UInt64(10), NewString("unused"),
+		},
+		[]Value{
+			UInt64(0),
+			UInt64(1),
+			UInt64(2),
+			UInt64(10),
+			UInt64(100),
+			UInt64(1000),
+		},
+	)
+
+	testMapOrder(assert,
+		MakePrimitiveType(Int16Kind), MakePrimitiveType(StringKind),
+		[]Value{
+			Int16(0), NewString("unused"),
+			Int16(-30), NewString("unused"),
+			Int16(25), NewString("unused"),
+			Int16(1002), NewString("unused"),
+			Int16(-5050), NewString("unused"),
+			Int16(23), NewString("unused"),
+		},
+		[]Value{
+			Int16(-5050),
+			Int16(-30),
+			Int16(0),
+			Int16(23),
+			Int16(25),
+			Int16(1002),
+		},
+	)
+
+	testMapOrder(assert,
+		MakePrimitiveType(Float32Kind), MakePrimitiveType(StringKind),
+		[]Value{
+			Float32(0.0001), NewString("unused"),
+			Float32(0.000001), NewString("unused"),
+			Float32(1), NewString("unused"),
+			Float32(25.01e3), NewString("unused"),
+			Float32(-32.231123e5), NewString("unused"),
+			Float32(23), NewString("unused"),
+		},
+		[]Value{
+			Float32(-32.231123e5),
+			Float32(0.000001),
+			Float32(0.0001),
+			Float32(1),
+			Float32(23),
+			Float32(25.01e3),
+		},
+	)
+
+	testMapOrder(assert,
+		MakePrimitiveType(ValueKind), MakePrimitiveType(StringKind),
+		[]Value{
+			NewString("a"), NewString("unused"),
+			NewString("z"), NewString("unused"),
+			NewString("b"), NewString("unused"),
+			NewString("y"), NewString("unused"),
+			NewString("c"), NewString("unused"),
+			NewString("x"), NewString("unused"),
+		},
+		// Ordered by ref
+		[]Value{
+			NewString("x"),
+			NewString("c"),
+			NewString("y"),
+			NewString("z"),
+			NewString("a"),
+			NewString("b"),
+		},
+	)
+
+	testMapOrder(assert,
+		MakePrimitiveType(BoolKind), MakePrimitiveType(StringKind),
+		[]Value{
+			Bool(true), NewString("unused"),
+			Bool(false), NewString("unused"),
+		},
+		// Ordered by ref
+		[]Value{
+			Bool(true),
+			Bool(false),
+		},
+	)
+}
+
 func TestMapEmpty(t *testing.T) {
 	assert := assert.New(t)
 	m := NewMap()

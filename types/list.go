@@ -17,10 +17,14 @@ type List struct {
 var listType = MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
 
 func NewList(v ...Value) List {
+	return NewTypedList(listType, v...)
+}
+
+func NewTypedList(t Type, v ...Value) List {
 	// Copy because Noms values are supposed to be immutable and Go allows v to be reused (thus mutable).
 	values := make([]Value, len(v))
 	copy(values, v)
-	return newListNoCopy(values, listType)
+	return newListNoCopy(values, t)
 }
 
 func newListNoCopy(values []Value, t Type) List {

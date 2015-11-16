@@ -199,7 +199,7 @@ type ListOfSong struct {
 }
 
 func NewListOfSong() ListOfSong {
-	return ListOfSong{types.NewList(), &ref.Ref{}}
+	return ListOfSong{types.NewTypedList(__typeForListOfSong), &ref.Ref{}}
 }
 
 type ListOfSongDef []SongDef
@@ -209,7 +209,7 @@ func (def ListOfSongDef) New() ListOfSong {
 	for i, d := range def {
 		l[i] = d.New()
 	}
-	return ListOfSong{types.NewList(l...), &ref.Ref{}}
+	return ListOfSong{types.NewTypedList(__typeForListOfSong, l...), &ref.Ref{}}
 }
 
 func (l ListOfSong) Def() ListOfSongDef {

@@ -177,7 +177,7 @@ type ListOfRefOfFloat32 struct {
 }
 
 func NewListOfRefOfFloat32() ListOfRefOfFloat32 {
-	return ListOfRefOfFloat32{types.NewList(), &ref.Ref{}}
+	return ListOfRefOfFloat32{types.NewTypedList(__typeForListOfRefOfFloat32), &ref.Ref{}}
 }
 
 type ListOfRefOfFloat32Def []ref.Ref
@@ -187,7 +187,7 @@ func (def ListOfRefOfFloat32Def) New() ListOfRefOfFloat32 {
 	for i, d := range def {
 		l[i] = NewRefOfFloat32(d)
 	}
-	return ListOfRefOfFloat32{types.NewList(l...), &ref.Ref{}}
+	return ListOfRefOfFloat32{types.NewTypedList(__typeForListOfRefOfFloat32, l...), &ref.Ref{}}
 }
 
 func (l ListOfRefOfFloat32) Def() ListOfRefOfFloat32Def {
@@ -376,7 +376,7 @@ type ListOfString struct {
 }
 
 func NewListOfString() ListOfString {
-	return ListOfString{types.NewList(), &ref.Ref{}}
+	return ListOfString{types.NewTypedList(__typeForListOfString), &ref.Ref{}}
 }
 
 type ListOfStringDef []string
@@ -386,7 +386,7 @@ func (def ListOfStringDef) New() ListOfString {
 	for i, d := range def {
 		l[i] = types.NewString(d)
 	}
-	return ListOfString{types.NewList(l...), &ref.Ref{}}
+	return ListOfString{types.NewTypedList(__typeForListOfString, l...), &ref.Ref{}}
 }
 
 func (l ListOfString) Def() ListOfStringDef {
@@ -575,7 +575,7 @@ type SetOfFloat32 struct {
 }
 
 func NewSetOfFloat32() SetOfFloat32 {
-	return SetOfFloat32{types.NewSet(), &ref.Ref{}}
+	return SetOfFloat32{types.NewTypedSet(__typeForSetOfFloat32), &ref.Ref{}}
 }
 
 type SetOfFloat32Def map[float32]bool
@@ -587,7 +587,7 @@ func (def SetOfFloat32Def) New() SetOfFloat32 {
 		l[i] = types.Float32(d)
 		i++
 	}
-	return SetOfFloat32{types.NewSet(l...), &ref.Ref{}}
+	return SetOfFloat32{types.NewTypedSet(__typeForSetOfFloat32, l...), &ref.Ref{}}
 }
 
 func (s SetOfFloat32) Def() SetOfFloat32Def {

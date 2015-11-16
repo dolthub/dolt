@@ -8,7 +8,7 @@ type {{.Name}} struct {
 }
 
 func New{{.Name}}() {{.Name}} {
-	return {{.Name}}{ {{$typesPackage}}NewMap(), &ref.Ref{}}
+	return {{.Name}}{ {{$typesPackage}}NewTypedMap(__typeFor{{.Name}}), &ref.Ref{}}
 }
 
 {{if .CanUseDef}}
@@ -19,7 +19,7 @@ func New{{.Name}}() {{.Name}} {
 		for k, v := range def {
 			kv = append(kv, {{defToValue "k" .KeyType}}, {{defToValue "v" .ValueType}})
 		}
-		return {{.Name}}{ {{$typesPackage}}NewMap(kv...), &ref.Ref{}}
+		return {{.Name}}{ {{$typesPackage}}NewTypedMap(__typeFor{{.Name}}, kv...), &ref.Ref{}}
 	}
 
 	func (m {{.Name}}) Def() {{.Name}}Def {

@@ -15,7 +15,7 @@ type MapOfBoolToString struct {
 }
 
 func NewMapOfBoolToString() MapOfBoolToString {
-	return MapOfBoolToString{types.NewMap(), &ref.Ref{}}
+	return MapOfBoolToString{types.NewTypedMap(__typeForMapOfBoolToString), &ref.Ref{}}
 }
 
 type MapOfBoolToStringDef map[bool]string
@@ -25,7 +25,7 @@ func (def MapOfBoolToStringDef) New() MapOfBoolToString {
 	for k, v := range def {
 		kv = append(kv, types.Bool(k), types.NewString(v))
 	}
-	return MapOfBoolToString{types.NewMap(kv...), &ref.Ref{}}
+	return MapOfBoolToString{types.NewTypedMap(__typeForMapOfBoolToString, kv...), &ref.Ref{}}
 }
 
 func (m MapOfBoolToString) Def() MapOfBoolToStringDef {
@@ -148,7 +148,7 @@ type MapOfStringToValue struct {
 }
 
 func NewMapOfStringToValue() MapOfStringToValue {
-	return MapOfStringToValue{types.NewMap(), &ref.Ref{}}
+	return MapOfStringToValue{types.NewTypedMap(__typeForMapOfStringToValue), &ref.Ref{}}
 }
 
 type MapOfStringToValueDef map[string]types.Value
@@ -158,7 +158,7 @@ func (def MapOfStringToValueDef) New() MapOfStringToValue {
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), v)
 	}
-	return MapOfStringToValue{types.NewMap(kv...), &ref.Ref{}}
+	return MapOfStringToValue{types.NewTypedMap(__typeForMapOfStringToValue, kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToValue) Def() MapOfStringToValueDef {

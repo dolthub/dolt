@@ -21,7 +21,7 @@ func (es entrySlice) Len() int {
 }
 
 func (es entrySlice) Less(i, j int) bool {
-	return ref.Less(es[i].start, es[j].start)
+	return es[i].start.Less(es[j].start)
 }
 
 func (es entrySlice) Swap(i, j int) {
@@ -58,7 +58,7 @@ func (node internal) start() ref.Ref {
 
 func (node internal) has(r ref.Ref) bool {
 	searchIndex := sort.Search(len(node.children), func(i int) bool {
-		return ref.Greater(node.children[i].start, r)
+		return node.children[i].start.Greater(r)
 	})
 	if searchIndex == 0 {
 		return false

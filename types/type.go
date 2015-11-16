@@ -68,6 +68,13 @@ func (t Type) Kind() NomsKind {
 	return t.Desc.Kind()
 }
 
+func (t Type) IsOrdered() bool {
+	if desc, ok := t.Desc.(PrimitiveDesc); ok {
+		return desc.IsOrdered()
+	}
+	return false
+}
+
 func (t Type) PackageRef() ref.Ref {
 	desc, ok := t.Desc.(UnresolvedDesc)
 	d.Chk.True(ok, "PackageRef only works on unresolved types")

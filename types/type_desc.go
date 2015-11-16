@@ -46,6 +46,15 @@ func (p PrimitiveDesc) Describe() string {
 	return KindToString[p.Kind()]
 }
 
+func (p PrimitiveDesc) IsOrdered() bool {
+	switch p.Kind() {
+	case Float32Kind, Float64Kind, Int8Kind, Int16Kind, Int32Kind, Int64Kind, UInt8Kind, UInt16Kind, UInt32Kind, UInt64Kind, StringKind:
+		return true
+	default:
+		return false
+	}
+}
+
 var KindToString = map[NomsKind]string{
 	BlobKind:    "Blob",
 	BoolKind:    "Bool",

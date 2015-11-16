@@ -13,3 +13,8 @@ type Value interface {
 	Chunks() []ref.Ref
 	Type() Type
 }
+
+type OrderedValue interface {
+  Value
+  Less(other OrderedValue) bool
+}

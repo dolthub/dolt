@@ -8,7 +8,7 @@ type {{.Name}} struct {
 }
 
 func New{{.Name}}() {{.Name}} {
-	return {{.Name}}{ {{$typesPackage}}NewSet(), &ref.Ref{}}
+	return {{.Name}}{ {{$typesPackage}}NewTypedSet(__typeFor{{.Name}}), &ref.Ref{}}
 }
 
 {{if .CanUseDef}}
@@ -21,7 +21,7 @@ func New{{.Name}}() {{.Name}} {
 			l[i] = {{defToValue "d" .ElemType}}
 			i++
 		}
-		return {{.Name}}{ {{$typesPackage}}NewSet(l...), &ref.Ref{}}
+		return {{.Name}}{ {{$typesPackage}}NewTypedSet(__typeFor{{.Name}}, l...), &ref.Ref{}}
 	}
 
 	func (s {{.Name}}) Def() {{.Name}}Def {

@@ -10,15 +10,22 @@ import (
 )
 
 type Map struct {
-	data mapData // sorted by entry.key.Ref()
-	t    Type
-	ref  *ref.Ref
+	data    mapData // sorted by entry.key.Ref()
+	indexOf indexOfMapFn
+	t       Type
+	ref     *ref.Ref
 }
 
 type mapData []mapEntry
 
+type indexOfMapFn func(m mapData, v Value) int
+
 func NewMap(kv ...Value) Map {
-	return newMapFromData(buildMapData(mapData{}, kv), mapType)
+	return NewTypedMap(mapType, kv...)
+}
+
+func NewTypedMap(t Type, kv ...Value) Map {
+	return newMapFromData(buildMapData(mapData{}, kv, t), t)
 }
 
 func (m Map) First() (Value, Value) {
@@ -39,7 +46,7 @@ func (m Map) Empty() bool {
 }
 
 func (m Map) Has(key Value) bool {
-	idx := indexMapData(m.data, key.Ref())
+	idx := m.indexOf(m.data, key)
 	return idx < len(m.data) && m.data[idx].key.Equals(key)
 }
 
@@ -51,7 +58,7 @@ func (m Map) Get(key Value) Value {
 }
 
 func (m Map) MaybeGet(key Value) (v Value, ok bool) {
-	idx := indexMapData(m.data, key.Ref())
+	idx := m.indexOf(m.data, key)
 	if idx < len(m.data) {
 		entry := m.data[idx]
 		if entry.key.Equals(key) {
@@ -65,16 +72,16 @@ func (m Map) Set(key Value, val Value) Map {
 	elemTypes := m.t.Desc.(CompoundDesc).ElemTypes
 	assertType(elemTypes[0], key)
 	assertType(elemTypes[1], val)
-	return newMapFromData(buildMapData(m.data, []Value{key, val}), m.t)
+	return newMapFromData(buildMapData(m.data, []Value{key, val}, m.t), m.t)
 }
 
 func (m Map) SetM(kv ...Value) Map {
 	assertMapElemTypes(m, kv...)
-	return newMapFromData(buildMapData(m.data, kv), m.t)
+	return newMapFromData(buildMapData(m.data, kv, m.t), m.t)
 }
 
 func (m Map) Remove(k Value) Map {
-	idx := indexMapData(m.data, k.Ref())
+	idx := m.indexOf(m.data, k)
 	if idx == len(m.data) || !m.data[idx].key.Equals(k) {
 		return m
 	}
@@ -180,10 +187,13 @@ type mapEntry struct {
 }
 
 func newMapFromData(data mapData, t Type) Map {
-	return Map{data, t, &ref.Ref{}}
+	return Map{data, getIndexFnForMapType(t), t, &ref.Ref{}}
 }
 
-func buildMapData(oldData mapData, values []Value) mapData {
+func buildMapData(oldData mapData, values []Value, t Type) mapData {
+	idxFn := getIndexFnForMapType(t)
+	elemTypes := t.Desc.(CompoundDesc).ElemTypes
+
 	// Sadly, d.Chk.Equals() costs too much. BUG #83
 	d.Chk.True(0 == len(values)%2, "Must specify even number of key/value pairs")
 
@@ -192,7 +202,9 @@ func buildMapData(oldData mapData, values []Value) mapData {
 	for i := 0; i < len(values); i += 2 {
 		k := values[i]
 		v := values[i+1]
-		idx := indexMapData(data, k.Ref())
+		assertType(elemTypes[0], k)
+		assertType(elemTypes[1], v)
+		idx := idxFn(data, k)
 		if idx < len(data) && data[idx].key.Equals(k) {
 			if !data[idx].value.Equals(v) {
 				data[idx] = mapEntry{k, v}
@@ -208,8 +220,25 @@ func buildMapData(oldData mapData, values []Value) mapData {
 	return data
 }
 
-func indexMapData(m mapData, r ref.Ref) int {
+func getIndexFnForMapType(t Type) indexOfMapFn {
+	orderByValue := t.Desc.(CompoundDesc).ElemTypes[0].IsOrdered()
+	if orderByValue {
+		return indexOfOrderedMapValue
+	}
+
+	return indexOfMapValue
+}
+
+func indexOfMapValue(m mapData, v Value) int {
 	return sort.Search(len(m), func(i int) bool {
-		return !ref.Less(m[i].key.Ref(), r)
+		return !m[i].key.Ref().Less(v.Ref())
+	})
+}
+
+func indexOfOrderedMapValue(m mapData, v Value) int {
+	ov := v.(OrderedValue)
+
+	return sort.Search(len(m), func(i int) bool {
+		return !m[i].key.(OrderedValue).Less(ov)
 	})
 }

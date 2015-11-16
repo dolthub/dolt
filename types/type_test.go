@@ -90,3 +90,25 @@ func TestTypeRefDescribe(t *testing.T) {
 	assert.Equal("struct MahOtherStruct {\n  Field1: String\n  Field2: optional Bool\n  union {\n    UInt8Field: UInt8\n    StringField: String\n  }\n}", otherType.Describe())
 
 }
+
+func TestTypeOrdered(t *testing.T) {
+	assert := assert.New(t)
+	assert.False(MakePrimitiveType(BoolKind).IsOrdered())
+	assert.True(MakePrimitiveType(UInt8Kind).IsOrdered())
+	assert.True(MakePrimitiveType(UInt16Kind).IsOrdered())
+	assert.True(MakePrimitiveType(UInt32Kind).IsOrdered())
+	assert.True(MakePrimitiveType(UInt64Kind).IsOrdered())
+	assert.True(MakePrimitiveType(Int8Kind).IsOrdered())
+	assert.True(MakePrimitiveType(Int16Kind).IsOrdered())
+	assert.True(MakePrimitiveType(Int32Kind).IsOrdered())
+	assert.True(MakePrimitiveType(Int64Kind).IsOrdered())
+	assert.True(MakePrimitiveType(Float32Kind).IsOrdered())
+	assert.True(MakePrimitiveType(Float64Kind).IsOrdered())
+	assert.True(MakePrimitiveType(StringKind).IsOrdered())
+	assert.False(MakePrimitiveType(BlobKind).IsOrdered())
+	assert.False(MakePrimitiveType(ValueKind).IsOrdered())
+	assert.False(MakeCompoundType(ListKind, MakePrimitiveType(StringKind)).IsOrdered())
+	assert.False(MakeCompoundType(SetKind, MakePrimitiveType(StringKind)).IsOrdered())
+	assert.False(MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(ValueKind)).IsOrdered())
+	assert.False(MakeCompoundType(RefKind, MakePrimitiveType(StringKind)).IsOrdered())
+}

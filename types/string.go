@@ -26,6 +26,10 @@ func (s String) Equals(other Value) bool {
 	return false
 }
 
+func (s String) Less(other OrderedValue) bool {
+	return s.s < other.(String).s
+}
+
 func (fs String) Chunks() []ref.Ref {
 	return nil
 }

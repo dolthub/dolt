@@ -8,18 +8,25 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
+type Set struct {
+	data    setData // sorted by Ref()
+	indexOf indexOfSetFn
+	t       Type
+	ref     *ref.Ref
+}
+
 type setData []Value
 
-type Set struct {
-	data setData // sorted by Ref()
-	t    Type
-	ref  *ref.Ref
-}
+type indexOfSetFn func(m setData, v Value) int
 
 var setType = MakeCompoundType(SetKind, MakePrimitiveType(ValueKind))
 
 func NewSet(v ...Value) Set {
-	return newSetFromData(buildSetData(setData{}, v), setType)
+	return NewTypedSet(setType, v...)
+}
+
+func NewTypedSet(t Type, v ...Value) Set {
+	return newSetFromData(buildSetData(setData{}, v, t), t)
 }
 
 func (s Set) Empty() bool {
@@ -31,20 +38,20 @@ func (s Set) Len() uint64 {
 }
 
 func (s Set) Has(v Value) bool {
-	idx := indexSetData(s.data, v.Ref())
+	idx := s.indexOf(s.data, v)
 	return idx < len(s.data) && s.data[idx].Equals(v)
 }
 
 func (s Set) Insert(values ...Value) Set {
 	assertType(s.elemType(), values...)
-	return newSetFromData(buildSetData(s.data, values), s.t)
+	return newSetFromData(buildSetData(s.data, values, s.t), s.t)
 }
 
 func (s Set) Remove(values ...Value) Set {
 	data := copySetData(s.data)
 	for _, v := range values {
 		if v != nil {
-			idx := indexSetData(s.data, v.Ref())
+			idx := s.indexOf(s.data, v)
 			if idx < len(s.data) && s.data[idx].Equals(v) {
 				data = append(data[:idx], data[idx+1:]...)
 			}
@@ -164,7 +171,7 @@ func (s Set) elemType() Type {
 }
 
 func newSetFromData(m setData, t Type) Set {
-	return Set{m, t, &ref.Ref{}}
+	return Set{m, getIndexFnForSetType(t), t, &ref.Ref{}}
 }
 
 func copySetData(m setData) setData {
@@ -173,11 +180,15 @@ func copySetData(m setData) setData {
 	return r
 }
 
-func buildSetData(old setData, values []Value) setData {
+func buildSetData(old setData, values []Value, t Type) setData {
+	idxFn := getIndexFnForSetType(t)
+	elemType := t.Desc.(CompoundDesc).ElemTypes[0]
+
 	data := make(setData, len(old), len(old)+len(values))
 	copy(data, old)
 	for _, v := range values {
-		idx := indexSetData(data, v.Ref())
+		assertType(elemType, v)
+		idx := idxFn(data, v)
 		if idx < len(data) && data[idx].Equals(v) {
 			// We already have this fellow.
 			continue
@@ -190,8 +201,25 @@ func buildSetData(old setData, values []Value) setData {
 	return data
 }
 
-func indexSetData(m setData, r ref.Ref) int {
+func getIndexFnForSetType(t Type) indexOfSetFn {
+	orderByValue := t.Desc.(CompoundDesc).ElemTypes[0].IsOrdered()
+	if orderByValue {
+		return indexOfOrderedSetValue
+	}
+
+	return indexOfSetValue
+}
+
+func indexOfSetValue(m setData, v Value) int {
 	return sort.Search(len(m), func(i int) bool {
-		return !ref.Less(m[i].Ref(), r)
+		return !m[i].Ref().Less(v.Ref())
+	})
+}
+
+func indexOfOrderedSetValue(m setData, v Value) int {
+	ov := v.(OrderedValue)
+
+	return sort.Search(len(m), func(i int) bool {
+		return !m[i].(OrderedValue).Less(ov)
 	})
 }

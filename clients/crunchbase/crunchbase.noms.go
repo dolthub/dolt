@@ -713,7 +713,7 @@ type MapOfStringToRefOfCompany struct {
 }
 
 func NewMapOfStringToRefOfCompany() MapOfStringToRefOfCompany {
-	return MapOfStringToRefOfCompany{types.NewMap(), &ref.Ref{}}
+	return MapOfStringToRefOfCompany{types.NewTypedMap(__typeForMapOfStringToRefOfCompany), &ref.Ref{}}
 }
 
 type MapOfStringToRefOfCompanyDef map[string]ref.Ref
@@ -723,7 +723,7 @@ func (def MapOfStringToRefOfCompanyDef) New() MapOfStringToRefOfCompany {
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), NewRefOfCompany(v))
 	}
-	return MapOfStringToRefOfCompany{types.NewMap(kv...), &ref.Ref{}}
+	return MapOfStringToRefOfCompany{types.NewTypedMap(__typeForMapOfStringToRefOfCompany, kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToRefOfCompany) Def() MapOfStringToRefOfCompanyDef {
@@ -846,7 +846,7 @@ type SetOfString struct {
 }
 
 func NewSetOfString() SetOfString {
-	return SetOfString{types.NewSet(), &ref.Ref{}}
+	return SetOfString{types.NewTypedSet(__typeForSetOfString), &ref.Ref{}}
 }
 
 type SetOfStringDef map[string]bool
@@ -858,7 +858,7 @@ func (def SetOfStringDef) New() SetOfString {
 		l[i] = types.NewString(d)
 		i++
 	}
-	return SetOfString{types.NewSet(l...), &ref.Ref{}}
+	return SetOfString{types.NewTypedSet(__typeForSetOfString, l...), &ref.Ref{}}
 }
 
 func (s SetOfString) Def() SetOfStringDef {
@@ -995,7 +995,7 @@ type SetOfRefOfRound struct {
 }
 
 func NewSetOfRefOfRound() SetOfRefOfRound {
-	return SetOfRefOfRound{types.NewSet(), &ref.Ref{}}
+	return SetOfRefOfRound{types.NewTypedSet(__typeForSetOfRefOfRound), &ref.Ref{}}
 }
 
 type SetOfRefOfRoundDef map[ref.Ref]bool
@@ -1007,7 +1007,7 @@ func (def SetOfRefOfRoundDef) New() SetOfRefOfRound {
 		l[i] = NewRefOfRound(d)
 		i++
 	}
-	return SetOfRefOfRound{types.NewSet(l...), &ref.Ref{}}
+	return SetOfRefOfRound{types.NewTypedSet(__typeForSetOfRefOfRound, l...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfRound) Def() SetOfRefOfRoundDef {

@@ -322,7 +322,7 @@ type ListOfRefOfIncident struct {
 }
 
 func NewListOfRefOfIncident() ListOfRefOfIncident {
-	return ListOfRefOfIncident{types.NewList(), &ref.Ref{}}
+	return ListOfRefOfIncident{types.NewTypedList(__typeForListOfRefOfIncident), &ref.Ref{}}
 }
 
 type ListOfRefOfIncidentDef []ref.Ref
@@ -332,7 +332,7 @@ func (def ListOfRefOfIncidentDef) New() ListOfRefOfIncident {
 	for i, d := range def {
 		l[i] = NewRefOfIncident(d)
 	}
-	return ListOfRefOfIncident{types.NewList(l...), &ref.Ref{}}
+	return ListOfRefOfIncident{types.NewTypedList(__typeForListOfRefOfIncident, l...), &ref.Ref{}}
 }
 
 func (l ListOfRefOfIncident) Def() ListOfRefOfIncidentDef {

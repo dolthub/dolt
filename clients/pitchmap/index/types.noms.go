@@ -139,7 +139,7 @@ type MapOfStringToRefOfListOfPitch struct {
 }
 
 func NewMapOfStringToRefOfListOfPitch() MapOfStringToRefOfListOfPitch {
-	return MapOfStringToRefOfListOfPitch{types.NewMap(), &ref.Ref{}}
+	return MapOfStringToRefOfListOfPitch{types.NewTypedMap(__typeForMapOfStringToRefOfListOfPitch), &ref.Ref{}}
 }
 
 type MapOfStringToRefOfListOfPitchDef map[string]ref.Ref
@@ -149,7 +149,7 @@ func (def MapOfStringToRefOfListOfPitchDef) New() MapOfStringToRefOfListOfPitch 
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), NewRefOfListOfPitch(v))
 	}
-	return MapOfStringToRefOfListOfPitch{types.NewMap(kv...), &ref.Ref{}}
+	return MapOfStringToRefOfListOfPitch{types.NewTypedMap(__typeForMapOfStringToRefOfListOfPitch, kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToRefOfListOfPitch) Def() MapOfStringToRefOfListOfPitchDef {
@@ -272,7 +272,7 @@ type ListOfRefOfMapOfStringToValue struct {
 }
 
 func NewListOfRefOfMapOfStringToValue() ListOfRefOfMapOfStringToValue {
-	return ListOfRefOfMapOfStringToValue{types.NewList(), &ref.Ref{}}
+	return ListOfRefOfMapOfStringToValue{types.NewTypedList(__typeForListOfRefOfMapOfStringToValue), &ref.Ref{}}
 }
 
 type ListOfRefOfMapOfStringToValueDef []ref.Ref
@@ -282,7 +282,7 @@ func (def ListOfRefOfMapOfStringToValueDef) New() ListOfRefOfMapOfStringToValue 
 	for i, d := range def {
 		l[i] = NewRefOfMapOfStringToValue(d)
 	}
-	return ListOfRefOfMapOfStringToValue{types.NewList(l...), &ref.Ref{}}
+	return ListOfRefOfMapOfStringToValue{types.NewTypedList(__typeForListOfRefOfMapOfStringToValue, l...), &ref.Ref{}}
 }
 
 func (l ListOfRefOfMapOfStringToValue) Def() ListOfRefOfMapOfStringToValueDef {
@@ -471,7 +471,7 @@ type MapOfStringToValue struct {
 }
 
 func NewMapOfStringToValue() MapOfStringToValue {
-	return MapOfStringToValue{types.NewMap(), &ref.Ref{}}
+	return MapOfStringToValue{types.NewTypedMap(__typeForMapOfStringToValue), &ref.Ref{}}
 }
 
 type MapOfStringToValueDef map[string]types.Value
@@ -481,7 +481,7 @@ func (def MapOfStringToValueDef) New() MapOfStringToValue {
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), v)
 	}
-	return MapOfStringToValue{types.NewMap(kv...), &ref.Ref{}}
+	return MapOfStringToValue{types.NewTypedMap(__typeForMapOfStringToValue, kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToValue) Def() MapOfStringToValueDef {
@@ -604,7 +604,7 @@ type ListOfPitch struct {
 }
 
 func NewListOfPitch() ListOfPitch {
-	return ListOfPitch{types.NewList(), &ref.Ref{}}
+	return ListOfPitch{types.NewTypedList(__typeForListOfPitch), &ref.Ref{}}
 }
 
 type ListOfPitchDef []PitchDef
@@ -614,7 +614,7 @@ func (def ListOfPitchDef) New() ListOfPitch {
 	for i, d := range def {
 		l[i] = d.New()
 	}
-	return ListOfPitch{types.NewList(l...), &ref.Ref{}}
+	return ListOfPitch{types.NewTypedList(__typeForListOfPitch, l...), &ref.Ref{}}
 }
 
 func (l ListOfPitch) Def() ListOfPitchDef {
