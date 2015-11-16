@@ -37,7 +37,7 @@ permissions:
     type:
       - file
   - object: /home/ec2-user/deployed/scripts
-    pattern: *.sh
+    pattern: "*.sh"
     mode: 0755
     type:
       - file
