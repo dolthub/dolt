@@ -17,8 +17,11 @@
     "watchify": "^3.6"
   },
   "scripts": {
-    "start": "NOMS_SERVER=http://localhost:8000 watchify -o out.js -t babelify -t envify -v -d main.js",
-    "build": "NOMS_SERVER=http://localhost:8000 NODE_ENV=production browserify main.js -t babelify -t envify > out.js",
+    "start": "NOMS_SERVER=http://localhost:8000 watchify -o out.js -v -d main.js",
+    "build": "NOMS_SERVER=http://localhost:8000 NODE_ENV=production browserify main.js > out.js",
     "test": "rm -f out.js && eslint *.js && flow"
+  },
+  "browserify": {
+    "transform": ["babelify", "envify"]
   }
 }
