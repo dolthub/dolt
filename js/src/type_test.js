@@ -65,4 +65,12 @@ suite('Type', () => {
   test('type Type', () => {
     assert.isTrue(makePrimitiveType(Kind.Bool).type.equals(makePrimitiveType(Kind.Type)));
   });
+
+  test('empty package ref', async () => {
+    let ms = new MemoryStore();
+    let v = makeType(new Ref(), -1);
+    let r = writeValue(v, v.type, ms);
+    let v2 = await readValue(r, ms);
+    assert.isTrue(v.equals(v2));
+  });
 });
