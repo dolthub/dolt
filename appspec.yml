@@ -69,12 +69,12 @@ hooks:
 #   in the script specified in "location" starting from the root of the
 #   revision's file bundle.
   ApplicationStop:
-    - location: /home/ec2-user/deployed/stop_server.sh
+    - location: /home/ec2-user/deployed/scripts/stop_server.sh
       timeout: 30
 # During the ApplicationInstall deployment lifecycle event, run the commands
 #   in the script specified in "location".
   ApplicationStart:
-    - location: /home/ec2-user/deployed/start_server.sh
+    - location: /home/ec2-user/deployed/scripts/start_server.sh
       timeout: 60
 # During the ValidateService deployment lifecycle event, run the commands
 #   in the script specified in "location".
