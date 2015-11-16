@@ -1,2 +1,2 @@
 #!/bin/sh
-service stop noms-server
+[[ `service status noms-server 2> /dev/null` ]] && service stop noms-server
