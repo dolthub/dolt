@@ -21,8 +21,6 @@ files:
     destination: /home/ec2-user/deployed
   - source: deployment/noms-server.conf
     destination: /etc/init
-  - source: deployment/scripts
-    destination: /home/ec2-user/deployed/scripts
 # For deployments to Amazon Linux, Ubuntu Server, or RHEL instances,
 #   you can specify a "permissions"
 #   section here that describes special permissions to apply to the files
@@ -33,11 +31,6 @@ permissions:
   - object: /home/ec2-user/deployed/server
     owner: ec2-user
     group: ec2-user
-    mode: 755
-    type:
-      - file
-  - object: /home/ec2-user/deployed/scripts
-    pattern: "*.sh"
     mode: 755
     type:
       - file
@@ -69,12 +62,12 @@ hooks:
 #   in the script specified in "location" starting from the root of the
 #   revision's file bundle.
   ApplicationStop:
-    - location: /home/ec2-user/deployed/scripts/stop_server.sh
+    - location: deployment/scripts/stop_server.sh
       timeout: 30
 # During the ApplicationInstall deployment lifecycle event, run the commands
 #   in the script specified in "location".
   ApplicationStart:
-    - location: /home/ec2-user/deployed/scripts/start_server.sh
+    - location: deployment/scripts/start_server.sh
       timeout: 60
 # During the ValidateService deployment lifecycle event, run the commands
 #   in the script specified in "location".
