@@ -405,7 +405,8 @@ func TestReadRef(t *testing.T) {
 	a := parseJson(`[%d, %d, "%s"]`, RefKind, UInt32Kind, r.String())
 	reader := newJsonArrayReader(a, cs)
 	v := reader.readTopLevelValue()
-	assert.True(NewRef(r).Equals(v))
+	tr := MakeCompoundType(RefKind, MakePrimitiveType(UInt32Kind))
+	assert.True(refFromType(r, tr).Equals(v))
 }
 
 func TestReadValueRef(t *testing.T) {
@@ -416,7 +417,8 @@ func TestReadValueRef(t *testing.T) {
 	a := parseJson(`[%d, %d, %d, "%s"]`, ValueKind, RefKind, UInt32Kind, r.String())
 	reader := newJsonArrayReader(a, cs)
 	v := reader.readTopLevelValue()
-	assert.True(NewRef(r).Equals(v))
+	tr := MakeCompoundType(RefKind, MakePrimitiveType(UInt32Kind))
+	assert.True(refFromType(r, tr).Equals(v))
 }
 
 func TestReadStructWithEnum(t *testing.T) {

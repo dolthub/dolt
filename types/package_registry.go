@@ -119,5 +119,5 @@ func refFromType(target ref.Ref, t Type) Value {
 	if f, ok := refFuncMap[t.Ref()]; ok {
 		return f(target)
 	}
-	return NewRef(target)
+	return newRef(target, t)
 }
