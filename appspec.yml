@@ -33,12 +33,12 @@ permissions:
   - object: /home/ec2-user/deployed/server
     owner: ec2-user
     group: ec2-user
-    mode: 0755
+    mode: 755
     type:
       - file
   - object: /home/ec2-user/deployed/scripts
     pattern: "*.sh"
-    mode: 0755
+    mode: 755
     type:
       - file
 # If you are not running any commands on the instance, then remove
