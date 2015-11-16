@@ -1,0 +1,83 @@
+# This is an appspec.yml template file for use with AWS CodeDeploy.
+# The lines in this template starting with the hashtag symbol are
+#   instructional comments and can be safely left in the file or
+#   ignored.
+# For help completing this file, see the "AppSpec File Reference" in the
+#   "AWS CodeDeploy User Guide" at
+#   http://docs.aws.amazon.com/codedeploy/latest/userguide/app-spec-ref.html
+version: 0.0
+os: linux
+# During the Install deployment lifecycle event (which occurs between the
+#   BeforeInstall and AfterInstall events), copy the specified files
+#   in "source" starting from the root of the revision's file bundle
+#   to "destination" on the instance.
+# Specify multiple "source" and "destination" pairs if you want to copy
+#   from multiple sources or to multiple destinations.
+# If you are not copying any files to the instance, then remove the
+#   "files" section altogether. A blank or incomplete "files" section
+#   may cause associated deployments to fail.
+files:
+  - source: bin/server
+    destination: /home/ec2-user/deployed
+  - source: deployment/noms-server.conf
+    destination: /etc/init
+  - source: deployment/scripts
+    destination: /home/ec2-user/deployed/scripts
+# For deployments to Amazon Linux, Ubuntu Server, or RHEL instances,
+#   you can specify a "permissions"
+#   section here that describes special permissions to apply to the files
+#   in the "files" section as they are being copied over to
+#   the instance.
+#   For more information, see the documentation.
+permissions:
+  - object: /home/ec2-user/deployed/server
+    owner: ec2-user
+    group: ec2-user
+    mode: 0755
+    type:
+      - file
+  - object: /home/ec2-user/deployed/scripts
+    pattern: *.sh
+    mode: 0755
+    type:
+      - file
+# If you are not running any commands on the instance, then remove
+#   the "hooks" section altogether. A blank or incomplete "hooks" section
+#   may cause associated deployments to fail.
+hooks:
+# For each deployment lifecycle event, specify multiple "location" entries
+#   if you want to run multiple scripts during that event.
+# You can specify "timeout" as the number of seconds to wait until failing the deployment
+#   if the specified scripts do not run within the specified time limit for the
+#   specified event. For example, 900 seconds is 15 minutes. If not specified,
+#   the default is 1800 seconds (30 minutes).
+#   Note that the maximum amount of time that all scripts must finish executing
+#   for each individual deployment lifecycle event is 3600 seconds (1 hour).
+#   Otherwise, the deployment will stop and AWS CodeDeploy will consider the deployment
+#   to have failed to the instance. Make sure that the total number of seconds
+#   that are specified in "timeout" for all scripts in each individual deployment
+#   lifecycle event does not exceed a combined 3600 seconds (1 hour).
+# For deployments to Amazon Linux, Ubuntu Server, or RHEL instances,
+#   you can specify "runas" in an event to
+#   run as the specified user. For more information, see the documentation.
+#   If you are deploying to Windows Server instances,
+#   remove "runas" altogether.
+# If you do not want to run any commands during a particular deployment
+#   lifecycle event, remove that event declaration altogether. Blank or
+#   incomplete event declarations may cause associated deployments to fail.
+# During the ApplicationStop deployment lifecycle event, run the commands
+#   in the script specified in "location" starting from the root of the
+#   revision's file bundle.
+  ApplicationStop:
+    - location: /home/ec2-user/deployed/stop_server.sh
+      timeout: 30
+# During the ApplicationInstall deployment lifecycle event, run the commands
+#   in the script specified in "location".
+  ApplicationStart:
+    - location: /home/ec2-user/deployed/start_server.sh
+      timeout: 60
+# During the ValidateService deployment lifecycle event, run the commands
+#   in the script specified in "location".
+  ValidateService:
+    - location: /bin/true
+      timeout: 30
