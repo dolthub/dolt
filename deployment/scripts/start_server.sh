@@ -1,2 +1,2 @@
 #!/bin/sh
-service start noms-server
+initctl reload-configuration && service start noms-server
