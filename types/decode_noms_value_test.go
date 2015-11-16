@@ -97,8 +97,7 @@ func TestReadListOfInt32(t *testing.T) {
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
 
 	l := r.readTopLevelValue()
-	l2 := NewList(Int32(0), Int32(1), Int32(2), Int32(3))
-	l2.t = tr
+	l2 := NewTypedList(tr, Int32(0), Int32(1), Int32(2), Int32(3))
 	assert.True(l2.Equals(l))
 }
 
@@ -122,8 +121,7 @@ func TestReadValueListOfInt8(t *testing.T) {
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int8Kind))
 
 	l := r.readTopLevelValue()
-	l2 := NewList(Int8(0), Int8(1), Int8(2))
-	l2.t = tr
+	l2 := NewTypedList(tr, Int8(0), Int8(1), Int8(2))
 	assert.True(l2.Equals(l))
 }
 
@@ -137,8 +135,7 @@ func TestReadMapOfInt64ToFloat64(t *testing.T) {
 	tr := MakeCompoundType(MapKind, MakePrimitiveType(Int64Kind), MakePrimitiveType(Float64Kind))
 
 	m := r.readTopLevelValue()
-	m2 := NewMap(Int64(0), Float64(1), Int64(2), Float64(3))
-	m2.t = tr
+	m2 := NewTypedMap(tr, Int64(0), Float64(1), Int64(2), Float64(3))
 	assert.True(m2.Equals(m))
 }
 
@@ -152,8 +149,7 @@ func TestReadValueMapOfUInt64ToUInt32(t *testing.T) {
 	mapTr := MakeCompoundType(MapKind, MakePrimitiveType(UInt64Kind), MakePrimitiveType(UInt32Kind))
 
 	m := r.readTopLevelValue()
-	m2 := NewMap(UInt64(0), UInt32(1), UInt64(2), UInt32(3))
-	m2.t = mapTr
+	m2 := NewTypedMap(mapTr, UInt64(0), UInt32(1), UInt64(2), UInt32(3))
 	assert.True(m2.Equals(m))
 }
 
@@ -161,14 +157,13 @@ func TestReadSetOfUInt8(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson("[%d, %d, [0, 3, 1, 2]]", SetKind, UInt8Kind)
+	a := parseJson("[%d, %d, [0, 1, 2, 3]]", SetKind, UInt8Kind)
 	r := newJsonArrayReader(a, cs)
 
 	tr := MakeCompoundType(SetKind, MakePrimitiveType(UInt8Kind))
 
 	s := r.readTopLevelValue()
-	s2 := NewSet(UInt8(0), UInt8(1), UInt8(2), UInt8(3))
-	s2.t = tr
+	s2 := NewTypedSet(tr, UInt8(0), UInt8(1), UInt8(2), UInt8(3))
 	assert.True(s2.Equals(s))
 }
 
@@ -176,14 +171,13 @@ func TestReadValueSetOfUInt16(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson("[%d, %d, %d, [3, 0, 1, 2]]", ValueKind, SetKind, UInt16Kind)
+	a := parseJson("[%d, %d, %d, [0, 1, 2, 3]]", ValueKind, SetKind, UInt16Kind)
 	r := newJsonArrayReader(a, cs)
 
 	setTr := MakeCompoundType(SetKind, MakePrimitiveType(UInt16Kind))
 
 	s := r.readTopLevelValue()
-	s2 := NewSet(UInt16(0), UInt16(1), UInt16(2), UInt16(3))
-	s2.t = setTr
+	s2 := NewTypedSet(setTr, UInt16(0), UInt16(1), UInt16(2), UInt16(3))
 	assert.True(s2.Equals(s))
 }
 
@@ -307,8 +301,7 @@ func TestReadStructWithList(t *testing.T) {
 	v := r.readTopLevelValue().(Struct)
 
 	assert.True(v.Get("b").Equals(Bool(true)))
-	l := NewList(Int32(0), Int32(1), Int32(2))
-	l.t = l32Tr
+	l := NewTypedList(l32Tr, Int32(0), Int32(1), Int32(2))
 	assert.True(v.Get("l").Equals(l))
 	assert.True(v.Get("s").Equals(NewString("hi")))
 }
