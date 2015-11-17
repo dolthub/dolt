@@ -72,5 +72,5 @@ hooks:
 # During the ValidateService deployment lifecycle event, run the commands
 #   in the script specified in "location".
   ValidateService:
-    - location: /bin/true
+    - location: deployment/scripts/validate_service.sh
       timeout: 30
