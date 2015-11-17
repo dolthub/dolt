@@ -1,2 +1,2 @@
 #!/bin/sh
-[[ `status noms-server` ]] || /bin/true
+stop noms-server || /bin/true
