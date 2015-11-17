@@ -3,7 +3,7 @@
   "main": "dist/noms.js",
   "dependencies": {
     "rusha": "^0.8.3",
-    "text-encoding": "^0.5.2"
+    "text-encoding-utf-8": "^1.0.1"
   },
   "devDependencies": {
     "babel": "~5.6.23",

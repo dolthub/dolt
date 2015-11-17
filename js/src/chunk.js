@@ -3,7 +3,7 @@
 'use strict';
 
 import Ref from './ref.js';
-import {TextEncoder, TextDecoder} from 'text-encoding';
+import {TextEncoder, TextDecoder} from './text_encoding.js';
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
