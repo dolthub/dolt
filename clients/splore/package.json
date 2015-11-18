@@ -19,6 +19,7 @@
   "scripts": {
     "start": "NOMS_SERVER=http://localhost:8000 watchify -o out.js -v -d main.js",
     "build": "NOMS_SERVER=http://localhost:8000 NODE_ENV=production browserify main.js > out.js",
+    "prod_build": "NOMS_SERVER=http://ds.noms.io NODE_ENV=production browserify main.js > out.js",
     "test": "rm -f out.js && eslint *.js && flow"
   },
   "browserify": {
