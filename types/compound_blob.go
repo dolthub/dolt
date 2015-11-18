@@ -38,7 +38,9 @@ func init() {
 
 func (cb compoundBlob) Reader() io.ReadSeeker {
 	length := uint64(cb.lastTuple().value.(UInt64))
-	return &compoundBlobReader{cursor: newMetaSequenceCursor(cb, cb.cs), length: length, cs: cb.cs}
+	cursor, v := newMetaSequenceCursor(cb, cb.cs)
+	reader := v.(blobLeaf).Reader()
+	return &compoundBlobReader{cursor: cursor, currentReader: reader, length: length, cs: cb.cs}
 }
 
 func (cb compoundBlob) Equals(other Value) bool {
@@ -125,6 +127,6 @@ func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (cbr *compoundBlobReader) updateReader() {
-	cbr.currentReader = ReadValue(cbr.cursor.current().ref, cbr.cs).(blobLeaf).Reader()
+	cbr.currentReader = cbr.cursor.current().(blobLeaf).Reader()
 	cbr.currentReader.Seek(int64(cbr.chunkOffset), 0)
 }
