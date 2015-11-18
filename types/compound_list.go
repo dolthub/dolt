@@ -48,9 +48,9 @@ func (cl compoundList) Empty() bool {
 	return false
 }
 
-func (cl compoundList) cursorAt(idx uint64) (cursor *metaSequenceCursor, start uint64) {
+func (cl compoundList) cursorAt(idx uint64) (cursor *metaSequenceCursor, listLeaf List, start uint64) {
 	d.Chk.True(idx < cl.Len())
-	cursor = newMetaSequenceCursor(cl, cl.cs)
+	cursor, leaf := newMetaSequenceCursor(cl, cl.cs)
 
 	chunkStart := cursor.seek(func(v, parent Value) bool {
 		d.Chk.NotNil(v)
@@ -66,45 +66,47 @@ func (cl compoundList) cursorAt(idx uint64) (cursor *metaSequenceCursor, start u
 		return UInt64(uint64(parent.(UInt64)) + pv)
 	}, UInt64(0))
 
-	return cursor, uint64(chunkStart.(UInt64))
+	if cursor.currentRef() != leaf.Ref() {
+		leaf = cursor.current()
+	}
+
+	listLeaf = leaf.(List)
+	start = uint64(chunkStart.(UInt64))
+	return
 }
 
 func (cl compoundList) Get(idx uint64) Value {
-	cursor, start := cl.cursorAt(idx)
-	l := ReadValue(cursor.current().ref, cl.cs).(List)
+	_, l, start := cl.cursorAt(idx)
 	return l.Get(idx - start)
 }
 
 func (cl compoundList) Iter(f listIterFunc) {
-	cursor := newMetaSequenceCursor(cl, cl.cs)
 	start := uint64(0)
-	first := true
 
-	for first || cursor.advance() {
-		l := ReadValue(cursor.current().ref, cl.cs).(List)
-		for i, v := range l.values {
+	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
+		list := l.(List)
+		for i, v := range list.values {
 			if f(v, start+uint64(i)) {
-				return
+				return true
 			}
 		}
-		start += l.Len()
-		first = false
-	}
+		start += list.Len()
+		return false
+	})
+
 }
 
 func (cl compoundList) IterAll(f listIterAllFunc) {
-	cursor := newMetaSequenceCursor(cl, cl.cs)
 	start := uint64(0)
-	first := true
 
-	for first || cursor.advance() {
-		l := ReadValue(cursor.current().ref, cl.cs).(List)
-		for i, v := range l.values {
+	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
+		list := l.(List)
+		for i, v := range list.values {
 			f(v, start+uint64(i))
 		}
-		start += l.Len()
-		first = false
-	}
+		start += list.Len()
+		return false
+	})
 }
 
 func listLeafIsBoundaryFn() isBoundaryFn {

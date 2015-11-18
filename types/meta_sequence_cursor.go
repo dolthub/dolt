@@ -5,6 +5,7 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/ref"
 )
 
 // metaSequenceCursor allows traversal of a tree of metaSequence nodes.
@@ -16,16 +17,34 @@ type metaSequenceCursor struct {
 	cs       chunks.ChunkSource
 }
 
-func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkSource) *metaSequenceCursor {
-	cursor := &metaSequenceCursor{nil, root, 0, cs}
-	parent := cursor
-	child := ReadValue(cursor.current().ref, cs)
-	if ms, ok := child.(metaSequence); ok {
-		cursor = newMetaSequenceCursor(ms, cs)
-		cursor.parent = parent
+func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkSource) (cursor *metaSequenceCursor, leaf Value) {
+	cursors := []*metaSequenceCursor{&metaSequenceCursor{nil, root, 0, cs}}
+	for {
+		cursor = cursors[len(cursors)-1]
+		leaf = cursor.current()
+		if ms, ok := leaf.(metaSequence); ok {
+			cursors = append(cursors, &metaSequenceCursor{cursor, ms, 0, cs})
+		} else {
+			return
+		}
 	}
 
-	return cursor
+	panic("not reachable")
+}
+
+type cursorIterFn func(v Value) bool
+
+func iterateMetaSequenceLeaf(root metaSequence, cs chunks.ChunkSource, cb cursorIterFn) {
+	cursor, v := newMetaSequenceCursor(root, cs)
+	for {
+		if cb(v) || !cursor.advance() {
+			return
+		}
+
+		v = cursor.current()
+	}
+
+	panic("not reachable")
 }
 
 func (ms *metaSequenceCursor) advance() bool {
@@ -37,7 +56,7 @@ func (ms *metaSequenceCursor) advance() bool {
 	}
 
 	if ms.parent != nil && ms.parent.advance() {
-		ms.readSequence()
+		ms.syncToParent()
 		ms.idx = 0
 		return true
 	}
@@ -45,19 +64,23 @@ func (ms *metaSequenceCursor) advance() bool {
 	return false
 }
 
-func (ms *metaSequenceCursor) readSequence() {
-	if ms.sequence.Ref() == ms.parent.current().ref {
+func (ms *metaSequenceCursor) syncToParent() {
+	if ms.sequence.Ref() == ms.parent.currentRef() {
 		return
 	}
 
-	ms.sequence = ReadValue(ms.parent.current().ref, ms.cs).(metaSequence)
+	ms.sequence = ms.parent.current().(metaSequence)
 	d.Chk.NotNil(ms.sequence)
 }
 
-func (ms *metaSequenceCursor) current() metaTuple {
+func (ms *metaSequenceCursor) current() Value {
+	return ReadValue(ms.currentRef(), ms.cs)
+}
+
+func (ms *metaSequenceCursor) currentRef() ref.Ref {
 	d.Chk.NotNil(ms.sequence)
 	d.Chk.True(ms.idx >= 0 && ms.idx < ms.sequence.tupleCount())
-	return ms.sequence.tupleAt(ms.idx)
+	return ms.sequence.tupleAt(ms.idx).ref
 }
 
 type metaSequenceSeekFn func(v, parent Value) bool
@@ -69,7 +92,7 @@ func (ms *metaSequenceCursor) seek(seekFn metaSequenceSeekFn, parentValueFn seek
 
 	if ms.parent != nil {
 		parentValue = ms.parent.seek(seekFn, parentValueFn, parentValue)
-		ms.readSequence()
+		ms.syncToParent()
 	}
 
 	ms.idx = sort.Search(ms.sequence.tupleCount(), func(i int) bool {

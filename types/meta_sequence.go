@@ -95,7 +95,7 @@ func newMetaSequenceFromData(tuples metaSequenceData, t Type, cs chunks.ChunkSou
 		return s.builder(tuples, t, cs)
 	}
 
-	panic("not reached")
+	panic("not reachable")
 }
 
 func getDataFromMetaSequence(v Value) metaSequenceData {
@@ -105,7 +105,7 @@ func getDataFromMetaSequence(v Value) metaSequenceData {
 		return s.reader(v)
 	}
 
-	panic("not reached")
+	panic("not reachable")
 }
 
 func metaSequenceIsBoundaryFn() isBoundaryFn {
