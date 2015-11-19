@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import {invariant} from './assert.js';
 import {readValue} from 'noms';
 import eq from './eq.js';

@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import {deserialize} from './chunk_serializer.js';

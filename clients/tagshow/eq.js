@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import {Ref} from 'noms';
 
 export default function eq(a: any, b: any) : boolean {

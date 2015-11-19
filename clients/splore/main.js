@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import {layout, NodeGraph, TreeNode} from './buchheim.js';
 import Layout from './layout.js';
 import React from 'react'; //eslint-disable-line no-unused-vars

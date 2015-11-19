@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Ref from './ref.js';
 import {TextEncoder, TextDecoder} from './text_encoding.js';
 

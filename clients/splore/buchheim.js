@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 // JavaScript implementation of Christoph Buchheim, Michael Jünger, Sebastian Leipert's tree layout algorithm. See: http://dl.acm.org/citation.cfm?id=729576.
 //
 // Thanks also to Bill Mill for the explanation and Python sample code: http://billmill.org/pymag-trees/.

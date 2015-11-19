@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Struct from './struct.js';
 import {assert} from 'chai';
 import {Field, makePrimitiveType, makeStructType, makeType} from './type.js';

@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Preview from './preview.js';
 import React from 'react';
 import TagList from './taglist.js';

@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import {request} from 'http';
 import {parse} from 'url';
 

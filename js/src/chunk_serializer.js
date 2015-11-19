@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import {invariant} from './assert.js';
@@ -69,4 +67,3 @@ export function deserialize(buffer: ArrayBuffer): Array<Chunk> {
 
   return chunks;
 }
-

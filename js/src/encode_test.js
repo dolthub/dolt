@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import {assert} from 'chai';
 import {suite} from 'mocha';
 

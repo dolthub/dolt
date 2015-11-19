@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Chunk from './chunk.js';
 import HttpStore from './http_store.js';
 import MemoryStore from './memory_store.js';

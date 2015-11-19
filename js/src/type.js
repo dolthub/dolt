@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Ref from './ref.js';
 import type {NomsKind} from './noms_kind.js';
 import {ensureRef} from './get_ref.js';

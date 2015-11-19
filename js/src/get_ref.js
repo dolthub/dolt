@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Ref from './ref.js';
 import {encodeNomsValue} from './encode.js';
 import {Type} from './type.js';

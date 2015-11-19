@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 // Tell Flow about these globals.
 declare var TextDecoder: ?Function;
 declare var TextEncoder: ?Function;
