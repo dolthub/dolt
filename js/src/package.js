@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Ref from './ref.js';
 import type {ChunkStore} from './chunk_store.js';
 import {ensureRef} from './get_ref.js';

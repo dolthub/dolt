@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 type FetchOptions = {
   method?: string,
   body?: any,

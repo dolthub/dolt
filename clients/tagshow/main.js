@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import {HttpStore} from 'noms';
 import queryString from 'query-string';
 import React from 'react'; // eslint-disable-line no-unused-vars

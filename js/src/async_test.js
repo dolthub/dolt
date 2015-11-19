@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import {test as mtest} from 'mocha';
 
 export default function test(n: string, f: () => ?Promise) {

@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 export type NomsKind = number;
 
 export const Kind: {

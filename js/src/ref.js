@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Rusha from 'rusha';
 
 const r = new Rusha();

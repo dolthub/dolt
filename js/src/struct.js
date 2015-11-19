@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Ref from './ref.js';
 import {ensureRef} from './get_ref.js';
 import {Field, StructDesc, Type} from './type.js';

@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import {readValue} from 'noms';
 import eq from './eq.js';
 import React from 'react';

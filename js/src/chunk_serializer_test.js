@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import Chunk from './chunk.js';

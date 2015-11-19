@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import {readValue} from 'noms';
 import DatasetPicker from './datasetpicker.js';
 import eq from './eq.js';

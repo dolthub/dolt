@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Photo from './photo.js';
 import React from 'react';
 import type {ChunkStore, Ref} from 'noms';

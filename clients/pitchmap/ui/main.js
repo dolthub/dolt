@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import HeatMap from './heat_map.js';
 import React from 'react'; //eslint-disable-line no-unused-lets
 import ReactDOM from 'react-dom';

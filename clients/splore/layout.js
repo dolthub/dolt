@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import Node from './node.js';
 import React from 'react';
 import type {NodeGraph} from './buchheim.js';

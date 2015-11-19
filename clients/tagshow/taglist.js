@@ -1,7 +1,5 @@
 /* @flow */
 
-'use strict';
-
 import React from 'react';
 
 const tagStyle = {
