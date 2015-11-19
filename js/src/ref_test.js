@@ -5,7 +5,7 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 import Ref from './ref.js';
-import {TextEncoder} from 'text-encoding';
+import {TextEncoder} from './text_encoding.js';
 
 
 suite('Ref', () => {
