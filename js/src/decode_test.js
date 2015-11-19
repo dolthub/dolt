@@ -240,4 +240,33 @@ suite('Decode', () => {
     let commit = await readValue(counterRef, ms);
     assert.strictEqual(1, commit.get('value'));
   });
+
+  test('top level blob', async () => {
+    function stringToBuffer(s) {
+      let bytes = new Uint8Array(s.length);
+      for (let i = 0; i < s.length; i++) {
+        bytes[i] = s.charCodeAt(i);
+      }
+      return bytes.buffer;
+    }
+
+    let chunk = Chunk.fromString('b hi');
+    let v = await decodeNomsValue(chunk, new MemoryStore());
+    assert.equal(2, v.byteLength);
+    assert.deepEqual(stringToBuffer('hi'), v);
+
+    let data = new Uint8Array(2 + 256);
+    data[0] = 'b'.charCodeAt(0);
+    data[1] = ' '.charCodeAt(0);
+    let bytes = new Uint8Array(256);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = i;
+      data[2 + i] = i;
+    }
+
+    let chunk2 = new Chunk(data);
+    let v2 = await decodeNomsValue(chunk2, new MemoryStore());
+    assert.equal(bytes.buffer.byteLength, v2.byteLength);
+    assert.deepEqual(bytes.buffer, v2);
+  });
 });

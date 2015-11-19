@@ -12,6 +12,7 @@ import {isPrimitiveKind, Kind} from './noms_kind.js';
 import {lookupPackage, Package, readPackage} from './package.js';
 
 const typedTag = 't ';
+const blobTag = 'b ';
 
 class JsonArrayReader {
   _a: Array<any>;
@@ -322,6 +323,9 @@ function decodeNomsValue(chunk: Chunk, cs: ChunkStore): Promise<any> {
       let payload = JSON.parse(new Chunk(new Uint8Array(chunk.data.buffer, 2)).toString());
       let reader = new JsonArrayReader(payload, cs);
       return reader.readTopLevelValue();
+    }
+    case blobTag: {
+      return Promise.resolve(chunk.data.buffer.slice(2));
     }
     default:
       throw new Error('Not implemented');
