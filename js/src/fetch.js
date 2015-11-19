@@ -9,7 +9,7 @@ type FetchOptions = {
   headers?: {[key: string]: string}
 };
 
-function fetch<T>(url: string, f: (buf: Buffer) => T, options: FetchOptions = {}) : Promise<T> {
+function fetch<T>(url: string, f: (buf: Buffer) => T, options: FetchOptions = {}): Promise<T> {
   let opts: any = parse(url);
   opts.method = options.method || 'GET';
   if (options.headers) {
@@ -39,7 +39,7 @@ function fetch<T>(url: string, f: (buf: Buffer) => T, options: FetchOptions = {}
   });
 }
 
-function bufferToArrayBuffer(buf: Buffer) : ArrayBuffer {
+function bufferToArrayBuffer(buf: Buffer): ArrayBuffer {
   let ab = new ArrayBuffer(buf.length);
   let view = new Uint8Array(ab);
   for (let i = 0; i < buf.length; i++) {
@@ -49,14 +49,14 @@ function bufferToArrayBuffer(buf: Buffer) : ArrayBuffer {
 }
 
 
-function bufferToString(buf: Buffer) : string {
+function bufferToString(buf: Buffer): string {
   return buf.toString();
 }
 
-export function fetchText(url: string, options: FetchOptions = {}) : Promise<string> {
+export function fetchText(url: string, options: FetchOptions = {}): Promise<string> {
   return fetch(url, bufferToString, options);
 }
 
-export function fetchArrayBuffer(url: string, options: FetchOptions = {}) : Promise<ArrayBuffer> {
+export function fetchArrayBuffer(url: string, options: FetchOptions = {}): Promise<ArrayBuffer> {
   return fetch(url, bufferToArrayBuffer, options);
 }

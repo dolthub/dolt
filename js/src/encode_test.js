@@ -11,8 +11,37 @@ import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} fr
 import {JsonArrayWriter} from './encode.js';
 import {Kind} from './noms_kind.js';
 import {Package, registerPackage} from './package.js';
+import type {NomsKind} from './noms_kind.js';
 
 suite('Encode', () => {
+  test('write primitives', () => {
+    function f(k: NomsKind, v: any, ex: any) {
+      let ms = new MemoryStore();
+      let w = new JsonArrayWriter(ms);
+      w.writeTopLevel(makePrimitiveType(k), v);
+      assert.deepEqual([k, ex], w.array);
+    }
+
+    f(Kind.Bool, true, true);
+    f(Kind.Bool, false, false);
+
+    f(Kind.UInt8, 0, 0);
+    f(Kind.UInt16, 0, 0);
+    f(Kind.UInt32, 0, 0);
+    f(Kind.UInt64, 0, 0);
+    f(Kind.Int8, 0, 0);
+    f(Kind.Int16, 0, 0);
+    f(Kind.Int32, 0, 0);
+    f(Kind.Int64, 0, 0);
+    f(Kind.Float32, 0, 0);
+    f(Kind.Float64, 0, 0);
+
+    f(Kind.String, 'hi', 'hi');
+
+    let buffer = new Uint8Array([0x00, 0x01]).buffer;
+    f(Kind.Blob, buffer, 'AAE=');
+  });
+
   test('write list', async () => {
     let ms = new MemoryStore();
     let w = new JsonArrayWriter(ms);
