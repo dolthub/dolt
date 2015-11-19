@@ -5,6 +5,7 @@ import Ref from './ref.js';
 import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
+import {encode as encodeBase64} from './base64.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
 import {lookupPackage, Package} from './package.js';
@@ -77,7 +78,8 @@ class JsonArrayWriter {
   writeValue(v: any, t: Type, pkg: ?Package) {
     switch (t.kind) {
       case Kind.Blob:
-        throw new Error('Not implemented');
+        this.writeBlob(v);
+        break;
       case Kind.Bool:
       case Kind.UInt8:
       case Kind.UInt16:
@@ -231,6 +233,10 @@ class JsonArrayWriter {
       default:
         throw new Error('Not reached');
     }
+  }
+
+  writeBlob(v: ArrayBuffer) {
+    this.write(encodeBase64(v));
   }
 
   writeStruct(s: Struct, type: Type, typeDef: Type, pkg: Package) {

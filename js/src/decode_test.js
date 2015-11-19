@@ -55,25 +55,26 @@ suite('Decode', () => {
     async function doTest(expected: any, a: Array<any>): Promise<void> {
       let r = new JsonArrayReader(a, ms);
       let v = await r.readTopLevelValue();
-      assert.strictEqual(expected, v);
+      assert.deepEqual(expected, v);
     }
 
-    doTest(true, [Kind.Bool, true]);
-    doTest(false, [Kind.Bool, false]);
-    doTest(0, [Kind.UInt8, 0]);
-    doTest(0, [Kind.UInt16, 0]);
-    doTest(0, [Kind.UInt32, 0]);
-    doTest(0, [Kind.UInt64, 0]);
-    doTest(0, [Kind.Int8, 0]);
-    doTest(0, [Kind.Int16, 0]);
-    doTest(0, [Kind.Int32, 0]);
-    doTest(0, [Kind.Int64, 0]);
-    doTest(0, [Kind.Float32, 0]);
-    doTest(0, [Kind.Float64, 0]);
+    await doTest(true, [Kind.Bool, true]);
+    await doTest(false, [Kind.Bool, false]);
+    await doTest(0, [Kind.UInt8, 0]);
+    await doTest(0, [Kind.UInt16, 0]);
+    await doTest(0, [Kind.UInt32, 0]);
+    await doTest(0, [Kind.UInt64, 0]);
+    await doTest(0, [Kind.Int8, 0]);
+    await doTest(0, [Kind.Int16, 0]);
+    await doTest(0, [Kind.Int32, 0]);
+    await doTest(0, [Kind.Int64, 0]);
+    await doTest(0, [Kind.Float32, 0]);
+    await doTest(0, [Kind.Float64, 0]);
 
-    doTest('hi', [Kind.String, 'hi']);
+    await doTest('hi', [Kind.String, 'hi']);
 
-    // TODO: Blob
+    let blob = new Uint8Array([0x00, 0x01]).buffer;
+    await doTest(blob, [Kind.Blob, 'AAE=']);
   });
 
   test('read list of int 32', async () => {

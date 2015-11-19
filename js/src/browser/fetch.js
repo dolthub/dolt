@@ -6,7 +6,7 @@ type FetchOptions = {
   headers?: {[key: string]: string}
 };
 
-function fetch<T>(url: string, responseType: string, options: FetchOptions = {}) : Promise<T> {
+function fetch<T>(url: string, responseType: string, options: FetchOptions = {}): Promise<T> {
   let xhr = new XMLHttpRequest();
   xhr.responseType = responseType;
   let method = options.method || 'GET';
@@ -29,10 +29,10 @@ function fetch<T>(url: string, responseType: string, options: FetchOptions = {})
   return p;
 }
 
-export function fetchText(url: string, options: FetchOptions = {}) : Promise<string> {
+export function fetchText(url: string, options: FetchOptions = {}): Promise<string> {
   return fetch(url, 'text', options);
 }
 
-export function fetchArrayBuffer(url: string, options: FetchOptions = {}) : Promise<ArrayBuffer> {
+export function fetchArrayBuffer(url: string, options: FetchOptions = {}): Promise<ArrayBuffer> {
   return fetch(url, 'arraybuffer', options);
 }

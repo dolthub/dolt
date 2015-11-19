@@ -5,6 +5,7 @@ import Ref from './ref.js';
 import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
+import {decode as decodeBase64} from './base64.js';
 import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType, makeUnresolvedType, StructDesc, Type} from './type.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
@@ -98,6 +99,11 @@ class JsonArrayReader {
     throw new Error('Unreachable');
   }
 
+  readBlob(): Promise<ArrayBuffer> {
+    let s = this.readString();
+    return Promise.resolve(decodeBase64(s));
+  }
+
   async readList(t: Type, pkg: ?Package): Promise<Array<any>> {
     let elemType = t.elemTypes[0];
     let list = [];
@@ -152,7 +158,7 @@ class JsonArrayReader {
     // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
       case Kind.Blob:
-        throw new Error('Not implemented');
+        return this.readBlob();
       case Kind.Bool:
         return Promise.resolve(this.readBool());
       case Kind.UInt8:
