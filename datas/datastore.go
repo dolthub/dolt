@@ -21,7 +21,11 @@ type DataStore interface {
 	// Commit updates the commit that a datastore points at. The new Commit is constructed using v and the current Head. If the update cannot be performed, e.g., because of a conflict, Commit returns 'false'. The newest snapshot of the datastore is always returned.
 	Commit(datasetID string, commit Commit) (DataStore, bool)
 
+	// Copies all chunks reachable from (and including)|r| but not reachable from (and including |exclude| in |source| to |sink|
 	CopyReachableChunksP(r, exclude ref.Ref, sink chunks.ChunkSink, concurrency int)
+
+	// Copies all chunks reachable from (and including) |r| in |source| that aren't present in |sink|
+	CopyMissingChunksP(r ref.Ref, sink chunks.ChunkStore, concurrency int)
 }
 
 func NewDataStore(cs chunks.ChunkStore) DataStore {

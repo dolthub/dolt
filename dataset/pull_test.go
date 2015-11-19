@@ -39,7 +39,7 @@ func NewSet(ds Dataset, vs ...types.Value) types.Ref {
 	return types.NewRef(r)
 }
 
-func TestPull(t *testing.T) {
+func pullTest(t *testing.T, topdown bool) {
 	assert := assert.New(t)
 
 	sink := createTestDataset("sink")
@@ -71,12 +71,20 @@ func TestPull(t *testing.T) {
 	source, ok = source.Commit(updatedValue)
 	assert.True(ok)
 
-	sink = sink.Pull(source, 1)
+	sink = sink.pull(source, 1, topdown, ref.Ref{})
 	assert.True(ok)
 	assert.True(source.Head().Equals(sink.Head()))
 }
 
-func TestPullFirstCommit(t *testing.T) {
+func TestPullTopDown(t *testing.T) {
+	pullTest(t, true)
+}
+
+func TestPullExclude(t *testing.T) {
+	pullTest(t, false)
+}
+
+func pullFirstCommit(t *testing.T, topdown bool) {
 	assert := assert.New(t)
 
 	sink := createTestDataset("sink")
@@ -92,11 +100,19 @@ func TestPullFirstCommit(t *testing.T) {
 	source, ok := source.Commit(sourceInitialValue)
 	assert.True(ok)
 
-	sink = sink.Pull(source, 1)
+	sink = sink.pull(source, 1, topdown, ref.Ref{})
 	assert.True(source.Head().Equals(sink.Head()))
 }
 
-func TestPullDeepRef(t *testing.T) {
+func TestPullFirstCommitTopDown(t *testing.T) {
+	pullFirstCommit(t, true)
+}
+
+func TestPullFirstCommitExclude(t *testing.T) {
+	pullFirstCommit(t, false)
+}
+
+func pullDeepRef(t *testing.T, topdown bool) {
 	assert := assert.New(t)
 
 	sink := createTestDataset("sink")
@@ -110,12 +126,14 @@ func TestPullDeepRef(t *testing.T) {
 	source, ok := source.Commit(sourceInitialValue)
 	assert.True(ok)
 
-	sink = sink.Pull(source, 1)
+	sink = sink.pull(source, 1, topdown, ref.Ref{})
 	assert.True(source.Head().Equals(sink.Head()))
 }
 
-func TestFailedCopyChunks(t *testing.T) {
-	ds := createTestDataset("test")
-	r := ref.Parse("sha1-0000000000000000000000000000000000000000")
-	assert.Panics(t, func() { ds.Store().CopyReachableChunksP(r, ref.Ref{}, ds.Store(), 1) })
+func TestPullDeepRefTopDown(t *testing.T) {
+	pullDeepRef(t, true)
+}
+
+func TestPullDeepRefExclude(t *testing.T) {
+	pullDeepRef(t, false)
 }

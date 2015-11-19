@@ -1,9 +1,10 @@
 package datas
 
 import (
+	"sync"
+
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/walk"
 )
 
@@ -26,38 +27,28 @@ func (lds *LocalDataStore) Commit(datasetID string, commit Commit) (DataStore, b
 	return newLocalDataStore(lds.ChunkStore), ok
 }
 
-// Copys all chunks reachable from (and including) |r| but excluding all chunks reachable from (and including) |exclude| in |source| to |sink|.
-func (lds *LocalDataStore) CopyReachableChunksP(r, exclude ref.Ref, sink chunks.ChunkSink, concurrency int) {
+// Copies all chunks reachable from (and including)|sourceRef| but not reachable from (and including) |exclude| in |source| to |sink|
+func (lds *LocalDataStore) CopyReachableChunksP(sourceRef, exclude ref.Ref, sink chunks.ChunkSink, concurrency int) {
 	excludeRefs := map[ref.Ref]bool{}
 
-	hasRef := func(v types.Value) bool {
-		if r, ok := v.(types.RefBase); ok {
-			return excludeRefs[r.TargetRef()]
-		} else {
+	if !exclude.IsEmpty() {
+		mu := sync.Mutex{}
+		excludeCallback := func(r ref.Ref) bool {
+			mu.Lock()
+			excludeRefs[r] = true
+			mu.Unlock()
 			return false
 		}
-	}
 
-	if !exclude.IsEmpty() {
-		refChan := make(chan ref.Ref, 1024)
-		addRef := func(v types.Value) {
-			if r, ok := v.(types.RefBase); ok {
-				refChan <- r.TargetRef()
-			}
-		}
-
-		go func() {
-			walk.AllP(types.ReadValue(exclude, lds), lds, addRef, concurrency)
-			close(refChan)
-		}()
-
-		for r := range refChan {
-			excludeRefs[r] = true
-		}
+		walk.SomeChunksP(exclude, lds, excludeCallback, concurrency)
 	}
 
 	tcs := &teeChunkSource{lds, sink}
-	walk.SomeP(types.ReadValue(r, tcs), tcs, hasRef, concurrency)
+	copyCallback := func(r ref.Ref) bool {
+		return excludeRefs[r]
+	}
+
+	walk.SomeChunksP(sourceRef, tcs, copyCallback, concurrency)
 }
 
 // teeChunkSource just serves the purpose of writing to |sink| every chunk that is read from |source|.

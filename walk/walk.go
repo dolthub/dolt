@@ -92,6 +92,55 @@ func doTreeWalkP(v types.Value, cs chunks.ChunkStore, cb SomeCallback, concurren
 	f.checkNotFailed()
 }
 
+type SomeChunksCallback func(r ref.Ref) bool
+
+// Invokes callback on all chunks reachable from |r| in top-down order. |callback| is invoked only
+// once for each chunk regardless of how many times the chunk appears
+func SomeChunksP(r ref.Ref, cs chunks.ChunkStore, callback SomeChunksCallback, concurrency int) {
+	doChunkWalkP(r, cs, callback, concurrency)
+}
+
+func doChunkWalkP(r ref.Ref, cs chunks.ChunkStore, callback SomeChunksCallback, concurrency int) {
+	rq := newRefQueue()
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{}
+	visitedRefs := map[ref.Ref]bool{}
+
+	walkChunk := func(r ref.Ref) {
+		defer wg.Done()
+
+		mu.Lock()
+		visited := visitedRefs[r]
+		visitedRefs[r] = true
+		mu.Unlock()
+
+		if visited || callback(r) {
+			return
+		}
+
+		v := types.ReadValue(r, cs)
+		for _, r1 := range v.Chunks() {
+			wg.Add(1)
+			rq.tail() <- r1
+		}
+	}
+
+	iter := func() {
+		for r := range rq.head() {
+			walkChunk(r)
+		}
+	}
+
+	for i := 0; i < concurrency; i++ {
+		go iter()
+	}
+
+	wg.Add(1)
+	rq.tail() <- r
+	wg.Wait()
+	rq.close()
+}
+
 // refQueue emulates a buffered channel of refs of unlimited size.
 type refQueue struct {
 	head  func() <-chan ref.Ref

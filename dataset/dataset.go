@@ -53,11 +53,19 @@ func (ds *Dataset) CommitWithParents(v types.Value, p datas.SetOfRefOfCommit) (D
 	return Dataset{store, ds.id}, ok
 }
 
-func (ds *Dataset) Pull(source Dataset, concurrency int) Dataset {
+func (ds *Dataset) Pull(source Dataset, concurrency int, sinkRef ref.Ref) Dataset {
+	_, topDown := ds.Store().(*datas.LocalDataStore)
+	return ds.pull(source, concurrency, topDown, sinkRef)
+}
+
+func (ds *Dataset) pull(source Dataset, concurrency int, topDown bool, sinkRef ref.Ref) Dataset {
 	sink := *ds
 	sourceHeadRef := source.Head().Ref()
+
 	sinkHeadRef := ref.Ref{}
-	if currentHead, ok := sink.MaybeHead(); ok {
+	if !sinkRef.IsEmpty() {
+		sinkHeadRef = sinkRef
+	} else if currentHead, ok := sink.MaybeHead(); ok {
 		sinkHeadRef = currentHead.Ref()
 	}
 
@@ -65,7 +73,11 @@ func (ds *Dataset) Pull(source Dataset, concurrency int) Dataset {
 		return sink
 	}
 
-	source.Store().CopyReachableChunksP(sourceHeadRef, sinkHeadRef, sink.Store(), concurrency)
+	if topDown {
+		source.Store().CopyMissingChunksP(sourceHeadRef, sink.Store(), concurrency)
+	} else {
+		source.Store().CopyReachableChunksP(sourceHeadRef, sinkHeadRef, sink.Store(), concurrency)
+	}
 	for ok := false; !ok; sink, ok = sink.SetNewHead(sourceHeadRef) {
 		continue
 	}
