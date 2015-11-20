@@ -48,4 +48,8 @@ ls /tmp/foo
 cat /tmp/foo/*.log | strings
 ```
 
-You can also explore the data visually. Follow the instructions in `clients/explore`.
+You can also explore the data visually. Follow the instructions in `clients/splore`.
+
+There are lots of other sample programs in `clients/` and they usually have `README`s. Have fun...
+
+TODO: There needs to be more of a big-picture introduction.
