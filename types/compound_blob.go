@@ -127,6 +127,6 @@ func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (cbr *compoundBlobReader) updateReader() {
-	cbr.currentReader = cbr.cursor.current().(blobLeaf).Reader()
+	cbr.currentReader = cbr.cursor.currentVal().(blobLeaf).Reader()
 	cbr.currentReader.Seek(int64(cbr.chunkOffset), 0)
 }

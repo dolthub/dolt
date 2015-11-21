@@ -35,24 +35,19 @@ func NewMemoryBlob(r io.Reader) Blob {
 	return NewBlob(r, chunks.NewMemoryStore())
 }
 
-func blobLeafIsBoundaryFn() isBoundaryFn {
-	h := buzhash.NewBuzHash(blobWindowSize)
-
-	return func(item sequenceItem) bool {
-		b, ok := item.(byte)
-		d.Chk.True(ok)
+func newBlobLeafBoundaryChecker() boundaryChecker {
+	return newBuzHashBoundaryChecker(blobWindowSize, func(h *buzhash.BuzHash, item sequenceItem) bool {
+		b := item.(byte)
 		return h.HashByte(b)&blobPattern == blobPattern
-	}
+	})
 }
 
 func newBlobLeafChunkFn(cs chunks.ChunkStore) makeChunkFn {
-	return func(items []sequenceItem) (sequenceItem, interface{}) {
+	return func(items []sequenceItem) (sequenceItem, Value) {
 		buff := make([]byte, len(items))
 
 		for i, v := range items {
-			b, ok := v.(byte)
-			d.Chk.True(ok)
-			buff[i] = b
+			buff[i] = v.(byte)
 		}
 
 		leaf := newBlobLeaf(buff)
@@ -62,7 +57,7 @@ func newBlobLeafChunkFn(cs chunks.ChunkStore) makeChunkFn {
 }
 
 func NewBlob(r io.Reader, cs chunks.ChunkStore) Blob {
-	seq := newSequenceChunker(newBlobLeafChunkFn(cs), newMetaSequenceChunkFn(typeForCompoundBlob, cs), blobLeafIsBoundaryFn(), metaSequenceIsBoundaryFn())
+	seq := newEmptySequenceChunker(newBlobLeafChunkFn(cs), newMetaSequenceChunkFn(typeForCompoundBlob, cs), newBlobLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
 	buf := []byte{0}
 	for {
 		n, err := r.Read(buf)
@@ -75,6 +70,5 @@ func NewBlob(r io.Reader, cs chunks.ChunkStore) Blob {
 			break
 		}
 	}
-	_, blob := seq.Done()
-	return blob.(Blob)
+	return seq.Done().(Blob)
 }

@@ -16,15 +16,23 @@ const (
 type compoundList struct {
 	metaSequenceObject
 	ref *ref.Ref
-	cs  chunks.ChunkSource
+	cs  chunks.ChunkStore
 }
 
 func buildCompoundList(tuples metaSequenceData, t Type, cs chunks.ChunkSource) Value {
-	return compoundList{metaSequenceObject{tuples, t}, &ref.Ref{}, cs}
+	return compoundList{metaSequenceObject{tuples, t}, &ref.Ref{}, cs.(chunks.ChunkStore)}
 }
 
 func getListSequenceData(v Value) metaSequenceData {
 	return v.(compoundList).tuples
+}
+
+func listAsSequenceItems(ls List) []sequenceItem {
+	items := make([]sequenceItem, len(ls.values))
+	for i, v := range ls.values {
+		items[i] = v
+	}
+	return items
 }
 
 func init() {
@@ -49,7 +57,7 @@ func (cl compoundList) Empty() bool {
 }
 
 func (cl compoundList) cursorAt(idx uint64) (cursor *metaSequenceCursor, listLeaf List, start uint64) {
-	d.Chk.True(idx < cl.Len())
+	d.Chk.True(idx <= cl.Len())
 	cursor, leaf := newMetaSequenceCursor(cl, cl.cs)
 
 	chunkStart := cursor.seek(func(v, parent Value) bool {
@@ -67,7 +75,7 @@ func (cl compoundList) cursorAt(idx uint64) (cursor *metaSequenceCursor, listLea
 	}, UInt64(0))
 
 	if cursor.currentRef() != leaf.Ref() {
-		leaf = cursor.current()
+		leaf = cursor.currentVal()
 	}
 
 	listLeaf = leaf.(List)
@@ -78,6 +86,16 @@ func (cl compoundList) cursorAt(idx uint64) (cursor *metaSequenceCursor, listLea
 func (cl compoundList) Get(idx uint64) Value {
 	_, l, start := cl.cursorAt(idx)
 	return l.Get(idx - start)
+}
+
+func (cl compoundList) Append(vs ...Value) compoundList {
+	metaCur, leaf, start := cl.cursorAt(cl.Len())
+	seqCur := newSequenceChunkerCursor(metaCur, listAsSequenceItems(leaf), int(cl.Len()-start), readListLeafChunkFn(cl.cs), cl.cs)
+	seq := newSequenceChunker(seqCur, makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), normalizeChunkNoop, normalizeMetaSequenceChunk, newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
+	for _, v := range vs {
+		seq.Append(v)
+	}
+	return seq.Done().(compoundList)
 }
 
 func (cl compoundList) Iter(f listIterFunc) {
@@ -109,40 +127,41 @@ func (cl compoundList) IterAll(f listIterAllFunc) {
 	})
 }
 
-func listLeafIsBoundaryFn() isBoundaryFn {
-	h := buzhash.NewBuzHash(listWindowSize)
-
-	return func(item sequenceItem) bool {
-		v, ok := item.(Value)
-		d.Chk.True(ok)
+func newListLeafBoundaryChecker() boundaryChecker {
+	return newBuzHashBoundaryChecker(listWindowSize, func(h *buzhash.BuzHash, item sequenceItem) bool {
+		v := item.(Value)
 		digest := v.Ref().Digest()
 		b := digest[0]
 		return h.HashByte(b)&listPattern == listPattern
-	}
+	})
 }
 
 func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
-	return func(items []sequenceItem) (sequenceItem, interface{}) {
+	return func(items []sequenceItem) (sequenceItem, Value) {
 		values := make([]Value, len(items))
 
 		for i, v := range items {
-			value, ok := v.(Value)
-			d.Chk.True(ok)
-			values[i] = value
+			values[i] = v.(Value)
 		}
 
 		concreteType := t.Desc.(CompoundDesc).ElemTypes[0]
 		list := List{values, concreteType, &ref.Ref{}}
 		ref := WriteValue(list, cs)
-		return metaTuple{ref, UInt64(uint64(len(values)))}, list
+		return metaTuple{ref, UInt64(len(values))}, list
+	}
+}
+
+func readListLeafChunkFn(cs chunks.ChunkStore) readChunkFn {
+	return func(item sequenceItem) []sequenceItem {
+		mt := item.(metaTuple)
+		return listAsSequenceItems(ReadValue(mt.ref, cs).(List))
 	}
 }
 
 func NewCompoundList(t Type, cs chunks.ChunkStore, values ...Value) Value {
-	seq := newSequenceChunker(makeListLeafChunkFn(t, cs), newMetaSequenceChunkFn(t, cs), listLeafIsBoundaryFn(), metaSequenceIsBoundaryFn())
+	seq := newEmptySequenceChunker(makeListLeafChunkFn(t, cs), newMetaSequenceChunkFn(t, cs), newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
 	for _, v := range values {
 		seq.Append(v)
 	}
-	_, l := seq.Done()
-	return l.(Value)
+	return seq.Done().(Value)
 }

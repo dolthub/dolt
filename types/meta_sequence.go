@@ -18,6 +18,7 @@ const (
 
 type metaSequence interface {
 	tupleAt(idx int) metaTuple
+	tupleSlice(to int) []metaTuple
 	lastTuple() metaTuple
 	tupleCount() int
 	Ref() ref.Ref
@@ -41,6 +42,10 @@ type metaSequenceObject struct {
 
 func (ms metaSequenceObject) tupleAt(idx int) metaTuple {
 	return ms.tuples[idx]
+}
+
+func (ms metaSequenceObject) tupleSlice(to int) []metaTuple {
+	return ms.tuples[:to]
 }
 
 func (ms metaSequenceObject) tupleCount() int {
@@ -108,34 +113,59 @@ func getDataFromMetaSequence(v Value) metaSequenceData {
 	panic("not reachable")
 }
 
-func metaSequenceIsBoundaryFn() isBoundaryFn {
-	h := buzhash.NewBuzHash(objectWindowSize)
+type checkHashFn func(h *buzhash.BuzHash, item sequenceItem) bool
 
-	return func(item sequenceItem) bool {
-		mt, ok := item.(metaTuple)
-		d.Chk.True(ok)
+type buzHashBoundaryChecker struct {
+	h          *buzhash.BuzHash
+	windowSize int
+	checkHash  checkHashFn
+}
+
+func newBuzHashBoundaryChecker(windowSize int, checkHash checkHashFn) boundaryChecker {
+	return &buzHashBoundaryChecker{buzhash.NewBuzHash(uint32(windowSize)), windowSize, checkHash}
+}
+
+func (b *buzHashBoundaryChecker) Write(item sequenceItem) bool {
+	return b.checkHash(b.h, item)
+}
+
+func (b *buzHashBoundaryChecker) WindowSize() int {
+	return b.windowSize
+}
+
+func newMetaSequenceBoundaryChecker() boundaryChecker {
+	return newBuzHashBoundaryChecker(objectWindowSize, func(h *buzhash.BuzHash, item sequenceItem) bool {
+		mt := item.(metaTuple)
 		digest := mt.ref.Digest()
 		_, err := h.Write(digest[:])
 		d.Chk.NoError(err)
 		return h.Sum32()&objectPattern == objectPattern
-	}
+	})
 }
 
 func newMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
-	return func(items []sequenceItem) (sequenceItem, interface{}) {
+	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
 		offsetSum := uint64(0)
 
 		for i, v := range items {
-			mt, ok := v.(metaTuple)
-			d.Chk.True(ok)
+			mt := v.(metaTuple)
 			offsetSum += mt.uint64Value()
-			mt.value = UInt64(offsetSum)
-			tuples[i] = mt
+			tuples[i] = metaTuple{mt.ref, UInt64(offsetSum)}
 		}
 
 		meta := newMetaSequenceFromData(tuples, t, cs)
 		ref := WriteValue(meta, cs)
 		return metaTuple{ref, UInt64(offsetSum)}, meta
 	}
+}
+
+func normalizeMetaSequenceChunk(in []sequenceItem) (out []sequenceItem) {
+	offset := uint64(0)
+	for _, v := range in {
+		mt := v.(metaTuple)
+		out = append(out, metaTuple{mt.ref, UInt64(mt.uint64Value() - offset)})
+		offset = mt.uint64Value()
+	}
+	return
 }
