@@ -24,6 +24,7 @@ func TestEnsureRef(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 	count := byte(1)
 	mockGetRef := func(v Value) ref.Ref {
+
 		d := ref.Sha1Digest{}
 		d[0] = count
 		count++
@@ -45,6 +46,7 @@ func TestEnsureRef(t *testing.T) {
 	bl := newBlobLeaf([]byte("hi"))
 	cb := newCompoundBlob([]metaTuple{{WriteValue(bl, cs), UInt64(uint64(2))}}, cs)
 
+	count = byte(1)
 	values := []Value{
 		newBlobLeaf([]byte{}),
 		cb,
