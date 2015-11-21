@@ -9,14 +9,14 @@ This repository will contain the reference implementation of the noms protocol, 
 This includes:
 
 * Go wrappers for all the core noms types
-* Support for generating Go types from Nom schema definitions
+* Support for generating Go types from schema definitions (aka 'nomdl')
 * Chunking and dechunking
 * Serialization and deserialization
 * Chunkstore interface as well as several sample implementations
 * Search support
 * Sample applications
 
-# Get the code
+# Get
 
 ```
 git clone https://github.com/attic-labs/noms
@@ -39,7 +39,7 @@ go build
 ./counter -ldb=/tmp/foo -ds=foo
 ```
 
-rejoice!
+# Rejoice!
 
 You can see the raw data:
 
