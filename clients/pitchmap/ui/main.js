@@ -1,15 +1,13 @@
 /* @flow */
 
 import HeatMap from './heat_map.js';
-import React from 'react'; //eslint-disable-line no-unused-lets
+import React from 'react';
 import ReactDOM from 'react-dom';
 import {readValue, HttpStore, Ref} from 'noms';
 
 let httpStore: HttpStore;
-let renderNode: ?HTMLElement;
 
 window.addEventListener('load', async () => {
-  renderNode = document.getElementById('heatmap');
   httpStore = new HttpStore('http://localhost:8000');
   let rootRef = await httpStore.getRoot();
   let datasets = await readValue(rootRef, httpStore);
@@ -46,7 +44,7 @@ class PitcherList extends React.Component<DefaultProps, Props, State> {
     };
   }
 
-  render() {
+  render() : React.Element {
     let currentPitcher = this.state.currentPitcher;
     let pitchListRef = this.props.pitchersMap.get(currentPitcher);
 
@@ -69,5 +67,6 @@ class PitcherList extends React.Component<DefaultProps, Props, State> {
 }
 
 function renderPitchersMap(map: Map) {
+  let renderNode = document.getElementById('heatmap');
   ReactDOM.render(<PitcherList pitchersMap={map}/>, renderNode);
 }
