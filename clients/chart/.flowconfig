@@ -1,13 +1,1 @@
-[ignore]
-.*/node_modules/d3/.*
-.*/node_modules/fbjs/flow/.*
-.*/node_modules/react/.*
-
-[include]
-
-[libs]
-
-[options]
-unsafe.enable_getters_and_setters=true
-munge_underscores=true
-suppress_comment=\\(.\\|\n\\)*\\$FlowIssue
+../../js/.flowconfig

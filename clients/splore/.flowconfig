@@ -1,13 +1,1 @@
-[ignore]
-.*/node_modules/babel.*
-.*/node_modules/babylon/.*
-.*/node_modules/fbjs/.*
-.*/node_modules/react/.*
-
-[include]
-
-[libs]
-
-[options]
-unsafe.enable_getters_and_setters=true
-munge_underscores=true
+../../js/.flowconfig

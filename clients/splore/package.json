@@ -27,7 +27,6 @@
     "grunt": "^0.4.5",
     "mocha": "^2.3.0",
     "uglify-js": "^2.6.1",
-    "uglifyify": "^3.0.1",
     "watchify": "^3.6"
   },
   "scripts": {
