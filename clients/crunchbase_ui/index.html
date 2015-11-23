@@ -1,0 +1,31 @@
+<!doctype html>
+<head>
+<title>noms.io &#10143; nerdosphere</title>
+<link href='https://fonts.googleapis.com/css?family=Open+Sans:400,300,600' rel='stylesheet' type='text/css'>
+<link href="nv.d3.css" rel="stylesheet">
+<link href="style.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="out.js"></script>
+</head>
+
+<body>
+
+<div id="masthead">
+<h1><span class="thin">noms.io <span style="position:relative; top:0.05em;">&#8594;</span> </span>nerdosphere</h1>
+</div>
+
+<div id="app"></div>
+
+<h2 style="margin-top:0">About this dataset</h2>
+
+<p>The nerdosphere dataset is imported montly from the <a href="http://data.crunchbase.com/v3/page/crunchbase-data-exports">CrunchBase Excel Data Export</a>, which is in turned based on crowdsourced data from <a href="http://www.crunchbase.com/">CrunchBase</a>.
+
+<p>This graph shows the distribution of venture capital funding rounds by funding series. The x-axis is round size by decile, and the y-axis is the average round size within that decile.
+
+<h2>Get the data</h2>
+
+<pre>go get https://github.com/attic-labs/noms/...
+go install $GOROOT/src/github.com/attic-labs/noms/clients/shove
+./shove -source-h="https://ds.noms.io" -source-ds="nerdosphere" -sink-ldb="/tmp/nerdosphere" -sink-ds="nerdosphere"</pre>
+
+</body>

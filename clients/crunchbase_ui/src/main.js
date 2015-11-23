@@ -49,7 +49,6 @@ class Main extends React.Component<DefaultProps, Props, State> {
 
   render() : React.Element {
     return <div className='app'>
-      <h2 className='app-title'>Amount Raised</h2>
       <div>
         <StackedBarChart className='app-chart' data={this._filteredData()}/>
         <div className='app-controls'>

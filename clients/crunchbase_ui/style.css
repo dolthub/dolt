@@ -1,3 +1,54 @@
+body {
+  background: #eaeaea;
+  color: black;
+  font-family: 'Open Sans', sans-serif;
+  font-weight: 400;
+  margin: 2em;
+}
+
+#masthead {
+  margin-left:-0.2em;
+  margin-top: -0.5em;
+  padding: 1em 100px;
+  background-image: url(cookie.png);
+  background-position: center left;
+  background-repeat: no-repeat;
+  background-size: contain;
+  border-bottom: 1px solid #aaa;
+}
+
+h1 {
+  font-weight: 400;
+  font-size: 1.25em;
+  display: inline;
+  margin: 0;
+}
+
+h1>.thin {
+  font-weight: 300;
+}
+
+h2 {
+  font-weight: 400;
+  font-size: 1.35em;
+  margin-top: 1.5em;
+}
+
+pre {
+  border: 1px solid #aaa;
+  padding: 0.5em;
+  line-height: 1.7em;
+  background: #dedede;
+}
+
+a {
+  color: #FF4515;
+}
+
+a:visited {
+  color: #cc2505;
+}
+
 .selection-list {
   font: normal 12px Arial;
   margin-top: 10px;
@@ -46,10 +97,7 @@
   display: flex;
   flex-direction: column;
   font-family: Arial, sans-serif;
-}
-
-.app-title {
-  margin: 5px 0 -10px 60px;;
+  margin-top: 1em;
 }
 
 .app > div > svg {
@@ -61,6 +109,7 @@
   display: flex;
   flex-direction: column;
   padding-top: 15px;
+  margin-right: 1.5em;
 }
 
 .app > div {
