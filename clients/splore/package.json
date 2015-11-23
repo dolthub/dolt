@@ -6,23 +6,39 @@
     "react-dom": "^0.14.1"
   },
   "devDependencies": {
-    "babel": "^5.6.23",
-    "babel-eslint": "^4.1.3",
-    "babelify": "^6.1.3",
+    "babel-cli": "^6.1.18",
+    "babel-core": "^6.1.20",
+    "babel-eslint": "^4.1.5",
+    "babel-plugin-syntax-async-functions": "^6.1.18",
+    "babel-plugin-syntax-flow": "^6.1.18",
+    "babel-plugin-transform-class-properties": "^6.2.2",
+    "babel-plugin-transform-regenerator": "^6.2.0",
+    "babel-preset-es2015": "^6.1.18",
+    "babel-preset-react": "^6.1.18",
+    "babel-regenerator-runtime": "^6.2.0",
+    "babelify": "^7.2.0",
     "browserify": "^12.0.1",
+    "bundle-collapser": "^1.2.1",
+    "chai": "^3.2.0",
     "envify": "^3.4.0",
-    "eslint": "^1.7.3",
-    "eslint-plugin-react": "^3.6.3",
+    "eslint": "^1.9.0",
+    "eslint-plugin-react": "^3.8.0",
     "flow-bin": "^0.18.1",
+    "grunt": "^0.4.5",
+    "mocha": "^2.3.0",
+    "uglify-js": "^2.6.1",
     "watchify": "^3.6"
   },
   "scripts": {
-    "start": "NOMS_SERVER=http://localhost:8000 watchify -o out.js -v -d main.js",
-    "build": "NOMS_SERVER=http://localhost:8000 NODE_ENV=production browserify main.js > out.js",
-    "prod_build": "NOMS_SERVER=http://ds.noms.io NODE_ENV=production browserify main.js > out.js",
+    "start": "NOMS_SERVER=http://localhost:8000 watchify -o out.js -v -d node_modules/babel-regenerator-runtime/runtime.js main.js",
+    "build": "NOMS_SERVER=http://localhost:8000 ./build.sh",
+    "prod_build": "NOMS_SERVER=http://ds.noms.io ./build.sh",
     "test": "rm -f out.js && eslint *.js && flow"
   },
   "browserify": {
-    "transform": ["babelify", "envify"]
+    "transform": [
+      "babelify",
+      "envify"
+    ]
   }
 }

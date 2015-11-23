@@ -25,8 +25,8 @@ export default class HttpStore {
   constructor(url: string, maxReads: number = 3) {
     this._rpc = {
       getRefs: url + '/getRefs/',
-      ref: url + '/ref',
-      root: url + '/root'
+      ref: url + '/ref/',
+      root: url + '/root/'
     };
     this._readQueue = Object.create(null);
     this._anyPending = false;

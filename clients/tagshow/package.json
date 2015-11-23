@@ -6,22 +6,38 @@
     "react-dom": "^0.14.1"
   },
   "devDependencies": {
-    "babel-eslint": "^4.1.3",
-    "babel": "^5.6.23",
-    "babelify": "^6.1.3",
+    "babel-cli": "^6.1.18",
+    "babel-core": "^6.1.20",
+    "babel-eslint": "^4.1.5",
+    "babel-plugin-syntax-async-functions": "^6.1.18",
+    "babel-plugin-syntax-flow": "^6.1.18",
+    "babel-plugin-transform-class-properties": "^6.2.2",
+    "babel-plugin-transform-regenerator": "^6.2.0",
+    "babel-preset-es2015": "^6.1.18",
+    "babel-preset-react": "^6.1.18",
+    "babel-regenerator-runtime": "^6.2.0",
+    "babelify": "^7.2.0",
     "browserify": "^12.0.1",
+    "bundle-collapser": "^1.2.1",
     "chai": "^3.2.0",
-    "eslint-plugin-react": "^3.6.3",
-    "eslint": "^1.7.3",
+    "envify": "^3.4.0",
+    "eslint": "^1.9.0",
+    "eslint-plugin-react": "^3.8.0",
     "flow-bin": "^0.18.1",
     "mocha": "^2.3.0",
+    "uglify-js": "^2.6.1",
     "watchify": "^3.6"
   },
   "scripts": {
-    "start": "watchify -o tagshow.js -t babelify -v -d main.js",
-    "build": "NODE_ENV=production browserify main.js -t babelify > tagshow.js",
+    "start": "watchify -o tagshow.js -t babelify -v -d node_modules/babel-regenerator-runtime/runtime.js main.js",
+    "build": "./build.sh",
     "pretest": "rm -f tagshow.js && eslint *.js && flow",
-    "test": "mocha --ui tdd --reporter dot --compilers js:babel/register ./*_test.js"
-
+    "test": "mocha --ui tdd --reporter dot --compilers js:babel-core/register ./*_test.js"
+  },
+  "browserify": {
+    "transform": [
+      "babelify",
+      "envify"
+    ]
   }
 }

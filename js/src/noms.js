@@ -8,11 +8,10 @@ import {encodeNomsValue} from './encode.js';
 import {readValue} from './decode.js';
 import {Type} from './type.js';
 import Struct from './struct.js';
-import ChunkStore from './chunk_store.js';
+import type {ChunkStore} from './chunk_store.js';
 
 export {
   Chunk,
-  ChunkStore,
   encodeNomsValue,
   HttpStore,
   MemoryStore,
@@ -21,3 +20,5 @@ export {
   Struct,
   Type
 };
+
+export type {ChunkStore};
