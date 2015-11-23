@@ -1,0 +1,31 @@
+{
+  "name": "test-nvd3",
+  "dependencies": {
+    "d3": "^3.4.4",
+    "nvd3": "^1.8.1",
+    "react": "^0.14.1",
+    "react-dom": "^0.14.1"
+  },
+  "devDependencies": {
+    "babel": "^5.6.23",
+    "babel-eslint": "^4.1.3",
+    "babelify": "^6.1.3",
+    "browserify": "^12.0.1",
+    "envify": "^3.4.0",
+    "eslint": "^1.7.3",
+    "eslint-plugin-react": "^3.6.3",
+    "flow-bin": "^0.18.1",
+    "watchify": "^3.6"
+  },
+  "scripts": {
+    "start": "cp node_modules/nvd3/build/nv.d3.css nv.d3.css; NOMS_SERVER=http://localhost:8000 watchify -o out.js -v -d src/main.js",
+    "build": "cp node_modules/nvd3/build/nv.d3.min.css nv.d3.css; NOMS_SERVER=http://localhost:8000 NODE_ENV=production browserify src/main.js > out.js",
+    "test": "rm -f out.js && eslint *.js && flow"
+  },
+  "browserify": {
+    "transform": [
+      "babelify",
+      "envify"
+    ]
+  }
+}

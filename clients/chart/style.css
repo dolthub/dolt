@@ -1,0 +1,70 @@
+.selection-list {
+  font: normal 12px Arial;
+  margin-top: 10px;
+}
+
+.selection-list > h3{
+  font-size: 14px;
+  font-weight: bold;
+  margin: 2px 0;
+}
+
+.selection-list > label {
+  align-items: center;
+  display: flex;
+  margin: 2px 0;
+  white-space: nowrap;
+}
+
+.selection-list > label > input {
+  /* Hide real checkbox */
+  position: absolute;
+  clip: rect(0 0 0 0);
+}
+
+.selection-list > label > input + span {
+  border-radius: 6px;
+  border: 2px solid currentColor;
+  box-sizing: border-box;
+  display: inline-block;
+  height: 12px;
+  margin-right: 2px;
+  padding: 0;
+  transition: .15s border-width;
+  width: 12px;
+}
+
+.selection-list > label > input:focus + span {
+  box-shadow: 0 0 5px #555;
+}
+
+.selection-list > label > :checked + span {
+  border: 6px solid currentColor;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  font-family: Arial, sans-serif;
+}
+
+.app-title {
+  margin: 5px 0 -10px 60px;;
+}
+
+.app > div > svg {
+  flex: 1;
+  height: 400px;
+}
+
+.app-controls {
+  display: flex;
+  flex-direction: column;
+  padding-top: 15px;
+}
+
+.app > div {
+  align-items: stretch;
+  display: flex;
+  flex: 1;
+}
