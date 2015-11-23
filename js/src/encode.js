@@ -269,7 +269,7 @@ function orderValuesByRef(t: Type, a: Array<any>): Array<any> {
   return a.map(v => {
     return {
       v: v,
-      r: encodeNomsValue(v, t, null).ref
+      r: encodeEmbeddedNomsValue(v, t, null).ref
     };
   }).sort((a, b) => {
     return a.r.compare(b.r);
@@ -278,7 +278,7 @@ function orderValuesByRef(t: Type, a: Array<any>): Array<any> {
   });
 }
 
-function encodeNomsValue(v: any, t: Type, cs: ?ChunkStore): Chunk {
+function encodeEmbeddedNomsValue(v: any, t: Type, cs: ?ChunkStore): Chunk {
   if (v instanceof Package) {
     // if (v.dependencies.length > 0) {
     //   throw new Error('Not implemented');
@@ -288,6 +288,27 @@ function encodeNomsValue(v: any, t: Type, cs: ?ChunkStore): Chunk {
   let w = new JsonArrayWriter(cs);
   w.writeTopLevel(t, v);
   return Chunk.fromString(typedTag + JSON.stringify(w.array));
+}
+
+// Top level blobs are not encoded using JSON but prefixed with 'b ' followed
+// by the raw bytes.
+function encodeTopLevelBlob(v: ArrayBuffer): Chunk {
+  let data = new Uint8Array(2 + v.byteLength);
+  let view = new DataView(v);
+  data[0] = 98;  // 'b'
+  data[1] = 32;  // ' '
+  for (let i = 0; i < view.byteLength; i++) {
+    data[i + 2] = view.getUint8(i);
+  }
+  return new Chunk(data);
+}
+
+function encodeNomsValue(v: any, t: Type, cs: ?ChunkStore): Chunk {
+  if (t.kind === Kind.Blob) {
+    invariant(v instanceof ArrayBuffer);
+    return encodeTopLevelBlob(v);
+  }
+  return encodeEmbeddedNomsValue(v, t, cs);
 }
 
 function writeValue(v: any, t: Type, cs: ChunkStore): Ref {

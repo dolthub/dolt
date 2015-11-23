@@ -8,7 +8,7 @@ import Ref from './ref.js';
 import Struct from './struct.js';
 import test from './async_test.js';
 import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
-import {JsonArrayWriter} from './encode.js';
+import {JsonArrayWriter, encodeNomsValue} from './encode.js';
 import {Kind} from './noms_kind.js';
 import {Package, registerPackage} from './package.js';
 import type {NomsKind} from './noms_kind.js';
@@ -217,7 +217,7 @@ suite('Encode', () => {
     assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, []], w.array);
   });
 
-  test('write struct with struct', async() => {
+  test('write struct with struct', async () => {
     let ms = new MemoryStore();
     let w = new JsonArrayWriter(ms);
 
@@ -237,5 +237,35 @@ suite('Encode', () => {
     let v = new Struct(sType, sTypeDef, {s: new Struct(s2Type, s2TypeDef, {x: 42})});
     w.writeTopLevel(sType, v);
     assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 1, 42], w.array);
+  });
+
+  test('top level blob', () => {
+    function stringToBuffer(s) {
+      let bytes = new Uint8Array(s.length);
+      for (let i = 0; i < s.length; i++) {
+        bytes[i] = s.charCodeAt(i);
+      }
+      return bytes.buffer;
+    }
+
+    let ms = new MemoryStore();
+    let blob = stringToBuffer('hi');
+    let chunk = encodeNomsValue(blob, makePrimitiveType(Kind.Blob), ms);
+    assert.equal(4, chunk.data.length);
+    assert.deepEqual(stringToBuffer('b hi'), chunk.data.buffer);
+
+    let buffer2 = new ArrayBuffer(2 + 256);
+    let view = new DataView(buffer2);
+    view.setUint8(0, 'b'.charCodeAt(0));
+    view.setUint8(1, ' '.charCodeAt(0));
+    let bytes = new Uint8Array(256);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = i;
+      view.setUint8(2 + i, i);
+    }
+    let blob2 = bytes.buffer;
+    let chunk2 = encodeNomsValue(blob2, makePrimitiveType(Kind.Blob), ms);
+    assert.equal(buffer2.byteLength, chunk2.data.buffer.byteLength);
+    assert.deepEqual(buffer2, chunk2.data.buffer);
   });
 });
