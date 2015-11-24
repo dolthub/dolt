@@ -8,7 +8,7 @@ export default function getAllData() : DataArray {
   let seed = [];
   let seriesA = [];
   let seriesB = [];
-  for (let i = 0; i < 24; i++) {
+  for (let i = 1; i <= 10; i++) {
     seed.push({x: i, y: i});
     seriesA.push({x: i, y: i});
     seriesB.push({x: i, y: i});
