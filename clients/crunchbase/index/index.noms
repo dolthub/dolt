@@ -1,0 +1,44 @@
+alias cb = import "../crunchbase.noms"
+
+enum QuarterEnum {
+  Q1
+  Q2
+  Q3
+  Q4
+}
+
+struct Quarter {
+  Year:    Int32
+  Quarter: QuarterEnum
+}
+
+struct Key {
+  union {
+    Category:  String
+    Quarter:   Quarter
+    Region:    String
+    RoundType: RoundTypeEnum
+    Year:      Int32
+  }
+}
+
+enum RoundTypeEnum {
+  Seed
+  SeriesA
+  SeriesB
+  SeriesC
+  SeriesD
+  SeriesE
+  SeriesF
+  SeriesG
+  SeriesH
+  UnknownRoundType
+}
+
+struct RoundRaise {
+  Raised:    Float64
+  Details:   Ref(cb.Round)
+}
+
+using Map(String, Ref(cb.Company))
+using Map(Ref(Key), Set(RoundRaise))

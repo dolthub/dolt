@@ -50,68 +50,66 @@ func main() {
 		tr := input.(types.Ref)
 		tv := tr.TargetValue(ds)
 		v, ok := tv.(MapOfStringToRefOfCompany)
-		d.Chk.True(ok, "Unexpected data in dataset. Found %T", tv)
+		d.Exp.True(ok, "Unexpected data in dataset. Found %T", tv)
 
-		l := float64(v.Len())
-		i := float64(0)
+		l := v.Len()
+		i := 0
 		mu := sync.Mutex{}
 
-		mapOfRoundsDef := MapOfRefOfKeyToSetOfRefOfRoundDef{}
+		mapOfRoundsDef := MapOfRefOfKeyToSetOfRoundRaiseDef{}
 
-		addRound := func(key Key, r RefOfRound) {
+		addRound := func(key Key, roundRaiseDef RoundRaiseDef) {
 			keyRef := key.Ref()
 
-			var setDef SetOfRefOfRoundDef
+			mu.Lock()
+			defer mu.Unlock()
+
+			var setDef SetOfRoundRaiseDef
 			setDef, ok := mapOfRoundsDef[keyRef]
 			if !ok {
-				setDef = SetOfRefOfRoundDef{}
+				setDef = SetOfRoundRaiseDef{}
 			}
 
-			mu.Lock()
-			setDef[r.TargetRef()] = true
+			setDef[roundRaiseDef] = true
 			mapOfRoundsDef[keyRef] = setDef
-			mu.Unlock()
 		}
 
-		addTimeRounds := func(tn int64, r RefOfRound) {
+		addTimeRounds := func(tn int64, roundRaiseDef RoundRaiseDef) {
 			t := time.Unix(tn, 0)
 			year := int32(t.Year())
 			yk := NewKey().SetYear(year)
-			addRound(yk, r)
+			addRound(yk, roundRaiseDef)
 
-			var q QuarterEnum
-			switch t.Month() {
-			case time.January, time.February, time.March:
-				q = Q1
-			case time.April, time.May, time.June:
-				q = Q2
-			case time.July, time.August, time.September:
-				q = Q3
-			case time.October, time.November, time.December:
-				q = Q4
-			}
-
+			q := timeToQuarter(t)
 			qk := NewKey().SetQuarter(QuarterDef{Year: year, Quarter: q}.New())
-			addRound(qk, r)
+			addRound(qk, roundRaiseDef)
 		}
 
 		v.IterAllP(64, func(permalink string, r RefOfCompany) {
 			mu.Lock()
 			i++
-			fmt.Printf("\rIndexing companies: %d/%d (%.f%%)", i, l, i/l*100)
+			fmt.Printf("\rIndexing companies: %d/%d (%.f%%)", i, l, float64(i)/float64(l)*100)
 			mu.Unlock()
 			company := r.TargetValue(ds)
 			categoryList := company.CategoryList()
 			regionKey := NewKey().SetRegion(company.Region())
 			company.Rounds().IterAll(func(r RefOfRound) {
 				round := r.TargetValue(ds)
+				roundRaiseDef := RoundRaiseDef{
+					Raised:  round.RaisedAmountUsd(),
+					Details: r.TargetRef(),
+				}
 				categoryList.IterAllP(64, func(category string) {
 					key := NewKey().SetCategory(category)
-					addRound(key, r)
+					addRound(key, roundRaiseDef)
 				})
 
-				addRound(regionKey, r)
-				addTimeRounds(round.FundedAt(), r)
+				addRound(regionKey, roundRaiseDef)
+				addTimeRounds(round.FundedAt(), roundRaiseDef)
+
+				roundType := classifyRoundType(round)
+				roundTypeKey := NewKey().SetRoundType(roundType)
+				addRound(roundTypeKey, roundRaiseDef)
 			})
 		})
 
@@ -123,9 +121,48 @@ func main() {
 		d.Exp.True(ok, "Could not commit due to conflicting edit")
 
 		util.MaybeWriteMemProfile()
-		// fmt.Printf("\n")
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func classifyRoundType(round Round) RoundTypeEnum {
+	if round.FundingRoundType() == "seed" {
+		return Seed
+	}
+	switch round.FundingRoundCode() {
+	case "A":
+		return SeriesA
+	case "B":
+		return SeriesB
+	case "C":
+		return SeriesC
+	case "D":
+		return SeriesD
+	case "E":
+		return SeriesE
+	case "F":
+		return SeriesF
+	case "G":
+		return SeriesG
+	case "H":
+		return SeriesH
+	default:
+		return UnknownRoundType
+	}
+}
+
+func timeToQuarter(t time.Time) QuarterEnum {
+	switch t.Month() {
+	case time.January, time.February, time.March:
+		return Q1
+	case time.April, time.May, time.June:
+		return Q2
+	case time.July, time.August, time.September:
+		return Q3
+	case time.October, time.November, time.December:
+		return Q4
+	}
+	panic("unreachable")
 }
