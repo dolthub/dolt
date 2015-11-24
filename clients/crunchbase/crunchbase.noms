@@ -26,4 +26,26 @@ struct Round {
     RaisedAmountUsd:        Float64
 }
 
+enum QuarterEnum {
+    Q1
+    Q2
+    Q3
+    Q4
+}
+
+struct Quarter {
+    Year:    Int32
+    Quarter: QuarterEnum
+}
+
+struct Key {
+    union {
+        Year:     Int32
+        Quarter:  Quarter
+        Category: String
+        Region:   String
+    }
+}
+
 using Map(String, Ref(Company))
+using Map(Ref(Key), Set(Ref(Round)))
