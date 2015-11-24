@@ -19,7 +19,7 @@ This includes:
 # Get
 
 ```
-git clone https://github.com/attic-labs/noms
+go get -u -t github.com/attic-labs/noms/...
 ```
 
 # Build
