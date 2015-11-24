@@ -50,15 +50,9 @@ func main() {
 	numRounds := 0
 	for i, row := range roundsSheet.Rows {
 		if i != 0 {
-			var rounds []Round
-			var ok bool
-
 			round := NewRoundFromRow(row)
-			if rounds, ok = roundsByPermalink[round.CompanyPermalink()]; !ok {
-				rounds = []Round{}
-			}
-			rounds = append(rounds, round)
-			roundsByPermalink[round._CompanyPermalink] = rounds
+			pl := round.CompanyPermalink()
+			roundsByPermalink[pl] = append(roundsByPermalink[pl], round)
 			numRounds++
 		}
 	}
@@ -71,11 +65,7 @@ func main() {
 			company := NewCompanyFromRow(row)
 			permalink := company.Permalink()
 
-			var rounds []Round
-			var ok bool
-			if rounds, ok = roundsByPermalink[permalink]; !ok {
-				rounds = []Round{}
-			}
+			rounds := roundsByPermalink[permalink]
 			roundRefs := NewSetOfRefOfRound()
 			for _, r := range rounds {
 				ref := types.WriteValue(r, ds.Store())
