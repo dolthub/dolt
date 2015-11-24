@@ -11,11 +11,9 @@ struct Company {
     Region:             String
     City:               String
     FundingRounds:      UInt16
-    FoundedAt:          String
-    FoundedMonth:       String
-    FoundedYear:        String
-    FirstFundingAt:     String
-    LastFundingAt:      String
+    FoundedAt:          Int64
+    FirstFundingAt:     Int64
+    LastFundingAt:      Int64
     Rounds:             Set(Ref(Round))
 }
 
@@ -24,10 +22,7 @@ struct Round {
     FundingRoundPermalink:  String
     FundingRoundType:       String
     FundingRoundCode:       String
-    FundedAt:               String
-    FundedMonth:            String
-    FundedQuarter:          String
-    FundedYear:             UInt16
+    FundedAt:               Int64
     RaisedAmountUsd:        Float64
 }
 
