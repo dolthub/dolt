@@ -29,11 +29,9 @@ func init() {
 				types.Field{"Region", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"City", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"FundingRounds", types.MakePrimitiveType(types.UInt16Kind), false},
-				types.Field{"FoundedAt", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"FoundedMonth", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"FoundedYear", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"FirstFundingAt", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"LastFundingAt", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"FoundedAt", types.MakePrimitiveType(types.Int64Kind), false},
+				types.Field{"FirstFundingAt", types.MakePrimitiveType(types.Int64Kind), false},
+				types.Field{"LastFundingAt", types.MakePrimitiveType(types.Int64Kind), false},
 				types.Field{"Rounds", types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Ref{}, 1))), false},
 			},
 			types.Choices{},
@@ -44,10 +42,7 @@ func init() {
 				types.Field{"FundingRoundPermalink", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"FundingRoundType", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"FundingRoundCode", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"FundedAt", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"FundedMonth", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"FundedQuarter", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"FundedYear", types.MakePrimitiveType(types.UInt16Kind), false},
+				types.Field{"FundedAt", types.MakePrimitiveType(types.Int64Kind), false},
 				types.Field{"RaisedAmountUsd", types.MakePrimitiveType(types.Float64Kind), false},
 			},
 			types.Choices{},
@@ -71,11 +66,9 @@ type Company struct {
 	_Region          string
 	_City            string
 	_FundingRounds   uint16
-	_FoundedAt       string
-	_FoundedMonth    string
-	_FoundedYear     string
-	_FirstFundingAt  string
-	_LastFundingAt   string
+	_FoundedAt       int64
+	_FirstFundingAt  int64
+	_LastFundingAt   int64
 	_Rounds          SetOfRefOfRound
 
 	ref *ref.Ref
@@ -95,11 +88,9 @@ func NewCompany() Company {
 		_Region:          "",
 		_City:            "",
 		_FundingRounds:   uint16(0),
-		_FoundedAt:       "",
-		_FoundedMonth:    "",
-		_FoundedYear:     "",
-		_FirstFundingAt:  "",
-		_LastFundingAt:   "",
+		_FoundedAt:       int64(0),
+		_FirstFundingAt:  int64(0),
+		_LastFundingAt:   int64(0),
 		_Rounds:          NewSetOfRefOfRound(),
 
 		ref: &ref.Ref{},
@@ -119,11 +110,9 @@ type CompanyDef struct {
 	Region          string
 	City            string
 	FundingRounds   uint16
-	FoundedAt       string
-	FoundedMonth    string
-	FoundedYear     string
-	FirstFundingAt  string
-	LastFundingAt   string
+	FoundedAt       int64
+	FirstFundingAt  int64
+	LastFundingAt   int64
 	Rounds          SetOfRefOfRoundDef
 }
 
@@ -142,8 +131,6 @@ func (def CompanyDef) New() Company {
 		_City:            def.City,
 		_FundingRounds:   def.FundingRounds,
 		_FoundedAt:       def.FoundedAt,
-		_FoundedMonth:    def.FoundedMonth,
-		_FoundedYear:     def.FoundedYear,
 		_FirstFundingAt:  def.FirstFundingAt,
 		_LastFundingAt:   def.LastFundingAt,
 		_Rounds:          def.Rounds.New(),
@@ -165,8 +152,6 @@ func (s Company) Def() (d CompanyDef) {
 	d.City = s._City
 	d.FundingRounds = s._FundingRounds
 	d.FoundedAt = s._FoundedAt
-	d.FoundedMonth = s._FoundedMonth
-	d.FoundedYear = s._FoundedYear
 	d.FirstFundingAt = s._FirstFundingAt
 	d.LastFundingAt = s._LastFundingAt
 	d.Rounds = s._Rounds.Def()
@@ -211,15 +196,11 @@ func builderForCompany(values []types.Value) types.Value {
 	i++
 	s._FundingRounds = uint16(values[i].(types.UInt16))
 	i++
-	s._FoundedAt = values[i].(types.String).String()
+	s._FoundedAt = int64(values[i].(types.Int64))
 	i++
-	s._FoundedMonth = values[i].(types.String).String()
+	s._FirstFundingAt = int64(values[i].(types.Int64))
 	i++
-	s._FoundedYear = values[i].(types.String).String()
-	i++
-	s._FirstFundingAt = values[i].(types.String).String()
-	i++
-	s._LastFundingAt = values[i].(types.String).String()
+	s._LastFundingAt = int64(values[i].(types.Int64))
 	i++
 	s._Rounds = values[i].(SetOfRefOfRound)
 	i++
@@ -241,11 +222,9 @@ func readerForCompany(v types.Value) []types.Value {
 	values = append(values, types.NewString(s._Region))
 	values = append(values, types.NewString(s._City))
 	values = append(values, types.UInt16(s._FundingRounds))
-	values = append(values, types.NewString(s._FoundedAt))
-	values = append(values, types.NewString(s._FoundedMonth))
-	values = append(values, types.NewString(s._FoundedYear))
-	values = append(values, types.NewString(s._FirstFundingAt))
-	values = append(values, types.NewString(s._LastFundingAt))
+	values = append(values, types.Int64(s._FoundedAt))
+	values = append(values, types.Int64(s._FirstFundingAt))
+	values = append(values, types.Int64(s._LastFundingAt))
 	values = append(values, s._Rounds)
 	return values
 }
@@ -278,11 +257,9 @@ func (s Company) ChildValues() (ret []types.Value) {
 	ret = append(ret, types.NewString(s._Region))
 	ret = append(ret, types.NewString(s._City))
 	ret = append(ret, types.UInt16(s._FundingRounds))
-	ret = append(ret, types.NewString(s._FoundedAt))
-	ret = append(ret, types.NewString(s._FoundedMonth))
-	ret = append(ret, types.NewString(s._FoundedYear))
-	ret = append(ret, types.NewString(s._FirstFundingAt))
-	ret = append(ret, types.NewString(s._LastFundingAt))
+	ret = append(ret, types.Int64(s._FoundedAt))
+	ret = append(ret, types.Int64(s._FirstFundingAt))
+	ret = append(ret, types.Int64(s._LastFundingAt))
 	ret = append(ret, s._Rounds)
 	return
 }
@@ -407,51 +384,31 @@ func (s Company) SetFundingRounds(val uint16) Company {
 	return s
 }
 
-func (s Company) FoundedAt() string {
+func (s Company) FoundedAt() int64 {
 	return s._FoundedAt
 }
 
-func (s Company) SetFoundedAt(val string) Company {
+func (s Company) SetFoundedAt(val int64) Company {
 	s._FoundedAt = val
 	s.ref = &ref.Ref{}
 	return s
 }
 
-func (s Company) FoundedMonth() string {
-	return s._FoundedMonth
-}
-
-func (s Company) SetFoundedMonth(val string) Company {
-	s._FoundedMonth = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
-func (s Company) FoundedYear() string {
-	return s._FoundedYear
-}
-
-func (s Company) SetFoundedYear(val string) Company {
-	s._FoundedYear = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
-func (s Company) FirstFundingAt() string {
+func (s Company) FirstFundingAt() int64 {
 	return s._FirstFundingAt
 }
 
-func (s Company) SetFirstFundingAt(val string) Company {
+func (s Company) SetFirstFundingAt(val int64) Company {
 	s._FirstFundingAt = val
 	s.ref = &ref.Ref{}
 	return s
 }
 
-func (s Company) LastFundingAt() string {
+func (s Company) LastFundingAt() int64 {
 	return s._LastFundingAt
 }
 
-func (s Company) SetLastFundingAt(val string) Company {
+func (s Company) SetLastFundingAt(val int64) Company {
 	s._LastFundingAt = val
 	s.ref = &ref.Ref{}
 	return s
@@ -474,10 +431,7 @@ type Round struct {
 	_FundingRoundPermalink string
 	_FundingRoundType      string
 	_FundingRoundCode      string
-	_FundedAt              string
-	_FundedMonth           string
-	_FundedQuarter         string
-	_FundedYear            uint16
+	_FundedAt              int64
 	_RaisedAmountUsd       float64
 
 	ref *ref.Ref
@@ -489,10 +443,7 @@ func NewRound() Round {
 		_FundingRoundPermalink: "",
 		_FundingRoundType:      "",
 		_FundingRoundCode:      "",
-		_FundedAt:              "",
-		_FundedMonth:           "",
-		_FundedQuarter:         "",
-		_FundedYear:            uint16(0),
+		_FundedAt:              int64(0),
 		_RaisedAmountUsd:       float64(0),
 
 		ref: &ref.Ref{},
@@ -504,10 +455,7 @@ type RoundDef struct {
 	FundingRoundPermalink string
 	FundingRoundType      string
 	FundingRoundCode      string
-	FundedAt              string
-	FundedMonth           string
-	FundedQuarter         string
-	FundedYear            uint16
+	FundedAt              int64
 	RaisedAmountUsd       float64
 }
 
@@ -518,9 +466,6 @@ func (def RoundDef) New() Round {
 		_FundingRoundType:      def.FundingRoundType,
 		_FundingRoundCode:      def.FundingRoundCode,
 		_FundedAt:              def.FundedAt,
-		_FundedMonth:           def.FundedMonth,
-		_FundedQuarter:         def.FundedQuarter,
-		_FundedYear:            def.FundedYear,
 		_RaisedAmountUsd:       def.RaisedAmountUsd,
 		ref:                    &ref.Ref{},
 	}
@@ -532,9 +477,6 @@ func (s Round) Def() (d RoundDef) {
 	d.FundingRoundType = s._FundingRoundType
 	d.FundingRoundCode = s._FundingRoundCode
 	d.FundedAt = s._FundedAt
-	d.FundedMonth = s._FundedMonth
-	d.FundedQuarter = s._FundedQuarter
-	d.FundedYear = s._FundedYear
 	d.RaisedAmountUsd = s._RaisedAmountUsd
 	return
 }
@@ -561,13 +503,7 @@ func builderForRound(values []types.Value) types.Value {
 	i++
 	s._FundingRoundCode = values[i].(types.String).String()
 	i++
-	s._FundedAt = values[i].(types.String).String()
-	i++
-	s._FundedMonth = values[i].(types.String).String()
-	i++
-	s._FundedQuarter = values[i].(types.String).String()
-	i++
-	s._FundedYear = uint16(values[i].(types.UInt16))
+	s._FundedAt = int64(values[i].(types.Int64))
 	i++
 	s._RaisedAmountUsd = float64(values[i].(types.Float64))
 	i++
@@ -581,10 +517,7 @@ func readerForRound(v types.Value) []types.Value {
 	values = append(values, types.NewString(s._FundingRoundPermalink))
 	values = append(values, types.NewString(s._FundingRoundType))
 	values = append(values, types.NewString(s._FundingRoundCode))
-	values = append(values, types.NewString(s._FundedAt))
-	values = append(values, types.NewString(s._FundedMonth))
-	values = append(values, types.NewString(s._FundedQuarter))
-	values = append(values, types.UInt16(s._FundedYear))
+	values = append(values, types.Int64(s._FundedAt))
 	values = append(values, types.Float64(s._RaisedAmountUsd))
 	return values
 }
@@ -607,10 +540,7 @@ func (s Round) ChildValues() (ret []types.Value) {
 	ret = append(ret, types.NewString(s._FundingRoundPermalink))
 	ret = append(ret, types.NewString(s._FundingRoundType))
 	ret = append(ret, types.NewString(s._FundingRoundCode))
-	ret = append(ret, types.NewString(s._FundedAt))
-	ret = append(ret, types.NewString(s._FundedMonth))
-	ret = append(ret, types.NewString(s._FundedQuarter))
-	ret = append(ret, types.UInt16(s._FundedYear))
+	ret = append(ret, types.Int64(s._FundedAt))
 	ret = append(ret, types.Float64(s._RaisedAmountUsd))
 	return
 }
@@ -655,42 +585,12 @@ func (s Round) SetFundingRoundCode(val string) Round {
 	return s
 }
 
-func (s Round) FundedAt() string {
+func (s Round) FundedAt() int64 {
 	return s._FundedAt
 }
 
-func (s Round) SetFundedAt(val string) Round {
+func (s Round) SetFundedAt(val int64) Round {
 	s._FundedAt = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
-func (s Round) FundedMonth() string {
-	return s._FundedMonth
-}
-
-func (s Round) SetFundedMonth(val string) Round {
-	s._FundedMonth = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
-func (s Round) FundedQuarter() string {
-	return s._FundedQuarter
-}
-
-func (s Round) SetFundedQuarter(val string) Round {
-	s._FundedQuarter = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
-func (s Round) FundedYear() uint16 {
-	return s._FundedYear
-}
-
-func (s Round) SetFundedYear(val uint16) Round {
-	s._FundedYear = val
 	s.ref = &ref.Ref{}
 	return s
 }

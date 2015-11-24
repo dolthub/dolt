@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 
 	"strings"
 
@@ -12,6 +14,8 @@ import (
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 )
+
+var date1904 bool = false
 
 func main() {
 	var ds *dataset.Dataset
@@ -37,6 +41,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 		os.Exit(-1)
 	}
+
+	date1904 = xlFile.Date1904
 
 	// Read in Rounds and group  according to CompanyPermalink
 	roundsByPermalink := map[string][]Round{}
@@ -108,11 +114,11 @@ func NewCompanyFromRow(row *xlsx.Row) Company {
 		Region:          cells[9].Value,
 		City:            cells[10].Value,
 		FundingRounds:   uint16(parseIntValue(cells[11], "Company.FundingRounds")),
-		FoundedAt:       cells[12].Value,
-		FoundedMonth:    cells[13].Value,
-		FoundedYear:     cells[14].Value,
-		FirstFundingAt:  cells[15].Value,
-		LastFundingAt:   cells[16].Value,
+		FoundedAt:       parseTimeStamp(cells[12], "Company.FoundedAt"),
+		// Skip FoundedMonth: 13
+		// Skip FoundedYear:  14
+		FirstFundingAt: parseTimeStamp(cells[15], "Company.FirstFundingAt"),
+		LastFundingAt:  parseTimeStamp(cells[16], "Company.LastFundingAt"),
 	}
 	return company.New()
 }
@@ -133,11 +139,11 @@ func NewRoundFromRow(row *xlsx.Row) Round {
 		FundingRoundPermalink: cells[8].Value,
 		FundingRoundType:      cells[9].Value,
 		FundingRoundCode:      cells[10].Value,
-		FundedAt:              cells[11].Value,
-		FundedMonth:           cells[12].Value,
-		FundedQuarter:         cells[13].Value,
-		FundedYear:            uint16(parseIntValue(cells[14], "Round.fundedYear")),
-		RaisedAmountUsd:       raisedAmountUsd,
+		FundedAt:              parseTimeStamp(cells[11], "Round.fundedAt"),
+		// Skip FundedMonth:   12
+		// Skip FundedQuarter: 13
+		// Skip FundedYear:    14
+		RaisedAmountUsd: raisedAmountUsd,
 	}
 	return round.New()
 }
@@ -178,4 +184,18 @@ func parseIntValue(cell *xlsx.Cell, field string) int {
 		}
 	}
 	return int(parsedValue)
+}
+
+func parseTimeStamp(cell *xlsx.Cell, field string) int64 {
+	if f, err := strconv.ParseFloat(cell.Value, 64); err == nil {
+		return xlsx.TimeFromExcelTime(f, date1904).Unix()
+	}
+	const shortForm = "2006-01-02"
+	if t, err := time.Parse(shortForm, cell.Value); err == nil {
+		return t.Unix()
+	}
+	if cell.Value != "" {
+		fmt.Fprintf(os.Stderr, "Could not parse field as date: %s, \"%s\"\n", field, cell.Value)
+	}
+	return 0
 }
