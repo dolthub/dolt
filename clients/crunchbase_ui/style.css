@@ -1,8 +1,7 @@
 body {
-  background: #eaeaea;
+  background: white;
   color: black;
-  font-family: 'Open Sans', sans-serif;
-  font-weight: 400;
+  font-family: 'helvetica', sans-serif;
   margin: 2em;
 }
 
@@ -14,10 +13,13 @@ body {
   background-position: center left;
   background-repeat: no-repeat;
   background-size: contain;
-  border-bottom: 1px solid #aaa;
+  border-bottom: 1px solid #ccc;
+  font-family: 'Open Sans', sans-serif;
+  font-weight: 400;
 }
 
 h1 {
+  font-family: 'Open Sans', sans-serif;
   font-weight: 400;
   font-size: 1.25em;
   display: inline;
@@ -29,16 +31,17 @@ h1>.thin {
 }
 
 h2 {
+  font-family: 'Open Sans', sans-serif;
   font-weight: 400;
   font-size: 1.35em;
   margin-top: 1.5em;
 }
 
 pre {
-  border: 1px solid #aaa;
+  border: 1px solid #ccc;
   padding: 0.5em;
   line-height: 1.7em;
-  background: #dedede;
+  background: #f6f6f6;
 }
 
 a {
