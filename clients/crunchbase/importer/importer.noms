@@ -1,0 +1,3 @@
+alias cb = import "../crunchbase.noms"
+
+using Map(String, Ref(cb.Company))

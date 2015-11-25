@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_crunchbase_CachedRef ref.Ref
+var __mainPackageInFile_sha1_3e4f60c_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -48,7 +48,7 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	__mainPackageInFile_crunchbase_CachedRef = types.RegisterPackage(&p)
+	__mainPackageInFile_sha1_3e4f60c_CachedRef = types.RegisterPackage(&p)
 }
 
 // Company
@@ -165,7 +165,7 @@ func (m Company) Type() types.Type {
 }
 
 func init() {
-	__typeForCompany = types.MakeType(__mainPackageInFile_crunchbase_CachedRef, 0)
+	__typeForCompany = types.MakeType(__mainPackageInFile_sha1_3e4f60c_CachedRef, 0)
 	types.RegisterStruct(__typeForCompany, builderForCompany, readerForCompany)
 }
 
@@ -488,7 +488,7 @@ func (m Round) Type() types.Type {
 }
 
 func init() {
-	__typeForRound = types.MakeType(__mainPackageInFile_crunchbase_CachedRef, 1)
+	__typeForRound = types.MakeType(__mainPackageInFile_sha1_3e4f60c_CachedRef, 1)
 	types.RegisterStruct(__typeForRound, builderForRound, readerForRound)
 }
 
@@ -603,139 +603,6 @@ func (s Round) SetRaisedAmountUsd(val float64) Round {
 	s._RaisedAmountUsd = val
 	s.ref = &ref.Ref{}
 	return s
-}
-
-// MapOfStringToRefOfCompany
-
-type MapOfStringToRefOfCompany struct {
-	m   types.Map
-	ref *ref.Ref
-}
-
-func NewMapOfStringToRefOfCompany() MapOfStringToRefOfCompany {
-	return MapOfStringToRefOfCompany{types.NewTypedMap(__typeForMapOfStringToRefOfCompany), &ref.Ref{}}
-}
-
-type MapOfStringToRefOfCompanyDef map[string]ref.Ref
-
-func (def MapOfStringToRefOfCompanyDef) New() MapOfStringToRefOfCompany {
-	kv := make([]types.Value, 0, len(def)*2)
-	for k, v := range def {
-		kv = append(kv, types.NewString(k), NewRefOfCompany(v))
-	}
-	return MapOfStringToRefOfCompany{types.NewTypedMap(__typeForMapOfStringToRefOfCompany, kv...), &ref.Ref{}}
-}
-
-func (m MapOfStringToRefOfCompany) Def() MapOfStringToRefOfCompanyDef {
-	def := make(map[string]ref.Ref)
-	m.m.Iter(func(k, v types.Value) bool {
-		def[k.(types.String).String()] = v.(RefOfCompany).TargetRef()
-		return false
-	})
-	return def
-}
-
-func (m MapOfStringToRefOfCompany) Equals(other types.Value) bool {
-	return other != nil && __typeForMapOfStringToRefOfCompany.Equals(other.Type()) && m.Ref() == other.Ref()
-}
-
-func (m MapOfStringToRefOfCompany) Ref() ref.Ref {
-	return types.EnsureRef(m.ref, m)
-}
-
-func (m MapOfStringToRefOfCompany) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.Type().Chunks()...)
-	chunks = append(chunks, m.m.Chunks()...)
-	return
-}
-
-func (m MapOfStringToRefOfCompany) ChildValues() []types.Value {
-	return append([]types.Value{}, m.m.ChildValues()...)
-}
-
-// A Noms Value that describes MapOfStringToRefOfCompany.
-var __typeForMapOfStringToRefOfCompany types.Type
-
-func (m MapOfStringToRefOfCompany) Type() types.Type {
-	return __typeForMapOfStringToRefOfCompany
-}
-
-func init() {
-	__typeForMapOfStringToRefOfCompany = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_crunchbase_CachedRef, 0)))
-	types.RegisterValue(__typeForMapOfStringToRefOfCompany, builderForMapOfStringToRefOfCompany, readerForMapOfStringToRefOfCompany)
-}
-
-func builderForMapOfStringToRefOfCompany(v types.Value) types.Value {
-	return MapOfStringToRefOfCompany{v.(types.Map), &ref.Ref{}}
-}
-
-func readerForMapOfStringToRefOfCompany(v types.Value) types.Value {
-	return v.(MapOfStringToRefOfCompany).m
-}
-
-func (m MapOfStringToRefOfCompany) Empty() bool {
-	return m.m.Empty()
-}
-
-func (m MapOfStringToRefOfCompany) Len() uint64 {
-	return m.m.Len()
-}
-
-func (m MapOfStringToRefOfCompany) Has(p string) bool {
-	return m.m.Has(types.NewString(p))
-}
-
-func (m MapOfStringToRefOfCompany) Get(p string) RefOfCompany {
-	return m.m.Get(types.NewString(p)).(RefOfCompany)
-}
-
-func (m MapOfStringToRefOfCompany) MaybeGet(p string) (RefOfCompany, bool) {
-	v, ok := m.m.MaybeGet(types.NewString(p))
-	if !ok {
-		return NewRefOfCompany(ref.Ref{}), false
-	}
-	return v.(RefOfCompany), ok
-}
-
-func (m MapOfStringToRefOfCompany) Set(k string, v RefOfCompany) MapOfStringToRefOfCompany {
-	return MapOfStringToRefOfCompany{m.m.Set(types.NewString(k), v), &ref.Ref{}}
-}
-
-// TODO: Implement SetM?
-
-func (m MapOfStringToRefOfCompany) Remove(p string) MapOfStringToRefOfCompany {
-	return MapOfStringToRefOfCompany{m.m.Remove(types.NewString(p)), &ref.Ref{}}
-}
-
-type MapOfStringToRefOfCompanyIterCallback func(k string, v RefOfCompany) (stop bool)
-
-func (m MapOfStringToRefOfCompany) Iter(cb MapOfStringToRefOfCompanyIterCallback) {
-	m.m.Iter(func(k, v types.Value) bool {
-		return cb(k.(types.String).String(), v.(RefOfCompany))
-	})
-}
-
-type MapOfStringToRefOfCompanyIterAllCallback func(k string, v RefOfCompany)
-
-func (m MapOfStringToRefOfCompany) IterAll(cb MapOfStringToRefOfCompanyIterAllCallback) {
-	m.m.IterAll(func(k, v types.Value) {
-		cb(k.(types.String).String(), v.(RefOfCompany))
-	})
-}
-
-func (m MapOfStringToRefOfCompany) IterAllP(concurrency int, cb MapOfStringToRefOfCompanyIterAllCallback) {
-	m.m.IterAllP(concurrency, func(k, v types.Value) {
-		cb(k.(types.String).String(), v.(RefOfCompany))
-	})
-}
-
-type MapOfStringToRefOfCompanyFilterCallback func(k string, v RefOfCompany) (keep bool)
-
-func (m MapOfStringToRefOfCompany) Filter(cb MapOfStringToRefOfCompanyFilterCallback) MapOfStringToRefOfCompany {
-	out := m.m.Filter(func(k, v types.Value) bool {
-		return cb(k.(types.String).String(), v.(RefOfCompany))
-	})
-	return MapOfStringToRefOfCompany{out, &ref.Ref{}}
 }
 
 // SetOfString
@@ -945,7 +812,7 @@ func (m SetOfRefOfRound) Type() types.Type {
 }
 
 func init() {
-	__typeForSetOfRefOfRound = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_crunchbase_CachedRef, 1)))
+	__typeForSetOfRefOfRound = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_3e4f60c_CachedRef, 1)))
 	types.RegisterValue(__typeForSetOfRefOfRound, builderForSetOfRefOfRound, readerForSetOfRefOfRound)
 }
 
@@ -1036,63 +903,6 @@ func (s SetOfRefOfRound) fromElemSlice(p []RefOfRound) []types.Value {
 	return r
 }
 
-// RefOfCompany
-
-type RefOfCompany struct {
-	target ref.Ref
-	ref    *ref.Ref
-}
-
-func NewRefOfCompany(target ref.Ref) RefOfCompany {
-	return RefOfCompany{target, &ref.Ref{}}
-}
-
-func (r RefOfCompany) TargetRef() ref.Ref {
-	return r.target
-}
-
-func (r RefOfCompany) Ref() ref.Ref {
-	return types.EnsureRef(r.ref, r)
-}
-
-func (r RefOfCompany) Equals(other types.Value) bool {
-	return other != nil && __typeForRefOfCompany.Equals(other.Type()) && r.Ref() == other.Ref()
-}
-
-func (r RefOfCompany) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
-	return
-}
-
-func (r RefOfCompany) ChildValues() []types.Value {
-	return nil
-}
-
-// A Noms Value that describes RefOfCompany.
-var __typeForRefOfCompany types.Type
-
-func (m RefOfCompany) Type() types.Type {
-	return __typeForRefOfCompany
-}
-
-func init() {
-	__typeForRefOfCompany = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_crunchbase_CachedRef, 0))
-	types.RegisterRef(__typeForRefOfCompany, builderForRefOfCompany)
-}
-
-func builderForRefOfCompany(r ref.Ref) types.Value {
-	return NewRefOfCompany(r)
-}
-
-func (r RefOfCompany) TargetValue(cs chunks.ChunkSource) Company {
-	return types.ReadValue(r.target, cs).(Company)
-}
-
-func (r RefOfCompany) SetTargetValue(val Company, cs chunks.ChunkSink) RefOfCompany {
-	return NewRefOfCompany(types.WriteValue(val, cs))
-}
-
 // RefOfRound
 
 type RefOfRound struct {
@@ -1134,7 +944,7 @@ func (m RefOfRound) Type() types.Type {
 }
 
 func init() {
-	__typeForRefOfRound = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_crunchbase_CachedRef, 1))
+	__typeForRefOfRound = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_3e4f60c_CachedRef, 1))
 	types.RegisterRef(__typeForRefOfRound, builderForRefOfRound)
 }
 

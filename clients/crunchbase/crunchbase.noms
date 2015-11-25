@@ -25,5 +25,3 @@ struct Round {
     FundedAt:               Int64
     RaisedAmountUsd:        Float64
 }
-
-using Map(String, Ref(Company))
