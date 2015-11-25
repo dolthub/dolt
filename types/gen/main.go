@@ -9,6 +9,8 @@ import (
 	"strings"
 	"text/template"
 
+	"sort"
+
 	"github.com/attic-labs/noms/d"
 )
 
@@ -19,6 +21,11 @@ var (
 
 func main() {
 	types := map[string]bool{"Bool": false, "Int8": true, "Int16": true, "Int32": true, "Int64": true, "UInt8": true, "UInt16": true, "UInt32": true, "UInt64": true, "Float32": true, "Float64": true}
+	typeNames := []string{}
+	for k := range types {
+		typeNames = append(typeNames, k)
+	}
+	sort.Strings(typeNames)
 
 	f, err := os.OpenFile("primitives.go", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
@@ -28,7 +35,8 @@ func main() {
 
 	headerTempl.Execute(f, nil)
 
-	for t, ordered := range types {
+	for _, t := range typeNames {
+		ordered := types[t]
 		goType := strings.ToLower(t)
 		primitiveTempl.Execute(f, struct {
 			NomsType  string

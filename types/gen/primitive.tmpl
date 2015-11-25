@@ -28,6 +28,6 @@ func (v {{.NomsType}}) Type() Type {
 
 {{if .IsOrdered}}
 func (v {{.NomsType}}) Less(other OrderedValue) bool {
-  return v < other.({{.NomsType}})
+	return v < other.({{.NomsType}})
 }
 {{end}}
