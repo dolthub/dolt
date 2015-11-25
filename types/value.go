@@ -15,6 +15,6 @@ type Value interface {
 }
 
 type OrderedValue interface {
-  Value
-  Less(other OrderedValue) bool
+	Value
+	Less(other OrderedValue) bool
 }
