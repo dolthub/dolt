@@ -6,7 +6,7 @@ import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {decode as decodeBase64} from './base64.js';
-import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType, makeUnresolvedType, StructDesc, Type} from './type.js';
+import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, makeUnresolvedType, StructDesc, Type} from './type.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
 import {lookupPackage, Package, readPackage} from './package.js';
@@ -134,6 +134,10 @@ class JsonArrayReader {
     return m;
   }
 
+  readEnum(): number {
+    return this.readNumber();
+  }
+
   readPackage(t: Type, pkg: ?Package): Package {
     let r2 = new JsonArrayReader(this.readArray(), this._cs);
     let types = [];
@@ -222,7 +226,7 @@ class JsonArrayReader {
     pkg = notNull(pkg);
     let typeDef = pkg.types[ordinal];
     if (typeDef.kind === Kind.Enum) {
-      throw new Error('Not implemented');
+      return this.readEnum();
     }
 
     invariant(typeDef.kind === Kind.Struct);
@@ -234,7 +238,13 @@ class JsonArrayReader {
 
     switch (k) {
       case Kind.Enum:
-        throw new Error('Not implemented');
+        let name = this.readString();
+        let r2 = new JsonArrayReader(this.readArray(), this._cs);
+        let ids = [];
+        while (!r2.atEnd()) {
+          ids.push(r2.readString());
+        }
+        return makeEnumType(name, ids);
       case Kind.List:
       case Kind.Map:
       case Kind.Ref:

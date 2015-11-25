@@ -8,7 +8,7 @@ import test from './async_test.js';
 import type {TypeDesc} from './type.js';
 import {assert} from 'chai';
 import {decodeNomsValue, JsonArrayReader, readValue} from './decode.js';
-import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType, Type} from './type.js';
+import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type} from './type.js';
 import {invariant} from './assert.js';
 import {Kind} from './noms_kind.js';
 import {registerPackage, Package} from './package.js';
@@ -172,7 +172,7 @@ suite('Decode', () => {
     assert.deepEqual(desc, s.desc);
 
     for (let key in data) {
-      assert.strictEqual(data[key], s.get(key));
+      assert.deepEqual(data[key], s.get(key));
     }
   }
 
@@ -194,6 +194,165 @@ suite('Decode', () => {
     assertStruct(v, tr.desc, {
       x: 42,
       s: 'hi',
+      b: true
+    });
+  });
+
+  test('test read struct union', async () => {
+    let ms = new MemoryStore();
+    let tr = makeStructType('A2', [
+      new Field('x', makePrimitiveType(Kind.Float32), false)
+    ], [
+      new Field('b', makePrimitiveType(Kind.Bool), false),
+      new Field('s', makePrimitiveType(Kind.String), false)
+    ]);
+
+    let pkg = new Package([tr], []);
+    registerPackage(pkg);
+
+    let a = [Kind.Unresolved, pkg.ref.toString(), 0, 42, 1, 'hi'];
+    let r = new JsonArrayReader(a, ms);
+    let v = await r.readTopLevelValue();
+
+    assertStruct(v, tr.desc, {
+      x: 42,
+      s: 'hi'
+    });
+  });
+
+  test('test read struct optional', async () => {
+    let ms = new MemoryStore();
+    let tr = makeStructType('A3', [
+      new Field('x', makePrimitiveType(Kind.Float32), false),
+      new Field('s', makePrimitiveType(Kind.String), true),
+      new Field('b', makePrimitiveType(Kind.Bool), true)
+    ], []);
+
+    let pkg = new Package([tr], []);
+    registerPackage(pkg);
+
+    let a = [Kind.Unresolved, pkg.ref.toString(), 0, 42, false, true, false];
+    let r = new JsonArrayReader(a, ms);
+    let v = await r.readTopLevelValue();
+
+    assertStruct(v, tr.desc, {
+      x: 42,
+      b: false
+    });
+  });
+
+  test('test read struct with list', async () => {
+    let ms = new MemoryStore();
+    let tr = makeStructType('A4', [
+      new Field('b', makePrimitiveType(Kind.Bool), false),
+      new Field('l', makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32)), false),
+      new Field('s', makePrimitiveType(Kind.String), false)
+    ], []);
+
+    let pkg = new Package([tr], []);
+    registerPackage(pkg);
+
+    let a = [Kind.Unresolved, pkg.ref.toString(), 0, true, [0, 1, 2], 'hi'];
+    let r = new JsonArrayReader(a, ms);
+    let v = await r.readTopLevelValue();
+
+    assertStruct(v, tr.desc, {
+      b: true,
+      l: [0, 1, 2],
+      s: 'hi'
+    });
+  });
+
+  test('test read struct with value', async () => {
+    let ms = new MemoryStore();
+    let tr = makeStructType('A5', [
+      new Field('b', makePrimitiveType(Kind.Bool), false),
+      new Field('v', makePrimitiveType(Kind.Value), false),
+      new Field('s', makePrimitiveType(Kind.String), false)
+    ], []);
+
+    let pkg = new Package([tr], []);
+    registerPackage(pkg);
+
+    let a = [Kind.Unresolved, pkg.ref.toString(), 0, true, Kind.UInt8, 42, 'hi'];
+    let r = new JsonArrayReader(a, ms);
+    let v = await r.readTopLevelValue();
+
+    assertStruct(v, tr.desc, {
+      b: true,
+      v: 42,
+      s: 'hi'
+    });
+  });
+
+  test('test read value struct', async () => {
+    let ms = new MemoryStore();
+    let tr = makeStructType('A1', [
+      new Field('x', makePrimitiveType(Kind.Int16), false),
+      new Field('s', makePrimitiveType(Kind.String), false),
+      new Field('b', makePrimitiveType(Kind.Bool), false)
+    ], []);
+
+    let pkg = new Package([tr], []);
+    registerPackage(pkg);
+
+    let a = [Kind.Value, Kind.Unresolved, pkg.ref.toString(), 0, 42, 'hi', true];
+    let r = new JsonArrayReader(a, ms);
+    let v = await r.readTopLevelValue();
+
+    assertStruct(v, tr.desc, {
+      x: 42,
+      s: 'hi',
+      b: true
+    });
+  });
+
+  test('test read enum', async () => {
+    let ms = new MemoryStore();
+
+    let tr = makeEnumType('E', ['a', 'b', 'c']);
+    let pkg = new Package([tr], []);
+    registerPackage(pkg);
+
+    let a = [Kind.Unresolved, pkg.ref.toString(), 0, 1];
+    let r = new JsonArrayReader(a, ms);
+    let v = await r.readTopLevelValue();
+
+    assert.deepEqual(1, v);
+  });
+
+  test('test read value enum', async () => {
+    let ms = new MemoryStore();
+
+    let tr = makeEnumType('E', ['a', 'b', 'c']);
+    let pkg = new Package([tr], []);
+    registerPackage(pkg);
+
+    let a = [Kind.Value, Kind.Unresolved, pkg.ref.toString(), 0, 1];
+    let r = new JsonArrayReader(a, ms);
+    let v = await r.readTopLevelValue();
+
+    assert.deepEqual(1, v);
+  });
+
+  test('test read struct with', async () => {
+    let ms = new MemoryStore();
+    let tr = makeStructType('A1', [
+      new Field('x', makePrimitiveType(Kind.Int16), false),
+      new Field('e', makeType(new Ref(), 1), false),
+      new Field('b', makePrimitiveType(Kind.Bool), false)
+    ], []);
+    let enumTref = makeEnumType('E', ['a', 'b', 'c']);
+    let pkg = new Package([tr, enumTref], []);
+    registerPackage(pkg);
+
+    let a = [Kind.Unresolved, pkg.ref.toString(), 0, 42, 1, true];
+    let r = new JsonArrayReader(a, ms);
+    let v = await r.readTopLevelValue();
+
+    assertStruct(v, tr.desc, {
+      x: 42,
+      e: 1,
       b: true
     });
   });
