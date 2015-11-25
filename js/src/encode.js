@@ -201,7 +201,7 @@ class JsonArrayWriter {
         break;
       }
       default:
-        throw new Error('Not implemented');
+        throw new Error(`Not implemented: ${t.kind} ${v}`);
     }
   }
 
@@ -296,7 +296,8 @@ class JsonArrayWriter {
   writeStruct(s: Struct, type: Type, typeDef: Type, pkg: Package) {
     let desc = typeDef.desc;
     invariant(desc instanceof StructDesc);
-    for (let field of desc.fields) {
+    for (let i = 0; i < desc.fields.length; i++) {
+      let field = desc.fields[i];
       let fieldValue = s.get(field.name);
       if (field.optional) {
         if (fieldValue !== undefined) {

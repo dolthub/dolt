@@ -19,5 +19,8 @@ func main() {
 	if _, present := os.LookupEnv("NOMS_SERVER"); !present {
 		os.Setenv("NOMS_SERVER", "http://localhost:8000")
 	}
+	if _, present := os.LookupEnv("NOMS_DATASET_ID"); !present {
+		os.Setenv("NOMS_DATASET_ID", "crunchbase/index")
+	}
 	runner.ForceRun("npm", "run", "build")
 }

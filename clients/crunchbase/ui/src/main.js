@@ -1,78 +1,182 @@
-/* @flow */
+// @flow
 
-import getAllData from './data.js';
-import RadioList from './radio_list.js';
+import {HttpStore} from 'noms';
+import Chart from './chart.js';
+import DataManager from './data.js';
+import List from './list.js';
 import React from 'react';
 import ReactDOM from 'react-dom';
-import SeriesList from './series_list.js';
-import StackedBarChart from './stacked_bar_chart.js';
-import type {DataArray, DataEntry} from './data.js';
+import type {DataArray} from './data.js';
+import type {ListDelegate} from './list.js';
+
+type LabelAndKey = {
+  label: string,
+  key: Object
+};
 
 type DefaultProps = {};
 
 type Props = {
-  data: DataArray,
-  timeItems: Array<string>,
-  categories: Array<string>
+  series: Array<string>,
+  timeItems: Array<LabelAndKey>,
+  categories: Array<string>,
+  color: Array<string>
 };
 
 type State = {
-  selectedSeries: Set<DataEntry>,
-  selectedTimeItem: string,
-  selectedCategoryItem: string
+  selectedSeries: Set<string>,
+  selectedTimeItem: LabelAndKey,
+  selectedCategoryItem: string,
+  data: DataArray
 };
 
+const nomsServer: string = process.env.NOMS_SERVER;
+if (!nomsServer) {
+  throw new Error('NOMS_SERVER not set');
+}
+const datasetId: string = process.env.NOMS_DATASET_ID;
+if (!datasetId) {
+  throw new Error('NOMS_DATASET_ID not set');
+}
+
 class Main extends React.Component<DefaultProps, Props, State> {
+  _dataManager: DataManager;
+
   constructor(props: Props) {
     super(props);
+
+    let selectedTimeItem = props.timeItems[0];
+    let selectedCategoryItem = props.categories[0];
+
+    this._dataManager = new DataManager(new HttpStore(nomsServer), datasetId);
+
     this.state = {
-      selectedSeries: new Set(props.data),
-      selectedTimeItem: props.timeItems[0],
-      selectedCategoryItem: props.categories[0]
+      selectedSeries: new Set(this.props.series),
+      selectedTimeItem,
+      selectedCategoryItem,
+      data: []
     };
   }
-  _filteredData() : DataArray {
-    return this.props.data.filter(o => this.state.selectedSeries.has(o));
+
+  shouldComponentUpdate(nextProps: Props, nextState: State) : boolean {
+    return nextProps !== this.props ||
+        nextState.selectedSeries !== this.state.selectedSeries ||
+        nextState.selectedTimeItem !== this.state.selectedTimeItem ||
+        nextState.selectedCategoryItem !== this.state.selectedCategoryItem ||
+        nextState.data !== this.state.data;
   }
 
-  _selectedSeriesChanged(s: Set<DataEntry>) {
+  _filteredData(): DataArray {
+    return this.state.data.filter(o => this.state.selectedSeries.has(o.key));
+  }
+
+  _selectedSeriesChanged(s: Set<string>) {
     this.setState({selectedSeries: s});
   }
 
-  _selectedTimeChanged(s: string) {
-    this.setState({selectedTimeItem: s});
+  _selectedTimeChanged(item: LabelAndKey) {
+    this.setState({selectedTimeItem: item});
   }
 
   _selectedCategoryChanged(s: string) {
     this.setState({selectedCategoryItem: s});
   }
 
-  render() : React.Element {
+  render(): React.Element {
+    let s = this.state;
+    let dm = this._dataManager;
+    dm.getData(s.selectedTimeItem.key, s.selectedCategoryItem).then(data => {
+      this.setState({data});
+    }).catch(ex => {
+      console.error(ex);  // eslint-disable-line
+    });
+
+    let seriesDelegate: ListDelegate<string> = {
+      getLabel(item: string): string {
+        return item;
+      },
+      isSelected: (item: string) => {
+        return this.state.selectedSeries.has(item);
+      },
+      getColor: (item: string) => {
+        return this.props.color[this.props.series.indexOf(item)];
+      },
+      onChange: (item: string) => {
+        let selectedSeries = new Set(this.state.selectedSeries);
+        if (selectedSeries.has(item)) {
+          selectedSeries.delete(item);
+        } else {
+          selectedSeries.add(item);
+        }
+        this.setState({selectedSeries});
+      }
+    };
+
+    let timeDelegate: ListDelegate<LabelAndKey> = {
+      getLabel(item: LabelAndKey): string {
+        return item.label;
+      },
+      isSelected: (item: LabelAndKey) => {
+        return item === this.state.selectedTimeItem;
+      },
+      onChange: (item: LabelAndKey) => {
+        this._selectedTimeChanged(item);
+      }
+    };
+
+    let categoryDelegate: ListDelegate<string> = {
+      getLabel(item: string): string {
+        return item;
+      },
+      isSelected: (item: string) => {
+        return item === this.state.selectedCategoryItem;
+      },
+      onChange: (item: string) => {
+        this._selectedCategoryChanged(item);
+      }
+    };
+
     return <div className='app'>
       <div>
-        <StackedBarChart className='app-chart' data={this._filteredData()}/>
+        <Chart className='app-chart' data={this._filteredData()}
+            color={this.props.color}/>
         <div className='app-controls'>
-          <SeriesList title='Series' data={this.props.data}
-              selected={this.state.selectedSeries}
-              onChange={s => this._selectedSeriesChanged(s)}/>
-          <RadioList title='Time' items={this.props.timeItems}
-              selected={this.state.selectedTimeItem}
-              onChange={s => this._selectedTimeChanged(s)}/>
-          <RadioList title='Categories' items={this.props.categories}
-              selected={this.state.selectedCategoryItem}
-              onChange={s => this._selectedCategoryChanged(s)}/>
+          <List title='Series' items={this.props.series}
+              delegate={seriesDelegate}/>
+          <List title='Time' items={this.props.timeItems}
+              delegate={timeDelegate}/>
+          <List title='Categories' items={this.props.categories}
+              delegate={categoryDelegate}/>
         </div>
       </div>
     </div>;
   }
 }
 
-const data = getAllData();
-const timeItems = ['Current Quarter', 'Current Year'];
-const categories = ['Finance', 'Tech', 'Bio', 'Education'];
+const series = ['Seed', 'A', 'B'];
+
+let d = new Date();
+let year = d.getFullYear();
+d.setMonth(d.getMonth() - 3);
+let qYear = d.getFullYear();
+let quarter = (d.getMonth() + 1) / 4 | 0;
+const timeItems = [
+  {label: 'Current Year', key: {Year: year}},
+  {label: 'Last Quarter', key: {Year: qYear, Quarter: quarter}}
+];
+
+const categories = [
+  'Biotechnology',
+  'Finance',
+  'Games',
+  'Software'
+];
+
+const color = ['#011f4b', '#03396c', '#005b96'];
 
 window.addEventListener('load', () => {
   ReactDOM.render(
-      <Main data={data} timeItems={timeItems} categories={categories}/>,
+      <Main series={series} timeItems={timeItems} categories={categories}
+          color={color}/>,
       document.querySelector('#app'));
 });

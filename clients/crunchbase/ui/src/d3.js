@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 /* $FlowIssue - Flow fails to find the d3 module? */
 import d3 from 'd3';

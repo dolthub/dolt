@@ -68,13 +68,32 @@ func main() {
 			c <- entry{qk, roundRaiseDef}
 		}
 
+		// Compute a cutoff date which is later used to only include rounds after this date to reduce the amount of data.
+		now := time.Now()
+		currentYear := time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
+		lastQ := lastQuarter(now)
+		var timeCutoff time.Time
+		if currentYear.Before(lastQ) {
+			timeCutoff = currentYear
+		} else {
+			timeCutoff = lastQ
+		}
+
 		go func() {
 			v.IterAllP(64, func(permalink string, r RefOfCompany) {
 				company := r.TargetValue(ds)
 				categoryList := company.CategoryList()
-				regionKey := NewKey(ds).SetRegion(company.Region())
+				// Skip region for now to reduce size of data.
+				// regionKey := NewKey(ds).SetRegion(company.Region())
+
 				company.Rounds().IterAll(func(r RefOfRound) {
 					round := r.TargetValue(ds)
+
+					// HACK: Only include rounds that are newer than the cutoff date.
+					if time.Unix(round.FundedAt(), 0).Before(timeCutoff) {
+						return
+					}
+
 					roundRaiseDef := RoundRaiseDef{
 						Raised:  round.RaisedAmountUsd(),
 						Details: r.TargetRef(),
@@ -84,7 +103,9 @@ func main() {
 						c <- entry{key, roundRaiseDef}
 					})
 
-					c <- entry{regionKey, roundRaiseDef}
+					// Skip region for now to reduce size of data.
+					// c <- entry{regionKey, roundRaiseDef}
+
 					addTimeRounds(round.FundedAt(), roundRaiseDef)
 
 					roundType := classifyRoundType(round)
@@ -99,7 +120,7 @@ func main() {
 		for e := range c {
 			key := e.key
 			roundRaiseDef := e.roundRaiseDef
-			keyRef := key.Ref()
+			keyRef := types.WriteValue(key, ds)
 			setDef := mapOfSets[keyRef]
 			if setDef == nil {
 				setDef = SetOfRoundRaiseDef{}
@@ -163,4 +184,20 @@ func timeToQuarter(t time.Time) QuarterEnum {
 		return Q4
 	}
 	panic("unreachable")
+}
+
+func lastQuarter(t time.Time) time.Time {
+	var m time.Month
+	switch t.Month() {
+	case time.January, time.February, time.March:
+		m = time.January
+	case time.April, time.May, time.June:
+		m = time.April
+	case time.July, time.August, time.September:
+		m = time.July
+	case time.October, time.November, time.December:
+		m = time.October
+	}
+	currentQuarter := time.Date(time.Now().Year(), m, 1, 0, 0, 0, 0, time.UTC)
+	return currentQuarter.AddDate(0, -3, 0)
 }

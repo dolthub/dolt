@@ -22,6 +22,12 @@ before_script:
 - npm run build
 - npm test
 - popd
+- pushd clients/crunchbase/ui
+- npm install
+- ./link.sh
+- npm run build
+- npm test
+- popd
 script:
 - export GODEBUG=invalidptr=0
 - go test ./...

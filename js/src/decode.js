@@ -348,7 +348,8 @@ class JsonArrayReader {
 
     let s: { [key: string]: any } = Object.create(null);
 
-    for (let field of desc.fields) {
+    for (let i = 0; i < desc.fields.length; i++) {
+      let field = desc.fields[i];
       if (field.optional) {
         let b = this.readBool();
         if (b) {
