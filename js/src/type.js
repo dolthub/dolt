@@ -37,8 +37,12 @@ class UnresolvedDesc {
   }
 
   equals(other: TypeDesc): boolean {
-    return other instanceof UnresolvedDesc && other._pkgRef.equals(this._pkgRef)
-        && other._ordinal === this._ordinal;
+    if (other.kind !== this.kind) {
+      return false;
+    }
+    invariant(other instanceof UnresolvedDesc);
+
+    return other._pkgRef.equals(this._pkgRef) && other._ordinal === this._ordinal;
   }
 }
 
@@ -71,6 +75,37 @@ class CompoundDesc {
   }
 }
 
+class EnumDesc {
+  ids: Array<string>;
+
+  constructor(ids: Array<string>) {
+    this.ids = ids;
+  }
+
+  get kind(): NomsKind {
+    return Kind.Enum;
+  }
+
+  equals(other: TypeDesc): boolean {
+    if (other.kind !== this.kind) {
+      return false;
+    }
+    invariant(other instanceof EnumDesc);
+
+    if (other.ids.length !== this.ids.length) {
+      return false;
+    }
+
+    for (let i = 0; i < this.ids.length; i++) {
+      if (this.ids[i] !== other.id[i]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+}
+
 class StructDesc {
   fields: Array<Field>;
   union: Array<Field>;
@@ -85,27 +120,28 @@ class StructDesc {
   }
 
   equals(other: TypeDesc): boolean {
-    if (other instanceof StructDesc) {
-      if (this.fields.length !== other.fields.length || this.union.length !== other.union.length) {
-        return false;
-      }
+    if (other.kind !== this.kind) {
+      return false;
+    }
+    invariant(other instanceof StructDesc);
 
-      for (let i = 0; i < this.fields.length; i++) {
-        if (!this.fields[i].equals(other.fields[i])) {
-          return false;
-        }
-      }
-
-      for (let i = 0; i < this.union.length; i++) {
-        if (!this.union[i].equals(other.union[i])) {
-          return false;
-        }
-      }
-
-      return true;
+    if (this.fields.length !== other.fields.length || this.union.length !== other.union.length) {
+      return false;
     }
 
-    return false;
+    for (let i = 0; i < this.fields.length; i++) {
+      if (!this.fields[i].equals(other.fields[i])) {
+        return false;
+      }
+    }
+
+    for (let i = 0; i < this.union.length; i++) {
+      if (!this.union[i].equals(other.union[i])) {
+        return false;
+      }
+    }
+
+    return true;
   }
 }
 
@@ -237,6 +273,10 @@ function makeCompoundType(k: NomsKind, ...elemTypes: Array<Type>): Type {
   return buildType('', new CompoundDesc(k, elemTypes));
 }
 
+function makeEnumType(name: string, ids: Array<string>): Type {
+  return buildType(name, new EnumDesc(ids));
+}
+
 function makeStructType(name: string, fields: Array<Field>, choices: Array<Field>): Type {
   return buildType(name, new StructDesc(fields, choices));
 }
@@ -254,8 +294,10 @@ let packageType = makePrimitiveType(Kind.Package);
 
 export {
   CompoundDesc,
+  EnumDesc,
   Field,
   makeCompoundType,
+  makeEnumType,
   makePrimitiveType,
   makeStructType,
   makeType,

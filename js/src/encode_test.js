@@ -7,7 +7,7 @@ import MemoryStore from './memory_store.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
 import test from './async_test.js';
-import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
+import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type} from './type.js';
 import {JsonArrayWriter, encodeNomsValue} from './encode.js';
 import {Kind} from './noms_kind.js';
 import {Package, registerPackage} from './package.js';
@@ -237,6 +237,67 @@ suite('Encode', () => {
     let v = new Struct(sType, sTypeDef, {s: new Struct(s2Type, s2TypeDef, {x: 42})});
     w.writeTopLevel(sType, v);
     assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 1, 42], w.array);
+  });
+
+  test('write enum', async () => {
+    let ms = new MemoryStore();
+    let w = new JsonArrayWriter(ms);
+
+    let pkg = new Package([makeEnumType('E', ['a', 'b', 'c'])], []);
+    registerPackage(pkg);
+    let pkgRef = pkg.ref;
+    let typ = makeType(pkgRef, 0);
+
+    w.writeTopLevel(typ, 1);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, 1], w.array);
+  });
+
+  test('write list of enum', async () => {
+    let ms = new MemoryStore();
+    let w = new JsonArrayWriter(ms);
+
+    let pkg = new Package([makeEnumType('E', ['a', 'b', 'c'])], []);
+    registerPackage(pkg);
+    let pkgRef = pkg.ref;
+    let typ = makeType(pkgRef, 0);
+    let listType = makeCompoundType(Kind.List, typ);
+    let l = [0, 1, 2];
+
+    w.writeTopLevel(listType, l);
+    assert.deepEqual([Kind.List, Kind.Unresolved, pkgRef.toString(), 0, [0, 1, 2]], w.array);
+  });
+
+  test('write type value', async () => {
+    let ms = new MemoryStore();
+
+    let test = (expected: Array<any>, v: Type) => {
+      let w = new JsonArrayWriter(ms);
+      w.writeTopLevel(v.type, v);
+      assert.deepEqual(expected, w.array);
+    };
+
+    test([Kind.Type, Kind.Int32], makePrimitiveType(Kind.Int32));
+    test([Kind.Type, Kind.List, [Kind.Bool]], makeCompoundType(Kind.List, makePrimitiveType(Kind.Bool)));
+    test([Kind.Type, Kind.Map, [Kind.Bool, Kind.String]], makeCompoundType(Kind.Map, makePrimitiveType(Kind.Bool), makePrimitiveType(Kind.String)));
+    test([Kind.Type, Kind.Enum, 'E', ['a', 'b', 'c']], makeEnumType('E', ['a', 'b', 'c']));
+    test([Kind.Type, Kind.Struct, 'S', ['x', Kind.Int16, false, 'v', Kind.Value, true], []], makeStructType('S', [
+      new Field('x', makePrimitiveType(Kind.Int16), false),
+      new Field('v', makePrimitiveType(Kind.Value), true)
+    ], []));
+    test([Kind.Type, Kind.Struct, 'S', [], ['x', Kind.Int16, false, 'v', Kind.Value, false]], makeStructType('S', [], [
+      new Field('x', makePrimitiveType(Kind.Int16), false),
+      new Field('v', makePrimitiveType(Kind.Value), false)
+    ]));
+
+    let pkgRef = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
+    test([Kind.Type, Kind.Unresolved, pkgRef.toString(), 123], makeType(pkgRef, 123));
+
+    test([Kind.Type, Kind.Struct, 'S', ['e', Kind.Unresolved, pkgRef.toString(), 123, false, 'x', Kind.Int64, false], []], makeStructType('S', [
+      new Field('e', makeType(pkgRef, 123), false),
+      new Field('x', makePrimitiveType(Kind.Int64), false)
+    ], []));
+
+    // test([Kind.Type, Kind.Unresolved, new Ref().toString(), -1, 'ns', 'n'], makeUnresolvedType('ns', 'n'));
   });
 
   test('top level blob', () => {

@@ -9,7 +9,7 @@ import {encode as encodeBase64} from './base64.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
 import {lookupPackage, Package} from './package.js';
-import {makePrimitiveType, StructDesc, Type} from './type.js';
+import {makePrimitiveType, EnumDesc, StructDesc, Type} from './type.js';
 
 const typedTag = 't ';
 
@@ -166,7 +166,15 @@ class JsonArrayWriter {
     this.writeKind(k);
     switch (k) {
       case Kind.Enum:
-        throw new Error('Not implemented');
+        let desc = t.desc;
+        invariant(desc instanceof EnumDesc);
+        this.write(t.name);
+        let w2 = new JsonArrayWriter(this._cs);
+        for (let i = 0; i < desc.ids.length; i++) {
+          w2.write(desc.ids[i]);
+        }
+        this.write(w2.array);
+        break;
       case Kind.List:
       case Kind.Map:
       case Kind.Ref:
@@ -224,7 +232,9 @@ class JsonArrayWriter {
     let typeDef = pkg.types[t.ordinal];
     switch (typeDef.kind) {
       case Kind.Enum:
-        throw new Error('Not implemented');
+        invariant(typeof v === 'number');
+        this.writeEnum(v);
+        break;
       case Kind.Struct: {
         invariant(v instanceof Struct);
         this.writeStruct(v, t, typeDef, pkg);
@@ -262,6 +272,10 @@ class JsonArrayWriter {
       this.writeNumber(s.unionIndex);
       this.writeValue(s.get(unionField.name), unionField.t, pkg);
     }
+  }
+
+  writeEnum(v: number) {
+    this.writeNumber(v);
   }
 }
 
