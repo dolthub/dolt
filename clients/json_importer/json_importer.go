@@ -28,12 +28,12 @@ func main() {
 	}
 
 	res, err := http.Get(url)
-	defer res.Body.Close()
 	if err != nil {
 		log.Fatalf("Error fetching %s: %+v\n", url, err)
 	} else if res.StatusCode != 200 {
 		log.Fatalf("Error fetching %s: %s\n", url, res.Status)
 	}
+	defer res.Body.Close()
 
 	var jsonObject interface{}
 	err = json.NewDecoder(res.Body).Decode(&jsonObject)
