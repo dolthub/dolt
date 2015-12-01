@@ -1,3 +1,11 @@
 alias cb = import "../crunchbase.noms"
 
-using Map(String, Ref(cb.Company))
+struct Import {
+    FileSHA1:  String
+    Date:      Date
+    Companies: Ref(Map(String, Ref(cb.Company)))
+}
+
+struct Date {
+    RFC3339: String
+}
