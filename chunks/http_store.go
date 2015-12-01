@@ -12,18 +12,28 @@ import (
 	"strings"
 	"sync"
 
+	"bufio"
+
 	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
 const (
-	targetBufferSize = 1 << 16 // 64k (compressed)
-	readBufferSize   = 1 << 12 // 4k
-	writeBufferSize  = 1 << 12 // 4k
-	readLimit        = 6       // Experimentally, 5 was dimishing returns, 1 for good measure
-	writeLimit       = 6
+	readBufferSize  = 1 << 12 // 4k
+	hasBufferSize   = 1 << 12 // 4k
+	writeBufferSize = 1 << 12 // 4k
+	readLimit       = 6       // Experimentally, 5 was dimishing returns, 1 for good measure
+	writeLimit      = 6
+	hasLimit        = 6
 )
+
+type hasRequest struct {
+	r  ref.Ref
+	ch chan bool
+}
+
+type hasBatch map[ref.Ref][]chan bool
 
 type readRequest struct {
 	r  ref.Ref
@@ -54,6 +64,7 @@ func (rrq *readBatch) Close() error {
 type HttpStore struct {
 	host       *url.URL
 	readQueue  chan readRequest
+	hasQueue   chan hasRequest
 	writeQueue chan Chunk
 	wg         *sync.WaitGroup
 	written    map[ref.Ref]bool
@@ -68,6 +79,7 @@ func NewHttpStore(host string) *HttpStore {
 	client := &HttpStore{
 		u,
 		make(chan readRequest, readBufferSize),
+		make(chan hasRequest, hasBufferSize),
 		make(chan Chunk, writeBufferSize),
 		&sync.WaitGroup{},
 		map[ref.Ref]bool{},
@@ -80,6 +92,10 @@ func NewHttpStore(host string) *HttpStore {
 
 	for i := 0; i < writeLimit; i++ {
 		go client.sendWriteRequests()
+	}
+
+	for i := 0; i < hasLimit; i++ {
+		go client.sendHasRequests()
 	}
 
 	return client
@@ -122,12 +138,34 @@ func (c *HttpStore) sendReadRequests() {
 }
 
 func (c *HttpStore) Has(ref ref.Ref) bool {
-	// HEAD http://<host>/ref/<sha1-xxx>. Response will be 200 if present, 404 if absent.
-	res := c.requestRef(ref, "HEAD", nil)
-	defer closeResponse(res)
+	ch := make(chan bool)
+	c.hasQueue <- hasRequest{ref, ch}
+	return <-ch
+}
 
-	d.Chk.True(res.StatusCode == http.StatusOK || res.StatusCode == http.StatusNotFound, "Unexpected response: %s", http.StatusText(res.StatusCode))
-	return res.StatusCode == http.StatusOK
+func (c *HttpStore) sendHasRequests() {
+	for req := range c.hasQueue {
+		reqs := hasBatch{}
+		refs := map[ref.Ref]bool{}
+
+		addReq := func(req hasRequest) {
+			reqs[req.r] = append(reqs[req.r], req.ch)
+			refs[req.r] = true
+		}
+		addReq(req)
+
+	loop:
+		for {
+			select {
+			case req := <-c.hasQueue:
+				addReq(req)
+			default:
+				break loop
+			}
+		}
+
+		c.getHasRefs(refs, reqs)
+	}
 }
 
 func (c *HttpStore) Put(chunk Chunk) {
@@ -207,6 +245,45 @@ func (c *HttpStore) requestRef(r ref.Ref, method string, body io.Reader) *http.R
 	res, err := http.DefaultClient.Do(req)
 	d.Chk.NoError(err)
 	return res
+}
+
+func (c *HttpStore) getHasRefs(refs map[ref.Ref]bool, reqs hasBatch) {
+	// POST http://<host>/getHasRefs/. Post body: ref=sha1---&ref=sha1---& Response will be text of lines containing "|ref| |bool|"
+	u := *c.host
+	u.Path = constants.GetHasPath
+	values := &url.Values{}
+	for r, _ := range refs {
+		values.Add("ref", r.String())
+	}
+
+	req, err := http.NewRequest("POST", u.String(), strings.NewReader(values.Encode()))
+	req.Header.Add("Accept-Encoding", "gzip")
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	d.Chk.NoError(err)
+
+	res, err := http.DefaultClient.Do(req)
+	d.Chk.NoError(err)
+	defer closeResponse(res)
+	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
+
+	reader := res.Body
+	if strings.Contains(res.Header.Get("Content-Encoding"), "gzip") {
+		gr, err := gzip.NewReader(reader)
+		d.Chk.NoError(err)
+		defer gr.Close()
+		reader = gr
+	}
+
+	scanner := bufio.NewScanner(reader)
+	scanner.Split(bufio.ScanWords)
+	for scanner.Scan() {
+		r := ref.Parse(scanner.Text())
+		scanner.Scan()
+		has := scanner.Text() == "true"
+		for _, ch := range reqs[r] {
+			ch <- has
+		}
+	}
 }
 
 func (c *HttpStore) getRefs(refs map[ref.Ref]bool, cs ChunkSink) {

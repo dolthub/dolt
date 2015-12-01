@@ -5,6 +5,7 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/walk"
 )
 
 type dataStoreCommon struct {
@@ -38,6 +39,17 @@ func (ds *dataStoreCommon) Datasets() MapOfStringToRefOfCommit {
 	} else {
 		return *ds.datasets
 	}
+}
+
+// Copies all chunks reachable from (and including) |r| in |source| that aren't present in |sink|
+func (ds *dataStoreCommon) CopyMissingChunksP(sourceRef ref.Ref, sink chunks.ChunkStore, concurrency int) {
+	tcs := &teeChunkSource{ds, sink}
+
+	copyCallback := func(r ref.Ref) bool {
+		return sink.Has(r)
+	}
+
+	walk.SomeChunksP(sourceRef, tcs, copyCallback, concurrency)
 }
 
 func (ds *dataStoreCommon) commit(datasetID string, commit Commit) bool {

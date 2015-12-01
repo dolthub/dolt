@@ -81,11 +81,6 @@ func (s *dataStoreServer) handleRef(w http.ResponseWriter, req *http.Request) {
 			w.Header().Add("Content-Type", "application/octet-stream")
 			w.Header().Add("Cache-Control", "max-age=31536000") // 1 year
 
-		case "HEAD":
-			if !s.ds.Has(r) {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
 		default:
 			d.Exp.Fail("Unexpected method: ", req.Method)
 		}
@@ -111,6 +106,42 @@ func (s *dataStoreServer) handlePostRefs(w http.ResponseWriter, req *http.Reques
 
 		chunks.Deserialize(reader, s.ds, nil)
 		w.WriteHeader(http.StatusCreated)
+	})
+
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+		return
+	}
+}
+
+func (s *dataStoreServer) handleGetHasRefs(w http.ResponseWriter, req *http.Request) {
+	err := d.Try(func() {
+		d.Exp.Equal("POST", req.Method)
+
+		req.ParseForm()
+		refStrs := req.PostForm["ref"]
+		d.Exp.True(len(refStrs) > 0)
+
+		refs := make([]ref.Ref, 0)
+		for _, refStr := range refStrs {
+			refs = append(refs, ref.Parse(refStr))
+		}
+
+		w.Header().Add("Content-Type", "text/plain")
+		writer := w.(io.Writer)
+		if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Add("Content-Encoding", "gzip")
+			gw := gzip.NewWriter(w)
+			defer gw.Close()
+			writer = gw
+		}
+
+		sz := chunks.NewSerializer(writer)
+		for _, r := range refs {
+			has := s.ds.Has(r)
+			fmt.Fprintf(writer, "%s %t\n", r, has)
+		}
+		sz.Close()
 	})
 
 	if err != nil {
@@ -201,6 +232,7 @@ func (s *dataStoreServer) Run() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc(constants.RefPath, http.HandlerFunc(s.handleRef))
+	mux.HandleFunc(constants.GetHasPath, http.HandlerFunc(s.handleGetHasRefs))
 	mux.HandleFunc(constants.GetRefsPath, http.HandlerFunc(s.handleGetRefs))
 	mux.HandleFunc(constants.PostRefsPath, http.HandlerFunc(s.handlePostRefs))
 	mux.HandleFunc(constants.RootPath, http.HandlerFunc(s.handleRoot))

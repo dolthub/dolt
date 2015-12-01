@@ -8,12 +8,14 @@ import (
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
+	"github.com/attic-labs/noms/ref"
 )
 
 var (
 	sinkDsFlags   = dataset.NewFlagsWithPrefix("sink-")
 	sourceDsFlags = dataset.NewFlagsWithPrefix("source-")
 	p             = flag.Uint("p", 512, "parallelism")
+	sinkRefFlag   = flag.String("sinkref", "", "ref to use in place of sink dataset head (useful for testing)")
 )
 
 func main() {
@@ -36,7 +38,12 @@ func main() {
 			defer util.StopCPUProfile()
 		}
 
-		*sink = sink.Pull(*source, int(*p))
+		sinkRef := ref.Ref{}
+		if *sinkRefFlag != "" {
+			sinkRef = ref.Parse(*sinkRefFlag)
+		}
+
+		*sink = sink.Pull(*source, int(*p), sinkRef)
 
 		util.MaybeWriteMemProfile()
 	})

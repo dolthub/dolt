@@ -2,7 +2,6 @@ package datas
 
 import (
 	"compress/gzip"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -38,8 +37,8 @@ func (lds *RemoteDataStore) Commit(datasetID string, commit Commit) (DataStore, 
 	return newRemoteDataStore(lds.ChunkStore), ok
 }
 
+// Asks remote server to figure out which chunks need to be copied and return them.
 func (lds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, cs chunks.ChunkSink, concurrency int) {
-	fmt.Println("Starting CopyReachableChunksP")
 	// POST http://<host>/ref/sha1----?all=true&exclude=sha1----. Response will be chunk data if present, 404 if absent.
 	u := lds.host()
 	u.Path = path.Join(constants.RefPath, r.String())
@@ -68,9 +67,7 @@ func (lds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, cs chunks.C
 		reader = gr
 	}
 
-	fmt.Println("Receiving")
 	chunks.Deserialize(reader, cs, nil)
-	fmt.Println("Done")
 }
 
 // In order for keep alive to work we must read to EOF on every response. We may want to add a timeout so that a server that left its connection open can't cause all of ports to be eaten up.
