@@ -74,8 +74,8 @@ func main() {
 		// AllP gives inconsistent results. BUG 604
 	}, 1)
 
-	_, ok = outputDS.Commit(out)
-	d.Exp.True(ok, "Could not commit due to conflicting edit")
+	_, err := outputDS.Commit(out)
+	d.Exp.NoError(err)
 
 	fmt.Printf("Indexed %v photos from %v values in %v\n", numPhotos, numValues, time.Now().Sub(t0))
 }

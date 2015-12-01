@@ -53,26 +53,26 @@ func pullTest(t *testing.T, topdown bool) {
 		types.NewString("first"), NewList(sink),
 		types.NewString("second"), NewList(sink, types.Int32(2)))
 
-	ok := false
-	source, ok = source.Commit(sourceInitialValue)
-	assert.True(ok)
-	sink, ok = sink.Commit(sinkInitialValue)
-	assert.True(ok)
+	var err error
+	source, err = source.Commit(sourceInitialValue)
+	assert.NoError(err)
+	sink, err = sink.Commit(sinkInitialValue)
+	assert.NoError(err)
 
 	// Add some new stuff to source.
 	updatedValue := sourceInitialValue.Set(
 		types.NewString("third"), NewList(source, types.Int32(3)))
-	source, ok = source.Commit(updatedValue)
-	assert.True(ok)
+	source, err = source.Commit(updatedValue)
+	assert.NoError(err)
 
 	// Add some more stuff, so that source isn't directly ahead of sink.
 	updatedValue = updatedValue.Set(
 		types.NewString("fourth"), NewList(source, types.Int32(4)))
-	source, ok = source.Commit(updatedValue)
-	assert.True(ok)
+	source, err = source.Commit(updatedValue)
+	assert.NoError(err)
 
-	sink = sink.pull(source, 1, topdown, ref.Ref{})
-	assert.True(ok)
+	sink, err = sink.pull(source, 1, topdown, ref.Ref{})
+	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
 
@@ -97,10 +97,11 @@ func pullFirstCommit(t *testing.T, topdown bool) {
 	NewList(sink)
 	NewList(sink, types.Int32(2))
 
-	source, ok := source.Commit(sourceInitialValue)
-	assert.True(ok)
+	source, err := source.Commit(sourceInitialValue)
+	assert.NoError(err)
 
-	sink = sink.pull(source, 1, topdown, ref.Ref{})
+	sink, err = sink.pull(source, 1, topdown, ref.Ref{})
+	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
 
@@ -123,10 +124,11 @@ func pullDeepRef(t *testing.T, topdown bool) {
 		types.NewSet(source.Store(), NewSet(source)),
 		types.NewMap(source.Store(), NewMap(source), NewMap(source)))
 
-	source, ok := source.Commit(sourceInitialValue)
-	assert.True(ok)
+	source, err := source.Commit(sourceInitialValue)
+	assert.NoError(err)
 
-	sink = sink.pull(source, 1, topdown, ref.Ref{})
+	sink, err = sink.pull(source, 1, topdown, ref.Ref{})
+	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
 

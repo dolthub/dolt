@@ -43,9 +43,11 @@ func main() {
 			sinkRef = ref.Parse(*sinkRefFlag)
 		}
 
-		*sink = sink.Pull(*source, int(*p), sinkRef)
+		var err error
+		*sink, err = sink.Pull(*source, int(*p), sinkRef)
 
 		util.MaybeWriteMemProfile()
+		d.Exp.NoError(err)
 	})
 
 	if err != nil {

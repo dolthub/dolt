@@ -166,8 +166,8 @@ func main() {
 		input := inputDataset.Head().Value().(ListOfRefOfMapOfStringToValue)
 		output := getIndex(input, ds)
 
-		_, ok := outputDataset.Commit(output)
-		d.Exp.True(ok, "Could not commit due to conflicting edit")
+		_, err := outputDataset.Commit(output)
+		d.Exp.NoError(err)
 
 		util.MaybeWriteMemProfile()
 	})

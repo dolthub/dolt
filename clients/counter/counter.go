@@ -28,8 +28,8 @@ func main() {
 		lastVal = uint64(commit.Value().(types.Uint64))
 	}
 	newVal := lastVal + 1
-	_, ok := ds.Commit(types.Uint64(newVal))
-	d.Exp.True(ok, "Could not commit due to conflicting edit")
+	_, err := ds.Commit(types.Uint64(newVal))
+	d.Exp.NoError(err)
 
 	fmt.Println(newVal)
 }

@@ -32,9 +32,9 @@ func (lds *RemoteDataStore) host() *url.URL {
 	return lds.dataStoreCommon.ChunkStore.(*chunks.HttpStore).Host()
 }
 
-func (lds *RemoteDataStore) Commit(datasetID string, commit Commit) (DataStore, bool) {
-	ok := lds.commit(datasetID, commit)
-	return newRemoteDataStore(lds.ChunkStore), ok
+func (lds *RemoteDataStore) Commit(datasetID string, commit Commit) (DataStore, error) {
+	err := lds.commit(datasetID, commit)
+	return newRemoteDataStore(lds.ChunkStore), err
 }
 
 // Asks remote server to figure out which chunks need to be copied and return them.

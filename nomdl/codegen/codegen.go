@@ -112,7 +112,8 @@ func generate(packageName, in, out, outDir string, written map[string]bool, pars
 	generateAndEmit(getBareFileName(in), out, written, deps, parsed)
 
 	// Since we're just building up a set of refs to all the packages in pkgDS, simply retrying is the logical response to commit failure.
-	for ok := false; !ok; pkgDS, ok = pkgDS.Commit(buildSetOfRefOfPackage(parsed, deps, pkgDS)) {
+	err := datas.ErrOptimisticLockFailed
+	for ; err == datas.ErrOptimisticLockFailed; pkgDS, err = pkgDS.Commit(buildSetOfRefOfPackage(parsed, deps, pkgDS)) {
 	}
 	return pkgDS
 }

@@ -41,6 +41,6 @@ func main() {
 		log.Fatalln("Error decoding JSON: ", err)
 	}
 
-	_, ok := ds.Commit(util.NomsValueFromDecodedJSON(ds.Store(), jsonObject))
-	d.Exp.True(ok, "Could not commit due to conflicting edit")
+	_, err = ds.Commit(util.NomsValueFromDecodedJSON(ds.Store(), jsonObject))
+	d.Exp.NoError(err)
 }

@@ -325,10 +325,10 @@ func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) error {
 }
 
 func commitUser() {
-	ok := false
+	var err error
 	r := NewRefOfUser(types.WriteValue(user, ds.Store()))
-	*ds, ok = ds.Commit(r)
-	d.Exp.True(ok, "Could not commit due to conflicting edit")
+	*ds, err = ds.Commit(r)
+	d.Exp.NoError(err)
 }
 
 func callFlickrAPI(method string, response interface{}, args *map[string]string) error {

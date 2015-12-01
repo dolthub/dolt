@@ -47,9 +47,9 @@ func (s *testSuite) TestTagdex() {
 	inputRef := types.WriteValue(set, cs)
 	refVal := types.NewRef(inputRef)
 
-	var ok bool
-	inputDs, ok = inputDs.Commit(refVal)
-	s.True(ok)
+	var err error
+	inputDs, err = inputDs.Commit(refVal)
+	s.NoError(err)
 	inputDs.Close()
 
 	out := s.Run(main, []string{"-in", "input-test", "-out", "tagdex-test"})

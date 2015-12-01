@@ -132,8 +132,8 @@ func main() {
 	if !*quietFlag {
 		fmt.Printf("Calling Commit(), elapsed time: %.2f secs\n", SecsSince(start))
 	}
-	_, ok = dataset.Commit(types.NewRef(nomsQtRoot.Ref()))
-	d.Chk.True(ok, "Could not commit due to conflicting edit")
+	_, err = dataset.Commit(types.NewRef(nomsQtRoot.Ref()))
+	d.Exp.NoError(err)
 	if !*quietFlag {
 		fmt.Printf("Commit completed, elapsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
 	}

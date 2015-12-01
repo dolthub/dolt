@@ -115,8 +115,8 @@ func main() {
 		}
 
 		output := mapOfRefs.New(ds)
-		_, ok = outputDataset.Commit(output)
-		d.Exp.True(ok, "Could not commit due to conflicting edit")
+		_, err := outputDataset.Commit(output)
+		d.Exp.NoError(err)
 
 		util.MaybeWriteMemProfile()
 	})

@@ -24,8 +24,8 @@ func (s *testSuite) TestShove() {
 	s.LdbFlagName = "-source-ldb"
 	cs := chunks.NewLevelDBStore(s.LdbDir, 1, false)
 	ds := dataset.NewDataset(datas.NewDataStore(cs), "foo")
-	ds, ok := ds.Commit(types.Int32(42))
-	s.True(ok)
+	ds, err := ds.Commit(types.Int32(42))
+	s.NoError(err)
 	ds.Close()
 
 	ldb2dir := path.Join(s.TempDir, "ldb2")
