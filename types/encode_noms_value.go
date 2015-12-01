@@ -134,7 +134,7 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 		indexType := indexTypeForMetaSequence(tr)
 		tr = fixupType(tr, pkg)
 		m := internalValueFromType(v, tr)
-		for _, tuple := range getDataFromMetaSequence(m) {
+		for _, tuple := range m.(metaSequence).data() {
 			w2.writeRef(tuple.ref)
 			w2.writeValue(tuple.value, indexType, pkg)
 		}
