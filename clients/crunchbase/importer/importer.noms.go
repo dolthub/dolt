@@ -8,6 +8,302 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+var __mainPackageInFile_importer_CachedRef ref.Ref
+
+// This function builds up a Noms value that describes the type
+// package implemented by this file and registers it with the global
+// type package definition cache.
+func init() {
+	p := types.NewPackage([]types.Type{
+		types.MakeStructType("Import",
+			[]types.Field{
+				types.Field{"FileSHA1", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Date", types.MakeType(ref.Ref{}, 1), false},
+				types.Field{"Companies", types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-3e4f60c3fbd518f4a7e903ac1c7c1a97b677c4d9"), 0)))), false},
+			},
+			types.Choices{},
+		),
+		types.MakeStructType("Date",
+			[]types.Field{
+				types.Field{"RFC3339", types.MakePrimitiveType(types.StringKind), false},
+			},
+			types.Choices{},
+		),
+	}, []ref.Ref{
+		ref.Parse("sha1-3e4f60c3fbd518f4a7e903ac1c7c1a97b677c4d9"),
+	})
+	__mainPackageInFile_importer_CachedRef = types.RegisterPackage(&p)
+}
+
+// Import
+
+type Import struct {
+	_FileSHA1  string
+	_Date      Date
+	_Companies RefOfMapOfStringToRefOfCompany
+
+	ref *ref.Ref
+}
+
+func NewImport() Import {
+	return Import{
+		_FileSHA1:  "",
+		_Date:      NewDate(),
+		_Companies: NewRefOfMapOfStringToRefOfCompany(ref.Ref{}),
+
+		ref: &ref.Ref{},
+	}
+}
+
+type ImportDef struct {
+	FileSHA1  string
+	Date      DateDef
+	Companies ref.Ref
+}
+
+func (def ImportDef) New() Import {
+	return Import{
+		_FileSHA1:  def.FileSHA1,
+		_Date:      def.Date.New(),
+		_Companies: NewRefOfMapOfStringToRefOfCompany(def.Companies),
+		ref:        &ref.Ref{},
+	}
+}
+
+func (s Import) Def() (d ImportDef) {
+	d.FileSHA1 = s._FileSHA1
+	d.Date = s._Date.Def()
+	d.Companies = s._Companies.TargetRef()
+	return
+}
+
+var __typeForImport types.Type
+
+func (m Import) Type() types.Type {
+	return __typeForImport
+}
+
+func init() {
+	__typeForImport = types.MakeType(__mainPackageInFile_importer_CachedRef, 0)
+	types.RegisterStruct(__typeForImport, builderForImport, readerForImport)
+}
+
+func builderForImport(values []types.Value) types.Value {
+	i := 0
+	s := Import{ref: &ref.Ref{}}
+	s._FileSHA1 = values[i].(types.String).String()
+	i++
+	s._Date = values[i].(Date)
+	i++
+	s._Companies = values[i].(RefOfMapOfStringToRefOfCompany)
+	i++
+	return s
+}
+
+func readerForImport(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Import)
+	values = append(values, types.NewString(s._FileSHA1))
+	values = append(values, s._Date)
+	values = append(values, s._Companies)
+	return values
+}
+
+func (s Import) Equals(other types.Value) bool {
+	return other != nil && __typeForImport.Equals(other.Type()) && s.Ref() == other.Ref()
+}
+
+func (s Import) Ref() ref.Ref {
+	return types.EnsureRef(s.ref, s)
+}
+
+func (s Import) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, __typeForImport.Chunks()...)
+	chunks = append(chunks, s._Date.Chunks()...)
+	chunks = append(chunks, s._Companies.Chunks()...)
+	return
+}
+
+func (s Import) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.NewString(s._FileSHA1))
+	ret = append(ret, s._Date)
+	ret = append(ret, s._Companies)
+	return
+}
+
+func (s Import) FileSHA1() string {
+	return s._FileSHA1
+}
+
+func (s Import) SetFileSHA1(val string) Import {
+	s._FileSHA1 = val
+	s.ref = &ref.Ref{}
+	return s
+}
+
+func (s Import) Date() Date {
+	return s._Date
+}
+
+func (s Import) SetDate(val Date) Import {
+	s._Date = val
+	s.ref = &ref.Ref{}
+	return s
+}
+
+func (s Import) Companies() RefOfMapOfStringToRefOfCompany {
+	return s._Companies
+}
+
+func (s Import) SetCompanies(val RefOfMapOfStringToRefOfCompany) Import {
+	s._Companies = val
+	s.ref = &ref.Ref{}
+	return s
+}
+
+// Date
+
+type Date struct {
+	_RFC3339 string
+
+	ref *ref.Ref
+}
+
+func NewDate() Date {
+	return Date{
+		_RFC3339: "",
+
+		ref: &ref.Ref{},
+	}
+}
+
+type DateDef struct {
+	RFC3339 string
+}
+
+func (def DateDef) New() Date {
+	return Date{
+		_RFC3339: def.RFC3339,
+		ref:      &ref.Ref{},
+	}
+}
+
+func (s Date) Def() (d DateDef) {
+	d.RFC3339 = s._RFC3339
+	return
+}
+
+var __typeForDate types.Type
+
+func (m Date) Type() types.Type {
+	return __typeForDate
+}
+
+func init() {
+	__typeForDate = types.MakeType(__mainPackageInFile_importer_CachedRef, 1)
+	types.RegisterStruct(__typeForDate, builderForDate, readerForDate)
+}
+
+func builderForDate(values []types.Value) types.Value {
+	i := 0
+	s := Date{ref: &ref.Ref{}}
+	s._RFC3339 = values[i].(types.String).String()
+	i++
+	return s
+}
+
+func readerForDate(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Date)
+	values = append(values, types.NewString(s._RFC3339))
+	return values
+}
+
+func (s Date) Equals(other types.Value) bool {
+	return other != nil && __typeForDate.Equals(other.Type()) && s.Ref() == other.Ref()
+}
+
+func (s Date) Ref() ref.Ref {
+	return types.EnsureRef(s.ref, s)
+}
+
+func (s Date) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, __typeForDate.Chunks()...)
+	return
+}
+
+func (s Date) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.NewString(s._RFC3339))
+	return
+}
+
+func (s Date) RFC3339() string {
+	return s._RFC3339
+}
+
+func (s Date) SetRFC3339(val string) Date {
+	s._RFC3339 = val
+	s.ref = &ref.Ref{}
+	return s
+}
+
+// RefOfMapOfStringToRefOfCompany
+
+type RefOfMapOfStringToRefOfCompany struct {
+	target ref.Ref
+	ref    *ref.Ref
+}
+
+func NewRefOfMapOfStringToRefOfCompany(target ref.Ref) RefOfMapOfStringToRefOfCompany {
+	return RefOfMapOfStringToRefOfCompany{target, &ref.Ref{}}
+}
+
+func (r RefOfMapOfStringToRefOfCompany) TargetRef() ref.Ref {
+	return r.target
+}
+
+func (r RefOfMapOfStringToRefOfCompany) Ref() ref.Ref {
+	return types.EnsureRef(r.ref, r)
+}
+
+func (r RefOfMapOfStringToRefOfCompany) Equals(other types.Value) bool {
+	return other != nil && __typeForRefOfMapOfStringToRefOfCompany.Equals(other.Type()) && r.Ref() == other.Ref()
+}
+
+func (r RefOfMapOfStringToRefOfCompany) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.Type().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
+}
+
+func (r RefOfMapOfStringToRefOfCompany) ChildValues() []types.Value {
+	return nil
+}
+
+// A Noms Value that describes RefOfMapOfStringToRefOfCompany.
+var __typeForRefOfMapOfStringToRefOfCompany types.Type
+
+func (m RefOfMapOfStringToRefOfCompany) Type() types.Type {
+	return __typeForRefOfMapOfStringToRefOfCompany
+}
+
+func init() {
+	__typeForRefOfMapOfStringToRefOfCompany = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-3e4f60c3fbd518f4a7e903ac1c7c1a97b677c4d9"), 0))))
+	types.RegisterRef(__typeForRefOfMapOfStringToRefOfCompany, builderForRefOfMapOfStringToRefOfCompany)
+}
+
+func builderForRefOfMapOfStringToRefOfCompany(r ref.Ref) types.Value {
+	return NewRefOfMapOfStringToRefOfCompany(r)
+}
+
+func (r RefOfMapOfStringToRefOfCompany) TargetValue(cs chunks.ChunkSource) MapOfStringToRefOfCompany {
+	return types.ReadValue(r.target, cs).(MapOfStringToRefOfCompany)
+}
+
+func (r RefOfMapOfStringToRefOfCompany) SetTargetValue(val MapOfStringToRefOfCompany, cs chunks.ChunkSink) RefOfMapOfStringToRefOfCompany {
+	return NewRefOfMapOfStringToRefOfCompany(types.WriteValue(val, cs))
+}
+
 // MapOfStringToRefOfCompany
 
 type MapOfStringToRefOfCompany struct {
