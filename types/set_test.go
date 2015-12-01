@@ -6,11 +6,13 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/chunks"
 )
 
 func TestSetLen(t *testing.T) {
 	assert := assert.New(t)
-	s1 := NewSet(Bool(true), Int32(1), NewString("hi"))
+	cs := chunks.NewMemoryStore()
+	s1 := NewSet(cs, Bool(true), Int32(1), NewString("hi"))
 	assert.Equal(uint64(3), s1.Len())
 	s2 := s1.Insert(Bool(false))
 	assert.Equal(uint64(4), s2.Len())
@@ -20,7 +22,8 @@ func TestSetLen(t *testing.T) {
 
 func TestSetEmpty(t *testing.T) {
 	assert := assert.New(t)
-	s := NewSet()
+	cs := chunks.NewMemoryStore()
+	s := NewSet(cs)
 	assert.True(s.Empty())
 	s = s.Insert(Bool(false))
 	assert.False(s.Empty())
@@ -31,13 +34,15 @@ func TestSetEmpty(t *testing.T) {
 // BUG 98
 func TestSetDuplicateInsert(t *testing.T) {
 	assert := assert.New(t)
-	s1 := NewSet(Bool(true), Int32(42), Int32(42))
+	cs := chunks.NewMemoryStore()
+	s1 := NewSet(cs, Bool(true), Int32(42), Int32(42))
 	assert.Equal(uint64(2), s1.Len())
 }
 
 func TestSetHas(t *testing.T) {
 	assert := assert.New(t)
-	s1 := NewSet(Bool(true), Int32(1), NewString("hi"))
+	cs := chunks.NewMemoryStore()
+	s1 := NewSet(cs, Bool(true), Int32(1), NewString("hi"))
 	assert.True(s1.Has(Bool(true)))
 	assert.False(s1.Has(Bool(false)))
 	assert.True(s1.Has(Int32(1)))
@@ -55,7 +60,8 @@ func TestSetHas(t *testing.T) {
 
 func TestSetInsert(t *testing.T) {
 	assert := assert.New(t)
-	s := NewSet()
+	cs := chunks.NewMemoryStore()
+	s := NewSet(cs)
 	v1 := Bool(false)
 	v2 := Bool(true)
 	v3 := Int32(0)
@@ -77,10 +83,11 @@ func TestSetInsert(t *testing.T) {
 
 func TestSetRemove(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 	v1 := Bool(false)
 	v2 := Bool(true)
 	v3 := Int32(0)
-	s := NewSet(v1, v2, v3)
+	s := NewSet(cs, v1, v2, v3)
 	assert.True(s.Has(v1))
 	assert.True(s.Has(v2))
 	assert.True(s.Has(v3))
@@ -100,25 +107,28 @@ func TestSetRemove(t *testing.T) {
 
 func TestSetUnion(t *testing.T) {
 	assert := assert.New(t)
-	assert.True(NewSet(Int32(1), Int32(2)).Union(
-		NewSet(Int32(2), Int32(3)),
-		NewSet(Int32(-1)),
-		NewSet()).Equals(
-		NewSet(Int32(1), Int32(2), Int32(3), Int32(-1))))
-	assert.True(NewSet(Int32(1)).Union().Equals(NewSet(Int32(1))))
+	cs := chunks.NewMemoryStore()
+	assert.True(NewSet(cs, Int32(1), Int32(2)).Union(
+		NewSet(cs, Int32(2), Int32(3)),
+		NewSet(cs, Int32(-1)),
+		NewSet(cs)).Equals(
+		NewSet(cs, Int32(1), Int32(2), Int32(3), Int32(-1))))
+	assert.True(NewSet(cs, Int32(1)).Union().Equals(NewSet(cs, Int32(1))))
 }
 
 func TestSetSubtract(t *testing.T) {
 	assert := assert.New(t)
-	assert.True(NewSet(Int32(-1), Int32(0), Int32(1)).Subtract(
-		NewSet(Int32(0), Int32(-1)),
-		NewSet(Int32(1), Int32(2))).Equals(
-		NewSet()))
+	cs := chunks.NewMemoryStore()
+	assert.True(NewSet(cs, Int32(-1), Int32(0), Int32(1)).Subtract(
+		NewSet(cs, Int32(0), Int32(-1)),
+		NewSet(cs, Int32(1), Int32(2))).Equals(
+		NewSet(cs)))
 }
 
 func TestSetAny(t *testing.T) {
 	assert := assert.New(t)
-	s := NewSet()
+	cs := chunks.NewMemoryStore()
+	s := NewSet(cs)
 	assert.Nil(s.Any())
 	s = s.Insert(Int32(1))
 	assert.NotNil(s.Any())
@@ -128,9 +138,9 @@ func TestSetAny(t *testing.T) {
 
 func TestSetIter(t *testing.T) {
 	assert := assert.New(t)
-
-	s := NewSet(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
-	acc := NewSet()
+	cs := chunks.NewMemoryStore()
+	s := NewSet(cs, Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	acc := NewSet(cs)
 	s.Iter(func(v Value) bool {
 		_, ok := v.(Int32)
 		assert.True(ok)
@@ -139,7 +149,7 @@ func TestSetIter(t *testing.T) {
 	})
 	assert.True(s.Equals(acc))
 
-	acc = NewSet()
+	acc = NewSet(cs)
 	s.Iter(func(v Value) bool {
 		return true
 	})
@@ -148,9 +158,9 @@ func TestSetIter(t *testing.T) {
 
 func TestSetIterAll(t *testing.T) {
 	assert := assert.New(t)
-
-	s := NewSet(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
-	acc := NewSet()
+	cs := chunks.NewMemoryStore()
+	s := NewSet(cs, Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	acc := NewSet(cs)
 	s.IterAll(func(v Value) {
 		_, ok := v.(Int32)
 		assert.True(ok)
@@ -161,6 +171,7 @@ func TestSetIterAll(t *testing.T) {
 
 func TestSetIterAllP(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 
 	testIter := func(concurrency, setLen int) {
 		values := make([]Value, setLen)
@@ -168,7 +179,7 @@ func TestSetIterAllP(t *testing.T) {
 			values[i] = UInt64(i)
 		}
 
-		s := NewSet(values...)
+		s := NewSet(cs, values...)
 
 		cur := 0
 		mu := sync.Mutex{}
@@ -214,8 +225,9 @@ func TestSetIterAllP(t *testing.T) {
 }
 
 func testSetOrder(assert *assert.Assertions, valueType Type, value []Value, expectOrdering []Value) {
+	cs := chunks.NewMemoryStore()
 	mapTr := MakeCompoundType(SetKind, valueType)
-	m := NewTypedSet(mapTr, value...)
+	m := NewTypedSet(cs, mapTr, value...)
 	i := 0
 	m.IterAll(func(value Value) {
 		assert.Equal(expectOrdering[i].Ref().String(), value.Ref().String())
@@ -343,25 +355,28 @@ func TestSetOrdering(t *testing.T) {
 
 func TestSetFilter(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 
-	s := NewSet(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	s := NewSet(cs, Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
 	s2 := s.Filter(func(v Value) bool {
 		i, ok := v.(Int32)
 		assert.True(ok)
 		return i%2 == 0
 	})
 
-	assert.True(NewSet(Int32(0), Int32(2), Int32(4)).Equals(s2))
+	assert.True(NewSet(cs, Int32(0), Int32(2), Int32(4)).Equals(s2))
 }
 
 func TestSetType(t *testing.T) {
 	assert := assert.New(t)
-	s := NewSet()
+	cs := chunks.NewMemoryStore()
+
+	s := NewSet(cs)
 	assert.True(s.Type().Equals(MakeCompoundType(SetKind, MakePrimitiveType(ValueKind))))
 
 	tr := MakeCompoundType(SetKind, MakePrimitiveType(UInt64Kind))
 
-	s = newSetFromData(setData{}, tr)
+	s = newSetFromData(cs, setData{}, tr)
 	assert.Equal(tr, s.Type())
 
 	s2 := s.Remove(UInt64(1))
@@ -378,26 +393,27 @@ func TestSetType(t *testing.T) {
 	s2 = s.Insert(UInt64(0), UInt64(1))
 	assert.True(tr.Equals(s2.Type()))
 
-	s3 := NewSet(UInt64(2))
+	s3 := NewSet(cs, UInt64(2))
 	s3.t = s2.t
 	s2 = s.Union(s3)
 	assert.True(tr.Equals(s2.Type()))
 
 	assert.Panics(func() { s.Insert(Bool(true)) })
 	assert.Panics(func() { s.Insert(UInt64(3), Bool(true)) })
-	assert.Panics(func() { s.Union(NewSet(UInt64(2))) })
-	assert.Panics(func() { s.Union(NewSet(Bool(true))) })
-	assert.Panics(func() { s.Union(s, NewSet(Bool(true))) })
+	assert.Panics(func() { s.Union(NewSet(cs, UInt64(2))) })
+	assert.Panics(func() { s.Union(NewSet(cs, Bool(true))) })
+	assert.Panics(func() { s.Union(s, NewSet(cs, Bool(true))) })
 }
 
 func TestSetChunks(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 
-	l1 := NewSet(Int32(0))
+	l1 := NewSet(cs, Int32(0))
 	c1 := l1.Chunks()
 	assert.Len(c1, 0)
 
-	l2 := NewSet(NewRef(Int32(0).Ref()))
+	l2 := NewSet(cs, NewRef(Int32(0).Ref()))
 	c2 := l2.Chunks()
 	assert.Len(c2, 1)
 }

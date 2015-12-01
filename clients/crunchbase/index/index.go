@@ -63,11 +63,11 @@ func main() {
 		addTimeRounds := func(tn int64, roundRaiseDef RoundRaiseDef) {
 			t := time.Unix(tn, 0)
 			year := int32(t.Year())
-			yk := NewKey().SetYear(year)
+			yk := NewKey(ds).SetYear(year)
 			c <- entry{yk, roundRaiseDef}
 
 			q := timeToQuarter(t)
-			qk := NewKey().SetQuarter(QuarterDef{Year: year, Quarter: q}.New())
+			qk := NewKey(ds).SetQuarter(QuarterDef{Year: year, Quarter: q}.New(ds))
 			c <- entry{qk, roundRaiseDef}
 		}
 
@@ -75,7 +75,7 @@ func main() {
 			v.IterAllP(64, func(permalink string, r RefOfCompany) {
 				company := r.TargetValue(ds)
 				categoryList := company.CategoryList()
-				regionKey := NewKey().SetRegion(company.Region())
+				regionKey := NewKey(ds).SetRegion(company.Region())
 				company.Rounds().IterAll(func(r RefOfRound) {
 					round := r.TargetValue(ds)
 					roundRaiseDef := RoundRaiseDef{
@@ -83,7 +83,7 @@ func main() {
 						Details: r.TargetRef(),
 					}
 					categoryList.IterAllP(64, func(category string) {
-						key := NewKey().SetCategory(category)
+						key := NewKey(ds).SetCategory(category)
 						c <- entry{key, roundRaiseDef}
 					})
 
@@ -91,7 +91,7 @@ func main() {
 					addTimeRounds(round.FundedAt(), roundRaiseDef)
 
 					roundType := classifyRoundType(round)
-					roundTypeKey := NewKey().SetRoundType(roundType)
+					roundTypeKey := NewKey(ds).SetRoundType(roundType)
 					c <- entry{roundTypeKey, roundRaiseDef}
 				})
 			})
@@ -111,7 +111,7 @@ func main() {
 			mapOfRoundsDef[keyRef] = setDef
 		}
 
-		output := mapOfRoundsDef.New()
+		output := mapOfRoundsDef.New(ds)
 		_, ok = outputDataset.Commit(output)
 		d.Exp.True(ok, "Could not commit due to conflicting edit")
 

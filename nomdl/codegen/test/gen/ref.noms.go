@@ -30,13 +30,15 @@ func init() {
 type StructWithRef struct {
 	_r RefOfSetOfFloat32
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewStructWithRef() StructWithRef {
+func NewStructWithRef(cs chunks.ChunkStore) StructWithRef {
 	return StructWithRef{
 		_r: NewRefOfSetOfFloat32(ref.Ref{}),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -45,9 +47,10 @@ type StructWithRefDef struct {
 	R ref.Ref
 }
 
-func (def StructWithRefDef) New() StructWithRef {
+func (def StructWithRefDef) New(cs chunks.ChunkStore) StructWithRef {
 	return StructWithRef{
 		_r:  NewRefOfSetOfFloat32(def.R),
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -68,9 +71,9 @@ func init() {
 	types.RegisterStruct(__typeForStructWithRef, builderForStructWithRef, readerForStructWithRef)
 }
 
-func builderForStructWithRef(values []types.Value) types.Value {
+func builderForStructWithRef(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := StructWithRef{ref: &ref.Ref{}}
+	s := StructWithRef{ref: &ref.Ref{}, cs: cs}
 	s._r = values[i].(RefOfSetOfFloat32)
 	i++
 	return s
@@ -161,7 +164,7 @@ func builderForRefOfListOfString(r ref.Ref) types.Value {
 	return NewRefOfListOfString(r)
 }
 
-func (r RefOfListOfString) TargetValue(cs chunks.ChunkSource) ListOfString {
+func (r RefOfListOfString) TargetValue(cs chunks.ChunkStore) ListOfString {
 	return types.ReadValue(r.target, cs).(ListOfString)
 }
 
@@ -173,21 +176,22 @@ func (r RefOfListOfString) SetTargetValue(val ListOfString, cs chunks.ChunkSink)
 
 type ListOfRefOfFloat32 struct {
 	l   types.List
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfRefOfFloat32() ListOfRefOfFloat32 {
-	return ListOfRefOfFloat32{types.NewTypedList(__typeForListOfRefOfFloat32), &ref.Ref{}}
+func NewListOfRefOfFloat32(cs chunks.ChunkStore) ListOfRefOfFloat32 {
+	return ListOfRefOfFloat32{types.NewTypedList(cs, __typeForListOfRefOfFloat32), cs, &ref.Ref{}}
 }
 
 type ListOfRefOfFloat32Def []ref.Ref
 
-func (def ListOfRefOfFloat32Def) New() ListOfRefOfFloat32 {
+func (def ListOfRefOfFloat32Def) New(cs chunks.ChunkStore) ListOfRefOfFloat32 {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
 		l[i] = NewRefOfFloat32(d)
 	}
-	return ListOfRefOfFloat32{types.NewTypedList(__typeForListOfRefOfFloat32, l...), &ref.Ref{}}
+	return ListOfRefOfFloat32{types.NewTypedList(cs, __typeForListOfRefOfFloat32, l...), cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfFloat32) Def() ListOfRefOfFloat32Def {
@@ -228,8 +232,8 @@ func init() {
 	types.RegisterValue(__typeForListOfRefOfFloat32, builderForListOfRefOfFloat32, readerForListOfRefOfFloat32)
 }
 
-func builderForListOfRefOfFloat32(v types.Value) types.Value {
-	return ListOfRefOfFloat32{v.(types.List), &ref.Ref{}}
+func builderForListOfRefOfFloat32(cs chunks.ChunkStore, v types.Value) types.Value {
+	return ListOfRefOfFloat32{v.(types.List), cs, &ref.Ref{}}
 }
 
 func readerForListOfRefOfFloat32(v types.Value) types.Value {
@@ -249,27 +253,27 @@ func (l ListOfRefOfFloat32) Get(i uint64) RefOfFloat32 {
 }
 
 func (l ListOfRefOfFloat32) Slice(idx uint64, end uint64) ListOfRefOfFloat32 {
-	return ListOfRefOfFloat32{l.l.Slice(idx, end), &ref.Ref{}}
+	return ListOfRefOfFloat32{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfFloat32) Set(i uint64, val RefOfFloat32) ListOfRefOfFloat32 {
-	return ListOfRefOfFloat32{l.l.Set(i, val), &ref.Ref{}}
+	return ListOfRefOfFloat32{l.l.Set(i, val), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfFloat32) Append(v ...RefOfFloat32) ListOfRefOfFloat32 {
-	return ListOfRefOfFloat32{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfRefOfFloat32{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfFloat32) Insert(idx uint64, v ...RefOfFloat32) ListOfRefOfFloat32 {
-	return ListOfRefOfFloat32{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfRefOfFloat32{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfFloat32) Remove(idx uint64, end uint64) ListOfRefOfFloat32 {
-	return ListOfRefOfFloat32{l.l.Remove(idx, end), &ref.Ref{}}
+	return ListOfRefOfFloat32{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfFloat32) RemoveAt(idx uint64) ListOfRefOfFloat32 {
-	return ListOfRefOfFloat32{(l.l.RemoveAt(idx)), &ref.Ref{}}
+	return ListOfRefOfFloat32{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfFloat32) fromElemSlice(p []RefOfFloat32) []types.Value {
@@ -308,7 +312,7 @@ func (l ListOfRefOfFloat32) Filter(cb ListOfRefOfFloat32FilterCallback) ListOfRe
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(RefOfFloat32), i)
 	})
-	return ListOfRefOfFloat32{out, &ref.Ref{}}
+	return ListOfRefOfFloat32{out, l.cs, &ref.Ref{}}
 }
 
 // RefOfSetOfFloat32
@@ -360,7 +364,7 @@ func builderForRefOfSetOfFloat32(r ref.Ref) types.Value {
 	return NewRefOfSetOfFloat32(r)
 }
 
-func (r RefOfSetOfFloat32) TargetValue(cs chunks.ChunkSource) SetOfFloat32 {
+func (r RefOfSetOfFloat32) TargetValue(cs chunks.ChunkStore) SetOfFloat32 {
 	return types.ReadValue(r.target, cs).(SetOfFloat32)
 }
 
@@ -372,21 +376,22 @@ func (r RefOfSetOfFloat32) SetTargetValue(val SetOfFloat32, cs chunks.ChunkSink)
 
 type ListOfString struct {
 	l   types.List
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfString() ListOfString {
-	return ListOfString{types.NewTypedList(__typeForListOfString), &ref.Ref{}}
+func NewListOfString(cs chunks.ChunkStore) ListOfString {
+	return ListOfString{types.NewTypedList(cs, __typeForListOfString), cs, &ref.Ref{}}
 }
 
 type ListOfStringDef []string
 
-func (def ListOfStringDef) New() ListOfString {
+func (def ListOfStringDef) New(cs chunks.ChunkStore) ListOfString {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
 		l[i] = types.NewString(d)
 	}
-	return ListOfString{types.NewTypedList(__typeForListOfString, l...), &ref.Ref{}}
+	return ListOfString{types.NewTypedList(cs, __typeForListOfString, l...), cs, &ref.Ref{}}
 }
 
 func (l ListOfString) Def() ListOfStringDef {
@@ -427,8 +432,8 @@ func init() {
 	types.RegisterValue(__typeForListOfString, builderForListOfString, readerForListOfString)
 }
 
-func builderForListOfString(v types.Value) types.Value {
-	return ListOfString{v.(types.List), &ref.Ref{}}
+func builderForListOfString(cs chunks.ChunkStore, v types.Value) types.Value {
+	return ListOfString{v.(types.List), cs, &ref.Ref{}}
 }
 
 func readerForListOfString(v types.Value) types.Value {
@@ -448,27 +453,27 @@ func (l ListOfString) Get(i uint64) string {
 }
 
 func (l ListOfString) Slice(idx uint64, end uint64) ListOfString {
-	return ListOfString{l.l.Slice(idx, end), &ref.Ref{}}
+	return ListOfString{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfString) Set(i uint64, val string) ListOfString {
-	return ListOfString{l.l.Set(i, types.NewString(val)), &ref.Ref{}}
+	return ListOfString{l.l.Set(i, types.NewString(val)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfString) Append(v ...string) ListOfString {
-	return ListOfString{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfString{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfString) Insert(idx uint64, v ...string) ListOfString {
-	return ListOfString{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfString{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfString) Remove(idx uint64, end uint64) ListOfString {
-	return ListOfString{l.l.Remove(idx, end), &ref.Ref{}}
+	return ListOfString{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfString) RemoveAt(idx uint64) ListOfString {
-	return ListOfString{(l.l.RemoveAt(idx)), &ref.Ref{}}
+	return ListOfString{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfString) fromElemSlice(p []string) []types.Value {
@@ -507,7 +512,7 @@ func (l ListOfString) Filter(cb ListOfStringFilterCallback) ListOfString {
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(types.String).String(), i)
 	})
-	return ListOfString{out, &ref.Ref{}}
+	return ListOfString{out, l.cs, &ref.Ref{}}
 }
 
 // RefOfFloat32
@@ -559,7 +564,7 @@ func builderForRefOfFloat32(r ref.Ref) types.Value {
 	return NewRefOfFloat32(r)
 }
 
-func (r RefOfFloat32) TargetValue(cs chunks.ChunkSource) float32 {
+func (r RefOfFloat32) TargetValue(cs chunks.ChunkStore) float32 {
 	return float32(types.ReadValue(r.target, cs).(types.Float32))
 }
 
@@ -571,23 +576,24 @@ func (r RefOfFloat32) SetTargetValue(val float32, cs chunks.ChunkSink) RefOfFloa
 
 type SetOfFloat32 struct {
 	s   types.Set
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSetOfFloat32() SetOfFloat32 {
-	return SetOfFloat32{types.NewTypedSet(__typeForSetOfFloat32), &ref.Ref{}}
+func NewSetOfFloat32(cs chunks.ChunkStore) SetOfFloat32 {
+	return SetOfFloat32{types.NewTypedSet(cs, __typeForSetOfFloat32), cs, &ref.Ref{}}
 }
 
 type SetOfFloat32Def map[float32]bool
 
-func (def SetOfFloat32Def) New() SetOfFloat32 {
+func (def SetOfFloat32Def) New(cs chunks.ChunkStore) SetOfFloat32 {
 	l := make([]types.Value, len(def))
 	i := 0
 	for d, _ := range def {
 		l[i] = types.Float32(d)
 		i++
 	}
-	return SetOfFloat32{types.NewTypedSet(__typeForSetOfFloat32, l...), &ref.Ref{}}
+	return SetOfFloat32{types.NewTypedSet(cs, __typeForSetOfFloat32, l...), cs, &ref.Ref{}}
 }
 
 func (s SetOfFloat32) Def() SetOfFloat32Def {
@@ -629,8 +635,8 @@ func init() {
 	types.RegisterValue(__typeForSetOfFloat32, builderForSetOfFloat32, readerForSetOfFloat32)
 }
 
-func builderForSetOfFloat32(v types.Value) types.Value {
-	return SetOfFloat32{v.(types.Set), &ref.Ref{}}
+func builderForSetOfFloat32(cs chunks.ChunkStore, v types.Value) types.Value {
+	return SetOfFloat32{v.(types.Set), cs, &ref.Ref{}}
 }
 
 func readerForSetOfFloat32(v types.Value) types.Value {
@@ -677,23 +683,23 @@ func (s SetOfFloat32) Filter(cb SetOfFloat32FilterCallback) SetOfFloat32 {
 	out := s.s.Filter(func(v types.Value) bool {
 		return cb(float32(v.(types.Float32)))
 	})
-	return SetOfFloat32{out, &ref.Ref{}}
+	return SetOfFloat32{out, s.cs, &ref.Ref{}}
 }
 
 func (s SetOfFloat32) Insert(p ...float32) SetOfFloat32 {
-	return SetOfFloat32{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
+	return SetOfFloat32{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfFloat32) Remove(p ...float32) SetOfFloat32 {
-	return SetOfFloat32{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
+	return SetOfFloat32{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfFloat32) Union(others ...SetOfFloat32) SetOfFloat32 {
-	return SetOfFloat32{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
+	return SetOfFloat32{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfFloat32) Subtract(others ...SetOfFloat32) SetOfFloat32 {
-	return SetOfFloat32{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}}
+	return SetOfFloat32{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfFloat32) Any() float32 {

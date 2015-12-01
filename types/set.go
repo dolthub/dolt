@@ -5,6 +5,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -13,6 +14,7 @@ type Set struct {
 	indexOf indexOfSetFn
 	t       Type
 	ref     *ref.Ref
+	cs      chunks.ChunkStore
 }
 
 type setData []Value
@@ -21,12 +23,12 @@ type indexOfSetFn func(m setData, v Value) int
 
 var setType = MakeCompoundType(SetKind, MakePrimitiveType(ValueKind))
 
-func NewSet(v ...Value) Set {
-	return NewTypedSet(setType, v...)
+func NewSet(cs chunks.ChunkStore, v ...Value) Set {
+	return NewTypedSet(cs, setType, v...)
 }
 
-func NewTypedSet(t Type, v ...Value) Set {
-	return newSetFromData(buildSetData(setData{}, v, t), t)
+func NewTypedSet(cs chunks.ChunkStore, t Type, v ...Value) Set {
+	return newSetFromData(cs, buildSetData(setData{}, v, t), t)
 }
 
 func (s Set) Empty() bool {
@@ -44,7 +46,7 @@ func (s Set) Has(v Value) bool {
 
 func (s Set) Insert(values ...Value) Set {
 	assertType(s.elemType(), values...)
-	return newSetFromData(buildSetData(s.data, values, s.t), s.t)
+	return newSetFromData(s.cs, buildSetData(s.data, values, s.t), s.t)
 }
 
 func (s Set) Remove(values ...Value) Set {
@@ -57,7 +59,7 @@ func (s Set) Remove(values ...Value) Set {
 			}
 		}
 	}
-	return newSetFromData(data, s.t)
+	return newSetFromData(s.cs, data, s.t)
 }
 
 func (s Set) Union(others ...Set) Set {
@@ -133,7 +135,7 @@ func (s Set) Filter(cb setFilterCallback) Set {
 		}
 	}
 	// Already sorted.
-	return newSetFromData(data, s.t)
+	return newSetFromData(s.cs, data, s.t)
 }
 
 func (s Set) Any() Value {
@@ -170,8 +172,8 @@ func (s Set) elemType() Type {
 	return s.t.Desc.(CompoundDesc).ElemTypes[0]
 }
 
-func newSetFromData(m setData, t Type) Set {
-	return Set{m, getIndexFnForSetType(t), t, &ref.Ref{}}
+func newSetFromData(cs chunks.ChunkStore, m setData, t Type) Set {
+	return Set{m, getIndexFnForSetType(t), t, &ref.Ref{}, cs}
 }
 
 func copySetData(m setData) setData {

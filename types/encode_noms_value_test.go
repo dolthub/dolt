@@ -44,7 +44,7 @@ func TestWriteList(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	typ := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
-	v := NewTypedList(typ, Int32(0), Int32(1), Int32(2), Int32(3))
+	v := NewTypedList(cs, typ, Int32(0), Int32(1), Int32(2), Int32(3))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -57,9 +57,9 @@ func TestWriteListOfList(t *testing.T) {
 
 	it := MakeCompoundType(ListKind, MakePrimitiveType(Int16Kind))
 	typ := MakeCompoundType(ListKind, it)
-	l1 := NewTypedList(it, Int16(0))
-	l2 := NewTypedList(it, Int16(1), Int16(2), Int16(3))
-	v := NewTypedList(typ, l1, l2)
+	l1 := NewTypedList(cs, it, Int16(0))
+	l2 := NewTypedList(cs, it, Int16(1), Int16(2), Int16(3))
+	v := NewTypedList(cs, typ, l1, l2)
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -72,7 +72,7 @@ func TestWriteSet(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	typ := MakeCompoundType(SetKind, MakePrimitiveType(UInt32Kind))
-	v := NewTypedSet(typ, UInt32(3), UInt32(1), UInt32(2), UInt32(0))
+	v := NewTypedSet(cs, typ, UInt32(3), UInt32(1), UInt32(2), UInt32(0))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -86,7 +86,7 @@ func TestWriteSetOfSet(t *testing.T) {
 
 	st := MakeCompoundType(SetKind, MakePrimitiveType(Int32Kind))
 	typ := MakeCompoundType(SetKind, st)
-	v := NewTypedSet(typ, NewTypedSet(st, Int32(0)), NewTypedSet(st, Int32(1), Int32(2), Int32(3)))
+	v := NewTypedSet(cs, typ, NewTypedSet(cs, st, Int32(0)), NewTypedSet(cs, st, Int32(1), Int32(2), Int32(3)))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -99,7 +99,7 @@ func TestWriteMap(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	typ := MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(BoolKind))
-	v := NewTypedMap(typ, NewString("a"), Bool(false), NewString("b"), Bool(true))
+	v := NewTypedMap(cs, typ, NewString("a"), Bool(false), NewString("b"), Bool(true))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -114,7 +114,7 @@ func TestWriteMapOfMap(t *testing.T) {
 	kt := MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(Int64Kind))
 	vt := MakeCompoundType(SetKind, MakePrimitiveType(BoolKind))
 	typ := MakeCompoundType(MapKind, kt, vt)
-	v := NewTypedMap(typ, NewTypedMap(kt, NewString("a"), Int64(0)), NewTypedSet(vt, Bool(true)))
+	v := NewTypedMap(cs, typ, NewTypedMap(cs, kt, NewString("a"), Int64(0)), NewTypedSet(cs, vt, Bool(true)))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -232,12 +232,12 @@ func TestWriteStructWithList(t *testing.T) {
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
 
-	v := NewStruct(typ, typeDef, structData{"l": NewList(NewString("a"), NewString("b"))})
+	v := NewStruct(typ, typeDef, structData{"l": NewList(cs, NewString("a"), NewString("b"))})
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), []interface{}{"a", "b"}}, w.toArray())
 
-	v = NewStruct(typ, typeDef, structData{"l": NewList()})
+	v = NewStruct(typ, typeDef, structData{"l": NewList(cs)})
 	w = newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), []interface{}{}}, w.toArray())
@@ -305,7 +305,7 @@ func TestWriteListOfEnum(t *testing.T) {
 	pkgRef := RegisterPackage(&pkg)
 	et := MakeType(pkgRef, 0)
 	typ := MakeCompoundType(ListKind, et)
-	v := NewTypedList(typ, Enum{0, et}, Enum{1, et}, Enum{2, et})
+	v := NewTypedList(cs, typ, Enum{0, et}, Enum{1, et}, Enum{2, et})
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -318,7 +318,7 @@ func TestWriteListOfValue(t *testing.T) {
 
 	typ := MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
 	blob := NewMemoryBlob(bytes.NewBuffer([]byte{0x01}))
-	v := NewTypedList(typ,
+	v := NewTypedList(cs, typ,
 		Bool(true),
 		UInt8(1),
 		UInt16(1),
@@ -365,7 +365,7 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 	pkgRef := RegisterPackage(&pkg)
 	listType := MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
 	structType := MakeType(pkgRef, 0)
-	v := NewTypedList(listType, NewStruct(structType, typeDef, structData{"x": Int32(42)}))
+	v := NewTypedList(cs, listType, NewStruct(structType, typeDef, structData{"x": Int32(42)}))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -383,7 +383,7 @@ func TestWriteListOfValueWithType(t *testing.T) {
 	pkgRef := RegisterPackage(&pkg)
 
 	typ := MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
-	v := NewTypedList(typ,
+	v := NewTypedList(cs, typ,
 		Bool(true),
 		MakePrimitiveType(Int32Kind),
 		MakePrimitiveType(TypeKind),
@@ -475,7 +475,7 @@ func TestWriteListOfTypes(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	typ := MakeCompoundType(ListKind, MakePrimitiveType(TypeKind))
-	v := NewTypedList(typ, MakePrimitiveType(BoolKind), MakeEnumType("E", "a", "b", "c"), MakePrimitiveType(StringKind))
+	v := NewTypedList(cs, typ, MakePrimitiveType(BoolKind), MakeEnumType("E", "a", "b", "c"), MakePrimitiveType(StringKind))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)

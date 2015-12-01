@@ -4,13 +4,15 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/chunks"
 )
 
 func TestListLeafIterator(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 
-	l := NewList(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
-	l2 := NewList()
+	l := NewList(cs, Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	l2 := NewList(cs)
 	it := newListIterator(l)
 	i := 0
 	for v, done := it.next(); !done; v, done = it.next() {
@@ -24,9 +26,10 @@ func TestListLeafIterator(t *testing.T) {
 
 func TestListLeafIteratorAt(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 
-	l := NewList(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
-	l2 := NewList()
+	l := NewList(cs, Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	l2 := NewList(cs)
 	it := newListIteratorAt(l, 2)
 	i := 2
 	for v, done := it.next(); !done; v, done = it.next() {
@@ -40,14 +43,15 @@ func TestListLeafIteratorAt(t *testing.T) {
 
 func TestCompoundListIterator(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 
 	uint8List := make([]Value, 256)
 	for i, _ := range uint8List {
 		uint8List[i] = UInt8(i)
 	}
 
-	l := NewList(uint8List...)
-	l2 := NewList()
+	l := NewList(cs, uint8List...)
+	l2 := NewList(cs)
 	it := newListIterator(l)
 	i := 0
 	for v, done := it.next(); !done; v, done = it.next() {
@@ -61,14 +65,15 @@ func TestCompoundListIterator(t *testing.T) {
 
 func TestCompoundListIteratorAt(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 
 	uint8List := make([]Value, 256)
 	for i, _ := range uint8List {
 		uint8List[i] = UInt8(i)
 	}
 
-	l := NewList(uint8List...)
-	l2 := NewList()
+	l := NewList(cs, uint8List...)
+	l2 := NewList(cs)
 	it := newListIteratorAt(l, 100)
 	i := 100
 	for v, done := it.next(); !done; v, done = it.next() {

@@ -6,30 +6,32 @@ import (
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/chunks"
 )
 
 type List struct {
 	values []Value
 	t      Type
 	ref    *ref.Ref
+	cs chunks.ChunkStore
 }
 
 var listType = MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
 
-func NewList(v ...Value) List {
-	return NewTypedList(listType, v...)
+func NewList(cs chunks.ChunkStore, v ...Value) List {
+	return NewTypedList(cs, listType, v...)
 }
 
-func NewTypedList(t Type, v ...Value) List {
+func NewTypedList(cs chunks.ChunkStore, t Type, v ...Value) List {
 	// Copy because Noms values are supposed to be immutable and Go allows v to be reused (thus mutable).
 	values := make([]Value, len(v))
 	copy(values, v)
-	return newListNoCopy(values, t)
+	return newListNoCopy(cs, values, t)
 }
 
-func newListNoCopy(values []Value, t Type) List {
+func newListNoCopy(cs chunks.ChunkStore, values []Value, t Type) List {
 	d.Chk.Equal(ListKind, t.Kind())
-	return List{values, t, &ref.Ref{}}
+	return List{values, t, &ref.Ref{}, cs}
 }
 
 func (l List) Len() uint64 {
@@ -99,7 +101,7 @@ func (l List) Filter(cb listFilterCallback) List {
 			data = append(data, v)
 		}
 	}
-	return newListNoCopy(data, l.t)
+	return newListNoCopy(l.cs, data, l.t)
 }
 
 type MapFunc func(v Value, index uint64) interface{}
@@ -144,7 +146,7 @@ func (l List) mapInternal(sem chan int, mf MapFunc, offset uint64) []interface{}
 }
 
 func (l List) Slice(start uint64, end uint64) List {
-	return newListNoCopy(l.values[start:end], l.t)
+	return newListNoCopy(l.cs, l.values[start:end], l.t)
 }
 
 func (l List) Set(idx uint64, v Value) List {
@@ -152,13 +154,13 @@ func (l List) Set(idx uint64, v Value) List {
 	values := make([]Value, len(l.values))
 	copy(values, l.values)
 	values[idx] = v
-	return newListNoCopy(values, l.t)
+	return newListNoCopy(l.cs, values, l.t)
 }
 
 func (l List) Append(v ...Value) List {
 	assertType(l.elemType(), v...)
 	values := append(l.values, v...)
-	return newListNoCopy(values, l.t)
+	return newListNoCopy(l.cs, values, l.t)
 }
 
 func (l List) Insert(idx uint64, v ...Value) List {
@@ -167,14 +169,14 @@ func (l List) Insert(idx uint64, v ...Value) List {
 	copy(values, l.values[:idx])
 	copy(values[idx:], v)
 	copy(values[idx+uint64(len(v)):], l.values[idx:])
-	return newListNoCopy(values, l.t)
+	return newListNoCopy(l.cs, values, l.t)
 }
 
 func (l List) Remove(start uint64, end uint64) List {
 	values := make([]Value, uint64(len(l.values))-(end-start))
 	copy(values, l.values[:start])
 	copy(values[start:], l.values[end:])
-	return newListNoCopy(values, l.t)
+	return newListNoCopy(l.cs, values, l.t)
 }
 
 func (l List) RemoveAt(idx uint64) List {

@@ -3,6 +3,7 @@
 package gen
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -80,13 +81,15 @@ func (e Handedness) ChildValues() []types.Value {
 type EnumStruct struct {
 	_hand Handedness
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewEnumStruct() EnumStruct {
+func NewEnumStruct(cs chunks.ChunkStore) EnumStruct {
 	return EnumStruct{
 		_hand: NewHandedness(),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -95,9 +98,10 @@ type EnumStructDef struct {
 	Hand Handedness
 }
 
-func (def EnumStructDef) New() EnumStruct {
+func (def EnumStructDef) New(cs chunks.ChunkStore) EnumStruct {
 	return EnumStruct{
 		_hand: def.Hand,
+		cs:    cs,
 		ref:   &ref.Ref{},
 	}
 }
@@ -118,9 +122,9 @@ func init() {
 	types.RegisterStruct(__typeForEnumStruct, builderForEnumStruct, readerForEnumStruct)
 }
 
-func builderForEnumStruct(values []types.Value) types.Value {
+func builderForEnumStruct(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := EnumStruct{ref: &ref.Ref{}}
+	s := EnumStruct{ref: &ref.Ref{}, cs: cs}
 	s._hand = values[i].(Handedness)
 	i++
 	return s

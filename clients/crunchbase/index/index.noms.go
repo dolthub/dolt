@@ -104,14 +104,16 @@ type Quarter struct {
 	_Year    int32
 	_Quarter QuarterEnum
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewQuarter() Quarter {
+func NewQuarter(cs chunks.ChunkStore) Quarter {
 	return Quarter{
 		_Year:    int32(0),
 		_Quarter: NewQuarterEnum(),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -121,10 +123,11 @@ type QuarterDef struct {
 	Quarter QuarterEnum
 }
 
-func (def QuarterDef) New() Quarter {
+func (def QuarterDef) New(cs chunks.ChunkStore) Quarter {
 	return Quarter{
 		_Year:    def.Year,
 		_Quarter: def.Quarter,
+		cs:       cs,
 		ref:      &ref.Ref{},
 	}
 }
@@ -146,9 +149,9 @@ func init() {
 	types.RegisterStruct(__typeForQuarter, builderForQuarter, readerForQuarter)
 }
 
-func builderForQuarter(values []types.Value) types.Value {
+func builderForQuarter(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := Quarter{ref: &ref.Ref{}}
+	s := Quarter{ref: &ref.Ref{}, cs: cs}
 	s._Year = int32(values[i].(types.Int32))
 	i++
 	s._Quarter = values[i].(QuarterEnum)
@@ -208,13 +211,15 @@ func (s Quarter) SetQuarter(val QuarterEnum) Quarter {
 type Key struct {
 	__unionIndex uint32
 	__unionValue types.Value
+	cs           chunks.ChunkStore
 	ref          *ref.Ref
 }
 
-func NewKey() Key {
+func NewKey(cs chunks.ChunkStore) Key {
 	return Key{
 		__unionIndex: 0,
 		__unionValue: types.NewString(""),
+		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -224,10 +229,11 @@ type KeyDef struct {
 	__unionValue types.Value
 }
 
-func (def KeyDef) New() Key {
+func (def KeyDef) New(cs chunks.ChunkStore) Key {
 	return Key{
 		__unionIndex: def.__unionIndex,
 		__unionValue: def.__unionValue,
+		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -249,9 +255,9 @@ func init() {
 	types.RegisterStruct(__typeForKey, builderForKey, readerForKey)
 }
 
-func builderForKey(values []types.Value) types.Value {
+func builderForKey(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := Key{ref: &ref.Ref{}}
+	s := Key{ref: &ref.Ref{}, cs: cs}
 	s.__unionIndex = uint32(values[i].(types.UInt32))
 	i++
 	s.__unionValue = values[i]
@@ -307,7 +313,7 @@ func (def KeyDef) Category() (val string, ok bool) {
 	return def.__unionValue.(types.String).String(), true
 }
 
-func (def KeyDef) SetCategory(val string) KeyDef {
+func (def KeyDef) SetCategory(cs chunks.ChunkStore, val string) KeyDef {
 	def.__unionIndex = 0
 	def.__unionValue = types.NewString(val)
 	return def
@@ -334,9 +340,9 @@ func (def KeyDef) Quarter() (val QuarterDef, ok bool) {
 	return def.__unionValue.(Quarter).Def(), true
 }
 
-func (def KeyDef) SetQuarter(val QuarterDef) KeyDef {
+func (def KeyDef) SetQuarter(cs chunks.ChunkStore, val QuarterDef) KeyDef {
 	def.__unionIndex = 1
-	def.__unionValue = val.New()
+	def.__unionValue = val.New(cs)
 	return def
 }
 
@@ -361,7 +367,7 @@ func (def KeyDef) Region() (val string, ok bool) {
 	return def.__unionValue.(types.String).String(), true
 }
 
-func (def KeyDef) SetRegion(val string) KeyDef {
+func (def KeyDef) SetRegion(cs chunks.ChunkStore, val string) KeyDef {
 	def.__unionIndex = 2
 	def.__unionValue = types.NewString(val)
 	return def
@@ -388,7 +394,7 @@ func (def KeyDef) RoundType() (val RoundTypeEnum, ok bool) {
 	return def.__unionValue.(RoundTypeEnum), true
 }
 
-func (def KeyDef) SetRoundType(val RoundTypeEnum) KeyDef {
+func (def KeyDef) SetRoundType(cs chunks.ChunkStore, val RoundTypeEnum) KeyDef {
 	def.__unionIndex = 3
 	def.__unionValue = val
 	return def
@@ -415,7 +421,7 @@ func (def KeyDef) Year() (val int32, ok bool) {
 	return int32(def.__unionValue.(types.Int32)), true
 }
 
-func (def KeyDef) SetYear(val int32) KeyDef {
+func (def KeyDef) SetYear(cs chunks.ChunkStore, val int32) KeyDef {
 	def.__unionIndex = 4
 	def.__unionValue = types.Int32(val)
 	return def
@@ -484,14 +490,16 @@ type RoundRaise struct {
 	_Raised  float64
 	_Details RefOfRound
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewRoundRaise() RoundRaise {
+func NewRoundRaise(cs chunks.ChunkStore) RoundRaise {
 	return RoundRaise{
 		_Raised:  float64(0),
 		_Details: NewRefOfRound(ref.Ref{}),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -501,10 +509,11 @@ type RoundRaiseDef struct {
 	Details ref.Ref
 }
 
-func (def RoundRaiseDef) New() RoundRaise {
+func (def RoundRaiseDef) New(cs chunks.ChunkStore) RoundRaise {
 	return RoundRaise{
 		_Raised:  def.Raised,
 		_Details: NewRefOfRound(def.Details),
+		cs:       cs,
 		ref:      &ref.Ref{},
 	}
 }
@@ -526,9 +535,9 @@ func init() {
 	types.RegisterStruct(__typeForRoundRaise, builderForRoundRaise, readerForRoundRaise)
 }
 
-func builderForRoundRaise(values []types.Value) types.Value {
+func builderForRoundRaise(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := RoundRaise{ref: &ref.Ref{}}
+	s := RoundRaise{ref: &ref.Ref{}, cs: cs}
 	s._Raised = float64(values[i].(types.Float64))
 	i++
 	s._Details = values[i].(RefOfRound)
@@ -588,21 +597,22 @@ func (s RoundRaise) SetDetails(val RefOfRound) RoundRaise {
 
 type MapOfStringToRefOfCompany struct {
 	m   types.Map
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfStringToRefOfCompany() MapOfStringToRefOfCompany {
-	return MapOfStringToRefOfCompany{types.NewTypedMap(__typeForMapOfStringToRefOfCompany), &ref.Ref{}}
+func NewMapOfStringToRefOfCompany(cs chunks.ChunkStore) MapOfStringToRefOfCompany {
+	return MapOfStringToRefOfCompany{types.NewTypedMap(cs, __typeForMapOfStringToRefOfCompany), cs, &ref.Ref{}}
 }
 
 type MapOfStringToRefOfCompanyDef map[string]ref.Ref
 
-func (def MapOfStringToRefOfCompanyDef) New() MapOfStringToRefOfCompany {
+func (def MapOfStringToRefOfCompanyDef) New(cs chunks.ChunkStore) MapOfStringToRefOfCompany {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), NewRefOfCompany(v))
 	}
-	return MapOfStringToRefOfCompany{types.NewTypedMap(__typeForMapOfStringToRefOfCompany, kv...), &ref.Ref{}}
+	return MapOfStringToRefOfCompany{types.NewTypedMap(cs, __typeForMapOfStringToRefOfCompany, kv...), cs, &ref.Ref{}}
 }
 
 func (m MapOfStringToRefOfCompany) Def() MapOfStringToRefOfCompanyDef {
@@ -644,8 +654,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfStringToRefOfCompany, builderForMapOfStringToRefOfCompany, readerForMapOfStringToRefOfCompany)
 }
 
-func builderForMapOfStringToRefOfCompany(v types.Value) types.Value {
-	return MapOfStringToRefOfCompany{v.(types.Map), &ref.Ref{}}
+func builderForMapOfStringToRefOfCompany(cs chunks.ChunkStore, v types.Value) types.Value {
+	return MapOfStringToRefOfCompany{v.(types.Map), cs, &ref.Ref{}}
 }
 
 func readerForMapOfStringToRefOfCompany(v types.Value) types.Value {
@@ -677,13 +687,13 @@ func (m MapOfStringToRefOfCompany) MaybeGet(p string) (RefOfCompany, bool) {
 }
 
 func (m MapOfStringToRefOfCompany) Set(k string, v RefOfCompany) MapOfStringToRefOfCompany {
-	return MapOfStringToRefOfCompany{m.m.Set(types.NewString(k), v), &ref.Ref{}}
+	return MapOfStringToRefOfCompany{m.m.Set(types.NewString(k), v), m.cs, &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToRefOfCompany) Remove(p string) MapOfStringToRefOfCompany {
-	return MapOfStringToRefOfCompany{m.m.Remove(types.NewString(p)), &ref.Ref{}}
+	return MapOfStringToRefOfCompany{m.m.Remove(types.NewString(p)), m.cs, &ref.Ref{}}
 }
 
 type MapOfStringToRefOfCompanyIterCallback func(k string, v RefOfCompany) (stop bool)
@@ -714,28 +724,29 @@ func (m MapOfStringToRefOfCompany) Filter(cb MapOfStringToRefOfCompanyFilterCall
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(k.(types.String).String(), v.(RefOfCompany))
 	})
-	return MapOfStringToRefOfCompany{out, &ref.Ref{}}
+	return MapOfStringToRefOfCompany{out, m.cs, &ref.Ref{}}
 }
 
 // MapOfRefOfKeyToSetOfRoundRaise
 
 type MapOfRefOfKeyToSetOfRoundRaise struct {
 	m   types.Map
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfRefOfKeyToSetOfRoundRaise() MapOfRefOfKeyToSetOfRoundRaise {
-	return MapOfRefOfKeyToSetOfRoundRaise{types.NewTypedMap(__typeForMapOfRefOfKeyToSetOfRoundRaise), &ref.Ref{}}
+func NewMapOfRefOfKeyToSetOfRoundRaise(cs chunks.ChunkStore) MapOfRefOfKeyToSetOfRoundRaise {
+	return MapOfRefOfKeyToSetOfRoundRaise{types.NewTypedMap(cs, __typeForMapOfRefOfKeyToSetOfRoundRaise), cs, &ref.Ref{}}
 }
 
 type MapOfRefOfKeyToSetOfRoundRaiseDef map[ref.Ref]SetOfRoundRaiseDef
 
-func (def MapOfRefOfKeyToSetOfRoundRaiseDef) New() MapOfRefOfKeyToSetOfRoundRaise {
+func (def MapOfRefOfKeyToSetOfRoundRaiseDef) New(cs chunks.ChunkStore) MapOfRefOfKeyToSetOfRoundRaise {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
-		kv = append(kv, NewRefOfKey(k), v.New())
+		kv = append(kv, NewRefOfKey(k), v.New(cs))
 	}
-	return MapOfRefOfKeyToSetOfRoundRaise{types.NewTypedMap(__typeForMapOfRefOfKeyToSetOfRoundRaise, kv...), &ref.Ref{}}
+	return MapOfRefOfKeyToSetOfRoundRaise{types.NewTypedMap(cs, __typeForMapOfRefOfKeyToSetOfRoundRaise, kv...), cs, &ref.Ref{}}
 }
 
 func (m MapOfRefOfKeyToSetOfRoundRaise) Def() MapOfRefOfKeyToSetOfRoundRaiseDef {
@@ -777,8 +788,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfRefOfKeyToSetOfRoundRaise, builderForMapOfRefOfKeyToSetOfRoundRaise, readerForMapOfRefOfKeyToSetOfRoundRaise)
 }
 
-func builderForMapOfRefOfKeyToSetOfRoundRaise(v types.Value) types.Value {
-	return MapOfRefOfKeyToSetOfRoundRaise{v.(types.Map), &ref.Ref{}}
+func builderForMapOfRefOfKeyToSetOfRoundRaise(cs chunks.ChunkStore, v types.Value) types.Value {
+	return MapOfRefOfKeyToSetOfRoundRaise{v.(types.Map), cs, &ref.Ref{}}
 }
 
 func readerForMapOfRefOfKeyToSetOfRoundRaise(v types.Value) types.Value {
@@ -804,19 +815,19 @@ func (m MapOfRefOfKeyToSetOfRoundRaise) Get(p RefOfKey) SetOfRoundRaise {
 func (m MapOfRefOfKeyToSetOfRoundRaise) MaybeGet(p RefOfKey) (SetOfRoundRaise, bool) {
 	v, ok := m.m.MaybeGet(p)
 	if !ok {
-		return NewSetOfRoundRaise(), false
+		return NewSetOfRoundRaise(m.cs), false
 	}
 	return v.(SetOfRoundRaise), ok
 }
 
 func (m MapOfRefOfKeyToSetOfRoundRaise) Set(k RefOfKey, v SetOfRoundRaise) MapOfRefOfKeyToSetOfRoundRaise {
-	return MapOfRefOfKeyToSetOfRoundRaise{m.m.Set(k, v), &ref.Ref{}}
+	return MapOfRefOfKeyToSetOfRoundRaise{m.m.Set(k, v), m.cs, &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfRefOfKeyToSetOfRoundRaise) Remove(p RefOfKey) MapOfRefOfKeyToSetOfRoundRaise {
-	return MapOfRefOfKeyToSetOfRoundRaise{m.m.Remove(p), &ref.Ref{}}
+	return MapOfRefOfKeyToSetOfRoundRaise{m.m.Remove(p), m.cs, &ref.Ref{}}
 }
 
 type MapOfRefOfKeyToSetOfRoundRaiseIterCallback func(k RefOfKey, v SetOfRoundRaise) (stop bool)
@@ -847,7 +858,7 @@ func (m MapOfRefOfKeyToSetOfRoundRaise) Filter(cb MapOfRefOfKeyToSetOfRoundRaise
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(k.(RefOfKey), v.(SetOfRoundRaise))
 	})
-	return MapOfRefOfKeyToSetOfRoundRaise{out, &ref.Ref{}}
+	return MapOfRefOfKeyToSetOfRoundRaise{out, m.cs, &ref.Ref{}}
 }
 
 // RefOfCompany
@@ -899,7 +910,7 @@ func builderForRefOfCompany(r ref.Ref) types.Value {
 	return NewRefOfCompany(r)
 }
 
-func (r RefOfCompany) TargetValue(cs chunks.ChunkSource) Company {
+func (r RefOfCompany) TargetValue(cs chunks.ChunkStore) Company {
 	return types.ReadValue(r.target, cs).(Company)
 }
 
@@ -956,7 +967,7 @@ func builderForRefOfKey(r ref.Ref) types.Value {
 	return NewRefOfKey(r)
 }
 
-func (r RefOfKey) TargetValue(cs chunks.ChunkSource) Key {
+func (r RefOfKey) TargetValue(cs chunks.ChunkStore) Key {
 	return types.ReadValue(r.target, cs).(Key)
 }
 
@@ -968,23 +979,24 @@ func (r RefOfKey) SetTargetValue(val Key, cs chunks.ChunkSink) RefOfKey {
 
 type SetOfRoundRaise struct {
 	s   types.Set
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSetOfRoundRaise() SetOfRoundRaise {
-	return SetOfRoundRaise{types.NewTypedSet(__typeForSetOfRoundRaise), &ref.Ref{}}
+func NewSetOfRoundRaise(cs chunks.ChunkStore) SetOfRoundRaise {
+	return SetOfRoundRaise{types.NewTypedSet(cs, __typeForSetOfRoundRaise), cs, &ref.Ref{}}
 }
 
 type SetOfRoundRaiseDef map[RoundRaiseDef]bool
 
-func (def SetOfRoundRaiseDef) New() SetOfRoundRaise {
+func (def SetOfRoundRaiseDef) New(cs chunks.ChunkStore) SetOfRoundRaise {
 	l := make([]types.Value, len(def))
 	i := 0
 	for d, _ := range def {
-		l[i] = d.New()
+		l[i] = d.New(cs)
 		i++
 	}
-	return SetOfRoundRaise{types.NewTypedSet(__typeForSetOfRoundRaise, l...), &ref.Ref{}}
+	return SetOfRoundRaise{types.NewTypedSet(cs, __typeForSetOfRoundRaise, l...), cs, &ref.Ref{}}
 }
 
 func (s SetOfRoundRaise) Def() SetOfRoundRaiseDef {
@@ -1026,8 +1038,8 @@ func init() {
 	types.RegisterValue(__typeForSetOfRoundRaise, builderForSetOfRoundRaise, readerForSetOfRoundRaise)
 }
 
-func builderForSetOfRoundRaise(v types.Value) types.Value {
-	return SetOfRoundRaise{v.(types.Set), &ref.Ref{}}
+func builderForSetOfRoundRaise(cs chunks.ChunkStore, v types.Value) types.Value {
+	return SetOfRoundRaise{v.(types.Set), cs, &ref.Ref{}}
 }
 
 func readerForSetOfRoundRaise(v types.Value) types.Value {
@@ -1074,23 +1086,23 @@ func (s SetOfRoundRaise) Filter(cb SetOfRoundRaiseFilterCallback) SetOfRoundRais
 	out := s.s.Filter(func(v types.Value) bool {
 		return cb(v.(RoundRaise))
 	})
-	return SetOfRoundRaise{out, &ref.Ref{}}
+	return SetOfRoundRaise{out, s.cs, &ref.Ref{}}
 }
 
 func (s SetOfRoundRaise) Insert(p ...RoundRaise) SetOfRoundRaise {
-	return SetOfRoundRaise{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
+	return SetOfRoundRaise{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfRoundRaise) Remove(p ...RoundRaise) SetOfRoundRaise {
-	return SetOfRoundRaise{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
+	return SetOfRoundRaise{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfRoundRaise) Union(others ...SetOfRoundRaise) SetOfRoundRaise {
-	return SetOfRoundRaise{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
+	return SetOfRoundRaise{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfRoundRaise) Subtract(others ...SetOfRoundRaise) SetOfRoundRaise {
-	return SetOfRoundRaise{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}}
+	return SetOfRoundRaise{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfRoundRaise) Any() RoundRaise {

@@ -14,16 +14,16 @@ import (
 type compoundBlob struct {
 	metaSequenceObject
 	ref *ref.Ref
-	cs  chunks.ChunkSource
+	cs  chunks.ChunkStore
 }
 
 var typeForCompoundBlob = MakeCompoundType(MetaSequenceKind, MakePrimitiveType(BlobKind))
 
-func newCompoundBlob(tuples metaSequenceData, cs chunks.ChunkSource) compoundBlob {
+func newCompoundBlob(tuples metaSequenceData, cs chunks.ChunkStore) compoundBlob {
 	return buildCompoundBlob(tuples, typeForCompoundBlob, cs).(compoundBlob)
 }
 
-func buildCompoundBlob(tuples metaSequenceData, t Type, cs chunks.ChunkSource) Value {
+func buildCompoundBlob(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
 	d.Chk.True(t.Equals(typeForCompoundBlob))
 	return compoundBlob{metaSequenceObject{tuples, typeForCompoundBlob}, &ref.Ref{}, cs}
 }

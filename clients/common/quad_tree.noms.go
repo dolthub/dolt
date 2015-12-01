@@ -56,14 +56,16 @@ type Node struct {
 	_Geoposition Geoposition
 	_Reference   RefOfValue
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewNode() Node {
+func NewNode(cs chunks.ChunkStore) Node {
 	return Node{
-		_Geoposition: NewGeoposition(),
+		_Geoposition: NewGeoposition(cs),
 		_Reference:   NewRefOfValue(ref.Ref{}),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -73,10 +75,11 @@ type NodeDef struct {
 	Reference   ref.Ref
 }
 
-func (def NodeDef) New() Node {
+func (def NodeDef) New(cs chunks.ChunkStore) Node {
 	return Node{
-		_Geoposition: def.Geoposition.New(),
+		_Geoposition: def.Geoposition.New(cs),
 		_Reference:   NewRefOfValue(def.Reference),
+		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -98,9 +101,9 @@ func init() {
 	types.RegisterStruct(__typeForNode, builderForNode, readerForNode)
 }
 
-func builderForNode(values []types.Value) types.Value {
+func builderForNode(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := Node{ref: &ref.Ref{}}
+	s := Node{ref: &ref.Ref{}, cs: cs}
 	s._Geoposition = values[i].(Geoposition)
 	i++
 	s._Reference = values[i].(RefOfValue)
@@ -167,18 +170,20 @@ type QuadTree struct {
 	_Path           string
 	_Georectangle   Georectangle
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewQuadTree() QuadTree {
+func NewQuadTree(cs chunks.ChunkStore) QuadTree {
 	return QuadTree{
-		_Nodes:          NewListOfNode(),
-		_Tiles:          NewMapOfStringToQuadTree(),
+		_Nodes:          NewListOfNode(cs),
+		_Tiles:          NewMapOfStringToQuadTree(cs),
 		_Depth:          uint8(0),
 		_NumDescendents: uint32(0),
 		_Path:           "",
-		_Georectangle:   NewGeorectangle(),
+		_Georectangle:   NewGeorectangle(cs),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -192,14 +197,15 @@ type QuadTreeDef struct {
 	Georectangle   GeorectangleDef
 }
 
-func (def QuadTreeDef) New() QuadTree {
+func (def QuadTreeDef) New(cs chunks.ChunkStore) QuadTree {
 	return QuadTree{
-		_Nodes:          def.Nodes.New(),
-		_Tiles:          def.Tiles.New(),
+		_Nodes:          def.Nodes.New(cs),
+		_Tiles:          def.Tiles.New(cs),
 		_Depth:          def.Depth,
 		_NumDescendents: def.NumDescendents,
 		_Path:           def.Path,
-		_Georectangle:   def.Georectangle.New(),
+		_Georectangle:   def.Georectangle.New(cs),
+		cs:              cs,
 		ref:             &ref.Ref{},
 	}
 }
@@ -225,9 +231,9 @@ func init() {
 	types.RegisterStruct(__typeForQuadTree, builderForQuadTree, readerForQuadTree)
 }
 
-func builderForQuadTree(values []types.Value) types.Value {
+func builderForQuadTree(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := QuadTree{ref: &ref.Ref{}}
+	s := QuadTree{ref: &ref.Ref{}, cs: cs}
 	s._Nodes = values[i].(ListOfNode)
 	i++
 	s._Tiles = values[i].(MapOfStringToQuadTree)
@@ -351,18 +357,20 @@ type SQuadTree struct {
 	_Path           string
 	_Georectangle   Georectangle
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSQuadTree() SQuadTree {
+func NewSQuadTree(cs chunks.ChunkStore) SQuadTree {
 	return SQuadTree{
-		_Nodes:          NewListOfRefOfValue(),
-		_Tiles:          NewMapOfStringToRefOfSQuadTree(),
+		_Nodes:          NewListOfRefOfValue(cs),
+		_Tiles:          NewMapOfStringToRefOfSQuadTree(cs),
 		_Depth:          uint8(0),
 		_NumDescendents: uint32(0),
 		_Path:           "",
-		_Georectangle:   NewGeorectangle(),
+		_Georectangle:   NewGeorectangle(cs),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -376,14 +384,15 @@ type SQuadTreeDef struct {
 	Georectangle   GeorectangleDef
 }
 
-func (def SQuadTreeDef) New() SQuadTree {
+func (def SQuadTreeDef) New(cs chunks.ChunkStore) SQuadTree {
 	return SQuadTree{
-		_Nodes:          def.Nodes.New(),
-		_Tiles:          def.Tiles.New(),
+		_Nodes:          def.Nodes.New(cs),
+		_Tiles:          def.Tiles.New(cs),
 		_Depth:          def.Depth,
 		_NumDescendents: def.NumDescendents,
 		_Path:           def.Path,
-		_Georectangle:   def.Georectangle.New(),
+		_Georectangle:   def.Georectangle.New(cs),
+		cs:              cs,
 		ref:             &ref.Ref{},
 	}
 }
@@ -409,9 +418,9 @@ func init() {
 	types.RegisterStruct(__typeForSQuadTree, builderForSQuadTree, readerForSQuadTree)
 }
 
-func builderForSQuadTree(values []types.Value) types.Value {
+func builderForSQuadTree(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := SQuadTree{ref: &ref.Ref{}}
+	s := SQuadTree{ref: &ref.Ref{}, cs: cs}
 	s._Nodes = values[i].(ListOfRefOfValue)
 	i++
 	s._Tiles = values[i].(MapOfStringToRefOfSQuadTree)
@@ -574,7 +583,7 @@ func builderForRefOfValue(r ref.Ref) types.Value {
 	return NewRefOfValue(r)
 }
 
-func (r RefOfValue) TargetValue(cs chunks.ChunkSource) types.Value {
+func (r RefOfValue) TargetValue(cs chunks.ChunkStore) types.Value {
 	return types.ReadValue(r.target, cs)
 }
 
@@ -586,21 +595,22 @@ func (r RefOfValue) SetTargetValue(val types.Value, cs chunks.ChunkSink) RefOfVa
 
 type ListOfNode struct {
 	l   types.List
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfNode() ListOfNode {
-	return ListOfNode{types.NewTypedList(__typeForListOfNode), &ref.Ref{}}
+func NewListOfNode(cs chunks.ChunkStore) ListOfNode {
+	return ListOfNode{types.NewTypedList(cs, __typeForListOfNode), cs, &ref.Ref{}}
 }
 
 type ListOfNodeDef []NodeDef
 
-func (def ListOfNodeDef) New() ListOfNode {
+func (def ListOfNodeDef) New(cs chunks.ChunkStore) ListOfNode {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
-		l[i] = d.New()
+		l[i] = d.New(cs)
 	}
-	return ListOfNode{types.NewTypedList(__typeForListOfNode, l...), &ref.Ref{}}
+	return ListOfNode{types.NewTypedList(cs, __typeForListOfNode, l...), cs, &ref.Ref{}}
 }
 
 func (l ListOfNode) Def() ListOfNodeDef {
@@ -641,8 +651,8 @@ func init() {
 	types.RegisterValue(__typeForListOfNode, builderForListOfNode, readerForListOfNode)
 }
 
-func builderForListOfNode(v types.Value) types.Value {
-	return ListOfNode{v.(types.List), &ref.Ref{}}
+func builderForListOfNode(cs chunks.ChunkStore, v types.Value) types.Value {
+	return ListOfNode{v.(types.List), cs, &ref.Ref{}}
 }
 
 func readerForListOfNode(v types.Value) types.Value {
@@ -662,27 +672,27 @@ func (l ListOfNode) Get(i uint64) Node {
 }
 
 func (l ListOfNode) Slice(idx uint64, end uint64) ListOfNode {
-	return ListOfNode{l.l.Slice(idx, end), &ref.Ref{}}
+	return ListOfNode{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfNode) Set(i uint64, val Node) ListOfNode {
-	return ListOfNode{l.l.Set(i, val), &ref.Ref{}}
+	return ListOfNode{l.l.Set(i, val), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfNode) Append(v ...Node) ListOfNode {
-	return ListOfNode{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfNode{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfNode) Insert(idx uint64, v ...Node) ListOfNode {
-	return ListOfNode{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfNode{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfNode) Remove(idx uint64, end uint64) ListOfNode {
-	return ListOfNode{l.l.Remove(idx, end), &ref.Ref{}}
+	return ListOfNode{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfNode) RemoveAt(idx uint64) ListOfNode {
-	return ListOfNode{(l.l.RemoveAt(idx)), &ref.Ref{}}
+	return ListOfNode{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfNode) fromElemSlice(p []Node) []types.Value {
@@ -721,28 +731,29 @@ func (l ListOfNode) Filter(cb ListOfNodeFilterCallback) ListOfNode {
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(Node), i)
 	})
-	return ListOfNode{out, &ref.Ref{}}
+	return ListOfNode{out, l.cs, &ref.Ref{}}
 }
 
 // MapOfStringToQuadTree
 
 type MapOfStringToQuadTree struct {
 	m   types.Map
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfStringToQuadTree() MapOfStringToQuadTree {
-	return MapOfStringToQuadTree{types.NewTypedMap(__typeForMapOfStringToQuadTree), &ref.Ref{}}
+func NewMapOfStringToQuadTree(cs chunks.ChunkStore) MapOfStringToQuadTree {
+	return MapOfStringToQuadTree{types.NewTypedMap(cs, __typeForMapOfStringToQuadTree), cs, &ref.Ref{}}
 }
 
 type MapOfStringToQuadTreeDef map[string]QuadTreeDef
 
-func (def MapOfStringToQuadTreeDef) New() MapOfStringToQuadTree {
+func (def MapOfStringToQuadTreeDef) New(cs chunks.ChunkStore) MapOfStringToQuadTree {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
-		kv = append(kv, types.NewString(k), v.New())
+		kv = append(kv, types.NewString(k), v.New(cs))
 	}
-	return MapOfStringToQuadTree{types.NewTypedMap(__typeForMapOfStringToQuadTree, kv...), &ref.Ref{}}
+	return MapOfStringToQuadTree{types.NewTypedMap(cs, __typeForMapOfStringToQuadTree, kv...), cs, &ref.Ref{}}
 }
 
 func (m MapOfStringToQuadTree) Def() MapOfStringToQuadTreeDef {
@@ -784,8 +795,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfStringToQuadTree, builderForMapOfStringToQuadTree, readerForMapOfStringToQuadTree)
 }
 
-func builderForMapOfStringToQuadTree(v types.Value) types.Value {
-	return MapOfStringToQuadTree{v.(types.Map), &ref.Ref{}}
+func builderForMapOfStringToQuadTree(cs chunks.ChunkStore, v types.Value) types.Value {
+	return MapOfStringToQuadTree{v.(types.Map), cs, &ref.Ref{}}
 }
 
 func readerForMapOfStringToQuadTree(v types.Value) types.Value {
@@ -811,19 +822,19 @@ func (m MapOfStringToQuadTree) Get(p string) QuadTree {
 func (m MapOfStringToQuadTree) MaybeGet(p string) (QuadTree, bool) {
 	v, ok := m.m.MaybeGet(types.NewString(p))
 	if !ok {
-		return NewQuadTree(), false
+		return NewQuadTree(m.cs), false
 	}
 	return v.(QuadTree), ok
 }
 
 func (m MapOfStringToQuadTree) Set(k string, v QuadTree) MapOfStringToQuadTree {
-	return MapOfStringToQuadTree{m.m.Set(types.NewString(k), v), &ref.Ref{}}
+	return MapOfStringToQuadTree{m.m.Set(types.NewString(k), v), m.cs, &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToQuadTree) Remove(p string) MapOfStringToQuadTree {
-	return MapOfStringToQuadTree{m.m.Remove(types.NewString(p)), &ref.Ref{}}
+	return MapOfStringToQuadTree{m.m.Remove(types.NewString(p)), m.cs, &ref.Ref{}}
 }
 
 type MapOfStringToQuadTreeIterCallback func(k string, v QuadTree) (stop bool)
@@ -854,28 +865,29 @@ func (m MapOfStringToQuadTree) Filter(cb MapOfStringToQuadTreeFilterCallback) Ma
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(k.(types.String).String(), v.(QuadTree))
 	})
-	return MapOfStringToQuadTree{out, &ref.Ref{}}
+	return MapOfStringToQuadTree{out, m.cs, &ref.Ref{}}
 }
 
 // ListOfRefOfValue
 
 type ListOfRefOfValue struct {
 	l   types.List
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfRefOfValue() ListOfRefOfValue {
-	return ListOfRefOfValue{types.NewTypedList(__typeForListOfRefOfValue), &ref.Ref{}}
+func NewListOfRefOfValue(cs chunks.ChunkStore) ListOfRefOfValue {
+	return ListOfRefOfValue{types.NewTypedList(cs, __typeForListOfRefOfValue), cs, &ref.Ref{}}
 }
 
 type ListOfRefOfValueDef []ref.Ref
 
-func (def ListOfRefOfValueDef) New() ListOfRefOfValue {
+func (def ListOfRefOfValueDef) New(cs chunks.ChunkStore) ListOfRefOfValue {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
 		l[i] = NewRefOfValue(d)
 	}
-	return ListOfRefOfValue{types.NewTypedList(__typeForListOfRefOfValue, l...), &ref.Ref{}}
+	return ListOfRefOfValue{types.NewTypedList(cs, __typeForListOfRefOfValue, l...), cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfValue) Def() ListOfRefOfValueDef {
@@ -916,8 +928,8 @@ func init() {
 	types.RegisterValue(__typeForListOfRefOfValue, builderForListOfRefOfValue, readerForListOfRefOfValue)
 }
 
-func builderForListOfRefOfValue(v types.Value) types.Value {
-	return ListOfRefOfValue{v.(types.List), &ref.Ref{}}
+func builderForListOfRefOfValue(cs chunks.ChunkStore, v types.Value) types.Value {
+	return ListOfRefOfValue{v.(types.List), cs, &ref.Ref{}}
 }
 
 func readerForListOfRefOfValue(v types.Value) types.Value {
@@ -937,27 +949,27 @@ func (l ListOfRefOfValue) Get(i uint64) RefOfValue {
 }
 
 func (l ListOfRefOfValue) Slice(idx uint64, end uint64) ListOfRefOfValue {
-	return ListOfRefOfValue{l.l.Slice(idx, end), &ref.Ref{}}
+	return ListOfRefOfValue{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfValue) Set(i uint64, val RefOfValue) ListOfRefOfValue {
-	return ListOfRefOfValue{l.l.Set(i, val), &ref.Ref{}}
+	return ListOfRefOfValue{l.l.Set(i, val), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfValue) Append(v ...RefOfValue) ListOfRefOfValue {
-	return ListOfRefOfValue{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfRefOfValue{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfValue) Insert(idx uint64, v ...RefOfValue) ListOfRefOfValue {
-	return ListOfRefOfValue{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfRefOfValue{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfValue) Remove(idx uint64, end uint64) ListOfRefOfValue {
-	return ListOfRefOfValue{l.l.Remove(idx, end), &ref.Ref{}}
+	return ListOfRefOfValue{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfValue) RemoveAt(idx uint64) ListOfRefOfValue {
-	return ListOfRefOfValue{(l.l.RemoveAt(idx)), &ref.Ref{}}
+	return ListOfRefOfValue{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfValue) fromElemSlice(p []RefOfValue) []types.Value {
@@ -996,28 +1008,29 @@ func (l ListOfRefOfValue) Filter(cb ListOfRefOfValueFilterCallback) ListOfRefOfV
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(RefOfValue), i)
 	})
-	return ListOfRefOfValue{out, &ref.Ref{}}
+	return ListOfRefOfValue{out, l.cs, &ref.Ref{}}
 }
 
 // MapOfStringToRefOfSQuadTree
 
 type MapOfStringToRefOfSQuadTree struct {
 	m   types.Map
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfStringToRefOfSQuadTree() MapOfStringToRefOfSQuadTree {
-	return MapOfStringToRefOfSQuadTree{types.NewTypedMap(__typeForMapOfStringToRefOfSQuadTree), &ref.Ref{}}
+func NewMapOfStringToRefOfSQuadTree(cs chunks.ChunkStore) MapOfStringToRefOfSQuadTree {
+	return MapOfStringToRefOfSQuadTree{types.NewTypedMap(cs, __typeForMapOfStringToRefOfSQuadTree), cs, &ref.Ref{}}
 }
 
 type MapOfStringToRefOfSQuadTreeDef map[string]ref.Ref
 
-func (def MapOfStringToRefOfSQuadTreeDef) New() MapOfStringToRefOfSQuadTree {
+func (def MapOfStringToRefOfSQuadTreeDef) New(cs chunks.ChunkStore) MapOfStringToRefOfSQuadTree {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), NewRefOfSQuadTree(v))
 	}
-	return MapOfStringToRefOfSQuadTree{types.NewTypedMap(__typeForMapOfStringToRefOfSQuadTree, kv...), &ref.Ref{}}
+	return MapOfStringToRefOfSQuadTree{types.NewTypedMap(cs, __typeForMapOfStringToRefOfSQuadTree, kv...), cs, &ref.Ref{}}
 }
 
 func (m MapOfStringToRefOfSQuadTree) Def() MapOfStringToRefOfSQuadTreeDef {
@@ -1059,8 +1072,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfStringToRefOfSQuadTree, builderForMapOfStringToRefOfSQuadTree, readerForMapOfStringToRefOfSQuadTree)
 }
 
-func builderForMapOfStringToRefOfSQuadTree(v types.Value) types.Value {
-	return MapOfStringToRefOfSQuadTree{v.(types.Map), &ref.Ref{}}
+func builderForMapOfStringToRefOfSQuadTree(cs chunks.ChunkStore, v types.Value) types.Value {
+	return MapOfStringToRefOfSQuadTree{v.(types.Map), cs, &ref.Ref{}}
 }
 
 func readerForMapOfStringToRefOfSQuadTree(v types.Value) types.Value {
@@ -1092,13 +1105,13 @@ func (m MapOfStringToRefOfSQuadTree) MaybeGet(p string) (RefOfSQuadTree, bool) {
 }
 
 func (m MapOfStringToRefOfSQuadTree) Set(k string, v RefOfSQuadTree) MapOfStringToRefOfSQuadTree {
-	return MapOfStringToRefOfSQuadTree{m.m.Set(types.NewString(k), v), &ref.Ref{}}
+	return MapOfStringToRefOfSQuadTree{m.m.Set(types.NewString(k), v), m.cs, &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToRefOfSQuadTree) Remove(p string) MapOfStringToRefOfSQuadTree {
-	return MapOfStringToRefOfSQuadTree{m.m.Remove(types.NewString(p)), &ref.Ref{}}
+	return MapOfStringToRefOfSQuadTree{m.m.Remove(types.NewString(p)), m.cs, &ref.Ref{}}
 }
 
 type MapOfStringToRefOfSQuadTreeIterCallback func(k string, v RefOfSQuadTree) (stop bool)
@@ -1129,7 +1142,7 @@ func (m MapOfStringToRefOfSQuadTree) Filter(cb MapOfStringToRefOfSQuadTreeFilter
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(k.(types.String).String(), v.(RefOfSQuadTree))
 	})
-	return MapOfStringToRefOfSQuadTree{out, &ref.Ref{}}
+	return MapOfStringToRefOfSQuadTree{out, m.cs, &ref.Ref{}}
 }
 
 // RefOfSQuadTree
@@ -1181,7 +1194,7 @@ func builderForRefOfSQuadTree(r ref.Ref) types.Value {
 	return NewRefOfSQuadTree(r)
 }
 
-func (r RefOfSQuadTree) TargetValue(cs chunks.ChunkSource) SQuadTree {
+func (r RefOfSQuadTree) TargetValue(cs chunks.ChunkStore) SQuadTree {
 	return types.ReadValue(r.target, cs).(SQuadTree)
 }
 

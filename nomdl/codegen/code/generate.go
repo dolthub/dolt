@@ -83,7 +83,7 @@ func (gen Generator) DefToValue(val string, t types.Type) string {
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return gen.NativeToValue(val, rt)
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
-		return fmt.Sprintf("%s.New()", val)
+		return fmt.Sprintf("%s.New(cs)", val)
 	case types.RefKind:
 		return fmt.Sprintf("New%s(%s)", gen.UserName(rt), val)
 	}
@@ -209,7 +209,7 @@ func (gen Generator) ValueToUser(val string, t types.Type) string {
 }
 
 // UserZero returns a string containing Go code to create an uninitialized instance of the User type appropriate for t.
-func (gen Generator) UserZero(t types.Type) string {
+func (gen Generator) UserZero(val string, t types.Type) string {
 	rt := gen.R.Resolve(t)
 	k := rt.Kind()
 	switch k {
@@ -221,7 +221,9 @@ func (gen Generator) UserZero(t types.Type) string {
 		return fmt.Sprintf("New%s()", gen.UserName(rt))
 	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return fmt.Sprintf("%s(0)", strings.ToLower(kindToString(k)))
-	case types.ListKind, types.MapKind, types.PackageKind, types.SetKind, types.StructKind:
+	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
+		return fmt.Sprintf("New%s(%s)", gen.UserName(rt), val)
+	case types.PackageKind:
 		return fmt.Sprintf("New%s()", gen.UserName(rt))
 	case types.RefKind:
 		return fmt.Sprintf("New%s(ref.Ref{})", gen.UserName(rt))
@@ -246,11 +248,11 @@ func (gen Generator) ValueZero(t types.Type) string {
 	case types.BoolKind:
 		return fmt.Sprintf("%sBool(false)", gen.TypesPackage)
 	case types.EnumKind:
-		return gen.UserZero(t)
+		return gen.UserZero("", t)
 	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
 		return fmt.Sprintf("%s%s(0)", gen.TypesPackage, kindToString(k))
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind:
-		return gen.UserZero(t)
+		return gen.UserZero("", t)
 	case types.PackageKind:
 		return fmt.Sprintf("%sNewPackage()", gen.TypesPackage)
 	case types.StringKind:

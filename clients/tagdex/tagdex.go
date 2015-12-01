@@ -49,7 +49,7 @@ func main() {
 	}
 	outputDS := dataset.NewDataset(store, *outputID)
 
-	out := NewMapOfStringToSetOfRefOfRemotePhoto()
+	out := NewMapOfStringToSetOfRefOfRemotePhoto(store)
 
 	t0 := time.Now()
 	numValues := 0

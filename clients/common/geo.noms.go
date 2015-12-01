@@ -3,6 +3,7 @@
 package common
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -38,14 +39,16 @@ type Geoposition struct {
 	_Latitude  float32
 	_Longitude float32
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewGeoposition() Geoposition {
+func NewGeoposition(cs chunks.ChunkStore) Geoposition {
 	return Geoposition{
 		_Latitude:  float32(0),
 		_Longitude: float32(0),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -55,10 +58,11 @@ type GeopositionDef struct {
 	Longitude float32
 }
 
-func (def GeopositionDef) New() Geoposition {
+func (def GeopositionDef) New(cs chunks.ChunkStore) Geoposition {
 	return Geoposition{
 		_Latitude:  def.Latitude,
 		_Longitude: def.Longitude,
+		cs:         cs,
 		ref:        &ref.Ref{},
 	}
 }
@@ -80,9 +84,9 @@ func init() {
 	types.RegisterStruct(__typeForGeoposition, builderForGeoposition, readerForGeoposition)
 }
 
-func builderForGeoposition(values []types.Value) types.Value {
+func builderForGeoposition(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := Geoposition{ref: &ref.Ref{}}
+	s := Geoposition{ref: &ref.Ref{}, cs: cs}
 	s._Latitude = float32(values[i].(types.Float32))
 	i++
 	s._Longitude = float32(values[i].(types.Float32))
@@ -143,14 +147,16 @@ type Georectangle struct {
 	_TopLeft     Geoposition
 	_BottomRight Geoposition
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewGeorectangle() Georectangle {
+func NewGeorectangle(cs chunks.ChunkStore) Georectangle {
 	return Georectangle{
-		_TopLeft:     NewGeoposition(),
-		_BottomRight: NewGeoposition(),
+		_TopLeft:     NewGeoposition(cs),
+		_BottomRight: NewGeoposition(cs),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -160,10 +166,11 @@ type GeorectangleDef struct {
 	BottomRight GeopositionDef
 }
 
-func (def GeorectangleDef) New() Georectangle {
+func (def GeorectangleDef) New(cs chunks.ChunkStore) Georectangle {
 	return Georectangle{
-		_TopLeft:     def.TopLeft.New(),
-		_BottomRight: def.BottomRight.New(),
+		_TopLeft:     def.TopLeft.New(cs),
+		_BottomRight: def.BottomRight.New(cs),
+		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -185,9 +192,9 @@ func init() {
 	types.RegisterStruct(__typeForGeorectangle, builderForGeorectangle, readerForGeorectangle)
 }
 
-func builderForGeorectangle(values []types.Value) types.Value {
+func builderForGeorectangle(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := Georectangle{ref: &ref.Ref{}}
+	s := Georectangle{ref: &ref.Ref{}, cs: cs}
 	s._TopLeft = values[i].(Geoposition)
 	i++
 	s._BottomRight = values[i].(Geoposition)

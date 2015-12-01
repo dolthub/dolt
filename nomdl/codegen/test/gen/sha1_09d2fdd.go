@@ -3,6 +3,7 @@
 package gen
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -39,14 +40,16 @@ type D struct {
 	_structField S
 	_enumField   E
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewD() D {
+func NewD(cs chunks.ChunkStore) D {
 	return D{
-		_structField: NewS(),
+		_structField: NewS(cs),
 		_enumField:   NewE(),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -56,10 +59,11 @@ type DDef struct {
 	EnumField   E
 }
 
-func (def DDef) New() D {
+func (def DDef) New(cs chunks.ChunkStore) D {
 	return D{
-		_structField: def.StructField.New(),
+		_structField: def.StructField.New(cs),
 		_enumField:   def.EnumField,
+		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -81,9 +85,9 @@ func init() {
 	types.RegisterStruct(__typeForD, builderForD, readerForD)
 }
 
-func builderForD(values []types.Value) types.Value {
+func builderForD(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := D{ref: &ref.Ref{}}
+	s := D{ref: &ref.Ref{}, cs: cs}
 	s._structField = values[i].(S)
 	i++
 	s._enumField = values[i].(E)
@@ -144,13 +148,15 @@ func (s D) SetEnumField(val E) D {
 type DUser struct {
 	_Dfield D
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewDUser() DUser {
+func NewDUser(cs chunks.ChunkStore) DUser {
 	return DUser{
-		_Dfield: NewD(),
+		_Dfield: NewD(cs),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -159,9 +165,10 @@ type DUserDef struct {
 	Dfield DDef
 }
 
-func (def DUserDef) New() DUser {
+func (def DUserDef) New(cs chunks.ChunkStore) DUser {
 	return DUser{
-		_Dfield: def.Dfield.New(),
+		_Dfield: def.Dfield.New(cs),
+		cs:      cs,
 		ref:     &ref.Ref{},
 	}
 }
@@ -182,9 +189,9 @@ func init() {
 	types.RegisterStruct(__typeForDUser, builderForDUser, readerForDUser)
 }
 
-func builderForDUser(values []types.Value) types.Value {
+func builderForDUser(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := DUser{ref: &ref.Ref{}}
+	s := DUser{ref: &ref.Ref{}, cs: cs}
 	s._Dfield = values[i].(D)
 	i++
 	return s

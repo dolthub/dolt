@@ -3,6 +3,7 @@
 package gen
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -11,21 +12,22 @@ import (
 
 type ListOfInt64 struct {
 	l   types.List
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfInt64() ListOfInt64 {
-	return ListOfInt64{types.NewTypedList(__typeForListOfInt64), &ref.Ref{}}
+func NewListOfInt64(cs chunks.ChunkStore) ListOfInt64 {
+	return ListOfInt64{types.NewTypedList(cs, __typeForListOfInt64), cs, &ref.Ref{}}
 }
 
 type ListOfInt64Def []int64
 
-func (def ListOfInt64Def) New() ListOfInt64 {
+func (def ListOfInt64Def) New(cs chunks.ChunkStore) ListOfInt64 {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
 		l[i] = types.Int64(d)
 	}
-	return ListOfInt64{types.NewTypedList(__typeForListOfInt64, l...), &ref.Ref{}}
+	return ListOfInt64{types.NewTypedList(cs, __typeForListOfInt64, l...), cs, &ref.Ref{}}
 }
 
 func (l ListOfInt64) Def() ListOfInt64Def {
@@ -66,8 +68,8 @@ func init() {
 	types.RegisterValue(__typeForListOfInt64, builderForListOfInt64, readerForListOfInt64)
 }
 
-func builderForListOfInt64(v types.Value) types.Value {
-	return ListOfInt64{v.(types.List), &ref.Ref{}}
+func builderForListOfInt64(cs chunks.ChunkStore, v types.Value) types.Value {
+	return ListOfInt64{v.(types.List), cs, &ref.Ref{}}
 }
 
 func readerForListOfInt64(v types.Value) types.Value {
@@ -87,27 +89,27 @@ func (l ListOfInt64) Get(i uint64) int64 {
 }
 
 func (l ListOfInt64) Slice(idx uint64, end uint64) ListOfInt64 {
-	return ListOfInt64{l.l.Slice(idx, end), &ref.Ref{}}
+	return ListOfInt64{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfInt64) Set(i uint64, val int64) ListOfInt64 {
-	return ListOfInt64{l.l.Set(i, types.Int64(val)), &ref.Ref{}}
+	return ListOfInt64{l.l.Set(i, types.Int64(val)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfInt64) Append(v ...int64) ListOfInt64 {
-	return ListOfInt64{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfInt64{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfInt64) Insert(idx uint64, v ...int64) ListOfInt64 {
-	return ListOfInt64{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfInt64{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfInt64) Remove(idx uint64, end uint64) ListOfInt64 {
-	return ListOfInt64{l.l.Remove(idx, end), &ref.Ref{}}
+	return ListOfInt64{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfInt64) RemoveAt(idx uint64) ListOfInt64 {
-	return ListOfInt64{(l.l.RemoveAt(idx)), &ref.Ref{}}
+	return ListOfInt64{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfInt64) fromElemSlice(p []int64) []types.Value {
@@ -146,5 +148,5 @@ func (l ListOfInt64) Filter(cb ListOfInt64FilterCallback) ListOfInt64 {
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(int64(v.(types.Int64)), i)
 	})
-	return ListOfInt64{out, &ref.Ref{}}
+	return ListOfInt64{out, l.cs, &ref.Ref{}}
 }

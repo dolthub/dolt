@@ -3,6 +3,7 @@
 package gen
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -36,14 +37,16 @@ type StructWithUnionField struct {
 	_a           float32
 	__unionIndex uint32
 	__unionValue types.Value
+	cs           chunks.ChunkStore
 	ref          *ref.Ref
 }
 
-func NewStructWithUnionField() StructWithUnionField {
+func NewStructWithUnionField(cs chunks.ChunkStore) StructWithUnionField {
 	return StructWithUnionField{
 		_a:           float32(0),
 		__unionIndex: 0,
 		__unionValue: types.Float64(0),
+		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -54,11 +57,12 @@ type StructWithUnionFieldDef struct {
 	__unionValue types.Value
 }
 
-func (def StructWithUnionFieldDef) New() StructWithUnionField {
+func (def StructWithUnionFieldDef) New(cs chunks.ChunkStore) StructWithUnionField {
 	return StructWithUnionField{
 		_a:           def.A,
 		__unionIndex: def.__unionIndex,
 		__unionValue: def.__unionValue,
+		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -81,9 +85,9 @@ func init() {
 	types.RegisterStruct(__typeForStructWithUnionField, builderForStructWithUnionField, readerForStructWithUnionField)
 }
 
-func builderForStructWithUnionField(values []types.Value) types.Value {
+func builderForStructWithUnionField(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := StructWithUnionField{ref: &ref.Ref{}}
+	s := StructWithUnionField{ref: &ref.Ref{}, cs: cs}
 	s._a = float32(values[i].(types.Float32))
 	i++
 	s.__unionIndex = uint32(values[i].(types.UInt32))
@@ -153,7 +157,7 @@ func (def StructWithUnionFieldDef) B() (val float64, ok bool) {
 	return float64(def.__unionValue.(types.Float64)), true
 }
 
-func (def StructWithUnionFieldDef) SetB(val float64) StructWithUnionFieldDef {
+func (def StructWithUnionFieldDef) SetB(cs chunks.ChunkStore, val float64) StructWithUnionFieldDef {
 	def.__unionIndex = 0
 	def.__unionValue = types.Float64(val)
 	return def
@@ -180,7 +184,7 @@ func (def StructWithUnionFieldDef) C() (val string, ok bool) {
 	return def.__unionValue.(types.String).String(), true
 }
 
-func (def StructWithUnionFieldDef) SetC(val string) StructWithUnionFieldDef {
+func (def StructWithUnionFieldDef) SetC(cs chunks.ChunkStore, val string) StructWithUnionFieldDef {
 	def.__unionIndex = 1
 	def.__unionValue = types.NewString(val)
 	return def
@@ -207,7 +211,7 @@ func (def StructWithUnionFieldDef) D() (val types.Blob, ok bool) {
 	return def.__unionValue.(types.Blob), true
 }
 
-func (def StructWithUnionFieldDef) SetD(val types.Blob) StructWithUnionFieldDef {
+func (def StructWithUnionFieldDef) SetD(cs chunks.ChunkStore, val types.Blob) StructWithUnionFieldDef {
 	def.__unionIndex = 2
 	def.__unionValue = val
 	return def
@@ -234,7 +238,7 @@ func (def StructWithUnionFieldDef) E() (val types.Value, ok bool) {
 	return def.__unionValue, true
 }
 
-func (def StructWithUnionFieldDef) SetE(val types.Value) StructWithUnionFieldDef {
+func (def StructWithUnionFieldDef) SetE(cs chunks.ChunkStore, val types.Value) StructWithUnionFieldDef {
 	def.__unionIndex = 3
 	def.__unionValue = val
 	return def
@@ -261,9 +265,9 @@ func (def StructWithUnionFieldDef) F() (val SetOfUInt8Def, ok bool) {
 	return def.__unionValue.(SetOfUInt8).Def(), true
 }
 
-func (def StructWithUnionFieldDef) SetF(val SetOfUInt8Def) StructWithUnionFieldDef {
+func (def StructWithUnionFieldDef) SetF(cs chunks.ChunkStore, val SetOfUInt8Def) StructWithUnionFieldDef {
 	def.__unionIndex = 4
-	def.__unionValue = val.New()
+	def.__unionValue = val.New(cs)
 	return def
 }
 
@@ -271,23 +275,24 @@ func (def StructWithUnionFieldDef) SetF(val SetOfUInt8Def) StructWithUnionFieldD
 
 type SetOfUInt8 struct {
 	s   types.Set
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSetOfUInt8() SetOfUInt8 {
-	return SetOfUInt8{types.NewTypedSet(__typeForSetOfUInt8), &ref.Ref{}}
+func NewSetOfUInt8(cs chunks.ChunkStore) SetOfUInt8 {
+	return SetOfUInt8{types.NewTypedSet(cs, __typeForSetOfUInt8), cs, &ref.Ref{}}
 }
 
 type SetOfUInt8Def map[uint8]bool
 
-func (def SetOfUInt8Def) New() SetOfUInt8 {
+func (def SetOfUInt8Def) New(cs chunks.ChunkStore) SetOfUInt8 {
 	l := make([]types.Value, len(def))
 	i := 0
 	for d, _ := range def {
 		l[i] = types.UInt8(d)
 		i++
 	}
-	return SetOfUInt8{types.NewTypedSet(__typeForSetOfUInt8, l...), &ref.Ref{}}
+	return SetOfUInt8{types.NewTypedSet(cs, __typeForSetOfUInt8, l...), cs, &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Def() SetOfUInt8Def {
@@ -329,8 +334,8 @@ func init() {
 	types.RegisterValue(__typeForSetOfUInt8, builderForSetOfUInt8, readerForSetOfUInt8)
 }
 
-func builderForSetOfUInt8(v types.Value) types.Value {
-	return SetOfUInt8{v.(types.Set), &ref.Ref{}}
+func builderForSetOfUInt8(cs chunks.ChunkStore, v types.Value) types.Value {
+	return SetOfUInt8{v.(types.Set), cs, &ref.Ref{}}
 }
 
 func readerForSetOfUInt8(v types.Value) types.Value {
@@ -377,23 +382,23 @@ func (s SetOfUInt8) Filter(cb SetOfUInt8FilterCallback) SetOfUInt8 {
 	out := s.s.Filter(func(v types.Value) bool {
 		return cb(uint8(v.(types.UInt8)))
 	})
-	return SetOfUInt8{out, &ref.Ref{}}
+	return SetOfUInt8{out, s.cs, &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Insert(p ...uint8) SetOfUInt8 {
-	return SetOfUInt8{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
+	return SetOfUInt8{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Remove(p ...uint8) SetOfUInt8 {
-	return SetOfUInt8{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
+	return SetOfUInt8{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Union(others ...SetOfUInt8) SetOfUInt8 {
-	return SetOfUInt8{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
+	return SetOfUInt8{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Subtract(others ...SetOfUInt8) SetOfUInt8 {
-	return SetOfUInt8{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}}
+	return SetOfUInt8{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfUInt8) Any() uint8 {

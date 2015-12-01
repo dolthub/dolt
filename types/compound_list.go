@@ -19,8 +19,8 @@ type compoundList struct {
 	cs  chunks.ChunkStore
 }
 
-func buildCompoundList(tuples metaSequenceData, t Type, cs chunks.ChunkSource) Value {
-	return compoundList{metaSequenceObject{tuples, t}, &ref.Ref{}, cs.(chunks.ChunkStore)}
+func buildCompoundList(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
+	return compoundList{metaSequenceObject{tuples, t}, &ref.Ref{}, cs}
 }
 
 func getListSequenceData(v Value) metaSequenceData {
@@ -145,7 +145,7 @@ func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 		}
 
 		concreteType := t.Desc.(CompoundDesc).ElemTypes[0]
-		list := List{values, concreteType, &ref.Ref{}}
+		list := List{values, concreteType, &ref.Ref{}, cs}
 		ref := WriteValue(list, cs)
 		return metaTuple{ref, UInt64(len(values))}, list
 	}

@@ -3,6 +3,7 @@
 package gen
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -11,23 +12,24 @@ import (
 
 type SetOfBool struct {
 	s   types.Set
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSetOfBool() SetOfBool {
-	return SetOfBool{types.NewTypedSet(__typeForSetOfBool), &ref.Ref{}}
+func NewSetOfBool(cs chunks.ChunkStore) SetOfBool {
+	return SetOfBool{types.NewTypedSet(cs, __typeForSetOfBool), cs, &ref.Ref{}}
 }
 
 type SetOfBoolDef map[bool]bool
 
-func (def SetOfBoolDef) New() SetOfBool {
+func (def SetOfBoolDef) New(cs chunks.ChunkStore) SetOfBool {
 	l := make([]types.Value, len(def))
 	i := 0
 	for d, _ := range def {
 		l[i] = types.Bool(d)
 		i++
 	}
-	return SetOfBool{types.NewTypedSet(__typeForSetOfBool, l...), &ref.Ref{}}
+	return SetOfBool{types.NewTypedSet(cs, __typeForSetOfBool, l...), cs, &ref.Ref{}}
 }
 
 func (s SetOfBool) Def() SetOfBoolDef {
@@ -69,8 +71,8 @@ func init() {
 	types.RegisterValue(__typeForSetOfBool, builderForSetOfBool, readerForSetOfBool)
 }
 
-func builderForSetOfBool(v types.Value) types.Value {
-	return SetOfBool{v.(types.Set), &ref.Ref{}}
+func builderForSetOfBool(cs chunks.ChunkStore, v types.Value) types.Value {
+	return SetOfBool{v.(types.Set), cs, &ref.Ref{}}
 }
 
 func readerForSetOfBool(v types.Value) types.Value {
@@ -117,23 +119,23 @@ func (s SetOfBool) Filter(cb SetOfBoolFilterCallback) SetOfBool {
 	out := s.s.Filter(func(v types.Value) bool {
 		return cb(bool(v.(types.Bool)))
 	})
-	return SetOfBool{out, &ref.Ref{}}
+	return SetOfBool{out, s.cs, &ref.Ref{}}
 }
 
 func (s SetOfBool) Insert(p ...bool) SetOfBool {
-	return SetOfBool{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
+	return SetOfBool{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfBool) Remove(p ...bool) SetOfBool {
-	return SetOfBool{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
+	return SetOfBool{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfBool) Union(others ...SetOfBool) SetOfBool {
-	return SetOfBool{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
+	return SetOfBool{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfBool) Subtract(others ...SetOfBool) SetOfBool {
-	return SetOfBool{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}}
+	return SetOfBool{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfBool) Any() bool {

@@ -32,14 +32,16 @@ type Pitch struct {
 	_X float64
 	_Z float64
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewPitch() Pitch {
+func NewPitch(cs chunks.ChunkStore) Pitch {
 	return Pitch{
 		_X: float64(0),
 		_Z: float64(0),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -49,10 +51,11 @@ type PitchDef struct {
 	Z float64
 }
 
-func (def PitchDef) New() Pitch {
+func (def PitchDef) New(cs chunks.ChunkStore) Pitch {
 	return Pitch{
 		_X:  def.X,
 		_Z:  def.Z,
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -74,9 +77,9 @@ func init() {
 	types.RegisterStruct(__typeForPitch, builderForPitch, readerForPitch)
 }
 
-func builderForPitch(values []types.Value) types.Value {
+func builderForPitch(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := Pitch{ref: &ref.Ref{}}
+	s := Pitch{ref: &ref.Ref{}, cs: cs}
 	s._X = float64(values[i].(types.Float64))
 	i++
 	s._Z = float64(values[i].(types.Float64))
@@ -135,21 +138,22 @@ func (s Pitch) SetZ(val float64) Pitch {
 
 type MapOfStringToRefOfListOfPitch struct {
 	m   types.Map
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfStringToRefOfListOfPitch() MapOfStringToRefOfListOfPitch {
-	return MapOfStringToRefOfListOfPitch{types.NewTypedMap(__typeForMapOfStringToRefOfListOfPitch), &ref.Ref{}}
+func NewMapOfStringToRefOfListOfPitch(cs chunks.ChunkStore) MapOfStringToRefOfListOfPitch {
+	return MapOfStringToRefOfListOfPitch{types.NewTypedMap(cs, __typeForMapOfStringToRefOfListOfPitch), cs, &ref.Ref{}}
 }
 
 type MapOfStringToRefOfListOfPitchDef map[string]ref.Ref
 
-func (def MapOfStringToRefOfListOfPitchDef) New() MapOfStringToRefOfListOfPitch {
+func (def MapOfStringToRefOfListOfPitchDef) New(cs chunks.ChunkStore) MapOfStringToRefOfListOfPitch {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), NewRefOfListOfPitch(v))
 	}
-	return MapOfStringToRefOfListOfPitch{types.NewTypedMap(__typeForMapOfStringToRefOfListOfPitch, kv...), &ref.Ref{}}
+	return MapOfStringToRefOfListOfPitch{types.NewTypedMap(cs, __typeForMapOfStringToRefOfListOfPitch, kv...), cs, &ref.Ref{}}
 }
 
 func (m MapOfStringToRefOfListOfPitch) Def() MapOfStringToRefOfListOfPitchDef {
@@ -191,8 +195,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfStringToRefOfListOfPitch, builderForMapOfStringToRefOfListOfPitch, readerForMapOfStringToRefOfListOfPitch)
 }
 
-func builderForMapOfStringToRefOfListOfPitch(v types.Value) types.Value {
-	return MapOfStringToRefOfListOfPitch{v.(types.Map), &ref.Ref{}}
+func builderForMapOfStringToRefOfListOfPitch(cs chunks.ChunkStore, v types.Value) types.Value {
+	return MapOfStringToRefOfListOfPitch{v.(types.Map), cs, &ref.Ref{}}
 }
 
 func readerForMapOfStringToRefOfListOfPitch(v types.Value) types.Value {
@@ -224,13 +228,13 @@ func (m MapOfStringToRefOfListOfPitch) MaybeGet(p string) (RefOfListOfPitch, boo
 }
 
 func (m MapOfStringToRefOfListOfPitch) Set(k string, v RefOfListOfPitch) MapOfStringToRefOfListOfPitch {
-	return MapOfStringToRefOfListOfPitch{m.m.Set(types.NewString(k), v), &ref.Ref{}}
+	return MapOfStringToRefOfListOfPitch{m.m.Set(types.NewString(k), v), m.cs, &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToRefOfListOfPitch) Remove(p string) MapOfStringToRefOfListOfPitch {
-	return MapOfStringToRefOfListOfPitch{m.m.Remove(types.NewString(p)), &ref.Ref{}}
+	return MapOfStringToRefOfListOfPitch{m.m.Remove(types.NewString(p)), m.cs, &ref.Ref{}}
 }
 
 type MapOfStringToRefOfListOfPitchIterCallback func(k string, v RefOfListOfPitch) (stop bool)
@@ -261,28 +265,29 @@ func (m MapOfStringToRefOfListOfPitch) Filter(cb MapOfStringToRefOfListOfPitchFi
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(k.(types.String).String(), v.(RefOfListOfPitch))
 	})
-	return MapOfStringToRefOfListOfPitch{out, &ref.Ref{}}
+	return MapOfStringToRefOfListOfPitch{out, m.cs, &ref.Ref{}}
 }
 
 // ListOfRefOfMapOfStringToValue
 
 type ListOfRefOfMapOfStringToValue struct {
 	l   types.List
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfRefOfMapOfStringToValue() ListOfRefOfMapOfStringToValue {
-	return ListOfRefOfMapOfStringToValue{types.NewTypedList(__typeForListOfRefOfMapOfStringToValue), &ref.Ref{}}
+func NewListOfRefOfMapOfStringToValue(cs chunks.ChunkStore) ListOfRefOfMapOfStringToValue {
+	return ListOfRefOfMapOfStringToValue{types.NewTypedList(cs, __typeForListOfRefOfMapOfStringToValue), cs, &ref.Ref{}}
 }
 
 type ListOfRefOfMapOfStringToValueDef []ref.Ref
 
-func (def ListOfRefOfMapOfStringToValueDef) New() ListOfRefOfMapOfStringToValue {
+func (def ListOfRefOfMapOfStringToValueDef) New(cs chunks.ChunkStore) ListOfRefOfMapOfStringToValue {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
 		l[i] = NewRefOfMapOfStringToValue(d)
 	}
-	return ListOfRefOfMapOfStringToValue{types.NewTypedList(__typeForListOfRefOfMapOfStringToValue, l...), &ref.Ref{}}
+	return ListOfRefOfMapOfStringToValue{types.NewTypedList(cs, __typeForListOfRefOfMapOfStringToValue, l...), cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfMapOfStringToValue) Def() ListOfRefOfMapOfStringToValueDef {
@@ -323,8 +328,8 @@ func init() {
 	types.RegisterValue(__typeForListOfRefOfMapOfStringToValue, builderForListOfRefOfMapOfStringToValue, readerForListOfRefOfMapOfStringToValue)
 }
 
-func builderForListOfRefOfMapOfStringToValue(v types.Value) types.Value {
-	return ListOfRefOfMapOfStringToValue{v.(types.List), &ref.Ref{}}
+func builderForListOfRefOfMapOfStringToValue(cs chunks.ChunkStore, v types.Value) types.Value {
+	return ListOfRefOfMapOfStringToValue{v.(types.List), cs, &ref.Ref{}}
 }
 
 func readerForListOfRefOfMapOfStringToValue(v types.Value) types.Value {
@@ -344,27 +349,27 @@ func (l ListOfRefOfMapOfStringToValue) Get(i uint64) RefOfMapOfStringToValue {
 }
 
 func (l ListOfRefOfMapOfStringToValue) Slice(idx uint64, end uint64) ListOfRefOfMapOfStringToValue {
-	return ListOfRefOfMapOfStringToValue{l.l.Slice(idx, end), &ref.Ref{}}
+	return ListOfRefOfMapOfStringToValue{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfMapOfStringToValue) Set(i uint64, val RefOfMapOfStringToValue) ListOfRefOfMapOfStringToValue {
-	return ListOfRefOfMapOfStringToValue{l.l.Set(i, val), &ref.Ref{}}
+	return ListOfRefOfMapOfStringToValue{l.l.Set(i, val), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfMapOfStringToValue) Append(v ...RefOfMapOfStringToValue) ListOfRefOfMapOfStringToValue {
-	return ListOfRefOfMapOfStringToValue{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfRefOfMapOfStringToValue{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfMapOfStringToValue) Insert(idx uint64, v ...RefOfMapOfStringToValue) ListOfRefOfMapOfStringToValue {
-	return ListOfRefOfMapOfStringToValue{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfRefOfMapOfStringToValue{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfMapOfStringToValue) Remove(idx uint64, end uint64) ListOfRefOfMapOfStringToValue {
-	return ListOfRefOfMapOfStringToValue{l.l.Remove(idx, end), &ref.Ref{}}
+	return ListOfRefOfMapOfStringToValue{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfMapOfStringToValue) RemoveAt(idx uint64) ListOfRefOfMapOfStringToValue {
-	return ListOfRefOfMapOfStringToValue{(l.l.RemoveAt(idx)), &ref.Ref{}}
+	return ListOfRefOfMapOfStringToValue{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfMapOfStringToValue) fromElemSlice(p []RefOfMapOfStringToValue) []types.Value {
@@ -403,7 +408,7 @@ func (l ListOfRefOfMapOfStringToValue) Filter(cb ListOfRefOfMapOfStringToValueFi
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(RefOfMapOfStringToValue), i)
 	})
-	return ListOfRefOfMapOfStringToValue{out, &ref.Ref{}}
+	return ListOfRefOfMapOfStringToValue{out, l.cs, &ref.Ref{}}
 }
 
 // RefOfMapOfStringToValue
@@ -455,7 +460,7 @@ func builderForRefOfMapOfStringToValue(r ref.Ref) types.Value {
 	return NewRefOfMapOfStringToValue(r)
 }
 
-func (r RefOfMapOfStringToValue) TargetValue(cs chunks.ChunkSource) MapOfStringToValue {
+func (r RefOfMapOfStringToValue) TargetValue(cs chunks.ChunkStore) MapOfStringToValue {
 	return types.ReadValue(r.target, cs).(MapOfStringToValue)
 }
 
@@ -467,21 +472,22 @@ func (r RefOfMapOfStringToValue) SetTargetValue(val MapOfStringToValue, cs chunk
 
 type MapOfStringToValue struct {
 	m   types.Map
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfStringToValue() MapOfStringToValue {
-	return MapOfStringToValue{types.NewTypedMap(__typeForMapOfStringToValue), &ref.Ref{}}
+func NewMapOfStringToValue(cs chunks.ChunkStore) MapOfStringToValue {
+	return MapOfStringToValue{types.NewTypedMap(cs, __typeForMapOfStringToValue), cs, &ref.Ref{}}
 }
 
 type MapOfStringToValueDef map[string]types.Value
 
-func (def MapOfStringToValueDef) New() MapOfStringToValue {
+func (def MapOfStringToValueDef) New(cs chunks.ChunkStore) MapOfStringToValue {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), v)
 	}
-	return MapOfStringToValue{types.NewTypedMap(__typeForMapOfStringToValue, kv...), &ref.Ref{}}
+	return MapOfStringToValue{types.NewTypedMap(cs, __typeForMapOfStringToValue, kv...), cs, &ref.Ref{}}
 }
 
 func (m MapOfStringToValue) Def() MapOfStringToValueDef {
@@ -523,8 +529,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfStringToValue, builderForMapOfStringToValue, readerForMapOfStringToValue)
 }
 
-func builderForMapOfStringToValue(v types.Value) types.Value {
-	return MapOfStringToValue{v.(types.Map), &ref.Ref{}}
+func builderForMapOfStringToValue(cs chunks.ChunkStore, v types.Value) types.Value {
+	return MapOfStringToValue{v.(types.Map), cs, &ref.Ref{}}
 }
 
 func readerForMapOfStringToValue(v types.Value) types.Value {
@@ -556,13 +562,13 @@ func (m MapOfStringToValue) MaybeGet(p string) (types.Value, bool) {
 }
 
 func (m MapOfStringToValue) Set(k string, v types.Value) MapOfStringToValue {
-	return MapOfStringToValue{m.m.Set(types.NewString(k), v), &ref.Ref{}}
+	return MapOfStringToValue{m.m.Set(types.NewString(k), v), m.cs, &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToValue) Remove(p string) MapOfStringToValue {
-	return MapOfStringToValue{m.m.Remove(types.NewString(p)), &ref.Ref{}}
+	return MapOfStringToValue{m.m.Remove(types.NewString(p)), m.cs, &ref.Ref{}}
 }
 
 type MapOfStringToValueIterCallback func(k string, v types.Value) (stop bool)
@@ -593,28 +599,29 @@ func (m MapOfStringToValue) Filter(cb MapOfStringToValueFilterCallback) MapOfStr
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(k.(types.String).String(), v)
 	})
-	return MapOfStringToValue{out, &ref.Ref{}}
+	return MapOfStringToValue{out, m.cs, &ref.Ref{}}
 }
 
 // ListOfPitch
 
 type ListOfPitch struct {
 	l   types.List
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfPitch() ListOfPitch {
-	return ListOfPitch{types.NewTypedList(__typeForListOfPitch), &ref.Ref{}}
+func NewListOfPitch(cs chunks.ChunkStore) ListOfPitch {
+	return ListOfPitch{types.NewTypedList(cs, __typeForListOfPitch), cs, &ref.Ref{}}
 }
 
 type ListOfPitchDef []PitchDef
 
-func (def ListOfPitchDef) New() ListOfPitch {
+func (def ListOfPitchDef) New(cs chunks.ChunkStore) ListOfPitch {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
-		l[i] = d.New()
+		l[i] = d.New(cs)
 	}
-	return ListOfPitch{types.NewTypedList(__typeForListOfPitch, l...), &ref.Ref{}}
+	return ListOfPitch{types.NewTypedList(cs, __typeForListOfPitch, l...), cs, &ref.Ref{}}
 }
 
 func (l ListOfPitch) Def() ListOfPitchDef {
@@ -655,8 +662,8 @@ func init() {
 	types.RegisterValue(__typeForListOfPitch, builderForListOfPitch, readerForListOfPitch)
 }
 
-func builderForListOfPitch(v types.Value) types.Value {
-	return ListOfPitch{v.(types.List), &ref.Ref{}}
+func builderForListOfPitch(cs chunks.ChunkStore, v types.Value) types.Value {
+	return ListOfPitch{v.(types.List), cs, &ref.Ref{}}
 }
 
 func readerForListOfPitch(v types.Value) types.Value {
@@ -676,27 +683,27 @@ func (l ListOfPitch) Get(i uint64) Pitch {
 }
 
 func (l ListOfPitch) Slice(idx uint64, end uint64) ListOfPitch {
-	return ListOfPitch{l.l.Slice(idx, end), &ref.Ref{}}
+	return ListOfPitch{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfPitch) Set(i uint64, val Pitch) ListOfPitch {
-	return ListOfPitch{l.l.Set(i, val), &ref.Ref{}}
+	return ListOfPitch{l.l.Set(i, val), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfPitch) Append(v ...Pitch) ListOfPitch {
-	return ListOfPitch{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfPitch{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfPitch) Insert(idx uint64, v ...Pitch) ListOfPitch {
-	return ListOfPitch{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfPitch{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfPitch) Remove(idx uint64, end uint64) ListOfPitch {
-	return ListOfPitch{l.l.Remove(idx, end), &ref.Ref{}}
+	return ListOfPitch{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfPitch) RemoveAt(idx uint64) ListOfPitch {
-	return ListOfPitch{(l.l.RemoveAt(idx)), &ref.Ref{}}
+	return ListOfPitch{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfPitch) fromElemSlice(p []Pitch) []types.Value {
@@ -735,7 +742,7 @@ func (l ListOfPitch) Filter(cb ListOfPitchFilterCallback) ListOfPitch {
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(Pitch), i)
 	})
-	return ListOfPitch{out, &ref.Ref{}}
+	return ListOfPitch{out, l.cs, &ref.Ref{}}
 }
 
 // RefOfListOfPitch
@@ -787,7 +794,7 @@ func builderForRefOfListOfPitch(r ref.Ref) types.Value {
 	return NewRefOfListOfPitch(r)
 }
 
-func (r RefOfListOfPitch) TargetValue(cs chunks.ChunkSource) ListOfPitch {
+func (r RefOfListOfPitch) TargetValue(cs chunks.ChunkStore) ListOfPitch {
 	return types.ReadValue(r.target, cs).(ListOfPitch)
 }
 

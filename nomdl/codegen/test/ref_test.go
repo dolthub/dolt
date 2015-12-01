@@ -13,8 +13,8 @@ func TestRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	l := gen.ListOfStringDef{"a", "b", "c"}.New()
-	l2 := gen.ListOfStringDef{"d", "e", "f"}.New()
+	l := gen.ListOfStringDef{"a", "b", "c"}.New(cs)
+	l2 := gen.ListOfStringDef{"d", "e", "f"}.New(cs)
 	lRef := l.Ref()
 	r := gen.NewRefOfListOfString(lRef)
 
@@ -40,7 +40,7 @@ func TestListOfRef(t *testing.T) {
 	a := types.Float32(0)
 	ra := a.Ref()
 
-	l := gen.NewListOfRefOfFloat32()
+	l := gen.NewListOfRefOfFloat32(cs)
 	r := gen.NewRefOfFloat32(ra)
 	l = l.Append(r)
 	r2 := l.Get(0)
@@ -59,10 +59,10 @@ func TestStructWithRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	set := gen.SetOfFloat32Def{0: true, 1: true, 2: true}.New()
+	set := gen.SetOfFloat32Def{0: true, 1: true, 2: true}.New(cs)
 	str := gen.StructWithRefDef{
 		R: set.Ref(),
-	}.New()
+	}.New(cs)
 
 	r := str.R()
 	r2 := gen.NewRefOfSetOfFloat32(set.Ref())
@@ -83,11 +83,12 @@ func TestStructWithRef(t *testing.T) {
 
 func TestListOfRefChunks(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 
 	a := types.Float32(0)
 	ra := a.Ref()
 
-	l := gen.NewListOfRefOfFloat32()
+	l := gen.NewListOfRefOfFloat32(cs)
 	r := gen.NewRefOfFloat32(ra)
 
 	assert.Len(l.Chunks(), 0)
@@ -98,11 +99,12 @@ func TestListOfRefChunks(t *testing.T) {
 
 func TestStructWithRefChunks(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 
-	set := gen.SetOfFloat32Def{0: true}.New()
+	set := gen.SetOfFloat32Def{0: true}.New(cs)
 	str := gen.StructWithRefDef{
 		R: set.Ref(),
-	}.New()
+	}.New(cs)
 
 	// 1 for the Type and 1 for the ref in the R field.
 	assert.Len(str.Chunks(), 2)

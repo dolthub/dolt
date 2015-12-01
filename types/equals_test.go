@@ -10,6 +10,7 @@ import (
 
 func TestValueEquals(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 
 	r1 := UInt16(1).Ref()
 	r2 := UInt16(2).Ref()
@@ -62,13 +63,13 @@ func TestValueEquals(t *testing.T) {
 			b2 := NewBlob(bytes.NewBufferString("bye"), ms)
 			return newCompoundBlob([]metaTuple{{WriteValue(b1, ms), UInt64(uint64(2))}, {WriteValue(b2, ms), UInt64(uint64(5))}}, ms)
 		},
-		func() Value { return NewList() },
-		func() Value { return NewList(NewString("foo")) },
-		func() Value { return NewList(NewString("bar")) },
-		func() Value { return NewMap() },
-		func() Value { return NewMap(NewString("a"), NewString("a")) },
-		func() Value { return NewSet() },
-		func() Value { return NewSet(NewString("hi")) },
+		func() Value { return NewList(cs) },
+		func() Value { return NewList(cs, NewString("foo")) },
+		func() Value { return NewList(cs, NewString("bar")) },
+		func() Value { return NewMap(cs) },
+		func() Value { return NewMap(cs, NewString("a"), NewString("a")) },
+		func() Value { return NewSet(cs) },
+		func() Value { return NewSet(cs, NewString("hi")) },
 
 		func() Value { return MakePrimitiveType(BoolKind) },
 		func() Value { return MakePrimitiveType(StringKind) },

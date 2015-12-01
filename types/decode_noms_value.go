@@ -10,7 +10,7 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-func fromTypedEncodeable(i []interface{}, cs chunks.ChunkSource) Value {
+func fromTypedEncodeable(i []interface{}, cs chunks.ChunkStore) Value {
 	r := newJsonArrayReader(i, cs)
 	return r.readTopLevelValue()
 }
@@ -18,10 +18,10 @@ func fromTypedEncodeable(i []interface{}, cs chunks.ChunkSource) Value {
 type jsonArrayReader struct {
 	a  []interface{}
 	i  int
-	cs chunks.ChunkSource
+	cs chunks.ChunkStore
 }
 
-func newJsonArrayReader(a []interface{}, cs chunks.ChunkSource) *jsonArrayReader {
+func newJsonArrayReader(a []interface{}, cs chunks.ChunkStore) *jsonArrayReader {
 	return &jsonArrayReader{a: a, i: 0, cs: cs}
 }
 
@@ -101,7 +101,7 @@ func (r *jsonArrayReader) readList(t Type, pkg *Package) Value {
 
 	t = fixupType(t, pkg)
 	// TODO: Skip the List wrapper.
-	return valueFromType(newListNoCopy(data, t), t)
+	return valueFromType(r.cs, newListNoCopy(r.cs, data, t), t)
 }
 
 func (r *jsonArrayReader) readSet(t Type, pkg *Package) Value {
@@ -115,7 +115,7 @@ func (r *jsonArrayReader) readSet(t Type, pkg *Package) Value {
 
 	t = fixupType(t, pkg)
 	// TODO: Skip the Set wrapper.
-	return valueFromType(newSetFromData(data, t), t)
+	return valueFromType(r.cs, newSetFromData(r.cs, data, t), t)
 }
 
 func (r *jsonArrayReader) readMap(t Type, pkg *Package) Value {
@@ -132,7 +132,7 @@ func (r *jsonArrayReader) readMap(t Type, pkg *Package) Value {
 
 	t = fixupType(t, pkg)
 	// TODO: Skip the Map wrapper.
-	return valueFromType(newMapFromData(data, t), t)
+	return valueFromType(r.cs, newMapFromData(r.cs, data, t), t)
 }
 
 func indexTypeForMetaSequence(t Type) Type {
@@ -382,5 +382,5 @@ func (r *jsonArrayReader) readStruct(typeDef, typ Type, pkg *Package) Value {
 	}
 
 	typ = fixupType(typ, pkg)
-	return structBuilderForType(values, typ, typeDef)
+	return structBuilderForType(r.cs, values, typ, typeDef)
 }

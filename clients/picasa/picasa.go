@@ -115,9 +115,9 @@ func getSingleAlbum(albumID string) *User {
 	aj := AlbumJSON{}
 	path := fmt.Sprintf("user/default/albumid/%s?alt=json&max-results=0", albumID)
 	callPicasaAPI(authHTTPClient, path, &aj)
-	u := UserDef{Id: aj.Feed.UserID.V, Name: aj.Feed.UserName.V}.New()
+	u := UserDef{Id: aj.Feed.UserID.V, Name: aj.Feed.UserName.V}.New(ds.Store())
 
-	albums := NewMapOfStringToAlbum()
+	albums := NewMapOfStringToAlbum(ds.Store())
 	albums = getAlbum(0, aj.Feed.ID.V, aj.Feed.Title.V, uint32(aj.Feed.NumPhotos.V), albums)
 
 	types.WriteValue(albums, ds.Store())
@@ -131,8 +131,8 @@ func getAlbums() *User {
 	if !*quietFlag {
 		fmt.Printf("Found %d albums\n", len(alj.Feed.Entry))
 	}
-	albums := NewMapOfStringToAlbum()
-	user := UserDef{Id: alj.Feed.UserID.V, Name: alj.Feed.UserName.V}.New()
+	albums := NewMapOfStringToAlbum(ds.Store())
+	user := UserDef{Id: alj.Feed.UserID.V, Name: alj.Feed.UserName.V}.New(ds.Store())
 	for i, entry := range alj.Feed.Entry {
 		albums = getAlbum(i, entry.ID.V, entry.Title.V, uint32(entry.NumPhotos.V), albums)
 	}
@@ -143,7 +143,7 @@ func getAlbums() *User {
 }
 
 func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32, albums MapOfStringToAlbum) MapOfStringToAlbum {
-	a := AlbumDef{Id: albumId, Title: albumTitle, NumPhotos: uint32(numPhotos)}.New()
+	a := AlbumDef{Id: albumId, Title: albumTitle, NumPhotos: uint32(numPhotos)}.New(ds.Store())
 	remotePhotoRefs := getRemotePhotoRefs(&a, albumIndex)
 	r := types.WriteValue(remotePhotoRefs, ds.Store())
 	a = a.SetPhotos(NewRefOfSetOfRefOfRemotePhoto(r))
@@ -154,7 +154,7 @@ func getRemotePhotoRefs(album *Album, albumIndex int) *SetOfRefOfRemotePhoto {
 	if album.NumPhotos() <= 0 {
 		return nil
 	}
-	remotePhotoRefs := NewSetOfRefOfRemotePhoto()
+	remotePhotoRefs := NewSetOfRefOfRemotePhoto(ds.Store())
 	if !*quietFlag {
 		fmt.Printf("Album #%d: %q contains %d photos... ", albumIndex, album.Title(), album.NumPhotos())
 	}
@@ -185,7 +185,7 @@ func getRemotePhotoRefs(album *Album, albumIndex int) *SetOfRefOfRemotePhoto {
 				Url:         e.Content.Src,
 				Sizes:       sizes,
 				Tags:        tags,
-			}.New()
+			}.New(ds.Store())
 			r := types.WriteValue(p, ds.Store())
 			remotePhotoRefs = remotePhotoRefs.Insert(NewRefOfRemotePhoto(r))
 		}

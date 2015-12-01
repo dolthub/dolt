@@ -80,7 +80,7 @@ func getUser() {
 			return
 		}
 	} else {
-		user = NewUser()
+		user = NewUser(ds.Store())
 	}
 
 	authUser()
@@ -148,7 +148,7 @@ func getAlbum(id string) Album {
 
 	fmt.Printf("Photoset: %v\nRef: %s\n", response.Photoset.Title.Content, photos.TargetRef())
 
-	return NewAlbum().
+	return NewAlbum(ds.Store()).
 		SetId(id).
 		SetTitle(response.Photoset.Title.Content).
 		SetPhotos(photos)
@@ -178,7 +178,7 @@ func getAlbums() MapOfStringToAlbum {
 		}()
 	}
 
-	albums := NewMapOfStringToAlbum()
+	albums := NewMapOfStringToAlbum(ds.Store())
 	for {
 		if albums.Len() == uint64(len(response.Photosets.Photoset)) {
 			break
@@ -227,16 +227,16 @@ func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
 	})
 	d.Chk.NoError(err)
 
-	photos := NewSetOfRefOfRemotePhoto()
+	photos := NewSetOfRefOfRemotePhoto(ds.Store())
 
 	for _, p := range response.Photoset.Photo {
 		photo := RemotePhotoDef{
 			Id:    p.Id,
 			Title: p.Title,
 			Tags:  getTags(p.Tags),
-		}.New()
+		}.New(ds.Store())
 
-		sizes := NewMapOfSizeToString()
+		sizes := NewMapOfSizeToString(ds.Store())
 		sizes = addSize(sizes, p.ThumbURL, p.ThumbWidth, p.ThumbHeight)
 		sizes = addSize(sizes, p.SmallURL, p.SmallWidth, p.SmallHeight)
 		sizes = addSize(sizes, p.MediumURL, p.MediumWidth, p.MediumHeight)
@@ -247,7 +247,7 @@ func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
 		lat := deFlickr(p.Latitude)
 		lon := deFlickr(p.Longitude)
 		if lat != 0.0 && lon != 0.0 {
-			photo = photo.SetGeoposition(GeopositionDef{lat, lon}.New())
+			photo = photo.SetGeoposition(GeopositionDef{lat, lon}.New(ds.Store()))
 		}
 
 		photos = photos.Insert(NewRefOfRemotePhoto(types.WriteValue(photo, ds.Store())))
@@ -301,7 +301,7 @@ func addSize(sizes MapOfSizeToString, url string, width interface{}, height inte
 		return sizes
 	}
 
-	return sizes.Set(SizeDef{getDim(width), getDim(height)}.New(), url)
+	return sizes.Set(SizeDef{getDim(width), getDim(height)}.New(ds.Store()), url)
 }
 
 func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) error {

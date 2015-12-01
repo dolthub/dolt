@@ -18,19 +18,19 @@ type SomeCallback func(v types.Value) bool
 type AllCallback func(v types.Value)
 
 // Some recursively walks over all ref.Refs reachable from r and calls cb on them. If cb ever returns true, the walk will stop recursing on the current ref. If |concurrency| > 1, it is the callers responsibility to make ensure that |cb| is threadsafe.
-func SomeP(v types.Value, cs chunks.ChunkSource, cb SomeCallback, concurrency int) {
+func SomeP(v types.Value, cs chunks.ChunkStore, cb SomeCallback, concurrency int) {
 	doTreeWalkP(v, cs, cb, concurrency)
 }
 
 // All recursively walks over all ref.Refs reachable from r and calls cb on them. If |concurrency| > 1, it is the callers responsibility to make ensure that |cb| is threadsafe.
-func AllP(v types.Value, cs chunks.ChunkSource, cb AllCallback, concurrency int) {
+func AllP(v types.Value, cs chunks.ChunkStore, cb AllCallback, concurrency int) {
 	doTreeWalkP(v, cs, func(v types.Value) (skip bool) {
 		cb(v)
 		return
 	}, concurrency)
 }
 
-func doTreeWalkP(v types.Value, cs chunks.ChunkSource, cb SomeCallback, concurrency int) {
+func doTreeWalkP(v types.Value, cs chunks.ChunkStore, cb SomeCallback, concurrency int) {
 	rq := newRefQueue()
 	f := newFailure()
 

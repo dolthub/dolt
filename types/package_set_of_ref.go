@@ -13,22 +13,23 @@ import (
 type SetOfRefOfPackage struct {
 	s   Set
 	ref *ref.Ref
+	cs  chunks.ChunkStore
 }
 
-func NewSetOfRefOfPackage() SetOfRefOfPackage {
-	return SetOfRefOfPackage{NewSet(), &ref.Ref{}}
+func NewSetOfRefOfPackage(cs chunks.ChunkStore) SetOfRefOfPackage {
+	return SetOfRefOfPackage{NewTypedSet(cs, __typeForSetOfRefOfPackage), &ref.Ref{}, cs}
 }
 
 type SetOfRefOfPackageDef map[ref.Ref]bool
 
-func (def SetOfRefOfPackageDef) New() SetOfRefOfPackage {
+func (def SetOfRefOfPackageDef) New(cs chunks.ChunkStore) SetOfRefOfPackage {
 	l := make([]Value, len(def))
 	i := 0
 	for d, _ := range def {
 		l[i] = NewRefOfPackage(d)
 		i++
 	}
-	return SetOfRefOfPackage{NewSet(l...), &ref.Ref{}}
+	return SetOfRefOfPackage{NewTypedSet(cs, __typeForSetOfRefOfPackage, l...), &ref.Ref{}, cs}
 }
 
 func (s SetOfRefOfPackage) Def() SetOfRefOfPackageDef {
@@ -72,8 +73,8 @@ func init() {
 	RegisterValue(__typeForSetOfRefOfPackage, builderForSetOfRefOfPackage, readerForSetOfRefOfPackage)
 }
 
-func builderForSetOfRefOfPackage(v Value) Value {
-	return SetOfRefOfPackage{v.(Set), &ref.Ref{}}
+func builderForSetOfRefOfPackage(cs chunks.ChunkStore, v Value) Value {
+	return SetOfRefOfPackage{v.(Set), &ref.Ref{}, cs}
 }
 
 func readerForSetOfRefOfPackage(v Value) Value {
@@ -111,7 +112,7 @@ func (s SetOfRefOfPackage) IterAll(cb SetOfRefOfPackageIterAllCallback) {
 type SetOfRefOfPackageFilterCallback func(p RefOfPackage) (keep bool)
 
 func (s SetOfRefOfPackage) Filter(cb SetOfRefOfPackageFilterCallback) SetOfRefOfPackage {
-	ns := NewSetOfRefOfPackage()
+	ns := NewSetOfRefOfPackage(s.cs)
 	s.IterAll(func(v RefOfPackage) {
 		if cb(v) {
 			ns = ns.Insert(v)
@@ -121,19 +122,19 @@ func (s SetOfRefOfPackage) Filter(cb SetOfRefOfPackageFilterCallback) SetOfRefOf
 }
 
 func (s SetOfRefOfPackage) Insert(p ...RefOfPackage) SetOfRefOfPackage {
-	return SetOfRefOfPackage{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
+	return SetOfRefOfPackage{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}, s.cs}
 }
 
 func (s SetOfRefOfPackage) Remove(p ...RefOfPackage) SetOfRefOfPackage {
-	return SetOfRefOfPackage{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
+	return SetOfRefOfPackage{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}, s.cs}
 }
 
 func (s SetOfRefOfPackage) Union(others ...SetOfRefOfPackage) SetOfRefOfPackage {
-	return SetOfRefOfPackage{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
+	return SetOfRefOfPackage{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}, s.cs}
 }
 
 func (s SetOfRefOfPackage) Subtract(others ...SetOfRefOfPackage) SetOfRefOfPackage {
-	return SetOfRefOfPackage{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}}
+	return SetOfRefOfPackage{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}, s.cs}
 }
 
 func (s SetOfRefOfPackage) Any() RefOfPackage {
@@ -205,7 +206,7 @@ func builderForRefOfPackage(r ref.Ref) Value {
 	return NewRefOfPackage(r)
 }
 
-func (r RefOfPackage) TargetValue(cs chunks.ChunkSource) Package {
+func (r RefOfPackage) TargetValue(cs chunks.ChunkStore) Package {
 	return ReadValue(r.target, cs).(Package)
 }
 

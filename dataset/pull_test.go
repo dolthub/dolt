@@ -22,19 +22,19 @@ func TestValidateRef(t *testing.T) {
 }
 
 func NewList(ds Dataset, vs ...types.Value) types.Ref {
-	v := types.NewList(vs...)
+	v := types.NewList(ds.Store(), vs...)
 	r := types.WriteValue(v, ds.store)
 	return types.NewRef(r)
 }
 
 func NewMap(ds Dataset, vs ...types.Value) types.Ref {
-	v := types.NewMap(vs...)
+	v := types.NewMap(ds.Store(), vs...)
 	r := types.WriteValue(v, ds.store)
 	return types.NewRef(r)
 }
 
 func NewSet(ds Dataset, vs ...types.Value) types.Ref {
-	v := types.NewSet(vs...)
+	v := types.NewSet(ds.Store(), vs...)
 	r := types.WriteValue(v, ds.store)
 	return types.NewRef(r)
 }
@@ -46,10 +46,10 @@ func TestPull(t *testing.T) {
 	source := createTestDataset("source")
 
 	// Give sink and source some initial shared context.
-	sourceInitialValue := types.NewMap(
+	sourceInitialValue := types.NewMap(source.Store(),
 		types.NewString("first"), NewList(source),
 		types.NewString("second"), NewList(source, types.Int32(2)))
-	sinkInitialValue := types.NewMap(
+	sinkInitialValue := types.NewMap(sink.Store(),
 		types.NewString("first"), NewList(sink),
 		types.NewString("second"), NewList(sink, types.Int32(2)))
 
@@ -82,7 +82,7 @@ func TestPullFirstCommit(t *testing.T) {
 	sink := createTestDataset("sink")
 	source := createTestDataset("source")
 
-	sourceInitialValue := types.NewMap(
+	sourceInitialValue := types.NewMap(source.Store(),
 		types.NewString("first"), NewList(source),
 		types.NewString("second"), NewList(source, types.Int32(2)))
 
@@ -102,10 +102,10 @@ func TestPullDeepRef(t *testing.T) {
 	sink := createTestDataset("sink")
 	source := createTestDataset("source")
 
-	sourceInitialValue := types.NewList(
-		types.NewList(NewList(source)),
-		types.NewSet(NewSet(source)),
-		types.NewMap(NewMap(source), NewMap(source)))
+	sourceInitialValue := types.NewList(source.Store(),
+		types.NewList(source.Store(), NewList(source)),
+		types.NewSet(source.Store(), NewSet(source)),
+		types.NewMap(source.Store(), NewMap(source), NewMap(source)))
 
 	source, ok := source.Commit(sourceInitialValue)
 	assert.True(ok)

@@ -56,7 +56,7 @@ func builderForRefOfBlob(r ref.Ref) Value {
 	return NewRefOfBlob(r)
 }
 
-func (r RefOfBlob) TargetValue(cs chunks.ChunkSource) Blob {
+func (r RefOfBlob) TargetValue(cs chunks.ChunkStore) Blob {
 	return ReadValue(r.target, cs).(Blob)
 }
 

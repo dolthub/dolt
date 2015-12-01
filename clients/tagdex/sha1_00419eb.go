@@ -3,6 +3,7 @@
 package main
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -48,18 +49,20 @@ type RemotePhoto struct {
 	_Sizes       MapOfSizeToString
 	_Tags        SetOfString
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewRemotePhoto() RemotePhoto {
+func NewRemotePhoto(cs chunks.ChunkStore) RemotePhoto {
 	return RemotePhoto{
 		_Id:          "",
 		_Title:       "",
 		_Url:         "",
-		_Geoposition: NewGeoposition(),
-		_Sizes:       NewMapOfSizeToString(),
-		_Tags:        NewSetOfString(),
+		_Geoposition: NewGeoposition(cs),
+		_Sizes:       NewMapOfSizeToString(cs),
+		_Tags:        NewSetOfString(cs),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -73,14 +76,15 @@ type RemotePhotoDef struct {
 	Tags        SetOfStringDef
 }
 
-func (def RemotePhotoDef) New() RemotePhoto {
+func (def RemotePhotoDef) New(cs chunks.ChunkStore) RemotePhoto {
 	return RemotePhoto{
 		_Id:          def.Id,
 		_Title:       def.Title,
 		_Url:         def.Url,
-		_Geoposition: def.Geoposition.New(),
-		_Sizes:       def.Sizes.New(),
-		_Tags:        def.Tags.New(),
+		_Geoposition: def.Geoposition.New(cs),
+		_Sizes:       def.Sizes.New(cs),
+		_Tags:        def.Tags.New(cs),
+		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -106,9 +110,9 @@ func init() {
 	types.RegisterStruct(__typeForRemotePhoto, builderForRemotePhoto, readerForRemotePhoto)
 }
 
-func builderForRemotePhoto(values []types.Value) types.Value {
+func builderForRemotePhoto(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := RemotePhoto{ref: &ref.Ref{}}
+	s := RemotePhoto{ref: &ref.Ref{}, cs: cs}
 	s._Id = values[i].(types.String).String()
 	i++
 	s._Title = values[i].(types.String).String()
@@ -228,14 +232,16 @@ type Size struct {
 	_Width  uint32
 	_Height uint32
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSize() Size {
+func NewSize(cs chunks.ChunkStore) Size {
 	return Size{
 		_Width:  uint32(0),
 		_Height: uint32(0),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -245,10 +251,11 @@ type SizeDef struct {
 	Height uint32
 }
 
-func (def SizeDef) New() Size {
+func (def SizeDef) New(cs chunks.ChunkStore) Size {
 	return Size{
 		_Width:  def.Width,
 		_Height: def.Height,
+		cs:      cs,
 		ref:     &ref.Ref{},
 	}
 }
@@ -270,9 +277,9 @@ func init() {
 	types.RegisterStruct(__typeForSize, builderForSize, readerForSize)
 }
 
-func builderForSize(values []types.Value) types.Value {
+func builderForSize(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := Size{ref: &ref.Ref{}}
+	s := Size{ref: &ref.Ref{}, cs: cs}
 	s._Width = uint32(values[i].(types.UInt32))
 	i++
 	s._Height = uint32(values[i].(types.UInt32))
@@ -331,21 +338,22 @@ func (s Size) SetHeight(val uint32) Size {
 
 type MapOfSizeToString struct {
 	m   types.Map
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfSizeToString() MapOfSizeToString {
-	return MapOfSizeToString{types.NewTypedMap(__typeForMapOfSizeToString), &ref.Ref{}}
+func NewMapOfSizeToString(cs chunks.ChunkStore) MapOfSizeToString {
+	return MapOfSizeToString{types.NewTypedMap(cs, __typeForMapOfSizeToString), cs, &ref.Ref{}}
 }
 
 type MapOfSizeToStringDef map[SizeDef]string
 
-func (def MapOfSizeToStringDef) New() MapOfSizeToString {
+func (def MapOfSizeToStringDef) New(cs chunks.ChunkStore) MapOfSizeToString {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
-		kv = append(kv, k.New(), types.NewString(v))
+		kv = append(kv, k.New(cs), types.NewString(v))
 	}
-	return MapOfSizeToString{types.NewTypedMap(__typeForMapOfSizeToString, kv...), &ref.Ref{}}
+	return MapOfSizeToString{types.NewTypedMap(cs, __typeForMapOfSizeToString, kv...), cs, &ref.Ref{}}
 }
 
 func (m MapOfSizeToString) Def() MapOfSizeToStringDef {
@@ -387,8 +395,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfSizeToString, builderForMapOfSizeToString, readerForMapOfSizeToString)
 }
 
-func builderForMapOfSizeToString(v types.Value) types.Value {
-	return MapOfSizeToString{v.(types.Map), &ref.Ref{}}
+func builderForMapOfSizeToString(cs chunks.ChunkStore, v types.Value) types.Value {
+	return MapOfSizeToString{v.(types.Map), cs, &ref.Ref{}}
 }
 
 func readerForMapOfSizeToString(v types.Value) types.Value {
@@ -420,13 +428,13 @@ func (m MapOfSizeToString) MaybeGet(p Size) (string, bool) {
 }
 
 func (m MapOfSizeToString) Set(k Size, v string) MapOfSizeToString {
-	return MapOfSizeToString{m.m.Set(k, types.NewString(v)), &ref.Ref{}}
+	return MapOfSizeToString{m.m.Set(k, types.NewString(v)), m.cs, &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfSizeToString) Remove(p Size) MapOfSizeToString {
-	return MapOfSizeToString{m.m.Remove(p), &ref.Ref{}}
+	return MapOfSizeToString{m.m.Remove(p), m.cs, &ref.Ref{}}
 }
 
 type MapOfSizeToStringIterCallback func(k Size, v string) (stop bool)
@@ -457,30 +465,31 @@ func (m MapOfSizeToString) Filter(cb MapOfSizeToStringFilterCallback) MapOfSizeT
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(k.(Size), v.(types.String).String())
 	})
-	return MapOfSizeToString{out, &ref.Ref{}}
+	return MapOfSizeToString{out, m.cs, &ref.Ref{}}
 }
 
 // SetOfString
 
 type SetOfString struct {
 	s   types.Set
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSetOfString() SetOfString {
-	return SetOfString{types.NewTypedSet(__typeForSetOfString), &ref.Ref{}}
+func NewSetOfString(cs chunks.ChunkStore) SetOfString {
+	return SetOfString{types.NewTypedSet(cs, __typeForSetOfString), cs, &ref.Ref{}}
 }
 
 type SetOfStringDef map[string]bool
 
-func (def SetOfStringDef) New() SetOfString {
+func (def SetOfStringDef) New(cs chunks.ChunkStore) SetOfString {
 	l := make([]types.Value, len(def))
 	i := 0
 	for d, _ := range def {
 		l[i] = types.NewString(d)
 		i++
 	}
-	return SetOfString{types.NewTypedSet(__typeForSetOfString, l...), &ref.Ref{}}
+	return SetOfString{types.NewTypedSet(cs, __typeForSetOfString, l...), cs, &ref.Ref{}}
 }
 
 func (s SetOfString) Def() SetOfStringDef {
@@ -522,8 +531,8 @@ func init() {
 	types.RegisterValue(__typeForSetOfString, builderForSetOfString, readerForSetOfString)
 }
 
-func builderForSetOfString(v types.Value) types.Value {
-	return SetOfString{v.(types.Set), &ref.Ref{}}
+func builderForSetOfString(cs chunks.ChunkStore, v types.Value) types.Value {
+	return SetOfString{v.(types.Set), cs, &ref.Ref{}}
 }
 
 func readerForSetOfString(v types.Value) types.Value {
@@ -570,23 +579,23 @@ func (s SetOfString) Filter(cb SetOfStringFilterCallback) SetOfString {
 	out := s.s.Filter(func(v types.Value) bool {
 		return cb(v.(types.String).String())
 	})
-	return SetOfString{out, &ref.Ref{}}
+	return SetOfString{out, s.cs, &ref.Ref{}}
 }
 
 func (s SetOfString) Insert(p ...string) SetOfString {
-	return SetOfString{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
+	return SetOfString{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfString) Remove(p ...string) SetOfString {
-	return SetOfString{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
+	return SetOfString{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfString) Union(others ...SetOfString) SetOfString {
-	return SetOfString{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
+	return SetOfString{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfString) Subtract(others ...SetOfString) SetOfString {
-	return SetOfString{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}}
+	return SetOfString{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfString) Any() string {
