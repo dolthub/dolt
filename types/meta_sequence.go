@@ -17,11 +17,12 @@ const (
 // metaSequence is a logical abstraction, but has no concrete "base" implementation. A Meta Sequence is a non-leaf (internal) node of a "probably" tree, which results from the chunking of an ordered or unordered sequence of values.
 
 type metaSequence interface {
+	Value
+	data() metaSequenceData
 	tupleAt(idx int) metaTuple
 	tupleSlice(to int) []metaTuple
 	lastTuple() metaTuple
 	tupleCount() int
-	Ref() ref.Ref
 }
 
 type metaTuple struct {
@@ -52,6 +53,10 @@ func (ms metaSequenceObject) tupleCount() int {
 	return len(ms.tuples)
 }
 
+func (ms metaSequenceObject) data() metaSequenceData {
+	return ms.tuples
+}
+
 func (ms metaSequenceObject) lastTuple() metaTuple {
 	return ms.tuples[len(ms.tuples)-1]
 }
@@ -78,36 +83,20 @@ func (ms metaSequenceObject) Type() Type {
 }
 
 type metaBuilderFunc func(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value
-type metaReaderFunc func(v Value) metaSequenceData
-
-type metaSequenceFuncs struct {
-	builder metaBuilderFunc
-	reader  metaReaderFunc
-}
 
 var (
-	metaFuncMap map[NomsKind]metaSequenceFuncs = map[NomsKind]metaSequenceFuncs{}
+	metaFuncMap map[NomsKind]metaBuilderFunc = map[NomsKind]metaBuilderFunc{}
 )
 
-func registerMetaValue(k NomsKind, bf metaBuilderFunc, rf metaReaderFunc) {
-	metaFuncMap[k] = metaSequenceFuncs{bf, rf}
+func registerMetaValue(k NomsKind, bf metaBuilderFunc) {
+	metaFuncMap[k] = bf
 }
 
 func newMetaSequenceFromData(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
 	concreteType := t.Desc.(CompoundDesc).ElemTypes[0]
 
-	if s, ok := metaFuncMap[concreteType.Kind()]; ok {
-		return s.builder(tuples, t, cs)
-	}
-
-	panic("not reachable")
-}
-
-func getDataFromMetaSequence(v Value) metaSequenceData {
-	concreteType := v.Type().Desc.(CompoundDesc).ElemTypes[0]
-
-	if s, ok := metaFuncMap[concreteType.Kind()]; ok {
-		return s.reader(v)
+	if bf, ok := metaFuncMap[concreteType.Kind()]; ok {
+		return bf(tuples, t, cs)
 	}
 
 	panic("not reachable")

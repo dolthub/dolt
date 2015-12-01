@@ -23,10 +23,6 @@ func buildCompoundList(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Va
 	return compoundList{metaSequenceObject{tuples, t}, &ref.Ref{}, cs}
 }
 
-func getListSequenceData(v Value) metaSequenceData {
-	return v.(compoundList).tuples
-}
-
 func listAsSequenceItems(ls List) []sequenceItem {
 	items := make([]sequenceItem, len(ls.values))
 	for i, v := range ls.values {
@@ -36,7 +32,7 @@ func listAsSequenceItems(ls List) []sequenceItem {
 }
 
 func init() {
-	registerMetaValue(ListKind, buildCompoundList, getListSequenceData)
+	registerMetaValue(ListKind, buildCompoundList)
 }
 
 func (cl compoundList) Equals(other Value) bool {

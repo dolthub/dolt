@@ -28,12 +28,8 @@ func buildCompoundBlob(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Va
 	return compoundBlob{metaSequenceObject{tuples, typeForCompoundBlob}, &ref.Ref{}, cs}
 }
 
-func getSequenceData(v Value) metaSequenceData {
-	return v.(compoundBlob).tuples
-}
-
 func init() {
-	registerMetaValue(BlobKind, buildCompoundBlob, getSequenceData)
+	registerMetaValue(BlobKind, buildCompoundBlob)
 }
 
 func (cb compoundBlob) Reader() io.ReadSeeker {
