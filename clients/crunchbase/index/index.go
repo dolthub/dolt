@@ -45,11 +45,8 @@ func main() {
 		inputDataset := dataset.NewDataset(ds, *inputID)
 		outputDataset := dataset.NewDataset(ds, *outputID)
 
-		input := inputDataset.Head().Value() //.(MapOfStringToRefOfCompany)
-		tr := input.(types.Ref)
-		tv := tr.TargetValue(ds)
-		v, ok := tv.(MapOfStringToRefOfCompany)
-		d.Exp.True(ok, "Unexpected data in dataset. Found %T", tv)
+		imp := inputDataset.Head().Value().(Import)
+		v := imp.Companies().TargetValue(ds)
 
 		type entry struct {
 			key           Key
@@ -58,7 +55,7 @@ func main() {
 
 		c := make(chan entry, 1024)
 
-		mapOfRoundsDef := MapOfRefOfKeyToSetOfRoundRaiseDef{}
+		mapOfSets := MapOfRefOfKeyToSetOfRoundRaiseDef{}
 
 		addTimeRounds := func(tn int64, roundRaiseDef RoundRaiseDef) {
 			t := time.Unix(tn, 0)
@@ -103,15 +100,21 @@ func main() {
 			key := e.key
 			roundRaiseDef := e.roundRaiseDef
 			keyRef := key.Ref()
-			setDef := mapOfRoundsDef[keyRef]
+			setDef := mapOfSets[keyRef]
 			if setDef == nil {
 				setDef = SetOfRoundRaiseDef{}
 			}
 			setDef[roundRaiseDef] = true
-			mapOfRoundsDef[keyRef] = setDef
+			mapOfSets[keyRef] = setDef
 		}
 
-		output := mapOfRoundsDef.New(ds)
+		mapOfRefs := MapOfRefOfKeyToRefOfSetOfRoundRaiseDef{}
+		for keyRef, set := range mapOfSets {
+			setRef := types.WriteValue(set.New(ds), ds)
+			mapOfRefs[keyRef] = setRef
+		}
+
+		output := mapOfRefs.New(ds)
 		_, ok = outputDataset.Commit(output)
 		d.Exp.True(ok, "Could not commit due to conflicting edit")
 

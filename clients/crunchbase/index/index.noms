@@ -1,3 +1,4 @@
+alias imp = import "../importer/importer.noms"
 alias cb = import "../crunchbase.noms"
 
 enum QuarterEnum {
@@ -42,3 +43,4 @@ struct RoundRaise {
 
 using Map(String, Ref(cb.Company))
 using Map(Ref(Key), Set(RoundRaise))
+using Map(Ref(Key), Ref(Set(RoundRaise)))
