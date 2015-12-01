@@ -3,6 +3,7 @@
 package gen
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -31,14 +32,16 @@ type Struct struct {
 	_s string
 	_b bool
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewStruct() Struct {
+func NewStruct(cs chunks.ChunkStore) Struct {
 	return Struct{
 		_s: "",
 		_b: false,
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -48,10 +51,11 @@ type StructDef struct {
 	B bool
 }
 
-func (def StructDef) New() Struct {
+func (def StructDef) New(cs chunks.ChunkStore) Struct {
 	return Struct{
 		_s:  def.S,
 		_b:  def.B,
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -73,9 +77,9 @@ func init() {
 	types.RegisterStruct(__typeForStruct, builderForStruct, readerForStruct)
 }
 
-func builderForStruct(values []types.Value) types.Value {
+func builderForStruct(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := Struct{ref: &ref.Ref{}}
+	s := Struct{ref: &ref.Ref{}, cs: cs}
 	s._s = values[i].(types.String).String()
 	i++
 	s._b = bool(values[i].(types.Bool))
@@ -134,21 +138,22 @@ func (s Struct) SetB(val bool) Struct {
 
 type ListOfStruct struct {
 	l   types.List
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfStruct() ListOfStruct {
-	return ListOfStruct{types.NewTypedList(__typeForListOfStruct), &ref.Ref{}}
+func NewListOfStruct(cs chunks.ChunkStore) ListOfStruct {
+	return ListOfStruct{types.NewTypedList(cs, __typeForListOfStruct), cs, &ref.Ref{}}
 }
 
 type ListOfStructDef []StructDef
 
-func (def ListOfStructDef) New() ListOfStruct {
+func (def ListOfStructDef) New(cs chunks.ChunkStore) ListOfStruct {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
-		l[i] = d.New()
+		l[i] = d.New(cs)
 	}
-	return ListOfStruct{types.NewTypedList(__typeForListOfStruct, l...), &ref.Ref{}}
+	return ListOfStruct{types.NewTypedList(cs, __typeForListOfStruct, l...), cs, &ref.Ref{}}
 }
 
 func (l ListOfStruct) Def() ListOfStructDef {
@@ -189,8 +194,8 @@ func init() {
 	types.RegisterValue(__typeForListOfStruct, builderForListOfStruct, readerForListOfStruct)
 }
 
-func builderForListOfStruct(v types.Value) types.Value {
-	return ListOfStruct{v.(types.List), &ref.Ref{}}
+func builderForListOfStruct(cs chunks.ChunkStore, v types.Value) types.Value {
+	return ListOfStruct{v.(types.List), cs, &ref.Ref{}}
 }
 
 func readerForListOfStruct(v types.Value) types.Value {
@@ -210,27 +215,27 @@ func (l ListOfStruct) Get(i uint64) Struct {
 }
 
 func (l ListOfStruct) Slice(idx uint64, end uint64) ListOfStruct {
-	return ListOfStruct{l.l.Slice(idx, end), &ref.Ref{}}
+	return ListOfStruct{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfStruct) Set(i uint64, val Struct) ListOfStruct {
-	return ListOfStruct{l.l.Set(i, val), &ref.Ref{}}
+	return ListOfStruct{l.l.Set(i, val), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfStruct) Append(v ...Struct) ListOfStruct {
-	return ListOfStruct{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfStruct{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfStruct) Insert(idx uint64, v ...Struct) ListOfStruct {
-	return ListOfStruct{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfStruct{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfStruct) Remove(idx uint64, end uint64) ListOfStruct {
-	return ListOfStruct{l.l.Remove(idx, end), &ref.Ref{}}
+	return ListOfStruct{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfStruct) RemoveAt(idx uint64) ListOfStruct {
-	return ListOfStruct{(l.l.RemoveAt(idx)), &ref.Ref{}}
+	return ListOfStruct{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfStruct) fromElemSlice(p []Struct) []types.Value {
@@ -269,5 +274,5 @@ func (l ListOfStruct) Filter(cb ListOfStructFilterCallback) ListOfStruct {
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(Struct), i)
 	})
-	return ListOfStruct{out, &ref.Ref{}}
+	return ListOfStruct{out, l.cs, &ref.Ref{}}
 }

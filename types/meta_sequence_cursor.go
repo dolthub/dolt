@@ -14,10 +14,10 @@ type metaSequenceCursor struct {
 	parent   *metaSequenceCursor
 	sequence metaSequence
 	idx      int
-	cs       chunks.ChunkSource
+	cs       chunks.ChunkStore
 }
 
-func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkSource) (cursor *metaSequenceCursor, leaf Value) {
+func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkStore) (cursor *metaSequenceCursor, leaf Value) {
 	cursors := []*metaSequenceCursor{&metaSequenceCursor{nil, root, 0, cs}}
 	for {
 		cursor = cursors[len(cursors)-1]
@@ -34,7 +34,7 @@ func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkSource) (cursor *me
 
 type cursorIterFn func(v Value) bool
 
-func iterateMetaSequenceLeaf(root metaSequence, cs chunks.ChunkSource, cb cursorIterFn) {
+func iterateMetaSequenceLeaf(root metaSequence, cs chunks.ChunkStore, cb cursorIterFn) {
 	cursor, v := newMetaSequenceCursor(root, cs)
 	for {
 		if cb(v) || !cursor.advance() {

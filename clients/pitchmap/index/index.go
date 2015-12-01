@@ -138,10 +138,10 @@ func getIndex(input ListOfRefOfMapOfStringToValue, cs chunks.ChunkStore) MapOfSt
 	namedPitchCounts := MapOfStringToRefOfListOfPitchDef{}
 	for id, p := range pitchCounts {
 		if name, ok := pitchers[id]; d.Chk.True(ok, "Unknown pitcher: %s", id) {
-			namedPitchCounts[name] = types.WriteValue(p.New(), cs)
+			namedPitchCounts[name] = types.WriteValue(p.New(cs), cs)
 		}
 	}
-	return namedPitchCounts.New()
+	return namedPitchCounts.New(cs)
 }
 
 func main() {

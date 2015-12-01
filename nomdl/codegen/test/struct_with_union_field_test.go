@@ -4,34 +4,36 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 	"github.com/attic-labs/noms/types"
 )
 
 func TestStructWithUnionField(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 
 	def := gen.StructWithUnionFieldDef{
 		A: float32(1),
 	}
-	def = def.SetC("s")
+	def = def.SetC(cs, "s")
 	_, ok := def.B()
 	assert.False(ok)
 	c, ok := def.C()
 	assert.True(ok)
 	assert.Equal("s", c)
 
-	st := def.New()
+	st := def.New(cs)
 	_, ok = st.F()
 	assert.False(ok)
 	c, ok = st.C()
 	assert.True(ok)
 	assert.Equal("s", c)
 
-	st2 := gen.NewStructWithUnionField().SetA(1).SetC("s")
+	st2 := gen.NewStructWithUnionField(cs).SetA(1).SetC("s")
 	assert.True(st.Equals(st2))
 
-	st3 := gen.NewStructWithUnionField().SetC("s").SetA(1)
+	st3 := gen.NewStructWithUnionField(cs).SetC("s").SetA(1)
 	assert.True(st.Equals(st3))
 
 	def2 := st3.Def()
@@ -40,8 +42,9 @@ func TestStructWithUnionField(t *testing.T) {
 
 func TestStructWithUnionFieldListPart(t *testing.T) {
 	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
 
-	st := gen.NewStructWithUnionField().SetF(gen.SetOfUInt8Def{2: true, 4: true}.New())
+	st := gen.NewStructWithUnionField(cs).SetF(gen.SetOfUInt8Def{2: true, 4: true}.New(cs))
 	f, ok := st.F()
 	assert.True(ok)
 	assert.True(f.Has(2))

@@ -3,6 +3,7 @@ package util
 import (
 	"reflect"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/types"
 )
@@ -21,7 +22,7 @@ import (
 // Composites:
 //  - []interface{}
 //  - map[string]interface{}
-func NomsValueFromDecodedJSON(o interface{}) types.Value {
+func NomsValueFromDecodedJSON(cs chunks.ChunkStore, o interface{}) types.Value {
 	switch o := o.(type) {
 	case string:
 		return types.NewString(o)
@@ -32,18 +33,18 @@ func NomsValueFromDecodedJSON(o interface{}) types.Value {
 	case nil:
 		return nil
 	case []interface{}:
-		out := types.NewList()
+		out := types.NewList(cs)
 		for _, v := range o {
-			nv := NomsValueFromDecodedJSON(v)
+			nv := NomsValueFromDecodedJSON(cs, v)
 			if nv != nil {
 				out = out.Append(nv)
 			}
 		}
 		return out
 	case map[string]interface{}:
-		out := NewMapOfStringToValue()
+		out := NewMapOfStringToValue(cs)
 		for k, v := range o {
-			nv := NomsValueFromDecodedJSON(v)
+			nv := NomsValueFromDecodedJSON(cs, v)
 			if nv != nil {
 				out = out.Set(k, nv)
 			}

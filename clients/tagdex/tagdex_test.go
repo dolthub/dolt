@@ -20,7 +20,7 @@ type testSuite struct {
 	util.ClientTestSuite
 }
 
-func createRefOfRemotePhoto(id int, tag string, cs chunks.ChunkSink) RefOfRemotePhoto {
+func createRefOfRemotePhoto(id int, tag string, cs chunks.ChunkStore) RefOfRemotePhoto {
 	p := RemotePhotoDef{
 		Id:          fmt.Sprintf("%d", id),
 		Title:       "title" + tag,
@@ -28,7 +28,7 @@ func createRefOfRemotePhoto(id int, tag string, cs chunks.ChunkSink) RefOfRemote
 		Geoposition: GeopositionDef{Latitude: 50, Longitude: 50},
 		Sizes:       MapOfSizeToStringDef{SizeDef{1, 2}: "1x2"},
 		Tags:        map[string]bool{tag: true},
-	}.New()
+	}.New(cs)
 	return NewRefOfRemotePhoto(types.WriteValue(p, cs))
 }
 
@@ -37,7 +37,7 @@ func (s *testSuite) TestTagdex() {
 	inputDs := dataset.NewDataset(datas.NewDataStore(cs), "input-test")
 
 	// Build the set
-	set := NewSetOfRefOfRemotePhoto().Insert(
+	set := NewSetOfRefOfRemotePhoto(cs).Insert(
 		createRefOfRemotePhoto(0, "nyc", cs),
 		createRefOfRemotePhoto(1, "sf", cs),
 		createRefOfRemotePhoto(2, "cat", cs),

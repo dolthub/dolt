@@ -149,7 +149,7 @@ func main() {
 	close(iChan)
 	refWg.Wait()
 
-	incidentRefs := types.NewList(refs...)
+	incidentRefs := types.NewList(ds.Store(), refs...)
 	if !*quietFlag {
 		fmt.Printf("Converting refs list to noms list: %.2f secs\n", time.Now().Sub(start).Seconds())
 	}
@@ -166,7 +166,7 @@ func main() {
 	fmt.Printf("Ref of list containing Incidents: %s, , elaspsed time: %.2f secs\n", incidentRefs.Ref(), time.Now().Sub(start).Seconds())
 }
 
-func getNomsWriter(cs chunks.ChunkSink) (iChan chan incidentWithIndex, rChan chan refIndex) {
+func getNomsWriter(cs chunks.ChunkStore) (iChan chan incidentWithIndex, rChan chan refIndex) {
 	iChan = make(chan incidentWithIndex, 3000)
 	rChan = make(chan refIndex, 3000)
 	var wg sync.WaitGroup
@@ -174,7 +174,7 @@ func getNomsWriter(cs chunks.ChunkSink) (iChan chan incidentWithIndex, rChan cha
 		wg.Add(1)
 		go func() {
 			for incidentRecord := range iChan {
-				v := incidentRecord.incident.New()
+				v := incidentRecord.incident.New(cs)
 				r := types.WriteValue(v, cs)
 				rChan <- refIndex{types.NewRef(r), incidentRecord.index}
 			}

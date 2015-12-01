@@ -52,10 +52,11 @@ type Incident struct {
 	_Geoposition Geoposition
 	_PdID        string
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewIncident() Incident {
+func NewIncident(cs chunks.ChunkStore) Incident {
 	return Incident{
 		_ID:          int64(0),
 		_Category:    "",
@@ -66,9 +67,10 @@ func NewIncident() Incident {
 		_PdDistrict:  "",
 		_Resolution:  "",
 		_Address:     "",
-		_Geoposition: NewGeoposition(),
+		_Geoposition: NewGeoposition(cs),
 		_PdID:        "",
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -87,7 +89,7 @@ type IncidentDef struct {
 	PdID        string
 }
 
-func (def IncidentDef) New() Incident {
+func (def IncidentDef) New(cs chunks.ChunkStore) Incident {
 	return Incident{
 		_ID:          def.ID,
 		_Category:    def.Category,
@@ -98,8 +100,9 @@ func (def IncidentDef) New() Incident {
 		_PdDistrict:  def.PdDistrict,
 		_Resolution:  def.Resolution,
 		_Address:     def.Address,
-		_Geoposition: def.Geoposition.New(),
+		_Geoposition: def.Geoposition.New(cs),
 		_PdID:        def.PdID,
+		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -130,9 +133,9 @@ func init() {
 	types.RegisterStruct(__typeForIncident, builderForIncident, readerForIncident)
 }
 
-func builderForIncident(values []types.Value) types.Value {
+func builderForIncident(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := Incident{ref: &ref.Ref{}}
+	s := Incident{ref: &ref.Ref{}, cs: cs}
 	s._ID = int64(values[i].(types.Int64))
 	i++
 	s._Category = values[i].(types.String).String()
@@ -318,21 +321,22 @@ func (s Incident) SetPdID(val string) Incident {
 
 type ListOfRefOfIncident struct {
 	l   types.List
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfRefOfIncident() ListOfRefOfIncident {
-	return ListOfRefOfIncident{types.NewTypedList(__typeForListOfRefOfIncident), &ref.Ref{}}
+func NewListOfRefOfIncident(cs chunks.ChunkStore) ListOfRefOfIncident {
+	return ListOfRefOfIncident{types.NewTypedList(cs, __typeForListOfRefOfIncident), cs, &ref.Ref{}}
 }
 
 type ListOfRefOfIncidentDef []ref.Ref
 
-func (def ListOfRefOfIncidentDef) New() ListOfRefOfIncident {
+func (def ListOfRefOfIncidentDef) New(cs chunks.ChunkStore) ListOfRefOfIncident {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
 		l[i] = NewRefOfIncident(d)
 	}
-	return ListOfRefOfIncident{types.NewTypedList(__typeForListOfRefOfIncident, l...), &ref.Ref{}}
+	return ListOfRefOfIncident{types.NewTypedList(cs, __typeForListOfRefOfIncident, l...), cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfIncident) Def() ListOfRefOfIncidentDef {
@@ -373,8 +377,8 @@ func init() {
 	types.RegisterValue(__typeForListOfRefOfIncident, builderForListOfRefOfIncident, readerForListOfRefOfIncident)
 }
 
-func builderForListOfRefOfIncident(v types.Value) types.Value {
-	return ListOfRefOfIncident{v.(types.List), &ref.Ref{}}
+func builderForListOfRefOfIncident(cs chunks.ChunkStore, v types.Value) types.Value {
+	return ListOfRefOfIncident{v.(types.List), cs, &ref.Ref{}}
 }
 
 func readerForListOfRefOfIncident(v types.Value) types.Value {
@@ -394,27 +398,27 @@ func (l ListOfRefOfIncident) Get(i uint64) RefOfIncident {
 }
 
 func (l ListOfRefOfIncident) Slice(idx uint64, end uint64) ListOfRefOfIncident {
-	return ListOfRefOfIncident{l.l.Slice(idx, end), &ref.Ref{}}
+	return ListOfRefOfIncident{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfIncident) Set(i uint64, val RefOfIncident) ListOfRefOfIncident {
-	return ListOfRefOfIncident{l.l.Set(i, val), &ref.Ref{}}
+	return ListOfRefOfIncident{l.l.Set(i, val), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfIncident) Append(v ...RefOfIncident) ListOfRefOfIncident {
-	return ListOfRefOfIncident{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfRefOfIncident{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfIncident) Insert(idx uint64, v ...RefOfIncident) ListOfRefOfIncident {
-	return ListOfRefOfIncident{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfRefOfIncident{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfIncident) Remove(idx uint64, end uint64) ListOfRefOfIncident {
-	return ListOfRefOfIncident{l.l.Remove(idx, end), &ref.Ref{}}
+	return ListOfRefOfIncident{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfIncident) RemoveAt(idx uint64) ListOfRefOfIncident {
-	return ListOfRefOfIncident{(l.l.RemoveAt(idx)), &ref.Ref{}}
+	return ListOfRefOfIncident{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfRefOfIncident) fromElemSlice(p []RefOfIncident) []types.Value {
@@ -453,7 +457,7 @@ func (l ListOfRefOfIncident) Filter(cb ListOfRefOfIncidentFilterCallback) ListOf
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(RefOfIncident), i)
 	})
-	return ListOfRefOfIncident{out, &ref.Ref{}}
+	return ListOfRefOfIncident{out, l.cs, &ref.Ref{}}
 }
 
 // RefOfIncident
@@ -505,7 +509,7 @@ func builderForRefOfIncident(r ref.Ref) types.Value {
 	return NewRefOfIncident(r)
 }
 
-func (r RefOfIncident) TargetValue(cs chunks.ChunkSource) Incident {
+func (r RefOfIncident) TargetValue(cs chunks.ChunkStore) Incident {
 	return types.ReadValue(r.target, cs).(Incident)
 }
 

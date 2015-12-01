@@ -197,7 +197,7 @@ func (qt *QuadTreeDef) makeChildren() {
 	qt.Tiles[br] = CreateNewQuadTreeDef(qt.Depth+1, qt.Path+"d", brRect)
 }
 
-func (qt *QuadTreeDef) SaveToNoms(cs chunks.ChunkSink, start time.Time, quiet bool) *SQuadTree {
+func (qt *QuadTreeDef) SaveToNoms(cs chunks.ChunkStore, start time.Time, quiet bool) *SQuadTree {
 	wChan := make(chan *SQuadTree, 1024)
 	var wg sync.WaitGroup
 	for i := 0; i < 32; i++ {
@@ -220,7 +220,7 @@ func (qt *QuadTreeDef) SaveToNoms(cs chunks.ChunkSink, start time.Time, quiet bo
 	return sqt
 }
 
-func (qt *QuadTreeDef) saveNodeToNoms(wChan chan *SQuadTree, cs chunks.ChunkSink, start time.Time, quiet bool) *SQuadTree {
+func (qt *QuadTreeDef) saveNodeToNoms(wChan chan *SQuadTree, cs chunks.ChunkStore, start time.Time, quiet bool) *SQuadTree {
 	tileRefs := MapOfStringToRefOfSQuadTreeDef{}
 	nrefs := make(ListOfRefOfValueDef, 0, len(qt.Nodes))
 	if qt.hasTiles() {
@@ -241,7 +241,7 @@ func (qt *QuadTreeDef) saveNodeToNoms(wChan chan *SQuadTree, cs chunks.ChunkSink
 		NumDescendents: qt.NumDescendents,
 		Path:           qt.Path,
 		Georectangle:   qt.Georectangle,
-	}.New()
+	}.New(cs)
 	sqtp := &sqt
 
 	wChan <- sqtp

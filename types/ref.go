@@ -49,7 +49,7 @@ func (r Ref) Type() Type {
 	return r.t
 }
 
-func (r Ref) TargetValue(cs chunks.ChunkSource) Value {
+func (r Ref) TargetValue(cs chunks.ChunkStore) Value {
 	return ReadValue(r.target, cs)
 }
 

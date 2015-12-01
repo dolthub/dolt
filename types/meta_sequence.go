@@ -77,7 +77,7 @@ func (ms metaSequenceObject) Type() Type {
 	return ms.t
 }
 
-type metaBuilderFunc func(tuples metaSequenceData, t Type, cs chunks.ChunkSource) Value
+type metaBuilderFunc func(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value
 type metaReaderFunc func(v Value) metaSequenceData
 
 type metaSequenceFuncs struct {
@@ -93,7 +93,7 @@ func registerMetaValue(k NomsKind, bf metaBuilderFunc, rf metaReaderFunc) {
 	metaFuncMap[k] = metaSequenceFuncs{bf, rf}
 }
 
-func newMetaSequenceFromData(tuples metaSequenceData, t Type, cs chunks.ChunkSource) Value {
+func newMetaSequenceFromData(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
 	concreteType := t.Desc.(CompoundDesc).ElemTypes[0]
 
 	if s, ok := metaFuncMap[concreteType.Kind()]; ok {

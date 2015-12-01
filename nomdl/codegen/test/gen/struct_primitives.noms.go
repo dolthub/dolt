@@ -3,6 +3,7 @@
 package gen
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -55,10 +56,11 @@ type StructPrimitives struct {
 	_blob    types.Blob
 	_value   types.Value
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewStructPrimitives() StructPrimitives {
+func NewStructPrimitives(cs chunks.ChunkStore) StructPrimitives {
 	return StructPrimitives{
 		_uint64:  uint64(0),
 		_uint32:  uint32(0),
@@ -75,6 +77,7 @@ func NewStructPrimitives() StructPrimitives {
 		_blob:    types.NewEmptyBlob(),
 		_value:   types.Bool(false),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -96,7 +99,7 @@ type StructPrimitivesDef struct {
 	Value   types.Value
 }
 
-func (def StructPrimitivesDef) New() StructPrimitives {
+func (def StructPrimitivesDef) New(cs chunks.ChunkStore) StructPrimitives {
 	return StructPrimitives{
 		_uint64:  def.Uint64,
 		_uint32:  def.Uint32,
@@ -112,6 +115,7 @@ func (def StructPrimitivesDef) New() StructPrimitives {
 		_string:  def.String,
 		_blob:    def.Blob,
 		_value:   def.Value,
+		cs:       cs,
 		ref:      &ref.Ref{},
 	}
 }
@@ -145,9 +149,9 @@ func init() {
 	types.RegisterStruct(__typeForStructPrimitives, builderForStructPrimitives, readerForStructPrimitives)
 }
 
-func builderForStructPrimitives(values []types.Value) types.Value {
+func builderForStructPrimitives(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := StructPrimitives{ref: &ref.Ref{}}
+	s := StructPrimitives{ref: &ref.Ref{}, cs: cs}
 	s._uint64 = uint64(values[i].(types.UInt64))
 	i++
 	s._uint32 = uint32(values[i].(types.UInt32))

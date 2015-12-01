@@ -23,9 +23,9 @@ var (
 		NewString("hi"),
 		newBlobLeaf([]byte("hi")),
 		// compoundBlob
-		NewSet(NewString("hi")),
-		NewList(NewString("hi")),
-		NewMap(NewString("hi"), NewString("hi")),
+		NewSet(chunks.NewMemoryStore(), NewString("hi")),
+		NewList(chunks.NewMemoryStore(), NewString("hi")),
+		NewMap(chunks.NewMemoryStore(), NewString("hi"), NewString("hi")),
 	}
 )
 
@@ -41,7 +41,7 @@ func TestIncrementalLoadList(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
 
-	expected := NewList(testVals...)
+	expected := NewList(cs, testVals...)
 	ref := WriteValue(expected, cs)
 
 	actualVar := ReadValue(ref, cs)
@@ -68,7 +68,7 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
 
-	expected := NewSet(testVals...)
+	expected := NewSet(cs, testVals...)
 	ref := WriteValue(expected, cs)
 
 	actualVar := ReadValue(ref, cs)
@@ -87,7 +87,7 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
 
-	expected := NewMap(testVals...)
+	expected := NewMap(cs, testVals...)
 	ref := WriteValue(expected, cs)
 
 	actualVar := ReadValue(ref, cs)
@@ -110,7 +110,7 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	expectedItem := UInt32(42)
 	ref := WriteValue(expectedItem, cs)
 
-	expected := NewList(NewRef(ref))
+	expected := NewList(cs, NewRef(ref))
 	ref = WriteValue(expected, cs)
 	actualVar := ReadValue(ref, cs)
 

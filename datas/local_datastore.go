@@ -79,3 +79,19 @@ func (trs *teeChunkSource) Get(ref ref.Ref) chunks.Chunk {
 func (trs *teeChunkSource) Has(ref ref.Ref) bool {
 	return trs.source.Has(ref)
 }
+
+func (trs *teeChunkSource) Root() ref.Ref {
+	panic("not reached")
+}
+
+func (trs *teeChunkSource) UpdateRoot(current, existing ref.Ref) bool {
+	panic("not reached")
+}
+
+func (trs *teeChunkSource) Put(c chunks.Chunk) {
+	panic("not reached")
+}
+
+func (trs *teeChunkSource) Close() error {
+	panic("not reached")
+}

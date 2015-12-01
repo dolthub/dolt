@@ -13,14 +13,14 @@ func TestDatasetCommitTracker(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	id2 := "othertestdataset"
-	ms := chunks.NewMemoryStore()
+	cs := chunks.NewMemoryStore()
 
-	ds1 := NewDataset(datas.NewDataStore(ms), id1)
+	ds1 := NewDataset(datas.NewDataStore(cs), id1)
 	ds1Commit := types.NewString("Commit value for " + id1)
 	ds1, ok := ds1.Commit(ds1Commit)
 	assert.True(ok)
 
-	ds2 := NewDataset(datas.NewDataStore(ms), id2)
+	ds2 := NewDataset(datas.NewDataStore(cs), id2)
 	ds2Commit := types.NewString("Commit value for " + id2)
 	ds2, ok = ds2.Commit(ds2Commit)
 	assert.True(ok)
@@ -30,11 +30,11 @@ func TestDatasetCommitTracker(t *testing.T) {
 	assert.False(ds2.Head().Value().Equals(ds1Commit))
 	assert.False(ds1.Head().Value().Equals(ds2Commit))
 
-	assert.Equal("sha1-580dcb5f3a138e4aafbf7cb831607d5475c06759", ms.Root().String())
+	assert.Equal("sha1-580dcb5f3a138e4aafbf7cb831607d5475c06759", cs.Root().String())
 }
 
-func newDS(id string, ms *chunks.MemoryStore) Dataset {
-	store := datas.NewDataStore(ms)
+func newDS(id string, cs *chunks.MemoryStore) Dataset {
+	store := datas.NewDataStore(cs)
 	return NewDataset(store, id)
 }
 
@@ -42,9 +42,9 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	id2 := "othertestdataset"
-	ms := chunks.NewMemoryStore()
+	cs := chunks.NewMemoryStore()
 
-	ds1 := newDS(id1, ms)
+	ds1 := newDS(id1, cs)
 
 	// ds1: |a|
 	a := types.NewString("a")
@@ -54,7 +54,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a|
 	//        \ds2
-	ds2 := newDS(id2, ms)
+	ds2 := newDS(id2, cs)
 	ds2, ok = ds2.Commit(ds1.Head().Value())
 	assert.True(ok)
 	assert.True(ds2.Head().Value().Equals(a))
@@ -74,7 +74,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
-	mergeParents := datas.NewSetOfRefOfCommit().Insert(datas.NewRefOfCommit(ds1.Head().Ref())).Insert(datas.NewRefOfCommit(ds2.Head().Ref()))
+	mergeParents := datas.NewSetOfRefOfCommit(cs).Insert(datas.NewRefOfCommit(ds1.Head().Ref())).Insert(datas.NewRefOfCommit(ds2.Head().Ref()))
 	d := types.NewString("d")
 	ds2, ok = ds2.CommitWithParents(d, mergeParents)
 	assert.True(ok)
@@ -88,10 +88,10 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 func TestTwoClientsWithEmptyDataset(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
-	ms := chunks.NewMemoryStore()
+	cs := chunks.NewMemoryStore()
 
-	dsx := newDS(id1, ms)
-	dsy := newDS(id1, ms)
+	dsx := newDS(id1, cs)
+	dsy := newDS(id1, cs)
 
 	// dsx: || -> |a|
 	a := types.NewString("a")
@@ -115,19 +115,19 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
-	ms := chunks.NewMemoryStore()
+	cs := chunks.NewMemoryStore()
 
 	a := types.NewString("a")
 	{
 		// ds1: || -> |a|
-		ds1 := newDS(id1, ms)
+		ds1 := newDS(id1, cs)
 		ds1, ok := ds1.Commit(a)
 		assert.True(ok)
 		assert.True(ds1.Head().Value().Equals(a))
 	}
 
-	dsx := newDS(id1, ms)
-	dsy := newDS(id1, ms)
+	dsx := newDS(id1, cs)
+	dsy := newDS(id1, cs)
 
 	// dsx: |a| -> |b|
 	assert.True(dsx.Head().Value().Equals(a))

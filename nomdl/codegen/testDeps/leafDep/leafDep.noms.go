@@ -3,6 +3,7 @@
 package leafDep
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -32,14 +33,16 @@ type S struct {
 	_s string
 	_b bool
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewS() S {
+func NewS(cs chunks.ChunkStore) S {
 	return S{
 		_s: "",
 		_b: false,
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -49,10 +52,11 @@ type SDef struct {
 	B bool
 }
 
-func (def SDef) New() S {
+func (def SDef) New(cs chunks.ChunkStore) S {
 	return S{
 		_s:  def.S,
 		_b:  def.B,
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -74,9 +78,9 @@ func init() {
 	types.RegisterStruct(__typeForS, builderForS, readerForS)
 }
 
-func builderForS(values []types.Value) types.Value {
+func builderForS(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := S{ref: &ref.Ref{}}
+	s := S{ref: &ref.Ref{}, cs: cs}
 	s._s = values[i].(types.String).String()
 	i++
 	s._b = bool(values[i].(types.Bool))

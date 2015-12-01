@@ -12,7 +12,7 @@ type dataStoreCommon struct {
 	datasets *MapOfStringToRefOfCommit
 }
 
-func datasetsFromRef(datasetsRef ref.Ref, cs chunks.ChunkSource) *MapOfStringToRefOfCommit {
+func datasetsFromRef(datasetsRef ref.Ref, cs chunks.ChunkStore) *MapOfStringToRefOfCommit {
 	c := types.ReadValue(datasetsRef, cs).(MapOfStringToRefOfCommit)
 	return &c
 }
@@ -23,7 +23,7 @@ func (ds *dataStoreCommon) MaybeHead(datasetID string) (Commit, bool) {
 			return r.TargetValue(ds), true
 		}
 	}
-	return NewCommit(), false
+	return NewCommit(ds), false
 }
 
 func (ds *dataStoreCommon) Head(datasetID string) Commit {
@@ -34,7 +34,7 @@ func (ds *dataStoreCommon) Head(datasetID string) Commit {
 
 func (ds *dataStoreCommon) Datasets() MapOfStringToRefOfCommit {
 	if ds.datasets == nil {
-		return NewMapOfStringToRefOfCommit()
+		return NewMapOfStringToRefOfCommit(ds)
 	} else {
 		return *ds.datasets
 	}
@@ -53,7 +53,7 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) bool {
 	} else if !currentRootRef.IsEmpty() {
 		currentDatasets = *datasetsFromRef(currentRootRef, ds)
 	} else {
-		currentDatasets = NewMapOfStringToRefOfCommit()
+		currentDatasets = NewMapOfStringToRefOfCommit(ds)
 	}
 
 	// TODO: This Commit will be orphaned if the UpdateRoot below fails
@@ -83,7 +83,7 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) bool {
 	return ds.UpdateRoot(newRootRef, currentRootRef)
 }
 
-func descendsFrom(commit Commit, currentHeadRef RefOfCommit, cs chunks.ChunkSource) bool {
+func descendsFrom(commit Commit, currentHeadRef RefOfCommit, cs chunks.ChunkStore) bool {
 	// BFS because the common case is that the ancestor is only a step or two away
 	ancestors := commit.Parents()
 	for !ancestors.Has(currentHeadRef) {
@@ -95,8 +95,8 @@ func descendsFrom(commit Commit, currentHeadRef RefOfCommit, cs chunks.ChunkSour
 	return true
 }
 
-func getAncestors(commits SetOfRefOfCommit, cs chunks.ChunkSource) SetOfRefOfCommit {
-	ancestors := NewSetOfRefOfCommit()
+func getAncestors(commits SetOfRefOfCommit, cs chunks.ChunkStore) SetOfRefOfCommit {
+	ancestors := NewSetOfRefOfCommit(cs)
 	commits.IterAll(func(r RefOfCommit) {
 		c := r.TargetValue(cs)
 		ancestors = ancestors.Union(c.Parents())

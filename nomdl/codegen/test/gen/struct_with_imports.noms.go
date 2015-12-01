@@ -3,6 +3,7 @@
 package gen
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -83,14 +84,16 @@ type ImportUser struct {
 	_importedStruct D
 	_enum           LocalE
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewImportUser() ImportUser {
+func NewImportUser(cs chunks.ChunkStore) ImportUser {
 	return ImportUser{
-		_importedStruct: NewD(),
+		_importedStruct: NewD(cs),
 		_enum:           NewLocalE(),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -100,10 +103,11 @@ type ImportUserDef struct {
 	Enum           LocalE
 }
 
-func (def ImportUserDef) New() ImportUser {
+func (def ImportUserDef) New(cs chunks.ChunkStore) ImportUser {
 	return ImportUser{
-		_importedStruct: def.ImportedStruct.New(),
+		_importedStruct: def.ImportedStruct.New(cs),
 		_enum:           def.Enum,
+		cs:              cs,
 		ref:             &ref.Ref{},
 	}
 }
@@ -125,9 +129,9 @@ func init() {
 	types.RegisterStruct(__typeForImportUser, builderForImportUser, readerForImportUser)
 }
 
-func builderForImportUser(values []types.Value) types.Value {
+func builderForImportUser(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := ImportUser{ref: &ref.Ref{}}
+	s := ImportUser{ref: &ref.Ref{}, cs: cs}
 	s._importedStruct = values[i].(D)
 	i++
 	s._enum = values[i].(LocalE)
@@ -187,21 +191,22 @@ func (s ImportUser) SetEnum(val LocalE) ImportUser {
 
 type ListOfD struct {
 	l   types.List
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfD() ListOfD {
-	return ListOfD{types.NewTypedList(__typeForListOfD), &ref.Ref{}}
+func NewListOfD(cs chunks.ChunkStore) ListOfD {
+	return ListOfD{types.NewTypedList(cs, __typeForListOfD), cs, &ref.Ref{}}
 }
 
 type ListOfDDef []DDef
 
-func (def ListOfDDef) New() ListOfD {
+func (def ListOfDDef) New(cs chunks.ChunkStore) ListOfD {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
-		l[i] = d.New()
+		l[i] = d.New(cs)
 	}
-	return ListOfD{types.NewTypedList(__typeForListOfD, l...), &ref.Ref{}}
+	return ListOfD{types.NewTypedList(cs, __typeForListOfD, l...), cs, &ref.Ref{}}
 }
 
 func (l ListOfD) Def() ListOfDDef {
@@ -242,8 +247,8 @@ func init() {
 	types.RegisterValue(__typeForListOfD, builderForListOfD, readerForListOfD)
 }
 
-func builderForListOfD(v types.Value) types.Value {
-	return ListOfD{v.(types.List), &ref.Ref{}}
+func builderForListOfD(cs chunks.ChunkStore, v types.Value) types.Value {
+	return ListOfD{v.(types.List), cs, &ref.Ref{}}
 }
 
 func readerForListOfD(v types.Value) types.Value {
@@ -263,27 +268,27 @@ func (l ListOfD) Get(i uint64) D {
 }
 
 func (l ListOfD) Slice(idx uint64, end uint64) ListOfD {
-	return ListOfD{l.l.Slice(idx, end), &ref.Ref{}}
+	return ListOfD{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfD) Set(i uint64, val D) ListOfD {
-	return ListOfD{l.l.Set(i, val), &ref.Ref{}}
+	return ListOfD{l.l.Set(i, val), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfD) Append(v ...D) ListOfD {
-	return ListOfD{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfD{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfD) Insert(idx uint64, v ...D) ListOfD {
-	return ListOfD{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfD{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfD) Remove(idx uint64, end uint64) ListOfD {
-	return ListOfD{l.l.Remove(idx, end), &ref.Ref{}}
+	return ListOfD{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfD) RemoveAt(idx uint64) ListOfD {
-	return ListOfD{(l.l.RemoveAt(idx)), &ref.Ref{}}
+	return ListOfD{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfD) fromElemSlice(p []D) []types.Value {
@@ -322,5 +327,5 @@ func (l ListOfD) Filter(cb ListOfDFilterCallback) ListOfD {
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(D), i)
 	})
-	return ListOfD{out, &ref.Ref{}}
+	return ListOfD{out, l.cs, &ref.Ref{}}
 }

@@ -50,10 +50,10 @@ func TestEnsureRef(t *testing.T) {
 	values := []Value{
 		newBlobLeaf([]byte{}),
 		cb,
-		NewList(),
+		NewList(cs),
 		NewString(""),
-		NewMap(),
-		NewSet(),
+		NewMap(cs),
+		NewSet(cs),
 	}
 	for i := 0; i < 2; i++ {
 		for j, v := range values {

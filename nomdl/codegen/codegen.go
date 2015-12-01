@@ -119,7 +119,7 @@ func generate(packageName, in, out, outDir string, written map[string]bool, pars
 
 type depsMap map[ref.Ref]types.Package
 
-func generateDepCode(packageName, outDir string, written map[string]bool, p types.Package, localPkgs refSet, cs chunks.ChunkSource) depsMap {
+func generateDepCode(packageName, outDir string, written map[string]bool, p types.Package, localPkgs refSet, cs chunks.ChunkStore) depsMap {
 	deps := depsMap{}
 	for _, r := range p.Dependencies() {
 		p := types.ReadValue(r, cs).(types.Package)
@@ -159,7 +159,7 @@ func generateAndEmit(tag, out string, written map[string]bool, deps depsMap, p p
 
 func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) types.SetOfRefOfPackage {
 	// Can do better once generated collections implement types.Value.
-	s := types.NewSetOfRefOfPackage()
+	s := types.NewSetOfRefOfPackage(ds.Store())
 	if h, ok := ds.MaybeHead(); ok {
 		s = h.Value().(types.SetOfRefOfPackage)
 	}

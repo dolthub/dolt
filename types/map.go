@@ -5,6 +5,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -14,18 +15,19 @@ type Map struct {
 	indexOf indexOfMapFn
 	t       Type
 	ref     *ref.Ref
+	cs      chunks.ChunkStore
 }
 
 type mapData []mapEntry
 
 type indexOfMapFn func(m mapData, v Value) int
 
-func NewMap(kv ...Value) Map {
-	return NewTypedMap(mapType, kv...)
+func NewMap(cs chunks.ChunkStore, kv ...Value) Map {
+	return NewTypedMap(cs, mapType, kv...)
 }
 
-func NewTypedMap(t Type, kv ...Value) Map {
-	return newMapFromData(buildMapData(mapData{}, kv, t), t)
+func NewTypedMap(cs chunks.ChunkStore, t Type, kv ...Value) Map {
+	return newMapFromData(cs, buildMapData(mapData{}, kv, t), t)
 }
 
 func (m Map) First() (Value, Value) {
@@ -72,12 +74,12 @@ func (m Map) Set(key Value, val Value) Map {
 	elemTypes := m.t.Desc.(CompoundDesc).ElemTypes
 	assertType(elemTypes[0], key)
 	assertType(elemTypes[1], val)
-	return newMapFromData(buildMapData(m.data, []Value{key, val}, m.t), m.t)
+	return newMapFromData(m.cs, buildMapData(m.data, []Value{key, val}, m.t), m.t)
 }
 
 func (m Map) SetM(kv ...Value) Map {
 	assertMapElemTypes(m, kv...)
-	return newMapFromData(buildMapData(m.data, kv, m.t), m.t)
+	return newMapFromData(m.cs, buildMapData(m.data, kv, m.t), m.t)
 }
 
 func (m Map) Remove(k Value) Map {
@@ -89,7 +91,7 @@ func (m Map) Remove(k Value) Map {
 	data := make(mapData, len(m.data)-1)
 	copy(data, m.data[:idx])
 	copy(data[idx:], m.data[idx+1:])
-	return newMapFromData(data, m.t)
+	return newMapFromData(m.cs, data, m.t)
 }
 
 type mapIterCallback func(key, value Value) (stop bool)
@@ -143,7 +145,7 @@ func (m Map) Filter(cb mapFilterCallback) Map {
 		}
 	}
 	// Already sorted.
-	return newMapFromData(data, m.t)
+	return newMapFromData(m.cs, data, m.t)
 }
 
 func (m Map) Ref() ref.Ref {
@@ -186,8 +188,8 @@ type mapEntry struct {
 	value Value
 }
 
-func newMapFromData(data mapData, t Type) Map {
-	return Map{data, getIndexFnForMapType(t), t, &ref.Ref{}}
+func newMapFromData(cs chunks.ChunkStore, data mapData, t Type) Map {
+	return Map{data, getIndexFnForMapType(t), t, &ref.Ref{}, cs}
 }
 
 func buildMapData(oldData mapData, values []Value, t Type) mapData {

@@ -3,6 +3,7 @@
 package gen
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -29,13 +30,15 @@ func init() {
 type Tree struct {
 	_children ListOfTree
 
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewTree() Tree {
+func NewTree(cs chunks.ChunkStore) Tree {
 	return Tree{
-		_children: NewListOfTree(),
+		_children: NewListOfTree(cs),
 
+		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -44,9 +47,10 @@ type TreeDef struct {
 	Children ListOfTreeDef
 }
 
-func (def TreeDef) New() Tree {
+func (def TreeDef) New(cs chunks.ChunkStore) Tree {
 	return Tree{
-		_children: def.Children.New(),
+		_children: def.Children.New(cs),
+		cs:        cs,
 		ref:       &ref.Ref{},
 	}
 }
@@ -67,9 +71,9 @@ func init() {
 	types.RegisterStruct(__typeForTree, builderForTree, readerForTree)
 }
 
-func builderForTree(values []types.Value) types.Value {
+func builderForTree(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
-	s := Tree{ref: &ref.Ref{}}
+	s := Tree{ref: &ref.Ref{}, cs: cs}
 	s._children = values[i].(ListOfTree)
 	i++
 	return s
@@ -115,21 +119,22 @@ func (s Tree) SetChildren(val ListOfTree) Tree {
 
 type ListOfTree struct {
 	l   types.List
+	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfTree() ListOfTree {
-	return ListOfTree{types.NewTypedList(__typeForListOfTree), &ref.Ref{}}
+func NewListOfTree(cs chunks.ChunkStore) ListOfTree {
+	return ListOfTree{types.NewTypedList(cs, __typeForListOfTree), cs, &ref.Ref{}}
 }
 
 type ListOfTreeDef []TreeDef
 
-func (def ListOfTreeDef) New() ListOfTree {
+func (def ListOfTreeDef) New(cs chunks.ChunkStore) ListOfTree {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
-		l[i] = d.New()
+		l[i] = d.New(cs)
 	}
-	return ListOfTree{types.NewTypedList(__typeForListOfTree, l...), &ref.Ref{}}
+	return ListOfTree{types.NewTypedList(cs, __typeForListOfTree, l...), cs, &ref.Ref{}}
 }
 
 func (l ListOfTree) Def() ListOfTreeDef {
@@ -170,8 +175,8 @@ func init() {
 	types.RegisterValue(__typeForListOfTree, builderForListOfTree, readerForListOfTree)
 }
 
-func builderForListOfTree(v types.Value) types.Value {
-	return ListOfTree{v.(types.List), &ref.Ref{}}
+func builderForListOfTree(cs chunks.ChunkStore, v types.Value) types.Value {
+	return ListOfTree{v.(types.List), cs, &ref.Ref{}}
 }
 
 func readerForListOfTree(v types.Value) types.Value {
@@ -191,27 +196,27 @@ func (l ListOfTree) Get(i uint64) Tree {
 }
 
 func (l ListOfTree) Slice(idx uint64, end uint64) ListOfTree {
-	return ListOfTree{l.l.Slice(idx, end), &ref.Ref{}}
+	return ListOfTree{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfTree) Set(i uint64, val Tree) ListOfTree {
-	return ListOfTree{l.l.Set(i, val), &ref.Ref{}}
+	return ListOfTree{l.l.Set(i, val), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfTree) Append(v ...Tree) ListOfTree {
-	return ListOfTree{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfTree{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfTree) Insert(idx uint64, v ...Tree) ListOfTree {
-	return ListOfTree{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
+	return ListOfTree{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfTree) Remove(idx uint64, end uint64) ListOfTree {
-	return ListOfTree{l.l.Remove(idx, end), &ref.Ref{}}
+	return ListOfTree{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfTree) RemoveAt(idx uint64) ListOfTree {
-	return ListOfTree{(l.l.RemoveAt(idx)), &ref.Ref{}}
+	return ListOfTree{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
 }
 
 func (l ListOfTree) fromElemSlice(p []Tree) []types.Value {
@@ -250,5 +255,5 @@ func (l ListOfTree) Filter(cb ListOfTreeFilterCallback) ListOfTree {
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(Tree), i)
 	})
-	return ListOfTree{out, &ref.Ref{}}
+	return ListOfTree{out, l.cs, &ref.Ref{}}
 }

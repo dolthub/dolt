@@ -84,7 +84,7 @@ func main() {
 
 		wg := sync.WaitGroup{}
 		importXml := func() {
-			expectedType := util.NewMapOfStringToValue()
+			expectedType := util.NewMapOfStringToValue(ds.Store())
 			for f := range filesChan {
 				file, err := os.Open(f.path)
 				d.Exp.NoError(err, "Error getting XML")
@@ -94,7 +94,7 @@ func main() {
 				object := xmlObject.Old()
 				file.Close()
 
-				nomsObj := util.NomsValueFromDecodedJSON(object)
+				nomsObj := util.NomsValueFromDecodedJSON(ds.Store(), object)
 				d.Chk.IsType(expectedType, nomsObj)
 				r := ref.Ref{}
 
@@ -130,7 +130,7 @@ func main() {
 		}
 
 		if !*noIO {
-			_, ok := ds.Commit(refs.New())
+			_, ok := ds.Commit(refs.New(ds.Store()))
 			d.Exp.True(ok, "Could not commit due to conflicting edit")
 		}
 

@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/tealeg/xlsx"
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
@@ -70,7 +71,7 @@ func main() {
 		ref.FromHash(h).String(),
 		DateDef{time.Now().Format(time.RFC3339)},
 		companiesRef,
-	}.New())
+	}.New(ds.Store()))
 	d.Exp.True(ok, "Could not commit due to conflicting edit")
 }
 
@@ -93,7 +94,7 @@ func importCompanies(ds dataset.Dataset, fileName string) ref.Ref {
 	numRounds := 0
 	for i, row := range roundsSheet.Rows {
 		if i != 0 {
-			round := NewRoundFromRow(row)
+			round := NewRoundFromRow(ds.Store(), row)
 			pl := round.CompanyPermalink()
 			roundsByPermalink[pl] = append(roundsByPermalink[pl], round)
 			numRounds++
@@ -101,16 +102,16 @@ func importCompanies(ds dataset.Dataset, fileName string) ref.Ref {
 	}
 
 	// Read in Companies and map to permalink
-	companyRefs := NewMapOfStringToRefOfCompany()
+	companyRefs := NewMapOfStringToRefOfCompany(ds.Store())
 	companySheet := xlFile.Sheet["Companies"]
 	for i, row := range companySheet.Rows {
 		fmt.Printf("\rImporting %d of %d rounds... (%.2f%%)", i, len(companySheet.Rows), float64(i)/float64(len(companySheet.Rows))*float64(100))
 		if i != 0 {
-			company := NewCompanyFromRow(row)
+			company := NewCompanyFromRow(ds.Store(), row)
 			permalink := company.Permalink()
 
 			rounds := roundsByPermalink[permalink]
-			roundRefs := NewSetOfRefOfRound()
+			roundRefs := NewSetOfRefOfRound(ds.Store())
 			for _, r := range rounds {
 				ref := types.WriteValue(r, ds.Store())
 				roundRefs = roundRefs.Insert(NewRefOfRound(ref))
@@ -139,7 +140,7 @@ func getExistingCompaniesRef(ds dataset.Dataset, h hash.Hash) ref.Ref {
 	return ref.Ref{}
 }
 
-func NewCompanyFromRow(row *xlsx.Row) Company {
+func NewCompanyFromRow(cs chunks.ChunkStore, row *xlsx.Row) Company {
 	cells := row.Cells
 
 	company := CompanyDef{
@@ -161,10 +162,10 @@ func NewCompanyFromRow(row *xlsx.Row) Company {
 		FirstFundingAt: parseTimeStamp(cells[15], "Company.FirstFundingAt"),
 		LastFundingAt:  parseTimeStamp(cells[16], "Company.LastFundingAt"),
 	}
-	return company.New()
+	return company.New(cs)
 }
 
-func NewRoundFromRow(row *xlsx.Row) Round {
+func NewRoundFromRow(cs chunks.ChunkStore, row *xlsx.Row) Round {
 	cells := row.Cells
 
 	var raisedAmountUsd float64
@@ -186,7 +187,7 @@ func NewRoundFromRow(row *xlsx.Row) Round {
 		// Skip FundedYear:    14
 		RaisedAmountUsd: raisedAmountUsd,
 	}
-	return round.New()
+	return round.New(cs)
 }
 
 func parseListOfCategory(s string) SetOfStringDef {
