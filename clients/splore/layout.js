@@ -18,6 +18,7 @@ export default function Layout(props: Props) : React.Element {
 
   const spaceX = 75;
   const spaceY = 20;
+  const paddingRight = 250;
   let getX = d => d.y * spaceX;
   let getY = d => d.x * spaceY;
   let maxX = 0;
@@ -84,7 +85,7 @@ export default function Layout(props: Props) : React.Element {
   }
 
   return (
-    <svg width={maxX + spaceX} height={maxY + spaceY}>
+    <svg width={maxX + spaceX + paddingRight} height={maxY + spaceY}>
       <g transform={`translate(${spaceX}, ${translateY})`}>
         {children}
       </g>
