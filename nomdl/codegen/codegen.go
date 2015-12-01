@@ -128,6 +128,7 @@ func generateDepCode(packageName, outDir string, written map[string]bool, p type
 		parsed := pkg.Parsed{Package: p, Name: packageName}
 		if !localPkgs[parsed.Ref()] {
 			generateAndEmit(tag, filepath.Join(outDir, tag+".go"), written, pDeps, parsed)
+			localPkgs[parsed.Ref()] = true
 		}
 		for depRef, dep := range pDeps {
 			deps[depRef] = dep

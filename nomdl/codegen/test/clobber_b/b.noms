@@ -1,0 +1,1 @@
+alias a = import "../clobber_a/a.noms"
