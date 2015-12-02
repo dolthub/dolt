@@ -130,6 +130,13 @@ class JsonArrayWriter {
         this.write(w3.array);
         break;
       }
+      case Kind.Ref: {
+        // TODO: This is not aligned with Go. In Go we have a dedicated Value
+        // for refs.
+        invariant(v instanceof Ref);
+        this.writeRef(v);
+        break;
+      }
       case Kind.Set: {
         invariant(v instanceof Set);
         let w2 = new JsonArrayWriter(this._cs);

@@ -329,4 +329,13 @@ suite('Encode', () => {
     assert.equal(buffer2.byteLength, chunk2.data.buffer.byteLength);
     assert.deepEqual(buffer2, chunk2.data.buffer);
   });
+
+  test('write ref', async () => {
+    let ms = new MemoryStore();
+    let w = new JsonArrayWriter(ms);
+    let ref = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
+    let t = makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Blob));
+    w.writeTopLevel(t, ref);
+    assert.deepEqual([Kind.Ref, Kind.Blob, ref.toString()], w.array);
+  });
 });
