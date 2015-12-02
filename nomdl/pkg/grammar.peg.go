@@ -798,22 +798,22 @@ var g = &grammar{
 						alternatives: []interface{}{
 							&litMatcher{
 								pos:        position{line: 162, col: 21, offset: 4230},
-								val:        "UInt64",
+								val:        "Uint64",
 								ignoreCase: false,
 							},
 							&litMatcher{
 								pos:        position{line: 162, col: 32, offset: 4241},
-								val:        "UInt32",
+								val:        "Uint32",
 								ignoreCase: false,
 							},
 							&litMatcher{
 								pos:        position{line: 162, col: 43, offset: 4252},
-								val:        "UInt16",
+								val:        "Uint16",
 								ignoreCase: false,
 							},
 							&litMatcher{
 								pos:        position{line: 162, col: 54, offset: 4263},
-								val:        "UInt8",
+								val:        "Uint8",
 								ignoreCase: false,
 							},
 							&litMatcher{

@@ -20,7 +20,7 @@ var (
 )
 
 func main() {
-	types := map[string]bool{"Bool": false, "Int8": true, "Int16": true, "Int32": true, "Int64": true, "UInt8": true, "UInt16": true, "UInt32": true, "UInt64": true, "Float32": true, "Float64": true}
+	types := map[string]bool{"Bool": false, "Int8": true, "Int16": true, "Int32": true, "Int64": true, "Uint8": true, "Uint16": true, "Uint32": true, "Uint64": true, "Float32": true, "Float64": true}
 	typeNames := []string{}
 	for k := range types {
 		typeNames = append(typeNames, k)

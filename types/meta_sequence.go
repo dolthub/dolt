@@ -31,7 +31,7 @@ type metaTuple struct {
 }
 
 func (mt metaTuple) uint64Value() uint64 {
-	return uint64(mt.value.(UInt64))
+	return uint64(mt.value.(Uint64))
 }
 
 type metaSequenceData []metaTuple
@@ -140,12 +140,12 @@ func newMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 		for i, v := range items {
 			mt := v.(metaTuple)
 			offsetSum += mt.uint64Value()
-			tuples[i] = metaTuple{mt.ref, UInt64(offsetSum)}
+			tuples[i] = metaTuple{mt.ref, Uint64(offsetSum)}
 		}
 
 		meta := newMetaSequenceFromData(tuples, t, cs)
 		ref := WriteValue(meta, cs)
-		return metaTuple{ref, UInt64(offsetSum)}, meta
+		return metaTuple{ref, Uint64(offsetSum)}, meta
 	}
 }
 
@@ -153,7 +153,7 @@ func normalizeMetaSequenceChunk(in []sequenceItem) (out []sequenceItem) {
 	offset := uint64(0)
 	for _, v := range in {
 		mt := v.(metaTuple)
-		out = append(out, metaTuple{mt.ref, UInt64(mt.uint64Value() - offset)})
+		out = append(out, metaTuple{mt.ref, Uint64(mt.uint64Value() - offset)})
 		offset = mt.uint64Value()
 	}
 	return

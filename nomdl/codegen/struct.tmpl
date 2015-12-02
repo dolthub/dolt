@@ -70,7 +70,7 @@ func builderFor{{.Name}}(cs chunks.ChunkStore, values []{{$typesPackage}}Value) 
 	}{{else}}
 	s._{{.Name}} = {{valueToUser "values[i]" .T}}
 	i++{{end}}{{end}}
-	{{if .HasUnion}}s.__unionIndex = uint32(values[i].({{$typesPackage}}UInt32))
+	{{if .HasUnion}}s.__unionIndex = uint32(values[i].({{$typesPackage}}Uint32))
 	i++
 	s.__unionValue = values[i]
 	i++
@@ -85,7 +85,7 @@ func readerFor{{.Name}}(v {{$typesPackage}}Value) []{{$typesPackage}}Value {
 		values = append(values, {{userToValue (printf "s._%s" .Name) .T}})
 	}{{else}}
 	values = append(values, {{userToValue (printf "s._%s" .Name) .T}}){{end}}{{end}}
-	{{if .HasUnion}}values = append(values, {{$typesPackage}}UInt32(s.__unionIndex))
+	{{if .HasUnion}}values = append(values, {{$typesPackage}}Uint32(s.__unionIndex))
 	values = append(values, s.__unionValue)
 	{{end}}return values
 }

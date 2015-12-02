@@ -28,7 +28,7 @@ func init() {
 				types.Field{"StateCode", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Region", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"City", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"FundingRounds", types.MakePrimitiveType(types.UInt16Kind), false},
+				types.Field{"FundingRounds", types.MakePrimitiveType(types.Uint16Kind), false},
 				types.Field{"FoundedAt", types.MakePrimitiveType(types.Int64Kind), false},
 				types.Field{"FirstFundingAt", types.MakePrimitiveType(types.Int64Kind), false},
 				types.Field{"LastFundingAt", types.MakePrimitiveType(types.Int64Kind), false},
@@ -197,7 +197,7 @@ func builderForCompany(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i++
 	s._City = values[i].(types.String).String()
 	i++
-	s._FundingRounds = uint16(values[i].(types.UInt16))
+	s._FundingRounds = uint16(values[i].(types.Uint16))
 	i++
 	s._FoundedAt = int64(values[i].(types.Int64))
 	i++
@@ -224,7 +224,7 @@ func readerForCompany(v types.Value) []types.Value {
 	values = append(values, types.NewString(s._StateCode))
 	values = append(values, types.NewString(s._Region))
 	values = append(values, types.NewString(s._City))
-	values = append(values, types.UInt16(s._FundingRounds))
+	values = append(values, types.Uint16(s._FundingRounds))
 	values = append(values, types.Int64(s._FoundedAt))
 	values = append(values, types.Int64(s._FirstFundingAt))
 	values = append(values, types.Int64(s._LastFundingAt))
@@ -259,7 +259,7 @@ func (s Company) ChildValues() (ret []types.Value) {
 	ret = append(ret, types.NewString(s._StateCode))
 	ret = append(ret, types.NewString(s._Region))
 	ret = append(ret, types.NewString(s._City))
-	ret = append(ret, types.UInt16(s._FundingRounds))
+	ret = append(ret, types.Uint16(s._FundingRounds))
 	ret = append(ret, types.Int64(s._FoundedAt))
 	ret = append(ret, types.Int64(s._FirstFundingAt))
 	ret = append(ret, types.Int64(s._LastFundingAt))

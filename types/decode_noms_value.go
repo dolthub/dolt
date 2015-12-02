@@ -143,7 +143,7 @@ func indexTypeForMetaSequence(t Type) Type {
 	case MapKind, SetKind:
 		return concreteType.Desc.(CompoundDesc).ElemTypes[0]
 	case BlobKind, ListKind:
-		return MakePrimitiveType(UInt64Kind)
+		return MakePrimitiveType(Uint64Kind)
 	}
 
 	panic("unreached")
@@ -200,14 +200,14 @@ func (r *jsonArrayReader) readValueWithoutTag(t Type, pkg *Package) Value {
 		return r.readBlob(t)
 	case BoolKind:
 		return Bool(r.read().(bool))
-	case UInt8Kind:
-		return UInt8(r.read().(float64))
-	case UInt16Kind:
-		return UInt16(r.read().(float64))
-	case UInt32Kind:
-		return UInt32(r.read().(float64))
-	case UInt64Kind:
-		return UInt64(r.read().(float64))
+	case Uint8Kind:
+		return Uint8(r.read().(float64))
+	case Uint16Kind:
+		return Uint16(r.read().(float64))
+	case Uint32Kind:
+		return Uint32(r.read().(float64))
+	case Uint64Kind:
+		return Uint64(r.read().(float64))
 	case Int8Kind:
 		return Int8(r.read().(float64))
 	case Int16Kind:
@@ -378,7 +378,7 @@ func (r *jsonArrayReader) readStruct(typeDef, typ Type, pkg *Package) Value {
 	}
 	if len(desc.Union) > 0 {
 		unionIndex := uint32(r.read().(float64))
-		values = append(values, UInt32(unionIndex), r.readValueWithoutTag(desc.Union[unionIndex].T, pkg))
+		values = append(values, Uint32(unionIndex), r.readValueWithoutTag(desc.Union[unionIndex].T, pkg))
 	}
 
 	typ = fixupType(typ, pkg)

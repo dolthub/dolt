@@ -73,7 +73,7 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 	switch tr.Kind() {
 	case BlobKind:
 		w.writeBlob(v.(Blob))
-	case BoolKind, Float32Kind, Float64Kind, Int16Kind, Int32Kind, Int64Kind, Int8Kind, UInt16Kind, UInt32Kind, UInt64Kind, UInt8Kind:
+	case BoolKind, Float32Kind, Float64Kind, Int16Kind, Int32Kind, Int64Kind, Int8Kind, Uint16Kind, Uint32Kind, Uint64Kind, Uint8Kind:
 		w.write(v.(primitive).ToPrimitive())
 	case ListKind:
 		w2 := newJsonArrayWriter(w.cs)
@@ -250,7 +250,7 @@ func (w *jsonArrayWriter) writeStruct(v Value, typ, typeDef Type, pkg *Package) 
 		}
 	}
 	if len(desc.Union) > 0 {
-		unionIndex := uint32(values[i].(UInt32))
+		unionIndex := uint32(values[i].(Uint32))
 		i++
 		w.write(unionIndex)
 		w.writeValue(values[i], desc.Union[unionIndex].T, pkg)

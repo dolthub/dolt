@@ -159,7 +159,7 @@ CompoundType <- `List` _ `(` _ t:Type _ `)` _ {
 	return types.MakeCompoundType(types.RefKind, t.(types.Type)), nil
 }
 
-PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `Type`) {
+PrimitiveType <- p:(`Uint64` / `Uint32` / `Uint16` / `Uint8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `Type`) {
 	return types.MakePrimitiveTypeByString(string(p.([]uint8))), nil
 }
 

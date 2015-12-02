@@ -30,7 +30,7 @@ func init() {
 			[]types.Field{
 				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"NumPhotos", types.MakePrimitiveType(types.UInt32Kind), false},
+				types.Field{"NumPhotos", types.MakePrimitiveType(types.Uint32Kind), false},
 				types.Field{"Photos", types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0)))), false},
 			},
 			types.Choices{},
@@ -294,7 +294,7 @@ func builderForAlbum(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i++
 	s._Title = values[i].(types.String).String()
 	i++
-	s._NumPhotos = uint32(values[i].(types.UInt32))
+	s._NumPhotos = uint32(values[i].(types.Uint32))
 	i++
 	s._Photos = values[i].(RefOfSetOfRefOfRemotePhoto)
 	i++
@@ -306,7 +306,7 @@ func readerForAlbum(v types.Value) []types.Value {
 	s := v.(Album)
 	values = append(values, types.NewString(s._Id))
 	values = append(values, types.NewString(s._Title))
-	values = append(values, types.UInt32(s._NumPhotos))
+	values = append(values, types.Uint32(s._NumPhotos))
 	values = append(values, s._Photos)
 	return values
 }
@@ -328,7 +328,7 @@ func (s Album) Chunks() (chunks []ref.Ref) {
 func (s Album) ChildValues() (ret []types.Value) {
 	ret = append(ret, types.NewString(s._Id))
 	ret = append(ret, types.NewString(s._Title))
-	ret = append(ret, types.UInt32(s._NumPhotos))
+	ret = append(ret, types.Uint32(s._NumPhotos))
 	ret = append(ret, s._Photos)
 	return
 }

@@ -37,7 +37,7 @@ This one is generated from `types/package_set_of_ref.noms`. However, it uses the
 out of the box. However, it is pretty straight forward to make it work.
 
 1. Open `nomdl/pkg/grammar.pg`
-2. Find `UInt64`
+2. Find `Uint64`
 3. At that line, add one more builtin type called `Package`.
 4. Run `go generate` `in nomdl/pkg`
 5. Run `go run ../nomdl/codegen/codegen.go --in=package_set_of_ref.noms` in `types/`.
@@ -51,8 +51,8 @@ Here is the diff:
         return types.MakeCompoundType(types.RefKind, t.(types.Type)), nil
  }
 
--PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `Type`) {
-+PrimitiveType <- p:(`UInt64` / `UInt32` / `UInt16` / `UInt8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `Type` / `Package`) {
+-PrimitiveType <- p:(`Uint64` / `Uint32` / `Uint16` / `Uint8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `Type`) {
++PrimitiveType <- p:(`Uint64` / `Uint32` / `Uint16` / `Uint8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `Type` / `Package`) {
         return types.MakePrimitiveTypeByString(string(p.([]uint8))), nil
  }
  ```

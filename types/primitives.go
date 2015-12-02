@@ -234,135 +234,135 @@ func (v Int8) Less(other OrderedValue) bool {
 	return v < other.(Int8)
 }
 
-type UInt16 uint16
+type Uint16 uint16
 
-func (p UInt16) Equals(other Value) bool {
+func (p Uint16) Equals(other Value) bool {
 	return p == other
 }
 
-func (v UInt16) Ref() ref.Ref {
+func (v Uint16) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v UInt16) Chunks() []ref.Ref {
+func (v Uint16) Chunks() []ref.Ref {
 	return nil
 }
 
-func (v UInt16) ChildValues() []Value {
+func (v Uint16) ChildValues() []Value {
 	return nil
 }
 
-func (v UInt16) ToPrimitive() interface{} {
+func (v Uint16) ToPrimitive() interface{} {
 	return uint16(v)
 }
 
-var typeForUInt16 = MakePrimitiveType(UInt16Kind)
+var typeForUint16 = MakePrimitiveType(Uint16Kind)
 
-func (v UInt16) Type() Type {
-	return typeForUInt16
+func (v Uint16) Type() Type {
+	return typeForUint16
 }
 
 
-func (v UInt16) Less(other OrderedValue) bool {
-	return v < other.(UInt16)
+func (v Uint16) Less(other OrderedValue) bool {
+	return v < other.(Uint16)
 }
 
-type UInt32 uint32
+type Uint32 uint32
 
-func (p UInt32) Equals(other Value) bool {
+func (p Uint32) Equals(other Value) bool {
 	return p == other
 }
 
-func (v UInt32) Ref() ref.Ref {
+func (v Uint32) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v UInt32) Chunks() []ref.Ref {
+func (v Uint32) Chunks() []ref.Ref {
 	return nil
 }
 
-func (v UInt32) ChildValues() []Value {
+func (v Uint32) ChildValues() []Value {
 	return nil
 }
 
-func (v UInt32) ToPrimitive() interface{} {
+func (v Uint32) ToPrimitive() interface{} {
 	return uint32(v)
 }
 
-var typeForUInt32 = MakePrimitiveType(UInt32Kind)
+var typeForUint32 = MakePrimitiveType(Uint32Kind)
 
-func (v UInt32) Type() Type {
-	return typeForUInt32
+func (v Uint32) Type() Type {
+	return typeForUint32
 }
 
 
-func (v UInt32) Less(other OrderedValue) bool {
-	return v < other.(UInt32)
+func (v Uint32) Less(other OrderedValue) bool {
+	return v < other.(Uint32)
 }
 
-type UInt64 uint64
+type Uint64 uint64
 
-func (p UInt64) Equals(other Value) bool {
+func (p Uint64) Equals(other Value) bool {
 	return p == other
 }
 
-func (v UInt64) Ref() ref.Ref {
+func (v Uint64) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v UInt64) Chunks() []ref.Ref {
+func (v Uint64) Chunks() []ref.Ref {
 	return nil
 }
 
-func (v UInt64) ChildValues() []Value {
+func (v Uint64) ChildValues() []Value {
 	return nil
 }
 
-func (v UInt64) ToPrimitive() interface{} {
+func (v Uint64) ToPrimitive() interface{} {
 	return uint64(v)
 }
 
-var typeForUInt64 = MakePrimitiveType(UInt64Kind)
+var typeForUint64 = MakePrimitiveType(Uint64Kind)
 
-func (v UInt64) Type() Type {
-	return typeForUInt64
+func (v Uint64) Type() Type {
+	return typeForUint64
 }
 
 
-func (v UInt64) Less(other OrderedValue) bool {
-	return v < other.(UInt64)
+func (v Uint64) Less(other OrderedValue) bool {
+	return v < other.(Uint64)
 }
 
-type UInt8 uint8
+type Uint8 uint8
 
-func (p UInt8) Equals(other Value) bool {
+func (p Uint8) Equals(other Value) bool {
 	return p == other
 }
 
-func (v UInt8) Ref() ref.Ref {
+func (v Uint8) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v UInt8) Chunks() []ref.Ref {
+func (v Uint8) Chunks() []ref.Ref {
 	return nil
 }
 
-func (v UInt8) ChildValues() []Value {
+func (v Uint8) ChildValues() []Value {
 	return nil
 }
 
-func (v UInt8) ToPrimitive() interface{} {
+func (v Uint8) ToPrimitive() interface{} {
 	return uint8(v)
 }
 
-var typeForUInt8 = MakePrimitiveType(UInt8Kind)
+var typeForUint8 = MakePrimitiveType(Uint8Kind)
 
-func (v UInt8) Type() Type {
-	return typeForUInt8
+func (v Uint8) Type() Type {
+	return typeForUint8
 }
 
 
-func (v UInt8) Less(other OrderedValue) bool {
-	return v < other.(UInt8)
+func (v Uint8) Less(other OrderedValue) bool {
+	return v < other.(Uint8)
 }
 

@@ -26,8 +26,8 @@ func init() {
 			[]types.Field{
 				types.Field{"Nodes", types.MakeCompoundType(types.ListKind, types.MakeType(ref.Ref{}, 0)), false},
 				types.Field{"Tiles", types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeType(ref.Ref{}, 1)), false},
-				types.Field{"Depth", types.MakePrimitiveType(types.UInt8Kind), false},
-				types.Field{"NumDescendents", types.MakePrimitiveType(types.UInt32Kind), false},
+				types.Field{"Depth", types.MakePrimitiveType(types.Uint8Kind), false},
+				types.Field{"NumDescendents", types.MakePrimitiveType(types.Uint32Kind), false},
 				types.Field{"Path", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Georectangle", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 1), false},
 			},
@@ -37,8 +37,8 @@ func init() {
 			[]types.Field{
 				types.Field{"Nodes", types.MakeCompoundType(types.ListKind, types.MakeCompoundType(types.RefKind, types.MakePrimitiveType(types.ValueKind))), false},
 				types.Field{"Tiles", types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Ref{}, 2))), false},
-				types.Field{"Depth", types.MakePrimitiveType(types.UInt8Kind), false},
-				types.Field{"NumDescendents", types.MakePrimitiveType(types.UInt32Kind), false},
+				types.Field{"Depth", types.MakePrimitiveType(types.Uint8Kind), false},
+				types.Field{"NumDescendents", types.MakePrimitiveType(types.Uint32Kind), false},
 				types.Field{"Path", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Georectangle", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 1), false},
 			},
@@ -238,9 +238,9 @@ func builderForQuadTree(cs chunks.ChunkStore, values []types.Value) types.Value 
 	i++
 	s._Tiles = values[i].(MapOfStringToQuadTree)
 	i++
-	s._Depth = uint8(values[i].(types.UInt8))
+	s._Depth = uint8(values[i].(types.Uint8))
 	i++
-	s._NumDescendents = uint32(values[i].(types.UInt32))
+	s._NumDescendents = uint32(values[i].(types.Uint32))
 	i++
 	s._Path = values[i].(types.String).String()
 	i++
@@ -254,8 +254,8 @@ func readerForQuadTree(v types.Value) []types.Value {
 	s := v.(QuadTree)
 	values = append(values, s._Nodes)
 	values = append(values, s._Tiles)
-	values = append(values, types.UInt8(s._Depth))
-	values = append(values, types.UInt32(s._NumDescendents))
+	values = append(values, types.Uint8(s._Depth))
+	values = append(values, types.Uint32(s._NumDescendents))
 	values = append(values, types.NewString(s._Path))
 	values = append(values, s._Georectangle)
 	return values
@@ -280,8 +280,8 @@ func (s QuadTree) Chunks() (chunks []ref.Ref) {
 func (s QuadTree) ChildValues() (ret []types.Value) {
 	ret = append(ret, s._Nodes)
 	ret = append(ret, s._Tiles)
-	ret = append(ret, types.UInt8(s._Depth))
-	ret = append(ret, types.UInt32(s._NumDescendents))
+	ret = append(ret, types.Uint8(s._Depth))
+	ret = append(ret, types.Uint32(s._NumDescendents))
 	ret = append(ret, types.NewString(s._Path))
 	ret = append(ret, s._Georectangle)
 	return
@@ -425,9 +425,9 @@ func builderForSQuadTree(cs chunks.ChunkStore, values []types.Value) types.Value
 	i++
 	s._Tiles = values[i].(MapOfStringToRefOfSQuadTree)
 	i++
-	s._Depth = uint8(values[i].(types.UInt8))
+	s._Depth = uint8(values[i].(types.Uint8))
 	i++
-	s._NumDescendents = uint32(values[i].(types.UInt32))
+	s._NumDescendents = uint32(values[i].(types.Uint32))
 	i++
 	s._Path = values[i].(types.String).String()
 	i++
@@ -441,8 +441,8 @@ func readerForSQuadTree(v types.Value) []types.Value {
 	s := v.(SQuadTree)
 	values = append(values, s._Nodes)
 	values = append(values, s._Tiles)
-	values = append(values, types.UInt8(s._Depth))
-	values = append(values, types.UInt32(s._NumDescendents))
+	values = append(values, types.Uint8(s._Depth))
+	values = append(values, types.Uint32(s._NumDescendents))
 	values = append(values, types.NewString(s._Path))
 	values = append(values, s._Georectangle)
 	return values
@@ -467,8 +467,8 @@ func (s SQuadTree) Chunks() (chunks []ref.Ref) {
 func (s SQuadTree) ChildValues() (ret []types.Value) {
 	ret = append(ret, s._Nodes)
 	ret = append(ret, s._Tiles)
-	ret = append(ret, types.UInt8(s._Depth))
-	ret = append(ret, types.UInt32(s._NumDescendents))
+	ret = append(ret, types.Uint8(s._Depth))
+	ret = append(ret, types.Uint32(s._NumDescendents))
 	ret = append(ret, types.NewString(s._Path))
 	ret = append(ret, s._Georectangle)
 	return

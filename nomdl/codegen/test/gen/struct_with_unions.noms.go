@@ -202,7 +202,7 @@ func init() {
 func builderFor__unionOfBOfFloat64AndCOfString(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
 	s := __unionOfBOfFloat64AndCOfString{ref: &ref.Ref{}, cs: cs}
-	s.__unionIndex = uint32(values[i].(types.UInt32))
+	s.__unionIndex = uint32(values[i].(types.Uint32))
 	i++
 	s.__unionValue = values[i]
 	i++
@@ -212,7 +212,7 @@ func builderFor__unionOfBOfFloat64AndCOfString(cs chunks.ChunkStore, values []ty
 func readerFor__unionOfBOfFloat64AndCOfString(v types.Value) []types.Value {
 	values := []types.Value{}
 	s := v.(__unionOfBOfFloat64AndCOfString)
-	values = append(values, types.UInt32(s.__unionIndex))
+	values = append(values, types.Uint32(s.__unionIndex))
 	values = append(values, s.__unionValue)
 	return values
 }
@@ -342,7 +342,7 @@ func init() {
 func builderFor__unionOfEOfFloat64AndFOfString(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
 	s := __unionOfEOfFloat64AndFOfString{ref: &ref.Ref{}, cs: cs}
-	s.__unionIndex = uint32(values[i].(types.UInt32))
+	s.__unionIndex = uint32(values[i].(types.Uint32))
 	i++
 	s.__unionValue = values[i]
 	i++
@@ -352,7 +352,7 @@ func builderFor__unionOfEOfFloat64AndFOfString(cs chunks.ChunkStore, values []ty
 func readerFor__unionOfEOfFloat64AndFOfString(v types.Value) []types.Value {
 	values := []types.Value{}
 	s := v.(__unionOfEOfFloat64AndFOfString)
-	values = append(values, types.UInt32(s.__unionIndex))
+	values = append(values, types.Uint32(s.__unionIndex))
 	values = append(values, s.__unionValue)
 	return values
 }

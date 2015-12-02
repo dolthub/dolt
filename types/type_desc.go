@@ -27,10 +27,10 @@ type TypeDesc interface {
 // Package
 // String
 // Type
-// UInt16
-// UInt32
-// UInt64
-// UInt8
+// Uint16
+// Uint32
+// Uint64
+// Uint8
 // Value
 type PrimitiveDesc NomsKind
 
@@ -48,7 +48,7 @@ func (p PrimitiveDesc) Describe() string {
 
 func (p PrimitiveDesc) IsOrdered() bool {
 	switch p.Kind() {
-	case Float32Kind, Float64Kind, Int8Kind, Int16Kind, Int32Kind, Int64Kind, UInt8Kind, UInt16Kind, UInt32Kind, UInt64Kind, StringKind:
+	case Float32Kind, Float64Kind, Int8Kind, Int16Kind, Int32Kind, Int64Kind, Uint8Kind, Uint16Kind, Uint32Kind, Uint64Kind, StringKind:
 		return true
 	default:
 		return false
@@ -71,10 +71,10 @@ var KindToString = map[NomsKind]string{
 	SetKind:     "Set",
 	StringKind:  "String",
 	TypeKind:    "Type",
-	UInt16Kind:  "UInt16",
-	UInt32Kind:  "UInt32",
-	UInt64Kind:  "UInt64",
-	UInt8Kind:   "UInt8",
+	Uint16Kind:  "Uint16",
+	Uint32Kind:  "Uint32",
+	Uint64Kind:  "Uint64",
+	Uint8Kind:   "Uint8",
 	ValueKind:   "Value",
 }
 

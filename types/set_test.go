@@ -176,7 +176,7 @@ func TestSetIterAllP(t *testing.T) {
 	testIter := func(concurrency, setLen int) {
 		values := make([]Value, setLen)
 		for i := 0; i < setLen; i++ {
-			values[i] = UInt64(i)
+			values[i] = Uint64(i)
 		}
 
 		s := NewSet(cs, values...)
@@ -202,7 +202,7 @@ func TestSetIterAllP(t *testing.T) {
 			for getCur() < expectConcurreny {
 			}
 
-			visited[v.(UInt64)] = true
+			visited[v.(Uint64)] = true
 		}
 
 		if concurrency == 1 {
@@ -259,22 +259,22 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert,
-		MakePrimitiveType(UInt64Kind),
+		MakePrimitiveType(Uint64Kind),
 		[]Value{
-			UInt64(0),
-			UInt64(1000),
-			UInt64(1),
-			UInt64(100),
-			UInt64(2),
-			UInt64(10),
+			Uint64(0),
+			Uint64(1000),
+			Uint64(1),
+			Uint64(100),
+			Uint64(2),
+			Uint64(10),
 		},
 		[]Value{
-			UInt64(0),
-			UInt64(1),
-			UInt64(2),
-			UInt64(10),
-			UInt64(100),
-			UInt64(1000),
+			Uint64(0),
+			Uint64(1),
+			Uint64(2),
+			Uint64(10),
+			Uint64(100),
+			Uint64(1000),
 		},
 	)
 
@@ -374,12 +374,12 @@ func TestSetType(t *testing.T) {
 	s := NewSet(cs)
 	assert.True(s.Type().Equals(MakeCompoundType(SetKind, MakePrimitiveType(ValueKind))))
 
-	tr := MakeCompoundType(SetKind, MakePrimitiveType(UInt64Kind))
+	tr := MakeCompoundType(SetKind, MakePrimitiveType(Uint64Kind))
 
 	s = newSetFromData(cs, setData{}, tr)
 	assert.Equal(tr, s.Type())
 
-	s2 := s.Remove(UInt64(1))
+	s2 := s.Remove(Uint64(1))
 	assert.True(tr.Equals(s2.Type()))
 
 	s2 = s.Subtract(s)
@@ -390,17 +390,17 @@ func TestSetType(t *testing.T) {
 	})
 	assert.True(tr.Equals(s2.Type()))
 
-	s2 = s.Insert(UInt64(0), UInt64(1))
+	s2 = s.Insert(Uint64(0), Uint64(1))
 	assert.True(tr.Equals(s2.Type()))
 
-	s3 := NewSet(cs, UInt64(2))
+	s3 := NewSet(cs, Uint64(2))
 	s3.t = s2.t
 	s2 = s.Union(s3)
 	assert.True(tr.Equals(s2.Type()))
 
 	assert.Panics(func() { s.Insert(Bool(true)) })
-	assert.Panics(func() { s.Insert(UInt64(3), Bool(true)) })
-	assert.Panics(func() { s.Union(NewSet(cs, UInt64(2))) })
+	assert.Panics(func() { s.Insert(Uint64(3), Bool(true)) })
+	assert.Panics(func() { s.Union(NewSet(cs, Uint64(2))) })
 	assert.Panics(func() { s.Union(NewSet(cs, Bool(true))) })
 	assert.Panics(func() { s.Union(s, NewSet(cs, Bool(true))) })
 }

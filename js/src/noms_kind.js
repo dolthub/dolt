@@ -4,10 +4,10 @@ export type NomsKind = number;
 
 export const Kind: {
   Bool: NomsKind,
-  UInt8: NomsKind,
-  UInt16: NomsKind,
-  UInt32: NomsKind,
-  UInt64: NomsKind,
+  Uint8: NomsKind,
+  Uint16: NomsKind,
+  Uint32: NomsKind,
+  Uint64: NomsKind,
   Int8: NomsKind,
   Int16: NomsKind,
   Int32: NomsKind,
@@ -28,10 +28,10 @@ export const Kind: {
   Package: NomsKind
 } = {
   Bool: 0,
-  UInt8: 1,
-  UInt16: 2,
-  UInt32: 3,
-  UInt64: 4,
+  Uint8: 1,
+  Uint16: 2,
+  Uint32: 3,
+  Uint64: 4,
   Int8: 5,
   Int16: 6,
   Int32: 7,
@@ -61,10 +61,10 @@ export function isPrimitiveKind(k: NomsKind): boolean {
     case Kind.Int64:
     case Kind.Float32:
     case Kind.Float64:
-    case Kind.UInt8:
-    case Kind.UInt16:
-    case Kind.UInt32:
-    case Kind.UInt64:
+    case Kind.Uint8:
+    case Kind.Uint16:
+    case Kind.Uint32:
+    case Kind.Uint64:
     case Kind.String:
     case Kind.Blob:
     case Kind.Value:

@@ -157,13 +157,13 @@ func TestSkipDuplicateTypes(t *testing.T) {
 	leaf1 := types.NewPackage([]types.Type{
 		types.MakeEnumType("E1", "a", "b"),
 		types.MakeStructType("S1", []types.Field{
-			types.Field{"f", types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.UInt16Kind)), false},
+			types.Field{"f", types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.Uint16Kind)), false},
 			types.Field{"e", types.MakeType(ref.Ref{}, 0), false},
 		}, types.Choices{}),
 	}, []ref.Ref{})
 	leaf2 := types.NewPackage([]types.Type{
 		types.MakeStructType("S2", []types.Field{
-			types.Field{"f", types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.UInt16Kind)), false},
+			types.Field{"f", types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.Uint16Kind)), false},
 		}, types.Choices{}),
 	}, []ref.Ref{})
 
@@ -178,7 +178,7 @@ func TestSkipDuplicateTypes(t *testing.T) {
 
 	code, err := ioutil.ReadFile(leaf2Path)
 	assert.NoError(err)
-	assert.NotContains(string(code), "type ListOfUInt16")
+	assert.NotContains(string(code), "type ListOfUint16")
 }
 
 func TestGenerateDeps(t *testing.T) {

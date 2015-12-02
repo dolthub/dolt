@@ -17,10 +17,10 @@ func init() {
 	p := types.NewPackage([]types.Type{
 		types.MakeStructType("StructPrimitives",
 			[]types.Field{
-				types.Field{"uint64", types.MakePrimitiveType(types.UInt64Kind), false},
-				types.Field{"uint32", types.MakePrimitiveType(types.UInt32Kind), false},
-				types.Field{"uint16", types.MakePrimitiveType(types.UInt16Kind), false},
-				types.Field{"uint8", types.MakePrimitiveType(types.UInt8Kind), false},
+				types.Field{"uint64", types.MakePrimitiveType(types.Uint64Kind), false},
+				types.Field{"uint32", types.MakePrimitiveType(types.Uint32Kind), false},
+				types.Field{"uint16", types.MakePrimitiveType(types.Uint16Kind), false},
+				types.Field{"uint8", types.MakePrimitiveType(types.Uint8Kind), false},
 				types.Field{"int64", types.MakePrimitiveType(types.Int64Kind), false},
 				types.Field{"int32", types.MakePrimitiveType(types.Int32Kind), false},
 				types.Field{"int16", types.MakePrimitiveType(types.Int16Kind), false},
@@ -152,13 +152,13 @@ func init() {
 func builderForStructPrimitives(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
 	s := StructPrimitives{ref: &ref.Ref{}, cs: cs}
-	s._uint64 = uint64(values[i].(types.UInt64))
+	s._uint64 = uint64(values[i].(types.Uint64))
 	i++
-	s._uint32 = uint32(values[i].(types.UInt32))
+	s._uint32 = uint32(values[i].(types.Uint32))
 	i++
-	s._uint16 = uint16(values[i].(types.UInt16))
+	s._uint16 = uint16(values[i].(types.Uint16))
 	i++
-	s._uint8 = uint8(values[i].(types.UInt8))
+	s._uint8 = uint8(values[i].(types.Uint8))
 	i++
 	s._int64 = int64(values[i].(types.Int64))
 	i++
@@ -186,10 +186,10 @@ func builderForStructPrimitives(cs chunks.ChunkStore, values []types.Value) type
 func readerForStructPrimitives(v types.Value) []types.Value {
 	values := []types.Value{}
 	s := v.(StructPrimitives)
-	values = append(values, types.UInt64(s._uint64))
-	values = append(values, types.UInt32(s._uint32))
-	values = append(values, types.UInt16(s._uint16))
-	values = append(values, types.UInt8(s._uint8))
+	values = append(values, types.Uint64(s._uint64))
+	values = append(values, types.Uint32(s._uint32))
+	values = append(values, types.Uint16(s._uint16))
+	values = append(values, types.Uint8(s._uint8))
 	values = append(values, types.Int64(s._int64))
 	values = append(values, types.Int32(s._int32))
 	values = append(values, types.Int16(s._int16))
@@ -219,10 +219,10 @@ func (s StructPrimitives) Chunks() (chunks []ref.Ref) {
 }
 
 func (s StructPrimitives) ChildValues() (ret []types.Value) {
-	ret = append(ret, types.UInt64(s._uint64))
-	ret = append(ret, types.UInt32(s._uint32))
-	ret = append(ret, types.UInt16(s._uint16))
-	ret = append(ret, types.UInt8(s._uint8))
+	ret = append(ret, types.Uint64(s._uint64))
+	ret = append(ret, types.Uint32(s._uint32))
+	ret = append(ret, types.Uint16(s._uint16))
+	ret = append(ret, types.Uint8(s._uint8))
 	ret = append(ret, types.Int64(s._int64))
 	ret = append(ret, types.Int32(s._int32))
 	ret = append(ret, types.Int16(s._int16))

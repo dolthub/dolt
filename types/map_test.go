@@ -151,8 +151,8 @@ func TestMapIterAllP(t *testing.T) {
 	testIter := func(concurrency, mapLen int) {
 		values := make([]Value, 2*mapLen)
 		for i := 0; i < mapLen; i++ {
-			values[2*i] = UInt64(i)
-			values[2*i+1] = UInt64(i)
+			values[2*i] = Uint64(i)
+			values[2*i+1] = Uint64(i)
 		}
 
 		m := NewMap(cs, values...)
@@ -178,7 +178,7 @@ func TestMapIterAllP(t *testing.T) {
 			for getCur() < expectConcurreny {
 			}
 
-			visited[v.(UInt64)] = true
+			visited[v.(Uint64)] = true
 		}
 
 		if concurrency == 1 {
@@ -297,22 +297,22 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert,
-		MakePrimitiveType(UInt64Kind), MakePrimitiveType(StringKind),
+		MakePrimitiveType(Uint64Kind), MakePrimitiveType(StringKind),
 		[]Value{
-			UInt64(0), NewString("unused"),
-			UInt64(1000), NewString("unused"),
-			UInt64(1), NewString("unused"),
-			UInt64(100), NewString("unused"),
-			UInt64(2), NewString("unused"),
-			UInt64(10), NewString("unused"),
+			Uint64(0), NewString("unused"),
+			Uint64(1000), NewString("unused"),
+			Uint64(1), NewString("unused"),
+			Uint64(100), NewString("unused"),
+			Uint64(2), NewString("unused"),
+			Uint64(10), NewString("unused"),
 		},
 		[]Value{
-			UInt64(0),
-			UInt64(1),
-			UInt64(2),
-			UInt64(10),
-			UInt64(100),
-			UInt64(1000),
+			Uint64(0),
+			Uint64(1),
+			Uint64(2),
+			Uint64(10),
+			Uint64(100),
+			Uint64(1000),
 		},
 	)
 
@@ -410,7 +410,7 @@ func TestMapType(t *testing.T) {
 	m := NewMap(cs)
 	assert.True(m.Type().Equals(MakeCompoundType(MapKind, MakePrimitiveType(ValueKind), MakePrimitiveType(ValueKind))))
 
-	tr := MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(UInt64Kind))
+	tr := MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(Uint64Kind))
 	m = newMapFromData(cs, mapData{}, tr)
 	assert.Equal(tr, m.Type())
 
@@ -422,16 +422,16 @@ func TestMapType(t *testing.T) {
 	})
 	assert.True(tr.Equals(m2.Type()))
 
-	m2 = m.Set(NewString("A"), UInt64(1))
+	m2 = m.Set(NewString("A"), Uint64(1))
 	assert.True(tr.Equals(m2.Type()))
 
-	m2 = m.SetM(NewString("B"), UInt64(2), NewString("C"), UInt64(2))
+	m2 = m.SetM(NewString("B"), Uint64(2), NewString("C"), Uint64(2))
 	assert.True(tr.Equals(m2.Type()))
 
-	assert.Panics(func() { m.Set(NewString("A"), UInt8(1)) })
-	assert.Panics(func() { m.Set(Bool(true), UInt64(1)) })
-	assert.Panics(func() { m.SetM(NewString("B"), UInt64(2), NewString("A"), UInt8(1)) })
-	assert.Panics(func() { m.SetM(NewString("B"), UInt64(2), Bool(true), UInt64(1)) })
+	assert.Panics(func() { m.Set(NewString("A"), Uint8(1)) })
+	assert.Panics(func() { m.Set(Bool(true), Uint64(1)) })
+	assert.Panics(func() { m.SetM(NewString("B"), Uint64(2), NewString("A"), Uint8(1)) })
+	assert.Panics(func() { m.SetM(NewString("B"), Uint64(2), Bool(true), Uint64(1)) })
 }
 
 func TestMapChunks(t *testing.T) {

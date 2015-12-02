@@ -12,9 +12,9 @@ func TestPrimitives(t *testing.T) {
 		Int16(0), Int16(-1),
 		Int32(0), Int32(-1),
 		Int64(0), Int64(-1),
-		UInt16(0), UInt16(1),
-		UInt32(0), UInt32(1),
-		UInt64(0), UInt64(1),
+		Uint16(0), Uint16(1),
+		Uint32(0), Uint32(1),
+		Uint64(0), Uint64(1),
 		Float32(0.0), Float32(0.1),
 		Float64(0.0), Float64(0.1),
 	}
@@ -42,10 +42,10 @@ func TestPrimitivesType(t *testing.T) {
 		{Int64(0), Int64Kind},
 		{Float32(0), Float32Kind},
 		{Float64(0), Float64Kind},
-		{UInt8(0), UInt8Kind},
-		{UInt16(0), UInt16Kind},
-		{UInt32(0), UInt32Kind},
-		{UInt64(0), UInt64Kind},
+		{Uint8(0), Uint8Kind},
+		{Uint16(0), Uint16Kind},
+		{Uint32(0), Uint32Kind},
+		{Uint64(0), Uint64Kind},
 	}
 
 	for _, d := range data {

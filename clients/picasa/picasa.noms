@@ -12,7 +12,7 @@ struct User {
 struct Album {
   Id: String
   Title: String
-  NumPhotos: UInt32
+  NumPhotos: Uint32
   Photos: Ref(Set(Ref(Img.RemotePhoto)))
 }
 

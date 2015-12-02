@@ -44,7 +44,7 @@ func TestStructWithUnionFieldListPart(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	st := gen.NewStructWithUnionField(cs).SetF(gen.SetOfUInt8Def{2: true, 4: true}.New(cs))
+	st := gen.NewStructWithUnionField(cs).SetF(gen.SetOfUint8Def{2: true, 4: true}.New(cs))
 	f, ok := st.F()
 	assert.True(ok)
 	assert.True(f.Has(2))

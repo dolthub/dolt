@@ -42,8 +42,8 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-3e4f60c3fbd518f4a7e903ac1c7c1a97b677c4d9"),
 		ref.Parse("sha1-e28aa19ad63c4ddabeb258aafe9b2b97fadd3666"),
+		ref.Parse("sha1-3e4f60c3fbd518f4a7e903ac1c7c1a97b677c4d9"),
 	})
 	__mainPackageInFile_index_CachedRef = types.RegisterPackage(&p)
 }
@@ -259,7 +259,7 @@ func init() {
 func builderForKey(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
 	s := Key{ref: &ref.Ref{}, cs: cs}
-	s.__unionIndex = uint32(values[i].(types.UInt32))
+	s.__unionIndex = uint32(values[i].(types.Uint32))
 	i++
 	s.__unionValue = values[i]
 	i++
@@ -269,7 +269,7 @@ func builderForKey(cs chunks.ChunkStore, values []types.Value) types.Value {
 func readerForKey(v types.Value) []types.Value {
 	values := []types.Value{}
 	s := v.(Key)
-	values = append(values, types.UInt32(s.__unionIndex))
+	values = append(values, types.Uint32(s.__unionIndex))
 	values = append(values, s.__unionValue)
 	return values
 }

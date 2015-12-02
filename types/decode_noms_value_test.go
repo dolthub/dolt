@@ -70,10 +70,10 @@ func TestReadPrimitives(t *testing.T) {
 	test(Bool(true), "[%d, true]", BoolKind)
 	test(Bool(false), "[%d, false]", BoolKind)
 
-	test(UInt8(0), "[%d, 0]", UInt8Kind)
-	test(UInt16(0), "[%d, 0]", UInt16Kind)
-	test(UInt32(0), "[%d, 0]", UInt32Kind)
-	test(UInt64(0), "[%d, 0]", UInt64Kind)
+	test(Uint8(0), "[%d, 0]", Uint8Kind)
+	test(Uint16(0), "[%d, 0]", Uint16Kind)
+	test(Uint32(0), "[%d, 0]", Uint32Kind)
+	test(Uint64(0), "[%d, 0]", Uint64Kind)
 	test(Int8(0), "[%d, 0]", Int8Kind)
 	test(Int16(0), "[%d, 0]", Int16Kind)
 	test(Int32(0), "[%d, 0]", Int32Kind)
@@ -139,45 +139,45 @@ func TestReadMapOfInt64ToFloat64(t *testing.T) {
 	assert.True(m2.Equals(m))
 }
 
-func TestReadValueMapOfUInt64ToUInt32(t *testing.T) {
+func TestReadValueMapOfUint64ToUint32(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson("[%d, %d, %d, %d, [0, 1, 2, 3]]", ValueKind, MapKind, UInt64Kind, UInt32Kind)
+	a := parseJson("[%d, %d, %d, %d, [0, 1, 2, 3]]", ValueKind, MapKind, Uint64Kind, Uint32Kind)
 	r := newJsonArrayReader(a, cs)
 
-	mapTr := MakeCompoundType(MapKind, MakePrimitiveType(UInt64Kind), MakePrimitiveType(UInt32Kind))
+	mapTr := MakeCompoundType(MapKind, MakePrimitiveType(Uint64Kind), MakePrimitiveType(Uint32Kind))
 
 	m := r.readTopLevelValue()
-	m2 := NewTypedMap(cs, mapTr, UInt64(0), UInt32(1), UInt64(2), UInt32(3))
+	m2 := NewTypedMap(cs, mapTr, Uint64(0), Uint32(1), Uint64(2), Uint32(3))
 	assert.True(m2.Equals(m))
 }
 
-func TestReadSetOfUInt8(t *testing.T) {
+func TestReadSetOfUint8(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson("[%d, %d, [0, 1, 2, 3]]", SetKind, UInt8Kind)
+	a := parseJson("[%d, %d, [0, 1, 2, 3]]", SetKind, Uint8Kind)
 	r := newJsonArrayReader(a, cs)
 
-	tr := MakeCompoundType(SetKind, MakePrimitiveType(UInt8Kind))
+	tr := MakeCompoundType(SetKind, MakePrimitiveType(Uint8Kind))
 
 	s := r.readTopLevelValue()
-	s2 := NewTypedSet(cs, tr, UInt8(0), UInt8(1), UInt8(2), UInt8(3))
+	s2 := NewTypedSet(cs, tr, Uint8(0), Uint8(1), Uint8(2), Uint8(3))
 	assert.True(s2.Equals(s))
 }
 
-func TestReadValueSetOfUInt16(t *testing.T) {
+func TestReadValueSetOfUint16(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	a := parseJson("[%d, %d, %d, [0, 1, 2, 3]]", ValueKind, SetKind, UInt16Kind)
+	a := parseJson("[%d, %d, %d, [0, 1, 2, 3]]", ValueKind, SetKind, Uint16Kind)
 	r := newJsonArrayReader(a, cs)
 
-	setTr := MakeCompoundType(SetKind, MakePrimitiveType(UInt16Kind))
+	setTr := MakeCompoundType(SetKind, MakePrimitiveType(Uint16Kind))
 
 	s := r.readTopLevelValue()
-	s2 := NewTypedSet(cs, setTr, UInt16(0), UInt16(1), UInt16(2), UInt16(3))
+	s2 := NewTypedSet(cs, setTr, Uint16(0), Uint16(1), Uint16(2), Uint16(3))
 	assert.True(s2.Equals(s))
 }
 
@@ -194,7 +194,7 @@ func TestReadCompoundBlob(t *testing.T) {
 	m := r.readTopLevelValue()
 	_, ok := m.(compoundBlob)
 	assert.True(ok)
-	m2 := newCompoundBlob([]metaTuple{{r1, UInt64(20)}, {r2, UInt64(40)}, {r3, UInt64(60)}}, cs)
+	m2 := newCompoundBlob([]metaTuple{{r1, Uint64(20)}, {r2, Uint64(40)}, {r3, Uint64(60)}}, cs)
 
 	assert.True(m.Type().Equals(m2.Type()))
 	assert.Equal(m.Ref().String(), m2.Ref().String())
@@ -324,12 +324,12 @@ func TestReadStructWithValue(t *testing.T) {
 	pkg := NewPackage([]Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJson(`[%d, "%s", 0, true, %d, 42, "hi"]`, UnresolvedKind, pkgRef.String(), UInt8Kind)
+	a := parseJson(`[%d, "%s", 0, true, %d, 42, "hi"]`, UnresolvedKind, pkgRef.String(), Uint8Kind)
 	r := newJsonArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
 	assert.True(v.Get("b").Equals(Bool(true)))
-	assert.True(v.Get("v").Equals(UInt8(42)))
+	assert.True(v.Get("v").Equals(Uint8(42)))
 	assert.True(v.Get("s").Equals(NewString("hi")))
 }
 
@@ -395,10 +395,10 @@ func TestReadRef(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-	a := parseJson(`[%d, %d, "%s"]`, RefKind, UInt32Kind, r.String())
+	a := parseJson(`[%d, %d, "%s"]`, RefKind, Uint32Kind, r.String())
 	reader := newJsonArrayReader(a, cs)
 	v := reader.readTopLevelValue()
-	tr := MakeCompoundType(RefKind, MakePrimitiveType(UInt32Kind))
+	tr := MakeCompoundType(RefKind, MakePrimitiveType(Uint32Kind))
 	assert.True(refFromType(r, tr).Equals(v))
 }
 
@@ -407,10 +407,10 @@ func TestReadValueRef(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-	a := parseJson(`[%d, %d, %d, "%s"]`, ValueKind, RefKind, UInt32Kind, r.String())
+	a := parseJson(`[%d, %d, %d, "%s"]`, ValueKind, RefKind, Uint32Kind, r.String())
 	reader := newJsonArrayReader(a, cs)
 	v := reader.readTopLevelValue()
-	tr := MakeCompoundType(RefKind, MakePrimitiveType(UInt32Kind))
+	tr := MakeCompoundType(RefKind, MakePrimitiveType(Uint32Kind))
 	assert.True(refFromType(r, tr).Equals(v))
 }
 
@@ -549,10 +549,10 @@ func TestReadPackage2(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	rr := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-	setTref := MakeCompoundType(SetKind, MakePrimitiveType(UInt32Kind))
+	setTref := MakeCompoundType(SetKind, MakePrimitiveType(Uint32Kind))
 	pkg := NewPackage([]Type{setTref}, []ref.Ref{rr})
 
-	a := []interface{}{float64(PackageKind), []interface{}{float64(SetKind), []interface{}{float64(UInt32Kind)}}, []interface{}{rr.String()}}
+	a := []interface{}{float64(PackageKind), []interface{}{float64(SetKind), []interface{}{float64(Uint32Kind)}}, []interface{}{rr.String()}}
 	r := newJsonArrayReader(a, cs)
 	v := r.readTopLevelValue().(Package)
 	assert.True(t, pkg.Equals(v))
