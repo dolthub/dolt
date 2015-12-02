@@ -11,6 +11,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"bufio"
 
@@ -27,6 +28,21 @@ const (
 	writeLimit      = 6
 	hasLimit        = 6
 )
+
+var (
+	httpClient = makeHttpClient()
+)
+
+// Use a custom http client rather than http.DefaultClient so that we can change the number of MaxIdleConnsPerHost. There are times when we hammer a server with buffered calls and it makes sense to keep more than the default # of 2 connections open in this case. Our current usage hammers a server with either reads or writes so keeping a maxLimit of open connections equals to how many concurrent requests we are making seems like a good choice.
+func makeHttpClient() *http.Client {
+	t := http.Transport(*http.DefaultTransport.(*http.Transport))
+	t.MaxIdleConnsPerHost = writeLimit
+
+	return &http.Client{
+		Transport: &t,
+		Timeout:   time.Duration(30) * time.Second,
+	}
+}
 
 type hasRequest struct {
 	r  ref.Ref
@@ -197,9 +213,7 @@ func (c *HttpStore) sendWriteRequests() {
 		}
 
 		c.postRefs(chs)
-		for _, _ = range chs {
-			c.wg.Done()
-		}
+		c.wg.Add(-len(chs))
 	}
 }
 
@@ -221,7 +235,7 @@ func (c *HttpStore) postRefs(chs []Chunk) {
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Content-Type", "application/octet-stream")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := httpClient.Do(req)
 	d.Chk.NoError(err)
 
 	d.Chk.Equal(res.StatusCode, http.StatusCreated, "Unexpected response: %s", http.StatusText(res.StatusCode))
@@ -242,7 +256,7 @@ func (c *HttpStore) requestRef(r ref.Ref, method string, body io.Reader) *http.R
 
 	d.Chk.NoError(err)
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := httpClient.Do(req)
 	d.Chk.NoError(err)
 	return res
 }
@@ -261,7 +275,7 @@ func (c *HttpStore) getHasRefs(refs map[ref.Ref]bool, reqs hasBatch) {
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	d.Chk.NoError(err)
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := httpClient.Do(req)
 	d.Chk.NoError(err)
 	defer closeResponse(res)
 	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
@@ -300,7 +314,7 @@ func (c *HttpStore) getRefs(refs map[ref.Ref]bool, cs ChunkSink) {
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	d.Chk.NoError(err)
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := httpClient.Do(req)
 	d.Chk.NoError(err)
 	defer closeResponse(res)
 	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
@@ -357,7 +371,7 @@ func (c *HttpStore) requestRoot(method string, current, last ref.Ref) *http.Resp
 	req, err := http.NewRequest(method, u.String(), nil)
 	d.Chk.NoError(err)
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := httpClient.Do(req)
 	d.Chk.NoError(err)
 
 	return res
