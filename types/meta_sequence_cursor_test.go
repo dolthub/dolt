@@ -31,7 +31,7 @@ func TestMeta(t *testing.T) {
 	l7 := NewList(cs, flatList[7])
 	lr7 := WriteValue(l7, cs)
 
-	mtr := MakeCompoundType(MetaSequenceKind, l0.Type())
+	mtr := l0.Type()
 
 	m0 := compoundList{metaSequenceObject{metaSequenceData{{lr0, Uint64(1)}, {lr1, Uint64(2)}}, mtr}, &ref.Ref{}, cs}
 	lm0 := WriteValue(m0, cs)

@@ -140,8 +140,7 @@ func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 			values[i] = v.(Value)
 		}
 
-		concreteType := t.Desc.(CompoundDesc).ElemTypes[0]
-		list := List{values, concreteType, &ref.Ref{}, cs}
+		list := List{values, t, &ref.Ref{}, cs}
 		ref := WriteValue(list, cs)
 		return metaTuple{ref, Uint64(len(values))}, list
 	}

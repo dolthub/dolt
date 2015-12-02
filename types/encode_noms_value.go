@@ -63,8 +63,18 @@ func (w *jsonArrayWriter) writeTypeAsTag(t Type) {
 	}
 }
 
-func (w *jsonArrayWriter) writeTopLevelValue(v Value) {
+func getNormalizedType(v Value) Type {
 	tr := v.Type()
+	v = internalValueFromType(v, tr)
+	if _, ok := v.(metaSequence); ok {
+		return MakeCompoundType(MetaSequenceKind, tr)
+	}
+
+	return tr
+}
+
+func (w *jsonArrayWriter) writeTopLevelValue(v Value) {
+	tr := getNormalizedType(v)
 	w.writeTypeAsTag(tr)
 	w.writeValue(v, tr, nil)
 }
@@ -133,8 +143,8 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 		w2 := newJsonArrayWriter(w.cs)
 		indexType := indexTypeForMetaSequence(tr)
 		tr = fixupType(tr, pkg)
-		m := internalValueFromType(v, tr)
-		for _, tuple := range m.(metaSequence).data() {
+		ms := internalValueFromType(v, tr)
+		for _, tuple := range ms.(metaSequence).data() {
 			w2.writeRef(tuple.ref)
 			w2.writeValue(tuple.value, indexType, pkg)
 		}

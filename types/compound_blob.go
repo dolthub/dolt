@@ -17,15 +17,13 @@ type compoundBlob struct {
 	cs  chunks.ChunkStore
 }
 
-var typeForCompoundBlob = MakeCompoundType(MetaSequenceKind, MakePrimitiveType(BlobKind))
-
 func newCompoundBlob(tuples metaSequenceData, cs chunks.ChunkStore) compoundBlob {
-	return buildCompoundBlob(tuples, typeForCompoundBlob, cs).(compoundBlob)
+	return buildCompoundBlob(tuples, typeForBlob, cs).(compoundBlob)
 }
 
 func buildCompoundBlob(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
-	d.Chk.True(t.Equals(typeForCompoundBlob))
-	return compoundBlob{metaSequenceObject{tuples, typeForCompoundBlob}, &ref.Ref{}, cs}
+	d.Chk.True(t.Equals(typeForBlob))
+	return compoundBlob{metaSequenceObject{tuples, typeForBlob}, &ref.Ref{}, cs}
 }
 
 func init() {

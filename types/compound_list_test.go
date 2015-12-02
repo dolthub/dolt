@@ -38,7 +38,7 @@ func TestCompoundListGet(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	simpleList := getTestSimpleList()
-	tr := MakeCompoundType(MetaSequenceKind, MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind)))
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 	cl := NewCompoundList(tr, cs, simpleList...).(compoundList)
 
 	for i, v := range simpleList {
@@ -55,7 +55,7 @@ func TestCompoundListIter(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	simpleList := getTestSimpleList()
-	tr := MakeCompoundType(MetaSequenceKind, MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind)))
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 	cl := NewCompoundList(tr, cs, simpleList...).(compoundList)
 
 	expectIdx := uint64(0)
@@ -82,7 +82,7 @@ func TestCompoundListIterAll(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	simpleList := getTestSimpleList()
-	tr := MakeCompoundType(MetaSequenceKind, MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind)))
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 	cl := NewCompoundList(tr, cs, simpleList...).(compoundList)
 
 	expectIdx := uint64(0)
@@ -101,7 +101,7 @@ func TestCompoundListCurAt(t *testing.T) {
 
 	listLen := func(at int, next func(*metaSequenceCursor) bool) (size int) {
 		cs := chunks.NewMemoryStore()
-		tr := MakeCompoundType(MetaSequenceKind, MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind)))
+		tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 		cl := NewCompoundList(tr, cs, getTestSimpleList()...).(compoundList)
 		cur, _, _ := cl.cursorAt(uint64(at))
 		for {
@@ -129,7 +129,7 @@ func TestCompoundListAppend(t *testing.T) {
 
 	newCompoundList := func(items testSimpleList) compoundList {
 		cs := chunks.NewMemoryStore()
-		tr := MakeCompoundType(MetaSequenceKind, MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind)))
+		tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 		return NewCompoundList(tr, cs, items...).(compoundList)
 	}
 
