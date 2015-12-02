@@ -24,7 +24,7 @@ func init() {
 				types.Field{"c", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"d", types.MakePrimitiveType(types.BlobKind), false},
 				types.Field{"e", types.MakePrimitiveType(types.ValueKind), false},
-				types.Field{"f", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.UInt8Kind)), false},
+				types.Field{"f", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.Uint8Kind)), false},
 			},
 		),
 	}, []ref.Ref{})
@@ -90,7 +90,7 @@ func builderForStructWithUnionField(cs chunks.ChunkStore, values []types.Value) 
 	s := StructWithUnionField{ref: &ref.Ref{}, cs: cs}
 	s._a = float32(values[i].(types.Float32))
 	i++
-	s.__unionIndex = uint32(values[i].(types.UInt32))
+	s.__unionIndex = uint32(values[i].(types.Uint32))
 	i++
 	s.__unionValue = values[i]
 	i++
@@ -101,7 +101,7 @@ func readerForStructWithUnionField(v types.Value) []types.Value {
 	values := []types.Value{}
 	s := v.(StructWithUnionField)
 	values = append(values, types.Float32(s._a))
-	values = append(values, types.UInt32(s.__unionIndex))
+	values = append(values, types.Uint32(s.__unionIndex))
 	values = append(values, s.__unionValue)
 	return values
 }
@@ -244,168 +244,168 @@ func (def StructWithUnionFieldDef) SetE(cs chunks.ChunkStore, val types.Value) S
 	return def
 }
 
-func (s StructWithUnionField) F() (val SetOfUInt8, ok bool) {
+func (s StructWithUnionField) F() (val SetOfUint8, ok bool) {
 	if s.__unionIndex != 4 {
 		return
 	}
-	return s.__unionValue.(SetOfUInt8), true
+	return s.__unionValue.(SetOfUint8), true
 }
 
-func (s StructWithUnionField) SetF(val SetOfUInt8) StructWithUnionField {
+func (s StructWithUnionField) SetF(val SetOfUint8) StructWithUnionField {
 	s.__unionIndex = 4
 	s.__unionValue = val
 	s.ref = &ref.Ref{}
 	return s
 }
 
-func (def StructWithUnionFieldDef) F() (val SetOfUInt8Def, ok bool) {
+func (def StructWithUnionFieldDef) F() (val SetOfUint8Def, ok bool) {
 	if def.__unionIndex != 4 {
 		return
 	}
-	return def.__unionValue.(SetOfUInt8).Def(), true
+	return def.__unionValue.(SetOfUint8).Def(), true
 }
 
-func (def StructWithUnionFieldDef) SetF(cs chunks.ChunkStore, val SetOfUInt8Def) StructWithUnionFieldDef {
+func (def StructWithUnionFieldDef) SetF(cs chunks.ChunkStore, val SetOfUint8Def) StructWithUnionFieldDef {
 	def.__unionIndex = 4
 	def.__unionValue = val.New(cs)
 	return def
 }
 
-// SetOfUInt8
+// SetOfUint8
 
-type SetOfUInt8 struct {
+type SetOfUint8 struct {
 	s   types.Set
 	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSetOfUInt8(cs chunks.ChunkStore) SetOfUInt8 {
-	return SetOfUInt8{types.NewTypedSet(cs, __typeForSetOfUInt8), cs, &ref.Ref{}}
+func NewSetOfUint8(cs chunks.ChunkStore) SetOfUint8 {
+	return SetOfUint8{types.NewTypedSet(cs, __typeForSetOfUint8), cs, &ref.Ref{}}
 }
 
-type SetOfUInt8Def map[uint8]bool
+type SetOfUint8Def map[uint8]bool
 
-func (def SetOfUInt8Def) New(cs chunks.ChunkStore) SetOfUInt8 {
+func (def SetOfUint8Def) New(cs chunks.ChunkStore) SetOfUint8 {
 	l := make([]types.Value, len(def))
 	i := 0
 	for d, _ := range def {
-		l[i] = types.UInt8(d)
+		l[i] = types.Uint8(d)
 		i++
 	}
-	return SetOfUInt8{types.NewTypedSet(cs, __typeForSetOfUInt8, l...), cs, &ref.Ref{}}
+	return SetOfUint8{types.NewTypedSet(cs, __typeForSetOfUint8, l...), cs, &ref.Ref{}}
 }
 
-func (s SetOfUInt8) Def() SetOfUInt8Def {
+func (s SetOfUint8) Def() SetOfUint8Def {
 	def := make(map[uint8]bool, s.Len())
 	s.s.Iter(func(v types.Value) bool {
-		def[uint8(v.(types.UInt8))] = true
+		def[uint8(v.(types.Uint8))] = true
 		return false
 	})
 	return def
 }
 
-func (s SetOfUInt8) Equals(other types.Value) bool {
-	return other != nil && __typeForSetOfUInt8.Equals(other.Type()) && s.Ref() == other.Ref()
+func (s SetOfUint8) Equals(other types.Value) bool {
+	return other != nil && __typeForSetOfUint8.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
-func (s SetOfUInt8) Ref() ref.Ref {
+func (s SetOfUint8) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfUInt8) Chunks() (chunks []ref.Ref) {
+func (s SetOfUint8) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
 
-func (s SetOfUInt8) ChildValues() []types.Value {
+func (s SetOfUint8) ChildValues() []types.Value {
 	return append([]types.Value{}, s.s.ChildValues()...)
 }
 
-// A Noms Value that describes SetOfUInt8.
-var __typeForSetOfUInt8 types.Type
+// A Noms Value that describes SetOfUint8.
+var __typeForSetOfUint8 types.Type
 
-func (m SetOfUInt8) Type() types.Type {
-	return __typeForSetOfUInt8
+func (m SetOfUint8) Type() types.Type {
+	return __typeForSetOfUint8
 }
 
 func init() {
-	__typeForSetOfUInt8 = types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.UInt8Kind))
-	types.RegisterValue(__typeForSetOfUInt8, builderForSetOfUInt8, readerForSetOfUInt8)
+	__typeForSetOfUint8 = types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.Uint8Kind))
+	types.RegisterValue(__typeForSetOfUint8, builderForSetOfUint8, readerForSetOfUint8)
 }
 
-func builderForSetOfUInt8(cs chunks.ChunkStore, v types.Value) types.Value {
-	return SetOfUInt8{v.(types.Set), cs, &ref.Ref{}}
+func builderForSetOfUint8(cs chunks.ChunkStore, v types.Value) types.Value {
+	return SetOfUint8{v.(types.Set), cs, &ref.Ref{}}
 }
 
-func readerForSetOfUInt8(v types.Value) types.Value {
-	return v.(SetOfUInt8).s
+func readerForSetOfUint8(v types.Value) types.Value {
+	return v.(SetOfUint8).s
 }
 
-func (s SetOfUInt8) Empty() bool {
+func (s SetOfUint8) Empty() bool {
 	return s.s.Empty()
 }
 
-func (s SetOfUInt8) Len() uint64 {
+func (s SetOfUint8) Len() uint64 {
 	return s.s.Len()
 }
 
-func (s SetOfUInt8) Has(p uint8) bool {
-	return s.s.Has(types.UInt8(p))
+func (s SetOfUint8) Has(p uint8) bool {
+	return s.s.Has(types.Uint8(p))
 }
 
-type SetOfUInt8IterCallback func(p uint8) (stop bool)
+type SetOfUint8IterCallback func(p uint8) (stop bool)
 
-func (s SetOfUInt8) Iter(cb SetOfUInt8IterCallback) {
+func (s SetOfUint8) Iter(cb SetOfUint8IterCallback) {
 	s.s.Iter(func(v types.Value) bool {
-		return cb(uint8(v.(types.UInt8)))
+		return cb(uint8(v.(types.Uint8)))
 	})
 }
 
-type SetOfUInt8IterAllCallback func(p uint8)
+type SetOfUint8IterAllCallback func(p uint8)
 
-func (s SetOfUInt8) IterAll(cb SetOfUInt8IterAllCallback) {
+func (s SetOfUint8) IterAll(cb SetOfUint8IterAllCallback) {
 	s.s.IterAll(func(v types.Value) {
-		cb(uint8(v.(types.UInt8)))
+		cb(uint8(v.(types.Uint8)))
 	})
 }
 
-func (s SetOfUInt8) IterAllP(concurrency int, cb SetOfUInt8IterAllCallback) {
+func (s SetOfUint8) IterAllP(concurrency int, cb SetOfUint8IterAllCallback) {
 	s.s.IterAllP(concurrency, func(v types.Value) {
-		cb(uint8(v.(types.UInt8)))
+		cb(uint8(v.(types.Uint8)))
 	})
 }
 
-type SetOfUInt8FilterCallback func(p uint8) (keep bool)
+type SetOfUint8FilterCallback func(p uint8) (keep bool)
 
-func (s SetOfUInt8) Filter(cb SetOfUInt8FilterCallback) SetOfUInt8 {
+func (s SetOfUint8) Filter(cb SetOfUint8FilterCallback) SetOfUint8 {
 	out := s.s.Filter(func(v types.Value) bool {
-		return cb(uint8(v.(types.UInt8)))
+		return cb(uint8(v.(types.Uint8)))
 	})
-	return SetOfUInt8{out, s.cs, &ref.Ref{}}
+	return SetOfUint8{out, s.cs, &ref.Ref{}}
 }
 
-func (s SetOfUInt8) Insert(p ...uint8) SetOfUInt8 {
-	return SetOfUInt8{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+func (s SetOfUint8) Insert(p ...uint8) SetOfUint8 {
+	return SetOfUint8{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfUInt8) Remove(p ...uint8) SetOfUInt8 {
-	return SetOfUInt8{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+func (s SetOfUint8) Remove(p ...uint8) SetOfUint8 {
+	return SetOfUint8{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfUInt8) Union(others ...SetOfUInt8) SetOfUInt8 {
-	return SetOfUInt8{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
+func (s SetOfUint8) Union(others ...SetOfUint8) SetOfUint8 {
+	return SetOfUint8{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfUInt8) Subtract(others ...SetOfUInt8) SetOfUInt8 {
-	return SetOfUInt8{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
+func (s SetOfUint8) Subtract(others ...SetOfUint8) SetOfUint8 {
+	return SetOfUint8{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfUInt8) Any() uint8 {
-	return uint8(s.s.Any().(types.UInt8))
+func (s SetOfUint8) Any() uint8 {
+	return uint8(s.s.Any().(types.Uint8))
 }
 
-func (s SetOfUInt8) fromStructSlice(p []SetOfUInt8) []types.Set {
+func (s SetOfUint8) fromStructSlice(p []SetOfUint8) []types.Set {
 	r := make([]types.Set, len(p))
 	for i, v := range p {
 		r[i] = v.s
@@ -413,10 +413,10 @@ func (s SetOfUInt8) fromStructSlice(p []SetOfUInt8) []types.Set {
 	return r
 }
 
-func (s SetOfUInt8) fromElemSlice(p []uint8) []types.Value {
+func (s SetOfUint8) fromElemSlice(p []uint8) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
-		r[i] = types.UInt8(v)
+		r[i] = types.Uint8(v)
 	}
 	return r
 }

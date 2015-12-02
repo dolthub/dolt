@@ -20,7 +20,7 @@ func getTestCompoundBlob(datas ...string) compoundBlob {
 	for i, s := range datas {
 		b := NewBlob(bytes.NewBufferString(s), ms)
 		length += uint64(len(s))
-		tuples[i] = metaTuple{WriteValue(b, ms), UInt64(length)}
+		tuples[i] = metaTuple{WriteValue(b, ms), Uint64(length)}
 	}
 	return newCompoundBlob(tuples, ms)
 }
@@ -189,7 +189,7 @@ func TestCompoundBlobChunks(t *testing.T) {
 
 	bl1 := newBlobLeaf([]byte("hello"))
 	bl2 := newBlobLeaf([]byte("world"))
-	cb = newCompoundBlob([]metaTuple{{WriteValue(bl1, cs), UInt64(uint64(5))}, {WriteValue(bl2, cs), UInt64(uint64(10))}}, cs)
+	cb = newCompoundBlob([]metaTuple{{WriteValue(bl1, cs), Uint64(uint64(5))}, {WriteValue(bl2, cs), Uint64(uint64(10))}}, cs)
 	assert.Equal(2, len(cb.Chunks()))
 }
 

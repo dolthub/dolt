@@ -15,7 +15,7 @@ suite('Type', () => {
     let ms = new MemoryStore();
 
     let boolType = makePrimitiveType(Kind.Bool);
-    let uint8Type = makePrimitiveType(Kind.UInt8);
+    let uint8Type = makePrimitiveType(Kind.Uint8);
     let stringType = makePrimitiveType(Kind.String);
     let mapType = makeCompoundType(Kind.Map, stringType, uint8Type);
     let setType = makeCompoundType(Kind.Set, stringType);

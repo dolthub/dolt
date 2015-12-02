@@ -10,7 +10,7 @@ struct Company {
     StateCode:          String
     Region:             String
     City:               String
-    FundingRounds:      UInt16
+    FundingRounds:      Uint16
     FoundedAt:          Int64
     FirstFundingAt:     Int64
     LastFundingAt:      Int64

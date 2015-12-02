@@ -12,8 +12,8 @@ func TestValueEquals(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	r1 := UInt16(1).Ref()
-	r2 := UInt16(2).Ref()
+	r1 := Uint16(1).Ref()
+	r2 := Uint16(2).Ref()
 
 	values := []func() Value{
 		func() Value { return nil },
@@ -31,14 +31,14 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return Int64(0) },
 		func() Value { return Int64(1) },
 		func() Value { return Int64(-1) },
-		func() Value { return UInt8(0) },
-		func() Value { return UInt8(1) },
-		func() Value { return UInt16(0) },
-		func() Value { return UInt16(1) },
-		func() Value { return UInt32(0) },
-		func() Value { return UInt32(1) },
-		func() Value { return UInt64(0) },
-		func() Value { return UInt64(1) },
+		func() Value { return Uint8(0) },
+		func() Value { return Uint8(1) },
+		func() Value { return Uint16(0) },
+		func() Value { return Uint16(1) },
+		func() Value { return Uint32(0) },
+		func() Value { return Uint32(1) },
+		func() Value { return Uint64(0) },
+		func() Value { return Uint64(1) },
 		func() Value { return Float32(0) },
 		func() Value { return Float32(-1) },
 		func() Value { return Float32(1) },
@@ -61,7 +61,7 @@ func TestValueEquals(t *testing.T) {
 			ms := chunks.NewMemoryStore()
 			b1 := NewBlob(bytes.NewBufferString("hi"), ms)
 			b2 := NewBlob(bytes.NewBufferString("bye"), ms)
-			return newCompoundBlob([]metaTuple{{WriteValue(b1, ms), UInt64(uint64(2))}, {WriteValue(b2, ms), UInt64(uint64(5))}}, ms)
+			return newCompoundBlob([]metaTuple{{WriteValue(b1, ms), Uint64(uint64(2))}, {WriteValue(b2, ms), Uint64(uint64(5))}}, ms)
 		},
 		func() Value { return NewList(cs) },
 		func() Value { return NewList(cs, NewString("foo")) },
@@ -77,14 +77,14 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return MakeStructType("b", []Field{}, Choices{}) },
 		func() Value { return MakeEnumType("E", "a", "b") },
 		func() Value { return MakeEnumType("E", "a", "b", "c") },
-		func() Value { return MakeCompoundType(ListKind, MakePrimitiveType(UInt64Kind)) },
+		func() Value { return MakeCompoundType(ListKind, MakePrimitiveType(Uint64Kind)) },
 		func() Value { return MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind)) },
-		func() Value { return MakeCompoundType(SetKind, MakePrimitiveType(UInt32Kind)) },
+		func() Value { return MakeCompoundType(SetKind, MakePrimitiveType(Uint32Kind)) },
 		func() Value { return MakeCompoundType(SetKind, MakePrimitiveType(Int32Kind)) },
-		func() Value { return MakeCompoundType(RefKind, MakePrimitiveType(UInt16Kind)) },
+		func() Value { return MakeCompoundType(RefKind, MakePrimitiveType(Uint16Kind)) },
 		func() Value { return MakeCompoundType(RefKind, MakePrimitiveType(Int16Kind)) },
 		func() Value {
-			return MakeCompoundType(MapKind, MakePrimitiveType(UInt8Kind), MakePrimitiveType(ValueKind))
+			return MakeCompoundType(MapKind, MakePrimitiveType(Uint8Kind), MakePrimitiveType(ValueKind))
 		},
 		func() Value {
 			return MakeCompoundType(MapKind, MakePrimitiveType(Int8Kind), MakePrimitiveType(ValueKind))

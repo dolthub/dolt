@@ -13,7 +13,7 @@ func TestStructWithDupList(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	def := gen.StructWithListDef{
-		L: gen.ListOfUInt8Def{0, 1, 2},
+		L: gen.ListOfUint8Def{0, 1, 2},
 		B: true,
 		S: "world",
 		I: 42,

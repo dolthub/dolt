@@ -14,10 +14,10 @@ var (
 		Int16(1),
 		Int32(1),
 		Int64(1),
-		UInt8(1),
-		UInt16(1),
-		UInt32(1),
-		UInt64(1),
+		Uint8(1),
+		Uint16(1),
+		Uint32(1),
+		Uint64(1),
 		Float32(1),
 		Float64(1),
 		NewString("hi"),
@@ -107,7 +107,7 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
 
-	expectedItem := UInt32(42)
+	expectedItem := Uint32(42)
 	ref := WriteValue(expectedItem, cs)
 
 	expected := NewList(cs, NewRef(ref))

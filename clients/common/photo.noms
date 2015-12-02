@@ -10,8 +10,8 @@ struct RemotePhoto {
 }
 
 struct Size {
-  Width: UInt32
-  Height: UInt32
+  Width: Uint32
+  Height: Uint32
 }
 
 using Map(Size, String)

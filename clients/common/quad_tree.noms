@@ -8,8 +8,8 @@ struct Node {
 struct QuadTree {
 	Nodes: List(Node)
 	Tiles: Map(String, QuadTree)
-	Depth: UInt8
-	NumDescendents: UInt32
+	Depth: Uint8
+	NumDescendents: Uint32
 	Path: String
 	Georectangle: Geo.Georectangle
 }
@@ -17,8 +17,8 @@ struct QuadTree {
 struct SQuadTree {
 	Nodes: List(Ref(Value))
 	Tiles: Map(String, Ref(SQuadTree))
-	Depth: UInt8
-	NumDescendents: UInt32
+	Depth: Uint8
+	NumDescendents: Uint32
 	Path: String
 	Georectangle: Geo.Georectangle
 }

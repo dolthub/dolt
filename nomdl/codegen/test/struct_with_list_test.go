@@ -14,7 +14,7 @@ func TestStructWithList(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	def := gen.StructWithListDef{
-		L: gen.ListOfUInt8Def{0, 1, 2},
+		L: gen.ListOfUint8Def{0, 1, 2},
 		B: true,
 		S: "world",
 		I: 42,
@@ -36,7 +36,7 @@ func TestStructIsValue(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 	var v types.Value = gen.StructWithListDef{
-		L: gen.ListOfUInt8Def{0, 1, 2},
+		L: gen.ListOfUint8Def{0, 1, 2},
 		B: true,
 		S: "world",
 		I: 42,
@@ -47,7 +47,7 @@ func TestStructIsValue(t *testing.T) {
 	assert.True(v.Equals(v2))
 
 	s2 := v2.(gen.StructWithList)
-	assert.True(s2.L().Equals(gen.NewListOfUInt8(cs).Append(0, 1, 2)))
+	assert.True(s2.L().Equals(gen.NewListOfUint8(cs).Append(0, 1, 2)))
 	assert.True(s2.B())
 	assert.Equal("world", s2.S())
 	assert.Equal(int64(42), s2.I())

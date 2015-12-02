@@ -47,7 +47,7 @@ func TestCompoundListIterator(t *testing.T) {
 
 	uint8List := make([]Value, 256)
 	for i, _ := range uint8List {
-		uint8List[i] = UInt8(i)
+		uint8List[i] = Uint8(i)
 	}
 
 	l := NewList(cs, uint8List...)
@@ -56,7 +56,7 @@ func TestCompoundListIterator(t *testing.T) {
 	i := 0
 	for v, done := it.next(); !done; v, done = it.next() {
 		l2 = l2.Append(v)
-		assert.True(UInt8(i).Equals(v))
+		assert.True(Uint8(i).Equals(v))
 		i++
 	}
 	assert.Equal(256, i)
@@ -69,7 +69,7 @@ func TestCompoundListIteratorAt(t *testing.T) {
 
 	uint8List := make([]Value, 256)
 	for i, _ := range uint8List {
-		uint8List[i] = UInt8(i)
+		uint8List[i] = Uint8(i)
 	}
 
 	l := NewList(cs, uint8List...)
@@ -78,7 +78,7 @@ func TestCompoundListIteratorAt(t *testing.T) {
 	i := 100
 	for v, done := it.next(); !done; v, done = it.next() {
 		l2 = l2.Append(v)
-		assert.True(UInt8(i).Equals(v))
+		assert.True(Uint8(i).Equals(v))
 		i++
 	}
 	assert.Equal(256, i)

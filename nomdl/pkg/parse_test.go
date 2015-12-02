@@ -221,7 +221,7 @@ func (suite *ParsedResultTestSuite) SetupTest() {
 	suite.union = types.Choices{
 		types.Field{"a", types.MakePrimitiveType(types.Int32Kind), false},
 		types.Field{"n", types.MakeUnresolvedType("NN", "Other"), false},
-		types.Field{"c", types.MakePrimitiveType(types.UInt32Kind), false},
+		types.Field{"c", types.MakePrimitiveType(types.Uint32Kind), false},
 	}
 }
 

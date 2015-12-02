@@ -60,22 +60,22 @@ func (cl compoundList) cursorAt(idx uint64) (cursor *metaSequenceCursor, listLea
 		d.Chk.NotNil(v)
 		d.Chk.NotNil(parent)
 
-		return idx < uint64(parent.(UInt64))+uint64(v.(UInt64))
+		return idx < uint64(parent.(Uint64))+uint64(v.(Uint64))
 	}, func(parent, prev, current Value) Value {
 		pv := uint64(0)
 		if prev != nil {
-			pv = uint64(prev.(UInt64))
+			pv = uint64(prev.(Uint64))
 		}
 
-		return UInt64(uint64(parent.(UInt64)) + pv)
-	}, UInt64(0))
+		return Uint64(uint64(parent.(Uint64)) + pv)
+	}, Uint64(0))
 
 	if cursor.currentRef() != leaf.Ref() {
 		leaf = cursor.currentVal()
 	}
 
 	listLeaf = leaf.(List)
-	start = uint64(chunkStart.(UInt64))
+	start = uint64(chunkStart.(Uint64))
 	return
 }
 
@@ -143,7 +143,7 @@ func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 		concreteType := t.Desc.(CompoundDesc).ElemTypes[0]
 		list := List{values, concreteType, &ref.Ref{}, cs}
 		ref := WriteValue(list, cs)
-		return metaTuple{ref, UInt64(len(values))}, list
+		return metaTuple{ref, Uint64(len(values))}, list
 	}
 }
 

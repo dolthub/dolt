@@ -1,3 +1,3 @@
 struct StructWithDupList {
-  l: List(UInt8)
+  l: List(Uint8)
 }

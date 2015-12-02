@@ -4,7 +4,7 @@
 // - Def - MyStructDef, ListOfBoolDef; convenient Go types for working with data from a given Noms Value.
 // - Native - such as string, uint32
 // - Value - the generic types.Value
-// - Nom - types.String, types.UInt32, MyStruct, ListOfBool
+// - Nom - types.String, types.Uint32, MyStruct, ListOfBool
 // - User - User defined structs, enums etc as well as native primitves. This uses Native when possible or Nom if not. These are to be used in APIs for generated types -- Getters and setters for maps and structs, etc.
 package code
 
@@ -35,7 +35,7 @@ func (gen Generator) DefType(t types.Type) string {
 	switch k {
 	case types.BlobKind:
 		return fmt.Sprintf("%sBlob", gen.TypesPackage)
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return strings.ToLower(kindToString(k))
 	case types.EnumKind:
 		return gen.UserName(t)
@@ -60,7 +60,7 @@ func (gen Generator) UserType(t types.Type) string {
 	switch k {
 	case types.BlobKind:
 		return fmt.Sprintf("%sBlob", gen.TypesPackage)
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return strings.ToLower(kindToString(k))
 	case types.EnumKind, types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return gen.UserName(t)
@@ -80,7 +80,7 @@ func (gen Generator) DefToValue(val string, t types.Type) string {
 	switch rt.Kind() {
 	case types.BlobKind, types.EnumKind, types.PackageKind, types.ValueKind, types.TypeKind:
 		return val // No special Def representation
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return gen.NativeToValue(val, rt)
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.New(cs)", val)
@@ -94,7 +94,7 @@ func (gen Generator) DefToValue(val string, t types.Type) string {
 func (gen Generator) DefToUser(val string, t types.Type) string {
 	rt := gen.R.Resolve(t)
 	switch rt.Kind() {
-	case types.BlobKind, types.BoolKind, types.EnumKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind:
+	case types.BlobKind, types.BoolKind, types.EnumKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind:
 		return val
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return gen.DefToValue(val, rt)
@@ -108,7 +108,7 @@ func (gen Generator) MayHaveChunks(t types.Type) bool {
 	switch rt.Kind() {
 	case types.BlobKind, types.ListKind, types.MapKind, types.PackageKind, types.RefKind, types.SetKind, types.StructKind, types.TypeKind, types.ValueKind:
 		return true
-	case types.BoolKind, types.EnumKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+	case types.BoolKind, types.EnumKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return false
 	}
 	panic("unreachable")
@@ -120,7 +120,7 @@ func (gen Generator) ValueToDef(val string, t types.Type) string {
 	switch rt.Kind() {
 	case types.BlobKind, types.PackageKind, types.TypeKind:
 		return gen.ValueToUser(val, rt) // No special Def representation
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return gen.ValueToNative(val, rt)
 	case types.EnumKind:
 		return fmt.Sprintf("%s.(%s)", val, gen.UserName(t))
@@ -138,7 +138,7 @@ func (gen Generator) ValueToDef(val string, t types.Type) string {
 func (gen Generator) UserToDef(val string, t types.Type) string {
 	rt := gen.R.Resolve(t)
 	switch rt.Kind() {
-	case types.BlobKind, types.EnumKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind:
+	case types.BlobKind, types.EnumKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind:
 		return val
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.Def()", val)
@@ -153,7 +153,7 @@ func (gen Generator) NativeToValue(val string, t types.Type) string {
 	t = gen.R.Resolve(t)
 	k := t.Kind()
 	switch k {
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return fmt.Sprintf("%s%s(%s)", gen.TypesPackage, kindToString(k), val)
 	case types.StringKind:
 		return fmt.Sprintf("%sNewString(%s)", gen.TypesPackage, val)
@@ -165,7 +165,7 @@ func (gen Generator) NativeToValue(val string, t types.Type) string {
 func (gen Generator) ValueToNative(val string, t types.Type) string {
 	k := t.Kind()
 	switch k {
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		n := kindToString(k)
 		return fmt.Sprintf("%s(%s.(%s%s))", strings.ToLower(n), val, gen.TypesPackage, n)
 	case types.StringKind:
@@ -181,7 +181,7 @@ func (gen Generator) UserToValue(val string, t types.Type) string {
 	switch k {
 	case types.BlobKind, types.EnumKind, types.ListKind, types.MapKind, types.PackageKind, types.RefKind, types.SetKind, types.StructKind, types.TypeKind, types.ValueKind:
 		return val
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return gen.NativeToValue(val, t)
 	}
 	panic("unreachable")
@@ -194,7 +194,7 @@ func (gen Generator) ValueToUser(val string, t types.Type) string {
 	switch k {
 	case types.BlobKind:
 		return fmt.Sprintf("%s.(%sBlob)", val, gen.TypesPackage)
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return gen.ValueToNative(val, rt)
 	case types.EnumKind, types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.(%s)", val, gen.UserName(t))
@@ -219,7 +219,7 @@ func (gen Generator) UserZero(val string, t types.Type) string {
 		return "false"
 	case types.EnumKind:
 		return fmt.Sprintf("New%s()", gen.UserName(rt))
-	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return fmt.Sprintf("%s(0)", strings.ToLower(kindToString(k)))
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("New%s(%s)", gen.UserName(rt), val)
@@ -249,7 +249,7 @@ func (gen Generator) ValueZero(t types.Type) string {
 		return fmt.Sprintf("%sBool(false)", gen.TypesPackage)
 	case types.EnumKind:
 		return gen.UserZero("", t)
-	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind:
+	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return fmt.Sprintf("%s%s(0)", gen.TypesPackage, kindToString(k))
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind:
 		return gen.UserZero("", t)
@@ -273,7 +273,7 @@ func (gen Generator) UserName(t types.Type) string {
 	rt := gen.R.Resolve(t)
 	k := rt.Kind()
 	switch k {
-	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeKind:
+	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind, types.TypeKind:
 		return kindToString(k)
 	case types.EnumKind:
 		return rt.Name()

@@ -28,8 +28,8 @@ func init() {
 		),
 		types.MakeStructType("Size",
 			[]types.Field{
-				types.Field{"Width", types.MakePrimitiveType(types.UInt32Kind), false},
-				types.Field{"Height", types.MakePrimitiveType(types.UInt32Kind), false},
+				types.Field{"Width", types.MakePrimitiveType(types.Uint32Kind), false},
+				types.Field{"Height", types.MakePrimitiveType(types.Uint32Kind), false},
 			},
 			types.Choices{},
 		),
@@ -280,9 +280,9 @@ func init() {
 func builderForSize(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
 	s := Size{ref: &ref.Ref{}, cs: cs}
-	s._Width = uint32(values[i].(types.UInt32))
+	s._Width = uint32(values[i].(types.Uint32))
 	i++
-	s._Height = uint32(values[i].(types.UInt32))
+	s._Height = uint32(values[i].(types.Uint32))
 	i++
 	return s
 }
@@ -290,8 +290,8 @@ func builderForSize(cs chunks.ChunkStore, values []types.Value) types.Value {
 func readerForSize(v types.Value) []types.Value {
 	values := []types.Value{}
 	s := v.(Size)
-	values = append(values, types.UInt32(s._Width))
-	values = append(values, types.UInt32(s._Height))
+	values = append(values, types.Uint32(s._Width))
+	values = append(values, types.Uint32(s._Height))
 	return values
 }
 
@@ -309,8 +309,8 @@ func (s Size) Chunks() (chunks []ref.Ref) {
 }
 
 func (s Size) ChildValues() (ret []types.Value) {
-	ret = append(ret, types.UInt32(s._Width))
-	ret = append(ret, types.UInt32(s._Height))
+	ret = append(ret, types.Uint32(s._Width))
+	ret = append(ret, types.Uint32(s._Height))
 	return
 }
 

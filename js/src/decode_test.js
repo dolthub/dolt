@@ -60,10 +60,10 @@ suite('Decode', () => {
 
     await doTest(true, [Kind.Bool, true]);
     await doTest(false, [Kind.Bool, false]);
-    await doTest(0, [Kind.UInt8, 0]);
-    await doTest(0, [Kind.UInt16, 0]);
-    await doTest(0, [Kind.UInt32, 0]);
-    await doTest(0, [Kind.UInt64, 0]);
+    await doTest(0, [Kind.Uint8, 0]);
+    await doTest(0, [Kind.Uint16, 0]);
+    await doTest(0, [Kind.Uint32, 0]);
+    await doTest(0, [Kind.Uint64, 0]);
     await doTest(0, [Kind.Int8, 0]);
     await doTest(0, [Kind.Int16, 0]);
     await doTest(0, [Kind.Int32, 0]);
@@ -124,7 +124,7 @@ suite('Decode', () => {
 
   test('read value map of uint64 to uint32', async () => {
     let ms = new MemoryStore();
-    let a = [Kind.Value, Kind.Map, Kind.UInt64, Kind.UInt32, [0, 1, 2, 3]];
+    let a = [Kind.Value, Kind.Map, Kind.Uint64, Kind.Uint32, [0, 1, 2, 3]];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -144,7 +144,7 @@ suite('Decode', () => {
 
   test('read set of uint8', async () => {
     let ms = new MemoryStore();
-    let a = [Kind.Set, Kind.UInt8, [0, 1, 2, 3]];
+    let a = [Kind.Set, Kind.Uint8, [0, 1, 2, 3]];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -159,7 +159,7 @@ suite('Decode', () => {
 
   test('read value set of uint16', async () => {
     let ms = new MemoryStore();
-    let a = [Kind.Value, Kind.Set, Kind.UInt16, [0, 1, 2, 3]];
+    let a = [Kind.Value, Kind.Set, Kind.Uint16, [0, 1, 2, 3]];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -274,7 +274,7 @@ suite('Decode', () => {
     let pkg = new Package([tr], []);
     registerPackage(pkg);
 
-    let a = [Kind.Unresolved, pkg.ref.toString(), 0, true, Kind.UInt8, 42, 'hi'];
+    let a = [Kind.Unresolved, pkg.ref.toString(), 0, true, Kind.Uint8, 42, 'hi'];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -381,7 +381,7 @@ suite('Decode', () => {
   });
 
   test('decodeNomsValue', async () => {
-    let chunk = Chunk.fromString(`t [${Kind.Value}, ${Kind.Set}, ${Kind.UInt16}, [0, 1, 2, 3]]`);
+    let chunk = Chunk.fromString(`t [${Kind.Value}, ${Kind.Set}, ${Kind.Uint16}, [0, 1, 2, 3]]`);
     let v = await decodeNomsValue(chunk, new MemoryStore());
     let s = new Set([0, 1, 2, 3]);
     assertSetsEqual(s, v);

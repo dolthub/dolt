@@ -25,10 +25,10 @@ suite('Encode', () => {
     f(Kind.Bool, true, true);
     f(Kind.Bool, false, false);
 
-    f(Kind.UInt8, 0, 0);
-    f(Kind.UInt16, 0, 0);
-    f(Kind.UInt32, 0, 0);
-    f(Kind.UInt64, 0, 0);
+    f(Kind.Uint8, 0, 0);
+    f(Kind.Uint16, 0, 0);
+    f(Kind.Uint32, 0, 0);
+    f(Kind.Uint64, 0, 0);
     f(Kind.Int8, 0, 0);
     f(Kind.Int16, 0, 0);
     f(Kind.Int32, 0, 0);
@@ -66,10 +66,10 @@ suite('Encode', () => {
     let ms = new MemoryStore();
     let w = new JsonArrayWriter(ms);
 
-    let tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.UInt32));
+    let tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint32));
     let v = new Set([0, 1, 2, 3]);
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Set, Kind.UInt32, [1, 3, 0, 2]], w.array);
+    assert.deepEqual([Kind.Set, Kind.Uint32, [1, 3, 0, 2]], w.array);
   });
 
   test('write set of set', async () => {

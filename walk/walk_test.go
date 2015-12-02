@@ -103,7 +103,7 @@ func (suite *WalkTestSuite) SetupTest() {
 	suite.cs = chunks.NewTestStore()
 	suite.shouldSeeItem = types.NewString("zzz")
 	suite.shouldSee = types.NewList(cs, suite.shouldSeeItem)
-	suite.deadValue = types.UInt64(0xDEADBEEF)
+	suite.deadValue = types.Uint64(0xDEADBEEF)
 	suite.mustSkip = types.NewList(cs, suite.deadValue)
 }
 

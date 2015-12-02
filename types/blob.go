@@ -52,7 +52,7 @@ func newBlobLeafChunkFn(cs chunks.ChunkStore) makeChunkFn {
 
 		leaf := newBlobLeaf(buff)
 		ref := WriteValue(leaf, cs)
-		return metaTuple{ref, UInt64(uint64(len(buff)))}, leaf
+		return metaTuple{ref, Uint64(uint64(len(buff)))}, leaf
 	}
 }
 

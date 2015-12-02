@@ -341,7 +341,7 @@ func (gen *codeGen) write(t types.Type) {
 	}
 	k := t.Kind()
 	switch k {
-	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.UInt16Kind, types.UInt32Kind, types.UInt64Kind, types.UInt8Kind, types.ValueKind, types.TypeKind:
+	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind, types.TypeKind:
 		return
 	case types.ListKind:
 		gen.writeList(t)
@@ -390,7 +390,7 @@ func (gen *codeGen) writeStruct(t types.Type, ordinal int) {
 		desc.Fields,
 		nil,
 		len(desc.Union) != 0,
-		types.MakePrimitiveType(types.UInt32Kind),
+		types.MakePrimitiveType(types.Uint32Kind),
 		gen.canUseDef(t),
 	}
 

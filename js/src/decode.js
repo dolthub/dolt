@@ -166,10 +166,10 @@ class JsonArrayReader {
         return this.readBlob();
       case Kind.Bool:
         return Promise.resolve(this.readBool());
-      case Kind.UInt8:
-      case Kind.UInt16:
-      case Kind.UInt32:
-      case Kind.UInt64:
+      case Kind.Uint8:
+      case Kind.Uint16:
+      case Kind.Uint32:
+      case Kind.Uint64:
       case Kind.Int8:
       case Kind.Int16:
       case Kind.Int32:

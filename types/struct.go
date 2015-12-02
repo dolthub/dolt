@@ -191,7 +191,7 @@ func structBuilder(values []Value, typ, typeDef Type) Value {
 		}
 	}
 	if len(desc.Union) > 0 {
-		unionIndex = uint32(values[i].(UInt32))
+		unionIndex = uint32(values[i].(Uint32))
 		i++
 		unionValue = values[i]
 		i++
@@ -217,7 +217,7 @@ func structReader(s Struct, typ, typeDef Type) []Value {
 		}
 	}
 	if len(desc.Union) > 0 {
-		values = append(values, UInt32(s.unionIndex), s.unionValue)
+		values = append(values, Uint32(s.unionIndex), s.unionValue)
 	}
 
 	return values

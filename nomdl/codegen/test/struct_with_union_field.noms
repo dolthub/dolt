@@ -5,6 +5,6 @@ struct StructWithUnionField {
     c: String
     d: Blob
     e: Value
-    f: Set(UInt8)
+    f: Set(Uint8)
   }
 }

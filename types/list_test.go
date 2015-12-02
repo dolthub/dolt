@@ -358,8 +358,8 @@ func TestListType(t *testing.T) {
 	l := NewList(cs, Int32(0))
 	assert.True(l.Type().Equals(MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))))
 
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(UInt8Kind))
-	l2 := newListNoCopy(cs, []Value{UInt8(0), UInt8(1)}, tr)
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Uint8Kind))
+	l2 := newListNoCopy(cs, []Value{Uint8(0), Uint8(1)}, tr)
 	assert.Equal(tr, l2.Type())
 
 	l3 := l2.Slice(0, 1)
@@ -369,11 +369,11 @@ func TestListType(t *testing.T) {
 	l3 = l2.RemoveAt(0)
 	assert.True(tr.Equals(l3.Type()))
 
-	l3 = l2.Set(0, UInt8(11))
+	l3 = l2.Set(0, Uint8(11))
 	assert.True(tr.Equals(l3.Type()))
-	l3 = l2.Append(UInt8(2))
+	l3 = l2.Append(Uint8(2))
 	assert.True(tr.Equals(l3.Type()))
-	l3 = l2.Insert(0, UInt8(3))
+	l3 = l2.Insert(0, Uint8(3))
 	assert.True(tr.Equals(l3.Type()))
 
 	assert.Panics(func() { l2.Set(0, NewString("")) })
