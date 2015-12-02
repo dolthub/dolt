@@ -194,6 +194,8 @@ class JsonArrayReader {
       case Kind.Package:
         return Promise.resolve(this.readPackage(t, pkg));
       case Kind.Ref:
+        // TODO: This is not aligned with Go. In Go we have a dedicated Value
+        // for refs.
         return Promise.resolve(this.readRef());
       case Kind.Set: {
         let r2 = new JsonArrayReader(this.readArray(), this._cs);
