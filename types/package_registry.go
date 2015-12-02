@@ -94,20 +94,33 @@ func enumPrimitiveValueFromType(v Value, t Type) uint32 {
 }
 
 func RegisterValue(t Type, bf valueBuilderFunc, rf valueReaderFunc) {
-	valueFuncMap[t.Ref()] = valueFuncs{bf, rf}
+	switch t.Kind() {
+	case MapKind, ListKind, SetKind:
+		valueFuncMap[t.Ref()] = valueFuncs{bf, rf}
+	default:
+		panic("not reached")
+	}
 }
 
 func valueFromType(cs chunks.ChunkStore, v Value, t Type) Value {
-	if s, ok := valueFuncMap[t.Ref()]; ok {
-		return s.builder(cs, v)
+	switch t.Kind() {
+	case MapKind, ListKind, SetKind:
+		if s, ok := valueFuncMap[t.Ref()]; ok {
+			return s.builder(cs, v)
+		}
 	}
+
 	return v
 }
 
 func internalValueFromType(v Value, t Type) Value {
-	if s, ok := valueFuncMap[t.Ref()]; ok {
-		return s.reader(v)
+	switch t.Kind() {
+	case MapKind, ListKind, SetKind:
+		if s, ok := valueFuncMap[t.Ref()]; ok {
+			return s.reader(v)
+		}
 	}
+
 	return v
 }
 

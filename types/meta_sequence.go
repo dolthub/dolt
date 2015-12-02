@@ -93,9 +93,7 @@ func registerMetaValue(k NomsKind, bf metaBuilderFunc) {
 }
 
 func newMetaSequenceFromData(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
-	concreteType := t.Desc.(CompoundDesc).ElemTypes[0]
-
-	if bf, ok := metaFuncMap[concreteType.Kind()]; ok {
+	if bf, ok := metaFuncMap[t.Kind()]; ok {
 		return bf(tuples, t, cs)
 	}
 

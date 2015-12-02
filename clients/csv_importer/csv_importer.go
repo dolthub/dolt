@@ -176,9 +176,8 @@ func main() {
 
 	refType := types.MakeCompoundType(types.RefKind, typ)
 	listType := types.MakeCompoundType(types.ListKind, refType)
-	metaRef := types.MakeCompoundType(types.MetaSequenceKind, listType)
 
-	value := types.NewCompoundList(metaRef, ds.Store(), refs...)
+	value := types.NewCompoundList(listType, ds.Store(), refs...)
 	_, ok := ds.Commit(value)
 	d.Exp.True(ok, "Could not commit due to conflicting edit")
 }

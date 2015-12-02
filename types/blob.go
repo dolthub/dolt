@@ -57,7 +57,7 @@ func newBlobLeafChunkFn(cs chunks.ChunkStore) makeChunkFn {
 }
 
 func NewBlob(r io.Reader, cs chunks.ChunkStore) Blob {
-	seq := newEmptySequenceChunker(newBlobLeafChunkFn(cs), newMetaSequenceChunkFn(typeForCompoundBlob, cs), newBlobLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(newBlobLeafChunkFn(cs), newMetaSequenceChunkFn(typeForBlob, cs), newBlobLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
 	buf := []byte{0}
 	for {
 		n, err := r.Read(buf)

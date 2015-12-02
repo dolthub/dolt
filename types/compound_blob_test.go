@@ -274,5 +274,5 @@ func TestCompoundBlobType(t *testing.T) {
 	assert := assert.New(t)
 
 	cb := getTestCompoundBlob("hello", "world")
-	assert.True(cb.Type().Equals(MakeCompoundType(MetaSequenceKind, MakePrimitiveType(BlobKind))))
+	assert.True(cb.Type().Equals(MakePrimitiveType(BlobKind)))
 }

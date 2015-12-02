@@ -159,7 +159,9 @@ func (r *jsonArrayReader) readMetaSequence(t Type, pkg *Package) Value {
 	}
 
 	t = fixupType(t, pkg)
-	return newMetaSequenceFromData(data, t, r.cs)
+	// Denormalize the type. Compound objects must return the same Type() as their leaf counterparts.
+	concreteType := t.Desc.(CompoundDesc).ElemTypes[0]
+	return newMetaSequenceFromData(data, concreteType, r.cs)
 }
 
 func (r *jsonArrayReader) readEnum(t Type, pkg *Package) Value {
