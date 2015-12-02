@@ -47,8 +47,8 @@ func (suite *ParserTestSuite) TestAlias() {
 
 func (suite *ParserTestSuite) TestUsing() {
 	usingDecls := `
-using Map(String, Simple)
-using List(Noms.Commit)
+using Map<String, Simple>
+using List<Noms.Commit>
 `
 	pkg := runParser("", strings.NewReader(usingDecls))
 	suite.Len(pkg.UsingDeclarations, 2)
@@ -66,7 +66,7 @@ using List(Noms.Commit)
 func (suite *ParserTestSuite) TestBadUsing() {
 	suite.Panics(func() { runParser("", strings.NewReader("using Blob")) }, "Can't 'use' a primitive.")
 	suite.Panics(func() { runParser("", strings.NewReader("using Noms.Commit")) }, "Can't 'use' a type from another package.")
-	suite.Panics(func() { runParser("", strings.NewReader("using f@(k")) }, "Can't 'use' illegal identifier.")
+	suite.Panics(func() { runParser("", strings.NewReader("using f@<k")) }, "Can't 'use' illegal identifier.")
 }
 
 func (suite *ParserTestSuite) TestBadStructParse() {
@@ -241,7 +241,7 @@ func (s structTestCase) toText() string {
 
 func (s structTestCase) fieldsToString() (out string) {
 	for _, f := range s.Fields {
-		out += f.Name + " :"
+		out += f.Name + ": "
 		if f.Optional {
 			out += "optional "
 		}

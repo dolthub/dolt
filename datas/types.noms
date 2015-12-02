@@ -1,6 +1,6 @@
 struct Commit {
   value: Value
-  parents: Set(Ref(Commit))
+  parents: Set<Ref<Commit>>
 }
 
-using Map(String, Ref(Commit))
+using Map<String, Ref<Commit>>

@@ -38,9 +38,9 @@ enum RoundTypeEnum {
 
 struct RoundRaise {
   Raised:    Float64
-  Details:   Ref(cb.Round)
+  Details:   Ref<cb.Round>
 }
 
-using Map(String, Ref(cb.Company))
-using Map(Ref(Key), Set(RoundRaise))
-using Map(Ref(Key), Ref(Set(RoundRaise)))
+using Map<String, Ref<cb.Company>>
+using Map<Ref<Key>, Set<RoundRaise>>
+using Map<Ref<Key>, Ref<Set<RoundRaise>>>

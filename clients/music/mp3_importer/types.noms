@@ -6,4 +6,4 @@ struct Song {
   Mp3: Blob
 }
 
-using List(Song)
+using List<Song>

@@ -149,13 +149,13 @@ Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
 	}
 }
 
-CompoundType <- `List` _ `(` _ t:Type _ `)` _ {
+CompoundType <- `List` _ `<` _ t:Type _ `>` _ {
 	return types.MakeCompoundType(types.ListKind, t.(types.Type)), nil
-} / `Map` _ `(` _ k:Type _ `,` _ v:Type _ `)` _ {
+} / `Map` _ `<` _ k:Type _ `,` _ v:Type _ `>` _ {
 	return types.MakeCompoundType(types.MapKind, k.(types.Type), v.(types.Type)), nil
-} / `Set` _ `(` _ t:Type _ `)` _ {
+} / `Set` _ `<` _ t:Type _ `>` _ {
 	return types.MakeCompoundType(types.SetKind, t.(types.Type)), nil
-} / `Ref` _ `(` _ t:Type _ `)` _ {
+} / `Ref` _ `<` _ t:Type _ `>` _ {
 	return types.MakeCompoundType(types.RefKind, t.(types.Type)), nil
 }
 

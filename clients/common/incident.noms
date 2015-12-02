@@ -14,4 +14,4 @@ struct Incident {
 	PdID: String
 }
 
-using List(Ref(Incident))
+using List<Ref<Incident>>

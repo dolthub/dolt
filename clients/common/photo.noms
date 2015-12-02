@@ -5,8 +5,8 @@ struct RemotePhoto {
   Title: String
   Url: String
   Geoposition: Geo.Geoposition
-  Sizes: Map(Size, String)
-  Tags: Set(String)
+  Sizes: Map<Size, String>
+  Tags: Set<String>
 }
 
 struct Size {
@@ -14,5 +14,5 @@ struct Size {
   Height: Uint32
 }
 
-using Map(Size, String)
-using Set(String)
+using Map<Size, String>
+using Set<String>

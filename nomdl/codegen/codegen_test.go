@@ -79,64 +79,64 @@ func TestCanUseDef(t *testing.T) {
 	}
 
 	good := `
-		using List(Int8)
-		using Set(Int8)
-		using Map(Int8, Int8)
-		using Map(Int8, Set(Int8))
-		using Map(Int8, Map(Int8, Int8))
+		using List<Int8>
+		using Set<Int8>
+		using Map<Int8, Int8>
+		using Map<Int8, Set<Int8>>
+		using Map<Int8, Map<Int8, Int8>>
 
 		struct Simple {
 			x: Int8
 		}
-		using Set(Simple)
-		using Map(Simple, Int8)
-		using Map(Simple, Simple)
+		using Set<Simple>
+		using Map<Simple, Int8>
+		using Map<Simple, Simple>
 		`
 	assertCanUseDef(good, true, true)
 
 	good = `
 		struct Tree {
-		  children: List(Tree)
+		  children: List<Tree>
 		}
 		`
 	assertCanUseDef(good, true, true)
 
 	bad := `
 		struct WithList {
-			x: List(Int8)
+			x: List<Int8>
 		}
-		using Set(WithList)
-		using Map(WithList, Int8)
+		using Set<WithList>
+		using Map<WithList, Int8>
 
 		struct WithSet {
-			x: Set(Int8)
+			x: Set<Int8>
 		}
-		using Set(WithSet)
-		using Map(WithSet, Int8)
+		using Set<WithSet>
+		using Map<WithSet, Int8>
 
 		struct WithMap {
-			x: Map(Int8, Int8)
+			x: Map<Int8, Int8>
 		}
-		using Set(WithMap)
-		using Map(WithMap, Int8)
+		using Set<WithMap>
+		using Map<WithMap, Int8>
 		`
 	assertCanUseDef(bad, false, true)
 
 	bad = `
 		struct Commit {
 			value: Value
-			parents: Set(Commit)
+			parents: Set<Commit>
 		}
 		`
 	assertCanUseDef(bad, false, false)
 
 	bad = `
-		Set(Set(Int8))
-		Set(Map(Int8, Int8))
-		Set(List(Int8))
-		Map(Set(Int8), Int8)
-		Map(Map(Int8, Int8), Int8)
-		Map(List(Int8), Int8)
+		Set<Set<Int8>>
+		Set<Map<Int8, Int8>>
+		Set<List<Int8>>
+		Map<Set<Int8>, Int8>
+		Map<Map<Int8, Int8>, Int8>
+		Map<List<Int8>, Int8>
 		`
 
 	for _, line := range strings.Split(bad, "\n") {

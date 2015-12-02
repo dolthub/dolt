@@ -585,7 +585,7 @@ var g = &grammar{
 								},
 								&litMatcher{
 									pos:        position{line: 152, col: 26, offset: 3779},
-									val:        "(",
+									val:        "<",
 									ignoreCase: false,
 								},
 								&ruleRefExpr{
@@ -606,7 +606,7 @@ var g = &grammar{
 								},
 								&litMatcher{
 									pos:        position{line: 152, col: 41, offset: 3794},
-									val:        ")",
+									val:        ">",
 									ignoreCase: false,
 								},
 								&ruleRefExpr{
@@ -633,7 +633,7 @@ var g = &grammar{
 								},
 								&litMatcher{
 									pos:        position{line: 154, col: 13, offset: 3882},
-									val:        "(",
+									val:        "<",
 									ignoreCase: false,
 								},
 								&ruleRefExpr{
@@ -675,7 +675,7 @@ var g = &grammar{
 								},
 								&litMatcher{
 									pos:        position{line: 154, col: 43, offset: 3912},
-									val:        ")",
+									val:        ">",
 									ignoreCase: false,
 								},
 								&ruleRefExpr{
@@ -702,7 +702,7 @@ var g = &grammar{
 								},
 								&litMatcher{
 									pos:        position{line: 156, col: 13, offset: 4015},
-									val:        "(",
+									val:        "<",
 									ignoreCase: false,
 								},
 								&ruleRefExpr{
@@ -723,7 +723,7 @@ var g = &grammar{
 								},
 								&litMatcher{
 									pos:        position{line: 156, col: 28, offset: 4030},
-									val:        ")",
+									val:        ">",
 									ignoreCase: false,
 								},
 								&ruleRefExpr{
@@ -750,7 +750,7 @@ var g = &grammar{
 								},
 								&litMatcher{
 									pos:        position{line: 158, col: 13, offset: 4117},
-									val:        "(",
+									val:        "<",
 									ignoreCase: false,
 								},
 								&ruleRefExpr{
@@ -771,7 +771,7 @@ var g = &grammar{
 								},
 								&litMatcher{
 									pos:        position{line: 158, col: 28, offset: 4132},
-									val:        ")",
+									val:        ">",
 									ignoreCase: false,
 								},
 								&ruleRefExpr{

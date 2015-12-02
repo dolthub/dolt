@@ -71,8 +71,8 @@ func TestTypeRefDescribe(t *testing.T) {
 	assert.Equal("Bool", boolType.Describe())
 	assert.Equal("Uint8", uint8Type.Describe())
 	assert.Equal("String", stringType.Describe())
-	assert.Equal("Map(String, Uint8)", mapType.Describe())
-	assert.Equal("Set(String)", setType.Describe())
+	assert.Equal("Map<String, Uint8>", mapType.Describe())
+	assert.Equal("Set<String>", setType.Describe())
 
 	mahType := MakeStructType("MahStruct", []Field{
 		Field{"Field1", stringType, false},

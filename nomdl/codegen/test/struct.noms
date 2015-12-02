@@ -3,4 +3,4 @@ struct Struct {
   b: Bool
 }
 
-using List(Struct)
+using List<Struct>
