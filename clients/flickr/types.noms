@@ -5,14 +5,14 @@ struct User {
   Name: String
   OAuthToken: String
   OAuthSecret: String
-  Albums: Map(String, Album)
+  Albums: Map<String, Album>
 }
 
 struct Album {
   Id: String
   Title: String
-  Photos: Ref(Set(Ref(Img.RemotePhoto)))
+  Photos: Ref<Set<Ref<Img.RemotePhoto>>>
 }
 
-using Map(String, Album)
-using Ref(User)
+using Map<String, Album>
+using Ref<User>

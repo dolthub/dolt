@@ -2,12 +2,12 @@ alias Geo = import "geo.noms"
 
 struct Node {
 	Geoposition: Geo.Geoposition
-	Reference: Ref(Value)
+	Reference: Ref<Value>
 }
 
 struct QuadTree {
-	Nodes: List(Node)
-	Tiles: Map(String, QuadTree)
+	Nodes: List<Node>
+	Tiles: Map<String, QuadTree>
 	Depth: Uint8
 	NumDescendents: Uint32
 	Path: String
@@ -15,8 +15,8 @@ struct QuadTree {
 }
 
 struct SQuadTree {
-	Nodes: List(Ref(Value))
-	Tiles: Map(String, Ref(SQuadTree))
+	Nodes: List<Ref<Value>>
+	Tiles: Map<String, Ref<SQuadTree>>
 	Depth: Uint8
 	NumDescendents: Uint32
 	Path: String

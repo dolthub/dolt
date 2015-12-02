@@ -142,15 +142,15 @@ func (c CompoundDesc) Describe() string {
 	}
 	switch c.kind {
 	case ListKind:
-		return "List(" + descElems() + ")"
+		return "List<" + descElems() + ">"
 	case MapKind:
-		return "Map(" + descElems() + ")"
+		return "Map<" + descElems() + ">"
 	case RefKind:
-		return "Ref(" + descElems() + ")"
+		return "Ref<" + descElems() + ">"
 	case SetKind:
-		return "Set(" + descElems() + ")"
+		return "Set<" + descElems() + ">"
 	case MetaSequenceKind:
-		return "Meta(" + descElems() + ")"
+		return "Meta<" + descElems() + ">"
 	default:
 		panic(fmt.Errorf("Kind is not compound: %v", c.kind))
 	}

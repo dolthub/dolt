@@ -2,7 +2,7 @@ struct Company {
     Permalink:          String
     Name:               String
     HomepageUrl:        String
-    CategoryList:       Set(String)
+    CategoryList:       Set<String>
     Market:             String
     FundingTotalUsd:    Float64
     Status:             String
@@ -14,7 +14,7 @@ struct Company {
     FoundedAt:          Int64
     FirstFundingAt:     Int64
     LastFundingAt:      Int64
-    Rounds:             Set(Ref(Round))
+    Rounds:             Set<Ref<Round>>
 }
 
 struct Round {

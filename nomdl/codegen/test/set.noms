@@ -1,1 +1,1 @@
-using Set(Bool)
+using Set<Bool>

@@ -3,7 +3,7 @@ alias Img = import "../common/photo.noms"
 struct User {
   Id: String
   Name: String
-  Albums: Map(String, Album)
+  Albums: Map<String, Album>
   RefreshToken: String
   OAuthToken: String
   OAuthSecret: String
@@ -13,9 +13,9 @@ struct Album {
   Id: String
   Title: String
   NumPhotos: Uint32
-  Photos: Ref(Set(Ref(Img.RemotePhoto)))
+  Photos: Ref<Set<Ref<Img.RemotePhoto>>>
 }
 
-using Map(String, Album)
-using Set(Img.RemotePhoto)
-using Ref(User)
+using Map<String, Album>
+using Set<Img.RemotePhoto>
+using Ref<User>

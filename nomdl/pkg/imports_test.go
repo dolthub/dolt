@@ -133,8 +133,8 @@ func (suite *ImportTestSuite) TestImports() {
 		alias Other = import "%s"
 		alias ByPath = import "%s"
 
-		using List(Other.ForeignEnum)
-		using List(Local1)
+		using List<Other.ForeignEnum>
+		using List<Local1>
 		struct Local1 {
 			a: Other.ForeignStruct
 			b: Int16
