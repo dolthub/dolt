@@ -24,19 +24,13 @@ const (
 	readBufferSize  = 1 << 12 // 4k
 	hasBufferSize   = 1 << 12 // 4k
 	writeBufferSize = 1 << 12 // 4k
-	readLimit       = 6       // Experimentally, 5 was dimishing returns, 1 for good measure
-	writeLimit      = 6
-	hasLimit        = 6
+	requestLimit    = 6       // max number of active http requests
 )
 
-var (
-	httpClient = makeHttpClient()
-)
-
-// Use a custom http client rather than http.DefaultClient so that we can change the number of MaxIdleConnsPerHost. There are times when we hammer a server with buffered calls and it makes sense to keep more than the default # of 2 connections open in this case. Our current usage hammers a server with either reads or writes so keeping a maxLimit of open connections equals to how many concurrent requests we are making seems like a good choice.
+// Use a custom http client rather than http.DefaultClient. We limit ourselves to a maximum of |requestLimit| concurrent http requests, the custom httpClient ups the maxIdleConnsPerHost value so that one connection stays open for each concurrent request.
 func makeHttpClient() *http.Client {
 	t := http.Transport(*http.DefaultTransport.(*http.Transport))
-	t.MaxIdleConnsPerHost = writeLimit
+	t.MaxIdleConnsPerHost = requestLimit
 
 	return &http.Client{
 		Transport: &t,
@@ -79,9 +73,11 @@ func (rrq *readBatch) Close() error {
 
 type HttpStore struct {
 	host       *url.URL
-	readQueue  chan readRequest
+	httpClient *http.Client
 	hasQueue   chan hasRequest
+	readQueue  chan readRequest
 	writeQueue chan Chunk
+	reqLimiter chan struct{}
 	wg         *sync.WaitGroup
 	written    map[ref.Ref]bool
 	wmu        *sync.Mutex
@@ -93,24 +89,26 @@ func NewHttpStore(host string) *HttpStore {
 	d.Exp.True(u.Scheme == "http" || u.Scheme == "https")
 	d.Exp.Equal(*u, url.URL{Scheme: u.Scheme, Host: u.Host})
 	client := &HttpStore{
-		u,
-		make(chan readRequest, readBufferSize),
-		make(chan hasRequest, hasBufferSize),
-		make(chan Chunk, writeBufferSize),
-		&sync.WaitGroup{},
-		map[ref.Ref]bool{},
-		&sync.Mutex{},
+		host:       u,
+		httpClient: makeHttpClient(),
+		hasQueue:   make(chan hasRequest, hasBufferSize),
+		readQueue:  make(chan readRequest, readBufferSize),
+		writeQueue: make(chan Chunk, writeBufferSize),
+		reqLimiter: make(chan struct{}, requestLimit),
+		wg:         &sync.WaitGroup{},
+		written:    map[ref.Ref]bool{},
+		wmu:        &sync.Mutex{},
 	}
 
-	for i := 0; i < readLimit; i++ {
+	for i := 0; i < requestLimit; i++ {
 		go client.sendReadRequests()
 	}
 
-	for i := 0; i < writeLimit; i++ {
+	for i := 0; i < requestLimit; i++ {
 		go client.sendWriteRequests()
 	}
 
-	for i := 0; i < hasLimit; i++ {
+	for i := 0; i < requestLimit; i++ {
 		go client.sendHasRequests()
 	}
 
@@ -217,6 +215,13 @@ func (c *HttpStore) sendWriteRequests() {
 	}
 }
 
+func (c *HttpStore) doRequest(req *http.Request) (*http.Response, error) {
+	c.reqLimiter <- struct{}{}
+	res, err := c.httpClient.Do(req)
+	<-c.reqLimiter
+	return res, err
+}
+
 func (c *HttpStore) postRefs(chs []Chunk) {
 	body := &bytes.Buffer{}
 	gw := gzip.NewWriter(body)
@@ -235,7 +240,7 @@ func (c *HttpStore) postRefs(chs []Chunk) {
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Content-Type", "application/octet-stream")
 
-	res, err := httpClient.Do(req)
+	res, err := c.doRequest(req)
 	d.Chk.NoError(err)
 
 	d.Chk.Equal(res.StatusCode, http.StatusCreated, "Unexpected response: %s", http.StatusText(res.StatusCode))
@@ -256,7 +261,7 @@ func (c *HttpStore) requestRef(r ref.Ref, method string, body io.Reader) *http.R
 
 	d.Chk.NoError(err)
 
-	res, err := httpClient.Do(req)
+	res, err := c.doRequest(req)
 	d.Chk.NoError(err)
 	return res
 }
@@ -275,7 +280,7 @@ func (c *HttpStore) getHasRefs(refs map[ref.Ref]bool, reqs hasBatch) {
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	d.Chk.NoError(err)
 
-	res, err := httpClient.Do(req)
+	res, err := c.doRequest(req)
 	d.Chk.NoError(err)
 	defer closeResponse(res)
 	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
@@ -314,7 +319,7 @@ func (c *HttpStore) getRefs(refs map[ref.Ref]bool, cs ChunkSink) {
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	d.Chk.NoError(err)
 
-	res, err := httpClient.Do(req)
+	res, err := c.doRequest(req)
 	d.Chk.NoError(err)
 	defer closeResponse(res)
 	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
@@ -371,7 +376,7 @@ func (c *HttpStore) requestRoot(method string, current, last ref.Ref) *http.Resp
 	req, err := http.NewRequest(method, u.String(), nil)
 	d.Chk.NoError(err)
 
-	res, err := httpClient.Do(req)
+	res, err := c.doRequest(req)
 	d.Chk.NoError(err)
 
 	return res
