@@ -44,13 +44,17 @@ func TestEnsureRef(t *testing.T) {
 	}()
 
 	bl := newBlobLeaf([]byte("hi"))
-	cb := newCompoundBlob([]metaTuple{{WriteValue(bl, cs), Uint64(uint64(2))}}, cs)
+	cb := newCompoundBlob([]metaTuple{{WriteValue(bl, cs), Uint64(2)}}, cs)
+
+	ll := newListLeaf(cs, listType, NewString("foo"))
+	cl := buildCompoundList([]metaTuple{{WriteValue(ll, cs), Uint64(1)}}, listType, cs)
 
 	count = byte(1)
 	values := []Value{
 		newBlobLeaf([]byte{}),
 		cb,
-		NewList(cs),
+		newListLeaf(cs, listType, NewString("bar")),
+		cl,
 		NewString(""),
 		NewMap(cs),
 		NewSet(cs),

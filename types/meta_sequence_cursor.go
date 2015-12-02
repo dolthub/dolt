@@ -118,7 +118,8 @@ func (ms *metaSequenceCursor) current() sequenceItem {
 }
 
 func (ms *metaSequenceCursor) currentVal() Value {
-	return ReadValue(ms.currentRef(), ms.cs)
+	v := ReadValue(ms.currentRef(), ms.cs)
+	return internalValueFromType(v, v.Type())
 }
 
 func (ms *metaSequenceCursor) currentRef() ref.Ref {

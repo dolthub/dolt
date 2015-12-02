@@ -143,7 +143,8 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 		w2 := newJsonArrayWriter(w.cs)
 		indexType := indexTypeForMetaSequence(tr)
 		tr = fixupType(tr, pkg)
-		ms := internalValueFromType(v, tr)
+		concreteType := tr.Desc.(CompoundDesc).ElemTypes[0]
+		ms := internalValueFromType(v, concreteType) // Dirty: must retrieve internal value by denormalized type
 		for _, tuple := range ms.(metaSequence).data() {
 			w2.writeRef(tuple.ref)
 			w2.writeValue(tuple.value, indexType, pkg)

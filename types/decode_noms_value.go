@@ -101,7 +101,7 @@ func (r *jsonArrayReader) readList(t Type, pkg *Package) Value {
 
 	t = fixupType(t, pkg)
 	// TODO: Skip the List wrapper.
-	return valueFromType(r.cs, newListNoCopy(r.cs, data, t), t)
+	return valueFromType(r.cs, newListLeaf(r.cs, t, data...), t)
 }
 
 func (r *jsonArrayReader) readSet(t Type, pkg *Package) Value {

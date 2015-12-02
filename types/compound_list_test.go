@@ -39,7 +39,7 @@ func TestCompoundListGet(t *testing.T) {
 
 	simpleList := getTestSimpleList()
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
-	cl := NewCompoundList(tr, cs, simpleList...).(compoundList)
+	cl := NewTypedList(cs, tr, simpleList...)
 
 	for i, v := range simpleList {
 		assert.Equal(v, cl.Get(uint64(i)))
@@ -56,7 +56,7 @@ func TestCompoundListIter(t *testing.T) {
 
 	simpleList := getTestSimpleList()
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
-	cl := NewCompoundList(tr, cs, simpleList...).(compoundList)
+	cl := NewTypedList(cs, tr, simpleList...)
 
 	expectIdx := uint64(0)
 	endAt := uint64(listPattern)
@@ -83,7 +83,7 @@ func TestCompoundListIterAll(t *testing.T) {
 
 	simpleList := getTestSimpleList()
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
-	cl := NewCompoundList(tr, cs, simpleList...).(compoundList)
+	cl := NewTypedList(cs, tr, simpleList...)
 
 	expectIdx := uint64(0)
 	cl.IterAll(func(v Value, idx uint64) {
@@ -102,7 +102,7 @@ func TestCompoundListCurAt(t *testing.T) {
 	listLen := func(at int, next func(*metaSequenceCursor) bool) (size int) {
 		cs := chunks.NewMemoryStore()
 		tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
-		cl := NewCompoundList(tr, cs, getTestSimpleList()...).(compoundList)
+		cl := NewTypedList(cs, tr, getTestSimpleList()...).(compoundList)
 		cur, _, _ := cl.cursorAt(uint64(at))
 		for {
 			size += int(ReadValue(cur.currentRef(), cs).(List).Len())
@@ -130,10 +130,10 @@ func TestCompoundListAppend(t *testing.T) {
 	newCompoundList := func(items testSimpleList) compoundList {
 		cs := chunks.NewMemoryStore()
 		tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
-		return NewCompoundList(tr, cs, items...).(compoundList)
+		return NewTypedList(cs, tr, items...).(compoundList)
 	}
 
-	compoundToSimple := func(cl compoundList) (simple testSimpleList) {
+	compoundToSimple := func(cl List) (simple testSimpleList) {
 		cl.IterAll(func(v Value, offset uint64) {
 			simple = append(simple, v)
 		})

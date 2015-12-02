@@ -9,7 +9,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-func TestRef(t *testing.T) {
+func SkipTestRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 

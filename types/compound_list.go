@@ -20,10 +20,11 @@ type compoundList struct {
 }
 
 func buildCompoundList(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
-	return compoundList{metaSequenceObject{tuples, t}, &ref.Ref{}, cs}
+	cl := compoundList{metaSequenceObject{tuples, t}, &ref.Ref{}, cs}
+	return valueFromType(cl.cs, cl, t)
 }
 
-func listAsSequenceItems(ls List) []sequenceItem {
+func listAsSequenceItems(ls listLeaf) []sequenceItem {
 	items := make([]sequenceItem, len(ls.values))
 	for i, v := range ls.values {
 		items[i] = v
@@ -52,7 +53,7 @@ func (cl compoundList) Empty() bool {
 	return false
 }
 
-func (cl compoundList) cursorAt(idx uint64) (cursor *metaSequenceCursor, listLeaf List, start uint64) {
+func (cl compoundList) cursorAt(idx uint64) (cursor *metaSequenceCursor, l listLeaf, start uint64) {
 	d.Chk.True(idx <= cl.Len())
 	cursor, leaf := newMetaSequenceCursor(cl, cl.cs)
 
@@ -74,7 +75,7 @@ func (cl compoundList) cursorAt(idx uint64) (cursor *metaSequenceCursor, listLea
 		leaf = cursor.currentVal()
 	}
 
-	listLeaf = leaf.(List)
+	l = leaf.(listLeaf)
 	start = uint64(chunkStart.(Uint64))
 	return
 }
@@ -84,21 +85,57 @@ func (cl compoundList) Get(idx uint64) Value {
 	return l.Get(idx - start)
 }
 
-func (cl compoundList) Append(vs ...Value) compoundList {
+func (cl compoundList) IterAllP(concurrency int, f listIterAllFunc) {
+	panic("not implemented")
+}
+
+func (cl compoundList) Slice(start uint64, end uint64) List {
+	panic("not implemented")
+}
+
+func (cl compoundList) Map(mf MapFunc) []interface{} {
+	panic("not implemented")
+}
+
+func (cl compoundList) MapP(concurrency int, mf MapFunc) []interface{} {
+	panic("not implemented")
+}
+
+func (cl compoundList) Set(idx uint64, v Value) List {
+	panic("not implemented")
+}
+
+func (cl compoundList) Append(vs ...Value) List {
 	metaCur, leaf, start := cl.cursorAt(cl.Len())
 	seqCur := newSequenceChunkerCursor(metaCur, listAsSequenceItems(leaf), int(cl.Len()-start), readListLeafChunkFn(cl.cs), cl.cs)
 	seq := newSequenceChunker(seqCur, makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), normalizeChunkNoop, normalizeMetaSequenceChunk, newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
 	for _, v := range vs {
 		seq.Append(v)
 	}
-	return seq.Done().(compoundList)
+	return seq.Done().(List)
+}
+
+func (cl compoundList) Filter(cb listFilterCallback) List {
+	panic("not implemented")
+}
+
+func (cl compoundList) Insert(idx uint64, v ...Value) List {
+	panic("not implemented")
+}
+
+func (cl compoundList) Remove(start uint64, end uint64) List {
+	panic("not implemented")
+}
+
+func (cl compoundList) RemoveAt(idx uint64) List {
+	panic("not implemented")
 }
 
 func (cl compoundList) Iter(f listIterFunc) {
 	start := uint64(0)
 
 	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
-		list := l.(List)
+		list := l.(listLeaf)
 		for i, v := range list.values {
 			if f(v, start+uint64(i)) {
 				return true
@@ -114,7 +151,7 @@ func (cl compoundList) IterAll(f listIterAllFunc) {
 	start := uint64(0)
 
 	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
-		list := l.(List)
+		list := l.(listLeaf)
 		for i, v := range list.values {
 			f(v, start+uint64(i))
 		}
@@ -140,7 +177,7 @@ func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 			values[i] = v.(Value)
 		}
 
-		list := List{values, t, &ref.Ref{}, cs}
+		list := valueFromType(cs, listLeaf{values, t, &ref.Ref{}, cs}, t)
 		ref := WriteValue(list, cs)
 		return metaTuple{ref, Uint64(len(values))}, list
 	}
@@ -149,14 +186,6 @@ func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 func readListLeafChunkFn(cs chunks.ChunkStore) readChunkFn {
 	return func(item sequenceItem) []sequenceItem {
 		mt := item.(metaTuple)
-		return listAsSequenceItems(ReadValue(mt.ref, cs).(List))
+		return listAsSequenceItems(ReadValue(mt.ref, cs).(listLeaf))
 	}
-}
-
-func NewCompoundList(t Type, cs chunks.ChunkStore, values ...Value) Value {
-	seq := newEmptySequenceChunker(makeListLeafChunkFn(t, cs), newMetaSequenceChunkFn(t, cs), newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
-	for _, v := range values {
-		seq.Append(v)
-	}
-	return seq.Done().(Value)
 }
