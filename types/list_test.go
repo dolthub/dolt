@@ -188,7 +188,7 @@ func TestListMap(t *testing.T) {
 			values[i] = Int64(i)
 		}
 
-		l := NewList(cs, values...)
+		l := newListLeaf(cs, listType, values...)
 
 		cur := 0
 		mu := sync.Mutex{}
@@ -304,7 +304,7 @@ func TestListIterAllP(t *testing.T) {
 			values[i] = Int64(i)
 		}
 
-		l := NewList(cs, values...)
+		l := newListLeaf(cs, listType, values...)
 
 		cur := 0
 		mu := sync.Mutex{}
@@ -359,7 +359,7 @@ func TestListType(t *testing.T) {
 	assert.True(l.Type().Equals(MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))))
 
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Uint8Kind))
-	l2 := newListNoCopy(cs, []Value{Uint8(0), Uint8(1)}, tr)
+	l2 := newListLeaf(cs, tr, []Value{Uint8(0), Uint8(1)}...)
 	assert.Equal(tr, l2.Type())
 
 	l3 := l2.Slice(0, 1)
