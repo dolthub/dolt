@@ -6,7 +6,7 @@ import (
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/walk"
-	"github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 type dataStoreCommon struct {
