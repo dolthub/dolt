@@ -3,14 +3,12 @@ package types
 import (
 	"crypto/sha1"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/attic-labs/buzhash"
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
 const (
-	objectWindowSize = 8 * sha1.Size
+	objectWindowSize = 8
 	objectPattern    = uint32(1<<6 - 1) // Average size of 64 elements
 )
 
@@ -113,33 +111,10 @@ func getDataFromMetaSequence(v Value) metaSequenceData {
 	panic("not reachable")
 }
 
-type checkHashFn func(h *buzhash.BuzHash, item sequenceItem) bool
-
-type buzHashBoundaryChecker struct {
-	h          *buzhash.BuzHash
-	windowSize int
-	checkHash  checkHashFn
-}
-
-func newBuzHashBoundaryChecker(windowSize int, checkHash checkHashFn) boundaryChecker {
-	return &buzHashBoundaryChecker{buzhash.NewBuzHash(uint32(windowSize)), windowSize, checkHash}
-}
-
-func (b *buzHashBoundaryChecker) Write(item sequenceItem) bool {
-	return b.checkHash(b.h, item)
-}
-
-func (b *buzHashBoundaryChecker) WindowSize() int {
-	return b.windowSize
-}
-
 func newMetaSequenceBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(objectWindowSize, func(h *buzhash.BuzHash, item sequenceItem) bool {
-		mt := item.(metaTuple)
-		digest := mt.ref.Digest()
-		_, err := h.Write(digest[:])
-		d.Chk.NoError(err)
-		return h.Sum32()&objectPattern == objectPattern
+	return newBuzHashBoundaryChecker(objectWindowSize, sha1.Size, objectPattern, func(item sequenceItem) []byte {
+		digest := item.(metaTuple).ref.Digest()
+		return digest[:]
 	})
 }
 

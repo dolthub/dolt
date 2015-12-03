@@ -15,7 +15,7 @@ func (tsl testSimpleList) Get(idx uint64) Value {
 }
 
 func getTestSimpleListLen() int {
-	return int(listPattern * 16)
+	return int(listPattern * 50)
 }
 
 func getTestSimpleList() testSimpleList {
