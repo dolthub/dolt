@@ -66,13 +66,15 @@ func main() {
 		companiesRef = importCompanies(*ds, tempFile.Name())
 	}
 
-	// Commit ref of the companiesRef list
-	_, ok := ds.Commit(ImportDef{
+	imp := ImportDef{
 		ref.FromHash(h).String(),
 		DateDef{time.Now().Format(time.RFC3339)},
 		companiesRef,
-	}.New(ds.Store()))
-	d.Exp.True(ok, "Could not commit due to conflicting edit")
+	}.New(ds.Store())
+
+	// Commit ref of the companiesRef list
+	_, err = ds.Commit(imp)
+	d.Exp.NoError(err)
 }
 
 func importCompanies(ds dataset.Dataset, fileName string) ref.Ref {

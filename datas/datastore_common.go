@@ -6,12 +6,18 @@ import (
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/walk"
+	"github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 type dataStoreCommon struct {
 	chunks.ChunkStore
 	datasets *MapOfStringToRefOfCommit
 }
+
+var (
+	ErrOptimisticLockFailed = errors.New("Optimistic lock failed on datastore Root update")
+	ErrMergeNeeded          = errors.New("Dataset head is not ancestor of commit")
+)
 
 func datasetsFromRef(datasetsRef ref.Ref, cs chunks.ChunkStore) *MapOfStringToRefOfCommit {
 	c := types.ReadValue(datasetsRef, cs).(MapOfStringToRefOfCommit)
@@ -52,12 +58,12 @@ func (ds *dataStoreCommon) CopyMissingChunksP(sourceRef ref.Ref, sink chunks.Chu
 	walk.SomeChunksP(sourceRef, tcs, copyCallback, concurrency)
 }
 
-func (ds *dataStoreCommon) commit(datasetID string, commit Commit) bool {
+func (ds *dataStoreCommon) commit(datasetID string, commit Commit) error {
 	return ds.doCommit(datasetID, commit)
 }
 
-// doCommit manages concurrent access the single logical piece of mutable state: the current head. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will fail if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
-func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) bool {
+// doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
+func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) error {
 	currentRootRef := ds.Root()
 	var currentDatasets MapOfStringToRefOfCommit
 	if ds.datasets != nil && currentRootRef == ds.datasets.Ref() {
@@ -80,10 +86,10 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) bool {
 		if hasHead {
 			// Allow only fast-forward commits.
 			if commitRef.Equals(currentHeadRef) {
-				return true
+				return nil
 			}
 			if !descendsFrom(commit, currentHeadRef, ds) {
-				return false
+				return ErrMergeNeeded
 			}
 		}
 	}
@@ -92,7 +98,11 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) bool {
 	newRootRef := types.WriteValue(currentDatasets, ds)
 
 	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
-	return ds.UpdateRoot(newRootRef, currentRootRef)
+	if ds.UpdateRoot(newRootRef, currentRootRef) {
+		return nil
+	} else {
+		return ErrOptimisticLockFailed
+	}
 }
 
 func descendsFrom(commit Commit, currentHeadRef RefOfCommit, cs chunks.ChunkStore) bool {

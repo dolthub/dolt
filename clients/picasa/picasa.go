@@ -86,8 +86,8 @@ func main() {
 	*user = user.SetRefreshToken(refreshToken)
 	userRef := types.WriteValue(user, ds.Store())
 	fmt.Printf("userRef: %s\n", userRef)
-	_, ok := ds.Commit(NewRefOfUser(userRef))
-	d.Exp.True(ok, "Could not commit due to conflicting edit")
+	_, err := ds.Commit(NewRefOfUser(userRef))
+	d.Exp.NoError(err)
 }
 
 func picasaUsage() {

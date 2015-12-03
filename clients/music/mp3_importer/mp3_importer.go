@@ -39,11 +39,11 @@ func addMp3(ds *dataset.Dataset, filename string) {
 		Mp3:    types.NewBlob(bufio.NewReader(mp3_file), ds.Store()),
 	}.New(ds.Store())
 	songs := readSongsFromDataset(ds).Append(new_song)
-	if _, ok := ds.Commit(songs); ok {
+	if _, err := ds.Commit(songs); err == nil {
 		fmt.Println("Successfully committed", filename)
 		printSong(new_song)
 	} else {
-		log.Fatalln("Failed to commit", filename)
+		log.Fatalf("Failed to commit: %s, error: %s\n", filename, err)
 	}
 }
 

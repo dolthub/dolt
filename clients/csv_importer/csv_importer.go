@@ -178,8 +178,8 @@ func main() {
 	listType := types.MakeCompoundType(types.ListKind, refType)
 
 	value := types.NewTypedList(ds.Store(), listType, refs...)
-	_, ok := ds.Commit(value)
-	d.Exp.True(ok, "Could not commit due to conflicting edit")
+	_, err = ds.Commit(value)
+	d.Exp.NoError(err)
 }
 
 // Returns the rune contained in *delimiter or an error.

@@ -22,9 +22,9 @@ func newLocalDataStore(cs chunks.ChunkStore) *LocalDataStore {
 	return &LocalDataStore{dataStoreCommon{cs, datasetsFromRef(rootRef, cs)}}
 }
 
-func (lds *LocalDataStore) Commit(datasetID string, commit Commit) (DataStore, bool) {
-	ok := lds.commit(datasetID, commit)
-	return newLocalDataStore(lds.ChunkStore), ok
+func (lds *LocalDataStore) Commit(datasetID string, commit Commit) (DataStore, error) {
+	err := lds.commit(datasetID, commit)
+	return newLocalDataStore(lds.ChunkStore), err
 }
 
 // Copies all chunks reachable from (and including)|sourceRef| but not reachable from (and including) |exclude| in |source| to |sink|

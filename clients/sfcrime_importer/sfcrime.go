@@ -155,8 +155,8 @@ func main() {
 	}
 
 	ref := types.WriteValue(incidentRefs, ds.Store())
-	_, ok := ds.Commit(types.NewRef(ref))
-	d.Exp.True(ok, "Could not commit due to conflicting edit")
+	_, err = ds.Commit(types.NewRef(ref))
+	d.Exp.NoError(err)
 
 	if !*quietFlag {
 		fmt.Printf("Commit completed, elaspsed time: %.2f secs\n", time.Now().Sub(start).Seconds())

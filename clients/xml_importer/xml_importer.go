@@ -130,8 +130,8 @@ func main() {
 		}
 
 		if !*noIO {
-			_, ok := ds.Commit(refs.New(ds.Store()))
-			d.Exp.True(ok, "Could not commit due to conflicting edit")
+			_, err := ds.Commit(refs.New(ds.Store()))
+			d.Exp.NoError(err)
 		}
 
 		util.MaybeWriteMemProfile()
