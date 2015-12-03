@@ -1,7 +1,8 @@
 package types
 
 import (
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/attic-labs/buzhash"
+	"crypto/sha1"
+
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -161,11 +162,9 @@ func (cl compoundList) IterAll(f listIterAllFunc) {
 }
 
 func newListLeafBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(listWindowSize, func(h *buzhash.BuzHash, item sequenceItem) bool {
-		v := item.(Value)
-		digest := v.Ref().Digest()
-		b := digest[0]
-		return h.HashByte(b)&listPattern == listPattern
+	return newBuzHashBoundaryChecker(listWindowSize, sha1.Size, listPattern, func(item sequenceItem) []byte {
+		digest := item.(Value).Ref().Digest()
+		return digest[:]
 	})
 }
 

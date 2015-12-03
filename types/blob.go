@@ -3,7 +3,6 @@ package types
 import (
 	"io"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/attic-labs/buzhash"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 )
@@ -36,9 +35,8 @@ func NewMemoryBlob(r io.Reader) Blob {
 }
 
 func newBlobLeafBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(blobWindowSize, func(h *buzhash.BuzHash, item sequenceItem) bool {
-		b := item.(byte)
-		return h.HashByte(b)&blobPattern == blobPattern
+	return newBuzHashBoundaryChecker(blobWindowSize, 1, blobPattern, func(item sequenceItem) []byte {
+		return []byte{item.(byte)}
 	})
 }
 
