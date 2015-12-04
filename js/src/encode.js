@@ -6,12 +6,10 @@ import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {encode as encodeBase64} from './base64.js';
-import {indexTypeForMetaSequence} from './decode.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
 import {lookupPackage, Package} from './package.js';
 import {makePrimitiveType, EnumDesc, StructDesc, Type} from './type.js';
-import {MetaSequence} from './meta_sequence.js';
 
 const typedTag = 't ';
 
@@ -68,7 +66,6 @@ class JsonArrayWriter {
         if (pkg && this._cs) {
           writeValue(pkg, pkg.type, this._cs);
         }
-        break;
       }
     }
   }
@@ -78,31 +75,9 @@ class JsonArrayWriter {
     this.writeValue(v, t);
   }
 
-  maybeWriteMetaSequence(v: any, t: Type, pkg: ?Package): boolean {
-    if (!(v instanceof MetaSequence)) {
-      this.write(false);
-      return false;
-    }
-
-    this.write(true);
-    let w2 = new JsonArrayWriter(this._cs);
-    let indexType = indexTypeForMetaSequence(t);
-    for (let i = 0; i < v.tuples.length; i++) {
-      let tuple = v.tuples[i];
-      w2.writeRef(tuple.ref);
-      w2.writeValue(tuple.value, indexType, pkg);
-    }
-    this.write(w2.array);
-    return true;
-  }
-
   writeValue(v: any, t: Type, pkg: ?Package) {
     switch (t.kind) {
       case Kind.Blob:
-        if (this.maybeWriteMetaSequence(v, t, pkg)) {
-          break;
-        }
-
         this.writeBlob(v);
         break;
       case Kind.Bool:
@@ -120,10 +95,6 @@ class JsonArrayWriter {
         this.write(v); // TODO: Verify value fits in type
         break;
       case Kind.List: {
-        if (this.maybeWriteMetaSequence(v, t, pkg)) {
-          break;
-        }
-
         invariant(Array.isArray(v));
         let w2 = new JsonArrayWriter(this._cs);
         let elemType = t.elemTypes[0];
@@ -132,10 +103,6 @@ class JsonArrayWriter {
         break;
       }
       case Kind.Map: {
-        if (this.maybeWriteMetaSequence(v, t, pkg)) {
-          break;
-        }
-
         invariant(v instanceof Map);
         let w2 = new JsonArrayWriter(this._cs);
         let keyType = t.elemTypes[0];
@@ -171,10 +138,6 @@ class JsonArrayWriter {
         break;
       }
       case Kind.Set: {
-        if (this.maybeWriteMetaSequence(v, t, pkg)) {
-          break;
-        }
-
         invariant(v instanceof Set);
         let w2 = new JsonArrayWriter(this._cs);
         let elemType = t.elemTypes[0];

@@ -265,7 +265,6 @@ function makePrimitiveType(k: NomsKind): Type {
 function makeCompoundType(k: NomsKind, ...elemTypes: Array<Type>): Type {
   if (elemTypes.length === 1) {
     invariant(k !== Kind.Map, 'Map requires 2 element types');
-    invariant(k === Kind.Ref || k === Kind.List || k === Kind.Set || k === Kind.MetaSequence);
   } else {
     invariant(k === Kind.Map, 'Only Map can have multiple element types');
     invariant(elemTypes.length === 2, 'Map requires 2 element types');
