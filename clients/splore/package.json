@@ -30,9 +30,8 @@
     "watchify": "^3.6"
   },
   "scripts": {
-    "start": "NOMS_SERVER=http://localhost:8000 watchify -o out.js -v -d node_modules/babel-regenerator-runtime/runtime.js main.js",
-    "build": "NOMS_SERVER=http://localhost:8000 ./build.sh",
-    "prod_build": "NOMS_SERVER=http://ds.noms.io ./build.sh",
+    "start": "watchify -o out.js -v -d node_modules/babel-regenerator-runtime/runtime.js main.js",
+    "build": "./.npm_build_helper.sh",
     "test": "rm -f out.js && eslint *.js && flow"
   },
   "browserify": {
