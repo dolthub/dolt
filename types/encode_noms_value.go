@@ -57,49 +57,66 @@ func (w *jsonArrayWriter) writeTypeAsTag(t Type) {
 		if pkg != nil {
 			writeChildValueInternal(*pkg, w.cs)
 		}
-	case MetaSequenceKind:
-		concreteType := t.Desc.(CompoundDesc).ElemTypes[0]
-		w.writeTypeAsTag(concreteType)
 	}
-}
-
-func getNormalizedType(v Value) Type {
-	tr := v.Type()
-	v = internalValueFromType(v, tr)
-	if _, ok := v.(metaSequence); ok {
-		return MakeCompoundType(MetaSequenceKind, tr)
-	}
-
-	return tr
 }
 
 func (w *jsonArrayWriter) writeTopLevelValue(v Value) {
-	tr := getNormalizedType(v)
+	tr := v.Type()
 	w.writeTypeAsTag(tr)
 	w.writeValue(v, tr, nil)
+}
+
+func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr Type, pkg *Package) bool {
+	ms, ok := v.(metaSequence)
+	if !ok {
+		w.write(false) // not a meta sequence
+		return false
+	}
+
+	w.write(true) // a meta sequence
+	w2 := newJsonArrayWriter(w.cs)
+	indexType := indexTypeForMetaSequence(tr)
+	for _, tuple := range ms.(metaSequence).data() {
+		w2.writeRef(tuple.ref)
+		w2.writeValue(tuple.value, indexType, pkg)
+	}
+	w.write(w2.toArray())
+	return true
 }
 
 func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 	switch tr.Kind() {
 	case BlobKind:
+		if w.maybeWriteMetaSequence(v, tr, pkg) {
+			return
+		}
+
 		w.writeBlob(v.(Blob))
 	case BoolKind, Float32Kind, Float64Kind, Int16Kind, Int32Kind, Int64Kind, Int8Kind, Uint16Kind, Uint32Kind, Uint64Kind, Uint8Kind:
 		w.write(v.(primitive).ToPrimitive())
 	case ListKind:
+		tr = fixupType(tr, pkg)
+		v = internalValueFromType(v, tr)
+		if w.maybeWriteMetaSequence(v, tr, pkg) {
+			return
+		}
+
 		w2 := newJsonArrayWriter(w.cs)
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
-		tr = fixupType(tr, pkg)
-		l := internalValueFromType(v, tr)
-		l.(List).IterAll(func(v Value, i uint64) {
+		v.(List).IterAll(func(v Value, i uint64) {
 			w2.writeValue(v, elemType, pkg)
 		})
 		w.write(w2.toArray())
 	case MapKind:
+		tr = fixupType(tr, pkg)
+		v = internalValueFromType(v, tr)
+		if w.maybeWriteMetaSequence(v, tr, pkg) {
+			return
+		}
+
 		w2 := newJsonArrayWriter(w.cs)
 		elemTypes := tr.Desc.(CompoundDesc).ElemTypes
-		tr = fixupType(tr, pkg)
-		m := internalValueFromType(v, tr)
-		m.(Map).IterAll(func(k, v Value) {
+		v.(Map).IterAll(func(k, v Value) {
 			w2.writeValue(k, elemTypes[0], pkg)
 			w2.writeValue(v, elemTypes[1], pkg)
 		})
@@ -119,11 +136,15 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 	case RefKind:
 		w.writeRef(v.(RefBase).TargetRef())
 	case SetKind:
+		tr = fixupType(tr, pkg)
+		v = internalValueFromType(v, tr)
+		if w.maybeWriteMetaSequence(v, tr, pkg) {
+			return
+		}
+
 		w2 := newJsonArrayWriter(w.cs)
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
-		tr = fixupType(tr, pkg)
-		s := internalValueFromType(v, tr)
-		s.(Set).IterAll(func(v Value) {
+		v.(Set).IterAll(func(v Value) {
 			w2.writeValue(v, elemType, pkg)
 		})
 		w.write(w2.toArray())
@@ -139,17 +160,6 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 	case ValueKind:
 		w.writeTypeAsTag(v.Type())
 		w.writeValue(v, v.Type(), pkg)
-	case MetaSequenceKind:
-		w2 := newJsonArrayWriter(w.cs)
-		indexType := indexTypeForMetaSequence(tr)
-		tr = fixupType(tr, pkg)
-		concreteType := tr.Desc.(CompoundDesc).ElemTypes[0]
-		ms := internalValueFromType(v, concreteType) // Dirty: must retrieve internal value by denormalized type
-		for _, tuple := range ms.(metaSequence).data() {
-			w2.writeRef(tuple.ref)
-			w2.writeValue(tuple.value, indexType, pkg)
-		}
-		w.write(w2.toArray())
 	default:
 		d.Chk.Fail("Unknown NomsKind")
 	}
@@ -166,7 +176,7 @@ func (w *jsonArrayWriter) writeTypeAsValue(v Type) {
 			w2.write(id)
 		}
 		w.write(w2.toArray())
-	case ListKind, MapKind, RefKind, SetKind, MetaSequenceKind:
+	case ListKind, MapKind, RefKind, SetKind:
 		w2 := newJsonArrayWriter(w.cs)
 		for _, elemType := range v.Desc.(CompoundDesc).ElemTypes {
 			w2.writeTypeAsValue(elemType)

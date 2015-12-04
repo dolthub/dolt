@@ -28,7 +28,6 @@ const (
 	TypeKind
 	UnresolvedKind
 	PackageKind
-	MetaSequenceKind
 )
 
 // IsPrimitiveKind returns true if k represents a Noms primitive type, which excludes collections (List, Map, Set), Refs, Enums, Structs, Symbolic and Unresolved types.

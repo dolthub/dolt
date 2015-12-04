@@ -166,7 +166,7 @@ func MakePrimitiveTypeByString(p string) Type {
 func MakeCompoundType(kind NomsKind, elemTypes ...Type) Type {
 	if len(elemTypes) == 1 {
 		d.Chk.NotEqual(MapKind, kind, "MapKind requires 2 element types.")
-		d.Chk.True(kind == RefKind || kind == ListKind || kind == SetKind || kind == MetaSequenceKind)
+		d.Chk.True(kind == RefKind || kind == ListKind || kind == SetKind)
 	} else {
 		d.Chk.Equal(MapKind, kind)
 		d.Chk.Len(elemTypes, 2, "MapKind requires 2 element types.")
@@ -196,7 +196,7 @@ func buildType(n string, desc TypeDesc) Type {
 		return Type{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
 	}
 	switch desc.Kind() {
-	case ListKind, RefKind, SetKind, MapKind, EnumKind, StructKind, UnresolvedKind, MetaSequenceKind:
+	case ListKind, RefKind, SetKind, MapKind, EnumKind, StructKind, UnresolvedKind:
 		return Type{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
 	default:
 		d.Exp.Fail("Unrecognized Kind:", "%v", desc.Kind())

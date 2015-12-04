@@ -1,15 +1,17 @@
 /* @flow */
 
 import Chunk from './chunk.js';
+import CompoundList from './compound_list.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {decode as decodeBase64} from './base64.js';
-import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, makeUnresolvedType, StructDesc, Type} from './type.js';
+import {CompoundDesc, Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, makeUnresolvedType, StructDesc, Type} from './type.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
 import {lookupPackage, Package, readPackage} from './package.js';
+import {MetaTuple} from './meta_sequence.js';
 
 const typedTag = 't ';
 const blobTag = 'b ';
@@ -138,6 +140,29 @@ class JsonArrayReader {
     return this.readNumber();
   }
 
+  async maybeReadMetaSequence(t: Type, pkg: ?Package): Promise<any> {
+    if (!this.readBool()) {
+      return null;
+    }
+
+    let r2 = new JsonArrayReader(this.readArray(), this._cs);
+    let data: Array<MetaTuple> = [];
+    let indexType = indexTypeForMetaSequence(t);
+    while (!r2.atEnd()) {
+      let ref = r2.readRef();
+      let v = await r2.readValueWithoutTag(indexType, pkg);
+      data.push(new MetaTuple(ref, v));
+    }
+
+    switch (t.kind) {
+      // TODO: case Kind.Blob, Kind.Set, Kind.Map
+      case Kind.List:
+        return new CompoundList(this._cs, t, data);
+      default:
+        throw new Error('unreached');
+    }
+  }
+
   readPackage(t: Type, pkg: ?Package): Package {
     let r2 = new JsonArrayReader(this.readArray(), this._cs);
     let types = [];
@@ -159,11 +184,17 @@ class JsonArrayReader {
     return this.readValueWithoutTag(t);
   }
 
-  readValueWithoutTag(t: Type, pkg: ?Package = null): Promise<any> {
+  async readValueWithoutTag(t: Type, pkg: ?Package = null): Promise<any> {
     // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
       case Kind.Blob:
+        let ms = await this.maybeReadMetaSequence(t, pkg);
+        if (ms) {
+          return ms;
+        }
+
         return this.readBlob();
+
       case Kind.Bool:
         return Promise.resolve(this.readBool());
       case Kind.Uint8:
@@ -184,10 +215,20 @@ class JsonArrayReader {
         return this.readValueWithoutTag(t2, pkg);
       }
       case Kind.List: {
+        let ms = await this.maybeReadMetaSequence(t, pkg);
+        if (ms) {
+          return ms;
+        }
+
         let r2 = new JsonArrayReader(this.readArray(), this._cs);
         return r2.readList(t, pkg);
       }
       case Kind.Map: {
+        let ms = await this.maybeReadMetaSequence(t, pkg);
+        if (ms) {
+          return ms;
+        }
+
         let r2 = new JsonArrayReader(this.readArray(), this._cs);
         return r2.readMap(t, pkg);
       }
@@ -198,6 +239,11 @@ class JsonArrayReader {
         // for refs.
         return Promise.resolve(this.readRef());
       case Kind.Set: {
+        let ms = await this.maybeReadMetaSequence(t, pkg);
+        if (ms) {
+          return ms;
+        }
+
         let r2 = new JsonArrayReader(this.readArray(), this._cs);
         return r2.readSet(t, pkg);
       }
@@ -327,6 +373,22 @@ class JsonArrayReader {
   }
 }
 
+function indexTypeForMetaSequence(t: Type): Type {
+  switch (t.kind) {
+    case Kind.Map:
+    case Kind.Set: {
+      let desc = t.desc;
+      invariant(desc instanceof CompoundDesc);
+      return desc.elemTypes[0];
+    }
+    case Kind.Blob:
+    case Kind.List:
+      return makePrimitiveType(Kind.Uint64);
+  }
+
+  throw new Error('Not reached');
+}
+
 function decodeNomsValue(chunk: Chunk, cs: ChunkStore): Promise<any> {
   let tag = new Chunk(new Uint8Array(chunk.data.buffer, 0, 2)).toString();
 
@@ -353,4 +415,4 @@ export async function readValue(r: Ref, cs: ChunkStore): Promise<any> {
   return decodeNomsValue(chunk, cs);
 }
 
-export {decodeNomsValue, JsonArrayReader, readValue};
+export {decodeNomsValue, indexTypeForMetaSequence, JsonArrayReader, readValue};

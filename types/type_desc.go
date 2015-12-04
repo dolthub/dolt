@@ -149,8 +149,6 @@ func (c CompoundDesc) Describe() string {
 		return "Ref<" + descElems() + ">"
 	case SetKind:
 		return "Set<" + descElems() + ">"
-	case MetaSequenceKind:
-		return "Meta<" + descElems() + ">"
 	default:
 		panic(fmt.Errorf("Kind is not compound: %v", c.kind))
 	}

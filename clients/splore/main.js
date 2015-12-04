@@ -4,7 +4,7 @@ import {layout, NodeGraph, TreeNode} from './buchheim.js';
 import Layout from './layout.js';
 import React from 'react'; //eslint-disable-line no-unused-vars
 import ReactDOM from 'react-dom';
-import {readValue, HttpStore, Ref, Struct} from 'noms';
+import {CompoundList, readValue, HttpStore, Ref, Struct} from 'noms';
 
 let data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
@@ -100,6 +100,19 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
           data.nodes[kid].isOpen = true;
 
           process(ref, v, kid);
+        } else {
+          throw new Error('No kid id.');
+        }
+      });
+    } else if (val instanceof CompoundList) {
+      data.nodes[id] = {name: 'MetaList'};
+      val.tuples.forEach(tuple => {
+        let kid = process(ref, tuple.value, id);
+        if (kid) {
+          // Start map keys open, just makes it easier to use.
+          data.nodes[kid].isOpen = true;
+
+          process(ref, tuple.ref, kid);
         } else {
           throw new Error('No kid id.');
         }
