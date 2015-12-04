@@ -3,7 +3,6 @@ package runner
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,16 +16,6 @@ type Env map[string]string
 func (e Env) toStrings() (out []string) {
 	for n, v := range e {
 		out = append(out, fmt.Sprintf("%s=%s", n, v))
-	}
-	return
-}
-
-// So that Failures implements the error interface.
-func (f Failures) Error() (msg string) {
-	for _, e := range f {
-		log, err := ioutil.ReadAll(e.Log)
-		d.Chk.NoError(err, "Error while formatting Failures: %v", err)
-		msg += fmt.Sprintf("go run %s failed with %v:\n%s\n\n", e.Path, e.Err, log)
 	}
 	return
 }

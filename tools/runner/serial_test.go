@@ -73,7 +73,7 @@ func (suite *SerialRunnerTestSuite) TestEnvVars() {
 	}
 }
 
-func (suite *ConcurrentRunnerTestSuite) TestFailure() {
+func (suite *SerialRunnerTestSuite) TestFailure() {
 	type testCase struct {
 		path, expected string
 	}
