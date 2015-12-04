@@ -14,7 +14,7 @@ type boundaryChecker interface {
 type newBoundaryCheckerFn func() boundaryChecker
 
 type sequenceChunker struct {
-	cur                        sequenceCursor
+	cur                        *sequenceCursor
 	parent                     *sequenceChunker
 	current, pendingFirst      []sequenceItem
 	makeChunk, parentMakeChunk makeChunkFn
@@ -37,7 +37,7 @@ func newEmptySequenceChunker(makeChunk, parentMakeChunk makeChunkFn, boundaryChk
 	return newSequenceChunker(nil, makeChunk, parentMakeChunk, normalizeChunkNoop, normalizeChunkNoop, boundaryChk, newBoundaryChecker)
 }
 
-func newSequenceChunker(cur sequenceCursor, makeChunk, parentMakeChunk makeChunkFn, nzeChunk, parentNzeChunk normalizeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
+func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChunkFn, nzeChunk, parentNzeChunk normalizeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
 	d.Chk.NotNil(makeChunk)
 	d.Chk.NotNil(parentMakeChunk)
 	d.Chk.NotNil(nzeChunk)
@@ -57,15 +57,15 @@ func newSequenceChunker(cur sequenceCursor, makeChunk, parentMakeChunk makeChunk
 
 	if cur != nil {
 		// Eagerly create a chunker for each level of the existing tree. This is correct while sequences can only ever append, and therefore the tree can only ever grow in height, but generally speaking the tree can also shrink - due to both removals and changes - and in that situation we can't simply create every meta-node that was in the cursor. If we did that, we'd end up with meta-nodes with only a single entry, which is illegal.
-		if cur.getParent() != nil {
+		if cur.parent != nil {
 			seq.createParent()
 		}
 		// Prime the chunker into the state it would be if all items in the sequence had been appended one at a time.
-		for _, item := range cursorGetMaxNPrevItems(cur, boundaryChk.WindowSize()) {
+		for _, item := range cur.maxNPrevItems(boundaryChk.WindowSize()) {
 			boundaryChk.Write(item)
 		}
 		// Reconstruct this entire chunk.
-		seq.current = nzeChunk(cursorGetMaxNPrevItems(cur, cur.indexInChunk()))
+		seq.current = nzeChunk(cur.maxNPrevItems(cur.indexInChunk()))
 	}
 
 	return seq
@@ -86,10 +86,10 @@ func (seq *sequenceChunker) Append(item sequenceItem) {
 
 func (seq *sequenceChunker) createParent() {
 	d.Chk.True(seq.parent == nil)
-	var curParent sequenceCursor
-	if seq.cur != nil {
-		d.Chk.NotNil(seq.cur)
-		curParent = seq.cur.getParent() // this will be nil if seq.cur points to the top of the chunked tree
+	var curParent *sequenceCursor
+	// seq.cur will be nil if it points to the root of the chunked tree.
+	if seq.cur != nil && seq.cur.parent != nil {
+		curParent = seq.cur.parent.clone()
 	}
 	seq.parent = newSequenceChunker(curParent, seq.parentMakeChunk, seq.parentMakeChunk, seq.parentNzeChunk, seq.parentNzeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
 }

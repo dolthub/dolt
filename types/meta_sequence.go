@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -130,4 +131,48 @@ func normalizeMetaSequenceChunk(in []sequenceItem) (out []sequenceItem) {
 		offset = mt.uint64Value()
 	}
 	return
+}
+
+// Creates a sequenceCursor pointing to the first metaTuple in a metaSequence, and returns that cursor plus the leaf Value referenced from that metaTuple.
+func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkStore) (*sequenceCursor, Value) {
+	d.Chk.NotNil(root)
+
+	newCursor := func(parent *sequenceCursor, ms metaSequence) *sequenceCursor {
+		return &sequenceCursor{parent, ms, 0, ms.tupleCount(), func(item sequenceItem, idx int) sequenceItem {
+			return item.(metaSequence).tupleAt(idx)
+		}, func(item sequenceItem) (sequenceItem, int) {
+			ms := readMetaTupleValue(item, cs).(metaSequence)
+			return ms, ms.tupleCount()
+		}}
+	}
+
+	cursors := []*sequenceCursor{newCursor(nil, root)}
+	for {
+		cursor := cursors[len(cursors)-1]
+		val := readMetaTupleValue(cursor.current(), cs)
+		if ms, ok := val.(metaSequence); ok {
+			cursors = append(cursors, newCursor(cursor, ms))
+		} else {
+			return cursor, val
+		}
+	}
+
+	panic("not reachable")
+}
+
+func readMetaTupleValue(item sequenceItem, cs chunks.ChunkStore) Value {
+	return ReadValue(item.(metaTuple).ref, cs)
+}
+
+func iterateMetaSequenceLeaf(ms metaSequence, cs chunks.ChunkStore, cb func(Value) bool) {
+	cursor, v := newMetaSequenceCursor(ms, cs)
+	for {
+		if cb(v) || !cursor.advance() {
+			return
+		}
+
+		v = readMetaTupleValue(cursor.current(), cs)
+	}
+
+	panic("not reachable")
 }

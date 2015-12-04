@@ -99,13 +99,13 @@ func TestCompoundListCurAt(t *testing.T) {
 	}
 	assert := assert.New(t)
 
-	listLen := func(at int, next func(*metaSequenceCursor) bool) (size int) {
+	listLen := func(at int, next func(*sequenceCursor) bool) (size int) {
 		cs := chunks.NewMemoryStore()
 		tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 		cl := NewTypedList(cs, tr, getTestSimpleList()...).(compoundList)
 		cur, _, _ := cl.cursorAt(uint64(at))
 		for {
-			size += int(ReadValue(cur.currentRef(), cs).(List).Len())
+			size += int(readMetaTupleValue(cur.current(), cs).(List).Len())
 			if !next(cur) {
 				return
 			}
@@ -113,10 +113,10 @@ func TestCompoundListCurAt(t *testing.T) {
 		panic("not reachable")
 	}
 
-	assert.Equal(getTestSimpleListLen(), listLen(0, func(cur *metaSequenceCursor) bool {
+	assert.Equal(getTestSimpleListLen(), listLen(0, func(cur *sequenceCursor) bool {
 		return cur.advance()
 	}))
-	assert.Equal(getTestSimpleListLen(), listLen(getTestSimpleListLen(), func(cur *metaSequenceCursor) bool {
+	assert.Equal(getTestSimpleListLen(), listLen(getTestSimpleListLen(), func(cur *sequenceCursor) bool {
 		return cur.retreat()
 	}))
 }
