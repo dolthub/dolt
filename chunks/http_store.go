@@ -72,15 +72,16 @@ func (rrq *readBatch) Close() error {
 }
 
 type HttpStore struct {
-	host       *url.URL
-	httpClient *http.Client
-	hasQueue   chan hasRequest
-	readQueue  chan readRequest
-	writeQueue chan Chunk
-	reqLimiter chan struct{}
-	wg         *sync.WaitGroup
-	written    map[ref.Ref]bool
-	wmu        *sync.Mutex
+	host         *url.URL
+	httpClient   *http.Client
+	readQueue    chan readRequest
+	hasQueue     chan hasRequest
+	writeQueue   chan Chunk
+	finishedChan chan struct{}
+	wg           *sync.WaitGroup
+	wgFinished   *sync.WaitGroup
+	written      map[ref.Ref]bool
+	wmu          *sync.Mutex
 }
 
 func NewHttpStore(host string) *HttpStore {
@@ -89,27 +90,20 @@ func NewHttpStore(host string) *HttpStore {
 	d.Exp.True(u.Scheme == "http" || u.Scheme == "https")
 	d.Exp.Equal(*u, url.URL{Scheme: u.Scheme, Host: u.Host})
 	client := &HttpStore{
-		host:       u,
-		httpClient: makeHttpClient(),
-		hasQueue:   make(chan hasRequest, hasBufferSize),
-		readQueue:  make(chan readRequest, readBufferSize),
-		writeQueue: make(chan Chunk, writeBufferSize),
-		reqLimiter: make(chan struct{}, requestLimit),
-		wg:         &sync.WaitGroup{},
-		written:    map[ref.Ref]bool{},
-		wmu:        &sync.Mutex{},
+		host:         u,
+		httpClient:   makeHttpClient(),
+		readQueue:    make(chan readRequest, readBufferSize),
+		hasQueue:     make(chan hasRequest, hasBufferSize),
+		writeQueue:   make(chan Chunk, writeBufferSize),
+		finishedChan: make(chan struct{}),
+		wg:           &sync.WaitGroup{},
+		wgFinished:   &sync.WaitGroup{},
+		written:      map[ref.Ref]bool{},
+		wmu:          &sync.Mutex{},
 	}
 
 	for i := 0; i < requestLimit; i++ {
-		go client.sendReadRequests()
-	}
-
-	for i := 0; i < requestLimit; i++ {
-		go client.sendWriteRequests()
-	}
-
-	for i := 0; i < requestLimit; i++ {
-		go client.sendHasRequests()
+		go client.batchRequests()
 	}
 
 	return client
@@ -121,65 +115,61 @@ func (c *HttpStore) Host() *url.URL {
 
 func (c *HttpStore) Get(r ref.Ref) Chunk {
 	ch := make(chan Chunk)
+	c.wg.Add(1)
 	c.readQueue <- readRequest{r, ch}
 	return <-ch
 }
 
-func (c *HttpStore) sendReadRequests() {
-	for req := range c.readQueue {
-		reqs := readBatch{}
-		refs := map[ref.Ref]bool{}
+func (c *HttpStore) sendReadRequests(req readRequest) {
+	batch := readBatch{}
+	refs := map[ref.Ref]bool{}
 
-		addReq := func(req readRequest) {
-			reqs[req.r] = append(reqs[req.r], req.ch)
-			refs[req.r] = true
-		}
-		addReq(req)
-
-	loop:
-		for {
-			select {
-			case req := <-c.readQueue:
-				addReq(req)
-			default:
-				break loop
-			}
-		}
-
-		c.getRefs(refs, &reqs)
-		reqs.Close()
+	addReq := func(req readRequest) {
+		batch[req.r] = append(batch[req.r], req.ch)
+		refs[req.r] = true
+		c.wg.Done()
 	}
+
+	addReq(req)
+	for done := false; !done; {
+		select {
+		case req := <-c.readQueue:
+			addReq(req)
+		default:
+			done = true
+		}
+	}
+	c.getRefs(refs, &batch)
+	batch.Close()
 }
 
 func (c *HttpStore) Has(ref ref.Ref) bool {
 	ch := make(chan bool)
+	c.wg.Add(1)
 	c.hasQueue <- hasRequest{ref, ch}
 	return <-ch
 }
 
-func (c *HttpStore) sendHasRequests() {
-	for req := range c.hasQueue {
-		reqs := hasBatch{}
-		refs := map[ref.Ref]bool{}
+func (c *HttpStore) sendHasRequests(req hasRequest) {
+	batch := hasBatch{}
+	refs := map[ref.Ref]bool{}
 
-		addReq := func(req hasRequest) {
-			reqs[req.r] = append(reqs[req.r], req.ch)
-			refs[req.r] = true
-		}
-		addReq(req)
-
-	loop:
-		for {
-			select {
-			case req := <-c.hasQueue:
-				addReq(req)
-			default:
-				break loop
-			}
-		}
-
-		c.getHasRefs(refs, reqs)
+	addReq := func(req hasRequest) {
+		batch[req.r] = append(batch[req.r], req.ch)
+		refs[req.r] = true
+		c.wg.Done()
 	}
+
+	addReq(req)
+	for done := false; !done; {
+		select {
+		case req := <-c.hasQueue:
+			addReq(req)
+		default:
+			done = true
+		}
+	}
+	c.getHasRefs(refs, batch)
 }
 
 func (c *HttpStore) Put(chunk Chunk) {
@@ -195,31 +185,39 @@ func (c *HttpStore) Put(chunk Chunk) {
 	c.writeQueue <- chunk
 }
 
-func (c *HttpStore) sendWriteRequests() {
-	for chunk := range c.writeQueue {
-		chs := make([]Chunk, 0)
-		chs = append(chs, chunk)
+func (c *HttpStore) sendWriteRequests(chunk Chunk) {
+	chunks := []Chunk{}
 
-	loop:
-		for {
-			select {
-			case chunk := <-c.writeQueue:
-				chs = append(chs, chunk)
-			default:
-				break loop
-			}
+	chunks = append(chunks, chunk)
+	for done := false; !done; {
+		select {
+		case chunk := <-c.writeQueue:
+			chunks = append(chunks, chunk)
+		default:
+			done = true
 		}
-
-		c.postRefs(chs)
-		c.wg.Add(-len(chs))
 	}
+
+	c.wg.Add(-len(chunks))
+	c.postRefs(chunks)
 }
 
-func (c *HttpStore) doRequest(req *http.Request) (*http.Response, error) {
-	c.reqLimiter <- struct{}{}
-	res, err := c.httpClient.Do(req)
-	<-c.reqLimiter
-	return res, err
+func (c *HttpStore) batchRequests() {
+	c.wgFinished.Add(1)
+	defer c.wgFinished.Done()
+
+	for done := false; !done; {
+		select {
+		case req := <-c.hasQueue:
+			c.sendHasRequests(req)
+		case req := <-c.readQueue:
+			c.sendReadRequests(req)
+		case chunk := <-c.writeQueue:
+			c.sendWriteRequests(chunk)
+		case <-c.finishedChan:
+			done = true
+		}
+	}
 }
 
 func (c *HttpStore) postRefs(chs []Chunk) {
@@ -240,7 +238,7 @@ func (c *HttpStore) postRefs(chs []Chunk) {
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Content-Type", "application/octet-stream")
 
-	res, err := c.doRequest(req)
+	res, err := c.httpClient.Do(req)
 	d.Chk.NoError(err)
 
 	d.Chk.Equal(res.StatusCode, http.StatusCreated, "Unexpected response: %s", http.StatusText(res.StatusCode))
@@ -261,7 +259,7 @@ func (c *HttpStore) requestRef(r ref.Ref, method string, body io.Reader) *http.R
 
 	d.Chk.NoError(err)
 
-	res, err := c.doRequest(req)
+	res, err := c.httpClient.Do(req)
 	d.Chk.NoError(err)
 	return res
 }
@@ -280,7 +278,7 @@ func (c *HttpStore) getHasRefs(refs map[ref.Ref]bool, reqs hasBatch) {
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	d.Chk.NoError(err)
 
-	res, err := c.doRequest(req)
+	res, err := c.httpClient.Do(req)
 	d.Chk.NoError(err)
 	defer closeResponse(res)
 	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
@@ -319,7 +317,7 @@ func (c *HttpStore) getRefs(refs map[ref.Ref]bool, cs ChunkSink) {
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	d.Chk.NoError(err)
 
-	res, err := c.doRequest(req)
+	res, err := c.httpClient.Do(req)
 	d.Chk.NoError(err)
 	defer closeResponse(res)
 	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
@@ -376,7 +374,7 @@ func (c *HttpStore) requestRoot(method string, current, last ref.Ref) *http.Resp
 	req, err := http.NewRequest(method, u.String(), nil)
 	d.Chk.NoError(err)
 
-	res, err := c.doRequest(req)
+	res, err := c.httpClient.Do(req)
 	d.Chk.NoError(err)
 
 	return res
@@ -384,6 +382,11 @@ func (c *HttpStore) requestRoot(method string, current, last ref.Ref) *http.Resp
 
 func (c *HttpStore) Close() error {
 	c.wg.Wait()
+
+	close(c.finishedChan)
+	c.wgFinished.Wait()
+
+	close(c.hasQueue)
 	close(c.readQueue)
 	close(c.writeQueue)
 	return nil
