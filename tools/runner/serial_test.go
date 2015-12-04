@@ -56,6 +56,7 @@ func (suite *SerialRunnerTestSuite) TestEnvVars() {
 	}
 	env := Env{
 		"PATH":                os.Getenv("PATH"),
+		"GOPATH":              os.Getenv("GOPATH"),
 		"NOMS_CHECKOUT_PATH":  "/where/noms/is",
 		"ATTIC_CHECKOUT_PATH": "/where/attic/is",
 	}
@@ -66,10 +67,11 @@ func (suite *SerialRunnerTestSuite) TestEnvVars() {
 		tests = append(tests, tc)
 	}
 	log := &bytes.Buffer{}
-	suite.True(Serial(log, log, env, suite.dir, buildFileBasename), "Serial() should have succeeded! logs:\n%s", string(log.Bytes()))
-	logText := string(log.Bytes())
-	for _, tc := range tests {
-		suite.Contains(logText, tc.expected)
+	if suite.True(Serial(log, log, env, suite.dir, buildFileBasename), "Serial() should have succeeded! logs:\n%s", string(log.Bytes())) {
+		logText := string(log.Bytes())
+		for _, tc := range tests {
+			suite.Contains(logText, tc.expected)
+		}
 	}
 }
 
