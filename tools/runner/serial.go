@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"github.com/attic-labs/noms/d"
 )
@@ -30,7 +31,7 @@ func ForceRun(exe string, args ...string) {
 func runEnvDir(out, err io.Writer, env Env, dir, exe string, args ...string) error {
 	cmd := exec.Command(exe, args...)
 	cmd.Dir = dir
-	cmd.Env = env.toStrings()
+	cmd.Env = append(env.toStrings(), "GOROOT="+runtime.GOROOT())
 	cmd.Stdout = out
 	cmd.Stderr = err
 	return cmd.Run()

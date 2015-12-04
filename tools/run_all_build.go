@@ -27,8 +27,8 @@ func main() {
 		workspace = goPath
 	}
 	env := runner.Env{
-		"GOPATH":              goPath,
 		"PATH":                os.Getenv("PATH"),
+		"GOPATH":              goPath,
 		"NOMS_SERVER":         nomsServer,
 		"NOMS_CHECKOUT_PATH":  filepath.Join(workspace, nomsCheckoutPath),
 		"ATTIC_CHECKOUT_PATH": filepath.Join(workspace, atticCheckoutPath),
