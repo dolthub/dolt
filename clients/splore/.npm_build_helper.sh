@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 SRC="node_modules/babel-regenerator-runtime/runtime.js main.js"
 OUT="out.js"
 
