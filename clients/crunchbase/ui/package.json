@@ -32,7 +32,7 @@
   },
   "scripts": {
     "start": "cp node_modules/nvd3/build/nv.d3.css nv.d3.css; watchify -o out.js -v -d src/main.js",
-    "build": "./build.sh",
+    "build": "./.npm_build_helper.sh",
     "test": "rm -f out.js && eslint src/ && flow src/"
   },
   "browserify": {
