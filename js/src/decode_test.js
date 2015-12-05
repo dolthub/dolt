@@ -16,7 +16,6 @@ import {MetaTuple} from './meta_sequence.js';
 import {registerPackage, Package} from './package.js';
 import {suite} from 'mocha';
 import {writeValue} from './encode.js';
-import {JsonArrayWriter} from './encode.js';
 
 suite('Decode', () => {
   test('read', async () => {
