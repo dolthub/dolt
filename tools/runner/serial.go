@@ -18,7 +18,11 @@ func (e Env) toStrings() (out []string) {
 	for n, v := range e {
 		out = append(out, fmt.Sprintf("%s=%s", n, v))
 	}
-	return
+	if out == nil {
+		// Sadly, it seems like we need to force-set GOROOT in the environment, which means that we need to manually copy out the current environment and add to it instead of just returning nil and allowing the exec library to take its course.
+		out = os.Environ()
+	}
+	return append(out, "GOROOT="+runtime.GOROOT())
 }
 
 // ForceRun runs 'exe [args...]' in current working directory, and d.Chk()s on failure. Inherits the environment of the current process.
@@ -31,7 +35,7 @@ func ForceRun(exe string, args ...string) {
 func runEnvDir(out, err io.Writer, env Env, dir, exe string, args ...string) error {
 	cmd := exec.Command(exe, args...)
 	cmd.Dir = dir
-	cmd.Env = append(env.toStrings(), "GOROOT="+runtime.GOROOT())
+	cmd.Env = env.toStrings()
 	cmd.Stdout = out
 	cmd.Stderr = err
 	return cmd.Run()
