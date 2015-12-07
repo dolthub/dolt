@@ -1,17 +1,21 @@
 package datas
 
 import (
+	"sync"
+
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/walk"
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 type dataStoreCommon struct {
 	chunks.ChunkStore
 	datasets *MapOfStringToRefOfCommit
+	hasCache map[ref.Ref]bool
+	mu       *sync.Mutex
 }
 
 var (
@@ -103,6 +107,49 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) error {
 	} else {
 		return ErrOptimisticLockFailed
 	}
+}
+
+func checkCache(ds *dataStoreCommon, r ref.Ref) (has, ok bool) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	has, ok = ds.hasCache[r]
+	return
+}
+
+func setCache(ds *dataStoreCommon, r ref.Ref, has bool) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	ds.hasCache[r] = has
+}
+
+func (ds *dataStoreCommon) Has(r ref.Ref) bool {
+	has, ok := checkCache(ds, r)
+	if ok {
+		return has
+	}
+	has = ds.ChunkStore.Has(r)
+	setCache(ds, r, has)
+	return has
+}
+
+func (ds *dataStoreCommon) Get(r ref.Ref) chunks.Chunk {
+	has, ok := checkCache(ds, r)
+	if ok && !has {
+		return chunks.EmptyChunk
+	}
+	c := ds.ChunkStore.Get(r)
+	setCache(ds, r, !c.IsEmpty())
+	return c
+}
+
+func (ds *dataStoreCommon) Put(c chunks.Chunk) {
+	r := c.Ref()
+	has, _ := checkCache(ds, r)
+	if has {
+		return
+	}
+	ds.ChunkStore.Put(c)
+	setCache(ds, r, true)
 }
 
 func descendsFrom(commit Commit, currentHeadRef RefOfCommit, cs chunks.ChunkStore) bool {
