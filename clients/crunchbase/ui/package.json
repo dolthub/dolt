@@ -31,7 +31,7 @@
     "watchify": "^3.6"
   },
   "scripts": {
-    "start": "cp node_modules/nvd3/build/nv.d3.css nv.d3.css; watchify -o out.js -v -d src/main.js",
+    "start": "cp node_modules/nvd3/build/nv.d3.css nv.d3.css; NOMS_SERVER=http://localhost:8000 NOMS_DATASET_ID=crunchbase/index watchify -o out.js -v -d node_modules/babel-regenerator-runtime/runtime.js src/main.js",
     "build": "./.npm_build_helper.sh",
     "test": "rm -f out.js && eslint src/ && flow src/"
   },

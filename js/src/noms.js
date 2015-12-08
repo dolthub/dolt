@@ -1,26 +1,31 @@
-/* @flow */
+// @flow
 
-import Chunk from './chunk.js';
-import type {ChunkStore} from './chunk_store.js';
-import CompoundList from './compound_list.js';
-import HttpStore from './http_store.js';
-import MemoryStore from './memory_store.js';
-import Ref from './ref.js';
-import Struct from './struct.js';
-import {encodeNomsValue} from './encode.js';
-import {readValue} from './decode.js';
-import {Type} from './type.js';
-
+export {encodeNomsValue} from './encode.js';
+export {readValue} from './decode.js';
+export {default as Chunk} from './chunk.js';
+export {default as CompoundList} from './compound_list.js';
+export {default as HttpStore} from './http_store.js';
+export {default as MemoryStore} from './memory_store.js';
+export {default as Ref} from './ref.js';
+export {default as Struct} from './struct.js';
+export {lookupPackage, Package, readPackage, registerPackage} from './package.js';
 export {
-  Chunk,
-  CompoundList,
-  encodeNomsValue,
-  HttpStore,
-  MemoryStore,
-  readValue,
-  Ref,
-  Struct,
-  Type
-};
+  CompoundDesc,
+  EnumDesc,
+  Field,
+  makeCompoundType,
+  makeEnumType,
+  makePrimitiveType,
+  makeStructType,
+  makeType,
+  makeUnresolvedType,
+  PrimitiveDesc,
+  StructDesc,
+  Type,
+  typeType,
+  packageType,
+  UnresolvedDesc
+} from './type.js';
 
+import type {ChunkStore} from './chunk_store.js';
 export type {ChunkStore};

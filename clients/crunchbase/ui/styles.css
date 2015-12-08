@@ -1,7 +1,7 @@
 body {
   background: white;
   color: black;
-  font-family: 'helvetica', sans-serif;
+  font-family: helvetica, sans-serif;
   margin: 2em;
 }
 
@@ -53,7 +53,7 @@ a:visited {
 }
 
 .selection-list {
-  font: normal 12px Arial;
+  font-size: 12px;
   margin-top: 10px;
 }
 
@@ -99,7 +99,7 @@ a:visited {
 .app {
   display: flex;
   flex-direction: column;
-  font-family: Arial, sans-serif;
+  font-family: 'Open Sans', sans-serif;
   margin-top: 1em;
 }
 
@@ -119,4 +119,8 @@ a:visited {
   align-items: stretch;
   display: flex;
   flex: 1;
+}
+
+.app .nvd3 text {
+  font-family: 'Open Sans', sans-serif;
 }

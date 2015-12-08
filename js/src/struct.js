@@ -107,17 +107,19 @@ function validate(s: Struct): ?Field {
   // TODO: Validate field values match field types.
   let data = s._data;
   let dataCount = Object.keys(data).length;
-  s.desc.fields.forEach(field => {
+  for (let i = 0; i < s.desc.fields.length; i++) {
+    let field = s.desc.fields[i];
     if (data[field.name] !== undefined) {
       dataCount--;
     } else {
       invariant(field.optional);
     }
-  });
+  }
 
   if (s.desc.union.length > 0) {
     invariant(dataCount === 1);
-    for (let field of s.desc.union) {
+    for (let i = 0; i < s.desc.union.length; i++) {
+      let field = s.desc.union[i];
       if (data[field.name] !== undefined) {
         return field;
       }
