@@ -40,10 +40,6 @@ func (ms *MemoryStore) Has(r ref.Ref) bool {
 }
 
 func (ms *MemoryStore) Put(c Chunk) {
-	if ms.Has(c.Ref()) {
-		return
-	}
-
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	if ms.data == nil {

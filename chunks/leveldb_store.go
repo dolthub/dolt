@@ -92,10 +92,6 @@ func (l *LevelDBStore) Has(ref ref.Ref) bool {
 }
 
 func (l *LevelDBStore) Put(c Chunk) {
-	if l.Has(c.Ref()) {
-		return
-	}
-
 	l.concurrentWriteLimit <- struct{}{}
 	err := l.db.Put(toChunkKey(c.Ref()), c.Data(), nil)
 	d.Chk.NoError(err)

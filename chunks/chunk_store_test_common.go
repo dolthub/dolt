@@ -28,14 +28,14 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 		suite.Equal(1, suite.putCountFn())
 	}
 
-	// Re-writing the same data should be idempotent and should not result in a second put
+	// Re-writing the same data should cause a second put
 	c = NewChunk([]byte(input))
 	suite.Store.Put(c)
 	suite.Equal(ref, c.Ref())
 	assertInputInStore(input, ref, suite.Store, suite.Assert())
 
 	if suite.putCountFn != nil {
-		suite.Equal(1, suite.putCountFn())
+		suite.Equal(2, suite.putCountFn())
 	}
 }
 

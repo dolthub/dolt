@@ -15,11 +15,15 @@ type LocalDataStore struct {
 
 func newLocalDataStore(cs chunks.ChunkStore) *LocalDataStore {
 	rootRef := cs.Root()
+
+	var datasets *MapOfStringToRefOfCommit
 	if rootRef.IsEmpty() {
-		return &LocalDataStore{dataStoreCommon{cs, nil}}
+		datasets = nil
+	} else {
+		datasets = datasetsFromRef(rootRef, cs)
 	}
 
-	return &LocalDataStore{dataStoreCommon{cs, datasetsFromRef(rootRef, cs)}}
+	return &LocalDataStore{dataStoreCommon{cs, datasets, map[ref.Ref]bool{}, &sync.Mutex{}}}
 }
 
 func (lds *LocalDataStore) Commit(datasetID string, commit Commit) (DataStore, error) {

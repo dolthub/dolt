@@ -8,6 +8,27 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+func TestDataStoreAccess(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+	ds := NewDataStore(cs)
+	input := "abc"
+
+	c := chunks.NewChunk([]byte(input))
+	c1 := ds.Get(c.Ref())
+	assert.True(c1.IsEmpty())
+
+	has := ds.Has(c.Ref())
+	assert.False(has)
+
+	ds.Put(c)
+	c1 = ds.Get(c.Ref())
+	assert.False(c1.IsEmpty())
+
+	has = ds.Has(c.Ref())
+	assert.True(has)
+}
+
 func TestDataStoreCommit(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
