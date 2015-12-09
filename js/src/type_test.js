@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import MemoryStore from './memory_store.js';
 import Ref from './ref.js';

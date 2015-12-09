@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import {invariant} from './assert.js';
 import {readValue} from 'noms';

@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 export type NomsKind = number;
 

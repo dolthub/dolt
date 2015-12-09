@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 export function invariant(exp: boolean, message: string = 'Invariant violated') {
   if (!exp) {

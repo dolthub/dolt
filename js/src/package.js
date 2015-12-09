@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import Ref from './ref.js';
 import type {ChunkStore} from './chunk_store.js';

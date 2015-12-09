@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import HeatMap from './heat_map.js';
 import React from 'react';

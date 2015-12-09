@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import React from 'react'; //eslint-disable-line no-unused-lets
 import {readValue, HttpStore, Ref, Struct} from 'noms';

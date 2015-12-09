@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import Photo from './photo.js';
 import React from 'react';

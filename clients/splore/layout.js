@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import Node from './node.js';
 import React from 'react';

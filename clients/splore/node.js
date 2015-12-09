@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import classNames from 'classnames';
 import React from 'react';

@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import {readValue} from 'noms';
 import eq from './eq.js';

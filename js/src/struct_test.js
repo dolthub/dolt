@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import Struct from './struct.js';
 import {assert} from 'chai';

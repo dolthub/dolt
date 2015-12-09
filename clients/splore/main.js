@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import {layout, NodeGraph, TreeNode} from './buchheim.js';
 import Layout from './layout.js';

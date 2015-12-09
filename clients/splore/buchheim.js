@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 // JavaScript implementation of Christoph Buchheim, Michael Jünger, Sebastian Leipert's tree layout algorithm. See: http://dl.acm.org/citation.cfm?id=729576.
 //

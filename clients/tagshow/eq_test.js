@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import {assert} from 'chai';
 import {suite, test} from 'mocha';

@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import {HttpStore} from 'noms';
 import queryString from 'query-string';
