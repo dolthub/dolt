@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import {readValue} from 'noms';
 import DatasetPicker from './datasetpicker.js';
@@ -7,8 +7,6 @@ import React from 'react';
 import SlideShow from './slideshow.js';
 import TagChooser from './tagchooser.js';
 import type {ChunkStore, Ref} from 'noms';
-
-type DefaultProps = {};
 
 type QueryStringObject = {[key: string]: string};
 
@@ -24,7 +22,7 @@ type State = {
   tags: Array<string>
 };
 
-export default class Root extends React.Component<DefaultProps, Props, State> {
+export default class Root extends React.Component<void, Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {

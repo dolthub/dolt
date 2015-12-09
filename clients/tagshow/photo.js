@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import {readValue} from 'noms';
 import eq from './eq.js';
@@ -22,6 +22,8 @@ type State = {
 };
 
 export default class Photo extends React.Component<DefaultProps, Props, State> {
+  static defaultProps: DefaultProps;
+
   constructor(props: Props) {
     super(props);
     this.state = {

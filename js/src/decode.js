@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import Chunk from './chunk.js';
 import CompoundList from './compound_list.js';

@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import Preview from './preview.js';
 import React from 'react';

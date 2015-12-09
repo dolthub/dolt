@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import Ref from './ref.js';
 import {ensureRef} from './get_ref.js';

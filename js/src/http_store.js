@@ -1,14 +1,11 @@
-/* @flow */
+// @flow
 
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import {deserialize} from './chunk_serializer.js';
 import {fetchArrayBuffer, fetchText} from './fetch.js';
 
-type ReadRequest = {
-  resolve: (c: Chunk) => void,
-  reject: (e: Error) => void
-};
+type Resolver = (c: Chunk) => void;
 
 export default class HttpStore {
   _rpc: {
@@ -16,7 +13,7 @@ export default class HttpStore {
     ref: string,
     root: string
   };
-  _readQueue: { [key: string]: Array<ReadRequest> };
+  _readQueue: { [key: string]: Array<Resolver> };
   _anyPending: boolean;
   _fetchScheduled: boolean;
   _activeReads: number;
@@ -41,17 +38,29 @@ export default class HttpStore {
   }
 
   async get(ref: Ref): Promise<Chunk> {
-    return new Promise((resolve, reject) => {
+    return new Promise(resolve => {
       let refStr = ref.toString();
 
       if (!this._readQueue[refStr]) {
         this._readQueue[refStr] = [];
       }
 
-      this._readQueue[refStr].push({resolve, reject});
+      this._readQueue[refStr].push(resolve);
       this._anyPending = true;
       this._pumpFetchQueue();
     });
+  }
+
+  updateRoot(current: Ref, last: Ref): Promise<boolean> {  // eslint-disable-line
+    throw new Error('not implemented');
+  }
+
+  put(c: Chunk): void {  // eslint-disable-line
+    throw new Error('not implemented');
+  }
+
+  has(ref: Ref): Promise<boolean> {  // eslint-disable-line
+    throw new Error('not implemented');
   }
 
   _pumpFetchQueue() {
@@ -86,18 +95,18 @@ export default class HttpStore {
       // Return success
       chunks.forEach(chunk => {
         let refStr = chunk.ref.toString();
-        let callers = reqs[refStr];
+        let resolvers = reqs[refStr];
         delete reqs[refStr];
-        callers.forEach(caller => {
-          caller.resolve(chunk);
+        resolvers.forEach(resolve => {
+          resolve(chunk);
         });
       });
 
       // Report failure
       Object.keys(reqs).forEach(r => {
-        let callers = reqs[r];
-        callers.forEach(c => {
-          c.reject(new Chunk());
+        let resolvers = reqs[r];
+        resolvers.forEach(resolve => {
+          resolve(new Chunk());
         });
       });
     } catch (err) {

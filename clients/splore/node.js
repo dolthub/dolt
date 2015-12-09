@@ -1,9 +1,7 @@
-/* @flow */
+// @flow
 
 import classNames from 'classnames';
 import React from 'react';
-
-type DefaultProps = {};
 
 type Props = {
   canOpen: boolean,
@@ -23,7 +21,7 @@ type State = {
   y: number
 }
 
-export default class Node extends React.Component<DefaultProps, Props, State> {
+export default class Node extends React.Component<void, Props, State> {
   constructor(props: Props) {
     super(props);
 

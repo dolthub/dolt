@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import {test as mtest} from 'mocha';
 

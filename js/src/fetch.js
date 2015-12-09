@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import {request} from 'http';
 import {parse} from 'url';

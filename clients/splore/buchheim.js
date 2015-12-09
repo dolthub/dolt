@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 // JavaScript implementation of Christoph Buchheim, Michael Jünger, Sebastian Leipert's tree layout algorithm. See: http://dl.acm.org/citation.cfm?id=729576.
 //
@@ -16,9 +16,9 @@ function assertNotNull<T>(v: ?T): T {
 
 export type NodeData = {
   name: string,
-  fullName: string,
-  isOpen: boolean,
-  canOpen: boolean
+  fullName?: string,
+  isOpen?: boolean,
+  canOpen?: boolean
 };
 
 export type NodeGraph = {

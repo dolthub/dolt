@@ -24,7 +24,7 @@
     "envify": "^3.4.0",
     "eslint": "^1.9.0",
     "eslint-plugin-react": "^3.8.0",
-    "flow-bin": "^0.18.1",
+    "flow-bin": "^0.19.1",
     "grunt": "^0.4.5",
     "mocha": "^2.3.0",
     "uglify-js": "^2.6.1",

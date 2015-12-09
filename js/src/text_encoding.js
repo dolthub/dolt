@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 // Tell Flow about these globals.
 declare var TextDecoder: ?Function;

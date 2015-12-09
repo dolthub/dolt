@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import {layout, NodeGraph, TreeNode} from './buchheim.js';
 import Layout from './layout.js';
@@ -11,7 +11,7 @@ let rootRef: Ref;
 let httpStore: HttpStore;
 let renderNode: ?HTMLElement;
 
-const nomsServer: string = process.env.NOMS_SERVER;
+const nomsServer: ?string = process.env.NOMS_SERVER;
 if (!nomsServer) {
   throw new Error('NOMS_SERVER not set');
 }
@@ -42,7 +42,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
     if (val instanceof Ref) {
       id = val.toString();
     } else {
-      id = ref + '/' + counter++;
+      id = ref.toString() + '/' + counter++;
     }
 
     // Populate links.
@@ -51,7 +51,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
     }
 
     switch (typeof val) {
-      case 'bool':
+      case 'boolean':
       case 'number':
       case 'string':
         data.nodes[id] = {name: String(val)};
@@ -144,8 +144,9 @@ function handleNodeClick(e: Event, id: string) {
     if (data.links[id] || !data.nodes[id].isOpen) {
       render();
     } else {
-      readValue(Ref.parse(id), httpStore).then(value => {
-        handleChunkLoad(id, value, id);
+      let ref = Ref.parse(id);
+      readValue(ref, httpStore).then(value => {
+        handleChunkLoad(ref, value, id);
       });
     }
   }

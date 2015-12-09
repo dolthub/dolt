@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import type {ChunkStore} from './chunk_store.js';
 import {MetaTuple, MetaSequence} from './meta_sequence.js';

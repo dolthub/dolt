@@ -1,6 +1,6 @@
 // @flow
 
-import {HttpStore, readValue, Struct, makeType, Ref, registerPackage} from 'noms';
+import {readValue, Struct, makeType, Ref, registerPackage} from 'noms';
 import {invariant} from './assert.js';
 import type {ChunkStore, Package} from 'noms';
 
@@ -30,7 +30,7 @@ type DataEntry = {values: Array<DataPoint>, key: string, color?: string};
 export type DataArray = Array<DataEntry>;
 
 export default class DataManager {
-  _store: HttpStore;
+  _store: ChunkStore;
   _datasetId: string;
   _keyClass: any;
   _quarterClass: any;
@@ -83,6 +83,7 @@ export default class DataManager {
     let ds = await this._getDataset();
     this._packageP = getKeyPackage(ds, this._store);
     this._index = convertMap(ds);
+    invariant(this._packageP);
     return this._packageP;
   }
 
@@ -156,7 +157,7 @@ export default class DataManager {
 
   async _getKeyRef(p: KeyParam): Promise<Ref> {
     const Key = await this._getKeyClass();
-    let k: typeof Key;
+    let k;
     if (p.Quarter !== undefined) {
       let Quarter = await this._getQuarterClass();
       k = new Key({Quarter: new Quarter(p)});
@@ -183,7 +184,7 @@ export default class DataManager {
  */
 async function getKeyPackage(index: Map<Ref, Ref>, store: ChunkStore):
     Promise<Package> {
-  let ref: Ref;
+  let ref;
   for (let v of index.keys()) {
     ref = v;
     break;
@@ -195,7 +196,7 @@ async function getKeyPackage(index: Map<Ref, Ref>, store: ChunkStore):
   return pkg;
 }
 
-function getStructClass(pkg, name): typeof Struct {
+function getStructClass(pkg, name) {
   let keyIndex = pkg.types.findIndex(t => t.name === name);
   let type = makeType(pkg.ref, keyIndex);
   let typeDef = pkg.types[keyIndex];

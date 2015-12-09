@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import type Chunk from './chunk.js';
 import type Ref from './ref.js';

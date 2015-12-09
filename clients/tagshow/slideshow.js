@@ -1,4 +1,4 @@
-/* @flow */
+// @flow
 
 import Photo from './photo.js';
 import React from 'react';
@@ -17,8 +17,6 @@ const containerStyle = {
   justifyContent: 'center'
 };
 
-type DefaultProps = {};
-
 type Props = {
   store: ChunkStore,
   photos: Array<Ref>
@@ -28,7 +26,7 @@ type State = {
   index: number
 };
 
-export default class SlideShow extends React.Component<DefaultProps, Props, State> {
+export default class SlideShow extends React.Component<void, Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -71,7 +69,7 @@ type ItemState = {
   timerId: number
 };
 
-class Item extends React.Component<DefaultProps, ItemProps, ItemState> {
+class Item extends React.Component<void, ItemProps, ItemState> {
   constructor(props: ItemProps) {
     super(props);
     this.state = {
