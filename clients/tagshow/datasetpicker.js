@@ -21,6 +21,8 @@ type State = {
 };
 
 export default class DatasetPicker extends React.Component<DefaultProps, Props, State> {
+  static defaultProps: DefaultProps;
+
   constructor(props: Props) {
     super(props);
     this.state = {

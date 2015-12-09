@@ -54,6 +54,18 @@ export default class HttpStore {
     });
   }
 
+  updateRoot(current: Ref, last: Ref): Promise<boolean> {  // eslint-disable-line
+    throw new Error('not implemented');
+  }
+
+  put(c: Chunk): void {  // eslint-disable-line
+    throw new Error('not implemented');
+  }
+
+  has(ref: Ref): Promise<boolean> {  // eslint-disable-line
+    throw new Error('not implemented');
+  }
+
   _pumpFetchQueue() {
     if (!this._fetchScheduled && this._anyPending && this._activeReads < this._maxReads) {
       this._fetchScheduled = true;
@@ -97,7 +109,7 @@ export default class HttpStore {
       Object.keys(reqs).forEach(r => {
         let callers = reqs[r];
         callers.forEach(c => {
-          c.reject(new Chunk());
+          c.reject(new Error());
         });
       });
     } catch (err) {

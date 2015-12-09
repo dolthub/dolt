@@ -14,8 +14,6 @@ type LabelAndKey = {
   key: Object
 };
 
-type DefaultProps = {};
-
 type Props = {
   series: Array<string>,
   timeItems: Array<LabelAndKey>,
@@ -30,16 +28,16 @@ type State = {
   data: DataArray
 };
 
-const nomsServer: string = process.env.NOMS_SERVER;
+const nomsServer: ?string = process.env.NOMS_SERVER;
 if (!nomsServer) {
   throw new Error('NOMS_SERVER not set');
 }
-const datasetId: string = process.env.NOMS_DATASET_ID;
+const datasetId: ?string = process.env.NOMS_DATASET_ID;
 if (!datasetId) {
   throw new Error('NOMS_DATASET_ID not set');
 }
 
-class Main extends React.Component<DefaultProps, Props, State> {
+class Main extends React.Component<void, Props, State> {
   _dataManager: DataManager;
 
   constructor(props: Props) {

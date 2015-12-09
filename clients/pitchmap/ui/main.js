@@ -17,8 +17,6 @@ window.addEventListener('load', async () => {
   renderPitchersMap(pitchersMap);
 });
 
-type DefaultProps = {};
-
 type Props = {
   pitchersMap: Map<string, Ref>
 };
@@ -28,7 +26,7 @@ type State = {
   pitchers: Array<string>
 };
 
-class PitcherList extends React.Component<DefaultProps, Props, State> {
+class PitcherList extends React.Component<void, Props, State> {
   constructor(props) {
     super(props);
 

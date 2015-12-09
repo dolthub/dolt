@@ -15,9 +15,7 @@ type State = {
   chart: ?Object
 };
 
-type DefaultProps = {};
-
-export default class Chart extends React.Component<DefaultProps, Props, State> {
+export default class Chart extends React.Component<void, Props, State> {
   componentDidMount() {
     nv.addGraph(() => {
       let chart = nv.models.lineChart();
