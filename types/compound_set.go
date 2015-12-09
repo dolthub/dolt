@@ -19,7 +19,8 @@ type compoundSet struct {
 }
 
 func buildCompoundSet(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
-	return compoundSet{metaSequenceObject{tuples, t}, &ref.Ref{}, cs}
+	s := compoundSet{metaSequenceObject{tuples, t}, &ref.Ref{}, cs}
+	return valueFromType(cs, s, t)
 }
 
 func init() {

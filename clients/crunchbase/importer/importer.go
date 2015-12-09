@@ -104,7 +104,7 @@ func importCompanies(ds dataset.Dataset, fileName string) ref.Ref {
 	}
 
 	// Read in Companies and map to permalink
-	companyRefs := NewMapOfStringToRefOfCompany(ds.Store())
+	companyRefsDef := MapOfStringToRefOfCompanyDef{}
 	companySheet := xlFile.Sheet["Companies"]
 	for i, row := range companySheet.Rows {
 		fmt.Printf("\rImporting %d of %d rounds... (%.2f%%)", i, len(companySheet.Rows), float64(i)/float64(len(companySheet.Rows))*float64(100))
@@ -113,19 +113,20 @@ func importCompanies(ds dataset.Dataset, fileName string) ref.Ref {
 			permalink := company.Permalink()
 
 			rounds := roundsByPermalink[permalink]
-			roundRefs := NewSetOfRefOfRound(ds.Store())
+			roundRefs := SetOfRefOfRoundDef{}
 			for _, r := range rounds {
 				ref := types.WriteValue(r, ds.Store())
-				roundRefs = roundRefs.Insert(NewRefOfRound(ref))
+				roundRefs[ref] = true
 			}
-			company = company.SetRounds(roundRefs)
+			company = company.SetRounds(roundRefs.New(ds.Store()))
 			ref := types.WriteValue(company, ds.Store())
-			refOfCompany := NewRefOfCompany(ref)
-			companyRefs = companyRefs.Set(company.Permalink(), refOfCompany)
+			companyRefsDef[company.Permalink()] = ref
 		}
 	}
 
-	fmt.Printf("\r### imported %d companies with %d rounds\n", companyRefs.Len(), numRounds)
+	companyRefs := companyRefsDef.New(ds.Store())
+
+	// fmt.Printf("\r### imported %d companies with %d rounds\n", companyRefs.Len(), numRounds)
 
 	// Write the list of companyRefs
 	return types.WriteValue(companyRefs, ds.Store())
