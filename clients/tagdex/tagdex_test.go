@@ -66,6 +66,6 @@ func (s *testSuite) TestTagdex() {
 	s.Equal(uint64(2), m.Get("cat").Len())
 	s.Equal(uint64(1), m.Get("dog").Len())
 
-	s.Equal("titlenyc", m.Get("nyc").Any().TargetValue(cs).Title())
-	s.Equal("1", m.Get("sf").Any().TargetValue(cs).Id())
+	s.Equal("titlenyc", m.Get("nyc").First().TargetValue(cs).Title())
+	s.Equal("1", m.Get("sf").First().TargetValue(cs).Id())
 }

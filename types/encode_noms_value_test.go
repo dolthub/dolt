@@ -103,7 +103,7 @@ func TestWriteMap(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	typ := MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(BoolKind))
-	v := NewTypedMap(cs, typ, NewString("a"), Bool(false), NewString("b"), Bool(true))
+	v := newMapLeaf(cs, typ, mapEntry{NewString("a"), Bool(false)}, mapEntry{NewString("b"), Bool(true)})
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)

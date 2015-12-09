@@ -272,8 +272,8 @@ func (s SetOfRefOfRemotePhoto) Subtract(others ...SetOfRefOfRemotePhoto) SetOfRe
 	return SetOfRefOfRemotePhoto{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfRefOfRemotePhoto) Any() RefOfRemotePhoto {
-	return s.s.Any().(RefOfRemotePhoto)
+func (s SetOfRefOfRemotePhoto) First() RefOfRemotePhoto {
+	return s.s.First().(RefOfRemotePhoto)
 }
 
 func (s SetOfRefOfRemotePhoto) fromStructSlice(p []SetOfRefOfRemotePhoto) []types.Set {

@@ -401,8 +401,8 @@ func (s SetOfUint8) Subtract(others ...SetOfUint8) SetOfUint8 {
 	return SetOfUint8{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfUint8) Any() uint8 {
-	return uint8(s.s.Any().(types.Uint8))
+func (s SetOfUint8) First() uint8 {
+	return uint8(s.s.First().(types.Uint8))
 }
 
 func (s SetOfUint8) fromStructSlice(p []SetOfUint8) []types.Set {

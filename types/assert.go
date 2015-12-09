@@ -10,7 +10,7 @@ func assertType(t Type, v ...Value) {
 	}
 }
 
-func assertSetsSameType(s Set, v ...Set) {
+func assertSetsSameType(s setLeaf, v ...Set) {
 	if s.elemType().Kind() != ValueKind {
 		t := s.Type()
 		for _, v := range v {
@@ -19,7 +19,7 @@ func assertSetsSameType(s Set, v ...Set) {
 	}
 }
 
-func assertMapElemTypes(m Map, v ...Value) {
+func assertMapElemTypes(m mapLeaf, v ...Value) {
 	elemTypes := m.elemTypes()
 	keyType := elemTypes[0]
 	valueType := elemTypes[0]

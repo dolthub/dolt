@@ -702,8 +702,8 @@ func (s SetOfFloat32) Subtract(others ...SetOfFloat32) SetOfFloat32 {
 	return SetOfFloat32{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfFloat32) Any() float32 {
-	return float32(s.s.Any().(types.Float32))
+func (s SetOfFloat32) First() float32 {
+	return float32(s.s.First().(types.Float32))
 }
 
 func (s SetOfFloat32) fromStructSlice(p []SetOfFloat32) []types.Set {

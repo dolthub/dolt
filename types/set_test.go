@@ -125,15 +125,15 @@ func TestSetSubtract(t *testing.T) {
 		NewSet(cs)))
 }
 
-func TestSetAny(t *testing.T) {
+func TestSetFirst(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 	s := NewSet(cs)
-	assert.Nil(s.Any())
+	assert.Nil(s.First())
 	s = s.Insert(Int32(1))
-	assert.NotNil(s.Any())
+	assert.NotNil(s.First())
 	s = s.Insert(Int32(2))
-	assert.NotNil(s.Any())
+	assert.NotNil(s.First())
 }
 
 func TestSetIter(t *testing.T) {
@@ -179,7 +179,7 @@ func TestSetIterAllP(t *testing.T) {
 			values[i] = Uint64(i)
 		}
 
-		s := NewSet(cs, values...)
+		s := newSetLeaf(cs, setType, values...)
 
 		cur := 0
 		mu := sync.Mutex{}
@@ -371,12 +371,12 @@ func TestSetType(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	s := NewSet(cs)
+	s := newSetLeaf(cs, setType)
 	assert.True(s.Type().Equals(MakeCompoundType(SetKind, MakePrimitiveType(ValueKind))))
 
 	tr := MakeCompoundType(SetKind, MakePrimitiveType(Uint64Kind))
 
-	s = newSetFromData(cs, setData{}, tr)
+	s = newSetLeaf(cs, tr)
 	assert.Equal(tr, s.Type())
 
 	s2 := s.Remove(Uint64(1))
@@ -391,11 +391,6 @@ func TestSetType(t *testing.T) {
 	assert.True(tr.Equals(s2.Type()))
 
 	s2 = s.Insert(Uint64(0), Uint64(1))
-	assert.True(tr.Equals(s2.Type()))
-
-	s3 := NewSet(cs, Uint64(2))
-	s3.t = s2.t
-	s2 = s.Union(s3)
 	assert.True(tr.Equals(s2.Type()))
 
 	assert.Panics(func() { s.Insert(Bool(true)) })

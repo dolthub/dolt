@@ -42,8 +42,8 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-3e4f60c3fbd518f4a7e903ac1c7c1a97b677c4d9"),
 		ref.Parse("sha1-e28aa19ad63c4ddabeb258aafe9b2b97fadd3666"),
+		ref.Parse("sha1-3e4f60c3fbd518f4a7e903ac1c7c1a97b677c4d9"),
 	})
 	__mainPackageInFile_index_CachedRef = types.RegisterPackage(&p)
 }
@@ -1049,8 +1049,8 @@ func (s SetOfRoundRaise) Subtract(others ...SetOfRoundRaise) SetOfRoundRaise {
 	return SetOfRoundRaise{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfRoundRaise) Any() RoundRaise {
-	return s.s.Any().(RoundRaise)
+func (s SetOfRoundRaise) First() RoundRaise {
+	return s.s.First().(RoundRaise)
 }
 
 func (s SetOfRoundRaise) fromStructSlice(p []SetOfRoundRaise) []types.Set {

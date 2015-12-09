@@ -104,7 +104,6 @@ type sequenceCursorSeekStepFn func(carry interface{}, prev, current sequenceItem
 // Seeks the cursor to the first position in the sequence where |compare| returns true. During seeking, the caller can build up an arbitrary carry value, passed to |compare| and |step|. The carry value is initialized as |carry|, but will be replaced with the return value of |step|.
 func (cur *sequenceCursor) seek(compare sequenceCursorSeekCompareFn, step sequenceCursorSeekStepFn, carry interface{}) interface{} {
 	d.Chk.NotNil(compare)
-	d.Chk.NotNil(step)
 
 	if cur.parent != nil {
 		carry = cur.parent.seek(compare, step, carry)
@@ -122,6 +121,10 @@ func (cur *sequenceCursor) seek(compare sequenceCursorSeekCompareFn, step sequen
 	var prev sequenceItem
 	if cur.idx > 0 {
 		prev = cur.getItem(cur.item, cur.idx-1)
+	}
+
+	if step == nil {
+		return nil
 	}
 
 	return step(carry, prev, cur.getItem(cur.item, cur.idx))
