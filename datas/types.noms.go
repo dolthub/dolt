@@ -400,8 +400,8 @@ func (s SetOfRefOfCommit) Subtract(others ...SetOfRefOfCommit) SetOfRefOfCommit 
 	return SetOfRefOfCommit{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfRefOfCommit) Any() RefOfCommit {
-	return s.s.Any().(RefOfCommit)
+func (s SetOfRefOfCommit) First() RefOfCommit {
+	return s.s.First().(RefOfCommit)
 }
 
 func (s SetOfRefOfCommit) fromStructSlice(p []SetOfRefOfCommit) []types.Set {

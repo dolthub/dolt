@@ -30,9 +30,6 @@ func getTestSimpleList() testSimpleList {
 }
 
 func TestCompoundListGet(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping test in short mode.")
-	}
 	assert := assert.New(t)
 
 	cs := chunks.NewMemoryStore()
@@ -47,9 +44,6 @@ func TestCompoundListGet(t *testing.T) {
 }
 
 func TestCompoundListIter(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping test in short mode.")
-	}
 	assert := assert.New(t)
 
 	cs := chunks.NewMemoryStore()
@@ -74,9 +68,6 @@ func TestCompoundListIter(t *testing.T) {
 }
 
 func TestCompoundListIterAll(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping test in short mode.")
-	}
 	assert := assert.New(t)
 
 	cs := chunks.NewMemoryStore()
@@ -94,9 +85,6 @@ func TestCompoundListIterAll(t *testing.T) {
 }
 
 func TestCompoundListCurAt(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping test in short mode.")
-	}
 	assert := assert.New(t)
 
 	listLen := func(at int, next func(*sequenceCursor) bool) (size int) {
@@ -122,9 +110,6 @@ func TestCompoundListCurAt(t *testing.T) {
 }
 
 func TestCompoundListAppend(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping test in short mode.")
-	}
 	assert := assert.New(t)
 
 	newCompoundList := func(items testSimpleList) compoundList {

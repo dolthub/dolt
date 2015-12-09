@@ -22,7 +22,7 @@ type compoundList struct {
 
 func buildCompoundList(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
 	cl := compoundList{metaSequenceObject{tuples, t}, &ref.Ref{}, cs}
-	return valueFromType(cl.cs, cl, t)
+	return valueFromType(cs, cl, t)
 }
 
 func listAsSequenceItems(ls listLeaf) []sequenceItem {
@@ -180,7 +180,7 @@ func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 			values[i] = v.(Value)
 		}
 
-		list := valueFromType(cs, listLeaf{values, t, &ref.Ref{}, cs}, t)
+		list := valueFromType(cs, newListLeaf(cs, t, values...), t)
 		ref := WriteValue(list, cs)
 		return metaTuple{ref, Uint64(len(values))}, list
 	}

@@ -132,8 +132,8 @@ func (s {{.Name}}) Subtract(others ...{{.Name}}) {{.Name}} {
 	return {{.Name}}{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s {{.Name}}) Any() {{userType .ElemType}} {
-	return {{valueToUser "s.s.Any()" .ElemType}}
+func (s {{.Name}}) First() {{userType .ElemType}} {
+	return {{valueToUser "s.s.First()" .ElemType}}
 }
 
 func (s {{.Name}}) fromStructSlice(p []{{.Name}}) []{{$typesPackage}}Set {

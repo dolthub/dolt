@@ -598,8 +598,8 @@ func (s SetOfString) Subtract(others ...SetOfString) SetOfString {
 	return SetOfString{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfString) Any() string {
-	return s.s.Any().(types.String).String()
+func (s SetOfString) First() string {
+	return s.s.First().(types.String).String()
 }
 
 func (s SetOfString) fromStructSlice(p []SetOfString) []types.Set {

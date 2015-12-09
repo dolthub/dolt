@@ -68,10 +68,10 @@ func TestStructWithRef(t *testing.T) {
 	r2 := gen.NewRefOfSetOfFloat32(set.Ref())
 	assert.True(r.Equals(r2))
 
-	assert.Panics(func() { r2.TargetValue(cs) })
+	assert.True(r2.TargetValue(cs).Equals(set))
 
 	types.WriteValue(str, cs)
-	assert.Panics(func() { r2.TargetValue(cs) })
+	assert.True(r2.TargetValue(cs).Equals(set))
 
 	types.WriteValue(set, cs)
 	set2 := r2.TargetValue(cs)

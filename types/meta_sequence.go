@@ -9,8 +9,9 @@ import (
 )
 
 const (
-	objectWindowSize = 8
-	objectPattern    = uint32(1<<6 - 1) // Average size of 64 elements
+	objectWindowSize          = 8
+	orderedSequenceWindowSize = 1
+	objectPattern             = uint32(1<<6 - 1) // Average size of 64 elements
 )
 
 // metaSequence is a logical abstraction, but has no concrete "base" implementation. A Meta Sequence is a non-leaf (internal) node of a "probably" tree, which results from the chunking of an ordered or unordered sequence of values.
@@ -35,6 +36,10 @@ func (mt metaTuple) uint64Value() uint64 {
 
 type metaSequenceData []metaTuple
 
+func (msd metaSequenceData) last() metaTuple {
+	return msd[len(msd)-1]
+}
+
 type metaSequenceObject struct {
 	tuples metaSequenceData
 	t      Type
@@ -57,7 +62,7 @@ func (ms metaSequenceObject) data() metaSequenceData {
 }
 
 func (ms metaSequenceObject) lastTuple() metaTuple {
-	return ms.tuples[len(ms.tuples)-1]
+	return ms.tuples.last()
 }
 
 func (ms metaSequenceObject) ChildValues() []Value {
@@ -101,6 +106,13 @@ func newMetaSequenceFromData(tuples metaSequenceData, t Type, cs chunks.ChunkSto
 
 func newMetaSequenceBoundaryChecker() boundaryChecker {
 	return newBuzHashBoundaryChecker(objectWindowSize, sha1.Size, objectPattern, func(item sequenceItem) []byte {
+		digest := item.(metaTuple).ref.Digest()
+		return digest[:]
+	})
+}
+
+func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
+	return newBuzHashBoundaryChecker(orderedSequenceWindowSize, sha1.Size, objectPattern, func(item sequenceItem) []byte {
 		digest := item.(metaTuple).ref.Digest()
 		return digest[:]
 	})
@@ -161,7 +173,8 @@ func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkStore) (*sequenceCu
 }
 
 func readMetaTupleValue(item sequenceItem, cs chunks.ChunkStore) Value {
-	return ReadValue(item.(metaTuple).ref, cs)
+	v := ReadValue(item.(metaTuple).ref, cs)
+	return internalValueFromType(v, v.Type())
 }
 
 func iterateMetaSequenceLeaf(ms metaSequence, cs chunks.ChunkStore, cb func(Value) bool) {

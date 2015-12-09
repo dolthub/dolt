@@ -25,7 +25,7 @@ func TestRefInSet(t *testing.T) {
 	s := NewSet(cs)
 	r := NewRef(s.Ref())
 	s = s.Insert(r)
-	r2 := s.Any()
+	r2 := s.First()
 	assert.True(r.Equals(r2))
 }
 

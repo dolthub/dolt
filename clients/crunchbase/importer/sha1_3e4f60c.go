@@ -741,8 +741,8 @@ func (s SetOfString) Subtract(others ...SetOfString) SetOfString {
 	return SetOfString{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfString) Any() string {
-	return s.s.Any().(types.String).String()
+func (s SetOfString) First() string {
+	return s.s.First().(types.String).String()
 }
 
 func (s SetOfString) fromStructSlice(p []SetOfString) []types.Set {
@@ -891,8 +891,8 @@ func (s SetOfRefOfRound) Subtract(others ...SetOfRefOfRound) SetOfRefOfRound {
 	return SetOfRefOfRound{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfRefOfRound) Any() RefOfRound {
-	return s.s.Any().(RefOfRound)
+func (s SetOfRefOfRound) First() RefOfRound {
+	return s.s.First().(RefOfRound)
 }
 
 func (s SetOfRefOfRound) fromStructSlice(p []SetOfRefOfRound) []types.Set {

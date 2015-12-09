@@ -137,8 +137,8 @@ func (s SetOfRefOfPackage) Subtract(others ...SetOfRefOfPackage) SetOfRefOfPacka
 	return SetOfRefOfPackage{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}, s.cs}
 }
 
-func (s SetOfRefOfPackage) Any() RefOfPackage {
-	return s.s.Any().(RefOfPackage)
+func (s SetOfRefOfPackage) First() RefOfPackage {
+	return s.s.First().(RefOfPackage)
 }
 
 func (s SetOfRefOfPackage) fromStructSlice(p []SetOfRefOfPackage) []Set {
