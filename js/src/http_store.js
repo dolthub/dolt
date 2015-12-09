@@ -37,7 +37,7 @@ export default class HttpStore {
     return Ref.parse(refStr);
   }
 
-  async get(ref: Ref): Promise<Chunk> {
+  get(ref: Ref): Promise<Chunk> {
     return new Promise(resolve => {
       let refStr = ref.toString();
 
