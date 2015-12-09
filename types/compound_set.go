@@ -71,20 +71,20 @@ func (cs compoundSet) Filter(cb setFilterCallback) Set {
 func (cs compoundSet) findLeaf(key Value) (*sequenceCursor, setLeaf) {
 	cursor, leaf := newMetaSequenceCursor(cs, cs.cs)
 
-	var seekFn sequenceCursorSeekCompareFn
+	var seekFn sequenceCursorSeekBinaryCompareFn
 	if orderedSequenceByIndexedType(cs.t) {
 		orderedKey := key.(OrderedValue)
 
-		seekFn = func(carry interface{}, mt sequenceItem) bool {
+		seekFn = func(mt sequenceItem) bool {
 			return !mt.(metaTuple).value.(OrderedValue).Less(orderedKey)
 		}
 	} else {
-		seekFn = func(carry interface{}, mt sequenceItem) bool {
+		seekFn = func(mt sequenceItem) bool {
 			return !mt.(metaTuple).value.(Ref).TargetRef().Less(key.Ref())
 		}
 	}
 
-	cursor.seek(seekFn, nil, nil)
+	cursor.seekBinary(seekFn)
 
 	current := cursor.current().(metaTuple)
 	if current.ref != leaf.Ref() {

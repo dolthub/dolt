@@ -47,20 +47,20 @@ func (cm compoundMap) Empty() bool {
 func (cm compoundMap) findLeaf(key Value) (*sequenceCursor, mapLeaf) {
 	cursor, leaf := newMetaSequenceCursor(cm, cm.cs)
 
-	var seekFn sequenceCursorSeekCompareFn
+	var seekFn sequenceCursorSeekBinaryCompareFn
 	if orderedSequenceByIndexedType(cm.t) {
 		orderedKey := key.(OrderedValue)
 
-		seekFn = func(carry interface{}, mt sequenceItem) bool {
+		seekFn = func(mt sequenceItem) bool {
 			return !mt.(metaTuple).value.(OrderedValue).Less(orderedKey)
 		}
 	} else {
-		seekFn = func(carry interface{}, mt sequenceItem) bool {
+		seekFn = func(mt sequenceItem) bool {
 			return !mt.(metaTuple).value.(Ref).TargetRef().Less(key.Ref())
 		}
 	}
 
-	cursor.seek(seekFn, nil, nil)
+	cursor.seekBinary(seekFn)
 
 	current := cursor.current().(metaTuple)
 	if current.ref != leaf.Ref() {

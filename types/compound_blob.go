@@ -13,8 +13,9 @@ import (
 // It implements the Blob interface.
 type compoundBlob struct {
 	metaSequenceObject
-	ref *ref.Ref
-	cs  chunks.ChunkStore
+	length uint64
+	ref    *ref.Ref
+	cs     chunks.ChunkStore
 }
 
 func newCompoundBlob(tuples metaSequenceData, cs chunks.ChunkStore) compoundBlob {
@@ -23,7 +24,7 @@ func newCompoundBlob(tuples metaSequenceData, cs chunks.ChunkStore) compoundBlob
 
 func buildCompoundBlob(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
 	d.Chk.True(t.Equals(typeForBlob))
-	return compoundBlob{metaSequenceObject{tuples, typeForBlob}, &ref.Ref{}, cs}
+	return compoundBlob{metaSequenceObject{tuples, typeForBlob}, tuples.uint64ValuesSum(), &ref.Ref{}, cs}
 }
 
 func init() {
@@ -31,10 +32,9 @@ func init() {
 }
 
 func (cb compoundBlob) Reader() io.ReadSeeker {
-	length := uint64(cb.lastTuple().value.(Uint64))
 	cursor, v := newMetaSequenceCursor(cb, cb.cs)
 	reader := v.(blobLeaf).Reader()
-	return &compoundBlobReader{cursor: cursor, currentReader: reader, length: length, cs: cb.cs}
+	return &compoundBlobReader{cursor: cursor, currentReader: reader, length: cb.Len(), cs: cb.cs}
 }
 
 func (cb compoundBlob) Equals(other Value) bool {
@@ -46,7 +46,7 @@ func (cb compoundBlob) Ref() ref.Ref {
 }
 
 func (cb compoundBlob) Len() uint64 {
-	return cb.tuples[len(cb.tuples)-1].uint64Value()
+	return cb.length
 }
 
 type compoundBlobReader struct {
@@ -100,20 +100,15 @@ func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
 
 	seekAbs := uint64(abs)
 
-	chunkStart := cbr.cursor.seek(func(carry interface{}, mt sequenceItem) bool {
-		return seekAbs < uint64(carry.(Uint64))+uint64(mt.(metaTuple).value.(Uint64))
-	}, func(carry interface{}, prev, current sequenceItem) interface{} {
-		pv := uint64(0)
-		if prev != nil {
-			pv = uint64(prev.(metaTuple).value.(Uint64))
-		}
-		return Uint64(uint64(carry.(Uint64)) + pv)
-	}, Uint64(0))
+	chunkStart := cbr.cursor.seekLinear(func(carry interface{}, mt sequenceItem) (bool, interface{}) {
+		offset := carry.(uint64) + mt.(metaTuple).uint64Value()
+		return seekAbs < offset, offset
+	}, uint64(0))
 
-	cbr.chunkStart = uint64(chunkStart.(Uint64))
+	cbr.chunkStart = chunkStart.(uint64)
 	cbr.chunkOffset = seekAbs - cbr.chunkStart
 	cbr.currentReader = nil
-	return int64(seekAbs), nil
+	return abs, nil
 }
 
 func (cbr *compoundBlobReader) updateReader() {
