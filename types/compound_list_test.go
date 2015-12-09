@@ -10,16 +10,12 @@ import (
 
 type testSimpleList []Value
 
-func (tsl testSimpleList) Get(idx uint64) Value {
-	return tsl[idx]
-}
-
-func getTestSimpleListLen() int {
-	return int(listPattern * 50)
+func getTestSimpleListLen() uint64 {
+	return uint64(listPattern) * 200
 }
 
 func getTestSimpleList() testSimpleList {
-	length := getTestSimpleListLen()
+	length := int(getTestSimpleListLen())
 	s := rand.NewSource(42)
 	values := make([]Value, length)
 	for i := 0; i < length; i++ {
@@ -38,8 +34,9 @@ func TestCompoundListGet(t *testing.T) {
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 	cl := NewTypedList(cs, tr, simpleList...)
 
-	for i, v := range simpleList {
-		assert.Equal(v, cl.Get(uint64(i)))
+	// Incrementing by len(simpleList)/10 because Get() is too slow to run on every index.
+	for i := 0; i < len(simpleList); i += len(simpleList) / 10 {
+		assert.Equal(simpleList[i], cl.Get(uint64(i)))
 	}
 }
 
@@ -53,15 +50,12 @@ func TestCompoundListIter(t *testing.T) {
 	cl := NewTypedList(cs, tr, simpleList...)
 
 	expectIdx := uint64(0)
-	endAt := uint64(listPattern)
+	endAt := getTestSimpleListLen() / 2
 	cl.Iter(func(v Value, idx uint64) bool {
 		assert.Equal(expectIdx, idx)
-		expectIdx += 1
-		assert.Equal(simpleList.Get(idx), v)
-		if expectIdx == endAt {
-			return true
-		}
-		return false
+		expectIdx++
+		assert.Equal(simpleList[idx], v)
+		return expectIdx == endAt
 	})
 
 	assert.Equal(endAt, expectIdx)
@@ -80,20 +74,34 @@ func TestCompoundListIterAll(t *testing.T) {
 	cl.IterAll(func(v Value, idx uint64) {
 		assert.Equal(expectIdx, idx)
 		expectIdx += 1
-		assert.Equal(simpleList.Get(idx), v)
+		assert.Equal(simpleList[idx], v)
 	})
+
+	assert.Equal(getTestSimpleListLen(), expectIdx)
 }
 
-func TestCompoundListCurAt(t *testing.T) {
+func TestCompoundListLen(t *testing.T) {
 	assert := assert.New(t)
 
-	listLen := func(at int, next func(*sequenceCursor) bool) (size int) {
+	cs := chunks.NewMemoryStore()
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+
+	cl := NewTypedList(cs, tr, getTestSimpleList()...).(compoundList)
+	assert.Equal(getTestSimpleListLen(), cl.Len())
+	cl = NewTypedList(cs, tr, append(getTestSimpleList(), getTestSimpleList()...)...).(compoundList)
+	assert.Equal(getTestSimpleListLen()*2, cl.Len())
+}
+
+func TestCompoundListCursorAt(t *testing.T) {
+	assert := assert.New(t)
+
+	listLen := func(at uint64, next func(*sequenceCursor) bool) (size uint64) {
 		cs := chunks.NewMemoryStore()
 		tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 		cl := NewTypedList(cs, tr, getTestSimpleList()...).(compoundList)
-		cur, _, _ := cl.cursorAt(uint64(at))
+		cur, _, _ := cl.cursorAt(at)
 		for {
-			size += int(readMetaTupleValue(cur.current(), cs).(List).Len())
+			size += readMetaTupleValue(cur.current(), cs).(List).Len()
 			if !next(cur) {
 				return
 			}
@@ -134,31 +142,31 @@ func TestCompoundListAppend(t *testing.T) {
 
 	expected := getTestSimpleList()
 	assert.Equal(expected, compoundToSimple(cl))
-	assert.Equal(getTestSimpleListLen(), int(cl.Len()))
+	assert.Equal(getTestSimpleListLen(), cl.Len())
 	assert.True(newCompoundList(expected).Equals(cl))
 
 	expected = append(expected, Int64(42))
 	assert.Equal(expected, compoundToSimple(cl2))
-	assert.Equal(getTestSimpleListLen()+1, int(cl2.Len()))
+	assert.Equal(getTestSimpleListLen()+1, cl2.Len())
 	assert.True(newCompoundList(expected).Equals(cl2))
 
 	expected = append(expected, Int64(43))
 	assert.Equal(expected, compoundToSimple(cl3))
-	assert.Equal(getTestSimpleListLen()+2, int(cl3.Len()))
+	assert.Equal(getTestSimpleListLen()+2, cl3.Len())
 	assert.True(newCompoundList(expected).Equals(cl3))
 
 	expected = append(expected, getTestSimpleList()...)
 	assert.Equal(expected, compoundToSimple(cl4))
-	assert.Equal(2*getTestSimpleListLen()+2, int(cl4.Len()))
+	assert.Equal(2*getTestSimpleListLen()+2, cl4.Len())
 	assert.True(newCompoundList(expected).Equals(cl4))
 
 	expected = append(expected, Int64(44), Int64(45))
 	assert.Equal(expected, compoundToSimple(cl5))
-	assert.Equal(2*getTestSimpleListLen()+4, int(cl5.Len()))
+	assert.Equal(2*getTestSimpleListLen()+4, cl5.Len())
 	assert.True(newCompoundList(expected).Equals(cl5))
 
 	expected = append(expected, getTestSimpleList()...)
 	assert.Equal(expected, compoundToSimple(cl6))
-	assert.Equal(3*getTestSimpleListLen()+4, int(cl6.Len()))
+	assert.Equal(3*getTestSimpleListLen()+4, cl6.Len())
 	assert.True(newCompoundList(expected).Equals(cl6))
 }

@@ -18,7 +18,6 @@ type sequenceChunker struct {
 	parent                     *sequenceChunker
 	current, pendingFirst      []sequenceItem
 	makeChunk, parentMakeChunk makeChunkFn
-	nzeChunk, parentNzeChunk   normalizeChunkFn
 	boundaryChk                boundaryChecker
 	newBoundaryChecker         newBoundaryCheckerFn
 }
@@ -26,22 +25,13 @@ type sequenceChunker struct {
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items, a tuple of a reference to that chunk which can itself be chunked + its underlying value.
 type makeChunkFn func(values []sequenceItem) (sequenceItem, Value)
 
-// normalizeChunkFn takes a sequence of existing items, and returns a sequence equivalent as though it had never gone through the chunking progress.
-type normalizeChunkFn func(values []sequenceItem) []sequenceItem
-
-func normalizeChunkNoop(si []sequenceItem) []sequenceItem {
-	return si
-}
-
 func newEmptySequenceChunker(makeChunk, parentMakeChunk makeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
-	return newSequenceChunker(nil, makeChunk, parentMakeChunk, normalizeChunkNoop, normalizeChunkNoop, boundaryChk, newBoundaryChecker)
+	return newSequenceChunker(nil, makeChunk, parentMakeChunk, boundaryChk, newBoundaryChecker)
 }
 
-func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChunkFn, nzeChunk, parentNzeChunk normalizeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
+func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
 	d.Chk.NotNil(makeChunk)
 	d.Chk.NotNil(parentMakeChunk)
-	d.Chk.NotNil(nzeChunk)
-	d.Chk.NotNil(parentNzeChunk)
 	d.Chk.NotNil(boundaryChk)
 	d.Chk.NotNil(newBoundaryChecker)
 
@@ -50,7 +40,6 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 		nil,
 		[]sequenceItem{}, nil,
 		makeChunk, parentMakeChunk,
-		nzeChunk, parentNzeChunk,
 		boundaryChk,
 		newBoundaryChecker,
 	}
@@ -65,7 +54,7 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 			boundaryChk.Write(item)
 		}
 		// Reconstruct this entire chunk.
-		seq.current = nzeChunk(cur.maxNPrevItems(cur.indexInChunk()))
+		seq.current = cur.maxNPrevItems(cur.indexInChunk())
 	}
 
 	return seq
@@ -91,7 +80,7 @@ func (seq *sequenceChunker) createParent() {
 	if seq.cur != nil && seq.cur.parent != nil {
 		curParent = seq.cur.parent.clone()
 	}
-	seq.parent = newSequenceChunker(curParent, seq.parentMakeChunk, seq.parentMakeChunk, seq.parentNzeChunk, seq.parentNzeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
+	seq.parent = newSequenceChunker(curParent, seq.parentMakeChunk, seq.parentMakeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
 }
 
 func (seq *sequenceChunker) commitPendingFirst() {

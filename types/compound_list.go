@@ -16,12 +16,13 @@ const (
 
 type compoundList struct {
 	metaSequenceObject
-	ref *ref.Ref
-	cs  chunks.ChunkStore
+	length uint64
+	ref    *ref.Ref
+	cs     chunks.ChunkStore
 }
 
 func buildCompoundList(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
-	cl := compoundList{metaSequenceObject{tuples, t}, &ref.Ref{}, cs}
+	cl := compoundList{metaSequenceObject{tuples, t}, tuples.uint64ValuesSum(), &ref.Ref{}, cs}
 	return valueFromType(cs, cl, t)
 }
 
@@ -46,7 +47,7 @@ func (cl compoundList) Ref() ref.Ref {
 }
 
 func (cl compoundList) Len() uint64 {
-	return cl.tuples[len(cl.tuples)-1].uint64Value()
+	return cl.length
 }
 
 func (cl compoundList) Empty() bool {
@@ -54,26 +55,21 @@ func (cl compoundList) Empty() bool {
 	return false
 }
 
+// Returns a cursor pointing to the deepest metaTuple containing |idx| within |cl|, the list leaf that it points to, and the offset within the list that the leaf starts at.
 func (cl compoundList) cursorAt(idx uint64) (*sequenceCursor, listLeaf, uint64) {
 	d.Chk.True(idx <= cl.Len())
 	cursor, leaf := newMetaSequenceCursor(cl, cl.cs)
 
-	chunkStart := cursor.seek(func(carry interface{}, mt sequenceItem) bool {
-		return idx < uint64(carry.(Uint64))+uint64(mt.(metaTuple).value.(Uint64))
-	}, func(carry interface{}, prev, current sequenceItem) interface{} {
-		pv := uint64(0)
-		if prev != nil {
-			pv = uint64(prev.(metaTuple).value.(Uint64))
-		}
-		return Uint64(uint64(carry.(Uint64)) + pv)
-	}, Uint64(0))
+	chunkStart := cursor.seekLinear(func(carry interface{}, mt sequenceItem) (bool, interface{}) {
+		offset := carry.(uint64) + mt.(metaTuple).uint64Value()
+		return idx < offset, offset
+	}, uint64(0))
 
-	current := cursor.current().(metaTuple)
-	if current.ref != leaf.Ref() {
+	if current := cursor.current().(metaTuple); current.ref != leaf.Ref() {
 		leaf = readMetaTupleValue(cursor.current(), cl.cs)
 	}
 
-	return cursor, leaf.(listLeaf), uint64(chunkStart.(Uint64))
+	return cursor, leaf.(listLeaf), chunkStart.(uint64)
 }
 
 func (cl compoundList) Get(idx uint64) Value {
@@ -102,6 +98,7 @@ func (cl compoundList) Set(idx uint64, v Value) List {
 }
 
 func (cl compoundList) Append(vs ...Value) List {
+	// TODO: add short circuitry to immediately create a cursor pointing to the end of the list.
 	seq := cl.sequenceChunkerAtIndex(cl.Len())
 	for _, v := range vs {
 		seq.Append(v)
@@ -118,7 +115,7 @@ func (cl compoundList) sequenceChunkerAtIndex(idx uint64) *sequenceChunker {
 		return list, len(list.values)
 	}}
 
-	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), normalizeChunkNoop, normalizeMetaSequenceChunk, newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
+	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
 }
 
 func (cl compoundList) Filter(cb listFilterCallback) List {

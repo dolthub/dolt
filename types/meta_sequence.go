@@ -21,7 +21,6 @@ type metaSequence interface {
 	data() metaSequenceData
 	tupleAt(idx int) metaTuple
 	tupleSlice(to int) []metaTuple
-	lastTuple() metaTuple
 	tupleCount() int
 }
 
@@ -35,6 +34,13 @@ func (mt metaTuple) uint64Value() uint64 {
 }
 
 type metaSequenceData []metaTuple
+
+func (msd metaSequenceData) uint64ValuesSum() (sum uint64) {
+	for _, mt := range msd {
+		sum += mt.uint64Value()
+	}
+	return
+}
 
 func (msd metaSequenceData) last() metaTuple {
 	return msd[len(msd)-1]
@@ -59,10 +65,6 @@ func (ms metaSequenceObject) tupleCount() int {
 
 func (ms metaSequenceObject) data() metaSequenceData {
 	return ms.tuples
-}
-
-func (ms metaSequenceObject) lastTuple() metaTuple {
-	return ms.tuples.last()
 }
 
 func (ms metaSequenceObject) ChildValues() []Value {
@@ -121,28 +123,14 @@ func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 func newMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
-		offsetSum := uint64(0)
-
 		for i, v := range items {
-			mt := v.(metaTuple)
-			offsetSum += mt.uint64Value()
-			tuples[i] = metaTuple{mt.ref, Uint64(offsetSum)}
+			tuples[i] = v.(metaTuple)
 		}
 
 		meta := newMetaSequenceFromData(tuples, t, cs)
 		ref := WriteValue(meta, cs)
-		return metaTuple{ref, Uint64(offsetSum)}, meta
+		return metaTuple{ref, Uint64(tuples.uint64ValuesSum())}, meta
 	}
-}
-
-func normalizeMetaSequenceChunk(in []sequenceItem) (out []sequenceItem) {
-	offset := uint64(0)
-	for _, v := range in {
-		mt := v.(metaTuple)
-		out = append(out, metaTuple{mt.ref, Uint64(mt.uint64Value() - offset)})
-		offset = mt.uint64Value()
-	}
-	return
 }
 
 // Creates a sequenceCursor pointing to the first metaTuple in a metaSequence, and returns that cursor plus the leaf Value referenced from that metaTuple.

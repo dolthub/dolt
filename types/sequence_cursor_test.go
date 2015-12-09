@@ -20,6 +20,27 @@ func newTestSequenceCursor(items [][]int) *sequenceCursor {
 	}}
 }
 
+// TODO: Convert all tests to use newTestSequenceCursor3.
+func newTestSequenceCursor3(items [][][]int) *sequenceCursor {
+	top := &sequenceCursor{nil, items, 0, len(items), func(item sequenceItem, idx int) sequenceItem {
+		return item.([][][]int)[idx] // item should be == items
+	}, func(item sequenceItem) (sequenceItem, int) {
+		panic("not reachable")
+	}}
+
+	middle := &sequenceCursor{top, items[0], 0, len(items[0]), func(item sequenceItem, idx int) sequenceItem {
+		return item.([][]int)[idx]
+	}, func(item sequenceItem) (sequenceItem, int) {
+		return item, len(item.([][]int))
+	}}
+
+	return &sequenceCursor{middle, items[0][0], 0, len(items[0][0]), func(item sequenceItem, idx int) sequenceItem {
+		return item.([]int)[idx]
+	}, func(item sequenceItem) (sequenceItem, int) {
+		return item, len(item.([]int))
+	}}
+}
+
 func TestTestCursor(t *testing.T) {
 	assert := assert.New(t)
 
@@ -206,7 +227,7 @@ func TestCursorGetMaxNPrevItemsWithMultiItemSequence(t *testing.T) {
 	assert.Equal([]sequenceItem{100, 101, 102, 103, 104, 105, 106, 107}, cur.maxNPrevItems(9))
 }
 
-func TestCursorSeek(t *testing.T) {
+func TestCursorSeekBinary(t *testing.T) {
 	assert := assert.New(t)
 
 	var cur *sequenceCursor
@@ -218,28 +239,16 @@ func TestCursorSeek(t *testing.T) {
 	}
 
 	assertSeeksTo := func(expected sequenceItem, seekTo int) {
-		// The value being carried around here is the level of the tree being seeked in. The seek is initialized with 0, so carry value passed to the comparison function on the first level should be 0. Subsequent steps increment this number, so 1 should be passed into the comparison function for the second level. When the seek exits, the final step should increment it again, so the result should be 2.
-		result := cur.seek(func(carry interface{}, val sequenceItem) bool {
+		cur.seekBinary(func(val sequenceItem) bool {
 			switch val := val.(type) {
 			case []int:
-				assert.Equal(0, carry)
 				return val[len(val)-1] >= seekTo
 			case int:
-				assert.Equal(1, carry)
 				return val >= seekTo
 			default:
 				panic("illegal")
 			}
-		}, func(carry interface{}, prev, current sequenceItem) interface{} {
-			switch current.(type) {
-			case []int:
-				assert.Equal(0, carry)
-			case int:
-				assert.Equal(1, carry)
-			}
-			return carry.(int) + 1
-		}, 0)
-		assert.Equal(2, result)
+		})
 		assert.Equal(expected, cur.current())
 	}
 
@@ -265,4 +274,92 @@ func TestCursorSeek(t *testing.T) {
 		assertSeeksTo(sequenceItem(i), i)
 	}
 	assertSeeksTo(sequenceItem(107), 108)
+}
+
+func TestCursorSeekLinear(t *testing.T) {
+	assert := assert.New(t)
+
+	var cur *sequenceCursor
+
+	assertSeeksTo := func(reset bool, expectedPos sequenceItem, expectedSumUpto, seekTo int) {
+		if reset {
+			cur = newTestSequenceCursor3(
+				[][][]int{
+					[][]int{
+						[]int{100, 101, 102, 103},
+						[]int{104, 105, 106, 107},
+					},
+					[][]int{
+						[]int{108, 109, 110, 111},
+						[]int{112, 113, 114, 115},
+					},
+				},
+			)
+		}
+		sumUpto := cur.seekLinear(func(carry interface{}, item sequenceItem) (bool, interface{}) {
+			switch item := item.(type) {
+			case [][]int:
+				last := item[len(item)-1]
+				return seekTo <= last[len(last)-1], carry
+			case []int:
+				return seekTo <= item[len(item)-1], carry
+			case int:
+				return seekTo <= item, item + carry.(int)
+			}
+			panic("illegal")
+		}, 0)
+		pos, _ := cur.maybeCurrent()
+		assert.Equal(expectedPos, pos)
+		assert.Equal(expectedSumUpto, sumUpto)
+	}
+
+	// Test seeking immediately to values on cursor construction.
+	assertSeeksTo(true, sequenceItem(100), 0, 99)
+
+	assertSeeksTo(true, sequenceItem(100), 0, 100)
+	assertSeeksTo(true, sequenceItem(101), 100, 101)
+	assertSeeksTo(true, sequenceItem(102), 201, 102)
+	assertSeeksTo(true, sequenceItem(103), 303, 103)
+
+	assertSeeksTo(true, sequenceItem(104), 0, 104)
+	assertSeeksTo(true, sequenceItem(105), 104, 105)
+	assertSeeksTo(true, sequenceItem(106), 209, 106)
+	assertSeeksTo(true, sequenceItem(107), 315, 107)
+
+	assertSeeksTo(true, sequenceItem(108), 0, 108)
+	assertSeeksTo(true, sequenceItem(109), 108, 109)
+	assertSeeksTo(true, sequenceItem(110), 217, 110)
+	assertSeeksTo(true, sequenceItem(111), 327, 111)
+
+	assertSeeksTo(true, sequenceItem(112), 0, 112)
+	assertSeeksTo(true, sequenceItem(113), 112, 113)
+	assertSeeksTo(true, sequenceItem(114), 225, 114)
+	assertSeeksTo(true, sequenceItem(115), 339, 115)
+
+	assertSeeksTo(true, sequenceItem(115), 339, 116)
+
+	// Test reusing an existing cursor to seek all over the place.
+	assertSeeksTo(false, sequenceItem(100), 0, 99)
+
+	assertSeeksTo(false, sequenceItem(100), 0, 100)
+	assertSeeksTo(false, sequenceItem(101), 100, 101)
+	assertSeeksTo(false, sequenceItem(102), 201, 102)
+	assertSeeksTo(false, sequenceItem(103), 303, 103)
+
+	assertSeeksTo(false, sequenceItem(104), 0, 104)
+	assertSeeksTo(false, sequenceItem(105), 104, 105)
+	assertSeeksTo(false, sequenceItem(106), 209, 106)
+	assertSeeksTo(false, sequenceItem(107), 315, 107)
+
+	assertSeeksTo(false, sequenceItem(108), 0, 108)
+	assertSeeksTo(false, sequenceItem(109), 108, 109)
+	assertSeeksTo(false, sequenceItem(110), 217, 110)
+	assertSeeksTo(false, sequenceItem(111), 327, 111)
+
+	assertSeeksTo(false, sequenceItem(112), 0, 112)
+	assertSeeksTo(false, sequenceItem(113), 112, 113)
+	assertSeeksTo(false, sequenceItem(114), 225, 114)
+	assertSeeksTo(false, sequenceItem(115), 339, 115)
+
+	assertSeeksTo(false, sequenceItem(115), 339, 116)
 }
