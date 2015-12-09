@@ -15,14 +15,15 @@ import (
 type Env map[string]string
 
 func (e Env) toStrings() (out []string) {
+	out = os.Environ()
+	// Sadly, it seems like we need to force-set GOROOT in the environment to handle some funky runtime environments (e.g. on our Travis setup)
+	if _, overridden := e["GOROOT"]; !overridden {
+		e["GOROOT"] = runtime.GOROOT()
+	}
 	for n, v := range e {
 		out = append(out, fmt.Sprintf("%s=%s", n, v))
 	}
-	if out == nil {
-		// Sadly, it seems like we need to force-set GOROOT in the environment, which means that we need to manually copy out the current environment and add to it instead of just returning nil and allowing the exec library to take its course.
-		out = os.Environ()
-	}
-	return append(out, "GOROOT="+runtime.GOROOT())
+	return
 }
 
 // ForceRun runs 'exe [args...]' in current working directory, and d.Chk()s on failure. Inherits the environment of the current process.

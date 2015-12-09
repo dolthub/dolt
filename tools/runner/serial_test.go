@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -66,6 +67,10 @@ func (suite *SerialRunnerTestSuite) TestEnvVars() {
 		makeEnvVarPrintBuildFile(tc.path, tc.varname)
 		tests = append(tests, tc)
 	}
+	gorootTestCase := testCase{suite.uniqueBuildFile(), "GOROOT", runtime.GOROOT()}
+	makeEnvVarPrintBuildFile(gorootTestCase.path, gorootTestCase.varname)
+	tests = append(tests, gorootTestCase)
+
 	log := &bytes.Buffer{}
 	if suite.True(Serial(log, log, env, suite.dir, buildFileBasename), "Serial() should have succeeded! logs:\n%s", string(log.Bytes())) {
 		logText := string(log.Bytes())

@@ -15,6 +15,7 @@ func main() {
 	d.Chk.NoError(err)
 	fileutil.ForceSymlink("../../js/.babelrc", path)
 
+	runner.ForceRun("./link.sh")
 	runner.ForceRun("npm", "install")
 	if _, present := os.LookupEnv("NOMS_SERVER"); !present {
 		os.Setenv("NOMS_SERVER", "http://localhost:8000")
