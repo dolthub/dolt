@@ -105,12 +105,21 @@ func (cl compoundList) MapP(concurrency int, mf MapFunc) []interface{} {
 }
 
 func (cl compoundList) Set(idx uint64, v Value) List {
-	panic("not implemented")
+	seq := cl.sequenceChunkerAtIndex(idx)
+	seq.Skip()
+	seq.Append(v)
+	return seq.Done().(List)
 }
 
 func (cl compoundList) Append(vs ...Value) List {
-	// TODO: add short circuitry to immediately create a cursor pointing to the end of the list.
-	seq := cl.sequenceChunkerAtIndex(cl.Len())
+	return cl.Insert(cl.Len(), vs...)
+}
+
+func (cl compoundList) Insert(idx uint64, vs ...Value) List {
+	if len(vs) == 0 {
+		return cl
+	}
+	seq := cl.sequenceChunkerAtIndex(idx)
 	for _, v := range vs {
 		seq.Append(v)
 	}
@@ -118,6 +127,7 @@ func (cl compoundList) Append(vs ...Value) List {
 }
 
 func (cl compoundList) sequenceCursorAtIndex(idx uint64) *sequenceCursor {
+	// TODO: An optimisation would be to decide at each level whether to step forward or backward across the node to find the insertion point, depending on which is closer. This would make Append much faster.
 	metaCur, leaf, start := cl.cursorAt(idx)
 	return &sequenceCursor{metaCur, leaf, int(idx - start), len(leaf.values), func(list sequenceItem, idx int) sequenceItem {
 		return list.(listLeaf).values[idx]
@@ -136,16 +146,20 @@ func (cl compoundList) Filter(cb listFilterCallback) List {
 	panic("not implemented")
 }
 
-func (cl compoundList) Insert(idx uint64, v ...Value) List {
-	panic("not implemented")
-}
-
 func (cl compoundList) Remove(start uint64, end uint64) List {
-	panic("not implemented")
+	if start == end {
+		return cl
+	}
+	d.Chk.True(end > start)
+	seq := cl.sequenceChunkerAtIndex(start)
+	for i := start; i < end; i++ {
+		seq.Skip()
+	}
+	return seq.Done().(compoundList)
 }
 
 func (cl compoundList) RemoveAt(idx uint64) List {
-	panic("not implemented")
+	return cl.Remove(idx, idx+1)
 }
 
 func (cl compoundList) Iter(f listIterFunc) {
