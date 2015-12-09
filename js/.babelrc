@@ -1,9 +1,25 @@
 {
-  "presets": ["react", "es2015"],
-  "plugins": [
-    "syntax-async-functions",
-    "syntax-flow",
-    "transform-class-properties",
-    "transform-regenerator"
-  ]
+  "env": {
+    "production": {
+      "presets": ["react", "es2015"],
+      "plugins": [
+        "syntax-async-functions",
+        "syntax-flow",
+        "transform-class-properties",
+        "transform-regenerator"
+      ]
+    },
+    "development": {
+      "presets": ["react"],
+      "plugins": [
+        "syntax-async-functions",
+        "syntax-flow",
+        "transform-async-to-generator",
+        "transform-class-properties",
+        "transform-es2015-destructuring",
+        "transform-es2015-modules-commonjs",
+        "transform-es2015-parameters",
+      ]
+    }
+  }
 }
