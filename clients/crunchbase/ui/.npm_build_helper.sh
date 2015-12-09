@@ -3,6 +3,7 @@ SRC="node_modules/babel-regenerator-runtime/runtime.js src/main.js"
 OUT="out.js"
 
 export NODE_ENV=production
+export BABEL_ENV=production
 
 cp node_modules/nvd3/build/nv.d3.min.css nv.d3.css
 
