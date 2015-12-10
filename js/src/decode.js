@@ -1,17 +1,20 @@
 // @flow
 
 import Chunk from './chunk.js';
-import CompoundList from './compound_list.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {decode as decodeBase64} from './base64.js';
-import {CompoundDesc, Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, makeUnresolvedType, StructDesc, Type} from './type.js';
+import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, makeUnresolvedType, StructDesc, Type} from './type.js';
+import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta_sequence.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
+import {ListLeaf} from './list.js';
 import {lookupPackage, Package, readPackage} from './package.js';
-import {MetaTuple} from './meta_sequence.js';
+import {MapLeaf} from './map.js';
+import {setDecodeNomsValue} from './read_value.js';
+import {SetLeaf} from './set.js';
 
 const typedTag = 't ';
 const blobTag = 'b ';
@@ -107,7 +110,7 @@ class JsonArrayReader {
     return Promise.resolve(decodeBase64(s));
   }
 
-  async readList(t: Type, pkg: ?Package): Promise<Array<any>> {
+  async readSequence(t: Type, pkg: ?Package): Promise<Array<any>> {
     let elemType = t.elemTypes[0];
     let list = [];
     while (!this.atEnd()) {
@@ -118,22 +121,27 @@ class JsonArrayReader {
     return list;
   }
 
-  async readSet(t: Type, pkg: ?Package): Promise<Set> {
-    let seq = await this.readList(t, pkg);
-    return new Set(seq);
+  async readListLeaf(t: Type, pkg: ?Package): Promise<ListLeaf> {
+    let seq = await this.readSequence(t, pkg);
+    return new ListLeaf(this._cs, t, seq);
   }
 
-  async readMap(t: Type, pkg: ?Package): Promise<Map> {
+  async readSetLeaf(t: Type, pkg: ?Package): Promise<SetLeaf> {
+    let seq = await this.readSequence(t, pkg);
+    return new SetLeaf(this._cs, t, seq);
+  }
+
+  async readMapLeaf(t: Type, pkg: ?Package): Promise<MapLeaf> {
     let keyType = t.elemTypes[0];
     let valueType = t.elemTypes[1];
-    let m = new Map();
+    let entries = [];
     while (!this.atEnd()) {
       let k = await this.readValueWithoutTag(keyType, pkg);
       let v = await this.readValueWithoutTag(valueType, pkg);
-      m.set(k, v);
+      entries.push({key: k, value: v});
     }
 
-    return m;
+    return new MapLeaf(this._cs, t, entries);
   }
 
   readEnum(): number {
@@ -154,13 +162,7 @@ class JsonArrayReader {
       data.push(new MetaTuple(ref, v));
     }
 
-    switch (t.kind) {
-      // TODO: case Kind.Blob, Kind.Set, Kind.Map
-      case Kind.List:
-        return new CompoundList(this._cs, t, data);
-      default:
-        throw new Error('unreached');
-    }
+    return newMetaSequenceFromData(this._cs, t, data);
   }
 
   readPackage(t: Type, pkg: ?Package): Package {
@@ -221,7 +223,7 @@ class JsonArrayReader {
         }
 
         let r2 = new JsonArrayReader(this.readArray(), this._cs);
-        return r2.readList(t, pkg);
+        return r2.readListLeaf(t, pkg);
       }
       case Kind.Map: {
         let ms = await this.maybeReadMetaSequence(t, pkg);
@@ -230,7 +232,7 @@ class JsonArrayReader {
         }
 
         let r2 = new JsonArrayReader(this.readArray(), this._cs);
-        return r2.readMap(t, pkg);
+        return r2.readMapLeaf(t, pkg);
       }
       case Kind.Package:
         return Promise.resolve(this.readPackage(t, pkg));
@@ -245,7 +247,7 @@ class JsonArrayReader {
         }
 
         let r2 = new JsonArrayReader(this.readArray(), this._cs);
-        return r2.readSet(t, pkg);
+        return r2.readSetLeaf(t, pkg);
       }
       case Kind.Enum:
       case Kind.Struct:
@@ -374,22 +376,6 @@ class JsonArrayReader {
   }
 }
 
-function indexTypeForMetaSequence(t: Type): Type {
-  switch (t.kind) {
-    case Kind.Map:
-    case Kind.Set: {
-      let desc = t.desc;
-      invariant(desc instanceof CompoundDesc);
-      return desc.elemTypes[0];
-    }
-    case Kind.Blob:
-    case Kind.List:
-      return makePrimitiveType(Kind.Uint64);
-  }
-
-  throw new Error('Not reached');
-}
-
 function decodeNomsValue(chunk: Chunk, cs: ChunkStore): Promise<any> {
   let tag = new Chunk(new Uint8Array(chunk.data.buffer, 0, 2)).toString();
 
@@ -407,13 +393,6 @@ function decodeNomsValue(chunk: Chunk, cs: ChunkStore): Promise<any> {
   }
 }
 
-export async function readValue(r: Ref, cs: ChunkStore): Promise<any> {
-  let chunk = await cs.get(r);
-  if (chunk.isEmpty()) {
-    return null;
-  }
+export {decodeNomsValue, indexTypeForMetaSequence, JsonArrayReader};
 
-  return decodeNomsValue(chunk, cs);
-}
-
-export {decodeNomsValue, indexTypeForMetaSequence, JsonArrayReader, readValue};
+setDecodeNomsValue(decodeNomsValue); // TODO: Avoid cyclic badness with commonjs.

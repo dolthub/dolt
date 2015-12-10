@@ -5,7 +5,7 @@ import type {ChunkStore} from './chunk_store.js';
 import {ensureRef} from './get_ref.js';
 import {invariant} from './assert.js';
 import {packageType, Type} from './type.js';
-import {readValue} from './decode.js';
+import {readValue} from './read_value.js';
 
 class Package {
   types: Array<Type>;

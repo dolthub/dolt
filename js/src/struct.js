@@ -1,23 +1,21 @@
 // @flow
 
-import Ref from './ref.js';
-import {ensureRef} from './get_ref.js';
 import {Field, StructDesc, Type} from './type.js';
 import {invariant, notNull} from './assert.js';
+import {Value} from './value.js';
 
 type StructData = {[key: string]: any};
 
-export default class Struct {
-  type: Type;
+export default class Struct extends Value {
   desc: StructDesc;
   unionField: ?Field;
 
   _data: StructData;
   typeDef: Type;
-  _ref: Ref;
 
   constructor(type: Type, typeDef: Type, data: StructData) {
-    this.type = type;
+    super(type);
+
     this.typeDef = typeDef;
 
     let desc = typeDef.desc;
@@ -26,14 +24,6 @@ export default class Struct {
 
     this._data = data;
     this.unionField = validate(this);
-  }
-
-  get ref(): Ref {
-    return this._ref = ensureRef(this._ref, this, this.type);
-  }
-
-  equals(other: Struct): boolean {
-    return this.ref.equals(other.ref);
   }
 
   get fields(): Array<Field> {

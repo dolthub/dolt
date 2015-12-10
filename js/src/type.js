@@ -21,6 +21,25 @@ class PrimitiveDesc {
   equals(other: TypeDesc): boolean {
     return other instanceof PrimitiveDesc && other.kind === this.kind;
   }
+
+  get ordered(): boolean {
+    switch (this.kind) {
+      case Kind.Float32:
+      case Kind.Float64:
+      case Kind.Int8:
+      case Kind.Int16:
+      case Kind.Int32:
+      case Kind.Int64:
+      case Kind.Uint8:
+      case Kind.Uint16:
+      case Kind.Uint32:
+      case Kind.Uint64:
+      case Kind.String:
+        return true;
+      default:
+        return false;
+    }
+  }
 }
 
 class UnresolvedDesc {
@@ -189,6 +208,15 @@ class Type {
     return this._desc.kind;
   }
 
+  get ordered(): boolean {
+    let desc = this._desc;
+    if (desc instanceof PrimitiveDesc) {
+      return desc.ordered;
+    }
+
+    return false;
+  }
+
   get desc(): TypeDesc {
     return this._desc;
   }
@@ -265,7 +293,7 @@ function makePrimitiveType(k: NomsKind): Type {
 function makeCompoundType(k: NomsKind, ...elemTypes: Array<Type>): Type {
   if (elemTypes.length === 1) {
     invariant(k !== Kind.Map, 'Map requires 2 element types');
-    invariant(k === Kind.Ref || k === Kind.List || k === Kind.Set || k === Kind.MetaSequence);
+    invariant(k === Kind.Ref || k === Kind.List || k === Kind.Set);
   } else {
     invariant(k === Kind.Map, 'Only Map can have multiple element types');
     invariant(elemTypes.length === 2, 'Map requires 2 element types');

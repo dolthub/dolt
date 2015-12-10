@@ -1,6 +1,6 @@
 // @flow
 
-import React from 'react'; //eslint-disable-line no-unused-lets
+import React from 'react';
 import {readValue, HttpStore, Ref, Struct} from 'noms';
 
 const IMAGE_WIDTH_PX = 286;

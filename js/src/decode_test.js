@@ -1,19 +1,22 @@
 // @flow
 
 import Chunk from './chunk.js';
-import CompoundList from './compound_list.js';
 import MemoryStore from './memory_store.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
 import test from './async_test.js';
 import type {TypeDesc} from './type.js';
 import {assert} from 'chai';
-import {decodeNomsValue, JsonArrayReader, readValue} from './decode.js';
+import {decodeNomsValue, JsonArrayReader} from './decode.js';
 import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type} from './type.js';
 import {invariant} from './assert.js';
 import {Kind} from './noms_kind.js';
+import {ListLeaf, CompoundList} from './list.js';
+import {MapLeaf} from './map.js';
 import {MetaTuple} from './meta_sequence.js';
+import {readValue} from './read_value.js';
 import {registerPackage, Package} from './package.js';
+import {SetLeaf} from './set.js';
 import {suite} from 'mocha';
 import {writeValue} from './encode.js';
 
@@ -85,15 +88,25 @@ suite('Decode', () => {
     let a = [Kind.List, Kind.Int32, false, [0, 1, 2, 3]];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
-    assert.deepEqual([0, 1, 2, 3], v);
+    invariant(v instanceof ListLeaf);
+
+    let tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
+    let l = new ListLeaf(ms, tr, [0, 1, 2, 3]);
+    assert.isTrue(l.equals(v));
   });
 
+  // TODO: Can't round-trip collections of value types. =-(
   test('read list of value', async () => {
     let ms = new MemoryStore();
     let a = [Kind.List, Kind.Value, false, [Kind.Int32, 1, Kind.String, 'hi', Kind.Bool, true]];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
-    assert.deepEqual([1, 'hi', true], v);
+    invariant(v instanceof ListLeaf);
+    let tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Value));
+    assert.isTrue(v.type.equals(tr));
+    assert.strictEqual(1, await v.get(0));
+    assert.strictEqual('hi', await v.get(1));
+    assert.strictEqual(true, await v.get(2));
   });
 
   test('read value list of int8', async () => {
@@ -101,16 +114,20 @@ suite('Decode', () => {
     let a = [Kind.Value, Kind.List, Kind.Int8, false, [0, 1, 2]];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
-    assert.deepEqual([0, 1, 2], v);
+    invariant(v instanceof ListLeaf);
+
+    let tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int8));
+    let l = new ListLeaf(ms, tr, [0, 1, 2]);
+    assert.isTrue(l.equals(v));
   });
 
   test('read compound list', async () => {
     let ms = new MemoryStore();
 
     let ltr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
-    let r1 = writeValue([0, 1], ltr, ms);
-    let r2 = writeValue([2, 3], ltr, ms);
-    let r3 = writeValue([4, 5], ltr, ms);
+    let r1 = writeValue(new ListLeaf(ms, ltr, [0, 1]), ltr, ms);
+    let r2 = writeValue(new ListLeaf(ms, ltr, [2, 3]), ltr, ms);
+    let r3 = writeValue(new ListLeaf(ms, ltr, [4, 5]), ltr, ms);
     let tuples = [
       new MetaTuple(r1, 2),
       new MetaTuple(r2, 4),
@@ -125,25 +142,16 @@ suite('Decode', () => {
     assert.isTrue(v.ref.equals(l.ref));
   });
 
-  function assertMapsEqual(expected: Map, actual: Map): void {
-    assert.strictEqual(expected.size, actual.size);
-    expected.forEach((v, k) => {
-      assert.isTrue(actual.has(k));
-      assert.deepEqual(v, actual.get(k));
-    });
-  }
-
   test('read map of int64 to float64', async () => {
     let ms = new MemoryStore();
     let a = [Kind.Map, Kind.Int64, Kind.Float64, false, [0, 1, 2, 3]];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
+    invariant(v instanceof MapLeaf);
 
-    let m = new Map();
-    m.set(0, 1);
-    m.set(2, 3);
-
-    assertMapsEqual(m, v);
+    let t = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64), makePrimitiveType(Kind.Float64));
+    let m = new MapLeaf(ms, t, [{key: 0, value: 1}, {key: 2, value: 3}]);
+    assert.isTrue(v.equals(m));
   });
 
   test('read value map of uint64 to uint32', async () => {
@@ -151,34 +159,23 @@ suite('Decode', () => {
     let a = [Kind.Value, Kind.Map, Kind.Uint64, Kind.Uint32, false, [0, 1, 2, 3]];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
+    invariant(v instanceof MapLeaf);
 
-    let m = new Map();
-    m.set(0, 1);
-    m.set(2, 3);
-
-    assertMapsEqual(m, v);
+    let t = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Uint64), makePrimitiveType(Kind.Uint32));
+    let m = new MapLeaf(ms, t, [{key: 0, value: 1}, {key: 2, value: 3}]);
+    assert.isTrue(v.equals(m));
   });
-
-  function assertSetsEqual(expected: Set, actual: Set): void {
-    assert.strictEqual(expected.size, actual.size);
-    expected.forEach((v) => {
-      assert.isTrue(actual.has(v));
-    });
-  }
 
   test('read set of uint8', async () => {
     let ms = new MemoryStore();
     let a = [Kind.Set, Kind.Uint8, false, [0, 1, 2, 3]];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
+    invariant(v instanceof SetLeaf);
 
-    let s = new Set();
-    s.add(0);
-    s.add(1);
-    s.add(2);
-    s.add(3);
-
-    assertSetsEqual(s, v);
+    let t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint8));
+    let s = new SetLeaf(ms, t, [0, 1, 2, 3]);
+    assert.isTrue(v.equals(s));
   });
 
   test('read value set of uint16', async () => {
@@ -187,12 +184,13 @@ suite('Decode', () => {
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
-    let s = new Set([0, 1, 2, 3]);
-    assertSetsEqual(s, v);
+    let t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint16));
+    let s = new SetLeaf(ms, t, [0, 1, 2, 3]);
+    assert.isTrue(v.equals(s));
   });
 
   function assertStruct(s: Struct, desc: TypeDesc, data: {[key: string]: any}) {
-    invariant(s instanceof Struct);
+    invariant(s instanceof Struct, 'expected instanceof struct');
     assert.deepEqual(desc, s.desc);
 
     for (let key in data) {
@@ -267,9 +265,11 @@ suite('Decode', () => {
 
   test('test read struct with list', async () => {
     let ms = new MemoryStore();
+
+    let ltr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
     let tr = makeStructType('A4', [
       new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('l', makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32)), false),
+      new Field('l', ltr, false),
       new Field('s', makePrimitiveType(Kind.String), false)
     ], []);
 
@@ -282,7 +282,7 @@ suite('Decode', () => {
 
     assertStruct(v, tr.desc, {
       b: true,
-      l: [0, 1, 2],
+      l: new ListLeaf(ms, ltr, [0, 1, 2]),
       s: 'hi'
     });
   });
@@ -391,24 +391,27 @@ suite('Decode', () => {
     let pkg = new Package([tr], []);
     registerPackage(pkg);
 
-    let a = [Kind.Value, Kind.Map, Kind.String, Kind.Unresolved, pkg.ref.toString(), 0, false, ['foo', true, 3, 'bar', false, 2, 'baz', false, 1]];
+    let a = [Kind.Value, Kind.Map, Kind.String, Kind.Unresolved, pkg.ref.toString(), 0, false, ['bar', false, 2, 'baz', false, 1, 'foo', true, 3]];
 
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
-    invariant(v instanceof Map);
+    invariant(v instanceof MapLeaf);
     assert.strictEqual(3, v.size);
 
-    assertStruct(v.get('foo'), tr.desc, {b: true, i: 3});
-    assertStruct(v.get('bar'), tr.desc, {b: false, i: 2});
-    assertStruct(v.get('baz'), tr.desc, {b: false, i: 1});
+    assertStruct(await v.get('foo'), tr.desc, {b: true, i: 3});
+    assertStruct(await v.get('bar'), tr.desc, {b: false, i: 2});
+    assertStruct(await v.get('baz'), tr.desc, {b: false, i: 1});
   });
 
   test('decodeNomsValue', async () => {
+    let ms = new MemoryStore();
     let chunk = Chunk.fromString(`t [${Kind.Value}, ${Kind.Set}, ${Kind.Uint16}, false, [0, 1, 2, 3]]`);
     let v = await decodeNomsValue(chunk, new MemoryStore());
-    let s = new Set([0, 1, 2, 3]);
-    assertSetsEqual(s, v);
+
+    let t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint16));
+    let s = new SetLeaf(ms, t, [0, 1, 2, 3]);
+    assert.isTrue(v.equals(s));
   });
 
   test('decodeNomsValue: counter with one commit', async () => {
@@ -419,9 +422,9 @@ suite('Decode', () => {
     ms.put(Chunk.fromString('t [21,"sha1-7546d804d845125bc42669c7a4c3f3fb909eca29",0,4,1,false,[]]')); // commit
 
     let rootMap = await readValue(root, ms);
-    let counterRef = rootMap.get('counter');
+    let counterRef = await rootMap.get('counter');
     let commit = await readValue(counterRef, ms);
-    assert.strictEqual(1, commit.get('value'));
+    assert.strictEqual(1, await commit.get('value'));
   });
 
   test('top level blob', async () => {

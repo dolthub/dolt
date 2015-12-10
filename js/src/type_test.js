@@ -6,7 +6,7 @@ import {assert} from 'chai';
 import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
 import {Kind} from './noms_kind.js';
 import {Package, registerPackage} from './package.js';
-import {readValue} from './decode.js';
+import {readValue} from './read_value.js';
 import {suite, test} from 'mocha';
 import {writeValue} from './encode.js';
 
