@@ -1,14 +1,17 @@
 // @flow
 
-export {encodeNomsValue} from './encode.js';
-export {readValue} from './decode.js';
+export {decodeNomsValue} from './decode.js';
 export {default as Chunk} from './chunk.js';
-export {default as CompoundList} from './compound_list.js';
 export {default as HttpStore} from './http_store.js';
 export {default as MemoryStore} from './memory_store.js';
 export {default as Ref} from './ref.js';
 export {default as Struct} from './struct.js';
+export {encodeNomsValue} from './encode.js';
 export {lookupPackage, Package, readPackage, registerPackage} from './package.js';
+export {NomsList, ListLeaf, CompoundList} from './list.js';
+export {NomsMap, MapLeaf, CompoundMap} from './map.js';
+export {NomsSet, SetLeaf, CompoundSet} from './set.js';
+export {readValue} from './read_value.js';
 export {
   CompoundDesc,
   EnumDesc,

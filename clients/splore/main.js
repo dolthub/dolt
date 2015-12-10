@@ -2,9 +2,9 @@
 
 import {layout, NodeGraph, TreeNode} from './buchheim.js';
 import Layout from './layout.js';
-import React from 'react'; //eslint-disable-line no-unused-vars
+import React from 'react'; // eslint-disable-line no-unused-vars
 import ReactDOM from 'react-dom';
-import {CompoundList, readValue, HttpStore, Ref, Struct} from 'noms';
+import {CompoundList, CompoundMap, CompoundSet, ListLeaf, MapLeaf, readValue, SetLeaf, HttpStore, Ref, Struct} from 'noms';
 
 let data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
@@ -60,15 +60,17 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
 
     if (val instanceof Blob) {
       data.nodes[id] = {name: `Blob (${val.size})`};
-    } else if (Array.isArray(val)) {
+    } else if (val instanceof ListLeaf) {
       data.nodes[id] = {name: `List (${val.length})`};
-      val.forEach(c => process(ref, c, id));
-    } else if (val instanceof Set) {
+      val.items.forEach(c => process(ref, c, id));
+    } else if (val instanceof SetLeaf) {
       data.nodes[id] = {name: `Set (${val.size})`};
-      val.forEach(c => process(ref, c, id));
-    } else if (val instanceof Map) {
+      val.items.forEach(c => process(ref, c, id));
+    } else if (val instanceof MapLeaf) {
       data.nodes[id] = {name: `Map (${val.size})`};
-      val.forEach((v, k) => {
+      val.items.forEach(entry => {
+        let k = entry.key;
+        let v = entry.value;
         // TODO: handle non-string keys
         let kid = process(ref, k, id);
         if (kid) {
@@ -105,8 +107,34 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         }
       });
     } else if (val instanceof CompoundList) {
-      data.nodes[id] = {name: 'MetaList'};
-      val.tuples.forEach(tuple => {
+      data.nodes[id] = {name: 'ListNode'};
+      val.items.forEach(tuple => {
+        let kid = process(ref, tuple.value, id);
+        if (kid) {
+          // Start map keys open, just makes it easier to use.
+          data.nodes[kid].isOpen = true;
+
+          process(ref, tuple.ref, kid);
+        } else {
+          throw new Error('No kid id.');
+        }
+      });
+    } else if (val instanceof CompoundMap) {
+      data.nodes[id] = {name: 'MapNode'};
+      val.items.forEach(tuple => {
+        let kid = process(ref, tuple.value, id);
+        if (kid) {
+          // Start map keys open, just makes it easier to use.
+          data.nodes[kid].isOpen = true;
+
+          process(ref, tuple.ref, kid);
+        } else {
+          throw new Error('No kid id.');
+        }
+      });
+    } else if (val instanceof CompoundSet) {
+      data.nodes[id] = {name: 'SetNode'};
+      val.items.forEach(tuple => {
         let kid = process(ref, tuple.value, id);
         if (kid) {
           // Start map keys open, just makes it easier to use.
