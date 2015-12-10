@@ -1,7 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -10,8 +12,8 @@ import (
 )
 
 const (
-	buildScript = "build.go"
-	pkgScript   = "pkg.go"
+	buildScript = "build.py"
+	stageScript = "stage.py"
 
 	nomsServer        = "http://ds.noms.io"
 	nomsCheckoutPath  = "src/github.com/attic-labs/noms"
@@ -19,22 +21,44 @@ const (
 )
 
 func main() {
-	goPath := os.Getenv("GOPATH")
-	d.Exp.NotEmpty(goPath, "GOPATH must be set!")
-	workspace := os.Getenv("WORKSPACE")
-	if workspace == "" {
-		fmt.Printf("WORKSPACE not set in environment; using GOPATH (%s).\n", goPath)
-		workspace = goPath
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n  %s path/to/staging/dir\n", os.Args[0], os.Args[0])
 	}
-	env := runner.Env{
-		"PATH":                os.Getenv("PATH"),
-		"GOPATH":              goPath,
-		"NOMS_SERVER":         nomsServer,
-		"NOMS_CHECKOUT_PATH":  filepath.Join(workspace, nomsCheckoutPath),
-		"ATTIC_CHECKOUT_PATH": filepath.Join(workspace, atticCheckoutPath),
-	}
-
-	if !runner.Serial(os.Stdout, os.Stderr, env, ".", buildScript) {
+	flag.Parse()
+	if flag.Arg(0) == "" {
+		flag.Usage()
 		os.Exit(1)
+	}
+	err := d.Try(func() {
+		stagingDir, err := filepath.Abs(flag.Arg(0))
+		d.Exp.NoError(err, "Path to staging directory (first arg) must be valid, not %s", flag.Arg(0))
+		d.Exp.NoError(os.MkdirAll(stagingDir, 0755))
+
+		goPath := os.Getenv("GOPATH")
+		d.Exp.NotEmpty(goPath, "GOPATH must be set!")
+		workspace := os.Getenv("WORKSPACE")
+		if workspace == "" {
+			fmt.Printf("WORKSPACE not set in environment; using GOPATH (%s).\n", goPath)
+			workspace = goPath
+		}
+		pythonPath := filepath.Join(goPath, nomsCheckoutPath, "tools")
+		env := runner.Env{
+			"GOPATH":              goPath,
+			"PYTHONPATH":          pythonPath,
+			"NOMS_SERVER":         nomsServer,
+			"NOMS_CHECKOUT_PATH":  filepath.Join(workspace, nomsCheckoutPath),
+			"ATTIC_CHECKOUT_PATH": filepath.Join(workspace, atticCheckoutPath),
+		}
+
+		if !runner.Serial(os.Stdout, os.Stderr, env, ".", buildScript) {
+			os.Exit(1)
+		}
+
+		if !runner.Serial(os.Stdout, os.Stderr, env, ".", stageScript, stagingDir) {
+			os.Exit(1)
+		}
+	})
+	if err != nil {
+		log.Fatal(err)
 	}
 }

@@ -11,18 +11,15 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
-	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/tools/imports"
 )
 
 const (
 	boilerplate = `
-package main
+import os
 
-func main() {
-	%s
-}
+%s
 `
-	buildFileBasename = "build.go"
+	buildFileBasename = "build.py"
 )
 
 func TestSerialRunnerTestSuite(t *testing.T) {
@@ -47,8 +44,7 @@ func (suite *SerialRunnerTestSuite) TearDownTest() {
 
 func (suite *SerialRunnerTestSuite) TestEnvVars() {
 	makeEnvVarPrintBuildFile := func(path, varname string) {
-		// This creates a string containing a Go statement that uses fmt.Println to print the value of the given environment variable. Looking at it is super confusing to me; hence the comment.
-		fmtStatement := fmt.Sprintf(`fmt.Println(os.Getenv("%s"))`, varname)
+		fmtStatement := fmt.Sprintf(`print os.environ['%s']`, varname)
 		suite.makeTestBuildFile(path, []string{fmtStatement})
 	}
 
@@ -90,9 +86,9 @@ func (suite *SerialRunnerTestSuite) TestFailure() {
 	}
 	goodOne := testCase{suite.uniqueBuildFile(), "All's well"}
 
-	suite.makeTestBuildFile(tests[0].path, []string{"Scoobaz() // Won't compile."})
-	suite.makeTestBuildFile(tests[1].path, []string{`panic("at the disco") // Won't run.`})
-	suite.makeTestBuildFile(goodOne.path, []string{fmt.Sprintf(`fmt.Println("%s")`, goodOne.expected)})
+	suite.makeTestBuildFile(tests[0].path, []string{"Scoobaz() # Won't compile."})
+	suite.makeTestBuildFile(tests[1].path, []string{`assert(False, "at the disco") # Won't run.`})
+	suite.makeTestBuildFile(goodOne.path, []string{fmt.Sprintf(`print "%s"`, goodOne.expected)})
 
 	log := &bytes.Buffer{}
 	suite.False(Serial(log, log, Env{}, suite.dir, buildFileBasename))
@@ -109,10 +105,8 @@ func (suite *SerialRunnerTestSuite) uniqueBuildFile() string {
 func (suite *SerialRunnerTestSuite) makeTestBuildFile(path string, statements []string) {
 	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, boilerplate, strings.Join(statements, "\n"))
-	bs, err := imports.Process("", buf.Bytes(), nil)
+	err := os.MkdirAll(filepath.Dir(path), 0777)
 	suite.NoError(err)
-	err = os.MkdirAll(filepath.Dir(path), 0777)
-	suite.NoError(err)
-	err = ioutil.WriteFile(path, bs, 0755)
+	err = ioutil.WriteFile(path, buf.Bytes(), 0755)
 	suite.NoError(err)
 }

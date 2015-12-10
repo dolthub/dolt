@@ -5,7 +5,7 @@ Pigeon (https://github.com/PuerkitoBio/pigeon) and goimports. To get the
 packages needed to work on the parser, run
 
 ```
-go get -u github.com/PuerkitoBio/pigeon github.com/bradfitz/goimports
+go get -u github.com/PuerkitoBio/pigeon golang.org/x/tools/cmd/goimports
 ```
 
 Once these are set up, simply run `go generate` to generate go code for the parser.
