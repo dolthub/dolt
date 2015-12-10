@@ -170,3 +170,48 @@ func TestCompoundListAppend(t *testing.T) {
 	assert.Equal(3*getTestSimpleListLen()+4, cl6.Len())
 	assert.True(newCompoundList(expected).Equals(cl6))
 }
+
+func TestCompoundListSlice(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := chunks.NewMemoryStore()
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	testList := getTestSimpleList()
+
+	cl := NewTypedList(cs, tr, testList...)
+	empty := NewTypedList(cs, tr)
+
+	assert.True(cl.Equals(cl.Slice(0, cl.Len())))
+	assert.True(cl.Equals(cl.Slice(0, cl.Len()+1)))
+	assert.True(cl.Equals(cl.Slice(0, cl.Len()*2)))
+
+	assert.True(empty.Equals(cl.Slice(0, 0)))
+	assert.True(empty.Equals(cl.Slice(1, 1)))
+	assert.True(empty.Equals(cl.Slice(cl.Len()/2, cl.Len()/2)))
+	assert.True(empty.Equals(cl.Slice(cl.Len()-1, cl.Len()-1)))
+	assert.True(empty.Equals(cl.Slice(cl.Len(), cl.Len())))
+	assert.True(empty.Equals(cl.Slice(cl.Len(), cl.Len()+1)))
+	assert.True(empty.Equals(cl.Slice(cl.Len(), cl.Len()*2)))
+
+	cl2 := NewTypedList(cs, tr, testList[0:1]...)
+	cl3 := NewTypedList(cs, tr, testList[1:2]...)
+	cl4 := NewTypedList(cs, tr, testList[len(testList)/2:len(testList)/2+1]...)
+	cl5 := NewTypedList(cs, tr, testList[len(testList)-2:len(testList)-1]...)
+	cl6 := NewTypedList(cs, tr, testList[len(testList)-1:]...)
+
+	assert.True(cl2.Equals(cl.Slice(0, 1)))
+	assert.True(cl3.Equals(cl.Slice(1, 2)))
+	assert.True(cl4.Equals(cl.Slice(cl.Len()/2, cl.Len()/2+1)))
+	assert.True(cl5.Equals(cl.Slice(cl.Len()-2, cl.Len()-1)))
+	assert.True(cl6.Equals(cl.Slice(cl.Len()-1, cl.Len())))
+	assert.True(cl6.Equals(cl.Slice(cl.Len()-1, cl.Len()+1)))
+	assert.True(cl6.Equals(cl.Slice(cl.Len()-1, cl.Len()*2)))
+
+	cl7 := NewTypedList(cs, tr, testList[:len(testList)/2]...)
+	cl8 := NewTypedList(cs, tr, testList[len(testList)/2:]...)
+
+	assert.True(cl7.Equals(cl.Slice(0, cl.Len()/2)))
+	assert.True(cl8.Equals(cl.Slice(cl.Len()/2, cl.Len())))
+	assert.True(cl8.Equals(cl.Slice(cl.Len()/2, cl.Len()+1)))
+	assert.True(cl8.Equals(cl.Slice(cl.Len()/2, cl.Len()*2)))
+}

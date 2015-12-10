@@ -82,7 +82,18 @@ func (cl compoundList) IterAllP(concurrency int, f listIterAllFunc) {
 }
 
 func (cl compoundList) Slice(start uint64, end uint64) List {
-	panic("not implemented")
+	// See https://github.com/attic-labs/noms/issues/744 for a better Slice implementation.
+	seq := cl.sequenceCursorAtIndex(start)
+	slice := make([]Value, 0, end-start)
+	for i := start; i < end; i++ {
+		if value, ok := seq.maybeCurrent(); ok {
+			slice = append(slice, value.(Value))
+		} else {
+			break
+		}
+		seq.advance()
+	}
+	return NewTypedList(cl.cs, cl.t, slice...)
 }
 
 func (cl compoundList) Map(mf MapFunc) []interface{} {
@@ -106,15 +117,18 @@ func (cl compoundList) Append(vs ...Value) List {
 	return seq.Done().(List)
 }
 
-func (cl compoundList) sequenceChunkerAtIndex(idx uint64) *sequenceChunker {
+func (cl compoundList) sequenceCursorAtIndex(idx uint64) *sequenceCursor {
 	metaCur, leaf, start := cl.cursorAt(idx)
-	cur := &sequenceCursor{metaCur, leaf, int(idx - start), len(leaf.values), func(list sequenceItem, idx int) sequenceItem {
+	return &sequenceCursor{metaCur, leaf, int(idx - start), len(leaf.values), func(list sequenceItem, idx int) sequenceItem {
 		return list.(listLeaf).values[idx]
 	}, func(mt sequenceItem) (sequenceItem, int) {
 		list := readMetaTupleValue(mt, cl.cs).(listLeaf)
 		return list, len(list.values)
 	}}
+}
 
+func (cl compoundList) sequenceChunkerAtIndex(idx uint64) *sequenceChunker {
+	cur := cl.sequenceCursorAtIndex(idx)
 	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
 }
 
