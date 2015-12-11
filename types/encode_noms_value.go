@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"io"
 	"strconv"
+	"strings"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
@@ -35,7 +36,15 @@ func (w *jsonArrayWriter) writeBool(b bool) {
 }
 
 func (w *jsonArrayWriter) writeFloat(v float64) {
-	w.write(strconv.FormatFloat(v, 'f', -1, 64))
+	// Make sure we output identical strings in go as in js
+	if v < 1e20 {
+		w.write(strconv.FormatFloat(v, 'f', -1, 64))
+	} else {
+		s := strconv.FormatFloat(v, 'e', -1, 64)
+		s = strings.Replace(s, "e+0", "e+", 1)
+		w.write(s)
+
+	}
 }
 
 func (w *jsonArrayWriter) writeInt(v int64) {

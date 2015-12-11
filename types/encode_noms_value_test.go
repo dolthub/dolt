@@ -33,6 +33,11 @@ func TestWritePrimitives(t *testing.T) {
 	f(Float32Kind, Float32(0), "0")
 	f(Float64Kind, Float64(0), "0")
 
+	f(Int64Kind, Int64(1e18), "1000000000000000000")
+	f(Uint64Kind, Uint64(1e19), "10000000000000000000")
+	f(Float64Kind, Float64(float64(1e19)), "10000000000000000000")
+	f(Float64Kind, Float64(float64(1e20)), "1e+20")
+
 	f(StringKind, NewString("hi"), "hi")
 }
 
