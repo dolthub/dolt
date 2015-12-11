@@ -69,10 +69,12 @@ func (t Type) Kind() NomsKind {
 }
 
 func (t Type) IsOrdered() bool {
-	if desc, ok := t.Desc.(PrimitiveDesc); ok {
-		return desc.IsOrdered()
+	switch t.Desc.Kind() {
+	case Float32Kind, Float64Kind, Int8Kind, Int16Kind, Int32Kind, Int64Kind, Uint8Kind, Uint16Kind, Uint32Kind, Uint64Kind, StringKind, RefKind:
+		return true
+	default:
+		return false
 	}
-	return false
 }
 
 func (t Type) PackageRef() ref.Ref {

@@ -187,8 +187,12 @@ func (r RefOfMapOfStringToValue) ChildValues() []types.Value {
 // A Noms Value that describes RefOfMapOfStringToValue.
 var __typeForRefOfMapOfStringToValue types.Type
 
-func (m RefOfMapOfStringToValue) Type() types.Type {
+func (r RefOfMapOfStringToValue) Type() types.Type {
 	return __typeForRefOfMapOfStringToValue
+}
+
+func (r RefOfMapOfStringToValue) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {

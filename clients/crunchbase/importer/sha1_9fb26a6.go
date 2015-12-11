@@ -947,8 +947,12 @@ func (r RefOfRound) ChildValues() []types.Value {
 // A Noms Value that describes RefOfRound.
 var __typeForRefOfRound types.Type
 
-func (m RefOfRound) Type() types.Type {
+func (r RefOfRound) Type() types.Type {
 	return __typeForRefOfRound
+}
+
+func (r RefOfRound) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {

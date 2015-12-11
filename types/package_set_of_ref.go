@@ -197,6 +197,10 @@ func (m RefOfPackage) Type() Type {
 	return __typeForRefOfPackage
 }
 
+func (r RefOfPackage) Less(other OrderedValue) bool {
+	return r.TargetRef().Less(other.(RefBase).TargetRef())
+}
+
 func init() {
 	__typeForRefOfPackage = MakeCompoundType(RefKind, MakePrimitiveType(PackageKind))
 	RegisterRef(__typeForRefOfPackage, builderForRefOfPackage)
