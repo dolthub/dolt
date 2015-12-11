@@ -20,7 +20,7 @@ func init() {
 				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Url", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
+				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"), 0), false},
 				types.Field{"Sizes", types.MakeCompoundType(types.MapKind, types.MakeType(ref.Ref{}, 1), types.MakePrimitiveType(types.StringKind)), false},
 				types.Field{"Tags", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind)), false},
 			},
@@ -34,7 +34,7 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"),
+		ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"),
 	})
 	__commonPackageInFile_photo_CachedRef = types.RegisterPackage(&p)
 }

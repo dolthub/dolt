@@ -26,13 +26,13 @@ func init() {
 				types.Field{"PdDistrict", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Resolution", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Address", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
+				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"), 0), false},
 				types.Field{"PdID", types.MakePrimitiveType(types.StringKind), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"),
+		ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"),
 	})
 	__commonPackageInFile_incident_CachedRef = types.RegisterPackage(&p)
 }

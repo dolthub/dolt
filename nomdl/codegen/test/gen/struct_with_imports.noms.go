@@ -18,13 +18,13 @@ func init() {
 		types.MakeEnumType("LocalE", "LocalE1", "Ignored"),
 		types.MakeStructType("ImportUser",
 			[]types.Field{
-				types.Field{"importedStruct", types.MakeType(ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"), 0), false},
+				types.Field{"importedStruct", types.MakeType(ref.Parse("sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0"), 0), false},
 				types.Field{"enum", types.MakeType(ref.Ref{}, 0), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"),
+		ref.Parse("sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0"),
 	})
 	__genPackageInFile_struct_with_imports_CachedRef = types.RegisterPackage(&p)
 }
@@ -243,7 +243,7 @@ func (m ListOfD) Type() types.Type {
 }
 
 func init() {
-	__typeForListOfD = types.MakeCompoundType(types.ListKind, types.MakeType(ref.Parse("sha1-09d2fdd9743c4daec6deebbbc1a38f75ad088eca"), 0))
+	__typeForListOfD = types.MakeCompoundType(types.ListKind, types.MakeType(ref.Parse("sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0"), 0))
 	types.RegisterValue(__typeForListOfD, builderForListOfD, readerForListOfD)
 }
 

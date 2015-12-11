@@ -17,7 +17,7 @@ func init() {
 	p := types.NewPackage([]types.Type{
 		types.MakeStructType("Node",
 			[]types.Field{
-				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
+				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"), 0), false},
 				types.Field{"Reference", types.MakeCompoundType(types.RefKind, types.MakePrimitiveType(types.ValueKind)), false},
 			},
 			types.Choices{},
@@ -29,7 +29,7 @@ func init() {
 				types.Field{"Depth", types.MakePrimitiveType(types.Uint8Kind), false},
 				types.Field{"NumDescendents", types.MakePrimitiveType(types.Uint32Kind), false},
 				types.Field{"Path", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Georectangle", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 1), false},
+				types.Field{"Georectangle", types.MakeType(ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"), 1), false},
 			},
 			types.Choices{},
 		),
@@ -40,12 +40,12 @@ func init() {
 				types.Field{"Depth", types.MakePrimitiveType(types.Uint8Kind), false},
 				types.Field{"NumDescendents", types.MakePrimitiveType(types.Uint32Kind), false},
 				types.Field{"Path", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Georectangle", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 1), false},
+				types.Field{"Georectangle", types.MakeType(ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"), 1), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"),
+		ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"),
 	})
 	__commonPackageInFile_quad_tree_CachedRef = types.RegisterPackage(&p)
 }

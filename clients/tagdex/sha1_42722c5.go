@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_00419eb_CachedRef ref.Ref
+var __mainPackageInFile_sha1_42722c5_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -20,7 +20,7 @@ func init() {
 				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Url", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"), 0), false},
+				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"), 0), false},
 				types.Field{"Sizes", types.MakeCompoundType(types.MapKind, types.MakeType(ref.Ref{}, 1), types.MakePrimitiveType(types.StringKind)), false},
 				types.Field{"Tags", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind)), false},
 			},
@@ -34,9 +34,9 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-6d5e1c54214264058be9f61f4b4ece0368c8c678"),
+		ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"),
 	})
-	__mainPackageInFile_sha1_00419eb_CachedRef = types.RegisterPackage(&p)
+	__mainPackageInFile_sha1_42722c5_CachedRef = types.RegisterPackage(&p)
 }
 
 // RemotePhoto
@@ -106,7 +106,7 @@ func (m RemotePhoto) Type() types.Type {
 }
 
 func init() {
-	__typeForRemotePhoto = types.MakeType(__mainPackageInFile_sha1_00419eb_CachedRef, 0)
+	__typeForRemotePhoto = types.MakeType(__mainPackageInFile_sha1_42722c5_CachedRef, 0)
 	types.RegisterStruct(__typeForRemotePhoto, builderForRemotePhoto, readerForRemotePhoto)
 }
 
@@ -273,7 +273,7 @@ func (m Size) Type() types.Type {
 }
 
 func init() {
-	__typeForSize = types.MakeType(__mainPackageInFile_sha1_00419eb_CachedRef, 1)
+	__typeForSize = types.MakeType(__mainPackageInFile_sha1_42722c5_CachedRef, 1)
 	types.RegisterStruct(__typeForSize, builderForSize, readerForSize)
 }
 
@@ -391,7 +391,7 @@ func (m MapOfSizeToString) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfSizeToString = types.MakeCompoundType(types.MapKind, types.MakeType(__mainPackageInFile_sha1_00419eb_CachedRef, 1), types.MakePrimitiveType(types.StringKind))
+	__typeForMapOfSizeToString = types.MakeCompoundType(types.MapKind, types.MakeType(__mainPackageInFile_sha1_42722c5_CachedRef, 1), types.MakePrimitiveType(types.StringKind))
 	types.RegisterValue(__typeForMapOfSizeToString, builderForMapOfSizeToString, readerForMapOfSizeToString)
 }
 

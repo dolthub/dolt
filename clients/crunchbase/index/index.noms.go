@@ -37,13 +37,13 @@ func init() {
 		types.MakeStructType("RoundRaise",
 			[]types.Field{
 				types.Field{"Raised", types.MakePrimitiveType(types.Float64Kind), false},
-				types.Field{"Details", types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-3e4f60c3fbd518f4a7e903ac1c7c1a97b677c4d9"), 1)), false},
+				types.Field{"Details", types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-9fb26a609a1d4134935888c9676c79d6ea89acbb"), 1)), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-e28aa19ad63c4ddabeb258aafe9b2b97fadd3666"),
-		ref.Parse("sha1-3e4f60c3fbd518f4a7e903ac1c7c1a97b677c4d9"),
+		ref.Parse("sha1-2a87e00788d479d9f10356ccece32ed54bb43e6f"),
+		ref.Parse("sha1-9fb26a609a1d4134935888c9676c79d6ea89acbb"),
 	})
 	__mainPackageInFile_index_CachedRef = types.RegisterPackage(&p)
 }
