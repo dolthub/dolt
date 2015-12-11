@@ -29,7 +29,14 @@ func (ts testSet) Swap(i, j int) {
 	ts.values[i], ts.values[j] = ts.values[j], ts.values[i]
 }
 
-func (ts testSet) toCompoundSet(cs chunks.ChunkStore) compoundSet {
+func (ts testSet) Remove(from, to int) testSet {
+	values := make([]Value, 0, len(ts.values)-(to-from))
+	values = append(values, ts.values[:from]...)
+	values = append(values, ts.values[to:]...)
+	return testSet{values, ts.less, ts.tr}
+}
+
+func (ts testSet) toCompoundSet(cs chunks.ChunkStore) Set {
 	return NewTypedSet(cs, ts.tr, ts.values...).(compoundSet)
 }
 
@@ -51,36 +58,36 @@ func newTestSet(length int, gen testSetGenFn, less testSetLessFn, tr Type) testS
 	return testSet{values, less, MakeCompoundType(SetKind, tr)}
 }
 
-func getTestNativeOrderSet() testSet {
-	return newTestSet(int(setPattern*16), func(v Int64) Value {
+func getTestNativeOrderSet(scale int) testSet {
+	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
 		return v
 	}, func(x, y Value) bool {
 		return !y.(OrderedValue).Less(x.(OrderedValue))
 	}, MakePrimitiveType(Int64Kind))
 }
 
-func getTestRefValueOrderSet() testSet {
+func getTestRefValueOrderSet(scale int) testSet {
 	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
-	return newTestSet(int(setPattern*2), func(v Int64) Value {
+	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
 		return NewTypedSet(chunks.NewMemoryStore(), setType, v)
 	}, func(x, y Value) bool {
 		return !y.Ref().Less(x.Ref())
 	}, setType)
 }
 
-func getTestRefToNativeOrderSet() testSet {
+func getTestRefToNativeOrderSet(scale int) testSet {
 	refType := MakeCompoundType(RefKind, MakePrimitiveType(Int64Kind))
-	return newTestSet(int(setPattern*2), func(v Int64) Value {
+	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
 		return newRef(v.Ref(), refType)
 	}, func(x, y Value) bool {
 		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
 	}, refType)
 }
 
-func getTestRefToValueOrderSet() testSet {
+func getTestRefToValueOrderSet(scale int) testSet {
 	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
 	refType := MakeCompoundType(RefKind, setType)
-	return newTestSet(int(setPattern*2), func(v Int64) Value {
+	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
 		return newRef(NewTypedSet(chunks.NewMemoryStore(), setType, v).Ref(), refType)
 	}, func(x, y Value) bool {
 		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
@@ -97,10 +104,10 @@ func TestCompoundSetHas(t *testing.T) {
 		}
 	}
 
-	doTest(getTestNativeOrderSet())
-	doTest(getTestRefValueOrderSet())
-	doTest(getTestRefToNativeOrderSet())
-	doTest(getTestRefToValueOrderSet())
+	doTest(getTestNativeOrderSet(16))
+	doTest(getTestRefValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2))
+	doTest(getTestRefToValueOrderSet(2))
 }
 
 func TestCompoundSetFirst(t *testing.T) {
@@ -113,10 +120,10 @@ func TestCompoundSetFirst(t *testing.T) {
 		assert.True(ts.values[0].Equals(actual), "%v != %v", ts.values[0], actual)
 	}
 
-	doTest(getTestNativeOrderSet())
-	doTest(getTestRefValueOrderSet())
-	doTest(getTestRefToNativeOrderSet())
-	doTest(getTestRefToValueOrderSet())
+	doTest(getTestNativeOrderSet(16))
+	doTest(getTestRefValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2))
+	doTest(getTestRefToValueOrderSet(2))
 }
 
 func TestCompoundSetIter(t *testing.T) {
@@ -142,10 +149,10 @@ func TestCompoundSetIter(t *testing.T) {
 		assert.Equal(endAt, idx-1)
 	}
 
-	doTest(getTestNativeOrderSet())
-	doTest(getTestRefValueOrderSet())
-	doTest(getTestRefToNativeOrderSet())
-	doTest(getTestRefToValueOrderSet())
+	doTest(getTestNativeOrderSet(16))
+	doTest(getTestRefValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2))
+	doTest(getTestRefToValueOrderSet(2))
 }
 
 func TestCompoundSetIterAll(t *testing.T) {
@@ -162,8 +169,89 @@ func TestCompoundSetIterAll(t *testing.T) {
 		})
 	}
 
-	doTest(getTestNativeOrderSet())
-	doTest(getTestRefValueOrderSet())
-	doTest(getTestRefToNativeOrderSet())
-	doTest(getTestRefToValueOrderSet())
+	doTest(getTestNativeOrderSet(16))
+	doTest(getTestRefValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2))
+	doTest(getTestRefToValueOrderSet(2))
+}
+
+func TestCompoundSetInsert(t *testing.T) {
+	assert := assert.New(t)
+
+	doTest := func(incr int, ts testSet) {
+		cs := chunks.NewMemoryStore()
+		expected := ts.toCompoundSet(cs)
+		run := func(from, to int) {
+			actual := ts.Remove(from, to).toCompoundSet(cs).Insert(ts.values[from:to]...)
+			assert.Equal(expected.Len(), actual.Len(), "%d-%d", from, to)
+			assert.True(expected.Equals(actual))
+		}
+		for i := 0; i < len(ts.values); i += incr {
+			run(i, i+1)
+		}
+		run(len(ts.values)-1, len(ts.values))
+		// TODO: make this pass, and make it fast:
+		// for i := 0; i < len(ts.values)-incr; i += incr {
+		//   run(i, i+incr)
+		// }
+		// For example, run(896, 960) fails for the native order set.
+	}
+
+	doTest(64, getTestNativeOrderSet(32))
+	doTest(32, getTestRefValueOrderSet(4))
+	doTest(32, getTestRefToNativeOrderSet(4))
+	doTest(32, getTestRefToValueOrderSet(4))
+}
+
+func TestCompoundSetInsertExistingValue(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := chunks.NewMemoryStore()
+	ts := getTestNativeOrderSet(2)
+	original := ts.toCompoundSet(cs)
+	actual := original.Insert(ts.values[0])
+
+	assert.Equal(original.Len(), actual.Len())
+	assert.True(original.Equals(actual))
+}
+
+func TestCompoundSetRemove(t *testing.T) {
+	assert := assert.New(t)
+
+	doTest := func(incr int, ts testSet) {
+		cs := chunks.NewMemoryStore()
+		whole := ts.toCompoundSet(cs)
+		run := func(from, to int) {
+			expected := ts.Remove(from, to).toCompoundSet(cs)
+			actual := whole.Remove(ts.values[from:to]...)
+			assert.Equal(expected.Len(), actual.Len(), "%d-%d", from, to)
+			assert.True(expected.Equals(actual))
+		}
+		for i := 0; i < len(ts.values); i += incr {
+			run(i, i+1)
+		}
+		run(len(ts.values)-1, len(ts.values))
+		// TODO: make this pass, and make it fast:
+		// for i := 0; i < len(ts.values)-incr; i += incr {
+		//   run(i, i+incr)
+		// }
+		// For example, run(448, 512) fails for the native order set.
+	}
+
+	doTest(64, getTestNativeOrderSet(32))
+	doTest(32, getTestRefValueOrderSet(4))
+	doTest(32, getTestRefToNativeOrderSet(4))
+	doTest(32, getTestRefToValueOrderSet(4))
+}
+
+func TestCompoundSetRemoveNonexistentValue(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := chunks.NewMemoryStore()
+	ts := getTestNativeOrderSet(2)
+	original := ts.toCompoundSet(cs)
+	actual := original.Remove(Int64(-1)) // rand.Int63 returns non-negative values.
+
+	assert.Equal(original.Len(), actual.Len())
+	assert.True(original.Equals(actual))
 }

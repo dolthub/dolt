@@ -231,7 +231,7 @@ func makeSetLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 		var indexValue Value
 		if len(setData) > 0 {
 			lastValue := setData[len(setData)-1]
-			if orderedSequenceByIndexedType(t) {
+			if isSequenceOrderedByIndexedType(t) {
 				indexValue = lastValue
 			} else {
 				indexValue = NewRef(lastValue.Ref())
