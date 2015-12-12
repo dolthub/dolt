@@ -50,7 +50,7 @@ suite('Decode', () => {
     doTest(makeCompoundType(Kind.List, makePrimitiveType(Kind.Bool)), [Kind.List, Kind.Bool, true, false]);
 
     let pkgRef = Ref.parse('sha1-a9993e364706816aba3e25717850c26c9cd0d89d');
-    doTest(makeType(pkgRef, 42), [Kind.Unresolved, pkgRef.toString(), 42]);
+    doTest(makeType(pkgRef, 42), [Kind.Unresolved, pkgRef.toString(), '42']);
 
     doTest(makePrimitiveType(Kind.Type), [Kind.Type, Kind.Type, pkgRef.toString()]);
   });
@@ -66,16 +66,21 @@ suite('Decode', () => {
 
     await doTest(true, [Kind.Bool, true]);
     await doTest(false, [Kind.Bool, false]);
-    await doTest(0, [Kind.Uint8, 0]);
-    await doTest(0, [Kind.Uint16, 0]);
-    await doTest(0, [Kind.Uint32, 0]);
-    await doTest(0, [Kind.Uint64, 0]);
-    await doTest(0, [Kind.Int8, 0]);
-    await doTest(0, [Kind.Int16, 0]);
-    await doTest(0, [Kind.Int32, 0]);
-    await doTest(0, [Kind.Int64, 0]);
-    await doTest(0, [Kind.Float32, 0]);
-    await doTest(0, [Kind.Float64, 0]);
+    await doTest(0, [Kind.Uint8, '0']);
+    await doTest(0, [Kind.Uint16, '0']);
+    await doTest(0, [Kind.Uint32, '0']);
+    await doTest(0, [Kind.Uint64, '0']);
+    await doTest(0, [Kind.Int8, '0']);
+    await doTest(0, [Kind.Int16, '0']);
+    await doTest(0, [Kind.Int32, '0']);
+    await doTest(0, [Kind.Int64, '0']);
+    await doTest(0, [Kind.Float32, '0']);
+    await doTest(0, [Kind.Float64, '0']);
+
+    await doTest(1e18, [Kind.Int64, '1000000000000000000']);
+    await doTest(1e19, [Kind.Uint64, '10000000000000000000']);
+    await doTest(1e19, [Kind.Float64, '10000000000000000000']);
+    await doTest(1e20, [Kind.Float64, '1e+20']);
 
     await doTest('hi', [Kind.String, 'hi']);
 
@@ -85,7 +90,7 @@ suite('Decode', () => {
 
   test('read list of int 32', async () => {
     let ms = new MemoryStore();
-    let a = [Kind.List, Kind.Int32, false, [0, 1, 2, 3]];
+    let a = [Kind.List, Kind.Int32, false, ['0', '1', '2', '3']];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
     invariant(v instanceof ListLeaf);
@@ -98,7 +103,7 @@ suite('Decode', () => {
   // TODO: Can't round-trip collections of value types. =-(
   test('read list of value', async () => {
     let ms = new MemoryStore();
-    let a = [Kind.List, Kind.Value, false, [Kind.Int32, 1, Kind.String, 'hi', Kind.Bool, true]];
+    let a = [Kind.List, Kind.Value, false, [Kind.Int32, '1', Kind.String, 'hi', Kind.Bool, true]];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
     invariant(v instanceof ListLeaf);
@@ -111,7 +116,7 @@ suite('Decode', () => {
 
   test('read value list of int8', async () => {
     let ms = new MemoryStore();
-    let a = [Kind.Value, Kind.List, Kind.Int8, false, [0, 1, 2]];
+    let a = [Kind.Value, Kind.List, Kind.Int8, false, ['0', '1', '2']];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
     invariant(v instanceof ListLeaf);
@@ -135,7 +140,7 @@ suite('Decode', () => {
     ];
     let l = new CompoundList(ms, ltr, tuples);
 
-    let a = [Kind.List, Kind.Int32, true, [r1.toString(), 2, r2.toString(), 4, r3.toString(), 6]];
+    let a = [Kind.List, Kind.Int32, true, [r1.toString(), '2', r2.toString(), '4', r3.toString(), '6']];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
     invariant(v instanceof CompoundList);
@@ -144,7 +149,7 @@ suite('Decode', () => {
 
   test('read map of int64 to float64', async () => {
     let ms = new MemoryStore();
-    let a = [Kind.Map, Kind.Int64, Kind.Float64, false, [0, 1, 2, 3]];
+    let a = [Kind.Map, Kind.Int64, Kind.Float64, false, ['0', '1', '2', '3']];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
     invariant(v instanceof MapLeaf);
@@ -156,7 +161,7 @@ suite('Decode', () => {
 
   test('read value map of uint64 to uint32', async () => {
     let ms = new MemoryStore();
-    let a = [Kind.Value, Kind.Map, Kind.Uint64, Kind.Uint32, false, [0, 1, 2, 3]];
+    let a = [Kind.Value, Kind.Map, Kind.Uint64, Kind.Uint32, false, ['0', '1', '2', '3']];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
     invariant(v instanceof MapLeaf);
@@ -168,7 +173,7 @@ suite('Decode', () => {
 
   test('read set of uint8', async () => {
     let ms = new MemoryStore();
-    let a = [Kind.Set, Kind.Uint8, false, [0, 1, 2, 3]];
+    let a = [Kind.Set, Kind.Uint8, false, ['0', '1', '2', '3']];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
     invariant(v instanceof SetLeaf);
@@ -180,7 +185,7 @@ suite('Decode', () => {
 
   test('read value set of uint16', async () => {
     let ms = new MemoryStore();
-    let a = [Kind.Value, Kind.Set, Kind.Uint16, false, [0, 1, 2, 3]];
+    let a = [Kind.Value, Kind.Set, Kind.Uint16, false, ['0', '1', '2', '3']];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -209,7 +214,7 @@ suite('Decode', () => {
     let pkg = new Package([tr], []);
     registerPackage(pkg);
 
-    let a = [Kind.Unresolved, pkg.ref.toString(), 0, 42, 'hi', true];
+    let a = [Kind.Unresolved, pkg.ref.toString(), '0', '42', 'hi', true];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -232,7 +237,7 @@ suite('Decode', () => {
     let pkg = new Package([tr], []);
     registerPackage(pkg);
 
-    let a = [Kind.Unresolved, pkg.ref.toString(), 0, 42, 1, 'hi'];
+    let a = [Kind.Unresolved, pkg.ref.toString(), '0', '42', '1', 'hi'];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -253,7 +258,7 @@ suite('Decode', () => {
     let pkg = new Package([tr], []);
     registerPackage(pkg);
 
-    let a = [Kind.Unresolved, pkg.ref.toString(), 0, 42, false, true, false];
+    let a = [Kind.Unresolved, pkg.ref.toString(), '0', '42', false, true, false];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -276,7 +281,7 @@ suite('Decode', () => {
     let pkg = new Package([tr], []);
     registerPackage(pkg);
 
-    let a = [Kind.Unresolved, pkg.ref.toString(), 0, true, false, [0, 1, 2], 'hi'];
+    let a = [Kind.Unresolved, pkg.ref.toString(), '0', true, false, ['0', '1', '2'], 'hi'];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -298,7 +303,7 @@ suite('Decode', () => {
     let pkg = new Package([tr], []);
     registerPackage(pkg);
 
-    let a = [Kind.Unresolved, pkg.ref.toString(), 0, true, Kind.Uint8, 42, 'hi'];
+    let a = [Kind.Unresolved, pkg.ref.toString(), '0', true, Kind.Uint8, '42', 'hi'];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -320,7 +325,7 @@ suite('Decode', () => {
     let pkg = new Package([tr], []);
     registerPackage(pkg);
 
-    let a = [Kind.Value, Kind.Unresolved, pkg.ref.toString(), 0, 42, 'hi', true];
+    let a = [Kind.Value, Kind.Unresolved, pkg.ref.toString(), '0', '42', 'hi', true];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -338,7 +343,7 @@ suite('Decode', () => {
     let pkg = new Package([tr], []);
     registerPackage(pkg);
 
-    let a = [Kind.Unresolved, pkg.ref.toString(), 0, 1];
+    let a = [Kind.Unresolved, pkg.ref.toString(), '0', '1'];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -352,7 +357,7 @@ suite('Decode', () => {
     let pkg = new Package([tr], []);
     registerPackage(pkg);
 
-    let a = [Kind.Value, Kind.Unresolved, pkg.ref.toString(), 0, 1];
+    let a = [Kind.Value, Kind.Unresolved, pkg.ref.toString(), '0', '1'];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -370,7 +375,7 @@ suite('Decode', () => {
     let pkg = new Package([tr, enumTref], []);
     registerPackage(pkg);
 
-    let a = [Kind.Unresolved, pkg.ref.toString(), 0, 42, 1, true];
+    let a = [Kind.Unresolved, pkg.ref.toString(), '0', '42', '1', true];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
 
@@ -391,7 +396,7 @@ suite('Decode', () => {
     let pkg = new Package([tr], []);
     registerPackage(pkg);
 
-    let a = [Kind.Value, Kind.Map, Kind.String, Kind.Unresolved, pkg.ref.toString(), 0, false, ['bar', false, 2, 'baz', false, 1, 'foo', true, 3]];
+    let a = [Kind.Value, Kind.Map, Kind.String, Kind.Unresolved, pkg.ref.toString(), '0', false, ['bar', false, '2', 'baz', false, '1', 'foo', true, '3']];
 
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
@@ -406,7 +411,7 @@ suite('Decode', () => {
 
   test('decodeNomsValue', async () => {
     let ms = new MemoryStore();
-    let chunk = Chunk.fromString(`t [${Kind.Value}, ${Kind.Set}, ${Kind.Uint16}, false, [0, 1, 2, 3]]`);
+    let chunk = Chunk.fromString(`t [${Kind.Value}, ${Kind.Set}, ${Kind.Uint16}, false, ["0", "1", "2", "3"]]`);
     let v = await decodeNomsValue(chunk, new MemoryStore());
 
     let t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint16));
@@ -416,10 +421,10 @@ suite('Decode', () => {
 
   test('decodeNomsValue: counter with one commit', async () => {
     let ms = new MemoryStore();
-    let root = Ref.parse('sha1-238be83f9eb4d346b06a82eb6bd0310b68189d24');
-    ms.put(Chunk.fromString('t [15,11,16,21,"sha1-7546d804d845125bc42669c7a4c3f3fb909eca29",0,false,["counter","sha1-3d5f81a6640300f377d5c0257c7bdee094ff90de"]]')); // root
-    ms.put(Chunk.fromString('t [22,[19,"Commit",["value",13,false,"parents",17,[16,[21,"sha1-0000000000000000000000000000000000000000",0]],false],[]],[]]')); // datas package
-    ms.put(Chunk.fromString('t [21,"sha1-7546d804d845125bc42669c7a4c3f3fb909eca29",0,4,1,false,[]]')); // commit
+    let root = Ref.parse('sha1-c3680a063b73ac42c3075110108a48a91007abf7');
+    ms.put(Chunk.fromString('t [15,11,16,21,"sha1-7546d804d845125bc42669c7a4c3f3fb909eca29","0",false,["counter","sha1-a6fffab4e12b49d57f194f0d3add9f6623a13e19"]]')); // root
+    ms.put(Chunk.fromString('t [22,[19,"Commit",["value",13,false,"parents",17,[16,[21,"sha1-0000000000000000000000000000000000000000","0"]],false],[]],[]]')); // datas package
+    ms.put(Chunk.fromString('t [21,"sha1-4da2f91cdbba5a7c91b383091da45e55e16d2152","0",4,"1",false,[]]')); // commit
 
     let rootMap = await readValue(root, ms);
     let counterRef = await rootMap.get('counter');

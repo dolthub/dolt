@@ -50,14 +50,26 @@ class JsonArrayReader {
     return next;
   }
 
-  readNumber(): number {
+  readInt(): number {
     let next = this.read();
-    invariant(typeof next === 'number');
-    return next;
+    invariant(typeof next === 'string');
+    return parseInt(next, 10);
+  }
+
+  readUint(): number {
+    let v = this.readInt();
+    invariant(v >= 0);
+    return v;
+  }
+
+  readFloat(): number {
+    let next = this.read();
+    invariant(typeof next === 'string');
+    return parseFloat(next);
   }
 
   readOrdinal(): number {
-    return this.readNumber();
+    return this.readInt();
   }
 
   readArray(): Array<any> {
@@ -67,7 +79,9 @@ class JsonArrayReader {
   }
 
   readKind(): NomsKind {
-    return this.readNumber();
+    let next = this.read();
+    invariant(typeof next === 'number');
+    return next;
   }
 
   readRef(): Ref {
@@ -145,7 +159,7 @@ class JsonArrayReader {
   }
 
   readEnum(): number {
-    return this.readNumber();
+    return this.readUint();
   }
 
   async maybeReadMetaSequence(t: Type, pkg: ?Package): Promise<any> {
@@ -199,17 +213,19 @@ class JsonArrayReader {
 
       case Kind.Bool:
         return Promise.resolve(this.readBool());
-      case Kind.Uint8:
-      case Kind.Uint16:
-      case Kind.Uint32:
-      case Kind.Uint64:
+      case Kind.Float32:
+      case Kind.Float64:
+        return Promise.resolve(this.readFloat());
       case Kind.Int8:
       case Kind.Int16:
       case Kind.Int32:
       case Kind.Int64:
-      case Kind.Float32:
-      case Kind.Float64:
-        return Promise.resolve(this.read());
+        return Promise.resolve(this.readInt());
+      case Kind.Uint8:
+      case Kind.Uint16:
+      case Kind.Uint32:
+      case Kind.Uint64:
+        return Promise.resolve(this.readUint());
       case Kind.String:
         return Promise.resolve(this.readString());
       case Kind.Value: {
@@ -366,7 +382,7 @@ class JsonArrayReader {
 
     let unionIndex = -1;
     if (desc.union.length > 0) {
-      unionIndex = this.readNumber();
+      unionIndex = this.readUint();
       let unionField = desc.union[unionIndex];
       let v = await this.readValueWithoutTag(unionField.t, pkg);
       s[unionField.name] = v;
