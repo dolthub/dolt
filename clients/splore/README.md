@@ -9,7 +9,7 @@ This is a generic noms data explorer.
 
 ## Build
 
-* `NOMS_SERVER=http://localhost:8000 go run build.go`
+* `NOMS_SERVER=http://localhost:8000 python build.py`
 
 ## Run
 
