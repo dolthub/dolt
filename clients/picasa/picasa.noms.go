@@ -31,12 +31,12 @@ func init() {
 				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"NumPhotos", types.MakePrimitiveType(types.Uint32Kind), false},
-				types.Field{"Photos", types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0)))), false},
+				types.Field{"Photos", types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-42722c55cec055ff32526d1dc0636fa4d48c9fd5"), 0)))), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"),
+		ref.Parse("sha1-42722c55cec055ff32526d1dc0636fa4d48c9fd5"),
 	})
 	__mainPackageInFile_picasa_CachedRef = types.RegisterPackage(&p)
 }
@@ -545,7 +545,7 @@ func (m SetOfRemotePhoto) Type() types.Type {
 }
 
 func init() {
-	__typeForSetOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))
+	__typeForSetOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-42722c55cec055ff32526d1dc0636fa4d48c9fd5"), 0))
 	types.RegisterValue(__typeForSetOfRemotePhoto, builderForSetOfRemotePhoto, readerForSetOfRemotePhoto)
 }
 
@@ -734,7 +734,7 @@ func (m RefOfSetOfRefOfRemotePhoto) Type() types.Type {
 }
 
 func init() {
-	__typeForRefOfSetOfRefOfRemotePhoto = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))))
+	__typeForRefOfSetOfRefOfRemotePhoto = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-42722c55cec055ff32526d1dc0636fa4d48c9fd5"), 0))))
 	types.RegisterRef(__typeForRefOfSetOfRefOfRemotePhoto, builderForRefOfSetOfRefOfRemotePhoto)
 }
 
@@ -809,7 +809,7 @@ func (m SetOfRefOfRemotePhoto) Type() types.Type {
 }
 
 func init() {
-	__typeForSetOfRefOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0)))
+	__typeForSetOfRefOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-42722c55cec055ff32526d1dc0636fa4d48c9fd5"), 0)))
 	types.RegisterValue(__typeForSetOfRefOfRemotePhoto, builderForSetOfRefOfRemotePhoto, readerForSetOfRefOfRemotePhoto)
 }
 
@@ -941,7 +941,7 @@ func (m RefOfRemotePhoto) Type() types.Type {
 }
 
 func init() {
-	__typeForRefOfRemotePhoto = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-00419ebbb418539af67238164b20341913efeb4d"), 0))
+	__typeForRefOfRemotePhoto = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-42722c55cec055ff32526d1dc0636fa4d48c9fd5"), 0))
 	types.RegisterRef(__typeForRefOfRemotePhoto, builderForRefOfRemotePhoto)
 }
 

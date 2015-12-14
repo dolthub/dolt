@@ -36,12 +36,20 @@ class JsonArrayWriter {
     this.write(b);
   }
 
-  writeNumber(n: number) {
-    this.write(n);
+  writeFloat(n: number) {
+    if (n < 1e20) {
+      this.write(n.toString(10));
+    } else {
+      this.write(n.toExponential());
+    }
+  }
+
+  writeInt(n: number) {
+    this.write(n.toFixed(0));
   }
 
   writeKind(k: NomsKind) {
-    this.writeNumber(k);
+    this.write(k);
   }
 
   writeRef(r: Ref) {
@@ -66,7 +74,7 @@ class JsonArrayWriter {
         let pkgRef = t.packageRef;
         invariant(!pkgRef.isEmpty());
         this.writeRef(pkgRef);
-        this.writeNumber(t.ordinal);
+        this.writeInt(t.ordinal);
 
         let pkg = lookupPackage(pkgRef);
         if (pkg && this._cs) {
@@ -113,6 +121,13 @@ class JsonArrayWriter {
         this.writeBlob(v);
         break;
       case Kind.Bool:
+      case Kind.String:
+        this.write(v);
+        break;
+      case Kind.Float32:
+      case Kind.Float64:
+        this.writeFloat(v); // TODO: Verify value fits in type
+        break;
       case Kind.Uint8:
       case Kind.Uint16:
       case Kind.Uint32:
@@ -121,10 +136,7 @@ class JsonArrayWriter {
       case Kind.Int16:
       case Kind.Int32:
       case Kind.Int64:
-      case Kind.Float32:
-      case Kind.Float64:
-      case Kind.String:
-        this.write(v); // TODO: Verify value fits in type
+        this.writeInt(v); // TODO: Verify value fits in type
         break;
       case Kind.List: {
         invariant(v instanceof Sequence);
@@ -256,7 +268,7 @@ class JsonArrayWriter {
         let pkgRef = t.packageRef;
         this.writeRef(pkgRef);
         let ordinal = t.ordinal;
-        this.write(ordinal);
+        this.writeInt(ordinal);
         if (ordinal === -1) {
           this.write(t.namespace);
           this.write(t.name);
@@ -318,13 +330,13 @@ class JsonArrayWriter {
 
     if (s.hasUnion) {
       let unionField = notNull(s.unionField);
-      this.writeNumber(s.unionIndex);
+      this.writeInt(s.unionIndex);
       this.writeValue(s.get(unionField.name), unionField.t, pkg);
     }
   }
 
   writeEnum(v: number) {
-    this.writeNumber(v);
+    this.writeInt(v);
   }
 }
 

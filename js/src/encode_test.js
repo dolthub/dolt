@@ -30,16 +30,21 @@ suite('Encode', () => {
     f(Kind.Bool, true, true);
     f(Kind.Bool, false, false);
 
-    f(Kind.Uint8, 0, 0);
-    f(Kind.Uint16, 0, 0);
-    f(Kind.Uint32, 0, 0);
-    f(Kind.Uint64, 0, 0);
-    f(Kind.Int8, 0, 0);
-    f(Kind.Int16, 0, 0);
-    f(Kind.Int32, 0, 0);
-    f(Kind.Int64, 0, 0);
-    f(Kind.Float32, 0, 0);
-    f(Kind.Float64, 0, 0);
+    f(Kind.Uint8, 0, '0');
+    f(Kind.Uint16, 0, '0');
+    f(Kind.Uint32, 0, '0');
+    f(Kind.Uint64, 0, '0');
+    f(Kind.Int8, 0, '0');
+    f(Kind.Int16, 0, '0');
+    f(Kind.Int32, 0, '0');
+    f(Kind.Int64, 0, '0');
+    f(Kind.Float32, 0, '0');
+    f(Kind.Float64, 0, '0');
+
+    f(Kind.Int64, 1e18, '1000000000000000000');
+    f(Kind.Uint64, 1e19, '10000000000000000000');
+    f(Kind.Float64, 1e19, '10000000000000000000');
+    f(Kind.Float64, 1e20, '1e+20');
 
     f(Kind.String, 'hi', 'hi');
   });
@@ -58,7 +63,7 @@ suite('Encode', () => {
     let tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
     let l = new ListLeaf(ms, tr, [0, 1, 2, 3]);
     w.writeTopLevel(tr, l);
-    assert.deepEqual([Kind.List, Kind.Int32, false, [0, 1, 2, 3]], w.array);
+    assert.deepEqual([Kind.List, Kind.Int32, false, ['0', '1', '2', '3']], w.array);
   });
 
   test('write list of list', async () => {
@@ -69,7 +74,7 @@ suite('Encode', () => {
     let tr = makeCompoundType(Kind.List, it);
     let v = new ListLeaf(ms, tr, [new ListLeaf(ms, it, [0]), new ListLeaf(ms, it, [1, 2, 3])]);
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.List, Kind.List, Kind.Int16, false, [false, [0], false, [1, 2, 3]]], w.array);
+    assert.deepEqual([Kind.List, Kind.List, Kind.Int16, false, [false, ['0'], false, ['1', '2', '3']]], w.array);
   });
 
   test('write set', async () => {
@@ -79,7 +84,7 @@ suite('Encode', () => {
     let tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint32));
     let v = new SetLeaf(ms, tr, [0, 1, 2, 3]);
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Set, Kind.Uint32, false, [0, 1, 2, 3]], w.array);
+    assert.deepEqual([Kind.Set, Kind.Uint32, false, ['0', '1', '2', '3']], w.array);
   });
 
   test('write set of set', async () => {
@@ -91,7 +96,7 @@ suite('Encode', () => {
     let v = new SetLeaf(ms, tr, [new SetLeaf(ms, st, [0]), new SetLeaf(ms, st, [1, 2, 3])]);
 
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Set, Kind.Set, Kind.Int32, false, [false, [0], false, [1, 2, 3]]], w.array);
+    assert.deepEqual([Kind.Set, Kind.Set, Kind.Int32, false, [false, ['0'], false, ['1', '2', '3']]], w.array);
   });
 
   test('write map', async() => {
@@ -117,7 +122,7 @@ suite('Encode', () => {
     let m1 = new MapLeaf(ms, kt, [{key: 'a', value: 0}]);
     let v = new MapLeaf(ms, tr, [{key: m1, value: s}]);
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Map, Kind.Map, Kind.String, Kind.Int64, Kind.Set, Kind.Bool, false, [false, ['a', 0], false, [true]]], w.array);
+    assert.deepEqual([Kind.Map, Kind.Map, Kind.String, Kind.Int64, Kind.Set, Kind.Bool, false, [false, ['a', '0'], false, [true]]], w.array);
   });
 
   test('write empty struct', async() => {
@@ -133,7 +138,7 @@ suite('Encode', () => {
     let v = new Struct(type, typeDef, {});
 
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0], w.array);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0'], w.array);
   });
 
   test('write struct', async() => {
@@ -152,7 +157,7 @@ suite('Encode', () => {
     let v = new Struct(type, typeDef, {x: 42, b: true});
 
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, 42, true], w.array);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', '42', true], w.array);
   });
 
   test('write struct optional field', async() => {
@@ -170,12 +175,12 @@ suite('Encode', () => {
 
     let v = new Struct(type, typeDef, {x: 42, b: true});
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, true, 42, true], w.array);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', true, '42', true], w.array);
 
     v = new Struct(type, typeDef, {b: true});
     w = new JsonArrayWriter(ms);
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, false, true], w.array);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', false, true], w.array);
   });
 
   test('write struct with union', async() => {
@@ -195,12 +200,12 @@ suite('Encode', () => {
 
     let v = new Struct(type, typeDef, {x: 42, s: 'hi'});
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, 42, 1, 'hi'], w.array);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', '42', '1', 'hi'], w.array);
 
     v = new Struct(type, typeDef, {x: 42, b: true});
     w = new JsonArrayWriter(ms);
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, 42, 0, true], w.array);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', '42', '0', true], w.array);
   });
 
   test('write struct with list', async() => {
@@ -218,12 +223,12 @@ suite('Encode', () => {
 
     let v = new Struct(type, typeDef, {l: new ListLeaf(ms, ltr, ['a', 'b'])});
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, false, ['a', 'b']], w.array);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', false, ['a', 'b']], w.array);
 
     v = new Struct(type, typeDef, {l: new ListLeaf(ms, ltr, [])});
     w = new JsonArrayWriter(ms);
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, false, []], w.array);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', false, []], w.array);
   });
 
   test('write struct with struct', async () => {
@@ -245,7 +250,7 @@ suite('Encode', () => {
 
     let v = new Struct(sType, sTypeDef, {s: new Struct(s2Type, s2TypeDef, {x: 42})});
     w.writeTopLevel(sType, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 1, 42], w.array);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '1', '42'], w.array);
   });
 
   test('write enum', async () => {
@@ -258,7 +263,7 @@ suite('Encode', () => {
     let typ = makeType(pkgRef, 0);
 
     w.writeTopLevel(typ, 1);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), 0, 1], w.array);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', '1'], w.array);
   });
 
   test('write list of enum', async () => {
@@ -273,7 +278,7 @@ suite('Encode', () => {
     let l = new ListLeaf(ms, listType, [0, 1, 2]);
 
     w.writeTopLevel(listType, l);
-    assert.deepEqual([Kind.List, Kind.Unresolved, pkgRef.toString(), 0, false, [0, 1, 2]], w.array);
+    assert.deepEqual([Kind.List, Kind.Unresolved, pkgRef.toString(), '0', false, ['0', '1', '2']], w.array);
   });
 
   test('write compound list', async () => {
@@ -292,7 +297,7 @@ suite('Encode', () => {
     let l = new CompoundList(ms, ltr, tuples);
 
     w.writeTopLevel(ltr, l);
-    assert.deepEqual([Kind.List, Kind.Int32, true, [r1.toString(), 2, r2.toString(), 4, r3.toString(), 6]], w.array);
+    assert.deepEqual([Kind.List, Kind.Int32, true, [r1.toString(), '2', r2.toString(), '4', r3.toString(), '6']], w.array);
   });
 
   test('write type value', async () => {
@@ -318,9 +323,9 @@ suite('Encode', () => {
     ]));
 
     let pkgRef = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
-    test([Kind.Type, Kind.Unresolved, pkgRef.toString(), 123], makeType(pkgRef, 123));
+    test([Kind.Type, Kind.Unresolved, pkgRef.toString(), '123'], makeType(pkgRef, 123));
 
-    test([Kind.Type, Kind.Struct, 'S', ['e', Kind.Unresolved, pkgRef.toString(), 123, false, 'x', Kind.Int64, false], []], makeStructType('S', [
+    test([Kind.Type, Kind.Struct, 'S', ['e', Kind.Unresolved, pkgRef.toString(), '123', false, 'x', Kind.Int64, false], []], makeStructType('S', [
       new Field('e', makeType(pkgRef, 123), false),
       new Field('x', makePrimitiveType(Kind.Int64), false)
     ], []));

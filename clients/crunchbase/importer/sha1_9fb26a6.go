@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_3e4f60c_CachedRef ref.Ref
+var __mainPackageInFile_sha1_9fb26a6_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -48,7 +48,7 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	__mainPackageInFile_sha1_3e4f60c_CachedRef = types.RegisterPackage(&p)
+	__mainPackageInFile_sha1_9fb26a6_CachedRef = types.RegisterPackage(&p)
 }
 
 // Company
@@ -168,7 +168,7 @@ func (m Company) Type() types.Type {
 }
 
 func init() {
-	__typeForCompany = types.MakeType(__mainPackageInFile_sha1_3e4f60c_CachedRef, 0)
+	__typeForCompany = types.MakeType(__mainPackageInFile_sha1_9fb26a6_CachedRef, 0)
 	types.RegisterStruct(__typeForCompany, builderForCompany, readerForCompany)
 }
 
@@ -494,7 +494,7 @@ func (m Round) Type() types.Type {
 }
 
 func init() {
-	__typeForRound = types.MakeType(__mainPackageInFile_sha1_3e4f60c_CachedRef, 1)
+	__typeForRound = types.MakeType(__mainPackageInFile_sha1_9fb26a6_CachedRef, 1)
 	types.RegisterStruct(__typeForRound, builderForRound, readerForRound)
 }
 
@@ -820,7 +820,7 @@ func (m SetOfRefOfRound) Type() types.Type {
 }
 
 func init() {
-	__typeForSetOfRefOfRound = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_3e4f60c_CachedRef, 1)))
+	__typeForSetOfRefOfRound = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_9fb26a6_CachedRef, 1)))
 	types.RegisterValue(__typeForSetOfRefOfRound, builderForSetOfRefOfRound, readerForSetOfRefOfRound)
 }
 
@@ -952,7 +952,7 @@ func (m RefOfRound) Type() types.Type {
 }
 
 func init() {
-	__typeForRefOfRound = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_3e4f60c_CachedRef, 1))
+	__typeForRefOfRound = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_9fb26a6_CachedRef, 1))
 	types.RegisterRef(__typeForRefOfRound, builderForRefOfRound)
 }
 

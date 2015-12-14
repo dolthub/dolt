@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
@@ -29,6 +31,30 @@ func (w *jsonArrayWriter) write(v interface{}) {
 	w.a = append(w.a, v)
 }
 
+func (w *jsonArrayWriter) writeBool(b bool) {
+	w.write(b)
+}
+
+func (w *jsonArrayWriter) writeFloat(v float64) {
+	// Make sure we output identical strings in go as in js
+	if v < 1e20 {
+		w.write(strconv.FormatFloat(v, 'f', -1, 64))
+	} else {
+		s := strconv.FormatFloat(v, 'e', -1, 64)
+		s = strings.Replace(s, "e+0", "e+", 1)
+		w.write(s)
+
+	}
+}
+
+func (w *jsonArrayWriter) writeInt(v int64) {
+	w.write(strconv.FormatInt(v, 10))
+}
+
+func (w *jsonArrayWriter) writeUint(v uint64) {
+	w.write(strconv.FormatUint(v, 10))
+}
+
 func (w *jsonArrayWriter) toArray() []interface{} {
 	return w.a
 }
@@ -51,7 +77,7 @@ func (w *jsonArrayWriter) writeTypeAsTag(t Type) {
 		pkgRef := t.PackageRef()
 		d.Chk.NotEqual(ref.Ref{}, pkgRef)
 		w.writeRef(pkgRef)
-		w.write(t.Ordinal())
+		w.writeInt(int64(t.Ordinal()))
 
 		pkg := LookupPackage(pkgRef)
 		if pkg != nil {
@@ -92,8 +118,28 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 		}
 
 		w.writeBlob(v.(Blob))
-	case BoolKind, Float32Kind, Float64Kind, Int16Kind, Int32Kind, Int64Kind, Int8Kind, Uint16Kind, Uint32Kind, Uint64Kind, Uint8Kind:
-		w.write(v.(primitive).ToPrimitive())
+	case BoolKind:
+		w.writeBool(bool(v.(Bool)))
+	case Float32Kind:
+		w.writeFloat(float64(v.(Float32)))
+	case Float64Kind:
+		w.writeFloat(float64(v.(Float64)))
+	case Int16Kind:
+		w.writeInt(int64(v.(Int16)))
+	case Int32Kind:
+		w.writeInt(int64(v.(Int32)))
+	case Int64Kind:
+		w.writeInt(int64(v.(Int64)))
+	case Int8Kind:
+		w.writeInt(int64(v.(Int8)))
+	case Uint16Kind:
+		w.writeUint(uint64(v.(Uint16)))
+	case Uint32Kind:
+		w.writeUint(uint64(v.(Uint32)))
+	case Uint64Kind:
+		w.writeUint(uint64(v.(Uint64)))
+	case Uint8Kind:
+		w.writeUint(uint64(v.(Uint8)))
 	case ListKind:
 		tr = fixupType(tr, pkg)
 		v = internalValueFromType(v, tr)
@@ -203,7 +249,7 @@ func (w *jsonArrayWriter) writeTypeAsValue(v Type) {
 		w.writeRef(pkgRef)
 		// Don't use Ordinal() here since we might need to serialize a Type that hasn't gotten a valid ordinal yet.
 		ordinal := v.Desc.(UnresolvedDesc).ordinal
-		w.write(ordinal)
+		w.writeInt(int64(ordinal))
 		if ordinal == -1 {
 			w.write(v.Namespace())
 			w.write(v.Name())
@@ -271,9 +317,9 @@ func (w *jsonArrayWriter) writeStruct(v Value, typ, typeDef Type, pkg *Package) 
 		}
 	}
 	if len(desc.Union) > 0 {
-		unionIndex := uint32(values[i].(Uint32))
+		unionIndex := uint64(values[i].(Uint32))
 		i++
-		w.write(unionIndex)
+		w.writeUint(unionIndex)
 		w.writeValue(values[i], desc.Union[unionIndex].T, pkg)
 		i++
 	}
@@ -282,5 +328,5 @@ func (w *jsonArrayWriter) writeStruct(v Value, typ, typeDef Type, pkg *Package) 
 func (w *jsonArrayWriter) writeEnum(v Value, t Type, pkg *Package) {
 	t = fixupType(t, pkg)
 	i := enumPrimitiveValueFromType(v, t)
-	w.write(i)
+	w.writeUint(uint64(i))
 }

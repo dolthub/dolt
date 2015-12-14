@@ -19,8 +19,8 @@ func TestNumMatches(t *testing.T) {
 		}
 	}
 
-	// 20 was experimentally determined by calling Add 1000 times.
-	assert.Equal(20, numMatches)
+	// 12 was experimentally determined by calling Add 1000 times.
+	assert.Equal(12, numMatches)
 }
 
 func TestThing(t *testing.T) {

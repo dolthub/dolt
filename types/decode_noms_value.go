@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/base64"
 	"io/ioutil"
+	"strconv"
 	"strings"
 
 	"github.com/attic-labs/noms/chunks"
@@ -43,6 +44,24 @@ func (r *jsonArrayReader) readBool() bool {
 	return r.read().(bool)
 }
 
+func (r *jsonArrayReader) readFloat() float64 {
+	v, err := strconv.ParseFloat(r.readString(), 64)
+	d.Chk.Nil(err)
+	return v
+}
+
+func (r *jsonArrayReader) readInt() int64 {
+	v, err := strconv.ParseInt(r.readString(), 10, 64)
+	d.Chk.Nil(err)
+	return v
+}
+
+func (r *jsonArrayReader) readUint() uint64 {
+	v, err := strconv.ParseUint(r.readString(), 10, 64)
+	d.Chk.Nil(err)
+	return v
+}
+
 func (r *jsonArrayReader) readArray() []interface{} {
 	return r.read().([]interface{})
 }
@@ -70,7 +89,7 @@ func (r *jsonArrayReader) readTypeAsTag() Type {
 		return MakePrimitiveType(TypeKind)
 	case UnresolvedKind:
 		pkgRef := r.readRef()
-		ordinal := int16(r.read().(float64))
+		ordinal := int16(r.readInt())
 		d.Chk.NotEqual(int16(-1), ordinal)
 		return MakeType(pkgRef, ordinal)
 	}
@@ -168,7 +187,7 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t Type, pkg *Package) (Value, bo
 
 func (r *jsonArrayReader) readEnum(t Type, pkg *Package) Value {
 	t = fixupType(t, pkg)
-	return enumFromType(uint32(r.read().(float64)), t)
+	return enumFromType(uint32(r.readUint()), t)
 }
 
 func (r *jsonArrayReader) readPackage(t Type, pkg *Package) Value {
@@ -209,25 +228,25 @@ func (r *jsonArrayReader) readValueWithoutTag(t Type, pkg *Package) Value {
 	case BoolKind:
 		return Bool(r.read().(bool))
 	case Uint8Kind:
-		return Uint8(r.read().(float64))
+		return Uint8(r.readUint())
 	case Uint16Kind:
-		return Uint16(r.read().(float64))
+		return Uint16(r.readUint())
 	case Uint32Kind:
-		return Uint32(r.read().(float64))
+		return Uint32(r.readUint())
 	case Uint64Kind:
-		return Uint64(r.read().(float64))
+		return Uint64(r.readUint())
 	case Int8Kind:
-		return Int8(r.read().(float64))
+		return Int8(r.readInt())
 	case Int16Kind:
-		return Int16(r.read().(float64))
+		return Int16(r.readInt())
 	case Int32Kind:
-		return Int32(r.read().(float64))
+		return Int32(r.readInt())
 	case Int64Kind:
-		return Int64(r.read().(float64))
+		return Int64(r.readInt())
 	case Float32Kind:
-		return Float32(r.read().(float64))
+		return Float32(r.readFloat())
 	case Float64Kind:
-		return Float64(r.read().(float64))
+		return Float64(r.readFloat())
 	case StringKind:
 		return NewString(r.readString())
 	case ValueKind:
@@ -342,7 +361,7 @@ func (r *jsonArrayReader) readTypeAsValue(pkg *Package) Type {
 		return MakeStructType(name, fields, choices)
 	case UnresolvedKind:
 		pkgRef := r.readRef()
-		ordinal := int16(r.read().(float64))
+		ordinal := int16(r.readInt())
 		if ordinal == -1 {
 			namespace := r.readString()
 			name := r.readString()
@@ -394,7 +413,7 @@ func (r *jsonArrayReader) readStruct(typeDef, typ Type, pkg *Package) Value {
 		}
 	}
 	if len(desc.Union) > 0 {
-		unionIndex := uint32(r.read().(float64))
+		unionIndex := uint32(r.readUint())
 		values = append(values, Uint32(unionIndex), r.readValueWithoutTag(desc.Union[unionIndex].T, pkg))
 	}
 

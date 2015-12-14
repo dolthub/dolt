@@ -22,16 +22,21 @@ func TestWritePrimitives(t *testing.T) {
 	f(BoolKind, Bool(true), true)
 	f(BoolKind, Bool(false), false)
 
-	f(Uint8Kind, Uint8(0), uint8(0))
-	f(Uint16Kind, Uint16(0), uint16(0))
-	f(Uint32Kind, Uint32(0), uint32(0))
-	f(Uint64Kind, Uint64(0), uint64(0))
-	f(Int8Kind, Int8(0), int8(0))
-	f(Int16Kind, Int16(0), int16(0))
-	f(Int32Kind, Int32(0), int32(0))
-	f(Int64Kind, Int64(0), int64(0))
-	f(Float32Kind, Float32(0), float32(0))
-	f(Float64Kind, Float64(0), float64(0))
+	f(Uint8Kind, Uint8(0), "0")
+	f(Uint16Kind, Uint16(0), "0")
+	f(Uint32Kind, Uint32(0), "0")
+	f(Uint64Kind, Uint64(0), "0")
+	f(Int8Kind, Int8(0), "0")
+	f(Int16Kind, Int16(0), "0")
+	f(Int32Kind, Int32(0), "0")
+	f(Int64Kind, Int64(0), "0")
+	f(Float32Kind, Float32(0), "0")
+	f(Float64Kind, Float64(0), "0")
+
+	f(Int64Kind, Int64(1e18), "1000000000000000000")
+	f(Uint64Kind, Uint64(1e19), "10000000000000000000")
+	f(Float64Kind, Float64(float64(1e19)), "10000000000000000000")
+	f(Float64Kind, Float64(float64(1e20)), "1e+20")
 
 	f(StringKind, NewString("hi"), "hi")
 }
@@ -53,7 +58,7 @@ func TestWriteList(t *testing.T) {
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{ListKind, Int32Kind, false, []interface{}{int32(0), int32(1), int32(2), int32(3)}}, w.toArray())
+	assert.EqualValues([]interface{}{ListKind, Int32Kind, false, []interface{}{"0", "1", "2", "3"}}, w.toArray())
 }
 
 func TestWriteListOfList(t *testing.T) {
@@ -68,7 +73,7 @@ func TestWriteListOfList(t *testing.T) {
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{ListKind, ListKind, Int16Kind, false, []interface{}{false, []interface{}{int16(0)}, false, []interface{}{int16(1), int16(2), int16(3)}}}, w.toArray())
+	assert.EqualValues([]interface{}{ListKind, ListKind, Int16Kind, false, []interface{}{false, []interface{}{"0"}, false, []interface{}{"1", "2", "3"}}}, w.toArray())
 }
 
 func TestWriteSet(t *testing.T) {
@@ -81,7 +86,7 @@ func TestWriteSet(t *testing.T) {
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
 	// The order of the elements is based on the order defined by OrderedValue.
-	assert.EqualValues([]interface{}{SetKind, Uint32Kind, false, []interface{}{uint32(0), uint32(1), uint32(2), uint32(3)}}, w.toArray())
+	assert.EqualValues([]interface{}{SetKind, Uint32Kind, false, []interface{}{"0", "1", "2", "3"}}, w.toArray())
 }
 
 func TestWriteSetOfSet(t *testing.T) {
@@ -95,7 +100,7 @@ func TestWriteSetOfSet(t *testing.T) {
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
 	// The order of the elements is based on the order defined by OrderedValue.
-	assert.EqualValues([]interface{}{SetKind, SetKind, Int32Kind, false, []interface{}{false, []interface{}{int32(1), int32(2), int32(3)}, false, []interface{}{int32(0)}}}, w.toArray())
+	assert.EqualValues([]interface{}{SetKind, SetKind, Int32Kind, false, []interface{}{false, []interface{}{"1", "2", "3"}, false, []interface{}{"0"}}}, w.toArray())
 }
 
 func TestWriteMap(t *testing.T) {
@@ -123,7 +128,7 @@ func TestWriteMapOfMap(t *testing.T) {
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
 	// the order of the elements is based on the ref of the value.
-	assert.EqualValues([]interface{}{MapKind, MapKind, StringKind, Int64Kind, SetKind, BoolKind, false, []interface{}{false, []interface{}{"a", int64(0)}, false, []interface{}{true}}}, w.toArray())
+	assert.EqualValues([]interface{}{MapKind, MapKind, StringKind, Int64Kind, SetKind, BoolKind, false, []interface{}{false, []interface{}{"a", "0"}, false, []interface{}{true}}}, w.toArray())
 }
 
 func TestWriteCompoundBlob(t *testing.T) {
@@ -139,7 +144,7 @@ func TestWriteCompoundBlob(t *testing.T) {
 	w.writeTopLevelValue(v)
 
 	// the order of the elements is based on the ref of the value.
-	assert.EqualValues([]interface{}{BlobKind, true, []interface{}{r1.String(), uint64(20), r2.String(), uint64(40), r3.String(), uint64(60)}}, w.toArray())
+	assert.EqualValues([]interface{}{BlobKind, true, []interface{}{r1.String(), "20", r2.String(), "40", r3.String(), "60"}}, w.toArray())
 }
 
 func TestWriteEmptyStruct(t *testing.T) {
@@ -154,7 +159,7 @@ func TestWriteEmptyStruct(t *testing.T) {
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0)}, w.toArray())
+	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0"}, w.toArray())
 }
 
 func TestWriteStruct(t *testing.T) {
@@ -172,7 +177,7 @@ func TestWriteStruct(t *testing.T) {
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), int8(42), true}, w.toArray())
+	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", "42", true}, w.toArray())
 }
 
 func TestWriteStructOptionalField(t *testing.T) {
@@ -190,13 +195,13 @@ func TestWriteStructOptionalField(t *testing.T) {
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), true, int8(42), true}, w.toArray())
+	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", true, "42", true}, w.toArray())
 
 	v = NewStruct(typ, typeDef, structData{"b": Bool(true)})
 
 	w = newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), false, true}, w.toArray())
+	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", false, true}, w.toArray())
 }
 
 func TestWriteStructWithUnion(t *testing.T) {
@@ -216,13 +221,13 @@ func TestWriteStructWithUnion(t *testing.T) {
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), int8(42), uint32(1), "hi"}, w.toArray())
+	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", "42", "1", "hi"}, w.toArray())
 
 	v = NewStruct(typ, typeDef, structData{"x": Int8(42), "b": Bool(true)})
 
 	w = newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), int8(42), uint32(0), true}, w.toArray())
+	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", "42", "0", true}, w.toArray())
 }
 
 func TestWriteStructWithList(t *testing.T) {
@@ -239,12 +244,12 @@ func TestWriteStructWithList(t *testing.T) {
 	v := NewStruct(typ, typeDef, structData{"l": NewList(cs, NewString("a"), NewString("b"))})
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), false, []interface{}{"a", "b"}}, w.toArray())
+	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", false, []interface{}{"a", "b"}}, w.toArray())
 
 	v = NewStruct(typ, typeDef, structData{"l": NewList(cs)})
 	w = newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), false, []interface{}{}}, w.toArray())
+	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", false, []interface{}{}}, w.toArray())
 }
 
 func TestWriteStructWithStruct(t *testing.T) {
@@ -265,7 +270,7 @@ func TestWriteStructWithStruct(t *testing.T) {
 	v := NewStruct(sType, sTypeDef, structData{"s": NewStruct(s2Type, s2TypeDef, structData{"x": Int32(42)})})
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(1), int32(42)}, w.toArray())
+	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "1", "42"}, w.toArray())
 }
 
 func TestWriteStructWithBlob(t *testing.T) {
@@ -283,7 +288,7 @@ func TestWriteStructWithBlob(t *testing.T) {
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), false, "AAE="}, w.toArray())
+	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", false, "AAE="}, w.toArray())
 }
 
 func TestWriteEnum(t *testing.T) {
@@ -297,7 +302,7 @@ func TestWriteEnum(t *testing.T) {
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(Enum{1, typ})
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), int16(0), uint32(1)}, w.toArray())
+	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", "1"}, w.toArray())
 }
 
 func TestWriteListOfEnum(t *testing.T) {
@@ -313,7 +318,7 @@ func TestWriteListOfEnum(t *testing.T) {
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{ListKind, UnresolvedKind, pkgRef.String(), int16(0), false, []interface{}{uint32(0), uint32(1), uint32(2)}}, w.toArray())
+	assert.EqualValues([]interface{}{ListKind, UnresolvedKind, pkgRef.String(), "0", false, []interface{}{"0", "1", "2"}}, w.toArray())
 }
 
 func TestWriteCompoundList(t *testing.T) {
@@ -321,13 +326,13 @@ func TestWriteCompoundList(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	ltr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
-	r1 := newListLeaf(cs, ltr, Int16(0)).Ref()
-	r2 := newListLeaf(cs, ltr, Int16(1), Int16(2), Int16(3)).Ref()
+	r1 := newListLeaf(cs, ltr, Int32(0)).Ref()
+	r2 := newListLeaf(cs, ltr, Int32(1), Int32(2), Int32(3)).Ref()
 	cl := buildCompoundList([]metaTuple{{r1, Uint64(1)}, {r2, Uint64(4)}}, ltr, cs)
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(cl)
-	assert.EqualValues([]interface{}{ListKind, Int32Kind, true, []interface{}{r1.String(), uint64(1), r2.String(), uint64(4)}}, w.toArray())
+	assert.EqualValues([]interface{}{ListKind, Int32Kind, true, []interface{}{r1.String(), "1", r2.String(), "4"}}, w.toArray())
 }
 
 func TestWriteListOfValue(t *testing.T) {
@@ -357,16 +362,16 @@ func TestWriteListOfValue(t *testing.T) {
 
 	assert.EqualValues([]interface{}{ListKind, ValueKind, false, []interface{}{
 		BoolKind, true,
-		Uint8Kind, uint8(1),
-		Uint16Kind, uint16(1),
-		Uint32Kind, uint32(1),
-		Uint64Kind, uint64(1),
-		Int8Kind, int8(1),
-		Int16Kind, int16(1),
-		Int32Kind, int32(1),
-		Int64Kind, int64(1),
-		Float32Kind, float32(1),
-		Float64Kind, float64(1),
+		Uint8Kind, "1",
+		Uint16Kind, "1",
+		Uint32Kind, "1",
+		Uint64Kind, "1",
+		Int8Kind, "1",
+		Int16Kind, "1",
+		Int32Kind, "1",
+		Int64Kind, "1",
+		Float32Kind, "1",
+		Float64Kind, "1",
 		StringKind, "hi",
 		BlobKind, false, "AQ==",
 	}}, w.toArray())
@@ -387,7 +392,7 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{ListKind, ValueKind, false, []interface{}{UnresolvedKind, pkgRef.String(), int16(0), int32(42)}}, w.toArray())
+	assert.EqualValues([]interface{}{ListKind, ValueKind, false, []interface{}{UnresolvedKind, pkgRef.String(), "0", "42"}}, w.toArray())
 }
 
 func TestWriteListOfValueWithType(t *testing.T) {
@@ -414,7 +419,7 @@ func TestWriteListOfValueWithType(t *testing.T) {
 		BoolKind, true,
 		TypeKind, Int32Kind,
 		TypeKind, TypeKind,
-		TypeKind, UnresolvedKind, pkgRef.String(), int16(0),
+		TypeKind, UnresolvedKind, pkgRef.String(), "0",
 	}}, w.toArray())
 }
 
@@ -475,16 +480,16 @@ func TestWriteTypeValue(t *testing.T) {
 		}))
 
 	pkgRef := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
-	test([]interface{}{TypeKind, UnresolvedKind, pkgRef.String(), int16(123)},
+	test([]interface{}{TypeKind, UnresolvedKind, pkgRef.String(), "123"},
 		MakeType(pkgRef, 123))
 
-	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"e", UnresolvedKind, pkgRef.String(), int16(123), false, "x", Int64Kind, false}, []interface{}{}},
+	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"e", UnresolvedKind, pkgRef.String(), "123", false, "x", Int64Kind, false}, []interface{}{}},
 		MakeStructType("S", []Field{
 			Field{"e", MakeType(pkgRef, 123), false},
 			Field{"x", MakePrimitiveType(Int64Kind), false},
 		}, Choices{}))
 
-	test([]interface{}{TypeKind, UnresolvedKind, ref.Ref{}.String(), int16(-1), "ns", "n"},
+	test([]interface{}{TypeKind, UnresolvedKind, ref.Ref{}.String(), "-1", "ns", "n"},
 		MakeUnresolvedType("ns", "n"))
 }
 
@@ -524,7 +529,7 @@ func TestWritePackage(t *testing.T) {
 		PackageKind,
 		[]interface{}{
 			StructKind, "EnumStruct", []interface{}{
-				"hand", UnresolvedKind, "sha1-0000000000000000000000000000000000000000", int16(1), false,
+				"hand", UnresolvedKind, "sha1-0000000000000000000000000000000000000000", "1", false,
 			}, []interface{}{},
 			EnumKind, "Handedness", []interface{}{"right", "left", "switch"},
 		},
