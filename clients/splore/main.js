@@ -28,6 +28,14 @@ window.addEventListener('load', () => {
 
 window.onresize = render;
 
+function formatKeyString(v: any): string {
+  if (v instanceof Ref) {
+    return v.toString().substring(5, 11);
+  }
+
+  return String(v);
+}
+
 function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
   let counter = 0;
 
@@ -109,7 +117,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
     } else if (val instanceof CompoundList) {
       data.nodes[id] = {name: 'ListNode'};
       val.items.forEach(tuple => {
-        let kid = process(ref, tuple.value, id);
+        let kid = process(ref, formatKeyString(tuple.value), id);
         if (kid) {
           // Start map keys open, just makes it easier to use.
           data.nodes[kid].isOpen = true;
@@ -122,7 +130,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
     } else if (val instanceof CompoundMap) {
       data.nodes[id] = {name: 'MapNode'};
       val.items.forEach(tuple => {
-        let kid = process(ref, tuple.value, id);
+        let kid = process(ref, formatKeyString(tuple.value), id);
         if (kid) {
           // Start map keys open, just makes it easier to use.
           data.nodes[kid].isOpen = true;
@@ -135,7 +143,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
     } else if (val instanceof CompoundSet) {
       data.nodes[id] = {name: 'SetNode'};
       val.items.forEach(tuple => {
-        let kid = process(ref, tuple.value, id);
+        let kid = process(ref, formatKeyString(tuple.value), id);
         if (kid) {
           // Start map keys open, just makes it easier to use.
           data.nodes[kid].isOpen = true;
