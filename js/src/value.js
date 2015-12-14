@@ -29,15 +29,18 @@ export type valueOrPrimitive = Value | primitive;
 export function less(v1: any, v2: any): boolean {
   invariant(v1 !== null && v1 !== undefined && v2 !== null && v2 !== undefined);
 
-  if (v1 instanceof Ref) {
+  if (typeof v1 === 'object') {
+    invariant(typeof v2 === 'object');
+    if (v1 instanceof Value) {
+      v1 = v1.ref;
+    }
+    if (v2 instanceof Value) {
+      v2 = v2.ref;
+    }
+
+    invariant(v1 instanceof Ref);
     invariant(v2 instanceof Ref);
     return v1.compare(v2) < 0;
-  }
-
-  if (typeof v1 === 'object') {
-    invariant(v1.ref instanceof Ref);
-    invariant(v2.ref instanceof Ref);
-    return v1.ref.compare(v2.ref) < 0;
   }
 
   if (typeof v1 === 'string') {
