@@ -5,7 +5,7 @@ import {suite} from 'mocha';
 
 import MemoryStore from './memory_store.js';
 import test from './async_test.js';
-import {CompoundSet, SetLeaf} from './set.js';
+import {CompoundSet, NomsSet, SetLeaf} from './set.js';
 import {notNull} from './assert.js';
 import {Kind} from './noms_kind.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
@@ -38,33 +38,37 @@ suite('SetLeaf', () => {
 });
 
 suite('CompoundSet', () => {
-  function build(): Array<CompoundSet> {
+  function build(values: Array<string>): NomsSet {
     let ms = new MemoryStore();
+
     let tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
-    let l1 = new SetLeaf(ms, tr, ['a', 'b']);
-    let r1 = writeValue(l1, tr, ms);
-    let l2 = new SetLeaf(ms, tr, ['e', 'f']);
-    let r2 = writeValue(l2, tr, ms);
-    let l3 = new SetLeaf(ms, tr, ['h', 'i']);
-    let r3 = writeValue(l3, tr, ms);
-    let l4 = new SetLeaf(ms, tr, ['m', 'n']);
-    let r4 = writeValue(l4, tr, ms);
+    assert.isTrue(values.length > 1 && Math.log2(values.length) % 1 === 0);
 
-    let m1 = new CompoundSet(ms, tr, [new MetaTuple(r1, 'b'), new MetaTuple(r2, 'f')]);
-    let rm1 = writeValue(m1, tr, ms);
-    let m2 = new CompoundSet(ms, tr, [new MetaTuple(r3, 'i'), new MetaTuple(r4, 'n')]);
-    let rm2 = writeValue(m2, tr, ms);
+    let tuples = [];
+    for (let i = 0; i < values.length; i += 2) {
+      let l = new SetLeaf(ms, tr, [values[i], values[i + 1]]);
+      let r = writeValue(l, tr, ms);
+      tuples.push(new MetaTuple(r, values[i + 1]));
+    }
 
-    let c = new CompoundSet(ms, tr, [new MetaTuple(rm1, 'f'), new MetaTuple(rm2, 'n')]);
-    return [c, m1, m2];
+    let last: ?NomsSet = null;
+    while (tuples.length > 1) {
+      let next = [];
+      for (let i = 0; i < tuples.length; i += 2) {
+        last = new CompoundSet(ms, tr, [tuples[i], tuples[i + 1]]);
+        let r = writeValue(last, tr, ms);
+        next.push(new MetaTuple(r, tuples[i + 1].value));
+      }
+
+      tuples = next;
+    }
+
+    return notNull(last);
   }
 
   test('first/has', async () => {
-    let [c, m1, m2] = build();
-    assert.strictEqual('a', await m1.first());
-    assert.strictEqual('h', await m2.first());
+    let c = build(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     assert.strictEqual('a', await c.first());
-
     assert.isTrue(await c.has('a'));
     assert.isTrue(await c.has('b'));
     assert.isFalse(await c.has('c'));
@@ -82,8 +86,7 @@ suite('CompoundSet', () => {
   });
 
   test('forEach', async () => {
-    let [c] = build();
-
+    let c = build(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     let values = [];
     await c.forEach((k) => { values.push(k); });
     assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], values);
@@ -101,7 +104,7 @@ suite('CompoundSet', () => {
   }
 
   test('advanceTo', async () => {
-    let [c] = build();
+    let c = build(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
 
     let cursor = await c.newCursorAt(null);
     assert.ok(cursor);
@@ -135,6 +138,27 @@ suite('CompoundSet', () => {
     asyncAssertThrows(async () => {
       await notNull(cursor).advanceTo('x');
     });
+  });
+
+  async function testIntersect(expect: Array<string>, seqs: Array<Array<string>>) {
+    let first = build(seqs[0]);
+    let sets:Array<NomsSet> = [];
+    for (let i = 1; i < seqs.length; i++) {
+      sets.push(build(seqs[i]));
+    }
+
+    let result = await first.intersect(...sets);
+    let actual = [];
+    await result.forEach(v => { actual.push(v); });
+    assert.deepEqual(expect, actual);
+  }
+
+  test('intersect', async () => {
+    await testIntersect(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']]);
+    await testIntersect(['a', 'h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'h', 'i', 'j', 'k', 'l', 'm', 'n']]);
+    await testIntersect(['d', 'e', 'f', 'g', 'h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k']]);
+    await testIntersect(['h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k'], ['h', 'i', 'j', 'k', 'l', 'm', 'n', 'o']]);
+    await testIntersect([], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k'], ['i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']]);
   });
 });
 
