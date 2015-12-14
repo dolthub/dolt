@@ -49,6 +49,10 @@ func (r Ref) Type() Type {
 	return r.t
 }
 
+func (r Ref) Less(other OrderedValue) bool {
+	return r.target.Less(other.(Ref).target)
+}
+
 func (r Ref) TargetValue(cs chunks.ChunkStore) Value {
 	return ReadValue(r.target, cs)
 }

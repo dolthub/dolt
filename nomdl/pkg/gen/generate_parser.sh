@@ -1,3 +1,3 @@
 #! /bin/sh
 
-pigeon "${1}" | goimports > "${1}".go
+"$GOPATH/bin/pigeon" "${1}" | "$GOPATH/bin/goimports" > "${1}".go

@@ -9,103 +9,111 @@ import (
 	"github.com/attic-labs/noms/chunks"
 )
 
-type testNativeOrderSet []Value
-
-func (tss testNativeOrderSet) Len() int {
-	return len(tss)
+type testSet struct {
+	values []Value
+	less   testSetLessFn
+	tr     Type
 }
 
-func (tss testNativeOrderSet) Less(i, j int) bool {
-	return tss[i].(OrderedValue).Less(tss[j].(OrderedValue))
+type testSetLessFn func(x, y Value) bool
+
+func (ts testSet) Len() int {
+	return len(ts.values)
 }
 
-func (tss testNativeOrderSet) Swap(i, j int) {
-	tss[i], tss[j] = tss[j], tss[i]
+func (ts testSet) Less(i, j int) bool {
+	return ts.less(ts.values[i], ts.values[j])
 }
 
-func getTestNativeOrderSet() []Value {
-	length := int(setPattern * 16)
-	s := rand.NewSource(42)
+func (ts testSet) Swap(i, j int) {
+	ts.values[i], ts.values[j] = ts.values[j], ts.values[i]
+}
+
+func (ts testSet) toCompoundSet(cs chunks.ChunkStore) compoundSet {
+	return NewTypedSet(cs, ts.tr, ts.values...).(compoundSet)
+}
+
+type testSetGenFn func(v Int64) Value
+
+func newTestSet(length int, gen testSetGenFn, less testSetLessFn, tr Type) testSet {
+	s := rand.NewSource(4242)
 	used := map[int64]bool{}
 
-	values := testNativeOrderSet{}
+	var values []Value
 	for len(values) < length {
 		v := s.Int63() & 0xffffff
 		if _, ok := used[v]; !ok {
-			values = append(values, Int64(v))
+			values = append(values, gen(Int64(v)))
 			used[v] = true
 		}
 	}
 
-	sort.Sort(values)
-	return values
+	return testSet{values, less, MakeCompoundType(SetKind, tr)}
 }
 
-type testRefOrderSet []Value
-
-func (tss testRefOrderSet) Len() int {
-	return len(tss)
+func getTestNativeOrderSet() testSet {
+	return newTestSet(int(setPattern*16), func(v Int64) Value {
+		return v
+	}, func(x, y Value) bool {
+		return !y.(OrderedValue).Less(x.(OrderedValue))
+	}, MakePrimitiveType(Int64Kind))
 }
 
-func (tss testRefOrderSet) Less(i, j int) bool {
-	return tss[i].Ref().Less(tss[j].Ref())
+func getTestRefValueOrderSet() testSet {
+	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
+	return newTestSet(int(setPattern*2), func(v Int64) Value {
+		return NewTypedSet(chunks.NewMemoryStore(), setType, v)
+	}, func(x, y Value) bool {
+		return !y.Ref().Less(x.Ref())
+	}, setType)
 }
 
-func (tss testRefOrderSet) Swap(i, j int) {
-	tss[i], tss[j] = tss[j], tss[i]
+func getTestRefToNativeOrderSet() testSet {
+	refType := MakeCompoundType(RefKind, MakePrimitiveType(Int64Kind))
+	return newTestSet(int(setPattern*2), func(v Int64) Value {
+		return newRef(v.Ref(), refType)
+	}, func(x, y Value) bool {
+		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
+	}, refType)
 }
 
-func getTestRefOrderSet() []Value {
-	length := int(setPattern * 2)
-	s := rand.NewSource(42)
-	used := map[int64]bool{}
-
-	values := testRefOrderSet{}
-	for i := 0; i < length; i++ {
-		v := s.Int63() & 0xffffff
-		if _, ok := used[v]; !ok {
-			values = append(values, NewRef(Int64(v).Ref()))
-			used[v] = true
-		}
-	}
-
-	sort.Sort(values)
-	return values
+func getTestRefToValueOrderSet() testSet {
+	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
+	refType := MakeCompoundType(RefKind, setType)
+	return newTestSet(int(setPattern*2), func(v Int64) Value {
+		return newRef(NewTypedSet(chunks.NewMemoryStore(), setType, v).Ref(), refType)
+	}, func(x, y Value) bool {
+		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
+	}, refType)
 }
 
 func TestCompoundSetHas(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewMemoryStore()
-
-	doTest := func(simpleSet []Value, set compoundSet) {
-		for _, v := range simpleSet {
+	doTest := func(ts testSet) {
+		set := ts.toCompoundSet(chunks.NewMemoryStore())
+		for _, v := range ts.values {
 			assert.True(set.Has(v))
 		}
 	}
 
-	simpleSet := getTestNativeOrderSet()
-	tr := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
-	set := NewTypedSet(cs, tr, simpleSet...).(compoundSet)
-	doTest(simpleSet, set)
-
-	simpleSet = getTestRefOrderSet()
-	tr = MakeCompoundType(SetKind, MakeCompoundType(RefKind, MakePrimitiveType(ValueKind)))
-	set = NewTypedSet(cs, tr, simpleSet...).(compoundSet)
-	doTest(simpleSet, set)
+	doTest(getTestNativeOrderSet())
+	doTest(getTestRefValueOrderSet())
+	doTest(getTestRefToNativeOrderSet())
+	doTest(getTestRefToValueOrderSet())
 }
 
 func TestCompoundSetIter(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewMemoryStore()
-
-	doTest := func(simpleSet []Value, set compoundSet) {
+	doTest := func(ts testSet) {
+		set := ts.toCompoundSet(chunks.NewMemoryStore())
+		sort.Sort(ts)
 		idx := uint64(0)
 		endAt := uint64(setPattern)
 
 		set.Iter(func(v Value) bool {
-			assert.True(simpleSet[idx].Equals(v))
+			assert.True(ts.values[idx].Equals(v))
 			if idx == endAt {
 				idx += 1
 				return true
@@ -118,40 +126,28 @@ func TestCompoundSetIter(t *testing.T) {
 		assert.Equal(endAt, idx-1)
 	}
 
-	simpleSet := getTestNativeOrderSet()
-	tr := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
-	set := NewTypedSet(cs, tr, simpleSet...).(compoundSet)
-	doTest(simpleSet, set)
-
-	simpleSet = getTestRefOrderSet()
-	tr = MakeCompoundType(SetKind, MakeCompoundType(RefKind, MakePrimitiveType(ValueKind)))
-	set = NewTypedSet(cs, tr, simpleSet...).(compoundSet)
-	doTest(simpleSet, set)
+	doTest(getTestNativeOrderSet())
+	doTest(getTestRefValueOrderSet())
+	doTest(getTestRefToNativeOrderSet())
+	doTest(getTestRefToValueOrderSet())
 }
 
 func TestCompoundSetIterAll(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping test in short mode.")
-	}
 	assert := assert.New(t)
 
-	cs := chunks.NewMemoryStore()
-
-	doTest := func(simpleSet []Value, set compoundSet) {
+	doTest := func(ts testSet) {
+		set := ts.toCompoundSet(chunks.NewMemoryStore())
+		sort.Sort(ts)
 		idx := uint64(0)
+
 		set.IterAll(func(v Value) {
-			assert.True(simpleSet[idx].Equals(v))
+			assert.True(ts.values[idx].Equals(v))
 			idx++
 		})
 	}
 
-	simpleSet := getTestNativeOrderSet()
-	tr := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
-	set := NewTypedSet(cs, tr, simpleSet...).(compoundSet)
-	doTest(simpleSet, set)
-
-	simpleSet = getTestRefOrderSet()
-	tr = MakeCompoundType(SetKind, MakeCompoundType(RefKind, MakePrimitiveType(ValueKind)))
-	set = NewTypedSet(cs, tr, simpleSet...).(compoundSet)
-	doTest(simpleSet, set)
+	doTest(getTestNativeOrderSet())
+	doTest(getTestRefValueOrderSet())
+	doTest(getTestRefToNativeOrderSet())
+	doTest(getTestRefToValueOrderSet())
 }

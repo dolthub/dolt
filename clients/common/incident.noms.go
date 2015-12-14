@@ -496,8 +496,12 @@ func (r RefOfIncident) ChildValues() []types.Value {
 // A Noms Value that describes RefOfIncident.
 var __typeForRefOfIncident types.Type
 
-func (m RefOfIncident) Type() types.Type {
+func (r RefOfIncident) Type() types.Type {
 	return __typeForRefOfIncident
+}
+
+func (r RefOfIncident) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {

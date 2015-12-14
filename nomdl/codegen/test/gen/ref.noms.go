@@ -151,8 +151,12 @@ func (r RefOfListOfString) ChildValues() []types.Value {
 // A Noms Value that describes RefOfListOfString.
 var __typeForRefOfListOfString types.Type
 
-func (m RefOfListOfString) Type() types.Type {
+func (r RefOfListOfString) Type() types.Type {
 	return __typeForRefOfListOfString
+}
+
+func (r RefOfListOfString) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {
@@ -351,8 +355,12 @@ func (r RefOfSetOfFloat32) ChildValues() []types.Value {
 // A Noms Value that describes RefOfSetOfFloat32.
 var __typeForRefOfSetOfFloat32 types.Type
 
-func (m RefOfSetOfFloat32) Type() types.Type {
+func (r RefOfSetOfFloat32) Type() types.Type {
 	return __typeForRefOfSetOfFloat32
+}
+
+func (r RefOfSetOfFloat32) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {
@@ -551,8 +559,12 @@ func (r RefOfFloat32) ChildValues() []types.Value {
 // A Noms Value that describes RefOfFloat32.
 var __typeForRefOfFloat32 types.Type
 
-func (m RefOfFloat32) Type() types.Type {
+func (r RefOfFloat32) Type() types.Type {
 	return __typeForRefOfFloat32
+}
+
+func (r RefOfFloat32) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {

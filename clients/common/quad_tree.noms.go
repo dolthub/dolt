@@ -570,8 +570,12 @@ func (r RefOfValue) ChildValues() []types.Value {
 // A Noms Value that describes RefOfValue.
 var __typeForRefOfValue types.Type
 
-func (m RefOfValue) Type() types.Type {
+func (r RefOfValue) Type() types.Type {
 	return __typeForRefOfValue
+}
+
+func (r RefOfValue) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {
@@ -1181,8 +1185,12 @@ func (r RefOfSQuadTree) ChildValues() []types.Value {
 // A Noms Value that describes RefOfSQuadTree.
 var __typeForRefOfSQuadTree types.Type
 
-func (m RefOfSQuadTree) Type() types.Type {
+func (r RefOfSQuadTree) Type() types.Type {
 	return __typeForRefOfSQuadTree
+}
+
+func (r RefOfSQuadTree) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {

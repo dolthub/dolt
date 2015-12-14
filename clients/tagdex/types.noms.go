@@ -328,8 +328,12 @@ func (r RefOfRemotePhoto) ChildValues() []types.Value {
 // A Noms Value that describes RefOfRemotePhoto.
 var __typeForRefOfRemotePhoto types.Type
 
-func (m RefOfRemotePhoto) Type() types.Type {
+func (r RefOfRemotePhoto) Type() types.Type {
 	return __typeForRefOfRemotePhoto
+}
+
+func (r RefOfRemotePhoto) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {

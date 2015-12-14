@@ -36,8 +36,12 @@ func (r {{.Name}}) ChildValues() []{{$typesPackage}}Value {
 // A Noms Value that describes {{.Name}}.
 var __typeFor{{.Name}} {{$typesPackage}}Type
 
-func (m {{.Name}}) Type() {{$typesPackage}}Type {
+func (r {{.Name}}) Type() {{$typesPackage}}Type {
 	return __typeFor{{.Name}}
+}
+
+func (r {{.Name}}) Less(other {{$typesPackage}}OrderedValue) bool {
+  return r.TargetRef().Less(other.({{$typesPackage}}RefBase).TargetRef())
 }
 
 func init() {

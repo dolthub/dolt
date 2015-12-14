@@ -9,154 +9,153 @@ import (
 	"github.com/attic-labs/noms/chunks"
 )
 
-type testNativeOrderMap []mapEntry
-
-func (tm testNativeOrderMap) Len() int {
-	return len(tm)
+type testMap struct {
+	entries []mapEntry
+	less    testMapLessFn
+	tr      Type
 }
 
-func (tm testNativeOrderMap) Less(i, j int) bool {
-	return tm[i].key.(OrderedValue).Less(tm[j].key.(OrderedValue))
+type testMapLessFn func(x, y Value) bool
+
+func (tm testMap) Len() int {
+	return len(tm.entries)
 }
 
-func (tm testNativeOrderMap) Swap(i, j int) {
-	tm[i], tm[j] = tm[j], tm[i]
+func (tm testMap) Less(i, j int) bool {
+	return tm.less(tm.entries[i].key, tm.entries[j].key)
 }
 
-func getTestNativeOrderMap() ([]mapEntry, []Value) {
-	length := int(mapPattern * 16)
-	s := rand.NewSource(42)
+func (tm testMap) Swap(i, j int) {
+	tm.entries[i], tm.entries[j] = tm.entries[j], tm.entries[i]
+}
+
+func (tm testMap) toCompoundMap(cs chunks.ChunkStore) compoundMap {
+	keyvals := []Value{}
+	for _, entry := range tm.entries {
+		keyvals = append(keyvals, entry.key, entry.value)
+	}
+	return NewTypedMap(cs, tm.tr, keyvals...).(compoundMap)
+}
+
+type testMapGenFn func(v Int64) Value
+
+func newTestMap(length int, gen testMapGenFn, less testMapLessFn, tr Type) testMap {
+	s := rand.NewSource(4242)
 	used := map[int64]bool{}
 
-	mapData := testNativeOrderMap{}
-	values := []Value{}
-
-	for len(values) < length {
+	var entries []mapEntry
+	for len(entries) < length {
 		v := s.Int63() & 0xffffff
 		if _, ok := used[v]; !ok {
-			entry := mapEntry{Int64(v), Int64(v * 2)}
-			mapData = append(mapData, entry)
+			entry := mapEntry{gen(Int64(v)), gen(Int64(v * 2))}
+			entries = append(entries, entry)
 			used[v] = true
-			values = append(values, entry.key, entry.value)
 		}
 	}
 
-	sort.Sort(mapData)
-	return mapData, values
+	return testMap{entries, less, MakeCompoundType(MapKind, tr, tr)}
 }
 
-type testRefOrderMap []mapEntry
-
-func (tm testRefOrderMap) Len() int {
-	return len(tm)
+func getTestNativeOrderMap() testMap {
+	return newTestMap(int(mapPattern*16), func(v Int64) Value {
+		return v
+	}, func(x, y Value) bool {
+		return !y.(OrderedValue).Less(x.(OrderedValue))
+	}, MakePrimitiveType(Int64Kind))
 }
 
-func (tm testRefOrderMap) Less(i, j int) bool {
-	return tm[i].key.Ref().Less(tm[j].key.Ref())
+func getTestRefValueOrderMap() testMap {
+	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
+	return newTestMap(int(mapPattern*2), func(v Int64) Value {
+		return NewTypedSet(chunks.NewMemoryStore(), setType, v)
+	}, func(x, y Value) bool {
+		return !y.Ref().Less(x.Ref())
+	}, setType)
 }
 
-func (tm testRefOrderMap) Swap(i, j int) {
-	tm[i], tm[j] = tm[j], tm[i]
+func getTestRefToNativeOrderMap() testMap {
+	refType := MakeCompoundType(RefKind, MakePrimitiveType(Int64Kind))
+	return newTestMap(int(mapPattern*2), func(v Int64) Value {
+		return newRef(v.Ref(), refType)
+	}, func(x, y Value) bool {
+		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
+	}, refType)
 }
 
-func getTestRefOrderMap() ([]mapEntry, []Value) {
-	length := int(mapPattern * 16)
-	s := rand.NewSource(42)
-	used := map[int64]bool{}
-
-	values := []Value{}
-	mapData := testRefOrderMap{}
-	for i := 0; i < length; i++ {
-		v := s.Int63() & 0xffffff
-		if _, ok := used[v]; !ok {
-			entry := mapEntry{NewRef(Int64(v).Ref()), Int64(v)}
-			mapData = append(mapData, entry)
-			used[v] = true
-			values = append(values, entry.key, entry.value)
-		}
-	}
-
-	sort.Sort(mapData)
-	return mapData, values
+func getTestRefToValueOrderMap() testMap {
+	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
+	refType := MakeCompoundType(RefKind, setType)
+	return newTestMap(int(mapPattern*2), func(v Int64) Value {
+		return newRef(NewTypedSet(chunks.NewMemoryStore(), setType, v).Ref(), refType)
+	}, func(x, y Value) bool {
+		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
+	}, refType)
 }
 
-func TestCompoundMapHasAndGet(t *testing.T) {
+func TestCompoundMapHas(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewMemoryStore()
-
-	doTest := func(simpleMap []mapEntry, m compoundMap) {
-		for _, v := range simpleMap {
-			assert.True(m.Has(v.key))
-			assert.True(m.Get(v.key).Equals(v.value))
+	doTest := func(tm testMap) {
+		m := tm.toCompoundMap(chunks.NewMemoryStore())
+		for _, entry := range tm.entries {
+			assert.True(m.Has(entry.key))
+			assert.True(m.Get(entry.key).Equals(entry.value))
 		}
 	}
 
-	simpleMap, kv := getTestNativeOrderMap()
-	tr := MakeCompoundType(MapKind, MakePrimitiveType(Int64Kind), MakePrimitiveType(Int64Kind))
-	m := NewTypedMap(cs, tr, kv...).(compoundMap)
-	doTest(simpleMap, m)
-
-	simpleMap, kv = getTestRefOrderMap()
-	tr = MakeCompoundType(MapKind, MakeCompoundType(RefKind, MakePrimitiveType(ValueKind)), MakePrimitiveType(Int64Kind))
-	m = NewTypedMap(cs, tr, kv...).(compoundMap)
-	doTest(simpleMap, m)
+	doTest(getTestNativeOrderMap())
+	doTest(getTestRefValueOrderMap())
+	doTest(getTestRefToNativeOrderMap())
+	doTest(getTestRefToValueOrderMap())
 }
 
 func TestCompoundMapIter(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewMemoryStore()
-
-	doTest := func(simpleMap []mapEntry, m compoundMap) {
+	doTest := func(tm testMap) {
+		m := tm.toCompoundMap(chunks.NewMemoryStore())
+		sort.Sort(tm)
 		idx := uint64(0)
 		endAt := uint64(mapPattern)
 
 		m.Iter(func(k, v Value) bool {
-			assert.True(simpleMap[idx].key.Equals(k))
-			assert.True(simpleMap[idx].value.Equals(v))
+			assert.True(tm.entries[idx].key.Equals(k))
+			assert.True(tm.entries[idx].value.Equals(v))
 			if idx == endAt {
+				idx += 1
 				return true
 			}
-			idx++
+
+			idx += 1
 			return false
 		})
 
-		assert.Equal(endAt, idx)
+		assert.Equal(endAt, idx-1)
 	}
 
-	simpleMap, kv := getTestNativeOrderMap()
-	tr := MakeCompoundType(MapKind, MakePrimitiveType(Int64Kind), MakePrimitiveType(Int64Kind))
-	m := NewTypedMap(cs, tr, kv...).(compoundMap)
-	doTest(simpleMap, m)
-
-	simpleMap, kv = getTestRefOrderMap()
-	tr = MakeCompoundType(MapKind, MakeCompoundType(RefKind, MakePrimitiveType(ValueKind)), MakePrimitiveType(Int64Kind))
-	m = NewTypedMap(cs, tr, kv...).(compoundMap)
-	doTest(simpleMap, m)
+	doTest(getTestNativeOrderMap())
+	doTest(getTestRefValueOrderMap())
+	doTest(getTestRefToNativeOrderMap())
+	doTest(getTestRefToValueOrderMap())
 }
 
 func TestCompoundMapIterAll(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewMemoryStore()
-
-	doTest := func(simpleMap []mapEntry, m compoundMap) {
+	doTest := func(tm testMap) {
+		m := tm.toCompoundMap(chunks.NewMemoryStore())
+		sort.Sort(tm)
 		idx := uint64(0)
+
 		m.IterAll(func(k, v Value) {
-			assert.True(simpleMap[idx].key.Equals(k))
-			assert.True(simpleMap[idx].value.Equals(v))
+			assert.True(tm.entries[idx].key.Equals(k))
+			assert.True(tm.entries[idx].value.Equals(v))
 			idx++
 		})
 	}
 
-	simpleMap, kv := getTestNativeOrderMap()
-	tr := MakeCompoundType(MapKind, MakePrimitiveType(Int64Kind), MakePrimitiveType(Int64Kind))
-	m := NewTypedMap(cs, tr, kv...).(compoundMap)
-	doTest(simpleMap, m)
-
-	simpleMap, kv = getTestRefOrderMap()
-	tr = MakeCompoundType(MapKind, MakeCompoundType(RefKind, MakePrimitiveType(ValueKind)), MakePrimitiveType(Int64Kind))
-	m = NewTypedMap(cs, tr, kv...).(compoundMap)
-	doTest(simpleMap, m)
+	doTest(getTestNativeOrderMap())
+	doTest(getTestRefValueOrderMap())
+	doTest(getTestRefToNativeOrderMap())
+	doTest(getTestRefToValueOrderMap())
 }

@@ -289,8 +289,12 @@ func (r RefOfMapOfStringToRefOfCompany) ChildValues() []types.Value {
 // A Noms Value that describes RefOfMapOfStringToRefOfCompany.
 var __typeForRefOfMapOfStringToRefOfCompany types.Type
 
-func (m RefOfMapOfStringToRefOfCompany) Type() types.Type {
+func (r RefOfMapOfStringToRefOfCompany) Type() types.Type {
 	return __typeForRefOfMapOfStringToRefOfCompany
+}
+
+func (r RefOfMapOfStringToRefOfCompany) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {
@@ -480,8 +484,12 @@ func (r RefOfCompany) ChildValues() []types.Value {
 // A Noms Value that describes RefOfCompany.
 var __typeForRefOfCompany types.Type
 
-func (m RefOfCompany) Type() types.Type {
+func (r RefOfCompany) Type() types.Type {
 	return __typeForRefOfCompany
+}
+
+func (r RefOfCompany) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {

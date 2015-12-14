@@ -503,8 +503,12 @@ func (r RefOfUser) ChildValues() []types.Value {
 // A Noms Value that describes RefOfUser.
 var __typeForRefOfUser types.Type
 
-func (m RefOfUser) Type() types.Type {
+func (r RefOfUser) Type() types.Type {
 	return __typeForRefOfUser
+}
+
+func (r RefOfUser) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {
@@ -560,8 +564,12 @@ func (r RefOfSetOfRefOfRemotePhoto) ChildValues() []types.Value {
 // A Noms Value that describes RefOfSetOfRefOfRemotePhoto.
 var __typeForRefOfSetOfRefOfRemotePhoto types.Type
 
-func (m RefOfSetOfRefOfRemotePhoto) Type() types.Type {
+func (r RefOfSetOfRefOfRemotePhoto) Type() types.Type {
 	return __typeForRefOfSetOfRefOfRemotePhoto
+}
+
+func (r RefOfSetOfRefOfRemotePhoto) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {
@@ -767,8 +775,12 @@ func (r RefOfRemotePhoto) ChildValues() []types.Value {
 // A Noms Value that describes RefOfRemotePhoto.
 var __typeForRefOfRemotePhoto types.Type
 
-func (m RefOfRemotePhoto) Type() types.Type {
+func (r RefOfRemotePhoto) Type() types.Type {
 	return __typeForRefOfRemotePhoto
+}
+
+func (r RefOfRemotePhoto) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {

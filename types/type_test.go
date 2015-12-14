@@ -110,5 +110,5 @@ func TestTypeOrdered(t *testing.T) {
 	assert.False(MakeCompoundType(ListKind, MakePrimitiveType(StringKind)).IsOrdered())
 	assert.False(MakeCompoundType(SetKind, MakePrimitiveType(StringKind)).IsOrdered())
 	assert.False(MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(ValueKind)).IsOrdered())
-	assert.False(MakeCompoundType(RefKind, MakePrimitiveType(StringKind)).IsOrdered())
+	assert.True(MakeCompoundType(RefKind, MakePrimitiveType(StringKind)).IsOrdered())
 }

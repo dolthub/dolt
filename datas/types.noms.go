@@ -456,8 +456,12 @@ func (r RefOfCommit) ChildValues() []types.Value {
 // A Noms Value that describes RefOfCommit.
 var __typeForRefOfCommit types.Type
 
-func (m RefOfCommit) Type() types.Type {
+func (r RefOfCommit) Type() types.Type {
 	return __typeForRefOfCommit
+}
+
+func (r RefOfCommit) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {

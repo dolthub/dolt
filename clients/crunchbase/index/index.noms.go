@@ -898,8 +898,12 @@ func (r RefOfKey) ChildValues() []types.Value {
 // A Noms Value that describes RefOfKey.
 var __typeForRefOfKey types.Type
 
-func (m RefOfKey) Type() types.Type {
+func (r RefOfKey) Type() types.Type {
 	return __typeForRefOfKey
+}
+
+func (r RefOfKey) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {
@@ -1105,8 +1109,12 @@ func (r RefOfSetOfRoundRaise) ChildValues() []types.Value {
 // A Noms Value that describes RefOfSetOfRoundRaise.
 var __typeForRefOfSetOfRoundRaise types.Type
 
-func (m RefOfSetOfRoundRaise) Type() types.Type {
+func (r RefOfSetOfRoundRaise) Type() types.Type {
 	return __typeForRefOfSetOfRoundRaise
+}
+
+func (r RefOfSetOfRoundRaise) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
 }
 
 func init() {
