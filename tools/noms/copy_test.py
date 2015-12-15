@@ -17,9 +17,8 @@ class TestCopy(unittest.TestCase):
 		otherNested = tempfile.mkdtemp(dir=self.tempdir)
 
 		def mkfile():
-			ret = tempfile.NamedTemporaryFile(dir=nested, delete=False)
-			ret.close()
-			return ret.name
+			with tempfile.NamedTemporaryFile(dir=nested, delete=False) as f:
+				return f.name
 
 		me = mkfile()
 		peerFile = os.path.basename(mkfile())
@@ -32,6 +31,7 @@ class TestCopy(unittest.TestCase):
 		self.assertTrue(os.path.islink(os.path.join(otherNested, peerLink)))
 		self.assertTrue(os.path.isfile(os.path.join(otherNested, peerFile)))
 		self.assertTrue(os.path.isdir(os.path.join(otherNested, peerDir)))
+		self.assertFalse(os.path.lexists(os.path.join(otherNested, os.path.basename(me))))
 
 
 if __name__ == '__main__':
