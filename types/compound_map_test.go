@@ -109,6 +109,23 @@ func TestCompoundMapHas(t *testing.T) {
 	doTest(getTestRefToValueOrderMap())
 }
 
+func TestCompoundMapFirst(t *testing.T) {
+	assert := assert.New(t)
+
+	doTest := func(tm testMap) {
+		m := tm.toCompoundMap(chunks.NewMemoryStore())
+		sort.Sort(tm)
+		actualKey, actualValue := m.First()
+		assert.True(tm.entries[0].key.Equals(actualKey))
+		assert.True(tm.entries[0].value.Equals(actualValue))
+	}
+
+	doTest(getTestNativeOrderMap())
+	doTest(getTestRefValueOrderMap())
+	doTest(getTestRefToNativeOrderMap())
+	doTest(getTestRefToValueOrderMap())
+}
+
 func TestCompoundMapIter(t *testing.T) {
 	assert := assert.New(t)
 

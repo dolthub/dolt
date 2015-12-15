@@ -71,7 +71,8 @@ func (cm compoundMap) findLeaf(key Value) (*sequenceCursor, mapLeaf) {
 }
 
 func (cm compoundMap) First() (Value, Value) {
-	panic("Not implemented")
+	_, leaf := newMetaSequenceCursor(cm, cm.cs)
+	return leaf.(mapLeaf).First()
 }
 
 func (cm compoundMap) MaybeGet(key Value) (v Value, ok bool) {
