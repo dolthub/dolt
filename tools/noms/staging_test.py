@@ -4,8 +4,6 @@ import os, os.path, shutil, tempfile, unittest
 import staging
 
 class TestStaging(unittest.TestCase):
-	CONTENTS = 'test file contents'
-
 	def setUp(self):
 		self.tempdir = os.path.realpath(tempfile.mkdtemp())
 		self.nested = tempfile.mkdtemp(dir=self.tempdir)
