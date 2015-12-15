@@ -43,11 +43,8 @@ func main() {
 		}
 		pythonPath := filepath.Join(goPath, nomsCheckoutPath, "tools")
 		env := runner.Env{
-			"GOPATH":              goPath,
-			"PYTHONPATH":          pythonPath,
-			"NOMS_SERVER":         nomsServer,
-			"NOMS_CHECKOUT_PATH":  filepath.Join(workspace, nomsCheckoutPath),
-			"ATTIC_CHECKOUT_PATH": filepath.Join(workspace, atticCheckoutPath),
+			"PYTHONPATH":  pythonPath,
+			"NOMS_SERVER": nomsServer,
 		}
 
 		if !runner.Serial(os.Stdout, os.Stderr, env, ".", buildScript) {

@@ -24,6 +24,11 @@ class TestStaging(unittest.TestCase):
 		self.assertFalse(staging._isSubDir(self.nested, otherNested))
 
 
+	def test_DotDotNotReallyNested(self):
+		notReallyNested = os.path.join(self.tempdir, 'foo', os.pardir, 'bar')
+		self.assertFalse(staging._isSubDir(self.nested, notReallyNested))
+
+
 	def test_LinkNotReallyNested(self):
 		otherNested = tempfile.mkdtemp(dir=self.tempdir)
 		linkName = os.path.join(self.nested, 'link')

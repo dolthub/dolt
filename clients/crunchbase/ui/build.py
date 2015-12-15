@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import os, os.path, subprocess, sys
+import os, os.path, subprocess
 
 import noms.symlink as symlink
 

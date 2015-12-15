@@ -29,8 +29,10 @@ def Main(projectName, stagingFunction):
 	args = parser.parse_args()
 	projectStagingDir = os.path.join(args.stagingDir, projectName)
 
-	# check if project dir is in staging dir
 	normalized = os.path.realpath(projectStagingDir)
+	if not _isSubDir(projectStagingDir, args.stagingDir):
+		raise Exception(projectStagingDir + ' must be a subdir of ' + args.stagingDir)
+
 	os.makedirs(normalized)
 	stagingFunction(normalized)
 

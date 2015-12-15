@@ -52,7 +52,7 @@ func Serial(stdout, stderr io.Writer, env Env, dir, filename string, args ...str
 			runErr := runEnvDir(stdout, stderr, env, filepath.Dir(path), "python", scriptAndArgs...)
 			if runErr != nil {
 				success = false
-				fmt.Fprintf(stderr, "Running %s failed with %v", path, runErr)
+				fmt.Fprintf(stderr, "Running %s failed with %v\n", path, runErr)
 			}
 		}
 		return nil
