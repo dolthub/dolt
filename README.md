@@ -16,6 +16,10 @@ This includes:
 * Search support
 * Sample applications
 
+# Prerequisites
+
+* [Go 1.4+](https://golang.org/dl/)
+
 # Get
 
 ```
