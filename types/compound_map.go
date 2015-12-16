@@ -124,15 +124,13 @@ func (cm compoundMap) IterAllP(concurrency int, f mapIterAllCallback) {
 func (cm compoundMap) Filter(cb mapFilterCallback) Map {
 	seq := newEmptySequenceChunker(makeMapLeafChunkFn(cm.t, cm.cs), newMapMetaSequenceChunkFn(cm.t, cm.cs), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
-	// Could conceivably use IterAllP() here.
 	cm.IterAll(func(k, v Value) {
 		if cb(k, v) {
 			seq.Append(mapEntry{k, v})
 		}
 	})
 
-	m := seq.Done()
-	return internalValueFromType(m, m.Type()).(Map)
+	return internalValueFromType(seq.Done(), cm.Type()).(Map)
 }
 
 func (cm compoundMap) Has(key Value) bool {
