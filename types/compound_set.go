@@ -68,7 +68,6 @@ func (cs compoundSet) Subtract(others ...Set) Set {
 func (cs compoundSet) Filter(cb setFilterCallback) Set {
 	seq := newEmptySequenceChunker(makeSetLeafChunkFn(cs.t, cs.cs), newSetMetaSequenceChunkFn(cs.t, cs.cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
-	// Could conceivably use IterAllP() here.
 	cs.IterAll(func(v Value) {
 		if cb(v) {
 			seq.Append(v)
