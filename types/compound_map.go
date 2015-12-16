@@ -63,7 +63,7 @@ func (cm compoundMap) findLeaf(key Value) (*sequenceCursor, mapLeaf) {
 	cursor.seekBinary(seekFn)
 
 	current := cursor.current().(metaTuple)
-	if current.ref != leaf.Ref() {
+	if current.ref != valueFromType(cm.cs, leaf, leaf.Type()).Ref() {
 		leaf = readMetaTupleValue(cursor.current(), cm.cs)
 	}
 

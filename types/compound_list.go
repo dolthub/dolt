@@ -67,7 +67,7 @@ func (cl compoundList) cursorAt(idx uint64) (*sequenceCursor, listLeaf, uint64) 
 		return idx < offset, offset
 	}, uint64(0))
 
-	if current := cursor.current().(metaTuple); current.ref != leaf.Ref() {
+	if current := cursor.current().(metaTuple); current.ref != valueFromType(cl.cs, leaf, leaf.Type()).Ref() {
 		leaf = readMetaTupleValue(cursor.current(), cl.cs)
 	}
 

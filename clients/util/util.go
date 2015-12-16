@@ -33,23 +33,24 @@ func NomsValueFromDecodedJSON(cs chunks.ChunkStore, o interface{}) types.Value {
 	case nil:
 		return nil
 	case []interface{}:
-		out := types.NewList(cs)
+		items := make([]types.Value, 0, len(o))
 		for _, v := range o {
 			nv := NomsValueFromDecodedJSON(cs, v)
 			if nv != nil {
-				out = out.Append(nv)
+				items = append(items, nv)
 			}
 		}
-		return out
+		return types.NewList(cs, items...)
 	case map[string]interface{}:
-		out := NewMapOfStringToValue(cs)
+		outDef := MapOfStringToValueDef{}
+
 		for k, v := range o {
 			nv := NomsValueFromDecodedJSON(cs, v)
 			if nv != nil {
-				out = out.Set(k, nv)
+				outDef[k] = nv
 			}
 		}
-		return out
+		return outDef.New(cs)
 	default:
 		d.Chk.Fail("Nomsification failed.", "I don't understand %+v, which is of type %s!\n", o, reflect.TypeOf(o).String())
 	}
