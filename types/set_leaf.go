@@ -57,15 +57,7 @@ func (s setLeaf) Remove(values ...Value) Set {
 }
 
 func (s setLeaf) Union(others ...Set) Set {
-	assertSetsSameType(s, others...)
-	var result Set = s
-	for _, other := range others {
-		other.Iter(func(v Value) (stop bool) {
-			result = result.Insert(v)
-			return
-		})
-	}
-	return result
+	return setUnion(s, s.cs, others)
 }
 
 func (s setLeaf) Subtract(others ...Set) Set {
@@ -239,5 +231,20 @@ func makeSetLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 		}
 
 		return metaTuple{ref, indexValue}, setLeaf
+	}
+}
+
+func (s setLeaf) sequenceCursorAtFirst() *sequenceCursor {
+	return &sequenceCursor{
+		nil,
+		s.data,
+		0,
+		len(s.data),
+		func(parent sequenceItem, idx int) sequenceItem {
+			return s.data[idx]
+		},
+		func(reference sequenceItem) (sequence sequenceItem, length int) {
+			panic("unreachable")
+		},
 	}
 }

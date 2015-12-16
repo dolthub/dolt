@@ -282,3 +282,53 @@ func TestCompoundSetFilter(t *testing.T) {
 	doTest(getTestRefToNativeOrderSet(2))
 	doTest(getTestRefToValueOrderSet(2))
 }
+
+func TestCompoundSetUnion(t *testing.T) {
+	assert := assert.New(t)
+	ms := chunks.NewMemoryStore()
+
+	doTest := func(ts testSet) {
+		cs := ts.toCompoundSet(ms)
+		cs2 := cs.Union()
+		assert.True(cs.Equals(cs2))
+		cs3 := cs.Union(cs2)
+		assert.True(cs.Equals(cs3))
+		cs4 := cs.Union(cs2, cs3)
+		assert.True(cs.Equals(cs4))
+		emptySet := NewTypedSet(ms, ts.tr)
+		cs5 := cs.Union(emptySet)
+		assert.True(cs.Equals(cs5))
+		cs6 := emptySet.Union(cs)
+		assert.True(cs.Equals(cs6))
+
+		r := rand.New(rand.NewSource(123))
+		subsetValues1 := make([]Value, 0, len(ts.values))
+		subsetValues2 := make([]Value, 0, len(ts.values))
+		subsetValues3 := make([]Value, 0, len(ts.values))
+		subsetValuesAll := make([]Value, 0, len(ts.values))
+		for _, v := range ts.values {
+			if r.Intn(3) == 0 {
+				subsetValues1 = append(subsetValues1, v)
+				subsetValuesAll = append(subsetValuesAll, v)
+			} else if r.Intn(3) == 0 {
+				subsetValues2 = append(subsetValues2, v)
+				subsetValuesAll = append(subsetValuesAll, v)
+			} else if r.Intn(3) == 0 {
+				subsetValues3 = append(subsetValues3, v)
+				subsetValuesAll = append(subsetValuesAll, v)
+			}
+		}
+
+		s1 := NewTypedSet(ms, ts.tr, subsetValues1...)
+		s2 := NewTypedSet(ms, ts.tr, subsetValues2...)
+		s3 := NewTypedSet(ms, ts.tr, subsetValues3...)
+		sAll := NewTypedSet(ms, ts.tr, subsetValuesAll...)
+
+		assert.True(s1.Union(s2, s3).Equals(sAll))
+	}
+
+	doTest(getTestNativeOrderSet(16))
+	doTest(getTestRefValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2))
+	doTest(getTestRefToValueOrderSet(2))
+}
