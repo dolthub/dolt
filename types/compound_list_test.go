@@ -548,3 +548,39 @@ func TestCompoundListSlice(t *testing.T) {
 	assert.True(cl8.Equals(cl.Slice(cl.Len()/2, cl.Len()+1)))
 	assert.True(cl8.Equals(cl.Slice(cl.Len()/2, cl.Len()*2)))
 }
+
+func TestCompoundListFilter(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+	simple := getTestSimpleList()
+	filterCb := func(v Value, idx uint64) bool {
+		return v.(Int64)%5 != 0
+	}
+
+	expected := testSimpleList{}
+	for i, v := range simple {
+		if filterCb(v, uint64(i)) {
+			expected = append(expected, v)
+		}
+
+	}
+	cl := simple.ToNomsList(cs)
+
+	res := cl.Filter(filterCb)
+	assert.Equal(len(expected), int(res.Len()))
+	res.IterAll(func(v Value, idx uint64) {
+		assert.Equal(expected[idx], v)
+	})
+	assert.True(expected.ToNomsList(cs).Equals(res))
+}
+
+func TestCompoundListFilterEmpty(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+	empty := testSimpleList{}.ToNomsList(cs)
+	filterCb := func(v Value, idx uint64) bool {
+		return v.(Int64)%5 != 0
+	}
+	res1 := empty.Filter(filterCb)
+	assert.True(res1.Empty())
+}

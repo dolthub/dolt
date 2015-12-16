@@ -186,7 +186,14 @@ func (cl compoundList) sequenceChunkerAtIndex(idx uint64) *sequenceChunker {
 }
 
 func (cl compoundList) Filter(cb listFilterCallback) List {
-	panic("not implemented")
+	seq := newEmptySequenceChunker(makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
+	cl.IterAll(func(v Value, idx uint64) {
+		if cb(v, idx) {
+			seq.Append(v)
+		}
+	})
+	s := seq.Done()
+	return internalValueFromType(s, s.Type()).(List)
 }
 
 func (cl compoundList) Remove(start uint64, end uint64) List {
