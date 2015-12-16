@@ -13,6 +13,8 @@ type testMap struct {
 	entries []mapEntry
 	less    testMapLessFn
 	tr      Type
+
+	knownBadKey Value
 }
 
 type testMapLessFn func(x, y Value) bool
@@ -43,9 +45,10 @@ func newTestMap(length int, gen testMapGenFn, less testMapLessFn, tr Type) testM
 	s := rand.NewSource(4242)
 	used := map[int64]bool{}
 
-	var entries []mapEntry
+	var mask int64 = 0xffffff
+	entries := make([]mapEntry, 0, length)
 	for len(entries) < length {
-		v := s.Int63() & 0xffffff
+		v := s.Int63() & mask
 		if _, ok := used[v]; !ok {
 			entry := mapEntry{gen(Int64(v)), gen(Int64(v * 2))}
 			entries = append(entries, entry)
@@ -53,7 +56,7 @@ func newTestMap(length int, gen testMapGenFn, less testMapLessFn, tr Type) testM
 		}
 	}
 
-	return testMap{entries, less, MakeCompoundType(MapKind, tr, tr)}
+	return testMap{entries, less, MakeCompoundType(MapKind, tr, tr), gen(Int64(mask + 1))}
 }
 
 func getTestNativeOrderMap() testMap {
@@ -114,10 +117,31 @@ func TestCompoundMapFirst(t *testing.T) {
 
 	doTest := func(tm testMap) {
 		m := tm.toCompoundMap(chunks.NewMemoryStore())
-		sort.Sort(tm)
+		sort.Stable(tm)
 		actualKey, actualValue := m.First()
 		assert.True(tm.entries[0].key.Equals(actualKey))
 		assert.True(tm.entries[0].value.Equals(actualValue))
+	}
+
+	doTest(getTestNativeOrderMap())
+	doTest(getTestRefValueOrderMap())
+	doTest(getTestRefToNativeOrderMap())
+	doTest(getTestRefToValueOrderMap())
+}
+
+func TestCompoundMapMaybeGet(t *testing.T) {
+	assert := assert.New(t)
+
+	doTest := func(tm testMap) {
+		m := tm.toCompoundMap(chunks.NewMemoryStore())
+		for _, entry := range tm.entries {
+			v, ok := m.MaybeGet(entry.key)
+			if assert.True(ok, "%v should have been in the map!", entry.key) {
+				assert.True(v.Equals(entry.value), "%v != %v", v, entry.value)
+			}
+		}
+		_, ok := m.MaybeGet(tm.knownBadKey)
+		assert.False(ok, "m should not contain %v", tm.knownBadKey)
 	}
 
 	doTest(getTestNativeOrderMap())

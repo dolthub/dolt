@@ -45,7 +45,8 @@ func (cs compoundSet) Empty() bool {
 }
 
 func (cs compoundSet) First() Value {
-	panic("not implemented")
+	_, leaf := newMetaSequenceCursor(cs, cs.cs)
+	return leaf.(setLeaf).First()
 }
 
 func (cs compoundSet) Insert(values ...Value) Set {

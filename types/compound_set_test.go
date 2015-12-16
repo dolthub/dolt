@@ -103,6 +103,22 @@ func TestCompoundSetHas(t *testing.T) {
 	doTest(getTestRefToValueOrderSet())
 }
 
+func TestCompoundSetFirst(t *testing.T) {
+	assert := assert.New(t)
+
+	doTest := func(ts testSet) {
+		s := ts.toCompoundSet(chunks.NewMemoryStore())
+		sort.Stable(ts)
+		actual := s.First()
+		assert.True(ts.values[0].Equals(actual), "%v != %v", ts.values[0], actual)
+	}
+
+	doTest(getTestNativeOrderSet())
+	doTest(getTestRefValueOrderSet())
+	doTest(getTestRefToNativeOrderSet())
+	doTest(getTestRefToValueOrderSet())
+}
+
 func TestCompoundSetIter(t *testing.T) {
 	assert := assert.New(t)
 
