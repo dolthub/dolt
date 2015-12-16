@@ -76,7 +76,8 @@ func (cm compoundMap) First() (Value, Value) {
 }
 
 func (cm compoundMap) MaybeGet(key Value) (v Value, ok bool) {
-	panic("Not implemented")
+	_, leaf := cm.findLeaf(key)
+	return leaf.MaybeGet(key)
 }
 
 func (cm compoundMap) Set(key Value, val Value) Map {
