@@ -249,7 +249,7 @@ func makeMapLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 		var indexValue Value
 		if len(mapData) > 0 {
 			lastValue := mapData[len(mapData)-1]
-			if orderedSequenceByIndexedType(t) {
+			if isSequenceOrderedByIndexedType(t) {
 				indexValue = lastValue.key
 			} else {
 				indexValue = NewRef(lastValue.key.Ref())

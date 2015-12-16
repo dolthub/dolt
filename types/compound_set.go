@@ -35,8 +35,12 @@ func (cs compoundSet) Ref() ref.Ref {
 	return EnsureRef(cs.ref, cs)
 }
 
-func (cs compoundSet) Len() uint64 {
-	panic("not implemented")
+func (cs compoundSet) Len() (length uint64) {
+	// https://github.com/attic-labs/noms/issues/764
+	cs.IterAll(func(v Value) {
+		length++
+	})
+	return
 }
 
 func (cs compoundSet) Empty() bool {
@@ -50,11 +54,54 @@ func (cs compoundSet) First() Value {
 }
 
 func (cs compoundSet) Insert(values ...Value) Set {
-	panic("not implemented")
+	if len(values) == 0 {
+		return cs
+	}
+
+	head, tail := values[0], values[1:]
+
+	var res Set
+	if seq, found := cs.sequenceChunkerAtValue(head); !found {
+		seq.Append(head)
+		res = seq.Done().(Set)
+	} else {
+		res = cs
+	}
+
+	return res.Insert(tail...)
 }
 
 func (cs compoundSet) Remove(values ...Value) Set {
-	panic("not implemented")
+	if len(values) == 0 {
+		return cs
+	}
+
+	head, tail := values[0], values[1:]
+
+	var res Set
+	if seq, found := cs.sequenceChunkerAtValue(head); found {
+		seq.Skip()
+		res = seq.Done().(Set)
+	} else {
+		res = cs
+	}
+
+	return res.Remove(tail...)
+}
+
+func (cs compoundSet) sequenceChunkerAtValue(v Value) (*sequenceChunker, bool) {
+	metaCur, leaf, idx := cs.findLeaf(v)
+
+	cur := &sequenceCursor{metaCur, leaf, idx, len(leaf.data), func(otherLeaf sequenceItem, idx int) sequenceItem {
+		return otherLeaf.(setLeaf).data[idx]
+	}, func(mt sequenceItem) (sequenceItem, int) {
+		otherLeaf := readMetaTupleValue(mt, cs.cs).(setLeaf)
+		return otherLeaf, len(otherLeaf.data)
+	}}
+
+	seq := newSequenceChunker(cur, makeSetLeafChunkFn(cs.t, cs.cs), newSetMetaSequenceChunkFn(cs.t, cs.cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	found := idx < len(leaf.data) && leaf.data[idx].Equals(v)
+	return seq, found
 }
 
 func (cs compoundSet) Union(others ...Set) Set {
@@ -69,35 +116,15 @@ func (cs compoundSet) Filter(cb setFilterCallback) Set {
 	panic("not implemented")
 }
 
-// TODO: seek should return false if it failed to find the value
-func (cs compoundSet) findLeaf(key Value) (*sequenceCursor, setLeaf) {
-	cursor, leaf := newMetaSequenceCursor(cs, cs.cs)
-
-	var seekFn sequenceCursorSeekBinaryCompareFn
-	if orderedSequenceByIndexedType(cs.t) {
-		orderedKey := key.(OrderedValue)
-
-		seekFn = func(mt sequenceItem) bool {
-			return !mt.(metaTuple).value.(OrderedValue).Less(orderedKey)
-		}
-	} else {
-		seekFn = func(mt sequenceItem) bool {
-			return !mt.(metaTuple).value.(Ref).TargetRef().Less(key.Ref())
-		}
-	}
-
-	cursor.seekBinary(seekFn)
-
-	current := cursor.current().(metaTuple)
-	if current.ref != valueFromType(cs.cs, leaf, leaf.Type()).Ref() {
-		leaf = readMetaTupleValue(cursor.current(), cs.cs)
-	}
-
-	return cursor, leaf.(setLeaf)
+func (cs compoundSet) findLeaf(key Value) (*sequenceCursor, setLeaf, int) {
+	cursor, leaf, idx := findLeafInOrderedSequence(cs, cs.t, key, func(v Value) []Value {
+		return v.(setLeaf).data
+	}, cs.cs)
+	return cursor, leaf.(setLeaf), idx
 }
 
 func (cs compoundSet) Has(key Value) bool {
-	_, leaf := cs.findLeaf(key)
+	_, leaf, _ := cs.findLeaf(key)
 	return leaf.Has(key)
 }
 
@@ -127,10 +154,6 @@ func (cs compoundSet) IterAllP(concurrency int, f setIterAllCallback) {
 	})
 }
 
-func orderedSequenceByIndexedType(t Type) bool {
-	return t.Desc.(CompoundDesc).ElemTypes[0].IsOrdered()
-}
-
 func newSetMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
@@ -139,9 +162,9 @@ func newSetMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 			tuples[i] = v.(metaTuple)
 		}
 
-		lastIndex := tuples[len(tuples)-1].value
+		lastValue := tuples[len(tuples)-1].value
 		meta := newMetaSequenceFromData(tuples, t, cs)
 		ref := WriteValue(meta, cs)
-		return metaTuple{ref, lastIndex}, meta
+		return metaTuple{ref, lastValue}, meta
 	}
 }

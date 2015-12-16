@@ -172,11 +172,11 @@ func (cl compoundList) Insert(idx uint64, vs ...Value) List {
 func (cl compoundList) sequenceCursorAtIndex(idx uint64) *sequenceCursor {
 	// TODO: An optimisation would be to decide at each level whether to step forward or backward across the node to find the insertion point, depending on which is closer. This would make Append much faster.
 	metaCur, leaf, start := cl.cursorAt(idx)
-	return &sequenceCursor{metaCur, leaf, int(idx - start), len(leaf.values), func(list sequenceItem, idx int) sequenceItem {
-		return list.(listLeaf).values[idx]
+	return &sequenceCursor{metaCur, leaf, int(idx - start), len(leaf.values), func(otherLeaf sequenceItem, idx int) sequenceItem {
+		return otherLeaf.(listLeaf).values[idx]
 	}, func(mt sequenceItem) (sequenceItem, int) {
-		list := readMetaTupleValue(mt, cl.cs).(listLeaf)
-		return list, len(list.values)
+		otherLeaf := readMetaTupleValue(mt, cl.cs).(listLeaf)
+		return otherLeaf, len(otherLeaf.values)
 	}}
 }
 

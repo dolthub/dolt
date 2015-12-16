@@ -10,10 +10,9 @@ import (
 )
 
 type testMap struct {
-	entries []mapEntry
-	less    testMapLessFn
-	tr      Type
-
+	entries     []mapEntry
+	less        testMapLessFn
+	tr          Type
 	knownBadKey Value
 }
 
@@ -29,6 +28,29 @@ func (tm testMap) Less(i, j int) bool {
 
 func (tm testMap) Swap(i, j int) {
 	tm.entries[i], tm.entries[j] = tm.entries[j], tm.entries[i]
+}
+
+func (tm testMap) SetValue(i int, v Value) testMap {
+	entries := make([]mapEntry, 0, len(tm.entries))
+	entries = append(entries, tm.entries...)
+	entries[i].value = v
+	return testMap{entries, tm.less, tm.tr, tm.knownBadKey}
+}
+
+func (tm testMap) Remove(from, to int) testMap {
+	entries := make([]mapEntry, 0, len(tm.entries)-(to-from))
+	entries = append(entries, tm.entries[:from]...)
+	entries = append(entries, tm.entries[to:]...)
+	return testMap{entries, tm.less, tm.tr, tm.knownBadKey}
+}
+
+func (tm testMap) Flatten(from, to int) []Value {
+	flat := make([]Value, 0, len(tm.entries)*2)
+	for _, entry := range tm.entries[from:to] {
+		flat = append(flat, entry.key)
+		flat = append(flat, entry.value)
+	}
+	return flat
 }
 
 func (tm testMap) toCompoundMap(cs chunks.ChunkStore) compoundMap {
@@ -59,36 +81,36 @@ func newTestMap(length int, gen testMapGenFn, less testMapLessFn, tr Type) testM
 	return testMap{entries, less, MakeCompoundType(MapKind, tr, tr), gen(Int64(mask + 1))}
 }
 
-func getTestNativeOrderMap() testMap {
-	return newTestMap(int(mapPattern*16), func(v Int64) Value {
+func getTestNativeOrderMap(scale int) testMap {
+	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
 		return v
 	}, func(x, y Value) bool {
 		return !y.(OrderedValue).Less(x.(OrderedValue))
 	}, MakePrimitiveType(Int64Kind))
 }
 
-func getTestRefValueOrderMap() testMap {
+func getTestRefValueOrderMap(scale int) testMap {
 	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
-	return newTestMap(int(mapPattern*2), func(v Int64) Value {
+	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
 		return NewTypedSet(chunks.NewMemoryStore(), setType, v)
 	}, func(x, y Value) bool {
 		return !y.Ref().Less(x.Ref())
 	}, setType)
 }
 
-func getTestRefToNativeOrderMap() testMap {
+func getTestRefToNativeOrderMap(scale int) testMap {
 	refType := MakeCompoundType(RefKind, MakePrimitiveType(Int64Kind))
-	return newTestMap(int(mapPattern*2), func(v Int64) Value {
+	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
 		return newRef(v.Ref(), refType)
 	}, func(x, y Value) bool {
 		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
 	}, refType)
 }
 
-func getTestRefToValueOrderMap() testMap {
+func getTestRefToValueOrderMap(scale int) testMap {
 	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
 	refType := MakeCompoundType(RefKind, setType)
-	return newTestMap(int(mapPattern*2), func(v Int64) Value {
+	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
 		return newRef(NewTypedSet(chunks.NewMemoryStore(), setType, v).Ref(), refType)
 	}, func(x, y Value) bool {
 		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
@@ -106,10 +128,10 @@ func TestCompoundMapHas(t *testing.T) {
 		}
 	}
 
-	doTest(getTestNativeOrderMap())
-	doTest(getTestRefValueOrderMap())
-	doTest(getTestRefToNativeOrderMap())
-	doTest(getTestRefToValueOrderMap())
+	doTest(getTestNativeOrderMap(16))
+	doTest(getTestRefValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2))
+	doTest(getTestRefToValueOrderMap(2))
 }
 
 func TestCompoundMapFirst(t *testing.T) {
@@ -123,10 +145,10 @@ func TestCompoundMapFirst(t *testing.T) {
 		assert.True(tm.entries[0].value.Equals(actualValue))
 	}
 
-	doTest(getTestNativeOrderMap())
-	doTest(getTestRefValueOrderMap())
-	doTest(getTestRefToNativeOrderMap())
-	doTest(getTestRefToValueOrderMap())
+	doTest(getTestNativeOrderMap(16))
+	doTest(getTestRefValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2))
+	doTest(getTestRefToValueOrderMap(2))
 }
 
 func TestCompoundMapMaybeGet(t *testing.T) {
@@ -144,10 +166,10 @@ func TestCompoundMapMaybeGet(t *testing.T) {
 		assert.False(ok, "m should not contain %v", tm.knownBadKey)
 	}
 
-	doTest(getTestNativeOrderMap())
-	doTest(getTestRefValueOrderMap())
-	doTest(getTestRefToNativeOrderMap())
-	doTest(getTestRefToValueOrderMap())
+	doTest(getTestNativeOrderMap(2))
+	doTest(getTestRefValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2))
+	doTest(getTestRefToValueOrderMap(2))
 }
 
 func TestCompoundMapIter(t *testing.T) {
@@ -174,10 +196,10 @@ func TestCompoundMapIter(t *testing.T) {
 		assert.Equal(endAt, idx-1)
 	}
 
-	doTest(getTestNativeOrderMap())
-	doTest(getTestRefValueOrderMap())
-	doTest(getTestRefToNativeOrderMap())
-	doTest(getTestRefToValueOrderMap())
+	doTest(getTestNativeOrderMap(16))
+	doTest(getTestRefValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2))
+	doTest(getTestRefToValueOrderMap(2))
 }
 
 func TestCompoundMapIterAll(t *testing.T) {
@@ -195,8 +217,108 @@ func TestCompoundMapIterAll(t *testing.T) {
 		})
 	}
 
-	doTest(getTestNativeOrderMap())
-	doTest(getTestRefValueOrderMap())
-	doTest(getTestRefToNativeOrderMap())
-	doTest(getTestRefToValueOrderMap())
+	doTest(getTestNativeOrderMap(16))
+	doTest(getTestRefValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2))
+	doTest(getTestRefToValueOrderMap(2))
+}
+
+func TestCompoundMapSet(t *testing.T) {
+	assert := assert.New(t)
+
+	doTest := func(incr int, tm testMap) {
+		cs := chunks.NewMemoryStore()
+		expected := tm.toCompoundMap(cs)
+		run := func(from, to int) {
+			actual := tm.Remove(from, to).toCompoundMap(cs).SetM(tm.Flatten(from, to)...)
+			assert.Equal(expected.Len(), actual.Len())
+			assert.True(expected.Equals(actual))
+		}
+		for i := 0; i < len(tm.entries); i += incr {
+			run(i, i+1)
+		}
+		// TODO: make this pass, and make it fast:
+		// for i := 0; i < len(tm.entries)-incr; i += incr {
+		//   run(i, i+incr)
+		// }
+		// For example, run(256, 384) fails with the native order map.
+	}
+
+	doTest(128, getTestNativeOrderMap(32))
+	doTest(64, getTestRefValueOrderMap(4))
+	doTest(64, getTestRefToNativeOrderMap(4))
+	doTest(64, getTestRefToValueOrderMap(4))
+}
+
+func TestCompoundMapSetExistingKeyToExistingValue(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := chunks.NewMemoryStore()
+	tm := getTestNativeOrderMap(2)
+	original := tm.toCompoundMap(cs)
+
+	actual := original
+	for _, entry := range tm.entries {
+		actual = actual.Set(entry.key, entry.value).(compoundMap)
+	}
+
+	assert.Equal(original.Len(), actual.Len())
+	assert.True(original.Equals(actual))
+}
+
+func TestCompoundMapSetExistingKeyToNewValue(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := chunks.NewMemoryStore()
+	tm := getTestNativeOrderMap(2)
+	original := tm.toCompoundMap(cs)
+
+	expectedWorking := tm
+	actual := original
+	for i, entry := range tm.entries {
+		newValue := Int64(int64(entry.value.(Int64)) + 1)
+		expectedWorking = expectedWorking.SetValue(i, newValue)
+		actual = actual.Set(entry.key, newValue).(compoundMap)
+	}
+
+	expected := expectedWorking.toCompoundMap(cs)
+	assert.Equal(expected.Len(), actual.Len())
+	assert.True(expected.Equals(actual))
+	assert.False(original.Equals(actual))
+}
+
+func TestCompoundMapRemove(t *testing.T) {
+	assert := assert.New(t)
+
+	doTest := func(incr int, tm testMap) {
+		cs := chunks.NewMemoryStore()
+		whole := tm.toCompoundMap(cs)
+		run := func(i int) {
+			expected := tm.Remove(i, i+1).toCompoundMap(cs)
+			actual := whole.Remove(tm.entries[i].key)
+			assert.Equal(expected.Len(), actual.Len())
+			assert.True(expected.Equals(actual))
+		}
+		for i := 0; i < len(tm.entries); i += incr {
+			run(i)
+		}
+		run(len(tm.entries) - 1)
+	}
+
+	doTest(128, getTestNativeOrderMap(32))
+	doTest(64, getTestRefValueOrderMap(4))
+	doTest(64, getTestRefToNativeOrderMap(4))
+	doTest(64, getTestRefToValueOrderMap(4))
+}
+
+func TestCompoundMapRemoveNonexistentKey(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := chunks.NewMemoryStore()
+	tm := getTestNativeOrderMap(2)
+	original := tm.toCompoundMap(cs)
+	actual := original.Remove(Int64(-1)) // rand.Int63 returns non-negative numbers.
+
+	assert.Equal(original.Len(), actual.Len())
+	assert.True(original.Equals(actual))
 }

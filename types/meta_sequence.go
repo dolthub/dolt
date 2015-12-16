@@ -138,11 +138,11 @@ func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkStore) (*sequenceCu
 	d.Chk.NotNil(root)
 
 	newCursor := func(parent *sequenceCursor, ms metaSequence) *sequenceCursor {
-		return &sequenceCursor{parent, ms, 0, ms.tupleCount(), func(item sequenceItem, idx int) sequenceItem {
-			return item.(metaSequence).tupleAt(idx)
+		return &sequenceCursor{parent, ms, 0, ms.tupleCount(), func(otherMs sequenceItem, idx int) sequenceItem {
+			return otherMs.(metaSequence).tupleAt(idx)
 		}, func(item sequenceItem) (sequenceItem, int) {
-			ms := readMetaTupleValue(item, cs).(metaSequence)
-			return ms, ms.tupleCount()
+			otherMs := readMetaTupleValue(item, cs).(metaSequence)
+			return otherMs, otherMs.tupleCount()
 		}}
 	}
 

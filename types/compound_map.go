@@ -34,8 +34,12 @@ func (cm compoundMap) Ref() ref.Ref {
 	return EnsureRef(cm.ref, cm)
 }
 
-func (cm compoundMap) Len() uint64 {
-	panic("not implemented")
+func (cm compoundMap) Len() (length uint64) {
+	// https://github.com/attic-labs/noms/issues/764
+	cm.IterAll(func(k, v Value) {
+		length++
+	})
+	return
 }
 
 func (cm compoundMap) Empty() bool {
@@ -43,31 +47,16 @@ func (cm compoundMap) Empty() bool {
 	return false
 }
 
-// TODO: seek should return false if it failed to find the value
-func (cm compoundMap) findLeaf(key Value) (*sequenceCursor, mapLeaf) {
-	cursor, leaf := newMetaSequenceCursor(cm, cm.cs)
-
-	var seekFn sequenceCursorSeekBinaryCompareFn
-	if orderedSequenceByIndexedType(cm.t) {
-		orderedKey := key.(OrderedValue)
-
-		seekFn = func(mt sequenceItem) bool {
-			return !mt.(metaTuple).value.(OrderedValue).Less(orderedKey)
+func (cm compoundMap) findLeaf(key Value) (*sequenceCursor, mapLeaf, int) {
+	cursor, leaf, idx := findLeafInOrderedSequence(cm, cm.t, key, func(v Value) []Value {
+		entries := v.(mapLeaf).data
+		res := make([]Value, len(entries))
+		for i, entry := range entries {
+			res[i] = entry.key
 		}
-	} else {
-		seekFn = func(mt sequenceItem) bool {
-			return !mt.(metaTuple).value.(Ref).TargetRef().Less(key.Ref())
-		}
-	}
-
-	cursor.seekBinary(seekFn)
-
-	current := cursor.current().(metaTuple)
-	if current.ref != valueFromType(cm.cs, leaf, leaf.Type()).Ref() {
-		leaf = readMetaTupleValue(cursor.current(), cm.cs)
-	}
-
-	return cursor, leaf.(mapLeaf)
+		return res
+	}, cm.cs)
+	return cursor, leaf.(mapLeaf), idx
 }
 
 func (cm compoundMap) First() (Value, Value) {
@@ -76,19 +65,52 @@ func (cm compoundMap) First() (Value, Value) {
 }
 
 func (cm compoundMap) MaybeGet(key Value) (v Value, ok bool) {
-	_, leaf := cm.findLeaf(key)
+	_, leaf, _ := cm.findLeaf(key)
 	return leaf.MaybeGet(key)
 }
 
 func (cm compoundMap) Set(key Value, val Value) Map {
-	panic("Not implemented")
+	return cm.SetM(key, val)
 }
 
 func (cm compoundMap) SetM(kv ...Value) Map {
-	panic("Not implemented")
+	if len(kv) == 0 {
+		return cm
+	}
+	d.Chk.True(len(kv)%2 == 0)
+
+	k, v, tail := kv[0], kv[1], kv[2:]
+
+	seq, found := cm.sequenceChunkerAtKey(k)
+	if found {
+		seq.Skip()
+	}
+	seq.Append(mapEntry{k, v})
+	return seq.Done().(Map).SetM(tail...)
 }
+
 func (cm compoundMap) Remove(k Value) Map {
-	panic("Not implemented")
+	if seq, found := cm.sequenceChunkerAtKey(k); found {
+		seq.Skip()
+		return seq.Done().(Map)
+	} else {
+		return cm
+	}
+}
+
+func (cm compoundMap) sequenceChunkerAtKey(k Value) (*sequenceChunker, bool) {
+	metaCur, leaf, idx := cm.findLeaf(k)
+
+	cur := &sequenceCursor{metaCur, leaf, idx, len(leaf.data), func(otherLeaf sequenceItem, idx int) sequenceItem {
+		return otherLeaf.(mapLeaf).data[idx]
+	}, func(mt sequenceItem) (sequenceItem, int) {
+		otherLeaf := readMetaTupleValue(mt, cm.cs).(mapLeaf)
+		return otherLeaf, len(otherLeaf.data)
+	}}
+
+	seq := newSequenceChunker(cur, makeMapLeafChunkFn(cm.t, cm.cs), newMapMetaSequenceChunkFn(cm.t, cm.cs), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	found := idx < len(leaf.data) && leaf.data[idx].key.Equals(k)
+	return seq, found
 }
 
 func (cm compoundMap) IterAllP(concurrency int, f mapIterAllCallback) {
@@ -104,12 +126,12 @@ func (cm compoundMap) Filter(cb mapFilterCallback) Map {
 }
 
 func (cm compoundMap) Has(key Value) bool {
-	_, leaf := cm.findLeaf(key)
+	_, leaf, _ := cm.findLeaf(key)
 	return leaf.Has(key)
 }
 
 func (cm compoundMap) Get(key Value) Value {
-	_, leaf := cm.findLeaf(key)
+	_, leaf, _ := cm.findLeaf(key)
 	return leaf.Get(key)
 }
 
