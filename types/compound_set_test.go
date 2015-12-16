@@ -174,10 +174,12 @@ func TestCompoundSetFilter(t *testing.T) {
 	doTest := func(ts testSet) {
 		set := ts.toCompoundSet(chunks.NewMemoryStore())
 		sort.Sort(ts)
-		pivot := ts.values[10]
+		pivotPoint := 10
+		pivot := ts.values[pivotPoint]
 		actual := set.Filter(func(v Value) bool {
 			return ts.less(v, pivot)
 		})
+		assert.True(newTypedSet(set.cs, set.t, ts.values[:pivotPoint+1]...).Equals(actual))
 
 		idx := 0
 		actual.IterAll(func(v Value) {
