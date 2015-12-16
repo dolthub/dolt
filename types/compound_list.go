@@ -111,11 +111,40 @@ func (cl compoundList) Slice(start uint64, end uint64) List {
 }
 
 func (cl compoundList) Map(mf MapFunc) []interface{} {
-	panic("not implemented")
+	start := uint64(0)
+
+	results := make([]interface{}, 0, cl.Len())
+	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
+		list := l.(listLeaf)
+		for i, v := range list.values {
+			res := mf(v, start+uint64(i))
+			results = append(results, res)
+		}
+		start += list.Len()
+		return false
+	})
+	return results
 }
 
 func (cl compoundList) MapP(concurrency int, mf MapFunc) []interface{} {
-	panic("not implemented")
+	start := uint64(0)
+
+	var limit chan int
+	if concurrency == 0 {
+		limit = make(chan int, runtime.NumCPU())
+	} else {
+		limit = make(chan int, concurrency)
+	}
+
+	results := make([]interface{}, 0, cl.Len())
+	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
+		list := l.(listLeaf)
+		nl := list.mapInternal(limit, mf, start)
+		results = append(results, nl...)
+		start += list.Len()
+		return false
+	})
+	return results
 }
 
 func (cl compoundList) Set(idx uint64, v Value) List {

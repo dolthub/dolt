@@ -61,7 +61,7 @@ func getTestSimpleListUnique() testSimpleList {
 	for len(uniques) < length {
 		uniques[s.Int63()] = true
 	}
-	values := []Value{}
+	values := make([]Value, 0, length)
 	for k, _ := range uniques {
 		values = append(values, Int64(k))
 	}
@@ -156,6 +156,44 @@ func TestCompoundListIterAllP(t *testing.T) {
 	})
 
 	assert.Equal(len(simpleList), len(visited))
+}
+
+func TestCompoundListMap(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+
+	simpleList := getTestSimpleList()
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	cl := NewTypedList(cs, tr, simpleList...)
+
+	l := cl.Map(func(v Value, i uint64) interface{} {
+		v1 := v.(Int64)
+		return v1 + Int64(i)
+	})
+
+	assert.Equal(uint64(len(l)), cl.Len())
+	for i := 0; i < len(l); i++ {
+		assert.Equal(l[i], cl.Get(uint64(i)).(Int64)+Int64(i))
+	}
+}
+
+func TestCompoundListMapP(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+
+	simpleList := getTestSimpleList()
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	cl := NewTypedList(cs, tr, simpleList...)
+
+	l := cl.MapP(64, func(v Value, i uint64) interface{} {
+		v1 := v.(Int64)
+		return v1 + Int64(i)
+	})
+
+	assert.Equal(uint64(len(l)), cl.Len())
+	for i := 0; i < len(l); i++ {
+		assert.Equal(l[i], cl.Get(uint64(i)).(Int64)+Int64(i))
+	}
 }
 
 func TestCompoundListLen(t *testing.T) {
