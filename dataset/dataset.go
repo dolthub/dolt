@@ -53,33 +53,30 @@ func (ds *Dataset) CommitWithParents(v types.Value, p datas.SetOfRefOfCommit) (D
 	return Dataset{store, ds.id}, err
 }
 
-func (ds *Dataset) Pull(source Dataset, concurrency int, sinkRef ref.Ref) (Dataset, error) {
+func (ds *Dataset) Pull(sourceStore datas.DataStore, sourceRef ref.Ref, concurrency int) (Dataset, error) {
 	_, topDown := ds.Store().(*datas.LocalDataStore)
-	return ds.pull(source, concurrency, topDown, sinkRef)
+	return ds.pull(sourceStore, sourceRef, concurrency, topDown)
 }
 
-func (ds *Dataset) pull(source Dataset, concurrency int, topDown bool, sinkRef ref.Ref) (Dataset, error) {
+func (ds *Dataset) pull(source datas.DataStore, sourceRef ref.Ref, concurrency int, topDown bool) (Dataset, error) {
 	sink := *ds
-	sourceHeadRef := source.Head().Ref()
 
 	sinkHeadRef := ref.Ref{}
-	if !sinkRef.IsEmpty() {
-		sinkHeadRef = sinkRef
-	} else if currentHead, ok := sink.MaybeHead(); ok {
+	if currentHead, ok := sink.MaybeHead(); ok {
 		sinkHeadRef = currentHead.Ref()
 	}
 
-	if sourceHeadRef == sinkHeadRef {
+	if sourceRef == sinkHeadRef {
 		return sink, nil
 	}
 
 	if topDown {
-		source.Store().CopyMissingChunksP(sourceHeadRef, sink.Store(), concurrency)
+		source.CopyMissingChunksP(sourceRef, sink.Store(), concurrency)
 	} else {
-		source.Store().CopyReachableChunksP(sourceHeadRef, sinkHeadRef, sink.Store(), concurrency)
+		source.CopyReachableChunksP(sourceRef, sinkHeadRef, sink.Store(), concurrency)
 	}
 	err := datas.ErrOptimisticLockFailed
-	for ; err == datas.ErrOptimisticLockFailed; sink, err = sink.SetNewHead(sourceHeadRef) {
+	for ; err == datas.ErrOptimisticLockFailed; sink, err = sink.SetNewHead(sourceRef) {
 	}
 
 	return sink, err

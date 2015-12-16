@@ -6,7 +6,6 @@ import (
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -71,7 +70,7 @@ func pullTest(t *testing.T, topdown bool) {
 	source, err = source.Commit(updatedValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source, 1, topdown, ref.Ref{})
+	sink, err = sink.pull(source.Store(), source.Head().Ref(), 1, topdown)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
@@ -100,7 +99,7 @@ func pullFirstCommit(t *testing.T, topdown bool) {
 	source, err := source.Commit(sourceInitialValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source, 1, topdown, ref.Ref{})
+	sink, err = sink.pull(source.Store(), source.Head().Ref(), 1, topdown)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
@@ -127,7 +126,7 @@ func pullDeepRef(t *testing.T, topdown bool) {
 	source, err := source.Commit(sourceInitialValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source, 1, topdown, ref.Ref{})
+	sink, err = sink.pull(source.Store(), source.Head().Ref(), 1, topdown)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
