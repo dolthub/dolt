@@ -167,3 +167,27 @@ func TestCompoundSetIterAll(t *testing.T) {
 	doTest(getTestRefToNativeOrderSet())
 	doTest(getTestRefToValueOrderSet())
 }
+
+func TestCompoundSetFilter(t *testing.T) {
+	assert := assert.New(t)
+
+	doTest := func(ts testSet) {
+		set := ts.toCompoundSet(chunks.NewMemoryStore())
+		sort.Sort(ts)
+		pivot := ts.values[10]
+		actual := set.Filter(func(v Value) bool {
+			return ts.less(v, pivot)
+		})
+
+		idx := 0
+		actual.IterAll(func(v Value) {
+			assert.True(ts.values[idx].Equals(v), "%v != %v", v, ts.values[idx])
+			idx++
+		})
+	}
+
+	doTest(getTestNativeOrderSet())
+	doTest(getTestRefValueOrderSet())
+	doTest(getTestRefToNativeOrderSet())
+	doTest(getTestRefToValueOrderSet())
+}
