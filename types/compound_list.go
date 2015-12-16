@@ -3,6 +3,8 @@ package types
 import (
 	"crypto/sha1"
 
+	"runtime"
+
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -78,7 +80,19 @@ func (cl compoundList) Get(idx uint64) Value {
 }
 
 func (cl compoundList) IterAllP(concurrency int, f listIterAllFunc) {
-	panic("not implemented")
+	start := uint64(0)
+	var limit chan int
+	if concurrency == 0 {
+		limit = make(chan int, runtime.NumCPU())
+	} else {
+		limit = make(chan int, concurrency)
+	}
+	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
+		list := l.(listLeaf)
+		list.iterInternal(limit, f, start)
+		start += list.Len()
+		return false
+	})
 }
 
 func (cl compoundList) Slice(start uint64, end uint64) List {

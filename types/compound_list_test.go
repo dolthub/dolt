@@ -2,6 +2,7 @@ package types
 
 import (
 	"math/rand"
+	"sync"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
@@ -50,6 +51,20 @@ func getTestSimpleList() testSimpleList {
 		values[i] = Int64(s.Int63() & 0xff)
 	}
 
+	return values
+}
+
+func getTestSimpleListUnique() testSimpleList {
+	length := int(getTestSimpleListLen())
+	s := rand.NewSource(42)
+	uniques := map[int64]bool{}
+	for len(uniques) < length {
+		uniques[s.Int63()] = true
+	}
+	values := []Value{}
+	for k, _ := range uniques {
+		values = append(values, Int64(k))
+	}
 	return values
 }
 
@@ -114,6 +129,33 @@ func TestCompoundListIterAll(t *testing.T) {
 	})
 
 	assert.Equal(getTestSimpleListLen(), expectIdx)
+}
+
+func TestCompoundListIterAllP(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := chunks.NewMemoryStore()
+	mu := sync.Mutex{}
+
+	simpleList := getTestSimpleListUnique()
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	cl := NewTypedList(cs, tr, simpleList...)
+
+	indexes := map[Value]uint64{}
+	for i, v := range simpleList {
+		indexes[v] = uint64(i)
+	}
+	visited := map[Value]bool{}
+	cl.IterAllP(64, func(v Value, idx uint64) {
+		mu.Lock()
+		_, seen := visited[v]
+		visited[v] = true
+		mu.Unlock()
+		assert.False(seen)
+		assert.Equal(idx, indexes[v])
+	})
+
+	assert.Equal(len(simpleList), len(visited))
 }
 
 func TestCompoundListLen(t *testing.T) {
