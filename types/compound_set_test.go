@@ -255,3 +255,30 @@ func TestCompoundSetRemoveNonexistentValue(t *testing.T) {
 	assert.Equal(original.Len(), actual.Len())
 	assert.True(original.Equals(actual))
 }
+
+func TestCompoundSetFilter(t *testing.T) {
+	assert := assert.New(t)
+
+	doTest := func(ts testSet) {
+		cs := chunks.NewMemoryStore()
+		set := ts.toCompoundSet(cs)
+		sort.Sort(ts)
+		pivotPoint := 10
+		pivot := ts.values[pivotPoint]
+		actual := set.Filter(func(v Value) bool {
+			return ts.less(v, pivot)
+		})
+		assert.True(newTypedSet(cs, ts.tr, ts.values[:pivotPoint+1]...).Equals(actual))
+
+		idx := 0
+		actual.IterAll(func(v Value) {
+			assert.True(ts.values[idx].Equals(v), "%v != %v", v, ts.values[idx])
+			idx++
+		})
+	}
+
+	doTest(getTestNativeOrderSet(16))
+	doTest(getTestRefValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2))
+	doTest(getTestRefToValueOrderSet(2))
+}
