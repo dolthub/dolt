@@ -322,3 +322,31 @@ func TestCompoundMapRemoveNonexistentKey(t *testing.T) {
 	assert.Equal(original.Len(), actual.Len())
 	assert.True(original.Equals(actual))
 }
+
+func TestCompoundMapFilter(t *testing.T) {
+	assert := assert.New(t)
+
+	doTest := func(tm testMap) {
+		cs := chunks.NewMemoryStore()
+		m := tm.toCompoundMap(cs)
+		sort.Sort(tm)
+		pivotPoint := 10
+		pivot := tm.entries[pivotPoint].key
+		actual := m.Filter(func(k, v Value) bool {
+			return tm.less(k, pivot)
+		})
+		assert.True(newTypedMap(cs, tm.tr, tm.entries[:pivotPoint+1]...).Equals(actual))
+
+		idx := 0
+		actual.IterAll(func(k, v Value) {
+			assert.True(tm.entries[idx].key.Equals(k), "%v != %v", k, tm.entries[idx].key)
+			assert.True(tm.entries[idx].value.Equals(v), "%v != %v", v, tm.entries[idx].value)
+			idx++
+		})
+	}
+
+	doTest(getTestNativeOrderMap(16))
+	doTest(getTestRefValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2))
+	doTest(getTestRefToValueOrderMap(2))
+}
