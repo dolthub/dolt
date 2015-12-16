@@ -89,7 +89,7 @@ func (cs compoundSet) findLeaf(key Value) (*sequenceCursor, setLeaf) {
 	cursor.seekBinary(seekFn)
 
 	current := cursor.current().(metaTuple)
-	if current.ref != leaf.Ref() {
+	if current.ref != valueFromType(cs.cs, leaf, leaf.Type()).Ref() {
 		leaf = readMetaTupleValue(cursor.current(), cs.cs)
 	}
 
