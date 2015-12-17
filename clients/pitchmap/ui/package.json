@@ -31,8 +31,8 @@
     "watchify": "^3.6"
   },
   "scripts": {
-    "start": "watchify -o out.js -t babelify -v -d node_modules/babel-regenerator-runtime/runtime.js main.js",
-    "build": "./build.sh",
+    "start": "NOMS_SERVER=http://localhost:8000 NOMS_DATASET_ID=mlb/heatmap watchify -o out.js -t babelify -v -d node_modules/babel-regenerator-runtime/runtime.js main.js",
+    "build": "./.npm_build_helper.sh",
     "test": "rm -f out.js && eslint *.js && flow"
   },
   "browserify": {

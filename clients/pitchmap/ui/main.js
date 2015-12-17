@@ -7,11 +7,20 @@ import {HttpStore, invariant, NomsMap, readValue, Ref, Struct} from 'noms';
 
 let httpStore: HttpStore;
 
+const nomsServer: ?string = process.env.NOMS_SERVER;
+if (!nomsServer) {
+  throw new Error('NOMS_SERVER not set');
+}
+const datasetId: ?string = process.env.NOMS_DATASET_ID;
+if (!datasetId) {
+  throw new Error('NOMS_DATASET_ID not set');
+}
+
 window.addEventListener('load', async () => {
-  httpStore = new HttpStore('http://localhost:8000');
+  httpStore = new HttpStore(nomsServer);
   let rootRef = await httpStore.getRoot();
-  let datasets:NomsMap<string, Ref> = await readValue(rootRef, httpStore);
-  let commitRef = await datasets.get('mlb/heatmap');
+  let datasets: NomsMap<string, Ref> = await readValue(rootRef, httpStore);
+  let commitRef = await datasets.get(datasetId);
   invariant(commitRef);
   let commit:Struct = await readValue(commitRef, httpStore);
   let pitchersMap = commit.get('value');
