@@ -5,19 +5,21 @@ import MemoryStore from './memory_store.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
 import test from './async_test.js';
+import type {float64, int32, int64, uint8, uint16, uint32, uint64} from './primitives.js';
 import type {TypeDesc} from './type.js';
 import {assert} from 'chai';
 import {decodeNomsValue, JsonArrayReader} from './decode.js';
 import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type} from './type.js';
-import {invariant} from './assert.js';
+import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
+import {invariant, notNull} from './assert.js';
 import {Kind} from './noms_kind.js';
-import {ListLeaf, CompoundList} from './list.js';
-import {MapLeaf} from './map.js';
-import {MetaTuple} from './meta_sequence.js';
+import {ListLeafSequence, NomsList} from './list.js';
+import {MapLeafSequence, NomsMap} from './map.js';
+import {NomsSet, SetLeafSequence} from './set.js';
 import {readValue} from './read_value.js';
 import {registerPackage, Package} from './package.js';
-import {SetLeaf} from './set.js';
 import {suite} from 'mocha';
+import {Value} from './value.js';
 import {writeValue} from './encode.js';
 
 suite('Decode', () => {
@@ -92,11 +94,11 @@ suite('Decode', () => {
     let ms = new MemoryStore();
     let a = [Kind.List, Kind.Int32, false, ['0', '1', '2', '3']];
     let r = new JsonArrayReader(a, ms);
-    let v = await r.readTopLevelValue();
-    invariant(v instanceof ListLeaf);
+    let v:NomsList<int32> = await r.readTopLevelValue();
+    invariant(v instanceof NomsList);
 
     let tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
-    let l = new ListLeaf(ms, tr, [0, 1, 2, 3]);
+    let l = new NomsList(ms, tr, new ListLeafSequence(tr, [0, 1, 2, 3]));
     assert.isTrue(l.equals(v));
   });
 
@@ -105,8 +107,9 @@ suite('Decode', () => {
     let ms = new MemoryStore();
     let a = [Kind.List, Kind.Value, false, [Kind.Int32, '1', Kind.String, 'hi', Kind.Bool, true]];
     let r = new JsonArrayReader(a, ms);
-    let v = await r.readTopLevelValue();
-    invariant(v instanceof ListLeaf);
+    let v:NomsList<Value> = await r.readTopLevelValue();
+    invariant(v instanceof NomsList);
+
     let tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Value));
     assert.isTrue(v.type.equals(tr));
     assert.strictEqual(1, await v.get(0));
@@ -119,10 +122,10 @@ suite('Decode', () => {
     let a = [Kind.Value, Kind.List, Kind.Int8, false, ['0', '1', '2']];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
-    invariant(v instanceof ListLeaf);
+    invariant(v instanceof NomsList);
 
     let tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int8));
-    let l = new ListLeaf(ms, tr, [0, 1, 2]);
+    let l = new NomsList(ms, tr, new ListLeafSequence(tr, [0, 1, 2]));
     assert.isTrue(l.equals(v));
   });
 
@@ -130,20 +133,21 @@ suite('Decode', () => {
     let ms = new MemoryStore();
 
     let ltr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
-    let r1 = writeValue(new ListLeaf(ms, ltr, [0, 1]), ltr, ms);
-    let r2 = writeValue(new ListLeaf(ms, ltr, [2, 3]), ltr, ms);
-    let r3 = writeValue(new ListLeaf(ms, ltr, [4, 5]), ltr, ms);
+    let r1 = writeValue(new NomsList(ms, ltr, new ListLeafSequence(ltr, [0, 1])), ltr, ms);
+    let r2 = writeValue(new NomsList(ms, ltr, new ListLeafSequence(ltr, [2, 3])), ltr, ms);
+    let r3 = writeValue(new NomsList(ms, ltr, new ListLeafSequence(ltr, [4, 5])), ltr, ms);
     let tuples = [
       new MetaTuple(r1, 2),
       new MetaTuple(r2, 4),
       new MetaTuple(r3, 6)
     ];
-    let l = new CompoundList(ms, ltr, tuples);
+    let l:NomsList<int32> = new NomsList(ms, ltr, new IndexedMetaSequence(ltr, tuples));
+    invariant(l instanceof NomsList);
 
     let a = [Kind.List, Kind.Int32, true, [r1.toString(), '2', r2.toString(), '4', r3.toString(), '6']];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
-    invariant(v instanceof CompoundList);
+    invariant(v instanceof NomsList);
     assert.isTrue(v.ref.equals(l.ref));
   });
 
@@ -151,11 +155,23 @@ suite('Decode', () => {
     let ms = new MemoryStore();
     let a = [Kind.Map, Kind.Int64, Kind.Float64, false, ['0', '1', '2', '3']];
     let r = new JsonArrayReader(a, ms);
-    let v = await r.readTopLevelValue();
-    invariant(v instanceof MapLeaf);
+    let v:NomsMap<int64, float64> = await r.readTopLevelValue();
+    invariant(v instanceof NomsMap);
 
     let t = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64), makePrimitiveType(Kind.Float64));
-    let m = new MapLeaf(ms, t, [{key: 0, value: 1}, {key: 2, value: 3}]);
+    let m = new NomsMap(ms, t, new MapLeafSequence(t, [{key: 0, value: 1}, {key: 2, value: 3}]));
+    assert.isTrue(v.equals(m));
+  });
+
+  test('read map of ref to uint64', async () => {
+    let ms = new MemoryStore();
+    let a = [Kind.Map, Kind.Ref, Kind.Value, Kind.Uint64, false, ['sha1-0000000000000000000000000000000000000001', '2', 'sha1-0000000000000000000000000000000000000002', '4']];
+    let r = new JsonArrayReader(a, ms);
+    let v:NomsMap<Ref, uint64> = await r.readTopLevelValue();
+    invariant(v instanceof NomsMap);
+
+    let t = makeCompoundType(Kind.Map, makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Value)), makePrimitiveType(Kind.Uint64));
+    let m = new NomsMap(ms, t, new MapLeafSequence(t, [{key: new Ref('sha1-0000000000000000000000000000000000000001'), value: 2}, {key: new Ref('sha1-0000000000000000000000000000000000000002'), value: 4}]));
     assert.isTrue(v.equals(m));
   });
 
@@ -163,11 +179,11 @@ suite('Decode', () => {
     let ms = new MemoryStore();
     let a = [Kind.Value, Kind.Map, Kind.Uint64, Kind.Uint32, false, ['0', '1', '2', '3']];
     let r = new JsonArrayReader(a, ms);
-    let v = await r.readTopLevelValue();
-    invariant(v instanceof MapLeaf);
+    let v:NomsMap<uint64, uint32> = await r.readTopLevelValue();
+    invariant(v instanceof NomsMap);
 
     let t = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Uint64), makePrimitiveType(Kind.Uint32));
-    let m = new MapLeaf(ms, t, [{key: 0, value: 1}, {key: 2, value: 3}]);
+    let m = new NomsMap(ms, t, new MapLeafSequence(t, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(v.equals(m));
   });
 
@@ -175,11 +191,11 @@ suite('Decode', () => {
     let ms = new MemoryStore();
     let a = [Kind.Set, Kind.Uint8, false, ['0', '1', '2', '3']];
     let r = new JsonArrayReader(a, ms);
-    let v = await r.readTopLevelValue();
-    invariant(v instanceof SetLeaf);
+    let v:NomsSet<uint8> = await r.readTopLevelValue();
+    invariant(v instanceof NomsSet);
 
     let t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint8));
-    let s = new SetLeaf(ms, t, [0, 1, 2, 3]);
+    let s = new NomsSet(ms, t, new SetLeafSequence(t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
 
@@ -187,14 +203,16 @@ suite('Decode', () => {
     let ms = new MemoryStore();
     let a = [Kind.Value, Kind.Set, Kind.Uint16, false, ['0', '1', '2', '3']];
     let r = new JsonArrayReader(a, ms);
-    let v = await r.readTopLevelValue();
+    let v:NomsSet<uint16> = await r.readTopLevelValue();
+    invariant(v instanceof NomsSet);
 
     let t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint16));
-    let s = new SetLeaf(ms, t, [0, 1, 2, 3]);
+    let s = new NomsSet(ms, t, new SetLeafSequence(t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
 
-  function assertStruct(s: Struct, desc: TypeDesc, data: {[key: string]: any}) {
+  function assertStruct(s: ?Struct, desc: TypeDesc, data: {[key: string]: any}) {
+    notNull(s);
     invariant(s instanceof Struct, 'expected instanceof struct');
     assert.deepEqual(desc, s.desc);
 
@@ -287,7 +305,7 @@ suite('Decode', () => {
 
     assertStruct(v, tr.desc, {
       b: true,
-      l: new ListLeaf(ms, ltr, [0, 1, 2]),
+      l: new NomsList(ms, ltr, new ListLeafSequence(ltr, [0, 1, 2])),
       s: 'hi'
     });
   });
@@ -399,11 +417,10 @@ suite('Decode', () => {
     let a = [Kind.Value, Kind.Map, Kind.String, Kind.Unresolved, pkg.ref.toString(), '0', false, ['bar', false, '2', 'baz', false, '1', 'foo', true, '3']];
 
     let r = new JsonArrayReader(a, ms);
-    let v = await r.readTopLevelValue();
+    let v:NomsMap<string, Struct> = await r.readTopLevelValue();
+    invariant(v instanceof NomsMap);
 
-    invariant(v instanceof MapLeaf);
     assert.strictEqual(3, v.size);
-
     assertStruct(await v.get('foo'), tr.desc, {b: true, i: 3});
     assertStruct(await v.get('bar'), tr.desc, {b: false, i: 2});
     assertStruct(await v.get('baz'), tr.desc, {b: false, i: 1});
@@ -412,10 +429,10 @@ suite('Decode', () => {
   test('decodeNomsValue', async () => {
     let ms = new MemoryStore();
     let chunk = Chunk.fromString(`t [${Kind.Value}, ${Kind.Set}, ${Kind.Uint16}, false, ["0", "1", "2", "3"]]`);
-    let v = await decodeNomsValue(chunk, new MemoryStore());
+    let v:NomsSet<uint16> = await decodeNomsValue(chunk, new MemoryStore());
 
     let t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint16));
-    let s = new SetLeaf(ms, t, [0, 1, 2, 3]);
+    let s:NomsSet<uint16> = new NomsSet(ms, t, new SetLeafSequence(t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
 

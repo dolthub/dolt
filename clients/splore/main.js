@@ -1,10 +1,10 @@
 // @flow
 
-import {layout, NodeGraph, TreeNode} from './buchheim.js';
 import Layout from './layout.js';
 import React from 'react'; // eslint-disable-line no-unused-vars
 import ReactDOM from 'react-dom';
-import {CompoundList, CompoundMap, CompoundSet, ListLeaf, MapLeaf, readValue, SetLeaf, HttpStore, Ref, Struct} from 'noms';
+import {HttpStore, invariant, IndexedMetaSequence, ListLeafSequence, MapLeafSequence, OrderedMetaSequence, NomsList, NomsMap, NomsSet, readValue, Ref, SetLeafSequence, Struct} from 'noms';
+import {layout, NodeGraph, TreeNode} from './buchheim.js';
 
 let data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
@@ -39,6 +39,20 @@ function formatKeyString(v: any): string {
 function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
   let counter = 0;
 
+  function processMetaSequence(id, sequence: IndexedMetaSequence | OrderedMetaSequence, name: string) {
+    data.nodes[id] = {name: name};
+    sequence.items.forEach(tuple => {
+      let kid = process(ref, formatKeyString(tuple.value), id);
+      if (kid) {
+        data.nodes[kid].isOpen = true;
+
+        process(ref, tuple.ref, kid);
+      } else {
+        throw new Error('No kid id.');
+      }
+    });
+  }
+
   function process(ref, val, fromId): ?string {
     if (typeof val === 'undefined') {
       return null;
@@ -68,28 +82,45 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
 
     if (val instanceof Blob) {
       data.nodes[id] = {name: `Blob (${val.size})`};
-    } else if (val instanceof ListLeaf) {
-      data.nodes[id] = {name: `List (${val.length})`};
-      val.items.forEach(c => process(ref, c, id));
-    } else if (val instanceof SetLeaf) {
-      data.nodes[id] = {name: `Set (${val.size})`};
-      val.items.forEach(c => process(ref, c, id));
-    } else if (val instanceof MapLeaf) {
-      data.nodes[id] = {name: `Map (${val.size})`};
-      val.items.forEach(entry => {
-        let k = entry.key;
-        let v = entry.value;
-        // TODO: handle non-string keys
-        let kid = process(ref, k, id);
-        if (kid) {
-          // Start map keys open, just makes it easier to use.
-          data.nodes[kid].isOpen = true;
+    } else if (val instanceof NomsList) {
+      let sequence = val.sequence;
+      if (sequence instanceof ListLeafSequence) {
+        data.nodes[id] = {name: `List (${val.length})`};
+        sequence.items.forEach(c => process(ref, c, id));
+      } else {
+        invariant(sequence instanceof IndexedMetaSequence);
+        processMetaSequence(id, sequence, 'ListNode');
+      }
+    } else if (val instanceof NomsSet) {
+      let sequence = val.sequence;
+      if (sequence instanceof SetLeafSequence) {
+        data.nodes[id] = {name: `Set (${val.size})`};
+        sequence.items.forEach(c => process(ref, c, id));
+      } else {
+        invariant(sequence instanceof OrderedMetaSequence);
+        processMetaSequence(id, sequence, 'SetNode');
+      }
+    } else if (val instanceof NomsMap) {
+      let sequence = val.sequence;
+      if (sequence instanceof MapLeafSequence) {
+        data.nodes[id] = {name: `Map (${val.size})`};
+        sequence.items.forEach(entry => {
+          let k = entry.key;
+          let v = entry.value;
+          // TODO: handle non-string keys
+          let kid = process(ref, k, id);
+          if (kid) {
+            data.nodes[kid].isOpen = true;
 
-          process(ref, v, kid);
-        } else {
-          throw new Error('No kid id.');
-        }
-      });
+            process(ref, v, kid);
+          } else {
+            throw new Error('No kid id.');
+          }
+        });
+      } else {
+        invariant(sequence instanceof OrderedMetaSequence);
+        processMetaSequence(id, sequence, 'MapNode');
+      }
     } else if (val instanceof Ref) {
       let refStr = val.toString();
       data.nodes[id] = {
@@ -110,45 +141,6 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
           data.nodes[kid].isOpen = true;
 
           process(ref, v, kid);
-        } else {
-          throw new Error('No kid id.');
-        }
-      });
-    } else if (val instanceof CompoundList) {
-      data.nodes[id] = {name: 'ListNode'};
-      val.items.forEach(tuple => {
-        let kid = process(ref, formatKeyString(tuple.value), id);
-        if (kid) {
-          // Start map keys open, just makes it easier to use.
-          data.nodes[kid].isOpen = true;
-
-          process(ref, tuple.ref, kid);
-        } else {
-          throw new Error('No kid id.');
-        }
-      });
-    } else if (val instanceof CompoundMap) {
-      data.nodes[id] = {name: 'MapNode'};
-      val.items.forEach(tuple => {
-        let kid = process(ref, formatKeyString(tuple.value), id);
-        if (kid) {
-          // Start map keys open, just makes it easier to use.
-          data.nodes[kid].isOpen = true;
-
-          process(ref, tuple.ref, kid);
-        } else {
-          throw new Error('No kid id.');
-        }
-      });
-    } else if (val instanceof CompoundSet) {
-      data.nodes[id] = {name: 'SetNode'};
-      val.items.forEach(tuple => {
-        let kid = process(ref, formatKeyString(tuple.value), id);
-        if (kid) {
-          // Start map keys open, just makes it easier to use.
-          data.nodes[kid].isOpen = true;
-
-          process(ref, tuple.ref, kid);
         } else {
           throw new Error('No kid id.');
         }

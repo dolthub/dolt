@@ -2,11 +2,11 @@
 
 import {Field, StructDesc, Type} from './type.js';
 import {invariant, notNull} from './assert.js';
-import {Value} from './value.js';
+import {ValueBase} from './value.js';
 
 type StructData = {[key: string]: any};
 
-export default class Struct extends Value {
+export default class Struct extends ValueBase {
   desc: StructDesc;
   unionField: ?Field;
 

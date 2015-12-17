@@ -6,7 +6,12 @@ import {ensureRef} from './get_ref.js';
 import {invariant} from './assert.js';
 import {Type} from './type.js';
 
-export class Value {
+export type Value = {
+  ref: Ref;
+  equals(other: Value): boolean;
+}
+
+export class ValueBase {
   type: Type;
   _ref: ?Ref;
 
@@ -31,16 +36,16 @@ export function less(v1: any, v2: any): boolean {
 
   if (typeof v1 === 'object') {
     invariant(typeof v2 === 'object');
-    if (v1 instanceof Value) {
+    if (v1 instanceof ValueBase) {
       v1 = v1.ref;
     }
-    if (v2 instanceof Value) {
+    if (v2 instanceof ValueBase) {
       v2 = v2.ref;
     }
 
     invariant(v1 instanceof Ref);
     invariant(v2 instanceof Ref);
-    return v1.compare(v2) < 0;
+    return v1.less(v2);
   }
 
   if (typeof v1 === 'string') {

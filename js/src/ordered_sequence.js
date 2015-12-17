@@ -1,8 +1,9 @@
 // @flow
 
+import type {ChunkStore} from './chunk_store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
-import {less, equals} from './value.js';
+import {less} from './value.js';
 import {search, Sequence, SequenceCursor} from './sequence.js';
 
 export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
@@ -12,12 +13,12 @@ export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
   //   -cursor positioned at
   //      -first value, if |key| is null
   //      -first value >= |key|
-  async newCursorAt(key: ?K): Promise<OrderedSequenceCursor> {
+  async newCursorAt(cs: ChunkStore, key: ?K): Promise<OrderedSequenceCursor> {
     let cursor: ?OrderedSequenceCursor = null;
     let sequence: ?OrderedSequence = this;
 
     while (sequence) {
-      cursor = new OrderedSequenceCursor(cursor, sequence, 0);
+      cursor = new OrderedSequenceCursor(cs, cursor, sequence, 0);
       if (key) {
         if (!cursor._seekTo(key)) {
           return cursor; // invalid
@@ -32,11 +33,6 @@ export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
 
   getKey(idx: number): K { // eslint-disable-line no-unused-vars
     throw new Error('override');
-  }
-
-  async has(key: K): Promise<boolean> {
-    let cursor = await this.newCursorAt(key);
-    return cursor.valid && equals(cursor.getCurrentKey(), key);
   }
 }
 

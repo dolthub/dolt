@@ -5,17 +5,18 @@ import {suite} from 'mocha';
 
 import MemoryStore from './memory_store.js';
 import test from './async_test.js';
-import {CompoundMap, MapLeaf} from './map.js';
+import type {ChunkStore} from './chunk_store.js';
 import {Kind} from './noms_kind.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
-import {MetaTuple} from './meta_sequence.js';
+import {MapLeafSequence, NomsMap} from './map.js';
+import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
 import {writeValue} from './encode.js';
 
 suite('MapLeaf', () => {
   test('has', async () => {
     let ms = new MemoryStore();
     let tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String), makePrimitiveType(Kind.Bool));
-    let m = new MapLeaf(ms, tr, [{key: 'a', value: false}, {key:'k', value:true}]);
+    let m = new NomsMap(ms, tr, new MapLeafSequence(tr, [{key: 'a', value: false}, {key:'k', value:true}]));
     assert.isTrue(await m.has('a'));
     assert.isFalse(await m.has('b'));
     assert.isTrue(await m.has('k'));
@@ -25,7 +26,7 @@ suite('MapLeaf', () => {
   test('first/get', async () => {
     let ms = new MemoryStore();
     let tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String), makePrimitiveType(Kind.Int32));
-    let m = new MapLeaf(ms, tr, [{key: 'a', value: 4}, {key:'k', value:8}]);
+    let m = new NomsMap(ms, tr, new MapLeafSequence(tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
 
     assert.deepEqual(['a', 4], await m.first());
 
@@ -38,7 +39,7 @@ suite('MapLeaf', () => {
   test('forEach', async () => {
     let ms = new MemoryStore();
     let tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String), makePrimitiveType(Kind.Int32));
-    let m = new MapLeaf(ms, tr, [{key: 'a', value: 4}, {key:'k', value:8}]);
+    let m = new NomsMap(ms, tr, new MapLeafSequence(tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
 
     let kv = [];
     await m.forEach((v, k) => { kv.push(k, v); });
@@ -47,29 +48,29 @@ suite('MapLeaf', () => {
 });
 
 suite('CompoundMap', () => {
-  function build(): Array<CompoundMap> {
-    let ms = new MemoryStore();
+  function build(cs: ChunkStore): Array<NomsMap> {
     let tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String), makePrimitiveType(Kind.Bool));
-    let l1 = new MapLeaf(ms, tr, [{key: 'a', value: false}, {key:'b', value:false}]);
-    let r1 = writeValue(l1, tr, ms);
-    let l2 = new MapLeaf(ms, tr, [{key: 'e', value: true}, {key:'f', value:true}]);
-    let r2 = writeValue(l2, tr, ms);
-    let l3 = new MapLeaf(ms, tr, [{key: 'h', value: false}, {key:'i', value:true}]);
-    let r3 = writeValue(l3, tr, ms);
-    let l4 = new MapLeaf(ms, tr, [{key: 'm', value: true}, {key:'n', value:false}]);
-    let r4 = writeValue(l4, tr, ms);
+    let l1 = new NomsMap(cs, tr, new MapLeafSequence(tr, [{key: 'a', value: false}, {key:'b', value:false}]));
+    let r1 = writeValue(l1, tr, cs);
+    let l2 = new NomsMap(cs, tr, new MapLeafSequence(tr, [{key: 'e', value: true}, {key:'f', value:true}]));
+    let r2 = writeValue(l2, tr, cs);
+    let l3 = new NomsMap(cs, tr, new MapLeafSequence(tr, [{key: 'h', value: false}, {key:'i', value:true}]));
+    let r3 = writeValue(l3, tr, cs);
+    let l4 = new NomsMap(cs, tr, new MapLeafSequence(tr, [{key: 'm', value: true}, {key:'n', value:false}]));
+    let r4 = writeValue(l4, tr, cs);
 
-    let m1 = new CompoundMap(ms, tr, [new MetaTuple(r1, 'b'), new MetaTuple(r2, 'f')]);
-    let rm1 = writeValue(m1, tr, ms);
-    let m2 = new CompoundMap(ms, tr, [new MetaTuple(r3, 'i'), new MetaTuple(r4, 'n')]);
-    let rm2 = writeValue(m2, tr, ms);
+    let m1 = new NomsMap(cs, tr, new OrderedMetaSequence(tr, [new MetaTuple(r1, 'b'), new MetaTuple(r2, 'f')]));
+    let rm1 = writeValue(m1, tr, cs);
+    let m2 = new NomsMap(cs, tr, new OrderedMetaSequence(tr, [new MetaTuple(r3, 'i'), new MetaTuple(r4, 'n')]));
+    let rm2 = writeValue(m2, tr, cs);
 
-    let c = new CompoundMap(ms, tr, [new MetaTuple(rm1, 'f'), new MetaTuple(rm2, 'n')]);
+    let c = new NomsMap(cs, tr, new OrderedMetaSequence(tr, [new MetaTuple(rm1, 'f'), new MetaTuple(rm2, 'n')]));
     return [c, m1, m2];
   }
 
   test('get', async () => {
-    let [c] = build();
+    let ms = new MemoryStore();
+    let [c] = build(ms);
 
     assert.strictEqual(false, await c.get('a'));
     assert.strictEqual(false, await c.get('b'));
@@ -88,8 +89,8 @@ suite('CompoundMap', () => {
   });
 
   test('first/has', async () => {
-    let [c, m1, m2] = build();
-
+    let ms = new MemoryStore();
+    let [c, m1, m2] = build(ms);
 
     assert.deepEqual(['a', false], await c.first());
     assert.deepEqual(['a', false], await m1.first());
@@ -112,7 +113,8 @@ suite('CompoundMap', () => {
   });
 
   test('forEach', async () => {
-    let [c] = build();
+    let ms = new MemoryStore();
+    let [c] = build(ms);
 
     let kv = [];
     await c.forEach((v, k) => { kv.push(k, v); });

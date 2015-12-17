@@ -1,7 +1,7 @@
 // @flow
 
 import React from 'react';
-import {readValue, HttpStore, Ref, Struct} from 'noms';
+import {HttpStore, NomsList, notNull, readValue, Ref} from 'noms';
 
 const IMAGE_WIDTH_PX = 286;
 const IMAGE_HEIGHT_PX = 324;
@@ -17,13 +17,18 @@ function feetToPixels(f: number): number {
 }
 
 type Props = {
-  pitchListRef: Ref,
+  pitchListRefP: Promise<?Ref>,
   httpStore: HttpStore
+};
+
+type Point = {
+  x: number,
+  y: number
 };
 
 type State = {
   loaded: boolean,
-  pitchList: ?Array<Struct>
+  pointList: Array<Point>
 };
 
 export default class HeatMap extends React.Component<void, Props, State> {
@@ -32,7 +37,7 @@ export default class HeatMap extends React.Component<void, Props, State> {
 
     this.state = {
       loaded: false,
-      pitchList: null
+      pointList: []
     };
   }
 
@@ -41,11 +46,20 @@ export default class HeatMap extends React.Component<void, Props, State> {
       return;
     }
 
-    let pitchList = await readValue(this.props.pitchListRef, this.props.httpStore);
-    if (Array.isArray(pitchList)) {
+    let pitchListRef = notNull(await this.props.pitchListRefP);
+    let pitchList = await readValue(pitchListRef, this.props.httpStore);
+
+    if (pitchList instanceof NomsList) {
+      let pointList = [];
+      await pitchList.forEach(p => {
+        pointList.push({
+          x: -1 + ORIGIN_X_PIXELS + feetToPixels(p.get('X')),
+          y: -1 + ORIGIN_Z_PIXELS - feetToPixels(p.get('Z'))
+        });
+      });
       this.setState({
         loaded: true,
-        pitchList: pitchList
+        pointList: pointList
       });
     } else {
       throw new Error('Unexpected type of pitchList');
@@ -77,27 +91,15 @@ export default class HeatMap extends React.Component<void, Props, State> {
   }
 
   getPoints(): Array<any> {
-    if (!this.state.loaded) {
-      return [];
-    }
-
-    if (!this.state.pitchList) {
-      throw new Error('pitchList not loaded');
-    }
-
-    return this.state.pitchList.map(p => {
-      let w = 2;
-      let h = 2;
-      let x = - w / 2 + ORIGIN_X_PIXELS + feetToPixels(p.get('X'));
-      let y = - h / 2 + ORIGIN_Z_PIXELS - feetToPixels(p.get('Z'));
+    return this.state.pointList.map(p => {
       return <div style={
         {
           position: 'absolute',
-          left: x,
-          top: y,
+          left: p.x,
+          top: p.y,
           background: 'rgba(0,255,0,0.4)',
-          width: w,
-          height: h,
+          width: '2px',
+          height: '2px',
           boxShadow: '0px 0px 16px 16px rgba(0,255,0,0.4)',
           borderRadius: '50%'
         }
