@@ -1,7 +1,6 @@
 // @flow
 
-import {invariant} from './assert.js';
-import {readValue} from 'noms';
+import {invariant, readValue} from 'noms';
 import eq from './eq.js';
 import React from 'react';
 import type {ChunkStore} from 'noms';

@@ -46,7 +46,7 @@ export function deserialize(buffer: ArrayBuffer): Array<Chunk> {
     invariant(buffer.byteLength - offset >= chunkHeaderSize, 'Invalid chunk buffer');
 
     let refArray = new Uint8Array(buffer, offset, sha1Size);
-    let ref = new Ref(new Uint8Array(refArray));
+    let ref = Ref.fromDigest(new Uint8Array(refArray));
     offset += sha1Size;
 
     let sizeReadArray = new Uint8Array(buffer, offset, chunkLengthSize);

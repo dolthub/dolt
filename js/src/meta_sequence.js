@@ -2,10 +2,12 @@
 
 import Ref from './ref.js';
 import type {ChunkStore} from './chunk_store.js';
-import type {NomsKind} from './noms_kind.js';
+import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {CompoundDesc, makeCompoundType, makePrimitiveType, Type} from './type.js';
-import {invariant, notNull} from './assert.js';
+import {IndexedSequence} from './indexed_sequence.js';
+import {invariant} from './assert.js';
 import {Kind} from './noms_kind.js';
+import {OrderedSequence} from './ordered_sequence.js';
 import {readValue} from './read_value.js';
 import {Sequence} from './sequence.js';
 
@@ -19,23 +21,73 @@ export class MetaTuple<K> {
     this.ref = ref;
     this.value = value;
   }
+}
 
-  readValue(cs: ChunkStore): Promise<any> {
-    return readValue(this.ref, cs);
+export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
+  offsets: Array<number>;
+
+  constructor(type: Type, items: Array<MetaTuple<number>>) {
+    super(type, items);
+    this.isMeta = true;
+    this.offsets = [];
+    let cum = 0;
+    for (let i = 0; i < items.length; i++) {
+      let length = items[i].value;
+      this.offsets.push(cum + length - 1);
+      cum += length;
+    }
+  }
+
+  async getChildSequence(cs: ChunkStore, idx: number): Promise<?IndexedSequence> {
+    if (!this.isMeta) {
+      return null;
+    }
+
+    let mt = this.items[idx];
+    let collection = await readValue(mt.ref, cs);
+    invariant(collection && collection.sequence instanceof IndexedSequence);
+    return collection.sequence;
+  }
+
+  getOffset(idx: number): number {
+    return this.offsets[idx];
   }
 }
 
-export type metaBuilderFn = (cs: ChunkStore, t: Type, tuples: Array<MetaTuple>) => MetaSequence;
+export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K, MetaTuple<K>> {
+  constructor(type: Type, items: Array<MetaTuple>) {
+    super(type, items);
+    this.isMeta = true;
+  }
 
-let metaFuncMap: Map<NomsKind, metaBuilderFn> = new Map();
+  async getChildSequence(cs: ChunkStore, idx: number): Promise<?OrderedSequence> {
+    if (!this.isMeta) {
+      return null;
+    }
 
-export function newMetaSequenceFromData(cs: ChunkStore, t: Type, data: Array<MetaTuple>): MetaSequence {
-  let ctor = notNull(metaFuncMap.get(t.kind));
-  return ctor(cs, t, data);
+    let mt = this.items[idx];
+    let collection = await readValue(mt.ref, cs);
+    invariant(collection && collection.sequence instanceof OrderedSequence);
+    return collection.sequence;
+  }
+
+  getKey(idx: number): K {
+    return this.items[idx].value;
+  }
 }
 
-export function registerMetaValue(k: NomsKind, bf: metaBuilderFn) {
-  metaFuncMap.set(k, bf);
+export function newMetaSequenceFromData(cs: ChunkStore, type: Type, tuples: Array<MetaTuple>): MetaSequence {
+  switch (type.kind) {
+    case Kind.Map:
+    case Kind.Set:
+      return new OrderedMetaSequence(type, tuples);
+    case Kind.List:
+      return new IndexedMetaSequence(type, tuples);
+    case Kind.Blob:
+      throw new Error('Not implemented');
+    default:
+      throw new Error('Not reached');
+  }
 }
 
 let indexedSequenceIndexType = makePrimitiveType(Kind.Uint64);

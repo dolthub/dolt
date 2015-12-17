@@ -5,18 +5,21 @@ import {suite} from 'mocha';
 
 import MemoryStore from './memory_store.js';
 import test from './async_test.js';
-import {CompoundSet, NomsSet, SetLeaf} from './set.js';
-import {notNull} from './assert.js';
+import type {ChunkStore} from './chunk_store.js';
+import {invariant} from './assert.js';
 import {Kind} from './noms_kind.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
-import {MetaTuple} from './meta_sequence.js';
+import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
+import {NomsSet, SetLeafSequence} from './set.js';
+import {notNull} from './assert.js';
+import {OrderedSequence} from './ordered_sequence.js';
 import {writeValue} from './encode.js';
 
 suite('SetLeaf', () => {
   test('first/has', async () => {
     let ms = new MemoryStore();
     let tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
-    let s = new SetLeaf(ms, tr, ['a', 'k']);
+    let s = new NomsSet(ms, tr, new SetLeafSequence(tr, ['a', 'k']));
 
     assert.strictEqual('a', await s.first());
 
@@ -29,7 +32,7 @@ suite('SetLeaf', () => {
   test('forEach', async () => {
     let ms = new MemoryStore();
     let tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
-    let m = new SetLeaf(ms, tr, ['a', 'b']);
+    let m = new NomsSet(ms, tr, new SetLeafSequence(tr, ['a', 'b']));
 
     let values = [];
     await m.forEach((k) => { values.push(k); });
@@ -38,16 +41,14 @@ suite('SetLeaf', () => {
 });
 
 suite('CompoundSet', () => {
-  function build(values: Array<string>): NomsSet {
-    let ms = new MemoryStore();
-
+  function build(cs: ChunkStore, values: Array<string>): NomsSet {
     let tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
     assert.isTrue(values.length > 1 && Math.log2(values.length) % 1 === 0);
 
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
-      let l = new SetLeaf(ms, tr, [values[i], values[i + 1]]);
-      let r = writeValue(l, tr, ms);
+      let l = new NomsSet(cs, tr, new SetLeafSequence(tr, [values[i], values[i + 1]]));
+      let r = writeValue(l, tr, cs);
       tuples.push(new MetaTuple(r, values[i + 1]));
     }
 
@@ -55,8 +56,8 @@ suite('CompoundSet', () => {
     while (tuples.length > 1) {
       let next = [];
       for (let i = 0; i < tuples.length; i += 2) {
-        last = new CompoundSet(ms, tr, [tuples[i], tuples[i + 1]]);
-        let r = writeValue(last, tr, ms);
+        last = new NomsSet(cs, tr, new OrderedMetaSequence(tr, [tuples[i], tuples[i + 1]]));
+        let r = writeValue(last, tr, cs);
         next.push(new MetaTuple(r, tuples[i + 1].value));
       }
 
@@ -67,7 +68,8 @@ suite('CompoundSet', () => {
   }
 
   test('first/has', async () => {
-    let c = build(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    let ms = new MemoryStore();
+    let c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     assert.strictEqual('a', await c.first());
     assert.isTrue(await c.has('a'));
     assert.isTrue(await c.has('b'));
@@ -86,7 +88,8 @@ suite('CompoundSet', () => {
   });
 
   test('forEach', async () => {
-    let c = build(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    let ms = new MemoryStore();
+    let c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     let values = [];
     await c.forEach((k) => { values.push(k); });
     assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], values);
@@ -104,9 +107,12 @@ suite('CompoundSet', () => {
   }
 
   test('advanceTo', async () => {
-    let c = build(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    let ms = new MemoryStore();
 
-    let cursor = await c.newCursorAt(null);
+    let c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+
+    invariant(c.sequence instanceof OrderedSequence);
+    let cursor = await c.sequence.newCursorAt(c.cs, null);
     assert.ok(cursor);
     assert.strictEqual('a', cursor.getCurrent());
 
@@ -119,10 +125,12 @@ suite('CompoundSet', () => {
     assert.isFalse(await cursor.advanceTo('z')); // not found
     assert.isFalse(cursor.valid);
 
-    cursor = await c.newCursorAt('x'); // not found
+    invariant(c.sequence instanceof OrderedSequence);
+    cursor = await c.sequence.newCursorAt(ms, 'x'); // not found
     assert.isFalse(cursor.valid);
 
-    cursor = await c.newCursorAt('e');
+    invariant(c.sequence instanceof OrderedSequence);
+    cursor = await c.sequence.newCursorAt(ms, 'e');
     assert.ok(cursor);
     assert.strictEqual('e', cursor.getCurrent());
 
@@ -141,10 +149,12 @@ suite('CompoundSet', () => {
   });
 
   async function testIntersect(expect: Array<string>, seqs: Array<Array<string>>) {
-    let first = build(seqs[0]);
+    let ms = new MemoryStore();
+
+    let first = build(ms, seqs[0]);
     let sets:Array<NomsSet> = [];
     for (let i = 1; i < seqs.length; i++) {
-      sets.push(build(seqs[i]));
+      sets.push(build(ms, seqs[i]));
     }
 
     let result = await first.intersect(...sets);

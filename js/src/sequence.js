@@ -3,32 +3,32 @@
 import type {ChunkStore} from './chunk_store.js';
 import {invariant, notNull} from './assert.js';
 import {Type} from './type.js';
-import {Value} from './value.js';
+import {ValueBase} from './value.js';
 
-export class Sequence<T> extends Value {
-  cs: ChunkStore;
+export class Sequence<T> extends ValueBase {
   items: Array<T>;
   isMeta: boolean;
 
-  constructor(cs: ChunkStore, type: Type, items: Array<T>) {
+  constructor(type: Type, items: Array<T>) {
     super(type);
 
-    this.cs = cs;
     this.items = items;
     this.isMeta = false;
   }
 
-  getChildSequence(idx: number): Promise<?Sequence> { // eslint-disable-line no-unused-vars
+  getChildSequence(cs: ChunkStore, idx: number): Promise<?Sequence> { // eslint-disable-line no-unused-vars
     return Promise.resolve(null);
   }
 }
 
 export class SequenceCursor<T, S:Sequence> {
+  cs: ChunkStore;
   parent: ?SequenceCursor;
   sequence: S;
   idx: number;
 
-  constructor(parent: ?SequenceCursor, sequence: S, idx: number) {
+  constructor(cs: ChunkStore, parent: ?SequenceCursor, sequence: S, idx: number) {
+    this.cs = cs;
     this.parent = parent;
     this.sequence = sequence;
     this.idx = idx;
@@ -48,7 +48,7 @@ export class SequenceCursor<T, S:Sequence> {
   }
 
   getChildSequence(): Promise<?S> {
-    return this.sequence.getChildSequence(this.idx);
+    return this.sequence.getChildSequence(this.cs, this.idx);
   }
 
   getCurrent(): T {
@@ -123,10 +123,6 @@ export class SequenceCursor<T, S:Sequence> {
     }
 
     return false;
-  }
-
-  copy(): SequenceCursor {
-    return new SequenceCursor(this.parent ? this.parent.copy() : null, this.sequence, this.idx);
   }
 
   async iter(cb: (v: T, i: number) => boolean): Promise<void> {

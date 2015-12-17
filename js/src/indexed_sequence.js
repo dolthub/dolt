@@ -1,5 +1,6 @@
 // @flow
 
+import type {ChunkStore} from './chunk_store.js';
 import {notNull} from './assert.js';
 import {search, Sequence, SequenceCursor} from './sequence.js';
 
@@ -8,12 +9,12 @@ export class IndexedSequence<T> extends Sequence<T> {
     throw new Error('override');
   }
 
-  async newCursorAt(idx: number): Promise<IndexedSequenceCursor> {
+  async newCursorAt(cs: ChunkStore, idx: number): Promise<IndexedSequenceCursor> {
     let cursor: ?IndexedSequenceCursor = null;
     let sequence: ?IndexedSequence = this;
 
     while (sequence) {
-      cursor = new IndexedSequenceCursor(cursor, sequence, 0);
+      cursor = new IndexedSequenceCursor(cs, cursor, sequence, 0);
       idx -= cursor.advanceToOffset(idx);
       sequence = await cursor.getChildSequence();
     }

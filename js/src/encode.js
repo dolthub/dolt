@@ -6,16 +6,16 @@ import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {encode as encodeBase64} from './base64.js';
+import {EnumDesc, makePrimitiveType, StructDesc, Type} from './type.js';
 import {indexTypeForMetaSequence} from './meta_sequence.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
-import {ListLeaf} from './list.js';
+import {ListLeafSequence, NomsList} from './list.js';
 import {lookupPackage, Package} from './package.js';
-import {makePrimitiveType, EnumDesc, StructDesc, Type} from './type.js';
-import {MapLeaf} from './map.js';
+import {MapLeafSequence, NomsMap} from './map.js';
+import {NomsSet, SetLeafSequence} from './set.js';
 import {Sequence} from './sequence.js';
 import {setEncodeNomsValue} from './get_ref.js';
-import {SetLeaf} from './set.js';
 
 const typedTag = 't ';
 
@@ -139,29 +139,31 @@ class JsonArrayWriter {
         this.writeInt(v); // TODO: Verify value fits in type
         break;
       case Kind.List: {
-        invariant(v instanceof Sequence);
-        if (this.maybeWriteMetaSequence(v, t, pkg)) {
+        invariant(v instanceof NomsList);
+        let sequence = v.sequence;
+        if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
           break;
         }
 
-        invariant(v instanceof ListLeaf);
+        invariant(sequence instanceof ListLeafSequence);
         let w2 = new JsonArrayWriter(this._cs);
         let elemType = t.elemTypes[0];
-        v.items.forEach(sv => w2.writeValue(sv, elemType));
+        sequence.items.forEach(sv => w2.writeValue(sv, elemType));
         this.write(w2.array);
         break;
       }
       case Kind.Map: {
-        invariant(v instanceof Sequence);
-        if (this.maybeWriteMetaSequence(v, t, pkg)) {
+        invariant(v instanceof NomsMap);
+        let sequence = v.sequence;
+        if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
           break;
         }
 
-        invariant(v instanceof MapLeaf);
+        invariant(sequence instanceof MapLeafSequence);
         let w2 = new JsonArrayWriter(this._cs);
         let keyType = t.elemTypes[0];
         let valueType = t.elemTypes[1];
-        v.items.forEach(entry => {
+        sequence.items.forEach(entry => {
           w2.writeValue(entry.key, keyType);
           w2.writeValue(entry.value, valueType);
         });
@@ -187,16 +189,17 @@ class JsonArrayWriter {
         break;
       }
       case Kind.Set: {
-        invariant(v instanceof Sequence);
-        if (this.maybeWriteMetaSequence(v, t, pkg)) {
+        invariant(v instanceof NomsSet);
+        let sequence = v.sequence;
+        if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
           break;
         }
 
-        invariant(v instanceof SetLeaf);
+        invariant(sequence instanceof SetLeafSequence);
         let w2 = new JsonArrayWriter(this._cs);
         let elemType = t.elemTypes[0];
         let elems = [];
-        v.items.forEach(v => {
+        sequence.items.forEach(v => {
           elems.push(v);
         });
         elems.forEach(elem => w2.writeValue(elem, elemType));

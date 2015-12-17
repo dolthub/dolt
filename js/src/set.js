@@ -1,22 +1,24 @@
 // @flow
 
-import type {ChunkStore} from './chunk_store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
+import {Collection} from './collection.js';
 import {equals, less} from './value.js';
 import {invariant} from './assert.js';
-import {Kind} from './noms_kind.js';
 import {OrderedSequence} from './ordered_sequence.js';
-import {registerMetaValue, MetaTuple} from './meta_sequence.js';
-import {Type} from './type.js';
 
-export class NomsSet<K:valueOrPrimitive, T> extends OrderedSequence<K, T> {
+export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
+  async has(key: T): Promise<boolean> {
+    let cursor = await this.sequence.newCursorAt(this.cs, key);
+    return cursor.valid && equals(cursor.getCurrentKey(), key);
+  }
+
   async first(): Promise<?T> {
-    let cursor = await this.newCursorAt(null);
+    let cursor = await this.sequence.newCursorAt(this.cs, null);
     return cursor.valid ? cursor.getCurrent() : null;
   }
 
   async forEach(cb: (v: T) => void): Promise<void> {
-    let cursor = await this.newCursorAt(null);
+    let cursor = await this.sequence.newCursorAt(this.cs, null);
     return cursor.iter(v => {
       cb(v);
       return false;
@@ -24,10 +26,14 @@ export class NomsSet<K:valueOrPrimitive, T> extends OrderedSequence<K, T> {
   }
 
   get size(): number {
-    return this.items.length;
+    if (this.sequence instanceof SetLeafSequence) {
+      return this.sequence.items.length;
+    }
+
+    throw new Error('not implemented');
   }
 
-  async intersect(...sets: Array<NomsSet>): Promise<NomsSet> {
+  async intersect(...sets: Array<NomsSet<T>>): Promise<NomsSet<T>> {
     if (sets.length === 0) {
       return this;
     }
@@ -37,16 +43,17 @@ export class NomsSet<K:valueOrPrimitive, T> extends OrderedSequence<K, T> {
       invariant(sets[i].type.equals(this.type));
     }
 
-    let cursor = await this.newCursorAt(null);
+    let cursor = await this.sequence.newCursorAt(this.cs, null);
     if (!cursor.valid) {
       return this;
     }
 
-    let values: Array<K> = [];
+    let values: Array<T> = [];
 
     for (let i = 0; cursor.valid && i < sets.length; i++) {
       let first = cursor.getCurrent();
-      let next = await sets[i].newCursorAt(first);
+      let set: NomsSet = sets[i];
+      let next = await set.sequence.newCursorAt(set.cs, first);
       if (!next.valid) {
         break;
       }
@@ -61,39 +68,15 @@ export class NomsSet<K:valueOrPrimitive, T> extends OrderedSequence<K, T> {
     }
 
     // TODO: Chunk the resulting set.
-    return new SetLeaf(this.cs, this.type, values);
+    return new NomsSet(this.cs, this.type, new SetLeafSequence(this.type, values));
   }
 }
 
-export class SetLeaf<K:valueOrPrimitive> extends NomsSet<K, K> {
+export class SetLeafSequence<K:valueOrPrimitive> extends OrderedSequence<K, K> {
   getKey(idx: number): K {
     return this.items[idx];
   }
 }
-
-export class CompoundSet<K:valueOrPrimitive> extends NomsSet<K, MetaTuple<K>> {
-  constructor(cs: ChunkStore, type: Type, items: Array<MetaTuple>) {
-    super(cs, type, items);
-    this.isMeta = true;
-  }
-
-  getKey(idx: number): K {
-    return this.items[idx].value;
-  }
-
-  async getChildSequence(idx: number): Promise<?SetLeaf> {
-    let mt = this.items[idx];
-    let ms = await mt.readValue(this.cs);
-    invariant(ms instanceof NomsSet);
-    return ms;
-  }
-
-  get size(): number {
-    throw new Error('not implemented');
-  }
-}
-
-registerMetaValue(Kind.Set, (cs, type, tuples) => new CompoundSet(cs, type, tuples));
 
 type OrderedCursor<K: valueOrPrimitive> = {
   valid: boolean;

@@ -2,9 +2,15 @@
 
 import Rusha from 'rusha';
 
+import type {Value} from './value.js';
+import {invariant} from './assert.js';
+
 const r = new Rusha();
 const sha1Size = 20;
-const pattern = /^sha1-([0-9a-f]{40})$/;
+const pattern = /^(sha1-[0-9a-f]{40})$/;
+
+const sha1Prefix = 'sha1-';
+const emtpyRefStr = sha1Prefix + '0'.repeat(40);
 
 function uint8ArrayToHex(a: Uint8Array): string {
   let hex = '';
@@ -31,46 +37,36 @@ function hexToUint8(s: string): Uint8Array {
 }
 
 export default class Ref {
-  digest: Uint8Array;
+  _refStr: string;
 
-  constructor(digest: Uint8Array = new Uint8Array(sha1Size)) {
-    this.digest = digest;
+  constructor(refStr: string = emtpyRefStr) {
+    this._refStr = refStr;
+  }
+
+  get ref(): Ref {
+    return this;
+  }
+
+  get digest(): Uint8Array {
+    return hexToUint8(this._refStr.substring(5));
   }
 
   isEmpty(): boolean {
-    for (let i = 0; i < sha1Size; i++) {
-      if (this.digest[i] !== 0) {
-        return false;
-      }
-    }
-
-    return true;
+    return this._refStr === emtpyRefStr;
   }
 
-  equals(other: Ref): boolean {
-    for (let i = 0; i < sha1Size; i++) {
-      if (this.digest[i] !== other.digest[i]) {
-        return false;
-      }
-    }
-
-    return true;
+  equals(other: Value): boolean {
+    invariant(other instanceof Ref);
+    return this._refStr === other._refStr;
   }
 
-  compare(other: Ref): number {
-    for (let i = 0; i < sha1Size; i++) {
-      if (this.digest[i] < other.digest[i]) {
-        return -1;
-      } else if (this.digest[i] > other.digest[i]) {
-        return 1;
-      }
-    }
-
-    return 0;
+  less(other: Value): boolean {
+    invariant(other instanceof Ref);
+    return this._refStr < other._refStr;
   }
 
   toString(): string {
-    return 'sha1-' + uint8ArrayToHex(this.digest);
+    return this._refStr;
   }
 
   static parse(s: string): Ref {
@@ -79,11 +75,14 @@ export default class Ref {
       throw Error('Could not parse ref: ' + s);
     }
 
-    return new Ref(hexToUint8(m[1]));
+    return new Ref(m[1]);
+  }
+
+  static fromDigest(digest: Uint8Array = new Uint8Array(sha1Size)) {
+    return new Ref(sha1Prefix + uint8ArrayToHex(digest));
   }
 
   static fromData(data: Uint8Array): Ref {
-    let digest = r.rawDigest(data);
-    return new Ref(new Uint8Array(digest.buffer));
+    return new Ref(sha1Prefix + r.digest(data));
   }
 }

@@ -5,17 +5,17 @@ import {suite} from 'mocha';
 
 import MemoryStore from './memory_store.js';
 import test from './async_test.js';
-import {CompoundList, ListLeaf} from './list.js';
+import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
 import {Kind} from './noms_kind.js';
+import {ListLeafSequence, NomsList} from './list.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
-import {MetaTuple} from './meta_sequence.js';
 import {writeValue} from './encode.js';
 
-suite('ListLeaf', () => {
+suite('ListLeafSequence', () => {
   test('get', async () => {
     let ms = new MemoryStore();
     let tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.String));
-    let l = new ListLeaf(ms, tr, ['z', 'x', 'a', 'b']);
+    let l = new NomsList(ms, tr, new ListLeafSequence(tr, ['z', 'x', 'a', 'b']));
     assert.strictEqual('z', await l.get(0));
     assert.strictEqual('x', await l.get(1));
     assert.strictEqual('a', await l.get(2));
@@ -25,7 +25,7 @@ suite('ListLeaf', () => {
   test('forEach', async () => {
     let ms = new MemoryStore();
     let tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
-    let l = new ListLeaf(ms, tr, [4, 2, 10, 16]);
+    let l = new NomsList(ms, tr, new ListLeafSequence(tr, [4, 2, 10, 16]));
 
     let values = [];
     await l.forEach((v, i) => { values.push(v, i); });
@@ -34,24 +34,24 @@ suite('ListLeaf', () => {
 });
 
 suite('CompoundList', () => {
-  function build(): CompoundList {
+  function build(): NomsList {
     let ms = new MemoryStore();
     let tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.String));
-    let l1 = new ListLeaf(ms, tr, ['a', 'b']);
+    let l1 = new NomsList(ms, tr, new ListLeafSequence(tr, ['a', 'b']));
     let r1 = writeValue(l1, tr, ms);
-    let l2 = new ListLeaf(ms, tr, ['e', 'f']);
+    let l2 = new NomsList(ms, tr, new ListLeafSequence(tr, ['e', 'f']));
     let r2 = writeValue(l2, tr, ms);
-    let l3 = new ListLeaf(ms, tr, ['h', 'i']);
+    let l3 = new NomsList(ms, tr, new ListLeafSequence(tr, ['h', 'i']));
     let r3 = writeValue(l3, tr, ms);
-    let l4 = new ListLeaf(ms, tr, ['m', 'n']);
+    let l4 = new NomsList(ms, tr, new ListLeafSequence(tr, ['m', 'n']));
     let r4 = writeValue(l4, tr, ms);
 
-    let m1 = new CompoundList(ms, tr, [new MetaTuple(r1, 2), new MetaTuple(r2, 2)]);
+    let m1 = new NomsList(ms, tr, new IndexedMetaSequence(tr, [new MetaTuple(r1, 2), new MetaTuple(r2, 2)]));
     let rm1 = writeValue(m1, tr, ms);
-    let m2 = new CompoundList(ms, tr, [new MetaTuple(r3, 2), new MetaTuple(r4, 2)]);
+    let m2 = new NomsList(ms, tr, new IndexedMetaSequence(tr, [new MetaTuple(r3, 2), new MetaTuple(r4, 2)]));
     let rm2 = writeValue(m2, tr, ms);
 
-    let l = new CompoundList(ms, tr, [new MetaTuple(rm1, 4), new MetaTuple(rm2, 4)]);
+    let l = new NomsList(ms, tr, new IndexedMetaSequence(tr, [new MetaTuple(rm1, 4), new MetaTuple(rm2, 4)]));
     return l;
   }
 

@@ -10,11 +10,11 @@ import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType
 import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta_sequence.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
-import {ListLeaf} from './list.js';
+import {ListLeafSequence, NomsList} from './list.js';
 import {lookupPackage, Package, readPackage} from './package.js';
-import {MapLeaf} from './map.js';
+import {NomsMap, MapLeafSequence} from './map.js';
 import {setDecodeNomsValue} from './read_value.js';
-import {SetLeaf} from './set.js';
+import {NomsSet, SetLeafSequence} from './set.js';
 
 const typedTag = 't ';
 const blobTag = 'b ';
@@ -135,17 +135,17 @@ class JsonArrayReader {
     return list;
   }
 
-  async readListLeaf(t: Type, pkg: ?Package): Promise<ListLeaf> {
+  async readListLeafSequence(t: Type, pkg: ?Package): Promise<ListLeafSequence> {
     let seq = await this.readSequence(t, pkg);
-    return new ListLeaf(this._cs, t, seq);
+    return new ListLeafSequence(t, seq);
   }
 
-  async readSetLeaf(t: Type, pkg: ?Package): Promise<SetLeaf> {
+  async readSetLeafSequence(t: Type, pkg: ?Package): Promise<SetLeafSequence> {
     let seq = await this.readSequence(t, pkg);
-    return new SetLeaf(this._cs, t, seq);
+    return new SetLeafSequence(t, seq);
   }
 
-  async readMapLeaf(t: Type, pkg: ?Package): Promise<MapLeaf> {
+  async readMapLeafSequence(t: Type, pkg: ?Package): Promise<MapLeafSequence> {
     let keyType = t.elemTypes[0];
     let valueType = t.elemTypes[1];
     let entries = [];
@@ -155,24 +155,19 @@ class JsonArrayReader {
       entries.push({key: k, value: v});
     }
 
-    return new MapLeaf(this._cs, t, entries);
+    return new MapLeafSequence(t, entries);
   }
 
   readEnum(): number {
     return this.readUint();
   }
 
-  async maybeReadMetaSequence(t: Type, pkg: ?Package): Promise<any> {
-    if (!this.readBool()) {
-      return null;
-    }
-
-    let r2 = new JsonArrayReader(this.readArray(), this._cs);
+  async readMetaSequence(t: Type, pkg: ?Package): Promise<any> {
     let data: Array<MetaTuple> = [];
     let indexType = indexTypeForMetaSequence(t);
-    while (!r2.atEnd()) {
-      let ref = r2.readRef();
-      let v = await r2.readValueWithoutTag(indexType, pkg);
+    while (!this.atEnd()) {
+      let ref = this.readRef();
+      let v = await this.readValueWithoutTag(indexType, pkg);
       data.push(new MetaTuple(ref, v));
     }
 
@@ -204,11 +199,9 @@ class JsonArrayReader {
     // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
       case Kind.Blob:
-        let ms = await this.maybeReadMetaSequence(t, pkg);
-        if (ms) {
-          return ms;
-        }
-
+        let isMeta = this.readBool();
+        // https://github.com/attic-labs/noms/issues/798
+        invariant(!isMeta, 'CompoundBlob not supported');
         return this.readBlob();
 
       case Kind.Bool:
@@ -233,22 +226,20 @@ class JsonArrayReader {
         return this.readValueWithoutTag(t2, pkg);
       }
       case Kind.List: {
-        let ms = await this.maybeReadMetaSequence(t, pkg);
-        if (ms) {
-          return ms;
-        }
-
+        let isMeta = this.readBool();
         let r2 = new JsonArrayReader(this.readArray(), this._cs);
-        return r2.readListLeaf(t, pkg);
+        let sequence = isMeta ?
+            await r2.readMetaSequence(t, pkg) :
+            await r2.readListLeafSequence(t, pkg);
+        return new NomsList(this._cs, t, sequence);
       }
       case Kind.Map: {
-        let ms = await this.maybeReadMetaSequence(t, pkg);
-        if (ms) {
-          return ms;
-        }
-
+        let isMeta = this.readBool();
         let r2 = new JsonArrayReader(this.readArray(), this._cs);
-        return r2.readMapLeaf(t, pkg);
+        let sequence = isMeta ?
+          await r2.readMetaSequence(t, pkg) :
+          await r2.readMapLeafSequence(t, pkg);
+        return new NomsMap(this._cs, t, sequence);
       }
       case Kind.Package:
         return Promise.resolve(this.readPackage(t, pkg));
@@ -257,13 +248,12 @@ class JsonArrayReader {
         // for refs.
         return Promise.resolve(this.readRef());
       case Kind.Set: {
-        let ms = await this.maybeReadMetaSequence(t, pkg);
-        if (ms) {
-          return ms;
-        }
-
+        let isMeta = this.readBool();
         let r2 = new JsonArrayReader(this.readArray(), this._cs);
-        return r2.readSetLeaf(t, pkg);
+        let sequence = isMeta ?
+          await r2.readMetaSequence(t, pkg) :
+          await r2.readSetLeafSequence(t, pkg);
+        return new NomsSet(this._cs, t, sequence);
       }
       case Kind.Enum:
       case Kind.Struct:

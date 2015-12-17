@@ -56,11 +56,11 @@ suite('Ref', () => {
 
   test('isEmpty', () => {
     let digest = new Uint8Array(20);
-    let r = new Ref(digest);
+    let r = Ref.fromDigest(digest);
     assert.isTrue(r.isEmpty());
 
     digest[0] = 10;
-    r = new Ref(digest);
+    r = Ref.fromDigest(digest);
     assert.isFalse(r.isEmpty());
 
     r = new Ref();
