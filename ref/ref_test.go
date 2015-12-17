@@ -25,13 +25,33 @@ func TestParseError(t *testing.T) {
 	assertParseError("sha1-00000000000000000000000000000000000000000")
 
 	// 'g' not valid hex
-	assertParseError("sha1-	000000000000000000000000000000000000000g")
+	assertParseError("sha1-000000000000000000000000000000000000000g")
 
 	// sha2 not supported
 	assertParseError("sha2-0000000000000000000000000000000000000000")
 
 	r := Parse("sha1-0000000000000000000000000000000000000000")
 	assert.NotNil(r)
+}
+
+func TestMaybeParse(t *testing.T) {
+	assert := assert.New(t)
+
+	parse := func(s string, success bool) {
+		r, ok := MaybeParse(s)
+		assert.Equal(success, ok, "Expected success=%t for %s", success, s)
+		if ok {
+			assert.Equal(s, r.String())
+		} else {
+			assert.Equal(emptyRef, r)
+		}
+	}
+
+	parse("sha1-0000000000000000000000000000000000000000", true)
+	parse("sha1-0000000000000000000000000000000000000001", true)
+	parse("", false)
+	parse("adsfasdf", false)
+	parse("sha2-0000000000000000000000000000000000000000", false)
 }
 
 func TestEquals(t *testing.T) {

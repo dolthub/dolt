@@ -7,15 +7,16 @@ import (
 
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/ref"
 )
 
 var (
-	sinkDsFlags   = dataset.NewFlagsWithPrefix("sink-")
-	sourceDsFlags = dataset.NewFlagsWithPrefix("source-")
-	p             = flag.Uint("p", 512, "parallelism")
-	sinkRefFlag   = flag.String("sinkref", "", "ref to use in place of sink dataset head (useful for testing)")
+	p                = flag.Uint("p", 512, "parallelism")
+	sinkDsFlags      = dataset.NewFlagsWithPrefix("sink-")
+	sourceStoreFlags = datas.NewFlagsWithPrefix("source-")
+	sourceObject     = flag.String("source", "", "source object to sync - either a dataset name or a ref")
 )
 
 func main() {
@@ -24,13 +25,13 @@ func main() {
 
 	flag.Parse()
 
-	source := sourceDsFlags.CreateDataset()
+	sourceStore, ok := sourceStoreFlags.CreateDataStore()
 	sink := sinkDsFlags.CreateDataset()
-	if source == nil || sink == nil || *p == 0 {
+	if !ok || sink == nil || *p == 0 || *sourceObject == "" {
 		flag.Usage()
 		return
 	}
-	defer source.Close()
+	defer sourceStore.Close()
 	defer sink.Close()
 
 	err := d.Try(func() {
@@ -38,13 +39,20 @@ func main() {
 			defer util.StopCPUProfile()
 		}
 
-		sinkRef := ref.Ref{}
-		if *sinkRefFlag != "" {
-			sinkRef = ref.Parse(*sinkRefFlag)
+		sourceRef := ref.Ref{}
+		if r, ok := ref.MaybeParse(*sourceObject); ok {
+			if sourceStore.Has(r) {
+				sourceRef = r
+			}
+		} else {
+			if c, ok := sourceStore.MaybeHead(*sourceObject); ok {
+				sourceRef = c.Ref()
+			}
 		}
+		d.Exp.False(sourceRef.IsEmpty(), "Unknown source object: %s", *sourceObject)
 
 		var err error
-		*sink, err = sink.Pull(*source, int(*p), sinkRef)
+		*sink, err = sink.Pull(sourceStore, sourceRef, int(*p))
 
 		util.MaybeWriteMemProfile()
 		d.Exp.NoError(err)
