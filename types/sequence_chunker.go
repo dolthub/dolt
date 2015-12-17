@@ -129,7 +129,7 @@ func (seq *sequenceChunker) Done() Value {
 		d.Chk.True(seq.parent == nil)
 		d.Chk.Equal(0, len(seq.current))
 		_, done := seq.makeChunk(seq.pendingFirst)
-		return done
+		return internalValueFromType(done, done.Type())
 	}
 
 	if seq.parent != nil && seq.parent.used {
@@ -140,7 +140,7 @@ func (seq *sequenceChunker) Done() Value {
 	}
 
 	_, done := seq.makeChunk(seq.current)
-	return done
+	return internalValueFromType(done, done.Type())
 }
 
 func (seq *sequenceChunker) finalizeCursor() {

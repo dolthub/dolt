@@ -40,6 +40,5 @@ func NewTypedList(cs chunks.ChunkStore, t Type, values ...Value) List {
 		seq.Append(v)
 	}
 
-	list := seq.Done()
-	return internalValueFromType(list, list.Type()).(List)
+	return seq.Done().(List)
 }

@@ -192,8 +192,7 @@ func (cl compoundList) Filter(cb listFilterCallback) List {
 			seq.Append(v)
 		}
 	})
-	s := seq.Done()
-	return internalValueFromType(s, s.Type()).(List)
+	return seq.Done().(List)
 }
 
 func (cl compoundList) Remove(start uint64, end uint64) List {

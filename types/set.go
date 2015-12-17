@@ -40,6 +40,5 @@ func newTypedSet(cs chunks.ChunkStore, t Type, data ...Value) Set {
 		seq.Append(v)
 	}
 
-	s := seq.Done()
-	return internalValueFromType(s, s.Type()).(Set)
+	return seq.Done().(Set)
 }
