@@ -130,7 +130,7 @@ func (cm compoundMap) Filter(cb mapFilterCallback) Map {
 		}
 	})
 
-	return internalValueFromType(seq.Done(), cm.Type()).(Map)
+	return seq.Done().(Map)
 }
 
 func (cm compoundMap) Has(key Value) bool {

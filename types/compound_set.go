@@ -121,7 +121,7 @@ func (cs compoundSet) Filter(cb setFilterCallback) Set {
 		}
 	})
 
-	return internalValueFromType(seq.Done(), cs.Type()).(Set)
+	return seq.Done().(Set)
 }
 
 func (cs compoundSet) findLeaf(key Value) (*sequenceCursor, setLeaf, int) {

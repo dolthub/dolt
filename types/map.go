@@ -41,6 +41,5 @@ func newTypedMap(cs chunks.ChunkStore, t Type, entries ...mapEntry) Map {
 		seq.Append(entry)
 	}
 
-	m := seq.Done()
-	return internalValueFromType(m, m.Type()).(Map)
+	return seq.Done().(Map)
 }
