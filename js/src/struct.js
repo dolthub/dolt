@@ -78,13 +78,15 @@ export default class Struct extends ValueBase {
 }
 
 function findField(desc: StructDesc, name: string): [?Field, boolean] {
-  for (let f of desc.fields) {
+  for (let i = 0; i < desc.fields.length; i++) {
+    let f = desc.fields[i];
     if (f.name === name) {
       return [f, false];
     }
   }
 
-  for (let f of desc.union) {
+  for (let i = 0; i < desc.union.length; i++) {
+    let f = desc.union[i];
     if (f.name === name) {
       return [f, true];
     }
