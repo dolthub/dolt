@@ -89,23 +89,38 @@ func (cs compoundSet) Remove(values ...Value) Set {
 	return res.Remove(tail...)
 }
 
-func (cs compoundSet) sequenceChunkerAtValue(v Value) (*sequenceChunker, bool) {
+func (cs compoundSet) sequenceCursorAtValue(v Value) (*sequenceCursor, bool) {
 	metaCur, leaf, idx := cs.findLeaf(v)
-
 	cur := &sequenceCursor{metaCur, leaf, idx, len(leaf.data), func(otherLeaf sequenceItem, idx int) sequenceItem {
 		return otherLeaf.(setLeaf).data[idx]
 	}, func(mt sequenceItem) (sequenceItem, int) {
 		otherLeaf := readMetaTupleValue(mt, cs.cs).(setLeaf)
 		return otherLeaf, len(otherLeaf.data)
 	}}
-
-	seq := newSequenceChunker(cur, makeSetLeafChunkFn(cs.t, cs.cs), newSetMetaSequenceChunkFn(cs.t, cs.cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 	found := idx < len(leaf.data) && leaf.data[idx].Equals(v)
+	return cur, found
+}
+
+func (cs compoundSet) sequenceChunkerAtValue(v Value) (*sequenceChunker, bool) {
+	cur, found := cs.sequenceCursorAtValue(v)
+	seq := newSequenceChunker(cur, makeSetLeafChunkFn(cs.t, cs.cs), newSetMetaSequenceChunkFn(cs.t, cs.cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 	return seq, found
 }
 
+func (cs compoundSet) elemType() Type {
+	return cs.t.Desc.(CompoundDesc).ElemTypes[0]
+}
+
+func (cs compoundSet) sequenceCursorAtFirst() *sequenceCursor {
+	// TODO: This can be done more efficiently - Bug 795
+	v := cs.First()
+	cur, found := cs.sequenceCursorAtValue(v)
+	d.Chk.True(found)
+	return cur
+}
+
 func (cs compoundSet) Union(others ...Set) Set {
-	panic("not implemented")
+	return setUnion(cs, cs.cs, others)
 }
 
 func (cs compoundSet) Subtract(others ...Set) Set {
