@@ -134,10 +134,6 @@ func (s SetOfBool) Union(others ...SetOfBool) SetOfBool {
 	return SetOfBool{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfBool) Subtract(others ...SetOfBool) SetOfBool {
-	return SetOfBool{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
-}
-
 func (s SetOfBool) First() bool {
 	return bool(s.s.First().(types.Bool))
 }

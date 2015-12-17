@@ -133,10 +133,6 @@ func (s SetOfRefOfPackage) Union(others ...SetOfRefOfPackage) SetOfRefOfPackage 
 	return SetOfRefOfPackage{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}, s.cs}
 }
 
-func (s SetOfRefOfPackage) Subtract(others ...SetOfRefOfPackage) SetOfRefOfPackage {
-	return SetOfRefOfPackage{s.s.Subtract(s.fromStructSlice(others)...), &ref.Ref{}, s.cs}
-}
-
 func (s SetOfRefOfPackage) First() RefOfPackage {
 	return s.s.First().(RefOfPackage)
 }
