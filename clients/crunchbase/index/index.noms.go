@@ -1049,10 +1049,6 @@ func (s SetOfRoundRaise) Union(others ...SetOfRoundRaise) SetOfRoundRaise {
 	return SetOfRoundRaise{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfRoundRaise) Subtract(others ...SetOfRoundRaise) SetOfRoundRaise {
-	return SetOfRoundRaise{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
-}
-
 func (s SetOfRoundRaise) First() RoundRaise {
 	return s.s.First().(RoundRaise)
 }

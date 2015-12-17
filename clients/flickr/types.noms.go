@@ -715,10 +715,6 @@ func (s SetOfRefOfRemotePhoto) Union(others ...SetOfRefOfRemotePhoto) SetOfRefOf
 	return SetOfRefOfRemotePhoto{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfRefOfRemotePhoto) Subtract(others ...SetOfRefOfRemotePhoto) SetOfRefOfRemotePhoto {
-	return SetOfRefOfRemotePhoto{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
-}
-
 func (s SetOfRefOfRemotePhoto) First() RefOfRemotePhoto {
 	return s.s.First().(RefOfRemotePhoto)
 }

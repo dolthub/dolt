@@ -397,10 +397,6 @@ func (s SetOfUint8) Union(others ...SetOfUint8) SetOfUint8 {
 	return SetOfUint8{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfUint8) Subtract(others ...SetOfUint8) SetOfUint8 {
-	return SetOfUint8{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
-}
-
 func (s SetOfUint8) First() uint8 {
 	return uint8(s.s.First().(types.Uint8))
 }

@@ -116,15 +116,6 @@ func TestSetUnion(t *testing.T) {
 	assert.True(NewSet(cs, Int32(1)).Union().Equals(NewSet(cs, Int32(1))))
 }
 
-func TestSetSubtract(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	assert.True(NewSet(cs, Int32(-1), Int32(0), Int32(1)).Subtract(
-		NewSet(cs, Int32(0), Int32(-1)),
-		NewSet(cs, Int32(1), Int32(2))).Equals(
-		NewSet(cs)))
-}
-
 func TestSetFirst(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
@@ -380,9 +371,6 @@ func TestSetType(t *testing.T) {
 	assert.Equal(tr, s.Type())
 
 	s2 := s.Remove(Uint64(1))
-	assert.True(tr.Equals(s2.Type()))
-
-	s2 = s.Subtract(s)
 	assert.True(tr.Equals(s2.Type()))
 
 	s2 = s.Filter(func(v Value) bool {

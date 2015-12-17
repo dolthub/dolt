@@ -737,10 +737,6 @@ func (s SetOfString) Union(others ...SetOfString) SetOfString {
 	return SetOfString{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfString) Subtract(others ...SetOfString) SetOfString {
-	return SetOfString{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
-}
-
 func (s SetOfString) First() string {
 	return s.s.First().(types.String).String()
 }
@@ -885,10 +881,6 @@ func (s SetOfRefOfRound) Remove(p ...RefOfRound) SetOfRefOfRound {
 
 func (s SetOfRefOfRound) Union(others ...SetOfRefOfRound) SetOfRefOfRound {
 	return SetOfRefOfRound{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
-}
-
-func (s SetOfRefOfRound) Subtract(others ...SetOfRefOfRound) SetOfRefOfRound {
-	return SetOfRefOfRound{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
 func (s SetOfRefOfRound) First() RefOfRound {

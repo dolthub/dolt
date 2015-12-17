@@ -396,10 +396,6 @@ func (s SetOfRefOfCommit) Union(others ...SetOfRefOfCommit) SetOfRefOfCommit {
 	return SetOfRefOfCommit{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
 }
 
-func (s SetOfRefOfCommit) Subtract(others ...SetOfRefOfCommit) SetOfRefOfCommit {
-	return SetOfRefOfCommit{s.s.Subtract(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
-}
-
 func (s SetOfRefOfCommit) First() RefOfCommit {
 	return s.s.First().(RefOfCommit)
 }

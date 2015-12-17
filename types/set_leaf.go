@@ -60,17 +60,6 @@ func (s setLeaf) Union(others ...Set) Set {
 	return setUnion(s, s.cs, others)
 }
 
-func (s setLeaf) Subtract(others ...Set) Set {
-	var result Set = s
-	for _, other := range others {
-		other.Iter(func(v Value) (stop bool) {
-			result = result.Remove(v)
-			return
-		})
-	}
-	return result
-}
-
 func (s setLeaf) Iter(cb setIterCallback) {
 	for _, v := range s.data {
 		if cb(v) {

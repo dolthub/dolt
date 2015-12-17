@@ -14,7 +14,6 @@ type Set interface {
 	Insert(values ...Value) Set
 	Remove(values ...Value) Set
 	Union(others ...Set) Set
-	Subtract(others ...Set) Set
 	Iter(cb setIterCallback)
 	IterAll(cb setIterAllCallback)
 	IterAllP(concurrency int, f setIterAllCallback)
