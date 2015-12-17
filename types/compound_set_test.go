@@ -178,33 +178,28 @@ func TestCompoundSetIterAll(t *testing.T) {
 func TestCompoundSetInsert(t *testing.T) {
 	assert := assert.New(t)
 
-	doTest := func(incr int, ts testSet) {
+	doTest := func(incr, offset int, ts testSet) {
 		cs := chunks.NewMemoryStore()
 		expected := ts.toCompoundSet(cs)
 		run := func(from, to int) {
 			actual := ts.Remove(from, to).toCompoundSet(cs).Insert(ts.values[from:to]...)
-			assert.Equal(expected.Len(), actual.Len(), "%d-%d", from, to)
+			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 		}
-		for i := 0; i < len(ts.values); i += incr {
-			run(i, i+1)
+		for i := 0; i < len(ts.values)-offset; i += incr {
+			run(i, i+offset)
 		}
-		run(len(ts.values)-1, len(ts.values))
-		// TODO: make this pass, and make it fast:
-		// for i := 0; i < len(ts.values)-incr; i += incr {
-		//   run(i, i+incr)
-		// }
-		// For example, run(896, 960) fails for the native order set.
-
+		run(len(ts.values)-offset, len(ts.values))
 		assert.Panics(func() {
 			expected.Insert(Int8(1))
 		}, "Should panic due to wrong type")
 	}
 
-	doTest(64, getTestNativeOrderSet(32))
-	doTest(32, getTestRefValueOrderSet(4))
-	doTest(32, getTestRefToNativeOrderSet(4))
-	doTest(32, getTestRefToValueOrderSet(4))
+	doTest(18, 3, getTestNativeOrderSet(9))
+	doTest(64, 1, getTestNativeOrderSet(32))
+	doTest(32, 1, getTestRefValueOrderSet(4))
+	doTest(32, 1, getTestRefToNativeOrderSet(4))
+	doTest(32, 1, getTestRefToValueOrderSet(4))
 }
 
 func TestCompoundSetInsertExistingValue(t *testing.T) {
@@ -222,30 +217,26 @@ func TestCompoundSetInsertExistingValue(t *testing.T) {
 func TestCompoundSetRemove(t *testing.T) {
 	assert := assert.New(t)
 
-	doTest := func(incr int, ts testSet) {
+	doTest := func(incr, offset int, ts testSet) {
 		cs := chunks.NewMemoryStore()
 		whole := ts.toCompoundSet(cs)
 		run := func(from, to int) {
 			expected := ts.Remove(from, to).toCompoundSet(cs)
 			actual := whole.Remove(ts.values[from:to]...)
-			assert.Equal(expected.Len(), actual.Len(), "%d-%d", from, to)
+			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 		}
-		for i := 0; i < len(ts.values); i += incr {
-			run(i, i+1)
+		for i := 0; i < len(ts.values)-offset; i += incr {
+			run(i, i+offset)
 		}
-		run(len(ts.values)-1, len(ts.values))
-		// TODO: make this pass, and make it fast:
-		// for i := 0; i < len(ts.values)-incr; i += incr {
-		//   run(i, i+incr)
-		// }
-		// For example, run(448, 512) fails for the native order set.
+		run(len(ts.values)-offset, len(ts.values))
 	}
 
-	doTest(64, getTestNativeOrderSet(32))
-	doTest(32, getTestRefValueOrderSet(4))
-	doTest(32, getTestRefToNativeOrderSet(4))
-	doTest(32, getTestRefToValueOrderSet(4))
+	doTest(18, 3, getTestNativeOrderSet(9))
+	doTest(64, 1, getTestNativeOrderSet(32))
+	doTest(32, 1, getTestRefValueOrderSet(4))
+	doTest(32, 1, getTestRefToNativeOrderSet(4))
+	doTest(32, 1, getTestRefToValueOrderSet(4))
 }
 
 func TestCompoundSetRemoveNonexistentValue(t *testing.T) {
