@@ -16,11 +16,7 @@ export default class Chunk {
   }
 
   get ref(): Ref {
-    if (this._ref) {
-      return this._ref;
-    } else {
-      return this._ref = Ref.fromData(this.data);
-    }
+    return this._ref || (this._ref = Ref.fromData(this.data));
   }
 
   isEmpty(): boolean {
