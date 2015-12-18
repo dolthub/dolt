@@ -4,7 +4,7 @@ Splore is a general-purpose debug UI for exploring noms data.
 
 ![splore and counter](screenshot.png)
 
-## Howto
+## Example
 
 ```
 cd $GOPATH/src/github.com/attic-labs/noms/clients/counter
