@@ -1,20 +1,29 @@
 # Splore
 
-This is a generic noms data explorer.
+Splore is a general-purpose debug UI for exploring noms data.
 
-## Requirements
+![splore and counter](screenshot.png)
 
-* Node.js: https://nodejs.org/download/
-* You probably want to configure npm to [use a global module path that your user owns](https://docs.npmjs.com/getting-started/fixing-npm-permissions)
+## Howto
 
-## Build
+```
+cd $GOPATH/src/github.com/attic-labs/noms/clients/counter
+go build
+./counter -ldb="/tmp/sploretest" -ds="counter"
+./counter -ldb="/tmp/sploretest" -ds="counter"
 
-* `NOMS_SERVER=http://localhost:8000 python build.py`
+# Splore requires server to be running
+cd ../server
+go build
+./server -ldb="/tmp/sploretest" &
 
-## Run
+cd ../splore
+PYTHONPATH=$GOPATH/src/github.com/attic-labs/noms/tools NOMS_SERVER=http://localhost:8000 python build.py
+./node_modules/.bin/http-server
+```
 
-* `python -m SimpleHTTPServer 8082` (expects ../server to run on same host, port 8000)
-* navigate to http://localhost:8082/
+Then, navigate to [http://localhost:8080].
+
 
 ## Develop
 

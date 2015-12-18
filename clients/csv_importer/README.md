@@ -1,7 +1,6 @@
 # CSV Importer
 
-Imports a CSV file as a List of Maps where the first row of the CSV file
-describes the keys of the Map.
+Imports a CSV file as List<T> where T is generated from the header row of the CSV (this can also be overridden with the `-header` flag).
 
 ## Usage
 

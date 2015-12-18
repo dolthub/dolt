@@ -28,6 +28,7 @@
     "eslint-plugin-react": "^3.8.0",
     "flow-bin": "^0.19.1",
     "grunt": "^0.4.5",
+    "http-server": "^0.8.5",
     "mocha": "^2.3.0",
     "uglify-js": "^2.6.1",
     "watchify": "^3.6"

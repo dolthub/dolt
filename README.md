@@ -1,26 +1,20 @@
 # Noms
 
-Noms is a content-addressable, immutable, peer-to-peer datastore for structured data.
+Noms is a content-addressable, append-only, peer-to-peer, structured data store.
 
 In other words, *noms is git for data*.
 
-This repository will contain the reference implementation of the noms protocol, and will eventually be open sourced. 
-
-This includes:
-
-* Go wrappers for all the core noms types
-* Support for generating Go types from schema definitions (aka 'nomdl')
-* Chunking and dechunking
-* Serialization and deserialization
-* Chunkstore interface as well as several sample implementations
-* Search support
-* Sample applications
+This repository contains two reference implementations of the noms protocol - one in Go, and one in JavaScript. It also includes a number of tools and sample applications.
 
 # Prerequisites
 
 * [Go 1.4+](https://golang.org/dl/)
+* [Python 2.7+](https://www.python.org/downloads/) (Note: Python 2.x only, not Python 3.x)
+* [Node.js 5.3+](https://nodejs.org/download/)
 
-# Get
+# Get the code
+
+First, ensure `$GOPATH` is [set correctly](https://golang.org/doc/code.html#GOPATH). Then:
 
 ```
 go get -u -t github.com/attic-labs/noms/...
@@ -43,17 +37,10 @@ go build
 ./counter -ldb=/tmp/foo -ds=foo
 ```
 
-# Rejoice!
+# What next?
 
-You can see the raw data:
-
-```
-ls /tmp/foo
-cat /tmp/foo/*.log | strings
-```
-
-You can also explore the data visually. Follow the instructions in `clients/splore`.
-
-There are lots of other sample programs in `clients/` and they usually have `README`s. Have fun...
-
-TODO: There needs to be more of a big-picture introduction.
+* Learn the core tools: [`server`](clients/server/README.md), [`splore`](clients/splore/README.md), [`shove`](clients/shove/README.md), [`csv_importer`](clients/csv_importer/README.md), [`json_importer`](clients/json_importer), [`xml_importer`](clients/xml_importer)
+* Run sample apps: [`sfcrime`](clients/sfcrime/README.md), [`tagshow` photo viewer](clients/tagshow/README.md)
+* NomDL reference
+* Go SDK
+* JavaScript SDK
