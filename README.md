@@ -40,7 +40,7 @@ go build
 # What next?
 
 * Learn the core tools: [`server`](clients/server/README.md), [`splore`](clients/splore/README.md), [`shove`](clients/shove/README.md), [`csv_importer`](clients/csv_importer/README.md), [`json_importer`](clients/json_importer), [`xml_importer`](clients/xml_importer)
-* Run sample apps: [`sfcrime`](clients/sfcrime/README.md), [`tagshow` photo viewer](clients/tagshow/README.md)
-* NomDL reference
-* Go SDK
-* JavaScript SDK
+* Run sample apps: [`sfcrime`](clients/sfcrime/README.md), [`tagshow`](clients/tagshow/README.md) (photo viewer)
+* NomDL reference (TODO)
+* Go SDK reference (TODO)
+* JavaScript SDK reference (TODO)
