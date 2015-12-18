@@ -2,6 +2,8 @@
 
 This is a slideshow that displays photos from a noms database having a particular tag.
 
+TODO(aa): These build instructions have rotted. Fix.
+
 ## Setup
 
 * Import some photos into noms. Currently [`flickr`](../flickr) and [`picasa`](../picasa) are the only ways to do this, but in principal anything that imports `Photo` structs would work.
