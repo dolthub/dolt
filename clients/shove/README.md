@@ -2,7 +2,7 @@
 
 Shove syncs between datastores and datasets. It is the noms equivalent of Git's `push` and `pull` commands.
 
-## Howto
+## Example
 
 ```
 cd $GOPATH/src/github.com/attic-labs/noms/clients/counter
