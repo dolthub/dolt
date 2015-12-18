@@ -2,14 +2,9 @@
 
 This is a slideshow that displays photos from a noms database having a particular tag.
 
-## Requirements
-
-* Node.js: https://nodejs.org/download/
-* You probably want to configure npm to [use a global module path that your user owns](https://docs.npmjs.com/getting-started/fixing-npm-permissions)
-
 ## Setup
 
-* Import some photos into noms. Currently [`flickr`](../flickr) is the only way to do this, but in principal anything that imports "Photo" structs would work (TODO: Add more importers - BUG 27 and BUG 28).
+* Import some photos into noms. Currently [`flickr`](../flickr) and [`picasa`](../picasa) are the only ways to do this, but in principal anything that imports `Photo` structs would work.
 
 ## Build
 
