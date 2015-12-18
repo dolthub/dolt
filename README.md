@@ -14,7 +14,7 @@ This repository contains two reference implementations of the noms protocol - on
 
 # Get the code
 
-First, ensure `$GOPATH` is [set correctly](https://golang.org/doc/code.html#GOPATH). Then:
+First, ensure [`$GOPATH` is set correctly](https://golang.org/doc/code.html#GOPATH). Then:
 
 ```
 go get -u -t github.com/attic-labs/noms/...
