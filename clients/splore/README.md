@@ -18,11 +18,11 @@ go build
 ./server -ldb="/tmp/sploretest" &
 
 cd ../splore
-PYTHONPATH=$GOPATH/src/github.com/attic-labs/noms/tools NOMS_SERVER=http://localhost:8000 python build.py
+PYTHONPATH=$GOPATH/src/github.com/attic-labs/noms/tools python build.py
 ./node_modules/.bin/http-server
 ```
 
-Then, navigate to [http://localhost:8080].
+Then, navigate to [http://localhost:8080](http://localhost:8080).
 
 
 ## Develop
