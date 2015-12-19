@@ -1,3 +1,4 @@
+#!/bin/bash
 pushd ../../../js
 npm install
 npm run build
