@@ -7,7 +7,7 @@ Import SF public crime data into noms, and search by georectangle.
 ```
 cd $GOPATH/src/github.com/attic-labs/noms/clients/sfcrime/importer
 
-# Fetch the data from: [http://www.opendatacache.com/data.sfgov.org/api/views/tmnf-yvry/rows.csv](http://www.opendatacache.com/data.sfgov.org/api/views/tmnf-yvry/rows.csv)
+# Fetch the data from: http://www.opendatacache.com/data.sfgov.org/api/views/tmnf-yvry/rows.csv
 
 go build
 ./importer -ldb="/tmp/sfcrime" -ds="sfcrime/raw" -input-file="rows.csv"
