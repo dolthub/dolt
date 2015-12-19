@@ -9,6 +9,11 @@ import type {ChunkStore} from 'noms';
 
 window.onload = window.onhashchange = render;
 
+const nomsServer: ?string = process.env.NOMS_SERVER;
+if (!nomsServer) {
+  throw new Error('NOMS_SERVER not set');
+}
+
 function updateQuery(qs: {[key: string]: string}) {
   location.hash = queryString.stringify(qs);
 }
@@ -16,14 +21,6 @@ function updateQuery(qs: {[key: string]: string}) {
 function render() {
   let qs = Object.freeze(queryString.parse(location.hash));
   let target = document.getElementById('root');
-
-  let nomsServer;
-  if (qs.server) {
-    nomsServer = qs.server;
-  } else {
-    nomsServer = `${location.protocol}//${location.hostname}:8000`;
-  }
-
   let store: ChunkStore = new HttpStore(nomsServer);
 
   ReactDOM.render(

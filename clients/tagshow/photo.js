@@ -1,9 +1,9 @@
 // @flow
 
-import {readValue} from 'noms';
 import eq from './eq.js';
 import React from 'react';
-import type {ChunkStore, Ref, Struct} from 'noms';
+import type {ChunkStore, Ref, NomsMap, Struct} from 'noms';
+import {readValue} from 'noms';
 
 type DefaultProps = {
   onLoad: () => void,
@@ -41,11 +41,12 @@ export default class Photo extends React.Component<DefaultProps, Props, State> {
       return size.get('Width') * size.get('Height');
     }
 
-    let photo = await readValue(props.photoRef, props.store);
+    let photo: Struct = await readValue(props.photoRef, props.store);
 
     // Sizes is a Map(Size, String) where the string is a URL.
     let sizes = [];
-    photo.get('Sizes').forEach((url, size) => {
+    let s: NomsMap<Struct, string> = photo.get('Sizes');
+    await s.forEach((url, size) => {
       sizes.push({size, url});
     });
     sizes.sort((a, b) => area(a.size) - area(b.size));
@@ -72,9 +73,10 @@ export default class Photo extends React.Component<DefaultProps, Props, State> {
     let sizes = this.state.sizes;
     let w = this.props.style.width || 0;
     let h = this.props.style.height || 0;
-    return sizes.find(({size}) => {
+    let size = sizes.find(({size}) => {
       return size.get('Width') >= w && size.get('Height') >= h;
-    }).url;
+    });
+    return size ? size.url : sizes[sizes.length - 1].url;
   }
 }
 
