@@ -77,7 +77,8 @@ export class TreeNode {
   leftBrother(): ?TreeNode {
     let n = null;
     if (this.parent) {
-      for (let node of this.parent.children) {
+      for (let i = 0; i < this.parent.children.length; i++) {
+        let node = this.parent.children[i];
         if (node === this) {
           return n;
         } else {
@@ -111,7 +112,8 @@ function firstWalk(v: TreeNode, distance: number): void {
     }
   } else {
     let defaultAncestor = v.children[0];
-    for (let w of v.children) {
+    for (let i = 0; i < v.children.length; i++) {
+      let w = v.children[i];
       firstWalk(w, distance);
       defaultAncestor = apportion(w, defaultAncestor, distance);
     }
@@ -205,7 +207,7 @@ function secondWalk(v: TreeNode, m: number, depth: number): void {
   v.x += m;
   v.y = depth;
 
-  for (let w of v.children) {
-    secondWalk(w, m + v.mod, depth + 1);
+  for (let i = 0; i < v.children.length; i++) {
+    secondWalk(v.children[i], m + v.mod, depth + 1);
   }
 }

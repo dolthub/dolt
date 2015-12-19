@@ -10,14 +10,15 @@ const chunkHeaderSize = sha1Size + chunkLengthSize;
 
 export function serialize(chunks: Array<Chunk>): ArrayBuffer {
   let totalSize = 0;
-  for (let chunk of chunks) {
-    totalSize += chunkHeaderSize + chunk.data.length;
+  for (let i = 0; i < chunks.length; i++) {
+    totalSize += chunkHeaderSize + chunks[i].data.length;
   }
 
   let buffer = new ArrayBuffer(totalSize);
   let offset = 0;
 
-  for (let chunk of chunks) {
+  for (let i = 0; i < chunks.length; i++) {
+    let chunk = chunks[i];
     let refArray = new Uint8Array(buffer, offset, sha1Size);
     refArray.set(chunk.ref.digest);
     offset += sha1Size;
