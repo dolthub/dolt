@@ -1,9 +1,9 @@
 // @flow
 
-import {invariant, readValue} from 'noms';
 import eq from './eq.js';
 import React from 'react';
 import type {ChunkStore} from 'noms';
+import {invariant, NomsMap, readValue, Ref} from 'noms';
 
 type DefaultProps = {
   selected: string
@@ -37,10 +37,14 @@ export default class DatasetPicker extends React.Component<DefaultProps, Props, 
   async _updateDatasets(props: Props) : Promise<void> {
     let store = props.store;
     let rootRef = await store.getRoot();
-    let datasets = await readValue(rootRef, store);
-    invariant(datasets instanceof Map);
+    let datasets: NomsMap<string, Ref> = await readValue(rootRef, store);
+    invariant(datasets);
+    let s = new Set();
+    await datasets.forEach((v, k) => {
+      s.add(k);
+    });
     this.setState({
-      datasets: new Set(datasets.keys())
+      datasets: s
     });
   }
 

@@ -1,12 +1,12 @@
 // @flow
 
-import {readValue} from 'noms';
 import DatasetPicker from './datasetpicker.js';
 import eq from './eq.js';
 import React from 'react';
 import SlideShow from './slideshow.js';
 import TagChooser from './tagchooser.js';
-import type {ChunkStore, Ref} from 'noms';
+import type {ChunkStore} from 'noms';
+import {invariant, NomsMap, NomsSet, readValue, Ref, Struct} from 'noms';
 
 type QueryStringObject = {[key: string]: string};
 
@@ -40,28 +40,37 @@ export default class Root extends React.Component<void, Props, State> {
     if (props.qs.ds) {
       let {store} = props;
       let rootRef = await props.store.getRoot();
-      let datasets = await readValue(rootRef, props.store);
-      let commitRef = datasets.get(props.qs.ds);
-      let commit = await readValue(commitRef, store);
+      let datasets: NomsMap<string, Ref> = await readValue(rootRef, props.store);
+      let commitRef = await datasets.get(props.qs.ds);
+      invariant(commitRef);
+      let commit: Struct = await readValue(commitRef, store);
       let v = commit.get('value');
-      if (v instanceof Map) {
+      if (v instanceof NomsMap) {
         let seenRefs: Set<string> = new Set();
-        for (let [tag, value] of v) {
+
+        let sets = [];
+
+        await v.forEach((value, tag) => {
           tags.push(tag);
-          if (selectedTags.has(tag) && value instanceof Set) {
-            for (let r of value) {
-              let rs = r.toString();
-              if (!seenRefs.has(rs)) {
-                seenRefs.add(rs);
-                selectedPhotos.push(r);
-              }
-            }
+          if (selectedTags.has(tag) && value instanceof NomsSet) {
+            sets.push(value);
           }
+        });
+
+        for (let s of sets) {
+          await s.forEach(r => {
+            let rs = r.toString();
+            if (!seenRefs.has(rs)) {
+              seenRefs.add(rs);
+              selectedPhotos.push(r);
+            }
+          });
         }
+
         // This sorts the photos deterministically, by the ref
         // TODO: Sort by create date if it ends up that the common image type
         // has a create date.
-        selectedPhotos.sort((a, b) => a.compare(b));
+        selectedPhotos.sort((a, b) => a.equals(b) ? 0 : a.less(b) ? -1 : 1);
         tags.sort();
       }
 
