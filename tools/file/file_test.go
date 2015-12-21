@@ -37,7 +37,7 @@ func (suite *FileTestSuite) TearDownTest() {
 
 func (suite *FileTestSuite) TestCopyFile() {
 	dst := filepath.Join(suite.dir, "dstfile")
-	suite.NoError(d.Try(func() { DumbCopy(suite.src, dst) }))
+	DumbCopy(suite.src, dst)
 
 	out, err := ioutil.ReadFile(dst)
 	suite.NoError(err)
@@ -49,7 +49,7 @@ func (suite *FileTestSuite) TestCopyLink() {
 	suite.NoError(os.Symlink(suite.src, link))
 
 	dst := filepath.Join(suite.dir, "dstfile")
-	suite.NoError(d.Try(func() { DumbCopy(link, dst) }))
+	DumbCopy(link, dst)
 
 	info, err := os.Lstat(dst)
 	suite.NoError(err)
