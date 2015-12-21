@@ -17,6 +17,7 @@ type Map interface {
 	IterAll(cb mapIterAllCallback)
 	IterAllP(concurrency int, f mapIterAllCallback)
 	Filter(cb mapFilterCallback) Map
+	elemTypes() []Type
 }
 
 type indexOfMapFn func(m mapData, v Value) int

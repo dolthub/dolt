@@ -19,7 +19,7 @@ func assertSetsSameType(s Set, v ...Set) {
 	}
 }
 
-func assertMapElemTypes(m mapLeaf, v ...Value) {
+func assertMapElemTypes(m Map, v ...Value) {
 	elemTypes := m.elemTypes()
 	keyType := elemTypes[0]
 	valueType := elemTypes[0]
