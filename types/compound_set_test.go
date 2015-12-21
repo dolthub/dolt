@@ -195,6 +195,10 @@ func TestCompoundSetInsert(t *testing.T) {
 		//   run(i, i+incr)
 		// }
 		// For example, run(896, 960) fails for the native order set.
+
+		assert.Panics(func() {
+			expected.Insert(Int8(1))
+		}, "Should panic due to wrong type")
 	}
 
 	doTest(64, getTestNativeOrderSet(32))

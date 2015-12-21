@@ -58,6 +58,8 @@ func (cs compoundSet) Insert(values ...Value) Set {
 		return cs
 	}
 
+	assertType(cs.elemType(), values...)
+
 	head, tail := values[0], values[1:]
 
 	var res Set
