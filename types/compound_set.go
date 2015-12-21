@@ -93,14 +93,18 @@ func (cs compoundSet) Remove(values ...Value) Set {
 
 func (cs compoundSet) sequenceCursorAtValue(v Value) (*sequenceCursor, bool) {
 	metaCur, leaf, idx := cs.findLeaf(v)
-	cur := &sequenceCursor{metaCur, leaf, idx, len(leaf.data), func(otherLeaf sequenceItem, idx int) sequenceItem {
-		return otherLeaf.(setLeaf).data[idx]
-	}, func(mt sequenceItem) (sequenceItem, int) {
-		otherLeaf := readMetaTupleValue(mt, cs.cs).(setLeaf)
-		return otherLeaf, len(otherLeaf.data)
-	}}
+	cur := newSetSequenceCursorAtPosition(metaCur, leaf, idx, cs.cs)
 	found := idx < len(leaf.data) && leaf.data[idx].Equals(v)
 	return cur, found
+}
+
+func newSetSequenceCursorAtPosition(metaCur *sequenceCursor, leaf setLeaf, idx int, cs chunks.ChunkStore) *sequenceCursor {
+	return &sequenceCursor{metaCur, leaf, idx, len(leaf.data), func(otherLeaf sequenceItem, idx int) sequenceItem {
+		return otherLeaf.(setLeaf).data[idx]
+	}, func(mt sequenceItem) (sequenceItem, int) {
+		otherLeaf := readMetaTupleValue(mt, cs).(setLeaf)
+		return otherLeaf, len(otherLeaf.data)
+	}}
 }
 
 func (cs compoundSet) sequenceChunkerAtValue(v Value) (*sequenceChunker, bool) {
@@ -114,11 +118,8 @@ func (cs compoundSet) elemType() Type {
 }
 
 func (cs compoundSet) sequenceCursorAtFirst() *sequenceCursor {
-	// TODO: This can be done more efficiently - Bug 795
-	v := cs.First()
-	cur, found := cs.sequenceCursorAtValue(v)
-	d.Chk.True(found)
-	return cur
+	metaCur, leaf := newMetaSequenceCursor(cs, cs.cs)
+	return newSetSequenceCursorAtPosition(metaCur, leaf.(setLeaf), 0, cs.cs)
 }
 
 func (cs compoundSet) Union(others ...Set) Set {
