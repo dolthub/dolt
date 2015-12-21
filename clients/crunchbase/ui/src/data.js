@@ -1,8 +1,20 @@
 // @flow
 
-import {readValue, Struct, makeType, Ref, registerPackage} from 'noms';
+import {
+  invariant,
+  Kind,
+  makeCompoundType,
+  makePrimitiveType,
+  makeType,
+  NomsMap,
+  NomsSet,
+  readValue,
+  Ref,
+  registerPackage,
+  SetLeafSequence,
+  Struct
+} from 'noms';
 import type {ChunkStore, Package} from 'noms';
-import {invariant, Kind, NomsMap, NomsSet, SetLeafSequence, makeCompoundType, makePrimitiveType} from 'noms';
 
 type RoundTypeEnum = 0 | 1 | 2;
 const Seed = 0;
