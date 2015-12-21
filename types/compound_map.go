@@ -79,6 +79,8 @@ func (cm compoundMap) SetM(kv ...Value) Map {
 	}
 	d.Chk.True(len(kv)%2 == 0)
 
+	assertMapElemTypes(cm, kv...)
+
 	k, v, tail := kv[0], kv[1], kv[2:]
 
 	seq, found := cm.sequenceChunkerAtKey(k)
@@ -175,4 +177,8 @@ func newMapMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 		ref := WriteValue(meta, cs)
 		return metaTuple{ref, lastIndex}, meta
 	}
+}
+
+func (cm compoundMap) elemTypes() []Type {
+	return cm.Type().Desc.(CompoundDesc).ElemTypes
 }

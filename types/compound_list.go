@@ -147,7 +147,12 @@ func (cl compoundList) MapP(concurrency int, mf MapFunc) []interface{} {
 	return results
 }
 
+func (cl compoundList) elemType() Type {
+	return cl.Type().Desc.(CompoundDesc).ElemTypes[0]
+}
+
 func (cl compoundList) Set(idx uint64, v Value) List {
+	assertType(cl.elemType(), v)
 	seq := cl.sequenceChunkerAtIndex(idx)
 	seq.Skip()
 	seq.Append(v)
@@ -162,6 +167,9 @@ func (cl compoundList) Insert(idx uint64, vs ...Value) List {
 	if len(vs) == 0 {
 		return cl
 	}
+
+	assertType(cl.elemType(), vs...)
+
 	seq := cl.sequenceChunkerAtIndex(idx)
 	for _, v := range vs {
 		seq.Append(v)

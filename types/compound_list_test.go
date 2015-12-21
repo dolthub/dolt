@@ -414,6 +414,18 @@ func TestCompoundListInsertRanges(t *testing.T) {
 	}
 }
 
+func TestCompoundListInsertTypeError(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := chunks.NewMemoryStore()
+	testList := getTestSimpleList()
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	cl := NewTypedList(cs, tr, testList...)
+	assert.Panics(func() {
+		cl.Insert(2, Bool(true))
+	})
+}
+
 func TestCompoundListRemoveNothing(t *testing.T) {
 	assert := assert.New(t)
 
@@ -502,6 +514,12 @@ func TestCompoundListSet(t *testing.T) {
 	for incr, i := 10, 0; i < len(testList); i += incr {
 		testIdx(i, false)
 	}
+
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	cl2 := NewTypedList(cs, tr, testList...)
+	assert.Panics(func() {
+		cl2.Set(0, Bool(true))
+	})
 }
 
 func TestCompoundListSlice(t *testing.T) {

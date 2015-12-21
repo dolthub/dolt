@@ -242,6 +242,10 @@ func TestCompoundMapSet(t *testing.T) {
 		//   run(i, i+incr)
 		// }
 		// For example, run(256, 384) fails with the native order map.
+
+		assert.Panics(func() {
+			expected.Set(Int8(1), Bool(true))
+		}, "Should panic due to wrong type")
 	}
 
 	doTest(128, getTestNativeOrderMap(32))
