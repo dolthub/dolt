@@ -33,7 +33,7 @@
   },
   "scripts": {
     "start": "watchify -o tagshow.js -t babelify -v -d node_modules/babel-regenerator-runtime/runtime.js main.js",
-    "build": "./build.sh",
+    "build": "./.npm_build_helper.sh",
     "pretest": "rm -f tagshow.js && eslint *.js && flow",
     "test": "mocha --ui tdd --reporter dot --compilers js:babel-core/register ./*_test.js"
   },
