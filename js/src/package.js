@@ -37,11 +37,21 @@ function registerPackage(p: Package) {
   packageRegistry[p.ref.toString()] = p;
 }
 
-async function readPackage(r: Ref, cs: ChunkStore): Promise<Package> {
-  let p = await readValue(r, cs);
-  invariant(p instanceof Package);
-  registerPackage(p);
-  return p;
+const pendingPackages: { [key: string]: Promise<Package> } = Object.create(null);
+
+function readPackage(r: Ref, cs: ChunkStore): Promise<Package> {
+  let refStr = r.toString();
+  let p = pendingPackages[refStr];
+  if (p) {
+    return p;
+  }
+
+  return pendingPackages[refStr] = readValue(r, cs).then((p: Package) => {
+    invariant(p instanceof Package);
+    registerPackage(p);
+    delete pendingPackages[refStr];
+    return p;
+  });
 }
 
 export {lookupPackage, Package, readPackage, registerPackage};
