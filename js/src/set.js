@@ -25,6 +25,18 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
     });
   }
 
+  // TODO: Find some way to return a NomsSet.
+  async map<S>(cb: (v: T) => (Promise<S> | S)): Promise<Array<S>> {
+    let cursor = await this.sequence.newCursorAt(this.cs, null);
+    let values = [];
+    await cursor.iter(v => {
+      values.push(cb(v));
+      return false;
+    });
+
+    return Promise.all(values);
+  }
+
   get size(): number {
     if (this.sequence instanceof SetLeafSequence) {
       return this.sequence.items.length;

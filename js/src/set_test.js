@@ -95,6 +95,20 @@ suite('CompoundSet', () => {
     assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], values);
   });
 
+  test('map', async () => {
+    let ms = new MemoryStore();
+    let c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    let values = await c.map((k) => k + '*');
+    assert.deepEqual(['a*', 'b*', 'e*', 'f*', 'h*', 'i*', 'm*', 'n*'], values);
+  });
+
+  test('map async', async () => {
+    let ms = new MemoryStore();
+    let c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    let values = await c.map((k) => Promise.resolve(k + '*'));
+    assert.deepEqual(['a*', 'b*', 'e*', 'f*', 'h*', 'i*', 'm*', 'n*'], values);
+  });
+
   async function asyncAssertThrows(f: () => any):Promise<boolean> {
     let error: any = null;
     try {

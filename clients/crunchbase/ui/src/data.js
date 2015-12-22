@@ -49,11 +49,11 @@ export default class DataManager {
   _datasetP: ?Promise<NomsMap<Ref, Ref>>;
   _packageP: ?Promise<Package>;
 
-  _categorySetP: ?Promise<NomsSet<Struct>>;
-  _timeSetP: ?Promise<NomsSet<Struct>>;
-  _seedSetP: ?Promise<NomsSet<Struct>>;
-  _seriesASetP: ?Promise<NomsSet<Struct>>;
-  _seriesBSetP: ?Promise<NomsSet<Struct>>;
+  _categorySetP: ?Promise<NomsSet<Ref>>;
+  _timeSetP: ?Promise<NomsSet<Ref>>;
+  _seedSetP: ?Promise<NomsSet<Ref>>;
+  _seriesASetP: ?Promise<NomsSet<Ref>>;
+  _seriesBSetP: ?Promise<NomsSet<Ref>>;
 
   _data: ?DataArray;
   _time: ?TimeOption;
@@ -134,6 +134,7 @@ export default class DataManager {
     if (!this._seedSetP) {
       this._createRounds();
     }
+
     this._setTime(time);
     this._setCategory(category);
 
@@ -145,23 +146,28 @@ export default class DataManager {
         await Promise.all([this._seedSetP, this._seriesASetP, this._seriesBSetP,
             this._timeSetP, this._categorySetP]);
 
-    let baseSet = await timeSet.intersect(categorySet);
-    let sets = await Promise.all([baseSet.intersect(seedSet),
-          baseSet.intersect(seriesASet), baseSet.intersect(seriesBSet)]);
-    let ptiles = await Promise.all([percentiles(sets[0]), percentiles(sets[1]),
-          percentiles(sets[2])]);
+    let store = this._store;
+    let getAmountRaised = (r: Ref): Promise<number> => {
+      return readValue(r, store).then(round => round.get('RaisedAmountUsd'));
+    };
+
+    let [seedData, seriesAData, seriesBData] = await Promise.all([
+      seedSet.intersect(categorySet, timeSet).then(set => set.map(getAmountRaised)),
+      seriesASet.intersect(categorySet, timeSet).then(set => set.map(getAmountRaised)),
+      seriesBSet.intersect(categorySet, timeSet).then(set => set.map(getAmountRaised))
+    ]);
 
     return this._data = [
       {
-        values: ptiles[0],
+        values: percentiles(seedData),
         key: 'Seed'
       },
       {
-        values: ptiles[1],
+        values: percentiles(seriesAData),
         key: 'A'
       },
       {
-        values: ptiles[2],
+        values: percentiles(seriesBData),
         key: 'B'
       }
     ];
@@ -179,17 +185,17 @@ export default class DataManager {
     return k.ref;
   }
 
-  async _getSetOfRounds(p: KeyParam): Promise<NomsSet<Struct>> {
+  async _getSetOfRounds(p: KeyParam): Promise<NomsSet<Ref>> {
     let r = await this._getKeyRef(p);
     invariant(this._datasetP);
     let map = await this._datasetP;
-    let setRef = await map.get(r);
-    if (setRef === undefined) {
+    let set = await map.get(r);
+    if (set === undefined) {
       // TODO: Cleanup the NomsSet api (it shouldn't be this hard to create an emptySet)
       return new NomsSet(this._store, setTr, new SetLeafSequence(setTr, []));
     }
 
-    return readValue(setRef, this._store);
+    return set;
   }
 }
 
@@ -235,11 +241,9 @@ async function getDataset(id: string, httpStore: ChunkStore): Promise<NomsMap<Re
 }
 
 
-async function percentiles(s: NomsSet<Struct>): Promise<Array<{x: number, y: number}>> {
+function percentiles(s: Array<number>): Array<{x: number, y: number}> {
   let arr: Array<number> = [];
-  await s.forEach(round => {
-    let v = round.get('Raised');
-
+  s.forEach(v => {
     if (v > 0) {
       arr.push(v);
     }

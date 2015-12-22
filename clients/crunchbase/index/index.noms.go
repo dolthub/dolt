@@ -34,13 +34,6 @@ func init() {
 			},
 		),
 		types.MakeEnumType("RoundTypeEnum", "Seed", "SeriesA", "SeriesB", "SeriesC", "SeriesD", "SeriesE", "SeriesF", "SeriesG", "SeriesH", "UnknownRoundType"),
-		types.MakeStructType("RoundRaise",
-			[]types.Field{
-				types.Field{"Raised", types.MakePrimitiveType(types.Float64Kind), false},
-				types.Field{"Details", types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-9fb26a609a1d4134935888c9676c79d6ea89acbb"), 1)), false},
-			},
-			types.Choices{},
-		),
 	}, []ref.Ref{
 		ref.Parse("sha1-2a87e00788d479d9f10356ccece32ed54bb43e6f"),
 		ref.Parse("sha1-9fb26a609a1d4134935888c9676c79d6ea89acbb"),
@@ -485,381 +478,138 @@ func (e RoundTypeEnum) ChildValues() []types.Value {
 	return nil
 }
 
-// RoundRaise
+// MapOfRefOfKeyToSetOfRefOfRound
 
-type RoundRaise struct {
-	_Raised  float64
-	_Details RefOfRound
-
-	cs  chunks.ChunkStore
-	ref *ref.Ref
-}
-
-func NewRoundRaise(cs chunks.ChunkStore) RoundRaise {
-	return RoundRaise{
-		_Raised:  float64(0),
-		_Details: NewRefOfRound(ref.Ref{}),
-
-		cs:  cs,
-		ref: &ref.Ref{},
-	}
-}
-
-type RoundRaiseDef struct {
-	Raised  float64
-	Details ref.Ref
-}
-
-func (def RoundRaiseDef) New(cs chunks.ChunkStore) RoundRaise {
-	return RoundRaise{
-		_Raised:  def.Raised,
-		_Details: NewRefOfRound(def.Details),
-		cs:       cs,
-		ref:      &ref.Ref{},
-	}
-}
-
-func (s RoundRaise) Def() (d RoundRaiseDef) {
-	d.Raised = s._Raised
-	d.Details = s._Details.TargetRef()
-	return
-}
-
-var __typeForRoundRaise types.Type
-
-func (m RoundRaise) Type() types.Type {
-	return __typeForRoundRaise
-}
-
-func init() {
-	__typeForRoundRaise = types.MakeType(__mainPackageInFile_index_CachedRef, 4)
-	types.RegisterStruct(__typeForRoundRaise, builderForRoundRaise, readerForRoundRaise)
-}
-
-func builderForRoundRaise(cs chunks.ChunkStore, values []types.Value) types.Value {
-	i := 0
-	s := RoundRaise{ref: &ref.Ref{}, cs: cs}
-	s._Raised = float64(values[i].(types.Float64))
-	i++
-	s._Details = values[i].(RefOfRound)
-	i++
-	return s
-}
-
-func readerForRoundRaise(v types.Value) []types.Value {
-	values := []types.Value{}
-	s := v.(RoundRaise)
-	values = append(values, types.Float64(s._Raised))
-	values = append(values, s._Details)
-	return values
-}
-
-func (s RoundRaise) Equals(other types.Value) bool {
-	return other != nil && __typeForRoundRaise.Equals(other.Type()) && s.Ref() == other.Ref()
-}
-
-func (s RoundRaise) Ref() ref.Ref {
-	return types.EnsureRef(s.ref, s)
-}
-
-func (s RoundRaise) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeForRoundRaise.Chunks()...)
-	chunks = append(chunks, s._Details.Chunks()...)
-	return
-}
-
-func (s RoundRaise) ChildValues() (ret []types.Value) {
-	ret = append(ret, types.Float64(s._Raised))
-	ret = append(ret, s._Details)
-	return
-}
-
-func (s RoundRaise) Raised() float64 {
-	return s._Raised
-}
-
-func (s RoundRaise) SetRaised(val float64) RoundRaise {
-	s._Raised = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
-func (s RoundRaise) Details() RefOfRound {
-	return s._Details
-}
-
-func (s RoundRaise) SetDetails(val RefOfRound) RoundRaise {
-	s._Details = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
-// MapOfRefOfKeyToSetOfRoundRaise
-
-type MapOfRefOfKeyToSetOfRoundRaise struct {
+type MapOfRefOfKeyToSetOfRefOfRound struct {
 	m   types.Map
 	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfRefOfKeyToSetOfRoundRaise(cs chunks.ChunkStore) MapOfRefOfKeyToSetOfRoundRaise {
-	return MapOfRefOfKeyToSetOfRoundRaise{types.NewTypedMap(cs, __typeForMapOfRefOfKeyToSetOfRoundRaise), cs, &ref.Ref{}}
+func NewMapOfRefOfKeyToSetOfRefOfRound(cs chunks.ChunkStore) MapOfRefOfKeyToSetOfRefOfRound {
+	return MapOfRefOfKeyToSetOfRefOfRound{types.NewTypedMap(cs, __typeForMapOfRefOfKeyToSetOfRefOfRound), cs, &ref.Ref{}}
 }
 
-type MapOfRefOfKeyToSetOfRoundRaiseDef map[ref.Ref]SetOfRoundRaiseDef
+type MapOfRefOfKeyToSetOfRefOfRoundDef map[ref.Ref]SetOfRefOfRoundDef
 
-func (def MapOfRefOfKeyToSetOfRoundRaiseDef) New(cs chunks.ChunkStore) MapOfRefOfKeyToSetOfRoundRaise {
+func (def MapOfRefOfKeyToSetOfRefOfRoundDef) New(cs chunks.ChunkStore) MapOfRefOfKeyToSetOfRefOfRound {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
 		kv = append(kv, NewRefOfKey(k), v.New(cs))
 	}
-	return MapOfRefOfKeyToSetOfRoundRaise{types.NewTypedMap(cs, __typeForMapOfRefOfKeyToSetOfRoundRaise, kv...), cs, &ref.Ref{}}
+	return MapOfRefOfKeyToSetOfRefOfRound{types.NewTypedMap(cs, __typeForMapOfRefOfKeyToSetOfRefOfRound, kv...), cs, &ref.Ref{}}
 }
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Def() MapOfRefOfKeyToSetOfRoundRaiseDef {
-	def := make(map[ref.Ref]SetOfRoundRaiseDef)
+func (m MapOfRefOfKeyToSetOfRefOfRound) Def() MapOfRefOfKeyToSetOfRefOfRoundDef {
+	def := make(map[ref.Ref]SetOfRefOfRoundDef)
 	m.m.Iter(func(k, v types.Value) bool {
-		def[k.(RefOfKey).TargetRef()] = v.(SetOfRoundRaise).Def()
+		def[k.(RefOfKey).TargetRef()] = v.(SetOfRefOfRound).Def()
 		return false
 	})
 	return def
 }
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Equals(other types.Value) bool {
-	return other != nil && __typeForMapOfRefOfKeyToSetOfRoundRaise.Equals(other.Type()) && m.Ref() == other.Ref()
+func (m MapOfRefOfKeyToSetOfRefOfRound) Equals(other types.Value) bool {
+	return other != nil && __typeForMapOfRefOfKeyToSetOfRefOfRound.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Ref() ref.Ref {
+func (m MapOfRefOfKeyToSetOfRefOfRound) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Chunks() (chunks []ref.Ref) {
+func (m MapOfRefOfKeyToSetOfRefOfRound) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
 }
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) ChildValues() []types.Value {
+func (m MapOfRefOfKeyToSetOfRefOfRound) ChildValues() []types.Value {
 	return append([]types.Value{}, m.m.ChildValues()...)
 }
 
-// A Noms Value that describes MapOfRefOfKeyToSetOfRoundRaise.
-var __typeForMapOfRefOfKeyToSetOfRoundRaise types.Type
+// A Noms Value that describes MapOfRefOfKeyToSetOfRefOfRound.
+var __typeForMapOfRefOfKeyToSetOfRefOfRound types.Type
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Type() types.Type {
-	return __typeForMapOfRefOfKeyToSetOfRoundRaise
+func (m MapOfRefOfKeyToSetOfRefOfRound) Type() types.Type {
+	return __typeForMapOfRefOfKeyToSetOfRefOfRound
 }
 
 func init() {
-	__typeForMapOfRefOfKeyToSetOfRoundRaise = types.MakeCompoundType(types.MapKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_index_CachedRef, 2)), types.MakeCompoundType(types.SetKind, types.MakeType(__mainPackageInFile_index_CachedRef, 4)))
-	types.RegisterValue(__typeForMapOfRefOfKeyToSetOfRoundRaise, builderForMapOfRefOfKeyToSetOfRoundRaise, readerForMapOfRefOfKeyToSetOfRoundRaise)
+	__typeForMapOfRefOfKeyToSetOfRefOfRound = types.MakeCompoundType(types.MapKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_index_CachedRef, 2)), types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-9fb26a609a1d4134935888c9676c79d6ea89acbb"), 1))))
+	types.RegisterValue(__typeForMapOfRefOfKeyToSetOfRefOfRound, builderForMapOfRefOfKeyToSetOfRefOfRound, readerForMapOfRefOfKeyToSetOfRefOfRound)
 }
 
-func builderForMapOfRefOfKeyToSetOfRoundRaise(cs chunks.ChunkStore, v types.Value) types.Value {
-	return MapOfRefOfKeyToSetOfRoundRaise{v.(types.Map), cs, &ref.Ref{}}
+func builderForMapOfRefOfKeyToSetOfRefOfRound(cs chunks.ChunkStore, v types.Value) types.Value {
+	return MapOfRefOfKeyToSetOfRefOfRound{v.(types.Map), cs, &ref.Ref{}}
 }
 
-func readerForMapOfRefOfKeyToSetOfRoundRaise(v types.Value) types.Value {
-	return v.(MapOfRefOfKeyToSetOfRoundRaise).m
+func readerForMapOfRefOfKeyToSetOfRefOfRound(v types.Value) types.Value {
+	return v.(MapOfRefOfKeyToSetOfRefOfRound).m
 }
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Empty() bool {
+func (m MapOfRefOfKeyToSetOfRefOfRound) Empty() bool {
 	return m.m.Empty()
 }
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Len() uint64 {
+func (m MapOfRefOfKeyToSetOfRefOfRound) Len() uint64 {
 	return m.m.Len()
 }
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Has(p RefOfKey) bool {
+func (m MapOfRefOfKeyToSetOfRefOfRound) Has(p RefOfKey) bool {
 	return m.m.Has(p)
 }
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Get(p RefOfKey) SetOfRoundRaise {
-	return m.m.Get(p).(SetOfRoundRaise)
+func (m MapOfRefOfKeyToSetOfRefOfRound) Get(p RefOfKey) SetOfRefOfRound {
+	return m.m.Get(p).(SetOfRefOfRound)
 }
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) MaybeGet(p RefOfKey) (SetOfRoundRaise, bool) {
+func (m MapOfRefOfKeyToSetOfRefOfRound) MaybeGet(p RefOfKey) (SetOfRefOfRound, bool) {
 	v, ok := m.m.MaybeGet(p)
 	if !ok {
-		return NewSetOfRoundRaise(m.cs), false
+		return NewSetOfRefOfRound(m.cs), false
 	}
-	return v.(SetOfRoundRaise), ok
+	return v.(SetOfRefOfRound), ok
 }
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Set(k RefOfKey, v SetOfRoundRaise) MapOfRefOfKeyToSetOfRoundRaise {
-	return MapOfRefOfKeyToSetOfRoundRaise{m.m.Set(k, v), m.cs, &ref.Ref{}}
+func (m MapOfRefOfKeyToSetOfRefOfRound) Set(k RefOfKey, v SetOfRefOfRound) MapOfRefOfKeyToSetOfRefOfRound {
+	return MapOfRefOfKeyToSetOfRefOfRound{m.m.Set(k, v), m.cs, &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Remove(p RefOfKey) MapOfRefOfKeyToSetOfRoundRaise {
-	return MapOfRefOfKeyToSetOfRoundRaise{m.m.Remove(p), m.cs, &ref.Ref{}}
+func (m MapOfRefOfKeyToSetOfRefOfRound) Remove(p RefOfKey) MapOfRefOfKeyToSetOfRefOfRound {
+	return MapOfRefOfKeyToSetOfRefOfRound{m.m.Remove(p), m.cs, &ref.Ref{}}
 }
 
-type MapOfRefOfKeyToSetOfRoundRaiseIterCallback func(k RefOfKey, v SetOfRoundRaise) (stop bool)
+type MapOfRefOfKeyToSetOfRefOfRoundIterCallback func(k RefOfKey, v SetOfRefOfRound) (stop bool)
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Iter(cb MapOfRefOfKeyToSetOfRoundRaiseIterCallback) {
+func (m MapOfRefOfKeyToSetOfRefOfRound) Iter(cb MapOfRefOfKeyToSetOfRefOfRoundIterCallback) {
 	m.m.Iter(func(k, v types.Value) bool {
-		return cb(k.(RefOfKey), v.(SetOfRoundRaise))
+		return cb(k.(RefOfKey), v.(SetOfRefOfRound))
 	})
 }
 
-type MapOfRefOfKeyToSetOfRoundRaiseIterAllCallback func(k RefOfKey, v SetOfRoundRaise)
+type MapOfRefOfKeyToSetOfRefOfRoundIterAllCallback func(k RefOfKey, v SetOfRefOfRound)
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) IterAll(cb MapOfRefOfKeyToSetOfRoundRaiseIterAllCallback) {
+func (m MapOfRefOfKeyToSetOfRefOfRound) IterAll(cb MapOfRefOfKeyToSetOfRefOfRoundIterAllCallback) {
 	m.m.IterAll(func(k, v types.Value) {
-		cb(k.(RefOfKey), v.(SetOfRoundRaise))
+		cb(k.(RefOfKey), v.(SetOfRefOfRound))
 	})
 }
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) IterAllP(concurrency int, cb MapOfRefOfKeyToSetOfRoundRaiseIterAllCallback) {
+func (m MapOfRefOfKeyToSetOfRefOfRound) IterAllP(concurrency int, cb MapOfRefOfKeyToSetOfRefOfRoundIterAllCallback) {
 	m.m.IterAllP(concurrency, func(k, v types.Value) {
-		cb(k.(RefOfKey), v.(SetOfRoundRaise))
+		cb(k.(RefOfKey), v.(SetOfRefOfRound))
 	})
 }
 
-type MapOfRefOfKeyToSetOfRoundRaiseFilterCallback func(k RefOfKey, v SetOfRoundRaise) (keep bool)
+type MapOfRefOfKeyToSetOfRefOfRoundFilterCallback func(k RefOfKey, v SetOfRefOfRound) (keep bool)
 
-func (m MapOfRefOfKeyToSetOfRoundRaise) Filter(cb MapOfRefOfKeyToSetOfRoundRaiseFilterCallback) MapOfRefOfKeyToSetOfRoundRaise {
+func (m MapOfRefOfKeyToSetOfRefOfRound) Filter(cb MapOfRefOfKeyToSetOfRefOfRoundFilterCallback) MapOfRefOfKeyToSetOfRefOfRound {
 	out := m.m.Filter(func(k, v types.Value) bool {
-		return cb(k.(RefOfKey), v.(SetOfRoundRaise))
+		return cb(k.(RefOfKey), v.(SetOfRefOfRound))
 	})
-	return MapOfRefOfKeyToSetOfRoundRaise{out, m.cs, &ref.Ref{}}
-}
-
-// MapOfRefOfKeyToRefOfSetOfRoundRaise
-
-type MapOfRefOfKeyToRefOfSetOfRoundRaise struct {
-	m   types.Map
-	cs  chunks.ChunkStore
-	ref *ref.Ref
-}
-
-func NewMapOfRefOfKeyToRefOfSetOfRoundRaise(cs chunks.ChunkStore) MapOfRefOfKeyToRefOfSetOfRoundRaise {
-	return MapOfRefOfKeyToRefOfSetOfRoundRaise{types.NewTypedMap(cs, __typeForMapOfRefOfKeyToRefOfSetOfRoundRaise), cs, &ref.Ref{}}
-}
-
-type MapOfRefOfKeyToRefOfSetOfRoundRaiseDef map[ref.Ref]ref.Ref
-
-func (def MapOfRefOfKeyToRefOfSetOfRoundRaiseDef) New(cs chunks.ChunkStore) MapOfRefOfKeyToRefOfSetOfRoundRaise {
-	kv := make([]types.Value, 0, len(def)*2)
-	for k, v := range def {
-		kv = append(kv, NewRefOfKey(k), NewRefOfSetOfRoundRaise(v))
-	}
-	return MapOfRefOfKeyToRefOfSetOfRoundRaise{types.NewTypedMap(cs, __typeForMapOfRefOfKeyToRefOfSetOfRoundRaise, kv...), cs, &ref.Ref{}}
-}
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Def() MapOfRefOfKeyToRefOfSetOfRoundRaiseDef {
-	def := make(map[ref.Ref]ref.Ref)
-	m.m.Iter(func(k, v types.Value) bool {
-		def[k.(RefOfKey).TargetRef()] = v.(RefOfSetOfRoundRaise).TargetRef()
-		return false
-	})
-	return def
-}
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Equals(other types.Value) bool {
-	return other != nil && __typeForMapOfRefOfKeyToRefOfSetOfRoundRaise.Equals(other.Type()) && m.Ref() == other.Ref()
-}
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Ref() ref.Ref {
-	return types.EnsureRef(m.ref, m)
-}
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.Type().Chunks()...)
-	chunks = append(chunks, m.m.Chunks()...)
-	return
-}
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) ChildValues() []types.Value {
-	return append([]types.Value{}, m.m.ChildValues()...)
-}
-
-// A Noms Value that describes MapOfRefOfKeyToRefOfSetOfRoundRaise.
-var __typeForMapOfRefOfKeyToRefOfSetOfRoundRaise types.Type
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Type() types.Type {
-	return __typeForMapOfRefOfKeyToRefOfSetOfRoundRaise
-}
-
-func init() {
-	__typeForMapOfRefOfKeyToRefOfSetOfRoundRaise = types.MakeCompoundType(types.MapKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_index_CachedRef, 2)), types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.SetKind, types.MakeType(__mainPackageInFile_index_CachedRef, 4))))
-	types.RegisterValue(__typeForMapOfRefOfKeyToRefOfSetOfRoundRaise, builderForMapOfRefOfKeyToRefOfSetOfRoundRaise, readerForMapOfRefOfKeyToRefOfSetOfRoundRaise)
-}
-
-func builderForMapOfRefOfKeyToRefOfSetOfRoundRaise(cs chunks.ChunkStore, v types.Value) types.Value {
-	return MapOfRefOfKeyToRefOfSetOfRoundRaise{v.(types.Map), cs, &ref.Ref{}}
-}
-
-func readerForMapOfRefOfKeyToRefOfSetOfRoundRaise(v types.Value) types.Value {
-	return v.(MapOfRefOfKeyToRefOfSetOfRoundRaise).m
-}
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Empty() bool {
-	return m.m.Empty()
-}
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Len() uint64 {
-	return m.m.Len()
-}
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Has(p RefOfKey) bool {
-	return m.m.Has(p)
-}
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Get(p RefOfKey) RefOfSetOfRoundRaise {
-	return m.m.Get(p).(RefOfSetOfRoundRaise)
-}
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) MaybeGet(p RefOfKey) (RefOfSetOfRoundRaise, bool) {
-	v, ok := m.m.MaybeGet(p)
-	if !ok {
-		return NewRefOfSetOfRoundRaise(ref.Ref{}), false
-	}
-	return v.(RefOfSetOfRoundRaise), ok
-}
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Set(k RefOfKey, v RefOfSetOfRoundRaise) MapOfRefOfKeyToRefOfSetOfRoundRaise {
-	return MapOfRefOfKeyToRefOfSetOfRoundRaise{m.m.Set(k, v), m.cs, &ref.Ref{}}
-}
-
-// TODO: Implement SetM?
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Remove(p RefOfKey) MapOfRefOfKeyToRefOfSetOfRoundRaise {
-	return MapOfRefOfKeyToRefOfSetOfRoundRaise{m.m.Remove(p), m.cs, &ref.Ref{}}
-}
-
-type MapOfRefOfKeyToRefOfSetOfRoundRaiseIterCallback func(k RefOfKey, v RefOfSetOfRoundRaise) (stop bool)
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Iter(cb MapOfRefOfKeyToRefOfSetOfRoundRaiseIterCallback) {
-	m.m.Iter(func(k, v types.Value) bool {
-		return cb(k.(RefOfKey), v.(RefOfSetOfRoundRaise))
-	})
-}
-
-type MapOfRefOfKeyToRefOfSetOfRoundRaiseIterAllCallback func(k RefOfKey, v RefOfSetOfRoundRaise)
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) IterAll(cb MapOfRefOfKeyToRefOfSetOfRoundRaiseIterAllCallback) {
-	m.m.IterAll(func(k, v types.Value) {
-		cb(k.(RefOfKey), v.(RefOfSetOfRoundRaise))
-	})
-}
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) IterAllP(concurrency int, cb MapOfRefOfKeyToRefOfSetOfRoundRaiseIterAllCallback) {
-	m.m.IterAllP(concurrency, func(k, v types.Value) {
-		cb(k.(RefOfKey), v.(RefOfSetOfRoundRaise))
-	})
-}
-
-type MapOfRefOfKeyToRefOfSetOfRoundRaiseFilterCallback func(k RefOfKey, v RefOfSetOfRoundRaise) (keep bool)
-
-func (m MapOfRefOfKeyToRefOfSetOfRoundRaise) Filter(cb MapOfRefOfKeyToRefOfSetOfRoundRaiseFilterCallback) MapOfRefOfKeyToRefOfSetOfRoundRaise {
-	out := m.m.Filter(func(k, v types.Value) bool {
-		return cb(k.(RefOfKey), v.(RefOfSetOfRoundRaise))
-	})
-	return MapOfRefOfKeyToRefOfSetOfRoundRaise{out, m.cs, &ref.Ref{}}
+	return MapOfRefOfKeyToSetOfRefOfRound{out, m.cs, &ref.Ref{}}
 }
 
 // RefOfKey
@@ -921,211 +671,4 @@ func (r RefOfKey) TargetValue(cs chunks.ChunkStore) Key {
 
 func (r RefOfKey) SetTargetValue(val Key, cs chunks.ChunkSink) RefOfKey {
 	return NewRefOfKey(types.WriteValue(val, cs))
-}
-
-// SetOfRoundRaise
-
-type SetOfRoundRaise struct {
-	s   types.Set
-	cs  chunks.ChunkStore
-	ref *ref.Ref
-}
-
-func NewSetOfRoundRaise(cs chunks.ChunkStore) SetOfRoundRaise {
-	return SetOfRoundRaise{types.NewTypedSet(cs, __typeForSetOfRoundRaise), cs, &ref.Ref{}}
-}
-
-type SetOfRoundRaiseDef map[RoundRaiseDef]bool
-
-func (def SetOfRoundRaiseDef) New(cs chunks.ChunkStore) SetOfRoundRaise {
-	l := make([]types.Value, len(def))
-	i := 0
-	for d, _ := range def {
-		l[i] = d.New(cs)
-		i++
-	}
-	return SetOfRoundRaise{types.NewTypedSet(cs, __typeForSetOfRoundRaise, l...), cs, &ref.Ref{}}
-}
-
-func (s SetOfRoundRaise) Def() SetOfRoundRaiseDef {
-	def := make(map[RoundRaiseDef]bool, s.Len())
-	s.s.Iter(func(v types.Value) bool {
-		def[v.(RoundRaise).Def()] = true
-		return false
-	})
-	return def
-}
-
-func (s SetOfRoundRaise) Equals(other types.Value) bool {
-	return other != nil && __typeForSetOfRoundRaise.Equals(other.Type()) && s.Ref() == other.Ref()
-}
-
-func (s SetOfRoundRaise) Ref() ref.Ref {
-	return types.EnsureRef(s.ref, s)
-}
-
-func (s SetOfRoundRaise) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.Type().Chunks()...)
-	chunks = append(chunks, s.s.Chunks()...)
-	return
-}
-
-func (s SetOfRoundRaise) ChildValues() []types.Value {
-	return append([]types.Value{}, s.s.ChildValues()...)
-}
-
-// A Noms Value that describes SetOfRoundRaise.
-var __typeForSetOfRoundRaise types.Type
-
-func (m SetOfRoundRaise) Type() types.Type {
-	return __typeForSetOfRoundRaise
-}
-
-func init() {
-	__typeForSetOfRoundRaise = types.MakeCompoundType(types.SetKind, types.MakeType(__mainPackageInFile_index_CachedRef, 4))
-	types.RegisterValue(__typeForSetOfRoundRaise, builderForSetOfRoundRaise, readerForSetOfRoundRaise)
-}
-
-func builderForSetOfRoundRaise(cs chunks.ChunkStore, v types.Value) types.Value {
-	return SetOfRoundRaise{v.(types.Set), cs, &ref.Ref{}}
-}
-
-func readerForSetOfRoundRaise(v types.Value) types.Value {
-	return v.(SetOfRoundRaise).s
-}
-
-func (s SetOfRoundRaise) Empty() bool {
-	return s.s.Empty()
-}
-
-func (s SetOfRoundRaise) Len() uint64 {
-	return s.s.Len()
-}
-
-func (s SetOfRoundRaise) Has(p RoundRaise) bool {
-	return s.s.Has(p)
-}
-
-type SetOfRoundRaiseIterCallback func(p RoundRaise) (stop bool)
-
-func (s SetOfRoundRaise) Iter(cb SetOfRoundRaiseIterCallback) {
-	s.s.Iter(func(v types.Value) bool {
-		return cb(v.(RoundRaise))
-	})
-}
-
-type SetOfRoundRaiseIterAllCallback func(p RoundRaise)
-
-func (s SetOfRoundRaise) IterAll(cb SetOfRoundRaiseIterAllCallback) {
-	s.s.IterAll(func(v types.Value) {
-		cb(v.(RoundRaise))
-	})
-}
-
-func (s SetOfRoundRaise) IterAllP(concurrency int, cb SetOfRoundRaiseIterAllCallback) {
-	s.s.IterAllP(concurrency, func(v types.Value) {
-		cb(v.(RoundRaise))
-	})
-}
-
-type SetOfRoundRaiseFilterCallback func(p RoundRaise) (keep bool)
-
-func (s SetOfRoundRaise) Filter(cb SetOfRoundRaiseFilterCallback) SetOfRoundRaise {
-	out := s.s.Filter(func(v types.Value) bool {
-		return cb(v.(RoundRaise))
-	})
-	return SetOfRoundRaise{out, s.cs, &ref.Ref{}}
-}
-
-func (s SetOfRoundRaise) Insert(p ...RoundRaise) SetOfRoundRaise {
-	return SetOfRoundRaise{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
-}
-
-func (s SetOfRoundRaise) Remove(p ...RoundRaise) SetOfRoundRaise {
-	return SetOfRoundRaise{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
-}
-
-func (s SetOfRoundRaise) Union(others ...SetOfRoundRaise) SetOfRoundRaise {
-	return SetOfRoundRaise{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
-}
-
-func (s SetOfRoundRaise) First() RoundRaise {
-	return s.s.First().(RoundRaise)
-}
-
-func (s SetOfRoundRaise) fromStructSlice(p []SetOfRoundRaise) []types.Set {
-	r := make([]types.Set, len(p))
-	for i, v := range p {
-		r[i] = v.s
-	}
-	return r
-}
-
-func (s SetOfRoundRaise) fromElemSlice(p []RoundRaise) []types.Value {
-	r := make([]types.Value, len(p))
-	for i, v := range p {
-		r[i] = v
-	}
-	return r
-}
-
-// RefOfSetOfRoundRaise
-
-type RefOfSetOfRoundRaise struct {
-	target ref.Ref
-	ref    *ref.Ref
-}
-
-func NewRefOfSetOfRoundRaise(target ref.Ref) RefOfSetOfRoundRaise {
-	return RefOfSetOfRoundRaise{target, &ref.Ref{}}
-}
-
-func (r RefOfSetOfRoundRaise) TargetRef() ref.Ref {
-	return r.target
-}
-
-func (r RefOfSetOfRoundRaise) Ref() ref.Ref {
-	return types.EnsureRef(r.ref, r)
-}
-
-func (r RefOfSetOfRoundRaise) Equals(other types.Value) bool {
-	return other != nil && __typeForRefOfSetOfRoundRaise.Equals(other.Type()) && r.Ref() == other.Ref()
-}
-
-func (r RefOfSetOfRoundRaise) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
-	return
-}
-
-func (r RefOfSetOfRoundRaise) ChildValues() []types.Value {
-	return nil
-}
-
-// A Noms Value that describes RefOfSetOfRoundRaise.
-var __typeForRefOfSetOfRoundRaise types.Type
-
-func (r RefOfSetOfRoundRaise) Type() types.Type {
-	return __typeForRefOfSetOfRoundRaise
-}
-
-func (r RefOfSetOfRoundRaise) Less(other types.OrderedValue) bool {
-	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
-}
-
-func init() {
-	__typeForRefOfSetOfRoundRaise = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.SetKind, types.MakeType(__mainPackageInFile_index_CachedRef, 4)))
-	types.RegisterRef(__typeForRefOfSetOfRoundRaise, builderForRefOfSetOfRoundRaise)
-}
-
-func builderForRefOfSetOfRoundRaise(r ref.Ref) types.Value {
-	return NewRefOfSetOfRoundRaise(r)
-}
-
-func (r RefOfSetOfRoundRaise) TargetValue(cs chunks.ChunkStore) SetOfRoundRaise {
-	return types.ReadValue(r.target, cs).(SetOfRoundRaise)
-}
-
-func (r RefOfSetOfRoundRaise) SetTargetValue(val SetOfRoundRaise, cs chunks.ChunkSink) RefOfSetOfRoundRaise {
-	return NewRefOfSetOfRoundRaise(types.WriteValue(val, cs))
 }

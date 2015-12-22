@@ -12,6 +12,7 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
+	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -49,23 +50,23 @@ func main() {
 		v := imp.Companies().TargetValue(ds)
 
 		type entry struct {
-			key           Key
-			roundRaiseDef RoundRaiseDef
+			key Key
+			ref ref.Ref
 		}
 
 		c := make(chan entry, 1024)
 
-		mapOfSets := MapOfRefOfKeyToSetOfRoundRaiseDef{}
+		mapOfSets := MapOfRefOfKeyToSetOfRefOfRoundDef{}
 
-		addTimeRounds := func(tn int64, roundRaiseDef RoundRaiseDef) {
+		addTimeRounds := func(tn int64, ref ref.Ref) {
 			t := time.Unix(tn, 0)
 			year := int32(t.Year())
 			yk := NewKey(ds).SetYear(year)
-			c <- entry{yk, roundRaiseDef}
+			c <- entry{yk, ref}
 
 			q := timeToQuarter(t)
 			qk := NewKey(ds).SetQuarter(QuarterDef{Year: year, Quarter: q}.New(ds))
-			c <- entry{qk, roundRaiseDef}
+			c <- entry{qk, ref}
 		}
 
 		// Compute a cutoff date which is later used to only include rounds after this date to reduce the amount of data.
@@ -94,23 +95,20 @@ func main() {
 						return
 					}
 
-					roundRaiseDef := RoundRaiseDef{
-						Raised:  round.RaisedAmountUsd(),
-						Details: r.TargetRef(),
-					}
+					roundRef := r.TargetRef()
 					categoryList.IterAllP(64, func(category string) {
 						key := NewKey(ds).SetCategory(category)
-						c <- entry{key, roundRaiseDef}
+						c <- entry{key, roundRef}
 					})
 
 					// Skip region for now to reduce size of data.
 					// c <- entry{regionKey, roundRaiseDef}
 
-					addTimeRounds(round.FundedAt(), roundRaiseDef)
+					addTimeRounds(round.FundedAt(), roundRef)
 
 					roundType := classifyRoundType(round)
 					roundTypeKey := NewKey(ds).SetRoundType(roundType)
-					c <- entry{roundTypeKey, roundRaiseDef}
+					c <- entry{roundTypeKey, roundRef}
 				})
 			})
 
@@ -119,23 +117,18 @@ func main() {
 
 		for e := range c {
 			key := e.key
-			roundRaiseDef := e.roundRaiseDef
+			ref := e.ref
 			keyRef := types.WriteValue(key, ds)
 			setDef := mapOfSets[keyRef]
 			if setDef == nil {
-				setDef = SetOfRoundRaiseDef{}
+				setDef = SetOfRefOfRoundDef{}
 			}
-			setDef[roundRaiseDef] = true
+
+			setDef[ref] = true
 			mapOfSets[keyRef] = setDef
 		}
 
-		mapOfRefs := MapOfRefOfKeyToRefOfSetOfRoundRaiseDef{}
-		for keyRef, set := range mapOfSets {
-			setRef := types.WriteValue(set.New(ds), ds)
-			mapOfRefs[keyRef] = setRef
-		}
-
-		output := mapOfRefs.New(ds)
+		output := mapOfSets.New(ds)
 		_, err := outputDataset.Commit(output)
 		d.Exp.NoError(err)
 
