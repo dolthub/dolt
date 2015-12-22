@@ -2,11 +2,9 @@
 
 This is an (incomplete) sample app that visualizes pitching data as a heatmap.
 
-## Requirements
+## Setup
 
-* [`<noms>/clients/server`](../server)
-* Node.js: https://nodejs.org/download/
-* You probably want to configure npm to [use a global module path that your user owns](https://docs.npmjs.com/getting-started/fixing-npm-permissions)
+TODO: Someone fill in how to get and index the required data.
 
 ## Example
 
