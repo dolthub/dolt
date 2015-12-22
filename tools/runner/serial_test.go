@@ -3,6 +3,7 @@ package runner
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -40,6 +41,34 @@ func (suite *SerialRunnerTestSuite) SetupTest() {
 
 func (suite *SerialRunnerTestSuite) TearDownTest() {
 	os.Remove(suite.dir)
+}
+
+func (suite *SerialRunnerTestSuite) TestForceRunInDir() {
+	scriptPath := filepath.Join(suite.dir, buildFileBasename)
+	suite.makeTestBuildFile(scriptPath, []string{"print os.getcwd()"})
+
+	old := os.Stdout // keep backup of the real stdout
+	r, w, err := os.Pipe()
+	suite.NoError(err)
+	os.Stdout = w
+	defer func() { os.Stdout = old }()
+	defer r.Close()
+
+	outC := make(chan string)
+	// copy the output in a separate goroutine so printing can't block indefinitely
+	go func() {
+		buf := &bytes.Buffer{}
+		io.Copy(buf, r)
+		outC <- buf.String()
+	}()
+
+	ForceRunInDir(suite.dir, "python", scriptPath)
+
+	w.Close()
+	out := strings.TrimSpace(<-outC)
+	actualSuiteDir, err := filepath.EvalSymlinks(suite.dir)
+	suite.NoError(err)
+	suite.Equal(actualSuiteDir, out)
 }
 
 func (suite *SerialRunnerTestSuite) TestEnvVars() {

@@ -32,6 +32,14 @@ func ForceRun(exe string, args ...string) {
 	d.Chk.NoError(err)
 }
 
+// ForceRunInDir runs 'exe [args...]' in the given directory, and d.Chk()s on failure. Inherits the environment of the current process.
+func ForceRunInDir(dir, exe string, args ...string) {
+	info, err := os.Stat(dir)
+	d.Exp.NoError(err, "Can't stat %s", dir)
+	d.Exp.True(info.IsDir(), "%s must be a path to a directory.", dir)
+	d.Chk.NoError(runEnvDir(os.Stdout, os.Stderr, Env{}, dir, exe, args...))
+}
+
 // runEnvDir 'exe [args...]' in dir with the environment env overlaid on that of the current process. If dir == "", use the current working directory.
 func runEnvDir(out, err io.Writer, env Env, dir, exe string, args ...string) error {
 	cmd := exec.Command(exe, args...)
