@@ -16,7 +16,8 @@ import (
 
 const (
 	boilerplate = `
-import os
+from __future__ import print_function
+import os, sys
 
 %s
 `
@@ -45,7 +46,7 @@ func (suite *SerialRunnerTestSuite) TearDownTest() {
 
 func (suite *SerialRunnerTestSuite) TestForceRunInDir() {
 	scriptPath := filepath.Join(suite.dir, buildFileBasename)
-	suite.makeTestBuildFile(scriptPath, []string{"print os.getcwd()"})
+	suite.makeTestBuildFile(scriptPath, []string{"print(os.getcwd(), file=sys.stdout)"})
 
 	old := os.Stdout // keep backup of the real stdout
 	r, w, err := os.Pipe()
@@ -71,9 +72,25 @@ func (suite *SerialRunnerTestSuite) TestForceRunInDir() {
 	suite.Equal(actualSuiteDir, out)
 }
 
+func (suite *SerialRunnerTestSuite) TestRunInDir() {
+	scriptPath := filepath.Join(suite.dir, buildFileBasename)
+	suite.makeTestBuildFile(scriptPath, []string{
+		"print(os.getcwd(), file=sys.stdout)",
+		"print('error', file=sys.stderr)",
+	})
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	RunInDir(stdout, stderr, suite.dir, "python", scriptPath)
+	actualSuiteDir, err := filepath.EvalSymlinks(suite.dir)
+	suite.NoError(err)
+	suite.Equal(actualSuiteDir, strings.TrimSpace(string(stdout.Bytes())))
+	suite.Equal("error", strings.TrimSpace(string(stderr.Bytes())))
+}
+
 func (suite *SerialRunnerTestSuite) TestEnvVars() {
 	makeEnvVarPrintBuildFile := func(path, varname string) {
-		fmtStatement := fmt.Sprintf(`print os.environ['%s']`, varname)
+		fmtStatement := fmt.Sprintf(`print(os.environ['%s'], file=sys.stdout)`, varname)
 		suite.makeTestBuildFile(path, []string{fmtStatement})
 	}
 
