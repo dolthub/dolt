@@ -212,7 +212,7 @@ func (cl compoundList) Remove(start uint64, end uint64) List {
 	for i := start; i < end; i++ {
 		seq.Skip()
 	}
-	return seq.Done().(compoundList)
+	return seq.Done().(List)
 }
 
 func (cl compoundList) RemoveAt(idx uint64) List {
