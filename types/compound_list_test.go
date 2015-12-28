@@ -440,6 +440,16 @@ func TestCompoundListRemoveNothing(t *testing.T) {
 	assert.True(cl.Equals(cl.Remove(cl.Len(), cl.Len())))
 }
 
+func TestCompoundListRemoveEverything(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := chunks.NewMemoryStore()
+	cl := getTestSimpleList().ToNomsList(cs).Remove(0, getTestSimpleListLen())
+
+	assert.True(NewList(cs).Equals(cl))
+	assert.Equal(0, int(cl.Len()))
+}
+
 func TestCompoundListRemoveAtMiddle(t *testing.T) {
 	assert := assert.New(t)
 
