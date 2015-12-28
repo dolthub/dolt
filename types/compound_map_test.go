@@ -226,7 +226,7 @@ func TestCompoundMapIterAll(t *testing.T) {
 func TestCompoundMapSet(t *testing.T) {
 	assert := assert.New(t)
 
-	doTest := func(incr int, tm testMap) {
+	doTest := func(incr, offset int, tm testMap) {
 		cs := chunks.NewMemoryStore()
 		expected := tm.toCompoundMap(cs)
 		run := func(from, to int) {
@@ -234,24 +234,20 @@ func TestCompoundMapSet(t *testing.T) {
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 		}
-		for i := 0; i < len(tm.entries); i += incr {
-			run(i, i+1)
+		for i := 0; i < len(tm.entries)-offset; i += incr {
+			run(i, i+offset)
 		}
-		// TODO: make this pass, and make it fast:
-		// for i := 0; i < len(tm.entries)-incr; i += incr {
-		//   run(i, i+incr)
-		// }
-		// For example, run(256, 384) fails with the native order map.
-
+		run(len(tm.entries)-offset, len(tm.entries))
 		assert.Panics(func() {
 			expected.Set(Int8(1), Bool(true))
 		}, "Should panic due to wrong type")
 	}
 
-	doTest(128, getTestNativeOrderMap(32))
-	doTest(64, getTestRefValueOrderMap(4))
-	doTest(64, getTestRefToNativeOrderMap(4))
-	doTest(64, getTestRefToValueOrderMap(4))
+	doTest(18, 3, getTestNativeOrderMap(9))
+	doTest(128, 1, getTestNativeOrderMap(32))
+	doTest(64, 1, getTestRefValueOrderMap(4))
+	doTest(64, 1, getTestRefToNativeOrderMap(4))
+	doTest(64, 1, getTestRefToValueOrderMap(4))
 }
 
 func TestCompoundMapSetExistingKeyToExistingValue(t *testing.T) {

@@ -132,15 +132,24 @@ func (seq *sequenceChunker) Done() Value {
 		return internalValueFromType(done, done.Type())
 	}
 
-	if seq.parent != nil && seq.parent.used {
-		if len(seq.current) > 0 {
-			seq.handleChunkBoundary()
-		}
-		return seq.parent.Done()
+	if seq.isRoot() {
+		_, done := seq.makeChunk(seq.current)
+		return internalValueFromType(done, done.Type())
 	}
 
-	_, done := seq.makeChunk(seq.current)
-	return internalValueFromType(done, done.Type())
+	if len(seq.current) > 0 {
+		seq.handleChunkBoundary()
+	}
+	return seq.parent.Done()
+}
+
+func (seq *sequenceChunker) isRoot() bool {
+	for ancstr := seq.parent; ancstr != nil; ancstr = ancstr.parent {
+		if ancstr.used {
+			return false
+		}
+	}
+	return true
 }
 
 func (seq *sequenceChunker) finalizeCursor() {
