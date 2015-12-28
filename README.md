@@ -23,14 +23,14 @@ go get -u -t github.com/attic-labs/noms/...
 # Build
 
 ```
-go build ./...
+go install ./...
 go test ./...
 ```
 
 # Run
 
 ```
-cd <noms>/clients/counter
+cd "$GOPATH/src/github.com/attic-labs/noms/clients/counter"
 go build
 ./counter -ldb=/tmp/foo -ds=foo
 ./counter -ldb=/tmp/foo -ds=foo
@@ -39,8 +39,8 @@ go build
 
 # What next?
 
-* Learn the core tools: [`server`](clients/server/README.md), [`splore`](clients/splore/README.md), [`shove`](clients/shove/README.md), [`csv_importer`](clients/csv_importer/README.md), [`json_importer`](clients/json_importer), [`xml_importer`](clients/xml_importer)
-* Run sample apps: [`sfcrime`](clients/sfcrime/README.md), [`tagshow`](clients/tagshow/README.md) (photo viewer)
+* Learn the core tools: [`server`](clients/server), [`splore`](clients/splore), [`shove`](clients/shove), [`csv_importer`](clients/csv_importer), [`json_importer`](clients/json_importer), [`xml_importer`](clients/xml_importer)
+* Run sample apps: [`sfcrime`](clients/sfcrime), [`tagshow`](clients/tagshow) (photo viewer)
 * NomDL reference (TODO)
 * Go SDK reference (TODO)
 * JavaScript SDK reference (TODO)
