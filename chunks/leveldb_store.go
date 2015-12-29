@@ -23,11 +23,11 @@ func toChunkKey(r ref.Ref) []byte {
 }
 
 type LevelDBStore struct {
-	db                           *leveldb.DB
-	mu                           *sync.Mutex
-	concurrentWriteLimit         chan struct{}
-	getCount, hasCount, putCount int
-	dumpStats                    bool
+	db                                     *leveldb.DB
+	mu                                     *sync.Mutex
+	concurrentWriteLimit                   chan struct{}
+	getCount, hasCount, putCount, putBytes int64
+	dumpStats                              bool
 }
 
 func NewLevelDBStore(dir string, maxFileHandles int, dumpStats bool) *LevelDBStore {
@@ -96,6 +96,7 @@ func (l *LevelDBStore) Put(c Chunk) {
 	err := l.db.Put(toChunkKey(c.Ref()), c.Data(), nil)
 	d.Chk.NoError(err)
 	l.putCount++
+	l.putBytes += int64(len(c.Data()))
 	<-l.concurrentWriteLimit
 }
 
@@ -106,6 +107,7 @@ func (l *LevelDBStore) Close() error {
 		fmt.Println("GetCount: ", l.getCount)
 		fmt.Println("HasCount: ", l.hasCount)
 		fmt.Println("PutCount: ", l.putCount)
+		fmt.Println("Average PutSize: ", l.putBytes/l.putCount)
 	}
 	return nil
 }
