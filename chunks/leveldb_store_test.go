@@ -23,7 +23,7 @@ func (suite *LevelDBStoreTestSuite) SetupTest() {
 	suite.NoError(err)
 	store := NewLevelDBStore(suite.dir, 24, false)
 	suite.putCountFn = func() int {
-		return store.putCount
+		return int(store.putCount)
 	}
 
 	suite.Store = store
