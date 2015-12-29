@@ -38,43 +38,10 @@ func makeHttpClient() *http.Client {
 	}
 }
 
-type hasRequest struct {
-	r  ref.Ref
-	ch chan bool
-}
-
-type hasBatch map[ref.Ref][]chan bool
-
-type readRequest struct {
-	r  ref.Ref
-	ch chan Chunk
-}
-
-// readBatch represents a set of queued read requests, each of which are blocking on a receive channel for a response.
-type readBatch map[ref.Ref][]chan Chunk
-
-func (rrg *readBatch) Put(c Chunk) {
-	for _, ch := range (*rrg)[c.Ref()] {
-		ch <- c
-	}
-
-	delete(*rrg, c.Ref())
-}
-
-// Callers to Get() must receive nil if the corresponding chunk wasn't in the response from the server (i.e. it wasn't found).
-func (rrq *readBatch) Close() error {
-	for _, chs := range *rrq {
-		for _, ch := range chs {
-			ch <- EmptyChunk
-		}
-	}
-	return nil
-}
-
 type HttpStore struct {
 	host         *url.URL
 	httpClient   *http.Client
-	readQueue    chan readRequest
+	getQueue     chan getRequest
 	hasQueue     chan hasRequest
 	writeQueue   chan Chunk
 	finishedChan chan struct{}
@@ -92,7 +59,7 @@ func NewHttpStore(host string) *HttpStore {
 	client := &HttpStore{
 		host:         u,
 		httpClient:   makeHttpClient(),
-		readQueue:    make(chan readRequest, readBufferSize),
+		getQueue:     make(chan getRequest, readBufferSize),
 		hasQueue:     make(chan hasRequest, hasBufferSize),
 		writeQueue:   make(chan Chunk, writeBufferSize),
 		finishedChan: make(chan struct{}),
@@ -116,15 +83,15 @@ func (c *HttpStore) Host() *url.URL {
 func (c *HttpStore) Get(r ref.Ref) Chunk {
 	ch := make(chan Chunk)
 	c.wg.Add(1)
-	c.readQueue <- readRequest{r, ch}
+	c.getQueue <- getRequest{r, ch}
 	return <-ch
 }
 
-func (c *HttpStore) sendReadRequests(req readRequest) {
-	batch := readBatch{}
+func (c *HttpStore) sendReadRequests(req getRequest) {
+	batch := getBatch{}
 	refs := map[ref.Ref]bool{}
 
-	addReq := func(req readRequest) {
+	addReq := func(req getRequest) {
 		batch[req.r] = append(batch[req.r], req.ch)
 		refs[req.r] = true
 		c.wg.Done()
@@ -133,7 +100,7 @@ func (c *HttpStore) sendReadRequests(req readRequest) {
 	addReq(req)
 	for done := false; !done; {
 		select {
-		case req := <-c.readQueue:
+		case req := <-c.getQueue:
 			addReq(req)
 		default:
 			done = true
@@ -210,7 +177,7 @@ func (c *HttpStore) batchRequests() {
 		select {
 		case req := <-c.hasQueue:
 			c.sendHasRequests(req)
-		case req := <-c.readQueue:
+		case req := <-c.getQueue:
 			c.sendReadRequests(req)
 		case chunk := <-c.writeQueue:
 			c.sendWriteRequests(chunk)
@@ -387,7 +354,7 @@ func (c *HttpStore) Close() error {
 	c.wgFinished.Wait()
 
 	close(c.hasQueue)
-	close(c.readQueue)
+	close(c.getQueue)
 	close(c.writeQueue)
 	return nil
 }

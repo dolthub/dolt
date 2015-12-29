@@ -58,6 +58,14 @@ func FromData(data []byte) Ref {
 	return FromHash(h)
 }
 
+// FromSlice creates a new Ref backed by data, ensuring that data is an acceptable length.
+func FromSlice(data []byte) Ref {
+	d.Chk.Len(data, sha1.Size)
+	digest := Sha1Digest{}
+	copy(digest[:], data)
+	return New(digest)
+}
+
 func FromHash(h hash.Hash) Ref {
 	d.Chk.Equal(sha1.Size, h.Size())
 	digest := Sha1Digest{}
