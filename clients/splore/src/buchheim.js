@@ -8,6 +8,8 @@
 
 // TreeNode represents one node of the tree visualization.
 
+import type {Ref} from 'noms';
+
 function assertNotNull<T>(v: ?T): T {
   if (v !== null && v !== undefined) {
     return v;
@@ -18,14 +20,14 @@ function assertNotNull<T>(v: ?T): T {
 
 export type NodeData = {
   name: string,
-  fullName?: string,
   isOpen?: boolean,
-  canOpen?: boolean
+  canOpen?: boolean,
+  ref?: Ref,
 };
 
 export type NodeGraph = {
   nodes: {[key: string]: NodeData},
-  links: {[key: string]: Array<string>}
+  links: {[key: string]: Array<string>},
 };
 
 export class TreeNode {

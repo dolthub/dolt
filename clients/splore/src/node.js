@@ -2,6 +2,8 @@
 
 import classNames from 'classnames';
 import React from 'react';
+import {Ref} from 'noms';
+import nomsServer from './noms_server.js';
 
 type Props = {
   canOpen: boolean,
@@ -13,13 +15,14 @@ type Props = {
   fromY: number,
   x: number,
   y: number,
-  onClick: (e: Event, s: String) => void;
-}
+  nomsRef: ?Ref,
+  onClick: (e: Event, s: String) => void,
+};
 
 type State = {
   x: number,
-  y: number
-}
+  y: number,
+};
 
 export default class Node extends React.Component<void, Props, State> {
   constructor(props: Props) {
@@ -49,11 +52,16 @@ export default class Node extends React.Component<void, Props, State> {
       textX = -10;
     }
 
+    let text = this.props.text;
+    if (this.props.nomsRef) {
+      const url = `${nomsServer}/ref/${this.props.nomsRef.toString()}`;
+      text = <a xlinkHref={url}>{text}</a>;
+    }
     return (
       <g className='node' onClick={this.props.onClick} style={{transform:translate}}>
         {this.getShape()}
         <text x={textX} dy='.35em' textAnchor={textAnchor}>
-          {this.props.text}
+          {text}
         </text>
         <title>{this.props.title}</title>
       </g>
