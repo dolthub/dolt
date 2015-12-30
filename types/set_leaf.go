@@ -207,7 +207,6 @@ func makeSetLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 		}
 
 		setLeaf := valueFromType(cs, newSetLeaf(cs, t, setData...), t)
-		ref := WriteValue(setLeaf, cs)
 
 		var indexValue Value
 		if len(setData) > 0 {
@@ -219,7 +218,7 @@ func makeSetLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 			}
 		}
 
-		return metaTuple{ref, indexValue}, setLeaf
+		return metaTuple{setLeaf, setLeaf.Ref(), indexValue}, setLeaf
 	}
 }
 

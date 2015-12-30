@@ -121,10 +121,16 @@ func TestCompoundMapHas(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
-		m := tm.toCompoundMap(chunks.NewMemoryStore())
+		cs := chunks.NewMemoryStore()
+		m := tm.toCompoundMap(cs)
+		r := WriteValue(m, cs)
+		m2 := ReadValue(r, cs).(compoundMap)
 		for _, entry := range tm.entries {
-			assert.True(m.Has(entry.key))
-			assert.True(m.Get(entry.key).Equals(entry.value))
+			k, v := entry.key, entry.value
+			assert.True(m.Has(k))
+			assert.True(m.Get(k).Equals(v))
+			assert.True(m2.Has(k))
+			assert.True(m2.Get(k).Equals(v))
 		}
 	}
 

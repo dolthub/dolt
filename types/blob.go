@@ -49,13 +49,12 @@ func newBlobLeafChunkFn(cs chunks.ChunkStore) makeChunkFn {
 		}
 
 		leaf := newBlobLeaf(buff)
-		ref := WriteValue(leaf, cs)
-		return metaTuple{ref, Uint64(uint64(len(buff)))}, leaf
+		return metaTuple{leaf, leaf.Ref(), Uint64(uint64(len(buff)))}, leaf
 	}
 }
 
 func NewBlob(r io.Reader, cs chunks.ChunkStore) Blob {
-	seq := newEmptySequenceChunker(newBlobLeafChunkFn(cs), newMetaSequenceChunkFn(typeForBlob, cs), newBlobLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(newBlobLeafChunkFn(cs), newIndexedMetaSequenceChunkFn(typeForBlob, cs), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	buf := []byte{0}
 	for {
 		n, err := r.Read(buf)

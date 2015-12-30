@@ -110,7 +110,7 @@ func (cm compoundMap) sequenceChunkerAtKey(k Value) (*sequenceChunker, bool) {
 		return otherLeaf, len(otherLeaf.data)
 	}}
 
-	seq := newSequenceChunker(cur, makeMapLeafChunkFn(cm.t, cm.cs), newMapMetaSequenceChunkFn(cm.t, cm.cs), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newSequenceChunker(cur, makeMapLeafChunkFn(cm.t, cm.cs), newOrderedMetaSequenceChunkFn(cm.t, cm.cs), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 	found := idx < len(leaf.data) && leaf.data[idx].key.Equals(k)
 	return seq, found
 }
@@ -124,7 +124,7 @@ func (cm compoundMap) IterAllP(concurrency int, f mapIterAllCallback) {
 }
 
 func (cm compoundMap) Filter(cb mapFilterCallback) Map {
-	seq := newEmptySequenceChunker(makeMapLeafChunkFn(cm.t, cm.cs), newMapMetaSequenceChunkFn(cm.t, cm.cs), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeMapLeafChunkFn(cm.t, cm.cs), newOrderedMetaSequenceChunkFn(cm.t, cm.cs), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	cm.IterAll(func(k, v Value) {
 		if cb(k, v) {
@@ -162,21 +162,6 @@ func (cm compoundMap) IterAll(cb mapIterAllCallback) {
 		v.(mapLeaf).IterAll(cb)
 		return false
 	})
-}
-
-func newMapMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
-	return func(items []sequenceItem) (sequenceItem, Value) {
-		tuples := make(metaSequenceData, len(items))
-
-		for i, v := range items {
-			tuples[i] = v.(metaTuple)
-		}
-
-		lastIndex := tuples.last().value
-		meta := newMetaSequenceFromData(tuples, t, cs)
-		ref := WriteValue(meta, cs)
-		return metaTuple{ref, lastIndex}, meta
-	}
 }
 
 func (cm compoundMap) elemTypes() []Type {

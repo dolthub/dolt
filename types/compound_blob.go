@@ -34,7 +34,7 @@ func init() {
 func (cb compoundBlob) Reader() io.ReadSeeker {
 	cursor, v := newMetaSequenceCursor(cb, cb.cs)
 	reader := v.(blobLeaf).Reader()
-	return &compoundBlobReader{cursor: cursor, currentReader: reader, length: cb.Len(), cs: cb.cs}
+	return &compoundBlobReader{cursor, reader, 0, 0, cb.Len(), cb.cs}
 }
 
 func (cb compoundBlob) Equals(other Value) bool {

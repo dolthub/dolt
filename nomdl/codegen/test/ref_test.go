@@ -60,20 +60,18 @@ func TestStructWithRef(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	set := gen.SetOfFloat32Def{0: true, 1: true, 2: true}.New(cs)
+	types.WriteValue(set, cs)
+
 	str := gen.StructWithRefDef{
 		R: set.Ref(),
 	}.New(cs)
+	types.WriteValue(str, cs)
 
 	r := str.R()
 	r2 := gen.NewRefOfSetOfFloat32(set.Ref())
 	assert.True(r.Equals(r2))
-
 	assert.True(r2.TargetValue(cs).Equals(set))
 
-	types.WriteValue(str, cs)
-	assert.True(r2.TargetValue(cs).Equals(set))
-
-	types.WriteValue(set, cs)
 	set2 := r2.TargetValue(cs)
 	assert.True(set.Equals(set2))
 

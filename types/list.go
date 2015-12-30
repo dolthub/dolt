@@ -35,7 +35,7 @@ func NewList(cs chunks.ChunkStore, v ...Value) List {
 }
 
 func NewTypedList(cs chunks.ChunkStore, t Type, values ...Value) List {
-	seq := newEmptySequenceChunker(makeListLeafChunkFn(t, cs), newMetaSequenceChunkFn(t, cs), newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeListLeafChunkFn(t, cs), newIndexedMetaSequenceChunkFn(t, cs), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	for _, v := range values {
 		seq.Append(v)
 	}
