@@ -1,9 +1,12 @@
   // @flow
 
+import Ref from './ref.js';
 import type {ChunkStore} from './chunk_store.js';
+import type {Sequence} from './sequence.js'; // eslint-disable-line no-unused-vars
+import {isPrimitive} from './primitives.js';
+import {MetaTuple} from './meta_sequence.js';
 import {Type} from './type.js';
 import {ValueBase} from './value.js';
-import type {Sequence} from './sequence.js'; // eslint-disable-line no-unused-vars
 
 export class Collection<S:Sequence> extends ValueBase {
   sequence: S;
@@ -13,5 +16,19 @@ export class Collection<S:Sequence> extends ValueBase {
     super(type);
     this.cs = cs;
     this.sequence = sequence;
+  }
+
+  get chunks(): Array<Ref> {
+    let chunks = [];
+    let addChunks = this.sequence.isMeta ? (mt:MetaTuple) => {
+      chunks.push(mt.ref);
+    } : (v) => {
+      if (!isPrimitive(v)) {
+        chunks.push(...v.chunks);
+      }
+    };
+
+    this.sequence.items.forEach(addChunks);
+    return chunks;
   }
 }

@@ -2,27 +2,30 @@
 
 import Ref from './ref.js';
 import type {ChunkStore} from './chunk_store.js';
-import {ensureRef} from './get_ref.js';
 import {invariant} from './assert.js';
 import {packageType, Type} from './type.js';
 import {readValue} from './read_value.js';
+import {ValueBase} from './value.js';
 
-class Package {
+class Package extends ValueBase {
   types: Array<Type>;
   dependencies: Array<Ref>;
-  _ref: Ref;
 
   constructor(types: Array<Type>, dependencies: Array<Ref>) {
+    super(packageType);
     this.types = types;
     this.dependencies = dependencies;
   }
 
-  get ref(): Ref {
-    return this._ref = ensureRef(this._ref, this, this.type);
-  }
-
-  get type(): Type {
-    return packageType;
+  get chunks(): Array<Ref> {
+    let chunks = [];
+    for (let i = 0; i < this.types.length; i++) {
+      chunks.push(...this.types[i].chunks);
+    }
+    for (let i = 0; i < this.dependencies.length; i++) {
+      chunks.push(this.dependencies[i]);
+    }
+    return chunks;
   }
 }
 
@@ -46,7 +49,7 @@ function readPackage(r: Ref, cs: ChunkStore): Promise<Package> {
     return p;
   }
 
-  return pendingPackages[refStr] = readValue(r, cs).then((p: Package) => {
+  return pendingPackages[refStr] = readValue(r, cs).then(p => {
     invariant(p instanceof Package);
     registerPackage(p);
     delete pendingPackages[refStr];

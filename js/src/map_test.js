@@ -45,6 +45,22 @@ suite('MapLeaf', () => {
     await m.forEach((v, k) => { kv.push(k, v); });
     assert.deepEqual(['a', 4, 'k', 8], kv);
   });
+
+  test('chunks', () => {
+    let ms = new MemoryStore();
+    let tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Value), makePrimitiveType(Kind.Value));
+    let st = makePrimitiveType(Kind.String);
+    let r1 = writeValue('x', st, ms);
+    let r2 = writeValue('a', st, ms);
+    let r3 = writeValue('b', st, ms);
+    let r4 = writeValue('c', st, ms);
+    let m = new NomsMap(ms, tr, new MapLeafSequence(tr, [{key: r1, value: r2}, {key: r3, value: r4}]));
+    assert.strictEqual(4, m.chunks.length);
+    assert.isTrue(r1.equals(m.chunks[0]));
+    assert.isTrue(r2.equals(m.chunks[1]));
+    assert.isTrue(r3.equals(m.chunks[2]));
+    assert.isTrue(r4.equals(m.chunks[3]));
+  });
 });
 
 suite('CompoundMap', () => {
@@ -119,5 +135,11 @@ suite('CompoundMap', () => {
     let kv = [];
     await c.forEach((v, k) => { kv.push(k, v); });
     assert.deepEqual(['a', false, 'b', false, 'e', true, 'f', true, 'h', false, 'i', true, 'm', true, 'n', false], kv);
+  });
+
+  test('chunks', () => {
+    let ms = new MemoryStore();
+    let [c] = build(ms);
+    assert.strictEqual(2, c.chunks.length);
   });
 });

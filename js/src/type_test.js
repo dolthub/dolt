@@ -56,6 +56,7 @@ suite('Type', () => {
 
     let v = await readValue(unresolvedRef, ms);
     assert.isNotNull(v);
+    assert.isTrue(pkgRef.equals(v.chunks[0]));
     let p = await readValue(pkgRef, ms);
     assert.isNotNull(p);
   });

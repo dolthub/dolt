@@ -38,6 +38,20 @@ suite('SetLeaf', () => {
     await m.forEach((k) => { values.push(k); });
     assert.deepEqual(['a', 'b'], values);
   });
+
+  test('chunks', () => {
+    let ms = new MemoryStore();
+    let tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Value));
+    let st = makePrimitiveType(Kind.String);
+    let r1 = writeValue('x', st, ms);
+    let r2 = writeValue('a', st, ms);
+    let r3 = writeValue('b', st, ms);
+    let l = new NomsSet(ms, tr, new SetLeafSequence(tr, ['z', r1, r2, r3]));
+    assert.strictEqual(3, l.chunks.length);
+    assert.isTrue(r1.equals(l.chunks[0]));
+    assert.isTrue(r2.equals(l.chunks[1]));
+    assert.isTrue(r3.equals(l.chunks[2]));
+  });
 });
 
 suite('CompoundSet', () => {
@@ -93,6 +107,12 @@ suite('CompoundSet', () => {
     let values = [];
     await c.forEach((k) => { values.push(k); });
     assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], values);
+  });
+
+  test('chunks', () => {
+    let ms = new MemoryStore();
+    let c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    assert.strictEqual(2, c.chunks.length);
   });
 
   test('map', async () => {
