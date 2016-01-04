@@ -2,6 +2,7 @@
 
 import Ref from './ref.js';
 import type {NomsKind} from './noms_kind.js';
+import type {Value} from './value.js';
 import {ensureRef} from './get_ref.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
@@ -184,9 +185,10 @@ class Type {
   _namespace: string;
   _name: string;
   _desc: TypeDesc;
-  _ref: Ref;
+  _ref: ?Ref;
 
   constructor(name: string = '', namespace: string = '', desc: TypeDesc) {
+    this._ref = null;
     this._name = name;
     this._namespace = namespace;
     this._desc = desc;
@@ -200,8 +202,26 @@ class Type {
     return typeType;
   }
 
-  equals(other: Type): boolean {
+  equals(other: Value): boolean {
     return this.ref.equals(other.ref);
+  }
+
+  get chunks(): Array<Ref> {
+    let chunks = [];
+    if (this.unresolved) {
+      if (this.hasPackageRef) {
+        chunks.push(this.packageRef);
+      }
+
+      return chunks;
+    }
+
+    let desc = this._desc;
+    if (desc instanceof CompoundDesc) {
+      desc.elemTypes.forEach(et => chunks.push(...et.chunks()));
+    }
+
+    return chunks;
   }
 
   get kind(): NomsKind {

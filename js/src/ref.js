@@ -60,6 +60,10 @@ export default class Ref {
     return this._refStr === other._refStr;
   }
 
+  get chunks(): Array<Ref> {
+    return [this];
+  }
+
   less(other: Value): boolean {
     invariant(other instanceof Ref);
     return this._refStr < other._refStr;

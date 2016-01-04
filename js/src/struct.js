@@ -1,7 +1,9 @@
 // @flow
 
+import Ref from './ref.js';
 import {Field, StructDesc, Type} from './type.js';
 import {invariant, notNull} from './assert.js';
+import {isPrimitive} from './primitives.js';
 import {ValueBase} from './value.js';
 
 type StructData = {[key: string]: any};
@@ -24,6 +26,17 @@ export default class Struct extends ValueBase {
 
     this._data = data;
     this.unionField = validate(this);
+  }
+
+  get chunks(): Array<Ref> {
+    let chunks = [];
+    chunks.push(...this.type.chunks);
+    this.forEach(v => {
+      if (!isPrimitive(v)) {
+        chunks.push(...v.chunks);
+      }
+    });
+    return chunks;
   }
 
   get fields(): Array<Field> {

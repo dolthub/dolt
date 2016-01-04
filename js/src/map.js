@@ -1,8 +1,10 @@
 // @flow
 
+import Ref from './ref.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {Collection} from './collection.js';
 import {equals} from './value.js';
+import {isPrimitive} from './primitives.js';
 import {OrderedSequence} from './ordered_sequence.js';
 
 type Entry<K: valueOrPrimitive, V: valueOrPrimitive> = {
@@ -11,6 +13,24 @@ type Entry<K: valueOrPrimitive, V: valueOrPrimitive> = {
 };
 
 export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collection<OrderedSequence> {
+  get chunks(): Array<Ref> {
+    if (this.sequence.isMeta) {
+      return super.chunks;
+    }
+
+    let chunks = [];
+    this.sequence.items.forEach(entry => {
+      if (!isPrimitive(entry.key)) {
+        chunks.push(...entry.key.chunks);
+      }
+      if (!isPrimitive(entry.value)) {
+        chunks.push(...entry.value.chunks);
+      }
+    });
+
+    return chunks;
+  }
+
   async has(key: K): Promise<boolean> {
     let cursor = await this.sequence.newCursorAt(this.cs, key);
     return cursor.valid && equals(cursor.getCurrentKey(), key);

@@ -1,12 +1,14 @@
 // @flow
 
+import MemoryStore from './memory_store.js';
 import Struct from './struct.js';
 import {assert} from 'chai';
-import {Field, makePrimitiveType, makeStructType, makeType} from './type.js';
+import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
 import {Kind} from './noms_kind.js';
 import {notNull} from './assert.js';
 import {Package, registerPackage} from './package.js';
 import {suite, test} from 'mocha';
+import {writeValue} from './encode.js';
 
 suite('Struct', () => {
   test('equals', () => {
@@ -27,7 +29,75 @@ suite('Struct', () => {
     assert.isTrue(s1.equals(s2));
   });
 
-  // TODO: 'struct chunks', 'chunks optional', 'chunks union'
+  test('chunks', () => {
+    let ms = new MemoryStore();
+    let typeDef = makeStructType('S1', [
+      new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), false)
+    ], []);
+
+    let pkg = new Package([typeDef], []);
+    registerPackage(pkg);
+    let pkgRef = pkg.ref;
+    let type = makeType(pkgRef, 0);
+
+    let b = true;
+    let bt = makePrimitiveType(Kind.Bool);
+    let r = writeValue(b, bt, ms);
+    let s1 = new Struct(type, typeDef, {r: r});
+    assert.strictEqual(2, s1.chunks.length);
+    assert.isTrue(pkgRef.equals(s1.chunks[0]));
+    assert.isTrue(r.equals(s1.chunks[1]));
+  });
+
+  test('chunks optional', () => {
+    let ms = new MemoryStore();
+    let typeDef = makeStructType('S1', [
+      new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), true)
+    ], []);
+
+    let pkg = new Package([typeDef], []);
+    registerPackage(pkg);
+    let pkgRef = pkg.ref;
+    let type = makeType(pkgRef, 0);
+
+    let s1 = new Struct(type, typeDef, {});
+
+    assert.strictEqual(1, s1.chunks.length);
+    assert.isTrue(pkgRef.equals(s1.chunks[0]));
+
+    let b = true;
+    let bt = makePrimitiveType(Kind.Bool);
+    let r = writeValue(b, bt, ms);
+    let s2 = new Struct(type, typeDef, {r: r});
+    assert.strictEqual(2, s2.chunks.length);
+    assert.isTrue(pkgRef.equals(s2.chunks[0]));
+    assert.isTrue(r.equals(s2.chunks[1]));
+  });
+
+  test('chunks union', () => {
+    let ms = new MemoryStore();
+    let typeDef = makeStructType('S1', [], [
+      new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), false),
+      new Field('s', makePrimitiveType(Kind.String), false)
+    ]);
+
+    let pkg = new Package([typeDef], []);
+    registerPackage(pkg);
+    let pkgRef = pkg.ref;
+    let type = makeType(pkgRef, 0);
+
+    let s1 = new Struct(type, typeDef, {s: 'hi'});
+    assert.strictEqual(1, s1.chunks.length);
+    assert.isTrue(pkgRef.equals(s1.chunks[0]));
+
+    let b = true;
+    let bt = makePrimitiveType(Kind.Bool);
+    let r = writeValue(b, bt, ms);
+    let s2 = new Struct(type, typeDef, {r: r});
+    assert.strictEqual(2, s2.chunks.length);
+    assert.isTrue(pkgRef.equals(s2.chunks[0]));
+    assert.isTrue(r.equals(s2.chunks[1]));
+  });
 
   test('new', () => {
     let typeDef = makeStructType('S2', [

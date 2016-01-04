@@ -9,6 +9,7 @@ import {Type} from './type.js';
 export type Value = {
   ref: Ref;
   equals(other: Value): boolean;
+  chunks: Array<Ref>;
 }
 
 export class ValueBase {
@@ -21,7 +22,7 @@ export class ValueBase {
   }
 
   get ref(): Ref {
-    return ensureRef(this._ref, this, this.type);
+    return this._ref = ensureRef(this._ref, this, this.type);
   }
 
   equals(other: Value): boolean {

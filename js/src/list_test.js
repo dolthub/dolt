@@ -31,6 +31,20 @@ suite('ListLeafSequence', () => {
     await l.forEach((v, i) => { values.push(v, i); });
     assert.deepEqual([4, 0, 2, 1, 10, 2, 16, 3], values);
   });
+
+  test('chunks', () => {
+    let ms = new MemoryStore();
+    let tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Value));
+    let st = makePrimitiveType(Kind.String);
+    let r1 = writeValue('x', st, ms);
+    let r2 = writeValue('a', st, ms);
+    let r3 = writeValue('b', st, ms);
+    let l = new NomsList(ms, tr, new ListLeafSequence(tr, ['z', r1, r2, r3]));
+    assert.strictEqual(3, l.chunks.length);
+    assert.isTrue(r1.equals(l.chunks[0]));
+    assert.isTrue(r2.equals(l.chunks[1]));
+    assert.isTrue(r3.equals(l.chunks[2]));
+  });
 });
 
 suite('CompoundList', () => {
@@ -72,5 +86,10 @@ suite('CompoundList', () => {
     let values = [];
     await l.forEach((k, i) => { values.push(k, i); });
     assert.deepEqual(['a', 0, 'b', 1, 'e', 2, 'f', 3, 'h', 4, 'i', 5, 'm', 6, 'n', 7], values);
+  });
+
+  test('chunks', () => {
+    let l = build();
+    assert.strictEqual(2, l.chunks.length);
   });
 });
