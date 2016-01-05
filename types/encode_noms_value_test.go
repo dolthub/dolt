@@ -139,7 +139,7 @@ func TestWriteCompoundBlob(t *testing.T) {
 	r2 := ref.Parse("sha1-0000000000000000000000000000000000000002")
 	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
 
-	v := newCompoundBlob([]metaTuple{{r1, Uint64(20)}, {r2, Uint64(40)}, {r3, Uint64(60)}}, cs)
+	v := newCompoundBlob([]metaTuple{{nil, r1, Uint64(20)}, {nil, r2, Uint64(40)}, {nil, r3, Uint64(60)}}, cs)
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
 
@@ -326,13 +326,13 @@ func TestWriteCompoundList(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	ltr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
-	r1 := newListLeaf(cs, ltr, Int32(0)).Ref()
-	r2 := newListLeaf(cs, ltr, Int32(1), Int32(2), Int32(3)).Ref()
-	cl := buildCompoundList([]metaTuple{{r1, Uint64(1)}, {r2, Uint64(4)}}, ltr, cs)
+	leaf1 := newListLeaf(cs, ltr, Int32(0))
+	leaf2 := newListLeaf(cs, ltr, Int32(1), Int32(2), Int32(3))
+	cl := buildCompoundList([]metaTuple{{leaf1, leaf1.Ref(), Uint64(1)}, {leaf2, leaf2.Ref(), Uint64(4)}}, ltr, cs)
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(cl)
-	assert.EqualValues([]interface{}{ListKind, Int32Kind, true, []interface{}{r1.String(), "1", r2.String(), "4"}}, w.toArray())
+	assert.EqualValues([]interface{}{ListKind, Int32Kind, true, []interface{}{leaf1.Ref().String(), "1", leaf2.Ref().String(), "4"}}, w.toArray())
 }
 
 func TestWriteListOfValue(t *testing.T) {

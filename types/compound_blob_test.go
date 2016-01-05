@@ -18,7 +18,8 @@ func getTestCompoundBlob(datas ...string) compoundBlob {
 	ms := chunks.NewMemoryStore()
 	for i, s := range datas {
 		b := NewBlob(bytes.NewBufferString(s), ms)
-		tuples[i] = metaTuple{WriteValue(b, ms), Uint64(len(s))}
+		r := WriteValue(b, ms)
+		tuples[i] = metaTuple{b, r, Uint64(len(s))}
 	}
 	return newCompoundBlob(tuples, ms)
 }
@@ -70,29 +71,29 @@ func TestCompoundBlobReader(t *testing.T) {
 	}
 	assert := assert.New(t)
 
+	test := func(b compoundBlob) {
+		bs, err := ioutil.ReadAll(b.Reader())
+		assert.NoError(err)
+		assert.Equal("helloworld", string(bs))
+
+		ab := getRandomBlob(t)
+		bs, err = ioutil.ReadAll(ab.Reader())
+		assert.NoError(err)
+		r := getRandomReader()
+		bs2, err := ioutil.ReadAll(r)
+		assert.Equal(bs2, bs)
+		testByteRange(assert, 200453, 100232, r, ab.Reader())
+		testByteRange(assert, 100, 10, r, ab.Reader())
+		testByteRange(assert, 2340, 2630, r, ab.Reader())
+		testByteRange(assert, 432423, 50000, r, ab.Reader())
+		testByteRange(assert, 1, 10, r, ab.Reader())
+	}
+
 	cb := getTestCompoundBlob("hello", "world")
-	bs, err := ioutil.ReadAll(cb.Reader())
-	assert.NoError(err)
-	assert.Equal("helloworld", string(bs))
+	test(cb)
 
-	ab := getRandomBlob(t)
-	bs, err = ioutil.ReadAll(ab.Reader())
-	assert.NoError(err)
-	r := getRandomReader()
-	bs2, err := ioutil.ReadAll(r)
-	assert.Equal(bs2, bs)
-	testByteRange(assert, 200453, 100232, r, ab.Reader())
-	testByteRange(assert, 100, 10, r, ab.Reader())
-	testByteRange(assert, 2340, 2630, r, ab.Reader())
-	testByteRange(assert, 432423, 50000, r, ab.Reader())
-	testByteRange(assert, 1, 10, r, ab.Reader())
-
-	ref := WriteValue(cb, cb.cs.(chunks.ChunkStore))
-	cb2 := ReadValue(ref, cb.cs)
-	bs3, err := ioutil.ReadAll(cb2.(Blob).Reader())
-	assert.NoError(err)
-	assert.Equal("helloworld", string(bs3))
-
+	r := WriteValue(cb, cb.cs)
+	test(ReadValue(r, cb.cs).(compoundBlob))
 }
 
 type testBlob struct {
@@ -187,7 +188,7 @@ func TestCompoundBlobChunks(t *testing.T) {
 
 	bl1 := newBlobLeaf([]byte("hello"))
 	bl2 := newBlobLeaf([]byte("world"))
-	cb = newCompoundBlob([]metaTuple{{WriteValue(bl1, cs), Uint64(uint64(5))}, {WriteValue(bl2, cs), Uint64(uint64(10))}}, cs)
+	cb = newCompoundBlob([]metaTuple{{bl1, bl1.Ref(), Uint64(uint64(5))}, {bl2, bl2.Ref(), Uint64(uint64(10))}}, cs)
 	assert.Equal(2, len(cb.Chunks()))
 }
 
@@ -213,13 +214,13 @@ func TestCompoundBlobSameChunksWithPrefix(t *testing.T) {
 	assert.Equal(cb2.Len(), cb1.Len()+uint64(6))
 	assert.Equal(2, len(cb1.tuples))
 	assert.Equal(2, len(cb2.tuples))
-	assert.NotEqual(cb1.tuples[0].ref, cb2.tuples[0].ref)
-	assert.Equal(cb1.tuples[1].ref, cb2.tuples[1].ref)
+	assert.NotEqual(cb1.tuples[0].childRef, cb2.tuples[0].childRef)
+	assert.Equal(cb1.tuples[1].childRef, cb2.tuples[1].childRef)
 
-	tuples1 := ReadValue(cb1.tuples[0].ref, cb1.cs).(compoundBlob).tuples
-	tuples2 := ReadValue(cb2.tuples[0].ref, cb2.cs).(compoundBlob).tuples
-	assert.NotEqual(tuples1[0].ref, tuples2[0].ref)
-	assert.Equal(tuples1[1].ref, tuples2[1].ref)
+	tuples1 := cb1.tuples[0].child.(compoundBlob).tuples
+	tuples2 := cb2.tuples[0].child.(compoundBlob).tuples
+	assert.NotEqual(tuples1[0].childRef, tuples2[0].childRef)
+	assert.Equal(tuples1[1].childRef, tuples2[1].childRef)
 }
 
 func TestCompoundBlobSameChunksWithSuffix(t *testing.T) {
@@ -244,14 +245,14 @@ func TestCompoundBlobSameChunksWithSuffix(t *testing.T) {
 	assert.Equal(cb2.Len(), cb1.Len()+uint64(6))
 	assert.Equal(2, len(cb1.tuples))
 	assert.Equal(len(cb1.tuples), len(cb2.tuples))
-	assert.Equal(cb1.tuples[0].ref, cb2.tuples[0].ref)
-	assert.NotEqual(cb1.tuples[1].ref, cb2.tuples[1].ref)
+	assert.Equal(cb1.tuples[0].childRef, cb2.tuples[0].childRef)
+	assert.NotEqual(cb1.tuples[1].childRef, cb2.tuples[1].childRef)
 
-	tuples1 := ReadValue(cb1.tuples[1].ref, cb1.cs).(compoundBlob).tuples
-	tuples2 := ReadValue(cb2.tuples[1].ref, cb2.cs).(compoundBlob).tuples
-	assert.Equal(tuples1[0].ref, tuples2[0].ref)
-	assert.Equal(tuples1[len(tuples1)-2].ref, tuples2[len(tuples2)-2].ref)
-	assert.NotEqual(tuples1[len(tuples1)-1].ref, tuples2[len(tuples2)-1].ref)
+	tuples1 := cb1.tuples[1].child.(compoundBlob).tuples
+	tuples2 := cb2.tuples[1].child.(compoundBlob).tuples
+	assert.Equal(tuples1[0].childRef, tuples2[0].childRef)
+	assert.Equal(tuples1[len(tuples1)-2].childRef, tuples2[len(tuples2)-2].childRef)
+	assert.NotEqual(tuples1[len(tuples1)-1].childRef, tuples2[len(tuples2)-1].childRef)
 }
 
 func printBlob(b Blob, indent int) {
@@ -263,7 +264,7 @@ func printBlob(b Blob, indent int) {
 		fmt.Printf("%scompoundBlob, len: %d, chunks: %d\n", indentString, b.Len(), len(b.tuples))
 		indent++
 		for _, t := range b.tuples {
-			printBlob(ReadValue(t.ref, b.cs).(Blob), indent)
+			printBlob(ReadValue(t.childRef, b.cs).(Blob), indent)
 		}
 	}
 }

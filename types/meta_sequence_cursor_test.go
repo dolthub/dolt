@@ -33,21 +33,21 @@ func TestMeta(t *testing.T) {
 
 	mtr := l0.Type()
 
-	m0 := compoundList{metaSequenceObject{metaSequenceData{{lr0, Uint64(1)}, {lr1, Uint64(2)}}, mtr}, 0, &ref.Ref{}, cs}
+	m0 := compoundList{metaSequenceObject{metaSequenceData{{l0, lr0, Uint64(1)}, {l1, lr1, Uint64(2)}}, mtr}, 0, &ref.Ref{}, cs}
 	lm0 := WriteValue(m0, cs)
-	m1 := compoundList{metaSequenceObject{metaSequenceData{{lr2, Uint64(1)}, {lr3, Uint64(2)}}, mtr}, 0, &ref.Ref{}, cs}
+	m1 := compoundList{metaSequenceObject{metaSequenceData{{l2, lr2, Uint64(1)}, {l3, lr3, Uint64(2)}}, mtr}, 0, &ref.Ref{}, cs}
 	lm1 := WriteValue(m1, cs)
-	m2 := compoundList{metaSequenceObject{metaSequenceData{{lr4, Uint64(1)}, {lr5, Uint64(2)}}, mtr}, 0, &ref.Ref{}, cs}
+	m2 := compoundList{metaSequenceObject{metaSequenceData{{l4, lr4, Uint64(1)}, {l5, lr5, Uint64(2)}}, mtr}, 0, &ref.Ref{}, cs}
 	lm2 := WriteValue(m2, cs)
-	m3 := compoundList{metaSequenceObject{metaSequenceData{{lr6, Uint64(1)}, {lr7, Uint64(2)}}, mtr}, 0, &ref.Ref{}, cs}
+	m3 := compoundList{metaSequenceObject{metaSequenceData{{l6, lr6, Uint64(1)}, {l7, lr7, Uint64(2)}}, mtr}, 0, &ref.Ref{}, cs}
 	lm3 := WriteValue(m3, cs)
 
-	m00 := compoundList{metaSequenceObject{metaSequenceData{{lm0, Uint64(2)}, {lm1, Uint64(4)}}, mtr}, 0, &ref.Ref{}, cs}
+	m00 := compoundList{metaSequenceObject{metaSequenceData{{m0, lm0, Uint64(2)}, {m1, lm1, Uint64(4)}}, mtr}, 0, &ref.Ref{}, cs}
 	lm00 := WriteValue(m00, cs)
-	m01 := compoundList{metaSequenceObject{metaSequenceData{{lm2, Uint64(2)}, {lm3, Uint64(4)}}, mtr}, 0, &ref.Ref{}, cs}
+	m01 := compoundList{metaSequenceObject{metaSequenceData{{m2, lm2, Uint64(2)}, {m3, lm3, Uint64(4)}}, mtr}, 0, &ref.Ref{}, cs}
 	lm01 := WriteValue(m01, cs)
 
-	rootList := compoundList{metaSequenceObject{metaSequenceData{{lm00, Uint64(4)}, {lm01, Uint64(8)}}, mtr}, 0, &ref.Ref{}, cs}
+	rootList := compoundList{metaSequenceObject{metaSequenceData{{m00, lm00, Uint64(4)}, {m01, lm01, Uint64(8)}}, mtr}, 0, &ref.Ref{}, cs}
 	rootRef := WriteValue(rootList, cs)
 
 	rootList = ReadValue(rootRef, cs).(compoundList)

@@ -109,7 +109,7 @@ func newSetSequenceCursorAtPosition(metaCur *sequenceCursor, leaf setLeaf, idx i
 
 func (cs compoundSet) sequenceChunkerAtValue(v Value) (*sequenceChunker, bool) {
 	cur, found := cs.sequenceCursorAtValue(v)
-	seq := newSequenceChunker(cur, makeSetLeafChunkFn(cs.t, cs.cs), newSetMetaSequenceChunkFn(cs.t, cs.cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newSequenceChunker(cur, makeSetLeafChunkFn(cs.t, cs.cs), newOrderedMetaSequenceChunkFn(cs.t, cs.cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 	return seq, found
 }
 
@@ -131,7 +131,7 @@ func (cs compoundSet) Subtract(others ...Set) Set {
 }
 
 func (cs compoundSet) Filter(cb setFilterCallback) Set {
-	seq := newEmptySequenceChunker(makeSetLeafChunkFn(cs.t, cs.cs), newSetMetaSequenceChunkFn(cs.t, cs.cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeSetLeafChunkFn(cs.t, cs.cs), newOrderedMetaSequenceChunkFn(cs.t, cs.cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	cs.IterAll(func(v Value) {
 		if cb(v) {
@@ -178,19 +178,4 @@ func (cs compoundSet) IterAllP(concurrency int, f setIterAllCallback) {
 		v.(setLeaf).IterAllP(concurrency, f)
 		return false
 	})
-}
-
-func newSetMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
-	return func(items []sequenceItem) (sequenceItem, Value) {
-		tuples := make(metaSequenceData, len(items))
-
-		for i, v := range items {
-			tuples[i] = v.(metaTuple)
-		}
-
-		lastValue := tuples[len(tuples)-1].value
-		meta := newMetaSequenceFromData(tuples, t, cs)
-		ref := WriteValue(meta, cs)
-		return metaTuple{ref, lastValue}, meta
-	}
 }

@@ -38,7 +38,7 @@ func NewTypedSet(cs chunks.ChunkStore, t Type, v ...Value) Set {
 }
 
 func newTypedSet(cs chunks.ChunkStore, t Type, data ...Value) Set {
-	seq := newEmptySequenceChunker(makeSetLeafChunkFn(t, cs), newSetMetaSequenceChunkFn(t, cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeSetLeafChunkFn(t, cs), newOrderedMetaSequenceChunkFn(t, cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, v := range data {
 		seq.Append(v)
@@ -55,7 +55,7 @@ func setUnion(set Set, cs chunks.ChunkStore, others []Set) Set {
 	assertSetsSameType(set, others...)
 
 	tr := set.Type()
-	seq := newEmptySequenceChunker(makeSetLeafChunkFn(tr, cs), newSetMetaSequenceChunkFn(tr, cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeSetLeafChunkFn(tr, cs), newOrderedMetaSequenceChunkFn(tr, cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	var lessFunction func(a, b sequenceItem) bool
 	if isSequenceOrderedByIndexedType(tr) {

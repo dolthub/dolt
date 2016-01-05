@@ -244,7 +244,6 @@ func makeMapLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 		}
 
 		mapLeaf := valueFromType(cs, newMapLeaf(cs, t, mapData...), t)
-		ref := WriteValue(mapLeaf, cs)
 
 		var indexValue Value
 		if len(mapData) > 0 {
@@ -256,6 +255,6 @@ func makeMapLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 			}
 		}
 
-		return metaTuple{ref, indexValue}, mapLeaf
+		return metaTuple{mapLeaf, mapLeaf.Ref(), indexValue}, mapLeaf
 	}
 }

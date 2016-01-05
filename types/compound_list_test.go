@@ -80,15 +80,21 @@ func TestCompoundListGet(t *testing.T) {
 	assert := assert.New(t)
 
 	cs := chunks.NewMemoryStore()
-
 	simpleList := getTestSimpleList()
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
-	cl := NewTypedList(cs, tr, simpleList...)
 
-	// Incrementing by len(simpleList)/10 because Get() is too slow to run on every index.
-	for i := 0; i < len(simpleList); i += len(simpleList) / 10 {
-		assert.Equal(simpleList[i], cl.Get(uint64(i)))
+	testGet := func(cl compoundList) {
+		// Incrementing by len(simpleList)/10 because Get() is too slow to run on every index.
+		for i := 0; i < len(simpleList); i += len(simpleList) / 10 {
+			assert.Equal(simpleList[i], cl.Get(uint64(i)))
+		}
 	}
+
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	cl := NewTypedList(cs, tr, simpleList...).(compoundList)
+	testGet(cl)
+
+	r := WriteValue(cl, cs)
+	testGet(ReadValue(r, cs).(compoundList))
 }
 
 func TestCompoundListIter(t *testing.T) {
