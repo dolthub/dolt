@@ -33,13 +33,13 @@ export default class HttpStore {
   }
 
   async getRoot(): Promise<Ref> {
-    let refStr = await fetchText(this._rpc.root);
+    const refStr = await fetchText(this._rpc.root);
     return Ref.parse(refStr);
   }
 
   get(ref: Ref): Promise<Chunk> {
     return new Promise(resolve => {
-      let refStr = ref.toString();
+      const refStr = ref.toString();
 
       if (!this._readQueue[refStr]) {
         this._readQueue[refStr] = [];
@@ -74,15 +74,15 @@ export default class HttpStore {
 
   async _beginFetch(): Promise<void> {
     this._activeReads++;
-    let reqs = this._readQueue;
+    const reqs = this._readQueue;
     this._readQueue = Object.create(null);
     this._anyPending = false;
     this._fetchScheduled = false;
-    let refStrs = Object.keys(reqs);
-    let body = refStrs.map(r => 'ref=' + r).join('&');
+    const refStrs = Object.keys(reqs);
+    const body = refStrs.map(r => 'ref=' + r).join('&');
 
     try {
-      let buffer = await fetchArrayBuffer(this._rpc.getRefs, {
+      const buffer = await fetchArrayBuffer(this._rpc.getRefs, {
         method: 'post',
         body: body,
         headers: {
@@ -90,12 +90,12 @@ export default class HttpStore {
         }
       });
 
-      let chunks = deserialize(buffer);
+      const chunks = deserialize(buffer);
 
       // Return success
       chunks.forEach(chunk => {
-        let refStr = chunk.ref.toString();
-        let resolvers = reqs[refStr];
+        const refStr = chunk.ref.toString();
+        const resolvers = reqs[refStr];
         delete reqs[refStr];
         resolvers.forEach(resolve => {
           resolve(chunk);
@@ -104,7 +104,7 @@ export default class HttpStore {
 
       // Report failure
       Object.keys(reqs).forEach(r => {
-        let resolvers = reqs[r];
+        const resolvers = reqs[r];
         resolvers.forEach(resolve => {
           resolve(new Chunk());
         });

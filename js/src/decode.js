@@ -48,31 +48,31 @@ class JsonArrayReader {
   }
 
   readString(): string {
-    let next = this.read();
+    const next = this.read();
     invariant(typeof next === 'string');
     return next;
   }
 
   readBool(): boolean {
-    let next = this.read();
+    const next = this.read();
     invariant(typeof next === 'boolean');
     return next;
   }
 
   readInt(): number {
-    let next = this.read();
+    const next = this.read();
     invariant(typeof next === 'string');
     return parseInt(next, 10);
   }
 
   readUint(): number {
-    let v = this.readInt();
+    const v = this.readInt();
     invariant(v >= 0);
     return v;
   }
 
   readFloat(): number {
-    let next = this.read();
+    const next = this.read();
     invariant(typeof next === 'string');
     return parseFloat(next);
   }
@@ -82,41 +82,41 @@ class JsonArrayReader {
   }
 
   readArray(): Array<any> {
-    let next = this.read();
+    const next = this.read();
     invariant(Array.isArray(next));
     return next;
   }
 
   readKind(): NomsKind {
-    let next = this.read();
+    const next = this.read();
     invariant(typeof next === 'number');
     return next;
   }
 
   readRef(): Ref {
-    let next = this.readString();
+    const next = this.readString();
     return Ref.parse(next);
   }
 
   readTypeAsTag(): Type {
-    let kind = this.readKind();
+    const kind = this.readKind();
     switch (kind) {
       case Kind.List:
       case Kind.Set:
       case Kind.Ref: {
-        let elemType = this.readTypeAsTag();
+        const elemType = this.readTypeAsTag();
         return makeCompoundType(kind, elemType);
       }
       case Kind.Map: {
-        let keyType = this.readTypeAsTag();
-        let valueType = this.readTypeAsTag();
+        const keyType = this.readTypeAsTag();
+        const valueType = this.readTypeAsTag();
         return makeCompoundType(kind, keyType, valueType);
       }
       case Kind.Type:
         return makePrimitiveType(Kind.Type);
       case Kind.Unresolved: {
-        let pkgRef = this.readRef();
-        let ordinal = this.readOrdinal();
+        const pkgRef = this.readRef();
+        const ordinal = this.readOrdinal();
         return makeType(pkgRef, ordinal);
       }
     }
@@ -129,15 +129,15 @@ class JsonArrayReader {
   }
 
   readBlob(): Promise<ArrayBuffer> {
-    let s = this.readString();
+    const s = this.readString();
     return Promise.resolve(decodeBase64(s));
   }
 
   readSequence(t: Type, pkg: ?Package): Array<any> {
-    let elemType = t.elemTypes[0];
-    let list = [];
+    const elemType = t.elemTypes[0];
+    const list = [];
     while (!this.atEnd()) {
-      let v = this.readValueWithoutTag(elemType, pkg);
+      const v = this.readValueWithoutTag(elemType, pkg);
       list.push(v);
     }
 
@@ -145,22 +145,22 @@ class JsonArrayReader {
   }
 
   readListLeafSequence(t: Type, pkg: ?Package): ListLeafSequence {
-    let seq = this.readSequence(t, pkg);
+    const seq = this.readSequence(t, pkg);
     return new ListLeafSequence(t, seq);
   }
 
   readSetLeafSequence(t: Type, pkg: ?Package): SetLeafSequence {
-    let seq = this.readSequence(t, pkg);
+    const seq = this.readSequence(t, pkg);
     return new SetLeafSequence(t, seq);
   }
 
   readMapLeafSequence(t: Type, pkg: ?Package): MapLeafSequence {
-    let keyType = t.elemTypes[0];
-    let valueType = t.elemTypes[1];
-    let entries = [];
+    const keyType = t.elemTypes[0];
+    const valueType = t.elemTypes[1];
+    const entries = [];
     while (!this.atEnd()) {
-      let k = this.readValueWithoutTag(keyType, pkg);
-      let v = this.readValueWithoutTag(valueType, pkg);
+      const k = this.readValueWithoutTag(keyType, pkg);
+      const v = this.readValueWithoutTag(valueType, pkg);
       entries.push({key: k, value: v});
     }
 
@@ -172,11 +172,11 @@ class JsonArrayReader {
   }
 
   readMetaSequence(t: Type, pkg: ?Package): any {
-    let data: Array<MetaTuple> = [];
-    let indexType = indexTypeForMetaSequence(t);
+    const data: Array<MetaTuple> = [];
+    const indexType = indexTypeForMetaSequence(t);
     while (!this.atEnd()) {
-      let ref = this.readRef();
-      let v = this.readValueWithoutTag(indexType, pkg);
+      const ref = this.readRef();
+      const v = this.readValueWithoutTag(indexType, pkg);
       data.push(new MetaTuple(ref, v));
     }
 
@@ -184,14 +184,14 @@ class JsonArrayReader {
   }
 
   readPackage(t: Type, pkg: ?Package): Package {
-    let r2 = new JsonArrayReader(this.readArray(), this._cs);
-    let types = [];
+    const r2 = new JsonArrayReader(this.readArray(), this._cs);
+    const types = [];
     while (!r2.atEnd()) {
       types.push(r2.readTypeAsValue(pkg));
     }
 
-    let r3 = new JsonArrayReader(this.readArray(), this._cs);
-    let deps = [];
+    const r3 = new JsonArrayReader(this.readArray(), this._cs);
+    const deps = [];
     while (!r3.atEnd()) {
       deps.push(r3.readRef());
     }
@@ -201,12 +201,12 @@ class JsonArrayReader {
 
   readTopLevelValue(): Promise<any> {
     return new Promise((resolve, reject) => {
-      let t = this.readTypeAsTag();
-      let doRead = () => {
-        let i = this._i;
+      const t = this.readTypeAsTag();
+      const doRead = () => {
+        const i = this._i;
 
         try {
-          let v = this.readValueWithoutTag(t);
+          const v = this.readValueWithoutTag(t);
           resolve(v);
         } catch (ex) {
           if (ex instanceof UnresolvedPackage) {
@@ -228,7 +228,7 @@ class JsonArrayReader {
     // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
       case Kind.Blob:
-        let isMeta = this.readBool();
+        const isMeta = this.readBool();
         // https://github.com/attic-labs/noms/issues/798
         invariant(!isMeta, 'CompoundBlob not supported');
         return this.readBlob();
@@ -251,21 +251,21 @@ class JsonArrayReader {
       case Kind.String:
         return this.readString();
       case Kind.Value: {
-        let t2 = this.readTypeAsTag();
+        const t2 = this.readTypeAsTag();
         return this.readValueWithoutTag(t2, pkg);
       }
       case Kind.List: {
-        let isMeta = this.readBool();
-        let r2 = new JsonArrayReader(this.readArray(), this._cs);
-        let sequence = isMeta ?
+        const isMeta = this.readBool();
+        const r2 = new JsonArrayReader(this.readArray(), this._cs);
+        const sequence = isMeta ?
             r2.readMetaSequence(t, pkg) :
             r2.readListLeafSequence(t, pkg);
         return new NomsList(this._cs, t, sequence);
       }
       case Kind.Map: {
-        let isMeta = this.readBool();
-        let r2 = new JsonArrayReader(this.readArray(), this._cs);
-        let sequence = isMeta ?
+        const isMeta = this.readBool();
+        const r2 = new JsonArrayReader(this.readArray(), this._cs);
+        const sequence = isMeta ?
           r2.readMetaSequence(t, pkg) :
           r2.readMapLeafSequence(t, pkg);
         return new NomsMap(this._cs, t, sequence);
@@ -277,9 +277,9 @@ class JsonArrayReader {
         // for refs.
         return this.readRef();
       case Kind.Set: {
-        let isMeta = this.readBool();
-        let r2 = new JsonArrayReader(this.readArray(), this._cs);
-        let sequence = isMeta ?
+        const isMeta = this.readBool();
+        const r2 = new JsonArrayReader(this.readArray(), this._cs);
+        const sequence = isMeta ?
           r2.readMetaSequence(t, pkg) :
           r2.readSetLeafSequence(t, pkg);
         return new NomsSet(this._cs, t, sequence);
@@ -297,8 +297,8 @@ class JsonArrayReader {
   }
 
   readUnresolvedKindToValue(t: Type, pkg: ?Package = null): any {
-    let pkgRef = t.packageRef;
-    let ordinal = t.ordinal;
+    const pkgRef = t.packageRef;
+    const ordinal = t.ordinal;
     if (!pkgRef.isEmpty()) {
       pkg = lookupPackage(pkgRef);
       if (!pkg) {
@@ -308,7 +308,7 @@ class JsonArrayReader {
     }
 
     pkg = notNull(pkg);
-    let typeDef = pkg.types[ordinal];
+    const typeDef = pkg.types[ordinal];
     if (typeDef.kind === Kind.Enum) {
       return this.readEnum();
     }
@@ -318,13 +318,13 @@ class JsonArrayReader {
   }
 
   readTypeAsValue(pkg: ?Package): Type {
-    let k = this.readKind();
+    const k = this.readKind();
 
     switch (k) {
       case Kind.Enum:
-        let name = this.readString();
-        let r2 = new JsonArrayReader(this.readArray(), this._cs);
-        let ids = [];
+        const name = this.readString();
+        const r2 = new JsonArrayReader(this.readArray(), this._cs);
+        const ids = [];
         while (!r2.atEnd()) {
           ids.push(r2.readString());
         }
@@ -333,8 +333,8 @@ class JsonArrayReader {
       case Kind.Map:
       case Kind.Ref:
       case Kind.Set: {
-        let r2 = new JsonArrayReader(this.readArray(), this._cs);
-        let elemTypes: Array<Type> = [];
+        const r2 = new JsonArrayReader(this.readArray(), this._cs);
+        const elemTypes: Array<Type> = [];
         while (!r2.atEnd()) {
           elemTypes.push(r2.readTypeAsValue());
         }
@@ -342,29 +342,29 @@ class JsonArrayReader {
         return makeCompoundType(k, ...elemTypes);
       }
       case Kind.Struct: {
-        let name = this.readString();
-        let readFields = () => {
-          let fields: Array<Field> = [];
-          let fieldReader = new JsonArrayReader(this.readArray(), this._cs);
+        const name = this.readString();
+        const readFields = () => {
+          const fields: Array<Field> = [];
+          const fieldReader = new JsonArrayReader(this.readArray(), this._cs);
           while (!fieldReader.atEnd()) {
-            let fieldName = fieldReader.readString();
-            let fieldType = fieldReader.readTypeAsValue(pkg);
-            let optional = fieldReader.readBool();
+            const fieldName = fieldReader.readString();
+            const fieldType = fieldReader.readTypeAsValue(pkg);
+            const optional = fieldReader.readBool();
             fields.push(new Field(fieldName, fieldType, optional));
           }
           return fields;
         };
 
-        let fields = readFields();
-        let choices = readFields();
+        const fields = readFields();
+        const choices = readFields();
         return makeStructType(name, fields, choices);
       }
       case Kind.Unresolved: {
-        let pkgRef = this.readRef();
-        let ordinal = this.readOrdinal();
+        const pkgRef = this.readRef();
+        const ordinal = this.readOrdinal();
         if (ordinal === -1) {
-          let namespace = this.readString();
-          let name = this.readString();
+          const namespace = this.readString();
+          const name = this.readString();
           return makeUnresolvedType(namespace, name);
         }
 
@@ -379,21 +379,21 @@ class JsonArrayReader {
 
   readStruct(typeDef: Type, type: Type, pkg: Package): Struct {
     // TODO FixupType?
-    let desc = typeDef.desc;
+    const desc = typeDef.desc;
     invariant(desc instanceof StructDesc);
 
-    let s: { [key: string]: any } = Object.create(null);
+    const s: { [key: string]: any } = Object.create(null);
 
     for (let i = 0; i < desc.fields.length; i++) {
-      let field = desc.fields[i];
+      const field = desc.fields[i];
       if (field.optional) {
-        let b = this.readBool();
+        const b = this.readBool();
         if (b) {
-          let v = this.readValueWithoutTag(field.t, pkg);
+          const v = this.readValueWithoutTag(field.t, pkg);
           s[field.name] = v;
         }
       } else {
-        let v = this.readValueWithoutTag(field.t, pkg);
+        const v = this.readValueWithoutTag(field.t, pkg);
         s[field.name] = v;
       }
     }
@@ -401,8 +401,8 @@ class JsonArrayReader {
     let unionIndex = -1;
     if (desc.union.length > 0) {
       unionIndex = this.readUint();
-      let unionField = desc.union[unionIndex];
-      let v = this.readValueWithoutTag(unionField.t, pkg);
+      const unionField = desc.union[unionIndex];
+      const v = this.readValueWithoutTag(unionField.t, pkg);
       s[unionField.name] = v;
     }
 
@@ -411,12 +411,12 @@ class JsonArrayReader {
 }
 
 function decodeNomsValue(chunk: Chunk, cs: ChunkStore): Promise<any> {
-  let tag = new Chunk(new Uint8Array(chunk.data.buffer, 0, 2)).toString();
+  const tag = new Chunk(new Uint8Array(chunk.data.buffer, 0, 2)).toString();
 
   switch (tag) {
     case typedTag: {
-      let payload = JSON.parse(new Chunk(new Uint8Array(chunk.data.buffer, 2)).toString());
-      let reader = new JsonArrayReader(payload, cs);
+      const payload = JSON.parse(new Chunk(new Uint8Array(chunk.data.buffer, 2)).toString());
+      const reader = new JsonArrayReader(payload, cs);
       return reader.readTopLevelValue();
     }
     case blobTag: {

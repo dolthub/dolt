@@ -144,7 +144,7 @@ export function search(n: number, f: (i: number) => boolean): number {
   let i = 0;
   let j = n;
   while (i < j) {
-    let h = i + (((j - i) / 2) | 0); // avoid overflow when computing h
+    const h = i + (((j - i) / 2) | 0); // avoid overflow when computing h
     // i ≤ h < j
     if (!f(h)) {
       i = h + 1; // preserves f(i-1) == false

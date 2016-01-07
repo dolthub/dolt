@@ -27,7 +27,7 @@ suite('assert', () => {
 
     t = new Foo();
     doSomething(); // might have nullified t;
-    let t2: Foo = notNull(t); // shouldn't throw
+    const t2: Foo = notNull(t); // shouldn't throw
     t2.doNothing();
   });
 });

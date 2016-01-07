@@ -9,7 +9,7 @@ type decodeFn = (chunk: Chunk, cs: ChunkStore) => Promise<any>
 let decodeNomsValue: ?decodeFn = null;
 
 export async function readValue(r: Ref, cs: ChunkStore): Promise<any> {
-  let chunk = await cs.get(r);
+  const chunk = await cs.get(r);
   if (chunk.isEmpty()) {
     return null;
   }

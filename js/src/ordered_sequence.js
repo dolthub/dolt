@@ -66,9 +66,9 @@ export class OrderedSequenceCursor<T, K: valueOrPrimitive> extends
       return false;
     }
 
-    let p = this.parent;
+    const p = this.parent;
     invariant(p instanceof OrderedSequenceCursor);
-    let old = p.getCurrent();
+    const old = p.getCurrent();
     if (!await p.advanceTo(key)) {
       return false;
     }

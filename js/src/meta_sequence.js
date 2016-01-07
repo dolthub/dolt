@@ -32,7 +32,7 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
     this.offsets = [];
     let cum = 0;
     for (let i = 0; i < items.length; i++) {
-      let length = items[i].value;
+      const length = items[i].value;
       this.offsets.push(cum + length - 1);
       cum += length;
     }
@@ -43,8 +43,8 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
       return null;
     }
 
-    let mt = this.items[idx];
-    let collection = await readValue(mt.ref, cs);
+    const mt = this.items[idx];
+    const collection = await readValue(mt.ref, cs);
     invariant(collection && collection.sequence instanceof IndexedSequence);
     return collection.sequence;
   }
@@ -65,8 +65,8 @@ export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K,
       return null;
     }
 
-    let mt = this.items[idx];
-    let collection = await readValue(mt.ref, cs);
+    const mt = this.items[idx];
+    const collection = await readValue(mt.ref, cs);
     invariant(collection && collection.sequence instanceof OrderedSequence);
     return collection.sequence;
   }
@@ -91,15 +91,15 @@ export function newMetaSequenceFromData(cs: ChunkStore, type: Type, tuples: Arra
   }
 }
 
-let indexedSequenceIndexType = makePrimitiveType(Kind.Uint64);
+const indexedSequenceIndexType = makePrimitiveType(Kind.Uint64);
 
 export function indexTypeForMetaSequence(t: Type): Type {
   switch (t.kind) {
     case Kind.Map:
     case Kind.Set: {
-      let desc = t.desc;
+      const desc = t.desc;
       invariant(desc instanceof CompoundDesc);
-      let elemType = desc.elemTypes[0];
+      const elemType = desc.elemTypes[0];
       if (elemType.ordered) {
         return elemType;
       } else {

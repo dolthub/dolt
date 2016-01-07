@@ -15,29 +15,29 @@ suite('ChunkSerializer', () => {
   }
 
   test('simple', () => {
-    let chunks = [Chunk.fromString('abc'), Chunk.fromString('def'), Chunk.fromString('ghi'),
-                  Chunk.fromString('wacka wack wack')];
+    const chunks = [Chunk.fromString('abc'), Chunk.fromString('def'), Chunk.fromString('ghi'),
+                    Chunk.fromString('wacka wack wack')];
 
-    let buffer = serialize(chunks);
-    let newChunks = deserialize(buffer);
+    const buffer = serialize(chunks);
+    const newChunks = deserialize(buffer);
 
     assertChunks(chunks, newChunks);
   });
 
   test('leading & trailing empty', () => {
-    let chunks = [Chunk.fromString(''), Chunk.fromString('A'), Chunk.fromString('')];
+    const chunks = [Chunk.fromString(''), Chunk.fromString('A'), Chunk.fromString('')];
 
-    let buffer = serialize(chunks);
-    let newChunks = deserialize(buffer);
+    const buffer = serialize(chunks);
+    const newChunks = deserialize(buffer);
 
     assertChunks(chunks, newChunks);
   });
 
   test('no chunks', () => {
-    let chunks = [];
+    const chunks = [];
 
-    let buffer = serialize(chunks);
-    let newChunks = deserialize(buffer);
+    const buffer = serialize(chunks);
+    const newChunks = deserialize(buffer);
 
     assertChunks(chunks, newChunks);
   });

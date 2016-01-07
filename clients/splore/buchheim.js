@@ -81,7 +81,7 @@ export class TreeNode {
     let n = null;
     if (this.parent) {
       for (let i = 0; i < this.parent.children.length; i++) {
-        let node = this.parent.children[i];
+        const node = this.parent.children[i];
         if (node === this) {
           return n;
         } else {
@@ -116,15 +116,15 @@ function firstWalk(v: TreeNode, distance: number): void {
   } else {
     let defaultAncestor = v.children[0];
     for (let i = 0; i < v.children.length; i++) {
-      let w = v.children[i];
+      const w = v.children[i];
       firstWalk(w, distance);
       defaultAncestor = apportion(w, defaultAncestor, distance);
     }
     executeShifts(v);
 
-    let midpoint = (v.children[0].x + v.children[v.children.length - 1].x) / 2;
+    const midpoint = (v.children[0].x + v.children[v.children.length - 1].x) / 2;
 
-    let w = v.leftBrother();
+    const w = v.leftBrother();
     if (w) {
       v.x = w.x + distance;
       v.mod = v.x - midpoint;
@@ -135,7 +135,7 @@ function firstWalk(v: TreeNode, distance: number): void {
 }
 
 function apportion(v: TreeNode, defaultAncestor: TreeNode, distance: number): TreeNode {
-  let w = v.leftBrother();
+  const w = v.leftBrother();
   if (w !== null) {
     let vir = v;
     let vor = v;
@@ -151,9 +151,9 @@ function apportion(v: TreeNode, defaultAncestor: TreeNode, distance: number): Tr
       vol = assertNotNull(vol.left());
       vor = assertNotNull(vor.right());
       vor.ancestor = v;
-      let shift = (vil.x + sil) - (vir.x + sir) + distance;
+      const shift = (vil.x + sil) - (vir.x + sir) + distance;
       if (shift > 0) {
-        let a = ancestor(vil, v, defaultAncestor);
+        const a = ancestor(vil, v, defaultAncestor);
         moveSubtree(a, v, shift);
         sir = sir + shift;
         sor = sor + shift;
@@ -178,7 +178,7 @@ function apportion(v: TreeNode, defaultAncestor: TreeNode, distance: number): Tr
 }
 
 function moveSubtree(wl: TreeNode, wr: TreeNode, shift: number): void {
-  let subtrees = wr.number - wl.number;
+  const subtrees = wr.number - wl.number;
   wr.change -= shift / subtrees;
   wr.shift += shift;
   wl.change += shift / subtrees;
@@ -190,7 +190,7 @@ function executeShifts(v: TreeNode): void {
   let shift = 0;
   let change = 0;
   for (let i = v.children.length - 1; i >= 0; i--) {
-    let w = v.children[i];
+    const w = v.children[i];
     w.x += shift;
     w.mod += shift;
     change += w.change;

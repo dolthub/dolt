@@ -9,8 +9,8 @@ type Props<T> = {
 };
 
 export default function List<T>(props: Props<T>) : React.Element {
-  let delegate = props.delegate;
-  let labels = props.items.map(item => {
+  const delegate = props.delegate;
+  const labels = props.items.map(item => {
     return <Label key={delegate.getLabel(item)} item={item}
         delegate={delegate}/>;
   });
@@ -33,7 +33,7 @@ export type ListDelegate<T> = {
 };
 
 function Label(props: LabelProps) : React.Element {
-  let {delegate, item} = props;
+  const {delegate, item} = props;
   return <label><input type="checkbox"
       checked={delegate.isSelected(item)}
       onChange={() => delegate.onChange(item)}/>

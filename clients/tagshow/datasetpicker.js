@@ -35,11 +35,11 @@ export default class DatasetPicker extends React.Component<DefaultProps, Props, 
   }
 
   async _updateDatasets(props: Props) : Promise<void> {
-    let store = props.store;
-    let rootRef = await store.getRoot();
-    let datasets: NomsMap<string, Ref> = await readValue(rootRef, store);
+    const store = props.store;
+    const rootRef = await store.getRoot();
+    const datasets: NomsMap<string, Ref> = await readValue(rootRef, store);
     invariant(datasets);
-    let s = new Set();
+    const s = new Set();
     await datasets.forEach((v, k) => {
       s.add(k);
     });
@@ -55,8 +55,8 @@ export default class DatasetPicker extends React.Component<DefaultProps, Props, 
   render() : React.Element {
     this._updateDatasets(this.props);
 
-    let options = [];
-    for (let v of this.state.datasets) {
+    const options = [];
+    for (const v of this.state.datasets) {
       options.push(<option value={v} key={v}>{v}</option>);
     }
     return <form>

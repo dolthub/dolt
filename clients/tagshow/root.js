@@ -33,22 +33,22 @@ export default class Root extends React.Component<void, Props, State> {
   }
 
   async _updateState(props: Props) : Promise<void> {
-    let selectedTags = this.getSelectedTags(props);
-    let tags = [];
-    let selectedPhotos: Array<Ref> = [];
+    const selectedTags = this.getSelectedTags(props);
+    const tags = [];
+    const selectedPhotos: Array<Ref> = [];
 
     if (props.qs.ds) {
-      let {store} = props;
-      let rootRef = await props.store.getRoot();
-      let datasets: NomsMap<string, Ref> = await readValue(rootRef, props.store);
-      let commitRef = await datasets.get(props.qs.ds);
+      const {store} = props;
+      const rootRef = await props.store.getRoot();
+      const datasets: NomsMap<string, Ref> = await readValue(rootRef, props.store);
+      const commitRef = await datasets.get(props.qs.ds);
       invariant(commitRef);
-      let commit: Struct = await readValue(commitRef, store);
-      let v = commit.get('value');
+      const commit: Struct = await readValue(commitRef, store);
+      const v = commit.get('value');
       if (v instanceof NomsMap) {
-        let seenRefs: Set<string> = new Set();
+        const seenRefs: Set<string> = new Set();
 
-        let sets = [];
+        const sets = [];
 
         await v.forEach((value, tag) => {
           tags.push(tag);
@@ -57,9 +57,9 @@ export default class Root extends React.Component<void, Props, State> {
           }
         });
 
-        for (let s of sets) {
+        for (const s of sets) {
           await s.forEach(r => {
-            let rs = r.toString();
+            const rs = r.toString();
             if (!seenRefs.has(rs)) {
               seenRefs.add(rs);
               selectedPhotos.push(r);
@@ -83,12 +83,12 @@ export default class Root extends React.Component<void, Props, State> {
   }
 
   handleDataSetPicked(ds: string) {
-    let qs = Object.assign({}, this.props.qs, {ds});
+    const qs = Object.assign({}, this.props.qs, {ds});
     this.props.updateQuery(qs);
   }
 
   getSelectedTags(props: Props) : Set<string> {
-    let tags = props.qs.tags;
+    const tags = props.qs.tags;
     if (!tags) {
       return new Set();
     }
@@ -97,14 +97,14 @@ export default class Root extends React.Component<void, Props, State> {
 
   handleTagsChange(selectedTags: Set<string>) {
     // FIXME: https://github.com/facebook/flow/issues/1059
-    let workaround: any = selectedTags;
-    let tags = [...workaround].join(',');
-    let qs = Object.assign({}, this.props.qs, {tags});
+    const workaround: any = selectedTags;
+    const tags = [...workaround].join(',');
+    const qs = Object.assign({}, this.props.qs, {tags});
     this.props.updateQuery(qs);
   }
 
   handleTagsConfirm() {
-    let qs = Object.assign({}, this.props.qs, {show: '1'});
+    const qs = Object.assign({}, this.props.qs, {show: '1'});
     this.props.updateQuery(qs);
   }
 

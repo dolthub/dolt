@@ -18,13 +18,13 @@ if (!datasetId) {
 
 window.addEventListener('load', async () => {
   httpStore = new HttpStore(nomsServer);
-  let rootRef = await httpStore.getRoot();
-  let datasets: NomsMap<string, Ref> = await readValue(rootRef, httpStore);
-  let commitRef = await datasets.get(datasetId);
+  const rootRef = await httpStore.getRoot();
+  const datasets: NomsMap<string, Ref> = await readValue(rootRef, httpStore);
+  const commitRef = await datasets.get(datasetId);
   invariant(commitRef);
-  let commit:Struct = await readValue(commitRef, httpStore);
-  let pitchersMap = commit.get('value');
-  let pitchers = [];
+  const commit:Struct = await readValue(commitRef, httpStore);
+  const pitchersMap = commit.get('value');
+  const pitchers = [];
   await pitchersMap.forEach((ref, pitcher) => {
     pitchers.push(pitcher);
   });
@@ -52,10 +52,10 @@ class PitcherList extends React.Component<void, Props, State> {
   }
 
   render() : React.Element {
-    let currentPitcher = this.state.currentPitcher;
-    let pitchListRefP = this.props.pitchersMap.get(currentPitcher);
+    const currentPitcher = this.state.currentPitcher;
+    const pitchListRefP = this.props.pitchersMap.get(currentPitcher);
 
-    let onChangePitcher = e => {
+    const onChangePitcher = e => {
       this.setState({
         currentPitcher: e.target.value
       });
@@ -73,6 +73,6 @@ class PitcherList extends React.Component<void, Props, State> {
 }
 
 function renderPitchersMap(map: NomsMap<string, Ref>, pitchers: Array<string>) {
-  let renderNode = document.getElementById('heatmap');
+  const renderNode = document.getElementById('heatmap');
   ReactDOM.render(<PitcherList pitchersMap={map} pitchers={pitchers}/>, renderNode);
 }

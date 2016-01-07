@@ -8,7 +8,7 @@ import {HttpStore, invariant, IndexedMetaSequence, ListLeafSequence, MapLeafSequ
     from 'noms';
 import {layout, NodeGraph, TreeNode} from './buchheim.js';
 
-let data: NodeGraph = {nodes: {}, links: {}};
+const data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
 let httpStore: HttpStore;
 let renderNode: ?HTMLElement;
@@ -45,7 +45,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
                                name: string) {
     data.nodes[id] = {name: name};
     sequence.items.forEach(tuple => {
-      let kid = process(ref, formatKeyString(tuple.value), id);
+      const kid = process(ref, formatKeyString(tuple.value), id);
       if (kid) {
         data.nodes[kid].isOpen = true;
 
@@ -87,7 +87,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
     if (val instanceof Blob) {
       data.nodes[id] = {name: `Blob (${val.size})`};
     } else if (val instanceof NomsList) {
-      let sequence = val.sequence;
+      const sequence = val.sequence;
       if (sequence instanceof ListLeafSequence) {
         data.nodes[id] = {name: `List (${val.length})`};
         sequence.items.forEach(c => process(ref, c, id));
@@ -96,7 +96,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         processMetaSequence(id, sequence, 'ListNode');
       }
     } else if (val instanceof NomsSet) {
-      let sequence = val.sequence;
+      const sequence = val.sequence;
       if (sequence instanceof SetLeafSequence) {
         data.nodes[id] = {name: `Set (${val.size})`};
         sequence.items.forEach(c => process(ref, c, id));
@@ -105,14 +105,14 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         processMetaSequence(id, sequence, 'SetNode');
       }
     } else if (val instanceof NomsMap) {
-      let sequence = val.sequence;
+      const sequence = val.sequence;
       if (sequence instanceof MapLeafSequence) {
         data.nodes[id] = {name: `Map (${val.size})`};
         sequence.items.forEach(entry => {
-          let k = entry.key;
-          let v = entry.value;
+          const k = entry.key;
+          const v = entry.value;
           // TODO: handle non-string keys
-          let kid = process(ref, k, id);
+          const kid = process(ref, k, id);
           if (kid) {
             data.nodes[kid].isOpen = true;
 
@@ -126,7 +126,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         processMetaSequence(id, sequence, 'MapNode');
       }
     } else if (val instanceof Ref) {
-      let refStr = val.toString();
+      const refStr = val.toString();
       data.nodes[id] = {
         canOpen: true,
         name: refStr.substr(5, 6),
@@ -134,12 +134,12 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
       };
     } else if (val instanceof Struct) {
       // Struct
-      let structName = val.typeDef.name;
+      const structName = val.typeDef.name;
       data.nodes[id] = {name: structName};
 
       val.forEach((v, k) => {
         // TODO: handle non-string keys
-        let kid = process(ref, k, id);
+        const kid = process(ref, k, id);
         if (kid) {
           // Start map keys open, just makes it easier to use.
           data.nodes[kid].isOpen = true;
@@ -176,7 +176,7 @@ function handleNodeClick(e: Event, id: string) {
     if (data.links[id] || !data.nodes[id].isOpen) {
       render();
     } else {
-      let ref = Ref.parse(id);
+      const ref = Ref.parse(id);
       readValue(ref, httpStore).then(value => {
         handleChunkLoad(ref, value, id);
       });
@@ -185,7 +185,7 @@ function handleNodeClick(e: Event, id: string) {
 }
 
 function render() {
-  let dt = new TreeNode(data, rootRef.toString(), null, 0, 0, {});
+  const dt = new TreeNode(data, rootRef.toString(), null, 0, 0, {});
   layout(dt);
   ReactDOM.render(<Layout tree={dt} data={data} onNodeClick={handleNodeClick}/>, renderNode);
 }

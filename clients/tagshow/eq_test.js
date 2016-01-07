@@ -7,10 +7,10 @@ import {Ref} from 'noms';
 
 suite('eq', () => {
   test('different', () => {
-    let r0 = Ref.parse('sha1-0000000000000000000000000000000000000000');
-    let r1 = Ref.parse('sha1-0000000000000000000000000000000000000001');
+    const r0 = Ref.parse('sha1-0000000000000000000000000000000000000000');
+    const r1 = Ref.parse('sha1-0000000000000000000000000000000000000001');
 
-    let different = [
+    const different = [
       null,
       undefined,
       true,
@@ -45,9 +45,9 @@ suite('eq', () => {
   });
 
   test('same', () => {
-    let r1 = Ref.parse('sha1-0000000000000000000000000000000000000000');
-    let r2 = Ref.parse('sha1-0000000000000000000000000000000000000000');
-    let same = [
+    const r1 = Ref.parse('sha1-0000000000000000000000000000000000000000');
+    const r2 = Ref.parse('sha1-0000000000000000000000000000000000000000');
+    const same = [
       [new Set([1, 2]), new Set([2, 1])],
       [new Map([[1, 2], [3, 4]]), new Map([[3, 4], [1, 2]])],
       [{a: 1, b: 2}, {b: 2, a: 1}],
@@ -56,7 +56,7 @@ suite('eq', () => {
       [new Set([r1]), new Set([r2])],
       [new Map([[r1, 42]]), new Map([[r2, 42]])]
     ];
-    for (let vs of same) {
+    for (const vs of same) {
       for (let i = 0; i < vs.length; i++) {
         for (let j = 0; j < vs.length; j++) {
           assert.equal(true, eq(vs[i], vs[i]), `${vs[i]} == ${vs[j]}`);

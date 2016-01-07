@@ -207,7 +207,7 @@ class Type {
   }
 
   get chunks(): Array<Ref> {
-    let chunks = [];
+    const chunks = [];
     if (this.unresolved) {
       if (this.hasPackageRef) {
         chunks.push(this.packageRef);
@@ -216,7 +216,7 @@ class Type {
       return chunks;
     }
 
-    let desc = this._desc;
+    const desc = this._desc;
     if (desc instanceof CompoundDesc) {
       desc.elemTypes.forEach(et => chunks.push(...et.chunks()));
     }
@@ -229,7 +229,7 @@ class Type {
   }
 
   get ordered(): boolean {
-    let desc = this._desc;
+    const desc = this._desc;
     if (desc instanceof PrimitiveDesc) {
       return desc.ordered;
     }
@@ -338,8 +338,8 @@ function makeUnresolvedType(namespace: string, name: string): Type {
   return new Type(name, namespace, new UnresolvedDesc(new Ref(), -1));
 }
 
-let typeType = makePrimitiveType(Kind.Type);
-let packageType = makePrimitiveType(Kind.Package);
+const typeType = makePrimitiveType(Kind.Type);
+const packageType = makePrimitiveType(Kind.Package);
 
 export {
   CompoundDesc,

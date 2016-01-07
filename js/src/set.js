@@ -8,17 +8,17 @@ import {OrderedSequence} from './ordered_sequence.js';
 
 export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
   async has(key: T): Promise<boolean> {
-    let cursor = await this.sequence.newCursorAt(this.cs, key);
+    const cursor = await this.sequence.newCursorAt(this.cs, key);
     return cursor.valid && equals(cursor.getCurrentKey(), key);
   }
 
   async first(): Promise<?T> {
-    let cursor = await this.sequence.newCursorAt(this.cs, null);
+    const cursor = await this.sequence.newCursorAt(this.cs, null);
     return cursor.valid ? cursor.getCurrent() : null;
   }
 
   async forEach(cb: (v: T) => void): Promise<void> {
-    let cursor = await this.sequence.newCursorAt(this.cs, null);
+    const cursor = await this.sequence.newCursorAt(this.cs, null);
     return cursor.iter(v => {
       cb(v);
       return false;
@@ -27,8 +27,8 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
 
   // TODO: Find some way to return a NomsSet.
   async map<S>(cb: (v: T) => (Promise<S> | S)): Promise<Array<S>> {
-    let cursor = await this.sequence.newCursorAt(this.cs, null);
-    let values = [];
+    const cursor = await this.sequence.newCursorAt(this.cs, null);
+    const values = [];
     await cursor.iter(v => {
       values.push(cb(v));
       return false;
@@ -60,12 +60,12 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
       return this;
     }
 
-    let values: Array<T> = [];
+    const values: Array<T> = [];
 
     for (let i = 0; cursor.valid && i < sets.length; i++) {
-      let first = cursor.getCurrent();
-      let set: NomsSet = sets[i];
-      let next = await set.sequence.newCursorAt(set.cs, first);
+      const first = cursor.getCurrent();
+      const set: NomsSet = sets[i];
+      const next = await set.sequence.newCursorAt(set.cs, first);
       if (!next.valid) {
         break;
       }

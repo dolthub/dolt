@@ -7,12 +7,12 @@ import {IndexedSequence} from './indexed_sequence.js';
 export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
   async get(idx: number): Promise<T> {
     // TODO (when |length| works) invariant(idx < this.length, idx + ' >= ' + this.length);
-    let cursor = await this.sequence.newCursorAt(this.cs, idx);
+    const cursor = await this.sequence.newCursorAt(this.cs, idx);
     return cursor.getCurrent();
   }
 
   async forEach(cb: (v: T, i: number) => void): Promise<void> {
-    let cursor = await this.sequence.newCursorAt(this.cs, 0);
+    const cursor = await this.sequence.newCursorAt(this.cs, 0);
     return cursor.iter((v, i) => {
       cb(v, i);
       return false;

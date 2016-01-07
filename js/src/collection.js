@@ -19,8 +19,8 @@ export class Collection<S:Sequence> extends ValueBase {
   }
 
   get chunks(): Array<Ref> {
-    let chunks = [];
-    let addChunks = this.sequence.isMeta ? (mt:MetaTuple) => {
+    const chunks = [];
+    const addChunks = this.sequence.isMeta ? (mt:MetaTuple) => {
       chunks.push(mt.ref);
     } : (v) => {
       if (!isPrimitive(v)) {

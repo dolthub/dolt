@@ -41,11 +41,11 @@ export default class Photo extends React.Component<DefaultProps, Props, State> {
       return size.get('Width') * size.get('Height');
     }
 
-    let photo: Struct = await readValue(props.photoRef, props.store);
+    const photo: Struct = await readValue(props.photoRef, props.store);
 
     // Sizes is a Map(Size, String) where the string is a URL.
-    let sizes = [];
-    let s: NomsMap<Struct, string> = photo.get('Sizes');
+    const sizes = [];
+    const s: NomsMap<Struct, string> = photo.get('Sizes');
     await s.forEach((url, size) => {
       sizes.push({size, url});
     });
@@ -71,10 +71,10 @@ export default class Photo extends React.Component<DefaultProps, Props, State> {
   getURL() : string {
     // If there are some remote URLs we can use, just pick the most appropriate size. We need the
     // smallest one that is bigger than our current dimensions.
-    let sizes = this.state.sizes;
-    let w = this.props.style.width || 0;
-    let h = this.props.style.height || 0;
-    let size = sizes.find(({size}) => {
+    const sizes = this.state.sizes;
+    const w = this.props.style.width || 0;
+    const h = this.props.style.height || 0;
+    const size = sizes.find(({size}) => {
       return size.get('Width') >= w && size.get('Height') >= h;
     });
     return size ? size.url : sizes[sizes.length - 1].url;

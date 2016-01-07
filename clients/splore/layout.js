@@ -12,24 +12,24 @@ type Props = {
 }
 
 export default function Layout(props: Props) : React.Element {
-  let children = [];
-  let edges = [];
-  let lookup = {};
+  const children = [];
+  const edges = [];
+  const lookup = {};
 
   const spaceX = 75;
   const spaceY = 20;
   const paddingRight = 250;
-  let getX = d => d.y * spaceX;
-  let getY = d => d.x * spaceY;
+  const getX = d => d.y * spaceX;
+  const getY = d => d.x * spaceY;
   let maxX = 0;
   let minY = 0;
   let maxY = 0;
 
-  let process = (treeNode, fromX, fromY) => {
-    let links = props.data.links[treeNode.id] || [];
-    let hasChildren = treeNode.data.canOpen || links.length > 0;
-    let x = getX(treeNode);
-    let y = getY(treeNode);
+  const process = (treeNode, fromX, fromY) => {
+    const links = props.data.links[treeNode.id] || [];
+    const hasChildren = treeNode.data.canOpen || links.length > 0;
+    const x = getX(treeNode);
+    const y = getY(treeNode);
     let title = '';
 
     if (treeNode.data.fullName) {
@@ -40,7 +40,7 @@ export default function Layout(props: Props) : React.Element {
     minY = Math.min(y, minY);
     maxY = Math.max(y + spaceY, maxY);
 
-    let n = (
+    const n = (
       <Node
         key={'n' + treeNode.id}
         shape='circle'
@@ -69,14 +69,14 @@ export default function Layout(props: Props) : React.Element {
   process(props.tree, 0, 0);
 
   edges.forEach(e => {
-    let from = lookup[e[0]];
-    let to = lookup[e[1]];
+    const from = lookup[e[0]];
+    const to = lookup[e[1]];
     children.push(
       <path key={'p' + e[0] + '-' + e[1]} className='link'
           d={`M${getX(from)},${getY(from)}L${getX(to)},${getY(to)}`}/>);
   });
 
-  let sortOrder = (elm => elm.type === 'path' ? 0 : 1);
+  const sortOrder = (elm => elm.type === 'path' ? 0 : 1);
   children.sort((a, b) => sortOrder(a) - sortOrder(b));
 
   let translateY = spaceY;

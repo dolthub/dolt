@@ -90,25 +90,25 @@ export default class DataManager {
       return this._packageP;
     }
 
-    let ds = await this._getDataset();
+    const ds = await this._getDataset();
     this._packageP = getKeyPackage(ds, this._store);
     return this._packageP;
   }
 
   async _getKeyClass(): Promise<any> {
     if (this._keyClass) return this._keyClass;
-    let pkg = await this._getPackage();
+    const pkg = await this._getPackage();
     return this._keyClass = getStructClass(pkg, 'Key');
   }
 
   async _getQuarterClass(): Promise<any> {
     if (this._quarterClass) return this._quarterClass;
-    let pkg = await this._getPackage();
+    const pkg = await this._getPackage();
     return this._quarterClass = getStructClass(pkg, 'Quarter');
   }
 
   _setTime(time: TimeOption) {
-    let t = this._time;
+    const t = this._time;
     if (!t || t.Year !== time.Year || t.Quarter !== time.Quarter) {
       this._time = time;
       this._timeSetP = this._getSetOfRounds(time);
@@ -142,16 +142,16 @@ export default class DataManager {
 
     invariant(this._seedSetP && this._seriesASetP && this._seriesBSetP &&
               this._timeSetP && this._categorySetP);
-    let [seedSet, seriesASet, seriesBSet, timeSet, categorySet] =
+    const [seedSet, seriesASet, seriesBSet, timeSet, categorySet] =
         await Promise.all([this._seedSetP, this._seriesASetP, this._seriesBSetP,
             this._timeSetP, this._categorySetP]);
 
-    let store = this._store;
-    let getAmountRaised = (r: Ref): Promise<number> => {
+    const store = this._store;
+    const getAmountRaised = (r: Ref): Promise<number> => {
       return readValue(r, store).then(round => round.get('RaisedAmountUsd'));
     };
 
-    let [seedData, seriesAData, seriesBData] = await Promise.all([
+    const [seedData, seriesAData, seriesBData] = await Promise.all([
       seedSet.intersect(categorySet, timeSet).then(set => set.map(getAmountRaised)),
       seriesASet.intersect(categorySet, timeSet).then(set => set.map(getAmountRaised)),
       seriesBSet.intersect(categorySet, timeSet).then(set => set.map(getAmountRaised))
@@ -177,7 +177,7 @@ export default class DataManager {
     const Key = await this._getKeyClass();
     let k;
     if (p.Quarter !== undefined) {
-      let Quarter = await this._getQuarterClass();
+      const Quarter = await this._getQuarterClass();
       k = new Key({Quarter: new Quarter(p)});
     } else {
       k = new Key(p);
@@ -186,10 +186,10 @@ export default class DataManager {
   }
 
   async _getSetOfRounds(p: KeyParam): Promise<NomsSet<Ref>> {
-    let r = await this._getKeyRef(p);
+    const r = await this._getKeyRef(p);
     invariant(this._datasetP);
-    let map = await this._datasetP;
-    let set = await map.get(r);
+    const map = await this._datasetP;
+    const set = await map.get(r);
     if (set === undefined) {
       // TODO: Cleanup the NomsSet api (it shouldn't be this hard to create an emptySet)
       return new NomsSet(this._store, setTr, new SetLeafSequence(setTr, []));
@@ -207,21 +207,21 @@ const setTr = makeCompoundType(Kind.Set, makeCompoundType(Kind.Ref, makePrimitiv
  */
 async function getKeyPackage(index: NomsMap<Ref, Ref>, store: ChunkStore):
     Promise<Package> {
-  let kv = await index.first();
+  const kv = await index.first();
   invariant(kv);
-  let ref = kv[0];
-  let key: Struct = await readValue(ref, store);
+  const ref = kv[0];
+  const key: Struct = await readValue(ref, store);
   invariant(key);
-  let pkg: Package = await readValue(key.type.packageRef, store);
+  const pkg: Package = await readValue(key.type.packageRef, store);
   invariant(pkg);
   registerPackage(pkg);
   return pkg;
 }
 
 function getStructClass(pkg, name) {
-  let keyIndex = pkg.types.findIndex(t => t.name === name);
-  let type = makeType(pkg.ref, keyIndex);
-  let typeDef = pkg.types[keyIndex];
+  const keyIndex = pkg.types.findIndex(t => t.name === name);
+  const type = makeType(pkg.ref, keyIndex);
+  const typeDef = pkg.types[keyIndex];
 
   return class extends Struct {
     constructor(data) {
@@ -231,18 +231,18 @@ function getStructClass(pkg, name) {
 }
 
 async function getDataset(id: string, httpStore: ChunkStore): Promise<NomsMap<Ref, Ref>> {
-  let rootRef = await httpStore.getRoot();
-  let datasets: Map<string, Ref> = await readValue(rootRef, httpStore);
-  let commitRef = await datasets.get(id);
+  const rootRef = await httpStore.getRoot();
+  const datasets: Map<string, Ref> = await readValue(rootRef, httpStore);
+  const commitRef = await datasets.get(id);
   invariant(commitRef);
-  let commit: Struct = await readValue(commitRef, httpStore);
+  const commit: Struct = await readValue(commitRef, httpStore);
   invariant(commit);
   return commit.get('value');
 }
 
 
 function percentiles(s: Array<number>): Array<{x: number, y: number}> {
-  let arr: Array<number> = [];
+  const arr: Array<number> = [];
   s.forEach(v => {
     if (v > 0) {
       arr.push(v);
@@ -250,7 +250,7 @@ function percentiles(s: Array<number>): Array<{x: number, y: number}> {
   });
 
   arr.sort((a, b) => a - b);
-  let len = arr.length;
+  const len = arr.length;
   if (len === 0) {
     return [];
   }
@@ -258,7 +258,7 @@ function percentiles(s: Array<number>): Array<{x: number, y: number}> {
     return [{x: 0, y: arr[0]}, {x: 1, y: arr[0]}];
   }
   return arr.map((y, i) => {
-    let x = i / (len - 1);
+    const x = i / (len - 1);
     return {x, y};
   });
 }

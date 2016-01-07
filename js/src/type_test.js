@@ -12,30 +12,30 @@ import {writeValue} from './encode.js';
 
 suite('Type', () => {
   test('types', async () => {
-    let ms = new MemoryStore();
+    const ms = new MemoryStore();
 
-    let boolType = makePrimitiveType(Kind.Bool);
-    let uint8Type = makePrimitiveType(Kind.Uint8);
-    let stringType = makePrimitiveType(Kind.String);
-    let mapType = makeCompoundType(Kind.Map, stringType, uint8Type);
-    let setType = makeCompoundType(Kind.Set, stringType);
-    let mahType = makeStructType('MahStruct', [
+    const boolType = makePrimitiveType(Kind.Bool);
+    const uint8Type = makePrimitiveType(Kind.Uint8);
+    const stringType = makePrimitiveType(Kind.String);
+    const mapType = makeCompoundType(Kind.Map, stringType, uint8Type);
+    const setType = makeCompoundType(Kind.Set, stringType);
+    const mahType = makeStructType('MahStruct', [
       new Field('Field1', stringType, false),
       new Field('Field2', boolType, true)
     ], []);
-    let otherType = makeStructType('MahOtherStruct', [], [
+    const otherType = makeStructType('MahOtherStruct', [], [
       new Field('StructField', mahType, false),
       new Field('StringField', stringType, false)
     ]);
 
-    let pkgRef = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
-    let trType = makeType(pkgRef, 42);
+    const pkgRef = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
+    const trType = makeType(pkgRef, 42);
 
-    let otherRef = writeValue(otherType, otherType.type, ms);
-    let mapRef = writeValue(mapType, mapType.type, ms);
-    let setRef = writeValue(setType, setType.type, ms);
-    let mahRef = writeValue(mahType, mahType.type, ms);
-    let trRef = writeValue(trType, trType.type, ms);
+    const otherRef = writeValue(otherType, otherType.type, ms);
+    const mapRef = writeValue(mapType, mapType.type, ms);
+    const setRef = writeValue(setType, setType.type, ms);
+    const mahRef = writeValue(mahType, mahType.type, ms);
+    const trRef = writeValue(trType, trType.type, ms);
 
     assert.isTrue(otherType.equals(await readValue(otherRef, ms)));
     assert.isTrue(mapType.equals(await readValue(mapRef, ms)));
@@ -45,19 +45,19 @@ suite('Type', () => {
   });
 
   test('type with pkgRef', async () => {
-    let ms = new MemoryStore();
+    const ms = new MemoryStore();
 
-    let pkg = new Package([makePrimitiveType(Kind.Float64)], []);
+    const pkg = new Package([makePrimitiveType(Kind.Float64)], []);
     registerPackage(pkg);
-    let pkgRef = pkg.ref;
+    const pkgRef = pkg.ref;
 
-    let unresolvedType = makeType(pkgRef, 42);
-    let unresolvedRef = writeValue(unresolvedType, unresolvedType.type, ms);
+    const unresolvedType = makeType(pkgRef, 42);
+    const unresolvedRef = writeValue(unresolvedType, unresolvedType.type, ms);
 
-    let v = await readValue(unresolvedRef, ms);
+    const v = await readValue(unresolvedRef, ms);
     assert.isNotNull(v);
     assert.isTrue(pkgRef.equals(v.chunks[0]));
-    let p = await readValue(pkgRef, ms);
+    const p = await readValue(pkgRef, ms);
     assert.isNotNull(p);
   });
 
@@ -66,10 +66,10 @@ suite('Type', () => {
   });
 
   test('empty package ref', async () => {
-    let ms = new MemoryStore();
-    let v = makeType(new Ref(), -1);
-    let r = writeValue(v, v.type, ms);
-    let v2 = await readValue(r, ms);
+    const ms = new MemoryStore();
+    const v = makeType(new Ref(), -1);
+    const r = writeValue(v, v.type, ms);
+    const v2 = await readValue(r, ms);
     assert.isTrue(v.equals(v2));
   });
 });

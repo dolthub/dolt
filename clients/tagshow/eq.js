@@ -6,8 +6,8 @@ export default function eq(a: any, b: any) : boolean {
   // Babel bug: https://github.com/babel/babel/issues/3046
   let i;
   if (a === b) return true;
-  let ta = typeof a;
-  let tb = typeof b;
+  const ta = typeof a;
+  const tb = typeof b;
   if (ta !== tb) return false;
   if (a === null || b === null) return false;
   if (ta !== 'object') return false;
@@ -16,8 +16,8 @@ export default function eq(a: any, b: any) : boolean {
     return a.equals(b);
   }
   // https://github.com/attic-labs/noms/issues/615
-  // let ar = a.ref;
-  // let br = b.ref;
+  // const ar = a.ref;
+  // const br = b.ref;
   // if (ar && br) {
   //   return eq(ar, br);
   // }
@@ -36,7 +36,7 @@ export default function eq(a: any, b: any) : boolean {
   if (a instanceof Map) {
     if (a.size !== b.size) return false;
     // get uses object identity
-    let compare = (a, b) => {
+    const compare = (a, b) => {
       if (eq(a[0], b[0])) return 0;
       if (a[0] < b[0]) return -1;
       return 1;
@@ -44,8 +44,8 @@ export default function eq(a: any, b: any) : boolean {
     return eq([...a].sort(compare), [...b].sort(compare));
   }
 
-  let ka = Object.keys(a);
-  let kb = Object.keys(b);
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
   if (ka.length !== kb.length) return false;
   for (i = 0; i < ka.length; i++) {
     if (!eq(a[ka[i]], b[ka[i]])) return false;

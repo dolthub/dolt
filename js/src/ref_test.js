@@ -27,14 +27,14 @@ suite('Ref', () => {
     // sha2 not supported
     assertParseError('sha2-0000000000000000000000000000000000000000');
 
-    let r = Ref.parse('sha1-0000000000000000000000000000000000000000');
+    const r = Ref.parse('sha1-0000000000000000000000000000000000000000');
     assert.isNotNull(r);
   });
 
   test('equals', () => {
-    let r0 = Ref.parse('sha1-0000000000000000000000000000000000000000');
-    let r01 = Ref.parse('sha1-0000000000000000000000000000000000000000');
-    let r1 = Ref.parse('sha1-0000000000000000000000000000000000000001');
+    const r0 = Ref.parse('sha1-0000000000000000000000000000000000000000');
+    const r01 = Ref.parse('sha1-0000000000000000000000000000000000000000');
+    const r1 = Ref.parse('sha1-0000000000000000000000000000000000000001');
 
     assert.isTrue(r0.equals(r01));
     assert.isTrue(r01.equals(r0));
@@ -43,19 +43,19 @@ suite('Ref', () => {
   });
 
   test('toString', () => {
-    let s = 'sha1-0123456789abcdef0123456789abcdef01234567';
-    let r = Ref.parse(s);
+    const s = 'sha1-0123456789abcdef0123456789abcdef01234567';
+    const r = Ref.parse(s);
     assert.strictEqual(s, r.toString());
   });
 
   test('fromData', () => {
-    let r = Ref.fromData(new TextEncoder().encode('abc'));
+    const r = Ref.fromData(new TextEncoder().encode('abc'));
 
     assert.strictEqual('sha1-a9993e364706816aba3e25717850c26c9cd0d89d', r.toString());
   });
 
   test('isEmpty', () => {
-    let digest = new Uint8Array(20);
+    const digest = new Uint8Array(20);
     let r = Ref.fromDigest(digest);
     assert.isTrue(r.isEmpty());
 
