@@ -132,7 +132,7 @@ func TestReadCompoundList(t *testing.T) {
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
 	leaf1 := newListLeaf(cs, tr, Int32(0))
 	leaf2 := newListLeaf(cs, tr, Int32(1), Int32(2), Int32(3))
-	l2 := buildCompoundList([]metaTuple{{leaf1, leaf1.Ref(), Uint64(1)}, {leaf2, leaf2.Ref(), Uint64(4)}}, tr, cs)
+	l2 := buildCompoundList([]metaTuple{{leaf1, ref.Ref{}, Uint64(1)}, {leaf2, ref.Ref{}, Uint64(4)}}, tr, cs)
 
 	a := parseJson(`[%d, %d, true, ["%s", "1", "%s", "4"]]`, ListKind, Int32Kind, leaf1.Ref(), leaf2.Ref())
 	r := newJsonArrayReader(a, cs)

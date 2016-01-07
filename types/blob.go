@@ -5,6 +5,7 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/ref"
 )
 
 const (
@@ -49,7 +50,7 @@ func newBlobLeafChunkFn(cs chunks.ChunkStore) makeChunkFn {
 		}
 
 		leaf := newBlobLeaf(buff)
-		return metaTuple{leaf, leaf.Ref(), Uint64(uint64(len(buff)))}, leaf
+		return metaTuple{leaf, ref.Ref{}, Uint64(uint64(len(buff)))}, leaf
 	}
 }
 

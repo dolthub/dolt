@@ -67,7 +67,7 @@ func (cl compoundList) cursorAt(idx uint64) (*sequenceCursor, listLeaf, uint64) 
 		return idx < offset, offset
 	}, uint64(0))
 
-	if current := cursor.current().(metaTuple); current.childRef != valueFromType(cl.cs, leaf, leaf.Type()).Ref() {
+	if current := cursor.current().(metaTuple); current.ChildRef() != valueFromType(cl.cs, leaf, leaf.Type()).Ref() {
 		leaf = readMetaTupleValue(current, cl.cs)
 	}
 
@@ -263,6 +263,6 @@ func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 		}
 
 		list := valueFromType(cs, newListLeaf(cs, t, values...), t)
-		return metaTuple{list, list.Ref(), Uint64(len(values))}, list
+		return metaTuple{list, ref.Ref{}, Uint64(len(values))}, list
 	}
 }

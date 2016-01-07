@@ -103,7 +103,7 @@ func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr Type, pkg *Package)
 	w2 := newJsonArrayWriter(w.cs)
 	indexType := indexTypeForMetaSequence(tr)
 	for _, tuple := range ms.(metaSequence).data() {
-		w2.writeRef(tuple.childRef)
+		w2.writeRef(tuple.ChildRef())
 		w2.writeValue(tuple.value, indexType, pkg)
 	}
 	w.write(w2.toArray())
