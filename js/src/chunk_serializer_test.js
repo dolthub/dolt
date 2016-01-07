@@ -15,7 +15,8 @@ suite('ChunkSerializer', () => {
   }
 
   test('simple', () => {
-    let chunks = [Chunk.fromString('abc'), Chunk.fromString('def'), Chunk.fromString('ghi'), Chunk.fromString('wacka wack wack')];
+    let chunks = [Chunk.fromString('abc'), Chunk.fromString('def'), Chunk.fromString('ghi'),
+                  Chunk.fromString('wacka wack wack')];
 
     let buffer = serialize(chunks);
     let newChunks = deserialize(buffer);

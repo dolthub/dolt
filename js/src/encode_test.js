@@ -9,7 +9,8 @@ import Struct from './struct.js';
 import test from './async_test.js';
 import type {NomsKind} from './noms_kind.js';
 import {encodeNomsValue, JsonArrayWriter} from './encode.js';
-import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type} from './type.js';
+import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type}
+    from './type.js';
 import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
 import {Kind} from './noms_kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
@@ -77,7 +78,8 @@ suite('Encode', () => {
       new NomsList(ms, tr, new ListLeafSequence(it, [1, 2, 3]))
     ]));
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.List, Kind.List, Kind.Int16, false, [false, ['0'], false, ['1', '2', '3']]], w.array);
+    assert.deepEqual([Kind.List, Kind.List, Kind.Int16, false, [false, ['0'], false,
+        ['1', '2', '3']]], w.array);
   });
 
   test('write set', async () => {
@@ -102,15 +104,18 @@ suite('Encode', () => {
     ]));
 
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Set, Kind.Set, Kind.Int32, false, [false, ['0'], false, ['1', '2', '3']]], w.array);
+    assert.deepEqual([Kind.Set, Kind.Set, Kind.Int32, false, [false, ['0'], false,
+        ['1', '2', '3']]], w.array);
   });
 
   test('write map', async() => {
     let ms = new MemoryStore();
     let w = new JsonArrayWriter(ms);
 
-    let tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String), makePrimitiveType(Kind.Bool));
-    let v = new NomsMap(ms, tr, new MapLeafSequence(tr, [{key: 'a', value: false}, {key:'b', value:true}]));
+    let tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
+        makePrimitiveType(Kind.Bool));
+    let v = new NomsMap(ms, tr, new MapLeafSequence(tr, [{key: 'a', value: false},
+        {key:'b', value:true}]));
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.Map, Kind.String, Kind.Bool, false, ['a', false, 'b', true]], w.array);
   });
@@ -119,7 +124,8 @@ suite('Encode', () => {
     let ms = new MemoryStore();
     let w = new JsonArrayWriter(ms);
 
-    let kt = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String), makePrimitiveType(Kind.Int64));
+    let kt = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
+        makePrimitiveType(Kind.Int64));
     let vt = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Bool));
     let tr = makeCompoundType(Kind.Map, kt, vt);
 
@@ -127,7 +133,8 @@ suite('Encode', () => {
     let m1 = new NomsMap(ms, kt, new MapLeafSequence(kt, [{key: 'a', value: 0}]));
     let v = new NomsMap(ms, kt, new MapLeafSequence(tr, [{key: m1, value: s}]));
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Map, Kind.Map, Kind.String, Kind.Int64, Kind.Set, Kind.Bool, false, [false, ['a', '0'], false, [true]]], w.array);
+    assert.deepEqual([Kind.Map, Kind.Map, Kind.String, Kind.Int64, Kind.Set, Kind.Bool, false,
+        [false, ['a', '0'], false, [true]]], w.array);
   });
 
   test('write empty struct', async() => {
@@ -226,7 +233,8 @@ suite('Encode', () => {
     let pkgRef = pkg.ref;
     let type = makeType(pkgRef, 0);
 
-    let v = new Struct(type, typeDef, {l: new NomsList(ms, ltr, new ListLeafSequence(ltr, ['a', 'b']))});
+    let v = new Struct(type, typeDef, {l: new NomsList(ms, ltr,
+          new ListLeafSequence(ltr, ['a', 'b']))});
     w.writeTopLevel(type, v);
     assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', false, ['a', 'b']], w.array);
 
@@ -283,7 +291,8 @@ suite('Encode', () => {
     let l = new NomsList(ms, listType, new ListLeafSequence(listType, [0, 1, 2]));
 
     w.writeTopLevel(listType, l);
-    assert.deepEqual([Kind.List, Kind.Unresolved, pkgRef.toString(), '0', false, ['0', '1', '2']], w.array);
+    assert.deepEqual([Kind.List, Kind.Unresolved, pkgRef.toString(), '0', false, ['0', '1', '2']],
+        w.array);
   });
 
   test('write compound list', async () => {
@@ -302,7 +311,8 @@ suite('Encode', () => {
     let l = new NomsList(ms, ltr, new IndexedMetaSequence(ltr, tuples));
 
     w.writeTopLevel(ltr, l);
-    assert.deepEqual([Kind.List, Kind.Int32, true, [r1.toString(), '2', r2.toString(), '4', r3.toString(), '6']], w.array);
+    assert.deepEqual([Kind.List, Kind.Int32, true, [r1.toString(), '2', r2.toString(), '4',
+        r3.toString(), '6']], w.array);
   });
 
   test('write type value', async () => {
@@ -315,27 +325,34 @@ suite('Encode', () => {
     };
 
     test([Kind.Type, Kind.Int32], makePrimitiveType(Kind.Int32));
-    test([Kind.Type, Kind.List, [Kind.Bool]], makeCompoundType(Kind.List, makePrimitiveType(Kind.Bool)));
-    test([Kind.Type, Kind.Map, [Kind.Bool, Kind.String]], makeCompoundType(Kind.Map, makePrimitiveType(Kind.Bool), makePrimitiveType(Kind.String)));
+    test([Kind.Type, Kind.List, [Kind.Bool]],
+         makeCompoundType(Kind.List, makePrimitiveType(Kind.Bool)));
+    test([Kind.Type, Kind.Map, [Kind.Bool, Kind.String]],
+         makeCompoundType(Kind.Map, makePrimitiveType(Kind.Bool), makePrimitiveType(Kind.String)));
     test([Kind.Type, Kind.Enum, 'E', ['a', 'b', 'c']], makeEnumType('E', ['a', 'b', 'c']));
-    test([Kind.Type, Kind.Struct, 'S', ['x', Kind.Int16, false, 'v', Kind.Value, true], []], makeStructType('S', [
-      new Field('x', makePrimitiveType(Kind.Int16), false),
-      new Field('v', makePrimitiveType(Kind.Value), true)
-    ], []));
-    test([Kind.Type, Kind.Struct, 'S', [], ['x', Kind.Int16, false, 'v', Kind.Value, false]], makeStructType('S', [], [
-      new Field('x', makePrimitiveType(Kind.Int16), false),
-      new Field('v', makePrimitiveType(Kind.Value), false)
-    ]));
+    test([Kind.Type, Kind.Struct, 'S', ['x', Kind.Int16, false, 'v', Kind.Value, true], []],
+         makeStructType('S', [
+           new Field('x', makePrimitiveType(Kind.Int16), false),
+           new Field('v', makePrimitiveType(Kind.Value), true)
+         ], []));
+    test([Kind.Type, Kind.Struct, 'S', [], ['x', Kind.Int16, false, 'v', Kind.Value, false]],
+         makeStructType('S', [], [
+           new Field('x', makePrimitiveType(Kind.Int16), false),
+           new Field('v', makePrimitiveType(Kind.Value), false)
+         ]));
 
     let pkgRef = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
     test([Kind.Type, Kind.Unresolved, pkgRef.toString(), '123'], makeType(pkgRef, 123));
 
-    test([Kind.Type, Kind.Struct, 'S', ['e', Kind.Unresolved, pkgRef.toString(), '123', false, 'x', Kind.Int64, false], []], makeStructType('S', [
-      new Field('e', makeType(pkgRef, 123), false),
-      new Field('x', makePrimitiveType(Kind.Int64), false)
-    ], []));
+    test([Kind.Type, Kind.Struct, 'S',
+          ['e', Kind.Unresolved, pkgRef.toString(), '123', false, 'x', Kind.Int64, false], []],
+          makeStructType('S', [
+            new Field('e', makeType(pkgRef, 123), false),
+            new Field('x', makePrimitiveType(Kind.Int64), false)
+          ], []));
 
-    // test([Kind.Type, Kind.Unresolved, new Ref().toString(), -1, 'ns', 'n'], makeUnresolvedType('ns', 'n'));
+    // test([Kind.Type, Kind.Unresolved, new Ref().toString(), -1, 'ns', 'n'],
+    //      makeUnresolvedType('ns', 'n'));
   });
 
   test('top level blob', () => {

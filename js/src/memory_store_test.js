@@ -39,8 +39,10 @@ suite('MemoryStore', () => {
     let oldRoot = await ms.getRoot();
     assert.isTrue(oldRoot.isEmpty());
 
-    let bogusRoot = Ref.parse('sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5'); // sha1('Bogus, Dude')
-    let newRoot = Ref.parse('sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd'); // sha1('Hello, World')
+    // sha1('Bogus, Dude')
+    let bogusRoot = Ref.parse('sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5');
+     // sha1('Hello, World')
+    let newRoot = Ref.parse('sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd');
 
     // Try to update root with bogus oldRoot
     let result = await ms.updateRoot(newRoot, bogusRoot);

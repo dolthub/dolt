@@ -1,8 +1,10 @@
 // @flow
 
-// JavaScript implementation of Christoph Buchheim, Michael Jünger, Sebastian Leipert's tree layout algorithm. See: http://dl.acm.org/citation.cfm?id=729576.
+// JavaScript implementation of Christoph Buchheim, Michael Jünger, Sebastian Leipert's tree layout
+// algorithm. See: http://dl.acm.org/citation.cfm?id=729576.
 //
-// Thanks also to Bill Mill for the explanation and Python sample code: http://billmill.org/pymag-trees/.
+// Thanks also to Bill Mill for the explanation and Python sample code:
+// http://billmill.org/pymag-trees/.
 
 // TreeNode represents one node of the tree visualization.
 
@@ -41,7 +43,8 @@ export class TreeNode {
   number: number;
   mod: number;
 
-  constructor(graph: NodeGraph, id: string, parent: ?TreeNode, depth: number, number: number, seen: {[key: string]: boolean}) {
+  constructor(graph: NodeGraph, id: string, parent: ?TreeNode, depth: number, number: number,
+      seen: {[key: string]: boolean}) {
     seen[id] = true;
     this.x = -1;
     this.y = depth;

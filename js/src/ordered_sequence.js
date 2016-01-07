@@ -36,7 +36,8 @@ export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
   }
 }
 
-export class OrderedSequenceCursor<T, K: valueOrPrimitive> extends SequenceCursor<T, OrderedSequence> {
+export class OrderedSequenceCursor<T, K: valueOrPrimitive> extends
+    SequenceCursor<T, OrderedSequence> {
   getCurrentKey(): K {
     invariant(this.idx >= 0 && this.idx < this.length);
     return this.sequence.getKey(this.idx);

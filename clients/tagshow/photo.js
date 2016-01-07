@@ -69,7 +69,8 @@ export default class Photo extends React.Component<DefaultProps, Props, State> {
   }
 
   getURL() : string {
-    // If there are some remote URLs we can use, just pick the most appropriate size. We need the smallest one that is bigger than our current dimensions.
+    // If there are some remote URLs we can use, just pick the most appropriate size. We need the
+    // smallest one that is bigger than our current dimensions.
     let sizes = this.state.sizes;
     let w = this.props.style.width || 0;
     let h = this.props.style.height || 0;

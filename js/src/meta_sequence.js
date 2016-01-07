@@ -76,7 +76,8 @@ export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K,
   }
 }
 
-export function newMetaSequenceFromData(cs: ChunkStore, type: Type, tuples: Array<MetaTuple>): MetaSequence {
+export function newMetaSequenceFromData(cs: ChunkStore, type: Type, tuples: Array<MetaTuple>):
+    MetaSequence {
   switch (type.kind) {
     case Kind.Map:
     case Kind.Set:

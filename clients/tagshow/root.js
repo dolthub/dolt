@@ -112,7 +112,8 @@ export default class Root extends React.Component<void, Props, State> {
     this._updateState(this.props);
 
     if (!this.props.qs.ds) {
-      return <DatasetPicker store={this.props.store} onChange={ds => this.handleDataSetPicked(ds)}/>;
+      return <DatasetPicker store={this.props.store}
+          onChange={ds => this.handleDataSetPicked(ds)}/>;
     }
 
     if (!this.props.qs.show || this.state.selectedTags.size === 0) {

@@ -198,11 +198,16 @@ suite('CompoundSet', () => {
   }
 
   test('intersect', async () => {
-    await testIntersect(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']]);
-    await testIntersect(['a', 'h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'h', 'i', 'j', 'k', 'l', 'm', 'n']]);
-    await testIntersect(['d', 'e', 'f', 'g', 'h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k']]);
-    await testIntersect(['h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k'], ['h', 'i', 'j', 'k', 'l', 'm', 'n', 'o']]);
-    await testIntersect([], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k'], ['i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']]);
+    await testIntersect(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
+        [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
+        ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']]);
+    await testIntersect(['a', 'h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
+        ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'h', 'i', 'j', 'k', 'l', 'm', 'n']]);
+    await testIntersect(['d', 'e', 'f', 'g', 'h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
+        ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k']]);
+    await testIntersect(['h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
+        ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k'], ['h', 'i', 'j', 'k', 'l', 'm', 'n', 'o']]);
+    await testIntersect([], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
+        ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k'], ['i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']]);
   });
 });
-

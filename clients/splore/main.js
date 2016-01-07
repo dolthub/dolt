@@ -3,7 +3,9 @@
 import Layout from './layout.js';
 import React from 'react'; // eslint-disable-line no-unused-vars
 import ReactDOM from 'react-dom';
-import {HttpStore, invariant, IndexedMetaSequence, ListLeafSequence, MapLeafSequence, OrderedMetaSequence, NomsList, NomsMap, NomsSet, readValue, Ref, SetLeafSequence, Struct} from 'noms';
+import {HttpStore, invariant, IndexedMetaSequence, ListLeafSequence, MapLeafSequence,
+    OrderedMetaSequence, NomsList, NomsMap, NomsSet, readValue, Ref, SetLeafSequence, Struct}
+    from 'noms';
 import {layout, NodeGraph, TreeNode} from './buchheim.js';
 
 let data: NodeGraph = {nodes: {}, links: {}};
@@ -39,7 +41,8 @@ function formatKeyString(v: any): string {
 function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
   let counter = 0;
 
-  function processMetaSequence(id, sequence: IndexedMetaSequence | OrderedMetaSequence, name: string) {
+  function processMetaSequence(id, sequence: IndexedMetaSequence | OrderedMetaSequence,
+                               name: string) {
     data.nodes[id] = {name: name};
     sequence.items.forEach(tuple => {
       let kid = process(ref, formatKeyString(tuple.value), id);
@@ -59,7 +62,8 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
     }
 
     // Assign a unique ID to this node.
-    // We don't use the noms ref because we only want to represent values as shared in the graph if they are actually in the same chunk.
+    // We don't use the noms ref because we only want to represent values as shared in the graph if
+    // they are actually in the same chunk.
     let id;
     if (val instanceof Ref) {
       id = val.toString();

@@ -17,6 +17,7 @@ type Props = {
 
 export default function Preview(props: Props) : React.Element {
   return <div>{
-    props.photos.map(r => <Photo key={r.toString()} photoRef={r} store={props.store} style={photoStyle}/>)
+    props.photos.map(r => <Photo key={r.toString()} photoRef={r} store={props.store}
+        style={photoStyle}/>)
   }</div>;
 }

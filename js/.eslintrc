@@ -6,6 +6,7 @@
     "eqeqeq": 2,
     "indent": [2, 2, {"SwitchCase": 1}],
     "linebreak-style": [2, "unix"],
+    "max-len": [2, 100, 8],
     "no-multi-spaces": 2,
     "no-new-wrappers": 2,
     "no-throw-literal": 2,
