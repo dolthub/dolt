@@ -16,7 +16,8 @@ export class Sequence<T> extends ValueBase {
     this.isMeta = false;
   }
 
-  getChildSequence(cs: ChunkStore, idx: number): Promise<?Sequence> { // eslint-disable-line no-unused-vars
+  getChildSequence(cs: ChunkStore, idx: number): // eslint-disable-line no-unused-vars
+      Promise<?Sequence> {
     return Promise.resolve(null);
   }
 }

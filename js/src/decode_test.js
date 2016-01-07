@@ -9,7 +9,8 @@ import type {float64, int32, int64, uint8, uint16, uint32, uint64} from './primi
 import type {TypeDesc} from './type.js';
 import {assert} from 'chai';
 import {decodeNomsValue, JsonArrayReader} from './decode.js';
-import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type} from './type.js';
+import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type}
+    from './type.js';
 import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
 import {invariant, notNull} from './assert.js';
 import {Kind} from './noms_kind.js';
@@ -49,7 +50,8 @@ suite('Decode', () => {
 
     doTest(makePrimitiveType(Kind.Bool), [Kind.Bool, true]);
     doTest(makePrimitiveType(Kind.Type), [Kind.Type, Kind.Bool]);
-    doTest(makeCompoundType(Kind.List, makePrimitiveType(Kind.Bool)), [Kind.List, Kind.Bool, true, false]);
+    doTest(makeCompoundType(Kind.List, makePrimitiveType(Kind.Bool)),
+                            [Kind.List, Kind.Bool, true, false]);
 
     let pkgRef = Ref.parse('sha1-a9993e364706816aba3e25717850c26c9cd0d89d');
     doTest(makeType(pkgRef, 42), [Kind.Unresolved, pkgRef.toString(), '42']);
@@ -144,7 +146,8 @@ suite('Decode', () => {
     let l:NomsList<int32> = new NomsList(ms, ltr, new IndexedMetaSequence(ltr, tuples));
     invariant(l instanceof NomsList);
 
-    let a = [Kind.List, Kind.Int32, true, [r1.toString(), '2', r2.toString(), '4', r3.toString(), '6']];
+    let a = [Kind.List, Kind.Int32, true,
+             [r1.toString(), '2', r2.toString(), '4', r3.toString(), '6']];
     let r = new JsonArrayReader(a, ms);
     let v = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
@@ -158,20 +161,26 @@ suite('Decode', () => {
     let v:NomsMap<int64, float64> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
-    let t = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64), makePrimitiveType(Kind.Float64));
+    let t = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
+                             makePrimitiveType(Kind.Float64));
     let m = new NomsMap(ms, t, new MapLeafSequence(t, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(v.equals(m));
   });
 
   test('read map of ref to uint64', async () => {
     let ms = new MemoryStore();
-    let a = [Kind.Map, Kind.Ref, Kind.Value, Kind.Uint64, false, ['sha1-0000000000000000000000000000000000000001', '2', 'sha1-0000000000000000000000000000000000000002', '4']];
+    let a = [Kind.Map, Kind.Ref, Kind.Value, Kind.Uint64, false,
+             ['sha1-0000000000000000000000000000000000000001', '2',
+              'sha1-0000000000000000000000000000000000000002', '4']];
     let r = new JsonArrayReader(a, ms);
     let v:NomsMap<Ref, uint64> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
-    let t = makeCompoundType(Kind.Map, makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Value)), makePrimitiveType(Kind.Uint64));
-    let m = new NomsMap(ms, t, new MapLeafSequence(t, [{key: new Ref('sha1-0000000000000000000000000000000000000001'), value: 2}, {key: new Ref('sha1-0000000000000000000000000000000000000002'), value: 4}]));
+    let t = makeCompoundType(Kind.Map, makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Value)),
+                             makePrimitiveType(Kind.Uint64));
+    let m = new NomsMap(ms, t,
+        new MapLeafSequence(t, [{key: new Ref('sha1-0000000000000000000000000000000000000001'),
+            value: 2}, {key: new Ref('sha1-0000000000000000000000000000000000000002'), value: 4}]));
     assert.isTrue(v.equals(m));
   });
 
@@ -182,7 +191,8 @@ suite('Decode', () => {
     let v:NomsMap<uint64, uint32> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
-    let t = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Uint64), makePrimitiveType(Kind.Uint32));
+    let t = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Uint64),
+                             makePrimitiveType(Kind.Uint32));
     let m = new NomsMap(ms, t, new MapLeafSequence(t, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(v.equals(m));
   });
@@ -414,7 +424,8 @@ suite('Decode', () => {
     let pkg = new Package([tr], []);
     registerPackage(pkg);
 
-    let a = [Kind.Value, Kind.Map, Kind.String, Kind.Unresolved, pkg.ref.toString(), '0', false, ['bar', false, '2', 'baz', false, '1', 'foo', true, '3']];
+    let a = [Kind.Value, Kind.Map, Kind.String, Kind.Unresolved, pkg.ref.toString(), '0', false,
+        ['bar', false, '2', 'baz', false, '1', 'foo', true, '3']];
 
     let r = new JsonArrayReader(a, ms);
     let v:NomsMap<string, Struct> = await r.readTopLevelValue();
@@ -428,7 +439,8 @@ suite('Decode', () => {
 
   test('decodeNomsValue', async () => {
     let ms = new MemoryStore();
-    let chunk = Chunk.fromString(`t [${Kind.Value}, ${Kind.Set}, ${Kind.Uint16}, false, ["0", "1", "2", "3"]]`);
+    let chunk = Chunk.fromString(
+          `t [${Kind.Value}, ${Kind.Set}, ${Kind.Uint16}, false, ["0", "1", "2", "3"]]`);
     let v:NomsSet<uint16> = await decodeNomsValue(chunk, new MemoryStore());
 
     let t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint16));
@@ -439,9 +451,12 @@ suite('Decode', () => {
   test('decodeNomsValue: counter with one commit', async () => {
     let ms = new MemoryStore();
     let root = Ref.parse('sha1-c3680a063b73ac42c3075110108a48a91007abf7');
-    ms.put(Chunk.fromString('t [15,11,16,21,"sha1-7546d804d845125bc42669c7a4c3f3fb909eca29","0",false,["counter","sha1-a6fffab4e12b49d57f194f0d3add9f6623a13e19"]]')); // root
-    ms.put(Chunk.fromString('t [22,[19,"Commit",["value",13,false,"parents",17,[16,[21,"sha1-0000000000000000000000000000000000000000","0"]],false],[]],[]]')); // datas package
-    ms.put(Chunk.fromString('t [21,"sha1-4da2f91cdbba5a7c91b383091da45e55e16d2152","0",4,"1",false,[]]')); // commit
+    ms.put(Chunk.fromString('t [15,11,16,21,"sha1-7546d804d845125bc42669c7a4c3f3fb909eca29","0",' +
+        'false,["counter","sha1-a6fffab4e12b49d57f194f0d3add9f6623a13e19"]]')); // root
+    ms.put(Chunk.fromString('t [22,[19,"Commit",["value",13,false,"parents",17,[16,[21,' +
+        '"sha1-0000000000000000000000000000000000000000","0"]],false],[]],[]]')); // datas package
+    ms.put(Chunk.fromString('t [21,"sha1-4da2f91cdbba5a7c91b383091da45e55e16d2152","0",4,"1",' +
+        'false,[]]')); // commit
 
     let rootMap = await readValue(root, ms);
     let counterRef = await rootMap.get('counter');

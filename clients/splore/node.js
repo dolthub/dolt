@@ -66,10 +66,12 @@ export default class Node extends React.Component<void, Props, State> {
       case 'circle':
         return <circle className={className} r='4.5'/>;
       case 'rect':
-        // rx:1.35 and ry:1.35 for rounded corners, but not doing until I learn how to make the triangle match below.
+        // rx:1.35 and ry:1.35 for rounded corners, but not doing until I learn how to make the/
+        // triangle match below.
         return <rect className={className} x='-4.5' y='-4.5' width='9' height='9'/>;
       case 'triangle':
-        return <polygon className={className} points='0,-4.5 4.5,4.5 -4.5,4.5' rx='1.35' ry='1.35'/>;
+        return <polygon className={className} points='0,-4.5 4.5,4.5 -4.5,4.5' rx='1.35'
+            ry='1.35'/>;
     }
     throw new Error('unreachable');
   }

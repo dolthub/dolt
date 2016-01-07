@@ -72,7 +72,8 @@ export default function Layout(props: Props) : React.Element {
     let from = lookup[e[0]];
     let to = lookup[e[1]];
     children.push(
-      <path key={'p' + e[0] + '-' + e[1]} className='link' d={`M${getX(from)},${getY(from)}L${getX(to)},${getY(to)}`}/>);
+      <path key={'p' + e[0] + '-' + e[1]} className='link'
+          d={`M${getX(from)},${getY(from)}L${getX(to)},${getY(to)}`}/>);
   });
 
   let sortOrder = (elm => elm.type === 'path' ? 0 : 1);

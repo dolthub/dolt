@@ -6,7 +6,8 @@ import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {decode as decodeBase64} from './base64.js';
-import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, makeUnresolvedType, StructDesc, Type} from './type.js';
+import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType,
+    makeUnresolvedType, StructDesc, Type} from './type.js';
 import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta_sequence.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';

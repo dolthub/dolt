@@ -23,7 +23,8 @@ export function serialize(chunks: Array<Chunk>): ArrayBuffer {
     refArray.set(chunk.ref.digest);
     offset += sha1Size;
 
-    // Uint32Arrays cannot be created at non-4-byte offsets into a buffer, so read & write of chunkLength must be done with tmp Uint8Array.
+    // Uint32Arrays cannot be created at non-4-byte offsets into a buffer, so read & write of
+    // chunkLength must be done with tmp Uint8Array.
     let chunkLength = chunk.data.length;
     let sizeArray = new Uint32Array(1);
     sizeArray[0] = chunkLength;
@@ -58,7 +59,8 @@ export function deserialize(buffer: ArrayBuffer): Array<Chunk> {
     invariant(offset + chunkLength <= totalLenth, 'Invalid chunk buffer');
 
     let dataArray = new Uint8Array(buffer, offset, chunkLength);
-    let chunk = new Chunk(new Uint8Array(dataArray)); // Makes a slice (copy) of the byte sequence from buffer.
+    let chunk = new Chunk(new Uint8Array(dataArray)); // Makes a slice (copy) of the byte sequence
+                                                      // from buffer.
 
     invariant(chunk.ref.equals(ref), 'Serialized ref !== computed ref');
 

@@ -60,12 +60,15 @@ suite('CompoundList', () => {
     let l4 = new NomsList(ms, tr, new ListLeafSequence(tr, ['m', 'n']));
     let r4 = writeValue(l4, tr, ms);
 
-    let m1 = new NomsList(ms, tr, new IndexedMetaSequence(tr, [new MetaTuple(r1, 2), new MetaTuple(r2, 2)]));
+    let m1 = new NomsList(ms, tr, new IndexedMetaSequence(tr, [new MetaTuple(r1, 2),
+        new MetaTuple(r2, 2)]));
     let rm1 = writeValue(m1, tr, ms);
-    let m2 = new NomsList(ms, tr, new IndexedMetaSequence(tr, [new MetaTuple(r3, 2), new MetaTuple(r4, 2)]));
+    let m2 = new NomsList(ms, tr, new IndexedMetaSequence(tr, [new MetaTuple(r3, 2),
+        new MetaTuple(r4, 2)]));
     let rm2 = writeValue(m2, tr, ms);
 
-    let l = new NomsList(ms, tr, new IndexedMetaSequence(tr, [new MetaTuple(rm1, 4), new MetaTuple(rm2, 4)]));
+    let l = new NomsList(ms, tr, new IndexedMetaSequence(tr, [new MetaTuple(rm1, 4),
+        new MetaTuple(rm2, 4)]));
     return l;
   }
 

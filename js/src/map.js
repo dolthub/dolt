@@ -73,7 +73,8 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
   }
 }
 
-export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends OrderedSequence<K, Entry<K, V>> {
+export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends
+    OrderedSequence<K, Entry<K, V>> {
   getKey(idx: number): K {
     return this.items[idx].key;
   }
