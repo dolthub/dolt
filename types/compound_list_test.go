@@ -92,9 +92,7 @@ func TestCompoundListGet(t *testing.T) {
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 	cl := NewTypedList(cs, tr, simpleList...).(compoundList)
 	testGet(cl)
-
-	r := WriteValue(cl, cs)
-	testGet(ReadValue(r, cs).(compoundList))
+	testGet(ReadValue(WriteValue(cl, cs), cs).(compoundList))
 }
 
 func TestCompoundListIter(t *testing.T) {
