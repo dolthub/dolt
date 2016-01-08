@@ -328,7 +328,7 @@ func TestWriteCompoundList(t *testing.T) {
 	ltr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
 	leaf1 := newListLeaf(cs, ltr, Int32(0))
 	leaf2 := newListLeaf(cs, ltr, Int32(1), Int32(2), Int32(3))
-	cl := buildCompoundList([]metaTuple{{leaf1, leaf1.Ref(), Uint64(1)}, {leaf2, leaf2.Ref(), Uint64(4)}}, ltr, cs)
+	cl := buildCompoundList([]metaTuple{{leaf1, ref.Ref{}, Uint64(1)}, {leaf2, ref.Ref{}, Uint64(4)}}, ltr, cs)
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(cl)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/ref"
 )
 
 func getTestCompoundBlob(datas ...string) compoundBlob {
@@ -188,7 +189,7 @@ func TestCompoundBlobChunks(t *testing.T) {
 
 	bl1 := newBlobLeaf([]byte("hello"))
 	bl2 := newBlobLeaf([]byte("world"))
-	cb = newCompoundBlob([]metaTuple{{bl1, bl1.Ref(), Uint64(uint64(5))}, {bl2, bl2.Ref(), Uint64(uint64(10))}}, cs)
+	cb = newCompoundBlob([]metaTuple{{bl1, ref.Ref{}, Uint64(uint64(5))}, {bl2, ref.Ref{}, Uint64(uint64(10))}}, cs)
 	assert.Equal(2, len(cb.Chunks()))
 }
 
@@ -214,13 +215,13 @@ func TestCompoundBlobSameChunksWithPrefix(t *testing.T) {
 	assert.Equal(cb2.Len(), cb1.Len()+uint64(6))
 	assert.Equal(2, len(cb1.tuples))
 	assert.Equal(2, len(cb2.tuples))
-	assert.NotEqual(cb1.tuples[0].childRef, cb2.tuples[0].childRef)
-	assert.Equal(cb1.tuples[1].childRef, cb2.tuples[1].childRef)
+	assert.NotEqual(cb1.tuples[0].ChildRef(), cb2.tuples[0].ChildRef())
+	assert.Equal(cb1.tuples[1].ChildRef(), cb2.tuples[1].ChildRef())
 
 	tuples1 := cb1.tuples[0].child.(compoundBlob).tuples
 	tuples2 := cb2.tuples[0].child.(compoundBlob).tuples
-	assert.NotEqual(tuples1[0].childRef, tuples2[0].childRef)
-	assert.Equal(tuples1[1].childRef, tuples2[1].childRef)
+	assert.NotEqual(tuples1[0].ChildRef(), tuples2[0].ChildRef())
+	assert.Equal(tuples1[1].ChildRef(), tuples2[1].ChildRef())
 }
 
 func TestCompoundBlobSameChunksWithSuffix(t *testing.T) {
@@ -245,14 +246,14 @@ func TestCompoundBlobSameChunksWithSuffix(t *testing.T) {
 	assert.Equal(cb2.Len(), cb1.Len()+uint64(6))
 	assert.Equal(2, len(cb1.tuples))
 	assert.Equal(len(cb1.tuples), len(cb2.tuples))
-	assert.Equal(cb1.tuples[0].childRef, cb2.tuples[0].childRef)
-	assert.NotEqual(cb1.tuples[1].childRef, cb2.tuples[1].childRef)
+	assert.Equal(cb1.tuples[0].ChildRef(), cb2.tuples[0].ChildRef())
+	assert.NotEqual(cb1.tuples[1].ChildRef(), cb2.tuples[1].ChildRef())
 
 	tuples1 := cb1.tuples[1].child.(compoundBlob).tuples
 	tuples2 := cb2.tuples[1].child.(compoundBlob).tuples
-	assert.Equal(tuples1[0].childRef, tuples2[0].childRef)
-	assert.Equal(tuples1[len(tuples1)-2].childRef, tuples2[len(tuples2)-2].childRef)
-	assert.NotEqual(tuples1[len(tuples1)-1].childRef, tuples2[len(tuples2)-1].childRef)
+	assert.Equal(tuples1[0].ChildRef(), tuples2[0].ChildRef())
+	assert.Equal(tuples1[len(tuples1)-2].ChildRef(), tuples2[len(tuples2)-2].ChildRef())
+	assert.NotEqual(tuples1[len(tuples1)-1].ChildRef(), tuples2[len(tuples2)-1].ChildRef())
 }
 
 func printBlob(b Blob, indent int) {
@@ -264,7 +265,7 @@ func printBlob(b Blob, indent int) {
 		fmt.Printf("%scompoundBlob, len: %d, chunks: %d\n", indentString, b.Len(), len(b.tuples))
 		indent++
 		for _, t := range b.tuples {
-			printBlob(ReadValue(t.childRef, b.cs).(Blob), indent)
+			printBlob(ReadValue(t.ChildRef(), b.cs).(Blob), indent)
 		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/ref"
 )
 
 func TestValueEquals(t *testing.T) {
@@ -61,7 +62,7 @@ func TestValueEquals(t *testing.T) {
 			ms := chunks.NewMemoryStore()
 			b1 := NewBlob(bytes.NewBufferString("hi"), ms)
 			b2 := NewBlob(bytes.NewBufferString("bye"), ms)
-			return newCompoundBlob([]metaTuple{{b1, b1.Ref(), Uint64(uint64(2))}, {b2, b2.Ref(), Uint64(uint64(5))}}, ms)
+			return newCompoundBlob([]metaTuple{{b1, ref.Ref{}, Uint64(uint64(2))}, {b2, ref.Ref{}, Uint64(uint64(5))}}, ms)
 		},
 		func() Value { return NewList(cs) },
 		func() Value { return NewList(cs, NewString("foo")) },

@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/ref"
 )
 
 func isSequenceOrderedByIndexedType(t Type) bool {
@@ -30,7 +31,7 @@ func findLeafInOrderedSequence(ms metaSequence, t Type, key Value, getValues get
 		})
 	}
 
-	if current := cursor.current().(metaTuple); current.childRef != valueFromType(cs, leaf, leaf.Type()).Ref() {
+	if current := cursor.current().(metaTuple); current.ChildRef() != valueFromType(cs, leaf, leaf.Type()).Ref() {
 		leaf = readMetaTupleValue(current, cs)
 	}
 
@@ -51,7 +52,7 @@ func findLeafInOrderedSequence(ms metaSequence, t Type, key Value, getValues get
 
 func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 	return newBuzHashBoundaryChecker(orderedSequenceWindowSize, sha1.Size, objectPattern, func(item sequenceItem) []byte {
-		digest := item.(metaTuple).childRef.Digest()
+		digest := item.(metaTuple).ChildRef().Digest()
 		return digest[:]
 	})
 }
@@ -67,8 +68,7 @@ func newOrderedMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 			WriteValue(mt.child, cs)
 		}
 
-		lastValue := tuples[len(tuples)-1].value
 		meta := newMetaSequenceFromData(tuples, t, cs)
-		return metaTuple{meta, meta.Ref(), lastValue}, meta
+		return metaTuple{meta, ref.Ref{}, tuples.last().value}, meta
 	}
 }

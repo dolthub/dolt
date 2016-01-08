@@ -255,6 +255,6 @@ func makeMapLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 			}
 		}
 
-		return metaTuple{mapLeaf, mapLeaf.Ref(), indexValue}, mapLeaf
+		return metaTuple{mapLeaf, ref.Ref{}, indexValue}, mapLeaf
 	}
 }

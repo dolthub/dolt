@@ -23,9 +23,18 @@ type metaSequence interface {
 
 // metaTuple is a node in a "probably" tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
-	child    Value // may be nil if the child data hasn't been read yet
-	childRef ref.Ref
+	child    Value   // nil if the child data hasn't been read
+	childRef ref.Ref // maybe empty if |child| is non-nil, call ChildRef() instead of accessing |childRef| directly
 	value    Value
+}
+
+func (mt metaTuple) ChildRef() ref.Ref {
+	if mt.child != nil {
+		return mt.child.Ref()
+	} else {
+		d.Chk.False(mt.childRef.IsEmpty())
+		return mt.childRef
+	}
 }
 
 func (mt metaTuple) uint64Value() uint64 {
@@ -71,14 +80,14 @@ func (ms metaSequenceObject) ChildValues() []Value {
 	refOfLeafType := MakeCompoundType(RefKind, leafType)
 	res := make([]Value, len(ms.tuples))
 	for i, t := range ms.tuples {
-		res[i] = refFromType(t.childRef, refOfLeafType)
+		res[i] = refFromType(t.ChildRef(), refOfLeafType)
 	}
 	return res
 }
 
 func (ms metaSequenceObject) Chunks() (chunks []ref.Ref) {
 	for _, tuple := range ms.tuples {
-		chunks = append(chunks, tuple.childRef)
+		chunks = append(chunks, tuple.ChildRef())
 	}
 	return
 }
@@ -135,6 +144,7 @@ func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkStore) (*sequenceCu
 func readMetaTupleValue(item sequenceItem, cs chunks.ChunkStore) Value {
 	mt := item.(metaTuple)
 	if mt.child == nil {
+		d.Chk.False(mt.childRef.IsEmpty())
 		mt.child = ReadValue(mt.childRef, cs)
 		d.Chk.NotNil(mt.child)
 	}
