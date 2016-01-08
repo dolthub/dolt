@@ -12,11 +12,11 @@ This is a slideshow that displays photos that have a particular tag.
     * `go build`
     * `./flickr -api-key="<apikey>" -api-key-secret="<apikeysecret>" -ldb="/tmp/tagshowdemo" -ds="flickr"`
   * To import photos from Picasa:
-    * `cd $GOPATH/src/github.com/attic-labs/noms/clients/flickr`
+    * `cd $GOPATH/src/github.com/attic-labs/noms/clients/picasa`
     * `go build`
     * `./picasa`
     * Follow the instructions printed out to create Google API credentials
-    * `./picasa -api-key="<apikey>" -api-key-secret="<apikeysecret>" -ldb="/tmp/tagshowdemo" -ds="picasa"
+    * `./picasa -api-key="<apikey>" -api-key-secret="<apikeysecret>" -ldb="/tmp/tagshowdemo" -ds="picasa"`
 * Index photos by tag
   * `cd $GOPATH/src/github.com/attic-labs/noms/clients/tagdex`
   * `go build`

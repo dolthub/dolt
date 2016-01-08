@@ -84,7 +84,7 @@ func main() {
 	printStats(user)
 
 	*user = user.SetRefreshToken(refreshToken)
-	userRef := types.WriteValue(user, ds.Store())
+	userRef := types.WriteValue(*user, ds.Store())
 	fmt.Printf("userRef: %s\n", userRef)
 	_, err := ds.Commit(NewRefOfUser(userRef))
 	d.Exp.NoError(err)
@@ -93,17 +93,17 @@ func main() {
 func picasaUsage() {
 	credentialSteps := `How to create Google API credentials:
   1) Go to http://console.developers.google.com/start
-  2) From the "Select a project" pull down menu, choose "Create a project..."
-  3) Fill in the "Project name" field (e.g. Picasa Importer)
-  4) Agree to the terms and conditions and hit continue.
-  5) Click on the "Select a project" pull down menu and choose "Manage all projects..."
-  6) Click on the project you just created. On the new page, in the sidebar menu,
-     click “APIs and auth”. In the submenu that opens up, click "Credentials".
-  7) In the popup, click on the "Add credentials" pulldown and select "OAuth 2.0 client ID".
-  8) Click the "Configure consent screen" button and fill in the "Product name" field.
-     All other fields on this page are optional. Now click the save button.
-  9) Select "Other" from the list of “Application Type” and fill in the “Name” field
-     (e.g. Picasa Importer) and click the “Create” button.
+  2) From the “Select a project” pull down menu, choose “Create a project...”
+  3) Fill in the “Project name” field (e.g. Picasa Importer), agree to the terms
+	   and conditions (if any), and hit “Create”.
+	4) Wait for the “Dashboard” page to load.
+	5) Click “Enable and manage APIs” in the blue “Use Google APIs” card.
+	6) In the sidebar menu, click “Credentials”.
+	7) Click “New credentials” and select “OAuth client ID”.
+	8) Click “Configure consent screen” and fill in the “Product name” field. All
+		 other fields on this page are optional. Now click “Save”.
+  9) Select “Other” from the list of “Application Type”, fill in the “Name” field
+     (e.g. Picasa Importer), and click “Create”.
      Your credentials will be displayed in a popup. Copy them to a safe place.`
 
 	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
@@ -145,13 +145,13 @@ func getAlbums() *User {
 func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32, albums MapOfStringToAlbum) MapOfStringToAlbum {
 	a := AlbumDef{Id: albumId, Title: albumTitle, NumPhotos: uint32(numPhotos)}.New(ds.Store())
 	remotePhotoRefs := getRemotePhotoRefs(&a, albumIndex)
-	r := types.WriteValue(remotePhotoRefs, ds.Store())
+	r := types.WriteValue(*remotePhotoRefs, ds.Store())
 	a = a.SetPhotos(NewRefOfSetOfRefOfRemotePhoto(r))
 	return albums.Set(a.Id(), a)
 }
 
 func getRemotePhotoRefs(album *Album, albumIndex int) *SetOfRefOfRemotePhoto {
-	if album.NumPhotos() <= 0 {
+	if album.NumPhotos() == 0 {
 		return nil
 	}
 	remotePhotoRefs := NewSetOfRefOfRemotePhoto(ds.Store())
@@ -262,7 +262,7 @@ func googleOAuth() (*http.Client, string) {
 
 	// Redirect user to Google's consent page to ask for permission
 	// for the scopes specified above.
-	fmt.Printf("Visit the following URL to authorize access to your Picasa data: %v\n", u)
+	fmt.Printf("Visit the following URL to authorize access to your Picasa data:\n%v\n", u)
 	code, returnedState := awaitOAuthResponse(l)
 	d.Chk.Equal(state, returnedState, "Oauth state is not correct")
 
