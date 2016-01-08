@@ -43,8 +43,8 @@ class Main extends React.Component<void, Props, State> {
   constructor(props: Props) {
     super(props);
 
-    let selectedTimeItem = props.timeItems[0];
-    let selectedCategoryItem = props.categories[0];
+    const selectedTimeItem = props.timeItems[0];
+    const selectedCategoryItem = props.categories[0];
 
     this._dataManager = new DataManager(new HttpStore(nomsServer), datasetId);
 
@@ -81,15 +81,15 @@ class Main extends React.Component<void, Props, State> {
   }
 
   render(): React.Element {
-    let s = this.state;
-    let dm = this._dataManager;
+    const s = this.state;
+    const dm = this._dataManager;
     dm.getData(s.selectedTimeItem.key, s.selectedCategoryItem).then(data => {
       this.setState({data});
     }).catch(ex => {
       console.error(ex);  // eslint-disable-line
     });
 
-    let seriesDelegate: ListDelegate<string> = {
+    const seriesDelegate: ListDelegate<string> = {
       getLabel(item: string): string {
         return item;
       },
@@ -100,7 +100,7 @@ class Main extends React.Component<void, Props, State> {
         return this.props.color[this.props.series.indexOf(item)];
       },
       onChange: (item: string) => {
-        let selectedSeries = new Set(this.state.selectedSeries);
+        const selectedSeries = new Set(this.state.selectedSeries);
         if (selectedSeries.has(item)) {
           selectedSeries.delete(item);
         } else {
@@ -110,7 +110,7 @@ class Main extends React.Component<void, Props, State> {
       }
     };
 
-    let timeDelegate: ListDelegate<LabelAndKey> = {
+    const timeDelegate: ListDelegate<LabelAndKey> = {
       getLabel(item: LabelAndKey): string {
         return item.label;
       },
@@ -122,7 +122,7 @@ class Main extends React.Component<void, Props, State> {
       }
     };
 
-    let categoryDelegate: ListDelegate<string> = {
+    const categoryDelegate: ListDelegate<string> = {
       getLabel(item: string): string {
         return item;
       },
@@ -153,11 +153,11 @@ class Main extends React.Component<void, Props, State> {
 
 const series = ['Seed', 'A', 'B'];
 
-let d = new Date();
-let year = d.getFullYear();
+const d = new Date();
+const year = d.getFullYear();
 d.setMonth(d.getMonth() - 3);
-let qYear = d.getFullYear();
-let quarter = (d.getMonth() + 1) / 4 | 0;
+const qYear = d.getFullYear();
+const quarter = (d.getMonth() + 1) / 4 | 0;
 const timeItems = [
   {label: 'Current Year', key: {Year: year}},
   {label: 'Last Quarter', key: {Year: qYear, Quarter: quarter}}

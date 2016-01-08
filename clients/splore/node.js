@@ -42,7 +42,7 @@ export default class Node extends React.Component<void, Props, State> {
 
     let textAnchor = 'start';
     let textX = 10;
-    let translate = `translate3d(${this.state.x}px, ${this.state.y}px, 0)`;
+    const translate = `translate3d(${this.state.x}px, ${this.state.y}px, 0)`;
 
     if (this.props.canOpen) {
       textAnchor = 'end';
@@ -61,7 +61,7 @@ export default class Node extends React.Component<void, Props, State> {
   }
 
   getShape() : React.Element {
-    let className = classNames('icon', {open:this.props.isOpen});
+    const className = classNames('icon', {open:this.props.isOpen});
     switch (this.props.shape) {
       case 'circle':
         return <circle className={className} r='4.5'/>;

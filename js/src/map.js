@@ -18,7 +18,7 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
       return super.chunks;
     }
 
-    let chunks = [];
+    const chunks = [];
     this.sequence.items.forEach(entry => {
       if (!isPrimitive(entry.key)) {
         chunks.push(...entry.key.chunks);
@@ -32,32 +32,32 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
   }
 
   async has(key: K): Promise<boolean> {
-    let cursor = await this.sequence.newCursorAt(this.cs, key);
+    const cursor = await this.sequence.newCursorAt(this.cs, key);
     return cursor.valid && equals(cursor.getCurrentKey(), key);
   }
 
   async first(): Promise<?[K, V]> {
-    let cursor = await this.sequence.newCursorAt(this.cs, null);
+    const cursor = await this.sequence.newCursorAt(this.cs, null);
     if (!cursor.valid) {
       return undefined;
     }
 
-    let entry = cursor.getCurrent();
+    const entry = cursor.getCurrent();
     return [entry.key, entry.value];
   }
 
   async get(key: K): Promise<?V> {
-    let cursor = await this.sequence.newCursorAt(this.cs, key);
+    const cursor = await this.sequence.newCursorAt(this.cs, key);
     if (!cursor.valid) {
       return undefined;
     }
 
-    let entry = cursor.getCurrent();
+    const entry = cursor.getCurrent();
     return equals(entry.key, key) ? entry.value : undefined;
   }
 
   async forEach(cb: (v: V, k: K) => void): Promise<void> {
-    let cursor = await this.sequence.newCursorAt(this.cs, null);
+    const cursor = await this.sequence.newCursorAt(this.cs, null);
     return cursor.iter(entry => {
       cb(entry.value, entry.key);
       return false;

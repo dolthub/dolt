@@ -46,11 +46,11 @@ export default class HeatMap extends React.Component<void, Props, State> {
       return;
     }
 
-    let pitchListRef = notNull(await this.props.pitchListRefP);
-    let pitchList = await readValue(pitchListRef, this.props.httpStore);
+    const pitchListRef = notNull(await this.props.pitchListRefP);
+    const pitchList = await readValue(pitchListRef, this.props.httpStore);
 
     if (pitchList instanceof NomsList) {
-      let pointList = [];
+      const pointList = [];
       await pitchList.forEach(p => {
         pointList.push({
           x: -1 + ORIGIN_X_PIXELS + feetToPixels(p.get('X')),
@@ -69,8 +69,8 @@ export default class HeatMap extends React.Component<void, Props, State> {
   render(): React.Element {
     this.loadIfNeeded();
 
-    let points = this.getPoints();
-    let fillStyle = {
+    const points = this.getPoints();
+    const fillStyle = {
       bottom: 0,
       left: 0,
       position: 'absolute',

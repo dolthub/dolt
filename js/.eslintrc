@@ -12,6 +12,7 @@
     "no-throw-literal": 2,
     "no-var": 2,
     "object-curly-spacing": [2, "never"],
+    "prefer-const": 2,
     "quotes": [2, "single"],
     "radix": 2,
     "semi": 2,

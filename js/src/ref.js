@@ -15,7 +15,7 @@ const emtpyRefStr = sha1Prefix + '0'.repeat(40);
 function uint8ArrayToHex(a: Uint8Array): string {
   let hex = '';
   for (let i = 0; i < a.length; i++) {
-    let v = a[i].toString(16);
+    const v = a[i].toString(16);
     if (v.length === 1) {
       hex += '0' + v;
     } else {
@@ -27,9 +27,9 @@ function uint8ArrayToHex(a: Uint8Array): string {
 }
 
 function hexToUint8(s: string): Uint8Array {
-  let digest = new Uint8Array(sha1Size);
+  const digest = new Uint8Array(sha1Size);
   for (let i = 0; i < sha1Size; i++) {
-    let ch = s.substring(i * 2, i * 2 + 2);
+    const ch = s.substring(i * 2, i * 2 + 2);
     digest[i] = parseInt(ch, 16);
   }
 
@@ -74,7 +74,7 @@ export default class Ref {
   }
 
   static parse(s: string): Ref {
-    let m = s.match(pattern);
+    const m = s.match(pattern);
     if (!m) {
       throw Error('Could not parse ref: ' + s);
     }

@@ -19,8 +19,8 @@ for (let i = 0 ; i < chars.length; i++) {
 }
 
 export function encode(b: ArrayBuffer): string {
-  let bytes = new Uint8Array(b);
-  let len = bytes.length;
+  const bytes = new Uint8Array(b);
+  const len = bytes.length;
   let base64 = '';
 
   for (let i = 0; i < len; i += 3) {
@@ -41,7 +41,7 @@ export function encode(b: ArrayBuffer): string {
 
 export function decode(s: string): ArrayBuffer {
   let bufferLength = s.length * 0.75;
-  let len = s.length;
+  const len = s.length;
 
   if (s[len - 1] === '=') {
     bufferLength--;
@@ -50,15 +50,15 @@ export function decode(s: string): ArrayBuffer {
     }
   }
 
-  let arraybuffer = new ArrayBuffer(bufferLength);
-  let bytes = new Uint8Array(arraybuffer);
+  const arraybuffer = new ArrayBuffer(bufferLength);
+  const bytes = new Uint8Array(arraybuffer);
   let p = 0;
 
   for (let i = 0; i < len; i += 4) {
-    let encoded1 = lookup[s.charCodeAt(i)];
-    let encoded2 = lookup[s.charCodeAt(i + 1)];
-    let encoded3 = lookup[s.charCodeAt(i + 2)];
-    let encoded4 = lookup[s.charCodeAt(i + 3)];
+    const encoded1 = lookup[s.charCodeAt(i)];
+    const encoded2 = lookup[s.charCodeAt(i + 1)];
+    const encoded3 = lookup[s.charCodeAt(i + 2)];
+    const encoded4 = lookup[s.charCodeAt(i + 3)];
 
     bytes[p++] = (encoded1 << 2) | (encoded2 >> 4);
     bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2);

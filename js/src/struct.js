@@ -20,7 +20,7 @@ export default class Struct extends ValueBase {
 
     this.typeDef = typeDef;
 
-    let desc = typeDef.desc;
+    const desc = typeDef.desc;
     invariant(desc instanceof StructDesc);
     this.desc = desc;
 
@@ -29,7 +29,7 @@ export default class Struct extends ValueBase {
   }
 
   get chunks(): Array<Ref> {
-    let chunks = [];
+    const chunks = [];
     chunks.push(...this.type.chunks);
     this.forEach(v => {
       if (!isPrimitive(v)) {
@@ -60,12 +60,12 @@ export default class Struct extends ValueBase {
   }
 
   set(key: string, value: any): Struct {
-    let [f, isUnion] = findField(this.desc, key);
+    let [f, isUnion] = findField(this.desc, key); // eslint-disable-line prefer-const
     f = notNull(f);
 
-    let oldUnionField: ?Field = isUnion && f !== this.unionField ? this.unionField : null;
+    const oldUnionField: ?Field = isUnion && f !== this.unionField ? this.unionField : null;
 
-    let data = Object.create(null);
+    const data = Object.create(null);
     Object.keys(this._data).forEach(f => {
       if (!oldUnionField || oldUnionField.name !== f) {
         data[f] = this._data[f];
@@ -78,7 +78,7 @@ export default class Struct extends ValueBase {
 
   forEach(callbackfn: (value: any, index: string, field?: Field) => void): void {
     this.desc.fields.forEach(field => {
-      let fieldValue = this._data[field.name];
+      const fieldValue = this._data[field.name];
       if (fieldValue !== undefined) {
         callbackfn(this._data[field.name], field.name, field);
       }
@@ -92,14 +92,14 @@ export default class Struct extends ValueBase {
 
 function findField(desc: StructDesc, name: string): [?Field, boolean] {
   for (let i = 0; i < desc.fields.length; i++) {
-    let f = desc.fields[i];
+    const f = desc.fields[i];
     if (f.name === name) {
       return [f, false];
     }
   }
 
   for (let i = 0; i < desc.union.length; i++) {
-    let f = desc.union[i];
+    const f = desc.union[i];
     if (f.name === name) {
       return [f, true];
     }
@@ -110,10 +110,10 @@ function findField(desc: StructDesc, name: string): [?Field, boolean] {
 
 function validate(s: Struct): ?Field {
   // TODO: Validate field values match field types.
-  let data = s._data;
+  const data = s._data;
   let dataCount = Object.keys(data).length;
   for (let i = 0; i < s.desc.fields.length; i++) {
-    let field = s.desc.fields[i];
+    const field = s.desc.fields[i];
     if (data[field.name] !== undefined) {
       dataCount--;
     } else {
@@ -124,7 +124,7 @@ function validate(s: Struct): ?Field {
   if (s.desc.union.length > 0) {
     invariant(dataCount === 1);
     for (let i = 0; i < s.desc.union.length; i++) {
-      let field = s.desc.union[i];
+      const field = s.desc.union[i];
       if (data[field.name] !== undefined) {
         return field;
       }

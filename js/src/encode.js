@@ -57,7 +57,7 @@ class JsonArrayWriter {
   }
 
   writeTypeAsTag(t: Type) {
-    let k = t.kind;
+    const k = t.kind;
     this.writeKind(k);
     switch (k) {
       case Kind.Enum:
@@ -71,12 +71,12 @@ class JsonArrayWriter {
         break;
       }
       case Kind.Unresolved: {
-        let pkgRef = t.packageRef;
+        const pkgRef = t.packageRef;
         invariant(!pkgRef.isEmpty());
         this.writeRef(pkgRef);
         this.writeInt(t.ordinal);
 
-        let pkg = lookupPackage(pkgRef);
+        const pkg = lookupPackage(pkgRef);
         if (pkg && this._cs) {
           writeValue(pkg, pkg.type, this._cs);
         }
@@ -97,10 +97,10 @@ class JsonArrayWriter {
     }
 
     this.write(true);
-    let w2 = new JsonArrayWriter(this._cs);
-    let indexType = indexTypeForMetaSequence(t);
+    const w2 = new JsonArrayWriter(this._cs);
+    const indexType = indexTypeForMetaSequence(t);
     for (let i = 0; i < v.items.length; i++) {
-      let tuple = v.items[i];
+      const tuple = v.items[i];
       w2.writeRef(tuple.ref);
       w2.writeValue(tuple.value, indexType, pkg);
     }
@@ -140,29 +140,29 @@ class JsonArrayWriter {
         break;
       case Kind.List: {
         invariant(v instanceof NomsList);
-        let sequence = v.sequence;
+        const sequence = v.sequence;
         if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
           break;
         }
 
         invariant(sequence instanceof ListLeafSequence);
-        let w2 = new JsonArrayWriter(this._cs);
-        let elemType = t.elemTypes[0];
+        const w2 = new JsonArrayWriter(this._cs);
+        const elemType = t.elemTypes[0];
         sequence.items.forEach(sv => w2.writeValue(sv, elemType));
         this.write(w2.array);
         break;
       }
       case Kind.Map: {
         invariant(v instanceof NomsMap);
-        let sequence = v.sequence;
+        const sequence = v.sequence;
         if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
           break;
         }
 
         invariant(sequence instanceof MapLeafSequence);
-        let w2 = new JsonArrayWriter(this._cs);
-        let keyType = t.elemTypes[0];
-        let valueType = t.elemTypes[1];
+        const w2 = new JsonArrayWriter(this._cs);
+        const keyType = t.elemTypes[0];
+        const valueType = t.elemTypes[1];
         sequence.items.forEach(entry => {
           w2.writeValue(entry.key, keyType);
           w2.writeValue(entry.value, valueType);
@@ -172,11 +172,11 @@ class JsonArrayWriter {
       }
       case Kind.Package: {
         invariant(v instanceof Package);
-        let ptr = makePrimitiveType(Kind.Type);
-        let w2 = new JsonArrayWriter(this._cs);
+        const ptr = makePrimitiveType(Kind.Type);
+        const w2 = new JsonArrayWriter(this._cs);
         v.types.forEach(type => w2.writeValue(type, ptr));
         this.write(w2.array);
-        let w3 = new JsonArrayWriter(this._cs);
+        const w3 = new JsonArrayWriter(this._cs);
         v.dependencies.forEach(ref => w3.writeRef(ref));
         this.write(w3.array);
         break;
@@ -190,15 +190,15 @@ class JsonArrayWriter {
       }
       case Kind.Set: {
         invariant(v instanceof NomsSet);
-        let sequence = v.sequence;
+        const sequence = v.sequence;
         if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
           break;
         }
 
         invariant(sequence instanceof SetLeafSequence);
-        let w2 = new JsonArrayWriter(this._cs);
-        let elemType = t.elemTypes[0];
-        let elems = [];
+        const w2 = new JsonArrayWriter(this._cs);
+        const elemType = t.elemTypes[0];
+        const elems = [];
         sequence.items.forEach(v => {
           elems.push(v);
         });
@@ -225,14 +225,14 @@ class JsonArrayWriter {
   }
 
   writeTypeAsValue(t: Type) {
-    let k = t.kind;
+    const k = t.kind;
     this.writeKind(k);
     switch (k) {
       case Kind.Enum:
-        let desc = t.desc;
+        const desc = t.desc;
         invariant(desc instanceof EnumDesc);
         this.write(t.name);
-        let w2 = new JsonArrayWriter(this._cs);
+        const w2 = new JsonArrayWriter(this._cs);
         for (let i = 0; i < desc.ids.length; i++) {
           w2.write(desc.ids[i]);
         }
@@ -242,23 +242,23 @@ class JsonArrayWriter {
       case Kind.Map:
       case Kind.Ref:
       case Kind.Set: {
-        let w2 = new JsonArrayWriter(this._cs);
+        const w2 = new JsonArrayWriter(this._cs);
         t.elemTypes.forEach(elem => w2.writeTypeAsValue(elem));
         this.write(w2.array);
         break;
       }
       case Kind.Struct: {
-        let desc = t.desc;
+        const desc = t.desc;
         invariant(desc instanceof StructDesc);
         this.write(t.name);
-        let fieldWriter = new JsonArrayWriter(this._cs);
+        const fieldWriter = new JsonArrayWriter(this._cs);
         desc.fields.forEach(field => {
           fieldWriter.write(field.name);
           fieldWriter.writeTypeAsValue(field.t);
           fieldWriter.write(field.optional);
         });
         this.write(fieldWriter.array);
-        let choiceWriter = new JsonArrayWriter(this._cs);
+        const choiceWriter = new JsonArrayWriter(this._cs);
         desc.union.forEach(choice => {
           choiceWriter.write(choice.name);
           choiceWriter.writeTypeAsValue(choice.t);
@@ -268,16 +268,16 @@ class JsonArrayWriter {
         break;
       }
       case Kind.Unresolved: {
-        let pkgRef = t.packageRef;
+        const pkgRef = t.packageRef;
         this.writeRef(pkgRef);
-        let ordinal = t.ordinal;
+        const ordinal = t.ordinal;
         this.writeInt(ordinal);
         if (ordinal === -1) {
           this.write(t.namespace);
           this.write(t.name);
         }
 
-        let pkg = lookupPackage(pkgRef);
+        const pkg = lookupPackage(pkgRef);
         if (pkg && this._cs) {
           writeValue(pkg, pkg.type, this._cs);
         }
@@ -292,7 +292,7 @@ class JsonArrayWriter {
   }
 
   writeUnresolvedKindValue(v: any, t: Type, pkg: Package) {
-    let typeDef = pkg.types[t.ordinal];
+    const typeDef = pkg.types[t.ordinal];
     switch (typeDef.kind) {
       case Kind.Enum:
         invariant(typeof v === 'number');
@@ -313,11 +313,11 @@ class JsonArrayWriter {
   }
 
   writeStruct(s: Struct, type: Type, typeDef: Type, pkg: Package) {
-    let desc = typeDef.desc;
+    const desc = typeDef.desc;
     invariant(desc instanceof StructDesc);
     for (let i = 0; i < desc.fields.length; i++) {
-      let field = desc.fields[i];
-      let fieldValue = s.get(field.name);
+      const field = desc.fields[i];
+      const fieldValue = s.get(field.name);
       if (field.optional) {
         if (fieldValue !== undefined) {
           this.writeBoolean(true);
@@ -332,7 +332,7 @@ class JsonArrayWriter {
     }
 
     if (s.hasUnion) {
-      let unionField = notNull(s.unionField);
+      const unionField = notNull(s.unionField);
       this.writeInt(s.unionIndex);
       this.writeValue(s.get(unionField.name), unionField.t, pkg);
     }
@@ -350,7 +350,7 @@ function encodeEmbeddedNomsValue(v: any, t: Type, cs: ?ChunkStore): Chunk {
     // }
   }
 
-  let w = new JsonArrayWriter(cs);
+  const w = new JsonArrayWriter(cs);
   w.writeTopLevel(t, v);
   return Chunk.fromString(typedTag + JSON.stringify(w.array));
 }
@@ -358,8 +358,8 @@ function encodeEmbeddedNomsValue(v: any, t: Type, cs: ?ChunkStore): Chunk {
 // Top level blobs are not encoded using JSON but prefixed with 'b ' followed
 // by the raw bytes.
 function encodeTopLevelBlob(v: ArrayBuffer): Chunk {
-  let data = new Uint8Array(2 + v.byteLength);
-  let view = new DataView(v);
+  const data = new Uint8Array(2 + v.byteLength);
+  const view = new DataView(v);
   data[0] = 98;  // 'b'
   data[1] = 32;  // ' '
   for (let i = 0; i < view.byteLength; i++) {
@@ -377,7 +377,7 @@ function encodeNomsValue(v: any, t: Type, cs: ?ChunkStore): Chunk {
 }
 
 function writeValue(v: any, t: Type, cs: ChunkStore): Ref {
-  let chunk = encodeNomsValue(v, t, cs);
+  const chunk = encodeNomsValue(v, t, cs);
   invariant(!chunk.isEmpty());
   cs.put(chunk);
   return chunk.ref;

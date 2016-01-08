@@ -5,7 +5,7 @@ import {assert} from 'chai';
 import {encode, decode} from './base64.js';
 
 function arrayBufferFromString(s: string): ArrayBuffer {
-  let ta = new Uint8Array(s.length);
+  const ta = new Uint8Array(s.length);
   for (let i = 0; i < s.length; i++) {
     ta[i] = s.charCodeAt(i);
   }

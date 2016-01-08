@@ -19,9 +19,9 @@ function updateQuery(qs: {[key: string]: string}) {
 }
 
 function render() {
-  let qs = Object.freeze(queryString.parse(location.hash));
-  let target = document.getElementById('root');
-  let store: ChunkStore = new HttpStore(nomsServer);
+  const qs = Object.freeze(queryString.parse(location.hash));
+  const target = document.getElementById('root');
+  const store: ChunkStore = new HttpStore(nomsServer);
 
   ReactDOM.render(
       <Root qs={qs} store={store} updateQuery={updateQuery}/>,

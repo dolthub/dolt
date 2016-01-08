@@ -7,11 +7,11 @@ type FetchOptions = {
 };
 
 function fetch<T>(url: string, responseType: string, options: FetchOptions = {}): Promise<T> {
-  let xhr = new XMLHttpRequest();
+  const xhr = new XMLHttpRequest();
   xhr.responseType = responseType;
-  let method = options.method || 'GET';
+  const method = options.method || 'GET';
   xhr.open(method, url, true);
-  let p = new Promise((res, rej) => {
+  const p = new Promise((res, rej) => {
     xhr.onloadend = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         res(xhr.response);
@@ -21,7 +21,7 @@ function fetch<T>(url: string, responseType: string, options: FetchOptions = {})
     };
   });
   if (options.headers) {
-    for (let key in options.headers) {
+    for (const key in options.headers) {
       xhr.setRequestHeader(key, options.headers[key]);
     }
   }

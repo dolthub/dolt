@@ -43,7 +43,7 @@ export default class SlideShow extends React.Component<void, Props, State> {
   }
 
   render() : ?React.Element {
-    let photoRef = this.props.photos[this.state.index];
+    const photoRef = this.props.photos[this.state.index];
     if (!photoRef) {
       return null;
     }
@@ -88,7 +88,7 @@ class Item extends React.Component<void, ItemProps, ItemState> {
   }
 
   render() : React.Element {
-    let style = {
+    const style = {
       objectFit: 'contain',
       width: window.innerWidth,
       height: window.innerHeight

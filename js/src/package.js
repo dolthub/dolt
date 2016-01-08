@@ -18,7 +18,7 @@ class Package extends ValueBase {
   }
 
   get chunks(): Array<Ref> {
-    let chunks = [];
+    const chunks = [];
     for (let i = 0; i < this.types.length; i++) {
       chunks.push(...this.types[i].chunks);
     }
@@ -43,8 +43,8 @@ function registerPackage(p: Package) {
 const pendingPackages: { [key: string]: Promise<Package> } = Object.create(null);
 
 function readPackage(r: Ref, cs: ChunkStore): Promise<Package> {
-  let refStr = r.toString();
-  let p = pendingPackages[refStr];
+  const refStr = r.toString();
+  const p = pendingPackages[refStr];
   if (p) {
     return p;
   }
