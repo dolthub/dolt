@@ -17,11 +17,9 @@ func newIndexedMetaSequenceBoundaryChecker() boundaryChecker {
 func newIndexedMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
+
 		for i, v := range items {
-			mt := v.(metaTuple)
-			tuples[i] = mt
-			// Immediately write intermediate chunks. It would be better to defer writing any chunks until commit, see https://github.com/attic-labs/noms/issues/710.
-			WriteValue(mt.child, cs)
+			tuples[i] = v.(metaTuple) // chunk is written when the root sequence is written
 		}
 
 		meta := newMetaSequenceFromData(tuples, t, cs)

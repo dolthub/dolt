@@ -100,8 +100,7 @@ func TestCompoundSetHas(t *testing.T) {
 	doTest := func(ts testSet) {
 		cs := chunks.NewMemoryStore()
 		set := ts.toCompoundSet(cs)
-		r := WriteValue(set, cs)
-		set2 := ReadValue(r, cs).(compoundSet)
+		set2 := ReadValue(WriteValue(set, cs), cs).(compoundSet)
 		for _, v := range ts.values {
 			assert.True(set.Has(v))
 			assert.True(set2.Has(v))

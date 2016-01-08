@@ -19,8 +19,7 @@ func getTestCompoundBlob(datas ...string) compoundBlob {
 	ms := chunks.NewMemoryStore()
 	for i, s := range datas {
 		b := NewBlob(bytes.NewBufferString(s), ms)
-		r := WriteValue(b, ms)
-		tuples[i] = metaTuple{b, r, Uint64(len(s))}
+		tuples[i] = metaTuple{b, ref.Ref{}, Uint64(len(s))}
 	}
 	return newCompoundBlob(tuples, ms)
 }
@@ -92,9 +91,7 @@ func TestCompoundBlobReader(t *testing.T) {
 
 	cb := getTestCompoundBlob("hello", "world")
 	test(cb)
-
-	r := WriteValue(cb, cb.cs)
-	test(ReadValue(r, cb.cs).(compoundBlob))
+	test(ReadValue(WriteValue(cb, cb.cs), cb.cs).(compoundBlob))
 }
 
 type testBlob struct {

@@ -23,7 +23,7 @@ type metaSequence interface {
 
 // metaTuple is a node in a "probably" tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
-	child    Value   // nil if the child data hasn't been read
+	child    Value   // nil if the child data hasn't been read, or has already been written
 	childRef ref.Ref // maybe empty if |child| is non-nil, call ChildRef() instead of accessing |childRef| directly
 	value    Value
 }
