@@ -15,8 +15,9 @@ type newBoundaryCheckerFn func() boundaryChecker
 
 type sequenceChunker struct {
 	cur                        *sequenceCursor
+	isOnChunkBoundary          bool
 	parent                     *sequenceChunker
-	current, pendingFirst      []sequenceItem
+	current                    []sequenceItem
 	makeChunk, parentMakeChunk makeChunkFn
 	boundaryChk                boundaryChecker
 	newBoundaryChecker         newBoundaryCheckerFn
@@ -39,8 +40,9 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 
 	seq := &sequenceChunker{
 		cur,
+		false,
 		nil,
-		[]sequenceItem{}, nil,
+		[]sequenceItem{},
 		makeChunk, parentMakeChunk,
 		boundaryChk,
 		newBoundaryChecker,
@@ -67,10 +69,11 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 
 func (seq *sequenceChunker) Append(item sequenceItem) {
 	d.Chk.NotNil(item)
-	// Checking for seq.pendingFirst must happen immediately, because it's effectively a continuation from the last call to Append. Specifically, if the last call to Append created the first chunk boundary, delay creating the parent until absolutely necessary. Otherwise, we will be in a state where a parent has only a single item, which is invalid.
-	if seq.pendingFirst != nil {
+	// Check |isOnChunkBoundary| immediately, because it's effectively a continuation from the last call to Append. Specifically, this happens when the last call to Append created the first chunk boundary, which delayed creating the parent until absolutely necessary. Otherwise, we will be in a state where a parent has only a single item, which is invalid.
+	if seq.isOnChunkBoundary {
 		seq.createParent()
-		seq.commitPendingFirst()
+		seq.handleChunkBoundary()
+		seq.isOnChunkBoundary = false
 	}
 	seq.current = append(seq.current, item)
 	seq.used = true
@@ -93,7 +96,7 @@ func (seq *sequenceChunker) skipParentIfExists() {
 }
 
 func (seq *sequenceChunker) createParent() {
-	d.Chk.True(seq.parent == nil)
+	d.Chk.Nil(seq.parent)
 	var parent *sequenceCursor
 	if seq.cur != nil && seq.cur.parent != nil {
 		// Clone the parent cursor because otherwise calling cur.advance() will affect our parent - and vice versa - in surprising ways. Instead, Skip moves forward our parent's cursor if we advance across a boundary.
@@ -102,34 +105,22 @@ func (seq *sequenceChunker) createParent() {
 	seq.parent = newSequenceChunker(parent, seq.parentMakeChunk, seq.parentMakeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
 }
 
-func (seq *sequenceChunker) commitPendingFirst() {
-	d.Chk.True(seq.pendingFirst != nil)
-	chunk, _ := seq.makeChunk(seq.pendingFirst)
-	seq.parent.Append(chunk)
-	seq.pendingFirst = nil
-}
-
 func (seq *sequenceChunker) handleChunkBoundary() {
-	d.Chk.True(len(seq.current) > 0)
+	d.Chk.NotEmpty(seq.current)
 	if seq.parent == nil {
-		seq.pendingFirst = seq.current
+		// Wait until there is a parent.
+		d.Chk.False(seq.isOnChunkBoundary)
+		seq.isOnChunkBoundary = true
 	} else {
 		chunk, _ := seq.makeChunk(seq.current)
 		seq.parent.Append(chunk)
+		seq.current = []sequenceItem{}
 	}
-	seq.current = []sequenceItem{}
 }
 
 func (seq *sequenceChunker) Done() Value {
 	if seq.cur != nil {
 		seq.finalizeCursor()
-	}
-
-	if seq.pendingFirst != nil {
-		d.Chk.True(seq.parent == nil)
-		d.Chk.Equal(0, len(seq.current))
-		_, done := seq.makeChunk(seq.pendingFirst)
-		return internalValueFromType(done, done.Type())
 	}
 
 	if seq.isRoot() {
