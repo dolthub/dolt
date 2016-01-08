@@ -135,9 +135,8 @@ func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkStore) (*sequenceCu
 func readMetaTupleValue(item sequenceItem, cs chunks.ChunkStore) Value {
 	mt := item.(metaTuple)
 	if mt.child == nil {
-		child := ReadValue(mt.childRef, cs)
-		d.Chk.NotNil(child)
-		mt.child = internalValueFromType(child, child.Type())
+		mt.child = ReadValue(mt.childRef, cs)
+		d.Chk.NotNil(mt.child)
 	}
 	return internalValueFromType(mt.child, mt.child.Type())
 }

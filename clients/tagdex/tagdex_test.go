@@ -36,14 +36,21 @@ func (s *testSuite) TestTagdex() {
 	cs := chunks.NewLevelDBStore(s.LdbDir, 1, false)
 	inputDs := dataset.NewDataset(datas.NewDataStore(cs), "input-test")
 
+	fakePhotos := map[string]int{
+		"cat": 2,
+		"dog": 1,
+		"nyc": 1,
+		"sf":  1,
+		"syd": 100,
+	}
+
 	// Build the set
-	set := NewSetOfRefOfRemotePhoto(cs).Insert(
-		createRefOfRemotePhoto(0, "nyc", cs),
-		createRefOfRemotePhoto(1, "sf", cs),
-		createRefOfRemotePhoto(2, "cat", cs),
-		createRefOfRemotePhoto(3, "dog", cs),
-		createRefOfRemotePhoto(4, "cat", cs), // One more cat. Cats rule!
-	)
+	set := NewSetOfRefOfRemotePhoto(cs)
+	for name, num := range fakePhotos {
+		for i := 0; i < num; i++ {
+			set = set.Insert(createRefOfRemotePhoto(i, name, cs))
+		}
+	}
 	inputRef := types.WriteValue(set, cs)
 	refVal := types.NewRef(inputRef)
 
@@ -53,19 +60,17 @@ func (s *testSuite) TestTagdex() {
 	inputDs.Close()
 
 	out := s.Run(main, []string{"-in", "input-test", "-out", "tagdex-test"})
-	s.Contains(out, "Indexed 5 photos from 77 values")
+	s.Contains(out, "Indexed 105 photos from 1583 values")
 
 	cs = chunks.NewLevelDBStore(s.LdbDir, 1, false)
 	ds := dataset.NewDataset(datas.NewDataStore(cs), "tagdex-test")
 
 	m := ds.Head().Value().(MapOfStringToSetOfRefOfRemotePhoto)
 
-	s.Equal(uint64(4), m.Len())
-	s.Equal(uint64(1), m.Get("nyc").Len())
-	s.Equal(uint64(1), m.Get("sf").Len())
-	s.Equal(uint64(2), m.Get("cat").Len())
-	s.Equal(uint64(1), m.Get("dog").Len())
+	s.Equal(uint64(len(fakePhotos)), m.Len())
+	for name, num := range fakePhotos {
+		s.Equal(uint64(num), m.Get(name).Len())
+	}
 
 	s.Equal("titlenyc", m.Get("nyc").First().TargetValue(cs).Title())
-	s.Equal("1", m.Get("sf").First().TargetValue(cs).Id())
 }
