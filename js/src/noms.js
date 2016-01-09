@@ -6,7 +6,7 @@ export {default as HttpStore} from './http_store.js';
 export {default as MemoryStore} from './memory_store.js';
 export {default as Ref} from './ref.js';
 export {default as Struct} from './struct.js';
-export {encodeNomsValue} from './encode.js';
+export {encodeNomsValue, writeValue} from './encode.js';
 export {invariant, notNull} from './assert.js';
 export {isPrimitiveKind, Kind} from './noms_kind.js';
 export {ListLeafSequence, NomsList} from './list.js';
@@ -35,3 +35,6 @@ export {
 
 import type {ChunkStore} from './chunk_store.js';
 export type {ChunkStore};
+
+import type {valueOrPrimitive} from './value.js';
+export type {valueOrPrimitive};
