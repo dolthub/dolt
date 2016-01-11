@@ -23,8 +23,7 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
     if (this.sequence instanceof ListLeafSequence) {
       return this.sequence.items.length;
     }
-
-    throw new Error('not implemented');
+    return this.sequence.items.reduce((v, tuple) => v + tuple.value, 0);
   }
 }
 

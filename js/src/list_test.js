@@ -95,4 +95,9 @@ suite('CompoundList', () => {
     const l = build();
     assert.strictEqual(2, l.chunks.length);
   });
+
+  test('length', () => {
+    const l = build();
+    assert.equal(l.length, 8);
+  });
 });
