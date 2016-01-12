@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_2a87e00_CachedRef ref.Ref
+var __mainPackageInFile_sha1_300cde1_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -18,21 +18,16 @@ func init() {
 		types.MakeStructType("Import",
 			[]types.Field{
 				types.Field{"FileSHA1", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Date", types.MakeType(ref.Ref{}, 1), false},
-				types.Field{"Companies", types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-9fb26a609a1d4134935888c9676c79d6ea89acbb"), 0)))), false},
-			},
-			types.Choices{},
-		),
-		types.MakeStructType("Date",
-			[]types.Field{
-				types.Field{"RFC3339", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Date", types.MakeType(ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"), 0), false},
+				types.Field{"Companies", types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-a2d00be2c4ed5b9912f1a9739415b59528cf491d"), 0)))), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-9fb26a609a1d4134935888c9676c79d6ea89acbb"),
+		ref.Parse("sha1-a2d00be2c4ed5b9912f1a9739415b59528cf491d"),
+		ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"),
 	})
-	__mainPackageInFile_sha1_2a87e00_CachedRef = types.RegisterPackage(&p)
+	__mainPackageInFile_sha1_300cde1_CachedRef = types.RegisterPackage(&p)
 }
 
 // Import
@@ -87,7 +82,7 @@ func (m Import) Type() types.Type {
 }
 
 func init() {
-	__typeForImport = types.MakeType(__mainPackageInFile_sha1_2a87e00_CachedRef, 0)
+	__typeForImport = types.MakeType(__mainPackageInFile_sha1_300cde1_CachedRef, 0)
 	types.RegisterStruct(__typeForImport, builderForImport, readerForImport)
 }
 
@@ -164,95 +159,6 @@ func (s Import) SetCompanies(val RefOfMapOfStringToRefOfCompany) Import {
 	return s
 }
 
-// Date
-
-type Date struct {
-	_RFC3339 string
-
-	cs  chunks.ChunkStore
-	ref *ref.Ref
-}
-
-func NewDate(cs chunks.ChunkStore) Date {
-	return Date{
-		_RFC3339: "",
-
-		cs:  cs,
-		ref: &ref.Ref{},
-	}
-}
-
-type DateDef struct {
-	RFC3339 string
-}
-
-func (def DateDef) New(cs chunks.ChunkStore) Date {
-	return Date{
-		_RFC3339: def.RFC3339,
-		cs:       cs,
-		ref:      &ref.Ref{},
-	}
-}
-
-func (s Date) Def() (d DateDef) {
-	d.RFC3339 = s._RFC3339
-	return
-}
-
-var __typeForDate types.Type
-
-func (m Date) Type() types.Type {
-	return __typeForDate
-}
-
-func init() {
-	__typeForDate = types.MakeType(__mainPackageInFile_sha1_2a87e00_CachedRef, 1)
-	types.RegisterStruct(__typeForDate, builderForDate, readerForDate)
-}
-
-func builderForDate(cs chunks.ChunkStore, values []types.Value) types.Value {
-	i := 0
-	s := Date{ref: &ref.Ref{}, cs: cs}
-	s._RFC3339 = values[i].(types.String).String()
-	i++
-	return s
-}
-
-func readerForDate(v types.Value) []types.Value {
-	values := []types.Value{}
-	s := v.(Date)
-	values = append(values, types.NewString(s._RFC3339))
-	return values
-}
-
-func (s Date) Equals(other types.Value) bool {
-	return other != nil && __typeForDate.Equals(other.Type()) && s.Ref() == other.Ref()
-}
-
-func (s Date) Ref() ref.Ref {
-	return types.EnsureRef(s.ref, s)
-}
-
-func (s Date) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, __typeForDate.Chunks()...)
-	return
-}
-
-func (s Date) ChildValues() (ret []types.Value) {
-	ret = append(ret, types.NewString(s._RFC3339))
-	return
-}
-
-func (s Date) RFC3339() string {
-	return s._RFC3339
-}
-
-func (s Date) SetRFC3339(val string) Date {
-	s._RFC3339 = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
 // RefOfMapOfStringToRefOfCompany
 
 type RefOfMapOfStringToRefOfCompany struct {
@@ -298,7 +204,7 @@ func (r RefOfMapOfStringToRefOfCompany) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfMapOfStringToRefOfCompany = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-9fb26a609a1d4134935888c9676c79d6ea89acbb"), 0))))
+	__typeForRefOfMapOfStringToRefOfCompany = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-a2d00be2c4ed5b9912f1a9739415b59528cf491d"), 0))))
 	types.RegisterRef(__typeForRefOfMapOfStringToRefOfCompany, builderForRefOfMapOfStringToRefOfCompany)
 }
 
@@ -371,7 +277,7 @@ func (m MapOfStringToRefOfCompany) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfStringToRefOfCompany = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-9fb26a609a1d4134935888c9676c79d6ea89acbb"), 0)))
+	__typeForMapOfStringToRefOfCompany = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-a2d00be2c4ed5b9912f1a9739415b59528cf491d"), 0)))
 	types.RegisterValue(__typeForMapOfStringToRefOfCompany, builderForMapOfStringToRefOfCompany, readerForMapOfStringToRefOfCompany)
 }
 
@@ -493,7 +399,7 @@ func (r RefOfCompany) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfCompany = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-9fb26a609a1d4134935888c9676c79d6ea89acbb"), 0))
+	__typeForRefOfCompany = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-a2d00be2c4ed5b9912f1a9739415b59528cf491d"), 0))
 	types.RegisterRef(__typeForRefOfCompany, builderForRefOfCompany)
 }
 

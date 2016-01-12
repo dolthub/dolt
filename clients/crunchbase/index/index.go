@@ -91,7 +91,7 @@ func main() {
 					round := r.TargetValue(ds)
 
 					// HACK: Only include rounds that are newer than the cutoff date.
-					if time.Unix(round.FundedAt(), 0).Before(timeCutoff) {
+					if time.Unix(round.FundedAt().Unix(), 0).Before(timeCutoff) {
 						return
 					}
 
@@ -104,7 +104,7 @@ func main() {
 					// Skip region for now to reduce size of data.
 					// c <- entry{regionKey, roundRaiseDef}
 
-					addTimeRounds(round.FundedAt(), roundRef)
+					addTimeRounds(round.FundedAt().Unix(), roundRef)
 
 					roundType := classifyRoundType(round)
 					roundTypeKey := NewKey(ds).SetRoundType(roundType)

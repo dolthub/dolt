@@ -68,7 +68,7 @@ func main() {
 
 	imp := ImportDef{
 		ref.FromHash(h).String(),
-		DateDef{time.Now().Format(time.RFC3339)},
+		DateDef{time.Now().Unix()},
 		companiesRef,
 	}.New(ds.Store())
 
@@ -162,9 +162,9 @@ func newCompanyFromRow(cs chunks.ChunkStore, idxs columnIndexes, row *xlsx.Row, 
 		Region:          idxs.getString("region", cells),
 		City:            idxs.getString("city", cells),
 		FundingRounds:   uint16(idxs.getInt("funding_rounds", cells, "Company.FundingRounds", rowNum)),
-		FoundedAt:       idxs.getTimeStamp("founded_at", cells, "Company.FoundedAt", rowNum),
-		FirstFundingAt:  idxs.getTimeStamp("first_funding_at", cells, "Company.FirstFundingAt", rowNum),
-		LastFundingAt:   idxs.getTimeStamp("last_funding_at", cells, "Company.LastFundingAt", rowNum),
+		FoundedAt:       idxs.getDate("founded_at", cells, "Company.FoundedAt", rowNum),
+		FirstFundingAt:  idxs.getDate("first_funding_at", cells, "Company.FirstFundingAt", rowNum),
+		LastFundingAt:   idxs.getDate("last_funding_at", cells, "Company.LastFundingAt", rowNum),
 	}
 	return company.New(cs)
 }
@@ -177,7 +177,7 @@ func newRoundFromRow(cs chunks.ChunkStore, idxs columnIndexes, row *xlsx.Row, ro
 		FundingRoundPermalink: idxs.getString("funding_round_permalink", cells),
 		FundingRoundType:      idxs.getString("funding_round_type", cells),
 		FundingRoundCode:      idxs.getString("funding_round_code", cells),
-		FundedAt:              idxs.getTimeStamp("funded_at", cells, "Round.fundedAt", rowNum),
+		FundedAt:              idxs.getDate("funded_at", cells, "Round.fundedAt", rowNum),
 		RaisedAmountUsd:       idxs.getFloat("raised_amount_usd", cells, "Round.raisedAmountUsd", rowNum),
 	}
 	return round.New(cs)
@@ -241,19 +241,19 @@ func (cn columnIndexes) getInt(key string, cells []*xlsx.Cell, field string, row
 	return int(parsedValue)
 }
 
-func (cn columnIndexes) getTimeStamp(key string, cells []*xlsx.Cell, field string, rowNum int) int64 {
+func (cn columnIndexes) getDate(key string, cells []*xlsx.Cell, field string, rowNum int) DateDef {
 	s := cn.getString(key, cells)
 	if s != "" && s != "-" {
 		if f, err := strconv.ParseFloat(s, 64); err == nil {
-			return xlsx.TimeFromExcelTime(f, date1904).Unix()
+			return DateDef{xlsx.TimeFromExcelTime(f, date1904).Unix()}
 		}
 		const shortForm = "2006-01-02"
 		var err error
 		var t time.Time
 		if t, err = time.Parse(shortForm, s); err == nil {
-			return t.Unix()
+			return DateDef{t.Unix()}
 		}
 		fmt.Fprintf(os.Stderr, "Unable to parse Date, row: %d, field: %s, value: %s, err: %s\n", rowNum, field, s, err)
 	}
-	return 0
+	return DateDef{0}
 }
