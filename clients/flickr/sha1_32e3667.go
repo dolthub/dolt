@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_42722c5_CachedRef ref.Ref
+var __mainPackageInFile_sha1_32e3667_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -20,6 +20,7 @@ func init() {
 				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Url", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Date", types.MakeType(ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"), 0), false},
 				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"), 0), false},
 				types.Field{"Sizes", types.MakeCompoundType(types.MapKind, types.MakeType(ref.Ref{}, 1), types.MakePrimitiveType(types.StringKind)), false},
 				types.Field{"Tags", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind)), false},
@@ -34,9 +35,10 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{
+		ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"),
 		ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"),
 	})
-	__mainPackageInFile_sha1_42722c5_CachedRef = types.RegisterPackage(&p)
+	__mainPackageInFile_sha1_32e3667_CachedRef = types.RegisterPackage(&p)
 }
 
 // RemotePhoto
@@ -45,6 +47,7 @@ type RemotePhoto struct {
 	_Id          string
 	_Title       string
 	_Url         string
+	_Date        Date
 	_Geoposition Geoposition
 	_Sizes       MapOfSizeToString
 	_Tags        SetOfString
@@ -58,6 +61,7 @@ func NewRemotePhoto(cs chunks.ChunkStore) RemotePhoto {
 		_Id:          "",
 		_Title:       "",
 		_Url:         "",
+		_Date:        NewDate(cs),
 		_Geoposition: NewGeoposition(cs),
 		_Sizes:       NewMapOfSizeToString(cs),
 		_Tags:        NewSetOfString(cs),
@@ -71,6 +75,7 @@ type RemotePhotoDef struct {
 	Id          string
 	Title       string
 	Url         string
+	Date        DateDef
 	Geoposition GeopositionDef
 	Sizes       MapOfSizeToStringDef
 	Tags        SetOfStringDef
@@ -81,6 +86,7 @@ func (def RemotePhotoDef) New(cs chunks.ChunkStore) RemotePhoto {
 		_Id:          def.Id,
 		_Title:       def.Title,
 		_Url:         def.Url,
+		_Date:        def.Date.New(cs),
 		_Geoposition: def.Geoposition.New(cs),
 		_Sizes:       def.Sizes.New(cs),
 		_Tags:        def.Tags.New(cs),
@@ -93,6 +99,7 @@ func (s RemotePhoto) Def() (d RemotePhotoDef) {
 	d.Id = s._Id
 	d.Title = s._Title
 	d.Url = s._Url
+	d.Date = s._Date.Def()
 	d.Geoposition = s._Geoposition.Def()
 	d.Sizes = s._Sizes.Def()
 	d.Tags = s._Tags.Def()
@@ -106,7 +113,7 @@ func (m RemotePhoto) Type() types.Type {
 }
 
 func init() {
-	__typeForRemotePhoto = types.MakeType(__mainPackageInFile_sha1_42722c5_CachedRef, 0)
+	__typeForRemotePhoto = types.MakeType(__mainPackageInFile_sha1_32e3667_CachedRef, 0)
 	types.RegisterStruct(__typeForRemotePhoto, builderForRemotePhoto, readerForRemotePhoto)
 }
 
@@ -118,6 +125,8 @@ func builderForRemotePhoto(cs chunks.ChunkStore, values []types.Value) types.Val
 	s._Title = values[i].(types.String).String()
 	i++
 	s._Url = values[i].(types.String).String()
+	i++
+	s._Date = values[i].(Date)
 	i++
 	s._Geoposition = values[i].(Geoposition)
 	i++
@@ -134,6 +143,7 @@ func readerForRemotePhoto(v types.Value) []types.Value {
 	values = append(values, types.NewString(s._Id))
 	values = append(values, types.NewString(s._Title))
 	values = append(values, types.NewString(s._Url))
+	values = append(values, s._Date)
 	values = append(values, s._Geoposition)
 	values = append(values, s._Sizes)
 	values = append(values, s._Tags)
@@ -150,6 +160,7 @@ func (s RemotePhoto) Ref() ref.Ref {
 
 func (s RemotePhoto) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, __typeForRemotePhoto.Chunks()...)
+	chunks = append(chunks, s._Date.Chunks()...)
 	chunks = append(chunks, s._Geoposition.Chunks()...)
 	chunks = append(chunks, s._Sizes.Chunks()...)
 	chunks = append(chunks, s._Tags.Chunks()...)
@@ -160,6 +171,7 @@ func (s RemotePhoto) ChildValues() (ret []types.Value) {
 	ret = append(ret, types.NewString(s._Id))
 	ret = append(ret, types.NewString(s._Title))
 	ret = append(ret, types.NewString(s._Url))
+	ret = append(ret, s._Date)
 	ret = append(ret, s._Geoposition)
 	ret = append(ret, s._Sizes)
 	ret = append(ret, s._Tags)
@@ -192,6 +204,16 @@ func (s RemotePhoto) Url() string {
 
 func (s RemotePhoto) SetUrl(val string) RemotePhoto {
 	s._Url = val
+	s.ref = &ref.Ref{}
+	return s
+}
+
+func (s RemotePhoto) Date() Date {
+	return s._Date
+}
+
+func (s RemotePhoto) SetDate(val Date) RemotePhoto {
+	s._Date = val
 	s.ref = &ref.Ref{}
 	return s
 }
@@ -273,7 +295,7 @@ func (m Size) Type() types.Type {
 }
 
 func init() {
-	__typeForSize = types.MakeType(__mainPackageInFile_sha1_42722c5_CachedRef, 1)
+	__typeForSize = types.MakeType(__mainPackageInFile_sha1_32e3667_CachedRef, 1)
 	types.RegisterStruct(__typeForSize, builderForSize, readerForSize)
 }
 
@@ -391,7 +413,7 @@ func (m MapOfSizeToString) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfSizeToString = types.MakeCompoundType(types.MapKind, types.MakeType(__mainPackageInFile_sha1_42722c5_CachedRef, 1), types.MakePrimitiveType(types.StringKind))
+	__typeForMapOfSizeToString = types.MakeCompoundType(types.MapKind, types.MakeType(__mainPackageInFile_sha1_32e3667_CachedRef, 1), types.MakePrimitiveType(types.StringKind))
 	types.RegisterValue(__typeForMapOfSizeToString, builderForMapOfSizeToString, readerForMapOfSizeToString)
 }
 

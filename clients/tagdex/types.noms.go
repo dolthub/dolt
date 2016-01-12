@@ -65,7 +65,7 @@ func (m MapOfStringToSetOfRefOfRemotePhoto) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfStringToSetOfRefOfRemotePhoto = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-42722c55cec055ff32526d1dc0636fa4d48c9fd5"), 0))))
+	__typeForMapOfStringToSetOfRefOfRemotePhoto = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-32e3667b438b3c4aa6e1e70cad1b01ac3880ecc2"), 0))))
 	types.RegisterValue(__typeForMapOfStringToSetOfRefOfRemotePhoto, builderForMapOfStringToSetOfRefOfRemotePhoto, readerForMapOfStringToSetOfRefOfRemotePhoto)
 }
 
@@ -201,7 +201,7 @@ func (m SetOfRefOfRemotePhoto) Type() types.Type {
 }
 
 func init() {
-	__typeForSetOfRefOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-42722c55cec055ff32526d1dc0636fa4d48c9fd5"), 0)))
+	__typeForSetOfRefOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-32e3667b438b3c4aa6e1e70cad1b01ac3880ecc2"), 0)))
 	types.RegisterValue(__typeForSetOfRefOfRemotePhoto, builderForSetOfRefOfRemotePhoto, readerForSetOfRefOfRemotePhoto)
 }
 
@@ -333,7 +333,7 @@ func (r RefOfRemotePhoto) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfRemotePhoto = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-42722c55cec055ff32526d1dc0636fa4d48c9fd5"), 0))
+	__typeForRefOfRemotePhoto = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-32e3667b438b3c4aa6e1e70cad1b01ac3880ecc2"), 0))
 	types.RegisterRef(__typeForRefOfRemotePhoto, builderForRefOfRemotePhoto)
 }
 

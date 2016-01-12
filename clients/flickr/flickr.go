@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/garyburd/go-oauth/oauth"
 	"github.com/attic-labs/noms/clients/util"
@@ -195,6 +196,7 @@ func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
 		flickrCall
 		Photoset struct {
 			Photo []struct {
+				DateTaken      string      `json:"datetaken"`
 				Id             string      `json:"id"`
 				Title          string      `json:"title"`
 				Tags           string      `json:"tags"`
@@ -223,20 +225,28 @@ func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
 	err := callFlickrAPI("flickr.photosets.getPhotos", &response, &map[string]string{
 		"photoset_id": id,
 		"user_id":     user.Id(),
-		"extras":      "geo,tags,url_t,url_s,url_m,url_l,url_o",
+		"extras":      "date_taken,geo,tags,url_t,url_s,url_m,url_l,url_o",
 	})
 	d.Chk.NoError(err)
 
-	photos := NewSetOfRefOfRemotePhoto(ds.Store())
+	cs := ds.Store()
+	photos := NewSetOfRefOfRemotePhoto(cs)
 
 	for _, p := range response.Photoset.Photo {
 		photo := RemotePhotoDef{
 			Id:    p.Id,
 			Title: p.Title,
 			Tags:  getTags(p.Tags),
-		}.New(ds.Store())
+		}.New(cs)
 
-		sizes := NewMapOfSizeToString(ds.Store())
+		// DateTaken is the MySQL DATETIME format, relative to the timezone where the photo was taken, not UTC.
+		if t, err := time.Parse("2006-01-02 15:04:05", p.DateTaken); err == nil {
+			photo = photo.SetDate(NewDate(cs).SetUnix(t.Unix()))
+		} else {
+			fmt.Printf("Error parsing date \"%s\": %s\n", p.DateTaken, err)
+		}
+
+		sizes := NewMapOfSizeToString(cs)
 		sizes = addSize(sizes, p.ThumbURL, p.ThumbWidth, p.ThumbHeight)
 		sizes = addSize(sizes, p.SmallURL, p.SmallWidth, p.SmallHeight)
 		sizes = addSize(sizes, p.MediumURL, p.MediumWidth, p.MediumHeight)
@@ -247,13 +257,13 @@ func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
 		lat := deFlickr(p.Latitude)
 		lon := deFlickr(p.Longitude)
 		if lat != 0.0 && lon != 0.0 {
-			photo = photo.SetGeoposition(GeopositionDef{lat, lon}.New(ds.Store()))
+			photo = photo.SetGeoposition(GeopositionDef{lat, lon}.New(cs))
 		}
 
-		photos = photos.Insert(NewRefOfRemotePhoto(types.WriteValue(photo, ds.Store())))
+		photos = photos.Insert(NewRefOfRemotePhoto(types.WriteValue(photo, cs)))
 	}
 
-	r := types.WriteValue(photos, ds.Store())
+	r := types.WriteValue(photos, cs)
 	return NewRefOfSetOfRefOfRemotePhoto(r)
 }
 

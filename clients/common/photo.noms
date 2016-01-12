@@ -1,10 +1,12 @@
-alias Geo = import "geo.noms"
+alias date = import "date.noms"
+alias geo = import "geo.noms"
 
 struct RemotePhoto {
   Id: String
   Title: String
   Url: String
-  Geoposition: Geo.Geoposition
+  Date: date.Date
+  Geoposition: geo.Geoposition
   Sizes: Map<Size, String>
   Tags: Set<String>
 }
