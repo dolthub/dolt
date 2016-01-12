@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_9fb26a6_CachedRef ref.Ref
+var __mainPackageInFile_sha1_a2d00be_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -29,9 +29,9 @@ func init() {
 				types.Field{"Region", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"City", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"FundingRounds", types.MakePrimitiveType(types.Uint16Kind), false},
-				types.Field{"FoundedAt", types.MakePrimitiveType(types.Int64Kind), false},
-				types.Field{"FirstFundingAt", types.MakePrimitiveType(types.Int64Kind), false},
-				types.Field{"LastFundingAt", types.MakePrimitiveType(types.Int64Kind), false},
+				types.Field{"FoundedAt", types.MakeType(ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"), 0), false},
+				types.Field{"FirstFundingAt", types.MakeType(ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"), 0), false},
+				types.Field{"LastFundingAt", types.MakeType(ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"), 0), false},
 				types.Field{"Rounds", types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Ref{}, 1))), false},
 			},
 			types.Choices{},
@@ -42,13 +42,15 @@ func init() {
 				types.Field{"FundingRoundPermalink", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"FundingRoundType", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"FundingRoundCode", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"FundedAt", types.MakePrimitiveType(types.Int64Kind), false},
+				types.Field{"FundedAt", types.MakeType(ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"), 0), false},
 				types.Field{"RaisedAmountUsd", types.MakePrimitiveType(types.Float64Kind), false},
 			},
 			types.Choices{},
 		),
-	}, []ref.Ref{})
-	__mainPackageInFile_sha1_9fb26a6_CachedRef = types.RegisterPackage(&p)
+	}, []ref.Ref{
+		ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"),
+	})
+	__mainPackageInFile_sha1_a2d00be_CachedRef = types.RegisterPackage(&p)
 }
 
 // Company
@@ -66,9 +68,9 @@ type Company struct {
 	_Region          string
 	_City            string
 	_FundingRounds   uint16
-	_FoundedAt       int64
-	_FirstFundingAt  int64
-	_LastFundingAt   int64
+	_FoundedAt       Date
+	_FirstFundingAt  Date
+	_LastFundingAt   Date
 	_Rounds          SetOfRefOfRound
 
 	cs  chunks.ChunkStore
@@ -89,9 +91,9 @@ func NewCompany(cs chunks.ChunkStore) Company {
 		_Region:          "",
 		_City:            "",
 		_FundingRounds:   uint16(0),
-		_FoundedAt:       int64(0),
-		_FirstFundingAt:  int64(0),
-		_LastFundingAt:   int64(0),
+		_FoundedAt:       NewDate(cs),
+		_FirstFundingAt:  NewDate(cs),
+		_LastFundingAt:   NewDate(cs),
 		_Rounds:          NewSetOfRefOfRound(cs),
 
 		cs:  cs,
@@ -112,9 +114,9 @@ type CompanyDef struct {
 	Region          string
 	City            string
 	FundingRounds   uint16
-	FoundedAt       int64
-	FirstFundingAt  int64
-	LastFundingAt   int64
+	FoundedAt       DateDef
+	FirstFundingAt  DateDef
+	LastFundingAt   DateDef
 	Rounds          SetOfRefOfRoundDef
 }
 
@@ -132,9 +134,9 @@ func (def CompanyDef) New(cs chunks.ChunkStore) Company {
 		_Region:          def.Region,
 		_City:            def.City,
 		_FundingRounds:   def.FundingRounds,
-		_FoundedAt:       def.FoundedAt,
-		_FirstFundingAt:  def.FirstFundingAt,
-		_LastFundingAt:   def.LastFundingAt,
+		_FoundedAt:       def.FoundedAt.New(cs),
+		_FirstFundingAt:  def.FirstFundingAt.New(cs),
+		_LastFundingAt:   def.LastFundingAt.New(cs),
 		_Rounds:          def.Rounds.New(cs),
 		cs:               cs,
 		ref:              &ref.Ref{},
@@ -154,9 +156,9 @@ func (s Company) Def() (d CompanyDef) {
 	d.Region = s._Region
 	d.City = s._City
 	d.FundingRounds = s._FundingRounds
-	d.FoundedAt = s._FoundedAt
-	d.FirstFundingAt = s._FirstFundingAt
-	d.LastFundingAt = s._LastFundingAt
+	d.FoundedAt = s._FoundedAt.Def()
+	d.FirstFundingAt = s._FirstFundingAt.Def()
+	d.LastFundingAt = s._LastFundingAt.Def()
 	d.Rounds = s._Rounds.Def()
 	return
 }
@@ -168,7 +170,7 @@ func (m Company) Type() types.Type {
 }
 
 func init() {
-	__typeForCompany = types.MakeType(__mainPackageInFile_sha1_9fb26a6_CachedRef, 0)
+	__typeForCompany = types.MakeType(__mainPackageInFile_sha1_a2d00be_CachedRef, 0)
 	types.RegisterStruct(__typeForCompany, builderForCompany, readerForCompany)
 }
 
@@ -199,11 +201,11 @@ func builderForCompany(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i++
 	s._FundingRounds = uint16(values[i].(types.Uint16))
 	i++
-	s._FoundedAt = int64(values[i].(types.Int64))
+	s._FoundedAt = values[i].(Date)
 	i++
-	s._FirstFundingAt = int64(values[i].(types.Int64))
+	s._FirstFundingAt = values[i].(Date)
 	i++
-	s._LastFundingAt = int64(values[i].(types.Int64))
+	s._LastFundingAt = values[i].(Date)
 	i++
 	s._Rounds = values[i].(SetOfRefOfRound)
 	i++
@@ -225,9 +227,9 @@ func readerForCompany(v types.Value) []types.Value {
 	values = append(values, types.NewString(s._Region))
 	values = append(values, types.NewString(s._City))
 	values = append(values, types.Uint16(s._FundingRounds))
-	values = append(values, types.Int64(s._FoundedAt))
-	values = append(values, types.Int64(s._FirstFundingAt))
-	values = append(values, types.Int64(s._LastFundingAt))
+	values = append(values, s._FoundedAt)
+	values = append(values, s._FirstFundingAt)
+	values = append(values, s._LastFundingAt)
 	values = append(values, s._Rounds)
 	return values
 }
@@ -243,6 +245,9 @@ func (s Company) Ref() ref.Ref {
 func (s Company) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, __typeForCompany.Chunks()...)
 	chunks = append(chunks, s._CategoryList.Chunks()...)
+	chunks = append(chunks, s._FoundedAt.Chunks()...)
+	chunks = append(chunks, s._FirstFundingAt.Chunks()...)
+	chunks = append(chunks, s._LastFundingAt.Chunks()...)
 	chunks = append(chunks, s._Rounds.Chunks()...)
 	return
 }
@@ -260,9 +265,9 @@ func (s Company) ChildValues() (ret []types.Value) {
 	ret = append(ret, types.NewString(s._Region))
 	ret = append(ret, types.NewString(s._City))
 	ret = append(ret, types.Uint16(s._FundingRounds))
-	ret = append(ret, types.Int64(s._FoundedAt))
-	ret = append(ret, types.Int64(s._FirstFundingAt))
-	ret = append(ret, types.Int64(s._LastFundingAt))
+	ret = append(ret, s._FoundedAt)
+	ret = append(ret, s._FirstFundingAt)
+	ret = append(ret, s._LastFundingAt)
 	ret = append(ret, s._Rounds)
 	return
 }
@@ -387,31 +392,31 @@ func (s Company) SetFundingRounds(val uint16) Company {
 	return s
 }
 
-func (s Company) FoundedAt() int64 {
+func (s Company) FoundedAt() Date {
 	return s._FoundedAt
 }
 
-func (s Company) SetFoundedAt(val int64) Company {
+func (s Company) SetFoundedAt(val Date) Company {
 	s._FoundedAt = val
 	s.ref = &ref.Ref{}
 	return s
 }
 
-func (s Company) FirstFundingAt() int64 {
+func (s Company) FirstFundingAt() Date {
 	return s._FirstFundingAt
 }
 
-func (s Company) SetFirstFundingAt(val int64) Company {
+func (s Company) SetFirstFundingAt(val Date) Company {
 	s._FirstFundingAt = val
 	s.ref = &ref.Ref{}
 	return s
 }
 
-func (s Company) LastFundingAt() int64 {
+func (s Company) LastFundingAt() Date {
 	return s._LastFundingAt
 }
 
-func (s Company) SetLastFundingAt(val int64) Company {
+func (s Company) SetLastFundingAt(val Date) Company {
 	s._LastFundingAt = val
 	s.ref = &ref.Ref{}
 	return s
@@ -434,7 +439,7 @@ type Round struct {
 	_FundingRoundPermalink string
 	_FundingRoundType      string
 	_FundingRoundCode      string
-	_FundedAt              int64
+	_FundedAt              Date
 	_RaisedAmountUsd       float64
 
 	cs  chunks.ChunkStore
@@ -447,7 +452,7 @@ func NewRound(cs chunks.ChunkStore) Round {
 		_FundingRoundPermalink: "",
 		_FundingRoundType:      "",
 		_FundingRoundCode:      "",
-		_FundedAt:              int64(0),
+		_FundedAt:              NewDate(cs),
 		_RaisedAmountUsd:       float64(0),
 
 		cs:  cs,
@@ -460,7 +465,7 @@ type RoundDef struct {
 	FundingRoundPermalink string
 	FundingRoundType      string
 	FundingRoundCode      string
-	FundedAt              int64
+	FundedAt              DateDef
 	RaisedAmountUsd       float64
 }
 
@@ -470,7 +475,7 @@ func (def RoundDef) New(cs chunks.ChunkStore) Round {
 		_FundingRoundPermalink: def.FundingRoundPermalink,
 		_FundingRoundType:      def.FundingRoundType,
 		_FundingRoundCode:      def.FundingRoundCode,
-		_FundedAt:              def.FundedAt,
+		_FundedAt:              def.FundedAt.New(cs),
 		_RaisedAmountUsd:       def.RaisedAmountUsd,
 		cs:                     cs,
 		ref:                    &ref.Ref{},
@@ -482,7 +487,7 @@ func (s Round) Def() (d RoundDef) {
 	d.FundingRoundPermalink = s._FundingRoundPermalink
 	d.FundingRoundType = s._FundingRoundType
 	d.FundingRoundCode = s._FundingRoundCode
-	d.FundedAt = s._FundedAt
+	d.FundedAt = s._FundedAt.Def()
 	d.RaisedAmountUsd = s._RaisedAmountUsd
 	return
 }
@@ -494,7 +499,7 @@ func (m Round) Type() types.Type {
 }
 
 func init() {
-	__typeForRound = types.MakeType(__mainPackageInFile_sha1_9fb26a6_CachedRef, 1)
+	__typeForRound = types.MakeType(__mainPackageInFile_sha1_a2d00be_CachedRef, 1)
 	types.RegisterStruct(__typeForRound, builderForRound, readerForRound)
 }
 
@@ -509,7 +514,7 @@ func builderForRound(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i++
 	s._FundingRoundCode = values[i].(types.String).String()
 	i++
-	s._FundedAt = int64(values[i].(types.Int64))
+	s._FundedAt = values[i].(Date)
 	i++
 	s._RaisedAmountUsd = float64(values[i].(types.Float64))
 	i++
@@ -523,7 +528,7 @@ func readerForRound(v types.Value) []types.Value {
 	values = append(values, types.NewString(s._FundingRoundPermalink))
 	values = append(values, types.NewString(s._FundingRoundType))
 	values = append(values, types.NewString(s._FundingRoundCode))
-	values = append(values, types.Int64(s._FundedAt))
+	values = append(values, s._FundedAt)
 	values = append(values, types.Float64(s._RaisedAmountUsd))
 	return values
 }
@@ -538,6 +543,7 @@ func (s Round) Ref() ref.Ref {
 
 func (s Round) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, __typeForRound.Chunks()...)
+	chunks = append(chunks, s._FundedAt.Chunks()...)
 	return
 }
 
@@ -546,7 +552,7 @@ func (s Round) ChildValues() (ret []types.Value) {
 	ret = append(ret, types.NewString(s._FundingRoundPermalink))
 	ret = append(ret, types.NewString(s._FundingRoundType))
 	ret = append(ret, types.NewString(s._FundingRoundCode))
-	ret = append(ret, types.Int64(s._FundedAt))
+	ret = append(ret, s._FundedAt)
 	ret = append(ret, types.Float64(s._RaisedAmountUsd))
 	return
 }
@@ -591,11 +597,11 @@ func (s Round) SetFundingRoundCode(val string) Round {
 	return s
 }
 
-func (s Round) FundedAt() int64 {
+func (s Round) FundedAt() Date {
 	return s._FundedAt
 }
 
-func (s Round) SetFundedAt(val int64) Round {
+func (s Round) SetFundedAt(val Date) Round {
 	s._FundedAt = val
 	s.ref = &ref.Ref{}
 	return s
@@ -816,7 +822,7 @@ func (m SetOfRefOfRound) Type() types.Type {
 }
 
 func init() {
-	__typeForSetOfRefOfRound = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_9fb26a6_CachedRef, 1)))
+	__typeForSetOfRefOfRound = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_a2d00be_CachedRef, 1)))
 	types.RegisterValue(__typeForSetOfRefOfRound, builderForSetOfRefOfRound, readerForSetOfRefOfRound)
 }
 
@@ -948,7 +954,7 @@ func (r RefOfRound) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfRound = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_9fb26a6_CachedRef, 1))
+	__typeForRefOfRound = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_a2d00be_CachedRef, 1))
 	types.RegisterRef(__typeForRefOfRound, builderForRefOfRound)
 }
 

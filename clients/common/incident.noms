@@ -4,6 +4,7 @@ struct Incident {
 	ID: Int64
 	Category: String
 	Description: String
+  // TODO: Combine DayOfWeek/Date/Time into single date.Date field, see https://github.com/attic-labs/noms/issues/850.
 	DayOfWeek: String
 	Date: String
 	Time: String

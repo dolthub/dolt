@@ -1,11 +1,8 @@
 alias cb = import "../crunchbase.noms"
+alias date = import "../../common/date.noms"
 
 struct Import {
     FileSHA1:  String
-    Date:      Date
+    Date:      date.Date
     Companies: Ref<Map<String, Ref<cb.Company>>>
-}
-
-struct Date {
-    RFC3339: String
 }
