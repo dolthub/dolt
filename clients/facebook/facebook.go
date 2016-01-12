@@ -287,11 +287,10 @@ func awaitOAuthResponse(l net.Listener) (string, string) {
 }
 
 func callFacebookAPI(client *http.Client, path string, response interface{}) {
-	u := "https://picasaweb.facebook.com/data/feed/api/" + path
+	u := "https://graph.facebook.com/" + path
 	req, err := http.NewRequest("GET", u, nil)
 	d.Chk.NoError(err)
 
-	req.Header.Add("GData-Version", "2")
 	resp, err := client.Do(req)
 	d.Chk.NoError(err)
 
