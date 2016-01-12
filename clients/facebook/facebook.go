@@ -238,10 +238,11 @@ func tryRefreshToken(rt string) *http.Client {
 }
 
 func facebookOAuth() (*http.Client, string) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	l, err := net.Listen("tcp", "localhost:63000")
 	d.Chk.NoError(err)
 
-	redirectURL := "http://" + l.Addr().String()
+	redirectURLAsNumbers := "http://" + l.Addr().String() + "/"
+        redirectURL := strings.Replace(redirectURLAsNumbers, "127.0.0.1", "localhost", -1)
 	conf := baseConfig(redirectURL)
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	state := fmt.Sprintf("%v", r.Uint32())
