@@ -94,6 +94,7 @@ func picasaUsage() {
   1) Go to https://developers.facebook.com/apps/
   2) From the “Select a project” pull down menu, choose “Create a project...”
   3) Fill in the “Project name” field (e.g. Aatic Facebook Importer), agree to the terms
+  4) Put your website's url as "http://localhost:63000/"
      `
 
 	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
