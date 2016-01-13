@@ -30,13 +30,12 @@ func init() {
 			[]types.Field{
 				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"NumPhotos", types.MakePrimitiveType(types.Uint32Kind), false},
-				types.Field{"Photos", types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-deb80d2bd1e15a7457d2f292d44700948e44d66c"), 0)))), false},
+				types.Field{"Photos", types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-22ba1d27e6f46ffe98342c0a789ceaf0a733a22a"), 0)), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-deb80d2bd1e15a7457d2f292d44700948e44d66c"),
+		ref.Parse("sha1-22ba1d27e6f46ffe98342c0a789ceaf0a733a22a"),
 	})
 	__mainPackageInFile_picasa_CachedRef = types.RegisterPackage(&p)
 }
@@ -67,38 +66,6 @@ func NewUser(cs chunks.ChunkStore) User {
 		cs:  cs,
 		ref: &ref.Ref{},
 	}
-}
-
-type UserDef struct {
-	Id           string
-	Name         string
-	Albums       MapOfStringToAlbumDef
-	RefreshToken string
-	OAuthToken   string
-	OAuthSecret  string
-}
-
-func (def UserDef) New(cs chunks.ChunkStore) User {
-	return User{
-		_Id:           def.Id,
-		_Name:         def.Name,
-		_Albums:       def.Albums.New(cs),
-		_RefreshToken: def.RefreshToken,
-		_OAuthToken:   def.OAuthToken,
-		_OAuthSecret:  def.OAuthSecret,
-		cs:            cs,
-		ref:           &ref.Ref{},
-	}
-}
-
-func (s User) Def() (d UserDef) {
-	d.Id = s._Id
-	d.Name = s._Name
-	d.Albums = s._Albums.Def()
-	d.RefreshToken = s._RefreshToken
-	d.OAuthToken = s._OAuthToken
-	d.OAuthSecret = s._OAuthSecret
-	return
 }
 
 var __typeForUser types.Type
@@ -229,10 +196,9 @@ func (s User) SetOAuthSecret(val string) User {
 // Album
 
 type Album struct {
-	_Id        string
-	_Title     string
-	_NumPhotos uint32
-	_Photos    RefOfSetOfRefOfRemotePhoto
+	_Id     string
+	_Title  string
+	_Photos SetOfRemotePhoto
 
 	cs  chunks.ChunkStore
 	ref *ref.Ref
@@ -240,40 +206,13 @@ type Album struct {
 
 func NewAlbum(cs chunks.ChunkStore) Album {
 	return Album{
-		_Id:        "",
-		_Title:     "",
-		_NumPhotos: uint32(0),
-		_Photos:    NewRefOfSetOfRefOfRemotePhoto(ref.Ref{}),
+		_Id:     "",
+		_Title:  "",
+		_Photos: NewSetOfRemotePhoto(cs),
 
 		cs:  cs,
 		ref: &ref.Ref{},
 	}
-}
-
-type AlbumDef struct {
-	Id        string
-	Title     string
-	NumPhotos uint32
-	Photos    ref.Ref
-}
-
-func (def AlbumDef) New(cs chunks.ChunkStore) Album {
-	return Album{
-		_Id:        def.Id,
-		_Title:     def.Title,
-		_NumPhotos: def.NumPhotos,
-		_Photos:    NewRefOfSetOfRefOfRemotePhoto(def.Photos),
-		cs:         cs,
-		ref:        &ref.Ref{},
-	}
-}
-
-func (s Album) Def() (d AlbumDef) {
-	d.Id = s._Id
-	d.Title = s._Title
-	d.NumPhotos = s._NumPhotos
-	d.Photos = s._Photos.TargetRef()
-	return
 }
 
 var __typeForAlbum types.Type
@@ -294,9 +233,7 @@ func builderForAlbum(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i++
 	s._Title = values[i].(types.String).String()
 	i++
-	s._NumPhotos = uint32(values[i].(types.Uint32))
-	i++
-	s._Photos = values[i].(RefOfSetOfRefOfRemotePhoto)
+	s._Photos = values[i].(SetOfRemotePhoto)
 	i++
 	return s
 }
@@ -306,7 +243,6 @@ func readerForAlbum(v types.Value) []types.Value {
 	s := v.(Album)
 	values = append(values, types.NewString(s._Id))
 	values = append(values, types.NewString(s._Title))
-	values = append(values, types.Uint32(s._NumPhotos))
 	values = append(values, s._Photos)
 	return values
 }
@@ -328,7 +264,6 @@ func (s Album) Chunks() (chunks []ref.Ref) {
 func (s Album) ChildValues() (ret []types.Value) {
 	ret = append(ret, types.NewString(s._Id))
 	ret = append(ret, types.NewString(s._Title))
-	ret = append(ret, types.Uint32(s._NumPhotos))
 	ret = append(ret, s._Photos)
 	return
 }
@@ -353,21 +288,11 @@ func (s Album) SetTitle(val string) Album {
 	return s
 }
 
-func (s Album) NumPhotos() uint32 {
-	return s._NumPhotos
-}
-
-func (s Album) SetNumPhotos(val uint32) Album {
-	s._NumPhotos = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
-func (s Album) Photos() RefOfSetOfRefOfRemotePhoto {
+func (s Album) Photos() SetOfRemotePhoto {
 	return s._Photos
 }
 
-func (s Album) SetPhotos(val RefOfSetOfRefOfRemotePhoto) Album {
+func (s Album) SetPhotos(val SetOfRemotePhoto) Album {
 	s._Photos = val
 	s.ref = &ref.Ref{}
 	return s
@@ -383,25 +308,6 @@ type MapOfStringToAlbum struct {
 
 func NewMapOfStringToAlbum(cs chunks.ChunkStore) MapOfStringToAlbum {
 	return MapOfStringToAlbum{types.NewTypedMap(cs, __typeForMapOfStringToAlbum), cs, &ref.Ref{}}
-}
-
-type MapOfStringToAlbumDef map[string]AlbumDef
-
-func (def MapOfStringToAlbumDef) New(cs chunks.ChunkStore) MapOfStringToAlbum {
-	kv := make([]types.Value, 0, len(def)*2)
-	for k, v := range def {
-		kv = append(kv, types.NewString(k), v.New(cs))
-	}
-	return MapOfStringToAlbum{types.NewTypedMap(cs, __typeForMapOfStringToAlbum, kv...), cs, &ref.Ref{}}
-}
-
-func (m MapOfStringToAlbum) Def() MapOfStringToAlbumDef {
-	def := make(map[string]AlbumDef)
-	m.m.Iter(func(k, v types.Value) bool {
-		def[k.(types.String).String()] = v.(Album).Def()
-		return false
-	})
-	return def
 }
 
 func (m MapOfStringToAlbum) Equals(other types.Value) bool {
@@ -507,6 +413,67 @@ func (m MapOfStringToAlbum) Filter(cb MapOfStringToAlbumFilterCallback) MapOfStr
 	return MapOfStringToAlbum{out, m.cs, &ref.Ref{}}
 }
 
+// RefOfUser
+
+type RefOfUser struct {
+	target ref.Ref
+	ref    *ref.Ref
+}
+
+func NewRefOfUser(target ref.Ref) RefOfUser {
+	return RefOfUser{target, &ref.Ref{}}
+}
+
+func (r RefOfUser) TargetRef() ref.Ref {
+	return r.target
+}
+
+func (r RefOfUser) Ref() ref.Ref {
+	return types.EnsureRef(r.ref, r)
+}
+
+func (r RefOfUser) Equals(other types.Value) bool {
+	return other != nil && __typeForRefOfUser.Equals(other.Type()) && r.Ref() == other.Ref()
+}
+
+func (r RefOfUser) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.Type().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
+}
+
+func (r RefOfUser) ChildValues() []types.Value {
+	return nil
+}
+
+// A Noms Value that describes RefOfUser.
+var __typeForRefOfUser types.Type
+
+func (r RefOfUser) Type() types.Type {
+	return __typeForRefOfUser
+}
+
+func (r RefOfUser) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
+}
+
+func init() {
+	__typeForRefOfUser = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_picasa_CachedRef, 0))
+	types.RegisterRef(__typeForRefOfUser, builderForRefOfUser)
+}
+
+func builderForRefOfUser(r ref.Ref) types.Value {
+	return NewRefOfUser(r)
+}
+
+func (r RefOfUser) TargetValue(cs chunks.ChunkStore) User {
+	return types.ReadValue(r.target, cs).(User)
+}
+
+func (r RefOfUser) SetTargetValue(val User, cs chunks.ChunkSink) RefOfUser {
+	return NewRefOfUser(types.WriteValue(val, cs))
+}
+
 // SetOfRemotePhoto
 
 type SetOfRemotePhoto struct {
@@ -545,7 +512,7 @@ func (m SetOfRemotePhoto) Type() types.Type {
 }
 
 func init() {
-	__typeForSetOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-deb80d2bd1e15a7457d2f292d44700948e44d66c"), 0))
+	__typeForSetOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-22ba1d27e6f46ffe98342c0a789ceaf0a733a22a"), 0))
 	types.RegisterValue(__typeForSetOfRemotePhoto, builderForSetOfRemotePhoto, readerForSetOfRemotePhoto)
 }
 
@@ -630,333 +597,4 @@ func (s SetOfRemotePhoto) fromElemSlice(p []RemotePhoto) []types.Value {
 		r[i] = v
 	}
 	return r
-}
-
-// RefOfUser
-
-type RefOfUser struct {
-	target ref.Ref
-	ref    *ref.Ref
-}
-
-func NewRefOfUser(target ref.Ref) RefOfUser {
-	return RefOfUser{target, &ref.Ref{}}
-}
-
-func (r RefOfUser) TargetRef() ref.Ref {
-	return r.target
-}
-
-func (r RefOfUser) Ref() ref.Ref {
-	return types.EnsureRef(r.ref, r)
-}
-
-func (r RefOfUser) Equals(other types.Value) bool {
-	return other != nil && __typeForRefOfUser.Equals(other.Type()) && r.Ref() == other.Ref()
-}
-
-func (r RefOfUser) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
-	return
-}
-
-func (r RefOfUser) ChildValues() []types.Value {
-	return nil
-}
-
-// A Noms Value that describes RefOfUser.
-var __typeForRefOfUser types.Type
-
-func (r RefOfUser) Type() types.Type {
-	return __typeForRefOfUser
-}
-
-func (r RefOfUser) Less(other types.OrderedValue) bool {
-	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
-}
-
-func init() {
-	__typeForRefOfUser = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_picasa_CachedRef, 0))
-	types.RegisterRef(__typeForRefOfUser, builderForRefOfUser)
-}
-
-func builderForRefOfUser(r ref.Ref) types.Value {
-	return NewRefOfUser(r)
-}
-
-func (r RefOfUser) TargetValue(cs chunks.ChunkStore) User {
-	return types.ReadValue(r.target, cs).(User)
-}
-
-func (r RefOfUser) SetTargetValue(val User, cs chunks.ChunkSink) RefOfUser {
-	return NewRefOfUser(types.WriteValue(val, cs))
-}
-
-// RefOfSetOfRefOfRemotePhoto
-
-type RefOfSetOfRefOfRemotePhoto struct {
-	target ref.Ref
-	ref    *ref.Ref
-}
-
-func NewRefOfSetOfRefOfRemotePhoto(target ref.Ref) RefOfSetOfRefOfRemotePhoto {
-	return RefOfSetOfRefOfRemotePhoto{target, &ref.Ref{}}
-}
-
-func (r RefOfSetOfRefOfRemotePhoto) TargetRef() ref.Ref {
-	return r.target
-}
-
-func (r RefOfSetOfRefOfRemotePhoto) Ref() ref.Ref {
-	return types.EnsureRef(r.ref, r)
-}
-
-func (r RefOfSetOfRefOfRemotePhoto) Equals(other types.Value) bool {
-	return other != nil && __typeForRefOfSetOfRefOfRemotePhoto.Equals(other.Type()) && r.Ref() == other.Ref()
-}
-
-func (r RefOfSetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
-	return
-}
-
-func (r RefOfSetOfRefOfRemotePhoto) ChildValues() []types.Value {
-	return nil
-}
-
-// A Noms Value that describes RefOfSetOfRefOfRemotePhoto.
-var __typeForRefOfSetOfRefOfRemotePhoto types.Type
-
-func (r RefOfSetOfRefOfRemotePhoto) Type() types.Type {
-	return __typeForRefOfSetOfRefOfRemotePhoto
-}
-
-func (r RefOfSetOfRefOfRemotePhoto) Less(other types.OrderedValue) bool {
-	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
-}
-
-func init() {
-	__typeForRefOfSetOfRefOfRemotePhoto = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-deb80d2bd1e15a7457d2f292d44700948e44d66c"), 0))))
-	types.RegisterRef(__typeForRefOfSetOfRefOfRemotePhoto, builderForRefOfSetOfRefOfRemotePhoto)
-}
-
-func builderForRefOfSetOfRefOfRemotePhoto(r ref.Ref) types.Value {
-	return NewRefOfSetOfRefOfRemotePhoto(r)
-}
-
-func (r RefOfSetOfRefOfRemotePhoto) TargetValue(cs chunks.ChunkStore) SetOfRefOfRemotePhoto {
-	return types.ReadValue(r.target, cs).(SetOfRefOfRemotePhoto)
-}
-
-func (r RefOfSetOfRefOfRemotePhoto) SetTargetValue(val SetOfRefOfRemotePhoto, cs chunks.ChunkSink) RefOfSetOfRefOfRemotePhoto {
-	return NewRefOfSetOfRefOfRemotePhoto(types.WriteValue(val, cs))
-}
-
-// SetOfRefOfRemotePhoto
-
-type SetOfRefOfRemotePhoto struct {
-	s   types.Set
-	cs  chunks.ChunkStore
-	ref *ref.Ref
-}
-
-func NewSetOfRefOfRemotePhoto(cs chunks.ChunkStore) SetOfRefOfRemotePhoto {
-	return SetOfRefOfRemotePhoto{types.NewTypedSet(cs, __typeForSetOfRefOfRemotePhoto), cs, &ref.Ref{}}
-}
-
-type SetOfRefOfRemotePhotoDef map[ref.Ref]bool
-
-func (def SetOfRefOfRemotePhotoDef) New(cs chunks.ChunkStore) SetOfRefOfRemotePhoto {
-	l := make([]types.Value, len(def))
-	i := 0
-	for d, _ := range def {
-		l[i] = NewRefOfRemotePhoto(d)
-		i++
-	}
-	return SetOfRefOfRemotePhoto{types.NewTypedSet(cs, __typeForSetOfRefOfRemotePhoto, l...), cs, &ref.Ref{}}
-}
-
-func (s SetOfRefOfRemotePhoto) Def() SetOfRefOfRemotePhotoDef {
-	def := make(map[ref.Ref]bool, s.Len())
-	s.s.Iter(func(v types.Value) bool {
-		def[v.(RefOfRemotePhoto).TargetRef()] = true
-		return false
-	})
-	return def
-}
-
-func (s SetOfRefOfRemotePhoto) Equals(other types.Value) bool {
-	return other != nil && __typeForSetOfRefOfRemotePhoto.Equals(other.Type()) && s.Ref() == other.Ref()
-}
-
-func (s SetOfRefOfRemotePhoto) Ref() ref.Ref {
-	return types.EnsureRef(s.ref, s)
-}
-
-func (s SetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, s.Type().Chunks()...)
-	chunks = append(chunks, s.s.Chunks()...)
-	return
-}
-
-func (s SetOfRefOfRemotePhoto) ChildValues() []types.Value {
-	return append([]types.Value{}, s.s.ChildValues()...)
-}
-
-// A Noms Value that describes SetOfRefOfRemotePhoto.
-var __typeForSetOfRefOfRemotePhoto types.Type
-
-func (m SetOfRefOfRemotePhoto) Type() types.Type {
-	return __typeForSetOfRefOfRemotePhoto
-}
-
-func init() {
-	__typeForSetOfRefOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-deb80d2bd1e15a7457d2f292d44700948e44d66c"), 0)))
-	types.RegisterValue(__typeForSetOfRefOfRemotePhoto, builderForSetOfRefOfRemotePhoto, readerForSetOfRefOfRemotePhoto)
-}
-
-func builderForSetOfRefOfRemotePhoto(cs chunks.ChunkStore, v types.Value) types.Value {
-	return SetOfRefOfRemotePhoto{v.(types.Set), cs, &ref.Ref{}}
-}
-
-func readerForSetOfRefOfRemotePhoto(v types.Value) types.Value {
-	return v.(SetOfRefOfRemotePhoto).s
-}
-
-func (s SetOfRefOfRemotePhoto) Empty() bool {
-	return s.s.Empty()
-}
-
-func (s SetOfRefOfRemotePhoto) Len() uint64 {
-	return s.s.Len()
-}
-
-func (s SetOfRefOfRemotePhoto) Has(p RefOfRemotePhoto) bool {
-	return s.s.Has(p)
-}
-
-type SetOfRefOfRemotePhotoIterCallback func(p RefOfRemotePhoto) (stop bool)
-
-func (s SetOfRefOfRemotePhoto) Iter(cb SetOfRefOfRemotePhotoIterCallback) {
-	s.s.Iter(func(v types.Value) bool {
-		return cb(v.(RefOfRemotePhoto))
-	})
-}
-
-type SetOfRefOfRemotePhotoIterAllCallback func(p RefOfRemotePhoto)
-
-func (s SetOfRefOfRemotePhoto) IterAll(cb SetOfRefOfRemotePhotoIterAllCallback) {
-	s.s.IterAll(func(v types.Value) {
-		cb(v.(RefOfRemotePhoto))
-	})
-}
-
-func (s SetOfRefOfRemotePhoto) IterAllP(concurrency int, cb SetOfRefOfRemotePhotoIterAllCallback) {
-	s.s.IterAllP(concurrency, func(v types.Value) {
-		cb(v.(RefOfRemotePhoto))
-	})
-}
-
-type SetOfRefOfRemotePhotoFilterCallback func(p RefOfRemotePhoto) (keep bool)
-
-func (s SetOfRefOfRemotePhoto) Filter(cb SetOfRefOfRemotePhotoFilterCallback) SetOfRefOfRemotePhoto {
-	out := s.s.Filter(func(v types.Value) bool {
-		return cb(v.(RefOfRemotePhoto))
-	})
-	return SetOfRefOfRemotePhoto{out, s.cs, &ref.Ref{}}
-}
-
-func (s SetOfRefOfRemotePhoto) Insert(p ...RefOfRemotePhoto) SetOfRefOfRemotePhoto {
-	return SetOfRefOfRemotePhoto{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
-}
-
-func (s SetOfRefOfRemotePhoto) Remove(p ...RefOfRemotePhoto) SetOfRefOfRemotePhoto {
-	return SetOfRefOfRemotePhoto{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
-}
-
-func (s SetOfRefOfRemotePhoto) Union(others ...SetOfRefOfRemotePhoto) SetOfRefOfRemotePhoto {
-	return SetOfRefOfRemotePhoto{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
-}
-
-func (s SetOfRefOfRemotePhoto) First() RefOfRemotePhoto {
-	return s.s.First().(RefOfRemotePhoto)
-}
-
-func (s SetOfRefOfRemotePhoto) fromStructSlice(p []SetOfRefOfRemotePhoto) []types.Set {
-	r := make([]types.Set, len(p))
-	for i, v := range p {
-		r[i] = v.s
-	}
-	return r
-}
-
-func (s SetOfRefOfRemotePhoto) fromElemSlice(p []RefOfRemotePhoto) []types.Value {
-	r := make([]types.Value, len(p))
-	for i, v := range p {
-		r[i] = v
-	}
-	return r
-}
-
-// RefOfRemotePhoto
-
-type RefOfRemotePhoto struct {
-	target ref.Ref
-	ref    *ref.Ref
-}
-
-func NewRefOfRemotePhoto(target ref.Ref) RefOfRemotePhoto {
-	return RefOfRemotePhoto{target, &ref.Ref{}}
-}
-
-func (r RefOfRemotePhoto) TargetRef() ref.Ref {
-	return r.target
-}
-
-func (r RefOfRemotePhoto) Ref() ref.Ref {
-	return types.EnsureRef(r.ref, r)
-}
-
-func (r RefOfRemotePhoto) Equals(other types.Value) bool {
-	return other != nil && __typeForRefOfRemotePhoto.Equals(other.Type()) && r.Ref() == other.Ref()
-}
-
-func (r RefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
-	return
-}
-
-func (r RefOfRemotePhoto) ChildValues() []types.Value {
-	return nil
-}
-
-// A Noms Value that describes RefOfRemotePhoto.
-var __typeForRefOfRemotePhoto types.Type
-
-func (r RefOfRemotePhoto) Type() types.Type {
-	return __typeForRefOfRemotePhoto
-}
-
-func (r RefOfRemotePhoto) Less(other types.OrderedValue) bool {
-	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
-}
-
-func init() {
-	__typeForRefOfRemotePhoto = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-deb80d2bd1e15a7457d2f292d44700948e44d66c"), 0))
-	types.RegisterRef(__typeForRefOfRemotePhoto, builderForRefOfRemotePhoto)
-}
-
-func builderForRefOfRemotePhoto(r ref.Ref) types.Value {
-	return NewRefOfRemotePhoto(r)
-}
-
-func (r RefOfRemotePhoto) TargetValue(cs chunks.ChunkStore) RemotePhoto {
-	return types.ReadValue(r.target, cs).(RemotePhoto)
-}
-
-func (r RefOfRemotePhoto) SetTargetValue(val RemotePhoto, cs chunks.ChunkSink) RefOfRemotePhoto {
-	return NewRefOfRemotePhoto(types.WriteValue(val, cs))
 }

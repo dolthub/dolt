@@ -1,5 +1,24 @@
 package main
 
+type ShapesJSON struct {
+	Version string `xml:"version,attr"`
+	Channel struct {
+		Item []struct {
+			ID     string `xml:"http://schemas.google.com/photos/2007 id"`
+			Shapes struct {
+				Shape []Shape `xml:"http://schemas.google.com/photos/2007 shape"`
+			} `xml:"http://schemas.google.com/photos/2007 shapes"`
+		} `xml:"item"`
+	} `xml:"channel"`
+}
+
+type Shape struct {
+	Type       string `xml:"type,attr"`
+	Name       string `xml:"name,attr"`
+	UpperLeft  string `xml:"upperLeft,attr"`
+	LowerRight string `xml:"lowerRight,attr"`
+}
+
 type AlbumJSON struct {
 	Feed struct {
 		UserName struct {
