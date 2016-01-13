@@ -377,22 +377,38 @@ func (r *jsonArrayReader) readTypeAsValue(pkg *Package) Type {
 
 // fixupType goes trough the object graph of tr and updates the PackageRef to pkg if the the old PackageRef was an empty ref.
 func fixupType(tr Type, pkg *Package) Type {
+	t, _ := fixupTypeInternal(tr, pkg)
+	return t
+}
+
+func fixupTypeInternal(tr Type, pkg *Package) (Type, bool) {
 	switch desc := tr.Desc.(type) {
 	case EnumDesc, StructDesc:
 		panic("unreachable")
 	case PrimitiveDesc:
-		return tr
+		return tr, false
 	case CompoundDesc:
 		elemTypes := make([]Type, len(desc.ElemTypes))
+		changed := false
 		for i, elemType := range desc.ElemTypes {
-			elemTypes[i] = fixupType(elemType, pkg)
+			if t, c := fixupTypeInternal(elemType, pkg); c {
+				changed = true
+				elemTypes[i] = t
+			} else {
+				elemTypes[i] = elemType
+			}
 		}
-		return MakeCompoundType(tr.Kind(), elemTypes...)
+
+		if !changed {
+			return tr, false
+		}
+
+		return MakeCompoundType(tr.Kind(), elemTypes...), true
 	case UnresolvedDesc:
 		if tr.HasPackageRef() {
-			return tr
+			return tr, false
 		}
-		return MakeType(pkg.Ref(), tr.Ordinal())
+		return MakeType(pkg.Ref(), tr.Ordinal()), true
 	}
 	panic("unreachable")
 }
