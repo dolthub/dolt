@@ -102,12 +102,19 @@ func picasaUsage() {
 	fmt.Fprintf(os.Stderr, "\n%s\n\n", credentialSteps)
 }
 
+func getUser() User {
+	uj := UserJSON{}
+        callFacebookAPI(authHTTPClient, "v2.5/me", &uj)
+	u := UserDef{Id: uj.ID, Name: uj.Name}.New(ds.Store())
+        return u
+}
+
 func getSingleAlbum(albumID string) *User {
 	amj := AlbumMetadataJSON{}
 	path := fmt.Sprintf("v2.5/%d", albumID)
 	callFacebookAPI(authHTTPClient, path, &amj)
-	u := UserDef{Id: "218471", Name: "Paul Tarjan"}.New(ds.Store())
 
+        u := getUser()
 	albums := NewMapOfStringToAlbum(ds.Store())
 	albums = getAlbum(0, amj.ID, amj.Name, albums)
 
@@ -124,7 +131,7 @@ func getAlbums() *User {
 		fmt.Printf("Found %d albums\n", len(alj.Data))
 	}
 	albums := NewMapOfStringToAlbum(ds.Store())
-	user := UserDef{Id: "218471", Name: "Paul Tarjan"}.New(ds.Store())
+        user := getUser()
 	for i, entry := range alj.Data {
 		albums = getAlbum(i, entry.ID, entry.Name, albums)
 	}

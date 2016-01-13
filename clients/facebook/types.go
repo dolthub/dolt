@@ -23,6 +23,11 @@ type AlbumListJSON struct {
         } `json:"data"`
 }
 
+type UserJSON struct {
+        Name string `json:"name"`
+        ID string `json:"id"`
+}
+
 // RefreshTokenJSON is used for fetching the refreshToken that gets stored
 // in the nomsUser object
 type RefreshTokenJSON struct {
