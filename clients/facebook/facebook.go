@@ -103,13 +103,13 @@ func picasaUsage() {
 }
 
 func getSingleAlbum(albumID string) *User {
-	aj := AlbumJSON{}
-	path := fmt.Sprintf("user/default/albumid/%s?alt=json&max-results=0", albumID)
-	callFacebookAPI(authHTTPClient, path, &aj)
-	u := UserDef{Id: aj.Feed.UserID.V, Name: aj.Feed.UserName.V}.New(ds.Store())
+	amj := AlbumMetadataJSON{}
+	path := fmt.Sprintf("v2.5/%d", albumID)
+	callFacebookAPI(authHTTPClient, path, &amj)
+	u := UserDef{Id: "218471", Name: "Paul Tarjan"}.New(ds.Store())
 
 	albums := NewMapOfStringToAlbum(ds.Store())
-	albums = getAlbum(0, aj.Feed.ID.V, aj.Feed.Title.V, uint32(aj.Feed.NumPhotos.V), albums)
+	albums = getAlbum(0, amj.ID, amj.Name, albums)
 
 	types.WriteValue(albums, ds.Store())
 	u = u.SetAlbums(albums)
@@ -118,14 +118,15 @@ func getSingleAlbum(albumID string) *User {
 
 func getAlbums() *User {
 	alj := AlbumListJSON{}
-	callFacebookAPI(authHTTPClient, "user/default?alt=json", &alj)
+	callFacebookAPI(authHTTPClient, "v2.5/me/albums", &alj)
+        fmt.Printf("%+v", alj)
 	if !*quietFlag {
-		fmt.Printf("Found %d albums\n", len(alj.Feed.Entry))
+		fmt.Printf("Found %d albums\n", len(alj.Data))
 	}
 	albums := NewMapOfStringToAlbum(ds.Store())
-	user := UserDef{Id: alj.Feed.UserID.V, Name: alj.Feed.UserName.V}.New(ds.Store())
-	for i, entry := range alj.Feed.Entry {
-		albums = getAlbum(i, entry.ID.V, entry.Title.V, uint32(entry.NumPhotos.V), albums)
+	user := UserDef{Id: "218471", Name: "Paul Tarjan"}.New(ds.Store())
+	for i, entry := range alj.Data {
+		albums = getAlbum(i, entry.ID, entry.Name, albums)
 	}
 
 	types.WriteValue(albums, ds.Store())
@@ -133,14 +134,17 @@ func getAlbums() *User {
 	return &user
 }
 
-func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32, albums MapOfStringToAlbum) MapOfStringToAlbum {
-	a := AlbumDef{Id: albumId, Title: albumTitle, NumPhotos: uint32(numPhotos)}.New(ds.Store())
+func getAlbum(albumIndex int, albumId string, albumTitle string, albums MapOfStringToAlbum) MapOfStringToAlbum {
+	a := AlbumDef{Id: albumId, Title: albumTitle}.New(ds.Store())
+        /*
 	remotePhotoRefs := getRemotePhotoRefs(&a, albumIndex)
 	r := types.WriteValue(*remotePhotoRefs, ds.Store())
 	a = a.SetPhotos(NewRefOfSetOfRefOfRemotePhoto(r))
+        */
 	return albums.Set(a.Id(), a)
 }
 
+/*
 func getRemotePhotoRefs(album *Album, albumIndex int) *SetOfRefOfRemotePhoto {
 	if album.NumPhotos() == 0 {
 		return nil
@@ -151,7 +155,7 @@ func getRemotePhotoRefs(album *Album, albumIndex int) *SetOfRefOfRemotePhoto {
 	}
 	for startIndex, foundPhotos := 0, true; uint64(album.NumPhotos()) > remotePhotoRefs.Len() && foundPhotos; startIndex += 1000 {
 		foundPhotos = false
-		aj := AlbumJSON{}
+		aj := AlbumPhotosJSON{}
 		path := fmt.Sprintf("user/default/albumid/%s?alt=json&max-results=1000", album.Id())
 		if startIndex > 0 {
 			path = fmt.Sprintf("%s%s%d", path, "&start-index=", startIndex)
@@ -184,6 +188,7 @@ func getRemotePhotoRefs(album *Album, albumIndex int) *SetOfRefOfRemotePhoto {
 	}
 	return &remotePhotoRefs
 }
+*/
 
 func printStats(user *User) {
 	if !*quietFlag {
@@ -260,6 +265,7 @@ func facebookOAuth() (*http.Client, string) {
 	d.Chk.NoError(err)
 
 	client := conf.Client(oauth2.NoContext, t)
+
 	return client, t.RefreshToken
 }
 
@@ -317,7 +323,7 @@ func baseConfig(redirectURL string) *oauth2.Config {
 		ClientID:     *apiKeyFlag,
 		ClientSecret: *apiKeySecretFlag,
 		RedirectURL:  redirectURL,
-		Scopes:       []string{""},
+		Scopes:       []string{"user_photos"},
 		Endpoint:     facebook.Endpoint,
 	}
 }
