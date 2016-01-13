@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/bradfitz/latlong"
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/garyburd/go-oauth/oauth"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
@@ -239,9 +240,21 @@ func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
 			Tags:  getTags(p.Tags),
 		}.New(cs)
 
-		// DateTaken is the MySQL DATETIME format, relative to the timezone where the photo was taken, not UTC.
-		if t, err := time.Parse("2006-01-02 15:04:05", p.DateTaken); err == nil {
-			photo = photo.SetDate(NewDate(cs).SetUnix(t.Unix()))
+		lat, lon := deFlickr(p.Latitude), deFlickr(p.Longitude)
+
+		// Flickr doesn't give timezone information (in fairness, neither does EXIF), so try to figure it out from the geolocation data. This is imperfect because it won't give us daylight savings. If there is no geolocation data then assume the location is PST - it's better than GMT.
+		zone := "America/Los_Angeles"
+		if lat != 0.0 && lon != 0.0 {
+			if z := latlong.LookupZoneName(lat, lon); z != "" {
+				zone = z
+			}
+		}
+		location, err := time.LoadLocation(zone)
+		d.Chk.NoError(err)
+
+		// DateTaken is the MySQL DATETIME format.
+		if t, err := time.ParseInLocation("2006-01-02 15:04:05", p.DateTaken, location); err == nil {
+			photo = photo.SetDate(DateDef{t.Unix()}.New(cs))
 		} else {
 			fmt.Printf("Error parsing date \"%s\": %s\n", p.DateTaken, err)
 		}
@@ -254,10 +267,8 @@ func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
 		sizes = addSize(sizes, p.OriginalURL, p.OriginalWidth, p.OriginalHeight)
 		photo = photo.SetSizes(sizes)
 
-		lat := deFlickr(p.Latitude)
-		lon := deFlickr(p.Longitude)
 		if lat != 0.0 && lon != 0.0 {
-			photo = photo.SetGeoposition(GeopositionDef{lat, lon}.New(cs))
+			photo = photo.SetGeoposition(GeopositionDef{float32(lat), float32(lon)}.New(cs))
 		}
 
 		photos = photos.Insert(NewRefOfRemotePhoto(types.WriteValue(photo, cs)))
@@ -280,14 +291,14 @@ func getTags(tagStr string) (tags SetOfStringDef) {
 	return
 }
 
-func deFlickr(argh interface{}) float32 {
+func deFlickr(argh interface{}) float64 {
 	switch argh := argh.(type) {
 	case float64:
-		return float32(argh)
+		return argh
 	case string:
-		f64, err := strconv.ParseFloat(argh, 32)
+		f64, err := strconv.ParseFloat(argh, 64)
 		d.Chk.NoError(err)
-		return float32(f64)
+		return float64(f64)
 	default:
 		return 0.0
 	}
