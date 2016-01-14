@@ -33,41 +33,11 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	suite.Store.Put(c)
 	suite.Equal(ref, c.Ref())
 	assertInputInStore(input, ref, suite.Store, suite.Assert())
+	suite.Store.UpdateRoot(ref, suite.Store.Root()) // Commit writes
 
 	if suite.putCountFn != nil {
 		suite.Equal(2, suite.putCountFn())
 	}
-}
-
-func (suite *ChunkStoreTestSuite) TestChunkStoreWriteAfterCloseFails() {
-	input := "abc"
-	w := NewChunkWriter()
-	_, err := w.Write([]byte(input))
-	suite.NoError(err)
-
-	suite.NoError(w.Close())
-	suite.Panics(func() { w.Write([]byte(input)) }, "Write() after Close() should barf!")
-}
-
-func (suite *ChunkStoreTestSuite) TestChunkStoreWriteAfterChunkFails() {
-	input := "abc"
-	w := NewChunkWriter()
-	_, err := w.Write([]byte(input))
-	suite.NoError(err)
-
-	_ = w.Chunk()
-	suite.NoError(err)
-	suite.Panics(func() { w.Write([]byte(input)) }, "Write() after Close() should barf!")
-}
-
-func (suite *ChunkStoreTestSuite) TestChunkStoreChunkCloses() {
-	input := "abc"
-	w := NewChunkWriter()
-	_, err := w.Write([]byte(input))
-	suite.NoError(err)
-
-	w.Chunk()
-	suite.Panics(func() { w.Write([]byte(input)) }, "Write() after Close() should barf!")
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreRoot() {

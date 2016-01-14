@@ -36,6 +36,7 @@ type Flags struct {
 	ldb    chunks.LevelDBStoreFlags
 	memory chunks.MemoryStoreFlags
 	hflags chunks.HttpStoreFlags
+	dynamo chunks.DynamoStoreFlags
 }
 
 func NewFlags() Flags {
@@ -47,12 +48,15 @@ func NewFlagsWithPrefix(prefix string) Flags {
 		chunks.LevelDBFlags(prefix),
 		chunks.MemoryFlags(prefix),
 		chunks.HttpFlags(prefix),
+		chunks.DynamoFlags(prefix),
 	}
 }
 
 func (f Flags) CreateDataStore() (DataStore, bool) {
 	var cs chunks.ChunkStore
 	if cs = f.ldb.CreateStore(); cs != nil {
+	} else if cs = f.dynamo.CreateStore(); cs != nil {
+
 	} else if cs = f.memory.CreateStore(); cs != nil {
 	}
 
