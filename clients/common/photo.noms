@@ -4,7 +4,6 @@ alias geo = import "geo.noms"
 struct RemotePhoto {
   Id: String
   Title: String
-  Url: String
   Date: date.Date
   Geoposition: geo.Geoposition
   Sizes: Map<Size, String>

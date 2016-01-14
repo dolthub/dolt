@@ -24,9 +24,8 @@ func createRefOfRemotePhoto(id int, tag string, cs chunks.ChunkStore) RefOfRemot
 	p := RemotePhotoDef{
 		Id:          fmt.Sprintf("%d", id),
 		Title:       "title" + tag,
-		Url:         fmt.Sprintf("http://test.com/images/%s-%d.jpg", tag, id),
 		Geoposition: GeopositionDef{Latitude: 50, Longitude: 50},
-		Sizes:       MapOfSizeToStringDef{SizeDef{1, 2}: "1x2"},
+		Sizes:       MapOfSizeToStringDef{SizeDef{1, 2}: fmt.Sprintf("http://test.com/images/%s-%d.jpg", tag, id)},
 		Tags:        map[string]bool{tag: true},
 	}.New(cs)
 	return NewRefOfRemotePhoto(types.WriteValue(p, cs))
@@ -60,7 +59,7 @@ func (s *testSuite) TestTagdex() {
 	inputDs.Close()
 
 	out := s.Run(main, []string{"-in", "input-test", "-out", "tagdex-test"})
-	s.Contains(out, "Indexed 105 photos from 1791 values")
+	s.Contains(out, "Indexed 105 photos")
 
 	cs = chunks.NewLevelDBStore(s.LdbDir, 1, false)
 	ds := dataset.NewDataset(datas.NewDataStore(cs), "tagdex-test")

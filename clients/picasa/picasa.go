@@ -175,13 +175,11 @@ func getRemotePhotoRefs(album *Album, albumIndex int) *SetOfRefOfRemotePhoto {
 			height, _ := strconv.Atoi(e.Height.V)
 			width, _ := strconv.Atoi(e.Width.V)
 			size := SizeDef{Height: uint32(height), Width: uint32(width)}
-			sizes := MapOfSizeToStringDef{}
-			sizes[size] = e.Content.Src
+			sizes := MapOfSizeToStringDef{size: e.Content.Src}
 			tags := splitTags(e.MediaGroup.Tags.V)
 			p := RemotePhotoDef{
 				Id:          e.ID.V,
 				Title:       e.Title.V,
-				Url:         e.Content.Src,
 				Geoposition: geoPos,
 				Sizes:       sizes,
 				Tags:        tags,
