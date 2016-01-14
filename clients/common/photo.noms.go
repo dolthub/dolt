@@ -19,7 +19,6 @@ func init() {
 			[]types.Field{
 				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Url", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Date", types.MakeType(ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"), 0), false},
 				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"), 0), false},
 				types.Field{"Sizes", types.MakeCompoundType(types.MapKind, types.MakeType(ref.Ref{}, 1), types.MakePrimitiveType(types.StringKind)), false},
@@ -46,7 +45,6 @@ func init() {
 type RemotePhoto struct {
 	_Id          string
 	_Title       string
-	_Url         string
 	_Date        Date
 	_Geoposition Geoposition
 	_Sizes       MapOfSizeToString
@@ -60,7 +58,6 @@ func NewRemotePhoto(cs chunks.ChunkStore) RemotePhoto {
 	return RemotePhoto{
 		_Id:          "",
 		_Title:       "",
-		_Url:         "",
 		_Date:        NewDate(cs),
 		_Geoposition: NewGeoposition(cs),
 		_Sizes:       NewMapOfSizeToString(cs),
@@ -74,7 +71,6 @@ func NewRemotePhoto(cs chunks.ChunkStore) RemotePhoto {
 type RemotePhotoDef struct {
 	Id          string
 	Title       string
-	Url         string
 	Date        DateDef
 	Geoposition GeopositionDef
 	Sizes       MapOfSizeToStringDef
@@ -85,7 +81,6 @@ func (def RemotePhotoDef) New(cs chunks.ChunkStore) RemotePhoto {
 	return RemotePhoto{
 		_Id:          def.Id,
 		_Title:       def.Title,
-		_Url:         def.Url,
 		_Date:        def.Date.New(cs),
 		_Geoposition: def.Geoposition.New(cs),
 		_Sizes:       def.Sizes.New(cs),
@@ -98,7 +93,6 @@ func (def RemotePhotoDef) New(cs chunks.ChunkStore) RemotePhoto {
 func (s RemotePhoto) Def() (d RemotePhotoDef) {
 	d.Id = s._Id
 	d.Title = s._Title
-	d.Url = s._Url
 	d.Date = s._Date.Def()
 	d.Geoposition = s._Geoposition.Def()
 	d.Sizes = s._Sizes.Def()
@@ -124,8 +118,6 @@ func builderForRemotePhoto(cs chunks.ChunkStore, values []types.Value) types.Val
 	i++
 	s._Title = values[i].(types.String).String()
 	i++
-	s._Url = values[i].(types.String).String()
-	i++
 	s._Date = values[i].(Date)
 	i++
 	s._Geoposition = values[i].(Geoposition)
@@ -142,7 +134,6 @@ func readerForRemotePhoto(v types.Value) []types.Value {
 	s := v.(RemotePhoto)
 	values = append(values, types.NewString(s._Id))
 	values = append(values, types.NewString(s._Title))
-	values = append(values, types.NewString(s._Url))
 	values = append(values, s._Date)
 	values = append(values, s._Geoposition)
 	values = append(values, s._Sizes)
@@ -170,7 +161,6 @@ func (s RemotePhoto) Chunks() (chunks []ref.Ref) {
 func (s RemotePhoto) ChildValues() (ret []types.Value) {
 	ret = append(ret, types.NewString(s._Id))
 	ret = append(ret, types.NewString(s._Title))
-	ret = append(ret, types.NewString(s._Url))
 	ret = append(ret, s._Date)
 	ret = append(ret, s._Geoposition)
 	ret = append(ret, s._Sizes)
@@ -194,16 +184,6 @@ func (s RemotePhoto) Title() string {
 
 func (s RemotePhoto) SetTitle(val string) RemotePhoto {
 	s._Title = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
-func (s RemotePhoto) Url() string {
-	return s._Url
-}
-
-func (s RemotePhoto) SetUrl(val string) RemotePhoto {
-	s._Url = val
 	s.ref = &ref.Ref{}
 	return s
 }
