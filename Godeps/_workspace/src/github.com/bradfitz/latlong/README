@@ -1,0 +1,28 @@
+This is a Go package which maps a (lat, long) to a timezone.
+
+My motivation was figuring out the UTC time of a JPG with EXIF
+metadata containing GPS coordinates and local time, but no timezone
+offset. This is a surprising number of photos. I built this to
+improve sorting in Camlistore, especially when photos are intermixed
+with tweets, checkins, etc, but it should be generally applicable.
+
+See docs at http://godoc.org/github.com/bradfitz/latlong
+
+It tries to have a small binary size (~360 KB), low memory footprint
+(~1 MB), and incredibly fast lookups (~0.5 microseconds). It does not
+try to be perfectly accurate when very close to borders.
+
+To rebuild the data files, see the Makefile (or just run make).
+You'll need the data files unzip to the "world" directory.
+
+Some background:
+
+    https://plus.google.com/u/0/+BradFitzpatrick/posts/XVyy1bAzkZd
+
+Another image of the underlying data structure:
+
+    http://i.imgur.com/Rt8bLSD.png
+
+... the tile borders are only there for debugging, to show areas with
+only one timezone. Tiles without borders around them still work; at
+that level, the small possible bitmap is used for lookup.

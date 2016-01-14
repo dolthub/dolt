@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/bradfitz/latlong"
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/garyburd/go-oauth/oauth"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
@@ -30,6 +31,10 @@ var (
 	oauthClient      oauth.Client
 	httpClient       *http.Client
 )
+
+type flickrAPI interface {
+	Call(method string, response interface{}, args *map[string]string) error
+}
 
 type flickrCall struct {
 	Stat string
@@ -63,31 +68,32 @@ func main() {
 	}
 	defer ds.Close()
 
-	getUser()
+	api := liveFlickrAPI{}
+	getUser(api)
 	if *albumIdFlag != "" {
-		album := getAlbum(*albumIdFlag)
+		album := getAlbum(api, *albumIdFlag)
 		user = user.SetAlbums(user.Albums().Set(album.Id(), album))
 	} else {
-		user = user.SetAlbums(getAlbums())
+		user = user.SetAlbums(getAlbums(api))
 	}
 	commitUser()
 }
 
-func getUser() {
+func getUser(api flickrAPI) {
 	if commit, ok := ds.MaybeHead(); ok {
 		userRef := commit.Value().(RefOfUser)
 		user = userRef.TargetValue(ds.Store())
-		if checkAuth() {
+		if checkAuth(api) {
 			return
 		}
 	} else {
 		user = NewUser(ds.Store())
 	}
 
-	authUser()
+	authUser(api)
 }
 
-func checkAuth() bool {
+func checkAuth(api flickrAPI) bool {
 	response := struct {
 		flickrCall
 		User struct {
@@ -98,7 +104,7 @@ func checkAuth() bool {
 		} `json:"user"`
 	}{}
 
-	err := callFlickrAPI("flickr.test.login", &response, nil)
+	err := api.Call("flickr.test.login", &response, nil)
 	if err != nil {
 		return false
 	}
@@ -107,7 +113,7 @@ func checkAuth() bool {
 	return true
 }
 
-func authUser() {
+func authUser(api flickrAPI) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	d.Chk.NoError(err)
 
@@ -123,12 +129,12 @@ func authUser() {
 	err = awaitOAuthResponse(l, tempCred)
 	d.Chk.NoError(err)
 
-	if !checkAuth() {
+	if !checkAuth(api) {
 		d.Chk.Fail("checkAuth failed after oauth succeded")
 	}
 }
 
-func getAlbum(id string) Album {
+func getAlbum(api flickrAPI, id string) Album {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -139,13 +145,13 @@ func getAlbum(id string) Album {
 		} `json:"photoset"`
 	}{}
 
-	err := callFlickrAPI("flickr.photosets.getInfo", &response, &map[string]string{
+	err := api.Call("flickr.photosets.getInfo", &response, &map[string]string{
 		"photoset_id": id,
 		"user_id":     user.Id(),
 	})
 	d.Chk.NoError(err)
 
-	photos := getAlbumPhotos(id)
+	photos := getAlbumPhotos(api, id)
 
 	fmt.Printf("Photoset: %v\nRef: %s\n", response.Photoset.Title.Content, photos.TargetRef())
 
@@ -155,7 +161,7 @@ func getAlbum(id string) Album {
 		SetPhotos(photos)
 }
 
-func getAlbums() MapOfStringToAlbum {
+func getAlbums(api flickrAPI) MapOfStringToAlbum {
 	response := struct {
 		flickrCall
 		Photosets struct {
@@ -168,14 +174,14 @@ func getAlbums() MapOfStringToAlbum {
 		} `json:"photosets"`
 	}{}
 
-	err := callFlickrAPI("flickr.photosets.getList", &response, nil)
+	err := api.Call("flickr.photosets.getList", &response, nil)
 	d.Chk.NoError(err)
 
 	out := make(chan Album, len(response.Photosets.Photoset))
 	for _, p := range response.Photosets.Photoset {
 		p := p
 		go func() {
-			out <- getAlbum(p.Id)
+			out <- getAlbum(api, p.Id)
 		}()
 	}
 
@@ -191,7 +197,7 @@ func getAlbums() MapOfStringToAlbum {
 	return albums
 }
 
-func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
+func getAlbumPhotos(api flickrAPI, id string) RefOfSetOfRefOfRemotePhoto {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -222,7 +228,7 @@ func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
 	}{}
 
 	// TODO: Implement paging. This call returns a maximum of 500 pictures in each response.
-	err := callFlickrAPI("flickr.photosets.getPhotos", &response, &map[string]string{
+	err := api.Call("flickr.photosets.getPhotos", &response, &map[string]string{
 		"photoset_id": id,
 		"user_id":     user.Id(),
 		"extras":      "date_taken,geo,tags,url_t,url_s,url_m,url_l,url_o",
@@ -239,9 +245,21 @@ func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
 			Tags:  getTags(p.Tags),
 		}.New(cs)
 
-		// DateTaken is the MySQL DATETIME format, relative to the timezone where the photo was taken, not UTC.
-		if t, err := time.Parse("2006-01-02 15:04:05", p.DateTaken); err == nil {
-			photo = photo.SetDate(NewDate(cs).SetUnix(t.Unix()))
+		lat, lon := deFlickr(p.Latitude), deFlickr(p.Longitude)
+
+		// Flickr doesn't give timezone information (in fairness, neither does EXIF), so try to figure it out from the geolocation data. This is imperfect because it won't give us daylight savings. If there is no geolocation data then assume the location is PST - it's better than GMT.
+		zone := "America/Los_Angeles"
+		if lat != 0.0 && lon != 0.0 {
+			if z := latlong.LookupZoneName(lat, lon); z != "" {
+				zone = z
+			}
+		}
+		location, err := time.LoadLocation(zone)
+		d.Chk.NoError(err)
+
+		// DateTaken is the MySQL DATETIME format.
+		if t, err := time.ParseInLocation("2006-01-02 15:04:05", p.DateTaken, location); err == nil {
+			photo = photo.SetDate(DateDef{t.Unix()}.New(cs))
 		} else {
 			fmt.Printf("Error parsing date \"%s\": %s\n", p.DateTaken, err)
 		}
@@ -254,10 +272,8 @@ func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
 		sizes = addSize(sizes, p.OriginalURL, p.OriginalWidth, p.OriginalHeight)
 		photo = photo.SetSizes(sizes)
 
-		lat := deFlickr(p.Latitude)
-		lon := deFlickr(p.Longitude)
 		if lat != 0.0 && lon != 0.0 {
-			photo = photo.SetGeoposition(GeopositionDef{lat, lon}.New(cs))
+			photo = photo.SetGeoposition(GeopositionDef{float32(lat), float32(lon)}.New(cs))
 		}
 
 		photos = photos.Insert(NewRefOfRemotePhoto(types.WriteValue(photo, cs)))
@@ -280,14 +296,14 @@ func getTags(tagStr string) (tags SetOfStringDef) {
 	return
 }
 
-func deFlickr(argh interface{}) float32 {
+func deFlickr(argh interface{}) float64 {
 	switch argh := argh.(type) {
 	case float64:
-		return float32(argh)
+		return argh
 	case string:
-		f64, err := strconv.ParseFloat(argh, 32)
+		f64, err := strconv.ParseFloat(argh, 64)
 		d.Chk.NoError(err)
-		return float32(f64)
+		return float64(f64)
 	default:
 		return 0.0
 	}
@@ -341,7 +357,9 @@ func commitUser() {
 	d.Exp.NoError(err)
 }
 
-func callFlickrAPI(method string, response interface{}, args *map[string]string) error {
+type liveFlickrAPI struct{}
+
+func (api liveFlickrAPI) Call(method string, response interface{}, args *map[string]string) error {
 	tokenCred := &oauth.Credentials{
 		user.OAuthToken(),
 		user.OAuthSecret(),

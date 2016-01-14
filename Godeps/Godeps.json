@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/attic-labs/noms",
-	"GoVersion": "go1.5",
+	"GoVersion": "go1.5.1",
 	"Packages": [
 		"./..."
 	],
@@ -8,6 +8,10 @@
 		{
 			"ImportPath": "github.com/attic-labs/buzhash",
 			"Rev": "ba25a3a15f617b6580523ccfb83d31764a50a97a"
+		},
+		{
+			"ImportPath": "github.com/bradfitz/latlong",
+			"Rev": "7d3ff04aa2b06b9db6947f7d99a4bb3cc66570bc"
 		},
 		{
 			"ImportPath": "github.com/clbanning/mxj",
@@ -32,10 +36,6 @@
 		{
 			"ImportPath": "github.com/gregjones/httpcache",
 			"Rev": "a2645c9fb8bb4ad1cbad1bef941af9f8a32287de"
-		},
-		{
-			"ImportPath": "github.com/kch42/buzhash",
-			"Rev": "ba25a3a15f617b6580523ccfb83d31764a50a97a"
 		},
 		{
 			"ImportPath": "github.com/mikkyang/id3-go",

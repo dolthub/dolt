@@ -11,7 +11,6 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/walk"
 )
@@ -21,10 +20,6 @@ var (
 	inputID  = flag.String("in", "", "dataset to find photos in")
 	outputID = flag.String("out", "", "dataset to store index in")
 )
-
-type targetRef interface {
-	TargetRef() ref.Ref
-}
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
