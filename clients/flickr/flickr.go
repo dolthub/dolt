@@ -32,6 +32,10 @@ var (
 	httpClient       *http.Client
 )
 
+type flickrAPI interface {
+	Call(method string, response interface{}, args *map[string]string) error
+}
+
 type flickrCall struct {
 	Stat string
 }
@@ -64,31 +68,32 @@ func main() {
 	}
 	defer ds.Close()
 
-	getUser()
+	api := liveFlickrAPI{}
+	getUser(api)
 	if *albumIdFlag != "" {
-		album := getAlbum(*albumIdFlag)
+		album := getAlbum(api, *albumIdFlag)
 		user = user.SetAlbums(user.Albums().Set(album.Id(), album))
 	} else {
-		user = user.SetAlbums(getAlbums())
+		user = user.SetAlbums(getAlbums(api))
 	}
 	commitUser()
 }
 
-func getUser() {
+func getUser(api flickrAPI) {
 	if commit, ok := ds.MaybeHead(); ok {
 		userRef := commit.Value().(RefOfUser)
 		user = userRef.TargetValue(ds.Store())
-		if checkAuth() {
+		if checkAuth(api) {
 			return
 		}
 	} else {
 		user = NewUser(ds.Store())
 	}
 
-	authUser()
+	authUser(api)
 }
 
-func checkAuth() bool {
+func checkAuth(api flickrAPI) bool {
 	response := struct {
 		flickrCall
 		User struct {
@@ -99,7 +104,7 @@ func checkAuth() bool {
 		} `json:"user"`
 	}{}
 
-	err := callFlickrAPI("flickr.test.login", &response, nil)
+	err := api.Call("flickr.test.login", &response, nil)
 	if err != nil {
 		return false
 	}
@@ -108,7 +113,7 @@ func checkAuth() bool {
 	return true
 }
 
-func authUser() {
+func authUser(api flickrAPI) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	d.Chk.NoError(err)
 
@@ -124,12 +129,12 @@ func authUser() {
 	err = awaitOAuthResponse(l, tempCred)
 	d.Chk.NoError(err)
 
-	if !checkAuth() {
+	if !checkAuth(api) {
 		d.Chk.Fail("checkAuth failed after oauth succeded")
 	}
 }
 
-func getAlbum(id string) Album {
+func getAlbum(api flickrAPI, id string) Album {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -140,13 +145,13 @@ func getAlbum(id string) Album {
 		} `json:"photoset"`
 	}{}
 
-	err := callFlickrAPI("flickr.photosets.getInfo", &response, &map[string]string{
+	err := api.Call("flickr.photosets.getInfo", &response, &map[string]string{
 		"photoset_id": id,
 		"user_id":     user.Id(),
 	})
 	d.Chk.NoError(err)
 
-	photos := getAlbumPhotos(id)
+	photos := getAlbumPhotos(api, id)
 
 	fmt.Printf("Photoset: %v\nRef: %s\n", response.Photoset.Title.Content, photos.TargetRef())
 
@@ -156,7 +161,7 @@ func getAlbum(id string) Album {
 		SetPhotos(photos)
 }
 
-func getAlbums() MapOfStringToAlbum {
+func getAlbums(api flickrAPI) MapOfStringToAlbum {
 	response := struct {
 		flickrCall
 		Photosets struct {
@@ -169,14 +174,14 @@ func getAlbums() MapOfStringToAlbum {
 		} `json:"photosets"`
 	}{}
 
-	err := callFlickrAPI("flickr.photosets.getList", &response, nil)
+	err := api.Call("flickr.photosets.getList", &response, nil)
 	d.Chk.NoError(err)
 
 	out := make(chan Album, len(response.Photosets.Photoset))
 	for _, p := range response.Photosets.Photoset {
 		p := p
 		go func() {
-			out <- getAlbum(p.Id)
+			out <- getAlbum(api, p.Id)
 		}()
 	}
 
@@ -192,7 +197,7 @@ func getAlbums() MapOfStringToAlbum {
 	return albums
 }
 
-func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
+func getAlbumPhotos(api flickrAPI, id string) RefOfSetOfRefOfRemotePhoto {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -223,7 +228,7 @@ func getAlbumPhotos(id string) RefOfSetOfRefOfRemotePhoto {
 	}{}
 
 	// TODO: Implement paging. This call returns a maximum of 500 pictures in each response.
-	err := callFlickrAPI("flickr.photosets.getPhotos", &response, &map[string]string{
+	err := api.Call("flickr.photosets.getPhotos", &response, &map[string]string{
 		"photoset_id": id,
 		"user_id":     user.Id(),
 		"extras":      "date_taken,geo,tags,url_t,url_s,url_m,url_l,url_o",
@@ -352,7 +357,9 @@ func commitUser() {
 	d.Exp.NoError(err)
 }
 
-func callFlickrAPI(method string, response interface{}, args *map[string]string) error {
+type liveFlickrAPI struct{}
+
+func (api liveFlickrAPI) Call(method string, response interface{}, args *map[string]string) error {
 	tokenCred := &oauth.Credentials{
 		user.OAuthToken(),
 		user.OAuthSecret(),
