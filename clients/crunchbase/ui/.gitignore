@@ -1,3 +1,5 @@
 node_modules
 out.js
-nv.d3.css
+nvd3.css
+nvd3.js
+d3.js
