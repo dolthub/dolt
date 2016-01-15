@@ -21,8 +21,19 @@ func init() {
 				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Date", types.MakeType(ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"), 0), false},
 				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"), 0), false},
-				types.Field{"Sizes", types.MakeCompoundType(types.MapKind, types.MakeType(ref.Ref{}, 1), types.MakePrimitiveType(types.StringKind)), false},
+				types.Field{"Sizes", types.MakeCompoundType(types.MapKind, types.MakeType(ref.Ref{}, 2), types.MakePrimitiveType(types.StringKind)), false},
 				types.Field{"Tags", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind)), false},
+				types.Field{"Faces", types.MakeCompoundType(types.SetKind, types.MakeType(ref.Ref{}, 1)), false},
+			},
+			types.Choices{},
+		),
+		types.MakeStructType("Face",
+			[]types.Field{
+				types.Field{"Top", types.MakePrimitiveType(types.Float32Kind), false},
+				types.Field{"Left", types.MakePrimitiveType(types.Float32Kind), false},
+				types.Field{"Width", types.MakePrimitiveType(types.Float32Kind), false},
+				types.Field{"Height", types.MakePrimitiveType(types.Float32Kind), false},
+				types.Field{"PersonName", types.MakePrimitiveType(types.StringKind), false},
 			},
 			types.Choices{},
 		),
@@ -34,8 +45,8 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"),
 		ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"),
+		ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"),
 	})
 	__commonPackageInFile_photo_CachedRef = types.RegisterPackage(&p)
 }
@@ -49,6 +60,7 @@ type RemotePhoto struct {
 	_Geoposition Geoposition
 	_Sizes       MapOfSizeToString
 	_Tags        SetOfString
+	_Faces       SetOfFace
 
 	cs  chunks.ChunkStore
 	ref *ref.Ref
@@ -62,6 +74,7 @@ func NewRemotePhoto(cs chunks.ChunkStore) RemotePhoto {
 		_Geoposition: NewGeoposition(cs),
 		_Sizes:       NewMapOfSizeToString(cs),
 		_Tags:        NewSetOfString(cs),
+		_Faces:       NewSetOfFace(cs),
 
 		cs:  cs,
 		ref: &ref.Ref{},
@@ -75,6 +88,7 @@ type RemotePhotoDef struct {
 	Geoposition GeopositionDef
 	Sizes       MapOfSizeToStringDef
 	Tags        SetOfStringDef
+	Faces       SetOfFaceDef
 }
 
 func (def RemotePhotoDef) New(cs chunks.ChunkStore) RemotePhoto {
@@ -85,6 +99,7 @@ func (def RemotePhotoDef) New(cs chunks.ChunkStore) RemotePhoto {
 		_Geoposition: def.Geoposition.New(cs),
 		_Sizes:       def.Sizes.New(cs),
 		_Tags:        def.Tags.New(cs),
+		_Faces:       def.Faces.New(cs),
 		cs:           cs,
 		ref:          &ref.Ref{},
 	}
@@ -97,6 +112,7 @@ func (s RemotePhoto) Def() (d RemotePhotoDef) {
 	d.Geoposition = s._Geoposition.Def()
 	d.Sizes = s._Sizes.Def()
 	d.Tags = s._Tags.Def()
+	d.Faces = s._Faces.Def()
 	return
 }
 
@@ -126,6 +142,8 @@ func builderForRemotePhoto(cs chunks.ChunkStore, values []types.Value) types.Val
 	i++
 	s._Tags = values[i].(SetOfString)
 	i++
+	s._Faces = values[i].(SetOfFace)
+	i++
 	return s
 }
 
@@ -138,6 +156,7 @@ func readerForRemotePhoto(v types.Value) []types.Value {
 	values = append(values, s._Geoposition)
 	values = append(values, s._Sizes)
 	values = append(values, s._Tags)
+	values = append(values, s._Faces)
 	return values
 }
 
@@ -155,6 +174,7 @@ func (s RemotePhoto) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, s._Geoposition.Chunks()...)
 	chunks = append(chunks, s._Sizes.Chunks()...)
 	chunks = append(chunks, s._Tags.Chunks()...)
+	chunks = append(chunks, s._Faces.Chunks()...)
 	return
 }
 
@@ -165,6 +185,7 @@ func (s RemotePhoto) ChildValues() (ret []types.Value) {
 	ret = append(ret, s._Geoposition)
 	ret = append(ret, s._Sizes)
 	ret = append(ret, s._Tags)
+	ret = append(ret, s._Faces)
 	return
 }
 
@@ -228,6 +249,181 @@ func (s RemotePhoto) SetTags(val SetOfString) RemotePhoto {
 	return s
 }
 
+func (s RemotePhoto) Faces() SetOfFace {
+	return s._Faces
+}
+
+func (s RemotePhoto) SetFaces(val SetOfFace) RemotePhoto {
+	s._Faces = val
+	s.ref = &ref.Ref{}
+	return s
+}
+
+// Face
+
+type Face struct {
+	_Top        float32
+	_Left       float32
+	_Width      float32
+	_Height     float32
+	_PersonName string
+
+	cs  chunks.ChunkStore
+	ref *ref.Ref
+}
+
+func NewFace(cs chunks.ChunkStore) Face {
+	return Face{
+		_Top:        float32(0),
+		_Left:       float32(0),
+		_Width:      float32(0),
+		_Height:     float32(0),
+		_PersonName: "",
+
+		cs:  cs,
+		ref: &ref.Ref{},
+	}
+}
+
+type FaceDef struct {
+	Top        float32
+	Left       float32
+	Width      float32
+	Height     float32
+	PersonName string
+}
+
+func (def FaceDef) New(cs chunks.ChunkStore) Face {
+	return Face{
+		_Top:        def.Top,
+		_Left:       def.Left,
+		_Width:      def.Width,
+		_Height:     def.Height,
+		_PersonName: def.PersonName,
+		cs:          cs,
+		ref:         &ref.Ref{},
+	}
+}
+
+func (s Face) Def() (d FaceDef) {
+	d.Top = s._Top
+	d.Left = s._Left
+	d.Width = s._Width
+	d.Height = s._Height
+	d.PersonName = s._PersonName
+	return
+}
+
+var __typeForFace types.Type
+
+func (m Face) Type() types.Type {
+	return __typeForFace
+}
+
+func init() {
+	__typeForFace = types.MakeType(__commonPackageInFile_photo_CachedRef, 1)
+	types.RegisterStruct(__typeForFace, builderForFace, readerForFace)
+}
+
+func builderForFace(cs chunks.ChunkStore, values []types.Value) types.Value {
+	i := 0
+	s := Face{ref: &ref.Ref{}, cs: cs}
+	s._Top = float32(values[i].(types.Float32))
+	i++
+	s._Left = float32(values[i].(types.Float32))
+	i++
+	s._Width = float32(values[i].(types.Float32))
+	i++
+	s._Height = float32(values[i].(types.Float32))
+	i++
+	s._PersonName = values[i].(types.String).String()
+	i++
+	return s
+}
+
+func readerForFace(v types.Value) []types.Value {
+	values := []types.Value{}
+	s := v.(Face)
+	values = append(values, types.Float32(s._Top))
+	values = append(values, types.Float32(s._Left))
+	values = append(values, types.Float32(s._Width))
+	values = append(values, types.Float32(s._Height))
+	values = append(values, types.NewString(s._PersonName))
+	return values
+}
+
+func (s Face) Equals(other types.Value) bool {
+	return other != nil && __typeForFace.Equals(other.Type()) && s.Ref() == other.Ref()
+}
+
+func (s Face) Ref() ref.Ref {
+	return types.EnsureRef(s.ref, s)
+}
+
+func (s Face) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, __typeForFace.Chunks()...)
+	return
+}
+
+func (s Face) ChildValues() (ret []types.Value) {
+	ret = append(ret, types.Float32(s._Top))
+	ret = append(ret, types.Float32(s._Left))
+	ret = append(ret, types.Float32(s._Width))
+	ret = append(ret, types.Float32(s._Height))
+	ret = append(ret, types.NewString(s._PersonName))
+	return
+}
+
+func (s Face) Top() float32 {
+	return s._Top
+}
+
+func (s Face) SetTop(val float32) Face {
+	s._Top = val
+	s.ref = &ref.Ref{}
+	return s
+}
+
+func (s Face) Left() float32 {
+	return s._Left
+}
+
+func (s Face) SetLeft(val float32) Face {
+	s._Left = val
+	s.ref = &ref.Ref{}
+	return s
+}
+
+func (s Face) Width() float32 {
+	return s._Width
+}
+
+func (s Face) SetWidth(val float32) Face {
+	s._Width = val
+	s.ref = &ref.Ref{}
+	return s
+}
+
+func (s Face) Height() float32 {
+	return s._Height
+}
+
+func (s Face) SetHeight(val float32) Face {
+	s._Height = val
+	s.ref = &ref.Ref{}
+	return s
+}
+
+func (s Face) PersonName() string {
+	return s._PersonName
+}
+
+func (s Face) SetPersonName(val string) Face {
+	s._PersonName = val
+	s.ref = &ref.Ref{}
+	return s
+}
+
 // Size
 
 type Size struct {
@@ -275,7 +471,7 @@ func (m Size) Type() types.Type {
 }
 
 func init() {
-	__typeForSize = types.MakeType(__commonPackageInFile_photo_CachedRef, 1)
+	__typeForSize = types.MakeType(__commonPackageInFile_photo_CachedRef, 2)
 	types.RegisterStruct(__typeForSize, builderForSize, readerForSize)
 }
 
@@ -393,7 +589,7 @@ func (m MapOfSizeToString) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfSizeToString = types.MakeCompoundType(types.MapKind, types.MakeType(__commonPackageInFile_photo_CachedRef, 1), types.MakePrimitiveType(types.StringKind))
+	__typeForMapOfSizeToString = types.MakeCompoundType(types.MapKind, types.MakeType(__commonPackageInFile_photo_CachedRef, 2), types.MakePrimitiveType(types.StringKind))
 	types.RegisterValue(__typeForMapOfSizeToString, builderForMapOfSizeToString, readerForMapOfSizeToString)
 }
 
@@ -612,6 +808,152 @@ func (s SetOfString) fromElemSlice(p []string) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
 		r[i] = types.NewString(v)
+	}
+	return r
+}
+
+// SetOfFace
+
+type SetOfFace struct {
+	s   types.Set
+	cs  chunks.ChunkStore
+	ref *ref.Ref
+}
+
+func NewSetOfFace(cs chunks.ChunkStore) SetOfFace {
+	return SetOfFace{types.NewTypedSet(cs, __typeForSetOfFace), cs, &ref.Ref{}}
+}
+
+type SetOfFaceDef map[FaceDef]bool
+
+func (def SetOfFaceDef) New(cs chunks.ChunkStore) SetOfFace {
+	l := make([]types.Value, len(def))
+	i := 0
+	for d, _ := range def {
+		l[i] = d.New(cs)
+		i++
+	}
+	return SetOfFace{types.NewTypedSet(cs, __typeForSetOfFace, l...), cs, &ref.Ref{}}
+}
+
+func (s SetOfFace) Def() SetOfFaceDef {
+	def := make(map[FaceDef]bool, s.Len())
+	s.s.Iter(func(v types.Value) bool {
+		def[v.(Face).Def()] = true
+		return false
+	})
+	return def
+}
+
+func (s SetOfFace) Equals(other types.Value) bool {
+	return other != nil && __typeForSetOfFace.Equals(other.Type()) && s.Ref() == other.Ref()
+}
+
+func (s SetOfFace) Ref() ref.Ref {
+	return types.EnsureRef(s.ref, s)
+}
+
+func (s SetOfFace) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, s.Type().Chunks()...)
+	chunks = append(chunks, s.s.Chunks()...)
+	return
+}
+
+func (s SetOfFace) ChildValues() []types.Value {
+	return append([]types.Value{}, s.s.ChildValues()...)
+}
+
+// A Noms Value that describes SetOfFace.
+var __typeForSetOfFace types.Type
+
+func (m SetOfFace) Type() types.Type {
+	return __typeForSetOfFace
+}
+
+func init() {
+	__typeForSetOfFace = types.MakeCompoundType(types.SetKind, types.MakeType(__commonPackageInFile_photo_CachedRef, 1))
+	types.RegisterValue(__typeForSetOfFace, builderForSetOfFace, readerForSetOfFace)
+}
+
+func builderForSetOfFace(cs chunks.ChunkStore, v types.Value) types.Value {
+	return SetOfFace{v.(types.Set), cs, &ref.Ref{}}
+}
+
+func readerForSetOfFace(v types.Value) types.Value {
+	return v.(SetOfFace).s
+}
+
+func (s SetOfFace) Empty() bool {
+	return s.s.Empty()
+}
+
+func (s SetOfFace) Len() uint64 {
+	return s.s.Len()
+}
+
+func (s SetOfFace) Has(p Face) bool {
+	return s.s.Has(p)
+}
+
+type SetOfFaceIterCallback func(p Face) (stop bool)
+
+func (s SetOfFace) Iter(cb SetOfFaceIterCallback) {
+	s.s.Iter(func(v types.Value) bool {
+		return cb(v.(Face))
+	})
+}
+
+type SetOfFaceIterAllCallback func(p Face)
+
+func (s SetOfFace) IterAll(cb SetOfFaceIterAllCallback) {
+	s.s.IterAll(func(v types.Value) {
+		cb(v.(Face))
+	})
+}
+
+func (s SetOfFace) IterAllP(concurrency int, cb SetOfFaceIterAllCallback) {
+	s.s.IterAllP(concurrency, func(v types.Value) {
+		cb(v.(Face))
+	})
+}
+
+type SetOfFaceFilterCallback func(p Face) (keep bool)
+
+func (s SetOfFace) Filter(cb SetOfFaceFilterCallback) SetOfFace {
+	out := s.s.Filter(func(v types.Value) bool {
+		return cb(v.(Face))
+	})
+	return SetOfFace{out, s.cs, &ref.Ref{}}
+}
+
+func (s SetOfFace) Insert(p ...Face) SetOfFace {
+	return SetOfFace{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+}
+
+func (s SetOfFace) Remove(p ...Face) SetOfFace {
+	return SetOfFace{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+}
+
+func (s SetOfFace) Union(others ...SetOfFace) SetOfFace {
+	return SetOfFace{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
+}
+
+func (s SetOfFace) First() Face {
+	return s.s.First().(Face)
+}
+
+func (s SetOfFace) fromStructSlice(p []SetOfFace) []types.Set {
+	r := make([]types.Set, len(p))
+	for i, v := range p {
+		r[i] = v.s
+	}
+	return r
+}
+
+func (s SetOfFace) fromElemSlice(p []Face) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = v
 	}
 	return r
 }

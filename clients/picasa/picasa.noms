@@ -12,10 +12,8 @@ struct User {
 struct Album {
   Id: String
   Title: String
-  NumPhotos: Uint32
-  Photos: Ref<Set<Ref<Img.RemotePhoto>>>
+  Photos: Set<Img.RemotePhoto>
 }
 
 using Map<String, Album>
-using Set<Img.RemotePhoto>
 using Ref<User>

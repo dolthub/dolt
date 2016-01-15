@@ -81,15 +81,15 @@ func main() {
 
 func getUser(api flickrAPI) {
 	if commit, ok := ds.MaybeHead(); ok {
-		userRef := commit.Value().(RefOfUser)
-		user = userRef.TargetValue(ds.Store())
-		if checkAuth(api) {
-			return
+		if userRef, ok := commit.Value().(RefOfUser); ok {
+			user = userRef.TargetValue(ds.Store())
+			if checkAuth(api) {
+				return
+			}
 		}
-	} else {
-		user = NewUser(ds.Store())
 	}
 
+	user = NewUser(ds.Store())
 	authUser(api)
 }
 

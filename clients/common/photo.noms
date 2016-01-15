@@ -8,6 +8,16 @@ struct RemotePhoto {
   Geoposition: geo.Geoposition
   Sizes: Map<Size, String>
   Tags: Set<String>
+  Faces: Set<Face>
+}
+
+struct Face {
+  // These coordinates are in the range [0-1]
+  Top: Float32
+  Left: Float32
+  Width: Float32
+  Height: Float32
+  PersonName: String
 }
 
 struct Size {
