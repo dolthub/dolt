@@ -192,7 +192,11 @@ export default class DataManager {
     const set = await map.get(r);
     if (set === undefined) {
       // TODO: Cleanup the NomsSet api (it shouldn't be this hard to create an emptySet)
-      return new NomsSet(this._store, setTr, new SetLeafSequence(setTr, []));
+      return new NomsSet(this._store, setType, new SetLeafSequence(setType, []));
+    } else {
+      // Update the type to something that is correct.
+      // An alternative would be to hardcode the ref/ordinal.
+      setType = set.type;
     }
 
     return set;
@@ -200,7 +204,7 @@ export default class DataManager {
 }
 
 // TODO: This is actually the wrong type. Fix when we have JS codegen.
-const setTr = makeCompoundType(Kind.Set, makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Value)));
+let setType = makeCompoundType(Kind.Set, makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Value)));
 
 /**
  * Loads the first key in the index and gets the package from the type.

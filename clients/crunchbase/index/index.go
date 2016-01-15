@@ -70,9 +70,9 @@ func main() {
 		}
 
 		// Compute a cutoff date which is later used to only include rounds after this date to reduce the amount of data.
-		now := time.Now()
-		currentYear := time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
-		lastQ := lastQuarter(now)
+		// Hardcode the time.
+		currentYear := time.Date(2015, time.January, 1, 0, 0, 0, 0, time.UTC)
+		lastQ := time.Date(2015, time.July, 1, 0, 0, 0, 0, time.UTC)
 		var timeCutoff time.Time
 		if currentYear.Before(lastQ) {
 			timeCutoff = currentYear

@@ -153,14 +153,13 @@ class Main extends React.Component<void, Props, State> {
 
 const series = ['Seed', 'A', 'B'];
 
-const d = new Date();
-const year = d.getFullYear();
-d.setMonth(d.getMonth() - 3);
-const qYear = d.getFullYear();
-const quarter = (d.getMonth() + 1) / 4 | 0;
+// Hardcode the time.
+const year = 2015;
+const qYear = 2105;
+const quarter = 2;
 const timeItems = [
-  {label: 'Current Year', key: {Year: year}},
-  {label: 'Last Quarter', key: {Year: qYear, Quarter: quarter}},
+  {label: '2015', key: {Year: year}},
+  {label: '2015 Q2', key: {Year: qYear, Quarter: quarter}},
 ];
 
 const categories = [
