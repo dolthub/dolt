@@ -1,10 +1,12 @@
-SRC="node_modules/babel-regenerator-runtime/runtime.js main.js"
+SRC="babel-regenerator-runtime src/main.js"
 OUT="out.js"
 
-export NODE_ENV=production
-export BABEL_ENV=production
+export NODE_ENV=$1
+export BABEL_ENV=$1
 
-node_modules/.bin/browserify \
-    -p bundle-collapser/plugin \
-    $SRC \
-    | node_modules/.bin/uglifyjs -c -m > $OUT
+if [ $1 != "production" ]; then
+  export NOMS_SERVER=http://localhost:8000
+  export NOMS_DATASET_ID=mlb/heatmap
+fi
+
+node_modules/.bin/webpack --progress $SRC $OUT
