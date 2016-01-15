@@ -1,10 +1,11 @@
 // @flow
 
-import d3 from './d3.js';
-import nv from 'nvd3';
 import React from 'react';
 import ReactDOM from 'react-dom';
 import type {DataArray} from './data.js';
+
+declare var d3;
+declare var nv;
 
 type Props = {
   data: DataArray,
