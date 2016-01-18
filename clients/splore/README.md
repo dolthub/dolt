@@ -18,7 +18,7 @@ go build
 ./server -ldb="/tmp/sploretest" &
 
 cd ../splore
-PYTHONPATH=$GOPATH/src/github.com/attic-labs/noms/tools python build.py
+PYTHONPATH=$GOPATH/src/github.com/attic-labs/noms/tools ./build.py
 ./node_modules/.bin/http-server
 ```
 
