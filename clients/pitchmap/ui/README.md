@@ -9,7 +9,6 @@ TODO: Someone fill in how to get and index the required data.
 ## Example
 
 ```
-export PYTHONPATH="${GOPATH}/src/github.com/attic-labs/noms/tools"
 NOMS_SERVER=http://localhost:8000 NOMS_DATASET_ID=mlb/heatmap python build.py
 python -m SimpleHTTPServer 8080`
 ```
