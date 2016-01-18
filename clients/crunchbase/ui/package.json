@@ -24,6 +24,7 @@
     "eslint": "^1.9.0",
     "eslint-plugin-react": "^3.8.0",
     "flow-bin": "^0.19.1",
+    "http-server": "^0.8.5",
     "webpack": "^1.12.11"
   },
   "scripts": {

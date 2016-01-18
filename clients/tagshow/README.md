@@ -30,7 +30,7 @@ go build
 ./server -ldb="/tmp/tagshowdemo"
 
 cd ../tagshow
-PYTHONPATH=$GOPATH/src/github.com/attic-labs/noms/tools python build.py
+PYTHONPATH=$GOPATH/src/github.com/attic-labs/noms/tools ./build.py
 ./node_modules/.bin/http-server
 ```
 
