@@ -34,6 +34,7 @@ var (
 	inFlag      = flag.String("in", "", "The name of the noms file to read")
 	pkgDSFlag   = flag.String("package-ds", "", "The dataset to read/write packages from/to.")
 	packageFlag = flag.String("package", "", "The name of the go package to write")
+	godepFlag   = flag.String("godep", "", "Name of the package using nomdl through godep, which is applied as a prefix to github.com/attic-labs/noms imports. For example, -godep=github.com/foo/bar generates imports to \"github.com/foo/bar/Godeps/_workspace/src/github.com/attic-labs/noms\"")
 
 	idRegexp    = regexp.MustCompile(`[_\pL][_\pL\pN]*`)
 	illegalRune = regexp.MustCompile(`[^_\pL\pN]`)
@@ -229,8 +230,13 @@ func newCodeGen(w io.Writer, fileID string, written map[string]bool, deps depsMa
 	if pkg.Name == "types" {
 		typesPackage = ""
 	}
+	nomsImport := "github.com/attic-labs/noms"
+	if *godepFlag != "" {
+		nomsImport = fmt.Sprintf("%s/Godeps/_workspace/src/%s", *godepFlag, nomsImport)
+	}
 	gen := &codeGen{w, pkg, deps, written, []types.Type{}, nil, nil, sharedData{
 		fileID,
+		nomsImport,
 		pkg.Name,
 		typesPackage,
 	}}
@@ -275,6 +281,7 @@ func (gen *codeGen) Resolve(t types.Type) types.Type {
 
 type sharedData struct {
 	FileID       string
+	NomsImport   string
 	PackageName  string
 	TypesPackage string
 }
