@@ -5,8 +5,9 @@
 package {{.Name}}
 
 import (
-	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
+	"{{.NomsImport}}/chunks"
+	"{{.NomsImport}}/ref"
+	"{{.NomsImport}}/types"
 )
 
 {{if .HasTypes}}
