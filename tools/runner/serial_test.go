@@ -63,7 +63,7 @@ func (suite *SerialRunnerTestSuite) TestForceRunInDir() {
 		outC <- buf.String()
 	}()
 
-	ForceRunInDir(suite.dir, "python", scriptPath)
+	ForceRunInDir(suite.dir, nil, "python", scriptPath)
 
 	w.Close()
 	out := strings.TrimSpace(<-outC)

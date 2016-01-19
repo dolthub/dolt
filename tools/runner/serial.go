@@ -17,6 +17,10 @@ type Env map[string]string
 func (e Env) toStrings() (out []string) {
 	out = os.Environ()
 	// Sadly, it seems like we need to force-set GOROOT in the environment to handle some funky runtime environments (e.g. on our Travis setup)
+	if e == nil {
+		e = Env{}
+	}
+
 	if _, overridden := e["GOROOT"]; !overridden {
 		e["GOROOT"] = runtime.GOROOT()
 	}
@@ -33,11 +37,11 @@ func ForceRun(exe string, args ...string) {
 }
 
 // ForceRunInDir runs 'exe [args...]' in the given directory, and d.Chk()s on failure. Inherits the environment of the current process.
-func ForceRunInDir(dir, exe string, args ...string) {
+func ForceRunInDir(dir string, env Env, exe string, args ...string) {
 	info, err := os.Stat(dir)
 	d.Exp.NoError(err, "Can't stat %s", dir)
 	d.Exp.True(info.IsDir(), "%s must be a path to a directory.", dir)
-	d.Chk.NoError(runEnvDir(os.Stdout, os.Stderr, Env{}, dir, exe, args...))
+	d.Chk.NoError(runEnvDir(os.Stdout, os.Stderr, env, dir, exe, args...))
 }
 
 // RunInDir runs 'exe [args...]' in the given directory, returning any failure. The child's stdout and stderr are mapped to out and err respectively. Inherits the environment of the current process.
