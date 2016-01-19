@@ -2,6 +2,8 @@
 
 import os, os.path, subprocess, sys
 
+sys.path.append(os.path.expandvars('$GOPATH/src/github.com/attic-labs/noms/tools'))
+
 import noms.symlink as symlink
 
 def main():
