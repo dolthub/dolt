@@ -29,7 +29,10 @@ module.exports = {
     loaders: [
       {
         test: /\.js$/,
-        exclude: /node_modules/,
+        exclude: (p) => {
+          // Noms needs to be compiled too!
+          return /node_modules/.test(p) && !/node_modules\/noms/.test(p)
+        },
         loader: 'babel-loader'
       }
     ]

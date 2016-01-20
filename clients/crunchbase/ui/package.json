@@ -2,6 +2,7 @@
   "name": "test-nvd3",
   "dependencies": {
     "d3": "^3.4.4",
+    "noms": "file:../../../js",
     "nvd3": "^1.8.1",
     "react": "^0.14.1",
     "react-dom": "^0.14.1"

@@ -1,2 +1,5 @@
+.babelrc
+.eslintrc
+.flowconfig
 node_modules
 out.js

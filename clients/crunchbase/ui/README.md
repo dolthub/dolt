@@ -33,10 +33,7 @@ Then, navigate to [http://localhost:8080](http://localhost:8080).
 
 ## Develop
 
-```
-./link.sh  # only necessary first time, or if changes have happened in 'js'
-npm install  # only necessary first time, or if deps have changed
-NOMS_SERVER="http://localhost:8000" NOMS_DATASET_ID="crunchbase/index" npm run start
-```
+* `./build.py`  # only necessary first time
+* `NOMS_SERVER="http://localhost:8000" NOMS_DATASET_ID="crunchbase/index" npm run start`
 
 This will start watchify which is continually building a non-minified (and thus debuggable) build.
