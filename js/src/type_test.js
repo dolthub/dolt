@@ -21,11 +21,11 @@ suite('Type', () => {
     const setType = makeCompoundType(Kind.Set, stringType);
     const mahType = makeStructType('MahStruct', [
       new Field('Field1', stringType, false),
-      new Field('Field2', boolType, true)
+      new Field('Field2', boolType, true),
     ], []);
     const otherType = makeStructType('MahOtherStruct', [], [
       new Field('StructField', mahType, false),
-      new Field('StringField', stringType, false)
+      new Field('StringField', stringType, false),
     ]);
 
     const pkgRef = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');

@@ -27,7 +27,7 @@ export default class Node extends React.Component<void, Props, State> {
 
     this.state = {
       x: this.props.fromX,
-      y: this.props.fromY
+      y: this.props.fromY,
     };
   }
 
@@ -36,7 +36,7 @@ export default class Node extends React.Component<void, Props, State> {
         this.state.y !== this.props.y) {
       window.requestAnimationFrame(() => this.setState({
         x: this.props.x,
-        y: this.props.y
+        y: this.props.y,
       }));
     }
 

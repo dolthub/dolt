@@ -12,7 +12,7 @@ import {
   Ref,
   registerPackage,
   SetLeafSequence,
-  Struct
+  Struct,
 } from 'noms';
 import type {ChunkStore, Package} from 'noms';
 
@@ -154,22 +154,22 @@ export default class DataManager {
     const [seedData, seriesAData, seriesBData] = await Promise.all([
       seedSet.intersect(categorySet, timeSet).then(set => set.map(getAmountRaised)),
       seriesASet.intersect(categorySet, timeSet).then(set => set.map(getAmountRaised)),
-      seriesBSet.intersect(categorySet, timeSet).then(set => set.map(getAmountRaised))
+      seriesBSet.intersect(categorySet, timeSet).then(set => set.map(getAmountRaised)),
     ]);
 
     return this._data = [
       {
         values: percentiles(seedData),
-        key: 'Seed'
+        key: 'Seed',
       },
       {
         values: percentiles(seriesAData),
-        key: 'A'
+        key: 'A',
       },
       {
         values: percentiles(seriesBData),
-        key: 'B'
-      }
+        key: 'B',
+      },
     ];
   }
 

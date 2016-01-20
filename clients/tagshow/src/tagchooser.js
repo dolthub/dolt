@@ -9,36 +9,36 @@ const styles = {
   root: {
     display: 'flex',
     flexDirection: 'column',
-    height: '100%'
+    height: '100%',
   },
 
   panes: {
     display: 'flex',
-    flex: 1
+    flex: 1,
   },
 
   left: {
     overflowX: 'hidden',
     overflowY: 'auto',
-    marginRight: '1em'
+    marginRight: '1em',
   },
 
   right: {
     flex: 1,
     overflowX: 'hidden',
     overflowY: 'auto',
-    padding: '1em'
+    padding: '1em',
   },
 
   bottom: {
-    textAlign: 'center'
+    textAlign: 'center',
   },
 
   button: {
     fontSize: '1.5em',
     margin: '1em',
-    width: '50%'
-  }
+    width: '50%',
+  },
 };
 
 type Props = {
@@ -47,7 +47,7 @@ type Props = {
   selectedPhotos: Array<Ref>,
   selectedTags: Set<string>,
   onChange: (selected: Set<string>) => void,
-  onConfirm: () => void
+  onConfirm: () => void,
 };
 
 export default function TagChooser(props: Props) : React.Element {

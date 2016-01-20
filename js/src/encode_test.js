@@ -9,7 +9,7 @@ import Struct from './struct.js';
 import test from './async_test.js';
 import type {NomsKind} from './noms_kind.js';
 import {encodeNomsValue, JsonArrayWriter} from './encode.js';
-import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type}
+import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type,}
     from './type.js';
 import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
 import {Kind} from './noms_kind.js';
@@ -75,7 +75,7 @@ suite('Encode', () => {
     const tr = makeCompoundType(Kind.List, it);
     const v = new NomsList(ms, tr, new ListLeafSequence(tr, [
       new NomsList(ms, tr, new ListLeafSequence(it, [0])),
-      new NomsList(ms, tr, new ListLeafSequence(it, [1, 2, 3]))
+      new NomsList(ms, tr, new ListLeafSequence(it, [1, 2, 3])),
     ]));
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.List, Kind.List, Kind.Int16, false, [false, ['0'], false,
@@ -100,7 +100,7 @@ suite('Encode', () => {
     const tr = makeCompoundType(Kind.Set, st);
     const v = new NomsSet(ms, tr, new SetLeafSequence(tr, [
       new NomsSet(ms, tr, new SetLeafSequence(st, [0])),
-      new NomsSet(ms, tr, new SetLeafSequence(st, [1, 2, 3]))
+      new NomsSet(ms, tr, new SetLeafSequence(st, [1, 2, 3])),
     ]));
 
     w.writeTopLevel(tr, v);
@@ -159,7 +159,7 @@ suite('Encode', () => {
 
     const typeDef = makeStructType('S', [
       new Field('x', makePrimitiveType(Kind.Int8), false),
-      new Field('b', makePrimitiveType(Kind.Bool), false)
+      new Field('b', makePrimitiveType(Kind.Bool), false),
     ], []);
     const pkg = new Package([typeDef], []);
     registerPackage(pkg);
@@ -178,7 +178,7 @@ suite('Encode', () => {
 
     const typeDef = makeStructType('S', [
       new Field('x', makePrimitiveType(Kind.Int8), true),
-      new Field('b', makePrimitiveType(Kind.Bool), false)
+      new Field('b', makePrimitiveType(Kind.Bool), false),
     ], []);
     const pkg = new Package([typeDef], []);
     registerPackage(pkg);
@@ -200,10 +200,10 @@ suite('Encode', () => {
     let w = new JsonArrayWriter(ms);
 
     const typeDef = makeStructType('S', [
-      new Field('x', makePrimitiveType(Kind.Int8), false)
+      new Field('x', makePrimitiveType(Kind.Int8), false),
     ], [
       new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('s', makePrimitiveType(Kind.String), false)
+      new Field('s', makePrimitiveType(Kind.String), false),
     ]);
     const pkg = new Package([typeDef], []);
     registerPackage(pkg);
@@ -226,7 +226,7 @@ suite('Encode', () => {
 
     const ltr = makeCompoundType(Kind.List, makePrimitiveType(Kind.String));
     const typeDef = makeStructType('S', [
-      new Field('l', ltr, false)
+      new Field('l', ltr, false),
     ], []);
     const pkg = new Package([typeDef], []);
     registerPackage(pkg);
@@ -249,10 +249,10 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ms);
 
     const s2TypeDef = makeStructType('S2', [
-      new Field('x', makePrimitiveType(Kind.Int32), false)
+      new Field('x', makePrimitiveType(Kind.Int32), false),
     ], []);
     const sTypeDef = makeStructType('S', [
-      new Field('s', makeType(new Ref(), 0), false)
+      new Field('s', makeType(new Ref(), 0), false),
     ], []);
 
     const pkg = new Package([s2TypeDef, sTypeDef], []);
@@ -306,7 +306,7 @@ suite('Encode', () => {
     const tuples = [
       new MetaTuple(r1, 2),
       new MetaTuple(r2, 4),
-      new MetaTuple(r3, 6)
+      new MetaTuple(r3, 6),
     ];
     const l = new NomsList(ms, ltr, new IndexedMetaSequence(ltr, tuples));
 
@@ -333,12 +333,12 @@ suite('Encode', () => {
     test([Kind.Type, Kind.Struct, 'S', ['x', Kind.Int16, false, 'v', Kind.Value, true], []],
          makeStructType('S', [
            new Field('x', makePrimitiveType(Kind.Int16), false),
-           new Field('v', makePrimitiveType(Kind.Value), true)
+           new Field('v', makePrimitiveType(Kind.Value), true),
          ], []));
     test([Kind.Type, Kind.Struct, 'S', [], ['x', Kind.Int16, false, 'v', Kind.Value, false]],
          makeStructType('S', [], [
            new Field('x', makePrimitiveType(Kind.Int16), false),
-           new Field('v', makePrimitiveType(Kind.Value), false)
+           new Field('v', makePrimitiveType(Kind.Value), false),
          ]));
 
     const pkgRef = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
@@ -348,7 +348,7 @@ suite('Encode', () => {
           ['e', Kind.Unresolved, pkgRef.toString(), '123', false, 'x', Kind.Int64, false], []],
           makeStructType('S', [
             new Field('e', makeType(pkgRef, 123), false),
-            new Field('x', makePrimitiveType(Kind.Int64), false)
+            new Field('x', makePrimitiveType(Kind.Int64), false),
           ], []));
 
     // test([Kind.Type, Kind.Unresolved, new Ref().toString(), -1, 'ns', 'n'],

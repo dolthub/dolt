@@ -4,7 +4,7 @@ import Layout from './layout.js';
 import React from 'react'; // eslint-disable-line no-unused-vars
 import ReactDOM from 'react-dom';
 import {HttpStore, invariant, IndexedMetaSequence, ListLeafSequence, MapLeafSequence,
-    OrderedMetaSequence, NomsList, NomsMap, NomsSet, readValue, Ref, SetLeafSequence, Struct}
+    OrderedMetaSequence, NomsList, NomsMap, NomsSet, readValue, Ref, SetLeafSequence, Struct,}
     from 'noms';
 import {layout, NodeGraph, TreeNode} from './buchheim.js';
 
@@ -130,7 +130,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
       data.nodes[id] = {
         canOpen: true,
         name: refStr.substr(5, 6),
-        fullName: refStr
+        fullName: refStr,
       };
     } else if (val instanceof Struct) {
       // Struct

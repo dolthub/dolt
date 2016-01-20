@@ -35,7 +35,7 @@ suite('eq', () => {
       new Map([[10, 12]]),
       new Map([[10, 11], [13, 14]]),
       r0,
-      r1
+      r1,
     ];
     for (let i = 0; i < different.length; i++) {
       for (let j = 0; j < different.length; j++) {
@@ -54,7 +54,7 @@ suite('eq', () => {
       [new Set([{a: 1}]), new Set([{a: 1}])],
       [new Map([[{a: 1}, {b: 2}]]), new Map([[{a: 1}, {b: 2}]])],
       [new Set([r1]), new Set([r2])],
-      [new Map([[r1, 42]]), new Map([[r2, 42]])]
+      [new Map([[r1, 42]]), new Map([[r2, 42]])],
     ];
     for (const vs of same) {
       for (let i = 0; i < vs.length; i++) {

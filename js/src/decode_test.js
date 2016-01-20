@@ -9,7 +9,7 @@ import type {float64, int32, int64, uint8, uint16, uint32, uint64} from './primi
 import type {TypeDesc} from './type.js';
 import {assert} from 'chai';
 import {decodeNomsValue, JsonArrayReader} from './decode.js';
-import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type}
+import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type,}
     from './type.js';
 import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
 import {invariant, notNull} from './assert.js';
@@ -141,7 +141,7 @@ suite('Decode', () => {
     const tuples = [
       new MetaTuple(r1, 2),
       new MetaTuple(r2, 4),
-      new MetaTuple(r3, 6)
+      new MetaTuple(r3, 6),
     ];
     const l:NomsList<int32> = new NomsList(ms, ltr, new IndexedMetaSequence(ltr, tuples));
     invariant(l instanceof NomsList);
@@ -236,7 +236,7 @@ suite('Decode', () => {
     const tr = makeStructType('A1', [
       new Field('x', makePrimitiveType(Kind.Int16), false),
       new Field('s', makePrimitiveType(Kind.String), false),
-      new Field('b', makePrimitiveType(Kind.Bool), false)
+      new Field('b', makePrimitiveType(Kind.Bool), false),
     ], []);
 
     const pkg = new Package([tr], []);
@@ -249,17 +249,17 @@ suite('Decode', () => {
     assertStruct(v, tr.desc, {
       x: 42,
       s: 'hi',
-      b: true
+      b: true,
     });
   });
 
   test('test read struct union', async () => {
     const ms = new MemoryStore();
     const tr = makeStructType('A2', [
-      new Field('x', makePrimitiveType(Kind.Float32), false)
+      new Field('x', makePrimitiveType(Kind.Float32), false),
     ], [
       new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('s', makePrimitiveType(Kind.String), false)
+      new Field('s', makePrimitiveType(Kind.String), false),
     ]);
 
     const pkg = new Package([tr], []);
@@ -271,7 +271,7 @@ suite('Decode', () => {
 
     assertStruct(v, tr.desc, {
       x: 42,
-      s: 'hi'
+      s: 'hi',
     });
   });
 
@@ -280,7 +280,7 @@ suite('Decode', () => {
     const tr = makeStructType('A3', [
       new Field('x', makePrimitiveType(Kind.Float32), false),
       new Field('s', makePrimitiveType(Kind.String), true),
-      new Field('b', makePrimitiveType(Kind.Bool), true)
+      new Field('b', makePrimitiveType(Kind.Bool), true),
     ], []);
 
     const pkg = new Package([tr], []);
@@ -292,7 +292,7 @@ suite('Decode', () => {
 
     assertStruct(v, tr.desc, {
       x: 42,
-      b: false
+      b: false,
     });
   });
 
@@ -303,7 +303,7 @@ suite('Decode', () => {
     const tr = makeStructType('A4', [
       new Field('b', makePrimitiveType(Kind.Bool), false),
       new Field('l', ltr, false),
-      new Field('s', makePrimitiveType(Kind.String), false)
+      new Field('s', makePrimitiveType(Kind.String), false),
     ], []);
 
     const pkg = new Package([tr], []);
@@ -316,7 +316,7 @@ suite('Decode', () => {
     assertStruct(v, tr.desc, {
       b: true,
       l: new NomsList(ms, ltr, new ListLeafSequence(ltr, [0, 1, 2])),
-      s: 'hi'
+      s: 'hi',
     });
   });
 
@@ -325,7 +325,7 @@ suite('Decode', () => {
     const tr = makeStructType('A5', [
       new Field('b', makePrimitiveType(Kind.Bool), false),
       new Field('v', makePrimitiveType(Kind.Value), false),
-      new Field('s', makePrimitiveType(Kind.String), false)
+      new Field('s', makePrimitiveType(Kind.String), false),
     ], []);
 
     const pkg = new Package([tr], []);
@@ -338,7 +338,7 @@ suite('Decode', () => {
     assertStruct(v, tr.desc, {
       b: true,
       v: 42,
-      s: 'hi'
+      s: 'hi',
     });
   });
 
@@ -347,7 +347,7 @@ suite('Decode', () => {
     const tr = makeStructType('A1', [
       new Field('x', makePrimitiveType(Kind.Int16), false),
       new Field('s', makePrimitiveType(Kind.String), false),
-      new Field('b', makePrimitiveType(Kind.Bool), false)
+      new Field('b', makePrimitiveType(Kind.Bool), false),
     ], []);
 
     const pkg = new Package([tr], []);
@@ -360,7 +360,7 @@ suite('Decode', () => {
     assertStruct(v, tr.desc, {
       x: 42,
       s: 'hi',
-      b: true
+      b: true,
     });
   });
 
@@ -397,7 +397,7 @@ suite('Decode', () => {
     const tr = makeStructType('A1', [
       new Field('x', makePrimitiveType(Kind.Int16), false),
       new Field('e', makeType(new Ref(), 1), false),
-      new Field('b', makePrimitiveType(Kind.Bool), false)
+      new Field('b', makePrimitiveType(Kind.Bool), false),
     ], []);
     const enumTref = makeEnumType('E', ['a', 'b', 'c']);
     const pkg = new Package([tr, enumTref], []);
@@ -410,7 +410,7 @@ suite('Decode', () => {
     assertStruct(v, tr.desc, {
       x: 42,
       e: 1,
-      b: true
+      b: true,
     });
   });
 
@@ -418,7 +418,7 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const tr = makeStructType('s', [
       new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('i', makePrimitiveType(Kind.Int32), false)
+      new Field('i', makePrimitiveType(Kind.Int32), false),
     ], []);
 
     const pkg = new Package([tr], []);

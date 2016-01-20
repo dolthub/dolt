@@ -25,7 +25,7 @@ export const Kind: {
   Struct: NomsKind,
   Type: NomsKind,
   Unresolved: NomsKind,
-  Package: NomsKind
+  Package: NomsKind,
 } = {
   Bool: 0,
   Uint8: 1,
@@ -49,7 +49,7 @@ export const Kind: {
   Struct: 19,
   Type: 20,
   Unresolved: 21,
-  Package: 22
+  Package: 22,
 };
 
 export function isPrimitiveKind(k: NomsKind): boolean {

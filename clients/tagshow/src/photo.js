@@ -28,7 +28,7 @@ export default class Photo extends React.Component<DefaultProps, Props, State> {
     super(props);
     this.state = {
       photo: null,
-      sizes: []
+      sizes: [],
     };
   }
 
@@ -82,5 +82,5 @@ export default class Photo extends React.Component<DefaultProps, Props, State> {
 }
 
 Photo.defaultProps = {
-  onLoad() {}
+  onLoad() {},
 };

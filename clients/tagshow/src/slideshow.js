@@ -14,23 +14,23 @@ const containerStyle = {
 
   display: 'flex',
   alignItems: 'center',
-  justifyContent: 'center'
+  justifyContent: 'center',
 };
 
 type Props = {
   store: ChunkStore,
-  photos: Array<Ref>
+  photos: Array<Ref>,
 };
 
 type State = {
-  index: number
+  index: number,
 };
 
 export default class SlideShow extends React.Component<void, Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
-      index: 0
+      index: 0,
     };
   }
 
@@ -73,13 +73,13 @@ class Item extends React.Component<void, ItemProps, ItemState> {
   constructor(props: ItemProps) {
     super(props);
     this.state = {
-      timerId: 0
+      timerId: 0,
     };
   }
 
   setTimeout() {
     this.setState({
-      timerId: window.setTimeout(this.props.onTimeout, 3000)
+      timerId: window.setTimeout(this.props.onTimeout, 3000),
     });
   }
 
@@ -91,7 +91,7 @@ class Item extends React.Component<void, ItemProps, ItemState> {
     const style = {
       objectFit: 'contain',
       width: window.innerWidth,
-      height: window.innerHeight
+      height: window.innerHeight,
     };
 
     return (

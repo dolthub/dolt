@@ -37,7 +37,7 @@ export default class HeatMap extends React.Component<void, Props, State> {
 
     this.state = {
       loaded: false,
-      pointList: []
+      pointList: [],
     };
   }
 
@@ -54,12 +54,12 @@ export default class HeatMap extends React.Component<void, Props, State> {
       await pitchList.forEach(p => {
         pointList.push({
           x: -1 + ORIGIN_X_PIXELS + feetToPixels(p.get('X')),
-          y: -1 + ORIGIN_Z_PIXELS - feetToPixels(p.get('Z'))
+          y: -1 + ORIGIN_Z_PIXELS - feetToPixels(p.get('Z')),
         });
       });
       this.setState({
         loaded: true,
-        pointList: pointList
+        pointList: pointList,
       });
     } else {
       throw new Error('Unexpected type of pitchList');
@@ -75,13 +75,13 @@ export default class HeatMap extends React.Component<void, Props, State> {
       left: 0,
       position: 'absolute',
       right: 0,
-      top: 0
+      top: 0,
     };
     return <div style={ {
       position: 'relative',
       overflow: 'hidden',
       width: IMAGE_WIDTH_PX,
-      height: IMAGE_HEIGHT_PX
+      height: IMAGE_HEIGHT_PX,
     } }>
       <img src="background.jpg" style={fillStyle}/>
       <div style={fillStyle}>
@@ -101,7 +101,7 @@ export default class HeatMap extends React.Component<void, Props, State> {
           width: '2px',
           height: '2px',
           boxShadow: '0px 0px 16px 16px rgba(0,255,0,0.4)',
-          borderRadius: '50%'
+          borderRadius: '50%',
         }
       }/>;
     });

@@ -30,7 +30,7 @@ export {
   StructDesc,
   Type,
   typeType,
-  UnresolvedDesc
+  UnresolvedDesc,
 } from './type.js';
 
 import type {ChunkStore} from './chunk_store.js';

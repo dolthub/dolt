@@ -47,7 +47,7 @@ class PitcherList extends React.Component<void, Props, State> {
     super(props);
 
     this.state = {
-      currentPitcher: props.pitchers[0]
+      currentPitcher: props.pitchers[0],
     };
   }
 
@@ -57,7 +57,7 @@ class PitcherList extends React.Component<void, Props, State> {
 
     const onChangePitcher = e => {
       this.setState({
-        currentPitcher: e.target.value
+        currentPitcher: e.target.value,
       });
     };
 
