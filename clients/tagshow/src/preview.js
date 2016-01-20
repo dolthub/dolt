@@ -7,12 +7,12 @@ import type {ChunkStore, Ref} from 'noms';
 const photoStyle = {
   display: 'inline-block',
   marginRight: 5,
-  height: 300
+  height: 300,
 };
 
 type Props = {
   photos: Array<Ref>,
-  store: ChunkStore
+  store: ChunkStore,
 };
 
 export default function Preview(props: Props) : React.Element {

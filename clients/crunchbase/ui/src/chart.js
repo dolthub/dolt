@@ -27,7 +27,7 @@ export default class Chart extends React.Component<void, Props, State> {
         isArea: true,
         showControls: false,
         showLegend: false,
-        useInteractiveGuideline: true
+        useInteractiveGuideline: true,
       });
 
       chart.yScale(d3.scale.log());

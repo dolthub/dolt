@@ -23,7 +23,7 @@ export default class HttpStore {
     this._rpc = {
       getRefs: url + '/getRefs/',
       ref: url + '/ref/',
-      root: url + '/root/'
+      root: url + '/root/',
     };
     this._readQueue = Object.create(null);
     this._anyPending = false;
@@ -86,8 +86,8 @@ export default class HttpStore {
         method: 'post',
         body: body,
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
       });
 
       const chunks = deserialize(buffer);

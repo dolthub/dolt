@@ -6,7 +6,7 @@ declare var TextEncoder: ?Function;
 
 import {
   TextDecoder as TextDecoderPolyfill,
-  TextEncoder as TextEncoderPolyfill
+  TextEncoder as TextEncoderPolyfill,
 } from 'text-encoding-utf-8';
 
 const TextDecoderImpl = typeof TextDecoder === 'function' ? TextDecoder : TextDecoderPolyfill;

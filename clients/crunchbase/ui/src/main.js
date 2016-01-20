@@ -11,21 +11,21 @@ import type {ListDelegate} from './list.js';
 
 type LabelAndKey = {
   label: string,
-  key: Object
+  key: Object,
 };
 
 type Props = {
   series: Array<string>,
   timeItems: Array<LabelAndKey>,
   categories: Array<string>,
-  color: Array<string>
+  color: Array<string>,
 };
 
 type State = {
   selectedSeries: Set<string>,
   selectedTimeItem: LabelAndKey,
   selectedCategoryItem: string,
-  data: DataArray
+  data: DataArray,
 };
 
 const nomsServer: ?string = process.env.NOMS_SERVER;
@@ -52,7 +52,7 @@ class Main extends React.Component<void, Props, State> {
       selectedSeries: new Set(this.props.series),
       selectedTimeItem,
       selectedCategoryItem,
-      data: []
+      data: [],
     };
   }
 
@@ -107,7 +107,7 @@ class Main extends React.Component<void, Props, State> {
           selectedSeries.add(item);
         }
         this.setState({selectedSeries});
-      }
+      },
     };
 
     const timeDelegate: ListDelegate<LabelAndKey> = {
@@ -119,7 +119,7 @@ class Main extends React.Component<void, Props, State> {
       },
       onChange: (item: LabelAndKey) => {
         this._selectedTimeChanged(item);
-      }
+      },
     };
 
     const categoryDelegate: ListDelegate<string> = {
@@ -131,7 +131,7 @@ class Main extends React.Component<void, Props, State> {
       },
       onChange: (item: string) => {
         this._selectedCategoryChanged(item);
-      }
+      },
     };
 
     return <div className='app'>
@@ -160,14 +160,14 @@ const qYear = d.getFullYear();
 const quarter = (d.getMonth() + 1) / 4 | 0;
 const timeItems = [
   {label: 'Current Year', key: {Year: year}},
-  {label: 'Last Quarter', key: {Year: qYear, Quarter: quarter}}
+  {label: 'Last Quarter', key: {Year: qYear, Quarter: quarter}},
 ];
 
 const categories = [
   'Biotechnology',
   'Finance',
   'Games',
-  'Software'
+  'Software',
 ];
 
 const color = ['#011f4b', '#03396c', '#005b96'];

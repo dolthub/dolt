@@ -13,13 +13,13 @@ type QueryStringObject = {[key: string]: string};
 type Props = {
   store: ChunkStore,
   qs: QueryStringObject,
-  updateQuery: (qs: QueryStringObject) => void
+  updateQuery: (qs: QueryStringObject) => void,
 };
 
 type State = {
   selectedTags: Set<string>,
   selectedPhotos: Array<Ref>,
-  tags: Array<string>
+  tags: Array<string>,
 };
 
 export default class Root extends React.Component<void, Props, State> {
@@ -28,7 +28,7 @@ export default class Root extends React.Component<void, Props, State> {
     this.state = {
       selectedTags: new Set(),
       selectedPhotos: [],
-      tags: []
+      tags: [],
     };
   }
 

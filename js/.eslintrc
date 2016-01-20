@@ -3,6 +3,7 @@
   "rules": {
     "array-bracket-spacing": [2, "never"],
     "camelcase": 2,
+    "comma-dangle": [2, "always-multiline"],
     "eqeqeq": 2,
     "indent": [2, 2, {"SwitchCase": 1}],
     "linebreak-style": [2, "unix"],

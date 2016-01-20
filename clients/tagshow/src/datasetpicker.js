@@ -25,7 +25,7 @@ export default class DatasetPicker extends React.Component<DefaultProps, Props, 
   constructor(props: Props) {
     super(props);
     this.state = {
-      datasets: new Set()
+      datasets: new Set(),
     };
   }
 
@@ -44,7 +44,7 @@ export default class DatasetPicker extends React.Component<DefaultProps, Props, 
       s.add(k);
     });
     this.setState({
-      datasets: s
+      datasets: s,
     });
   }
 

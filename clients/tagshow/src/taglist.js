@@ -6,13 +6,13 @@ const tagStyle = {
   display: 'block',
   margin: '3px',
   marginRight: '25px',
-  whiteSpace: 'nowrap'
+  whiteSpace: 'nowrap',
 };
 
 type Props = {
   selected: Set<string>,
   tags: Array<string>,
-  onChange: (selected: Set<string>) => void
+  onChange: (selected: Set<string>) => void,
 };
 
 function handleChange(props: Props, tag: string) {

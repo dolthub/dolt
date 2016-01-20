@@ -14,7 +14,7 @@ suite('Struct', () => {
   test('equals', () => {
     const typeDef = makeStructType('S1', [
       new Field('x', makePrimitiveType(Kind.Bool), false),
-      new Field('o', makePrimitiveType(Kind.String), true)
+      new Field('o', makePrimitiveType(Kind.String), true),
     ], []);
 
     const pkg = new Package([typeDef], []);
@@ -32,7 +32,7 @@ suite('Struct', () => {
   test('chunks', () => {
     const ms = new MemoryStore();
     const typeDef = makeStructType('S1', [
-      new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), false)
+      new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), false),
     ], []);
 
     const pkg = new Package([typeDef], []);
@@ -52,7 +52,7 @@ suite('Struct', () => {
   test('chunks optional', () => {
     const ms = new MemoryStore();
     const typeDef = makeStructType('S1', [
-      new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), true)
+      new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), true),
     ], []);
 
     const pkg = new Package([typeDef], []);
@@ -78,7 +78,7 @@ suite('Struct', () => {
     const ms = new MemoryStore();
     const typeDef = makeStructType('S1', [], [
       new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), false),
-      new Field('s', makePrimitiveType(Kind.String), false)
+      new Field('s', makePrimitiveType(Kind.String), false),
     ]);
 
     const pkg = new Package([typeDef], []);
@@ -102,7 +102,7 @@ suite('Struct', () => {
   test('new', () => {
     const typeDef = makeStructType('S2', [
       new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('o', makePrimitiveType(Kind.String), true)
+      new Field('o', makePrimitiveType(Kind.String), true),
     ], []);
 
     const pkg = new Package([typeDef], []);
@@ -132,7 +132,7 @@ suite('Struct', () => {
   test('new union', () => {
     const typeDef = makeStructType('S3', [], [
       new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('o', makePrimitiveType(Kind.String), false)
+      new Field('o', makePrimitiveType(Kind.String), false),
     ]);
 
     const pkg = new Package([typeDef], []);
@@ -148,7 +148,7 @@ suite('Struct', () => {
   test('struct set', () => {
     const typeDef = makeStructType('S3', [
       new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('o', makePrimitiveType(Kind.String), true)
+      new Field('o', makePrimitiveType(Kind.String), true),
     ], []);
 
     const pkg = new Package([typeDef], []);
@@ -190,7 +190,7 @@ suite('Struct', () => {
   test('struct set union', () => {
     const typeDef = makeStructType('S3', [], [
       new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('s', makePrimitiveType(Kind.String), false)
+      new Field('s', makePrimitiveType(Kind.String), false),
     ]);
 
     const pkg = new Package([typeDef], []);

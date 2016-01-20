@@ -356,5 +356,5 @@ export {
   Type,
   typeType,
   packageType,
-  UnresolvedDesc
+  UnresolvedDesc,
 };
