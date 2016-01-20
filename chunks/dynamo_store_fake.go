@@ -5,7 +5,6 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
-	"github.com/attic-labs/noms/ref"
 )
 
 type mockAWSError string
@@ -59,7 +58,7 @@ func (m *fakeDDB) BatchWriteItem(input *dynamodb.BatchWriteItemInput) (*dynamodb
 			m.assert.NotNil(value, "value should have been a blob: %+v", putReq.Item[chunkAttr])
 			m.assert.False(bytes.Equal(key, dynamoRootKey), "Can't batch-write the root!")
 
-			m.data[ref.FromSlice(key).String()] = value
+			m.put(key, value)
 			m.numPuts++
 		}
 	}
@@ -81,17 +80,12 @@ func (m *fakeDDB) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput
 	}, nil
 }
 
-func (m *fakeDDB) get(k []byte) (v []byte) {
-	if bytes.Equal(k, dynamoRootKey) {
-		v = m.data[string(dynamoRootKey)]
-	} else {
-		v = m.data[ref.FromSlice(k).String()]
-	}
-	return
+func (m *fakeDDB) get(k []byte) []byte {
+	return m.data[string(k)]
 }
 
-func (m *fakeDDB) hasRoot() bool {
-	return m.data[string(dynamoRootKey)] != nil
+func (m *fakeDDB) put(k, v []byte) {
+	m.data[string(k)] = v
 }
 
 func (m *fakeDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
@@ -100,16 +94,17 @@ func (m *fakeDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput
 	m.assert.NotNil(key, "key should have been a blob: %+v", input.Item[refAttr])
 	m.assert.NotNil(value, "value should have been a blob: %+v", input.Item[chunkAttr])
 
-	if bytes.Equal(key, dynamoRootKey) {
-		initial := *(input.ConditionExpression) == valueNotExistsExpression
+	mustNotExist := *(input.ConditionExpression) == valueNotExistsExpression
+	current, present := m.data[string(key)]
 
-		if (initial && m.hasRoot()) || (!initial && !bytes.Equal(m.data[string(dynamoRootKey)], input.ExpressionAttributeValues[":prev"].B)) {
-			return nil, mockAWSError("ConditionalCheckFailedException")
-		}
+	if mustNotExist && present {
+		return nil, mockAWSError("ConditionalCheckFailedException")
+	} else if !mustNotExist && !bytes.Equal(current, input.ExpressionAttributeValues[":prev"].B) {
+		return nil, mockAWSError("ConditionalCheckFailedException")
+	}
 
-		m.data[string(dynamoRootKey)] = value
-	} else {
-		m.data[ref.FromSlice(key).String()] = value
+	m.data[string(key)] = value
+	if !bytes.HasSuffix(key, dynamoRootKey) {
 		m.numPuts++
 	}
 

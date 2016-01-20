@@ -17,7 +17,7 @@ type DynamoStoreTestSuite struct {
 
 func (suite *DynamoStoreTestSuite) SetupTest() {
 	ddb := createFakeDDB(suite.Assert())
-	suite.Store = newDynamoStoreFromDDBsvc("table", ddb)
+	suite.Store = newDynamoStoreFromDDBsvc("table", "namespace", ddb)
 	suite.putCountFn = func() int {
 		return ddb.numPuts
 	}
@@ -29,7 +29,7 @@ func (suite *DynamoStoreTestSuite) TearDownTest() {
 
 func TestGetRetrying(t *testing.T) {
 	assert := assert.New(t)
-	store := newDynamoStoreFromDDBsvc("table", createLowCapFakeDDB(assert))
+	store := newDynamoStoreFromDDBsvc("table", "namespace", createLowCapFakeDDB(assert))
 
 	c1 := NewChunk([]byte("abc"))
 

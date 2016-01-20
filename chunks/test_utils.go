@@ -9,13 +9,13 @@ import (
 
 func assertInputInStore(input string, ref ref.Ref, s ChunkStore, assert *assert.Assertions) {
 	chunk := s.Get(ref)
-	assert.False(chunk.IsEmpty())
+	assert.False(chunk.IsEmpty(), "Shouldn't get empty chunk for %s", ref.String())
 	assert.Equal(input, string(chunk.Data()))
 }
 
 func assertInputNotInStore(input string, ref ref.Ref, s ChunkStore, assert *assert.Assertions) {
 	data := s.Get(ref)
-	assert.Nil(data)
+	assert.Nil(data, "Shouldn't have gotten data for %s", ref.String())
 }
 
 type TestStore struct {
@@ -44,4 +44,20 @@ func (s *TestStore) Has(ref ref.Ref) bool {
 func (s *TestStore) Put(c Chunk) {
 	s.Writes++
 	s.MemoryStore.Put(c)
+}
+
+type testStoreFactory struct {
+	stores map[string]*TestStore
+}
+
+func NewTestStoreFactory() *testStoreFactory {
+	return &testStoreFactory{map[string]*TestStore{}}
+}
+
+func (f *testStoreFactory) CreateNamespacedStore(ns string) ChunkStore {
+	if cs, present := f.stores[ns]; present {
+		return cs
+	}
+	f.stores[ns] = NewTestStore()
+	return f.stores[ns]
 }

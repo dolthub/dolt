@@ -9,7 +9,6 @@ import (
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/aws/aws-sdk-go/aws"
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/aws/aws-sdk-go/aws/defaults"
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/aws/aws-sdk-go/aws/session"
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/attic-labs/noms/d"
@@ -21,8 +20,9 @@ const (
 	dynamoMaxPutCount = 25
 	dynamoMaxPutSize  = 400 * 1024 // 400K
 
-	refAttr   = "ref"
-	chunkAttr = "chunk"
+	dynamoTableName = "noms"
+	refAttr         = "ref"
+	chunkAttr       = "chunk"
 )
 
 var (
@@ -38,8 +38,12 @@ type ddbsvc interface {
 	PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
 }
 
+// DynamoStore implements ChunkStore by storing data to DynamoDB and, if needed, S3.
 type DynamoStore struct {
 	table           string
+	namespace       []byte
+	namespaceLen    int
+	rootKey         []byte
 	ddbsvc          ddbsvc
 	writeTime       int64
 	writeCount      int64
@@ -54,21 +58,22 @@ type DynamoStore struct {
 	unwrittenPutsMu *sync.Mutex
 }
 
-func NewDynamoStore(table, region, key, secret string) *DynamoStore {
-	creds := defaults.CredChain(defaults.Config(), defaults.Handlers())
-
+// NewDynamoStore returns a new DynamoStore instance pointed at a DynamoDB table in the given region. All keys used to access items are prefixed with the given namespace. If key and secret are empty, the DynamoStore will attempt to inherit AWS credentials from the environment.
+func NewDynamoStore(table, namespace, region, key, secret string) *DynamoStore {
+	config := aws.NewConfig().WithRegion(region)
 	if key != "" {
-		creds = credentials.NewStaticCredentials(key, secret, "")
+		config = config.WithCredentials(credentials.NewStaticCredentials(key, secret, ""))
 	}
 
-	sess := session.New(&aws.Config{Region: aws.String(region), Credentials: creds})
+	sess := session.New(config)
 
-	return newDynamoStoreFromDDBsvc(table, dynamodb.New(sess))
+	return newDynamoStoreFromDDBsvc(table, namespace, dynamodb.New(sess))
 }
 
-func newDynamoStoreFromDDBsvc(table string, ddb ddbsvc) *DynamoStore {
+func newDynamoStoreFromDDBsvc(table, namespace string, ddb ddbsvc) *DynamoStore {
 	store := &DynamoStore{
 		table:           table,
+		namespace:       []byte(namespace),
 		ddbsvc:          ddb,
 		readQueue:       make(chan readRequest, readBufferSize),
 		writeQueue:      make(chan Chunk, writeBufferSize),
@@ -78,6 +83,8 @@ func newDynamoStoreFromDDBsvc(table string, ddb ddbsvc) *DynamoStore {
 		unwrittenPuts:   map[ref.Ref]Chunk{},
 		unwrittenPutsMu: &sync.Mutex{},
 	}
+	store.namespaceLen = len(store.namespace)
+	store.rootKey = append(store.namespace, dynamoRootKey...)
 	store.batchGetRequests()
 	store.batchPutRequests()
 	return store
@@ -202,14 +209,14 @@ func (s *DynamoStore) sendGetRequests(req readRequest) {
 		}
 	}
 
-	requestItems := buildRequestItems(s.table, refs)
+	requestItems := s.buildRequestItems(refs)
 	for hasUnprocessedKeys := true; hasUnprocessedKeys; {
 		out, err := s.ddbsvc.BatchGetItem(&dynamodb.BatchGetItemInput{
 			RequestItems: requestItems,
 		})
 
 		if err == nil {
-			processResponses(out.Responses[s.table], batch)
+			s.processResponses(out.Responses[s.table], batch)
 		} else if err.(awserr.Error).Code() != "ProvisionedThroughputExceededException" {
 			d.Chk.NoError(err, "Errors from BatchGetItem() other than throughput exceeded are fatal")
 		}
@@ -220,22 +227,22 @@ func (s *DynamoStore) sendGetRequests(req readRequest) {
 	batch.Close()
 }
 
-func buildRequestItems(table string, refs map[ref.Ref]bool) map[string]*dynamodb.KeysAndAttributes {
+func (s *DynamoStore) buildRequestItems(refs map[ref.Ref]bool) map[string]*dynamodb.KeysAndAttributes {
 	makeKeysAndAttrs := func() *dynamodb.KeysAndAttributes {
 		out := &dynamodb.KeysAndAttributes{ConsistentRead: aws.Bool(true)} // This doubles the cost :-(
 		for r := range refs {
-			out.Keys = append(out.Keys, map[string]*dynamodb.AttributeValue{refAttr: {B: r.DigestSlice()}})
+			out.Keys = append(out.Keys, map[string]*dynamodb.AttributeValue{refAttr: {B: s.makeNamespacedKey(r)}})
 		}
 		return out
 	}
-	return map[string]*dynamodb.KeysAndAttributes{table: makeKeysAndAttrs()}
+	return map[string]*dynamodb.KeysAndAttributes{s.table: makeKeysAndAttrs()}
 }
 
-func processResponses(responses []map[string]*dynamodb.AttributeValue, batch readBatch) {
+func (s *DynamoStore) processResponses(responses []map[string]*dynamodb.AttributeValue, batch readBatch) {
 	for _, item := range responses {
 		p := item[refAttr]
 		d.Chk.NotNil(p)
-		r := ref.FromSlice(p.B)
+		r := ref.FromSlice(s.removeNamespace(p.B))
 		p = item[chunkAttr]
 		d.Chk.NotNil(p)
 		c := NewChunkWithRef(r, p.B)
@@ -273,7 +280,7 @@ func (s *DynamoStore) sendWriteRequests(first Chunk) {
 		}
 	}
 
-	requestItems := buildWriteRequests(s.table, chunks)
+	requestItems := s.buildWriteRequests(chunks)
 	for hasUnprocessedItems := true; hasUnprocessedItems; {
 		out, err := s.ddbsvc.BatchWriteItem(&dynamodb.BatchWriteItemInput{
 			RequestItems: requestItems,
@@ -296,10 +303,10 @@ func chunkItemSize(c Chunk) int {
 	return len(refAttr) + len(r.DigestSlice()) + len(chunkAttr) + len(c.Data())
 }
 
-func buildWriteRequests(table string, chunks []Chunk) map[string][]*dynamodb.WriteRequest {
+func (s *DynamoStore) buildWriteRequests(chunks []Chunk) map[string][]*dynamodb.WriteRequest {
 	chunkToItem := func(c Chunk) map[string]*dynamodb.AttributeValue {
 		return map[string]*dynamodb.AttributeValue{
-			refAttr:   {B: c.Ref().DigestSlice()},
+			refAttr:   {B: s.makeNamespacedKey(c.Ref())},
 			chunkAttr: {B: c.Data()},
 		}
 	}
@@ -309,7 +316,7 @@ func buildWriteRequests(table string, chunks []Chunk) map[string][]*dynamodb.Wri
 			PutRequest: &dynamodb.PutRequest{Item: chunkToItem(c)},
 		})
 	}
-	return map[string][]*dynamodb.WriteRequest{table: requests}
+	return map[string][]*dynamodb.WriteRequest{s.table: requests}
 }
 
 func (s *DynamoStore) writeLargeChunk(c Chunk) {
@@ -338,7 +345,7 @@ func (s *DynamoStore) Root() ref.Ref {
 	result, err := s.ddbsvc.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String(s.table),
 		Key: map[string]*dynamodb.AttributeValue{
-			refAttr: {B: dynamoRootKey},
+			refAttr: {B: s.rootKey},
 		},
 	})
 	d.Exp.NoError(err)
@@ -357,7 +364,7 @@ func (s *DynamoStore) UpdateRoot(current, last ref.Ref) bool {
 	putArgs := dynamodb.PutItemInput{
 		TableName: aws.String(s.table),
 		Item: map[string]*dynamodb.AttributeValue{
-			refAttr:   {B: dynamoRootKey},
+			refAttr:   {B: s.rootKey},
 			chunkAttr: {B: current.DigestSlice()},
 		},
 	}
@@ -387,17 +394,32 @@ func (s *DynamoStore) UpdateRoot(current, last ref.Ref) bool {
 	return true
 }
 
+func (s *DynamoStore) makeNamespacedKey(r ref.Ref) []byte {
+	// This is semantically `return append(s.namespace, r.DigestSlice()...)`, but it seemed like we'd be doing this a LOT, and we know how much space we're going to need anyway. So, pre-allocate a slice and then copy into it.
+	refSlice := r.DigestSlice()
+	key := make([]byte, s.namespaceLen+len(refSlice))
+	copy(key, s.namespace)
+	copy(key[s.namespaceLen:], refSlice)
+	return key
+}
+
+func (s *DynamoStore) removeNamespace(namespaced []byte) []byte {
+	return namespaced[len(s.namespace):]
+}
+
 type DynamoStoreFlags struct {
-	dynamoTable *string
-	awsRegion   *string
-	authFromEnv *bool
-	awsKey      *string
-	awsSecret   *string
+	dynamoTable     *string
+	dynamoNamespace *string
+	awsRegion       *string
+	authFromEnv     *bool
+	awsKey          *string
+	awsSecret       *string
 }
 
 func DynamoFlags(prefix string) DynamoStoreFlags {
 	return DynamoStoreFlags{
-		flag.String(prefix+"dynamo-table", "noms-values", "dynamodb table to store the values of the chunkstore in"),
+		flag.String(prefix+"dynamo-table", dynamoTableName, "dynamodb table to store the values of the chunkstore in. You probably don't want to change this."),
+		flag.String(prefix+"dynamo-ns", "", "namespace for keys used to store chunks in aws-based chunkstore"),
 		flag.String(prefix+"aws-region", "us-west-2", "aws region to put the aws-based chunkstore in"),
 		flag.Bool(prefix+"aws-auth-from-env", false, "creates the aws-based chunkstore from authorization found in the environment. This is typically used in production to get keys from IAM profile. If not specified, then -aws-key and aws-secret must be specified instead"),
 		flag.String(prefix+"aws-key", "", "aws key to use to create the aws-based chunkstore"),
@@ -406,15 +428,31 @@ func DynamoFlags(prefix string) DynamoStoreFlags {
 }
 
 func (f DynamoStoreFlags) CreateStore() ChunkStore {
-	if *f.dynamoTable == "" || *f.awsRegion == "" {
-		return nil
-	}
+	return f.CreateNamespacedStore(*f.dynamoNamespace)
+}
 
+func (f DynamoStoreFlags) CreateNamespacedStore(ns string) (cs ChunkStore) {
+	if f.check() {
+		cs = NewDynamoStore(*f.dynamoTable, ns, *f.awsRegion, *f.awsKey, *f.awsSecret)
+	}
+	return
+}
+
+func (f DynamoStoreFlags) CreateFactory() (factree Factory) {
+	if f.check() {
+		factree = f
+	}
+	return
+}
+
+func (f DynamoStoreFlags) check() bool {
+	if *f.dynamoTable == "" || *f.awsRegion == "" {
+		return false
+	}
 	if !*f.authFromEnv {
 		if *f.awsKey == "" || *f.awsSecret == "" {
-			return nil
+			return false
 		}
 	}
-
-	return NewDynamoStore(*f.dynamoTable, *f.awsRegion, *f.awsKey, *f.awsSecret)
+	return true
 }

@@ -1,0 +1,206 @@
+package datas
+
+import (
+	"bytes"
+	"compress/gzip"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+
+	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/ref"
+)
+
+type Handler func(w http.ResponseWriter, req *http.Request, ds DataStore)
+
+func HandleRef(w http.ResponseWriter, req *http.Request, ds DataStore) {
+	err := d.Try(func() {
+		d.Exp.Equal("GET", req.Method)
+
+		refStr := ""
+		pathParts := strings.Split(req.URL.Path[1:], "/")
+		if len(pathParts) > 1 {
+			refStr = pathParts[len(pathParts)-1]
+		}
+		r := ref.Parse(refStr)
+
+		all := req.URL.Query().Get("all")
+		if all == "true" {
+			handleGetReachable(r, w, req, ds)
+			return
+		}
+		chunk := ds.Get(r)
+		if chunk.IsEmpty() {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		_, err := io.Copy(w, bytes.NewReader(chunk.Data()))
+		d.Chk.NoError(err)
+		w.Header().Add("Content-Type", "application/octet-stream")
+		w.Header().Add("Cache-Control", "max-age=31536000") // 1 year
+	})
+
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+		return
+	}
+}
+
+func handleGetReachable(r ref.Ref, w http.ResponseWriter, req *http.Request, ds DataStore) {
+	excludeRef := ref.Ref{}
+	exclude := req.URL.Query().Get("exclude")
+	if exclude != "" {
+		excludeRef = ref.Parse(exclude)
+	}
+
+	w.Header().Add("Content-Type", "application/octet-stream")
+	writer := w.(io.Writer)
+	if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Add("Content-Encoding", "gzip")
+		gw := gzip.NewWriter(w)
+		defer gw.Close()
+		writer = gw
+	}
+
+	sz := chunks.NewSerializer(writer)
+	ds.CopyReachableChunksP(r, excludeRef, sz, 512)
+	sz.Close()
+}
+
+func HandlePostRefs(w http.ResponseWriter, req *http.Request, ds DataStore) {
+	err := d.Try(func() {
+		d.Exp.Equal("POST", req.Method)
+
+		var reader io.Reader = req.Body
+		if strings.Contains(req.Header.Get("Content-Encoding"), "gzip") {
+			gr, err := gzip.NewReader(reader)
+			d.Exp.NoError(err)
+			defer gr.Close()
+			reader = gr
+		}
+
+		chunks.Deserialize(reader, ds, nil)
+		w.WriteHeader(http.StatusCreated)
+	})
+
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+		return
+	}
+}
+
+func HandleGetHasRefs(w http.ResponseWriter, req *http.Request, ds DataStore) {
+	err := d.Try(func() {
+		d.Exp.Equal("POST", req.Method)
+
+		req.ParseForm()
+		refStrs := req.PostForm["ref"]
+		d.Exp.True(len(refStrs) > 0)
+
+		refs := make([]ref.Ref, len(refStrs))
+		for idx, refStr := range refStrs {
+			refs[idx] = ref.Parse(refStr)
+		}
+
+		w.Header().Add("Content-Type", "text/plain")
+		writer := w.(io.Writer)
+		if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Add("Content-Encoding", "gzip")
+			gw := gzip.NewWriter(w)
+			defer gw.Close()
+			writer = gw
+		}
+
+		sz := chunks.NewSerializer(writer)
+		for _, r := range refs {
+			has := ds.Has(r)
+			fmt.Fprintf(writer, "%s %t\n", r, has)
+		}
+		sz.Close()
+	})
+
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+		return
+	}
+}
+
+func HandleGetRefs(w http.ResponseWriter, req *http.Request, ds DataStore) {
+	err := d.Try(func() {
+		d.Exp.Equal("POST", req.Method)
+
+		req.ParseForm()
+		refStrs := req.PostForm["ref"]
+		d.Exp.True(len(refStrs) > 0)
+
+		refs := make([]ref.Ref, len(refStrs))
+		for idx, refStr := range refStrs {
+			refs[idx] = ref.Parse(refStr)
+		}
+
+		w.Header().Add("Content-Type", "application/octet-stream")
+		writer := w.(io.Writer)
+		if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Add("Content-Encoding", "gzip")
+			gw := gzip.NewWriter(w)
+			defer gw.Close()
+			writer = gw
+		}
+
+		sz := chunks.NewSerializer(writer)
+		for _, r := range refs {
+			c := ds.Get(r)
+			if !c.IsEmpty() {
+				sz.Put(c)
+			}
+		}
+		sz.Close()
+	})
+
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+		return
+	}
+}
+
+func HandleRootGet(w http.ResponseWriter, req *http.Request, ds DataStore) {
+	err := d.Try(func() {
+		d.Exp.Equal("GET", req.Method)
+
+		rootRef := ds.Root()
+		fmt.Fprintf(w, "%v", rootRef.String())
+		w.Header().Add("content-type", "text/plain")
+	})
+
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+		return
+	}
+}
+
+func HandleRootPost(w http.ResponseWriter, req *http.Request, ds DataStore) {
+	err := d.Try(func() {
+		d.Exp.Equal("POST", req.Method)
+
+		params := req.URL.Query()
+		tokens := params["last"]
+		d.Exp.Len(tokens, 1)
+		last := ref.Parse(tokens[0])
+		tokens = params["current"]
+		d.Exp.Len(tokens, 1)
+		current := ref.Parse(tokens[0])
+
+		if !ds.UpdateRoot(current, last) {
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+	})
+
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+		return
+	}
+}

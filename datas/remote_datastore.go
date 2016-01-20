@@ -25,19 +25,19 @@ func newRemoteDataStore(cs chunks.ChunkStore) *RemoteDataStore {
 	return &RemoteDataStore{dataStoreCommon{cs, cs.Root(), nil, map[ref.Ref]bool{}, &sync.Mutex{}}}
 }
 
-func (lds *RemoteDataStore) host() *url.URL {
-	return lds.dataStoreCommon.ChunkStore.(*chunks.HttpStore).Host()
+func (rds *RemoteDataStore) host() *url.URL {
+	return rds.dataStoreCommon.ChunkStore.(*chunks.HTTPStore).Host()
 }
 
-func (lds *RemoteDataStore) Commit(datasetID string, commit Commit) (DataStore, error) {
-	err := lds.commit(datasetID, commit)
-	return newRemoteDataStore(lds.ChunkStore), err
+func (rds *RemoteDataStore) Commit(datasetID string, commit Commit) (DataStore, error) {
+	err := rds.commit(datasetID, commit)
+	return newRemoteDataStore(rds.ChunkStore), err
 }
 
 // Asks remote server to figure out which chunks need to be copied and return them.
-func (lds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, cs chunks.ChunkSink, concurrency int) {
+func (rds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, cs chunks.ChunkSink, concurrency int) {
 	// POST http://<host>/ref/sha1----?all=true&exclude=sha1----. Response will be chunk data if present, 404 if absent.
-	u := lds.host()
+	u := rds.host()
 	u.Path = path.Join(constants.RefPath, r.String())
 
 	values := &url.Values{}

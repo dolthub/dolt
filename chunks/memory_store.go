@@ -69,9 +69,23 @@ func MemoryFlags(prefix string) MemoryStoreFlags {
 }
 
 func (f MemoryStoreFlags) CreateStore() ChunkStore {
-	if *f.use {
+	return f.CreateNamespacedStore("")
+}
+
+func (f MemoryStoreFlags) CreateNamespacedStore(ns string) ChunkStore {
+	if f.check() {
 		return NewMemoryStore()
-	} else {
-		return nil
 	}
+	return nil
+}
+
+func (f MemoryStoreFlags) CreateFactory() (factree Factory) {
+	if f.check() {
+		return f
+	}
+	return nil
+}
+
+func (f MemoryStoreFlags) check() bool {
+	return *f.use
 }
