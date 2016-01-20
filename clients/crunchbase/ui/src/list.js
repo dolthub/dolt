@@ -10,10 +10,8 @@ type Props<T> = {
 
 export default function List<T>(props: Props<T>) : React.Element {
   const delegate = props.delegate;
-  const labels = props.items.map(item => {
-    return <Label key={delegate.getLabel(item)} item={item}
-        delegate={delegate}/>;
-  });
+  const labels = props.items.map(item =>
+      <Label key={delegate.getLabel(item)} item={item} delegate={delegate}/>);
   return <div className='selection-list'>
     {props.title ? <h3>{props.title}</h3> : null}
     {labels}

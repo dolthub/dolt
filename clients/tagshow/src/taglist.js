@@ -23,14 +23,12 @@ function handleChange(props: Props, tag: string) {
 
 export default function TagList(props: Props) : React.Element {
   const tags = [...props.tags].sort();
-  const labels = tags.map(tag => {
-    return <label style={tagStyle} key={tag}>
-      <input type="checkbox" name="tc"
-        checked={props.selected.has(tag)}
-        onChange={() => handleChange(props, tag) }/>
-      {tag}
-    </label>;
-  });
+  const labels = tags.map(tag => <label style={tagStyle} key={tag}>
+    <input type="checkbox" name="tc"
+      checked={props.selected.has(tag)}
+      onChange={() => handleChange(props, tag) }/>
+    {tag}
+  </label>);
 
   return <div>{labels}</div>;
 }

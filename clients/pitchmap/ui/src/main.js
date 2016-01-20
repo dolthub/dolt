@@ -63,9 +63,7 @@ class PitcherList extends React.Component<void, Props, State> {
 
     return <div>
       <select onChange={onChangePitcher} defaultValue={currentPitcher}>{
-        this.props.pitchers.map(pitcher => {
-          return <option key={pitcher} value={pitcher}>{pitcher}</option>;
-        })
+        this.props.pitchers.map(pitcher => <option key={pitcher} value={pitcher}>{pitcher}</option>)
       }</select>
       <HeatMap key={currentPitcher} pitchListRefP={pitchListRefP} httpStore={httpStore}/>
     </div>;

@@ -3,7 +3,7 @@
 import {test as mtest} from 'mocha';
 
 export default function test(n: string, f: () => ?Promise) {
-  mtest(n, done => {
+  mtest(n, (done) => {
     try {
       const p = f();
       if (p instanceof Promise) {
