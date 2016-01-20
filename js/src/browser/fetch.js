@@ -3,7 +3,8 @@
 type FetchOptions = {
   method?: string,
   body?: any,
-  headers?: {[key: string]: string}
+  headers?: {[key: string]: string},
+  withCredentials? : boolean
 };
 
 function fetch<T>(url: string, responseType: string, options: FetchOptions = {}): Promise<T> {
@@ -20,6 +21,9 @@ function fetch<T>(url: string, responseType: string, options: FetchOptions = {})
       }
     };
   });
+  if (options.withCredentials) {
+    xhr.withCredentials = true;
+  }
   if (options.headers) {
     for (const key in options.headers) {
       xhr.setRequestHeader(key, options.headers[key]);
