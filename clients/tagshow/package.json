@@ -1,6 +1,7 @@
 {
   "name": "noms-tagshow",
   "dependencies": {
+    "noms": "file:../../js",
     "query-string": "^2.4.0",
     "react": "^0.14.1",
     "react-dom": "^0.14.1"
@@ -31,7 +32,7 @@
   "scripts": {
     "start": "./.npm_build_helper.sh development",
     "build": "./.npm_build_helper.sh production",
-    "pretest": "eslint src/ && flow src/",
-    "test": "mocha --ui tdd --reporter dot --compilers js:babel-core/register src/*_test.js"
+    "TODO:": "re-enable tests (e.g. eq_test.js)",
+    "test": "eslint src/ && flow src/"
   }
 }

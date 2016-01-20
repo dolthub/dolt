@@ -2,16 +2,15 @@
 
 import os, os.path, subprocess, sys
 
-sys.path.append(os.path.expandvars('$GOPATH/src/github.com/attic-labs/noms/tools'))
+sys.path.append(os.path.abspath('../../tools'))
 
 import noms.symlink as symlink
 
 def main():
-  # ln -sf ../../js/.babelrc .babelrc hack, because zip files screw up symlinks.
-  babelrcPath = os.path.abspath('.babelrc')
-  symlink.Force('../../js/.babelrc', babelrcPath)
+  symlink.Force('../../js/.babelrc', os.path.abspath('.babelrc'))
+  symlink.Force('../../js/.eslintrc', os.path.abspath('.eslintrc'))
+  symlink.Force('../../js/.flowconfig', os.path.abspath('.flowconfig'))
 
-  subprocess.check_call('./link.sh', shell=False)
   subprocess.check_call(['npm', 'install'], shell=False)
   env = None
   if 'NOMS_SERVER' not in os.environ:

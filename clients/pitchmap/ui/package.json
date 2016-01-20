@@ -1,6 +1,7 @@
 {
   "name": "noms-pitchmap-ui",
   "dependencies": {
+    "noms": "file:../../../js",
     "react": "^0.14.1",
     "react-dom": "^0.14.1"
   },

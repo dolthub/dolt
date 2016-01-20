@@ -11,21 +11,15 @@ before_script:
 - npm test
 - popd
 - pushd clients/splore
-- npm install
-- ./link.sh
-- npm run build
+- ./build.py
 - npm test
 - popd
 - pushd clients/pitchmap/ui
-- npm install
-- ./link.sh
-- npm run build
+- ./build.py
 - npm test
 - popd
 - pushd clients/crunchbase/ui
-- npm install
-- ./link.sh
-- npm run build
+- ./build.py
 - npm test
 - popd
 script:
