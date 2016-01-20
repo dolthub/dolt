@@ -59,8 +59,9 @@ func resolveLocalOrdinals(p *intermediate) {
 			if t.Namespace() == "" && !t.HasOrdinal() {
 				ordinal := indexOf(t, p.Types)
 				d.Chk.True(ordinal >= 0 && int(ordinal) < len(p.Types), "Invalid reference: %s", t.Name())
-				return types.MakeType(t.PackageRef(), int16(ordinal))
+				return types.MakeType(ref.Ref{}, int16(ordinal))
 			}
+
 			return t
 		}
 
@@ -119,6 +120,8 @@ func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref
 			t = resolveNamespace(t, aliases, deps)
 		}
 		switch t.Kind() {
+		case types.UnresolvedKind:
+			d.Chk.True(t.HasPackageRef(), "should resolve again")
 		case types.ListKind, types.SetKind, types.RefKind:
 			return types.MakeCompoundType(t.Kind(), rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
 		case types.MapKind:
@@ -129,7 +132,10 @@ func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref
 			resolveFields(t.Desc.(types.StructDesc).Union)
 		}
 
-		d.Chk.True(!t.IsUnresolved() || t.HasOrdinal())
+		if t.IsUnresolved() {
+			return rec(t)
+		}
+
 		return t
 	}
 
@@ -155,6 +161,7 @@ func resolveNamespace(t types.Type, aliases map[string]ref.Ref, deps map[ref.Ref
 	d.Chk.NotEqual("", t.Name())
 	ordinal := deps[pkgRef].GetOrdinal(t.Name())
 	d.Exp.NotEqual(int64(-1), ordinal, "Could not find type %s in package %s (aliased to %s).", t.Name(), pkgRef.String(), t.Namespace())
+	d.Chk.False(pkgRef.IsEmpty())
 	return types.MakeType(pkgRef, int16(ordinal))
 }
 

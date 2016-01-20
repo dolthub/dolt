@@ -71,10 +71,10 @@ func TestCanUseDef(t *testing.T) {
 		pkg := pkg.ParseNomDL("fakefile", bytes.NewBufferString(s), "", emptyCS)
 		gen := newCodeGen(nil, "fakefile", map[string]bool{}, depsMap{}, pkg)
 		for _, t := range pkg.UsingDeclarations {
-			assert.Equal(using, gen.canUseDef(t))
+			assert.Equal(using, gen.canUseDef(t, gen.pkg.Package))
 		}
 		for _, t := range pkg.Types() {
-			assert.Equal(named, gen.canUseDef(t))
+			assert.Equal(named, gen.canUseDef(t, gen.pkg.Package))
 		}
 	}
 
@@ -243,4 +243,38 @@ func TestMakeGoIdentifier(t *testing.T) {
 	assert.Equal("_hello", makeGoIdentifier("\u2318hello"))
 	assert.Equal("he_llo", makeGoIdentifier("he\u2318llo"))
 
+}
+
+func TestCanUseDefFromImport(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewMemoryStore()
+
+	dir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(dir)
+
+	byPathNomDL := filepath.Join(dir, "filedep.noms")
+	err = ioutil.WriteFile(byPathNomDL, []byte("struct FromFile{i:Int8}"), 0600)
+	assert.NoError(err)
+
+	r1 := strings.NewReader(`
+		struct A {
+			B: B
+		}
+		struct B {
+			X: Int64
+		}`)
+	pkg1 := pkg.ParseNomDL("test1", r1, dir, cs)
+	pkgRef1 := types.WriteValue(pkg1.Package, cs)
+
+	r2 := strings.NewReader(fmt.Sprintf(`
+		alias Other = import "%s"
+		struct C {
+			C: Map<Int64, Other.A>
+		}
+		`, pkgRef1))
+	pkg2 := pkg.ParseNomDL("test2", r2, dir, cs)
+	gen2 := newCodeGen(nil, "test2", map[string]bool{}, depsMap{pkg1.Ref(): pkg1.Package}, pkg2)
+
+	assert.True(gen2.canUseDef(pkg2.Types()[0], gen2.pkg.Package))
 }

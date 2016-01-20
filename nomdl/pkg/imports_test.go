@@ -199,3 +199,40 @@ func (suite *ImportTestSuite) TestImports() {
 	suite.EqualValues(types.ListKind, usings[1].Kind())
 	suite.EqualValues(0, usings[1].Desc.(types.CompoundDesc).ElemTypes[0].Ordinal())
 }
+
+func (suite *ImportTestSuite) TestImportWithLocalRef() {
+	dir, err := ioutil.TempDir("", "")
+	suite.NoError(err)
+	defer os.RemoveAll(dir)
+
+	byPathNomDL := filepath.Join(dir, "filedep.noms")
+	err = ioutil.WriteFile(byPathNomDL, []byte("struct FromFile{i:Int8}"), 0600)
+	suite.NoError(err)
+
+	r1 := strings.NewReader(`
+		struct A {
+			B: B
+		}
+		struct B {
+			X: Int64
+		}`)
+	pkg1 := ParseNomDL("test1", r1, dir, suite.cs)
+	pkgRef1 := types.WriteValue(pkg1.Package, suite.cs)
+
+	r2 := strings.NewReader(fmt.Sprintf(`
+		alias Other = import "%s"
+		struct C {
+			C: Map<Int64, Other.A>
+		}
+		`, pkgRef1))
+	pkg2 := ParseNomDL("test2", r2, dir, suite.cs)
+
+	ts := pkg2.Types()
+	suite.Len(ts, 1)
+	suite.EqualValues(types.StructKind, ts[0].Kind())
+	mapType := ts[0].Desc.(types.StructDesc).Fields[0].T
+	suite.EqualValues(types.MapKind, mapType.Kind())
+	otherAType := mapType.Desc.(types.CompoundDesc).ElemTypes[1]
+	suite.EqualValues(types.UnresolvedKind, otherAType.Kind())
+	suite.EqualValues(pkgRef1, otherAType.PackageRef())
+}
