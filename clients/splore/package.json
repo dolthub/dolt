@@ -3,6 +3,7 @@
   "dependencies": {
     "classnames": "^2.1.3",
     "noms": "file:../../js",
+    "noms-webpack-config": "file:../../js/webpack-config",
     "react": "^0.14.1",
     "react-dom": "^0.14.1"
   },
@@ -10,7 +11,6 @@
     "babel-cli": "^6.3.15",
     "babel-core": "^6.3.15",
     "babel-eslint": "^4.1.5",
-    "babel-loader": "^6.2.1",
     "babel-plugin-syntax-async-functions": "^6.3.13",
     "babel-plugin-syntax-flow": "^6.3.13",
     "babel-plugin-transform-async-to-generator": "^6.3.13",
@@ -24,8 +24,7 @@
     "eslint": "^1.9.0",
     "eslint-plugin-react": "^3.8.0",
     "flow-bin": "^0.19.1",
-    "http-server": "^0.8.5",
-    "webpack": "^1.12.11"
+    "http-server": "^0.8.5"
   },
   "scripts": {
     "start": "./.npm_build_helper.sh development",
