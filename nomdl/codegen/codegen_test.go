@@ -71,10 +71,10 @@ func TestCanUseDef(t *testing.T) {
 		pkg := pkg.ParseNomDL("fakefile", bytes.NewBufferString(s), "", emptyCS)
 		gen := newCodeGen(nil, "fakefile", map[string]bool{}, depsMap{}, pkg)
 		for _, t := range pkg.UsingDeclarations {
-			assert.Equal(using, gen.canUseDef(t))
+			assert.Equal(using, gen.canUseDef(t, gen.pkg.Package))
 		}
 		for _, t := range pkg.Types() {
-			assert.Equal(named, gen.canUseDef(t))
+			assert.Equal(named, gen.canUseDef(t, gen.pkg.Package))
 		}
 	}
 
