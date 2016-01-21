@@ -29,8 +29,8 @@
     "mocha": "^2.3.0"
   },
   "scripts": {
-    "start": "./.npm_build_helper.sh development",
-    "build": "./.npm_build_helper.sh production",
+    "start": "python .npm_build_helper.py development",
+    "build": "python .npm_build_helper.py production",
     "TODO:": "re-enable tests (e.g. eq_test.js)",
     "test": "eslint src/ && flow src/"
   }
