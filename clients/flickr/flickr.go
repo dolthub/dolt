@@ -259,7 +259,7 @@ func getAlbumPhotos(api flickrAPI, id string) RefOfSetOfRefOfRemotePhoto {
 
 		// DateTaken is the MySQL DATETIME format.
 		if t, err := time.ParseInLocation("2006-01-02 15:04:05", p.DateTaken, location); err == nil {
-			photo = photo.SetDate(DateDef{t.Unix()}.New(cs))
+			photo = photo.SetDate(DateDef{t.Unix() * 1e3}.New(cs))
 		} else {
 			fmt.Printf("Error parsing date \"%s\": %s\n", p.DateTaken, err)
 		}

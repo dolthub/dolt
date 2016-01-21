@@ -58,8 +58,7 @@ func main() {
 
 		mapOfSets := MapOfRefOfKeyToSetOfRefOfRoundDef{}
 
-		addTimeRounds := func(tn int64, ref ref.Ref) {
-			t := time.Unix(tn, 0)
+		addTimeRounds := func(t time.Time, ref ref.Ref) {
 			year := int32(t.Year())
 			yk := NewKey(ds).SetYear(year)
 			c <- entry{yk, ref}
@@ -90,8 +89,12 @@ func main() {
 				company.Rounds().IterAll(func(r RefOfRound) {
 					round := r.TargetValue(ds)
 
+					dateToTime := func(d Date) time.Time {
+						return time.Unix(d.UnixMs()/1e3, 0)
+					}
+
 					// HACK: Only include rounds that are newer than the cutoff date.
-					if time.Unix(round.FundedAt().Unix(), 0).Before(timeCutoff) {
+					if dateToTime(round.FundedAt()).Before(timeCutoff) {
 						return
 					}
 
@@ -104,7 +107,7 @@ func main() {
 					// Skip region for now to reduce size of data.
 					// c <- entry{regionKey, roundRaiseDef}
 
-					addTimeRounds(round.FundedAt().Unix(), roundRef)
+					addTimeRounds(dateToTime(round.FundedAt()), roundRef)
 
 					roundType := classifyRoundType(round)
 					roundTypeKey := NewKey(ds).SetRoundType(roundType)

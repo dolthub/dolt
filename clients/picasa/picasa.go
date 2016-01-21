@@ -229,9 +229,9 @@ func getRemotePhotos(album *Album, albumIndex int, numPhotos uint32, shapes shap
 				Faces:       faces,
 			}.New(ds.Store())
 
-			// Picasa's timestamp is ms since the epoch, compared to Unix time which is seconds since the epoch.
+			// Timestamp is ms since the epoch.
 			if i, err := strconv.ParseInt(e.Timestamp.V, 10, 64); err == nil {
-				p = p.SetDate(NewDate(ds.Store()).SetUnix(i / 1000))
+				p = p.SetDate(NewDate(ds.Store()).SetUnixMs(i))
 			} else {
 				fmt.Printf("Error parsing date \"%s\": %s\n", e.Timestamp.V, err)
 			}

@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_2e6bad7_CachedRef ref.Ref
+var __mainPackageInFile_sha1_ce7d661_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -17,18 +17,18 @@ func init() {
 	p := types.NewPackage([]types.Type{
 		types.MakeStructType("Date",
 			[]types.Field{
-				types.Field{"Unix", types.MakePrimitiveType(types.Int64Kind), false},
+				types.Field{"UnixMs", types.MakePrimitiveType(types.Int64Kind), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	__mainPackageInFile_sha1_2e6bad7_CachedRef = types.RegisterPackage(&p)
+	__mainPackageInFile_sha1_ce7d661_CachedRef = types.RegisterPackage(&p)
 }
 
 // Date
 
 type Date struct {
-	_Unix int64
+	_UnixMs int64
 
 	cs  chunks.ChunkStore
 	ref *ref.Ref
@@ -36,7 +36,7 @@ type Date struct {
 
 func NewDate(cs chunks.ChunkStore) Date {
 	return Date{
-		_Unix: int64(0),
+		_UnixMs: int64(0),
 
 		cs:  cs,
 		ref: &ref.Ref{},
@@ -44,19 +44,19 @@ func NewDate(cs chunks.ChunkStore) Date {
 }
 
 type DateDef struct {
-	Unix int64
+	UnixMs int64
 }
 
 func (def DateDef) New(cs chunks.ChunkStore) Date {
 	return Date{
-		_Unix: def.Unix,
-		cs:    cs,
-		ref:   &ref.Ref{},
+		_UnixMs: def.UnixMs,
+		cs:      cs,
+		ref:     &ref.Ref{},
 	}
 }
 
 func (s Date) Def() (d DateDef) {
-	d.Unix = s._Unix
+	d.UnixMs = s._UnixMs
 	return
 }
 
@@ -67,14 +67,14 @@ func (m Date) Type() types.Type {
 }
 
 func init() {
-	__typeForDate = types.MakeType(__mainPackageInFile_sha1_2e6bad7_CachedRef, 0)
+	__typeForDate = types.MakeType(__mainPackageInFile_sha1_ce7d661_CachedRef, 0)
 	types.RegisterStruct(__typeForDate, builderForDate, readerForDate)
 }
 
 func builderForDate(cs chunks.ChunkStore, values []types.Value) types.Value {
 	i := 0
 	s := Date{ref: &ref.Ref{}, cs: cs}
-	s._Unix = int64(values[i].(types.Int64))
+	s._UnixMs = int64(values[i].(types.Int64))
 	i++
 	return s
 }
@@ -82,7 +82,7 @@ func builderForDate(cs chunks.ChunkStore, values []types.Value) types.Value {
 func readerForDate(v types.Value) []types.Value {
 	values := []types.Value{}
 	s := v.(Date)
-	values = append(values, types.Int64(s._Unix))
+	values = append(values, types.Int64(s._UnixMs))
 	return values
 }
 
@@ -100,16 +100,16 @@ func (s Date) Chunks() (chunks []ref.Ref) {
 }
 
 func (s Date) ChildValues() (ret []types.Value) {
-	ret = append(ret, types.Int64(s._Unix))
+	ret = append(ret, types.Int64(s._UnixMs))
 	return
 }
 
-func (s Date) Unix() int64 {
-	return s._Unix
+func (s Date) UnixMs() int64 {
+	return s._UnixMs
 }
 
-func (s Date) SetUnix(val int64) Date {
-	s._Unix = val
+func (s Date) SetUnixMs(val int64) Date {
+	s._UnixMs = val
 	s.ref = &ref.Ref{}
 	return s
 }
