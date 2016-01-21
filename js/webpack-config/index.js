@@ -5,22 +5,31 @@ const webpack = require('webpack');
 const devMode = process.env.NODE_ENV !== 'production';
 
 // Replaces all process.env.foo with the value of the enviroment variable.
-function replaceEnv() {
-  const replacements = {};
-  for (const key in process.env) {
-    replacements[`process.env.${key}`] = JSON.stringify(process.env[key]);
+function replaceEnv(envVars) {
+  const replacements = {
+    'process.env.NODE_ENV': JSON.stringify(String(process.env.NODE_ENV)),
+  };
+  for (const name of envVars) {
+    if (!(name in process.env)) {
+      console.error(`Missing required environment variable: ${name}`);  //eslint-disable-line
+      process.exit(-1);
+    }
+    replacements[`process.env.${name}`] = JSON.stringify(process.env[name]);
   }
   return new webpack.DefinePlugin(replacements);
 }
 
-const plugins = [replaceEnv()];
+function getPlugins(envVars) {
+  const plugins = [replaceEnv(envVars)];
+  if (!devMode) {
+    plugins.push(new webpack.optimize.UglifyJsPlugin({
+      compress: {
+        warnings: false,
+      },
+    }));
+  }
+  return plugins;
 
-if (!devMode) {
-  plugins.push(new webpack.optimize.UglifyJsPlugin({
-    compress: {
-      warnings: false,
-    },
-  }));
 }
 
 function defaultExclude(p) {
@@ -40,7 +49,7 @@ module.exports = function(options) {
       ],
     },
 
-    plugins,
+    plugins: getPlugins(options.requiredEnvVars || []),
 
     devtool: devMode ? '#inline-source-map' : '',
     watch: devMode,
