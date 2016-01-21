@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_a2d00be_CachedRef ref.Ref
+var __mainPackageInFile_sha1_ce23a43_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -29,9 +29,9 @@ func init() {
 				types.Field{"Region", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"City", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"FundingRounds", types.MakePrimitiveType(types.Uint16Kind), false},
-				types.Field{"FoundedAt", types.MakeType(ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"), 0), false},
-				types.Field{"FirstFundingAt", types.MakeType(ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"), 0), false},
-				types.Field{"LastFundingAt", types.MakeType(ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"), 0), false},
+				types.Field{"FoundedAt", types.MakeType(ref.Parse("sha1-ce7d661d0b6b4351457b150bb90351fd7482533c"), 0), false},
+				types.Field{"FirstFundingAt", types.MakeType(ref.Parse("sha1-ce7d661d0b6b4351457b150bb90351fd7482533c"), 0), false},
+				types.Field{"LastFundingAt", types.MakeType(ref.Parse("sha1-ce7d661d0b6b4351457b150bb90351fd7482533c"), 0), false},
 				types.Field{"Rounds", types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Ref{}, 1))), false},
 			},
 			types.Choices{},
@@ -42,15 +42,15 @@ func init() {
 				types.Field{"FundingRoundPermalink", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"FundingRoundType", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"FundingRoundCode", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"FundedAt", types.MakeType(ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"), 0), false},
+				types.Field{"FundedAt", types.MakeType(ref.Parse("sha1-ce7d661d0b6b4351457b150bb90351fd7482533c"), 0), false},
 				types.Field{"RaisedAmountUsd", types.MakePrimitiveType(types.Float64Kind), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-2e6bad7baeccddc84d367068dfc813231f7adda1"),
+		ref.Parse("sha1-ce7d661d0b6b4351457b150bb90351fd7482533c"),
 	})
-	__mainPackageInFile_sha1_a2d00be_CachedRef = types.RegisterPackage(&p)
+	__mainPackageInFile_sha1_ce23a43_CachedRef = types.RegisterPackage(&p)
 }
 
 // Company
@@ -170,7 +170,7 @@ func (m Company) Type() types.Type {
 }
 
 func init() {
-	__typeForCompany = types.MakeType(__mainPackageInFile_sha1_a2d00be_CachedRef, 0)
+	__typeForCompany = types.MakeType(__mainPackageInFile_sha1_ce23a43_CachedRef, 0)
 	types.RegisterStruct(__typeForCompany, builderForCompany, readerForCompany)
 }
 
@@ -499,7 +499,7 @@ func (m Round) Type() types.Type {
 }
 
 func init() {
-	__typeForRound = types.MakeType(__mainPackageInFile_sha1_a2d00be_CachedRef, 1)
+	__typeForRound = types.MakeType(__mainPackageInFile_sha1_ce23a43_CachedRef, 1)
 	types.RegisterStruct(__typeForRound, builderForRound, readerForRound)
 }
 
@@ -822,7 +822,7 @@ func (m SetOfRefOfRound) Type() types.Type {
 }
 
 func init() {
-	__typeForSetOfRefOfRound = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_a2d00be_CachedRef, 1)))
+	__typeForSetOfRefOfRound = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_ce23a43_CachedRef, 1)))
 	types.RegisterValue(__typeForSetOfRefOfRound, builderForSetOfRefOfRound, readerForSetOfRefOfRound)
 }
 
@@ -954,7 +954,7 @@ func (r RefOfRound) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfRound = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_a2d00be_CachedRef, 1))
+	__typeForRefOfRound = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_ce23a43_CachedRef, 1))
 	types.RegisterRef(__typeForRefOfRound, builderForRefOfRound)
 }
 

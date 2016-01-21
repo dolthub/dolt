@@ -30,12 +30,12 @@ func init() {
 			[]types.Field{
 				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Photos", types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-22ba1d27e6f46ffe98342c0a789ceaf0a733a22a"), 0)), false},
+				types.Field{"Photos", types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-a9eaf3ae0d9dde3722ad4c2a7322adc2dabc1690"), 0)), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-22ba1d27e6f46ffe98342c0a789ceaf0a733a22a"),
+		ref.Parse("sha1-a9eaf3ae0d9dde3722ad4c2a7322adc2dabc1690"),
 	})
 	__mainPackageInFile_picasa_CachedRef = types.RegisterPackage(&p)
 }
@@ -512,7 +512,7 @@ func (m SetOfRemotePhoto) Type() types.Type {
 }
 
 func init() {
-	__typeForSetOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-22ba1d27e6f46ffe98342c0a789ceaf0a733a22a"), 0))
+	__typeForSetOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-a9eaf3ae0d9dde3722ad4c2a7322adc2dabc1690"), 0))
 	types.RegisterValue(__typeForSetOfRemotePhoto, builderForSetOfRemotePhoto, readerForSetOfRemotePhoto)
 }
 

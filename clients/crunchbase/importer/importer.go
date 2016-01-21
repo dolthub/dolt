@@ -68,7 +68,7 @@ func main() {
 
 	imp := ImportDef{
 		ref.FromHash(h).String(),
-		DateDef{time.Now().Unix()},
+		DateDef{unixMs(time.Now())},
 		companiesRef,
 	}.New(ds.Store())
 
@@ -245,15 +245,19 @@ func (cn columnIndexes) getDate(key string, cells []*xlsx.Cell, field string, ro
 	s := cn.getString(key, cells)
 	if s != "" && s != "-" {
 		if f, err := strconv.ParseFloat(s, 64); err == nil {
-			return DateDef{xlsx.TimeFromExcelTime(f, date1904).Unix()}
+			return DateDef{unixMs(xlsx.TimeFromExcelTime(f, date1904))}
 		}
 		const shortForm = "2006-01-02"
 		var err error
 		var t time.Time
 		if t, err = time.Parse(shortForm, s); err == nil {
-			return DateDef{t.Unix()}
+			return DateDef{unixMs(t)}
 		}
 		fmt.Fprintf(os.Stderr, "Unable to parse Date, row: %d, field: %s, value: %s, err: %s\n", rowNum, field, s, err)
 	}
 	return DateDef{0}
+}
+
+func unixMs(t time.Time) int64 {
+	return t.Unix() * 1e3
 }
