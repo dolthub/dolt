@@ -231,7 +231,7 @@ func getRemotePhotos(album *Album, albumIndex int, numPhotos uint32, shapes shap
 
 			// Timestamp is ms since the epoch.
 			if i, err := strconv.ParseInt(e.Timestamp.V, 10, 64); err == nil {
-				p = p.SetDate(NewDate(ds.Store()).SetUnixMs(i))
+				p = p.SetDate(NewDate(ds.Store()).SetMsSinceEpoch(i))
 			} else {
 				fmt.Printf("Error parsing date \"%s\": %s\n", e.Timestamp.V, err)
 			}

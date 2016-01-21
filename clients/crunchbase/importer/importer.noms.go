@@ -18,14 +18,14 @@ func init() {
 		types.MakeStructType("Import",
 			[]types.Field{
 				types.Field{"FileSHA1", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Date", types.MakeType(ref.Parse("sha1-ce7d661d0b6b4351457b150bb90351fd7482533c"), 0), false},
-				types.Field{"Companies", types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-ce23a43307c0d14735de5e3a4bfbe19e69c12282"), 0)))), false},
+				types.Field{"Date", types.MakeType(ref.Parse("sha1-0b4ac7cb0583d7fecd71a1584a3f846e5d8b08eb"), 0), false},
+				types.Field{"Companies", types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"), 0)))), false},
 			},
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-ce23a43307c0d14735de5e3a4bfbe19e69c12282"),
-		ref.Parse("sha1-ce7d661d0b6b4351457b150bb90351fd7482533c"),
+		ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"),
+		ref.Parse("sha1-0b4ac7cb0583d7fecd71a1584a3f846e5d8b08eb"),
 	})
 	__mainPackageInFile_importer_CachedRef = types.RegisterPackage(&p)
 }
@@ -204,7 +204,7 @@ func (r RefOfMapOfStringToRefOfCompany) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfMapOfStringToRefOfCompany = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-ce23a43307c0d14735de5e3a4bfbe19e69c12282"), 0))))
+	__typeForRefOfMapOfStringToRefOfCompany = types.MakeCompoundType(types.RefKind, types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"), 0))))
 	types.RegisterRef(__typeForRefOfMapOfStringToRefOfCompany, builderForRefOfMapOfStringToRefOfCompany)
 }
 
@@ -277,7 +277,7 @@ func (m MapOfStringToRefOfCompany) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfStringToRefOfCompany = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-ce23a43307c0d14735de5e3a4bfbe19e69c12282"), 0)))
+	__typeForMapOfStringToRefOfCompany = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"), 0)))
 	types.RegisterValue(__typeForMapOfStringToRefOfCompany, builderForMapOfStringToRefOfCompany, readerForMapOfStringToRefOfCompany)
 }
 
@@ -399,7 +399,7 @@ func (r RefOfCompany) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfCompany = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-ce23a43307c0d14735de5e3a4bfbe19e69c12282"), 0))
+	__typeForRefOfCompany = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"), 0))
 	types.RegisterRef(__typeForRefOfCompany, builderForRefOfCompany)
 }
 

@@ -131,7 +131,7 @@ func TestGetAlbums(t *testing.T) {
 
 	assert.Equal("0", photo0.Id())
 	assert.Equal("_0", photo0.Title())
-	assert.Equal(int64(1313236480000), photo0.Date().UnixMs())
+	assert.Equal(int64(1313236480000), photo0.Date().MsSinceEpoch())
 	assert.Equal(float32(0), photo0.Geoposition().Latitude())
 	assert.Equal(float32(0), photo0.Geoposition().Longitude())
 	assert.Equal(uint64(3), photo0.Sizes().Len()) // two of the images are the same
@@ -140,7 +140,7 @@ func TestGetAlbums(t *testing.T) {
 	assert.Equal("1", photo1.Id())
 	assert.Equal("_1", photo1.Title())
 	// This photo was taken in Paris (by finding the lat/long of the Eiffel Tower), so its date should be interpreted according to that timezone, which is 9 hours ahead of PST (as of this moment).
-	assert.Equal(int64(1323780668000-(9000*3600)), photo1.Date().UnixMs())
+	assert.Equal(int64(1323780668000-(9000*3600)), photo1.Date().MsSinceEpoch())
 	assert.Equal(float32(48.8582641), photo1.Geoposition().Latitude())
 	assert.Equal(float32(2.2923184), photo1.Geoposition().Longitude())
 	assert.Equal(uint64(4), photo1.Sizes().Len()) // all images are different sizes

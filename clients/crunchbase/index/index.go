@@ -90,7 +90,7 @@ func main() {
 					round := r.TargetValue(ds)
 
 					dateToTime := func(d Date) time.Time {
-						return time.Unix(d.UnixMs()/1e3, 0)
+						return time.Unix(d.MsSinceEpoch()/1e3, 0)
 					}
 
 					// HACK: Only include rounds that are newer than the cutoff date.
