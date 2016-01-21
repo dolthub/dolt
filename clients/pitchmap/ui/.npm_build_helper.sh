@@ -9,4 +9,4 @@ if [ $1 != "production" ]; then
   export NOMS_DATASET_ID=mlb/heatmap
 fi
 
-node_modules/.bin/webpack --progress $SRC $OUT
+node_modules/.bin/webpack $SRC $OUT || exit 1
