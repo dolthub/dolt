@@ -12,11 +12,7 @@ def main():
   symlink.Force('../../js/.flowconfig', os.path.abspath('.flowconfig'))
 
   subprocess.check_call(['npm', 'install'], shell=False)
-  env = None
-  if 'NOMS_SERVER' not in os.environ:
-    env = os.environ
-    env['NOMS_SERVER'] = 'http://localhost:8000'
-  subprocess.check_call(['npm', 'run', 'build'], env=env, shell=False)
+  subprocess.check_call(['npm', 'run', 'build'], env=os.environ, shell=False)
 
 
 if __name__ == "__main__":

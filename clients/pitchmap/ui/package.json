@@ -25,8 +25,8 @@
     "flow-bin": "^0.19.1"
   },
   "scripts": {
-    "start": "./.npm_build_helper.sh development",
-    "build": "./.npm_build_helper.sh production",
+    "start": "python .npm_build_helper.py development",
+    "build": "python .npm_build_helper.py production",
     "test": "eslint src/ && flow src/"
   }
 }
