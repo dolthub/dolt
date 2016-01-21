@@ -147,9 +147,8 @@ export default class DataManager {
             this._timeSetP, this._categorySetP]);
 
     const store = this._store;
-    const getAmountRaised = (r: Ref): Promise<number> => {
-      return readValue(r, store).then(round => round.get('RaisedAmountUsd'));
-    };
+    const getAmountRaised = (r: Ref): Promise<number> =>
+        readValue(r, store).then(round => round.get('RaisedAmountUsd'));
 
     const [seedData, seriesAData, seriesBData] = await Promise.all([
       seedSet.intersect(categorySet, timeSet).then(set => set.map(getAmountRaised)),

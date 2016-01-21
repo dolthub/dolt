@@ -93,12 +93,8 @@ class Main extends React.Component<void, Props, State> {
       getLabel(item: string): string {
         return item;
       },
-      isSelected: (item: string) => {
-        return this.state.selectedSeries.has(item);
-      },
-      getColor: (item: string) => {
-        return this.props.color[this.props.series.indexOf(item)];
-      },
+      isSelected: (item: string) => this.state.selectedSeries.has(item),
+      getColor: (item: string) => this.props.color[this.props.series.indexOf(item)],
       onChange: (item: string) => {
         const selectedSeries = new Set(this.state.selectedSeries);
         if (selectedSeries.has(item)) {
@@ -114,9 +110,7 @@ class Main extends React.Component<void, Props, State> {
       getLabel(item: LabelAndKey): string {
         return item.label;
       },
-      isSelected: (item: LabelAndKey) => {
-        return item === this.state.selectedTimeItem;
-      },
+      isSelected: (item: LabelAndKey) => item === this.state.selectedTimeItem,
       onChange: (item: LabelAndKey) => {
         this._selectedTimeChanged(item);
       },
@@ -126,9 +120,7 @@ class Main extends React.Component<void, Props, State> {
       getLabel(item: string): string {
         return item;
       },
-      isSelected: (item: string) => {
-        return item === this.state.selectedCategoryItem;
-      },
+      isSelected: (item: string) => item === this.state.selectedCategoryItem,
       onChange: (item: string) => {
         this._selectedCategoryChanged(item);
       },

@@ -91,19 +91,15 @@ export default class HeatMap extends React.Component<void, Props, State> {
   }
 
   getPoints(): Array<any> {
-    return this.state.pointList.map(p => {
-      return <div style={
-        {
-          position: 'absolute',
-          left: p.x,
-          top: p.y,
-          background: 'rgba(0,255,0,0.4)',
-          width: '2px',
-          height: '2px',
-          boxShadow: '0px 0px 16px 16px rgba(0,255,0,0.4)',
-          borderRadius: '50%',
-        }
-      }/>;
-    });
+    return this.state.pointList.map(p => <div style={{
+      position: 'absolute',
+      left: p.x,
+      top: p.y,
+      background: 'rgba(0,255,0,0.4)',
+      width: '2px',
+      height: '2px',
+      boxShadow: '0px 0px 16px 16px rgba(0,255,0,0.4)',
+      borderRadius: '50%',
+    }}/>);
   }
 }

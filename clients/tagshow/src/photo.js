@@ -74,9 +74,7 @@ export default class Photo extends React.Component<DefaultProps, Props, State> {
     const sizes = this.state.sizes;
     const w = this.props.style.width || 0;
     const h = this.props.style.height || 0;
-    const size = sizes.find(({size}) => {
-      return size.get('Width') >= w && size.get('Height') >= h;
-    });
+    const size = sizes.find(({size}) => size.get('Width') >= w && size.get('Height') >= h);
     return size ? size.url : sizes[sizes.length - 1].url;
   }
 }
