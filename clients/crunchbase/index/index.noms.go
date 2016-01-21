@@ -35,8 +35,8 @@ func init() {
 		),
 		types.MakeEnumType("RoundTypeEnum", "Seed", "SeriesA", "SeriesB", "SeriesC", "SeriesD", "SeriesE", "SeriesF", "SeriesG", "SeriesH", "UnknownRoundType"),
 	}, []ref.Ref{
-		ref.Parse("sha1-d0c7c9389c0500f635bb58d1580ed988cc6324e9"),
-		ref.Parse("sha1-ce23a43307c0d14735de5e3a4bfbe19e69c12282"),
+		ref.Parse("sha1-2620ef22dff3875cb6ea4c074551f3cbebd2a331"),
+		ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"),
 	})
 	__mainPackageInFile_index_CachedRef = types.RegisterPackage(&p)
 }
@@ -535,7 +535,7 @@ func (m MapOfRefOfKeyToSetOfRefOfRound) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfRefOfKeyToSetOfRefOfRound = types.MakeCompoundType(types.MapKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_index_CachedRef, 2)), types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-ce23a43307c0d14735de5e3a4bfbe19e69c12282"), 1))))
+	__typeForMapOfRefOfKeyToSetOfRefOfRound = types.MakeCompoundType(types.MapKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_index_CachedRef, 2)), types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"), 1))))
 	types.RegisterValue(__typeForMapOfRefOfKeyToSetOfRefOfRound, builderForMapOfRefOfKeyToSetOfRefOfRound, readerForMapOfRefOfKeyToSetOfRefOfRound)
 }
 
