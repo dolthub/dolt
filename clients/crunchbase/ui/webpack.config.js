@@ -1,1 +1,1 @@
-module.exports = require('noms-webpack-config');
+module.exports = require('noms-webpack-config')();
