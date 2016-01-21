@@ -18,27 +18,31 @@ const plugins = [replaceEnv()];
 if (!devMode) {
   plugins.push(new webpack.optimize.UglifyJsPlugin({
     compress: {
-      warnings: false
-    }
+      warnings: false,
+    },
   }));
 }
 
-module.exports = {
-  module: {
-    loaders: [
-      {
-        test: /\.js$/,
-        exclude: (p) => {
-          // Noms needs to be compiled too!
-          return /node_modules/.test(p) && !/node_modules\/noms/.test(p);
+function defaultExclude(p) {
+  return /node_modules/.test(p) && !/node_modules\/noms/.test(p);
+}
+
+module.exports = function(options) {
+  options = options || {};
+  return {
+    module: {
+      loaders: [
+        {
+          test: /\.js$/,
+          exclude: options.exclude || defaultExclude,
+          loader: 'babel-loader',
         },
-        loader: 'babel-loader'
-      }
-    ]
-  },
+      ],
+    },
 
-  plugins,
+    plugins,
 
-  devtool: devMode ? '#inline-source-map' : '',
-  watch: devMode
+    devtool: devMode ? '#inline-source-map' : '',
+    watch: devMode,
+  };
 };
