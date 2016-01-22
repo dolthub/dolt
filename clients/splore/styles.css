@@ -3,8 +3,14 @@ html, body, svg {
 	margin: 0;
 }
 
-.node {
+a:hover {
 	cursor: pointer;
+	fill: blue;
+	text-decoration: underline;
+}
+
+.node {
+	cursor: default;
 	transition: transform 200ms;
 }
 

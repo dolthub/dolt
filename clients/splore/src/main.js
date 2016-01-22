@@ -7,16 +7,12 @@ import {HttpStore, invariant, IndexedMetaSequence, ListLeafSequence, MapLeafSequ
     OrderedMetaSequence, NomsList, NomsMap, NomsSet, readValue, Ref, SetLeafSequence, Struct,}
     from 'noms';
 import {layout, NodeGraph, TreeNode} from './buchheim.js';
+import nomsServer from './noms_server.js';
 
 const data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
 let httpStore: HttpStore;
 let renderNode: ?HTMLElement;
-
-const nomsServer: ?string = process.env.NOMS_SERVER;
-if (!nomsServer) {
-  throw new Error('NOMS_SERVER not set');
-}
 
 window.addEventListener('load', () => {
   renderNode = document.getElementById('splore');
@@ -130,7 +126,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
       data.nodes[id] = {
         canOpen: true,
         name: refStr.substr(5, 6),
-        fullName: refStr,
+        ref: val,
       };
     } else if (val instanceof Struct) {
       // Struct
@@ -159,11 +155,8 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
 }
 
 function handleNodeClick(e: Event, id: string) {
-  if (e.altKey) {
-    if (data.nodes[id].fullName) {
-      window.prompt('Full ref', data.nodes[id].fullName);
-    }
-    return;
+  if (e.button === 0 && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    e.preventDefault();
   }
 
   if (id.indexOf('/') > -1) {

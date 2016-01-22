@@ -30,11 +30,8 @@ export default function Layout(props: Props) : React.Element {
     const hasChildren = treeNode.data.canOpen || links.length > 0;
     const x = getX(treeNode);
     const y = getY(treeNode);
-    let title = '';
-
-    if (treeNode.data.fullName) {
-      title = 'Alt-click for full ref';
-    }
+    const nomsRef = treeNode.data.ref;
+    const title = nomsRef ? nomsRef.toString() : '';
 
     maxX = Math.max(x + spaceX, maxX);
     minY = Math.min(y, minY);
@@ -52,6 +49,7 @@ export default function Layout(props: Props) : React.Element {
         title={title}
         canOpen={hasChildren}
         isOpen={!hasChildren || Boolean(treeNode.data.isOpen)}
+        nomsRef={nomsRef}
         onClick={(e) => props.onNodeClick(e, treeNode.id)}/>);
     children.push(n);
     lookup[treeNode.id] = treeNode;
