@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -200,33 +201,14 @@ func getRemotePhotos(album *Album, albumIndex int, numPhotos uint32, shapes shap
 		callPicasaAPI(authHTTPClient, path, &aj)
 		for _, e := range aj.Feed.Entry {
 			foundPhotos = true
-			geoPos := toGeopos(e.Geo.Point.Pos.V)
-			height, _ := strconv.Atoi(e.Height.V)
-			width, _ := strconv.Atoi(e.Width.V)
-			size := SizeDef{Height: uint32(height), Width: uint32(width)}
-			sizes := MapOfSizeToStringDef{size: e.Content.Src}
-			tags := splitTags(e.MediaGroup.Tags.V)
-
-			faces := map[FaceDef]bool{}
-			for _, f := range shapes[e.ID.V] {
-				t, l := parsePoint(f.UpperLeft)
-				b, r := parsePoint(f.LowerRight)
-				faces[FaceDef{
-					Top:        t / float32(height),
-					Left:       l / float32(width),
-					Width:      (r - l) / float32(width),
-					Height:     (b - t) / float32(height),
-					PersonName: f.Name,
-				}] = true
-			}
 
 			p := RemotePhotoDef{
 				Id:          e.ID.V,
 				Title:       e.Title.V,
-				Geoposition: geoPos,
-				Sizes:       sizes,
-				Tags:        tags,
-				Faces:       faces,
+				Geoposition: toGeopos(e.Geo.Point.Pos.V),
+				Sizes:       getSizes(e),
+				Tags:        splitTags(e.MediaGroup.Tags.V),
+				Faces:       getFaces(e, shapes),
 			}.New(ds.Store())
 
 			// Timestamp is ms since the epoch.
@@ -248,12 +230,7 @@ func getRemotePhotos(album *Album, albumIndex int, numPhotos uint32, shapes shap
 
 func parsePoint(s string) (x, y float32) {
 	pair := strings.Split(s, " ")
-	d.Chk.Equal(2, len(pair))
-	tx, err := strconv.Atoi(pair[0])
-	d.Chk.NoError(err)
-	ty, err := strconv.Atoi(pair[1])
-	d.Chk.NoError(err)
-	return float32(tx), float32(ty)
+	return float32(atoi(pair[0])), float32(atoi(pair[1]))
 }
 
 func printStats(user *User) {
@@ -429,4 +406,75 @@ func splitTags(s string) map[string]bool {
 		}
 	}
 	return tags
+}
+
+func getSizes(e EntryJSON) MapOfSizeToStringDef {
+	sizes := MapOfSizeToStringDef{}
+	addSize := func(height, width int, url string) {
+		sizes[SizeDef{Height: uint32(height), Width: uint32(width)}] = url
+	}
+
+	sizePath := func(size int) string {
+		return fmt.Sprintf("/s%d/", size)
+	}
+
+	scale := func(x, a, b int) int {
+		return int(math.Ceil(float64(x) * (float64(a) / float64(b))))
+	}
+
+	// Original size.
+	height, width := atoi(e.Height.V), atoi(e.Width.V)
+	addSize(height, width, e.Content.Src)
+
+	// Infer 5 more sizes from the photo's thumbnail. Thumbnail URLs encode their size using a path component like "/s1024/" within "https://googleusercontent.com/aaa/bbb/ccc/s1024/img.jpg" and Picasa will allow any size to be specified there.
+	if len(e.MediaGroup.Thumbnails) == 0 {
+		return sizes
+	}
+
+	var thumbURLParts []string
+	if t := e.MediaGroup.Thumbnails[0]; t.Height > t.Width {
+		thumbURLParts = strings.SplitN(t.URL, sizePath(t.Height), 2)
+	} else {
+		thumbURLParts = strings.SplitN(t.URL, sizePath(t.Width), 2)
+	}
+
+	for _, px := range []int{128, 320, 640, 1024, 1600} {
+		if px > height && px > width {
+			break
+		}
+
+		thumbURL := strings.Join(thumbURLParts, sizePath(px))
+		if height > width {
+			addSize(px, scale(px, width, height), thumbURL)
+		} else {
+			addSize(scale(px, height, width), px, thumbURL)
+		}
+	}
+
+	return sizes
+}
+
+func getFaces(e EntryJSON, shapes shapeMap) SetOfFaceDef {
+	faces := SetOfFaceDef{}
+	height, width := atoi(e.Height.V), atoi(e.Width.V)
+
+	for _, f := range shapes[e.ID.V] {
+		t, l := parsePoint(f.UpperLeft)
+		b, r := parsePoint(f.LowerRight)
+		faces[FaceDef{
+			Top:        t / float32(height),
+			Left:       l / float32(width),
+			Width:      (r - l) / float32(width),
+			Height:     (b - t) / float32(height),
+			PersonName: f.Name,
+		}] = true
+	}
+
+	return faces
+}
+
+func atoi(a string) int {
+	i, err := strconv.Atoi(a)
+	d.Chk.NoError(err)
+	return i
 }
