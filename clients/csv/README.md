@@ -5,8 +5,9 @@ Imports a CSV file as `List<T>` where `T` is a struct with fields corresponding 
 ## Usage
 
 ```
-$ go build csv_importer.go
-$ ./csv_importer -fs="/tmp/foo" -ds="foo" <URL>
+$ cd importer
+$ go build
+$ ./importer --h=http://localhost:8000  --ds=foo <PATH>
 ```
 
 ## Some places for CSV files
