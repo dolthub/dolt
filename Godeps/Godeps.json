@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/attic-labs/noms",
-	"GoVersion": "go1.5.1",
+	"GoVersion": "go1.5",
 	"Packages": [
 		"./..."
 	],
@@ -8,10 +8,6 @@
 		{
 			"ImportPath": "github.com/attic-labs/buzhash",
 			"Rev": "ba25a3a15f617b6580523ccfb83d31764a50a97a"
-		},
-		{
-			"ImportPath": "github.com/bradfitz/latlong",
-			"Rev": "7d3ff04aa2b06b9db6947f7d99a4bb3cc66570bc"
 		},
 		{
 			"ImportPath": "github.com/aws/aws-sdk-go/aws",
@@ -54,6 +50,10 @@
 			"Rev": "727e1f596b6b59700b4d286af9ca41747066685d"
 		},
 		{
+			"ImportPath": "github.com/bradfitz/latlong",
+			"Rev": "7d3ff04aa2b06b9db6947f7d99a4bb3cc66570bc"
+		},
+		{
 			"ImportPath": "github.com/clbanning/mxj",
 			"Rev": "87ef56c6f157ac80caf824a9779dddc6f69c6580"
 		},
@@ -86,6 +86,11 @@
 			"ImportPath": "github.com/jmespath/go-jmespath",
 			"Comment": "0.2.2-2-gc01cf91",
 			"Rev": "c01cf91b011868172fdcd9f41838e80c9d716264"
+		},
+		{
+			"ImportPath": "github.com/julienschmidt/httprouter",
+			"Comment": "v1.1-14-g21439ef",
+			"Rev": "21439ef4d70ba4f3e2a5ed9249e7b03af4019b40"
 		},
 		{
 			"ImportPath": "github.com/mikkyang/id3-go",
