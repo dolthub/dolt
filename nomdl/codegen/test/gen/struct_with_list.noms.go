@@ -174,3 +174,146 @@ func (s StructWithList) SetI(val int64) StructWithList {
 	s.ref = &ref.Ref{}
 	return s
 }
+
+// ListOfUint8
+
+type ListOfUint8 struct {
+	l   types.List
+	cs  chunks.ChunkStore
+	ref *ref.Ref
+}
+
+func NewListOfUint8(cs chunks.ChunkStore) ListOfUint8 {
+	return ListOfUint8{types.NewTypedList(cs, __typeForListOfUint8), cs, &ref.Ref{}}
+}
+
+type ListOfUint8Def []uint8
+
+func (def ListOfUint8Def) New(cs chunks.ChunkStore) ListOfUint8 {
+	l := make([]types.Value, len(def))
+	for i, d := range def {
+		l[i] = types.Uint8(d)
+	}
+	return ListOfUint8{types.NewTypedList(cs, __typeForListOfUint8, l...), cs, &ref.Ref{}}
+}
+
+func (l ListOfUint8) Def() ListOfUint8Def {
+	d := make([]uint8, l.Len())
+	for i := uint64(0); i < l.Len(); i++ {
+		d[i] = uint8(l.l.Get(i).(types.Uint8))
+	}
+	return d
+}
+
+func (l ListOfUint8) Equals(other types.Value) bool {
+	return other != nil && __typeForListOfUint8.Equals(other.Type()) && l.Ref() == other.Ref()
+}
+
+func (l ListOfUint8) Ref() ref.Ref {
+	return types.EnsureRef(l.ref, l)
+}
+
+func (l ListOfUint8) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, l.Type().Chunks()...)
+	chunks = append(chunks, l.l.Chunks()...)
+	return
+}
+
+func (l ListOfUint8) ChildValues() []types.Value {
+	return append([]types.Value{}, l.l.ChildValues()...)
+}
+
+// A Noms Value that describes ListOfUint8.
+var __typeForListOfUint8 types.Type
+
+func (m ListOfUint8) Type() types.Type {
+	return __typeForListOfUint8
+}
+
+func init() {
+	__typeForListOfUint8 = types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.Uint8Kind))
+	types.RegisterValue(__typeForListOfUint8, builderForListOfUint8, readerForListOfUint8)
+}
+
+func builderForListOfUint8(cs chunks.ChunkStore, v types.Value) types.Value {
+	return ListOfUint8{v.(types.List), cs, &ref.Ref{}}
+}
+
+func readerForListOfUint8(v types.Value) types.Value {
+	return v.(ListOfUint8).l
+}
+
+func (l ListOfUint8) Len() uint64 {
+	return l.l.Len()
+}
+
+func (l ListOfUint8) Empty() bool {
+	return l.Len() == uint64(0)
+}
+
+func (l ListOfUint8) Get(i uint64) uint8 {
+	return uint8(l.l.Get(i).(types.Uint8))
+}
+
+func (l ListOfUint8) Slice(idx uint64, end uint64) ListOfUint8 {
+	return ListOfUint8{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
+}
+
+func (l ListOfUint8) Set(i uint64, val uint8) ListOfUint8 {
+	return ListOfUint8{l.l.Set(i, types.Uint8(val)), l.cs, &ref.Ref{}}
+}
+
+func (l ListOfUint8) Append(v ...uint8) ListOfUint8 {
+	return ListOfUint8{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
+}
+
+func (l ListOfUint8) Insert(idx uint64, v ...uint8) ListOfUint8 {
+	return ListOfUint8{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
+}
+
+func (l ListOfUint8) Remove(idx uint64, end uint64) ListOfUint8 {
+	return ListOfUint8{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
+}
+
+func (l ListOfUint8) RemoveAt(idx uint64) ListOfUint8 {
+	return ListOfUint8{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
+}
+
+func (l ListOfUint8) fromElemSlice(p []uint8) []types.Value {
+	r := make([]types.Value, len(p))
+	for i, v := range p {
+		r[i] = types.Uint8(v)
+	}
+	return r
+}
+
+type ListOfUint8IterCallback func(v uint8, i uint64) (stop bool)
+
+func (l ListOfUint8) Iter(cb ListOfUint8IterCallback) {
+	l.l.Iter(func(v types.Value, i uint64) bool {
+		return cb(uint8(v.(types.Uint8)), i)
+	})
+}
+
+type ListOfUint8IterAllCallback func(v uint8, i uint64)
+
+func (l ListOfUint8) IterAll(cb ListOfUint8IterAllCallback) {
+	l.l.IterAll(func(v types.Value, i uint64) {
+		cb(uint8(v.(types.Uint8)), i)
+	})
+}
+
+func (l ListOfUint8) IterAllP(concurrency int, cb ListOfUint8IterAllCallback) {
+	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
+		cb(uint8(v.(types.Uint8)), i)
+	})
+}
+
+type ListOfUint8FilterCallback func(v uint8, i uint64) (keep bool)
+
+func (l ListOfUint8) Filter(cb ListOfUint8FilterCallback) ListOfUint8 {
+	out := l.l.Filter(func(v types.Value, i uint64) bool {
+		return cb(uint8(v.(types.Uint8)), i)
+	})
+	return ListOfUint8{out, l.cs, &ref.Ref{}}
+}

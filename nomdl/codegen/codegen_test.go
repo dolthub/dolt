@@ -196,7 +196,7 @@ func TestGenerateDeps(t *testing.T) {
 	depender := types.NewPackage([]types.Type{}, []ref.Ref{leaf1Ref})
 	dependerRef := types.WriteValue(depender, cs)
 
-	top := types.NewPackage([]types.Type{}, []ref.Ref{leaf2Ref, dependerRef})
+	top := types.NewPackage([]types.Type{}, []ref.Ref{dependerRef, leaf2Ref})
 	types.RegisterPackage(&top)
 
 	localPkgs := refSet{top.Ref(): true}

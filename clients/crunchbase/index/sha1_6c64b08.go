@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_2620ef2_CachedRef ref.Ref
+var __mainPackageInFile_sha1_6c64b08_CachedRef ref.Ref
 
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
@@ -24,10 +24,10 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"),
 		ref.Parse("sha1-0b4ac7cb0583d7fecd71a1584a3f846e5d8b08eb"),
+		ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"),
 	})
-	__mainPackageInFile_sha1_2620ef2_CachedRef = types.RegisterPackage(&p)
+	__mainPackageInFile_sha1_6c64b08_CachedRef = types.RegisterPackage(&p)
 }
 
 // Import
@@ -82,7 +82,7 @@ func (m Import) Type() types.Type {
 }
 
 func init() {
-	__typeForImport = types.MakeType(__mainPackageInFile_sha1_2620ef2_CachedRef, 0)
+	__typeForImport = types.MakeType(__mainPackageInFile_sha1_6c64b08_CachedRef, 0)
 	types.RegisterStruct(__typeForImport, builderForImport, readerForImport)
 }
 

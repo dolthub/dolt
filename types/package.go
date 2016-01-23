@@ -1,14 +1,21 @@
 package types
 
-import "github.com/attic-labs/noms/ref"
+import (
+	"sort"
+
+	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/ref"
+)
 
 type Package struct {
 	types        []Type
-	dependencies []ref.Ref
+	dependencies ref.RefSlice
 	ref          *ref.Ref
 }
 
-func NewPackage(types []Type, deps []ref.Ref) Package {
+func NewPackage(types []Type, deps ref.RefSlice) Package {
+	// TODO: Check that |types| is sorted.
+	d.Chk.True(sort.IsSorted(deps))
 	return Package{types, deps, &ref.Ref{}}
 }
 
@@ -55,7 +62,7 @@ func (p Package) GetOrdinal(n string) (ordinal int64) {
 	return -1
 }
 
-func (p Package) Dependencies() []ref.Ref {
+func (p Package) Dependencies() ref.RefSlice {
 	// TODO: Change API to prevent mutations.
 	return p.dependencies
 }

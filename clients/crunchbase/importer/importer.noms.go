@@ -24,8 +24,8 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"),
 		ref.Parse("sha1-0b4ac7cb0583d7fecd71a1584a3f846e5d8b08eb"),
+		ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"),
 	})
 	__mainPackageInFile_importer_CachedRef = types.RegisterPackage(&p)
 }

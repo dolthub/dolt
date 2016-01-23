@@ -45,8 +45,8 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{
-		ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"),
 		ref.Parse("sha1-0b4ac7cb0583d7fecd71a1584a3f846e5d8b08eb"),
+		ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"),
 	})
 	__commonPackageInFile_photo_CachedRef = types.RegisterPackage(&p)
 }
