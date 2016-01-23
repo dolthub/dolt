@@ -3,7 +3,6 @@ package pkg
 import (
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
@@ -47,15 +46,14 @@ func resolveImports(aliases map[string]string, includePath string, cs chunks.Chu
 	return imports
 }
 
-func importsToDeps(imports map[string]ref.Ref) ref.RefSlice {
+func importsToDeps(imports map[string]ref.Ref) []ref.Ref {
 	depsSet := make(map[ref.Ref]bool, len(imports))
-	deps := make(ref.RefSlice, 0, len(imports))
+	deps := make([]ref.Ref, 0, len(imports))
 	for _, target := range imports {
 		if !depsSet[target] {
 			deps = append(deps, target)
 		}
 		depsSet[target] = true
 	}
-	sort.Sort(deps)
 	return deps
 }
