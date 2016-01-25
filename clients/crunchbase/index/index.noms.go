@@ -35,7 +35,7 @@ func init() {
 		),
 		types.MakeEnumType("RoundTypeEnum", "Seed", "SeriesA", "SeriesB", "SeriesC", "SeriesD", "SeriesE", "SeriesF", "SeriesG", "SeriesH", "UnknownRoundType"),
 	}, []ref.Ref{
-		ref.Parse("sha1-2620ef22dff3875cb6ea4c074551f3cbebd2a331"),
+		ref.Parse("sha1-6c64b08a509e25f9814dbf036489267c957a6fd8"),
 		ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"),
 	})
 	__mainPackageInFile_index_CachedRef = types.RegisterPackage(&p)

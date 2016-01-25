@@ -1,15 +1,24 @@
 package types
 
-import "github.com/attic-labs/noms/ref"
+import (
+	"sort"
+
+	"github.com/attic-labs/noms/ref"
+)
 
 type Package struct {
 	types        []Type
-	dependencies []ref.Ref
+	dependencies ref.RefSlice
 	ref          *ref.Ref
 }
 
-func NewPackage(types []Type, deps []ref.Ref) Package {
-	return Package{types, deps, &ref.Ref{}}
+func NewPackage(types []Type, dependencies ref.RefSlice) Package {
+	p := Package{types: types, ref: &ref.Ref{}}
+	// The order |Package.dependencies| must be stable for the Package to have a stable ref.
+	// See https://github.com/attic-labs/noms/issues/814 for stable ordering of |Package.types|.
+	p.dependencies = append(p.dependencies, dependencies...)
+	sort.Sort(p.dependencies)
+	return p
 }
 
 func (p Package) Equals(other Value) bool {
@@ -55,12 +64,12 @@ func (p Package) GetOrdinal(n string) (ordinal int64) {
 	return -1
 }
 
-func (p Package) Dependencies() []ref.Ref {
-	// TODO: Change API to prevent mutations.
-	return p.dependencies
+func (p Package) Dependencies() (dependencies []ref.Ref) {
+	dependencies = append(dependencies, p.dependencies...)
+	return
 }
 
-func (p Package) Types() []Type {
-	// TODO: Change API to prevent mutations.
-	return p.types
+func (p Package) Types() (types []Type) {
+	types = append(types, p.types...)
+	return
 }
