@@ -39,16 +39,16 @@ func makeHttpClient() *http.Client {
 }
 
 type HttpStore struct {
-	host         *url.URL
-	httpClient   *http.Client
-	getQueue     chan getRequest
-	hasQueue     chan hasRequest
-	writeQueue   chan Chunk
-	finishedChan chan struct{}
-	wg           *sync.WaitGroup
-	wgFinished   *sync.WaitGroup
-	written      map[ref.Ref]bool
-	wmu          *sync.Mutex
+	host            *url.URL
+	httpClient      *http.Client
+	getQueue        chan getRequest
+	hasQueue        chan hasRequest
+	writeQueue      chan Chunk
+	finishedChan    chan struct{}
+	wg              *sync.WaitGroup
+	wgFinished      *sync.WaitGroup
+	unwrittenPuts   map[ref.Ref]Chunk
+	unwrittenPutsMu *sync.Mutex
 }
 
 func NewHttpStore(host string) *HttpStore {
@@ -57,16 +57,16 @@ func NewHttpStore(host string) *HttpStore {
 	d.Exp.True(u.Scheme == "http" || u.Scheme == "https")
 	d.Exp.Equal(*u, url.URL{Scheme: u.Scheme, Host: u.Host})
 	client := &HttpStore{
-		host:         u,
-		httpClient:   makeHttpClient(),
-		getQueue:     make(chan getRequest, readBufferSize),
-		hasQueue:     make(chan hasRequest, hasBufferSize),
-		writeQueue:   make(chan Chunk, writeBufferSize),
-		finishedChan: make(chan struct{}),
-		wg:           &sync.WaitGroup{},
-		wgFinished:   &sync.WaitGroup{},
-		written:      map[ref.Ref]bool{},
-		wmu:          &sync.Mutex{},
+		host:            u,
+		httpClient:      makeHttpClient(),
+		getQueue:        make(chan getRequest, readBufferSize),
+		hasQueue:        make(chan hasRequest, hasBufferSize),
+		writeQueue:      make(chan Chunk, writeBufferSize),
+		finishedChan:    make(chan struct{}),
+		wg:              &sync.WaitGroup{},
+		wgFinished:      &sync.WaitGroup{},
+		unwrittenPuts:   map[ref.Ref]Chunk{},
+		unwrittenPutsMu: &sync.Mutex{},
 	}
 
 	for i := 0; i < requestLimit; i++ {
@@ -80,7 +80,40 @@ func (c *HttpStore) Host() *url.URL {
 	return c.host
 }
 
+func (c *HttpStore) addUnwrittenPut(chunk Chunk) bool {
+	c.unwrittenPutsMu.Lock()
+	defer c.unwrittenPutsMu.Unlock()
+	if _, ok := c.unwrittenPuts[chunk.Ref()]; !ok {
+		c.unwrittenPuts[chunk.Ref()] = chunk
+		return true
+	}
+
+	return false
+}
+
+func (c *HttpStore) getUnwrittenPut(r ref.Ref) Chunk {
+	c.unwrittenPutsMu.Lock()
+	defer c.unwrittenPutsMu.Unlock()
+	if c, ok := c.unwrittenPuts[r]; ok {
+		return c
+	}
+	return EmptyChunk
+}
+
+func (c *HttpStore) clearUnwrittenPuts(chunks []Chunk) {
+	c.unwrittenPutsMu.Lock()
+	defer c.unwrittenPutsMu.Unlock()
+	for _, chunk := range chunks {
+		delete(c.unwrittenPuts, chunk.Ref())
+	}
+}
+
 func (c *HttpStore) Get(r ref.Ref) Chunk {
+	pending := c.getUnwrittenPut(r)
+	if !pending.IsEmpty() {
+		return pending
+	}
+
 	ch := make(chan Chunk)
 	c.wg.Add(1)
 	c.getQueue <- getRequest{r, ch}
@@ -111,6 +144,11 @@ func (c *HttpStore) sendReadRequests(req getRequest) {
 }
 
 func (c *HttpStore) Has(ref ref.Ref) bool {
+	pending := c.getUnwrittenPut(ref)
+	if !pending.IsEmpty() {
+		return true
+	}
+
 	ch := make(chan bool)
 	c.wg.Add(1)
 	c.hasQueue <- hasRequest{ref, ch}
@@ -140,13 +178,9 @@ func (c *HttpStore) sendHasRequests(req hasRequest) {
 }
 
 func (c *HttpStore) Put(chunk Chunk) {
-	// POST http://<host>/ref/. Body is a serialized chunkBuffer. Response will be 201.
-	c.wmu.Lock()
-	defer c.wmu.Unlock()
-	if c.written[chunk.Ref()] {
+	if !c.addUnwrittenPut(chunk) {
 		return
 	}
-	c.written[chunk.Ref()] = true
 
 	c.wg.Add(1)
 	c.writeQueue <- chunk
@@ -210,6 +244,7 @@ func (c *HttpStore) postRefs(chs []Chunk) {
 
 	d.Chk.Equal(res.StatusCode, http.StatusCreated, "Unexpected response: %s", http.StatusText(res.StatusCode))
 	closeResponse(res)
+	c.clearUnwrittenPuts(chs)
 }
 
 func (c *HttpStore) requestRef(r ref.Ref, method string, body io.Reader) *http.Response {
@@ -315,10 +350,6 @@ func (c *HttpStore) Root() ref.Ref {
 func (c *HttpStore) UpdateRoot(current, last ref.Ref) bool {
 	// POST http://<host>root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
 	c.wg.Wait()
-
-	c.wmu.Lock()
-	c.written = map[ref.Ref]bool{}
-	c.wmu.Unlock()
 
 	res := c.requestRoot("POST", current, last)
 	defer closeResponse(res)
