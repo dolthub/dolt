@@ -1,11 +1,13 @@
 language: go
 go:
 - 1.5
-before_script:
+before_install:
 - npm version
 - nvm install stable
 - nvm use stable
 - npm version
+install: true # no need to do the default install
+before_script:
 - pushd js
 - npm install
 - npm test
