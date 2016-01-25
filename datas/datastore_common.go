@@ -13,6 +13,7 @@ import (
 
 type dataStoreCommon struct {
 	chunks.ChunkStore
+	rootRef  ref.Ref
 	datasets *MapOfStringToRefOfCommit
 	hasCache map[ref.Ref]bool
 	mu       *sync.Mutex
@@ -29,10 +30,8 @@ func datasetsFromRef(datasetsRef ref.Ref, cs chunks.ChunkStore) *MapOfStringToRe
 }
 
 func (ds *dataStoreCommon) MaybeHead(datasetID string) (Commit, bool) {
-	if ds.datasets != nil {
-		if r, ok := ds.datasets.MaybeGet(datasetID); ok {
-			return r.TargetValue(ds), true
-		}
+	if r, ok := ds.Datasets().MaybeGet(datasetID); ok {
+		return r.TargetValue(ds), true
 	}
 	return NewCommit(ds), false
 }
@@ -45,10 +44,15 @@ func (ds *dataStoreCommon) Head(datasetID string) Commit {
 
 func (ds *dataStoreCommon) Datasets() MapOfStringToRefOfCommit {
 	if ds.datasets == nil {
-		return NewMapOfStringToRefOfCommit(ds)
-	} else {
-		return *ds.datasets
+		if ds.rootRef.IsEmpty() {
+			emptySet := NewMapOfStringToRefOfCommit(ds)
+			ds.datasets = &emptySet
+		} else {
+			ds.datasets = datasetsFromRef(ds.rootRef, ds)
+		}
 	}
+
+	return *ds.datasets
 }
 
 // Copies all chunks reachable from (and including) |r| in |source| that aren't present in |sink|
@@ -69,13 +73,11 @@ func (ds *dataStoreCommon) commit(datasetID string, commit Commit) error {
 // doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
 func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) error {
 	currentRootRef := ds.Root()
-	var currentDatasets MapOfStringToRefOfCommit
-	if ds.datasets != nil && currentRootRef == ds.datasets.Ref() {
-		currentDatasets = *ds.datasets
-	} else if !currentRootRef.IsEmpty() {
+	currentDatasets := ds.Datasets()
+
+	if currentRootRef != currentDatasets.Ref() && !currentRootRef.IsEmpty() {
+		// The root has been advanced.
 		currentDatasets = *datasetsFromRef(currentRootRef, ds)
-	} else {
-		currentDatasets = NewMapOfStringToRefOfCommit(ds)
 	}
 
 	// TODO: This Commit will be orphaned if the UpdateRoot below fails
