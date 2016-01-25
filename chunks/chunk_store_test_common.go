@@ -1,8 +1,6 @@
 package chunks
 
 import (
-	"time"
-
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
 	"github.com/attic-labs/noms/ref"
 )
@@ -34,10 +32,6 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	c = NewChunk([]byte(input))
 	suite.Store.Put(c)
 	suite.Equal(ref, c.Ref())
-
-	// Bug 884. HORRIBLE HORRIBLE HACK
-	time.Sleep(time.Second * 2)
-
 	assertInputInStore(input, ref, suite.Store, suite.Assert())
 	suite.Store.UpdateRoot(ref, suite.Store.Root()) // Commit writes
 
