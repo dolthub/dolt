@@ -21,15 +21,16 @@ type connectionState struct {
 }
 
 type dataStoreServer struct {
-	ds     DataStore
-	port   int
-	l      *net.Listener
-	csChan chan *connectionState
+	ds      DataStore
+	port    int
+	l       *net.Listener
+	csChan  chan *connectionState
+	closing bool
 }
 
 func NewDataStoreServer(ds DataStore, port int) *dataStoreServer {
 	return &dataStoreServer{
-		ds, port, nil, make(chan *connectionState, 16),
+		ds, port, nil, make(chan *connectionState, 16), false,
 	}
 }
 
@@ -219,6 +220,10 @@ func (s *dataStoreServer) handleRoot(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *dataStoreServer) connState(c net.Conn, cs http.ConnState) {
+	if s.closing {
+		d.Chk.Equal(cs, http.StateClosed)
+		return
+	}
 	s.csChan <- &connectionState{c, cs}
 }
 
@@ -265,6 +270,7 @@ func (s *dataStoreServer) Run() {
 
 // Will cause the dataStoreServer to stop listening and an existing call to Run() to continue.
 func (s *dataStoreServer) Stop() {
+	s.closing = true
 	(*s.l).Close()
 	close(s.csChan)
 }
