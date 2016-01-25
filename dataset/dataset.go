@@ -23,6 +23,10 @@ func (ds *Dataset) Store() datas.DataStore {
 	return ds.store
 }
 
+func (ds *Dataset) ID() string {
+	return ds.id
+}
+
 // MaybeHead returns the current Head Commit of this Dataset, which contains the current root of the Dataset's value tree, if available. If not, it returns a new Commit and 'false'.
 func (ds *Dataset) MaybeHead() (datas.Commit, bool) {
 	return ds.Store().MaybeHead(ds.id)
