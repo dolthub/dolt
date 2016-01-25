@@ -32,3 +32,10 @@ notifications:
     on_failure: always
     on_success: change
     on_start: never
+caches:
+  directories:
+  - js/node_modules
+  - clients/crunchbase/ui/node_modules
+  - clients/pitchmap/ui/node_modules
+  - clients/splore/node_modules
+  - clients/tagshow/node_modules
