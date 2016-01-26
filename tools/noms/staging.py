@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import argparse, glob, shutil, os.path
+import argparse, glob, shutil, os, os.path
 
 def Main(projectName, stagingFunction):
 	"""Main should be called by all staging scripts when executed.
@@ -35,10 +35,17 @@ def Main(projectName, stagingFunction):
 def GlobCopier(*globs):
 	exclude = ('webpack.config.js',)
 	def stage(stagingDir):
-		for g in globs:
-			for f in glob.glob(g):
-				if os.path.split(f)[1] not in exclude:
-					shutil.copy2(f, stagingDir)
+		for pattern in globs:
+			for f in glob.glob(pattern):
+				if os.path.isdir(f):
+					continue
+				fromDir, name = os.path.split(f)
+				if name in exclude:
+					continue
+				toDir = os.path.join(stagingDir, fromDir)
+				if not os.path.exists(toDir):
+					os.makedirs(toDir)
+				shutil.copy2(f, toDir)
 	return stage
 
 
