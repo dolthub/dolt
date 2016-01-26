@@ -14,19 +14,11 @@ After your build script gets run, we'll run your staging script -- the purpose o
 We have provided a library to make writing your staging scripts easier. Example usage:
 ```python
 	#!/usr/bin/python
-	import shutil
 
-	import noms.staging
-
-	def stage(stagingDir):
-		shutil.copy2('out.js', stagingDir)
-		shutil.copy2('index.html', stagingDir)
-		shutil.copy2('styles.css', stagingDir)
-
+	import noms.staging as staging
 
 	if __name__ == '__main__':
-		noms.staging.Main('nerdosphere', stage)
-
+		staging.Main('nerdosphere', staging.GlobCopier('index.html', 'styles.css', '*.js'))
 ```
 Importing and using `noms.staging` handles determining where you should stage your code and creating the necessary directories for you. You just pass it the name of your project and a function that knows how to stage your build artifacts, given a path under which to put everything.
 
