@@ -1,6 +1,7 @@
 package chunks
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"flag"
@@ -13,8 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"bufio"
-
+	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -28,7 +28,7 @@ const (
 )
 
 // Use a custom http client rather than http.DefaultClient. We limit ourselves to a maximum of |requestLimit| concurrent http requests, the custom httpClient ups the maxIdleConnsPerHost value so that one connection stays open for each concurrent request.
-func makeHttpClient() *http.Client {
+func makeHTTPClient() *http.Client {
 	t := http.Transport(*http.DefaultTransport.(*http.Transport))
 	t.MaxIdleConnsPerHost = requestLimit
 
@@ -38,7 +38,7 @@ func makeHttpClient() *http.Client {
 	}
 }
 
-type HttpStore struct {
+type HTTPStore struct {
 	host            *url.URL
 	httpClient      *http.Client
 	getQueue        chan getRequest
@@ -51,14 +51,14 @@ type HttpStore struct {
 	unwrittenPutsMu *sync.Mutex
 }
 
-func NewHttpStore(host string) *HttpStore {
-	u, err := url.Parse(host)
+func NewHTTPStore(baseURL string) *HTTPStore {
+	u, err := url.Parse(baseURL)
 	d.Exp.NoError(err)
 	d.Exp.True(u.Scheme == "http" || u.Scheme == "https")
-	d.Exp.Equal(*u, url.URL{Scheme: u.Scheme, Host: u.Host})
-	client := &HttpStore{
+
+	client := &HTTPStore{
 		host:            u,
-		httpClient:      makeHttpClient(),
+		httpClient:      makeHTTPClient(),
 		getQueue:        make(chan getRequest, readBufferSize),
 		hasQueue:        make(chan hasRequest, hasBufferSize),
 		writeQueue:      make(chan Chunk, writeBufferSize),
@@ -76,11 +76,11 @@ func NewHttpStore(host string) *HttpStore {
 	return client
 }
 
-func (c *HttpStore) Host() *url.URL {
-	return c.host
+func (c *HTTPStore) Host() *url.URL {
+	return &url.URL{Host: c.host.Host, Scheme: c.host.Scheme}
 }
 
-func (c *HttpStore) addUnwrittenPut(chunk Chunk) bool {
+func (c *HTTPStore) addUnwrittenPut(chunk Chunk) bool {
 	c.unwrittenPutsMu.Lock()
 	defer c.unwrittenPutsMu.Unlock()
 	if _, ok := c.unwrittenPuts[chunk.Ref()]; !ok {
@@ -91,7 +91,7 @@ func (c *HttpStore) addUnwrittenPut(chunk Chunk) bool {
 	return false
 }
 
-func (c *HttpStore) getUnwrittenPut(r ref.Ref) Chunk {
+func (c *HTTPStore) getUnwrittenPut(r ref.Ref) Chunk {
 	c.unwrittenPutsMu.Lock()
 	defer c.unwrittenPutsMu.Unlock()
 	if c, ok := c.unwrittenPuts[r]; ok {
@@ -100,7 +100,7 @@ func (c *HttpStore) getUnwrittenPut(r ref.Ref) Chunk {
 	return EmptyChunk
 }
 
-func (c *HttpStore) clearUnwrittenPuts(chunks []Chunk) {
+func (c *HTTPStore) clearUnwrittenPuts(chunks []Chunk) {
 	c.unwrittenPutsMu.Lock()
 	defer c.unwrittenPutsMu.Unlock()
 	for _, chunk := range chunks {
@@ -108,7 +108,7 @@ func (c *HttpStore) clearUnwrittenPuts(chunks []Chunk) {
 	}
 }
 
-func (c *HttpStore) Get(r ref.Ref) Chunk {
+func (c *HTTPStore) Get(r ref.Ref) Chunk {
 	pending := c.getUnwrittenPut(r)
 	if !pending.IsEmpty() {
 		return pending
@@ -120,7 +120,7 @@ func (c *HttpStore) Get(r ref.Ref) Chunk {
 	return <-ch
 }
 
-func (c *HttpStore) sendReadRequests(req getRequest) {
+func (c *HTTPStore) sendReadRequests(req getRequest) {
 	batch := getBatch{}
 	refs := map[ref.Ref]bool{}
 
@@ -143,7 +143,7 @@ func (c *HttpStore) sendReadRequests(req getRequest) {
 	batch.Close()
 }
 
-func (c *HttpStore) Has(ref ref.Ref) bool {
+func (c *HTTPStore) Has(ref ref.Ref) bool {
 	pending := c.getUnwrittenPut(ref)
 	if !pending.IsEmpty() {
 		return true
@@ -155,7 +155,7 @@ func (c *HttpStore) Has(ref ref.Ref) bool {
 	return <-ch
 }
 
-func (c *HttpStore) sendHasRequests(req hasRequest) {
+func (c *HTTPStore) sendHasRequests(req hasRequest) {
 	batch := hasBatch{}
 	refs := map[ref.Ref]bool{}
 
@@ -177,7 +177,7 @@ func (c *HttpStore) sendHasRequests(req hasRequest) {
 	c.getHasRefs(refs, batch)
 }
 
-func (c *HttpStore) Put(chunk Chunk) {
+func (c *HTTPStore) Put(chunk Chunk) {
 	if !c.addUnwrittenPut(chunk) {
 		return
 	}
@@ -186,7 +186,7 @@ func (c *HttpStore) Put(chunk Chunk) {
 	c.writeQueue <- chunk
 }
 
-func (c *HttpStore) sendWriteRequests(chunk Chunk) {
+func (c *HTTPStore) sendWriteRequests(chunk Chunk) {
 	chunks := []Chunk{}
 
 	chunks = append(chunks, chunk)
@@ -203,7 +203,7 @@ func (c *HttpStore) sendWriteRequests(chunk Chunk) {
 	c.postRefs(chunks)
 }
 
-func (c *HttpStore) batchRequests() {
+func (c *HTTPStore) batchRequests() {
 	c.wgFinished.Add(1)
 	defer c.wgFinished.Done()
 
@@ -221,7 +221,7 @@ func (c *HttpStore) batchRequests() {
 	}
 }
 
-func (c *HttpStore) postRefs(chs []Chunk) {
+func (c *HTTPStore) postRefs(chs []Chunk) {
 	body := &bytes.Buffer{}
 	gw := gzip.NewWriter(body)
 	sz := NewSerializer(gw)
@@ -232,7 +232,7 @@ func (c *HttpStore) postRefs(chs []Chunk) {
 	gw.Close()
 
 	url := *c.host
-	url.Path = constants.PostRefsPath
+	url.Path = httprouter.CleanPath(c.host.Path + constants.PostRefsPath)
 	req, err := http.NewRequest("POST", url.String(), body)
 	d.Chk.NoError(err)
 
@@ -247,9 +247,9 @@ func (c *HttpStore) postRefs(chs []Chunk) {
 	c.clearUnwrittenPuts(chs)
 }
 
-func (c *HttpStore) requestRef(r ref.Ref, method string, body io.Reader) *http.Response {
+func (c *HTTPStore) requestRef(r ref.Ref, method string, body io.Reader) *http.Response {
 	url := *c.host
-	url.Path = constants.RefPath
+	url.Path = httprouter.CleanPath(c.host.Path + constants.RefPath)
 	if !r.IsEmpty() {
 		url.Path = path.Join(url.Path, r.String())
 	}
@@ -266,10 +266,10 @@ func (c *HttpStore) requestRef(r ref.Ref, method string, body io.Reader) *http.R
 	return res
 }
 
-func (c *HttpStore) getHasRefs(refs map[ref.Ref]bool, reqs hasBatch) {
+func (c *HTTPStore) getHasRefs(refs map[ref.Ref]bool, reqs hasBatch) {
 	// POST http://<host>/getHasRefs/. Post body: ref=sha1---&ref=sha1---& Response will be text of lines containing "|ref| |bool|"
 	u := *c.host
-	u.Path = constants.GetHasPath
+	u.Path = httprouter.CleanPath(c.host.Path + constants.GetHasPath)
 	values := &url.Values{}
 	for r, _ := range refs {
 		values.Add("ref", r.String())
@@ -305,10 +305,10 @@ func (c *HttpStore) getHasRefs(refs map[ref.Ref]bool, reqs hasBatch) {
 	}
 }
 
-func (c *HttpStore) getRefs(refs map[ref.Ref]bool, cs ChunkSink) {
+func (c *HTTPStore) getRefs(refs map[ref.Ref]bool, cs ChunkSink) {
 	// POST http://<host>/getRefs/. Post body: ref=sha1---&ref=sha1---& Response will be chunk data if present, 404 if absent.
 	u := *c.host
-	u.Path = constants.GetRefsPath
+	u.Path = httprouter.CleanPath(c.host.Path + constants.GetRefsPath)
 	values := &url.Values{}
 	for r, _ := range refs {
 		values.Add("ref", r.String())
@@ -336,7 +336,7 @@ func (c *HttpStore) getRefs(refs map[ref.Ref]bool, cs ChunkSink) {
 	Deserialize(reader, cs, rl)
 }
 
-func (c *HttpStore) Root() ref.Ref {
+func (c *HTTPStore) Root() ref.Ref {
 	// GET http://<host>/root. Response will be ref of root.
 	res := c.requestRoot("GET", ref.Ref{}, ref.Ref{})
 	defer closeResponse(res)
@@ -347,7 +347,7 @@ func (c *HttpStore) Root() ref.Ref {
 	return ref.Parse(string(data))
 }
 
-func (c *HttpStore) UpdateRoot(current, last ref.Ref) bool {
+func (c *HTTPStore) UpdateRoot(current, last ref.Ref) bool {
 	// POST http://<host>root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
 	c.wg.Wait()
 
@@ -358,9 +358,9 @@ func (c *HttpStore) UpdateRoot(current, last ref.Ref) bool {
 	return res.StatusCode == http.StatusOK
 }
 
-func (c *HttpStore) requestRoot(method string, current, last ref.Ref) *http.Response {
+func (c *HTTPStore) requestRoot(method string, current, last ref.Ref) *http.Response {
 	u := *c.host
-	u.Path = constants.RootPath
+	u.Path = httprouter.CleanPath(c.host.Path + constants.RootPath)
 	if method == "POST" {
 		d.Exp.False(current.IsEmpty())
 		params := url.Values{}
@@ -378,7 +378,7 @@ func (c *HttpStore) requestRoot(method string, current, last ref.Ref) *http.Resp
 	return res
 }
 
-func (c *HttpStore) Close() error {
+func (c *HTTPStore) Close() error {
 	c.wg.Wait()
 
 	close(c.finishedChan)
@@ -394,24 +394,38 @@ func (c *HttpStore) Close() error {
 func closeResponse(res *http.Response) error {
 	data, err := ioutil.ReadAll(res.Body)
 	d.Chk.NoError(err)
-	d.Chk.Equal(0, len(data))
+	d.Chk.Equal(0, len(data), string(data))
 	return res.Body.Close()
 }
 
-type HttpStoreFlags struct {
+type HTTPStoreFlags struct {
 	host *string
 }
 
-func HttpFlags(prefix string) HttpStoreFlags {
-	return HttpStoreFlags{
+func HTTPFlags(prefix string) HTTPStoreFlags {
+	return HTTPStoreFlags{
 		flag.String(prefix+"h", "", "http host to connect to"),
 	}
 }
 
-func (h HttpStoreFlags) CreateStore() ChunkStore {
-	if *h.host == "" {
-		return nil
-	} else {
-		return NewHttpStore(*h.host)
+func (h HTTPStoreFlags) CreateStore() ChunkStore {
+	return h.CreateNamespacedStore("")
+}
+
+func (h HTTPStoreFlags) CreateNamespacedStore(ns string) ChunkStore {
+	if h.check() {
+		return NewHTTPStore(*h.host + httprouter.CleanPath(ns))
 	}
+	return nil
+}
+
+func (h HTTPStoreFlags) CreateFactory() Factory {
+	if h.check() {
+		return h
+	}
+	return nil
+}
+
+func (h HTTPStoreFlags) check() bool {
+	return *h.host != ""
 }

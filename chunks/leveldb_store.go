@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb"
@@ -39,7 +40,7 @@ func NewLevelDBStore(dir string, maxFileHandles int, dumpStats bool) *LevelDBSto
 		OpenFilesCacheCapacity: maxFileHandles,
 		WriteBuffer:            1 << 24, // 16MiB,
 	})
-	d.Chk.NoError(err)
+	d.Chk.NoError(err, "opening LevelDBStore in %s", dir)
 	return &LevelDBStore{
 		db:                   db,
 		mu:                   &sync.Mutex{},
@@ -127,9 +128,23 @@ func LevelDBFlags(prefix string) LevelDBStoreFlags {
 }
 
 func (f LevelDBStoreFlags) CreateStore() ChunkStore {
-	if *f.dir == "" {
-		return nil
-	} else {
-		return NewLevelDBStore(*f.dir, *f.maxFileHandles, *f.dumpStats)
+	return f.CreateNamespacedStore("")
+}
+
+func (f LevelDBStoreFlags) CreateFactory() (factree Factory) {
+	if f.check() {
+		factree = f
 	}
+	return
+}
+
+func (f LevelDBStoreFlags) CreateNamespacedStore(ns string) ChunkStore {
+	if !f.check() {
+		return nil
+	}
+	return NewLevelDBStore(filepath.Join(*f.dir, ns), *f.maxFileHandles, *f.dumpStats)
+}
+
+func (f LevelDBStoreFlags) check() bool {
+	return *f.dir != ""
 }

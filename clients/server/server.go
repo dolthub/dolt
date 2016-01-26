@@ -18,13 +18,13 @@ var (
 func main() {
 	flags := datas.NewFlags()
 	flag.Parse()
-	ds, ok := flags.CreateDataStore()
+	dsf, ok := flags.CreateFactory()
 	if !ok {
 		flag.Usage()
 		return
 	}
 
-	server := datas.NewDataStoreServer(ds, *port)
+	server := datas.NewDataStoreServer(dsf, *port)
 
 	// Shutdown server gracefully so that profile may be written
 	c := make(chan os.Signal, 1)
@@ -33,7 +33,6 @@ func main() {
 	go func() {
 		<-c
 		server.Stop()
-		ds.Close()
 	}()
 
 	d.Try(func() {

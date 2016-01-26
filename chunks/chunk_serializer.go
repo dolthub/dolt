@@ -24,7 +24,7 @@ import (
     Data  // len(Data) == Len
 */
 
-// Creates a serializer which is a ChunkSink. Put() chunks will be serialized to |writer|. Close() must be called when no more chunks will be serialized.
+// NewSerializer creates a serializer which is a ChunkSink. Put() chunks will be serialized to |writer|. Close() must be called when no more chunks will be serialized.
 func NewSerializer(writer io.Writer) ChunkSink {
 	s := &serializer{
 		writer,
