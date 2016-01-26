@@ -34,7 +34,7 @@ notifications:
     on_failure: always
     on_success: change
     on_start: never
-caches:
+cache:
   directories:
   - js/node_modules
   - clients/crunchbase/ui/node_modules
