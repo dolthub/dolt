@@ -2,6 +2,7 @@ package datas
 
 import (
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
@@ -9,6 +10,9 @@ import (
 )
 
 func TestHttpStoreTestSuite(t *testing.T) {
+	if os.Getenv("RUN_HTTP_STORE_TEST") == "" {
+		t.Skip("Skipping flaky HttpStoreTestSuite; to enable set RUN_HTTP_STORE_TEST env var.")
+	}
 	suite.Run(t, &HttpStoreTestSuite{})
 }
 
