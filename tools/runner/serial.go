@@ -63,6 +63,10 @@ func runEnvDir(out, err io.Writer, env Env, dir, exe string, args ...string) err
 func Serial(stdout, stderr io.Writer, env Env, dir, filename string, args ...string) bool {
 	success := true
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if os.IsNotExist(err) {
+			// Some programs like npm create temporary log files which confuse filepath.Walk.
+			return nil
+		}
 		d.Exp.NoError(err, "Failed directory traversal at %s", path)
 		if !info.IsDir() && filepath.Base(path) == filename {
 			scriptAndArgs := append([]string{filepath.Base(path)}, args...)
