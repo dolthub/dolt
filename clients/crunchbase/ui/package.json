@@ -4,7 +4,7 @@
     "d3": "^3.4.4",
     "noms": "file:../../../js",
     "noms-webpack-config": "file:../../../js/webpack-config",
-    "nvd3": "^1.8.1",
+    "nvd3": "1.8.2",
     "react": "^0.14.1",
     "react-dom": "^0.14.1"
   },
