@@ -2,6 +2,7 @@
 
 import type {ChunkStore} from './chunk_store.js';
 import {invariant, notNull} from './assert.js';
+import {AsyncIterator, AsyncIteratorResult} from './async_iterator.js';
 import {Type} from './type.js';
 import {ValueBase} from './value.js';
 
@@ -134,6 +135,34 @@ export class SequenceCursor<T, S:Sequence> {
       }
       this.advanceLocal() || await this.advance();
     }
+  }
+
+  iterator(): AsyncIterator<T> {
+    return new SequenceIterator(this);
+  }
+}
+
+export class SequenceIterator<T, S:Sequence> extends AsyncIterator<T> {
+  _cursor: SequenceCursor<T, S>;
+  _nextP: Promise<AsyncIteratorResult<T>>;
+
+  constructor(cursor: SequenceCursor<T, S>) {
+    super();
+    this._cursor = cursor;
+    this._nextP = Promise.resolve(
+        cursor.valid ? {done: false, value: cursor.getCurrent()} : {done: true});
+  }
+
+  async next(): Promise<AsyncIteratorResult<T>> {
+    const next = await this._nextP;
+    if (this._cursor.advanceLocal()) {
+      this._nextP = Promise.resolve({done: false, value: this._cursor.getCurrent()});
+    } else {
+      const self = this;
+      this._nextP = this._cursor.advance().then(
+          success => success ? {done: false, value: self._cursor.getCurrent()} : {done: true});
+    }
+    return next;
   }
 }
 

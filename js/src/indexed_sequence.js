@@ -1,5 +1,6 @@
 // @flow
 
+import {AsyncIterator, AsyncIteratorResult} from './async_iterator.js';
 import type {ChunkStore} from './chunk_store.js';
 import {notNull} from './assert.js';
 import {search, Sequence, SequenceCursor} from './sequence.js';
@@ -32,5 +33,22 @@ export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence>
     }
 
     return this.idx > 0 ? this.sequence.getOffset(this.idx - 1) + 1 : 0;
+  }
+}
+
+export class IndexedSequenceIterator<T> extends AsyncIterator<T> {
+  _cursorP: Promise<IndexedSequenceCursor<T>>;
+  _iterator: ?AsyncIterator<T>;
+
+  constructor(cursorP: Promise<IndexedSequenceCursor<T>>) {
+    super();
+    this._cursorP = cursorP;
+  }
+
+  async next(): Promise<AsyncIteratorResult<T>> {
+    if (!this._iterator) {
+      this._iterator = (await this._cursorP).iterator();
+    }
+    return this._iterator.next();
   }
 }

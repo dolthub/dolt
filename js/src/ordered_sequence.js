@@ -1,5 +1,6 @@
 // @flow
 
+import {AsyncIterator, AsyncIteratorResult} from './async_iterator.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
@@ -78,5 +79,22 @@ export class OrderedSequenceCursor<T, K: valueOrPrimitive> extends
 
     invariant(this._seekTo(key));
     return true;
+  }
+}
+
+export class OrderedSequenceIterator<T, K: valueOrPrimitive> extends AsyncIterator<T> {
+  _cursorP: Promise<OrderedSequenceCursor<T, K>>;
+  _iterator: ?AsyncIterator<T>;
+
+  constructor(cursorP: Promise<OrderedSequenceCursor<T, K>>) {
+    super();
+    this._cursorP = cursorP;
+  }
+
+  async next(): Promise<AsyncIteratorResult<T>> {
+    if (!this._iterator) {
+      this._iterator = (await this._cursorP).iterator();
+    }
+    return this._iterator.next();
   }
 }

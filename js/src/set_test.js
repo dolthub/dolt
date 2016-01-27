@@ -46,6 +46,25 @@ suite('SetLeaf', () => {
     assert.deepEqual(['a', 'b'], values);
   });
 
+  test('iterator', async () => {
+    const ms = new MemoryStore();
+    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
+
+    const test = async items => {
+      const m = new NomsSet(ms, tr, new SetLeafSequence(tr, items));
+      const values = [];
+      for (let iter = m.iterator(), next = await iter.next(); !next.done;
+           next = await iter.next()) {
+        values.push(next.value);
+      }
+      assert.deepEqual(items, values);
+    };
+
+    await test([]);
+    await test(['a']);
+    await test(['a', 'b']);
+  });
+
   test('chunks', () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Value));
@@ -119,6 +138,16 @@ suite('CompoundSet', () => {
     const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const values = [];
     await c.forEach((k) => { values.push(k); });
+    assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], values);
+  });
+
+  test('iterator', async () => {
+    const ms = new MemoryStore();
+    const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const values = [];
+    for (let iter = c.iterator(), next = await iter.next(); !next.done; next = await iter.next()) {
+      values.push(next.value);
+    }
     assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], values);
   });
 

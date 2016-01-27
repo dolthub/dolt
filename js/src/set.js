@@ -1,10 +1,11 @@
 // @flow
 
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
+import {AsyncIterator} from './async_iterator.js';
 import {Collection} from './collection.js';
 import {equals, less} from './value.js';
 import {invariant} from './assert.js';
-import {OrderedSequence} from './ordered_sequence.js';
+import {OrderedSequence, OrderedSequenceIterator} from './ordered_sequence.js';
 
 export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
   async has(key: T): Promise<boolean> {
@@ -23,6 +24,10 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
       cb(v);
       return false;
     });
+  }
+
+  iterator(): AsyncIterator<T> {
+    return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, null));
   }
 
   // TODO: Find some way to return a NomsSet.

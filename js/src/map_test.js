@@ -3,6 +3,7 @@
 import {assert} from 'chai';
 import {suite} from 'mocha';
 
+import {notNull} from './assert.js';
 import MemoryStore from './memory_store.js';
 import test from './async_test.js';
 import type {ChunkStore} from './chunk_store.js';
@@ -59,6 +60,26 @@ suite('MapLeaf', () => {
     const kv = [];
     await m.forEach((v, k) => { kv.push(k, v); });
     assert.deepEqual(['a', 4, 'k', 8], kv);
+  });
+
+  test('iterator', async () => {
+    const ms = new MemoryStore();
+    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
+                                makePrimitiveType(Kind.Int32));
+
+    const test = async entries => {
+      const m = new NomsMap(ms, tr, new MapLeafSequence(tr, entries));
+      const kv = [];
+      for (let iter = m.iterator(), next = await iter.next(); !next.done;
+           next = await iter.next()) {
+        kv.push(next.value);
+      }
+      assert.deepEqual(entries, kv);
+    };
+
+    test([]);
+    test([{key: 'a', value: 4}]);
+    test([{key: 'a', value: 4}, {key: 'k', value: 8}]);
   });
 
   test('chunks', () => {
@@ -165,6 +186,20 @@ suite('CompoundMap', () => {
 
     const kv = [];
     await c.forEach((v, k) => { kv.push(k, v); });
+    assert.deepEqual(['a', false, 'b', false, 'e', true, 'f', true, 'h', false, 'i', true, 'm',
+        true, 'n', false], kv);
+  });
+
+  test('iterator', async () => {
+    const ms = new MemoryStore();
+    const [c] = build(ms);
+
+    const kv = [];
+    for (let iter = c.iterator(), next = await iter.next(); !next.done; next = await iter.next()) {
+      const {key, value} = notNull(next.value);
+      kv.push(key, value);
+    }
+
     assert.deepEqual(['a', false, 'b', false, 'e', true, 'f', true, 'h', false, 'i', true, 'm',
         true, 'n', false], kv);
   });

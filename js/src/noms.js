@@ -1,5 +1,6 @@
 // @flow
 
+export {AsyncIterator} from './async_iterator.js';
 export {decodeNomsValue} from './decode.js';
 export {default as Chunk} from './chunk.js';
 export {default as HttpStore} from './http_store.js';
@@ -32,6 +33,9 @@ export {
   typeType,
   UnresolvedDesc,
 } from './type.js';
+
+import type {AsyncIteratorResult} from './async_iterator.js';
+export type {AsyncIteratorResult};
 
 import type {ChunkStore} from './chunk_store.js';
 export type {ChunkStore};
