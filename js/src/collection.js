@@ -18,6 +18,10 @@ export class Collection<S:Sequence> extends ValueBase {
     this.sequence = sequence;
   }
 
+  isEmpty(): boolean {
+    return !this.sequence.isMeta && this.sequence.items.length === 0;
+  }
+
   get chunks(): Array<Ref> {
     const chunks = [];
     const addChunks = this.sequence.isMeta ? (mt:MetaTuple) => {

@@ -13,6 +13,15 @@ import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
 import {writeValue} from './encode.js';
 
 suite('MapLeaf', () => {
+  test('isEmpty', () => {
+    const ms = new MemoryStore();
+    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
+                                makePrimitiveType(Kind.Bool));
+    const newMap = entries => new NomsMap(ms, tr, new MapLeafSequence(tr, entries));
+    assert.isTrue(newMap([]).isEmpty());
+    assert.isFalse(newMap([{key: 'a', value: false}, {key:'k', value:true}]).isEmpty());
+  });
+
   test('has', async () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
@@ -99,6 +108,12 @@ suite('CompoundMap', () => {
         new MetaTuple(rm2, 'n')]));
     return [c, m1, m2];
   }
+
+  test('isEmpty', () => {
+    const ms = new MemoryStore();
+    const [c] = build(ms);
+    assert.isFalse(c.isEmpty());
+  });
 
   test('get', async () => {
     const ms = new MemoryStore();
