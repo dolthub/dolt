@@ -12,6 +12,14 @@ import {makeCompoundType, makePrimitiveType} from './type.js';
 import {writeValue} from './encode.js';
 
 suite('ListLeafSequence', () => {
+  test('isEmpty', () => {
+    const ms = new MemoryStore();
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.String));
+    const newList = items => new NomsList(ms, tr, new ListLeafSequence(tr, items));
+    assert.isTrue(newList([]).isEmpty());
+    assert.isFalse(newList(['z', 'x', 'a', 'b']).isEmpty());
+  });
+
   test('get', async () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.String));
@@ -71,6 +79,10 @@ suite('CompoundList', () => {
         new MetaTuple(rm2, 4)]));
     return l;
   }
+
+  test('isEmpty', () => {
+    assert.isFalse(build().isEmpty());
+  });
 
   test('get', async () => {
     const l = build();

@@ -6,16 +6,23 @@ import {suite} from 'mocha';
 import MemoryStore from './memory_store.js';
 import test from './async_test.js';
 import type {ChunkStore} from './chunk_store.js';
-import {invariant} from './assert.js';
+import {invariant, notNull} from './assert.js';
 import {Kind} from './noms_kind.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
 import {NomsSet, SetLeafSequence} from './set.js';
-import {notNull} from './assert.js';
 import {OrderedSequence} from './ordered_sequence.js';
 import {writeValue} from './encode.js';
 
 suite('SetLeaf', () => {
+  test('isEmpty', () => {
+    const ms = new MemoryStore();
+    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
+    const newSet = items => new NomsSet(ms, tr, new SetLeafSequence(tr, items));
+    assert.isTrue(newSet([]).isEmpty());
+    assert.isFalse(newSet(['a', 'k']).isEmpty());
+  });
+
   test('first/has', async () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
@@ -80,6 +87,12 @@ suite('CompoundSet', () => {
 
     return notNull(last);
   }
+
+  test('isEmpty', () => {
+    const ms = new MemoryStore();
+    const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    assert.isFalse(c.isEmpty());
+  });
 
   test('first/has', async () => {
     const ms = new MemoryStore();
