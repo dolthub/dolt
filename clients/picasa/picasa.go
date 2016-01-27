@@ -334,6 +334,7 @@ func awaitOAuthResponse(l net.Listener) (string, string) {
 
 func callPicasaAPI(client *http.Client, path string, response interface{}) {
 	rc := callPicasaURL(client, "https://picasaweb.google.com/data/feed/api/"+path)
+	defer rc.Close()
 	err := json.NewDecoder(rc).Decode(response)
 	d.Chk.NoError(err)
 }
