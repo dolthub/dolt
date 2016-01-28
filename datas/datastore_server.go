@@ -51,17 +51,17 @@ func (s *dataStoreServer) Run() {
 	defer unnamedDs.Close()
 	router.HandleMethodNotAllowed = false
 	router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Normalize trailing slash.
 		p := strings.TrimRight(r.URL.EscapedPath(), "/") + "/"
-		switch p {
-		case constants.RefPath:
+		if strings.HasPrefix(p, constants.RefPath) {
 			HandleRef(w, r, unnamedDs)
-		case constants.PostRefsPath:
+		} else if strings.HasPrefix(p, constants.PostRefsPath) {
 			HandlePostRefs(w, r, unnamedDs)
-		case constants.GetHasPath:
+		} else if strings.HasPrefix(p, constants.GetHasPath) {
 			HandleGetHasRefs(w, r, unnamedDs)
-		case constants.GetRefsPath:
+		} else if strings.HasPrefix(p, constants.GetRefsPath) {
 			HandleGetRefs(w, r, unnamedDs)
-		case constants.RootPath:
+		} else if strings.HasPrefix(p, constants.RootPath) {
 			if r.Method == "GET" {
 				HandleRootGet(w, r, unnamedDs)
 			} else if r.Method == "POST" {
@@ -69,7 +69,7 @@ func (s *dataStoreServer) Run() {
 			} else {
 				http.NotFound(w, r)
 			}
-		default:
+		} else {
 			http.NotFound(w, r)
 		}
 	})
