@@ -1,11 +1,12 @@
 // @flow
 
+import {AsyncIterator} from './async_iterator.js';
 import Ref from './ref.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {Collection} from './collection.js';
 import {equals} from './value.js';
 import {isPrimitive} from './primitives.js';
-import {OrderedSequence} from './ordered_sequence.js';
+import {OrderedSequence, OrderedSequenceIterator} from './ordered_sequence.js';
 
 type Entry<K: valueOrPrimitive, V: valueOrPrimitive> = {
   key: K,
@@ -62,6 +63,10 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
       cb(entry.value, entry.key);
       return false;
     });
+  }
+
+  iterator(): AsyncIterator<Entry<K, V>> {
+    return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, null));
   }
 
   get size(): number {

@@ -1,8 +1,9 @@
   // @flow
 
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
+import {AsyncIterator} from './async_iterator.js';
 import {Collection} from './collection.js';
-import {IndexedSequence} from './indexed_sequence.js';
+import {IndexedSequence, IndexedSequenceIterator} from './indexed_sequence.js';
 
 export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
   async get(idx: number): Promise<T> {
@@ -17,6 +18,10 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
       cb(v, i);
       return false;
     });
+  }
+
+  iterator(): AsyncIterator<T> {
+    return new IndexedSequenceIterator(this.sequence.newCursorAt(this.cs, 0));
   }
 
   get length(): number {
