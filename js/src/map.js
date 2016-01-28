@@ -8,7 +8,7 @@ import {equals} from './value.js';
 import {isPrimitive} from './primitives.js';
 import {OrderedSequence, OrderedSequenceIterator} from './ordered_sequence.js';
 
-type Entry<K: valueOrPrimitive, V: valueOrPrimitive> = {
+export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
   key: K,
   value: V
 };
@@ -65,7 +65,7 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
     });
   }
 
-  iterator(): AsyncIterator<Entry<K, V>> {
+  iterator(): AsyncIterator<MapEntry<K, V>> {
     return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, null));
   }
 
@@ -79,7 +79,7 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
 }
 
 export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends
-    OrderedSequence<K, Entry<K, V>> {
+    OrderedSequence<K, MapEntry<K, V>> {
   getKey(idx: number): K {
     return this.items[idx].key;
   }

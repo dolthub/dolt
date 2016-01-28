@@ -40,5 +40,8 @@ export type {AsyncIteratorResult};
 import type {ChunkStore} from './chunk_store.js';
 export type {ChunkStore};
 
+import type {MapEntry} from './map.js';
+export type {MapEntry};
+
 import type {valueOrPrimitive} from './value.js';
 export type {valueOrPrimitive};
