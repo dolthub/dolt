@@ -25,6 +25,7 @@ function getPlugins(envVars) {
     plugins.push(new webpack.optimize.UglifyJsPlugin({
       compress: {
         warnings: false,
+        screw_ie8: true,  //eslint-disable-line
       },
     }));
   }
