@@ -33,6 +33,7 @@ export {
   typeType,
   UnresolvedDesc,
 } from './type.js';
+export {equals, less} from './value.js';
 
 import type {AsyncIteratorResult} from './async_iterator.js';
 export type {AsyncIteratorResult};
