@@ -16,6 +16,9 @@ type ChunkStore interface {
 // Factory allows the creation of namespaced ChunkStore instances. The details of how namespaces are separated is left up to the particular implementation of Factory and ChunkStore.
 type Factory interface {
 	CreateNamespacedStore(ns string) ChunkStore
+
+	// Shutter shuts down the factory. Subsequent calls to CreateNamespacedStore() will fail.
+	Shutter()
 }
 
 // RootTracker allows querying and management of the root of an entire tree of references. The "root" is the single mutable variable in a ChunkStore. It can store any ref, but it is typically used by higher layers (such as DataStore) to store a ref to a value that represents the current state and entire history of a datastore.

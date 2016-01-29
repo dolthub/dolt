@@ -419,6 +419,8 @@ func (h HTTPStoreFlags) CreateNamespacedStore(ns string) ChunkStore {
 	return nil
 }
 
+func (h HTTPStoreFlags) Shutter() {}
+
 func (h HTTPStoreFlags) CreateFactory() Factory {
 	if h.check() {
 		return h

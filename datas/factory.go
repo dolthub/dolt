@@ -5,6 +5,9 @@ import "github.com/attic-labs/noms/chunks"
 // Factory allows the creation of namespaced DataStore instances. The details of how namespaces are separated is left up to the particular implementation of Factory and DataStore.
 type Factory interface {
 	Create(string) (DataStore, bool)
+
+	// Shutter shuts down the factory. Subsequent calls to CreateNamespacedStore() will fail.
+	Shutter()
 }
 
 func (f Flags) CreateFactory() (Factory, bool) {
@@ -35,13 +38,21 @@ func (lf *localFactory) Create(ns string) (DataStore, bool) {
 	return &LocalDataStore{}, false
 }
 
+func (lf *localFactory) Shutter() {
+	lf.cf.Shutter()
+}
+
 type remoteFactory struct {
 	cf chunks.Factory
 }
 
-func (lf *remoteFactory) Create(ns string) (DataStore, bool) {
-	if cs := lf.cf.CreateNamespacedStore(ns); cs != nil {
+func (rf *remoteFactory) Create(ns string) (DataStore, bool) {
+	if cs := rf.cf.CreateNamespacedStore(ns); cs != nil {
 		return newRemoteDataStore(cs), true
 	}
 	return &LocalDataStore{}, false
+}
+
+func (rf *remoteFactory) Shutter() {
+	rf.cf.Shutter()
 }
