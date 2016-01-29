@@ -41,4 +41,5 @@ func main() {
 		}
 		server.Run()
 	})
+	dsf.Shutter()
 }

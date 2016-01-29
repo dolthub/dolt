@@ -61,3 +61,7 @@ func (f *testStoreFactory) CreateNamespacedStore(ns string) ChunkStore {
 	f.stores[ns] = NewTestStore()
 	return f.stores[ns]
 }
+
+func (f *testStoreFactory) Shutter() {
+	f.stores = map[string]*TestStore{}
+}

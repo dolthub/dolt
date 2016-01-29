@@ -4,6 +4,7 @@ import (
 	"flag"
 	"sync"
 
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -69,23 +70,40 @@ func MemoryFlags(prefix string) MemoryStoreFlags {
 }
 
 func (f MemoryStoreFlags) CreateStore() ChunkStore {
-	return f.CreateNamespacedStore("")
-}
-
-func (f MemoryStoreFlags) CreateNamespacedStore(ns string) ChunkStore {
 	if f.check() {
 		return NewMemoryStore()
 	}
 	return nil
 }
 
-func (f MemoryStoreFlags) CreateFactory() (factree Factory) {
+func (f MemoryStoreFlags) CreateFactory() Factory {
 	if f.check() {
-		return f
+		return &MemoryStoreFactory{f, map[string]*MemoryStore{}}
 	}
 	return nil
 }
 
 func (f MemoryStoreFlags) check() bool {
 	return *f.use
+}
+
+type MemoryStoreFactory struct {
+	flags  MemoryStoreFlags
+	stores map[string]*MemoryStore
+}
+
+func (f *MemoryStoreFactory) CreateNamespacedStore(ns string) ChunkStore {
+	d.Chk.NotNil(f.stores, "Cannot use LevelDBStoreFactory after Shutter().")
+	if !f.flags.check() {
+		return nil
+	}
+	if cs, present := f.stores[ns]; present {
+		return cs
+	}
+	f.stores[ns] = NewMemoryStore()
+	return f.stores[ns]
+}
+
+func (f *MemoryStoreFactory) Shutter() {
+	f.stores = map[string]*MemoryStore{}
 }

@@ -438,6 +438,8 @@ func (f DynamoStoreFlags) CreateNamespacedStore(ns string) (cs ChunkStore) {
 	return
 }
 
+func (f DynamoStoreFlags) Shutter() {}
+
 func (f DynamoStoreFlags) CreateFactory() (factree Factory) {
 	if f.check() {
 		factree = f
