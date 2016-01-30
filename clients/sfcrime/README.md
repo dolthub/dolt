@@ -13,7 +13,7 @@ go build
 ./importer -ldb="/tmp/sfcrime" -ds="sfcrime/raw" -input-file="rows.csv"
 
 # quad_tree is a general purpose tool to index geocoded data
-cd ../quad_tree
+cd ../../quad_tree
 go build
 ./quad_tree -ldb="/tmp/sfcrime" -input-ref="<ref-from-importer-output>" -output-ds="sfcrime/bygeo"
 
