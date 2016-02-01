@@ -408,11 +408,7 @@ func HTTPFlags(prefix string) HTTPStoreFlags {
 	}
 }
 
-func (h HTTPStoreFlags) CreateStore() ChunkStore {
-	return h.CreateNamespacedStore("")
-}
-
-func (h HTTPStoreFlags) CreateNamespacedStore(ns string) ChunkStore {
+func (h HTTPStoreFlags) CreateStore(ns string) ChunkStore {
 	if h.check() {
 		return NewHTTPStore(*h.host + httprouter.CleanPath(ns))
 	}

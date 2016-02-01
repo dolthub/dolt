@@ -6,7 +6,7 @@ import "github.com/attic-labs/noms/chunks"
 type Factory interface {
 	Create(string) (DataStore, bool)
 
-	// Shutter shuts down the factory. Subsequent calls to CreateNamespacedStore() will fail.
+	// Shutter shuts down the factory. Subsequent calls to Create() will fail.
 	Shutter()
 }
 
@@ -32,7 +32,7 @@ type localFactory struct {
 }
 
 func (lf *localFactory) Create(ns string) (DataStore, bool) {
-	if cs := lf.cf.CreateNamespacedStore(ns); cs != nil {
+	if cs := lf.cf.CreateStore(ns); cs != nil {
 		return newLocalDataStore(cs), true
 	}
 	return &LocalDataStore{}, false
@@ -47,7 +47,7 @@ type remoteFactory struct {
 }
 
 func (rf *remoteFactory) Create(ns string) (DataStore, bool) {
-	if cs := rf.cf.CreateNamespacedStore(ns); cs != nil {
+	if cs := rf.cf.CreateStore(ns); cs != nil {
 		return newRemoteDataStore(cs), true
 	}
 	return &LocalDataStore{}, false

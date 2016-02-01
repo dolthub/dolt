@@ -69,7 +69,7 @@ func MemoryFlags(prefix string) MemoryStoreFlags {
 	}
 }
 
-func (f MemoryStoreFlags) CreateStore() ChunkStore {
+func (f MemoryStoreFlags) CreateStore(ns string) ChunkStore {
 	if f.check() {
 		return NewMemoryStore()
 	}
@@ -92,7 +92,7 @@ type MemoryStoreFactory struct {
 	stores map[string]*MemoryStore
 }
 
-func (f *MemoryStoreFactory) CreateNamespacedStore(ns string) ChunkStore {
+func (f *MemoryStoreFactory) CreateStore(ns string) ChunkStore {
 	d.Chk.NotNil(f.stores, "Cannot use LevelDBStoreFactory after Shutter().")
 	if !f.flags.check() {
 		return nil

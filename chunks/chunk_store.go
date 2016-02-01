@@ -15,9 +15,9 @@ type ChunkStore interface {
 
 // Factory allows the creation of namespaced ChunkStore instances. The details of how namespaces are separated is left up to the particular implementation of Factory and ChunkStore.
 type Factory interface {
-	CreateNamespacedStore(ns string) ChunkStore
+	CreateStore(ns string) ChunkStore
 
-	// Shutter shuts down the factory. Subsequent calls to CreateNamespacedStore() will fail.
+	// Shutter shuts down the factory. Subsequent calls to CreateStore() will fail.
 	Shutter()
 }
 

@@ -14,12 +14,72 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-var (
-	rootKey     = []byte("/root")
-	chunkPrefix = []byte("/chunk/")
+const (
+	rootKeyConst     = "/root"
+	chunkPrefixConst = "/chunk/"
 )
 
+func NewLevelDBStore(dir, name string, maxFileHandles int, dumpStats bool) *LevelDBStore {
+	return newLevelDBStore(newBackingStore(dir, maxFileHandles, dumpStats), []byte(name), true)
+}
+
+func newLevelDBStore(store *internalLevelDBStore, name []byte, closeBackingStore bool) *LevelDBStore {
+	return &LevelDBStore{
+		internalLevelDBStore: store,
+		rootKey:              append(name, []byte(rootKeyConst)...),
+		chunkPrefix:          append(name, []byte(chunkPrefixConst)...),
+		closeBackingStore:    closeBackingStore,
+	}
+}
+
 type LevelDBStore struct {
+	*internalLevelDBStore
+	rootKey           []byte
+	chunkPrefix       []byte
+	closeBackingStore bool
+}
+
+func (l *LevelDBStore) Root() ref.Ref {
+	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
+	return l.rootByKey(l.rootKey)
+}
+
+func (l *LevelDBStore) UpdateRoot(current, last ref.Ref) bool {
+	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
+	return l.updateRootByKey(l.rootKey, current, last)
+}
+
+func (l *LevelDBStore) Get(ref ref.Ref) Chunk {
+	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
+	return l.getByKey(l.toChunkKey(ref), ref)
+}
+
+func (l *LevelDBStore) Has(ref ref.Ref) bool {
+	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
+	return l.hasByKey(l.toChunkKey(ref))
+}
+
+func (l *LevelDBStore) Put(c Chunk) {
+	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
+	l.putByKey(l.toChunkKey(c.Ref()), c)
+}
+
+func (l *LevelDBStore) Close() error {
+	if l.closeBackingStore {
+		l.internalLevelDBStore.Close()
+	}
+	l.internalLevelDBStore = nil
+	return nil
+}
+
+func (l *LevelDBStore) toChunkKey(r ref.Ref) []byte {
+	digest := r.DigestSlice()
+	out := make([]byte, len(l.chunkPrefix), len(l.chunkPrefix)+len(digest))
+	copy(out, l.chunkPrefix)
+	return append(out, digest...)
+}
+
+type internalLevelDBStore struct {
 	db                                     *leveldb.DB
 	mu                                     *sync.Mutex
 	concurrentWriteLimit                   chan struct{}
@@ -27,7 +87,7 @@ type LevelDBStore struct {
 	dumpStats                              bool
 }
 
-func NewLevelDBStore(dir string, maxFileHandles int, dumpStats bool) *LevelDBStore {
+func newBackingStore(dir string, maxFileHandles int, dumpStats bool) *internalLevelDBStore {
 	d.Exp.NotEmpty(dir)
 	d.Exp.NoError(os.MkdirAll(dir, 0700))
 	db, err := leveldb.OpenFile(dir, &opt.Options{
@@ -36,8 +96,8 @@ func NewLevelDBStore(dir string, maxFileHandles int, dumpStats bool) *LevelDBSto
 		OpenFilesCacheCapacity: maxFileHandles,
 		WriteBuffer:            1 << 24, // 16MiB,
 	})
-	d.Chk.NoError(err, "opening LevelDBStore in %s", dir)
-	return &LevelDBStore{
+	d.Chk.NoError(err, "opening internalLevelDBStore in %s", dir)
+	return &internalLevelDBStore{
 		db:                   db,
 		mu:                   &sync.Mutex{},
 		concurrentWriteLimit: make(chan struct{}, maxFileHandles),
@@ -45,11 +105,7 @@ func NewLevelDBStore(dir string, maxFileHandles int, dumpStats bool) *LevelDBSto
 	}
 }
 
-func (l *LevelDBStore) Root() ref.Ref {
-	return l.rootByKey(rootKey)
-}
-
-func (l *LevelDBStore) rootByKey(key []byte) ref.Ref {
+func (l *internalLevelDBStore) rootByKey(key []byte) ref.Ref {
 	val, err := l.db.Get(key, nil)
 	if err == errors.ErrNotFound {
 		return ref.Ref{}
@@ -59,11 +115,7 @@ func (l *LevelDBStore) rootByKey(key []byte) ref.Ref {
 	return ref.Parse(string(val))
 }
 
-func (l *LevelDBStore) UpdateRoot(current, last ref.Ref) bool {
-	return l.updateRootByKey(rootKey, current, last)
-}
-
-func (l *LevelDBStore) updateRootByKey(key []byte, current, last ref.Ref) bool {
+func (l *internalLevelDBStore) updateRootByKey(key []byte, current, last ref.Ref) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if last != l.rootByKey(key) {
@@ -76,11 +128,7 @@ func (l *LevelDBStore) updateRootByKey(key []byte, current, last ref.Ref) bool {
 	return true
 }
 
-func (l *LevelDBStore) Get(ref ref.Ref) Chunk {
-	return l.getByKey(toChunkKey(ref), ref)
-}
-
-func (l *LevelDBStore) getByKey(key []byte, ref ref.Ref) Chunk {
+func (l *internalLevelDBStore) getByKey(key []byte, ref ref.Ref) Chunk {
 	data, err := l.db.Get(key, nil)
 	l.getCount++
 	if err == errors.ErrNotFound {
@@ -91,22 +139,14 @@ func (l *LevelDBStore) getByKey(key []byte, ref ref.Ref) Chunk {
 	return NewChunkWithRef(ref, data)
 }
 
-func (l *LevelDBStore) Has(ref ref.Ref) bool {
-	return l.hasByKey(toChunkKey(ref))
-}
-
-func (l *LevelDBStore) hasByKey(key []byte) bool {
+func (l *internalLevelDBStore) hasByKey(key []byte) bool {
 	exists, err := l.db.Has(key, &opt.ReadOptions{DontFillCache: true}) // This isn't really a "read", so don't signal the cache to treat it as one.
 	d.Chk.NoError(err)
 	l.hasCount++
 	return exists
 }
 
-func (l *LevelDBStore) Put(c Chunk) {
-	l.putByKey(toChunkKey(c.Ref()), c)
-}
-
-func (l *LevelDBStore) putByKey(key []byte, c Chunk) {
+func (l *internalLevelDBStore) putByKey(key []byte, c Chunk) {
 	l.concurrentWriteLimit <- struct{}{}
 	err := l.db.Put(key, c.Data(), nil)
 	d.Chk.NoError(err)
@@ -115,7 +155,7 @@ func (l *LevelDBStore) putByKey(key []byte, c Chunk) {
 	<-l.concurrentWriteLimit
 }
 
-func (l *LevelDBStore) Close() error {
+func (l *internalLevelDBStore) Close() error {
 	l.db.Close()
 	if l.dumpStats {
 		fmt.Println("--LevelDB Stats--")
@@ -125,11 +165,6 @@ func (l *LevelDBStore) Close() error {
 		fmt.Println("Average PutSize: ", l.putBytes/l.putCount)
 	}
 	return nil
-}
-
-func toChunkKey(r ref.Ref) []byte {
-	digest := r.Digest()
-	return append(chunkPrefix, digest[:]...)
 }
 
 type LevelDBStoreFlags struct {
@@ -146,16 +181,16 @@ func LevelDBFlags(prefix string) LevelDBStoreFlags {
 	}
 }
 
-func (f LevelDBStoreFlags) CreateStore() ChunkStore {
+func (f LevelDBStoreFlags) CreateStore(ns string) ChunkStore {
 	if f.check() {
-		return NewLevelDBStore(*f.dir, *f.maxFileHandles, *f.dumpStats)
+		return NewLevelDBStore(*f.dir, ns, *f.maxFileHandles, *f.dumpStats)
 	}
 	return nil
 }
 
 func (f LevelDBStoreFlags) CreateFactory() Factory {
 	if f.check() {
-		return &LevelDBStoreFactory{f, f.CreateStore().(*LevelDBStore)}
+		return &LevelDBStoreFactory{f, newBackingStore(*f.dir, *f.maxFileHandles, *f.dumpStats)}
 	}
 	return nil
 }
@@ -166,13 +201,13 @@ func (f LevelDBStoreFlags) check() bool {
 
 type LevelDBStoreFactory struct {
 	flags LevelDBStoreFlags
-	store *LevelDBStore
+	store *internalLevelDBStore
 }
 
-func (f *LevelDBStoreFactory) CreateNamespacedStore(ns string) ChunkStore {
+func (f *LevelDBStoreFactory) CreateStore(ns string) ChunkStore {
 	d.Chk.NotNil(f.store, "Cannot use LevelDBStoreFactory after Shutter().")
 	if f.flags.check() {
-		return &NamedLevelDBStore{f.store, []byte(ns)}
+		return newLevelDBStore(f.store, []byte(ns), false)
 	}
 	return nil
 }
@@ -180,43 +215,4 @@ func (f *LevelDBStoreFactory) CreateNamespacedStore(ns string) ChunkStore {
 func (f *LevelDBStoreFactory) Shutter() {
 	f.store.Close()
 	f.store = nil
-}
-
-type NamedLevelDBStore struct {
-	*LevelDBStore
-	namespace []byte
-}
-
-func (l *NamedLevelDBStore) Root() ref.Ref {
-	d.Chk.NotNil(l.LevelDBStore, "Cannot use NamedLevelDBStore after Close().")
-	return l.rootByKey(append(l.namespace, rootKey...))
-}
-
-func (l *NamedLevelDBStore) UpdateRoot(current, last ref.Ref) bool {
-	d.Chk.NotNil(l.LevelDBStore, "Cannot use NamedLevelDBStore after Close().")
-	return l.updateRootByKey(append(l.namespace, rootKey...), current, last)
-}
-
-func (l *NamedLevelDBStore) Get(ref ref.Ref) Chunk {
-	d.Chk.NotNil(l.LevelDBStore, "Cannot use NamedLevelDBStore after Close().")
-	return l.getByKey(l.toChunkKey(ref), ref)
-}
-
-func (l *NamedLevelDBStore) Has(ref ref.Ref) bool {
-	d.Chk.NotNil(l.LevelDBStore, "Cannot use NamedLevelDBStore after Close().")
-	return l.hasByKey(l.toChunkKey(ref))
-}
-
-func (l *NamedLevelDBStore) Put(c Chunk) {
-	d.Chk.NotNil(l.LevelDBStore, "Cannot use NamedLevelDBStore after Close().")
-	l.putByKey(l.toChunkKey(c.Ref()), c)
-}
-
-func (l *NamedLevelDBStore) Close() error {
-	l.LevelDBStore = nil
-	return nil
-}
-
-func (l *NamedLevelDBStore) toChunkKey(r ref.Ref) []byte {
-	return append(l.namespace, toChunkKey(r)...)
 }

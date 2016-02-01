@@ -1,6 +1,8 @@
 package datas
 
 import (
+	"flag"
+
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 )
@@ -33,10 +35,11 @@ func NewDataStore(cs chunks.ChunkStore) DataStore {
 }
 
 type Flags struct {
-	ldb    chunks.LevelDBStoreFlags
-	dynamo chunks.DynamoStoreFlags
-	hflags chunks.HTTPStoreFlags
-	memory chunks.MemoryStoreFlags
+	ldb         chunks.LevelDBStoreFlags
+	dynamo      chunks.DynamoStoreFlags
+	hflags      chunks.HTTPStoreFlags
+	memory      chunks.MemoryStoreFlags
+	datastoreID *string
 }
 
 func NewFlags() Flags {
@@ -49,21 +52,22 @@ func NewFlagsWithPrefix(prefix string) Flags {
 		chunks.DynamoFlags(prefix),
 		chunks.HTTPFlags(prefix),
 		chunks.MemoryFlags(prefix),
+		flag.String(prefix+"store", "", "name of datastore to access datasets in"),
 	}
 }
 
 func (f Flags) CreateDataStore() (DataStore, bool) {
 	var cs chunks.ChunkStore
-	if cs = f.ldb.CreateStore(); cs != nil {
-	} else if cs = f.dynamo.CreateStore(); cs != nil {
-	} else if cs = f.memory.CreateStore(); cs != nil {
+	if cs = f.ldb.CreateStore(*f.datastoreID); cs != nil {
+	} else if cs = f.dynamo.CreateStore(*f.datastoreID); cs != nil {
+	} else if cs = f.memory.CreateStore(*f.datastoreID); cs != nil {
 	}
 
 	if cs != nil {
 		return newLocalDataStore(cs), true
 	}
 
-	if cs = f.hflags.CreateStore(); cs != nil {
+	if cs = f.hflags.CreateStore(*f.datastoreID); cs != nil {
 		return newRemoteDataStore(cs), true
 	}
 
