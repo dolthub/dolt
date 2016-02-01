@@ -27,4 +27,4 @@ go build
 
 ## Sample data
 
-There are currently a small collection of datasets you can sync available at `-h="ds.noms.io"`. You can browse them at [http://apps.noms.io/splore](http://apps.noms.io/splore) (username: attic, password: labs).
+There are currently a small collection of datasets you can sync available at `-h="ds.noms.io"`. You can browse them at [http://splore.noms.io](http://splore.noms.io) (username: attic, password: labs).
