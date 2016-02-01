@@ -15,7 +15,6 @@ const (
 	buildScript = "build.py"
 	stageScript = "stage.py"
 
-	nomsServer        = "http://ds.noms.io"
 	nomsCheckoutPath  = "src/github.com/attic-labs/noms"
 	atticCheckoutPath = "src/github.com/attic-labs/attic"
 )
@@ -43,8 +42,7 @@ func main() {
 		}
 		pythonPath := filepath.Join(goPath, nomsCheckoutPath, "tools")
 		env := runner.Env{
-			"PYTHONPATH":  pythonPath,
-			"NOMS_SERVER": nomsServer,
+			"PYTHONPATH": pythonPath,
 		}
 
 		if !runner.Serial(os.Stdout, os.Stderr, env, ".", buildScript) {
