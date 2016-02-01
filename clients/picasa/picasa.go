@@ -58,7 +58,7 @@ func main() {
 		flag.Usage()
 		return
 	}
-	defer ds.Close()
+	defer ds.Store().Close()
 
 	var currentUser *User
 	if commit, ok := ds.MaybeHead(); ok {

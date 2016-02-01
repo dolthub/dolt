@@ -57,7 +57,7 @@ func (s *testSuite) TestTagdex() {
 	var err error
 	inputDs, err = inputDs.Commit(refVal)
 	s.NoError(err)
-	inputDs.Close()
+	inputDs.Store().Close()
 
 	out := s.Run(main, []string{"-store", sn, "-in", "input-test", "-out", "tagdex-test"})
 	s.Contains(out, "Indexed 105 photos")

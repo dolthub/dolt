@@ -66,7 +66,7 @@ func main() {
 		flag.Usage()
 		return
 	}
-	defer ds.Close()
+	defer ds.Store().Close()
 
 	api := liveFlickrAPI{}
 	getUser(api)
