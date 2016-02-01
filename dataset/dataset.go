@@ -107,10 +107,6 @@ func (ds *Dataset) SetNewHead(newHeadRef ref.Ref) (Dataset, error) {
 	return ds.CommitWithParents(commit.Value(), commit.Parents())
 }
 
-func (ds *Dataset) Close() {
-	ds.store.Close()
-}
-
 type datasetFlags struct {
 	datas.Flags
 	datasetID *string

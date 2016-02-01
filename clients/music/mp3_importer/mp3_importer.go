@@ -88,7 +88,7 @@ func main() {
 		flag.Usage()
 		return
 	}
-	defer ds.Close()
+	defer ds.Store().Close()
 
 	if *addFlag != "" {
 		addMp3(ds, *addFlag)

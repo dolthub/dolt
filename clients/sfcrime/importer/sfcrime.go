@@ -64,7 +64,7 @@ func main() {
 		flag.Usage()
 		return
 	}
-	defer ds.Close()
+	defer ds.Store().Close()
 
 	csvfile, err := os.Open(*inputFlag)
 	if err != nil {

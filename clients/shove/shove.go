@@ -32,7 +32,7 @@ func main() {
 		return
 	}
 	defer sourceStore.Close()
-	defer sink.Close()
+	defer sink.Store().Close()
 
 	err := d.Try(func() {
 		if util.MaybeStartCPUProfile() {
