@@ -32,7 +32,8 @@ func createRefOfRemotePhoto(id int, tag string, cs chunks.ChunkStore) RefOfRemot
 }
 
 func (s *testSuite) TestTagdex() {
-	cs := chunks.NewLevelDBStore(s.LdbDir, 1, false)
+	sn := "storeName"
+	cs := chunks.NewLevelDBStore(s.LdbDir, sn, 1, false)
 	inputDs := dataset.NewDataset(datas.NewDataStore(cs), "input-test")
 
 	fakePhotos := map[string]int{
@@ -56,12 +57,12 @@ func (s *testSuite) TestTagdex() {
 	var err error
 	inputDs, err = inputDs.Commit(refVal)
 	s.NoError(err)
-	inputDs.Close()
+	inputDs.Store().Close()
 
-	out := s.Run(main, []string{"-in", "input-test", "-out", "tagdex-test"})
+	out := s.Run(main, []string{"-store", sn, "-in", "input-test", "-out", "tagdex-test"})
 	s.Contains(out, "Indexed 105 photos")
 
-	cs = chunks.NewLevelDBStore(s.LdbDir, 1, false)
+	cs = chunks.NewLevelDBStore(s.LdbDir, sn, 1, false)
 	ds := dataset.NewDataset(datas.NewDataStore(cs), "tagdex-test")
 
 	m := ds.Head().Value().(MapOfStringToSetOfRefOfRemotePhoto)

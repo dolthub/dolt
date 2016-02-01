@@ -35,12 +35,14 @@ func (s *testSuite) TestCSVImporter() {
 	_, err = input.Seek(0, 0)
 	d.Chk.NoError(err)
 
-	out := s.Run(main, []string{"-ds", "csv", input.Name()})
+	storeName := "store"
+	setName := "csv"
+	out := s.Run(main, []string{"-store", storeName, "-ds", setName, input.Name()})
 	s.Equal("", out)
 
-	cs := chunks.NewLevelDBStore(s.LdbDir, 1, false)
-	ds := dataset.NewDataset(datas.NewDataStore(cs), "csv")
-	defer ds.Close()
+	cs := chunks.NewLevelDBStore(s.LdbDir, storeName, 1, false)
+	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
+	defer ds.Store().Close()
 
 	l := ds.Head().Value().(types.List)
 	s.Equal(uint64(100), l.Len())
@@ -66,12 +68,15 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 
 	_, err = input.WriteString("a|b\n1|2\n")
 	d.Chk.NoError(err)
-	out := s.Run(main, []string{"-ds", "csv", input.Name()})
+
+	storeName := "store"
+	setName := "csv"
+	out := s.Run(main, []string{"-store", storeName, "-ds", setName, input.Name()})
 	s.Equal("", out)
 
-	cs := chunks.NewLevelDBStore(s.LdbDir, 1, false)
-	ds := dataset.NewDataset(datas.NewDataStore(cs), "csv")
-	defer ds.Close()
+	cs := chunks.NewLevelDBStore(s.LdbDir, storeName, 1, false)
+	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
+	defer ds.Store().Close()
 
 	l := ds.Head().Value().(types.List)
 	s.Equal(uint64(1), l.Len())
@@ -92,12 +97,15 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 
 	_, err = input.WriteString("7,8\n")
 	d.Chk.NoError(err)
-	out := s.Run(main, []string{"-ds", "csv", input.Name()})
+
+	storeName := "store"
+	setName := "csv"
+	out := s.Run(main, []string{"-store", storeName, "-ds", setName, input.Name()})
 	s.Equal("", out)
 
-	cs := chunks.NewLevelDBStore(s.LdbDir, 1, false)
-	ds := dataset.NewDataset(datas.NewDataStore(cs), "csv")
-	defer ds.Close()
+	cs := chunks.NewLevelDBStore(s.LdbDir, storeName, 1, false)
+	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
+	defer ds.Store().Close()
 
 	l := ds.Head().Value().(types.List)
 	s.Equal(uint64(1), l.Len())

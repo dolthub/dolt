@@ -44,7 +44,7 @@ func main() {
 		flag.Usage()
 		return
 	}
-	defer ds.Close()
+	defer ds.Store().Close()
 
 	fmt.Print("Fetching excel file - this can take a minute or so...")
 	resp, err := httpClient.Get(url)

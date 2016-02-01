@@ -54,7 +54,7 @@ func NewTestStoreFactory() *testStoreFactory {
 	return &testStoreFactory{map[string]*TestStore{}}
 }
 
-func (f *testStoreFactory) CreateNamespacedStore(ns string) ChunkStore {
+func (f *testStoreFactory) CreateStore(ns string) ChunkStore {
 	if cs, present := f.stores[ns]; present {
 		return cs
 	}

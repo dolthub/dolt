@@ -408,18 +408,16 @@ func (s *DynamoStore) removeNamespace(namespaced []byte) []byte {
 }
 
 type DynamoStoreFlags struct {
-	dynamoTable     *string
-	dynamoNamespace *string
-	awsRegion       *string
-	authFromEnv     *bool
-	awsKey          *string
-	awsSecret       *string
+	dynamoTable *string
+	awsRegion   *string
+	authFromEnv *bool
+	awsKey      *string
+	awsSecret   *string
 }
 
 func DynamoFlags(prefix string) DynamoStoreFlags {
 	return DynamoStoreFlags{
 		flag.String(prefix+"dynamo-table", dynamoTableName, "dynamodb table to store the values of the chunkstore in. You probably don't want to change this."),
-		flag.String(prefix+"dynamo-ns", "", "namespace for keys used to store chunks in aws-based chunkstore"),
 		flag.String(prefix+"aws-region", "us-west-2", "aws region to put the aws-based chunkstore in"),
 		flag.Bool(prefix+"aws-auth-from-env", false, "creates the aws-based chunkstore from authorization found in the environment. This is typically used in production to get keys from IAM profile. If not specified, then -aws-key and aws-secret must be specified instead"),
 		flag.String(prefix+"aws-key", "", "aws key to use to create the aws-based chunkstore"),
@@ -427,15 +425,11 @@ func DynamoFlags(prefix string) DynamoStoreFlags {
 	}
 }
 
-func (f DynamoStoreFlags) CreateStore() ChunkStore {
-	return f.CreateNamespacedStore(*f.dynamoNamespace)
-}
-
-func (f DynamoStoreFlags) CreateNamespacedStore(ns string) (cs ChunkStore) {
+func (f DynamoStoreFlags) CreateStore(ns string) ChunkStore {
 	if f.check() {
-		cs = NewDynamoStore(*f.dynamoTable, ns, *f.awsRegion, *f.awsKey, *f.awsSecret)
+		return NewDynamoStore(*f.dynamoTable, ns, *f.awsRegion, *f.awsKey, *f.awsSecret)
 	}
-	return
+	return nil
 }
 
 func (f DynamoStoreFlags) Shutter() {}
