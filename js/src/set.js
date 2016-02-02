@@ -30,6 +30,10 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
     return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, null));
   }
 
+  iteratorAt(v: T): AsyncIterator<T> {
+    return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, v));
+  }
+
   // TODO: Find some way to return a NomsSet.
   async map<S>(cb: (v: T) => (Promise<S> | S)): Promise<Array<S>> {
     const cursor = await this.sequence.newCursorAt(this.cs, null);

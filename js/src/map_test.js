@@ -3,11 +3,11 @@
 import {assert} from 'chai';
 import {suite} from 'mocha';
 
-import {notNull} from './assert.js';
 import MemoryStore from './memory_store.js';
 import test from './async_test.js';
 import type {ChunkStore} from './chunk_store.js';
 import {Kind} from './noms_kind.js';
+import {flatten} from './test_util.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MapLeafSequence, NomsMap} from './map.js';
 import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
@@ -69,17 +69,37 @@ suite('MapLeaf', () => {
 
     const test = async entries => {
       const m = new NomsMap(ms, tr, new MapLeafSequence(tr, entries));
-      const kv = [];
-      for (let iter = m.iterator(), next = await iter.next(); !next.done;
-           next = await iter.next()) {
-        kv.push(next.value);
-      }
-      assert.deepEqual(entries, kv);
+      assert.deepEqual(entries, flatten(m.iterator()));
     };
 
     test([]);
     test([{key: 'a', value: 4}]);
     test([{key: 'a', value: 4}, {key: 'k', value: 8}]);
+  });
+
+  test('iteratorAt', async () => {
+    const ms = new MemoryStore();
+    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
+                                makePrimitiveType(Kind.Int32));
+    const build = entries => new NomsMap(ms, tr, new MapLeafSequence(tr, entries));
+
+    assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
+
+    {
+      const kv = [{key: 'b', value: 5}];
+      assert.deepEqual(kv, await flatten(build(kv).iteratorAt('a')));
+      assert.deepEqual(kv, await flatten(build(kv).iteratorAt('b')));
+      assert.deepEqual([], await flatten(build(kv).iteratorAt('c')));
+    }
+
+    {
+      const kv = [{key: 'b', value: 5}, {key: 'd', value: 10}];
+      assert.deepEqual(kv, await flatten(build(kv).iteratorAt('a')));
+      assert.deepEqual(kv, await flatten(build(kv).iteratorAt('b')));
+      assert.deepEqual(kv.slice(1), await flatten(build(kv).iteratorAt('c')));
+      assert.deepEqual(kv.slice(1), await flatten(build(kv).iteratorAt('d')));
+      assert.deepEqual([], await flatten(build(kv).iteratorAt('e')));
+    }
   });
 
   test('chunks', () => {
@@ -193,15 +213,32 @@ suite('CompoundMap', () => {
   test('iterator', async () => {
     const ms = new MemoryStore();
     const [c] = build(ms);
+    assert.deepEqual([{key: 'a', value: false}, {key: 'b', value: false}, {key: 'e', value: true},
+                      {key: 'f', value: true}, {key: 'h', value: false}, {key: 'i', value: true},
+                      {key: 'm', value: true}, {key: 'n', value: false}],
+                     await flatten(c.iterator()));
+  });
 
-    const kv = [];
-    for (let iter = c.iterator(), next = await iter.next(); !next.done; next = await iter.next()) {
-      const {key, value} = notNull(next.value);
-      kv.push(key, value);
+  test('iteratorAt', async () => {
+    const ms = new MemoryStore();
+    const [c] = build(ms);
+    const entries = [{key: 'a', value: false}, {key: 'b', value: false}, {key: 'e', value: true},
+                     {key: 'f', value: true}, {key: 'h', value: false}, {key: 'i', value: true},
+                     {key: 'm', value: true}, {key: 'n', value: false}];
+    const offsets = {
+      _: 0, a: 0,
+      b: 1,
+      c: 2, d: 2, e: 2,
+      f: 3,
+      g: 4, h: 4,
+      i: 5,
+      j: 6, k: 6, l: 6, m: 6,
+      n: 7,
+      o: 8,
+    };
+    for (const k in offsets) {
+      assert.deepEqual(entries.slice(offsets[k]), await flatten(c.iteratorAt(k)));
     }
-
-    assert.deepEqual(['a', false, 'b', false, 'e', true, 'f', true, 'h', false, 'i', true, 'm',
-        true, 'n', false], kv);
   });
 
   test('chunks', () => {

@@ -10,7 +10,7 @@ import {OrderedSequence, OrderedSequenceIterator} from './ordered_sequence.js';
 
 export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
   key: K,
-  value: V
+  value: V,
 };
 
 export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collection<OrderedSequence> {
@@ -67,6 +67,10 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
 
   iterator(): AsyncIterator<MapEntry<K, V>> {
     return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, null));
+  }
+
+  iteratorAt(k: K): AsyncIterator<MapEntry<K, V>> {
+    return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, k));
   }
 
   get size(): number {

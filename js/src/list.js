@@ -24,6 +24,10 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
     return new IndexedSequenceIterator(this.sequence.newCursorAt(this.cs, 0));
   }
 
+  iteratorAt(i: number): AsyncIterator<T> {
+    return new IndexedSequenceIterator(this.sequence.newCursorAt(this.cs, i));
+  }
+
   get length(): number {
     if (this.sequence instanceof ListLeafSequence) {
       return this.sequence.items.length;
