@@ -460,8 +460,8 @@ func getFaces(e EntryJSON, shapes shapeMap) SetOfFaceDef {
 	height, width := atoi(e.Height.V), atoi(e.Width.V)
 
 	for _, f := range shapes[e.ID.V] {
-		t, l := parsePoint(f.UpperLeft)
-		b, r := parsePoint(f.LowerRight)
+		l, t := parsePoint(f.UpperLeft)
+		r, b := parsePoint(f.LowerRight)
 		faces[FaceDef{
 			Top:        t / float32(height),
 			Left:       l / float32(width),
