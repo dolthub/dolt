@@ -3,7 +3,6 @@
 package gen
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -36,18 +35,16 @@ type StructWithList struct {
 	_s string
 	_i int64
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewStructWithList(cs chunks.ChunkStore) StructWithList {
+func NewStructWithList() StructWithList {
 	return StructWithList{
-		_l: NewListOfUint8(cs),
+		_l: NewListOfUint8(),
 		_b: false,
 		_s: "",
 		_i: int64(0),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -59,13 +56,12 @@ type StructWithListDef struct {
 	I int64
 }
 
-func (def StructWithListDef) New(cs chunks.ChunkStore) StructWithList {
+func (def StructWithListDef) New() StructWithList {
 	return StructWithList{
-		_l:  def.L.New(cs),
+		_l:  def.L.New(),
 		_b:  def.B,
 		_s:  def.S,
 		_i:  def.I,
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -89,9 +85,9 @@ func init() {
 	types.RegisterStruct(__typeForStructWithList, builderForStructWithList, readerForStructWithList)
 }
 
-func builderForStructWithList(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForStructWithList(values []types.Value) types.Value {
 	i := 0
-	s := StructWithList{ref: &ref.Ref{}, cs: cs}
+	s := StructWithList{ref: &ref.Ref{}}
 	s._l = values[i].(ListOfUint8)
 	i++
 	s._b = bool(values[i].(types.Bool))

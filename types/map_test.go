@@ -16,7 +16,7 @@ func TestNewMap(t *testing.T) {
 	m := newMapLeaf(cs, mapType)
 	assert.IsType(newMapLeaf(cs, mapType), m)
 	assert.Equal(uint64(0), m.Len())
-	m = NewMap(cs, NewString("foo"), NewString("foo"), NewString("bar"), NewString("bar"))
+	m = NewMap(NewString("foo"), NewString("foo"), NewString("bar"), NewString("bar"))
 	assert.Equal(uint64(2), m.Len())
 	assert.True(NewString("foo").Equals(m.Get(NewString("foo"))))
 	assert.True(NewString("bar").Equals(m.Get(NewString("bar"))))
@@ -96,8 +96,7 @@ func TestMapSetM(t *testing.T) {
 // BUG 98
 func TestMapDuplicateSet(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	m1 := NewMap(cs, Bool(true), Bool(true), Int32(42), Int32(42), Int32(42), Int32(42))
+	m1 := NewMap(Bool(true), Bool(true), Int32(42), Int32(42), Int32(42), Int32(42))
 	assert.Equal(uint64(2), m1.Len())
 }
 
@@ -203,13 +202,12 @@ func TestMapIterAllP(t *testing.T) {
 
 func TestMapFilter(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	m := NewMap(cs, Int8(0), NewString("a"), Int8(1), NewString("b"), Int8(2), NewString("c"))
+	m := NewMap(Int8(0), NewString("a"), Int8(1), NewString("b"), Int8(2), NewString("c"))
 	m2 := m.Filter(func(k, v Value) bool {
 		return k.Equals(Int8(0)) || v.Equals(NewString("c"))
 	})
-	assert.True(NewMap(cs, Int8(0), NewString("a"), Int8(2), NewString("c")).Equals(m2))
+	assert.True(NewMap(Int8(0), NewString("a"), Int8(2), NewString("c")).Equals(m2))
 }
 
 func TestMapEquals(t *testing.T) {
@@ -225,8 +223,8 @@ func TestMapEquals(t *testing.T) {
 	assert.True(m3.Equals(m2))
 	assert.True(m2.Equals(m3))
 
-	m1 = NewMap(cs, NewString("foo"), Float32(0.0), NewString("bar"), NewList(cs))
-	m2 = m2.SetM(NewString("foo"), Float32(0.0), NewString("bar"), NewList(cs))
+	m1 = NewMap(NewString("foo"), Float32(0.0), NewString("bar"), NewList())
+	m2 = m2.SetM(NewString("foo"), Float32(0.0), NewString("bar"), NewList())
 	assert.True(m1.Equals(m2))
 	assert.True(m2.Equals(m1))
 	assert.False(m2.Equals(m3))
@@ -237,8 +235,8 @@ func TestMapNotStringKeys(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	b1 := NewMemoryBlob(bytes.NewBufferString("blob1"))
-	b2 := NewMemoryBlob(bytes.NewBufferString("blob2"))
+	b1 := NewBlob(bytes.NewBufferString("blob1"))
+	b2 := NewBlob(bytes.NewBufferString("blob2"))
 	l := []Value{
 		Bool(true), NewString("true"),
 		Bool(false), NewString("false"),
@@ -248,14 +246,14 @@ func TestMapNotStringKeys(t *testing.T) {
 		Float64(0), NewString("float64: 0"),
 		b1, NewString("blob1"),
 		b2, NewString("blob2"),
-		NewList(cs), NewString("empty list"),
-		NewList(cs, NewList(cs)), NewString("list of list"),
+		NewList(), NewString("empty list"),
+		NewList(NewList()), NewString("list of list"),
 		newMapLeaf(cs, mapType), NewString("empty map"),
-		NewMap(cs, newMapLeaf(cs, mapType), newMapLeaf(cs, mapType)), NewString("map of map/map"),
-		NewSet(cs), NewString("empty set"),
-		NewSet(cs, NewSet(cs)), NewString("map of set/set"),
+		NewMap(newMapLeaf(cs, mapType), newMapLeaf(cs, mapType)), NewString("map of map/map"),
+		NewSet(), NewString("empty set"),
+		NewSet(NewSet()), NewString("map of set/set"),
 	}
-	m1 := NewMap(cs, l...)
+	m1 := NewMap(l...)
 	assert.Equal(uint64(14), m1.Len())
 	for i := 0; i < len(l); i += 2 {
 		assert.True(m1.Get(l[i]).Equals(l[i+1]))
@@ -264,9 +262,8 @@ func TestMapNotStringKeys(t *testing.T) {
 }
 
 func testMapOrder(assert *assert.Assertions, keyType, valueType Type, tuples []Value, expectOrdering []Value) {
-	cs := chunks.NewMemoryStore()
 	mapTr := MakeCompoundType(MapKind, keyType, valueType)
-	m := NewTypedMap(cs, mapTr, tuples...)
+	m := NewTypedMap(mapTr, tuples...)
 	i := 0
 	m.IterAll(func(key, value Value) {
 		assert.Equal(expectOrdering[i].Ref().String(), key.Ref().String())
@@ -400,7 +397,7 @@ func TestMapEmpty(t *testing.T) {
 	assert.True(m.Empty())
 	m = m.Set(Bool(false), NewString("hi"))
 	assert.False(m.Empty())
-	m = m.Set(NewList(cs), newMapLeaf(cs, mapType))
+	m = m.Set(NewList(), newMapLeaf(cs, mapType))
 	assert.False(m.Empty())
 }
 
@@ -437,17 +434,16 @@ func TestMapType(t *testing.T) {
 
 func TestMapChunks(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l1 := NewMap(cs, Int32(0), Int32(1))
+	l1 := NewMap(Int32(0), Int32(1))
 	c1 := l1.Chunks()
 	assert.Len(c1, 0)
 
-	l2 := NewMap(cs, NewRef(Int32(0).Ref()), Int32(1))
+	l2 := NewMap(NewRef(Int32(0).Ref()), Int32(1))
 	c2 := l2.Chunks()
 	assert.Len(c2, 1)
 
-	l3 := NewMap(cs, Int32(0), NewRef(Int32(1).Ref()))
+	l3 := NewMap(Int32(0), NewRef(Int32(1).Ref()))
 	c3 := l3.Chunks()
 	assert.Len(c3, 1)
 }

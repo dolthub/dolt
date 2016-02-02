@@ -24,7 +24,7 @@ var (
 	ErrMergeNeeded          = errors.New("Dataset head is not ancestor of commit")
 )
 
-func datasetsFromRef(datasetsRef ref.Ref, cs chunks.ChunkStore) *MapOfStringToRefOfCommit {
+func datasetsFromRef(datasetsRef ref.Ref, cs chunks.ChunkSource) *MapOfStringToRefOfCommit {
 	c := types.ReadValue(datasetsRef, cs).(MapOfStringToRefOfCommit)
 	return &c
 }
@@ -33,7 +33,7 @@ func (ds *dataStoreCommon) MaybeHead(datasetID string) (Commit, bool) {
 	if r, ok := ds.Datasets().MaybeGet(datasetID); ok {
 		return r.TargetValue(ds), true
 	}
-	return NewCommit(ds), false
+	return NewCommit(), false
 }
 
 func (ds *dataStoreCommon) Head(datasetID string) Commit {
@@ -45,7 +45,7 @@ func (ds *dataStoreCommon) Head(datasetID string) Commit {
 func (ds *dataStoreCommon) Datasets() MapOfStringToRefOfCommit {
 	if ds.datasets == nil {
 		if ds.rootRef.IsEmpty() {
-			emptySet := NewMapOfStringToRefOfCommit(ds)
+			emptySet := NewMapOfStringToRefOfCommit()
 			ds.datasets = &emptySet
 		} else {
 			ds.datasets = datasetsFromRef(ds.rootRef, ds)
@@ -167,7 +167,7 @@ func descendsFrom(commit Commit, currentHeadRef RefOfCommit, cs chunks.ChunkStor
 }
 
 func getAncestors(commits SetOfRefOfCommit, cs chunks.ChunkStore) SetOfRefOfCommit {
-	ancestors := NewSetOfRefOfCommit(cs)
+	ancestors := NewSetOfRefOfCommit()
 	commits.IterAll(func(r RefOfCommit) {
 		c := r.TargetValue(cs)
 		ancestors = ancestors.Union(c.Parents())

@@ -9,9 +9,9 @@ import (
 type enumBuilderFunc func(v uint32) Value
 type enumReaderFunc func(v Value) uint32
 type refBuilderFunc func(target ref.Ref) Value
-type structBuilderFunc func(cs chunks.ChunkStore, values []Value) Value
+type structBuilderFunc func(values []Value) Value
 type structReaderFunc func(v Value) []Value
-type valueBuilderFunc func(cs chunks.ChunkStore, v Value) Value
+type valueBuilderFunc func(v Value) Value
 type valueReaderFunc func(v Value) Value
 
 type enumFuncs struct {
@@ -51,7 +51,7 @@ func RegisterPackage(p *Package) (r ref.Ref) {
 	return
 }
 
-func readPackage(r ref.Ref, cs chunks.ChunkStore) *Package {
+func readPackage(r ref.Ref, cs chunks.ChunkSource) *Package {
 	p := ReadValue(r, cs).(Package)
 	RegisterPackage(&p)
 	return &p
@@ -61,9 +61,9 @@ func RegisterStruct(t Type, bf structBuilderFunc, rf structReaderFunc) {
 	structFuncMap[t.Ref()] = structFuncs{bf, rf}
 }
 
-func structBuilderForType(cs chunks.ChunkStore, values []Value, typ, typeDef Type) Value {
+func structBuilderForType(values []Value, typ, typeDef Type) Value {
 	if s, ok := structFuncMap[typ.Ref()]; ok {
-		return s.builder(cs, values)
+		return s.builder(values)
 	}
 	return structBuilder(values, typ, typeDef)
 }
@@ -102,11 +102,11 @@ func RegisterValue(t Type, bf valueBuilderFunc, rf valueReaderFunc) {
 	}
 }
 
-func valueFromType(cs chunks.ChunkStore, v Value, t Type) Value {
+func valueFromType(v Value, t Type) Value {
 	switch t.Kind() {
 	case MapKind, ListKind, SetKind:
 		if s, ok := valueFuncMap[t.Ref()]; ok {
-			return s.builder(cs, v)
+			return s.builder(v)
 		}
 	}
 

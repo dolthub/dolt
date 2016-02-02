@@ -27,7 +27,7 @@ func TestWriteValue(t *testing.T) {
 
 	// Encoding details for each codec is tested elsewhere.
 	// Here we just want to make sure codecs are selected correctly.
-	b := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01, 0x02}))
+	b := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01, 0x02}))
 	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), b)
 
 	testEncode(fmt.Sprintf("t [%d,\"hi\"]", StringKind), NewString("hi"))
@@ -42,7 +42,7 @@ func TestWriteBlobLeaf(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	buf := bytes.NewBuffer([]byte{})
-	b1 := NewMemoryBlob(buf)
+	b1 := NewBlob(buf)
 	bl1, ok := b1.(blobLeaf)
 	assert.True(ok)
 	r1 := WriteValue(bl1, cs)
@@ -50,7 +50,7 @@ func TestWriteBlobLeaf(t *testing.T) {
 	assert.Equal("sha1-e1bc846440ec2fb557a5a271e785cd4c648883fa", r1.String())
 
 	buf = bytes.NewBufferString("Hello, World!")
-	b2 := NewMemoryBlob(buf)
+	b2 := NewBlob(buf)
 	bl2, ok := b2.(blobLeaf)
 	assert.True(ok)
 	r2 := WriteValue(bl2, cs)

@@ -4,13 +4,11 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 )
 
 func TestStructRecursiveChildren(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	root := gen.TreeDef{
 		Children: []gen.TreeDef{
@@ -21,7 +19,7 @@ func TestStructRecursiveChildren(t *testing.T) {
 				},
 			},
 		},
-	}.New(cs)
+	}.New()
 
 	assert.Equal(uint64(2), root.Children().Len())
 	assert.Equal(uint64(0), root.Children().Get(0).Children().Len())

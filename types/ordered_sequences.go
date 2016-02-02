@@ -16,7 +16,7 @@ func isSequenceOrderedByIndexedType(t Type) bool {
 type getLeafOrderedValuesFn func(Value) []Value
 
 // Returns a cursor to |key| in |ms|, plus the leaf + index that |key| is in. |t| is the type of the ordered values.
-func findLeafInOrderedSequence(ms metaSequence, t Type, key Value, getValues getLeafOrderedValuesFn, cs chunks.ChunkStore) (cursor *sequenceCursor, leaf Value, idx int) {
+func findLeafInOrderedSequence(ms metaSequence, t Type, key Value, getValues getLeafOrderedValuesFn, cs chunks.ChunkSource) (cursor *sequenceCursor, leaf Value, idx int) {
 	cursor, leaf = newMetaSequenceCursor(ms, cs)
 
 	if isSequenceOrderedByIndexedType(t) {
@@ -31,7 +31,7 @@ func findLeafInOrderedSequence(ms metaSequence, t Type, key Value, getValues get
 		})
 	}
 
-	if current := cursor.current().(metaTuple); current.ChildRef() != valueFromType(cs, leaf, leaf.Type()).Ref() {
+	if current := cursor.current().(metaTuple); current.ChildRef() != valueFromType(leaf, leaf.Type()).Ref() {
 		leaf = readMetaTupleValue(current, cs)
 	}
 
@@ -57,7 +57,7 @@ func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 	})
 }
 
-func newOrderedMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
+func newOrderedMetaSequenceChunkFn(t Type) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
 
@@ -65,7 +65,7 @@ func newOrderedMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 			tuples[i] = v.(metaTuple) // chunk is written when the root sequence is written
 		}
 
-		meta := newMetaSequenceFromData(tuples, t, cs)
+		meta := newMetaSequenceFromData(tuples, t, nil)
 		return metaTuple{meta, ref.Ref{}, tuples.last().value}, meta
 	}
 }

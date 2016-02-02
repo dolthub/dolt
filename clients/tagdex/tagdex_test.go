@@ -27,7 +27,7 @@ func createRefOfRemotePhoto(id int, tag string, cs chunks.ChunkStore) RefOfRemot
 		Geoposition: GeopositionDef{Latitude: 50, Longitude: 50},
 		Sizes:       MapOfSizeToStringDef{SizeDef{1, 2}: fmt.Sprintf("http://test.com/images/%s-%d.jpg", tag, id)},
 		Tags:        map[string]bool{tag: true},
-	}.New(cs)
+	}.New()
 	return NewRefOfRemotePhoto(types.WriteValue(p, cs))
 }
 
@@ -45,7 +45,7 @@ func (s *testSuite) TestTagdex() {
 	}
 
 	// Build the set
-	set := NewSetOfRefOfRemotePhoto(cs)
+	set := NewSetOfRefOfRemotePhoto()
 	for name, num := range fakePhotos {
 		for i := 0; i < num; i++ {
 			set = set.Insert(createRefOfRemotePhoto(i, name, cs))

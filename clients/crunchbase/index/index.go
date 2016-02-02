@@ -60,11 +60,11 @@ func main() {
 
 		addTimeRounds := func(t time.Time, ref ref.Ref) {
 			year := int32(t.Year())
-			yk := NewKey(ds).SetYear(year)
+			yk := NewKey().SetYear(year)
 			c <- entry{yk, ref}
 
 			q := timeToQuarter(t)
-			qk := NewKey(ds).SetQuarter(QuarterDef{Year: year, Quarter: q}.New(ds))
+			qk := NewKey().SetQuarter(QuarterDef{Year: year, Quarter: q}.New())
 			c <- entry{qk, ref}
 		}
 
@@ -84,7 +84,7 @@ func main() {
 				company := r.TargetValue(ds)
 				categoryList := company.CategoryList()
 				// Skip region for now to reduce size of data.
-				// regionKey := NewKey(ds).SetRegion(company.Region())
+				// regionKey := NewKey().SetRegion(company.Region())
 
 				company.Rounds().IterAll(func(r RefOfRound) {
 					round := r.TargetValue(ds)
@@ -100,7 +100,7 @@ func main() {
 
 					roundRef := r.TargetRef()
 					categoryList.IterAllP(64, func(category string) {
-						key := NewKey(ds).SetCategory(category)
+						key := NewKey().SetCategory(category)
 						c <- entry{key, roundRef}
 					})
 
@@ -110,7 +110,7 @@ func main() {
 					addTimeRounds(dateToTime(round.FundedAt()), roundRef)
 
 					roundType := classifyRoundType(round)
-					roundTypeKey := NewKey(ds).SetRoundType(roundType)
+					roundTypeKey := NewKey().SetRoundType(roundType)
 					c <- entry{roundTypeKey, roundRef}
 				})
 			})
@@ -131,7 +131,7 @@ func main() {
 			mapOfSets[keyRef] = setDef
 		}
 
-		output := mapOfSets.New(ds)
+		output := mapOfSets.New()
 		_, err := outputDataset.Commit(output)
 		d.Exp.NoError(err)
 

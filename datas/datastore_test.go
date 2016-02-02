@@ -40,7 +40,7 @@ func TestDataStoreCommit(t *testing.T) {
 
 	// |a|
 	a := types.NewString("a")
-	aCommit := NewCommit(cs).SetValue(a)
+	aCommit := NewCommit().SetValue(a)
 	ds2, err := ds.Commit(datasetID, aCommit)
 	assert.NoError(err)
 
@@ -55,7 +55,7 @@ func TestDataStoreCommit(t *testing.T) {
 
 	// |a| <- |b|
 	b := types.NewString("b")
-	bCommit := NewCommit(cs).SetValue(b).SetParents(NewSetOfRefOfCommit(cs).Insert(NewRefOfCommit(aCommit.Ref())))
+	bCommit := NewCommit().SetValue(b).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(aCommit.Ref())))
 	ds, err = ds.Commit(datasetID, bCommit)
 	assert.NoError(err)
 	assert.True(ds.Head(datasetID).Value().Equals(b))
@@ -64,14 +64,14 @@ func TestDataStoreCommit(t *testing.T) {
 	//   \----|c|
 	// Should be disallowed.
 	c := types.NewString("c")
-	cCommit := NewCommit(cs).SetValue(c)
+	cCommit := NewCommit().SetValue(c)
 	ds, err = ds.Commit(datasetID, cCommit)
 	assert.Error(err)
 	assert.True(ds.Head(datasetID).Value().Equals(b))
 
 	// |a| <- |b| <- |d|
 	d := types.NewString("d")
-	dCommit := NewCommit(cs).SetValue(d).SetParents(NewSetOfRefOfCommit(cs).Insert(NewRefOfCommit(bCommit.Ref())))
+	dCommit := NewCommit().SetValue(d).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(bCommit.Ref())))
 	ds, err = ds.Commit(datasetID, dCommit)
 	assert.NoError(err)
 	assert.True(ds.Head(datasetID).Value().Equals(d))
@@ -102,10 +102,10 @@ func TestDataStoreConcurrency(t *testing.T) {
 	// Setup:
 	// |a| <- |b|
 	a := types.NewString("a")
-	aCommit := NewCommit(cs).SetValue(a)
+	aCommit := NewCommit().SetValue(a)
 	ds, err := ds.Commit(datasetID, aCommit)
 	b := types.NewString("b")
-	bCommit := NewCommit(cs).SetValue(b).SetParents(NewSetOfRefOfCommit(cs).Insert(NewRefOfCommit(aCommit.Ref())))
+	bCommit := NewCommit().SetValue(b).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(aCommit.Ref())))
 	ds, err = ds.Commit(datasetID, bCommit)
 	assert.NoError(err)
 	assert.True(ds.Head(datasetID).Value().Equals(b))
@@ -116,7 +116,7 @@ func TestDataStoreConcurrency(t *testing.T) {
 	// Change 1:
 	// |a| <- |b| <- |c|
 	c := types.NewString("c")
-	cCommit := NewCommit(cs).SetValue(c).SetParents(NewSetOfRefOfCommit(cs).Insert(NewRefOfCommit(bCommit.Ref())))
+	cCommit := NewCommit().SetValue(c).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(bCommit.Ref())))
 	ds, err = ds.Commit(datasetID, cCommit)
 	assert.NoError(err)
 	assert.True(ds.Head(datasetID).Value().Equals(c))
@@ -125,7 +125,7 @@ func TestDataStoreConcurrency(t *testing.T) {
 	// |a| <- |b| <- |e|
 	// Should be disallowed, DataStore returned by Commit() should have |c| as Head.
 	e := types.NewString("e")
-	eCommit := NewCommit(cs).SetValue(e).SetParents(NewSetOfRefOfCommit(cs).Insert(NewRefOfCommit(bCommit.Ref())))
+	eCommit := NewCommit().SetValue(e).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(bCommit.Ref())))
 	ds2, err = ds2.Commit(datasetID, eCommit)
 	assert.Error(err)
 	assert.True(ds.Head(datasetID).Value().Equals(c))

@@ -3,7 +3,6 @@
 package gen
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -30,15 +29,13 @@ func init() {
 type A struct {
 	_A ListOfListOfBlob
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewA(cs chunks.ChunkStore) A {
+func NewA() A {
 	return A{
-		_A: NewListOfListOfBlob(cs),
+		_A: NewListOfListOfBlob(),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -47,10 +44,9 @@ type ADef struct {
 	A ListOfListOfBlobDef
 }
 
-func (def ADef) New(cs chunks.ChunkStore) A {
+func (def ADef) New() A {
 	return A{
-		_A:  def.A.New(cs),
-		cs:  cs,
+		_A:  def.A.New(),
 		ref: &ref.Ref{},
 	}
 }
@@ -71,9 +67,9 @@ func init() {
 	types.RegisterStruct(__typeForA, builderForA, readerForA)
 }
 
-func builderForA(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForA(values []types.Value) types.Value {
 	i := 0
-	s := A{ref: &ref.Ref{}, cs: cs}
+	s := A{ref: &ref.Ref{}}
 	s._A = values[i].(ListOfListOfBlob)
 	i++
 	return s
@@ -119,22 +115,21 @@ func (s A) SetA(val ListOfListOfBlob) A {
 
 type ListOfListOfBlob struct {
 	l   types.List
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfListOfBlob(cs chunks.ChunkStore) ListOfListOfBlob {
-	return ListOfListOfBlob{types.NewTypedList(cs, __typeForListOfListOfBlob), cs, &ref.Ref{}}
+func NewListOfListOfBlob() ListOfListOfBlob {
+	return ListOfListOfBlob{types.NewTypedList(__typeForListOfListOfBlob), &ref.Ref{}}
 }
 
 type ListOfListOfBlobDef []ListOfBlobDef
 
-func (def ListOfListOfBlobDef) New(cs chunks.ChunkStore) ListOfListOfBlob {
+func (def ListOfListOfBlobDef) New() ListOfListOfBlob {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
-		l[i] = d.New(cs)
+		l[i] = d.New()
 	}
-	return ListOfListOfBlob{types.NewTypedList(cs, __typeForListOfListOfBlob, l...), cs, &ref.Ref{}}
+	return ListOfListOfBlob{types.NewTypedList(__typeForListOfListOfBlob, l...), &ref.Ref{}}
 }
 
 func (l ListOfListOfBlob) Def() ListOfListOfBlobDef {
@@ -175,8 +170,8 @@ func init() {
 	types.RegisterValue(__typeForListOfListOfBlob, builderForListOfListOfBlob, readerForListOfListOfBlob)
 }
 
-func builderForListOfListOfBlob(cs chunks.ChunkStore, v types.Value) types.Value {
-	return ListOfListOfBlob{v.(types.List), cs, &ref.Ref{}}
+func builderForListOfListOfBlob(v types.Value) types.Value {
+	return ListOfListOfBlob{v.(types.List), &ref.Ref{}}
 }
 
 func readerForListOfListOfBlob(v types.Value) types.Value {
@@ -196,27 +191,27 @@ func (l ListOfListOfBlob) Get(i uint64) ListOfBlob {
 }
 
 func (l ListOfListOfBlob) Slice(idx uint64, end uint64) ListOfListOfBlob {
-	return ListOfListOfBlob{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
+	return ListOfListOfBlob{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfListOfBlob) Set(i uint64, val ListOfBlob) ListOfListOfBlob {
-	return ListOfListOfBlob{l.l.Set(i, val), l.cs, &ref.Ref{}}
+	return ListOfListOfBlob{l.l.Set(i, val), &ref.Ref{}}
 }
 
 func (l ListOfListOfBlob) Append(v ...ListOfBlob) ListOfListOfBlob {
-	return ListOfListOfBlob{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
+	return ListOfListOfBlob{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfListOfBlob) Insert(idx uint64, v ...ListOfBlob) ListOfListOfBlob {
-	return ListOfListOfBlob{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
+	return ListOfListOfBlob{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfListOfBlob) Remove(idx uint64, end uint64) ListOfListOfBlob {
-	return ListOfListOfBlob{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
+	return ListOfListOfBlob{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfListOfBlob) RemoveAt(idx uint64) ListOfListOfBlob {
-	return ListOfListOfBlob{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
+	return ListOfListOfBlob{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l ListOfListOfBlob) fromElemSlice(p []ListOfBlob) []types.Value {
@@ -255,29 +250,28 @@ func (l ListOfListOfBlob) Filter(cb ListOfListOfBlobFilterCallback) ListOfListOf
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(ListOfBlob), i)
 	})
-	return ListOfListOfBlob{out, l.cs, &ref.Ref{}}
+	return ListOfListOfBlob{out, &ref.Ref{}}
 }
 
 // ListOfBlob
 
 type ListOfBlob struct {
 	l   types.List
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfBlob(cs chunks.ChunkStore) ListOfBlob {
-	return ListOfBlob{types.NewTypedList(cs, __typeForListOfBlob), cs, &ref.Ref{}}
+func NewListOfBlob() ListOfBlob {
+	return ListOfBlob{types.NewTypedList(__typeForListOfBlob), &ref.Ref{}}
 }
 
 type ListOfBlobDef []types.Blob
 
-func (def ListOfBlobDef) New(cs chunks.ChunkStore) ListOfBlob {
+func (def ListOfBlobDef) New() ListOfBlob {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
 		l[i] = d
 	}
-	return ListOfBlob{types.NewTypedList(cs, __typeForListOfBlob, l...), cs, &ref.Ref{}}
+	return ListOfBlob{types.NewTypedList(__typeForListOfBlob, l...), &ref.Ref{}}
 }
 
 func (l ListOfBlob) Def() ListOfBlobDef {
@@ -318,8 +312,8 @@ func init() {
 	types.RegisterValue(__typeForListOfBlob, builderForListOfBlob, readerForListOfBlob)
 }
 
-func builderForListOfBlob(cs chunks.ChunkStore, v types.Value) types.Value {
-	return ListOfBlob{v.(types.List), cs, &ref.Ref{}}
+func builderForListOfBlob(v types.Value) types.Value {
+	return ListOfBlob{v.(types.List), &ref.Ref{}}
 }
 
 func readerForListOfBlob(v types.Value) types.Value {
@@ -339,27 +333,27 @@ func (l ListOfBlob) Get(i uint64) types.Blob {
 }
 
 func (l ListOfBlob) Slice(idx uint64, end uint64) ListOfBlob {
-	return ListOfBlob{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
+	return ListOfBlob{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfBlob) Set(i uint64, val types.Blob) ListOfBlob {
-	return ListOfBlob{l.l.Set(i, val), l.cs, &ref.Ref{}}
+	return ListOfBlob{l.l.Set(i, val), &ref.Ref{}}
 }
 
 func (l ListOfBlob) Append(v ...types.Blob) ListOfBlob {
-	return ListOfBlob{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
+	return ListOfBlob{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfBlob) Insert(idx uint64, v ...types.Blob) ListOfBlob {
-	return ListOfBlob{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
+	return ListOfBlob{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfBlob) Remove(idx uint64, end uint64) ListOfBlob {
-	return ListOfBlob{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
+	return ListOfBlob{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfBlob) RemoveAt(idx uint64) ListOfBlob {
-	return ListOfBlob{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
+	return ListOfBlob{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l ListOfBlob) fromElemSlice(p []types.Blob) []types.Value {
@@ -398,5 +392,5 @@ func (l ListOfBlob) Filter(cb ListOfBlobFilterCallback) ListOfBlob {
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(types.Blob), i)
 	})
-	return ListOfBlob{out, l.cs, &ref.Ref{}}
+	return ListOfBlob{out, &ref.Ref{}}
 }

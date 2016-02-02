@@ -21,19 +21,19 @@ func TestValidateRef(t *testing.T) {
 }
 
 func NewList(ds Dataset, vs ...types.Value) types.Ref {
-	v := types.NewList(ds.Store(), vs...)
+	v := types.NewList(vs...)
 	r := types.WriteValue(v, ds.store)
 	return types.NewRef(r)
 }
 
 func NewMap(ds Dataset, vs ...types.Value) types.Ref {
-	v := types.NewMap(ds.Store(), vs...)
+	v := types.NewMap(vs...)
 	r := types.WriteValue(v, ds.store)
 	return types.NewRef(r)
 }
 
 func NewSet(ds Dataset, vs ...types.Value) types.Ref {
-	v := types.NewSet(ds.Store(), vs...)
+	v := types.NewSet(vs...)
 	r := types.WriteValue(v, ds.store)
 	return types.NewRef(r)
 }
@@ -45,10 +45,10 @@ func pullTest(t *testing.T, topdown bool) {
 	source := createTestDataset("source")
 
 	// Give sink and source some initial shared context.
-	sourceInitialValue := types.NewMap(source.Store(),
+	sourceInitialValue := types.NewMap(
 		types.NewString("first"), NewList(source),
 		types.NewString("second"), NewList(source, types.Int32(2)))
-	sinkInitialValue := types.NewMap(sink.Store(),
+	sinkInitialValue := types.NewMap(
 		types.NewString("first"), NewList(sink),
 		types.NewString("second"), NewList(sink, types.Int32(2)))
 
@@ -89,7 +89,7 @@ func pullFirstCommit(t *testing.T, topdown bool) {
 	sink := createTestDataset("sink")
 	source := createTestDataset("source")
 
-	sourceInitialValue := types.NewMap(source.Store(),
+	sourceInitialValue := types.NewMap(
 		types.NewString("first"), NewList(source),
 		types.NewString("second"), NewList(source, types.Int32(2)))
 
@@ -118,10 +118,10 @@ func pullDeepRef(t *testing.T, topdown bool) {
 	sink := createTestDataset("sink")
 	source := createTestDataset("source")
 
-	sourceInitialValue := types.NewList(source.Store(),
-		types.NewList(source.Store(), NewList(source)),
-		types.NewSet(source.Store(), NewSet(source)),
-		types.NewMap(source.Store(), NewMap(source), NewMap(source)))
+	sourceInitialValue := types.NewList(
+		types.NewList(NewList(source)),
+		types.NewSet(NewSet(source)),
+		types.NewMap(NewMap(source), NewMap(source)))
 
 	source, err := source.Commit(sourceInitialValue)
 	assert.NoError(err)

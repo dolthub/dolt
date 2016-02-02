@@ -5,14 +5,12 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 	"github.com/attic-labs/noms/types"
 )
 
 func TestAccessors(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	def := gen.StructPrimitivesDef{
 		Uint64:  uint64(1),
@@ -31,7 +29,7 @@ func TestAccessors(t *testing.T) {
 		Value:   types.Bool(false),
 	}
 
-	st := def.New(cs)
+	st := def.New()
 
 	assert.Equal(uint64(1), st.Uint64())
 	st.SetUint64(uint64(11))
@@ -106,7 +104,7 @@ func TestAccessors(t *testing.T) {
 	assert.Equal("bye", st.String())
 
 	assert.True(st.Blob().Equals(types.NewEmptyBlob()))
-	b := types.NewMemoryBlob(strings.NewReader("hello"))
+	b := types.NewBlob(strings.NewReader("hello"))
 	st.SetBlob(b)
 	assert.True(st.Blob().Equals(types.NewEmptyBlob()))
 	st = st.SetBlob(b)

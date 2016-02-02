@@ -3,7 +3,6 @@
 package gen
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -30,15 +29,13 @@ func init() {
 type StructWithDupList struct {
 	_l ListOfUint8
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewStructWithDupList(cs chunks.ChunkStore) StructWithDupList {
+func NewStructWithDupList() StructWithDupList {
 	return StructWithDupList{
-		_l: NewListOfUint8(cs),
+		_l: NewListOfUint8(),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -47,10 +44,9 @@ type StructWithDupListDef struct {
 	L ListOfUint8Def
 }
 
-func (def StructWithDupListDef) New(cs chunks.ChunkStore) StructWithDupList {
+func (def StructWithDupListDef) New() StructWithDupList {
 	return StructWithDupList{
-		_l:  def.L.New(cs),
-		cs:  cs,
+		_l:  def.L.New(),
 		ref: &ref.Ref{},
 	}
 }
@@ -71,9 +67,9 @@ func init() {
 	types.RegisterStruct(__typeForStructWithDupList, builderForStructWithDupList, readerForStructWithDupList)
 }
 
-func builderForStructWithDupList(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForStructWithDupList(values []types.Value) types.Value {
 	i := 0
-	s := StructWithDupList{ref: &ref.Ref{}, cs: cs}
+	s := StructWithDupList{ref: &ref.Ref{}}
 	s._l = values[i].(ListOfUint8)
 	i++
 	return s
@@ -119,22 +115,21 @@ func (s StructWithDupList) SetL(val ListOfUint8) StructWithDupList {
 
 type ListOfUint8 struct {
 	l   types.List
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfUint8(cs chunks.ChunkStore) ListOfUint8 {
-	return ListOfUint8{types.NewTypedList(cs, __typeForListOfUint8), cs, &ref.Ref{}}
+func NewListOfUint8() ListOfUint8 {
+	return ListOfUint8{types.NewTypedList(__typeForListOfUint8), &ref.Ref{}}
 }
 
 type ListOfUint8Def []uint8
 
-func (def ListOfUint8Def) New(cs chunks.ChunkStore) ListOfUint8 {
+func (def ListOfUint8Def) New() ListOfUint8 {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
 		l[i] = types.Uint8(d)
 	}
-	return ListOfUint8{types.NewTypedList(cs, __typeForListOfUint8, l...), cs, &ref.Ref{}}
+	return ListOfUint8{types.NewTypedList(__typeForListOfUint8, l...), &ref.Ref{}}
 }
 
 func (l ListOfUint8) Def() ListOfUint8Def {
@@ -175,8 +170,8 @@ func init() {
 	types.RegisterValue(__typeForListOfUint8, builderForListOfUint8, readerForListOfUint8)
 }
 
-func builderForListOfUint8(cs chunks.ChunkStore, v types.Value) types.Value {
-	return ListOfUint8{v.(types.List), cs, &ref.Ref{}}
+func builderForListOfUint8(v types.Value) types.Value {
+	return ListOfUint8{v.(types.List), &ref.Ref{}}
 }
 
 func readerForListOfUint8(v types.Value) types.Value {
@@ -196,27 +191,27 @@ func (l ListOfUint8) Get(i uint64) uint8 {
 }
 
 func (l ListOfUint8) Slice(idx uint64, end uint64) ListOfUint8 {
-	return ListOfUint8{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
+	return ListOfUint8{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfUint8) Set(i uint64, val uint8) ListOfUint8 {
-	return ListOfUint8{l.l.Set(i, types.Uint8(val)), l.cs, &ref.Ref{}}
+	return ListOfUint8{l.l.Set(i, types.Uint8(val)), &ref.Ref{}}
 }
 
 func (l ListOfUint8) Append(v ...uint8) ListOfUint8 {
-	return ListOfUint8{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
+	return ListOfUint8{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfUint8) Insert(idx uint64, v ...uint8) ListOfUint8 {
-	return ListOfUint8{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
+	return ListOfUint8{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfUint8) Remove(idx uint64, end uint64) ListOfUint8 {
-	return ListOfUint8{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
+	return ListOfUint8{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfUint8) RemoveAt(idx uint64) ListOfUint8 {
-	return ListOfUint8{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
+	return ListOfUint8{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l ListOfUint8) fromElemSlice(p []uint8) []types.Value {
@@ -255,5 +250,5 @@ func (l ListOfUint8) Filter(cb ListOfUint8FilterCallback) ListOfUint8 {
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(uint8(v.(types.Uint8)), i)
 	})
-	return ListOfUint8{out, l.cs, &ref.Ref{}}
+	return ListOfUint8{out, &ref.Ref{}}
 }

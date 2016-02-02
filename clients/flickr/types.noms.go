@@ -48,19 +48,17 @@ type User struct {
 	_OAuthSecret string
 	_Albums      MapOfStringToAlbum
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewUser(cs chunks.ChunkStore) User {
+func NewUser() User {
 	return User{
 		_Id:          "",
 		_Name:        "",
 		_OAuthToken:  "",
 		_OAuthSecret: "",
-		_Albums:      NewMapOfStringToAlbum(cs),
+		_Albums:      NewMapOfStringToAlbum(),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -73,14 +71,13 @@ type UserDef struct {
 	Albums      MapOfStringToAlbumDef
 }
 
-func (def UserDef) New(cs chunks.ChunkStore) User {
+func (def UserDef) New() User {
 	return User{
 		_Id:          def.Id,
 		_Name:        def.Name,
 		_OAuthToken:  def.OAuthToken,
 		_OAuthSecret: def.OAuthSecret,
-		_Albums:      def.Albums.New(cs),
-		cs:           cs,
+		_Albums:      def.Albums.New(),
 		ref:          &ref.Ref{},
 	}
 }
@@ -105,9 +102,9 @@ func init() {
 	types.RegisterStruct(__typeForUser, builderForUser, readerForUser)
 }
 
-func builderForUser(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForUser(values []types.Value) types.Value {
 	i := 0
-	s := User{ref: &ref.Ref{}, cs: cs}
+	s := User{ref: &ref.Ref{}}
 	s._Id = values[i].(types.String).String()
 	i++
 	s._Name = values[i].(types.String).String()
@@ -212,17 +209,15 @@ type Album struct {
 	_Title  string
 	_Photos RefOfSetOfRefOfRemotePhoto
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewAlbum(cs chunks.ChunkStore) Album {
+func NewAlbum() Album {
 	return Album{
 		_Id:     "",
 		_Title:  "",
 		_Photos: NewRefOfSetOfRefOfRemotePhoto(ref.Ref{}),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -233,12 +228,11 @@ type AlbumDef struct {
 	Photos ref.Ref
 }
 
-func (def AlbumDef) New(cs chunks.ChunkStore) Album {
+func (def AlbumDef) New() Album {
 	return Album{
 		_Id:     def.Id,
 		_Title:  def.Title,
 		_Photos: NewRefOfSetOfRefOfRemotePhoto(def.Photos),
-		cs:      cs,
 		ref:     &ref.Ref{},
 	}
 }
@@ -261,9 +255,9 @@ func init() {
 	types.RegisterStruct(__typeForAlbum, builderForAlbum, readerForAlbum)
 }
 
-func builderForAlbum(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForAlbum(values []types.Value) types.Value {
 	i := 0
-	s := Album{ref: &ref.Ref{}, cs: cs}
+	s := Album{ref: &ref.Ref{}}
 	s._Id = values[i].(types.String).String()
 	i++
 	s._Title = values[i].(types.String).String()
@@ -337,22 +331,21 @@ func (s Album) SetPhotos(val RefOfSetOfRefOfRemotePhoto) Album {
 
 type MapOfStringToAlbum struct {
 	m   types.Map
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfStringToAlbum(cs chunks.ChunkStore) MapOfStringToAlbum {
-	return MapOfStringToAlbum{types.NewTypedMap(cs, __typeForMapOfStringToAlbum), cs, &ref.Ref{}}
+func NewMapOfStringToAlbum() MapOfStringToAlbum {
+	return MapOfStringToAlbum{types.NewTypedMap(__typeForMapOfStringToAlbum), &ref.Ref{}}
 }
 
 type MapOfStringToAlbumDef map[string]AlbumDef
 
-func (def MapOfStringToAlbumDef) New(cs chunks.ChunkStore) MapOfStringToAlbum {
+func (def MapOfStringToAlbumDef) New() MapOfStringToAlbum {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
-		kv = append(kv, types.NewString(k), v.New(cs))
+		kv = append(kv, types.NewString(k), v.New())
 	}
-	return MapOfStringToAlbum{types.NewTypedMap(cs, __typeForMapOfStringToAlbum, kv...), cs, &ref.Ref{}}
+	return MapOfStringToAlbum{types.NewTypedMap(__typeForMapOfStringToAlbum, kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToAlbum) Def() MapOfStringToAlbumDef {
@@ -394,8 +387,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfStringToAlbum, builderForMapOfStringToAlbum, readerForMapOfStringToAlbum)
 }
 
-func builderForMapOfStringToAlbum(cs chunks.ChunkStore, v types.Value) types.Value {
-	return MapOfStringToAlbum{v.(types.Map), cs, &ref.Ref{}}
+func builderForMapOfStringToAlbum(v types.Value) types.Value {
+	return MapOfStringToAlbum{v.(types.Map), &ref.Ref{}}
 }
 
 func readerForMapOfStringToAlbum(v types.Value) types.Value {
@@ -421,19 +414,19 @@ func (m MapOfStringToAlbum) Get(p string) Album {
 func (m MapOfStringToAlbum) MaybeGet(p string) (Album, bool) {
 	v, ok := m.m.MaybeGet(types.NewString(p))
 	if !ok {
-		return NewAlbum(m.cs), false
+		return NewAlbum(), false
 	}
 	return v.(Album), ok
 }
 
 func (m MapOfStringToAlbum) Set(k string, v Album) MapOfStringToAlbum {
-	return MapOfStringToAlbum{m.m.Set(types.NewString(k), v), m.cs, &ref.Ref{}}
+	return MapOfStringToAlbum{m.m.Set(types.NewString(k), v), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToAlbum) Remove(p string) MapOfStringToAlbum {
-	return MapOfStringToAlbum{m.m.Remove(types.NewString(p)), m.cs, &ref.Ref{}}
+	return MapOfStringToAlbum{m.m.Remove(types.NewString(p)), &ref.Ref{}}
 }
 
 type MapOfStringToAlbumIterCallback func(k string, v Album) (stop bool)
@@ -464,7 +457,7 @@ func (m MapOfStringToAlbum) Filter(cb MapOfStringToAlbumFilterCallback) MapOfStr
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(k.(types.String).String(), v.(Album))
 	})
-	return MapOfStringToAlbum{out, m.cs, &ref.Ref{}}
+	return MapOfStringToAlbum{out, &ref.Ref{}}
 }
 
 // RefOfUser
@@ -520,7 +513,7 @@ func builderForRefOfUser(r ref.Ref) types.Value {
 	return NewRefOfUser(r)
 }
 
-func (r RefOfUser) TargetValue(cs chunks.ChunkStore) User {
+func (r RefOfUser) TargetValue(cs chunks.ChunkSource) User {
 	return types.ReadValue(r.target, cs).(User)
 }
 
@@ -581,7 +574,7 @@ func builderForRefOfSetOfRefOfRemotePhoto(r ref.Ref) types.Value {
 	return NewRefOfSetOfRefOfRemotePhoto(r)
 }
 
-func (r RefOfSetOfRefOfRemotePhoto) TargetValue(cs chunks.ChunkStore) SetOfRefOfRemotePhoto {
+func (r RefOfSetOfRefOfRemotePhoto) TargetValue(cs chunks.ChunkSource) SetOfRefOfRemotePhoto {
 	return types.ReadValue(r.target, cs).(SetOfRefOfRemotePhoto)
 }
 
@@ -593,24 +586,23 @@ func (r RefOfSetOfRefOfRemotePhoto) SetTargetValue(val SetOfRefOfRemotePhoto, cs
 
 type SetOfRefOfRemotePhoto struct {
 	s   types.Set
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSetOfRefOfRemotePhoto(cs chunks.ChunkStore) SetOfRefOfRemotePhoto {
-	return SetOfRefOfRemotePhoto{types.NewTypedSet(cs, __typeForSetOfRefOfRemotePhoto), cs, &ref.Ref{}}
+func NewSetOfRefOfRemotePhoto() SetOfRefOfRemotePhoto {
+	return SetOfRefOfRemotePhoto{types.NewTypedSet(__typeForSetOfRefOfRemotePhoto), &ref.Ref{}}
 }
 
 type SetOfRefOfRemotePhotoDef map[ref.Ref]bool
 
-func (def SetOfRefOfRemotePhotoDef) New(cs chunks.ChunkStore) SetOfRefOfRemotePhoto {
+func (def SetOfRefOfRemotePhotoDef) New() SetOfRefOfRemotePhoto {
 	l := make([]types.Value, len(def))
 	i := 0
 	for d, _ := range def {
 		l[i] = NewRefOfRemotePhoto(d)
 		i++
 	}
-	return SetOfRefOfRemotePhoto{types.NewTypedSet(cs, __typeForSetOfRefOfRemotePhoto, l...), cs, &ref.Ref{}}
+	return SetOfRefOfRemotePhoto{types.NewTypedSet(__typeForSetOfRefOfRemotePhoto, l...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfRemotePhoto) Def() SetOfRefOfRemotePhotoDef {
@@ -652,8 +644,8 @@ func init() {
 	types.RegisterValue(__typeForSetOfRefOfRemotePhoto, builderForSetOfRefOfRemotePhoto, readerForSetOfRefOfRemotePhoto)
 }
 
-func builderForSetOfRefOfRemotePhoto(cs chunks.ChunkStore, v types.Value) types.Value {
-	return SetOfRefOfRemotePhoto{v.(types.Set), cs, &ref.Ref{}}
+func builderForSetOfRefOfRemotePhoto(v types.Value) types.Value {
+	return SetOfRefOfRemotePhoto{v.(types.Set), &ref.Ref{}}
 }
 
 func readerForSetOfRefOfRemotePhoto(v types.Value) types.Value {
@@ -700,19 +692,19 @@ func (s SetOfRefOfRemotePhoto) Filter(cb SetOfRefOfRemotePhotoFilterCallback) Se
 	out := s.s.Filter(func(v types.Value) bool {
 		return cb(v.(RefOfRemotePhoto))
 	})
-	return SetOfRefOfRemotePhoto{out, s.cs, &ref.Ref{}}
+	return SetOfRefOfRemotePhoto{out, &ref.Ref{}}
 }
 
 func (s SetOfRefOfRemotePhoto) Insert(p ...RefOfRemotePhoto) SetOfRefOfRemotePhoto {
-	return SetOfRefOfRemotePhoto{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+	return SetOfRefOfRemotePhoto{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfRemotePhoto) Remove(p ...RefOfRemotePhoto) SetOfRefOfRemotePhoto {
-	return SetOfRefOfRemotePhoto{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+	return SetOfRefOfRemotePhoto{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfRemotePhoto) Union(others ...SetOfRefOfRemotePhoto) SetOfRefOfRemotePhoto {
-	return SetOfRefOfRemotePhoto{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
+	return SetOfRefOfRemotePhoto{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfRemotePhoto) First() RefOfRemotePhoto {
@@ -788,7 +780,7 @@ func builderForRefOfRemotePhoto(r ref.Ref) types.Value {
 	return NewRefOfRemotePhoto(r)
 }
 
-func (r RefOfRemotePhoto) TargetValue(cs chunks.ChunkStore) RemotePhoto {
+func (r RefOfRemotePhoto) TargetValue(cs chunks.ChunkSource) RemotePhoto {
 	return types.ReadValue(r.target, cs).(RemotePhoto)
 }
 

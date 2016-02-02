@@ -36,8 +36,8 @@ func addMp3(ds *dataset.Dataset, filename string) {
 		Artist: id3.Artist(),
 		Album:  id3.Album(),
 		Year:   id3.Year(),
-		Mp3:    types.NewBlob(bufio.NewReader(mp3_file), ds.Store()),
-	}.New(ds.Store())
+		Mp3:    types.NewBlob(bufio.NewReader(mp3_file)),
+	}.New()
 	songs := readSongsFromDataset(ds).Append(new_song)
 	if _, err := ds.Commit(songs); err == nil {
 		fmt.Println("Successfully committed", filename)
@@ -64,7 +64,7 @@ func listSongs(ds *dataset.Dataset) {
 }
 
 func readSongsFromDataset(ds *dataset.Dataset) ListOfSong {
-	songs := NewListOfSong(ds.Store())
+	songs := NewListOfSong()
 	if commit, ok := ds.MaybeHead(); ok {
 		songs = commit.Value().(ListOfSong)
 	}

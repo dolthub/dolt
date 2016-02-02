@@ -5,13 +5,11 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 )
 
 func TestValueEquals(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	r1 := Uint16(1).Ref()
 	r2 := Uint16(2).Ref()
@@ -50,27 +48,26 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return NewString("hi") },
 		func() Value { return NewString("bye") },
 		func() Value {
-			return NewMemoryBlob(&bytes.Buffer{})
+			return NewBlob(&bytes.Buffer{})
 		},
 		func() Value {
-			return NewMemoryBlob(bytes.NewBufferString("hi"))
+			return NewBlob(bytes.NewBufferString("hi"))
 		},
 		func() Value {
-			return NewMemoryBlob(bytes.NewBufferString("bye"))
+			return NewBlob(bytes.NewBufferString("bye"))
 		},
 		func() Value {
-			ms := chunks.NewMemoryStore()
-			b1 := NewBlob(bytes.NewBufferString("hi"), ms)
-			b2 := NewBlob(bytes.NewBufferString("bye"), ms)
-			return newCompoundBlob([]metaTuple{{b1, ref.Ref{}, Uint64(uint64(2))}, {b2, ref.Ref{}, Uint64(uint64(5))}}, ms)
+			b1 := NewBlob(bytes.NewBufferString("hi"))
+			b2 := NewBlob(bytes.NewBufferString("bye"))
+			return newCompoundBlob([]metaTuple{{b1, ref.Ref{}, Uint64(uint64(2))}, {b2, ref.Ref{}, Uint64(uint64(5))}}, nil)
 		},
-		func() Value { return NewList(cs) },
-		func() Value { return NewList(cs, NewString("foo")) },
-		func() Value { return NewList(cs, NewString("bar")) },
-		func() Value { return NewMap(cs) },
-		func() Value { return NewMap(cs, NewString("a"), NewString("a")) },
-		func() Value { return NewSet(cs) },
-		func() Value { return NewSet(cs, NewString("hi")) },
+		func() Value { return NewList() },
+		func() Value { return NewList(NewString("foo")) },
+		func() Value { return NewList(NewString("bar")) },
+		func() Value { return NewMap() },
+		func() Value { return NewMap(NewString("a"), NewString("a")) },
+		func() Value { return NewSet() },
+		func() Value { return NewSet(NewString("hi")) },
 
 		func() Value { return MakePrimitiveType(BoolKind) },
 		func() Value { return MakePrimitiveType(StringKind) },

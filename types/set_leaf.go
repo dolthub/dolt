@@ -16,12 +16,12 @@ type setLeaf struct {
 	indexOf indexOfSetFn
 	t       Type
 	ref     *ref.Ref
-	cs      chunks.ChunkStore
+	cs      chunks.ChunkSource
 }
 
 type setData []Value
 
-func newSetLeaf(cs chunks.ChunkStore, t Type, m ...Value) setLeaf {
+func newSetLeaf(cs chunks.ChunkSource, t Type, m ...Value) setLeaf {
 	return setLeaf{m, getIndexFnForSetType(t), t, &ref.Ref{}, cs}
 }
 
@@ -40,7 +40,7 @@ func (s setLeaf) Has(v Value) bool {
 
 func (s setLeaf) Insert(values ...Value) Set {
 	assertType(s.elemType(), values...)
-	return newTypedSet(s.cs, s.t, buildSetData(s.data, values, s.t)...)
+	return newTypedSet(s.t, buildSetData(s.data, values, s.t)...)
 }
 
 func (s setLeaf) Remove(values ...Value) Set {
@@ -53,11 +53,11 @@ func (s setLeaf) Remove(values ...Value) Set {
 		}
 	}
 
-	return newTypedSet(s.cs, s.t, data...)
+	return newTypedSet(s.t, data...)
 }
 
 func (s setLeaf) Union(others ...Set) Set {
-	return setUnion(s, s.cs, others)
+	return setUnion(s, others)
 }
 
 func (s setLeaf) Iter(cb setIterCallback) {
@@ -104,7 +104,7 @@ func (s setLeaf) Filter(cb setFilterCallback) Set {
 		}
 	}
 
-	return newTypedSet(s.cs, s.t, data...)
+	return newTypedSet(s.t, data...)
 }
 
 func (s setLeaf) First() Value {
@@ -198,7 +198,7 @@ func newSetLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeSetLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
+func makeSetLeafChunkFn(t Type) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		setData := make([]Value, len(items), len(items))
 
@@ -206,7 +206,7 @@ func makeSetLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 			setData[i] = v.(Value)
 		}
 
-		setLeaf := valueFromType(cs, newSetLeaf(cs, t, setData...), t)
+		setLeaf := valueFromType(newSetLeaf(nil, t, setData...), t)
 
 		var indexValue Value
 		if len(setData) > 0 {

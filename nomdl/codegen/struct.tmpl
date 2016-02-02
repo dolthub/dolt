@@ -7,16 +7,14 @@ type {{.Name}} struct {
 	{{if .Optional}}__optional{{.Name}} bool
 	{{end}}{{end}}{{if .HasUnion}}__unionIndex uint32
 	__unionValue {{$typesPackage}}Value{{end}}
-	cs chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func New{{.Name}}(cs chunks.ChunkStore) {{.Name}} {
+func New{{.Name}}() {{.Name}} {
 	return {{.Name}}{
-		{{range .Fields}}{{if (not .Optional)}}_{{.Name}}: {{userZero "cs" .T}},
+		{{range .Fields}}{{if (not .Optional)}}_{{.Name}}: {{userZero .T}},
 		{{end}}{{end}}{{if .HasUnion}}__unionIndex: 0,
 		__unionValue: {{valueZero .UnionZeroType}},{{end}}
-		cs: cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -28,14 +26,13 @@ func New{{.Name}}(cs chunks.ChunkStore) {{.Name}} {
 		__unionValue {{$typesPackage}}Value
 	{{end}}}
 
-	func (def {{.Name}}Def) New(cs chunks.ChunkStore) {{.Name}} {
+	func (def {{.Name}}Def) New() {{.Name}} {
 		return {{.Name}}{
 			{{range .Fields}}_{{.Name}}: {{defToUser (print "def." (title .Name)) .T}},
 			{{if .Optional}}__optional{{.Name}}: true,
 			{{end}}{{end}}{{if .HasUnion}}__unionIndex: def.__unionIndex,
 			__unionValue: def.__unionValue,
-			{{end}}cs: cs,
-			ref: &ref.Ref{},
+			{{end}}ref: &ref.Ref{},
 		}
 	}
 
@@ -59,9 +56,9 @@ func init() {
 	{{$typesPackage}}RegisterStruct(__typeFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
 }
 
-func builderFor{{.Name}}(cs chunks.ChunkStore, values []{{$typesPackage}}Value) {{$typesPackage}}Value {
+func builderFor{{.Name}}(values []{{$typesPackage}}Value) {{$typesPackage}}Value {
 	i := 0
-	s := {{.Name}}{ref: &ref.Ref{}, cs: cs}{{range .Fields}}{{if .Optional}}
+	s := {{.Name}}{ref: &ref.Ref{}}{{range .Fields}}{{if .Optional}}
 	s.__optional{{.Name}} = bool(values[i].({{$typesPackage}}Bool))
 	i++
 	if s.__optional{{.Name}} {
@@ -161,7 +158,7 @@ func (s {{$name}}) Set{{title .Name}}(val {{userType .T}}) {{$name}} {
 			return {{valueToDef "def.__unionValue" .T}}, true
 		}
 
-		func (def {{$name}}Def) Set{{title .Name}}(cs chunks.ChunkStore, val {{defType .T}}) {{$name}}Def {
+		func (def {{$name}}Def) Set{{title .Name}}(val {{defType .T}}) {{$name}}Def {
 			def.__unionIndex = {{$index}}
 			def.__unionValue = {{defToValue "val" .T}}
 			return def

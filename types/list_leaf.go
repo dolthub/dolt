@@ -13,10 +13,10 @@ type listLeaf struct {
 	values []Value
 	t      Type
 	ref    *ref.Ref
-	cs     chunks.ChunkStore
+	cs     chunks.ChunkSource
 }
 
-func newListLeaf(cs chunks.ChunkStore, t Type, v ...Value) List {
+func newListLeaf(cs chunks.ChunkSource, t Type, v ...Value) List {
 	d.Chk.Equal(ListKind, t.Kind())
 	return listLeaf{v, t, &ref.Ref{}, cs}
 }
@@ -83,7 +83,7 @@ func (l listLeaf) Filter(cb listFilterCallback) List {
 		}
 	}
 
-	return NewTypedList(l.cs, l.t, data...)
+	return NewTypedList(l.t, data...)
 }
 
 func (l listLeaf) Map(mf MapFunc) []interface{} {
@@ -126,7 +126,7 @@ func (l listLeaf) mapInternal(sem chan int, mf MapFunc, offset uint64) []interfa
 }
 
 func (l listLeaf) Slice(start uint64, end uint64) List {
-	return NewTypedList(l.cs, l.t, l.values[start:end]...)
+	return NewTypedList(l.t, l.values[start:end]...)
 }
 
 func (l listLeaf) Set(idx uint64, v Value) List {
@@ -134,13 +134,13 @@ func (l listLeaf) Set(idx uint64, v Value) List {
 	values := make([]Value, len(l.values))
 	copy(values, l.values)
 	values[idx] = v
-	return NewTypedList(l.cs, l.t, values...)
+	return NewTypedList(l.t, values...)
 }
 
 func (l listLeaf) Append(v ...Value) List {
 	assertType(l.elemType(), v...)
 	values := append(l.values, v...)
-	return NewTypedList(l.cs, l.t, values...)
+	return NewTypedList(l.t, values...)
 }
 
 func (l listLeaf) Insert(idx uint64, v ...Value) List {
@@ -149,14 +149,14 @@ func (l listLeaf) Insert(idx uint64, v ...Value) List {
 	copy(values, l.values[:idx])
 	copy(values[idx:], v)
 	copy(values[idx+uint64(len(v)):], l.values[idx:])
-	return NewTypedList(l.cs, l.t, values...)
+	return NewTypedList(l.t, values...)
 }
 
 func (l listLeaf) Remove(start uint64, end uint64) List {
 	values := make([]Value, uint64(len(l.values))-(end-start))
 	copy(values, l.values[:start])
 	copy(values[start:], l.values[end:])
-	return NewTypedList(l.cs, l.t, values...)
+	return NewTypedList(l.t, values...)
 }
 
 func (l listLeaf) RemoveAt(idx uint64) List {

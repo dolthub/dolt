@@ -53,7 +53,7 @@ func builderFor{{.Name}}(r ref.Ref) {{$typesPackage}}Value {
 	return New{{.Name}}(r)
 }
 
-func (r {{.Name}}) TargetValue(cs chunks.ChunkStore) {{userType .ElemType}} {
+func (r {{.Name}}) TargetValue(cs chunks.ChunkSource) {{userType .ElemType}} {
 	return {{valueToUser (printf "%sReadValue(r.target, cs)" $typesPackage) .ElemType}}
 }
 

@@ -41,37 +41,36 @@ func (suite *WalkAllTestSuite) TestWalkPrimitives() {
 }
 
 func (suite *WalkAllTestSuite) TestWalkComposites() {
-	cs := chunks.NewMemoryStore()
-	suite.walkWorker(suite.storeAndRef(types.NewList(cs)), 2)
-	suite.walkWorker(suite.storeAndRef(types.NewList(cs, types.Bool(false), types.Int32(8))), 4)
-	suite.walkWorker(suite.storeAndRef(types.NewSet(cs)), 2)
-	suite.walkWorker(suite.storeAndRef(types.NewSet(cs, types.Bool(false), types.Int32(8))), 4)
-	suite.walkWorker(suite.storeAndRef(types.NewMap(cs)), 2)
-	suite.walkWorker(suite.storeAndRef(types.NewMap(cs, types.Int32(8), types.Bool(true), types.Int32(0), types.Bool(false))), 6)
+	suite.walkWorker(suite.storeAndRef(types.NewList()), 2)
+	suite.walkWorker(suite.storeAndRef(types.NewList(types.Bool(false), types.Int32(8))), 4)
+	suite.walkWorker(suite.storeAndRef(types.NewSet()), 2)
+	suite.walkWorker(suite.storeAndRef(types.NewSet(types.Bool(false), types.Int32(8))), 4)
+	suite.walkWorker(suite.storeAndRef(types.NewMap()), 2)
+	suite.walkWorker(suite.storeAndRef(types.NewMap(types.Int32(8), types.Bool(true), types.Int32(0), types.Bool(false))), 6)
 }
 
 func (suite *WalkAllTestSuite) NewList(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
-	v := types.NewList(cs, vs...)
+	v := types.NewList(vs...)
 	r := types.WriteValue(v, suite.cs)
 	return types.NewRef(r)
 }
 
 func (suite *WalkAllTestSuite) NewMap(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
-	v := types.NewMap(cs, vs...)
+	v := types.NewMap(vs...)
 	r := types.WriteValue(v, suite.cs)
 	return types.NewRef(r)
 }
 
 func (suite *WalkAllTestSuite) NewSet(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
-	v := types.NewSet(cs, vs...)
+	v := types.NewSet(vs...)
 	r := types.WriteValue(v, suite.cs)
 	return types.NewRef(r)
 }
 
 func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
 	cs := chunks.NewMemoryStore()
-	suite.walkWorker(suite.storeAndRef(types.NewList(cs, suite.NewSet(cs), types.Int32(8))), 5)
-	suite.walkWorker(suite.storeAndRef(types.NewSet(cs, suite.NewList(cs), suite.NewSet(cs))), 6)
+	suite.walkWorker(suite.storeAndRef(types.NewList(suite.NewSet(cs), types.Int32(8))), 5)
+	suite.walkWorker(suite.storeAndRef(types.NewSet(suite.NewList(cs), suite.NewSet(cs))), 6)
 	// {"string": "string",
 	//  "list": [false true],
 	//  "map": {"nested": "string"}
@@ -79,7 +78,7 @@ func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
 	//  "set": [5 7 8]
 	//  []: "wow"
 	// }
-	nested := types.NewMap(cs,
+	nested := types.NewMap(
 		types.NewString("string"), types.NewString("string"),
 		types.NewString("list"), suite.NewList(cs, types.Bool(false), types.Bool(true)),
 		types.NewString("map"), suite.NewMap(cs, types.NewString("nested"), types.NewString("string")),
@@ -99,18 +98,16 @@ type WalkTestSuite struct {
 }
 
 func (suite *WalkTestSuite) SetupTest() {
-	cs := chunks.NewMemoryStore()
 	suite.cs = chunks.NewTestStore()
 	suite.shouldSeeItem = types.NewString("zzz")
-	suite.shouldSee = types.NewList(cs, suite.shouldSeeItem)
+	suite.shouldSee = types.NewList(suite.shouldSeeItem)
 	suite.deadValue = types.Uint64(0xDEADBEEF)
-	suite.mustSkip = types.NewList(cs, suite.deadValue)
+	suite.mustSkip = types.NewList(suite.deadValue)
 }
 
 func (suite *WalkTestSuite) TestStopWalkImmediately() {
-	cs := chunks.NewMemoryStore()
 	actual := 0
-	SomeP(types.NewList(cs, types.NewSet(cs), types.NewList(cs)), suite.cs, func(v types.Value) bool {
+	SomeP(types.NewList(types.NewSet(), types.NewList()), suite.cs, func(v types.Value) bool {
 		actual++
 		return true
 	}, 1)
@@ -128,8 +125,7 @@ func (suite *WalkTestSuite) skipWorker(composite types.Value) (reached []types.V
 
 // Skipping a sub-tree must allow other items in the list to be processed.
 func (suite *WalkTestSuite) SkipTestSkipListElement() {
-	cs := chunks.NewMemoryStore()
-	wholeList := types.NewList(cs, suite.mustSkip, suite.shouldSee, suite.shouldSee)
+	wholeList := types.NewList(suite.mustSkip, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeList)
 	for _, v := range []types.Value{wholeList, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.Contains(reached, v, "Doesn't contain %+v", v)
@@ -138,8 +134,7 @@ func (suite *WalkTestSuite) SkipTestSkipListElement() {
 }
 
 func (suite *WalkTestSuite) SkipTestSkipSetElement() {
-	cs := chunks.NewMemoryStore()
-	wholeSet := types.NewSet(cs, suite.mustSkip, suite.shouldSee).Insert(suite.shouldSee)
+	wholeSet := types.NewSet(suite.mustSkip, suite.shouldSee).Insert(suite.shouldSee)
 	reached := suite.skipWorker(wholeSet)
 	for _, v := range []types.Value{wholeSet, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.Contains(reached, v, "Doesn't contain %+v", v)
@@ -148,10 +143,9 @@ func (suite *WalkTestSuite) SkipTestSkipSetElement() {
 }
 
 func (suite *WalkTestSuite) SkipTestSkipMapValue() {
-	cs := chunks.NewMemoryStore()
 	shouldAlsoSeeItem := types.NewString("Also good")
-	shouldAlsoSee := types.NewSet(cs, shouldAlsoSeeItem)
-	wholeMap := types.NewMap(cs, suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
+	shouldAlsoSee := types.NewSet(shouldAlsoSeeItem)
+	wholeMap := types.NewMap(suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []types.Value{wholeMap, suite.shouldSee, suite.shouldSeeItem, suite.mustSkip, shouldAlsoSee, shouldAlsoSeeItem} {
 		suite.Contains(reached, v, "Doesn't contain %+v", v)
@@ -160,8 +154,7 @@ func (suite *WalkTestSuite) SkipTestSkipMapValue() {
 }
 
 func (suite *WalkTestSuite) SkipTestSkipMapKey() {
-	cs := chunks.NewMemoryStore()
-	wholeMap := types.NewMap(cs, suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee)
+	wholeMap := types.NewMap(suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []types.Value{wholeMap, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.Contains(reached, v, "Doesn't contain %+v", v)

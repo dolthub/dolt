@@ -15,14 +15,14 @@ type compoundBlob struct {
 	metaSequenceObject
 	length uint64
 	ref    *ref.Ref
-	cs     chunks.ChunkStore
+	cs     chunks.ChunkSource
 }
 
-func newCompoundBlob(tuples metaSequenceData, cs chunks.ChunkStore) compoundBlob {
+func newCompoundBlob(tuples metaSequenceData, cs chunks.ChunkSource) compoundBlob {
 	return buildCompoundBlob(tuples, typeForBlob, cs).(compoundBlob)
 }
 
-func buildCompoundBlob(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
+func buildCompoundBlob(tuples metaSequenceData, t Type, cs chunks.ChunkSource) Value {
 	d.Chk.True(t.Equals(typeForBlob))
 	return compoundBlob{metaSequenceObject{tuples, typeForBlob}, tuples.uint64ValuesSum(), &ref.Ref{}, cs}
 }
@@ -53,7 +53,7 @@ type compoundBlobReader struct {
 	cursor                          *sequenceCursor
 	currentReader                   io.ReadSeeker
 	chunkStart, chunkOffset, length uint64
-	cs                              chunks.ChunkStore
+	cs                              chunks.ChunkSource
 }
 
 func (cbr *compoundBlobReader) Read(p []byte) (n int, err error) {

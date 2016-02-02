@@ -3,7 +3,6 @@ package types
 import (
 	"crypto/sha1"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -14,7 +13,7 @@ func newIndexedMetaSequenceBoundaryChecker() boundaryChecker {
 	})
 }
 
-func newIndexedMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
+func newIndexedMetaSequenceChunkFn(t Type) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
 
@@ -22,7 +21,7 @@ func newIndexedMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 			tuples[i] = v.(metaTuple) // chunk is written when the root sequence is written
 		}
 
-		meta := newMetaSequenceFromData(tuples, t, cs)
+		meta := newMetaSequenceFromData(tuples, t, nil)
 		return metaTuple{meta, ref.Ref{}, Uint64(tuples.uint64ValuesSum())}, meta
 	}
 }

@@ -3,7 +3,6 @@
 package gen
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -46,16 +45,14 @@ type StructWithUnions struct {
 	_a __unionOfBOfFloat64AndCOfString
 	_d __unionOfEOfFloat64AndFOfString
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewStructWithUnions(cs chunks.ChunkStore) StructWithUnions {
+func NewStructWithUnions() StructWithUnions {
 	return StructWithUnions{
-		_a: New__unionOfBOfFloat64AndCOfString(cs),
-		_d: New__unionOfEOfFloat64AndFOfString(cs),
+		_a: New__unionOfBOfFloat64AndCOfString(),
+		_d: New__unionOfEOfFloat64AndFOfString(),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -65,11 +62,10 @@ type StructWithUnionsDef struct {
 	D __unionOfEOfFloat64AndFOfStringDef
 }
 
-func (def StructWithUnionsDef) New(cs chunks.ChunkStore) StructWithUnions {
+func (def StructWithUnionsDef) New() StructWithUnions {
 	return StructWithUnions{
-		_a:  def.A.New(cs),
-		_d:  def.D.New(cs),
-		cs:  cs,
+		_a:  def.A.New(),
+		_d:  def.D.New(),
 		ref: &ref.Ref{},
 	}
 }
@@ -91,9 +87,9 @@ func init() {
 	types.RegisterStruct(__typeForStructWithUnions, builderForStructWithUnions, readerForStructWithUnions)
 }
 
-func builderForStructWithUnions(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForStructWithUnions(values []types.Value) types.Value {
 	i := 0
-	s := StructWithUnions{ref: &ref.Ref{}, cs: cs}
+	s := StructWithUnions{ref: &ref.Ref{}}
 	s._a = values[i].(__unionOfBOfFloat64AndCOfString)
 	i++
 	s._d = values[i].(__unionOfEOfFloat64AndFOfString)
@@ -155,15 +151,13 @@ func (s StructWithUnions) SetD(val __unionOfEOfFloat64AndFOfString) StructWithUn
 type __unionOfBOfFloat64AndCOfString struct {
 	__unionIndex uint32
 	__unionValue types.Value
-	cs           chunks.ChunkStore
 	ref          *ref.Ref
 }
 
-func New__unionOfBOfFloat64AndCOfString(cs chunks.ChunkStore) __unionOfBOfFloat64AndCOfString {
+func New__unionOfBOfFloat64AndCOfString() __unionOfBOfFloat64AndCOfString {
 	return __unionOfBOfFloat64AndCOfString{
 		__unionIndex: 0,
 		__unionValue: types.Float64(0),
-		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -173,11 +167,10 @@ type __unionOfBOfFloat64AndCOfStringDef struct {
 	__unionValue types.Value
 }
 
-func (def __unionOfBOfFloat64AndCOfStringDef) New(cs chunks.ChunkStore) __unionOfBOfFloat64AndCOfString {
+func (def __unionOfBOfFloat64AndCOfStringDef) New() __unionOfBOfFloat64AndCOfString {
 	return __unionOfBOfFloat64AndCOfString{
 		__unionIndex: def.__unionIndex,
 		__unionValue: def.__unionValue,
-		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -199,9 +192,9 @@ func init() {
 	types.RegisterStruct(__typeFor__unionOfBOfFloat64AndCOfString, builderFor__unionOfBOfFloat64AndCOfString, readerFor__unionOfBOfFloat64AndCOfString)
 }
 
-func builderFor__unionOfBOfFloat64AndCOfString(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderFor__unionOfBOfFloat64AndCOfString(values []types.Value) types.Value {
 	i := 0
-	s := __unionOfBOfFloat64AndCOfString{ref: &ref.Ref{}, cs: cs}
+	s := __unionOfBOfFloat64AndCOfString{ref: &ref.Ref{}}
 	s.__unionIndex = uint32(values[i].(types.Uint32))
 	i++
 	s.__unionValue = values[i]
@@ -257,7 +250,7 @@ func (def __unionOfBOfFloat64AndCOfStringDef) B() (val float64, ok bool) {
 	return float64(def.__unionValue.(types.Float64)), true
 }
 
-func (def __unionOfBOfFloat64AndCOfStringDef) SetB(cs chunks.ChunkStore, val float64) __unionOfBOfFloat64AndCOfStringDef {
+func (def __unionOfBOfFloat64AndCOfStringDef) SetB(val float64) __unionOfBOfFloat64AndCOfStringDef {
 	def.__unionIndex = 0
 	def.__unionValue = types.Float64(val)
 	return def
@@ -284,7 +277,7 @@ func (def __unionOfBOfFloat64AndCOfStringDef) C() (val string, ok bool) {
 	return def.__unionValue.(types.String).String(), true
 }
 
-func (def __unionOfBOfFloat64AndCOfStringDef) SetC(cs chunks.ChunkStore, val string) __unionOfBOfFloat64AndCOfStringDef {
+func (def __unionOfBOfFloat64AndCOfStringDef) SetC(val string) __unionOfBOfFloat64AndCOfStringDef {
 	def.__unionIndex = 1
 	def.__unionValue = types.NewString(val)
 	return def
@@ -295,15 +288,13 @@ func (def __unionOfBOfFloat64AndCOfStringDef) SetC(cs chunks.ChunkStore, val str
 type __unionOfEOfFloat64AndFOfString struct {
 	__unionIndex uint32
 	__unionValue types.Value
-	cs           chunks.ChunkStore
 	ref          *ref.Ref
 }
 
-func New__unionOfEOfFloat64AndFOfString(cs chunks.ChunkStore) __unionOfEOfFloat64AndFOfString {
+func New__unionOfEOfFloat64AndFOfString() __unionOfEOfFloat64AndFOfString {
 	return __unionOfEOfFloat64AndFOfString{
 		__unionIndex: 0,
 		__unionValue: types.Float64(0),
-		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -313,11 +304,10 @@ type __unionOfEOfFloat64AndFOfStringDef struct {
 	__unionValue types.Value
 }
 
-func (def __unionOfEOfFloat64AndFOfStringDef) New(cs chunks.ChunkStore) __unionOfEOfFloat64AndFOfString {
+func (def __unionOfEOfFloat64AndFOfStringDef) New() __unionOfEOfFloat64AndFOfString {
 	return __unionOfEOfFloat64AndFOfString{
 		__unionIndex: def.__unionIndex,
 		__unionValue: def.__unionValue,
-		cs:           cs,
 		ref:          &ref.Ref{},
 	}
 }
@@ -339,9 +329,9 @@ func init() {
 	types.RegisterStruct(__typeFor__unionOfEOfFloat64AndFOfString, builderFor__unionOfEOfFloat64AndFOfString, readerFor__unionOfEOfFloat64AndFOfString)
 }
 
-func builderFor__unionOfEOfFloat64AndFOfString(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderFor__unionOfEOfFloat64AndFOfString(values []types.Value) types.Value {
 	i := 0
-	s := __unionOfEOfFloat64AndFOfString{ref: &ref.Ref{}, cs: cs}
+	s := __unionOfEOfFloat64AndFOfString{ref: &ref.Ref{}}
 	s.__unionIndex = uint32(values[i].(types.Uint32))
 	i++
 	s.__unionValue = values[i]
@@ -397,7 +387,7 @@ func (def __unionOfEOfFloat64AndFOfStringDef) E() (val float64, ok bool) {
 	return float64(def.__unionValue.(types.Float64)), true
 }
 
-func (def __unionOfEOfFloat64AndFOfStringDef) SetE(cs chunks.ChunkStore, val float64) __unionOfEOfFloat64AndFOfStringDef {
+func (def __unionOfEOfFloat64AndFOfStringDef) SetE(val float64) __unionOfEOfFloat64AndFOfStringDef {
 	def.__unionIndex = 0
 	def.__unionValue = types.Float64(val)
 	return def
@@ -424,7 +414,7 @@ func (def __unionOfEOfFloat64AndFOfStringDef) F() (val string, ok bool) {
 	return def.__unionValue.(types.String).String(), true
 }
 
-func (def __unionOfEOfFloat64AndFOfStringDef) SetF(cs chunks.ChunkStore, val string) __unionOfEOfFloat64AndFOfStringDef {
+func (def __unionOfEOfFloat64AndFOfStringDef) SetF(val string) __unionOfEOfFloat64AndFOfStringDef {
 	def.__unionIndex = 1
 	def.__unionValue = types.NewString(val)
 	return def

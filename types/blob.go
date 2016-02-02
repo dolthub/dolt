@@ -3,7 +3,6 @@ package types
 import (
 	"io"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -31,17 +30,13 @@ func NewEmptyBlob() Blob {
 	return newBlobLeaf([]byte{})
 }
 
-func NewMemoryBlob(r io.Reader) Blob {
-	return NewBlob(r, chunks.NewMemoryStore())
-}
-
 func newBlobLeafBoundaryChecker() boundaryChecker {
 	return newBuzHashBoundaryChecker(blobWindowSize, 1, blobPattern, func(item sequenceItem) []byte {
 		return []byte{item.(byte)}
 	})
 }
 
-func newBlobLeafChunkFn(cs chunks.ChunkStore) makeChunkFn {
+func newBlobLeafChunkFn() makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		buff := make([]byte, len(items))
 
@@ -54,8 +49,8 @@ func newBlobLeafChunkFn(cs chunks.ChunkStore) makeChunkFn {
 	}
 }
 
-func NewBlob(r io.Reader, cs chunks.ChunkStore) Blob {
-	seq := newEmptySequenceChunker(newBlobLeafChunkFn(cs), newIndexedMetaSequenceChunkFn(typeForBlob, cs), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+func NewBlob(r io.Reader) Blob {
+	seq := newEmptySequenceChunker(newBlobLeafChunkFn(), newIndexedMetaSequenceChunkFn(typeForBlob), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	buf := []byte{0}
 	for {
 		n, err := r.Read(buf)

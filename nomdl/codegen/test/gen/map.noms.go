@@ -3,7 +3,6 @@
 package gen
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -12,22 +11,21 @@ import (
 
 type MapOfBoolToString struct {
 	m   types.Map
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfBoolToString(cs chunks.ChunkStore) MapOfBoolToString {
-	return MapOfBoolToString{types.NewTypedMap(cs, __typeForMapOfBoolToString), cs, &ref.Ref{}}
+func NewMapOfBoolToString() MapOfBoolToString {
+	return MapOfBoolToString{types.NewTypedMap(__typeForMapOfBoolToString), &ref.Ref{}}
 }
 
 type MapOfBoolToStringDef map[bool]string
 
-func (def MapOfBoolToStringDef) New(cs chunks.ChunkStore) MapOfBoolToString {
+func (def MapOfBoolToStringDef) New() MapOfBoolToString {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
 		kv = append(kv, types.Bool(k), types.NewString(v))
 	}
-	return MapOfBoolToString{types.NewTypedMap(cs, __typeForMapOfBoolToString, kv...), cs, &ref.Ref{}}
+	return MapOfBoolToString{types.NewTypedMap(__typeForMapOfBoolToString, kv...), &ref.Ref{}}
 }
 
 func (m MapOfBoolToString) Def() MapOfBoolToStringDef {
@@ -69,8 +67,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfBoolToString, builderForMapOfBoolToString, readerForMapOfBoolToString)
 }
 
-func builderForMapOfBoolToString(cs chunks.ChunkStore, v types.Value) types.Value {
-	return MapOfBoolToString{v.(types.Map), cs, &ref.Ref{}}
+func builderForMapOfBoolToString(v types.Value) types.Value {
+	return MapOfBoolToString{v.(types.Map), &ref.Ref{}}
 }
 
 func readerForMapOfBoolToString(v types.Value) types.Value {
@@ -102,13 +100,13 @@ func (m MapOfBoolToString) MaybeGet(p bool) (string, bool) {
 }
 
 func (m MapOfBoolToString) Set(k bool, v string) MapOfBoolToString {
-	return MapOfBoolToString{m.m.Set(types.Bool(k), types.NewString(v)), m.cs, &ref.Ref{}}
+	return MapOfBoolToString{m.m.Set(types.Bool(k), types.NewString(v)), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfBoolToString) Remove(p bool) MapOfBoolToString {
-	return MapOfBoolToString{m.m.Remove(types.Bool(p)), m.cs, &ref.Ref{}}
+	return MapOfBoolToString{m.m.Remove(types.Bool(p)), &ref.Ref{}}
 }
 
 type MapOfBoolToStringIterCallback func(k bool, v string) (stop bool)
@@ -139,29 +137,28 @@ func (m MapOfBoolToString) Filter(cb MapOfBoolToStringFilterCallback) MapOfBoolT
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(bool(k.(types.Bool)), v.(types.String).String())
 	})
-	return MapOfBoolToString{out, m.cs, &ref.Ref{}}
+	return MapOfBoolToString{out, &ref.Ref{}}
 }
 
 // MapOfStringToValue
 
 type MapOfStringToValue struct {
 	m   types.Map
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfStringToValue(cs chunks.ChunkStore) MapOfStringToValue {
-	return MapOfStringToValue{types.NewTypedMap(cs, __typeForMapOfStringToValue), cs, &ref.Ref{}}
+func NewMapOfStringToValue() MapOfStringToValue {
+	return MapOfStringToValue{types.NewTypedMap(__typeForMapOfStringToValue), &ref.Ref{}}
 }
 
 type MapOfStringToValueDef map[string]types.Value
 
-func (def MapOfStringToValueDef) New(cs chunks.ChunkStore) MapOfStringToValue {
+func (def MapOfStringToValueDef) New() MapOfStringToValue {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), v)
 	}
-	return MapOfStringToValue{types.NewTypedMap(cs, __typeForMapOfStringToValue, kv...), cs, &ref.Ref{}}
+	return MapOfStringToValue{types.NewTypedMap(__typeForMapOfStringToValue, kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToValue) Def() MapOfStringToValueDef {
@@ -203,8 +200,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfStringToValue, builderForMapOfStringToValue, readerForMapOfStringToValue)
 }
 
-func builderForMapOfStringToValue(cs chunks.ChunkStore, v types.Value) types.Value {
-	return MapOfStringToValue{v.(types.Map), cs, &ref.Ref{}}
+func builderForMapOfStringToValue(v types.Value) types.Value {
+	return MapOfStringToValue{v.(types.Map), &ref.Ref{}}
 }
 
 func readerForMapOfStringToValue(v types.Value) types.Value {
@@ -236,13 +233,13 @@ func (m MapOfStringToValue) MaybeGet(p string) (types.Value, bool) {
 }
 
 func (m MapOfStringToValue) Set(k string, v types.Value) MapOfStringToValue {
-	return MapOfStringToValue{m.m.Set(types.NewString(k), v), m.cs, &ref.Ref{}}
+	return MapOfStringToValue{m.m.Set(types.NewString(k), v), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToValue) Remove(p string) MapOfStringToValue {
-	return MapOfStringToValue{m.m.Remove(types.NewString(p)), m.cs, &ref.Ref{}}
+	return MapOfStringToValue{m.m.Remove(types.NewString(p)), &ref.Ref{}}
 }
 
 type MapOfStringToValueIterCallback func(k string, v types.Value) (stop bool)
@@ -273,5 +270,5 @@ func (m MapOfStringToValue) Filter(cb MapOfStringToValueFilterCallback) MapOfStr
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(k.(types.String).String(), v)
 	})
-	return MapOfStringToValue{out, m.cs, &ref.Ref{}}
+	return MapOfStringToValue{out, &ref.Ref{}}
 }

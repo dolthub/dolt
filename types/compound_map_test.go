@@ -58,7 +58,7 @@ func (tm testMap) toCompoundMap(cs chunks.ChunkStore) compoundMap {
 	for _, entry := range tm.entries {
 		keyvals = append(keyvals, entry.key, entry.value)
 	}
-	return NewTypedMap(cs, tm.tr, keyvals...).(compoundMap)
+	return NewTypedMap(tm.tr, keyvals...).(compoundMap)
 }
 
 type testMapGenFn func(v Int64) Value
@@ -92,7 +92,7 @@ func getTestNativeOrderMap(scale int) testMap {
 func getTestRefValueOrderMap(scale int) testMap {
 	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
 	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
-		return NewTypedSet(chunks.NewMemoryStore(), setType, v)
+		return NewTypedSet(setType, v)
 	}, func(x, y Value) bool {
 		return !y.Ref().Less(x.Ref())
 	}, setType)
@@ -111,7 +111,7 @@ func getTestRefToValueOrderMap(scale int) testMap {
 	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
 	refType := MakeCompoundType(RefKind, setType)
 	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
-		return newRef(NewTypedSet(chunks.NewMemoryStore(), setType, v).Ref(), refType)
+		return newRef(NewTypedSet(setType, v).Ref(), refType)
 	}, func(x, y Value) bool {
 		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
 	}, refType)
@@ -340,7 +340,7 @@ func TestCompoundMapFilter(t *testing.T) {
 		actual := m.Filter(func(k, v Value) bool {
 			return tm.less(k, pivot)
 		})
-		assert.True(newTypedMap(cs, tm.tr, tm.entries[:pivotPoint+1]...).Equals(actual))
+		assert.True(newTypedMap(tm.tr, tm.entries[:pivotPoint+1]...).Equals(actual))
 
 		idx := 0
 		actual.IterAll(func(k, v Value) {
