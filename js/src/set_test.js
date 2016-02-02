@@ -8,6 +8,7 @@ import test from './async_test.js';
 import type {ChunkStore} from './chunk_store.js';
 import {invariant, notNull} from './assert.js';
 import {Kind} from './noms_kind.js';
+import {flatten} from './test_util.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
 import {NomsSet, SetLeafSequence} from './set.js';
@@ -52,17 +53,30 @@ suite('SetLeaf', () => {
 
     const test = async items => {
       const m = new NomsSet(ms, tr, new SetLeafSequence(tr, items));
-      const values = [];
-      for (let iter = m.iterator(), next = await iter.next(); !next.done;
-           next = await iter.next()) {
-        values.push(next.value);
-      }
-      assert.deepEqual(items, values);
+      assert.deepEqual(items, await flatten(m.iterator()));
     };
 
     await test([]);
     await test(['a']);
     await test(['a', 'b']);
+  });
+
+  test('iteratorAt', async () => {
+    const ms = new MemoryStore();
+    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
+    const build = items => new NomsSet(ms, tr, new SetLeafSequence(tr, items));
+
+    assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
+
+    assert.deepEqual(['b'], await flatten(build(['b']).iteratorAt('a')));
+    assert.deepEqual(['b'], await flatten(build(['b']).iteratorAt('b')));
+    assert.deepEqual([], await flatten(build(['b']).iteratorAt('c')));
+
+    assert.deepEqual(['b', 'd'], await flatten(build(['b', 'd']).iteratorAt('a')));
+    assert.deepEqual(['b', 'd'], await flatten(build(['b', 'd']).iteratorAt('b')));
+    assert.deepEqual(['d'], await flatten(build(['b', 'd']).iteratorAt('c')));
+    assert.deepEqual(['d'], await flatten(build(['b', 'd']).iteratorAt('d')));
+    assert.deepEqual([], await flatten(build(['b', 'd']).iteratorAt('e')));
   });
 
   test('chunks', () => {
@@ -144,11 +158,27 @@ suite('CompoundSet', () => {
   test('iterator', async () => {
     const ms = new MemoryStore();
     const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
-    const values = [];
-    for (let iter = c.iterator(), next = await iter.next(); !next.done; next = await iter.next()) {
-      values.push(next.value);
+    assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], await flatten(c.iterator()));
+  });
+
+  test('iteratorAt', async () => {
+    const ms = new MemoryStore();
+    const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
+    const c = build(ms, values);
+    const offsets = {
+      _: 0, a: 0,
+      b: 1,
+      c: 2, d: 2, e: 2,
+      f: 3,
+      g: 4, h: 4,
+      i: 5,
+      j: 6, k: 6, l: 6, m: 6,
+      n: 7,
+      o: 8,
+    };
+    for (const k in offsets) {
+      assert.deepEqual(values.slice(offsets[k]), await flatten(c.iteratorAt(k)));
     }
-    assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], values);
   });
 
   test('chunks', () => {

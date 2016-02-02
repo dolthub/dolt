@@ -28,7 +28,7 @@ export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence>
   advanceToOffset(idx: number): number {
     this.idx = search(this.length, (i: number) => idx <= this.sequence.getOffset(i));
 
-    if (this.idx === this.length) {
+    if (this.sequence.isMeta && this.idx === this.length) {
       this.idx = this.length - 1;
     }
 

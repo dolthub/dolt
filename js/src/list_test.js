@@ -8,6 +8,7 @@ import test from './async_test.js';
 import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
 import {Kind} from './noms_kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
+import {flatten} from './test_util.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {writeValue} from './encode.js';
 
@@ -46,12 +47,23 @@ suite('ListLeafSequence', () => {
 
     const test = async items => {
       const l = new NomsList(ms, tr, new ListLeafSequence(tr, items));
-      const values = [];
-      for (let iter = l.iterator(), next = await iter.next(); !next.done;
-           next = await iter.next()) {
-        values.push(next.value);
+      assert.deepEqual(items, await flatten(l.iterator()));
+    };
+
+    await test([]);
+    await test([42]);
+    await test([4, 2, 10, 16]);
+  });
+
+  test('iteratorAt', async () => {
+    const ms = new MemoryStore();
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
+
+    const test = async items => {
+      const l = new NomsList(ms, tr, new ListLeafSequence(tr, items));
+      for (let i = 0; i <= items.length; i++) {
+        assert.deepEqual(items.slice(i), await flatten(l.iteratorAt(i)));
       }
-      assert.deepEqual(items, values);
     };
 
     await test([]);
@@ -123,12 +135,14 @@ suite('CompoundList', () => {
   });
 
   test('iterator', async () => {
-    const values = [];
-    for (let iter = build().iterator(), next = await iter.next(); !next.done;
-         next = await iter.next()) {
-      values.push(next.value);
+    assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], await flatten(build().iterator()));
+  });
+
+  test('iteratorAt', async () => {
+    const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
+    for (let i = 0; i <= values.length; i++) {
+      assert.deepEqual(values.slice(i), await flatten(build().iteratorAt(i)));
     }
-    assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], values);
   });
 
   test('chunks', () => {
