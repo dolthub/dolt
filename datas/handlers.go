@@ -13,22 +13,20 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-type Handler func(w http.ResponseWriter, req *http.Request, ds DataStore)
+type URLParams interface {
+	ByName(string) string
+}
 
-func HandleRef(w http.ResponseWriter, req *http.Request, ds DataStore) {
+type Handler func(w http.ResponseWriter, req *http.Request, ps URLParams, ds DataStore)
+
+func HandleRef(w http.ResponseWriter, req *http.Request, ps URLParams, ds DataStore) {
 	err := d.Try(func() {
 		d.Exp.Equal("GET", req.Method)
-
-		refStr := ""
-		pathParts := strings.Split(req.URL.Path[1:], "/")
-		if len(pathParts) > 1 {
-			refStr = pathParts[len(pathParts)-1]
-		}
-		r := ref.Parse(refStr)
+		r := ref.Parse(ps.ByName("ref"))
 
 		all := req.URL.Query().Get("all")
 		if all == "true" {
-			handleGetReachable(r, w, req, ds)
+			handleGetReachable(w, req, r, ds)
 			return
 		}
 		chunk := ds.Get(r)
@@ -49,7 +47,7 @@ func HandleRef(w http.ResponseWriter, req *http.Request, ds DataStore) {
 	}
 }
 
-func handleGetReachable(r ref.Ref, w http.ResponseWriter, req *http.Request, ds DataStore) {
+func handleGetReachable(w http.ResponseWriter, req *http.Request, r ref.Ref, ds DataStore) {
 	excludeRef := ref.Ref{}
 	exclude := req.URL.Query().Get("exclude")
 	if exclude != "" {
@@ -70,7 +68,7 @@ func handleGetReachable(r ref.Ref, w http.ResponseWriter, req *http.Request, ds 
 	sz.Close()
 }
 
-func HandlePostRefs(w http.ResponseWriter, req *http.Request, ds DataStore) {
+func HandlePostRefs(w http.ResponseWriter, req *http.Request, ps URLParams, ds DataStore) {
 	err := d.Try(func() {
 		d.Exp.Equal("POST", req.Method)
 
@@ -92,7 +90,7 @@ func HandlePostRefs(w http.ResponseWriter, req *http.Request, ds DataStore) {
 	}
 }
 
-func HandleGetHasRefs(w http.ResponseWriter, req *http.Request, ds DataStore) {
+func HandleGetHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, ds DataStore) {
 	err := d.Try(func() {
 		d.Exp.Equal("POST", req.Method)
 
@@ -128,7 +126,7 @@ func HandleGetHasRefs(w http.ResponseWriter, req *http.Request, ds DataStore) {
 	}
 }
 
-func HandleGetRefs(w http.ResponseWriter, req *http.Request, ds DataStore) {
+func HandleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, ds DataStore) {
 	err := d.Try(func() {
 		d.Exp.Equal("POST", req.Method)
 
@@ -166,7 +164,7 @@ func HandleGetRefs(w http.ResponseWriter, req *http.Request, ds DataStore) {
 	}
 }
 
-func HandleRootGet(w http.ResponseWriter, req *http.Request, ds DataStore) {
+func HandleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, ds DataStore) {
 	err := d.Try(func() {
 		d.Exp.Equal("GET", req.Method)
 
@@ -181,7 +179,7 @@ func HandleRootGet(w http.ResponseWriter, req *http.Request, ds DataStore) {
 	}
 }
 
-func HandleRootPost(w http.ResponseWriter, req *http.Request, ds DataStore) {
+func HandleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, ds DataStore) {
 	err := d.Try(func() {
 		d.Exp.Equal("POST", req.Method)
 
