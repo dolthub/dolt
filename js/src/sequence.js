@@ -158,9 +158,8 @@ export class SequenceIterator<T, S:Sequence> extends AsyncIterator<T> {
     if (this._cursor.advanceLocal()) {
       this._nextP = Promise.resolve({done: false, value: this._cursor.getCurrent()});
     } else {
-      const self = this;
       this._nextP = this._cursor.advance().then(
-          success => success ? {done: false, value: self._cursor.getCurrent()} : {done: true});
+          success => success ? {done: false, value: this._cursor.getCurrent()} : {done: true});
     }
     return next;
   }
