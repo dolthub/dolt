@@ -105,8 +105,7 @@ func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr Type, pkg *Package)
 	for _, tuple := range ms.(metaSequence).data() {
 		if tuple.child != nil && w.cs != nil {
 			// Write unwritten chunked sequences. Chunks are lazily written so that intermediate chunked structures like NewList().Append(x).Append(y) don't cause unnecessary churn.
-			tuple.childRef = writeValueInternal(tuple.child, w.cs)
-			tuple.child = nil
+			writeValueInternal(tuple.child, w.cs)
 		}
 		w2.writeRef(tuple.ChildRef())
 		w2.writeValue(tuple.value, indexType, pkg)
