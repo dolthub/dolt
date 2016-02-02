@@ -39,12 +39,13 @@ func (s *dataStoreServer) Run() {
 
 	router := httprouter.New()
 
-	router.GET("/:datastore"+constants.RefPath, s.makeHandle(HandleRef))
-	router.POST("/:datastore"+constants.PostRefsPath, s.makeHandle(HandlePostRefs))
-	router.POST("/:datastore"+constants.GetHasPath, s.makeHandle(HandleGetHasRefs))
-	router.POST("/:datastore"+constants.GetRefsPath, s.makeHandle(HandleGetRefs))
-	router.GET("/:datastore"+constants.RootPath, s.makeHandle(HandleRootGet))
-	router.POST("/:datastore"+constants.RootPath, s.makeHandle(HandleRootPost))
+	dsKey, rKey := "datastore", "ref"
+	router.GET(fmt.Sprintf("/:%s%s:%s", dsKey, constants.RefPath, rKey), s.makeHandle(HandleRef))
+	router.POST(fmt.Sprintf("/:%s%s", dsKey, constants.PostRefsPath), s.makeHandle(HandlePostRefs))
+	router.POST(fmt.Sprintf("/:%s%s", dsKey, constants.GetHasPath), s.makeHandle(HandleGetHasRefs))
+	router.POST(fmt.Sprintf("/:%s%s", dsKey, constants.GetRefsPath), s.makeHandle(HandleGetRefs))
+	router.GET(fmt.Sprintf("/:%s%s", dsKey, constants.RootPath), s.makeHandle(HandleRootGet))
+	router.POST(fmt.Sprintf("/:%s%s", dsKey, constants.RootPath), s.makeHandle(HandleRootPost))
 
 	// Handle DEPRECATED endpoints. Remove once JS knows about particular datastores.
 	unnamedDs := expectStoreCreate(s.dsf, httprouter.Params{})
@@ -53,19 +54,24 @@ func (s *dataStoreServer) Run() {
 	router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Normalize trailing slash.
 		p := strings.TrimRight(r.URL.EscapedPath(), "/") + "/"
+		ps := httprouter.Params{}
 		if strings.HasPrefix(p, constants.RefPath) {
-			HandleRef(w, r, unnamedDs)
+			pathParts := strings.Split(r.URL.EscapedPath()[1:], "/")
+			if len(pathParts) > 1 {
+				ps = httprouter.Params{{rKey, pathParts[len(pathParts)-1]}}
+			}
+			HandleRef(w, r, ps, unnamedDs)
 		} else if strings.HasPrefix(p, constants.PostRefsPath) {
-			HandlePostRefs(w, r, unnamedDs)
+			HandlePostRefs(w, r, ps, unnamedDs)
 		} else if strings.HasPrefix(p, constants.GetHasPath) {
-			HandleGetHasRefs(w, r, unnamedDs)
+			HandleGetHasRefs(w, r, ps, unnamedDs)
 		} else if strings.HasPrefix(p, constants.GetRefsPath) {
-			HandleGetRefs(w, r, unnamedDs)
+			HandleGetRefs(w, r, ps, unnamedDs)
 		} else if strings.HasPrefix(p, constants.RootPath) {
 			if r.Method == "GET" {
-				HandleRootGet(w, r, unnamedDs)
+				HandleRootGet(w, r, ps, unnamedDs)
 			} else if r.Method == "POST" {
-				HandleRootPost(w, r, unnamedDs)
+				HandleRootPost(w, r, ps, unnamedDs)
 			} else {
 				http.NotFound(w, r)
 			}
@@ -103,7 +109,7 @@ func (s *dataStoreServer) makeHandle(hndlr Handler) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		ds := expectStoreCreate(s.dsf, ps)
 		defer ds.Close()
-		hndlr(w, req, ds)
+		hndlr(w, req, ps, ds)
 	}
 }
 
