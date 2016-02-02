@@ -148,7 +148,7 @@ class JsonArrayWriter {
         invariant(sequence instanceof ListLeafSequence);
         const w2 = new JsonArrayWriter(this._cs);
         const elemType = t.elemTypes[0];
-        sequence.items.forEach(sv => w2.writeValue(sv, elemType));
+        sequence.items.forEach(sv => w2.writeValue(sv, elemType, pkg));
         this.write(w2.array);
         break;
       }
@@ -164,8 +164,8 @@ class JsonArrayWriter {
         const keyType = t.elemTypes[0];
         const valueType = t.elemTypes[1];
         sequence.items.forEach(entry => {
-          w2.writeValue(entry.key, keyType);
-          w2.writeValue(entry.value, valueType);
+          w2.writeValue(entry.key, keyType, pkg);
+          w2.writeValue(entry.value, valueType, pkg);
         });
         this.write(w2.array);
         break;
@@ -174,7 +174,7 @@ class JsonArrayWriter {
         invariant(v instanceof Package);
         const ptr = makePrimitiveType(Kind.Type);
         const w2 = new JsonArrayWriter(this._cs);
-        v.types.forEach(type => w2.writeValue(type, ptr));
+        v.types.forEach(type => w2.writeValue(type, ptr, pkg));
         this.write(w2.array);
         const w3 = new JsonArrayWriter(this._cs);
         v.dependencies.forEach(ref => w3.writeRef(ref));
@@ -202,7 +202,7 @@ class JsonArrayWriter {
         sequence.items.forEach(v => {
           elems.push(v);
         });
-        elems.forEach(elem => w2.writeValue(elem, elemType));
+        elems.forEach(elem => w2.writeValue(elem, elemType, pkg));
         this.write(w2.array);
         break;
       }
