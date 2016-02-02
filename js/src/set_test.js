@@ -181,6 +181,21 @@ suite('CompoundSet', () => {
     }
   });
 
+  test('iterator return', async () => {
+    const ms = new MemoryStore();
+    const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
+    const c = build(ms, values);
+    const iter = c.iterator();
+    const values2 = [];
+    for (let res = await iter.next(); !res.done; res = await iter.next()) {
+      values2.push(res.value);
+      if (values2.length === 5) {
+        await iter.return();
+      }
+    }
+    assert.deepEqual(values.slice(0, 5), values2);
+  });
+
   test('chunks', () => {
     const ms = new MemoryStore();
     const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);

@@ -241,6 +241,22 @@ suite('CompoundMap', () => {
     }
   });
 
+  test('iterator return', async () => {
+    const ms = new MemoryStore();
+    const [c] = build(ms);
+    const iter = c.iterator();
+    const values = [];
+    for (let res = await iter.next(); !res.done; res = await iter.next()) {
+      values.push(res.value);
+      if (values.length === 5) {
+        await iter.return();
+      }
+    }
+    assert.deepEqual([{key: 'a', value: false}, {key: 'b', value: false}, {key: 'e', value: true},
+                      {key: 'f', value: true}, {key: 'h', value: false}],
+                     values);
+  });
+
   test('chunks', () => {
     const ms = new MemoryStore();
     const [c] = build(ms);
