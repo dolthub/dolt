@@ -145,6 +145,19 @@ suite('CompoundList', () => {
     }
   });
 
+  test('iterator return', async () => {
+    const list = build();
+    const iter = list.iterator();
+    const values = [];
+    for (let res = await iter.next(); !res.done; res = await iter.next()) {
+      values.push(res.value);
+      if (values.length === 5) {
+        await iter.return();
+      }
+    }
+    assert.deepEqual(values, ['a', 'b', 'e', 'f', 'h']);
+  });
+
   test('chunks', () => {
     const l = build();
     assert.strictEqual(2, l.chunks.length);

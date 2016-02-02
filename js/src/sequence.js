@@ -145,15 +145,20 @@ export class SequenceCursor<T, S:Sequence> {
 export class SequenceIterator<T, S:Sequence> extends AsyncIterator<T> {
   _cursor: SequenceCursor<T, S>;
   _nextP: Promise<AsyncIteratorResult<T>>;
+  _closed: boolean;
 
   constructor(cursor: SequenceCursor<T, S>) {
     super();
     this._cursor = cursor;
+    this._closed = false;
     this._nextP = Promise.resolve(
         cursor.valid ? {done: false, value: cursor.getCurrent()} : {done: true});
   }
 
   async next(): Promise<AsyncIteratorResult<T>> {
+    if (this._closed) {
+      return {done: true};
+    }
     const next = await this._nextP;
     if (this._cursor.advanceLocal()) {
       this._nextP = Promise.resolve({done: false, value: this._cursor.getCurrent()});
@@ -162,6 +167,11 @@ export class SequenceIterator<T, S:Sequence> extends AsyncIterator<T> {
           success => success ? {done: false, value: this._cursor.getCurrent()} : {done: true});
     }
     return next;
+  }
+
+  return(): Promise<AsyncIteratorResult<T>> {
+    this._closed = true;
+    return this.next();
   }
 }
 

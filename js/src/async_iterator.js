@@ -12,4 +12,7 @@ export class AsyncIterator<T> {
   next(): Promise<AsyncIteratorResult<T>> {
     throw new Error('override');
   }
+  return(): Promise<AsyncIteratorResult<T>> {
+    throw new Error('override');
+  }
 }

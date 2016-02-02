@@ -91,10 +91,18 @@ export class OrderedSequenceIterator<T, K: valueOrPrimitive> extends AsyncIterat
     this._cursorP = cursorP;
   }
 
-  async next(): Promise<AsyncIteratorResult<T>> {
+  async _ensureIterator(): Promise<AsyncIterator<T>> {
     if (!this._iterator) {
       this._iterator = (await this._cursorP).iterator();
     }
-    return this._iterator.next();
+    return this._iterator;
+  }
+
+  next(): Promise<AsyncIteratorResult<T>> {
+    return this._ensureIterator().then(it => it.next());
+  }
+
+  return(): Promise<AsyncIteratorResult<T>> {
+    return this._ensureIterator().then(it => it.return());
   }
 }
