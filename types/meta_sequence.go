@@ -96,7 +96,7 @@ func (ms metaSequenceObject) Type() Type {
 	return ms.t
 }
 
-type metaBuilderFunc func(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value
+type metaBuilderFunc func(tuples metaSequenceData, t Type, cs chunks.ChunkSource) Value
 
 var (
 	metaFuncMap map[NomsKind]metaBuilderFunc = map[NomsKind]metaBuilderFunc{}
@@ -106,7 +106,7 @@ func registerMetaValue(k NomsKind, bf metaBuilderFunc) {
 	metaFuncMap[k] = bf
 }
 
-func newMetaSequenceFromData(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
+func newMetaSequenceFromData(tuples metaSequenceData, t Type, cs chunks.ChunkSource) Value {
 	if bf, ok := metaFuncMap[t.Kind()]; ok {
 		return bf(tuples, t, cs)
 	}
@@ -115,7 +115,7 @@ func newMetaSequenceFromData(tuples metaSequenceData, t Type, cs chunks.ChunkSto
 }
 
 // Creates a sequenceCursor pointing to the first metaTuple in a metaSequence, and returns that cursor plus the leaf Value referenced from that metaTuple.
-func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkStore) (*sequenceCursor, Value) {
+func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkSource) (*sequenceCursor, Value) {
 	d.Chk.NotNil(root)
 
 	newCursor := func(parent *sequenceCursor, ms metaSequence) *sequenceCursor {
@@ -141,7 +141,7 @@ func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkStore) (*sequenceCu
 	panic("not reachable")
 }
 
-func readMetaTupleValue(item sequenceItem, cs chunks.ChunkStore) Value {
+func readMetaTupleValue(item sequenceItem, cs chunks.ChunkSource) Value {
 	mt := item.(metaTuple)
 	if mt.child == nil {
 		d.Chk.False(mt.childRef.IsEmpty())
@@ -151,7 +151,7 @@ func readMetaTupleValue(item sequenceItem, cs chunks.ChunkStore) Value {
 	return internalValueFromType(mt.child, mt.child.Type())
 }
 
-func iterateMetaSequenceLeaf(ms metaSequence, cs chunks.ChunkStore, cb func(Value) bool) {
+func iterateMetaSequenceLeaf(ms metaSequence, cs chunks.ChunkSource, cb func(Value) bool) {
 	cursor, v := newMetaSequenceCursor(ms, cs)
 	for {
 		if cb(v) || !cursor.advance() {

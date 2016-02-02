@@ -25,7 +25,7 @@ func listFromInts(cs chunks.ChunkStore, ints []int) List {
 		vals[i] = Int64(v)
 	}
 
-	return NewList(cs, vals...)
+	return NewList(vals...)
 }
 
 func TestSequenceChunkerMod(t *testing.T) {

@@ -4,25 +4,24 @@
 
 type {{.Name}} struct {
 	s   {{$typesPackage}}Set
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func New{{.Name}}(cs chunks.ChunkStore) {{.Name}} {
-	return {{.Name}}{ {{$typesPackage}}NewTypedSet(cs, __typeFor{{.Name}}), cs, &ref.Ref{}}
+func New{{.Name}}() {{.Name}} {
+	return {{.Name}}{ {{$typesPackage}}NewTypedSet(__typeFor{{.Name}}), &ref.Ref{}}
 }
 
 {{if .CanUseDef}}
 	type {{.Name}}Def map[{{defType .ElemType}}]bool
 
-	func (def {{.Name}}Def) New(cs chunks.ChunkStore) {{.Name}} {
+	func (def {{.Name}}Def) New() {{.Name}} {
 		l := make([]{{$typesPackage}}Value, len(def))
 		i := 0
 		for d, _ := range def  {
 			l[i] = {{defToValue "d" .ElemType}}
 			i++
 		}
-		return {{.Name}}{ {{$typesPackage}}NewTypedSet(cs, __typeFor{{.Name}}, l...), cs, &ref.Ref{}}
+		return {{.Name}}{ {{$typesPackage}}NewTypedSet(__typeFor{{.Name}}, l...), &ref.Ref{}}
 	}
 
 	func (s {{.Name}}) Def() {{.Name}}Def {
@@ -65,8 +64,8 @@ func init() {
 	{{$typesPackage}}RegisterValue(__typeFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
 }
 
-func builderFor{{.Name}}(cs chunks.ChunkStore, v {{$typesPackage}}Value) {{$typesPackage}}Value {
-	return {{.Name}}{v.({{$typesPackage}}Set), cs, &ref.Ref{}}
+func builderFor{{.Name}}(v {{$typesPackage}}Value) {{$typesPackage}}Value {
+	return {{.Name}}{v.({{$typesPackage}}Set), &ref.Ref{}}
 }
 
 func readerFor{{.Name}}(v {{$typesPackage}}Value) {{$typesPackage}}Value {
@@ -113,19 +112,19 @@ func (s {{.Name}}) Filter(cb {{.Name}}FilterCallback) {{.Name}} {
 	out := s.s.Filter(func(v {{$typesPackage}}Value) bool {
 		return cb({{valueToUser "v" .ElemType}})
 	})
-	return {{.Name}}{out, s.cs, &ref.Ref{}}
+	return {{.Name}}{out, &ref.Ref{}}
 }
 
 func (s {{.Name}}) Insert(p ...{{userType .ElemType}}) {{.Name}} {
-	return {{.Name}}{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+	return {{.Name}}{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s {{.Name}}) Remove(p ...{{userType .ElemType}}) {{.Name}} {
-	return {{.Name}}{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+	return {{.Name}}{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s {{.Name}}) Union(others ...{{.Name}}) {{.Name}} {
-	return {{.Name}}{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
+	return {{.Name}}{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
 func (s {{.Name}}) First() {{userType .ElemType}} {

@@ -32,16 +32,14 @@ type Commit struct {
 	_value   types.Value
 	_parents SetOfRefOfCommit
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewCommit(cs chunks.ChunkStore) Commit {
+func NewCommit() Commit {
 	return Commit{
 		_value:   types.Bool(false),
-		_parents: NewSetOfRefOfCommit(cs),
+		_parents: NewSetOfRefOfCommit(),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -51,11 +49,10 @@ type CommitDef struct {
 	Parents SetOfRefOfCommitDef
 }
 
-func (def CommitDef) New(cs chunks.ChunkStore) Commit {
+func (def CommitDef) New() Commit {
 	return Commit{
 		_value:   def.Value,
-		_parents: def.Parents.New(cs),
-		cs:       cs,
+		_parents: def.Parents.New(),
 		ref:      &ref.Ref{},
 	}
 }
@@ -77,9 +74,9 @@ func init() {
 	types.RegisterStruct(__typeForCommit, builderForCommit, readerForCommit)
 }
 
-func builderForCommit(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForCommit(values []types.Value) types.Value {
 	i := 0
-	s := Commit{ref: &ref.Ref{}, cs: cs}
+	s := Commit{ref: &ref.Ref{}}
 	s._value = values[i]
 	i++
 	s._parents = values[i].(SetOfRefOfCommit)
@@ -140,22 +137,21 @@ func (s Commit) SetParents(val SetOfRefOfCommit) Commit {
 
 type MapOfStringToRefOfCommit struct {
 	m   types.Map
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfStringToRefOfCommit(cs chunks.ChunkStore) MapOfStringToRefOfCommit {
-	return MapOfStringToRefOfCommit{types.NewTypedMap(cs, __typeForMapOfStringToRefOfCommit), cs, &ref.Ref{}}
+func NewMapOfStringToRefOfCommit() MapOfStringToRefOfCommit {
+	return MapOfStringToRefOfCommit{types.NewTypedMap(__typeForMapOfStringToRefOfCommit), &ref.Ref{}}
 }
 
 type MapOfStringToRefOfCommitDef map[string]ref.Ref
 
-func (def MapOfStringToRefOfCommitDef) New(cs chunks.ChunkStore) MapOfStringToRefOfCommit {
+func (def MapOfStringToRefOfCommitDef) New() MapOfStringToRefOfCommit {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), NewRefOfCommit(v))
 	}
-	return MapOfStringToRefOfCommit{types.NewTypedMap(cs, __typeForMapOfStringToRefOfCommit, kv...), cs, &ref.Ref{}}
+	return MapOfStringToRefOfCommit{types.NewTypedMap(__typeForMapOfStringToRefOfCommit, kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToRefOfCommit) Def() MapOfStringToRefOfCommitDef {
@@ -197,8 +193,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfStringToRefOfCommit, builderForMapOfStringToRefOfCommit, readerForMapOfStringToRefOfCommit)
 }
 
-func builderForMapOfStringToRefOfCommit(cs chunks.ChunkStore, v types.Value) types.Value {
-	return MapOfStringToRefOfCommit{v.(types.Map), cs, &ref.Ref{}}
+func builderForMapOfStringToRefOfCommit(v types.Value) types.Value {
+	return MapOfStringToRefOfCommit{v.(types.Map), &ref.Ref{}}
 }
 
 func readerForMapOfStringToRefOfCommit(v types.Value) types.Value {
@@ -230,13 +226,13 @@ func (m MapOfStringToRefOfCommit) MaybeGet(p string) (RefOfCommit, bool) {
 }
 
 func (m MapOfStringToRefOfCommit) Set(k string, v RefOfCommit) MapOfStringToRefOfCommit {
-	return MapOfStringToRefOfCommit{m.m.Set(types.NewString(k), v), m.cs, &ref.Ref{}}
+	return MapOfStringToRefOfCommit{m.m.Set(types.NewString(k), v), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToRefOfCommit) Remove(p string) MapOfStringToRefOfCommit {
-	return MapOfStringToRefOfCommit{m.m.Remove(types.NewString(p)), m.cs, &ref.Ref{}}
+	return MapOfStringToRefOfCommit{m.m.Remove(types.NewString(p)), &ref.Ref{}}
 }
 
 type MapOfStringToRefOfCommitIterCallback func(k string, v RefOfCommit) (stop bool)
@@ -267,31 +263,30 @@ func (m MapOfStringToRefOfCommit) Filter(cb MapOfStringToRefOfCommitFilterCallba
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(k.(types.String).String(), v.(RefOfCommit))
 	})
-	return MapOfStringToRefOfCommit{out, m.cs, &ref.Ref{}}
+	return MapOfStringToRefOfCommit{out, &ref.Ref{}}
 }
 
 // SetOfRefOfCommit
 
 type SetOfRefOfCommit struct {
 	s   types.Set
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSetOfRefOfCommit(cs chunks.ChunkStore) SetOfRefOfCommit {
-	return SetOfRefOfCommit{types.NewTypedSet(cs, __typeForSetOfRefOfCommit), cs, &ref.Ref{}}
+func NewSetOfRefOfCommit() SetOfRefOfCommit {
+	return SetOfRefOfCommit{types.NewTypedSet(__typeForSetOfRefOfCommit), &ref.Ref{}}
 }
 
 type SetOfRefOfCommitDef map[ref.Ref]bool
 
-func (def SetOfRefOfCommitDef) New(cs chunks.ChunkStore) SetOfRefOfCommit {
+func (def SetOfRefOfCommitDef) New() SetOfRefOfCommit {
 	l := make([]types.Value, len(def))
 	i := 0
 	for d, _ := range def {
 		l[i] = NewRefOfCommit(d)
 		i++
 	}
-	return SetOfRefOfCommit{types.NewTypedSet(cs, __typeForSetOfRefOfCommit, l...), cs, &ref.Ref{}}
+	return SetOfRefOfCommit{types.NewTypedSet(__typeForSetOfRefOfCommit, l...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfCommit) Def() SetOfRefOfCommitDef {
@@ -333,8 +328,8 @@ func init() {
 	types.RegisterValue(__typeForSetOfRefOfCommit, builderForSetOfRefOfCommit, readerForSetOfRefOfCommit)
 }
 
-func builderForSetOfRefOfCommit(cs chunks.ChunkStore, v types.Value) types.Value {
-	return SetOfRefOfCommit{v.(types.Set), cs, &ref.Ref{}}
+func builderForSetOfRefOfCommit(v types.Value) types.Value {
+	return SetOfRefOfCommit{v.(types.Set), &ref.Ref{}}
 }
 
 func readerForSetOfRefOfCommit(v types.Value) types.Value {
@@ -381,19 +376,19 @@ func (s SetOfRefOfCommit) Filter(cb SetOfRefOfCommitFilterCallback) SetOfRefOfCo
 	out := s.s.Filter(func(v types.Value) bool {
 		return cb(v.(RefOfCommit))
 	})
-	return SetOfRefOfCommit{out, s.cs, &ref.Ref{}}
+	return SetOfRefOfCommit{out, &ref.Ref{}}
 }
 
 func (s SetOfRefOfCommit) Insert(p ...RefOfCommit) SetOfRefOfCommit {
-	return SetOfRefOfCommit{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+	return SetOfRefOfCommit{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfCommit) Remove(p ...RefOfCommit) SetOfRefOfCommit {
-	return SetOfRefOfCommit{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+	return SetOfRefOfCommit{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfCommit) Union(others ...SetOfRefOfCommit) SetOfRefOfCommit {
-	return SetOfRefOfCommit{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
+	return SetOfRefOfCommit{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfCommit) First() RefOfCommit {
@@ -469,7 +464,7 @@ func builderForRefOfCommit(r ref.Ref) types.Value {
 	return NewRefOfCommit(r)
 }
 
-func (r RefOfCommit) TargetValue(cs chunks.ChunkStore) Commit {
+func (r RefOfCommit) TargetValue(cs chunks.ChunkSource) Commit {
 	return types.ReadValue(r.target, cs).(Commit)
 }
 

@@ -1,9 +1,6 @@
 package types
 
-import (
-	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/d"
-)
+import "github.com/attic-labs/noms/d"
 
 type Set interface {
 	Value
@@ -29,16 +26,16 @@ type setFilterCallback func(v Value) (keep bool)
 
 var setType = MakeCompoundType(SetKind, MakePrimitiveType(ValueKind))
 
-func NewSet(cs chunks.ChunkStore, v ...Value) Set {
-	return NewTypedSet(cs, setType, v...)
+func NewSet(v ...Value) Set {
+	return NewTypedSet(setType, v...)
 }
 
-func NewTypedSet(cs chunks.ChunkStore, t Type, v ...Value) Set {
-	return newTypedSet(cs, t, buildSetData(setData{}, v, t)...)
+func NewTypedSet(t Type, v ...Value) Set {
+	return newTypedSet(t, buildSetData(setData{}, v, t)...)
 }
 
-func newTypedSet(cs chunks.ChunkStore, t Type, data ...Value) Set {
-	seq := newEmptySequenceChunker(makeSetLeafChunkFn(t, cs), newOrderedMetaSequenceChunkFn(t, cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+func newTypedSet(t Type, data ...Value) Set {
+	seq := newEmptySequenceChunker(makeSetLeafChunkFn(t), newOrderedMetaSequenceChunkFn(t), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, v := range data {
 		seq.Append(v)
@@ -47,7 +44,7 @@ func newTypedSet(cs chunks.ChunkStore, t Type, data ...Value) Set {
 	return seq.Done().(Set)
 }
 
-func setUnion(set Set, cs chunks.ChunkStore, others []Set) Set {
+func setUnion(set Set, others []Set) Set {
 	// TODO: This can be done more efficiently by realizing that if two sets have the same meta tuple we only have to traverse one of the subtrees. Bug 794
 	if len(others) == 0 {
 		return set
@@ -55,7 +52,7 @@ func setUnion(set Set, cs chunks.ChunkStore, others []Set) Set {
 	assertSetsSameType(set, others...)
 
 	tr := set.Type()
-	seq := newEmptySequenceChunker(makeSetLeafChunkFn(tr, cs), newOrderedMetaSequenceChunkFn(tr, cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeSetLeafChunkFn(tr), newOrderedMetaSequenceChunkFn(tr), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	var lessFunction func(a, b sequenceItem) bool
 	if isSequenceOrderedByIndexedType(tr) {

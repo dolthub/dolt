@@ -3,7 +3,6 @@
 package gen
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -34,14 +33,12 @@ type OptionalStruct struct {
 	_b          bool
 	__optionalb bool
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewOptionalStruct(cs chunks.ChunkStore) OptionalStruct {
+func NewOptionalStruct() OptionalStruct {
 	return OptionalStruct{
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -51,13 +48,12 @@ type OptionalStructDef struct {
 	B bool
 }
 
-func (def OptionalStructDef) New(cs chunks.ChunkStore) OptionalStruct {
+func (def OptionalStructDef) New() OptionalStruct {
 	return OptionalStruct{
 		_s:          def.S,
 		__optionals: true,
 		_b:          def.B,
 		__optionalb: true,
-		cs:          cs,
 		ref:         &ref.Ref{},
 	}
 }
@@ -83,9 +79,9 @@ func init() {
 	types.RegisterStruct(__typeForOptionalStruct, builderForOptionalStruct, readerForOptionalStruct)
 }
 
-func builderForOptionalStruct(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForOptionalStruct(values []types.Value) types.Value {
 	i := 0
-	s := OptionalStruct{ref: &ref.Ref{}, cs: cs}
+	s := OptionalStruct{ref: &ref.Ref{}}
 	s.__optionals = bool(values[i].(types.Bool))
 	i++
 	if s.__optionals {

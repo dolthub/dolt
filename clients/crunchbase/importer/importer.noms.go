@@ -37,17 +37,15 @@ type Import struct {
 	_Date      Date
 	_Companies RefOfMapOfStringToRefOfCompany
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewImport(cs chunks.ChunkStore) Import {
+func NewImport() Import {
 	return Import{
 		_FileSHA1:  "",
-		_Date:      NewDate(cs),
+		_Date:      NewDate(),
 		_Companies: NewRefOfMapOfStringToRefOfCompany(ref.Ref{}),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -58,12 +56,11 @@ type ImportDef struct {
 	Companies ref.Ref
 }
 
-func (def ImportDef) New(cs chunks.ChunkStore) Import {
+func (def ImportDef) New() Import {
 	return Import{
 		_FileSHA1:  def.FileSHA1,
-		_Date:      def.Date.New(cs),
+		_Date:      def.Date.New(),
 		_Companies: NewRefOfMapOfStringToRefOfCompany(def.Companies),
-		cs:         cs,
 		ref:        &ref.Ref{},
 	}
 }
@@ -86,9 +83,9 @@ func init() {
 	types.RegisterStruct(__typeForImport, builderForImport, readerForImport)
 }
 
-func builderForImport(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForImport(values []types.Value) types.Value {
 	i := 0
-	s := Import{ref: &ref.Ref{}, cs: cs}
+	s := Import{ref: &ref.Ref{}}
 	s._FileSHA1 = values[i].(types.String).String()
 	i++
 	s._Date = values[i].(Date)
@@ -212,7 +209,7 @@ func builderForRefOfMapOfStringToRefOfCompany(r ref.Ref) types.Value {
 	return NewRefOfMapOfStringToRefOfCompany(r)
 }
 
-func (r RefOfMapOfStringToRefOfCompany) TargetValue(cs chunks.ChunkStore) MapOfStringToRefOfCompany {
+func (r RefOfMapOfStringToRefOfCompany) TargetValue(cs chunks.ChunkSource) MapOfStringToRefOfCompany {
 	return types.ReadValue(r.target, cs).(MapOfStringToRefOfCompany)
 }
 
@@ -224,22 +221,21 @@ func (r RefOfMapOfStringToRefOfCompany) SetTargetValue(val MapOfStringToRefOfCom
 
 type MapOfStringToRefOfCompany struct {
 	m   types.Map
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfStringToRefOfCompany(cs chunks.ChunkStore) MapOfStringToRefOfCompany {
-	return MapOfStringToRefOfCompany{types.NewTypedMap(cs, __typeForMapOfStringToRefOfCompany), cs, &ref.Ref{}}
+func NewMapOfStringToRefOfCompany() MapOfStringToRefOfCompany {
+	return MapOfStringToRefOfCompany{types.NewTypedMap(__typeForMapOfStringToRefOfCompany), &ref.Ref{}}
 }
 
 type MapOfStringToRefOfCompanyDef map[string]ref.Ref
 
-func (def MapOfStringToRefOfCompanyDef) New(cs chunks.ChunkStore) MapOfStringToRefOfCompany {
+func (def MapOfStringToRefOfCompanyDef) New() MapOfStringToRefOfCompany {
 	kv := make([]types.Value, 0, len(def)*2)
 	for k, v := range def {
 		kv = append(kv, types.NewString(k), NewRefOfCompany(v))
 	}
-	return MapOfStringToRefOfCompany{types.NewTypedMap(cs, __typeForMapOfStringToRefOfCompany, kv...), cs, &ref.Ref{}}
+	return MapOfStringToRefOfCompany{types.NewTypedMap(__typeForMapOfStringToRefOfCompany, kv...), &ref.Ref{}}
 }
 
 func (m MapOfStringToRefOfCompany) Def() MapOfStringToRefOfCompanyDef {
@@ -281,8 +277,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfStringToRefOfCompany, builderForMapOfStringToRefOfCompany, readerForMapOfStringToRefOfCompany)
 }
 
-func builderForMapOfStringToRefOfCompany(cs chunks.ChunkStore, v types.Value) types.Value {
-	return MapOfStringToRefOfCompany{v.(types.Map), cs, &ref.Ref{}}
+func builderForMapOfStringToRefOfCompany(v types.Value) types.Value {
+	return MapOfStringToRefOfCompany{v.(types.Map), &ref.Ref{}}
 }
 
 func readerForMapOfStringToRefOfCompany(v types.Value) types.Value {
@@ -314,13 +310,13 @@ func (m MapOfStringToRefOfCompany) MaybeGet(p string) (RefOfCompany, bool) {
 }
 
 func (m MapOfStringToRefOfCompany) Set(k string, v RefOfCompany) MapOfStringToRefOfCompany {
-	return MapOfStringToRefOfCompany{m.m.Set(types.NewString(k), v), m.cs, &ref.Ref{}}
+	return MapOfStringToRefOfCompany{m.m.Set(types.NewString(k), v), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToRefOfCompany) Remove(p string) MapOfStringToRefOfCompany {
-	return MapOfStringToRefOfCompany{m.m.Remove(types.NewString(p)), m.cs, &ref.Ref{}}
+	return MapOfStringToRefOfCompany{m.m.Remove(types.NewString(p)), &ref.Ref{}}
 }
 
 type MapOfStringToRefOfCompanyIterCallback func(k string, v RefOfCompany) (stop bool)
@@ -351,7 +347,7 @@ func (m MapOfStringToRefOfCompany) Filter(cb MapOfStringToRefOfCompanyFilterCall
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(k.(types.String).String(), v.(RefOfCompany))
 	})
-	return MapOfStringToRefOfCompany{out, m.cs, &ref.Ref{}}
+	return MapOfStringToRefOfCompany{out, &ref.Ref{}}
 }
 
 // RefOfCompany
@@ -407,7 +403,7 @@ func builderForRefOfCompany(r ref.Ref) types.Value {
 	return NewRefOfCompany(r)
 }
 
-func (r RefOfCompany) TargetValue(cs chunks.ChunkStore) Company {
+func (r RefOfCompany) TargetValue(cs chunks.ChunkSource) Company {
 	return types.ReadValue(r.target, cs).(Company)
 }
 

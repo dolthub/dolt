@@ -9,9 +9,8 @@ import (
 
 func TestRefInList(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l := NewList(cs)
+	l := NewList()
 	r := NewRef(l.Ref())
 	l = l.Append(r)
 	r2 := l.Get(0)
@@ -20,9 +19,8 @@ func TestRefInList(t *testing.T) {
 
 func TestRefInSet(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	s := NewSet(cs)
+	s := NewSet()
 	r := NewRef(s.Ref())
 	s = s.Insert(r)
 	r2 := s.First()
@@ -31,9 +29,8 @@ func TestRefInSet(t *testing.T) {
 
 func TestRefInMap(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	m := NewMap(cs)
+	m := NewMap()
 	r := NewRef(m.Ref())
 	m = m.Set(Int32(0), r).Set(r, Int32(1))
 	r2 := m.Get(Int32(0))
@@ -49,11 +46,11 @@ func TestRefType(t *testing.T) {
 
 	tr := MakeCompoundType(RefKind, MakePrimitiveType(ValueKind))
 
-	l := NewList(cs)
+	l := NewList()
 	r := NewRef(l.Ref())
 	assert.True(r.Type().Equals(tr))
 
-	m := NewMap(cs)
+	m := NewMap()
 	r2 := r.SetTargetValue(m, cs)
 	assert.True(r2.Type().Equals(tr))
 
@@ -69,9 +66,8 @@ func TestRefType(t *testing.T) {
 
 func TestRefChunks(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l := NewList(cs)
+	l := NewList()
 	r := NewRef(l.Ref())
 	assert.Len(r.Chunks(), 1)
 	assert.Equal(l.Ref(), r.Chunks()[0])

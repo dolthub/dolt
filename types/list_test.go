@@ -11,9 +11,8 @@ import (
 
 func TestListLen(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l := NewList(cs)
+	l := NewList()
 	assert.Equal(uint64(0), l.Len())
 	l = l.Append(Bool(true))
 	assert.Equal(uint64(1), l.Len())
@@ -23,9 +22,8 @@ func TestListLen(t *testing.T) {
 
 func TestListEmpty(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l := NewList(cs)
+	l := NewList()
 	assert.True(l.Empty())
 	l = l.Append(Bool(true))
 	assert.False(l.Empty())
@@ -35,9 +33,8 @@ func TestListEmpty(t *testing.T) {
 
 func TestListGet(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l := NewList(cs)
+	l := NewList()
 	l = l.Append(Int32(0), Int32(1), Int32(2))
 	assert.Equal(Int32(0), l.Get(0))
 	assert.Equal(Int32(1), l.Get(1))
@@ -50,9 +47,8 @@ func TestListGet(t *testing.T) {
 
 func TestListSlice(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l1 := NewList(cs)
+	l1 := NewList()
 	l1 = l1.Append(Int32(0), Int32(1), Int32(2), Int32(3))
 	l2 := l1.Slice(1, 3)
 	assert.Equal(uint64(4), l1.Len())
@@ -80,9 +76,8 @@ func TestListSlice(t *testing.T) {
 
 func TestListSet(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l0 := NewList(cs)
+	l0 := NewList()
 	l0 = l0.Append(Float32(0.0))
 	l1 := l0.Set(uint64(0), Float32(1.0))
 	assert.Equal(Float32(1.0), l1.Get(0))
@@ -94,9 +89,8 @@ func TestListSet(t *testing.T) {
 
 func TestListAppend(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l0 := NewList(cs)
+	l0 := NewList()
 	l1 := l0.Append(Bool(false))
 	assert.Equal(uint64(0), l0.Len())
 	assert.Equal(uint64(1), l1.Len())
@@ -106,16 +100,15 @@ func TestListAppend(t *testing.T) {
 	l2 := l1.Append(Bool(true), Bool(true))
 	assert.Equal(uint64(3), l2.Len())
 	assert.Equal(Bool(false), l2.Get(0))
-	assert.True(NewList(cs, Bool(true), Bool(true)).Equals(l2.Slice(1, l2.Len())))
+	assert.True(NewList(Bool(true), Bool(true)).Equals(l2.Slice(1, l2.Len())))
 	assert.Equal(uint64(1), l1.Len())
 }
 
 func TestListInsert(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	// Insert(0, v1)
-	l0 := NewList(cs)
+	l0 := NewList()
 	l1 := l0.Insert(uint64(0), Int32(-1))
 	assert.Equal(uint64(0), l0.Len())
 	assert.Equal(uint64(1), l1.Len())
@@ -125,7 +118,7 @@ func TestListInsert(t *testing.T) {
 	l2 := l1.Insert(0, Int32(-3), Int32(-2))
 	assert.Equal(uint64(3), l2.Len())
 	assert.Equal(Int32(-1), l2.Get(2))
-	assert.True(NewList(cs, Int32(-3), Int32(-2)).Equals(l2.Slice(0, 2)))
+	assert.True(NewList(Int32(-3), Int32(-2)).Equals(l2.Slice(0, 2)))
 	assert.Equal(uint64(1), l1.Len())
 
 	// Insert(2, v3)
@@ -139,9 +132,8 @@ func TestListInsert(t *testing.T) {
 
 func TestListRemove(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l0 := NewList(cs)
+	l0 := NewList()
 	l0 = l0.Remove(0, 0)
 	assert.Equal(uint64(0), l0.Len())
 
@@ -149,13 +141,13 @@ func TestListRemove(t *testing.T) {
 	l1 := l0.Remove(1, 3)
 	assert.Equal(uint64(4), l0.Len())
 	assert.Equal(uint64(2), l1.Len())
-	assert.True(NewList(cs, Bool(false), Bool(false)).Equals(l1))
+	assert.True(NewList(Bool(false), Bool(false)).Equals(l1))
 
 	l1 = l1.Remove(1, 2)
-	assert.True(NewList(cs, Bool(false)).Equals(l1))
+	assert.True(NewList(Bool(false)).Equals(l1))
 
 	l1 = l1.Remove(0, 1)
-	assert.True(NewList(cs).Equals(l1))
+	assert.True(NewList().Equals(l1))
 
 	assert.Panics(func() {
 		l1.Remove(0, 1)
@@ -164,14 +156,13 @@ func TestListRemove(t *testing.T) {
 
 func TestListRemoveAt(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l0 := NewList(cs)
+	l0 := NewList()
 	l0 = l0.Append(Bool(false), Bool(true))
 	l1 := l0.RemoveAt(1)
-	assert.True(NewList(cs, Bool(false)).Equals(l1))
+	assert.True(NewList(Bool(false)).Equals(l1))
 	l1 = l1.RemoveAt(0)
-	assert.True(NewList(cs).Equals(l1))
+	assert.True(NewList().Equals(l1))
 
 	assert.Panics(func() {
 		l1.RemoveAt(0)
@@ -239,9 +230,8 @@ func TestListMap(t *testing.T) {
 
 func TestListIter(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l := NewList(cs, Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	l := NewList(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
 	acc := []int32{}
 	i := uint64(0)
 	l.Iter(func(v Value, index uint64) bool {
@@ -252,7 +242,7 @@ func TestListIter(t *testing.T) {
 	})
 	assert.Equal([]int32{0, 1, 2}, acc)
 
-	cl := NewList(cs, NewString("a"), NewString("b"), NewString("c"), NewString("d"), NewString("e"), NewString("f"))
+	cl := NewList(NewString("a"), NewString("b"), NewString("c"), NewString("d"), NewString("e"), NewString("f"))
 	acc2 := []string{}
 	cl.Iter(func(v Value, i uint64) bool {
 		acc2 = append(acc2, v.(String).String())
@@ -274,9 +264,8 @@ func TestListIter(t *testing.T) {
 
 func TestListIterAll(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l := NewList(cs, Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	l := NewList(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
 	acc := []int32{}
 	i := uint64(0)
 	l.IterAll(func(v Value, index uint64) {
@@ -286,7 +275,7 @@ func TestListIterAll(t *testing.T) {
 	})
 	assert.Equal([]int32{0, 1, 2, 3, 4}, acc)
 
-	cl := NewList(cs, NewString("a"), NewString("b"), NewString("c"), NewString("d"), NewString("e"), NewString("f"))
+	cl := NewList(NewString("a"), NewString("b"), NewString("c"), NewString("d"), NewString("e"), NewString("f"))
 	acc2 := []string{}
 	cl.IterAll(func(v Value, i uint64) {
 		acc2 = append(acc2, v.(String).String())
@@ -355,7 +344,7 @@ func TestListType(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 
-	l := NewList(cs, Int32(0))
+	l := NewList(Int32(0))
 	assert.True(l.Type().Equals(MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))))
 
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Uint8Kind))
@@ -383,17 +372,16 @@ func TestListType(t *testing.T) {
 
 func TestListChunks(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	l1 := NewList(cs, Int32(0))
+	l1 := NewList(Int32(0))
 	c1 := l1.Chunks()
 	assert.Len(c1, 0)
 
-	l2 := NewList(cs, NewRef(Int32(0).Ref()))
+	l2 := NewList(NewRef(Int32(0).Ref()))
 	c2 := l2.Chunks()
 	assert.Len(c2, 1)
 
-	l3 := NewList(cs, l2)
+	l3 := NewList(l2)
 	c3 := l3.Chunks()
 	assert.Len(c3, 1)
 	assert.Equal(Int32(0).Ref(), c3[0])

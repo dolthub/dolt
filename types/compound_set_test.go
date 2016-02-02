@@ -37,7 +37,7 @@ func (ts testSet) Remove(from, to int) testSet {
 }
 
 func (ts testSet) toCompoundSet(cs chunks.ChunkStore) Set {
-	return NewTypedSet(cs, ts.tr, ts.values...).(compoundSet)
+	return NewTypedSet(ts.tr, ts.values...).(compoundSet)
 }
 
 type testSetGenFn func(v Int64) Value
@@ -69,7 +69,7 @@ func getTestNativeOrderSet(scale int) testSet {
 func getTestRefValueOrderSet(scale int) testSet {
 	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
 	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
-		return NewTypedSet(chunks.NewMemoryStore(), setType, v)
+		return NewTypedSet(setType, v)
 	}, func(x, y Value) bool {
 		return !y.Ref().Less(x.Ref())
 	}, setType)
@@ -88,7 +88,7 @@ func getTestRefToValueOrderSet(scale int) testSet {
 	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
 	refType := MakeCompoundType(RefKind, setType)
 	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
-		return newRef(NewTypedSet(chunks.NewMemoryStore(), setType, v).Ref(), refType)
+		return newRef(NewTypedSet(setType, v).Ref(), refType)
 	}, func(x, y Value) bool {
 		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
 	}, refType)
@@ -266,7 +266,7 @@ func TestCompoundSetFilter(t *testing.T) {
 		actual := set.Filter(func(v Value) bool {
 			return ts.less(v, pivot)
 		})
-		assert.True(newTypedSet(cs, ts.tr, ts.values[:pivotPoint+1]...).Equals(actual))
+		assert.True(newTypedSet(ts.tr, ts.values[:pivotPoint+1]...).Equals(actual))
 
 		idx := 0
 		actual.IterAll(func(v Value) {
@@ -293,7 +293,7 @@ func TestCompoundSetUnion(t *testing.T) {
 		assert.True(cs.Equals(cs3))
 		cs4 := cs.Union(cs2, cs3)
 		assert.True(cs.Equals(cs4))
-		emptySet := NewTypedSet(ms, ts.tr)
+		emptySet := NewTypedSet(ts.tr)
 		cs5 := cs.Union(emptySet)
 		assert.True(cs.Equals(cs5))
 		cs6 := emptySet.Union(cs)
@@ -317,10 +317,10 @@ func TestCompoundSetUnion(t *testing.T) {
 			}
 		}
 
-		s1 := NewTypedSet(ms, ts.tr, subsetValues1...)
-		s2 := NewTypedSet(ms, ts.tr, subsetValues2...)
-		s3 := NewTypedSet(ms, ts.tr, subsetValues3...)
-		sAll := NewTypedSet(ms, ts.tr, subsetValuesAll...)
+		s1 := NewTypedSet(ts.tr, subsetValues1...)
+		s2 := NewTypedSet(ts.tr, subsetValues2...)
+		s3 := NewTypedSet(ts.tr, subsetValues3...)
+		sAll := NewTypedSet(ts.tr, subsetValuesAll...)
 
 		assert.True(s1.Union(s2, s3).Equals(sAll))
 	}

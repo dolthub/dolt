@@ -89,7 +89,7 @@ func getUser(api flickrAPI) {
 		}
 	}
 
-	user = NewUser(ds.Store())
+	user = NewUser()
 	authUser(api)
 }
 
@@ -155,7 +155,7 @@ func getAlbum(api flickrAPI, id string) Album {
 
 	fmt.Printf("Photoset: %v\nRef: %s\n", response.Photoset.Title.Content, photos.TargetRef())
 
-	return NewAlbum(ds.Store()).
+	return NewAlbum().
 		SetId(id).
 		SetTitle(response.Photoset.Title.Content).
 		SetPhotos(photos)
@@ -185,7 +185,7 @@ func getAlbums(api flickrAPI) MapOfStringToAlbum {
 		}()
 	}
 
-	albums := NewMapOfStringToAlbum(ds.Store())
+	albums := NewMapOfStringToAlbum()
 	for {
 		if albums.Len() == uint64(len(response.Photosets.Photoset)) {
 			break
@@ -236,14 +236,14 @@ func getAlbumPhotos(api flickrAPI, id string) RefOfSetOfRefOfRemotePhoto {
 	d.Chk.NoError(err)
 
 	cs := ds.Store()
-	photos := NewSetOfRefOfRemotePhoto(cs)
+	photos := NewSetOfRefOfRemotePhoto()
 
 	for _, p := range response.Photoset.Photo {
 		photo := RemotePhotoDef{
 			Id:    p.Id,
 			Title: p.Title,
 			Tags:  getTags(p.Tags),
-		}.New(cs)
+		}.New()
 
 		lat, lon := deFlickr(p.Latitude), deFlickr(p.Longitude)
 
@@ -259,12 +259,12 @@ func getAlbumPhotos(api flickrAPI, id string) RefOfSetOfRefOfRemotePhoto {
 
 		// DateTaken is the MySQL DATETIME format.
 		if t, err := time.ParseInLocation("2006-01-02 15:04:05", p.DateTaken, location); err == nil {
-			photo = photo.SetDate(DateDef{t.Unix() * 1e3}.New(cs))
+			photo = photo.SetDate(DateDef{t.Unix() * 1e3}.New())
 		} else {
 			fmt.Printf("Error parsing date \"%s\": %s\n", p.DateTaken, err)
 		}
 
-		sizes := NewMapOfSizeToString(cs)
+		sizes := NewMapOfSizeToString()
 		sizes = addSize(sizes, p.ThumbURL, p.ThumbWidth, p.ThumbHeight)
 		sizes = addSize(sizes, p.SmallURL, p.SmallWidth, p.SmallHeight)
 		sizes = addSize(sizes, p.MediumURL, p.MediumWidth, p.MediumHeight)
@@ -273,7 +273,7 @@ func getAlbumPhotos(api flickrAPI, id string) RefOfSetOfRefOfRemotePhoto {
 		photo = photo.SetSizes(sizes)
 
 		if lat != 0.0 && lon != 0.0 {
-			photo = photo.SetGeoposition(GeopositionDef{float32(lat), float32(lon)}.New(cs))
+			photo = photo.SetGeoposition(GeopositionDef{float32(lat), float32(lon)}.New())
 		}
 
 		photos = photos.Insert(NewRefOfRemotePhoto(types.WriteValue(photo, cs)))
@@ -327,7 +327,7 @@ func addSize(sizes MapOfSizeToString, url string, width interface{}, height inte
 		return sizes
 	}
 
-	return sizes.Set(SizeDef{getDim(width), getDim(height)}.New(ds.Store()), url)
+	return sizes.Set(SizeDef{getDim(width), getDim(height)}.New(), url)
 }
 
 func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) error {

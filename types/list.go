@@ -1,9 +1,5 @@
 package types
 
-import (
-	"github.com/attic-labs/noms/chunks"
-)
-
 type List interface {
 	Value
 	Len() uint64
@@ -30,12 +26,12 @@ type MapFunc func(v Value, index uint64) interface{}
 
 var listType = MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
 
-func NewList(cs chunks.ChunkStore, v ...Value) List {
-	return NewTypedList(cs, listType, v...)
+func NewList(v ...Value) List {
+	return NewTypedList(listType, v...)
 }
 
-func NewTypedList(cs chunks.ChunkStore, t Type, values ...Value) List {
-	seq := newEmptySequenceChunker(makeListLeafChunkFn(t, cs), newIndexedMetaSequenceChunkFn(t, cs), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+func NewTypedList(t Type, values ...Value) List {
+	seq := newEmptySequenceChunker(makeListLeafChunkFn(t), newIndexedMetaSequenceChunkFn(t), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	for _, v := range values {
 		seq.Append(v)
 	}

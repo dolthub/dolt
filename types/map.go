@@ -1,7 +1,5 @@
 package types
 
-import "github.com/attic-labs/noms/chunks"
-
 type Map interface {
 	Value
 	First() (Value, Value)
@@ -27,16 +25,16 @@ type mapFilterCallback func(key, value Value) (keep bool)
 
 var mapType = MakeCompoundType(MapKind, MakePrimitiveType(ValueKind), MakePrimitiveType(ValueKind))
 
-func NewMap(cs chunks.ChunkStore, kv ...Value) Map {
-	return NewTypedMap(cs, mapType, kv...)
+func NewMap(kv ...Value) Map {
+	return NewTypedMap(mapType, kv...)
 }
 
-func NewTypedMap(cs chunks.ChunkStore, t Type, kv ...Value) Map {
-	return newTypedMap(cs, t, buildMapData(mapData{}, kv, t)...)
+func NewTypedMap(t Type, kv ...Value) Map {
+	return newTypedMap(t, buildMapData(mapData{}, kv, t)...)
 }
 
-func newTypedMap(cs chunks.ChunkStore, t Type, entries ...mapEntry) Map {
-	seq := newEmptySequenceChunker(makeMapLeafChunkFn(t, cs), newOrderedMetaSequenceChunkFn(t, cs), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+func newTypedMap(t Type, entries ...mapEntry) Map {
+	seq := newEmptySequenceChunker(makeMapLeafChunkFn(t), newOrderedMetaSequenceChunkFn(t), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, entry := range entries {
 		seq.Append(entry)

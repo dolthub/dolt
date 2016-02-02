@@ -4,23 +4,22 @@
 
 type {{.Name}} struct {
 	m   {{$typesPackage}}Map
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func New{{.Name}}(cs chunks.ChunkStore) {{.Name}} {
-	return {{.Name}}{ {{$typesPackage}}NewTypedMap(cs, __typeFor{{.Name}}), cs, &ref.Ref{}}
+func New{{.Name}}() {{.Name}} {
+	return {{.Name}}{ {{$typesPackage}}NewTypedMap(__typeFor{{.Name}}), &ref.Ref{}}
 }
 
 {{if .CanUseDef}}
 	type {{.Name}}Def map[{{defType .KeyType}}]{{defType .ValueType}}
 
-	func (def {{.Name}}Def) New(cs chunks.ChunkStore) {{.Name}} {
+	func (def {{.Name}}Def) New() {{.Name}} {
 		kv := make([]{{$typesPackage}}Value, 0, len(def)*2)
 		for k, v := range def {
 			kv = append(kv, {{defToValue "k" .KeyType}}, {{defToValue "v" .ValueType}})
 		}
-		return {{.Name}}{ {{$typesPackage}}NewTypedMap(cs, __typeFor{{.Name}}, kv...), cs, &ref.Ref{}}
+		return {{.Name}}{ {{$typesPackage}}NewTypedMap(__typeFor{{.Name}}, kv...), &ref.Ref{}}
 	}
 
 	func (m {{.Name}}) Def() {{.Name}}Def {
@@ -63,8 +62,8 @@ func init() {
 	{{$typesPackage}}RegisterValue(__typeFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
 }
 
-func builderFor{{.Name}}(cs chunks.ChunkStore, v {{$typesPackage}}Value) {{$typesPackage}}Value {
-	return {{.Name}}{v.({{$typesPackage}}Map), cs, &ref.Ref{}}
+func builderFor{{.Name}}(v {{$typesPackage}}Value) {{$typesPackage}}Value {
+	return {{.Name}}{v.({{$typesPackage}}Map), &ref.Ref{}}
 }
 
 func readerFor{{.Name}}(v {{$typesPackage}}Value) {{$typesPackage}}Value {
@@ -90,19 +89,19 @@ func (m {{.Name}}) Get(p {{userType .KeyType}}) {{userType .ValueType}} {
 func (m {{.Name}}) MaybeGet(p {{userType .KeyType}}) ({{userType .ValueType}}, bool) {
     v, ok := m.m.MaybeGet({{userToValue "p" .KeyType}})
     if !ok {
-    	return {{userZero "m.cs" .ValueType}}, false
+    	return {{userZero .ValueType}}, false
     }
 	return {{valueToUser "v" .ValueType}}, ok
 }
 
 func (m {{.Name}}) Set(k {{userType .KeyType}}, v {{userType .ValueType}}) {{.Name}} {
-	return {{.Name}}{m.m.Set({{userToValue "k" .KeyType}}, {{userToValue "v" .ValueType}}), m.cs, &ref.Ref{}}
+	return {{.Name}}{m.m.Set({{userToValue "k" .KeyType}}, {{userToValue "v" .ValueType}}), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m {{.Name}}) Remove(p {{userType .KeyType}}) {{.Name}} {
-	return {{.Name}}{m.m.Remove({{userToValue "p" .KeyType}}), m.cs, &ref.Ref{}}
+	return {{.Name}}{m.m.Remove({{userToValue "p" .KeyType}}), &ref.Ref{}}
 }
 
 type {{.Name}}IterCallback func(k {{userType .KeyType}}, v {{userType .ValueType}}) (stop bool)
@@ -133,5 +132,5 @@ func (m {{.Name}}) Filter(cb {{.Name}}FilterCallback) {{.Name}} {
 	out := m.m.Filter(func(k, v {{$typesPackage}}Value) bool {
 		return cb({{valueToUser "k" .KeyType}}, {{valueToUser "v" .ValueType}})
 	})
-	return {{.Name}}{out, m.cs, &ref.Ref{}}
+	return {{.Name}}{out, &ref.Ref{}}
 }

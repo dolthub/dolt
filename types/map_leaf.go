@@ -16,7 +16,7 @@ type mapLeaf struct {
 	indexOf indexOfMapFn
 	t       Type
 	ref     *ref.Ref
-	cs      chunks.ChunkStore
+	cs      chunks.ChunkSource
 }
 
 type mapData []mapEntry
@@ -26,7 +26,7 @@ type mapEntry struct {
 	value Value
 }
 
-func newMapLeaf(cs chunks.ChunkStore, t Type, data ...mapEntry) Map {
+func newMapLeaf(cs chunks.ChunkSource, t Type, data ...mapEntry) Map {
 	return mapLeaf{data, getIndexFnForMapType(t), t, &ref.Ref{}, cs}
 }
 
@@ -74,12 +74,12 @@ func (m mapLeaf) Set(key Value, val Value) Map {
 	elemTypes := m.t.Desc.(CompoundDesc).ElemTypes
 	assertType(elemTypes[0], key)
 	assertType(elemTypes[1], val)
-	return newTypedMap(m.cs, m.t, buildMapData(m.data, []Value{key, val}, m.t)...)
+	return newTypedMap(m.t, buildMapData(m.data, []Value{key, val}, m.t)...)
 }
 
 func (m mapLeaf) SetM(kv ...Value) Map {
 	assertMapElemTypes(m, kv...)
-	return newTypedMap(m.cs, m.t, buildMapData(m.data, kv, m.t)...)
+	return newTypedMap(m.t, buildMapData(m.data, kv, m.t)...)
 }
 
 func (m mapLeaf) Remove(k Value) Map {
@@ -91,7 +91,7 @@ func (m mapLeaf) Remove(k Value) Map {
 	data := make(mapData, len(m.data)-1)
 	copy(data, m.data[:idx])
 	copy(data[idx:], m.data[idx+1:])
-	return newTypedMap(m.cs, m.t, data...)
+	return newTypedMap(m.t, data...)
 }
 
 func (m mapLeaf) Iter(cb mapIterCallback) {
@@ -139,7 +139,7 @@ func (m mapLeaf) Filter(cb mapFilterCallback) Map {
 		}
 	}
 	// Already sorted.
-	return newTypedMap(m.cs, m.t, data...)
+	return newTypedMap(m.t, data...)
 }
 
 func (m mapLeaf) Ref() ref.Ref {
@@ -235,7 +235,7 @@ func newMapLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeMapLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
+func makeMapLeafChunkFn(t Type) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		mapData := make([]mapEntry, len(items), len(items))
 
@@ -243,7 +243,7 @@ func makeMapLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 			mapData[i] = v.(mapEntry)
 		}
 
-		mapLeaf := valueFromType(cs, newMapLeaf(cs, t, mapData...), t)
+		mapLeaf := valueFromType(newMapLeaf(nil, t, mapData...), t)
 
 		var indexValue Value
 		if len(mapData) > 0 {

@@ -42,7 +42,7 @@ func (ds *Dataset) Head() datas.Commit {
 // Commit updates the commit that a dataset points at. The new Commit is constructed using v and the current Head.
 // If the update cannot be performed, e.g., because of a conflict, Commit returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
 func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
-	p := datas.NewSetOfRefOfCommit(ds.store)
+	p := datas.NewSetOfRefOfCommit()
 	if head, ok := ds.MaybeHead(); ok {
 		p = p.Insert(datas.NewRefOfCommit(head.Ref()))
 	}
@@ -52,7 +52,7 @@ func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
 // CommitWithParents updates the commit that a dataset points at. The new Commit is constructed using v and p.
 // If the update cannot be performed, e.g., because of a conflict, CommitWithParents returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
 func (ds *Dataset) CommitWithParents(v types.Value, p datas.SetOfRefOfCommit) (Dataset, error) {
-	newCommit := datas.NewCommit(ds.store).SetParents(p).SetValue(v)
+	newCommit := datas.NewCommit().SetParents(p).SetValue(v)
 	store, err := ds.Store().Commit(ds.id, newCommit)
 	return Dataset{store, ds.id}, err
 }

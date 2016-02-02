@@ -4,14 +4,12 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 	"github.com/attic-labs/noms/types"
 )
 
 func TestWithImportsDef(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	def := gen.ImportUserDef{
 		ImportedStruct: gen.DDef{
@@ -20,16 +18,16 @@ func TestWithImportsDef(t *testing.T) {
 		},
 		Enum: gen.LocalE1,
 	}
-	st := def.New(cs)
+	st := def.New()
 
 	def2 := st.Def()
-	st2 := def.New(cs)
+	st2 := def.New()
 
 	assert.Equal(def, def2)
 	assert.True(st.Equals(st2))
 
-	ds := gen.NewD(cs).SetStructField(gen.NewS(cs).SetS("hi").SetB(true)).SetEnumField(gen.E2)
-	st3 := gen.NewImportUser(cs)
+	ds := gen.NewD().SetStructField(gen.NewS().SetS("hi").SetB(true)).SetEnumField(gen.E2)
+	st3 := gen.NewImportUser()
 	st3 = st3.SetImportedStruct(ds).SetEnum(gen.LocalE1)
 	assert.True(st.Equals(st3))
 	ddef := st3.ImportedStruct().Def()
@@ -40,7 +38,6 @@ func TestWithImportsDef(t *testing.T) {
 
 func SkipTestListOfImportsDef(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	lDef := gen.ListOfDDef{
 		gen.DDef{EnumField: gen.E3},
@@ -48,7 +45,7 @@ func SkipTestListOfImportsDef(t *testing.T) {
 		gen.DDef{EnumField: gen.E1},
 	}
 
-	l := lDef.New(cs)
+	l := lDef.New()
 	assert.EqualValues(3, l.Len())
 	assert.EqualValues(gen.E3, l.Get(0).EnumField())
 	assert.EqualValues(gen.E2, l.Get(1).EnumField())
@@ -57,9 +54,8 @@ func SkipTestListOfImportsDef(t *testing.T) {
 
 func TestDepsAndPackageRefs(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	tr := gen.NewImportUser(cs).ImportedStruct().Type()
+	tr := gen.NewImportUser().ImportedStruct().Type()
 	assert.Equal(types.UnresolvedKind, tr.Kind())
 	assert.True(tr.HasPackageRef())
 	p := types.LookupPackage(tr.PackageRef())

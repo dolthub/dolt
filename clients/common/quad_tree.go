@@ -241,7 +241,7 @@ func (qt *QuadTreeDef) saveNodeToNoms(wChan chan *SQuadTree, cs chunks.ChunkStor
 		NumDescendents: qt.NumDescendents,
 		Path:           qt.Path,
 		Georectangle:   qt.Georectangle,
-	}.New(cs)
+	}.New()
 	sqtp := &sqt
 
 	wChan <- sqtp

@@ -45,7 +45,7 @@ func TestWriteSimpleBlob(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewMemoryStore()
 	w := newJsonArrayWriter(cs)
-	w.writeTopLevelValue(NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01})))
+	w.writeTopLevelValue(NewBlob(bytes.NewBuffer([]byte{0x00, 0x01})))
 	assert.EqualValues([]interface{}{BlobKind, false, "AAE="}, w.toArray())
 }
 
@@ -54,7 +54,7 @@ func TestWriteList(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	typ := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
-	v := NewTypedList(cs, typ, Int32(0), Int32(1), Int32(2), Int32(3))
+	v := NewTypedList(typ, Int32(0), Int32(1), Int32(2), Int32(3))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -67,9 +67,9 @@ func TestWriteListOfList(t *testing.T) {
 
 	it := MakeCompoundType(ListKind, MakePrimitiveType(Int16Kind))
 	typ := MakeCompoundType(ListKind, it)
-	l1 := NewTypedList(cs, it, Int16(0))
-	l2 := NewTypedList(cs, it, Int16(1), Int16(2), Int16(3))
-	v := NewTypedList(cs, typ, l1, l2)
+	l1 := NewTypedList(it, Int16(0))
+	l2 := NewTypedList(it, Int16(1), Int16(2), Int16(3))
+	v := NewTypedList(typ, l1, l2)
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -81,7 +81,7 @@ func TestWriteSet(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	typ := MakeCompoundType(SetKind, MakePrimitiveType(Uint32Kind))
-	v := NewTypedSet(cs, typ, Uint32(3), Uint32(1), Uint32(2), Uint32(0))
+	v := NewTypedSet(typ, Uint32(3), Uint32(1), Uint32(2), Uint32(0))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -95,7 +95,7 @@ func TestWriteSetOfSet(t *testing.T) {
 
 	st := MakeCompoundType(SetKind, MakePrimitiveType(Int32Kind))
 	typ := MakeCompoundType(SetKind, st)
-	v := NewTypedSet(cs, typ, NewTypedSet(cs, st, Int32(0)), NewTypedSet(cs, st, Int32(1), Int32(2), Int32(3)))
+	v := NewTypedSet(typ, NewTypedSet(st, Int32(0)), NewTypedSet(st, Int32(1), Int32(2), Int32(3)))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -123,7 +123,7 @@ func TestWriteMapOfMap(t *testing.T) {
 	kt := MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(Int64Kind))
 	vt := MakeCompoundType(SetKind, MakePrimitiveType(BoolKind))
 	typ := MakeCompoundType(MapKind, kt, vt)
-	v := NewTypedMap(cs, typ, NewTypedMap(cs, kt, NewString("a"), Int64(0)), NewTypedSet(cs, vt, Bool(true)))
+	v := NewTypedMap(typ, NewTypedMap(kt, NewString("a"), Int64(0)), NewTypedSet(vt, Bool(true)))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -241,12 +241,12 @@ func TestWriteStructWithList(t *testing.T) {
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
 
-	v := NewStruct(typ, typeDef, structData{"l": NewList(cs, NewString("a"), NewString("b"))})
+	v := NewStruct(typ, typeDef, structData{"l": NewList(NewString("a"), NewString("b"))})
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", false, []interface{}{"a", "b"}}, w.toArray())
 
-	v = NewStruct(typ, typeDef, structData{"l": NewList(cs)})
+	v = NewStruct(typ, typeDef, structData{"l": NewList()})
 	w = newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", false, []interface{}{}}, w.toArray())
@@ -283,7 +283,7 @@ func TestWriteStructWithBlob(t *testing.T) {
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
-	b := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
+	b := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	v := NewStruct(typ, typeDef, structData{"b": b})
 
 	w := newJsonArrayWriter(cs)
@@ -314,7 +314,7 @@ func TestWriteListOfEnum(t *testing.T) {
 	pkgRef := RegisterPackage(&pkg)
 	et := MakeType(pkgRef, 0)
 	typ := MakeCompoundType(ListKind, et)
-	v := NewTypedList(cs, typ, Enum{0, et}, Enum{1, et}, Enum{2, et})
+	v := NewTypedList(typ, Enum{0, et}, Enum{1, et}, Enum{2, et})
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -340,8 +340,8 @@ func TestWriteListOfValue(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	typ := MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
-	blob := NewMemoryBlob(bytes.NewBuffer([]byte{0x01}))
-	v := NewTypedList(cs, typ,
+	blob := NewBlob(bytes.NewBuffer([]byte{0x01}))
+	v := NewTypedList(typ,
 		Bool(true),
 		Uint8(1),
 		Uint16(1),
@@ -388,7 +388,7 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 	pkgRef := RegisterPackage(&pkg)
 	listType := MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
 	structType := MakeType(pkgRef, 0)
-	v := NewTypedList(cs, listType, NewStruct(structType, typeDef, structData{"x": Int32(42)}))
+	v := NewTypedList(listType, NewStruct(structType, typeDef, structData{"x": Int32(42)}))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -406,7 +406,7 @@ func TestWriteListOfValueWithType(t *testing.T) {
 	pkgRef := RegisterPackage(&pkg)
 
 	typ := MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
-	v := NewTypedList(cs, typ,
+	v := NewTypedList(typ,
 		Bool(true),
 		MakePrimitiveType(Int32Kind),
 		MakePrimitiveType(TypeKind),
@@ -498,7 +498,7 @@ func TestWriteListOfTypes(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	typ := MakeCompoundType(ListKind, MakePrimitiveType(TypeKind))
-	v := NewTypedList(cs, typ, MakePrimitiveType(BoolKind), MakeEnumType("E", "a", "b", "c"), MakePrimitiveType(StringKind))
+	v := NewTypedList(typ, MakePrimitiveType(BoolKind), MakeEnumType("E", "a", "b", "c"), MakePrimitiveType(StringKind))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)

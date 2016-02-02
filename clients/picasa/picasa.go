@@ -120,11 +120,11 @@ func getSingleAlbum(albumID string) *User {
 	aj := AlbumJSON{}
 	path := fmt.Sprintf("user/default/albumid/%s?alt=json&max-results=0", albumID)
 	callPicasaAPI(authHTTPClient, path, &aj)
-	u := NewUser(ds.Store()).
+	u := NewUser().
 		SetId(aj.Feed.UserID.V).
 		SetName(aj.Feed.UserName.V)
 
-	albums := NewMapOfStringToAlbum(ds.Store())
+	albums := NewMapOfStringToAlbum()
 	albums = getAlbum(0, aj.Feed.ID.V, aj.Feed.Title.V, uint32(aj.Feed.NumPhotos.V), albums)
 
 	types.WriteValue(albums, ds.Store())
@@ -138,8 +138,8 @@ func getAlbums() *User {
 	if !*quietFlag {
 		fmt.Printf("Found %d albums\n", len(alj.Feed.Entry))
 	}
-	albums := NewMapOfStringToAlbum(ds.Store())
-	user := NewUser(ds.Store()).
+	albums := NewMapOfStringToAlbum()
+	user := NewUser().
 		SetId(alj.Feed.UserID.V).
 		SetName(alj.Feed.UserName.V)
 	for i, entry := range alj.Feed.Entry {
@@ -172,7 +172,7 @@ func getShapes(albumId string) shapeMap {
 func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32, albums MapOfStringToAlbum) MapOfStringToAlbum {
 	shapes := getShapes(albumId)
 
-	a := NewAlbum(ds.Store()).
+	a := NewAlbum().
 		SetId(albumId).
 		SetTitle(albumTitle)
 	if numPhotos != 0 {
@@ -184,7 +184,7 @@ func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32, albu
 }
 
 func getRemotePhotos(album *Album, albumIndex int, numPhotos uint32, shapes shapeMap) SetOfRemotePhoto {
-	remotePhotos := NewSetOfRemotePhoto(ds.Store())
+	remotePhotos := NewSetOfRemotePhoto()
 	if !*quietFlag {
 		fmt.Printf("Album #%d: %q contains %d photos... ", albumIndex, album.Title(), numPhotos)
 	}
@@ -209,11 +209,11 @@ func getRemotePhotos(album *Album, albumIndex int, numPhotos uint32, shapes shap
 				Sizes:       getSizes(e),
 				Tags:        splitTags(e.MediaGroup.Tags.V),
 				Faces:       getFaces(e, shapes),
-			}.New(ds.Store())
+			}.New()
 
 			// Timestamp is ms since the epoch.
 			if i, err := strconv.ParseInt(e.Timestamp.V, 10, 64); err == nil {
-				p = p.SetDate(NewDate(ds.Store()).SetMsSinceEpoch(i))
+				p = p.SetDate(NewDate().SetMsSinceEpoch(i))
 			} else {
 				fmt.Printf("Error parsing date \"%s\": %s\n", e.Timestamp.V, err)
 			}

@@ -50,20 +50,18 @@ type User struct {
 	_OAuthToken   string
 	_OAuthSecret  string
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewUser(cs chunks.ChunkStore) User {
+func NewUser() User {
 	return User{
 		_Id:           "",
 		_Name:         "",
-		_Albums:       NewMapOfStringToAlbum(cs),
+		_Albums:       NewMapOfStringToAlbum(),
 		_RefreshToken: "",
 		_OAuthToken:   "",
 		_OAuthSecret:  "",
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -79,9 +77,9 @@ func init() {
 	types.RegisterStruct(__typeForUser, builderForUser, readerForUser)
 }
 
-func builderForUser(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForUser(values []types.Value) types.Value {
 	i := 0
-	s := User{ref: &ref.Ref{}, cs: cs}
+	s := User{ref: &ref.Ref{}}
 	s._Id = values[i].(types.String).String()
 	i++
 	s._Name = values[i].(types.String).String()
@@ -200,17 +198,15 @@ type Album struct {
 	_Title  string
 	_Photos SetOfRemotePhoto
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewAlbum(cs chunks.ChunkStore) Album {
+func NewAlbum() Album {
 	return Album{
 		_Id:     "",
 		_Title:  "",
-		_Photos: NewSetOfRemotePhoto(cs),
+		_Photos: NewSetOfRemotePhoto(),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -226,9 +222,9 @@ func init() {
 	types.RegisterStruct(__typeForAlbum, builderForAlbum, readerForAlbum)
 }
 
-func builderForAlbum(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForAlbum(values []types.Value) types.Value {
 	i := 0
-	s := Album{ref: &ref.Ref{}, cs: cs}
+	s := Album{ref: &ref.Ref{}}
 	s._Id = values[i].(types.String).String()
 	i++
 	s._Title = values[i].(types.String).String()
@@ -302,12 +298,11 @@ func (s Album) SetPhotos(val SetOfRemotePhoto) Album {
 
 type MapOfStringToAlbum struct {
 	m   types.Map
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewMapOfStringToAlbum(cs chunks.ChunkStore) MapOfStringToAlbum {
-	return MapOfStringToAlbum{types.NewTypedMap(cs, __typeForMapOfStringToAlbum), cs, &ref.Ref{}}
+func NewMapOfStringToAlbum() MapOfStringToAlbum {
+	return MapOfStringToAlbum{types.NewTypedMap(__typeForMapOfStringToAlbum), &ref.Ref{}}
 }
 
 func (m MapOfStringToAlbum) Equals(other types.Value) bool {
@@ -340,8 +335,8 @@ func init() {
 	types.RegisterValue(__typeForMapOfStringToAlbum, builderForMapOfStringToAlbum, readerForMapOfStringToAlbum)
 }
 
-func builderForMapOfStringToAlbum(cs chunks.ChunkStore, v types.Value) types.Value {
-	return MapOfStringToAlbum{v.(types.Map), cs, &ref.Ref{}}
+func builderForMapOfStringToAlbum(v types.Value) types.Value {
+	return MapOfStringToAlbum{v.(types.Map), &ref.Ref{}}
 }
 
 func readerForMapOfStringToAlbum(v types.Value) types.Value {
@@ -367,19 +362,19 @@ func (m MapOfStringToAlbum) Get(p string) Album {
 func (m MapOfStringToAlbum) MaybeGet(p string) (Album, bool) {
 	v, ok := m.m.MaybeGet(types.NewString(p))
 	if !ok {
-		return NewAlbum(m.cs), false
+		return NewAlbum(), false
 	}
 	return v.(Album), ok
 }
 
 func (m MapOfStringToAlbum) Set(k string, v Album) MapOfStringToAlbum {
-	return MapOfStringToAlbum{m.m.Set(types.NewString(k), v), m.cs, &ref.Ref{}}
+	return MapOfStringToAlbum{m.m.Set(types.NewString(k), v), &ref.Ref{}}
 }
 
 // TODO: Implement SetM?
 
 func (m MapOfStringToAlbum) Remove(p string) MapOfStringToAlbum {
-	return MapOfStringToAlbum{m.m.Remove(types.NewString(p)), m.cs, &ref.Ref{}}
+	return MapOfStringToAlbum{m.m.Remove(types.NewString(p)), &ref.Ref{}}
 }
 
 type MapOfStringToAlbumIterCallback func(k string, v Album) (stop bool)
@@ -410,7 +405,7 @@ func (m MapOfStringToAlbum) Filter(cb MapOfStringToAlbumFilterCallback) MapOfStr
 	out := m.m.Filter(func(k, v types.Value) bool {
 		return cb(k.(types.String).String(), v.(Album))
 	})
-	return MapOfStringToAlbum{out, m.cs, &ref.Ref{}}
+	return MapOfStringToAlbum{out, &ref.Ref{}}
 }
 
 // RefOfUser
@@ -466,7 +461,7 @@ func builderForRefOfUser(r ref.Ref) types.Value {
 	return NewRefOfUser(r)
 }
 
-func (r RefOfUser) TargetValue(cs chunks.ChunkStore) User {
+func (r RefOfUser) TargetValue(cs chunks.ChunkSource) User {
 	return types.ReadValue(r.target, cs).(User)
 }
 
@@ -478,12 +473,11 @@ func (r RefOfUser) SetTargetValue(val User, cs chunks.ChunkSink) RefOfUser {
 
 type SetOfRemotePhoto struct {
 	s   types.Set
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSetOfRemotePhoto(cs chunks.ChunkStore) SetOfRemotePhoto {
-	return SetOfRemotePhoto{types.NewTypedSet(cs, __typeForSetOfRemotePhoto), cs, &ref.Ref{}}
+func NewSetOfRemotePhoto() SetOfRemotePhoto {
+	return SetOfRemotePhoto{types.NewTypedSet(__typeForSetOfRemotePhoto), &ref.Ref{}}
 }
 
 func (s SetOfRemotePhoto) Equals(other types.Value) bool {
@@ -516,8 +510,8 @@ func init() {
 	types.RegisterValue(__typeForSetOfRemotePhoto, builderForSetOfRemotePhoto, readerForSetOfRemotePhoto)
 }
 
-func builderForSetOfRemotePhoto(cs chunks.ChunkStore, v types.Value) types.Value {
-	return SetOfRemotePhoto{v.(types.Set), cs, &ref.Ref{}}
+func builderForSetOfRemotePhoto(v types.Value) types.Value {
+	return SetOfRemotePhoto{v.(types.Set), &ref.Ref{}}
 }
 
 func readerForSetOfRemotePhoto(v types.Value) types.Value {
@@ -564,19 +558,19 @@ func (s SetOfRemotePhoto) Filter(cb SetOfRemotePhotoFilterCallback) SetOfRemoteP
 	out := s.s.Filter(func(v types.Value) bool {
 		return cb(v.(RemotePhoto))
 	})
-	return SetOfRemotePhoto{out, s.cs, &ref.Ref{}}
+	return SetOfRemotePhoto{out, &ref.Ref{}}
 }
 
 func (s SetOfRemotePhoto) Insert(p ...RemotePhoto) SetOfRemotePhoto {
-	return SetOfRemotePhoto{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+	return SetOfRemotePhoto{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfRemotePhoto) Remove(p ...RemotePhoto) SetOfRemotePhoto {
-	return SetOfRemotePhoto{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+	return SetOfRemotePhoto{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfRemotePhoto) Union(others ...SetOfRemotePhoto) SetOfRemotePhoto {
-	return SetOfRemotePhoto{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
+	return SetOfRemotePhoto{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
 func (s SetOfRemotePhoto) First() RemotePhoto {

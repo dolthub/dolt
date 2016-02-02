@@ -20,19 +20,19 @@ func AssertSymNe(assert *assert.Assertions, a, b Value) {
 
 func TestBlobLen(t *testing.T) {
 	assert := assert.New(t)
-	b := NewMemoryBlob(&bytes.Buffer{})
+	b := NewBlob(&bytes.Buffer{})
 	assert.Equal(uint64(0), b.Len())
-	b = NewMemoryBlob(bytes.NewBuffer([]byte{0x01}))
+	b = NewBlob(bytes.NewBuffer([]byte{0x01}))
 	assert.Equal(uint64(1), b.Len())
 }
 
 func TestBlobEquals(t *testing.T) {
 	assert := assert.New(t)
-	b1 := NewMemoryBlob(bytes.NewBuffer([]byte{0x01}))
+	b1 := NewBlob(bytes.NewBuffer([]byte{0x01}))
 	b11 := b1
-	b12 := NewMemoryBlob(bytes.NewBuffer([]byte{0x01}))
-	b2 := NewMemoryBlob(bytes.NewBuffer([]byte{0x02}))
-	b3 := NewMemoryBlob(bytes.NewBuffer([]byte{0x02, 0x03}))
+	b12 := NewBlob(bytes.NewBuffer([]byte{0x01}))
+	b2 := NewBlob(bytes.NewBuffer([]byte{0x02}))
+	b3 := NewBlob(bytes.NewBuffer([]byte{0x02, 0x03}))
 	AssertSymEq(assert, b1, b11)
 	AssertSymEq(assert, b1, b12)
 	AssertSymNe(assert, b1, b2)
@@ -70,7 +70,7 @@ func TestBlobFromReaderThatReturnsDataAndError(t *testing.T) {
 	assert := assert.New(t)
 	tr := &testReader{buf: &bytes.Buffer{}}
 
-	b := NewMemoryBlob(tr)
+	b := NewBlob(tr)
 
 	actual := &bytes.Buffer{}
 	io.Copy(actual, b.Reader())

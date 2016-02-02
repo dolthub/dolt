@@ -83,7 +83,7 @@ func TestReadPrimitives(t *testing.T) {
 
 	test(NewString("hi"), `[%d, "hi"]`, StringKind)
 
-	blob := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
+	blob := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	test(blob, `[%d, false, "AAE="]`, BlobKind)
 }
 
@@ -97,7 +97,7 @@ func TestReadListOfInt32(t *testing.T) {
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
 
 	l := r.readTopLevelValue()
-	l2 := NewTypedList(cs, tr, Int32(0), Int32(1), Int32(2), Int32(3))
+	l2 := NewTypedList(tr, Int32(0), Int32(1), Int32(2), Int32(3))
 	assert.True(l2.Equals(l))
 }
 
@@ -108,7 +108,7 @@ func TestReadListOfValue(t *testing.T) {
 	a := parseJson(`[%d, %d, false, [%d, "1", %d, "hi", %d, true]]`, ListKind, ValueKind, Int32Kind, StringKind, BoolKind)
 	r := newJsonArrayReader(a, cs)
 	l := r.readTopLevelValue()
-	assert.True(NewList(cs, Int32(1), NewString("hi"), Bool(true)).Equals(l))
+	assert.True(NewList(Int32(1), NewString("hi"), Bool(true)).Equals(l))
 }
 
 func TestReadValueListOfInt8(t *testing.T) {
@@ -121,7 +121,7 @@ func TestReadValueListOfInt8(t *testing.T) {
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int8Kind))
 
 	l := r.readTopLevelValue()
-	l2 := NewTypedList(cs, tr, Int8(0), Int8(1), Int8(2))
+	l2 := NewTypedList(tr, Int8(0), Int8(1), Int8(2))
 	assert.True(l2.Equals(l))
 }
 
@@ -151,7 +151,7 @@ func TestReadMapOfInt64ToFloat64(t *testing.T) {
 	tr := MakeCompoundType(MapKind, MakePrimitiveType(Int64Kind), MakePrimitiveType(Float64Kind))
 
 	m := r.readTopLevelValue()
-	m2 := NewTypedMap(cs, tr, Int64(0), Float64(1), Int64(2), Float64(3))
+	m2 := NewTypedMap(tr, Int64(0), Float64(1), Int64(2), Float64(3))
 	assert.True(m2.Equals(m))
 }
 
@@ -165,7 +165,7 @@ func TestReadValueMapOfUint64ToUint32(t *testing.T) {
 	mapTr := MakeCompoundType(MapKind, MakePrimitiveType(Uint64Kind), MakePrimitiveType(Uint32Kind))
 
 	m := r.readTopLevelValue()
-	m2 := NewTypedMap(cs, mapTr, Uint64(0), Uint32(1), Uint64(2), Uint32(3))
+	m2 := NewTypedMap(mapTr, Uint64(0), Uint32(1), Uint64(2), Uint32(3))
 	assert.True(m2.Equals(m))
 }
 
@@ -179,7 +179,7 @@ func TestReadSetOfUint8(t *testing.T) {
 	tr := MakeCompoundType(SetKind, MakePrimitiveType(Uint8Kind))
 
 	s := r.readTopLevelValue()
-	s2 := NewTypedSet(cs, tr, Uint8(0), Uint8(1), Uint8(2), Uint8(3))
+	s2 := NewTypedSet(tr, Uint8(0), Uint8(1), Uint8(2), Uint8(3))
 	assert.True(s2.Equals(s))
 }
 
@@ -193,7 +193,7 @@ func TestReadValueSetOfUint16(t *testing.T) {
 	setTr := MakeCompoundType(SetKind, MakePrimitiveType(Uint16Kind))
 
 	s := r.readTopLevelValue()
-	s2 := NewTypedSet(cs, setTr, Uint16(0), Uint16(1), Uint16(2), Uint16(3))
+	s2 := NewTypedSet(setTr, Uint16(0), Uint16(1), Uint16(2), Uint16(3))
 	assert.True(s2.Equals(s))
 }
 
@@ -317,7 +317,7 @@ func TestReadStructWithList(t *testing.T) {
 	v := r.readTopLevelValue().(Struct)
 
 	assert.True(v.Get("b").Equals(Bool(true)))
-	l := NewTypedList(cs, l32Tr, Int32(0), Int32(1), Int32(2))
+	l := NewTypedList(l32Tr, Int32(0), Int32(1), Int32(2))
 	assert.True(v.Get("l").Equals(l))
 	assert.True(v.Get("s").Equals(NewString("hi")))
 }
@@ -481,7 +481,7 @@ func TestReadStructWithBlob(t *testing.T) {
 	r := newJsonArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
-	blob := NewMemoryBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
+	blob := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	assert.True(v.Get("b").Equals(blob))
 }
 

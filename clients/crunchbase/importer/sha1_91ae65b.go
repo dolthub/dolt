@@ -73,16 +73,15 @@ type Company struct {
 	_LastFundingAt   Date
 	_Rounds          SetOfRefOfRound
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewCompany(cs chunks.ChunkStore) Company {
+func NewCompany() Company {
 	return Company{
 		_Permalink:       "",
 		_Name:            "",
 		_HomepageUrl:     "",
-		_CategoryList:    NewSetOfString(cs),
+		_CategoryList:    NewSetOfString(),
 		_Market:          "",
 		_FundingTotalUsd: float64(0),
 		_Status:          "",
@@ -91,12 +90,11 @@ func NewCompany(cs chunks.ChunkStore) Company {
 		_Region:          "",
 		_City:            "",
 		_FundingRounds:   uint16(0),
-		_FoundedAt:       NewDate(cs),
-		_FirstFundingAt:  NewDate(cs),
-		_LastFundingAt:   NewDate(cs),
-		_Rounds:          NewSetOfRefOfRound(cs),
+		_FoundedAt:       NewDate(),
+		_FirstFundingAt:  NewDate(),
+		_LastFundingAt:   NewDate(),
+		_Rounds:          NewSetOfRefOfRound(),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -120,12 +118,12 @@ type CompanyDef struct {
 	Rounds          SetOfRefOfRoundDef
 }
 
-func (def CompanyDef) New(cs chunks.ChunkStore) Company {
+func (def CompanyDef) New() Company {
 	return Company{
 		_Permalink:       def.Permalink,
 		_Name:            def.Name,
 		_HomepageUrl:     def.HomepageUrl,
-		_CategoryList:    def.CategoryList.New(cs),
+		_CategoryList:    def.CategoryList.New(),
 		_Market:          def.Market,
 		_FundingTotalUsd: def.FundingTotalUsd,
 		_Status:          def.Status,
@@ -134,11 +132,10 @@ func (def CompanyDef) New(cs chunks.ChunkStore) Company {
 		_Region:          def.Region,
 		_City:            def.City,
 		_FundingRounds:   def.FundingRounds,
-		_FoundedAt:       def.FoundedAt.New(cs),
-		_FirstFundingAt:  def.FirstFundingAt.New(cs),
-		_LastFundingAt:   def.LastFundingAt.New(cs),
-		_Rounds:          def.Rounds.New(cs),
-		cs:               cs,
+		_FoundedAt:       def.FoundedAt.New(),
+		_FirstFundingAt:  def.FirstFundingAt.New(),
+		_LastFundingAt:   def.LastFundingAt.New(),
+		_Rounds:          def.Rounds.New(),
 		ref:              &ref.Ref{},
 	}
 }
@@ -174,9 +171,9 @@ func init() {
 	types.RegisterStruct(__typeForCompany, builderForCompany, readerForCompany)
 }
 
-func builderForCompany(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForCompany(values []types.Value) types.Value {
 	i := 0
-	s := Company{ref: &ref.Ref{}, cs: cs}
+	s := Company{ref: &ref.Ref{}}
 	s._Permalink = values[i].(types.String).String()
 	i++
 	s._Name = values[i].(types.String).String()
@@ -442,20 +439,18 @@ type Round struct {
 	_FundedAt              Date
 	_RaisedAmountUsd       float64
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewRound(cs chunks.ChunkStore) Round {
+func NewRound() Round {
 	return Round{
 		_CompanyPermalink:      "",
 		_FundingRoundPermalink: "",
 		_FundingRoundType:      "",
 		_FundingRoundCode:      "",
-		_FundedAt:              NewDate(cs),
+		_FundedAt:              NewDate(),
 		_RaisedAmountUsd:       float64(0),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -469,15 +464,14 @@ type RoundDef struct {
 	RaisedAmountUsd       float64
 }
 
-func (def RoundDef) New(cs chunks.ChunkStore) Round {
+func (def RoundDef) New() Round {
 	return Round{
 		_CompanyPermalink:      def.CompanyPermalink,
 		_FundingRoundPermalink: def.FundingRoundPermalink,
 		_FundingRoundType:      def.FundingRoundType,
 		_FundingRoundCode:      def.FundingRoundCode,
-		_FundedAt:              def.FundedAt.New(cs),
+		_FundedAt:              def.FundedAt.New(),
 		_RaisedAmountUsd:       def.RaisedAmountUsd,
-		cs:                     cs,
 		ref:                    &ref.Ref{},
 	}
 }
@@ -503,9 +497,9 @@ func init() {
 	types.RegisterStruct(__typeForRound, builderForRound, readerForRound)
 }
 
-func builderForRound(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForRound(values []types.Value) types.Value {
 	i := 0
-	s := Round{ref: &ref.Ref{}, cs: cs}
+	s := Round{ref: &ref.Ref{}}
 	s._CompanyPermalink = values[i].(types.String).String()
 	i++
 	s._FundingRoundPermalink = values[i].(types.String).String()
@@ -621,24 +615,23 @@ func (s Round) SetRaisedAmountUsd(val float64) Round {
 
 type SetOfString struct {
 	s   types.Set
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSetOfString(cs chunks.ChunkStore) SetOfString {
-	return SetOfString{types.NewTypedSet(cs, __typeForSetOfString), cs, &ref.Ref{}}
+func NewSetOfString() SetOfString {
+	return SetOfString{types.NewTypedSet(__typeForSetOfString), &ref.Ref{}}
 }
 
 type SetOfStringDef map[string]bool
 
-func (def SetOfStringDef) New(cs chunks.ChunkStore) SetOfString {
+func (def SetOfStringDef) New() SetOfString {
 	l := make([]types.Value, len(def))
 	i := 0
 	for d, _ := range def {
 		l[i] = types.NewString(d)
 		i++
 	}
-	return SetOfString{types.NewTypedSet(cs, __typeForSetOfString, l...), cs, &ref.Ref{}}
+	return SetOfString{types.NewTypedSet(__typeForSetOfString, l...), &ref.Ref{}}
 }
 
 func (s SetOfString) Def() SetOfStringDef {
@@ -680,8 +673,8 @@ func init() {
 	types.RegisterValue(__typeForSetOfString, builderForSetOfString, readerForSetOfString)
 }
 
-func builderForSetOfString(cs chunks.ChunkStore, v types.Value) types.Value {
-	return SetOfString{v.(types.Set), cs, &ref.Ref{}}
+func builderForSetOfString(v types.Value) types.Value {
+	return SetOfString{v.(types.Set), &ref.Ref{}}
 }
 
 func readerForSetOfString(v types.Value) types.Value {
@@ -728,19 +721,19 @@ func (s SetOfString) Filter(cb SetOfStringFilterCallback) SetOfString {
 	out := s.s.Filter(func(v types.Value) bool {
 		return cb(v.(types.String).String())
 	})
-	return SetOfString{out, s.cs, &ref.Ref{}}
+	return SetOfString{out, &ref.Ref{}}
 }
 
 func (s SetOfString) Insert(p ...string) SetOfString {
-	return SetOfString{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+	return SetOfString{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfString) Remove(p ...string) SetOfString {
-	return SetOfString{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+	return SetOfString{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfString) Union(others ...SetOfString) SetOfString {
-	return SetOfString{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
+	return SetOfString{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
 func (s SetOfString) First() string {
@@ -767,24 +760,23 @@ func (s SetOfString) fromElemSlice(p []string) []types.Value {
 
 type SetOfRefOfRound struct {
 	s   types.Set
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSetOfRefOfRound(cs chunks.ChunkStore) SetOfRefOfRound {
-	return SetOfRefOfRound{types.NewTypedSet(cs, __typeForSetOfRefOfRound), cs, &ref.Ref{}}
+func NewSetOfRefOfRound() SetOfRefOfRound {
+	return SetOfRefOfRound{types.NewTypedSet(__typeForSetOfRefOfRound), &ref.Ref{}}
 }
 
 type SetOfRefOfRoundDef map[ref.Ref]bool
 
-func (def SetOfRefOfRoundDef) New(cs chunks.ChunkStore) SetOfRefOfRound {
+func (def SetOfRefOfRoundDef) New() SetOfRefOfRound {
 	l := make([]types.Value, len(def))
 	i := 0
 	for d, _ := range def {
 		l[i] = NewRefOfRound(d)
 		i++
 	}
-	return SetOfRefOfRound{types.NewTypedSet(cs, __typeForSetOfRefOfRound, l...), cs, &ref.Ref{}}
+	return SetOfRefOfRound{types.NewTypedSet(__typeForSetOfRefOfRound, l...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfRound) Def() SetOfRefOfRoundDef {
@@ -826,8 +818,8 @@ func init() {
 	types.RegisterValue(__typeForSetOfRefOfRound, builderForSetOfRefOfRound, readerForSetOfRefOfRound)
 }
 
-func builderForSetOfRefOfRound(cs chunks.ChunkStore, v types.Value) types.Value {
-	return SetOfRefOfRound{v.(types.Set), cs, &ref.Ref{}}
+func builderForSetOfRefOfRound(v types.Value) types.Value {
+	return SetOfRefOfRound{v.(types.Set), &ref.Ref{}}
 }
 
 func readerForSetOfRefOfRound(v types.Value) types.Value {
@@ -874,19 +866,19 @@ func (s SetOfRefOfRound) Filter(cb SetOfRefOfRoundFilterCallback) SetOfRefOfRoun
 	out := s.s.Filter(func(v types.Value) bool {
 		return cb(v.(RefOfRound))
 	})
-	return SetOfRefOfRound{out, s.cs, &ref.Ref{}}
+	return SetOfRefOfRound{out, &ref.Ref{}}
 }
 
 func (s SetOfRefOfRound) Insert(p ...RefOfRound) SetOfRefOfRound {
-	return SetOfRefOfRound{s.s.Insert(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+	return SetOfRefOfRound{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfRound) Remove(p ...RefOfRound) SetOfRefOfRound {
-	return SetOfRefOfRound{s.s.Remove(s.fromElemSlice(p)...), s.cs, &ref.Ref{}}
+	return SetOfRefOfRound{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfRound) Union(others ...SetOfRefOfRound) SetOfRefOfRound {
-	return SetOfRefOfRound{s.s.Union(s.fromStructSlice(others)...), s.cs, &ref.Ref{}}
+	return SetOfRefOfRound{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
 func (s SetOfRefOfRound) First() RefOfRound {
@@ -962,7 +954,7 @@ func builderForRefOfRound(r ref.Ref) types.Value {
 	return NewRefOfRound(r)
 }
 
-func (r RefOfRound) TargetValue(cs chunks.ChunkStore) Round {
+func (r RefOfRound) TargetValue(cs chunks.ChunkSource) Round {
 	return types.ReadValue(r.target, cs).(Round)
 }
 

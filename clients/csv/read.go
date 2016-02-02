@@ -132,5 +132,5 @@ func Read(res io.Reader, structName, header string, comma rune, p uint, cs chunk
 	refType := types.MakeCompoundType(types.RefKind, typeRef)
 	listType := types.MakeCompoundType(types.ListKind, refType)
 
-	return types.NewTypedList(cs, listType, refs...), typeRef, typeDef
+	return types.NewTypedList(listType, refs...), typeRef, typeDef
 }

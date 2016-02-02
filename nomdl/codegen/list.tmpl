@@ -4,23 +4,22 @@
 
 type {{.Name}} struct {
 	l   {{$typesPackage}}List
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func New{{.Name}}(cs chunks.ChunkStore) {{.Name}} {
-	return {{.Name}}{ {{$typesPackage}}NewTypedList(cs, __typeFor{{.Name}}), cs, &ref.Ref{}}
+func New{{.Name}}() {{.Name}} {
+	return {{.Name}}{ {{$typesPackage}}NewTypedList(__typeFor{{.Name}}), &ref.Ref{}}
 }
 
 {{if .CanUseDef}}
 	type {{.Name}}Def []{{defType .ElemType}}
 
-	func (def {{.Name}}Def) New(cs chunks.ChunkStore) {{.Name}} {
+	func (def {{.Name}}Def) New() {{.Name}} {
 		l := make([]{{$typesPackage}}Value, len(def))
 		for i, d := range def {
 			l[i] = {{defToValue "d" .ElemType }}
 		}
-		return {{.Name}}{ {{$typesPackage}}NewTypedList(cs, __typeFor{{.Name}}, l...), cs, &ref.Ref{}}
+		return {{.Name}}{ {{$typesPackage}}NewTypedList(__typeFor{{.Name}}, l...), &ref.Ref{}}
 	}
 
 	func (l {{.Name}}) Def() {{.Name}}Def {
@@ -62,8 +61,8 @@ func init() {
 	{{$typesPackage}}RegisterValue(__typeFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
 }
 
-func builderFor{{.Name}}(cs chunks.ChunkStore, v {{$typesPackage}}Value) {{$typesPackage}}Value {
-	return {{.Name}}{v.({{$typesPackage}}List), cs, &ref.Ref{}}
+func builderFor{{.Name}}(v {{$typesPackage}}Value) {{$typesPackage}}Value {
+	return {{.Name}}{v.({{$typesPackage}}List), &ref.Ref{}}
 }
 
 func readerFor{{.Name}}(v {{$typesPackage}}Value) {{$typesPackage}}Value {
@@ -83,27 +82,27 @@ func (l {{.Name}}) Get(i uint64) {{userType .ElemType}} {
 }
 
 func (l {{.Name}}) Slice(idx uint64, end uint64) {{.Name}} {
-	return {{.Name}}{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
+	return {{.Name}}{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l {{.Name}}) Set(i uint64, val {{userType .ElemType}}) {{.Name}} {
-	return {{.Name}}{l.l.Set(i, {{userToValue "val" .ElemType}}), l.cs, &ref.Ref{}}
+	return {{.Name}}{l.l.Set(i, {{userToValue "val" .ElemType}}), &ref.Ref{}}
 }
 
 func (l {{.Name}}) Append(v ...{{userType .ElemType}}) {{.Name}} {
-	return {{.Name}}{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
+	return {{.Name}}{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l {{.Name}}) Insert(idx uint64, v ...{{userType .ElemType}}) {{.Name}} {
-	return {{.Name}}{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
+	return {{.Name}}{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l {{.Name}}) Remove(idx uint64, end uint64) {{.Name}} {
-	return {{.Name}}{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
+	return {{.Name}}{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l {{.Name}}) RemoveAt(idx uint64) {{.Name}} {
-	return {{.Name}}{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
+	return {{.Name}}{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l {{.Name}}) fromElemSlice(p []{{userType .ElemType}}) []{{$typesPackage}}Value {
@@ -142,5 +141,5 @@ func (l {{.Name}}) Filter(cb {{.Name}}FilterCallback) {{.Name}} {
 	out := l.l.Filter(func(v {{$typesPackage}}Value, i uint64) bool {
 		return cb({{valueToUser "v" .ElemType}}, i)
 	})
-	return {{.Name}}{out, l.cs, &ref.Ref{}}
+	return {{.Name}}{out, &ref.Ref{}}
 }

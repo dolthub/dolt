@@ -3,7 +3,6 @@ package util
 import (
 	"reflect"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/types"
 )
@@ -22,7 +21,7 @@ import (
 // Composites:
 //  - []interface{}
 //  - map[string]interface{}
-func NomsValueFromDecodedJSON(cs chunks.ChunkStore, o interface{}) types.Value {
+func NomsValueFromDecodedJSON(o interface{}) types.Value {
 	switch o := o.(type) {
 	case string:
 		return types.NewString(o)
@@ -35,22 +34,22 @@ func NomsValueFromDecodedJSON(cs chunks.ChunkStore, o interface{}) types.Value {
 	case []interface{}:
 		items := make([]types.Value, 0, len(o))
 		for _, v := range o {
-			nv := NomsValueFromDecodedJSON(cs, v)
+			nv := NomsValueFromDecodedJSON(v)
 			if nv != nil {
 				items = append(items, nv)
 			}
 		}
-		return types.NewList(cs, items...)
+		return types.NewList(items...)
 	case map[string]interface{}:
 		outDef := MapOfStringToValueDef{}
 
 		for k, v := range o {
-			nv := NomsValueFromDecodedJSON(cs, v)
+			nv := NomsValueFromDecodedJSON(v)
 			if nv != nil {
 				outDef[k] = nv
 			}
 		}
-		return outDef.New(cs)
+		return outDef.New()
 	default:
 		d.Chk.Fail("Nomsification failed.", "I don't understand %+v, which is of type %s!\n", o, reflect.TypeOf(o).String())
 	}

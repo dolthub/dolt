@@ -162,7 +162,7 @@ func generateAndEmit(tag, out string, written map[string]bool, deps depsMap, p p
 
 func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) types.SetOfRefOfPackage {
 	// Can do better once generated collections implement types.Value.
-	s := types.NewSetOfRefOfPackage(ds.Store())
+	s := types.NewSetOfRefOfPackage()
 	if h, ok := ds.MaybeHead(); ok {
 		s = h.Value().(types.SetOfRefOfPackage)
 	}

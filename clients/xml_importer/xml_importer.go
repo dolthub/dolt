@@ -84,7 +84,7 @@ func main() {
 
 		wg := sync.WaitGroup{}
 		importXml := func() {
-			expectedType := util.NewMapOfStringToValue(ds.Store())
+			expectedType := util.NewMapOfStringToValue()
 			for f := range filesChan {
 				file, err := os.Open(f.path)
 				d.Exp.NoError(err, "Error getting XML")
@@ -94,7 +94,7 @@ func main() {
 				object := xmlObject.Old()
 				file.Close()
 
-				nomsObj := util.NomsValueFromDecodedJSON(ds.Store(), object)
+				nomsObj := util.NomsValueFromDecodedJSON(object)
 				d.Chk.IsType(expectedType, nomsObj)
 				r := ref.Ref{}
 
@@ -130,7 +130,7 @@ func main() {
 		}
 
 		if !*noIO {
-			_, err := ds.Commit(refs.New(ds.Store()))
+			_, err := ds.Commit(refs.New())
 			d.Exp.NoError(err)
 		}
 

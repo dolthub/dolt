@@ -3,7 +3,6 @@
 package main
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -38,11 +37,10 @@ type Song struct {
 	_Year   string
 	_Mp3    types.Blob
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewSong(cs chunks.ChunkStore) Song {
+func NewSong() Song {
 	return Song{
 		_Title:  "",
 		_Artist: "",
@@ -50,7 +48,6 @@ func NewSong(cs chunks.ChunkStore) Song {
 		_Year:   "",
 		_Mp3:    types.NewEmptyBlob(),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -63,14 +60,13 @@ type SongDef struct {
 	Mp3    types.Blob
 }
 
-func (def SongDef) New(cs chunks.ChunkStore) Song {
+func (def SongDef) New() Song {
 	return Song{
 		_Title:  def.Title,
 		_Artist: def.Artist,
 		_Album:  def.Album,
 		_Year:   def.Year,
 		_Mp3:    def.Mp3,
-		cs:      cs,
 		ref:     &ref.Ref{},
 	}
 }
@@ -95,9 +91,9 @@ func init() {
 	types.RegisterStruct(__typeForSong, builderForSong, readerForSong)
 }
 
-func builderForSong(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForSong(values []types.Value) types.Value {
 	i := 0
-	s := Song{ref: &ref.Ref{}, cs: cs}
+	s := Song{ref: &ref.Ref{}}
 	s._Title = values[i].(types.String).String()
 	i++
 	s._Artist = values[i].(types.String).String()
@@ -199,22 +195,21 @@ func (s Song) SetMp3(val types.Blob) Song {
 
 type ListOfSong struct {
 	l   types.List
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewListOfSong(cs chunks.ChunkStore) ListOfSong {
-	return ListOfSong{types.NewTypedList(cs, __typeForListOfSong), cs, &ref.Ref{}}
+func NewListOfSong() ListOfSong {
+	return ListOfSong{types.NewTypedList(__typeForListOfSong), &ref.Ref{}}
 }
 
 type ListOfSongDef []SongDef
 
-func (def ListOfSongDef) New(cs chunks.ChunkStore) ListOfSong {
+func (def ListOfSongDef) New() ListOfSong {
 	l := make([]types.Value, len(def))
 	for i, d := range def {
-		l[i] = d.New(cs)
+		l[i] = d.New()
 	}
-	return ListOfSong{types.NewTypedList(cs, __typeForListOfSong, l...), cs, &ref.Ref{}}
+	return ListOfSong{types.NewTypedList(__typeForListOfSong, l...), &ref.Ref{}}
 }
 
 func (l ListOfSong) Def() ListOfSongDef {
@@ -255,8 +250,8 @@ func init() {
 	types.RegisterValue(__typeForListOfSong, builderForListOfSong, readerForListOfSong)
 }
 
-func builderForListOfSong(cs chunks.ChunkStore, v types.Value) types.Value {
-	return ListOfSong{v.(types.List), cs, &ref.Ref{}}
+func builderForListOfSong(v types.Value) types.Value {
+	return ListOfSong{v.(types.List), &ref.Ref{}}
 }
 
 func readerForListOfSong(v types.Value) types.Value {
@@ -276,27 +271,27 @@ func (l ListOfSong) Get(i uint64) Song {
 }
 
 func (l ListOfSong) Slice(idx uint64, end uint64) ListOfSong {
-	return ListOfSong{l.l.Slice(idx, end), l.cs, &ref.Ref{}}
+	return ListOfSong{l.l.Slice(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfSong) Set(i uint64, val Song) ListOfSong {
-	return ListOfSong{l.l.Set(i, val), l.cs, &ref.Ref{}}
+	return ListOfSong{l.l.Set(i, val), &ref.Ref{}}
 }
 
 func (l ListOfSong) Append(v ...Song) ListOfSong {
-	return ListOfSong{l.l.Append(l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
+	return ListOfSong{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfSong) Insert(idx uint64, v ...Song) ListOfSong {
-	return ListOfSong{l.l.Insert(idx, l.fromElemSlice(v)...), l.cs, &ref.Ref{}}
+	return ListOfSong{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
 }
 
 func (l ListOfSong) Remove(idx uint64, end uint64) ListOfSong {
-	return ListOfSong{l.l.Remove(idx, end), l.cs, &ref.Ref{}}
+	return ListOfSong{l.l.Remove(idx, end), &ref.Ref{}}
 }
 
 func (l ListOfSong) RemoveAt(idx uint64) ListOfSong {
-	return ListOfSong{(l.l.RemoveAt(idx)), l.cs, &ref.Ref{}}
+	return ListOfSong{(l.l.RemoveAt(idx)), &ref.Ref{}}
 }
 
 func (l ListOfSong) fromElemSlice(p []Song) []types.Value {
@@ -335,5 +330,5 @@ func (l ListOfSong) Filter(cb ListOfSongFilterCallback) ListOfSong {
 	out := l.l.Filter(func(v types.Value, i uint64) bool {
 		return cb(v.(Song), i)
 	})
-	return ListOfSong{out, l.cs, &ref.Ref{}}
+	return ListOfSong{out, &ref.Ref{}}
 }

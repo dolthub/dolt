@@ -11,7 +11,7 @@ import (
 )
 
 // getDeps reads the types.Package objects referred to by depRefs out of cs and returns a map of ref: PackageDef.
-func getDeps(deps []ref.Ref, cs chunks.ChunkStore) map[ref.Ref]types.Package {
+func getDeps(deps []ref.Ref, cs chunks.ChunkSource) map[ref.Ref]types.Package {
 	depsMap := map[ref.Ref]types.Package{}
 	for _, depRef := range deps {
 		v := types.ReadValue(depRef, cs)

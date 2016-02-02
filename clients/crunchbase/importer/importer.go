@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/tealeg/xlsx"
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
@@ -70,7 +69,7 @@ func main() {
 		ref.FromHash(h).String(),
 		DateDef{msSinceEpoch(time.Now())},
 		companiesRef,
-	}.New(ds.Store())
+	}.New()
 
 	// Commit ref of the companiesRef list
 	_, err = ds.Commit(imp)
@@ -97,7 +96,7 @@ func importCompanies(ds dataset.Dataset, fileName string) ref.Ref {
 	numRounds := 0
 	for i, row := range roundsSheet.Rows {
 		if i != 0 {
-			round := newRoundFromRow(ds.Store(), roundsColIndexes, row, i)
+			round := newRoundFromRow(roundsColIndexes, row, i)
 			pl := round.CompanyPermalink()
 			roundsByPermalink[pl] = append(roundsByPermalink[pl], round)
 			numRounds++
@@ -111,7 +110,7 @@ func importCompanies(ds dataset.Dataset, fileName string) ref.Ref {
 	for i, row := range companySheet.Rows {
 		fmt.Printf("\rImporting %d of %d companies... (%.2f%%)", i, len(companySheet.Rows), float64(i)/float64(len(companySheet.Rows))*float64(100))
 		if i != 0 {
-			company := newCompanyFromRow(ds.Store(), companyColIndexes, row, i)
+			company := newCompanyFromRow(companyColIndexes, row, i)
 			permalink := company.Permalink()
 
 			rounds := roundsByPermalink[permalink]
@@ -120,13 +119,13 @@ func importCompanies(ds dataset.Dataset, fileName string) ref.Ref {
 				ref := types.WriteValue(r, ds.Store())
 				roundRefs[ref] = true
 			}
-			company = company.SetRounds(roundRefs.New(ds.Store()))
+			company = company.SetRounds(roundRefs.New())
 			ref := types.WriteValue(company, ds.Store())
 			companyRefsDef[company.Permalink()] = ref
 		}
 	}
 
-	companyRefs := companyRefsDef.New(ds.Store())
+	companyRefs := companyRefsDef.New()
 
 	// Uncomment this line of code once Len() is implemented on compoundLists
 	//	fmt.Printf("\rImported %d companies with %d rounds\n", companyRefs.Len(), numRounds)
@@ -146,7 +145,7 @@ func getExistingCompaniesRef(ds dataset.Dataset, h hash.Hash) ref.Ref {
 	return ref.Ref{}
 }
 
-func newCompanyFromRow(cs chunks.ChunkStore, idxs columnIndexes, row *xlsx.Row, rowNum int) Company {
+func newCompanyFromRow(idxs columnIndexes, row *xlsx.Row, rowNum int) Company {
 	cells := row.Cells
 
 	company := CompanyDef{
@@ -166,10 +165,10 @@ func newCompanyFromRow(cs chunks.ChunkStore, idxs columnIndexes, row *xlsx.Row, 
 		FirstFundingAt:  idxs.getDate("first_funding_at", cells, "Company.FirstFundingAt", rowNum),
 		LastFundingAt:   idxs.getDate("last_funding_at", cells, "Company.LastFundingAt", rowNum),
 	}
-	return company.New(cs)
+	return company.New()
 }
 
-func newRoundFromRow(cs chunks.ChunkStore, idxs columnIndexes, row *xlsx.Row, rowNum int) Round {
+func newRoundFromRow(idxs columnIndexes, row *xlsx.Row, rowNum int) Round {
 	cells := row.Cells
 
 	round := RoundDef{
@@ -180,7 +179,7 @@ func newRoundFromRow(cs chunks.ChunkStore, idxs columnIndexes, row *xlsx.Row, ro
 		FundedAt:              idxs.getDate("funded_at", cells, "Round.fundedAt", rowNum),
 		RaisedAmountUsd:       idxs.getFloat("raised_amount_usd", cells, "Round.raisedAmountUsd", rowNum),
 	}
-	return round.New(cs)
+	return round.New()
 }
 
 type columnIndexes map[string]int

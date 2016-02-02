@@ -74,7 +74,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
-	mergeParents := datas.NewSetOfRefOfCommit(cs).Insert(datas.NewRefOfCommit(ds1.Head().Ref())).Insert(datas.NewRefOfCommit(ds2.Head().Ref()))
+	mergeParents := datas.NewSetOfRefOfCommit().Insert(datas.NewRefOfCommit(ds1.Head().Ref())).Insert(datas.NewRefOfCommit(ds2.Head().Ref()))
 	d := types.NewString("d")
 	ds2, err = ds2.CommitWithParents(d, mergeParents)
 	assert.NoError(err)

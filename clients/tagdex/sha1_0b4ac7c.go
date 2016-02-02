@@ -3,7 +3,6 @@
 package main
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -30,15 +29,13 @@ func init() {
 type Date struct {
 	_MsSinceEpoch int64
 
-	cs  chunks.ChunkStore
 	ref *ref.Ref
 }
 
-func NewDate(cs chunks.ChunkStore) Date {
+func NewDate() Date {
 	return Date{
 		_MsSinceEpoch: int64(0),
 
-		cs:  cs,
 		ref: &ref.Ref{},
 	}
 }
@@ -47,10 +44,9 @@ type DateDef struct {
 	MsSinceEpoch int64
 }
 
-func (def DateDef) New(cs chunks.ChunkStore) Date {
+func (def DateDef) New() Date {
 	return Date{
 		_MsSinceEpoch: def.MsSinceEpoch,
-		cs:            cs,
 		ref:           &ref.Ref{},
 	}
 }
@@ -71,9 +67,9 @@ func init() {
 	types.RegisterStruct(__typeForDate, builderForDate, readerForDate)
 }
 
-func builderForDate(cs chunks.ChunkStore, values []types.Value) types.Value {
+func builderForDate(values []types.Value) types.Value {
 	i := 0
-	s := Date{ref: &ref.Ref{}, cs: cs}
+	s := Date{ref: &ref.Ref{}}
 	s._MsSinceEpoch = int64(values[i].(types.Int64))
 	i++
 	return s
