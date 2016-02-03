@@ -340,8 +340,11 @@ function makeUnresolvedType(namespace: string, name: string): Type {
 
 const typeType = makePrimitiveType(Kind.Type);
 const packageType = makePrimitiveType(Kind.Package);
+const stringType = makePrimitiveType(Kind.String);
+const boolType = makePrimitiveType(Kind.Bool);
 
 export {
+  boolType,
   CompoundDesc,
   EnumDesc,
   Field,
@@ -354,6 +357,7 @@ export {
   PrimitiveDesc,
   StructDesc,
   Type,
+  stringType,
   typeType,
   packageType,
   UnresolvedDesc,
