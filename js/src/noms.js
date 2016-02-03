@@ -34,6 +34,7 @@ export {
   UnresolvedDesc,
 } from './type.js';
 export {equals, less} from './value.js';
+export {default as CacheStore} from './cache_store.js';
 
 import type {AsyncIteratorResult} from './async_iterator.js';
 export type {AsyncIteratorResult};
