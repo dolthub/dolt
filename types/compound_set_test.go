@@ -345,7 +345,7 @@ func TestCompoundSetFirstNNumbers(t *testing.T) {
 		return nums
 	}
 
-	nums := firstNNumbers(10000)
+	nums := firstNNumbers(5000)
 	s := newTypedSet(setType, nums...)
-	assert.Equal(s.Ref().String(), "sha1-0ea92d59ecbce4e38bcecf4faaca6b17673c8a6b")
+	assert.Equal(s.Ref().String(), "sha1-54ff8f84b5f39fe2171572922d067257a57c539c")
 }

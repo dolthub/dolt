@@ -15,6 +15,9 @@ import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {OrderedSequence} from './ordered_sequence.js';
 import {writeValue} from './encode.js';
 
+const testSetSize = 5000;
+const setOfNRef = 'sha1-54ff8f84b5f39fe2171572922d067257a57c539c';
+
 suite('BuildSet', () => {
   function firstNNumbers(n: number): Array<number> {
     const nums = [];
@@ -28,42 +31,42 @@ suite('BuildSet', () => {
 
   test('set of n numbers', async () => {
     const ms = new MemoryStore();
-    const nums = firstNNumbers(10000);
+    const nums = firstNNumbers(testSetSize);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
     const s = await newSet(ms, tr, nums);
-    assert.strictEqual(s.ref.toString(), 'sha1-0ea92d59ecbce4e38bcecf4faaca6b17673c8a6b');
+    assert.strictEqual(s.ref.toString(), setOfNRef);
 
     // shuffle kvs, and test that the constructor sorts properly
     nums.sort(() => Math.random() > .5 ? 1 : -1);
     const s2 = await newSet(ms, tr, nums);
-    assert.strictEqual(s2.ref.toString(), 'sha1-0ea92d59ecbce4e38bcecf4faaca6b17673c8a6b');
+    assert.strictEqual(s2.ref.toString(), setOfNRef);
   });
 
   test('insert', async () => {
     const ms = new MemoryStore();
-    const nums = firstNNumbers(9990);
+    const nums = firstNNumbers(testSetSize - 10);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
     let s = await newSet(ms, tr, nums);
 
-    for (let i = 9990; i < 10000; i++) {
+    for (let i = testSetSize - 10; i < testSetSize; i++) {
       s = await s.insert(i);
     }
 
-    assert.strictEqual(s.ref.toString(), 'sha1-0ea92d59ecbce4e38bcecf4faaca6b17673c8a6b');
+    assert.strictEqual(s.ref.toString(), setOfNRef);
   });
 
   test('remove', async () => {
     const ms = new MemoryStore();
-    const nums = firstNNumbers(10010);
+    const nums = firstNNumbers(testSetSize + 10);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
     let s = await newSet(ms, tr, nums);
 
     let count = 10;
     while (count-- > 0) {
-      s = await s.remove(10000 + count);
+      s = await s.remove(testSetSize + count);
     }
 
-    assert.strictEqual(s.ref.toString(), 'sha1-0ea92d59ecbce4e38bcecf4faaca6b17673c8a6b');
+    assert.strictEqual(s.ref.toString(), setOfNRef);
   });
 
 });

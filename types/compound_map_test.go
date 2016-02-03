@@ -362,11 +362,11 @@ func TestCompoundMapFirstNNumbers(t *testing.T) {
 	mapType := MakeCompoundType(MapKind, MakePrimitiveType(Int64Kind), MakePrimitiveType(Int64Kind))
 
 	kvs := []Value{}
-	n := 10000
+	n := 5000
 	for i := 0; i < n; i++ {
 		kvs = append(kvs, Int64(i), Int64(i+1))
 	}
 
 	m := NewTypedMap(mapType, kvs...)
-	assert.Equal(m.Ref().String(), "sha1-87b4686ae92df37f87f19b0264cbf24a21a5850e")
+	assert.Equal(m.Ref().String(), "sha1-1b9664e55091370996f3af428ffee78f1ad36426")
 }

@@ -611,7 +611,7 @@ func TestCompoundListFirstNNumbers(t *testing.T) {
 		return nums
 	}
 
-	nums := firstNNumbers(10000)
+	nums := firstNNumbers(5000)
 	s := NewTypedList(listType, nums...)
-	assert.Equal(s.Ref().String(), "sha1-0f0d90ce79d01f78b2e39c6e31281d19e5730a65")
+	assert.Equal(s.Ref().String(), "sha1-11e947e8aacfda8e9052bb57e661da442b26c625")
 }
