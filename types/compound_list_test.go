@@ -596,3 +596,22 @@ func TestCompoundListFilterEmpty(t *testing.T) {
 	res1 := empty.Filter(filterCb)
 	assert.True(res1.Empty())
 }
+
+func TestCompoundListFirstNNumbers(t *testing.T) {
+	assert := assert.New(t)
+
+	listType := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+
+	firstNNumbers := func(n int) []Value {
+		nums := []Value{}
+		for i := 0; i < n; i++ {
+			nums = append(nums, Int64(i))
+		}
+
+		return nums
+	}
+
+	nums := firstNNumbers(10000)
+	s := NewTypedList(listType, nums...)
+	assert.Equal(s.Ref().String(), "sha1-0f0d90ce79d01f78b2e39c6e31281d19e5730a65")
+}

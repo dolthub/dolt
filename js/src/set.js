@@ -1,11 +1,67 @@
 // @flow
 
-import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
+import BuzHashBoundaryChecker from './buzhash_boundary_checker.js';
+import type {BoundaryChecker, makeChunkFn} from './sequence_chunker.js';
+import type {ChunkStore} from './chunk_store.js';
+import type {valueOrPrimitive, Value} from './value.js'; // eslint-disable-line no-unused-vars
 import {AsyncIterator} from './async_iterator.js';
+import {chunkSequence} from './sequence_chunker.js';
 import {Collection} from './collection.js';
+import {compare} from './value.js';
+import {default as Ref, sha1Size} from './ref.js';
 import {equals, less} from './value.js';
+import {getRefOfValueOrPrimitive} from './get_ref.js';
 import {invariant} from './assert.js';
-import {OrderedSequence, OrderedSequenceIterator} from './ordered_sequence.js';
+import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
+  newOrderedMetaSequenceChunkFn} from './meta_sequence.js';
+import {OrderedSequence, OrderedSequenceCursor,
+  OrderedSequenceIterator} from './ordered_sequence.js';
+import {Type} from './type.js';
+
+const setWindowSize = 1;
+const setPattern = ((1 << 6) | 0) - 1;
+
+function newSetLeafChunkFn<T:valueOrPrimitive>(t: Type): makeChunkFn {
+  return (items: Array<T>) => {
+    const setLeaf = new SetLeafSequence(t, items);
+
+    let indexValue: ?(T | Ref) = null;
+    if (items.length > 0) {
+      const lastValue = items[items.length - 1];
+      if (t.elemTypes[0].ordered) {
+        indexValue = lastValue;
+      } else {
+        indexValue = getRefOfValueOrPrimitive(lastValue, t.elemTypes[0]);
+      }
+    }
+
+    const mt = new MetaTuple(setLeaf, indexValue);
+    return [mt, setLeaf];
+  };
+}
+
+function newSetLeafBoundaryChecker<T:valueOrPrimitive>(t: Type): BoundaryChecker<T> {
+  return new BuzHashBoundaryChecker(setWindowSize, sha1Size, setPattern, (v: T) => {
+    const ref = getRefOfValueOrPrimitive(v, t.elemTypes[0]);
+    return ref.digest;
+  });
+}
+
+function buildSetData<T>(t: Type, values: Array<any>): Array<T> {
+  // TODO: Assert values are of correct type
+  values.sort((v1, v2) => compare(v1, v2));
+  return values;
+}
+
+export function newSet<T:valueOrPrimitive>(cs: ChunkStore, type: Type, values: Array<T>):
+    Promise<NomsSet<T>> {
+
+  return chunkSequence(null, buildSetData(type, values), 0, newSetLeafChunkFn(type),
+                       newOrderedMetaSequenceChunkFn(type),
+                       newSetLeafBoundaryChecker(type),
+                       newOrderedMetaSequenceBoundaryChecker)
+  .then((seq: OrderedSequence) => new NomsSet(cs, type, seq));
+}
 
 export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
   async has(key: T): Promise<boolean> {
@@ -32,6 +88,35 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
 
   iteratorAt(v: T): AsyncIterator<T> {
     return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, v));
+  }
+
+  async _splice(cursor: OrderedSequenceCursor, insert: Array<T>, remove: number):
+      Promise<NomsSet<T>> {
+    const type = this.type;
+    const seq = await chunkSequence(cursor, insert, remove, newSetLeafChunkFn(type),
+                                    newOrderedMetaSequenceChunkFn(type),
+                                    newSetLeafBoundaryChecker(type),
+                                    newOrderedMetaSequenceBoundaryChecker);
+    invariant(seq instanceof OrderedSequence);
+    return new NomsSet(this.cs, type, seq);
+  }
+
+  async insert(value: T): Promise<NomsSet<T>> {
+    const cursor = await this.sequence.newCursorAt(this.cs, value, true);
+    if (cursor.valid && equals(cursor.getCurrentKey(), value)) {
+      return this;
+    }
+
+    return this._splice(cursor, [value], 0);
+  }
+
+  async remove(value: T): Promise<NomsSet<T>> {
+    const cursor = await this.sequence.newCursorAt(this.cs, value);
+    if (cursor.valid && equals(cursor.getCurrentKey(), value)) {
+      return this._splice(cursor, [], 1);
+    }
+
+    return this;
   }
 
   // TODO: Find some way to return a NomsSet.

@@ -14,14 +14,16 @@ export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
   //   -cursor positioned at
   //      -first value, if |key| is null
   //      -first value >= |key|
-  async newCursorAt(cs: ChunkStore, key: ?K): Promise<OrderedSequenceCursor> {
+  async newCursorAt(cs: ChunkStore, key: ?K, forInsertion: boolean = false):
+      Promise<OrderedSequenceCursor> {
     let cursor: ?OrderedSequenceCursor = null;
     let sequence: ?OrderedSequence = this;
 
     while (sequence) {
       cursor = new OrderedSequenceCursor(cs, cursor, sequence, 0);
       if (key) {
-        if (!cursor._seekTo(key)) {
+        const lastPositionIfNotfound = forInsertion && sequence.isMeta;
+        if (!cursor._seekTo(key, lastPositionIfNotfound)) {
           return cursor; // invalid
         }
       }
@@ -44,10 +46,21 @@ export class OrderedSequenceCursor<T, K: valueOrPrimitive> extends
     return this.sequence.getKey(this.idx);
   }
 
+  clone(): OrderedSequenceCursor<T, K> {
+    return new OrderedSequenceCursor(this.cs, this.parent && this.parent.clone(),
+                                     this.sequence,
+                                     this.idx);
+  }
+
   // Moves the cursor to the first value in sequence >= key and returns true.
   // If none exists, returns false.
-  _seekTo(key: K): boolean {
+  _seekTo(key: K, lastPositionIfNotfound: boolean = false): boolean {
     this.idx = search(this.length, (i: number) => !less(this.sequence.getKey(i), key));
+
+    if (this.idx === this.length && lastPositionIfNotfound) {
+      invariant(this.idx > 0);
+      this.idx--;
+    }
 
     return this.idx < this.length;
   }

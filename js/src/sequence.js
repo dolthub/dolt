@@ -36,6 +36,10 @@ export class SequenceCursor<T, S:Sequence> {
     this.idx = idx;
   }
 
+  clone(): SequenceCursor<T, S> {
+    throw new Error('override');
+  }
+
   get length(): number {
     return this.sequence.items.length;
   }
@@ -114,7 +118,7 @@ export class SequenceCursor<T, S:Sequence> {
       return false;
     }
     invariant(this.idx === 0);
-    if (this.parent && this.parent._retreatMaybeAllowBeforeStart(false)) {
+    if (this.parent && await this.parent._retreatMaybeAllowBeforeStart(false)) {
       await this.sync();
       this.idx = this.length - 1;
       return true;
@@ -125,6 +129,17 @@ export class SequenceCursor<T, S:Sequence> {
     }
 
     return false;
+  }
+
+  async maxNPrevItems(n: number): Promise<Array<T>> {
+    const prev = [];
+    const retreater = this.clone();
+    for (let i = 0; i < n && await retreater.retreat(); i++) {
+      prev.push(retreater.getCurrent());
+    }
+
+    prev.reverse();
+    return prev;
   }
 
   async iter(cb: (v: T, i: number) => boolean): Promise<void> {

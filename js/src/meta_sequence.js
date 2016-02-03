@@ -1,8 +1,11 @@
 // @flow
 
-import Ref from './ref.js';
+import BuzHashBoundaryChecker from './buzhash_boundary_checker.js';
+import {default as Ref, sha1Size} from './ref.js';
+import type {BoundaryChecker, makeChunkFn} from './sequence_chunker.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
+import {Collection} from './collection.js';
 import {CompoundDesc, makeCompoundType, makePrimitiveType, Type} from './type.js';
 import {IndexedSequence} from './indexed_sequence.js';
 import {invariant} from './assert.js';
@@ -14,12 +17,26 @@ import {Sequence} from './sequence.js';
 export type MetaSequence = Sequence<MetaTuple>;
 
 export class MetaTuple<K> {
-  ref: Ref;
+  _sequence: Sequence | Ref;
   value: K;
 
-  constructor(ref: Ref, value: K) {
-    this.ref = ref;
+  constructor(sequence: Sequence | Ref, value: K) {
+    this._sequence = sequence;
     this.value = value;
+  }
+
+  get ref(): Ref {
+    return this._sequence instanceof Ref ? this._sequence : this._sequence.ref;
+  }
+
+  getSequence(cs: ChunkStore): Promise<Sequence> {
+    if (this._sequence instanceof Sequence) {
+      return Promise.resolve(this._sequence);
+    } else {
+      const ref = this._sequence;
+      invariant(ref instanceof Ref);
+      return readValue(ref, cs).then((c: Collection) => c.sequence);
+    }
   }
 }
 
@@ -38,15 +55,13 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
     }
   }
 
-  async getChildSequence(cs: ChunkStore, idx: number): Promise<?IndexedSequence> {
+  getChildSequence(cs: ChunkStore, idx: number): Promise<?Sequence> {
     if (!this.isMeta) {
-      return null;
+      return Promise.resolve(null);
     }
 
     const mt = this.items[idx];
-    const collection = await readValue(mt.ref, cs);
-    invariant(collection && collection.sequence instanceof IndexedSequence);
-    return collection.sequence;
+    return mt.getSequence(cs);
   }
 
   getOffset(idx: number): number {
@@ -60,15 +75,13 @@ export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K,
     this.isMeta = true;
   }
 
-  async getChildSequence(cs: ChunkStore, idx: number): Promise<?OrderedSequence> {
+  getChildSequence(cs: ChunkStore, idx: number): Promise<?Sequence> {
     if (!this.isMeta) {
-      return null;
+      return Promise.resolve(null);
     }
 
     const mt = this.items[idx];
-    const collection = await readValue(mt.ref, cs);
-    invariant(collection && collection.sequence instanceof OrderedSequence);
-    return collection.sequence;
+    return mt.getSequence(cs);
   }
 
   getKey(idx: number): K {
@@ -113,3 +126,36 @@ export function indexTypeForMetaSequence(t: Type): Type {
 
   throw new Error('Not reached');
 }
+
+export function newOrderedMetaSequenceChunkFn(t: Type): makeChunkFn {
+  return (tuples: Array<MetaTuple>) => {
+    const meta = new OrderedMetaSequence(t, tuples);
+    const lastValue = tuples[tuples.length - 1].value;
+    return [new MetaTuple(meta, lastValue), meta];
+  };
+}
+
+const objectWindowSize = 8;
+const orderedSequenceWindowSize = 1;
+const objectPattern = ((1 << 6) | 0) - 1;
+
+export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTuple> {
+  return new BuzHashBoundaryChecker(orderedSequenceWindowSize, sha1Size, objectPattern,
+    (mt: MetaTuple) => mt.ref.digest
+  );
+}
+
+export function newIndexedMetaSequenceChunkFn(t: Type): makeChunkFn {
+  return (tuples: Array<MetaTuple>) => {
+    const sum = tuples.reduce((l, mt) => l + mt.value, 0);
+    const meta = new IndexedMetaSequence(t, tuples);
+    return [new MetaTuple(meta, sum), meta];
+  };
+}
+
+export function newIndexedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTuple> {
+  return new BuzHashBoundaryChecker(objectWindowSize, sha1Size, objectPattern,
+    (mt: MetaTuple) => mt.ref.digest
+  );
+}
+

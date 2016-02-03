@@ -330,3 +330,22 @@ func TestCompoundSetUnion(t *testing.T) {
 	doTest(getTestRefToNativeOrderSet(2))
 	doTest(getTestRefToValueOrderSet(2))
 }
+
+func TestCompoundSetFirstNNumbers(t *testing.T) {
+	assert := assert.New(t)
+
+	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
+
+	firstNNumbers := func(n int) []Value {
+		nums := []Value{}
+		for i := 0; i < n; i++ {
+			nums = append(nums, Int64(i))
+		}
+
+		return nums
+	}
+
+	nums := firstNNumbers(10000)
+	s := newTypedSet(setType, nums...)
+	assert.Equal(s.Ref().String(), "sha1-0ea92d59ecbce4e38bcecf4faaca6b17673c8a6b")
+}

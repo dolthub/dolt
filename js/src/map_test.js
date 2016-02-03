@@ -9,9 +9,86 @@ import type {ChunkStore} from './chunk_store.js';
 import {Kind} from './noms_kind.js';
 import {flatten} from './test_util.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
-import {MapLeafSequence, NomsMap} from './map.js';
+import {MapLeafSequence, newMap, NomsMap} from './map.js';
 import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
 import {writeValue} from './encode.js';
+
+suite('BuildMap', () => {
+  test('set of n numbers', async () => {
+    const ms = new MemoryStore();
+    const kvs = [];
+    for (let i = 0; i < 10000; i++) {
+      kvs.push(i, i + 1);
+    }
+
+    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
+                                makePrimitiveType(Kind.Int64));
+    const m = await newMap(ms, tr, kvs);
+    assert.strictEqual(m.ref.toString(), 'sha1-87b4686ae92df37f87f19b0264cbf24a21a5850e');
+
+    // shuffle kvs, and test that the constructor sorts properly
+    const pairs = [];
+    for (let i = 0; i < kvs.length; i += 2) {
+      pairs.push({k: kvs[i], v: kvs[i + 1]});
+    }
+    pairs.sort(() => Math.random() > .5 ? 1 : -1);
+    kvs.length = 0;
+    pairs.forEach(kv => kvs.push(kv.k, kv.v));
+    const m2 = await newMap(ms, tr, kvs);
+    assert.strictEqual(m2.ref.toString(), 'sha1-87b4686ae92df37f87f19b0264cbf24a21a5850e');
+  });
+
+  test('set', async () => {
+    const ms = new MemoryStore();
+    const kvs = [];
+    for (let i = 0; i < 9990; i++) {
+      kvs.push(i, i + 1);
+    }
+
+    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
+                                makePrimitiveType(Kind.Int64));
+    let m = await newMap(ms, tr, kvs);
+    for (let i = 9990; i < 10000; i++) {
+      m = await m.set(i, i + 1);
+    }
+
+    assert.strictEqual(m.ref.toString(), 'sha1-87b4686ae92df37f87f19b0264cbf24a21a5850e');
+  });
+
+  test('set existing', async () => {
+    const ms = new MemoryStore();
+    const kvs = [];
+    for (let i = 0; i < 10000; i++) {
+      kvs.push(i, i + 1);
+    }
+
+    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
+                                makePrimitiveType(Kind.Int64));
+    let m = await newMap(ms, tr, kvs);
+    for (let i = 0; i < 10000; i++) {
+      m = await m.set(i, i + 1);
+    }
+
+    assert.strictEqual(m.ref.toString(), 'sha1-87b4686ae92df37f87f19b0264cbf24a21a5850e');
+  });
+
+  test('remove', async () => {
+    const ms = new MemoryStore();
+    const kvs = [];
+    for (let i = 0; i < 10010; i++) {
+      kvs.push(i, i + 1);
+    }
+
+    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
+                                makePrimitiveType(Kind.Int64));
+    let m = await newMap(ms, tr, kvs);
+    for (let i = 10000; i < 10010; i++) {
+      m = await m.remove(i);
+    }
+
+    assert.strictEqual(m.ref.toString(), 'sha1-87b4686ae92df37f87f19b0264cbf24a21a5850e');
+  });
+});
 
 suite('MapLeaf', () => {
   test('isEmpty', () => {
