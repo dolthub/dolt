@@ -2,7 +2,6 @@
 
 import BuzHashBoundaryChecker from './buzhash_boundary_checker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence_chunker.js';
-import type {ChunkStore} from './chunk_store.js';
 import type {valueOrPrimitive, Value} from './value.js'; // eslint-disable-line no-unused-vars
 import {AsyncIterator} from './async_iterator.js';
 import {chunkSequence} from './sequence_chunker.js';
@@ -53,14 +52,14 @@ function buildSetData<T>(t: Type, values: Array<any>): Array<T> {
   return values;
 }
 
-export function newSet<T:valueOrPrimitive>(cs: ChunkStore, type: Type, values: Array<T>):
+export function newSet<T:valueOrPrimitive>(type: Type, values: Array<T>):
     Promise<NomsSet<T>> {
 
   return chunkSequence(null, buildSetData(type, values), 0, newSetLeafChunkFn(type),
                        newOrderedMetaSequenceChunkFn(type),
                        newSetLeafBoundaryChecker(type),
                        newOrderedMetaSequenceBoundaryChecker)
-  .then((seq: OrderedSequence) => new NomsSet(cs, type, seq));
+  .then((seq: OrderedSequence) => new NomsSet(null, type, seq));
 }
 
 export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {

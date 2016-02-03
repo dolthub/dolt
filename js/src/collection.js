@@ -10,9 +10,9 @@ import {ValueBase} from './value.js';
 
 export class Collection<S:Sequence> extends ValueBase {
   sequence: S;
-  cs: ChunkStore;
+  cs: ?ChunkStore;
 
-  constructor(cs: ChunkStore, type: Type, sequence: S) {
+  constructor(cs: ?ChunkStore, type: Type, sequence: S) {
     super(type);
     this.cs = cs;
     this.sequence = sequence;

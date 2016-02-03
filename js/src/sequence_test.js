@@ -15,7 +15,7 @@ class TestSequence extends Sequence<any> {
     super(makeCompoundType(Kind.List, makePrimitiveType(Kind.Value)), items);
   }
 
-  getChildSequence(cs: ChunkStore, idx: number): // eslint-disable-line no-unused-vars
+  getChildSequence(cs: ?ChunkStore, idx: number): // eslint-disable-line no-unused-vars
       Promise<?Sequence> {
     return Promise.resolve(new TestSequence(this.items[idx]));
   }

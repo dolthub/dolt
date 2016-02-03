@@ -2,7 +2,6 @@
 
 import BuzHashBoundaryChecker from './buzhash_boundary_checker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence_chunker.js';
-import type {ChunkStore} from './chunk_store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {AsyncIterator} from './async_iterator.js';
 import {chunkSequence} from './sequence_chunker.js';
@@ -32,13 +31,13 @@ function newListLeafBoundaryChecker<T: valueOrPrimitive>(t: Type): BoundaryCheck
   );
 }
 
-export function newList<T: valueOrPrimitive>(cs: ChunkStore, type: Type, values: Array<T>):
+export function newList<T: valueOrPrimitive>(type: Type, values: Array<T>):
     Promise<NomsList<T>> {
   return chunkSequence(null, values, 0, newListLeafChunkFn(type),
                        newIndexedMetaSequenceChunkFn(type),
                        newListLeafBoundaryChecker(type),
                        newIndexedMetaSequenceBoundaryChecker)
-  .then((seq: IndexedSequence) => new NomsList(cs, type, seq));
+  .then((seq: IndexedSequence) => new NomsList(null, type, seq));
 }
 
 export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
