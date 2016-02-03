@@ -30,23 +30,21 @@ suite('BuildSet', () => {
   }
 
   test('set of n numbers', async () => {
-    const ms = new MemoryStore();
     const nums = firstNNumbers(testSetSize);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
-    const s = await newSet(ms, tr, nums);
+    const s = await newSet(tr, nums);
     assert.strictEqual(s.ref.toString(), setOfNRef);
 
     // shuffle kvs, and test that the constructor sorts properly
     nums.sort(() => Math.random() > .5 ? 1 : -1);
-    const s2 = await newSet(ms, tr, nums);
+    const s2 = await newSet(tr, nums);
     assert.strictEqual(s2.ref.toString(), setOfNRef);
   });
 
   test('insert', async () => {
-    const ms = new MemoryStore();
     const nums = firstNNumbers(testSetSize - 10);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
-    let s = await newSet(ms, tr, nums);
+    let s = await newSet(tr, nums);
 
     for (let i = testSetSize - 10; i < testSetSize; i++) {
       s = await s.insert(i);
@@ -56,10 +54,9 @@ suite('BuildSet', () => {
   });
 
   test('remove', async () => {
-    const ms = new MemoryStore();
     const nums = firstNNumbers(testSetSize + 10);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
-    let s = await newSet(ms, tr, nums);
+    let s = await newSet(tr, nums);
 
     let count = 10;
     while (count-- > 0) {

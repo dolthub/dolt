@@ -31,18 +31,16 @@ suite('BuildList', () => {
   }
 
   test('set of n numbers', async () => {
-    const ms = new MemoryStore();
     const nums = firstNNumbers(testListSize);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    const s = await newList(ms, tr, nums);
+    const s = await newList(tr, nums);
     assert.strictEqual(s.ref.toString(), listOfNRef);
   });
 
   test('insert', async () => {
-    const ms = new MemoryStore();
     const nums = firstNNumbers(testListSize - 10);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    let s = await newList(ms, tr, nums);
+    let s = await newList(tr, nums);
 
     for (let i = testListSize - 10; i < testListSize; i++) {
       s = await s.insert(i, [i]);
@@ -52,10 +50,9 @@ suite('BuildList', () => {
   });
 
   test('append', async () => {
-    const ms = new MemoryStore();
     const nums = firstNNumbers(testListSize - 10);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    let s = await newList(ms, tr, nums);
+    let s = await newList(tr, nums);
 
     for (let i = testListSize - 10; i < testListSize; i++) {
       s = await s.append([i]);
@@ -65,10 +62,9 @@ suite('BuildList', () => {
   });
 
   test('remove', async () => {
-    const ms = new MemoryStore();
     const nums = firstNNumbers(testListSize + 10);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    let s = await newList(ms, tr, nums);
+    let s = await newList(tr, nums);
 
     let count = 10;
     while (count-- > 0) {
@@ -79,10 +75,9 @@ suite('BuildList', () => {
   });
 
   test('splice', async () => {
-    const ms = new MemoryStore();
     const nums = firstNNumbers(testListSize);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    let s = await newList(ms, tr, nums);
+    let s = await newList(tr, nums);
 
     const splice500At = async (idx: number) => {
       s = await s.splice(idx, [], 500);

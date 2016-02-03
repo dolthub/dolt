@@ -19,7 +19,6 @@ const mapOfNRef = 'sha1-1b9664e55091370996f3af428ffee78f1ad36426';
 
 suite('BuildMap', () => {
   test('set of n numbers', async () => {
-    const ms = new MemoryStore();
     const kvs = [];
     for (let i = 0; i < testMapSize; i++) {
       kvs.push(i, i + 1);
@@ -27,7 +26,7 @@ suite('BuildMap', () => {
 
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
                                 makePrimitiveType(Kind.Int64));
-    const m = await newMap(ms, tr, kvs);
+    const m = await newMap(tr, kvs);
     assert.strictEqual(m.ref.toString(), mapOfNRef);
 
     // shuffle kvs, and test that the constructor sorts properly
@@ -38,12 +37,11 @@ suite('BuildMap', () => {
     pairs.sort(() => Math.random() > .5 ? 1 : -1);
     kvs.length = 0;
     pairs.forEach(kv => kvs.push(kv.k, kv.v));
-    const m2 = await newMap(ms, tr, kvs);
+    const m2 = await newMap(tr, kvs);
     assert.strictEqual(m2.ref.toString(), mapOfNRef);
   });
 
   test('set', async () => {
-    const ms = new MemoryStore();
     const kvs = [];
     for (let i = 0; i < testMapSize - 10; i++) {
       kvs.push(i, i + 1);
@@ -51,7 +49,7 @@ suite('BuildMap', () => {
 
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
                                 makePrimitiveType(Kind.Int64));
-    let m = await newMap(ms, tr, kvs);
+    let m = await newMap(tr, kvs);
     for (let i = testMapSize - 10; i < testMapSize; i++) {
       m = await m.set(i, i + 1);
     }
@@ -60,7 +58,6 @@ suite('BuildMap', () => {
   });
 
   test('set existing', async () => {
-    const ms = new MemoryStore();
     const kvs = [];
     for (let i = 0; i < testMapSize; i++) {
       kvs.push(i, i + 1);
@@ -68,7 +65,7 @@ suite('BuildMap', () => {
 
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
                                 makePrimitiveType(Kind.Int64));
-    let m = await newMap(ms, tr, kvs);
+    let m = await newMap(tr, kvs);
     for (let i = 0; i < testMapSize; i++) {
       m = await m.set(i, i + 1);
     }
@@ -77,7 +74,6 @@ suite('BuildMap', () => {
   });
 
   test('remove', async () => {
-    const ms = new MemoryStore();
     const kvs = [];
     for (let i = 0; i < testMapSize + 10; i++) {
       kvs.push(i, i + 1);
@@ -85,7 +81,7 @@ suite('BuildMap', () => {
 
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
                                 makePrimitiveType(Kind.Int64));
-    let m = await newMap(ms, tr, kvs);
+    let m = await newMap(tr, kvs);
     for (let i = testMapSize; i < testMapSize + 10; i++) {
       m = await m.remove(i);
     }

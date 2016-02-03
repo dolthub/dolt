@@ -17,19 +17,19 @@ export class Sequence<T> extends ValueBase {
     this.isMeta = false;
   }
 
-  getChildSequence(cs: ChunkStore, idx: number): // eslint-disable-line no-unused-vars
+  getChildSequence(cs: ?ChunkStore, idx: number): // eslint-disable-line no-unused-vars
       Promise<?Sequence> {
     return Promise.resolve(null);
   }
 }
 
 export class SequenceCursor<T, S:Sequence> {
-  cs: ChunkStore;
+  cs: ?ChunkStore;
   parent: ?SequenceCursor;
   sequence: S;
   idx: number;
 
-  constructor(cs: ChunkStore, parent: ?SequenceCursor, sequence: S, idx: number) {
+  constructor(cs: ?ChunkStore, parent: ?SequenceCursor, sequence: S, idx: number) {
     this.cs = cs;
     this.parent = parent;
     this.sequence = sequence;

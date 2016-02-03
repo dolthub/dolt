@@ -29,12 +29,12 @@ export class MetaTuple<K> {
     return this._sequence instanceof Ref ? this._sequence : this._sequence.ref;
   }
 
-  getSequence(cs: ChunkStore): Promise<Sequence> {
+  getSequence(cs: ?ChunkStore): Promise<Sequence> {
     if (this._sequence instanceof Sequence) {
       return Promise.resolve(this._sequence);
     } else {
       const ref = this._sequence;
-      invariant(ref instanceof Ref);
+      invariant(cs && ref instanceof Ref);
       return readValue(ref, cs).then((c: Collection) => c.sequence);
     }
   }
@@ -55,7 +55,7 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
     }
   }
 
-  getChildSequence(cs: ChunkStore, idx: number): Promise<?Sequence> {
+  getChildSequence(cs: ?ChunkStore, idx: number): Promise<?Sequence> {
     if (!this.isMeta) {
       return Promise.resolve(null);
     }
@@ -75,7 +75,7 @@ export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K,
     this.isMeta = true;
   }
 
-  getChildSequence(cs: ChunkStore, idx: number): Promise<?Sequence> {
+  getChildSequence(cs: ?ChunkStore, idx: number): Promise<?Sequence> {
     if (!this.isMeta) {
       return Promise.resolve(null);
     }

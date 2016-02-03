@@ -14,7 +14,7 @@ export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
   //   -cursor positioned at
   //      -first value, if |key| is null
   //      -first value >= |key|
-  async newCursorAt(cs: ChunkStore, key: ?K, forInsertion: boolean = false):
+  async newCursorAt(cs: ?ChunkStore, key: ?K, forInsertion: boolean = false):
       Promise<OrderedSequenceCursor> {
     let cursor: ?OrderedSequenceCursor = null;
     let sequence: ?OrderedSequence = this;

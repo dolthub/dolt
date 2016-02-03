@@ -10,7 +10,7 @@ export class IndexedSequence<T> extends Sequence<T> {
     throw new Error('override');
   }
 
-  async newCursorAt(cs: ChunkStore, idx: number): Promise<IndexedSequenceCursor> {
+  async newCursorAt(cs: ?ChunkStore, idx: number): Promise<IndexedSequenceCursor> {
     let cursor: ?IndexedSequenceCursor = null;
     let sequence: ?IndexedSequence = this;
 

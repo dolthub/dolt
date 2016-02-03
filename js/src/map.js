@@ -2,7 +2,6 @@
 
 import BuzHashBoundaryChecker from './buzhash_boundary_checker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence_chunker.js';
-import type {ChunkStore} from './chunk_store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {AsyncIterator} from './async_iterator.js';
 import {chunkSequence} from './sequence_chunker.js';
@@ -64,13 +63,13 @@ function buildMapData(t: Type, kvs: Array<any>): Array<MapEntry> {
   return entries;
 }
 
-export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(cs: ChunkStore, type: Type,
+export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(type: Type,
     kvs: Array<any>): Promise<NomsMap<K, V>> {
   return chunkSequence(null, buildMapData(type, kvs), 0, newMapLeafChunkFn(type),
                        newOrderedMetaSequenceChunkFn(type),
                        newMapLeafBoundaryChecker(type),
                        newOrderedMetaSequenceBoundaryChecker)
-  .then((seq: OrderedSequence) => new NomsMap(cs, type, seq));
+  .then((seq: OrderedSequence) => new NomsMap(null, type, seq));
 }
 
 export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collection<OrderedSequence> {
