@@ -34,4 +34,4 @@ export default class Chunk {
   }
 }
 
-Chunk.emptyChunk = new Chunk();
+export const emptyChunk = new Chunk();
