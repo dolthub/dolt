@@ -1,7 +1,7 @@
 // @flow
 
-import Chunk from './chunk.js';
 import Ref from './ref.js';
+import {emptyChunk, default as Chunk} from './chunk.js';
 
 export default class MemoryStore {
   _data: { [key: string]: Chunk };
@@ -28,7 +28,7 @@ export default class MemoryStore {
   async get(ref: Ref): Promise<Chunk> {
     let c = this._data[ref.toString()];
     if (!c) {
-      c = Chunk.emptyChunk;
+      c = emptyChunk;
     }
 
     return c;
