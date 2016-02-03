@@ -1,17 +1,77 @@
 // @flow
 
-import {AsyncIterator} from './async_iterator.js';
-import Ref from './ref.js';
+import BuzHashBoundaryChecker from './buzhash_boundary_checker.js';
+import type {BoundaryChecker, makeChunkFn} from './sequence_chunker.js';
+import type {ChunkStore} from './chunk_store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
+import {AsyncIterator} from './async_iterator.js';
+import {chunkSequence} from './sequence_chunker.js';
 import {Collection} from './collection.js';
+import {compare} from './value.js';
+import {default as Ref, sha1Size} from './ref.js';
 import {equals} from './value.js';
+import {getRefOfValueOrPrimitive} from './get_ref.js';
+import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
-import {OrderedSequence, OrderedSequenceIterator} from './ordered_sequence.js';
+import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
+  newOrderedMetaSequenceChunkFn} from './meta_sequence.js';
+import {OrderedSequence, OrderedSequenceCursor,
+  OrderedSequenceIterator} from './ordered_sequence.js';
+import {Type} from './type.js';
 
 export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
   key: K,
   value: V,
 };
+
+const mapWindowSize = 1;
+const mapPattern = ((1 << 6) | 0) - 1;
+
+function newMapLeafChunkFn(t: Type): makeChunkFn {
+  return (items: Array<MapEntry>) => {
+    const mapLeaf = new MapLeafSequence(t, items);
+
+    let indexValue: ?(MapEntry | Ref) = null;
+    if (items.length > 0) {
+      const lastValue = items[items.length - 1];
+      if (t.elemTypes[0].ordered) {
+        indexValue = lastValue.key;
+      } else {
+        indexValue = getRefOfValueOrPrimitive(lastValue.key, t.elemTypes[0]);
+      }
+    }
+
+    const mt = new MetaTuple(mapLeaf, indexValue);
+    return [mt, mapLeaf];
+  };
+}
+
+function newMapLeafBoundaryChecker(t: Type): BoundaryChecker<MapEntry> {
+  return new BuzHashBoundaryChecker(mapWindowSize, sha1Size, mapPattern,
+    (entry: MapEntry) => getRefOfValueOrPrimitive(entry.key, t.elemTypes[0]).digest);
+}
+
+function buildMapData(t: Type, kvs: Array<any>): Array<MapEntry> {
+  // TODO: Assert k & v are of correct type
+  const entries = [];
+  for (let i = 0; i < kvs.length; i += 2) {
+    entries.push({
+      key: kvs[i],
+      value: kvs[i + 1],
+    });
+  }
+  entries.sort((v1, v2) => compare(v1.key, v2.key));
+  return entries;
+}
+
+export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(cs: ChunkStore, type: Type,
+    kvs: Array<any>): Promise<NomsMap<K, V>> {
+  return chunkSequence(null, buildMapData(type, kvs), 0, newMapLeafChunkFn(type),
+                       newOrderedMetaSequenceChunkFn(type),
+                       newMapLeafBoundaryChecker(type),
+                       newOrderedMetaSequenceBoundaryChecker)
+  .then((seq: OrderedSequence) => new NomsMap(cs, type, seq));
+}
 
 export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collection<OrderedSequence> {
   get chunks(): Array<Ref> {
@@ -71,6 +131,41 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
 
   iteratorAt(k: K): AsyncIterator<MapEntry<K, V>> {
     return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, k));
+  }
+
+  async _splice(cursor: OrderedSequenceCursor, insert: Array<MapEntry>, remove: number):
+      Promise<NomsMap<K, V>> {
+    const type = this.type;
+    const seq = await chunkSequence(cursor, insert, remove, newMapLeafChunkFn(type),
+                                    newOrderedMetaSequenceChunkFn(type),
+                                    newMapLeafBoundaryChecker(type),
+                                    newOrderedMetaSequenceBoundaryChecker);
+    invariant(seq instanceof OrderedSequence);
+    return new NomsMap(this.cs, type, seq);
+  }
+
+  async set(key: K, value: V): Promise<NomsMap<K, V>> {
+    let remove = 0;
+    const cursor = await this.sequence.newCursorAt(this.cs, key, true);
+    if (cursor.valid && equals(cursor.getCurrentKey(), key)) {
+      const entry = cursor.getCurrent();
+      if (equals(entry.value, value)) {
+        return this;
+      }
+
+      remove = 1;
+    }
+
+    return this._splice(cursor, [{key: key, value: value}], remove);
+  }
+
+  async remove(key: K): Promise<NomsMap<K, V>> {
+    const cursor = await this.sequence.newCursorAt(this.cs, key);
+    if (cursor.valid && equals(cursor.getCurrentKey(), key)) {
+      return this._splice(cursor, [], 1);
+    }
+
+    return this;
   }
 
   get size(): number {

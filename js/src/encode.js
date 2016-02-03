@@ -139,8 +139,9 @@ class JsonArrayWriter {
         this.writeInt(v); // TODO: Verify value fits in type
         break;
       case Kind.List: {
-        invariant(v instanceof NomsList);
-        const sequence = v.sequence;
+        invariant(v instanceof NomsList || v instanceof Sequence);
+        const sequence: Sequence = v instanceof NomsList ? v.sequence : v;
+
         if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
           break;
         }
@@ -153,8 +154,9 @@ class JsonArrayWriter {
         break;
       }
       case Kind.Map: {
-        invariant(v instanceof NomsMap);
-        const sequence = v.sequence;
+        invariant(v instanceof NomsMap || v instanceof Sequence);
+        const sequence: Sequence = v instanceof NomsMap ? v.sequence : v;
+
         if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
           break;
         }
@@ -189,8 +191,9 @@ class JsonArrayWriter {
         break;
       }
       case Kind.Set: {
-        invariant(v instanceof NomsSet);
-        const sequence = v.sequence;
+        invariant(v instanceof NomsSet || v instanceof Sequence);
+        const sequence: Sequence = v instanceof NomsSet ? v.sequence : v;
+
         if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
           break;
         }

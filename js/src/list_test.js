@@ -5,12 +5,94 @@ import {suite} from 'mocha';
 
 import MemoryStore from './memory_store.js';
 import test from './async_test.js';
+import {flatten} from './test_util.js';
 import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
 import {Kind} from './noms_kind.js';
-import {ListLeafSequence, NomsList} from './list.js';
-import {flatten} from './test_util.js';
+import {ListLeafSequence, newList, NomsList} from './list.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {writeValue} from './encode.js';
+
+suite('BuildList', () => {
+  function intSequence(start: number, end: number): Array<number> {
+    const nums = [];
+
+    for (let i = start; i < end; i++) {
+      nums.push(i);
+    }
+
+    return nums;
+  }
+
+  function firstNNumbers(n: number): Array<number> {
+    return intSequence(0, n);
+  }
+
+  test('set of n numbers', async () => {
+    const ms = new MemoryStore();
+    const nums = firstNNumbers(10000);
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
+    const s = await newList(ms, tr, nums);
+    assert.strictEqual(s.ref.toString(), 'sha1-0f0d90ce79d01f78b2e39c6e31281d19e5730a65');
+  });
+
+  test('insert', async () => {
+    const ms = new MemoryStore();
+    const nums = firstNNumbers(9990);
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
+    let s = await newList(ms, tr, nums);
+
+    for (let i = 9990; i < 10000; i++) {
+      s = await s.insert(i, [i]);
+    }
+
+    assert.strictEqual(s.ref.toString(), 'sha1-0f0d90ce79d01f78b2e39c6e31281d19e5730a65');
+  });
+
+  test('append', async () => {
+    const ms = new MemoryStore();
+    const nums = firstNNumbers(9990);
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
+    let s = await newList(ms, tr, nums);
+
+    for (let i = 9990; i < 10000; i++) {
+      s = await s.append([i]);
+    }
+
+    assert.strictEqual(s.ref.toString(), 'sha1-0f0d90ce79d01f78b2e39c6e31281d19e5730a65');
+  });
+
+  test('remove', async () => {
+    const ms = new MemoryStore();
+    const nums = firstNNumbers(10010);
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
+    let s = await newList(ms, tr, nums);
+
+    let count = 10;
+    while (count-- > 0) {
+      s = await s.remove(10000 + count, 10000 + count + 1);
+    }
+
+    assert.strictEqual(s.ref.toString(), 'sha1-0f0d90ce79d01f78b2e39c6e31281d19e5730a65');
+  });
+
+  test('splice', async () => {
+    const ms = new MemoryStore();
+    const nums = firstNNumbers(10000);
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
+    let s = await newList(ms, tr, nums);
+
+    const splice500At = async (idx: number) => {
+      s = await s.splice(idx, [], 500);
+      s = await s.splice(idx, intSequence(idx, idx + 500), 0);
+    };
+
+    for (let i = 0; i < 10; i++) {
+      await splice500At(i * 1000);
+    }
+
+    assert.strictEqual(s.ref.toString(), 'sha1-0f0d90ce79d01f78b2e39c6e31281d19e5730a65');
+  });
+});
 
 suite('ListLeafSequence', () => {
   test('isEmpty', () => {

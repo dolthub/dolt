@@ -11,9 +11,62 @@ import {Kind} from './noms_kind.js';
 import {flatten} from './test_util.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
-import {NomsSet, SetLeafSequence} from './set.js';
+import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {OrderedSequence} from './ordered_sequence.js';
 import {writeValue} from './encode.js';
+
+suite('BuildSet', () => {
+  function firstNNumbers(n: number): Array<number> {
+    const nums = [];
+
+    for (let i = 0; i < n; i++) {
+      nums.push(i);
+    }
+
+    return nums;
+  }
+
+  test('set of n numbers', async () => {
+    const ms = new MemoryStore();
+    const nums = firstNNumbers(10000);
+    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
+    const s = await newSet(ms, tr, nums);
+    assert.strictEqual(s.ref.toString(), 'sha1-0ea92d59ecbce4e38bcecf4faaca6b17673c8a6b');
+
+    // shuffle kvs, and test that the constructor sorts properly
+    nums.sort(() => Math.random() > .5 ? 1 : -1);
+    const s2 = await newSet(ms, tr, nums);
+    assert.strictEqual(s2.ref.toString(), 'sha1-0ea92d59ecbce4e38bcecf4faaca6b17673c8a6b');
+  });
+
+  test('insert', async () => {
+    const ms = new MemoryStore();
+    const nums = firstNNumbers(9990);
+    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
+    let s = await newSet(ms, tr, nums);
+
+    for (let i = 9990; i < 10000; i++) {
+      s = await s.insert(i);
+    }
+
+    assert.strictEqual(s.ref.toString(), 'sha1-0ea92d59ecbce4e38bcecf4faaca6b17673c8a6b');
+  });
+
+  test('remove', async () => {
+    const ms = new MemoryStore();
+    const nums = firstNNumbers(10010);
+    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
+    let s = await newSet(ms, tr, nums);
+
+    let count = 10;
+    while (count-- > 0) {
+      s = await s.remove(10000 + count);
+    }
+
+    assert.strictEqual(s.ref.toString(), 'sha1-0ea92d59ecbce4e38bcecf4faaca6b17673c8a6b');
+  });
+
+});
 
 suite('SetLeaf', () => {
   test('isEmpty', () => {

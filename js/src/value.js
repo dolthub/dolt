@@ -76,3 +76,11 @@ export function equals(v1: valueOrPrimitive, v2: valueOrPrimitive): boolean {
   invariant(typeof v2 === 'number');
   return v1 === v2;
 }
+
+export function compare(v1: valueOrPrimitive, v2: valueOrPrimitive): number {
+  if (less(v1, v2)) {
+    return -1;
+  }
+
+  return equals(v1, v2) ? 0 : 1;
+}

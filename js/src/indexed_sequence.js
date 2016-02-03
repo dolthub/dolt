@@ -34,6 +34,11 @@ export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence>
 
     return this.idx > 0 ? this.sequence.getOffset(this.idx - 1) + 1 : 0;
   }
+
+  clone(): IndexedSequenceCursor<T> {
+    return new IndexedSequenceCursor(this.cs, this.parent && this.parent.clone(),
+                                     this.sequence, this.idx);
+  }
 }
 
 export class IndexedSequenceIterator<T> extends AsyncIterator<T> {

@@ -6,7 +6,7 @@ import type {Value} from './value.js';
 import {invariant} from './assert.js';
 
 const r = new Rusha();
-const sha1Size = 20;
+export const sha1Size = 20;
 const pattern = /^(sha1-[0-9a-f]{40})$/;
 
 const sha1Prefix = 'sha1-';
