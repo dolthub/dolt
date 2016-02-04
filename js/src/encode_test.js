@@ -67,6 +67,21 @@ suite('Encode', () => {
     assert.deepEqual([Kind.List, Kind.Int32, false, ['0', '1', '2', '3']], w.array);
   });
 
+  test('write list of value', async () => {
+    const ms = new MemoryStore();
+    const w = new JsonArrayWriter(ms);
+
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Value));
+    const l = new NomsList(ms, tr, new ListLeafSequence(tr, ['0', '1', '2', '3']));
+    w.writeTopLevel(tr, l);
+    assert.deepEqual([Kind.List, Kind.Value, false, [
+      Kind.String, '0',
+      Kind.String, '1',
+      Kind.String, '2',
+      Kind.String, '3',
+    ]], w.array);
+  });
+
   test('write list of list', async () => {
     const ms = new MemoryStore();
     const w = new JsonArrayWriter(ms);

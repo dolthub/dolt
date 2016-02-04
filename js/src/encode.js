@@ -6,7 +6,7 @@ import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {encode as encodeBase64} from './base64.js';
-import {EnumDesc, makePrimitiveType, StructDesc, Type} from './type.js';
+import {boolType, EnumDesc, makePrimitiveType, stringType, StructDesc, Type} from './type.js';
 import {indexTypeForMetaSequence} from './meta_sequence.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
@@ -222,6 +222,12 @@ class JsonArrayWriter {
         this.writeUnresolvedKindValue(v, t, pkg);
         break;
       }
+      case Kind.Value: {
+        const valueType = getTypeOfValue(v);
+        this.writeTypeAsTag(valueType);
+        this.writeValue(v, valueType, pkg);
+        break;
+      }
       default:
         throw new Error(`Not implemented: ${t.kind} ${v}`);
     }
@@ -343,6 +349,21 @@ class JsonArrayWriter {
 
   writeEnum(v: number) {
     this.writeInt(v);
+  }
+}
+
+function getTypeOfValue(v: any): Type {
+  switch (typeof v) {
+    case 'object':
+      return v.type;
+    case 'string':
+      return stringType;
+    case 'boolean':
+      return boolType;
+    case 'number':
+      throw new Error('Encoding untagged numbers is not supported');
+    default:
+      throw new Error('Unknown type');
   }
 }
 
