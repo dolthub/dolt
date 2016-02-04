@@ -7,10 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
-	"math/rand"
-	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -18,7 +15,6 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2"
-	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2/google"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
@@ -29,12 +25,10 @@ const maxProcs = 25
 
 var (
 	albumIDFlag       = flag.String("album-id", "", "Import a specific album, identified by id")
-	apiKeyFlag        = flag.String("api-key", "", "API keys for Google can be created at https://console.developers.google.com")
-	apiKeySecretFlag  = flag.String("api-key-secret", "", "API keys for Google can be created at https://console.developers.google.com")
 	authHTTPClient    *http.Client
 	cachingHTTPClient *http.Client
 	ds                *dataset.Dataset
-	forceAuthFlag     = flag.Bool("force-auth", false, "Force re-authentication")
+	tokenFlag         = flag.String("token", "", "OAuth2 bearer token to authenticate with (required)")
 	quietFlag         = flag.Bool("quiet", false, "Don't print progress information")
 	smallFlag         = flag.Bool("small", false, "Fetch lower resolution images from picasa")
 	start             time.Time
@@ -48,15 +42,15 @@ func main() {
 	flag.Parse()
 	cachingHTTPClient = util.CachingHttpClient()
 
-	if *apiKeyFlag == "" || *apiKeySecretFlag == "" || cachingHTTPClient == nil {
+	if *tokenFlag == "" || cachingHTTPClient == nil {
 		flag.Usage()
-		return
+		os.Exit(1)
 	}
 
 	ds = dsFlags.CreateDataset()
 	if ds == nil {
 		flag.Usage()
-		return
+		os.Exit(1)
 	}
 	defer ds.Store().Close()
 
@@ -68,10 +62,9 @@ func main() {
 		}
 	}
 
-	var refreshToken string
-	authHTTPClient, refreshToken = doAuthentication(currentUser)
+	token := oauth2.Token{AccessToken: *tokenFlag}
+	authHTTPClient = oauth2.NewClient(oauth2.NoContext, oauth2.StaticTokenSource(&token))
 
-	// set start after authentication so we don't count that time
 	start = time.Now()
 
 	var user *User
@@ -88,7 +81,6 @@ func main() {
 
 	printStats(user)
 
-	*user = user.SetRefreshToken(refreshToken)
 	userRef := types.WriteValue(*user, ds.Store())
 	fmt.Printf("userRef: %s\n", userRef)
 	_, err := ds.Commit(NewRefOfUser(userRef))
@@ -96,24 +88,15 @@ func main() {
 }
 
 func picasaUsage() {
-	credentialSteps := `How to create Google API credentials:
-  1) Go to http://console.developers.google.com/start
-  2) From the “Select a project” pull down menu, choose “Create a project...”
-  3) Fill in the “Project name” field (e.g. Picasa Importer), agree to the terms
-	   and conditions (if any), and hit “Create”.
-	4) Wait for the “Dashboard” page to load.
-	5) Click “Enable and manage APIs” in the blue “Use Google APIs” card.
-	6) In the sidebar menu, click “Credentials”.
-	7) Click “New credentials” and select “OAuth client ID”.
-	8) Click “Configure consent screen” and fill in the “Product name” field. All
-		 other fields on this page are optional. Now click “Save”.
-  9) Select “Other” from the list of “Application Type”, fill in the “Name” field
-     (e.g. Picasa Importer), and click “Create”.
-     Your credentials will be displayed in a popup. Copy them to a safe place.`
-
+	essay := `You must provide -token, an OAuth2 bearer token. It will look like ab12.adsDshDsjkkdljkddhASDhjksdSAs-asjASDhADSs-asdhjdAs-SDSADhlDSAhlsjsAs. To get one:
+  1) Go to https://developers.google.com/oauthplayground.
+  2) Enter https://picasaweb.google.com/data in the "Input your own scopes" box, click "Authorize APIs".
+  3) Click "Allow".
+  4) Click "Exchange authorization code for tokens".
+  5) Copy the "Access token" field (e.g. ab12.adsDshDsjkkdljkddhASDhjksdSAs-asjASDhADSs-asdhjdAs-SDSADhlDSAhlsjsAs).`
 	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 	flag.PrintDefaults()
-	fmt.Fprintf(os.Stderr, "\n%s\n\n", credentialSteps)
+	fmt.Fprintf(os.Stderr, "\n%s\n\n", essay)
 }
 
 func getSingleAlbum(albumID string) *User {
@@ -254,84 +237,6 @@ func mergeInCurrentAlbums(curUser *User, newUser *User) *User {
 	return newUser
 }
 
-func doAuthentication(currentUser *User) (c *http.Client, rt string) {
-	if !*forceAuthFlag && currentUser != nil {
-		rt = currentUser.RefreshToken()
-		c = tryRefreshToken(rt)
-	}
-	if c == nil {
-		c, rt = googleOAuth()
-	}
-	return c, rt
-}
-
-func tryRefreshToken(rt string) *http.Client {
-	var c *http.Client
-
-	if rt != "" {
-		t := oauth2.Token{}
-		conf := baseConfig("")
-		ct := "application/x-www-form-urlencoded"
-		body := fmt.Sprintf("client_id=%s&client_secret=%s&grant_type=refresh_token&refresh_token=%s", *apiKeyFlag, *apiKeySecretFlag, rt)
-		r, err := cachingHTTPClient.Post(google.Endpoint.TokenURL, ct, strings.NewReader(body))
-		d.Chk.NoError(err)
-		if r.StatusCode == 200 {
-			buf, err := ioutil.ReadAll(r.Body)
-			d.Chk.NoError(err)
-			json.Unmarshal(buf, &t)
-			c = conf.Client(oauth2.NoContext, &t)
-		}
-	}
-	return c
-}
-
-func googleOAuth() (*http.Client, string) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	d.Chk.NoError(err)
-
-	redirectURL := "http://" + l.Addr().String()
-	conf := baseConfig(redirectURL)
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	state := fmt.Sprintf("%v", r.Uint32())
-	u := conf.AuthCodeURL(state)
-
-	// Redirect user to Google's consent page to ask for permission
-	// for the scopes specified above.
-	fmt.Printf("Visit the following URL to authorize access to your Picasa data:\n%v\n", u)
-	code, returnedState := awaitOAuthResponse(l)
-	d.Chk.Equal(state, returnedState, "Oauth state is not correct")
-
-	// Handle the exchange code to initiate a transport.
-	t, err := conf.Exchange(oauth2.NoContext, code)
-	d.Chk.NoError(err)
-
-	client := conf.Client(oauth2.NoContext, t)
-	return client, t.RefreshToken
-}
-
-func awaitOAuthResponse(l net.Listener) (string, string) {
-	var code, state string
-
-	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("code") != "" && r.URL.Query().Get("state") != "" {
-			code = r.URL.Query().Get("code")
-			state = r.URL.Query().Get("state")
-			w.Header().Add("content-type", "text/plain")
-			fmt.Fprintf(w, "Authorized")
-			l.Close()
-		} else if err := r.URL.Query().Get("error"); err == "access_denied" {
-			fmt.Fprintln(os.Stderr, "Request for authorization was denied.")
-			os.Exit(0)
-		} else if err := r.URL.Query().Get("error"); err != "" {
-			l.Close()
-			d.Chk.Fail(err)
-		}
-	})}
-	srv.Serve(l)
-
-	return code, state
-}
-
 func callPicasaAPI(client *http.Client, path string, response interface{}) {
 	rc := callPicasaURL(client, "https://picasaweb.google.com/data/feed/api/"+path)
 	defer rc.Close()
@@ -362,16 +267,6 @@ func callPicasaURL(client *http.Client, url string) io.ReadCloser {
 	}
 
 	return resp.Body
-}
-
-func baseConfig(redirectURL string) *oauth2.Config {
-	return &oauth2.Config{
-		ClientID:     *apiKeyFlag,
-		ClientSecret: *apiKeySecretFlag,
-		RedirectURL:  redirectURL,
-		Scopes:       []string{"https://picasaweb.google.com/data"},
-		Endpoint:     google.Endpoint,
-	}
 }
 
 // General utility functions
