@@ -1,17 +1,18 @@
 // @flow
 
 import {
+  DataStore,
   invariant,
   Kind,
   makeCompoundType,
   makePrimitiveType,
   makeType,
+  newSet,
   NomsMap,
   NomsSet,
   readValue,
   Ref,
   registerPackage,
-  SetLeafSequence,
   Struct,
 } from 'noms';
 import type {ChunkStore, Package} from 'noms';
@@ -42,11 +43,10 @@ type DataEntry = {values: Array<DataPoint>, key: string, color?: string};
 export type DataArray = Array<DataEntry>;
 
 export default class DataManager {
-  _store: ChunkStore;
-  _datasetId: string;
+  _datastore: DataStore;
   _keyClass: any;
   _quarterClass: any;
-  _datasetP: ?Promise<NomsMap<Ref, Ref>>;
+  _datasetP: ?Promise<NomsMap<Ref, NomsSet<Ref>>>;
   _packageP: ?Promise<Package>;
 
   _categorySetP: ?Promise<NomsSet<Ref>>;
@@ -59,12 +59,15 @@ export default class DataManager {
   _time: ?TimeOption;
   _category: string;
 
-  constructor(store: ChunkStore, datasetId: string) {
-    this._datasetId = datasetId;
-    this._store = store;
+  constructor(datastore: DataStore, datasetId: string) {
+    this._datastore = datastore;
+    this._datasetP = this._datastore.head(datasetId).then(commit => {
+      invariant(commit);
+      return commit.get('value');
+    });
+
     this._keyClass = null;
     this._quarterClass = null;
-    this._datasetP = null;
     this._packageP = null;
 
     this._timeSetP = null;
@@ -78,20 +81,14 @@ export default class DataManager {
     this._category = '';
   }
 
-  async _getDataset(): Promise<NomsMap<Ref, Ref>> {
-    if (this._datasetP) {
-      return this._datasetP;
-    }
-    return this._datasetP = getDataset(this._datasetId, this._store);
-  }
-
   async _getPackage(): Promise<Package> {
     if (this._packageP) {
       return this._packageP;
     }
 
-    const ds = await this._getDataset();
-    this._packageP = getKeyPackage(ds, this._store);
+    const ds = await this._datasetP;
+    invariant(ds);
+    this._packageP = getKeyPackage(ds, this._datastore);
     return this._packageP;
   }
 
@@ -146,7 +143,7 @@ export default class DataManager {
         await Promise.all([this._seedSetP, this._seriesASetP, this._seriesBSetP,
             this._timeSetP, this._categorySetP]);
 
-    const store = this._store;
+    const store = this._datastore;
     const getAmountRaised = (r: Ref): Promise<number> =>
         readValue(r, store).then(round => round.get('RaisedAmountUsd'));
 
@@ -190,14 +187,13 @@ export default class DataManager {
     const map = await this._datasetP;
     const set = await map.get(r);
     if (set === undefined) {
-      // TODO: Cleanup the NomsSet api (it shouldn't be this hard to create an emptySet)
-      return new NomsSet(this._store, setType, new SetLeafSequence(setType, []));
-    } else {
-      // Update the type to something that is correct.
-      // An alternative would be to hardcode the ref/ordinal.
-      setType = set.type;
+      return newSet(setType, []);
     }
 
+    invariant(set);
+    // Update the type to something that is correct.
+    // An alternative would be to hardcode the ref/ordinal.
+    setType = set.type;
     return set;
   }
 }
@@ -208,7 +204,7 @@ let setType = makeCompoundType(Kind.Set, makeCompoundType(Kind.Ref, makePrimitiv
 /**
  * Loads the first key in the index and gets the package from the type.
  */
-async function getKeyPackage(index: NomsMap<Ref, Ref>, store: ChunkStore):
+async function getKeyPackage(index: NomsMap<Ref, NomsSet<Ref>>, store: ChunkStore):
     Promise<Package> {
   const kv = await index.first();
   invariant(kv);
@@ -232,17 +228,6 @@ function getStructClass(pkg, name) {
     }
   };
 }
-
-async function getDataset(id: string, httpStore: ChunkStore): Promise<NomsMap<Ref, Ref>> {
-  const rootRef = await httpStore.getRoot();
-  const datasets: Map<string, Ref> = await readValue(rootRef, httpStore);
-  const commitRef = await datasets.get(id);
-  invariant(commitRef);
-  const commit: Struct = await readValue(commitRef, httpStore);
-  invariant(commit);
-  return commit.get('value');
-}
-
 
 function percentiles(s: Array<number>): Array<{x: number, y: number}> {
   const arr: Array<number> = [];

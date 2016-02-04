@@ -25,6 +25,8 @@ type State = {
 };
 
 export default class Node extends React.Component<void, Props, State> {
+  state: State;
+
   constructor(props: Props) {
     super(props);
 

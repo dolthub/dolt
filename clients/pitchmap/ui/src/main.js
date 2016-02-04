@@ -3,9 +3,9 @@
 import HeatMap from './heat_map.js';
 import React from 'react';
 import ReactDOM from 'react-dom';
-import {HttpStore, invariant, NomsMap, readValue, Ref, Struct} from 'noms';
+import {DataStore, HttpStore, invariant, NomsMap, Ref} from 'noms';
 
-let httpStore: HttpStore;
+let datastore: DataStore;
 
 const nomsServer: ?string = process.env.NOMS_SERVER;
 if (!nomsServer) {
@@ -17,13 +17,11 @@ if (!datasetId) {
 }
 
 window.addEventListener('load', async () => {
-  httpStore = new HttpStore(nomsServer);
-  const rootRef = await httpStore.getRoot();
-  const datasets: NomsMap<string, Ref> = await readValue(rootRef, httpStore);
-  const commitRef = await datasets.get(datasetId);
-  invariant(commitRef);
-  const commit:Struct = await readValue(commitRef, httpStore);
-  const pitchersMap = commit.get('value');
+  datastore = new DataStore(new HttpStore(nomsServer));
+  const head = await datastore.head(datasetId);
+  invariant(head);
+  const pitchersMap: NomsMap<string, Ref> = head.get('value');
+  invariant(pitchersMap);
   const pitchers = [];
   await pitchersMap.forEach((ref, pitcher) => {
     pitchers.push(pitcher);
@@ -43,6 +41,8 @@ type State = {
 };
 
 class PitcherList extends React.Component<void, Props, State> {
+  state: State;
+
   constructor(props) {
     super(props);
 
@@ -65,7 +65,7 @@ class PitcherList extends React.Component<void, Props, State> {
       <select onChange={onChangePitcher} defaultValue={currentPitcher}>{
         this.props.pitchers.map(pitcher => <option key={pitcher} value={pitcher}>{pitcher}</option>)
       }</select>
-      <HeatMap key={currentPitcher} pitchListRefP={pitchListRefP} httpStore={httpStore}/>
+      <HeatMap key={currentPitcher} pitchListRefP={pitchListRefP} chunkStore={datastore}/>
     </div>;
   }
 }

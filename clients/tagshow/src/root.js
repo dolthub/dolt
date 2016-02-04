@@ -5,13 +5,13 @@ import eq from './eq.js';
 import React from 'react';
 import SlideShow from './slideshow.js';
 import TagChooser from './tagchooser.js';
-import type {ChunkStore} from 'noms';
-import {invariant, NomsMap, NomsSet, readValue, Ref, Struct} from 'noms';
+import type {DataStore} from 'noms';
+import {invariant, NomsMap, NomsSet, Ref} from 'noms';
 
 type QueryStringObject = {[key: string]: string};
 
 type Props = {
-  store: ChunkStore,
+  store: DataStore,
   qs: QueryStringObject,
   updateQuery: (qs: QueryStringObject) => void,
 };
@@ -23,6 +23,8 @@ type State = {
 };
 
 export default class Root extends React.Component<void, Props, State> {
+  state: State;
+
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -39,11 +41,8 @@ export default class Root extends React.Component<void, Props, State> {
 
     if (props.qs.ds) {
       const {store} = props;
-      const rootRef = await props.store.getRoot();
-      const datasets: NomsMap<string, Ref> = await readValue(rootRef, props.store);
-      const commitRef = await datasets.get(props.qs.ds);
-      invariant(commitRef);
-      const commit: Struct = await readValue(commitRef, store);
+      const commit = await store.head(props.qs.ds);
+      invariant(commit);
       const v = commit.get('value');
       if (v instanceof NomsMap) {
         const seenRefs: Set<string> = new Set();

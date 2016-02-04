@@ -1,6 +1,7 @@
 // @flow
 
 export {AsyncIterator} from './async_iterator.js';
+export {DataStore} from './datastore.js';
 export {decodeNomsValue} from './decode.js';
 export {default as Chunk} from './chunk.js';
 export {default as HttpStore} from './http_store.js';
@@ -10,8 +11,8 @@ export {default as Struct} from './struct.js';
 export {encodeNomsValue, writeValue} from './encode.js';
 export {invariant, notNull} from './assert.js';
 export {isPrimitiveKind, Kind} from './noms_kind.js';
-export {newList, ListLeafSequence, NomsList} from './list.js';
 export {lookupPackage, Package, readPackage, registerPackage} from './package.js';
+export {newList, ListLeafSequence, NomsList} from './list.js';
 export {newMap, NomsMap, MapLeafSequence} from './map.js';
 export {newSet, NomsSet, SetLeafSequence} from './set.js';
 export {OrderedMetaSequence, IndexedMetaSequence} from './meta_sequence.js';

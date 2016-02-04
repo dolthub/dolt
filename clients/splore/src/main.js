@@ -167,7 +167,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
   render();
 }
 
-function handleNodeClick(e: Event, id: string) {
+function handleNodeClick(e: MouseEvent, id: string) {
   if (e.button === 0 && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
     e.preventDefault();
   }
@@ -199,6 +199,8 @@ type PromptState = {
 }
 
 class Prompt extends React.Component<void, {}, PromptState> {
+  state: PromptState;
+
   render() {
     const fontStyle = {
       fontFamily: 'Menlo',
@@ -214,7 +216,7 @@ class Prompt extends React.Component<void, {}, PromptState> {
               style={Object.assign(fontStyle, {}, {width: '50ex'})}
               defaultValue='http://api.noms.io/-/ds/[user]'/>
           </div>
-        </label> 
+        </label>
         <div><button onClick={() => setServer(this.refs.input.value)}>OK</button></div>
       </div>
     </div>;

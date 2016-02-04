@@ -24,7 +24,7 @@
     "chai": "^3.2.0",
     "eslint": "^1.9.0",
     "eslint-plugin-react": "^3.8.0",
-    "flow-bin": "^0.19.1",
+    "flow-bin": "^0.21.0",
     "http-server": "^0.8.5",
     "mocha": "^2.3.0"
   },

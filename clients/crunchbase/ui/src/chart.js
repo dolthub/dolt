@@ -17,6 +17,15 @@ type State = {
 };
 
 export default class Chart extends React.Component<void, Props, State> {
+  state: State;
+
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      chart: null,
+    };
+  }
+
   componentDidMount() {
     nv.addGraph(() => {
       const chart = nv.models.lineChart();

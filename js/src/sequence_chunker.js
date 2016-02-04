@@ -142,7 +142,6 @@ export class SequenceChunker<S, T, U:Sequence, V:Sequence> {
     }
 
     if (this.isRoot()) {
-      invariant(this._current.length > 0);
       return this._makeChunk(this._current)[1];
     }
 
