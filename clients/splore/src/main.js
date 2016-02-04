@@ -7,24 +7,37 @@ import {HttpStore, invariant, IndexedMetaSequence, ListLeafSequence, MapLeafSequ
     OrderedMetaSequence, NomsList, NomsMap, NomsSet, readValue, Ref, SetLeafSequence, Struct,}
     from 'noms';
 import {layout, NodeGraph, TreeNode} from './buchheim.js';
-import nomsServer from './noms_server.js';
 
 const data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
 let httpStore: HttpStore;
 let renderNode: ?HTMLElement;
 
-window.addEventListener('load', () => {
+const hash = {};
+
+window.onload = load;
+window.onhashchange = load;
+window.onresize = render;
+
+function load() {
   renderNode = document.getElementById('splore');
-  httpStore = new HttpStore(nomsServer);
+  location.hash.substr(1).split('&').forEach(pair => {
+    const [k, v] = pair.split('=');
+    hash[k] = v;
+  });
+
+  if (!hash.server) {
+    renderPrompt();
+    return;
+  }
+
+  httpStore = new HttpStore(hash.server);
 
   httpStore.getRoot().then(ref => {
     rootRef = ref;
     handleChunkLoad(ref, ref);
   });
-});
-
-window.onresize = render;
+}
 
 function formatKeyString(v: any): string {
   if (v instanceof Ref) {
@@ -175,6 +188,40 @@ function handleNodeClick(e: Event, id: string) {
       });
     }
   }
+}
+
+function setServer(url: string) {
+  location.hash = `server=${url}`;
+}
+
+type PromptState = {
+  server: string,
+}
+
+class Prompt extends React.Component<void, {}, PromptState> {
+  render() {
+    const fontStyle = {
+      fontFamily: 'Menlo',
+      fontSize: 14,
+      width: '',
+    };
+    return <div style={{display: 'flex', height: '100%', alignItems: 'center',
+      justifyContent: 'center'}}>
+      <div style={fontStyle}>
+        <label>Can haz server?
+          <div style={{margin:'0.5em 0'}}>
+            <input ref='input' autoFocus={true} style={Object.assign(fontStyle, {}, {width: '50ex'})}
+              type='text' defaultValue='http://api.noms.io/-/ds/[user]'/>
+          </div>
+        </label>
+        <div><button onClick={() => setServer(this.refs.input.value)}>OK</button></div>
+      </div>
+    </div>;
+  }
+}
+
+function renderPrompt() {
+  ReactDOM.render(<Prompt/>, renderNode);
 }
 
 function render() {
