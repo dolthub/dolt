@@ -15,16 +15,19 @@ before_script:
 - popd
 - pushd clients/splore
 - npm prune
+- npm rm noms
 - ./build.py
 - npm test
 - popd
 - pushd clients/pitchmap/ui
 - npm prune
+- npm rm noms
 - ./build.py
 - npm test
 - popd
 - pushd clients/crunchbase/ui
 - npm prune
+- npm rm noms
 - ./build.py
 - npm test
 - popd
