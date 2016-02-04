@@ -41,10 +41,10 @@ func (s *seekableReader) Read(b []byte) (n int, err error) {
 		return
 	}
 	d.Chk.Equal(s.cached, s.pos, "Position is somehow _after_ the cached data!")
-	if n, err = io.ReadFull(s.r, b); err != nil {
+	if n, err = s.r.Read(b); err != nil {
 		return
 	}
-	if _, werr := s.cache.Write(b); werr != nil {
+	if _, werr := s.cache.Write(b[:n]); werr != nil {
 		return 0, werr
 	}
 	s.pos += int64(n)
