@@ -48,6 +48,12 @@ func (suite *SeekableReaderTestSuite) TestRead() {
 	suite.readAndExpect(suite.content)
 }
 
+func (suite *SeekableReaderTestSuite) TestReadAll() {
+	b, err := ioutil.ReadAll(suite.contentRSC)
+	suite.NoError(err)
+	suite.Equal(string(suite.content), string(b))
+}
+
 func (suite *SeekableReaderTestSuite) TestSeekFromStart() {
 	offset := suite.contentLen - 2
 	ret, err := suite.contentRSC.Seek(offset, 0)
