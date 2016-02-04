@@ -1,6 +1,6 @@
 // @flow
 
-import {HttpStore} from 'noms';
+import {DataStore, HttpStore} from 'noms';
 import Chart from './chart.js';
 import DataManager from './data.js';
 import List from './list.js';
@@ -38,6 +38,7 @@ if (!datasetId) {
 }
 
 class Main extends React.Component<void, Props, State> {
+  state: State;
   _dataManager: DataManager;
 
   constructor(props: Props) {
@@ -46,7 +47,8 @@ class Main extends React.Component<void, Props, State> {
     const selectedTimeItem = props.timeItems[0];
     const selectedCategoryItem = props.categories[0];
 
-    this._dataManager = new DataManager(new HttpStore(nomsServer), datasetId);
+    const datastore = new DataStore(new HttpStore(nomsServer));
+    this._dataManager = new DataManager(datastore, datasetId);
 
     this.state = {
       selectedSeries: new Set(this.props.series),

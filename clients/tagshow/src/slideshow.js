@@ -27,6 +27,8 @@ type State = {
 };
 
 export default class SlideShow extends React.Component<void, Props, State> {
+  state: State;
+
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -70,6 +72,8 @@ type ItemState = {
 };
 
 class Item extends React.Component<void, ItemProps, ItemState> {
+  state: ItemState;
+
   constructor(props: ItemProps) {
     super(props);
     this.state = {

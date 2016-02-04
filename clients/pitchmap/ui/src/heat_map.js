@@ -1,7 +1,8 @@
 // @flow
 
 import React from 'react';
-import {HttpStore, NomsList, notNull, readValue, Ref} from 'noms';
+import {NomsList, notNull, readValue, Ref} from 'noms';
+import type {ChunkStore} from 'noms';
 
 const IMAGE_WIDTH_PX = 286;
 const IMAGE_HEIGHT_PX = 324;
@@ -18,7 +19,7 @@ function feetToPixels(f: number): number {
 
 type Props = {
   pitchListRefP: Promise<?Ref>,
-  httpStore: HttpStore
+  chunkStore: ChunkStore
 };
 
 type Point = {
@@ -32,6 +33,8 @@ type State = {
 };
 
 export default class HeatMap extends React.Component<void, Props, State> {
+  state: State;
+
   constructor(props: Props) {
     super(props);
 
@@ -47,7 +50,7 @@ export default class HeatMap extends React.Component<void, Props, State> {
     }
 
     const pitchListRef = notNull(await this.props.pitchListRefP);
-    const pitchList = await readValue(pitchListRef, this.props.httpStore);
+    const pitchList = await readValue(pitchListRef, this.props.chunkStore);
 
     if (pitchList instanceof NomsList) {
       const pointList = [];

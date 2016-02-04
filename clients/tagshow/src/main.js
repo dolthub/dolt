@@ -1,11 +1,10 @@
 // @flow
 
-import {HttpStore} from 'noms';
+import {DataStore, HttpStore} from 'noms';
 import queryString from 'query-string';
 import React from 'react'; // eslint-disable-line no-unused-vars
 import ReactDOM from 'react-dom';
 import Root from './root.js';
-import type {ChunkStore} from 'noms';
 
 window.onload = window.onhashchange = render;
 
@@ -21,7 +20,7 @@ function updateQuery(qs: {[key: string]: string}) {
 function render() {
   const qs = Object.freeze(queryString.parse(location.hash));
   const target = document.getElementById('root');
-  const store: ChunkStore = new HttpStore(nomsServer);
+  const store = new DataStore(new HttpStore(nomsServer));
 
   ReactDOM.render(
       <Root qs={qs} store={store} updateQuery={updateQuery}/>,

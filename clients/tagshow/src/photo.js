@@ -22,6 +22,7 @@ type State = {
 };
 
 export default class Photo extends React.Component<DefaultProps, Props, State> {
+  state: State;
   static defaultProps: DefaultProps;
 
   constructor(props: Props) {
