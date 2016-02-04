@@ -210,10 +210,11 @@ class Prompt extends React.Component<void, {}, PromptState> {
       <div style={fontStyle}>
         <label>Can haz server?
           <div style={{margin:'0.5em 0'}}>
-            <input ref='input' autoFocus={true} style={Object.assign(fontStyle, {}, {width: '50ex'})}
-              type='text' defaultValue='http://api.noms.io/-/ds/[user]'/>
+            <input type='text' ref='input' autoFocus={true}
+              style={Object.assign(fontStyle, {}, {width: '50ex'})}
+              defaultValue='http://api.noms.io/-/ds/[user]'/>
           </div>
-        </label>
+        </label> 
         <div><button onClick={() => setServer(this.refs.input.value)}>OK</button></div>
       </div>
     </div>;
