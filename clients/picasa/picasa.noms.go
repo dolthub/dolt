@@ -20,9 +20,6 @@ func init() {
 				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Name", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Albums", types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeType(ref.Ref{}, 1)), false},
-				types.Field{"RefreshToken", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"OAuthToken", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"OAuthSecret", types.MakePrimitiveType(types.StringKind), false},
 			},
 			types.Choices{},
 		),
@@ -43,24 +40,18 @@ func init() {
 // User
 
 type User struct {
-	_Id           string
-	_Name         string
-	_Albums       MapOfStringToAlbum
-	_RefreshToken string
-	_OAuthToken   string
-	_OAuthSecret  string
+	_Id     string
+	_Name   string
+	_Albums MapOfStringToAlbum
 
 	ref *ref.Ref
 }
 
 func NewUser() User {
 	return User{
-		_Id:           "",
-		_Name:         "",
-		_Albums:       NewMapOfStringToAlbum(),
-		_RefreshToken: "",
-		_OAuthToken:   "",
-		_OAuthSecret:  "",
+		_Id:     "",
+		_Name:   "",
+		_Albums: NewMapOfStringToAlbum(),
 
 		ref: &ref.Ref{},
 	}
@@ -86,12 +77,6 @@ func builderForUser(values []types.Value) types.Value {
 	i++
 	s._Albums = values[i].(MapOfStringToAlbum)
 	i++
-	s._RefreshToken = values[i].(types.String).String()
-	i++
-	s._OAuthToken = values[i].(types.String).String()
-	i++
-	s._OAuthSecret = values[i].(types.String).String()
-	i++
 	return s
 }
 
@@ -101,9 +86,6 @@ func readerForUser(v types.Value) []types.Value {
 	values = append(values, types.NewString(s._Id))
 	values = append(values, types.NewString(s._Name))
 	values = append(values, s._Albums)
-	values = append(values, types.NewString(s._RefreshToken))
-	values = append(values, types.NewString(s._OAuthToken))
-	values = append(values, types.NewString(s._OAuthSecret))
 	return values
 }
 
@@ -125,9 +107,6 @@ func (s User) ChildValues() (ret []types.Value) {
 	ret = append(ret, types.NewString(s._Id))
 	ret = append(ret, types.NewString(s._Name))
 	ret = append(ret, s._Albums)
-	ret = append(ret, types.NewString(s._RefreshToken))
-	ret = append(ret, types.NewString(s._OAuthToken))
-	ret = append(ret, types.NewString(s._OAuthSecret))
 	return
 }
 
@@ -157,36 +136,6 @@ func (s User) Albums() MapOfStringToAlbum {
 
 func (s User) SetAlbums(val MapOfStringToAlbum) User {
 	s._Albums = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
-func (s User) RefreshToken() string {
-	return s._RefreshToken
-}
-
-func (s User) SetRefreshToken(val string) User {
-	s._RefreshToken = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
-func (s User) OAuthToken() string {
-	return s._OAuthToken
-}
-
-func (s User) SetOAuthToken(val string) User {
-	s._OAuthToken = val
-	s.ref = &ref.Ref{}
-	return s
-}
-
-func (s User) OAuthSecret() string {
-	return s._OAuthSecret
-}
-
-func (s User) SetOAuthSecret(val string) User {
-	s._OAuthSecret = val
 	s.ref = &ref.Ref{}
 	return s
 }

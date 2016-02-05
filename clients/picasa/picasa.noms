@@ -4,9 +4,6 @@ struct User {
   Id: String
   Name: String
   Albums: Map<String, Album>
-  RefreshToken: String
-  OAuthToken: String
-  OAuthSecret: String
 }
 
 struct Album {
