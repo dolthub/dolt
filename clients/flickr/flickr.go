@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -23,13 +24,15 @@ import (
 )
 
 var (
-	apiKeyFlag       = flag.String("api-key", "", "API keys for flickr can be created at https://www.flickr.com/services/apps/create/apply")
-	apiKeySecretFlag = flag.String("api-key-secret", "", "API keys for flickr can be created at https://www.flickr.com/services/apps/create/apply")
 	albumIdFlag      = flag.String("album-id", "", "Import a specific album, identified by id")
+	clientIdFlag     = flag.String("client-id", "", "API keys for flickr can be created at https://www.flickr.com/services/apps/create/apply")
+	clientSecretFlag = flag.String("client-secret", "", "API keys for flickr can be created at https://www.flickr.com/services/apps/create/apply")
 	ds               *dataset.Dataset
-	user             User
-	oauthClient      oauth.Client
 	httpClient       *http.Client
+	oauthClient      oauth.Client
+	tokenFlag        = flag.String("token", "", "OAuth1 token (if ommitted, flickr will attempt web auth)")
+	tokenSecretFlag  = flag.String("token-secret", "", "OAuth1 token secret (if ommitted, flickr will attempt web auth)")
+	user             User
 )
 
 type flickrAPI interface {
@@ -41,24 +44,15 @@ type flickrCall struct {
 }
 
 func main() {
+	flag.Usage = flickrUsage
 	dsFlags := dataset.NewFlags()
 	flag.Parse()
 
 	httpClient = util.CachingHttpClient()
 
-	if *apiKeyFlag == "" || *apiKeySecretFlag == "" || httpClient == nil {
+	if *clientIdFlag == "" || *clientSecretFlag == "" || httpClient == nil {
 		flag.Usage()
 		return
-	}
-
-	oauthClient = oauth.Client{
-		TemporaryCredentialRequestURI: "https://www.flickr.com/services/oauth/request_token",
-		ResourceOwnerAuthorizationURI: "https://www.flickr.com/services/oauth/authorize",
-		TokenRequestURI:               "https://www.flickr.com/services/oauth/access_token",
-		Credentials: oauth.Credentials{
-			Token:  *apiKeyFlag,
-			Secret: *apiKeySecretFlag,
-		},
 	}
 
 	ds = dsFlags.CreateDataset()
@@ -68,7 +62,26 @@ func main() {
 	}
 	defer ds.Store().Close()
 
-	api := liveFlickrAPI{}
+	oauthClient = oauth.Client{
+		TemporaryCredentialRequestURI: "https://www.flickr.com/services/oauth/request_token",
+		ResourceOwnerAuthorizationURI: "https://www.flickr.com/services/oauth/authorize",
+		TokenRequestURI:               "https://www.flickr.com/services/oauth/access_token",
+		Credentials: oauth.Credentials{
+			Token:  *clientIdFlag,
+			Secret: *clientSecretFlag,
+		},
+	}
+
+	var tokenCred *oauth.Credentials
+	if *tokenFlag != "" && *tokenSecretFlag != "" {
+		tokenCred = &oauth.Credentials{*tokenFlag, *tokenSecretFlag}
+	} else {
+		tokenCred = requestTokenCredentials()
+	}
+
+	api := liveFlickrAPI{tokenCred}
+	d.Chk.True(checkAuth(api), "checkAuth failed after oauth succeeded")
+
 	getUser(api)
 	if *albumIdFlag != "" {
 		album := getAlbum(api, *albumIdFlag)
@@ -77,6 +90,18 @@ func main() {
 		user = user.SetAlbums(getAlbums(api))
 	}
 	commitUser()
+}
+
+func flickrUsage() {
+	essay := `The Flickr importer needs 4 items for authentication: a client ID + secret, and a token + secret:
+  * For the client ID + secret, you need to apply for an API key through https://www.flickr.com/services/apps/create/apply. Specify these as -client-id and -client-secret.
+  * For the token + secret, you have 2 options:
+    (a) specify them as -token and -secret, or
+    (b) let the Flickr importer request them for you (don't specify anything).
+    The latter will take you through web auth, which on the last page will show the token and secret to use for -token and -secret from now on (unless they get revoked).`
+	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+	flag.PrintDefaults()
+	fmt.Fprintf(os.Stderr, "\n%s\n\n", essay)
 }
 
 func getUser(api flickrAPI) {
@@ -90,7 +115,6 @@ func getUser(api flickrAPI) {
 	}
 
 	user = NewUser()
-	authUser(api)
 }
 
 func checkAuth(api flickrAPI) bool {
@@ -113,7 +137,7 @@ func checkAuth(api flickrAPI) bool {
 	return true
 }
 
-func authUser(api flickrAPI) {
+func requestTokenCredentials() *oauth.Credentials {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	d.Chk.NoError(err)
 
@@ -126,12 +150,9 @@ func authUser(api flickrAPI) {
 
 	authUrl := oauthClient.AuthorizationURL(tempCred, nil)
 	fmt.Printf("Visit the following URL to authorize access to your Flickr data: %v\n", authUrl)
-	err = awaitOAuthResponse(l, tempCred)
+	tokenCred, err := awaitOAuthResponse(l, tempCred)
 	d.Chk.NoError(err)
-
-	if !checkAuth(api) {
-		d.Chk.Fail("checkAuth failed after oauth succeded")
-	}
+	return tokenCred
 }
 
 func getAlbum(api flickrAPI, id string) Album {
@@ -330,24 +351,20 @@ func addSize(sizes MapOfSizeToString, url string, width interface{}, height inte
 	return sizes.Set(SizeDef{getDim(width), getDim(height)}.New(), url)
 }
 
-func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) error {
-	var handlerError error
-
+func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) (tokenCred *oauth.Credentials, err error) {
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("content-type", "text/plain")
-		var cred *oauth.Credentials
-		cred, _, handlerError = oauthClient.RequestToken(nil, tempCred, r.FormValue("oauth_verifier"))
-		if handlerError != nil {
-			fmt.Fprintf(w, "%v", handlerError)
+		tokenCred, _, err = oauthClient.RequestToken(nil, tempCred, r.FormValue("oauth_verifier"))
+		if err != nil {
+			fmt.Fprintf(w, "%v", err)
 		} else {
-			fmt.Fprintf(w, "Authorized")
-			user = user.SetOAuthToken(cred.Token).SetOAuthSecret(cred.Secret)
+			d.Chk.NotNil(tokenCred)
+			fmt.Fprintf(w, "Authorized: token %s token-secret %s", tokenCred.Token, tokenCred.Secret)
 		}
 		l.Close()
 	})}
 	srv.Serve(l)
-
-	return handlerError
+	return
 }
 
 func commitUser() {
@@ -357,14 +374,11 @@ func commitUser() {
 	d.Exp.NoError(err)
 }
 
-type liveFlickrAPI struct{}
+type liveFlickrAPI struct {
+	tokenCred *oauth.Credentials
+}
 
 func (api liveFlickrAPI) Call(method string, response interface{}, args *map[string]string) error {
-	tokenCred := &oauth.Credentials{
-		user.OAuthToken(),
-		user.OAuthSecret(),
-	}
-
 	values := url.Values{
 		"method":         []string{method},
 		"format":         []string{"json"},
@@ -377,7 +391,7 @@ func (api liveFlickrAPI) Call(method string, response interface{}, args *map[str
 		}
 	}
 
-	res, err := oauthClient.Get(nil, tokenCred, "https://api.flickr.com/services/rest/", values)
+	res, err := oauthClient.Get(nil, api.tokenCred, "https://api.flickr.com/services/rest/", values)
 	if err != nil {
 		return err
 	}
