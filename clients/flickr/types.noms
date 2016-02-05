@@ -3,8 +3,6 @@ alias Img = import "../common/photo.noms"
 struct User {
   Id: String
   Name: String
-  OAuthToken: String
-  OAuthSecret: String
   Albums: Map<String, Album>
 }
 
