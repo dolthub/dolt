@@ -3,10 +3,11 @@
 import {request} from 'http';
 import {parse} from 'url';
 
-type FetchOptions = {
+export type FetchOptions = {
   method?: string,
   body?: any,
-  headers?: {[key: string]: string}
+  headers?: {[key: string]: string},
+  withCredentials? : boolean,
 };
 
 function fetch<T>(url: string, f: (buf: Buffer) => T, options: FetchOptions = {}): Promise<T> {
