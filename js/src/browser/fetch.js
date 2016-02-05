@@ -1,10 +1,10 @@
 // @flow
 
-type FetchOptions = {
+export type FetchOptions = {
   method?: string,
   body?: any,
   headers?: {[key: string]: string},
-  withCredentials? : boolean
+  withCredentials? : boolean,
 };
 
 function fetch<T>(url: string, responseType: string, options: FetchOptions = {}): Promise<T> {
