@@ -3,15 +3,18 @@
 // This is a port (to flowtype, with minor modifications) of
 // https://github.com/Polymer/observe-js/blob/master/src/observe.js#L1309.
 
-// const SPLICE_AT = 0;
+const SPLICE_AT = 0; // eslint-disable-line no-unused-vars
 const SPLICE_REMOVED = 1;
 const SPLICE_ADDED = 2;
 const SPLICE_FROM = 3;
 
-// Read a Splice [SPLICE_AT, SPLICE_REMOVED, SPLICE_ADDED, SPLICE_FROM] as...
-// "at SPLICE_AT (in the previous state), SPLICE_REMOVED elements were removed and SPLICE_ADDED
-// elements were inserted, which can be found starting at SPLICE_FROM in the current state"
-export type Splice = [number, number, number, number];
+// Read a Splice as "at SpAt (in the previous state), SpRemoved elements were removed and SpAdded
+// elements were inserted, which can be found starting at SpFrom in the current state"
+type SpAt = number;
+type SpRemoved = number;
+type SpAdded = number;
+type SpFrom = number;
+export type Splice = [SpAt, SpRemoved, SpAdded, SpFrom];
 
 export type EqualsFn<T> = (a: T, b: T) => boolean;
 
