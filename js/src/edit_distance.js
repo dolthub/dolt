@@ -16,39 +16,25 @@ type SpAdded = number;
 type SpFrom = number;
 export type Splice = [SpAt, SpRemoved, SpAdded, SpFrom];
 
-export type EqualsFn<T> = (a: T, b: T) => boolean;
+export type EqualsFn = (prevIndex: number, currentIndex: number) => boolean;
 
 const UNCHANGED = 0;
 const UPDATED = 1;
 const INSERTED = 2;
 const REMOVED = 3;
 
-export function calcSplices<T>(eqFn: EqualsFn, previous: Array<T>,
-                               current: Array<T>): Array<Splice> {
-  return calcSplicesAt(eqFn, previous, 0, previous.length, current, 0, current.length);
-}
 
-export function calcSplicesAt<T>(eqFn: EqualsFn, previous: Array<T>, previousStart: number,
-                                 previousEnd: number,
-                                 current: Array<T>,
-                                 currentStart: number,
-                                 currentEnd: number): Array<Splice> {
-  let prefixCount = 0;
-  let suffixCount = 0;
+export function calcSplices(previousLength: number, currentLength: number,
+                            eqFn: EqualsFn): Array<Splice> {
 
-  const minLength = Math.min(currentEnd - currentStart, previousEnd - previousStart);
-  if (currentStart === 0 && previousStart === 0) {
-    prefixCount = sharedPrefix(eqFn, previous, current, minLength);
-  }
+  const minLength = Math.min(previousLength, currentLength);
+  const prefixCount = sharedPrefix(eqFn, minLength);
+  const suffixCount = sharedSuffix(eqFn, previousLength, currentLength, minLength - prefixCount);
 
-  if (currentEnd === current.length && previousEnd === previous.length) {
-    suffixCount = sharedSuffix(eqFn, previous, current, minLength - prefixCount);
-  }
-
-  currentStart += prefixCount;
-  previousStart += prefixCount;
-  currentEnd -= suffixCount;
-  previousEnd -= suffixCount;
+  const previousStart = prefixCount;
+  const currentStart = prefixCount;
+  const previousEnd = previousLength - suffixCount;
+  const currentEnd = currentLength - suffixCount;
 
   if (currentEnd - currentStart === 0 && previousEnd - previousStart === 0) {
     return [];
@@ -61,8 +47,7 @@ export function calcSplicesAt<T>(eqFn: EqualsFn, previous: Array<T>, previousSta
     return [[previousStart, 0, currentEnd - currentStart, currentStart]];
   }
 
-  const distances = calcEditDistances(eqFn, previous, previousStart, previousEnd, current,
-    currentStart, currentEnd);
+  const distances = calcEditDistances(eqFn, previousStart, previousEnd, currentStart, currentEnd);
   const ops = operationsFromEditDistances(distances);
 
   const splices = [];
@@ -124,11 +109,9 @@ export function calcSplicesAt<T>(eqFn: EqualsFn, previous: Array<T>, previousSta
   return splices;
 }
 
-function calcEditDistances<T>(eqFn: EqualsFn, previous: Array<T>, previousStart: number,
-                              previousEnd: number,
-                              current: Array<T>,
-                              currentStart: number,
-                              currentEnd: number): Array<Array<number>> {
+function calcEditDistances(eqFn: EqualsFn, previousStart: number, previousEnd: number,
+                           currentStart: number,
+                           currentEnd: number): Array<Array<number>> {
   // "Deletion" columns
   const rowCount = previousEnd - previousStart + 1;
   const columnCount = currentEnd - currentStart + 1;
@@ -150,7 +133,7 @@ function calcEditDistances<T>(eqFn: EqualsFn, previous: Array<T>, previousStart:
 
   for (i = 1; i < rowCount; i++) {
     for (j = 1; j < columnCount; j++) {
-      if (eqFn(current[currentStart + j - 1], previous[previousStart + i - 1])) {
+      if (eqFn(previousStart + i - 1, currentStart + j - 1)) {
         distances[i][j] = distances[i - 1][j - 1];
       } else {
         const north = distances[i - 1][j] + 1;
@@ -213,10 +196,9 @@ function operationsFromEditDistances(distances: Array<Array<number>>): Array<num
   return edits;
 }
 
-function sharedPrefix<T>(eqFn: EqualsFn, previous: Array<T>, current: Array<T>,
-    searchLength: number) {
+function sharedPrefix(eqFn: EqualsFn, searchLength: number) {
   for (let i = 0; i < searchLength; i++) {
-    if (!eqFn(current[i], previous[i])) {
+    if (!eqFn(i, i)) {
       return i;
     }
   }
@@ -224,12 +206,10 @@ function sharedPrefix<T>(eqFn: EqualsFn, previous: Array<T>, current: Array<T>,
   return searchLength;
 }
 
-function sharedSuffix<T>(eqFn: EqualsFn, previous: Array<T>, current: Array<T>,
+function sharedSuffix(eqFn: EqualsFn, previousLength: number, currentLength: number,
     searchLength: number) {
-  let index1 = current.length;
-  let index2 = previous.length;
   let count = 0;
-  while (count < searchLength && eqFn(current[--index1], previous[--index2])) {
+  while (count < searchLength && eqFn(--previousLength, --currentLength)) {
     count++;
   }
 
