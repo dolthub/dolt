@@ -51,7 +51,7 @@ func RegisterPackage(p *Package) (r ref.Ref) {
 	return
 }
 
-func readPackage(r ref.Ref, cs chunks.ChunkSource) *Package {
+func ReadPackage(r ref.Ref, cs chunks.ChunkSource) *Package {
 	p := ReadValue(r, cs).(Package)
 	RegisterPackage(&p)
 	return &p

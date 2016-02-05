@@ -303,7 +303,7 @@ func (r *jsonArrayReader) readUnresolvedKindToValue(t Type, pkg *Package) Value 
 		if pkg2 != nil {
 			pkg = pkg2
 		} else {
-			pkg = readPackage(pkgRef, r.cs)
+			pkg = ReadPackage(pkgRef, r.cs)
 		}
 	}
 
