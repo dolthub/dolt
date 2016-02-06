@@ -137,8 +137,6 @@ func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkSource) (*sequenceC
 			return cursor, val
 		}
 	}
-
-	panic("not reachable")
 }
 
 func readMetaTupleValue(item sequenceItem, cs chunks.ChunkSource) Value {
@@ -160,6 +158,4 @@ func iterateMetaSequenceLeaf(ms metaSequence, cs chunks.ChunkSource, cb func(Val
 
 		v = readMetaTupleValue(cursor.current(), cs)
 	}
-
-	panic("not reachable")
 }

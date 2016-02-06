@@ -62,7 +62,7 @@ func getTestSimpleListUnique() testSimpleList {
 		uniques[s.Int63()] = true
 	}
 	values := make([]Value, 0, length)
-	for k, _ := range uniques {
+	for k := range uniques {
 		values = append(values, Int64(k))
 	}
 	return values
@@ -74,6 +74,39 @@ func testSimpleListFromNomsList(list List) testSimpleList {
 		simple[offset] = v
 	})
 	return simple
+}
+
+func TestStreamingCompoundListCreation(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := chunks.NewTestStore()
+	simpleList := getTestSimpleList()
+
+	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	cl := NewTypedList(tr, simpleList...)
+	valueChan := make(chan Value)
+	listChan := NewStreamingTypedList(tr, cs, valueChan)
+	go func() {
+		for _, v := range simpleList {
+			valueChan <- v
+		}
+		close(valueChan)
+	}()
+	assertChunksEqual(assert, cl, <-listChan, cs)
+}
+
+func assertChunksEqual(assert *assert.Assertions, v1, v2 Value, cs chunks.ChunkSource) {
+	assert.EqualValues(v1.Ref(), v2.Ref())
+	v1Chunks, v2Chunks := v1.Chunks(), v2.Chunks()
+	if assert.NotEmpty(v2Chunks) {
+		assert.Equal(len(v1Chunks), len(v2Chunks))
+
+		assert.True(cs.Has(v1.Ref()))
+		for _, r := range v2Chunks {
+			assert.Contains(v1Chunks, r)
+			assert.True(cs.Has(r))
+		}
+	}
 }
 
 func TestCompoundListGet(t *testing.T) {
@@ -124,7 +157,7 @@ func TestCompoundListIterAll(t *testing.T) {
 	expectIdx := uint64(0)
 	cl.IterAll(func(v Value, idx uint64) {
 		assert.Equal(expectIdx, idx)
-		expectIdx += 1
+		expectIdx++
 		assert.Equal(simpleList[idx], v)
 	})
 
@@ -218,7 +251,6 @@ func TestCompoundListCursorAt(t *testing.T) {
 				return
 			}
 		}
-		panic("not reachable")
 	}
 
 	assert.Equal(getTestSimpleListLen(), listLen(0, func(cur *sequenceCursor) bool {

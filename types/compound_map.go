@@ -95,9 +95,8 @@ func (cm compoundMap) Remove(k Value) Map {
 	if seq, found := cm.sequenceChunkerAtKey(k); found {
 		seq.Skip()
 		return seq.Done().(Map)
-	} else {
-		return cm
 	}
+	return cm
 }
 
 func (cm compoundMap) sequenceChunkerAtKey(k Value) (*sequenceChunker, bool) {
