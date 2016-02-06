@@ -94,6 +94,12 @@ func (suite *SeekableReaderTestSuite) TestReadSeekBackRead() {
 	suite.readAndExpect(suite.content)
 }
 
+func (suite *SeekableReaderTestSuite) TestSeekFwdSeekBackReadSome() {
+	suite.contentRSC.Seek(0, 2)
+	suite.contentRSC.Seek(0, 0)
+	suite.readAndExpect(suite.content[:4])
+}
+
 func (suite *SeekableReaderTestSuite) readAndExpect(expected []byte) {
 	expectedLen := len(expected)
 	p := make([]byte, expectedLen)

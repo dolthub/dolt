@@ -33,7 +33,11 @@ type seekableReader struct {
 func (s *seekableReader) Read(b []byte) (n int, err error) {
 	if s.pos < s.cached {
 		// Caller sought backwards, so current position is somewhere in the cached data. Satisfy the Read() from the cache as much as possible. If that doesn't fill b, the caller will see that n < len(b) and try again.
-		n, err = io.ReadAtLeast(s.cache, b, int(s.cached-s.pos))
+		min := int(s.cached - s.pos)
+		if min > len(b) {
+			min = len(b)
+		}
+		n, err = io.ReadAtLeast(s.cache, b, min)
 		if err == io.EOF {
 			err = nil
 		}
