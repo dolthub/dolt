@@ -52,13 +52,13 @@ func main() {
 
 	if *clientIdFlag == "" || *clientSecretFlag == "" || httpClient == nil {
 		flag.Usage()
-		return
+		os.Exit(1)
 	}
 
 	ds = dsFlags.CreateDataset()
 	if ds == nil {
 		flag.Usage()
-		return
+		os.Exit(1)
 	}
 	defer ds.Store().Close()
 
