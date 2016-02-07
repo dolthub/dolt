@@ -12,9 +12,12 @@ This repository contains two reference implementations of the noms protocol - on
 * [Python 2.7+](https://www.python.org/downloads/) (Note: Python 2.x only, not Python 3.x)
 * [Node.js 5.3+](https://nodejs.org/download/)
 
-# Get the code
+# Set environment variables
 
-First, ensure [`$GOPATH` is set correctly](https://golang.org/doc/code.html#GOPATH). Then:
+* Ensure [`$GOPATH` is set correctly](https://golang.org/doc/code.html#GOPATH)
+* Set `GO15VENDOREXPERIMENT=1` in your environment - all our code requires this
+
+# Get the code
 
 ```
 go get -u -t github.com/attic-labs/noms/...
