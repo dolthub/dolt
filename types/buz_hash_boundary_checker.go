@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/attic-labs/buzhash"
+	"github.com/attic-labs/buzhash"
 	"github.com/attic-labs/noms/d"
 )
 

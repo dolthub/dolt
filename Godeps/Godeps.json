@@ -6,10 +6,6 @@
 	],
 	"Deps": [
 		{
-			"ImportPath": "github.com/attic-labs/buzhash",
-			"Rev": "ba25a3a15f617b6580523ccfb83d31764a50a97a"
-		},
-		{
 			"ImportPath": "github.com/aws/aws-sdk-go/aws",
 			"Comment": "v1.0.7-2-g727e1f5",
 			"Rev": "727e1f596b6b59700b4d286af9ca41747066685d"
