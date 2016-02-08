@@ -21,10 +21,15 @@ type metaSequence interface {
 	tupleCount() int
 }
 
+func newMetaTuple(value, child Value, childRef ref.Ref) metaTuple {
+	d.Chk.True((child != nil) != (childRef != ref.Ref{}), "Either child or childRef can be set, but not both")
+	return metaTuple{child, childRef, value}
+}
+
 // metaTuple is a node in a "probably" tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
 	child    Value   // nil if the child data hasn't been read, or has already been written
-	childRef ref.Ref // maybe empty if |child| is non-nil, call ChildRef() instead of accessing |childRef| directly
+	childRef ref.Ref // may be empty if |child| is non-nil; call ChildRef() instead of accessing |childRef| directly
 	value    Value
 }
 

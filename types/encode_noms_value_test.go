@@ -139,7 +139,11 @@ func TestWriteCompoundBlob(t *testing.T) {
 	r2 := ref.Parse("sha1-0000000000000000000000000000000000000002")
 	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
 
-	v := newCompoundBlob([]metaTuple{{nil, r1, Uint64(20)}, {nil, r2, Uint64(40)}, {nil, r3, Uint64(60)}}, cs)
+	v := newCompoundBlob([]metaTuple{
+		newMetaTuple(Uint64(20), nil, r1),
+		newMetaTuple(Uint64(40), nil, r2),
+		newMetaTuple(Uint64(60), nil, r3),
+	}, cs)
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
 
@@ -328,7 +332,10 @@ func TestWriteCompoundList(t *testing.T) {
 	ltr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
 	leaf1 := newListLeaf(cs, ltr, Int32(0))
 	leaf2 := newListLeaf(cs, ltr, Int32(1), Int32(2), Int32(3))
-	cl := buildCompoundList([]metaTuple{{leaf1, ref.Ref{}, Uint64(1)}, {leaf2, ref.Ref{}, Uint64(4)}}, ltr, cs)
+	cl := buildCompoundList([]metaTuple{
+		newMetaTuple(Uint64(1), leaf1, ref.Ref{}),
+		newMetaTuple(Uint64(4), leaf2, ref.Ref{}),
+	}, ltr, cs)
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(cl)

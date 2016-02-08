@@ -86,27 +86,16 @@ func TestStreamingCompoundListCreation(t *testing.T) {
 	cl := NewTypedList(tr, simpleList...)
 	valueChan := make(chan Value)
 	listChan := NewStreamingTypedList(tr, cs, valueChan)
-	go func() {
-		for _, v := range simpleList {
-			valueChan <- v
-		}
-		close(valueChan)
-	}()
-	assertChunksEqual(assert, cl, <-listChan, cs)
-}
-
-func assertChunksEqual(assert *assert.Assertions, v1, v2 Value, cs chunks.ChunkSource) {
-	assert.EqualValues(v1.Ref(), v2.Ref())
-	v1Chunks, v2Chunks := v1.Chunks(), v2.Chunks()
-	if assert.NotEmpty(v2Chunks) {
-		assert.Equal(len(v1Chunks), len(v2Chunks))
-
-		assert.True(cs.Has(v1.Ref()))
-		for _, r := range v2Chunks {
-			assert.Contains(v1Chunks, r)
-			assert.True(cs.Has(r))
-		}
+	for _, v := range simpleList {
+		valueChan <- v
 	}
+	close(valueChan)
+	sl := <-listChan
+	assert.True(cl.Equals(sl))
+	cl.Iter(func(v Value, idx uint64) (done bool) {
+		done = !assert.EqualValues(v, sl.Get(idx))
+		return
+	})
 }
 
 func TestCompoundListGet(t *testing.T) {

@@ -14,7 +14,7 @@ func newIndexedMetaSequenceBoundaryChecker() boundaryChecker {
 	})
 }
 
-func newIndexedMetaSequenceChunkFn(t Type, cs chunks.ChunkSink) makeChunkFn {
+func newIndexedMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
 
@@ -22,7 +22,7 @@ func newIndexedMetaSequenceChunkFn(t Type, cs chunks.ChunkSink) makeChunkFn {
 			tuples[i] = v.(metaTuple) // chunk is written when the root sequence is written
 		}
 
-		meta := newMetaSequenceFromData(tuples, t, nil)
+		meta := newMetaSequenceFromData(tuples, t, cs)
 		if cs != nil {
 			return metaTuple{nil, WriteValue(meta, cs), Uint64(tuples.uint64ValuesSum())}, meta
 		}

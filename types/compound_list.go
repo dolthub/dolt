@@ -254,7 +254,7 @@ func newListLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeListLeafChunkFn(t Type, cs chunks.ChunkSink) makeChunkFn {
+func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		values := make([]Value, len(items))
 
@@ -262,10 +262,10 @@ func makeListLeafChunkFn(t Type, cs chunks.ChunkSink) makeChunkFn {
 			values[i] = v.(Value)
 		}
 
-		list := valueFromType(newListLeaf(nil, t, values...), t)
+		list := valueFromType(newListLeaf(cs, t, values...), t)
 		if cs != nil {
-			return metaTuple{nil, WriteValue(list, cs), Uint64(len(values))}, list
+			return newMetaTuple(Uint64(len(values)), nil, WriteValue(list, cs)), list
 		}
-		return metaTuple{list, ref.Ref{}, Uint64(len(values))}, list
+		return newMetaTuple(Uint64(len(values)), list, ref.Ref{}), list
 	}
 }

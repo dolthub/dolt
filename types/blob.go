@@ -45,7 +45,7 @@ func newBlobLeafChunkFn() makeChunkFn {
 		}
 
 		leaf := newBlobLeaf(buff)
-		return metaTuple{leaf, ref.Ref{}, Uint64(uint64(len(buff)))}, leaf
+		return newMetaTuple(Uint64(uint64(len(buff))), leaf, ref.Ref{}), leaf
 	}
 }
 

@@ -43,7 +43,7 @@ func NewTypedList(t Type, values ...Value) List {
 }
 
 // NewStreamingTypedList creates a new List with type t, populated with values, chunking if and when needed. As chunks are created, they're written to cs -- including the root chunk of the list. Once the caller has closed values, she can read the completed List from the returned channel.
-func NewStreamingTypedList(t Type, cs chunks.ChunkSink, values <-chan Value) <-chan List {
+func NewStreamingTypedList(t Type, cs chunks.ChunkStore, values <-chan Value) <-chan List {
 	out := make(chan List)
 	go func() {
 		seq := newEmptySequenceChunker(makeListLeafChunkFn(t, cs), newIndexedMetaSequenceChunkFn(t, cs), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)

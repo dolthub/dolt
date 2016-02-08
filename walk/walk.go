@@ -10,19 +10,19 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-// SomeCallback takes a ref.Ref and returns a bool indicating whether
+// SomeCallback takes a types.Value and returns a bool indicating whether
 // the current walk should skip the tree descending from value.
 type SomeCallback func(v types.Value) bool
 
-// AllCallback takes a ref and processes it.
+// AllCallback takes a types.Value and processes it.
 type AllCallback func(v types.Value)
 
-// Some recursively walks over all ref.Refs reachable from r and calls cb on them. If cb ever returns true, the walk will stop recursing on the current ref. If |concurrency| > 1, it is the callers responsibility to make ensure that |cb| is threadsafe.
+// SomeP recursively walks over all types.Values reachable from r and calls cb on them. If cb ever returns true, the walk will stop recursing on the current ref. If |concurrency| > 1, it is the callers responsibility to make ensure that |cb| is threadsafe.
 func SomeP(v types.Value, cs chunks.ChunkSource, cb SomeCallback, concurrency int) {
 	doTreeWalkP(v, cs, cb, concurrency)
 }
 
-// All recursively walks over all ref.Refs reachable from r and calls cb on them. If |concurrency| > 1, it is the callers responsibility to make ensure that |cb| is threadsafe.
+// AllP recursively walks over all types.Values reachable from r and calls cb on them. If |concurrency| > 1, it is the callers responsibility to make ensure that |cb| is threadsafe.
 func AllP(v types.Value, cs chunks.ChunkSource, cb AllCallback, concurrency int) {
 	doTreeWalkP(v, cs, func(v types.Value) (skip bool) {
 		cb(v)
@@ -92,15 +92,16 @@ func doTreeWalkP(v types.Value, cs chunks.ChunkSource, cb SomeCallback, concurre
 	f.checkNotFailed()
 }
 
+// SomeChunksCallback takes a ref.Ref and returns a bool indicating whether
+// the current walk should skip the tree descending from value.
 type SomeChunksCallback func(r ref.Ref) bool
 
-// Invokes callback on all chunks reachable from |r| in top-down order. |callback| is invoked only
-// once for each chunk regardless of how many times the chunk appears
-func SomeChunksP(r ref.Ref, cs chunks.ChunkStore, callback SomeChunksCallback, concurrency int) {
+// SomeChunksP Invokes callback on all chunks reachable from |r| in top-down order. |callback| is invoked only once for each chunk regardless of how many times the chunk appears
+func SomeChunksP(r ref.Ref, cs chunks.ChunkSource, callback SomeChunksCallback, concurrency int) {
 	doChunkWalkP(r, cs, callback, concurrency)
 }
 
-func doChunkWalkP(r ref.Ref, cs chunks.ChunkStore, callback SomeChunksCallback, concurrency int) {
+func doChunkWalkP(r ref.Ref, cs chunks.ChunkSource, callback SomeChunksCallback, concurrency int) {
 	rq := newRefQueue()
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
