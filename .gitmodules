@@ -1,3 +1,0 @@
-[submodule "vendor/github.com/attic-labs/buzhash"]
-	path = vendor/github.com/attic-labs/buzhash
-	url = ../buzhash.git
