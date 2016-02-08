@@ -12,7 +12,6 @@ import (
 )
 
 var (
-	p       = flag.Uint("p", 512, "parallelism")
 	dsFlags = dataset.NewFlags()
 	// Actually the delimiter uses runes, which can be multiple characters long.
 	// https://blog.golang.org/strings
@@ -61,7 +60,7 @@ func main() {
 		return
 	}
 
-	value, _, _ := csv.Read(res, *name, *header, comma, *p, ds.Store())
+	value, _, _ := csv.Read(res, *name, *header, comma, ds.Store())
 	_, err = ds.Commit(value)
 	d.Exp.NoError(err)
 }

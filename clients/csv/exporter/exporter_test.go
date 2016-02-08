@@ -56,20 +56,17 @@ func (s *testSuite) TestCSVExporter() {
 	structFields := typeDef.Desc.(types.StructDesc).Fields
 
 	// Build data rows
-	refs := make([]types.Value, 0, len(payload))
-	for i := 0; i < len(payload); i++ {
+	structs := make([]types.Value, len(payload))
+	for i, row := range payload {
 		fields := make(map[string]types.Value)
-		for j, v := range payload[i] {
+		for j, v := range row {
 			fields[structFields[j].Name] = types.NewString(v)
 		}
-		newStruct := types.NewStruct(typeRef, typeDef, fields)
-		r := types.NewRef(types.WriteValue(newStruct, cs))
-		refs = append(refs, r)
+		structs[i] = types.NewStruct(typeRef, typeDef, fields)
 	}
 
-	refType := types.MakeCompoundType(types.RefKind, typeRef)
-	listType := types.MakeCompoundType(types.ListKind, refType)
-	ds.Commit(types.NewTypedList(listType, refs...))
+	listType := types.MakeCompoundType(types.ListKind, typeRef)
+	ds.Commit(types.NewTypedList(listType, structs...))
 	ds.Store().Close()
 
 	// Run exporter
