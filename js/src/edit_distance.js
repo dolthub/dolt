@@ -3,10 +3,11 @@
 // This is a port (to flowtype, with minor modifications) of
 // https://github.com/Polymer/observe-js/blob/master/src/observe.js#L1309.
 
-const SPLICE_AT = 0; // eslint-disable-line no-unused-vars
-const SPLICE_REMOVED = 1;
-const SPLICE_ADDED = 2;
-const SPLICE_FROM = 3;
+export const SPLICE_UNASSIGNED = -1;
+export const SPLICE_AT = 0;
+export const SPLICE_REMOVED = 1;
+export const SPLICE_ADDED = 2;
+export const SPLICE_FROM = 3;
 
 // Read a Splice as "at SpAt (in the previous state), SpRemoved elements were removed and SpAdded
 // elements were inserted, which can be found starting at SpFrom in the current state"
@@ -51,14 +52,21 @@ export function calcSplices(previousLength: number, currentLength: number,
   const ops = operationsFromEditDistances(distances);
 
   const splices = [];
+  const addSplice = (s) => {
+    if (s[SPLICE_FROM] === SPLICE_UNASSIGNED) {
+      s[SPLICE_FROM] = 0;
+    }
+    splices.push(s);
+    splice = undefined;
+  };
+
   let index = currentStart;
   let previousIndex = previousStart;
   for (let i = 0; i < ops.length; i++) {
     switch (ops[i]) {
       case UNCHANGED:
         if (splice) {
-          splices.push(splice);
-          splice = undefined;
+          addSplice(splice);
         }
 
         index++;
@@ -66,10 +74,10 @@ export function calcSplices(previousLength: number, currentLength: number,
         break;
       case UPDATED:
         if (!splice) {
-          splice = [index, 0, 0, 0];
+          splice = [index, 0, 0, SPLICE_UNASSIGNED];
         }
 
-        if (splice[SPLICE_FROM] === 0) {
+        if (splice[SPLICE_FROM] === SPLICE_UNASSIGNED) {
           splice[SPLICE_FROM] = previousIndex;
         }
 
@@ -81,11 +89,11 @@ export function calcSplices(previousLength: number, currentLength: number,
         break;
       case INSERTED:
         if (!splice) {
-          splice = [index, 0, 0, 0];
+          splice = [index, 0, 0, SPLICE_UNASSIGNED];
         }
 
         splice[SPLICE_ADDED]++;
-        if (splice[SPLICE_FROM] === 0) {
+        if (splice[SPLICE_FROM] === SPLICE_UNASSIGNED) {
           splice[SPLICE_FROM] = previousIndex;
         }
 
@@ -93,7 +101,7 @@ export function calcSplices(previousLength: number, currentLength: number,
         break;
       case REMOVED:
         if (!splice) {
-          splice = [index, 0, 0, 0];
+          splice = [index, 0, 0, SPLICE_UNASSIGNED];
         }
 
         splice[SPLICE_REMOVED]++;
@@ -103,7 +111,7 @@ export function calcSplices(previousLength: number, currentLength: number,
   }
 
   if (splice) {
-    splices.push(splice);
+    addSplice(splice);
   }
 
   return splices;
