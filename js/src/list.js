@@ -2,12 +2,13 @@
 
 import BuzHashBoundaryChecker from './buzhash_boundary_checker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence_chunker.js';
+import type {Splice} from './edit_distance.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {AsyncIterator} from './async_iterator.js';
 import {chunkSequence} from './sequence_chunker.js';
 import {Collection} from './collection.js';
+import {diff, IndexedSequence, IndexedSequenceIterator} from './indexed_sequence.js';
 import {getRefOfValueOrPrimitive} from './get_ref.js';
-import {IndexedSequence, IndexedSequenceIterator} from './indexed_sequence.js';
 import {invariant} from './assert.js';
 import {MetaTuple, newIndexedMetaSequenceBoundaryChecker,
   newIndexedMetaSequenceChunkFn} from './meta_sequence.js';
@@ -84,6 +85,23 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
 
   iteratorAt(i: number): AsyncIterator<T> {
     return new IndexedSequenceIterator(this.sequence.newCursorAt(i));
+  }
+
+  diff(last: NomsList<T>): Promise<Array<Splice>> {
+    invariant(this.type.equals(last.type));
+
+    if (this.equals(last)) {
+      return Promise.resolve([]); // nothing changed.
+    }
+    if (this.length === 0) {
+      return Promise.resolve([[0, last.length, 0, 0]]); // Everything removed
+    }
+    if (last.length === 0) {
+      return Promise.resolve([[0, 0, this.length, 0]]); // Everything added
+    }
+
+    return Promise.all([last.sequence.newCursorAt(0), this.sequence.newCursorAt(0)]).then(cursors =>
+        diff(last.sequence, cursors[0].depth, 0, this.sequence, cursors[1].depth, 0));
   }
 
   get length(): number {
