@@ -13,7 +13,8 @@ export default class HttpStore extends RemoteStore {
     getRefs: string,
     root: string
   };
-  _fetchOptions: FetchOptions;
+  _rootOptions: FetchOptions;
+  _readBatchOptions: FetchOptions;
 
   constructor(url: string, maxReads: number = 3, fetchOptions: FetchOptions = {}) {
     super(maxReads);
@@ -22,11 +23,12 @@ export default class HttpStore extends RemoteStore {
       getRefs: url + '/getRefs/',
       root: url + '/root/',
     };
-    this._fetchOptions = fetchOptions;
+    this._rootOptions = fetchOptions;
+    this._readBatchOptions = this._mergeReadBatchOptions(fetchOptions);
   }
 
   async getRoot(): Promise<Ref> {
-    const refStr = await fetchText(this._rpc.root, this._fetchOptions);
+    const refStr = await fetchText(this._rpc.root, this._rootOptions);
     return Ref.parse(refStr);
   }
 
@@ -42,17 +44,23 @@ export default class HttpStore extends RemoteStore {
     throw new Error('not implemented');
   }
 
-  async _readBatch(reqs: UnsentReadMap): Promise<void> {
-    const refStrs = Object.keys(reqs);
-    const body = refStrs.map(r => 'ref=' + r).join('&');
-    const opts: FetchOptions = {
+  _mergeReadBatchOptions(opts: FetchOptions): FetchOptions {
+    const baseOpts: FetchOptions = {
       method: 'post',
-      body: body,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
     };
-    const buf = await fetchArrayBuffer(this._rpc.getRefs, Object.assign(opts, this._fetchOptions));
+    
+    const hdrs = Object.assign({}, opts.headers, baseOpts.headers);
+    return Object.assign({}, opts, baseOpts, {headers: hdrs});
+  }
+  
+  async _readBatch(reqs: UnsentReadMap): Promise<void> {
+    const refStrs = Object.keys(reqs);
+    const body = refStrs.map(r => 'ref=' + r).join('&');
+    const opts = Object.assign(this._readBatchOptions, {body: body});
+    const buf = await fetchArrayBuffer(this._rpc.getRefs, opts);
 
     const chunks = deserialize(buf);
 
