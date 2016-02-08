@@ -1,7 +1,6 @@
 // @flow
 
 import {AsyncIterator, AsyncIteratorResult} from './async_iterator.js';
-import type {ChunkStore} from './chunk_store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
 import {less} from './value.js';
@@ -14,13 +13,13 @@ export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
   //   -cursor positioned at
   //      -first value, if |key| is null
   //      -first value >= |key|
-  async newCursorAt(cs: ?ChunkStore, key: ?K, forInsertion: boolean = false):
+  async newCursorAt(key: ?K, forInsertion: boolean = false):
       Promise<OrderedSequenceCursor> {
     let cursor: ?OrderedSequenceCursor = null;
     let sequence: ?OrderedSequence = this;
 
     while (sequence) {
-      cursor = new OrderedSequenceCursor(cs, cursor, sequence, 0);
+      cursor = new OrderedSequenceCursor(cursor, sequence, 0);
       if (key) {
         const lastPositionIfNotfound = forInsertion && sequence.isMeta;
         if (!cursor._seekTo(key, lastPositionIfNotfound)) {
@@ -47,9 +46,7 @@ export class OrderedSequenceCursor<T, K: valueOrPrimitive> extends
   }
 
   clone(): OrderedSequenceCursor<T, K> {
-    return new OrderedSequenceCursor(this.cs, this.parent && this.parent.clone(),
-                                     this.sequence,
-                                     this.idx);
+    return new OrderedSequenceCursor(this.parent && this.parent.clone(), this.sequence, this.idx);
   }
 
   // Moves the cursor to the first value in sequence >= key and returns true.

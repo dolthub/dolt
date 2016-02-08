@@ -1,7 +1,6 @@
 // @flow
 
 import {AsyncIterator, AsyncIteratorResult} from './async_iterator.js';
-import type {ChunkStore} from './chunk_store.js';
 import {notNull} from './assert.js';
 import {search, Sequence, SequenceCursor} from './sequence.js';
 
@@ -10,12 +9,12 @@ export class IndexedSequence<T> extends Sequence<T> {
     throw new Error('override');
   }
 
-  async newCursorAt(cs: ?ChunkStore, idx: number): Promise<IndexedSequenceCursor> {
+  async newCursorAt(idx: number): Promise<IndexedSequenceCursor> {
     let cursor: ?IndexedSequenceCursor = null;
     let sequence: ?IndexedSequence = this;
 
     while (sequence) {
-      cursor = new IndexedSequenceCursor(cs, cursor, sequence, 0);
+      cursor = new IndexedSequenceCursor(cursor, sequence, 0);
       idx -= cursor.advanceToOffset(idx);
       sequence = await cursor.getChildSequence();
     }
@@ -36,8 +35,7 @@ export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence>
   }
 
   clone(): IndexedSequenceCursor<T> {
-    return new IndexedSequenceCursor(this.cs, this.parent && this.parent.clone(),
-                                     this.sequence, this.idx);
+    return new IndexedSequenceCursor(this.parent && this.parent.clone(), this.sequence, this.idx);
   }
 }
 

@@ -22,7 +22,7 @@ const setPattern = ((1 << 6) | 0) - 1;
 
 function newSetLeafChunkFn<T:valueOrPrimitive>(t: Type): makeChunkFn {
   return (items: Array<T>) => {
-    const setLeaf = new SetLeafSequence(t, items);
+    const setLeaf = new SetLeafSequence(null, t, items);
 
     let indexValue: ?(T | Ref) = null;
     if (items.length > 0) {
@@ -59,22 +59,22 @@ export function newSet<T:valueOrPrimitive>(type: Type, values: Array<T>):
                        newOrderedMetaSequenceChunkFn(type),
                        newSetLeafBoundaryChecker(type),
                        newOrderedMetaSequenceBoundaryChecker)
-  .then((seq: OrderedSequence) => new NomsSet(null, type, seq));
+  .then((seq: OrderedSequence) => new NomsSet(type, seq));
 }
 
 export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
   async has(key: T): Promise<boolean> {
-    const cursor = await this.sequence.newCursorAt(this.cs, key);
+    const cursor = await this.sequence.newCursorAt(key);
     return cursor.valid && equals(cursor.getCurrentKey(), key);
   }
 
   async first(): Promise<?T> {
-    const cursor = await this.sequence.newCursorAt(this.cs, null);
+    const cursor = await this.sequence.newCursorAt(null);
     return cursor.valid ? cursor.getCurrent() : null;
   }
 
   async forEach(cb: (v: T) => void): Promise<void> {
-    const cursor = await this.sequence.newCursorAt(this.cs, null);
+    const cursor = await this.sequence.newCursorAt(null);
     return cursor.iter(v => {
       cb(v);
       return false;
@@ -82,11 +82,11 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
   }
 
   iterator(): AsyncIterator<T> {
-    return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, null));
+    return new OrderedSequenceIterator(this.sequence.newCursorAt(null));
   }
 
   iteratorAt(v: T): AsyncIterator<T> {
-    return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, v));
+    return new OrderedSequenceIterator(this.sequence.newCursorAt(v));
   }
 
   async _splice(cursor: OrderedSequenceCursor, insert: Array<T>, remove: number):
@@ -97,11 +97,11 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
                                     newSetLeafBoundaryChecker(type),
                                     newOrderedMetaSequenceBoundaryChecker);
     invariant(seq instanceof OrderedSequence);
-    return new NomsSet(this.cs, type, seq);
+    return new NomsSet(type, seq);
   }
 
   async insert(value: T): Promise<NomsSet<T>> {
-    const cursor = await this.sequence.newCursorAt(this.cs, value, true);
+    const cursor = await this.sequence.newCursorAt(value, true);
     if (cursor.valid && equals(cursor.getCurrentKey(), value)) {
       return this;
     }
@@ -110,7 +110,7 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
   }
 
   async remove(value: T): Promise<NomsSet<T>> {
-    const cursor = await this.sequence.newCursorAt(this.cs, value);
+    const cursor = await this.sequence.newCursorAt(value);
     if (cursor.valid && equals(cursor.getCurrentKey(), value)) {
       return this._splice(cursor, [], 1);
     }
@@ -120,7 +120,7 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
 
   // TODO: Find some way to return a NomsSet.
   async map<S>(cb: (v: T) => (Promise<S> | S)): Promise<Array<S>> {
-    const cursor = await this.sequence.newCursorAt(this.cs, null);
+    const cursor = await this.sequence.newCursorAt(null);
     const values = [];
     await cursor.iter(v => {
       values.push(cb(v));
@@ -148,7 +148,7 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
       invariant(sets[i].type.equals(this.type));
     }
 
-    let cursor = await this.sequence.newCursorAt(this.cs, null);
+    let cursor = await this.sequence.newCursorAt(null);
     if (!cursor.valid) {
       return this;
     }
@@ -157,8 +157,7 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
 
     for (let i = 0; cursor.valid && i < sets.length; i++) {
       const first = cursor.getCurrent();
-      const set: NomsSet = sets[i];
-      const next = await set.sequence.newCursorAt(set.cs, first);
+      const next = await sets[i].sequence.newCursorAt(first);
       if (!next.valid) {
         break;
       }
@@ -173,7 +172,7 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
     }
 
     // TODO: Chunk the resulting set.
-    return new NomsSet(this.cs, this.type, new SetLeafSequence(this.type, values));
+    return new NomsSet(this.type, new SetLeafSequence(null, this.type, values));
   }
 }
 

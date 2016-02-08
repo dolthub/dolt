@@ -7,30 +7,30 @@ import {Type} from './type.js';
 import {ValueBase} from './value.js';
 
 export class Sequence<T> extends ValueBase {
+  cs: ?ChunkStore;
   items: Array<T>;
   isMeta: boolean;
 
-  constructor(type: Type, items: Array<T>) {
+  constructor(cs: ?ChunkStore, type: Type, items: Array<T>) {
     super(type);
 
+    this.cs = cs;
     this.items = items;
     this.isMeta = false;
   }
 
-  getChildSequence(cs: ?ChunkStore, idx: number): // eslint-disable-line no-unused-vars
+  getChildSequence(idx: number): // eslint-disable-line no-unused-vars
       Promise<?Sequence> {
     return Promise.resolve(null);
   }
 }
 
 export class SequenceCursor<T, S:Sequence> {
-  cs: ?ChunkStore;
   parent: ?SequenceCursor;
   sequence: S;
   idx: number;
 
-  constructor(cs: ?ChunkStore, parent: ?SequenceCursor, sequence: S, idx: number) {
-    this.cs = cs;
+  constructor(parent: ?SequenceCursor, sequence: S, idx: number) {
     this.parent = parent;
     this.sequence = sequence;
     this.idx = idx;
@@ -54,7 +54,7 @@ export class SequenceCursor<T, S:Sequence> {
   }
 
   getChildSequence(): Promise<?S> {
-    return this.sequence.getChildSequence(this.cs, this.idx);
+    return this.sequence.getChildSequence(this.idx);
   }
 
   getCurrent(): T {

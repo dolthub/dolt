@@ -146,12 +146,12 @@ class JsonArrayReader {
 
   readListLeafSequence(t: Type, pkg: ?Package): ListLeafSequence {
     const seq = this.readSequence(t, pkg);
-    return new ListLeafSequence(t, seq);
+    return new ListLeafSequence(this._cs, t, seq);
   }
 
   readSetLeafSequence(t: Type, pkg: ?Package): SetLeafSequence {
     const seq = this.readSequence(t, pkg);
-    return new SetLeafSequence(t, seq);
+    return new SetLeafSequence(this._cs, t, seq);
   }
 
   readMapLeafSequence(t: Type, pkg: ?Package): MapLeafSequence {
@@ -164,7 +164,7 @@ class JsonArrayReader {
       entries.push({key: k, value: v});
     }
 
-    return new MapLeafSequence(t, entries);
+    return new MapLeafSequence(this._cs, t, entries);
   }
 
   readEnum(): number {
@@ -260,7 +260,7 @@ class JsonArrayReader {
         const sequence = isMeta ?
             r2.readMetaSequence(t, pkg) :
             r2.readListLeafSequence(t, pkg);
-        return new NomsList(this._cs, t, sequence);
+        return new NomsList(t, sequence);
       }
       case Kind.Map: {
         const isMeta = this.readBool();
@@ -268,7 +268,7 @@ class JsonArrayReader {
         const sequence = isMeta ?
           r2.readMetaSequence(t, pkg) :
           r2.readMapLeafSequence(t, pkg);
-        return new NomsMap(this._cs, t, sequence);
+        return new NomsMap(t, sequence);
       }
       case Kind.Package:
         return this.readPackage(t, pkg);
@@ -282,7 +282,7 @@ class JsonArrayReader {
         const sequence = isMeta ?
           r2.readMetaSequence(t, pkg) :
           r2.readSetLeafSequence(t, pkg);
-        return new NomsSet(this._cs, t, sequence);
+        return new NomsSet(t, sequence);
       }
       case Kind.Enum:
       case Kind.Struct:
