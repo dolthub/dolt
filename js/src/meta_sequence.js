@@ -64,6 +64,23 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
     return mt.getSequence(this.cs);
   }
 
+  // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
+  // concatentation as one long composite sequence
+  getCompositeChildSequence(start: number, length: number):
+      Promise<IndexedSequence> {
+    const childrenP = [];
+    for (let i = start; i < start + length; i++) {
+      childrenP.push(this.items[i].getSequence(this.cs));
+    }
+
+    return Promise.all(childrenP).then(children => {
+      const items = [];
+      children.forEach(child => items.push(...child.items));
+      return children[0].isMeta ? new IndexedMetaSequence(this.cs, this.type, items)
+        : new IndexedSequence(this.cs, this.type, items);
+    });
+  }
+
   getOffset(idx: number): number {
     return this.offsets[idx];
   }

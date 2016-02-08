@@ -23,6 +23,10 @@ export class Sequence<T> extends ValueBase {
       Promise<?Sequence> {
     return Promise.resolve(null);
   }
+
+  get length(): number {
+    return this.items.length;
+  }
 }
 
 export class SequenceCursor<T, S:Sequence> {
@@ -68,6 +72,10 @@ export class SequenceCursor<T, S:Sequence> {
 
   get indexInChunk(): number {
     return this.idx;
+  }
+
+  get depth(): number {
+    return 1 + (this.parent ? this.parent.depth : 0);
   }
 
   advance(): Promise<boolean> {

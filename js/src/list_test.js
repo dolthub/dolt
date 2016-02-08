@@ -5,6 +5,7 @@ import {suite} from 'mocha';
 
 import MemoryStore from './memory_store.js';
 import test from './async_test.js';
+import {calcSplices} from './edit_distance.js';
 import {flatten} from './test_util.js';
 import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
 import {Kind} from './noms_kind.js';
@@ -247,5 +248,79 @@ suite('CompoundList', () => {
   test('length', () => {
     const l = build();
     assert.equal(l.length, 8);
+  });
+});
+
+suite('Diff List', () => {
+  function intSequence(start: number, end: number): Array<number> {
+    const nums = [];
+
+    for (let i = start; i < end; i++) {
+      nums.push(i);
+    }
+
+    return nums;
+  }
+
+  function firstNNumbers(n: number): Array<number> {
+    return intSequence(0, n);
+  }
+
+  test('Remove 5x100', async () => {
+    const nums1 = firstNNumbers(5000);
+    const nums2 = nums1.slice(0);
+
+    let count = 5;
+    while (count-- > 0) {
+      nums2.splice(count * 1000, 100);
+    }
+
+    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
+
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
+    const l1 = await newList(tr, nums1);
+    const l2 = await newList(tr, nums2);
+
+    const listDiff = await l2.diff(l1);
+    assert.deepEqual(directDiff, listDiff);
+  });
+
+  test('Add 5x5', async () => {
+    const nums1 = firstNNumbers(5000);
+    const nums2 = nums1.slice(0);
+
+    let count = 5;
+    while (count-- > 0) {
+      nums2.splice(count * 1000, 0, 0, 1, 2, 3, 4);
+    }
+
+    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
+
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
+    const l1 = await newList(tr, nums1);
+    const l2 = await newList(tr, nums2);
+
+    const listDiff = await l2.diff(l1);
+    assert.deepEqual(directDiff, listDiff);
+  });
+
+
+  test('Replace reverse 5x100', async () => {
+    const nums1 = firstNNumbers(5000);
+    const nums2 = nums1.slice(0);
+
+    let count = 5;
+    while (count-- > 0) {
+      const out = nums2.slice(count * 1000, 100).reverse();
+      nums2.splice(count * 1000, 100, ...out);
+    }
+
+    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
+    const l1 = await newList(tr, nums1);
+    const l2 = await newList(tr, nums2);
+
+    const listDiff = await l2.diff(l1);
+    assert.deepEqual(directDiff, listDiff);
   });
 });
