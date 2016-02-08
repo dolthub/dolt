@@ -41,6 +41,7 @@ func makeHTTPClient() *http.Client {
 type HTTPStore struct {
 	host            *url.URL
 	httpClient      *http.Client
+	auth            string
 	getQueue        chan getRequest
 	hasQueue        chan hasRequest
 	writeQueue      chan Chunk
@@ -51,7 +52,7 @@ type HTTPStore struct {
 	unwrittenPutsMu *sync.Mutex
 }
 
-func NewHTTPStore(baseURL string) *HTTPStore {
+func NewHTTPStore(baseURL, auth string) *HTTPStore {
 	u, err := url.Parse(baseURL)
 	d.Exp.NoError(err)
 	d.Exp.True(u.Scheme == "http" || u.Scheme == "https")
@@ -59,6 +60,7 @@ func NewHTTPStore(baseURL string) *HTTPStore {
 	client := &HTTPStore{
 		host:            u,
 		httpClient:      makeHTTPClient(),
+		auth:            auth,
 		getQueue:        make(chan getRequest, readBufferSize),
 		hasQueue:        make(chan hasRequest, hasBufferSize),
 		writeQueue:      make(chan Chunk, writeBufferSize),
@@ -221,6 +223,20 @@ func (c *HTTPStore) batchRequests() {
 	}
 }
 
+func (c *HTTPStore) newRequest(method, url string, body io.Reader, header http.Header) *http.Request {
+	req, err := http.NewRequest(method, url, body)
+	d.Chk.NoError(err)
+	for k, vals := range header {
+		for _, v := range vals {
+			req.Header.Add(k, v)
+		}
+	}
+	if c.auth != "" {
+		req.Header.Set("Authorization", c.auth)
+	}
+	return req
+}
+
 func (c *HTTPStore) postRefs(chs []Chunk) {
 	body := &bytes.Buffer{}
 	gw := gzip.NewWriter(body)
@@ -233,11 +249,10 @@ func (c *HTTPStore) postRefs(chs []Chunk) {
 
 	url := *c.host
 	url.Path = httprouter.CleanPath(c.host.Path + constants.PostRefsPath)
-	req, err := http.NewRequest("POST", url.String(), body)
-	d.Chk.NoError(err)
-
-	req.Header.Set("Content-Encoding", "gzip")
-	req.Header.Set("Content-Type", "application/octet-stream")
+	req := c.newRequest("POST", url.String(), body, http.Header{
+		"Content-Encoding": {"gzip"},
+		"Content-Type":     {"application/octet-stream"},
+	})
 
 	res, err := c.httpClient.Do(req)
 	d.Chk.NoError(err)
@@ -254,12 +269,11 @@ func (c *HTTPStore) requestRef(r ref.Ref, method string, body io.Reader) *http.R
 		url.Path = path.Join(url.Path, r.String())
 	}
 
-	req, err := http.NewRequest(method, url.String(), body)
+	header := http.Header{}
 	if body != nil {
-		req.Header.Set("Content-Type", "application/octet-stream")
+		header.Set("Content-Type", "application/octet-stream")
 	}
-
-	d.Chk.NoError(err)
+	req := c.newRequest(method, url.String(), body, header)
 
 	res, err := c.httpClient.Do(req)
 	d.Chk.NoError(err)
@@ -275,10 +289,10 @@ func (c *HTTPStore) getHasRefs(refs map[ref.Ref]bool, reqs hasBatch) {
 		values.Add("ref", r.String())
 	}
 
-	req, err := http.NewRequest("POST", u.String(), strings.NewReader(values.Encode()))
-	req.Header.Add("Accept-Encoding", "gzip")
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	d.Chk.NoError(err)
+	req := c.newRequest("POST", u.String(), strings.NewReader(values.Encode()), http.Header{
+		"Accept-Encoding": {"gzip"},
+		"Content-Type":    {"application/x-www-form-urlencoded"},
+	})
 
 	res, err := c.httpClient.Do(req)
 	d.Chk.NoError(err)
@@ -314,10 +328,10 @@ func (c *HTTPStore) getRefs(refs map[ref.Ref]bool, cs ChunkSink) {
 		values.Add("ref", r.String())
 	}
 
-	req, err := http.NewRequest("POST", u.String(), strings.NewReader(values.Encode()))
-	req.Header.Add("Accept-Encoding", "gzip")
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	d.Chk.NoError(err)
+	req := c.newRequest("POST", u.String(), strings.NewReader(values.Encode()), http.Header{
+		"Accept-Encoding": {"gzip"},
+		"Content-Type":    {"application/x-www-form-urlencoded"},
+	})
 
 	res, err := c.httpClient.Do(req)
 	d.Chk.NoError(err)
@@ -369,8 +383,7 @@ func (c *HTTPStore) requestRoot(method string, current, last ref.Ref) *http.Resp
 		u.RawQuery = params.Encode()
 	}
 
-	req, err := http.NewRequest(method, u.String(), nil)
-	d.Chk.NoError(err)
+	req := c.newRequest(method, u.String(), nil, nil)
 
 	res, err := c.httpClient.Do(req)
 	d.Chk.NoError(err)
@@ -400,17 +413,19 @@ func closeResponse(res *http.Response) error {
 
 type HTTPStoreFlags struct {
 	host *string
+	auth *string
 }
 
 func HTTPFlags(prefix string) HTTPStoreFlags {
 	return HTTPStoreFlags{
 		flag.String(prefix+"h", "", "http host to connect to"),
+		flag.String(prefix+"h-auth", "", "\"Authorization\" http header"),
 	}
 }
 
 func (h HTTPStoreFlags) CreateStore(ns string) ChunkStore {
 	if h.check() {
-		return NewHTTPStore(*h.host + httprouter.CleanPath(ns))
+		return NewHTTPStore(*h.host+httprouter.CleanPath(ns), *h.auth)
 	}
 	return nil
 }
