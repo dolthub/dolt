@@ -2,9 +2,6 @@ language: go
 go:
 - 1.5
 before_install:
-- echo "machine github.com\n  login atticlabs-ci\n  password $CI_USER_PASSWORD"
-- echo -e "machine github.com\n  login atticlabs-ci\n  password $CI_USER_PASSWORD"
-- echo -e "machine github.com\n  login atticlabs-ci\n  password $CI_USER_PASSWORD" >> ~/.netrc
 - npm version
 - nvm install stable
 - nvm use stable
