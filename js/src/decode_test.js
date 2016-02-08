@@ -100,7 +100,7 @@ suite('Decode', () => {
     invariant(v instanceof NomsList);
 
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
-    const l = new NomsList(ms, tr, new ListLeafSequence(tr, [0, 1, 2, 3]));
+    const l = new NomsList(tr, new ListLeafSequence(ms, tr, [0, 1, 2, 3]));
     assert.isTrue(l.equals(v));
   });
 
@@ -127,7 +127,7 @@ suite('Decode', () => {
     invariant(v instanceof NomsList);
 
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int8));
-    const l = new NomsList(ms, tr, new ListLeafSequence(tr, [0, 1, 2]));
+    const l = new NomsList(tr, new ListLeafSequence(ms, tr, [0, 1, 2]));
     assert.isTrue(l.equals(v));
   });
 
@@ -135,15 +135,15 @@ suite('Decode', () => {
     const ms = new MemoryStore();
 
     const ltr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
-    const r1 = writeValue(new NomsList(ms, ltr, new ListLeafSequence(ltr, [0, 1])), ltr, ms);
-    const r2 = writeValue(new NomsList(ms, ltr, new ListLeafSequence(ltr, [2, 3])), ltr, ms);
-    const r3 = writeValue(new NomsList(ms, ltr, new ListLeafSequence(ltr, [4, 5])), ltr, ms);
+    const r1 = writeValue(new NomsList(ltr, new ListLeafSequence(ms, ltr, [0, 1])), ltr, ms);
+    const r2 = writeValue(new NomsList(ltr, new ListLeafSequence(ms, ltr, [2, 3])), ltr, ms);
+    const r3 = writeValue(new NomsList(ltr, new ListLeafSequence(ms, ltr, [4, 5])), ltr, ms);
     const tuples = [
       new MetaTuple(r1, 2),
       new MetaTuple(r2, 4),
       new MetaTuple(r3, 6),
     ];
-    const l:NomsList<int32> = new NomsList(ms, ltr, new IndexedMetaSequence(ltr, tuples));
+    const l:NomsList<int32> = new NomsList(ltr, new IndexedMetaSequence(ms, ltr, tuples));
     invariant(l instanceof NomsList);
 
     const a = [Kind.List, Kind.Int32, true,
@@ -163,7 +163,7 @@ suite('Decode', () => {
 
     const t = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
                                makePrimitiveType(Kind.Float64));
-    const m = new NomsMap(ms, t, new MapLeafSequence(t, [{key: 0, value: 1}, {key: 2, value: 3}]));
+    const m = new NomsMap(t, new MapLeafSequence(ms, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(v.equals(m));
   });
 
@@ -178,8 +178,8 @@ suite('Decode', () => {
 
     const t = makeCompoundType(Kind.Map, makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Value)),
                                makePrimitiveType(Kind.Uint64));
-    const m = new NomsMap(ms, t,
-        new MapLeafSequence(t, [{key: new Ref('sha1-0000000000000000000000000000000000000001'),
+    const m = new NomsMap(t,
+        new MapLeafSequence(ms, t, [{key: new Ref('sha1-0000000000000000000000000000000000000001'),
             value: 2}, {key: new Ref('sha1-0000000000000000000000000000000000000002'), value: 4}]));
     assert.isTrue(v.equals(m));
   });
@@ -193,7 +193,7 @@ suite('Decode', () => {
 
     const t = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Uint64),
                                makePrimitiveType(Kind.Uint32));
-    const m = new NomsMap(ms, t, new MapLeafSequence(t, [{key: 0, value: 1}, {key: 2, value: 3}]));
+    const m = new NomsMap(t, new MapLeafSequence(ms, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(v.equals(m));
   });
 
@@ -205,7 +205,7 @@ suite('Decode', () => {
     invariant(v instanceof NomsSet);
 
     const t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint8));
-    const s = new NomsSet(ms, t, new SetLeafSequence(t, [0, 1, 2, 3]));
+    const s = new NomsSet(t, new SetLeafSequence(ms, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
 
@@ -217,7 +217,7 @@ suite('Decode', () => {
     invariant(v instanceof NomsSet);
 
     const t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint16));
-    const s = new NomsSet(ms, t, new SetLeafSequence(t, [0, 1, 2, 3]));
+    const s = new NomsSet(t, new SetLeafSequence(ms, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
 
@@ -315,7 +315,7 @@ suite('Decode', () => {
 
     assertStruct(v, tr.desc, {
       b: true,
-      l: new NomsList(ms, ltr, new ListLeafSequence(ltr, [0, 1, 2])),
+      l: new NomsList(ltr, new ListLeafSequence(ms, ltr, [0, 1, 2])),
       s: 'hi',
     });
   });
@@ -444,7 +444,7 @@ suite('Decode', () => {
     const v:NomsSet<uint16> = await decodeNomsValue(chunk, new MemoryStore());
 
     const t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint16));
-    const s:NomsSet<uint16> = new NomsSet(ms, t, new SetLeafSequence(t, [0, 1, 2, 3]));
+    const s:NomsSet<uint16> = new NomsSet(t, new SetLeafSequence(ms, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
 

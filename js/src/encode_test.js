@@ -62,7 +62,7 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ms);
 
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
-    const l = new NomsList(ms, tr, new ListLeafSequence(tr, [0, 1, 2, 3]));
+    const l = new NomsList(tr, new ListLeafSequence(ms, tr, [0, 1, 2, 3]));
     w.writeTopLevel(tr, l);
     assert.deepEqual([Kind.List, Kind.Int32, false, ['0', '1', '2', '3']], w.array);
   });
@@ -72,7 +72,7 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ms);
 
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Value));
-    const l = new NomsList(ms, tr, new ListLeafSequence(tr, ['0', '1', '2', '3']));
+    const l = new NomsList(tr, new ListLeafSequence(ms, tr, ['0', '1', '2', '3']));
     w.writeTopLevel(tr, l);
     assert.deepEqual([Kind.List, Kind.Value, false, [
       Kind.String, '0',
@@ -88,9 +88,9 @@ suite('Encode', () => {
 
     const it = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int16));
     const tr = makeCompoundType(Kind.List, it);
-    const v = new NomsList(ms, tr, new ListLeafSequence(tr, [
-      new NomsList(ms, tr, new ListLeafSequence(it, [0])),
-      new NomsList(ms, tr, new ListLeafSequence(it, [1, 2, 3])),
+    const v = new NomsList(tr, new ListLeafSequence(ms, tr, [
+      new NomsList(tr, new ListLeafSequence(ms, it, [0])),
+      new NomsList(tr, new ListLeafSequence(ms, it, [1, 2, 3])),
     ]));
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.List, Kind.List, Kind.Int16, false, [false, ['0'], false,
@@ -102,7 +102,7 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ms);
 
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint32));
-    const v = new NomsSet(ms, tr, new SetLeafSequence(tr, [0, 1, 2, 3]));
+    const v = new NomsSet(tr, new SetLeafSequence(ms, tr, [0, 1, 2, 3]));
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.Set, Kind.Uint32, false, ['0', '1', '2', '3']], w.array);
   });
@@ -113,9 +113,9 @@ suite('Encode', () => {
 
     const st = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int32));
     const tr = makeCompoundType(Kind.Set, st);
-    const v = new NomsSet(ms, tr, new SetLeafSequence(tr, [
-      new NomsSet(ms, tr, new SetLeafSequence(st, [0])),
-      new NomsSet(ms, tr, new SetLeafSequence(st, [1, 2, 3])),
+    const v = new NomsSet(tr, new SetLeafSequence(ms, tr, [
+      new NomsSet(tr, new SetLeafSequence(ms, st, [0])),
+      new NomsSet(tr, new SetLeafSequence(ms, st, [1, 2, 3])),
     ]));
 
     w.writeTopLevel(tr, v);
@@ -129,7 +129,7 @@ suite('Encode', () => {
 
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
         makePrimitiveType(Kind.Bool));
-    const v = new NomsMap(ms, tr, new MapLeafSequence(tr, [{key: 'a', value: false},
+    const v = new NomsMap(tr, new MapLeafSequence(ms, tr, [{key: 'a', value: false},
         {key:'b', value:true}]));
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.Map, Kind.String, Kind.Bool, false, ['a', false, 'b', true]], w.array);
@@ -144,9 +144,9 @@ suite('Encode', () => {
     const vt = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Bool));
     const tr = makeCompoundType(Kind.Map, kt, vt);
 
-    const s = new NomsSet(ms, vt, new SetLeafSequence(vt, [true]));
-    const m1 = new NomsMap(ms, kt, new MapLeafSequence(kt, [{key: 'a', value: 0}]));
-    const v = new NomsMap(ms, kt, new MapLeafSequence(tr, [{key: m1, value: s}]));
+    const s = new NomsSet(vt, new SetLeafSequence(ms, vt, [true]));
+    const m1 = new NomsMap(kt, new MapLeafSequence(ms, kt, [{key: 'a', value: 0}]));
+    const v = new NomsMap(kt, new MapLeafSequence(ms, tr, [{key: m1, value: s}]));
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.Map, Kind.Map, Kind.String, Kind.Int64, Kind.Set, Kind.Bool, false,
         [false, ['a', '0'], false, [true]]], w.array);
@@ -248,12 +248,12 @@ suite('Encode', () => {
     const pkgRef = pkg.ref;
     const type = makeType(pkgRef, 0);
 
-    let v = new Struct(type, typeDef, {l: new NomsList(ms, ltr,
-          new ListLeafSequence(ltr, ['a', 'b']))});
+    let v = new Struct(type, typeDef, {l: new NomsList(ltr,
+          new ListLeafSequence(ms, ltr, ['a', 'b']))});
     w.writeTopLevel(type, v);
     assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', false, ['a', 'b']], w.array);
 
-    v = new Struct(type, typeDef, {l: new NomsList(ms, ltr, new ListLeafSequence(ltr, []))});
+    v = new Struct(type, typeDef, {l: new NomsList(ltr, new ListLeafSequence(ms, ltr, []))});
     w = new JsonArrayWriter(ms);
     w.writeTopLevel(type, v);
     assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', false, []], w.array);
@@ -303,7 +303,7 @@ suite('Encode', () => {
     const pkgRef = pkg.ref;
     const typ = makeType(pkgRef, 0);
     const listType = makeCompoundType(Kind.List, typ);
-    const l = new NomsList(ms, listType, new ListLeafSequence(listType, [0, 1, 2]));
+    const l = new NomsList(listType, new ListLeafSequence(ms, listType, [0, 1, 2]));
 
     w.writeTopLevel(listType, l);
     assert.deepEqual([Kind.List, Kind.Unresolved, pkgRef.toString(), '0', false, ['0', '1', '2']],
@@ -315,15 +315,15 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ms);
 
     const ltr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
-    const r1 = writeValue(new NomsList(ms, ltr, new ListLeafSequence(ltr, [0, 1])), ltr, ms);
-    const r2 = writeValue(new NomsList(ms, ltr, new ListLeafSequence(ltr, [2, 3])), ltr, ms);
-    const r3 = writeValue(new NomsList(ms, ltr, new ListLeafSequence(ltr, [4, 5])), ltr, ms);
+    const r1 = writeValue(new NomsList(ltr, new ListLeafSequence(ms, ltr, [0, 1])), ltr, ms);
+    const r2 = writeValue(new NomsList(ltr, new ListLeafSequence(ms, ltr, [2, 3])), ltr, ms);
+    const r3 = writeValue(new NomsList(ltr, new ListLeafSequence(ms, ltr, [4, 5])), ltr, ms);
     const tuples = [
       new MetaTuple(r1, 2),
       new MetaTuple(r2, 4),
       new MetaTuple(r3, 6),
     ];
-    const l = new NomsList(ms, ltr, new IndexedMetaSequence(ltr, tuples));
+    const l = new NomsList(ltr, new IndexedMetaSequence(ms, ltr, tuples));
 
     w.writeTopLevel(ltr, l);
     assert.deepEqual([Kind.List, Kind.Int32, true, [r1.toString(), '2', r2.toString(), '4',

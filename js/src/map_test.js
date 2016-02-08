@@ -95,7 +95,7 @@ suite('MapLeaf', () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
                                 makePrimitiveType(Kind.Bool));
-    const newMap = entries => new NomsMap(ms, tr, new MapLeafSequence(tr, entries));
+    const newMap = entries => new NomsMap(tr, new MapLeafSequence(ms, tr, entries));
     assert.isTrue(newMap([]).isEmpty());
     assert.isFalse(newMap([{key: 'a', value: false}, {key:'k', value:true}]).isEmpty());
   });
@@ -104,8 +104,8 @@ suite('MapLeaf', () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
                                 makePrimitiveType(Kind.Bool));
-    const m = new NomsMap(ms, tr,
-        new MapLeafSequence(tr, [{key: 'a', value: false}, {key:'k', value:true}]));
+    const m = new NomsMap(tr,
+        new MapLeafSequence(ms, tr, [{key: 'a', value: false}, {key:'k', value:true}]));
     assert.isTrue(await m.has('a'));
     assert.isFalse(await m.has('b'));
     assert.isTrue(await m.has('k'));
@@ -116,8 +116,8 @@ suite('MapLeaf', () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
                                 makePrimitiveType(Kind.Int32));
-    const m = new NomsMap(ms, tr,
-                          new MapLeafSequence(tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
+    const m = new NomsMap(tr,
+        new MapLeafSequence(ms, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
 
     assert.deepEqual(['a', 4], await m.first());
 
@@ -131,8 +131,8 @@ suite('MapLeaf', () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
                                 makePrimitiveType(Kind.Int32));
-    const m = new NomsMap(ms, tr,
-                          new MapLeafSequence(tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
+    const m = new NomsMap(tr,
+        new MapLeafSequence(ms, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
 
     const kv = [];
     await m.forEach((v, k) => { kv.push(k, v); });
@@ -145,7 +145,7 @@ suite('MapLeaf', () => {
                                 makePrimitiveType(Kind.Int32));
 
     const test = async entries => {
-      const m = new NomsMap(ms, tr, new MapLeafSequence(tr, entries));
+      const m = new NomsMap(tr, new MapLeafSequence(ms, tr, entries));
       assert.deepEqual(entries, flatten(m.iterator()));
     };
 
@@ -158,7 +158,7 @@ suite('MapLeaf', () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
                                 makePrimitiveType(Kind.Int32));
-    const build = entries => new NomsMap(ms, tr, new MapLeafSequence(tr, entries));
+    const build = entries => new NomsMap(tr, new MapLeafSequence(ms, tr, entries));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
 
@@ -188,8 +188,8 @@ suite('MapLeaf', () => {
     const r2 = writeValue('a', st, ms);
     const r3 = writeValue('b', st, ms);
     const r4 = writeValue('c', st, ms);
-    const m = new NomsMap(ms, tr,
-                          new MapLeafSequence(tr, [{key: r1, value: r2}, {key: r3, value: r4}]));
+    const m = new NomsMap(tr,
+        new MapLeafSequence(ms, tr, [{key: r1, value: r2}, {key: r3, value: r4}]));
     assert.strictEqual(4, m.chunks.length);
     assert.isTrue(r1.equals(m.chunks[0]));
     assert.isTrue(r2.equals(m.chunks[1]));
@@ -202,27 +202,27 @@ suite('CompoundMap', () => {
   function build(cs: ChunkStore): Array<NomsMap> {
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
         makePrimitiveType(Kind.Bool));
-    const l1 = new NomsMap(cs, tr, new MapLeafSequence(tr, [{key: 'a', value: false},
+    const l1 = new NomsMap(tr, new MapLeafSequence(cs, tr, [{key: 'a', value: false},
         {key:'b', value:false}]));
     const r1 = writeValue(l1, tr, cs);
-    const l2 = new NomsMap(cs, tr, new MapLeafSequence(tr, [{key: 'e', value: true},
+    const l2 = new NomsMap(tr, new MapLeafSequence(cs, tr, [{key: 'e', value: true},
         {key:'f', value:true}]));
     const r2 = writeValue(l2, tr, cs);
-    const l3 = new NomsMap(cs, tr, new MapLeafSequence(tr, [{key: 'h', value: false},
+    const l3 = new NomsMap(tr, new MapLeafSequence(cs, tr, [{key: 'h', value: false},
         {key:'i', value:true}]));
     const r3 = writeValue(l3, tr, cs);
-    const l4 = new NomsMap(cs, tr, new MapLeafSequence(tr, [{key: 'm', value: true},
+    const l4 = new NomsMap(tr, new MapLeafSequence(cs, tr, [{key: 'm', value: true},
         {key:'n', value:false}]));
     const r4 = writeValue(l4, tr, cs);
 
-    const m1 = new NomsMap(cs, tr, new OrderedMetaSequence(tr, [new MetaTuple(r1, 'b'),
+    const m1 = new NomsMap(tr, new OrderedMetaSequence(cs, tr, [new MetaTuple(r1, 'b'),
         new MetaTuple(r2, 'f')]));
     const rm1 = writeValue(m1, tr, cs);
-    const m2 = new NomsMap(cs, tr, new OrderedMetaSequence(tr, [new MetaTuple(r3, 'i'),
+    const m2 = new NomsMap(tr, new OrderedMetaSequence(cs, tr, [new MetaTuple(r3, 'i'),
         new MetaTuple(r4, 'n')]));
     const rm2 = writeValue(m2, tr, cs);
 
-    const c = new NomsMap(cs, tr, new OrderedMetaSequence(tr, [new MetaTuple(rm1, 'f'),
+    const c = new NomsMap(tr, new OrderedMetaSequence(cs, tr, [new MetaTuple(rm1, 'f'),
         new MetaTuple(rm2, 'n')]));
     return [c, m1, m2];
   }

@@ -1,7 +1,6 @@
   // @flow
 
 import Ref from './ref.js';
-import type {ChunkStore} from './chunk_store.js';
 import type {Sequence} from './sequence.js'; // eslint-disable-line no-unused-vars
 import {isPrimitive} from './primitives.js';
 import {MetaTuple} from './meta_sequence.js';
@@ -10,11 +9,9 @@ import {ValueBase} from './value.js';
 
 export class Collection<S:Sequence> extends ValueBase {
   sequence: S;
-  cs: ?ChunkStore;
 
-  constructor(cs: ?ChunkStore, type: Type, sequence: S) {
+  constructor(type: Type, sequence: S) {
     super(type);
-    this.cs = cs;
     this.sequence = sequence;
   }
 

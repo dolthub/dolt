@@ -28,7 +28,7 @@ const mapPattern = ((1 << 6) | 0) - 1;
 
 function newMapLeafChunkFn(t: Type): makeChunkFn {
   return (items: Array<MapEntry>) => {
-    const mapLeaf = new MapLeafSequence(t, items);
+    const mapLeaf = new MapLeafSequence(null, t, items);
 
     let indexValue: ?(MapEntry | Ref) = null;
     if (items.length > 0) {
@@ -69,7 +69,7 @@ export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(type: Type,
                        newOrderedMetaSequenceChunkFn(type),
                        newMapLeafBoundaryChecker(type),
                        newOrderedMetaSequenceBoundaryChecker)
-  .then((seq: OrderedSequence) => new NomsMap(null, type, seq));
+  .then((seq: OrderedSequence) => new NomsMap(type, seq));
 }
 
 export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collection<OrderedSequence> {
@@ -92,12 +92,12 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
   }
 
   async has(key: K): Promise<boolean> {
-    const cursor = await this.sequence.newCursorAt(this.cs, key);
+    const cursor = await this.sequence.newCursorAt(key);
     return cursor.valid && equals(cursor.getCurrentKey(), key);
   }
 
   async first(): Promise<?[K, V]> {
-    const cursor = await this.sequence.newCursorAt(this.cs, null);
+    const cursor = await this.sequence.newCursorAt(null);
     if (!cursor.valid) {
       return undefined;
     }
@@ -107,7 +107,7 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
   }
 
   async get(key: K): Promise<?V> {
-    const cursor = await this.sequence.newCursorAt(this.cs, key);
+    const cursor = await this.sequence.newCursorAt(key);
     if (!cursor.valid) {
       return undefined;
     }
@@ -117,7 +117,7 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
   }
 
   async forEach(cb: (v: V, k: K) => void): Promise<void> {
-    const cursor = await this.sequence.newCursorAt(this.cs, null);
+    const cursor = await this.sequence.newCursorAt(null);
     return cursor.iter(entry => {
       cb(entry.value, entry.key);
       return false;
@@ -125,11 +125,11 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
   }
 
   iterator(): AsyncIterator<MapEntry<K, V>> {
-    return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, null));
+    return new OrderedSequenceIterator(this.sequence.newCursorAt(null));
   }
 
   iteratorAt(k: K): AsyncIterator<MapEntry<K, V>> {
-    return new OrderedSequenceIterator(this.sequence.newCursorAt(this.cs, k));
+    return new OrderedSequenceIterator(this.sequence.newCursorAt(k));
   }
 
   async _splice(cursor: OrderedSequenceCursor, insert: Array<MapEntry>, remove: number):
@@ -140,12 +140,12 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
                                     newMapLeafBoundaryChecker(type),
                                     newOrderedMetaSequenceBoundaryChecker);
     invariant(seq instanceof OrderedSequence);
-    return new NomsMap(this.cs, type, seq);
+    return new NomsMap(type, seq);
   }
 
   async set(key: K, value: V): Promise<NomsMap<K, V>> {
     let remove = 0;
-    const cursor = await this.sequence.newCursorAt(this.cs, key, true);
+    const cursor = await this.sequence.newCursorAt(key, true);
     if (cursor.valid && equals(cursor.getCurrentKey(), key)) {
       const entry = cursor.getCurrent();
       if (equals(entry.value, value)) {
@@ -159,7 +159,7 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
   }
 
   async remove(key: K): Promise<NomsMap<K, V>> {
-    const cursor = await this.sequence.newCursorAt(this.cs, key);
+    const cursor = await this.sequence.newCursorAt(key);
     if (cursor.valid && equals(cursor.getCurrentKey(), key)) {
       return this._splice(cursor, [], 1);
     }

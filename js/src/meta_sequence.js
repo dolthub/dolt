@@ -43,8 +43,8 @@ export class MetaTuple<K> {
 export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
   offsets: Array<number>;
 
-  constructor(type: Type, items: Array<MetaTuple<number>>) {
-    super(type, items);
+  constructor(cs: ?ChunkStore, type: Type, items: Array<MetaTuple<number>>) {
+    super(cs, type, items);
     this.isMeta = true;
     this.offsets = [];
     let cum = 0;
@@ -55,13 +55,13 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
     }
   }
 
-  getChildSequence(cs: ?ChunkStore, idx: number): Promise<?Sequence> {
+  getChildSequence(idx: number): Promise<?Sequence> {
     if (!this.isMeta) {
       return Promise.resolve(null);
     }
 
     const mt = this.items[idx];
-    return mt.getSequence(cs);
+    return mt.getSequence(this.cs);
   }
 
   getOffset(idx: number): number {
@@ -70,18 +70,18 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
 }
 
 export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K, MetaTuple<K>> {
-  constructor(type: Type, items: Array<MetaTuple>) {
-    super(type, items);
+  constructor(cs: ?ChunkStore, type: Type, items: Array<MetaTuple>) {
+    super(cs, type, items);
     this.isMeta = true;
   }
 
-  getChildSequence(cs: ?ChunkStore, idx: number): Promise<?Sequence> {
+  getChildSequence(idx: number): Promise<?Sequence> {
     if (!this.isMeta) {
       return Promise.resolve(null);
     }
 
     const mt = this.items[idx];
-    return mt.getSequence(cs);
+    return mt.getSequence(this.cs);
   }
 
   getKey(idx: number): K {
@@ -94,9 +94,9 @@ export function newMetaSequenceFromData(cs: ChunkStore, type: Type, tuples: Arra
   switch (type.kind) {
     case Kind.Map:
     case Kind.Set:
-      return new OrderedMetaSequence(type, tuples);
+      return new OrderedMetaSequence(cs, type, tuples);
     case Kind.List:
-      return new IndexedMetaSequence(type, tuples);
+      return new IndexedMetaSequence(cs, type, tuples);
     case Kind.Blob:
       throw new Error('Not implemented');
     default:
@@ -129,7 +129,7 @@ export function indexTypeForMetaSequence(t: Type): Type {
 
 export function newOrderedMetaSequenceChunkFn(t: Type): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
-    const meta = new OrderedMetaSequence(t, tuples);
+    const meta = new OrderedMetaSequence(null, t, tuples);
     const lastValue = tuples[tuples.length - 1].value;
     return [new MetaTuple(meta, lastValue), meta];
   };
@@ -148,7 +148,7 @@ export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
 export function newIndexedMetaSequenceChunkFn(t: Type): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
     const sum = tuples.reduce((l, mt) => l + mt.value, 0);
-    const meta = new IndexedMetaSequence(t, tuples);
+    const meta = new IndexedMetaSequence(null, t, tuples);
     return [new MetaTuple(meta, sum), meta];
   };
 }

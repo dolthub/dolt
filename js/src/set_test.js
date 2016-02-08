@@ -72,7 +72,7 @@ suite('SetLeaf', () => {
   test('isEmpty', () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
-    const newSet = items => new NomsSet(ms, tr, new SetLeafSequence(tr, items));
+    const newSet = items => new NomsSet(tr, new SetLeafSequence(ms, tr, items));
     assert.isTrue(newSet([]).isEmpty());
     assert.isFalse(newSet(['a', 'k']).isEmpty());
   });
@@ -80,7 +80,7 @@ suite('SetLeaf', () => {
   test('first/has', async () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
-    const s = new NomsSet(ms, tr, new SetLeafSequence(tr, ['a', 'k']));
+    const s = new NomsSet(tr, new SetLeafSequence(ms, tr, ['a', 'k']));
 
     assert.strictEqual('a', await s.first());
 
@@ -93,7 +93,7 @@ suite('SetLeaf', () => {
   test('forEach', async () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
-    const m = new NomsSet(ms, tr, new SetLeafSequence(tr, ['a', 'b']));
+    const m = new NomsSet(tr, new SetLeafSequence(ms, tr, ['a', 'b']));
 
     const values = [];
     await m.forEach((k) => { values.push(k); });
@@ -105,7 +105,7 @@ suite('SetLeaf', () => {
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
 
     const test = async items => {
-      const m = new NomsSet(ms, tr, new SetLeafSequence(tr, items));
+      const m = new NomsSet(tr, new SetLeafSequence(ms, tr, items));
       assert.deepEqual(items, await flatten(m.iterator()));
     };
 
@@ -117,7 +117,7 @@ suite('SetLeaf', () => {
   test('iteratorAt', async () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
-    const build = items => new NomsSet(ms, tr, new SetLeafSequence(tr, items));
+    const build = items => new NomsSet(tr, new SetLeafSequence(ms, tr, items));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
 
@@ -139,7 +139,7 @@ suite('SetLeaf', () => {
     const r1 = writeValue('x', st, ms);
     const r2 = writeValue('a', st, ms);
     const r3 = writeValue('b', st, ms);
-    const l = new NomsSet(ms, tr, new SetLeafSequence(tr, ['z', r1, r2, r3]));
+    const l = new NomsSet(tr, new SetLeafSequence(ms, tr, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
     assert.isTrue(r1.equals(l.chunks[0]));
     assert.isTrue(r2.equals(l.chunks[1]));
@@ -154,7 +154,7 @@ suite('CompoundSet', () => {
 
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
-      const l = new NomsSet(cs, tr, new SetLeafSequence(tr, [values[i], values[i + 1]]));
+      const l = new NomsSet(tr, new SetLeafSequence(cs, tr, [values[i], values[i + 1]]));
       const r = writeValue(l, tr, cs);
       tuples.push(new MetaTuple(r, values[i + 1]));
     }
@@ -163,7 +163,7 @@ suite('CompoundSet', () => {
     while (tuples.length > 1) {
       const next = [];
       for (let i = 0; i < tuples.length; i += 2) {
-        last = new NomsSet(cs, tr, new OrderedMetaSequence(tr, [tuples[i], tuples[i + 1]]));
+        last = new NomsSet(tr, new OrderedMetaSequence(cs, tr, [tuples[i], tuples[i + 1]]));
         const r = writeValue(last, tr, cs);
         next.push(new MetaTuple(r, tuples[i + 1].value));
       }
@@ -286,7 +286,7 @@ suite('CompoundSet', () => {
     const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
 
     invariant(c.sequence instanceof OrderedSequence);
-    let cursor = await c.sequence.newCursorAt(c.cs, null);
+    let cursor = await c.sequence.newCursorAt(null);
     assert.ok(cursor);
     assert.strictEqual('a', cursor.getCurrent());
 
@@ -300,11 +300,11 @@ suite('CompoundSet', () => {
     assert.isFalse(cursor.valid);
 
     invariant(c.sequence instanceof OrderedSequence);
-    cursor = await c.sequence.newCursorAt(ms, 'x'); // not found
+    cursor = await c.sequence.newCursorAt('x'); // not found
     assert.isFalse(cursor.valid);
 
     invariant(c.sequence instanceof OrderedSequence);
-    cursor = await c.sequence.newCursorAt(ms, 'e');
+    cursor = await c.sequence.newCursorAt('e');
     assert.ok(cursor);
     assert.strictEqual('e', cursor.getCurrent());
 

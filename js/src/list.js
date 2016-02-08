@@ -19,7 +19,7 @@ const listPattern = ((1 << 6) | 0) - 1;
 
 function newListLeafChunkFn<T: valueOrPrimitive>(t: Type): makeChunkFn {
   return (items: Array<T>) => {
-    const listLeaf = new ListLeafSequence(t, items);
+    const listLeaf = new ListLeafSequence(null, t, items);
     const mt = new MetaTuple(listLeaf, items.length);
     return [mt, listLeaf];
   };
@@ -37,25 +37,25 @@ export function newList<T: valueOrPrimitive>(type: Type, values: Array<T>):
                        newIndexedMetaSequenceChunkFn(type),
                        newListLeafBoundaryChecker(type),
                        newIndexedMetaSequenceBoundaryChecker)
-  .then((seq: IndexedSequence) => new NomsList(null, type, seq));
+  .then((seq: IndexedSequence) => new NomsList(type, seq));
 }
 
 export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
   async get(idx: number): Promise<T> {
     // TODO (when |length| works) invariant(idx < this.length, idx + ' >= ' + this.length);
-    const cursor = await this.sequence.newCursorAt(this.cs, idx);
+    const cursor = await this.sequence.newCursorAt(idx);
     return cursor.getCurrent();
   }
 
   async splice(idx: number, insert: Array<T>, remove: number): Promise<NomsList<T>> {
-    const cursor = await this.sequence.newCursorAt(this.cs, idx);
+    const cursor = await this.sequence.newCursorAt(idx);
     const type = this.type;
     const seq = await chunkSequence(cursor, insert, remove, newListLeafChunkFn(type),
                                     newIndexedMetaSequenceChunkFn(type),
                                     newListLeafBoundaryChecker(type),
                                     newIndexedMetaSequenceBoundaryChecker);
     invariant(seq instanceof IndexedSequence);
-    return new NomsList(this.cs, type, seq);
+    return new NomsList(type, seq);
   }
 
   insert(idx: number, values: Array<T>): Promise<NomsList<T>> {
@@ -71,7 +71,7 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
   }
 
   async forEach(cb: (v: T, i: number) => void): Promise<void> {
-    const cursor = await this.sequence.newCursorAt(this.cs, 0);
+    const cursor = await this.sequence.newCursorAt(0);
     return cursor.iter((v, i) => {
       cb(v, i);
       return false;
@@ -79,11 +79,11 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
   }
 
   iterator(): AsyncIterator<T> {
-    return new IndexedSequenceIterator(this.sequence.newCursorAt(this.cs, 0));
+    return new IndexedSequenceIterator(this.sequence.newCursorAt(0));
   }
 
   iteratorAt(i: number): AsyncIterator<T> {
-    return new IndexedSequenceIterator(this.sequence.newCursorAt(this.cs, i));
+    return new IndexedSequenceIterator(this.sequence.newCursorAt(i));
   }
 
   get length(): number {

@@ -11,19 +11,19 @@ import MemoryStore from './memory_store.js';
 import type {ChunkStore} from './chunk_store.js';
 
 class TestSequence extends Sequence<any> {
-  constructor(items: Array<any>) {
-    super(makeCompoundType(Kind.List, makePrimitiveType(Kind.Value)), items);
+  constructor(cs: ?ChunkStore, items: Array<any>) {
+    super(cs, makeCompoundType(Kind.List, makePrimitiveType(Kind.Value)), items);
   }
 
-  getChildSequence(cs: ?ChunkStore, idx: number): // eslint-disable-line no-unused-vars
+  getChildSequence(idx: number): // eslint-disable-line no-unused-vars
       Promise<?Sequence> {
-    return Promise.resolve(new TestSequence(this.items[idx]));
+    return Promise.resolve(new TestSequence(this.cs, this.items[idx]));
   }
 }
 
 class TestSequenceCursor extends SequenceCursor<any, TestSequence> {
   clone(): TestSequenceCursor {
-    return new TestSequenceCursor(this.cs, this.parent ? this.parent.clone() : null, this.sequence,
+    return new TestSequenceCursor(this.parent ? this.parent.clone() : null, this.sequence,
                                   this.idx);
   }
 }
@@ -31,10 +31,10 @@ class TestSequenceCursor extends SequenceCursor<any, TestSequence> {
 suite('SequenceCursor', () => {
   function testCursor(data: any): TestSequenceCursor {
     const ms = new MemoryStore();
-    const s1 = new TestSequence(data);
-    const c1 = new TestSequenceCursor(ms, null, s1, 0);
-    const s2 = new TestSequence(data[0]);
-    const c2 = new TestSequenceCursor(ms, c1, s2, 0);
+    const s1 = new TestSequence(ms, data);
+    const c1 = new TestSequenceCursor(null, s1, 0);
+    const s2 = new TestSequence(ms, data[0]);
+    const c2 = new TestSequenceCursor(c1, s2, 0);
     return c2;
   }
 
