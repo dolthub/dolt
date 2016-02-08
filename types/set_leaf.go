@@ -218,7 +218,7 @@ func makeSetLeafChunkFn(t Type) makeChunkFn {
 			}
 		}
 
-		return metaTuple{setLeaf, ref.Ref{}, indexValue}, setLeaf
+		return newMetaTuple(indexValue, setLeaf, ref.Ref{}), setLeaf
 	}
 }
 

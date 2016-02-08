@@ -138,15 +138,13 @@ func TestCompoundSetIter(t *testing.T) {
 		idx := uint64(0)
 		endAt := uint64(setPattern)
 
-		set.Iter(func(v Value) bool {
+		set.Iter(func(v Value) (done bool) {
 			assert.True(ts.values[idx].Equals(v))
 			if idx == endAt {
-				idx += 1
-				return true
+				done = true
 			}
-
-			idx += 1
-			return false
+			idx++
+			return
 		})
 
 		assert.Equal(endAt, idx-1)

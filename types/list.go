@@ -1,5 +1,7 @@
 package types
 
+import "github.com/attic-labs/noms/chunks"
+
 type List interface {
 	Value
 	Len() uint64
@@ -26,15 +28,30 @@ type MapFunc func(v Value, index uint64) interface{}
 
 var listType = MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
 
+// NewList creates a new untyped List, populated with values, chunking if and when needed.
 func NewList(v ...Value) List {
 	return NewTypedList(listType, v...)
 }
 
+// NewTypedList creates a new List with type t, populated with values, chunking if and when needed.
 func NewTypedList(t Type, values ...Value) List {
-	seq := newEmptySequenceChunker(makeListLeafChunkFn(t), newIndexedMetaSequenceChunkFn(t), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeListLeafChunkFn(t, nil), newIndexedMetaSequenceChunkFn(t, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	for _, v := range values {
 		seq.Append(v)
 	}
-
 	return seq.Done().(List)
+}
+
+// NewStreamingTypedList creates a new List with type t, populated with values, chunking if and when needed. As chunks are created, they're written to cs -- including the root chunk of the list. Once the caller has closed values, she can read the completed List from the returned channel.
+func NewStreamingTypedList(t Type, cs chunks.ChunkStore, values <-chan Value) <-chan List {
+	out := make(chan List)
+	go func() {
+		seq := newEmptySequenceChunker(makeListLeafChunkFn(t, cs), newIndexedMetaSequenceChunkFn(t, cs), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+		for v := range values {
+			seq.Append(v)
+		}
+		out <- seq.Done().(List)
+		close(out)
+	}()
+	return out
 }

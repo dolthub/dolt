@@ -190,11 +190,11 @@ func (cl compoundList) sequenceCursorAtIndex(idx uint64) *sequenceCursor {
 
 func (cl compoundList) sequenceChunkerAtIndex(idx uint64) *sequenceChunker {
 	cur := cl.sequenceCursorAtIndex(idx)
-	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t), newIndexedMetaSequenceChunkFn(cl.t), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t, nil), newIndexedMetaSequenceChunkFn(cl.t, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 }
 
 func (cl compoundList) Filter(cb listFilterCallback) List {
-	seq := newEmptySequenceChunker(makeListLeafChunkFn(cl.t), newIndexedMetaSequenceChunkFn(cl.t), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeListLeafChunkFn(cl.t, nil), newIndexedMetaSequenceChunkFn(cl.t, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	cl.IterAll(func(v Value, idx uint64) {
 		if cb(v, idx) {
 			seq.Append(v)
@@ -254,7 +254,7 @@ func newListLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeListLeafChunkFn(t Type) makeChunkFn {
+func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		values := make([]Value, len(items))
 
@@ -262,7 +262,10 @@ func makeListLeafChunkFn(t Type) makeChunkFn {
 			values[i] = v.(Value)
 		}
 
-		list := valueFromType(newListLeaf(nil, t, values...), t)
-		return metaTuple{list, ref.Ref{}, Uint64(len(values))}, list
+		list := valueFromType(newListLeaf(cs, t, values...), t)
+		if cs != nil {
+			return newMetaTuple(Uint64(len(values)), nil, WriteValue(list, cs)), list
+		}
+		return newMetaTuple(Uint64(len(values)), list, ref.Ref{}), list
 	}
 }

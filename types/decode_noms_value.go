@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -153,18 +154,17 @@ func (r *jsonArrayReader) readMap(t Type, pkg *Package) Value {
 
 func indexTypeForMetaSequence(t Type) Type {
 	switch t.Kind() {
+	default:
+		panic(fmt.Sprintf("Unknown type used for metaSequence: %s", t.Describe()))
+	case BlobKind, ListKind:
+		return MakePrimitiveType(Uint64Kind)
 	case MapKind, SetKind:
 		elemType := t.Desc.(CompoundDesc).ElemTypes[0]
 		if elemType.IsOrdered() {
 			return elemType
-		} else {
-			return MakeCompoundType(RefKind, MakePrimitiveType(ValueKind))
 		}
-	case BlobKind, ListKind:
-		return MakePrimitiveType(Uint64Kind)
+		return MakeCompoundType(RefKind, MakePrimitiveType(ValueKind))
 	}
-
-	panic("unreached")
 }
 
 func (r *jsonArrayReader) maybeReadMetaSequence(t Type, pkg *Package) (Value, bool) {
@@ -178,7 +178,7 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t Type, pkg *Package) (Value, bo
 	for !r2.atEnd() {
 		ref := r2.readRef()
 		v := r2.readValueWithoutTag(indexType, pkg)
-		data = append(data, metaTuple{nil, ref, v})
+		data = append(data, newMetaTuple(v, nil, ref))
 	}
 
 	t = fixupType(t, pkg)

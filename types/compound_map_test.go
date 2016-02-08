@@ -186,16 +186,14 @@ func TestCompoundMapIter(t *testing.T) {
 		idx := uint64(0)
 		endAt := uint64(mapPattern)
 
-		m.Iter(func(k, v Value) bool {
+		m.Iter(func(k, v Value) (done bool) {
 			assert.True(tm.entries[idx].key.Equals(k))
 			assert.True(tm.entries[idx].value.Equals(v))
 			if idx == endAt {
-				idx += 1
-				return true
+				done = true
 			}
-
-			idx += 1
-			return false
+			idx++
+			return
 		})
 
 		assert.Equal(endAt, idx-1)
