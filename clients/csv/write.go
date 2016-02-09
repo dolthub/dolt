@@ -22,23 +22,19 @@ func getFieldNamesFromStruct(structDesc types.StructDesc) (fieldNames []string) 
 func datasetToHeaderAndList(ds *dataset.Dataset) (fieldNames []string, nomsList types.List) {
 	v := ds.Head().Value()
 	d.Exp.Equal(types.ListKind, v.Type().Desc.Kind(),
-		"Dataset must be List<>, found:", v.Type().Desc.Describe())
+		"Dataset must be List<>, found: %s", v.Type().Desc.Describe())
 
-	t := v.Type().Desc.(types.CompoundDesc).ElemTypes[0]
-	d.Exp.Equal(types.RefKind, t.Desc.Kind(),
-		"List<> must be of Ref, found:", t.Desc.Describe())
-
-	u := t.Desc.(types.CompoundDesc).ElemTypes[0]
+	u := v.Type().Desc.(types.CompoundDesc).ElemTypes[0]
 	d.Exp.Equal(types.UnresolvedKind, u.Desc.Kind(),
-		"Ref must be UnresolvedKind, found:", u.Desc.Describe())
+		"List<> must be UnresolvedKind, found: %s", u.Desc.Describe())
 
 	pkg := types.ReadPackage(u.PackageRef(), ds.Store())
 	d.Exp.Equal(types.PackageKind, pkg.Type().Desc.Kind(),
-		"Failed to read package:", pkg.Type().Desc.Describe())
+		"Failed to read package: %s", pkg.Type().Desc.Describe())
 
 	structDesc := pkg.Types()[u.Ordinal()].Desc
 	d.Exp.Equal(types.StructKind, structDesc.Kind(),
-		"Did not find Struct:", structDesc.Describe())
+		"Did not find Struct: %s", structDesc.Describe())
 
 	fieldNames = getFieldNamesFromStruct(structDesc.(types.StructDesc))
 	nomsList = v.(types.List)
@@ -58,8 +54,8 @@ func Write(ds *dataset.Dataset, comma rune, concurrency int, output io.Writer) {
 		for _, f := range fieldNames {
 			records[index+1] = append(
 				records[index+1],
-				fmt.Sprintf("%s", v.(types.Ref).TargetValue(ds.Store()).(types.Struct).
-					Get(f)))
+				fmt.Sprintf("%s", v.(types.Struct).Get(f)),
+			)
 		}
 	})
 
