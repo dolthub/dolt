@@ -73,3 +73,20 @@ func (f Flags) CreateDataStore() (DataStore, bool) {
 
 	return &LocalDataStore{}, false
 }
+
+func (f Flags) CreateFactory() (Factory, bool) {
+	var cf chunks.Factory
+	if cf = f.ldb.CreateFactory(); cf != nil {
+	} else if cf = f.dynamo.CreateFactory(); cf != nil {
+	} else if cf = f.memory.CreateFactory(); cf != nil {
+	}
+
+	if cf != nil {
+		return &localFactory{cf}, true
+	}
+
+	if cf = f.hflags.CreateFactory(); cf != nil {
+		return &remoteFactory{cf}, true
+	}
+	return &localFactory{}, false
+}
