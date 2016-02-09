@@ -19,9 +19,19 @@ function replaceEnv(envVars) {
   return new webpack.DefinePlugin(replacements);
 }
 
+function exitStatus() {
+  this.plugin('done', function(stats) {
+    if (stats.compilation.errors && stats.compilation.errors.length) {
+        console.error(stats.compilation.errors);
+        process.exit(1);
+    }
+  });
+}
+
 function getPlugins(envVars) {
   const plugins = [replaceEnv(envVars)];
   if (!devMode) {
+    plugins.push(exitStatus);
     plugins.push(new webpack.optimize.UglifyJsPlugin({
       compress: {
         warnings: false,
