@@ -22,7 +22,7 @@ type HTTPStoreTestSuite struct {
 }
 
 func (suite *HTTPStoreTestSuite) SetupTest() {
-	suite.Store = chunks.NewHTTPStore("http://localhost:8000")
+	suite.Store = chunks.NewHTTPStore("http://localhost:8000", "")
 	suite.server = NewDataStoreServer(&localFactory{chunks.NewTestStoreFactory()}, 8000)
 	go suite.server.Run()
 
@@ -57,7 +57,7 @@ type NamespacedHTTPStoreTestSuite struct {
 
 func (suite *NamespacedHTTPStoreTestSuite) SetupTest() {
 	suite.baseURL = "http://localhost:8000/someStore"
-	suite.Store = chunks.NewHTTPStore(suite.baseURL)
+	suite.Store = chunks.NewHTTPStore(suite.baseURL, "")
 	suite.server = NewDataStoreServer(&localFactory{chunks.NewTestStoreFactory()}, 8000)
 	go suite.server.Run()
 
