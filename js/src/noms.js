@@ -17,6 +17,7 @@ export {newMap, NomsMap, MapLeafSequence} from './map.js';
 export {newSet, NomsSet, SetLeafSequence} from './set.js';
 export {OrderedMetaSequence, IndexedMetaSequence} from './meta_sequence.js';
 export {readValue} from './read_value.js';
+export {SPLICE_AT, SPLICE_REMOVED, SPLICE_ADDED, SPLICE_FROM} from './edit_distance.js';
 export {
   CompoundDesc,
   EnumDesc,
@@ -45,6 +46,9 @@ export type {ChunkStore};
 
 import type {MapEntry} from './map.js';
 export type {MapEntry};
+
+import type {Splice} from './edit_distance.js';
+export type {Splice};
 
 import type {valueOrPrimitive} from './value.js';
 export type {valueOrPrimitive};
