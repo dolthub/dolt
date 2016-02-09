@@ -1,5 +1,4 @@
 // @flow
-
 import {DataStore, HttpStore} from 'noms';
 import Chart from './chart.js';
 import DataManager from './data.js';
