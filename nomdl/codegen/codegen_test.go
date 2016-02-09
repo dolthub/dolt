@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
-	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/tools/imports"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
@@ -19,6 +17,8 @@ import (
 	"github.com/attic-labs/noms/nomdl/pkg"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/tools/imports"
 )
 
 func assertOutput(inPath, goldenPath string, t *testing.T) {

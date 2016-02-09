@@ -5,8 +5,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/chunks"
+	"github.com/stretchr/testify/assert"
 )
 
 type testMap struct {

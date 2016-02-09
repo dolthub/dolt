@@ -3,7 +3,7 @@ package d
 import (
 	"fmt"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 var (

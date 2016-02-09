@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/oauth2"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
+	"golang.org/x/oauth2"
 )
 
 const maxProcs = 25

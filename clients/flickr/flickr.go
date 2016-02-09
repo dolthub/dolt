@@ -15,12 +15,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/bradfitz/latlong"
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/garyburd/go-oauth/oauth"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
+	"github.com/bradfitz/latlong"
+	"github.com/garyburd/go-oauth/oauth"
 )
 
 var (

@@ -5,9 +5,9 @@ import (
 	"io"
 	"testing"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTolerateUngettableRefs(t *testing.T) {

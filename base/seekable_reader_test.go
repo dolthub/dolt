@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestSeekableReaderTestSuite(t *testing.T) {
