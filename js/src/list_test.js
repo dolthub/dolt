@@ -304,7 +304,6 @@ suite('Diff List', () => {
     assert.deepEqual(directDiff, listDiff);
   });
 
-
   test('Replace reverse 5x100', async () => {
     const nums1 = firstNNumbers(5000);
     const nums2 = nums1.slice(0);
@@ -322,5 +321,26 @@ suite('Diff List', () => {
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(directDiff, listDiff);
+  });
+
+  test('Load Limit', async () => {
+    const nums1 = firstNNumbers(5);
+    const nums2 = firstNNumbers(5000);
+
+    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
+    const l1 = await newList(tr, nums1);
+    const l2 = await newList(tr, nums2);
+
+    const listDiff = await l2.diff(l1);
+    assert.deepEqual(directDiff, listDiff);
+    let exMessage = '';
+    try {
+      await l2.diff(l1, 50);
+    } catch (ex) {
+      exMessage = ex.message;
+    }
+
+    assert.strictEqual('Load limit exceeded', exMessage);
   });
 });

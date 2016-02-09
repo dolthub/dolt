@@ -87,7 +87,7 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
     return new IndexedSequenceIterator(this.sequence.newCursorAt(i));
   }
 
-  diff(last: NomsList<T>): Promise<Array<Splice>> {
+  diff(last: NomsList<T>, loadLimit: number = -1): Promise<Array<Splice>> {
     invariant(this.type.equals(last.type));
 
     if (this.equals(last)) {
@@ -100,8 +100,9 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
       return Promise.resolve([[0, 0, this.length, 0]]); // Everything added
     }
 
+    const loadLimitArg = loadLimit === -1 ? null : {count : loadLimit};
     return Promise.all([last.sequence.newCursorAt(0), this.sequence.newCursorAt(0)]).then(cursors =>
-        diff(last.sequence, cursors[0].depth, 0, this.sequence, cursors[1].depth, 0));
+        diff(last.sequence, cursors[0].depth, 0, this.sequence, cursors[1].depth, 0, loadLimitArg));
   }
 
   get length(): number {

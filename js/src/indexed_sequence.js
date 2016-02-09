@@ -69,21 +69,39 @@ export class IndexedSequenceIterator<T> extends AsyncIterator<T> {
   }
 }
 
+type LoadLimit = {
+  count: number,
+}
+
 export function diff(last: IndexedSequence, lastHeight: number, lastOffset: number,
-                     current: IndexedSequence, currentHeight: number, currentOffset: number):
-    Promise<Array<Splice>> {
+                     current: IndexedSequence, currentHeight: number, currentOffset: number,
+                     loadLimit: ?LoadLimit): Promise<Array<Splice>> {
+
+  const maybeLoadCompositeSequence = (ms: IndexedMetaSequence, idx: number, length: number) => {
+    if (loadLimit) {
+      loadLimit.count -= length;
+      if (loadLimit.count < 0) {
+        return Promise.reject(new Error('Load limit exceeded'));
+      }
+    }
+
+    return ms.getCompositeChildSequence(idx, length);
+  };
+
   if (lastHeight > currentHeight) {
     invariant(lastOffset === 0 && currentOffset === 0);
     invariant(last instanceof IndexedMetaSequence);
-    return last.getCompositeChildSequence(0, last.length).then(lastChild =>
-        diff(lastChild, lastHeight - 1, lastOffset, current, currentHeight, currentOffset));
+    return maybeLoadCompositeSequence(last, 0, last.length).then(lastChild =>
+        diff(lastChild, lastHeight - 1, lastOffset, current, currentHeight, currentOffset,
+             loadLimit));
   }
 
   if (currentHeight > lastHeight) {
     invariant(lastOffset === 0 && currentOffset === 0);
     invariant(current instanceof IndexedMetaSequence);
-    return current.getCompositeChildSequence(0, current.length).then(currentChild =>
-        diff(last, lastHeight, lastOffset, currentChild, currentHeight - 1, currentOffset));
+    return maybeLoadCompositeSequence(current, 0, current.length).then(currentChild =>
+        diff(last, lastHeight, lastOffset, currentChild, currentHeight - 1, currentOffset,
+             loadLimit));
   }
 
   invariant(last.isMeta === current.isMeta);
@@ -104,9 +122,9 @@ export function diff(last: IndexedSequence, lastHeight: number, lastOffset: numb
     }
 
     invariant(last instanceof IndexedMetaSequence && current instanceof IndexedMetaSequence);
-    const lastChildP = last.getCompositeChildSequence(splice[SPLICE_AT], splice[SPLICE_REMOVED]);
-    const currentChildP = current.getCompositeChildSequence(splice[SPLICE_FROM],
-                                                            splice[SPLICE_ADDED]);
+    const lastChildP = maybeLoadCompositeSequence(last, splice[SPLICE_AT], splice[SPLICE_REMOVED]);
+    const currentChildP = maybeLoadCompositeSequence(current, splice[SPLICE_FROM],
+                                                     splice[SPLICE_ADDED]);
 
     let lastChildOffset = lastOffset;
     if (splice[SPLICE_AT] > 0) {
@@ -119,7 +137,8 @@ export function diff(last: IndexedSequence, lastHeight: number, lastOffset: numb
 
     return Promise.all([lastChildP, currentChildP]).then(childSequences =>
       diff(childSequences[0], lastHeight - 1, lastChildOffset, childSequences[1], currentHeight - 1,
-           currentChildOffset));
+           currentChildOffset,
+           loadLimit));
   });
 
   return Promise.all(splicesP).then(spliceArrays => {
