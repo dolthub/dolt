@@ -1,0 +1,9 @@
+language: go
+
+go:
+  - 1.2
+  - 1.3
+  - 1.4
+  - tip
+
+script: go test -timeout 1h ./...
