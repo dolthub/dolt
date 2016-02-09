@@ -10,23 +10,6 @@ type Factory interface {
 	Shutter()
 }
 
-func (f Flags) CreateFactory() (Factory, bool) {
-	var cf chunks.Factory
-	if cf = f.ldb.CreateFactory(); cf != nil {
-	} else if cf = f.dynamo.CreateFactory(); cf != nil {
-	} else if cf = f.memory.CreateFactory(); cf != nil {
-	}
-
-	if cf != nil {
-		return &localFactory{cf}, true
-	}
-
-	if cf = f.hflags.CreateFactory(); cf != nil {
-		return &remoteFactory{cf}, true
-	}
-	return &localFactory{}, false
-}
-
 type localFactory struct {
 	cf chunks.Factory
 }
@@ -55,4 +38,8 @@ func (rf *remoteFactory) Create(ns string) (DataStore, bool) {
 
 func (rf *remoteFactory) Shutter() {
 	rf.cf.Shutter()
+}
+
+func NewTestFactory(cf chunks.Factory) Factory {
+	return &localFactory{cf}
 }
