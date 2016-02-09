@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
@@ -14,6 +13,7 @@ import (
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestCSVExporter(t *testing.T) {

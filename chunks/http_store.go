@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
+	"github.com/julienschmidt/httprouter"
 )
 
 const (

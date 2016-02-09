@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
 	"github.com/attic-labs/noms/chunks"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestHTTPStoreTestSuite(t *testing.T) {

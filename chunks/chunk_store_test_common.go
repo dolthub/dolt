@@ -1,8 +1,8 @@
 package chunks
 
 import (
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
 	"github.com/attic-labs/noms/ref"
+	"github.com/stretchr/testify/suite"
 )
 
 type ChunkStoreTestSuite struct {

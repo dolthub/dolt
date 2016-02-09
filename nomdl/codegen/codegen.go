@@ -18,7 +18,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/golang.org/x/tools/imports"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
@@ -27,6 +26,7 @@ import (
 	"github.com/attic-labs/noms/nomdl/pkg"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
+	"golang.org/x/tools/imports"
 )
 
 var (

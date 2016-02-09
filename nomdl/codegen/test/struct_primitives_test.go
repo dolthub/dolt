@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 	"github.com/attic-labs/noms/types"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAccessors(t *testing.T) {

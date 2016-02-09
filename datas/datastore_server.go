@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
+	"github.com/julienschmidt/httprouter"
 )
 
 type connectionState struct {

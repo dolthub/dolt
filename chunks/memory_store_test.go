@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestMemoryStoreTestSuite(t *testing.T) {

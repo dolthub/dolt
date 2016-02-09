@@ -26,8 +26,8 @@ go get -u -t github.com/attic-labs/noms/...
 # Build
 
 ```
-go install ./...
-go test ./...
+go install `go list ./... | grep -v /vendor/`
+go test `go list ./... | grep -v /vendor/`
 ```
 
 # Run

@@ -34,7 +34,7 @@ before_script:
 script:
 - export GODEBUG=invalidptr=0
 - export GO15VENDOREXPERIMENT=1
-- go test ./...
+- go test `go list ./... | grep -v vendor`
 notifications:
   email:
     recipients:

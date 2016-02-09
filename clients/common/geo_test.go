@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPoint(t *testing.T) {

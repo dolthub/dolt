@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/suite"
 	"github.com/attic-labs/noms/clients/util"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestCounter(t *testing.T) {
