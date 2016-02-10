@@ -19,6 +19,7 @@ export {OrderedMetaSequence, IndexedMetaSequence} from './meta_sequence.js';
 export {readValue} from './read_value.js';
 export {SPLICE_AT, SPLICE_REMOVED, SPLICE_ADDED, SPLICE_FROM} from './edit_distance.js';
 export {
+  boolType,
   CompoundDesc,
   EnumDesc,
   Field,
@@ -32,6 +33,7 @@ export {
   PrimitiveDesc,
   StructDesc,
   Type,
+  stringType,
   typeType,
   UnresolvedDesc,
 } from './type.js';
