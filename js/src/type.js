@@ -5,11 +5,12 @@ import type {NomsKind} from './noms_kind.js';
 import type {Value} from './value.js';
 import {ensureRef} from './get_ref.js';
 import {invariant} from './assert.js';
-import {isPrimitiveKind, Kind} from './noms_kind.js';
+import {isPrimitiveKind, Kind, kindToString} from './noms_kind.js';
 
 export type TypeDesc = {
   kind: NomsKind;
   equals: (other: TypeDesc) => boolean;
+  describe: () => string;
 };
 
 class PrimitiveDesc {
@@ -41,6 +42,10 @@ class PrimitiveDesc {
         return false;
     }
   }
+
+  describe(): string {
+    return kindToString[this.kind];
+  }
 }
 
 class UnresolvedDesc {
@@ -63,6 +68,10 @@ class UnresolvedDesc {
     invariant(other instanceof UnresolvedDesc);
 
     return other._pkgRef.equals(this._pkgRef) && other._ordinal === this._ordinal;
+  }
+
+  describe(): string {
+    return `Unresolved(${this._pkgRef.toString()}, ${this._ordinal})`;
   }
 }
 
@@ -92,6 +101,11 @@ class CompoundDesc {
     }
 
     return false;
+  }
+
+  describe(): string {
+    const elemsDesc = this.elemTypes.map(e => e.describe()).join(', ');
+    return `${kindToString[this.kind]}<${elemsDesc}>`;
   }
 }
 
@@ -124,7 +138,13 @@ class EnumDesc {
 
     return true;
   }
+
+  describe(): string {
+    const idsStr = this.ids.join('  \n');
+    return `{\n  ${idsStr}\n}`;
+  }
 }
+
 
 class StructDesc {
   fields: Array<Field>;
@@ -162,6 +182,24 @@ class StructDesc {
     }
 
     return true;
+  }
+
+  describe(): string {
+    let out = '{\n';
+    this.fields.forEach(f => {
+      const optional = f.optional ? 'optional ' : '';
+      out += `  ${f.name}: ${optional}${f.t.describe()}\n`;
+    });
+
+    if (this.union.length > 0) {
+      out += '  union {\n';
+      this.union.forEach(f => {
+        out += `    ${f.name}: ${f.t.describe()}\n`;
+      });
+      out += '  }\n';
+    }
+
+    return out + '}';
   }
 }
 
@@ -283,6 +321,35 @@ class Type {
   get elemTypes(): Array<Type> {
     invariant(this._desc instanceof CompoundDesc);
     return this._desc.elemTypes;
+  }
+
+  describe(): string {
+    let out = '';
+    switch (this.kind) {
+      case Kind.Enum:
+        out += 'enum ';
+        break;
+      case Kind.Struct:
+        out += 'struct ';
+        break;
+    }
+    if (this.name) {
+      invariant(!this.namespace || (this.namespace && this.name));
+      if (this.namespace) {
+        out += this.namespace + '.';
+      }
+      if (this.name) {
+        out += this.name;
+      }
+      out += ' ';
+
+      if (this.unresolved) {
+        return out;
+      }
+    }
+
+    out += this.desc.describe();
+    return out;
   }
 }
 

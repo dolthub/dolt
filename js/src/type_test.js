@@ -44,6 +44,39 @@ suite('Type', () => {
     assert.isTrue(trType.equals(await readValue(trRef, ms)));
   });
 
+  test('typeRef describe', async () => {
+    const boolType = makePrimitiveType(Kind.Bool);
+    const uint8Type = makePrimitiveType(Kind.Uint8);
+    const stringType = makePrimitiveType(Kind.String);
+    const mapType = makeCompoundType(Kind.Map, stringType, uint8Type);
+    const setType = makeCompoundType(Kind.Set, stringType);
+
+    assert.strictEqual('Bool', boolType.describe());
+    assert.strictEqual('Uint8', uint8Type.describe());
+    assert.strictEqual('String', stringType.describe());
+    assert.strictEqual('Map<String, Uint8>', mapType.describe());
+    assert.strictEqual('Set<String>', setType.describe());
+
+    const mahType = makeStructType('MahStruct',[
+      new Field('Field1', stringType, false),
+      new Field('Field2', boolType, true),
+    ], [
+    ]);
+    assert.strictEqual('struct MahStruct {\n  Field1: String\n  Field2: optional Bool\n}',
+        mahType.describe());
+
+    const otherType = makeStructType('MahOtherStruct',[
+      new Field('Field1', stringType, false),
+      new Field('Field2', boolType, true),
+    ], [
+      new Field('Uint8Field', uint8Type, false),
+      new Field('StringField', stringType, false),
+    ]);
+
+    const exp = `struct MahOtherStruct {\n  Field1: String\n  Field2: optional Bool\n  union {\n    Uint8Field: Uint8\n    StringField: String\n  }\n}`; // eslint-disable-line max-len
+    assert.strictEqual(exp, otherType.describe());
+  });
+
   test('type with pkgRef', async () => {
     const ms = new MemoryStore();
 
