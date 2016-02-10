@@ -5,7 +5,7 @@ import (
 	"unicode/utf8"
 )
 
-// Returns the rune contained in delimiter or an error.
+// StringToRune returns the rune contained in delimiter or an error.
 func StringToRune(delimiter string) (rune, error) {
 	dlimLen := len(delimiter)
 	if dlimLen == 0 {
