@@ -23,6 +23,12 @@ export {
   CompoundDesc,
   EnumDesc,
   Field,
+  float32Type,
+  float64Type,
+  int8Type,
+  int16Type,
+  int32Type,
+  int64Type,
   makeCompoundType,
   makeEnumType,
   makePrimitiveType,
@@ -35,6 +41,10 @@ export {
   Type,
   stringType,
   typeType,
+  uint8Type,
+  uint16Type,
+  uint32Type,
+  uint64Type,
   UnresolvedDesc,
 } from './type.js';
 export {equals, less} from './value.js';
