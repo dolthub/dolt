@@ -338,13 +338,22 @@ function makeUnresolvedType(namespace: string, name: string): Type {
   return new Type(name, namespace, new UnresolvedDesc(new Ref(), -1));
 }
 
-const typeType = makePrimitiveType(Kind.Type);
-const packageType = makePrimitiveType(Kind.Package);
-const stringType = makePrimitiveType(Kind.String);
-const boolType = makePrimitiveType(Kind.Bool);
+export const boolType = makePrimitiveType(Kind.Bool);
+export const uint8Type = makePrimitiveType(Kind.Uint8);
+export const uint16Type = makePrimitiveType(Kind.Uint16);
+export const uint32Type = makePrimitiveType(Kind.Uint32);
+export const uint64Type = makePrimitiveType(Kind.Uint64);
+export const int8Type = makePrimitiveType(Kind.Int8);
+export const int16Type = makePrimitiveType(Kind.Int16);
+export const int32Type = makePrimitiveType(Kind.Int32);
+export const int64Type = makePrimitiveType(Kind.Int64);
+export const float32Type = makePrimitiveType(Kind.Float32);
+export const float64Type = makePrimitiveType(Kind.Float64);
+export const stringType = makePrimitiveType(Kind.String);
+export const typeType = makePrimitiveType(Kind.Type);
+export const packageType = makePrimitiveType(Kind.Package);
 
 export {
-  boolType,
   CompoundDesc,
   EnumDesc,
   Field,
@@ -357,8 +366,5 @@ export {
   PrimitiveDesc,
   StructDesc,
   Type,
-  stringType,
-  typeType,
-  packageType,
   UnresolvedDesc,
 };
