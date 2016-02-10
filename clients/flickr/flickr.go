@@ -80,9 +80,9 @@ func main() {
 	}
 
 	api := liveFlickrAPI{tokenCred}
-	d.Chk.True(checkAuth(api), "checkAuth failed after oauth succeeded")
+	user = getUser(api)
+	d.Chk.NoError(checkAuth(api), "checkAuth failed after oauth succeeded")
 
-	getUser(api)
 	if *albumIdFlag != "" {
 		album := getAlbum(api, *albumIdFlag)
 		user = user.SetAlbums(user.Albums().Set(album.Id(), album))
@@ -104,20 +104,17 @@ func flickrUsage() {
 	fmt.Fprintf(os.Stderr, "\n%s\n\n", essay)
 }
 
-func getUser(api flickrAPI) {
+func getUser(api flickrAPI) User {
 	if commit, ok := ds.MaybeHead(); ok {
 		if userRef, ok := commit.Value().(RefOfUser); ok {
-			user = userRef.TargetValue(ds.Store())
-			if checkAuth(api) {
-				return
-			}
+			return userRef.TargetValue(ds.Store())
 		}
 	}
 
-	user = NewUser()
+	return NewUser()
 }
 
-func checkAuth(api flickrAPI) bool {
+func checkAuth(api flickrAPI) error {
 	response := struct {
 		flickrCall
 		User struct {
@@ -128,13 +125,12 @@ func checkAuth(api flickrAPI) bool {
 		} `json:"user"`
 	}{}
 
-	err := api.Call("flickr.test.login", &response, nil)
-	if err != nil {
-		return false
+	if err := api.Call("flickr.test.login", &response, nil); err != nil {
+		return err
 	}
 
 	user = user.SetId(response.User.Id).SetName(response.User.Username.Content)
-	return true
+	return nil
 }
 
 func requestTokenCredentials() *oauth.Credentials {
