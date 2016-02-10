@@ -44,7 +44,8 @@ func main() {
 	}
 
 	err = d.Try(func() {
-		csv.Write(ds, comma, *p, os.Stdout)
+		nomsList, structDesc := csv.ValueToListAndElemDesc(ds.Head().Value(), ds.Store())
+		csv.Write(nomsList, structDesc, comma, *p, os.Stdout)
 	})
 	if err != nil {
 		fmt.Println("Failed to export dataset as CSV:")
