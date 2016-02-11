@@ -43,7 +43,7 @@ go build
 # What next?
 
 * Learn the core tools: [`server`](clients/server), [`splore`](clients/splore), [`shove`](clients/shove), [`csv_importer`](clients/csv_importer), [`json_importer`](clients/json_importer), [`xml_importer`](clients/xml_importer)
-* Run sample apps: [`sfcrime`](clients/sfcrime), [`tagshow`](clients/tagshow) (photo viewer)
+* Run sample apps: [`sfcrime`](clients/sfcrime)
 * NomDL reference (TODO)
 * Go SDK reference (TODO)
 * JavaScript SDK reference (TODO)

@@ -48,4 +48,3 @@ cache:
   - clients/crunchbase/ui/node_modules
   - clients/pitchmap/ui/node_modules
   - clients/splore/node_modules
-  - clients/tagshow/node_modules
