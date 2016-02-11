@@ -1,5 +1,0 @@
-alias Photo = import "../common/photo.noms"
-
-using Map<String, Set<Ref<Photo.RemotePhoto>>>
-using Set<Ref<Photo.RemotePhoto>>
-using Set<String>
