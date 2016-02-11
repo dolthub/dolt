@@ -18,7 +18,6 @@ import (
 )
 
 const facebookAPI = "https://graph.facebook.com/"
-const maxProcs = 25
 
 var (
 	authHTTPClient    *http.Client
