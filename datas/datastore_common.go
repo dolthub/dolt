@@ -72,15 +72,9 @@ func (ds *dataStoreCommon) commit(datasetID string, commit Commit) error {
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
 func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) error {
-	currentRootRef := ds.Root()
-	currentDatasets := ds.Datasets()
+	currentRootRef, currentDatasets := ds.getRootAndDatasets()
 
-	if currentRootRef != currentDatasets.Ref() && !currentRootRef.IsEmpty() {
-		// The root has been advanced.
-		currentDatasets = *datasetsFromRef(currentRootRef, ds)
-	}
-
-	// TODO: This Commit will be orphaned if the UpdateRoot below fails
+	// TODO: This Commit will be orphaned if the tryUpdateRoot() below fails
 	commitRef := NewRefOfCommit(types.WriteValue(commit, ds))
 
 	// First commit in store is always fast-foward.
@@ -99,16 +93,36 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) error {
 			}
 		}
 	}
-	// TODO: This Commit will be orphaned if the UpdateRoot below fails
 	currentDatasets = currentDatasets.Set(datasetID, commitRef)
-	newRootRef := types.WriteValue(currentDatasets, ds)
+	return ds.tryUpdateRoot(currentDatasets, currentRootRef)
+}
 
-	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
-	if ds.UpdateRoot(newRootRef, currentRootRef) {
-		return nil
-	} else {
-		return ErrOptimisticLockFailed
+// doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
+func (ds *dataStoreCommon) doDelete(datasetID string) error {
+	currentRootRef, currentDatasets := ds.getRootAndDatasets()
+	currentDatasets = currentDatasets.Remove(datasetID)
+	return ds.tryUpdateRoot(currentDatasets, currentRootRef)
+}
+
+func (ds *dataStoreCommon) getRootAndDatasets() (currentRootRef ref.Ref, currentDatasets MapOfStringToRefOfCommit) {
+	currentRootRef = ds.Root()
+	currentDatasets = ds.Datasets()
+
+	if currentRootRef != currentDatasets.Ref() && !currentRootRef.IsEmpty() {
+		// The root has been advanced.
+		currentDatasets = *datasetsFromRef(currentRootRef, ds)
 	}
+	return
+}
+
+func (ds *dataStoreCommon) tryUpdateRoot(currentDatasets MapOfStringToRefOfCommit, currentRootRef ref.Ref) (err error) {
+	// TODO: This Commit will be orphaned if the UpdateRoot below fails
+	newRootRef := types.WriteValue(currentDatasets, ds)
+	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
+	if !ds.UpdateRoot(newRootRef, currentRootRef) {
+		err = ErrOptimisticLockFailed
+	}
+	return
 }
 
 func checkCache(ds *dataStoreCommon, r ref.Ref) (has, ok bool) {

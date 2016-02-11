@@ -22,6 +22,11 @@ func (lds *LocalDataStore) Commit(datasetID string, commit Commit) (DataStore, e
 	return newLocalDataStore(lds.ChunkStore), err
 }
 
+func (lds *LocalDataStore) Delete(datasetID string) (DataStore, error) {
+	err := lds.doDelete(datasetID)
+	return newLocalDataStore(lds.ChunkStore), err
+}
+
 // Copies all chunks reachable from (and including)|sourceRef| but not reachable from (and including) |exclude| in |source| to |sink|
 func (lds *LocalDataStore) CopyReachableChunksP(sourceRef, exclude ref.Ref, sink chunks.ChunkSink, concurrency int) {
 	excludeRefs := map[ref.Ref]bool{}
