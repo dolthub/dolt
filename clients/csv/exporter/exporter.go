@@ -12,7 +12,6 @@ import (
 )
 
 var (
-	p       = flag.Int("p", 512, "parallelism")
 	dsFlags = dataset.NewFlags()
 	// Actually the delimiter uses runes, which can be multiple characters long.
 	// https://blog.golang.org/strings
@@ -45,7 +44,7 @@ func main() {
 
 	err = d.Try(func() {
 		nomsList, structDesc := csv.ValueToListAndElemDesc(ds.Head().Value(), ds.Store())
-		csv.Write(nomsList, structDesc, comma, *p, os.Stdout)
+		csv.Write(nomsList, structDesc, comma, os.Stdout)
 	})
 	if err != nil {
 		fmt.Println("Failed to export dataset as CSV:")
