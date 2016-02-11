@@ -34,6 +34,11 @@ func (rds *RemoteDataStore) Commit(datasetID string, commit Commit) (DataStore, 
 	return newRemoteDataStore(rds.ChunkStore), err
 }
 
+func (rds *RemoteDataStore) Delete(datasetID string) (DataStore, error) {
+	err := rds.doDelete(datasetID)
+	return newRemoteDataStore(rds.ChunkStore), err
+}
+
 // Asks remote server to figure out which chunks need to be copied and return them.
 func (rds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, cs chunks.ChunkSink, concurrency int) {
 	// POST http://<host>/ref/sha1----?all=true&exclude=sha1----. Response will be chunk data if present, 404 if absent.

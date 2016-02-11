@@ -20,8 +20,11 @@ type DataStore interface {
 	// Datasets returns the root of the datastore which is a MapOfStringToRefOfCommit where string is a datasetID.
 	Datasets() MapOfStringToRefOfCommit
 
-	// Commit updates the commit that a datastore points at. The new Commit is constructed using v and the current Head. If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the datastore is always returned.
+	// Commit updates the Commit that datasetID in this datastore points at. If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the datastore is always returned.
 	Commit(datasetID string, commit Commit) (DataStore, error)
+
+	// Delete removes the Dataset named datasetID from the map at the root of the DataStore. The Dataset data is not necessarily cleaned up at this time, but may be garbage collected in the future. If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the datastore is always returned.
+	Delete(datasetID string) (DataStore, error)
 
 	// Copies all chunks reachable from (and including)|r| but not reachable from (and including |exclude| in |source| to |sink|
 	CopyReachableChunksP(r, exclude ref.Ref, sink chunks.ChunkSink, concurrency int)
