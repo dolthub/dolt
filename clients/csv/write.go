@@ -29,28 +29,24 @@ func ValueToListAndElemDesc(v types.Value, cs chunks.ChunkSource) (types.List, t
 }
 
 // Write takes a types.List l of structs (described by sd) and writes it to output as comma-delineated values.
-func Write(l types.List, sd types.StructDesc, comma rune, concurrency int, output io.Writer) {
+func Write(l types.List, sd types.StructDesc, comma rune, output io.Writer) {
 	d.Exp.Equal(types.StructKind, sd.Kind(), "Did not find Struct: %s", sd.Describe())
 	fieldNames := getFieldNamesFromStruct(sd)
 
 	csvWriter := csv.NewWriter(output)
 	csvWriter.Comma = comma
 
-	records := make([][]string, l.Len()+1)
-	records[0] = fieldNames // Write header
-
-	l.IterAllP(concurrency, func(v types.Value, index uint64) {
-		for _, f := range fieldNames {
-			records[index+1] = append(
-				records[index+1],
-				fmt.Sprintf("%s", v.(types.Struct).Get(f)),
-			)
+	d.Exp.NoError(csvWriter.Write(fieldNames), "Failed to write header %v", fieldNames)
+	record := make([]string, len(fieldNames))
+	l.IterAll(func(v types.Value, index uint64) {
+		for i, f := range fieldNames {
+			record[i] = fmt.Sprintf("%s", v.(types.Struct).Get(f))
 		}
+		d.Exp.NoError(csvWriter.Write(record), "Failed to write record %v", record)
 	})
 
-	csvWriter.WriteAll(records)
-	err := csvWriter.Error()
-	d.Exp.Equal(nil, err, "error flushing csv:", err)
+	csvWriter.Flush()
+	d.Exp.NoError(csvWriter.Error(), "error flushing csv")
 }
 
 func getFieldNamesFromStruct(structDesc types.StructDesc) (fieldNames []string) {
