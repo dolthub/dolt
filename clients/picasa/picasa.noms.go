@@ -19,7 +19,7 @@ func init() {
 			[]types.Field{
 				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Name", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Albums", types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeType(ref.Ref{}, 1)), false},
+				types.Field{"Albums", types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Ref{}, 1))), false},
 			},
 			types.Choices{},
 		),
@@ -27,7 +27,7 @@ func init() {
 			[]types.Field{
 				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Photos", types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 0)), false},
+				types.Field{"Photos", types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 0))), false},
 			},
 			types.Choices{},
 		),
@@ -42,7 +42,7 @@ func init() {
 type User struct {
 	_Id     string
 	_Name   string
-	_Albums MapOfStringToAlbum
+	_Albums MapOfStringToRefOfAlbum
 
 	ref *ref.Ref
 }
@@ -51,10 +51,32 @@ func NewUser() User {
 	return User{
 		_Id:     "",
 		_Name:   "",
-		_Albums: NewMapOfStringToAlbum(),
+		_Albums: NewMapOfStringToRefOfAlbum(),
 
 		ref: &ref.Ref{},
 	}
+}
+
+type UserDef struct {
+	Id     string
+	Name   string
+	Albums MapOfStringToRefOfAlbumDef
+}
+
+func (def UserDef) New() User {
+	return User{
+		_Id:     def.Id,
+		_Name:   def.Name,
+		_Albums: def.Albums.New(),
+		ref:     &ref.Ref{},
+	}
+}
+
+func (s User) Def() (d UserDef) {
+	d.Id = s._Id
+	d.Name = s._Name
+	d.Albums = s._Albums.Def()
+	return
 }
 
 var __typeForUser types.Type
@@ -75,7 +97,7 @@ func builderForUser(values []types.Value) types.Value {
 	i++
 	s._Name = values[i].(types.String).String()
 	i++
-	s._Albums = values[i].(MapOfStringToAlbum)
+	s._Albums = values[i].(MapOfStringToRefOfAlbum)
 	i++
 	return s
 }
@@ -130,11 +152,11 @@ func (s User) SetName(val string) User {
 	return s
 }
 
-func (s User) Albums() MapOfStringToAlbum {
+func (s User) Albums() MapOfStringToRefOfAlbum {
 	return s._Albums
 }
 
-func (s User) SetAlbums(val MapOfStringToAlbum) User {
+func (s User) SetAlbums(val MapOfStringToRefOfAlbum) User {
 	s._Albums = val
 	s.ref = &ref.Ref{}
 	return s
@@ -145,7 +167,7 @@ func (s User) SetAlbums(val MapOfStringToAlbum) User {
 type Album struct {
 	_Id     string
 	_Title  string
-	_Photos SetOfRemotePhoto
+	_Photos SetOfRefOfRemotePhoto
 
 	ref *ref.Ref
 }
@@ -154,10 +176,32 @@ func NewAlbum() Album {
 	return Album{
 		_Id:     "",
 		_Title:  "",
-		_Photos: NewSetOfRemotePhoto(),
+		_Photos: NewSetOfRefOfRemotePhoto(),
 
 		ref: &ref.Ref{},
 	}
+}
+
+type AlbumDef struct {
+	Id     string
+	Title  string
+	Photos SetOfRefOfRemotePhotoDef
+}
+
+func (def AlbumDef) New() Album {
+	return Album{
+		_Id:     def.Id,
+		_Title:  def.Title,
+		_Photos: def.Photos.New(),
+		ref:     &ref.Ref{},
+	}
+}
+
+func (s Album) Def() (d AlbumDef) {
+	d.Id = s._Id
+	d.Title = s._Title
+	d.Photos = s._Photos.Def()
+	return
 }
 
 var __typeForAlbum types.Type
@@ -178,7 +222,7 @@ func builderForAlbum(values []types.Value) types.Value {
 	i++
 	s._Title = values[i].(types.String).String()
 	i++
-	s._Photos = values[i].(SetOfRemotePhoto)
+	s._Photos = values[i].(SetOfRefOfRemotePhoto)
 	i++
 	return s
 }
@@ -233,128 +277,14 @@ func (s Album) SetTitle(val string) Album {
 	return s
 }
 
-func (s Album) Photos() SetOfRemotePhoto {
+func (s Album) Photos() SetOfRefOfRemotePhoto {
 	return s._Photos
 }
 
-func (s Album) SetPhotos(val SetOfRemotePhoto) Album {
+func (s Album) SetPhotos(val SetOfRefOfRemotePhoto) Album {
 	s._Photos = val
 	s.ref = &ref.Ref{}
 	return s
-}
-
-// MapOfStringToAlbum
-
-type MapOfStringToAlbum struct {
-	m   types.Map
-	ref *ref.Ref
-}
-
-func NewMapOfStringToAlbum() MapOfStringToAlbum {
-	return MapOfStringToAlbum{types.NewTypedMap(__typeForMapOfStringToAlbum), &ref.Ref{}}
-}
-
-func (m MapOfStringToAlbum) Equals(other types.Value) bool {
-	return other != nil && __typeForMapOfStringToAlbum.Equals(other.Type()) && m.Ref() == other.Ref()
-}
-
-func (m MapOfStringToAlbum) Ref() ref.Ref {
-	return types.EnsureRef(m.ref, m)
-}
-
-func (m MapOfStringToAlbum) Chunks() (chunks []ref.Ref) {
-	chunks = append(chunks, m.Type().Chunks()...)
-	chunks = append(chunks, m.m.Chunks()...)
-	return
-}
-
-func (m MapOfStringToAlbum) ChildValues() []types.Value {
-	return append([]types.Value{}, m.m.ChildValues()...)
-}
-
-// A Noms Value that describes MapOfStringToAlbum.
-var __typeForMapOfStringToAlbum types.Type
-
-func (m MapOfStringToAlbum) Type() types.Type {
-	return __typeForMapOfStringToAlbum
-}
-
-func init() {
-	__typeForMapOfStringToAlbum = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeType(__mainPackageInFile_picasa_CachedRef, 1))
-	types.RegisterValue(__typeForMapOfStringToAlbum, builderForMapOfStringToAlbum, readerForMapOfStringToAlbum)
-}
-
-func builderForMapOfStringToAlbum(v types.Value) types.Value {
-	return MapOfStringToAlbum{v.(types.Map), &ref.Ref{}}
-}
-
-func readerForMapOfStringToAlbum(v types.Value) types.Value {
-	return v.(MapOfStringToAlbum).m
-}
-
-func (m MapOfStringToAlbum) Empty() bool {
-	return m.m.Empty()
-}
-
-func (m MapOfStringToAlbum) Len() uint64 {
-	return m.m.Len()
-}
-
-func (m MapOfStringToAlbum) Has(p string) bool {
-	return m.m.Has(types.NewString(p))
-}
-
-func (m MapOfStringToAlbum) Get(p string) Album {
-	return m.m.Get(types.NewString(p)).(Album)
-}
-
-func (m MapOfStringToAlbum) MaybeGet(p string) (Album, bool) {
-	v, ok := m.m.MaybeGet(types.NewString(p))
-	if !ok {
-		return NewAlbum(), false
-	}
-	return v.(Album), ok
-}
-
-func (m MapOfStringToAlbum) Set(k string, v Album) MapOfStringToAlbum {
-	return MapOfStringToAlbum{m.m.Set(types.NewString(k), v), &ref.Ref{}}
-}
-
-// TODO: Implement SetM?
-
-func (m MapOfStringToAlbum) Remove(p string) MapOfStringToAlbum {
-	return MapOfStringToAlbum{m.m.Remove(types.NewString(p)), &ref.Ref{}}
-}
-
-type MapOfStringToAlbumIterCallback func(k string, v Album) (stop bool)
-
-func (m MapOfStringToAlbum) Iter(cb MapOfStringToAlbumIterCallback) {
-	m.m.Iter(func(k, v types.Value) bool {
-		return cb(k.(types.String).String(), v.(Album))
-	})
-}
-
-type MapOfStringToAlbumIterAllCallback func(k string, v Album)
-
-func (m MapOfStringToAlbum) IterAll(cb MapOfStringToAlbumIterAllCallback) {
-	m.m.IterAll(func(k, v types.Value) {
-		cb(k.(types.String).String(), v.(Album))
-	})
-}
-
-func (m MapOfStringToAlbum) IterAllP(concurrency int, cb MapOfStringToAlbumIterAllCallback) {
-	m.m.IterAllP(concurrency, func(k, v types.Value) {
-		cb(k.(types.String).String(), v.(Album))
-	})
-}
-
-type MapOfStringToAlbumFilterCallback func(k string, v Album) (keep bool)
-
-func (m MapOfStringToAlbum) Filter(cb MapOfStringToAlbumFilterCallback) MapOfStringToAlbum {
-	out := m.m.Filter(func(k, v types.Value) bool {
-		return cb(k.(types.String).String(), v.(Album))
-	})
-	return MapOfStringToAlbum{out, &ref.Ref{}}
 }
 
 // RefOfUser
@@ -418,115 +348,269 @@ func (r RefOfUser) SetTargetValue(val User, cs chunks.ChunkSink) RefOfUser {
 	return NewRefOfUser(types.WriteValue(val, cs))
 }
 
-// SetOfRemotePhoto
+// MapOfStringToRefOfAlbum
 
-type SetOfRemotePhoto struct {
+type MapOfStringToRefOfAlbum struct {
+	m   types.Map
+	ref *ref.Ref
+}
+
+func NewMapOfStringToRefOfAlbum() MapOfStringToRefOfAlbum {
+	return MapOfStringToRefOfAlbum{types.NewTypedMap(__typeForMapOfStringToRefOfAlbum), &ref.Ref{}}
+}
+
+type MapOfStringToRefOfAlbumDef map[string]ref.Ref
+
+func (def MapOfStringToRefOfAlbumDef) New() MapOfStringToRefOfAlbum {
+	kv := make([]types.Value, 0, len(def)*2)
+	for k, v := range def {
+		kv = append(kv, types.NewString(k), NewRefOfAlbum(v))
+	}
+	return MapOfStringToRefOfAlbum{types.NewTypedMap(__typeForMapOfStringToRefOfAlbum, kv...), &ref.Ref{}}
+}
+
+func (m MapOfStringToRefOfAlbum) Def() MapOfStringToRefOfAlbumDef {
+	def := make(map[string]ref.Ref)
+	m.m.Iter(func(k, v types.Value) bool {
+		def[k.(types.String).String()] = v.(RefOfAlbum).TargetRef()
+		return false
+	})
+	return def
+}
+
+func (m MapOfStringToRefOfAlbum) Equals(other types.Value) bool {
+	return other != nil && __typeForMapOfStringToRefOfAlbum.Equals(other.Type()) && m.Ref() == other.Ref()
+}
+
+func (m MapOfStringToRefOfAlbum) Ref() ref.Ref {
+	return types.EnsureRef(m.ref, m)
+}
+
+func (m MapOfStringToRefOfAlbum) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, m.Type().Chunks()...)
+	chunks = append(chunks, m.m.Chunks()...)
+	return
+}
+
+func (m MapOfStringToRefOfAlbum) ChildValues() []types.Value {
+	return append([]types.Value{}, m.m.ChildValues()...)
+}
+
+// A Noms Value that describes MapOfStringToRefOfAlbum.
+var __typeForMapOfStringToRefOfAlbum types.Type
+
+func (m MapOfStringToRefOfAlbum) Type() types.Type {
+	return __typeForMapOfStringToRefOfAlbum
+}
+
+func init() {
+	__typeForMapOfStringToRefOfAlbum = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_picasa_CachedRef, 1)))
+	types.RegisterValue(__typeForMapOfStringToRefOfAlbum, builderForMapOfStringToRefOfAlbum, readerForMapOfStringToRefOfAlbum)
+}
+
+func builderForMapOfStringToRefOfAlbum(v types.Value) types.Value {
+	return MapOfStringToRefOfAlbum{v.(types.Map), &ref.Ref{}}
+}
+
+func readerForMapOfStringToRefOfAlbum(v types.Value) types.Value {
+	return v.(MapOfStringToRefOfAlbum).m
+}
+
+func (m MapOfStringToRefOfAlbum) Empty() bool {
+	return m.m.Empty()
+}
+
+func (m MapOfStringToRefOfAlbum) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m MapOfStringToRefOfAlbum) Has(p string) bool {
+	return m.m.Has(types.NewString(p))
+}
+
+func (m MapOfStringToRefOfAlbum) Get(p string) RefOfAlbum {
+	return m.m.Get(types.NewString(p)).(RefOfAlbum)
+}
+
+func (m MapOfStringToRefOfAlbum) MaybeGet(p string) (RefOfAlbum, bool) {
+	v, ok := m.m.MaybeGet(types.NewString(p))
+	if !ok {
+		return NewRefOfAlbum(ref.Ref{}), false
+	}
+	return v.(RefOfAlbum), ok
+}
+
+func (m MapOfStringToRefOfAlbum) Set(k string, v RefOfAlbum) MapOfStringToRefOfAlbum {
+	return MapOfStringToRefOfAlbum{m.m.Set(types.NewString(k), v), &ref.Ref{}}
+}
+
+// TODO: Implement SetM?
+
+func (m MapOfStringToRefOfAlbum) Remove(p string) MapOfStringToRefOfAlbum {
+	return MapOfStringToRefOfAlbum{m.m.Remove(types.NewString(p)), &ref.Ref{}}
+}
+
+type MapOfStringToRefOfAlbumIterCallback func(k string, v RefOfAlbum) (stop bool)
+
+func (m MapOfStringToRefOfAlbum) Iter(cb MapOfStringToRefOfAlbumIterCallback) {
+	m.m.Iter(func(k, v types.Value) bool {
+		return cb(k.(types.String).String(), v.(RefOfAlbum))
+	})
+}
+
+type MapOfStringToRefOfAlbumIterAllCallback func(k string, v RefOfAlbum)
+
+func (m MapOfStringToRefOfAlbum) IterAll(cb MapOfStringToRefOfAlbumIterAllCallback) {
+	m.m.IterAll(func(k, v types.Value) {
+		cb(k.(types.String).String(), v.(RefOfAlbum))
+	})
+}
+
+func (m MapOfStringToRefOfAlbum) IterAllP(concurrency int, cb MapOfStringToRefOfAlbumIterAllCallback) {
+	m.m.IterAllP(concurrency, func(k, v types.Value) {
+		cb(k.(types.String).String(), v.(RefOfAlbum))
+	})
+}
+
+type MapOfStringToRefOfAlbumFilterCallback func(k string, v RefOfAlbum) (keep bool)
+
+func (m MapOfStringToRefOfAlbum) Filter(cb MapOfStringToRefOfAlbumFilterCallback) MapOfStringToRefOfAlbum {
+	out := m.m.Filter(func(k, v types.Value) bool {
+		return cb(k.(types.String).String(), v.(RefOfAlbum))
+	})
+	return MapOfStringToRefOfAlbum{out, &ref.Ref{}}
+}
+
+// SetOfRefOfRemotePhoto
+
+type SetOfRefOfRemotePhoto struct {
 	s   types.Set
 	ref *ref.Ref
 }
 
-func NewSetOfRemotePhoto() SetOfRemotePhoto {
-	return SetOfRemotePhoto{types.NewTypedSet(__typeForSetOfRemotePhoto), &ref.Ref{}}
+func NewSetOfRefOfRemotePhoto() SetOfRefOfRemotePhoto {
+	return SetOfRefOfRemotePhoto{types.NewTypedSet(__typeForSetOfRefOfRemotePhoto), &ref.Ref{}}
 }
 
-func (s SetOfRemotePhoto) Equals(other types.Value) bool {
-	return other != nil && __typeForSetOfRemotePhoto.Equals(other.Type()) && s.Ref() == other.Ref()
+type SetOfRefOfRemotePhotoDef map[ref.Ref]bool
+
+func (def SetOfRefOfRemotePhotoDef) New() SetOfRefOfRemotePhoto {
+	l := make([]types.Value, len(def))
+	i := 0
+	for d, _ := range def {
+		l[i] = NewRefOfRemotePhoto(d)
+		i++
+	}
+	return SetOfRefOfRemotePhoto{types.NewTypedSet(__typeForSetOfRefOfRemotePhoto, l...), &ref.Ref{}}
 }
 
-func (s SetOfRemotePhoto) Ref() ref.Ref {
+func (s SetOfRefOfRemotePhoto) Def() SetOfRefOfRemotePhotoDef {
+	def := make(map[ref.Ref]bool, s.Len())
+	s.s.Iter(func(v types.Value) bool {
+		def[v.(RefOfRemotePhoto).TargetRef()] = true
+		return false
+	})
+	return def
+}
+
+func (s SetOfRefOfRemotePhoto) Equals(other types.Value) bool {
+	return other != nil && __typeForSetOfRefOfRemotePhoto.Equals(other.Type()) && s.Ref() == other.Ref()
+}
+
+func (s SetOfRefOfRemotePhoto) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfRemotePhoto) Chunks() (chunks []ref.Ref) {
+func (s SetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
 	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
 }
 
-func (s SetOfRemotePhoto) ChildValues() []types.Value {
+func (s SetOfRefOfRemotePhoto) ChildValues() []types.Value {
 	return append([]types.Value{}, s.s.ChildValues()...)
 }
 
-// A Noms Value that describes SetOfRemotePhoto.
-var __typeForSetOfRemotePhoto types.Type
+// A Noms Value that describes SetOfRefOfRemotePhoto.
+var __typeForSetOfRefOfRemotePhoto types.Type
 
-func (m SetOfRemotePhoto) Type() types.Type {
-	return __typeForSetOfRemotePhoto
+func (m SetOfRefOfRemotePhoto) Type() types.Type {
+	return __typeForSetOfRefOfRemotePhoto
 }
 
 func init() {
-	__typeForSetOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 0))
-	types.RegisterValue(__typeForSetOfRemotePhoto, builderForSetOfRemotePhoto, readerForSetOfRemotePhoto)
+	__typeForSetOfRefOfRemotePhoto = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 0)))
+	types.RegisterValue(__typeForSetOfRefOfRemotePhoto, builderForSetOfRefOfRemotePhoto, readerForSetOfRefOfRemotePhoto)
 }
 
-func builderForSetOfRemotePhoto(v types.Value) types.Value {
-	return SetOfRemotePhoto{v.(types.Set), &ref.Ref{}}
+func builderForSetOfRefOfRemotePhoto(v types.Value) types.Value {
+	return SetOfRefOfRemotePhoto{v.(types.Set), &ref.Ref{}}
 }
 
-func readerForSetOfRemotePhoto(v types.Value) types.Value {
-	return v.(SetOfRemotePhoto).s
+func readerForSetOfRefOfRemotePhoto(v types.Value) types.Value {
+	return v.(SetOfRefOfRemotePhoto).s
 }
 
-func (s SetOfRemotePhoto) Empty() bool {
+func (s SetOfRefOfRemotePhoto) Empty() bool {
 	return s.s.Empty()
 }
 
-func (s SetOfRemotePhoto) Len() uint64 {
+func (s SetOfRefOfRemotePhoto) Len() uint64 {
 	return s.s.Len()
 }
 
-func (s SetOfRemotePhoto) Has(p RemotePhoto) bool {
+func (s SetOfRefOfRemotePhoto) Has(p RefOfRemotePhoto) bool {
 	return s.s.Has(p)
 }
 
-type SetOfRemotePhotoIterCallback func(p RemotePhoto) (stop bool)
+type SetOfRefOfRemotePhotoIterCallback func(p RefOfRemotePhoto) (stop bool)
 
-func (s SetOfRemotePhoto) Iter(cb SetOfRemotePhotoIterCallback) {
+func (s SetOfRefOfRemotePhoto) Iter(cb SetOfRefOfRemotePhotoIterCallback) {
 	s.s.Iter(func(v types.Value) bool {
-		return cb(v.(RemotePhoto))
+		return cb(v.(RefOfRemotePhoto))
 	})
 }
 
-type SetOfRemotePhotoIterAllCallback func(p RemotePhoto)
+type SetOfRefOfRemotePhotoIterAllCallback func(p RefOfRemotePhoto)
 
-func (s SetOfRemotePhoto) IterAll(cb SetOfRemotePhotoIterAllCallback) {
+func (s SetOfRefOfRemotePhoto) IterAll(cb SetOfRefOfRemotePhotoIterAllCallback) {
 	s.s.IterAll(func(v types.Value) {
-		cb(v.(RemotePhoto))
+		cb(v.(RefOfRemotePhoto))
 	})
 }
 
-func (s SetOfRemotePhoto) IterAllP(concurrency int, cb SetOfRemotePhotoIterAllCallback) {
+func (s SetOfRefOfRemotePhoto) IterAllP(concurrency int, cb SetOfRefOfRemotePhotoIterAllCallback) {
 	s.s.IterAllP(concurrency, func(v types.Value) {
-		cb(v.(RemotePhoto))
+		cb(v.(RefOfRemotePhoto))
 	})
 }
 
-type SetOfRemotePhotoFilterCallback func(p RemotePhoto) (keep bool)
+type SetOfRefOfRemotePhotoFilterCallback func(p RefOfRemotePhoto) (keep bool)
 
-func (s SetOfRemotePhoto) Filter(cb SetOfRemotePhotoFilterCallback) SetOfRemotePhoto {
+func (s SetOfRefOfRemotePhoto) Filter(cb SetOfRefOfRemotePhotoFilterCallback) SetOfRefOfRemotePhoto {
 	out := s.s.Filter(func(v types.Value) bool {
-		return cb(v.(RemotePhoto))
+		return cb(v.(RefOfRemotePhoto))
 	})
-	return SetOfRemotePhoto{out, &ref.Ref{}}
+	return SetOfRefOfRemotePhoto{out, &ref.Ref{}}
 }
 
-func (s SetOfRemotePhoto) Insert(p ...RemotePhoto) SetOfRemotePhoto {
-	return SetOfRemotePhoto{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
+func (s SetOfRefOfRemotePhoto) Insert(p ...RefOfRemotePhoto) SetOfRefOfRemotePhoto {
+	return SetOfRefOfRemotePhoto{s.s.Insert(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
-func (s SetOfRemotePhoto) Remove(p ...RemotePhoto) SetOfRemotePhoto {
-	return SetOfRemotePhoto{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
+func (s SetOfRefOfRemotePhoto) Remove(p ...RefOfRemotePhoto) SetOfRefOfRemotePhoto {
+	return SetOfRefOfRemotePhoto{s.s.Remove(s.fromElemSlice(p)...), &ref.Ref{}}
 }
 
-func (s SetOfRemotePhoto) Union(others ...SetOfRemotePhoto) SetOfRemotePhoto {
-	return SetOfRemotePhoto{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
+func (s SetOfRefOfRemotePhoto) Union(others ...SetOfRefOfRemotePhoto) SetOfRefOfRemotePhoto {
+	return SetOfRefOfRemotePhoto{s.s.Union(s.fromStructSlice(others)...), &ref.Ref{}}
 }
 
-func (s SetOfRemotePhoto) First() RemotePhoto {
-	return s.s.First().(RemotePhoto)
+func (s SetOfRefOfRemotePhoto) First() RefOfRemotePhoto {
+	return s.s.First().(RefOfRemotePhoto)
 }
 
-func (s SetOfRemotePhoto) fromStructSlice(p []SetOfRemotePhoto) []types.Set {
+func (s SetOfRefOfRemotePhoto) fromStructSlice(p []SetOfRefOfRemotePhoto) []types.Set {
 	r := make([]types.Set, len(p))
 	for i, v := range p {
 		r[i] = v.s
@@ -534,10 +618,132 @@ func (s SetOfRemotePhoto) fromStructSlice(p []SetOfRemotePhoto) []types.Set {
 	return r
 }
 
-func (s SetOfRemotePhoto) fromElemSlice(p []RemotePhoto) []types.Value {
+func (s SetOfRefOfRemotePhoto) fromElemSlice(p []RefOfRemotePhoto) []types.Value {
 	r := make([]types.Value, len(p))
 	for i, v := range p {
 		r[i] = v
 	}
 	return r
+}
+
+// RefOfAlbum
+
+type RefOfAlbum struct {
+	target ref.Ref
+	ref    *ref.Ref
+}
+
+func NewRefOfAlbum(target ref.Ref) RefOfAlbum {
+	return RefOfAlbum{target, &ref.Ref{}}
+}
+
+func (r RefOfAlbum) TargetRef() ref.Ref {
+	return r.target
+}
+
+func (r RefOfAlbum) Ref() ref.Ref {
+	return types.EnsureRef(r.ref, r)
+}
+
+func (r RefOfAlbum) Equals(other types.Value) bool {
+	return other != nil && __typeForRefOfAlbum.Equals(other.Type()) && r.Ref() == other.Ref()
+}
+
+func (r RefOfAlbum) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.Type().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
+}
+
+func (r RefOfAlbum) ChildValues() []types.Value {
+	return nil
+}
+
+// A Noms Value that describes RefOfAlbum.
+var __typeForRefOfAlbum types.Type
+
+func (r RefOfAlbum) Type() types.Type {
+	return __typeForRefOfAlbum
+}
+
+func (r RefOfAlbum) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
+}
+
+func init() {
+	__typeForRefOfAlbum = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_picasa_CachedRef, 1))
+	types.RegisterRef(__typeForRefOfAlbum, builderForRefOfAlbum)
+}
+
+func builderForRefOfAlbum(r ref.Ref) types.Value {
+	return NewRefOfAlbum(r)
+}
+
+func (r RefOfAlbum) TargetValue(cs chunks.ChunkSource) Album {
+	return types.ReadValue(r.target, cs).(Album)
+}
+
+func (r RefOfAlbum) SetTargetValue(val Album, cs chunks.ChunkSink) RefOfAlbum {
+	return NewRefOfAlbum(types.WriteValue(val, cs))
+}
+
+// RefOfRemotePhoto
+
+type RefOfRemotePhoto struct {
+	target ref.Ref
+	ref    *ref.Ref
+}
+
+func NewRefOfRemotePhoto(target ref.Ref) RefOfRemotePhoto {
+	return RefOfRemotePhoto{target, &ref.Ref{}}
+}
+
+func (r RefOfRemotePhoto) TargetRef() ref.Ref {
+	return r.target
+}
+
+func (r RefOfRemotePhoto) Ref() ref.Ref {
+	return types.EnsureRef(r.ref, r)
+}
+
+func (r RefOfRemotePhoto) Equals(other types.Value) bool {
+	return other != nil && __typeForRefOfRemotePhoto.Equals(other.Type()) && r.Ref() == other.Ref()
+}
+
+func (r RefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.Type().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
+}
+
+func (r RefOfRemotePhoto) ChildValues() []types.Value {
+	return nil
+}
+
+// A Noms Value that describes RefOfRemotePhoto.
+var __typeForRefOfRemotePhoto types.Type
+
+func (r RefOfRemotePhoto) Type() types.Type {
+	return __typeForRefOfRemotePhoto
+}
+
+func (r RefOfRemotePhoto) Less(other types.OrderedValue) bool {
+	return r.TargetRef().Less(other.(types.RefBase).TargetRef())
+}
+
+func init() {
+	__typeForRefOfRemotePhoto = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 0))
+	types.RegisterRef(__typeForRefOfRemotePhoto, builderForRefOfRemotePhoto)
+}
+
+func builderForRefOfRemotePhoto(r ref.Ref) types.Value {
+	return NewRefOfRemotePhoto(r)
+}
+
+func (r RefOfRemotePhoto) TargetValue(cs chunks.ChunkSource) RemotePhoto {
+	return types.ReadValue(r.target, cs).(RemotePhoto)
+}
+
+func (r RefOfRemotePhoto) SetTargetValue(val RemotePhoto, cs chunks.ChunkSink) RefOfRemotePhoto {
+	return NewRefOfRemotePhoto(types.WriteValue(val, cs))
 }

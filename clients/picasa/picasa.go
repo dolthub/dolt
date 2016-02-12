@@ -47,6 +47,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	util.MaybeStartCPUProfile()
+	defer util.StopCPUProfile()
+
 	ds = dsFlags.CreateDataset()
 	if ds == nil {
 		flag.Usage()
@@ -107,7 +110,7 @@ func getSingleAlbum(albumID string) *User {
 		SetId(aj.Feed.UserID.V).
 		SetName(aj.Feed.UserName.V)
 
-	albums := NewMapOfStringToAlbum()
+	albums := NewMapOfStringToRefOfAlbum()
 	albums = getAlbum(0, aj.Feed.ID.V, aj.Feed.Title.V, uint32(aj.Feed.NumPhotos.V), albums)
 
 	types.WriteValue(albums, ds.Store())
@@ -121,7 +124,7 @@ func getAlbums() *User {
 	if !*quietFlag {
 		fmt.Printf("Found %d albums\n", len(alj.Feed.Entry))
 	}
-	albums := NewMapOfStringToAlbum()
+	albums := NewMapOfStringToRefOfAlbum()
 	user := NewUser().
 		SetId(alj.Feed.UserID.V).
 		SetName(alj.Feed.UserName.V)
@@ -152,7 +155,7 @@ func getShapes(albumId string) shapeMap {
 	return res
 }
 
-func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32, albums MapOfStringToAlbum) MapOfStringToAlbum {
+func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32, albums MapOfStringToRefOfAlbum) MapOfStringToRefOfAlbum {
 	shapes := getShapes(albumId)
 
 	a := NewAlbum().
@@ -163,11 +166,11 @@ func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32, albu
 		a = a.SetPhotos(remotePhotos)
 	}
 
-	return albums.Set(a.Id(), a)
+	return albums.Set(a.Id(), NewRefOfAlbum(types.WriteValue(a, ds.Store())))
 }
 
-func getRemotePhotos(album *Album, albumIndex int, numPhotos uint32, shapes shapeMap) SetOfRemotePhoto {
-	remotePhotos := NewSetOfRemotePhoto()
+func getRemotePhotos(album *Album, albumIndex int, numPhotos uint32, shapes shapeMap) SetOfRefOfRemotePhoto {
+	remotePhotos := NewSetOfRefOfRemotePhoto()
 	if !*quietFlag {
 		fmt.Printf("Album #%d: %q contains %d photos... ", albumIndex, album.Title(), numPhotos)
 	}
@@ -201,7 +204,7 @@ func getRemotePhotos(album *Album, albumIndex int, numPhotos uint32, shapes shap
 				fmt.Printf("Error parsing date \"%s\": %s\n", e.Timestamp.V, err)
 			}
 
-			remotePhotos = remotePhotos.Insert(p)
+			remotePhotos = remotePhotos.Insert(NewRefOfRemotePhoto(types.WriteValue(p, ds.Store())))
 		}
 	}
 
@@ -220,8 +223,9 @@ func printStats(user *User) {
 	if !*quietFlag {
 		numPhotos := uint64(0)
 		albums := user.Albums()
-		albums.IterAll(func(id string, album Album) {
-			numPhotos = numPhotos + album.Photos().Len()
+		albums.IterAll(func(id string, album RefOfAlbum) {
+			// TODO: Sucks to deref album just to get num photos
+			numPhotos = numPhotos + album.TargetValue(ds.Store()).Photos().Len()
 		})
 
 		fmt.Printf("Imported %d album(s), %d photo(s), time: %.2f\n", albums.Len(), numPhotos, time.Now().Sub(start).Seconds())
@@ -230,7 +234,7 @@ func printStats(user *User) {
 
 func mergeInCurrentAlbums(curUser *User, newUser *User) *User {
 	albums := curUser.Albums()
-	newUser.Albums().IterAll(func(id string, a Album) {
+	newUser.Albums().IterAll(func(id string, a RefOfAlbum) {
 		albums = albums.Set(id, a)
 	})
 	*newUser = newUser.SetAlbums(albums)

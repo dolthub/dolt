@@ -3,14 +3,13 @@ alias Img = import "../common/photo.noms"
 struct User {
   Id: String
   Name: String
-  Albums: Map<String, Album>
+  Albums: Map<String, Ref<Album>>
 }
 
 struct Album {
   Id: String
   Title: String
-  Photos: Set<Img.RemotePhoto>
+  Photos: Set<Ref<Img.RemotePhoto>>
 }
 
-using Map<String, Album>
 using Ref<User>
