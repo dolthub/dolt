@@ -50,17 +50,9 @@ export {
 export {equals, less} from './value.js';
 export {default as CacheStore} from './cache_store.js';
 
-import type {AsyncIteratorResult} from './async_iterator.js';
-export type {AsyncIteratorResult};
-
-import type {ChunkStore} from './chunk_store.js';
-export type {ChunkStore};
-
-import type {MapEntry} from './map.js';
-export type {MapEntry};
-
-import type {Splice} from './edit_distance.js';
-export type {Splice};
-
-import type {valueOrPrimitive} from './value.js';
-export type {valueOrPrimitive};
+export type {AsyncIteratorResult} from './async_iterator.js';
+export type {ChunkStore} from './chunk_store.js';
+export type {MapEntry} from './map.js';
+export type {Splice} from './edit_distance.js';
+export type {valueOrPrimitive} from './value.js';
+export type {NomsKind} from './noms_kind.js';
