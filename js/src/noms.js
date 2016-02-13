@@ -10,7 +10,7 @@ export {default as Ref} from './ref.js';
 export {default as Struct} from './struct.js';
 export {encodeNomsValue, writeValue} from './encode.js';
 export {invariant, notNull} from './assert.js';
-export {isPrimitiveKind, Kind} from './noms_kind.js';
+export {isPrimitiveKind, Kind, kindToString} from './noms_kind.js';
 export {lookupPackage, Package, readPackage, registerPackage} from './package.js';
 export {newList, ListLeafSequence, NomsList} from './list.js';
 export {newMap, NomsMap, MapLeafSequence} from './map.js';

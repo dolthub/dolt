@@ -52,30 +52,34 @@ export const Kind: {
   Package: 22,
 };
 
-export const kindToString: { [key: number]: string } = Object.create(null);
-kindToString[Kind.Bool] = 'Bool';
-kindToString[Kind.Uint8] = 'Uint8';
-kindToString[Kind.Uint16] = 'Uint16';
-kindToString[Kind.Uint32] = 'Uint32';
-kindToString[Kind.Uint64] = 'Uint64';
-kindToString[Kind.Int8] = 'Int8';
-kindToString[Kind.Int16] = 'Int16';
-kindToString[Kind.Int32] = 'Int32';
-kindToString[Kind.Int64] = 'Int64';
-kindToString[Kind.Float32] = 'Float32';
-kindToString[Kind.Float64] = 'Float64';
-kindToString[Kind.String] = 'String';
-kindToString[Kind.Blob] = 'Blob';
-kindToString[Kind.Value] = 'Value';
-kindToString[Kind.List] = 'List';
-kindToString[Kind.Map] = 'Map';
-kindToString[Kind.Ref] = 'Ref';
-kindToString[Kind.Set] = 'Set';
-kindToString[Kind.Enum] = 'Enum';
-kindToString[Kind.Struct] = 'Struct';
-kindToString[Kind.Type] = 'Type';
-kindToString[Kind.Unresolved] = 'Unresolved';
-kindToString[Kind.Package] = 'Package';
+const kindToStringMap: { [key: number]: string } = Object.create(null);
+kindToStringMap[Kind.Bool] = 'Bool';
+kindToStringMap[Kind.Uint8] = 'Uint8';
+kindToStringMap[Kind.Uint16] = 'Uint16';
+kindToStringMap[Kind.Uint32] = 'Uint32';
+kindToStringMap[Kind.Uint64] = 'Uint64';
+kindToStringMap[Kind.Int8] = 'Int8';
+kindToStringMap[Kind.Int16] = 'Int16';
+kindToStringMap[Kind.Int32] = 'Int32';
+kindToStringMap[Kind.Int64] = 'Int64';
+kindToStringMap[Kind.Float32] = 'Float32';
+kindToStringMap[Kind.Float64] = 'Float64';
+kindToStringMap[Kind.String] = 'String';
+kindToStringMap[Kind.Blob] = 'Blob';
+kindToStringMap[Kind.Value] = 'Value';
+kindToStringMap[Kind.List] = 'List';
+kindToStringMap[Kind.Map] = 'Map';
+kindToStringMap[Kind.Ref] = 'Ref';
+kindToStringMap[Kind.Set] = 'Set';
+kindToStringMap[Kind.Enum] = 'Enum';
+kindToStringMap[Kind.Struct] = 'Struct';
+kindToStringMap[Kind.Type] = 'Type';
+kindToStringMap[Kind.Unresolved] = 'Unresolved';
+kindToStringMap[Kind.Package] = 'Package';
+
+export function kindToString(kind: number): string {
+  return kindToStringMap[kind];
+}
 
 export function isPrimitiveKind(k: NomsKind): boolean {
   switch (k) {
