@@ -3,7 +3,7 @@ alias Img = import "../common/photo.noms"
 struct User {
   Id: String
   Name: String
-  Albums: Map<String, Ref<Album>>
+  Albums: List<Ref<Album>>
 }
 
 struct Album {

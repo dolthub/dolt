@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/attic-labs/noms/clients/util"
@@ -21,10 +22,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const maxProcs = 25
-
 var (
-	albumIDFlag       = flag.String("album-id", "", "Import a specific album, identified by id")
 	authHTTPClient    *http.Client
 	cachingHTTPClient *http.Client
 	ds                *dataset.Dataset
@@ -57,34 +55,14 @@ func main() {
 	}
 	defer ds.Store().Close()
 
-	var currentUser *User
-	if commit, ok := ds.MaybeHead(); ok {
-		if currentUserRef, ok := commit.Value().(RefOfUser); ok {
-			cu := currentUserRef.TargetValue(ds.Store())
-			currentUser = &cu
-		}
-	}
-
 	token := oauth2.Token{AccessToken: *tokenFlag}
 	authHTTPClient = oauth2.NewClient(oauth2.NoContext, oauth2.StaticTokenSource(&token))
 
 	start = time.Now()
-
-	var user *User
-	if *albumIDFlag != "" {
-		newUser := getSingleAlbum(*albumIDFlag)
-		if currentUser != nil {
-			user = mergeInCurrentAlbums(currentUser, newUser)
-		} else {
-			user = newUser
-		}
-	} else {
-		user = getAlbums()
-	}
-
+	user := getUser()
 	printStats(user)
 
-	userRef := types.WriteValue(*user, ds.Store())
+	userRef := types.WriteValue(user, ds.Store())
 	fmt.Printf("userRef: %s\n", userRef)
 	_, err := ds.Commit(NewRefOfUser(userRef))
 	d.Exp.NoError(err)
@@ -102,39 +80,45 @@ func picasaUsage() {
 	fmt.Fprintf(os.Stderr, "\n%s\n\n", essay)
 }
 
-func getSingleAlbum(albumID string) *User {
-	aj := AlbumJSON{}
-	path := fmt.Sprintf("user/default/albumid/%s?alt=json&max-results=0", albumID)
-	callPicasaAPI(authHTTPClient, path, &aj)
-	u := NewUser().
-		SetId(aj.Feed.UserID.V).
-		SetName(aj.Feed.UserName.V)
-
-	albums := NewMapOfStringToRefOfAlbum()
-	albums = getAlbum(0, aj.Feed.ID.V, aj.Feed.Title.V, uint32(aj.Feed.NumPhotos.V), albums)
-
-	types.WriteValue(albums, ds.Store())
-	u = u.SetAlbums(albums)
-	return &u
-}
-
-func getAlbums() *User {
+func getUser() User {
 	alj := AlbumListJSON{}
 	callPicasaAPI(authHTTPClient, "user/default?alt=json", &alj)
 	if !*quietFlag {
 		fmt.Printf("Found %d albums\n", len(alj.Feed.Entry))
 	}
-	albums := NewMapOfStringToRefOfAlbum()
+	albums := ListOfRefOfAlbumDef{}
 	user := NewUser().
 		SetId(alj.Feed.UserID.V).
 		SetName(alj.Feed.UserName.V)
+
+	ch := make(chan Album, len(alj.Feed.Entry))
+	lim := make(chan struct{}, 25)
+	wg := sync.WaitGroup{}
 	for i, entry := range alj.Feed.Entry {
-		albums = getAlbum(i, entry.ID.V, entry.Title.V, uint32(entry.NumPhotos.V), albums)
+		i := i
+		entry := entry
+		lim <- struct{}{}
+		wg.Add(1)
+		go func() {
+			fmt.Println("Fetching album", entry.ID.V)
+			ch <- getAlbum(i, entry.ID.V, entry.Title.V, uint32(entry.NumPhotos.V))
+			<- lim
+		}()
 	}
 
-	types.WriteValue(albums, ds.Store())
-	user = user.SetAlbums(albums)
-	return &user
+	go func() {
+		for {
+			album := <- ch
+			fmt.Println("Writing album", album.Title())
+			r := types.WriteValue(album, ds.Store())
+			albums = append(albums, r)
+			wg.Done()
+		}
+	}()
+
+	wg.Wait()
+
+	return user.SetAlbums(albums.New())
 }
 
 func getShapes(albumId string) shapeMap {
@@ -155,9 +139,8 @@ func getShapes(albumId string) shapeMap {
 	return res
 }
 
-func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32, albums MapOfStringToRefOfAlbum) MapOfStringToRefOfAlbum {
+func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32) Album {
 	shapes := getShapes(albumId)
-
 	a := NewAlbum().
 		SetId(albumId).
 		SetTitle(albumTitle)
@@ -165,53 +148,58 @@ func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32, albu
 		remotePhotos := getRemotePhotos(&a, albumIndex, numPhotos, shapes)
 		a = a.SetPhotos(remotePhotos)
 	}
-
-	return albums.Set(a.Id(), NewRefOfAlbum(types.WriteValue(a, ds.Store())))
+	return a
 }
 
 func getRemotePhotos(album *Album, albumIndex int, numPhotos uint32, shapes shapeMap) SetOfRefOfRemotePhoto {
-	remotePhotos := NewSetOfRefOfRemotePhoto()
+	remotePhotos := SetOfRefOfRemotePhotoDef{}
 	if !*quietFlag {
 		fmt.Printf("Album #%d: %q contains %d photos... ", albumIndex, album.Title(), numPhotos)
 	}
-	for startIndex, foundPhotos := 0, true; uint64(numPhotos) > remotePhotos.Len() && foundPhotos; startIndex += 1000 {
-		foundPhotos = false
-		aj := AlbumJSON{}
-		path := fmt.Sprintf("user/default/albumid/%s?alt=json&max-results=1000", album.Id())
-		if !*smallFlag {
-			path = fmt.Sprintf("%s%s", path, "&imgmax=d")
-		}
-		if startIndex > 0 {
-			path = fmt.Sprintf("%s%s%d", path, "&start-index=", startIndex)
-		}
-		callPicasaAPI(authHTTPClient, path, &aj)
-		for _, e := range aj.Feed.Entry {
-			foundPhotos = true
 
-			p := RemotePhotoDef{
-				Id:          e.ID.V,
-				Title:       e.Title.V,
-				Geoposition: toGeopos(e.Geo.Point.Pos.V),
-				Sizes:       getSizes(e),
-				Tags:        splitTags(e.MediaGroup.Tags.V),
-				Faces:       getFaces(e, shapes),
-			}.New()
-
-			// Timestamp is ms since the epoch.
-			if i, err := strconv.ParseInt(e.Timestamp.V, 10, 64); err == nil {
-				p = p.SetDate(NewDate().SetMsSinceEpoch(i))
-			} else {
-				fmt.Printf("Error parsing date \"%s\": %s\n", e.Timestamp.V, err)
+	wg := sync.WaitGroup{}
+	batchSize := uint32(1000)
+	for i := uint32(0); i < numPhotos; i += batchSize {
+		i := i
+		wg.Add(1)
+		go func() {
+			aj := AlbumJSON{}
+			path := fmt.Sprintf("user/default/albumid/%s?alt=json&max-results=1000", album.Id())
+			if !*smallFlag {
+				path = fmt.Sprintf("%s%s", path, "&imgmax=d")
 			}
+			if i > 0 {
+				path = fmt.Sprintf("%s%s%d", path, "&start-index=", i)
+			}
+			callPicasaAPI(authHTTPClient, path, &aj)
+			for _, e := range aj.Feed.Entry {
+				p := RemotePhotoDef{
+					Id:          e.ID.V,
+					Title:       e.Title.V,
+					Geoposition: toGeopos(e.Geo.Point.Pos.V),
+					Sizes:       getSizes(e),
+					Tags:        splitTags(e.MediaGroup.Tags.V),
+					Faces:       getFaces(e, shapes),
+				}.New()
 
-			remotePhotos = remotePhotos.Insert(NewRefOfRemotePhoto(types.WriteValue(p, ds.Store())))
-		}
+				// Timestamp is ms since the epoch.
+				if i, err := strconv.ParseInt(e.Timestamp.V, 10, 64); err == nil {
+					p = p.SetDate(NewDate().SetMsSinceEpoch(i))
+				} else {
+					fmt.Printf("Error parsing date \"%s\": %s\n", e.Timestamp.V, err)
+				}
+
+				remotePhotos[types.WriteValue(p, ds.Store())] = true
+			}
+			wg.Done()
+		}()
 	}
 
+	wg.Wait()
 	if !*quietFlag {
-		fmt.Printf("fetched %d, elapsed time: %.2f secs\n", remotePhotos.Len(), time.Now().Sub(start).Seconds())
+		fmt.Printf("fetched %d, elapsed time: %.2f secs\n", len(remotePhotos), time.Now().Sub(start).Seconds())
 	}
-	return remotePhotos
+	return remotePhotos.New()
 }
 
 func parsePoint(s string) (x, y float32) {
@@ -219,11 +207,11 @@ func parsePoint(s string) (x, y float32) {
 	return float32(atoi(pair[0])), float32(atoi(pair[1]))
 }
 
-func printStats(user *User) {
+func printStats(user User) {
 	if !*quietFlag {
 		numPhotos := uint64(0)
 		albums := user.Albums()
-		albums.IterAll(func(id string, album RefOfAlbum) {
+		albums.IterAll(func(album RefOfAlbum, _ uint64) {
 			// TODO: Sucks to deref album just to get num photos
 			numPhotos = numPhotos + album.TargetValue(ds.Store()).Photos().Len()
 		})
@@ -232,16 +220,8 @@ func printStats(user *User) {
 	}
 }
 
-func mergeInCurrentAlbums(curUser *User, newUser *User) *User {
-	albums := curUser.Albums()
-	newUser.Albums().IterAll(func(id string, a RefOfAlbum) {
-		albums = albums.Set(id, a)
-	})
-	*newUser = newUser.SetAlbums(albums)
-	return newUser
-}
-
 func callPicasaAPI(client *http.Client, path string, response interface{}) {
+	fmt.Println("Requesting", "https://picasaweb.google.com/data/feed/api/"+path)
 	rc := callPicasaURL(client, "https://picasaweb.google.com/data/feed/api/"+path)
 	defer rc.Close()
 	err := json.NewDecoder(rc).Decode(response)
