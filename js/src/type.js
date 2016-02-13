@@ -44,7 +44,7 @@ class PrimitiveDesc {
   }
 
   describe(): string {
-    return kindToString[this.kind];
+    return kindToString(this.kind);
   }
 }
 
@@ -105,7 +105,7 @@ class CompoundDesc {
 
   describe(): string {
     const elemsDesc = this.elemTypes.map(e => e.describe()).join(', ');
-    return `${kindToString[this.kind]}<${elemsDesc}>`;
+    return `${kindToString(this.kind)}<${elemsDesc}>`;
   }
 }
 
