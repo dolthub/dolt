@@ -27,8 +27,6 @@ var (
 	cachingHTTPClient *http.Client
 	ds                *dataset.Dataset
 	tokenFlag         = flag.String("token", "", "OAuth2 bearer token to authenticate with (required)")
-	quietFlag         = flag.Bool("quiet", false, "Don't print progress information")
-	smallFlag         = flag.Bool("small", false, "Fetch lower resolution images from picasa")
 	start             time.Time
 )
 
@@ -83,9 +81,7 @@ func picasaUsage() {
 func getUser() User {
 	alj := AlbumListJSON{}
 	callPicasaAPI(authHTTPClient, "user/default?alt=json", &alj)
-	if !*quietFlag {
-		fmt.Printf("Found %d albums\n", len(alj.Feed.Entry))
-	}
+	fmt.Printf("Found %d albums\n", len(alj.Feed.Entry))
 	albums := ListOfRefOfAlbumDef{}
 	user := NewUser().
 		SetId(alj.Feed.UserID.V).
@@ -94,14 +90,13 @@ func getUser() User {
 	ch := make(chan Album, len(alj.Feed.Entry))
 	lim := make(chan struct{}, 25)
 	wg := sync.WaitGroup{}
+	wg.Add(len(alj.Feed.Entry))
 	for i, entry := range alj.Feed.Entry {
 		i := i
 		entry := entry
 		lim <- struct{}{}
-		wg.Add(1)
 		go func() {
-			fmt.Println("Fetching album", entry.ID.V)
-			ch <- getAlbum(i, entry.ID.V, entry.Title.V, uint32(entry.NumPhotos.V))
+			ch <- getAlbum(i, entry.ID.V, entry.Title.V, entry.NumPhotos.V)
 			<- lim
 		}()
 	}
@@ -109,7 +104,6 @@ func getUser() User {
 	go func() {
 		for {
 			album := <- ch
-			fmt.Println("Writing album", album.Title())
 			r := types.WriteValue(album, ds.Store())
 			albums = append(albums, r)
 			wg.Done()
@@ -139,37 +133,38 @@ func getShapes(albumId string) shapeMap {
 	return res
 }
 
-func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos uint32) Album {
+func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos int) Album {
 	shapes := getShapes(albumId)
 	a := NewAlbum().
 		SetId(albumId).
 		SetTitle(albumTitle)
 	if numPhotos != 0 {
-		remotePhotos := getRemotePhotos(&a, albumIndex, numPhotos, shapes)
+		fmt.Printf("Album #%d: %q contains %d photos...\n", albumIndex, a.Title(), numPhotos)
+		remotePhotos := getRemotePhotos(albumId, numPhotos, shapes)
 		a = a.SetPhotos(remotePhotos)
 	}
 	return a
 }
 
-func getRemotePhotos(album *Album, albumIndex int, numPhotos uint32, shapes shapeMap) SetOfRefOfRemotePhoto {
+func getRemotePhotos(albumId string, numPhotos int, shapes shapeMap) SetOfRefOfRemotePhoto {
+	mu := sync.Mutex{}
 	remotePhotos := SetOfRefOfRemotePhotoDef{}
-	if !*quietFlag {
-		fmt.Printf("Album #%d: %q contains %d photos... ", albumIndex, album.Title(), numPhotos)
-	}
 
+	batchSize := 1000
+	batches := int(math.Ceil(float64(numPhotos) / float64(batchSize)))
 	wg := sync.WaitGroup{}
-	batchSize := uint32(1000)
-	for i := uint32(0); i < numPhotos; i += batchSize {
+	wg.Add(batches)
+
+	for i := 0; i < batches; i++ {
 		i := i
-		wg.Add(1)
 		go func() {
+			defer wg.Done()
+
+			startIndex := i * batchSize
 			aj := AlbumJSON{}
-			path := fmt.Sprintf("user/default/albumid/%s?alt=json&max-results=1000", album.Id())
-			if !*smallFlag {
-				path = fmt.Sprintf("%s%s", path, "&imgmax=d")
-			}
-			if i > 0 {
-				path = fmt.Sprintf("%s%s%d", path, "&start-index=", i)
+			path := fmt.Sprintf("user/default/albumid/%s?alt=json&max-results=1000", albumId)
+			if startIndex > 0 {
+				path = fmt.Sprintf("%s%s%d", path, "&start-index=", startIndex)
 			}
 			callPicasaAPI(authHTTPClient, path, &aj)
 			for _, e := range aj.Feed.Entry {
@@ -183,22 +178,20 @@ func getRemotePhotos(album *Album, albumIndex int, numPhotos uint32, shapes shap
 				}.New()
 
 				// Timestamp is ms since the epoch.
-				if i, err := strconv.ParseInt(e.Timestamp.V, 10, 64); err == nil {
-					p = p.SetDate(NewDate().SetMsSinceEpoch(i))
+				if ts, err := strconv.ParseInt(e.Timestamp.V, 10, 64); err == nil {
+					p = p.SetDate(NewDate().SetMsSinceEpoch(ts))
 				} else {
 					fmt.Printf("Error parsing date \"%s\": %s\n", e.Timestamp.V, err)
 				}
 
+				mu.Lock()
 				remotePhotos[types.WriteValue(p, ds.Store())] = true
+				mu.Unlock()
 			}
-			wg.Done()
 		}()
 	}
 
 	wg.Wait()
-	if !*quietFlag {
-		fmt.Printf("fetched %d, elapsed time: %.2f secs\n", len(remotePhotos), time.Now().Sub(start).Seconds())
-	}
 	return remotePhotos.New()
 }
 
@@ -208,20 +201,17 @@ func parsePoint(s string) (x, y float32) {
 }
 
 func printStats(user User) {
-	if !*quietFlag {
-		numPhotos := uint64(0)
-		albums := user.Albums()
-		albums.IterAll(func(album RefOfAlbum, _ uint64) {
-			// TODO: Sucks to deref album just to get num photos
-			numPhotos = numPhotos + album.TargetValue(ds.Store()).Photos().Len()
-		})
+	numPhotos := uint64(0)
+	albums := user.Albums()
+	albums.IterAll(func(album RefOfAlbum, _ uint64) {
+		// TODO: Sucks to deref album just to get num photos
+		numPhotos = numPhotos + album.TargetValue(ds.Store()).Photos().Len()
+	})
 
-		fmt.Printf("Imported %d album(s), %d photo(s), time: %.2f\n", albums.Len(), numPhotos, time.Now().Sub(start).Seconds())
-	}
+	fmt.Printf("Imported %d album(s), %d photo(s), time: %.2f\n", albums.Len(), numPhotos, time.Now().Sub(start).Seconds())
 }
 
 func callPicasaAPI(client *http.Client, path string, response interface{}) {
-	fmt.Println("Requesting", "https://picasaweb.google.com/data/feed/api/"+path)
 	rc := callPicasaURL(client, "https://picasaweb.google.com/data/feed/api/"+path)
 	defer rc.Close()
 	err := json.NewDecoder(rc).Decode(response)
