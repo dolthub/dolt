@@ -157,11 +157,6 @@ func (tc *TypeCanFit) testFloats(value string) {
 		tc.float64Type = false
 		return
 	}
-	if fval > math.MaxFloat64 {
-		tc.float32Type = false
-		tc.float64Type = false
-		return
-	}
 
 	if fval > math.MaxFloat32 {
 		tc.float32Type = false
