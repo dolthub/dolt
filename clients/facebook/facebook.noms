@@ -6,5 +6,4 @@ struct User {
   Photos: Set<Ref<Img.RemotePhoto>>
 }
 
-using Set<Img.RemotePhoto>
 using Ref<User>
