@@ -5,19 +5,23 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/attic-labs/noms/clients/csv"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
+	"github.com/attic-labs/noms/types"
 )
 
 var (
 	dsFlags = dataset.NewFlags()
 	// Actually the delimiter uses runes, which can be multiple characters long.
 	// https://blog.golang.org/strings
-	delimiter = flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
-	header    = flag.String("header", "", "header row. If empty, we'll use the first row of the file")
-	name      = flag.String("name", "Row", "struct name. The user-visible name to give to the struct type that will hold each row of data.")
+	delimiter   = flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
+	header      = flag.String("header", "", "header row. If empty, we'll use the first row of the file")
+	name        = flag.String("name", "Row", "struct name. The user-visible name to give to the struct type that will hold each row of data.")
+	reportTypes = flag.Bool("report-types", false, "read the entire file and report which types all values in each column would occupy safely.")
+	columnTypes = flag.String("column-types", "", "a comma-separated list of types representing the desired type of each column. if absent all types default to be String")
 )
 
 func main() {
@@ -30,12 +34,6 @@ func main() {
 	}
 
 	flag.Parse()
-	ds := dsFlags.CreateDataset()
-	if ds == nil {
-		flag.Usage()
-		return
-	}
-	defer ds.Store().Close()
 
 	if flag.NArg() != 1 {
 		fmt.Printf("Expected exactly one parameter (path) after flags, but you have %d. Maybe you put a flag after the path?\n", flag.NArg())
@@ -60,7 +58,29 @@ func main() {
 		return
 	}
 
-	value, _, _ := csv.Read(res, *name, *header, comma, ds.Store())
+	if *reportTypes {
+		keys, kinds := csv.ReportValidFieldTypes(res, *header)
+		d.Chk.Equal(len(keys), len(kinds))
+		fmt.Println("Possible types for each column:")
+		for i, key := range keys {
+			fmt.Printf("%s: %s\n", key, strings.Join(csv.KindsToStrings(kinds[i]), ","))
+		}
+		return
+	}
+
+	ds := dsFlags.CreateDataset()
+	if ds == nil {
+		flag.Usage()
+		return
+	}
+	defer ds.Store().Close()
+
+	kinds := []types.NomsKind{}
+	if *columnTypes != "" {
+		kinds = csv.StringsToKinds(strings.Split(*columnTypes, ","))
+	}
+
+	value, _, _ := csv.Read(res, *name, *header, kinds, comma, ds.Store())
 	_, err = ds.Commit(value)
 	d.Exp.NoError(err)
 }
