@@ -38,6 +38,9 @@ export class SequenceCursor<T, S:Sequence> {
     this.parent = parent;
     this.sequence = sequence;
     this.idx = idx;
+    if (this.idx < 0) {
+      this.idx = Math.max(0, this.sequence.length + this.idx);
+    }
   }
 
   clone(): SequenceCursor<T, S> {

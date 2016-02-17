@@ -112,7 +112,7 @@ suite('MapLeaf', () => {
     assert.isFalse(await m.has('z'));
   });
 
-  test('first/get', async () => {
+  test('first/last/get', async () => {
     const ms = new MemoryStore();
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
                                 makePrimitiveType(Kind.Int32));
@@ -120,6 +120,7 @@ suite('MapLeaf', () => {
         new MapLeafSequence(ms, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
 
     assert.deepEqual(['a', 4], await m.first());
+    assert.deepEqual(['k', 8], await m.last());
 
     assert.strictEqual(4, await m.get('a'));
     assert.strictEqual(undefined, await m.get('b'));
@@ -253,13 +254,16 @@ suite('CompoundMap', () => {
     assert.strictEqual(undefined, await c.get('o'));
   });
 
-  test('first/has', async () => {
+  test('first/last/has', async () => {
     const ms = new MemoryStore();
     const [c, m1, m2] = build(ms);
 
     assert.deepEqual(['a', false], await c.first());
+    assert.deepEqual(['n', false], await c.last());
     assert.deepEqual(['a', false], await m1.first());
+    assert.deepEqual(['f', true], await m1.last());
     assert.deepEqual(['h', false], await m2.first());
+    assert.deepEqual(['n', false], await m2.last());
 
     assert.isTrue(await c.has('a'));
     assert.isTrue(await c.has('b'));

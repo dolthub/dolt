@@ -96,14 +96,23 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
     return cursor.valid && equals(cursor.getCurrentKey(), key);
   }
 
-  async first(): Promise<?[K, V]> {
-    const cursor = await this.sequence.newCursorAt(null);
+
+  async _firstOrLast(last: boolean): Promise<?[K, V]> {
+    const cursor = await this.sequence.newCursorAt(null, false, last);
     if (!cursor.valid) {
       return undefined;
     }
 
     const entry = cursor.getCurrent();
     return [entry.key, entry.value];
+  }
+
+  first(): Promise<?[K, V]> {
+    return this._firstOrLast(false);
+  }
+
+  last(): Promise<?[K, V]> {
+    return this._firstOrLast(true);
   }
 
   async get(key: K): Promise<?V> {
