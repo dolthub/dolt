@@ -12,7 +12,7 @@ import (
 
 func TestSchemaDetection(t *testing.T) {
 	assert := assert.New(t)
-	test := func(input [][]string, expect [][]types.NomsKind) {
+	test := func(input [][]string, expect []KindSlice) {
 		options := newSchemaOptions(len(input[0]))
 		for _, values := range input {
 			options.Test(values)
@@ -28,10 +28,10 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"1", "1", "60"},
 			[]string{"1.1", "false", "75"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{types.StringKind},
-			[]types.NomsKind{types.BoolKind, types.StringKind},
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{types.StringKind},
+			KindSlice{types.BoolKind, types.StringKind},
+			KindSlice{
 				types.Uint8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind,
 				types.Int8Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind,
 				types.Float32Kind, types.Float64Kind,
@@ -47,8 +47,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"1"},
 			[]string{"1.1"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{types.StringKind},
+		[]KindSlice{
+			KindSlice{types.StringKind},
 		},
 	)
 	test(
@@ -57,8 +57,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"1"},
 			[]string{"1.1"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{types.StringKind},
+		[]KindSlice{
+			KindSlice{types.StringKind},
 		},
 	)
 	test(
@@ -72,8 +72,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"1"},
 			[]string{"0"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{types.BoolKind, types.StringKind},
+		[]KindSlice{
+			KindSlice{types.BoolKind, types.StringKind},
 		},
 	)
 	test(
@@ -81,8 +81,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"1"},
 			[]string{"1.1"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Float32Kind, types.Float64Kind,
 				types.StringKind},
 		},
@@ -94,8 +94,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"4.940656458412465441765687928682213723651e-50"},
 			[]string{"-4.940656458412465441765687928682213723651e-50"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Float32Kind,
 				types.Float64Kind,
 				types.StringKind},
@@ -109,8 +109,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"1.797693134862315708145274237317043567981e+102"},
 			[]string{"-1.797693134862315708145274237317043567981e+102"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Float64Kind,
 				types.StringKind},
 		},
@@ -122,8 +122,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"1.797693134862315708145274237317043567981e+309"},
 			[]string{"-1.797693134862315708145274237317043567981e+309"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.StringKind},
 		},
 	)
@@ -132,8 +132,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"1"},
 			[]string{"0"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Uint8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind,
 				types.Int8Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind,
 				types.Float32Kind,
@@ -148,8 +148,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"0"},
 			[]string{"-1"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Int8Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind,
 				types.Float32Kind, types.Float64Kind,
 				types.StringKind},
@@ -160,8 +160,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"0"},
 			[]string{"-0"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Int8Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind,
 				types.Float32Kind, types.Float64Kind,
 				types.StringKind},
@@ -174,8 +174,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"0"},
 			[]string{"-1"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Int16Kind, types.Int32Kind, types.Int64Kind,
 				types.Float32Kind, types.Float64Kind,
 				types.StringKind},
@@ -188,8 +188,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"0"},
 			[]string{"-1"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Int16Kind, types.Int32Kind, types.Int64Kind,
 				types.Float32Kind, types.Float64Kind,
 				types.StringKind},
@@ -202,8 +202,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"0"},
 			[]string{"-1"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Int32Kind, types.Int64Kind,
 				types.Float32Kind, types.Float64Kind,
 				types.StringKind},
@@ -216,8 +216,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"0"},
 			[]string{"-1"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Int32Kind, types.Int64Kind,
 				types.Float32Kind, types.Float64Kind,
 				types.StringKind},
@@ -230,8 +230,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"0"},
 			[]string{"-1"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Int64Kind,
 				types.Float32Kind, types.Float64Kind,
 				types.StringKind},
@@ -244,8 +244,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{"0"},
 			[]string{"-1"},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Int64Kind,
 				types.Float32Kind, types.Float64Kind,
 				types.StringKind},
@@ -257,8 +257,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{fmt.Sprintf("%d", uint64(1<<63))},
 			[]string{fmt.Sprintf("%d", uint64(1<<63)+1)},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Uint64Kind,
 				types.Float32Kind,
 				types.Float64Kind,
@@ -271,8 +271,8 @@ func TestSchemaDetection(t *testing.T) {
 			[]string{fmt.Sprintf("%d", uint64(1<<32))},
 			[]string{fmt.Sprintf("%d", uint64(1<<32)+1)},
 		},
-		[][]types.NomsKind{
-			[]types.NomsKind{
+		[]KindSlice{
+			KindSlice{
 				types.Uint64Kind, types.Int64Kind,
 				types.Float32Kind,
 				types.Float64Kind,
@@ -288,10 +288,10 @@ func TestReportValidFieldTypes(t *testing.T) {
 		{"1.1", "true", "d3"},
 		{"2", "false", "d6"},
 	}
-	expectedKinds := [][]types.NomsKind{
-		[]types.NomsKind{types.Float32Kind, types.Float64Kind, types.StringKind},
-		[]types.NomsKind{types.BoolKind, types.StringKind},
-		[]types.NomsKind{types.StringKind},
+	expectedKinds := []KindSlice{
+		KindSlice{types.Float32Kind, types.Float64Kind, types.StringKind},
+		KindSlice{types.BoolKind, types.StringKind},
+		KindSlice{types.StringKind},
 	}
 	dataString := ""
 	for _, row := range data {
