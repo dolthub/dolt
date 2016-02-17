@@ -13,13 +13,13 @@ export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
   //   -cursor positioned at
   //      -first value, if |key| is null
   //      -first value >= |key|
-  async newCursorAt(key: ?K, forInsertion: boolean = false):
+  async newCursorAt(key: ?K, forInsertion: boolean = false, last: boolean = false):
       Promise<OrderedSequenceCursor> {
     let cursor: ?OrderedSequenceCursor = null;
     let sequence: ?OrderedSequence = this;
 
     while (sequence) {
-      cursor = new OrderedSequenceCursor(cursor, sequence, 0);
+      cursor = new OrderedSequenceCursor(cursor, sequence, last ? -1 : 0);
       if (key) {
         const lastPositionIfNotfound = forInsertion && sequence.isMeta;
         if (!cursor._seekTo(key, lastPositionIfNotfound)) {

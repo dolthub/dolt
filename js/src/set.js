@@ -68,9 +68,17 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
     return cursor.valid && equals(cursor.getCurrentKey(), key);
   }
 
-  async first(): Promise<?T> {
-    const cursor = await this.sequence.newCursorAt(null);
+  async _firstOrLast(last: boolean): Promise<?T> {
+    const cursor = await this.sequence.newCursorAt(null, false, last);
     return cursor.valid ? cursor.getCurrent() : null;
+  }
+
+  first(): Promise<?T> {
+    return this._firstOrLast(false);
+  }
+
+  last(): Promise<?T> {
+    return this._firstOrLast(true);
   }
 
   async forEach(cb: (v: T) => void): Promise<void> {
