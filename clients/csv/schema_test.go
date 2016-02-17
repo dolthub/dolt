@@ -1,7 +1,9 @@
 package csv
 
 import (
+	"bytes"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/attic-labs/noms/types"
@@ -10,9 +12,8 @@ import (
 
 func TestSchemaDetection(t *testing.T) {
 	assert := assert.New(t)
-
 	test := func(input [][]string, expect [][]types.NomsKind) {
-		options := NewSchemaOptions(len(input[0]))
+		options := newSchemaOptions(len(input[0]))
 		for _, values := range input {
 			options.Test(values)
 		}
@@ -278,4 +279,27 @@ func TestSchemaDetection(t *testing.T) {
 				types.StringKind},
 		},
 	)
+}
+
+func TestReportValidFieldTypes(t *testing.T) {
+	assert := assert.New(t)
+	data := [][]string{
+		{"h1", "h2", "h3"},
+		{"1.1", "true", "d3"},
+		{"2", "false", "d6"},
+	}
+	expectedKinds := [][]types.NomsKind{
+		[]types.NomsKind{types.Float32Kind, types.Float64Kind, types.StringKind},
+		[]types.NomsKind{types.BoolKind, types.StringKind},
+		[]types.NomsKind{types.StringKind},
+	}
+	dataString := ""
+	for _, row := range data {
+		dataString = dataString + strings.Join(row, ",") + "\n"
+	}
+	keys, kinds := ReportValidFieldTypes(bytes.NewBufferString(dataString), "")
+	assert.Equal(data[0], keys)
+	for i, ks := range kinds {
+		assert.Equal(expectedKinds[i], ks)
+	}
 }

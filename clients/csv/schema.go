@@ -8,24 +8,24 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-type SchemaOptions []*TypeCanFit
+type schemaOptions []*typeCanFit
 
-func NewSchemaOptions(fieldCount int) SchemaOptions {
-	options := make([]*TypeCanFit, fieldCount, fieldCount)
+func newSchemaOptions(fieldCount int) schemaOptions {
+	options := make([]*typeCanFit, fieldCount, fieldCount)
 	for i := 0; i < fieldCount; i++ {
-		options[i] = &TypeCanFit{true, true, true, true, true, true, true, true, true, true, true, true, true, true}
+		options[i] = &typeCanFit{true, true, true, true, true, true, true, true, true, true, true, true, true, true}
 	}
 	return options
 }
 
-func (so SchemaOptions) Test(values []string) {
+func (so schemaOptions) Test(values []string) {
 	d.Chk.True(len(so) == len(values))
 	for i, t := range so {
 		t.Test(values[i])
 	}
 }
 
-func (so SchemaOptions) ValidKinds() [][]types.NomsKind {
+func (so schemaOptions) ValidKinds() [][]types.NomsKind {
 	kinds := make([][]types.NomsKind, len(so))
 	for i, t := range so {
 		kinds[i] = t.ValidKinds()
@@ -33,7 +33,7 @@ func (so SchemaOptions) ValidKinds() [][]types.NomsKind {
 	return kinds
 }
 
-type TypeCanFit struct {
+type typeCanFit struct {
 	uintType    bool
 	intType     bool
 	boolType    bool
@@ -50,8 +50,7 @@ type TypeCanFit struct {
 	stringType  bool
 }
 
-func (tc *TypeCanFit) ValidKinds() []types.NomsKind {
-	kinds := make([]types.NomsKind, 0)
+func (tc *typeCanFit) ValidKinds() (kinds []types.NomsKind) {
 	if tc.uintType {
 		if tc.uint8Type {
 			kinds = append(kinds, types.Uint8Kind)
@@ -94,14 +93,14 @@ func (tc *TypeCanFit) ValidKinds() []types.NomsKind {
 	return kinds
 }
 
-func (tc *TypeCanFit) Test(value string) {
+func (tc *typeCanFit) Test(value string) {
 	tc.testUints(value)
 	tc.testInts(value)
 	tc.testFloats(value)
 	tc.testBool(value)
 }
 
-func (tc *TypeCanFit) testUints(value string) {
+func (tc *typeCanFit) testUints(value string) {
 	if !tc.uintType {
 		return
 	}
@@ -122,7 +121,7 @@ func (tc *TypeCanFit) testUints(value string) {
 	return
 }
 
-func (tc *TypeCanFit) testInts(value string) {
+func (tc *typeCanFit) testInts(value string) {
 	if !tc.intType {
 		return
 	}
@@ -146,7 +145,7 @@ func (tc *TypeCanFit) testInts(value string) {
 	return
 }
 
-func (tc *TypeCanFit) testFloats(value string) {
+func (tc *typeCanFit) testFloats(value string) {
 	if !tc.float32Type && !tc.float64Type {
 		return
 	}
@@ -163,7 +162,7 @@ func (tc *TypeCanFit) testFloats(value string) {
 	}
 }
 
-func (tc *TypeCanFit) testBool(value string) {
+func (tc *typeCanFit) testBool(value string) {
 	if !tc.boolType {
 		return
 	}
@@ -171,6 +170,7 @@ func (tc *TypeCanFit) testBool(value string) {
 	tc.boolType = err == nil
 }
 
+// StringToType takes a piece of data as a string and attempts to convert it to a types.Value of the appropriate types.NomsKind.
 func StringToType(s string, k types.NomsKind) types.Value {
 	switch k {
 	case types.Uint8Kind:
