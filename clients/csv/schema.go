@@ -25,8 +25,8 @@ func (so schemaOptions) Test(values []string) {
 	}
 }
 
-func (so schemaOptions) ValidKinds() [][]types.NomsKind {
-	kinds := make([][]types.NomsKind, len(so))
+func (so schemaOptions) ValidKinds() []KindSlice {
+	kinds := make([]KindSlice, len(so))
 	for i, t := range so {
 		kinds[i] = t.ValidKinds()
 	}
@@ -50,7 +50,7 @@ type typeCanFit struct {
 	stringType  bool
 }
 
-func (tc *typeCanFit) ValidKinds() (kinds []types.NomsKind) {
+func (tc *typeCanFit) ValidKinds() (kinds KindSlice) {
 	if tc.uintType {
 		if tc.uint8Type {
 			kinds = append(kinds, types.Uint8Kind)
