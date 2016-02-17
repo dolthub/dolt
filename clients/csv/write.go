@@ -40,7 +40,7 @@ func Write(l types.List, sd types.StructDesc, comma rune, output io.Writer) {
 	record := make([]string, len(fieldNames))
 	l.IterAll(func(v types.Value, index uint64) {
 		for i, f := range fieldNames {
-			record[i] = fmt.Sprintf("%s", v.(types.Struct).Get(f))
+			record[i] = fmt.Sprintf("%v", v.(types.Struct).Get(f))
 		}
 		d.Exp.NoError(csvWriter.Write(record), "Failed to write record %v", record)
 	})
