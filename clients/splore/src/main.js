@@ -31,7 +31,11 @@ function load() {
     return;
   }
 
-  httpStore = new HttpStore(hash.server);
+  const opts = {};
+  if (hash.token) {
+    opts['headers'] = {Authorization: `Bearer ${hash.token}`};
+  }
+  httpStore = new HttpStore(hash.server, undefined, opts);
 
   httpStore.getRoot().then(ref => {
     rootRef = ref;
@@ -190,8 +194,12 @@ function handleNodeClick(e: MouseEvent, id: string) {
   }
 }
 
-function setServer(url: string) {
-  location.hash = `server=${url}`;
+function setServer(url: string, token: ?string) {
+  let hash = `server=${url}`;
+  if (token) {
+    hash += '&token=' + token;
+  }
+  location.hash = hash;
 }
 
 type PromptState = {
@@ -202,22 +210,25 @@ class Prompt extends React.Component<void, {}, PromptState> {
   state: PromptState;
 
   render() {
-    const fontStyle = {
+    const fontStyle: {[key: string]: any} = {
       fontFamily: 'Menlo',
       fontSize: 14,
-      width: '',
     };
+    const inputStyle = Object.assign(fontStyle, {}, {width: '50ex', marginBottom: '0.5em'});
     return <div style={{display: 'flex', height: '100%', alignItems: 'center',
       justifyContent: 'center'}}>
       <div style={fontStyle}>
         <label>Can haz server?
           <div style={{margin:'0.5em 0'}}>
-            <input type='text' ref='input' autoFocus={true}
-              style={Object.assign(fontStyle, {}, {width: '50ex'})}
-              defaultValue='http://api.noms.io/-/ds/[user]'/>
+            <input type='text' ref='url' autoFocus={true} style={inputStyle}
+              defaultValue='http://api.noms.io/-/ds/[user]'/><br/>
+            <input type='text' ref='token' style={inputStyle}
+              placeholder='auth token'/>
           </div>
         </label>
-        <div><button onClick={() => setServer(this.refs.input.value)}>OK</button></div>
+        <div>
+          <button onClick={() => setServer(this.refs.url.value, this.refs.token.value)}>OK</button>
+        </div>
       </div>
     </div>;
   }
