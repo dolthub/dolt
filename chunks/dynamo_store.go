@@ -1,8 +1,11 @@
 package chunks
 
 import (
+	"bytes"
+	"compress/gzip"
 	"flag"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -16,13 +19,17 @@ import (
 )
 
 const (
-	dynamoMaxGetCount = 100
-	dynamoMaxPutCount = 25
-	dynamoMaxPutSize  = 400 * 1024 // 400K
+	dynamoMaxGetCount   = 100
+	dynamoMaxPutCount   = 25
+	dynamoMaxPutSize    = 400 * 1024 // 400K
+	dynamoWriteUnitSize = 1024       // 1K
 
 	dynamoTableName = "noms"
 	refAttr         = "ref"
 	chunkAttr       = "chunk"
+	compAttr        = "comp"
+	noneValue       = "none"
+	gzipValue       = "gzip"
 )
 
 var (
@@ -46,9 +53,12 @@ type DynamoStore struct {
 	rootKey         []byte
 	ddbsvc          ddbsvc
 	writeTime       int64
-	writeCount      int64
+	writeBatchCount uint64
+	writeCount      uint64
+	writeTotal      uint64
+	writeCompTotal  uint64
 	readTime        int64
-	readCount       int64
+	readBatchCount  int64
 	readQueue       chan readRequest
 	writeQueue      chan Chunk
 	finishedChan    chan struct{}
@@ -186,7 +196,7 @@ func (s *DynamoStore) Put(c Chunk) {
 func (s *DynamoStore) sendGetRequests(req readRequest) {
 	n := time.Now().UnixNano()
 	defer func() {
-		s.readCount++
+		s.readBatchCount++
 		s.readTime += time.Now().UnixNano() - n
 	}()
 	batch := readBatch{}
@@ -245,7 +255,16 @@ func (s *DynamoStore) processResponses(responses []map[string]*dynamodb.Attribut
 		r := ref.FromSlice(s.removeNamespace(p.B))
 		p = item[chunkAttr]
 		d.Chk.NotNil(p)
-		c := NewChunkWithRef(r, p.B)
+		b := p.B
+		if p = item[compAttr]; p != nil && *p.S == gzipValue {
+			gr, err := gzip.NewReader(bytes.NewReader(b))
+			d.Chk.NoError(err)
+			buf := &bytes.Buffer{}
+			_, err = io.Copy(buf, gr)
+			d.Chk.NoError(err)
+			b = buf.Bytes()
+		}
+		c := NewChunkWithRef(r, b)
 		for _, reqChan := range batch[r] {
 			reqChan.Satisfy(c)
 		}
@@ -256,7 +275,7 @@ func (s *DynamoStore) processResponses(responses []map[string]*dynamodb.Attribut
 func (s *DynamoStore) sendWriteRequests(first Chunk) {
 	n := time.Now().UnixNano()
 	defer func() {
-		s.writeCount++
+		s.writeBatchCount++
 		s.writeTime += time.Now().UnixNano() - n
 	}()
 	chunks := []Chunk{}
@@ -300,14 +319,32 @@ func (s *DynamoStore) sendWriteRequests(first Chunk) {
 
 func chunkItemSize(c Chunk) int {
 	r := c.Ref()
-	return len(refAttr) + len(r.DigestSlice()) + len(chunkAttr) + len(c.Data())
+	return len(refAttr) + len(r.DigestSlice()) + len(chunkAttr) + len(c.Data()) + len(compAttr) + len(noneValue)
 }
 
 func (s *DynamoStore) buildWriteRequests(chunks []Chunk) map[string][]*dynamodb.WriteRequest {
 	chunkToItem := func(c Chunk) map[string]*dynamodb.AttributeValue {
+		chunkData := c.Data()
+		chunkDataLen := uint64(len(chunkData))
+		compDataLen := chunkDataLen
+		compression := noneValue
+		if chunkItemSize(c) > dynamoWriteUnitSize {
+			compression = gzipValue
+			buf := &bytes.Buffer{}
+			gw := gzip.NewWriter(buf)
+			_, err := io.Copy(gw, bytes.NewReader(chunkData))
+			d.Chk.NoError(err)
+			gw.Close()
+			chunkData = buf.Bytes()
+			compDataLen = uint64(buf.Len())
+		}
+		s.writeCount++
+		s.writeTotal += chunkDataLen
+		s.writeCompTotal += compDataLen
 		return map[string]*dynamodb.AttributeValue{
 			refAttr:   {B: s.makeNamespacedKey(c.Ref())},
-			chunkAttr: {B: c.Data()},
+			chunkAttr: {B: chunkData},
+			compAttr:  {S: aws.String(compression)},
 		}
 	}
 	var requests []*dynamodb.WriteRequest
@@ -332,11 +369,15 @@ func (s *DynamoStore) Close() error {
 	close(s.readQueue)
 	close(s.writeQueue)
 
-	if s.readCount > 0 {
-		fmt.Printf("Read batch count: %d, Read batch latency: %d\n", s.readCount, s.readTime/s.readCount/1e6)
+	if s.readBatchCount > 0 {
+		fmt.Printf("Read batch count: %d, Read batch latency: %dms\n", s.readBatchCount, s.readTime/s.readBatchCount/1e6)
+	}
+	if s.writeBatchCount > 0 {
+		fmt.Printf("Write batch count: %d, Write batch latency: %dms\n", s.writeBatchCount, uint64(s.writeTime)/s.writeBatchCount/1e6)
 	}
 	if s.writeCount > 0 {
-		fmt.Printf("Write batch count: %d, Write batch latency: %d\n", s.writeCount, s.writeTime/s.writeCount/1e6)
+		fmt.Printf("Write chunk count: %d, Avg chunk size: %.3fK\n", s.writeCount, float64(s.writeTotal)/float64(s.writeCount)/1024.0)
+		fmt.Printf("Avg compression ratio: %.2fx, Avg compressed chunk size: %.3fK\n", float64(s.writeTotal)/float64(s.writeCompTotal), float64(s.writeCompTotal)/float64(s.writeCount)/1024.0)
 	}
 	return nil
 }
@@ -354,7 +395,13 @@ func (s *DynamoStore) Root() ref.Ref {
 		return ref.Ref{}
 	}
 
-	d.Chk.Equal(len(result.Item), 2)
+	itemLen := len(result.Item)
+	d.Chk.True(itemLen == 2 || itemLen == 3)
+	if itemLen == 3 {
+		d.Chk.NotNil(result.Item[compAttr])
+		d.Chk.NotNil(result.Item[compAttr].S)
+		d.Chk.Equal(noneValue, *result.Item[compAttr].S)
+	}
 	return ref.FromSlice(result.Item[chunkAttr].B)
 }
 
@@ -366,10 +413,11 @@ func (s *DynamoStore) UpdateRoot(current, last ref.Ref) bool {
 		Item: map[string]*dynamodb.AttributeValue{
 			refAttr:   {B: s.rootKey},
 			chunkAttr: {B: current.DigestSlice()},
+			// compAttr:  {S: aws.String(noneValue)},  // We want to add this, but old versions of the code assert that items have only 2 elements.
 		},
 	}
 
-	if (last == ref.Ref{}) {
+	if last.IsEmpty() {
 		putArgs.ConditionExpression = aws.String(valueNotExistsExpression)
 	} else {
 		putArgs.ConditionExpression = aws.String(valueEqualsExpression)
@@ -384,7 +432,6 @@ func (s *DynamoStore) UpdateRoot(current, last ref.Ref) bool {
 			if awsErr.Code() == "ConditionalCheckFailedException" {
 				return false
 			}
-
 			d.Chk.NoError(awsErr)
 		} else {
 			d.Chk.NoError(err)
