@@ -8,6 +8,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
+// KindSlice is an alias for []types.NomsKind. It's needed because types.NomsKind are really just 8 bit unsigned ints, which are what Go uses to represent 'byte', and this confuses the Go JSON marshal/unmarshal code --  it treats them as byte arrays and base64 encodes them!
 type KindSlice []types.NomsKind
 
 func (ks KindSlice) MarshalJSON() ([]byte, error) {

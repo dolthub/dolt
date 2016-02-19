@@ -130,7 +130,7 @@ func Read(res io.Reader, structName, header string, kinds KindSlice, comma rune,
 	r.FieldsPerRecord = 0 // Let first row determine the number of fields.
 
 	typeRef, typeDef = MakeStructTypeFromHeader(r, structName, kinds)
-	valueChan := make(chan types.Value)
+	valueChan := make(chan types.Value, 128) // TODO: Make this a function param?
 	listType := types.MakeCompoundType(types.ListKind, typeRef)
 	listChan := types.NewStreamingTypedList(listType, cs, valueChan)
 
