@@ -6,7 +6,7 @@ import {suite} from 'mocha';
 import MemoryStore from './memory_store.js';
 import test from './async_test.js';
 import {calcSplices} from './edit_distance.js';
-import {flatten} from './test_util.js';
+import {flatten, flattenParallel} from './test_util.js';
 import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
 import {Kind} from './noms_kind.js';
 import {ListLeafSequence, newList, NomsList} from './list.js';
@@ -158,6 +158,7 @@ suite('ListLeafSequence', () => {
     const test = async items => {
       const l = new NomsList(tr, new ListLeafSequence(ms, tr, items));
       assert.deepEqual(items, await flatten(l.iterator()));
+      assert.deepEqual(items, await flattenParallel(l.iterator(), items.length));
     };
 
     await test([]);
@@ -172,7 +173,9 @@ suite('ListLeafSequence', () => {
     const test = async items => {
       const l = new NomsList(tr, new ListLeafSequence(ms, tr, items));
       for (let i = 0; i <= items.length; i++) {
-        assert.deepEqual(items.slice(i), await flatten(l.iteratorAt(i)));
+        const slice = items.slice(i);
+        assert.deepEqual(slice, await flatten(l.iteratorAt(i)));
+        assert.deepEqual(slice, await flattenParallel(l.iteratorAt(i), slice.length));
       }
     };
 
@@ -250,13 +253,19 @@ suite('CompoundList', () => {
   });
 
   test('iterator', async () => {
-    assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], await flatten(build().iterator()));
+    const l = build();
+    const expected = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
+    assert.deepEqual(expected, await flatten(l.iterator()));
+    assert.deepEqual(expected, await flattenParallel(l.iterator(), expected.length));
   });
 
   test('iteratorAt', async () => {
     const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
     for (let i = 0; i <= values.length; i++) {
-      assert.deepEqual(values.slice(i), await flatten(build().iteratorAt(i)));
+      const l = build();
+      const slice = values.slice(i);
+      assert.deepEqual(slice, await flatten(l.iteratorAt(i)));
+      assert.deepEqual(slice, await flattenParallel(l.iteratorAt(i), slice.length));
     }
   });
 
@@ -271,6 +280,15 @@ suite('CompoundList', () => {
       }
     }
     assert.deepEqual(values, ['a', 'b', 'e', 'f', 'h']);
+  });
+
+  test('iterator return parallel', async () => {
+    const list = build();
+    const iter = list.iterator();
+    const values = await Promise.all([iter.next(), iter.next(), iter.return(), iter.next()]);
+    assert.deepEqual(
+        [{done: false, value: 'a'}, {done: false, value: 'b'}, {done: true}, {done: true}],
+        values);
   });
 
   test('chunks', () => {

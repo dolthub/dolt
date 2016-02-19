@@ -10,3 +10,12 @@ export async function flatten<T>(iter: AsyncIterator<T>): Promise<Array<T>> {
   }
   return values;
 }
+
+export async function flattenParallel<T>(iter: AsyncIterator<T>, count: number): Promise<Array<T>> {
+  const promises = [];
+  for (let i = 0; i < count; i++) {
+    promises.push(iter.next());
+  }
+  const results = await Promise.all(promises);
+  return results.map(res => notNull(res.value));
+}

@@ -8,7 +8,7 @@ import test from './async_test.js';
 import type {ChunkStore} from './chunk_store.js';
 import {invariant, notNull} from './assert.js';
 import {Kind} from './noms_kind.js';
-import {flatten} from './test_util.js';
+import {flatten, flattenParallel} from './test_util.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
@@ -108,6 +108,7 @@ suite('SetLeaf', () => {
     const test = async items => {
       const m = new NomsSet(tr, new SetLeafSequence(ms, tr, items));
       assert.deepEqual(items, await flatten(m.iterator()));
+      assert.deepEqual(items, await flattenParallel(m.iterator(), items.length));
     };
 
     await test([]);
@@ -212,8 +213,10 @@ suite('CompoundSet', () => {
 
   test('iterator', async () => {
     const ms = new MemoryStore();
-    const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
-    assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], await flatten(c.iterator()));
+    const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
+    const c = build(ms, values);
+    assert.deepEqual(values, await flatten(c.iterator()));
+    assert.deepEqual(values, await flattenParallel(c.iterator(), values.length));
   });
 
   test('iteratorAt', async () => {
@@ -232,7 +235,9 @@ suite('CompoundSet', () => {
       o: 8,
     };
     for (const k in offsets) {
-      assert.deepEqual(values.slice(offsets[k]), await flatten(c.iteratorAt(k)));
+      const slice = values.slice(offsets[k]);
+      assert.deepEqual(slice, await flatten(c.iteratorAt(k)));
+      assert.deepEqual(slice, await flattenParallel(c.iteratorAt(k), slice.length));
     }
   });
 
@@ -249,6 +254,16 @@ suite('CompoundSet', () => {
       }
     }
     assert.deepEqual(values.slice(0, 5), values2);
+  });
+
+  test('iterator return parallel', async () => {
+    const ms = new MemoryStore();
+    const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const iter = c.iterator();
+    const values = await Promise.all([iter.next(), iter.next(), iter.return(), iter.next()]);
+    assert.deepEqual(
+        [{done: false, value: 'a'}, {done: false, value: 'b'}, {done: true}, {done: true}],
+        values);
   });
 
   test('chunks', () => {

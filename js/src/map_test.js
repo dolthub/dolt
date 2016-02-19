@@ -7,7 +7,7 @@ import MemoryStore from './memory_store.js';
 import test from './async_test.js';
 import type {ChunkStore} from './chunk_store.js';
 import {Kind} from './noms_kind.js';
-import {flatten} from './test_util.js';
+import {flatten, flattenParallel} from './test_util.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MapLeafSequence, newMap, NomsMap} from './map.js';
 import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
@@ -148,6 +148,7 @@ suite('MapLeaf', () => {
     const test = async entries => {
       const m = new NomsMap(tr, new MapLeafSequence(ms, tr, entries));
       assert.deepEqual(entries, flatten(m.iterator()));
+      assert.deepEqual(entries, flattenParallel(m.iterator(), entries.length));
     };
 
     test([]);
@@ -294,10 +295,11 @@ suite('CompoundMap', () => {
   test('iterator', async () => {
     const ms = new MemoryStore();
     const [c] = build(ms);
-    assert.deepEqual([{key: 'a', value: false}, {key: 'b', value: false}, {key: 'e', value: true},
+    const expected = [{key: 'a', value: false}, {key: 'b', value: false}, {key: 'e', value: true},
                       {key: 'f', value: true}, {key: 'h', value: false}, {key: 'i', value: true},
-                      {key: 'm', value: true}, {key: 'n', value: false}],
-                     await flatten(c.iterator()));
+                      {key: 'm', value: true}, {key: 'n', value: false}];
+    assert.deepEqual(expected, await flatten(c.iterator()));
+    assert.deepEqual(expected, await flattenParallel(c.iterator(), expected.length));
   });
 
   test('iteratorAt', async () => {
@@ -318,7 +320,9 @@ suite('CompoundMap', () => {
       o: 8,
     };
     for (const k in offsets) {
-      assert.deepEqual(entries.slice(offsets[k]), await flatten(c.iteratorAt(k)));
+      const slice = entries.slice(offsets[k]);
+      assert.deepEqual(slice, await flatten(c.iteratorAt(k)));
+      assert.deepEqual(slice, await flattenParallel(c.iteratorAt(k), slice.length));
     }
   });
 
@@ -335,6 +339,17 @@ suite('CompoundMap', () => {
     }
     assert.deepEqual([{key: 'a', value: false}, {key: 'b', value: false}, {key: 'e', value: true},
                       {key: 'f', value: true}, {key: 'h', value: false}],
+                     values);
+  });
+
+  test('iterator return parallel', async () => {
+    const ms = new MemoryStore();
+    const [c] = build(ms);
+    const iter = c.iterator();
+    const values = await Promise.all([iter.next(), iter.next(), iter.return(), iter.next()]);
+    assert.deepEqual([{done: false, value: {key: 'a', value: false}},
+                      {done: false, value: {key: 'b', value: false}},
+                      {done: true}, {done: true}],
                      values);
   });
 

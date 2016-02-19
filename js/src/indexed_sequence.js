@@ -49,27 +49,19 @@ export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence>
 }
 
 export class IndexedSequenceIterator<T> extends AsyncIterator<T> {
-  _cursorP: Promise<IndexedSequenceCursor<T>>;
-  _iterator: ?AsyncIterator<T>;
+  _iterator: Promise<AsyncIterator<T>>;
 
   constructor(cursorP: Promise<IndexedSequenceCursor<T>>) {
     super();
-    this._cursorP = cursorP;
-  }
-
-  async _ensureIterator(): Promise<AsyncIterator<T>> {
-    if (!this._iterator) {
-      this._iterator = (await this._cursorP).iterator();
-    }
-    return this._iterator;
+    this._iterator = cursorP.then(cur => cur.iterator());
   }
 
   next(): Promise<AsyncIteratorResult<T>> {
-    return this._ensureIterator().then(it => it.next());
+    return this._iterator.then(it => it.next());
   }
 
   return(): Promise<AsyncIteratorResult<T>> {
-    return this._ensureIterator().then(it => it.return());
+    return this._iterator.then(it => it.return());
   }
 }
 

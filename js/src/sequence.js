@@ -170,34 +170,52 @@ export class SequenceCursor<T, S:Sequence> {
 
 export class SequenceIterator<T, S:Sequence> extends AsyncIterator<T> {
   _cursor: SequenceCursor<T, S>;
-  _nextP: Promise<AsyncIteratorResult<T>>;
+  _advance: Promise<boolean>;
   _closed: boolean;
 
   constructor(cursor: SequenceCursor<T, S>) {
     super();
     this._cursor = cursor;
+    this._advance = Promise.resolve(cursor.valid);
     this._closed = false;
-    this._nextP = Promise.resolve(
-        cursor.valid ? {done: false, value: cursor.getCurrent()} : {done: true});
   }
 
-  async next(): Promise<AsyncIteratorResult<T>> {
-    if (this._closed) {
-      return {done: true};
-    }
-    const next = await this._nextP;
-    if (this._cursor.advanceLocal()) {
-      this._nextP = Promise.resolve({done: false, value: this._cursor.getCurrent()});
-    } else {
-      this._nextP = this._cursor.advance().then(
-          success => success ? {done: false, value: this._cursor.getCurrent()} : {done: true});
-    }
-    return next;
+  next(): Promise<AsyncIteratorResult<T>> {
+    return this._safeAdvance(success => {
+      if (!success || this._closed) {
+        return {done: true};
+      }
+      const cur = this._cursor;
+      const value = cur.getCurrent();
+      if (!cur.advanceLocal()) {
+        // Advance the cursor to the next chunk, invalidating any in-progress calls to next(), since
+        // they were wrapped in |_safeAdvance|. They will just try again. This works because the
+        // ordering of Promise callbacks is guaranteed to be in .then() order.
+        this._advance = cur.advance();
+      }
+      return {done: false, value};
+    });
   }
 
   return(): Promise<AsyncIteratorResult<T>> {
-    this._closed = true;
-    return this.next();
+    return this._safeAdvance(() => {
+      this._closed = true;
+      return {done: true};
+    });
+  }
+
+  // Wraps |_advance|.then() with the guarantee that |_advance| hasn't changed since running .then()
+  // and the callback being run.
+  _safeAdvance(fn: (success: boolean) => AsyncIteratorResult<T> | Promise<AsyncIteratorResult<T>>)
+              :Promise<AsyncIteratorResult<T>> {
+    const run = advance =>
+      advance.then(success => {
+        if (advance !== this._advance) {
+          return run(this._advance);
+        }
+        return fn(success);
+      });
+    return run(this._advance);
   }
 }
 
