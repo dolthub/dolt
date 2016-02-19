@@ -50,9 +50,35 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
     let cum = 0;
     for (let i = 0; i < items.length; i++) {
       const length = items[i].value;
-      this.offsets.push(cum + length - 1);
       cum += length;
+      this.offsets.push(cum);
     }
+  }
+
+  range(start: number, end: number): Promise<Array<any>> {
+    invariant(start >= 0 && end >= 0 && end >= start);
+
+    const childRanges = [];
+    for (let i = 0; i < this.items.length && end > start; i++) {
+      const cum = this.getOffset(i) + 1;
+      const seqLength = this.items[i].value;
+      if (start < cum) {
+        const seqStart = cum - seqLength;
+        const childStart = start - seqStart;
+        const childEnd = Math.min(seqLength, end - seqStart);
+        childRanges.push(this.getChildSequence(i).then(child => {
+          invariant(child instanceof IndexedSequence);
+          return child.range(childStart, childEnd);
+        }));
+        start += childEnd - childStart;
+      }
+    }
+
+    return Promise.all(childRanges).then(ranges => {
+      const range = [];
+      ranges.forEach(r => range.push(...r));
+      return range;
+    });
   }
 
   getChildSequence(idx: number): Promise<?Sequence> {
@@ -82,7 +108,7 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
   }
 
   getOffset(idx: number): number {
-    return this.offsets[idx];
+    return this.offsets[idx] - 1;
   }
 }
 

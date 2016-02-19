@@ -105,11 +105,20 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
         diff(last.sequence, cursors[0].depth, 0, this.sequence, cursors[1].depth, 0, loadLimitArg));
   }
 
-  get length(): number {
-    if (this.sequence instanceof ListLeafSequence) {
-      return this.sequence.items.length;
+  // $FlowIssue
+  toJS(start: number = 0, end: number = this.length): Promise<Array<T>> {
+    const l = this.length;
+    start = clampIndex(start, l);
+    end = clampIndex(end, l);
+    if (start >= end) {
+      return Promise.resolve([]);
     }
-    return this.sequence.items.reduce((v, tuple) => v + tuple.value, 0);
+    return this.sequence.range(start, end);
+  }
+
+  get length(): number {
+    const seq = this.sequence;
+    return seq.getOffset(seq.items.length - 1) + 1;
   }
 }
 
@@ -117,4 +126,17 @@ export class ListLeafSequence<T: valueOrPrimitive> extends IndexedSequence<T> {
   getOffset(idx: number): number {
     return idx;
   }
+
+  range(start: number, end: number): Promise<Array<T>> {
+    invariant(start >= 0 && end >= 0 && end <= this.items.length);
+    return Promise.resolve(this.items.slice(start, end));
+  }
+}
+
+function clampIndex(idx: number, length: number): number {
+  if (idx > length) {
+    return length;
+  }
+
+  return idx < 0 ? Math.max(0, length + idx) : idx;
 }
