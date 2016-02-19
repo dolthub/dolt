@@ -16,6 +16,13 @@ import {writeValue} from './encode.js';
 const testListSize = 5000;
 const listOfNRef = 'sha1-11e947e8aacfda8e9052bb57e661da442b26c625';
 
+async function assertToJS(list: NomsList, nums: Array<any>, start: number = 0,
+    end: number = nums.length): Promise<void> {
+  const jsArray = await list.toJS(start, end);
+  const expect = nums.slice(start, end);
+  assert.deepEqual(expect, jsArray);
+}
+
 suite('BuildList', () => {
   function intSequence(start: number, end: number): Array<number> {
     const nums = [];
@@ -31,11 +38,32 @@ suite('BuildList', () => {
     return intSequence(0, n);
   }
 
-  test('set of n numbers', async () => {
+  test('set of n numbers, length', async () => {
     const nums = firstNNumbers(testListSize);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
     const s = await newList(tr, nums);
     assert.strictEqual(s.ref.toString(), listOfNRef);
+    assert.strictEqual(testListSize, s.length);
+  });
+
+  test('toJS', async () => {
+    const nums = firstNNumbers(5000);
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
+    const s = await newList(tr, nums);
+    assert.strictEqual(s.ref.toString(), listOfNRef);
+    assert.strictEqual(testListSize, s.length);
+
+    await assertToJS(s, nums, 1000, 2000);
+    await assertToJS(s, nums, 3000, 3500);
+    await assertToJS(s, nums);
+    await assertToJS(s, nums, 0, -100);
+    await assertToJS(s, nums, -300, -100);
+    await assertToJS(s, nums, -2000, 4000);
+    await assertToJS(s, nums, -300, -300);
+    await assertToJS(s, nums, -300, -400);
+    await assertToJS(s, nums, 10000, 10000);
+    await assertToJS(s, nums, 0, 1);
+    await assertToJS(s, nums, -1);
   });
 
   test('insert', async () => {
@@ -195,6 +223,11 @@ suite('CompoundList', () => {
 
   test('isEmpty', () => {
     assert.isFalse(build().isEmpty());
+  });
+
+  test('toJS', async () => {
+    const l = build();
+    await assertToJS(l, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'] , 0, 8);
   });
 
   test('get', async () => {

@@ -26,6 +26,10 @@ export class IndexedSequence<T> extends Sequence<T> {
 
     return notNull(cursor);
   }
+
+  range(start: number, end: number): Promise<Array<T>> { // eslint-disable-line no-unused-vars
+    throw new Error('override');
+  }
 }
 
 export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence> {
