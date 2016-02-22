@@ -23,8 +23,9 @@ var (
 	authHTTPClient    *http.Client
 	cachingHTTPClient *http.Client
 	ds                *dataset.Dataset
-	tokenFlag         = flag.String("token", "", "Facebook auth token (required) - see usage for instructions")
+	progressFileFlag  = flag.String("progress-file", "", "file for logging progress")
 	start             time.Time
+	tokenFlag         = flag.String("token", "", "Facebook auth token (required) - see usage for instructions")
 )
 
 func main() {

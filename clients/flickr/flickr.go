@@ -30,6 +30,7 @@ var (
 	ds               *dataset.Dataset
 	httpClient       *http.Client
 	oauthClient      oauth.Client
+	progressFileFlag = flag.String("progress-file", "", "file for logging progress")
 	tokenFlag        = flag.String("token", "", "OAuth1 token (if ommitted, flickr will attempt web auth)")
 	tokenSecretFlag  = flag.String("token-secret", "", "OAuth1 token secret (if ommitted, flickr will attempt web auth)")
 	user             User
