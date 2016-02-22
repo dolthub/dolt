@@ -27,6 +27,7 @@ var (
 	cachingHTTPClient *http.Client
 	ds                *dataset.Dataset
 	tokenFlag         = flag.String("token", "", "OAuth2 bearer token to authenticate with (required)")
+	progressFileFlag  = flag.String("progress-file", "", "file for logging progress")
 	start             time.Time
 )
 
@@ -97,13 +98,13 @@ func getUser() User {
 		lim <- struct{}{}
 		go func() {
 			ch <- getAlbum(i, entry.ID.V, entry.Title.V, entry.NumPhotos.V)
-			<- lim
+			<-lim
 		}()
 	}
 
 	go func() {
 		for {
-			album := <- ch
+			album := <-ch
 			r := types.WriteValue(album, ds.Store())
 			albums = append(albums, r)
 			wg.Done()
