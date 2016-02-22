@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/clients/csv"
+	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
@@ -51,6 +52,10 @@ func main() {
 	d.Exp.NoError(err)
 	defer res.Close()
 
+	if util.MaybeStartCPUProfile() {
+		defer util.StopCPUProfile()
+	}
+
 	comma, err := csv.StringToRune(*delimiter)
 	if err != nil {
 		fmt.Println(err.Error())
@@ -83,4 +88,6 @@ func main() {
 	value, _, _ := csv.Read(res, *name, *header, kinds, comma, ds.Store())
 	_, err = ds.Commit(value)
 	d.Exp.NoError(err)
+
+	util.MaybeWriteMemProfile()
 }
