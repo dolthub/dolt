@@ -19,10 +19,12 @@ import (
 )
 
 const (
-	dynamoMaxGetCount   = 100
-	dynamoMaxPutCount   = 25
-	dynamoMaxPutSize    = 400 * 1024 // 400K
-	dynamoWriteUnitSize = 1024       // 1K
+	dynamoMaxGetCount      = 100
+	dynamoMaxPutCount      = 25
+	dynamoMaxPutSize       = 400 * 1024 // 400K
+	dynamoWriteUnitSize    = 1024       // 1K
+	dynamoWriteConcurrency = 6
+	dynamoReadConcurrency  = 1
 
 	dynamoTableName = "noms"
 	refAttr         = "ref"
@@ -47,25 +49,19 @@ type ddbsvc interface {
 
 // DynamoStore implements ChunkStore by storing data to DynamoDB and, if needed, S3.
 type DynamoStore struct {
-	table           string
-	namespace       []byte
-	namespaceLen    int
-	rootKey         []byte
-	ddbsvc          ddbsvc
-	writeTime       int64
-	writeBatchCount uint64
-	writeCount      uint64
-	writeTotal      uint64
-	writeCompTotal  uint64
-	readTime        int64
-	readBatchCount  int64
-	readQueue       chan readRequest
-	writeQueue      chan Chunk
-	finishedChan    chan struct{}
-	requestWg       *sync.WaitGroup
-	workerWg        *sync.WaitGroup
-	unwrittenPuts   map[ref.Ref]Chunk
-	unwrittenPutsMu *sync.Mutex
+	table          string
+	namespace      []byte
+	namespaceLen   int
+	rootKey        []byte
+	ddbsvc         ddbsvc
+	stats          *statKeeper
+	readQueue      chan readRequest
+	writeQueue     chan Chunk
+	updateRootChan chan struct{}
+	finishedChan   chan struct{}
+	requestWg      *sync.WaitGroup
+	workerWg       *sync.WaitGroup
+	unwrittenPuts  *unwrittenPutCache
 }
 
 // NewDynamoStore returns a new DynamoStore instance pointed at a DynamoDB table in the given region. All keys used to access items are prefixed with the given namespace. If key and secret are empty, the DynamoStore will attempt to inherit AWS credentials from the environment.
@@ -76,25 +72,33 @@ func NewDynamoStore(table, namespace, region, key, secret string) *DynamoStore {
 	}
 
 	sess := session.New(config)
-
 	return newDynamoStoreFromDDBsvc(table, namespace, dynamodb.New(sess))
 }
 
 func newDynamoStoreFromDDBsvc(table, namespace string, ddb ddbsvc) *DynamoStore {
 	store := &DynamoStore{
-		table:           table,
-		namespace:       []byte(namespace),
-		ddbsvc:          ddb,
-		readQueue:       make(chan readRequest, readBufferSize),
-		writeQueue:      make(chan Chunk, writeBufferSize),
-		finishedChan:    make(chan struct{}),
-		requestWg:       &sync.WaitGroup{},
-		workerWg:        &sync.WaitGroup{},
-		unwrittenPuts:   map[ref.Ref]Chunk{},
-		unwrittenPutsMu: &sync.Mutex{},
+		table:          table,
+		namespace:      []byte(namespace),
+		ddbsvc:         ddb,
+		stats:          newStatKeeper(dynamoWriteConcurrency + dynamoReadConcurrency),
+		readQueue:      make(chan readRequest, readBufferSize),
+		writeQueue:     make(chan Chunk, writeBufferSize),
+		updateRootChan: make(chan struct{}),
+		finishedChan:   make(chan struct{}),
+		requestWg:      &sync.WaitGroup{},
+		workerWg:       &sync.WaitGroup{},
+		unwrittenPuts:  newUnwrittenPutCache(),
 	}
+	store.stats.AddStat("writeTime")
+	store.stats.AddStat("writeBatchCount")
+	store.stats.AddStat("writeCount")
+	store.stats.AddStat("writeTotal")
+	store.stats.AddStat("writeCompTotal")
+	store.stats.AddStat("readTime")
+	store.stats.AddStat("readBatchCount")
 	store.namespaceLen = len(store.namespace)
 	store.rootKey = append(store.namespace, dynamoRootKey...)
+
 	store.batchGetRequests()
 	store.batchPutRequests()
 	return store
@@ -121,47 +125,49 @@ func (s *DynamoStore) batchPutRequests() {
 	go func() {
 		defer s.workerWg.Done()
 
+		rateLimit := make(chan struct{}, dynamoWriteConcurrency)
+		var chunks []Chunk
 		for done := false; !done; {
+			drainAndSend := false
 			select {
-			case chunk := <-s.writeQueue:
-				s.sendWriteRequests(chunk)
+			case c := <-s.writeQueue:
+				if chunkItemSize(c) > dynamoMaxPutSize {
+					s.writeLargeChunk(c)
+					break
+				}
+				chunks = append(chunks, c)
+				if len(chunks) == dynamoMaxPutCount {
+					s.sendWriteRequests(chunks, rateLimit)
+					chunks = nil
+				}
+			case <-s.updateRootChan:
+				drainAndSend = true
 			case <-s.finishedChan:
+				drainAndSend = true
 				done = true
 			}
+
+			if drainAndSend {
+				for drained := false; !drained; {
+					select {
+					case c := <-s.writeQueue:
+						chunks = append(chunks, c)
+					default:
+						drained = true
+					}
+					if len(chunks) == dynamoMaxPutCount || (drained && chunks != nil) {
+						s.sendWriteRequests(chunks, rateLimit)
+						chunks = nil
+					}
+				}
+			}
 		}
+		d.Chk.Nil(chunks, "%d chunks were never sent to server", len(chunks))
 	}()
 }
 
-func (s *DynamoStore) addUnwrittenPut(c Chunk) bool {
-	s.unwrittenPutsMu.Lock()
-	defer s.unwrittenPutsMu.Unlock()
-	if _, ok := s.unwrittenPuts[c.Ref()]; !ok {
-		s.unwrittenPuts[c.Ref()] = c
-		return true
-	}
-
-	return false
-}
-
-func (s *DynamoStore) getUnwrittenPut(r ref.Ref) Chunk {
-	s.unwrittenPutsMu.Lock()
-	defer s.unwrittenPutsMu.Unlock()
-	if c, ok := s.unwrittenPuts[r]; ok {
-		return c
-	}
-	return EmptyChunk
-}
-
-func (s *DynamoStore) clearUnwrittenPuts(chunks []Chunk) {
-	s.unwrittenPutsMu.Lock()
-	defer s.unwrittenPutsMu.Unlock()
-	for _, c := range chunks {
-		delete(s.unwrittenPuts, c.Ref())
-	}
-}
-
 func (s *DynamoStore) Get(r ref.Ref) Chunk {
-	pending := s.getUnwrittenPut(r)
+	pending := s.unwrittenPuts.Get(r)
 	if !pending.IsEmpty() {
 		return pending
 	}
@@ -173,7 +179,7 @@ func (s *DynamoStore) Get(r ref.Ref) Chunk {
 }
 
 func (s *DynamoStore) Has(r ref.Ref) bool {
-	pending := s.getUnwrittenPut(r)
+	pending := s.unwrittenPuts.Get(r)
 	if !pending.IsEmpty() {
 		return true
 	}
@@ -185,7 +191,7 @@ func (s *DynamoStore) Has(r ref.Ref) bool {
 }
 
 func (s *DynamoStore) Put(c Chunk) {
-	if !s.addUnwrittenPut(c) {
+	if !s.unwrittenPuts.Add(c) {
 		return
 	}
 
@@ -196,8 +202,8 @@ func (s *DynamoStore) Put(c Chunk) {
 func (s *DynamoStore) sendGetRequests(req readRequest) {
 	n := time.Now().UnixNano()
 	defer func() {
-		s.readBatchCount++
-		s.readTime += time.Now().UnixNano() - n
+		s.stats.Chan("readBatchCount") <- 1
+		s.stats.Chan("readTime") <- time.Now().UnixNano() - n
 	}()
 	batch := readBatch{}
 	refs := map[ref.Ref]bool{}
@@ -272,49 +278,33 @@ func (s *DynamoStore) processResponses(responses []map[string]*dynamodb.Attribut
 	}
 }
 
-func (s *DynamoStore) sendWriteRequests(first Chunk) {
-	n := time.Now().UnixNano()
-	defer func() {
-		s.writeBatchCount++
-		s.writeTime += time.Now().UnixNano() - n
+func (s *DynamoStore) sendWriteRequests(chunks []Chunk, rateLimit chan struct{}) {
+	rateLimit <- struct{}{}
+	startTime := time.Now().UnixNano()
+	go func() {
+		defer func() {
+			s.stats.Chan("writeBatchCount") <- 1
+			s.stats.Chan("writeTime") <- time.Now().UnixNano() - startTime
+		}()
+
+		requestItems := s.buildWriteRequests(chunks)
+		for hasUnprocessedItems := true; hasUnprocessedItems; {
+			out, err := s.ddbsvc.BatchWriteItem(&dynamodb.BatchWriteItemInput{
+				RequestItems: requestItems,
+			})
+
+			if err != nil && err.(awserr.Error).Code() != "ProvisionedThroughputExceededException" {
+				d.Chk.NoError(err, "Errors from BatchGetItem() other than throughput exceeded are fatal")
+			}
+
+			hasUnprocessedItems = len(out.UnprocessedItems) != 0
+			requestItems = out.UnprocessedItems
+		}
+
+		s.unwrittenPuts.Clear(chunks)
+		s.requestWg.Add(-len(chunks))
+		<-rateLimit
 	}()
-	chunks := []Chunk{}
-	addReqIfFits := func(c Chunk) {
-		size := chunkItemSize(c)
-		if size > dynamoMaxPutSize {
-			s.writeLargeChunk(c)
-			return
-		}
-		chunks = append(chunks, c)
-		return
-	}
-
-	addReqIfFits(first)
-	for drained := false; !drained && len(chunks) < dynamoMaxPutCount; {
-		select {
-		case c := <-s.writeQueue:
-			addReqIfFits(c)
-		default:
-			drained = true
-		}
-	}
-
-	requestItems := s.buildWriteRequests(chunks)
-	for hasUnprocessedItems := true; hasUnprocessedItems; {
-		out, err := s.ddbsvc.BatchWriteItem(&dynamodb.BatchWriteItemInput{
-			RequestItems: requestItems,
-		})
-
-		if err != nil && err.(awserr.Error).Code() != "ProvisionedThroughputExceededException" {
-			d.Chk.NoError(err, "Errors from BatchGetItem() other than throughput exceeded are fatal")
-		}
-
-		hasUnprocessedItems = len(out.UnprocessedItems) != 0
-		requestItems = out.UnprocessedItems
-	}
-
-	s.clearUnwrittenPuts(chunks)
-	s.requestWg.Add(-len(chunks))
 }
 
 func chunkItemSize(c Chunk) int {
@@ -323,11 +313,13 @@ func chunkItemSize(c Chunk) int {
 }
 
 func (s *DynamoStore) buildWriteRequests(chunks []Chunk) map[string][]*dynamodb.WriteRequest {
+	totalChunkData, totalCompData := 0, 0
 	chunkToItem := func(c Chunk) map[string]*dynamodb.AttributeValue {
-		chunkData := c.Data()
-		chunkDataLen := uint64(len(chunkData))
-		compDataLen := chunkDataLen
 		compression := noneValue
+		chunkData := c.Data()
+		compDataLen := len(chunkData)
+		totalChunkData += len(chunkData)
+
 		if chunkItemSize(c) > dynamoWriteUnitSize {
 			compression = gzipValue
 			buf := &bytes.Buffer{}
@@ -336,11 +328,10 @@ func (s *DynamoStore) buildWriteRequests(chunks []Chunk) map[string][]*dynamodb.
 			d.Chk.NoError(err)
 			gw.Close()
 			chunkData = buf.Bytes()
-			compDataLen = uint64(buf.Len())
+			compDataLen = buf.Len()
 		}
-		s.writeCount++
-		s.writeTotal += chunkDataLen
-		s.writeCompTotal += compDataLen
+
+		totalCompData += compDataLen
 		return map[string]*dynamodb.AttributeValue{
 			refAttr:   {B: s.makeNamespacedKey(c.Ref())},
 			chunkAttr: {B: chunkData},
@@ -353,6 +344,9 @@ func (s *DynamoStore) buildWriteRequests(chunks []Chunk) map[string][]*dynamodb.
 			PutRequest: &dynamodb.PutRequest{Item: chunkToItem(c)},
 		})
 	}
+	s.stats.Chan("writeCount") <- int64(len(chunks))
+	s.stats.Chan("writeTotal") <- int64(totalChunkData)
+	s.stats.Chan("writeCompTotal") <- int64(totalCompData)
 	return map[string][]*dynamodb.WriteRequest{s.table: requests}
 }
 
@@ -369,15 +363,19 @@ func (s *DynamoStore) Close() error {
 	close(s.readQueue)
 	close(s.writeQueue)
 
-	if s.readBatchCount > 0 {
-		fmt.Printf("Read batch count: %d, Read batch latency: %dms\n", s.readBatchCount, s.readTime/s.readBatchCount/1e6)
+	s.stats.Stop()
+	if s.stats.Has("readBatchCount") {
+		fmt.Printf("Read batch count: %d, Read batch latency: %dms\n", s.stats.Get("readBatchCount"), s.stats.Get("readTime")/s.stats.Get("readBatchCount")/1e6)
 	}
-	if s.writeBatchCount > 0 {
-		fmt.Printf("Write batch count: %d, Write batch latency: %dms\n", s.writeBatchCount, uint64(s.writeTime)/s.writeBatchCount/1e6)
+	if s.stats.Has("writeBatchCount") {
+		fmt.Printf("Write batch count: %d, Write batch latency: %dms\n", s.stats.Get("writeBatchCount"), s.stats.Get("writeTime")/s.stats.Get("writeBatchCount")/1e6)
 	}
-	if s.writeCount > 0 {
-		fmt.Printf("Write chunk count: %d, Avg chunk size: %.3fK\n", s.writeCount, float64(s.writeTotal)/float64(s.writeCount)/1024.0)
-		fmt.Printf("Avg compression ratio: %.2fx, Avg compressed chunk size: %.3fK\n", float64(s.writeTotal)/float64(s.writeCompTotal), float64(s.writeCompTotal)/float64(s.writeCount)/1024.0)
+	if s.stats.Has("writeCount") {
+		writeTotal := float64(s.stats.Get("writeTotal"))
+		writeCompTotal := float64(s.stats.Get("writeCompTotal"))
+		writeCount := float64(s.stats.Get("writeCount"))
+		fmt.Printf("Write chunk count: %.0f, Avg chunk size: %.3fK\n", writeCount, writeTotal/writeCount/1024.0)
+		fmt.Printf("Avg compression ratio: %.2fx, Avg compressed chunk size: %.3fK\n", writeTotal/writeCompTotal, writeCompTotal/writeCount/1024.0)
 	}
 	return nil
 }
@@ -406,6 +404,7 @@ func (s *DynamoStore) Root() ref.Ref {
 }
 
 func (s *DynamoStore) UpdateRoot(current, last ref.Ref) bool {
+	s.updateRootChan <- struct{}{}
 	s.requestWg.Wait()
 
 	putArgs := dynamodb.PutItemInput{
