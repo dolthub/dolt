@@ -25,7 +25,7 @@ import (
 var (
 	authHTTPClient    *http.Client
 	cachingHTTPClient *http.Client
-	clientFlags       = util.NewFlags() // TODO: respect clientFlags.Concurrency()
+	clientFlags       = util.NewFlags()
 	ds                *dataset.Dataset
 	tokenFlag         = flag.String("token", "", "OAuth2 bearer token to authenticate with (required)")
 	start             time.Time
@@ -93,10 +93,12 @@ func getUser() User {
 	}
 	fmt.Printf("Found %d albums with %d photos\n", len(alj.Feed.Entry), numPhotos)
 
-	progress := make(chan bool, clientFlags.Concurrency())
+	progress := make(chan interface{}, clientFlags.Concurrency()*100)
 	go func() {
 		lastUpdate := time.Now()
-		for added := 0; <-progress; added++ {
+		added := 0
+		for range progress {
+			added++
 			if now := time.Now(); now.Sub(lastUpdate)/time.Millisecond >= 200 {
 				clientFlags.UpdateProgress(float32(added) / float32(numPhotos))
 				lastUpdate = now
@@ -134,7 +136,7 @@ func getUser() User {
 	}()
 
 	wg.Wait()
-	progress <- false
+	close(progress)
 
 	clientFlags.UpdateProgress(1.0)
 	return user.SetAlbums(albums.New())
@@ -158,7 +160,7 @@ func getShapes(albumId string) shapeMap {
 	return res
 }
 
-func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos int, progress chan bool) Album {
+func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos int, progress chan interface{}) Album {
 	shapes := getShapes(albumId)
 	a := NewAlbum().
 		SetId(albumId).
@@ -171,7 +173,7 @@ func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos int, progres
 	return a
 }
 
-func getRemotePhotos(albumId string, numPhotos int, shapes shapeMap, progress chan bool) SetOfRefOfRemotePhoto {
+func getRemotePhotos(albumId string, numPhotos int, shapes shapeMap, progress chan interface{}) SetOfRefOfRemotePhoto {
 	mu := sync.Mutex{}
 	remotePhotos := SetOfRefOfRemotePhotoDef{}
 
@@ -213,7 +215,7 @@ func getRemotePhotos(albumId string, numPhotos int, shapes shapeMap, progress ch
 				// TODO: batch write photos.
 				remotePhotos[types.WriteValue(p, ds.Store())] = true
 				mu.Unlock()
-				progress <- true
+				progress <- struct{}{}
 			}
 		}()
 	}
