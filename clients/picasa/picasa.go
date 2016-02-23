@@ -29,7 +29,6 @@ var (
 	ds                *dataset.Dataset
 	tokenFlag         = flag.String("token", "", "OAuth2 bearer token to authenticate with (required)")
 	start             time.Time
-	progress          chan int
 )
 
 type shapeMap map[string][]Shape
@@ -94,12 +93,10 @@ func getUser() User {
 	}
 	fmt.Printf("Found %d albums with %d photos\n", len(alj.Feed.Entry), numPhotos)
 
-	progress = make(chan int, numPhotos)
+	progress := make(chan bool, clientFlags.Concurrency())
 	go func() {
-		added := 0
 		lastUpdate := time.Now()
-		for i := 0; i < numPhotos; i++ {
-			added += <-progress
+		for added := 0; <-progress; added++ {
 			if now := time.Now(); now.Sub(lastUpdate)/time.Millisecond >= 200 {
 				clientFlags.UpdateProgress(float32(added) / float32(numPhotos))
 				lastUpdate = now
@@ -113,7 +110,7 @@ func getUser() User {
 		SetName(alj.Feed.UserName.V)
 
 	ch := make(chan Album, len(alj.Feed.Entry))
-	lim := make(chan struct{}, 25)
+	lim := make(chan struct{}, clientFlags.Concurrency())
 	wg := sync.WaitGroup{}
 	wg.Add(len(alj.Feed.Entry))
 	for i, entry := range alj.Feed.Entry {
@@ -121,7 +118,7 @@ func getUser() User {
 		entry := entry
 		lim <- struct{}{}
 		go func() {
-			ch <- getAlbum(i, entry.ID.V, entry.Title.V, entry.NumPhotos.V)
+			ch <- getAlbum(i, entry.ID.V, entry.Title.V, entry.NumPhotos.V, progress)
 			<-lim
 		}()
 	}
@@ -129,6 +126,7 @@ func getUser() User {
 	go func() {
 		for {
 			album := <-ch
+			// TODO: batch write albums.
 			r := types.WriteValue(album, ds.Store())
 			albums = append(albums, r)
 			wg.Done()
@@ -136,6 +134,7 @@ func getUser() User {
 	}()
 
 	wg.Wait()
+	progress <- false
 
 	clientFlags.UpdateProgress(1.0)
 	return user.SetAlbums(albums.New())
@@ -159,20 +158,20 @@ func getShapes(albumId string) shapeMap {
 	return res
 }
 
-func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos int) Album {
+func getAlbum(albumIndex int, albumId, albumTitle string, numPhotos int, progress chan bool) Album {
 	shapes := getShapes(albumId)
 	a := NewAlbum().
 		SetId(albumId).
 		SetTitle(albumTitle)
 	if numPhotos != 0 {
 		fmt.Printf("Album #%d: %q contains %d photos...\n", albumIndex, a.Title(), numPhotos)
-		remotePhotos := getRemotePhotos(albumId, numPhotos, shapes)
+		remotePhotos := getRemotePhotos(albumId, numPhotos, shapes, progress)
 		a = a.SetPhotos(remotePhotos)
 	}
 	return a
 }
 
-func getRemotePhotos(albumId string, numPhotos int, shapes shapeMap) SetOfRefOfRemotePhoto {
+func getRemotePhotos(albumId string, numPhotos int, shapes shapeMap, progress chan bool) SetOfRefOfRemotePhoto {
 	mu := sync.Mutex{}
 	remotePhotos := SetOfRefOfRemotePhotoDef{}
 
@@ -211,9 +210,10 @@ func getRemotePhotos(albumId string, numPhotos int, shapes shapeMap) SetOfRefOfR
 				}
 
 				mu.Lock()
+				// TODO: batch write photos.
 				remotePhotos[types.WriteValue(p, ds.Store())] = true
 				mu.Unlock()
-				progress <- 1
+				progress <- true
 			}
 		}()
 	}
