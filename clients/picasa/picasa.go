@@ -25,17 +25,17 @@ import (
 var (
 	authHTTPClient    *http.Client
 	cachingHTTPClient *http.Client
+	clientFlags       = util.NewFlags() // TODO: respect clientFlags.Concurrency()
 	ds                *dataset.Dataset
 	tokenFlag         = flag.String("token", "", "OAuth2 bearer token to authenticate with (required)")
-	progressFileFlag  = flag.String("progress-file", "", "file for logging progress")
 	start             time.Time
+	progress          chan int
 )
 
 type shapeMap map[string][]Shape
 
 func main() {
 	flag.Usage = picasaUsage
-	dsFlags := dataset.NewFlags()
 	flag.Parse()
 	cachingHTTPClient = util.CachingHttpClient()
 
@@ -47,19 +47,24 @@ func main() {
 	util.MaybeStartCPUProfile()
 	defer util.StopCPUProfile()
 
-	ds = dsFlags.CreateDataset()
+	ds = clientFlags.CreateDataset()
 	if ds == nil {
 		flag.Usage()
 		os.Exit(1)
 	}
 	defer ds.Store().Close()
 
+	if err := clientFlags.CreateProgressFile(); err != nil {
+		fmt.Println(err)
+	} else {
+		defer clientFlags.CloseProgressFile()
+	}
+
 	token := oauth2.Token{AccessToken: *tokenFlag}
 	authHTTPClient = oauth2.NewClient(oauth2.NoContext, oauth2.StaticTokenSource(&token))
 
 	start = time.Now()
 	user := getUser()
-	printStats(user)
 
 	userRef := types.WriteValue(user, ds.Store())
 	fmt.Printf("userRef: %s\n", userRef)
@@ -82,7 +87,26 @@ func picasaUsage() {
 func getUser() User {
 	alj := AlbumListJSON{}
 	callPicasaAPI(authHTTPClient, "user/default?alt=json", &alj)
-	fmt.Printf("Found %d albums\n", len(alj.Feed.Entry))
+
+	numPhotos := 0
+	for _, entry := range alj.Feed.Entry {
+		numPhotos += entry.NumPhotos.V
+	}
+	fmt.Printf("Found %d albums with %d photos\n", len(alj.Feed.Entry), numPhotos)
+
+	progress = make(chan int, numPhotos)
+	go func() {
+		added := 0
+		lastUpdate := time.Now()
+		for i := 0; i < numPhotos; i++ {
+			added += <-progress
+			if now := time.Now(); now.Sub(lastUpdate)/time.Millisecond >= 200 {
+				clientFlags.UpdateProgress(float32(added) / float32(numPhotos))
+				lastUpdate = now
+			}
+		}
+	}()
+
 	albums := ListOfRefOfAlbumDef{}
 	user := NewUser().
 		SetId(alj.Feed.UserID.V).
@@ -113,6 +137,7 @@ func getUser() User {
 
 	wg.Wait()
 
+	clientFlags.UpdateProgress(1.0)
 	return user.SetAlbums(albums.New())
 }
 
@@ -188,6 +213,7 @@ func getRemotePhotos(albumId string, numPhotos int, shapes shapeMap) SetOfRefOfR
 				mu.Lock()
 				remotePhotos[types.WriteValue(p, ds.Store())] = true
 				mu.Unlock()
+				progress <- 1
 			}
 		}()
 	}
@@ -199,17 +225,6 @@ func getRemotePhotos(albumId string, numPhotos int, shapes shapeMap) SetOfRefOfR
 func parsePoint(s string) (x, y float32) {
 	pair := strings.Split(s, " ")
 	return float32(atoi(pair[0])), float32(atoi(pair[1]))
-}
-
-func printStats(user User) {
-	numPhotos := uint64(0)
-	albums := user.Albums()
-	albums.IterAll(func(album RefOfAlbum, _ uint64) {
-		// TODO: Sucks to deref album just to get num photos
-		numPhotos = numPhotos + album.TargetValue(ds.Store()).Photos().Len()
-	})
-
-	fmt.Printf("Imported %d album(s), %d photo(s), time: %.2f\n", albums.Len(), numPhotos, time.Now().Sub(start).Seconds())
 }
 
 func callPicasaAPI(client *http.Client, path string, response interface{}) {

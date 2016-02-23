@@ -107,23 +107,23 @@ func (ds *Dataset) SetNewHead(newHeadRef ref.Ref) (Dataset, error) {
 	return ds.CommitWithParents(commit.Value(), commit.Parents())
 }
 
-type datasetFlags struct {
+type DatasetFlags struct {
 	datas.Flags
 	datasetID *string
 }
 
-func NewFlags() datasetFlags {
+func NewFlags() DatasetFlags {
 	return NewFlagsWithPrefix("")
 }
 
-func NewFlagsWithPrefix(prefix string) datasetFlags {
-	return datasetFlags{
+func NewFlagsWithPrefix(prefix string) DatasetFlags {
+	return DatasetFlags{
 		datas.NewFlagsWithPrefix(prefix),
 		flag.String(prefix+"ds", "", "dataset id to store data for"),
 	}
 }
 
-func (f datasetFlags) CreateDataset() *Dataset {
+func (f DatasetFlags) CreateDataset() *Dataset {
 	if *f.datasetID == "" {
 		return nil
 	}
