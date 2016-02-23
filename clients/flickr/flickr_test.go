@@ -28,6 +28,7 @@ func TestGetAlbums(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 	testDs := dataset.NewDataset(datas.NewDataStore(cs), "test")
 	ds = &testDs
+	progress := progressTracker{}
 	methods := map[string]string{
 		"flickr.photosets.getList": `{
 			"photosets": {
@@ -106,14 +107,14 @@ func TestGetAlbums(t *testing.T) {
 		}`,
 	}
 
-	albums := getAlbums(fakeFlickrAPI{methods})
+	albums := getAlbums(fakeFlickrAPI{methods}, &progress)
 	assert.Equal(uint64(1), albums.Len())
 
-	album := albums.Get("42")
+	album := albums.Get("42").TargetValue(cs)
 	assert.Equal("42", album.Id())
 	assert.Equal("My Photoset", album.Title())
 
-	photos := album.Photos().TargetValue(cs)
+	photos := album.Photos()
 	assert.Equal(uint64(2), photos.Len())
 
 	var photo0, photo1 RemotePhoto
