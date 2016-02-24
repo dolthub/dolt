@@ -39,17 +39,16 @@ func makeHTTPClient() *http.Client {
 }
 
 type HTTPStore struct {
-	host            *url.URL
-	httpClient      *http.Client
-	auth            string
-	getQueue        chan getRequest
-	hasQueue        chan hasRequest
-	writeQueue      chan Chunk
-	finishedChan    chan struct{}
-	wg              *sync.WaitGroup
-	wgFinished      *sync.WaitGroup
-	unwrittenPuts   map[ref.Ref]Chunk
-	unwrittenPutsMu *sync.Mutex
+	host          *url.URL
+	httpClient    *http.Client
+	auth          string
+	getQueue      chan getRequest
+	hasQueue      chan hasRequest
+	writeQueue    chan Chunk
+	finishedChan  chan struct{}
+	wg            *sync.WaitGroup
+	wgFinished    *sync.WaitGroup
+	unwrittenPuts *unwrittenPutCache
 }
 
 func NewHTTPStore(baseURL, auth string) *HTTPStore {
@@ -58,17 +57,16 @@ func NewHTTPStore(baseURL, auth string) *HTTPStore {
 	d.Exp.True(u.Scheme == "http" || u.Scheme == "https")
 
 	client := &HTTPStore{
-		host:            u,
-		httpClient:      makeHTTPClient(),
-		auth:            auth,
-		getQueue:        make(chan getRequest, readBufferSize),
-		hasQueue:        make(chan hasRequest, hasBufferSize),
-		writeQueue:      make(chan Chunk, writeBufferSize),
-		finishedChan:    make(chan struct{}),
-		wg:              &sync.WaitGroup{},
-		wgFinished:      &sync.WaitGroup{},
-		unwrittenPuts:   map[ref.Ref]Chunk{},
-		unwrittenPutsMu: &sync.Mutex{},
+		host:          u,
+		httpClient:    makeHTTPClient(),
+		auth:          auth,
+		getQueue:      make(chan getRequest, readBufferSize),
+		hasQueue:      make(chan hasRequest, hasBufferSize),
+		writeQueue:    make(chan Chunk, writeBufferSize),
+		finishedChan:  make(chan struct{}),
+		wg:            &sync.WaitGroup{},
+		wgFinished:    &sync.WaitGroup{},
+		unwrittenPuts: newUnwrittenPutCache(),
 	}
 
 	for i := 0; i < requestLimit; i++ {
@@ -82,36 +80,8 @@ func (c *HTTPStore) Host() *url.URL {
 	return &url.URL{Host: c.host.Host, Scheme: c.host.Scheme}
 }
 
-func (c *HTTPStore) addUnwrittenPut(chunk Chunk) bool {
-	c.unwrittenPutsMu.Lock()
-	defer c.unwrittenPutsMu.Unlock()
-	if _, ok := c.unwrittenPuts[chunk.Ref()]; !ok {
-		c.unwrittenPuts[chunk.Ref()] = chunk
-		return true
-	}
-
-	return false
-}
-
-func (c *HTTPStore) getUnwrittenPut(r ref.Ref) Chunk {
-	c.unwrittenPutsMu.Lock()
-	defer c.unwrittenPutsMu.Unlock()
-	if c, ok := c.unwrittenPuts[r]; ok {
-		return c
-	}
-	return EmptyChunk
-}
-
-func (c *HTTPStore) clearUnwrittenPuts(chunks []Chunk) {
-	c.unwrittenPutsMu.Lock()
-	defer c.unwrittenPutsMu.Unlock()
-	for _, chunk := range chunks {
-		delete(c.unwrittenPuts, chunk.Ref())
-	}
-}
-
 func (c *HTTPStore) Get(r ref.Ref) Chunk {
-	pending := c.getUnwrittenPut(r)
+	pending := c.unwrittenPuts.Get(r)
 	if !pending.IsEmpty() {
 		return pending
 	}
@@ -146,7 +116,7 @@ func (c *HTTPStore) sendReadRequests(req getRequest) {
 }
 
 func (c *HTTPStore) Has(ref ref.Ref) bool {
-	pending := c.getUnwrittenPut(ref)
+	pending := c.unwrittenPuts.Get(ref)
 	if !pending.IsEmpty() {
 		return true
 	}
@@ -180,7 +150,7 @@ func (c *HTTPStore) sendHasRequests(req hasRequest) {
 }
 
 func (c *HTTPStore) Put(chunk Chunk) {
-	if !c.addUnwrittenPut(chunk) {
+	if !c.unwrittenPuts.Add(chunk) {
 		return
 	}
 
@@ -259,7 +229,7 @@ func (c *HTTPStore) postRefs(chs []Chunk) {
 
 	d.Chk.Equal(res.StatusCode, http.StatusCreated, "Unexpected response: %s", http.StatusText(res.StatusCode))
 	closeResponse(res)
-	c.clearUnwrittenPuts(chs)
+	c.unwrittenPuts.Clear(chs)
 }
 
 func (c *HTTPStore) requestRef(r ref.Ref, method string, body io.Reader) *http.Response {
