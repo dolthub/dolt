@@ -64,8 +64,7 @@ type DynamoStore struct {
 	finishedChan    chan struct{}
 	requestWg       *sync.WaitGroup
 	workerWg        *sync.WaitGroup
-	unwrittenPuts   map[ref.Ref]Chunk
-	unwrittenPutsMu *sync.Mutex
+	unwrittenPuts   *unwrittenPutCache
 }
 
 // NewDynamoStore returns a new DynamoStore instance pointed at a DynamoDB table in the given region. All keys used to access items are prefixed with the given namespace. If key and secret are empty, the DynamoStore will attempt to inherit AWS credentials from the environment.
@@ -82,22 +81,54 @@ func NewDynamoStore(table, namespace, region, key, secret string) *DynamoStore {
 
 func newDynamoStoreFromDDBsvc(table, namespace string, ddb ddbsvc) *DynamoStore {
 	store := &DynamoStore{
-		table:           table,
-		namespace:       []byte(namespace),
-		ddbsvc:          ddb,
-		readQueue:       make(chan readRequest, readBufferSize),
-		writeQueue:      make(chan Chunk, writeBufferSize),
-		finishedChan:    make(chan struct{}),
-		requestWg:       &sync.WaitGroup{},
-		workerWg:        &sync.WaitGroup{},
-		unwrittenPuts:   map[ref.Ref]Chunk{},
-		unwrittenPutsMu: &sync.Mutex{},
+		table:         table,
+		namespace:     []byte(namespace),
+		ddbsvc:        ddb,
+		readQueue:     make(chan readRequest, readBufferSize),
+		writeQueue:    make(chan Chunk, writeBufferSize),
+		finishedChan:  make(chan struct{}),
+		requestWg:     &sync.WaitGroup{},
+		workerWg:      &sync.WaitGroup{},
+		unwrittenPuts: newUnwrittenPutCache(),
 	}
 	store.namespaceLen = len(store.namespace)
 	store.rootKey = append(store.namespace, dynamoRootKey...)
 	store.batchGetRequests()
 	store.batchPutRequests()
 	return store
+}
+
+func (s *DynamoStore) Get(r ref.Ref) Chunk {
+	pending := s.unwrittenPuts.Get(r)
+	if !pending.IsEmpty() {
+		return pending
+	}
+
+	ch := make(chan Chunk)
+	s.requestWg.Add(1)
+	s.readQueue <- getRequest{r, ch}
+	return <-ch
+}
+
+func (s *DynamoStore) Has(r ref.Ref) bool {
+	pending := s.unwrittenPuts.Get(r)
+	if !pending.IsEmpty() {
+		return true
+	}
+
+	ch := make(chan bool)
+	s.requestWg.Add(1)
+	s.readQueue <- hasRequest{r, ch}
+	return <-ch
+}
+
+func (s *DynamoStore) Put(c Chunk) {
+	if !s.unwrittenPuts.Add(c) {
+		return
+	}
+
+	s.requestWg.Add(1)
+	s.writeQueue <- c
 }
 
 func (s *DynamoStore) batchGetRequests() {
@@ -114,83 +145,6 @@ func (s *DynamoStore) batchGetRequests() {
 			}
 		}
 	}()
-}
-
-func (s *DynamoStore) batchPutRequests() {
-	s.workerWg.Add(1)
-	go func() {
-		defer s.workerWg.Done()
-
-		for done := false; !done; {
-			select {
-			case chunk := <-s.writeQueue:
-				s.sendWriteRequests(chunk)
-			case <-s.finishedChan:
-				done = true
-			}
-		}
-	}()
-}
-
-func (s *DynamoStore) addUnwrittenPut(c Chunk) bool {
-	s.unwrittenPutsMu.Lock()
-	defer s.unwrittenPutsMu.Unlock()
-	if _, ok := s.unwrittenPuts[c.Ref()]; !ok {
-		s.unwrittenPuts[c.Ref()] = c
-		return true
-	}
-
-	return false
-}
-
-func (s *DynamoStore) getUnwrittenPut(r ref.Ref) Chunk {
-	s.unwrittenPutsMu.Lock()
-	defer s.unwrittenPutsMu.Unlock()
-	if c, ok := s.unwrittenPuts[r]; ok {
-		return c
-	}
-	return EmptyChunk
-}
-
-func (s *DynamoStore) clearUnwrittenPuts(chunks []Chunk) {
-	s.unwrittenPutsMu.Lock()
-	defer s.unwrittenPutsMu.Unlock()
-	for _, c := range chunks {
-		delete(s.unwrittenPuts, c.Ref())
-	}
-}
-
-func (s *DynamoStore) Get(r ref.Ref) Chunk {
-	pending := s.getUnwrittenPut(r)
-	if !pending.IsEmpty() {
-		return pending
-	}
-
-	ch := make(chan Chunk)
-	s.requestWg.Add(1)
-	s.readQueue <- getRequest{r, ch}
-	return <-ch
-}
-
-func (s *DynamoStore) Has(r ref.Ref) bool {
-	pending := s.getUnwrittenPut(r)
-	if !pending.IsEmpty() {
-		return true
-	}
-
-	ch := make(chan bool)
-	s.requestWg.Add(1)
-	s.readQueue <- hasRequest{r, ch}
-	return <-ch
-}
-
-func (s *DynamoStore) Put(c Chunk) {
-	if !s.addUnwrittenPut(c) {
-		return
-	}
-
-	s.requestWg.Add(1)
-	s.writeQueue <- c
 }
 
 func (s *DynamoStore) sendGetRequests(req readRequest) {
@@ -272,6 +226,22 @@ func (s *DynamoStore) processResponses(responses []map[string]*dynamodb.Attribut
 	}
 }
 
+func (s *DynamoStore) batchPutRequests() {
+	s.workerWg.Add(1)
+	go func() {
+		defer s.workerWg.Done()
+
+		for done := false; !done; {
+			select {
+			case chunk := <-s.writeQueue:
+				s.sendWriteRequests(chunk)
+			case <-s.finishedChan:
+				done = true
+			}
+		}
+	}()
+}
+
 func (s *DynamoStore) sendWriteRequests(first Chunk) {
 	n := time.Now().UnixNano()
 	defer func() {
@@ -313,7 +283,7 @@ func (s *DynamoStore) sendWriteRequests(first Chunk) {
 		requestItems = out.UnprocessedItems
 	}
 
-	s.clearUnwrittenPuts(chunks)
+	s.unwrittenPuts.Clear(chunks)
 	s.requestWg.Add(-len(chunks))
 }
 
