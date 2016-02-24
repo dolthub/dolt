@@ -1,6 +1,9 @@
 package types
 
-import "github.com/attic-labs/noms/d"
+import (
+	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/d"
+)
 
 type Set interface {
 	Value
@@ -35,7 +38,7 @@ func NewTypedSet(t Type, v ...Value) Set {
 }
 
 func newTypedSet(t Type, data ...Value) Set {
-	seq := newEmptySequenceChunker(makeSetLeafChunkFn(t), newOrderedMetaSequenceChunkFn(t), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeSetLeafChunkFn(t, nil), newOrderedMetaSequenceChunkFn(t, nil), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, v := range data {
 		seq.Append(v)
@@ -44,7 +47,7 @@ func newTypedSet(t Type, data ...Value) Set {
 	return seq.Done().(Set)
 }
 
-func setUnion(set Set, others []Set) Set {
+func setUnion(cs chunks.ChunkSource, set Set, others []Set) Set {
 	// TODO: This can be done more efficiently by realizing that if two sets have the same meta tuple we only have to traverse one of the subtrees. Bug 794
 	if len(others) == 0 {
 		return set
@@ -52,7 +55,7 @@ func setUnion(set Set, others []Set) Set {
 	assertSetsSameType(set, others...)
 
 	tr := set.Type()
-	seq := newEmptySequenceChunker(makeSetLeafChunkFn(tr), newOrderedMetaSequenceChunkFn(tr), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeSetLeafChunkFn(tr, cs), newOrderedMetaSequenceChunkFn(tr, cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	var lessFunction func(a, b sequenceItem) bool
 	if isSequenceOrderedByIndexedType(tr) {

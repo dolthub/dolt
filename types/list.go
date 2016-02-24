@@ -35,7 +35,7 @@ func NewList(v ...Value) List {
 
 // NewTypedList creates a new List with type t, populated with values, chunking if and when needed.
 func NewTypedList(t Type, values ...Value) List {
-	seq := newEmptySequenceChunker(makeListLeafChunkFn(t, nil), newIndexedMetaSequenceChunkFn(t, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeListLeafChunkFn(t, nil, nil), newIndexedMetaSequenceChunkFn(t, nil, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	for _, v := range values {
 		seq.Append(v)
 	}
@@ -46,7 +46,7 @@ func NewTypedList(t Type, values ...Value) List {
 func NewStreamingTypedList(t Type, cs chunks.ChunkStore, values <-chan Value) <-chan List {
 	out := make(chan List)
 	go func() {
-		seq := newEmptySequenceChunker(makeListLeafChunkFn(t, cs), newIndexedMetaSequenceChunkFn(t, cs), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+		seq := newEmptySequenceChunker(makeListLeafChunkFn(t, cs, cs), newIndexedMetaSequenceChunkFn(t, cs, cs), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 		for v := range values {
 			seq.Append(v)
 		}

@@ -235,7 +235,7 @@ func newMapLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeMapLeafChunkFn(t Type) makeChunkFn {
+func makeMapLeafChunkFn(t Type, cs chunks.ChunkSource) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		mapData := make([]mapEntry, len(items), len(items))
 
@@ -243,7 +243,7 @@ func makeMapLeafChunkFn(t Type) makeChunkFn {
 			mapData[i] = v.(mapEntry)
 		}
 
-		mapLeaf := valueFromType(newMapLeaf(nil, t, mapData...), t)
+		mapLeaf := valueFromType(newMapLeaf(cs, t, mapData...), t)
 
 		var indexValue Value
 		if len(mapData) > 0 {

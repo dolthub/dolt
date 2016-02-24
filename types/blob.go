@@ -50,7 +50,7 @@ func newBlobLeafChunkFn() makeChunkFn {
 }
 
 func NewBlob(r io.Reader) Blob {
-	seq := newEmptySequenceChunker(newBlobLeafChunkFn(), newIndexedMetaSequenceChunkFn(typeForBlob, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(newBlobLeafChunkFn(), newIndexedMetaSequenceChunkFn(typeForBlob, nil, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	buf := []byte{0}
 	for {
 		n, err := r.Read(buf)

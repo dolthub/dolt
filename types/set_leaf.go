@@ -57,7 +57,7 @@ func (s setLeaf) Remove(values ...Value) Set {
 }
 
 func (s setLeaf) Union(others ...Set) Set {
-	return setUnion(s, others)
+	return setUnion(s.cs, s, others)
 }
 
 func (s setLeaf) Iter(cb setIterCallback) {
@@ -198,7 +198,7 @@ func newSetLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeSetLeafChunkFn(t Type) makeChunkFn {
+func makeSetLeafChunkFn(t Type, cs chunks.ChunkSource) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		setData := make([]Value, len(items), len(items))
 
@@ -206,7 +206,7 @@ func makeSetLeafChunkFn(t Type) makeChunkFn {
 			setData[i] = v.(Value)
 		}
 
-		setLeaf := valueFromType(newSetLeaf(nil, t, setData...), t)
+		setLeaf := valueFromType(newSetLeaf(cs, t, setData...), t)
 
 		var indexValue Value
 		if len(setData) > 0 {
