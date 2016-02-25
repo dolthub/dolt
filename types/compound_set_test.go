@@ -36,7 +36,7 @@ func (ts testSet) Remove(from, to int) testSet {
 	return testSet{values, ts.less, ts.tr}
 }
 
-func (ts testSet) toCompoundSet(cs chunks.ChunkStore) Set {
+func (ts testSet) toCompoundSet() compoundSet {
 	return NewTypedSet(ts.tr, ts.values...).(compoundSet)
 }
 
@@ -99,7 +99,7 @@ func TestCompoundSetHas(t *testing.T) {
 
 	doTest := func(ts testSet) {
 		cs := chunks.NewMemoryStore()
-		set := ts.toCompoundSet(cs)
+		set := ts.toCompoundSet()
 		set2 := ReadValue(WriteValue(set, cs), cs).(compoundSet)
 		for _, v := range ts.values {
 			assert.True(set.Has(v))
@@ -117,7 +117,7 @@ func TestCompoundSetFirst(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(ts testSet) {
-		s := ts.toCompoundSet(chunks.NewMemoryStore())
+		s := ts.toCompoundSet()
 		sort.Stable(ts)
 		actual := s.First()
 		assert.True(ts.values[0].Equals(actual), "%v != %v", ts.values[0], actual)
@@ -133,7 +133,7 @@ func TestCompoundSetIter(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(ts testSet) {
-		set := ts.toCompoundSet(chunks.NewMemoryStore())
+		set := ts.toCompoundSet()
 		sort.Sort(ts)
 		idx := uint64(0)
 		endAt := uint64(setPattern)
@@ -160,7 +160,7 @@ func TestCompoundSetIterAll(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(ts testSet) {
-		set := ts.toCompoundSet(chunks.NewMemoryStore())
+		set := ts.toCompoundSet()
 		sort.Sort(ts)
 		idx := uint64(0)
 
@@ -180,10 +180,9 @@ func TestCompoundSetInsert(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(incr, offset int, ts testSet) {
-		cs := chunks.NewMemoryStore()
-		expected := ts.toCompoundSet(cs)
+		expected := ts.toCompoundSet()
 		run := func(from, to int) {
-			actual := ts.Remove(from, to).toCompoundSet(cs).Insert(ts.values[from:to]...)
+			actual := ts.Remove(from, to).toCompoundSet().Insert(ts.values[from:to]...)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 		}
@@ -206,9 +205,8 @@ func TestCompoundSetInsert(t *testing.T) {
 func TestCompoundSetInsertExistingValue(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewMemoryStore()
 	ts := getTestNativeOrderSet(2)
-	original := ts.toCompoundSet(cs)
+	original := ts.toCompoundSet()
 	actual := original.Insert(ts.values[0])
 
 	assert.Equal(original.Len(), actual.Len())
@@ -219,10 +217,9 @@ func TestCompoundSetRemove(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(incr, offset int, ts testSet) {
-		cs := chunks.NewMemoryStore()
-		whole := ts.toCompoundSet(cs)
+		whole := ts.toCompoundSet()
 		run := func(from, to int) {
-			expected := ts.Remove(from, to).toCompoundSet(cs)
+			expected := ts.Remove(from, to).toCompoundSet()
 			actual := whole.Remove(ts.values[from:to]...)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
@@ -243,9 +240,8 @@ func TestCompoundSetRemove(t *testing.T) {
 func TestCompoundSetRemoveNonexistentValue(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewMemoryStore()
 	ts := getTestNativeOrderSet(2)
-	original := ts.toCompoundSet(cs)
+	original := ts.toCompoundSet()
 	actual := original.Remove(Int64(-1)) // rand.Int63 returns non-negative values.
 
 	assert.Equal(original.Len(), actual.Len())
@@ -256,8 +252,7 @@ func TestCompoundSetFilter(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(ts testSet) {
-		cs := chunks.NewMemoryStore()
-		set := ts.toCompoundSet(cs)
+		set := ts.toCompoundSet()
 		sort.Sort(ts)
 		pivotPoint := 10
 		pivot := ts.values[pivotPoint]
@@ -281,10 +276,9 @@ func TestCompoundSetFilter(t *testing.T) {
 
 func TestCompoundSetUnion(t *testing.T) {
 	assert := assert.New(t)
-	ms := chunks.NewMemoryStore()
 
 	doTest := func(ts testSet) {
-		cs := ts.toCompoundSet(ms)
+		cs := ts.toCompoundSet()
 		cs2 := cs.Union()
 		assert.True(cs.Equals(cs2))
 		cs3 := cs.Union(cs2)
@@ -346,4 +340,19 @@ func TestCompoundSetFirstNNumbers(t *testing.T) {
 	nums := firstNNumbers(5000)
 	s := newTypedSet(setType, nums...)
 	assert.Equal(s.Ref().String(), "sha1-54ff8f84b5f39fe2171572922d067257a57c539c")
+}
+
+func TestCompoundSetModifyAfterRead(t *testing.T) {
+	assert := assert.New(t)
+	ms := chunks.NewMemoryStore()
+	set := getTestNativeOrderSet(2).toCompoundSet()
+	// Drop chunk values.
+	set = ReadValue(WriteValue(set, ms), ms).(compoundSet)
+	// Modify/query. Once upon a time this would crash.
+	fst := set.First()
+	set = set.Remove(fst).(compoundSet)
+	assert.False(set.Has(fst))
+	assert.True(set.Has(set.First()))
+	set = set.Insert(fst).(compoundSet)
+	assert.True(set.Has(fst))
 }

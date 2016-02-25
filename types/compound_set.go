@@ -113,17 +113,8 @@ func (cs compoundSet) sequenceChunkerAtValue(v Value) (*sequenceChunker, bool) {
 	return seq, found
 }
 
-func (cs compoundSet) elemType() Type {
-	return cs.t.Desc.(CompoundDesc).ElemTypes[0]
-}
-
-func (cs compoundSet) sequenceCursorAtFirst() *sequenceCursor {
-	metaCur, leaf := newMetaSequenceCursor(cs, cs.cs)
-	return newSetSequenceCursorAtPosition(metaCur, leaf.(setLeaf), 0, cs.cs)
-}
-
 func (cs compoundSet) Union(others ...Set) Set {
-	return setUnion(cs.cs, cs, others)
+	return setUnion(cs, others)
 }
 
 func (cs compoundSet) Subtract(others ...Set) Set {
@@ -178,4 +169,17 @@ func (cs compoundSet) IterAllP(concurrency int, f setIterAllCallback) {
 		v.(setLeaf).IterAllP(concurrency, f)
 		return false
 	})
+}
+
+func (cs compoundSet) elemType() Type {
+	return cs.t.Desc.(CompoundDesc).ElemTypes[0]
+}
+
+func (cs compoundSet) sequenceCursorAtFirst() *sequenceCursor {
+	metaCur, leaf := newMetaSequenceCursor(cs, cs.cs)
+	return newSetSequenceCursorAtPosition(metaCur, leaf.(setLeaf), 0, cs.cs)
+}
+
+func (cs compoundSet) chunkSource() chunks.ChunkSource {
+	return cs.cs
 }

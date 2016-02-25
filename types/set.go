@@ -20,6 +20,7 @@ type Set interface {
 	Filter(cb setFilterCallback) Set
 	elemType() Type
 	sequenceCursorAtFirst() *sequenceCursor
+	chunkSource() chunks.ChunkSource
 }
 
 type indexOfSetFn func(m setData, v Value) int
@@ -47,12 +48,24 @@ func newTypedSet(t Type, data ...Value) Set {
 	return seq.Done().(Set)
 }
 
-func setUnion(cs chunks.ChunkSource, set Set, others []Set) Set {
+func setUnion(set Set, others []Set) Set {
 	// TODO: This can be done more efficiently by realizing that if two sets have the same meta tuple we only have to traverse one of the subtrees. Bug 794
 	if len(others) == 0 {
 		return set
 	}
 	assertSetsSameType(set, others...)
+
+	cs := set.chunkSource()
+	for _, s := range others {
+		// This both tries to find a ChunkSource to use for the new Set, and asserts that if it does,
+		// it's the same (or nil) for all Sets. I.e. it should be possible to take the union of a Set
+		// without a ChunkSource (constructed in memory but not written yet) and one with a ChunkSource
+		// (from that source) but not with a *different* ChunkSource because this would get complicated.
+		if cs == nil {
+			cs = s.chunkSource()
+		}
+		d.Chk.True(cs == nil || cs == s.chunkSource())
+	}
 
 	tr := set.Type()
 	seq := newEmptySequenceChunker(makeSetLeafChunkFn(tr, cs), newOrderedMetaSequenceChunkFn(tr, cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)

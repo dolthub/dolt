@@ -35,8 +35,8 @@ func (tsl testSimpleList) RemoveAt(idx int) testSimpleList {
 	return tsl.Remove(idx, idx+1)
 }
 
-func (tsl testSimpleList) ToNomsList() List {
-	return NewList(tsl...)
+func (tsl testSimpleList) toCompoundList() compoundList {
+	return NewList(tsl...).(compoundList)
 }
 
 func getTestSimpleListLen() uint64 {
@@ -306,7 +306,7 @@ func TestCompoundListAppend(t *testing.T) {
 func TestCompoundListInsertNothing(t *testing.T) {
 	assert := assert.New(t)
 
-	cl := getTestSimpleList().ToNomsList()
+	cl := getTestSimpleList().toCompoundList()
 
 	assert.True(cl.Equals(cl.Insert(0)))
 	for i := uint64(1); i < getTestSimpleListLen(); i *= 2 {
@@ -319,7 +319,7 @@ func TestCompoundListInsertNothing(t *testing.T) {
 func TestCompoundListInsertStart(t *testing.T) {
 	assert := assert.New(t)
 
-	cl := getTestSimpleList().ToNomsList()
+	cl := getTestSimpleList().toCompoundList()
 	cl2 := cl.Insert(0, Int64(42))
 	cl3 := cl2.Insert(0, Int64(43))
 	cl4 := cl3.Insert(0, getTestSimpleList()...)
@@ -329,38 +329,38 @@ func TestCompoundListInsertStart(t *testing.T) {
 	expected := getTestSimpleList()
 	assert.Equal(expected, testSimpleListFromNomsList(cl))
 	assert.Equal(getTestSimpleListLen(), cl.Len())
-	assert.True(expected.ToNomsList().Equals(cl))
+	assert.True(expected.toCompoundList().Equals(cl))
 
 	expected = expected.Insert(0, Int64(42))
 	assert.Equal(expected, testSimpleListFromNomsList(cl2))
 	assert.Equal(getTestSimpleListLen()+1, cl2.Len())
-	assert.True(expected.ToNomsList().Equals(cl2))
+	assert.True(expected.toCompoundList().Equals(cl2))
 
 	expected = expected.Insert(0, Int64(43))
 	assert.Equal(expected, testSimpleListFromNomsList(cl3))
 	assert.Equal(getTestSimpleListLen()+2, cl3.Len())
-	assert.True(expected.ToNomsList().Equals(cl3))
+	assert.True(expected.toCompoundList().Equals(cl3))
 
 	expected = expected.Insert(0, getTestSimpleList()...)
 	assert.Equal(expected, testSimpleListFromNomsList(cl4))
 	assert.Equal(2*getTestSimpleListLen()+2, cl4.Len())
-	assert.True(expected.ToNomsList().Equals(cl4))
+	assert.True(expected.toCompoundList().Equals(cl4))
 
 	expected = expected.Insert(0, Int64(44), Int64(45))
 	assert.Equal(expected, testSimpleListFromNomsList(cl5))
 	assert.Equal(2*getTestSimpleListLen()+4, cl5.Len())
-	assert.True(expected.ToNomsList().Equals(cl5))
+	assert.True(expected.toCompoundList().Equals(cl5))
 
 	expected = expected.Insert(0, getTestSimpleList()...)
 	assert.Equal(expected, testSimpleListFromNomsList(cl6))
 	assert.Equal(3*getTestSimpleListLen()+4, cl6.Len())
-	assert.True(expected.ToNomsList().Equals(cl6))
+	assert.True(expected.toCompoundList().Equals(cl6))
 }
 
 func TestCompoundListInsertMiddle(t *testing.T) {
 	assert := assert.New(t)
 
-	cl := getTestSimpleList().ToNomsList()
+	cl := getTestSimpleList().toCompoundList()
 	cl2 := cl.Insert(100, Int64(42))
 	cl3 := cl2.Insert(200, Int64(43))
 	cl4 := cl3.Insert(300, getTestSimpleList()...)
@@ -371,50 +371,50 @@ func TestCompoundListInsertMiddle(t *testing.T) {
 	expected := getTestSimpleList()
 	assert.Equal(expected, testSimpleListFromNomsList(cl))
 	assert.Equal(getTestSimpleListLen(), cl.Len())
-	assert.True(expected.ToNomsList().Equals(cl))
+	assert.True(expected.toCompoundList().Equals(cl))
 
 	expected = expected.Insert(100, Int64(42))
 	assert.Equal(expected, testSimpleListFromNomsList(cl2))
 	assert.Equal(getTestSimpleListLen()+1, cl2.Len())
-	assert.True(expected.ToNomsList().Equals(cl2))
+	assert.True(expected.toCompoundList().Equals(cl2))
 
 	expected = expected.Insert(200, Int64(43))
 	assert.Equal(expected, testSimpleListFromNomsList(cl3))
 	assert.Equal(getTestSimpleListLen()+2, cl3.Len())
-	assert.True(expected.ToNomsList().Equals(cl3))
+	assert.True(expected.toCompoundList().Equals(cl3))
 
 	expected = expected.Insert(300, getTestSimpleList()...)
 	assert.Equal(expected, testSimpleListFromNomsList(cl4))
 	assert.Equal(2*getTestSimpleListLen()+2, cl4.Len())
-	assert.True(expected.ToNomsList().Equals(cl4))
+	assert.True(expected.toCompoundList().Equals(cl4))
 
 	expected = expected.Insert(400, Int64(44), Int64(45))
 	assert.Equal(expected, testSimpleListFromNomsList(cl5))
 	assert.Equal(2*getTestSimpleListLen()+4, cl5.Len())
-	assert.True(expected.ToNomsList().Equals(cl5))
+	assert.True(expected.toCompoundList().Equals(cl5))
 
 	expected = expected.Insert(500, getTestSimpleList()...)
 	assert.Equal(expected, testSimpleListFromNomsList(cl6))
 	assert.Equal(3*getTestSimpleListLen()+4, cl6.Len())
-	assert.True(expected.ToNomsList().Equals(cl6))
+	assert.True(expected.toCompoundList().Equals(cl6))
 
 	expected = expected.Insert(600, Int64(100))
 	assert.Equal(expected, testSimpleListFromNomsList(cl7))
 	assert.Equal(3*getTestSimpleListLen()+5, cl7.Len())
-	assert.True(expected.ToNomsList().Equals(cl7))
+	assert.True(expected.toCompoundList().Equals(cl7))
 }
 
 func TestCompoundListInsertRanges(t *testing.T) {
 	assert := assert.New(t)
 
 	testList := getTestSimpleList()
-	whole := testList.ToNomsList()
+	whole := testList.toCompoundList()
 
 	// Compare list equality. Increment by 256 (16^2) because each iteration requires building a new list, which is slow.
 	for incr, i := 256, 0; i < len(testList)-incr; i += incr {
 		for window := 1; window <= incr; window *= 16 {
 			testListPart := testList.Remove(i, i+window)
-			actual := testListPart.ToNomsList().Insert(uint64(i), testList[i:i+window]...)
+			actual := testListPart.toCompoundList().Insert(uint64(i), testList[i:i+window]...)
 			assert.Equal(whole.Len(), actual.Len())
 			assert.True(whole.Equals(actual))
 		}
@@ -440,7 +440,7 @@ func TestCompoundListInsertTypeError(t *testing.T) {
 func TestCompoundListRemoveNothing(t *testing.T) {
 	assert := assert.New(t)
 
-	cl := getTestSimpleList().ToNomsList()
+	cl := getTestSimpleList().toCompoundList()
 
 	assert.True(cl.Equals(cl.Remove(0, 0)))
 	for i := uint64(1); i < getTestSimpleListLen(); i *= 2 {
@@ -453,7 +453,7 @@ func TestCompoundListRemoveNothing(t *testing.T) {
 func TestCompoundListRemoveEverything(t *testing.T) {
 	assert := assert.New(t)
 
-	cl := getTestSimpleList().ToNomsList().Remove(0, getTestSimpleListLen())
+	cl := getTestSimpleList().toCompoundList().Remove(0, getTestSimpleListLen())
 
 	assert.True(NewList().Equals(cl))
 	assert.Equal(0, int(cl.Len()))
@@ -462,37 +462,37 @@ func TestCompoundListRemoveEverything(t *testing.T) {
 func TestCompoundListRemoveAtMiddle(t *testing.T) {
 	assert := assert.New(t)
 
-	cl := getTestSimpleList().ToNomsList()
+	cl := getTestSimpleList().toCompoundList()
 	cl2 := cl.RemoveAt(100)
 	cl3 := cl2.RemoveAt(200)
 
 	expected := getTestSimpleList()
 	assert.Equal(expected, testSimpleListFromNomsList(cl))
 	assert.Equal(getTestSimpleListLen(), cl.Len())
-	assert.True(expected.ToNomsList().Equals(cl))
+	assert.True(expected.toCompoundList().Equals(cl))
 
 	expected = expected.RemoveAt(100)
 	assert.Equal(expected, testSimpleListFromNomsList(cl2))
 	assert.Equal(getTestSimpleListLen()-1, cl2.Len())
-	assert.True(expected.ToNomsList().Equals(cl2))
+	assert.True(expected.toCompoundList().Equals(cl2))
 
 	expected = expected.RemoveAt(200)
 	assert.Equal(expected, testSimpleListFromNomsList(cl3))
 	assert.Equal(getTestSimpleListLen()-2, cl3.Len())
-	assert.True(expected.ToNomsList().Equals(cl3))
+	assert.True(expected.toCompoundList().Equals(cl3))
 }
 
 func TestCompoundListRemoveRanges(t *testing.T) {
 	assert := assert.New(t)
 
 	testList := getTestSimpleList()
-	whole := testList.ToNomsList()
+	whole := testList.toCompoundList()
 
 	// Compare list equality. Increment by 256 (16^2) because each iteration requires building a new list, which is slow.
 	for incr, i := 256, 0; i < len(testList)-incr; i += incr {
 		for window := 1; window <= incr; window *= 16 {
 			testListPart := testList.Remove(i, i+window)
-			expected := testListPart.ToNomsList()
+			expected := testListPart.toCompoundList()
 			actual := whole.Remove(uint64(i), uint64(i+window))
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
@@ -509,14 +509,14 @@ func TestCompoundListSet(t *testing.T) {
 	assert := assert.New(t)
 
 	testList := getTestSimpleList()
-	cl := testList.ToNomsList()
+	cl := testList.toCompoundList()
 
 	testIdx := func(idx int, testEquality bool) {
 		newVal := Int64(-1) // Test values are never < 0
 		cl2 := cl.Set(uint64(idx), newVal)
 		assert.False(cl.Equals(cl2))
 		if testEquality {
-			assert.True(testList.Set(idx, newVal).ToNomsList().Equals(cl2))
+			assert.True(testList.Set(idx, newVal).toCompoundList().Equals(cl2))
 		}
 	}
 
@@ -597,25 +597,14 @@ func TestCompoundListFilter(t *testing.T) {
 		}
 
 	}
-	cl := simple.ToNomsList()
+	cl := simple.toCompoundList()
 
 	res := cl.Filter(filterCb)
 	assert.Equal(len(expected), int(res.Len()))
 	res.IterAll(func(v Value, idx uint64) {
 		assert.Equal(expected[idx], v)
 	})
-	assert.True(expected.ToNomsList().Equals(res))
-}
-
-func TestCompoundListFilterEmpty(t *testing.T) {
-	assert := assert.New(t)
-
-	empty := testSimpleList{}.ToNomsList()
-	filterCb := func(v Value, idx uint64) bool {
-		return v.(Int64)%5 != 0
-	}
-	res1 := empty.Filter(filterCb)
-	assert.True(res1.Empty())
+	assert.True(expected.toCompoundList().Equals(res))
 }
 
 func TestCompoundListFirstNNumbers(t *testing.T) {
@@ -635,4 +624,19 @@ func TestCompoundListFirstNNumbers(t *testing.T) {
 	nums := firstNNumbers(5000)
 	s := NewTypedList(listType, nums...)
 	assert.Equal(s.Ref().String(), "sha1-11e947e8aacfda8e9052bb57e661da442b26c625")
+}
+
+func TestCompoundListModifyAfterRead(t *testing.T) {
+	assert := assert.New(t)
+	ms := chunks.NewMemoryStore()
+	list := getTestSimpleList().toCompoundList()
+	// Drop chunk values.
+	list = ReadValue(WriteValue(list, ms), ms).(compoundList)
+	// Modify/query. Once upon a time this would crash.
+	llen := list.Len()
+	z := list.Get(0)
+	list = list.RemoveAt(0).(compoundList)
+	assert.Equal(llen-1, list.Len())
+	list = list.Append(z).(compoundList)
+	assert.Equal(llen, list.Len())
 }
