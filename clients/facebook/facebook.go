@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"time"
@@ -22,15 +23,14 @@ const facebookAPI = "https://graph.facebook.com/"
 var (
 	authHTTPClient    *http.Client
 	cachingHTTPClient *http.Client
+	clientFlags       = util.NewFlags() // TODO: respect Concurrency()
 	ds                *dataset.Dataset
-	progressFileFlag  = flag.String("progress-file", "", "file for logging progress")
 	start             time.Time
 	tokenFlag         = flag.String("token", "", "Facebook auth token (required) - see usage for instructions")
 )
 
 func main() {
 	flag.Usage = usage
-	dsFlags := dataset.NewFlags()
 	flag.Parse()
 	cachingHTTPClient = util.CachingHttpClient()
 
@@ -39,12 +39,18 @@ func main() {
 		return
 	}
 
-	ds = dsFlags.CreateDataset()
+	ds = clientFlags.CreateDataset()
 	if ds == nil {
 		flag.Usage()
 		return
 	}
 	defer ds.Store().Close()
+
+	if err := clientFlags.CreateProgressFile(); err != nil {
+		fmt.Println(err)
+	} else {
+		defer clientFlags.CloseProgressFile()
+	}
 
 	token := oauth2.Token{AccessToken: *tokenFlag}
 	authHTTPClient = oauth2.NewClient(oauth2.NoContext, oauth2.StaticTokenSource(&token))
@@ -81,13 +87,22 @@ func getUser() User {
 }
 
 func getPhotos() SetOfRefOfRemotePhoto {
-	photos := NewSetOfRefOfRemotePhoto()
-	url := facebookAPI + "v2.5/me/photos/uploaded?limit=1000&fields=fields=place,name,created_time,images,tags{x,y,name}&date_format=U"
+	// Get the number of photos via the list of albums, so that we can show progress. This appears to
+	// be the fastest way (photos only let you paginate).
+	alj := AlbumListJSON{}
+	callFacebookAPI(authHTTPClient, facebookAPI+"v2.5/me/albums?limit=1000&fields=count", &alj)
+	numPhotos := 0
+	for _, a := range alj.Data {
+		numPhotos += a.Count
+	}
 
+	photos := NewSetOfRefOfRemotePhoto()
+	url := facebookAPI + "v2.5/me/photos/uploaded?limit=1000&fields=place,name,created_time,images,tags{x,y,name}&date_format=U"
+
+	numFetched := 0
 	for url != "" {
 		plj := PhotoListJSON{}
 		callFacebookAPI(authHTTPClient, url, &plj)
-		fmt.Printf("Found %d photos\n", len(plj.Data))
 		for _, entry := range plj.Data {
 			photo := RemotePhotoDef{
 				Id:    entry.Id,
@@ -105,6 +120,11 @@ func getPhotos() SetOfRefOfRemotePhoto {
 				float32(entry.Images[0].Height)))
 
 			photos = photos.Insert(NewRefOfRemotePhoto(types.WriteValue(photo, ds.Store())))
+
+			numFetched++
+			// Be defensive and use Min(1.0) here - the user might have more than 1000 albums, or they
+			// might have uploded more photos since we got the album count.
+			clientFlags.UpdateProgress(float32(math.Min(1.0, float64(numFetched)/float64(numPhotos))))
 		}
 
 		url = plj.Paging.Next

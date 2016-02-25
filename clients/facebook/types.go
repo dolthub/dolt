@@ -5,6 +5,13 @@ type UserJSON struct {
 	ID   string `json:"id"`
 }
 
+type AlbumListJSON struct {
+	Data []struct {
+		Count int `json:"count"`
+	}
+	// Paging, but we only use this to get a good photo count, so whatevs
+}
+
 type PhotoListJSON struct {
 	Data []struct {
 		Id          string      `json:"id"`
