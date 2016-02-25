@@ -108,7 +108,7 @@ func TestWriteMap(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	typ := MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(BoolKind))
-	v := newMapLeaf(cs, typ, mapEntry{NewString("a"), Bool(false)}, mapEntry{NewString("b"), Bool(true)})
+	v := newMapLeaf(typ, mapEntry{NewString("a"), Bool(false)}, mapEntry{NewString("b"), Bool(true)})
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
@@ -330,8 +330,8 @@ func TestWriteCompoundList(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	ltr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
-	leaf1 := newListLeaf(cs, ltr, Int32(0))
-	leaf2 := newListLeaf(cs, ltr, Int32(1), Int32(2), Int32(3))
+	leaf1 := newListLeaf(ltr, Int32(0))
+	leaf2 := newListLeaf(ltr, Int32(1), Int32(2), Int32(3))
 	cl := buildCompoundList([]metaTuple{
 		newMetaTuple(Uint64(1), leaf1, ref.Ref{}),
 		newMetaTuple(Uint64(4), leaf2, ref.Ref{}),

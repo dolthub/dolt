@@ -6,15 +6,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewMap(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	m := newMapLeaf(cs, mapType)
-	assert.IsType(newMapLeaf(cs, mapType), m)
+	m := newMapLeaf(mapType)
+	assert.IsType(newMapLeaf(mapType), m)
 	assert.Equal(uint64(0), m.Len())
 	m = NewMap(NewString("foo"), NewString("foo"), NewString("bar"), NewString("bar"))
 	assert.Equal(uint64(2), m.Len())
@@ -24,8 +22,7 @@ func TestNewMap(t *testing.T) {
 
 func TestMapHasRemove(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	m1 := newMapLeaf(cs, mapType)
+	m1 := newMapLeaf(mapType)
 	assert.False(m1.Has(NewString("foo")))
 	m2 := m1.Set(NewString("foo"), NewString("foo"))
 	assert.False(m1.Has(NewString("foo")))
@@ -38,8 +35,7 @@ func TestMapHasRemove(t *testing.T) {
 
 func TestMapFirst(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	m1 := newMapLeaf(cs, mapType)
+	m1 := newMapLeaf(mapType)
 	k, v := m1.First()
 	assert.Nil(k)
 	assert.Nil(v)
@@ -60,8 +56,7 @@ func TestMapFirst(t *testing.T) {
 
 func TestMapSetGet(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	m1 := newMapLeaf(cs, mapType)
+	m1 := newMapLeaf(mapType)
 	assert.Nil(m1.Get(NewString("foo")))
 	m2 := m1.Set(NewString("foo"), Int32(42))
 	assert.Nil(m1.Get(NewString("foo")))
@@ -79,8 +74,7 @@ func TestMapSetGet(t *testing.T) {
 
 func TestMapSetM(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	m1 := newMapLeaf(cs, mapType)
+	m1 := newMapLeaf(mapType)
 	m2 := m1.SetM()
 	assert.True(m1.Equals(m2))
 	m3 := m2.SetM(NewString("foo"), NewString("bar"), NewString("hot"), NewString("dog"))
@@ -102,8 +96,7 @@ func TestMapDuplicateSet(t *testing.T) {
 
 func TestMapIter(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	m := newMapLeaf(cs, mapType)
+	m := newMapLeaf(mapType)
 
 	type entry struct {
 		key   Value
@@ -146,7 +139,6 @@ func TestMapIter(t *testing.T) {
 
 func TestMapIterAllP(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	testIter := func(concurrency, mapLen int) {
 		values := make([]Value, 2*mapLen)
@@ -155,7 +147,7 @@ func TestMapIterAllP(t *testing.T) {
 			values[2*i+1] = Uint64(i)
 		}
 
-		m := newMapLeaf(cs, mapType, buildMapData(mapData{}, values, mapType)...)
+		m := newMapLeaf(mapType, buildMapData(mapData{}, values, mapType)...)
 
 		cur := 0
 		mu := sync.Mutex{}
@@ -212,11 +204,10 @@ func TestMapFilter(t *testing.T) {
 
 func TestMapEquals(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	m1 := newMapLeaf(cs, mapType)
+	m1 := newMapLeaf(mapType)
 	m2 := m1
-	m3 := newMapLeaf(cs, mapType)
+	m3 := newMapLeaf(mapType)
 
 	assert.True(m1.Equals(m2))
 	assert.True(m2.Equals(m1))
@@ -233,7 +224,6 @@ func TestMapEquals(t *testing.T) {
 
 func TestMapNotStringKeys(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	b1 := NewBlob(bytes.NewBufferString("blob1"))
 	b2 := NewBlob(bytes.NewBufferString("blob2"))
@@ -248,8 +238,8 @@ func TestMapNotStringKeys(t *testing.T) {
 		b2, NewString("blob2"),
 		NewList(), NewString("empty list"),
 		NewList(NewList()), NewString("list of list"),
-		newMapLeaf(cs, mapType), NewString("empty map"),
-		NewMap(newMapLeaf(cs, mapType), newMapLeaf(cs, mapType)), NewString("map of map/map"),
+		newMapLeaf(mapType), NewString("empty map"),
+		NewMap(newMapLeaf(mapType), newMapLeaf(mapType)), NewString("map of map/map"),
 		NewSet(), NewString("empty set"),
 		NewSet(NewSet()), NewString("map of set/set"),
 	}
@@ -391,25 +381,23 @@ func TestMapOrdering(t *testing.T) {
 
 func TestMapEmpty(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	m := newMapLeaf(cs, mapType)
+	m := newMapLeaf(mapType)
 	assert.True(m.Empty())
 	m = m.Set(Bool(false), NewString("hi"))
 	assert.False(m.Empty())
-	m = m.Set(NewList(), newMapLeaf(cs, mapType))
+	m = m.Set(NewList(), newMapLeaf(mapType))
 	assert.False(m.Empty())
 }
 
 func TestMapType(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	m := newMapLeaf(cs, mapType)
+	m := newMapLeaf(mapType)
 	assert.True(m.Type().Equals(MakeCompoundType(MapKind, MakePrimitiveType(ValueKind), MakePrimitiveType(ValueKind))))
 
 	tr := MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(Uint64Kind))
-	m = newMapLeaf(cs, tr)
+	m = newMapLeaf(tr)
 	assert.Equal(tr, m.Type())
 
 	m2 := m.Remove(NewString("B"))

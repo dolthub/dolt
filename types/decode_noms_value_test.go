@@ -130,8 +130,8 @@ func TestReadCompoundList(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
-	leaf1 := newListLeaf(cs, tr, Int32(0))
-	leaf2 := newListLeaf(cs, tr, Int32(1), Int32(2), Int32(3))
+	leaf1 := newListLeaf(tr, Int32(0))
+	leaf2 := newListLeaf(tr, Int32(1), Int32(2), Int32(3))
 	l2 := buildCompoundList([]metaTuple{
 		newMetaTuple(Uint64(1), leaf1, ref.Ref{}),
 		newMetaTuple(Uint64(4), leaf2, ref.Ref{}),

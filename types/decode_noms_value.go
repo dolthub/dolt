@@ -120,7 +120,7 @@ func (r *jsonArrayReader) readList(t Type, pkg *Package) Value {
 	}
 
 	t = fixupType(t, pkg)
-	return valueFromType(newListLeaf(r.cs, t, data...), t)
+	return valueFromType(newListLeaf(t, data...), t)
 }
 
 func (r *jsonArrayReader) readSet(t Type, pkg *Package) Value {
@@ -133,7 +133,7 @@ func (r *jsonArrayReader) readSet(t Type, pkg *Package) Value {
 	}
 
 	t = fixupType(t, pkg)
-	return valueFromType(newSetLeaf(r.cs, t, data...), t)
+	return valueFromType(newSetLeaf(t, data...), t)
 }
 
 func (r *jsonArrayReader) readMap(t Type, pkg *Package) Value {
@@ -149,7 +149,7 @@ func (r *jsonArrayReader) readMap(t Type, pkg *Package) Value {
 	}
 
 	t = fixupType(t, pkg)
-	return valueFromType(newMapLeaf(r.cs, t, data...), t)
+	return valueFromType(newMapLeaf(t, data...), t)
 }
 
 func indexTypeForMetaSequence(t Type) Type {

@@ -5,7 +5,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -152,7 +151,6 @@ func TestSetIterAll(t *testing.T) {
 
 func TestSetIterAllP(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	testIter := func(concurrency, setLen int) {
 		values := make([]Value, setLen)
@@ -160,7 +158,7 @@ func TestSetIterAllP(t *testing.T) {
 			values[i] = Uint64(i)
 		}
 
-		s := newSetLeaf(cs, setType, values...)
+		s := newSetLeaf(setType, values...)
 
 		cur := 0
 		mu := sync.Mutex{}
@@ -348,14 +346,13 @@ func TestSetFilter(t *testing.T) {
 
 func TestSetType(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
-	s := newSetLeaf(cs, setType)
+	s := newSetLeaf(setType)
 	assert.True(s.Type().Equals(MakeCompoundType(SetKind, MakePrimitiveType(ValueKind))))
 
 	tr := MakeCompoundType(SetKind, MakePrimitiveType(Uint64Kind))
 
-	s = newSetLeaf(cs, tr)
+	s = newSetLeaf(tr)
 	assert.Equal(tr, s.Type())
 
 	s2 := s.Remove(Uint64(1))
