@@ -24,17 +24,37 @@ import (
 )
 
 var (
-	albumIdFlag      = flag.String("album-id", "", "Import a specific album, identified by id")
 	clientIdFlag     = flag.String("client-id", "", "API keys for flickr can be created at https://www.flickr.com/services/apps/create/apply")
 	clientSecretFlag = flag.String("client-secret", "", "API keys for flickr can be created at https://www.flickr.com/services/apps/create/apply")
+	clientFlags      = util.NewFlags()
 	ds               *dataset.Dataset
 	httpClient       *http.Client
 	oauthClient      oauth.Client
-	progressFileFlag = flag.String("progress-file", "", "file for logging progress")
 	tokenFlag        = flag.String("token", "", "OAuth1 token (if ommitted, flickr will attempt web auth)")
 	tokenSecretFlag  = flag.String("token-secret", "", "OAuth1 token secret (if ommitted, flickr will attempt web auth)")
 	user             User
 )
+
+type progressTracker struct {
+	didLogin                 bool
+	didGetList               bool
+	numPhotos, photoProgress int
+}
+
+func (pt *progressTracker) Update() {
+	progress := float32(0)
+	if pt.didLogin {
+		progress += 0.1
+	}
+	if pt.didGetList {
+		progress += 0.1
+	}
+	if pt.numPhotos > 0 {
+		remaining := 1.0 - progress
+		progress += remaining * (float32(pt.photoProgress) / float32(pt.numPhotos))
+	}
+	clientFlags.UpdateProgress(progress)
+}
 
 type flickrAPI interface {
 	Call(method string, response interface{}, args *map[string]string) error
@@ -44,9 +64,13 @@ type flickrCall struct {
 	Stat string
 }
 
+type idAndRefOfAlbum struct {
+	id  string
+	ref RefOfAlbum
+}
+
 func main() {
 	flag.Usage = flickrUsage
-	dsFlags := dataset.NewFlags()
 	flag.Parse()
 
 	httpClient = util.CachingHttpClient()
@@ -56,12 +80,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	ds = dsFlags.CreateDataset()
+	ds = clientFlags.CreateDataset()
 	if ds == nil {
 		flag.Usage()
 		os.Exit(1)
 	}
 	defer ds.Store().Close()
+
+	if err := clientFlags.CreateProgressFile(); err != nil {
+		fmt.Println(err)
+	} else {
+		defer clientFlags.CloseProgressFile()
+	}
 
 	oauthClient = oauth.Client{
 		TemporaryCredentialRequestURI: "https://www.flickr.com/services/oauth/request_token",
@@ -81,15 +111,18 @@ func main() {
 	}
 
 	api := liveFlickrAPI{tokenCred}
-	user = getUser(api)
-	d.Chk.NoError(checkAuth(api), "checkAuth failed after oauth succeeded")
-
-	if *albumIdFlag != "" {
-		album := getAlbum(api, *albumIdFlag)
-		user = user.SetAlbums(user.Albums().Set(album.Id(), album))
-	} else {
-		user = user.SetAlbums(getAlbums(api))
+	if !findUser() {
+		if err := requestUser(api); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 	}
+
+	progress := progressTracker{}
+	progress.didLogin = true
+	progress.Update()
+
+	user = user.SetAlbums(getAlbums(api, &progress))
 	commitUser()
 }
 
@@ -105,17 +138,18 @@ func flickrUsage() {
 	fmt.Fprintf(os.Stderr, "\n%s\n\n", essay)
 }
 
-func getUser(api flickrAPI) User {
+func findUser() bool {
 	if commit, ok := ds.MaybeHead(); ok {
 		if userRef, ok := commit.Value().(RefOfUser); ok {
-			return userRef.TargetValue(ds.Store())
+			user = userRef.TargetValue(ds.Store())
+			return true
 		}
 	}
 
-	return NewUser()
+	return false
 }
 
-func checkAuth(api flickrAPI) error {
+func requestUser(api flickrAPI) error {
 	response := struct {
 		flickrCall
 		User struct {
@@ -152,7 +186,7 @@ func requestTokenCredentials() *oauth.Credentials {
 	return tokenCred
 }
 
-func getAlbum(api flickrAPI, id string) Album {
+func getAlbum(api flickrAPI, id string, gotPhoto chan struct{}) idAndRefOfAlbum {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -169,17 +203,20 @@ func getAlbum(api flickrAPI, id string) Album {
 	})
 	d.Chk.NoError(err)
 
-	photos := getAlbumPhotos(api, id)
+	photos := getAlbumPhotos(api, id, gotPhoto)
 
-	fmt.Printf("Photoset: %v\nRef: %s\n", response.Photoset.Title.Content, photos.TargetRef())
+	fmt.Printf("Photoset: %v\n", response.Photoset.Title.Content)
 
-	return NewAlbum().
+	album := NewAlbum().
 		SetId(id).
 		SetTitle(response.Photoset.Title.Content).
 		SetPhotos(photos)
+	// TODO: Write albums in batches.
+	ref := NewRefOfAlbum(types.WriteValue(album, ds.Store()))
+	return idAndRefOfAlbum{id, ref}
 }
 
-func getAlbums(api flickrAPI) MapOfStringToAlbum {
+func getAlbums(api flickrAPI, progress *progressTracker) MapOfStringToRefOfAlbum {
 	response := struct {
 		flickrCall
 		Photosets struct {
@@ -188,6 +225,7 @@ func getAlbums(api flickrAPI) MapOfStringToAlbum {
 				Title struct {
 					Content string `json:"_content"`
 				} `json:"title"`
+				Photos int `json:"photos"`
 			} `json:"photoset"`
 		} `json:"photosets"`
 	}{}
@@ -195,27 +233,44 @@ func getAlbums(api flickrAPI) MapOfStringToAlbum {
 	err := api.Call("flickr.photosets.getList", &response, nil)
 	d.Chk.NoError(err)
 
-	out := make(chan Album, len(response.Photosets.Photoset))
+	progress.didGetList = true
+	progress.Update()
+
+	for _, ps := range response.Photosets.Photoset {
+		progress.numPhotos += ps.Photos
+	}
+
+	gotPhoto := make(chan struct{}, clientFlags.Concurrency())
+	go func() {
+		lastUpdate := time.Now()
+		for range gotPhoto {
+			progress.photoProgress++
+			if now := time.Now(); now.Sub(lastUpdate)/time.Millisecond >= 200 {
+				progress.Update()
+				lastUpdate = now
+			}
+		}
+	}()
+
+	out := make(chan idAndRefOfAlbum, clientFlags.Concurrency())
 	for _, p := range response.Photosets.Photoset {
 		p := p
 		go func() {
-			out <- getAlbum(api, p.Id)
+			out <- getAlbum(api, p.Id, gotPhoto)
 		}()
 	}
 
-	albums := NewMapOfStringToAlbum()
-	for {
-		if albums.Len() == uint64(len(response.Photosets.Photoset)) {
-			break
-		}
+	albums := NewMapOfStringToRefOfAlbum()
+	for range response.Photosets.Photoset {
 		a := <-out
-		albums = albums.Set(a.Id(), a)
+		albums = albums.Set(a.id, a.ref)
 	}
 
+	close(gotPhoto)
 	return albums
 }
 
-func getAlbumPhotos(api flickrAPI, id string) RefOfSetOfRefOfRemotePhoto {
+func getAlbumPhotos(api flickrAPI, id string, gotPhoto chan struct{}) SetOfRefOfRemotePhoto {
 	response := struct {
 		flickrCall
 		Photoset struct {
@@ -294,11 +349,12 @@ func getAlbumPhotos(api flickrAPI, id string) RefOfSetOfRefOfRemotePhoto {
 			photo = photo.SetGeoposition(GeopositionDef{float32(lat), float32(lon)}.New())
 		}
 
+		// TODO: Write photos in batches.
 		photos = photos.Insert(NewRefOfRemotePhoto(types.WriteValue(photo, cs)))
+		gotPhoto <- struct{}{}
 	}
 
-	r := types.WriteValue(photos, cs)
-	return NewRefOfSetOfRefOfRemotePhoto(r)
+	return photos
 }
 
 func getTags(tagStr string) (tags SetOfStringDef) {
