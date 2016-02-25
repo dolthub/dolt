@@ -109,7 +109,7 @@ func newSetSequenceCursorAtPosition(metaCur *sequenceCursor, leaf setLeaf, idx i
 
 func (cs compoundSet) sequenceChunkerAtValue(v Value) (*sequenceChunker, bool) {
 	cur, found := cs.sequenceCursorAtValue(v)
-	seq := newSequenceChunker(cur, makeSetLeafChunkFn(cs.t), newOrderedMetaSequenceChunkFn(cs.t), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newSequenceChunker(cur, makeSetLeafChunkFn(cs.t, cs.cs), newOrderedMetaSequenceChunkFn(cs.t, cs.cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 	return seq, found
 }
 
@@ -123,7 +123,7 @@ func (cs compoundSet) sequenceCursorAtFirst() *sequenceCursor {
 }
 
 func (cs compoundSet) Union(others ...Set) Set {
-	return setUnion(cs, others)
+	return setUnion(cs.cs, cs, others)
 }
 
 func (cs compoundSet) Subtract(others ...Set) Set {
@@ -131,7 +131,7 @@ func (cs compoundSet) Subtract(others ...Set) Set {
 }
 
 func (cs compoundSet) Filter(cb setFilterCallback) Set {
-	seq := newEmptySequenceChunker(makeSetLeafChunkFn(cs.t), newOrderedMetaSequenceChunkFn(cs.t), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeSetLeafChunkFn(cs.t, cs.cs), newOrderedMetaSequenceChunkFn(cs.t, cs.cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	cs.IterAll(func(v Value) {
 		if cb(v) {

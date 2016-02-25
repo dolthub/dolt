@@ -34,7 +34,7 @@ func NewTypedMap(t Type, kv ...Value) Map {
 }
 
 func newTypedMap(t Type, entries ...mapEntry) Map {
-	seq := newEmptySequenceChunker(makeMapLeafChunkFn(t), newOrderedMetaSequenceChunkFn(t), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeMapLeafChunkFn(t, nil), newOrderedMetaSequenceChunkFn(t, nil), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, entry := range entries {
 		seq.Append(entry)

@@ -190,11 +190,11 @@ func (cl compoundList) sequenceCursorAtIndex(idx uint64) *sequenceCursor {
 
 func (cl compoundList) sequenceChunkerAtIndex(idx uint64) *sequenceChunker {
 	cur := cl.sequenceCursorAtIndex(idx)
-	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t, nil), newIndexedMetaSequenceChunkFn(cl.t, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t, cl.cs, nil), newIndexedMetaSequenceChunkFn(cl.t, cl.cs, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 }
 
 func (cl compoundList) Filter(cb listFilterCallback) List {
-	seq := newEmptySequenceChunker(makeListLeafChunkFn(cl.t, nil), newIndexedMetaSequenceChunkFn(cl.t, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeListLeafChunkFn(cl.t, cl.cs, nil), newIndexedMetaSequenceChunkFn(cl.t, cl.cs, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	cl.IterAll(func(v Value, idx uint64) {
 		if cb(v, idx) {
 			seq.Append(v)
@@ -254,7 +254,9 @@ func newListLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
+// If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
+// written when the root is written.
+func makeListLeafChunkFn(t Type, cs chunks.ChunkSource, sink chunks.ChunkSink) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		values := make([]Value, len(items))
 
@@ -263,8 +265,8 @@ func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 		}
 
 		list := valueFromType(newListLeaf(cs, t, values...), t)
-		if cs != nil {
-			return newMetaTuple(Uint64(len(values)), nil, WriteValue(list, cs)), list
+		if sink != nil {
+			return newMetaTuple(Uint64(len(values)), nil, WriteValue(list, sink)), list
 		}
 		return newMetaTuple(Uint64(len(values)), list, ref.Ref{}), list
 	}
