@@ -53,7 +53,7 @@ func (tm testMap) Flatten(from, to int) []Value {
 	return flat
 }
 
-func (tm testMap) toCompoundMap(cs chunks.ChunkStore) compoundMap {
+func (tm testMap) toCompoundMap() compoundMap {
 	keyvals := []Value{}
 	for _, entry := range tm.entries {
 		keyvals = append(keyvals, entry.key, entry.value)
@@ -122,7 +122,7 @@ func TestCompoundMapHas(t *testing.T) {
 
 	doTest := func(tm testMap) {
 		cs := chunks.NewMemoryStore()
-		m := tm.toCompoundMap(cs)
+		m := tm.toCompoundMap()
 		m2 := ReadValue(WriteValue(m, cs), cs).(compoundMap)
 		for _, entry := range tm.entries {
 			k, v := entry.key, entry.value
@@ -143,7 +143,7 @@ func TestCompoundMapFirst(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
-		m := tm.toCompoundMap(chunks.NewMemoryStore())
+		m := tm.toCompoundMap()
 		sort.Stable(tm)
 		actualKey, actualValue := m.First()
 		assert.True(tm.entries[0].key.Equals(actualKey))
@@ -160,7 +160,7 @@ func TestCompoundMapMaybeGet(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
-		m := tm.toCompoundMap(chunks.NewMemoryStore())
+		m := tm.toCompoundMap()
 		for _, entry := range tm.entries {
 			v, ok := m.MaybeGet(entry.key)
 			if assert.True(ok, "%v should have been in the map!", entry.key) {
@@ -181,7 +181,7 @@ func TestCompoundMapIter(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
-		m := tm.toCompoundMap(chunks.NewMemoryStore())
+		m := tm.toCompoundMap()
 		sort.Sort(tm)
 		idx := uint64(0)
 		endAt := uint64(mapPattern)
@@ -209,7 +209,7 @@ func TestCompoundMapIterAll(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
-		m := tm.toCompoundMap(chunks.NewMemoryStore())
+		m := tm.toCompoundMap()
 		sort.Sort(tm)
 		idx := uint64(0)
 
@@ -230,10 +230,9 @@ func TestCompoundMapSet(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(incr, offset int, tm testMap) {
-		cs := chunks.NewMemoryStore()
-		expected := tm.toCompoundMap(cs)
+		expected := tm.toCompoundMap()
 		run := func(from, to int) {
-			actual := tm.Remove(from, to).toCompoundMap(cs).SetM(tm.Flatten(from, to)...)
+			actual := tm.Remove(from, to).toCompoundMap().SetM(tm.Flatten(from, to)...)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 		}
@@ -256,9 +255,8 @@ func TestCompoundMapSet(t *testing.T) {
 func TestCompoundMapSetExistingKeyToExistingValue(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewMemoryStore()
 	tm := getTestNativeOrderMap(2)
-	original := tm.toCompoundMap(cs)
+	original := tm.toCompoundMap()
 
 	actual := original
 	for _, entry := range tm.entries {
@@ -272,9 +270,8 @@ func TestCompoundMapSetExistingKeyToExistingValue(t *testing.T) {
 func TestCompoundMapSetExistingKeyToNewValue(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewMemoryStore()
 	tm := getTestNativeOrderMap(2)
-	original := tm.toCompoundMap(cs)
+	original := tm.toCompoundMap()
 
 	expectedWorking := tm
 	actual := original
@@ -284,7 +281,7 @@ func TestCompoundMapSetExistingKeyToNewValue(t *testing.T) {
 		actual = actual.Set(entry.key, newValue).(compoundMap)
 	}
 
-	expected := expectedWorking.toCompoundMap(cs)
+	expected := expectedWorking.toCompoundMap()
 	assert.Equal(expected.Len(), actual.Len())
 	assert.True(expected.Equals(actual))
 	assert.False(original.Equals(actual))
@@ -294,10 +291,9 @@ func TestCompoundMapRemove(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(incr int, tm testMap) {
-		cs := chunks.NewMemoryStore()
-		whole := tm.toCompoundMap(cs)
+		whole := tm.toCompoundMap()
 		run := func(i int) {
-			expected := tm.Remove(i, i+1).toCompoundMap(cs)
+			expected := tm.Remove(i, i+1).toCompoundMap()
 			actual := whole.Remove(tm.entries[i].key)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
@@ -317,9 +313,8 @@ func TestCompoundMapRemove(t *testing.T) {
 func TestCompoundMapRemoveNonexistentKey(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewMemoryStore()
 	tm := getTestNativeOrderMap(2)
-	original := tm.toCompoundMap(cs)
+	original := tm.toCompoundMap()
 	actual := original.Remove(Int64(-1)) // rand.Int63 returns non-negative numbers.
 
 	assert.Equal(original.Len(), actual.Len())
@@ -330,8 +325,7 @@ func TestCompoundMapFilter(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
-		cs := chunks.NewMemoryStore()
-		m := tm.toCompoundMap(cs)
+		m := tm.toCompoundMap()
 		sort.Sort(tm)
 		pivotPoint := 10
 		pivot := tm.entries[pivotPoint].key
@@ -367,4 +361,22 @@ func TestCompoundMapFirstNNumbers(t *testing.T) {
 
 	m := NewTypedMap(mapType, kvs...)
 	assert.Equal(m.Ref().String(), "sha1-1b9664e55091370996f3af428ffee78f1ad36426")
+}
+
+func TestCompoundMapModifyAfterRead(t *testing.T) {
+	assert := assert.New(t)
+	ms := chunks.NewMemoryStore()
+	m := getTestNativeOrderMap(2).toCompoundMap()
+	// Drop chunk values.
+	m = ReadValue(WriteValue(m, ms), ms).(compoundMap)
+	// Modify/query. Once upon a time this would crash.
+	fst, fstval := m.First()
+	m = m.Remove(fst).(compoundMap)
+	assert.False(m.Has(fst))
+	{
+		fst, _ := m.First()
+		assert.True(m.Has(fst))
+	}
+	m = m.Set(fst, fstval).(compoundMap)
+	assert.True(m.Has(fst))
 }

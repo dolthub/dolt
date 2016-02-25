@@ -57,7 +57,7 @@ func (s setLeaf) Remove(values ...Value) Set {
 }
 
 func (s setLeaf) Union(others ...Set) Set {
-	return setUnion(s.cs, s, others)
+	return setUnion(s, others)
 }
 
 func (s setLeaf) Iter(cb setIterCallback) {
@@ -235,4 +235,8 @@ func (s setLeaf) sequenceCursorAtFirst() *sequenceCursor {
 			panic("unreachable")
 		},
 	}
+}
+
+func (s setLeaf) chunkSource() chunks.ChunkSource {
+	return s.cs
 }
