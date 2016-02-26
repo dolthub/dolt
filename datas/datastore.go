@@ -26,10 +26,10 @@ type DataStore interface {
 	// Delete removes the Dataset named datasetID from the map at the root of the DataStore. The Dataset data is not necessarily cleaned up at this time, but may be garbage collected in the future. If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the datastore is always returned.
 	Delete(datasetID string) (DataStore, error)
 
-	// Copies all chunks reachable from (and including)|r| but not reachable from (and including |exclude| in |source| to |sink|
+	// Copies all chunks reachable from (and including) |r| but not reachable from (and including) |exclude| from this DataStore to |sink|
 	CopyReachableChunksP(r, exclude ref.Ref, sink chunks.ChunkSink, concurrency int)
 
-	// Copies all chunks reachable from (and including) |r| in |source| that aren't present in |sink|
+	// Copies all chunks reachable from (and including) |r| in |source| that aren't present in this DataStore
 	CopyMissingChunksP(r ref.Ref, sink chunks.ChunkStore, concurrency int)
 }
 
