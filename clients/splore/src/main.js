@@ -37,10 +37,16 @@ function load() {
   }
   httpStore = new HttpStore(hash.server, undefined, opts);
 
-  httpStore.getRoot().then(ref => {
+  const setRootRef = ref => {
     rootRef = ref;
     handleChunkLoad(ref, ref);
-  });
+  };
+
+  if (hash.ref) {
+    setRootRef(Ref.parse(hash.ref));
+  } else {
+    httpStore.getRoot().then(setRootRef);
+  }
 }
 
 function formatKeyString(v: any): string {
@@ -194,10 +200,13 @@ function handleNodeClick(e: MouseEvent, id: string) {
   }
 }
 
-function setServer(url: string, token: ?string) {
+function setServer(url: string, token: ?string, ref: ?string) {
   let hash = `server=${url}`;
   if (token) {
     hash += '&token=' + token;
+  }
+  if (ref) {
+    hash += '&ref=' + ref;
   }
   location.hash = hash;
 }
@@ -218,19 +227,23 @@ class Prompt extends React.Component<void, {}, PromptState> {
     return <div style={{display: 'flex', height: '100%', alignItems: 'center',
       justifyContent: 'center'}}>
       <div style={fontStyle}>
-        <label>Can haz server?
-          <div style={{margin:'0.5em 0'}}>
-            <input type='text' ref='url' autoFocus={true} style={inputStyle}
-              defaultValue='http://api.noms.io/-/ds/[user]'/><br/>
-            <input type='text' ref='token' style={inputStyle}
-              placeholder='auth token'/>
-          </div>
-        </label>
-        <div>
-          <button onClick={() => setServer(this.refs.url.value, this.refs.token.value)}>OK</button>
-        </div>
+        Can haz server?
+        <form style={{margin:'0.5em 0'}} onSubmit={() => this._handleOnSubmit()}>
+          <input type='text' ref='url' autoFocus={true} style={inputStyle}
+            defaultValue='http://api.noms.io/-/ds/[user]'/><br/>
+          <input type='text' ref='token' style={inputStyle}
+            placeholder='auth token'/>
+          <input type='text' ref='ref' style={inputStyle}
+            placeholder='sha1-xyz (ref to jump to)' />
+          <button type='submit'>OK</button>
+        </form>
       </div>
     </div>;
+  }
+
+  _handleOnSubmit() {
+    const {url, token, ref} = this.refs;
+    setServer(url.value, token.value, ref.value);
   }
 }
 
