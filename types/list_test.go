@@ -5,7 +5,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -171,7 +170,6 @@ func TestListRemoveAt(t *testing.T) {
 
 func TestListMap(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	testMap := func(concurrency, listLen int) {
 		values := make([]Value, listLen)
@@ -179,7 +177,7 @@ func TestListMap(t *testing.T) {
 			values[i] = Int64(i)
 		}
 
-		l := newListLeaf(cs, listType, values...)
+		l := newListLeaf(listType, values...)
 
 		cur := 0
 		mu := sync.Mutex{}
@@ -285,7 +283,6 @@ func TestListIterAll(t *testing.T) {
 
 func TestListIterAllP(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	testIter := func(concurrency, listLen int) {
 		values := make([]Value, listLen)
@@ -293,7 +290,7 @@ func TestListIterAllP(t *testing.T) {
 			values[i] = Int64(i)
 		}
 
-		l := newListLeaf(cs, listType, values...)
+		l := newListLeaf(listType, values...)
 
 		cur := 0
 		mu := sync.Mutex{}
@@ -342,13 +339,12 @@ func TestListIterAllP(t *testing.T) {
 
 func TestListType(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	l := NewList(Int32(0))
 	assert.True(l.Type().Equals(MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))))
 
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Uint8Kind))
-	l2 := newListLeaf(cs, tr, []Value{Uint8(0), Uint8(1)}...)
+	l2 := newListLeaf(tr, []Value{Uint8(0), Uint8(1)}...)
 	assert.Equal(tr, l2.Type())
 
 	l3 := l2.Slice(0, 1)

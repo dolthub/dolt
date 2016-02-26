@@ -46,26 +46,26 @@ func TestEnsureRef(t *testing.T) {
 	bl := newBlobLeaf([]byte("hi"))
 	cb := newCompoundBlob([]metaTuple{{bl, ref.Ref{}, Uint64(2)}}, cs)
 
-	ll := newListLeaf(cs, listType, NewString("foo"))
+	ll := newListLeaf(listType, NewString("foo"))
 	cl := buildCompoundList([]metaTuple{{ll, ref.Ref{}, Uint64(1)}}, listType, cs)
 
-	ml := newMapLeaf(cs, mapType, mapEntry{NewString("foo"), NewString("bar")})
+	ml := newMapLeaf(mapType, mapEntry{NewString("foo"), NewString("bar")})
 	cm := buildCompoundMap([]metaTuple{{ml, ref.Ref{}, NewString("foo")}}, mapType, cs)
 
-	sl := newSetLeaf(cs, setType, NewString("foo"))
+	sl := newSetLeaf(setType, NewString("foo"))
 	cps := buildCompoundSet([]metaTuple{{sl, ref.Ref{}, NewString("foo")}}, setType, cs)
 
 	count = byte(1)
 	values := []Value{
 		newBlobLeaf([]byte{}),
 		cb,
-		newListLeaf(cs, listType, NewString("bar")),
+		newListLeaf(listType, NewString("bar")),
 		cl,
 		NewString(""),
 		cm,
-		newMapLeaf(cs, mapType),
+		newMapLeaf(mapType),
 		cps,
-		newSetLeaf(cs, setType),
+		newSetLeaf(setType),
 	}
 	for i := 0; i < 2; i++ {
 		for j, v := range values {

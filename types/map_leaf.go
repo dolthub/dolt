@@ -16,7 +16,6 @@ type mapLeaf struct {
 	indexOf indexOfMapFn
 	t       Type
 	ref     *ref.Ref
-	cs      chunks.ChunkSource
 }
 
 type mapData []mapEntry
@@ -26,8 +25,8 @@ type mapEntry struct {
 	value Value
 }
 
-func newMapLeaf(cs chunks.ChunkSource, t Type, data ...mapEntry) Map {
-	return mapLeaf{data, getIndexFnForMapType(t), t, &ref.Ref{}, cs}
+func newMapLeaf(t Type, data ...mapEntry) Map {
+	return mapLeaf{data, getIndexFnForMapType(t), t, &ref.Ref{}}
 }
 
 func (m mapLeaf) First() (Value, Value) {
@@ -243,7 +242,7 @@ func makeMapLeafChunkFn(t Type, cs chunks.ChunkSource) makeChunkFn {
 			mapData[i] = v.(mapEntry)
 		}
 
-		mapLeaf := valueFromType(newMapLeaf(cs, t, mapData...), t)
+		mapLeaf := valueFromType(newMapLeaf(t, mapData...), t)
 
 		var indexValue Value
 		if len(mapData) > 0 {

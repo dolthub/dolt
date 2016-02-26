@@ -4,7 +4,6 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -13,12 +12,11 @@ type listLeaf struct {
 	values []Value
 	t      Type
 	ref    *ref.Ref
-	cs     chunks.ChunkSource
 }
 
-func newListLeaf(cs chunks.ChunkSource, t Type, v ...Value) List {
+func newListLeaf(t Type, v ...Value) List {
 	d.Chk.Equal(ListKind, t.Kind())
-	return listLeaf{v, t, &ref.Ref{}, cs}
+	return listLeaf{v, t, &ref.Ref{}}
 }
 
 func (l listLeaf) Len() uint64 {

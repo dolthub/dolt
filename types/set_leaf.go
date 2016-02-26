@@ -16,13 +16,12 @@ type setLeaf struct {
 	indexOf indexOfSetFn
 	t       Type
 	ref     *ref.Ref
-	cs      chunks.ChunkSource
 }
 
 type setData []Value
 
-func newSetLeaf(cs chunks.ChunkSource, t Type, m ...Value) setLeaf {
-	return setLeaf{m, getIndexFnForSetType(t), t, &ref.Ref{}, cs}
+func newSetLeaf(t Type, m ...Value) setLeaf {
+	return setLeaf{m, getIndexFnForSetType(t), t, &ref.Ref{}}
 }
 
 func (s setLeaf) Empty() bool {
@@ -206,7 +205,7 @@ func makeSetLeafChunkFn(t Type, cs chunks.ChunkSource) makeChunkFn {
 			setData[i] = v.(Value)
 		}
 
-		setLeaf := valueFromType(newSetLeaf(cs, t, setData...), t)
+		setLeaf := valueFromType(newSetLeaf(t, setData...), t)
 
 		var indexValue Value
 		if len(setData) > 0 {
@@ -238,5 +237,5 @@ func (s setLeaf) sequenceCursorAtFirst() *sequenceCursor {
 }
 
 func (s setLeaf) chunkSource() chunks.ChunkSource {
-	return s.cs
+	return nil
 }
