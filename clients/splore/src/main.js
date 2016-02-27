@@ -76,7 +76,8 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
   }
 
   function process(ref, val, fromId): ?string {
-    if (typeof val === 'undefined') {
+    const t = typeof val;
+    if (t === 'undefined') {
       return null;
     }
 
@@ -95,16 +96,10 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
       (data.links[fromId] || (data.links[fromId] = [])).push(id);
     }
 
-    switch (typeof val) {
-      case 'boolean':
-      case 'number':
-      case 'string':
-        data.nodes[id] = {name: String(val)};
-        break;
-    }
-
-    if (val instanceof Blob) {
-      data.nodes[id] = {name: `Blob (${val.size})`};
+    if (t === 'boolean' || t === 'number' || t === 'string') {
+      data.nodes[id] = {name: String(val)};
+    } else if (val instanceof Promise) { // Blob
+      data.nodes[id] = {name: `Blob`};
     } else if (val instanceof NomsList) {
       const sequence = val.sequence;
       if (sequence instanceof ListLeafSequence) {
@@ -168,6 +163,8 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
           throw new Error('No kid id.');
         }
       });
+    } else {
+      console.log('Unsupported type!', val); // eslint-disable-line no-console
     }
 
     return id;
