@@ -18,8 +18,7 @@ for (let i = 0 ; i < chars.length; i++) {
   lookup[chars.charCodeAt(i)] = i;
 }
 
-export function encode(b: ArrayBuffer): string {
-  const bytes = new Uint8Array(b);
+export function encode(bytes: Uint8Array): string {
   const len = bytes.length;
   let base64 = '';
 
@@ -39,7 +38,7 @@ export function encode(b: ArrayBuffer): string {
   return base64;
 }
 
-export function decode(s: string): ArrayBuffer {
+export function decode(s: string): Uint8Array {
   let bufferLength = s.length * 0.75;
   const len = s.length;
 
@@ -50,8 +49,7 @@ export function decode(s: string): ArrayBuffer {
     }
   }
 
-  const arraybuffer = new ArrayBuffer(bufferLength);
-  const bytes = new Uint8Array(arraybuffer);
+  const bytes = new Uint8Array(bufferLength);
   let p = 0;
 
   for (let i = 0; i < len; i += 4) {
@@ -65,5 +63,5 @@ export function decode(s: string): ArrayBuffer {
     bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63);
   }
 
-  return arraybuffer;
+  return bytes;
 }

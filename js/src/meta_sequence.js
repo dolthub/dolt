@@ -49,7 +49,6 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
 
   constructor(cs: ?ChunkStore, type: Type, items: Array<MetaTuple<number>>) {
     super(cs, type, items);
-    this.isMeta = true;
     this.offsets = [];
     let cum = 0;
     for (let i = 0; i < items.length; i++) {
@@ -57,6 +56,10 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
       cum += length;
       this.offsets.push(cum);
     }
+  }
+
+  get isMeta(): boolean {
+    return true;
   }
 
   range(start: number, end: number): Promise<Array<any>> {
@@ -117,9 +120,8 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
 }
 
 export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K, MetaTuple<K>> {
-  constructor(cs: ?ChunkStore, type: Type, items: Array<MetaTuple>) {
-    super(cs, type, items);
-    this.isMeta = true;
+  get isMeta(): boolean {
+    return true;
   }
 
   getChildSequence(idx: number): Promise<?Sequence> {
@@ -142,10 +144,9 @@ export function newMetaSequenceFromData(cs: ChunkStore, type: Type, tuples: Arra
     case Kind.Map:
     case Kind.Set:
       return new OrderedMetaSequence(cs, type, tuples);
+    case Kind.Blob:
     case Kind.List:
       return new IndexedMetaSequence(cs, type, tuples);
-    case Kind.Blob:
-      throw new Error('Not implemented');
     default:
       throw new Error('Not reached');
   }
@@ -205,4 +206,3 @@ export function newIndexedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
     (mt: MetaTuple) => mt.ref.digest
   );
 }
-

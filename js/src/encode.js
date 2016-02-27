@@ -16,6 +16,7 @@ import {MapLeafSequence, NomsMap} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';
 import {Sequence} from './sequence.js';
 import {setEncodeNomsValue} from './get_ref.js';
+import {NomsBlob, BlobLeafSequence} from './blob.js';
 
 const typedTag = 't ';
 
@@ -116,14 +117,15 @@ class JsonArrayWriter {
   writeValue(v: any, t: Type, pkg: ?Package) {
     switch (t.kind) {
       case Kind.Blob:
-        this.write(false);
-        // TODO: When CompoundBlob is implemented...
-        // invariant(v instanceof Sequence);
-        // if (this.maybeWriteMetaSequence(v, t, pkg)) {
-        //   break;
-        // }
+        invariant(v instanceof NomsBlob || v instanceof Sequence);
+        const sequence: Sequence = v instanceof NomsBlob ? v.sequence : v;
 
-        this.writeBlob(v);
+        if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
+          break;
+        }
+
+        invariant(sequence instanceof BlobLeafSequence);
+        this.writeBlob(sequence);
         break;
       case Kind.Bool:
       case Kind.String:
@@ -322,8 +324,10 @@ class JsonArrayWriter {
     }
   }
 
-  writeBlob(v: ArrayBuffer) {
-    this.write(encodeBase64(v));
+  writeBlob(seq: BlobLeafSequence) {
+    // HACK: The items property is declared as Array<T> in Flow.
+    invariant(seq.items instanceof Uint8Array);
+    this.write(encodeBase64(seq.items));
   }
 
   writeStruct(s: Struct, type: Type, typeDef: Type, pkg: Package) {
@@ -386,21 +390,24 @@ function encodeEmbeddedNomsValue(v: any, t: Type, cs: ?ChunkStore): Chunk {
 
 // Top level blobs are not encoded using JSON but prefixed with 'b ' followed
 // by the raw bytes.
-function encodeTopLevelBlob(v: ArrayBuffer): Chunk {
-  const data = new Uint8Array(2 + v.byteLength);
-  const view = new DataView(v);
+function encodeTopLevelBlob(sequence: BlobLeafSequence): Chunk {
+  const arr = sequence.items;
+  const data = new Uint8Array(2 + arr.length);
   data[0] = 98;  // 'b'
   data[1] = 32;  // ' '
-  for (let i = 0; i < view.byteLength; i++) {
-    data[i + 2] = view.getUint8(i);
+  for (let i = 0; i < arr.length; i++) {
+    data[i + 2] = arr[i];
   }
   return new Chunk(data);
 }
 
 function encodeNomsValue(v: any, t: Type, cs: ?ChunkStore): Chunk {
   if (t.kind === Kind.Blob) {
-    invariant(v instanceof ArrayBuffer);
-    return encodeTopLevelBlob(v);
+    invariant(v instanceof NomsBlob || v instanceof Sequence);
+    const sequence: BlobLeafSequence = v instanceof NomsBlob ? v.sequence : v;
+    if (!sequence.isMeta) {
+      return encodeTopLevelBlob(sequence);
+    }
   }
   return encodeEmbeddedNomsValue(v, t, cs);
 }

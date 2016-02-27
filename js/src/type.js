@@ -417,6 +417,7 @@ export const int64Type = makePrimitiveType(Kind.Int64);
 export const float32Type = makePrimitiveType(Kind.Float32);
 export const float64Type = makePrimitiveType(Kind.Float64);
 export const stringType = makePrimitiveType(Kind.String);
+export const blobType = makePrimitiveType(Kind.Blob);
 export const typeType = makePrimitiveType(Kind.Type);
 export const packageType = makePrimitiveType(Kind.Package);
 
