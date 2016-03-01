@@ -19,6 +19,7 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/util/http/retry"
 	"github.com/bradfitz/latlong"
 	"github.com/garyburd/go-oauth/oauth"
 )
@@ -432,6 +433,8 @@ type liveFlickrAPI struct {
 }
 
 func (api liveFlickrAPI) Call(method string, response interface{}, args *map[string]string) error {
+	restURL := "https://api.flickr.com/services/rest/"
+
 	values := url.Values{
 		"method":         []string{method},
 		"format":         []string{"json"},
@@ -444,10 +447,9 @@ func (api liveFlickrAPI) Call(method string, response interface{}, args *map[str
 		}
 	}
 
-	res, err := oauthClient.Get(nil, api.tokenCred, "https://api.flickr.com/services/rest/", values)
-	if err != nil {
-		return err
-	}
+	res := retry.Request(restURL, func() (*http.Response, error) {
+		return oauthClient.Get(nil, api.tokenCred, restURL, values)
+	})
 
 	defer res.Body.Close()
 	buff, err := ioutil.ReadAll(res.Body)

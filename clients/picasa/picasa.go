@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"flag"
@@ -19,6 +18,7 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/util/http/retry"
 	"golang.org/x/oauth2"
 )
 
@@ -237,28 +237,12 @@ func callPicasaAPI(client *http.Client, path string, response interface{}) {
 }
 
 func callPicasaURL(client *http.Client, url string) io.ReadCloser {
-	req, err := http.NewRequest("GET", url, nil)
-	d.Chk.NoError(err)
-
-	req.Header.Add("GData-Version", "2")
-	resp, err := client.Do(req)
-	d.Chk.NoError(err)
-
-	msg := func() string {
-		body := &bytes.Buffer{}
-		_, err := io.Copy(body, resp.Body)
+	return retry.Request(url, func() (*http.Response, error) {
+		req, err := http.NewRequest("GET", url, nil)
 		d.Chk.NoError(err)
-		return fmt.Sprintf("could not load %s: %d: %s", url, resp.StatusCode, body)
-	}
-
-	switch resp.StatusCode / 100 {
-	case 4:
-		d.Exp.Fail(msg())
-	case 5:
-		d.Chk.Fail(msg())
-	}
-
-	return resp.Body
+		req.Header.Add("GData-Version", "2")
+		return client.Do(req)
+	}).Body
 }
 
 // General utility functions
