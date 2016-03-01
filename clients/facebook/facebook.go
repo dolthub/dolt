@@ -15,6 +15,7 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/util/http/retry"
 	"golang.org/x/oauth2"
 )
 
@@ -180,11 +181,11 @@ func printStats(user User) {
 
 func callFacebookAPI(client *http.Client, url string, response interface{}) {
 	fmt.Printf("Fetching %s...\n", url)
-	req, err := http.NewRequest("GET", url, nil)
-	d.Chk.NoError(err)
-
-	resp, err := client.Do(req)
-	d.Chk.NoError(err)
+	resp := retry.Request(url, func() (*http.Response, error) {
+		req, err := http.NewRequest("GET", url, nil)
+		d.Chk.NoError(err)
+		return client.Do(req)
+	})
 
 	msg := func() string {
 		body := &bytes.Buffer{}
@@ -200,6 +201,6 @@ func callFacebookAPI(client *http.Client, url string, response interface{}) {
 		d.Chk.Fail(msg())
 	}
 
-	err = json.NewDecoder(resp.Body).Decode(response)
+	err := json.NewDecoder(resp.Body).Decode(response)
 	d.Chk.NoError(err)
 }
