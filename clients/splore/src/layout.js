@@ -45,6 +45,7 @@ export default function Layout(props: Props) : React.Element {
         fromY={fromY}
         x={x}
         y={y}
+        spaceX={spaceX}
         text={treeNode.data.name}
         title={title}
         canOpen={hasChildren}

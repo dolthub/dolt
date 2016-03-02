@@ -15,6 +15,7 @@ type Props = {
   fromY: number,
   x: number,
   y: number,
+  spaceX: number,
   nomsRef: ?Ref,
   onClick: (e: Event, s: String) => void,
 };
@@ -45,27 +46,32 @@ export default class Node extends React.Component<void, Props, State> {
       }));
     }
 
-    let textAnchor = 'start';
-    let textX = 10;
     const translate = `translate3d(${this.state.x}px, ${this.state.y}px, 0)`;
-
-    if (this.props.canOpen) {
-      textAnchor = 'end';
-      textX = -10;
-    }
 
     let text = this.props.text;
     if (this.props.nomsRef) {
       const url = `${nomsServer}/ref/${this.props.nomsRef.toString()}`;
-      text = <a xlinkHref={url}>{text}</a>;
+      text = <a href={url}>{text}</a>;
     }
+
+    const paraStyle = {
+      overflow: 'hidden',
+      textAlign: 'right',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+    };
+
     return (
       <g className='node' onClick={this.props.onClick} style={{transform:translate}}>
         {this.getShape()}
-        <text x={textX} dy='.35em' textAnchor={textAnchor}>
-          {text}
-        </text>
-        <title>{this.props.title}</title>
+        <foreignObject x={-this.props.spaceX + 10} y='-.35em'
+          width={this.props.spaceX - 20} height='0.7em'
+          requiredExtensions='http://www.w3.org/1999/xhtml'>
+          <p xmlns='http://www.w3.org/1999/xhtml' title={this.props.title || this.props.text}
+            style={paraStyle}>
+            {text}
+          </p>
+        </foreignObject>
       </g>
     );
   }
