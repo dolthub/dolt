@@ -58,11 +58,21 @@ func main() {
 		return
 	}
 
+	r := csv.NewCSVReader(res, comma)
+
+	var headers []string
+	if *header == "" {
+		headers, err = r.Read()
+		d.Exp.NoError(err)
+	} else {
+		headers = strings.Split(*header, string(comma))
+	}
+
 	if *reportTypes {
-		keys, kinds := csv.ReportValidFieldTypes(res, *header)
-		d.Chk.Equal(len(keys), len(kinds))
+		kinds := csv.ReportValidFieldTypes(r, headers)
+		d.Chk.Equal(len(headers), len(kinds))
 		fmt.Println("Possible types for each column:")
-		for i, key := range keys {
+		for i, key := range headers {
 			fmt.Printf("%s: %s\n", key, strings.Join(csv.KindsToStrings(kinds[i]), ","))
 		}
 		return
@@ -80,7 +90,7 @@ func main() {
 		kinds = csv.StringsToKinds(strings.Split(*columnTypes, ","))
 	}
 
-	value, _, _ := csv.Read(res, *name, *header, kinds, comma, ds.Store())
+	value, _, _ := csv.Read(r, *name, headers, kinds, ds.Store())
 	_, err = ds.Commit(value)
 	d.Exp.NoError(err)
 }
