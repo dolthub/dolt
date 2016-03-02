@@ -367,4 +367,20 @@ suite('CompoundSet', () => {
     await testIntersect([], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
         ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k'], ['i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']]);
   });
+
+  test('iterator at 0', async () => {
+    const ms = new MemoryStore();
+    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int8));
+
+    const test = async (expected, items) => {
+      const set = new NomsSet(tr, new SetLeafSequence(ms, tr, items));
+      const iter = set.iteratorAt(0);
+      assert.deepEqual(expected, await flatten(iter));
+    };
+
+    await test([1, 2], [1, 2]);
+    await test([0, 1, 2], [0, 1, 2]);
+    await test([1, 2], [-2, -1, 1, 2]);
+    await test([0, 1, 2], [-2, -1, 0, 1, 2]);
+  });
 });

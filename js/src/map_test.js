@@ -147,13 +147,13 @@ suite('MapLeaf', () => {
 
     const test = async entries => {
       const m = new NomsMap(tr, new MapLeafSequence(ms, tr, entries));
-      assert.deepEqual(entries, flatten(m.iterator()));
-      assert.deepEqual(entries, flattenParallel(m.iterator(), entries.length));
+      assert.deepEqual(entries, await flatten(m.iterator()));
+      assert.deepEqual(entries, await flattenParallel(m.iterator(), entries.length));
     };
 
-    test([]);
-    test([{key: 'a', value: 4}]);
-    test([{key: 'a', value: 4}, {key: 'k', value: 8}]);
+    await test([]);
+    await test([{key: 'a', value: 4}]);
+    await test([{key: 'a', value: 4}, {key: 'k', value: 8}]);
   });
 
   test('iteratorAt', async () => {
