@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"io"
 	"log"
+	"strings"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
@@ -48,10 +49,21 @@ func NewCSVReader(res io.Reader, comma rune) *csv.Reader {
 	return r
 }
 
-// ReportValidFieldTypes takes a CSV reader and the headers. It returns a slice of types.NomsKind for each column in the data indicating what Noms types could be used to represent that row.
+// ReportValidFieldTypes takes res, a reader expected to contain CSV data, and an optional header. Excluding the header (assumed to be the first row if no header is given), it returns a slice of types.NomsKind for each column in the data indicating what Noms types could be used to represent that row.
 // For example, if all values in a row are negative integers between -127 and 0, the slice for that row would be [types.Int8Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Float32Kind, types.Float64Kind, types.StringKind]. If even one value in the row is a floating point number, however, all the integer kinds would be dropped. All values can be represented as a string, so that option is always provided.
-func ReportValidFieldTypes(r *csv.Reader, headers []string) []KindSlice {
-	options := newSchemaOptions(len(headers))
+func ReportValidFieldTypes(res io.Reader, header string) ([]string, []KindSlice) {
+	var input io.Reader
+	if len(header) == 0 {
+		input = res
+	} else {
+		input = io.MultiReader(strings.NewReader(header+"\n"), res)
+	}
+
+	r := csv.NewReader(input)
+	keys, err := r.Read()
+	d.Exp.NoError(err, "Error decoding CSV")
+
+	options := newSchemaOptions(len(keys))
 	rowChan := make(chan []string)
 	doneChan := make(chan struct{})
 	go func() {
@@ -72,15 +84,18 @@ func ReportValidFieldTypes(r *csv.Reader, headers []string) []KindSlice {
 		rowChan <- row
 	}
 	<-doneChan
-	return options.ValidKinds()
+	return keys, options.ValidKinds()
 }
 
-// MakeStructTypeFromHeaders creates a struct type from the headers using |kinds| as the type of each field. If |kinds| is empty, default to strings.
-func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSlice) (typeRef, typeDef types.Type) {
+// MakeStructTypeFromHeader creates a struct type by reading the first row of the csv.Reader using |kinds| as the type of each field. If |kinds| is empty, default to strings.
+func MakeStructTypeFromHeader(r *csv.Reader, structName string, kinds KindSlice) (typeRef, typeDef types.Type) {
+	keys, err := r.Read()
+	d.Exp.NoError(err, "Error decoding CSV")
+
 	useStringType := len(kinds) == 0
-	d.Chk.True(useStringType || len(headers) == len(kinds))
-	fields := make([]types.Field, len(headers))
-	for i, key := range headers {
+	d.Chk.True(useStringType || len(keys) == len(kinds))
+	fields := make([]types.Field, len(keys))
+	for i, key := range keys {
 		kind := types.StringKind
 		if !useStringType {
 			kind = kinds[i]
@@ -100,11 +115,21 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 	return
 }
 
-// Read takes a CSV reader and reads it into a typed List of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
-// If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
+// Read takes comma-delineated data from res and parses it into a typed List of structs. Each row gets parsed into a struct named structName, optionally described by header. If header is empty, the first line of the file is used to guess the form of the struct into which rows are parsed. If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
 // In addition to the list, Read returns the typeRef for the structs in the list, and last the typeDef of the structs.
-func Read(r *csv.Reader, structName string, headers []string, kinds KindSlice, cs chunks.ChunkStore) (l types.List, typeRef, typeDef types.Type) {
-	typeRef, typeDef = MakeStructTypeFromHeaders(headers, structName, kinds)
+func Read(res io.Reader, structName, header string, kinds KindSlice, comma rune, cs chunks.ChunkStore) (l types.List, typeRef, typeDef types.Type) {
+	var input io.Reader
+	if len(header) == 0 {
+		input = res
+	} else {
+		input = io.MultiReader(strings.NewReader(header+"\n"), res)
+	}
+
+	r := csv.NewReader(input)
+	r.Comma = comma
+	r.FieldsPerRecord = 0 // Let first row determine the number of fields.
+
+	typeRef, typeDef = MakeStructTypeFromHeader(r, structName, kinds)
 	valueChan := make(chan types.Value, 128) // TODO: Make this a function param?
 	listType := types.MakeCompoundType(types.ListKind, typeRef)
 	listChan := types.NewStreamingTypedList(listType, cs, valueChan)
