@@ -297,8 +297,12 @@ func TestReportValidFieldTypes(t *testing.T) {
 	for _, row := range data {
 		dataString = dataString + strings.Join(row, ",") + "\n"
 	}
-	keys, kinds := ReportValidFieldTypes(bytes.NewBufferString(dataString), "")
-	assert.Equal(data[0], keys)
+
+	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
+	headers, err := r.Read()
+	assert.NoError(err)
+	assert.Equal(data[0], headers)
+	kinds := ReportValidFieldTypes(r, headers)
 	for i, ks := range kinds {
 		assert.Equal(expectedKinds[i], ks)
 	}
