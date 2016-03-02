@@ -59,6 +59,7 @@ func (s *testSuite) TestCSVImporter() {
 		s.Equal(types.Uint8(i), st.Get("b"))
 		i++
 	})
+
 }
 
 func (s *testSuite) TestCSVImporterReportTypes() {
