@@ -33,6 +33,7 @@ const (
 )
 
 var (
+	dynamoStats              = flag.Bool("dynamo-stats", false, "On each DynamoStore close, print read and write stats. Can be quite verbose")
 	dynamoRootKey            = []byte("root")
 	valueNotExistsExpression = fmt.Sprintf("attribute_not_exists(%s)", chunkAttr)
 	valueEqualsExpression    = fmt.Sprintf("%s = :prev", chunkAttr)
@@ -339,15 +340,17 @@ func (s *DynamoStore) Close() error {
 	close(s.readQueue)
 	close(s.writeQueue)
 
-	if s.readBatchCount > 0 {
-		fmt.Printf("Read batch count: %d, Read batch latency: %dms\n", s.readBatchCount, s.readTime/s.readBatchCount/1e6)
-	}
-	if s.writeBatchCount > 0 {
-		fmt.Printf("Write batch count: %d, Write batch latency: %dms\n", s.writeBatchCount, uint64(s.writeTime)/s.writeBatchCount/1e6)
-	}
-	if s.writeCount > 0 {
-		fmt.Printf("Write chunk count: %d, Avg chunk size: %.3fK\n", s.writeCount, float64(s.writeTotal)/float64(s.writeCount)/1024.0)
-		fmt.Printf("Avg compression ratio: %.2fx, Avg compressed chunk size: %.3fK\n", float64(s.writeTotal)/float64(s.writeCompTotal), float64(s.writeCompTotal)/float64(s.writeCount)/1024.0)
+	if *dynamoStats {
+		if s.readBatchCount > 0 {
+			fmt.Printf("Read batch count: %d, Read batch latency: %dms\n", s.readBatchCount, s.readTime/s.readBatchCount/1e6)
+		}
+		if s.writeBatchCount > 0 {
+			fmt.Printf("Write batch count: %d, Write batch latency: %dms\n", s.writeBatchCount, uint64(s.writeTime)/s.writeBatchCount/1e6)
+		}
+		if s.writeCount > 0 {
+			fmt.Printf("Write chunk count: %d, Avg chunk size: %.3fK\n", s.writeCount, float64(s.writeTotal)/float64(s.writeCount)/1024.0)
+			fmt.Printf("Avg compression ratio: %.2fx, Avg compressed chunk size: %.3fK\n", float64(s.writeTotal)/float64(s.writeCompTotal), float64(s.writeCompTotal)/float64(s.writeCount)/1024.0)
+		}
 	}
 	return nil
 }
