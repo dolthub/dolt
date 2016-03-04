@@ -211,4 +211,23 @@ suite('Struct', () => {
     const s3 = s2.set('b', true);
     assert.isTrue(s1.equals(s3));
   });
+
+  test('type assertion on construct', () => {
+    const typeDef = makeStructType('S3', [
+      new Field('b', makePrimitiveType(Kind.Bool), false),
+    ], []);
+
+    const pkg = new Package([typeDef], []);
+    registerPackage(pkg);
+    const pkgRef = pkg.ref;
+    const type = makeType(pkgRef, 0);
+
+    assert.throws(() => {
+      new Struct(type, type, {b: true});
+    });
+
+    assert.throws(() => {
+      new Struct(typeDef, typeDef, {b: true});
+    });
+  });
 });
