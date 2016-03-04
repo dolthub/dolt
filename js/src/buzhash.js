@@ -1,5 +1,5 @@
 // @flow
-import {uint8, uint32} from './primitives.js';
+import type {uint8, uint32} from './primitives.js';
 
 // This a javascript port of github.com/kch42/buzhash.
 

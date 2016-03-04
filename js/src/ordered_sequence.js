@@ -1,6 +1,7 @@
 // @flow
 
-import {AsyncIterator, AsyncIteratorResult} from './async_iterator.js';
+import {AsyncIterator} from './async_iterator.js';
+import type {AsyncIteratorResult} from './async_iterator.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant, isNullOrUndefined, notNull} from './assert.js';
 import {less} from './value.js';

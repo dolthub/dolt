@@ -2,7 +2,8 @@
 
 import type {ChunkStore} from './chunk_store.js';
 import {invariant, notNull} from './assert.js';
-import {AsyncIterator, AsyncIteratorResult} from './async_iterator.js';
+import {AsyncIterator} from './async_iterator.js';
+import type {AsyncIteratorResult} from './async_iterator.js';
 import {Type} from './type.js';
 import {ValueBase} from './value.js';
 
