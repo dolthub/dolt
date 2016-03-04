@@ -2,7 +2,7 @@
 
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
-import {int64} from './primitives.js';
+import type {int64} from './primitives.js';
 import {SequenceChunker} from './sequence_chunker.js';
 
 class ModBoundaryChecker {

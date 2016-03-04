@@ -3,7 +3,7 @@
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import {Sequence, SequenceCursor} from './sequence.js';
-import {int64} from './primitives.js';
+import type {int64} from './primitives.js';
 import {notNull} from './assert.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {Kind} from './noms_kind.js';

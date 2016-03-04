@@ -1,7 +1,8 @@
 // @flow
 
 import type {Splice} from './edit_distance.js';
-import {AsyncIterator, AsyncIteratorResult} from './async_iterator.js';
+import {AsyncIterator} from './async_iterator.js';
+import type {AsyncIteratorResult} from './async_iterator.js';
 import {calcSplices, SPLICE_ADDED, SPLICE_AT, SPLICE_FROM,
   SPLICE_REMOVED} from './edit_distance.js';
 import {equals} from './value.js';

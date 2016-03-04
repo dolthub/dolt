@@ -20,7 +20,7 @@ import {NomsSet, SetLeafSequence} from './set.js';
 import {readValue} from './read_value.js';
 import {registerPackage, Package} from './package.js';
 import {suite} from 'mocha';
-import {Value} from './value.js';
+import type {Value} from './value.js';
 import {writeValue} from './encode.js';
 
 suite('Decode', () => {
