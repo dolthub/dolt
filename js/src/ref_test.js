@@ -12,6 +12,7 @@ suite('Ref', () => {
       assert.throws(() => {
         Ref.parse(s);
       });
+      assert.equal(null, Ref.maybeParse(s));
     }
 
     assertParseError('foo');
@@ -27,8 +28,9 @@ suite('Ref', () => {
     // sha2 not supported
     assertParseError('sha2-0000000000000000000000000000000000000000');
 
-    const r = Ref.parse('sha1-0000000000000000000000000000000000000000');
-    assert.isNotNull(r);
+    const valid = 'sha1-0000000000000000000000000000000000000000';
+    assert.isNotNull(Ref.parse(valid));
+    assert.isNotNull(Ref.maybeParse(valid));
   });
 
   test('equals', () => {
