@@ -82,6 +82,11 @@ export default class Ref {
     return new Ref(m[1]);
   }
 
+  static maybeParse(s: string): ?Ref {
+    const m = s.match(pattern);
+    return m ? new Ref(m[1]) : null;
+  }
+
   static fromDigest(digest: Uint8Array = new Uint8Array(sha1Size)) {
     return new Ref(sha1Prefix + uint8ArrayToHex(digest));
   }
