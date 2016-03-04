@@ -5,6 +5,7 @@ import {Field, StructDesc, Type} from './type.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitive} from './primitives.js';
 import {ValueBase} from './value.js';
+import {Kind} from'./noms_kind.js';
 
 type StructData = {[key: string]: any};
 
@@ -17,6 +18,9 @@ export default class Struct extends ValueBase {
 
   constructor(type: Type, typeDef: Type, data: StructData) {
     super(type);
+
+    invariant(type.kind === Kind.Unresolved);
+    invariant(typeDef.kind === Kind.Struct);
 
     this.typeDef = typeDef;
 
