@@ -7,9 +7,14 @@ html, body, svg {
 	margin: 0;
 }
 
-a:hover {
+a {
+	color: black;
 	cursor: pointer;
-	fill: blue;
+	text-decoration: none;
+}
+
+a:hover {
+	color: blue;
 	text-decoration: underline;
 }
 
@@ -28,8 +33,8 @@ a:hover {
 	fill: rgb(255, 255, 255);
 }
 
-.node text {
-	font-size: 10px;
+.node p {
+	font-size: 11px;
 	font-family: "Menlo", monospace;
 }
 
