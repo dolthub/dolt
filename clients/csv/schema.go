@@ -18,10 +18,11 @@ func newSchemaOptions(fieldCount int) schemaOptions {
 	return options
 }
 
-func (so schemaOptions) Test(values []string) {
-	d.Chk.True(len(so) == len(values))
+func (so schemaOptions) Test(fields []string) {
 	for i, t := range so {
-		t.Test(values[i])
+		if i < len(fields) {
+			t.Test(fields[i])
+		}
 	}
 }
 

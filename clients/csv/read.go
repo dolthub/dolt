@@ -3,7 +3,6 @@ package csv
 import (
 	"encoding/csv"
 	"io"
-	"log"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
@@ -44,7 +43,7 @@ func KindsToStrings(kinds KindSlice) []string {
 func NewCSVReader(res io.Reader, comma rune) *csv.Reader {
 	r := csv.NewReader(res)
 	r.Comma = comma
-	r.FieldsPerRecord = 0 // Let first row determine the number of fields.
+	r.FieldsPerRecord = -1 // Don't enforce number of fields.
 	return r
 }
 
@@ -117,13 +116,15 @@ func Read(r *csv.Reader, structName string, headers []string, kinds KindSlice, c
 			close(valueChan)
 			break
 		} else if err != nil {
-			log.Fatalln("Error decoding CSV: ", err)
+			panic(err)
 		}
 
 		fields := make(map[string]types.Value)
 		for i, v := range row {
-			f := structFields[i]
-			fields[f.Name] = StringToType(v, f.T.Kind())
+			if i < len(headers) {
+				f := structFields[i]
+				fields[f.Name] = StringToType(v, f.T.Kind())
+			}
 		}
 		valueChan <- types.NewStruct(typeRef, typeDef, fields)
 	}
