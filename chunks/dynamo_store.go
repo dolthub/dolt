@@ -369,7 +369,7 @@ func (s *DynamoStore) Root() ref.Ref {
 	}
 
 	itemLen := len(result.Item)
-	d.Chk.True(itemLen == 2 || itemLen == 3)
+	d.Chk.True(itemLen == 2 || itemLen == 3, "Root should have 2 or three attributes on it: %+v", result.Item)
 	if itemLen == 3 {
 		d.Chk.NotNil(result.Item[compAttr])
 		d.Chk.NotNil(result.Item[compAttr].S)
@@ -386,7 +386,7 @@ func (s *DynamoStore) UpdateRoot(current, last ref.Ref) bool {
 		Item: map[string]*dynamodb.AttributeValue{
 			refAttr:   {B: s.rootKey},
 			chunkAttr: {B: current.DigestSlice()},
-			// compAttr:  {S: aws.String(noneValue)},  // We want to add this, but old versions of the code assert that items have only 2 elements.
+			compAttr:  {S: aws.String(noneValue)},
 		},
 	}
 
