@@ -27,7 +27,7 @@ func (lds *LocalDataStore) Delete(datasetID string) (DataStore, error) {
 	return newLocalDataStore(lds.ChunkStore), err
 }
 
-// Copies all chunks reachable from (and including)|sourceRef| but not reachable from (and including) |exclude| in |source| to |sink|
+// CopyReachableChunksP copies to |sink| all chunks reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|
 func (lds *LocalDataStore) CopyReachableChunksP(sourceRef, exclude ref.Ref, sink chunks.ChunkSink, concurrency int) {
 	excludeRefs := map[ref.Ref]bool{}
 
