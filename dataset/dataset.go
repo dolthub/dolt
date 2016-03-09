@@ -90,14 +90,7 @@ func (ds *Dataset) validateRefAsCommit(r ref.Ref) datas.Commit {
 	v := types.ReadValue(r, ds.store)
 
 	d.Exp.NotNil(v, "%v cannot be found", r)
-
-	// TODO: Replace this weird recover stuff below once we have a way to determine if a Value is an instance of a custom struct type. BUG #133
-	defer func() {
-		if r := recover(); r != nil {
-			d.Exp.Fail("Not a Commit:", "%+v", v)
-		}
-	}()
-
+	d.Exp.True(v.Type().Equals(datas.NewCommit().Type()), "Not a Commit: %+v", v)
 	return v.(datas.Commit)
 }
 
