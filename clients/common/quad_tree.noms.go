@@ -3,7 +3,6 @@
 package common
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -578,12 +577,12 @@ func builderForRefOfValue(r ref.Ref) types.Value {
 	return NewRefOfValue(r)
 }
 
-func (r RefOfValue) TargetValue(cs chunks.ChunkSource) types.Value {
-	return types.ReadValue(r.target, cs)
+func (r RefOfValue) TargetValue(vr types.ValueReader) types.Value {
+	return vr.ReadValue(r.target)
 }
 
-func (r RefOfValue) SetTargetValue(val types.Value, cs chunks.ChunkSink) RefOfValue {
-	return NewRefOfValue(types.WriteValue(val, cs))
+func (r RefOfValue) SetTargetValue(val types.Value, vw types.ValueWriter) RefOfValue {
+	return NewRefOfValue(vw.WriteValue(val))
 }
 
 // ListOfNode
@@ -1189,10 +1188,10 @@ func builderForRefOfSQuadTree(r ref.Ref) types.Value {
 	return NewRefOfSQuadTree(r)
 }
 
-func (r RefOfSQuadTree) TargetValue(cs chunks.ChunkSource) SQuadTree {
-	return types.ReadValue(r.target, cs).(SQuadTree)
+func (r RefOfSQuadTree) TargetValue(vr types.ValueReader) SQuadTree {
+	return vr.ReadValue(r.target).(SQuadTree)
 }
 
-func (r RefOfSQuadTree) SetTargetValue(val SQuadTree, cs chunks.ChunkSink) RefOfSQuadTree {
-	return NewRefOfSQuadTree(types.WriteValue(val, cs))
+func (r RefOfSQuadTree) SetTargetValue(val SQuadTree, vw types.ValueWriter) RefOfSQuadTree {
+	return NewRefOfSQuadTree(vw.WriteValue(val))
 }

@@ -8,8 +8,6 @@ import (
 	"path"
 	"strings"
 
-	"sync"
-
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
@@ -22,25 +20,25 @@ type RemoteDataStore struct {
 }
 
 func newRemoteDataStore(cs chunks.ChunkStore) *RemoteDataStore {
-	return &RemoteDataStore{dataStoreCommon{cs, cs.Root(), nil, map[ref.Ref]bool{}, &sync.Mutex{}}}
+	return &RemoteDataStore{dataStoreCommon{newHasCachingChunkStore(cs), cs.Root(), nil}}
 }
 
 func (rds *RemoteDataStore) host() *url.URL {
-	return rds.dataStoreCommon.ChunkStore.(*chunks.HTTPStore).Host()
+	return rds.dataStoreCommon.cs.Backing().(*chunks.HTTPStore).Host()
 }
 
 func (rds *RemoteDataStore) Commit(datasetID string, commit Commit) (DataStore, error) {
 	err := rds.commit(datasetID, commit)
-	return newRemoteDataStore(rds.ChunkStore), err
+	return newRemoteDataStore(rds.cs.Backing()), err
 }
 
 func (rds *RemoteDataStore) Delete(datasetID string) (DataStore, error) {
 	err := rds.doDelete(datasetID)
-	return newRemoteDataStore(rds.ChunkStore), err
+	return newRemoteDataStore(rds.cs.Backing()), err
 }
 
-// CopyReachableChunksP copies to |sink| all chunks  in rds that are reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|.This implementation asks the remote server to return the desired chunks and writes them to |sink|.
-func (rds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, sink chunks.ChunkSink, concurrency int) {
+// CopyReachableChunksP copies to |sink| all chunks in rds that are reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|. This implementation asks the remote server to return the desired chunks and writes them to |sink|.
+func (rds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, sink DataSink, concurrency int) {
 	// POST http://<host>/ref/sha1----?all=true&exclude=sha1----. Response will be chunk data if present, 404 if absent.
 	u := rds.host()
 	u.Path = path.Join(constants.RefPath, r.String())
@@ -69,7 +67,7 @@ func (rds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, sink chunks
 		reader = gr
 	}
 
-	chunks.Deserialize(reader, sink, nil)
+	chunks.Deserialize(reader, sink.transitionalChunkSink(), nil)
 }
 
 // In order for keep alive to work we must read to EOF on every response. We may want to add a timeout so that a server that left its connection open can't cause all of ports to be eaten up.

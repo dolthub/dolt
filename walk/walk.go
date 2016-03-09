@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
@@ -18,19 +17,19 @@ type SomeCallback func(v types.Value) bool
 type AllCallback func(v types.Value)
 
 // SomeP recursively walks over all types.Values reachable from r and calls cb on them. If cb ever returns true, the walk will stop recursing on the current ref. If |concurrency| > 1, it is the callers responsibility to make ensure that |cb| is threadsafe.
-func SomeP(v types.Value, cs chunks.ChunkSource, cb SomeCallback, concurrency int) {
-	doTreeWalkP(v, cs, cb, concurrency)
+func SomeP(v types.Value, vr types.ValueReader, cb SomeCallback, concurrency int) {
+	doTreeWalkP(v, vr, cb, concurrency)
 }
 
 // AllP recursively walks over all types.Values reachable from r and calls cb on them. If |concurrency| > 1, it is the callers responsibility to make ensure that |cb| is threadsafe.
-func AllP(v types.Value, cs chunks.ChunkSource, cb AllCallback, concurrency int) {
-	doTreeWalkP(v, cs, func(v types.Value) (skip bool) {
+func AllP(v types.Value, vr types.ValueReader, cb AllCallback, concurrency int) {
+	doTreeWalkP(v, vr, func(v types.Value) (skip bool) {
 		cb(v)
 		return
 	}, concurrency)
 }
 
-func doTreeWalkP(v types.Value, cs chunks.ChunkSource, cb SomeCallback, concurrency int) {
+func doTreeWalkP(v types.Value, vr types.ValueReader, cb SomeCallback, concurrency int) {
 	rq := newRefQueue()
 	f := newFailure()
 
@@ -66,7 +65,7 @@ func doTreeWalkP(v types.Value, cs chunks.ChunkSource, cb SomeCallback, concurre
 			return
 		}
 
-		v := types.ReadValue(r, cs)
+		v := vr.ReadValue(r)
 		if v == nil {
 			f.fail(fmt.Errorf("Attempt to copy absent ref:%s", r.String()))
 			return
@@ -97,11 +96,11 @@ func doTreeWalkP(v types.Value, cs chunks.ChunkSource, cb SomeCallback, concurre
 type SomeChunksCallback func(r ref.Ref) bool
 
 // SomeChunksP Invokes callback on all chunks reachable from |r| in top-down order. |callback| is invoked only once for each chunk regardless of how many times the chunk appears
-func SomeChunksP(r ref.Ref, cs chunks.ChunkSource, callback SomeChunksCallback, concurrency int) {
-	doChunkWalkP(r, cs, callback, concurrency)
+func SomeChunksP(r ref.Ref, vr types.ValueReader, callback SomeChunksCallback, concurrency int) {
+	doChunkWalkP(r, vr, callback, concurrency)
 }
 
-func doChunkWalkP(r ref.Ref, cs chunks.ChunkSource, callback SomeChunksCallback, concurrency int) {
+func doChunkWalkP(r ref.Ref, vr types.ValueReader, callback SomeChunksCallback, concurrency int) {
 	rq := newRefQueue()
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
@@ -119,7 +118,7 @@ func doChunkWalkP(r ref.Ref, cs chunks.ChunkSource, callback SomeChunksCallback,
 			return
 		}
 
-		v := types.ReadValue(r, cs)
+		v := vr.ReadValue(r)
 		for _, r1 := range v.Chunks() {
 			wg.Add(1)
 			rq.tail() <- r1

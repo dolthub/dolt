@@ -79,22 +79,22 @@ func main() {
 	fmt.Printf("Done, elapsed time: %.2f secs\n", time.Now().Sub(start).Seconds())
 }
 
-func searchWithQuadTree(gp common.GeopositionDef, ds datas.DataStore) []common.Incident {
+func searchWithQuadTree(gp common.GeopositionDef, vr types.ValueReader) []common.Incident {
 	argName := "quadtree-ref"
 	r := readRef(*quadTreeRefFlag, argName)
-	sqtRoot := types.ReadValue(r, ds).(common.SQuadTree)
+	sqtRoot := vr.ReadValue(r).(common.SQuadTree)
 	if !common.ContainsPoint(sqtRoot.Georectangle().Def(), gp) {
 		log.Fatalf("lat/lon: %+v is not within sf area: %+v\n", gp, sqtRoot.Georectangle().Def())
 	}
-	gr, results := sqtRoot.Query(gp, *distanceFlag, ds)
+	gr, results := sqtRoot.Query(gp, *distanceFlag, vr)
 	fmt.Printf("bounding Rectangle: %+v, numIncidents: %d\n", gr, len(results))
 	return results
 }
 
-func searchWithList(gp common.GeopositionDef, ds datas.DataStore) []common.Incident {
+func searchWithList(gp common.GeopositionDef, vr types.ValueReader) []common.Incident {
 	argName := "incident-list-ref"
 	r := readRef(*incidentListRefFlag, argName)
-	val := types.ReadValue(r, ds)
+	val := vr.ReadValue(r)
 	l, ok := val.(types.List)
 	if !ok {
 		log.Fatalf("Value for %s argument is not a list object\n", argName)
@@ -109,7 +109,7 @@ func searchWithList(gp common.GeopositionDef, ds datas.DataStore) []common.Incid
 		if i%uint64(10000) == 0 {
 			fmt.Printf("%.2f%%: %v\n", float64(i)/float64(incidentList.Len())*float64(100), time.Now().Sub(t0))
 		}
-		incident := incidentList.Get(i).TargetValue(ds).(common.Incident)
+		incident := incidentList.Get(i).TargetValue(vr).(common.Incident)
 		if common.DistanceTo(incident.Geoposition().Def(), gp) <= float32(*distanceFlag) {
 			results = append(results, incident)
 		}

@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
@@ -99,7 +98,7 @@ func processInning(m MapOfStringToValue) map[string][]PitchDef {
 	return pitchCounts
 }
 
-func getIndex(input ListOfRefOfMapOfStringToValue, cs chunks.ChunkStore) MapOfStringToRefOfListOfPitch {
+func getIndex(input ListOfRefOfMapOfStringToValue, vrw types.ValueReadWriter) MapOfStringToRefOfListOfPitch {
 	pitcherMu := sync.Mutex{}
 	inningMu := sync.Mutex{}
 	pitchers := map[string]string{}
@@ -108,7 +107,7 @@ func getIndex(input ListOfRefOfMapOfStringToValue, cs chunks.ChunkStore) MapOfSt
 	// Walk through the list in inputDataset and basically switch
 	// on the top-level key to know if it's an inning or a pitcher.
 	input.IterAllP(512, func(item RefOfMapOfStringToValue, i uint64) {
-		m := item.TargetValue(cs)
+		m := item.TargetValue(vrw)
 
 		if key := "inning"; m.Has(key) {
 			inning := processInning(m.Get(key).(MapOfStringToValue))
@@ -138,7 +137,7 @@ func getIndex(input ListOfRefOfMapOfStringToValue, cs chunks.ChunkStore) MapOfSt
 	namedPitchCounts := MapOfStringToRefOfListOfPitchDef{}
 	for id, p := range pitchCounts {
 		if name, ok := pitchers[id]; d.Chk.True(ok, "Unknown pitcher: %s", id) {
-			namedPitchCounts[name] = types.WriteValue(p.New(), cs)
+			namedPitchCounts[name] = vrw.WriteValue(p.New())
 		}
 	}
 	return namedPitchCounts.New()

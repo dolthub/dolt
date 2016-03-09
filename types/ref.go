@@ -1,9 +1,6 @@
 package types
 
-import (
-	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
-)
+import "github.com/attic-labs/noms/ref"
 
 type Ref struct {
 	target ref.Ref
@@ -53,11 +50,11 @@ func (r Ref) Less(other OrderedValue) bool {
 	return r.target.Less(other.(Ref).target)
 }
 
-func (r Ref) TargetValue(cs chunks.ChunkSource) Value {
-	return ReadValue(r.target, cs)
+func (r Ref) TargetValue(vr ValueReader) Value {
+	return vr.ReadValue(r.target)
 }
 
-func (r Ref) SetTargetValue(val Value, cs chunks.ChunkSink) Ref {
+func (r Ref) SetTargetValue(val Value, vw ValueWriter) Ref {
 	assertType(r.t.Desc.(CompoundDesc).ElemTypes[0], val)
-	return newRef(WriteValue(val, cs), r.t)
+	return newRef(vw.WriteValue(val), r.t)
 }

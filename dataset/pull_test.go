@@ -15,26 +15,26 @@ func createTestDataset(name string) Dataset {
 
 func TestValidateRef(t *testing.T) {
 	ds := createTestDataset("test")
-	r := types.WriteValue(types.Bool(true), ds.Store())
+	r := ds.Store().WriteValue(types.Bool(true))
 
 	assert.Panics(t, func() { ds.validateRefAsCommit(r) })
 }
 
 func NewList(ds Dataset, vs ...types.Value) types.Ref {
 	v := types.NewList(vs...)
-	r := types.WriteValue(v, ds.store)
+	r := ds.Store().WriteValue(v)
 	return types.NewRef(r)
 }
 
 func NewMap(ds Dataset, vs ...types.Value) types.Ref {
 	v := types.NewMap(vs...)
-	r := types.WriteValue(v, ds.store)
+	r := ds.Store().WriteValue(v)
 	return types.NewRef(r)
 }
 
 func NewSet(ds Dataset, vs ...types.Value) types.Ref {
 	v := types.NewSet(vs...)
-	r := types.WriteValue(v, ds.store)
+	r := ds.Store().WriteValue(v)
 	return types.NewRef(r)
 }
 

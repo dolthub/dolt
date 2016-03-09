@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/types"
 )
 
-// ValueToListAndElemDesc ensures that v is a types.List of structs, pulls the types.StructDesc that describes the elements of v out of cs, and returns the List and related StructDesc.
-func ValueToListAndElemDesc(v types.Value, cs chunks.ChunkSource) (types.List, types.StructDesc) {
+// ValueToListAndElemDesc ensures that v is a types.List of structs, pulls the types.StructDesc that describes the elements of v out of vr, and returns the List and related StructDesc.
+func ValueToListAndElemDesc(v types.Value, vr types.ValueReader) (types.List, types.StructDesc) {
 	d.Exp.Equal(types.ListKind, v.Type().Desc.Kind(),
 		"Dataset must be List<>, found: %s", v.Type().Desc.Describe())
 
@@ -19,7 +18,7 @@ func ValueToListAndElemDesc(v types.Value, cs chunks.ChunkSource) (types.List, t
 	d.Exp.Equal(types.UnresolvedKind, u.Desc.Kind(),
 		"List<> must be UnresolvedKind, found: %s", u.Desc.Describe())
 
-	pkg := types.ReadPackage(u.PackageRef(), cs)
+	pkg := types.ReadPackage(u.PackageRef(), vr)
 	d.Exp.Equal(types.PackageKind, pkg.Type().Desc.Kind(),
 		"Failed to read package: %s", pkg.Type().Desc.Describe())
 

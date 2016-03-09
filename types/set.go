@@ -1,9 +1,6 @@
 package types
 
-import (
-	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/d"
-)
+import "github.com/attic-labs/noms/d"
 
 type Set interface {
 	Value
@@ -20,7 +17,7 @@ type Set interface {
 	Filter(cb setFilterCallback) Set
 	elemType() Type
 	sequenceCursorAtFirst() *sequenceCursor
-	chunkSource() chunks.ChunkSource
+	valueReader() ValueReader
 }
 
 type indexOfSetFn func(m setData, v Value) int
@@ -55,20 +52,20 @@ func setUnion(set Set, others []Set) Set {
 	}
 	assertSetsSameType(set, others...)
 
-	cs := set.chunkSource()
+	vr := set.valueReader()
 	for _, s := range others {
-		// This both tries to find a ChunkSource to use for the new Set, and asserts that if it does,
+		// This both tries to find a ValueReader to use for the new Set, and asserts that if it does,
 		// it's the same (or nil) for all Sets. I.e. it should be possible to take the union of a Set
-		// without a ChunkSource (constructed in memory but not written yet) and one with a ChunkSource
-		// (from that source) but not with a *different* ChunkSource because this would get complicated.
-		if cs == nil {
-			cs = s.chunkSource()
+		// without a ValueReader (constructed in memory but not written yet) and one with a ValueReader
+		// (from that source) but not with a *different* ValueReader because this would get complicated.
+		if vr == nil {
+			vr = s.valueReader()
 		}
-		d.Chk.True(cs == nil || cs == s.chunkSource())
+		d.Chk.True(vr == nil || vr == s.valueReader())
 	}
 
 	tr := set.Type()
-	seq := newEmptySequenceChunker(makeSetLeafChunkFn(tr, cs), newOrderedMetaSequenceChunkFn(tr, cs), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeSetLeafChunkFn(tr, vr), newOrderedMetaSequenceChunkFn(tr, vr), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	var lessFunction func(a, b sequenceItem) bool
 	if isSequenceOrderedByIndexedType(tr) {

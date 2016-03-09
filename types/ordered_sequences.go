@@ -4,7 +4,6 @@ import (
 	"crypto/sha1"
 	"sort"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -16,8 +15,8 @@ func isSequenceOrderedByIndexedType(t Type) bool {
 type getLeafOrderedValuesFn func(Value) []Value
 
 // Returns a cursor to |key| in |ms|, plus the leaf + index that |key| is in. |t| is the type of the ordered values.
-func findLeafInOrderedSequence(ms metaSequence, t Type, key Value, getValues getLeafOrderedValuesFn, cs chunks.ChunkSource) (cursor *sequenceCursor, leaf Value, idx int) {
-	cursor, leaf = newMetaSequenceCursor(ms, cs)
+func findLeafInOrderedSequence(ms metaSequence, t Type, key Value, getValues getLeafOrderedValuesFn, vr ValueReader) (cursor *sequenceCursor, leaf Value, idx int) {
+	cursor, leaf = newMetaSequenceCursor(ms, vr)
 
 	if isSequenceOrderedByIndexedType(t) {
 		orderedKey := key.(OrderedValue)
@@ -32,7 +31,7 @@ func findLeafInOrderedSequence(ms metaSequence, t Type, key Value, getValues get
 	}
 
 	if current := cursor.current().(metaTuple); current.ChildRef() != valueFromType(leaf, leaf.Type()).Ref() {
-		leaf = readMetaTupleValue(current, cs)
+		leaf = readMetaTupleValue(current, vr)
 	}
 
 	if leafData := getValues(leaf); isSequenceOrderedByIndexedType(t) {
@@ -57,7 +56,7 @@ func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 	})
 }
 
-func newOrderedMetaSequenceChunkFn(t Type, cs chunks.ChunkSource) makeChunkFn {
+func newOrderedMetaSequenceChunkFn(t Type, vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
 
@@ -65,7 +64,7 @@ func newOrderedMetaSequenceChunkFn(t Type, cs chunks.ChunkSource) makeChunkFn {
 			tuples[i] = v.(metaTuple) // chunk is written when the root sequence is written
 		}
 
-		meta := newMetaSequenceFromData(tuples, t, cs)
+		meta := newMetaSequenceFromData(tuples, t, vr)
 		return newMetaTuple(tuples.last().value, meta, ref.Ref{}), meta
 	}
 }

@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRead(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 
 	dataString := `a,1,true
 b,2,false
@@ -21,7 +22,7 @@ b,2,false
 
 	headers := []string{"A", "B", "C"}
 	kinds := KindSlice{types.StringKind, types.Int8Kind, types.BoolKind}
-	l, typeRef, typeDef := Read(r, "test", headers, kinds, cs)
+	l, typeRef, typeDef := Read(r, "test", headers, kinds, ds)
 
 	assert.Equal(uint64(2), l.Len())
 
@@ -46,13 +47,13 @@ b,2,false
 
 func testTrailingHelper(t *testing.T, dataString string) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 
 	headers := []string{"A", "B"}
 	kinds := KindSlice{types.StringKind, types.StringKind}
-	l, typeRef, typeDef := Read(r, "test", headers, kinds, cs)
+	l, typeRef, typeDef := Read(r, "test", headers, kinds, ds)
 
 	assert.Equal(uint64(3), l.Len())
 
@@ -91,7 +92,7 @@ g,h,i,j
 
 func TestReadParseError(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 
 	dataString := `a,"b`
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
@@ -105,6 +106,6 @@ func TestReadParseError(t *testing.T) {
 			_, ok := r.(*csv.ParseError)
 			assert.True(ok, "Should be a ParseError")
 		}()
-		Read(r, "test", headers, kinds, cs)
+		Read(r, "test", headers, kinds, ds)
 	}()
 }

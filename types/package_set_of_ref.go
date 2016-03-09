@@ -3,10 +3,7 @@
 
 package types
 
-import (
-	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
-)
+import "github.com/attic-labs/noms/ref"
 
 // SetOfRefOfPackage
 
@@ -205,10 +202,10 @@ func builderForRefOfPackage(r ref.Ref) Value {
 	return NewRefOfPackage(r)
 }
 
-func (r RefOfPackage) TargetValue(cs chunks.ChunkStore) Package {
-	return ReadValue(r.target, cs).(Package)
+func (r RefOfPackage) TargetValue(vr ValueReader) Package {
+	return vr.ReadValue(r.target).(Package)
 }
 
-func (r RefOfPackage) SetTargetValue(val Package, cs chunks.ChunkSink) RefOfPackage {
-	return NewRefOfPackage(WriteValue(val, cs))
+func (r RefOfPackage) SetTargetValue(val Package, vw ValueWriter) RefOfPackage {
+	return NewRefOfPackage(vw.WriteValue(val))
 }

@@ -6,10 +6,16 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
+// ValueWriter is an interface that knows how to write Noms Values, e.g. datas/DataStore. Required to avoid import cycle between this package and the package that implements Value writing.
+type ValueWriter interface {
+	WriteValue(v Value) ref.Ref
+}
+
 type primitive interface {
 	ToPrimitive() interface{}
 }
 
+// WriteValue takes a Value, encodes it into Chunks, and puts them into cs. As a part of BUG 654, we're trying to get rid of the need to provide a ChunkSink here.
 func WriteValue(v Value, cs chunks.ChunkSink) ref.Ref {
 	d.Chk.NotNil(cs)
 	return writeValueInternal(v, cs)

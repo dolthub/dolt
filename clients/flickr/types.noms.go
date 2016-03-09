@@ -3,7 +3,6 @@
 package main
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -340,12 +339,12 @@ func builderForRefOfUser(r ref.Ref) types.Value {
 	return NewRefOfUser(r)
 }
 
-func (r RefOfUser) TargetValue(cs chunks.ChunkSource) User {
-	return types.ReadValue(r.target, cs).(User)
+func (r RefOfUser) TargetValue(vr types.ValueReader) User {
+	return vr.ReadValue(r.target).(User)
 }
 
-func (r RefOfUser) SetTargetValue(val User, cs chunks.ChunkSink) RefOfUser {
-	return NewRefOfUser(types.WriteValue(val, cs))
+func (r RefOfUser) SetTargetValue(val User, vw types.ValueWriter) RefOfUser {
+	return NewRefOfUser(vw.WriteValue(val))
 }
 
 // MapOfStringToRefOfAlbum
@@ -679,12 +678,12 @@ func builderForRefOfAlbum(r ref.Ref) types.Value {
 	return NewRefOfAlbum(r)
 }
 
-func (r RefOfAlbum) TargetValue(cs chunks.ChunkSource) Album {
-	return types.ReadValue(r.target, cs).(Album)
+func (r RefOfAlbum) TargetValue(vr types.ValueReader) Album {
+	return vr.ReadValue(r.target).(Album)
 }
 
-func (r RefOfAlbum) SetTargetValue(val Album, cs chunks.ChunkSink) RefOfAlbum {
-	return NewRefOfAlbum(types.WriteValue(val, cs))
+func (r RefOfAlbum) SetTargetValue(val Album, vw types.ValueWriter) RefOfAlbum {
+	return NewRefOfAlbum(vw.WriteValue(val))
 }
 
 // RefOfRemotePhoto
@@ -740,10 +739,10 @@ func builderForRefOfRemotePhoto(r ref.Ref) types.Value {
 	return NewRefOfRemotePhoto(r)
 }
 
-func (r RefOfRemotePhoto) TargetValue(cs chunks.ChunkSource) RemotePhoto {
-	return types.ReadValue(r.target, cs).(RemotePhoto)
+func (r RefOfRemotePhoto) TargetValue(vr types.ValueReader) RemotePhoto {
+	return vr.ReadValue(r.target).(RemotePhoto)
 }
 
-func (r RefOfRemotePhoto) SetTargetValue(val RemotePhoto, cs chunks.ChunkSink) RefOfRemotePhoto {
-	return NewRefOfRemotePhoto(types.WriteValue(val, cs))
+func (r RefOfRemotePhoto) SetTargetValue(val RemotePhoto, vw types.ValueWriter) RefOfRemotePhoto {
+	return NewRefOfRemotePhoto(vw.WriteValue(val))
 }

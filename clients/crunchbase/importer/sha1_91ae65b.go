@@ -3,7 +3,6 @@
 package main
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -954,10 +953,10 @@ func builderForRefOfRound(r ref.Ref) types.Value {
 	return NewRefOfRound(r)
 }
 
-func (r RefOfRound) TargetValue(cs chunks.ChunkSource) Round {
-	return types.ReadValue(r.target, cs).(Round)
+func (r RefOfRound) TargetValue(vr types.ValueReader) Round {
+	return vr.ReadValue(r.target).(Round)
 }
 
-func (r RefOfRound) SetTargetValue(val Round, cs chunks.ChunkSink) RefOfRound {
-	return NewRefOfRound(types.WriteValue(val, cs))
+func (r RefOfRound) SetTargetValue(val Round, vw types.ValueWriter) RefOfRound {
+	return NewRefOfRound(vw.WriteValue(val))
 }

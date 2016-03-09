@@ -17,7 +17,6 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 	"github.com/tealeg/xlsx"
 )
 
@@ -116,11 +115,11 @@ func importCompanies(ds dataset.Dataset, fileName string) ref.Ref {
 			rounds := roundsByPermalink[permalink]
 			roundRefs := SetOfRefOfRoundDef{}
 			for _, r := range rounds {
-				ref := types.WriteValue(r, ds.Store())
+				ref := ds.Store().WriteValue(r)
 				roundRefs[ref] = true
 			}
 			company = company.SetRounds(roundRefs.New())
-			ref := types.WriteValue(company, ds.Store())
+			ref := ds.Store().WriteValue(company)
 			companyRefsDef[company.Permalink()] = ref
 		}
 	}
@@ -131,7 +130,7 @@ func importCompanies(ds dataset.Dataset, fileName string) ref.Ref {
 	//	fmt.Printf("\rImported %d companies with %d rounds\n", companyRefs.Len(), numRounds)
 
 	// Write the list of companyRefs
-	return types.WriteValue(companyRefs, ds.Store())
+	return ds.Store().WriteValue(companyRefs)
 }
 
 func getExistingCompaniesRef(ds dataset.Dataset, h hash.Hash) ref.Ref {

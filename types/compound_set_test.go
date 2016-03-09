@@ -5,7 +5,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -98,9 +97,9 @@ func TestCompoundSetHas(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(ts testSet) {
-		cs := chunks.NewMemoryStore()
+		vs := NewTestValueStore()
 		set := ts.toCompoundSet()
-		set2 := ReadValue(WriteValue(set, cs), cs).(compoundSet)
+		set2 := vs.ReadValue(vs.WriteValue(set)).(compoundSet)
 		for _, v := range ts.values {
 			assert.True(set.Has(v))
 			assert.True(set2.Has(v))
@@ -344,10 +343,10 @@ func TestCompoundSetFirstNNumbers(t *testing.T) {
 
 func TestCompoundSetModifyAfterRead(t *testing.T) {
 	assert := assert.New(t)
-	ms := chunks.NewMemoryStore()
+	vs := NewTestValueStore()
 	set := getTestNativeOrderSet(2).toCompoundSet()
 	// Drop chunk values.
-	set = ReadValue(WriteValue(set, ms), ms).(compoundSet)
+	set = vs.ReadValue(vs.WriteValue(set)).(compoundSet)
 	// Modify/query. Once upon a time this would crash.
 	fst := set.First()
 	set = set.Remove(fst).(compoundSet)

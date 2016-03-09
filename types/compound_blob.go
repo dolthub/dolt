@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -15,16 +14,16 @@ type compoundBlob struct {
 	metaSequenceObject
 	length uint64
 	ref    *ref.Ref
-	cs     chunks.ChunkSource
+	vr     ValueReader
 }
 
-func newCompoundBlob(tuples metaSequenceData, cs chunks.ChunkSource) compoundBlob {
-	return buildCompoundBlob(tuples, typeForBlob, cs).(compoundBlob)
+func newCompoundBlob(tuples metaSequenceData, vr ValueReader) compoundBlob {
+	return buildCompoundBlob(tuples, typeForBlob, vr).(compoundBlob)
 }
 
-func buildCompoundBlob(tuples metaSequenceData, t Type, cs chunks.ChunkSource) Value {
+func buildCompoundBlob(tuples metaSequenceData, t Type, vr ValueReader) Value {
 	d.Chk.True(t.Equals(typeForBlob))
-	return compoundBlob{metaSequenceObject{tuples, typeForBlob}, tuples.uint64ValuesSum(), &ref.Ref{}, cs}
+	return compoundBlob{metaSequenceObject{tuples, typeForBlob}, tuples.uint64ValuesSum(), &ref.Ref{}, vr}
 }
 
 func init() {
@@ -32,9 +31,9 @@ func init() {
 }
 
 func (cb compoundBlob) Reader() io.ReadSeeker {
-	cursor, v := newMetaSequenceCursor(cb, cb.cs)
+	cursor, v := newMetaSequenceCursor(cb, cb.vr)
 	reader := v.(blobLeaf).Reader()
-	return &compoundBlobReader{cursor, reader, 0, 0, cb.Len(), cb.cs}
+	return &compoundBlobReader{cursor, reader, 0, 0, cb.Len(), cb.vr}
 }
 
 func (cb compoundBlob) Equals(other Value) bool {
@@ -53,7 +52,7 @@ type compoundBlobReader struct {
 	cursor                          *sequenceCursor
 	currentReader                   io.ReadSeeker
 	chunkStart, chunkOffset, length uint64
-	cs                              chunks.ChunkSource
+	vr                              ValueReader
 }
 
 func (cbr *compoundBlobReader) Read(p []byte) (n int, err error) {
@@ -112,6 +111,6 @@ func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (cbr *compoundBlobReader) updateReader() {
-	cbr.currentReader = readMetaTupleValue(cbr.cursor.current(), cbr.cs).(blobLeaf).Reader()
+	cbr.currentReader = readMetaTupleValue(cbr.cursor.current(), cbr.vr).(blobLeaf).Reader()
 	cbr.currentReader.Seek(int64(cbr.chunkOffset), 0)
 }

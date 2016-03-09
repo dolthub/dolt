@@ -16,23 +16,23 @@ func TestWalkTestSuite(t *testing.T) {
 
 type WalkAllTestSuite struct {
 	suite.Suite
-	cs *chunks.TestStore
+	vs *types.ValueStore
 }
 
 func (suite *WalkAllTestSuite) SetupTest() {
-	suite.cs = chunks.NewTestStore()
+	suite.vs = types.NewTestValueStore()
 }
 
 func (suite *WalkAllTestSuite) walkWorker(r ref.Ref, expected int) {
 	actual := 0
-	AllP(types.NewRef(r), suite.cs, func(c types.Value) {
+	AllP(types.NewRef(r), suite.vs, func(c types.Value) {
 		actual++
 	}, 1)
 	suite.Equal(expected, actual)
 }
 
 func (suite *WalkAllTestSuite) storeAndRef(v types.Value) ref.Ref {
-	return types.WriteValue(v, suite.cs)
+	return suite.vs.WriteValue(v)
 }
 
 func (suite *WalkAllTestSuite) TestWalkPrimitives() {
@@ -51,19 +51,19 @@ func (suite *WalkAllTestSuite) TestWalkComposites() {
 
 func (suite *WalkAllTestSuite) NewList(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
 	v := types.NewList(vs...)
-	r := types.WriteValue(v, suite.cs)
+	r := suite.vs.WriteValue(v)
 	return types.NewRef(r)
 }
 
 func (suite *WalkAllTestSuite) NewMap(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
 	v := types.NewMap(vs...)
-	r := types.WriteValue(v, suite.cs)
+	r := suite.vs.WriteValue(v)
 	return types.NewRef(r)
 }
 
 func (suite *WalkAllTestSuite) NewSet(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
 	v := types.NewSet(vs...)
-	r := types.WriteValue(v, suite.cs)
+	r := suite.vs.WriteValue(v)
 	return types.NewRef(r)
 }
 
@@ -98,7 +98,7 @@ type WalkTestSuite struct {
 }
 
 func (suite *WalkTestSuite) SetupTest() {
-	suite.cs = chunks.NewTestStore()
+	suite.vs = types.NewTestValueStore()
 	suite.shouldSeeItem = types.NewString("zzz")
 	suite.shouldSee = types.NewList(suite.shouldSeeItem)
 	suite.deadValue = types.Uint64(0xDEADBEEF)
@@ -107,7 +107,7 @@ func (suite *WalkTestSuite) SetupTest() {
 
 func (suite *WalkTestSuite) TestStopWalkImmediately() {
 	actual := 0
-	SomeP(types.NewList(types.NewSet(), types.NewList()), suite.cs, func(v types.Value) bool {
+	SomeP(types.NewList(types.NewSet(), types.NewList()), suite.vs, func(v types.Value) bool {
 		actual++
 		return true
 	}, 1)
@@ -115,7 +115,7 @@ func (suite *WalkTestSuite) TestStopWalkImmediately() {
 }
 
 func (suite *WalkTestSuite) skipWorker(composite types.Value) (reached []types.Value) {
-	SomeP(composite, suite.cs, func(v types.Value) bool {
+	SomeP(composite, suite.vs, func(v types.Value) bool {
 		suite.False(v.Equals(suite.deadValue), "Should never have reached %+v", suite.deadValue)
 		reached = append(reached, v)
 		return v.Equals(suite.mustSkip)

@@ -143,7 +143,7 @@ func TestWriteCompoundBlob(t *testing.T) {
 		newMetaTuple(Uint64(20), nil, r1),
 		newMetaTuple(Uint64(40), nil, r2),
 		newMetaTuple(Uint64(60), nil, r3),
-	}, cs)
+	}, newValueStore(cs))
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
 
@@ -335,7 +335,7 @@ func TestWriteCompoundList(t *testing.T) {
 	cl := buildCompoundList([]metaTuple{
 		newMetaTuple(Uint64(1), leaf1, ref.Ref{}),
 		newMetaTuple(Uint64(4), leaf2, ref.Ref{}),
-	}, ltr, cs)
+	}, ltr, newValueStore(cs))
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(cl)

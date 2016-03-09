@@ -5,7 +5,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -79,13 +78,13 @@ func testSimpleListFromNomsList(list List) testSimpleList {
 func TestStreamingCompoundListCreation(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewTestStore()
+	vs := NewTestValueStore()
 	simpleList := getTestSimpleList()
 
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 	cl := NewTypedList(tr, simpleList...)
 	valueChan := make(chan Value)
-	listChan := NewStreamingTypedList(tr, cs, valueChan)
+	listChan := NewStreamingTypedList(tr, vs, valueChan)
 	for _, v := range simpleList {
 		valueChan <- v
 	}
@@ -101,7 +100,7 @@ func TestStreamingCompoundListCreation(t *testing.T) {
 func TestCompoundListGet(t *testing.T) {
 	assert := assert.New(t)
 
-	cs := chunks.NewMemoryStore()
+	vs := NewTestValueStore()
 	simpleList := getTestSimpleList()
 
 	testGet := func(cl compoundList) {
@@ -114,7 +113,7 @@ func TestCompoundListGet(t *testing.T) {
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 	cl := NewTypedList(tr, simpleList...).(compoundList)
 	testGet(cl)
-	testGet(ReadValue(WriteValue(cl, cs), cs).(compoundList))
+	testGet(vs.ReadValue(vs.WriteValue(cl)).(compoundList))
 }
 
 func TestCompoundListIter(t *testing.T) {
@@ -230,7 +229,7 @@ func TestCompoundListCursorAt(t *testing.T) {
 	assert := assert.New(t)
 
 	listLen := func(at uint64, next func(*sequenceCursor) bool) (size uint64) {
-		cs := chunks.NewMemoryStore()
+		cs := NewTestValueStore()
 		tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 		cl := NewTypedList(tr, getTestSimpleList()...).(compoundList)
 		cur, _, _ := cl.cursorAt(at)
@@ -628,10 +627,10 @@ func TestCompoundListFirstNNumbers(t *testing.T) {
 
 func TestCompoundListModifyAfterRead(t *testing.T) {
 	assert := assert.New(t)
-	ms := chunks.NewMemoryStore()
+	vs := NewTestValueStore()
 	list := getTestSimpleList().toCompoundList()
 	// Drop chunk values.
-	list = ReadValue(WriteValue(list, ms), ms).(compoundList)
+	list = vs.ReadValue(vs.WriteValue(list)).(compoundList)
 	// Modify/query. Once upon a time this would crash.
 	llen := list.Len()
 	z := list.Get(0)

@@ -3,7 +3,6 @@
 package common
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -509,10 +508,10 @@ func builderForRefOfIncident(r ref.Ref) types.Value {
 	return NewRefOfIncident(r)
 }
 
-func (r RefOfIncident) TargetValue(cs chunks.ChunkSource) Incident {
-	return types.ReadValue(r.target, cs).(Incident)
+func (r RefOfIncident) TargetValue(vr types.ValueReader) Incident {
+	return vr.ReadValue(r.target).(Incident)
 }
 
-func (r RefOfIncident) SetTargetValue(val Incident, cs chunks.ChunkSink) RefOfIncident {
-	return NewRefOfIncident(types.WriteValue(val, cs))
+func (r RefOfIncident) SetTargetValue(val Incident, vw types.ValueWriter) RefOfIncident {
+	return NewRefOfIncident(vw.WriteValue(val))
 }

@@ -21,6 +21,7 @@ func assertInputNotInStore(input string, ref ref.Ref, s ChunkStore, assert *asse
 type TestStore struct {
 	MemoryStore
 	Reads  int
+	Hases  int
 	Writes int
 }
 
@@ -38,6 +39,7 @@ func (s *TestStore) Get(ref ref.Ref) Chunk {
 }
 
 func (s *TestStore) Has(ref ref.Ref) bool {
+	s.Hases++
 	return s.MemoryStore.Has(ref)
 }
 

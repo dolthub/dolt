@@ -13,7 +13,6 @@ import (
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 )
 
 var (
@@ -121,7 +120,7 @@ func main() {
 		for e := range c {
 			key := e.key
 			ref := e.ref
-			keyRef := types.WriteValue(key, ds)
+			keyRef := ds.WriteValue(key)
 			setDef := mapOfSets[keyRef]
 			if setDef == nil {
 				setDef = SetOfRefOfRoundDef{}

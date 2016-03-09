@@ -3,7 +3,6 @@
 package main
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -658,10 +657,10 @@ func builderForRefOfKey(r ref.Ref) types.Value {
 	return NewRefOfKey(r)
 }
 
-func (r RefOfKey) TargetValue(cs chunks.ChunkSource) Key {
-	return types.ReadValue(r.target, cs).(Key)
+func (r RefOfKey) TargetValue(vr types.ValueReader) Key {
+	return vr.ReadValue(r.target).(Key)
 }
 
-func (r RefOfKey) SetTargetValue(val Key, cs chunks.ChunkSink) RefOfKey {
-	return NewRefOfKey(types.WriteValue(val, cs))
+func (r RefOfKey) SetTargetValue(val Key, vw types.ValueWriter) RefOfKey {
+	return NewRefOfKey(vw.WriteValue(val))
 }

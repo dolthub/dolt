@@ -6,7 +6,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -197,7 +196,7 @@ func newSetLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeSetLeafChunkFn(t Type, cs chunks.ChunkSource) makeChunkFn {
+func makeSetLeafChunkFn(t Type, vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		setData := make([]Value, len(items), len(items))
 
@@ -236,6 +235,6 @@ func (s setLeaf) sequenceCursorAtFirst() *sequenceCursor {
 	}
 }
 
-func (s setLeaf) chunkSource() chunks.ChunkSource {
+func (s setLeaf) valueReader() ValueReader {
 	return nil
 }

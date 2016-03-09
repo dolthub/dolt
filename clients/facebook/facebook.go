@@ -14,7 +14,6 @@ import (
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/util/http/retry"
 	"golang.org/x/oauth2"
 )
@@ -60,7 +59,7 @@ func main() {
 	var user = getUser()
 	printStats(user)
 
-	userRef := types.WriteValue(user, ds.Store())
+	userRef := ds.Store().WriteValue(user)
 	fmt.Printf("userRef: %s\n", userRef)
 	_, err := ds.Commit(NewRefOfUser(userRef))
 	d.Exp.NoError(err)
@@ -120,7 +119,7 @@ func getPhotos() SetOfRefOfRemotePhoto {
 				float32(entry.Images[0].Width),
 				float32(entry.Images[0].Height)))
 
-			photos = photos.Insert(NewRefOfRemotePhoto(types.WriteValue(photo, ds.Store())))
+			photos = photos.Insert(NewRefOfRemotePhoto(ds.Store().WriteValue(photo)))
 
 			numFetched++
 			// Be defensive and use Min(1.0) here - the user might have more than 1000 albums, or they

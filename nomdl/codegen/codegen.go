@@ -120,11 +120,11 @@ func generate(packageName, in, out, outDir string, written map[string]bool, pars
 
 type depsMap map[ref.Ref]types.Package
 
-func generateDepCode(packageName, outDir string, written map[string]bool, p types.Package, localPkgs refSet, cs chunks.ChunkStore) depsMap {
+func generateDepCode(packageName, outDir string, written map[string]bool, p types.Package, localPkgs refSet, vr types.ValueReader) depsMap {
 	deps := depsMap{}
 	for _, r := range p.Dependencies() {
-		p := types.ReadValue(r, cs).(types.Package)
-		pDeps := generateDepCode(packageName, outDir, written, p, localPkgs, cs)
+		p := vr.ReadValue(r).(types.Package)
+		pDeps := generateDepCode(packageName, outDir, written, p, localPkgs, vr)
 		tag := code.ToTag(p.Ref())
 		parsed := pkg.Parsed{Package: p, Name: packageName}
 		if !localPkgs[parsed.Ref()] {
@@ -168,9 +168,9 @@ func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) ty
 	for _, dep := range deps {
 		// Writing the deps into ds should be redundant at this point, but do it to be sure.
 		// TODO: consider moving all dataset work over into nomdl/pkg BUG 409
-		s = s.Insert(types.NewRefOfPackage(types.WriteValue(dep, ds.Store())))
+		s = s.Insert(types.NewRefOfPackage(ds.Store().WriteValue(dep)))
 	}
-	r := types.WriteValue(pkg.Package, ds.Store())
+	r := ds.Store().WriteValue(pkg.Package)
 	return s.Insert(types.NewRefOfPackage(r))
 }
 

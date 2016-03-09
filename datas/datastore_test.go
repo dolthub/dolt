@@ -4,29 +4,16 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDataStoreAccess(t *testing.T) {
+func TestTolerateUngettableRefs(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	ds := NewDataStore(cs)
-	input := "abc"
-
-	c := chunks.NewChunk([]byte(input))
-	c1 := ds.Get(c.Ref())
-	assert.True(c1.IsEmpty())
-
-	has := ds.Has(c.Ref())
-	assert.False(has)
-
-	ds.Put(c)
-	c1 = ds.Get(c.Ref())
-	assert.False(c1.IsEmpty())
-
-	has = ds.Has(c.Ref())
-	assert.True(has)
+	ds := NewDataStore(chunks.NewTestStore())
+	v := ds.ReadValue(ref.Ref{})
+	assert.Nil(v)
 }
 
 func TestDataStoreCommit(t *testing.T) {

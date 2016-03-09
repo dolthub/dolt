@@ -2,10 +2,7 @@
 
 package types
 
-import (
-	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
-)
+import "github.com/attic-labs/noms/ref"
 
 // RefOfBlob
 
@@ -56,10 +53,10 @@ func builderForRefOfBlob(r ref.Ref) Value {
 	return NewRefOfBlob(r)
 }
 
-func (r RefOfBlob) TargetValue(cs chunks.ChunkStore) Blob {
-	return ReadValue(r.target, cs).(Blob)
+func (r RefOfBlob) TargetValue(vr ValueReader) Blob {
+	return vr.ReadValue(r.target).(Blob)
 }
 
-func (r RefOfBlob) SetTargetValue(val Blob, cs chunks.ChunkSink) RefOfBlob {
-	return NewRefOfBlob(WriteValue(val, cs))
+func (r RefOfBlob) SetTargetValue(val Blob, vw ValueWriter) RefOfBlob {
+	return NewRefOfBlob(vw.WriteValue(val))
 }

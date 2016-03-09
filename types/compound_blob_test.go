@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
@@ -91,8 +90,8 @@ func TestCompoundBlobReader(t *testing.T) {
 	cb := getTestCompoundBlob("hello", "world")
 	test(cb)
 
-	ms := chunks.NewMemoryStore()
-	test(ReadValue(WriteValue(cb, ms), ms).(compoundBlob))
+	vs := NewTestValueStore()
+	test(vs.ReadValue(vs.WriteValue(cb)).(compoundBlob))
 }
 
 type testBlob struct {
@@ -180,7 +179,7 @@ func TestCompoundBlobLen(t *testing.T) {
 
 func TestCompoundBlobChunks(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	vs := NewTestValueStore()
 
 	cb := getTestCompoundBlob("hello", "world")
 	assert.Equal(2, len(cb.Chunks()))
@@ -190,7 +189,7 @@ func TestCompoundBlobChunks(t *testing.T) {
 	cb = newCompoundBlob([]metaTuple{
 		newMetaTuple(Uint64(uint64(5)), bl1, ref.Ref{}),
 		newMetaTuple(Uint64(uint64(10)), bl2, ref.Ref{}),
-	}, cs)
+	}, vs)
 	assert.Equal(2, len(cb.Chunks()))
 }
 
@@ -266,7 +265,7 @@ func printBlob(b Blob, indent int) {
 		fmt.Printf("%scompoundBlob, len: %d, chunks: %d\n", indentString, b.Len(), len(b.tuples))
 		indent++
 		for _, t := range b.tuples {
-			printBlob(ReadValue(t.ChildRef(), b.cs).(Blob), indent)
+			printBlob(b.vr.ReadValue(t.ChildRef()).(Blob), indent)
 		}
 	}
 }
