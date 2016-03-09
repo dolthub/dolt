@@ -39,8 +39,8 @@ func (rds *RemoteDataStore) Delete(datasetID string) (DataStore, error) {
 	return newRemoteDataStore(rds.ChunkStore), err
 }
 
-// Asks remote server to figure out which chunks need to be copied and return them.
-func (rds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, cs chunks.ChunkSink, concurrency int) {
+// CopyReachableChunksP copies to |sink| all chunks  in rds that are reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|.This implementation asks the remote server to return the desired chunks and writes them to |sink|.
+func (rds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, sink chunks.ChunkSink, concurrency int) {
 	// POST http://<host>/ref/sha1----?all=true&exclude=sha1----. Response will be chunk data if present, 404 if absent.
 	u := rds.host()
 	u.Path = path.Join(constants.RefPath, r.String())
@@ -69,7 +69,7 @@ func (rds *RemoteDataStore) CopyReachableChunksP(r, exclude ref.Ref, cs chunks.C
 		reader = gr
 	}
 
-	chunks.Deserialize(reader, cs, nil)
+	chunks.Deserialize(reader, sink, nil)
 }
 
 // In order for keep alive to work we must read to EOF on every response. We may want to add a timeout so that a server that left its connection open can't cause all of ports to be eaten up.

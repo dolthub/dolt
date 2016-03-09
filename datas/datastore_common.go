@@ -55,7 +55,7 @@ func (ds *dataStoreCommon) Datasets() MapOfStringToRefOfCommit {
 	return *ds.datasets
 }
 
-// Copies all chunks reachable from (and including) |r| in |source| that aren't present in |sink|
+// CopyMissingChunksP copies to |sink| all chunks in ds that are reachable from (and including) |r|, skipping chunks that |sink| already has
 func (ds *dataStoreCommon) CopyMissingChunksP(sourceRef ref.Ref, sink chunks.ChunkStore, concurrency int) {
 	tcs := &teeChunkSource{ds, sink}
 
