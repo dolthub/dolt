@@ -47,3 +47,7 @@ go build
 * NomDL reference (TODO)
 * Go SDK reference (TODO)
 * JavaScript SDK reference (TODO)
+
+## Recommended Chrome extensions
+
+* Hides generated (Go) files from GitHub pull requests: [GitHub PR gen hider](https://chrome.google.com/webstore/detail/mhemmopgidccpkibohejfhlbkggdcmhf).
