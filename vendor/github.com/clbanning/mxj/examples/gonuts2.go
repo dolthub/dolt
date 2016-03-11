@@ -5,7 +5,7 @@
 //		<GetClaimStatusCodesResult>... list of ClaimStatusCodeRecord ...</GetClaimStatusCodeResult>
 //		<GetClaimStatusCodesResult>... one instance of ClaimStatusCodeRecord ...</GetClaimStatusCodeResult>
 //		<GetClaimStatusCodesResult>... empty element ...</GetClaimStatusCodeResult>
-//		ValueForPath
+//		ValuesForPath
 
 package main
 
@@ -79,7 +79,7 @@ func fullPath(xmldata [][]byte) {
 
 		// get the value for the key path of interest
 		path := "Envelope.Body.GetClaimStatusCodesResponse.GetClaimStatusCodesResult.ClaimStatusCodeRecord"
-		values, err := m.ValueForPath(path)
+		values, err := m.ValuesForPath(path)
 		if err != nil {
 			fmt.Println("err:", err.Error())
 			return
@@ -112,7 +112,7 @@ func partPath1(msg []byte) {
 	m, _ := mxj.NewMapXml(msg)
 	fmt.Println("m:", m.StringIndent())
 	path := "Envelope.Body.*.*.ClaimStatusCodeRecord"
-	values, err := m.ValueForPath(path)
+	values, err := m.ValuesForPath(path)
 	if err != nil {
 		fmt.Println("err:", err.Error())
 		return
@@ -134,7 +134,7 @@ func partPath2(msg []byte) {
 	m, _ := mxj.NewMapXml(msg)
 	fmt.Println("m:", m.StringIndent())
 	path := "Envelope.Body.*.*.*"
-	values, err := m.ValueForPath(path)
+	values, err := m.ValuesForPath(path)
 	if err != nil {
 		fmt.Println("err:", err.Error())
 		return
@@ -156,7 +156,7 @@ func partPath3(msg []byte) {
 	m, _ := mxj.NewMapXml(msg)
 	fmt.Println("m:", m.StringIndent())
 	path := "*.*.*.*.*"
-	values, err := m.ValueForPath(path)
+	values, err := m.ValuesForPath(path)
 	if err != nil {
 		fmt.Println("err:", err.Error())
 		return
@@ -178,7 +178,7 @@ func partPath4(msg []byte) {
 	m, _ := mxj.NewMapXml(msg)
 	fmt.Println("m:", m.StringIndent())
 	path := "*.*.*.*.*.Description"
-	values, err := m.ValueForPath(path)
+	values, err := m.ValuesForPath(path)
 	if err != nil {
 		fmt.Println("err:", err.Error())
 		return
@@ -200,7 +200,7 @@ func partPath5(msg []byte) {
 	m, _ := mxj.NewMapXml(msg)
 	fmt.Println("m:", m.StringIndent())
 	path := "*.*.*.*.*.*"
-	values, err := m.ValueForPath(path)
+	values, err := m.ValuesForPath(path)
 	if err != nil {
 		fmt.Println("err:", err.Error())
 		return
@@ -222,7 +222,7 @@ func partPath6(msg []byte) {
 	m, _ := mxj.NewMapXml(msg)
 	fmt.Println("m:", m.StringIndent())
 	path := "*.*.*.*.*.*.*"
-	values, err := m.ValueForPath(path)
+	values, err := m.ValuesForPath(path)
 	if err != nil {
 		fmt.Println("err:", err.Error())
 		return
