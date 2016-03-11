@@ -55,7 +55,7 @@ func main() {
 		} else if merr == io.EOF {
 			break
 		}
-		fmt.Println("\nMessage to parse:", string(*raw))
+		fmt.Println("\nMessage to parse:", string(raw))
 		fmt.Println("Map value for XML message:", m.StringIndent())
 
 		// get the values for "netid" or "idnet" key using path == "data.*"

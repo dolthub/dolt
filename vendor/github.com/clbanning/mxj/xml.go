@@ -1,4 +1,4 @@
-// Copyright 2012-2014 Charles Banning. All rights reserved.
+// Copyright 2012-2016 Charles Banning. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file
 
@@ -14,14 +14,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// ------------------- NewMapXml & NewMapXmlReader ... from x2j2 -------------------------
+// ------------------- NewMapXml & NewMapXmlReader ... -------------------------
 
 // If XmlCharsetReader != nil, it will be used to decode the XML, if required.
 //   import (
@@ -47,23 +46,24 @@ var XmlCharsetReader func(charset string, input io.Reader) (io.Reader, error)
 //		if jerr != nil {
 //			// handle error
 //		}
+//
+//	NOTES:
+//	   1. The 'xmlVal' will be parsed looking for an xml.StartElement, so BOM and other
+//	      extraneous xml.CharData will be ignored unless io.EOF is reached first.
+//	   2. If CoerceKeysToLower() has been called, then all key values will be lower case.
 func NewMapXml(xmlVal []byte, cast ...bool) (Map, error) {
 	var r bool
 	if len(cast) == 1 {
 		r = cast[0]
 	}
-	n, err := xmlToTree(xmlVal)
-	if err != nil {
-		return nil, err
-	}
-
-	m := make(map[string]interface{}, 0)
-	m[n.key] = n.treeToMap(r)
-
-	return m, nil
+	return xmlToMap(xmlVal, r)
 }
 
 // Get next XML doc from an io.Reader as a Map value.  Returns Map value.
+//	NOTES:
+//	   1. The 'xmlReader' will be parsed looking for an xml.StartElement, so BOM and other
+//	      extraneous xml.CharData will be ignored unless io.EOF is reached first.
+//	   2. If CoerceKeysToLower() has been called, then all key values will be lower case.
 func NewMapXmlReader(xmlReader io.Reader, cast ...bool) (Map, error) {
 	var r bool
 	if len(cast) == 1 {
@@ -71,29 +71,26 @@ func NewMapXmlReader(xmlReader io.Reader, cast ...bool) (Map, error) {
 	}
 
 	// build the node tree
-	n, err := xmlReaderToTree(xmlReader)
-	if err != nil {
-		return nil, err
-	}
-
-	// create the Map value
-	m := make(map[string]interface{})
-	m[n.key] = n.treeToMap(r)
-
-	return m, nil
+	return xmlReaderToMap(xmlReader, r)
 }
 
 // XmlWriterBufSize - set the size of io.Writer for the TeeReader used by NewMapXmlReaderRaw()
 // and HandleXmlReaderRaw().  This reduces repeated memory allocations and copy() calls in most cases.
+//	NOTE: the 'xmlVal' will be parsed looking for an xml.StartElement, so BOM and other
+//	      extraneous xml.CharData will be ignored unless io.EOF is reached first.
 var XmlWriterBufSize int = 256
 
 // Get next XML doc from an io.Reader as a Map value.  Returns Map value and slice with the raw XML.
-//	NOTES: 1. Due to the implementation of xml.Decoder, the raw XML off the reader is buffered to []byte
-//	          using a ByteReader. If the io.Reader is an os.File, there may be significant performance impact.
-//	          See the examples - getmetrics1.go through getmetrics4.go - for comparative use cases on a large
-//	          data set. If the io.Reader is wrapping a []byte value in-memory, however, such as http.Request.Body
-//	          you CAN use it to efficiently unmarshal a XML doc and retrieve the raw XML in a single call.
-//	       2. The 'raw' return value may be larger than the XML text value.  To log it, cast it to a string.
+//	NOTES:
+//	   1. Due to the implementation of xml.Decoder, the raw XML off the reader is buffered to []byte
+//	      using a ByteReader. If the io.Reader is an os.File, there may be significant performance impact.
+//	      See the examples - getmetrics1.go through getmetrics4.go - for comparative use cases on a large
+//	      data set. If the io.Reader is wrapping a []byte value in-memory, however, such as http.Request.Body
+//	      you CAN use it to efficiently unmarshal a XML doc and retrieve the raw XML in a single call.
+//	   2. The 'raw' return value may be larger than the XML text value.
+//	   3. The 'xmlReader' will be parsed looking for an xml.StartElement, so BOM and other
+//	      extraneous xml.CharData will be ignored unless io.EOF is reached first.
+//	   4. If CoerceKeysToLower() has been called, then all key values will be lower case.
 func NewMapXmlReaderRaw(xmlReader io.Reader, cast ...bool) (Map, []byte, error) {
 	var r bool
 	if len(cast) == 1 {
@@ -105,7 +102,7 @@ func NewMapXmlReaderRaw(xmlReader io.Reader, cast ...bool) (Map, []byte, error) 
 	trdr := myTeeReader(xmlReader, wb) // see code at EOF
 
 	// build the node tree
-	n, err := xmlReaderToTree(trdr)
+	m, err := xmlReaderToMap(trdr, r)
 
 	// retrieve the raw XML that was decoded
 	b := make([]byte, wb.Len())
@@ -115,49 +112,28 @@ func NewMapXmlReaderRaw(xmlReader io.Reader, cast ...bool) (Map, []byte, error) 
 		return nil, b, err
 	}
 
-	// create the Map value
-	m := make(map[string]interface{})
-	m[n.key] = n.treeToMap(r)
-
 	return m, b, nil
 }
 
-// xmlReaderToTree() - parse a XML io.Reader to a tree of nodes
-func xmlReaderToTree(rdr io.Reader) (*node, error) {
+// xmlReaderToMap() - parse a XML io.Reader to a map[string]interface{} value
+func xmlReaderToMap(rdr io.Reader, r bool) (map[string]interface{}, error) {
 	// parse the Reader
 	p := xml.NewDecoder(rdr)
 	p.CharsetReader = XmlCharsetReader
-	return xmlToTreeParser("", nil, p)
+	return xmlToMapParser("", nil, p, r)
 }
 
-// for building the parse tree
-type node struct {
-	dup   bool   // is member of a list
-	attr  bool   // is an attribute
-	key   string // XML tag
-	val   string // element value
-	nodes []*node
-}
-
-// xmlToTree - convert a XML doc into a tree of nodes.
-func xmlToTree(doc []byte) (*node, error) {
-	// xml.Decoder doesn't properly handle whitespace in some doc
-	// see songTextString.xml test case ...
-	reg, _ := regexp.Compile("[ \t\n\r]*<")
-	doc = reg.ReplaceAll(doc, []byte("<"))
-
+// xmlToMap - convert a XML doc into map[string]interface{} value
+func xmlToMap(doc []byte, r bool) (map[string]interface{}, error) {
 	b := bytes.NewReader(doc)
 	p := xml.NewDecoder(b)
 	p.CharsetReader = XmlCharsetReader
-	n, berr := xmlToTreeParser("", nil, p)
-	if berr != nil {
-		return nil, berr
-	}
-
-	return n, nil
+	return xmlToMapParser("", nil, p, r)
 }
 
-// we allow people to drop hyphen when unmarshaling the XML doc.
+// ===================================== where the work happens =============================
+
+// Allow people to drop hyphen when unmarshaling the XML doc.
 var useHyphen bool = true
 
 // PrependAttrWithHyphen. Prepend attribute tags with a hyphen.
@@ -173,7 +149,10 @@ func PrependAttrWithHyphen(v bool) {
 var includeTagSeqNum bool
 
 // IncludeTagSeqNum - include a "_seq":N key:value pair with each inner tag, denoting
-// its position when parsed. E.g.,
+// its position when parsed. This is of limited usefulness, since list values cannot
+// be tagged with "_seq" without changing their depth in the Map.
+// So THIS SHOULD BE USED WITH CAUTION - see the test cases. Here's a sample of what
+// you get.
 /*
 		<Obj c="la" x="dee" h="da">
 			<IntObj id="3"/>
@@ -213,25 +192,58 @@ func IncludeTagSeqNum(b bool) {
 	includeTagSeqNum = b
 }
 
-// xmlToTreeParser - load a 'clean' XML doc into a tree of *node.
-func xmlToTreeParser(skey string, a []xml.Attr, p *xml.Decoder) (*node, error) {
-	n := new(node)
-	n.nodes = make([]*node, 0)
+// all keys will be "lower case"
+var lowerCase bool
+
+// Coerce all tag values to keys in lower case.  This is useful if you've got sources with variable
+// tag capitalization, and you want to use m.ValuesForKeys(), etc., with the key or path spec
+// in lower case.
+//	CoerceKeysToLower() will toggle the coercion flag true|false - on|off
+//	CoerceKeysToLower(true|false) will set the coercion flag on|off
+//
+//	NOTE: only recognized by NewMapXml, NewMapXmlReader, and NewMapXmlReaderRaw functions as well as
+//	      the associated HandleXmlReader and HandleXmlReaderRaw.
+func CoerceKeysToLower(b ...bool) {
+	if len(b) == 1 {
+		lowerCase = b[0]
+		return
+	}
+	if !lowerCase {
+		lowerCase = true
+	} else {
+		lowerCase = false
+	}
+}
+
+// xmlToMapParser (2015.11.12) - load a 'clean' XML doc into a map[string]interface{} directly.
+// A refactoring of xmlToTreeParser(), markDuplicate() and treeToMap() - here, all-in-one.
+// We've removed the intermediate *node tree with the allocation and subsequent rescanning.
+func xmlToMapParser(skey string, a []xml.Attr, p *xml.Decoder, r bool) (map[string]interface{}, error) {
+	if lowerCase {
+		skey = strings.ToLower(skey)
+	}
+
+	// NOTE: all attributes and sub-elements parsed into 'na', 'na' is returned as value for 'skey'
+	// Unless 'skey' is a simple element w/o attributes, in which case the xml.CharData value is the value.
+	var n, na map[string]interface{}
 	var seq int // for includeTagSeqNum
 
+	// Allocate maps and load attributes, if any.
 	if skey != "" {
-		n.key = skey
+		n = make(map[string]interface{})  // old n
+		na = make(map[string]interface{}) // old n.nodes
 		if len(a) > 0 {
 			for _, v := range a {
-				na := new(node)
-				na.attr = true
+				var key string
 				if useHyphen {
-					na.key = `-` + v.Name.Local
+					key = `-` + v.Name.Local
 				} else {
-					na.key = v.Name.Local
+					key = v.Name.Local
 				}
-				na.val = v.Value
-				n.nodes = append(n.nodes, na)
+				if lowerCase {
+					key = strings.ToLower(key)
+				}
+				na[key] = cast(v.Value, r)
 			}
 		}
 	}
@@ -246,132 +258,128 @@ func xmlToTreeParser(skey string, a []xml.Attr, p *xml.Decoder) (*node, error) {
 		switch t.(type) {
 		case xml.StartElement:
 			tt := t.(xml.StartElement)
-			// handle root
-			if n.key == "" {
-				n.key = tt.Name.Local
-				if len(tt.Attr) > 0 {
-					for _, v := range tt.Attr {
-						na := new(node)
-						na.attr = true
-						if useHyphen {
-							na.key = `-` + v.Name.Local
-						} else {
-							na.key = v.Name.Local
-						}
-						na.val = v.Value
-						n.nodes = append(n.nodes, na)
-					}
-				}
-			} else {
-				nn, nnerr := xmlToTreeParser(tt.Name.Local, tt.Attr, p)
-				if nnerr != nil {
-					return nil, nnerr
-				}
-				n.nodes = append(n.nodes, nn)
-				if includeTagSeqNum { // 2014.11.09
-					sn := &node{false, false, "_seq", strconv.Itoa(seq), nil}
-					nn.nodes = append(nn.nodes, sn)
+
+			// First call to xmlToMapParser() doesn't pass xml.StartElement - the map key.
+			// So when the loop is first entered, the first token is the root tag along
+			// with any attributes, which we process here.
+			//
+			// Subsequent calls to xmlToMapParser() will pass in tag+attributes for
+			// processing before getting the next token which is the element value,
+			// which is done above.
+			if skey == "" {
+				return xmlToMapParser(tt.Name.Local, tt.Attr, p, r)
+			}
+
+			// If not initializing the map, parse the element.
+			// len(nn) == 1, necessarily - it is just an 'n'.
+			nn, err := xmlToMapParser(tt.Name.Local, tt.Attr, p, r)
+			if err != nil {
+				return nil, err
+			}
+
+			// The nn map[string]interface{} value is a na[nn_key] value.
+			// We need to see if nn_key already exists - means we're parsing a list.
+			// This may require converting na[nn_key] value into []interface{} type.
+			// First, extract the key:val for the map - it's a singleton.
+			// Note: if CoerceKeysToLower() called, then key will be lower case.
+			var key string
+			var val interface{}
+			for key, val = range nn {
+				break
+			}
+
+			// IncludeTagSeqNum requests that the element be augmented with a "_seq" sub-element.
+			// In theory, we don't need this if len(na) == 1. But, we don't know what might
+			// come next - we're only parsing forward.  So if you ask for 'includeTagSeqNum' you
+			// get it on every element. (Personally, I never liked this, but I added it on request
+			// and did get a $50 Amazon gift card in return - now we support it for backwards compatibility!)
+			if includeTagSeqNum {
+				switch val.(type) {
+				case []interface{}:
+					// noop - There's no clean way to handle this w/o changing message structure.
+				case map[string]interface{}:
+					val.(map[string]interface{})["_seq"] = seq // will overwrite an "_seq" XML tag
 					seq++
+				case interface{}: // a non-nil simple element: string, float64, bool
+					v := map[string]interface{}{"#text": val}
+					v["_seq"] = seq
+					seq++
+					val = v
 				}
+			}
+
+			// 'na' holding sub-elements of n.
+			// See if 'key' already exists.
+			// If 'key' exists, then this is a list, if not just add key:val to na.
+			if v, ok := na[key]; ok {
+				var a []interface{}
+				switch v.(type) {
+				case []interface{}:
+					a = v.([]interface{})
+				default: // anything else - note: v.(type) != nil
+					a = []interface{}{v}
+				}
+				a = append(a, val)
+				na[key] = a
+			} else {
+				na[key] = val // save it as a singleton
 			}
 		case xml.EndElement:
-			// scan n.nodes for duplicate n.key values
-			n.markDuplicateKeys()
+			// len(n) > 0 if this is a simple element w/o xml.Attrs - see xml.CharData case.
+			if len(n) == 0 {
+				// If len(na)==0 we have an empty element == "";
+				// it has no xml.Attr nor xml.CharData.
+				// Note: in original node-tree parser, val defaulted to "";
+				// so we always had the default if len(node.nodes) == 0.
+				if len(na) > 0 {
+					n[skey] = na
+				} else {
+					n[skey] = "" // empty element
+				}
+			}
 			return n, nil
 		case xml.CharData:
-			tt := string(t.(xml.CharData))
 			// clean up possible noise
-			tt = strings.Trim(tt, "\t\r\b\n ")
-			if len(n.nodes) > 0 && len(tt) > 0 {
-				// if len(n.nodes) > 0 {
-				nn := new(node)
-				nn.key = "#text"
-				nn.val = tt
-				n.nodes = append(n.nodes, nn)
-			} else {
-				n.val = tt
-			}
-			if includeTagSeqNum { // 2014.11.09
-				if len(n.nodes) == 0 { // treat like a simple element with attributes
-					nn := new(node)
-					nn.key = "#text"
-					nn.val = tt
-					n.nodes = append(n.nodes, nn)
+			tt := strings.Trim(string(t.(xml.CharData)), "\t\r\b\n ")
+			if len(tt) > 0 {
+				if len(na) > 0 {
+					na["#text"] = cast(tt, r)
+				} else if skey != "" {
+					n[skey] = cast(tt, r)
+				} else {
+					// per Adrian (http://www.adrianlungu.com/) catch stray text
+					// in decoder stream -
+					// https://github.com/clbanning/mxj/pull/14#issuecomment-182816374
+					// NOTE: CharSetReader must be set to non-UTF-8 CharSet or you'll get
+					// a p.Token() decoding error when the BOM is UTF-16 or UTF-32.
+					continue
 				}
-				sn := &node{false, false, "_seq", strconv.Itoa(seq), nil}
-				n.nodes = append(n.nodes, sn)
-				seq++
 			}
 		default:
 			// noop
 		}
 	}
-	// Logically we can't get here, but provide an error message anyway.
-	return nil, fmt.Errorf("Unknown parse error in xmlToTree() for: %s", n.key)
 }
 
-// (*node)markDuplicateKeys - set node.dup flag for loading map[string]interface{}.
-func (n *node) markDuplicateKeys() {
-	l := len(n.nodes)
-	for i := 0; i < l; i++ {
-		if n.nodes[i].dup {
-			continue
-		}
-		for j := i + 1; j < l; j++ {
-			if n.nodes[i].key == n.nodes[j].key {
-				n.nodes[i].dup = true
-				n.nodes[j].dup = true
-			}
-		}
-	}
-}
+var castNanInf bool
 
-// (*node)treeToMap - convert a tree of nodes into a map[string]interface{}.
-//	(Parses to map that is structurally the same as from json.Unmarshal().)
-// Note: root is not instantiated; call with: "m[n.key] = n.treeToMap(cast)".
-func (n *node) treeToMap(r bool) interface{} {
-	if len(n.nodes) == 0 {
-		return cast(n.val, r)
-	}
-
-	m := make(map[string]interface{}, 0)
-	for _, v := range n.nodes {
-		// 2014.11.9 - may have to back out
-		if includeTagSeqNum {
-			if len(v.nodes) == 1 {
-				m[v.key] = cast(v.val, r)
-				continue
-			}
-		}
-
-		// just a value
-		if !v.dup && len(v.nodes) == 0 {
-			m[v.key] = cast(v.val, r)
-			continue
-		}
-		// a list of values
-		if v.dup {
-			var a []interface{}
-			if vv, ok := m[v.key]; ok {
-				a = vv.([]interface{})
-			} else {
-				a = make([]interface{}, 0)
-			}
-			a = append(a, v.treeToMap(r))
-			m[v.key] = interface{}(a)
-			continue
-		}
-
-		// it's a unique key
-		m[v.key] = v.treeToMap(r)
-	}
-
-	return interface{}(m)
+// Cast "Nan", "Inf", "-Inf" XML values to 'float64'.
+// By default, these values will be decoded as 'string'.
+func CastNanInf(b bool) {
+	castNanInf = b
 }
 
 // cast - try to cast string values to bool or float64
 func cast(s string, r bool) interface{} {
 	if r {
+		// handle nan and inf
+		if !castNanInf {
+			switch strings.ToLower(s) {
+			case "nan", "inf", "-inf":
+				return interface{}(s)
+			}
+		}
+
 		// handle numeric strings ahead of boolean
 		if f, err := strconv.ParseFloat(s, 64); err == nil {
 			return interface{}(f)
@@ -518,7 +526,7 @@ func (mv Map) XmlIndentWriterRaw(xmlWriter io.Writer, prefix, indent string, roo
 
 // Default poll delay to keep Handler from spinning on an open stream
 // like sitting on os.Stdin waiting for imput.
-var xhandlerPollInterval = time.Duration(1e6)
+var xhandlerPollInterval = time.Millisecond
 
 // Bulk process XML using handlers that process a Map value.
 //	'rdr' is an io.Reader for XML (stream)
@@ -549,7 +557,7 @@ func HandleXmlReader(xmlReader io.Reader, mapHandler func(Map) bool, errHandler 
 				break
 			}
 		} else if merr != io.EOF {
-			<-time.After(xhandlerPollInterval)
+			time.Sleep(xhandlerPollInterval)
 		}
 
 		if merr == io.EOF {
@@ -589,7 +597,7 @@ func HandleXmlReaderRaw(xmlReader io.Reader, mapHandler func(Map, []byte) bool, 
 				break
 			}
 		} else if merr != io.EOF {
-			<-time.After(xhandlerPollInterval)
+			time.Sleep(xhandlerPollInterval)
 		}
 
 		if merr == io.EOF {
@@ -741,12 +749,11 @@ func mapToXmlIndent(doIndent bool, s *string, key string, value interface{}, pp 
 			break
 		}
 		// simple element? Note: '#text" is an invalid XML tag.
-		if v, ok := vv["#text"]; ok {
-			if cntAttr+1 < lenvv {
-				return errors.New("#text key occurs with other non-attribute keys")
-			}
+		if v, ok := vv["#text"]; ok && cntAttr+1 == lenvv {
 			*s += ">" + fmt.Sprintf("%v", v)
 			endTag = true
+			elen = 1
+			isSimple = true
 			break
 		}
 		// close tag with possible attributes
@@ -771,9 +778,6 @@ func mapToXmlIndent(doIndent bool, s *string, key string, value interface{}, pp 
 		sort.Sort(elemList(elemlist))
 		var i int
 		for _, v := range elemlist {
-			// if k[:1] == "-" {
-			// 	continue
-			// }
 			switch v[1].(type) {
 			case []interface{}:
 			default:
@@ -846,19 +850,15 @@ func mapToXmlIndent(doIndent bool, s *string, key string, value interface{}, pp 
 		isSimple = true
 		endTag = true
 	}
-
 	if endTag {
 		if doIndent {
 			if !isSimple {
-				//				if p.mapDepth == 0 {
-				//					p.Outdent()
-				//				}
 				*s += p.padding
 			}
 		}
 		switch value.(type) {
 		case map[string]interface{}, []byte, string, float64, bool, int, int32, int64, float32:
-			if elen > 0  || useGoXmlEmptyElemSyntax {
+			if elen > 0 || useGoXmlEmptyElemSyntax {
 				if elen == 0 {
 					*s += ">"
 				}

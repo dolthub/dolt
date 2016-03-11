@@ -1,3 +1,5 @@
+// +test OMIT
+
 // note - "// Output:" is  a key for "go test" to match function ouput with the lines that follow.
 //        It is also use by "godoc" to build the Output block of the function / method documentation.
 //        To skip processing Example* functions, use: go test -run "Test*"

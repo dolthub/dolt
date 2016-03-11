@@ -4,8 +4,7 @@ package main
 
 import (
 	"fmt"
-	// "github.com/clbanning/mxj"
-	"tamgroup/mxj"
+	"github.com/clbanning/mxj"
 )
 
 var data = []byte(`<root>

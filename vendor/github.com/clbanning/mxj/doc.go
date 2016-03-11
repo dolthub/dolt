@@ -1,5 +1,5 @@
 // mxj - A collection of map[string]interface{} and associated XML and JSON utilities.
-// Copyright 2012-2014 Charles Banning. All rights reserved.
+// Copyright 2012-2015 Charles Banning. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file
 
@@ -11,6 +11,7 @@ mxj supplants the legacy x2j and j2x packages. If you want the old syntax, use m
 Note: this library was designed for processing ad hoc anonymous messages.  Bulk processing large data sets may be much more efficiently performed using the encoding/xml or encoding/json packages from Go's standard library directly.
 
 Note:
+	2015-12-02: NewMapXmlSeq() with mv.XmlSeq() & co. will try to preserve structure of XML doc when re-encoding.
 	2014-08-02: AnyXml() and AnyXmlIndent() will try to marshal arbitrary values to XML.
 
 SUMMARY
@@ -63,22 +64,47 @@ SUMMARY
 
    A new Map with whatever keys are desired can be created from the current Map and then encoded in XML
    or JSON. (Note: keys can use dot-notation. 'oldKey' can also use wildcards and indexed arrays.)
-      newMap := m.NewMap("oldKey_1:newKey_1", "oldKey_2:newKey_2", ..., "oldKey_N:newKey_N")
-      newXml := newMap.Xml()   // for example
-      newJson := newMap.Json() // ditto
+      newMap, err := m.NewMap("oldKey_1:newKey_1", "oldKey_2:newKey_2", ..., "oldKey_N:newKey_N")
+      newXml, err := newMap.Xml()   // for example
+      newJson, err := newMap.Json() // ditto
 
 XML PARSING CONVENTIONS
 
-   - Attributes are parsed to map[string]interface{} values by prefixing a hyphen, '-',
-     to the attribute label. (PrependAttrWithHyphen(false) will override this.)
+   Using NewXml()
+
+   - Attributes are parsed to `map[string]interface{}` values by prefixing a hyphen, `-`,
+     to the attribute label. (Unless overridden by `PrependAttrWithHyphen(false)`.)
    - If the element is a simple element and has attributes, the element value
-     is given the key '#text' for its map[string]interface{} representation.
+     is given the key `#text` for its `map[string]interface{}` representation.  (See
+     the 'atomFeedString.xml' test data, below.)
+   - XML comments, directives, and process instructions are ignored.
+   - If CoerceKeysToLower() has been called, then the resultant keys will be lower case.
+
+   Using NewXmlSeq()
+
+   - Attributes are parsed to `map["#attr"]map[<attr_label>]map[string]interface{}`values
+     where the `<attr_label>` value has "#text" and "#seq" keys - the "#text" key holds the 
+     value for `<attr_label>`.
+   - All elements, except for the root, have a "#seq" key.
+   - Comments, directives, and process instructions are unmarshalled into the Map using the
+     keys "#comment", "#directive", and "#procinst", respectively. (See documentation for more
+     specifics.)
+
+   Both
+
+   - By default, "Nan", "Inf", and "-Inf" values are not cast to float64.  If you want them
+     to be cast, set a flag to cast them  using CastNanInf(true).
 
 XML ENCODING CONVENTIONS
-
+   
    - 'nil' Map values, which may represent 'null' JSON values, are encoded as "<tag/>".
-      NOTE: the operation is not symmetric as "<tag/>" elements are decoded as 'tag:""' Map values,
-            which, then, encode in JSON as '"tag":""' values..
+     NOTE: the operation is not symmetric as "<tag/>" elements are decoded as 'tag:""' Map values,
+           which, then, encode in JSON as '"tag":""' values..
+   - ALSO: there is no guarantee that the encoded XML doc will be the same as the decoded one.  (Go
+           randomizes the walk through map[string]interface{} values.) If you plan to re-encode the
+           Map value to XML and want the same sequencing of elements look at NewMapXmlSeq() and
+           m.XmlSeq() - these try to preserve the element sequencing but with added complexity when
+           working with the Map representation.
 
 */
 package mxj

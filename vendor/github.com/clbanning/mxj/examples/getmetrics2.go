@@ -42,6 +42,7 @@ import (
 	"github.com/clbanning/mxj"
 	"log"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -120,14 +121,14 @@ func main() {
 
 					// no guarantee that range on map will follow any sequence
 					lv := len(valueEntry)
-					type ev [2]string
-					list := make([]ev, lv)
+					list := make([][2]string, lv)
 					var i int
 					for k, v := range valueEntry {
 						list[i][0] = k
 						list[i][1] = v.(string)
 						i++
 					}
+					sort.Sort(mylist(list))
 
 					// extract keys as column header on first pass
 					if !gotKeys {
@@ -170,4 +171,21 @@ func main() {
 		}
 		mf.Close()
 	}
+}
+
+type mylist [][2]string
+
+func (m mylist) Len() int {
+	return len(m)
+}
+
+func (m mylist) Less(i, j int) bool {
+	if m[i][0] > m[j][0] {
+		return false
+	}
+	return true
+}
+
+func (m mylist) Swap(i, j int) {
+	m[i], m[j] = m[j], m[i]
 }
