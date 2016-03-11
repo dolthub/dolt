@@ -13,6 +13,7 @@ import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {OrderedSequence} from './ordered_sequence.js';
+import {readValue} from './read_value.js';
 import {writeValue} from './encode.js';
 
 const testSetSize = 5000;
@@ -66,6 +67,25 @@ suite('BuildSet', () => {
     assert.strictEqual(s.ref.toString(), setOfNRef);
   });
 
+  test('write, read, modify, read', async () => {
+    const ms = new MemoryStore();
+
+    const nums = firstNNumbers(testSetSize);
+    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
+    const s = await newSet(tr, nums);
+    const r = writeValue(s, tr, ms);
+    const s2 = await readValue(r, ms);
+    const outNums = [];
+    await s2.forEach(k => outNums.push(k));
+    assert.deepEqual(nums, outNums);
+
+    invariant(s2 instanceof NomsSet);
+    const s3 = await s2.remove(testSetSize - 1);
+    const outNums2 = [];
+    await s3.forEach(k => outNums2.push(k));
+    nums.splice(testSetSize - 1, 1);
+    assert.deepEqual(nums, outNums2);
+  });
 });
 
 suite('SetLeaf', () => {

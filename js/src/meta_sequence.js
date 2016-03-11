@@ -174,9 +174,9 @@ export function indexTypeForMetaSequence(t: Type): Type {
   throw new Error('Not reached');
 }
 
-export function newOrderedMetaSequenceChunkFn(t: Type): makeChunkFn {
+export function newOrderedMetaSequenceChunkFn(t: Type, cs: ?ChunkStore = null): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
-    const meta = new OrderedMetaSequence(null, t, tuples);
+    const meta = new OrderedMetaSequence(cs, t, tuples);
     const lastValue = tuples[tuples.length - 1].value;
     return [new MetaTuple(meta, lastValue), meta];
   };
@@ -192,10 +192,10 @@ export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
   );
 }
 
-export function newIndexedMetaSequenceChunkFn(t: Type): makeChunkFn {
+export function newIndexedMetaSequenceChunkFn(t: Type, cs: ?ChunkStore = null): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
     const sum = tuples.reduce((l, mt) => l + mt.value, 0);
-    const meta = new IndexedMetaSequence(null, t, tuples);
+    const meta = new IndexedMetaSequence(cs, t, tuples);
     return [new MetaTuple(meta, sum), meta];
   };
 }

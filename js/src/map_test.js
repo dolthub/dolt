@@ -6,11 +6,13 @@ import {suite} from 'mocha';
 import MemoryStore from './memory_store.js';
 import test from './async_test.js';
 import type {ChunkStore} from './chunk_store.js';
+import {invariant} from './assert.js';
 import {Kind} from './noms_kind.js';
 import {flatten, flattenParallel} from './test_util.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MapLeafSequence, newMap, NomsMap} from './map.js';
 import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
+import {readValue} from './read_value.js';
 import {writeValue} from './encode.js';
 
 
@@ -87,6 +89,32 @@ suite('BuildMap', () => {
     }
 
     assert.strictEqual(m.ref.toString(), mapOfNRef);
+  });
+
+  test('write, read, modify, read', async () => {
+    const ms = new MemoryStore();
+
+    const kvs = [];
+    for (let i = 0; i < testMapSize; i++) {
+      kvs.push(i, i + 1);
+    }
+
+    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
+                                makePrimitiveType(Kind.Int64));
+    const m = await newMap(tr, kvs);
+
+    const r = writeValue(m, tr, ms);
+    const m2 = await readValue(r, ms);
+    const outKvs = [];
+    await m2.forEach((v, k) => outKvs.push(k, v));
+    assert.deepEqual(kvs, outKvs);
+
+    invariant(m2 instanceof NomsMap);
+    const m3 = await m2.remove(testMapSize - 1);
+    const outKvs2 = [];
+    await m3.forEach((v, k) => outKvs2.push(k, v));
+    kvs.splice(testMapSize * 2 - 2, 2);
+    assert.deepEqual(kvs, outKvs2);
   });
 });
 
