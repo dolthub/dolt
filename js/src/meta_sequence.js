@@ -17,23 +17,27 @@ import {Sequence} from './sequence.js';
 export type MetaSequence = Sequence<MetaTuple>;
 
 export class MetaTuple<K> {
-  _sequence: Sequence | Ref;
+  _sequenceOrRef: Sequence | Ref;
   value: K;
 
   constructor(sequence: Sequence | Ref, value: K) {
-    this._sequence = sequence;
+    this._sequenceOrRef = sequence;
     this.value = value;
   }
 
   get ref(): Ref {
-    return this._sequence instanceof Ref ? this._sequence : this._sequence.ref;
+    return this._sequenceOrRef instanceof Ref ? this._sequenceOrRef : this._sequenceOrRef.ref;
+  }
+
+  get sequence(): ?Sequence {
+    return this._sequenceOrRef instanceof Sequence ? this._sequenceOrRef : null;
   }
 
   getSequence(cs: ?ChunkStore): Promise<Sequence> {
-    if (this._sequence instanceof Sequence) {
-      return Promise.resolve(this._sequence);
+    if (this._sequenceOrRef instanceof Sequence) {
+      return Promise.resolve(this._sequenceOrRef);
     } else {
-      const ref = this._sequence;
+      const ref = this._sequenceOrRef;
       invariant(cs && ref instanceof Ref);
       return readValue(ref, cs).then((c: Collection) => c.sequence);
     }

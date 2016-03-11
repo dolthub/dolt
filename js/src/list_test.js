@@ -12,6 +12,7 @@ import {Kind} from './noms_kind.js';
 import {ListLeafSequence, newList, NomsList} from './list.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {writeValue} from './encode.js';
+import {readValue} from './read_value.js';
 
 const testListSize = 5000;
 const listOfNRef = 'sha1-11e947e8aacfda8e9052bb57e661da442b26c625';
@@ -119,6 +120,18 @@ suite('BuildList', () => {
     }
 
     assert.strictEqual(s.ref.toString(), listOfNRef);
+  });
+
+  test('write', async () => {
+    const ms = new MemoryStore();
+
+    const nums = firstNNumbers(testListSize);
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
+    const s = await newList(tr, nums);
+    const r = writeValue(s, tr, ms);
+    const s2 = await readValue(r, ms);
+    const outNums = await s2.toJS();
+    assert.deepEqual(nums, outNums);
   });
 });
 

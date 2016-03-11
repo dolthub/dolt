@@ -7,7 +7,7 @@ import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {encode as encodeBase64} from './base64.js';
 import {boolType, EnumDesc, makePrimitiveType, stringType, StructDesc, Type} from './type.js';
-import {indexTypeForMetaSequence} from './meta_sequence.js';
+import {indexTypeForMetaSequence, MetaTuple} from './meta_sequence.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
@@ -101,6 +101,11 @@ class JsonArrayWriter {
     const indexType = indexTypeForMetaSequence(t);
     for (let i = 0; i < v.items.length; i++) {
       const tuple = v.items[i];
+      invariant(tuple instanceof MetaTuple);
+      if (tuple.sequence && this._cs) {
+        const child = tuple.sequence;
+        writeValue(child, t, this._cs);
+      }
       w2.writeRef(tuple.ref);
       w2.writeValue(tuple.value, indexType, pkg);
     }
