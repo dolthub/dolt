@@ -55,7 +55,7 @@ func (ms *MemoryStore) Len() int {
 	return len(ms.data)
 }
 
-func (l *MemoryStore) Close() error {
+func (ms *MemoryStore) Close() error {
 	return nil
 }
 
