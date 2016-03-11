@@ -17,23 +17,27 @@ import {Sequence} from './sequence.js';
 export type MetaSequence = Sequence<MetaTuple>;
 
 export class MetaTuple<K> {
-  _sequence: Sequence | Ref;
+  _sequenceOrRef: Sequence | Ref;
   value: K;
 
   constructor(sequence: Sequence | Ref, value: K) {
-    this._sequence = sequence;
+    this._sequenceOrRef = sequence;
     this.value = value;
   }
 
   get ref(): Ref {
-    return this._sequence instanceof Ref ? this._sequence : this._sequence.ref;
+    return this._sequenceOrRef instanceof Ref ? this._sequenceOrRef : this._sequenceOrRef.ref;
+  }
+
+  get sequence(): ?Sequence {
+    return this._sequenceOrRef instanceof Sequence ? this._sequenceOrRef : null;
   }
 
   getSequence(cs: ?ChunkStore): Promise<Sequence> {
-    if (this._sequence instanceof Sequence) {
-      return Promise.resolve(this._sequence);
+    if (this._sequenceOrRef instanceof Sequence) {
+      return Promise.resolve(this._sequenceOrRef);
     } else {
-      const ref = this._sequence;
+      const ref = this._sequenceOrRef;
       invariant(cs && ref instanceof Ref);
       return readValue(ref, cs).then((c: Collection) => c.sequence);
     }
@@ -170,9 +174,9 @@ export function indexTypeForMetaSequence(t: Type): Type {
   throw new Error('Not reached');
 }
 
-export function newOrderedMetaSequenceChunkFn(t: Type): makeChunkFn {
+export function newOrderedMetaSequenceChunkFn(t: Type, cs: ?ChunkStore = null): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
-    const meta = new OrderedMetaSequence(null, t, tuples);
+    const meta = new OrderedMetaSequence(cs, t, tuples);
     const lastValue = tuples[tuples.length - 1].value;
     return [new MetaTuple(meta, lastValue), meta];
   };
@@ -188,10 +192,10 @@ export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
   );
 }
 
-export function newIndexedMetaSequenceChunkFn(t: Type): makeChunkFn {
+export function newIndexedMetaSequenceChunkFn(t: Type, cs: ?ChunkStore = null): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
     const sum = tuples.reduce((l, mt) => l + mt.value, 0);
-    const meta = new IndexedMetaSequence(null, t, tuples);
+    const meta = new IndexedMetaSequence(cs, t, tuples);
     return [new MetaTuple(meta, sum), meta];
   };
 }

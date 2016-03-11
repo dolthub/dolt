@@ -8,9 +8,11 @@ import test from './async_test.js';
 import {calcSplices} from './edit_distance.js';
 import {flatten, flattenParallel} from './test_util.js';
 import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
+import {invariant} from './assert.js';
 import {Kind} from './noms_kind.js';
 import {ListLeafSequence, newList, NomsList} from './list.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
+import {readValue} from './read_value.js';
 import {writeValue} from './encode.js';
 
 const testListSize = 5000;
@@ -119,6 +121,24 @@ suite('BuildList', () => {
     }
 
     assert.strictEqual(s.ref.toString(), listOfNRef);
+  });
+
+  test('write, read, modify, read', async () => {
+    const ms = new MemoryStore();
+
+    const nums = firstNNumbers(testListSize);
+    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
+    const s = await newList(tr, nums);
+    const r = writeValue(s, tr, ms);
+    const s2 = await readValue(r, ms);
+    const outNums = await s2.toJS();
+    assert.deepEqual(nums, outNums);
+
+    invariant(s2 instanceof NomsList);
+    const s3 = await s2.splice(testListSize - 1, [], 1);
+    const outNums2 = await s3.toJS();
+    nums.splice(testListSize - 1, 1);
+    assert.deepEqual(nums, outNums2);
   });
 });
 
