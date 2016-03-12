@@ -42,8 +42,7 @@ type AlbumJSON struct {
 
 type EntryJSON struct {
 	Content struct {
-		Src  string
-		Type string
+		Src string
 	}
 	Height struct {
 		V string `json:"$t"`
