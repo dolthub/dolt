@@ -1,86 +1,79 @@
 package csv
 
 import (
-    "testing"
-    "bytes"
-    "encoding/csv"
-    // "fmt"
-    "strings"
-    "bufio"
+	"bytes"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-
 func TestCR(t *testing.T) {
-    testFile := bytes.NewBufferString("a,b,c\r1,2,3\r").Bytes()
+	testFile := []byte("a,b,c\r1,2,3\r")
+	delimiter, err := StringToRune(",")
 
-    r := csv.NewReader(SafeCSVReader(bufio.NewReader(bytes.NewReader(testFile))))
-    lines, err := r.ReadAll()
+	r := NewCSVReader(bytes.NewReader(testFile), delimiter)
+	lines, err := r.ReadAll()
 
-    if err != nil {
-        t.Errorf("An error occurred while reading the data: %v", err)
-    }
-    if len(lines) != 2 {
-        t.Errorf("Wrong number of lines. Expected 2, got %d", len(lines))
-    }
+	assert.NoError(t, err, "An error occurred while reading the data: %v", err)
+	if len(lines) != 2 {
+		t.Errorf("Wrong number of lines. Expected 2, got %d", len(lines))
+	}
 }
 
 func TestLF(t *testing.T) {
-    testFile := bytes.NewBufferString("a,b,c\n1,2,3\n").Bytes()
+	testFile := []byte("a,b,c\n1,2,3\n")
+	delimiter, err := StringToRune(",")
 
-    r := csv.NewReader(SafeCSVReader(bufio.NewReader(bytes.NewReader(testFile))))
-    lines, err := r.ReadAll()
+	r := NewCSVReader(bytes.NewReader(testFile), delimiter)
+	lines, err := r.ReadAll()
 
-    if err != nil {
-        t.Errorf("An error occurred while reading the data: %v", err)
-    }
-    if len(lines) != 2 {
-        t.Errorf("Wrong number of lines. Expected 2, got %d", len(lines))
-    }
+	assert.NoError(t, err, "An error occurred while reading the data: %v", err)
+	if len(lines) != 2 {
+		t.Errorf("Wrong number of lines. Expected 2, got %d", len(lines))
+	}
 }
 
 func TestCRLF(t *testing.T) {
-    testFile := bytes.NewBufferString("a,b,c\r\n1,2,3\r\n").Bytes()
+	testFile := []byte("a,b,c\r\n1,2,3\r\n")
+	delimiter, err := StringToRune(",")
 
-    r := csv.NewReader(SafeCSVReader(bufio.NewReader(bytes.NewReader(testFile))))
-    lines, err := r.ReadAll()
+	r := NewCSVReader(bytes.NewReader(testFile), delimiter)
+	lines, err := r.ReadAll()
 
-    if err != nil {
-        t.Errorf("An error occurred while reading the data: %v", err)
-    }
-    if len(lines) != 2 {
-        t.Errorf("Wrong number of lines. Expected 2, got %d", len(lines))
-    }
+	assert.NoError(t, err, "An error occurred while reading the data: %v", err)
+	if len(lines) != 2 {
+		t.Errorf("Wrong number of lines. Expected 2, got %d", len(lines))
+	}
 }
 
 func TestCRInQuote(t *testing.T) {
-    testFile := bytes.NewBufferString("a,\"foo,\rbar\",c\r1,\"2\r\n2\",3\r").Bytes()
+	testFile := []byte("a,\"foo,\rbar\",c\r1,\"2\r\n2\",3\r")
+	delimiter, err := StringToRune(",")
 
-    r := csv.NewReader(SafeCSVReader(bufio.NewReader(bytes.NewReader(testFile))))
-    lines, err := r.ReadAll()
+	r := NewCSVReader(bytes.NewReader(testFile), delimiter)
+	lines, err := r.ReadAll()
 
-    if err != nil {
-        t.Errorf("An error occurred while reading the data: %v", err)
-    }
-    if len(lines) != 2 {
-        t.Errorf("Wrong number of lines. Expected 2, got %d", len(lines))
-    }
-    if strings.Contains(lines[1][1], "\n\n") {
-        t.Error("The CRLF was converted to a LFLF")
-    }
+	assert.NoError(t, err, "An error occurred while reading the data: %v", err)
+	if len(lines) != 2 {
+		t.Errorf("Wrong number of lines. Expected 2, got %d", len(lines))
+	}
+	if strings.Contains(lines[1][1], "\n\n") {
+		t.Error("The CRLF was converted to a LFLF")
+	}
 }
 
 func TestCRLFEndOfBufferLength(t *testing.T) {
-    testFile := bytes.NewBuffer(make([]byte, 4096 * 2, 4096 * 2)).Bytes()
-    testFile[4095] = 13 // \r byte
-    testFile[4096] = 10 // \n byte
+	testFile := make([]byte, 4096*2, 4096*2)
+	testFile[4095] = 13 // \r byte
+	testFile[4096] = 10 // \n byte
+	delimiter, err := StringToRune(",")
 
-    r := csv.NewReader(SafeCSVReader(bufio.NewReader(bytes.NewReader(testFile))))
-    lines, err := r.ReadAll()
+	r := NewCSVReader(bytes.NewReader(testFile), delimiter)
+	lines, err := r.ReadAll()
 
-    if err != nil {
-        t.Errorf("An error occurred while reading the data: %v", err)
-    }
-    if len(lines) != 2 {
-        t.Errorf("Wrong number of lines. Expected 2, got %d", len(lines))
-    }
+	assert.NoError(t, err, "An error occurred while reading the data: %v", err)
+	if len(lines) != 2 {
+		t.Errorf("Wrong number of lines. Expected 2, got %d", len(lines))
+	}
 }
