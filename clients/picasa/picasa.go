@@ -294,14 +294,11 @@ func getSizes(e EntryJSON) MapOfSizeToStringDef {
 		return int(math.Ceil(float64(x) * (float64(a) / float64(b))))
 	}
 
-	// Original size.
+	// Don't use the URL to the full image, because Picasa sometimes incorrectly serves a smaller
+	// image. E.g. e.Width.V might be 1000 and e.Height.V 500, but e.Content only 200x100.
+	//
+	// To work around this, use the URL for thumbnails with the full image size.
 	height, width := atoi(e.Height.V), atoi(e.Width.V)
-	addSize(height, width, e.Content.Src)
-
-	// Infer 5 more sizes from the photo's thumbnail. Thumbnail URLs encode their size using a path component like "/s1024/" within "https://googleusercontent.com/aaa/bbb/ccc/s1024/img.jpg" and Picasa will allow any size to be specified there.
-	if len(e.MediaGroup.Thumbnails) == 0 {
-		return sizes
-	}
 
 	var thumbURLParts []string
 	if t := e.MediaGroup.Thumbnails[0]; t.Height > t.Width {
@@ -310,6 +307,7 @@ func getSizes(e EntryJSON) MapOfSizeToStringDef {
 		thumbURLParts = strings.SplitN(t.URL, sizePath(t.Width), 2)
 	}
 
+	// Add thumbnails.
 	for _, px := range []int{128, 320, 640, 1024, 1600} {
 		if px > height && px > width {
 			break
@@ -321,6 +319,13 @@ func getSizes(e EntryJSON) MapOfSizeToStringDef {
 		} else {
 			addSize(scale(px, height, width), px, thumbURL)
 		}
+	}
+
+	// Add the full image.
+	if height > width {
+		addSize(height, width, strings.Join(thumbURLParts, sizePath(height)))
+	} else {
+		addSize(height, width, strings.Join(thumbURLParts, sizePath(width)))
 	}
 
 	return sizes
