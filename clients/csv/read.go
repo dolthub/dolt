@@ -39,14 +39,6 @@ func KindsToStrings(kinds KindSlice) []string {
 	return strs
 }
 
-// NewCSVReader returns a new csv.Reader that splits on comma and asserts that all rows contain the same number of fields as the first.
-func NewCSVReader(res io.Reader, comma rune) *csv.Reader {
-	r := csv.NewReader(res)
-	r.Comma = comma
-	r.FieldsPerRecord = -1 // Don't enforce number of fields.
-	return r
-}
-
 // ReportValidFieldTypes takes a CSV reader and the headers. It returns a slice of types.NomsKind for each column in the data indicating what Noms types could be used to represent that row.
 // For example, if all values in a row are negative integers between -127 and 0, the slice for that row would be [types.Int8Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Float32Kind, types.Float64Kind, types.StringKind]. If even one value in the row is a floating point number, however, all the integer kinds would be dropped. All values can be represented as a string, so that option is always provided.
 func ReportValidFieldTypes(r *csv.Reader, headers []string) []KindSlice {
