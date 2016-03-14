@@ -104,7 +104,7 @@ class JsonArrayWriter {
       invariant(tuple instanceof MetaTuple);
       if (tuple.sequence && this._cs) {
         const child = tuple.sequence;
-        writeValue(child, t, this._cs);
+        writeValue(child, child.type, this._cs);
       }
       w2.writeRef(tuple.ref);
       w2.writeValue(tuple.value, indexType, pkg);
