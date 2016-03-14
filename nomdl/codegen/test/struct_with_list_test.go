@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
@@ -33,7 +34,7 @@ func TestStructWithList(t *testing.T) {
 
 func TestStructIsValue(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 	var v types.Value = gen.StructWithListDef{
 		L: gen.ListOfUint8Def{0, 1, 2},
 		B: true,
@@ -41,8 +42,8 @@ func TestStructIsValue(t *testing.T) {
 		I: 42,
 	}.New()
 
-	ref := types.WriteValue(v, cs)
-	v2 := types.ReadValue(ref, cs)
+	ref := ds.WriteValue(v)
+	v2 := ds.ReadValue(ref)
 	assert.True(v.Equals(v2))
 
 	s2 := v2.(gen.StructWithList)

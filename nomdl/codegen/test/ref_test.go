@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
@@ -11,31 +12,31 @@ import (
 
 func SkipTestRef(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 
 	l := gen.ListOfStringDef{"a", "b", "c"}.New()
 	l2 := gen.ListOfStringDef{"d", "e", "f"}.New()
 	lRef := l.Ref()
 	r := gen.NewRefOfListOfString(lRef)
 
-	v := types.ReadValue(l.Ref(), cs)
+	v := ds.ReadValue(l.Ref())
 	assert.Nil(v)
 
-	assert.Panics(func() { r.TargetValue(cs) })
+	assert.Panics(func() { r.TargetValue(ds) })
 
-	r2 := r.SetTargetValue(l, cs)
+	r2 := r.SetTargetValue(l, ds)
 	assert.True(r.Equals(r2))
-	v2 := r2.TargetValue(cs)
-	v3 := r.TargetValue(cs)
+	v2 := r2.TargetValue(ds)
+	v3 := r.TargetValue(ds)
 	assert.True(v2.Equals(v3))
 
-	r3 := r2.SetTargetValue(l2, cs)
+	r3 := r2.SetTargetValue(l2, ds)
 	assert.False(r.Equals(r3))
 }
 
 func TestListOfRef(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 
 	a := types.Float32(0)
 	ra := a.Ref()
@@ -49,30 +50,30 @@ func TestListOfRef(t *testing.T) {
 	def := l.Def()
 	assert.EqualValues(ra, def[0])
 
-	l = l.Set(0, r.SetTargetValue(1, cs))
+	l = l.Set(0, r.SetTargetValue(1, ds))
 	r3 := l.Get(0)
 	assert.False(r.Equals(r3))
-	assert.Panics(func() { r.TargetValue(cs) })
+	assert.Panics(func() { r.TargetValue(ds) })
 }
 
 func TestStructWithRef(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 
 	set := gen.SetOfFloat32Def{0: true, 1: true, 2: true}.New()
-	types.WriteValue(set, cs)
+	ds.WriteValue(set)
 
 	str := gen.StructWithRefDef{
 		R: set.Ref(),
 	}.New()
-	types.WriteValue(str, cs)
+	ds.WriteValue(str)
 
 	r := str.R()
 	r2 := gen.NewRefOfSetOfFloat32(set.Ref())
 	assert.True(r.Equals(r2))
-	assert.True(r2.TargetValue(cs).Equals(set))
+	assert.True(r2.TargetValue(ds).Equals(set))
 
-	set2 := r2.TargetValue(cs)
+	set2 := r2.TargetValue(ds)
 	assert.True(set.Equals(set2))
 
 	def := str.Def()

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/nomdl/codegen/test/gen"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
@@ -38,9 +39,9 @@ func TestEnumValue(t *testing.T) {
 }
 
 func TestEnumIsValue(t *testing.T) {
-	cs := chunks.NewMemoryStore()
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 	var v types.Value = gen.NewEnumStruct()
-	ref := types.WriteValue(v, cs)
-	v2 := types.ReadValue(ref, cs)
+	ref := ds.WriteValue(v)
+	v2 := ds.ReadValue(ref)
 	assert.True(t, v.Equals(v2))
 }
