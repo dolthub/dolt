@@ -12,30 +12,30 @@ export default class MemoryStore {
     this._root = new Ref();
   }
 
-  async getRoot(): Promise<Ref> {
-    return this._root;
+  getRoot(): Promise<Ref> {
+    return Promise.resolve(this._root);
   }
 
-  async updateRoot(current: Ref, last: Ref): Promise<boolean> {
+  updateRoot(current: Ref, last: Ref): Promise<boolean> {
     if (!this._root.equals(last)) {
-      return false;
+      return Promise.resolve(false);
     }
 
     this._root = current;
-    return true;
+    return Promise.resolve(true);
   }
 
-  async get(ref: Ref): Promise<Chunk> {
+  get(ref: Ref): Promise<Chunk> {
     let c = this._data[ref.toString()];
     if (!c) {
       c = emptyChunk;
     }
 
-    return c;
+    return Promise.resolve(c);
   }
 
-  async has(ref: Ref): Promise<boolean> {
-    return this._data[ref.toString()] !== undefined;
+  has(ref: Ref): Promise<boolean> {
+    return Promise.resolve(this._data[ref.toString()] !== undefined);
   }
 
   put(c: Chunk) {

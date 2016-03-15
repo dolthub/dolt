@@ -49,13 +49,24 @@ function bufferToArrayBuffer(buf: Buffer): ArrayBuffer {
   return ab;
 }
 
+function arrayBufferToBuffer(ab: ArrayBuffer): Buffer {
+  // $FlowIssue: Node type declaration doesn't include ArrayBuffer.
+  return new Buffer(ab);
+}
 
 function bufferToString(buf: Buffer): string {
   return buf.toString();
 }
 
+function normalizeBody(opts: FetchOptions): FetchOptions {
+  if (opts.body instanceof ArrayBuffer) {
+    opts.body = arrayBufferToBuffer(opts.body);
+  }
+  return opts;
+}
+
 export function fetchText(url: string, options: FetchOptions = {}): Promise<string> {
-  return fetch(url, bufferToString, options);
+  return fetch(url, bufferToString, normalizeBody(options));
 }
 
 export function fetchArrayBuffer(url: string, options: FetchOptions = {}): Promise<ArrayBuffer> {

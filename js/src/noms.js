@@ -1,7 +1,7 @@
 // @flow
 
 export {AsyncIterator} from './async_iterator.js';
-export {DataStore} from './datastore.js';
+export {DataStore, newCommit} from './datastore.js';
 export {decodeNomsValue} from './decode.js';
 export {default as Chunk} from './chunk.js';
 export {default as HttpStore} from './http_store.js';

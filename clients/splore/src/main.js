@@ -35,7 +35,7 @@ function load() {
   if (hash.token) {
     opts['headers'] = {Authorization: `Bearer ${hash.token}`};
   }
-  httpStore = new HttpStore(hash.server, undefined, opts);
+  httpStore = new HttpStore(hash.server, undefined, undefined, opts);
 
   const setRootRef = ref => {
     rootRef = ref;
