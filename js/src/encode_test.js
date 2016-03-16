@@ -18,6 +18,7 @@ import {MapLeafSequence, NomsMap} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';
 import {Package, registerPackage} from './package.js';
 import {writeValue} from './encode.js';
+import {newBlob} from './blob.js';
 
 suite('Encode', () => {
   test('write primitives', () => {
@@ -53,7 +54,8 @@ suite('Encode', () => {
   test('write simple blob', () => {
     const ms = new MemoryStore();
     const w = new JsonArrayWriter(ms);
-    w.writeTopLevel(makePrimitiveType(Kind.Blob), new Uint8Array([0x00, 0x01]).buffer);
+    const blob = newBlob(new Uint8Array([0x00, 0x01]), ms);
+    w.writeTopLevel(makePrimitiveType(Kind.Blob), blob);
     assert.deepEqual([Kind.Blob, false, 'AAE='], w.array);
   });
 
@@ -371,19 +373,20 @@ suite('Encode', () => {
   });
 
   test('top level blob', () => {
-    function stringToBuffer(s) {
+    function stringToUint8Array(s) {
       const bytes = new Uint8Array(s.length);
       for (let i = 0; i < s.length; i++) {
         bytes[i] = s.charCodeAt(i);
       }
-      return bytes.buffer;
+      return bytes;
     }
 
     const ms = new MemoryStore();
-    const blob = stringToBuffer('hi');
+    const blob = newBlob(stringToUint8Array('hi'), ms);
+
     const chunk = encodeNomsValue(blob, makePrimitiveType(Kind.Blob), ms);
     assert.equal(4, chunk.data.length);
-    assert.deepEqual(stringToBuffer('b hi'), chunk.data.buffer);
+    assert.deepEqual(stringToUint8Array('b hi'), chunk.data);
 
     const buffer2 = new ArrayBuffer(2 + 256);
     const view = new DataView(buffer2);
@@ -394,7 +397,7 @@ suite('Encode', () => {
       bytes[i] = i;
       view.setUint8(2 + i, i);
     }
-    const blob2 = bytes.buffer;
+    const blob2 = newBlob(bytes, ms);
     const chunk2 = encodeNomsValue(blob2, makePrimitiveType(Kind.Blob), ms);
     assert.equal(buffer2.byteLength, chunk2.data.buffer.byteLength);
     assert.deepEqual(buffer2, chunk2.data.buffer);

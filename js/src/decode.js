@@ -1,5 +1,6 @@
 // @flow
 
+import {NomsBlob, newBlob} from './blob.js';
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
@@ -16,6 +17,7 @@ import {lookupPackage, Package, readPackage} from './package.js';
 import {NomsMap, MapLeafSequence} from './map.js';
 import {setDecodeNomsValue} from './read_value.js';
 import {NomsSet, SetLeafSequence} from './set.js';
+import {IndexedMetaSequence} from './meta_sequence.js';
 
 const typedTag = 't ';
 const blobTag = 'b ';
@@ -128,9 +130,8 @@ class JsonArrayReader {
     throw new Error('Unreachable');
   }
 
-  readBlob(): Promise<ArrayBuffer> {
-    const s = this.readString();
-    return Promise.resolve(decodeBase64(s));
+  readBlob(): NomsBlob {
+    return newBlob(decodeBase64(this.readString()), this._cs);
   }
 
   readSequence(t: Type, pkg: ?Package): Array<any> {
@@ -227,12 +228,16 @@ class JsonArrayReader {
   readValueWithoutTag(t: Type, pkg: ?Package = null): any {
     // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
-      case Kind.Blob:
+      case Kind.Blob: {
         const isMeta = this.readBool();
-        // https://github.com/attic-labs/noms/issues/798
-        invariant(!isMeta, 'CompoundBlob not supported');
+        if (isMeta) {
+          const r2 = new JsonArrayReader(this.readArray(), this._cs);
+          const sequence = r2.readMetaSequence(t, pkg);
+          invariant(sequence instanceof IndexedMetaSequence);
+          return new NomsBlob(sequence);
+        }
         return this.readBlob();
-
+      }
       case Kind.Bool:
         return this.readBool();
       case Kind.Float32:
@@ -419,9 +424,8 @@ function decodeNomsValue(chunk: Chunk, cs: ChunkStore): Promise<any> {
       const reader = new JsonArrayReader(payload, cs);
       return reader.readTopLevelValue();
     }
-    case blobTag: {
-      return Promise.resolve(chunk.data.buffer.slice(2));
-    }
+    case blobTag:
+      return Promise.resolve(newBlob(new Uint8Array(chunk.data.buffer, 2), cs));
     default:
       throw new Error('Not implemented');
   }

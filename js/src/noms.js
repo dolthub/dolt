@@ -2,6 +2,7 @@
 
 export {AsyncIterator} from './async_iterator.js';
 export {DataStore, newCommit} from './datastore.js';
+export {NomsBlob, BlobReader} from './blob.js';
 export {decodeNomsValue} from './decode.js';
 export {default as Chunk} from './chunk.js';
 export {default as HttpStore} from './http_store.js';

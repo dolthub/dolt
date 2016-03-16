@@ -10,14 +10,16 @@ import {ValueBase} from './value.js';
 export class Sequence<T> extends ValueBase {
   cs: ?ChunkStore;
   items: Array<T>;
-  isMeta: boolean;
 
   constructor(cs: ?ChunkStore, type: Type, items: Array<T>) {
     super(type);
 
     this.cs = cs;
     this.items = items;
-    this.isMeta = false;
+  }
+
+  get isMeta(): boolean {
+    return false;
   }
 
   getChildSequence(idx: number): // eslint-disable-line no-unused-vars
@@ -30,7 +32,7 @@ export class Sequence<T> extends ValueBase {
   }
 }
 
-export class SequenceCursor<T, S:Sequence> {
+export class SequenceCursor<T, S: Sequence> {
   parent: ?SequenceCursor;
   sequence: S;
   idx: number;
@@ -49,7 +51,7 @@ export class SequenceCursor<T, S:Sequence> {
   }
 
   get length(): number {
-    return this.sequence.items.length;
+    return this.sequence.length;
   }
 
   getItem(idx: number): T {
@@ -86,6 +88,10 @@ export class SequenceCursor<T, S:Sequence> {
     return this._advanceMaybeAllowPastEnd(true);
   }
 
+  /**
+   * Advances the cursor in the local chunk and returns false if advancing would advance past the
+   * end.
+   */
   advanceLocal(): boolean {
     if (this.idx < this.length - 1) {
       this.idx++;
@@ -115,6 +121,11 @@ export class SequenceCursor<T, S:Sequence> {
     }
 
     return false;
+  }
+
+  advanceChunk(): Promise<boolean> {
+    this.idx = this.length - 1;
+    return this._advanceMaybeAllowPastEnd(true);
   }
 
   retreat(): Promise<boolean> {
@@ -169,7 +180,7 @@ export class SequenceCursor<T, S:Sequence> {
   }
 }
 
-export class SequenceIterator<T, S:Sequence> extends AsyncIterator<T> {
+export class SequenceIterator<T, S: Sequence> extends AsyncIterator<T> {
   _cursor: SequenceCursor<T, S>;
   _advance: Promise<boolean>;
   _closed: boolean;
