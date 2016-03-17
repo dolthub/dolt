@@ -20,21 +20,21 @@ type RemoteDataStore struct {
 }
 
 func newRemoteDataStore(cs chunks.ChunkStore) *RemoteDataStore {
-	return &RemoteDataStore{dataStoreCommon{newHasCachingChunkStore(cs), cs.Root(), nil}}
+	return &RemoteDataStore{newDataStoreCommon(cs)}
 }
 
 func (rds *RemoteDataStore) host() *url.URL {
-	return rds.dataStoreCommon.cs.Backing().(*chunks.HTTPStore).Host()
+	return rds.cs.(*chunks.HTTPStore).Host()
 }
 
 func (rds *RemoteDataStore) Commit(datasetID string, commit Commit) (DataStore, error) {
 	err := rds.commit(datasetID, commit)
-	return newRemoteDataStore(rds.cs.Backing()), err
+	return newRemoteDataStore(rds.cs), err
 }
 
 func (rds *RemoteDataStore) Delete(datasetID string) (DataStore, error) {
 	err := rds.doDelete(datasetID)
-	return newRemoteDataStore(rds.cs.Backing()), err
+	return newRemoteDataStore(rds.cs), err
 }
 
 // CopyReachableChunksP copies to |sink| all chunks in rds that are reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|. This implementation asks the remote server to return the desired chunks and writes them to |sink|.

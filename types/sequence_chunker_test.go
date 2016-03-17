@@ -3,7 +3,6 @@ package types
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,7 +18,7 @@ func (b modBoundaryChecker) WindowSize() int {
 	return 1
 }
 
-func listFromInts(cs chunks.ChunkStore, ints []int) List {
+func listFromInts(ints []int) List {
 	vals := make([]Value, len(ints))
 	for i, v := range ints {
 		vals[i] = Int64(v)
@@ -30,7 +29,6 @@ func listFromInts(cs chunks.ChunkStore, ints []int) List {
 
 func TestSequenceChunkerMod(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
 
 	sumChunker := func(items []sequenceItem) (sequenceItem, Value) {
 		sum := 0
@@ -40,7 +38,7 @@ func TestSequenceChunkerMod(t *testing.T) {
 			ints[i] = v
 			sum += v
 		}
-		return sum, listFromInts(cs, ints)
+		return sum, listFromInts(ints)
 	}
 
 	testChunking := func(expect []int, from, to int) {
@@ -49,7 +47,7 @@ func TestSequenceChunkerMod(t *testing.T) {
 			seq.Append(i)
 		}
 
-		assert.True(listFromInts(cs, expect).Equals(seq.Done()))
+		assert.True(listFromInts(expect).Equals(seq.Done()))
 	}
 
 	// [1] is not a chunk boundary, so it won't chunk.
