@@ -6,9 +6,9 @@ import {Sequence, SequenceCursor} from './sequence.js';
 import type {int64} from './primitives.js';
 import {notNull} from './assert.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
-import {Kind} from './noms_kind.js';
-import MemoryStore from './memory_store.js';
-import type {ChunkStore} from './chunk_store.js';
+import {Kind} from './noms-kind.js';
+import MemoryStore from './memory-store.js';
+import type {ChunkStore} from './chunk-store.js';
 
 class TestSequence extends Sequence<any> {
   constructor(cs: ?ChunkStore, items: Array<any>) {

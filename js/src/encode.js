@@ -3,19 +3,19 @@
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
-import type {ChunkStore} from './chunk_store.js';
-import type {NomsKind} from './noms_kind.js';
+import type {ChunkStore} from './chunk-store.js';
+import type {NomsKind} from './noms-kind.js';
 import {encode as encodeBase64} from './base64.js';
 import {boolType, EnumDesc, makePrimitiveType, stringType, StructDesc, Type} from './type.js';
-import {indexTypeForMetaSequence, MetaTuple} from './meta_sequence.js';
+import {indexTypeForMetaSequence, MetaTuple} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
-import {isPrimitiveKind, Kind} from './noms_kind.js';
+import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
 import {lookupPackage, Package} from './package.js';
 import {MapLeafSequence, NomsMap} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';
 import {Sequence} from './sequence.js';
-import {setEncodeNomsValue} from './get_ref.js';
+import {setEncodeNomsValue} from './get-ref.js';
 import {NomsBlob, BlobLeafSequence} from './blob.js';
 
 const typedTag = 't ';

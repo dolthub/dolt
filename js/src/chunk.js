@@ -1,7 +1,7 @@
 // @flow
 
 import Ref from './ref.js';
-import {TextEncoder, TextDecoder} from './text_encoding.js';
+import {TextEncoder, TextDecoder} from './text-encoding.js';
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();

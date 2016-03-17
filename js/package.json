@@ -30,7 +30,7 @@
   },
   "scripts": {
     "pretest": "eslint src/ && flow src/",
-    "test": "mocha --ui tdd --reporter dot --require babel-polyfill --compilers js:babel-core/register src/"
+    "test": "mocha --ui tdd --reporter dot --require babel-polyfill --compilers js:babel-core/register src/*-test.js"
   },
   "browser": {
     "./src/fetch.js": "./src/browser/fetch.js"

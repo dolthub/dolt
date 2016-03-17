@@ -1,18 +1,18 @@
   // @flow
 
-import BuzHashBoundaryChecker from './buzhash_boundary_checker.js';
-import type {BoundaryChecker, makeChunkFn} from './sequence_chunker.js';
-import type {ChunkStore} from './chunk_store.js';
-import type {Splice} from './edit_distance.js';
+import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
+import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
+import type {ChunkStore} from './chunk-store.js';
+import type {Splice} from './edit-distance.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
-import {AsyncIterator} from './async_iterator.js';
-import {chunkSequence} from './sequence_chunker.js';
+import {AsyncIterator} from './async-iterator.js';
+import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
-import {diff, IndexedSequence, IndexedSequenceIterator} from './indexed_sequence.js';
-import {getRefOfValueOrPrimitive} from './get_ref.js';
+import {diff, IndexedSequence, IndexedSequenceIterator} from './indexed-sequence.js';
+import {getRefOfValueOrPrimitive} from './get-ref.js';
 import {invariant} from './assert.js';
 import {MetaTuple, newIndexedMetaSequenceBoundaryChecker,
-  newIndexedMetaSequenceChunkFn} from './meta_sequence.js';
+  newIndexedMetaSequenceChunkFn} from './meta-sequence.js';
 import {sha1Size} from './ref.js';
 import {Type} from './type.js';
 

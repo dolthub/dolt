@@ -1,22 +1,22 @@
 // @flow
 
-import BuzHashBoundaryChecker from './buzhash_boundary_checker.js';
-import type {BoundaryChecker, makeChunkFn} from './sequence_chunker.js';
-import type {ChunkStore} from './chunk_store.js';
+import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
+import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
+import type {ChunkStore} from './chunk-store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
-import {AsyncIterator} from './async_iterator.js';
-import {chunkSequence} from './sequence_chunker.js';
+import {AsyncIterator} from './async-iterator.js';
+import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
 import {compare} from './value.js';
 import {default as Ref, sha1Size} from './ref.js';
 import {equals} from './value.js';
-import {getRefOfValueOrPrimitive} from './get_ref.js';
+import {getRefOfValueOrPrimitive} from './get-ref.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
-  newOrderedMetaSequenceChunkFn} from './meta_sequence.js';
+  newOrderedMetaSequenceChunkFn} from './meta-sequence.js';
 import {OrderedSequence, OrderedSequenceCursor,
-  OrderedSequenceIterator} from './ordered_sequence.js';
+  OrderedSequenceIterator} from './ordered-sequence.js';
 import {Type} from './type.js';
 
 export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {

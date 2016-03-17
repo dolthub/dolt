@@ -1,9 +1,9 @@
 // @flow
 
 import {suite, test} from 'mocha';
-import type {Splice} from './edit_distance.js';
+import type {Splice} from './edit-distance.js';
 import {assert} from 'chai';
-import {calcSplices} from './edit_distance.js';
+import {calcSplices} from './edit-distance.js';
 
 suite('Edit Distance', () => {
 

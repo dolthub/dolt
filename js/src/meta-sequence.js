@@ -1,17 +1,17 @@
 // @flow
 
-import BuzHashBoundaryChecker from './buzhash_boundary_checker.js';
+import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import {default as Ref, sha1Size} from './ref.js';
-import type {BoundaryChecker, makeChunkFn} from './sequence_chunker.js';
-import type {ChunkStore} from './chunk_store.js';
+import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
+import type {ChunkStore} from './chunk-store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {Collection} from './collection.js';
 import {CompoundDesc, makeCompoundType, makePrimitiveType, Type} from './type.js';
-import {IndexedSequence} from './indexed_sequence.js';
+import {IndexedSequence} from './indexed-sequence.js';
 import {invariant} from './assert.js';
-import {Kind} from './noms_kind.js';
-import {OrderedSequence} from './ordered_sequence.js';
-import {readValue} from './read_value.js';
+import {Kind} from './noms-kind.js';
+import {OrderedSequence} from './ordered-sequence.js';
+import {readValue} from './read-value.js';
 import {Sequence} from './sequence.js';
 
 export type MetaSequence = Sequence<MetaTuple>;

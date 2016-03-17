@@ -1,11 +1,11 @@
 // @flow
 
 import Ref from './ref.js';
-import type {NomsKind} from './noms_kind.js';
+import type {NomsKind} from './noms-kind.js';
 import type {Value} from './value.js';
-import {ensureRef} from './get_ref.js';
+import {ensureRef} from './get-ref.js';
 import {invariant} from './assert.js';
-import {isPrimitiveKind, Kind, kindToString} from './noms_kind.js';
+import {isPrimitiveKind, Kind, kindToString} from './noms-kind.js';
 
 export type TypeDesc = {
   kind: NomsKind;

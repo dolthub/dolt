@@ -1,12 +1,12 @@
 // @flow
 
-import type {Splice} from './edit_distance.js';
-import {AsyncIterator} from './async_iterator.js';
-import type {AsyncIteratorResult} from './async_iterator.js';
+import type {Splice} from './edit-distance.js';
+import {AsyncIterator} from './async-iterator.js';
+import type {AsyncIteratorResult} from './async-iterator.js';
 import {calcSplices, SPLICE_ADDED, SPLICE_AT, SPLICE_FROM,
-  SPLICE_REMOVED} from './edit_distance.js';
+  SPLICE_REMOVED} from './edit-distance.js';
 import {equals} from './value.js';
-import {IndexedMetaSequence} from './meta_sequence.js';
+import {IndexedMetaSequence} from './meta-sequence.js';
 import {notNull, invariant} from './assert.js';
 import {search, Sequence, SequenceCursor} from './sequence.js';
 

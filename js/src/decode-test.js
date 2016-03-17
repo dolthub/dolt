@@ -3,23 +3,23 @@
 import {encode as encodeBase64} from './base64.js';
 import {NomsBlob, newBlob} from './blob.js';
 import Chunk from './chunk.js';
-import MemoryStore from './memory_store.js';
+import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
-import test from './async_test.js';
+import test from './async-test.js';
 import type {float64, int32, int64, uint8, uint16, uint32, uint64} from './primitives.js';
 import type {TypeDesc} from './type.js';
 import {assert} from 'chai';
 import {decodeNomsValue, JsonArrayReader} from './decode.js';
 import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type,
     blobType} from './type.js';
-import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
+import {IndexedMetaSequence, MetaTuple} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
-import {Kind} from './noms_kind.js';
+import {Kind} from './noms-kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
 import {MapLeafSequence, NomsMap} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';
-import {readValue} from './read_value.js';
+import {readValue} from './read-value.js';
 import {registerPackage, Package} from './package.js';
 import {suite} from 'mocha';
 import type {Value} from './value.js';

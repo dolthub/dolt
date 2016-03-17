@@ -1,19 +1,19 @@
 // @flow
 
 import {Collection} from './collection.js';
-import {IndexedSequence} from './indexed_sequence.js';
+import {IndexedSequence} from './indexed-sequence.js';
 import {SequenceCursor} from './sequence.js';
 import {invariant} from './assert.js';
-import type {ChunkStore} from './chunk_store.js';
+import type {ChunkStore} from './chunk-store.js';
 import {blobType} from './type.js';
 import {
   MetaTuple,
   newIndexedMetaSequenceChunkFn,
   newIndexedMetaSequenceBoundaryChecker,
-} from './meta_sequence.js';
-import BuzHashBoundaryChecker from './buzhash_boundary_checker.js';
-import {SequenceChunker} from './sequence_chunker.js';
-import type {BoundaryChecker, makeChunkFn} from './sequence_chunker.js';
+} from './meta-sequence.js';
+import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
+import {SequenceChunker} from './sequence-chunker.js';
+import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {uint8} from './primitives.js';
 
 export class NomsBlob extends Collection<IndexedSequence<uint8>> {

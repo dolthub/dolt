@@ -2,11 +2,11 @@
 
 import {assert} from 'chai';
 import {suite} from 'mocha';
-import Random from './pseudo_random.js';
-import MemoryStore from './memory_store.js';
-import test from './async_test.js';
+import Random from './pseudo-random.js';
+import MemoryStore from './memory-store.js';
+import test from './async-test.js';
 import {blobType} from './type.js';
-import {readValue} from './read_value.js';
+import {readValue} from './read-value.js';
 import {writeValue} from './encode.js';
 import {newBlob, BlobWriter} from './blob.js';
 

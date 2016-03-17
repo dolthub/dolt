@@ -3,16 +3,16 @@
 import {assert} from 'chai';
 import {suite} from 'mocha';
 
-import MemoryStore from './memory_store.js';
+import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
-import test from './async_test.js';
-import type {NomsKind} from './noms_kind.js';
+import test from './async-test.js';
+import type {NomsKind} from './noms-kind.js';
 import {encodeNomsValue, JsonArrayWriter} from './encode.js';
 import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type,}
     from './type.js';
-import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
-import {Kind} from './noms_kind.js';
+import {IndexedMetaSequence, MetaTuple} from './meta-sequence.js';
+import {Kind} from './noms-kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
 import {MapLeafSequence, NomsMap} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';

@@ -2,7 +2,7 @@
 
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
-import Random from './pseudo_random.js';
+import Random from './pseudo-random.js';
 
 suite('pseudo random', () => {
   test('sequence', () => {

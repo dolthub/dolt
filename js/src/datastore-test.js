@@ -3,7 +3,7 @@
 import {suite, test} from 'mocha';
 
 import Chunk from './chunk.js';
-import MemoryStore from './memory_store.js';
+import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 import {assert} from 'chai';
 import {DataStore, getDatasTypes, newCommit} from './datastore.js';

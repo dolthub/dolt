@@ -3,7 +3,7 @@
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import Chunk from './chunk.js';
-import {deserialize, serialize} from './chunk_serializer.js';
+import {deserialize, serialize} from './chunk-serializer.js';
 
 suite('ChunkSerializer', () => {
 

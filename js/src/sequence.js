@@ -1,9 +1,9 @@
 // @flow
 
-import type {ChunkStore} from './chunk_store.js';
+import type {ChunkStore} from './chunk-store.js';
 import {invariant, notNull} from './assert.js';
-import {AsyncIterator} from './async_iterator.js';
-import type {AsyncIteratorResult} from './async_iterator.js';
+import {AsyncIterator} from './async-iterator.js';
+import type {AsyncIteratorResult} from './async-iterator.js';
 import {Type} from './type.js';
 import {ValueBase} from './value.js';
 

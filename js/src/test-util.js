@@ -1,7 +1,7 @@
 // @flow
 
 import {notNull} from './assert.js';
-import {AsyncIterator} from './async_iterator.js';
+import {AsyncIterator} from './async-iterator.js';
 
 export async function flatten<T>(iter: AsyncIterator<T>): Promise<Array<T>> {
   const values = [];
