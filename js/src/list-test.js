@@ -43,7 +43,7 @@ suite('BuildList', () => {
   test('set of n numbers, length', async () => {
     const nums = firstNNumbers(testListSize);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    const s = await newList(tr, nums);
+    const s = await newList(nums, tr);
     assert.strictEqual(s.ref.toString(), listOfNRef);
     assert.strictEqual(testListSize, s.length);
   });
@@ -51,7 +51,7 @@ suite('BuildList', () => {
   test('toJS', async () => {
     const nums = firstNNumbers(5000);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    const s = await newList(tr, nums);
+    const s = await newList(nums, tr);
     assert.strictEqual(s.ref.toString(), listOfNRef);
     assert.strictEqual(testListSize, s.length);
 
@@ -71,7 +71,7 @@ suite('BuildList', () => {
   test('insert', async () => {
     const nums = firstNNumbers(testListSize - 10);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    let s = await newList(tr, nums);
+    let s = await newList(nums, tr);
 
     for (let i = testListSize - 10; i < testListSize; i++) {
       s = await s.insert(i, [i]);
@@ -83,7 +83,7 @@ suite('BuildList', () => {
   test('append', async () => {
     const nums = firstNNumbers(testListSize - 10);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    let s = await newList(tr, nums);
+    let s = await newList(nums, tr);
 
     for (let i = testListSize - 10; i < testListSize; i++) {
       s = await s.append([i]);
@@ -95,7 +95,7 @@ suite('BuildList', () => {
   test('remove', async () => {
     const nums = firstNNumbers(testListSize + 10);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    let s = await newList(tr, nums);
+    let s = await newList(nums, tr);
 
     let count = 10;
     while (count-- > 0) {
@@ -108,7 +108,7 @@ suite('BuildList', () => {
   test('splice', async () => {
     const nums = firstNNumbers(testListSize);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    let s = await newList(tr, nums);
+    let s = await newList(nums, tr);
 
     const splice500At = async (idx: number) => {
       s = await s.splice(idx, [], 500);
@@ -128,7 +128,7 @@ suite('BuildList', () => {
 
     const nums = firstNNumbers(testListSize);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    const s = await newList(tr, nums);
+    const s = await newList(nums, tr);
     const r = writeValue(s, tr, ms);
     const s2 = await readValue(r, ms);
     const outNums = await s2.toJS();
@@ -349,8 +349,8 @@ suite('Diff List', () => {
     const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
 
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    const l1 = await newList(tr, nums1);
-    const l2 = await newList(tr, nums2);
+    const l1 = await newList(nums1, tr);
+    const l2 = await newList(nums2, tr);
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(directDiff, listDiff);
@@ -368,8 +368,8 @@ suite('Diff List', () => {
     const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
 
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    const l1 = await newList(tr, nums1);
-    const l2 = await newList(tr, nums2);
+    const l1 = await newList(nums1, tr);
+    const l2 = await newList(nums2, tr);
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(directDiff, listDiff);
@@ -387,8 +387,8 @@ suite('Diff List', () => {
 
     const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    const l1 = await newList(tr, nums1);
-    const l2 = await newList(tr, nums2);
+    const l1 = await newList(nums1, tr);
+    const l2 = await newList(nums2, tr);
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(directDiff, listDiff);
@@ -400,8 +400,8 @@ suite('Diff List', () => {
 
     const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
-    const l1 = await newList(tr, nums1);
-    const l2 = await newList(tr, nums2);
+    const l1 = await newList(nums1, tr);
+    const l2 = await newList(nums2, tr);
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(directDiff, listDiff);

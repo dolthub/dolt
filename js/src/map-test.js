@@ -28,7 +28,7 @@ suite('BuildMap', () => {
 
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
                                 makePrimitiveType(Kind.Int64));
-    const m = await newMap(tr, kvs);
+    const m = await newMap(kvs, tr);
     assert.strictEqual(m.ref.toString(), mapOfNRef);
 
     // shuffle kvs, and test that the constructor sorts properly
@@ -39,7 +39,7 @@ suite('BuildMap', () => {
     pairs.sort(() => Math.random() > .5 ? 1 : -1);
     kvs.length = 0;
     pairs.forEach(kv => kvs.push(kv.k, kv.v));
-    const m2 = await newMap(tr, kvs);
+    const m2 = await newMap(kvs, tr);
     assert.strictEqual(m2.ref.toString(), mapOfNRef);
   });
 
@@ -51,7 +51,7 @@ suite('BuildMap', () => {
 
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
                                 makePrimitiveType(Kind.Int64));
-    let m = await newMap(tr, kvs);
+    let m = await newMap(kvs, tr);
     for (let i = testMapSize - 10; i < testMapSize; i++) {
       m = await m.set(i, i + 1);
     }
@@ -67,7 +67,7 @@ suite('BuildMap', () => {
 
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
                                 makePrimitiveType(Kind.Int64));
-    let m = await newMap(tr, kvs);
+    let m = await newMap(kvs, tr);
     for (let i = 0; i < testMapSize; i++) {
       m = await m.set(i, i + 1);
     }
@@ -83,7 +83,7 @@ suite('BuildMap', () => {
 
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
                                 makePrimitiveType(Kind.Int64));
-    let m = await newMap(tr, kvs);
+    let m = await newMap(kvs, tr);
     for (let i = testMapSize; i < testMapSize + 10; i++) {
       m = await m.remove(i);
     }
@@ -101,7 +101,7 @@ suite('BuildMap', () => {
 
     const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
                                 makePrimitiveType(Kind.Int64));
-    const m = await newMap(tr, kvs);
+    const m = await newMap(kvs, tr);
 
     const r = writeValue(m, tr, ms);
     const m2 = await readValue(r, ms);
