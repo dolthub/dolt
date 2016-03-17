@@ -78,3 +78,26 @@ func TestBlobFromReaderThatReturnsDataAndError(t *testing.T) {
 	assert.True(bytes.Equal(actual.Bytes(), tr.buf.Bytes()))
 	assert.Equal(byte(2), actual.Bytes()[len(actual.Bytes())-1])
 }
+
+func TestBlobChunkingSameAsJavascript(t *testing.T) {
+	assert := assert.New(t)
+	b := NewBlob(bytes.NewBuffer([]byte{
+		141,
+		136,
+		71,
+		250,
+		17,
+		60,
+		107,
+		206,
+		213,
+		48,
+		207,
+		226,
+		217,
+		100,
+		115,
+	}))
+
+	assert.Equal(b.Ref().String(), "sha1-fc30f237649464078574bc46b90c842179b4fa18")
+}

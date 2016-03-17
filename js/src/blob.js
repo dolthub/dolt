@@ -6,14 +6,28 @@ import {SequenceCursor} from './sequence.js';
 import {invariant} from './assert.js';
 import type {ChunkStore} from './chunk_store.js';
 import {blobType} from './type.js';
+import {
+  MetaTuple,
+  newIndexedMetaSequenceChunkFn,
+  newIndexedMetaSequenceBoundaryChecker,
+} from './meta_sequence.js';
+import BuzHashBoundaryChecker from './buzhash_boundary_checker.js';
+import {SequenceChunker} from './sequence_chunker.js';
+import type {BoundaryChecker, makeChunkFn} from './sequence_chunker.js';
 import type {uint8} from './primitives.js';
 
 export class NomsBlob extends Collection<IndexedSequence<uint8>> {
   constructor(sequence: IndexedSequence<uint8>) {
     super(blobType, sequence);
   }
+
   getReader(): BlobReader {
     return new BlobReader(this.sequence.newCursorAt(0));
+  }
+
+  get length(): number {
+    const seq = this.sequence;
+    return seq.getOffset(seq.items.length - 1) + 1;
   }
 }
 
@@ -47,7 +61,7 @@ export class BlobReader {
 }
 
 export class BlobLeafSequence extends IndexedSequence<uint8> {
-  constructor(cs: ChunkStore, items: Uint8Array) {
+  constructor(cs: ?ChunkStore, items: Uint8Array) {
     // $FlowIssue: The super class expects Array<T> but we sidestep that.
     super(cs, blobType, items);
   }
@@ -57,7 +71,65 @@ export class BlobLeafSequence extends IndexedSequence<uint8> {
   }
 }
 
-export function newBlob(data: Uint8Array, cs: ChunkStore): NomsBlob {
-  // TODO: Chunk it!
-  return new NomsBlob(new BlobLeafSequence(cs, data));
+const blobWindowSize = 64;
+const blobPattern = ((1 << 13) | 0) - 1;
+
+function newBlobLeafChunkFn(cs: ?ChunkStore = null): makeChunkFn {
+  return (items: Array<uint8>) => {
+    const blobLeaf = new BlobLeafSequence(cs, new Uint8Array(items));
+    const mt = new MetaTuple(blobLeaf, items.length);
+    return [mt, blobLeaf];
+  };
+}
+
+function newBlobLeafBoundaryChecker(): BoundaryChecker<uint8> {
+  return new BuzHashBoundaryChecker(blobWindowSize, 1, blobPattern, (v: uint8) => v);
+}
+
+export function newBlob(bytes: Uint8Array): Promise<NomsBlob> {
+  const w = new BlobWriter();
+  w.write(bytes);
+  return w.close().then(() => w.blob);
+}
+
+type BlobWriterState = 'writable' | 'closing' | 'closed';
+
+export class BlobWriter {
+  _state: BlobWriterState;
+  _blob: ?NomsBlob;
+  _chunker: SequenceChunker;
+
+  constructor() {
+    this._state = 'writable';
+    this._chunker = new SequenceChunker(null, newBlobLeafChunkFn(),
+        newIndexedMetaSequenceChunkFn(blobType), newBlobLeafBoundaryChecker(),
+        newIndexedMetaSequenceBoundaryChecker);
+  }
+
+  write(chunk: Uint8Array) {
+    assert(this._state === 'writable');
+    for (let i = 0; i < chunk.length; i++) {
+      this._chunker.append(chunk[i]);
+    }
+  }
+
+  async close(): Promise<void> {
+    assert(this._state === 'writable');
+    this._state = 'closing';
+    const sequence = await this._chunker.done();
+    this._blob = new NomsBlob(sequence);
+    this._state = 'closed';
+  }
+
+  get blob(): NomsBlob {
+    assert(this._state === 'closed');
+    invariant(this._blob);
+    return this._blob;
+  }
+}
+
+function assert(v: any) {
+  if (!v) {
+    throw new TypeError('Invalid usage of BlobWriter');
+  }
 }

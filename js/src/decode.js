@@ -1,14 +1,23 @@
 // @flow
 
-import {NomsBlob, newBlob} from './blob.js';
+import {NomsBlob, BlobLeafSequence} from './blob.js';
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
 import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {decode as decodeBase64} from './base64.js';
-import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType,
-    makeUnresolvedType, StructDesc, Type} from './type.js';
+import {
+  Field,
+  makeCompoundType,
+  makeEnumType,
+  makePrimitiveType,
+  makeStructType,
+  makeType,
+  makeUnresolvedType,
+  StructDesc,
+  Type,
+} from './type.js';
 import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta_sequence.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
@@ -30,7 +39,7 @@ class UnresolvedPackage {
   }
 }
 
-class JsonArrayReader {
+export class JsonArrayReader {
   _a: Array<any>;
   _i: number;
   _cs: ChunkStore;
@@ -130,8 +139,10 @@ class JsonArrayReader {
     throw new Error('Unreachable');
   }
 
-  readBlob(): NomsBlob {
-    return newBlob(decodeBase64(this.readString()), this._cs);
+
+  readBlobLeafSequence(): BlobLeafSequence {
+    const bytes = decodeBase64(this.readString());
+    return new BlobLeafSequence(this._cs, bytes);
   }
 
   readSequence(t: Type, pkg: ?Package): Array<any> {
@@ -230,13 +241,15 @@ class JsonArrayReader {
     switch (t.kind) {
       case Kind.Blob: {
         const isMeta = this.readBool();
+        let sequence;
         if (isMeta) {
           const r2 = new JsonArrayReader(this.readArray(), this._cs);
-          const sequence = r2.readMetaSequence(t, pkg);
+          sequence = r2.readMetaSequence(t, pkg);
           invariant(sequence instanceof IndexedMetaSequence);
-          return new NomsBlob(sequence);
+        } else {
+          sequence = this.readBlobLeafSequence();
         }
-        return this.readBlob();
+        return new NomsBlob(sequence);
       }
       case Kind.Bool:
         return this.readBool();
@@ -415,7 +428,7 @@ class JsonArrayReader {
   }
 }
 
-function decodeNomsValue(chunk: Chunk, cs: ChunkStore): Promise<any> {
+export function decodeNomsValue(chunk: Chunk, cs: ChunkStore): Promise<any> {
   const tag = new Chunk(new Uint8Array(chunk.data.buffer, 0, 2)).toString();
 
   switch (tag) {
@@ -425,12 +438,11 @@ function decodeNomsValue(chunk: Chunk, cs: ChunkStore): Promise<any> {
       return reader.readTopLevelValue();
     }
     case blobTag:
-      return Promise.resolve(newBlob(new Uint8Array(chunk.data.buffer, 2), cs));
+      return Promise.resolve(
+          new NomsBlob(new BlobLeafSequence(cs, new Uint8Array(chunk.data.buffer, 2))));
     default:
       throw new Error('Not implemented');
   }
 }
-
-export {decodeNomsValue, indexTypeForMetaSequence, JsonArrayReader};
 
 setDecodeNomsValue(decodeNomsValue); // TODO: Avoid cyclic badness with commonjs.
