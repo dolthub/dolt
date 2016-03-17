@@ -187,7 +187,7 @@ export default class DataManager {
     const map = await this._datasetP;
     const set = await map.get(r);
     if (set === undefined) {
-      return newSet(setType, []);
+      return newSet([], setType);
     }
 
     invariant(set);

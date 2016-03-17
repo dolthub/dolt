@@ -33,7 +33,7 @@ function newListLeafBoundaryChecker<T: valueOrPrimitive>(t: Type): BoundaryCheck
   );
 }
 
-export function newList<T: valueOrPrimitive>(type: Type, values: Array<T>):
+export function newList<T: valueOrPrimitive>(values: Array<T>, type: Type):
     Promise<NomsList<T>> {
   return chunkSequence(null, values, 0, newListLeafChunkFn(type),
                        newIndexedMetaSequenceChunkFn(type),

@@ -64,8 +64,8 @@ function buildMapData(t: Type, kvs: Array<any>): Array<MapEntry> {
   return entries;
 }
 
-export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(type: Type,
-    kvs: Array<any>): Promise<NomsMap<K, V>> {
+export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<any>, type: Type):
+    Promise<NomsMap<K, V>> {
   return chunkSequence(null, buildMapData(type, kvs), 0, newMapLeafChunkFn(type),
                        newOrderedMetaSequenceChunkFn(type),
                        newMapLeafBoundaryChecker(type),

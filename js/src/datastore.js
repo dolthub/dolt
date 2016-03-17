@@ -27,7 +27,7 @@ type DatasTypes = {
 let emptyCommitMap: Promise<NomsMap<string, Ref>>;
 function getEmptyCommitMap(): Promise<NomsMap<string, Ref>> {
   if (!emptyCommitMap) {
-    emptyCommitMap = newMap(getDatasTypes().commitMapType, []);
+    emptyCommitMap = newMap([], getDatasTypes().commitMapType);
   }
   return emptyCommitMap;
 }
@@ -157,7 +157,7 @@ export class DataStore {
 }
 
 async function getAncestors(commits: NomsSet<Ref>, store: ChunkStore): Promise<NomsSet<Ref>> {
-  let ancestors = await newSet(getDatasTypes().commitSetType, []);
+  let ancestors = await newSet([], getDatasTypes().commitSetType);
   await commits.map(async (commitRef) => {
     const commit = await readValue(commitRef, store);
     await commit.get('parents').map(async (ref) => ancestors = await ancestors.insert(ref));
@@ -168,6 +168,6 @@ async function getAncestors(commits: NomsSet<Ref>, store: ChunkStore): Promise<N
 export function newCommit(value: valueOrPrimitive, parents: Array<Ref> = []):
     Promise<Struct> {
   const types = getDatasTypes();
-  return newSet(types.commitSetType, parents).then(parents =>
+  return newSet(parents, types.commitSetType).then(parents =>
       new Struct(types.commitType, types.commitTypeDef, {value,parents}));
 }

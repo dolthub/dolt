@@ -53,7 +53,7 @@ function buildSetData<T>(t: Type, values: Array<any>): Array<T> {
   return values;
 }
 
-export function newSet<T:valueOrPrimitive>(type: Type, values: Array<T>):
+export function newSet<T:valueOrPrimitive>(values: Array<T>, type: Type):
     Promise<NomsSet<T>> {
 
   return chunkSequence(null, buildSetData(type, values), 0, newSetLeafChunkFn(type),
