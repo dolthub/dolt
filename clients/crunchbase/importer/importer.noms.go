@@ -3,7 +3,6 @@
 package main
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -209,12 +208,12 @@ func builderForRefOfMapOfStringToRefOfCompany(r ref.Ref) types.Value {
 	return NewRefOfMapOfStringToRefOfCompany(r)
 }
 
-func (r RefOfMapOfStringToRefOfCompany) TargetValue(cs chunks.ChunkSource) MapOfStringToRefOfCompany {
-	return types.ReadValue(r.target, cs).(MapOfStringToRefOfCompany)
+func (r RefOfMapOfStringToRefOfCompany) TargetValue(vr types.ValueReader) MapOfStringToRefOfCompany {
+	return vr.ReadValue(r.target).(MapOfStringToRefOfCompany)
 }
 
-func (r RefOfMapOfStringToRefOfCompany) SetTargetValue(val MapOfStringToRefOfCompany, cs chunks.ChunkSink) RefOfMapOfStringToRefOfCompany {
-	return NewRefOfMapOfStringToRefOfCompany(types.WriteValue(val, cs))
+func (r RefOfMapOfStringToRefOfCompany) SetTargetValue(val MapOfStringToRefOfCompany, vw types.ValueWriter) RefOfMapOfStringToRefOfCompany {
+	return NewRefOfMapOfStringToRefOfCompany(vw.WriteValue(val))
 }
 
 // MapOfStringToRefOfCompany
@@ -403,10 +402,10 @@ func builderForRefOfCompany(r ref.Ref) types.Value {
 	return NewRefOfCompany(r)
 }
 
-func (r RefOfCompany) TargetValue(cs chunks.ChunkSource) Company {
-	return types.ReadValue(r.target, cs).(Company)
+func (r RefOfCompany) TargetValue(vr types.ValueReader) Company {
+	return vr.ReadValue(r.target).(Company)
 }
 
-func (r RefOfCompany) SetTargetValue(val Company, cs chunks.ChunkSink) RefOfCompany {
-	return NewRefOfCompany(types.WriteValue(val, cs))
+func (r RefOfCompany) SetTargetValue(val Company, vw types.ValueWriter) RefOfCompany {
+	return NewRefOfCompany(vw.WriteValue(val))
 }

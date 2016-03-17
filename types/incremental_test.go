@@ -40,11 +40,12 @@ func isEncodedOutOfLine(v Value) int {
 func TestIncrementalLoadList(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
+	vs := newValueStore(cs)
 
 	expected := NewList(testVals...)
-	ref := WriteValue(expected, cs)
+	ref := vs.WriteValue(expected)
 
-	actualVar := ReadValue(ref, cs)
+	actualVar := vs.ReadValue(ref)
 	actual := actualVar.(List)
 
 	expectedCount := cs.Reads
@@ -67,11 +68,12 @@ func TestIncrementalLoadList(t *testing.T) {
 func SkipTestIncrementalLoadSet(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
+	vs := newValueStore(cs)
 
 	expected := NewSet(testVals...)
-	ref := WriteValue(expected, cs)
+	ref := vs.WriteValue(expected)
 
-	actualVar := ReadValue(ref, cs)
+	actualVar := vs.ReadValue(ref)
 	actual := actualVar.(Set)
 
 	expectedCount := cs.Reads
@@ -86,11 +88,12 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 func SkipTestIncrementalLoadMap(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
+	vs := newValueStore(cs)
 
 	expected := NewMap(testVals...)
-	ref := WriteValue(expected, cs)
+	ref := vs.WriteValue(expected)
 
-	actualVar := ReadValue(ref, cs)
+	actualVar := vs.ReadValue(ref)
 	actual := actualVar.(Map)
 
 	expectedCount := cs.Reads
@@ -106,13 +109,14 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 func SkipTestIncrementalAddRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
+	vs := newValueStore(cs)
 
 	expectedItem := Uint32(42)
-	ref := WriteValue(expectedItem, cs)
+	ref := vs.WriteValue(expectedItem)
 
 	expected := NewList(NewRef(ref))
-	ref = WriteValue(expected, cs)
-	actualVar := ReadValue(ref, cs)
+	ref = vs.WriteValue(expected)
+	actualVar := vs.ReadValue(ref)
 
 	assert.Equal(1, cs.Reads)
 	assert.True(expected.Equals(actualVar))

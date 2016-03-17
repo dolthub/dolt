@@ -3,7 +3,6 @@ package types
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -42,7 +41,7 @@ func TestRefInMap(t *testing.T) {
 
 func TestRefType(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	vs := NewTestValueStore()
 
 	tr := MakeCompoundType(RefKind, MakePrimitiveType(ValueKind))
 
@@ -51,17 +50,17 @@ func TestRefType(t *testing.T) {
 	assert.True(r.Type().Equals(tr))
 
 	m := NewMap()
-	r2 := r.SetTargetValue(m, cs)
+	r2 := r.SetTargetValue(m, vs)
 	assert.True(r2.Type().Equals(tr))
 
 	b := Bool(true)
-	r2 = r.SetTargetValue(b, cs)
+	r2 = r.SetTargetValue(b, vs)
 	r2.t = MakeCompoundType(RefKind, b.Type())
 
-	r3 := r2.SetTargetValue(Bool(false), cs)
+	r3 := r2.SetTargetValue(Bool(false), vs)
 	assert.True(r2.Type().Equals(r3.Type()))
 
-	assert.Panics(func() { r2.SetTargetValue(Int16(1), cs) })
+	assert.Panics(func() { r2.SetTargetValue(Int16(1), vs) })
 }
 
 func TestRefChunks(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/types"
 )
 
 type URLParams interface {
@@ -29,7 +30,7 @@ func HandleRef(w http.ResponseWriter, req *http.Request, ps URLParams, ds DataSt
 			handleGetReachable(w, req, r, ds)
 			return
 		}
-		chunk := ds.Get(r)
+		chunk := ds.transitionalChunkStore().Get(r)
 		if chunk.IsEmpty() {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -63,9 +64,29 @@ func handleGetReachable(w http.ResponseWriter, req *http.Request, r ref.Ref, ds 
 		writer = gw
 	}
 
-	sz := chunks.NewSerializer(writer)
+	sz := newDataSink(chunks.NewSerializer(writer))
 	ds.CopyReachableChunksP(r, excludeRef, sz, 512)
 	sz.Close()
+}
+
+type localDataSink struct {
+	cs chunks.ChunkSink
+}
+
+func newDataSink(cs chunks.ChunkSink) DataSink {
+	return &localDataSink{cs}
+}
+
+func (lds *localDataSink) transitionalChunkSink() chunks.ChunkSink {
+	return lds.cs
+}
+
+func (lds *localDataSink) WriteValue(v types.Value) ref.Ref {
+	return types.WriteValue(v, lds.cs)
+}
+
+func (lds *localDataSink) Close() error {
+	return lds.cs.Close()
 }
 
 func HandlePostRefs(w http.ResponseWriter, req *http.Request, ps URLParams, ds DataStore) {
@@ -80,7 +101,7 @@ func HandlePostRefs(w http.ResponseWriter, req *http.Request, ps URLParams, ds D
 			reader = gr
 		}
 
-		chunks.Deserialize(reader, ds, nil)
+		chunks.Deserialize(reader, ds.transitionalChunkStore(), nil)
 		w.WriteHeader(http.StatusCreated)
 	})
 
@@ -114,7 +135,7 @@ func HandleGetHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, ds
 
 		sz := chunks.NewSerializer(writer)
 		for _, r := range refs {
-			has := ds.Has(r)
+			has := ds.transitionalChunkStore().Has(r)
 			fmt.Fprintf(writer, "%s %t\n", r, has)
 		}
 		sz.Close()
@@ -150,7 +171,7 @@ func HandleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, ds Da
 
 		sz := chunks.NewSerializer(writer)
 		for _, r := range refs {
-			c := ds.Get(r)
+			c := ds.transitionalChunkStore().Get(r)
 			if !c.IsEmpty() {
 				sz.Put(c)
 			}
@@ -168,7 +189,7 @@ func HandleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, ds Da
 	err := d.Try(func() {
 		d.Exp.Equal("GET", req.Method)
 
-		rootRef := ds.Root()
+		rootRef := ds.transitionalChunkStore().Root()
 		fmt.Fprintf(w, "%v", rootRef.String())
 		w.Header().Add("content-type", "text/plain")
 	})
@@ -191,7 +212,7 @@ func HandleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, ds D
 		d.Exp.Len(tokens, 1)
 		current := ref.Parse(tokens[0])
 
-		if !ds.UpdateRoot(current, last) {
+		if !ds.transitionalChunkStore().UpdateRoot(current, last) {
 			w.WriteHeader(http.StatusConflict)
 			return
 		}

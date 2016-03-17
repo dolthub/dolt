@@ -3,7 +3,6 @@
 package gen
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -165,12 +164,12 @@ func builderForRefOfListOfString(r ref.Ref) types.Value {
 	return NewRefOfListOfString(r)
 }
 
-func (r RefOfListOfString) TargetValue(cs chunks.ChunkSource) ListOfString {
-	return types.ReadValue(r.target, cs).(ListOfString)
+func (r RefOfListOfString) TargetValue(vr types.ValueReader) ListOfString {
+	return vr.ReadValue(r.target).(ListOfString)
 }
 
-func (r RefOfListOfString) SetTargetValue(val ListOfString, cs chunks.ChunkSink) RefOfListOfString {
-	return NewRefOfListOfString(types.WriteValue(val, cs))
+func (r RefOfListOfString) SetTargetValue(val ListOfString, vw types.ValueWriter) RefOfListOfString {
+	return NewRefOfListOfString(vw.WriteValue(val))
 }
 
 // ListOfRefOfFloat32
@@ -368,12 +367,12 @@ func builderForRefOfSetOfFloat32(r ref.Ref) types.Value {
 	return NewRefOfSetOfFloat32(r)
 }
 
-func (r RefOfSetOfFloat32) TargetValue(cs chunks.ChunkSource) SetOfFloat32 {
-	return types.ReadValue(r.target, cs).(SetOfFloat32)
+func (r RefOfSetOfFloat32) TargetValue(vr types.ValueReader) SetOfFloat32 {
+	return vr.ReadValue(r.target).(SetOfFloat32)
 }
 
-func (r RefOfSetOfFloat32) SetTargetValue(val SetOfFloat32, cs chunks.ChunkSink) RefOfSetOfFloat32 {
-	return NewRefOfSetOfFloat32(types.WriteValue(val, cs))
+func (r RefOfSetOfFloat32) SetTargetValue(val SetOfFloat32, vw types.ValueWriter) RefOfSetOfFloat32 {
+	return NewRefOfSetOfFloat32(vw.WriteValue(val))
 }
 
 // ListOfString
@@ -571,12 +570,12 @@ func builderForRefOfFloat32(r ref.Ref) types.Value {
 	return NewRefOfFloat32(r)
 }
 
-func (r RefOfFloat32) TargetValue(cs chunks.ChunkSource) float32 {
-	return float32(types.ReadValue(r.target, cs).(types.Float32))
+func (r RefOfFloat32) TargetValue(vr types.ValueReader) float32 {
+	return float32(vr.ReadValue(r.target).(types.Float32))
 }
 
-func (r RefOfFloat32) SetTargetValue(val float32, cs chunks.ChunkSink) RefOfFloat32 {
-	return NewRefOfFloat32(types.WriteValue(types.Float32(val), cs))
+func (r RefOfFloat32) SetTargetValue(val float32, vw types.ValueWriter) RefOfFloat32 {
+	return NewRefOfFloat32(vw.WriteValue(types.Float32(val)))
 }
 
 // SetOfFloat32

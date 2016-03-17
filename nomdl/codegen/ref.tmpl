@@ -53,10 +53,10 @@ func builderFor{{.Name}}(r ref.Ref) {{$typesPackage}}Value {
 	return New{{.Name}}(r)
 }
 
-func (r {{.Name}}) TargetValue(cs chunks.ChunkSource) {{userType .ElemType}} {
-	return {{valueToUser (printf "%sReadValue(r.target, cs)" $typesPackage) .ElemType}}
+func (r {{.Name}}) TargetValue(vr {{$typesPackage}}ValueReader) {{userType .ElemType}} {
+	return {{valueToUser "vr.ReadValue(r.target)" .ElemType}}
 }
 
-func (r {{.Name}}) SetTargetValue(val {{userType .ElemType}}, cs chunks.ChunkSink) {{.Name}} {
-	return New{{.Name}}({{$typesPackage}}WriteValue({{userToValue "val" .ElemType}}, cs))
+func (r {{.Name}}) SetTargetValue(val {{userType .ElemType}}, vw {{$typesPackage}}ValueWriter) {{.Name}} {
+	return New{{.Name}}(vw.WriteValue({{userToValue "val" .ElemType}}))
 }

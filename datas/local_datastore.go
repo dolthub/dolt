@@ -5,6 +5,7 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/walk"
 )
 
@@ -14,21 +15,21 @@ type LocalDataStore struct {
 }
 
 func newLocalDataStore(cs chunks.ChunkStore) *LocalDataStore {
-	return &LocalDataStore{dataStoreCommon{cs, cs.Root(), nil, map[ref.Ref]bool{}, &sync.Mutex{}}}
+	return &LocalDataStore{dataStoreCommon{newHasCachingChunkStore(cs), cs.Root(), nil}}
 }
 
 func (lds *LocalDataStore) Commit(datasetID string, commit Commit) (DataStore, error) {
 	err := lds.commit(datasetID, commit)
-	return newLocalDataStore(lds.ChunkStore), err
+	return newLocalDataStore(lds.cs.Backing()), err
 }
 
 func (lds *LocalDataStore) Delete(datasetID string) (DataStore, error) {
 	err := lds.doDelete(datasetID)
-	return newLocalDataStore(lds.ChunkStore), err
+	return newLocalDataStore(lds.cs.Backing()), err
 }
 
 // CopyReachableChunksP copies to |sink| all chunks reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|
-func (lds *LocalDataStore) CopyReachableChunksP(sourceRef, exclude ref.Ref, sink chunks.ChunkSink, concurrency int) {
+func (lds *LocalDataStore) CopyReachableChunksP(sourceRef, exclude ref.Ref, sink DataSink, concurrency int) {
 	excludeRefs := map[ref.Ref]bool{}
 
 	if !exclude.IsEmpty() {
@@ -43,7 +44,7 @@ func (lds *LocalDataStore) CopyReachableChunksP(sourceRef, exclude ref.Ref, sink
 		walk.SomeChunksP(exclude, lds, excludeCallback, concurrency)
 	}
 
-	tcs := &teeChunkSource{lds, sink}
+	tcs := &teeDataSource{lds.cs, sink.transitionalChunkSink()}
 	copyCallback := func(r ref.Ref) bool {
 		return excludeRefs[r]
 	}
@@ -51,38 +52,18 @@ func (lds *LocalDataStore) CopyReachableChunksP(sourceRef, exclude ref.Ref, sink
 	walk.SomeChunksP(sourceRef, tcs, copyCallback, concurrency)
 }
 
-// teeChunkSource just serves the purpose of writing to |sink| every chunk that is read from |source|.
-type teeChunkSource struct {
+// teeDataSource just serves the purpose of writing to |sink| every chunk that is read from |source|.
+type teeDataSource struct {
 	source chunks.ChunkSource
 	sink   chunks.ChunkSink
 }
 
-func (trs *teeChunkSource) Get(ref ref.Ref) chunks.Chunk {
+func (trs *teeDataSource) ReadValue(ref ref.Ref) types.Value {
 	c := trs.source.Get(ref)
 	if c.IsEmpty() {
-		return c
+		return nil
 	}
 
 	trs.sink.Put(c)
-	return c
-}
-
-func (trs *teeChunkSource) Has(ref ref.Ref) bool {
-	return trs.source.Has(ref)
-}
-
-func (trs *teeChunkSource) Root() ref.Ref {
-	panic("not reached")
-}
-
-func (trs *teeChunkSource) UpdateRoot(current, existing ref.Ref) bool {
-	panic("not reached")
-}
-
-func (trs *teeChunkSource) Put(c chunks.Chunk) {
-	panic("not reached")
-}
-
-func (trs *teeChunkSource) Close() error {
-	panic("not reached")
+	return types.DecodeChunk(c, trs)
 }

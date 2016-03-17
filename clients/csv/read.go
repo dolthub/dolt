@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"io"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
@@ -94,11 +93,11 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 // Read takes a CSV reader and reads it into a typed List of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
 // If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
 // In addition to the list, Read returns the typeRef for the structs in the list, and last the typeDef of the structs.
-func Read(r *csv.Reader, structName string, headers []string, kinds KindSlice, cs chunks.ChunkStore) (l types.List, typeRef, typeDef types.Type) {
+func Read(r *csv.Reader, structName string, headers []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, typeRef, typeDef types.Type) {
 	typeRef, typeDef = MakeStructTypeFromHeaders(headers, structName, kinds)
 	valueChan := make(chan types.Value, 128) // TODO: Make this a function param?
 	listType := types.MakeCompoundType(types.ListKind, typeRef)
-	listChan := types.NewStreamingTypedList(listType, cs, valueChan)
+	listChan := types.NewStreamingTypedList(listType, vrw, valueChan)
 
 	structFields := typeDef.Desc.(types.StructDesc).Fields
 

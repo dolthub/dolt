@@ -1,33 +1,25 @@
 package datas
 
 import (
-	"sync"
+	"errors"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/walk"
-	"github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 type dataStoreCommon struct {
-	chunks.ChunkStore
+	cs       *hasCachingChunkStore
 	rootRef  ref.Ref
 	datasets *MapOfStringToRefOfCommit
-	hasCache map[ref.Ref]bool
-	mu       *sync.Mutex
 }
 
 var (
 	ErrOptimisticLockFailed = errors.New("Optimistic lock failed on datastore Root update")
 	ErrMergeNeeded          = errors.New("Dataset head is not ancestor of commit")
 )
-
-func datasetsFromRef(datasetsRef ref.Ref, cs chunks.ChunkSource) *MapOfStringToRefOfCommit {
-	c := types.ReadValue(datasetsRef, cs).(MapOfStringToRefOfCommit)
-	return &c
-}
 
 func (ds *dataStoreCommon) MaybeHead(datasetID string) (Commit, bool) {
 	if r, ok := ds.Datasets().MaybeGet(datasetID); ok {
@@ -48,22 +40,55 @@ func (ds *dataStoreCommon) Datasets() MapOfStringToRefOfCommit {
 			emptySet := NewMapOfStringToRefOfCommit()
 			ds.datasets = &emptySet
 		} else {
-			ds.datasets = datasetsFromRef(ds.rootRef, ds)
+			ds.datasets = ds.datasetsFromRef(ds.rootRef)
 		}
 	}
 
 	return *ds.datasets
 }
 
+func (ds *dataStoreCommon) datasetsFromRef(datasetsRef ref.Ref) *MapOfStringToRefOfCommit {
+	c := ds.ReadValue(datasetsRef).(MapOfStringToRefOfCommit)
+	return &c
+}
+
+// ReadValue reads and decodes a value from ds. It is not considered an error for the requested chunk to be empty; in this case, the function simply returns nil.
+func (ds *dataStoreCommon) ReadValue(r ref.Ref) types.Value {
+	c := ds.cs.Get(r)
+	return types.DecodeChunk(c, ds)
+}
+
+func (ds *dataStoreCommon) WriteValue(v types.Value) ref.Ref {
+	return types.WriteValue(v, ds.cs)
+}
+
+// Has should really not be exposed on DataStore :-/
+func (ds *dataStoreCommon) Has(r ref.Ref) bool {
+	return ds.cs.Has(r)
+}
+
+func (ds *dataStoreCommon) Close() error {
+	return ds.cs.Close()
+}
+
 // CopyMissingChunksP copies to |sink| all chunks in ds that are reachable from (and including) |r|, skipping chunks that |sink| already has
-func (ds *dataStoreCommon) CopyMissingChunksP(sourceRef ref.Ref, sink chunks.ChunkStore, concurrency int) {
-	tcs := &teeChunkSource{ds, sink}
+func (ds *dataStoreCommon) CopyMissingChunksP(sourceRef ref.Ref, sink DataStore, concurrency int) {
+	sinkCS := sink.transitionalChunkStore()
+	tcs := &teeDataSource{ds.cs, sinkCS}
 
 	copyCallback := func(r ref.Ref) bool {
-		return sink.Has(r)
+		return sinkCS.Has(r)
 	}
 
 	walk.SomeChunksP(sourceRef, tcs, copyCallback, concurrency)
+}
+
+func (ds *dataStoreCommon) transitionalChunkSink() chunks.ChunkSink {
+	return ds.cs
+}
+
+func (ds *dataStoreCommon) transitionalChunkStore() chunks.ChunkStore {
+	return ds.cs
 }
 
 func (ds *dataStoreCommon) commit(datasetID string, commit Commit) error {
@@ -75,7 +100,7 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) error {
 	currentRootRef, currentDatasets := ds.getRootAndDatasets()
 
 	// TODO: This Commit will be orphaned if the tryUpdateRoot() below fails
-	commitRef := NewRefOfCommit(types.WriteValue(commit, ds))
+	commitRef := NewRefOfCommit(ds.WriteValue(commit))
 
 	// First commit in store is always fast-foward.
 	if !currentRootRef.IsEmpty() {
@@ -105,85 +130,42 @@ func (ds *dataStoreCommon) doDelete(datasetID string) error {
 }
 
 func (ds *dataStoreCommon) getRootAndDatasets() (currentRootRef ref.Ref, currentDatasets MapOfStringToRefOfCommit) {
-	currentRootRef = ds.Root()
+	currentRootRef = ds.cs.Root()
 	currentDatasets = ds.Datasets()
 
 	if currentRootRef != currentDatasets.Ref() && !currentRootRef.IsEmpty() {
 		// The root has been advanced.
-		currentDatasets = *datasetsFromRef(currentRootRef, ds)
+		currentDatasets = *ds.datasetsFromRef(currentRootRef)
 	}
 	return
 }
 
 func (ds *dataStoreCommon) tryUpdateRoot(currentDatasets MapOfStringToRefOfCommit, currentRootRef ref.Ref) (err error) {
 	// TODO: This Commit will be orphaned if the UpdateRoot below fails
-	newRootRef := types.WriteValue(currentDatasets, ds)
+	newRootRef := ds.WriteValue(currentDatasets)
 	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
-	if !ds.UpdateRoot(newRootRef, currentRootRef) {
+	if !ds.cs.UpdateRoot(newRootRef, currentRootRef) {
 		err = ErrOptimisticLockFailed
 	}
 	return
 }
 
-func checkCache(ds *dataStoreCommon, r ref.Ref) (has, ok bool) {
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
-	has, ok = ds.hasCache[r]
-	return
-}
-
-func setCache(ds *dataStoreCommon, r ref.Ref, has bool) {
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
-	ds.hasCache[r] = has
-}
-
-func (ds *dataStoreCommon) Has(r ref.Ref) bool {
-	has, ok := checkCache(ds, r)
-	if ok {
-		return has
-	}
-	has = ds.ChunkStore.Has(r)
-	setCache(ds, r, has)
-	return has
-}
-
-func (ds *dataStoreCommon) Get(r ref.Ref) chunks.Chunk {
-	has, ok := checkCache(ds, r)
-	if ok && !has {
-		return chunks.EmptyChunk
-	}
-	c := ds.ChunkStore.Get(r)
-	setCache(ds, r, !c.IsEmpty())
-	return c
-}
-
-func (ds *dataStoreCommon) Put(c chunks.Chunk) {
-	r := c.Ref()
-	has, _ := checkCache(ds, r)
-	if has {
-		return
-	}
-	ds.ChunkStore.Put(c)
-	setCache(ds, r, true)
-}
-
-func descendsFrom(commit Commit, currentHeadRef RefOfCommit, cs chunks.ChunkStore) bool {
+func descendsFrom(commit Commit, currentHeadRef RefOfCommit, vr types.ValueReader) bool {
 	// BFS because the common case is that the ancestor is only a step or two away
 	ancestors := commit.Parents()
 	for !ancestors.Has(currentHeadRef) {
 		if ancestors.Empty() {
 			return false
 		}
-		ancestors = getAncestors(ancestors, cs)
+		ancestors = getAncestors(ancestors, vr)
 	}
 	return true
 }
 
-func getAncestors(commits SetOfRefOfCommit, cs chunks.ChunkStore) SetOfRefOfCommit {
+func getAncestors(commits SetOfRefOfCommit, vr types.ValueReader) SetOfRefOfCommit {
 	ancestors := NewSetOfRefOfCommit()
 	commits.IterAll(func(r RefOfCommit) {
-		c := r.TargetValue(cs)
+		c := r.TargetValue(vr)
 		ancestors = ancestors.Union(c.Parents())
 	})
 	return ancestors

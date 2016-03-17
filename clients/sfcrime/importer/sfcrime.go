@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/clients/common"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
@@ -154,7 +153,7 @@ func main() {
 		fmt.Printf("Converting refs list to noms list: %.2f secs\n", time.Now().Sub(start).Seconds())
 	}
 
-	ref := types.WriteValue(incidentRefs, ds.Store())
+	ref := ds.Store().WriteValue(incidentRefs)
 	_, err = ds.Commit(types.NewRef(ref))
 	d.Exp.NoError(err)
 
@@ -166,7 +165,7 @@ func main() {
 	fmt.Printf("Ref of list containing Incidents: %s, , elaspsed time: %.2f secs\n", incidentRefs.Ref(), time.Now().Sub(start).Seconds())
 }
 
-func getNomsWriter(cs chunks.ChunkStore) (iChan chan incidentWithIndex, rChan chan refIndex) {
+func getNomsWriter(vw types.ValueWriter) (iChan chan incidentWithIndex, rChan chan refIndex) {
 	iChan = make(chan incidentWithIndex, 3000)
 	rChan = make(chan refIndex, 3000)
 	var wg sync.WaitGroup
@@ -175,7 +174,7 @@ func getNomsWriter(cs chunks.ChunkStore) (iChan chan incidentWithIndex, rChan ch
 		go func() {
 			for incidentRecord := range iChan {
 				v := incidentRecord.incident.New()
-				r := types.WriteValue(v, cs)
+				r := vw.WriteValue(v)
 				rChan <- refIndex{types.NewRef(r), incidentRecord.index}
 			}
 			wg.Done()

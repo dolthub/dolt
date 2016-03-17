@@ -6,7 +6,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -234,7 +233,7 @@ func newMapLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeMapLeafChunkFn(t Type, cs chunks.ChunkSource) makeChunkFn {
+func makeMapLeafChunkFn(t Type, vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		mapData := make([]mapEntry, len(items), len(items))
 

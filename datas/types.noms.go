@@ -3,7 +3,6 @@
 package datas
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -464,10 +463,10 @@ func builderForRefOfCommit(r ref.Ref) types.Value {
 	return NewRefOfCommit(r)
 }
 
-func (r RefOfCommit) TargetValue(cs chunks.ChunkSource) Commit {
-	return types.ReadValue(r.target, cs).(Commit)
+func (r RefOfCommit) TargetValue(vr types.ValueReader) Commit {
+	return vr.ReadValue(r.target).(Commit)
 }
 
-func (r RefOfCommit) SetTargetValue(val Commit, cs chunks.ChunkSink) RefOfCommit {
-	return NewRefOfCommit(types.WriteValue(val, cs))
+func (r RefOfCommit) SetTargetValue(val Commit, vw types.ValueWriter) RefOfCommit {
+	return NewRefOfCommit(vw.WriteValue(val))
 }

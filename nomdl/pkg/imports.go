@@ -4,24 +4,23 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
-// getDeps reads the types.Package objects referred to by depRefs out of cs and returns a map of ref: PackageDef.
-func getDeps(deps []ref.Ref, cs chunks.ChunkSource) map[ref.Ref]types.Package {
+// getDeps reads the types.Package objects referred to by depRefs from vr and returns a map of ref: PackageDef.
+func getDeps(deps []ref.Ref, vr types.ValueReader) map[ref.Ref]types.Package {
 	depsMap := map[ref.Ref]types.Package{}
 	for _, depRef := range deps {
-		v := types.ReadValue(depRef, cs)
+		v := vr.ReadValue(depRef)
 		d.Chk.NotNil(v, "Importing package by ref %s failed.", depRef.String())
 		depsMap[depRef] = v.(types.Package)
 	}
 	return depsMap
 }
 
-func resolveImports(aliases map[string]string, includePath string, cs chunks.ChunkStore) map[string]ref.Ref {
+func resolveImports(aliases map[string]string, includePath string, vrw types.ValueReadWriter) map[string]ref.Ref {
 	canonicalize := func(path string) string {
 		if filepath.IsAbs(path) {
 			return path
@@ -37,8 +36,8 @@ func resolveImports(aliases map[string]string, includePath string, cs chunks.Chu
 			inFile, err := os.Open(canonical)
 			d.Chk.NoError(err)
 			defer inFile.Close()
-			parsedDep := ParseNomDL(alias, inFile, filepath.Dir(canonical), cs)
-			imports[alias] = types.WriteValue(parsedDep.Package, cs)
+			parsedDep := ParseNomDL(alias, inFile, filepath.Dir(canonical), vrw)
+			imports[alias] = vrw.WriteValue(parsedDep.Package)
 		} else {
 			imports[alias] = r
 		}

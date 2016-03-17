@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
@@ -21,7 +20,7 @@ func TestGetRef(t *testing.T) {
 
 func TestEnsureRef(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	vs := NewTestValueStore()
 	count := byte(1)
 	mockGetRef := func(v Value) ref.Ref {
 
@@ -44,16 +43,16 @@ func TestEnsureRef(t *testing.T) {
 	}()
 
 	bl := newBlobLeaf([]byte("hi"))
-	cb := newCompoundBlob([]metaTuple{{bl, ref.Ref{}, Uint64(2)}}, cs)
+	cb := newCompoundBlob([]metaTuple{{bl, ref.Ref{}, Uint64(2)}}, vs)
 
 	ll := newListLeaf(listType, NewString("foo"))
-	cl := buildCompoundList([]metaTuple{{ll, ref.Ref{}, Uint64(1)}}, listType, cs)
+	cl := buildCompoundList([]metaTuple{{ll, ref.Ref{}, Uint64(1)}}, listType, vs)
 
 	ml := newMapLeaf(mapType, mapEntry{NewString("foo"), NewString("bar")})
-	cm := buildCompoundMap([]metaTuple{{ml, ref.Ref{}, NewString("foo")}}, mapType, cs)
+	cm := buildCompoundMap([]metaTuple{{ml, ref.Ref{}, NewString("foo")}}, mapType, vs)
 
 	sl := newSetLeaf(setType, NewString("foo"))
-	cps := buildCompoundSet([]metaTuple{{sl, ref.Ref{}, NewString("foo")}}, setType, cs)
+	cps := buildCompoundSet([]metaTuple{{sl, ref.Ref{}, NewString("foo")}}, setType, vs)
 
 	count = byte(1)
 	values := []Value{

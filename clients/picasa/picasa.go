@@ -17,7 +17,6 @@ import (
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/util/http/retry"
 	"golang.org/x/oauth2"
 )
@@ -65,7 +64,7 @@ func main() {
 	start = time.Now()
 	user := getUser()
 
-	userRef := types.WriteValue(user, ds.Store())
+	userRef := ds.Store().WriteValue(user)
 	fmt.Printf("userRef: %s\n", userRef)
 	_, err := ds.Commit(NewRefOfUser(userRef))
 	d.Exp.NoError(err)
@@ -129,7 +128,7 @@ func getUser() User {
 		for {
 			album := <-ch
 			// TODO: batch write albums.
-			r := types.WriteValue(album, ds.Store())
+			r := ds.Store().WriteValue(album)
 			albums = append(albums, r)
 			wg.Done()
 		}
@@ -213,7 +212,7 @@ func getRemotePhotos(albumId string, numPhotos int, shapes shapeMap, progress ch
 
 				mu.Lock()
 				// TODO: batch write photos.
-				remotePhotos[types.WriteValue(p, ds.Store())] = true
+				remotePhotos[ds.Store().WriteValue(p)] = true
 				mu.Unlock()
 				progress <- struct{}{}
 			}

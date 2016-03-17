@@ -76,8 +76,8 @@ func main() {
 	}
 
 	go func() {
-		cs := dataset.Store()
-		walk.SomeP(types.ReadValue(inputRef, cs), cs, func(v types.Value) (stop bool) {
+		ds := dataset.Store()
+		walk.SomeP(ds.ReadValue(inputRef), ds, func(v types.Value) (stop bool) {
 			var g common.Geoposition
 
 			switch v := v.(type) {
@@ -95,7 +95,7 @@ func main() {
 			}
 
 			// TODO: This check is mega bummer. We really only want to consider RefOfStruct, but it's complicated to filter the case of an inline struct out.
-			if !cs.Has(v.Ref()) {
+			if !ds.Has(v.Ref()) {
 				return
 			}
 

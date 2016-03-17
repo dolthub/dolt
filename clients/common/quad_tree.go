@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/types"
@@ -197,14 +196,14 @@ func (qt *QuadTreeDef) makeChildren() {
 	qt.Tiles[br] = CreateNewQuadTreeDef(qt.Depth+1, qt.Path+"d", brRect)
 }
 
-func (qt *QuadTreeDef) SaveToNoms(cs chunks.ChunkStore, start time.Time, quiet bool) *SQuadTree {
+func (qt *QuadTreeDef) SaveToNoms(vw types.ValueWriter, start time.Time, quiet bool) *SQuadTree {
 	wChan := make(chan *SQuadTree, 1024)
 	var wg sync.WaitGroup
 	for i := 0; i < 32; i++ {
 		wg.Add(1)
 		go func() {
 			for sqt := range wChan {
-				types.WriteValue(*sqt, cs)
+				vw.WriteValue(*sqt)
 			}
 			wg.Done()
 		}()
@@ -214,18 +213,18 @@ func (qt *QuadTreeDef) SaveToNoms(cs chunks.ChunkStore, start time.Time, quiet b
 		defer util.StopCPUProfile()
 	}
 
-	sqt := qt.saveNodeToNoms(wChan, cs, start, quiet)
+	sqt := qt.saveNodeToNoms(wChan, vw, start, quiet)
 	close(wChan)
 	wg.Wait()
 	return sqt
 }
 
-func (qt *QuadTreeDef) saveNodeToNoms(wChan chan *SQuadTree, cs chunks.ChunkStore, start time.Time, quiet bool) *SQuadTree {
+func (qt *QuadTreeDef) saveNodeToNoms(wChan chan *SQuadTree, vw types.ValueWriter, start time.Time, quiet bool) *SQuadTree {
 	tileRefs := MapOfStringToRefOfSQuadTreeDef{}
 	nrefs := make(ListOfRefOfValueDef, 0, len(qt.Nodes))
 	if qt.hasTiles() {
 		for q, tile := range qt.Tiles {
-			child := tile.saveNodeToNoms(wChan, cs, start, quiet)
+			child := tile.saveNodeToNoms(wChan, vw, start, quiet)
 			ref := child.Ref()
 			tileRefs[q] = ref
 		}

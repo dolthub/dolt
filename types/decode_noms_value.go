@@ -7,24 +7,23 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
-func fromTypedEncodeable(i []interface{}, cs chunks.ChunkSource) Value {
-	r := newJsonArrayReader(i, cs)
+func fromTypedEncodeable(i []interface{}, vr ValueReader) Value {
+	r := newJsonArrayReader(i, vr)
 	return r.readTopLevelValue()
 }
 
 type jsonArrayReader struct {
 	a  []interface{}
 	i  int
-	cs chunks.ChunkSource
+	vr ValueReader
 }
 
-func newJsonArrayReader(a []interface{}, cs chunks.ChunkSource) *jsonArrayReader {
-	return &jsonArrayReader{a: a, i: 0, cs: cs}
+func newJsonArrayReader(a []interface{}, vr ValueReader) *jsonArrayReader {
+	return &jsonArrayReader{a: a, i: 0, vr: vr}
 }
 
 func (r *jsonArrayReader) read() interface{} {
@@ -172,7 +171,7 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t Type, pkg *Package) (Value, bo
 		return nil, false
 	}
 
-	r2 := newJsonArrayReader(r.readArray(), r.cs)
+	r2 := newJsonArrayReader(r.readArray(), r.vr)
 	data := metaSequenceData{}
 	indexType := indexTypeForMetaSequence(t)
 	for !r2.atEnd() {
@@ -182,7 +181,7 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t Type, pkg *Package) (Value, bo
 	}
 
 	t = fixupType(t, pkg)
-	return newMetaSequenceFromData(data, t, r.cs), true
+	return newMetaSequenceFromData(data, t, r.vr), true
 }
 
 func (r *jsonArrayReader) readEnum(t Type, pkg *Package) Value {
@@ -191,13 +190,13 @@ func (r *jsonArrayReader) readEnum(t Type, pkg *Package) Value {
 }
 
 func (r *jsonArrayReader) readPackage(t Type, pkg *Package) Value {
-	r2 := newJsonArrayReader(r.readArray(), r.cs)
+	r2 := newJsonArrayReader(r.readArray(), r.vr)
 	types := []Type{}
 	for !r2.atEnd() {
 		types = append(types, r2.readTypeAsValue(pkg))
 	}
 
-	r3 := newJsonArrayReader(r.readArray(), r.cs)
+	r3 := newJsonArrayReader(r.readArray(), r.vr)
 	deps := []ref.Ref{}
 	for !r3.atEnd() {
 		deps = append(deps, r3.readRef())
@@ -258,14 +257,14 @@ func (r *jsonArrayReader) readValueWithoutTag(t Type, pkg *Package) Value {
 			return ms
 		}
 
-		r2 := newJsonArrayReader(r.readArray(), r.cs)
+		r2 := newJsonArrayReader(r.readArray(), r.vr)
 		return r2.readList(t, pkg)
 	case MapKind:
 		if ms, ok := r.maybeReadMetaSequence(t, pkg); ok {
 			return ms
 		}
 
-		r2 := newJsonArrayReader(r.readArray(), r.cs)
+		r2 := newJsonArrayReader(r.readArray(), r.vr)
 		return r2.readMap(t, pkg)
 	case PackageKind:
 		return r.readPackage(t, pkg)
@@ -276,7 +275,7 @@ func (r *jsonArrayReader) readValueWithoutTag(t Type, pkg *Package) Value {
 			return ms
 		}
 
-		r2 := newJsonArrayReader(r.readArray(), r.cs)
+		r2 := newJsonArrayReader(r.readArray(), r.vr)
 		return r2.readSet(t, pkg)
 	case EnumKind, StructKind:
 		panic("not allowed")
@@ -303,7 +302,7 @@ func (r *jsonArrayReader) readUnresolvedKindToValue(t Type, pkg *Package) Value 
 		if pkg2 != nil {
 			pkg = pkg2
 		} else {
-			pkg = ReadPackage(pkgRef, r.cs)
+			pkg = ReadPackage(pkgRef, r.vr)
 		}
 	}
 
@@ -324,14 +323,14 @@ func (r *jsonArrayReader) readTypeAsValue(pkg *Package) Type {
 	switch k {
 	case EnumKind:
 		name := r.readString()
-		r2 := newJsonArrayReader(r.readArray(), r.cs)
+		r2 := newJsonArrayReader(r.readArray(), r.vr)
 		ids := []string{}
 		for !r2.atEnd() {
 			ids = append(ids, r2.readString())
 		}
 		return MakeEnumType(name, ids...)
 	case ListKind, MapKind, RefKind, SetKind:
-		r2 := newJsonArrayReader(r.readArray(), r.cs)
+		r2 := newJsonArrayReader(r.readArray(), r.vr)
 		elemTypes := []Type{}
 		for !r2.atEnd() {
 			t := r2.readTypeAsValue(pkg)
@@ -344,14 +343,14 @@ func (r *jsonArrayReader) readTypeAsValue(pkg *Package) Type {
 		fields := []Field{}
 		choices := Choices{}
 
-		fieldReader := newJsonArrayReader(r.readArray(), r.cs)
+		fieldReader := newJsonArrayReader(r.readArray(), r.vr)
 		for !fieldReader.atEnd() {
 			fieldName := fieldReader.readString()
 			fieldType := fieldReader.readTypeAsValue(pkg)
 			optional := fieldReader.readBool()
 			fields = append(fields, Field{Name: fieldName, T: fieldType, Optional: optional})
 		}
-		choiceReader := newJsonArrayReader(r.readArray(), r.cs)
+		choiceReader := newJsonArrayReader(r.readArray(), r.vr)
 		for !choiceReader.atEnd() {
 			fieldName := choiceReader.readString()
 			fieldType := choiceReader.readTypeAsValue(pkg)

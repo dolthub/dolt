@@ -5,7 +5,6 @@ import (
 
 	"runtime"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -20,11 +19,11 @@ type compoundList struct {
 	metaSequenceObject
 	length uint64
 	ref    *ref.Ref
-	cs     chunks.ChunkSource
+	vr     ValueReader
 }
 
-func buildCompoundList(tuples metaSequenceData, t Type, cs chunks.ChunkSource) Value {
-	cl := compoundList{metaSequenceObject{tuples, t}, tuples.uint64ValuesSum(), &ref.Ref{}, cs}
+func buildCompoundList(tuples metaSequenceData, t Type, vr ValueReader) Value {
+	cl := compoundList{metaSequenceObject{tuples, t}, tuples.uint64ValuesSum(), &ref.Ref{}, vr}
 	return valueFromType(cl, t)
 }
 
@@ -60,7 +59,7 @@ func (cl compoundList) Empty() bool {
 // Returns a cursor pointing to the deepest metaTuple containing |idx| within |cl|, the list leaf that it points to, and the offset within the list that the leaf starts at.
 func (cl compoundList) cursorAt(idx uint64) (*sequenceCursor, listLeaf, uint64) {
 	d.Chk.True(idx <= cl.Len())
-	cursor, leaf := newMetaSequenceCursor(cl, cl.cs)
+	cursor, leaf := newMetaSequenceCursor(cl, cl.vr)
 
 	chunkStart := cursor.seekLinear(func(carry interface{}, mt sequenceItem) (bool, interface{}) {
 		offset := carry.(uint64) + mt.(metaTuple).uint64Value()
@@ -68,7 +67,7 @@ func (cl compoundList) cursorAt(idx uint64) (*sequenceCursor, listLeaf, uint64) 
 	}, uint64(0))
 
 	if current := cursor.current().(metaTuple); current.ChildRef() != valueFromType(leaf, leaf.Type()).Ref() {
-		leaf = readMetaTupleValue(current, cl.cs)
+		leaf = readMetaTupleValue(current, cl.vr)
 	}
 
 	return cursor, leaf.(listLeaf), chunkStart.(uint64)
@@ -87,7 +86,7 @@ func (cl compoundList) IterAllP(concurrency int, f listIterAllFunc) {
 	} else {
 		limit = make(chan int, concurrency)
 	}
-	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
+	iterateMetaSequenceLeaf(cl, cl.vr, func(l Value) bool {
 		list := l.(listLeaf)
 		list.iterInternal(limit, f, start)
 		start += list.Len()
@@ -114,7 +113,7 @@ func (cl compoundList) Map(mf MapFunc) []interface{} {
 	start := uint64(0)
 
 	results := make([]interface{}, 0, cl.Len())
-	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
+	iterateMetaSequenceLeaf(cl, cl.vr, func(l Value) bool {
 		list := l.(listLeaf)
 		for i, v := range list.values {
 			res := mf(v, start+uint64(i))
@@ -137,7 +136,7 @@ func (cl compoundList) MapP(concurrency int, mf MapFunc) []interface{} {
 	}
 
 	results := make([]interface{}, 0, cl.Len())
-	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
+	iterateMetaSequenceLeaf(cl, cl.vr, func(l Value) bool {
 		list := l.(listLeaf)
 		nl := list.mapInternal(limit, mf, start)
 		results = append(results, nl...)
@@ -183,18 +182,18 @@ func (cl compoundList) sequenceCursorAtIndex(idx uint64) *sequenceCursor {
 	return &sequenceCursor{metaCur, leaf, int(idx - start), len(leaf.values), func(otherLeaf sequenceItem, idx int) sequenceItem {
 		return otherLeaf.(listLeaf).values[idx]
 	}, func(mt sequenceItem) (sequenceItem, int) {
-		otherLeaf := readMetaTupleValue(mt, cl.cs).(listLeaf)
+		otherLeaf := readMetaTupleValue(mt, cl.vr).(listLeaf)
 		return otherLeaf, len(otherLeaf.values)
 	}}
 }
 
 func (cl compoundList) sequenceChunkerAtIndex(idx uint64) *sequenceChunker {
 	cur := cl.sequenceCursorAtIndex(idx)
-	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t, nil), newIndexedMetaSequenceChunkFn(cl.t, cl.cs, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t, nil), newIndexedMetaSequenceChunkFn(cl.t, cl.vr, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 }
 
 func (cl compoundList) Filter(cb listFilterCallback) List {
-	seq := newEmptySequenceChunker(makeListLeafChunkFn(cl.t, nil), newIndexedMetaSequenceChunkFn(cl.t, cl.cs, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeListLeafChunkFn(cl.t, nil), newIndexedMetaSequenceChunkFn(cl.t, cl.vr, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	cl.IterAll(func(v Value, idx uint64) {
 		if cb(v, idx) {
 			seq.Append(v)
@@ -222,7 +221,7 @@ func (cl compoundList) RemoveAt(idx uint64) List {
 func (cl compoundList) Iter(f listIterFunc) {
 	start := uint64(0)
 
-	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
+	iterateMetaSequenceLeaf(cl, cl.vr, func(l Value) bool {
 		list := l.(listLeaf)
 		for i, v := range list.values {
 			if f(v, start+uint64(i)) {
@@ -237,7 +236,7 @@ func (cl compoundList) Iter(f listIterFunc) {
 func (cl compoundList) IterAll(f listIterAllFunc) {
 	start := uint64(0)
 
-	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
+	iterateMetaSequenceLeaf(cl, cl.vr, func(l Value) bool {
 		list := l.(listLeaf)
 		for i, v := range list.values {
 			f(v, start+uint64(i))
@@ -256,7 +255,7 @@ func newListLeafBoundaryChecker() boundaryChecker {
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
-func makeListLeafChunkFn(t Type, sink chunks.ChunkSink) makeChunkFn {
+func makeListLeafChunkFn(t Type, sink ValueWriter) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		values := make([]Value, len(items))
 
@@ -266,7 +265,7 @@ func makeListLeafChunkFn(t Type, sink chunks.ChunkSink) makeChunkFn {
 
 		list := valueFromType(newListLeaf(t, values...), t)
 		if sink != nil {
-			return newMetaTuple(Uint64(len(values)), nil, WriteValue(list, sink)), list
+			return newMetaTuple(Uint64(len(values)), nil, sink.WriteValue(list)), list
 		}
 		return newMetaTuple(Uint64(len(values)), list, ref.Ref{}), list
 	}

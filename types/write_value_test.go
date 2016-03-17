@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
@@ -14,11 +13,9 @@ import (
 func TestWriteValue(t *testing.T) {
 	assert := assert.New(t)
 
-	var s *chunks.MemoryStore
-
 	testEncode := func(expected string, v Value) ref.Ref {
-		s = chunks.NewMemoryStore()
-		r := WriteValue(v, s)
+		vs := NewTestValueStore()
+		r := vs.WriteValue(v)
 
 		// Assuming that MemoryStore works correctly, we don't need to check the actual serialization, only the hash. Neat.
 		assert.EqualValues(sha1.Sum([]byte(expected)), r.Digest(), "Incorrect ref serializing %+v. Got: %#x", v, r.Digest())
@@ -39,13 +36,13 @@ func TestWriteValue(t *testing.T) {
 
 func TestWriteBlobLeaf(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	vs := NewTestValueStore()
 
 	buf := bytes.NewBuffer([]byte{})
 	b1 := NewBlob(buf)
 	bl1, ok := b1.(blobLeaf)
 	assert.True(ok)
-	r1 := WriteValue(bl1, cs)
+	r1 := vs.WriteValue(bl1)
 	// echo -n 'b ' | sha1sum
 	assert.Equal("sha1-e1bc846440ec2fb557a5a271e785cd4c648883fa", r1.String())
 
@@ -53,14 +50,14 @@ func TestWriteBlobLeaf(t *testing.T) {
 	b2 := NewBlob(buf)
 	bl2, ok := b2.(blobLeaf)
 	assert.True(ok)
-	r2 := WriteValue(bl2, cs)
+	r2 := vs.WriteValue(bl2)
 	// echo -n 'b Hello, World!' | sha1sum
 	assert.Equal("sha1-135fe1453330547994b2ce8a1b238adfbd7df87e", r2.String())
 }
 
 func TestWritePackageWhenValueIsWritten(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	vs := NewTestValueStore()
 
 	typeDef := MakeStructType("S", []Field{
 		Field{"X", MakePrimitiveType(Int32Kind), false},
@@ -71,23 +68,23 @@ func TestWritePackageWhenValueIsWritten(t *testing.T) {
 	typ := MakeType(pkgRef1, 0)
 
 	s := NewStruct(typ, typeDef, structData{"X": Int32(42)})
-	WriteValue(s, cs)
+	vs.WriteValue(s)
 
-	pkg2 := ReadValue(pkgRef1, cs)
+	pkg2 := vs.ReadValue(pkgRef1)
 	assert.True(pkg1.Equals(pkg2))
 }
 
 func TestWritePackageDepWhenPackageIsWritten(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	vs := NewTestValueStore()
 
 	pkg1 := NewPackage([]Type{}, []ref.Ref{})
 	// Don't write package
 	pkgRef1 := RegisterPackage(&pkg1)
 
 	pkg2 := NewPackage([]Type{}, []ref.Ref{pkgRef1})
-	WriteValue(pkg2, cs)
+	vs.WriteValue(pkg2)
 
-	pkg3 := ReadValue(pkgRef1, cs)
+	pkg3 := vs.ReadValue(pkgRef1)
 	assert.True(pkg1.Equals(pkg3))
 }

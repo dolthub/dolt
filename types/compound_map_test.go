@@ -5,7 +5,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -121,9 +120,9 @@ func TestCompoundMapHas(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
-		cs := chunks.NewMemoryStore()
+		vs := NewTestValueStore()
 		m := tm.toCompoundMap()
-		m2 := ReadValue(WriteValue(m, cs), cs).(compoundMap)
+		m2 := vs.ReadValue(vs.WriteValue(m)).(compoundMap)
 		for _, entry := range tm.entries {
 			k, v := entry.key, entry.value
 			assert.True(m.Has(k))
@@ -365,10 +364,10 @@ func TestCompoundMapFirstNNumbers(t *testing.T) {
 
 func TestCompoundMapModifyAfterRead(t *testing.T) {
 	assert := assert.New(t)
-	ms := chunks.NewMemoryStore()
+	vs := NewTestValueStore()
 	m := getTestNativeOrderMap(2).toCompoundMap()
 	// Drop chunk values.
-	m = ReadValue(WriteValue(m, ms), ms).(compoundMap)
+	m = vs.ReadValue(vs.WriteValue(m)).(compoundMap)
 	// Modify/query. Once upon a time this would crash.
 	fst, fstval := m.First()
 	m = m.Remove(fst).(compoundMap)

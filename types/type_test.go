@@ -3,14 +3,13 @@ package types
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestTypes(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	vs := NewTestValueStore()
 
 	boolType := MakePrimitiveType(BoolKind)
 	uint8Type := MakePrimitiveType(Uint8Kind)
@@ -28,32 +27,32 @@ func TestTypes(t *testing.T) {
 	pkgRef := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
 	trType := MakeType(pkgRef, 42)
 
-	mRef := WriteValue(mapType, cs)
-	setRef := WriteValue(setType, cs)
-	otherRef := WriteValue(otherType, cs)
-	mahRef := WriteValue(mahType, cs)
-	trRef := WriteValue(trType, cs)
+	mRef := vs.WriteValue(mapType)
+	setRef := vs.WriteValue(setType)
+	otherRef := vs.WriteValue(otherType)
+	mahRef := vs.WriteValue(mahType)
+	trRef := vs.WriteValue(trType)
 
-	assert.True(otherType.Equals(ReadValue(otherRef, cs)))
-	assert.True(mapType.Equals(ReadValue(mRef, cs)))
-	assert.True(setType.Equals(ReadValue(setRef, cs)))
-	assert.True(mahType.Equals(ReadValue(mahRef, cs)))
-	assert.True(trType.Equals(ReadValue(trRef, cs)))
+	assert.True(otherType.Equals(vs.ReadValue(otherRef)))
+	assert.True(mapType.Equals(vs.ReadValue(mRef)))
+	assert.True(setType.Equals(vs.ReadValue(setRef)))
+	assert.True(mahType.Equals(vs.ReadValue(mahRef)))
+	assert.True(trType.Equals(vs.ReadValue(trRef)))
 }
 
 func TestTypeWithPkgRef(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	vs := NewTestValueStore()
 
 	pkg := NewPackage([]Type{MakePrimitiveType(Float64Kind)}, []ref.Ref{})
 
 	pkgRef := RegisterPackage(&pkg)
 	unresolvedType := MakeType(pkgRef, 42)
-	unresolvedRef := WriteValue(unresolvedType, cs)
+	unresolvedRef := vs.WriteValue(unresolvedType)
 
-	v := ReadValue(unresolvedRef, cs)
+	v := vs.ReadValue(unresolvedRef)
 	assert.EqualValues(pkgRef, v.Chunks()[0])
-	assert.NotNil(ReadValue(pkgRef, cs))
+	assert.NotNil(vs.ReadValue(pkgRef))
 }
 
 func TestTypeType(t *testing.T) {

@@ -18,7 +18,6 @@ import (
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/util/http/retry"
 	"github.com/bradfitz/latlong"
 	"github.com/garyburd/go-oauth/oauth"
@@ -213,7 +212,7 @@ func getAlbum(api flickrAPI, id string, gotPhoto chan struct{}) idAndRefOfAlbum 
 		SetTitle(response.Photoset.Title.Content).
 		SetPhotos(photos)
 	// TODO: Write albums in batches.
-	ref := NewRefOfAlbum(types.WriteValue(album, ds.Store()))
+	ref := NewRefOfAlbum(ds.Store().WriteValue(album))
 	return idAndRefOfAlbum{id, ref}
 }
 
@@ -309,7 +308,7 @@ func getAlbumPhotos(api flickrAPI, id string, gotPhoto chan struct{}) SetOfRefOf
 	})
 	d.Chk.NoError(err)
 
-	cs := ds.Store()
+	store := ds.Store()
 	photos := NewSetOfRefOfRemotePhoto()
 
 	for _, p := range response.Photoset.Photo {
@@ -351,7 +350,7 @@ func getAlbumPhotos(api flickrAPI, id string, gotPhoto chan struct{}) SetOfRefOf
 		}
 
 		// TODO: Write photos in batches.
-		photos = photos.Insert(NewRefOfRemotePhoto(types.WriteValue(photo, cs)))
+		photos = photos.Insert(NewRefOfRemotePhoto(store.WriteValue(photo)))
 		gotPhoto <- struct{}{}
 	}
 
@@ -423,7 +422,7 @@ func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) (tokenCred 
 
 func commitUser() {
 	var err error
-	r := NewRefOfUser(types.WriteValue(user, ds.Store()))
+	r := NewRefOfUser(ds.Store().WriteValue(user))
 	*ds, err = ds.Commit(r)
 	d.Exp.NoError(err)
 }

@@ -3,7 +3,6 @@
 package main
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -459,12 +458,12 @@ func builderForRefOfMapOfStringToValue(r ref.Ref) types.Value {
 	return NewRefOfMapOfStringToValue(r)
 }
 
-func (r RefOfMapOfStringToValue) TargetValue(cs chunks.ChunkSource) MapOfStringToValue {
-	return types.ReadValue(r.target, cs).(MapOfStringToValue)
+func (r RefOfMapOfStringToValue) TargetValue(vr types.ValueReader) MapOfStringToValue {
+	return vr.ReadValue(r.target).(MapOfStringToValue)
 }
 
-func (r RefOfMapOfStringToValue) SetTargetValue(val MapOfStringToValue, cs chunks.ChunkSink) RefOfMapOfStringToValue {
-	return NewRefOfMapOfStringToValue(types.WriteValue(val, cs))
+func (r RefOfMapOfStringToValue) SetTargetValue(val MapOfStringToValue, vw types.ValueWriter) RefOfMapOfStringToValue {
+	return NewRefOfMapOfStringToValue(vw.WriteValue(val))
 }
 
 // MapOfStringToValue
@@ -795,10 +794,10 @@ func builderForRefOfListOfPitch(r ref.Ref) types.Value {
 	return NewRefOfListOfPitch(r)
 }
 
-func (r RefOfListOfPitch) TargetValue(cs chunks.ChunkSource) ListOfPitch {
-	return types.ReadValue(r.target, cs).(ListOfPitch)
+func (r RefOfListOfPitch) TargetValue(vr types.ValueReader) ListOfPitch {
+	return vr.ReadValue(r.target).(ListOfPitch)
 }
 
-func (r RefOfListOfPitch) SetTargetValue(val ListOfPitch, cs chunks.ChunkSink) RefOfListOfPitch {
-	return NewRefOfListOfPitch(types.WriteValue(val, cs))
+func (r RefOfListOfPitch) SetTargetValue(val ListOfPitch, vw types.ValueWriter) RefOfListOfPitch {
+	return NewRefOfListOfPitch(vw.WriteValue(val))
 }

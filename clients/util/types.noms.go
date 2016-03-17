@@ -3,7 +3,6 @@
 package util
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -203,12 +202,12 @@ func builderForRefOfMapOfStringToValue(r ref.Ref) types.Value {
 	return NewRefOfMapOfStringToValue(r)
 }
 
-func (r RefOfMapOfStringToValue) TargetValue(cs chunks.ChunkSource) MapOfStringToValue {
-	return types.ReadValue(r.target, cs).(MapOfStringToValue)
+func (r RefOfMapOfStringToValue) TargetValue(vr types.ValueReader) MapOfStringToValue {
+	return vr.ReadValue(r.target).(MapOfStringToValue)
 }
 
-func (r RefOfMapOfStringToValue) SetTargetValue(val MapOfStringToValue, cs chunks.ChunkSink) RefOfMapOfStringToValue {
-	return NewRefOfMapOfStringToValue(types.WriteValue(val, cs))
+func (r RefOfMapOfStringToValue) SetTargetValue(val MapOfStringToValue, vw types.ValueWriter) RefOfMapOfStringToValue {
+	return NewRefOfMapOfStringToValue(vw.WriteValue(val))
 }
 
 // MapOfStringToValue

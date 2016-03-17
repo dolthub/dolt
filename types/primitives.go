@@ -35,7 +35,6 @@ func (v Bool) Type() Type {
 	return typeForBool
 }
 
-
 type Float32 float32
 
 func (p Float32) Equals(other Value) bool {
@@ -63,7 +62,6 @@ var typeForFloat32 = MakePrimitiveType(Float32Kind)
 func (v Float32) Type() Type {
 	return typeForFloat32
 }
-
 
 func (v Float32) Less(other OrderedValue) bool {
 	return v < other.(Float32)
@@ -97,7 +95,6 @@ func (v Float64) Type() Type {
 	return typeForFloat64
 }
 
-
 func (v Float64) Less(other OrderedValue) bool {
 	return v < other.(Float64)
 }
@@ -129,7 +126,6 @@ var typeForInt16 = MakePrimitiveType(Int16Kind)
 func (v Int16) Type() Type {
 	return typeForInt16
 }
-
 
 func (v Int16) Less(other OrderedValue) bool {
 	return v < other.(Int16)
@@ -163,7 +159,6 @@ func (v Int32) Type() Type {
 	return typeForInt32
 }
 
-
 func (v Int32) Less(other OrderedValue) bool {
 	return v < other.(Int32)
 }
@@ -195,7 +190,6 @@ var typeForInt64 = MakePrimitiveType(Int64Kind)
 func (v Int64) Type() Type {
 	return typeForInt64
 }
-
 
 func (v Int64) Less(other OrderedValue) bool {
 	return v < other.(Int64)
@@ -229,7 +223,6 @@ func (v Int8) Type() Type {
 	return typeForInt8
 }
 
-
 func (v Int8) Less(other OrderedValue) bool {
 	return v < other.(Int8)
 }
@@ -261,7 +254,6 @@ var typeForUint16 = MakePrimitiveType(Uint16Kind)
 func (v Uint16) Type() Type {
 	return typeForUint16
 }
-
 
 func (v Uint16) Less(other OrderedValue) bool {
 	return v < other.(Uint16)
@@ -295,7 +287,6 @@ func (v Uint32) Type() Type {
 	return typeForUint32
 }
 
-
 func (v Uint32) Less(other OrderedValue) bool {
 	return v < other.(Uint32)
 }
@@ -327,7 +318,6 @@ var typeForUint64 = MakePrimitiveType(Uint64Kind)
 func (v Uint64) Type() Type {
 	return typeForUint64
 }
-
 
 func (v Uint64) Less(other OrderedValue) bool {
 	return v < other.(Uint64)
@@ -361,8 +351,6 @@ func (v Uint8) Type() Type {
 	return typeForUint8
 }
 
-
 func (v Uint8) Less(other OrderedValue) bool {
 	return v < other.(Uint8)
 }
-

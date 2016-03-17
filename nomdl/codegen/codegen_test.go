@@ -23,7 +23,7 @@ import (
 
 func assertOutput(inPath, goldenPath string, t *testing.T) {
 	assert := assert.New(t)
-	emptyCS := chunks.NewMemoryStore() // Will be ChunkSource containing imports
+	emptyDS := datas.NewDataStore(chunks.NewMemoryStore()) // Will be DataStore containing imports
 
 	depsDir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -40,7 +40,7 @@ func assertOutput(inPath, goldenPath string, t *testing.T) {
 	d.Chk.NoError(err)
 
 	var buf bytes.Buffer
-	pkg := pkg.ParseNomDL("test", inFile, filepath.Dir(inPath), emptyCS)
+	pkg := pkg.ParseNomDL("test", inFile, filepath.Dir(inPath), emptyDS)
 	gen := newCodeGen(&buf, getBareFileName(inPath), map[string]bool{}, depsMap{}, pkg)
 	gen.WritePackage()
 
@@ -61,14 +61,14 @@ func TestGeneratedFiles(t *testing.T) {
 
 func TestCanUseDef(t *testing.T) {
 	assert := assert.New(t)
-	emptyCS := chunks.NewMemoryStore()
+	emptyDS := datas.NewDataStore(chunks.NewMemoryStore())
 
 	depsDir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(depsDir)
 
 	assertCanUseDef := func(s string, using, named bool) {
-		pkg := pkg.ParseNomDL("fakefile", bytes.NewBufferString(s), "", emptyCS)
+		pkg := pkg.ParseNomDL("fakefile", bytes.NewBufferString(s), "", emptyDS)
 		gen := newCodeGen(nil, "fakefile", map[string]bool{}, depsMap{}, pkg)
 		for _, t := range pkg.UsingDeclarations {
 			assert.Equal(using, gen.canUseDef(t, gen.pkg.Package))
@@ -183,24 +183,24 @@ func TestSkipDuplicateTypes(t *testing.T) {
 
 func TestGenerateDeps(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 	dir, err := ioutil.TempDir("", "codegen_test_")
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
 	leaf1 := types.NewPackage([]types.Type{types.MakeEnumType("e1", "a", "b")}, []ref.Ref{})
-	leaf1Ref := types.WriteValue(leaf1, cs)
+	leaf1Ref := ds.WriteValue(leaf1)
 	leaf2 := types.NewPackage([]types.Type{types.MakePrimitiveType(types.BoolKind)}, []ref.Ref{})
-	leaf2Ref := types.WriteValue(leaf2, cs)
+	leaf2Ref := ds.WriteValue(leaf2)
 
 	depender := types.NewPackage([]types.Type{}, []ref.Ref{leaf1Ref})
-	dependerRef := types.WriteValue(depender, cs)
+	dependerRef := ds.WriteValue(depender)
 
 	top := types.NewPackage([]types.Type{}, []ref.Ref{leaf2Ref, dependerRef})
 	types.RegisterPackage(&top)
 
 	localPkgs := refSet{top.Ref(): true}
-	generateDepCode(filepath.Base(dir), dir, map[string]bool{}, top, localPkgs, cs)
+	generateDepCode(filepath.Base(dir), dir, map[string]bool{}, top, localPkgs, ds)
 
 	leaf1Path := filepath.Join(dir, code.ToTag(leaf1.Ref())+".go")
 	leaf2Path := filepath.Join(dir, code.ToTag(leaf2.Ref())+".go")
@@ -247,7 +247,7 @@ func TestMakeGoIdentifier(t *testing.T) {
 
 func TestCanUseDefFromImport(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 
 	dir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -264,8 +264,8 @@ func TestCanUseDefFromImport(t *testing.T) {
 		struct B {
 			X: Int64
 		}`)
-	pkg1 := pkg.ParseNomDL("test1", r1, dir, cs)
-	pkgRef1 := types.WriteValue(pkg1.Package, cs)
+	pkg1 := pkg.ParseNomDL("test1", r1, dir, ds)
+	pkgRef1 := ds.WriteValue(pkg1.Package)
 
 	r2 := strings.NewReader(fmt.Sprintf(`
 		alias Other = import "%s"
@@ -273,7 +273,7 @@ func TestCanUseDefFromImport(t *testing.T) {
 			C: Map<Int64, Other.A>
 		}
 		`, pkgRef1))
-	pkg2 := pkg.ParseNomDL("test2", r2, dir, cs)
+	pkg2 := pkg.ParseNomDL("test2", r2, dir, ds)
 	gen2 := newCodeGen(nil, "test2", map[string]bool{}, depsMap{pkg1.Ref(): pkg1.Package}, pkg2)
 
 	assert.True(gen2.canUseDef(pkg2.Types()[0], gen2.pkg.Package))

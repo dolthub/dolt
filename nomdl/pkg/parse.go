@@ -3,7 +3,6 @@ package pkg
 import (
 	"io"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
@@ -18,14 +17,14 @@ type Parsed struct {
 }
 
 // ParseNomDL reads a Noms package specification from r and returns a Package. Errors will be annotated with packageName and thrown.
-func ParseNomDL(packageName string, r io.Reader, includePath string, cs chunks.ChunkStore) Parsed {
+func ParseNomDL(packageName string, r io.Reader, includePath string, vrw types.ValueReadWriter) Parsed {
 	i := runParser(packageName, r)
 	i.Name = packageName
-	imports := resolveImports(i.Aliases, includePath, cs)
+	imports := resolveImports(i.Aliases, includePath, vrw)
 	deps := importsToDeps(imports)
 
 	resolveLocalOrdinals(&i)
-	resolveNamespaces(&i, imports, getDeps(deps, cs))
+	resolveNamespaces(&i, imports, getDeps(deps, vrw))
 	return Parsed{
 		types.NewPackage(i.Types, deps),
 		i.Name,

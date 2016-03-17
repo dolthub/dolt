@@ -1,7 +1,5 @@
 package types
 
-import "github.com/attic-labs/noms/chunks"
-
 type List interface {
 	Value
 	Len() uint64
@@ -42,11 +40,11 @@ func NewTypedList(t Type, values ...Value) List {
 	return seq.Done().(List)
 }
 
-// NewStreamingTypedList creates a new List with type t, populated with values, chunking if and when needed. As chunks are created, they're written to cs -- including the root chunk of the list. Once the caller has closed values, she can read the completed List from the returned channel.
-func NewStreamingTypedList(t Type, cs chunks.ChunkStore, values <-chan Value) <-chan List {
+// NewStreamingTypedList creates a new List with type t, populated with values, chunking if and when needed. As chunks are created, they're written to vrw -- including the root chunk of the list. Once the caller has closed values, she can read the completed List from the returned channel.
+func NewStreamingTypedList(t Type, vrw ValueReadWriter, values <-chan Value) <-chan List {
 	out := make(chan List)
 	go func() {
-		seq := newEmptySequenceChunker(makeListLeafChunkFn(t, cs), newIndexedMetaSequenceChunkFn(t, cs, cs), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+		seq := newEmptySequenceChunker(makeListLeafChunkFn(t, vrw), newIndexedMetaSequenceChunkFn(t, vrw, vrw), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 		for v := range values {
 			seq.Append(v)
 		}

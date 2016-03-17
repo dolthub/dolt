@@ -25,8 +25,8 @@ func (api fakeFlickrAPI) Call(method string, response interface{}, args *map[str
 
 func TestGetAlbums(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	testDs := dataset.NewDataset(datas.NewDataStore(cs), "test")
+	store := datas.NewDataStore(chunks.NewMemoryStore())
+	testDs := dataset.NewDataset(store, "test")
 	ds = &testDs
 	progress := progressTracker{}
 	methods := map[string]string{
@@ -110,7 +110,7 @@ func TestGetAlbums(t *testing.T) {
 	albums := getAlbums(fakeFlickrAPI{methods}, &progress)
 	assert.Equal(uint64(1), albums.Len())
 
-	album := albums.Get("42").TargetValue(cs)
+	album := albums.Get("42").TargetValue(store)
 	assert.Equal("42", album.Id())
 	assert.Equal("My Photoset", album.Title())
 
@@ -119,7 +119,7 @@ func TestGetAlbums(t *testing.T) {
 
 	var photo0, photo1 RemotePhoto
 	photos.IterAll(func(photo RefOfRemotePhoto) {
-		p := photo.TargetValue(cs)
+		p := photo.TargetValue(store)
 		switch id := p.Id(); id {
 		case "0":
 			photo0 = p

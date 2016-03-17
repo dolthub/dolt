@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/suite"
@@ -20,7 +21,7 @@ func TestImportSuite(t *testing.T) {
 
 type ImportTestSuite struct {
 	suite.Suite
-	cs        chunks.ChunkStore
+	vrw       types.ValueReadWriter
 	imported  types.Package
 	importRef ref.Ref
 	nested    types.Package
@@ -28,14 +29,14 @@ type ImportTestSuite struct {
 }
 
 func (suite *ImportTestSuite) SetupTest() {
-	suite.cs = chunks.NewMemoryStore()
+	suite.vrw = datas.NewDataStore(chunks.NewMemoryStore())
 
 	ns := types.MakeStructType("NestedDepStruct", []types.Field{}, types.Choices{
 		types.Field{"b", types.MakePrimitiveType(types.BoolKind), false},
 		types.Field{"i", types.MakePrimitiveType(types.Int8Kind), false},
 	})
 	suite.nested = types.NewPackage([]types.Type{ns}, []ref.Ref{})
-	suite.nestedRef = types.WriteValue(suite.nested, suite.cs)
+	suite.nestedRef = suite.vrw.WriteValue(suite.nested)
 
 	fs := types.MakeStructType("ForeignStruct", []types.Field{
 		types.Field{"b", types.MakeType(ref.Ref{}, 1), false},
@@ -44,36 +45,36 @@ func (suite *ImportTestSuite) SetupTest() {
 		types.Choices{})
 	fe := types.MakeEnumType("ForeignEnum", "uno", "dos")
 	suite.imported = types.NewPackage([]types.Type{fs, fe}, []ref.Ref{suite.nestedRef})
-	suite.importRef = types.WriteValue(suite.imported, suite.cs)
+	suite.importRef = suite.vrw.WriteValue(suite.imported)
 }
 
 func (suite *ImportTestSuite) TestGetDeps() {
-	deps := getDeps([]ref.Ref{suite.importRef}, suite.cs)
+	deps := getDeps([]ref.Ref{suite.importRef}, suite.vrw)
 	suite.Len(deps, 1)
 	imported, ok := deps[suite.importRef]
 	suite.True(ok, "%s is a dep; should have been found.", suite.importRef.String())
 
-	deps = getDeps(imported.Dependencies(), suite.cs)
+	deps = getDeps(imported.Dependencies(), suite.vrw)
 	suite.Len(deps, 1)
 	imported, ok = deps[suite.nestedRef]
 	suite.True(ok, "%s is a dep; should have been found.", suite.nestedRef.String())
 }
 
 func (suite *ImportTestSuite) TestResolveNamespace() {
-	deps := getDeps([]ref.Ref{suite.importRef}, suite.cs)
+	deps := getDeps([]ref.Ref{suite.importRef}, suite.vrw)
 	t := resolveNamespace(types.MakeUnresolvedType("Other", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
 	suite.EqualValues(types.MakeType(suite.importRef, 1), t)
 }
 
 func (suite *ImportTestSuite) TestUnknownAlias() {
-	deps := getDeps([]ref.Ref{suite.importRef}, suite.cs)
+	deps := getDeps([]ref.Ref{suite.importRef}, suite.vrw)
 	suite.Panics(func() {
 		resolveNamespace(types.MakeUnresolvedType("Bother", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
 	})
 }
 
 func (suite *ImportTestSuite) TestUnknownImportedType() {
-	deps := getDeps([]ref.Ref{suite.importRef}, suite.cs)
+	deps := getDeps([]ref.Ref{suite.importRef}, suite.vrw)
 	suite.Panics(func() {
 		resolveNamespace(types.MakeUnresolvedType("Other", "NotThere"), map[string]ref.Ref{"Other": suite.importRef}, deps)
 	})
@@ -113,12 +114,12 @@ func (suite *ImportTestSuite) TestImports() {
 		return types.Field{}
 	}
 	refFromNomsFile := func(path string) ref.Ref {
-		cs := chunks.NewMemoryStore()
+		ds := datas.NewDataStore(chunks.NewMemoryStore())
 		inFile, err := os.Open(path)
 		suite.NoError(err)
 		defer inFile.Close()
-		parsedDep := ParseNomDL("", inFile, filepath.Dir(path), cs)
-		return types.WriteValue(parsedDep.Package, cs)
+		parsedDep := ParseNomDL("", inFile, filepath.Dir(path), ds)
+		return ds.WriteValue(parsedDep.Package)
 	}
 
 	dir, err := ioutil.TempDir("", "")
@@ -157,7 +158,7 @@ func (suite *ImportTestSuite) TestImports() {
 				t: Other.ForeignEnum
 			}
 		}`, suite.importRef, filepath.Base(byPathNomDL)))
-	p := ParseNomDL("testing", r, dir, suite.cs)
+	p := ParseNomDL("testing", r, dir, suite.vrw)
 
 	named := p.Types()[0]
 	suite.Equal("Local1", named.Name())
@@ -216,8 +217,8 @@ func (suite *ImportTestSuite) TestImportWithLocalRef() {
 		struct B {
 			X: Int64
 		}`)
-	pkg1 := ParseNomDL("test1", r1, dir, suite.cs)
-	pkgRef1 := types.WriteValue(pkg1.Package, suite.cs)
+	pkg1 := ParseNomDL("test1", r1, dir, suite.vrw)
+	pkgRef1 := suite.vrw.WriteValue(pkg1.Package)
 
 	r2 := strings.NewReader(fmt.Sprintf(`
 		alias Other = import "%s"
@@ -225,7 +226,7 @@ func (suite *ImportTestSuite) TestImportWithLocalRef() {
 			C: Map<Int64, Other.A>
 		}
 		`, pkgRef1))
-	pkg2 := ParseNomDL("test2", r2, dir, suite.cs)
+	pkg2 := ParseNomDL("test2", r2, dir, suite.vrw)
 
 	ts := pkg2.Types()
 	suite.Len(ts, 1)

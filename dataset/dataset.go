@@ -87,7 +87,7 @@ func (ds *Dataset) pull(source datas.DataStore, sourceRef ref.Ref, concurrency i
 }
 
 func (ds *Dataset) validateRefAsCommit(r ref.Ref) datas.Commit {
-	v := types.ReadValue(r, ds.store)
+	v := ds.store.ReadValue(r)
 
 	d.Exp.NotNil(v, "%v cannot be found", r)
 	d.Exp.True(v.Type().Equals(datas.NewCommit().Type()), "Not a Commit: %+v", v)

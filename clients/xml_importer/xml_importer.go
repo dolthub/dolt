@@ -14,7 +14,6 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 	"github.com/clbanning/mxj"
 )
 
@@ -99,7 +98,7 @@ func main() {
 				r := ref.Ref{}
 
 				if !*noIO {
-					r = types.WriteValue(nomsObj, ds.Store())
+					r = ds.Store().WriteValue(nomsObj)
 				}
 
 				refsChan <- refIndex{r, f.index}

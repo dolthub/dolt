@@ -1,7 +1,6 @@
 package types
 
 import (
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -51,8 +50,8 @@ func RegisterPackage(p *Package) (r ref.Ref) {
 	return
 }
 
-func ReadPackage(r ref.Ref, cs chunks.ChunkSource) *Package {
-	p := ReadValue(r, cs).(Package)
+func ReadPackage(r ref.Ref, vr ValueReader) *Package {
+	p := vr.ReadValue(r).(Package)
 	RegisterPackage(&p)
 	return &p
 }

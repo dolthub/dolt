@@ -2,14 +2,28 @@ package datas
 
 import (
 	"flag"
+	"io"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/types"
 )
+
+type DataSink interface {
+	types.ValueWriter
+	io.Closer
+
+	// transitionalChunkSink is awkwardly named on purpose. Hopefully we can do away with it.
+	transitionalChunkSink() chunks.ChunkSink
+}
 
 // DataStore provides versioned storage for noms values. Each DataStore instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new DataStore, representing a new moment in history.
 type DataStore interface {
-	chunks.ChunkStore
+	DataSink
+	types.ValueReader
+
+	// Has should be removed, if possible
+	Has(r ref.Ref) bool
 
 	// MaybeHead returns the current Head Commit of this Datastore, which contains the current root of the DataStore's value tree, if available. If not, it returns a new Commit and 'false'.
 	MaybeHead(datasetID string) (Commit, bool)
@@ -27,10 +41,13 @@ type DataStore interface {
 	Delete(datasetID string) (DataStore, error)
 
 	// CopyReachableChunksP copies to |sink| all chunks reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|
-	CopyReachableChunksP(r, exclude ref.Ref, sink chunks.ChunkSink, concurrency int)
+	CopyReachableChunksP(r, exclude ref.Ref, sink DataSink, concurrency int)
 
 	// CopyMissingChunksP copies to sink all chunks reachable from (and including) |r| that it does not already have
-	CopyMissingChunksP(r ref.Ref, sink chunks.ChunkStore, concurrency int)
+	CopyMissingChunksP(r ref.Ref, sink DataStore, concurrency int)
+
+	// transitionalChunkStore is awkwardly named on purpose. Hopefully we can do away with it.
+	transitionalChunkStore() chunks.ChunkStore
 }
 
 func NewDataStore(cs chunks.ChunkStore) DataStore {
