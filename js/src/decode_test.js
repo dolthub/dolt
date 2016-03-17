@@ -518,8 +518,8 @@ suite('Decode', () => {
   test('compound blob', async () => {
     const ms = new MemoryStore();
 
-    const r1 = writeValue(newBlob(stringToUint8Array('hi'), ms), blobType, ms);
-    const r2 = writeValue(newBlob(stringToUint8Array('world'), ms), blobType, ms);
+    const r1 = writeValue(await newBlob(stringToUint8Array('hi')), blobType, ms);
+    const r2 = writeValue(await newBlob(stringToUint8Array('world')), blobType, ms);
 
     const a = [Kind.Blob, true, [r1.ref.toString(), '2', r2.ref.toString(), '5']];
     const r = new JsonArrayReader(a, ms);

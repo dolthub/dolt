@@ -51,10 +51,10 @@ suite('Encode', () => {
     f(Kind.String, 'hi', 'hi');
   });
 
-  test('write simple blob', () => {
+  test('write simple blob', async () => {
     const ms = new MemoryStore();
     const w = new JsonArrayWriter(ms);
-    const blob = newBlob(new Uint8Array([0x00, 0x01]), ms);
+    const blob = await newBlob(new Uint8Array([0x00, 0x01]));
     w.writeTopLevel(makePrimitiveType(Kind.Blob), blob);
     assert.deepEqual([Kind.Blob, false, 'AAE='], w.array);
   });
@@ -372,7 +372,7 @@ suite('Encode', () => {
     //      makeUnresolvedType('ns', 'n'));
   });
 
-  test('top level blob', () => {
+  test('top level blob', async () => {
     function stringToUint8Array(s) {
       const bytes = new Uint8Array(s.length);
       for (let i = 0; i < s.length; i++) {
@@ -382,7 +382,7 @@ suite('Encode', () => {
     }
 
     const ms = new MemoryStore();
-    const blob = newBlob(stringToUint8Array('hi'), ms);
+    const blob = await newBlob(stringToUint8Array('hi'));
 
     const chunk = encodeNomsValue(blob, makePrimitiveType(Kind.Blob), ms);
     assert.equal(4, chunk.data.length);
@@ -397,7 +397,7 @@ suite('Encode', () => {
       bytes[i] = i;
       view.setUint8(2 + i, i);
     }
-    const blob2 = newBlob(bytes, ms);
+    const blob2 = await newBlob(bytes);
     const chunk2 = encodeNomsValue(blob2, makePrimitiveType(Kind.Blob), ms);
     assert.equal(buffer2.byteLength, chunk2.data.buffer.byteLength);
     assert.deepEqual(buffer2, chunk2.data.buffer);
