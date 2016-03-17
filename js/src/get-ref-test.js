@@ -3,8 +3,8 @@
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import {assert} from 'chai';
-import {ensureRef, getRef} from './get_ref.js';
-import {Kind} from './noms_kind.js';
+import {ensureRef, getRef} from './get-ref.js';
+import {Kind} from './noms-kind.js';
 import {makePrimitiveType} from './type.js';
 import {suite, test} from 'mocha';
 

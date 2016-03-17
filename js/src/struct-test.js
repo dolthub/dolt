@@ -1,10 +1,10 @@
 // @flow
 
-import MemoryStore from './memory_store.js';
+import MemoryStore from './memory-store.js';
 import Struct from './struct.js';
 import {assert} from 'chai';
 import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
-import {Kind} from './noms_kind.js';
+import {Kind} from './noms-kind.js';
 import {notNull} from './assert.js';
 import {Package, registerPackage} from './package.js';
 import {suite, test} from 'mocha';

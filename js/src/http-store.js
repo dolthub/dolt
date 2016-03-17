@@ -2,12 +2,12 @@
 
 import Ref from './ref.js';
 import type {FetchOptions} from './fetch.js';
-import type {UnsentReadMap} from './remote_store.js';
-import type {WriteMap} from './remote_store.js';
-import {deserialize, serialize} from './chunk_serializer.js';
+import type {UnsentReadMap} from './remote-store.js';
+import type {WriteMap} from './remote-store.js';
+import {deserialize, serialize} from './chunk-serializer.js';
 import {emptyChunk} from './chunk.js';
 import {fetchArrayBuffer, fetchText} from './fetch.js';
-import {RemoteStore} from './remote_store.js';
+import {RemoteStore} from './remote-store.js';
 
 const HTTP_STATUS_CONFLICT = 409;
 

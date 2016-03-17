@@ -2,7 +2,7 @@
 
 import Chunk from './chunk.js';
 import Ref from './ref.js';
-import type {ChunkStore} from './chunk_store.js';
+import type {ChunkStore} from './chunk-store.js';
 import {invariant, notNull} from './assert.js';
 import {Type} from './type.js';
 

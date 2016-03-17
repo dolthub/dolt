@@ -1,10 +1,10 @@
 // @flow
 
 import Ref from './ref.js';
-import type {ChunkStore} from './chunk_store.js';
+import type {ChunkStore} from './chunk-store.js';
 import {invariant} from './assert.js';
 import {packageType, Type} from './type.js';
-import {readValue} from './read_value.js';
+import {readValue} from './read-value.js';
 import {ValueBase} from './value.js';
 
 class Package extends ValueBase {

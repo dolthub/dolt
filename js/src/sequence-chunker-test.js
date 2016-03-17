@@ -3,7 +3,7 @@
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import type {int64} from './primitives.js';
-import {SequenceChunker} from './sequence_chunker.js';
+import {SequenceChunker} from './sequence-chunker.js';
 
 class ModBoundaryChecker {
   mod: number;

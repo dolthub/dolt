@@ -1,6 +1,6 @@
 // @flow
 
-import type {ChunkStore} from './chunk_store.js';
+import type {ChunkStore} from './chunk-store.js';
 import type Chunk from './chunk.js';
 import type Ref from './ref.js';
 

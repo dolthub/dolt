@@ -4,8 +4,8 @@ import {NomsBlob, BlobLeafSequence} from './blob.js';
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
-import type {ChunkStore} from './chunk_store.js';
-import type {NomsKind} from './noms_kind.js';
+import type {ChunkStore} from './chunk-store.js';
+import type {NomsKind} from './noms-kind.js';
 import {decode as decodeBase64} from './base64.js';
 import {
   Field,
@@ -18,15 +18,15 @@ import {
   StructDesc,
   Type,
 } from './type.js';
-import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta_sequence.js';
+import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
-import {isPrimitiveKind, Kind} from './noms_kind.js';
+import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
 import {lookupPackage, Package, readPackage} from './package.js';
 import {NomsMap, MapLeafSequence} from './map.js';
-import {setDecodeNomsValue} from './read_value.js';
+import {setDecodeNomsValue} from './read-value.js';
 import {NomsSet, SetLeafSequence} from './set.js';
-import {IndexedMetaSequence} from './meta_sequence.js';
+import {IndexedMetaSequence} from './meta-sequence.js';
 
 const typedTag = 't ';
 const blobTag = 'b ';

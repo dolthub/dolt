@@ -3,17 +3,17 @@
 import {assert} from 'chai';
 import {suite} from 'mocha';
 
-import MemoryStore from './memory_store.js';
-import test from './async_test.js';
-import type {ChunkStore} from './chunk_store.js';
+import MemoryStore from './memory-store.js';
+import test from './async-test.js';
+import type {ChunkStore} from './chunk-store.js';
 import {invariant, notNull} from './assert.js';
-import {Kind} from './noms_kind.js';
-import {flatten, flattenParallel} from './test_util.js';
+import {Kind} from './noms-kind.js';
+import {flatten, flattenParallel} from './test-util.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
-import {MetaTuple, OrderedMetaSequence} from './meta_sequence.js';
+import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
-import {OrderedSequence} from './ordered_sequence.js';
-import {readValue} from './read_value.js';
+import {OrderedSequence} from './ordered-sequence.js';
+import {readValue} from './read-value.js';
 import {writeValue} from './encode.js';
 
 const testSetSize = 5000;

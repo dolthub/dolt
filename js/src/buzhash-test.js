@@ -3,7 +3,7 @@
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import BuzHash from './buzhash.js';
-import {TextEncoder} from './text_encoding.js';
+import {TextEncoder} from './text-encoding.js';
 
 const encoder = new TextEncoder();
 

@@ -3,17 +3,17 @@
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
-import type {ChunkStore} from './chunk_store.js';
+import type {ChunkStore} from './chunk-store.js';
 import type {NomsMap} from './map.js';
 import type {NomsSet} from './set.js';
 import type {valueOrPrimitive} from './value.js';
 import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType,
   Type} from './type.js';
-import {Kind} from './noms_kind.js';
+import {Kind} from './noms-kind.js';
 import {newMap} from './map.js';
 import {newSet} from './set.js';
 import {Package, registerPackage} from './package.js';
-import {readValue} from './read_value.js';
+import {readValue} from './read-value.js';
 import {writeValue} from './encode.js';
 
 type DatasTypes = {

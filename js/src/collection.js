@@ -3,7 +3,7 @@
 import Ref from './ref.js';
 import type {Sequence} from './sequence.js'; // eslint-disable-line no-unused-vars
 import {isPrimitive} from './primitives.js';
-import {MetaTuple} from './meta_sequence.js';
+import {MetaTuple} from './meta-sequence.js';
 import {Type} from './type.js';
 import {ValueBase} from './value.js';
 

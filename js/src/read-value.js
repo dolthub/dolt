@@ -2,7 +2,7 @@
 
 import Ref from './ref.js';
 import Chunk from './chunk.js';
-import type {ChunkStore} from './chunk_store.js';
+import type {ChunkStore} from './chunk-store.js';
 import {notNull} from './assert.js';
 
 type decodeFn = (chunk: Chunk, cs: ChunkStore) => Promise<any>

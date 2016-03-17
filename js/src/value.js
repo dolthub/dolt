@@ -2,7 +2,7 @@
 
 import Ref from './ref.js';
 import type {primitive} from './primitives.js';
-import {ensureRef} from './get_ref.js';
+import {ensureRef} from './get-ref.js';
 import {invariant} from './assert.js';
 import {Type} from './type.js';
 
