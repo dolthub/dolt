@@ -1,7 +1,5 @@
 // @flow
 
-'use strict';
-
 // Based on https://github.com/niklasvh/base64-arraybuffer
 //
 // base64-arraybuffer
