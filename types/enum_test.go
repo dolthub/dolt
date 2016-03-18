@@ -10,7 +10,7 @@ import (
 
 func TestGenericEnumWriteRead(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
+	vs := newValueStore(chunks.NewMemoryStore())
 
 	typeDefA := MakeEnumType("EA", "aA", "bA")
 	typeDefB := MakeEnumType("EB", "aB", "bB")
@@ -24,8 +24,8 @@ func TestGenericEnumWriteRead(t *testing.T) {
 
 	assert.False(vA.Equals(vB))
 
-	rA := WriteValue(vA, cs)
-	vA2 := newValueStore(cs).ReadValue(rA)
+	rA := vs.WriteValue(vA)
+	vA2 := vs.ReadValue(rA)
 
 	assert.True(vA.Equals(vA2))
 	assert.True(vA2.Equals(vA))

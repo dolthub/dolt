@@ -82,7 +82,9 @@ func (lds *localDataSink) transitionalChunkSink() chunks.ChunkSink {
 }
 
 func (lds *localDataSink) WriteValue(v types.Value) ref.Ref {
-	return types.WriteValue(v, lds.cs)
+	chunk := types.EncodeValue(v, lds)
+	lds.cs.Put(chunk)
+	return chunk.Ref()
 }
 
 func (lds *localDataSink) Close() error {

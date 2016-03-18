@@ -20,10 +20,11 @@ func NewTestValueStore() *ValueStore {
 
 // ReadValue reads and decodes a value from vrw. It is not considered an error for the requested chunk to be empty; in this case, the function simply returns nil.
 func (vrw *ValueStore) ReadValue(r ref.Ref) Value {
-	c := vrw.cs.Get(r)
-	return DecodeChunk(c, vrw)
+	return DecodeChunk(vrw.cs.Get(r), vrw)
 }
 
 func (vrw *ValueStore) WriteValue(v Value) ref.Ref {
-	return WriteValue(v, vrw.cs)
+	chunk := EncodeValue(v, vrw)
+	vrw.cs.Put(chunk)
+	return chunk.Ref()
 }

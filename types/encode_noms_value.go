@@ -7,24 +7,23 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
-func encNomsValue(v Value, cs chunks.ChunkSink) []interface{} {
-	w := newJsonArrayWriter(cs)
+func encNomsValue(v Value, vw ValueWriter) []interface{} {
+	w := newJsonArrayWriter(vw)
 	w.writeTopLevelValue(v)
 	return w.toArray()
 }
 
 type jsonArrayWriter struct {
 	a  []interface{}
-	cs chunks.ChunkSink
+	vw ValueWriter
 }
 
-func newJsonArrayWriter(cs chunks.ChunkSink) *jsonArrayWriter {
-	return &jsonArrayWriter{cs: cs, a: []interface{}{}}
+func newJsonArrayWriter(vw ValueWriter) *jsonArrayWriter {
+	return &jsonArrayWriter{vw: vw, a: []interface{}{}}
 }
 
 func (w *jsonArrayWriter) write(v interface{}) {
@@ -80,8 +79,8 @@ func (w *jsonArrayWriter) writeTypeAsTag(t Type) {
 		w.writeInt(int64(t.Ordinal()))
 
 		pkg := LookupPackage(pkgRef)
-		if pkg != nil {
-			writeChildValueInternal(*pkg, w.cs)
+		if pkg != nil && w.vw != nil {
+			w.vw.WriteValue(*pkg)
 		}
 	}
 }
@@ -100,12 +99,12 @@ func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr Type, pkg *Package)
 	}
 
 	w.write(true) // a meta sequence
-	w2 := newJsonArrayWriter(w.cs)
+	w2 := newJsonArrayWriter(w.vw)
 	indexType := indexTypeForMetaSequence(tr)
 	for _, tuple := range ms.(metaSequence).data() {
-		if tuple.child != nil && w.cs != nil {
+		if tuple.child != nil && w.vw != nil {
 			// Write unwritten chunked sequences. Chunks are lazily written so that intermediate chunked structures like NewList().Append(x).Append(y) don't cause unnecessary churn.
-			writeValueInternal(tuple.child, w.cs)
+			w.vw.WriteValue(tuple.child)
 		}
 		w2.writeRef(tuple.ChildRef())
 		w2.writeValue(tuple.value, indexType, pkg)
@@ -151,7 +150,7 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 			return
 		}
 
-		w2 := newJsonArrayWriter(w.cs)
+		w2 := newJsonArrayWriter(w.vw)
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
 		v.(List).IterAll(func(v Value, i uint64) {
 			w2.writeValue(v, elemType, pkg)
@@ -164,7 +163,7 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 			return
 		}
 
-		w2 := newJsonArrayWriter(w.cs)
+		w2 := newJsonArrayWriter(w.vw)
 		elemTypes := tr.Desc.(CompoundDesc).ElemTypes
 		v.(Map).IterAll(func(k, v Value) {
 			w2.writeValue(k, elemTypes[0], pkg)
@@ -173,12 +172,12 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 		w.write(w2.toArray())
 	case PackageKind:
 		ptr := MakePrimitiveType(TypeKind)
-		w2 := newJsonArrayWriter(w.cs)
+		w2 := newJsonArrayWriter(w.vw)
 		for _, v := range v.(Package).types {
 			w2.writeValue(v, ptr, pkg)
 		}
 		w.write(w2.toArray())
-		w3 := newJsonArrayWriter(w.cs)
+		w3 := newJsonArrayWriter(w.vw)
 		for _, r := range v.(Package).dependencies {
 			w3.writeRef(r)
 		}
@@ -192,7 +191,7 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 			return
 		}
 
-		w2 := newJsonArrayWriter(w.cs)
+		w2 := newJsonArrayWriter(w.vw)
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
 		v.(Set).IterAll(func(v Value) {
 			w2.writeValue(v, elemType, pkg)
@@ -221,27 +220,27 @@ func (w *jsonArrayWriter) writeTypeAsValue(v Type) {
 	switch k {
 	case EnumKind:
 		w.write(v.Name())
-		w2 := newJsonArrayWriter(w.cs)
+		w2 := newJsonArrayWriter(w.vw)
 		for _, id := range v.Desc.(EnumDesc).IDs {
 			w2.write(id)
 		}
 		w.write(w2.toArray())
 	case ListKind, MapKind, RefKind, SetKind:
-		w2 := newJsonArrayWriter(w.cs)
+		w2 := newJsonArrayWriter(w.vw)
 		for _, elemType := range v.Desc.(CompoundDesc).ElemTypes {
 			w2.writeTypeAsValue(elemType)
 		}
 		w.write(w2.toArray())
 	case StructKind:
 		w.write(v.Name())
-		fieldWriter := newJsonArrayWriter(w.cs)
+		fieldWriter := newJsonArrayWriter(w.vw)
 		for _, field := range v.Desc.(StructDesc).Fields {
 			fieldWriter.write(field.Name)
 			fieldWriter.writeTypeAsValue(field.T)
 			fieldWriter.write(field.Optional)
 		}
 		w.write(fieldWriter.toArray())
-		choiceWriter := newJsonArrayWriter(w.cs)
+		choiceWriter := newJsonArrayWriter(w.vw)
 		for _, choice := range v.Desc.(StructDesc).Union {
 			choiceWriter.write(choice.Name)
 			choiceWriter.writeTypeAsValue(choice.T)
@@ -260,8 +259,8 @@ func (w *jsonArrayWriter) writeTypeAsValue(v Type) {
 		}
 
 		pkg := LookupPackage(pkgRef)
-		if pkg != nil {
-			writeChildValueInternal(*pkg, w.cs)
+		if pkg != nil && w.vw != nil {
+			w.vw.WriteValue(*pkg)
 		}
 
 	default:
