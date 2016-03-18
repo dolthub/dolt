@@ -8,6 +8,7 @@ before_install:
 - npm version
 install: true # no need to do the default install
 before_script:
+- npm config set //registry.npmjs.org/:_authToken=$NPM_AUTH_TOKEN
 - pushd js
 - npm prune
 - npm install
@@ -15,19 +16,16 @@ before_script:
 - popd
 - pushd clients/splore
 - npm prune
-- npm rm noms
 - ./build.py
 - npm test
 - popd
 - pushd clients/pitchmap/ui
 - npm prune
-- npm rm noms
 - ./build.py
 - npm test
 - popd
 - pushd clients/crunchbase/ui
 - npm prune
-- npm rm noms
 - ./build.py
 - npm test
 - popd
