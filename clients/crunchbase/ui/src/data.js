@@ -14,8 +14,8 @@ import {
   Ref,
   registerPackage,
   Struct,
-} from 'noms';
-import type {ChunkStore, Package} from 'noms';
+} from '@attic/noms';
+import type {ChunkStore, Package} from '@attic/noms';
 
 type RoundTypeEnum = 0 | 1 | 2;
 const Seed = 0;
