@@ -2,7 +2,7 @@
 
 import classNames from 'classnames';
 import React from 'react';
-import {Ref} from 'noms';
+import {Ref} from '@attic/noms';
 import nomsServer from './noms_server.js';
 
 type Props = {

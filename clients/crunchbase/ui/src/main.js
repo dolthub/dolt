@@ -1,5 +1,5 @@
 // @flow
-import {DataStore, HttpStore} from 'noms';
+import {DataStore, HttpStore} from '@attic/noms';
 import Chart from './chart.js';
 import DataManager from './data.js';
 import List from './list.js';

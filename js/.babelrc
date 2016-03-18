@@ -20,6 +20,15 @@
         "transform-es2015-modules-commonjs",
         "transform-es2015-parameters",
       ]
-    }
+    },
+    "es6": {
+      "presets": ["react"],
+      "plugins": [
+        "syntax-async-functions",
+        "syntax-flow",
+        "transform-async-to-generator",
+        "transform-class-properties",
+      ]
+    },
   }
 }

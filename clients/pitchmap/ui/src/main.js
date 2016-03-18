@@ -3,7 +3,7 @@
 import HeatMap from './heat_map.js';
 import React from 'react';
 import ReactDOM from 'react-dom';
-import {DataStore, HttpStore, invariant, NomsMap, Ref} from 'noms';
+import {DataStore, HttpStore, invariant, NomsMap, Ref} from '@attic/noms';
 
 let datastore: DataStore;
 

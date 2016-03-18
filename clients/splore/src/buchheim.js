@@ -8,7 +8,7 @@
 
 // TreeNode represents one node of the tree visualization.
 
-import type {Ref} from 'noms';
+import type {Ref} from '@attic/noms';
 
 function assertNotNull<T>(v: ?T): T {
   if (v !== null && v !== undefined) {

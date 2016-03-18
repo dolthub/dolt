@@ -1,8 +1,8 @@
 // @flow
 
 import React from 'react';
-import {NomsList, notNull, readValue, Ref} from 'noms';
-import type {ChunkStore} from 'noms';
+import {NomsList, notNull, readValue, Ref} from '@attic/noms';
+import type {ChunkStore} from '@attic/noms';
 
 const IMAGE_WIDTH_PX = 286;
 const IMAGE_HEIGHT_PX = 324;

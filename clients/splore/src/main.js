@@ -5,8 +5,9 @@ import React from 'react'; // eslint-disable-line no-unused-vars
 import ReactDOM from 'react-dom';
 import {HttpStore, invariant, IndexedMetaSequence, ListLeafSequence, MapLeafSequence,
     OrderedMetaSequence, NomsList, NomsMap, NomsSet, readValue, Ref, SetLeafSequence, Struct,}
-    from 'noms';
-import {layout, NodeGraph, TreeNode} from './buchheim.js';
+    from '@attic/noms';
+import {layout, TreeNode} from './buchheim.js';
+import type {NodeGraph} from './buchheim.js';
 
 const data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
