@@ -67,7 +67,7 @@ export default class HttpStore extends RemoteStore {
     return Object.assign({}, opts, baseOpts, {headers: hdrs});
   }
 
-  async internalReadBatchInternal(reqs: UnsentReadMap): Promise<void> {
+  async internalReadBatch(reqs: UnsentReadMap): Promise<void> {
     const refStrs = Object.keys(reqs);
     const body = refStrs.map(r => 'ref=' + r).join('&');
     const opts = Object.assign(this._readBatchOptions, {body: body});
