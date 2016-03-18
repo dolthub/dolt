@@ -12,7 +12,7 @@ func getRef(v Value) ref.Ref {
 }
 
 func getRefNoOverride(v Value) ref.Ref {
-	return writeValueInternal(v, nil)
+	return EncodeValue(v, nil).Ref()
 }
 
 func EnsureRef(r *ref.Ref, v Value) ref.Ref {

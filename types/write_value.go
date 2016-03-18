@@ -2,7 +2,6 @@ package types
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -15,46 +14,33 @@ type primitive interface {
 	ToPrimitive() interface{}
 }
 
-// WriteValue takes a Value, encodes it into Chunks, and puts them into cs. As a part of BUG 654, we're trying to get rid of the need to provide a ChunkSink here.
-func WriteValue(v Value, cs chunks.ChunkSink) ref.Ref {
-	d.Chk.NotNil(cs)
-	return writeValueInternal(v, cs)
-}
-
-func writeChildValueInternal(v Value, cs chunks.ChunkSink) ref.Ref {
-	if cs == nil {
-		return v.Ref()
-	}
-
-	return writeValueInternal(v, cs)
-}
-
-func writeValueInternal(v Value, cs chunks.ChunkSink) ref.Ref {
-	e := toEncodeable(v, cs)
+// WriteValue takes a Value and encodes it to a Chunk, if |vw| is non-nill, it will vw.WriteValue reachable unwritten sub-chunks.
+func EncodeValue(v Value, vw ValueWriter) chunks.Chunk {
+	e := toEncodeable(v, vw)
 	w := chunks.NewChunkWriter()
 	encode(w, e)
-	c := w.Chunk()
-	if cs != nil {
-		cs.Put(c)
-	}
-	return c.Ref()
+	return w.Chunk()
 }
 
-func toEncodeable(v Value, cs chunks.ChunkSink) interface{} {
+func toEncodeable(v Value, vw ValueWriter) interface{} {
 	switch v := v.(type) {
 	case blobLeaf:
 		return v.Reader()
 	case Package:
-		processPackageChildren(v, cs)
+		processPackageChildren(v, vw)
 	}
-	return encNomsValue(v, cs)
+	return encNomsValue(v, vw)
 }
 
-func processPackageChildren(p Package, cs chunks.ChunkSink) {
+func processPackageChildren(p Package, vw ValueWriter) {
+	if vw == nil {
+		return
+	}
+
 	for _, r := range p.dependencies {
 		p := LookupPackage(r)
-		if p != nil {
-			writeChildValueInternal(*p, cs)
+		if p != nil && vw != nil {
+			vw.WriteValue(*p)
 		}
 	}
 }

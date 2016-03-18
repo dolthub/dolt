@@ -59,7 +59,9 @@ func (ds *dataStoreCommon) ReadValue(r ref.Ref) types.Value {
 }
 
 func (ds *dataStoreCommon) WriteValue(v types.Value) ref.Ref {
-	return types.WriteValue(v, ds.cs)
+	chunk := types.EncodeValue(v, ds)
+	ds.cs.Put(chunk)
+	return chunk.Ref()
 }
 
 // Has should really not be exposed on DataStore :-/
