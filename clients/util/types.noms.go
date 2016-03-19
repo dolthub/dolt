@@ -44,7 +44,7 @@ func (l ListOfRefOfMapOfStringToValue) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfRefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
+func (l ListOfRefOfMapOfStringToValue) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
@@ -172,9 +172,9 @@ func (r RefOfMapOfStringToValue) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfMapOfStringToValue.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
+func (r RefOfMapOfStringToValue) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -198,7 +198,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfMapOfStringToValue, builderForRefOfMapOfStringToValue)
 }
 
-func builderForRefOfMapOfStringToValue(r ref.Ref) types.Value {
+func builderForRefOfMapOfStringToValue(r ref.Ref) types.RefBase {
 	return NewRefOfMapOfStringToValue(r)
 }
 
@@ -248,7 +248,7 @@ func (m MapOfStringToValue) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToValue) Chunks() (chunks []ref.Ref) {
+func (m MapOfStringToValue) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return

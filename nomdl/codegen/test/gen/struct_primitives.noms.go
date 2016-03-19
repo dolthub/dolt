@@ -207,7 +207,7 @@ func (s StructPrimitives) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s StructPrimitives) Chunks() (chunks []ref.Ref) {
+func (s StructPrimitives) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForStructPrimitives.Chunks()...)
 	chunks = append(chunks, s._blob.Chunks()...)
 	chunks = append(chunks, s._value.Chunks()...)

@@ -47,7 +47,7 @@ func (s SetOfBool) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfBool) Chunks() (chunks []ref.Ref) {
+func (s SetOfBool) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return

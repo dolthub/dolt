@@ -99,7 +99,7 @@ func (s Struct) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Struct) Chunks() (chunks []ref.Ref) {
+func (s Struct) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForStruct.Chunks()...)
 	return
 }
@@ -167,7 +167,7 @@ func (l ListOfStruct) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfStruct) Chunks() (chunks []ref.Ref) {
+func (l ListOfStruct) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return

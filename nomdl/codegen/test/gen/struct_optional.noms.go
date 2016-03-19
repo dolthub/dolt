@@ -119,7 +119,7 @@ func (s OptionalStruct) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s OptionalStruct) Chunks() (chunks []ref.Ref) {
+func (s OptionalStruct) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForOptionalStruct.Chunks()...)
 	return
 }

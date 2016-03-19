@@ -69,7 +69,7 @@ func (e LocalE) Ref() ref.Ref {
 	return types.EnsureRef(&throwaway, e)
 }
 
-func (e LocalE) Chunks() []ref.Ref {
+func (e LocalE) Chunks() []types.RefBase {
 	return nil
 }
 
@@ -151,7 +151,7 @@ func (s ImportUser) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s ImportUser) Chunks() (chunks []ref.Ref) {
+func (s ImportUser) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForImportUser.Chunks()...)
 	chunks = append(chunks, s._importedStruct.Chunks()...)
 	return
@@ -220,7 +220,7 @@ func (l ListOfD) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfD) Chunks() (chunks []ref.Ref) {
+func (l ListOfD) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return

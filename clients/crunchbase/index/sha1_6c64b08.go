@@ -111,7 +111,7 @@ func (s Import) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Import) Chunks() (chunks []ref.Ref) {
+func (s Import) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForImport.Chunks()...)
 	chunks = append(chunks, s._Date.Chunks()...)
 	chunks = append(chunks, s._Companies.Chunks()...)
@@ -178,9 +178,9 @@ func (r RefOfMapOfStringToRefOfCompany) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfMapOfStringToRefOfCompany.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfMapOfStringToRefOfCompany) Chunks() (chunks []ref.Ref) {
+func (r RefOfMapOfStringToRefOfCompany) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -204,7 +204,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfMapOfStringToRefOfCompany, builderForRefOfMapOfStringToRefOfCompany)
 }
 
-func builderForRefOfMapOfStringToRefOfCompany(r ref.Ref) types.Value {
+func builderForRefOfMapOfStringToRefOfCompany(r ref.Ref) types.RefBase {
 	return NewRefOfMapOfStringToRefOfCompany(r)
 }
 
@@ -254,7 +254,7 @@ func (m MapOfStringToRefOfCompany) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToRefOfCompany) Chunks() (chunks []ref.Ref) {
+func (m MapOfStringToRefOfCompany) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
@@ -372,9 +372,9 @@ func (r RefOfCompany) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfCompany.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfCompany) Chunks() (chunks []ref.Ref) {
+func (r RefOfCompany) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -398,7 +398,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfCompany, builderForRefOfCompany)
 }
 
-func builderForRefOfCompany(r ref.Ref) types.Value {
+func builderForRefOfCompany(r ref.Ref) types.RefBase {
 	return NewRefOfCompany(r)
 }
 

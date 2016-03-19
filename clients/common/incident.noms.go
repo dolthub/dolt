@@ -182,7 +182,7 @@ func (s Incident) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Incident) Chunks() (chunks []ref.Ref) {
+func (s Incident) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForIncident.Chunks()...)
 	chunks = append(chunks, s._Geoposition.Chunks()...)
 	return
@@ -350,7 +350,7 @@ func (l ListOfRefOfIncident) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfRefOfIncident) Chunks() (chunks []ref.Ref) {
+func (l ListOfRefOfIncident) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
@@ -478,9 +478,9 @@ func (r RefOfIncident) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfIncident.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfIncident) Chunks() (chunks []ref.Ref) {
+func (r RefOfIncident) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -504,7 +504,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfIncident, builderForRefOfIncident)
 }
 
-func builderForRefOfIncident(r ref.Ref) types.Value {
+func builderForRefOfIncident(r ref.Ref) types.RefBase {
 	return NewRefOfIncident(r)
 }
 

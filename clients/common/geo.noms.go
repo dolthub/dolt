@@ -106,7 +106,7 @@ func (s Geoposition) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Geoposition) Chunks() (chunks []ref.Ref) {
+func (s Geoposition) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForGeoposition.Chunks()...)
 	return
 }
@@ -211,7 +211,7 @@ func (s Georectangle) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Georectangle) Chunks() (chunks []ref.Ref) {
+func (s Georectangle) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForGeorectangle.Chunks()...)
 	chunks = append(chunks, s._TopLeft.Chunks()...)
 	chunks = append(chunks, s._BottomRight.Chunks()...)

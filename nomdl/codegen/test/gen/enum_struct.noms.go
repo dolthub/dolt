@@ -67,7 +67,7 @@ func (e Handedness) Ref() ref.Ref {
 	return types.EnsureRef(&throwaway, e)
 }
 
-func (e Handedness) Chunks() []ref.Ref {
+func (e Handedness) Chunks() []types.RefBase {
 	return nil
 }
 
@@ -141,7 +141,7 @@ func (s EnumStruct) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s EnumStruct) Chunks() (chunks []ref.Ref) {
+func (s EnumStruct) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForEnumStruct.Chunks()...)
 	return
 }

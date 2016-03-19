@@ -164,7 +164,7 @@ func (s RemotePhoto) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s RemotePhoto) Chunks() (chunks []ref.Ref) {
+func (s RemotePhoto) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForRemotePhoto.Chunks()...)
 	chunks = append(chunks, s._Date.Chunks()...)
 	chunks = append(chunks, s._Geoposition.Chunks()...)
@@ -353,7 +353,7 @@ func (s Face) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Face) Chunks() (chunks []ref.Ref) {
+func (s Face) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForFace.Chunks()...)
 	return
 }
@@ -491,7 +491,7 @@ func (s Size) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Size) Chunks() (chunks []ref.Ref) {
+func (s Size) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForSize.Chunks()...)
 	return
 }
@@ -560,7 +560,7 @@ func (m MapOfSizeToString) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfSizeToString) Chunks() (chunks []ref.Ref) {
+func (m MapOfSizeToString) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
@@ -695,7 +695,7 @@ func (s SetOfString) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfString) Chunks() (chunks []ref.Ref) {
+func (s SetOfString) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
@@ -840,7 +840,7 @@ func (s SetOfFace) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfFace) Chunks() (chunks []ref.Ref) {
+func (s SetOfFace) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return

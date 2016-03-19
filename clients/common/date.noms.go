@@ -90,7 +90,7 @@ func (s Date) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Date) Chunks() (chunks []ref.Ref) {
+func (s Date) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForDate.Chunks()...)
 	return
 }
