@@ -7,7 +7,7 @@ import (
 
 type enumBuilderFunc func(v uint32) Value
 type enumReaderFunc func(v Value) uint32
-type refBuilderFunc func(target ref.Ref) Value
+type refBuilderFunc func(target ref.Ref) RefBase
 type structBuilderFunc func(values []Value) Value
 type structReaderFunc func(v Value) []Value
 type valueBuilderFunc func(v Value) Value
@@ -127,7 +127,7 @@ func RegisterRef(t Type, bf refBuilderFunc) {
 	refFuncMap[t.Ref()] = bf
 }
 
-func refFromType(target ref.Ref, t Type) Value {
+func refFromType(target ref.Ref, t Type) RefBase {
 	if f, ok := refFuncMap[t.Ref()]; ok {
 		return f(target)
 	}

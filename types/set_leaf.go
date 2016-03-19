@@ -120,7 +120,7 @@ func (s setLeaf) Equals(other Value) bool {
 	return other != nil && s.t.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
-func (s setLeaf) Chunks() (chunks []ref.Ref) {
+func (s setLeaf) Chunks() (chunks []RefBase) {
 	for _, v := range s.data {
 		chunks = append(chunks, v.Chunks()...)
 	}
@@ -216,7 +216,7 @@ func makeSetLeafChunkFn(t Type, vr ValueReader) makeChunkFn {
 			}
 		}
 
-		return newMetaTuple(indexValue, setLeaf, ref.Ref{}), setLeaf
+		return newMetaTuple(indexValue, setLeaf, Ref{}), setLeaf
 	}
 }
 

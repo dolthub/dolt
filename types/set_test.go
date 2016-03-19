@@ -209,7 +209,7 @@ func testSetOrder(assert *assert.Assertions, valueType Type, value []Value, expe
 	i := 0
 	m.IterAll(func(value Value) {
 		assert.Equal(expectOrdering[i].Ref().String(), value.Ref().String())
-		i += 1
+		i++
 	})
 }
 

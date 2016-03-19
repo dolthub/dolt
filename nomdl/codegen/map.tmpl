@@ -40,7 +40,7 @@ func (m {{.Name}}) Ref() ref.Ref {
 	return {{$typesPackage}}EnsureRef(m.ref, m)
 }
 
-func (m {{.Name}}) Chunks() (chunks []ref.Ref) {
+func (m {{.Name}}) Chunks() (chunks []{{$typesPackage}}RefBase) {
 	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return

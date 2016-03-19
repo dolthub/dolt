@@ -32,7 +32,7 @@ func (bl blobLeaf) Ref() ref.Ref {
 	return EnsureRef(bl.ref, bl)
 }
 
-func (bl blobLeaf) Chunks() []ref.Ref {
+func (bl blobLeaf) Chunks() []RefBase {
 	return nil
 }
 

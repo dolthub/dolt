@@ -1,14 +1,10 @@
 package types
 
-import (
-	"crypto/sha1"
-
-	"github.com/attic-labs/noms/ref"
-)
+import "crypto/sha1"
 
 func newIndexedMetaSequenceBoundaryChecker() boundaryChecker {
 	return newBuzHashBoundaryChecker(objectWindowSize, sha1.Size, objectPattern, func(item sequenceItem) []byte {
-		digest := item.(metaTuple).ChildRef().Digest()
+		digest := item.(metaTuple).ChildRef().TargetRef().Digest()
 		return digest[:]
 	})
 }
@@ -25,8 +21,9 @@ func newIndexedMetaSequenceChunkFn(t Type, source ValueReader, sink ValueWriter)
 
 		meta := newMetaSequenceFromData(tuples, t, source)
 		if sink != nil {
-			return metaTuple{nil, sink.WriteValue(meta), Uint64(tuples.uint64ValuesSum())}, meta
+			r := newRef(sink.WriteValue(meta), MakeRefType(meta.Type()))
+			return newMetaTuple(Uint64(tuples.uint64ValuesSum()), nil, r), meta
 		}
-		return metaTuple{meta, ref.Ref{}, Uint64(tuples.uint64ValuesSum())}, meta
+		return newMetaTuple(Uint64(tuples.uint64ValuesSum()), meta, Ref{}), meta
 	}
 }

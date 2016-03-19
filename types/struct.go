@@ -56,7 +56,7 @@ func (s Struct) Ref() ref.Ref {
 	return EnsureRef(s.ref, s)
 }
 
-func (s Struct) Chunks() (chunks []ref.Ref) {
+func (s Struct) Chunks() (chunks []RefBase) {
 	chunks = append(chunks, s.t.Chunks()...)
 	for _, f := range s.desc().Fields {
 		if v, ok := s.data[f.Name]; ok {

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -60,8 +59,8 @@ func TestValueEquals(t *testing.T) {
 			b1 := NewBlob(bytes.NewBufferString("hi"))
 			b2 := NewBlob(bytes.NewBufferString("bye"))
 			return newCompoundBlob([]metaTuple{
-				newMetaTuple(Uint64(uint64(2)), b1, ref.Ref{}),
-				newMetaTuple(Uint64(uint64(5)), b2, ref.Ref{}),
+				newMetaTuple(Uint64(uint64(2)), b1, Ref{}),
+				newMetaTuple(Uint64(uint64(5)), b2, Ref{}),
 			}, nil)
 		},
 		func() Value { return NewList() },

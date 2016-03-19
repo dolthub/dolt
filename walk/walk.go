@@ -121,7 +121,7 @@ func doChunkWalkP(r ref.Ref, vr types.ValueReader, callback SomeChunksCallback, 
 		v := vr.ReadValue(r)
 		for _, r1 := range v.Chunks() {
 			wg.Add(1)
-			rq.tail() <- r1
+			rq.tail() <- r1.TargetRef()
 		}
 	}
 

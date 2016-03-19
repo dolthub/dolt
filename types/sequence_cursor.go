@@ -33,9 +33,8 @@ func (cur *sequenceCursor) maybeCurrent() (sequenceItem, bool) {
 	d.Chk.True(cur.idx >= -1 && cur.idx <= cur.length)
 	if cur.idx == -1 || cur.idx == cur.length {
 		return nil, false
-	} else {
-		return cur.getItem(cur.item, cur.idx), true
 	}
+	return cur.getItem(cur.item, cur.idx), true
 }
 
 func (cur *sequenceCursor) indexInChunk() int {

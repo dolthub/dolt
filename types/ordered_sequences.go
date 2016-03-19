@@ -3,8 +3,6 @@ package types
 import (
 	"crypto/sha1"
 	"sort"
-
-	"github.com/attic-labs/noms/ref"
 )
 
 func isSequenceOrderedByIndexedType(t Type) bool {
@@ -30,7 +28,7 @@ func findLeafInOrderedSequence(ms metaSequence, t Type, key Value, getValues get
 		})
 	}
 
-	if current := cursor.current().(metaTuple); current.ChildRef() != valueFromType(leaf, leaf.Type()).Ref() {
+	if current := cursor.current().(metaTuple); current.ChildRef().TargetRef() != valueFromType(leaf, leaf.Type()).Ref() {
 		leaf = readMetaTupleValue(current, vr)
 	}
 
@@ -51,7 +49,7 @@ func findLeafInOrderedSequence(ms metaSequence, t Type, key Value, getValues get
 
 func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 	return newBuzHashBoundaryChecker(orderedSequenceWindowSize, sha1.Size, objectPattern, func(item sequenceItem) []byte {
-		digest := item.(metaTuple).ChildRef().Digest()
+		digest := item.(metaTuple).ChildRef().TargetRef().Digest()
 		return digest[:]
 	})
 }
@@ -65,6 +63,6 @@ func newOrderedMetaSequenceChunkFn(t Type, vr ValueReader) makeChunkFn {
 		}
 
 		meta := newMetaSequenceFromData(tuples, t, vr)
-		return newMetaTuple(tuples.last().value, meta, ref.Ref{}), meta
+		return newMetaTuple(tuples.last().value, meta, Ref{}), meta
 	}
 }

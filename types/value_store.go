@@ -5,17 +5,18 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-// ValueStore is currently used only for tests in this pacakge.
+// ValueStore is currently used only for tests in this package.
 type ValueStore struct {
 	cs chunks.ChunkStore
 }
 
-func newValueStore(cs chunks.ChunkStore) *ValueStore {
-	return &ValueStore{cs}
-}
-
+// NewTestValueStore creates a simple struct that satisfies ValueReadWriter and is backed by a chunks.TestStore.
 func NewTestValueStore() *ValueStore {
 	return &ValueStore{chunks.NewTestStore()}
+}
+
+func newValueStore(cs chunks.ChunkStore) *ValueStore {
+	return &ValueStore{cs}
 }
 
 // ReadValue reads and decodes a value from vrw. It is not considered an error for the requested chunk to be empty; in this case, the function simply returns nil.

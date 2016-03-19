@@ -4,7 +4,6 @@ import (
 	"io"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
 )
 
 const (
@@ -45,7 +44,7 @@ func newBlobLeafChunkFn() makeChunkFn {
 		}
 
 		leaf := newBlobLeaf(buff)
-		return newMetaTuple(Uint64(uint64(len(buff))), leaf, ref.Ref{}), leaf
+		return newMetaTuple(Uint64(uint64(len(buff))), leaf, Ref{}), leaf
 	}
 }
 

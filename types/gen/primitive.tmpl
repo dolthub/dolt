@@ -8,7 +8,7 @@ func (v {{.NomsType}}) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v {{.NomsType}}) Chunks() []ref.Ref {
+func (v {{.NomsType}}) Chunks() []RefBase {
 	return nil
 }
 
@@ -25,7 +25,6 @@ var typeFor{{.NomsType}} = MakePrimitiveType({{.NomsType}}Kind)
 func (v {{.NomsType}}) Type() Type {
 	return typeFor{{.NomsType}}
 }
-
 {{if .IsOrdered}}
 func (v {{.NomsType}}) Less(other OrderedValue) bool {
 	return v < other.({{.NomsType}})

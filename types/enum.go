@@ -20,7 +20,7 @@ func (e Enum) Ref() ref.Ref {
 	return EnsureRef(&throwaway, e)
 }
 
-func (e Enum) Chunks() []ref.Ref {
+func (e Enum) Chunks() []RefBase {
 	return nil
 }
 

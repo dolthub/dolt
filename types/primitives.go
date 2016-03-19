@@ -17,7 +17,7 @@ func (v Bool) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Bool) Chunks() []ref.Ref {
+func (v Bool) Chunks() []RefBase {
 	return nil
 }
 
@@ -45,7 +45,7 @@ func (v Float32) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Float32) Chunks() []ref.Ref {
+func (v Float32) Chunks() []RefBase {
 	return nil
 }
 
@@ -77,7 +77,7 @@ func (v Float64) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Float64) Chunks() []ref.Ref {
+func (v Float64) Chunks() []RefBase {
 	return nil
 }
 
@@ -109,7 +109,7 @@ func (v Int16) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Int16) Chunks() []ref.Ref {
+func (v Int16) Chunks() []RefBase {
 	return nil
 }
 
@@ -141,7 +141,7 @@ func (v Int32) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Int32) Chunks() []ref.Ref {
+func (v Int32) Chunks() []RefBase {
 	return nil
 }
 
@@ -173,7 +173,7 @@ func (v Int64) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Int64) Chunks() []ref.Ref {
+func (v Int64) Chunks() []RefBase {
 	return nil
 }
 
@@ -205,7 +205,7 @@ func (v Int8) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Int8) Chunks() []ref.Ref {
+func (v Int8) Chunks() []RefBase {
 	return nil
 }
 
@@ -237,7 +237,7 @@ func (v Uint16) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Uint16) Chunks() []ref.Ref {
+func (v Uint16) Chunks() []RefBase {
 	return nil
 }
 
@@ -269,7 +269,7 @@ func (v Uint32) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Uint32) Chunks() []ref.Ref {
+func (v Uint32) Chunks() []RefBase {
 	return nil
 }
 
@@ -301,7 +301,7 @@ func (v Uint64) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Uint64) Chunks() []ref.Ref {
+func (v Uint64) Chunks() []RefBase {
 	return nil
 }
 
@@ -333,7 +333,7 @@ func (v Uint8) Ref() ref.Ref {
 	return getRef(v)
 }
 
-func (v Uint8) Chunks() []ref.Ref {
+func (v Uint8) Chunks() []RefBase {
 	return nil
 }
 
@@ -354,3 +354,4 @@ func (v Uint8) Type() Type {
 func (v Uint8) Less(other OrderedValue) bool {
 	return v < other.(Uint8)
 }
+

@@ -45,7 +45,7 @@ func (s SetOfRefOfPackage) Ref() ref.Ref {
 	return EnsureRef(s.ref, s)
 }
 
-func (s SetOfRefOfPackage) Chunks() (chunks []ref.Ref) {
+func (s SetOfRefOfPackage) Chunks() (chunks []RefBase) {
 	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
@@ -172,9 +172,9 @@ func (r RefOfPackage) Equals(other Value) bool {
 	return other != nil && __typeForRefOfPackage.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfPackage) Chunks() (chunks []ref.Ref) {
+func (r RefOfPackage) Chunks() (chunks []RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -198,7 +198,7 @@ func init() {
 	RegisterRef(__typeForRefOfPackage, builderForRefOfPackage)
 }
 
-func builderForRefOfPackage(r ref.Ref) Value {
+func builderForRefOfPackage(r ref.Ref) RefBase {
 	return NewRefOfPackage(r)
 }
 

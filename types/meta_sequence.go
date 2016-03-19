@@ -1,9 +1,6 @@
 package types
 
-import (
-	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
-)
+import "github.com/attic-labs/noms/d"
 
 const (
 	objectWindowSize          = 8
@@ -20,25 +17,24 @@ type metaSequence interface {
 	tupleCount() int
 }
 
-func newMetaTuple(value, child Value, childRef ref.Ref) metaTuple {
-	d.Chk.True((child != nil) != (childRef != ref.Ref{}), "Either child or childRef can be set, but not both")
+func newMetaTuple(value, child Value, childRef RefBase) metaTuple {
+	d.Chk.True((child != nil) != (childRef != Ref{}), "Either child or childRef can be set, but not both")
 	return metaTuple{child, childRef, value}
 }
 
 // metaTuple is a node in a "probably" tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
 	child    Value   // nil if the child data hasn't been read, or has already been written
-	childRef ref.Ref // may be empty if |child| is non-nil; call ChildRef() instead of accessing |childRef| directly
+	childRef RefBase // may be empty if |child| is non-nil; call ChildRef() instead of accessing |childRef| directly
 	value    Value
 }
 
-func (mt metaTuple) ChildRef() ref.Ref {
+func (mt metaTuple) ChildRef() RefBase {
 	if mt.child != nil {
-		return mt.child.Ref()
-	} else {
-		d.Chk.False(mt.childRef.IsEmpty())
-		return mt.childRef
+		return newRef(mt.child.Ref(), MakeRefType(mt.child.Type()))
 	}
+	d.Chk.False(mt.childRef.TargetRef().IsEmpty())
+	return mt.childRef
 }
 
 func (mt metaTuple) uint64Value() uint64 {
@@ -84,12 +80,12 @@ func (ms metaSequenceObject) ChildValues() []Value {
 	refOfLeafType := MakeCompoundType(RefKind, leafType)
 	res := make([]Value, len(ms.tuples))
 	for i, t := range ms.tuples {
-		res[i] = refFromType(t.ChildRef(), refOfLeafType)
+		res[i] = refFromType(t.ChildRef().TargetRef(), refOfLeafType)
 	}
 	return res
 }
 
-func (ms metaSequenceObject) Chunks() (chunks []ref.Ref) {
+func (ms metaSequenceObject) Chunks() (chunks []RefBase) {
 	for _, tuple := range ms.tuples {
 		chunks = append(chunks, tuple.ChildRef())
 	}
@@ -102,9 +98,7 @@ func (ms metaSequenceObject) Type() Type {
 
 type metaBuilderFunc func(tuples metaSequenceData, t Type, vr ValueReader) Value
 
-var (
-	metaFuncMap map[NomsKind]metaBuilderFunc = map[NomsKind]metaBuilderFunc{}
-)
+var metaFuncMap = map[NomsKind]metaBuilderFunc{}
 
 func registerMetaValue(k NomsKind, bf metaBuilderFunc) {
 	metaFuncMap[k] = bf
@@ -146,8 +140,8 @@ func newMetaSequenceCursor(root metaSequence, vr ValueReader) (*sequenceCursor, 
 func readMetaTupleValue(item sequenceItem, vr ValueReader) Value {
 	mt := item.(metaTuple)
 	if mt.child == nil {
-		d.Chk.False(mt.childRef.IsEmpty())
-		mt.child = vr.ReadValue(mt.childRef)
+		d.Chk.False(mt.childRef.TargetRef().IsEmpty())
+		mt.child = vr.ReadValue(mt.childRef.TargetRef())
 		d.Chk.NotNil(mt.child)
 	}
 	return internalValueFromType(mt.child, mt.child.Type())

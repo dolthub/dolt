@@ -99,7 +99,7 @@ func (s Commit) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Commit) Chunks() (chunks []ref.Ref) {
+func (s Commit) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForCommit.Chunks()...)
 	chunks = append(chunks, s._value.Chunks()...)
 	chunks = append(chunks, s._parents.Chunks()...)
@@ -170,7 +170,7 @@ func (m MapOfStringToRefOfCommit) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToRefOfCommit) Chunks() (chunks []ref.Ref) {
+func (m MapOfStringToRefOfCommit) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
@@ -305,7 +305,7 @@ func (s SetOfRefOfCommit) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfRefOfCommit) Chunks() (chunks []ref.Ref) {
+func (s SetOfRefOfCommit) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
@@ -433,9 +433,9 @@ func (r RefOfCommit) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfCommit.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfCommit) Chunks() (chunks []ref.Ref) {
+func (r RefOfCommit) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -459,7 +459,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfCommit, builderForRefOfCommit)
 }
 
-func builderForRefOfCommit(r ref.Ref) types.Value {
+func builderForRefOfCommit(r ref.Ref) types.RefBase {
 	return NewRefOfCommit(r)
 }
 
