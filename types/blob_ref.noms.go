@@ -27,9 +27,9 @@ func (r RefOfBlob) Equals(other Value) bool {
 	return other != nil && __typeForRefOfBlob.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfBlob) Chunks() (chunks []ref.Ref) {
+func (r RefOfBlob) Chunks() (chunks []RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -40,7 +40,7 @@ func (r RefOfBlob) ChildValues() []Value {
 // A Noms Value that describes RefOfBlob.
 var __typeForRefOfBlob Type
 
-func (m RefOfBlob) Type() Type {
+func (r RefOfBlob) Type() Type {
 	return __typeForRefOfBlob
 }
 
@@ -49,7 +49,7 @@ func init() {
 	RegisterRef(__typeForRefOfBlob, builderForRefOfBlob)
 }
 
-func builderForRefOfBlob(r ref.Ref) Value {
+func builderForRefOfBlob(r ref.Ref) RefBase {
 	return NewRefOfBlob(r)
 }
 

@@ -107,7 +107,7 @@ func (s D) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s D) Chunks() (chunks []ref.Ref) {
+func (s D) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForD.Chunks()...)
 	chunks = append(chunks, s._structField.Chunks()...)
 	return
@@ -205,7 +205,7 @@ func (s DUser) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s DUser) Chunks() (chunks []ref.Ref) {
+func (s DUser) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForDUser.Chunks()...)
 	chunks = append(chunks, s._Dfield.Chunks()...)
 	return

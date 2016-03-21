@@ -79,7 +79,7 @@ func setUnion(set Set, others []Set) Set {
 	}
 
 	smallest := func(cursors map[*sequenceCursor]bool) (smallestCursor *sequenceCursor, smallestItem sequenceItem) {
-		for cursor, _ := range cursors {
+		for cursor := range cursors {
 			currentItem := cursor.current()
 			if smallestCursor == nil || lessFunction(currentItem, smallestItem) {
 				smallestCursor = cursor

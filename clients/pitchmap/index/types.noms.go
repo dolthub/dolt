@@ -99,7 +99,7 @@ func (s Pitch) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Pitch) Chunks() (chunks []ref.Ref) {
+func (s Pitch) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForPitch.Chunks()...)
 	return
 }
@@ -168,7 +168,7 @@ func (m MapOfStringToRefOfListOfPitch) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToRefOfListOfPitch) Chunks() (chunks []ref.Ref) {
+func (m MapOfStringToRefOfListOfPitch) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
@@ -300,7 +300,7 @@ func (l ListOfRefOfMapOfStringToValue) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfRefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
+func (l ListOfRefOfMapOfStringToValue) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
@@ -428,9 +428,9 @@ func (r RefOfMapOfStringToValue) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfMapOfStringToValue.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfMapOfStringToValue) Chunks() (chunks []ref.Ref) {
+func (r RefOfMapOfStringToValue) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -454,7 +454,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfMapOfStringToValue, builderForRefOfMapOfStringToValue)
 }
 
-func builderForRefOfMapOfStringToValue(r ref.Ref) types.Value {
+func builderForRefOfMapOfStringToValue(r ref.Ref) types.RefBase {
 	return NewRefOfMapOfStringToValue(r)
 }
 
@@ -504,7 +504,7 @@ func (m MapOfStringToValue) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToValue) Chunks() (chunks []ref.Ref) {
+func (m MapOfStringToValue) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
@@ -636,7 +636,7 @@ func (l ListOfPitch) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfPitch) Chunks() (chunks []ref.Ref) {
+func (l ListOfPitch) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
@@ -764,9 +764,9 @@ func (r RefOfListOfPitch) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfListOfPitch.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfListOfPitch) Chunks() (chunks []ref.Ref) {
+func (r RefOfListOfPitch) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -790,7 +790,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfListOfPitch, builderForRefOfListOfPitch)
 }
 
-func builderForRefOfListOfPitch(r ref.Ref) types.Value {
+func builderForRefOfListOfPitch(r ref.Ref) types.RefBase {
 	return NewRefOfListOfPitch(r)
 }
 

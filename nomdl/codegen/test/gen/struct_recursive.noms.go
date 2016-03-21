@@ -90,7 +90,7 @@ func (s Tree) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Tree) Chunks() (chunks []ref.Ref) {
+func (s Tree) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForTree.Chunks()...)
 	chunks = append(chunks, s._children.Chunks()...)
 	return
@@ -148,7 +148,7 @@ func (l ListOfTree) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfTree) Chunks() (chunks []ref.Ref) {
+func (l ListOfTree) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return

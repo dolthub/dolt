@@ -126,7 +126,7 @@ func (s Song) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Song) Chunks() (chunks []ref.Ref) {
+func (s Song) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForSong.Chunks()...)
 	chunks = append(chunks, s._Mp3.Chunks()...)
 	return
@@ -228,7 +228,7 @@ func (l ListOfSong) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfSong) Chunks() (chunks []ref.Ref) {
+func (l ListOfSong) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return

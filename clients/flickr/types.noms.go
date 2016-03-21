@@ -118,7 +118,7 @@ func (s User) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s User) Chunks() (chunks []ref.Ref) {
+func (s User) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForUser.Chunks()...)
 	chunks = append(chunks, s._Albums.Chunks()...)
 	return
@@ -243,7 +243,7 @@ func (s Album) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Album) Chunks() (chunks []ref.Ref) {
+func (s Album) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForAlbum.Chunks()...)
 	chunks = append(chunks, s._Photos.Chunks()...)
 	return
@@ -309,9 +309,9 @@ func (r RefOfUser) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfUser.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfUser) Chunks() (chunks []ref.Ref) {
+func (r RefOfUser) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -335,7 +335,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfUser, builderForRefOfUser)
 }
 
-func builderForRefOfUser(r ref.Ref) types.Value {
+func builderForRefOfUser(r ref.Ref) types.RefBase {
 	return NewRefOfUser(r)
 }
 
@@ -385,7 +385,7 @@ func (m MapOfStringToRefOfAlbum) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToRefOfAlbum) Chunks() (chunks []ref.Ref) {
+func (m MapOfStringToRefOfAlbum) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
@@ -520,7 +520,7 @@ func (s SetOfRefOfRemotePhoto) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfRefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
+func (s SetOfRefOfRemotePhoto) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
@@ -648,9 +648,9 @@ func (r RefOfAlbum) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfAlbum.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfAlbum) Chunks() (chunks []ref.Ref) {
+func (r RefOfAlbum) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -674,7 +674,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfAlbum, builderForRefOfAlbum)
 }
 
-func builderForRefOfAlbum(r ref.Ref) types.Value {
+func builderForRefOfAlbum(r ref.Ref) types.RefBase {
 	return NewRefOfAlbum(r)
 }
 
@@ -709,9 +709,9 @@ func (r RefOfRemotePhoto) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfRemotePhoto.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfRemotePhoto) Chunks() (chunks []ref.Ref) {
+func (r RefOfRemotePhoto) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -735,7 +735,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfRemotePhoto, builderForRefOfRemotePhoto)
 }
 
-func builderForRefOfRemotePhoto(r ref.Ref) types.Value {
+func builderForRefOfRemotePhoto(r ref.Ref) types.RefBase {
 	return NewRefOfRemotePhoto(r)
 }
 

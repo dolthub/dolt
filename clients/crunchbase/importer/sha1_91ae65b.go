@@ -238,7 +238,7 @@ func (s Company) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Company) Chunks() (chunks []ref.Ref) {
+func (s Company) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForCompany.Chunks()...)
 	chunks = append(chunks, s._CategoryList.Chunks()...)
 	chunks = append(chunks, s._FoundedAt.Chunks()...)
@@ -534,7 +534,7 @@ func (s Round) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Round) Chunks() (chunks []ref.Ref) {
+func (s Round) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForRound.Chunks()...)
 	chunks = append(chunks, s._FundedAt.Chunks()...)
 	return
@@ -650,7 +650,7 @@ func (s SetOfString) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfString) Chunks() (chunks []ref.Ref) {
+func (s SetOfString) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
@@ -795,7 +795,7 @@ func (s SetOfRefOfRound) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfRefOfRound) Chunks() (chunks []ref.Ref) {
+func (s SetOfRefOfRound) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return
@@ -923,9 +923,9 @@ func (r RefOfRound) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfRound.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfRound) Chunks() (chunks []ref.Ref) {
+func (r RefOfRound) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -949,7 +949,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfRound, builderForRefOfRound)
 }
 
-func builderForRefOfRound(r ref.Ref) types.Value {
+func builderForRefOfRound(r ref.Ref) types.RefBase {
 	return NewRefOfRound(r)
 }
 

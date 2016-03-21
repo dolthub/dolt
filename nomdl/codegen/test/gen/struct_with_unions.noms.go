@@ -113,7 +113,7 @@ func (s StructWithUnions) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s StructWithUnions) Chunks() (chunks []ref.Ref) {
+func (s StructWithUnions) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForStructWithUnions.Chunks()...)
 	chunks = append(chunks, s._a.Chunks()...)
 	chunks = append(chunks, s._d.Chunks()...)
@@ -218,7 +218,7 @@ func (s __unionOfBOfFloat64AndCOfString) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s __unionOfBOfFloat64AndCOfString) Chunks() (chunks []ref.Ref) {
+func (s __unionOfBOfFloat64AndCOfString) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeFor__unionOfBOfFloat64AndCOfString.Chunks()...)
 	chunks = append(chunks, s.__unionValue.Chunks()...)
 	return
@@ -355,7 +355,7 @@ func (s __unionOfEOfFloat64AndFOfString) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s __unionOfEOfFloat64AndFOfString) Chunks() (chunks []ref.Ref) {
+func (s __unionOfEOfFloat64AndFOfString) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeFor__unionOfEOfFloat64AndFOfString.Chunks()...)
 	chunks = append(chunks, s.__unionValue.Chunks()...)
 	return

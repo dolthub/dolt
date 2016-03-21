@@ -373,12 +373,13 @@ func TestListChunks(t *testing.T) {
 	c1 := l1.Chunks()
 	assert.Len(c1, 0)
 
-	l2 := NewList(NewRef(Int32(0).Ref()))
+	ool := NewRef(Int32(0).Ref())
+	l2 := NewList(ool)
 	c2 := l2.Chunks()
 	assert.Len(c2, 1)
 
 	l3 := NewList(l2)
 	c3 := l3.Chunks()
 	assert.Len(c3, 1)
-	assert.Equal(Int32(0).Ref(), c3[0])
+	assert.Equal(ool, c3[0])
 }

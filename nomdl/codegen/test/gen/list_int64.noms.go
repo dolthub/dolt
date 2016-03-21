@@ -44,7 +44,7 @@ func (l ListOfInt64) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfInt64) Chunks() (chunks []ref.Ref) {
+func (l ListOfInt64) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return

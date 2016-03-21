@@ -110,7 +110,7 @@ func (s StructWithUnionField) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s StructWithUnionField) Chunks() (chunks []ref.Ref) {
+func (s StructWithUnionField) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForStructWithUnionField.Chunks()...)
 	chunks = append(chunks, s.__unionValue.Chunks()...)
 	return
@@ -307,7 +307,7 @@ func (s SetOfUint8) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfUint8) Chunks() (chunks []ref.Ref) {
+func (s SetOfUint8) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return

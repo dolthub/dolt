@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,7 +16,7 @@ func getTestCompoundBlob(datas ...string) compoundBlob {
 	tuples := make([]metaTuple, len(datas))
 	for i, s := range datas {
 		b := NewBlob(bytes.NewBufferString(s))
-		tuples[i] = newMetaTuple(Uint64(len(s)), b, ref.Ref{})
+		tuples[i] = newMetaTuple(Uint64(len(s)), b, Ref{})
 	}
 	return newCompoundBlob(tuples, nil)
 }
@@ -187,8 +186,8 @@ func TestCompoundBlobChunks(t *testing.T) {
 	bl1 := newBlobLeaf([]byte("hello"))
 	bl2 := newBlobLeaf([]byte("world"))
 	cb = newCompoundBlob([]metaTuple{
-		newMetaTuple(Uint64(uint64(5)), bl1, ref.Ref{}),
-		newMetaTuple(Uint64(uint64(10)), bl2, ref.Ref{}),
+		newMetaTuple(Uint64(uint64(5)), bl1, Ref{}),
+		newMetaTuple(Uint64(uint64(10)), bl2, Ref{}),
 	}, vs)
 	assert.Equal(2, len(cb.Chunks()))
 }
@@ -265,7 +264,7 @@ func printBlob(b Blob, indent int) {
 		fmt.Printf("%scompoundBlob, len: %d, chunks: %d\n", indentString, b.Len(), len(b.tuples))
 		indent++
 		for _, t := range b.tuples {
-			printBlob(b.vr.ReadValue(t.ChildRef()).(Blob), indent)
+			printBlob(b.vr.ReadValue(t.ChildRef().TargetRef()).(Blob), indent)
 		}
 	}
 }

@@ -29,12 +29,12 @@ func (p Package) Ref() ref.Ref {
 	return EnsureRef(p.ref, p)
 }
 
-func (p Package) Chunks() (chunks []ref.Ref) {
+func (p Package) Chunks() (chunks []RefBase) {
 	for _, t := range p.types {
 		chunks = append(chunks, t.Chunks()...)
 	}
 	for _, d := range p.dependencies {
-		chunks = append(chunks, d)
+		chunks = append(chunks, refFromType(d, MakeRefType(typeForPackage)))
 	}
 	return
 }

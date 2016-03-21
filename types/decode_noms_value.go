@@ -177,7 +177,7 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t Type, pkg *Package) (Value, bo
 	for !r2.atEnd() {
 		ref := r2.readRef()
 		v := r2.readValueWithoutTag(indexType, pkg)
-		data = append(data, newMetaTuple(v, nil, ref))
+		data = append(data, newMetaTuple(v, nil, refFromType(ref, MakeRefType(v.Type()))))
 	}
 
 	t = fixupType(t, pkg)

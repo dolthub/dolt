@@ -23,9 +23,9 @@ func (r {{.Name}}) Equals(other {{$typesPackage}}Value) bool {
 	return other != nil && __typeFor{{.Name}}.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r {{.Name}}) Chunks() (chunks []ref.Ref) {
+func (r {{.Name}}) Chunks() (chunks []{{$typesPackage}}RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -49,7 +49,7 @@ func init() {
 	{{$typesPackage}}RegisterRef(__typeFor{{.Name}}, builderFor{{.Name}})
 }
 
-func builderFor{{.Name}}(r ref.Ref) {{$typesPackage}}Value {
+func builderFor{{.Name}}(r ref.Ref) {{$typesPackage}}RefBase {
 	return New{{.Name}}(r)
 }
 

@@ -31,10 +31,9 @@ func newMapLeaf(t Type, data ...mapEntry) Map {
 func (m mapLeaf) First() (Value, Value) {
 	if len(m.data) == 0 {
 		return nil, nil
-	} else {
-		entry := m.data[0]
-		return entry.key, entry.value
 	}
+	entry := m.data[0]
+	return entry.key, entry.value
 }
 
 func (m mapLeaf) Len() uint64 {
@@ -148,7 +147,7 @@ func (m mapLeaf) Equals(other Value) bool {
 	return other != nil && m.t.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
-func (m mapLeaf) Chunks() (chunks []ref.Ref) {
+func (m mapLeaf) Chunks() (chunks []RefBase) {
 	for _, entry := range m.data {
 		chunks = append(chunks, entry.key.Chunks()...)
 		chunks = append(chunks, entry.value.Chunks()...)
@@ -249,10 +248,10 @@ func makeMapLeafChunkFn(t Type, vr ValueReader) makeChunkFn {
 			if isSequenceOrderedByIndexedType(t) {
 				indexValue = lastValue.key
 			} else {
-				indexValue = NewRef(lastValue.key.Ref())
+				indexValue = refFromType(lastValue.key.Ref(), MakeRefType(lastValue.key.Type()))
 			}
 		}
 
-		return newMetaTuple(indexValue, mapLeaf, ref.Ref{}), mapLeaf
+		return newMetaTuple(indexValue, mapLeaf, Ref{}), mapLeaf
 	}
 }

@@ -132,8 +132,8 @@ func TestReadCompoundList(t *testing.T) {
 	leaf1 := newListLeaf(tr, Int32(0))
 	leaf2 := newListLeaf(tr, Int32(1), Int32(2), Int32(3))
 	l2 := buildCompoundList([]metaTuple{
-		newMetaTuple(Uint64(1), leaf1, ref.Ref{}),
-		newMetaTuple(Uint64(4), leaf2, ref.Ref{}),
+		newMetaTuple(Uint64(1), leaf1, Ref{}),
+		newMetaTuple(Uint64(4), leaf2, Ref{}),
 	}, tr, cs)
 
 	a := parseJson(`[%d, %d, true, ["%s", "1", "%s", "4"]]`, ListKind, Int32Kind, leaf1.Ref(), leaf2.Ref())
@@ -213,9 +213,9 @@ func TestReadCompoundBlob(t *testing.T) {
 	_, ok := m.(compoundBlob)
 	assert.True(ok)
 	m2 := newCompoundBlob([]metaTuple{
-		newMetaTuple(Uint64(20), nil, r1),
-		newMetaTuple(Uint64(40), nil, r2),
-		newMetaTuple(Uint64(60), nil, r3),
+		newMetaTuple(Uint64(20), nil, newRef(r1, MakeRefType(typeForBlob))),
+		newMetaTuple(Uint64(40), nil, newRef(r2, MakeRefType(typeForBlob))),
+		newMetaTuple(Uint64(60), nil, newRef(r3, MakeRefType(typeForBlob))),
 	}, cs)
 
 	assert.True(m.Type().Equals(m2.Type()))

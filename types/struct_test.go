@@ -43,8 +43,8 @@ func TestGenericStructChunks(t *testing.T) {
 	s1 := newStructFromData(data1, 0, nil, typ, typeDef)
 
 	assert.Len(s1.Chunks(), 2)
-	assert.Equal(pkgRef, s1.Chunks()[0])
-	assert.Equal(b.Ref(), s1.Chunks()[1])
+	assert.Equal(pkgRef, s1.Chunks()[0].TargetRef())
+	assert.Equal(b.Ref(), s1.Chunks()[1].TargetRef())
 }
 
 func TestGenericStructChunksOptional(t *testing.T) {
@@ -63,14 +63,14 @@ func TestGenericStructChunksOptional(t *testing.T) {
 	s1 := newStructFromData(data1, 0, nil, typ, typeDef)
 
 	assert.Len(s1.Chunks(), 1)
-	assert.Equal(pkgRef, s1.Chunks()[0])
+	assert.Equal(pkgRef, s1.Chunks()[0].TargetRef())
 
 	data2 := structData{"r": NewRef(b.Ref())}
 	s2 := newStructFromData(data2, 0, nil, typ, typeDef)
 
 	assert.Len(s2.Chunks(), 2)
-	assert.Equal(pkgRef, s2.Chunks()[0])
-	assert.Equal(b.Ref(), s2.Chunks()[1])
+	assert.Equal(pkgRef, s2.Chunks()[0].TargetRef())
+	assert.Equal(b.Ref(), s2.Chunks()[1].TargetRef())
 }
 
 func TestGenericStructChunksUnion(t *testing.T) {
@@ -89,13 +89,13 @@ func TestGenericStructChunksUnion(t *testing.T) {
 	s1 := NewStruct(typ, typeDef, structData{"s": NewString("hi")})
 
 	assert.Len(s1.Chunks(), 1)
-	assert.Equal(pkgRef, s1.Chunks()[0])
+	assert.Equal(pkgRef, s1.Chunks()[0].TargetRef())
 
 	s2 := NewStruct(typ, typeDef, structData{"r": NewRef(b.Ref())})
 
 	assert.Len(s2.Chunks(), 2)
-	assert.Equal(pkgRef, s2.Chunks()[0])
-	assert.Equal(b.Ref(), s2.Chunks()[1])
+	assert.Equal(pkgRef, s2.Chunks()[0].TargetRef())
+	assert.Equal(b.Ref(), s2.Chunks()[1].TargetRef())
 }
 
 func TestGenericStructNew(t *testing.T) {

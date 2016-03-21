@@ -100,7 +100,7 @@ func (s S) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s S) Chunks() (chunks []ref.Ref) {
+func (s S) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForS.Chunks()...)
 	return
 }
@@ -173,7 +173,7 @@ func (e E) Ref() ref.Ref {
 	return types.EnsureRef(&throwaway, e)
 }
 
-func (e E) Chunks() []ref.Ref {
+func (e E) Chunks() []types.RefBase {
 	return nil
 }
 

@@ -90,7 +90,7 @@ func (s A) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s A) Chunks() (chunks []ref.Ref) {
+func (s A) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForA.Chunks()...)
 	chunks = append(chunks, s._A.Chunks()...)
 	return
@@ -148,7 +148,7 @@ func (l ListOfListOfBlob) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfListOfBlob) Chunks() (chunks []ref.Ref) {
+func (l ListOfListOfBlob) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
@@ -290,7 +290,7 @@ func (l ListOfBlob) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfBlob) Chunks() (chunks []ref.Ref) {
+func (l ListOfBlob) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return

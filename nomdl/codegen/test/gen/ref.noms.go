@@ -90,7 +90,7 @@ func (s StructWithRef) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s StructWithRef) Chunks() (chunks []ref.Ref) {
+func (s StructWithRef) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForStructWithRef.Chunks()...)
 	chunks = append(chunks, s._r.Chunks()...)
 	return
@@ -134,9 +134,9 @@ func (r RefOfListOfString) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfListOfString.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfListOfString) Chunks() (chunks []ref.Ref) {
+func (r RefOfListOfString) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -160,7 +160,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfListOfString, builderForRefOfListOfString)
 }
 
-func builderForRefOfListOfString(r ref.Ref) types.Value {
+func builderForRefOfListOfString(r ref.Ref) types.RefBase {
 	return NewRefOfListOfString(r)
 }
 
@@ -209,7 +209,7 @@ func (l ListOfRefOfFloat32) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfRefOfFloat32) Chunks() (chunks []ref.Ref) {
+func (l ListOfRefOfFloat32) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
@@ -337,9 +337,9 @@ func (r RefOfSetOfFloat32) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfSetOfFloat32.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfSetOfFloat32) Chunks() (chunks []ref.Ref) {
+func (r RefOfSetOfFloat32) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -363,7 +363,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfSetOfFloat32, builderForRefOfSetOfFloat32)
 }
 
-func builderForRefOfSetOfFloat32(r ref.Ref) types.Value {
+func builderForRefOfSetOfFloat32(r ref.Ref) types.RefBase {
 	return NewRefOfSetOfFloat32(r)
 }
 
@@ -412,7 +412,7 @@ func (l ListOfString) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfString) Chunks() (chunks []ref.Ref) {
+func (l ListOfString) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
@@ -540,9 +540,9 @@ func (r RefOfFloat32) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfFloat32.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfFloat32) Chunks() (chunks []ref.Ref) {
+func (r RefOfFloat32) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -566,7 +566,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfFloat32, builderForRefOfFloat32)
 }
 
-func builderForRefOfFloat32(r ref.Ref) types.Value {
+func builderForRefOfFloat32(r ref.Ref) types.RefBase {
 	return NewRefOfFloat32(r)
 }
 
@@ -618,7 +618,7 @@ func (s SetOfFloat32) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SetOfFloat32) Chunks() (chunks []ref.Ref) {
+func (s SetOfFloat32) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, s.Type().Chunks()...)
 	chunks = append(chunks, s.s.Chunks()...)
 	return

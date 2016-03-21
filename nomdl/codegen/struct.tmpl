@@ -95,7 +95,7 @@ func (s {{.Name}}) Ref() ref.Ref {
 	return {{$typesPackage}}EnsureRef(s.ref, s)
 }
 
-func (s {{.Name}}) Chunks() (chunks []ref.Ref) {
+func (s {{.Name}}) Chunks() (chunks []{{$typesPackage}}RefBase) {
 	chunks = append(chunks, __typeFor{{.Name}}.Chunks()...)
 	{{range .Fields}}{{if mayHaveChunks .T}}{{if .Optional}}if s.__optional{{.Name}} {
 		{{end}}chunks = append(chunks, s._{{.Name}}.Chunks()...)

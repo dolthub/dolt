@@ -123,7 +123,7 @@ func (s Node) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Node) Chunks() (chunks []ref.Ref) {
+func (s Node) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForNode.Chunks()...)
 	chunks = append(chunks, s._Geoposition.Chunks()...)
 	chunks = append(chunks, s._Reference.Chunks()...)
@@ -262,7 +262,7 @@ func (s QuadTree) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s QuadTree) Chunks() (chunks []ref.Ref) {
+func (s QuadTree) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForQuadTree.Chunks()...)
 	chunks = append(chunks, s._Nodes.Chunks()...)
 	chunks = append(chunks, s._Tiles.Chunks()...)
@@ -446,7 +446,7 @@ func (s SQuadTree) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s SQuadTree) Chunks() (chunks []ref.Ref) {
+func (s SQuadTree) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForSQuadTree.Chunks()...)
 	chunks = append(chunks, s._Nodes.Chunks()...)
 	chunks = append(chunks, s._Tiles.Chunks()...)
@@ -547,9 +547,9 @@ func (r RefOfValue) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfValue.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfValue) Chunks() (chunks []ref.Ref) {
+func (r RefOfValue) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -573,7 +573,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfValue, builderForRefOfValue)
 }
 
-func builderForRefOfValue(r ref.Ref) types.Value {
+func builderForRefOfValue(r ref.Ref) types.RefBase {
 	return NewRefOfValue(r)
 }
 
@@ -622,7 +622,7 @@ func (l ListOfNode) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfNode) Chunks() (chunks []ref.Ref) {
+func (l ListOfNode) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
@@ -765,7 +765,7 @@ func (m MapOfStringToQuadTree) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToQuadTree) Chunks() (chunks []ref.Ref) {
+func (m MapOfStringToQuadTree) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
@@ -897,7 +897,7 @@ func (l ListOfRefOfValue) Ref() ref.Ref {
 	return types.EnsureRef(l.ref, l)
 }
 
-func (l ListOfRefOfValue) Chunks() (chunks []ref.Ref) {
+func (l ListOfRefOfValue) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, l.Type().Chunks()...)
 	chunks = append(chunks, l.l.Chunks()...)
 	return
@@ -1040,7 +1040,7 @@ func (m MapOfStringToRefOfSQuadTree) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfStringToRefOfSQuadTree) Chunks() (chunks []ref.Ref) {
+func (m MapOfStringToRefOfSQuadTree) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
@@ -1158,9 +1158,9 @@ func (r RefOfSQuadTree) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfSQuadTree.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfSQuadTree) Chunks() (chunks []ref.Ref) {
+func (r RefOfSQuadTree) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -1184,7 +1184,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfSQuadTree, builderForRefOfSQuadTree)
 }
 
-func builderForRefOfSQuadTree(r ref.Ref) types.Value {
+func builderForRefOfSQuadTree(r ref.Ref) types.RefBase {
 	return NewRefOfSQuadTree(r)
 }
 

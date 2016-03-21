@@ -83,7 +83,7 @@ func (e QuarterEnum) Ref() ref.Ref {
 	return types.EnsureRef(&throwaway, e)
 }
 
-func (e QuarterEnum) Chunks() []ref.Ref {
+func (e QuarterEnum) Chunks() []types.RefBase {
 	return nil
 }
 
@@ -165,7 +165,7 @@ func (s Quarter) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Quarter) Chunks() (chunks []ref.Ref) {
+func (s Quarter) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForQuarter.Chunks()...)
 	return
 }
@@ -268,7 +268,7 @@ func (s Key) Ref() ref.Ref {
 	return types.EnsureRef(s.ref, s)
 }
 
-func (s Key) Chunks() (chunks []ref.Ref) {
+func (s Key) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, __typeForKey.Chunks()...)
 	chunks = append(chunks, s.__unionValue.Chunks()...)
 	return
@@ -463,7 +463,7 @@ func (e RoundTypeEnum) Ref() ref.Ref {
 	return types.EnsureRef(&throwaway, e)
 }
 
-func (e RoundTypeEnum) Chunks() []ref.Ref {
+func (e RoundTypeEnum) Chunks() []types.RefBase {
 	return nil
 }
 
@@ -509,7 +509,7 @@ func (m MapOfRefOfKeyToSetOfRefOfRound) Ref() ref.Ref {
 	return types.EnsureRef(m.ref, m)
 }
 
-func (m MapOfRefOfKeyToSetOfRefOfRound) Chunks() (chunks []ref.Ref) {
+func (m MapOfRefOfKeyToSetOfRefOfRound) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, m.Type().Chunks()...)
 	chunks = append(chunks, m.m.Chunks()...)
 	return
@@ -627,9 +627,9 @@ func (r RefOfKey) Equals(other types.Value) bool {
 	return other != nil && __typeForRefOfKey.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
-func (r RefOfKey) Chunks() (chunks []ref.Ref) {
+func (r RefOfKey) Chunks() (chunks []types.RefBase) {
 	chunks = append(chunks, r.Type().Chunks()...)
-	chunks = append(chunks, r.target)
+	chunks = append(chunks, r)
 	return
 }
 
@@ -653,7 +653,7 @@ func init() {
 	types.RegisterRef(__typeForRefOfKey, builderForRefOfKey)
 }
 
-func builderForRefOfKey(r ref.Ref) types.Value {
+func builderForRefOfKey(r ref.Ref) types.RefBase {
 	return NewRefOfKey(r)
 }
 

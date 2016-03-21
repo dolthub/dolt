@@ -106,7 +106,7 @@ func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr Type, pkg *Package)
 			// Write unwritten chunked sequences. Chunks are lazily written so that intermediate chunked structures like NewList().Append(x).Append(y) don't cause unnecessary churn.
 			w.vw.WriteValue(tuple.child)
 		}
-		w2.writeRef(tuple.ChildRef())
+		w2.writeRef(tuple.ChildRef().TargetRef())
 		w2.writeValue(tuple.value, indexType, pkg)
 	}
 	w.write(w2.toArray())

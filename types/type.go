@@ -108,10 +108,10 @@ func (t Type) Equals(other Value) (res bool) {
 	return other != nil && t.Ref() == other.Ref()
 }
 
-func (t Type) Chunks() (chunks []ref.Ref) {
+func (t Type) Chunks() (chunks []RefBase) {
 	if t.IsUnresolved() {
 		if t.HasPackageRef() {
-			chunks = append(chunks, t.PackageRef())
+			chunks = append(chunks, refFromType(t.PackageRef(), MakeRefType(typeForPackage)))
 		}
 		return
 	}
@@ -163,6 +163,10 @@ func MakePrimitiveType(k NomsKind) Type {
 
 func MakePrimitiveTypeByString(p string) Type {
 	return buildType("", primitiveToDesc(p))
+}
+
+func MakeRefType(elemType Type) Type {
+	return MakeCompoundType(RefKind, elemType)
 }
 
 func MakeCompoundType(kind NomsKind, elemTypes ...Type) Type {
