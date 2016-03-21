@@ -16,7 +16,7 @@ import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
 import {OrderedSequence, OrderedSequenceCursor,
   OrderedSequenceIterator} from './ordered-sequence.js';
 import {Type} from './type.js';
-import type {DataStore} from './data-store.js';
+import type DataStore from './data-store.js';
 
 const setWindowSize = 1;
 const setPattern = ((1 << 6) | 0) - 1;

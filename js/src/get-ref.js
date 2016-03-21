@@ -4,7 +4,7 @@ import Chunk from './chunk.js';
 import Ref from './ref.js';
 import {invariant, notNull} from './assert.js';
 import {Type} from './type.js';
-import type {DataStore} from './data-store.js';
+import type DataStore from './data-store.js';
 
 type encodeFn = (v: any, t: Type, ds: ?DataStore) => Chunk;
 let encodeNomsValue: ?encodeFn = null;

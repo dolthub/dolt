@@ -7,7 +7,7 @@ import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} fr
 import {Kind} from './noms-kind.js';
 import {Package, registerPackage} from './package.js';
 import {suite, test} from 'mocha';
-import {DataStore} from './data-store.js';
+import DataStore from './data-store.js';
 
 suite('Type', () => {
   test('types', async () => {

@@ -67,7 +67,7 @@ export function getDatasTypes(): DatasTypes {
   return datasTypes;
 }
 
-export class DataStore {
+export default class DataStore {
   _cs: ChunkStore;
   _datasets: Promise<NomsMap<string, Ref>>;
 

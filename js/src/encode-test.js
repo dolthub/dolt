@@ -18,7 +18,7 @@ import {MapLeafSequence, NomsMap} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';
 import {Package, registerPackage} from './package.js';
 import {newBlob} from './blob.js';
-import {DataStore} from './data-store.js';
+import DataStore from './data-store.js';
 
 suite('Encode', () => {
   test('write primitives', () => {

@@ -12,7 +12,7 @@ import {invariant} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {ListLeafSequence, newList, NomsList} from './list.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
-import {DataStore} from './data-store.js';
+import DataStore from './data-store.js';
 
 const testListSize = 5000;
 const listOfNRef = 'sha1-11e947e8aacfda8e9052bb57e661da442b26c625';

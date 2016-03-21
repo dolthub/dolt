@@ -4,7 +4,7 @@ import Ref from './ref.js';
 import {invariant} from './assert.js';
 import {packageType, Type} from './type.js';
 import {ValueBase} from './value.js';
-import type {DataStore} from './data-store.js';
+import type DataStore from './data-store.js';
 
 export class Package extends ValueBase {
   types: Array<Type>;

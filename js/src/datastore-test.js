@@ -6,7 +6,7 @@ import Chunk from './chunk.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 import {assert} from 'chai';
-import {DataStore, getDatasTypes, newCommit} from './data-store.js';
+import {default as DataStore, getDatasTypes, newCommit} from './data-store.js';
 import {invariant, notNull} from './assert.js';
 import {newMap} from './map.js';
 

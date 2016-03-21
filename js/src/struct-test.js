@@ -8,7 +8,7 @@ import {Kind} from './noms-kind.js';
 import {notNull} from './assert.js';
 import {Package, registerPackage} from './package.js';
 import {suite, test} from 'mocha';
-import {DataStore} from './data-store.js';
+import DataStore from './data-store.js';
 
 suite('Struct', () => {
   test('equals', () => {

@@ -3,7 +3,7 @@
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import {default as Ref, sha1Size} from './ref.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {DataStore} from './data-store.js';
+import type DataStore from './data-store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {Collection} from './collection.js';
 import {CompoundDesc, makeCompoundType, makePrimitiveType, Type} from './type.js';

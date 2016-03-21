@@ -1,6 +1,6 @@
 // @flow
 
-import type {DataStore} from './data-store.js';
+import type DataStore from './data-store.js';
 import {invariant, notNull} from './assert.js';
 import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';

@@ -8,7 +8,7 @@ import {notNull} from './assert.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {Kind} from './noms-kind.js';
 import MemoryStore from './memory-store.js';
-import {DataStore} from './data-store.js';
+import DataStore from './data-store.js';
 
 class TestSequence extends Sequence<any> {
   constructor(ds: ?DataStore, items: Array<any>) {

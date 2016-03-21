@@ -11,7 +11,7 @@ import {flatten, flattenParallel} from './test-util.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MapLeafSequence, newMap, NomsMap} from './map.js';
 import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
-import {DataStore} from './data-store';
+import DataStore from './data-store';
 
 const testMapSize = 5000;
 const mapOfNRef = 'sha1-1b9664e55091370996f3af428ffee78f1ad36426';

@@ -17,7 +17,7 @@ import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
 import {OrderedSequence, OrderedSequenceCursor,
   OrderedSequenceIterator} from './ordered-sequence.js';
 import {Type} from './type.js';
-import type {DataStore} from './data-store.js';
+import type DataStore from './data-store.js';
 
 export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
   key: K,

@@ -22,7 +22,7 @@ import {NomsSet, SetLeafSequence} from './set.js';
 import {registerPackage, Package} from './package.js';
 import {suite} from 'mocha';
 import type {Value} from './value.js';
-import {DataStore} from './data-store.js';
+import DataStore from './data-store.js';
 
 suite('Decode', () => {
   function stringToUint8Array(s): Uint8Array {

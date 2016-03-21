@@ -12,7 +12,7 @@ import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {OrderedSequence} from './ordered-sequence.js';
-import {DataStore} from './data-store.js';
+import DataStore from './data-store.js';
 
 const testSetSize = 5000;
 const setOfNRef = 'sha1-54ff8f84b5f39fe2171572922d067257a57c539c';

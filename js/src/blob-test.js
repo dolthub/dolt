@@ -7,7 +7,7 @@ import MemoryStore from './memory-store.js';
 import test from './async-test.js';
 import {blobType} from './type.js';
 import {newBlob, BlobWriter} from './blob.js';
-import {DataStore} from './data-store.js';
+import DataStore from './data-store.js';
 
 suite('Blob', () => {
   function intSequence(start: number, end: number): Uint8Array {
