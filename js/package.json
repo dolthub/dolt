@@ -1,11 +1,11 @@
 {
   "name": "@attic/noms",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "dist/commonjs/noms.js",
   "jsnext:main": "dist/es6/noms.js",
   "dependencies": {
-    "chai": "3.5.0",
-    "mocha": "2.4.5",
+    "babel-plugin-transform-runtime": "^6.6.0",
+    "babel-regenerator-runtime": "6.5.0",
     "rusha": "0.8.3",
     "text-encoding-utf-8": "1.0.1"
   },
@@ -21,14 +21,15 @@
     "babel-plugin-transform-es2015-destructuring": "6.6.5",
     "babel-plugin-transform-es2015-modules-commonjs": "6.7.0",
     "babel-plugin-transform-es2015-parameters": "6.7.0",
-    "babel-regenerator-runtime": "6.5.0",
     "babel-preset-es2015": "6.6.0",
     "babel-preset-react": "6.5.0",
+    "chai": "3.5.0",
     "chokidar": "1.4.3",
     "commander": "2.9.0",
-    "eslint": "^1.10.3",
     "eslint-plugin-react": "4.2.3",
+    "eslint": "^1.10.3",
     "flow-bin": "0.22.1",
+    "mocha": "2.4.5",
     "fs-extra": "0.26.7"
   },
   "files": [
