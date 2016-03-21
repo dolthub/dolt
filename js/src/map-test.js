@@ -11,7 +11,6 @@ import {flatten, flattenParallel} from './test-util.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MapLeafSequence, newMap, NomsMap} from './map.js';
 import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
-import {writeValue} from './encode.js';
 import {DataStore} from './data-store';
 
 const testMapSize = 5000;
@@ -102,7 +101,7 @@ suite('BuildMap', () => {
                                 makePrimitiveType(Kind.Int64));
     const m = await newMap(kvs, tr);
 
-    const r = writeValue(m, tr, ds);
+    const r = ds.writeValue(m, tr);
     const m2 = await ds.readValue(r);
     const outKvs = [];
     await m2.forEach((v, k) => outKvs.push(k, v));
@@ -220,10 +219,10 @@ suite('MapLeaf', () => {
     const tr = makeCompoundType(Kind.Map,
                                 makePrimitiveType(Kind.Value), makePrimitiveType(Kind.Value));
     const st = makePrimitiveType(Kind.String);
-    const r1 = writeValue('x', st, ds);
-    const r2 = writeValue('a', st, ds);
-    const r3 = writeValue('b', st, ds);
-    const r4 = writeValue('c', st, ds);
+    const r1 = ds.writeValue('x', st);
+    const r2 = ds.writeValue('a', st);
+    const r3 = ds.writeValue('b', st);
+    const r4 = ds.writeValue('c', st);
     const m = new NomsMap(tr,
         new MapLeafSequence(ds, tr, [{key: r1, value: r2}, {key: r3, value: r4}]));
     assert.strictEqual(4, m.chunks.length);
@@ -240,23 +239,23 @@ suite('CompoundMap', () => {
         makePrimitiveType(Kind.Bool));
     const l1 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'a', value: false},
         {key:'b', value:false}]));
-    const r1 = writeValue(l1, tr, ds);
+    const r1 = ds.writeValue(l1, tr);
     const l2 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'e', value: true},
         {key:'f', value:true}]));
-    const r2 = writeValue(l2, tr, ds);
+    const r2 = ds.writeValue(l2, tr);
     const l3 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'h', value: false},
         {key:'i', value:true}]));
-    const r3 = writeValue(l3, tr, ds);
+    const r3 = ds.writeValue(l3, tr);
     const l4 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'm', value: true},
         {key:'n', value:false}]));
-    const r4 = writeValue(l4, tr, ds);
+    const r4 = ds.writeValue(l4, tr);
 
     const m1 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r1, 'b'),
         new MetaTuple(r2, 'f')]));
-    const rm1 = writeValue(m1, tr, ds);
+    const rm1 = ds.writeValue(m1, tr);
     const m2 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r3, 'i'),
         new MetaTuple(r4, 'n')]));
-    const rm2 = writeValue(m2, tr, ds);
+    const rm2 = ds.writeValue(m2, tr);
 
     const c = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(rm1, 'f'),
         new MetaTuple(rm2, 'n')]));

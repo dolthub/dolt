@@ -22,7 +22,6 @@ import {NomsSet, SetLeafSequence} from './set.js';
 import {registerPackage, Package} from './package.js';
 import {suite} from 'mocha';
 import type {Value} from './value.js';
-import {writeValue} from './encode.js';
 import {DataStore} from './data-store.js';
 
 suite('Decode', () => {
@@ -148,9 +147,9 @@ suite('Decode', () => {
     const ds = new DataStore(ms);
 
     const ltr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
-    const r1 = writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0, 1])), ltr, ds);
-    const r2 = writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [2, 3])), ltr, ds);
-    const r3 = writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [4, 5])), ltr, ds);
+    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0, 1])), ltr);
+    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [2, 3])), ltr);
+    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [4, 5])), ltr);
     const tuples = [
       new MetaTuple(r1, 2),
       new MetaTuple(r2, 4),
@@ -540,8 +539,8 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
-    const r1 = writeValue(await newBlob(stringToUint8Array('hi')), blobType, ds);
-    const r2 = writeValue(await newBlob(stringToUint8Array('world')), blobType, ds);
+    const r1 = ds.writeValue(await newBlob(stringToUint8Array('hi')), blobType);
+    const r2 = ds.writeValue(await newBlob(stringToUint8Array('world')), blobType);
 
     const a = [Kind.Blob, true, [r1.ref.toString(), '2', r2.ref.toString(), '5']];
     const r = new JsonArrayReader(a, ds);

@@ -12,7 +12,6 @@ import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {OrderedSequence} from './ordered-sequence.js';
-import {writeValue} from './encode.js';
 import {DataStore} from './data-store.js';
 
 const testSetSize = 5000;
@@ -73,7 +72,7 @@ suite('BuildSet', () => {
     const nums = firstNNumbers(testSetSize);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
     const s = await newSet(nums, tr);
-    const r = writeValue(s, tr, ds);
+    const r = ds.writeValue(s, tr);
     const s2 = await ds.readValue(r);
     const outNums = [];
     await s2.forEach(k => outNums.push(k));
@@ -164,9 +163,9 @@ suite('SetLeaf', () => {
     const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Value));
     const st = makePrimitiveType(Kind.String);
-    const r1 = writeValue('x', st, ds);
-    const r2 = writeValue('a', st, ds);
-    const r3 = writeValue('b', st, ds);
+    const r1 = ds.writeValue('x', st);
+    const r2 = ds.writeValue('a', st);
+    const r3 = ds.writeValue('b', st);
     const l = new NomsSet(tr, new SetLeafSequence(ds, tr, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
     assert.isTrue(r1.equals(l.chunks[0]));
@@ -183,7 +182,7 @@ suite('CompoundSet', () => {
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
       const l = new NomsSet(tr, new SetLeafSequence(ds, tr, [values[i], values[i + 1]]));
-      const r = writeValue(l, tr, ds);
+      const r = ds.writeValue(l, tr);
       tuples.push(new MetaTuple(r, values[i + 1]));
     }
 
@@ -192,7 +191,7 @@ suite('CompoundSet', () => {
       const next = [];
       for (let i = 0; i < tuples.length; i += 2) {
         last = new NomsSet(tr, new OrderedMetaSequence(ds, tr, [tuples[i], tuples[i + 1]]));
-        const r = writeValue(last, tr, ds);
+        const r = ds.writeValue(last, tr);
         next.push(new MetaTuple(r, tuples[i + 1].value));
       }
 

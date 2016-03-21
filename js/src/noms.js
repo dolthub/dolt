@@ -9,7 +9,7 @@ export {default as HttpStore} from './http-store.js';
 export {default as MemoryStore} from './memory-store.js';
 export {default as Ref} from './ref.js';
 export {default as Struct} from './struct.js';
-export {encodeNomsValue, writeValue} from './encode.js';
+export {encodeNomsValue} from './encode.js';
 export {invariant, isNullOrUndefined, notNull} from './assert.js';
 export {isPrimitiveKind, Kind, kindToString} from './noms-kind.js';
 export {lookupPackage, Package, readPackage, registerPackage} from './package.js';

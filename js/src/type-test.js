@@ -7,7 +7,6 @@ import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} fr
 import {Kind} from './noms-kind.js';
 import {Package, registerPackage} from './package.js';
 import {suite, test} from 'mocha';
-import {writeValue} from './encode.js';
 import {DataStore} from './data-store.js';
 
 suite('Type', () => {
@@ -32,11 +31,11 @@ suite('Type', () => {
     const pkgRef = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
     const trType = makeType(pkgRef, 42);
 
-    const otherRef = writeValue(otherType, otherType.type, ds);
-    const mapRef = writeValue(mapType, mapType.type, ds);
-    const setRef = writeValue(setType, setType.type, ds);
-    const mahRef = writeValue(mahType, mahType.type, ds);
-    const trRef = writeValue(trType, trType.type, ds);
+    const otherRef = ds.writeValue(otherType, otherType.type);
+    const mapRef = ds.writeValue(mapType, mapType.type);
+    const setRef = ds.writeValue(setType, setType.type);
+    const mahRef = ds.writeValue(mahType, mahType.type);
+    const trRef = ds.writeValue(trType, trType.type);
 
     assert.isTrue(otherType.equals(await ds.readValue(otherRef)));
     assert.isTrue(mapType.equals(await ds.readValue(mapRef)));
@@ -87,7 +86,7 @@ suite('Type', () => {
     const pkgRef = pkg.ref;
 
     const unresolvedType = makeType(pkgRef, 42);
-    const unresolvedRef = writeValue(unresolvedType, unresolvedType.type, ds);
+    const unresolvedRef = ds.writeValue(unresolvedType, unresolvedType.type);
 
     const v = await ds.readValue(unresolvedRef);
     assert.isNotNull(v);
@@ -104,7 +103,7 @@ suite('Type', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const v = makeType(new Ref(), -1);
-    const r = writeValue(v, v.type, ds);
+    const r = ds.writeValue(v, v.type);
     const v2 = await ds.readValue(r);
     assert.isTrue(v.equals(v2));
   });

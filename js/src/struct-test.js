@@ -8,7 +8,6 @@ import {Kind} from './noms-kind.js';
 import {notNull} from './assert.js';
 import {Package, registerPackage} from './package.js';
 import {suite, test} from 'mocha';
-import {writeValue} from './encode.js';
 import {DataStore} from './data-store.js';
 
 suite('Struct', () => {
@@ -44,7 +43,7 @@ suite('Struct', () => {
 
     const b = true;
     const bt = makePrimitiveType(Kind.Bool);
-    const r = writeValue(b, bt, ds);
+    const r = ds.writeValue(b, bt);
     const s1 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s1.chunks.length);
     assert.isTrue(pkgRef.equals(s1.chunks[0]));
@@ -70,7 +69,7 @@ suite('Struct', () => {
 
     const b = true;
     const bt = makePrimitiveType(Kind.Bool);
-    const r = writeValue(b, bt, ds);
+    const r = ds.writeValue(b, bt);
     const s2 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s2.chunks.length);
     assert.isTrue(pkgRef.equals(s2.chunks[0]));
@@ -96,7 +95,7 @@ suite('Struct', () => {
 
     const b = true;
     const bt = makePrimitiveType(Kind.Bool);
-    const r = writeValue(b, bt, ds);
+    const r = ds.writeValue(b, bt);
     const s2 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s2.chunks.length);
     assert.isTrue(pkgRef.equals(s2.chunks[0]));

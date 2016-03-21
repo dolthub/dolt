@@ -20,7 +20,7 @@ import {NomsBlob, BlobLeafSequence} from './blob.js';
 
 const typedTag = 't ';
 
-class JsonArrayWriter {
+export class JsonArrayWriter {
   array: Array<any>;
   _ds: ?DataStore;
 
@@ -79,7 +79,7 @@ class JsonArrayWriter {
 
         const pkg = lookupPackage(pkgRef);
         if (pkg && this._ds) {
-          writeValue(pkg, pkg.type, this._ds);
+          this._ds.writeValue(pkg, pkg.type);
         }
         break;
       }
@@ -105,7 +105,7 @@ class JsonArrayWriter {
       invariant(tuple instanceof MetaTuple);
       if (tuple.sequence && this._ds) {
         const child = tuple.sequence;
-        writeValue(child, child.type, this._ds);
+        this._ds.writeValue(child, child.type);
       }
       w2.writeRef(tuple.ref);
       w2.writeValue(tuple.value, indexType, pkg);
@@ -295,7 +295,7 @@ class JsonArrayWriter {
 
         const pkg = lookupPackage(pkgRef);
         if (pkg && this._ds) {
-          writeValue(pkg, pkg.type, this._ds);
+          this._ds.writeValue(pkg, pkg.type);
         }
 
         break;
@@ -411,14 +411,5 @@ export function encodeNomsValue(v: any, t: Type, ds: ?DataStore): Chunk {
   }
   return encodeEmbeddedNomsValue(v, t, ds);
 }
-
-export function writeValue(v: any, t: Type, ds: DataStore): Ref {
-  const chunk = encodeNomsValue(v, t, ds);
-  invariant(!chunk.isEmpty());
-  ds.put(chunk);
-  return chunk.ref;
-}
-
-export {JsonArrayWriter};
 
 setEncodeNomsValue(encodeNomsValue);

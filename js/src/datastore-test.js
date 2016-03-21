@@ -9,7 +9,6 @@ import {assert} from 'chai';
 import {DataStore, getDatasTypes, newCommit} from './data-store.js';
 import {invariant, notNull} from './assert.js';
 import {newMap} from './map.js';
-import {writeValue} from './encode.js';
 
 suite('DataStore', () => {
   test('access', async () => {
@@ -148,9 +147,9 @@ suite('DataStore', () => {
 
     const commit = await newCommit('foo', []);
 
-    const commitRef = writeValue(commit, commit.type, ds);
+    const commitRef = ds.writeValue(commit, commit.type);
     const datasets = await newMap(['foo', commitRef], types.commitMapType);
-    const rootRef = writeValue(datasets, datasets.type, ds);
+    const rootRef = ds.writeValue(datasets, datasets.type);
     assert.isTrue(await ms.updateRoot(rootRef, new Ref()));
     ds = new DataStore(ms); // refresh the datasets
 
