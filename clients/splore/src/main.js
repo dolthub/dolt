@@ -4,14 +4,14 @@ import Layout from './layout.js';
 import React from 'react'; // eslint-disable-line no-unused-vars
 import ReactDOM from 'react-dom';
 import {HttpStore, invariant, IndexedMetaSequence, ListLeafSequence, MapLeafSequence,
-    OrderedMetaSequence, NomsList, NomsMap, NomsSet, readValue, Ref, SetLeafSequence, Struct,}
+    OrderedMetaSequence, NomsList, NomsMap, NomsSet, DataStore, Ref, SetLeafSequence, Struct,}
     from '@attic/noms';
 import {layout, TreeNode} from './buchheim.js';
 import type {NodeGraph} from './buchheim.js';
 
 const data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
-let httpStore: HttpStore;
+let dataStore: DataStore;
 let renderNode: ?HTMLElement;
 
 const hash = {};
@@ -36,7 +36,8 @@ function load() {
   if (hash.token) {
     opts['headers'] = {Authorization: `Bearer ${hash.token}`};
   }
-  httpStore = new HttpStore(hash.server, undefined, undefined, opts);
+  const httpStore = new HttpStore(hash.server, undefined, undefined, opts);
+  dataStore = new DataStore(httpStore);
 
   const setRootRef = ref => {
     rootRef = ref;
@@ -46,7 +47,7 @@ function load() {
   if (hash.ref) {
     setRootRef(Ref.parse(hash.ref));
   } else {
-    httpStore.getRoot().then(setRootRef);
+    dataStore.getRoot().then(setRootRef);
   }
 }
 
@@ -191,7 +192,7 @@ function handleNodeClick(e: MouseEvent, id: string) {
       render();
     } else {
       const ref = Ref.parse(id);
-      readValue(ref, httpStore).then(value => {
+      dataStore.readValue(ref).then(value => {
         handleChunkLoad(ref, value, id);
       });
     }

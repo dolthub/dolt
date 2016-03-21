@@ -9,6 +9,7 @@ before_install:
 install: true # no need to do the default install
 before_script:
 - npm config set //registry.npmjs.org/:_authToken=$NPM_AUTH_TOKEN
+- npm whoami
 - pushd js
 - npm prune
 - npm install
