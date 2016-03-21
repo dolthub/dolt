@@ -13,8 +13,9 @@ import {Kind} from './noms-kind.js';
 import {newMap} from './map.js';
 import {newSet} from './set.js';
 import {Package, registerPackage} from './package.js';
-import {readValue} from './read-value.js';
+// import {readValue} from './read-value.js';
 import {writeValue} from './encode.js';
+import {decodeNomsValue} from './decode.js';
 
 type DatasTypes = {
   commitTypeDef: Type,
@@ -103,14 +104,14 @@ export class DataStore {
         return getEmptyCommitMap();
       }
 
-      return readValue(rootRef, this._cs);
+      return this.readValue(rootRef);
     });
   }
 
   head(datasetID: string): Promise<?Struct> {
     return this._datasets.then(
       datasets => datasets.get(datasetID).then(commitRef => commitRef ?
-                                                            readValue(commitRef, this._cs) : null));
+                                                            this.readValue(commitRef) : null));
   }
 
   datasets(): Promise<NomsMap<string, Ref>> {
@@ -126,6 +127,15 @@ export class DataStore {
       ancestors = await getAncestors(ancestors, this);
     }
     return true;
+  }
+
+  async readValue(ref: Ref): Promise<any> {
+    const chunk = await this._cs.get(ref);
+    if (chunk.isEmpty()) {
+      return null;
+    }
+
+    return decodeNomsValue(chunk, this);
   }
 
   async commit(datasetId: string, commit: Struct): Promise<DataStore> {
@@ -156,10 +166,10 @@ export class DataStore {
   }
 }
 
-async function getAncestors(commits: NomsSet<Ref>, store: ChunkStore): Promise<NomsSet<Ref>> {
+async function getAncestors(commits: NomsSet<Ref>, store: DataStore): Promise<NomsSet<Ref>> {
   let ancestors = await newSet([], getDatasTypes().commitSetType);
   await commits.map(async (commitRef) => {
-    const commit = await readValue(commitRef, store);
+    const commit = await store.readValue(commitRef);
     await commit.get('parents').map(async (ref) => ancestors = await ancestors.insert(ref));
   });
   return ancestors;

@@ -1,6 +1,6 @@
 // @flow
 
-import type {ChunkStore} from './chunk-store.js';
+import type {DataStore} from './data-store.js';
 import {invariant, notNull} from './assert.js';
 import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
@@ -8,13 +8,13 @@ import {Type} from './type.js';
 import {ValueBase} from './value.js';
 
 export class Sequence<T> extends ValueBase {
-  cs: ?ChunkStore;
+  ds: ?DataStore;
   items: Array<T>;
 
-  constructor(cs: ?ChunkStore, type: Type, items: Array<T>) {
+  constructor(ds: ?DataStore, type: Type, items: Array<T>) {
     super(type);
 
-    this.cs = cs;
+    this.ds = ds;
     this.items = items;
   }
 

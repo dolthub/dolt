@@ -1,7 +1,7 @@
 // @flow
 
 export {AsyncIterator} from './async-iterator.js';
-export {DataStore, newCommit} from './datastore.js';
+export {DataStore, newCommit} from './data-store.js';
 export {NomsBlob, BlobReader} from './blob.js';
 export {decodeNomsValue} from './decode.js';
 export {default as Chunk} from './chunk.js';
@@ -17,7 +17,6 @@ export {newList, ListLeafSequence, NomsList} from './list.js';
 export {newMap, NomsMap, MapLeafSequence} from './map.js';
 export {newSet, NomsSet, SetLeafSequence} from './set.js';
 export {OrderedMetaSequence, IndexedMetaSequence} from './meta-sequence.js';
-export {readValue} from './read-value.js';
 export {SPLICE_AT, SPLICE_REMOVED, SPLICE_ADDED, SPLICE_FROM} from './edit-distance.js';
 export {
   boolType,

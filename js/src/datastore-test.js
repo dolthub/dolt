@@ -6,7 +6,7 @@ import Chunk from './chunk.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 import {assert} from 'chai';
-import {DataStore, getDatasTypes, newCommit} from './datastore.js';
+import {DataStore, getDatasTypes, newCommit} from './data-store.js';
 import {invariant, notNull} from './assert.js';
 import {newMap} from './map.js';
 import {writeValue} from './encode.js';
@@ -148,9 +148,9 @@ suite('DataStore', () => {
 
     const commit = await newCommit('foo', []);
 
-    const commitRef = writeValue(commit, commit.type, ms);
+    const commitRef = writeValue(commit, commit.type, ds);
     const datasets = await newMap(['foo', commitRef], types.commitMapType);
-    const rootRef = writeValue(datasets, datasets.type, ms);
+    const rootRef = writeValue(datasets, datasets.type, ds);
     assert.isTrue(await ms.updateRoot(rootRef, new Ref()));
     ds = new DataStore(ms); // refresh the datasets
 

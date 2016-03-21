@@ -3,7 +3,7 @@
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import {default as Ref, sha1Size} from './ref.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {ChunkStore} from './chunk-store.js';
+import type {DataStore} from './data-store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {Collection} from './collection.js';
 import {CompoundDesc, makeCompoundType, makePrimitiveType, Type} from './type.js';
@@ -11,7 +11,6 @@ import {IndexedSequence} from './indexed-sequence.js';
 import {invariant} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {OrderedSequence} from './ordered-sequence.js';
-import {readValue} from './read-value.js';
 import {Sequence} from './sequence.js';
 
 export type MetaSequence = Sequence<MetaTuple>;
@@ -33,13 +32,13 @@ export class MetaTuple<K> {
     return this._sequenceOrRef instanceof Sequence ? this._sequenceOrRef : null;
   }
 
-  getSequence(cs: ?ChunkStore): Promise<Sequence> {
+  getSequence(ds: ?DataStore): Promise<Sequence> {
     if (this._sequenceOrRef instanceof Sequence) {
       return Promise.resolve(this._sequenceOrRef);
     } else {
       const ref = this._sequenceOrRef;
-      invariant(cs && ref instanceof Ref);
-      return readValue(ref, cs).then((c: Collection) => c.sequence);
+      invariant(ds && ref instanceof Ref);
+      return ds.readValue(ref).then((c: Collection) => c.sequence);
     }
   }
 }
@@ -47,8 +46,8 @@ export class MetaTuple<K> {
 export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
   offsets: Array<number>;
 
-  constructor(cs: ?ChunkStore, type: Type, items: Array<MetaTuple<number>>) {
-    super(cs, type, items);
+  constructor(ds: ?DataStore, type: Type, items: Array<MetaTuple<number>>) {
+    super(ds, type, items);
     this.offsets = [];
     let cum = 0;
     for (let i = 0; i < items.length; i++) {
@@ -94,7 +93,7 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
     }
 
     const mt = this.items[idx];
-    return mt.getSequence(this.cs);
+    return mt.getSequence(this.ds);
   }
 
   // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
@@ -103,14 +102,14 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
       Promise<IndexedSequence> {
     const childrenP = [];
     for (let i = start; i < start + length; i++) {
-      childrenP.push(this.items[i].getSequence(this.cs));
+      childrenP.push(this.items[i].getSequence(this.ds));
     }
 
     return Promise.all(childrenP).then(children => {
       const items = [];
       children.forEach(child => items.push(...child.items));
-      return children[0].isMeta ? new IndexedMetaSequence(this.cs, this.type, items)
-        : new IndexedSequence(this.cs, this.type, items);
+      return children[0].isMeta ? new IndexedMetaSequence(this.ds, this.type, items)
+        : new IndexedSequence(this.ds, this.type, items);
     });
   }
 
@@ -130,7 +129,7 @@ export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K,
     }
 
     const mt = this.items[idx];
-    return mt.getSequence(this.cs);
+    return mt.getSequence(this.ds);
   }
 
   getKey(idx: number): K {
@@ -138,15 +137,15 @@ export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K,
   }
 }
 
-export function newMetaSequenceFromData(cs: ChunkStore, type: Type, tuples: Array<MetaTuple>):
+export function newMetaSequenceFromData(ds: DataStore, type: Type, tuples: Array<MetaTuple>):
     MetaSequence {
   switch (type.kind) {
     case Kind.Map:
     case Kind.Set:
-      return new OrderedMetaSequence(cs, type, tuples);
+      return new OrderedMetaSequence(ds, type, tuples);
     case Kind.Blob:
     case Kind.List:
-      return new IndexedMetaSequence(cs, type, tuples);
+      return new IndexedMetaSequence(ds, type, tuples);
     default:
       throw new Error('Not reached');
   }
@@ -175,9 +174,9 @@ export function indexTypeForMetaSequence(t: Type): Type {
   throw new Error('Not reached');
 }
 
-export function newOrderedMetaSequenceChunkFn(t: Type, cs: ?ChunkStore = null): makeChunkFn {
+export function newOrderedMetaSequenceChunkFn(t: Type, ds: ?DataStore = null): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
-    const meta = new OrderedMetaSequence(cs, t, tuples);
+    const meta = new OrderedMetaSequence(ds, t, tuples);
     const lastValue = tuples[tuples.length - 1].value;
     return [new MetaTuple(meta, lastValue), meta];
   };
@@ -193,10 +192,10 @@ export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
   );
 }
 
-export function newIndexedMetaSequenceChunkFn(t: Type, cs: ?ChunkStore = null): makeChunkFn {
+export function newIndexedMetaSequenceChunkFn(t: Type, ds: ?DataStore = null): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
     const sum = tuples.reduce((l, mt) => l + mt.value, 0);
-    const meta = new IndexedMetaSequence(cs, t, tuples);
+    const meta = new IndexedMetaSequence(ds, t, tuples);
     return [new MetaTuple(meta, sum), meta];
   };
 }

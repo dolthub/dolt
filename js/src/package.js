@@ -1,13 +1,12 @@
 // @flow
 
 import Ref from './ref.js';
-import type {ChunkStore} from './chunk-store.js';
 import {invariant} from './assert.js';
 import {packageType, Type} from './type.js';
-import {readValue} from './read-value.js';
 import {ValueBase} from './value.js';
+import type {DataStore} from './data-store.js';
 
-class Package extends ValueBase {
+export class Package extends ValueBase {
   types: Array<Type>;
   dependencies: Array<Ref>;
 
@@ -31,30 +30,28 @@ class Package extends ValueBase {
 
 const packageRegistry: { [key: string]: Package } = Object.create(null);
 
-function lookupPackage(r: Ref): ?Package {
+export function lookupPackage(r: Ref): ?Package {
   return packageRegistry[r.toString()];
 }
 
 // TODO: Compute ref rather than setting
-function registerPackage(p: Package) {
+export function registerPackage(p: Package) {
   packageRegistry[p.ref.toString()] = p;
 }
 
 const pendingPackages: { [key: string]: Promise<Package> } = Object.create(null);
 
-function readPackage(r: Ref, cs: ChunkStore): Promise<Package> {
+export function readPackage(r: Ref, ds: DataStore): Promise<Package> {
   const refStr = r.toString();
   const p = pendingPackages[refStr];
   if (p) {
     return p;
   }
 
-  return pendingPackages[refStr] = readValue(r, cs).then(p => {
+  return pendingPackages[refStr] = ds.readValue(r).then(p => {
     invariant(p instanceof Package);
     registerPackage(p);
     delete pendingPackages[refStr];
     return p;
   });
 }
-
-export {lookupPackage, Package, readPackage, registerPackage};

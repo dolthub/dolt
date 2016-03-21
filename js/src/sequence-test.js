@@ -8,16 +8,16 @@ import {notNull} from './assert.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
 import {Kind} from './noms-kind.js';
 import MemoryStore from './memory-store.js';
-import type {ChunkStore} from './chunk-store.js';
+import {DataStore} from './data-store.js';
 
 class TestSequence extends Sequence<any> {
-  constructor(cs: ?ChunkStore, items: Array<any>) {
-    super(cs, makeCompoundType(Kind.List, makePrimitiveType(Kind.Value)), items);
+  constructor(ds: ?DataStore, items: Array<any>) {
+    super(ds, makeCompoundType(Kind.List, makePrimitiveType(Kind.Value)), items);
   }
 
   getChildSequence(idx: number): // eslint-disable-line no-unused-vars
       Promise<?Sequence> {
-    return Promise.resolve(new TestSequence(this.cs, this.items[idx]));
+    return Promise.resolve(new TestSequence(this.ds, this.items[idx]));
   }
 }
 
@@ -31,9 +31,10 @@ class TestSequenceCursor extends SequenceCursor<any, TestSequence> {
 suite('SequenceCursor', () => {
   function testCursor(data: any): TestSequenceCursor {
     const ms = new MemoryStore();
-    const s1 = new TestSequence(ms, data);
+    const ds = new DataStore(ms);
+    const s1 = new TestSequence(ds, data);
     const c1 = new TestSequenceCursor(null, s1, 0);
-    const s2 = new TestSequence(ms, data[0]);
+    const s2 = new TestSequence(ds, data[0]);
     const c2 = new TestSequenceCursor(c1, s2, 0);
     return c2;
   }
