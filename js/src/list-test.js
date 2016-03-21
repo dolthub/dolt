@@ -12,8 +12,7 @@ import {invariant} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {ListLeafSequence, newList, NomsList} from './list.js';
 import {makeCompoundType, makePrimitiveType} from './type.js';
-import {readValue} from './read-value.js';
-import {writeValue} from './encode.js';
+import DataStore from './data-store.js';
 
 const testListSize = 5000;
 const listOfNRef = 'sha1-11e947e8aacfda8e9052bb57e661da442b26c625';
@@ -125,12 +124,13 @@ suite('BuildList', () => {
 
   test('write, read, modify, read', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
 
     const nums = firstNNumbers(testListSize);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
     const s = await newList(nums, tr);
-    const r = writeValue(s, tr, ms);
-    const s2 = await readValue(r, ms);
+    const r = ds.writeValue(s, tr);
+    const s2 = await ds.readValue(r);
     const outNums = await s2.toJS();
     assert.deepEqual(nums, outNums);
 
@@ -145,16 +145,18 @@ suite('BuildList', () => {
 suite('ListLeafSequence', () => {
   test('isEmpty', () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.String));
-    const newList = items => new NomsList(tr, new ListLeafSequence(ms, tr, items));
+    const newList = items => new NomsList(tr, new ListLeafSequence(ds, tr, items));
     assert.isTrue(newList([]).isEmpty());
     assert.isFalse(newList(['z', 'x', 'a', 'b']).isEmpty());
   });
 
   test('get', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.String));
-    const l = new NomsList(tr, new ListLeafSequence(ms, tr, ['z', 'x', 'a', 'b']));
+    const l = new NomsList(tr, new ListLeafSequence(ds, tr, ['z', 'x', 'a', 'b']));
     assert.strictEqual('z', await l.get(0));
     assert.strictEqual('x', await l.get(1));
     assert.strictEqual('a', await l.get(2));
@@ -163,8 +165,9 @@ suite('ListLeafSequence', () => {
 
   test('forEach', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
-    const l = new NomsList(tr, new ListLeafSequence(ms, tr, [4, 2, 10, 16]));
+    const l = new NomsList(tr, new ListLeafSequence(ds, tr, [4, 2, 10, 16]));
 
     const values = [];
     await l.forEach((v, i) => { values.push(v, i); });
@@ -173,10 +176,11 @@ suite('ListLeafSequence', () => {
 
   test('iterator', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
 
     const test = async items => {
-      const l = new NomsList(tr, new ListLeafSequence(ms, tr, items));
+      const l = new NomsList(tr, new ListLeafSequence(ds, tr, items));
       assert.deepEqual(items, await flatten(l.iterator()));
       assert.deepEqual(items, await flattenParallel(l.iterator(), items.length));
     };
@@ -188,10 +192,11 @@ suite('ListLeafSequence', () => {
 
   test('iteratorAt', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
 
     const test = async items => {
-      const l = new NomsList(tr, new ListLeafSequence(ms, tr, items));
+      const l = new NomsList(tr, new ListLeafSequence(ds, tr, items));
       for (let i = 0; i <= items.length; i++) {
         const slice = items.slice(i);
         assert.deepEqual(slice, await flatten(l.iteratorAt(i)));
@@ -206,12 +211,13 @@ suite('ListLeafSequence', () => {
 
   test('chunks', () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Value));
     const st = makePrimitiveType(Kind.String);
-    const r1 = writeValue('x', st, ms);
-    const r2 = writeValue('a', st, ms);
-    const r3 = writeValue('b', st, ms);
-    const l = new NomsList(tr, new ListLeafSequence(ms, tr, ['z', r1, r2, r3]));
+    const r1 = ds.writeValue('x', st);
+    const r2 = ds.writeValue('a', st);
+    const r3 = ds.writeValue('b', st);
+    const l = new NomsList(tr, new ListLeafSequence(ds, tr, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
     assert.isTrue(r1.equals(l.chunks[0]));
     assert.isTrue(r2.equals(l.chunks[1]));
@@ -222,24 +228,25 @@ suite('ListLeafSequence', () => {
 suite('CompoundList', () => {
   function build(): NomsList {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.String));
-    const l1 = new NomsList(tr, new ListLeafSequence(ms, tr, ['a', 'b']));
-    const r1 = writeValue(l1, tr, ms);
-    const l2 = new NomsList(tr, new ListLeafSequence(ms, tr, ['e', 'f']));
-    const r2 = writeValue(l2, tr, ms);
-    const l3 = new NomsList(tr, new ListLeafSequence(ms, tr, ['h', 'i']));
-    const r3 = writeValue(l3, tr, ms);
-    const l4 = new NomsList(tr, new ListLeafSequence(ms, tr, ['m', 'n']));
-    const r4 = writeValue(l4, tr, ms);
+    const l1 = new NomsList(tr, new ListLeafSequence(ds, tr, ['a', 'b']));
+    const r1 = ds.writeValue(l1, tr);
+    const l2 = new NomsList(tr, new ListLeafSequence(ds, tr, ['e', 'f']));
+    const r2 = ds.writeValue(l2, tr);
+    const l3 = new NomsList(tr, new ListLeafSequence(ds, tr, ['h', 'i']));
+    const r3 = ds.writeValue(l3, tr);
+    const l4 = new NomsList(tr, new ListLeafSequence(ds, tr, ['m', 'n']));
+    const r4 = ds.writeValue(l4, tr);
 
-    const m1 = new NomsList(tr, new IndexedMetaSequence(ms, tr, [new MetaTuple(r1, 2),
+    const m1 = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(r1, 2),
         new MetaTuple(r2, 2)]));
-    const rm1 = writeValue(m1, tr, ms);
-    const m2 = new NomsList(tr, new IndexedMetaSequence(ms, tr, [new MetaTuple(r3, 2),
+    const rm1 = ds.writeValue(m1, tr);
+    const m2 = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(r3, 2),
         new MetaTuple(r4, 2)]));
-    const rm2 = writeValue(m2, tr, ms);
+    const rm2 = ds.writeValue(m2, tr);
 
-    const l = new NomsList(tr, new IndexedMetaSequence(ms, tr, [new MetaTuple(rm1, 4),
+    const l = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(rm1, 4),
         new MetaTuple(rm2, 4)]));
     return l;
   }

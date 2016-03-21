@@ -6,9 +6,8 @@ import Random from './pseudo-random.js';
 import MemoryStore from './memory-store.js';
 import test from './async-test.js';
 import {blobType} from './type.js';
-import {readValue} from './read-value.js';
-import {writeValue} from './encode.js';
 import {newBlob, BlobWriter} from './blob.js';
+import DataStore from './data-store.js';
 
 suite('Blob', () => {
   function intSequence(start: number, end: number): Uint8Array {
@@ -51,10 +50,11 @@ suite('Blob', () => {
 
   test('roundtrip', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
 
     const b1 = await newBlob(randomArray(15));
-    const r1 = await writeValue(b1, blobType, ms);
-    const b2 = await readValue(r1, ms);
+    const r1 = await ds.writeValue(b1, blobType);
+    const b2 = await ds.readValue(r1);
     assert.isTrue(b1.equals(b2));
   });
 

@@ -2,7 +2,6 @@
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {ChunkStore} from './chunk-store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence} from './sequence-chunker.js';
@@ -18,6 +17,7 @@ import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
 import {OrderedSequence, OrderedSequenceCursor,
   OrderedSequenceIterator} from './ordered-sequence.js';
 import {Type} from './type.js';
+import type DataStore from './data-store.js';
 
 export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
   key: K,
@@ -27,9 +27,9 @@ export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
 const mapWindowSize = 1;
 const mapPattern = ((1 << 6) | 0) - 1;
 
-function newMapLeafChunkFn(t: Type, cs: ?ChunkStore = null): makeChunkFn {
+function newMapLeafChunkFn(t: Type, ds: ?DataStore = null): makeChunkFn {
   return (items: Array<MapEntry>) => {
-    const mapLeaf = new MapLeafSequence(cs, t, items);
+    const mapLeaf = new MapLeafSequence(ds, t, items);
 
     let indexValue: ?(MapEntry | Ref) = null;
     if (items.length > 0) {
@@ -145,9 +145,9 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
   async _splice(cursor: OrderedSequenceCursor, insert: Array<MapEntry>, remove: number):
       Promise<NomsMap<K, V>> {
     const type = this.type;
-    const cs = this.sequence.cs;
-    const seq = await chunkSequence(cursor, insert, remove, newMapLeafChunkFn(type, cs),
-                                    newOrderedMetaSequenceChunkFn(type, cs),
+    const ds = this.sequence.ds;
+    const seq = await chunkSequence(cursor, insert, remove, newMapLeafChunkFn(type, ds),
+                                    newOrderedMetaSequenceChunkFn(type, ds),
                                     newMapLeafBoundaryChecker(type),
                                     newOrderedMetaSequenceBoundaryChecker);
     invariant(seq instanceof OrderedSequence);

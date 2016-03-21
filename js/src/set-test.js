@@ -5,7 +5,6 @@ import {suite} from 'mocha';
 
 import MemoryStore from './memory-store.js';
 import test from './async-test.js';
-import type {ChunkStore} from './chunk-store.js';
 import {invariant, notNull} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {flatten, flattenParallel} from './test-util.js';
@@ -13,8 +12,7 @@ import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {OrderedSequence} from './ordered-sequence.js';
-import {readValue} from './read-value.js';
-import {writeValue} from './encode.js';
+import DataStore from './data-store.js';
 
 const testSetSize = 5000;
 const setOfNRef = 'sha1-54ff8f84b5f39fe2171572922d067257a57c539c';
@@ -69,12 +67,13 @@ suite('BuildSet', () => {
 
   test('write, read, modify, read', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
 
     const nums = firstNNumbers(testSetSize);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
     const s = await newSet(nums, tr);
-    const r = writeValue(s, tr, ms);
-    const s2 = await readValue(r, ms);
+    const r = ds.writeValue(s, tr);
+    const s2 = await ds.readValue(r);
     const outNums = [];
     await s2.forEach(k => outNums.push(k));
     assert.deepEqual(nums, outNums);
@@ -91,16 +90,18 @@ suite('BuildSet', () => {
 suite('SetLeaf', () => {
   test('isEmpty', () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
-    const newSet = items => new NomsSet(tr, new SetLeafSequence(ms, tr, items));
+    const newSet = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
     assert.isTrue(newSet([]).isEmpty());
     assert.isFalse(newSet(['a', 'k']).isEmpty());
   });
 
   test('first/last/has', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
-    const s = new NomsSet(tr, new SetLeafSequence(ms, tr, ['a', 'k']));
+    const s = new NomsSet(tr, new SetLeafSequence(ds, tr, ['a', 'k']));
 
     assert.strictEqual('a', await s.first());
     assert.strictEqual('k', await s.last());
@@ -113,8 +114,9 @@ suite('SetLeaf', () => {
 
   test('forEach', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
-    const m = new NomsSet(tr, new SetLeafSequence(ms, tr, ['a', 'b']));
+    const m = new NomsSet(tr, new SetLeafSequence(ds, tr, ['a', 'b']));
 
     const values = [];
     await m.forEach((k) => { values.push(k); });
@@ -123,10 +125,11 @@ suite('SetLeaf', () => {
 
   test('iterator', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
 
     const test = async items => {
-      const m = new NomsSet(tr, new SetLeafSequence(ms, tr, items));
+      const m = new NomsSet(tr, new SetLeafSequence(ds, tr, items));
       assert.deepEqual(items, await flatten(m.iterator()));
       assert.deepEqual(items, await flattenParallel(m.iterator(), items.length));
     };
@@ -138,8 +141,9 @@ suite('SetLeaf', () => {
 
   test('iteratorAt', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
-    const build = items => new NomsSet(tr, new SetLeafSequence(ms, tr, items));
+    const build = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
 
@@ -156,12 +160,13 @@ suite('SetLeaf', () => {
 
   test('chunks', () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Value));
     const st = makePrimitiveType(Kind.String);
-    const r1 = writeValue('x', st, ms);
-    const r2 = writeValue('a', st, ms);
-    const r3 = writeValue('b', st, ms);
-    const l = new NomsSet(tr, new SetLeafSequence(ms, tr, ['z', r1, r2, r3]));
+    const r1 = ds.writeValue('x', st);
+    const r2 = ds.writeValue('a', st);
+    const r3 = ds.writeValue('b', st);
+    const l = new NomsSet(tr, new SetLeafSequence(ds, tr, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
     assert.isTrue(r1.equals(l.chunks[0]));
     assert.isTrue(r2.equals(l.chunks[1]));
@@ -170,14 +175,14 @@ suite('SetLeaf', () => {
 });
 
 suite('CompoundSet', () => {
-  function build(cs: ChunkStore, values: Array<string>): NomsSet {
+  function build(ds: DataStore, values: Array<string>): NomsSet {
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
     assert.isTrue(values.length > 1 && Math.log2(values.length) % 1 === 0);
 
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
-      const l = new NomsSet(tr, new SetLeafSequence(cs, tr, [values[i], values[i + 1]]));
-      const r = writeValue(l, tr, cs);
+      const l = new NomsSet(tr, new SetLeafSequence(ds, tr, [values[i], values[i + 1]]));
+      const r = ds.writeValue(l, tr);
       tuples.push(new MetaTuple(r, values[i + 1]));
     }
 
@@ -185,8 +190,8 @@ suite('CompoundSet', () => {
     while (tuples.length > 1) {
       const next = [];
       for (let i = 0; i < tuples.length; i += 2) {
-        last = new NomsSet(tr, new OrderedMetaSequence(cs, tr, [tuples[i], tuples[i + 1]]));
-        const r = writeValue(last, tr, cs);
+        last = new NomsSet(tr, new OrderedMetaSequence(ds, tr, [tuples[i], tuples[i + 1]]));
+        const r = ds.writeValue(last, tr);
         next.push(new MetaTuple(r, tuples[i + 1].value));
       }
 
@@ -198,13 +203,15 @@ suite('CompoundSet', () => {
 
   test('isEmpty', () => {
     const ms = new MemoryStore();
-    const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const ds = new DataStore(ms);
+    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     assert.isFalse(c.isEmpty());
   });
 
   test('first/last/has', async () => {
     const ms = new MemoryStore();
-    const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const ds = new DataStore(ms);
+    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     assert.strictEqual('a', await c.first());
     assert.strictEqual('n', await c.last());
     assert.isTrue(await c.has('a'));
@@ -225,7 +232,8 @@ suite('CompoundSet', () => {
 
   test('forEach', async () => {
     const ms = new MemoryStore();
-    const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const ds = new DataStore(ms);
+    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const values = [];
     await c.forEach((k) => { values.push(k); });
     assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], values);
@@ -233,16 +241,18 @@ suite('CompoundSet', () => {
 
   test('iterator', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
-    const c = build(ms, values);
+    const c = build(ds, values);
     assert.deepEqual(values, await flatten(c.iterator()));
     assert.deepEqual(values, await flattenParallel(c.iterator(), values.length));
   });
 
   test('iteratorAt', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
-    const c = build(ms, values);
+    const c = build(ds, values);
     const offsets = {
       _: 0, a: 0,
       b: 1,
@@ -263,8 +273,9 @@ suite('CompoundSet', () => {
 
   test('iterator return', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
-    const c = build(ms, values);
+    const c = build(ds, values);
     const iter = c.iterator();
     const values2 = [];
     for (let res = await iter.next(); !res.done; res = await iter.next()) {
@@ -278,7 +289,8 @@ suite('CompoundSet', () => {
 
   test('iterator return parallel', async () => {
     const ms = new MemoryStore();
-    const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const ds = new DataStore(ms);
+    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const iter = c.iterator();
     const values = await Promise.all([iter.next(), iter.next(), iter.return(), iter.next()]);
     assert.deepEqual(
@@ -288,20 +300,23 @@ suite('CompoundSet', () => {
 
   test('chunks', () => {
     const ms = new MemoryStore();
-    const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const ds = new DataStore(ms);
+    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     assert.strictEqual(2, c.chunks.length);
   });
 
   test('map', async () => {
     const ms = new MemoryStore();
-    const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const ds = new DataStore(ms);
+    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const values = await c.map((k) => k + '*');
     assert.deepEqual(['a*', 'b*', 'e*', 'f*', 'h*', 'i*', 'm*', 'n*'], values);
   });
 
   test('map async', async () => {
     const ms = new MemoryStore();
-    const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const ds = new DataStore(ms);
+    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const values = await c.map((k) => Promise.resolve(k + '*'));
     assert.deepEqual(['a*', 'b*', 'e*', 'f*', 'h*', 'i*', 'm*', 'n*'], values);
   });
@@ -319,8 +334,9 @@ suite('CompoundSet', () => {
 
   test('advanceTo', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
 
-    const c = build(ms, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
 
     invariant(c.sequence instanceof OrderedSequence);
     let cursor = await c.sequence.newCursorAt(null);
@@ -361,11 +377,12 @@ suite('CompoundSet', () => {
 
   async function testIntersect(expect: Array<string>, seqs: Array<Array<string>>) {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
 
-    const first = build(ms, seqs[0]);
+    const first = build(ds, seqs[0]);
     const sets:Array<NomsSet> = [];
     for (let i = 1; i < seqs.length; i++) {
-      sets.push(build(ms, seqs[i]));
+      sets.push(build(ds, seqs[i]));
     }
 
     const result = await first.intersect(...sets);
@@ -390,10 +407,11 @@ suite('CompoundSet', () => {
 
   test('iterator at 0', async () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int8));
 
     const test = async (expected, items) => {
-      const set = new NomsSet(tr, new SetLeafSequence(ms, tr, items));
+      const set = new NomsSet(tr, new SetLeafSequence(ds, tr, items));
       const iter = set.iteratorAt(0);
       assert.deepEqual(expected, await flatten(iter));
     };

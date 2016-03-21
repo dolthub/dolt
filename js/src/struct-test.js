@@ -8,7 +8,7 @@ import {Kind} from './noms-kind.js';
 import {notNull} from './assert.js';
 import {Package, registerPackage} from './package.js';
 import {suite, test} from 'mocha';
-import {writeValue} from './encode.js';
+import DataStore from './data-store.js';
 
 suite('Struct', () => {
   test('equals', () => {
@@ -31,6 +31,7 @@ suite('Struct', () => {
 
   test('chunks', () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const typeDef = makeStructType('S1', [
       new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), false),
     ], []);
@@ -42,7 +43,7 @@ suite('Struct', () => {
 
     const b = true;
     const bt = makePrimitiveType(Kind.Bool);
-    const r = writeValue(b, bt, ms);
+    const r = ds.writeValue(b, bt);
     const s1 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s1.chunks.length);
     assert.isTrue(pkgRef.equals(s1.chunks[0]));
@@ -51,6 +52,7 @@ suite('Struct', () => {
 
   test('chunks optional', () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const typeDef = makeStructType('S1', [
       new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), true),
     ], []);
@@ -67,7 +69,7 @@ suite('Struct', () => {
 
     const b = true;
     const bt = makePrimitiveType(Kind.Bool);
-    const r = writeValue(b, bt, ms);
+    const r = ds.writeValue(b, bt);
     const s2 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s2.chunks.length);
     assert.isTrue(pkgRef.equals(s2.chunks[0]));
@@ -76,6 +78,7 @@ suite('Struct', () => {
 
   test('chunks union', () => {
     const ms = new MemoryStore();
+    const ds = new DataStore(ms);
     const typeDef = makeStructType('S1', [], [
       new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), false),
       new Field('s', makePrimitiveType(Kind.String), false),
@@ -92,7 +95,7 @@ suite('Struct', () => {
 
     const b = true;
     const bt = makePrimitiveType(Kind.Bool);
-    const r = writeValue(b, bt, ms);
+    const r = ds.writeValue(b, bt);
     const s2 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s2.chunks.length);
     assert.isTrue(pkgRef.equals(s2.chunks[0]));

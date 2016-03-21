@@ -2,7 +2,6 @@
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {ChunkStore} from './chunk-store.js';
 import type {valueOrPrimitive, Value} from './value.js'; // eslint-disable-line no-unused-vars
 import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence} from './sequence-chunker.js';
@@ -17,13 +16,14 @@ import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
 import {OrderedSequence, OrderedSequenceCursor,
   OrderedSequenceIterator} from './ordered-sequence.js';
 import {Type} from './type.js';
+import type DataStore from './data-store.js';
 
 const setWindowSize = 1;
 const setPattern = ((1 << 6) | 0) - 1;
 
-function newSetLeafChunkFn<T:valueOrPrimitive>(t: Type, cs: ?ChunkStore = null): makeChunkFn {
+function newSetLeafChunkFn<T:valueOrPrimitive>(t: Type, ds: ?DataStore = null): makeChunkFn {
   return (items: Array<T>) => {
-    const setLeaf = new SetLeafSequence(cs, t, items);
+    const setLeaf = new SetLeafSequence(ds, t, items);
 
     let indexValue: ?(T | Ref) = null;
     if (items.length > 0) {
@@ -101,9 +101,9 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
   async _splice(cursor: OrderedSequenceCursor, insert: Array<T>, remove: number):
       Promise<NomsSet<T>> {
     const type = this.type;
-    const cs = this.sequence.cs;
-    const seq = await chunkSequence(cursor, insert, remove, newSetLeafChunkFn(type, cs),
-                                    newOrderedMetaSequenceChunkFn(type, cs),
+    const ds = this.sequence.ds;
+    const seq = await chunkSequence(cursor, insert, remove, newSetLeafChunkFn(type, ds),
+                                    newOrderedMetaSequenceChunkFn(type, ds),
                                     newSetLeafBoundaryChecker(type),
                                     newOrderedMetaSequenceBoundaryChecker);
     invariant(seq instanceof OrderedSequence);

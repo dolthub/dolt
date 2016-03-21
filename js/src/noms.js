@@ -1,7 +1,7 @@
 // @flow
 
 export {AsyncIterator} from './async-iterator.js';
-export {DataStore, newCommit} from './datastore.js';
+export {default as DataStore, newCommit} from './data-store.js';
 export {NomsBlob, BlobReader} from './blob.js';
 export {decodeNomsValue} from './decode.js';
 export {default as Chunk} from './chunk.js';
@@ -9,7 +9,7 @@ export {default as HttpStore} from './http-store.js';
 export {default as MemoryStore} from './memory-store.js';
 export {default as Ref} from './ref.js';
 export {default as Struct} from './struct.js';
-export {encodeNomsValue, writeValue} from './encode.js';
+export {encodeNomsValue} from './encode.js';
 export {invariant, isNullOrUndefined, notNull} from './assert.js';
 export {isPrimitiveKind, Kind, kindToString} from './noms-kind.js';
 export {lookupPackage, Package, readPackage, registerPackage} from './package.js';
@@ -17,7 +17,6 @@ export {newList, ListLeafSequence, NomsList} from './list.js';
 export {newMap, NomsMap, MapLeafSequence} from './map.js';
 export {newSet, NomsSet, SetLeafSequence} from './set.js';
 export {OrderedMetaSequence, IndexedMetaSequence} from './meta-sequence.js';
-export {readValue} from './read-value.js';
 export {SPLICE_AT, SPLICE_REMOVED, SPLICE_ADDED, SPLICE_FROM} from './edit-distance.js';
 export {
   boolType,
