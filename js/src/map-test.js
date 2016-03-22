@@ -101,7 +101,7 @@ suite('BuildMap', () => {
                                 makePrimitiveType(Kind.Int64));
     const m = await newMap(kvs, tr);
 
-    const r = ds.writeValue(m, tr);
+    const r = ds.writeValue(m);
     const m2 = await ds.readValue(r);
     const outKvs = [];
     await m2.forEach((v, k) => outKvs.push(k, v));
@@ -218,11 +218,10 @@ suite('MapLeaf', () => {
     const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Map,
                                 makePrimitiveType(Kind.Value), makePrimitiveType(Kind.Value));
-    const st = makePrimitiveType(Kind.String);
-    const r1 = ds.writeValue('x', st);
-    const r2 = ds.writeValue('a', st);
-    const r3 = ds.writeValue('b', st);
-    const r4 = ds.writeValue('c', st);
+    const r1 = ds.writeValue('x');
+    const r2 = ds.writeValue('a');
+    const r3 = ds.writeValue('b');
+    const r4 = ds.writeValue('c');
     const m = new NomsMap(tr,
         new MapLeafSequence(ds, tr, [{key: r1, value: r2}, {key: r3, value: r4}]));
     assert.strictEqual(4, m.chunks.length);
@@ -239,23 +238,23 @@ suite('CompoundMap', () => {
         makePrimitiveType(Kind.Bool));
     const l1 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'a', value: false},
         {key:'b', value:false}]));
-    const r1 = ds.writeValue(l1, tr);
+    const r1 = ds.writeValue(l1);
     const l2 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'e', value: true},
         {key:'f', value:true}]));
-    const r2 = ds.writeValue(l2, tr);
+    const r2 = ds.writeValue(l2);
     const l3 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'h', value: false},
         {key:'i', value:true}]));
-    const r3 = ds.writeValue(l3, tr);
+    const r3 = ds.writeValue(l3);
     const l4 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'm', value: true},
         {key:'n', value:false}]));
-    const r4 = ds.writeValue(l4, tr);
+    const r4 = ds.writeValue(l4);
 
     const m1 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r1, 'b'),
         new MetaTuple(r2, 'f')]));
-    const rm1 = ds.writeValue(m1, tr);
+    const rm1 = ds.writeValue(m1);
     const m2 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r3, 'i'),
         new MetaTuple(r4, 'n')]));
-    const rm2 = ds.writeValue(m2, tr);
+    const rm2 = ds.writeValue(m2);
 
     const c = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(rm1, 'f'),
         new MetaTuple(rm2, 'n')]));

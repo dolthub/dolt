@@ -173,7 +173,7 @@ export default class DataStore {
     const currentRootRefP = this.getRoot();
     let currentDatasets = await this._datasetsFromRootRef(currentRootRefP);
     const currentRootRef = await currentRootRefP;
-    const commitRef = this.writeValue(commit, commit.type);
+    const commitRef = this.writeValue(commit);
 
     if (!currentRootRef.isEmpty()) {
       const currentHeadRef = await currentDatasets.get(datasetId);
@@ -188,7 +188,7 @@ export default class DataStore {
     }
 
     currentDatasets = await currentDatasets.set(datasetId, commitRef);
-    const newRootRef = this.writeValue(currentDatasets, currentDatasets.type);
+    const newRootRef = this.writeValue(currentDatasets);
     if (await this.updateRoot(newRootRef, currentRootRef)) {
       return new DataStore(this._cs);
     }

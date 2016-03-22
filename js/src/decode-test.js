@@ -11,8 +11,15 @@ import type {float64, int32, int64, uint8, uint16, uint32, uint64} from './primi
 import type {TypeDesc} from './type.js';
 import {assert} from 'chai';
 import {decodeNomsValue, JsonArrayReader} from './decode.js';
-import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type,
-    blobType} from './type.js';
+import {
+  Field,
+  makeCompoundType,
+  makeEnumType,
+  makePrimitiveType,
+  makeStructType,
+  makeType,
+  Type,
+} from './type.js';
 import {IndexedMetaSequence, MetaTuple} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {Kind} from './noms-kind.js';
@@ -147,9 +154,9 @@ suite('Decode', () => {
     const ds = new DataStore(ms);
 
     const ltr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
-    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0, 1])), ltr);
-    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [2, 3])), ltr);
-    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [4, 5])), ltr);
+    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0, 1])));
+    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [2, 3])));
+    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [4, 5])));
     const tuples = [
       new MetaTuple(r1, 2),
       new MetaTuple(r2, 4),
@@ -539,8 +546,8 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
-    const r1 = ds.writeValue(await newBlob(stringToUint8Array('hi')), blobType);
-    const r2 = ds.writeValue(await newBlob(stringToUint8Array('world')), blobType);
+    const r1 = ds.writeValue(await newBlob(stringToUint8Array('hi')));
+    const r2 = ds.writeValue(await newBlob(stringToUint8Array('world')));
 
     const a = [Kind.Blob, true, [r1.ref.toString(), '2', r2.ref.toString(), '5']];
     const r = new JsonArrayReader(a, ds);

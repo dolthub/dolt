@@ -149,9 +149,9 @@ suite('DataStore', () => {
 
     const commit = await newCommit('foo', []);
 
-    const commitRef = ds.writeValue(commit, commit.type);
+    const commitRef = ds.writeValue(commit);
     const datasets = await newMap(['foo', commitRef], types.commitMapType);
-    const rootRef = ds.writeValue(datasets, datasets.type);
+    const rootRef = ds.writeValue(datasets);
     assert.isTrue(await ms.updateRoot(rootRef, new Ref()));
     ds = new DataStore(ms); // refresh the datasets
 

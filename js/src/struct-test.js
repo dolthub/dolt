@@ -42,8 +42,7 @@ suite('Struct', () => {
     const type = makeType(pkgRef, 0);
 
     const b = true;
-    const bt = makePrimitiveType(Kind.Bool);
-    const r = ds.writeValue(b, bt);
+    const r = ds.writeValue(b);
     const s1 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s1.chunks.length);
     assert.isTrue(pkgRef.equals(s1.chunks[0]));
@@ -68,8 +67,7 @@ suite('Struct', () => {
     assert.isTrue(pkgRef.equals(s1.chunks[0]));
 
     const b = true;
-    const bt = makePrimitiveType(Kind.Bool);
-    const r = ds.writeValue(b, bt);
+    const r = ds.writeValue(b);
     const s2 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s2.chunks.length);
     assert.isTrue(pkgRef.equals(s2.chunks[0]));
@@ -94,8 +92,7 @@ suite('Struct', () => {
     assert.isTrue(pkgRef.equals(s1.chunks[0]));
 
     const b = true;
-    const bt = makePrimitiveType(Kind.Bool);
-    const r = ds.writeValue(b, bt);
+    const r = ds.writeValue(b);
     const s2 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s2.chunks.length);
     assert.isTrue(pkgRef.equals(s2.chunks[0]));
