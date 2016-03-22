@@ -3,15 +3,18 @@
 import {assert} from 'chai';
 import {suite} from 'mocha';
 
+import DataStore from './data-store';
 import MemoryStore from './memory-store.js';
+import RefValue from './ref-value.js';
+import Struct from './struct.js';
 import test from './async-test.js';
+import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
+import {flatten, flattenParallel} from './test-util.js';
 import {invariant} from './assert.js';
 import {Kind} from './noms-kind.js';
-import {flatten, flattenParallel} from './test-util.js';
-import {makeCompoundType, makePrimitiveType} from './type.js';
 import {MapLeafSequence, newMap, NomsMap} from './map.js';
 import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
-import DataStore from './data-store';
+import {Package, registerPackage} from './package.js';
 
 const testMapSize = 5000;
 const mapOfNRef = 'sha1-1b9664e55091370996f3af428ffee78f1ad36426';
@@ -38,6 +41,32 @@ suite('BuildMap', () => {
     pairs.forEach(kv => kvs.push(kv.k, kv.v));
     const m2 = await newMap(kvs, tr);
     assert.strictEqual(m2.ref.toString(), mapOfNRef);
+  });
+
+  test('map of ref to ref, set of n numbers', async () => {
+    const kvs = [];
+    for (let i = 0; i < testMapSize; i++) {
+      kvs.push(i, i + 1);
+    }
+
+    const structTypeDef = makeStructType('num', [
+      new Field('n', makePrimitiveType(Kind.Int64), false),
+    ], []);
+    const pkg = new Package([structTypeDef], []);
+    registerPackage(pkg);
+    const pkgRef = pkg.ref;
+    const structType = makeType(pkgRef, 0);
+    const refOfStructType = makeCompoundType(Kind.Ref, structType);
+    const tr = makeCompoundType(Kind.Map, refOfStructType, refOfStructType);
+
+    const kvRefs = kvs.map(n => {
+      const s = new Struct(structType, structTypeDef, {n});
+      const r = s.ref;
+      return new RefValue(r, refOfStructType);
+    });
+
+    const m = await newMap(kvRefs, tr);
+    assert.strictEqual(m.ref.toString(), 'sha1-8dc9e857b17c8550e5faf18a8af2abc2b7f4be0d');
   });
 
   test('set', async () => {
@@ -218,17 +247,19 @@ suite('MapLeaf', () => {
     const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Map,
                                 makePrimitiveType(Kind.Value), makePrimitiveType(Kind.Value));
-    const r1 = ds.writeValue('x');
-    const r2 = ds.writeValue('a');
-    const r3 = ds.writeValue('b');
-    const r4 = ds.writeValue('c');
+    const st = makePrimitiveType(Kind.String);
+    const refOfSt = makeCompoundType(Kind.Ref, st);
+    const r1 = new RefValue(ds.writeValue('x'), refOfSt);
+    const r2 = new RefValue(ds.writeValue('a'), refOfSt);
+    const r3 = new RefValue(ds.writeValue('b'), refOfSt);
+    const r4 = new RefValue(ds.writeValue('c'), refOfSt);
     const m = new NomsMap(tr,
         new MapLeafSequence(ds, tr, [{key: r1, value: r2}, {key: r3, value: r4}]));
     assert.strictEqual(4, m.chunks.length);
-    assert.isTrue(r1.equals(m.chunks[0]));
-    assert.isTrue(r2.equals(m.chunks[1]));
-    assert.isTrue(r3.equals(m.chunks[2]));
-    assert.isTrue(r4.equals(m.chunks[3]));
+    assert.isTrue(r1.targetRef.equals(m.chunks[0]));
+    assert.isTrue(r2.targetRef.equals(m.chunks[1]));
+    assert.isTrue(r3.targetRef.equals(m.chunks[2]));
+    assert.isTrue(r4.targetRef.equals(m.chunks[3]));
   });
 });
 

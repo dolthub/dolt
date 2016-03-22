@@ -47,7 +47,7 @@ export {
   uint64Type,
   UnresolvedDesc,
 } from './type.js';
-export {equals, less} from './value.js';
+export {equals, less} from './compare.js';
 export {default as CacheStore} from './cache-store.js';
 
 export type {AsyncIteratorResult} from './async-iterator.js';

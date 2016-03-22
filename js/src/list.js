@@ -14,7 +14,7 @@ import {invariant} from './assert.js';
 import {MetaTuple, newIndexedMetaSequenceBoundaryChecker,
   newIndexedMetaSequenceChunkFn} from './meta-sequence.js';
 import {sha1Size} from './ref.js';
-import {Type} from './type.js';
+import {listOfValueType, Type} from './type.js';
 
 const listWindowSize = 64;
 const listPattern = ((1 << 6) | 0) - 1;
@@ -33,7 +33,7 @@ function newListLeafBoundaryChecker<T: valueOrPrimitive>(t: Type): BoundaryCheck
   );
 }
 
-export function newList<T: valueOrPrimitive>(values: Array<T>, type: Type):
+export function newList<T: valueOrPrimitive>(values: Array<T>, type: Type = listOfValueType):
     Promise<NomsList<T>> {
   return chunkSequence(null, values, 0, newListLeafChunkFn(type),
                        newIndexedMetaSequenceChunkFn(type),

@@ -5,6 +5,7 @@ import {suite, test} from 'mocha';
 import Chunk from './chunk.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
+import RefValue from './ref-value.js';
 import {assert} from 'chai';
 import {default as DataStore, getDatasTypes, newCommit} from './data-store.js';
 import {invariant, notNull} from './assert.js';
@@ -149,7 +150,7 @@ suite('DataStore', () => {
 
     const commit = await newCommit('foo', []);
 
-    const commitRef = ds.writeValue(commit);
+    const commitRef = new RefValue(ds.writeValue(commit), types.refOfCommitType);
     const datasets = await newMap(['foo', commitRef], types.commitMapType);
     const rootRef = ds.writeValue(datasets);
     assert.isTrue(await ms.updateRoot(rootRef, new Ref()));

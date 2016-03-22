@@ -6,9 +6,8 @@ import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unus
 import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
-import {compare} from './value.js';
+import {compare, equals} from './compare.js';
 import {default as Ref, sha1Size} from './ref.js';
-import {equals} from './value.js';
 import {getRefOfValueOrPrimitive} from './get-ref.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
@@ -16,7 +15,7 @@ import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
   newOrderedMetaSequenceChunkFn} from './meta-sequence.js';
 import {OrderedSequence, OrderedSequenceCursor,
   OrderedSequenceIterator} from './ordered-sequence.js';
-import {Type} from './type.js';
+import {mapOfValueType, Type} from './type.js';
 import type DataStore from './data-store.js';
 
 export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
@@ -64,8 +63,8 @@ function buildMapData(t: Type, kvs: Array<any>): Array<MapEntry> {
   return entries;
 }
 
-export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<any>, type: Type):
-    Promise<NomsMap<K, V>> {
+export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<any>,
+    type: Type = mapOfValueType): Promise<NomsMap<K, V>> {
   return chunkSequence(null, buildMapData(type, kvs), 0, newMapLeafChunkFn(type),
                        newOrderedMetaSequenceChunkFn(type),
                        newMapLeafBoundaryChecker(type),

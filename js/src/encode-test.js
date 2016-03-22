@@ -5,6 +5,7 @@ import {suite} from 'mocha';
 
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
+import RefValue from './ref-value.js';
 import Struct from './struct.js';
 import test from './async-test.js';
 import type {NomsKind} from './noms-kind.js';
@@ -429,7 +430,9 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ds);
     const ref = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
     const t = makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Blob));
-    w.writeTopLevel(t, ref);
+    const v = new RefValue(ref, t);
+    w.writeTopLevel(t, v);
+
     assert.deepEqual([Kind.Ref, Kind.Blob, ref.toString()], w.array);
   });
 });

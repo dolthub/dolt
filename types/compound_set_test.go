@@ -5,6 +5,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -339,6 +340,36 @@ func TestCompoundSetFirstNNumbers(t *testing.T) {
 	nums := firstNNumbers(5000)
 	s := newTypedSet(setType, nums...)
 	assert.Equal(s.Ref().String(), "sha1-54ff8f84b5f39fe2171572922d067257a57c539c")
+}
+
+func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
+	assert := assert.New(t)
+	vs := NewTestValueStore()
+
+	structTypeDef := MakeStructType("num", []Field{
+		Field{"n", MakePrimitiveType(Int64Kind), false},
+	}, Choices{})
+	pkg := NewPackage([]Type{structTypeDef}, []ref.Ref{})
+	pkgRef := RegisterPackage(&pkg)
+	structType := MakeType(pkgRef, 0)
+	refOfTypeStructType := MakeCompoundType(RefKind, structType)
+
+	setType := MakeCompoundType(SetKind, refOfTypeStructType)
+
+	firstNNumbers := func(n int) []Value {
+		nums := []Value{}
+		for i := 0; i < n; i++ {
+			r := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i)}))
+			tr := newRef(r, refOfTypeStructType)
+			nums = append(nums, tr)
+		}
+
+		return nums
+	}
+
+	nums := firstNNumbers(5000)
+	s := NewTypedSet(setType, nums...)
+	assert.Equal(s.Ref().String(), "sha1-3ed56cc080690be61c72828e80080ec3507fec65")
 }
 
 func TestCompoundSetModifyAfterRead(t *testing.T) {

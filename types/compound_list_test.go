@@ -5,6 +5,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -625,9 +626,39 @@ func TestCompoundListFirstNNumbers(t *testing.T) {
 	assert.Equal(s.Ref().String(), "sha1-11e947e8aacfda8e9052bb57e661da442b26c625")
 }
 
+func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
+	assert := assert.New(t)
+	vs := NewTestValueStore()
+
+	structTypeDef := MakeStructType("num", []Field{
+		Field{"n", MakePrimitiveType(Int64Kind), false},
+	}, Choices{})
+	pkg := NewPackage([]Type{structTypeDef}, []ref.Ref{})
+	pkgRef := RegisterPackage(&pkg)
+	structType := MakeType(pkgRef, 0)
+	refOfTypeStructType := MakeCompoundType(RefKind, structType)
+	listType := MakeCompoundType(ListKind, refOfTypeStructType)
+
+	firstNNumbers := func(n int) []Value {
+		nums := []Value{}
+		for i := 0; i < n; i++ {
+			r := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i)}))
+			tr := newRef(r, refOfTypeStructType)
+			nums = append(nums, tr)
+		}
+
+		return nums
+	}
+
+	nums := firstNNumbers(5000)
+	s := NewTypedList(listType, nums...)
+	assert.Equal(s.Ref().String(), "sha1-324e4faa5d80df9942627fe9848e0689261cbbc5")
+}
+
 func TestCompoundListModifyAfterRead(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
+
 	list := getTestSimpleList().toCompoundList()
 	// Drop chunk values.
 	list = vs.ReadValue(vs.WriteValue(list)).(compoundList)

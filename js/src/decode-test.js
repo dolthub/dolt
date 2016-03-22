@@ -1,14 +1,15 @@
 // @flow
 
-import {encode as encodeBase64} from './base64.js';
-import {NomsBlob, newBlob} from './blob.js';
 import Chunk from './chunk.js';
+import DataStore from './data-store.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
+import RefValue from './ref-value.js';
 import Struct from './struct.js';
 import test from './async-test.js';
 import type {float64, int32, int64, uint8, uint16, uint32, uint64} from './primitives.js';
 import type {TypeDesc} from './type.js';
+import type {Value} from './value.js';
 import {assert} from 'chai';
 import {decodeNomsValue, JsonArrayReader} from './decode.js';
 import {
@@ -20,16 +21,16 @@ import {
   makeType,
   Type,
 } from './type.js';
+import {encode as encodeBase64} from './base64.js';
 import {IndexedMetaSequence, MetaTuple} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
 import {MapLeafSequence, NomsMap} from './map.js';
+import {NomsBlob, newBlob} from './blob.js';
 import {NomsSet, SetLeafSequence} from './set.js';
 import {registerPackage, Package} from './package.js';
 import {suite} from 'mocha';
-import type {Value} from './value.js';
-import DataStore from './data-store.js';
 
 suite('Decode', () => {
   function stringToUint8Array(s): Uint8Array {
@@ -194,14 +195,17 @@ suite('Decode', () => {
                ['sha1-0000000000000000000000000000000000000001', '2',
                 'sha1-0000000000000000000000000000000000000002', '4']];
     const r = new JsonArrayReader(a, ds);
-    const v:NomsMap<Ref, uint64> = await r.readTopLevelValue();
+    const v:NomsMap<RefValue<Value>, uint64> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
-    const t = makeCompoundType(Kind.Map, makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Value)),
-                               makePrimitiveType(Kind.Uint64));
-    const m = new NomsMap(t,
-        new MapLeafSequence(ds, t, [{key: new Ref('sha1-0000000000000000000000000000000000000001'),
-            value: 2}, {key: new Ref('sha1-0000000000000000000000000000000000000002'), value: 4}]));
+    const refOfValueType = makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Value));
+    const mapType = makeCompoundType(Kind.Map, refOfValueType, makePrimitiveType(Kind.Uint64));
+    const rv1 = new RefValue(new Ref('sha1-0000000000000000000000000000000000000001'),
+        refOfValueType);
+    const rv2 = new RefValue(new Ref('sha1-0000000000000000000000000000000000000002'),
+        refOfValueType);
+    const m = new NomsMap(mapType, new MapLeafSequence(ds, mapType, [{key: rv1, value: 2},
+                                                                     {key: rv2, value: 4}]));
     assert.isTrue(v.equals(m));
   });
 
@@ -493,7 +497,7 @@ suite('Decode', () => {
 
     const rootMap = await ds.readValue(root);
     const counterRef = await rootMap.get('counter');
-    const commit = await ds.readValue(counterRef);
+    const commit = await counterRef.targetValue(ds);
     assert.strictEqual(1, await commit.get('value'));
   });
 
