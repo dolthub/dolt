@@ -1,14 +1,7 @@
 {
   "name": "noms-crunchbase-ui",
-  "dependencies": {
-    "d3": "^3.4.4",
-    "@attic/noms": "^0.0.2",
-    "noms-webpack-config": "file:../../../js/webpack-config",
-    "nvd3": "1.8.2",
-    "react": "^0.14.1",
-    "react-dom": "^0.14.1"
-  },
   "devDependencies": {
+    "@attic/noms": "^0.0.2",
     "babel-cli": "6.6.5",
     "babel-core": "6.7.2",
     "babel-eslint": "5.0.0",
@@ -20,13 +13,19 @@
     "babel-plugin-transform-es2015-destructuring": "6.6.5",
     "babel-plugin-transform-es2015-modules-commonjs": "6.7.0",
     "babel-plugin-transform-es2015-parameters": "6.7.0",
-    "babel-regenerator-runtime": "6.5.0",
+    "babel-plugin-transform-runtime": "^6.6.0",
     "babel-preset-es2015": "6.6.0",
     "babel-preset-react": "6.5.0",
-    "eslint": "^1.9.0",
+    "babel-regenerator-runtime": "6.5.0",
+    "d3": "^3.4.4",
     "eslint-plugin-react": "^3.8.0",
+    "eslint": "^1.9.0",
     "flow-bin": "^0.22.1",
-    "http-server": "^0.8.5"
+    "http-server": "^0.8.5",
+    "noms-webpack-config": "file:../../../js/webpack-config",
+    "nvd3": "1.8.2",
+    "react-dom": "^0.14.1",
+    "react": "^0.14.1"
   },
   "scripts": {
     "start": "python .npm_build_helper.py development",
