@@ -9,6 +9,13 @@ export type UnsentReadMap = { [key: string]: (c: Chunk) => void };
 
 export type WriteMap = { [key: string]: Chunk };
 
+// https://github.com/babel/babel-eslint/issues/279
+interface Delegate {  // eslint-disable-line no-undef
+  readBatch(reqs: UnsentReadMap): Promise<void>;
+  writeBatch(reqs: WriteMap): Promise<void>;
+  updateRoot(current: Ref, last: Ref): Promise<boolean>;
+}
+
 export class RemoteStore {
   _pendingReads: PendingReadMap;
   _unsentReads: ?UnsentReadMap;
@@ -23,8 +30,9 @@ export class RemoteStore {
   _maxWrites: number;
   _allWritesFinishedFn: ?() => void;
   _canUpdateRoot: Promise<void>;
+  _delegate: Delegate;  // eslint-disable-line no-undef
 
-  constructor(maxReads: number, maxWrites: number) {
+  constructor(maxReads: number, maxWrites: number, delegate: Delegate) {  // eslint-disable-line
     this._pendingReads = Object.create(null);
     this._unsentReads = null;
     this._readScheduled = false;
@@ -38,6 +46,7 @@ export class RemoteStore {
     this._maxWrites = maxWrites;
     this._allWritesFinishedFn = null;
     this._canUpdateRoot = Promise.resolve();
+    this._delegate = delegate;
   }
 
   get(ref: Ref): Promise<Chunk> {
@@ -73,7 +82,7 @@ export class RemoteStore {
     this._unsentReads = null;
     this._readScheduled = false;
 
-    await this.internalReadBatch(reqs);
+    await this._delegate.readBatch(reqs);
 
     const self = this; // TODO: Remove this when babel bug is fixed.
     Object.keys(reqs).forEach(refStr => {
@@ -82,11 +91,6 @@ export class RemoteStore {
 
     this._activeReads--;
     this._maybeStartRead();
-  }
-
-  async internalReadBatch(reqs: UnsentReadMap): // eslint-disable-line no-unused-vars
-      Promise<void> {
-    throw new Error('override');
   }
 
   put(c: Chunk): void {
@@ -126,7 +130,7 @@ export class RemoteStore {
     this._unsentWrites = null;
     this._writeScheduled = false;
 
-    await this.internalWriteBatch(reqs);
+    await this._delegate.writeBatch(reqs);
 
     const self = this; // TODO: Remove this when babel bug is fixed.
     Object.keys(reqs).forEach(refStr => {
@@ -143,22 +147,13 @@ export class RemoteStore {
     this._maybeStartWrite();
   }
 
-  async internalWriteBatch(reqs: WriteMap): Promise<void> { // eslint-disable-line no-unused-vars
-    throw new Error('override');
-  }
-
   async updateRoot(current: Ref, last: Ref): Promise<boolean> {
     await this._canUpdateRoot;
     if (current.equals(last)) {
       return Promise.resolve(true);
     }
 
-    return this.internalUpdateRoot(current, last);
-  }
-
-  internalUpdateRoot(current: Ref, last: Ref): // eslint-disable-line no-unused-vars
-      Promise<boolean> {
-    throw new Error('override');
+    return this._delegate.updateRoot(current, last);
   }
 
   close() {}
