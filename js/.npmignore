@@ -1,2 +1,7 @@
+build/
+src/
+webpack-config/
+.*
+*.tgz
 *-test.js
 *-test.js.flow

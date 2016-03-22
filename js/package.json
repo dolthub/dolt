@@ -1,6 +1,6 @@
 {
   "name": "@attic/noms",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "main": "dist/commonjs/noms.js",
   "jsnext:main": "dist/es6/noms.js",
   "dependencies": {
@@ -32,9 +32,6 @@
     "mocha": "2.4.5",
     "fs-extra": "0.26.7"
   },
-  "files": [
-    "dist/"
-  ],
   "scripts": {
     "pretest": "eslint src/ && flow src/",
     "test": "mocha --ui tdd --reporter dot --require babel-regenerator-runtime --compilers js:babel-core/register src/*-test.js",
