@@ -3,14 +3,13 @@ package types
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGenericEnumWriteRead(t *testing.T) {
 	assert := assert.New(t)
-	vs := newValueStore(chunks.NewMemoryStore())
+	vs := NewTestValueStore()
 
 	typeDefA := MakeEnumType("EA", "aA", "bA")
 	typeDefB := MakeEnumType("EB", "aB", "bB")

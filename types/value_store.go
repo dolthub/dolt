@@ -12,7 +12,7 @@ type ValueStore struct {
 
 // NewTestValueStore creates a simple struct that satisfies ValueReadWriter and is backed by a chunks.TestStore.
 func NewTestValueStore() *ValueStore {
-	return &ValueStore{chunks.NewTestStore()}
+	return newValueStore(chunks.NewTestStore())
 }
 
 func newValueStore(cs chunks.ChunkStore) *ValueStore {

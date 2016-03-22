@@ -15,17 +15,17 @@ type LocalDataStore struct {
 }
 
 func newLocalDataStore(cs chunks.ChunkStore) *LocalDataStore {
-	return &LocalDataStore{dataStoreCommon{newHasCachingChunkStore(cs), cs.Root(), nil}}
+	return &LocalDataStore{newDataStoreCommon(cs)}
 }
 
 func (lds *LocalDataStore) Commit(datasetID string, commit Commit) (DataStore, error) {
 	err := lds.commit(datasetID, commit)
-	return newLocalDataStore(lds.cs.Backing()), err
+	return newLocalDataStore(lds.cs), err
 }
 
 func (lds *LocalDataStore) Delete(datasetID string) (DataStore, error) {
 	err := lds.doDelete(datasetID)
-	return newLocalDataStore(lds.cs.Backing()), err
+	return newLocalDataStore(lds.cs), err
 }
 
 // CopyReachableChunksP copies to |sink| all chunks reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|

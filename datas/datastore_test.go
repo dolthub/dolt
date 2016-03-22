@@ -9,6 +9,71 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestReadWriteCache(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+	ds := NewDataStore(cs)
+
+	var v types.Value = types.Bool(true)
+	assert.NotEqual(ref.Ref{}, ds.WriteValue(v))
+	assert.Equal(1, cs.Writes)
+	r := ds.WriteValue(v)
+	assert.Equal(1, cs.Writes)
+
+	v = ds.ReadValue(r)
+	assert.True(v.Equals(types.Bool(true)))
+}
+
+func TestWriteRefToNonexistentValue(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+	ds := NewDataStore(cs)
+
+	assert.Panics(func() { ds.WriteValue(types.NewRef(types.Bool(true).Ref())) })
+}
+
+func TestWriteWrongTypeRef(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+	ds := NewDataStore(cs)
+
+	b := types.Bool(true)
+	assert.NotEqual(ref.Ref{}, ds.WriteValue(b))
+
+	assert.Panics(func() { ds.WriteValue(types.NewRefOfBlob(b.Ref())) })
+}
+
+func TestWriteValueTypeRef(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+	ds := NewDataStore(cs)
+
+	b := types.Bool(true)
+	assert.NotEqual(ref.Ref{}, ds.WriteValue(b))
+
+	assert.NotPanics(func() { ds.WriteValue(types.NewRef(b.Ref())) })
+}
+
+func TestReadValueTypeRefPanics_BUG1121(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+	ds := NewDataStore(cs)
+
+	b := types.NewEmptyBlob()
+	assert.NotEqual(ref.Ref{}, ds.WriteValue(b))
+
+	datasetID := "ds1"
+	aCommit := NewCommit().SetValue(types.NewRef(b.Ref()))
+	ds2, err := ds.Commit(datasetID, aCommit)
+	assert.NoError(err)
+
+	_, ok := ds2.MaybeHead(datasetID)
+	assert.True(ok)
+	// Fix BUG 1121 and then uncomment this line and delete the one after
+	// assert.NotPanics(func() { ds2.WriteValue(types.NewRefOfBlob(b.Ref())) })
+	assert.Panics(func() { ds2.WriteValue(types.NewRefOfBlob(b.Ref())) })
+}
+
 func TestTolerateUngettableRefs(t *testing.T) {
 	assert := assert.New(t)
 	ds := NewDataStore(chunks.NewTestStore())
@@ -31,7 +96,7 @@ func TestDataStoreCommit(t *testing.T) {
 	ds2, err := ds.Commit(datasetID, aCommit)
 	assert.NoError(err)
 
-	// The old datastore still still has no head.
+	// The old datastore still has no head.
 	_, ok := ds.MaybeHead(datasetID)
 	assert.False(ok)
 
