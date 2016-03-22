@@ -31,11 +31,11 @@ suite('Type', () => {
     const pkgRef = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
     const trType = makeType(pkgRef, 42);
 
-    const otherRef = ds.writeValue(otherType, otherType.type);
-    const mapRef = ds.writeValue(mapType, mapType.type);
-    const setRef = ds.writeValue(setType, setType.type);
-    const mahRef = ds.writeValue(mahType, mahType.type);
-    const trRef = ds.writeValue(trType, trType.type);
+    const otherRef = ds.writeValue(otherType);
+    const mapRef = ds.writeValue(mapType);
+    const setRef = ds.writeValue(setType);
+    const mahRef = ds.writeValue(mahType);
+    const trRef = ds.writeValue(trType);
 
     assert.isTrue(otherType.equals(await ds.readValue(otherRef)));
     assert.isTrue(mapType.equals(await ds.readValue(mapRef)));
@@ -86,7 +86,7 @@ suite('Type', () => {
     const pkgRef = pkg.ref;
 
     const unresolvedType = makeType(pkgRef, 42);
-    const unresolvedRef = ds.writeValue(unresolvedType, unresolvedType.type);
+    const unresolvedRef = ds.writeValue(unresolvedType);
 
     const v = await ds.readValue(unresolvedRef);
     assert.isNotNull(v);
@@ -103,7 +103,7 @@ suite('Type', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const v = makeType(new Ref(), -1);
-    const r = ds.writeValue(v, v.type);
+    const r = ds.writeValue(v);
     const v2 = await ds.readValue(r);
     assert.isTrue(v.equals(v2));
   });

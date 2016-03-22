@@ -7,8 +7,16 @@ import type {ChunkStore} from './chunk-store.js';
 import type {NomsMap} from './map.js';
 import type {NomsSet} from './set.js';
 import type {valueOrPrimitive} from './value.js';
-import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType,
-  Type} from './type.js';
+import {
+  Field,
+  makeCompoundType,
+  makePrimitiveType,
+  makeStructType,
+  makeType,
+  Type,
+  stringType,
+  boolType,
+} from './type.js';
 import {Kind} from './noms-kind.js';
 import {newMap} from './map.js';
 import {newSet} from './set.js';
@@ -138,7 +146,23 @@ export default class DataStore {
     return decodeNomsValue(chunk, this);
   }
 
-  writeValue(v: any, t: Type): Ref {
+  writeValue(v: any, t: ?Type = undefined): Ref {
+    if (!t) {
+      switch (typeof v) {
+        case 'string':
+          t = stringType;
+          break;
+        case 'boolean':
+          t = boolType;
+          break;
+        case 'object':
+          t = v.type;
+          break;
+        default:
+          throw new Error(`type parameter is required for ${typeof v}`);
+      }
+      invariant(t);
+    }
     const chunk = encodeNomsValue(v, t, this);
     invariant(!chunk.isEmpty());
     this.put(chunk);
@@ -149,7 +173,7 @@ export default class DataStore {
     const currentRootRefP = this.getRoot();
     let currentDatasets = await this._datasetsFromRootRef(currentRootRefP);
     const currentRootRef = await currentRootRefP;
-    const commitRef = this.writeValue(commit, commit.type);
+    const commitRef = this.writeValue(commit);
 
     if (!currentRootRef.isEmpty()) {
       const currentHeadRef = await currentDatasets.get(datasetId);
@@ -164,7 +188,7 @@ export default class DataStore {
     }
 
     currentDatasets = await currentDatasets.set(datasetId, commitRef);
-    const newRootRef = this.writeValue(currentDatasets, currentDatasets.type);
+    const newRootRef = this.writeValue(currentDatasets);
     if (await this.updateRoot(newRootRef, currentRootRef)) {
       return new DataStore(this._cs);
     }

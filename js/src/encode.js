@@ -79,7 +79,7 @@ export class JsonArrayWriter {
 
         const pkg = lookupPackage(pkgRef);
         if (pkg && this._ds) {
-          this._ds.writeValue(pkg, pkg.type);
+          this._ds.writeValue(pkg);
         }
         break;
       }
@@ -105,7 +105,7 @@ export class JsonArrayWriter {
       invariant(tuple instanceof MetaTuple);
       if (tuple.sequence && this._ds) {
         const child = tuple.sequence;
-        this._ds.writeValue(child, child.type);
+        this._ds.writeValue(child);
       }
       w2.writeRef(tuple.ref);
       w2.writeValue(tuple.value, indexType, pkg);
@@ -295,7 +295,7 @@ export class JsonArrayWriter {
 
         const pkg = lookupPackage(pkgRef);
         if (pkg && this._ds) {
-          this._ds.writeValue(pkg, pkg.type);
+          this._ds.writeValue(pkg);
         }
 
         break;
