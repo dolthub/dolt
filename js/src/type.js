@@ -24,25 +24,6 @@ class PrimitiveDesc {
     return other instanceof PrimitiveDesc && other.kind === this.kind;
   }
 
-  get ordered(): boolean {
-    switch (this.kind) {
-      case Kind.Float32:
-      case Kind.Float64:
-      case Kind.Int8:
-      case Kind.Int16:
-      case Kind.Int32:
-      case Kind.Int64:
-      case Kind.Uint8:
-      case Kind.Uint16:
-      case Kind.Uint32:
-      case Kind.Uint64:
-      case Kind.String:
-        return true;
-      default:
-        return false;
-    }
-  }
-
   describe(): string {
     return kindToString(this.kind);
   }
@@ -244,6 +225,10 @@ class Type {
     return this.ref.equals(other.ref);
   }
 
+  less(other: Value): boolean {
+    return this.ref.less(other.ref);
+  }
+
   get chunks(): Array<Ref> {
     const chunks = [];
     if (this.unresolved) {
@@ -267,12 +252,23 @@ class Type {
   }
 
   get ordered(): boolean {
-    const desc = this._desc;
-    if (desc instanceof PrimitiveDesc) {
-      return desc.ordered;
+    switch (this.kind) {
+      case Kind.Float32:
+      case Kind.Float64:
+      case Kind.Int8:
+      case Kind.Int16:
+      case Kind.Int32:
+      case Kind.Int64:
+      case Kind.Uint8:
+      case Kind.Uint16:
+      case Kind.Uint32:
+      case Kind.Uint64:
+      case Kind.String:
+      case Kind.Ref:
+        return true;
+      default:
+        return false;
     }
-
-    return false;
   }
 
   get desc(): TypeDesc {
@@ -420,6 +416,11 @@ export const stringType = makePrimitiveType(Kind.String);
 export const blobType = makePrimitiveType(Kind.Blob);
 export const typeType = makePrimitiveType(Kind.Type);
 export const packageType = makePrimitiveType(Kind.Package);
+export const valueType = makePrimitiveType(Kind.Value);
+export const refOfValueType = makeCompoundType(Kind.Ref, valueType);
+export const listOfValueType = makeCompoundType(Kind.List, valueType);
+export const setOfValueType = makeCompoundType(Kind.Set, valueType);
+export const mapOfValueType = makeCompoundType(Kind.Map, valueType, valueType);
 
 export {
   CompoundDesc,

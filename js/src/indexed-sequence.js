@@ -5,7 +5,7 @@ import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
 import {calcSplices, SPLICE_ADDED, SPLICE_AT, SPLICE_FROM,
   SPLICE_REMOVED} from './edit-distance.js';
-import {equals} from './value.js';
+import {equals} from './compare.js';
 import {IndexedMetaSequence} from './meta-sequence.js';
 import {notNull, invariant} from './assert.js';
 import {search, Sequence, SequenceCursor} from './sequence.js';

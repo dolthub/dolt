@@ -2,9 +2,6 @@
 
 import Rusha from 'rusha';
 
-import type {Value} from './value.js';
-import {invariant} from './assert.js';
-
 const r = new Rusha();
 export const sha1Size = 20;
 const pattern = /^(sha1-[0-9a-f]{40})$/;
@@ -55,17 +52,11 @@ export default class Ref {
     return this._refStr === emtpyRefStr;
   }
 
-  equals(other: Value): boolean {
-    invariant(other instanceof Ref);
+  equals(other: Ref): boolean {
     return this._refStr === other._refStr;
   }
 
-  get chunks(): Array<Ref> {
-    return [this];
-  }
-
-  less(other: Value): boolean {
-    invariant(other instanceof Ref);
+  less(other: Ref): boolean {
     return this._refStr < other._refStr;
   }
 

@@ -2,6 +2,7 @@
 
 import Chunk from './chunk.js';
 import Ref from './ref.js';
+import RefValue from './ref-value.js';
 import Struct from './struct.js';
 import type DataStore from './data-store.js';
 import type {NomsKind} from './noms-kind.js';
@@ -191,10 +192,8 @@ export class JsonArrayWriter {
         break;
       }
       case Kind.Ref: {
-        // TODO: This is not aligned with Go. In Go we have a dedicated Value
-        // for refs.
-        invariant(v instanceof Ref);
-        this.writeRef(v);
+        invariant(v instanceof RefValue);
+        this.writeRef(v.targetRef);
         break;
       }
       case Kind.Set: {

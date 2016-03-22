@@ -5,6 +5,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -360,6 +361,34 @@ func TestCompoundMapFirstNNumbers(t *testing.T) {
 
 	m := NewTypedMap(mapType, kvs...)
 	assert.Equal(m.Ref().String(), "sha1-1b9664e55091370996f3af428ffee78f1ad36426")
+}
+
+func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
+	assert := assert.New(t)
+	vs := NewTestValueStore()
+
+	structTypeDef := MakeStructType("num", []Field{
+		Field{"n", MakePrimitiveType(Int64Kind), false},
+	}, Choices{})
+	pkg := NewPackage([]Type{structTypeDef}, []ref.Ref{})
+	pkgRef := RegisterPackage(&pkg)
+	structType := MakeType(pkgRef, 0)
+	refOfTypeStructType := MakeCompoundType(RefKind, structType)
+
+	mapType := MakeCompoundType(MapKind, refOfTypeStructType, refOfTypeStructType)
+
+	kvs := []Value{}
+	n := 5000
+	for i := 0; i < n; i++ {
+		rk := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i)}))
+		k := newRef(rk, refOfTypeStructType)
+		rv := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i + 1)}))
+		v := newRef(rv, refOfTypeStructType)
+		kvs = append(kvs, k, v)
+	}
+
+	m := NewTypedMap(mapType, kvs...)
+	assert.Equal(m.Ref().String(), "sha1-8dc9e857b17c8550e5faf18a8af2abc2b7f4be0d")
 }
 
 func TestCompoundMapModifyAfterRead(t *testing.T) {

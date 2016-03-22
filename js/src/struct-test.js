@@ -1,6 +1,7 @@
 // @flow
 
 import MemoryStore from './memory-store.js';
+import RefValue from './ref-value.js';
 import Struct from './struct.js';
 import {assert} from 'chai';
 import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
@@ -32,8 +33,11 @@ suite('Struct', () => {
   test('chunks', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
+
+    const bt = makePrimitiveType(Kind.Bool);
+    const refOfBoolType = makeCompoundType(Kind.Ref, bt);
     const typeDef = makeStructType('S1', [
-      new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), false),
+      new Field('r', refOfBoolType, false),
     ], []);
 
     const pkg = new Package([typeDef], []);
@@ -42,18 +46,21 @@ suite('Struct', () => {
     const type = makeType(pkgRef, 0);
 
     const b = true;
-    const r = ds.writeValue(b);
+    const r = new RefValue(ds.writeValue(b), refOfBoolType);
     const s1 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s1.chunks.length);
     assert.isTrue(pkgRef.equals(s1.chunks[0]));
-    assert.isTrue(r.equals(s1.chunks[1]));
+    assert.isTrue(r.targetRef.equals(s1.chunks[1]));
   });
 
   test('chunks optional', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
+
+    const bt = makePrimitiveType(Kind.Bool);
+    const refOfBoolType = makeCompoundType(Kind.Ref, bt);
     const typeDef = makeStructType('S1', [
-      new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), true),
+      new Field('r', refOfBoolType, true),
     ], []);
 
     const pkg = new Package([typeDef], []);
@@ -67,18 +74,21 @@ suite('Struct', () => {
     assert.isTrue(pkgRef.equals(s1.chunks[0]));
 
     const b = true;
-    const r = ds.writeValue(b);
+    const r = new RefValue(ds.writeValue(b), refOfBoolType);
     const s2 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s2.chunks.length);
     assert.isTrue(pkgRef.equals(s2.chunks[0]));
-    assert.isTrue(r.equals(s2.chunks[1]));
+    assert.isTrue(r.targetRef.equals(s2.chunks[1]));
   });
 
   test('chunks union', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
+
+    const bt = makePrimitiveType(Kind.Bool);
+    const refOfBoolType = makeCompoundType(Kind.Ref, bt);
     const typeDef = makeStructType('S1', [], [
-      new Field('r', makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Bool)), false),
+      new Field('r', refOfBoolType, false),
       new Field('s', makePrimitiveType(Kind.String), false),
     ]);
 
@@ -92,11 +102,11 @@ suite('Struct', () => {
     assert.isTrue(pkgRef.equals(s1.chunks[0]));
 
     const b = true;
-    const r = ds.writeValue(b);
+    const r = new RefValue(ds.writeValue(b), refOfBoolType);
     const s2 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s2.chunks.length);
     assert.isTrue(pkgRef.equals(s2.chunks[0]));
-    assert.isTrue(r.equals(s2.chunks[1]));
+    assert.isTrue(r.targetRef.equals(s2.chunks[1]));
   });
 
   test('new', () => {

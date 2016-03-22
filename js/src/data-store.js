@@ -2,6 +2,7 @@
 
 import Chunk from './chunk.js';
 import Ref from './ref.js';
+import RefValue from './ref-value.js';
 import Struct from './struct.js';
 import type {ChunkStore} from './chunk-store.js';
 import type {NomsMap} from './map.js';
@@ -30,11 +31,12 @@ type DatasTypes = {
   datasPackage: Package,
   commitType: Type,
   commitSetType: Type,
+  refOfCommitType: Type,
   commitMapType: Type,
 };
 
-let emptyCommitMap: Promise<NomsMap<string, Ref>>;
-function getEmptyCommitMap(): Promise<NomsMap<string, Ref>> {
+let emptyCommitMap: Promise<NomsMap<string, RefValue<Struct>>>;
+function getEmptyCommitMap(): Promise<NomsMap<string, RefValue<Struct>>> {
   if (!emptyCommitMap) {
     emptyCommitMap = newMap([], getDatasTypes().commitMapType);
   }
@@ -55,18 +57,15 @@ export function getDatasTypes(): DatasTypes {
     registerPackage(datasPackage);
 
     const commitType = makeType(datasPackage.ref, 0);
-
-    const commitSetType = makeCompoundType(Kind.Set,
-      makeCompoundType(Kind.Ref, makeType(datasPackage.ref, 0)));
-
-    const commitMapType =
-      makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
-                                 makeCompoundType(Kind.Ref, makeType(datasPackage.ref, 0)));
-
+    const refOfCommitType = makeCompoundType(Kind.Ref, commitType);
+    const commitSetType = makeCompoundType(Kind.Set, refOfCommitType);
+    const commitMapType = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
+                                                     refOfCommitType);
     datasTypes = {
       commitTypeDef,
       datasPackage,
       commitType,
+      refOfCommitType,
       commitSetType,
       commitMapType,
     };
@@ -77,7 +76,7 @@ export function getDatasTypes(): DatasTypes {
 
 export default class DataStore {
   _cs: ChunkStore;
-  _datasets: Promise<NomsMap<string, Ref>>;
+  _datasets: Promise<NomsMap<string, RefValue<Struct>>>;
 
   constructor(cs: ChunkStore) {
     this._cs = cs;
@@ -106,7 +105,7 @@ export default class DataStore {
 
   close() {}
 
-  _datasetsFromRootRef(rootRef: Promise<Ref>): Promise<NomsMap<string, Ref>> {
+  _datasetsFromRootRef(rootRef: Promise<Ref>): Promise<NomsMap<string, RefValue<Struct>>> {
     return rootRef.then(rootRef => {
       if (rootRef.isEmpty()) {
         return getEmptyCommitMap();
@@ -118,15 +117,15 @@ export default class DataStore {
 
   head(datasetID: string): Promise<?Struct> {
     return this._datasets.then(
-      datasets => datasets.get(datasetID).then(commitRef => commitRef ?
-                                                            this.readValue(commitRef) : null));
+      datasets => datasets.get(datasetID).then(commitRef =>
+          commitRef ? this.readValue(commitRef.targetRef) : null));
   }
 
-  datasets(): Promise<NomsMap<string, Ref>> {
+  datasets(): Promise<NomsMap<string, RefValue<Struct>>> {
     return this._datasets;
   }
 
-  async _descendsFrom(commit: Struct, currentHeadRef: Ref): Promise<boolean> {
+  async _descendsFrom(commit: Struct, currentHeadRef: RefValue<Struct>): Promise<boolean> {
     let ancestors = commit.get('parents');
     while (!(await ancestors.has(currentHeadRef))) {
       if (ancestors.isEmpty()) {
@@ -171,9 +170,11 @@ export default class DataStore {
 
   async commit(datasetId: string, commit: Struct): Promise<DataStore> {
     const currentRootRefP = this.getRoot();
-    let currentDatasets = await this._datasetsFromRootRef(currentRootRefP);
+    const datasetsP = this._datasetsFromRootRef(currentRootRefP);
+    let currentDatasets = await (datasetsP:Promise<NomsMap>);
     const currentRootRef = await currentRootRefP;
-    const commitRef = this.writeValue(commit);
+    const types = getDatasTypes();
+    const commitRef = new RefValue(this.writeValue(commit), types.refOfCommitType);
 
     if (!currentRootRef.isEmpty()) {
       const currentHeadRef = await currentDatasets.get(datasetId);
@@ -197,10 +198,11 @@ export default class DataStore {
   }
 }
 
-async function getAncestors(commits: NomsSet<Ref>, store: DataStore): Promise<NomsSet<Ref>> {
+async function getAncestors(commits: NomsSet<RefValue<Struct>>, store: DataStore):
+    Promise<NomsSet<RefValue<Struct>>> {
   let ancestors = await newSet([], getDatasTypes().commitSetType);
   await commits.map(async (commitRef) => {
-    const commit = await store.readValue(commitRef);
+    const commit = await store.readValue(commitRef.targetRef);
     await commit.get('parents').map(async (ref) => ancestors = await ancestors.insert(ref));
   });
   return ancestors;
@@ -209,6 +211,7 @@ async function getAncestors(commits: NomsSet<Ref>, store: DataStore): Promise<No
 export function newCommit(value: valueOrPrimitive, parents: Array<Ref> = []):
     Promise<Struct> {
   const types = getDatasTypes();
-  return newSet(parents, types.commitSetType).then(parents =>
+  const parentRefs = parents.map(r => new RefValue(r, types.refOfCommitType));
+  return newSet(parentRefs, types.commitSetType).then(parents =>
       new Struct(types.commitType, types.commitTypeDef, {value,parents}));
 }

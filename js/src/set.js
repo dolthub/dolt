@@ -1,22 +1,22 @@
 // @flow
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
+import RefValue from './ref-value.js';
+import type DataStore from './data-store.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {valueOrPrimitive, Value} from './value.js'; // eslint-disable-line no-unused-vars
 import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
-import {compare} from './value.js';
-import {default as Ref, sha1Size} from './ref.js';
-import {equals, less} from './value.js';
+import {compare, equals, less} from './compare.js';
 import {getRefOfValueOrPrimitive} from './get-ref.js';
 import {invariant} from './assert.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
   newOrderedMetaSequenceChunkFn} from './meta-sequence.js';
 import {OrderedSequence, OrderedSequenceCursor,
   OrderedSequenceIterator} from './ordered-sequence.js';
-import {Type} from './type.js';
-import type DataStore from './data-store.js';
+import {setOfValueType, Type} from './type.js';
+import {sha1Size} from './ref.js';
 
 const setWindowSize = 1;
 const setPattern = ((1 << 6) | 0) - 1;
@@ -25,13 +25,13 @@ function newSetLeafChunkFn<T:valueOrPrimitive>(t: Type, ds: ?DataStore = null): 
   return (items: Array<T>) => {
     const setLeaf = new SetLeafSequence(ds, t, items);
 
-    let indexValue: ?(T | Ref) = null;
+    let indexValue: ?(T | RefValue) = null;
     if (items.length > 0) {
       const lastValue = items[items.length - 1];
       if (t.elemTypes[0].ordered) {
         indexValue = lastValue;
       } else {
-        indexValue = getRefOfValueOrPrimitive(lastValue, t.elemTypes[0]);
+        indexValue = new RefValue(getRefOfValueOrPrimitive(lastValue, t.elemTypes[0]));
       }
     }
 
@@ -53,7 +53,7 @@ function buildSetData<T>(t: Type, values: Array<any>): Array<T> {
   return values;
 }
 
-export function newSet<T:valueOrPrimitive>(values: Array<T>, type: Type):
+export function newSet<T:valueOrPrimitive>(values: Array<T>, type: Type = setOfValueType):
     Promise<NomsSet<T>> {
 
   return chunkSequence(null, buildSetData(type, values), 0, newSetLeafChunkFn(type),

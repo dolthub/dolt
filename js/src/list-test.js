@@ -3,16 +3,19 @@
 import {assert} from 'chai';
 import {suite} from 'mocha';
 
+import DataStore from './data-store.js';
 import MemoryStore from './memory-store.js';
+import RefValue from './ref-value.js';
+import Struct from './struct.js';
 import test from './async-test.js';
 import {calcSplices} from './edit-distance.js';
+import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
 import {flatten, flattenParallel} from './test-util.js';
 import {IndexedMetaSequence, MetaTuple} from './meta-sequence.js';
 import {invariant} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {ListLeafSequence, newList, NomsList} from './list.js';
-import {makeCompoundType, makePrimitiveType} from './type.js';
-import DataStore from './data-store.js';
+import {Package, registerPackage} from './package.js';
 
 const testListSize = 5000;
 const listOfNRef = 'sha1-11e947e8aacfda8e9052bb57e661da442b26c625';
@@ -44,6 +47,30 @@ suite('BuildList', () => {
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int64));
     const s = await newList(nums, tr);
     assert.strictEqual(s.ref.toString(), listOfNRef);
+    assert.strictEqual(testListSize, s.length);
+  });
+
+  test('list of ref, set of n numbers, length', async () => {
+    const nums = firstNNumbers(testListSize);
+
+    const structTypeDef = makeStructType('num', [
+      new Field('n', makePrimitiveType(Kind.Int64), false),
+    ], []);
+    const pkg = new Package([structTypeDef], []);
+    registerPackage(pkg);
+    const pkgRef = pkg.ref;
+    const structType = makeType(pkgRef, 0);
+    const refOfStructType = makeCompoundType(Kind.Ref, structType);
+    const tr = makeCompoundType(Kind.List, refOfStructType);
+
+    const refs = nums.map(n => {
+      const s = new Struct(structType, structTypeDef, {n});
+      const r = s.ref;
+      return new RefValue(r, refOfStructType);
+    });
+
+    const s = await newList(refs, tr);
+    assert.strictEqual(s.ref.toString(), 'sha1-324e4faa5d80df9942627fe9848e0689261cbbc5');
     assert.strictEqual(testListSize, s.length);
   });
 
@@ -213,14 +240,16 @@ suite('ListLeafSequence', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Value));
-    const r1 = ds.writeValue('x');
-    const r2 = ds.writeValue('a');
-    const r3 = ds.writeValue('b');
+    const st = makePrimitiveType(Kind.String);
+    const refOfSt = makeCompoundType(Kind.Ref, st);
+    const r1 = new RefValue(ds.writeValue('x'), refOfSt);
+    const r2 = new RefValue(ds.writeValue('a'), refOfSt);
+    const r3 = new RefValue(ds.writeValue('b'), refOfSt);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
-    assert.isTrue(r1.equals(l.chunks[0]));
-    assert.isTrue(r2.equals(l.chunks[1]));
-    assert.isTrue(r3.equals(l.chunks[2]));
+    assert.isTrue(r1.targetRef.equals(l.chunks[0]));
+    assert.isTrue(r2.targetRef.equals(l.chunks[1]));
+    assert.isTrue(r3.targetRef.equals(l.chunks[2]));
   });
 });
 

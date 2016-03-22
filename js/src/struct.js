@@ -1,13 +1,14 @@
 // @flow
 
 import Ref from './ref.js';
+import type {valueOrPrimitive} from './value.js';
 import {Field, StructDesc, Type} from './type.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitive} from './primitives.js';
-import {ValueBase} from './value.js';
 import {Kind} from'./noms-kind.js';
+import {ValueBase} from './value.js';
 
-type StructData = {[key: string]: any};
+type StructData = {[key: string]: valueOrPrimitive};
 
 export default class Struct extends ValueBase {
   desc: StructDesc;
