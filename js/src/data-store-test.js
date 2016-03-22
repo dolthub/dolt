@@ -9,6 +9,8 @@ import {assert} from 'chai';
 import {default as DataStore, getDatasTypes, newCommit} from './data-store.js';
 import {invariant, notNull} from './assert.js';
 import {newMap} from './map.js';
+import {uint8Type, stringType, makeCompoundType} from './type.js';
+import {Kind} from './noms-kind.js';
 
 suite('DataStore', () => {
   test('access', async () => {
@@ -159,5 +161,31 @@ suite('DataStore', () => {
     assert.isTrue(fooHead.equals(commit));
     const barHead = await ds.head('bar');
     assert.isNull(barHead);
+  });
+
+  test('writeValue optional type', async () => {
+    const ds = new DataStore(new MemoryStore());
+
+    const r1 = ds.writeValue('hello');
+    const r2 = ds.writeValue(false);
+
+    assert.throws(() => {
+      ds.writeValue(1);
+    });
+
+    const r3 = ds.writeValue(2, uint8Type);
+
+    const v1 = await ds.readValue(r1);
+    assert.equal('hello', v1);
+    const v2 = await ds.readValue(r2);
+    assert.equal(false, v2);
+    const v3 = await ds.readValue(r3);
+    assert.equal(2, v3);
+
+    const mt = makeCompoundType(Kind.Map, uint8Type, stringType);
+    const m = await newMap([3, 'b', 4, 'c'], mt);
+    const r4 = ds.writeValue(m);
+    const v4 = await ds.readValue(r4);
+    assert.isTrue(m.equals(v4));
   });
 });
