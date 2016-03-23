@@ -4,7 +4,7 @@ import {Collection} from './collection.js';
 import {IndexedSequence} from './indexed-sequence.js';
 import {SequenceCursor} from './sequence.js';
 import {invariant} from './assert.js';
-import type {ChunkStore} from './chunk-store.js';
+import type DataStore from './data-store.js';
 import {blobType} from './type.js';
 import {
   MetaTuple,
@@ -61,7 +61,7 @@ export class BlobReader {
 }
 
 export class BlobLeafSequence extends IndexedSequence<uint8> {
-  constructor(cs: ?ChunkStore, items: Uint8Array) {
+  constructor(cs: ?DataStore, items: Uint8Array) {
     // $FlowIssue: The super class expects Array<T> but we sidestep that.
     super(cs, blobType, items);
   }
@@ -74,7 +74,7 @@ export class BlobLeafSequence extends IndexedSequence<uint8> {
 const blobWindowSize = 64;
 const blobPattern = ((1 << 13) | 0) - 1;
 
-function newBlobLeafChunkFn(cs: ?ChunkStore = null): makeChunkFn {
+function newBlobLeafChunkFn(cs: ?DataStore = null): makeChunkFn {
   return (items: Array<uint8>) => {
     const blobLeaf = new BlobLeafSequence(cs, new Uint8Array(items));
     const mt = new MetaTuple(blobLeaf, items.length);

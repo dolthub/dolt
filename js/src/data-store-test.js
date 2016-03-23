@@ -1,8 +1,6 @@
 // @flow
 
 import {suite, test} from 'mocha';
-
-import Chunk from './chunk.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 import RefValue from './ref-value.js';
@@ -12,6 +10,8 @@ import {invariant, notNull} from './assert.js';
 import {newMap} from './map.js';
 import {uint8Type, stringType, makeCompoundType} from './type.js';
 import {Kind} from './noms-kind.js';
+import {getRef} from './get-ref.js';
+import {encodeNomsValue} from './encode.js';
 
 suite('DataStore', () => {
   test('access', async () => {
@@ -19,19 +19,13 @@ suite('DataStore', () => {
     const ds = new DataStore(ms);
     const input = 'abc';
 
-    const c = Chunk.fromString(input);
-    let c1 = await ds.get(c.ref);
-    assert.isTrue(c1.isEmpty());
-
-    let has = await ds.has(c.ref);
-    assert.isFalse(has);
+    const c = encodeNomsValue(input, stringType);
+    const v1 = await ds.readValue(c.ref);
+    assert.equal(null, v1);
 
     ms.put(c);
-    c1 = await ds.get(c.ref);
-    assert.isFalse(c1.isEmpty());
-
-    has = await ds.has(c.ref);
-    assert.isTrue(has);
+    const v2 = await ds.readValue(c.ref);
+    assert.equal('abc', v2);
   });
 
   test('commit', async () => {
@@ -188,5 +182,47 @@ suite('DataStore', () => {
     const r4 = ds.writeValue(m);
     const v4 = await ds.readValue(r4);
     assert.isTrue(m.equals(v4));
+  });
+
+  test('caching', async () => {
+    const ms = new MemoryStore();
+    const ds = new DataStore(ms, 1e6);
+
+    const r1 = ds.writeValue('hello');
+    (ms: any).get = (ms: any).put = () => { assert.fail('unreachable'); };
+    const v1 = await ds.readValue(r1);
+    assert.equal(v1, 'hello');
+    const r2 = ds.writeValue('hello');
+    assert.isTrue(r1.equals(r2));
+  });
+
+  test('caching eviction', async () => {
+    const ms = new MemoryStore();
+    const ds = new DataStore(ms, 15);
+
+    const r1 = ds.writeValue('hello');
+    const r2 = ds.writeValue('world');
+    (ms: any).get = () => { throw new Error(); };
+    const v2 = await ds.readValue(r2);
+    assert.equal(v2, 'world');
+    let ex;
+    try {
+      await ds.readValue(r1);
+    } catch (e) {
+      ex = e;
+    }
+    assert.instanceOf(ex, Error);
+  });
+
+  test('caching has', async () => {
+    const ms = new MemoryStore();
+    const ds = new DataStore(ms, 1e6);
+
+    const r1 = getRef('hello', stringType);
+    const v1 = await ds.readValue(r1);
+    assert.equal(v1, null);
+    (ms: any).get = (ms: any).has = () => { assert.fail('unreachable'); };
+    const v2 = await ds.readValue(r1);
+    assert.equal(v2, null);
   });
 });

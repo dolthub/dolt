@@ -488,11 +488,11 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const root = Ref.parse('sha1-c3680a063b73ac42c3075110108a48a91007abf7');
-    ds.put(Chunk.fromString('t [15,11,16,21,"sha1-7546d804d845125bc42669c7a4c3f3fb909eca29","0",' +
+    ms.put(Chunk.fromString('t [15,11,16,21,"sha1-7546d804d845125bc42669c7a4c3f3fb909eca29","0",' +
         'false,["counter","sha1-a6fffab4e12b49d57f194f0d3add9f6623a13e19"]]')); // root
-    ds.put(Chunk.fromString('t [22,[19,"Commit",["value",13,false,"parents",17,[16,[21,' +
+    ms.put(Chunk.fromString('t [22,[19,"Commit",["value",13,false,"parents",17,[16,[21,' +
         '"sha1-0000000000000000000000000000000000000000","0"]],false],[]],[]]')); // datas package
-    ds.put(Chunk.fromString('t [21,"sha1-4da2f91cdbba5a7c91b383091da45e55e16d2152","0",4,"1",' +
+    ms.put(Chunk.fromString('t [21,"sha1-4da2f91cdbba5a7c91b383091da45e55e16d2152","0",4,"1",' +
         'false,[]]')); // commit
 
     const rootMap = await ds.readValue(root);

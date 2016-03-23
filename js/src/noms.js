@@ -49,7 +49,6 @@ export {
   UnresolvedDesc,
 } from './type.js';
 export {equals, less} from './compare.js';
-export {default as CacheStore} from './cache-store.js';
 
 export type {AsyncIteratorResult} from './async-iterator.js';
 export type {ChunkStore} from './chunk-store.js';

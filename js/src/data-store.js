@@ -74,36 +74,22 @@ export function getDatasTypes(): DatasTypes {
   return datasTypes;
 }
 
+interface Cache<T> {  // eslint-disable-line no-undef
+  entry(ref: Ref): ?CacheEntry<T>;  // eslint-disable-line no-undef
+  get(ref: Ref): ?T;  // eslint-disable-line no-undef
+  add(ref: Ref, size: number, value: T): void;  // eslint-disable-line no-undef
+}
+
 export default class DataStore {
   _cs: ChunkStore;
   _datasets: Promise<NomsMap<string, RefValue<Struct>>>;
+  _valueCache: Cache<Promise<?valueOrPrimitive>>;
 
-  constructor(cs: ChunkStore) {
+  constructor(cs: ChunkStore, cacheSize: number = 0) {
     this._cs = cs;
-    this._datasets = this._datasetsFromRootRef(this.getRoot());
+    this._datasets = this._datasetsFromRootRef(cs.getRoot());
+    this._valueCache = cacheSize > 0 ? new SizeCache(cacheSize) : new NoopCache();
   }
-
-  getRoot(): Promise<Ref> {
-    return this._cs.getRoot();
-  }
-
-  updateRoot(current: Ref, last: Ref): Promise<boolean> {
-    return this._cs.updateRoot(current, last);
-  }
-
-  get(ref: Ref): Promise<Chunk> {
-    return this._cs.get(ref);
-  }
-
-  has(ref: Ref): Promise<boolean> {
-    return this._cs.has(ref);
-  }
-
-  put(c: Chunk): void {
-    this._cs.put(c);
-  }
-
-  close() {}
 
   _datasetsFromRootRef(rootRef: Promise<Ref>): Promise<NomsMap<string, RefValue<Struct>>> {
     return rootRef.then(rootRef => {
@@ -137,12 +123,19 @@ export default class DataStore {
   }
 
   async readValue(ref: Ref): Promise<any> {
-    const chunk = await this._cs.get(ref);
+    const entry = this._valueCache.entry(ref);
+    if (entry) {
+      return entry.value;
+    }
+    const chunk: Chunk = await this._cs.get(ref);
     if (chunk.isEmpty()) {
+      this._valueCache.add(ref, 0, Promise.resolve(null));
       return null;
     }
 
-    return decodeNomsValue(chunk, this);
+    const p = decodeNomsValue(chunk, this);
+    this._valueCache.add(ref, chunk.data.length, p);
+    return p;
   }
 
   writeValue(v: any, t: ?Type = undefined): Ref {
@@ -164,12 +157,18 @@ export default class DataStore {
     }
     const chunk = encodeNomsValue(v, t, this);
     invariant(!chunk.isEmpty());
-    this.put(chunk);
-    return chunk.ref;
+    const {ref} = chunk;
+    const entry = this._valueCache.entry(ref);
+    if (entry && entry.present) {
+      return ref;
+    }
+    this._cs.put(chunk);
+    this._valueCache.add(ref, chunk.data.length, Promise.resolve(v));
+    return ref;
   }
 
   async commit(datasetId: string, commit: Struct): Promise<DataStore> {
-    const currentRootRefP = this.getRoot();
+    const currentRootRefP = this._cs.getRoot();
     const datasetsP = this._datasetsFromRootRef(currentRootRefP);
     let currentDatasets = await (datasetsP:Promise<NomsMap>);
     const currentRootRef = await currentRootRefP;
@@ -190,7 +189,7 @@ export default class DataStore {
 
     currentDatasets = await currentDatasets.set(datasetId, commitRef);
     const newRootRef = this.writeValue(currentDatasets);
-    if (await this.updateRoot(newRootRef, currentRootRef)) {
+    if (await this._cs.updateRoot(newRootRef, currentRootRef)) {
       return new DataStore(this._cs);
     }
 
@@ -214,4 +213,79 @@ export function newCommit(value: valueOrPrimitive, parents: Array<Ref> = []):
   const parentRefs = parents.map(r => new RefValue(r, types.refOfCommitType));
   return newSet(parentRefs, types.commitSetType).then(parents =>
       new Struct(types.commitType, types.commitTypeDef, {value,parents}));
+}
+
+class CacheEntry<T> {
+  size: number;
+  value: ?T;
+
+  constructor(size: number, value: ?T) {
+    this.size = size;
+    this.value = value;
+  }
+
+  get present(): boolean {
+    return this.value !== null;
+  }
+}
+
+/**
+ * This uses a Map as an LRU cache. It uses the behavior that iteration of keys in a Map is done in
+ * insertion order and any time a value is checked it is taken out and reinserted which puts it last
+ * in the iteration.
+ */
+class SizeCache<T> {
+  _size: number;
+  _maxSize: number;
+  _cache: Map<string, CacheEntry<T>>;
+
+  constructor(size: number) {
+    this._maxSize = size;
+    this._cache = new Map();
+    this._size = 0;
+  }
+
+  entry(ref: Ref): ?CacheEntry {
+    const key = ref.toString();
+    const entry = this._cache.get(key);
+    if (!entry) {
+      return undefined;
+    }
+    this._cache.delete(key);
+    this._cache.set(key, entry);
+    return entry;
+  }
+
+  get(ref: Ref): ?T {
+    const entry = this.entry(ref);
+    return entry ? entry.value : undefined;
+  }
+
+  add(ref: Ref, size: number, value: ?T) {
+    const key = ref.toString();
+    if (this._cache.has(key)) {
+      this._cache.delete(key);
+    } else {
+      this._size += size;
+    }
+    this._cache.set(key, new CacheEntry(size, value));
+
+    if (this._size > this._maxSize) {
+      for (const [key, {size}] of this._cache) {
+        if (this._size <= this._maxSize) {
+          break;
+        }
+        this._cache.delete(key);
+        this._size -= size;
+      }
+    }
+  }
+}
+
+class NoopCache<T> {
+  entry(ref: Ref): ?CacheEntry {}  // eslint-disable-line no-unused-vars
+
+  get(ref: Ref): ?T {}  // eslint-disable-line no-unused-vars
+
+  add(ref: Ref, size: number, value: T) {}  // eslint-disable-line no-unused-vars
 }
