@@ -349,7 +349,7 @@ export class JsonArrayWriter {
     }
 
     if (s.hasUnion) {
-      const unionField = notNull(s.unionField);
+      const unionField = notNull(desc.union[s.unionIndex]);
       this.writeInt(s.unionIndex);
       this.writeValue(s.get(unionField.name), unionField.t, pkg);
     }

@@ -6,7 +6,6 @@ import Struct from './struct.js';
 import {assert} from 'chai';
 import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
 import {Kind} from './noms-kind.js';
-import {notNull} from './assert.js';
 import {Package, registerPackage} from './package.js';
 import {suite, test} from 'mocha';
 import DataStore from './data-store.js';
@@ -178,25 +177,6 @@ suite('Struct', () => {
     assert.isTrue(s1.equals(s3));
   });
 
-  test('struct forEach', () => {
-    const field1 = new Field('b', makePrimitiveType(Kind.Bool), false);
-    const field2 = new Field('o', makePrimitiveType(Kind.String), false);
-    const typeDef = makeStructType('S3', [field1, field2], []);
-
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
-
-    const s1 = new Struct(type, typeDef, {b: true, o: 'hi'});
-    const expect = [true, 'b', field1, 'hi', 'o', field2];
-    s1.forEach((v, k, f) => {
-      assert.strictEqual(expect.shift(), v);
-      assert.strictEqual(expect.shift(), k);
-      assert.strictEqual(expect.shift(), f);
-    });
-  });
-
   test('struct set union', () => {
     const typeDef = makeStructType('S3', [], [
       new Field('b', makePrimitiveType(Kind.Bool), false),
@@ -210,12 +190,12 @@ suite('Struct', () => {
 
     const s1 = new Struct(type, typeDef, {b: true});
     assert.strictEqual(0, s1.unionIndex);
-    assert.strictEqual(true, s1.get(notNull(s1.unionField).name));
+    assert.strictEqual(true, s1.unionValue);
     assert.isFalse(s1.has('s'));
 
     const s2 = s1.set('s', 'hi');
     assert.strictEqual(1, s2.unionIndex);
-    assert.strictEqual('hi', s2.get(notNull(s2.unionField).name));
+    assert.strictEqual('hi', s2.unionValue);
     assert.isFalse(s2.has('b'));
 
     const s3 = s2.set('b', true);
