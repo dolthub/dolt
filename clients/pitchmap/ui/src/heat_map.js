@@ -1,8 +1,7 @@
 // @flow
 
 import React from 'react';
-import {NomsList, notNull, readValue, Ref} from '@attic/noms';
-import type {ChunkStore} from '@attic/noms';
+import {DataStore, NomsList, notNull, RefValue} from '@attic/noms';
 
 const IMAGE_WIDTH_PX = 286;
 const IMAGE_HEIGHT_PX = 324;
@@ -18,8 +17,8 @@ function feetToPixels(f: number): number {
 }
 
 type Props = {
-  pitchListRefP: Promise<?Ref>,
-  chunkStore: ChunkStore
+  pitchListRefP: Promise<?RefValue>,
+  datastore: DataStore
 };
 
 type Point = {
@@ -50,7 +49,7 @@ export default class HeatMap extends React.Component<void, Props, State> {
     }
 
     const pitchListRef = notNull(await this.props.pitchListRefP);
-    const pitchList = await readValue(pitchListRef, this.props.chunkStore);
+    const pitchList = await this.props.datastore.readValue(pitchListRef.targetRef);
 
     if (pitchList instanceof NomsList) {
       const pointList = [];
@@ -80,20 +79,22 @@ export default class HeatMap extends React.Component<void, Props, State> {
       right: 0,
       top: 0,
     };
-    return <div style={ {
-      position: 'relative',
-      overflow: 'hidden',
-      width: IMAGE_WIDTH_PX,
-      height: IMAGE_HEIGHT_PX,
-    } }>
-      <img src="background.jpg" style={fillStyle}/>
-      <div style={fillStyle}>
-        {points}
+    return (
+      <div style={{
+        position: 'relative',
+        overflow: 'hidden',
+        width: IMAGE_WIDTH_PX,
+        height: IMAGE_HEIGHT_PX,
+      }}>
+        <img src="background.jpg" style={fillStyle}/>
+        <div style={fillStyle}>
+          {points}
+        </div>
       </div>
-    </div>;
+    );
   }
 
-  getPoints(): Array<any> {
+  getPoints(): Array<React.Element> {
     return this.state.pointList.map(p => <div style={{
       position: 'absolute',
       left: p.x,

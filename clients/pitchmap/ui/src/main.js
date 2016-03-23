@@ -3,7 +3,7 @@
 import HeatMap from './heat_map.js';
 import React from 'react';
 import ReactDOM from 'react-dom';
-import {DataStore, HttpStore, invariant, NomsMap, Ref} from '@attic/noms';
+import {DataStore, HttpStore, invariant, NomsMap, RefValue} from '@attic/noms';
 
 let datastore: DataStore;
 
@@ -20,10 +20,10 @@ window.addEventListener('load', async () => {
   datastore = new DataStore(new HttpStore(nomsServer));
   const head = await datastore.head(datasetId);
   invariant(head);
-  const pitchersMap: NomsMap<string, Ref> = head.get('value');
+  const pitchersMap: NomsMap<string, RefValue> = head.get('value');
   invariant(pitchersMap);
   const pitchers = [];
-  await pitchersMap.forEach((ref, pitcher) => {
+  await pitchersMap.forEach((rv, pitcher) => {
     pitchers.push(pitcher);
   });
 
@@ -32,7 +32,7 @@ window.addEventListener('load', async () => {
 });
 
 type Props = {
-  pitchersMap: NomsMap<string, Ref>,
+  pitchersMap: NomsMap<string, RefValue>,
   pitchers: Array<string>
 };
 
@@ -65,12 +65,12 @@ class PitcherList extends React.Component<void, Props, State> {
       <select onChange={onChangePitcher} defaultValue={currentPitcher}>{
         this.props.pitchers.map(pitcher => <option key={pitcher} value={pitcher}>{pitcher}</option>)
       }</select>
-      <HeatMap key={currentPitcher} pitchListRefP={pitchListRefP} chunkStore={datastore}/>
+      <HeatMap key={currentPitcher} pitchListRefP={pitchListRefP} datastore={datastore}/>
     </div>;
   }
 }
 
-function renderPitchersMap(map: NomsMap<string, Ref>, pitchers: Array<string>) {
+function renderPitchersMap(map: NomsMap<string, RefValue>, pitchers: Array<string>) {
   const renderNode = document.getElementById('heatmap');
   ReactDOM.render(<PitcherList pitchersMap={map} pitchers={pitchers}/>, renderNode);
 }
