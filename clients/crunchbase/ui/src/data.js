@@ -10,12 +10,11 @@ import {
   newSet,
   NomsMap,
   NomsSet,
-  readValue,
-  Ref,
+  RefValue,
   registerPackage,
   Struct,
 } from '@attic/noms';
-import type {ChunkStore, Package} from '@attic/noms';
+import type {Package} from '@attic/noms';
 
 type RoundTypeEnum = 0 | 1 | 2;
 const Seed = 0;
@@ -46,14 +45,14 @@ export default class DataManager {
   _datastore: DataStore;
   _keyClass: any;
   _quarterClass: any;
-  _datasetP: ?Promise<NomsMap<Ref, NomsSet<Ref>>>;
+  _datasetP: ?Promise<NomsMap<RefValue, NomsSet<RefValue>>>;
   _packageP: ?Promise<Package>;
 
-  _categorySetP: ?Promise<NomsSet<Ref>>;
-  _timeSetP: ?Promise<NomsSet<Ref>>;
-  _seedSetP: ?Promise<NomsSet<Ref>>;
-  _seriesASetP: ?Promise<NomsSet<Ref>>;
-  _seriesBSetP: ?Promise<NomsSet<Ref>>;
+  _categorySetP: ?Promise<NomsSet<RefValue>>;
+  _timeSetP: ?Promise<NomsSet<RefValue>>;
+  _seedSetP: ?Promise<NomsSet<RefValue>>;
+  _seriesASetP: ?Promise<NomsSet<RefValue>>;
+  _seriesBSetP: ?Promise<NomsSet<RefValue>>;
 
   _data: ?DataArray;
   _time: ?TimeOption;
@@ -144,8 +143,8 @@ export default class DataManager {
             this._timeSetP, this._categorySetP]);
 
     const store = this._datastore;
-    const getAmountRaised = (r: Ref): Promise<number> =>
-        readValue(r, store).then(round => round.get('RaisedAmountUsd'));
+    const getAmountRaised = (r: RefValue): Promise<number> =>
+        store.readValue(r.targetRef).then(round => round.get('RaisedAmountUsd'));
 
     const [seedData, seriesAData, seriesBData] = await Promise.all([
       seedSet.intersect(categorySet, timeSet).then(set => set.map(getAmountRaised)),
@@ -169,7 +168,7 @@ export default class DataManager {
     ];
   }
 
-  async _getKeyRef(p: KeyParam): Promise<Ref> {
+  async _getKeyRef(p: KeyParam): Promise<RefValue> {
     const Key = await this._getKeyClass();
     let k;
     if (p.Quarter !== undefined) {
@@ -178,10 +177,10 @@ export default class DataManager {
     } else {
       k = new Key(p);
     }
-    return k.ref;
+    return new RefValue(k.ref, makeCompoundType(Kind.Ref, k.type));
   }
 
-  async _getSetOfRounds(p: KeyParam): Promise<NomsSet<Ref>> {
+  async _getSetOfRounds(p: KeyParam): Promise<NomsSet<RefValue>> {
     const r = await this._getKeyRef(p);
     invariant(this._datasetP);
     const map = await this._datasetP;
@@ -204,14 +203,14 @@ let setType = makeCompoundType(Kind.Set, makeCompoundType(Kind.Ref, makePrimitiv
 /**
  * Loads the first key in the index and gets the package from the type.
  */
-async function getKeyPackage(index: NomsMap<Ref, NomsSet<Ref>>, store: ChunkStore):
+async function getKeyPackage(index: NomsMap<RefValue, NomsSet<RefValue>>, store: DataStore):
     Promise<Package> {
   const kv = await index.first();
   invariant(kv);
   const ref = kv[0];
-  const key: Struct = await readValue(ref, store);
+  const key: Struct = await store.readValue(ref.targetRef);
   invariant(key);
-  const pkg: Package = await readValue(key.type.packageRef, store);
+  const pkg: Package = await store.readValue(key.type.packageRef);
   invariant(pkg);
   registerPackage(pkg);
   return pkg;
