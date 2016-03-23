@@ -8,6 +8,8 @@
     "camelcase": 2,
     "comma-dangle": [2, "always-multiline"],
     "eqeqeq": 2,
+    "flow-vars/define-flow-type": 1,
+    "flow-vars/use-flow-type": 1,
     "indent": [2, 2, {"SwitchCase": 1}],
     "linebreak-style": [2, "unix"],
     "max-len": [2, 100, 8],
@@ -38,6 +40,7 @@
     "experimentalObjectRestSpread": true
   },
   "plugins": [
+    "flow-vars",
     "react"
   ]
 }
