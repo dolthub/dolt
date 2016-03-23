@@ -11,6 +11,12 @@ import {RemoteStore} from './remote-store.js';
 
 const HTTP_STATUS_CONFLICT = 409;
 
+type RpcStrings = {
+  getRefs: string,
+  postRefs: string,
+  root: string,
+};
+
 const readBatchOptions = {
   method: 'POST',
   headers: {
@@ -19,25 +25,21 @@ const readBatchOptions = {
 };
 
 export default class HttpStore extends RemoteStore {
-  _rpc: {
-    getRefs: string,
-    postRefs: string,
-    root: string,
-  };
+  _rpc: RpcStrings;
   _rootOptions: FetchOptions;
-  _readBatchOptions: FetchOptions;
 
   constructor(url: string, maxReads: number = 3, maxWrites: number = 3,
       fetchOptions: FetchOptions = {}) {
-    super(maxReads, maxWrites);
-
-    this._rpc = {
+    const rpc = {
       getRefs: url + '/getRefs/',
       postRefs: url + '/postRefs/',
       root: url + '/root/',
     };
+
+    const mergedOptions = mergeOptions(readBatchOptions, fetchOptions);
+    super(maxReads, maxWrites, new Delegate(rpc, mergedOptions));
+    this._rpc = rpc;
     this._rootOptions = fetchOptions;
-    this._readBatchOptions = this._mergeOptions(readBatchOptions, fetchOptions);
   }
 
   async getRoot(): Promise<Ref> {
@@ -45,29 +47,26 @@ export default class HttpStore extends RemoteStore {
     return Ref.parse(refStr);
   }
 
-  async internalUpdateRoot(current: Ref, last: Ref): Promise<boolean> {
-    const params = `?current=${current}&last=${last}`;
-    try {
-      await fetchText(this._rpc.root + params, {method: 'POST'});
-      return true;
-    } catch (ex) {
-      if (ex === HTTP_STATUS_CONFLICT) {
-        return false;
-      }
-      throw ex;
-    }
-  }
-
-  has(ref: Ref): Promise<boolean> {  // eslint-disable-line
+  has(ref: Ref): Promise<boolean> {  // eslint-disable-line no-unused-vars
     throw new Error('not implemented');
   }
+}
 
-  _mergeOptions(baseOpts: FetchOptions, opts: FetchOptions): FetchOptions {
-    const hdrs = Object.assign({}, opts.headers, baseOpts.headers);
-    return Object.assign({}, opts, baseOpts, {headers: hdrs});
+function mergeOptions(baseOpts: FetchOptions, opts: FetchOptions): FetchOptions {
+  const hdrs = Object.assign({}, opts.headers, baseOpts.headers);
+  return Object.assign({}, opts, baseOpts, {headers: hdrs});
+}
+
+class Delegate {
+  _rpc: RpcStrings;
+  _readBatchOptions: FetchOptions;
+
+  constructor(rpc: RpcStrings, readBatchOptions: FetchOptions) {
+    this._rpc = rpc;
+    this._readBatchOptions = readBatchOptions;
   }
 
-  async internalReadBatch(reqs: UnsentReadMap): Promise<void> {
+  async readBatch(reqs: UnsentReadMap): Promise<void> {
     const refStrs = Object.keys(reqs);
     const body = refStrs.map(r => 'ref=' + r).join('&');
     const opts = Object.assign(this._readBatchOptions, {body: body});
@@ -86,9 +85,22 @@ export default class HttpStore extends RemoteStore {
     Object.keys(reqs).forEach(refStr => reqs[refStr](emptyChunk));
   }
 
-  async internalWriteBatch(reqs: WriteMap): Promise<void> {
+  async writeBatch(reqs: WriteMap): Promise<void> {
     const chunks = Object.keys(reqs).map(refStr => reqs[refStr]);
     const body = serialize(chunks);
     await fetchText(this._rpc.postRefs, {method: 'POST', body});
+  }
+
+  async updateRoot(current: Ref, last: Ref): Promise<boolean> {
+    const params = `?current=${current}&last=${last}`;
+    try {
+      await fetchText(this._rpc.root + params, {method: 'POST'});
+      return true;
+    } catch (ex) {
+      if (ex === HTTP_STATUS_CONFLICT) {
+        return false;
+      }
+      throw ex;
+    }
   }
 }
