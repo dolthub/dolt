@@ -12,7 +12,7 @@ type StructData = {[key: string]: valueOrPrimitive};
 
 export default class Struct extends ValueBase {
   desc: StructDesc;
-  unionField: ?Field;
+  _unionField: ?Field;
 
   _data: StructData;
   typeDef: Type;
@@ -30,13 +30,13 @@ export default class Struct extends ValueBase {
     this.desc = desc;
 
     this._data = data;
-    this.unionField = validate(this);
+    this._unionField = validate(this);
   }
 
   get chunks(): Array<Ref> {
     const chunks = [];
     chunks.push(...this.type.chunks);
-    this.forEach(v => {
+    forEach(this, this._unionField, v => {
       if (!isPrimitive(v)) {
         chunks.push(...v.chunks);
       }
@@ -44,16 +44,16 @@ export default class Struct extends ValueBase {
     return chunks;
   }
 
-  get fields(): Array<Field> {
-    return this.desc.fields;
-  }
-
   get hasUnion(): boolean {
     return this.desc.union.length > 0;
   }
 
   get unionIndex(): number {
-    return this.desc.union.indexOf(notNull(this.unionField));
+    return this.desc.union.indexOf(notNull(this._unionField));
+  }
+
+  get unionValue(): valueOrPrimitive {
+    return this._data[notNull(this._unionField).name];
   }
 
   has(key: string): boolean {
@@ -68,7 +68,7 @@ export default class Struct extends ValueBase {
     let [f, isUnion] = findField(this.desc, key); // eslint-disable-line prefer-const
     f = notNull(f);
 
-    const oldUnionField: ?Field = isUnion && f !== this.unionField ? this.unionField : null;
+    const oldUnionField: ?Field = isUnion && f !== this._unionField ? this._unionField : null;
 
     const data = Object.create(null);
     Object.keys(this._data).forEach(f => {
@@ -79,19 +79,6 @@ export default class Struct extends ValueBase {
 
     data[key] = value;
     return new Struct(this.type, this.typeDef, data);
-  }
-
-  forEach(callbackfn: (value: any, index: string, field?: Field) => void): void {
-    this.desc.fields.forEach(field => {
-      const fieldValue = this._data[field.name];
-      if (fieldValue !== undefined) {
-        callbackfn(this._data[field.name], field.name, field);
-      }
-    });
-
-    if (this.unionField) {
-      callbackfn(this._data[this.unionField.name], this.unionField.name, this.unionField);
-    }
   }
 }
 
@@ -139,5 +126,20 @@ function validate(s: Struct): ?Field {
   } else {
     invariant(dataCount === 0);
     return null;
+  }
+}
+
+function forEach(struct: Struct,
+                 unionField: ?Field,
+                 callbackfn: (value: any, index: string, field?: Field) => void): void {
+  struct.desc.fields.forEach(field => {
+    const fieldValue = struct._data[field.name];
+    if (fieldValue !== undefined) {
+      callbackfn(struct._data[field.name], field.name, field);
+    }
+  });
+
+  if (unionField) {
+    callbackfn(struct._data[unionField.name], unionField.name, unionField);
   }
 }
