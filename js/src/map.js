@@ -1,6 +1,8 @@
 // @flow
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
+import RefValue from './ref-value.js';
+import type DataStore from './data-store.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {AsyncIterator} from './async-iterator.js';
@@ -11,12 +13,11 @@ import {default as Ref, sha1Size} from './ref.js';
 import {getRefOfValueOrPrimitive} from './get-ref.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
+import {mapOfValueType, Type} from './type.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
   newOrderedMetaSequenceChunkFn} from './meta-sequence.js';
 import {OrderedSequence, OrderedSequenceCursor,
   OrderedSequenceIterator} from './ordered-sequence.js';
-import {mapOfValueType, Type} from './type.js';
-import type DataStore from './data-store.js';
 
 export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
   key: K,
@@ -30,13 +31,13 @@ function newMapLeafChunkFn(t: Type, ds: ?DataStore = null): makeChunkFn {
   return (items: Array<MapEntry>) => {
     const mapLeaf = new MapLeafSequence(ds, t, items);
 
-    let indexValue: ?(MapEntry | Ref) = null;
+    let indexValue: ?valueOrPrimitive = null;
     if (items.length > 0) {
       const lastValue = items[items.length - 1];
       if (t.elemTypes[0].ordered) {
         indexValue = lastValue.key;
       } else {
-        indexValue = getRefOfValueOrPrimitive(lastValue.key, t.elemTypes[0]);
+        indexValue = new RefValue(getRefOfValueOrPrimitive(lastValue.key, t.elemTypes[0]));
       }
     }
 
