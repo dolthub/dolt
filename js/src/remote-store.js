@@ -9,8 +9,7 @@ export type UnsentReadMap = { [key: string]: (c: Chunk) => void };
 
 export type WriteMap = { [key: string]: Chunk };
 
-// https://github.com/babel/babel-eslint/issues/279
-interface Delegate {  // eslint-disable-line no-undef
+interface Delegate {
   readBatch(reqs: UnsentReadMap): Promise<void>;
   writeBatch(reqs: WriteMap): Promise<void>;
   updateRoot(current: Ref, last: Ref): Promise<boolean>;
@@ -30,9 +29,9 @@ export class RemoteStore {
   _maxWrites: number;
   _allWritesFinishedFn: ?() => void;
   _canUpdateRoot: Promise<void>;
-  _delegate: Delegate;  // eslint-disable-line no-undef
+  _delegate: Delegate;
 
-  constructor(maxReads: number, maxWrites: number, delegate: Delegate) {  // eslint-disable-line
+  constructor(maxReads: number, maxWrites: number, delegate: Delegate) {
     this._pendingReads = Object.create(null);
     this._unsentReads = null;
     this._readScheduled = false;
