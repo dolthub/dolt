@@ -93,6 +93,24 @@ func getTestRefToValueOrderSet(scale int) testSet {
 	}, refType)
 }
 
+func TestCompoundSetChunks(t *testing.T) {
+	assert := assert.New(t)
+
+	doTest := func(ts testSet) {
+		vs := NewTestValueStore()
+		set := ts.toCompoundSet()
+		set2chunks := vs.ReadValue(vs.WriteValue(set)).(compoundSet).Chunks()
+		for i, r := range set.Chunks() {
+			assert.True(r.Type().Equals(set2chunks[i].Type()), "%s != %s", r.Type().Describe(), set2chunks[i].Type().Describe())
+		}
+	}
+
+	doTest(getTestNativeOrderSet(16))
+	doTest(getTestRefValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2))
+	doTest(getTestRefToValueOrderSet(2))
+}
+
 func TestCompoundSetHas(t *testing.T) {
 	assert := assert.New(t)
 
