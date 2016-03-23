@@ -5,7 +5,7 @@ import type {primitive} from './primitives.js';
 import {ensureRef} from './get-ref.js';
 import {Type} from './type.js';
 
-export type Value = {
+export interface Value {
   ref: Ref;
   equals(other: Value): boolean;
   less(other: Value): boolean;
@@ -35,6 +35,4 @@ export class ValueBase {
   }
 }
 
-export type valueOrPrimitive = Value | primitive;
-
-
+export type valueOrPrimitive = primitive | Value;
