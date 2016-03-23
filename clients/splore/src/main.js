@@ -3,9 +3,22 @@
 import Layout from './layout.js';
 import React from 'react'; // eslint-disable-line no-unused-vars
 import ReactDOM from 'react-dom';
-import {HttpStore, invariant, IndexedMetaSequence, ListLeafSequence, MapLeafSequence,
-    OrderedMetaSequence, NomsList, NomsMap, NomsSet, DataStore, Ref, SetLeafSequence, Struct,}
-    from '@attic/noms';
+import {
+  DataStore,
+  HttpStore,
+  IndexedMetaSequence,
+  invariant,
+  ListLeafSequence,
+  MapLeafSequence,
+  NomsList,
+  NomsMap,
+  NomsSet,
+  OrderedMetaSequence,
+  Ref,
+  RefValue,
+  SetLeafSequence,
+  Struct,
+} from '@attic/noms';
 import {layout, TreeNode} from './buchheim.js';
 import type {NodeGraph} from './buchheim.js';
 
@@ -52,6 +65,9 @@ function load() {
 }
 
 function formatKeyString(v: any): string {
+  if (v instanceof RefValue) {
+    v = v.targetRef;
+  }
   if (v instanceof Ref) {
     return v.toString().substring(5, 11);
   }
@@ -87,6 +103,10 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
     // We don't use the noms ref because we only want to represent values as shared in the graph if
     // they are actually in the same chunk.
     let id;
+    if (val instanceof RefValue) {
+      val = val.targetRef;
+    }
+
     if (val instanceof Ref) {
       id = val.toString();
     } else {
