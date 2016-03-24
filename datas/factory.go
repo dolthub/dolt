@@ -24,22 +24,3 @@ func (lf *localFactory) Create(ns string) (DataStore, bool) {
 func (lf *localFactory) Shutter() {
 	lf.cf.Shutter()
 }
-
-type remoteFactory struct {
-	cf chunks.Factory
-}
-
-func (rf *remoteFactory) Create(ns string) (DataStore, bool) {
-	if cs := rf.cf.CreateStore(ns); cs != nil {
-		return newRemoteDataStore(cs), true
-	}
-	return &LocalDataStore{}, false
-}
-
-func (rf *remoteFactory) Shutter() {
-	rf.cf.Shutter()
-}
-
-func NewTestFactory(cf chunks.Factory) Factory {
-	return &localFactory{cf}
-}

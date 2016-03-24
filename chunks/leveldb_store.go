@@ -64,6 +64,18 @@ func (l *LevelDBStore) Put(c Chunk) {
 	l.putByKey(l.toChunkKey(c.Ref()), c)
 }
 
+func (l *LevelDBStore) PutMany(chunks []Chunk) (e BackpressureError) {
+	numBytes := 0
+	b := new(leveldb.Batch)
+	for _, c := range chunks {
+		d := c.Data()
+		numBytes += len(d)
+		b.Put(l.toChunkKey(c.Ref()), d)
+	}
+	l.putBatch(b, numBytes)
+	return
+}
+
 func (l *LevelDBStore) Close() error {
 	if l.closeBackingStore {
 		l.internalLevelDBStore.Close()
@@ -152,6 +164,15 @@ func (l *internalLevelDBStore) putByKey(key []byte, c Chunk) {
 	d.Chk.NoError(err)
 	l.putCount++
 	l.putBytes += int64(len(c.Data()))
+	<-l.concurrentWriteLimit
+}
+
+func (l *internalLevelDBStore) putBatch(b *leveldb.Batch, numBytes int) {
+	l.concurrentWriteLimit <- struct{}{}
+	err := l.db.Write(b, nil)
+	d.Chk.NoError(err)
+	l.putCount += int64(b.Len())
+	l.putBytes += int64(numBytes)
 	<-l.concurrentWriteLimit
 }
 

@@ -5,25 +5,15 @@ import (
 	"io"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
-type DataSink interface {
-	types.ValueWriter
-	io.Closer
-
-	// transitionalChunkSink is awkwardly named on purpose. Hopefully we can do away with it.
-	transitionalChunkSink() chunks.ChunkSink
-}
-
 // DataStore provides versioned storage for noms values. Each DataStore instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new DataStore, representing a new moment in history.
 type DataStore interface {
-	DataSink
+	// To implement types.ValueWriter, DataStore implementations provide WriteValue(). WriteValue() writes v to this DataStore, though v is not guaranteed to be be persistent until after a subsequent Commit(). The return value is the Ref of v.
+	types.ValueWriter
 	types.ValueReader
-
-	// Has should be removed, if possible
-	Has(r ref.Ref) bool
+	io.Closer
 
 	// MaybeHead returns the current Head Commit of this Datastore, which contains the current root of the DataStore's value tree, if available. If not, it returns a new Commit and 'false'.
 	MaybeHead(datasetID string) (Commit, bool)
@@ -34,14 +24,14 @@ type DataStore interface {
 	// Datasets returns the root of the datastore which is a MapOfStringToRefOfCommit where string is a datasetID.
 	Datasets() MapOfStringToRefOfCommit
 
-	// Commit updates the Commit that datasetID in this datastore points at. If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the datastore is always returned.
+	// Commit updates the Commit that datasetID in this datastore points at. All Values that have been written to this DataStore are guaranteed to be persistent after Commit(). If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the datastore is always returned.
 	Commit(datasetID string, commit Commit) (DataStore, error)
 
 	// Delete removes the Dataset named datasetID from the map at the root of the DataStore. The Dataset data is not necessarily cleaned up at this time, but may be garbage collected in the future. If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the datastore is always returned.
 	Delete(datasetID string) (DataStore, error)
 
-	// transitionalChunkStore is awkwardly named on purpose. Hopefully we can do away with it.
-	transitionalChunkStore() chunks.ChunkStore
+	hintedChunkStore() hintedChunkStore
+	hintedChunkSink() hintedChunkSink
 }
 
 func NewDataStore(cs chunks.ChunkStore) DataStore {
@@ -49,9 +39,9 @@ func NewDataStore(cs chunks.ChunkStore) DataStore {
 }
 
 type Flags struct {
+	remote      remoteDataStoreFlags
 	ldb         chunks.LevelDBStoreFlags
 	dynamo      chunks.DynamoStoreFlags
-	hflags      chunks.HTTPStoreFlags
 	memory      chunks.MemoryStoreFlags
 	datastoreID *string
 }
@@ -62,15 +52,19 @@ func NewFlags() Flags {
 
 func NewFlagsWithPrefix(prefix string) Flags {
 	return Flags{
+		remoteFlags(prefix),
 		chunks.LevelDBFlags(prefix),
 		chunks.DynamoFlags(prefix),
-		chunks.HTTPFlags(prefix),
 		chunks.MemoryFlags(prefix),
 		flag.String(prefix+"store", "", "name of datastore to access datasets in"),
 	}
 }
 
 func (f Flags) CreateDataStore() (DataStore, bool) {
+	if ds := f.remote.CreateStore(*f.datastoreID); ds != nil {
+		return ds, true
+	}
+
 	var cs chunks.ChunkStore
 	if cs = f.ldb.CreateStore(*f.datastoreID); cs != nil {
 	} else if cs = f.dynamo.CreateStore(*f.datastoreID); cs != nil {
@@ -80,15 +74,14 @@ func (f Flags) CreateDataStore() (DataStore, bool) {
 	if cs != nil {
 		return newLocalDataStore(cs), true
 	}
-
-	if cs = f.hflags.CreateStore(*f.datastoreID); cs != nil {
-		return newRemoteDataStore(cs), true
-	}
-
 	return &LocalDataStore{}, false
 }
 
 func (f Flags) CreateFactory() (Factory, bool) {
+	if df := f.remote.CreateFactory(); df != nil {
+		return df, true
+	}
+
 	var cf chunks.Factory
 	if cf = f.ldb.CreateFactory(); cf != nil {
 	} else if cf = f.dynamo.CreateFactory(); cf != nil {
@@ -97,10 +90,6 @@ func (f Flags) CreateFactory() (Factory, bool) {
 
 	if cf != nil {
 		return &localFactory{cf}, true
-	}
-
-	if cf = f.hflags.CreateFactory(); cf != nil {
-		return &remoteFactory{cf}, true
 	}
 	return &localFactory{}, false
 }

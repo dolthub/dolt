@@ -46,6 +46,27 @@ func (rts ReadThroughStore) Put(c Chunk) {
 	rts.cachingStore.Put(c)
 }
 
+func (rts ReadThroughStore) PutMany(chunks []Chunk) BackpressureError {
+	bpe1 := rts.backingStore.PutMany(chunks)
+	bpe2 := rts.cachingStore.PutMany(chunks)
+	if bpe1 == nil {
+		return bpe2
+	} else if bpe2 == nil {
+		return bpe1
+	}
+	// Neither is nil
+	lookup := make(map[ref.Ref]bool, len(bpe1))
+	for _, c := range bpe1 {
+		lookup[c.Ref()] = true
+	}
+	for _, c := range bpe2 {
+		if !lookup[c.Ref()] {
+			bpe1 = append(bpe1, c)
+		}
+	}
+	return bpe1
+}
+
 func (rts ReadThroughStore) Root() ref.Ref {
 	return rts.backingStore.Root()
 }

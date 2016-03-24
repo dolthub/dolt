@@ -2,25 +2,16 @@ package datas
 
 import (
 	"errors"
-	"sync"
 
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
 type dataStoreCommon struct {
-	cs        chunks.ChunkStore
-	rootRef   ref.Ref
-	datasets  *MapOfStringToRefOfCommit
-	typeCache map[ref.Ref]chunkCacheEntry
-	mu        *sync.Mutex
-}
-
-type chunkCacheEntry interface {
-	Present() bool
-	Type() types.Type
+	cachingValueStore
+	rootRef  ref.Ref
+	datasets *MapOfStringToRefOfCommit
 }
 
 var (
@@ -28,8 +19,8 @@ var (
 	ErrMergeNeeded          = errors.New("Dataset head is not ancestor of commit")
 )
 
-func newDataStoreCommon(cs chunks.ChunkStore) dataStoreCommon {
-	return dataStoreCommon{cs: cs, rootRef: cs.Root(), typeCache: map[ref.Ref]chunkCacheEntry{}, mu: &sync.Mutex{}}
+func newDataStoreCommon(hcs hintedChunkStore) dataStoreCommon {
+	return dataStoreCommon{cachingValueStore: newCachingValueStore(hcs), rootRef: hcs.Root()}
 }
 
 func (ds *dataStoreCommon) MaybeHead(datasetID string) (Commit, bool) {
@@ -63,92 +54,8 @@ func (ds *dataStoreCommon) datasetsFromRef(datasetsRef ref.Ref) *MapOfStringToRe
 	return &c
 }
 
-// ReadValue reads and decodes a value from ds. It is not considered an error for the requested chunk to be empty; in this case, the function simply returns nil.
-func (ds *dataStoreCommon) ReadValue(r ref.Ref) types.Value {
-	v := types.DecodeChunk(ds.cs.Get(r), ds)
-	checkAndSet := func(reachable ref.Ref, entry chunkCacheEntry) {
-		if ds.checkCache(reachable) == nil {
-			ds.setCache(reachable, entry)
-		}
-	}
-
-	var entry chunkCacheEntry = absentChunk{}
-	if v != nil {
-		entry = presentChunk(v.Type())
-		for _, reachable := range v.Chunks() {
-			checkAndSet(reachable.TargetRef(), presentChunk(getTargetType(reachable)))
-		}
-	}
-	checkAndSet(r, entry)
-	return v
-}
-
-// WriteValue takes a Value, schedules it to be written it to ds, and returns v.Ref(). v is not guaranteed to be actually written until after a successful Commit().
-func (ds *dataStoreCommon) WriteValue(v types.Value) (r types.RefBase) {
-	if v == nil {
-		return
-	}
-
-	targetRef := v.Ref()
-	r = types.PrivateRefFromType(targetRef, types.MakeRefType(v.Type()))
-	if entry := ds.checkCache(targetRef); entry != nil && entry.Present() {
-		return
-	}
-
-	// Encoding v causes any child chunks, e.g. internal nodes if v is a meta sequence, to get written. That needs to happen before we try to validate v.
-	chunk := types.EncodeValue(v, ds)
-
-	for _, reachable := range v.Chunks() {
-		entry := ds.checkCache(reachable.TargetRef())
-		d.Chk.True(entry != nil && entry.Present(), "Value to write contains ref %s, which points to a non-existent Value.", reachable.TargetRef())
-
-		// BUG 1121
-		// It's possible that entry.Type() will be simply 'Value', but that 'reachable' is actually a properly-typed object -- that is, a Ref to some specific Type. The Chk below would fail, though it's possible that the Type is actually correct. We wouldn't be able to verify without reading it, though, so we'll dig into this later.
-		targetType := getTargetType(reachable)
-		if targetType.Equals(types.MakePrimitiveType(types.ValueKind)) {
-			continue
-		}
-		d.Chk.True(entry.Type().Equals(targetType), "Value to write contains ref %s, which points to a value of a different type: %+v != %+v", reachable.TargetRef(), entry.Type(), targetType)
-	}
-	ds.cs.Put(chunk) // TODO: DataStore should manage batching and backgrounding Puts.
-	ds.setCache(targetRef, presentChunk(v.Type()))
-
-	return
-}
-
-func getTargetType(refBase types.RefBase) types.Type {
-	refType := refBase.Type()
-	d.Chk.Equal(types.RefKind, refType.Kind())
-	return refType.Desc.(types.CompoundDesc).ElemTypes[0]
-}
-
-func (ds *dataStoreCommon) checkCache(r ref.Ref) chunkCacheEntry {
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
-	return ds.typeCache[r]
-}
-
-func (ds *dataStoreCommon) setCache(r ref.Ref, entry chunkCacheEntry) {
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
-	ds.typeCache[r] = entry
-}
-
-// Has should really not be exposed on DataStore :-/
-func (ds *dataStoreCommon) Has(r ref.Ref) bool {
-	return ds.cs.Has(r)
-}
-
 func (ds *dataStoreCommon) Close() error {
-	return ds.cs.Close()
-}
-
-func (ds *dataStoreCommon) transitionalChunkSink() chunks.ChunkSink {
-	return newHasCachingChunkStore(ds.cs)
-}
-
-func (ds *dataStoreCommon) transitionalChunkStore() chunks.ChunkStore {
-	return newHasCachingChunkStore(ds.cs)
+	return ds.hcs.Close()
 }
 
 func (ds *dataStoreCommon) commit(datasetID string, commit Commit) error {
@@ -190,7 +97,7 @@ func (ds *dataStoreCommon) doDelete(datasetID string) error {
 }
 
 func (ds *dataStoreCommon) getRootAndDatasets() (currentRootRef ref.Ref, currentDatasets MapOfStringToRefOfCommit) {
-	currentRootRef = ds.cs.Root()
+	currentRootRef = ds.hcs.Root()
 	currentDatasets = ds.Datasets()
 
 	if currentRootRef != currentDatasets.Ref() && !currentRootRef.IsEmpty() {
@@ -204,7 +111,7 @@ func (ds *dataStoreCommon) tryUpdateRoot(currentDatasets MapOfStringToRefOfCommi
 	// TODO: This Commit will be orphaned if the UpdateRoot below fails
 	newRootRef := ds.WriteValue(currentDatasets).TargetRef()
 	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
-	if !ds.cs.UpdateRoot(newRootRef, currentRootRef) {
+	if !ds.hcs.UpdateRoot(newRootRef, currentRootRef) {
 		err = ErrOptimisticLockFailed
 	}
 	return
@@ -229,24 +136,4 @@ func getAncestors(commits SetOfRefOfCommit, vr types.ValueReader) SetOfRefOfComm
 		ancestors = ancestors.Union(c.Parents())
 	})
 	return ancestors
-}
-
-type presentChunk types.Type
-
-func (t presentChunk) Present() bool {
-	return true
-}
-
-func (t presentChunk) Type() types.Type {
-	return types.Type(t)
-}
-
-type absentChunk struct{}
-
-func (a absentChunk) Present() bool {
-	return false
-}
-
-func (a absentChunk) Type() types.Type {
-	panic("Not reached. Should never call Type() on an absentChunk.")
 }

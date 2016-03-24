@@ -41,7 +41,7 @@ func main() {
 
 		sourceRef := ref.Ref{}
 		if r, ok := ref.MaybeParse(*sourceObject); ok {
-			if sourceStore.Has(r) {
+			if sourceStore.ReadValue(r) != nil {
 				sourceRef = r
 			}
 		} else {

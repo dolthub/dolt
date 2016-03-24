@@ -67,6 +67,13 @@ func (sz *serializer) Put(c Chunk) {
 	sz.chs <- c
 }
 
+func (sz *serializer) PutMany(chunks []Chunk) (e BackpressureError) {
+	for _, c := range chunks {
+		sz.chs <- c
+	}
+	return
+}
+
 func (sz *serializer) Close() error {
 	close(sz.chs)
 	<-sz.done
@@ -78,25 +85,10 @@ func Deserialize(reader io.Reader, cs ChunkSink, rateLimit chan struct{}) {
 	wg := sync.WaitGroup{}
 
 	for {
-		digest := ref.Sha1Digest{}
-		n, err := io.ReadFull(reader, digest[:])
-		if err == io.EOF {
+		c := deserializeWorker(reader)
+		if c.IsEmpty() {
 			break
 		}
-		d.Chk.NoError(err)
-		d.Chk.Equal(int(sha1.Size), n)
-		r := ref.New(digest)
-
-		chunkSize := uint32(0)
-		err = binary.Read(reader, binary.LittleEndian, &chunkSize)
-		d.Chk.NoError(err)
-
-		w := NewChunkWriter()
-		n2, err := io.CopyN(w, reader, int64(chunkSize))
-		d.Chk.NoError(err)
-		d.Chk.Equal(int64(chunkSize), n2)
-		c := w.Chunk()
-		d.Chk.Equal(r, c.Ref())
 
 		wg.Add(1)
 		if rateLimit != nil {
@@ -112,4 +104,39 @@ func Deserialize(reader io.Reader, cs ChunkSink, rateLimit chan struct{}) {
 	}
 
 	wg.Wait()
+}
+
+// DeserializeToChan reads off of |reader| until EOF, sending chunks to chunkChan in the order they are read.
+func DeserializeToChan(reader io.Reader, chunkChan chan<- Chunk) {
+	for {
+		c := deserializeWorker(reader)
+		if c.IsEmpty() {
+			break
+		}
+		chunkChan <- c
+	}
+	close(chunkChan)
+}
+
+func deserializeWorker(reader io.Reader) Chunk {
+	digest := ref.Sha1Digest{}
+	n, err := io.ReadFull(reader, digest[:])
+	if err == io.EOF {
+		return EmptyChunk
+	}
+	d.Chk.NoError(err)
+	d.Chk.Equal(int(sha1.Size), n)
+	r := ref.New(digest)
+
+	chunkSize := uint32(0)
+	err = binary.Read(reader, binary.LittleEndian, &chunkSize)
+	d.Chk.NoError(err)
+
+	w := NewChunkWriter()
+	n2, err := io.CopyN(w, reader, int64(chunkSize))
+	d.Chk.NoError(err)
+	d.Chk.Equal(int64(chunkSize), n2)
+	c := w.Chunk()
+	d.Chk.Equal(r, c.Ref())
+	return c
 }

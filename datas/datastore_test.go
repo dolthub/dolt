@@ -6,243 +6,256 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestReadWriteCache(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	ds := NewDataStore(cs)
+// writesOnCommit allows tests to adjust for how many writes dataStoreCommon performs on Commit()
+const writesOnCommit = 3
 
+func TestLocalDataStore(t *testing.T) {
+	suite.Run(t, &LocalDataStoreSuite{})
+}
+
+func TestRemoteDataStore(t *testing.T) {
+	suite.Run(t, &RemoteDataStoreSuite{})
+}
+
+type DataStoreSuite struct {
+	suite.Suite
+	cs     *chunks.TestStore
+	ds     DataStore
+	makeDs func(chunks.ChunkStore) DataStore
+}
+
+type LocalDataStoreSuite struct {
+	DataStoreSuite
+}
+
+func (suite *LocalDataStoreSuite) SetupTest() {
+	suite.cs = chunks.NewTestStore()
+	suite.makeDs = NewDataStore
+	suite.ds = suite.makeDs(suite.cs)
+}
+
+type RemoteDataStoreSuite struct {
+	DataStoreSuite
+}
+
+func (suite *RemoteDataStoreSuite) SetupTest() {
+	suite.cs = chunks.NewTestStore()
+	suite.makeDs = func(cs chunks.ChunkStore) DataStore {
+		return &RemoteDataStoreClient{newDataStoreCommon(newHTTPHintedChunkStoreForTest(suite.cs))}
+	}
+	suite.ds = suite.makeDs(suite.cs)
+}
+
+func (suite *DataStoreSuite) TearDownTest() {
+	suite.ds.Close()
+	suite.cs.Close()
+}
+
+func (suite *DataStoreSuite) TestReadWriteCache() {
 	var v types.Value = types.Bool(true)
-	assert.NotEqual(ref.Ref{}, ds.WriteValue(v))
-	assert.Equal(1, cs.Writes)
-	r := ds.WriteValue(v).TargetRef()
-	assert.Equal(1, cs.Writes)
+	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(v))
+	r := suite.ds.WriteValue(v).TargetRef()
+	newDs, err := suite.ds.Commit("foo", CommitDef{Value: v}.New())
+	suite.NoError(err)
+	suite.Equal(1, suite.cs.Writes-writesOnCommit)
 
-	v = ds.ReadValue(r)
-	assert.True(v.Equals(types.Bool(true)))
+	v = newDs.ReadValue(r)
+	suite.True(v.Equals(types.Bool(true)))
 }
 
-func TestWriteRefToNonexistentValue(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	ds := NewDataStore(cs)
-
-	assert.Panics(func() { ds.WriteValue(types.NewRef(types.Bool(true).Ref())) })
+func (suite *DataStoreSuite) TestWriteRefToNonexistentValue() {
+	suite.Panics(func() { suite.ds.WriteValue(types.NewRef(types.Bool(true).Ref())) })
 }
 
-func TestWriteWrongTypeRef(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	ds := NewDataStore(cs)
-
+func (suite *DataStoreSuite) TestWriteWrongTypeRef() {
 	b := types.Bool(true)
-	assert.NotEqual(ref.Ref{}, ds.WriteValue(b))
+	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(b))
 
-	assert.Panics(func() { ds.WriteValue(types.NewRefOfBlob(b.Ref())) })
+	suite.Panics(func() { suite.ds.WriteValue(types.NewRefOfBlob(b.Ref())) })
 }
 
-func TestWriteValueTypeRef(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	ds := NewDataStore(cs)
-
+func (suite *DataStoreSuite) TestWriteValueTypeRef() {
 	b := types.Bool(true)
-	assert.NotEqual(ref.Ref{}, ds.WriteValue(b))
+	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(b))
 
-	assert.NotPanics(func() { ds.WriteValue(types.NewRef(b.Ref())) })
+	suite.NotPanics(func() { suite.ds.WriteValue(types.NewRef(b.Ref())) })
 }
 
-func TestReadValueTypeRefPanics_BUG1121(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	ds := NewDataStore(cs)
-
+func (suite *DataStoreSuite) TestReadValueTypeRefPanics_BUG1121() {
 	b := types.NewEmptyBlob()
-	assert.NotEqual(ref.Ref{}, ds.WriteValue(b))
+	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(b))
 
 	datasetID := "ds1"
 	aCommit := NewCommit().SetValue(types.NewRef(b.Ref()))
-	ds2, err := ds.Commit(datasetID, aCommit)
-	assert.NoError(err)
+	ds2, err := suite.ds.Commit(datasetID, aCommit)
+	suite.NoError(err)
 
 	_, ok := ds2.MaybeHead(datasetID)
-	assert.True(ok)
+	suite.True(ok)
 	// Fix BUG 1121 and then uncomment this line and delete the one after
-	// assert.NotPanics(func() { ds2.WriteValue(types.NewRefOfBlob(b.Ref())) })
-	assert.Panics(func() { ds2.WriteValue(types.NewRefOfBlob(b.Ref())) })
+	// suite.NotPanics(func() { ds2.WriteValue(types.NewRefOfBlob(b.Ref())) })
+	suite.Panics(func() { ds2.WriteValue(types.NewRefOfBlob(b.Ref())) })
 }
 
-func TestTolerateUngettableRefs(t *testing.T) {
-	assert := assert.New(t)
-	ds := NewDataStore(chunks.NewTestStore())
-	v := ds.ReadValue(ref.Ref{})
-	assert.Nil(v)
+func (suite *DataStoreSuite) TestTolerateUngettableRefs() {
+	suite.Nil(suite.ds.ReadValue(ref.Ref{}))
 }
 
-func TestDataStoreCommit(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	ds := NewDataStore(cs)
+func (suite *DataStoreSuite) TestDataStoreCommit() {
 	datasetID := "ds1"
-
-	datasets := ds.Datasets()
-	assert.Zero(datasets.Len())
+	datasets := suite.ds.Datasets()
+	suite.Zero(datasets.Len())
 
 	// |a|
 	a := types.NewString("a")
 	aCommit := NewCommit().SetValue(a)
-	ds2, err := ds.Commit(datasetID, aCommit)
-	assert.NoError(err)
+	ds2, err := suite.ds.Commit(datasetID, aCommit)
+	suite.NoError(err)
 
 	// The old datastore still has no head.
-	_, ok := ds.MaybeHead(datasetID)
-	assert.False(ok)
+	_, ok := suite.ds.MaybeHead(datasetID)
+	suite.False(ok)
 
 	// The new datastore has |a|.
 	aCommit1 := ds2.Head(datasetID)
-	assert.True(aCommit1.Value().Equals(a))
-	ds = ds2
+	suite.True(aCommit1.Value().Equals(a))
+	suite.ds = ds2
 
 	// |a| <- |b|
 	b := types.NewString("b")
 	bCommit := NewCommit().SetValue(b).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(aCommit.Ref())))
-	ds, err = ds.Commit(datasetID, bCommit)
-	assert.NoError(err)
-	assert.True(ds.Head(datasetID).Value().Equals(b))
+	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
+	suite.NoError(err)
+	suite.True(suite.ds.Head(datasetID).Value().Equals(b))
 
 	// |a| <- |b|
 	//   \----|c|
 	// Should be disallowed.
 	c := types.NewString("c")
 	cCommit := NewCommit().SetValue(c)
-	ds, err = ds.Commit(datasetID, cCommit)
-	assert.Error(err)
-	assert.True(ds.Head(datasetID).Value().Equals(b))
+	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
+	suite.Error(err)
+	suite.True(suite.ds.Head(datasetID).Value().Equals(b))
 
 	// |a| <- |b| <- |d|
 	d := types.NewString("d")
 	dCommit := NewCommit().SetValue(d).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(bCommit.Ref())))
-	ds, err = ds.Commit(datasetID, dCommit)
-	assert.NoError(err)
-	assert.True(ds.Head(datasetID).Value().Equals(d))
+	suite.ds, err = suite.ds.Commit(datasetID, dCommit)
+	suite.NoError(err)
+	suite.True(suite.ds.Head(datasetID).Value().Equals(d))
 
 	// Attempt to recommit |b| with |a| as parent.
 	// Should be disallowed.
-	ds, err = ds.Commit(datasetID, bCommit)
-	assert.Error(err)
-	assert.True(ds.Head(datasetID).Value().Equals(d))
+	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
+	suite.Error(err)
+	suite.True(suite.ds.Head(datasetID).Value().Equals(d))
 
 	// Add a commit to a different datasetId
-	_, err = ds.Commit("otherDs", aCommit)
-	assert.NoError(err)
+	_, err = suite.ds.Commit("otherDs", aCommit)
+	suite.NoError(err)
 
 	// Get a fresh datastore, and verify that both datasets are present
-	newDs := NewDataStore(cs)
+	newDs := suite.makeDs(suite.cs)
 	datasets2 := newDs.Datasets()
-	assert.Equal(uint64(2), datasets2.Len())
+	suite.Equal(uint64(2), datasets2.Len())
+	newDs.Close()
 }
 
-func TestDataStoreDelete(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	ds := NewDataStore(cs)
+func (suite *DataStoreSuite) TestDataStoreDelete() {
 	datasetID1, datasetID2 := "ds1", "ds2"
-
-	datasets := ds.Datasets()
-	assert.Zero(datasets.Len())
+	datasets := suite.ds.Datasets()
+	suite.Zero(datasets.Len())
 
 	// |a|
+	var err error
 	a := types.NewString("a")
-	ds, err := ds.Commit(datasetID1, NewCommit().SetValue(a))
-	assert.NoError(err)
-	assert.True(ds.Head(datasetID1).Value().Equals(a))
+	suite.ds, err = suite.ds.Commit(datasetID1, NewCommit().SetValue(a))
+	suite.NoError(err)
+	suite.True(suite.ds.Head(datasetID1).Value().Equals(a))
 
 	// ds1; |a|, ds2: |b|
 	b := types.NewString("b")
-	ds, err = ds.Commit(datasetID2, NewCommit().SetValue(b))
-	assert.NoError(err)
-	assert.True(ds.Head(datasetID2).Value().Equals(b))
+	suite.ds, err = suite.ds.Commit(datasetID2, NewCommit().SetValue(b))
+	suite.NoError(err)
+	suite.True(suite.ds.Head(datasetID2).Value().Equals(b))
 
-	ds, err = ds.Delete(datasetID1)
-	assert.NoError(err)
-	assert.True(ds.Head(datasetID2).Value().Equals(b))
-	h, present := ds.MaybeHead(datasetID1)
-	assert.False(present, "Dataset %s should not be present, but head is %v", datasetID1, h.Value())
+	suite.ds, err = suite.ds.Delete(datasetID1)
+	suite.NoError(err)
+	suite.True(suite.ds.Head(datasetID2).Value().Equals(b))
+	h, present := suite.ds.MaybeHead(datasetID1)
+	suite.False(present, "Dataset %s should not be present, but head is %v", datasetID1, h.Value())
 
 	// Get a fresh datastore, and verify that only ds1 is present
-	newDs := NewDataStore(cs)
+	newDs := suite.makeDs(suite.cs)
 	datasets = newDs.Datasets()
-	assert.Equal(uint64(1), datasets.Len())
-	_, present = ds.MaybeHead(datasetID2)
-	assert.True(present, "Dataset %s should be present", datasetID2)
+	suite.Equal(uint64(1), datasets.Len())
+	_, present = suite.ds.MaybeHead(datasetID2)
+	suite.True(present, "Dataset %s should be present", datasetID2)
+	newDs.Close()
 }
 
-func TestDataStoreDeleteConcurrent(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewMemoryStore()
-	ds := NewDataStore(cs)
+func (suite *DataStoreSuite) TestDataStoreDeleteConcurrent() {
 	datasetID := "ds1"
-
-	datasets := ds.Datasets()
-	assert.Zero(datasets.Len())
+	datasets := suite.ds.Datasets()
+	suite.Zero(datasets.Len())
+	var err error
 
 	// |a|
 	a := types.NewString("a")
 	aCommit := NewCommit().SetValue(a)
-	ds, err := ds.Commit(datasetID, aCommit)
-	assert.NoError(err)
+	suite.ds, err = suite.ds.Commit(datasetID, aCommit)
+	suite.NoError(err)
 
 	// |a| <- |b|
 	b := types.NewString("b")
 	bCommit := NewCommit().SetValue(b).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(aCommit.Ref())))
-	ds2, err := ds.Commit(datasetID, bCommit)
-	assert.NoError(err)
-	assert.True(ds.Head(datasetID).Value().Equals(a))
-	assert.True(ds2.Head(datasetID).Value().Equals(b))
+	ds2, err := suite.ds.Commit(datasetID, bCommit)
+	suite.NoError(err)
+	suite.True(suite.ds.Head(datasetID).Value().Equals(a))
+	suite.True(ds2.Head(datasetID).Value().Equals(b))
 
-	ds, err = ds.Delete(datasetID)
-	assert.NoError(err)
-	h, present := ds.MaybeHead(datasetID)
-	assert.False(present, "Dataset %s should not be present, but head is %v", datasetID, h.Value())
+	suite.ds, err = suite.ds.Delete(datasetID)
+	suite.NoError(err)
+	h, present := suite.ds.MaybeHead(datasetID)
+	suite.False(present, "Dataset %s should not be present, but head is %v", datasetID, h.Value())
 	h, present = ds2.MaybeHead(datasetID)
-	assert.True(present, "Dataset %s should be present", datasetID)
+	suite.True(present, "Dataset %s should be present", datasetID)
 
 	// Get a fresh datastore, and verify that no datastores are present
-	newDs := NewDataStore(cs)
+	newDs := suite.makeDs(suite.cs)
 	datasets = newDs.Datasets()
-	assert.Equal(uint64(0), datasets.Len())
+	suite.Equal(uint64(0), datasets.Len())
+	newDs.Close()
 }
 
-func TestDataStoreConcurrency(t *testing.T) {
-	assert := assert.New(t)
-
-	cs := chunks.NewMemoryStore()
-	ds := NewDataStore(cs)
+func (suite *DataStoreSuite) TestDataStoreConcurrency() {
 	datasetID := "ds1"
+	var err error
 
 	// Setup:
 	// |a| <- |b|
 	a := types.NewString("a")
 	aCommit := NewCommit().SetValue(a)
-	ds, err := ds.Commit(datasetID, aCommit)
+	suite.ds, err = suite.ds.Commit(datasetID, aCommit)
 	b := types.NewString("b")
 	bCommit := NewCommit().SetValue(b).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(aCommit.Ref())))
-	ds, err = ds.Commit(datasetID, bCommit)
-	assert.NoError(err)
-	assert.True(ds.Head(datasetID).Value().Equals(b))
+	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
+	suite.NoError(err)
+	suite.True(suite.ds.Head(datasetID).Value().Equals(b))
 
 	// Important to create this here.
-	ds2 := NewDataStore(cs)
+	ds2 := suite.makeDs(suite.cs)
 
 	// Change 1:
 	// |a| <- |b| <- |c|
 	c := types.NewString("c")
 	cCommit := NewCommit().SetValue(c).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(bCommit.Ref())))
-	ds, err = ds.Commit(datasetID, cCommit)
-	assert.NoError(err)
-	assert.True(ds.Head(datasetID).Value().Equals(c))
+	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
+	suite.NoError(err)
+	suite.True(suite.ds.Head(datasetID).Value().Equals(c))
 
 	// Change 2:
 	// |a| <- |b| <- |e|
@@ -250,6 +263,6 @@ func TestDataStoreConcurrency(t *testing.T) {
 	e := types.NewString("e")
 	eCommit := NewCommit().SetValue(e).SetParents(NewSetOfRefOfCommit().Insert(NewRefOfCommit(bCommit.Ref())))
 	ds2, err = ds2.Commit(datasetID, eCommit)
-	assert.Error(err)
-	assert.True(ds.Head(datasetID).Value().Equals(c))
+	suite.Error(err)
+	suite.True(ds2.Head(datasetID).Value().Equals(c))
 }

@@ -48,6 +48,13 @@ func (s *TestStore) Put(c Chunk) {
 	s.MemoryStore.Put(c)
 }
 
+func (s *TestStore) PutMany(chunks []Chunk) (e BackpressureError) {
+	for _, c := range chunks {
+		s.Put(c)
+	}
+	return
+}
+
 type testStoreFactory struct {
 	stores map[string]*TestStore
 }
