@@ -46,7 +46,7 @@ class Main extends React.Component<void, Props, State> {
     const selectedTimeItem = props.timeItems[0];
     const selectedCategoryItem = props.categories[0];
 
-    const datastore = new DataStore(new HttpStore(nomsServer));
+    const datastore = new DataStore(new HttpStore(nomsServer), 1e5);
     this._dataManager = new DataManager(datastore, datasetId);
 
     this.state = {

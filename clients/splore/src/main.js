@@ -1,7 +1,7 @@
 // @flow
 
 import Layout from './layout.js';
-import React from 'react'; // eslint-disable-line no-unused-vars
+import React from 'react';
 import ReactDOM from 'react-dom';
 import {
   DataStore,
@@ -24,7 +24,9 @@ import type {NodeGraph} from './buchheim.js';
 
 const data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
+let httpStore: HttpStore;
 let dataStore: DataStore;
+
 let renderNode: ?HTMLElement;
 
 const hash = {};
@@ -49,7 +51,7 @@ function load() {
   if (hash.token) {
     opts['headers'] = {Authorization: `Bearer ${hash.token}`};
   }
-  const httpStore = new HttpStore(hash.server, undefined, undefined, opts);
+  httpStore = new HttpStore(hash.server, undefined, undefined, opts);
   dataStore = new DataStore(httpStore);
 
   const setRootRef = ref => {
@@ -60,7 +62,7 @@ function load() {
   if (hash.ref) {
     setRootRef(Ref.parse(hash.ref));
   } else {
-    dataStore.getRoot().then(setRootRef);
+    httpStore.getRoot().then(setRootRef);
   }
 }
 
@@ -170,21 +172,31 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
       };
     } else if (val instanceof Struct) {
       // Struct
+      // Make a variable to the struct to work around Flow bug.
+      const struct: Struct = val;
       const structName = val.typeDef.name;
       data.nodes[id] = {name: structName};
 
-      val.forEach((v, k) => {
-        // TODO: handle non-string keys
+      const processField = (k: string) => {
+        const v = struct.get(k);
         const kid = process(ref, k, id);
         if (kid) {
-          // Start map keys open, just makes it easier to use.
+          // Start struct keys open, just makes it easier to use.
           data.nodes[kid].isOpen = true;
 
           process(ref, v, kid);
         } else {
           throw new Error('No kid id.');
         }
+      };
+
+      val.typeDef.desc.fields.forEach(f => {
+        processField(f.name);
       });
+      if (val.hasUnion) {
+        const {name} = val.typeDef.union[val.unionIndex];
+        processField(name);
+      }
     } else {
       console.log('Unsupported type!', val); // eslint-disable-line no-console
     }
