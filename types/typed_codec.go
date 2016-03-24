@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"regexp"
+	"strings"
 
 	"github.com/attic-labs/noms/d"
 )
@@ -19,8 +21,30 @@ func appendCompactedJSON(dst io.Writer, v interface{}) {
 	buff2 := &bytes.Buffer{}
 	err = json.Compact(buff2, buff.Bytes())
 	d.Chk.NoError(err)
-	_, err = io.Copy(dst, buff2)
+	s := normalizeJSONStrings(buff2.String())
+	_, err = io.Copy(dst, strings.NewReader(s))
 	d.Chk.NoError(err)
+}
+
+var unescapeHTMLRegexp = regexp.MustCompile(`\\u[0-9a-z]{4}`)
+
+// normalizeJSONStrings undoes the HTMLEscape that the Go JSON encoder does.
+func normalizeJSONStrings(s string) string {
+	return unescapeHTMLRegexp.ReplaceAllStringFunc(s, func(s string) string {
+		switch s {
+		case `\u003c`:
+			return "<"
+		case `\u003e`:
+			return ">"
+		case `\u0026`:
+			return "&"
+		case `\u2028`:
+			return "\u2028"
+		case `\u2029`:
+			return "\u2029"
+		}
+		return s
+	})
 }
 
 func typedEncode(dst io.Writer, v interface{}) {
