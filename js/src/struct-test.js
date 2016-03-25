@@ -48,8 +48,8 @@ suite('Struct', () => {
     const r = new RefValue(ds.writeValue(b), refOfBoolType);
     const s1 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s1.chunks.length);
-    assert.isTrue(pkgRef.equals(s1.chunks[0]));
-    assert.isTrue(r.targetRef.equals(s1.chunks[1]));
+    assert.isTrue(pkgRef.equals(s1.chunks[0].targetRef));
+    assert.isTrue(r.equals(s1.chunks[1]));
   });
 
   test('chunks optional', () => {
@@ -70,14 +70,14 @@ suite('Struct', () => {
     const s1 = new Struct(type, typeDef, {});
 
     assert.strictEqual(1, s1.chunks.length);
-    assert.isTrue(pkgRef.equals(s1.chunks[0]));
+    assert.isTrue(pkgRef.equals(s1.chunks[0].targetRef));
 
     const b = true;
     const r = new RefValue(ds.writeValue(b), refOfBoolType);
     const s2 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s2.chunks.length);
-    assert.isTrue(pkgRef.equals(s2.chunks[0]));
-    assert.isTrue(r.targetRef.equals(s2.chunks[1]));
+    assert.isTrue(pkgRef.equals(s2.chunks[0].targetRef));
+    assert.isTrue(r.equals(s2.chunks[1]));
   });
 
   test('chunks union', () => {
@@ -98,14 +98,14 @@ suite('Struct', () => {
 
     const s1 = new Struct(type, typeDef, {s: 'hi'});
     assert.strictEqual(1, s1.chunks.length);
-    assert.isTrue(pkgRef.equals(s1.chunks[0]));
+    assert.isTrue(pkgRef.equals(s1.chunks[0].targetRef));
 
     const b = true;
     const r = new RefValue(ds.writeValue(b), refOfBoolType);
     const s2 = new Struct(type, typeDef, {r: r});
     assert.strictEqual(2, s2.chunks.length);
-    assert.isTrue(pkgRef.equals(s2.chunks[0]));
-    assert.isTrue(r.targetRef.equals(s2.chunks[1]));
+    assert.isTrue(pkgRef.equals(s2.chunks[0].targetRef));
+    assert.isTrue(r.equals(s2.chunks[1]));
   });
 
   test('new', () => {

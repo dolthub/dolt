@@ -5,11 +5,11 @@ import RefValue from './ref-value.js';
 import type DataStore from './data-store.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
-import {AsyncIterator} from './async-iterator.js';
+import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
 import {getCompareFunction, equals} from './compare.js';
-import {default as Ref, sha1Size} from './ref.js';
+import {sha1Size} from './ref.js';
 import {getRefOfValueOrPrimitive} from './get-ref.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
@@ -75,7 +75,7 @@ export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<any>
 }
 
 export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collection<OrderedSequence> {
-  get chunks(): Array<Ref> {
+  get chunks(): Array<RefValue> {
     if (this.sequence.isMeta) {
       return super.chunks;
     }

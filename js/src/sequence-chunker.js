@@ -2,7 +2,7 @@
 
 import type {Sequence} from './sequence.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
-import {SequenceCursor} from './sequence.js';
+import type {SequenceCursor} from './sequence.js';
 
 export type BoundaryChecker<T> = {
   write: (item: T) => bool;

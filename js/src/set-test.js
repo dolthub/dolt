@@ -196,9 +196,9 @@ suite('SetLeaf', () => {
     const r3 = new RefValue(ds.writeValue('b'), refOfSt);
     const l = new NomsSet(tr, new SetLeafSequence(ds, tr, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
-    assert.isTrue(r1.targetRef.equals(l.chunks[0]));
-    assert.isTrue(r2.targetRef.equals(l.chunks[1]));
-    assert.isTrue(r3.targetRef.equals(l.chunks[2]));
+    assert.isTrue(r1.equals(l.chunks[0]));
+    assert.isTrue(r2.equals(l.chunks[1]));
+    assert.isTrue(r3.equals(l.chunks[2]));
   });
 });
 

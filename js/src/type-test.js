@@ -90,7 +90,7 @@ suite('Type', () => {
 
     const v = await ds.readValue(unresolvedRef);
     assert.isNotNull(v);
-    assert.isTrue(pkgRef.equals(v.chunks[0]));
+    assert.isTrue(pkgRef.equals(v.chunks[0].targetRef));
     const p = await ds.readValue(pkgRef);
     assert.isNotNull(p);
   });

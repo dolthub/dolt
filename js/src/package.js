@@ -1,8 +1,10 @@
 // @flow
 
-import Ref from './ref.js';
+import type Ref from './ref.js';
+import RefValue from './ref-value.js';
 import {invariant} from './assert.js';
-import {packageType, Type} from './type.js';
+import type {Type} from './type.js';
+import {packageType, packageRefType} from './type.js';
 import {ValueBase} from './value.js';
 import type DataStore from './data-store.js';
 
@@ -16,13 +18,13 @@ export class Package extends ValueBase {
     this.dependencies = dependencies;
   }
 
-  get chunks(): Array<Ref> {
+  get chunks(): Array<RefValue> {
     const chunks = [];
     for (let i = 0; i < this.types.length; i++) {
       chunks.push(...this.types[i].chunks);
     }
     for (let i = 0; i < this.dependencies.length; i++) {
-      chunks.push(this.dependencies[i]);
+      chunks.push(new RefValue(this.dependencies[i], packageRefType));
     }
     return chunks;
   }

@@ -256,10 +256,10 @@ suite('MapLeaf', () => {
     const m = new NomsMap(tr,
         new MapLeafSequence(ds, tr, [{key: r1, value: r2}, {key: r3, value: r4}]));
     assert.strictEqual(4, m.chunks.length);
-    assert.isTrue(r1.targetRef.equals(m.chunks[0]));
-    assert.isTrue(r2.targetRef.equals(m.chunks[1]));
-    assert.isTrue(r3.targetRef.equals(m.chunks[2]));
-    assert.isTrue(r4.targetRef.equals(m.chunks[3]));
+    assert.isTrue(r1.equals(m.chunks[0]));
+    assert.isTrue(r2.equals(m.chunks[1]));
+    assert.isTrue(r3.equals(m.chunks[2]));
+    assert.isTrue(r4.equals(m.chunks[3]));
   });
 });
 
