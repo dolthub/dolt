@@ -49,11 +49,11 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
     return cursor.getCurrent();
   }
 
-  async splice(idx: number, insert: Array<T>, remove: number): Promise<NomsList<T>> {
+  async splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<NomsList<T>> {
     const cursor = await this.sequence.newCursorAt(idx);
     const ds = this.sequence.ds;
     const type = this.type;
-    const seq = await chunkSequence(cursor, insert, remove, newListLeafChunkFn(type, ds),
+    const seq = await chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(type, ds),
                                     newIndexedMetaSequenceChunkFn(type, ds),
                                     newListLeafBoundaryChecker(type),
                                     newIndexedMetaSequenceBoundaryChecker);
@@ -62,15 +62,15 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
   }
 
   insert(idx: number, values: Array<T>): Promise<NomsList<T>> {
-    return this.splice(idx, values, 0);
+    return this.splice(idx, 0, ...values);
   }
 
   remove(start: number, end: number): Promise<NomsList<T>> {
-    return this.splice(start, [], end - start);
+    return this.splice(start, end - start);
   }
 
   append(values: Array<T>): Promise<NomsList<T>> {
-    return this.splice(this.length, values, 0);
+    return this.splice(this.length, 0, ...values);
   }
 
   async forEach(cb: (v: T, i: number) => void): Promise<void> {

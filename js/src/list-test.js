@@ -137,8 +137,8 @@ suite('BuildList', () => {
     let s = await newList(nums, tr);
 
     const splice500At = async (idx: number) => {
-      s = await s.splice(idx, [], 500);
-      s = await s.splice(idx, intSequence(idx, idx + 500), 0);
+      s = await s.splice(idx, 500);
+      s = await s.splice(idx, 0, ...intSequence(idx, idx + 500));
     };
 
 
@@ -162,7 +162,7 @@ suite('BuildList', () => {
     assert.deepEqual(nums, outNums);
 
     invariant(s2 instanceof NomsList);
-    const s3 = await s2.splice(testListSize - 1, [], 1);
+    const s3 = await s2.splice(testListSize - 1, 1);
     const outNums2 = await s3.toJS();
     nums.splice(testListSize - 1, 1);
     assert.deepEqual(nums, outNums2);
