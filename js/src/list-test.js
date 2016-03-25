@@ -100,7 +100,7 @@ suite('BuildList', () => {
     let s = await newList(nums, tr);
 
     for (let i = testListSize - 10; i < testListSize; i++) {
-      s = await s.insert(i, [i]);
+      s = await s.insert(i, i);
     }
 
     assert.strictEqual(s.ref.toString(), listOfNRef);
@@ -112,7 +112,7 @@ suite('BuildList', () => {
     let s = await newList(nums, tr);
 
     for (let i = testListSize - 10; i < testListSize; i++) {
-      s = await s.append([i]);
+      s = await s.append(i);
     }
 
     assert.strictEqual(s.ref.toString(), listOfNRef);

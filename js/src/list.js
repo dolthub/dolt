@@ -61,7 +61,7 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
     return new NomsList(type, seq);
   }
 
-  insert(idx: number, values: Array<T>): Promise<NomsList<T>> {
+  insert(idx: number, ...values: Array<T>): Promise<NomsList<T>> {
     return this.splice(idx, 0, ...values);
   }
 
@@ -69,7 +69,7 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
     return this.splice(start, end - start);
   }
 
-  append(values: Array<T>): Promise<NomsList<T>> {
+  append(...values: Array<T>): Promise<NomsList<T>> {
     return this.splice(this.length, 0, ...values);
   }
 
