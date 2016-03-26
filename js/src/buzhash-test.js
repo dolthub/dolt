@@ -3,12 +3,10 @@
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import BuzHash from './buzhash.js';
-import {TextEncoder} from './text-encoding.js';
-
-const encoder = new TextEncoder();
+import {encode} from './utf8.js';
 
 function bytes(s: string): Uint8Array {
-  return encoder.encode(s);
+  return encode(s);
 }
 
 const loremipsum1 = `Lorem ipsum dolor sit amet, consectetuer adipiscing elit.

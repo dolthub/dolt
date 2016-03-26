@@ -1,10 +1,7 @@
 // @flow
 
 import Ref from './ref.js';
-import {TextEncoder, TextDecoder} from './text-encoding.js';
-
-const decoder = new TextDecoder();
-const encoder = new TextEncoder();
+import {encode, decode} from './utf8.js';
 
 export default class Chunk {
   data: Uint8Array;
@@ -24,13 +21,13 @@ export default class Chunk {
   }
 
   toString(): string {
-    return decoder.decode(this.data);
+    return decode(this.data);
   }
 
   static emptyChunk: Chunk;
 
   static fromString(s: string, ref: ?Ref): Chunk {
-    return new Chunk(encoder.encode(s), ref);
+    return new Chunk(encode(s), ref);
   }
 }
 

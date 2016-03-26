@@ -47,6 +47,10 @@
   "browser": {
     "./src/fetch.js": "./src/browser/fetch.js",
     "./dist/commonjs/fetch.js": "./dist/commonjs/browser/fetch.js",
-    "./dist/es6/fetch.js": "./dist/es6/browser/fetch.js"
+    "./dist/es6/fetch.js": "./dist/es6/browser/fetch.js",
+
+    "./src/utf8.js": "./src/browser/utf8.js",
+    "./dist/commonjs/utf8.js": "./dist/commonjs/browser/utf8.js",
+    "./dist/es6/utf8.js": "./dist/es6/browser/utf8.js"
   }
 }
