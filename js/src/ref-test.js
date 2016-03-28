@@ -3,8 +3,7 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 import Ref from './ref.js';
-import {TextEncoder} from './text-encoding.js';
-
+import {encode} from './utf8.js';
 
 suite('Ref', () => {
   test('parse', () => {
@@ -51,7 +50,7 @@ suite('Ref', () => {
   });
 
   test('fromData', () => {
-    const r = Ref.fromData(new TextEncoder().encode('abc'));
+    const r = Ref.fromData(encode('abc'));
 
     assert.strictEqual('sha1-a9993e364706816aba3e25717850c26c9cd0d89d', r.toString());
   });
