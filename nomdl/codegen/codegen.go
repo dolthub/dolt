@@ -29,11 +29,15 @@ import (
 	"golang.org/x/tools/imports"
 )
 
+const goExt = "go"
+const jsExt = "js"
+
 var (
 	outDirFlag  = flag.String("out-dir", ".", "Directory where generated code will be written")
 	inFlag      = flag.String("in", "", "The name of the noms file to read")
 	pkgDSFlag   = flag.String("package-ds", "", "The dataset to read/write packages from/to.")
 	packageFlag = flag.String("package", "", "The name of the go package to write")
+	outputLang  = flag.String("out-lang", goExt, `Output language. Supported values are "go" and "js"`)
 
 	idRegexp    = regexp.MustCompile(`[_\pL][_\pL\pN]*`)
 	illegalRune = regexp.MustCompile(`[^_\pL\pN]`)
@@ -64,6 +68,12 @@ func main() {
 		*pkgDSFlag = "default"
 	}
 
+	if *outputLang != goExt && *outputLang != jsExt {
+		log.Print("Invalid out-lang provided.")
+		flag.Usage()
+		return
+	}
+
 	pkgDS := dataset.NewDataset(ds, *pkgDSFlag)
 	// Ensure that, if pkgDS has stuff in it, its head is a SetOfRefOfPackage.
 	if h, ok := pkgDS.MaybeHead(); ok {
@@ -73,7 +83,10 @@ func main() {
 	localPkgs := refSet{}
 	outDir, err := filepath.Abs(*outDirFlag)
 	d.Chk.NoError(err, "Could not canonicalize -out-dir: %v", err)
-	packageName := getGoPackageName(outDir)
+	packageName := ""
+	if *outputLang == goExt {
+		packageName = getGoPackageName(outDir)
+	}
 
 	if *inFlag != "" {
 		out := getOutFileName(filepath.Base(*inFlag))
@@ -129,7 +142,7 @@ func generateDepCode(packageName, outDir string, written map[string]bool, p type
 		tag := code.ToTag(p.Ref())
 		parsed := pkg.Parsed{Package: p, Name: packageName}
 		if !localPkgs[parsed.Ref()] {
-			generateAndEmit(tag, filepath.Join(outDir, tag+".go"), written, pDeps, parsed)
+			generateAndEmit(tag, filepath.Join(outDir, tag+"."+*outputLang), written, pDeps, parsed)
 			localPkgs[parsed.Ref()] = true
 		}
 		for depRef, dep := range pDeps {
@@ -142,14 +155,18 @@ func generateDepCode(packageName, outDir string, written map[string]bool, p type
 
 func generateAndEmit(tag, out string, written map[string]bool, deps depsMap, p pkg.Parsed) {
 	var buf bytes.Buffer
-	gen := newCodeGen(&buf, tag, written, deps, p)
+	gen := newCodeGen(&buf, tag, *outputLang, written, deps, p)
 	gen.WritePackage()
 
-	bs, err := imports.Process(out, buf.Bytes(), nil)
-	if err != nil {
-		fmt.Println(buf.String())
+	if *outputLang == goExt {
+		// go format
+		bs, err := imports.Process(out, buf.Bytes(), nil)
+		if err != nil {
+			fmt.Println(buf.String())
+		}
+		d.Chk.NoError(err)
+		buf = *bytes.NewBuffer(bs)
 	}
-	d.Chk.NoError(err)
 
 	d.Chk.NoError(os.MkdirAll(filepath.Dir(out), 0700))
 
@@ -157,7 +174,7 @@ func generateAndEmit(tag, out string, written map[string]bool, deps depsMap, p p
 	d.Chk.NoError(err)
 	defer outFile.Close()
 
-	io.Copy(outFile, bytes.NewBuffer(bs))
+	io.Copy(outFile, &buf)
 }
 
 func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) types.SetOfRefOfPackage {
@@ -176,7 +193,7 @@ func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) ty
 }
 
 func getOutFileName(in string) string {
-	return in[:len(in)-len(ext)] + ".noms.go"
+	return in[:len(in)-len(ext)] + ".noms." + *outputLang
 }
 
 func getBareFileName(in string) string {
@@ -221,17 +238,18 @@ type codeGen struct {
 	written    map[string]bool
 	toWrite    []types.Type
 	generator  *code.Generator
+	lang       string
 	templates  *template.Template
 	sharedData sharedData
 }
 
-func newCodeGen(w io.Writer, fileID string, written map[string]bool, deps depsMap, pkg pkg.Parsed) *codeGen {
+func newCodeGen(w io.Writer, fileID, lang string, written map[string]bool, deps depsMap, pkg pkg.Parsed) *codeGen {
 	typesPackage := "types."
 	if pkg.Name == "types" {
 		typesPackage = ""
 	}
 	nomsImport := "github.com/attic-labs/noms"
-	gen := &codeGen{w, pkg, deps, written, []types.Type{}, nil, nil, sharedData{
+	gen := &codeGen{w, pkg, deps, written, []types.Type{}, nil, lang, nil, sharedData{
 		fileID,
 		nomsImport,
 		pkg.Name,
@@ -244,7 +262,7 @@ func newCodeGen(w io.Writer, fileID string, written map[string]bool, deps depsMa
 
 func (gen *codeGen) readTemplates() *template.Template {
 	_, thisfile, _, _ := runtime.Caller(1)
-	glob := path.Join(path.Dir(thisfile), "*.tmpl")
+	glob := path.Join(path.Dir(thisfile), gen.lang, "*.tmpl")
 	return template.Must(template.New("").Funcs(
 		template.FuncMap{
 			"defType":       gen.generator.DefType,
@@ -260,6 +278,7 @@ func (gen *codeGen) readTemplates() *template.Template {
 			"valueZero":     gen.generator.ValueZero,
 			"title":         strings.Title,
 			"toTypesType":   gen.generator.ToType,
+			"toTypesTypeJS": gen.generator.ToTypeJS,
 		}).ParseGlob(glob))
 }
 

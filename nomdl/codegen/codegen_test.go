@@ -21,7 +21,7 @@ import (
 	"golang.org/x/tools/imports"
 )
 
-func assertOutput(inPath, goldenPath string, t *testing.T) {
+func assertOutput(inPath, lang, goldenPath string, t *testing.T) {
 	assert := assert.New(t)
 	emptyDS := datas.NewDataStore(chunks.NewMemoryStore()) // Will be DataStore containing imports
 
@@ -47,11 +47,14 @@ func assertOutput(inPath, goldenPath string, t *testing.T) {
 		// List<Uint8> is provided twice in the noms files to ensure it is only written once. Therefore we emulate that it was already written for struct_with_list.noms.
 		written["ListOfUint8"] = true
 	}
-	gen := newCodeGen(&buf, getBareFileName(inPath), written, depsMap{}, pkg)
+	gen := newCodeGen(&buf, getBareFileName(inPath), lang, written, depsMap{}, pkg)
 	gen.WritePackage()
 
-	bs, err := imports.Process("", buf.Bytes(), nil)
-	d.Chk.NoError(err)
+	bs := buf.Bytes()
+	if lang == "go" {
+		bs, err = imports.Process("", bs, nil)
+		d.Chk.NoError(err)
+	}
 
 	assert.Equal(string(goldenBytes), string(bs), "%s did not generate the same string", inPath)
 }
@@ -66,7 +69,8 @@ func TestGeneratedFiles(t *testing.T) {
 			// We are not writing deps in this test so lookup by ref does not work.
 			continue
 		}
-		assertOutput(n, filepath.Join("test", "gen", file+".go"), t)
+		assertOutput(n, "go", filepath.Join("test", "gen", file+".go"), t)
+		assertOutput(n, "js", filepath.Join("test", "gen", file+".js"), t)
 	}
 }
 
@@ -80,7 +84,7 @@ func TestCanUseDef(t *testing.T) {
 
 	assertCanUseDef := func(s string, using, named bool) {
 		pkg := pkg.ParseNomDL("fakefile", bytes.NewBufferString(s), "", emptyDS)
-		gen := newCodeGen(nil, "fakefile", map[string]bool{}, depsMap{}, pkg)
+		gen := newCodeGen(nil, "fakefile", "go", map[string]bool{}, depsMap{}, pkg)
 		for _, t := range pkg.UsingDeclarations {
 			assert.Equal(using, gen.canUseDef(t, gen.pkg.Package))
 		}
@@ -285,7 +289,7 @@ func TestCanUseDefFromImport(t *testing.T) {
 		}
 		`, pkgRef1))
 	pkg2 := pkg.ParseNomDL("test2", r2, dir, ds)
-	gen2 := newCodeGen(nil, "test2", map[string]bool{}, depsMap{pkg1.Ref(): pkg1.Package}, pkg2)
+	gen2 := newCodeGen(nil, "test2", "go", map[string]bool{}, depsMap{pkg1.Ref(): pkg1.Package}, pkg2)
 
 	assert.True(gen2.canUseDef(pkg2.Types()[0], gen2.pkg.Package))
 }

@@ -11,6 +11,7 @@ package code
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -278,14 +279,14 @@ func (gen Generator) UserName(t types.Type) string {
 	case types.EnumKind:
 		return rt.Name()
 	case types.ListKind:
-		return fmt.Sprintf("ListOf%s", gen.refToId(rt.Desc.(types.CompoundDesc).ElemTypes[0]))
+		return fmt.Sprintf("ListOf%s", gen.refToID(rt.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.MapKind:
 		elemTypes := rt.Desc.(types.CompoundDesc).ElemTypes
-		return fmt.Sprintf("MapOf%sTo%s", gen.refToId(elemTypes[0]), gen.refToId(elemTypes[1]))
+		return fmt.Sprintf("MapOf%sTo%s", gen.refToID(elemTypes[0]), gen.refToID(elemTypes[1]))
 	case types.RefKind:
-		return fmt.Sprintf("RefOf%s", gen.refToId(rt.Desc.(types.CompoundDesc).ElemTypes[0]))
+		return fmt.Sprintf("RefOf%s", gen.refToID(rt.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.SetKind:
-		return fmt.Sprintf("SetOf%s", gen.refToId(rt.Desc.(types.CompoundDesc).ElemTypes[0]))
+		return fmt.Sprintf("SetOf%s", gen.refToID(rt.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.StructKind:
 		// We get an empty name when we have a struct that is used as union
 		if rt.Name() == "" {
@@ -295,7 +296,7 @@ func (gen Generator) UserName(t types.Type) string {
 				if i > 0 {
 					s += "And"
 				}
-				s += strings.Title(f.Name) + "Of" + gen.refToId(f.T)
+				s += strings.Title(f.Name) + "Of" + gen.refToID(f.T)
 			}
 			return s
 		}
@@ -304,7 +305,7 @@ func (gen Generator) UserName(t types.Type) string {
 	panic("unreachable")
 }
 
-func (gen Generator) refToId(t types.Type) string {
+func (gen Generator) refToID(t types.Type) string {
 	if !t.IsUnresolved() || !t.HasPackageRef() {
 		return gen.UserName(t)
 	}
@@ -313,13 +314,17 @@ func (gen Generator) refToId(t types.Type) string {
 
 // ToType returns a string containing Go code that instantiates a types.Type instance equivalent to t.
 func (gen Generator) ToType(t types.Type, fileID, packageName string) string {
+	d.Chk.True(!t.HasPackageRef() && !t.IsUnresolved() || t.HasOrdinal(), "%s does not have an ordinal set", t.Name())
 	if t.HasPackageRef() {
+		d.Chk.True(t.HasOrdinal(), "%s does not have an ordinal set", t.Name())
 		return fmt.Sprintf(`%sMakeType(ref.Parse("%s"), %d)`, gen.TypesPackage, t.PackageRef().String(), t.Ordinal())
 	}
-	if t.IsUnresolved() && fileID != "" {
-		return fmt.Sprintf(`%sMakeType(__%sPackageInFile_%s_CachedRef, %d)`, gen.TypesPackage, packageName, fileID, t.Ordinal())
-	}
+
 	if t.IsUnresolved() {
+		if fileID != "" {
+			return fmt.Sprintf(`%sMakeType(__%sPackageInFile_%s_CachedRef, %d)`, gen.TypesPackage, packageName, fileID, t.Ordinal())
+		}
+
 		d.Chk.True(t.HasOrdinal(), "%s does not have an ordinal set", t.Name())
 		return fmt.Sprintf(`%sMakeType(ref.Ref{}, %d)`, gen.TypesPackage, t.Ordinal())
 	}
@@ -327,6 +332,7 @@ func (gen Generator) ToType(t types.Type, fileID, packageName string) string {
 	if types.IsPrimitiveKind(t.Kind()) {
 		return fmt.Sprintf("%sMakePrimitiveType(%s%sKind)", gen.TypesPackage, gen.TypesPackage, kindToString(t.Kind()))
 	}
+
 	switch desc := t.Desc.(type) {
 	case types.CompoundDesc:
 		types := make([]string, len(desc.ElemTypes))
@@ -347,6 +353,60 @@ func (gen Generator) ToType(t types.Type, fileID, packageName string) string {
 		fields := fmt.Sprintf("[]%sField{\n%s\n}", gen.TypesPackage, flatten(desc.Fields))
 		choices := fmt.Sprintf("%sChoices{\n%s\n}", gen.TypesPackage, flatten(desc.Union))
 		return fmt.Sprintf("%sMakeStructType(\"%s\",\n%s,\n%s,\n)", gen.TypesPackage, t.Name(), fields, choices)
+	default:
+		d.Chk.Fail("Unknown TypeDesc.", "%#v (%T)", desc, desc)
+	}
+	panic("Unreachable")
+}
+
+func ind(i int) string {
+	return strings.Repeat("  ", i)
+}
+
+func firstToLower(s string) string {
+	b := []rune(s)
+	b[0] = unicode.ToLower(b[0])
+	return string(b)
+}
+
+// ToTypeJS returns a string containing Go code that instantiates a Type instance equivalent to t for JavaScript.
+func (gen Generator) ToTypeJS(t types.Type, fileID, nomsName string, indent int) string {
+	d.Chk.True(!t.HasPackageRef() && !t.IsUnresolved() || t.HasOrdinal(), "%s does not have an ordinal set", t.Name())
+	if t.HasPackageRef() {
+		return fmt.Sprintf(`%s.makeType(%s.Ref.parse('%s'), %d)`, nomsName, nomsName, t.PackageRef().String(), t.Ordinal())
+	}
+
+	if t.IsUnresolved() {
+		if fileID != "" {
+			return fmt.Sprintf(`%s.makeType(__packageInFile_%s_CachedRef, %d)`, nomsName, fileID, t.Ordinal())
+		}
+		return fmt.Sprintf(`%s.makeType(new %s.Ref(), %d)`, nomsName, nomsName, t.Ordinal())
+	}
+
+	if types.IsPrimitiveKind(t.Kind()) {
+		return fmt.Sprintf("%s.%sType", nomsName, firstToLower(kindToString(t.Kind())))
+	}
+
+	switch desc := t.Desc.(type) {
+	case types.CompoundDesc:
+		types := make([]string, len(desc.ElemTypes))
+		for i, t := range desc.ElemTypes {
+			types[i] = gen.ToTypeJS(t, fileID, nomsName, 0)
+		}
+		return fmt.Sprintf(`%s.makeCompoundType(%s.Kind.%s, %s)`, nomsName, nomsName, kindToString(t.Kind()), strings.Join(types, ", "))
+	case types.EnumDesc:
+		return fmt.Sprintf(`%s.makeEnumType('%s', '%s')`, nomsName, t.Name(), strings.Join(desc.IDs, `', '`))
+	case types.StructDesc:
+		flatten := func(f []types.Field) string {
+			out := make([]string, 0, len(f))
+			for _, field := range f {
+				out = append(out, fmt.Sprintf(`%snew %s.Field('%s', %s, %t),`, ind(indent+1), nomsName, field.Name, gen.ToTypeJS(field.T, fileID, nomsName, 0), field.Optional))
+			}
+			return strings.Join(out, "\n")
+		}
+		fields := fmt.Sprintf("%s[\n%s\n%s]", ind(indent), flatten(desc.Fields), ind(indent))
+		choices := fmt.Sprintf("%s[\n%s\n%s]", ind(indent), flatten(desc.Union), ind(indent))
+		return fmt.Sprintf("%s.makeStructType('%s',\n%s,\n%s\n%s)", nomsName, t.Name(), fields, choices, ind(indent-1))
 	default:
 		d.Chk.Fail("Unknown TypeDesc.", "%#v (%T)", desc, desc)
 	}
