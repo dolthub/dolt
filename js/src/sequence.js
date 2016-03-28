@@ -4,7 +4,7 @@ import type DataStore from './data-store.js';
 import {invariant, notNull} from './assert.js';
 import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
-import {Type} from './type.js';
+import type {Type} from './type.js';
 import {ValueBase} from './value.js';
 
 export class Sequence<T> extends ValueBase {

@@ -7,6 +7,7 @@ import MemoryStore from './memory-store.js';
 import test from './async-test.js';
 import {newBlob, BlobWriter} from './blob.js';
 import DataStore from './data-store.js';
+import {blobType} from './type.js';
 
 suite('Blob', () => {
   function intSequence(start: number, end: number): Uint8Array {
@@ -141,5 +142,14 @@ suite('Blob', () => {
       115,
     ]));
     assert.equal(b.ref.toString(), 'sha1-fc30f237649464078574bc46b90c842179b4fa18');
+  });
+
+  test('chunks', async () => {
+    const a = randomArray(15);
+    const b = await newBlob(a);
+    const chunks = b.chunks;
+    assert.equal(chunks.length, 2);
+    assert.isTrue(chunks[0].type.equals(blobType));
+    assert.isTrue(chunks[1].type.equals(blobType));
   });
 });

@@ -1,8 +1,9 @@
 // @flow
 
-import Ref from './ref.js';
+import type RefValue from './ref-value.js';
 import type {valueOrPrimitive} from './value.js';
-import {Field, StructDesc, Type} from './type.js';
+import {StructDesc} from './type.js';
+import type {Field, Type} from './type.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitive} from './primitives.js';
 import {Kind} from'./noms-kind.js';
@@ -33,7 +34,7 @@ export default class Struct extends ValueBase {
     this._unionIndex = validate(this);
   }
 
-  get chunks(): Array<Ref> {
+  get chunks(): Array<RefValue> {
     const chunks = [];
     chunks.push(...this.type.chunks);
     forEach(this, this._unionField, v => {

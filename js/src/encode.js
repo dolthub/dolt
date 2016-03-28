@@ -1,7 +1,7 @@
 // @flow
 
 import Chunk from './chunk.js';
-import Ref from './ref.js';
+import type Ref from './ref.js';
 import RefValue from './ref-value.js';
 import Struct from './struct.js';
 import type DataStore from './data-store.js';

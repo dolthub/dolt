@@ -5,10 +5,11 @@ import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type DataStore from './data-store.js';
 import type {Splice} from './edit-distance.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
-import {AsyncIterator} from './async-iterator.js';
+import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
-import {diff, IndexedSequence, IndexedSequenceIterator} from './indexed-sequence.js';
+import {IndexedSequence, IndexedSequenceIterator} from './indexed-sequence.js';
+import {diff} from './indexed-sequence-diff.js';
 import {getRefOfValueOrPrimitive} from './get-ref.js';
 import {invariant} from './assert.js';
 import {MetaTuple, newIndexedMetaSequenceBoundaryChecker,

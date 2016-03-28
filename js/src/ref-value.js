@@ -1,7 +1,7 @@
 // @flow
 
-import DataStore from './data-store.js';
-import Ref from './ref.js';
+import type DataStore from './data-store.js';
+import type Ref from './ref.js';
 import type {Type} from './type.js';
 import type {Value} from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant} from './assert.js';
@@ -25,7 +25,7 @@ export default class RefValue<T: Value> extends ValueBase {
     return this.targetRef.less(other.targetRef);
   }
 
-  get chunks(): Array<Ref> {
-    return [this.targetRef];
+  get chunks(): Array<RefValue> {
+    return [this];
   }
 }

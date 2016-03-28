@@ -16,6 +16,7 @@ import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import {Package, registerPackage} from './package.js';
+import type {Type} from './type.js';
 
 const testSetSize = 5000;
 const setOfNRef = 'sha1-54ff8f84b5f39fe2171572922d067257a57c539c';
@@ -185,10 +186,10 @@ suite('SetLeaf', () => {
     assert.deepEqual([], await flatten(build(['b', 'd']).iteratorAt('e')));
   });
 
-  test('chunks', () => {
+  function testChunks(elemType: Type) {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Value));
+    const tr = makeCompoundType(Kind.Set, elemType);
     const st = makePrimitiveType(Kind.String);
     const refOfSt = makeCompoundType(Kind.Ref, st);
     const r1 = new RefValue(ds.writeValue('x'), refOfSt);
@@ -196,9 +197,17 @@ suite('SetLeaf', () => {
     const r3 = new RefValue(ds.writeValue('b'), refOfSt);
     const l = new NomsSet(tr, new SetLeafSequence(ds, tr, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
-    assert.isTrue(r1.targetRef.equals(l.chunks[0]));
-    assert.isTrue(r2.targetRef.equals(l.chunks[1]));
-    assert.isTrue(r3.targetRef.equals(l.chunks[2]));
+    assert.isTrue(r1.equals(l.chunks[0]));
+    assert.isTrue(r2.equals(l.chunks[1]));
+    assert.isTrue(r3.equals(l.chunks[2]));
+  }
+
+  test('chunks, set of value', () => {
+    testChunks(makePrimitiveType(Kind.Value));
+  });
+
+  test('chunks', () => {
+    testChunks(makePrimitiveType(Kind.String));
   });
 });
 

@@ -1,6 +1,7 @@
 // @flow
 
 import Ref from './ref.js';
+import RefValue from './ref-value.js';
 import type {NomsKind} from './noms-kind.js';
 import type {Value} from './value.js';
 import {ensureRef} from './get-ref.js';
@@ -13,7 +14,7 @@ export type TypeDesc = {
   describe: () => string;
 };
 
-class PrimitiveDesc {
+export class PrimitiveDesc {
   kind: NomsKind;
 
   constructor(kind: NomsKind) {
@@ -29,7 +30,7 @@ class PrimitiveDesc {
   }
 }
 
-class UnresolvedDesc {
+export class UnresolvedDesc {
   _pkgRef: Ref;
   _ordinal: number;
 
@@ -56,7 +57,7 @@ class UnresolvedDesc {
   }
 }
 
-class CompoundDesc {
+export class CompoundDesc {
   kind: NomsKind;
   elemTypes: Array<Type>;
 
@@ -90,7 +91,7 @@ class CompoundDesc {
   }
 }
 
-class EnumDesc {
+export class EnumDesc {
   ids: Array<string>;
 
   constructor(ids: Array<string>) {
@@ -127,7 +128,7 @@ class EnumDesc {
 }
 
 
-class StructDesc {
+export class StructDesc {
   fields: Array<Field>;
   union: Array<Field>;
 
@@ -184,7 +185,7 @@ class StructDesc {
   }
 }
 
-class Field {
+export class Field {
   name: string;
   t: Type;
   optional: boolean;
@@ -200,7 +201,7 @@ class Field {
   }
 }
 
-class Type {
+export class Type {
   _namespace: string;
   _name: string;
   _desc: TypeDesc;
@@ -229,11 +230,11 @@ class Type {
     return this.ref.less(other.ref);
   }
 
-  get chunks(): Array<Ref> {
+  get chunks(): Array<RefValue> {
     const chunks = [];
     if (this.unresolved) {
       if (this.hasPackageRef) {
-        chunks.push(this.packageRef);
+        chunks.push(new RefValue(this.packageRef, packageType));
       }
 
       return chunks;
@@ -369,11 +370,11 @@ function buildType(n: string, desc: TypeDesc): Type {
   }
 }
 
-function makePrimitiveType(k: NomsKind): Type {
+export function makePrimitiveType(k: NomsKind): Type {
   return buildType('', new PrimitiveDesc(k));
 }
 
-function makeCompoundType(k: NomsKind, ...elemTypes: Array<Type>): Type {
+export function makeCompoundType(k: NomsKind, ...elemTypes: Array<Type>): Type {
   if (elemTypes.length === 1) {
     invariant(k !== Kind.Map, 'Map requires 2 element types');
     invariant(k === Kind.Ref || k === Kind.List || k === Kind.Set);
@@ -385,19 +386,19 @@ function makeCompoundType(k: NomsKind, ...elemTypes: Array<Type>): Type {
   return buildType('', new CompoundDesc(k, elemTypes));
 }
 
-function makeEnumType(name: string, ids: Array<string>): Type {
+export function makeEnumType(name: string, ids: Array<string>): Type {
   return buildType(name, new EnumDesc(ids));
 }
 
-function makeStructType(name: string, fields: Array<Field>, choices: Array<Field>): Type {
+export function makeStructType(name: string, fields: Array<Field>, choices: Array<Field>): Type {
   return buildType(name, new StructDesc(fields, choices));
 }
 
-function makeType(pkgRef: Ref, ordinal: number): Type {
+export function makeType(pkgRef: Ref, ordinal: number): Type {
   return new Type('', '', new UnresolvedDesc(pkgRef, ordinal));
 }
 
-function makeUnresolvedType(namespace: string, name: string): Type {
+export function makeUnresolvedType(namespace: string, name: string): Type {
   return new Type(name, namespace, new UnresolvedDesc(new Ref(), -1));
 }
 
@@ -422,18 +423,4 @@ export const listOfValueType = makeCompoundType(Kind.List, valueType);
 export const setOfValueType = makeCompoundType(Kind.Set, valueType);
 export const mapOfValueType = makeCompoundType(Kind.Map, valueType, valueType);
 
-export {
-  CompoundDesc,
-  EnumDesc,
-  Field,
-  makeCompoundType,
-  makeEnumType,
-  makePrimitiveType,
-  makeStructType,
-  makeType,
-  makeUnresolvedType,
-  PrimitiveDesc,
-  StructDesc,
-  Type,
-  UnresolvedDesc,
-};
+export const packageRefType = makeCompoundType(Kind.Ref, packageType);
