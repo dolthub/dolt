@@ -8,7 +8,7 @@ import type {valueOrPrimitive, Value} from './value.js'; // eslint-disable-line 
 import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
-import {compare, equals, less} from './compare.js';
+import {getCompareFunction, equals, less} from './compare.js';
 import {getRefOfValueOrPrimitive} from './get-ref.js';
 import {invariant} from './assert.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
@@ -49,7 +49,8 @@ function newSetLeafBoundaryChecker<T:valueOrPrimitive>(t: Type): BoundaryChecker
 
 function buildSetData<T>(t: Type, values: Array<any>): Array<T> {
   // TODO: Assert values are of correct type
-  values.sort((v1, v2) => compare(v1, v2));
+  const compare = getCompareFunction(t.elemTypes[0]);
+  values.sort(compare);
   return values;
 }
 

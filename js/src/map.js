@@ -8,7 +8,7 @@ import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unus
 import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
-import {compare, equals} from './compare.js';
+import {getCompareFunction, equals} from './compare.js';
 import {default as Ref, sha1Size} from './ref.js';
 import {getRefOfValueOrPrimitive} from './get-ref.js';
 import {invariant} from './assert.js';
@@ -60,6 +60,7 @@ function buildMapData(t: Type, kvs: Array<any>): Array<MapEntry> {
       value: kvs[i + 1],
     });
   }
+  const compare = getCompareFunction(t.elemTypes[0]);
   entries.sort((v1, v2) => compare(v1.key, v2.key));
   return entries;
 }
