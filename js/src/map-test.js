@@ -15,6 +15,7 @@ import {Kind} from './noms-kind.js';
 import {MapLeafSequence, newMap, NomsMap} from './map.js';
 import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {Package, registerPackage} from './package.js';
+import type {Type} from './type.js';
 
 const testMapSize = 5000;
 const mapOfNRef = 'sha1-1b9664e55091370996f3af428ffee78f1ad36426';
@@ -242,17 +243,16 @@ suite('MapLeaf', () => {
     }
   });
 
-  test('chunks', () => {
+  function testChunks(keyType: Type, valueType: Type) {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map,
-                                makePrimitiveType(Kind.Value), makePrimitiveType(Kind.Value));
+    const tr = makeCompoundType(Kind.Map, keyType, valueType);
     const st = makePrimitiveType(Kind.String);
     const refOfSt = makeCompoundType(Kind.Ref, st);
     const r1 = new RefValue(ds.writeValue('x'), refOfSt);
-    const r2 = new RefValue(ds.writeValue('a'), refOfSt);
+    const r2 = new RefValue(ds.writeValue(true), refOfSt);
     const r3 = new RefValue(ds.writeValue('b'), refOfSt);
-    const r4 = new RefValue(ds.writeValue('c'), refOfSt);
+    const r4 = new RefValue(ds.writeValue(false), refOfSt);
     const m = new NomsMap(tr,
         new MapLeafSequence(ds, tr, [{key: r1, value: r2}, {key: r3, value: r4}]));
     assert.strictEqual(4, m.chunks.length);
@@ -260,6 +260,14 @@ suite('MapLeaf', () => {
     assert.isTrue(r2.equals(m.chunks[1]));
     assert.isTrue(r3.equals(m.chunks[2]));
     assert.isTrue(r4.equals(m.chunks[3]));
+  }
+
+  test('chunks', () => {
+    testChunks(makePrimitiveType(Kind.String), makePrimitiveType(Kind.Bool));
+  });
+
+  test('chunks, map from value to value', () => {
+    testChunks(makePrimitiveType(Kind.Value), makePrimitiveType(Kind.Value));
   });
 });
 

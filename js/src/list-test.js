@@ -16,6 +16,7 @@ import {invariant} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {ListLeafSequence, newList, NomsList} from './list.js';
 import {Package, registerPackage} from './package.js';
+import type {Type} from './type.js';
 
 const testListSize = 5000;
 const listOfNRef = 'sha1-11e947e8aacfda8e9052bb57e661da442b26c625';
@@ -236,10 +237,10 @@ suite('ListLeafSequence', () => {
     await test([4, 2, 10, 16]);
   });
 
-  test('chunks', () => {
+  function testChunks(elemType: Type) {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Value));
+    const tr = makeCompoundType(Kind.List, elemType);
     const st = makePrimitiveType(Kind.String);
     const refOfSt = makeCompoundType(Kind.Ref, st);
     const r1 = new RefValue(ds.writeValue('x'), refOfSt);
@@ -250,6 +251,14 @@ suite('ListLeafSequence', () => {
     assert.isTrue(r1.equals(l.chunks[0]));
     assert.isTrue(r2.equals(l.chunks[1]));
     assert.isTrue(r3.equals(l.chunks[2]));
+  }
+
+  test('chunks, list of value', () => {
+    testChunks(makePrimitiveType(Kind.Value));
+  });
+
+  test('chunks', () => {
+    testChunks(makePrimitiveType(Kind.String));
   });
 });
 

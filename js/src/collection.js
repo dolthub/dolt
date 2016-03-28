@@ -22,8 +22,7 @@ export class Collection<S: Sequence> extends ValueBase {
   get chunks(): Array<RefValue> {
     const chunks = [];
     const addChunks = this.sequence.isMeta ? (mt: MetaTuple) => {
-      // TODO: https://github.com/attic-labs/noms/issues/1106
-      chunks.push(new RefValue(mt.ref));
+      chunks.push(new RefValue(mt.ref, this.type));
     } : (v) => {
       if (!isPrimitive(v)) {
         chunks.push(...v.chunks);
