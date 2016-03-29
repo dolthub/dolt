@@ -20,7 +20,9 @@ This repository contains two reference implementations of the noms protocol - on
 # Get the code
 
 ```
-go get -u -t github.com/attic-labs/noms/...
+mkdir -p $GOPATH/src/github.com/attic-labs
+cd $GOPATH/src/github.com/attic-labs
+git clone https://github.com/attic-labs/noms
 ```
 
 # Build
