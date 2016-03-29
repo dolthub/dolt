@@ -85,6 +85,7 @@ func main() {
 
 	// Generate code from all .noms file in the current directory
 	nomsFiles, err := filepath.Glob("*" + ext)
+	d.Chk.NoError(err)
 
 	written := map[string]bool{}
 	packages := map[string]pkg.Parsed{}

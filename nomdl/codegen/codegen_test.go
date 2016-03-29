@@ -40,22 +40,33 @@ func assertOutput(inPath, goldenPath string, t *testing.T) {
 	d.Chk.NoError(err)
 
 	var buf bytes.Buffer
-	pkg := pkg.ParseNomDL("test", inFile, filepath.Dir(inPath), emptyDS)
-	gen := newCodeGen(&buf, getBareFileName(inPath), map[string]bool{}, depsMap{}, pkg)
+	pkg := pkg.ParseNomDL("gen", inFile, filepath.Dir(inPath), emptyDS)
+	written := map[string]bool{}
+	_, file := filepath.Split(inPath)
+	if file == "struct_with_list.noms" {
+		// List<Uint8> is provided twice in the noms files to ensure it is only written once. Therefore we emulate that it was already written for struct_with_list.noms.
+		written["ListOfUint8"] = true
+	}
+	gen := newCodeGen(&buf, getBareFileName(inPath), written, depsMap{}, pkg)
 	gen.WritePackage()
 
 	bs, err := imports.Process("", buf.Bytes(), nil)
 	d.Chk.NoError(err)
 
-	assert.Equal(string(goldenBytes), string(bs))
+	assert.Equal(string(goldenBytes), string(bs), "%s did not generate the same string", inPath)
 }
 
 func TestGeneratedFiles(t *testing.T) {
-	files, err := filepath.Glob("test/gen/*.noms")
+	files, err := filepath.Glob("test/*.noms")
 	d.Chk.NoError(err)
+	assert.NotEmpty(t, files)
 	for _, n := range files {
 		_, file := filepath.Split(n)
-		assertOutput(n, "test/"+file[:len(file)-5]+".go", t)
+		if file == "struct_with_imports.noms" {
+			// We are not writing deps in this test so lookup by ref does not work.
+			continue
+		}
+		assertOutput(n, filepath.Join("test", "gen", file+".go"), t)
 	}
 }
 
