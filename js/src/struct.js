@@ -53,7 +53,7 @@ export default class Struct extends ValueBase {
     return this._unionIndex;
   }
 
-  get unionValue(): valueOrPrimitive {
+  get unionValue(): ?valueOrPrimitive {
     return this._data[this._unionField.name];
   }
 

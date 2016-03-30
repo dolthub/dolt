@@ -28,10 +28,10 @@ export {
   Field,
   float32Type,
   float64Type,
-  int8Type,
   int16Type,
   int32Type,
   int64Type,
+  int8Type,
   makeCompoundType,
   makeEnumType,
   makePrimitiveType,
@@ -40,15 +40,16 @@ export {
   makeUnresolvedType,
   packageType,
   PrimitiveDesc,
+  stringType,
   StructDesc,
   Type,
-  stringType,
   typeType,
-  uint8Type,
   uint16Type,
   uint32Type,
   uint64Type,
+  uint8Type,
   UnresolvedDesc,
+  valueType,
 } from './type.js';
 export {equals, less} from './compare.js';
 
@@ -56,5 +57,5 @@ export type {AsyncIteratorResult} from './async-iterator.js';
 export type {ChunkStore} from './chunk-store.js';
 export type {MapEntry} from './map.js';
 export type {Splice} from './edit-distance.js';
-export type {valueOrPrimitive} from './value.js';
+export type {valueOrPrimitive, Value} from './value.js';
 export type {NomsKind} from './noms-kind.js';
