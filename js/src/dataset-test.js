@@ -21,12 +21,12 @@ suite('Dataset', () => {
 
     // The new dataset has |a|.
     const aCommit = notNull(await ds2.head());
-    assert.strictEqual('a', aCommit.get('value'));
+    assert.strictEqual('a', aCommit.value);
     ds = ds2;
 
     // |a| <- |b|
     ds = await ds.commit('b', [aCommit.ref]);
-    assert.strictEqual('b', notNull(await ds.head()).get('value'));
+    assert.strictEqual('b', notNull(await ds.head()).value);
 
     // |a| <- |b|
     //   \----|c|
@@ -40,21 +40,21 @@ suite('Dataset', () => {
     invariant(ex instanceof Error);
     assert.strictEqual('Merge needed', ex.message);
     const bCommit = notNull(await ds.head());
-    assert.strictEqual('b', bCommit.get('value'));
+    assert.strictEqual('b', bCommit.value);
 
     // |a| <- |b| <- |d|
     ds = await ds.commit('d');
-    assert.strictEqual('d', notNull(await ds.head()).get('value'));
+    assert.strictEqual('d', notNull(await ds.head()).value);
 
 
     // Add a commit to a different datasetId
     ds = new Dataset(store, 'otherDs');
     ds = await ds.commit('a');
-    assert.strictEqual('a', notNull(await ds.head('otherDs')).get('value'));
+    assert.strictEqual('a', notNull(await ds.head('otherDs')).value);
 
     // Get a fresh datastore, and verify that both datasets are present
     const newStore = new DataStore(ms);
-    assert.strictEqual('d', notNull(await newStore.head('ds1')).get('value'));
-    assert.strictEqual('a', notNull(await newStore.head('otherDs')).get('value'));
+    assert.strictEqual('d', notNull(await newStore.head('ds1')).value);
+    assert.strictEqual('a', notNull(await newStore.head('otherDs')).value);
   });
 });

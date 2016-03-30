@@ -4,7 +4,8 @@ import {NomsBlob, BlobLeafSequence} from './blob.js';
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import RefValue from './ref-value.js';
-import Struct from './struct.js';
+import {newStruct} from './struct.js';
+import type Struct from './struct.js';
 import type DataStore from './data-store.js';
 import type {NomsKind} from './noms-kind.js';
 import {decode as decodeBase64} from './base64.js';
@@ -407,12 +408,11 @@ export class JsonArrayReader {
 
   }
 
-  readStruct(typeDef: Type, type: Type, pkg: Package): Struct {
-    // TODO FixupType?
+  readStruct<T: Struct>(typeDef: Type, type: Type, pkg: Package): T {
     const desc = typeDef.desc;
     invariant(desc instanceof StructDesc);
 
-    const s: { [key: string]: any } = Object.create(null);
+    const data: {[key: string]: any} = Object.create(null);
 
     for (let i = 0; i < desc.fields.length; i++) {
       const field = desc.fields[i];
@@ -420,11 +420,11 @@ export class JsonArrayReader {
         const b = this.readBool();
         if (b) {
           const v = this.readValueWithoutTag(field.t, pkg);
-          s[field.name] = v;
+          data[field.name] = v;
         }
       } else {
         const v = this.readValueWithoutTag(field.t, pkg);
-        s[field.name] = v;
+        data[field.name] = v;
       }
     }
 
@@ -433,11 +433,11 @@ export class JsonArrayReader {
       unionIndex = this.readUint();
       const unionField = desc.union[unionIndex];
       const v = this.readValueWithoutTag(unionField.t, pkg);
-      s[unionField.name] = v;
+      data[unionField.name] = v;
     }
 
     type = fixupType(type, pkg);
-    return new Struct(type, typeDef, s);
+    return newStruct(type, typeDef, data);
   }
 }
 

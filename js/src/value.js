@@ -34,6 +34,10 @@ export class ValueBase {
   less(other: Value): boolean {
     return this.ref.less(other.ref);
   }
+
+  get chunks(): Array<RefValue> {
+    return [];
+  }
 }
 
 export type valueOrPrimitive = primitive | Value;

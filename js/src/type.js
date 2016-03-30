@@ -192,6 +192,7 @@ export class Field {
 
   constructor(name: string, t: Type, optional: boolean) {
     this.name = name;
+    // TODO: Rename this to type.
     this.t = t;
     this.optional = optional;
   }

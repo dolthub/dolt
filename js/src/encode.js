@@ -3,7 +3,7 @@
 import Chunk from './chunk.js';
 import type Ref from './ref.js';
 import RefValue from './ref-value.js';
-import Struct from './struct.js';
+import {default as Struct, StructMirror} from './struct.js';
 import type DataStore from './data-store.js';
 import type {NomsKind} from './noms-kind.js';
 import {encode as encodeBase64} from './base64.js';
@@ -330,28 +330,25 @@ export class JsonArrayWriter {
   }
 
   writeStruct(s: Struct, type: Type, typeDef: Type, pkg: Package) {
-    const desc = typeDef.desc;
-    invariant(desc instanceof StructDesc);
-    for (let i = 0; i < desc.fields.length; i++) {
-      const field = desc.fields[i];
-      const fieldValue = s.get(field.name);
+    const mirror = new StructMirror(s);
+    mirror.forEachField(field => {
       if (field.optional) {
-        if (fieldValue !== undefined) {
+        if (field.present) {
           this.writeBoolean(true);
-          this.writeValue(fieldValue, field.t, pkg);
+          this.writeValue(field.value, field.type, pkg);
         } else {
           this.writeBoolean(false);
         }
       } else {
-        invariant(fieldValue !== undefined);
-        this.writeValue(s.get(field.name), field.t, pkg);
+        invariant(field.present);
+        this.writeValue(field.value, field.type, pkg);
       }
-    }
+    });
 
-    if (s.hasUnion) {
-      const unionField = notNull(desc.union[s.unionIndex]);
-      this.writeInt(s.unionIndex);
-      this.writeValue(s.get(unionField.name), unionField.t, pkg);
+    if (mirror.hasUnion) {
+      const {unionField} = mirror;
+      this.writeInt(mirror.unionIndex);
+      this.writeValue(unionField.value, unionField.type, pkg);
     }
   }
 

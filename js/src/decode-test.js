@@ -5,7 +5,7 @@ import DataStore from './data-store.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 import RefValue from './ref-value.js';
-import Struct from './struct.js';
+import {default as Struct, StructMirror} from './struct.js';
 import test from './async-test.js';
 import type {float64, int32, int64, uint8, uint16, uint32, uint64} from './primitives.js';
 import type {TypeDesc} from './type.js';
@@ -252,10 +252,11 @@ suite('Decode', () => {
   function assertStruct(s: ?Struct, desc: TypeDesc, data: {[key: string]: any}) {
     notNull(s);
     invariant(s instanceof Struct, 'expected instanceof struct');
-    assert.deepEqual(desc, s.desc);
+    const mirror = new StructMirror(s);
+    assert.deepEqual(desc, mirror.desc);
 
     for (const key in data) {
-      assert.deepEqual(data[key], s.get(key));
+      assert.deepEqual(data[key], mirror.get(key));
     }
   }
 
@@ -498,7 +499,7 @@ suite('Decode', () => {
     const rootMap = await ds.readValue(root);
     const counterRef = await rootMap.get('counter');
     const commit = await counterRef.targetValue(ds);
-    assert.strictEqual(1, await commit.get('value'));
+    assert.strictEqual(1, await commit.value);
   });
 
   test('out of line blob', async () => {
