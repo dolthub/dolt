@@ -10,6 +10,7 @@ import {
   invariant,
   ListLeafSequence,
   MapLeafSequence,
+  NomsBlob,
   NomsList,
   NomsMap,
   NomsSet,
@@ -122,8 +123,8 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
 
     if (t === 'boolean' || t === 'number' || t === 'string') {
       data.nodes[id] = {name: String(val)};
-    } else if (val instanceof Promise) { // Blob
-      data.nodes[id] = {name: `Blob`};
+    } else if (val instanceof NomsBlob) {
+      data.nodes[id] = {name: `Blob (${val.length})`};
     } else if (val instanceof NomsList) {
       const sequence = val.sequence;
       if (sequence instanceof ListLeafSequence) {
@@ -198,7 +199,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         processField(name);
       }
     } else {
-      console.log('Unsupported type!', val); // eslint-disable-line no-console
+      console.log('Unsupported type', val.constructor.name, val); // eslint-disable-line no-console
     }
 
     return id;
