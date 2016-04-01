@@ -45,13 +45,13 @@ suite('DataStore', () => {
 
     // The new datastore has |a|.
     const aCommit1 = notNull(await ds2.head(datasetID));
-    assert.strictEqual('a', aCommit1.get('value'));
+    assert.strictEqual('a', aCommit1.value);
     ds = ds2;
 
     // |a| <- |b|
     const bCommit = await newCommit('b', [aCommit.ref]);
     ds = await ds.commit(datasetID, bCommit);
-    assert.strictEqual('b', notNull(await ds.head(datasetID)).get('value'));
+    assert.strictEqual('b', notNull(await ds.head(datasetID)).value);
 
     // |a| <- |b|
     //   \----|c|
@@ -65,12 +65,12 @@ suite('DataStore', () => {
       message = ex.message;
     }
     assert.strictEqual('Merge needed', message);
-    assert.strictEqual('b', notNull(await ds.head(datasetID)).get('value'));
+    assert.strictEqual('b', notNull(await ds.head(datasetID)).value);
 
     // |a| <- |b| <- |d|
     const dCommit = await newCommit('d', [bCommit.ref]);
     ds = await ds.commit(datasetID, dCommit);
-    assert.strictEqual('d', notNull(await ds.head(datasetID)).get('value'));
+    assert.strictEqual('d', notNull(await ds.head(datasetID)).value);
 
     // Attempt to recommit |b| with |a| as parent.
     // Should be disallowed.
@@ -81,16 +81,16 @@ suite('DataStore', () => {
       message = ex.message;
     }
     // assert.strictEqual('Merge needed', message);
-    assert.strictEqual('d', notNull(await ds.head(datasetID)).get('value'));
+    assert.strictEqual('d', notNull(await ds.head(datasetID)).value);
 
     // Add a commit to a different datasetId
     ds = await ds.commit('otherDs', aCommit);
-    assert.strictEqual('a', notNull(await ds.head('otherDs')).get('value'));
+    assert.strictEqual('a', notNull(await ds.head('otherDs')).value);
 
     // Get a fresh datastore, and verify that both datasets are present
     const newDs = new DataStore(ms);
-    assert.strictEqual('d', notNull(await newDs.head(datasetID)).get('value'));
-    assert.strictEqual('a', notNull(await newDs.head('otherDs')).get('value'));
+    assert.strictEqual('d', notNull(await newDs.head(datasetID)).value);
+    assert.strictEqual('a', notNull(await newDs.head('otherDs')).value);
   });
 
   test('concurrency', async () => {
@@ -103,7 +103,7 @@ suite('DataStore', () => {
     ds = await ds.commit(datasetID, aCommit);
     const bCommit = await newCommit('b', [aCommit.ref]);
     ds = await ds.commit(datasetID, bCommit);
-    assert.strictEqual('b', notNull(await ds.head(datasetID)).get('value'));
+    assert.strictEqual('b', notNull(await ds.head(datasetID)).value);
 
     // Important to create this here.
     let ds2 = new DataStore(ms);
@@ -112,7 +112,7 @@ suite('DataStore', () => {
     // |a| <- |b| <- |c|
     const cCommit = await newCommit('c', [bCommit.ref]);
     ds = await ds.commit(datasetID, cCommit);
-    assert.strictEqual('c', notNull(await ds.head(datasetID)).get('value'));
+    assert.strictEqual('c', notNull(await ds.head(datasetID)).value);
 
     // Change 2:
     // |a| <- |b| <- |e|
@@ -126,7 +126,7 @@ suite('DataStore', () => {
       message = ex.message;
     }
     assert.strictEqual('Merge needed', message);
-    assert.strictEqual('c', notNull(await ds.head(datasetID)).get('value'));
+    assert.strictEqual('c', notNull(await ds.head(datasetID)).value);
   });
 
 

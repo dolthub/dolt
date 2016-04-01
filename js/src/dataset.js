@@ -3,7 +3,7 @@
 import {newCommit} from './data-store.js';
 import type {valueOrPrimitive} from './value.js';
 import type DataStore from './data-store.js';
-import type Struct from './struct.js';
+import type {Commit} from './commit.js';
 import type Ref from './ref.js';
 
 export default class Dataset {
@@ -23,7 +23,7 @@ export default class Dataset {
     return this._id;
   }
 
-  head(): Promise<?Struct> {
+  head(): Promise<?Commit> {
     return this._store.head(this._id);
   }
 
@@ -34,7 +34,7 @@ export default class Dataset {
       const head = await this.head();
       parents = head ? [head.ref] : [];
     }
-    const commit = await newCommit(v, parents);
+    const commit: Commit = await newCommit(v, parents);
     const store = await this._store.commit(this._id, commit);
     return new Dataset(store, this._id);
   }
