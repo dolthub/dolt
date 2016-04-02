@@ -1,11 +1,10 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite} from 'mocha';
+import {suite, test} from 'mocha';
 import Chunk from './chunk.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
-import test from './async-test.js';
 
 suite('MemoryStore', () => {
   async function assertInputInStore(input: string, ref: Ref, ms: MemoryStore) {

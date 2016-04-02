@@ -1,13 +1,12 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite} from 'mocha';
+import {suite, test} from 'mocha';
 
 import DataStore from './data-store.js';
 import MemoryStore from './memory-store.js';
 import RefValue from './ref-value.js';
 import Struct from './struct.js';
-import test from './async-test.js';
 import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
 import {flatten, flattenParallel} from './test-util.js';
 import {invariant, notNull} from './assert.js';

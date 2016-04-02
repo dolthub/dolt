@@ -1,13 +1,12 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite} from 'mocha';
+import {suite, test} from 'mocha';
 
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 import RefValue from './ref-value.js';
 import Struct from './struct.js';
-import test from './async-test.js';
 import type {NomsKind} from './noms-kind.js';
 import {encodeNomsValue, JsonArrayWriter} from './encode.js';
 import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type,}

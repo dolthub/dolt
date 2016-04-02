@@ -1,10 +1,9 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite} from 'mocha';
+import {suite, test} from 'mocha';
 import Random from './pseudo-random.js';
 import MemoryStore from './memory-store.js';
-import test from './async-test.js';
 import {newBlob, BlobWriter} from './blob.js';
 import DataStore from './data-store.js';
 import {blobType} from './type.js';

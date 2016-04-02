@@ -6,7 +6,6 @@ import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 import RefValue from './ref-value.js';
 import {default as Struct, StructMirror} from './struct.js';
-import test from './async-test.js';
 import type {float64, int32, int64, uint8, uint16, uint32, uint64} from './primitives.js';
 import type {TypeDesc} from './type.js';
 import type {Value} from './value.js';
@@ -30,7 +29,7 @@ import {MapLeafSequence, NomsMap} from './map.js';
 import {NomsBlob, newBlob} from './blob.js';
 import {NomsSet, SetLeafSequence} from './set.js';
 import {registerPackage, Package} from './package.js';
-import {suite} from 'mocha';
+import {suite, test} from 'mocha';
 
 suite('Decode', () => {
   function stringToUint8Array(s): Uint8Array {
