@@ -1,1 +1,3 @@
-// enum.tmpl
+{{$name := .Name}}
+export type {{.Name}} ={{range $index, $id := .Ids}}
+  {{$index}}{{if isLast $index $.Ids | not}} |{{else}};{{end}}  // {{$id}}{{end}}

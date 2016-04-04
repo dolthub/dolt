@@ -20,7 +20,11 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// enum.tmpl
+
+export type Handedness =
+  0 |  // right
+  1 |  // left
+  2;  // switch
 
 export interface EnumStruct extends _noms.Struct {
   hand: Handedness;  // readonly

@@ -10,6 +10,7 @@ package code
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"unicode"
 
@@ -445,6 +446,11 @@ func (gen Generator) ToTypeJS(t types.Type, fileID, nomsName string, indent int)
 		d.Chk.Fail("Unknown TypeDesc.", "%#v (%T)", desc, desc)
 	}
 	panic("Unreachable")
+}
+
+// IsLast determines if |index| is the last index in |seq|.
+func (gen Generator) IsLast(index int, seq interface{}) bool {
+	return reflect.ValueOf(seq).Len() == index+1
 }
 
 // ToTag replaces "-" characters in s with "_", so it can be used in a Go identifier.

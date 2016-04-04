@@ -28,4 +28,8 @@ export interface S extends _noms.Struct {
   b: boolean;  // readonly
   setB(value: boolean): S;
 }
-// enum.tmpl
+
+export type E =
+  0 |  // e1
+  1 |  // e2
+  2;  // e3

@@ -280,6 +280,7 @@ func (gen *codeGen) readTemplates() *template.Template {
 			"valueToDef":    gen.generator.ValueToDef,
 			"valueToUser":   gen.generator.ValueToUser,
 			"valueZero":     gen.generator.ValueZero,
+			"isLast":        gen.generator.IsLast,
 		}).ParseGlob(glob))
 }
 

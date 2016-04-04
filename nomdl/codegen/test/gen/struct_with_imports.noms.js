@@ -22,7 +22,10 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// enum.tmpl
+
+export type LocalE =
+  0 |  // LocalE1
+  1;  // Ignored
 
 export interface ImportUser extends _noms.Struct {
   importedStruct: D;  // readonly
