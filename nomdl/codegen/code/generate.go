@@ -75,6 +75,40 @@ func (gen Generator) UserType(t types.Type) string {
 	panic("unreachable")
 }
 
+// UserTypeJS returns a string containing the JS type that should be used when the Noms type described by t needs to be returned by a generated getter or taken as a parameter to a generated setter.
+func (gen Generator) UserTypeJS(t types.Type, nomsName string) string {
+	rt := gen.R.Resolve(t)
+	k := rt.Kind()
+	switch k {
+	case types.BlobKind:
+		return fmt.Sprintf("%s.Blob", nomsName)
+	case types.BoolKind:
+		return "boolean"
+	case types.StringKind:
+		return "string"
+	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+		return fmt.Sprintf("%s.%s", nomsName, strings.ToLower(kindToString(k)))
+	case types.EnumKind, types.StructKind:
+		return gen.UserName(t)
+	case types.ListKind:
+		return fmt.Sprintf("%s.List<%s>", nomsName, gen.UserTypeJS(t.Desc.(types.CompoundDesc).ElemTypes[0], nomsName))
+	case types.SetKind:
+		return fmt.Sprintf("%s.NomsSet<%s>", nomsName, gen.UserTypeJS(t.Desc.(types.CompoundDesc).ElemTypes[0], nomsName))
+	case types.RefKind:
+		return fmt.Sprintf("%s.RefValue<%s>", nomsName, gen.UserTypeJS(t.Desc.(types.CompoundDesc).ElemTypes[0], nomsName))
+	case types.MapKind:
+		elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
+		return fmt.Sprintf("%s.NomsMap<%s, %s>", nomsName, gen.UserTypeJS(elemTypes[0], nomsName), gen.UserTypeJS(elemTypes[1], nomsName))
+	case types.PackageKind:
+		return fmt.Sprintf("%s.Package", nomsName)
+	case types.ValueKind:
+		return fmt.Sprintf("%s.Value", nomsName)
+	case types.TypeKind:
+		return fmt.Sprintf("%s.Type", nomsName)
+	}
+	panic("unreachable")
+}
+
 // DefToValue returns a string containing Go code to convert an instance of a Def type (named val) to a Noms types.Value of the type described by t.
 func (gen Generator) DefToValue(val string, t types.Type) string {
 	rt := gen.R.Resolve(t)

@@ -20,4 +20,10 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// struct.tmpl
+
+export interface OptionalStruct extends _noms.Struct {
+  s: ?string;  // readonly
+  setS(value: ?string): OptionalStruct;
+  b: ?boolean;  // readonly
+  setB(value: ?boolean): OptionalStruct;
+}

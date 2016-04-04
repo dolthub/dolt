@@ -23,5 +23,19 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// struct.tmpl
-// set.tmpl
+
+export interface StructWithUnionField extends _noms.Struct {
+  a: _noms.float32;  // readonly
+  setA(value: _noms.float32): StructWithUnionField;
+  b: ?_noms.float64;  // readonly
+  setB(value: _noms.float64): StructWithUnionField;
+  c: ?string;  // readonly
+  setC(value: string): StructWithUnionField;
+  d: ?_noms.Blob;  // readonly
+  setD(value: _noms.Blob): StructWithUnionField;
+  e: ?_noms.Value;  // readonly
+  setE(value: _noms.Value): StructWithUnionField;
+  f: ?_noms.NomsSet<_noms.uint8>;  // readonly
+  setF(value: _noms.NomsSet<_noms.uint8>): StructWithUnionField;
+}
+

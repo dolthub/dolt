@@ -21,5 +21,11 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// struct.tmpl
+
+export interface S extends _noms.Struct {
+  s: string;  // readonly
+  setS(value: string): S;
+  b: boolean;  // readonly
+  setB(value: boolean): S;
+}
 // enum.tmpl

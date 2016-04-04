@@ -265,20 +265,21 @@ func (gen *codeGen) readTemplates() *template.Template {
 	glob := path.Join(path.Dir(thisfile), gen.lang, "*.tmpl")
 	return template.Must(template.New("").Funcs(
 		template.FuncMap{
-			"defType":       gen.generator.DefType,
-			"defToValue":    gen.generator.DefToValue,
 			"defToUser":     gen.generator.DefToUser,
+			"defToValue":    gen.generator.DefToValue,
+			"defType":       gen.generator.DefType,
 			"mayHaveChunks": gen.generator.MayHaveChunks,
-			"valueToDef":    gen.generator.ValueToDef,
-			"userType":      gen.generator.UserType,
-			"userToValue":   gen.generator.UserToValue,
-			"userToDef":     gen.generator.UserToDef,
-			"valueToUser":   gen.generator.ValueToUser,
-			"userZero":      gen.generator.UserZero,
-			"valueZero":     gen.generator.ValueZero,
 			"title":         strings.Title,
 			"toTypesType":   gen.generator.ToType,
 			"toTypesTypeJS": gen.generator.ToTypeJS,
+			"userToDef":     gen.generator.UserToDef,
+			"userToValue":   gen.generator.UserToValue,
+			"userType":      gen.generator.UserType,
+			"userTypeJS":    gen.generator.UserTypeJS,
+			"userZero":      gen.generator.UserZero,
+			"valueToDef":    gen.generator.ValueToDef,
+			"valueToUser":   gen.generator.ValueToUser,
+			"valueZero":     gen.generator.ValueZero,
 		}).ParseGlob(glob))
 }
 

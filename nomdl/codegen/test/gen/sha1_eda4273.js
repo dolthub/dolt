@@ -29,5 +29,15 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// struct.tmpl
-// struct.tmpl
+
+export interface D extends _noms.Struct {
+  structField: S;  // readonly
+  setStructField(value: S): D;
+  enumField: E;  // readonly
+  setEnumField(value: E): D;
+}
+
+export interface DUser extends _noms.Struct {
+  Dfield: D;  // readonly
+  setDfield(value: D): DUser;
+}

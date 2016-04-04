@@ -22,4 +22,14 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// struct.tmpl
+
+export interface StructWithList extends _noms.Struct {
+  l: _noms.List<_noms.uint8>;  // readonly
+  setL(value: _noms.List<_noms.uint8>): StructWithList;
+  b: boolean;  // readonly
+  setB(value: boolean): StructWithList;
+  s: string;  // readonly
+  setS(value: string): StructWithList;
+  i: _noms.int64;  // readonly
+  setI(value: _noms.int64): StructWithList;
+}

@@ -19,5 +19,9 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// struct.tmpl
-// list.tmpl
+
+export interface StructWithDupList extends _noms.Struct {
+  l: _noms.List<_noms.uint8>;  // readonly
+  setL(value: _noms.List<_noms.uint8>): StructWithDupList;
+}
+

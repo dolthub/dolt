@@ -32,4 +32,34 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// struct.tmpl
+
+export interface StructPrimitives extends _noms.Struct {
+  uint64: _noms.uint64;  // readonly
+  setUint64(value: _noms.uint64): StructPrimitives;
+  uint32: _noms.uint32;  // readonly
+  setUint32(value: _noms.uint32): StructPrimitives;
+  uint16: _noms.uint16;  // readonly
+  setUint16(value: _noms.uint16): StructPrimitives;
+  uint8: _noms.uint8;  // readonly
+  setUint8(value: _noms.uint8): StructPrimitives;
+  int64: _noms.int64;  // readonly
+  setInt64(value: _noms.int64): StructPrimitives;
+  int32: _noms.int32;  // readonly
+  setInt32(value: _noms.int32): StructPrimitives;
+  int16: _noms.int16;  // readonly
+  setInt16(value: _noms.int16): StructPrimitives;
+  int8: _noms.int8;  // readonly
+  setInt8(value: _noms.int8): StructPrimitives;
+  float64: _noms.float64;  // readonly
+  setFloat64(value: _noms.float64): StructPrimitives;
+  float32: _noms.float32;  // readonly
+  setFloat32(value: _noms.float32): StructPrimitives;
+  bool: boolean;  // readonly
+  setBool(value: boolean): StructPrimitives;
+  string: string;  // readonly
+  setString(value: string): StructPrimitives;
+  blob: _noms.Blob;  // readonly
+  setBlob(value: _noms.Blob): StructPrimitives;
+  value: _noms.Value;  // readonly
+  setValue(value: _noms.Value): StructPrimitives;
+}

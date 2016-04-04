@@ -23,5 +23,11 @@ import * as _noms from '@attic/noms';
 }
 
 // enum.tmpl
-// struct.tmpl
-// list.tmpl
+
+export interface ImportUser extends _noms.Struct {
+  importedStruct: D;  // readonly
+  setImportedStruct(value: D): ImportUser;
+  enum: LocalE;  // readonly
+  setEnum(value: LocalE): ImportUser;
+}
+

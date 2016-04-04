@@ -38,6 +38,24 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// struct.tmpl
-// struct.tmpl
-// struct.tmpl
+
+export interface StructWithUnions extends _noms.Struct {
+  a: __unionOfBOfFloat64AndCOfString;  // readonly
+  setA(value: __unionOfBOfFloat64AndCOfString): StructWithUnions;
+  d: __unionOfEOfFloat64AndFOfString;  // readonly
+  setD(value: __unionOfEOfFloat64AndFOfString): StructWithUnions;
+}
+
+export interface __unionOfBOfFloat64AndCOfString extends _noms.Struct {
+  b: ?_noms.float64;  // readonly
+  setB(value: _noms.float64): __unionOfBOfFloat64AndCOfString;
+  c: ?string;  // readonly
+  setC(value: string): __unionOfBOfFloat64AndCOfString;
+}
+
+export interface __unionOfEOfFloat64AndFOfString extends _noms.Struct {
+  e: ?_noms.float64;  // readonly
+  setE(value: _noms.float64): __unionOfEOfFloat64AndFOfString;
+  f: ?string;  // readonly
+  setF(value: string): __unionOfEOfFloat64AndFOfString;
+}

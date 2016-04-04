@@ -21,4 +21,8 @@ import * as _noms from '@attic/noms';
 }
 
 // enum.tmpl
-// struct.tmpl
+
+export interface EnumStruct extends _noms.Struct {
+  hand: Handedness;  // readonly
+  setHand(value: Handedness): EnumStruct;
+}

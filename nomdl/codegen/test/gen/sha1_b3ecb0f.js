@@ -19,6 +19,10 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// struct.tmpl
-// list.tmpl
-// list.tmpl
+
+export interface A extends _noms.Struct {
+  A: _noms.List<_noms.List<_noms.Blob>>;  // readonly
+  setA(value: _noms.List<_noms.List<_noms.Blob>>): A;
+}
+
+

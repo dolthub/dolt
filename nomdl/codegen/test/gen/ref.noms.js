@@ -19,10 +19,14 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// struct.tmpl
-// ref.tmpl
-// list.tmpl
-// ref.tmpl
-// list.tmpl
-// ref.tmpl
-// set.tmpl
+
+export interface StructWithRef extends _noms.Struct {
+  r: _noms.RefValue<_noms.NomsSet<_noms.float32>>;  // readonly
+  setR(value: _noms.RefValue<_noms.NomsSet<_noms.float32>>): StructWithRef;
+}
+
+
+
+
+
+

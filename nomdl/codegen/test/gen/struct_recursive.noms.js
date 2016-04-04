@@ -19,5 +19,9 @@ import * as _noms from '@attic/noms';
   _noms.registerPackage(pkg);
 }
 
-// struct.tmpl
-// list.tmpl
+
+export interface Tree extends _noms.Struct {
+  children: _noms.List<Tree>;  // readonly
+  setChildren(value: _noms.List<Tree>): Tree;
+}
+
