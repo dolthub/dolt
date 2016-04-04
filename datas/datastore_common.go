@@ -8,7 +8,6 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
-	"github.com/attic-labs/noms/walk"
 )
 
 type dataStoreCommon struct {
@@ -141,18 +140,6 @@ func (ds *dataStoreCommon) Has(r ref.Ref) bool {
 
 func (ds *dataStoreCommon) Close() error {
 	return ds.cs.Close()
-}
-
-// CopyMissingChunksP copies to |sink| all chunks in ds that are reachable from (and including) |r|, skipping chunks that |sink| already has
-func (ds *dataStoreCommon) CopyMissingChunksP(sourceRef ref.Ref, sink DataStore, concurrency int) {
-	sinkCS := sink.transitionalChunkStore()
-	tcs := &teeDataSource{ds.cs, sinkCS}
-
-	copyCallback := func(r ref.Ref) bool {
-		return sinkCS.Has(r)
-	}
-
-	walk.SomeChunksP(sourceRef, tcs, copyCallback, concurrency)
 }
 
 func (ds *dataStoreCommon) transitionalChunkSink() chunks.ChunkSink {

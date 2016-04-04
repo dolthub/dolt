@@ -75,9 +75,9 @@ func (ds *Dataset) pull(source datas.DataStore, sourceRef ref.Ref, concurrency i
 	}
 
 	if topDown {
-		source.CopyMissingChunksP(sourceRef, sink.Store(), concurrency)
+		datas.CopyMissingChunksP(source, sink.Store().(*datas.LocalDataStore), sourceRef, concurrency)
 	} else {
-		source.CopyReachableChunksP(sourceRef, sinkHeadRef, sink.Store(), concurrency)
+		datas.CopyReachableChunksP(source, sink.Store(), sourceRef, sinkHeadRef, concurrency)
 	}
 	err := datas.ErrOptimisticLockFailed
 	for ; err == datas.ErrOptimisticLockFailed; sink, err = sink.SetNewHead(sourceRef) {

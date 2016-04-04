@@ -11,7 +11,6 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
 )
 
 type URLParams interface {
@@ -24,12 +23,6 @@ func HandleRef(w http.ResponseWriter, req *http.Request, ps URLParams, ds DataSt
 	err := d.Try(func() {
 		d.Exp.Equal("GET", req.Method)
 		r := ref.Parse(ps.ByName("ref"))
-
-		all := req.URL.Query().Get("all")
-		if all == "true" {
-			handleGetReachable(w, req, r, ds)
-			return
-		}
 		chunk := ds.transitionalChunkStore().Get(r)
 		if chunk.IsEmpty() {
 			w.WriteHeader(http.StatusNotFound)
@@ -46,49 +39,6 @@ func HandleRef(w http.ResponseWriter, req *http.Request, ps URLParams, ds DataSt
 		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
 		return
 	}
-}
-
-func handleGetReachable(w http.ResponseWriter, req *http.Request, r ref.Ref, ds DataStore) {
-	excludeRef := ref.Ref{}
-	exclude := req.URL.Query().Get("exclude")
-	if exclude != "" {
-		excludeRef = ref.Parse(exclude)
-	}
-
-	w.Header().Add("Content-Type", "application/octet-stream")
-	writer := w.(io.Writer)
-	if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
-		w.Header().Add("Content-Encoding", "gzip")
-		gw := gzip.NewWriter(w)
-		defer gw.Close()
-		writer = gw
-	}
-
-	sz := newDataSink(chunks.NewSerializer(writer))
-	ds.CopyReachableChunksP(r, excludeRef, sz, 512)
-	sz.Close()
-}
-
-type localDataSink struct {
-	cs chunks.ChunkSink
-}
-
-func newDataSink(cs chunks.ChunkSink) DataSink {
-	return &localDataSink{cs}
-}
-
-func (lds *localDataSink) transitionalChunkSink() chunks.ChunkSink {
-	return lds.cs
-}
-
-func (lds *localDataSink) WriteValue(v types.Value) ref.Ref {
-	chunk := types.EncodeValue(v, lds)
-	lds.cs.Put(chunk)
-	return chunk.Ref()
-}
-
-func (lds *localDataSink) Close() error {
-	return lds.cs.Close()
 }
 
 func HandlePostRefs(w http.ResponseWriter, req *http.Request, ps URLParams, ds DataStore) {

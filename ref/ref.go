@@ -34,6 +34,7 @@ func (r Ref) IsEmpty() bool {
 	return r.digest == emptyRef.digest
 }
 
+// DigestSlice returns a slice of the digest that backs A NEW COPY of Ref, because the receiver of this method is not a pointer.
 func (r Ref) DigestSlice() []byte {
 	return r.digest[:]
 }
