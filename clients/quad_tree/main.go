@@ -95,9 +95,9 @@ func main() {
 			}
 
 			// TODO: This check is mega bummer. We really only want to consider RefOfStruct, but it's complicated to filter the case of an inline struct out.
-			if !ds.Has(v.Ref()) {
+			/*if !ds.Has(v.Ref()) {
 				return
-			}
+			}*/
 
 			stop = true
 
