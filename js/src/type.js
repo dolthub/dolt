@@ -3,10 +3,9 @@
 import Ref from './ref.js';
 import RefValue from './ref-value.js';
 import type {NomsKind} from './noms-kind.js';
-import type {Value} from './value.js';
-import {ensureRef} from './get-ref.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind, kindToString} from './noms-kind.js';
+import {ValueBase} from './value.js';
 
 export type TypeDesc = {
   kind: NomsKind;
@@ -202,33 +201,21 @@ export class Field {
   }
 }
 
-export class Type {
+export class Type extends ValueBase {
   _namespace: string;
   _name: string;
   _desc: TypeDesc;
   _ref: ?Ref;
 
   constructor(name: string = '', namespace: string = '', desc: TypeDesc) {
-    this._ref = null;
+    super();
     this._name = name;
     this._namespace = namespace;
     this._desc = desc;
   }
 
-  get ref(): Ref {
-    return this._ref = ensureRef(this._ref, this, this.type);
-  }
-
   get type(): Type {
     return typeType;
-  }
-
-  equals(other: Value): boolean {
-    return this.ref.equals(other.ref);
-  }
-
-  less(other: Value): boolean {
-    return this.ref.less(other.ref);
   }
 
   get chunks(): Array<RefValue> {
@@ -385,6 +372,22 @@ export function makeCompoundType(k: NomsKind, ...elemTypes: Array<Type>): Type {
   }
 
   return buildType('', new CompoundDesc(k, elemTypes));
+}
+
+export function makeListType(elemType: Type): Type {
+  return buildType('', new CompoundDesc(Kind.List, [elemType]));
+}
+
+export function makeSetType(elemType: Type): Type {
+  return buildType('', new CompoundDesc(Kind.Set, [elemType]));
+}
+
+export function makeMapType(keyType: Type, valueType: Type): Type {
+  return buildType('', new CompoundDesc(Kind.Map, [keyType, valueType]));
+}
+
+export function makeRefType(elemType: Type): Type {
+  return buildType('', new CompoundDesc(Kind.Ref, [elemType]));
 }
 
 export function makeEnumType(name: string, ids: Array<string>): Type {

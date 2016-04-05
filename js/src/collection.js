@@ -8,11 +8,17 @@ import type {Type} from './type.js';
 import {ValueBase} from './value.js';
 
 export class Collection<S: Sequence> extends ValueBase {
+  _type: Type;
   sequence: S;
 
   constructor(type: Type, sequence: S) {
-    super(type);
+    super();
+    this._type = type;
     this.sequence = sequence;
+  }
+
+  get type(): Type {
+    return this._type;
   }
 
   isEmpty(): boolean {

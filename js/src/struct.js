@@ -34,10 +34,12 @@ type StructData = {[key: string]: ?valueOrPrimitive};
  */
 export default class Struct extends ValueBase {
   _data: StructData;
+  _type: Type;
   _typeDef: Type;
 
+
   constructor(type: Type, typeDef: Type, data: StructData) {
-    super(type);
+    super();
 
     invariant(type.kind === Kind.Unresolved);
     invariant(typeDef.kind === Kind.Struct);
@@ -47,8 +49,13 @@ export default class Struct extends ValueBase {
       validate(typeDef, data);
     }
 
+    this._type = type;
     this._typeDef = typeDef;
     this._data = data;
+  }
+
+  get type(): Type {
+    return this._type;
   }
 
   get chunks(): Array<RefValue> {

@@ -10,7 +10,7 @@ export {default as HttpStore} from './http-store.js';
 export {default as MemoryStore} from './memory-store.js';
 export {default as Ref} from './ref.js';
 export {default as RefValue} from './ref-value.js';
-export {default as Struct} from './struct.js';
+export {default as Struct, StructMirror, newStruct} from './struct.js';
 export {encodeNomsValue} from './encode.js';
 export {invariant, isNullOrUndefined, notNull} from './assert.js';
 export {isPrimitiveKind, Kind, kindToString} from './noms-kind.js';
@@ -34,7 +34,11 @@ export {
   int8Type,
   makeCompoundType,
   makeEnumType,
+  makeListType,
+  makeMapType,
   makePrimitiveType,
+  makeRefType,
+  makeSetType,
   makeStructType,
   makeType,
   makeUnresolvedType,

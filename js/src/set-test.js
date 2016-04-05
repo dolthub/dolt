@@ -6,7 +6,7 @@ import {suite, test} from 'mocha';
 import DataStore from './data-store.js';
 import MemoryStore from './memory-store.js';
 import RefValue from './ref-value.js';
-import Struct from './struct.js';
+import {newStruct} from './struct.js';
 import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
 import {flatten, flattenParallel} from './test-util.js';
 import {invariant, notNull} from './assert.js';
@@ -57,7 +57,7 @@ suite('BuildSet', () => {
     const tr = makeCompoundType(Kind.Set, refOfStructType);
 
     const refs = nums.map(n => {
-      const s = new Struct(structType, structTypeDef, {n});
+      const s = newStruct(structType, structTypeDef, {n});
       const r = s.ref;
       return new RefValue(r, refOfStructType);
     });

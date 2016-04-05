@@ -13,9 +13,13 @@ export class Package extends ValueBase {
   dependencies: Array<Ref>;
 
   constructor(types: Array<Type>, dependencies: Array<Ref>) {
-    super(packageType);
+    super();
     this.types = types;
     this.dependencies = dependencies;
+  }
+
+  get type(): Type {
+    return packageType;
   }
 
   get chunks(): Array<RefValue> {

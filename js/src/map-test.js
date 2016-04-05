@@ -6,7 +6,7 @@ import {suite, test} from 'mocha';
 import DataStore from './data-store';
 import MemoryStore from './memory-store.js';
 import RefValue from './ref-value.js';
-import Struct from './struct.js';
+import {newStruct} from './struct.js';
 import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
 import {flatten, flattenParallel} from './test-util.js';
 import {invariant} from './assert.js';
@@ -60,7 +60,7 @@ suite('BuildMap', () => {
     const tr = makeCompoundType(Kind.Map, refOfStructType, refOfStructType);
 
     const kvRefs = kvs.map(n => {
-      const s = new Struct(structType, structTypeDef, {n});
+      const s = newStruct(structType, structTypeDef, {n});
       const r = s.ref;
       return new RefValue(r, refOfStructType);
     });

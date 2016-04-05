@@ -15,12 +15,14 @@ export interface Value {
 }
 
 export class ValueBase {
-  type: Type;
   _ref: ?Ref;
 
-  constructor(type: Type) {
-    this.type = type;
+  constructor() {
     this._ref = null;
+  }
+
+  get type(): Type {
+    throw new Error('abstract');
   }
 
   get ref(): Ref {
@@ -28,7 +30,7 @@ export class ValueBase {
   }
 
   equals(other: Value): boolean {
-    return this.ref.equals(other.ref);
+    return this === other || this.ref.equals(other.ref);
   }
 
   less(other: Value): boolean {

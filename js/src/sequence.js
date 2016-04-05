@@ -9,13 +9,18 @@ import {ValueBase} from './value.js';
 
 export class Sequence<T> extends ValueBase {
   ds: ?DataStore;
+  _type: Type;
   items: Array<T>;
 
   constructor(ds: ?DataStore, type: Type, items: Array<T>) {
-    super(type);
-
+    super();
     this.ds = ds;
+    this._type = type;
     this.items = items;
+  }
+
+  get type(): Type {
+    return this._type;
   }
 
   get isMeta(): boolean {

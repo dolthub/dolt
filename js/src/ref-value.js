@@ -9,11 +9,17 @@ import {refOfValueType} from './type.js';
 import {ValueBase} from './value.js';
 
 export default class RefValue<T: Value> extends ValueBase {
+  _type: Type;
   targetRef: Ref;
 
   constructor(targetRef: Ref, t: Type = refOfValueType) {
-    super(t);
+    super();
+    this._type = t;
     this.targetRef = targetRef;
+  }
+
+  get type(): Type {
+    return this._type;
   }
 
   targetValue(store: DataStore): Promise<T> {
