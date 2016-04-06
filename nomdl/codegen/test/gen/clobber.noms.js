@@ -2,3 +2,7 @@
 // @flow
 // eslint-disable max-len
 
+import * as a from './sha1_b3ecb0f.js';
+import * as b from './sha1_f3ba402.js';
+
+

@@ -1,7 +1,7 @@
 {{$name := .Name}}
-export interface {{.Name}} extends _noms.Struct {{"{"}}{{range $field := .Fields}}
-  {{.Name}}: {{if .Optional}}?{{end}}{{userTypeJS .T "_noms"}};  // readonly
-  set{{title .Name}}(value: {{if .Optional}}?{{end}}{{userTypeJS .T "_noms"}}): {{$name}};{{end}}{{range $field := .Choices}}
-  {{.Name}}: ?{{userTypeJS .T "_noms"}};  // readonly
-  set{{title .Name}}(value: {{userTypeJS .T "_noms"}}): {{$name}};{{end}}
+export interface {{.Name}} extends {{importJsType "Struct"}} {{"{"}}{{range $field := .Fields}}
+  {{.Name}}: {{if .Optional}}?{{end}}{{userTypeJS .T}};  // readonly
+  set{{title .Name}}(value: {{if .Optional}}?{{end}}{{userTypeJS .T}}): {{$name}};{{end}}{{range $field := .Choices}}
+  {{.Name}}: ?{{userTypeJS .T}};  // readonly
+  set{{title .Name}}(value: {{userTypeJS .T}}): {{$name}};{{end}}
 }

@@ -1,0 +1,10 @@
+{{if .HasTypes}}
+{
+  const pkg = new {{importJs "Package"}}([{{range $i, $t := .Types}}
+    {{toTypesTypeJS $t "" "_noms" 3}},{{end}}
+  ], [{{range $deps := .Dependencies}}
+    {{importJs "Ref"}}.parse('{{$deps}}'),{{end}}
+  ]);
+  {{importJs "registerPackage"}}(pkg);
+}
+{{end}}

@@ -2,14 +2,24 @@
 // @flow
 // eslint-disable max-len
 
-import * as _noms from '@attic/noms';
+import {
+  Field as _Field,
+  Package as _Package,
+  boolType as _boolType,
+  makeStructType as _makeStructType,
+  registerPackage as _registerPackage,
+  stringType as _stringType,
+} from "@attic/noms";
+import type {
+  Struct as _Struct,
+} from "@attic/noms";
 
 {
-  const pkg = new _noms.Package([
-    _noms.makeStructType('OptionalStruct',
+  const pkg = new _Package([
+    _makeStructType('OptionalStruct',
       [
-        new _noms.Field('s', _noms.stringType, true),
-        new _noms.Field('b', _noms.boolType, true),
+        new _Field('s', _stringType, true),
+        new _Field('b', _boolType, true),
       ],
       [
 
@@ -17,11 +27,11 @@ import * as _noms from '@attic/noms';
     ),
   ], [
   ]);
-  _noms.registerPackage(pkg);
+  _registerPackage(pkg);
 }
 
 
-export interface OptionalStruct extends _noms.Struct {
+export interface OptionalStruct extends _Struct {
   s: ?string;  // readonly
   setS(value: ?string): OptionalStruct;
   b: ?boolean;  // readonly

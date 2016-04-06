@@ -2,13 +2,26 @@
 // @flow
 // eslint-disable max-len
 
-import * as _noms from '@attic/noms';
+import {
+  Field as _Field,
+  Kind as _Kind,
+  Package as _Package,
+  blobType as _blobType,
+  makeCompoundType as _makeCompoundType,
+  makeStructType as _makeStructType,
+  registerPackage as _registerPackage,
+} from "@attic/noms";
+import type {
+  Blob as _Blob,
+  NomsList as _NomsList,
+  Struct as _Struct,
+} from "@attic/noms";
 
 {
-  const pkg = new _noms.Package([
-    _noms.makeStructType('A',
+  const pkg = new _Package([
+    _makeStructType('A',
       [
-        new _noms.Field('A', _noms.makeCompoundType(_noms.Kind.List, _noms.makeCompoundType(_noms.Kind.List, _noms.blobType)), false),
+        new _Field('A', _makeCompoundType(_Kind.List, _makeCompoundType(_Kind.List, _blobType)), false),
       ],
       [
 
@@ -16,13 +29,11 @@ import * as _noms from '@attic/noms';
     ),
   ], [
   ]);
-  _noms.registerPackage(pkg);
+  _registerPackage(pkg);
 }
 
 
-export interface A extends _noms.Struct {
-  A: _noms.List<_noms.List<_noms.Blob>>;  // readonly
-  setA(value: _noms.List<_noms.List<_noms.Blob>>): A;
+export interface A extends _Struct {
+  A: _NomsList<_NomsList<_Blob>>;  // readonly
+  setA(value: _NomsList<_NomsList<_Blob>>): A;
 }
-
-

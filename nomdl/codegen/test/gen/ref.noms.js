@@ -2,13 +2,27 @@
 // @flow
 // eslint-disable max-len
 
-import * as _noms from '@attic/noms';
+import {
+  Field as _Field,
+  Kind as _Kind,
+  Package as _Package,
+  float32Type as _float32Type,
+  makeCompoundType as _makeCompoundType,
+  makeStructType as _makeStructType,
+  registerPackage as _registerPackage,
+} from "@attic/noms";
+import type {
+  NomsSet as _NomsSet,
+  RefValue as _RefValue,
+  Struct as _Struct,
+  float32 as _float32,
+} from "@attic/noms";
 
 {
-  const pkg = new _noms.Package([
-    _noms.makeStructType('StructWithRef',
+  const pkg = new _Package([
+    _makeStructType('StructWithRef',
       [
-        new _noms.Field('r', _noms.makeCompoundType(_noms.Kind.Ref, _noms.makeCompoundType(_noms.Kind.Set, _noms.float32Type)), false),
+        new _Field('r', _makeCompoundType(_Kind.Ref, _makeCompoundType(_Kind.Set, _float32Type)), false),
       ],
       [
 
@@ -16,17 +30,11 @@ import * as _noms from '@attic/noms';
     ),
   ], [
   ]);
-  _noms.registerPackage(pkg);
+  _registerPackage(pkg);
 }
 
 
-export interface StructWithRef extends _noms.Struct {
-  r: _noms.RefValue<_noms.NomsSet<_noms.float32>>;  // readonly
-  setR(value: _noms.RefValue<_noms.NomsSet<_noms.float32>>): StructWithRef;
+export interface StructWithRef extends _Struct {
+  r: _RefValue<_NomsSet<_float32>>;  // readonly
+  setR(value: _RefValue<_NomsSet<_float32>>): StructWithRef;
 }
-
-
-
-
-
-

@@ -2,13 +2,26 @@
 // @flow
 // eslint-disable max-len
 
-import * as _noms from '@attic/noms';
+import {
+  Field as _Field,
+  Kind as _Kind,
+  Package as _Package,
+  Ref as _Ref,
+  makeCompoundType as _makeCompoundType,
+  makeStructType as _makeStructType,
+  makeType as _makeType,
+  registerPackage as _registerPackage,
+} from "@attic/noms";
+import type {
+  NomsList as _NomsList,
+  Struct as _Struct,
+} from "@attic/noms";
 
 {
-  const pkg = new _noms.Package([
-    _noms.makeStructType('Tree',
+  const pkg = new _Package([
+    _makeStructType('Tree',
       [
-        new _noms.Field('children', _noms.makeCompoundType(_noms.Kind.List, _noms.makeType(new _noms.Ref(), 0)), false),
+        new _Field('children', _makeCompoundType(_Kind.List, _makeType(new _Ref(), 0)), false),
       ],
       [
 
@@ -16,12 +29,11 @@ import * as _noms from '@attic/noms';
     ),
   ], [
   ]);
-  _noms.registerPackage(pkg);
+  _registerPackage(pkg);
 }
 
 
-export interface Tree extends _noms.Struct {
-  children: _noms.List<Tree>;  // readonly
-  setChildren(value: _noms.List<Tree>): Tree;
+export interface Tree extends _Struct {
+  children: _NomsList<Tree>;  // readonly
+  setChildren(value: _NomsList<Tree>): Tree;
 }
-

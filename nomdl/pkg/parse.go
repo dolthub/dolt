@@ -14,6 +14,7 @@ type Parsed struct {
 	types.Package
 	Name              string
 	UsingDeclarations []types.Type
+	AliasNames        map[ref.Ref]string
 }
 
 // ParseNomDL reads a Noms package specification from r and returns a Package. Errors will be annotated with packageName and thrown.
@@ -25,10 +26,18 @@ func ParseNomDL(packageName string, r io.Reader, includePath string, vrw types.V
 
 	resolveLocalOrdinals(&i)
 	resolveNamespaces(&i, imports, getDeps(deps, vrw))
+
+	// Transpose imports
+	aliasNames := map[ref.Ref]string{}
+	for k, v := range imports {
+		aliasNames[v] = k
+	}
+
 	return Parsed{
 		types.NewPackage(i.Types, deps),
 		i.Name,
 		i.UsingDeclarations,
+		aliasNames,
 	}
 }
 

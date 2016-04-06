@@ -2,42 +2,54 @@
 // @flow
 // eslint-disable max-len
 
-import * as _noms from '@attic/noms';
+import {
+  Field as _Field,
+  Package as _Package,
+  Ref as _Ref,
+  makeStructType as _makeStructType,
+  makeType as _makeType,
+  registerPackage as _registerPackage,
+} from "@attic/noms";
+import type {
+  Struct as _Struct,
+} from "@attic/noms";
+import * as _sha1_1c216c6 from './sha1_1c216c6.js';
+
 
 {
-  const pkg = new _noms.Package([
-    _noms.makeStructType('D',
+  const pkg = new _Package([
+    _makeStructType('D',
       [
-        new _noms.Field('structField', _noms.makeType(_noms.Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 0), false),
-        new _noms.Field('enumField', _noms.makeType(_noms.Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 1), false),
+        new _Field('structField', _makeType(_Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 0), false),
+        new _Field('enumField', _makeType(_Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 1), false),
       ],
       [
 
       ]
     ),
-    _noms.makeStructType('DUser',
+    _makeStructType('DUser',
       [
-        new _noms.Field('Dfield', _noms.makeType(new _noms.Ref(), 0), false),
+        new _Field('Dfield', _makeType(new _Ref(), 0), false),
       ],
       [
 
       ]
     ),
   ], [
-    _noms.Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'),
+    _Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'),
   ]);
-  _noms.registerPackage(pkg);
+  _registerPackage(pkg);
 }
 
 
-export interface D extends _noms.Struct {
-  structField: S;  // readonly
-  setStructField(value: S): D;
-  enumField: E;  // readonly
-  setEnumField(value: E): D;
+export interface D extends _Struct {
+  structField: _sha1_1c216c6.S;  // readonly
+  setStructField(value: _sha1_1c216c6.S): D;
+  enumField: _sha1_1c216c6.E;  // readonly
+  setEnumField(value: _sha1_1c216c6.E): D;
 }
 
-export interface DUser extends _noms.Struct {
+export interface DUser extends _Struct {
   Dfield: D;  // readonly
   setDfield(value: D): DUser;
 }

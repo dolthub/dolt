@@ -13,10 +13,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"text/template"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/tools/imports"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
@@ -26,7 +29,6 @@ import (
 	"github.com/attic-labs/noms/nomdl/pkg"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
-	"golang.org/x/tools/imports"
 )
 
 const goExt = "go"
@@ -107,7 +109,14 @@ func main() {
 		localPkgs[p.Ref()] = true
 		packages[inFile] = p
 	}
-	for inFile, p := range packages {
+	// Sort to have deterministic output.
+	keys := make([]string, 0, len(packages))
+	sort.Strings(keys)
+	for inFile := range packages {
+		keys = append(keys, inFile)
+	}
+	for _, inFile := range keys {
+		p := packages[inFile]
 		pkgDS = generate(packageName, inFile, filepath.Join(outDir, getOutFileName(inFile)), outDir, written, p, localPkgs, pkgDS)
 	}
 }
@@ -255,7 +264,7 @@ func newCodeGen(w io.Writer, fileID, lang string, written map[string]bool, deps 
 		pkg.Name,
 		typesPackage,
 	}}
-	gen.generator = &code.Generator{R: gen, TypesPackage: typesPackage}
+	gen.generator = &code.Generator{R: gen, TypesPackage: typesPackage, AliasNames: pkg.AliasNames}
 	gen.templates = gen.readTemplates()
 	return gen
 }
@@ -265,22 +274,26 @@ func (gen *codeGen) readTemplates() *template.Template {
 	glob := path.Join(path.Dir(thisfile), gen.lang, "*.tmpl")
 	return template.Must(template.New("").Funcs(
 		template.FuncMap{
-			"defToUser":     gen.generator.DefToUser,
-			"defToValue":    gen.generator.DefToValue,
-			"defType":       gen.generator.DefType,
-			"mayHaveChunks": gen.generator.MayHaveChunks,
-			"title":         strings.Title,
-			"toTypesType":   gen.generator.ToType,
-			"toTypesTypeJS": gen.generator.ToTypeJS,
-			"userToDef":     gen.generator.UserToDef,
-			"userToValue":   gen.generator.UserToValue,
-			"userType":      gen.generator.UserType,
-			"userTypeJS":    gen.generator.UserTypeJS,
-			"userZero":      gen.generator.UserZero,
-			"valueToDef":    gen.generator.ValueToDef,
-			"valueToUser":   gen.generator.ValueToUser,
-			"valueZero":     gen.generator.ValueZero,
-			"isLast":        gen.generator.IsLast,
+			"defToUser":            gen.generator.DefToUser,
+			"defToValue":           gen.generator.DefToValue,
+			"defType":              gen.generator.DefType,
+			"importJs":             gen.generator.ImportJS,
+			"importJsType":         gen.generator.ImportJSType,
+			"isLast":               gen.generator.IsLast,
+			"mayHaveChunks":        gen.generator.MayHaveChunks,
+			"refToAliasName":       gen.generator.RefToAliasName,
+			"refToJSIdentfierName": gen.generator.RefToJSIdentfierName,
+			"title":                strings.Title,
+			"toTypesType":          gen.generator.ToType,
+			"toTypesTypeJS":        gen.generator.ToTypeJS,
+			"userToDef":            gen.generator.UserToDef,
+			"userToValue":          gen.generator.UserToValue,
+			"userType":             gen.generator.UserType,
+			"userTypeJS":           gen.generator.UserTypeJS,
+			"userZero":             gen.generator.UserZero,
+			"valueToDef":           gen.generator.ValueToDef,
+			"valueToUser":          gen.generator.ValueToUser,
+			"valueZero":            gen.generator.ValueZero,
 		}).ParseGlob(glob))
 }
 
@@ -319,7 +332,18 @@ func (gen *codeGen) WritePackage() {
 		gen.pkg.Name,
 		pkgTypes,
 	}
-	err := gen.templates.ExecuteTemplate(gen.w, "header.tmpl", data)
+
+	// In JS we want to write the imports at the top of the file but we do not know what we need to import until we have written everything. We therefore write to a buffer and when everything is done we can write the imports and write the buffer into the writer.
+	var buf bytes.Buffer
+	w := gen.w
+
+	if gen.lang == jsExt {
+		gen.w = &buf
+	} else {
+		gen.WriteHeader()
+	}
+
+	err := gen.templates.ExecuteTemplate(gen.w, "package.tmpl", data)
 	d.Exp.NoError(err)
 
 	for i, t := range pkgTypes {
@@ -335,6 +359,53 @@ func (gen *codeGen) WritePackage() {
 		gen.toWrite = gen.toWrite[1:]
 		gen.write(t)
 	}
+
+	if gen.lang == jsExt {
+		gen.w = w
+		gen.WriteHeader()
+		io.Copy(w, &buf)
+	}
+}
+
+func (gen *codeGen) WriteHeader() {
+	importedJS := make([]string, 0, len(gen.generator.ImportedJS))
+	importedJSTypes := make([]string, 0, len(gen.generator.ImportedJSTypes))
+	if gen.lang == jsExt {
+		for name := range gen.generator.ImportedJS {
+			importedJS = append(importedJS, name)
+		}
+		for name := range gen.generator.ImportedJSTypes {
+			if _, ok := gen.generator.ImportedJS[name]; !ok {
+				importedJSTypes = append(importedJSTypes, name)
+			}
+		}
+		sort.Strings(importedJS)
+		sort.Strings(importedJSTypes)
+	}
+
+	pkgTypes := gen.pkg.Types()
+	data := struct {
+		sharedData
+		HasTypes        bool
+		Dependencies    []ref.Ref
+		Name            string
+		Types           []types.Type
+		ImportedJS      []string
+		ImportedJSTypes []string
+		AliasNames      map[ref.Ref]string
+	}{
+		gen.sharedData,
+		len(pkgTypes) > 0,
+		gen.pkg.Dependencies(),
+		gen.pkg.Name,
+		pkgTypes,
+		importedJS,
+		importedJSTypes,
+		gen.pkg.AliasNames,
+	}
+
+	err := gen.templates.ExecuteTemplate(gen.w, "header.tmpl", data)
+	d.Exp.NoError(err)
 }
 
 func (gen *codeGen) shouldBeWritten(t types.Type) bool {

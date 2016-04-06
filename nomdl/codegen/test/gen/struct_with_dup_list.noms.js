@@ -2,13 +2,26 @@
 // @flow
 // eslint-disable max-len
 
-import * as _noms from '@attic/noms';
+import {
+  Field as _Field,
+  Kind as _Kind,
+  Package as _Package,
+  makeCompoundType as _makeCompoundType,
+  makeStructType as _makeStructType,
+  registerPackage as _registerPackage,
+  uint8Type as _uint8Type,
+} from "@attic/noms";
+import type {
+  NomsList as _NomsList,
+  Struct as _Struct,
+  uint8 as _uint8,
+} from "@attic/noms";
 
 {
-  const pkg = new _noms.Package([
-    _noms.makeStructType('StructWithDupList',
+  const pkg = new _Package([
+    _makeStructType('StructWithDupList',
       [
-        new _noms.Field('l', _noms.makeCompoundType(_noms.Kind.List, _noms.uint8Type), false),
+        new _Field('l', _makeCompoundType(_Kind.List, _uint8Type), false),
       ],
       [
 
@@ -16,12 +29,11 @@ import * as _noms from '@attic/noms';
     ),
   ], [
   ]);
-  _noms.registerPackage(pkg);
+  _registerPackage(pkg);
 }
 
 
-export interface StructWithDupList extends _noms.Struct {
-  l: _noms.List<_noms.uint8>;  // readonly
-  setL(value: _noms.List<_noms.uint8>): StructWithDupList;
+export interface StructWithDupList extends _Struct {
+  l: _NomsList<_uint8>;  // readonly
+  setL(value: _NomsList<_uint8>): StructWithDupList;
 }
-

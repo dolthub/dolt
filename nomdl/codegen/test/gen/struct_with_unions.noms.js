@@ -2,60 +2,73 @@
 // @flow
 // eslint-disable max-len
 
-import * as _noms from '@attic/noms';
+import {
+  Field as _Field,
+  Package as _Package,
+  Ref as _Ref,
+  float64Type as _float64Type,
+  makeStructType as _makeStructType,
+  makeType as _makeType,
+  registerPackage as _registerPackage,
+  stringType as _stringType,
+} from "@attic/noms";
+import type {
+  Struct as _Struct,
+  float64 as _float64,
+} from "@attic/noms";
 
 {
-  const pkg = new _noms.Package([
-    _noms.makeStructType('StructWithUnions',
+  const pkg = new _Package([
+    _makeStructType('StructWithUnions',
       [
-        new _noms.Field('a', _noms.makeType(new _noms.Ref(), 1), false),
-        new _noms.Field('d', _noms.makeType(new _noms.Ref(), 2), false),
+        new _Field('a', _makeType(new _Ref(), 1), false),
+        new _Field('d', _makeType(new _Ref(), 2), false),
       ],
       [
 
       ]
     ),
-    _noms.makeStructType('',
+    _makeStructType('',
       [
 
       ],
       [
-        new _noms.Field('b', _noms.float64Type, false),
-        new _noms.Field('c', _noms.stringType, false),
+        new _Field('b', _float64Type, false),
+        new _Field('c', _stringType, false),
       ]
     ),
-    _noms.makeStructType('',
+    _makeStructType('',
       [
 
       ],
       [
-        new _noms.Field('e', _noms.float64Type, false),
-        new _noms.Field('f', _noms.stringType, false),
+        new _Field('e', _float64Type, false),
+        new _Field('f', _stringType, false),
       ]
     ),
   ], [
   ]);
-  _noms.registerPackage(pkg);
+  _registerPackage(pkg);
 }
 
 
-export interface StructWithUnions extends _noms.Struct {
+export interface StructWithUnions extends _Struct {
   a: __unionOfBOfFloat64AndCOfString;  // readonly
   setA(value: __unionOfBOfFloat64AndCOfString): StructWithUnions;
   d: __unionOfEOfFloat64AndFOfString;  // readonly
   setD(value: __unionOfEOfFloat64AndFOfString): StructWithUnions;
 }
 
-export interface __unionOfBOfFloat64AndCOfString extends _noms.Struct {
-  b: ?_noms.float64;  // readonly
-  setB(value: _noms.float64): __unionOfBOfFloat64AndCOfString;
+export interface __unionOfBOfFloat64AndCOfString extends _Struct {
+  b: ?_float64;  // readonly
+  setB(value: _float64): __unionOfBOfFloat64AndCOfString;
   c: ?string;  // readonly
   setC(value: string): __unionOfBOfFloat64AndCOfString;
 }
 
-export interface __unionOfEOfFloat64AndFOfString extends _noms.Struct {
-  e: ?_noms.float64;  // readonly
-  setE(value: _noms.float64): __unionOfEOfFloat64AndFOfString;
+export interface __unionOfEOfFloat64AndFOfString extends _Struct {
+  e: ?_float64;  // readonly
+  setE(value: _float64): __unionOfEOfFloat64AndFOfString;
   f: ?string;  // readonly
   setF(value: string): __unionOfEOfFloat64AndFOfString;
 }

@@ -2,14 +2,25 @@
 // @flow
 // eslint-disable max-len
 
-import * as _noms from '@attic/noms';
+import {
+  Field as _Field,
+  Package as _Package,
+  Ref as _Ref,
+  makeEnumType as _makeEnumType,
+  makeStructType as _makeStructType,
+  makeType as _makeType,
+  registerPackage as _registerPackage,
+} from "@attic/noms";
+import type {
+  Struct as _Struct,
+} from "@attic/noms";
 
 {
-  const pkg = new _noms.Package([
-    _noms.makeEnumType('Handedness', 'right', 'left', 'switch'),
-    _noms.makeStructType('EnumStruct',
+  const pkg = new _Package([
+    _makeEnumType('Handedness', 'right', 'left', 'switch'),
+    _makeStructType('EnumStruct',
       [
-        new _noms.Field('hand', _noms.makeType(new _noms.Ref(), 0), false),
+        new _Field('hand', _makeType(new _Ref(), 0), false),
       ],
       [
 
@@ -17,7 +28,7 @@ import * as _noms from '@attic/noms';
     ),
   ], [
   ]);
-  _noms.registerPackage(pkg);
+  _registerPackage(pkg);
 }
 
 
@@ -26,7 +37,7 @@ export type Handedness =
   1 |  // left
   2;  // switch
 
-export interface EnumStruct extends _noms.Struct {
+export interface EnumStruct extends _Struct {
   hand: Handedness;  // readonly
   setHand(value: Handedness): EnumStruct;
 }

@@ -2,27 +2,38 @@
 // @flow
 // eslint-disable max-len
 
-import * as _noms from '@attic/noms';
+import {
+  Field as _Field,
+  Package as _Package,
+  boolType as _boolType,
+  makeEnumType as _makeEnumType,
+  makeStructType as _makeStructType,
+  registerPackage as _registerPackage,
+  stringType as _stringType,
+} from "@attic/noms";
+import type {
+  Struct as _Struct,
+} from "@attic/noms";
 
 {
-  const pkg = new _noms.Package([
-    _noms.makeStructType('S',
+  const pkg = new _Package([
+    _makeStructType('S',
       [
-        new _noms.Field('s', _noms.stringType, false),
-        new _noms.Field('b', _noms.boolType, false),
+        new _Field('s', _stringType, false),
+        new _Field('b', _boolType, false),
       ],
       [
 
       ]
     ),
-    _noms.makeEnumType('E', 'e1', 'e2', 'e3'),
+    _makeEnumType('E', 'e1', 'e2', 'e3'),
   ], [
   ]);
-  _noms.registerPackage(pkg);
+  _registerPackage(pkg);
 }
 
 
-export interface S extends _noms.Struct {
+export interface S extends _Struct {
   s: string;  // readonly
   setS(value: string): S;
   b: boolean;  // readonly
