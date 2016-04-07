@@ -64,3 +64,16 @@ export type {MapEntry} from './map.js';
 export type {Splice} from './edit-distance.js';
 export type {valueOrPrimitive, Value} from './value.js';
 export type {NomsKind} from './noms-kind.js';
+export type {
+  float32,
+  float64,
+  int16,
+  int32,
+  int64,
+  int8,
+  primitive,
+  uint16,
+  uint32,
+  uint64,
+  uint8,
+} from './primitives.js';
