@@ -22,6 +22,7 @@ export {IndexedSequence} from './indexed-sequence.js';
 export {OrderedMetaSequence, IndexedMetaSequence} from './meta-sequence.js';
 export {SPLICE_AT, SPLICE_REMOVED, SPLICE_ADDED, SPLICE_FROM} from './edit-distance.js';
 export {
+  blobType,
   boolType,
   CompoundDesc,
   EnumDesc,
