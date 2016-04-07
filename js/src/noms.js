@@ -3,7 +3,7 @@
 export {AsyncIterator} from './async-iterator.js';
 export {default as DataStore, newCommit} from './data-store.js';
 export {default as Dataset} from './dataset.js';
-export {newBlob, NomsBlob, BlobReader} from './blob.js';
+export {newBlob, NomsBlob, BlobReader, BlobWriter} from './blob.js';
 export {decodeNomsValue} from './decode.js';
 export {default as Chunk} from './chunk.js';
 export {default as HttpStore} from './http-store.js';
