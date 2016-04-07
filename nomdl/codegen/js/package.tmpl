@@ -1,10 +1,10 @@
 {{if .HasTypes}}
-{
-  const pkg = new {{importJs "Package"}}([{{range $i, $t := .Types}}
-    {{toTypesTypeJS $t "" "_noms" 3}},{{end}}
-  ], [{{range $deps := .Dependencies}}
-    {{importJs "Ref"}}.parse('{{$deps}}'),{{end}}
-  ]);
-  {{importJs "registerPackage"}}(pkg);
-}
+const _pkg = new {{importJs "Package"}}([{{range $i, $t := .Types}}
+  {{toTypesTypeJS $t "" "_noms" 3}},{{end}}
+], [{{range $deps := .Dependencies}}
+  {{importJs "Ref"}}.parse('{{$deps}}'),{{end}}
+]);
+{{importJs "registerPackage"}}(_pkg);{{range $i, $t := .Types}}
+const {{userType $t}}$type = {{importJs "makeType"}}(_pkg.ref, {{$i}});
+const {{userType $t}}$typeDef = _pkg.types[{{$i}}];{{end}}
 {{end}}

@@ -6,6 +6,7 @@ import {
   Field as _Field,
   Package as _Package,
   Ref as _Ref,
+  createStructClass as _createStructClass,
   makeStructType as _makeStructType,
   makeType as _makeType,
   registerPackage as _registerPackage,
@@ -16,9 +17,8 @@ import type {
 import * as _sha1_1c216c6 from './sha1_1c216c6.js';
 
 
-{
-  const pkg = new _Package([
-    _makeStructType('D',
+const _pkg = new _Package([
+  _makeStructType('D',
       [
         new _Field('structField', _makeType(_Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 0), false),
         new _Field('enumField', _makeType(_Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 1), false),
@@ -27,7 +27,7 @@ import * as _sha1_1c216c6 from './sha1_1c216c6.js';
 
       ]
     ),
-    _makeStructType('DUser',
+  _makeStructType('DUser',
       [
         new _Field('Dfield', _makeType(new _Ref(), 0), false),
       ],
@@ -35,21 +35,39 @@ import * as _sha1_1c216c6 from './sha1_1c216c6.js';
 
       ]
     ),
-  ], [
-    _Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'),
-  ]);
-  _registerPackage(pkg);
-}
+], [
+  _Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'),
+]);
+_registerPackage(_pkg);
+const D$type = _makeType(_pkg.ref, 0);
+const D$typeDef = _pkg.types[0];
+const DUser$type = _makeType(_pkg.ref, 1);
+const DUser$typeDef = _pkg.types[1];
 
 
-export interface D extends _Struct {
+type D$Data = {
+  structField: _sha1_1c216c6.S;
+  enumField: _sha1_1c216c6.E;
+};
+
+interface D$Interface extends _Struct {
+  constructor(data: D$Data): void;
   structField: _sha1_1c216c6.S;  // readonly
-  setStructField(value: _sha1_1c216c6.S): D;
+  setStructField(value: _sha1_1c216c6.S): D$Interface;
   enumField: _sha1_1c216c6.E;  // readonly
-  setEnumField(value: _sha1_1c216c6.E): D;
+  setEnumField(value: _sha1_1c216c6.E): D$Interface;
 }
 
-export interface DUser extends _Struct {
+export const D: Class<D$Interface> = _createStructClass(D$type, D$typeDef);
+
+type DUser$Data = {
+  Dfield: D;
+};
+
+interface DUser$Interface extends _Struct {
+  constructor(data: DUser$Data): void;
   Dfield: D;  // readonly
-  setDfield(value: D): DUser;
+  setDfield(value: D): DUser$Interface;
 }
+
+export const DUser: Class<DUser$Interface> = _createStructClass(DUser$type, DUser$typeDef);

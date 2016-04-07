@@ -30,6 +30,11 @@ before_script:
 - ./build.py
 - npm test
 - popd
+- pushd nomdl/codegen/test
+- npm prune
+- npm install
+- npm test
+- popd
 script:
 - export GODEBUG=invalidptr=0
 - export GO15VENDOREXPERIMENT=1
@@ -47,3 +52,4 @@ cache:
   - clients/crunchbase/ui/node_modules
   - clients/pitchmap/ui/node_modules
   - clients/splore/node_modules
+  - nomdl/codegen/test/node_modules

@@ -1,7 +1,14 @@
 {{$name := .Name}}
-export interface {{.Name}} extends {{importJsType "Struct"}} {{"{"}}{{range $field := .Fields}}
+type {{.Name}}$Data = {{"{"}}{{range $field := .Fields}}
+  {{.Name}}{{if .Optional}}?{{end}}: {{userTypeJS .T}};{{end}}
+};
+
+interface {{.Name}}$Interface extends {{importJsType "Struct"}} {
+  constructor(data: {{.Name}}$Data): void;{{range $field := .Fields}}
   {{.Name}}: {{if .Optional}}?{{end}}{{userTypeJS .T}};  // readonly
-  set{{title .Name}}(value: {{if .Optional}}?{{end}}{{userTypeJS .T}}): {{$name}};{{end}}{{range $field := .Choices}}
+  set{{title .Name}}(value: {{if .Optional}}?{{end}}{{userTypeJS .T}}): {{$name}}$Interface;{{end}}{{range $field := .Choices}}
   {{.Name}}: ?{{userTypeJS .T}};  // readonly
-  set{{title .Name}}(value: {{userTypeJS .T}}): {{$name}};{{end}}
+  set{{title .Name}}(value: {{userTypeJS .T}}): {{$name}}$Interface;{{end}}
 }
+
+export const {{.Name}}: Class<{{.Name}}$Interface> = {{importJs "createStructClass"}}({{.Name}}$type, {{.Name}}$typeDef);

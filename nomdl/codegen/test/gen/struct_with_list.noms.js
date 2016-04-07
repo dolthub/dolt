@@ -7,9 +7,11 @@ import {
   Kind as _Kind,
   Package as _Package,
   boolType as _boolType,
+  createStructClass as _createStructClass,
   int64Type as _int64Type,
   makeCompoundType as _makeCompoundType,
   makeStructType as _makeStructType,
+  makeType as _makeType,
   registerPackage as _registerPackage,
   stringType as _stringType,
   uint8Type as _uint8Type,
@@ -21,9 +23,8 @@ import type {
   uint8 as _uint8,
 } from '@attic/noms';
 
-{
-  const pkg = new _Package([
-    _makeStructType('StructWithList',
+const _pkg = new _Package([
+  _makeStructType('StructWithList',
       [
         new _Field('l', _makeCompoundType(_Kind.List, _uint8Type), false),
         new _Field('b', _boolType, false),
@@ -34,19 +35,30 @@ import type {
 
       ]
     ),
-  ], [
-  ]);
-  _registerPackage(pkg);
-}
+], [
+]);
+_registerPackage(_pkg);
+const StructWithList$type = _makeType(_pkg.ref, 0);
+const StructWithList$typeDef = _pkg.types[0];
 
 
-export interface StructWithList extends _Struct {
+type StructWithList$Data = {
+  l: _NomsList<_uint8>;
+  b: boolean;
+  s: string;
+  i: _int64;
+};
+
+interface StructWithList$Interface extends _Struct {
+  constructor(data: StructWithList$Data): void;
   l: _NomsList<_uint8>;  // readonly
-  setL(value: _NomsList<_uint8>): StructWithList;
+  setL(value: _NomsList<_uint8>): StructWithList$Interface;
   b: boolean;  // readonly
-  setB(value: boolean): StructWithList;
+  setB(value: boolean): StructWithList$Interface;
   s: string;  // readonly
-  setS(value: string): StructWithList;
+  setS(value: string): StructWithList$Interface;
   i: _int64;  // readonly
-  setI(value: _int64): StructWithList;
+  setI(value: _int64): StructWithList$Interface;
 }
+
+export const StructWithList: Class<StructWithList$Interface> = _createStructClass(StructWithList$type, StructWithList$typeDef);

@@ -6,7 +6,9 @@ import {
   Field as _Field,
   Package as _Package,
   boolType as _boolType,
+  createStructClass as _createStructClass,
   makeStructType as _makeStructType,
+  makeType as _makeType,
   registerPackage as _registerPackage,
   stringType as _stringType,
 } from '@attic/noms';
@@ -14,9 +16,8 @@ import type {
   Struct as _Struct,
 } from '@attic/noms';
 
-{
-  const pkg = new _Package([
-    _makeStructType('Struct',
+const _pkg = new _Package([
+  _makeStructType('Struct',
       [
         new _Field('s', _stringType, false),
         new _Field('b', _boolType, false),
@@ -25,15 +26,24 @@ import type {
 
       ]
     ),
-  ], [
-  ]);
-  _registerPackage(pkg);
-}
+], [
+]);
+_registerPackage(_pkg);
+const Struct$type = _makeType(_pkg.ref, 0);
+const Struct$typeDef = _pkg.types[0];
 
 
-export interface Struct extends _Struct {
+type Struct$Data = {
+  s: string;
+  b: boolean;
+};
+
+interface Struct$Interface extends _Struct {
+  constructor(data: Struct$Data): void;
   s: string;  // readonly
-  setS(value: string): Struct;
+  setS(value: string): Struct$Interface;
   b: boolean;  // readonly
-  setB(value: boolean): Struct;
+  setB(value: boolean): Struct$Interface;
 }
+
+export const Struct: Class<Struct$Interface> = _createStructClass(Struct$type, Struct$typeDef);

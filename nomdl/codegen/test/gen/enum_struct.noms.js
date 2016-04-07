@@ -6,6 +6,7 @@ import {
   Field as _Field,
   Package as _Package,
   Ref as _Ref,
+  createStructClass as _createStructClass,
   makeEnumType as _makeEnumType,
   makeStructType as _makeStructType,
   makeType as _makeType,
@@ -15,10 +16,9 @@ import type {
   Struct as _Struct,
 } from '@attic/noms';
 
-{
-  const pkg = new _Package([
-    _makeEnumType('Handedness', 'right', 'left', 'switch'),
-    _makeStructType('EnumStruct',
+const _pkg = new _Package([
+  _makeEnumType('Handedness', 'right', 'left', 'switch'),
+  _makeStructType('EnumStruct',
       [
         new _Field('hand', _makeType(new _Ref(), 0), false),
       ],
@@ -26,10 +26,13 @@ import type {
 
       ]
     ),
-  ], [
-  ]);
-  _registerPackage(pkg);
-}
+], [
+]);
+_registerPackage(_pkg);
+const Handedness$type = _makeType(_pkg.ref, 0);
+const Handedness$typeDef = _pkg.types[0];
+const EnumStruct$type = _makeType(_pkg.ref, 1);
+const EnumStruct$typeDef = _pkg.types[1];
 
 
 export type Handedness =
@@ -37,7 +40,14 @@ export type Handedness =
   1 |  // left
   2;  // switch
 
-export interface EnumStruct extends _Struct {
+type EnumStruct$Data = {
+  hand: Handedness;
+};
+
+interface EnumStruct$Interface extends _Struct {
+  constructor(data: EnumStruct$Data): void;
   hand: Handedness;  // readonly
-  setHand(value: Handedness): EnumStruct;
+  setHand(value: Handedness): EnumStruct$Interface;
 }
+
+export const EnumStruct: Class<EnumStruct$Interface> = _createStructClass(EnumStruct$type, EnumStruct$typeDef);

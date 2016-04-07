@@ -7,6 +7,7 @@ import {
   Kind as _Kind,
   Package as _Package,
   Ref as _Ref,
+  createStructClass as _createStructClass,
   makeCompoundType as _makeCompoundType,
   makeStructType as _makeStructType,
   makeType as _makeType,
@@ -17,9 +18,8 @@ import type {
   Struct as _Struct,
 } from '@attic/noms';
 
-{
-  const pkg = new _Package([
-    _makeStructType('Tree',
+const _pkg = new _Package([
+  _makeStructType('Tree',
       [
         new _Field('children', _makeCompoundType(_Kind.List, _makeType(new _Ref(), 0)), false),
       ],
@@ -27,13 +27,21 @@ import type {
 
       ]
     ),
-  ], [
-  ]);
-  _registerPackage(pkg);
-}
+], [
+]);
+_registerPackage(_pkg);
+const Tree$type = _makeType(_pkg.ref, 0);
+const Tree$typeDef = _pkg.types[0];
 
 
-export interface Tree extends _Struct {
+type Tree$Data = {
+  children: _NomsList<Tree>;
+};
+
+interface Tree$Interface extends _Struct {
+  constructor(data: Tree$Data): void;
   children: _NomsList<Tree>;  // readonly
-  setChildren(value: _NomsList<Tree>): Tree;
+  setChildren(value: _NomsList<Tree>): Tree$Interface;
 }
+
+export const Tree: Class<Tree$Interface> = _createStructClass(Tree$type, Tree$typeDef);

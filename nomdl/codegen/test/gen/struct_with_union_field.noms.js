@@ -7,10 +7,12 @@ import {
   Kind as _Kind,
   Package as _Package,
   blobType as _blobType,
+  createStructClass as _createStructClass,
   float32Type as _float32Type,
   float64Type as _float64Type,
   makeCompoundType as _makeCompoundType,
   makeStructType as _makeStructType,
+  makeType as _makeType,
   registerPackage as _registerPackage,
   stringType as _stringType,
   uint8Type as _uint8Type,
@@ -26,9 +28,8 @@ import type {
   uint8 as _uint8,
 } from '@attic/noms';
 
-{
-  const pkg = new _Package([
-    _makeStructType('StructWithUnionField',
+const _pkg = new _Package([
+  _makeStructType('StructWithUnionField',
       [
         new _Field('a', _float32Type, false),
       ],
@@ -40,23 +41,31 @@ import type {
         new _Field('f', _makeCompoundType(_Kind.Set, _uint8Type), false),
       ]
     ),
-  ], [
-  ]);
-  _registerPackage(pkg);
-}
+], [
+]);
+_registerPackage(_pkg);
+const StructWithUnionField$type = _makeType(_pkg.ref, 0);
+const StructWithUnionField$typeDef = _pkg.types[0];
 
 
-export interface StructWithUnionField extends _Struct {
+type StructWithUnionField$Data = {
+  a: _float32;
+};
+
+interface StructWithUnionField$Interface extends _Struct {
+  constructor(data: StructWithUnionField$Data): void;
   a: _float32;  // readonly
-  setA(value: _float32): StructWithUnionField;
+  setA(value: _float32): StructWithUnionField$Interface;
   b: ?_float64;  // readonly
-  setB(value: _float64): StructWithUnionField;
+  setB(value: _float64): StructWithUnionField$Interface;
   c: ?string;  // readonly
-  setC(value: string): StructWithUnionField;
+  setC(value: string): StructWithUnionField$Interface;
   d: ?_Blob;  // readonly
-  setD(value: _Blob): StructWithUnionField;
+  setD(value: _Blob): StructWithUnionField$Interface;
   e: ?_Value;  // readonly
-  setE(value: _Value): StructWithUnionField;
+  setE(value: _Value): StructWithUnionField$Interface;
   f: ?_NomsSet<_uint8>;  // readonly
-  setF(value: _NomsSet<_uint8>): StructWithUnionField;
+  setF(value: _NomsSet<_uint8>): StructWithUnionField$Interface;
 }
+
+export const StructWithUnionField: Class<StructWithUnionField$Interface> = _createStructClass(StructWithUnionField$type, StructWithUnionField$typeDef);
