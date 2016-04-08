@@ -31,7 +31,7 @@ const _pkg = new _Package([
 ], [
 ]);
 _registerPackage(_pkg);
-const StructWithDupList$type = _makeType(_pkg.ref, 0);
+export const typeForStructWithDupList = _makeType(_pkg.ref, 0);
 const StructWithDupList$typeDef = _pkg.types[0];
 
 
@@ -45,4 +45,4 @@ interface StructWithDupList$Interface extends _Struct {
   setL(value: _NomsList<_uint8>): StructWithDupList$Interface;
 }
 
-export const StructWithDupList: Class<StructWithDupList$Interface> = _createStructClass(StructWithDupList$type, StructWithDupList$typeDef);
+export const StructWithDupList: Class<StructWithDupList$Interface> = _createStructClass(typeForStructWithDupList, StructWithDupList$typeDef);

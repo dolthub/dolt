@@ -38,7 +38,7 @@ const _pkg = new _Package([
 ], [
 ]);
 _registerPackage(_pkg);
-const StructWithList$type = _makeType(_pkg.ref, 0);
+export const typeForStructWithList = _makeType(_pkg.ref, 0);
 const StructWithList$typeDef = _pkg.types[0];
 
 
@@ -61,4 +61,4 @@ interface StructWithList$Interface extends _Struct {
   setI(value: _int64): StructWithList$Interface;
 }
 
-export const StructWithList: Class<StructWithList$Interface> = _createStructClass(StructWithList$type, StructWithList$typeDef);
+export const StructWithList: Class<StructWithList$Interface> = _createStructClass(typeForStructWithList, StructWithList$typeDef);

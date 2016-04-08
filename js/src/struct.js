@@ -219,6 +219,7 @@ export function createStructClass<T: Struct>(type: Type, typeDef: Type): Class<T
   invariant(desc instanceof StructDesc);
 
   for (const fields of [desc.fields, desc.union]) {
+    const isUnion = fields === desc.union;
     for (const field of fields) {
       const {name} = field;
       Object.defineProperty(c.prototype, name, {
@@ -231,7 +232,7 @@ export function createStructClass<T: Struct>(type: Type, typeDef: Type): Class<T
       Object.defineProperty(c.prototype, setterName(name), {
         configurable: true,
         enumerable: false,
-        value: getSetter(name, field.optional, fields === desc.union),
+        value: getSetter(name, field.optional, isUnion),
         writable: true,
       });
     }

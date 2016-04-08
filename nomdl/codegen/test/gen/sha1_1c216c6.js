@@ -31,9 +31,9 @@ const _pkg = new _Package([
 ], [
 ]);
 _registerPackage(_pkg);
-const S$type = _makeType(_pkg.ref, 0);
+export const typeForS = _makeType(_pkg.ref, 0);
 const S$typeDef = _pkg.types[0];
-const E$type = _makeType(_pkg.ref, 1);
+export const typeForE = _makeType(_pkg.ref, 1);
 const E$typeDef = _pkg.types[1];
 
 
@@ -50,7 +50,7 @@ interface S$Interface extends _Struct {
   setB(value: boolean): S$Interface;
 }
 
-export const S: Class<S$Interface> = _createStructClass(S$type, S$typeDef);
+export const S: Class<S$Interface> = _createStructClass(typeForS, S$typeDef);
 
 export type E =
   0 |  // e1

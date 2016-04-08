@@ -44,7 +44,7 @@ const _pkg = new _Package([
 ], [
 ]);
 _registerPackage(_pkg);
-const StructWithUnionField$type = _makeType(_pkg.ref, 0);
+export const typeForStructWithUnionField = _makeType(_pkg.ref, 0);
 const StructWithUnionField$typeDef = _pkg.types[0];
 
 
@@ -68,4 +68,4 @@ interface StructWithUnionField$Interface extends _Struct {
   setF(value: _NomsSet<_uint8>): StructWithUnionField$Interface;
 }
 
-export const StructWithUnionField: Class<StructWithUnionField$Interface> = _createStructClass(StructWithUnionField$type, StructWithUnionField$typeDef);
+export const StructWithUnionField: Class<StructWithUnionField$Interface> = _createStructClass(typeForStructWithUnionField, StructWithUnionField$typeDef);

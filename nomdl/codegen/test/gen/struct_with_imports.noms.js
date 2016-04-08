@@ -33,9 +33,9 @@ const _pkg = new _Package([
   _Ref.parse('sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0'),
 ]);
 _registerPackage(_pkg);
-const LocalE$type = _makeType(_pkg.ref, 0);
+export const typeForLocalE = _makeType(_pkg.ref, 0);
 const LocalE$typeDef = _pkg.types[0];
-const ImportUser$type = _makeType(_pkg.ref, 1);
+export const typeForImportUser = _makeType(_pkg.ref, 1);
 const ImportUser$typeDef = _pkg.types[1];
 
 
@@ -56,4 +56,4 @@ interface ImportUser$Interface extends _Struct {
   setEnum(value: LocalE): ImportUser$Interface;
 }
 
-export const ImportUser: Class<ImportUser$Interface> = _createStructClass(ImportUser$type, ImportUser$typeDef);
+export const ImportUser: Class<ImportUser$Interface> = _createStructClass(typeForImportUser, ImportUser$typeDef);

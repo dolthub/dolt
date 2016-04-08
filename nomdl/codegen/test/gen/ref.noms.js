@@ -32,7 +32,7 @@ const _pkg = new _Package([
 ], [
 ]);
 _registerPackage(_pkg);
-const StructWithRef$type = _makeType(_pkg.ref, 0);
+export const typeForStructWithRef = _makeType(_pkg.ref, 0);
 const StructWithRef$typeDef = _pkg.types[0];
 
 
@@ -46,4 +46,4 @@ interface StructWithRef$Interface extends _Struct {
   setR(value: _RefValue<_NomsSet<_float32>>): StructWithRef$Interface;
 }
 
-export const StructWithRef: Class<StructWithRef$Interface> = _createStructClass(StructWithRef$type, StructWithRef$typeDef);
+export const StructWithRef: Class<StructWithRef$Interface> = _createStructClass(typeForStructWithRef, StructWithRef$typeDef);

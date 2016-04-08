@@ -30,7 +30,7 @@ const _pkg = new _Package([
 ], [
 ]);
 _registerPackage(_pkg);
-const Tree$type = _makeType(_pkg.ref, 0);
+export const typeForTree = _makeType(_pkg.ref, 0);
 const Tree$typeDef = _pkg.types[0];
 
 
@@ -44,4 +44,4 @@ interface Tree$Interface extends _Struct {
   setChildren(value: _NomsList<Tree>): Tree$Interface;
 }
 
-export const Tree: Class<Tree$Interface> = _createStructClass(Tree$type, Tree$typeDef);
+export const Tree: Class<Tree$Interface> = _createStructClass(typeForTree, Tree$typeDef);

@@ -31,7 +31,7 @@ const _pkg = new _Package([
 ], [
 ]);
 _registerPackage(_pkg);
-const A$type = _makeType(_pkg.ref, 0);
+export const typeForA = _makeType(_pkg.ref, 0);
 const A$typeDef = _pkg.types[0];
 
 
@@ -45,4 +45,4 @@ interface A$Interface extends _Struct {
   setA(value: _NomsList<_NomsList<_Blob>>): A$Interface;
 }
 
-export const A: Class<A$Interface> = _createStructClass(A$type, A$typeDef);
+export const A: Class<A$Interface> = _createStructClass(typeForA, A$typeDef);

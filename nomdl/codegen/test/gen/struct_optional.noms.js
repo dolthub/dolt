@@ -29,7 +29,7 @@ const _pkg = new _Package([
 ], [
 ]);
 _registerPackage(_pkg);
-const OptionalStruct$type = _makeType(_pkg.ref, 0);
+export const typeForOptionalStruct = _makeType(_pkg.ref, 0);
 const OptionalStruct$typeDef = _pkg.types[0];
 
 
@@ -46,4 +46,4 @@ interface OptionalStruct$Interface extends _Struct {
   setB(value: ?boolean): OptionalStruct$Interface;
 }
 
-export const OptionalStruct: Class<OptionalStruct$Interface> = _createStructClass(OptionalStruct$type, OptionalStruct$typeDef);
+export const OptionalStruct: Class<OptionalStruct$Interface> = _createStructClass(typeForOptionalStruct, OptionalStruct$typeDef);

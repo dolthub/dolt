@@ -29,7 +29,7 @@ const _pkg = new _Package([
 ], [
 ]);
 _registerPackage(_pkg);
-const Struct$type = _makeType(_pkg.ref, 0);
+export const typeForStruct = _makeType(_pkg.ref, 0);
 const Struct$typeDef = _pkg.types[0];
 
 
@@ -46,4 +46,4 @@ interface Struct$Interface extends _Struct {
   setB(value: boolean): Struct$Interface;
 }
 
-export const Struct: Class<Struct$Interface> = _createStructClass(Struct$type, Struct$typeDef);
+export const Struct: Class<Struct$Interface> = _createStructClass(typeForStruct, Struct$typeDef);

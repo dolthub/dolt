@@ -49,11 +49,11 @@ const _pkg = new _Package([
 ], [
 ]);
 _registerPackage(_pkg);
-const StructWithUnions$type = _makeType(_pkg.ref, 0);
+export const typeForStructWithUnions = _makeType(_pkg.ref, 0);
 const StructWithUnions$typeDef = _pkg.types[0];
-const __unionOfBOfFloat64AndCOfString$type = _makeType(_pkg.ref, 1);
+export const typeFor__unionOfBOfFloat64AndCOfString = _makeType(_pkg.ref, 1);
 const __unionOfBOfFloat64AndCOfString$typeDef = _pkg.types[1];
-const __unionOfEOfFloat64AndFOfString$type = _makeType(_pkg.ref, 2);
+export const typeFor__unionOfEOfFloat64AndFOfString = _makeType(_pkg.ref, 2);
 const __unionOfEOfFloat64AndFOfString$typeDef = _pkg.types[2];
 
 
@@ -70,7 +70,7 @@ interface StructWithUnions$Interface extends _Struct {
   setD(value: __unionOfEOfFloat64AndFOfString): StructWithUnions$Interface;
 }
 
-export const StructWithUnions: Class<StructWithUnions$Interface> = _createStructClass(StructWithUnions$type, StructWithUnions$typeDef);
+export const StructWithUnions: Class<StructWithUnions$Interface> = _createStructClass(typeForStructWithUnions, StructWithUnions$typeDef);
 
 type __unionOfBOfFloat64AndCOfString$Data = {
 };
@@ -83,7 +83,7 @@ interface __unionOfBOfFloat64AndCOfString$Interface extends _Struct {
   setC(value: string): __unionOfBOfFloat64AndCOfString$Interface;
 }
 
-export const __unionOfBOfFloat64AndCOfString: Class<__unionOfBOfFloat64AndCOfString$Interface> = _createStructClass(__unionOfBOfFloat64AndCOfString$type, __unionOfBOfFloat64AndCOfString$typeDef);
+export const __unionOfBOfFloat64AndCOfString: Class<__unionOfBOfFloat64AndCOfString$Interface> = _createStructClass(typeFor__unionOfBOfFloat64AndCOfString, __unionOfBOfFloat64AndCOfString$typeDef);
 
 type __unionOfEOfFloat64AndFOfString$Data = {
 };
@@ -96,4 +96,4 @@ interface __unionOfEOfFloat64AndFOfString$Interface extends _Struct {
   setF(value: string): __unionOfEOfFloat64AndFOfString$Interface;
 }
 
-export const __unionOfEOfFloat64AndFOfString: Class<__unionOfEOfFloat64AndFOfString$Interface> = _createStructClass(__unionOfEOfFloat64AndFOfString$type, __unionOfEOfFloat64AndFOfString$typeDef);
+export const __unionOfEOfFloat64AndFOfString: Class<__unionOfEOfFloat64AndFOfString$Interface> = _createStructClass(typeFor__unionOfEOfFloat64AndFOfString, __unionOfEOfFloat64AndFOfString$typeDef);

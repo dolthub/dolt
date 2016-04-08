@@ -29,9 +29,9 @@ const _pkg = new _Package([
 ], [
 ]);
 _registerPackage(_pkg);
-const Handedness$type = _makeType(_pkg.ref, 0);
+export const typeForHandedness = _makeType(_pkg.ref, 0);
 const Handedness$typeDef = _pkg.types[0];
-const EnumStruct$type = _makeType(_pkg.ref, 1);
+export const typeForEnumStruct = _makeType(_pkg.ref, 1);
 const EnumStruct$typeDef = _pkg.types[1];
 
 
@@ -50,4 +50,4 @@ interface EnumStruct$Interface extends _Struct {
   setHand(value: Handedness): EnumStruct$Interface;
 }
 
-export const EnumStruct: Class<EnumStruct$Interface> = _createStructClass(EnumStruct$type, EnumStruct$typeDef);
+export const EnumStruct: Class<EnumStruct$Interface> = _createStructClass(typeForEnumStruct, EnumStruct$typeDef);

@@ -65,7 +65,7 @@ const _pkg = new _Package([
 ], [
 ]);
 _registerPackage(_pkg);
-const StructPrimitives$type = _makeType(_pkg.ref, 0);
+export const typeForStructPrimitives = _makeType(_pkg.ref, 0);
 const StructPrimitives$typeDef = _pkg.types[0];
 
 
@@ -118,4 +118,4 @@ interface StructPrimitives$Interface extends _Struct {
   setValue(value: _Value): StructPrimitives$Interface;
 }
 
-export const StructPrimitives: Class<StructPrimitives$Interface> = _createStructClass(StructPrimitives$type, StructPrimitives$typeDef);
+export const StructPrimitives: Class<StructPrimitives$Interface> = _createStructClass(typeForStructPrimitives, StructPrimitives$typeDef);
