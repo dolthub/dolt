@@ -1,1 +1,4 @@
-{{/* Lists in JS needs no codegen */}}
+
+export function new{{userType .Type}}(values: Array<{{userTypeJS .ElemType}}>): Promise<{{importJsType "NomsList"}}<{{userTypeJS .ElemType}}>> {
+  return {{importJS "newList"}}(values, {{importJS "makeListType"}}({{toTypeValueJS .ElemType false 0}}));
+}

@@ -9,8 +9,10 @@ import {
   blobType as _blobType,
   createStructClass as _createStructClass,
   makeCompoundType as _makeCompoundType,
+  makeListType as _makeListType,
   makeStructType as _makeStructType,
   makeType as _makeType,
+  newList as _newList,
   registerPackage as _registerPackage,
 } from '@attic/noms';
 import type {
@@ -46,3 +48,11 @@ interface A$Interface extends _Struct {
 }
 
 export const A: Class<A$Interface> = _createStructClass(typeForA, A$typeDef);
+
+export function newListOfListOfBlob(values: Array<_NomsList<_Blob>>): Promise<_NomsList<_NomsList<_Blob>>> {
+  return _newList(values, _makeListType(_makeCompoundType(_Kind.List, _blobType)));
+}
+
+export function newListOfBlob(values: Array<_Blob>): Promise<_NomsList<_Blob>> {
+  return _newList(values, _makeListType(_blobType));
+}

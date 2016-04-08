@@ -8,11 +8,14 @@ import {
   Ref as _Ref,
   createStructClass as _createStructClass,
   makeEnumType as _makeEnumType,
+  makeListType as _makeListType,
   makeStructType as _makeStructType,
   makeType as _makeType,
+  newList as _newList,
   registerPackage as _registerPackage,
 } from '@attic/noms';
 import type {
+  NomsList as _NomsList,
   Struct as _Struct,
 } from '@attic/noms';
 import * as dep from './sha1_eda4273.js';
@@ -57,3 +60,7 @@ interface ImportUser$Interface extends _Struct {
 }
 
 export const ImportUser: Class<ImportUser$Interface> = _createStructClass(typeForImportUser, ImportUser$typeDef);
+
+export function newListOfD(values: Array<dep.D>): Promise<_NomsList<dep.D>> {
+  return _newList(values, _makeListType(_makeType(_Ref.parse('sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0'), 0)));
+}

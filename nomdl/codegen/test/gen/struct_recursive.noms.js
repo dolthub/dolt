@@ -9,8 +9,10 @@ import {
   Ref as _Ref,
   createStructClass as _createStructClass,
   makeCompoundType as _makeCompoundType,
+  makeListType as _makeListType,
   makeStructType as _makeStructType,
   makeType as _makeType,
+  newList as _newList,
   registerPackage as _registerPackage,
 } from '@attic/noms';
 import type {
@@ -45,3 +47,7 @@ interface Tree$Interface extends _Struct {
 }
 
 export const Tree: Class<Tree$Interface> = _createStructClass(typeForTree, Tree$typeDef);
+
+export function newListOfTree(values: Array<Tree>): Promise<_NomsList<Tree>> {
+  return _newList(values, _makeListType(_makeType(_pkg.ref, 0)));
+}

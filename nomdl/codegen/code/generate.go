@@ -429,18 +429,18 @@ func firstToLower(s string) string {
 	return string(b)
 }
 
-// ToTypeJS returns a string containing Go code that instantiates a Type instance equivalent to t for JavaScript.
-func (gen *Generator) ToTypeJS(t types.Type, fileID, nomsName string, indent int) string {
+// ToTypeValueJS returns a string containing JS code that instantiates a Type instance equivalent to t for JavaScript.
+func (gen *Generator) ToTypeValueJS(t types.Type, inPackageDef bool, indent int) string {
 	d.Chk.True(!t.HasPackageRef() && !t.IsUnresolved() || t.HasOrdinal(), "%s does not have an ordinal set", t.Name())
 	if t.HasPackageRef() {
 		return fmt.Sprintf(`%s(%s.parse('%s'), %d)`, gen.ImportJS("makeType"), gen.ImportJS("Ref"), t.PackageRef().String(), t.Ordinal())
 	}
 
 	if t.IsUnresolved() {
-		if fileID != "" {
-			return fmt.Sprintf(`%s.makeType(__packageInFile_%s_CachedRef, %d)`, nomsName, fileID, t.Ordinal())
+		if inPackageDef {
+			return fmt.Sprintf(`%s(new %s(), %d)`, gen.ImportJS("makeType"), gen.ImportJS("Ref"), t.Ordinal())
 		}
-		return fmt.Sprintf(`%s(new %s(), %d)`, gen.ImportJS("makeType"), gen.ImportJS("Ref"), t.Ordinal())
+		return fmt.Sprintf("%s(_pkg.ref, %d)", gen.ImportJS("makeType"), t.Ordinal())
 	}
 
 	if types.IsPrimitiveKind(t.Kind()) {
@@ -451,7 +451,7 @@ func (gen *Generator) ToTypeJS(t types.Type, fileID, nomsName string, indent int
 	case types.CompoundDesc:
 		types := make([]string, len(desc.ElemTypes))
 		for i, t := range desc.ElemTypes {
-			types[i] = gen.ToTypeJS(t, fileID, nomsName, 0)
+			types[i] = gen.ToTypeValueJS(t, inPackageDef, 0)
 		}
 		return fmt.Sprintf(`%s(%s.%s, %s)`, gen.ImportJS("makeCompoundType"), gen.ImportJS("Kind"), kindToString(t.Kind()), strings.Join(types, ", "))
 	case types.EnumDesc:
@@ -460,7 +460,7 @@ func (gen *Generator) ToTypeJS(t types.Type, fileID, nomsName string, indent int
 		flatten := func(f []types.Field) string {
 			out := make([]string, 0, len(f))
 			for _, field := range f {
-				out = append(out, fmt.Sprintf(`%snew %s('%s', %s, %t),`, ind(indent+1), gen.ImportJS("Field"), field.Name, gen.ToTypeJS(field.T, fileID, nomsName, 0), field.Optional))
+				out = append(out, fmt.Sprintf(`%snew %s('%s', %s, %t),`, ind(indent+1), gen.ImportJS("Field"), field.Name, gen.ToTypeValueJS(field.T, inPackageDef, 0), field.Optional))
 			}
 			return strings.Join(out, "\n")
 		}

@@ -2,4 +2,23 @@
 // @flow
 /* eslint-disable */
 
+import {
+  boolType as _boolType,
+  makeMapType as _makeMapType,
+  newMap as _newMap,
+  stringType as _stringType,
+  valueType as _valueType,
+} from '@attic/noms';
+import type {
+  NomsMap as _NomsMap,
+  Value as _Value,
+} from '@attic/noms';
 
+
+export function newMapOfBoolToString(values: Array<any>): Promise<_NomsMap<boolean, string>> {
+  return _newMap(values, _makeMapType(_boolType, _stringType));
+}
+
+export function newMapOfStringToValue(values: Array<any>): Promise<_NomsMap<string, _Value>> {
+  return _newMap(values, _makeMapType(_stringType, _valueType));
+}

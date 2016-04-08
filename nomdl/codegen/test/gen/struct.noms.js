@@ -7,12 +7,15 @@ import {
   Package as _Package,
   boolType as _boolType,
   createStructClass as _createStructClass,
+  makeListType as _makeListType,
   makeStructType as _makeStructType,
   makeType as _makeType,
+  newList as _newList,
   registerPackage as _registerPackage,
   stringType as _stringType,
 } from '@attic/noms';
 import type {
+  NomsList as _NomsList,
   Struct as _Struct,
 } from '@attic/noms';
 
@@ -47,3 +50,7 @@ interface Struct$Interface extends _Struct {
 }
 
 export const Struct: Class<Struct$Interface> = _createStructClass(typeForStruct, Struct$typeDef);
+
+export function newListOfStruct(values: Array<Struct>): Promise<_NomsList<Struct>> {
+  return _newList(values, _makeListType(_makeType(_pkg.ref, 0)));
+}

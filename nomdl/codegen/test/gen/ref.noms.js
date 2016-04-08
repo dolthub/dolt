@@ -9,11 +9,17 @@ import {
   createStructClass as _createStructClass,
   float32Type as _float32Type,
   makeCompoundType as _makeCompoundType,
+  makeListType as _makeListType,
+  makeSetType as _makeSetType,
   makeStructType as _makeStructType,
   makeType as _makeType,
+  newList as _newList,
+  newSet as _newSet,
   registerPackage as _registerPackage,
+  stringType as _stringType,
 } from '@attic/noms';
 import type {
+  NomsList as _NomsList,
   NomsSet as _NomsSet,
   RefValue as _RefValue,
   Struct as _Struct,
@@ -47,3 +53,15 @@ interface StructWithRef$Interface extends _Struct {
 }
 
 export const StructWithRef: Class<StructWithRef$Interface> = _createStructClass(typeForStructWithRef, StructWithRef$typeDef);
+
+export function newListOfRefOfFloat32(values: Array<_RefValue<_float32>>): Promise<_NomsList<_RefValue<_float32>>> {
+  return _newList(values, _makeListType(_makeCompoundType(_Kind.Ref, _float32Type)));
+}
+
+export function newListOfString(values: Array<string>): Promise<_NomsList<string>> {
+  return _newList(values, _makeListType(_stringType));
+}
+
+export function newSetOfFloat32(values: Array<_float32>): Promise<_NomsSet<_float32>> {
+  return _newSet(values, _makeSetType(_float32Type));
+}

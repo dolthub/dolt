@@ -1,1 +1,4 @@
-{{/* Maps in JS needs no codegen */}}
+
+export function new{{userType .Type}}(values: Array<any>): Promise<{{importJsType "NomsMap"}}<{{userTypeJS .KeyType}}, {{userTypeJS .ValueType}}>> {
+  return {{importJS "newMap"}}(values, {{importJS "makeMapType"}}({{toTypeValueJS .KeyType false 0}}, {{toTypeValueJS .ValueType false 0}}));
+}

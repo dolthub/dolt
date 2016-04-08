@@ -8,8 +8,10 @@ import {
   Package as _Package,
   createStructClass as _createStructClass,
   makeCompoundType as _makeCompoundType,
+  makeListType as _makeListType,
   makeStructType as _makeStructType,
   makeType as _makeType,
+  newList as _newList,
   registerPackage as _registerPackage,
   uint8Type as _uint8Type,
 } from '@attic/noms';
@@ -46,3 +48,7 @@ interface StructWithDupList$Interface extends _Struct {
 }
 
 export const StructWithDupList: Class<StructWithDupList$Interface> = _createStructClass(typeForStructWithDupList, StructWithDupList$typeDef);
+
+export function newListOfUint8(values: Array<_uint8>): Promise<_NomsList<_uint8>> {
+  return _newList(values, _makeListType(_uint8Type));
+}

@@ -11,8 +11,10 @@ import {
   float32Type as _float32Type,
   float64Type as _float64Type,
   makeCompoundType as _makeCompoundType,
+  makeSetType as _makeSetType,
   makeStructType as _makeStructType,
   makeType as _makeType,
+  newSet as _newSet,
   registerPackage as _registerPackage,
   stringType as _stringType,
   uint8Type as _uint8Type,
@@ -69,3 +71,7 @@ interface StructWithUnionField$Interface extends _Struct {
 }
 
 export const StructWithUnionField: Class<StructWithUnionField$Interface> = _createStructClass(typeForStructWithUnionField, StructWithUnionField$typeDef);
+
+export function newSetOfUint8(values: Array<_uint8>): Promise<_NomsSet<_uint8>> {
+  return _newSet(values, _makeSetType(_uint8Type));
+}
