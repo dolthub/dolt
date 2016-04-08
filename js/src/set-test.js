@@ -7,7 +7,15 @@ import DataStore from './data-store.js';
 import MemoryStore from './memory-store.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
-import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
+import {
+  Field,
+  makeCompoundType,
+  makePrimitiveType,
+  makeStructType,
+  makeType,
+  makeSetType,
+  boolType,
+} from './type.js';
 import {flatten, flattenParallel} from './test-util.js';
 import {invariant, notNull} from './assert.js';
 import {Kind} from './noms-kind.js';
@@ -456,5 +464,12 @@ suite('CompoundSet', () => {
     await test([0, 1, 2], [0, 1, 2]);
     await test([1, 2], [-2, -1, 1, 2]);
     await test([0, 1, 2], [-2, -1, 0, 1, 2]);
+  });
+
+  test('set of bool', async () => {
+    const tr = makeSetType(boolType);
+    const set = await newSet([true], tr);
+    assert.isTrue(await set.has(true));
+    assert.isFalse(await set.has(false));
   });
 });
