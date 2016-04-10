@@ -41,9 +41,9 @@ func (bl blobLeaf) ChildValues() []Value {
 }
 
 func (bl blobLeaf) Type() Type {
-	return blobType
+	return typeForBlob
 }
 
 func (bl blobLeaf) Equals(other Value) bool {
-	return other != nil && blobType.Equals(other.Type()) && bl.Ref() == other.Ref()
+	return other != nil && typeForBlob.Equals(other.Type()) && bl.Ref() == other.Ref()
 }
