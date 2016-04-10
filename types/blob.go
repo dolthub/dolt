@@ -16,7 +16,8 @@ const (
 	blobWindowSize = 64
 )
 
-var typeForBlob = MakePrimitiveType(BlobKind)
+var blobType = MakePrimitiveType(BlobKind)
+var refOfBlobType = MakeRefType(blobType)
 
 type Blob interface {
 	Value
@@ -49,7 +50,7 @@ func newBlobLeafChunkFn() makeChunkFn {
 }
 
 func NewBlob(r io.Reader) Blob {
-	seq := newEmptySequenceChunker(newBlobLeafChunkFn(), newIndexedMetaSequenceChunkFn(typeForBlob, nil, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(newBlobLeafChunkFn(), newIndexedMetaSequenceChunkFn(blobType, nil, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	buf := []byte{0}
 	for {
 		n, err := r.Read(buf)
