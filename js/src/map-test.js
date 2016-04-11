@@ -16,8 +16,8 @@ import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {Package, registerPackage} from './package.js';
 import type {Type} from './type.js';
 
-const testMapSize = 5000;
-const mapOfNRef = 'sha1-1b9664e55091370996f3af428ffee78f1ad36426';
+const testMapSize = 1000;
+const mapOfNRef = 'sha1-b88cd90f3bd0b826bcd9bf57ea28bff15d1d141a';
 
 suite('BuildMap', () => {
   test('set of n numbers', async () => {
@@ -66,7 +66,7 @@ suite('BuildMap', () => {
     });
 
     const m = await newMap(kvRefs, tr);
-    assert.strictEqual(m.ref.toString(), 'sha1-8dc9e857b17c8550e5faf18a8af2abc2b7f4be0d');
+    assert.strictEqual(m.ref.toString(), 'sha1-8055bd75cd73e9a770123740739532661cec4a86');
   });
 
   test('set', async () => {
