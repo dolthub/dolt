@@ -53,3 +53,8 @@ cache:
   - clients/pitchmap/ui/node_modules
   - clients/splore/node_modules
   - nomdl/codegen/test/node_modules
+deploy:
+  provider: script
+  script: tools/publish-js-sdk.py
+  on:
+    branch: master
