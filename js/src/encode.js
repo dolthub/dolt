@@ -18,6 +18,7 @@ import {NomsSet, SetLeafSequence} from './set.js';
 import {Sequence} from './sequence.js';
 import {setEncodeNomsValue} from './get-ref.js';
 import {NomsBlob, BlobLeafSequence} from './blob.js';
+import describeType from './describe-type.js';
 
 const typedTag = 't ';
 
@@ -118,7 +119,8 @@ export class JsonArrayWriter {
   writeValue(v: any, t: Type, pkg: ?Package) {
     switch (t.kind) {
       case Kind.Blob:
-        invariant(v instanceof NomsBlob || v instanceof Sequence);
+        invariant(v instanceof NomsBlob || v instanceof Sequence,
+                  `Failed to write Blob. Invalid type: ${describeType(v)}`);
         const sequence: Sequence = v instanceof NomsBlob ? v.sequence : v;
 
         if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
@@ -129,11 +131,18 @@ export class JsonArrayWriter {
         this.writeBlob(sequence);
         break;
       case Kind.Bool:
+        invariant(typeof v === 'boolean', `Failed to write Bool. Invalid type: ${describeType(v)}`);
+        this.write(v);
+        break;
       case Kind.String:
+        invariant(typeof v === 'string',
+                  `Failed to write String. Invalid type: ${describeType(v)}`);
         this.write(v);
         break;
       case Kind.Float32:
       case Kind.Float64:
+        invariant(typeof v === 'number',
+                `Failed to write ${t.describe()}. Invalid type: ${describeType(v)}`);
         this.writeFloat(v); // TODO: Verify value fits in type
         break;
       case Kind.Uint8:
@@ -144,10 +153,13 @@ export class JsonArrayWriter {
       case Kind.Int16:
       case Kind.Int32:
       case Kind.Int64:
+        invariant(typeof v === 'number',
+              `Failed to write ${t.describe()}. Invalid type: ${describeType(v)}`);
         this.writeInt(v); // TODO: Verify value fits in type
         break;
       case Kind.List: {
-        invariant(v instanceof NomsList || v instanceof Sequence);
+        invariant(v instanceof NomsList || v instanceof Sequence,
+                  `Failed to write List. Invalid type: ${describeType(v)}`);
         const sequence: Sequence = v instanceof NomsList ? v.sequence : v;
 
         if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
@@ -162,7 +174,8 @@ export class JsonArrayWriter {
         break;
       }
       case Kind.Map: {
-        invariant(v instanceof NomsMap || v instanceof Sequence);
+        invariant(v instanceof NomsMap || v instanceof Sequence,
+                  `Failed to write Map. Invalid type: ${describeType(v)}`);
         const sequence: Sequence = v instanceof NomsMap ? v.sequence : v;
 
         if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
@@ -181,7 +194,8 @@ export class JsonArrayWriter {
         break;
       }
       case Kind.Package: {
-        invariant(v instanceof Package);
+        invariant(v instanceof Package,
+                  `Failed to write Package. Invalid type: ${describeType(v)}`);
         const ptr = makePrimitiveType(Kind.Type);
         const w2 = new JsonArrayWriter(this._ds);
         v.types.forEach(type => w2.writeValue(type, ptr, pkg));
@@ -192,12 +206,14 @@ export class JsonArrayWriter {
         break;
       }
       case Kind.Ref: {
-        invariant(v instanceof RefValue);
+        invariant(v instanceof RefValue,
+                  `Failed to write Ref. Invalid type: ${describeType(v)}`);
         this.writeRef(v.targetRef);
         break;
       }
       case Kind.Set: {
-        invariant(v instanceof NomsSet || v instanceof Sequence);
+        invariant(v instanceof NomsSet || v instanceof Sequence,
+                  `Failed to write Set. Invalid type: ${describeType(v)}`);
         const sequence: Sequence = v instanceof NomsSet ? v.sequence : v;
 
         if (this.maybeWriteMetaSequence(sequence, t, pkg)) {
@@ -216,7 +232,8 @@ export class JsonArrayWriter {
         break;
       }
       case Kind.Type: {
-        invariant(v instanceof Type);
+        invariant(v instanceof Type,
+                  `Failed to write Type. Invalid type: ${describeType(v)}`);
         this.writeTypeAsValue(v);
         break;
       }
@@ -310,11 +327,13 @@ export class JsonArrayWriter {
     const typeDef = pkg.types[t.ordinal];
     switch (typeDef.kind) {
       case Kind.Enum:
-        invariant(typeof v === 'number');
+        invariant(typeof v === 'number',
+                  `Failed to write ${typeDef.describe()}. Invalid type: ${describeType(v)}`);
         this.writeEnum(v);
         break;
       case Kind.Struct: {
-        invariant(v instanceof Struct);
+        invariant(v instanceof Struct,
+                  `Failed to write ${typeDef.describe()}. Invalid type: ${describeType(v)}`);
         this.writeStruct(v, t, typeDef, pkg);
         break;
       }

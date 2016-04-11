@@ -9,13 +9,28 @@ import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
 import type {NomsKind} from './noms-kind.js';
 import {encodeNomsValue, JsonArrayWriter} from './encode.js';
-import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type,}
-    from './type.js';
+import {
+  blobType,
+  boolType,
+  Field,
+  float64Type,
+  int8Type,
+  makeCompoundType,
+  makeEnumType,
+  makeListType,
+  makeMapType,
+  makePrimitiveType,
+  makeSetType,
+  makeStructType,
+  makeType,
+  stringType,
+  Type,
+} from './type.js';
 import {IndexedMetaSequence, MetaTuple} from './meta-sequence.js';
 import {Kind} from './noms-kind.js';
-import {ListLeafSequence, NomsList} from './list.js';
-import {MapLeafSequence, NomsMap} from './map.js';
-import {NomsSet, SetLeafSequence} from './set.js';
+import {newList, ListLeafSequence, NomsList} from './list.js';
+import {newMap, MapLeafSequence, NomsMap} from './map.js';
+import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {Package, registerPackage} from './package.js';
 import {newBlob} from './blob.js';
 import DataStore from './data-store.js';
@@ -433,5 +448,61 @@ suite('Encode', () => {
     w.writeTopLevel(t, v);
 
     assert.deepEqual([Kind.Ref, Kind.Blob, ref.toString()], w.array);
+  });
+
+  test('type errors', async () => {
+    const ds = new DataStore(new MemoryStore());
+    const w = new JsonArrayWriter(ds);
+
+    const test = (et, at, t, v) => {
+      try {
+        w.writeTopLevel(t, v);
+      } catch (ex) {
+        assert.equal(ex.message, `Failed to write ${et}. Invalid type: ${at}`);
+        return;
+      }
+      assert.ok(false, `Expected error, 'Failed to write ${et}. Invalid type: ${at}' but Got none`);
+    };
+
+    test('Int8', 'string', int8Type, 'hi');
+    test('Float64', 'string', float64Type, 'hi');
+    test('Bool', 'string', boolType, 'hi');
+    test('Blob', 'string', blobType, 'hi');
+
+    test('String', 'number', stringType, 42);
+    test('Bool', 'number', boolType, 42);
+    test('Blob', 'number', blobType, 42);
+
+    test('Int8', 'boolean', int8Type, true);
+    test('Float64', 'boolean', float64Type, true);
+    test('String', 'boolean', stringType, true);
+    test('Blob', 'boolean', blobType, true);
+
+    const blob = await newBlob(new Uint8Array([0, 1]));
+    test('Int8', 'Blob', int8Type, blob);
+    test('Float64', 'Blob', float64Type, blob);
+    test('String', 'Blob', stringType, blob);
+    test('Bool', 'Blob', boolType, blob);
+
+    const list = await newList([0, 1], makeListType(int8Type));
+    test('Int8', 'List<Int8>', int8Type, list);
+    test('Float64', 'List<Int8>', float64Type, list);
+    test('String', 'List<Int8>', stringType, list);
+    test('Bool', 'List<Int8>', boolType, list);
+    test('Blob', 'List<Int8>', blobType, list);
+
+    const map = await newMap(['zero', 1], makeMapType(stringType, int8Type));
+    test('Int8', 'Map<String, Int8>', int8Type, map);
+    test('Float64', 'Map<String, Int8>', float64Type, map);
+    test('String', 'Map<String, Int8>', stringType, map);
+    test('Bool', 'Map<String, Int8>', boolType, map);
+    test('Blob', 'Map<String, Int8>', blobType, map);
+
+    const set = await newSet([0, 1], makeSetType(int8Type));
+    test('Int8', 'Set<Int8>', int8Type, set);
+    test('Float64', 'Set<Int8>', float64Type, set);
+    test('String', 'Set<Int8>', stringType, set);
+    test('Bool', 'Set<Int8>', boolType, set);
+    test('Blob', 'Set<Int8>', blobType, set);
   });
 });
