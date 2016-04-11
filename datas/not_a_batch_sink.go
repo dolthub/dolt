@@ -119,15 +119,17 @@ func (bhcs *notABatchSink) batchPutRequests() {
 func (bhcs *notABatchSink) sendWriteRequests(chnx []chunks.Chunk) {
 	bhcs.rateLimit <- struct{}{}
 	go func() {
+		hashes := make(ref.RefSlice, len(chnx))
 		defer func() {
-			bhcs.unwrittenPuts.Clear(chnx)
+			bhcs.unwrittenPuts.Clear(hashes)
 			bhcs.requestWg.Add(-len(chnx))
 		}()
 
 		body := &bytes.Buffer{}
 		gw := gzip.NewWriter(body)
 		sz := chunks.NewSerializer(gw)
-		for _, chunk := range chnx {
+		for i, chunk := range chnx {
+			hashes[i] = chunk.Ref()
 			sz.Put(chunk)
 		}
 		sz.Close()
