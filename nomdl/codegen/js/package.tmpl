@@ -1,10 +1,10 @@
 {{if .HasTypes}}
 const _pkg = new {{importJS "Package"}}([{{range $i, $t := .Types}}
-  {{toTypeValueJS $t true 3}},{{end}}
+  {{toTypeValueJS $t true 2}},{{end}}
 ], [{{range $deps := .Dependencies}}
   {{importJS "Ref"}}.parse('{{$deps}}'),{{end}}
 ]);
 {{importJS "registerPackage"}}(_pkg);{{range $i, $t := .Types}}
-export const typeFor{{userType $t}} = {{importJS "makeType"}}(_pkg.ref, {{$i}});
-const {{userType $t}}$typeDef = _pkg.types[{{$i}}];{{end}}
+const {{userType $t}}$type = {{importJS "makeType"}}(_pkg.ref, {{$i}});
+const {{userType $t}}$typeDef = {{toTypeValueJS $t false 1}};{{end}}
 {{end}}

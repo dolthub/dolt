@@ -18,19 +18,27 @@ import type {
 
 const _pkg = new _Package([
   _makeStructType('OptionalStruct',
-      [
-        new _Field('s', _stringType, true),
-        new _Field('b', _boolType, true),
-      ],
-      [
+    [
+      new _Field('s', _stringType, true),
+      new _Field('b', _boolType, true),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
 ], [
 ]);
 _registerPackage(_pkg);
-export const typeForOptionalStruct = _makeType(_pkg.ref, 0);
-const OptionalStruct$typeDef = _pkg.types[0];
+const OptionalStruct$type = _makeType(_pkg.ref, 0);
+const OptionalStruct$typeDef = _makeStructType('OptionalStruct',
+  [
+    new _Field('s', _stringType, true),
+    new _Field('b', _boolType, true),
+  ],
+  [
+
+  ]
+);
 
 
 type OptionalStruct$Data = {
@@ -46,4 +54,4 @@ interface OptionalStruct$Interface extends _Struct {
   setB(value: ?boolean): OptionalStruct$Interface;
 }
 
-export const OptionalStruct: Class<OptionalStruct$Interface> = _createStructClass(typeForOptionalStruct, OptionalStruct$typeDef);
+export const OptionalStruct: Class<OptionalStruct$Interface> = _createStructClass(OptionalStruct$type, OptionalStruct$typeDef);

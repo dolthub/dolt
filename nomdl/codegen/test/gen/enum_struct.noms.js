@@ -19,20 +19,27 @@ import type {
 const _pkg = new _Package([
   _makeEnumType('Handedness', 'right', 'left', 'switch'),
   _makeStructType('EnumStruct',
-      [
-        new _Field('hand', _makeType(new _Ref(), 0), false),
-      ],
-      [
+    [
+      new _Field('hand', _makeType(new _Ref(), 0), false),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
 ], [
 ]);
 _registerPackage(_pkg);
-export const typeForHandedness = _makeType(_pkg.ref, 0);
-const Handedness$typeDef = _pkg.types[0];
-export const typeForEnumStruct = _makeType(_pkg.ref, 1);
-const EnumStruct$typeDef = _pkg.types[1];
+const Handedness$type = _makeType(_pkg.ref, 0);
+const Handedness$typeDef = _makeEnumType('Handedness', 'right', 'left', 'switch');
+const EnumStruct$type = _makeType(_pkg.ref, 1);
+const EnumStruct$typeDef = _makeStructType('EnumStruct',
+  [
+    new _Field('hand', _makeType(_pkg.ref, 0), false),
+  ],
+  [
+
+  ]
+);
 
 
 export type Handedness =
@@ -50,4 +57,4 @@ interface EnumStruct$Interface extends _Struct {
   setHand(value: Handedness): EnumStruct$Interface;
 }
 
-export const EnumStruct: Class<EnumStruct$Interface> = _createStructClass(typeForEnumStruct, EnumStruct$typeDef);
+export const EnumStruct: Class<EnumStruct$Interface> = _createStructClass(EnumStruct$type, EnumStruct$typeDef);

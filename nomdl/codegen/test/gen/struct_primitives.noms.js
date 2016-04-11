@@ -42,31 +42,51 @@ import type {
 
 const _pkg = new _Package([
   _makeStructType('StructPrimitives',
-      [
-        new _Field('uint64', _uint64Type, false),
-        new _Field('uint32', _uint32Type, false),
-        new _Field('uint16', _uint16Type, false),
-        new _Field('uint8', _uint8Type, false),
-        new _Field('int64', _int64Type, false),
-        new _Field('int32', _int32Type, false),
-        new _Field('int16', _int16Type, false),
-        new _Field('int8', _int8Type, false),
-        new _Field('float64', _float64Type, false),
-        new _Field('float32', _float32Type, false),
-        new _Field('bool', _boolType, false),
-        new _Field('string', _stringType, false),
-        new _Field('blob', _blobType, false),
-        new _Field('value', _valueType, false),
-      ],
-      [
+    [
+      new _Field('uint64', _uint64Type, false),
+      new _Field('uint32', _uint32Type, false),
+      new _Field('uint16', _uint16Type, false),
+      new _Field('uint8', _uint8Type, false),
+      new _Field('int64', _int64Type, false),
+      new _Field('int32', _int32Type, false),
+      new _Field('int16', _int16Type, false),
+      new _Field('int8', _int8Type, false),
+      new _Field('float64', _float64Type, false),
+      new _Field('float32', _float32Type, false),
+      new _Field('bool', _boolType, false),
+      new _Field('string', _stringType, false),
+      new _Field('blob', _blobType, false),
+      new _Field('value', _valueType, false),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
 ], [
 ]);
 _registerPackage(_pkg);
-export const typeForStructPrimitives = _makeType(_pkg.ref, 0);
-const StructPrimitives$typeDef = _pkg.types[0];
+const StructPrimitives$type = _makeType(_pkg.ref, 0);
+const StructPrimitives$typeDef = _makeStructType('StructPrimitives',
+  [
+    new _Field('uint64', _uint64Type, false),
+    new _Field('uint32', _uint32Type, false),
+    new _Field('uint16', _uint16Type, false),
+    new _Field('uint8', _uint8Type, false),
+    new _Field('int64', _int64Type, false),
+    new _Field('int32', _int32Type, false),
+    new _Field('int16', _int16Type, false),
+    new _Field('int8', _int8Type, false),
+    new _Field('float64', _float64Type, false),
+    new _Field('float32', _float32Type, false),
+    new _Field('bool', _boolType, false),
+    new _Field('string', _stringType, false),
+    new _Field('blob', _blobType, false),
+    new _Field('value', _valueType, false),
+  ],
+  [
+
+  ]
+);
 
 
 type StructPrimitives$Data = {
@@ -118,4 +138,4 @@ interface StructPrimitives$Interface extends _Struct {
   setValue(value: _Value): StructPrimitives$Interface;
 }
 
-export const StructPrimitives: Class<StructPrimitives$Interface> = _createStructClass(typeForStructPrimitives, StructPrimitives$typeDef);
+export const StructPrimitives: Class<StructPrimitives$Interface> = _createStructClass(StructPrimitives$type, StructPrimitives$typeDef);

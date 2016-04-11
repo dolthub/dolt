@@ -24,22 +24,30 @@ import * as dep from './sha1_eda4273.js';
 const _pkg = new _Package([
   _makeEnumType('LocalE', 'LocalE1', 'Ignored'),
   _makeStructType('ImportUser',
-      [
-        new _Field('importedStruct', _makeType(_Ref.parse('sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0'), 0), false),
-        new _Field('enum', _makeType(new _Ref(), 0), false),
-      ],
-      [
+    [
+      new _Field('importedStruct', _makeType(_Ref.parse('sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0'), 0), false),
+      new _Field('enum', _makeType(new _Ref(), 0), false),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
 ], [
   _Ref.parse('sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0'),
 ]);
 _registerPackage(_pkg);
-export const typeForLocalE = _makeType(_pkg.ref, 0);
-const LocalE$typeDef = _pkg.types[0];
-export const typeForImportUser = _makeType(_pkg.ref, 1);
-const ImportUser$typeDef = _pkg.types[1];
+const LocalE$type = _makeType(_pkg.ref, 0);
+const LocalE$typeDef = _makeEnumType('LocalE', 'LocalE1', 'Ignored');
+const ImportUser$type = _makeType(_pkg.ref, 1);
+const ImportUser$typeDef = _makeStructType('ImportUser',
+  [
+    new _Field('importedStruct', _makeType(_Ref.parse('sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0'), 0), false),
+    new _Field('enum', _makeType(_pkg.ref, 0), false),
+  ],
+  [
+
+  ]
+);
 
 
 export type LocalE =
@@ -59,7 +67,7 @@ interface ImportUser$Interface extends _Struct {
   setEnum(value: LocalE): ImportUser$Interface;
 }
 
-export const ImportUser: Class<ImportUser$Interface> = _createStructClass(typeForImportUser, ImportUser$typeDef);
+export const ImportUser: Class<ImportUser$Interface> = _createStructClass(ImportUser$type, ImportUser$typeDef);
 
 export function newListOfD(values: Array<dep.D>): Promise<_NomsList<dep.D>> {
   return _newList(values, _makeListType(_makeType(_Ref.parse('sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0'), 0)));

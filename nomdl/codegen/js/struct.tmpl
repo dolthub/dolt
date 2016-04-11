@@ -11,4 +11,4 @@ interface {{.Name}}$Interface extends {{importJsType "Struct"}} {
   set{{title .Name}}(value: {{userTypeJS .T}}): {{$name}}$Interface;{{end}}
 }
 
-export const {{.Name}}: Class<{{.Name}}$Interface> = {{importJS "createStructClass"}}(typeFor{{userType .Type}}, {{userType .Type}}$typeDef);
+export const {{.Name}}: Class<{{.Name}}$Interface> = {{importJS "createStructClass"}}({{userType .Type}}$type, {{userType .Type}}$typeDef);

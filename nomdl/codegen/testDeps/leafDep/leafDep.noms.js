@@ -19,22 +19,30 @@ import type {
 
 const _pkg = new _Package([
   _makeStructType('S',
-      [
-        new _Field('s', _stringType, false),
-        new _Field('b', _boolType, false),
-      ],
-      [
+    [
+      new _Field('s', _stringType, false),
+      new _Field('b', _boolType, false),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
   _makeEnumType('E', 'e1', 'e2', 'e3'),
 ], [
 ]);
 _registerPackage(_pkg);
-export const typeForS = _makeType(_pkg.ref, 0);
-const S$typeDef = _pkg.types[0];
-export const typeForE = _makeType(_pkg.ref, 1);
-const E$typeDef = _pkg.types[1];
+const S$type = _makeType(_pkg.ref, 0);
+const S$typeDef = _makeStructType('S',
+  [
+    new _Field('s', _stringType, false),
+    new _Field('b', _boolType, false),
+  ],
+  [
+
+  ]
+);
+const E$type = _makeType(_pkg.ref, 1);
+const E$typeDef = _makeEnumType('E', 'e1', 'e2', 'e3');
 
 
 type S$Data = {
@@ -50,7 +58,7 @@ interface S$Interface extends _Struct {
   setB(value: boolean): S$Interface;
 }
 
-export const S: Class<S$Interface> = _createStructClass(typeForS, S$typeDef);
+export const S: Class<S$Interface> = _createStructClass(S$type, S$typeDef);
 
 export type E =
   0 |  // e1

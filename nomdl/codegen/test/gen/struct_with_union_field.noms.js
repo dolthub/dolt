@@ -32,22 +32,33 @@ import type {
 
 const _pkg = new _Package([
   _makeStructType('StructWithUnionField',
-      [
-        new _Field('a', _float32Type, false),
-      ],
-      [
-        new _Field('b', _float64Type, false),
-        new _Field('c', _stringType, false),
-        new _Field('d', _blobType, false),
-        new _Field('e', _valueType, false),
-        new _Field('f', _makeCompoundType(_Kind.Set, _uint8Type), false),
-      ]
-    ),
+    [
+      new _Field('a', _float32Type, false),
+    ],
+    [
+      new _Field('b', _float64Type, false),
+      new _Field('c', _stringType, false),
+      new _Field('d', _blobType, false),
+      new _Field('e', _valueType, false),
+      new _Field('f', _makeCompoundType(_Kind.Set, _uint8Type), false),
+    ]
+  ),
 ], [
 ]);
 _registerPackage(_pkg);
-export const typeForStructWithUnionField = _makeType(_pkg.ref, 0);
-const StructWithUnionField$typeDef = _pkg.types[0];
+const StructWithUnionField$type = _makeType(_pkg.ref, 0);
+const StructWithUnionField$typeDef = _makeStructType('StructWithUnionField',
+  [
+    new _Field('a', _float32Type, false),
+  ],
+  [
+    new _Field('b', _float64Type, false),
+    new _Field('c', _stringType, false),
+    new _Field('d', _blobType, false),
+    new _Field('e', _valueType, false),
+    new _Field('f', _makeCompoundType(_Kind.Set, _uint8Type), false),
+  ]
+);
 
 
 type StructWithUnionField$Data = {
@@ -70,7 +81,7 @@ interface StructWithUnionField$Interface extends _Struct {
   setF(value: _NomsSet<_uint8>): StructWithUnionField$Interface;
 }
 
-export const StructWithUnionField: Class<StructWithUnionField$Interface> = _createStructClass(typeForStructWithUnionField, StructWithUnionField$typeDef);
+export const StructWithUnionField: Class<StructWithUnionField$Interface> = _createStructClass(StructWithUnionField$type, StructWithUnionField$typeDef);
 
 export function newSetOfUint8(values: Array<_uint8>): Promise<_NomsSet<_uint8>> {
   return _newSet(values, _makeSetType(_uint8Type));

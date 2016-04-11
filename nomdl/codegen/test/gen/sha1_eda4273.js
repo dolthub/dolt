@@ -19,30 +19,45 @@ import * as _sha1_1c216c6 from './sha1_1c216c6.js';
 
 const _pkg = new _Package([
   _makeStructType('D',
-      [
-        new _Field('structField', _makeType(_Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 0), false),
-        new _Field('enumField', _makeType(_Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 1), false),
-      ],
-      [
+    [
+      new _Field('structField', _makeType(_Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 0), false),
+      new _Field('enumField', _makeType(_Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 1), false),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
   _makeStructType('DUser',
-      [
-        new _Field('Dfield', _makeType(new _Ref(), 0), false),
-      ],
-      [
+    [
+      new _Field('Dfield', _makeType(new _Ref(), 0), false),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
 ], [
   _Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'),
 ]);
 _registerPackage(_pkg);
-export const typeForD = _makeType(_pkg.ref, 0);
-const D$typeDef = _pkg.types[0];
-export const typeForDUser = _makeType(_pkg.ref, 1);
-const DUser$typeDef = _pkg.types[1];
+const D$type = _makeType(_pkg.ref, 0);
+const D$typeDef = _makeStructType('D',
+  [
+    new _Field('structField', _makeType(_Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 0), false),
+    new _Field('enumField', _makeType(_Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 1), false),
+  ],
+  [
+
+  ]
+);
+const DUser$type = _makeType(_pkg.ref, 1);
+const DUser$typeDef = _makeStructType('DUser',
+  [
+    new _Field('Dfield', _makeType(_pkg.ref, 0), false),
+  ],
+  [
+
+  ]
+);
 
 
 type D$Data = {
@@ -58,7 +73,7 @@ interface D$Interface extends _Struct {
   setEnumField(value: _sha1_1c216c6.E): D$Interface;
 }
 
-export const D: Class<D$Interface> = _createStructClass(typeForD, D$typeDef);
+export const D: Class<D$Interface> = _createStructClass(D$type, D$typeDef);
 
 type DUser$Data = {
   Dfield: D;
@@ -70,4 +85,4 @@ interface DUser$Interface extends _Struct {
   setDfield(value: D): DUser$Interface;
 }
 
-export const DUser: Class<DUser$Interface> = _createStructClass(typeForDUser, DUser$typeDef);
+export const DUser: Class<DUser$Interface> = _createStructClass(DUser$type, DUser$typeDef);

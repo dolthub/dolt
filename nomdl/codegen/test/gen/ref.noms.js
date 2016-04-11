@@ -28,18 +28,25 @@ import type {
 
 const _pkg = new _Package([
   _makeStructType('StructWithRef',
-      [
-        new _Field('r', _makeCompoundType(_Kind.Ref, _makeCompoundType(_Kind.Set, _float32Type)), false),
-      ],
-      [
+    [
+      new _Field('r', _makeCompoundType(_Kind.Ref, _makeCompoundType(_Kind.Set, _float32Type)), false),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
 ], [
 ]);
 _registerPackage(_pkg);
-export const typeForStructWithRef = _makeType(_pkg.ref, 0);
-const StructWithRef$typeDef = _pkg.types[0];
+const StructWithRef$type = _makeType(_pkg.ref, 0);
+const StructWithRef$typeDef = _makeStructType('StructWithRef',
+  [
+    new _Field('r', _makeCompoundType(_Kind.Ref, _makeCompoundType(_Kind.Set, _float32Type)), false),
+  ],
+  [
+
+  ]
+);
 
 
 type StructWithRef$Data = {
@@ -52,7 +59,7 @@ interface StructWithRef$Interface extends _Struct {
   setR(value: _RefValue<_NomsSet<_float32>>): StructWithRef$Interface;
 }
 
-export const StructWithRef: Class<StructWithRef$Interface> = _createStructClass(typeForStructWithRef, StructWithRef$typeDef);
+export const StructWithRef: Class<StructWithRef$Interface> = _createStructClass(StructWithRef$type, StructWithRef$typeDef);
 
 export function newListOfRefOfFloat32(values: Array<_RefValue<_float32>>): Promise<_NomsList<_RefValue<_float32>>> {
   return _newList(values, _makeListType(_makeCompoundType(_Kind.Ref, _float32Type)));

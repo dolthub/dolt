@@ -21,19 +21,27 @@ import type {
 
 const _pkg = new _Package([
   _makeStructType('Struct',
-      [
-        new _Field('s', _stringType, false),
-        new _Field('b', _boolType, false),
-      ],
-      [
+    [
+      new _Field('s', _stringType, false),
+      new _Field('b', _boolType, false),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
 ], [
 ]);
 _registerPackage(_pkg);
-export const typeForStruct = _makeType(_pkg.ref, 0);
-const Struct$typeDef = _pkg.types[0];
+const Struct$type = _makeType(_pkg.ref, 0);
+const Struct$typeDef = _makeStructType('Struct',
+  [
+    new _Field('s', _stringType, false),
+    new _Field('b', _boolType, false),
+  ],
+  [
+
+  ]
+);
 
 
 type Struct$Data = {
@@ -49,7 +57,7 @@ interface Struct$Interface extends _Struct {
   setB(value: boolean): Struct$Interface;
 }
 
-export const Struct: Class<Struct$Interface> = _createStructClass(typeForStruct, Struct$typeDef);
+export const Struct: Class<Struct$Interface> = _createStructClass(Struct$type, Struct$typeDef);
 
 export function newListOfStruct(values: Array<Struct>): Promise<_NomsList<Struct>> {
   return _newList(values, _makeListType(_makeType(_pkg.ref, 0)));

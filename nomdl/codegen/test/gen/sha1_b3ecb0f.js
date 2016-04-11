@@ -23,18 +23,25 @@ import type {
 
 const _pkg = new _Package([
   _makeStructType('A',
-      [
-        new _Field('A', _makeCompoundType(_Kind.List, _makeCompoundType(_Kind.List, _blobType)), false),
-      ],
-      [
+    [
+      new _Field('A', _makeCompoundType(_Kind.List, _makeCompoundType(_Kind.List, _blobType)), false),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
 ], [
 ]);
 _registerPackage(_pkg);
-export const typeForA = _makeType(_pkg.ref, 0);
-const A$typeDef = _pkg.types[0];
+const A$type = _makeType(_pkg.ref, 0);
+const A$typeDef = _makeStructType('A',
+  [
+    new _Field('A', _makeCompoundType(_Kind.List, _makeCompoundType(_Kind.List, _blobType)), false),
+  ],
+  [
+
+  ]
+);
 
 
 type A$Data = {
@@ -47,7 +54,7 @@ interface A$Interface extends _Struct {
   setA(value: _NomsList<_NomsList<_Blob>>): A$Interface;
 }
 
-export const A: Class<A$Interface> = _createStructClass(typeForA, A$typeDef);
+export const A: Class<A$Interface> = _createStructClass(A$type, A$typeDef);
 
 export function newListOfListOfBlob(values: Array<_NomsList<_Blob>>): Promise<_NomsList<_NomsList<_Blob>>> {
   return _newList(values, _makeListType(_makeCompoundType(_Kind.List, _blobType)));

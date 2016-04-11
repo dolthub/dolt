@@ -22,18 +22,25 @@ import type {
 
 const _pkg = new _Package([
   _makeStructType('Tree',
-      [
-        new _Field('children', _makeCompoundType(_Kind.List, _makeType(new _Ref(), 0)), false),
-      ],
-      [
+    [
+      new _Field('children', _makeCompoundType(_Kind.List, _makeType(new _Ref(), 0)), false),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
 ], [
 ]);
 _registerPackage(_pkg);
-export const typeForTree = _makeType(_pkg.ref, 0);
-const Tree$typeDef = _pkg.types[0];
+const Tree$type = _makeType(_pkg.ref, 0);
+const Tree$typeDef = _makeStructType('Tree',
+  [
+    new _Field('children', _makeCompoundType(_Kind.List, _makeType(_pkg.ref, 0)), false),
+  ],
+  [
+
+  ]
+);
 
 
 type Tree$Data = {
@@ -46,7 +53,7 @@ interface Tree$Interface extends _Struct {
   setChildren(value: _NomsList<Tree>): Tree$Interface;
 }
 
-export const Tree: Class<Tree$Interface> = _createStructClass(typeForTree, Tree$typeDef);
+export const Tree: Class<Tree$Interface> = _createStructClass(Tree$type, Tree$typeDef);
 
 export function newListOfTree(values: Array<Tree>): Promise<_NomsList<Tree>> {
   return _newList(values, _makeListType(_makeType(_pkg.ref, 0)));

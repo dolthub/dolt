@@ -10,8 +10,10 @@ import {
   createStructClass as _createStructClass,
   int64Type as _int64Type,
   makeCompoundType as _makeCompoundType,
+  makeListType as _makeListType,
   makeStructType as _makeStructType,
   makeType as _makeType,
+  newList as _newList,
   registerPackage as _registerPackage,
   stringType as _stringType,
   uint8Type as _uint8Type,
@@ -25,21 +27,31 @@ import type {
 
 const _pkg = new _Package([
   _makeStructType('StructWithList',
-      [
-        new _Field('l', _makeCompoundType(_Kind.List, _uint8Type), false),
-        new _Field('b', _boolType, false),
-        new _Field('s', _stringType, false),
-        new _Field('i', _int64Type, false),
-      ],
-      [
+    [
+      new _Field('l', _makeCompoundType(_Kind.List, _uint8Type), false),
+      new _Field('b', _boolType, false),
+      new _Field('s', _stringType, false),
+      new _Field('i', _int64Type, false),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
 ], [
 ]);
 _registerPackage(_pkg);
-export const typeForStructWithList = _makeType(_pkg.ref, 0);
-const StructWithList$typeDef = _pkg.types[0];
+const StructWithList$type = _makeType(_pkg.ref, 0);
+const StructWithList$typeDef = _makeStructType('StructWithList',
+  [
+    new _Field('l', _makeCompoundType(_Kind.List, _uint8Type), false),
+    new _Field('b', _boolType, false),
+    new _Field('s', _stringType, false),
+    new _Field('i', _int64Type, false),
+  ],
+  [
+
+  ]
+);
 
 
 type StructWithList$Data = {
@@ -61,4 +73,8 @@ interface StructWithList$Interface extends _Struct {
   setI(value: _int64): StructWithList$Interface;
 }
 
-export const StructWithList: Class<StructWithList$Interface> = _createStructClass(typeForStructWithList, StructWithList$typeDef);
+export const StructWithList: Class<StructWithList$Interface> = _createStructClass(StructWithList$type, StructWithList$typeDef);
+
+export function newListOfUint8(values: Array<_uint8>): Promise<_NomsList<_uint8>> {
+  return _newList(values, _makeListType(_uint8Type));
+}

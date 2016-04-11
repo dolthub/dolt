@@ -20,41 +20,65 @@ import type {
 
 const _pkg = new _Package([
   _makeStructType('StructWithUnions',
-      [
-        new _Field('a', _makeType(new _Ref(), 1), false),
-        new _Field('d', _makeType(new _Ref(), 2), false),
-      ],
-      [
+    [
+      new _Field('a', _makeType(new _Ref(), 1), false),
+      new _Field('d', _makeType(new _Ref(), 2), false),
+    ],
+    [
 
-      ]
-    ),
+    ]
+  ),
   _makeStructType('',
-      [
+    [
 
-      ],
-      [
-        new _Field('b', _float64Type, false),
-        new _Field('c', _stringType, false),
-      ]
-    ),
+    ],
+    [
+      new _Field('b', _float64Type, false),
+      new _Field('c', _stringType, false),
+    ]
+  ),
   _makeStructType('',
-      [
+    [
 
-      ],
-      [
-        new _Field('e', _float64Type, false),
-        new _Field('f', _stringType, false),
-      ]
-    ),
+    ],
+    [
+      new _Field('e', _float64Type, false),
+      new _Field('f', _stringType, false),
+    ]
+  ),
 ], [
 ]);
 _registerPackage(_pkg);
-export const typeForStructWithUnions = _makeType(_pkg.ref, 0);
-const StructWithUnions$typeDef = _pkg.types[0];
-export const typeFor__unionOfBOfFloat64AndCOfString = _makeType(_pkg.ref, 1);
-const __unionOfBOfFloat64AndCOfString$typeDef = _pkg.types[1];
-export const typeFor__unionOfEOfFloat64AndFOfString = _makeType(_pkg.ref, 2);
-const __unionOfEOfFloat64AndFOfString$typeDef = _pkg.types[2];
+const StructWithUnions$type = _makeType(_pkg.ref, 0);
+const StructWithUnions$typeDef = _makeStructType('StructWithUnions',
+  [
+    new _Field('a', _makeType(_pkg.ref, 1), false),
+    new _Field('d', _makeType(_pkg.ref, 2), false),
+  ],
+  [
+
+  ]
+);
+const __unionOfBOfFloat64AndCOfString$type = _makeType(_pkg.ref, 1);
+const __unionOfBOfFloat64AndCOfString$typeDef = _makeStructType('',
+  [
+
+  ],
+  [
+    new _Field('b', _float64Type, false),
+    new _Field('c', _stringType, false),
+  ]
+);
+const __unionOfEOfFloat64AndFOfString$type = _makeType(_pkg.ref, 2);
+const __unionOfEOfFloat64AndFOfString$typeDef = _makeStructType('',
+  [
+
+  ],
+  [
+    new _Field('e', _float64Type, false),
+    new _Field('f', _stringType, false),
+  ]
+);
 
 
 type StructWithUnions$Data = {
@@ -70,7 +94,7 @@ interface StructWithUnions$Interface extends _Struct {
   setD(value: __unionOfEOfFloat64AndFOfString): StructWithUnions$Interface;
 }
 
-export const StructWithUnions: Class<StructWithUnions$Interface> = _createStructClass(typeForStructWithUnions, StructWithUnions$typeDef);
+export const StructWithUnions: Class<StructWithUnions$Interface> = _createStructClass(StructWithUnions$type, StructWithUnions$typeDef);
 
 type __unionOfBOfFloat64AndCOfString$Data = {
 };
@@ -83,7 +107,7 @@ interface __unionOfBOfFloat64AndCOfString$Interface extends _Struct {
   setC(value: string): __unionOfBOfFloat64AndCOfString$Interface;
 }
 
-export const __unionOfBOfFloat64AndCOfString: Class<__unionOfBOfFloat64AndCOfString$Interface> = _createStructClass(typeFor__unionOfBOfFloat64AndCOfString, __unionOfBOfFloat64AndCOfString$typeDef);
+export const __unionOfBOfFloat64AndCOfString: Class<__unionOfBOfFloat64AndCOfString$Interface> = _createStructClass(__unionOfBOfFloat64AndCOfString$type, __unionOfBOfFloat64AndCOfString$typeDef);
 
 type __unionOfEOfFloat64AndFOfString$Data = {
 };
@@ -96,4 +120,4 @@ interface __unionOfEOfFloat64AndFOfString$Interface extends _Struct {
   setF(value: string): __unionOfEOfFloat64AndFOfString$Interface;
 }
 
-export const __unionOfEOfFloat64AndFOfString: Class<__unionOfEOfFloat64AndFOfString$Interface> = _createStructClass(typeFor__unionOfEOfFloat64AndFOfString, __unionOfEOfFloat64AndFOfString$typeDef);
+export const __unionOfEOfFloat64AndFOfString: Class<__unionOfEOfFloat64AndFOfString$Interface> = _createStructClass(__unionOfEOfFloat64AndFOfString$type, __unionOfEOfFloat64AndFOfString$typeDef);
