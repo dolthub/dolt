@@ -7,7 +7,17 @@ import DataStore from './data-store';
 import MemoryStore from './memory-store.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
-import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
+import {
+  boolType,
+  Field,
+  int32Type,
+  int64Type,
+  makeCompoundType,
+  makeStructType,
+  makeType,
+  stringType,
+  valueType,
+} from './type.js';
 import {flatten, flattenParallel} from './test-util.js';
 import {invariant} from './assert.js';
 import {Kind} from './noms-kind.js';
@@ -26,8 +36,8 @@ suite('BuildMap', () => {
       kvs.push(i, i + 1);
     }
 
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
-                                makePrimitiveType(Kind.Int64));
+    const tr = makeCompoundType(Kind.Map, int64Type,
+                                int64Type);
     const m = await newMap(kvs, tr);
     assert.strictEqual(m.ref.toString(), mapOfNRef);
 
@@ -50,7 +60,7 @@ suite('BuildMap', () => {
     }
 
     const structTypeDef = makeStructType('num', [
-      new Field('n', makePrimitiveType(Kind.Int64), false),
+      new Field('n', int64Type, false),
     ], []);
     const pkg = new Package([structTypeDef], []);
     registerPackage(pkg);
@@ -75,8 +85,8 @@ suite('BuildMap', () => {
       kvs.push(i, i + 1);
     }
 
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
-                                makePrimitiveType(Kind.Int64));
+    const tr = makeCompoundType(Kind.Map, int64Type,
+                                int64Type);
     let m = await newMap(kvs, tr);
     for (let i = testMapSize - 10; i < testMapSize; i++) {
       m = await m.set(i, i + 1);
@@ -91,8 +101,8 @@ suite('BuildMap', () => {
       kvs.push(i, i + 1);
     }
 
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
-                                makePrimitiveType(Kind.Int64));
+    const tr = makeCompoundType(Kind.Map, int64Type,
+                                int64Type);
     let m = await newMap(kvs, tr);
     for (let i = 0; i < testMapSize; i++) {
       m = await m.set(i, i + 1);
@@ -107,8 +117,8 @@ suite('BuildMap', () => {
       kvs.push(i, i + 1);
     }
 
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
-                                makePrimitiveType(Kind.Int64));
+    const tr = makeCompoundType(Kind.Map, int64Type,
+                                int64Type);
     let m = await newMap(kvs, tr);
     for (let i = testMapSize; i < testMapSize + 10; i++) {
       m = await m.remove(i);
@@ -126,8 +136,8 @@ suite('BuildMap', () => {
       kvs.push(i, i + 1);
     }
 
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
-                                makePrimitiveType(Kind.Int64));
+    const tr = makeCompoundType(Kind.Map, int64Type,
+                                int64Type);
     const m = await newMap(kvs, tr);
 
     const r = ds.writeValue(m);
@@ -149,8 +159,8 @@ suite('MapLeaf', () => {
   test('isEmpty', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
-                                makePrimitiveType(Kind.Bool));
+    const tr = makeCompoundType(Kind.Map, stringType,
+                                boolType);
     const newMap = entries => new NomsMap(tr, new MapLeafSequence(ds, tr, entries));
     assert.isTrue(newMap([]).isEmpty());
     assert.isFalse(newMap([{key: 'a', value: false}, {key:'k', value:true}]).isEmpty());
@@ -159,8 +169,8 @@ suite('MapLeaf', () => {
   test('has', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
-                                makePrimitiveType(Kind.Bool));
+    const tr = makeCompoundType(Kind.Map, stringType,
+                                boolType);
     const m = new NomsMap(tr,
         new MapLeafSequence(ds, tr, [{key: 'a', value: false}, {key:'k', value:true}]));
     assert.isTrue(await m.has('a'));
@@ -172,8 +182,8 @@ suite('MapLeaf', () => {
   test('first/last/get', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
-                                makePrimitiveType(Kind.Int32));
+    const tr = makeCompoundType(Kind.Map, stringType,
+                                int32Type);
     const m = new NomsMap(tr,
         new MapLeafSequence(ds, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
 
@@ -189,8 +199,8 @@ suite('MapLeaf', () => {
   test('forEach', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
-                                makePrimitiveType(Kind.Int32));
+    const tr = makeCompoundType(Kind.Map, stringType,
+                                int32Type);
     const m = new NomsMap(tr,
         new MapLeafSequence(ds, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
 
@@ -202,8 +212,8 @@ suite('MapLeaf', () => {
   test('iterator', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
-                                makePrimitiveType(Kind.Int32));
+    const tr = makeCompoundType(Kind.Map, stringType,
+                                int32Type);
 
     const test = async entries => {
       const m = new NomsMap(tr, new MapLeafSequence(ds, tr, entries));
@@ -219,8 +229,8 @@ suite('MapLeaf', () => {
   test('iteratorAt', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
-                                makePrimitiveType(Kind.Int32));
+    const tr = makeCompoundType(Kind.Map, stringType,
+                                int32Type);
     const build = entries => new NomsMap(tr, new MapLeafSequence(ds, tr, entries));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
@@ -246,7 +256,7 @@ suite('MapLeaf', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Map, keyType, valueType);
-    const st = makePrimitiveType(Kind.String);
+    const st = stringType;
     const refOfSt = makeCompoundType(Kind.Ref, st);
     const r1 = new RefValue(ds.writeValue('x'), refOfSt);
     const r2 = new RefValue(ds.writeValue(true), refOfSt);
@@ -262,18 +272,18 @@ suite('MapLeaf', () => {
   }
 
   test('chunks', () => {
-    testChunks(makePrimitiveType(Kind.String), makePrimitiveType(Kind.Bool));
+    testChunks(stringType, boolType);
   });
 
   test('chunks, map from value to value', () => {
-    testChunks(makePrimitiveType(Kind.Value), makePrimitiveType(Kind.Value));
+    testChunks(valueType, valueType);
   });
 });
 
 suite('CompoundMap', () => {
   function build(ds: DataStore): Array<NomsMap> {
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
-        makePrimitiveType(Kind.Bool));
+    const tr = makeCompoundType(Kind.Map, stringType,
+        boolType);
     const l1 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'a', value: false},
         {key:'b', value:false}]));
     const r1 = ds.writeValue(l1);

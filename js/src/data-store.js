@@ -11,12 +11,12 @@ import type {valueOrPrimitive} from './value.js';
 import {
   Field,
   makeCompoundType,
-  makePrimitiveType,
   makeStructType,
   makeType,
   Type,
   stringType,
   boolType,
+  valueType,
 } from './type.js';
 import {Kind} from './noms-kind.js';
 import {newMap} from './map.js';
@@ -48,7 +48,7 @@ let datasTypes: DatasTypes;
 export function getDatasTypes(): DatasTypes {
   if (!datasTypes) {
     const commitTypeDef = makeStructType('Commit', [
-      new Field('value', makePrimitiveType(Kind.Value), false),
+      new Field('value', valueType, false),
       new Field('parents', makeCompoundType(Kind.Set,
         makeCompoundType(Kind.Ref, makeType(new Ref(), 0))), false),
     ], []);
@@ -59,8 +59,7 @@ export function getDatasTypes(): DatasTypes {
     const commitType = makeType(datasPackage.ref, 0);
     const refOfCommitType = makeCompoundType(Kind.Ref, commitType);
     const commitSetType = makeCompoundType(Kind.Set, refOfCommitType);
-    const commitMapType = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
-                                                     refOfCommitType);
+    const commitMapType = makeCompoundType(Kind.Map, stringType, refOfCommitType);
     datasTypes = {
       commitTypeDef,
       datasPackage,

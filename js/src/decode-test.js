@@ -12,13 +12,26 @@ import type {Value} from './value.js';
 import {assert} from 'chai';
 import {decodeNomsValue, JsonArrayReader} from './decode.js';
 import {
+  boolType,
   Field,
+  float32Type,
+  float64Type,
+  int16Type,
+  int32Type,
+  int64Type,
+  int8Type,
   makeCompoundType,
   makeEnumType,
-  makePrimitiveType,
   makeStructType,
   makeType,
+  stringType,
   Type,
+  typeType,
+  uint16Type,
+  uint32Type,
+  uint64Type,
+  uint8Type,
+  valueType,
 } from './type.js';
 import {encode as encodeBase64} from './base64.js';
 import {IndexedMetaSequence, MetaTuple} from './meta-sequence.js';
@@ -65,15 +78,15 @@ suite('Decode', () => {
       assert.isTrue(expected.equals(tr));
     }
 
-    doTest(makePrimitiveType(Kind.Bool), [Kind.Bool, true]);
-    doTest(makePrimitiveType(Kind.Type), [Kind.Type, Kind.Bool]);
-    doTest(makeCompoundType(Kind.List, makePrimitiveType(Kind.Bool)),
+    doTest(boolType, [Kind.Bool, true]);
+    doTest(typeType, [Kind.Type, Kind.Bool]);
+    doTest(makeCompoundType(Kind.List, boolType),
                             [Kind.List, Kind.Bool, true, false]);
 
     const pkgRef = Ref.parse('sha1-a9993e364706816aba3e25717850c26c9cd0d89d');
     doTest(makeType(pkgRef, 42), [Kind.Unresolved, pkgRef.toString(), '42']);
 
-    doTest(makePrimitiveType(Kind.Type), [Kind.Type, Kind.Type, pkgRef.toString()]);
+    doTest(typeType, [Kind.Type, Kind.Type, pkgRef.toString()]);
   });
 
   test('read primitives', async () => {
@@ -115,7 +128,7 @@ suite('Decode', () => {
     const v:NomsList<int32> = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
 
-    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
+    const tr = makeCompoundType(Kind.List, int32Type);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, [0, 1, 2, 3]));
     assert.isTrue(l.equals(v));
   });
@@ -129,7 +142,7 @@ suite('Decode', () => {
     const v:NomsList<Value> = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
 
-    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Value));
+    const tr = makeCompoundType(Kind.List, valueType);
     assert.isTrue(v.type.equals(tr));
     assert.strictEqual(1, await v.get(0));
     assert.strictEqual('hi', await v.get(1));
@@ -144,7 +157,7 @@ suite('Decode', () => {
     const v = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
 
-    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int8));
+    const tr = makeCompoundType(Kind.List, int8Type);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, [0, 1, 2]));
     assert.isTrue(l.equals(v));
   });
@@ -153,7 +166,7 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
-    const ltr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
+    const ltr = makeCompoundType(Kind.List, int32Type);
     const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0, 1])));
     const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [2, 3])));
     const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [4, 5])));
@@ -181,8 +194,8 @@ suite('Decode', () => {
     const v:NomsMap<int64, float64> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
-    const t = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Int64),
-                               makePrimitiveType(Kind.Float64));
+    const t = makeCompoundType(Kind.Map, int64Type,
+                               float64Type);
     const m = new NomsMap(t, new MapLeafSequence(ds, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(v.equals(m));
   });
@@ -197,8 +210,8 @@ suite('Decode', () => {
     const v:NomsMap<RefValue<Value>, uint64> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
-    const refOfValueType = makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Value));
-    const mapType = makeCompoundType(Kind.Map, refOfValueType, makePrimitiveType(Kind.Uint64));
+    const refOfValueType = makeCompoundType(Kind.Ref, valueType);
+    const mapType = makeCompoundType(Kind.Map, refOfValueType, uint64Type);
     const rv1 = new RefValue(new Ref('sha1-0000000000000000000000000000000000000001'),
         refOfValueType);
     const rv2 = new RefValue(new Ref('sha1-0000000000000000000000000000000000000002'),
@@ -216,8 +229,8 @@ suite('Decode', () => {
     const v:NomsMap<uint64, uint32> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
-    const t = makeCompoundType(Kind.Map, makePrimitiveType(Kind.Uint64),
-                               makePrimitiveType(Kind.Uint32));
+    const t = makeCompoundType(Kind.Map, uint64Type,
+                               uint32Type);
     const m = new NomsMap(t, new MapLeafSequence(ds, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(v.equals(m));
   });
@@ -230,7 +243,7 @@ suite('Decode', () => {
     const v:NomsSet<uint8> = await r.readTopLevelValue();
     invariant(v instanceof NomsSet);
 
-    const t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint8));
+    const t = makeCompoundType(Kind.Set, uint8Type);
     const s = new NomsSet(t, new SetLeafSequence(ds, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
@@ -243,7 +256,7 @@ suite('Decode', () => {
     const v:NomsSet<uint16> = await r.readTopLevelValue();
     invariant(v instanceof NomsSet);
 
-    const t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint16));
+    const t = makeCompoundType(Kind.Set, uint16Type);
     const s = new NomsSet(t, new SetLeafSequence(ds, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
@@ -263,9 +276,9 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeStructType('A1', [
-      new Field('x', makePrimitiveType(Kind.Int16), false),
-      new Field('s', makePrimitiveType(Kind.String), false),
-      new Field('b', makePrimitiveType(Kind.Bool), false),
+      new Field('x', int16Type, false),
+      new Field('s', stringType, false),
+      new Field('b', boolType, false),
     ], []);
 
     const pkg = new Package([tr], []);
@@ -286,10 +299,10 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeStructType('A2', [
-      new Field('x', makePrimitiveType(Kind.Float32), false),
+      new Field('x', float32Type, false),
     ], [
-      new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('s', makePrimitiveType(Kind.String), false),
+      new Field('b', boolType, false),
+      new Field('s', stringType, false),
     ]);
 
     const pkg = new Package([tr], []);
@@ -309,9 +322,9 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeStructType('A3', [
-      new Field('x', makePrimitiveType(Kind.Float32), false),
-      new Field('s', makePrimitiveType(Kind.String), true),
-      new Field('b', makePrimitiveType(Kind.Bool), true),
+      new Field('x', float32Type, false),
+      new Field('s', stringType, true),
+      new Field('b', boolType, true),
     ], []);
 
     const pkg = new Package([tr], []);
@@ -330,11 +343,11 @@ suite('Decode', () => {
   test('test read struct with list', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const ltr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
+    const ltr = makeCompoundType(Kind.List, int32Type);
     const tr = makeStructType('A4', [
-      new Field('b', makePrimitiveType(Kind.Bool), false),
+      new Field('b', boolType, false),
       new Field('l', ltr, false),
-      new Field('s', makePrimitiveType(Kind.String), false),
+      new Field('s', stringType, false),
     ], []);
 
     const pkg = new Package([tr], []);
@@ -355,9 +368,9 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeStructType('A5', [
-      new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('v', makePrimitiveType(Kind.Value), false),
-      new Field('s', makePrimitiveType(Kind.String), false),
+      new Field('b', boolType, false),
+      new Field('v', valueType, false),
+      new Field('s', stringType, false),
     ], []);
 
     const pkg = new Package([tr], []);
@@ -378,9 +391,9 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeStructType('A1', [
-      new Field('x', makePrimitiveType(Kind.Int16), false),
-      new Field('s', makePrimitiveType(Kind.String), false),
-      new Field('b', makePrimitiveType(Kind.Bool), false),
+      new Field('x', int16Type, false),
+      new Field('s', stringType, false),
+      new Field('b', boolType, false),
     ], []);
 
     const pkg = new Package([tr], []);
@@ -429,9 +442,9 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeStructType('A1', [
-      new Field('x', makePrimitiveType(Kind.Int16), false),
+      new Field('x', int16Type, false),
       new Field('e', makeType(new Ref(), 1), false),
-      new Field('b', makePrimitiveType(Kind.Bool), false),
+      new Field('b', boolType, false),
     ], []);
     const enumTref = makeEnumType('E', ['a', 'b', 'c']);
     const pkg = new Package([tr, enumTref], []);
@@ -452,8 +465,8 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeStructType('s', [
-      new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('i', makePrimitiveType(Kind.Int32), false),
+      new Field('b', boolType, false),
+      new Field('i', int32Type, false),
     ], []);
 
     const pkg = new Package([tr], []);
@@ -479,7 +492,7 @@ suite('Decode', () => {
         `t [${Kind.Value}, ${Kind.Set}, ${Kind.Uint16}, false, ["0", "1", "2", "3"]]`);
     const v:NomsSet<uint16> = await decodeNomsValue(chunk, new DataStore(new MemoryStore()));
 
-    const t = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint16));
+    const t = makeCompoundType(Kind.Set, uint16Type);
     const s:NomsSet<uint16> = new NomsSet(t, new SetLeafSequence(ds, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });

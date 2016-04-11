@@ -5,14 +5,14 @@ import {assert} from 'chai';
 import {Sequence, SequenceCursor} from './sequence.js';
 import type {int64} from './primitives.js';
 import {notNull} from './assert.js';
-import {makeCompoundType, makePrimitiveType} from './type.js';
+import {makeCompoundType, valueType} from './type.js';
 import {Kind} from './noms-kind.js';
 import MemoryStore from './memory-store.js';
 import DataStore from './data-store.js';
 
 class TestSequence extends Sequence<any> {
   constructor(ds: ?DataStore, items: Array<any>) {
-    super(ds, makeCompoundType(Kind.List, makePrimitiveType(Kind.Value)), items);
+    super(ds, makeCompoundType(Kind.List, valueType), items);
   }
 
   getChildSequence(idx: number): // eslint-disable-line no-unused-vars

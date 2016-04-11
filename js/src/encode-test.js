@@ -13,18 +13,26 @@ import {
   blobType,
   boolType,
   Field,
+  float32Type,
   float64Type,
+  int16Type,
+  int32Type,
+  int64Type,
   int8Type,
   makeCompoundType,
   makeEnumType,
   makeListType,
   makeMapType,
-  makePrimitiveType,
   makeSetType,
   makeStructType,
   makeType,
   stringType,
   Type,
+  uint16Type,
+  uint32Type,
+  uint64Type,
+  uint8Type,
+  valueType,
 } from './type.js';
 import {IndexedMetaSequence, MetaTuple} from './meta-sequence.js';
 import {Kind} from './noms-kind.js';
@@ -37,34 +45,34 @@ import DataStore from './data-store.js';
 
 suite('Encode', () => {
   test('write primitives', () => {
-    function f(k: NomsKind, v: any, ex: any) {
+    function f(k: NomsKind, t:Type, v: any, ex: any) {
       const ms = new MemoryStore();
       const ds = new DataStore(ms);
       const w = new JsonArrayWriter(ds);
-      w.writeTopLevel(makePrimitiveType(k), v);
+      w.writeTopLevel(t, v);
       assert.deepEqual([k, ex], w.array);
     }
 
-    f(Kind.Bool, true, true);
-    f(Kind.Bool, false, false);
+    f(Kind.Bool, boolType, true, true);
+    f(Kind.Bool, boolType, false, false);
 
-    f(Kind.Uint8, 0, '0');
-    f(Kind.Uint16, 0, '0');
-    f(Kind.Uint32, 0, '0');
-    f(Kind.Uint64, 0, '0');
-    f(Kind.Int8, 0, '0');
-    f(Kind.Int16, 0, '0');
-    f(Kind.Int32, 0, '0');
-    f(Kind.Int64, 0, '0');
-    f(Kind.Float32, 0, '0');
-    f(Kind.Float64, 0, '0');
+    f(Kind.Uint8, uint8Type, 0, '0');
+    f(Kind.Uint16, uint16Type, 0, '0');
+    f(Kind.Uint32, uint32Type, 0, '0');
+    f(Kind.Uint64, uint64Type, 0, '0');
+    f(Kind.Int8, int8Type, 0, '0');
+    f(Kind.Int16, int16Type, 0, '0');
+    f(Kind.Int32, int32Type, 0, '0');
+    f(Kind.Int64, int64Type, 0, '0');
+    f(Kind.Float32, float32Type, 0, '0');
+    f(Kind.Float64, float64Type, 0, '0');
 
-    f(Kind.Int64, 1e18, '1000000000000000000');
-    f(Kind.Uint64, 1e19, '10000000000000000000');
-    f(Kind.Float64, 1e19, '10000000000000000000');
-    f(Kind.Float64, 1e20, '1e+20');
+    f(Kind.Int64, int64Type, 1e18, '1000000000000000000');
+    f(Kind.Uint64, uint64Type, 1e19, '10000000000000000000');
+    f(Kind.Float64, float64Type, 1e19, '10000000000000000000');
+    f(Kind.Float64, float64Type, 1e20, '1e+20');
 
-    f(Kind.String, 'hi', 'hi');
+    f(Kind.String, stringType, 'hi', 'hi');
   });
 
   test('write simple blob', async () => {
@@ -72,7 +80,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
     const blob = await newBlob(new Uint8Array([0x00, 0x01]));
-    w.writeTopLevel(makePrimitiveType(Kind.Blob), blob);
+    w.writeTopLevel(blobType, blob);
     assert.deepEqual([Kind.Blob, false, 'AAE='], w.array);
   });
 
@@ -81,7 +89,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
+    const tr = makeCompoundType(Kind.List, int32Type);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, [0, 1, 2, 3]));
     w.writeTopLevel(tr, l);
     assert.deepEqual([Kind.List, Kind.Int32, false, ['0', '1', '2', '3']], w.array);
@@ -92,7 +100,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const tr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Value));
+    const tr = makeCompoundType(Kind.List, valueType);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, ['0', '1', '2', '3']));
     w.writeTopLevel(tr, l);
     assert.deepEqual([Kind.List, Kind.Value, false, [
@@ -108,7 +116,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const it = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int16));
+    const it = makeCompoundType(Kind.List, int16Type);
     const tr = makeCompoundType(Kind.List, it);
     const v = new NomsList(tr, new ListLeafSequence(ds, tr, [
       new NomsList(tr, new ListLeafSequence(ds, it, [0])),
@@ -124,7 +132,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Uint32));
+    const tr = makeCompoundType(Kind.Set, uint32Type);
     const v = new NomsSet(tr, new SetLeafSequence(ds, tr, [0, 1, 2, 3]));
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.Set, Kind.Uint32, false, ['0', '1', '2', '3']], w.array);
@@ -135,7 +143,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const st = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int32));
+    const st = makeCompoundType(Kind.Set, int32Type);
     const tr = makeCompoundType(Kind.Set, st);
     const v = new NomsSet(tr, new SetLeafSequence(ds, tr, [
       new NomsSet(tr, new SetLeafSequence(ds, st, [0])),
@@ -152,8 +160,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const tr = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
-        makePrimitiveType(Kind.Bool));
+    const tr = makeCompoundType(Kind.Map, stringType, boolType);
     const v = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'a', value: false},
         {key:'b', value:true}]));
     w.writeTopLevel(tr, v);
@@ -165,9 +172,8 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const kt = makeCompoundType(Kind.Map, makePrimitiveType(Kind.String),
-        makePrimitiveType(Kind.Int64));
-    const vt = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Bool));
+    const kt = makeCompoundType(Kind.Map, stringType, int64Type);
+    const vt = makeCompoundType(Kind.Set, boolType);
     const tr = makeCompoundType(Kind.Map, kt, vt);
 
     const s = new NomsSet(vt, new SetLeafSequence(ds, vt, [true]));
@@ -201,8 +207,8 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ds);
 
     const typeDef = makeStructType('S', [
-      new Field('x', makePrimitiveType(Kind.Int8), false),
-      new Field('b', makePrimitiveType(Kind.Bool), false),
+      new Field('x', int8Type, false),
+      new Field('b', boolType, false),
     ], []);
     const pkg = new Package([typeDef], []);
     registerPackage(pkg);
@@ -221,8 +227,8 @@ suite('Encode', () => {
     let w = new JsonArrayWriter(ds);
 
     const typeDef = makeStructType('S', [
-      new Field('x', makePrimitiveType(Kind.Int8), true),
-      new Field('b', makePrimitiveType(Kind.Bool), false),
+      new Field('x', int8Type, true),
+      new Field('b', boolType, false),
     ], []);
     const pkg = new Package([typeDef], []);
     registerPackage(pkg);
@@ -245,10 +251,10 @@ suite('Encode', () => {
     let w = new JsonArrayWriter(ds);
 
     const typeDef = makeStructType('S', [
-      new Field('x', makePrimitiveType(Kind.Int8), false),
+      new Field('x', int8Type, false),
     ], [
-      new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('s', makePrimitiveType(Kind.String), false),
+      new Field('b', boolType, false),
+      new Field('s', stringType, false),
     ]);
     const pkg = new Package([typeDef], []);
     registerPackage(pkg);
@@ -270,7 +276,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     let w = new JsonArrayWriter(ds);
 
-    const ltr = makeCompoundType(Kind.List, makePrimitiveType(Kind.String));
+    const ltr = makeCompoundType(Kind.List, stringType);
     const typeDef = makeStructType('S', [
       new Field('l', ltr, false),
     ], []);
@@ -296,7 +302,7 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ds);
 
     const s2TypeDef = makeStructType('S2', [
-      new Field('x', makePrimitiveType(Kind.Int32), false),
+      new Field('x', int32Type, false),
     ], []);
     const sTypeDef = makeStructType('S', [
       new Field('s', makeType(new Ref(), 0), false),
@@ -349,7 +355,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const ltr = makeCompoundType(Kind.List, makePrimitiveType(Kind.Int32));
+    const ltr = makeCompoundType(Kind.List, int32Type);
     const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0, 1])));
     const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [2, 3])));
     const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [4, 5])));
@@ -375,21 +381,21 @@ suite('Encode', () => {
       assert.deepEqual(expected, w.array);
     };
 
-    test([Kind.Type, Kind.Int32], makePrimitiveType(Kind.Int32));
+    test([Kind.Type, Kind.Int32], int32Type);
     test([Kind.Type, Kind.List, [Kind.Bool]],
-         makeCompoundType(Kind.List, makePrimitiveType(Kind.Bool)));
+         makeCompoundType(Kind.List, boolType));
     test([Kind.Type, Kind.Map, [Kind.Bool, Kind.String]],
-         makeCompoundType(Kind.Map, makePrimitiveType(Kind.Bool), makePrimitiveType(Kind.String)));
+         makeCompoundType(Kind.Map, boolType, stringType));
     test([Kind.Type, Kind.Enum, 'E', ['a', 'b', 'c']], makeEnumType('E', ['a', 'b', 'c']));
     test([Kind.Type, Kind.Struct, 'S', ['x', Kind.Int16, false, 'v', Kind.Value, true], []],
          makeStructType('S', [
-           new Field('x', makePrimitiveType(Kind.Int16), false),
-           new Field('v', makePrimitiveType(Kind.Value), true),
+           new Field('x', int16Type, false),
+           new Field('v', valueType, true),
          ], []));
     test([Kind.Type, Kind.Struct, 'S', [], ['x', Kind.Int16, false, 'v', Kind.Value, false]],
          makeStructType('S', [], [
-           new Field('x', makePrimitiveType(Kind.Int16), false),
-           new Field('v', makePrimitiveType(Kind.Value), false),
+           new Field('x', int16Type, false),
+           new Field('v', valueType, false),
          ]));
 
     const pkgRef = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
@@ -399,7 +405,7 @@ suite('Encode', () => {
           ['e', Kind.Unresolved, pkgRef.toString(), '123', false, 'x', Kind.Int64, false], []],
           makeStructType('S', [
             new Field('e', makeType(pkgRef, 123), false),
-            new Field('x', makePrimitiveType(Kind.Int64), false),
+            new Field('x', int64Type, false),
           ], []));
 
     // test([Kind.Type, Kind.Unresolved, new Ref().toString(), -1, 'ns', 'n'],
@@ -419,7 +425,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const blob = await newBlob(stringToUint8Array('hi'));
 
-    const chunk = encodeNomsValue(blob, makePrimitiveType(Kind.Blob), ds);
+    const chunk = encodeNomsValue(blob, blobType, ds);
     assert.equal(4, chunk.data.length);
     assert.deepEqual(stringToUint8Array('b hi'), chunk.data);
 
@@ -433,7 +439,7 @@ suite('Encode', () => {
       view.setUint8(2 + i, i);
     }
     const blob2 = await newBlob(bytes);
-    const chunk2 = encodeNomsValue(blob2, makePrimitiveType(Kind.Blob), ds);
+    const chunk2 = encodeNomsValue(blob2, blobType, ds);
     assert.equal(buffer2.byteLength, chunk2.data.buffer.byteLength);
     assert.deepEqual(buffer2, chunk2.data.buffer);
   });
@@ -443,7 +449,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
     const ref = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
-    const t = makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Blob));
+    const t = makeCompoundType(Kind.Ref, blobType);
     const v = new RefValue(ref, t);
     w.writeTopLevel(t, v);
 

@@ -8,13 +8,16 @@ import MemoryStore from './memory-store.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
 import {
+  boolType,
   Field,
+  int64Type,
+  int8Type,
   makeCompoundType,
-  makePrimitiveType,
+  makeSetType,
   makeStructType,
   makeType,
-  makeSetType,
-  boolType,
+  stringType,
+  valueType,
 } from './type.js';
 import {flatten, flattenParallel} from './test-util.js';
 import {invariant, notNull} from './assert.js';
@@ -41,7 +44,7 @@ suite('BuildSet', () => {
 
   test('set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
+    const tr = makeCompoundType(Kind.Set, int64Type);
     const s = await newSet(nums, tr);
     assert.strictEqual(s.ref.toString(), setOfNRef);
 
@@ -55,7 +58,7 @@ suite('BuildSet', () => {
     const nums = firstNNumbers(testSetSize);
 
     const structTypeDef = makeStructType('num', [
-      new Field('n', makePrimitiveType(Kind.Int64), false),
+      new Field('n', int64Type, false),
     ], []);
     const pkg = new Package([structTypeDef], []);
     registerPackage(pkg);
@@ -77,7 +80,7 @@ suite('BuildSet', () => {
 
   test('insert', async () => {
     const nums = firstNNumbers(testSetSize - 10);
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
+    const tr = makeCompoundType(Kind.Set, int64Type);
     let s = await newSet(nums, tr);
 
     for (let i = testSetSize - 10; i < testSetSize; i++) {
@@ -89,7 +92,7 @@ suite('BuildSet', () => {
 
   test('remove', async () => {
     const nums = firstNNumbers(testSetSize + 10);
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
+    const tr = makeCompoundType(Kind.Set, int64Type);
     let s = await newSet(nums, tr);
 
     let count = 10;
@@ -105,7 +108,7 @@ suite('BuildSet', () => {
     const ds = new DataStore(ms);
 
     const nums = firstNNumbers(testSetSize);
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int64));
+    const tr = makeCompoundType(Kind.Set, int64Type);
     const s = await newSet(nums, tr);
     const r = ds.writeValue(s);
     const s2 = await ds.readValue(r);
@@ -126,7 +129,7 @@ suite('SetLeaf', () => {
   test('isEmpty', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
+    const tr = makeCompoundType(Kind.Set, stringType);
     const newSet = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
     assert.isTrue(newSet([]).isEmpty());
     assert.isFalse(newSet(['a', 'k']).isEmpty());
@@ -135,7 +138,7 @@ suite('SetLeaf', () => {
   test('first/last/has', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
+    const tr = makeCompoundType(Kind.Set, stringType);
     const s = new NomsSet(tr, new SetLeafSequence(ds, tr, ['a', 'k']));
 
     assert.strictEqual('a', await s.first());
@@ -150,7 +153,7 @@ suite('SetLeaf', () => {
   test('forEach', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
+    const tr = makeCompoundType(Kind.Set, stringType);
     const m = new NomsSet(tr, new SetLeafSequence(ds, tr, ['a', 'b']));
 
     const values = [];
@@ -161,7 +164,7 @@ suite('SetLeaf', () => {
   test('iterator', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
+    const tr = makeCompoundType(Kind.Set, stringType);
 
     const test = async items => {
       const m = new NomsSet(tr, new SetLeafSequence(ds, tr, items));
@@ -177,7 +180,7 @@ suite('SetLeaf', () => {
   test('iteratorAt', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
+    const tr = makeCompoundType(Kind.Set, stringType);
     const build = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
@@ -197,7 +200,7 @@ suite('SetLeaf', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, elemType);
-    const st = makePrimitiveType(Kind.String);
+    const st = stringType;
     const refOfSt = makeCompoundType(Kind.Ref, st);
     const r1 = new RefValue(ds.writeValue('x'), refOfSt);
     const r2 = new RefValue(ds.writeValue('a'), refOfSt);
@@ -210,17 +213,17 @@ suite('SetLeaf', () => {
   }
 
   test('chunks, set of value', () => {
-    testChunks(makePrimitiveType(Kind.Value));
+    testChunks(valueType);
   });
 
   test('chunks', () => {
-    testChunks(makePrimitiveType(Kind.String));
+    testChunks(stringType);
   });
 });
 
 suite('CompoundSet', () => {
   function build(ds: DataStore, values: Array<string>): NomsSet {
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.String));
+    const tr = makeCompoundType(Kind.Set, stringType);
     assert.isTrue(values.length > 1 && Math.log2(values.length) % 1 === 0);
 
     let tuples = [];
@@ -452,7 +455,7 @@ suite('CompoundSet', () => {
   test('iterator at 0', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, makePrimitiveType(Kind.Int8));
+    const tr = makeCompoundType(Kind.Set, int8Type);
 
     const test = async (expected, items) => {
       const set = new NomsSet(tr, new SetLeafSequence(ds, tr, items));

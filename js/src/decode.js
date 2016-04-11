@@ -13,15 +13,16 @@ import {
   CompoundDesc,
   EnumDesc,
   Field,
+  getPrimitiveType,
   makeCompoundType,
   makeEnumType,
-  makePrimitiveType,
   makeStructType,
   makeType,
   makeUnresolvedType,
   PrimitiveDesc,
   StructDesc,
   Type,
+  typeType,
   UnresolvedDesc,
 } from './type.js';
 import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta-sequence.js';
@@ -129,7 +130,7 @@ export class JsonArrayReader {
         return makeCompoundType(kind, keyType, valueType);
       }
       case Kind.Type:
-        return makePrimitiveType(Kind.Type);
+        return typeType;
       case Kind.Unresolved: {
         const pkgRef = this.readRef();
         const ordinal = this.readOrdinal();
@@ -138,7 +139,7 @@ export class JsonArrayReader {
     }
 
     if (isPrimitiveKind(kind)) {
-      return makePrimitiveType(kind);
+      return getPrimitiveType(kind);
     }
 
     throw new Error('Unreachable');
@@ -404,8 +405,7 @@ export class JsonArrayReader {
     }
 
     invariant(isPrimitiveKind(k));
-    return makePrimitiveType(k);
-
+    return getPrimitiveType(k);
   }
 
   readStruct<T: Struct>(typeDef: Type, type: Type, pkg: Package): T {

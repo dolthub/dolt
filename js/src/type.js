@@ -358,7 +358,7 @@ function buildType(n: string, desc: TypeDesc): Type {
   }
 }
 
-export function makePrimitiveType(k: NomsKind): Type {
+function makePrimitiveType(k: NomsKind): Type {
   return buildType('', new PrimitiveDesc(k));
 }
 
@@ -428,3 +428,46 @@ export const setOfValueType = makeCompoundType(Kind.Set, valueType);
 export const mapOfValueType = makeCompoundType(Kind.Map, valueType, valueType);
 
 export const packageRefType = makeCompoundType(Kind.Ref, packageType);
+
+/**
+ * Gives the existing primitive Type value for a NomsKind.
+ */
+export function getPrimitiveType(k: NomsKind): Type {
+  invariant(isPrimitiveKind(k));
+  switch (k) {
+    case Kind.Bool:
+      return boolType;
+    case Kind.Uint8:
+      return uint8Type;
+    case Kind.Uint16:
+      return uint16Type;
+    case Kind.Uint32:
+      return uint32Type;
+    case Kind.Uint64:
+      return uint64Type;
+    case Kind.Int8:
+      return int8Type;
+    case Kind.Int16:
+      return int16Type;
+    case Kind.Int32:
+      return int32Type;
+    case Kind.Int64:
+      return int64Type;
+    case Kind.Float32:
+      return float32Type;
+    case Kind.Float64:
+      return float64Type;
+    case Kind.String:
+      return stringType;
+    case Kind.Blob:
+      return blobType;
+    case Kind.Type:
+      return typeType;
+    case Kind.Package:
+      return packageType;
+    case Kind.Value:
+      return valueType;
+    default:
+      invariant(false, 'not reachable');
+  }
+}

@@ -37,7 +37,6 @@ export {
   makeEnumType,
   makeListType,
   makeMapType,
-  makePrimitiveType,
   makeRefType,
   makeSetType,
   makeStructType,

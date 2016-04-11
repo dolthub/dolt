@@ -5,12 +5,12 @@ import RefValue from './ref-value.js';
 import {newStruct, StructMirror, createStructClass} from './struct.js';
 import {assert} from 'chai';
 import {
+  boolType,
   Field,
+  float64Type,
   makeCompoundType,
-  makePrimitiveType,
   makeStructType,
   makeType,
-  float64Type,
   stringType,
 } from './type.js';
 import {Kind} from './noms-kind.js';
@@ -22,8 +22,8 @@ import Ref from './ref.js';
 suite('Struct', () => {
   test('equals', () => {
     const typeDef = makeStructType('S1', [
-      new Field('x', makePrimitiveType(Kind.Bool), false),
-      new Field('o', makePrimitiveType(Kind.String), true),
+      new Field('x', boolType, false),
+      new Field('o', stringType, true),
     ], []);
 
     const pkg = new Package([typeDef], []);
@@ -42,7 +42,7 @@ suite('Struct', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
-    const bt = makePrimitiveType(Kind.Bool);
+    const bt = boolType;
     const refOfBoolType = makeCompoundType(Kind.Ref, bt);
     const typeDef = makeStructType('S1', [
       new Field('r', refOfBoolType, false),
@@ -65,7 +65,7 @@ suite('Struct', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
-    const bt = makePrimitiveType(Kind.Bool);
+    const bt = boolType;
     const refOfBoolType = makeCompoundType(Kind.Ref, bt);
     const typeDef = makeStructType('S1', [
       new Field('r', refOfBoolType, true),
@@ -93,11 +93,11 @@ suite('Struct', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
-    const bt = makePrimitiveType(Kind.Bool);
+    const bt = boolType;
     const refOfBoolType = makeCompoundType(Kind.Ref, bt);
     const typeDef = makeStructType('S1', [], [
       new Field('r', refOfBoolType, false),
-      new Field('s', makePrimitiveType(Kind.String), false),
+      new Field('s', stringType, false),
     ]);
 
     const pkg = new Package([typeDef], []);
@@ -119,8 +119,8 @@ suite('Struct', () => {
 
   test('new', () => {
     const typeDef = makeStructType('S2', [
-      new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('o', makePrimitiveType(Kind.String), true),
+      new Field('b', boolType, false),
+      new Field('o', stringType, true),
     ], []);
 
     const pkg = new Package([typeDef], []);
@@ -150,8 +150,8 @@ suite('Struct', () => {
 
   test('new union', () => {
     const typeDef = makeStructType('S3', [], [
-      new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('o', makePrimitiveType(Kind.String), false),
+      new Field('b', boolType, false),
+      new Field('o', stringType, false),
     ]);
 
     const pkg = new Package([typeDef], []);
@@ -166,8 +166,8 @@ suite('Struct', () => {
 
   test('struct set', () => {
     const typeDef = makeStructType('S3', [
-      new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('o', makePrimitiveType(Kind.String), true),
+      new Field('b', boolType, false),
+      new Field('o', stringType, true),
     ], []);
 
     const pkg = new Package([typeDef], []);
@@ -197,8 +197,8 @@ suite('Struct', () => {
 
   test('struct set union', () => {
     const typeDef = makeStructType('S3', [], [
-      new Field('b', makePrimitiveType(Kind.Bool), false),
-      new Field('s', makePrimitiveType(Kind.String), false),
+      new Field('b', boolType, false),
+      new Field('s', stringType, false),
     ]);
 
     const pkg = new Package([typeDef], []);
@@ -225,7 +225,7 @@ suite('Struct', () => {
 
   test('type assertion on construct', () => {
     const typeDef = makeStructType('S3', [
-      new Field('b', makePrimitiveType(Kind.Bool), false),
+      new Field('b', boolType, false),
     ], []);
 
     const pkg = new Package([typeDef], []);

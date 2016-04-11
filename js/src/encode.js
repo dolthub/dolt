@@ -7,7 +7,7 @@ import {default as Struct, StructMirror} from './struct.js';
 import type DataStore from './data-store.js';
 import type {NomsKind} from './noms-kind.js';
 import {encode as encodeBase64} from './base64.js';
-import {boolType, EnumDesc, makePrimitiveType, stringType, StructDesc, Type} from './type.js';
+import {boolType, EnumDesc, stringType, StructDesc, Type, typeType} from './type.js';
 import {indexTypeForMetaSequence, MetaTuple} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
@@ -196,9 +196,8 @@ export class JsonArrayWriter {
       case Kind.Package: {
         invariant(v instanceof Package,
                   `Failed to write Package. Invalid type: ${describeType(v)}`);
-        const ptr = makePrimitiveType(Kind.Type);
         const w2 = new JsonArrayWriter(this._ds);
-        v.types.forEach(type => w2.writeValue(type, ptr, pkg));
+        v.types.forEach(type => w2.writeValue(type, typeType, pkg));
         this.write(w2.array);
         const w3 = new JsonArrayWriter(this._ds);
         v.dependencies.forEach(ref => w3.writeRef(ref));

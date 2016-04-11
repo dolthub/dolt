@@ -3,7 +3,17 @@
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 import {assert} from 'chai';
-import {Field, makeCompoundType, makePrimitiveType, makeStructType, makeType} from './type.js';
+import {
+  boolType,
+  Field,
+  float64Type,
+  makeCompoundType,
+  makeStructType,
+  makeType,
+  stringType,
+  typeType,
+  uint8Type,
+} from './type.js';
 import {Kind} from './noms-kind.js';
 import {Package, registerPackage} from './package.js';
 import {suite, test} from 'mocha';
@@ -14,9 +24,6 @@ suite('Type', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
-    const boolType = makePrimitiveType(Kind.Bool);
-    const uint8Type = makePrimitiveType(Kind.Uint8);
-    const stringType = makePrimitiveType(Kind.String);
     const mapType = makeCompoundType(Kind.Map, stringType, uint8Type);
     const setType = makeCompoundType(Kind.Set, stringType);
     const mahType = makeStructType('MahStruct', [
@@ -45,9 +52,6 @@ suite('Type', () => {
   });
 
   test('typeRef describe', async () => {
-    const boolType = makePrimitiveType(Kind.Bool);
-    const uint8Type = makePrimitiveType(Kind.Uint8);
-    const stringType = makePrimitiveType(Kind.String);
     const mapType = makeCompoundType(Kind.Map, stringType, uint8Type);
     const setType = makeCompoundType(Kind.Set, stringType);
 
@@ -81,7 +85,7 @@ suite('Type', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
-    const pkg = new Package([makePrimitiveType(Kind.Float64)], []);
+    const pkg = new Package([float64Type], []);
     registerPackage(pkg);
     const pkgRef = pkg.ref;
 
@@ -96,7 +100,7 @@ suite('Type', () => {
   });
 
   test('type Type', () => {
-    assert.isTrue(makePrimitiveType(Kind.Bool).type.equals(makePrimitiveType(Kind.Type)));
+    assert.isTrue(boolType.type.equals(typeType));
   });
 
   test('empty package ref', async () => {
