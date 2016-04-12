@@ -8,7 +8,8 @@ import {TreeNode} from './buchheim.js';
 type Props = {
   data: NodeGraph,
   onNodeClick: (e: Event, s: string) => void,
-  tree: TreeNode
+  tree: TreeNode,
+  nomsStore: string,
 }
 
 export default function Layout(props: Props) : React.Element {
@@ -51,6 +52,7 @@ export default function Layout(props: Props) : React.Element {
         canOpen={hasChildren}
         isOpen={!hasChildren || Boolean(treeNode.data.isOpen)}
         nomsRef={nomsRef}
+        nomsStore={props.nomsStore}
         onClick={(e) => props.onNodeClick(e, treeNode.id)}/>);
     children.push(n);
     lookup[treeNode.id] = treeNode;

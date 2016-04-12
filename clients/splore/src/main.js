@@ -25,34 +25,38 @@ import type {NodeGraph} from './buchheim.js';
 
 const data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
-let httpStore: HttpStore;
 let dataStore: DataStore;
 
 let renderNode: ?HTMLElement;
 
-const hash = {};
+const params = {};
 
 window.onload = load;
-window.onhashchange = load;
+window.onpopstate = load;
 window.onresize = render;
 
 function load() {
   renderNode = document.getElementById('splore');
-  location.hash.substr(1).split('&').forEach(pair => {
-    const [k, v] = pair.split('=');
-    hash[k] = v;
-  });
 
-  if (!hash.server) {
+  const paramsIdx = location.href.indexOf('?');
+  if (paramsIdx > -1) {
+    decodeURIComponent(location.href.slice(paramsIdx + 1)).split('&').forEach(pair => {
+      const [k, v] = pair.split('=');
+      params[k] = v;
+    });
+  }
+
+  if (!params.store) {
     renderPrompt();
     return;
   }
 
   const opts = {};
-  if (hash.token) {
-    opts['headers'] = {Authorization: `Bearer ${hash.token}`};
+  if (params.token) {
+    opts['headers'] = {Authorization: `Bearer ${params.token}`};
   }
-  httpStore = new HttpStore(hash.server, undefined, undefined, opts);
+
+  const httpStore = new HttpStore(params.store, undefined, undefined, opts);
   dataStore = new DataStore(httpStore);
 
   const setRootRef = ref => {
@@ -60,8 +64,8 @@ function load() {
     handleChunkLoad(ref, ref);
   };
 
-  if (hash.ref) {
-    setRootRef(Ref.parse(hash.ref));
+  if (params.ref) {
+    setRootRef(Ref.parse(params.ref));
   } else {
     httpStore.getRoot().then(setRootRef);
   }
@@ -232,25 +236,8 @@ function handleNodeClick(e: MouseEvent, id: string) {
   }
 }
 
-function setServer(url: string, token: ?string, ref: ?string) {
-  let hash = `server=${url}`;
-  if (token) {
-    hash += '&token=' + token;
-  }
-  if (ref) {
-    hash += '&ref=' + ref;
-  }
-  location.hash = hash;
-}
-
-type PromptState = {
-  server: string,
-}
-
-class Prompt extends React.Component<void, {}, PromptState> {
-  state: PromptState;
-
-  render() {
+class Prompt extends React.Component<void, {}, void> {
+  render(): React.Element {
     const fontStyle: {[key: string]: any} = {
       fontFamily: 'Menlo',
       fontSize: 14,
@@ -259,14 +246,20 @@ class Prompt extends React.Component<void, {}, PromptState> {
     return <div style={{display: 'flex', height: '100%', alignItems: 'center',
       justifyContent: 'center'}}>
       <div style={fontStyle}>
-        Can haz server?
+        Can haz datastore?
         <form style={{margin:'0.5em 0'}} onSubmit={() => this._handleOnSubmit()}>
-          <input type='text' ref='url' autoFocus={true} style={inputStyle}
-            defaultValue='http://api.noms.io/-/ds/[user]'/><br/>
+          <input type='text' ref='store' autoFocus={true} style={inputStyle}
+            defaultValue={params.store || 'http://api.noms.io/-/ds/[user]'}
+            placeholder='noms store URL'
+          />
           <input type='text' ref='token' style={inputStyle}
-            placeholder='auth token'/>
+            defaultValue={params.token}
+            placeholder='auth token'
+          />
           <input type='text' ref='ref' style={inputStyle}
-            placeholder='sha1-xyz (ref to jump to)' />
+            defaultValue={params.ref}
+            placeholder='sha1-xyz (ref to jump to)'
+          />
           <button type='submit'>OK</button>
         </form>
       </div>
@@ -274,8 +267,16 @@ class Prompt extends React.Component<void, {}, PromptState> {
   }
 
   _handleOnSubmit() {
-    const {url, token, ref} = this.refs;
-    setServer(url.value, token.value, ref.value);
+    const {store, token, ref} = this.refs;
+    let params = 'store=' + store.value;
+    if (token.value) {
+      params += '&token=' + token.value;
+    }
+    if (ref.value) {
+      params += '&ref=' + ref.value;
+    }
+    window.location.pushState({}, undefined, '?' + params);
+    render();
   }
 }
 
@@ -286,5 +287,7 @@ function renderPrompt() {
 function render() {
   const dt = new TreeNode(data, rootRef.toString(), null, 0, 0, {});
   layout(dt);
-  ReactDOM.render(<Layout tree={dt} data={data} onNodeClick={handleNodeClick}/>, renderNode);
+  ReactDOM.render(
+    <Layout tree={dt} data={data} onNodeClick={handleNodeClick} nomsStore={params.store}/>,
+    renderNode);
 }

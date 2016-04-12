@@ -9,8 +9,6 @@ def main():
 	env = os.environ
 	env['NODE_ENV'] = sys.argv[1]
 	env['BABEL_ENV'] = sys.argv[1]
-	if 'NOMS_SERVER' not in env:
-		env['NOMS_SERVER'] = 'http://localhost:8000'
 	subprocess.check_call(['node_modules/.bin/webpack'] + SRC + [OUT], env=env, shell=False)
 
 

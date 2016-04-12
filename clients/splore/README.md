@@ -7,27 +7,26 @@ Splore is a general-purpose debug UI for exploring noms data.
 ## Example
 
 ```
-cd $GOPATH/src/github.com/attic-labs/noms/clients/counter
+# Create some data
+cd "$GOPATH/src/github.com/attic-labs/noms/clients/counter"
 go build
 ./counter -ldb="/tmp/sploretest" -ds="counter"
 ./counter -ldb="/tmp/sploretest" -ds="counter"
 
-# Splore requires server to be running
-cd ../server
-go build
-./server -ldb="/tmp/sploretest" &
-
+# Build Splore
 cd ../splore
 ./build.py
-./node_modules/.bin/http-server
+
+# Launch Splore with noms-view
+cd ../../cmd/noms-view
+go build
+./noms-view serve ../../clients/splore store="ldb:/tmp/sploretest" &
 ```
 
-Then, navigate to [http://localhost:8080](http://localhost:8080).
-
+Then, navigate to the URL printed by noms-view, e.g. http://127.0.0.1:12345?store=xyz.
 
 ## Develop
 
-* `./build.py`  # only necessary first time
-* `NOMS_SERVER=http://localhost:8000 npm run start`
-
-This will start watchify which is continually building a non-minified (and thus debuggable) build.
+Same as the example, but:
+* `./build.py` is only necessary the first time.
+* Also run `npm run start`, to continually build a non-minified (and thus debuggable) build.

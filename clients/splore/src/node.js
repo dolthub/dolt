@@ -3,7 +3,6 @@
 import classNames from 'classnames';
 import React from 'react';
 import {Ref} from '@attic/noms';
-import nomsServer from './noms_server.js';
 
 type Props = {
   canOpen: boolean,
@@ -17,6 +16,7 @@ type Props = {
   y: number,
   spaceX: number,
   nomsRef: ?Ref,
+  nomsStore: string,
   onClick: (e: Event, s: String) => void,
 };
 
@@ -50,7 +50,7 @@ export default class Node extends React.Component<void, Props, State> {
 
     let text = this.props.text;
     if (this.props.nomsRef) {
-      const url = `${nomsServer}/ref/${this.props.nomsRef.toString()}`;
+      const url = `${this.props.nomsStore}/ref/${this.props.nomsRef.toString()}`;
       text = <a href={url}>{text}</a>;
     }
 
