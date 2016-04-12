@@ -206,10 +206,6 @@ func (r RefOfMapOfStringToValue) TargetValue(vr types.ValueReader) MapOfStringTo
 	return vr.ReadValue(r.target).(MapOfStringToValue)
 }
 
-func (r RefOfMapOfStringToValue) SetTargetValue(val MapOfStringToValue, vw types.ValueWriter) RefOfMapOfStringToValue {
-	return vw.WriteValue(val).(RefOfMapOfStringToValue)
-}
-
 // MapOfStringToValue
 
 type MapOfStringToValue struct {

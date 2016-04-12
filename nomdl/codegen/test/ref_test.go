@@ -10,34 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func SkipTestRef(t *testing.T) {
-	assert := assert.New(t)
-	ds := datas.NewDataStore(chunks.NewMemoryStore())
-
-	l := gen.ListOfStringDef{"a", "b", "c"}.New()
-	l2 := gen.ListOfStringDef{"d", "e", "f"}.New()
-	lRef := l.Ref()
-	r := gen.NewRefOfListOfString(lRef)
-
-	v := ds.ReadValue(l.Ref())
-	assert.Nil(v)
-
-	assert.Panics(func() { r.TargetValue(ds) })
-
-	r2 := r.SetTargetValue(l, ds)
-	assert.True(r.Equals(r2))
-	v2 := r2.TargetValue(ds)
-	v3 := r.TargetValue(ds)
-	assert.True(v2.Equals(v3))
-
-	r3 := r2.SetTargetValue(l2, ds)
-	assert.False(r.Equals(r3))
-}
-
 func TestListOfRef(t *testing.T) {
 	assert := assert.New(t)
-	ds := datas.NewDataStore(chunks.NewMemoryStore())
-
 	a := types.Float32(0)
 	ra := a.Ref()
 
@@ -49,11 +23,6 @@ func TestListOfRef(t *testing.T) {
 
 	def := l.Def()
 	assert.EqualValues(ra, def[0])
-
-	l = l.Set(0, r.SetTargetValue(1, ds))
-	r3 := l.Get(0)
-	assert.False(r.Equals(r3))
-	assert.Panics(func() { r.TargetValue(ds) })
 }
 
 func TestStructWithRef(t *testing.T) {

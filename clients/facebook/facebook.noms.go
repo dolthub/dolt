@@ -210,10 +210,6 @@ func (r RefOfUser) TargetValue(vr types.ValueReader) User {
 	return vr.ReadValue(r.target).(User)
 }
 
-func (r RefOfUser) SetTargetValue(val User, vw types.ValueWriter) RefOfUser {
-	return vw.WriteValue(val).(RefOfUser)
-}
-
 // SetOfRefOfRemotePhoto
 
 type SetOfRefOfRemotePhoto struct {
@@ -414,8 +410,4 @@ func builderForRefOfRemotePhoto(r ref.Ref) types.RefBase {
 
 func (r RefOfRemotePhoto) TargetValue(vr types.ValueReader) RemotePhoto {
 	return vr.ReadValue(r.target).(RemotePhoto)
-}
-
-func (r RefOfRemotePhoto) SetTargetValue(val RemotePhoto, vw types.ValueWriter) RefOfRemotePhoto {
-	return vw.WriteValue(val).(RefOfRemotePhoto)
 }

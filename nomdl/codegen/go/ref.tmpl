@@ -56,7 +56,3 @@ func builderFor{{.Name}}(r ref.Ref) {{$typesPackage}}RefBase {
 func (r {{.Name}}) TargetValue(vr {{$typesPackage}}ValueReader) {{userType .ElemType}} {
 	return {{valueToUser "vr.ReadValue(r.target)" .ElemType}}
 }
-
-func (r {{.Name}}) SetTargetValue(val {{userType .ElemType}}, vw {{$typesPackage}}ValueWriter) {{.Name}} {
-	return vw.WriteValue({{userToValue "val" .ElemType}}).({{.Name}})
-}

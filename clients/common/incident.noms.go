@@ -511,7 +511,3 @@ func builderForRefOfIncident(r ref.Ref) types.RefBase {
 func (r RefOfIncident) TargetValue(vr types.ValueReader) Incident {
 	return vr.ReadValue(r.target).(Incident)
 }
-
-func (r RefOfIncident) SetTargetValue(val Incident, vw types.ValueWriter) RefOfIncident {
-	return vw.WriteValue(val).(RefOfIncident)
-}
