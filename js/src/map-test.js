@@ -30,8 +30,8 @@ import type {Type} from './type.js';
 
 const testMapSize = 1000;
 const mapOfNRef = 'sha1-b88cd90f3bd0b826bcd9bf57ea28bff15d1d141a';
-const smallRandomMapSize = 200;
-const randomMapSize = 2000;
+const smallRandomMapSize = 100;
+const randomMapSize = 1000;
 
 class CountingMemoryStore extends MemoryStore {
   getCount: number;
@@ -504,7 +504,6 @@ suite('CompoundMap', () => {
     assert.deepEqual([[], [], []], await m2.diff(m2));
     assert.deepEqual([removed, added, modified], await m1.diff(m2));
     assert.deepEqual([added, removed, modified], await m2.diff(m1));
-    console.log('Total map reads:', ms.getCount); // eslint-disable-line no-console
   }
 
   async function testSmallRandomDiff(inM1: number, inM2: number, inBoth: number) {

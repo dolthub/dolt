@@ -554,7 +554,6 @@ suite('CompoundSet', () => {
     assert.deepEqual([[], []], await s2.diff(s2));
     assert.deepEqual([removed, added], await s1.diff(s2));
     assert.deepEqual([added, removed], await s2.diff(s1));
-    console.log('Total set reads:', ms.getCount); // eslint-disable-line no-console
   }
 
   function testSmallRandomDiff(inS1: number, inS2: number): Promise<void> {
