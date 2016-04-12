@@ -18,6 +18,7 @@ import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
   newOrderedMetaSequenceChunkFn} from './meta-sequence.js';
 import {OrderedSequence, OrderedSequenceCursor,
   OrderedSequenceIterator} from './ordered-sequence.js';
+import diff from './ordered-sequence-diff.js';
 
 export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
   key: K,
@@ -186,11 +187,23 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
 
     throw new Error('Not implemented');
   }
+
+  /**
+   * Returns a 3-tuple [added, removed, modified] sorted by keys.
+   */
+  diff(from: NomsMap<K, V>): Promise<[Array<K>, Array<K>, Array<K>]> {
+    return diff(from.sequence, this.sequence);
+  }
 }
 
 export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends
     OrderedSequence<K, MapEntry<K, V>> {
   getKey(idx: number): K {
     return this.items[idx].key;
+  }
+
+  equalsAt(idx: number, other: {key: K, value: V}): boolean {
+    const entry = this.items[idx];
+    return equals(entry.key, other.key) && equals(entry.value, other.value);
   }
 }

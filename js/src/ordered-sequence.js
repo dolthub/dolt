@@ -34,7 +34,17 @@ export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
     return notNull(cursor);
   }
 
+  /**
+   * Gets the key used for ordering the sequence at index |idx|.
+   */
   getKey(idx: number): K { // eslint-disable-line no-unused-vars
+    throw new Error('override');
+  }
+
+  /**
+   * Returns true if the item in this sequence at |idx| is equal to |other|.
+   */
+  equalsAt(idx: number, other: any): boolean { // eslint-disable-line no-unused-vars
     throw new Error('override');
   }
 }

@@ -3,6 +3,7 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
+import Chunk from './chunk.js';
 import DataStore from './data-store.js';
 import MemoryStore from './memory-store.js';
 import RefValue from './ref-value.js';
@@ -10,6 +11,7 @@ import {newStruct} from './struct.js';
 import {
   boolType,
   Field,
+  int32Type,
   int64Type,
   int8Type,
   makeCompoundType,
@@ -26,22 +28,37 @@ import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import {Package, registerPackage} from './package.js';
+import Ref from './ref.js';
 import type {Type} from './type.js';
 
 const testSetSize = 5000;
 const setOfNRef = 'sha1-54ff8f84b5f39fe2171572922d067257a57c539c';
+const smallRandomSetSize = 200;
+const randomSetSize = 2000;
 
-suite('BuildSet', () => {
-  function firstNNumbers(n: number): Array<number> {
-    const nums = [];
+class CountingMemoryStore extends MemoryStore {
+  getCount: number;
 
-    for (let i = 0; i < n; i++) {
-      nums.push(i);
-    }
-
-    return nums;
+  constructor() {
+    super();
+    this.getCount = 0;
   }
 
+  get(ref: Ref): Promise<Chunk> {
+    this.getCount++;
+    return super.get(ref);
+  }
+}
+
+function firstNNumbers(n: number): Array<number> {
+  const nums = [];
+  for (let i = 0; i < n; i++) {
+    nums.push(i);
+  }
+  return nums;
+}
+
+suite('BuildSet', () => {
   test('set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
     const tr = makeCompoundType(Kind.Set, int64Type);
@@ -473,4 +490,99 @@ suite('CompoundSet', () => {
     assert.isTrue(await set.has(true));
     assert.isFalse(await set.has(false));
   });
+
+  test('canned set diff', async () => {
+    const ms = new MemoryStore();
+    const ds = new DataStore(ms);
+    const tr = makeCompoundType(Kind.Set, int32Type);
+    const s1 = await newSet(
+      firstNNumbers(testSetSize), tr).then(s => ds.readValue(ds.writeValue(s).targetRef));
+
+    {
+      // Insert/remove at start.
+      const s2 = await s1.insert(-1);
+      assert.deepEqual([[-1], []], await s2.diff(s1));
+      assert.deepEqual([[], [-1]], await s1.diff(s2));
+    }
+    {
+      // Insert/remove at end.
+      const s2 = await s1.insert(testSetSize);
+      assert.deepEqual([[testSetSize], []], await s2.diff(s1));
+      assert.deepEqual([[], [testSetSize]], await s1.diff(s2));
+    }
+    {
+      // Insert/remove in middle.
+      const s2 = await s1.remove(testSetSize / 2);
+      assert.deepEqual([[], [testSetSize / 2]], await s2.diff(s1));
+      assert.deepEqual([[testSetSize / 2], []], await s1.diff(s2));
+    }
+  });
+
+  async function testRandomDiff(setSize: number, inS1: number, inS2: number): Promise<void> {
+    invariant(inS1 + inS2 <= 1);
+
+    const tr = makeCompoundType(Kind.Set, int32Type);
+    const nums1 = [], nums2 = [], added = [], removed = [];
+
+    // Randomly populate nums1/nums2 which will be the contents of s1/s2 respectively, and record
+    // which numbers were added/removed.
+    for (let i = 0; i < setSize; i++) {
+      const r = Math.random();
+      if (r <= inS1) {
+        nums1.push(i);
+        removed.push(i);
+      } else if (r <= inS1 + inS2) {
+        nums2.push(i);
+        added.push(i);
+      } else {
+        nums1.push(i);
+        nums2.push(i);
+      }
+    }
+
+    let [s1, s2] = await Promise.all([newSet(nums1, tr), newSet(nums2, tr)]);
+
+    if (s1.empty || s2.empty || added.length + removed.length === 0) {
+      return testRandomDiff(setSize, inS1, inS2);
+    }
+
+    const ms = new CountingMemoryStore();
+    const ds = new DataStore(ms);
+    [s1, s2] = await Promise.all([s1, s2].map(s => ds.readValue(ds.writeValue(s).targetRef)));
+
+    assert.deepEqual([[], []], await s1.diff(s1));
+    assert.deepEqual([[], []], await s2.diff(s2));
+    assert.deepEqual([removed, added], await s1.diff(s2));
+    assert.deepEqual([added, removed], await s2.diff(s1));
+    console.log('Total set reads:', ms.getCount); // eslint-disable-line no-console
+  }
+
+  function testSmallRandomDiff(inS1: number, inS2: number): Promise<void> {
+    const rounds = randomSetSize / smallRandomSetSize;
+    const tests = [];
+    for (let i = 0; i < rounds; i++) {
+      tests.push(testRandomDiff(smallRandomSetSize, inS1, inS2));
+    }
+    return Promise.all(tests).then(() => undefined);
+  }
+
+  test('random small set diff 0.1/0.1', () => testSmallRandomDiff(0.1, 0.1));
+  test('random small set diff 0.1/0.5', () => testSmallRandomDiff(0.1, 0.5));
+  test('random small set diff 0.1/0.9', () => testSmallRandomDiff(0.1, 0.9));
+
+  test('random set diff 0.0001/0.0001', () => testRandomDiff(randomSetSize, 0.0001, 0.0001));
+  test('random set diff 0.0001/0.5', () => testRandomDiff(randomSetSize, 0.0001, 0.5));
+  test('random set diff 0.0001/0.9999', () => testRandomDiff(randomSetSize, 0.0001, 0.9900));
+
+  test('random set diff 0.001/0.001', () => testRandomDiff(randomSetSize, 0.001, 0.001));
+  test('random set diff 0.001/0.5', () => testRandomDiff(randomSetSize, 0.001, 0.5));
+  test('random set diff 0.001/0.999', () => testRandomDiff(randomSetSize, 0.001, 0.999));
+
+  test('random set diff 0.01/0.01', () => testRandomDiff(randomSetSize, 0.01, 0.01));
+  test('random set diff 0.01/0.5', () => testRandomDiff(randomSetSize, 0.01, 0.5));
+  test('random set diff 0.01/0.99', () => testRandomDiff(randomSetSize, 0.01, 0.99));
+
+  test('random set diff 0.1/0.1', () => testRandomDiff(randomSetSize, 0.1, 0.1));
+  test('random set diff 0.1/0.5', () => testRandomDiff(randomSetSize, 0.1, 0.5));
+  test('random set diff 0.1/0.9', () => testRandomDiff(randomSetSize, 0.1, 0.9));
 });

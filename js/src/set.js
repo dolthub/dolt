@@ -15,6 +15,7 @@ import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
   newOrderedMetaSequenceChunkFn} from './meta-sequence.js';
 import {OrderedSequence, OrderedSequenceCursor,
   OrderedSequenceIterator} from './ordered-sequence.js';
+import diff from './ordered-sequence-diff.js';
 import {setOfValueType, Type} from './type.js';
 import {sha1Size} from './ref.js';
 
@@ -185,11 +186,25 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
     // TODO: Chunk the resulting set.
     return new NomsSet(this.type, new SetLeafSequence(null, this.type, values));
   }
+
+  /**
+   * Returns a 2-tuple [added, removed] sorted values.
+   */
+  diff(from: NomsSet<T>): Promise<[Array<T> /* added */, Array<T> /* removed */]> {
+    return diff(from.sequence, this.sequence).then(([added, removed, modified]) => {
+      invariant(modified.length === 0);
+      return [added, removed];
+    });
+  }
 }
 
 export class SetLeafSequence<K:valueOrPrimitive> extends OrderedSequence<K, K> {
   getKey(idx: number): K {
     return this.items[idx];
+  }
+
+  equalsAt(idx: number, other: any): boolean {
+    return equals(this.items[idx], other);
   }
 }
 

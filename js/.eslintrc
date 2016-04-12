@@ -17,6 +17,7 @@
     "no-multi-spaces": 2,
     "no-new-wrappers": 2,
     "no-throw-literal": 2,
+    "no-unused-vars": [2, { "argsIgnorePattern": "^_$", "varsIgnorePattern": "^_$" }],
     "no-var": 2,
     "object-curly-spacing": [2, "never"],
     "prefer-arrow-callback": 2,

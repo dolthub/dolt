@@ -27,8 +27,7 @@ export class Sequence<T> extends ValueBase {
     return false;
   }
 
-  getChildSequence(idx: number): // eslint-disable-line no-unused-vars
-      Promise<?Sequence> {
+  getChildSequence(idx: number): Promise<?Sequence> { // eslint-disable-line no-unused-vars
     return Promise.resolve(null);
   }
 
@@ -63,9 +62,11 @@ export class SequenceCursor<T, S: Sequence> {
     return this.sequence.items[idx];
   }
 
-  async sync(): Promise<void> {
+  sync(): Promise<void> {
     invariant(this.parent);
-    this.sequence = notNull(await this.parent.getChildSequence());
+    return this.parent.getChildSequence().then(p => {
+      this.sequence = notNull(p);
+    });
   }
 
   getChildSequence(): Promise<?S> {
@@ -89,40 +90,55 @@ export class SequenceCursor<T, S: Sequence> {
     return 1 + (this.parent ? this.parent.depth : 0);
   }
 
-  advance(): Promise<boolean> {
-    return this._advanceMaybeAllowPastEnd(true);
+  advance(allowPastEnd: boolean = true): Promise<boolean> {
+    return this._advanceMaybeAllowPastEnd(allowPastEnd);
   }
 
   /**
-   * Advances the cursor in the local chunk and returns false if advancing would advance past the
-   * end.
+   * Advances the cursor within the current chunk.
+   *
+   * Returns true if the cursor advanced to a valid position within this chunk, false if not.
+   *
+   * If |allowPastEnd| is true, the cursor is allowed to advance one index past the end of the chunk
+   * (an invalid position, so the return value will be false).
    */
-  advanceLocal(): boolean {
+  advanceLocal(allowPastEnd: boolean): boolean {
+    if (this.idx === this.length) {
+      return false;
+    }
+
     if (this.idx < this.length - 1) {
       this.idx++;
       return true;
+    }
+
+    if (allowPastEnd) {
+      this.idx++;
     }
 
     return false;
   }
 
+  /**
+   * Returns true if the cursor can advance within the current chunk to a valid position.
+   */
+  canAdvanceLocal(): boolean {
+    return this.idx < this.length - 1;
+  }
+
   async _advanceMaybeAllowPastEnd(allowPastEnd: boolean): Promise<boolean> {
-    if (this.idx < this.length - 1) {
-      this.idx++;
-      return true;
-    }
-
     if (this.idx === this.length) {
-      return false;
+      return Promise.resolve(false);
     }
 
-    if (this.parent && (await this.parent._advanceMaybeAllowPastEnd(false))) {
+    if (this.advanceLocal(allowPastEnd)) {
+      return Promise.resolve(true);
+    }
+
+    if (this.parent && await this.parent._advanceMaybeAllowPastEnd(false)) {
       await this.sync();
       this.idx = 0;
       return true;
-    }
-    if (allowPastEnd) {
-      this.idx++;
     }
 
     return false;
@@ -138,6 +154,7 @@ export class SequenceCursor<T, S: Sequence> {
   }
 
   async _retreatMaybeAllowBeforeStart(allowBeforeStart: boolean): Promise<boolean> {
+    // TODO: Factor this similar to advance().
     if (this.idx > 0) {
       this.idx--;
       return true;
@@ -176,7 +193,7 @@ export class SequenceCursor<T, S: Sequence> {
       if (cb(this.getItem(this.idx), idx++)) {
         return;
       }
-      this.advanceLocal() || await this.advance();
+      this.advanceLocal(false) || await this.advance();
     }
   }
 
@@ -204,7 +221,7 @@ export class SequenceIterator<T, S: Sequence> extends AsyncIterator<T> {
       }
       const cur = this._cursor;
       const value = cur.getCurrent();
-      if (!cur.advanceLocal()) {
+      if (!cur.advanceLocal(false)) {
         // Advance the cursor to the next chunk, invalidating any in-progress calls to next(), since
         // they were wrapped in |_safeAdvance|. They will just try again. This works because the
         // ordering of Promise callbacks is guaranteed to be in .then() order.

@@ -20,14 +20,32 @@ import {
 } from './type.js';
 import {flatten, flattenParallel} from './test-util.js';
 import {invariant} from './assert.js';
+import Chunk from './chunk.js';
 import {Kind} from './noms-kind.js';
 import {MapLeafSequence, newMap, NomsMap} from './map.js';
 import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {Package, registerPackage} from './package.js';
+import Ref from './ref.js';
 import type {Type} from './type.js';
 
 const testMapSize = 1000;
 const mapOfNRef = 'sha1-b88cd90f3bd0b826bcd9bf57ea28bff15d1d141a';
+const smallRandomMapSize = 200;
+const randomMapSize = 2000;
+
+class CountingMemoryStore extends MemoryStore {
+  getCount: number;
+
+  constructor() {
+    super();
+    this.getCount = 0;
+  }
+
+  get(ref: Ref): Promise<Chunk> {
+    this.getCount++;
+    return super.get(ref);
+  }
+}
 
 suite('BuildMap', () => {
   test('set of n numbers', async () => {
@@ -445,4 +463,83 @@ suite('CompoundMap', () => {
     const [c] = build(ds);
     assert.strictEqual(2, c.chunks.length);
   });
+
+  async function testRandomDiff(mapSize: number, inM1: number, inM2: number, inBoth: number) {
+    invariant(inM1 + inM2 + inBoth <= 1);
+
+    const tr = makeCompoundType(Kind.Map, int32Type, stringType);
+    const kv1 = [], kv2 = [], added = [], removed = [], modified = [];
+
+    // Randomly populate kv1/kv2 which will be the contents of m1/m2 respectively, and record which
+    // numbers were added/removed.
+    for (let i = 0; i < mapSize; i++) {
+      const r = Math.random();
+      if (r <= inM1) {
+        kv1.push(i, i + '');
+        removed.push(i);
+      } else if (r <= inM1 + inM2) {
+        kv2.push(i, i + '');
+        added.push(i);
+      } else if (r <= inM1 + inM2 + inBoth) {
+        kv1.push(i, i + '');
+        kv2.push(i, i + '_');
+        modified.push(i);
+      } else {
+        kv1.push(i, i + '');
+        kv2.push(i, i + '');
+      }
+    }
+
+    let [m1, m2] = await Promise.all([newMap(kv1, tr), newMap(kv2, tr)]);
+
+    if (m1.empty || m2.empty || added.length + removed.length + modified.length === 0) {
+      return testRandomDiff(mapSize, inM1, inM2, inBoth);
+    }
+
+    const ms = new CountingMemoryStore();
+    const ds = new DataStore(ms);
+    [m1, m2] = await Promise.all([m1, m2].map(s => ds.readValue(ds.writeValue(s).targetRef)));
+
+    assert.deepEqual([[], [], []], await m1.diff(m1));
+    assert.deepEqual([[], [], []], await m2.diff(m2));
+    assert.deepEqual([removed, added, modified], await m1.diff(m2));
+    assert.deepEqual([added, removed, modified], await m2.diff(m1));
+    console.log('Total map reads:', ms.getCount); // eslint-disable-line no-console
+  }
+
+  async function testSmallRandomDiff(inM1: number, inM2: number, inBoth: number) {
+    const rounds = randomMapSize / smallRandomMapSize;
+    for (let i = 0; i < rounds; i++) {
+      await testRandomDiff(smallRandomMapSize, inM1, inM2, inBoth);
+    }
+  }
+
+  test('random small map diff 0.1/0.1/0.1', () => testSmallRandomDiff(0.1, 0.1, 0.1));
+  test('random small map diff 0.1/0.5/0.1', () => testSmallRandomDiff(0.1, 0.5, 0.1));
+  test('random small map diff 0.1/0.1/0.5', () => testSmallRandomDiff(0.1, 0.1, 0.5));
+  test('random small map diff 0.1/0.9/0', () => testSmallRandomDiff(0.1, 0.9, 0));
+
+  test('random map diff 0.0001/0.0001/0.0001',
+       () => testRandomDiff(randomMapSize, 0.0001, 0.0001, 0.0001));
+  test('random map diff 0.0001/0.5/0.0001',
+       () => testRandomDiff(randomMapSize, 0.0001, 0.5, 0.0001));
+  test('random map diff 0.0001/0.0001/0.5',
+       () => testRandomDiff(randomMapSize, 0.0001, 0.0001, 0.5));
+  test('random map diff 0.0001/0.9999/0', () => testRandomDiff(randomMapSize, 0.0001, 0.9999, 0));
+
+  test('random map diff 0.001/0.001/0.001',
+       () => testRandomDiff(randomMapSize, 0.001, 0.001, 0.001));
+  test('random map diff 0.001/0.5/0.001', () => testRandomDiff(randomMapSize, 0.001, 0.5, 0.001));
+  test('random map diff 0.001/0.001/0.5', () => testRandomDiff(randomMapSize, 0.001, 0.001, 0.5));
+  test('random map diff 0.001/0.999/0', () => testRandomDiff(randomMapSize, 0.001, 0.999, 0));
+
+  test('random map diff 0.01/0.01/0.01', () => testRandomDiff(randomMapSize, 0.01, 0.01, 0.01));
+  test('random map diff 0.01/0.5/0.1', () => testRandomDiff(randomMapSize, 0.01, 0.5, 0.1));
+  test('random map diff 0.01/0.1/0.5', () => testRandomDiff(randomMapSize, 0.01, 0.1, 0.5));
+  test('random map diff 0.01/0.99', () => testRandomDiff(randomMapSize, 0.01, 0.99, 0));
+
+  test('random map diff 0.1/0.1/0.1', () => testRandomDiff(randomMapSize, 0.1, 0.1, 0.1));
+  test('random map diff 0.1/0.5/0.1', () => testRandomDiff(randomMapSize, 0.1, 0.5, 0.1));
+  test('random map diff 0.1/0.1/0.5', () => testRandomDiff(randomMapSize, 0.1, 0.1, 0.5));
+  test('random map diff 0.1/0.9/0', () => testRandomDiff(randomMapSize, 0.1, 0.9, 0));
 });

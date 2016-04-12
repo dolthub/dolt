@@ -136,6 +136,10 @@ export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K,
   getKey(idx: number): K {
     return this.items[idx].value;
   }
+
+  equalsAt(idx: number, other: MetaTuple): boolean {
+    return this.items[idx].ref.equals(other.ref);
+  }
 }
 
 export function newMetaSequenceFromData(ds: DataStore, type: Type, tuples: Array<MetaTuple>):

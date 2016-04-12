@@ -7,17 +7,15 @@ import type {int64} from './primitives.js';
 import {notNull} from './assert.js';
 import {makeCompoundType, valueType} from './type.js';
 import {Kind} from './noms-kind.js';
-import MemoryStore from './memory-store.js';
-import DataStore from './data-store.js';
 
 class TestSequence extends Sequence<any> {
-  constructor(ds: ?DataStore, items: Array<any>) {
-    super(ds, makeCompoundType(Kind.List, valueType), items);
+  constructor(items: Array<any>) {
+    super(null, makeCompoundType(Kind.List, valueType), items);
   }
 
   getChildSequence(idx: number): // eslint-disable-line no-unused-vars
       Promise<?Sequence> {
-    return Promise.resolve(new TestSequence(this.ds, this.items[idx]));
+    return Promise.resolve(new TestSequence(this.items[idx]));
   }
 }
 
@@ -29,14 +27,11 @@ class TestSequenceCursor extends SequenceCursor<any, TestSequence> {
 }
 
 suite('SequenceCursor', () => {
-  function testCursor(data: any): TestSequenceCursor {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const s1 = new TestSequence(ds, data);
+  function testCursor(data: Array<any>): TestSequenceCursor {
+    const s1 = new TestSequence(data);
     const c1 = new TestSequenceCursor(null, s1, 0);
-    const s2 = new TestSequence(ds, data[0]);
-    const c2 = new TestSequenceCursor(c1, s2, 0);
-    return c2;
+    const s2 = new TestSequence(data[0]);
+    return new TestSequenceCursor(c1, s2, 0);
   }
 
   function expect(c: TestSequenceCursor, expectIdx: number,
