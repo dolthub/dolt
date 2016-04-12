@@ -28,12 +28,12 @@ var (
 	hostFlag = flag.String("host", "localhost:0", "Host to listen on")
 )
 
-type dataStoreRecord struct {
-	ds    datas.DataStore
+type chunkStoreRecord struct {
+	cs    chunks.ChunkStore
 	alias string
 }
 
-type dataStoreRecords map[string]dataStoreRecord
+type chunkStoreRecords map[string]chunkStoreRecord
 
 func main() {
 	usage := func() {
@@ -59,12 +59,8 @@ func main() {
 	}
 
 	prefix := dsPathPrefix + "/:store"
-	router.GET(prefix+constants.RefPath+":ref", routeToStore(stores, datas.HandleRef))
-	router.OPTIONS(prefix+constants.RefPath+":ref", routeToStore(stores, datas.HandleRef))
 	router.POST(prefix+constants.PostRefsPath, routeToStore(stores, datas.HandlePostRefs))
 	router.OPTIONS(prefix+constants.PostRefsPath, routeToStore(stores, datas.HandlePostRefs))
-	router.POST(prefix+constants.GetHasPath, routeToStore(stores, datas.HandleGetHasRefs))
-	router.OPTIONS(prefix+constants.GetHasPath, routeToStore(stores, datas.HandleGetHasRefs))
 	router.POST(prefix+constants.GetRefsPath, routeToStore(stores, datas.HandleGetRefs))
 	router.OPTIONS(prefix+constants.GetRefsPath, routeToStore(stores, datas.HandleGetRefs))
 	router.GET(prefix+constants.RootPath, routeToStore(stores, datas.HandleRootGet))
@@ -89,9 +85,9 @@ func main() {
 	log.Fatal(srv.Serve(l))
 }
 
-func constructQueryString(args []string) (url.Values, dataStoreRecords) {
+func constructQueryString(args []string) (url.Values, chunkStoreRecords) {
 	qsValues := url.Values{}
-	stores := dataStoreRecords{}
+	stores := chunkStoreRecords{}
 
 	for _, arg := range args {
 		k, v, ok := split2(arg, "=")
@@ -107,7 +103,7 @@ func constructQueryString(args []string) (url.Values, dataStoreRecords) {
 			_, path, _ := split2(v, ":")
 			record, ok := stores[path]
 			if !ok {
-				record.ds = datas.NewDataStore(chunks.NewLevelDBStore(path, "", 24, false))
+				record.cs = chunks.NewLevelDBStore(path, "", 24, false)
 				// Identify the stores with a (abridged) hash of the file system path,
 				// so that the same URL always refers to the same database.
 				hash := sha1.Sum([]byte(path))
@@ -123,12 +119,12 @@ func constructQueryString(args []string) (url.Values, dataStoreRecords) {
 	return qsValues, stores
 }
 
-func routeToStore(stores dataStoreRecords, handler datas.Handler) httprouter.Handle {
+func routeToStore(stores chunkStoreRecords, handler datas.Handler) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 		store := params.ByName("store")
 		for _, record := range stores {
 			if record.alias == store {
-				handler(w, r, params, record.ds)
+				handler(w, r, params, record.cs)
 				return
 			}
 		}

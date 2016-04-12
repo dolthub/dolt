@@ -25,7 +25,7 @@ const (
 	dynamoWriteUnitSize = 1024       // 1K
 
 	readBufferSize  = 1 << 12 // 4k
-	writeBufferSize = 1 << 12 // 4k
+	writeBufferSize = dynamoMaxPutCount
 
 	dynamoTableName = "noms"
 	refAttr         = "ref"

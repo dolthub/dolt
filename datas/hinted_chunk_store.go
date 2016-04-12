@@ -7,6 +7,7 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
+// Note that this doesn't actually implement the chunks.ChunkStore interface. This is by design, because we don't want to provide Has(), and because Put() is intended to be non-blocking and take 'hints', but I failed to come up with a different-but-still-relevant name.
 type hintedChunkStore interface {
 	hintedChunkSink
 	chunks.RootTracker
@@ -16,7 +17,8 @@ type hintedChunkStore interface {
 }
 
 type hintedChunkSink interface {
-	// Put writes c into the ChunkSink, using the provided hints to assist in validation. c may or may not be persisted when Put() returns, but is guaranteed to be persistent after a call to Flush() or Close().
+	// Put writes c into the ChunkSink, using the provided hints to assist in validation. Validation requires checking that all refs embedded in c are themselves valid, which could be done by resolving each one. Instead, hints provides a (smaller) set of refs that point to chunks that themselves contain many of c's refs. Thus, by checking only the hinted chunks, c can be validated with fewer read operations.
+	// c may or may not be persisted when Put() returns, but is guaranteed to be persistent after a call to Flush() or Close().
 	Put(c chunks.Chunk, hints map[ref.Ref]struct{})
 
 	// Flush causes enqueued Puts to be persisted.

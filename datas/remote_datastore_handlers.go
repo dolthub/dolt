@@ -72,6 +72,20 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 			}
 			v := types.DecodeChunk(c, &cvr)
 			d.Exp.NotNil(v, "Chunk with hash %s failed to decode", r)
+
+			// IT'S A HAAAAAACK
+			if datasets, ok := v.(MapOfStringToRefOfCommit); ok {
+				// Manually populate cvr with Dataset Heads, because shove still uses a crappy backchannel to send chunks over. This can go away once we fix BUG 822.
+				datasets.IterAll(func(s string, rOfC RefOfCommit) {
+					r := rOfC.TargetRef()
+					if !cvr.isPresent(r) {
+						fmt.Println("Manually shoving in", r)
+						cvr.ReadValue(r)
+					}
+				})
+			}
+			// End HAAAAAAAAACK
+
 			cvr.checkChunksInCache(v)
 			cvr.set(r, presentChunk(v.Type()))
 			orderedChunks = append(orderedChunks, c)
@@ -88,17 +102,12 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 }
 
 // Contents of the returned io.Reader are gzipped.
-func buildWriteValueRequest(chnx []chunks.Chunk, hints map[ref.Ref]struct{}) io.Reader {
+func buildWriteValueRequest(serializedChunks io.Reader, hints map[ref.Ref]struct{}) io.Reader {
 	body := &bytes.Buffer{}
 	gw := gzip.NewWriter(body)
 	serializeHints(gw, hints)
-	sz := chunks.NewSerializer(gw)
-	for _, chunk := range chnx {
-		sz.Put(chunk)
-	}
-	sz.Close()
-	gw.Close()
-	return body
+	d.Chk.NoError(gw.Close())
+	return io.MultiReader(body, serializedChunks)
 }
 
 func HandleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {

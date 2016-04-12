@@ -85,7 +85,7 @@ func Deserialize(reader io.Reader, cs ChunkSink, rateLimit chan struct{}) {
 	wg := sync.WaitGroup{}
 
 	for {
-		c := deserializeWorker(reader)
+		c := deserializeChunk(reader)
 		if c.IsEmpty() {
 			break
 		}
@@ -109,7 +109,7 @@ func Deserialize(reader io.Reader, cs ChunkSink, rateLimit chan struct{}) {
 // DeserializeToChan reads off of |reader| until EOF, sending chunks to chunkChan in the order they are read.
 func DeserializeToChan(reader io.Reader, chunkChan chan<- Chunk) {
 	for {
-		c := deserializeWorker(reader)
+		c := deserializeChunk(reader)
 		if c.IsEmpty() {
 			break
 		}
@@ -118,7 +118,7 @@ func DeserializeToChan(reader io.Reader, chunkChan chan<- Chunk) {
 	close(chunkChan)
 }
 
-func deserializeWorker(reader io.Reader) Chunk {
+func deserializeChunk(reader io.Reader) Chunk {
 	digest := ref.Sha1Digest{}
 	n, err := io.ReadFull(reader, digest[:])
 	if err == io.EOF {

@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -20,10 +21,11 @@ import (
 
 const (
 	httpChunkSinkConcurrency = 6
-	writeBufferSize          = 64
-	readBufferSize           = 2048
+	writeBufferSize          = 1 << 12 // 4K
+	readBufferSize           = 1 << 12 // 4K
 )
 
+// Note that this doesn't actually implement the chunks.ChunkStore interface. This is by design, because we don't want to provide Has(), and because Put() is intended to be non-blocking and take 'hints', but I failed to come up with a different-but-still-relevant name.
 type httpHintedChunkStore struct {
 	host          *url.URL
 	httpClient    httpDoer
@@ -206,25 +208,23 @@ func (bhcs *httpHintedChunkStore) batchPutRequests() {
 	go func() {
 		defer bhcs.workerWg.Done()
 
-		var chunks []chunks.Chunk
+		numChunks := 0
 		hints := map[ref.Ref]struct{}{}
-		sendAndReset := func() {
-			bhcs.sendWriteRequests(chunks, hints) // Takes ownership of chunks
-			chunks = nil
-			hints = map[ref.Ref]struct{}{}
+		buf := makeBuffer()
+		gw := gzip.NewWriter(buf)
+		sz := chunks.NewSerializer(gw)
+		handleRequest := func(wr writeRequest) {
+			numChunks++
+			sz.Put(wr.c)
+			for hint := range wr.hints {
+				hints[hint] = struct{}{}
+			}
 		}
-
 		for done := false; !done; {
 			drainAndSend := false
 			select {
 			case wr := <-bhcs.writeQueue:
-				chunks = append(chunks, wr.c)
-				for hint := range wr.hints {
-					hints[hint] = struct{}{}
-				}
-				if len(chunks) == writeBufferSize {
-					sendAndReset()
-				}
+				handleRequest(wr)
 			case <-bhcs.flushChan:
 				drainAndSend = true
 			case <-bhcs.finishedChan:
@@ -236,32 +236,44 @@ func (bhcs *httpHintedChunkStore) batchPutRequests() {
 				for drained := false; !drained; {
 					select {
 					case wr := <-bhcs.writeQueue:
-						chunks = append(chunks, wr.c)
-						for hint := range wr.hints {
-							hints[hint] = struct{}{}
-						}
+						handleRequest(wr)
 					default:
 						drained = true
-					}
-					if len(chunks) == writeBufferSize || (drained && chunks != nil) {
-						sendAndReset()
+						d.Chk.NoError(sz.Close())
+						d.Chk.NoError(gw.Close())
+						_, err := buf.Seek(0, 0)
+						d.Chk.NoError(err, "Could not reset filesystem buffer to offset 0.")
+						bhcs.sendWriteRequests(buf, numChunks, hints) // Takes ownership of buf, hints
+
+						numChunks = 0
+						hints = map[ref.Ref]struct{}{}
+						buf = makeBuffer()
+						gw = gzip.NewWriter(buf)
+						sz = chunks.NewSerializer(gw)
 					}
 				}
 			}
 		}
-		d.Chk.Nil(chunks, "%d chunks were never sent to server", len(chunks))
 	}()
 }
 
-func (bhcs *httpHintedChunkStore) sendWriteRequests(chnx []chunks.Chunk, hints map[ref.Ref]struct{}) {
+func makeBuffer() *os.File {
+	f, err := ioutil.TempFile("", "http_hinted_chunk_store_")
+	d.Chk.NoError(err, "Cannot create filesystem buffer for Chunks.")
+	return f
+}
+
+func (bhcs *httpHintedChunkStore) sendWriteRequests(serializedChunks *os.File, numChunks int, hints map[ref.Ref]struct{}) {
 	bhcs.rateLimit <- struct{}{}
 	go func() {
 		defer func() {
-			bhcs.unwrittenPuts.Clear(chnx)
-			bhcs.requestWg.Add(-len(chnx))
+			bhcs.unwrittenPuts = newUnwrittenPutCache()
+			bhcs.requestWg.Add(-numChunks)
+			d.Chk.NoError(serializedChunks.Close(), "Cannot close filesystem buffer.")
+			d.Chk.NoError(os.Remove(serializedChunks.Name()), "Cannot remove filesystem buffer.")
 		}()
 
-		body := buildWriteValueRequest(chnx, hints)
+		body := buildWriteValueRequest(serializedChunks, hints)
 
 		url := *bhcs.host
 		url.Path = httprouter.CleanPath(bhcs.host.Path + constants.WriteValuePath)

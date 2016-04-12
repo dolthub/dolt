@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -60,11 +61,12 @@ func TestBuildWriteValueRequest(t *testing.T) {
 		chunks.NewChunk([]byte(input1)),
 		chunks.NewChunk([]byte(input2)),
 	}
+
 	hints := map[ref.Ref]struct{}{
 		ref.Parse("sha1-0000000000000000000000000000000000000002"): struct{}{},
 		ref.Parse("sha1-0000000000000000000000000000000000000003"): struct{}{},
 	}
-	compressed := buildWriteValueRequest(chnx, hints)
+	compressed := buildWriteValueRequest(serializeChunks(chnx, assert), hints)
 	gr, err := gzip.NewReader(compressed)
 	d.Exp.NoError(err)
 	defer gr.Close()
@@ -84,6 +86,16 @@ func TestBuildWriteValueRequest(t *testing.T) {
 		chnx = chnx[1:]
 	}
 	assert.Empty(chnx)
+}
+
+func serializeChunks(chnx []chunks.Chunk, assert *assert.Assertions) io.Reader {
+	body := &bytes.Buffer{}
+	gw := gzip.NewWriter(body)
+	sz := chunks.NewSerializer(gw)
+	assert.NoError(sz.PutMany(chnx))
+	assert.NoError(sz.Close())
+	assert.NoError(gw.Close())
+	return body
 }
 
 func TestBuildGetRefsRequest(t *testing.T) {
