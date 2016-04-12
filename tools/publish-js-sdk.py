@@ -11,10 +11,7 @@ def main():
     subprocess.check_output(['npm', 'info', '.', 'version']).strip())
   print 'Old version: %s, New version: %s' % (deployed_version, new_version)
   if new_version > deployed_version:
-    #   subprocess.check_call(['npm', 'version', '%s' % str(new_version)])
-      # subprocess.check_call(['npm', 'publish'])
-      subprocess.check_call(['npm', 'whomai'])
-      print 'Not pushing this time. Maybe next time?'
+    subprocess.check_call(['npm', 'publish'])
 
 if __name__ == '__main__':
   main()
