@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/suite"
 )
@@ -23,15 +22,15 @@ func (suite *WalkAllTestSuite) SetupTest() {
 	suite.vs = types.NewTestValueStore()
 }
 
-func (suite *WalkAllTestSuite) walkWorker(r ref.Ref, expected int) {
+func (suite *WalkAllTestSuite) walkWorker(r types.RefBase, expected int) {
 	actual := 0
-	AllP(types.NewRef(r), suite.vs, func(c types.Value) {
+	AllP(r, suite.vs, func(c types.Value) {
 		actual++
 	}, 1)
 	suite.Equal(expected, actual)
 }
 
-func (suite *WalkAllTestSuite) storeAndRef(v types.Value) ref.Ref {
+func (suite *WalkAllTestSuite) storeAndRef(v types.Value) types.RefBase {
 	return suite.vs.WriteValue(v)
 }
 
@@ -49,22 +48,19 @@ func (suite *WalkAllTestSuite) TestWalkComposites() {
 	suite.walkWorker(suite.storeAndRef(types.NewMap(types.Int32(8), types.Bool(true), types.Int32(0), types.Bool(false))), 6)
 }
 
-func (suite *WalkAllTestSuite) NewList(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
+func (suite *WalkAllTestSuite) NewList(cs chunks.ChunkStore, vs ...types.Value) types.RefBase {
 	v := types.NewList(vs...)
-	r := suite.vs.WriteValue(v)
-	return types.NewRef(r)
+	return suite.vs.WriteValue(v)
 }
 
-func (suite *WalkAllTestSuite) NewMap(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
+func (suite *WalkAllTestSuite) NewMap(cs chunks.ChunkStore, vs ...types.Value) types.RefBase {
 	v := types.NewMap(vs...)
-	r := suite.vs.WriteValue(v)
-	return types.NewRef(r)
+	return suite.vs.WriteValue(v)
 }
 
-func (suite *WalkAllTestSuite) NewSet(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
+func (suite *WalkAllTestSuite) NewSet(cs chunks.ChunkStore, vs ...types.Value) types.RefBase {
 	v := types.NewSet(vs...)
-	r := suite.vs.WriteValue(v)
-	return types.NewRef(r)
+	return suite.vs.WriteValue(v)
 }
 
 func (suite *WalkAllTestSuite) TestWalkNestedComposites() {

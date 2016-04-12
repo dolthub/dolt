@@ -100,7 +100,7 @@ func TestCompoundSetChunks(t *testing.T) {
 	doTest := func(ts testSet) {
 		vs := NewTestValueStore()
 		set := ts.toCompoundSet()
-		set2chunks := vs.ReadValue(vs.WriteValue(set)).(compoundSet).Chunks()
+		set2chunks := vs.ReadValue(vs.WriteValue(set).TargetRef()).(compoundSet).Chunks()
 		for i, r := range set.Chunks() {
 			assert.True(r.Type().Equals(set2chunks[i].Type()), "%s != %s", r.Type().Describe(), set2chunks[i].Type().Describe())
 		}
@@ -118,7 +118,7 @@ func TestCompoundSetHas(t *testing.T) {
 	doTest := func(ts testSet) {
 		vs := NewTestValueStore()
 		set := ts.toCompoundSet()
-		set2 := vs.ReadValue(vs.WriteValue(set)).(compoundSet)
+		set2 := vs.ReadValue(vs.WriteValue(set).TargetRef()).(compoundSet)
 		for _, v := range ts.values {
 			assert.True(set.Has(v))
 			assert.True(set2.Has(v))
@@ -378,8 +378,7 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 		nums := []Value{}
 		for i := 0; i < n; i++ {
 			r := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i)}))
-			tr := newRef(r, refOfTypeStructType)
-			nums = append(nums, tr)
+			nums = append(nums, r)
 		}
 
 		return nums
@@ -395,7 +394,7 @@ func TestCompoundSetModifyAfterRead(t *testing.T) {
 	vs := NewTestValueStore()
 	set := getTestNativeOrderSet(2).toCompoundSet()
 	// Drop chunk values.
-	set = vs.ReadValue(vs.WriteValue(set)).(compoundSet)
+	set = vs.ReadValue(vs.WriteValue(set).TargetRef()).(compoundSet)
 	// Modify/query. Once upon a time this would crash.
 	fst := set.First()
 	set = set.Remove(fst).(compoundSet)

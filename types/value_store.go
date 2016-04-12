@@ -24,8 +24,9 @@ func (vrw *ValueStore) ReadValue(r ref.Ref) Value {
 	return DecodeChunk(vrw.cs.Get(r), vrw)
 }
 
-func (vrw *ValueStore) WriteValue(v Value) ref.Ref {
+func (vrw *ValueStore) WriteValue(v Value) RefBase {
 	chunk := EncodeValue(v, vrw)
 	vrw.cs.Put(chunk)
-	return chunk.Ref()
+	targetRef := chunk.Ref()
+	return refFromType(targetRef, MakeRefType(v.Type()))
 }

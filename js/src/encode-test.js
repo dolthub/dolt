@@ -354,11 +354,10 @@ suite('Encode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
-
     const ltr = makeCompoundType(Kind.List, int32Type);
-    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0, 1])));
-    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [2, 3])));
-    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [4, 5])));
+    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0, 1]))).targetRef;
+    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [2, 3]))).targetRef;
+    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [4, 5]))).targetRef;
     const tuples = [
       new MetaTuple(r1, 2),
       new MetaTuple(r2, 4),

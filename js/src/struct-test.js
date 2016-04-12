@@ -1,7 +1,6 @@
 // @flow
 
 import MemoryStore from './memory-store.js';
-import RefValue from './ref-value.js';
 import {newStruct, StructMirror, createStructClass} from './struct.js';
 import {assert} from 'chai';
 import {
@@ -54,7 +53,7 @@ suite('Struct', () => {
     const type = makeType(pkgRef, 0);
 
     const b = true;
-    const r = new RefValue(ds.writeValue(b), refOfBoolType);
+    const r = ds.writeValue(b);
     const s1 = newStruct(type, typeDef, {r: r});
     assert.strictEqual(2, s1.chunks.length);
     assert.isTrue(pkgRef.equals(s1.chunks[0].targetRef));
@@ -82,7 +81,7 @@ suite('Struct', () => {
     assert.isTrue(pkgRef.equals(s1.chunks[0].targetRef));
 
     const b = true;
-    const r = new RefValue(ds.writeValue(b), refOfBoolType);
+    const r = ds.writeValue(b);
     const s2 = newStruct(type, typeDef, {r: r});
     assert.strictEqual(2, s2.chunks.length);
     assert.isTrue(pkgRef.equals(s2.chunks[0].targetRef));
@@ -110,7 +109,7 @@ suite('Struct', () => {
     assert.isTrue(pkgRef.equals(s1.chunks[0].targetRef));
 
     const b = true;
-    const r = new RefValue(ds.writeValue(b), refOfBoolType);
+    const r = ds.writeValue(b);
     const s2 = newStruct(type, typeDef, {r: r});
     assert.strictEqual(2, s2.chunks.length);
     assert.isTrue(pkgRef.equals(s2.chunks[0].targetRef));

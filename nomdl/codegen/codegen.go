@@ -195,10 +195,10 @@ func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) ty
 	for _, dep := range deps {
 		// Writing the deps into ds should be redundant at this point, but do it to be sure.
 		// TODO: consider moving all dataset work over into nomdl/pkg BUG 409
-		s = s.Insert(types.NewRefOfPackage(ds.Store().WriteValue(dep)))
+		s = s.Insert(ds.Store().WriteValue(dep).(types.RefOfPackage))
 	}
-	r := ds.Store().WriteValue(pkg.Package)
-	return s.Insert(types.NewRefOfPackage(r))
+	r := ds.Store().WriteValue(pkg.Package).(types.RefOfPackage)
+	return s.Insert(r)
 }
 
 func getOutFileName(in string) string {

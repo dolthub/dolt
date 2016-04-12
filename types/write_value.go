@@ -1,13 +1,10 @@
 package types
 
-import (
-	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
-)
+import "github.com/attic-labs/noms/chunks"
 
 // ValueWriter is an interface that knows how to write Noms Values, e.g. datas/DataStore. Required to avoid import cycle between this package and the package that implements Value writing.
 type ValueWriter interface {
-	WriteValue(v Value) ref.Ref
+	WriteValue(v Value) RefBase
 }
 
 type primitive interface {

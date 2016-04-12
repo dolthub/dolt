@@ -42,7 +42,7 @@ func TestStructIsValue(t *testing.T) {
 		I: 42,
 	}.New()
 
-	ref := ds.WriteValue(v)
+	ref := ds.WriteValue(v).TargetRef()
 	v2 := ds.ReadValue(ref)
 	assert.True(v.Equals(v2))
 

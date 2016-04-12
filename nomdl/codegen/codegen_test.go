@@ -203,12 +203,12 @@ func TestGenerateDeps(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	leaf1 := types.NewPackage([]types.Type{types.MakeEnumType("e1", "a", "b")}, []ref.Ref{})
-	leaf1Ref := ds.WriteValue(leaf1)
+	leaf1Ref := ds.WriteValue(leaf1).TargetRef()
 	leaf2 := types.NewPackage([]types.Type{types.MakePrimitiveType(types.BoolKind)}, []ref.Ref{})
-	leaf2Ref := ds.WriteValue(leaf2)
+	leaf2Ref := ds.WriteValue(leaf2).TargetRef()
 
 	depender := types.NewPackage([]types.Type{}, []ref.Ref{leaf1Ref})
-	dependerRef := ds.WriteValue(depender)
+	dependerRef := ds.WriteValue(depender).TargetRef()
 
 	top := types.NewPackage([]types.Type{}, []ref.Ref{leaf2Ref, dependerRef})
 	types.RegisterPackage(&top)
@@ -279,7 +279,7 @@ func TestCanUseDefFromImport(t *testing.T) {
 			X: Int64
 		}`)
 	pkg1 := pkg.ParseNomDL("test1", r1, dir, ds)
-	pkgRef1 := ds.WriteValue(pkg1.Package)
+	pkgRef1 := ds.WriteValue(pkg1.Package).TargetRef()
 
 	r2 := strings.NewReader(fmt.Sprintf(`
 		alias Other = import "%s"

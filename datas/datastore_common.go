@@ -84,13 +84,14 @@ func (ds *dataStoreCommon) ReadValue(r ref.Ref) types.Value {
 }
 
 // WriteValue takes a Value, schedules it to be written it to ds, and returns v.Ref(). v is not guaranteed to be actually written until after a successful Commit().
-func (ds *dataStoreCommon) WriteValue(v types.Value) (r ref.Ref) {
+func (ds *dataStoreCommon) WriteValue(v types.Value) (r types.RefBase) {
 	if v == nil {
 		return
 	}
 
-	r = v.Ref()
-	if entry := ds.checkCache(r); entry != nil && entry.Present() {
+	targetRef := v.Ref()
+	r = types.PrivateRefFromType(targetRef, types.MakeRefType(v.Type()))
+	if entry := ds.checkCache(targetRef); entry != nil && entry.Present() {
 		return
 	}
 
@@ -110,7 +111,7 @@ func (ds *dataStoreCommon) WriteValue(v types.Value) (r ref.Ref) {
 		d.Chk.True(entry.Type().Equals(targetType), "Value to write contains ref %s, which points to a value of a different type: %+v != %+v", reachable.TargetRef(), entry.Type(), targetType)
 	}
 	ds.cs.Put(chunk) // TODO: DataStore should manage batching and backgrounding Puts.
-	ds.setCache(r, presentChunk(v.Type()))
+	ds.setCache(targetRef, presentChunk(v.Type()))
 
 	return
 }
@@ -159,7 +160,7 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) error {
 	currentRootRef, currentDatasets := ds.getRootAndDatasets()
 
 	// TODO: This Commit will be orphaned if the tryUpdateRoot() below fails
-	commitRef := NewRefOfCommit(ds.WriteValue(commit))
+	commitRef := ds.WriteValue(commit).(RefOfCommit)
 
 	// First commit in store is always fast-foward.
 	if !currentRootRef.IsEmpty() {
@@ -201,7 +202,7 @@ func (ds *dataStoreCommon) getRootAndDatasets() (currentRootRef ref.Ref, current
 
 func (ds *dataStoreCommon) tryUpdateRoot(currentDatasets MapOfStringToRefOfCommit, currentRootRef ref.Ref) (err error) {
 	// TODO: This Commit will be orphaned if the UpdateRoot below fails
-	newRootRef := ds.WriteValue(currentDatasets)
+	newRootRef := ds.WriteValue(currentDatasets).TargetRef()
 	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
 	if !ds.cs.UpdateRoot(newRootRef, currentRootRef) {
 		err = ErrOptimisticLockFailed

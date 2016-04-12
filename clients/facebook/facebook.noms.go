@@ -211,7 +211,7 @@ func (r RefOfUser) TargetValue(vr types.ValueReader) User {
 }
 
 func (r RefOfUser) SetTargetValue(val User, vw types.ValueWriter) RefOfUser {
-	return NewRefOfUser(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfUser)
 }
 
 // SetOfRefOfRemotePhoto
@@ -417,5 +417,5 @@ func (r RefOfRemotePhoto) TargetValue(vr types.ValueReader) RemotePhoto {
 }
 
 func (r RefOfRemotePhoto) SetTargetValue(val RemotePhoto, vw types.ValueWriter) RefOfRemotePhoto {
-	return NewRefOfRemotePhoto(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfRemotePhoto)
 }

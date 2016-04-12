@@ -15,7 +15,7 @@ func TestWriteValue(t *testing.T) {
 
 	testEncode := func(expected string, v Value) ref.Ref {
 		vs := NewTestValueStore()
-		r := vs.WriteValue(v)
+		r := vs.WriteValue(v).TargetRef()
 
 		// Assuming that MemoryStore works correctly, we don't need to check the actual serialization, only the hash. Neat.
 		assert.EqualValues(sha1.Sum([]byte(expected)), r.Digest(), "Incorrect ref serializing %+v. Got: %#x", v, r.Digest())
@@ -42,7 +42,7 @@ func TestWriteBlobLeaf(t *testing.T) {
 	b1 := NewBlob(buf)
 	bl1, ok := b1.(blobLeaf)
 	assert.True(ok)
-	r1 := vs.WriteValue(bl1)
+	r1 := vs.WriteValue(bl1).TargetRef()
 	// echo -n 'b ' | sha1sum
 	assert.Equal("sha1-e1bc846440ec2fb557a5a271e785cd4c648883fa", r1.String())
 
@@ -50,7 +50,7 @@ func TestWriteBlobLeaf(t *testing.T) {
 	b2 := NewBlob(buf)
 	bl2, ok := b2.(blobLeaf)
 	assert.True(ok)
-	r2 := vs.WriteValue(bl2)
+	r2 := vs.WriteValue(bl2).TargetRef()
 	// echo -n 'b Hello, World!' | sha1sum
 	assert.Equal("sha1-135fe1453330547994b2ce8a1b238adfbd7df87e", r2.String())
 }

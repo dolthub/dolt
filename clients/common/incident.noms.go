@@ -513,5 +513,5 @@ func (r RefOfIncident) TargetValue(vr types.ValueReader) Incident {
 }
 
 func (r RefOfIncident) SetTargetValue(val Incident, vw types.ValueWriter) RefOfIncident {
-	return NewRefOfIncident(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfIncident)
 }

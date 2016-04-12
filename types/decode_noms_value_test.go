@@ -590,7 +590,7 @@ func TestReadPackageThroughChunkSource(t *testing.T) {
 		}, Choices{}),
 	}, []ref.Ref{})
 	// Don't register
-	pkgRef := cs.WriteValue(pkg)
+	pkgRef := cs.WriteValue(pkg).TargetRef()
 
 	a := parseJson(`[%d, "%s", "0", "42"]`, UnresolvedKind, pkgRef.String())
 	r := newJsonArrayReader(a, cs)

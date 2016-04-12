@@ -662,5 +662,5 @@ func (r RefOfKey) TargetValue(vr types.ValueReader) Key {
 }
 
 func (r RefOfKey) SetTargetValue(val Key, vw types.ValueWriter) RefOfKey {
-	return NewRefOfKey(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfKey)
 }

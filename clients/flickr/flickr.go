@@ -212,7 +212,7 @@ func getAlbum(api flickrAPI, id string, gotPhoto chan struct{}) idAndRefOfAlbum 
 		SetTitle(response.Photoset.Title.Content).
 		SetPhotos(photos)
 	// TODO: Write albums in batches.
-	ref := NewRefOfAlbum(ds.Store().WriteValue(album))
+	ref := ds.Store().WriteValue(album).(RefOfAlbum)
 	return idAndRefOfAlbum{id, ref}
 }
 
@@ -350,7 +350,7 @@ func getAlbumPhotos(api flickrAPI, id string, gotPhoto chan struct{}) SetOfRefOf
 		}
 
 		// TODO: Write photos in batches.
-		photos = photos.Insert(NewRefOfRemotePhoto(store.WriteValue(photo)))
+		photos = photos.Insert(store.WriteValue(photo).(RefOfRemotePhoto))
 		gotPhoto <- struct{}{}
 	}
 
@@ -422,7 +422,7 @@ func awaitOAuthResponse(l net.Listener, tempCred *oauth.Credentials) (tokenCred 
 
 func commitUser() {
 	var err error
-	r := NewRefOfUser(ds.Store().WriteValue(user))
+	r := ds.Store().WriteValue(user).(RefOfUser)
 	*ds, err = ds.Commit(r)
 	d.Exp.NoError(err)
 }

@@ -58,5 +58,5 @@ func (r {{.Name}}) TargetValue(vr {{$typesPackage}}ValueReader) {{userType .Elem
 }
 
 func (r {{.Name}}) SetTargetValue(val {{userType .ElemType}}, vw {{$typesPackage}}ValueWriter) {{.Name}} {
-	return New{{.Name}}(vw.WriteValue({{userToValue "val" .ElemType}}))
+	return vw.WriteValue({{userToValue "val" .ElemType}}).({{.Name}})
 }

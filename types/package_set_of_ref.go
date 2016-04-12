@@ -207,5 +207,5 @@ func (r RefOfPackage) TargetValue(vr ValueReader) Package {
 }
 
 func (r RefOfPackage) SetTargetValue(val Package, vw ValueWriter) RefOfPackage {
-	return NewRefOfPackage(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfPackage)
 }

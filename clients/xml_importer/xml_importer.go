@@ -98,7 +98,7 @@ func main() {
 				r := ref.Ref{}
 
 				if !*noIO {
-					r = ds.Store().WriteValue(nomsObj)
+					r = ds.Store().WriteValue(nomsObj).TargetRef()
 				}
 
 				refsChan <- refIndex{r, f.index}

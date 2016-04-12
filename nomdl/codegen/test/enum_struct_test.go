@@ -41,7 +41,7 @@ func TestEnumValue(t *testing.T) {
 func TestEnumIsValue(t *testing.T) {
 	ds := datas.NewDataStore(chunks.NewMemoryStore())
 	var v types.Value = gen.NewEnumStruct()
-	ref := ds.WriteValue(v)
+	ref := ds.WriteValue(v).TargetRef()
 	v2 := ds.ReadValue(ref)
 	assert.True(t, v.Equals(v2))
 }
