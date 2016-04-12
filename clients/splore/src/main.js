@@ -199,7 +199,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         processField(f.name);
       });
       if (val.hasUnion) {
-        const {name} = val.typeDef.union[val.unionIndex];
+        const {name} = val.typeDef.desc.union[val.unionIndex];
         processField(name);
       }
     } else {
