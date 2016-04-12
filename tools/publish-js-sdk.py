@@ -12,6 +12,8 @@ def main():
   new_version = LooseVersion(data['version'])
   print 'Old version: %s, New version: %s' % (deployed_version, new_version)
   if new_version > deployed_version:
+    subprocess.check_call(['npm', 'whoami'])
+    subprocess.check_call(['npm', 'install'])
     subprocess.check_call(['npm', 'publish'])
 
 if __name__ == '__main__':
