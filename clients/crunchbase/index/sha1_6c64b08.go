@@ -213,7 +213,7 @@ func (r RefOfMapOfStringToRefOfCompany) TargetValue(vr types.ValueReader) MapOfS
 }
 
 func (r RefOfMapOfStringToRefOfCompany) SetTargetValue(val MapOfStringToRefOfCompany, vw types.ValueWriter) RefOfMapOfStringToRefOfCompany {
-	return NewRefOfMapOfStringToRefOfCompany(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfMapOfStringToRefOfCompany)
 }
 
 // MapOfStringToRefOfCompany
@@ -407,5 +407,5 @@ func (r RefOfCompany) TargetValue(vr types.ValueReader) Company {
 }
 
 func (r RefOfCompany) SetTargetValue(val Company, vw types.ValueWriter) RefOfCompany {
-	return NewRefOfCompany(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfCompany)
 }

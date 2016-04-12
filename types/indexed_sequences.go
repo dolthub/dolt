@@ -21,7 +21,7 @@ func newIndexedMetaSequenceChunkFn(t Type, source ValueReader, sink ValueWriter)
 
 		meta := newMetaSequenceFromData(tuples, t, source)
 		if sink != nil {
-			r := newRef(sink.WriteValue(meta), MakeRefType(meta.Type()))
+			r := sink.WriteValue(meta)
 			return newMetaTuple(Uint64(tuples.uint64ValuesSum()), nil, r), meta
 		}
 		return newMetaTuple(Uint64(tuples.uint64ValuesSum()), meta, Ref{}), meta

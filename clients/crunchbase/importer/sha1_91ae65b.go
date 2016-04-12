@@ -958,5 +958,5 @@ func (r RefOfRound) TargetValue(vr types.ValueReader) Round {
 }
 
 func (r RefOfRound) SetTargetValue(val Round, vw types.ValueWriter) RefOfRound {
-	return NewRefOfRound(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfRound)
 }

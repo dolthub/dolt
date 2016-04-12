@@ -582,7 +582,7 @@ func (r RefOfValue) TargetValue(vr types.ValueReader) types.Value {
 }
 
 func (r RefOfValue) SetTargetValue(val types.Value, vw types.ValueWriter) RefOfValue {
-	return NewRefOfValue(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfValue)
 }
 
 // ListOfNode
@@ -1193,5 +1193,5 @@ func (r RefOfSQuadTree) TargetValue(vr types.ValueReader) SQuadTree {
 }
 
 func (r RefOfSQuadTree) SetTargetValue(val SQuadTree, vw types.ValueWriter) RefOfSQuadTree {
-	return NewRefOfSQuadTree(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfSQuadTree)
 }

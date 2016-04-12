@@ -17,7 +17,7 @@ func TestReadWriteCache(t *testing.T) {
 	var v types.Value = types.Bool(true)
 	assert.NotEqual(ref.Ref{}, ds.WriteValue(v))
 	assert.Equal(1, cs.Writes)
-	r := ds.WriteValue(v)
+	r := ds.WriteValue(v).TargetRef()
 	assert.Equal(1, cs.Writes)
 
 	v = ds.ReadValue(r)

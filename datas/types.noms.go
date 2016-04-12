@@ -468,5 +468,5 @@ func (r RefOfCommit) TargetValue(vr types.ValueReader) Commit {
 }
 
 func (r RefOfCommit) SetTargetValue(val Commit, vw types.ValueWriter) RefOfCommit {
-	return NewRefOfCommit(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfCommit)
 }

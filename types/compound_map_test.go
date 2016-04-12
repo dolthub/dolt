@@ -123,7 +123,7 @@ func TestCompoundMapHas(t *testing.T) {
 	doTest := func(tm testMap) {
 		vs := NewTestValueStore()
 		m := tm.toCompoundMap()
-		m2 := vs.ReadValue(vs.WriteValue(m)).(compoundMap)
+		m2 := vs.ReadValue(vs.WriteValue(m).TargetRef()).(compoundMap)
 		for _, entry := range tm.entries {
 			k, v := entry.key, entry.value
 			assert.True(m.Has(k))
@@ -380,10 +380,8 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	kvs := []Value{}
 	n := 5000
 	for i := 0; i < n; i++ {
-		rk := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i)}))
-		k := newRef(rk, refOfTypeStructType)
-		rv := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i + 1)}))
-		v := newRef(rv, refOfTypeStructType)
+		k := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i)}))
+		v := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i + 1)}))
 		kvs = append(kvs, k, v)
 	}
 
@@ -396,7 +394,7 @@ func TestCompoundMapModifyAfterRead(t *testing.T) {
 	vs := NewTestValueStore()
 	m := getTestNativeOrderMap(2).toCompoundMap()
 	// Drop chunk values.
-	m = vs.ReadValue(vs.WriteValue(m)).(compoundMap)
+	m = vs.ReadValue(vs.WriteValue(m).TargetRef()).(compoundMap)
 	// Modify/query. Once upon a time this would crash.
 	fst, fstval := m.First()
 	m = m.Remove(fst).(compoundMap)

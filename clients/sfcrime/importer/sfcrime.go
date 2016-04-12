@@ -38,7 +38,7 @@ type incidentWithIndex struct {
 }
 
 type refIndex struct {
-	ref   types.Ref
+	ref   types.RefBase
 	index int
 }
 
@@ -153,8 +153,7 @@ func main() {
 		fmt.Printf("Converting refs list to noms list: %.2f secs\n", time.Now().Sub(start).Seconds())
 	}
 
-	ref := ds.Store().WriteValue(incidentRefs)
-	_, err = ds.Commit(types.NewRef(ref))
+	_, err = ds.Commit(ds.Store().WriteValue(incidentRefs))
 	d.Exp.NoError(err)
 
 	if !*quietFlag {
@@ -174,8 +173,7 @@ func getNomsWriter(vw types.ValueWriter) (iChan chan incidentWithIndex, rChan ch
 		go func() {
 			for incidentRecord := range iChan {
 				v := incidentRecord.incident.New()
-				r := vw.WriteValue(v)
-				rChan <- refIndex{types.NewRef(r), incidentRecord.index}
+				rChan <- refIndex{vw.WriteValue(v), incidentRecord.index}
 			}
 			wg.Done()
 		}()

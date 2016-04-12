@@ -57,5 +57,5 @@ func (r Ref) TargetValue(vr ValueReader) Value {
 
 func (r Ref) SetTargetValue(val Value, vw ValueWriter) Ref {
 	assertType(r.t.Desc.(CompoundDesc).ElemTypes[0], val)
-	return newRef(vw.WriteValue(val), r.t)
+	return newRef(vw.WriteValue(val).TargetRef(), r.t)
 }

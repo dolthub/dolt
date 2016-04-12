@@ -66,7 +66,7 @@ func main() {
 
 	userRef := ds.Store().WriteValue(user)
 	fmt.Printf("userRef: %s\n", userRef)
-	_, err := ds.Commit(NewRefOfUser(userRef))
+	_, err := ds.Commit(userRef)
 	d.Exp.NoError(err)
 }
 
@@ -128,7 +128,7 @@ func getUser() User {
 		for {
 			album := <-ch
 			// TODO: batch write albums.
-			r := ds.Store().WriteValue(album)
+			r := ds.Store().WriteValue(album).TargetRef()
 			albums = append(albums, r)
 			wg.Done()
 		}
@@ -212,7 +212,7 @@ func getRemotePhotos(albumId string, numPhotos int, shapes shapeMap, progress ch
 
 				mu.Lock()
 				// TODO: batch write photos.
-				remotePhotos[ds.Store().WriteValue(p)] = true
+				remotePhotos[ds.Store().WriteValue(p).TargetRef()] = true
 				mu.Unlock()
 				progress <- struct{}{}
 			}

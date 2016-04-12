@@ -58,5 +58,5 @@ func (r RefOfBlob) TargetValue(vr ValueReader) Blob {
 }
 
 func (r RefOfBlob) SetTargetValue(val Blob, vw ValueWriter) RefOfBlob {
-	return NewRefOfBlob(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfBlob)
 }

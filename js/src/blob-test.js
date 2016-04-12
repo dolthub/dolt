@@ -52,7 +52,7 @@ suite('Blob', () => {
     const ds = new DataStore(ms);
 
     const b1 = await newBlob(randomArray(15));
-    const r1 = await ds.writeValue(b1);
+    const r1 = await ds.writeValue(b1).targetRef;
     const b2 = await ds.readValue(r1);
     assert.isTrue(b1.equals(b2));
   });

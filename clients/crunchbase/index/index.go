@@ -120,7 +120,7 @@ func main() {
 		for e := range c {
 			key := e.key
 			ref := e.ref
-			keyRef := ds.WriteValue(key)
+			keyRef := ds.WriteValue(key).TargetRef()
 			setDef := mapOfSets[keyRef]
 			if setDef == nil {
 				setDef = SetOfRefOfRoundDef{}

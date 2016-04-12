@@ -23,7 +23,7 @@ func TestGenericEnumWriteRead(t *testing.T) {
 
 	assert.False(vA.Equals(vB))
 
-	rA := vs.WriteValue(vA)
+	rA := vs.WriteValue(vA).TargetRef()
 	vA2 := vs.ReadValue(rA)
 
 	assert.True(vA.Equals(vA2))

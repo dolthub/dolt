@@ -463,7 +463,7 @@ func (r RefOfMapOfStringToValue) TargetValue(vr types.ValueReader) MapOfStringTo
 }
 
 func (r RefOfMapOfStringToValue) SetTargetValue(val MapOfStringToValue, vw types.ValueWriter) RefOfMapOfStringToValue {
-	return NewRefOfMapOfStringToValue(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfMapOfStringToValue)
 }
 
 // MapOfStringToValue
@@ -799,5 +799,5 @@ func (r RefOfListOfPitch) TargetValue(vr types.ValueReader) ListOfPitch {
 }
 
 func (r RefOfListOfPitch) SetTargetValue(val ListOfPitch, vw types.ValueWriter) RefOfListOfPitch {
-	return NewRefOfListOfPitch(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfListOfPitch)
 }

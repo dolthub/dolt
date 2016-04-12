@@ -115,11 +115,11 @@ func importCompanies(ds dataset.Dataset, fileName string) ref.Ref {
 			rounds := roundsByPermalink[permalink]
 			roundRefs := SetOfRefOfRoundDef{}
 			for _, r := range rounds {
-				ref := ds.Store().WriteValue(r)
+				ref := ds.Store().WriteValue(r).TargetRef()
 				roundRefs[ref] = true
 			}
 			company = company.SetRounds(roundRefs.New())
-			ref := ds.Store().WriteValue(company)
+			ref := ds.Store().WriteValue(company).TargetRef()
 			companyRefsDef[company.Permalink()] = ref
 		}
 	}
@@ -130,7 +130,7 @@ func importCompanies(ds dataset.Dataset, fileName string) ref.Ref {
 	//	fmt.Printf("\rImported %d companies with %d rounds\n", companyRefs.Len(), numRounds)
 
 	// Write the list of companyRefs
-	return ds.Store().WriteValue(companyRefs)
+	return ds.Store().WriteValue(companyRefs).TargetRef()
 }
 
 func getExistingCompaniesRef(ds dataset.Dataset, h hash.Hash) ref.Ref {

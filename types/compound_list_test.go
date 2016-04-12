@@ -114,7 +114,7 @@ func TestCompoundListGet(t *testing.T) {
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
 	cl := NewTypedList(tr, simpleList...).(compoundList)
 	testGet(cl)
-	testGet(vs.ReadValue(vs.WriteValue(cl)).(compoundList))
+	testGet(vs.ReadValue(vs.WriteValue(cl).TargetRef()).(compoundList))
 }
 
 func TestCompoundListIter(t *testing.T) {
@@ -643,8 +643,7 @@ func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
 		nums := []Value{}
 		for i := 0; i < n; i++ {
 			r := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i)}))
-			tr := newRef(r, refOfTypeStructType)
-			nums = append(nums, tr)
+			nums = append(nums, r)
 		}
 
 		return nums
@@ -661,7 +660,7 @@ func TestCompoundListModifyAfterRead(t *testing.T) {
 
 	list := getTestSimpleList().toCompoundList()
 	// Drop chunk values.
-	list = vs.ReadValue(vs.WriteValue(list)).(compoundList)
+	list = vs.ReadValue(vs.WriteValue(list).TargetRef()).(compoundList)
 	// Modify/query. Once upon a time this would crash.
 	llen := list.Len()
 	z := list.Get(0)

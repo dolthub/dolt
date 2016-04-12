@@ -169,7 +169,7 @@ func (r RefOfListOfString) TargetValue(vr types.ValueReader) ListOfString {
 }
 
 func (r RefOfListOfString) SetTargetValue(val ListOfString, vw types.ValueWriter) RefOfListOfString {
-	return NewRefOfListOfString(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfListOfString)
 }
 
 // ListOfRefOfFloat32
@@ -372,7 +372,7 @@ func (r RefOfSetOfFloat32) TargetValue(vr types.ValueReader) SetOfFloat32 {
 }
 
 func (r RefOfSetOfFloat32) SetTargetValue(val SetOfFloat32, vw types.ValueWriter) RefOfSetOfFloat32 {
-	return NewRefOfSetOfFloat32(vw.WriteValue(val))
+	return vw.WriteValue(val).(RefOfSetOfFloat32)
 }
 
 // ListOfString
@@ -575,7 +575,7 @@ func (r RefOfFloat32) TargetValue(vr types.ValueReader) float32 {
 }
 
 func (r RefOfFloat32) SetTargetValue(val float32, vw types.ValueWriter) RefOfFloat32 {
-	return NewRefOfFloat32(vw.WriteValue(types.Float32(val)))
+	return vw.WriteValue(types.Float32(val)).(RefOfFloat32)
 }
 
 // SetOfFloat32

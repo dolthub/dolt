@@ -11,6 +11,7 @@ import type {valueOrPrimitive} from './value.js';
 import {
   Field,
   makeCompoundType,
+  makeRefType,
   makeStructType,
   makeType,
   Type,
@@ -137,7 +138,7 @@ export default class DataStore {
     return p;
   }
 
-  writeValue(v: any, t: ?Type = undefined): Ref {
+  writeValue<T: valueOrPrimitive>(v: T, t: ?Type = undefined): RefValue<T> {
     if (!t) {
       switch (typeof v) {
         case 'string':
@@ -157,13 +158,14 @@ export default class DataStore {
     const chunk = encodeNomsValue(v, t, this);
     invariant(!chunk.isEmpty());
     const {ref} = chunk;
+    const refValue = new RefValue(ref, makeRefType(t));
     const entry = this._valueCache.entry(ref);
     if (entry && entry.present) {
-      return ref;
+      return refValue;
     }
     this._cs.put(chunk);
     this._valueCache.add(ref, chunk.data.length, Promise.resolve(v));
-    return ref;
+    return refValue;
   }
 
   async commit(datasetId: string, commit: Commit): Promise<DataStore> {
@@ -171,8 +173,7 @@ export default class DataStore {
     const datasetsP = this._datasetsFromRootRef(currentRootRefP);
     let currentDatasets = await (datasetsP:Promise<NomsMap>);
     const currentRootRef = await currentRootRefP;
-    const types = getDatasTypes();
-    const commitRef = new RefValue(this.writeValue(commit), types.refOfCommitType);
+    const commitRef = this.writeValue(commit);
 
     if (!currentRootRef.isEmpty()) {
       const currentHeadRef = await currentDatasets.get(datasetId);
@@ -187,7 +188,7 @@ export default class DataStore {
     }
 
     currentDatasets = await currentDatasets.set(datasetId, commitRef);
-    const newRootRef = this.writeValue(currentDatasets);
+    const newRootRef = this.writeValue(currentDatasets).targetRef;
     if (await this._cs.updateRoot(newRootRef, currentRootRef)) {
       return new DataStore(this._cs);
     }

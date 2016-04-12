@@ -110,7 +110,7 @@ suite('BuildSet', () => {
     const nums = firstNNumbers(testSetSize);
     const tr = makeCompoundType(Kind.Set, int64Type);
     const s = await newSet(nums, tr);
-    const r = ds.writeValue(s);
+    const r = ds.writeValue(s).targetRef;
     const s2 = await ds.readValue(r);
     const outNums = [];
     await s2.forEach(k => outNums.push(k));
@@ -200,11 +200,9 @@ suite('SetLeaf', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, elemType);
-    const st = stringType;
-    const refOfSt = makeCompoundType(Kind.Ref, st);
-    const r1 = new RefValue(ds.writeValue('x'), refOfSt);
-    const r2 = new RefValue(ds.writeValue('a'), refOfSt);
-    const r3 = new RefValue(ds.writeValue('b'), refOfSt);
+    const r1 = ds.writeValue('x');
+    const r2 = ds.writeValue('a');
+    const r3 = ds.writeValue('b');
     const l = new NomsSet(tr, new SetLeafSequence(ds, tr, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
     assert.isTrue(r1.equals(l.chunks[0]));
@@ -229,7 +227,7 @@ suite('CompoundSet', () => {
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
       const l = new NomsSet(tr, new SetLeafSequence(ds, tr, [values[i], values[i + 1]]));
-      const r = ds.writeValue(l);
+      const r = ds.writeValue(l).targetRef;
       tuples.push(new MetaTuple(r, values[i + 1]));
     }
 
@@ -238,7 +236,7 @@ suite('CompoundSet', () => {
       const next = [];
       for (let i = 0; i < tuples.length; i += 2) {
         last = new NomsSet(tr, new OrderedMetaSequence(ds, tr, [tuples[i], tuples[i + 1]]));
-        const r = ds.writeValue(last);
+        const r = ds.writeValue(last).targetRef;
         next.push(new MetaTuple(r, tuples[i + 1].value));
       }
 

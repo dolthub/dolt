@@ -137,7 +137,7 @@ func getIndex(input ListOfRefOfMapOfStringToValue, vrw types.ValueReadWriter) Ma
 	namedPitchCounts := MapOfStringToRefOfListOfPitchDef{}
 	for id, p := range pitchCounts {
 		if name, ok := pitchers[id]; d.Chk.True(ok, "Unknown pitcher: %s", id) {
-			namedPitchCounts[name] = vrw.WriteValue(p.New())
+			namedPitchCounts[name] = vrw.WriteValue(p.New()).TargetRef()
 		}
 	}
 	return namedPitchCounts.New()

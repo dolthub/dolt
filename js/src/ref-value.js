@@ -3,12 +3,12 @@
 import type DataStore from './data-store.js';
 import type Ref from './ref.js';
 import type {Type} from './type.js';
-import type {Value} from './value.js'; // eslint-disable-line no-unused-vars
+import type {Value, valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant} from './assert.js';
 import {refOfValueType} from './type.js';
 import {ValueBase} from './value.js';
 
-export default class RefValue<T: Value> extends ValueBase {
+export default class RefValue<T: valueOrPrimitive> extends ValueBase {
   _type: Type;
   targetRef: Ref;
 

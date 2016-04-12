@@ -27,11 +27,11 @@ func TestTypes(t *testing.T) {
 	pkgRef := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
 	trType := MakeType(pkgRef, 42)
 
-	mRef := vs.WriteValue(mapType)
-	setRef := vs.WriteValue(setType)
-	otherRef := vs.WriteValue(otherType)
-	mahRef := vs.WriteValue(mahType)
-	trRef := vs.WriteValue(trType)
+	mRef := vs.WriteValue(mapType).TargetRef()
+	setRef := vs.WriteValue(setType).TargetRef()
+	otherRef := vs.WriteValue(otherType).TargetRef()
+	mahRef := vs.WriteValue(mahType).TargetRef()
+	trRef := vs.WriteValue(trType).TargetRef()
 
 	assert.True(otherType.Equals(vs.ReadValue(otherRef)))
 	assert.True(mapType.Equals(vs.ReadValue(mRef)))
@@ -48,7 +48,7 @@ func TestTypeWithPkgRef(t *testing.T) {
 
 	pkgRef := RegisterPackage(&pkg)
 	unresolvedType := MakeType(pkgRef, 42)
-	unresolvedRef := vs.WriteValue(unresolvedType)
+	unresolvedRef := vs.WriteValue(unresolvedType).TargetRef()
 
 	v := vs.ReadValue(unresolvedRef)
 	assert.EqualValues(pkgRef, v.Chunks()[0].TargetRef())

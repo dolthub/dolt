@@ -60,8 +60,8 @@ func main() {
 	printStats(user)
 
 	userRef := ds.Store().WriteValue(user)
-	fmt.Printf("userRef: %s\n", userRef)
-	_, err := ds.Commit(NewRefOfUser(userRef))
+	fmt.Printf("userRef: %s\n", userRef.TargetRef())
+	_, err := ds.Commit(userRef)
 	d.Exp.NoError(err)
 }
 
@@ -119,7 +119,7 @@ func getPhotos() SetOfRefOfRemotePhoto {
 				float32(entry.Images[0].Width),
 				float32(entry.Images[0].Height)))
 
-			photos = photos.Insert(NewRefOfRemotePhoto(ds.Store().WriteValue(photo)))
+			photos = photos.Insert(ds.Store().WriteValue(photo).(RefOfRemotePhoto))
 
 			numFetched++
 			// Be defensive and use Min(1.0) here - the user might have more than 1000 albums, or they

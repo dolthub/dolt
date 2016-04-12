@@ -90,7 +90,7 @@ func TestCompoundBlobReader(t *testing.T) {
 	test(cb)
 
 	vs := NewTestValueStore()
-	test(vs.ReadValue(vs.WriteValue(cb)).(compoundBlob))
+	test(vs.ReadValue(vs.WriteValue(cb).TargetRef()).(compoundBlob))
 }
 
 type testBlob struct {

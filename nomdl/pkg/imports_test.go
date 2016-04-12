@@ -36,7 +36,7 @@ func (suite *ImportTestSuite) SetupTest() {
 		types.Field{"i", types.MakePrimitiveType(types.Int8Kind), false},
 	})
 	suite.nested = types.NewPackage([]types.Type{ns}, []ref.Ref{})
-	suite.nestedRef = suite.vrw.WriteValue(suite.nested)
+	suite.nestedRef = suite.vrw.WriteValue(suite.nested).TargetRef()
 
 	fs := types.MakeStructType("ForeignStruct", []types.Field{
 		types.Field{"b", types.MakeType(ref.Ref{}, 1), false},
@@ -45,7 +45,7 @@ func (suite *ImportTestSuite) SetupTest() {
 		types.Choices{})
 	fe := types.MakeEnumType("ForeignEnum", "uno", "dos")
 	suite.imported = types.NewPackage([]types.Type{fs, fe}, []ref.Ref{suite.nestedRef})
-	suite.importRef = suite.vrw.WriteValue(suite.imported)
+	suite.importRef = suite.vrw.WriteValue(suite.imported).TargetRef()
 }
 
 func (suite *ImportTestSuite) TestGetDeps() {
@@ -119,7 +119,7 @@ func (suite *ImportTestSuite) TestImports() {
 		suite.NoError(err)
 		defer inFile.Close()
 		parsedDep := ParseNomDL("", inFile, filepath.Dir(path), ds)
-		return ds.WriteValue(parsedDep.Package)
+		return ds.WriteValue(parsedDep.Package).TargetRef()
 	}
 
 	dir, err := ioutil.TempDir("", "")
@@ -218,7 +218,7 @@ func (suite *ImportTestSuite) TestImportWithLocalRef() {
 			X: Int64
 		}`)
 	pkg1 := ParseNomDL("test1", r1, dir, suite.vrw)
-	pkgRef1 := suite.vrw.WriteValue(pkg1.Package)
+	pkgRef1 := suite.vrw.WriteValue(pkg1.Package).TargetRef()
 
 	r2 := strings.NewReader(fmt.Sprintf(`
 		alias Other = import "%s"

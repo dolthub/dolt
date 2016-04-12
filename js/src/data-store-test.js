@@ -3,7 +3,6 @@
 import {suite, test} from 'mocha';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
-import RefValue from './ref-value.js';
 import {assert} from 'chai';
 import {default as DataStore, getDatasTypes, newCommit} from './data-store.js';
 import {invariant, notNull} from './assert.js';
@@ -144,9 +143,9 @@ suite('DataStore', () => {
 
     const commit = await newCommit('foo', []);
 
-    const commitRef = new RefValue(ds.writeValue(commit), types.refOfCommitType);
+    const commitRef = ds.writeValue(commit);
     const datasets = await newMap(['foo', commitRef], types.commitMapType);
-    const rootRef = ds.writeValue(datasets);
+    const rootRef = ds.writeValue(datasets).targetRef;
     assert.isTrue(await ms.updateRoot(rootRef, new Ref()));
     ds = new DataStore(ms); // refresh the datasets
 
@@ -161,14 +160,14 @@ suite('DataStore', () => {
   test('writeValue optional type', async () => {
     const ds = new DataStore(new MemoryStore());
 
-    const r1 = ds.writeValue('hello');
-    const r2 = ds.writeValue(false);
+    const r1 = ds.writeValue('hello').targetRef;
+    const r2 = ds.writeValue(false).targetRef;
 
     assert.throws(() => {
       ds.writeValue(1);
     });
 
-    const r3 = ds.writeValue(2, uint8Type);
+    const r3 = ds.writeValue(2, uint8Type).targetRef;
 
     const v1 = await ds.readValue(r1);
     assert.equal('hello', v1);
@@ -179,7 +178,7 @@ suite('DataStore', () => {
 
     const mt = makeCompoundType(Kind.Map, uint8Type, stringType);
     const m = await newMap([3, 'b', 4, 'c'], mt);
-    const r4 = ds.writeValue(m);
+    const r4 = ds.writeValue(m).targetRef;
     const v4 = await ds.readValue(r4);
     assert.isTrue(m.equals(v4));
   });
@@ -188,11 +187,11 @@ suite('DataStore', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms, 1e6);
 
-    const r1 = ds.writeValue('hello');
+    const r1 = ds.writeValue('hello').targetRef;
     (ms: any).get = (ms: any).put = () => { assert.fail('unreachable'); };
     const v1 = await ds.readValue(r1);
     assert.equal(v1, 'hello');
-    const r2 = ds.writeValue('hello');
+    const r2 = ds.writeValue('hello').targetRef;
     assert.isTrue(r1.equals(r2));
   });
 
@@ -200,8 +199,8 @@ suite('DataStore', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms, 15);
 
-    const r1 = ds.writeValue('hello');
-    const r2 = ds.writeValue('world');
+    const r1 = ds.writeValue('hello').targetRef;
+    const r2 = ds.writeValue('world').targetRef;
     (ms: any).get = () => { throw new Error(); };
     const v2 = await ds.readValue(r2);
     assert.equal(v2, 'world');

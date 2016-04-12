@@ -37,7 +37,7 @@ func resolveImports(aliases map[string]string, includePath string, vrw types.Val
 			d.Chk.NoError(err)
 			defer inFile.Close()
 			parsedDep := ParseNomDL(alias, inFile, filepath.Dir(canonical), vrw)
-			imports[alias] = vrw.WriteValue(parsedDep.Package)
+			imports[alias] = vrw.WriteValue(parsedDep.Package).TargetRef()
 		} else {
 			imports[alias] = r
 		}
