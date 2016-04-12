@@ -28,8 +28,7 @@ let rootRef: Ref;
 let dataStore: DataStore;
 
 let renderNode: ?HTMLElement;
-
-const params = {};
+let params;
 
 window.onload = load;
 window.onpopstate = load;
@@ -38,6 +37,7 @@ window.onresize = render;
 function load() {
   renderNode = document.getElementById('splore');
 
+  params = {};
   const paramsIdx = location.href.indexOf('?');
   if (paramsIdx > -1) {
     decodeURIComponent(location.href.slice(paramsIdx + 1)).split('&').forEach(pair => {
@@ -247,7 +247,7 @@ class Prompt extends React.Component<void, {}, void> {
       justifyContent: 'center'}}>
       <div style={fontStyle}>
         Can haz datastore?
-        <form style={{margin:'0.5em 0'}} onSubmit={() => this._handleOnSubmit()}>
+        <form style={{margin:'0.5em 0'}} onSubmit={e => this._handleOnSubmit(e)}>
           <input type='text' ref='store' autoFocus={true} style={inputStyle}
             defaultValue={params.store || 'http://api.noms.io/-/ds/[user]'}
             placeholder='noms store URL'
@@ -266,17 +266,18 @@ class Prompt extends React.Component<void, {}, void> {
     </div>;
   }
 
-  _handleOnSubmit() {
+  _handleOnSubmit(e) {
+    e.preventDefault();
     const {store, token, ref} = this.refs;
-    let params = 'store=' + store.value;
+    let qs = '?store=' + store.value;
     if (token.value) {
-      params += '&token=' + token.value;
+      qs += '&token=' + token.value;
     }
     if (ref.value) {
-      params += '&ref=' + ref.value;
+      qs += '&ref=' + ref.value;
     }
-    window.location.pushState({}, undefined, '?' + params);
-    render();
+    window.history.pushState({}, undefined, qs);
+    load();
   }
 }
 
