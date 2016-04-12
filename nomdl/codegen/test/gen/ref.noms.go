@@ -168,10 +168,6 @@ func (r RefOfListOfString) TargetValue(vr types.ValueReader) ListOfString {
 	return vr.ReadValue(r.target).(ListOfString)
 }
 
-func (r RefOfListOfString) SetTargetValue(val ListOfString, vw types.ValueWriter) RefOfListOfString {
-	return vw.WriteValue(val).(RefOfListOfString)
-}
-
 // ListOfRefOfFloat32
 
 type ListOfRefOfFloat32 struct {
@@ -371,10 +367,6 @@ func (r RefOfSetOfFloat32) TargetValue(vr types.ValueReader) SetOfFloat32 {
 	return vr.ReadValue(r.target).(SetOfFloat32)
 }
 
-func (r RefOfSetOfFloat32) SetTargetValue(val SetOfFloat32, vw types.ValueWriter) RefOfSetOfFloat32 {
-	return vw.WriteValue(val).(RefOfSetOfFloat32)
-}
-
 // ListOfString
 
 type ListOfString struct {
@@ -572,10 +564,6 @@ func builderForRefOfFloat32(r ref.Ref) types.RefBase {
 
 func (r RefOfFloat32) TargetValue(vr types.ValueReader) float32 {
 	return float32(vr.ReadValue(r.target).(types.Float32))
-}
-
-func (r RefOfFloat32) SetTargetValue(val float32, vw types.ValueWriter) RefOfFloat32 {
-	return vw.WriteValue(types.Float32(val)).(RefOfFloat32)
 }
 
 // SetOfFloat32

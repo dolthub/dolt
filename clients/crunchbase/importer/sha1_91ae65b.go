@@ -956,7 +956,3 @@ func builderForRefOfRound(r ref.Ref) types.RefBase {
 func (r RefOfRound) TargetValue(vr types.ValueReader) Round {
 	return vr.ReadValue(r.target).(Round)
 }
-
-func (r RefOfRound) SetTargetValue(val Round, vw types.ValueWriter) RefOfRound {
-	return vw.WriteValue(val).(RefOfRound)
-}

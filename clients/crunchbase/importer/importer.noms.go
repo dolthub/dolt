@@ -212,10 +212,6 @@ func (r RefOfMapOfStringToRefOfCompany) TargetValue(vr types.ValueReader) MapOfS
 	return vr.ReadValue(r.target).(MapOfStringToRefOfCompany)
 }
 
-func (r RefOfMapOfStringToRefOfCompany) SetTargetValue(val MapOfStringToRefOfCompany, vw types.ValueWriter) RefOfMapOfStringToRefOfCompany {
-	return vw.WriteValue(val).(RefOfMapOfStringToRefOfCompany)
-}
-
 // MapOfStringToRefOfCompany
 
 type MapOfStringToRefOfCompany struct {
@@ -404,8 +400,4 @@ func builderForRefOfCompany(r ref.Ref) types.RefBase {
 
 func (r RefOfCompany) TargetValue(vr types.ValueReader) Company {
 	return vr.ReadValue(r.target).(Company)
-}
-
-func (r RefOfCompany) SetTargetValue(val Company, vw types.ValueWriter) RefOfCompany {
-	return vw.WriteValue(val).(RefOfCompany)
 }

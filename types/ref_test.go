@@ -39,30 +39,6 @@ func TestRefInMap(t *testing.T) {
 	assert.Equal(int32(1), int32(i.(Int32)))
 }
 
-func TestRefType(t *testing.T) {
-	assert := assert.New(t)
-	vs := NewTestValueStore()
-
-	tr := MakeCompoundType(RefKind, MakePrimitiveType(ValueKind))
-
-	l := NewList()
-	r := NewRef(l.Ref())
-	assert.True(r.Type().Equals(tr))
-
-	m := NewMap()
-	r2 := r.SetTargetValue(m, vs)
-	assert.True(r2.Type().Equals(tr))
-
-	b := Bool(true)
-	r2 = r.SetTargetValue(b, vs)
-	r2.t = MakeCompoundType(RefKind, b.Type())
-
-	r3 := r2.SetTargetValue(Bool(false), vs)
-	assert.True(r2.Type().Equals(r3.Type()))
-
-	assert.Panics(func() { r2.SetTargetValue(Int16(1), vs) })
-}
-
 func TestRefChunks(t *testing.T) {
 	assert := assert.New(t)
 

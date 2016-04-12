@@ -343,10 +343,6 @@ func (r RefOfUser) TargetValue(vr types.ValueReader) User {
 	return vr.ReadValue(r.target).(User)
 }
 
-func (r RefOfUser) SetTargetValue(val User, vw types.ValueWriter) RefOfUser {
-	return vw.WriteValue(val).(RefOfUser)
-}
-
 // ListOfRefOfAlbum
 
 type ListOfRefOfAlbum struct {
@@ -691,10 +687,6 @@ func (r RefOfAlbum) TargetValue(vr types.ValueReader) Album {
 	return vr.ReadValue(r.target).(Album)
 }
 
-func (r RefOfAlbum) SetTargetValue(val Album, vw types.ValueWriter) RefOfAlbum {
-	return vw.WriteValue(val).(RefOfAlbum)
-}
-
 // RefOfRemotePhoto
 
 type RefOfRemotePhoto struct {
@@ -750,8 +742,4 @@ func builderForRefOfRemotePhoto(r ref.Ref) types.RefBase {
 
 func (r RefOfRemotePhoto) TargetValue(vr types.ValueReader) RemotePhoto {
 	return vr.ReadValue(r.target).(RemotePhoto)
-}
-
-func (r RefOfRemotePhoto) SetTargetValue(val RemotePhoto, vw types.ValueWriter) RefOfRemotePhoto {
-	return vw.WriteValue(val).(RefOfRemotePhoto)
 }

@@ -660,7 +660,3 @@ func builderForRefOfKey(r ref.Ref) types.RefBase {
 func (r RefOfKey) TargetValue(vr types.ValueReader) Key {
 	return vr.ReadValue(r.target).(Key)
 }
-
-func (r RefOfKey) SetTargetValue(val Key, vw types.ValueWriter) RefOfKey {
-	return vw.WriteValue(val).(RefOfKey)
-}

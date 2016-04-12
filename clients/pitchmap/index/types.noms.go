@@ -462,10 +462,6 @@ func (r RefOfMapOfStringToValue) TargetValue(vr types.ValueReader) MapOfStringTo
 	return vr.ReadValue(r.target).(MapOfStringToValue)
 }
 
-func (r RefOfMapOfStringToValue) SetTargetValue(val MapOfStringToValue, vw types.ValueWriter) RefOfMapOfStringToValue {
-	return vw.WriteValue(val).(RefOfMapOfStringToValue)
-}
-
 // MapOfStringToValue
 
 type MapOfStringToValue struct {
@@ -796,8 +792,4 @@ func builderForRefOfListOfPitch(r ref.Ref) types.RefBase {
 
 func (r RefOfListOfPitch) TargetValue(vr types.ValueReader) ListOfPitch {
 	return vr.ReadValue(r.target).(ListOfPitch)
-}
-
-func (r RefOfListOfPitch) SetTargetValue(val ListOfPitch, vw types.ValueWriter) RefOfListOfPitch {
-	return vw.WriteValue(val).(RefOfListOfPitch)
 }

@@ -54,8 +54,3 @@ func (r Ref) Less(other OrderedValue) bool {
 func (r Ref) TargetValue(vr ValueReader) Value {
 	return vr.ReadValue(r.target)
 }
-
-func (r Ref) SetTargetValue(val Value, vw ValueWriter) Ref {
-	assertType(r.t.Desc.(CompoundDesc).ElemTypes[0], val)
-	return newRef(vw.WriteValue(val).TargetRef(), r.t)
-}

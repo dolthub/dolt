@@ -466,7 +466,3 @@ func builderForRefOfCommit(r ref.Ref) types.RefBase {
 func (r RefOfCommit) TargetValue(vr types.ValueReader) Commit {
 	return vr.ReadValue(r.target).(Commit)
 }
-
-func (r RefOfCommit) SetTargetValue(val Commit, vw types.ValueWriter) RefOfCommit {
-	return vw.WriteValue(val).(RefOfCommit)
-}
