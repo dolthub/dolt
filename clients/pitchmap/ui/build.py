@@ -12,8 +12,8 @@ def main():
     symlink.Force('../../../js/.flowconfig', os.path.abspath('.flowconfig'))
 
     subprocess.check_call(['npm', 'install'], shell=False)
-    # TODO: Publish noms-webpack-config to npm.
-    subprocess.check_call(['npm', 'install', 'noms-webpack-config'], shell=False)
+    # TODO: Publish @attic/webpack-config to npm.
+    subprocess.check_call(['npm', 'install', '@attic/webpack-config'], shell=False)
     subprocess.check_call(['npm', 'run', 'build'], env=os.environ, shell=False)
 
 

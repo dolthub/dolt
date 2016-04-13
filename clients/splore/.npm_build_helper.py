@@ -11,7 +11,7 @@ def main():
     env['BABEL_ENV'] = sys.argv[1]
     subprocess.check_call(
             ['node_modules/.bin/webpack',
-                '--config', 'node_modules/noms-webpack-config/index.js'] + SRC + [OUT],
+                '--config', 'node_modules/@attic/webpack-config/index.js'] + SRC + [OUT],
             env=env, shell=False)
 
 

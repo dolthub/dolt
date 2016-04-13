@@ -1,6 +1,5 @@
 build/
 src/
-webpack-config/
 .*
 *.tgz
 *-test.js
