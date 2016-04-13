@@ -2,7 +2,7 @@
   "name": "noms-crunchbase-ui",
   "devDependencies": {
     "@attic/noms": "^4.0.1",
-    "@attic/webpack-config": "file:../../../jsmodules/webpack-config",
+    "@attic/webpack-config": "^1.0.1",
     "babel-cli": "6.6.5",
     "babel-core": "6.7.2",
     "babel-eslint": "5.0.0",
