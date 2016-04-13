@@ -57,17 +57,17 @@ func (ds *Dataset) CommitWithParents(v types.Value, p datas.SetOfRefOfCommit) (D
 	return Dataset{store, ds.id}, err
 }
 
-func (ds *Dataset) Pull(sourceStore datas.DataStore, sourceRef ref.Ref, concurrency int) (Dataset, error) {
+func (ds *Dataset) Pull(sourceStore datas.DataStore, sourceRef datas.RefOfCommit, concurrency int) (Dataset, error) {
 	_, topDown := ds.Store().(*datas.LocalDataStore)
 	return ds.pull(sourceStore, sourceRef, concurrency, topDown)
 }
 
-func (ds *Dataset) pull(source datas.DataStore, sourceRef ref.Ref, concurrency int, topDown bool) (Dataset, error) {
+func (ds *Dataset) pull(source datas.DataStore, sourceRef datas.RefOfCommit, concurrency int, topDown bool) (Dataset, error) {
 	sink := *ds
 
-	sinkHeadRef := ref.Ref{}
+	sinkHeadRef := datas.NewRefOfCommit(ref.Ref{})
 	if currentHead, ok := sink.MaybeHead(); ok {
-		sinkHeadRef = currentHead.Ref()
+		sinkHeadRef = datas.NewRefOfCommit(currentHead.Ref())
 	}
 
 	if sourceRef == sinkHeadRef {
@@ -87,8 +87,8 @@ func (ds *Dataset) pull(source datas.DataStore, sourceRef ref.Ref, concurrency i
 	return sink, err
 }
 
-func (ds *Dataset) validateRefAsCommit(r ref.Ref) datas.Commit {
-	v := ds.store.ReadValue(r)
+func (ds *Dataset) validateRefAsCommit(r datas.RefOfCommit) datas.Commit {
+	v := ds.store.ReadValue(r.TargetRef())
 
 	d.Exp.NotNil(v, "%v cannot be found", r)
 	d.Exp.True(v.Type().Equals(datas.NewCommit().Type()), "Not a Commit: %+v", v)
@@ -96,7 +96,7 @@ func (ds *Dataset) validateRefAsCommit(r ref.Ref) datas.Commit {
 }
 
 // setNewHead takes the Ref of the desired new Head of ds, the chunk for which should already exist in the Dataset. It validates that the Ref points to an existing chunk that decodes to the correct type of value and then commits it to ds, returning a new Dataset with newHeadRef set and ok set to true. In the event that the commit fails, ok is set to false and a new up-to-date Dataset is returned WITHOUT newHeadRef in it. The caller should take any necessary corrective action and try again using this new Dataset.
-func (ds *Dataset) setNewHead(newHeadRef ref.Ref) (Dataset, error) {
+func (ds *Dataset) setNewHead(newHeadRef datas.RefOfCommit) (Dataset, error) {
 	commit := ds.validateRefAsCommit(newHeadRef)
 	return ds.CommitWithParents(commit.Value(), commit.Parents())
 }
