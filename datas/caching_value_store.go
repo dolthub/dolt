@@ -53,12 +53,27 @@ func (cvs *cachingValueStore) ReadValue(r ref.Ref) types.Value {
 	var entry chunkCacheEntry = absentChunk{}
 	if v != nil {
 		entry = presentChunk(v.Type())
-		for _, reachable := range v.Chunks() {
-			cvs.checkAndSet(reachable.TargetRef(), hintedChunk{getTargetType(reachable), r})
+		cvs.cacheChunks(v, r)
+	}
+	if cur := cvs.check(r); cur == nil || cur.Hint().IsEmpty() {
+		cvs.set(r, entry)
+	}
+	return v
+}
+
+func (cvs *cachingValueStore) cacheChunks(v types.Value, r ref.Ref) {
+	for _, reachable := range v.Chunks() {
+		hash := reachable.TargetRef()
+		if cur := cvs.check(hash); cur == nil || cur.Hint().IsEmpty() {
+			cvs.set(hash, hintedChunk{getTargetType(reachable), r})
+			// Code-genned Packages are side-loaded when reading Values for performance reasons. This means that they won't pass through the ReadValue() codepath above, which means that they won't have their Chunks added to the cache. So, if reachable is a RefOfPackage, go look the package up in the types.PackageRegistry and recursively add its Chunks to the cache.
+			if _, ok := reachable.(types.RefOfPackage); ok {
+				if p := types.LookupPackage(hash); p != nil {
+					cvs.cacheChunks(p, hash)
+				}
+			}
 		}
 	}
-	cvs.checkAndSet(r, entry)
-	return v
 }
 
 func (cvs *cachingValueStore) isPresent(r ref.Ref) (present bool) {
