@@ -30,8 +30,8 @@ import type {Type} from './type.js';
 
 const testMapSize = 1000;
 const mapOfNRef = 'sha1-b88cd90f3bd0b826bcd9bf57ea28bff15d1d141a';
-const smallRandomMapSize = 100;
-const randomMapSize = 1000;
+const smallRandomMapSize = 50;
+const randomMapSize = 500;
 
 class CountingMemoryStore extends MemoryStore {
   getCount: number;
