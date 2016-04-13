@@ -20,11 +20,6 @@ before_script:
 - ./build.py
 - npm test
 - popd
-- pushd clients/pitchmap/ui
-- npm prune
-- ./build.py
-- npm test
-- popd
 - pushd clients/crunchbase/ui
 - npm prune
 - ./build.py
@@ -50,7 +45,6 @@ cache:
   directories:
   - js/node_modules
   - clients/crunchbase/ui/node_modules
-  - clients/pitchmap/ui/node_modules
   - clients/splore/node_modules
   - nomdl/codegen/test/node_modules
 deploy:
