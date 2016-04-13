@@ -11,9 +11,9 @@ go build
 ./counter -ldb="/tmp/servertest" -ds="counter"
 ./counter -ldb="/tmp/servertest" -ds="counter"
 
-cd ../datastore_server
+cd ../server
 go build
-./datastore_server -ldb="/tmp/servertest" &
+./server -ldb="/tmp/servertest" &
 ```
 
 Then navigate a web browser to [http://localhost:8000/root](http://localhost:8000/root). You should see a string starting with `sha1-...`. This _ref_ is the unique identifier for the current state of the datastore. You can explore it further by fetching URLs like http://localhost:8000/ref/sha1-...
