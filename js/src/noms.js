@@ -8,7 +8,7 @@ export {decodeNomsValue} from './decode.js';
 export {default as Chunk} from './chunk.js';
 export {default as HttpStore} from './http-store.js';
 export {default as MemoryStore} from './memory-store.js';
-export {default as Ref, emptyRef} from './ref.js';
+export {default as Ref} from './ref.js';
 export {default as RefValue} from './ref-value.js';
 export {default as Struct, StructMirror, newStruct, createStructClass} from './struct.js';
 export {encodeNomsValue} from './encode.js';
