@@ -2,7 +2,7 @@
   "name": "noms-splore",
   "devDependencies": {
     "@attic/noms": "^4.0.1",
-    "@attic/webpack-config": "^1.0.1",
+    "@attic/webpack-config": "^2.0.0",
     "babel-cli": "6.6.5",
     "babel-core": "6.7.2",
     "babel-eslint": "5.0.0",
@@ -28,8 +28,8 @@
     "react-dom": "^0.14.1"
   },
   "scripts": {
-    "start": "python .npm_build_helper.py development",
-    "build": "python .npm_build_helper.py production",
+    "start": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js development",
+    "build": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js production",
     "test": "eslint src/ && flow src/"
   }
 }
