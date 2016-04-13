@@ -4,6 +4,7 @@ import (
 	"io"
 	"io/ioutil"
 
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -44,6 +45,22 @@ func (rts ReadThroughStore) Has(ref ref.Ref) bool {
 func (rts ReadThroughStore) Put(c Chunk) {
 	rts.backingStore.Put(c)
 	rts.cachingStore.Put(c)
+}
+
+func (rts ReadThroughStore) PutMany(chunks []Chunk) BackpressureError {
+	bpe := rts.backingStore.PutMany(chunks)
+	lookup := make(map[ref.Ref]bool, len(bpe))
+	for _, c := range bpe {
+		lookup[c.Ref()] = true
+	}
+	toPut := make([]Chunk, 0, len(chunks)-len(bpe))
+	for _, c := range chunks {
+		if lookup[c.Ref()] {
+			toPut = append(toPut, c)
+		}
+	}
+	d.Chk.NoError(rts.cachingStore.PutMany(toPut))
+	return bpe
 }
 
 func (rts ReadThroughStore) Root() ref.Ref {

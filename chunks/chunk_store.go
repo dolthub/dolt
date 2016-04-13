@@ -1,6 +1,7 @@
 package chunks
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/attic-labs/noms/ref"
@@ -38,6 +39,18 @@ type ChunkSource interface {
 
 // ChunkSink is a place to put chunks.
 type ChunkSink interface {
+	// Put writes c into the ChunkSink, blocking until the operation is complete.
 	Put(c Chunk)
+
+	// PutMany tries to write chunks into the sink. It will block as it handles as many as possible, then return a BackpressureError containing the rest (if any).
+	PutMany(chunks []Chunk) BackpressureError
+
 	io.Closer
+}
+
+// BackpressureError is a slice of Chunk that indicates some chunks could not be Put(). Caller is free to try to Put them again later.
+type BackpressureError []Chunk
+
+func (b BackpressureError) Error() string {
+	return fmt.Sprintf("Tried to Put %d too many Chunks", len(b))
 }

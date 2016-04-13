@@ -24,6 +24,9 @@ const (
 	dynamoMaxPutSize    = 400 * 1024 // 400K
 	dynamoWriteUnitSize = 1024       // 1K
 
+	readBufferSize  = 1 << 12 // 4k
+	writeBufferSize = dynamoMaxPutCount
+
 	dynamoTableName = "noms"
 	refAttr         = "ref"
 	chunkAttr       = "chunk"
@@ -60,7 +63,7 @@ type DynamoStore struct {
 	writeCompTotal  uint64
 	readTime        int64
 	readBatchCount  int64
-	readQueue       chan readRequest
+	readQueue       chan ReadRequest
 	writeQueue      chan Chunk
 	finishedChan    chan struct{}
 	requestWg       *sync.WaitGroup
@@ -85,7 +88,7 @@ func newDynamoStoreFromDDBsvc(table, namespace string, ddb ddbsvc) *DynamoStore 
 		table:         table,
 		namespace:     []byte(namespace),
 		ddbsvc:        ddb,
-		readQueue:     make(chan readRequest, readBufferSize),
+		readQueue:     make(chan ReadRequest, readBufferSize),
 		writeQueue:    make(chan Chunk, writeBufferSize),
 		finishedChan:  make(chan struct{}),
 		requestWg:     &sync.WaitGroup{},
@@ -107,7 +110,7 @@ func (s *DynamoStore) Get(r ref.Ref) Chunk {
 
 	ch := make(chan Chunk)
 	s.requestWg.Add(1)
-	s.readQueue <- getRequest{r, ch}
+	s.readQueue <- GetRequest{r, ch}
 	return <-ch
 }
 
@@ -119,8 +122,24 @@ func (s *DynamoStore) Has(r ref.Ref) bool {
 
 	ch := make(chan bool)
 	s.requestWg.Add(1)
-	s.readQueue <- hasRequest{r, ch}
+	s.readQueue <- HasRequest{r, ch}
 	return <-ch
+}
+
+func (s *DynamoStore) PutMany(chunks []Chunk) (e BackpressureError) {
+	for i, c := range chunks {
+		if s.unwrittenPuts.Has(c) {
+			continue
+		}
+		select {
+		case s.writeQueue <- c:
+			s.requestWg.Add(1)
+			s.unwrittenPuts.Add(c)
+		default:
+			return BackpressureError(chunks[i:])
+		}
+	}
+	return
 }
 
 func (s *DynamoStore) Put(c Chunk) {
@@ -148,16 +167,16 @@ func (s *DynamoStore) batchGetRequests() {
 	}()
 }
 
-func (s *DynamoStore) sendGetRequests(req readRequest) {
+func (s *DynamoStore) sendGetRequests(req ReadRequest) {
 	n := time.Now().UnixNano()
 	defer func() {
 		s.readBatchCount++
 		s.readTime += time.Now().UnixNano() - n
 	}()
-	batch := readBatch{}
+	batch := ReadBatch{}
 	refs := map[ref.Ref]bool{}
 
-	addReq := func(req readRequest) {
+	addReq := func(req ReadRequest) {
 		r := req.Ref()
 		batch[r] = append(batch[r], req.Outstanding())
 		refs[r] = true
@@ -203,7 +222,7 @@ func (s *DynamoStore) buildRequestItems(refs map[ref.Ref]bool) map[string]*dynam
 	return map[string]*dynamodb.KeysAndAttributes{s.table: makeKeysAndAttrs()}
 }
 
-func (s *DynamoStore) processResponses(responses []map[string]*dynamodb.AttributeValue, batch readBatch) {
+func (s *DynamoStore) processResponses(responses []map[string]*dynamodb.AttributeValue, batch ReadBatch) {
 	for _, item := range responses {
 		p := item[refAttr]
 		d.Chk.NotNil(p)

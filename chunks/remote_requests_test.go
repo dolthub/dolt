@@ -29,10 +29,10 @@ func TestGetRequestBatch(t *testing.T) {
 	req3chan := make(chan bool, 1)
 	req4chan := make(chan Chunk, 1)
 
-	batch := readBatch{
-		r0: []outstandingRequest{outstandingHas(req0chan), outstandingGet(req1chan)},
-		r1: []outstandingRequest{outstandingHas(req2chan)},
-		r2: []outstandingRequest{outstandingHas(req3chan), outstandingGet(req4chan)},
+	batch := ReadBatch{
+		r0: []OutstandingRequest{OutstandingHas(req0chan), OutstandingGet(req1chan)},
+		r1: []OutstandingRequest{OutstandingHas(req2chan)},
+		r2: []OutstandingRequest{OutstandingHas(req3chan), OutstandingGet(req4chan)},
 	}
 	go func() {
 		for requestedRef, reqs := range batch {

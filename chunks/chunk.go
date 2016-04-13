@@ -29,6 +29,7 @@ func (c Chunk) IsEmpty() bool {
 	return len(c.data) == 0
 }
 
+// NewChunk creates a new Chunk backed by data. This means that the returned Chunk has ownership of this slice of memory.
 func NewChunk(data []byte) Chunk {
 	r := ref.FromData(data)
 	return Chunk{r, data}
