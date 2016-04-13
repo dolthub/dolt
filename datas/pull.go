@@ -9,22 +9,22 @@ import (
 )
 
 // CopyMissingChunksP copies to |sink| all chunks in source that are reachable from (and including) |r|, skipping chunks that |sink| already has
-func CopyMissingChunksP(source DataStore, sink *LocalDataStore, sourceRef ref.Ref, concurrency int) {
-	copyCallback := func(r ref.Ref) bool {
-		return sink.has(r)
+func CopyMissingChunksP(source DataStore, sink *LocalDataStore, sourceRef types.RefBase, concurrency int) {
+	copyCallback := func(r types.RefBase) bool {
+		return sink.has(r.TargetRef())
 	}
 	copyWorker(source, sink, sourceRef, copyCallback, concurrency)
 }
 
 // CopyReachableChunksP copies to |sink| all chunks reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|
-func CopyReachableChunksP(source, sink DataStore, sourceRef, exclude ref.Ref, concurrency int) {
+func CopyReachableChunksP(source, sink DataStore, sourceRef, exclude types.RefBase, concurrency int) {
 	excludeRefs := map[ref.Ref]bool{}
 
-	if !exclude.IsEmpty() {
+	if !exclude.TargetRef().IsEmpty() {
 		mu := sync.Mutex{}
-		excludeCallback := func(r ref.Ref) bool {
+		excludeCallback := func(r types.RefBase) bool {
 			mu.Lock()
-			excludeRefs[r] = true
+			excludeRefs[r.TargetRef()] = true
 			mu.Unlock()
 			return false
 		}
@@ -32,13 +32,13 @@ func CopyReachableChunksP(source, sink DataStore, sourceRef, exclude ref.Ref, co
 		walk.SomeChunksP(exclude, source, excludeCallback, concurrency)
 	}
 
-	copyCallback := func(r ref.Ref) bool {
-		return excludeRefs[r]
+	copyCallback := func(r types.RefBase) bool {
+		return excludeRefs[r.TargetRef()]
 	}
 	copyWorker(source, sink, sourceRef, copyCallback, concurrency)
 }
 
-func copyWorker(source DataStore, sink DataStore, sourceRef ref.Ref, stopFn walk.SomeChunksCallback, concurrency int) {
+func copyWorker(source DataStore, sink DataStore, sourceRef types.RefBase, stopFn walk.SomeChunksCallback, concurrency int) {
 	hcs := sink.hintedChunkSink()
 	walk.SomeChunksP(sourceRef, newTeeDataSource(source.hintedChunkStore(), hcs), stopFn, concurrency)
 

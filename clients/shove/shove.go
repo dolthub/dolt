@@ -52,7 +52,7 @@ func main() {
 		d.Exp.False(sourceRef.IsEmpty(), "Unknown source object: %s", *sourceObject)
 
 		var err error
-		*sink, err = sink.Pull(sourceStore, sourceRef, int(*p))
+		*sink, err = sink.Pull(sourceStore, datas.NewRefOfCommit(sourceRef), int(*p))
 
 		util.MaybeWriteMemProfile()
 		d.Exp.NoError(err)
