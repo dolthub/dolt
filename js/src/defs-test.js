@@ -20,7 +20,7 @@ import {newList} from './list.js';
 import {newStruct} from './struct.js';
 import {newSet} from './set.js';
 import {newMap} from './map.js';
-import Ref from './ref.js';
+import {emptyRef} from './ref.js';
 import {ValueBase} from './value.js';
 import {invariant} from './assert.js';
 
@@ -137,7 +137,7 @@ suite('defs', () => {
   test('recursive struct', async () => {
     const pkg = new Package([
       makeStructType('Struct', [
-        new Field('children', makeListType(makeType(new Ref(), 0)), false),
+        new Field('children', makeListType(makeType(emptyRef, 0)), false),
       ], []),
     ], []);
     registerPackage(pkg);

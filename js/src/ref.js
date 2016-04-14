@@ -36,7 +36,7 @@ function hexToUint8(s: string): Uint8Array {
 export default class Ref {
   _refStr: string;
 
-  constructor(refStr: string = emtpyRefStr) {
+  constructor(refStr: string) {
     this._refStr = refStr;
   }
 
@@ -86,3 +86,5 @@ export default class Ref {
     return new Ref(sha1Prefix + r.digest(data));
   }
 }
+
+export const emptyRef = new Ref(emtpyRefStr);

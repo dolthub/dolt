@@ -10,8 +10,6 @@ import type DataStore from './data-store.js';
 import type {NomsKind} from './noms-kind.js';
 import {decode as decodeBase64} from './base64.js';
 import {
-  CompoundDesc,
-  EnumDesc,
   Field,
   getPrimitiveType,
   makeCompoundType,
@@ -19,11 +17,9 @@ import {
   makeStructType,
   makeType,
   makeUnresolvedType,
-  PrimitiveDesc,
   StructDesc,
   Type,
   typeType,
-  UnresolvedDesc,
 } from './type.js';
 import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
@@ -164,13 +160,11 @@ export class JsonArrayReader {
 
   readListLeafSequence(t: Type, pkg: ?Package): ListLeafSequence {
     const seq = this.readSequence(t, pkg);
-    t = fixupType(t, pkg);
     return new ListLeafSequence(this._ds, t, seq);
   }
 
   readSetLeafSequence(t: Type, pkg: ?Package): SetLeafSequence {
     const seq = this.readSequence(t, pkg);
-    t = fixupType(t, pkg);
     return new SetLeafSequence(this._ds, t, seq);
   }
 
@@ -184,7 +178,6 @@ export class JsonArrayReader {
       entries.push({key: k, value: v});
     }
 
-    t = fixupType(t, pkg);
     return new MapLeafSequence(this._ds, t, entries);
   }
 
@@ -201,7 +194,6 @@ export class JsonArrayReader {
       data.push(new MetaTuple(ref, v));
     }
 
-    t = fixupType(t, pkg);
     return newMetaSequenceFromData(this._ds, t, data);
   }
 
@@ -221,9 +213,8 @@ export class JsonArrayReader {
     return new Package(types, deps);
   }
 
-  readRefValue(t: Type, pkg: ?Package): RefValue {
+  readRefValue(t: Type): RefValue {
     const ref = this.readRef();
-    t = fixupType(t, pkg);
     return new RefValue(ref, t);
   }
 
@@ -307,7 +298,7 @@ export class JsonArrayReader {
       case Kind.Package:
         return this.readPackage(t, pkg);
       case Kind.Ref:
-        return this.readRefValue(t, pkg);
+        return this.readRefValue(t);
       case Kind.Set: {
         const isMeta = this.readBool();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
@@ -436,41 +427,7 @@ export class JsonArrayReader {
       data[unionField.name] = v;
     }
 
-    type = fixupType(type, pkg);
     return newStruct(type, typeDef, data);
-  }
-}
-
-function fixupType(t: Type, pkg: ?Package): Type {
-  return fixupTypeInternal(t, pkg) || t;
-}
-
-function fixupTypeInternal(t: Type, pkg: ?Package): ?Type {
-  const desc = t.desc;
-  if (desc instanceof EnumDesc || desc instanceof StructDesc) {
-    throw new Error('not reached');
-  }
-  if (desc instanceof PrimitiveDesc) {
-    return null;
-  }
-  if (desc instanceof CompoundDesc) {
-    let changed = false;
-    const newTypes = desc.elemTypes.map(t => {
-      const newT = fixupTypeInternal(t, pkg);
-      if (newT) {
-        changed = true;
-      }
-      return newT || t;
-    });
-
-    return changed ? makeCompoundType(t.kind, ...newTypes) : null;
-  }
-  if (desc instanceof UnresolvedDesc) {
-    if (t.hasPackageRef) {
-      return null;
-    }
-
-    return makeType(notNull(pkg).ref, t.ordinal);
   }
 }
 

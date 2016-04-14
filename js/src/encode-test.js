@@ -4,7 +4,7 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 import MemoryStore from './memory-store.js';
-import Ref from './ref.js';
+import {default as Ref, emptyRef} from './ref.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
 import type {NomsKind} from './noms-kind.js';
@@ -304,12 +304,13 @@ suite('Encode', () => {
     const s2TypeDef = makeStructType('S2', [
       new Field('x', int32Type, false),
     ], []);
-    const sTypeDef = makeStructType('S', [
-      new Field('s', makeType(new Ref(), 0), false),
+    let sTypeDef = makeStructType('S', [
+      new Field('s', makeType(emptyRef, 0), false),
     ], []);
 
     const pkg = new Package([s2TypeDef, sTypeDef], []);
     registerPackage(pkg);
+    sTypeDef = pkg.types[1];
     const pkgRef = pkg.ref;
     const s2Type = makeType(pkgRef, 0);
     const sType = makeType(pkgRef, 1);

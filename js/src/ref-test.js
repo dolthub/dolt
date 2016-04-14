@@ -2,7 +2,7 @@
 
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
-import Ref from './ref.js';
+import {default as Ref, emptyRef} from './ref.js';
 import {encode} from './utf8.js';
 
 suite('Ref', () => {
@@ -64,7 +64,7 @@ suite('Ref', () => {
     r = Ref.fromDigest(digest);
     assert.isFalse(r.isEmpty());
 
-    r = new Ref();
+    r = emptyRef;
     assert.isTrue(r.isEmpty());
   });
 });

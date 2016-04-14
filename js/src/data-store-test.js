@@ -2,7 +2,7 @@
 
 import {suite, test} from 'mocha';
 import MemoryStore from './memory-store.js';
-import Ref from './ref.js';
+import {emptyRef} from './ref.js';
 import {assert} from 'chai';
 import {default as DataStore, getDatasTypes, newCommit} from './data-store.js';
 import {invariant, notNull} from './assert.js';
@@ -146,7 +146,7 @@ suite('DataStore', () => {
     const commitRef = ds.writeValue(commit);
     const datasets = await newMap(['foo', commitRef], types.commitMapType);
     const rootRef = ds.writeValue(datasets).targetRef;
-    assert.isTrue(await ms.updateRoot(rootRef, new Ref()));
+    assert.isTrue(await ms.updateRoot(rootRef, emptyRef));
     ds = new DataStore(ms); // refresh the datasets
 
     assert.strictEqual(1, datasets.size);

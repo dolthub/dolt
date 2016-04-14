@@ -1,7 +1,7 @@
 // @flow
 
 import Chunk from './chunk.js';
-import Ref from './ref.js';
+import {default as Ref, emptyRef} from './ref.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
 import type {ChunkStore} from './chunk-store.js';
@@ -51,7 +51,7 @@ export function getDatasTypes(): DatasTypes {
     const commitTypeDef = makeStructType('Commit', [
       new Field('value', valueType, false),
       new Field('parents', makeCompoundType(Kind.Set,
-        makeCompoundType(Kind.Ref, makeType(new Ref(), 0))), false),
+        makeCompoundType(Kind.Ref, makeType(emptyRef, 0))), false),
     ], []);
 
     const datasPackage = new Package([commitTypeDef], []);

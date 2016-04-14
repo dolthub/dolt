@@ -1,6 +1,6 @@
 {
   "name": "@attic/noms",
-  "version": "9.0.1",
+  "version": "10.0.0",
   "main": "dist/commonjs/noms.js",
   "jsnext:main": "dist/es6/noms.js",
   "dependencies": {

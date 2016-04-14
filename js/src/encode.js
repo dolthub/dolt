@@ -2,6 +2,7 @@
 
 import Chunk from './chunk.js';
 import type Ref from './ref.js';
+import {emptyRef} from './ref.js';
 import RefValue from './ref-value.js';
 import {default as Struct, StructMirror} from './struct.js';
 import type DataStore from './data-store.js';
@@ -197,7 +198,7 @@ export class JsonArrayWriter {
         invariant(v instanceof Package,
                   `Failed to write Package. Invalid type: ${describeType(v)}`);
         const w2 = new JsonArrayWriter(this._ds);
-        v.types.forEach(type => w2.writeValue(type, typeType, pkg));
+        v.types.forEach(type => w2.writeValue(type, typeType, v));
         this.write(w2.array);
         const w3 = new JsonArrayWriter(this._ds);
         v.dependencies.forEach(ref => w3.writeRef(ref));
@@ -233,7 +234,7 @@ export class JsonArrayWriter {
       case Kind.Type: {
         invariant(v instanceof Type,
                   `Failed to write Type. Invalid type: ${describeType(v)}`);
-        this.writeTypeAsValue(v);
+        this.writeTypeAsValue(v, pkg);
         break;
       }
       case Kind.Unresolved: {
@@ -255,7 +256,7 @@ export class JsonArrayWriter {
     }
   }
 
-  writeTypeAsValue(t: Type) {
+  writeTypeAsValue(t: Type, pkg: ?Package) {
     const k = t.kind;
     this.writeKind(k);
     switch (k) {
@@ -274,7 +275,7 @@ export class JsonArrayWriter {
       case Kind.Ref:
       case Kind.Set: {
         const w2 = new JsonArrayWriter(this._ds);
-        t.elemTypes.forEach(elem => w2.writeTypeAsValue(elem));
+        t.elemTypes.forEach(elem => w2.writeTypeAsValue(elem, pkg));
         this.write(w2.array);
         break;
       }
@@ -285,14 +286,14 @@ export class JsonArrayWriter {
         const fieldWriter = new JsonArrayWriter(this._ds);
         desc.fields.forEach(field => {
           fieldWriter.write(field.name);
-          fieldWriter.writeTypeAsValue(field.t);
+          fieldWriter.writeTypeAsValue(field.t, pkg);
           fieldWriter.write(field.optional);
         });
         this.write(fieldWriter.array);
         const choiceWriter = new JsonArrayWriter(this._ds);
         desc.union.forEach(choice => {
           choiceWriter.write(choice.name);
-          choiceWriter.writeTypeAsValue(choice.t);
+          choiceWriter.writeTypeAsValue(choice.t, pkg);
           choiceWriter.write(choice.optional);
         });
         this.write(choiceWriter.array);
@@ -300,7 +301,13 @@ export class JsonArrayWriter {
       }
       case Kind.Unresolved: {
         const pkgRef = t.packageRef;
-        this.writeRef(pkgRef);
+        // When we compute the ref for the package the first time it does not have a ref.
+        const isCurrentPackage = pkg && pkg.ref && pkg.ref.equals(pkgRef);
+        if (isCurrentPackage) {
+          this.writeRef(emptyRef);
+        } else {
+          this.writeRef(pkgRef);
+        }
         const ordinal = t.ordinal;
         this.writeInt(ordinal);
         if (ordinal === -1) {
@@ -308,9 +315,11 @@ export class JsonArrayWriter {
           this.write(t.name);
         }
 
-        const pkg = lookupPackage(pkgRef);
-        if (pkg && this._ds) {
-          this._ds.writeValue(pkg);
+        if (!isCurrentPackage) {
+          const pkg = lookupPackage(pkgRef);
+          if (this._ds && pkg) {
+            this._ds.writeValue(pkg);
+          }
         }
 
         break;

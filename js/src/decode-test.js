@@ -3,7 +3,7 @@
 import Chunk from './chunk.js';
 import DataStore from './data-store.js';
 import MemoryStore from './memory-store.js';
-import Ref from './ref.js';
+import {default as Ref, emptyRef} from './ref.js';
 import RefValue from './ref-value.js';
 import {default as Struct, StructMirror} from './struct.js';
 import type {float64, int32, int64, uint8, uint16, uint32, uint64} from './primitives.js';
@@ -440,14 +440,15 @@ suite('Decode', () => {
   test('test read struct with', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeStructType('A1', [
+    let tr = makeStructType('A1', [
       new Field('x', int16Type, false),
-      new Field('e', makeType(new Ref(), 1), false),
+      new Field('e', makeType(emptyRef, 1), false),
       new Field('b', boolType, false),
     ], []);
     const enumTref = makeEnumType('E', ['a', 'b', 'c']);
     const pkg = new Package([tr, enumTref], []);
     registerPackage(pkg);
+    tr = pkg.types[0];
 
     const a = [Kind.Unresolved, pkg.ref.toString(), '0', '42', '1', true];
     const r = new JsonArrayReader(a, ds);

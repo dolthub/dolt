@@ -1,6 +1,7 @@
 // @flow
 
-import Ref from './ref.js';
+import type Ref from './ref.js';
+import {emptyRef} from './ref.js';
 import RefValue from './ref-value.js';
 import type {NomsKind} from './noms-kind.js';
 import {invariant} from './assert.js';
@@ -403,7 +404,7 @@ export function makeType(pkgRef: Ref, ordinal: number): Type {
 }
 
 export function makeUnresolvedType(namespace: string, name: string): Type {
-  return new Type(name, namespace, new UnresolvedDesc(new Ref(), -1));
+  return new Type(name, namespace, new UnresolvedDesc(emptyRef, -1));
 }
 
 export const boolType = makePrimitiveType(Kind.Bool);

@@ -1,7 +1,7 @@
 // @flow
 
 import MemoryStore from './memory-store.js';
-import Ref from './ref.js';
+import {default as Ref, emptyRef} from './ref.js';
 import {assert} from 'chai';
 import {
   boolType,
@@ -106,7 +106,7 @@ suite('Type', () => {
   test('empty package ref', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const v = makeType(new Ref(), -1);
+    const v = makeType(emptyRef, -1);
     const r = ds.writeValue(v).targetRef;
     const v2 = await ds.readValue(r);
     assert.isTrue(v.equals(v2));

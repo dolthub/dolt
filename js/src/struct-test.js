@@ -16,7 +16,7 @@ import {Kind} from './noms-kind.js';
 import {Package, registerPackage} from './package.js';
 import {suite, test} from 'mocha';
 import DataStore from './data-store.js';
-import Ref from './ref.js';
+import {emptyRef} from './ref.js';
 
 suite('Struct', () => {
   test('equals', () => {
@@ -245,8 +245,8 @@ suite('Struct', () => {
     let typeDef, typeDefA, typeDefD;
     const pkg = new Package([
       typeDef = makeStructType('StructWithUnions', [
-        new Field('a', makeType(new Ref(), 1), false),
-        new Field('d', makeType(new Ref(), 2), false),
+        new Field('a', makeType(emptyRef, 1), false),
+        new Field('d', makeType(emptyRef, 2), false),
       ], []),
       typeDefA = makeStructType('', [], [
         new Field('b', float64Type, false),

@@ -1,7 +1,9 @@
 // @flow
 
-import Ref from './ref.js';
-import {emptyChunk, default as Chunk} from './chunk.js';
+import type Ref from './ref.js';
+import {emptyRef} from './ref.js';
+import type Chunk from './chunk.js';
+import {emptyChunk} from './chunk.js';
 
 export default class MemoryStore {
   _data: { [key: string]: Chunk };
@@ -9,7 +11,7 @@ export default class MemoryStore {
 
   constructor() {
     this._data = Object.create(null);
-    this._root = new Ref();
+    this._root = emptyRef;
   }
 
   getRoot(): Promise<Ref> {
