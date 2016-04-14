@@ -1,7 +1,7 @@
 {
   "name": "directory-import",
   "dependencies": {
-    "@attic/noms": "^9.0.1"
+    "@attic/noms": "^10.3.0"
   },
   "devDependencies": {
     "@attic/eslintrc": "^1.0.0",

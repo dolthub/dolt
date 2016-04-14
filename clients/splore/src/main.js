@@ -198,7 +198,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
       };
 
       mirror.forEachField(processField);
-      if (val.hasUnion) {
+      if (mirror.hasUnion) {
         processField(mirror.unionField);
       }
     } else {
