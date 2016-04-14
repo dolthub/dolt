@@ -119,7 +119,7 @@ export class JsonArrayWriter {
 
   writeValue(v: any, t: Type, pkg: ?Package) {
     switch (t.kind) {
-      case Kind.Blob:
+      case Kind.Blob: {
         invariant(v instanceof NomsBlob || v instanceof Sequence,
                   `Failed to write Blob. Invalid type: ${describeType(v)}`);
         const sequence: Sequence = v instanceof NomsBlob ? v.sequence : v;
@@ -131,6 +131,7 @@ export class JsonArrayWriter {
         invariant(sequence instanceof BlobLeafSequence);
         this.writeBlob(sequence);
         break;
+      }
       case Kind.Bool:
         invariant(typeof v === 'boolean', `Failed to write Bool. Invalid type: ${describeType(v)}`);
         this.write(v);
@@ -260,7 +261,7 @@ export class JsonArrayWriter {
     const k = t.kind;
     this.writeKind(k);
     switch (k) {
-      case Kind.Enum:
+      case Kind.Enum: {
         const desc = t.desc;
         invariant(desc instanceof EnumDesc);
         this.write(t.name);
@@ -270,6 +271,7 @@ export class JsonArrayWriter {
         }
         this.write(w2.array);
         break;
+      }
       case Kind.List:
       case Kind.Map:
       case Kind.Ref:

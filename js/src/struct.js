@@ -6,7 +6,7 @@ import {StructDesc} from './type.js';
 import type {Field, Type} from './type.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
-import {Kind} from'./noms-kind.js';
+import {Kind} from './noms-kind.js';
 import {ValueBase} from './value.js';
 
 type StructData = {[key: string]: ?valueOrPrimitive};

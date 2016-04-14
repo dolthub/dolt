@@ -8,7 +8,6 @@ import noms.symlink as symlink
 
 def main():
     symlink.Force('../../../js/.babelrc', os.path.abspath('.babelrc'))
-    symlink.Force('../../../js/.eslintrc', os.path.abspath('.eslintrc'))
     symlink.Force('../../../js/.flowconfig', os.path.abspath('.flowconfig'))
 
     subprocess.check_call(['npm', 'install'], shell=False)
