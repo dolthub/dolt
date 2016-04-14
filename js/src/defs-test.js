@@ -46,6 +46,18 @@ suite('defs', () => {
     const l2 = await defToNoms([0, 1, 2, 3], listOfUint8Type);
     invariant(l2 instanceof ValueBase);
     assert.isTrue(l1.equals(l2));
+
+    const l3 = await defToNoms(l1, listOfUint8Type);
+    invariant(l3 instanceof ValueBase);
+    assert.isTrue(l1.equals(l3));
+
+    let ex;
+    try {
+      await defToNoms(l1, makeListType(stringType));
+    } catch (e) {
+      ex = e;
+    }
+    assert.ok(ex);
   });
 
   test('set', async () => {
@@ -54,6 +66,14 @@ suite('defs', () => {
     const s2 = await defToNoms([0, 1, 2, 3], setOfFloat64Type);
     invariant(s2 instanceof ValueBase);
     assert.isTrue(s1.equals(s2));
+
+    let ex;
+    try {
+      await defToNoms(s1, makeSetType(stringType));
+    } catch (e) {
+      ex = e;
+    }
+    assert.ok(ex);
   });
 
   test('map', async () => {
@@ -62,6 +82,14 @@ suite('defs', () => {
     const m2 = await defToNoms([0, 'zero', 1, 'one'], mapOfFloat64ToStringType);
     invariant(m2 instanceof ValueBase);
     assert.isTrue(m1.equals(m2));
+
+    let ex;
+    try {
+      await defToNoms(m1, makeMapType(stringType, float64Type));
+    } catch (e) {
+      ex = e;
+    }
+    assert.ok(ex);
   });
 
   test('struct', async () => {
@@ -84,8 +112,6 @@ suite('defs', () => {
       b: true,
       s: 'hi',
     }, type);
-
-
     assert.isTrue(s1.equals(s2));
   });
 
@@ -129,9 +155,12 @@ suite('defs', () => {
     ], listType);
 
     const l2 = await defToNoms([{i: 1}, {i: 2}], listType);
-
     invariant(l2 instanceof ValueBase);
     assert.isTrue(l1.equals(l2));
+
+    const l3 = await defToNoms([newStruct(structType, typeDef, {i: 1}), {i: 2}], listType);
+    invariant(l3 instanceof ValueBase);
+    assert.isTrue(l1.equals(l3));
   });
 
   test('recursive struct', async () => {
@@ -171,5 +200,15 @@ suite('defs', () => {
 
     invariant(t2 instanceof ValueBase);
     assert.isTrue(t1.equals(t2));
+
+    const t3 = await defToNoms({
+      children: [
+        {children: []},
+        {children: await newList([], listType)},
+      ],
+    }, type);
+
+    invariant(t3 instanceof ValueBase);
+    assert.isTrue(t1.equals(t3));
   });
 });
