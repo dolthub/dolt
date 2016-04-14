@@ -12,7 +12,8 @@ def main():
     env = {
         'NODE_ENV': args.mode,
         'BABEL_ENV': args.mode,
-    }.update(os.environ)
+    }
+    env.update(os.environ)
     subprocess.check_call(
             ['node_modules/.bin/webpack',
                 '--config', 'node_modules/@attic/webpack-config/index.js', args.src, args.out],
