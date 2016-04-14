@@ -122,7 +122,7 @@ export function findUnionIndex(data: StructData, union: Array<Field>): number {
   return -1;
 }
 
-class StructFieldMirror {
+export class StructFieldMirror {
   value: ?valueOrPrimitive;
   _f: Field;
 
@@ -130,16 +130,16 @@ class StructFieldMirror {
     this.value = data[f.name];
     this._f = f;
   }
-  get name() {
+  get name(): string {
     return this._f.name;
   }
-  get type() {
+  get type(): Type {
     return this._f.t;
   }
-  get optional() {
+  get optional(): boolean {
     return this._f.optional;
   }
-  get present() {
+  get present(): boolean {
     return this.value !== undefined;
   }
 }
@@ -181,6 +181,10 @@ export class StructMirror<T: Struct> {
 
   get unionValue(): ?valueOrPrimitive {
     return this._data[this.unionField.name];
+  }
+
+  get name(): string {
+    return this.typeDef.name;
   }
 
   get(name: string): ?valueOrPrimitive {
