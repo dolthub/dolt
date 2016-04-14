@@ -1,7 +1,7 @@
 {
   "name": "noms-splore",
   "devDependencies": {
-    "@attic/eslintrc": "file:../../jsmodules/eslintrc",
+    "@attic/eslintrc": "^1.0.0",
     "@attic/noms": "^10.3.0",
     "@attic/webpack-config": "^2.0.0",
     "babel-cli": "6.6.5",

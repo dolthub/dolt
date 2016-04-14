@@ -9,7 +9,7 @@
     "text-encoding-utf-8": "1.0.1"
   },
   "devDependencies": {
-    "@attic/eslintrc": "file:../jsmodules/eslintrc",
+    "@attic/eslintrc": "^1.0.0",
     "babel-cli": "6.6.5",
     "babel-core": "6.7.2",
     "babel-generator": "6.7.2",
