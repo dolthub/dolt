@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __datasPackageInFile_types_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -22,7 +20,7 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	__datasPackageInFile_types_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // Commit
@@ -69,7 +67,7 @@ func (m Commit) Type() types.Type {
 }
 
 func init() {
-	__typeForCommit = types.MakeType(__datasPackageInFile_types_CachedRef, 0)
+	__typeForCommit = types.MakeType(ref.Parse("sha1-4da2f91cdbba5a7c91b383091da45e55e16d2152"), 0)
 	types.RegisterStruct(__typeForCommit, builderForCommit, readerForCommit)
 }
 
@@ -188,7 +186,7 @@ func (m MapOfStringToRefOfCommit) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfStringToRefOfCommit = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(__datasPackageInFile_types_CachedRef, 0)))
+	__typeForMapOfStringToRefOfCommit = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-4da2f91cdbba5a7c91b383091da45e55e16d2152"), 0)))
 	types.RegisterValue(__typeForMapOfStringToRefOfCommit, builderForMapOfStringToRefOfCommit, readerForMapOfStringToRefOfCommit)
 }
 
@@ -323,7 +321,7 @@ func (m SetOfRefOfCommit) Type() types.Type {
 }
 
 func init() {
-	__typeForSetOfRefOfCommit = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(__datasPackageInFile_types_CachedRef, 0)))
+	__typeForSetOfRefOfCommit = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-4da2f91cdbba5a7c91b383091da45e55e16d2152"), 0)))
 	types.RegisterValue(__typeForSetOfRefOfCommit, builderForSetOfRefOfCommit, readerForSetOfRefOfCommit)
 }
 
@@ -455,7 +453,7 @@ func (r RefOfCommit) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfCommit = types.MakeCompoundType(types.RefKind, types.MakeType(__datasPackageInFile_types_CachedRef, 0))
+	__typeForRefOfCommit = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-4da2f91cdbba5a7c91b383091da45e55e16d2152"), 0))
 	types.RegisterRef(__typeForRefOfCommit, builderForRefOfCommit)
 }
 

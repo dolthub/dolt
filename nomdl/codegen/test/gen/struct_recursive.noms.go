@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __genPackageInFile_struct_recursive_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -21,7 +19,7 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	__genPackageInFile_struct_recursive_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // Tree
@@ -63,7 +61,7 @@ func (m Tree) Type() types.Type {
 }
 
 func init() {
-	__typeForTree = types.MakeType(__genPackageInFile_struct_recursive_CachedRef, 0)
+	__typeForTree = types.MakeType(ref.Parse("sha1-1166998faee80d4112e7b74cf44ad2647c196566"), 0)
 	types.RegisterStruct(__typeForTree, builderForTree, readerForTree)
 }
 
@@ -166,7 +164,7 @@ func (m ListOfTree) Type() types.Type {
 }
 
 func init() {
-	__typeForListOfTree = types.MakeCompoundType(types.ListKind, types.MakeType(__genPackageInFile_struct_recursive_CachedRef, 0))
+	__typeForListOfTree = types.MakeCompoundType(types.ListKind, types.MakeType(ref.Parse("sha1-1166998faee80d4112e7b74cf44ad2647c196566"), 0))
 	types.RegisterValue(__typeForListOfTree, builderForListOfTree, readerForListOfTree)
 }
 

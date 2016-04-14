@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_91ae65b_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -49,7 +47,7 @@ func init() {
 	}, []ref.Ref{
 		ref.Parse("sha1-0b4ac7cb0583d7fecd71a1584a3f846e5d8b08eb"),
 	})
-	__mainPackageInFile_sha1_91ae65b_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // Company
@@ -166,7 +164,7 @@ func (m Company) Type() types.Type {
 }
 
 func init() {
-	__typeForCompany = types.MakeType(__mainPackageInFile_sha1_91ae65b_CachedRef, 0)
+	__typeForCompany = types.MakeType(ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"), 0)
 	types.RegisterStruct(__typeForCompany, builderForCompany, readerForCompany)
 }
 
@@ -492,7 +490,7 @@ func (m Round) Type() types.Type {
 }
 
 func init() {
-	__typeForRound = types.MakeType(__mainPackageInFile_sha1_91ae65b_CachedRef, 1)
+	__typeForRound = types.MakeType(ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"), 1)
 	types.RegisterStruct(__typeForRound, builderForRound, readerForRound)
 }
 
@@ -813,7 +811,7 @@ func (m SetOfRefOfRound) Type() types.Type {
 }
 
 func init() {
-	__typeForSetOfRefOfRound = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_91ae65b_CachedRef, 1)))
+	__typeForSetOfRefOfRound = types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"), 1)))
 	types.RegisterValue(__typeForSetOfRefOfRound, builderForSetOfRefOfRound, readerForSetOfRefOfRound)
 }
 
@@ -945,7 +943,7 @@ func (r RefOfRound) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfRound = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_sha1_91ae65b_CachedRef, 1))
+	__typeForRefOfRound = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"), 1))
 	types.RegisterRef(__typeForRefOfRound, builderForRefOfRound)
 }
 

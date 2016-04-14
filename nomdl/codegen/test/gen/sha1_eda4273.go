@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __genPackageInFile_sha1_eda4273_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -30,7 +28,7 @@ func init() {
 	}, []ref.Ref{
 		ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"),
 	})
-	__genPackageInFile_sha1_eda4273_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // D
@@ -77,7 +75,7 @@ func (m D) Type() types.Type {
 }
 
 func init() {
-	__typeForD = types.MakeType(__genPackageInFile_sha1_eda4273_CachedRef, 0)
+	__typeForD = types.MakeType(ref.Parse("sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0"), 0)
 	types.RegisterStruct(__typeForD, builderForD, readerForD)
 }
 
@@ -178,7 +176,7 @@ func (m DUser) Type() types.Type {
 }
 
 func init() {
-	__typeForDUser = types.MakeType(__genPackageInFile_sha1_eda4273_CachedRef, 1)
+	__typeForDUser = types.MakeType(ref.Parse("sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0"), 1)
 	types.RegisterStruct(__typeForDUser, builderForDUser, readerForDUser)
 }
 

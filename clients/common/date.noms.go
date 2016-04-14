@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __commonPackageInFile_date_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -21,7 +19,7 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	__commonPackageInFile_date_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // Date
@@ -63,7 +61,7 @@ func (m Date) Type() types.Type {
 }
 
 func init() {
-	__typeForDate = types.MakeType(__commonPackageInFile_date_CachedRef, 0)
+	__typeForDate = types.MakeType(ref.Parse("sha1-0b4ac7cb0583d7fecd71a1584a3f846e5d8b08eb"), 0)
 	types.RegisterStruct(__typeForDate, builderForDate, readerForDate)
 }
 

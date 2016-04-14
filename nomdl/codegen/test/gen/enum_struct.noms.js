@@ -5,8 +5,8 @@
 import {
   Field as _Field,
   Package as _Package,
-  Ref as _Ref,
   createStructClass as _createStructClass,
+  emptyRef as _emptyRef,
   makeEnumType as _makeEnumType,
   makeStructType as _makeStructType,
   makeType as _makeType,
@@ -20,7 +20,7 @@ const _pkg = new _Package([
   _makeEnumType('Handedness', 'right', 'left', 'switch'),
   _makeStructType('EnumStruct',
     [
-      new _Field('hand', _makeType(new _Ref(), 0), false),
+      new _Field('hand', _makeType(_emptyRef, 0), false),
     ],
     [
 
@@ -30,16 +30,9 @@ const _pkg = new _Package([
 ]);
 _registerPackage(_pkg);
 const Handedness$type = _makeType(_pkg.ref, 0);
-const Handedness$typeDef = _makeEnumType('Handedness', 'right', 'left', 'switch');
+const Handedness$typeDef = _pkg.types[0];
 const EnumStruct$type = _makeType(_pkg.ref, 1);
-const EnumStruct$typeDef = _makeStructType('EnumStruct',
-  [
-    new _Field('hand', _makeType(_pkg.ref, 0), false),
-  ],
-  [
-
-  ]
-);
+const EnumStruct$typeDef = _pkg.types[1];
 
 
 export type Handedness =

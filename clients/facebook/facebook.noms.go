@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_facebook_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -25,7 +23,7 @@ func init() {
 	}, []ref.Ref{
 		ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"),
 	})
-	__mainPackageInFile_facebook_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // User
@@ -77,7 +75,7 @@ func (m User) Type() types.Type {
 }
 
 func init() {
-	__typeForUser = types.MakeType(__mainPackageInFile_facebook_CachedRef, 0)
+	__typeForUser = types.MakeType(ref.Parse("sha1-39235efebdcbd71e886e3f020fa0e4e683f31a63"), 0)
 	types.RegisterStruct(__typeForUser, builderForUser, readerForUser)
 }
 
@@ -198,7 +196,7 @@ func (r RefOfUser) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfUser = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_facebook_CachedRef, 0))
+	__typeForRefOfUser = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-39235efebdcbd71e886e3f020fa0e4e683f31a63"), 0))
 	types.RegisterRef(__typeForRefOfUser, builderForRefOfUser)
 }
 

@@ -6,5 +6,5 @@ const _pkg = new {{importJS "Package"}}([{{range $i, $t := .Types}}
 ]);
 {{importJS "registerPackage"}}(_pkg);{{range $i, $t := .Types}}
 const {{userType $t}}$type = {{importJS "makeType"}}(_pkg.ref, {{$i}});
-const {{userType $t}}$typeDef = {{toTypeValueJS $t false 1}};{{end}}
+const {{userType $t}}$typeDef = _pkg.types[{{$i}}];{{end}}
 {{end}}

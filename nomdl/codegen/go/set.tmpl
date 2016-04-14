@@ -60,7 +60,7 @@ func (m {{.Name}}) Type() {{$typesPackage}}Type {
 }
 
 func init() {
-	__typeFor{{.Name}} = {{toTypesType .Type .FileID .PackageName}}
+	__typeFor{{.Name}} = {{toTypesType .Type false}}
 	{{$typesPackage}}RegisterValue(__typeFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
 }
 

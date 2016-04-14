@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __genPackageInFile_enum_struct_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -22,7 +20,7 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	__genPackageInFile_enum_struct_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // Handedness
@@ -46,7 +44,7 @@ func (e Handedness) Type() types.Type {
 }
 
 func init() {
-	__typeForHandedness = types.MakeType(__genPackageInFile_enum_struct_CachedRef, 0)
+	__typeForHandedness = types.MakeType(ref.Parse("sha1-018c08cd37f517d6cbb6a203727b8f4198d450b7"), 0)
 	types.RegisterEnum(__typeForHandedness, builderForHandedness, readerForHandedness)
 }
 
@@ -114,7 +112,7 @@ func (m EnumStruct) Type() types.Type {
 }
 
 func init() {
-	__typeForEnumStruct = types.MakeType(__genPackageInFile_enum_struct_CachedRef, 1)
+	__typeForEnumStruct = types.MakeType(ref.Parse("sha1-018c08cd37f517d6cbb6a203727b8f4198d450b7"), 1)
 	types.RegisterStruct(__typeForEnumStruct, builderForEnumStruct, readerForEnumStruct)
 }
 

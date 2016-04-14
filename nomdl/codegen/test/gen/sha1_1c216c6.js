@@ -32,17 +32,9 @@ const _pkg = new _Package([
 ]);
 _registerPackage(_pkg);
 const S$type = _makeType(_pkg.ref, 0);
-const S$typeDef = _makeStructType('S',
-  [
-    new _Field('s', _stringType, false),
-    new _Field('b', _boolType, false),
-  ],
-  [
-
-  ]
-);
+const S$typeDef = _pkg.types[0];
 const E$type = _makeType(_pkg.ref, 1);
-const E$typeDef = _makeEnumType('E', 'e1', 'e2', 'e3');
+const E$typeDef = _pkg.types[1];
 
 
 type S$Data = {

@@ -7,6 +7,7 @@ import {
   Package as _Package,
   Ref as _Ref,
   createStructClass as _createStructClass,
+  emptyRef as _emptyRef,
   makeStructType as _makeStructType,
   makeType as _makeType,
   registerPackage as _registerPackage,
@@ -29,7 +30,7 @@ const _pkg = new _Package([
   ),
   _makeStructType('DUser',
     [
-      new _Field('Dfield', _makeType(new _Ref(), 0), false),
+      new _Field('Dfield', _makeType(_emptyRef, 0), false),
     ],
     [
 
@@ -40,24 +41,9 @@ const _pkg = new _Package([
 ]);
 _registerPackage(_pkg);
 const D$type = _makeType(_pkg.ref, 0);
-const D$typeDef = _makeStructType('D',
-  [
-    new _Field('structField', _makeType(_Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 0), false),
-    new _Field('enumField', _makeType(_Ref.parse('sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef'), 1), false),
-  ],
-  [
-
-  ]
-);
+const D$typeDef = _pkg.types[0];
 const DUser$type = _makeType(_pkg.ref, 1);
-const DUser$typeDef = _makeStructType('DUser',
-  [
-    new _Field('Dfield', _makeType(_pkg.ref, 0), false),
-  ],
-  [
-
-  ]
-);
+const DUser$typeDef = _pkg.types[1];
 
 
 type D$Data = {

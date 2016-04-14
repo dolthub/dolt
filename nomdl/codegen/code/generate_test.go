@@ -14,13 +14,17 @@ type testResolver struct {
 	deps   map[ref.Ref]types.Package
 }
 
-func (res *testResolver) Resolve(t types.Type) types.Type {
+func (res *testResolver) Resolve(t types.Type, pkg *types.Package) types.Type {
 	if !t.IsUnresolved() {
 		return t
 	}
 
 	if !t.HasPackageRef() {
 		res.assert.Fail("Test does not handle local references")
+	}
+
+	if t.PackageRef() == pkg.Ref() {
+		return pkg.Types()[t.Ordinal()]
 	}
 
 	dep, ok := res.deps[t.PackageRef()]
@@ -45,7 +49,7 @@ func TestUserName(t *testing.T) {
 		types.Field{"a", types.MakePrimitiveType(types.Int8Kind), false},
 	}, types.Choices{})
 
-	g := Generator{R: &res}
+	g := Generator{R: &res, Package: &imported}
 	assert.Equal(localStructName, g.UserName(resolved))
 
 	listOfImported := types.MakeCompoundType(types.ListKind, types.MakeType(imported.Ref(), 1))

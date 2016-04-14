@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __commonPackageInFile_quad_tree_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -46,7 +44,7 @@ func init() {
 	}, []ref.Ref{
 		ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"),
 	})
-	__commonPackageInFile_quad_tree_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // Node
@@ -93,7 +91,7 @@ func (m Node) Type() types.Type {
 }
 
 func init() {
-	__typeForNode = types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 0)
+	__typeForNode = types.MakeType(ref.Parse("sha1-7c318372119e92c5ae013c980e958de685c5584f"), 0)
 	types.RegisterStruct(__typeForNode, builderForNode, readerForNode)
 }
 
@@ -220,7 +218,7 @@ func (m QuadTree) Type() types.Type {
 }
 
 func init() {
-	__typeForQuadTree = types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 1)
+	__typeForQuadTree = types.MakeType(ref.Parse("sha1-7c318372119e92c5ae013c980e958de685c5584f"), 1)
 	types.RegisterStruct(__typeForQuadTree, builderForQuadTree, readerForQuadTree)
 }
 
@@ -404,7 +402,7 @@ func (m SQuadTree) Type() types.Type {
 }
 
 func init() {
-	__typeForSQuadTree = types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 2)
+	__typeForSQuadTree = types.MakeType(ref.Parse("sha1-7c318372119e92c5ae013c980e958de685c5584f"), 2)
 	types.RegisterStruct(__typeForSQuadTree, builderForSQuadTree, readerForSQuadTree)
 }
 
@@ -636,7 +634,7 @@ func (m ListOfNode) Type() types.Type {
 }
 
 func init() {
-	__typeForListOfNode = types.MakeCompoundType(types.ListKind, types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 0))
+	__typeForListOfNode = types.MakeCompoundType(types.ListKind, types.MakeType(ref.Parse("sha1-7c318372119e92c5ae013c980e958de685c5584f"), 0))
 	types.RegisterValue(__typeForListOfNode, builderForListOfNode, readerForListOfNode)
 }
 
@@ -779,7 +777,7 @@ func (m MapOfStringToQuadTree) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfStringToQuadTree = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 1))
+	__typeForMapOfStringToQuadTree = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeType(ref.Parse("sha1-7c318372119e92c5ae013c980e958de685c5584f"), 1))
 	types.RegisterValue(__typeForMapOfStringToQuadTree, builderForMapOfStringToQuadTree, readerForMapOfStringToQuadTree)
 }
 
@@ -1054,7 +1052,7 @@ func (m MapOfStringToRefOfSQuadTree) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfStringToRefOfSQuadTree = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 2)))
+	__typeForMapOfStringToRefOfSQuadTree = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-7c318372119e92c5ae013c980e958de685c5584f"), 2)))
 	types.RegisterValue(__typeForMapOfStringToRefOfSQuadTree, builderForMapOfStringToRefOfSQuadTree, readerForMapOfStringToRefOfSQuadTree)
 }
 
@@ -1176,7 +1174,7 @@ func (r RefOfSQuadTree) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfSQuadTree = types.MakeCompoundType(types.RefKind, types.MakeType(__commonPackageInFile_quad_tree_CachedRef, 2))
+	__typeForRefOfSQuadTree = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-7c318372119e92c5ae013c980e958de685c5584f"), 2))
 	types.RegisterRef(__typeForRefOfSQuadTree, builderForRefOfSQuadTree)
 }
 

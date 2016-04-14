@@ -6,8 +6,8 @@ import {
   Field as _Field,
   Kind as _Kind,
   Package as _Package,
-  Ref as _Ref,
   createStructClass as _createStructClass,
+  emptyRef as _emptyRef,
   makeCompoundType as _makeCompoundType,
   makeListType as _makeListType,
   makeStructType as _makeStructType,
@@ -23,7 +23,7 @@ import type {
 const _pkg = new _Package([
   _makeStructType('Tree',
     [
-      new _Field('children', _makeCompoundType(_Kind.List, _makeType(new _Ref(), 0)), false),
+      new _Field('children', _makeCompoundType(_Kind.List, _makeType(_emptyRef, 0)), false),
     ],
     [
 
@@ -33,14 +33,7 @@ const _pkg = new _Package([
 ]);
 _registerPackage(_pkg);
 const Tree$type = _makeType(_pkg.ref, 0);
-const Tree$typeDef = _makeStructType('Tree',
-  [
-    new _Field('children', _makeCompoundType(_Kind.List, _makeType(_pkg.ref, 0)), false),
-  ],
-  [
-
-  ]
-);
+const Tree$typeDef = _pkg.types[0];
 
 
 type Tree$Data = {

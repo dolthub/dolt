@@ -259,12 +259,16 @@ func newCodeGen(w io.Writer, fileID, lang string, written map[string]bool, deps 
 	}
 	nomsImport := "github.com/attic-labs/noms"
 	gen := &codeGen{w, pkg, deps, written, []types.Type{}, nil, lang, nil, sharedData{
-		fileID,
 		nomsImport,
-		pkg.Name,
 		typesPackage,
+		pkg.Package.Ref(),
 	}}
-	gen.generator = &code.Generator{R: gen, TypesPackage: typesPackage, AliasNames: pkg.AliasNames}
+	gen.generator = &code.Generator{
+		R:            gen,
+		TypesPackage: typesPackage,
+		AliasNames:   pkg.AliasNames,
+		Package:      &pkg.Package,
+	}
 	gen.templates = gen.readTemplates()
 	return gen
 }
@@ -284,7 +288,7 @@ func (gen *codeGen) readTemplates() *template.Template {
 			"refToAliasName":       gen.generator.RefToAliasName,
 			"refToJSIdentfierName": gen.generator.RefToJSIdentfierName,
 			"title":                strings.Title,
-			"toTypesType":          gen.generator.ToType,
+			"toTypesType":          gen.generator.ToTypesType,
 			"toTypeValueJS":        gen.generator.ToTypeValueJS,
 			"userToDef":            gen.generator.UserToDef,
 			"userToValue":          gen.generator.UserToValue,
@@ -297,12 +301,16 @@ func (gen *codeGen) readTemplates() *template.Template {
 		}).ParseGlob(glob))
 }
 
-func (gen *codeGen) Resolve(t types.Type) types.Type {
+func (gen *codeGen) Resolve(t types.Type, pkg *types.Package) types.Type {
 	if !t.IsUnresolved() {
 		return t
 	}
 	if !t.HasPackageRef() {
 		return gen.pkg.Types()[t.Ordinal()]
+	}
+
+	if t.PackageRef() == pkg.Ref() {
+		return pkg.Types()[t.Ordinal()]
 	}
 
 	dep, ok := gen.deps[t.PackageRef()]
@@ -311,10 +319,9 @@ func (gen *codeGen) Resolve(t types.Type) types.Type {
 }
 
 type sharedData struct {
-	FileID       string
 	NomsImport   string
-	PackageName  string
 	TypesPackage string
+	PackageRef   ref.Ref
 }
 
 func (gen *codeGen) WritePackage() {
@@ -680,12 +687,13 @@ func (gen *codeGen) containsNonComparable(t types.Type, p types.Package) bool {
 
 func (gen *codeGen) resolveInPackage(t types.Type, p types.Package) (types.Type, types.Package) {
 	d.Chk.True(t.IsUnresolved())
+	d.Chk.True(t.HasPackageRef(), "Should have a package ref")
 
-	// For unresolved types that references types in the same package the ref is empty and we need to use the passed in package.
-	if t.HasPackageRef() {
+	if p.Ref() != t.PackageRef() {
 		p = gen.deps[t.PackageRef()]
-		d.Chk.NotNil(p)
 	}
 
+	d.Chk.NotNil(p)
+	d.Chk.True(int(t.Ordinal()) < len(p.Types()))
 	return p.Types()[t.Ordinal()], p
 }

@@ -47,18 +47,7 @@ const _pkg = new _Package([
 ]);
 _registerPackage(_pkg);
 const StructWithUnionField$type = _makeType(_pkg.ref, 0);
-const StructWithUnionField$typeDef = _makeStructType('StructWithUnionField',
-  [
-    new _Field('a', _float32Type, false),
-  ],
-  [
-    new _Field('b', _float64Type, false),
-    new _Field('c', _stringType, false),
-    new _Field('d', _blobType, false),
-    new _Field('e', _valueType, false),
-    new _Field('f', _makeCompoundType(_Kind.Set, _uint8Type), false),
-  ]
-);
+const StructWithUnionField$typeDef = _pkg.types[0];
 
 
 type StructWithUnionField$Data = {

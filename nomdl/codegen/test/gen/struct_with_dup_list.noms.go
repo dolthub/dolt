@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __genPackageInFile_struct_with_dup_list_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -21,7 +19,7 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	__genPackageInFile_struct_with_dup_list_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // StructWithDupList
@@ -63,7 +61,7 @@ func (m StructWithDupList) Type() types.Type {
 }
 
 func init() {
-	__typeForStructWithDupList = types.MakeType(__genPackageInFile_struct_with_dup_list_CachedRef, 0)
+	__typeForStructWithDupList = types.MakeType(ref.Parse("sha1-c3bc9f1d9562008977979cd26c5d4e7339f21b2e"), 0)
 	types.RegisterStruct(__typeForStructWithDupList, builderForStructWithDupList, readerForStructWithDupList)
 }
 
@@ -109,146 +107,4 @@ func (s StructWithDupList) SetL(val ListOfUint8) StructWithDupList {
 	s._l = val
 	s.ref = &ref.Ref{}
 	return s
-}
-
-// ListOfUint8
-
-type ListOfUint8 struct {
-	l   types.List
-	ref *ref.Ref
-}
-
-func NewListOfUint8() ListOfUint8 {
-	return ListOfUint8{types.NewTypedList(__typeForListOfUint8), &ref.Ref{}}
-}
-
-type ListOfUint8Def []uint8
-
-func (def ListOfUint8Def) New() ListOfUint8 {
-	l := make([]types.Value, len(def))
-	for i, d := range def {
-		l[i] = types.Uint8(d)
-	}
-	return ListOfUint8{types.NewTypedList(__typeForListOfUint8, l...), &ref.Ref{}}
-}
-
-func (l ListOfUint8) Def() ListOfUint8Def {
-	d := make([]uint8, l.Len())
-	for i := uint64(0); i < l.Len(); i++ {
-		d[i] = uint8(l.l.Get(i).(types.Uint8))
-	}
-	return d
-}
-
-func (l ListOfUint8) Equals(other types.Value) bool {
-	return other != nil && __typeForListOfUint8.Equals(other.Type()) && l.Ref() == other.Ref()
-}
-
-func (l ListOfUint8) Ref() ref.Ref {
-	return types.EnsureRef(l.ref, l)
-}
-
-func (l ListOfUint8) Chunks() (chunks []types.RefBase) {
-	chunks = append(chunks, l.Type().Chunks()...)
-	chunks = append(chunks, l.l.Chunks()...)
-	return
-}
-
-func (l ListOfUint8) ChildValues() []types.Value {
-	return append([]types.Value{}, l.l.ChildValues()...)
-}
-
-// A Noms Value that describes ListOfUint8.
-var __typeForListOfUint8 types.Type
-
-func (m ListOfUint8) Type() types.Type {
-	return __typeForListOfUint8
-}
-
-func init() {
-	__typeForListOfUint8 = types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.Uint8Kind))
-	types.RegisterValue(__typeForListOfUint8, builderForListOfUint8, readerForListOfUint8)
-}
-
-func builderForListOfUint8(v types.Value) types.Value {
-	return ListOfUint8{v.(types.List), &ref.Ref{}}
-}
-
-func readerForListOfUint8(v types.Value) types.Value {
-	return v.(ListOfUint8).l
-}
-
-func (l ListOfUint8) Len() uint64 {
-	return l.l.Len()
-}
-
-func (l ListOfUint8) Empty() bool {
-	return l.Len() == uint64(0)
-}
-
-func (l ListOfUint8) Get(i uint64) uint8 {
-	return uint8(l.l.Get(i).(types.Uint8))
-}
-
-func (l ListOfUint8) Slice(idx uint64, end uint64) ListOfUint8 {
-	return ListOfUint8{l.l.Slice(idx, end), &ref.Ref{}}
-}
-
-func (l ListOfUint8) Set(i uint64, val uint8) ListOfUint8 {
-	return ListOfUint8{l.l.Set(i, types.Uint8(val)), &ref.Ref{}}
-}
-
-func (l ListOfUint8) Append(v ...uint8) ListOfUint8 {
-	return ListOfUint8{l.l.Append(l.fromElemSlice(v)...), &ref.Ref{}}
-}
-
-func (l ListOfUint8) Insert(idx uint64, v ...uint8) ListOfUint8 {
-	return ListOfUint8{l.l.Insert(idx, l.fromElemSlice(v)...), &ref.Ref{}}
-}
-
-func (l ListOfUint8) Remove(idx uint64, end uint64) ListOfUint8 {
-	return ListOfUint8{l.l.Remove(idx, end), &ref.Ref{}}
-}
-
-func (l ListOfUint8) RemoveAt(idx uint64) ListOfUint8 {
-	return ListOfUint8{(l.l.RemoveAt(idx)), &ref.Ref{}}
-}
-
-func (l ListOfUint8) fromElemSlice(p []uint8) []types.Value {
-	r := make([]types.Value, len(p))
-	for i, v := range p {
-		r[i] = types.Uint8(v)
-	}
-	return r
-}
-
-type ListOfUint8IterCallback func(v uint8, i uint64) (stop bool)
-
-func (l ListOfUint8) Iter(cb ListOfUint8IterCallback) {
-	l.l.Iter(func(v types.Value, i uint64) bool {
-		return cb(uint8(v.(types.Uint8)), i)
-	})
-}
-
-type ListOfUint8IterAllCallback func(v uint8, i uint64)
-
-func (l ListOfUint8) IterAll(cb ListOfUint8IterAllCallback) {
-	l.l.IterAll(func(v types.Value, i uint64) {
-		cb(uint8(v.(types.Uint8)), i)
-	})
-}
-
-func (l ListOfUint8) IterAllP(concurrency int, cb ListOfUint8IterAllCallback) {
-	l.l.IterAllP(concurrency, func(v types.Value, i uint64) {
-		cb(uint8(v.(types.Uint8)), i)
-	})
-}
-
-type ListOfUint8FilterCallback func(v uint8, i uint64) (keep bool)
-
-func (l ListOfUint8) Filter(cb ListOfUint8FilterCallback) ListOfUint8 {
-	out := l.l.Filter(func(v types.Value, i uint64) bool {
-		return cb(uint8(v.(types.Uint8)), i)
-	})
-	return ListOfUint8{out, &ref.Ref{}}
 }

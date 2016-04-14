@@ -39,17 +39,7 @@ const _pkg = new _Package([
 ]);
 _registerPackage(_pkg);
 const StructWithList$type = _makeType(_pkg.ref, 0);
-const StructWithList$typeDef = _makeStructType('StructWithList',
-  [
-    new _Field('l', _makeCompoundType(_Kind.List, _uint8Type), false),
-    new _Field('b', _boolType, false),
-    new _Field('s', _stringType, false),
-    new _Field('i', _int64Type, false),
-  ],
-  [
-
-  ]
-);
+const StructWithList$typeDef = _pkg.types[0];
 
 
 type StructWithList$Data = {

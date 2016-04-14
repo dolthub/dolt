@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __genPackageInFile_struct_with_unions_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -36,7 +34,7 @@ func init() {
 			},
 		),
 	}, []ref.Ref{})
-	__genPackageInFile_struct_with_unions_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // StructWithUnions
@@ -83,7 +81,7 @@ func (m StructWithUnions) Type() types.Type {
 }
 
 func init() {
-	__typeForStructWithUnions = types.MakeType(__genPackageInFile_struct_with_unions_CachedRef, 0)
+	__typeForStructWithUnions = types.MakeType(ref.Parse("sha1-acd8b38023bbe726aed752ca3119eb5e1c125fa1"), 0)
 	types.RegisterStruct(__typeForStructWithUnions, builderForStructWithUnions, readerForStructWithUnions)
 }
 
@@ -188,7 +186,7 @@ func (m __unionOfBOfFloat64AndCOfString) Type() types.Type {
 }
 
 func init() {
-	__typeFor__unionOfBOfFloat64AndCOfString = types.MakeType(__genPackageInFile_struct_with_unions_CachedRef, 1)
+	__typeFor__unionOfBOfFloat64AndCOfString = types.MakeType(ref.Parse("sha1-acd8b38023bbe726aed752ca3119eb5e1c125fa1"), 1)
 	types.RegisterStruct(__typeFor__unionOfBOfFloat64AndCOfString, builderFor__unionOfBOfFloat64AndCOfString, readerFor__unionOfBOfFloat64AndCOfString)
 }
 
@@ -325,7 +323,7 @@ func (m __unionOfEOfFloat64AndFOfString) Type() types.Type {
 }
 
 func init() {
-	__typeFor__unionOfEOfFloat64AndFOfString = types.MakeType(__genPackageInFile_struct_with_unions_CachedRef, 2)
+	__typeFor__unionOfEOfFloat64AndFOfString = types.MakeType(ref.Parse("sha1-acd8b38023bbe726aed752ca3119eb5e1c125fa1"), 2)
 	types.RegisterStruct(__typeFor__unionOfEOfFloat64AndFOfString, builderFor__unionOfEOfFloat64AndFOfString, readerFor__unionOfEOfFloat64AndFOfString)
 }
 

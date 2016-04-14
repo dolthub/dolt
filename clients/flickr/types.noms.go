@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_types_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -33,7 +31,7 @@ func init() {
 	}, []ref.Ref{
 		ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"),
 	})
-	__mainPackageInFile_types_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // User
@@ -85,7 +83,7 @@ func (m User) Type() types.Type {
 }
 
 func init() {
-	__typeForUser = types.MakeType(__mainPackageInFile_types_CachedRef, 0)
+	__typeForUser = types.MakeType(ref.Parse("sha1-6ff3435146ddf2b1373084026be32dc5a8e09d4d"), 0)
 	types.RegisterStruct(__typeForUser, builderForUser, readerForUser)
 }
 
@@ -210,7 +208,7 @@ func (m Album) Type() types.Type {
 }
 
 func init() {
-	__typeForAlbum = types.MakeType(__mainPackageInFile_types_CachedRef, 1)
+	__typeForAlbum = types.MakeType(ref.Parse("sha1-6ff3435146ddf2b1373084026be32dc5a8e09d4d"), 1)
 	types.RegisterStruct(__typeForAlbum, builderForAlbum, readerForAlbum)
 }
 
@@ -331,7 +329,7 @@ func (r RefOfUser) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfUser = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_types_CachedRef, 0))
+	__typeForRefOfUser = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-6ff3435146ddf2b1373084026be32dc5a8e09d4d"), 0))
 	types.RegisterRef(__typeForRefOfUser, builderForRefOfUser)
 }
 
@@ -399,7 +397,7 @@ func (m MapOfStringToRefOfAlbum) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfStringToRefOfAlbum = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_types_CachedRef, 1)))
+	__typeForMapOfStringToRefOfAlbum = types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-6ff3435146ddf2b1373084026be32dc5a8e09d4d"), 1)))
 	types.RegisterValue(__typeForMapOfStringToRefOfAlbum, builderForMapOfStringToRefOfAlbum, readerForMapOfStringToRefOfAlbum)
 }
 
@@ -666,7 +664,7 @@ func (r RefOfAlbum) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfAlbum = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_types_CachedRef, 1))
+	__typeForRefOfAlbum = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-6ff3435146ddf2b1373084026be32dc5a8e09d4d"), 1))
 	types.RegisterRef(__typeForRefOfAlbum, builderForRefOfAlbum)
 }
 

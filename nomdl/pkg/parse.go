@@ -33,10 +33,17 @@ func ParseNomDL(packageName string, r io.Reader, includePath string, vrw types.V
 		aliasNames[v] = k
 	}
 
+	pkg := types.NewPackage(i.Types, deps)
+
+	usingDeclarations := make([]types.Type, len(i.UsingDeclarations))
+	for idx, t := range i.UsingDeclarations {
+		usingDeclarations[idx] = types.FixupType(t, &pkg)
+	}
+
 	return Parsed{
-		types.NewPackage(i.Types, deps),
+		pkg,
 		i.Name,
-		i.UsingDeclarations,
+		usingDeclarations,
 		aliasNames,
 	}
 }
@@ -185,7 +192,7 @@ func expandStruct(t types.Type, ordinal int) []types.Type {
 			if f.T.Kind() == types.StructKind {
 				newType := expandStruct(f.T, ordinal)
 				ts = append(ts, newType...)
-				rv[i] = types.Field{f.Name, types.MakeType(ref.Ref{}, int16(ordinal)), f.Optional}
+				rv[i] = types.Field{Name: f.Name, T: types.MakeType(ref.Ref{}, int16(ordinal)), Optional: f.Optional}
 				ordinal += len(newType)
 			} else {
 				rv[i] = f

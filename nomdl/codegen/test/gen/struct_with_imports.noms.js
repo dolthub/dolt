@@ -7,6 +7,7 @@ import {
   Package as _Package,
   Ref as _Ref,
   createStructClass as _createStructClass,
+  emptyRef as _emptyRef,
   makeEnumType as _makeEnumType,
   makeListType as _makeListType,
   makeStructType as _makeStructType,
@@ -26,7 +27,7 @@ const _pkg = new _Package([
   _makeStructType('ImportUser',
     [
       new _Field('importedStruct', _makeType(_Ref.parse('sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0'), 0), false),
-      new _Field('enum', _makeType(new _Ref(), 0), false),
+      new _Field('enum', _makeType(_emptyRef, 0), false),
     ],
     [
 
@@ -37,17 +38,9 @@ const _pkg = new _Package([
 ]);
 _registerPackage(_pkg);
 const LocalE$type = _makeType(_pkg.ref, 0);
-const LocalE$typeDef = _makeEnumType('LocalE', 'LocalE1', 'Ignored');
+const LocalE$typeDef = _pkg.types[0];
 const ImportUser$type = _makeType(_pkg.ref, 1);
-const ImportUser$typeDef = _makeStructType('ImportUser',
-  [
-    new _Field('importedStruct', _makeType(_Ref.parse('sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0'), 0), false),
-    new _Field('enum', _makeType(_pkg.ref, 0), false),
-  ],
-  [
-
-  ]
-);
+const ImportUser$typeDef = _pkg.types[1];
 
 
 export type LocalE =

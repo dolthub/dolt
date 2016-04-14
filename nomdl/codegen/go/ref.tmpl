@@ -45,7 +45,7 @@ func (r {{.Name}}) Less(other {{$typesPackage}}OrderedValue) bool {
 }
 
 func init() {
-	__typeFor{{.Name}} = {{toTypesType .Type .FileID .PackageName}}
+	__typeFor{{.Name}} = {{toTypesType .Type false}}
 	{{$typesPackage}}RegisterRef(__typeFor{{.Name}}, builderFor{{.Name}})
 }
 

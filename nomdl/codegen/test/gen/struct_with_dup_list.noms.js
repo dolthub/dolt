@@ -34,14 +34,7 @@ const _pkg = new _Package([
 ]);
 _registerPackage(_pkg);
 const StructWithDupList$type = _makeType(_pkg.ref, 0);
-const StructWithDupList$typeDef = _makeStructType('StructWithDupList',
-  [
-    new _Field('l', _makeCompoundType(_Kind.List, _uint8Type), false),
-  ],
-  [
-
-  ]
-);
+const StructWithDupList$typeDef = _pkg.types[0];
 
 
 type StructWithDupList$Data = {

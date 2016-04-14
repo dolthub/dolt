@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __genPackageInFile_struct_with_union_field_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -27,7 +25,7 @@ func init() {
 			},
 		),
 	}, []ref.Ref{})
-	__genPackageInFile_struct_with_union_field_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // StructWithUnionField
@@ -77,7 +75,7 @@ func (m StructWithUnionField) Type() types.Type {
 }
 
 func init() {
-	__typeForStructWithUnionField = types.MakeType(__genPackageInFile_struct_with_union_field_CachedRef, 0)
+	__typeForStructWithUnionField = types.MakeType(ref.Parse("sha1-0b9aa6bce1d882691828abba4ab105d2ff018992"), 0)
 	types.RegisterStruct(__typeForStructWithUnionField, builderForStructWithUnionField, readerForStructWithUnionField)
 }
 

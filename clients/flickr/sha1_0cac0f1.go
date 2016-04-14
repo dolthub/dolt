@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_sha1_0cac0f1_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -29,7 +27,7 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	__mainPackageInFile_sha1_0cac0f1_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // Geoposition
@@ -76,7 +74,7 @@ func (m Geoposition) Type() types.Type {
 }
 
 func init() {
-	__typeForGeoposition = types.MakeType(__mainPackageInFile_sha1_0cac0f1_CachedRef, 0)
+	__typeForGeoposition = types.MakeType(ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"), 0)
 	types.RegisterStruct(__typeForGeoposition, builderForGeoposition, readerForGeoposition)
 }
 
@@ -181,7 +179,7 @@ func (m Georectangle) Type() types.Type {
 }
 
 func init() {
-	__typeForGeorectangle = types.MakeType(__mainPackageInFile_sha1_0cac0f1_CachedRef, 1)
+	__typeForGeorectangle = types.MakeType(ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"), 1)
 	types.RegisterStruct(__typeForGeorectangle, builderForGeorectangle, readerForGeorectangle)
 }
 

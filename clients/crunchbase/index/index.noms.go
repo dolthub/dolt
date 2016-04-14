@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_index_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -37,7 +35,7 @@ func init() {
 		ref.Parse("sha1-6c64b08a509e25f9814dbf036489267c957a6fd8"),
 		ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"),
 	})
-	__mainPackageInFile_index_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // QuarterEnum
@@ -62,7 +60,7 @@ func (e QuarterEnum) Type() types.Type {
 }
 
 func init() {
-	__typeForQuarterEnum = types.MakeType(__mainPackageInFile_index_CachedRef, 0)
+	__typeForQuarterEnum = types.MakeType(ref.Parse("sha1-1d9b1605b84bc4f043956d96b4abddc9c0c139ba"), 0)
 	types.RegisterEnum(__typeForQuarterEnum, builderForQuarterEnum, readerForQuarterEnum)
 }
 
@@ -135,7 +133,7 @@ func (m Quarter) Type() types.Type {
 }
 
 func init() {
-	__typeForQuarter = types.MakeType(__mainPackageInFile_index_CachedRef, 1)
+	__typeForQuarter = types.MakeType(ref.Parse("sha1-1d9b1605b84bc4f043956d96b4abddc9c0c139ba"), 1)
 	types.RegisterStruct(__typeForQuarter, builderForQuarter, readerForQuarter)
 }
 
@@ -238,7 +236,7 @@ func (m Key) Type() types.Type {
 }
 
 func init() {
-	__typeForKey = types.MakeType(__mainPackageInFile_index_CachedRef, 2)
+	__typeForKey = types.MakeType(ref.Parse("sha1-1d9b1605b84bc4f043956d96b4abddc9c0c139ba"), 2)
 	types.RegisterStruct(__typeForKey, builderForKey, readerForKey)
 }
 
@@ -442,7 +440,7 @@ func (e RoundTypeEnum) Type() types.Type {
 }
 
 func init() {
-	__typeForRoundTypeEnum = types.MakeType(__mainPackageInFile_index_CachedRef, 3)
+	__typeForRoundTypeEnum = types.MakeType(ref.Parse("sha1-1d9b1605b84bc4f043956d96b4abddc9c0c139ba"), 3)
 	types.RegisterEnum(__typeForRoundTypeEnum, builderForRoundTypeEnum, readerForRoundTypeEnum)
 }
 
@@ -527,7 +525,7 @@ func (m MapOfRefOfKeyToSetOfRefOfRound) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfRefOfKeyToSetOfRefOfRound = types.MakeCompoundType(types.MapKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_index_CachedRef, 2)), types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"), 1))))
+	__typeForMapOfRefOfKeyToSetOfRefOfRound = types.MakeCompoundType(types.MapKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-1d9b1605b84bc4f043956d96b4abddc9c0c139ba"), 2)), types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-91ae65b19b4817fc15d4e2c5c7472c68b4950b77"), 1))))
 	types.RegisterValue(__typeForMapOfRefOfKeyToSetOfRefOfRound, builderForMapOfRefOfKeyToSetOfRefOfRound, readerForMapOfRefOfKeyToSetOfRefOfRound)
 }
 
@@ -649,7 +647,7 @@ func (r RefOfKey) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfKey = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_index_CachedRef, 2))
+	__typeForRefOfKey = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-1d9b1605b84bc4f043956d96b4abddc9c0c139ba"), 2))
 	types.RegisterRef(__typeForRefOfKey, builderForRefOfKey)
 }
 

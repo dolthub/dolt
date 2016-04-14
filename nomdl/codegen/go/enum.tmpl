@@ -20,7 +20,7 @@ func (e {{.Name}}) Type() {{$typesPackage}}Type {
 }
 
 func init() {
-	__typeFor{{.Name}} = {{$typesPackage}}MakeType(__{{.PackageName}}PackageInFile_{{.FileID}}_CachedRef, {{.Ordinal}})
+	__typeFor{{.Name}} = {{$typesPackage}}MakeType(ref.Parse("{{.PackageRef}}"), {{.Ordinal}})
 	{{$typesPackage}}RegisterEnum(__typeFor{{.Name}}, builderFor{{.Name}}, readerFor{{.Name}})
 }
 

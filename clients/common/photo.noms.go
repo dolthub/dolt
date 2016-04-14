@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __commonPackageInFile_photo_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -47,7 +45,7 @@ func init() {
 		ref.Parse("sha1-0b4ac7cb0583d7fecd71a1584a3f846e5d8b08eb"),
 		ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"),
 	})
-	__commonPackageInFile_photo_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // RemotePhoto
@@ -119,7 +117,7 @@ func (m RemotePhoto) Type() types.Type {
 }
 
 func init() {
-	__typeForRemotePhoto = types.MakeType(__commonPackageInFile_photo_CachedRef, 0)
+	__typeForRemotePhoto = types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 0)
 	types.RegisterStruct(__typeForRemotePhoto, builderForRemotePhoto, readerForRemotePhoto)
 }
 
@@ -314,7 +312,7 @@ func (m Face) Type() types.Type {
 }
 
 func init() {
-	__typeForFace = types.MakeType(__commonPackageInFile_photo_CachedRef, 1)
+	__typeForFace = types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 1)
 	types.RegisterStruct(__typeForFace, builderForFace, readerForFace)
 }
 
@@ -461,7 +459,7 @@ func (m Size) Type() types.Type {
 }
 
 func init() {
-	__typeForSize = types.MakeType(__commonPackageInFile_photo_CachedRef, 2)
+	__typeForSize = types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 2)
 	types.RegisterStruct(__typeForSize, builderForSize, readerForSize)
 }
 
@@ -578,7 +576,7 @@ func (m MapOfSizeToString) Type() types.Type {
 }
 
 func init() {
-	__typeForMapOfSizeToString = types.MakeCompoundType(types.MapKind, types.MakeType(__commonPackageInFile_photo_CachedRef, 2), types.MakePrimitiveType(types.StringKind))
+	__typeForMapOfSizeToString = types.MakeCompoundType(types.MapKind, types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 2), types.MakePrimitiveType(types.StringKind))
 	types.RegisterValue(__typeForMapOfSizeToString, builderForMapOfSizeToString, readerForMapOfSizeToString)
 }
 
@@ -858,7 +856,7 @@ func (m SetOfFace) Type() types.Type {
 }
 
 func init() {
-	__typeForSetOfFace = types.MakeCompoundType(types.SetKind, types.MakeType(__commonPackageInFile_photo_CachedRef, 1))
+	__typeForSetOfFace = types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 1))
 	types.RegisterValue(__typeForSetOfFace, builderForSetOfFace, readerForSetOfFace)
 }
 

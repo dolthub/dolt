@@ -118,7 +118,6 @@ func (r *jsonArrayReader) readList(t Type, pkg *Package) Value {
 		data = append(data, v)
 	}
 
-	t = fixupType(t, pkg)
 	return valueFromType(newListLeaf(t, data...), t)
 }
 
@@ -131,7 +130,6 @@ func (r *jsonArrayReader) readSet(t Type, pkg *Package) Value {
 		data = append(data, v)
 	}
 
-	t = fixupType(t, pkg)
 	return valueFromType(newSetLeaf(t, data...), t)
 }
 
@@ -147,7 +145,6 @@ func (r *jsonArrayReader) readMap(t Type, pkg *Package) Value {
 		data = append(data, mapEntry{k, v})
 	}
 
-	t = fixupType(t, pkg)
 	return valueFromType(newMapLeaf(t, data...), t)
 }
 
@@ -174,7 +171,6 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t Type, pkg *Package) (Value, bo
 	r2 := newJsonArrayReader(r.readArray(), r.vr)
 	data := metaSequenceData{}
 	indexType := indexTypeForMetaSequence(t)
-	t = fixupType(t, pkg)
 	for !r2.atEnd() {
 		ref := refFromType(r2.readRef(), MakeRefType(t))
 		v := r2.readValueWithoutTag(indexType, pkg)
@@ -184,8 +180,7 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t Type, pkg *Package) (Value, bo
 	return newMetaSequenceFromData(data, t, r.vr), true
 }
 
-func (r *jsonArrayReader) readEnum(t Type, pkg *Package) Value {
-	t = fixupType(t, pkg)
+func (r *jsonArrayReader) readEnum(t Type) Value {
 	return enumFromType(uint32(r.readUint()), t)
 }
 
@@ -205,9 +200,8 @@ func (r *jsonArrayReader) readPackage(t Type, pkg *Package) Value {
 	return NewPackage(types, deps)
 }
 
-func (r *jsonArrayReader) readRefValue(t Type, pkg *Package) Value {
+func (r *jsonArrayReader) readRefValue(t Type) Value {
 	ref := r.readRef()
-	t = fixupType(t, pkg)
 	return refFromType(ref, t)
 }
 
@@ -269,7 +263,7 @@ func (r *jsonArrayReader) readValueWithoutTag(t Type, pkg *Package) Value {
 	case PackageKind:
 		return r.readPackage(t, pkg)
 	case RefKind:
-		return r.readRefValue(t, pkg)
+		return r.readRefValue(t)
 	case SetKind:
 		if ms, ok := r.maybeReadMetaSequence(t, pkg); ok {
 			return ms
@@ -311,7 +305,7 @@ func (r *jsonArrayReader) readUnresolvedKindToValue(t Type, pkg *Package) Value 
 	typeDef := pkg.types[ordinal]
 
 	if typeDef.Kind() == EnumKind {
-		return r.readEnum(t, pkg)
+		return r.readEnum(t)
 	}
 
 	d.Chk.Equal(StructKind, typeDef.Kind())
@@ -374,44 +368,6 @@ func (r *jsonArrayReader) readTypeAsValue(pkg *Package) Type {
 	return MakePrimitiveType(k)
 }
 
-// fixupType goes trough the object graph of tr and updates the PackageRef to pkg if the the old PackageRef was an empty ref.
-func fixupType(tr Type, pkg *Package) Type {
-	t, _ := fixupTypeInternal(tr, pkg)
-	return t
-}
-
-func fixupTypeInternal(tr Type, pkg *Package) (Type, bool) {
-	switch desc := tr.Desc.(type) {
-	case EnumDesc, StructDesc:
-		panic("unreachable")
-	case PrimitiveDesc:
-		return tr, false
-	case CompoundDesc:
-		elemTypes := make([]Type, len(desc.ElemTypes))
-		changed := false
-		for i, elemType := range desc.ElemTypes {
-			if t, c := fixupTypeInternal(elemType, pkg); c {
-				changed = true
-				elemTypes[i] = t
-			} else {
-				elemTypes[i] = elemType
-			}
-		}
-
-		if !changed {
-			return tr, false
-		}
-
-		return MakeCompoundType(tr.Kind(), elemTypes...), true
-	case UnresolvedDesc:
-		if tr.HasPackageRef() {
-			return tr, false
-		}
-		return MakeType(pkg.Ref(), tr.Ordinal()), true
-	}
-	panic("unreachable")
-}
-
 func (r *jsonArrayReader) readStruct(typeDef, typ Type, pkg *Package) Value {
 	// We've read `[StructKind, sha1, name` at this point
 	values := []Value{}
@@ -432,6 +388,5 @@ func (r *jsonArrayReader) readStruct(typeDef, typ Type, pkg *Package) Value {
 		values = append(values, Uint32(unionIndex), r.readValueWithoutTag(desc.Union[unionIndex].T, pkg))
 	}
 
-	typ = fixupType(typ, pkg)
 	return structBuilderForType(values, typ, typeDef)
 }

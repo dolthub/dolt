@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __commonPackageInFile_incident_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -33,7 +31,7 @@ func init() {
 	}, []ref.Ref{
 		ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"),
 	})
-	__commonPackageInFile_incident_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // Incident
@@ -125,7 +123,7 @@ func (m Incident) Type() types.Type {
 }
 
 func init() {
-	__typeForIncident = types.MakeType(__commonPackageInFile_incident_CachedRef, 0)
+	__typeForIncident = types.MakeType(ref.Parse("sha1-a4e6ece8b3bc70057c3019cbc9f1c2caf1dd25d7"), 0)
 	types.RegisterStruct(__typeForIncident, builderForIncident, readerForIncident)
 }
 
@@ -368,7 +366,7 @@ func (m ListOfRefOfIncident) Type() types.Type {
 }
 
 func init() {
-	__typeForListOfRefOfIncident = types.MakeCompoundType(types.ListKind, types.MakeCompoundType(types.RefKind, types.MakeType(__commonPackageInFile_incident_CachedRef, 0)))
+	__typeForListOfRefOfIncident = types.MakeCompoundType(types.ListKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-a4e6ece8b3bc70057c3019cbc9f1c2caf1dd25d7"), 0)))
 	types.RegisterValue(__typeForListOfRefOfIncident, builderForListOfRefOfIncident, readerForListOfRefOfIncident)
 }
 
@@ -500,7 +498,7 @@ func (r RefOfIncident) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfIncident = types.MakeCompoundType(types.RefKind, types.MakeType(__commonPackageInFile_incident_CachedRef, 0))
+	__typeForRefOfIncident = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-a4e6ece8b3bc70057c3019cbc9f1c2caf1dd25d7"), 0))
 	types.RegisterRef(__typeForRefOfIncident, builderForRefOfIncident)
 }
 

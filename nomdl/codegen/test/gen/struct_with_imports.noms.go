@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __genPackageInFile_struct_with_imports_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -25,7 +23,7 @@ func init() {
 	}, []ref.Ref{
 		ref.Parse("sha1-eda4273cba9d5d4a1bccf41bcaec64743863cde0"),
 	})
-	__genPackageInFile_struct_with_imports_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // LocalE
@@ -48,7 +46,7 @@ func (e LocalE) Type() types.Type {
 }
 
 func init() {
-	__typeForLocalE = types.MakeType(__genPackageInFile_struct_with_imports_CachedRef, 0)
+	__typeForLocalE = types.MakeType(ref.Parse("sha1-406c3f71fd59ab208bb2d427e0b1b8ab6ebc6130"), 0)
 	types.RegisterEnum(__typeForLocalE, builderForLocalE, readerForLocalE)
 }
 
@@ -121,7 +119,7 @@ func (m ImportUser) Type() types.Type {
 }
 
 func init() {
-	__typeForImportUser = types.MakeType(__genPackageInFile_struct_with_imports_CachedRef, 1)
+	__typeForImportUser = types.MakeType(ref.Parse("sha1-406c3f71fd59ab208bb2d427e0b1b8ab6ebc6130"), 1)
 	types.RegisterStruct(__typeForImportUser, builderForImportUser, readerForImportUser)
 }
 

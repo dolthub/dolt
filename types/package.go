@@ -13,11 +13,20 @@ type Package struct {
 }
 
 func NewPackage(types []Type, dependencies ref.RefSlice) Package {
-	p := Package{types: types, ref: &ref.Ref{}}
+	p := Package{types: types}
 	// The order |Package.dependencies| must be stable for the Package to have a stable ref.
 	// See https://github.com/attic-labs/noms/issues/814 for stable ordering of |Package.types|.
 	p.dependencies = append(p.dependencies, dependencies...)
 	sort.Sort(p.dependencies)
+	r := getRef(p)
+	p.ref = &r
+
+	newTypes := make([]Type, len(types))
+	for i, t := range types {
+		newTypes[i] = FixupType(t, &p)
+	}
+	p.types = newTypes
+
 	return p
 }
 

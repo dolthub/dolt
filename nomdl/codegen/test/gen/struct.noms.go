@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __genPackageInFile_struct_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -22,7 +20,7 @@ func init() {
 			types.Choices{},
 		),
 	}, []ref.Ref{})
-	__genPackageInFile_struct_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // Struct
@@ -69,7 +67,7 @@ func (m Struct) Type() types.Type {
 }
 
 func init() {
-	__typeForStruct = types.MakeType(__genPackageInFile_struct_CachedRef, 0)
+	__typeForStruct = types.MakeType(ref.Parse("sha1-a1c1ec1fc3e4af6d49f5f53da41d9cc2bf1dc804"), 0)
 	types.RegisterStruct(__typeForStruct, builderForStruct, readerForStruct)
 }
 
@@ -185,7 +183,7 @@ func (m ListOfStruct) Type() types.Type {
 }
 
 func init() {
-	__typeForListOfStruct = types.MakeCompoundType(types.ListKind, types.MakeType(__genPackageInFile_struct_CachedRef, 0))
+	__typeForListOfStruct = types.MakeCompoundType(types.ListKind, types.MakeType(ref.Parse("sha1-a1c1ec1fc3e4af6d49f5f53da41d9cc2bf1dc804"), 0))
 	types.RegisterValue(__typeForListOfStruct, builderForListOfStruct, readerForListOfStruct)
 }
 

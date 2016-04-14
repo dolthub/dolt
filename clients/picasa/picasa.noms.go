@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __mainPackageInFile_picasa_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -33,7 +31,7 @@ func init() {
 	}, []ref.Ref{
 		ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"),
 	})
-	__mainPackageInFile_picasa_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // User
@@ -85,7 +83,7 @@ func (m User) Type() types.Type {
 }
 
 func init() {
-	__typeForUser = types.MakeType(__mainPackageInFile_picasa_CachedRef, 0)
+	__typeForUser = types.MakeType(ref.Parse("sha1-988f3a092d1b2cfe21f48d517b28b27a3fed4e95"), 0)
 	types.RegisterStruct(__typeForUser, builderForUser, readerForUser)
 }
 
@@ -210,7 +208,7 @@ func (m Album) Type() types.Type {
 }
 
 func init() {
-	__typeForAlbum = types.MakeType(__mainPackageInFile_picasa_CachedRef, 1)
+	__typeForAlbum = types.MakeType(ref.Parse("sha1-988f3a092d1b2cfe21f48d517b28b27a3fed4e95"), 1)
 	types.RegisterStruct(__typeForAlbum, builderForAlbum, readerForAlbum)
 }
 
@@ -331,7 +329,7 @@ func (r RefOfUser) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfUser = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_picasa_CachedRef, 0))
+	__typeForRefOfUser = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-988f3a092d1b2cfe21f48d517b28b27a3fed4e95"), 0))
 	types.RegisterRef(__typeForRefOfUser, builderForRefOfUser)
 }
 
@@ -398,7 +396,7 @@ func (m ListOfRefOfAlbum) Type() types.Type {
 }
 
 func init() {
-	__typeForListOfRefOfAlbum = types.MakeCompoundType(types.ListKind, types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_picasa_CachedRef, 1)))
+	__typeForListOfRefOfAlbum = types.MakeCompoundType(types.ListKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-988f3a092d1b2cfe21f48d517b28b27a3fed4e95"), 1)))
 	types.RegisterValue(__typeForListOfRefOfAlbum, builderForListOfRefOfAlbum, readerForListOfRefOfAlbum)
 }
 
@@ -675,7 +673,7 @@ func (r RefOfAlbum) Less(other types.OrderedValue) bool {
 }
 
 func init() {
-	__typeForRefOfAlbum = types.MakeCompoundType(types.RefKind, types.MakeType(__mainPackageInFile_picasa_CachedRef, 1))
+	__typeForRefOfAlbum = types.MakeCompoundType(types.RefKind, types.MakeType(ref.Parse("sha1-988f3a092d1b2cfe21f48d517b28b27a3fed4e95"), 1))
 	types.RegisterRef(__typeForRefOfAlbum, builderForRefOfAlbum)
 }
 

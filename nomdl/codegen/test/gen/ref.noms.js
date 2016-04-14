@@ -39,14 +39,7 @@ const _pkg = new _Package([
 ]);
 _registerPackage(_pkg);
 const StructWithRef$type = _makeType(_pkg.ref, 0);
-const StructWithRef$typeDef = _makeStructType('StructWithRef',
-  [
-    new _Field('r', _makeCompoundType(_Kind.Ref, _makeCompoundType(_Kind.Set, _float32Type)), false),
-  ],
-  [
-
-  ]
-);
+const StructWithRef$typeDef = _pkg.types[0];
 
 
 type StructWithRef$Data = {

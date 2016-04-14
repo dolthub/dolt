@@ -30,15 +30,7 @@ const _pkg = new _Package([
 ]);
 _registerPackage(_pkg);
 const OptionalStruct$type = _makeType(_pkg.ref, 0);
-const OptionalStruct$typeDef = _makeStructType('OptionalStruct',
-  [
-    new _Field('s', _stringType, true),
-    new _Field('b', _boolType, true),
-  ],
-  [
-
-  ]
-);
+const OptionalStruct$typeDef = _pkg.types[0];
 
 
 type OptionalStruct$Data = {

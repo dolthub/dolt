@@ -165,7 +165,7 @@ func (suite *ImportTestSuite) TestImports() {
 	field := find("a", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	field = find("c", named)
-	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
+	suite.EqualValues(p.Ref(), field.T.PackageRef())
 
 	named = p.Types()[1]
 	suite.Equal("Local2", named.Name())
@@ -179,7 +179,7 @@ func (suite *ImportTestSuite) TestImports() {
 	field = findChoice("a", named)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 	field = findChoice("b", named)
-	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
+	suite.EqualValues(p.Ref(), field.T.PackageRef())
 
 	named = p.Types()[3]
 	suite.Equal("WithUnion", named.Name())
@@ -189,7 +189,7 @@ func (suite *ImportTestSuite) TestImports() {
 	suite.True(namedUnion.IsUnresolved())
 	namedUnion = p.Types()[namedUnion.Ordinal()]
 	field = findChoice("s", namedUnion)
-	suite.EqualValues(ref.Ref{}, field.T.PackageRef())
+	suite.EqualValues(p.Ref(), field.T.PackageRef())
 	field = findChoice("t", namedUnion)
 	suite.EqualValues(suite.importRef, field.T.PackageRef())
 

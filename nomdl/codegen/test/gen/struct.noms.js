@@ -33,15 +33,7 @@ const _pkg = new _Package([
 ]);
 _registerPackage(_pkg);
 const Struct$type = _makeType(_pkg.ref, 0);
-const Struct$typeDef = _makeStructType('Struct',
-  [
-    new _Field('s', _stringType, false),
-    new _Field('b', _boolType, false),
-  ],
-  [
-
-  ]
-);
+const Struct$typeDef = _pkg.types[0];
 
 
 type Struct$Data = {

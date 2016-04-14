@@ -5,8 +5,8 @@
 import {
   Field as _Field,
   Package as _Package,
-  Ref as _Ref,
   createStructClass as _createStructClass,
+  emptyRef as _emptyRef,
   float64Type as _float64Type,
   makeStructType as _makeStructType,
   makeType as _makeType,
@@ -21,8 +21,8 @@ import type {
 const _pkg = new _Package([
   _makeStructType('StructWithUnions',
     [
-      new _Field('a', _makeType(new _Ref(), 1), false),
-      new _Field('d', _makeType(new _Ref(), 2), false),
+      new _Field('a', _makeType(_emptyRef, 1), false),
+      new _Field('d', _makeType(_emptyRef, 2), false),
     ],
     [
 
@@ -50,35 +50,11 @@ const _pkg = new _Package([
 ]);
 _registerPackage(_pkg);
 const StructWithUnions$type = _makeType(_pkg.ref, 0);
-const StructWithUnions$typeDef = _makeStructType('StructWithUnions',
-  [
-    new _Field('a', _makeType(_pkg.ref, 1), false),
-    new _Field('d', _makeType(_pkg.ref, 2), false),
-  ],
-  [
-
-  ]
-);
+const StructWithUnions$typeDef = _pkg.types[0];
 const __unionOfBOfFloat64AndCOfString$type = _makeType(_pkg.ref, 1);
-const __unionOfBOfFloat64AndCOfString$typeDef = _makeStructType('',
-  [
-
-  ],
-  [
-    new _Field('b', _float64Type, false),
-    new _Field('c', _stringType, false),
-  ]
-);
+const __unionOfBOfFloat64AndCOfString$typeDef = _pkg.types[1];
 const __unionOfEOfFloat64AndFOfString$type = _makeType(_pkg.ref, 2);
-const __unionOfEOfFloat64AndFOfString$typeDef = _makeStructType('',
-  [
-
-  ],
-  [
-    new _Field('e', _float64Type, false),
-    new _Field('f', _stringType, false),
-  ]
-);
+const __unionOfEOfFloat64AndFOfString$typeDef = _pkg.types[2];
 
 
 type StructWithUnions$Data = {

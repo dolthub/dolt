@@ -7,8 +7,6 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-var __leafDepPackageInFile_leafDep_CachedRef ref.Ref
-
 // This function builds up a Noms value that describes the type
 // package implemented by this file and registers it with the global
 // type package definition cache.
@@ -23,7 +21,7 @@ func init() {
 		),
 		types.MakeEnumType("E", "e1", "e2", "e3"),
 	}, []ref.Ref{})
-	__leafDepPackageInFile_leafDep_CachedRef = types.RegisterPackage(&p)
+	types.RegisterPackage(&p)
 }
 
 // S
@@ -70,7 +68,7 @@ func (m S) Type() types.Type {
 }
 
 func init() {
-	__typeForS = types.MakeType(__leafDepPackageInFile_leafDep_CachedRef, 0)
+	__typeForS = types.MakeType(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 0)
 	types.RegisterStruct(__typeForS, builderForS, readerForS)
 }
 
@@ -152,7 +150,7 @@ func (e E) Type() types.Type {
 }
 
 func init() {
-	__typeForE = types.MakeType(__leafDepPackageInFile_leafDep_CachedRef, 1)
+	__typeForE = types.MakeType(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 1)
 	types.RegisterEnum(__typeForE, builderForE, readerForE)
 }
 
