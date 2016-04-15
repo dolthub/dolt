@@ -44,7 +44,8 @@ type RemoteDataStoreSuite struct {
 func (suite *RemoteDataStoreSuite) SetupTest() {
 	suite.cs = chunks.NewTestStore()
 	suite.makeDs = func(cs chunks.ChunkStore) DataStore {
-		return &RemoteDataStoreClient{newDataStoreCommon(newHTTPHintedChunkStoreForTest(suite.cs))}
+		hbs := newHTTPBatchStoreForTest(suite.cs)
+		return &RemoteDataStoreClient{newDataStoreCommon(hbs, hbs)}
 	}
 	suite.ds = suite.makeDs(suite.cs)
 }

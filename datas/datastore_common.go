@@ -3,13 +3,16 @@ package datas
 import (
 	"errors"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
 type dataStoreCommon struct {
-	cachingValueStore
+	*types.ValueStore
+	bs       types.BatchStore
+	rt       chunks.RootTracker
 	rootRef  ref.Ref
 	datasets *MapOfStringToRefOfCommit
 }
@@ -19,8 +22,8 @@ var (
 	ErrMergeNeeded          = errors.New("Dataset head is not ancestor of commit")
 )
 
-func newDataStoreCommon(hcs hintedChunkStore) dataStoreCommon {
-	return dataStoreCommon{cachingValueStore: newCachingValueStore(hcs), rootRef: hcs.Root()}
+func newDataStoreCommon(bs types.BatchStore, rt chunks.RootTracker) dataStoreCommon {
+	return dataStoreCommon{ValueStore: types.NewValueStore(bs), bs: bs, rt: rt, rootRef: rt.Root()}
 }
 
 func (ds *dataStoreCommon) MaybeHead(datasetID string) (Commit, bool) {
@@ -52,10 +55,6 @@ func (ds *dataStoreCommon) Datasets() MapOfStringToRefOfCommit {
 func (ds *dataStoreCommon) datasetsFromRef(datasetsRef ref.Ref) *MapOfStringToRefOfCommit {
 	c := ds.ReadValue(datasetsRef).(MapOfStringToRefOfCommit)
 	return &c
-}
-
-func (ds *dataStoreCommon) Close() error {
-	return ds.hcs.Close()
 }
 
 func (ds *dataStoreCommon) commit(datasetID string, commit Commit) error {
@@ -97,7 +96,7 @@ func (ds *dataStoreCommon) doDelete(datasetID string) error {
 }
 
 func (ds *dataStoreCommon) getRootAndDatasets() (currentRootRef ref.Ref, currentDatasets MapOfStringToRefOfCommit) {
-	currentRootRef = ds.hcs.Root()
+	currentRootRef = ds.rt.Root()
 	currentDatasets = ds.Datasets()
 
 	if currentRootRef != currentDatasets.Ref() && !currentRootRef.IsEmpty() {
@@ -111,7 +110,7 @@ func (ds *dataStoreCommon) tryUpdateRoot(currentDatasets MapOfStringToRefOfCommi
 	// TODO: This Commit will be orphaned if the UpdateRoot below fails
 	newRootRef := ds.WriteValue(currentDatasets).TargetRef()
 	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
-	if !ds.hcs.UpdateRoot(newRootRef, currentRootRef) {
+	if !ds.rt.UpdateRoot(newRootRef, currentRootRef) {
 		err = ErrOptimisticLockFailed
 	}
 	return

@@ -11,11 +11,12 @@ import (
 	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/types"
 	"github.com/julienschmidt/httprouter"
 )
 
-// notAHintedChunkSink exists solely to provide a way to pull chunks into a remote data store without validation, because doing it with validation efficiently requires some serialization changes we have yet to make. Once we land BUG 822, we can come back here and undo this.
-type notAHintedChunkSink struct {
+// notABatchSink exists solely to provide a way to pull chunks into a remote data store without validation, because doing it with validation efficiently requires some serialization changes we have yet to make. Once we land BUG 822, we can come back here and undo this.
+type notABatchSink struct {
 	host          *url.URL
 	httpClient    httpDoer
 	auth          string
@@ -28,8 +29,8 @@ type notAHintedChunkSink struct {
 	unwrittenPuts *unwrittenPutCache
 }
 
-func newNotAHintedChunkStore(host *url.URL, auth string) *notAHintedChunkSink {
-	sink := &notAHintedChunkSink{
+func newNotABatchSink(host *url.URL, auth string) *notABatchSink {
+	sink := &notABatchSink{
 		host:          host,
 		httpClient:    makeHTTPClient(httpChunkSinkConcurrency),
 		auth:          auth,
@@ -45,13 +46,13 @@ func newNotAHintedChunkStore(host *url.URL, auth string) *notAHintedChunkSink {
 	return sink
 }
 
-func (bhcs *notAHintedChunkSink) Flush() {
+func (bhcs *notABatchSink) Flush() {
 	bhcs.flushChan <- struct{}{}
 	bhcs.requestWg.Wait()
 	return
 }
 
-func (bhcs *notAHintedChunkSink) Close() (e error) {
+func (bhcs *notABatchSink) Close() (e error) {
 	close(bhcs.finishedChan)
 	bhcs.requestWg.Wait()
 	bhcs.workerWg.Wait()
@@ -62,7 +63,7 @@ func (bhcs *notAHintedChunkSink) Close() (e error) {
 	return
 }
 
-func (bhcs *notAHintedChunkSink) Put(c chunks.Chunk, hints map[ref.Ref]struct{}) {
+func (bhcs *notABatchSink) SchedulePut(c chunks.Chunk, hints types.Hints) {
 	if !bhcs.unwrittenPuts.Add(c) {
 		return
 	}
@@ -71,7 +72,7 @@ func (bhcs *notAHintedChunkSink) Put(c chunks.Chunk, hints map[ref.Ref]struct{})
 	bhcs.writeQueue <- c
 }
 
-func (bhcs *notAHintedChunkSink) batchPutRequests() {
+func (bhcs *notABatchSink) batchPutRequests() {
 	bhcs.workerWg.Add(1)
 	go func() {
 		defer bhcs.workerWg.Done()
@@ -115,7 +116,7 @@ func (bhcs *notAHintedChunkSink) batchPutRequests() {
 	}()
 }
 
-func (bhcs *notAHintedChunkSink) sendWriteRequests(chnx []chunks.Chunk) {
+func (bhcs *notABatchSink) sendWriteRequests(chnx []chunks.Chunk) {
 	bhcs.rateLimit <- struct{}{}
 	go func() {
 		defer func() {
@@ -148,10 +149,10 @@ func (bhcs *notAHintedChunkSink) sendWriteRequests(chnx []chunks.Chunk) {
 	}()
 }
 
-func (bhcs *notAHintedChunkSink) Root() ref.Ref {
+func (bhcs *notABatchSink) Root() ref.Ref {
 	panic("Not Reached")
 }
 
-func (bhcs *notAHintedChunkSink) UpdateRoot(current, last ref.Ref) bool {
+func (bhcs *notABatchSink) UpdateRoot(current, last ref.Ref) bool {
 	panic("Not Reached")
 }

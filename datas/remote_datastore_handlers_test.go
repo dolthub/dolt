@@ -72,7 +72,7 @@ func TestBuildWriteValueRequest(t *testing.T) {
 	defer gr.Close()
 
 	count := 0
-	for _, hint := range deserializeHints(gr) {
+	for hint := range deserializeHints(gr) {
 		count++
 		_, present := hints[hint]
 		assert.True(present)

@@ -30,8 +30,15 @@ type DataStore interface {
 	// Delete removes the Dataset named datasetID from the map at the root of the DataStore. The Dataset data is not necessarily cleaned up at this time, but may be garbage collected in the future. If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the datastore is always returned.
 	Delete(datasetID string) (DataStore, error)
 
-	hintedChunkStore() hintedChunkStore
-	hintedChunkSink() hintedChunkSink
+	batchSink() batchSink
+	batchStore() types.BatchStore
+}
+
+// This interface exists solely to allow RemoteDataStoreClient to pass back a gross side-channel thing for the purposes of pull.
+type batchSink interface {
+	SchedulePut(c chunks.Chunk, hints types.Hints)
+	Flush()
+	io.Closer
 }
 
 func NewDataStore(cs chunks.ChunkStore) DataStore {
