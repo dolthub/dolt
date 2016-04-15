@@ -55,21 +55,21 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 			defer gr.Close()
 			reader = gr
 		}
-		bvs := types.NewValidatingBatchingSink(cs)
-		bvs.Prepare(deserializeHints(reader))
+		vbs := types.NewValidatingBatchingSink(cs)
+		vbs.Prepare(deserializeHints(reader))
 
 		chunkChan := make(chan chunks.Chunk, 16)
 		go chunks.DeserializeToChan(reader, chunkChan)
 		var bpe chunks.BackpressureError
 		for c := range chunkChan {
 			if bpe == nil {
-				bpe = bvs.Enqueue(c)
+				bpe = vbs.Enqueue(c)
 			}
 			// If a previous Enqueue() errored, we still need to drain chunkChan
 			// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
 		}
 		if bpe == nil {
-			bpe = bvs.Flush()
+			bpe = vbs.Flush()
 		}
 		// TODO communicate backpressure from bpe
 		w.WriteHeader(http.StatusCreated)

@@ -127,11 +127,6 @@ func RegisterRef(t Type, bf refBuilderFunc) {
 	refFuncMap[t.Ref()] = bf
 }
 
-// TODO: This *isn't* public API: Remove. https://github.com/attic-labs/noms/issues/1209.
-func PrivateRefFromType(target ref.Ref, t Type) RefBase {
-	return refFromType(target, t)
-}
-
 func refFromType(target ref.Ref, t Type) RefBase {
 	if f, ok := refFuncMap[t.Ref()]; ok {
 		return f(target)

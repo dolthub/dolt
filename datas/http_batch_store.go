@@ -26,7 +26,7 @@ const (
 	readBufferSize           = 1 << 12 // 4K
 )
 
-// Note that this doesn't actually implement the chunks.ChunkStore interface. This is by design, because we don't want to provide Has(), and because Put() is intended to be non-blocking and take 'hints', but I failed to come up with a different-but-still-relevant name.
+// httpBatchStore implements types.BatchStore
 type httpBatchStore struct {
 	host          *url.URL
 	httpClient    httpDoer

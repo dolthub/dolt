@@ -9,8 +9,8 @@ import (
 
 // BatchStore provides an interface similar to chunks.ChunkStore, but batch-oriented. Instead of Put(), it provides SchedulePut(), which enqueues a Chunk to be sent at a possibly later time.
 type BatchStore interface {
-	// Get gets a reader for the value of the Ref in the store. If the ref is absent from the store nil is returned.
-	Get(ref ref.Ref) chunks.Chunk
+	// Get returns from the store the Value Chunk by r. If r is absent from the store, chunks.EmptyChunk is returned.
+	Get(r ref.Ref) chunks.Chunk
 
 	// SchedulePut enqueues a write for the Chunk c, using the provided hints to assist in validation. It may or may not block until c is persisted. Validation requires checking that all refs embedded in c are themselves valid, which could naively be done by resolving each one. Instead, hints provides a (smaller) set of refs that point to Chunks that themselves contain many of c's refs. Thus, by checking only the hinted Chunks, c can be validated with fewer read operations.
 	// c may or may not be persisted when Put() returns, but is guaranteed to be persistent after a call to Flush() or Close().

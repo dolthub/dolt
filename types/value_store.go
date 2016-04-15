@@ -9,6 +9,10 @@ import (
 )
 
 // ValueStore provides methods to read and write Noms Values to a BatchStore. It validates Values as they are written, but does not guarantee that these Values are persisted to the BatchStore until a subsequent Flush. or Close.
+// Currently, WriteValue validates the following properties of a Value v:
+// - v can be correctly serialized and its Ref taken
+// - all Refs in v point to a Value that can be read from this ValueStore
+// - all Refs in v point to a Value of the correct Type
 type ValueStore struct {
 	bs    BatchStore
 	cache map[ref.Ref]chunkCacheEntry
