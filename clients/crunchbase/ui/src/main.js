@@ -1,5 +1,5 @@
 // @flow
-import {DataStore, HttpStore} from '@attic/noms';
+import {DataStore, Dataset, HttpStore} from '@attic/noms';
 import Chart from './chart.js';
 import DataManager from './data.js';
 import List from './list.js';
@@ -47,7 +47,8 @@ class Main extends React.Component<void, Props, State> {
     const selectedCategoryItem = props.categories[0];
 
     const datastore = new DataStore(new HttpStore(nomsServer), 1e5);
-    this._dataManager = new DataManager(datastore, datasetId);
+    const dataset = new Dataset(datastore, datasetId);
+    this._dataManager = new DataManager(dataset);
 
     this.state = {
       selectedSeries: new Set(this.props.series),

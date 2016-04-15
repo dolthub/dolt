@@ -2,7 +2,7 @@
   "name": "noms-crunchbase-ui",
   "devDependencies": {
     "@attic/eslintrc": "^1.0.0",
-    "@attic/noms": "^4.0.1",
+    "@attic/noms": "^11.1.0",
     "@attic/webpack-config": "^1.0.1",
     "babel-cli": "6.6.5",
     "babel-core": "6.7.2",
@@ -19,7 +19,7 @@
     "babel-preset-react": "6.5.0",
     "babel-regenerator-runtime": "6.5.0",
     "d3": "^3.4.4",
-    "flow-bin": "^0.22.1",
+    "flow-bin": "^0.23.0",
     "http-server": "^0.8.5",
     "nvd3": "1.8.2",
     "react-dom": "^0.14.1",

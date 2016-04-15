@@ -3,14 +3,9 @@
   "version": "0.0.1",
   "description": "Tests for generated js code",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
     "@attic/eslintrc": "^1.0.0",
-    "@attic/noms": "^10.1.0",
+    "@attic/noms": "^11.1.0",
     "@attic/webpack-config": "^1.0.1",
     "babel-cli": "6.6.5",
     "babel-core": "6.7.2",
@@ -28,7 +23,7 @@
     "chai": "3.5.0",
     "chokidar": "1.4.3",
     "commander": "2.9.0",
-    "flow-bin": "0.22.1",
+    "flow-bin": "0.23.0",
     "fs-extra": "0.26.7",
     "mocha": "2.4.5"
   },

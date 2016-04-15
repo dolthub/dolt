@@ -1,20 +1,23 @@
 // @flow
 
 import {
+  createStructClass,
+  Dataset,
   DataStore,
   invariant,
-  Kind,
-  makeCompoundType,
-  makePrimitiveType,
+  makeRefType,
+  makeSetType,
   makeType,
   newSet,
   NomsMap,
   NomsSet,
+  notNull,
   RefValue,
   registerPackage,
   Struct,
+  valueType,
 } from '@attic/noms';
-import type {Package} from '@attic/noms';
+import type {Commit, Package} from '@attic/noms';
 
 type RoundTypeEnum = 0 | 1 | 2;
 const Seed = 0;
@@ -42,10 +45,10 @@ type DataEntry = {values: Array<DataPoint>, key: string, color?: string};
 export type DataArray = Array<DataEntry>;
 
 export default class DataManager {
-  _datastore: DataStore;
-  _keyClass: any;
-  _quarterClass: any;
-  _datasetP: ?Promise<NomsMap<RefValue, NomsSet<RefValue>>>;
+  _dataset: Dataset;
+  _keyClass: ?Class<Struct>;
+  _quarterClass: ?Class<Struct>;
+  _indexP: Promise<NomsMap>;
   _packageP: ?Promise<Package>;
 
   _categorySetP: ?Promise<NomsSet<RefValue>>;
@@ -58,11 +61,12 @@ export default class DataManager {
   _time: ?TimeOption;
   _category: string;
 
-  constructor(datastore: DataStore, datasetId: string) {
-    this._datastore = datastore;
-    this._datasetP = this._datastore.head(datasetId).then(commit => {
-      invariant(commit);
-      return commit.get('value');
+  constructor(dataset: Dataset) {
+    this._dataset = dataset;
+    this._indexP = this._dataset.head().then((commit: ?Commit) => {
+      const v = notNull(commit).value;
+      invariant(v instanceof NomsMap);
+      return v;
     });
 
     this._keyClass = null;
@@ -85,9 +89,8 @@ export default class DataManager {
       return this._packageP;
     }
 
-    const ds = await this._datasetP;
-    invariant(ds);
-    this._packageP = getKeyPackage(ds, this._datastore);
+    const index = await this._indexP;
+    this._packageP = getKeyPackage(index, this._dataset.store);
     return this._packageP;
   }
 
@@ -142,7 +145,7 @@ export default class DataManager {
         await Promise.all([this._seedSetP, this._seriesASetP, this._seriesBSetP,
             this._timeSetP, this._categorySetP]);
 
-    const store = this._datastore;
+    const store = this._dataset.store;
     const getAmountRaised = (r: RefValue): Promise<number> =>
         store.readValue(r.targetRef).then(round => round.get('RaisedAmountUsd'));
 
@@ -177,14 +180,12 @@ export default class DataManager {
     } else {
       k = new Key(p);
     }
-    return new RefValue(k.ref, makeCompoundType(Kind.Ref, k.type));
+    return new RefValue(k.ref, makeRefType(k.type));
   }
 
   async _getSetOfRounds(p: KeyParam): Promise<NomsSet<RefValue>> {
-    const r = await this._getKeyRef(p);
-    invariant(this._datasetP);
-    const map = await this._datasetP;
-    const set = await map.get(r);
+    const [r, index] = await Promise.all([this._getKeyRef(p), this._indexP]);
+    const set = await index.get(r);
     if (set === undefined) {
       return newSet([], setType);
     }
@@ -198,7 +199,7 @@ export default class DataManager {
 }
 
 // TODO: This is actually the wrong type. Fix when we have JS codegen.
-let setType = makeCompoundType(Kind.Set, makeCompoundType(Kind.Ref, makePrimitiveType(Kind.Value)));
+let setType = makeSetType(makeRefType(valueType));
 
 /**
  * Loads the first key in the index and gets the package from the type.
@@ -220,12 +221,7 @@ function getStructClass(pkg, name) {
   const keyIndex = pkg.types.findIndex(t => t.name === name);
   const type = makeType(pkg.ref, keyIndex);
   const typeDef = pkg.types[keyIndex];
-
-  return class extends Struct {
-    constructor(data) {
-      super(type, typeDef, data);
-    }
-  };
+  return createStructClass(type, typeDef);
 }
 
 function percentiles(s: Array<number>): Array<{x: number, y: number}> {
