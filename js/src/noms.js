@@ -82,3 +82,4 @@ export type {
   uint64,
   uint8,
 } from './primitives.js';
+export type {Commit} from './commit.js';
