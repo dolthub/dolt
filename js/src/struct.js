@@ -8,6 +8,7 @@ import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
 import {Kind} from './noms-kind.js';
 import {ValueBase} from './value.js';
+import validateType from './validate-type.js';
 
 type StructData = {[key: string]: ?valueOrPrimitive};
 
@@ -90,9 +91,17 @@ function validate(typeDef: Type, data: StructData): void {
   let dataCount = Object.keys(data).length;
   for (let i = 0; i < fields.length; i++) {
     const field = fields[i];
-    invariant(data[field.name] !== undefined || field.optional);
-    if (field.name in data) {
+    const value = data[field.name];
+    if (field.optional) {
+      if (field.name in data) {
+        dataCount--;
+      }
+      if (value !== undefined) {
+        validateType(field.t, value);
+      }
+    } else {
       dataCount--;
+      validateType(field.t, value);
     }
   }
 
@@ -101,7 +110,9 @@ function validate(typeDef: Type, data: StructData): void {
     invariant(dataCount === 1);
     for (let i = 0; i < union.length; i++) {
       const field = union[i];
-      if (data[field.name] !== undefined) {
+      const value = data[field.name];
+      if (value !== undefined) {
+        validateType(field.t, value);
         return;
       }
     }

@@ -48,14 +48,15 @@ function getEmptyCommitMap(): Promise<NomsMap<string, RefValue<Commit>>> {
 let datasTypes: DatasTypes;
 export function getDatasTypes(): DatasTypes {
   if (!datasTypes) {
-    const commitTypeDef = makeStructType('Commit', [
-      new Field('value', valueType, false),
-      new Field('parents', makeCompoundType(Kind.Set,
-        makeCompoundType(Kind.Ref, makeType(emptyRef, 0))), false),
+    const datasPackage = new Package([
+      makeStructType('Commit', [
+        new Field('value', valueType, false),
+        new Field('parents', makeCompoundType(Kind.Set,
+          makeCompoundType(Kind.Ref, makeType(emptyRef, 0))), false),
+      ], []),
     ], []);
-
-    const datasPackage = new Package([commitTypeDef], []);
     registerPackage(datasPackage);
+    const [commitTypeDef] = datasPackage.types;
 
     const commitType = makeType(datasPackage.ref, 0);
     const refOfCommitType = makeCompoundType(Kind.Ref, commitType);

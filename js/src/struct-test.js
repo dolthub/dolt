@@ -242,23 +242,24 @@ suite('Struct', () => {
   });
 
   test('named union', () => {
-    let typeDef, typeDefA, typeDefD;
+
     const pkg = new Package([
-      typeDef = makeStructType('StructWithUnions', [
+      makeStructType('StructWithUnions', [
         new Field('a', makeType(emptyRef, 1), false),
         new Field('d', makeType(emptyRef, 2), false),
       ], []),
-      typeDefA = makeStructType('', [], [
+      makeStructType('', [], [
         new Field('b', float64Type, false),
         new Field('c', stringType, false),
       ]),
-      typeDefD = makeStructType('', [], [
+      makeStructType('', [], [
         new Field('e', float64Type, false),
         new Field('f', stringType, false),
       ]),
     ], []);
     registerPackage(pkg);
     const pkgRef = pkg.ref;
+    const [typeDef, typeDefA, typeDefD] = pkg.types;
     const type = makeType(pkgRef, 0);
     const typeA = makeType(pkgRef, 1);
     const typeD = makeType(pkgRef, 2);
@@ -287,5 +288,27 @@ suite('Struct', () => {
       a: new A({c: 'hi'}),
       d: new D({f: 'bye'}),
     })));
+  });
+
+  test('type validation', () => {
+    const typeDef = makeStructType('S1', [
+      new Field('x', boolType, false),
+      new Field('o', stringType, true),
+    ], []);
+
+    const pkg = new Package([typeDef], []);
+    registerPackage(pkg);
+    const pkgRef = pkg.ref;
+    const type = makeType(pkgRef, 0);
+
+    assert.throws(() => {
+      newStruct(type, typeDef, {x: 1});
+    });
+    assert.throws(() => {
+      newStruct(type, typeDef, {o: 1});
+    });
+
+    newStruct(type, typeDef, {x: true, o: undefined});
+    newStruct(type, typeDef, {x: true});
   });
 });
