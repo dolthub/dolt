@@ -18,7 +18,7 @@ export {
   createStructClass,
 } from './struct.js';
 export {encodeNomsValue} from './encode.js';
-export {invariant, isNullOrUndefined, notNull} from './assert.js';
+export {invariant, notNull} from './assert.js';
 export {isPrimitiveKind, Kind, kindToString} from './noms-kind.js';
 export {lookupPackage, Package, readPackage, registerPackage} from './package.js';
 export {newList, ListLeafSequence, NomsList} from './list.js';
