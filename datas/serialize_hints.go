@@ -8,6 +8,7 @@ import (
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/types"
 )
 
 func serializeHints(w io.Writer, hints map[ref.Ref]struct{}) {
@@ -21,19 +22,19 @@ func serializeHints(w io.Writer, hints map[ref.Ref]struct{}) {
 	}
 }
 
-func deserializeHints(reader io.Reader) ref.RefSlice {
+func deserializeHints(reader io.Reader) types.Hints {
 	numRefs := uint32(0)
 	err := binary.Read(reader, binary.LittleEndian, &numRefs)
 	d.Chk.NoError(err)
 
-	refs := make(ref.RefSlice, numRefs)
+	hints := make(types.Hints, numRefs)
 	for i := uint32(0); i < numRefs; i++ {
 		digest := ref.Sha1Digest{}
 		n, err := io.ReadFull(reader, digest[:])
 		d.Chk.NoError(err)
 		d.Chk.Equal(int(sha1.Size), n)
 
-		refs[i] = ref.New(digest)
+		hints[ref.New(digest)] = struct{}{}
 	}
-	return refs
+	return hints
 }

@@ -39,19 +39,19 @@ func CopyReachableChunksP(source, sink DataStore, sourceRef, exclude types.RefBa
 }
 
 func copyWorker(source DataStore, sink DataStore, sourceRef types.RefBase, stopFn walk.SomeChunksCallback, concurrency int) {
-	hcs := sink.hintedChunkSink()
-	walk.SomeChunksP(sourceRef, newTeeDataSource(source.hintedChunkStore(), hcs), stopFn, concurrency)
+	bs := sink.batchSink()
+	walk.SomeChunksP(sourceRef, newTeeDataSource(source.batchStore(), bs), stopFn, concurrency)
 
-	hcs.Flush()
+	bs.Flush()
 }
 
 // teeDataSource just serves the purpose of writing to |sink| every chunk that is read from |source|.
 type teeDataSource struct {
-	source hintedChunkStore
-	sink   hintedChunkSink
+	source types.BatchStore
+	sink   batchSink
 }
 
-func newTeeDataSource(source hintedChunkStore, sink hintedChunkSink) *teeDataSource {
+func newTeeDataSource(source types.BatchStore, sink batchSink) *teeDataSource {
 	return &teeDataSource{source, sink}
 }
 
@@ -60,6 +60,6 @@ func (tds *teeDataSource) ReadValue(r ref.Ref) types.Value {
 	if c.IsEmpty() {
 		return nil
 	}
-	tds.sink.Put(c, map[ref.Ref]struct{}{})
+	tds.sink.SchedulePut(c, types.Hints{})
 	return types.DecodeChunk(c, tds)
 }

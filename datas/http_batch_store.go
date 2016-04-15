@@ -16,6 +16,7 @@ import (
 	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/types"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -26,7 +27,7 @@ const (
 )
 
 // Note that this doesn't actually implement the chunks.ChunkStore interface. This is by design, because we don't want to provide Has(), and because Put() is intended to be non-blocking and take 'hints', but I failed to come up with a different-but-still-relevant name.
-type httpHintedChunkStore struct {
+type httpBatchStore struct {
 	host          *url.URL
 	httpClient    httpDoer
 	auth          string
@@ -40,11 +41,11 @@ type httpHintedChunkStore struct {
 	unwrittenPuts *unwrittenPutCache
 }
 
-func newHTTPHintedChunkStore(baseURL, auth string) *httpHintedChunkStore {
+func newHTTPBatchStore(baseURL, auth string) *httpBatchStore {
 	u, err := url.Parse(baseURL)
 	d.Exp.NoError(err)
 	d.Exp.True(u.Scheme == "http" || u.Scheme == "https")
-	buffSink := &httpHintedChunkStore{
+	buffSink := &httpBatchStore{
 		host:          u,
 		httpClient:    makeHTTPClient(httpChunkSinkConcurrency),
 		auth:          auth,
@@ -68,7 +69,7 @@ type httpDoer interface {
 
 type writeRequest struct {
 	c     chunks.Chunk
-	hints map[ref.Ref]struct{}
+	hints types.Hints
 }
 
 // Use a custom http client rather than http.DefaultClient. We limit ourselves to a maximum of |requestLimit| concurrent http requests, the custom httpClient ups the maxIdleConnsPerHost value so that one connection stays open for each concurrent request.
@@ -82,13 +83,13 @@ func makeHTTPClient(requestLimit int) *http.Client {
 	}
 }
 
-func (bhcs *httpHintedChunkStore) Flush() {
+func (bhcs *httpBatchStore) Flush() {
 	bhcs.flushChan <- struct{}{}
 	bhcs.requestWg.Wait()
 	return
 }
 
-func (bhcs *httpHintedChunkStore) Close() (e error) {
+func (bhcs *httpBatchStore) Close() (e error) {
 	close(bhcs.finishedChan)
 	bhcs.requestWg.Wait()
 	bhcs.workerWg.Wait()
@@ -99,7 +100,7 @@ func (bhcs *httpHintedChunkStore) Close() (e error) {
 	return
 }
 
-func (bhcs *httpHintedChunkStore) Get(r ref.Ref) chunks.Chunk {
+func (bhcs *httpBatchStore) Get(r ref.Ref) chunks.Chunk {
 	pending := bhcs.unwrittenPuts.Get(r)
 	if !pending.IsEmpty() {
 		return pending
@@ -111,7 +112,7 @@ func (bhcs *httpHintedChunkStore) Get(r ref.Ref) chunks.Chunk {
 	return <-ch
 }
 
-func (bhcs *httpHintedChunkStore) batchGetRequests() {
+func (bhcs *httpBatchStore) batchGetRequests() {
 	bhcs.workerWg.Add(1)
 	go func() {
 		defer bhcs.workerWg.Done()
@@ -134,9 +135,9 @@ func (bhcs *httpHintedChunkStore) batchGetRequests() {
 	}()
 }
 
-func (bhcs *httpHintedChunkStore) sendGetRequests(req chunks.ReadRequest) {
+func (bhcs *httpBatchStore) sendGetRequests(req chunks.ReadRequest) {
 	batch := chunks.ReadBatch{}
-	refs := map[ref.Ref]struct{}{}
+	refs := types.Hints{}
 
 	addReq := func(req chunks.ReadRequest) {
 		r := req.Ref()
@@ -167,7 +168,7 @@ func (bhcs *httpHintedChunkStore) sendGetRequests(req chunks.ReadRequest) {
 	}()
 }
 
-func (bhcs *httpHintedChunkStore) getRefs(refs map[ref.Ref]struct{}, cs chunks.ChunkSink) {
+func (bhcs *httpBatchStore) getRefs(refs types.Hints, cs chunks.ChunkSink) {
 	// POST http://<host>/getRefs/. Post body: ref=sha1---&ref=sha1---& Response will be chunk data if present, 404 if absent.
 	u := *bhcs.host
 	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.GetRefsPath)
@@ -194,7 +195,7 @@ func (bhcs *httpHintedChunkStore) getRefs(refs map[ref.Ref]struct{}, cs chunks.C
 	chunks.Deserialize(reader, cs, rl)
 }
 
-func (bhcs *httpHintedChunkStore) Put(c chunks.Chunk, hints map[ref.Ref]struct{}) {
+func (bhcs *httpBatchStore) SchedulePut(c chunks.Chunk, hints types.Hints) {
 	if !bhcs.unwrittenPuts.Add(c) {
 		return
 	}
@@ -203,13 +204,13 @@ func (bhcs *httpHintedChunkStore) Put(c chunks.Chunk, hints map[ref.Ref]struct{}
 	bhcs.writeQueue <- writeRequest{c, hints}
 }
 
-func (bhcs *httpHintedChunkStore) batchPutRequests() {
+func (bhcs *httpBatchStore) batchPutRequests() {
 	bhcs.workerWg.Add(1)
 	go func() {
 		defer bhcs.workerWg.Done()
 
 		numChunks := 0
-		hints := map[ref.Ref]struct{}{}
+		hints := types.Hints{}
 		buf := makeBuffer()
 		gw := gzip.NewWriter(buf)
 		sz := chunks.NewSerializer(gw)
@@ -246,7 +247,7 @@ func (bhcs *httpHintedChunkStore) batchPutRequests() {
 						bhcs.sendWriteRequests(buf, numChunks, hints) // Takes ownership of buf, hints
 
 						numChunks = 0
-						hints = map[ref.Ref]struct{}{}
+						hints = types.Hints{}
 						buf = makeBuffer()
 						gw = gzip.NewWriter(buf)
 						sz = chunks.NewSerializer(gw)
@@ -263,7 +264,7 @@ func makeBuffer() *os.File {
 	return f
 }
 
-func (bhcs *httpHintedChunkStore) sendWriteRequests(serializedChunks *os.File, numChunks int, hints map[ref.Ref]struct{}) {
+func (bhcs *httpBatchStore) sendWriteRequests(serializedChunks *os.File, numChunks int, hints types.Hints) {
 	bhcs.rateLimit <- struct{}{}
 	go func() {
 		defer func() {
@@ -290,7 +291,7 @@ func (bhcs *httpHintedChunkStore) sendWriteRequests(serializedChunks *os.File, n
 	}()
 }
 
-func (bhcs *httpHintedChunkStore) Root() ref.Ref {
+func (bhcs *httpBatchStore) Root() ref.Ref {
 	// GET http://<host>/root. Response will be ref of root.
 	res := bhcs.requestRoot("GET", ref.Ref{}, ref.Ref{})
 	defer closeResponse(res)
@@ -301,7 +302,7 @@ func (bhcs *httpHintedChunkStore) Root() ref.Ref {
 	return ref.Parse(string(data))
 }
 
-func (bhcs *httpHintedChunkStore) UpdateRoot(current, last ref.Ref) bool {
+func (bhcs *httpBatchStore) UpdateRoot(current, last ref.Ref) bool {
 	// POST http://<host>/root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
 	bhcs.Flush()
 
@@ -312,7 +313,7 @@ func (bhcs *httpHintedChunkStore) UpdateRoot(current, last ref.Ref) bool {
 	return res.StatusCode == http.StatusOK
 }
 
-func (bhcs *httpHintedChunkStore) requestRoot(method string, current, last ref.Ref) *http.Response {
+func (bhcs *httpBatchStore) requestRoot(method string, current, last ref.Ref) *http.Response {
 	u := *bhcs.host
 	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.RootPath)
 	if method == "POST" {

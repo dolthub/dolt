@@ -12,14 +12,14 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-func TestHTTPHintedChunkStore(t *testing.T) {
-	suite.Run(t, &HTTPHintedChunkStoreTestSuite{})
+func TestHTTPBatchStore(t *testing.T) {
+	suite.Run(t, &HTTPBatchStoreSuite{})
 }
 
-type HTTPHintedChunkStoreTestSuite struct {
+type HTTPBatchStoreSuite struct {
 	suite.Suite
 	cs    *chunks.TestStore
-	store hintedChunkStore
+	store *httpBatchStore
 }
 
 type inlineServer struct {
@@ -32,12 +32,12 @@ func (serv inlineServer) Do(req *http.Request) (resp *http.Response, err error) 
 	return w.resp, nil
 }
 
-func (suite *HTTPHintedChunkStoreTestSuite) SetupTest() {
+func (suite *HTTPBatchStoreSuite) SetupTest() {
 	suite.cs = chunks.NewTestStore()
-	suite.store = newHTTPHintedChunkStoreForTest(suite.cs)
+	suite.store = newHTTPBatchStoreForTest(suite.cs)
 }
 
-func newHTTPHintedChunkStoreForTest(cs chunks.ChunkStore) hintedChunkStore {
+func newHTTPBatchStoreForTest(cs chunks.ChunkStore) *httpBatchStore {
 	serv := inlineServer{httprouter.New()}
 	serv.POST(
 		constants.WriteValuePath,
@@ -63,41 +63,41 @@ func newHTTPHintedChunkStoreForTest(cs chunks.ChunkStore) hintedChunkStore {
 			HandleRootGet(w, req, ps, cs)
 		},
 	)
-	hcs := newHTTPHintedChunkStore("http://localhost:9000", "")
+	hcs := newHTTPBatchStore("http://localhost:9000", "")
 	hcs.httpClient = serv
 	return hcs
 }
 
-func (suite *HTTPHintedChunkStoreTestSuite) TearDownTest() {
+func (suite *HTTPBatchStoreSuite) TearDownTest() {
 	suite.store.Close()
 	suite.cs.Close()
 }
 
-func (suite *HTTPHintedChunkStoreTestSuite) TestPutChunk() {
+func (suite *HTTPBatchStoreSuite) TestPutChunk() {
 	c := types.EncodeValue(types.NewString("abc"), nil)
-	suite.store.Put(c, map[ref.Ref]struct{}{})
+	suite.store.SchedulePut(c, types.Hints{})
 	suite.store.Flush()
 
 	suite.Equal(1, suite.cs.Writes)
 }
 
-func (suite *HTTPHintedChunkStoreTestSuite) TestPutChunksInOrder() {
+func (suite *HTTPBatchStoreSuite) TestPutChunksInOrder() {
 	chnx := []chunks.Chunk{
 		types.EncodeValue(types.NewString("abc"), nil),
 		types.EncodeValue(types.NewString("def"), nil),
 	}
 	l := types.NewList()
 	for _, c := range chnx {
-		suite.store.Put(c, map[ref.Ref]struct{}{})
+		suite.store.SchedulePut(c, types.Hints{})
 		l = l.Append(types.NewRef(c.Ref()))
 	}
-	suite.store.Put(types.EncodeValue(l, nil), map[ref.Ref]struct{}{})
+	suite.store.SchedulePut(types.EncodeValue(l, nil), types.Hints{})
 	suite.store.Flush()
 
 	suite.Equal(3, suite.cs.Writes)
 }
 
-func (suite *HTTPHintedChunkStoreTestSuite) TestPutChunkWithHints() {
+func (suite *HTTPBatchStoreSuite) TestPutChunkWithHints() {
 	chnx := []chunks.Chunk{
 		types.EncodeValue(types.NewString("abc"), nil),
 		types.EncodeValue(types.NewString("def"), nil),
@@ -105,7 +105,7 @@ func (suite *HTTPHintedChunkStoreTestSuite) TestPutChunkWithHints() {
 	suite.cs.PutMany(chnx)
 	l := types.NewList(types.NewRef(chnx[0].Ref()), types.NewRef(chnx[1].Ref()))
 
-	suite.store.Put(types.EncodeValue(l, nil), map[ref.Ref]struct{}{
+	suite.store.SchedulePut(types.EncodeValue(l, nil), types.Hints{
 		chnx[0].Ref(): struct{}{},
 		chnx[1].Ref(): struct{}{},
 	})
@@ -114,19 +114,19 @@ func (suite *HTTPHintedChunkStoreTestSuite) TestPutChunkWithHints() {
 	suite.Equal(3, suite.cs.Writes)
 }
 
-func (suite *HTTPHintedChunkStoreTestSuite) TestRoot() {
+func (suite *HTTPBatchStoreSuite) TestRoot() {
 	c := chunks.NewChunk([]byte("abc"))
 	suite.True(suite.cs.UpdateRoot(c.Ref(), ref.Ref{}))
 	suite.Equal(c.Ref(), suite.store.Root())
 }
 
-func (suite *HTTPHintedChunkStoreTestSuite) TestUpdateRoot() {
+func (suite *HTTPBatchStoreSuite) TestUpdateRoot() {
 	c := chunks.NewChunk([]byte("abc"))
 	suite.True(suite.store.UpdateRoot(c.Ref(), ref.Ref{}))
 	suite.Equal(c.Ref(), suite.cs.Root())
 }
 
-func (suite *HTTPHintedChunkStoreTestSuite) TestGet() {
+func (suite *HTTPBatchStoreSuite) TestGet() {
 	c := chunks.NewChunk([]byte("abc"))
 	suite.cs.Put(c)
 	got := suite.store.Get(c.Ref())

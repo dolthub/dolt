@@ -4,17 +4,38 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"fmt"
+	"io"
 	"testing"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
+func TestReadValueBlobLeafDecode(t *testing.T) {
+	assert := assert.New(t)
+
+	blobLeafDecode := func(r io.Reader) Value {
+		i := decode(r)
+		return NewBlob(i.(io.Reader))
+	}
+
+	reader := bytes.NewBufferString("b ")
+	v1 := blobLeafDecode(reader)
+	bl1 := newBlobLeaf([]byte{})
+	assert.True(bl1.Equals(v1))
+
+	reader = bytes.NewBufferString("b Hello World!")
+	v2 := blobLeafDecode(reader)
+	bl2 := newBlobLeaf([]byte("Hello World!"))
+	assert.True(bl2.Equals(v2))
+}
+
 func TestWriteValue(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := NewTestValueStore()
 	testEncode := func(expected string, v Value) ref.Ref {
-		vs := NewTestValueStore()
 		r := vs.WriteValue(v).TargetRef()
 
 		// Assuming that MemoryStore works correctly, we don't need to check the actual serialization, only the hash. Neat.
@@ -87,4 +108,59 @@ func TestWritePackageDepWhenPackageIsWritten(t *testing.T) {
 
 	pkg3 := vs.ReadValue(pkgRef1)
 	assert.True(pkg1.Equals(pkg3))
+}
+
+func TestCheckChunksInCache(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+	cvs := newLocalValueStore(cs)
+
+	b := NewEmptyBlob()
+	cs.Put(EncodeValue(b, nil))
+	cvs.set(b.Ref(), presentChunk(b.Type()))
+
+	bref := NewRefOfBlob(b.Ref())
+	assert.NotPanics(func() { cvs.checkChunksInCache(bref) })
+}
+
+func TestCacheOnReadValue(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+	cvs := newLocalValueStore(cs)
+
+	b := NewEmptyBlob()
+	bref := cvs.WriteValue(b).(RefOfBlob)
+	r := cvs.WriteValue(bref)
+
+	cvs2 := newLocalValueStore(cs)
+	v := cvs2.ReadValue(r.TargetRef())
+	assert.True(bref.Equals(v))
+	assert.True(cvs2.isPresent(b.Ref()))
+	assert.True(cvs2.isPresent(bref.Ref()))
+}
+
+func TestHintsOnCache(t *testing.T) {
+	assert := assert.New(t)
+	cvs := newLocalValueStore(chunks.NewTestStore())
+
+	bs := []Blob{NewEmptyBlob(), NewBlob(bytes.NewBufferString("f"))}
+	l := NewList()
+	for _, b := range bs {
+		bref := cvs.WriteValue(b).(RefOfBlob)
+		l = l.Append(bref)
+	}
+	r := cvs.WriteValue(l)
+
+	v := cvs.ReadValue(r.TargetRef())
+	if assert.True(l.Equals(v)) {
+		l = v.(List)
+		bref := cvs.WriteValue(NewBlob(bytes.NewBufferString("g"))).(RefOfBlob)
+		l = l.Insert(0, bref)
+
+		hints := cvs.checkChunksInCache(l)
+		if assert.Len(hints, 1) {
+			_, present := hints[v.Ref()]
+			assert.True(present)
+		}
+	}
 }
