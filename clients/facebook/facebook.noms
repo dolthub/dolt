@@ -1,9 +1,0 @@
-alias Img = import "../common/photo.noms"
-
-struct User {
-  Id: String
-  Name: String
-  Photos: Set<Ref<Img.RemotePhoto>>
-}
-
-using Ref<User>
