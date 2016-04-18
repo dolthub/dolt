@@ -14,6 +14,7 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/types"
 	"github.com/clbanning/mxj"
 )
 
@@ -123,13 +124,20 @@ func main() {
 		}
 		sort.Sort(refList)
 
-		refs := make(util.ListOfRefOfMapOfStringToValueDef, len(refList))
+		refs := make([]types.Value, len(refList))
 		for idx, r := range refList {
-			refs[idx] = r.ref
+			refs[idx] = types.NewRef(r.ref)
 		}
 
+		rl := types.NewTypedList(
+			types.MakeCompoundType(types.ListKind, 
+				types.MakeCompoundType(types.RefKind, 
+					types.MakeCompoundType(types.MapKind,
+						types.MakePrimitiveType(types.StringKind),
+						types.MakePrimitiveType(types.ValueKind)))), refs...)
+
 		if !*noIO {
-			_, err := ds.Commit(refs.New())
+			_, err := ds.Commit(rl)
 			d.Exp.NoError(err)
 		}
 

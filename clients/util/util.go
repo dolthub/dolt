@@ -41,15 +41,17 @@ func NomsValueFromDecodedJSON(o interface{}) types.Value {
 		}
 		return types.NewList(items...)
 	case map[string]interface{}:
-		outDef := MapOfStringToValueDef{}
+		kv := make([]types.Value, 0, len(o)*2)
 
 		for k, v := range o {
 			nv := NomsValueFromDecodedJSON(v)
 			if nv != nil {
-				outDef[k] = nv
+				kv = append(kv, types.NewString(k), nv)
 			}
 		}
-		return outDef.New()
+
+		return NewMapOfStringToValue(kv...)
+
 	default:
 		d.Chk.Fail("Nomsification failed.", "I don't understand %+v, which is of type %s!\n", o, reflect.TypeOf(o).String())
 	}
