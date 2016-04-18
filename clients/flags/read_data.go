@@ -2,6 +2,8 @@ package flags
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -23,24 +25,31 @@ var (
 func ParseDataStore(in string) (ds datas.DataStore, err error) {
 	input := strings.Split(in, ":")
 
-	if len(input) < 2 {
-		return ds, fmt.Errorf("Improper datastore name: %s", in)
-	}
-
 	switch input[0] {
 	case "http":
 		//get from server and path, including http
+		if len(input) < 2 {
+			return ds, fmt.Errorf("Improper datastore name: %s", in)
+		}
+
 		ds = datas.NewRemoteDataStore(in, "")
 
 	case "ldb":
 		//create/access from path
+		if len(input) < 2 {
+			return ds, fmt.Errorf("Improper datastore name: %s", in)
+		}
 		ds = datas.NewDataStore(chunks.NewLevelDBStore(strings.Join(input[1:len(input)], ":"), "", maxFileHandles, false))
 
 	case "mem":
+		if len(input) < 2 {
+			return ds, fmt.Errorf("Improper datastore name: %s", in)
+		}
+
 		ds = datas.NewDataStore(chunks.NewMemoryStore())
 
 	case "":
-		ds = datas.NewDataStore(chunks.NewLevelDBStore("$HOME/.noms", "", maxFileHandles, false))
+		ds = datas.NewDataStore(chunks.NewLevelDBStore(filepath.Join(os.Getenv("HOME"), ".noms"), "", maxFileHandles, false))
 
 	default:
 		err = fmt.Errorf("Improper datastore name: %s", in)

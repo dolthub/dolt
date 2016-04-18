@@ -3,6 +3,7 @@ package flags
 import (
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
@@ -42,23 +43,23 @@ func TestParseDataStoreFromLDB(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
+	defer os.RemoveAll(dir)
 	assert.NoError(err)
 
-	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
+	cs := chunks.NewLevelDBStore(filepath.Join(dir, "name"), "", 24, false)
 	ds := datas.NewDataStore(cs)
 
 	r := ds.WriteValue(types.Bool(true))
 
 	ds.Close()
 
-	datastoreName := "ldb:" + dir + "/name"
+	datastoreName := "ldb:" + filepath.Join(dir, "name")
 	dsTest, errRead := ParseDataStore(datastoreName)
 
 	assert.NoError(errRead)
 	assert.Equal(types.Bool(true), dsTest.ReadValue(r.TargetRef()))
 
 	dsTest.Close()
-	os.Remove(dir)
 }
 
 func TestParseDataStoreFromMem(t *testing.T) {
@@ -129,6 +130,7 @@ func TestParseDatasetFromLDB(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
+	defer os.RemoveAll(dir)
 	assert.NoError(err)
 
 	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
@@ -147,14 +149,13 @@ func TestParseDatasetFromLDB(t *testing.T) {
 
 	assert.NoError(errRead)
 	assert.EqualValues(commit, setTest.Head().Value())
-
-	os.Remove(dir)
 }
 
 func TestDatasetBadInput(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
+	defer os.RemoveAll(dir)
 	assert.NoError(err)
 
 	badName := "ldb:" + dir + "/name:--bad"
@@ -174,14 +175,13 @@ func TestDatasetBadInput(t *testing.T) {
 
 	assert.Error(err)
 	assert.NotNil(ds)
-
-	os.Remove(dir)
 }
 
 func TestParseDatasetObjectFromLdb(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
+	defer os.RemoveAll(dir)
 	assert.NoError(err)
 
 	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
@@ -202,14 +202,13 @@ func TestParseDatasetObjectFromLdb(t *testing.T) {
 	assert.True(isDs)
 	assert.NoError(errRead)
 	assert.EqualValues(commit, setTest.Head().Value())
-
-	os.Remove(dir)
 }
 
 func TestReadRef(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
+	defer os.RemoveAll(dir)
 	assert.NoError(err)
 
 	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
@@ -256,5 +255,35 @@ func TestParseObjectBadInput(t *testing.T) {
 func TestDefaultDatastore(t *testing.T) {
 	assert := assert.New(t)
 
-	assert.True(true)
+	home := os.Getenv("HOME")
+	defer os.Setenv(home, "HOME")
+
+	dir, err := ioutil.TempDir(os.TempDir(), "")
+	defer os.RemoveAll(dir)
+	assert.NoError(err)
+
+	os.Setenv(dir, "HOME")
+
+	//currentDir, err := os.Getwd()
+	//assert.NoError(err)
+	//os.Chdir(dir)
+	//os.Create(".noms")
+	//os.Chdir(currentDir)
+
+	//can't create file at location like this
+	//file, err := os.File.Create(filepath.Join(dir, ".noms")
+
+	cs := chunks.NewLevelDBStore(filepath.Join(os.Getenv("HOME"), ".noms"), "", 24, false)
+	ds := datas.NewDataStore(cs)
+
+	r := ds.WriteValue(types.Bool(true))
+
+	ds.Close()
+
+	dsTest, errRead := ParseDataStore("")
+
+	assert.NoError(errRead)
+	assert.Equal(types.Bool(true), dsTest.ReadValue(r.TargetRef()))
+
+	dsTest.Close()
 }
