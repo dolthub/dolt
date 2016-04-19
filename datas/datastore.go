@@ -22,7 +22,7 @@ type DataStore interface {
 	Head(datasetID string) Commit
 
 	// Datasets returns the root of the datastore which is a MapOfStringToRefOfCommit where string is a datasetID.
-	Datasets() MapOfStringToRefOfCommit
+	Datasets() types.Map
 
 	// Commit updates the Commit that datasetID in this datastore points at. All Values that have been written to this DataStore are guaranteed to be persistent after Commit(). If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the datastore is always returned.
 	Commit(datasetID string, commit Commit) (DataStore, error)

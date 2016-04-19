@@ -32,7 +32,7 @@ type metaTuple struct {
 
 func (mt metaTuple) ChildRef() RefBase {
 	if mt.child != nil {
-		return newRef(mt.child.Ref(), MakeRefType(mt.child.Type()))
+		return NewTypedRef(MakeRefType(mt.child.Type()), mt.child.Ref())
 	}
 	d.Chk.False(mt.childRef.TargetRef().IsEmpty())
 	return mt.childRef

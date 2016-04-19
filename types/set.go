@@ -32,6 +32,7 @@ func NewSet(v ...Value) Set {
 }
 
 func NewTypedSet(t Type, v ...Value) Set {
+	d.Chk.Equal(SetKind, t.Kind(), "Invalid type. Expected:SetKind, found: %s", t.Describe())
 	return newTypedSet(t, buildSetData(setData{}, v, t)...)
 }
 

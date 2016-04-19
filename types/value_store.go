@@ -139,7 +139,10 @@ func (lvs *ValueStore) checkChunksInCache(v Value) map[ref.Ref]struct{} {
 		}
 
 		// BUG 1121
-		// It's possible that entry.Type() will be simply 'Value', but that 'reachable' is actually a properly-typed object -- that is, a Ref to some specific Type. The Exp below would fail, though it's possible that the Type is actually correct. We wouldn't be able to verify without reading it, though, so we'll dig into this later.
+		// It's possible that entry.Type() will be simply 'Value', but that 'reachable' is actually a
+		// properly-typed object -- that is, a Ref to some specific Type. The Exp below would fail,
+		// though it's possible that the Type is actually correct. We wouldn't be able to verify
+		// without reading it, though, so we'll dig into this later.
 		targetType := getTargetType(reachable)
 		if targetType.Equals(MakePrimitiveType(ValueKind)) {
 			continue

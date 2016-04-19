@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -304,4 +305,18 @@ func (w *hrsWriter) writeUnresolvedTypeRef(t Type, printStructName bool) {
 		panic("unreachable")
 	}
 	fmt.Fprintf(w.w, "<%s, %s, %d>", typeDef.Name(), t.PackageRef(), t.Ordinal())
+}
+
+func WriteHRS(v Value) string {
+	var buf bytes.Buffer
+	w := &hrsWriter{w: &buf}
+	w.Write(v)
+	return buf.String()
+}
+
+func WriteTaggedHRS(v Value) string {
+	var buf bytes.Buffer
+	w := &hrsWriter{w: &buf}
+	w.WriteTagged(v)
+	return buf.String()
 }

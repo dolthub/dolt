@@ -232,9 +232,9 @@ func TestReadCompoundBlob(t *testing.T) {
 	_, ok := m.(compoundBlob)
 	assert.True(ok)
 	m2 := newCompoundBlob([]metaTuple{
-		newMetaTuple(Uint64(20), nil, newRef(r1, MakeRefType(typeForBlob)), 20),
-		newMetaTuple(Uint64(40), nil, newRef(r2, MakeRefType(typeForBlob)), 40),
-		newMetaTuple(Uint64(60), nil, newRef(r3, MakeRefType(typeForBlob)), 60),
+		newMetaTuple(Uint64(20), nil, NewTypedRef(MakeRefType(typeForBlob), r1), 20),
+		newMetaTuple(Uint64(40), nil, NewTypedRef(MakeRefType(typeForBlob), r2), 40),
+		newMetaTuple(Uint64(60), nil, NewTypedRef(MakeRefType(typeForBlob), r3), 60),
 	}, cs)
 
 	assert.True(m.Type().Equals(m2.Type()))
