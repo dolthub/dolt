@@ -251,7 +251,6 @@ func TestParseObjectBadInput(t *testing.T) {
 	assert.True(isDs)
 }
 
-//need a good way to test this without overwriting any potential $HOME/.noms folder...
 func TestDefaultDatastore(t *testing.T) {
 	assert := assert.New(t)
 
@@ -263,15 +262,6 @@ func TestDefaultDatastore(t *testing.T) {
 	assert.NoError(err)
 
 	os.Setenv(dir, "HOME")
-
-	//currentDir, err := os.Getwd()
-	//assert.NoError(err)
-	//os.Chdir(dir)
-	//os.Create(".noms")
-	//os.Chdir(currentDir)
-
-	//can't create file at location like this
-	//file, err := os.File.Create(filepath.Join(dir, ".noms")
 
 	cs := chunks.NewLevelDBStore(filepath.Join(os.Getenv("HOME"), ".noms"), "", 24, false)
 	ds := datas.NewDataStore(cs)
