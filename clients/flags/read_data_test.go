@@ -43,8 +43,8 @@ func TestParseDataStoreFromLDB(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.RemoveAll(dir)
 	assert.NoError(err)
+	defer os.RemoveAll(dir)
 
 	cs := chunks.NewLevelDBStore(filepath.Join(dir, "name"), "", 24, false)
 	ds := datas.NewDataStore(cs)
@@ -130,8 +130,8 @@ func TestParseDatasetFromLDB(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.RemoveAll(dir)
 	assert.NoError(err)
+	defer os.RemoveAll(dir)
 
 	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
 	ds := datas.NewDataStore(cs)
@@ -155,8 +155,8 @@ func TestDatasetBadInput(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.RemoveAll(dir)
 	assert.NoError(err)
+	defer os.RemoveAll(dir)
 
 	badName := "ldb:" + dir + "/name:--bad"
 	ds, err := ParseDataset(badName)
@@ -181,8 +181,8 @@ func TestParseDatasetObjectFromLdb(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.RemoveAll(dir)
 	assert.NoError(err)
+	defer os.RemoveAll(dir)
 
 	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
 	ds := datas.NewDataStore(cs)
@@ -208,8 +208,8 @@ func TestReadRef(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.RemoveAll(dir)
 	assert.NoError(err)
+	defer os.RemoveAll(dir)
 
 	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
 	ds := datas.NewDataStore(cs)
@@ -258,8 +258,8 @@ func TestDefaultDatastore(t *testing.T) {
 	defer os.Setenv(home, "HOME")
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
-	defer os.RemoveAll(dir)
 	assert.NoError(err)
+	defer os.RemoveAll(dir)
 
 	os.Setenv(dir, "HOME")
 

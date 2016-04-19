@@ -22,6 +22,10 @@ var (
 	validDatasetNameRegexp = regexp.MustCompile("^[a-zA-Z0-9]+([/\\-_][a-zA-Z0-9]+)*$")
 )
 
+//ParseDataStore takes an optional colon-delineated string indicating what kind of DataStore to open and return. Supported syntax includes
+// - http:<server and path>
+// - ldb:<path>
+// - mem:
 func ParseDataStore(in string) (ds datas.DataStore, err error) {
 	input := strings.Split(in, ":")
 
@@ -59,6 +63,8 @@ func ParseDataStore(in string) (ds datas.DataStore, err error) {
 	return
 }
 
+//ParseDataset takes a colon-delineated string indicating a DataStore and the name of a dataset to open and return. Supported syntax includes
+//<datastore>:<dataset>
 func ParseDataset(in string) (dataset.Dataset, error) {
 	input := strings.Split(in, ":")
 
@@ -78,6 +84,9 @@ func ParseDataset(in string) (dataset.Dataset, error) {
 	return dataset.NewDataset(ds, name), nil
 }
 
+//ParseObject takes a colon-delineated string indicating a DataStore and an object from the DataStore to return. It also indicates whether the retun value is a dataset or a ref using a boolean. Supported syntax includes
+//<datastore>:<dataset>
+//<datastore>:<ref>
 func ParseObject(in string) (dataset.Dataset, ref.Ref, bool, error) {
 	input := strings.Split(in, ":")
 
