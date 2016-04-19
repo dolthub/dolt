@@ -26,14 +26,8 @@ func HandlePostRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 	err := d.Try(func() {
 		d.Exp.Equal("POST", req.Method)
 
-		var reader io.Reader = req.Body
-		if strings.Contains(req.Header.Get("Content-Encoding"), "gzip") {
-			gr, err := gzip.NewReader(reader)
-			d.Exp.NoError(err)
-			defer gr.Close()
-			reader = gr
-		}
-
+		reader := bodyReader(req)
+		defer reader.Close()
 		chunks.Deserialize(reader, cs, nil)
 		w.WriteHeader(http.StatusCreated)
 	})
@@ -44,17 +38,40 @@ func HandlePostRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 	}
 }
 
+func bodyReader(req *http.Request) (reader io.ReadCloser) {
+	reader = req.Body
+	if strings.Contains(req.Header.Get("Content-Encoding"), "gzip") {
+		gr, err := gzip.NewReader(reader)
+		d.Exp.NoError(err)
+		reader = gr
+	}
+	return
+}
+
+func respWriter(req *http.Request, w http.ResponseWriter) (writer io.WriteCloser) {
+	writer = wc{w.(io.Writer)}
+	if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Add("Content-Encoding", "gzip")
+		gw := gzip.NewWriter(w)
+		writer = gw
+	}
+	return
+}
+
+type wc struct {
+	io.Writer
+}
+
+func (wc wc) Close() error {
+	return nil
+}
+
 func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
 	err := d.Try(func() {
 		d.Exp.Equal("POST", req.Method)
 
-		var reader io.Reader = req.Body
-		if strings.Contains(req.Header.Get("Content-Encoding"), "gzip") {
-			gr, err := gzip.NewReader(reader)
-			d.Exp.NoError(err)
-			defer gr.Close()
-			reader = gr
-		}
+		reader := bodyReader(req)
+		defer reader.Close()
 		vbs := types.NewValidatingBatchingSink(cs)
 		vbs.Prepare(deserializeHints(reader))
 
@@ -71,7 +88,14 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		if bpe == nil {
 			bpe = vbs.Flush()
 		}
-		// TODO communicate backpressure from bpe
+		if bpe != nil {
+			w.WriteHeader(httpStatusTooManyRequests)
+			w.Header().Add("Content-Type", "application/octet-stream")
+			writer := respWriter(req, w)
+			defer writer.Close()
+			serializeHashes(writer, bpe.AsHashes())
+			return
+		}
 		w.WriteHeader(http.StatusCreated)
 	})
 
@@ -105,13 +129,8 @@ func HandleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 		}
 
 		w.Header().Add("Content-Type", "application/octet-stream")
-		writer := w.(io.Writer)
-		if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
-			w.Header().Add("Content-Encoding", "gzip")
-			gw := gzip.NewWriter(w)
-			defer gw.Close()
-			writer = gw
-		}
+		writer := respWriter(req, w)
+		defer writer.Close()
 
 		sz := chunks.NewSerializer(writer)
 		for _, r := range refs {

@@ -48,9 +48,13 @@ type ChunkSink interface {
 	io.Closer
 }
 
-// BackpressureError is a slice of Chunk that indicates some chunks could not be Put(). Caller is free to try to Put them again later.
-type BackpressureError []Chunk
+// BackpressureError is a slice of ref.Ref that indicates some chunks could not be Put(). Caller is free to try to Put them again later.
+type BackpressureError ref.RefSlice
 
 func (b BackpressureError) Error() string {
 	return fmt.Sprintf("Tried to Put %d too many Chunks", len(b))
+}
+
+func (b BackpressureError) AsHashes() ref.RefSlice {
+	return ref.RefSlice(b)
 }

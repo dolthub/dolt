@@ -1,7 +1,9 @@
 package datas
 
 import (
+	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
@@ -27,9 +29,15 @@ type inlineServer struct {
 }
 
 func (serv inlineServer) Do(req *http.Request) (resp *http.Response, err error) {
-	w := newFakeHTTPResponseWriter()
+	w := httptest.NewRecorder()
 	serv.ServeHTTP(w, req)
-	return w.resp, nil
+	return &http.Response{
+			StatusCode: w.Code,
+			Status:     http.StatusText(w.Code),
+			Header:     w.HeaderMap,
+			Body:       ioutil.NopCloser(w.Body),
+		},
+		nil
 }
 
 func (suite *HTTPBatchStoreSuite) SetupTest() {
@@ -102,7 +110,7 @@ func (suite *HTTPBatchStoreSuite) TestPutChunkWithHints() {
 		types.EncodeValue(types.NewString("abc"), nil),
 		types.EncodeValue(types.NewString("def"), nil),
 	}
-	suite.cs.PutMany(chnx)
+	suite.NoError(suite.cs.PutMany(chnx))
 	l := types.NewList(types.NewRef(chnx[0].Ref()), types.NewRef(chnx[1].Ref()))
 
 	suite.store.SchedulePut(types.EncodeValue(l, nil), types.Hints{
@@ -112,6 +120,52 @@ func (suite *HTTPBatchStoreSuite) TestPutChunkWithHints() {
 	suite.store.Flush()
 
 	suite.Equal(3, suite.cs.Writes)
+}
+
+type backpressureCS struct {
+	chunks.ChunkStore
+	tries int
+}
+
+func (b *backpressureCS) PutMany(chnx []chunks.Chunk) chunks.BackpressureError {
+	if chnx == nil {
+		return nil
+	}
+	b.tries++
+
+	if len(chnx) <= b.tries {
+		return b.ChunkStore.PutMany(chnx)
+	}
+	if bpe := b.ChunkStore.PutMany(chnx[:b.tries]); bpe != nil {
+		return bpe
+	}
+
+	bpe := make(chunks.BackpressureError, len(chnx)-b.tries)
+	for i, c := range chnx[b.tries:] {
+		bpe[i] = c.Ref()
+	}
+	return bpe
+}
+
+func (suite *HTTPBatchStoreSuite) TestPutChunksBackpressure() {
+	bpcs := &backpressureCS{ChunkStore: suite.cs}
+	bs := newHTTPBatchStoreForTest(bpcs)
+	defer bs.Close()
+	defer bpcs.Close()
+
+	chnx := []chunks.Chunk{
+		types.EncodeValue(types.NewString("abc"), nil),
+		types.EncodeValue(types.NewString("def"), nil),
+	}
+	l := types.NewList()
+	for _, c := range chnx {
+		bs.SchedulePut(c, types.Hints{})
+		l = l.Append(types.NewRef(c.Ref()))
+	}
+	bs.SchedulePut(types.EncodeValue(l, nil), types.Hints{})
+	bs.Flush()
+
+	suite.Equal(6, suite.cs.Writes)
 }
 
 func (suite *HTTPBatchStoreSuite) TestRoot() {
