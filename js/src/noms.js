@@ -10,9 +10,15 @@ export {default as HttpStore} from './http-store.js';
 export {default as MemoryStore} from './memory-store.js';
 export {default as Ref, emptyRef} from './ref.js';
 export {default as RefValue} from './ref-value.js';
-export {default as Struct, StructMirror, newStruct, createStructClass} from './struct.js';
+export {
+  default as Struct,
+  StructMirror,
+  StructFieldMirror,
+  newStruct,
+  createStructClass,
+} from './struct.js';
 export {encodeNomsValue} from './encode.js';
-export {invariant, isNullOrUndefined, notNull} from './assert.js';
+export {invariant, notNull} from './assert.js';
 export {isPrimitiveKind, Kind, kindToString} from './noms-kind.js';
 export {lookupPackage, Package, readPackage, registerPackage} from './package.js';
 export {newList, ListLeafSequence, NomsList} from './list.js';
@@ -76,3 +82,4 @@ export type {
   uint64,
   uint8,
 } from './primitives.js';
+export type {Commit} from './commit.js';

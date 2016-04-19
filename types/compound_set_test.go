@@ -75,20 +75,20 @@ func getTestRefValueOrderSet(scale int) testSet {
 	}, setType)
 }
 
-func getTestRefToNativeOrderSet(scale int) testSet {
-	refType := MakeCompoundType(RefKind, MakePrimitiveType(Int64Kind))
+func getTestRefToNativeOrderSet(scale int, vw ValueWriter) testSet {
+	refType := MakeRefType(MakePrimitiveType(Int64Kind))
 	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
-		return newRef(v.Ref(), refType)
+		return vw.WriteValue(v)
 	}, func(x, y Value) bool {
 		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
 	}, refType)
 }
 
-func getTestRefToValueOrderSet(scale int) testSet {
+func getTestRefToValueOrderSet(scale int, vw ValueWriter) testSet {
 	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
-	refType := MakeCompoundType(RefKind, setType)
+	refType := MakeRefType(setType)
 	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
-		return newRef(NewTypedSet(setType, v).Ref(), refType)
+		return vw.WriteValue(NewTypedSet(setType, v))
 	}, func(x, y Value) bool {
 		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
 	}, refType)
@@ -97,8 +97,8 @@ func getTestRefToValueOrderSet(scale int) testSet {
 func TestCompoundSetChunks(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := NewTestValueStore()
 	doTest := func(ts testSet) {
-		vs := NewTestValueStore()
 		set := ts.toCompoundSet()
 		set2chunks := vs.ReadValue(vs.WriteValue(set).TargetRef()).(compoundSet).Chunks()
 		for i, r := range set.Chunks() {
@@ -108,15 +108,15 @@ func TestCompoundSetChunks(t *testing.T) {
 
 	doTest(getTestNativeOrderSet(16))
 	doTest(getTestRefValueOrderSet(2))
-	doTest(getTestRefToNativeOrderSet(2))
-	doTest(getTestRefToValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2, vs))
+	doTest(getTestRefToValueOrderSet(2, vs))
 }
 
 func TestCompoundSetHas(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := NewTestValueStore()
 	doTest := func(ts testSet) {
-		vs := NewTestValueStore()
 		set := ts.toCompoundSet()
 		set2 := vs.ReadValue(vs.WriteValue(set).TargetRef()).(compoundSet)
 		for _, v := range ts.values {
@@ -127,8 +127,8 @@ func TestCompoundSetHas(t *testing.T) {
 
 	doTest(getTestNativeOrderSet(16))
 	doTest(getTestRefValueOrderSet(2))
-	doTest(getTestRefToNativeOrderSet(2))
-	doTest(getTestRefToValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2, vs))
+	doTest(getTestRefToValueOrderSet(2, vs))
 }
 
 func TestCompoundSetFirst(t *testing.T) {
@@ -143,8 +143,8 @@ func TestCompoundSetFirst(t *testing.T) {
 
 	doTest(getTestNativeOrderSet(16))
 	doTest(getTestRefValueOrderSet(2))
-	doTest(getTestRefToNativeOrderSet(2))
-	doTest(getTestRefToValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2, NewTestValueStore()))
+	doTest(getTestRefToValueOrderSet(2, NewTestValueStore()))
 }
 
 func TestCompoundSetIter(t *testing.T) {
@@ -170,8 +170,8 @@ func TestCompoundSetIter(t *testing.T) {
 
 	doTest(getTestNativeOrderSet(16))
 	doTest(getTestRefValueOrderSet(2))
-	doTest(getTestRefToNativeOrderSet(2))
-	doTest(getTestRefToValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2, NewTestValueStore()))
+	doTest(getTestRefToValueOrderSet(2, NewTestValueStore()))
 }
 
 func TestCompoundSetIterAll(t *testing.T) {
@@ -190,8 +190,8 @@ func TestCompoundSetIterAll(t *testing.T) {
 
 	doTest(getTestNativeOrderSet(16))
 	doTest(getTestRefValueOrderSet(2))
-	doTest(getTestRefToNativeOrderSet(2))
-	doTest(getTestRefToValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2, NewTestValueStore()))
+	doTest(getTestRefToValueOrderSet(2, NewTestValueStore()))
 }
 
 func TestCompoundSetInsert(t *testing.T) {
@@ -216,8 +216,8 @@ func TestCompoundSetInsert(t *testing.T) {
 	doTest(18, 3, getTestNativeOrderSet(9))
 	doTest(64, 1, getTestNativeOrderSet(32))
 	doTest(32, 1, getTestRefValueOrderSet(4))
-	doTest(32, 1, getTestRefToNativeOrderSet(4))
-	doTest(32, 1, getTestRefToValueOrderSet(4))
+	doTest(32, 1, getTestRefToNativeOrderSet(4, NewTestValueStore()))
+	doTest(32, 1, getTestRefToValueOrderSet(4, NewTestValueStore()))
 }
 
 func TestCompoundSetInsertExistingValue(t *testing.T) {
@@ -251,8 +251,8 @@ func TestCompoundSetRemove(t *testing.T) {
 	doTest(18, 3, getTestNativeOrderSet(9))
 	doTest(64, 1, getTestNativeOrderSet(32))
 	doTest(32, 1, getTestRefValueOrderSet(4))
-	doTest(32, 1, getTestRefToNativeOrderSet(4))
-	doTest(32, 1, getTestRefToValueOrderSet(4))
+	doTest(32, 1, getTestRefToNativeOrderSet(4, NewTestValueStore()))
+	doTest(32, 1, getTestRefToValueOrderSet(4, NewTestValueStore()))
 }
 
 func TestCompoundSetRemoveNonexistentValue(t *testing.T) {
@@ -288,8 +288,8 @@ func TestCompoundSetFilter(t *testing.T) {
 
 	doTest(getTestNativeOrderSet(16))
 	doTest(getTestRefValueOrderSet(2))
-	doTest(getTestRefToNativeOrderSet(2))
-	doTest(getTestRefToValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2, NewTestValueStore()))
+	doTest(getTestRefToValueOrderSet(2, NewTestValueStore()))
 }
 
 func TestCompoundSetUnion(t *testing.T) {
@@ -337,8 +337,8 @@ func TestCompoundSetUnion(t *testing.T) {
 
 	doTest(getTestNativeOrderSet(16))
 	doTest(getTestRefValueOrderSet(2))
-	doTest(getTestRefToNativeOrderSet(2))
-	doTest(getTestRefToValueOrderSet(2))
+	doTest(getTestRefToNativeOrderSet(2, NewTestValueStore()))
+	doTest(getTestRefToValueOrderSet(2, NewTestValueStore()))
 }
 
 func TestCompoundSetFirstNNumbers(t *testing.T) {

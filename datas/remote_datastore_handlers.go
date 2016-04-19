@@ -55,43 +55,23 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 			defer gr.Close()
 			reader = gr
 		}
-		cvr := newCachingValueStore(&naiveHintedChunkStore{cs})
-		// Prime cvr with the refs embedded in the 'hinted' chunks.
-		for _, hint := range deserializeHints(reader) {
-			cvr.ReadValue(hint)
-		}
+		vbs := types.NewValidatingBatchingSink(cs)
+		vbs.Prepare(deserializeHints(reader))
 
-		var orderedChunks []chunks.Chunk
 		chunkChan := make(chan chunks.Chunk, 16)
 		go chunks.DeserializeToChan(reader, chunkChan)
-		var r ref.Ref
+		var bpe chunks.BackpressureError
 		for c := range chunkChan {
-			r = c.Ref()
-			if cvr.isPresent(r) {
-				continue
+			if bpe == nil {
+				bpe = vbs.Enqueue(c)
 			}
-			v := types.DecodeChunk(c, &cvr)
-			d.Exp.NotNil(v, "Chunk with hash %s failed to decode", r)
-
-			// IT'S A HAAAAAACK
-			if datasets, ok := v.(MapOfStringToRefOfCommit); ok {
-				// Manually populate cvr with Dataset Heads, because shove still uses a crappy backchannel to send chunks over. This can go away once we fix BUG 822.
-				datasets.IterAll(func(s string, rOfC RefOfCommit) {
-					r := rOfC.TargetRef()
-					if !cvr.isPresent(r) {
-						fmt.Println("Manually shoving in", r)
-						cvr.ReadValue(r)
-					}
-				})
-			}
-			// End HAAAAAAAAACK
-
-			cvr.checkChunksInCache(v)
-			cvr.set(r, presentChunk(v.Type()))
-			orderedChunks = append(orderedChunks, c)
+			// If a previous Enqueue() errored, we still need to drain chunkChan
+			// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
 		}
-		/*err := */ cs.PutMany(orderedChunks)
-		// TODO communicate backpressure from err
+		if bpe == nil {
+			bpe = vbs.Flush()
+		}
+		// TODO communicate backpressure from bpe
 		w.WriteHeader(http.StatusCreated)
 	})
 

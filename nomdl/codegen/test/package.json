@@ -3,17 +3,12 @@
   "version": "0.0.1",
   "description": "Tests for generated js code",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
-    "@attic/noms": "^10.1.0",
+    "@attic/eslintrc": "^1.0.0",
+    "@attic/noms": "^11.1.0",
     "@attic/webpack-config": "^1.0.1",
     "babel-cli": "6.6.5",
     "babel-core": "6.7.2",
-    "babel-eslint": "5.0.0",
     "babel-generator": "6.7.2",
     "babel-plugin-syntax-async-functions": "6.5.0",
     "babel-plugin-syntax-flow": "6.5.0",
@@ -28,10 +23,7 @@
     "chai": "3.5.0",
     "chokidar": "1.4.3",
     "commander": "2.9.0",
-    "eslint-plugin-flow-vars": "^0.2.1",
-    "eslint-plugin-react": "4.2.3",
-    "eslint": "^1.10.3",
-    "flow-bin": "0.22.1",
+    "flow-bin": "0.23.0",
     "fs-extra": "0.26.7",
     "mocha": "2.4.5"
   },

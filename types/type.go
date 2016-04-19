@@ -165,10 +165,6 @@ func MakePrimitiveTypeByString(p string) Type {
 	return buildType("", primitiveToDesc(p))
 }
 
-func MakeRefType(elemType Type) Type {
-	return MakeCompoundType(RefKind, elemType)
-}
-
 func MakeCompoundType(kind NomsKind, elemTypes ...Type) Type {
 	if len(elemTypes) == 1 {
 		d.Chk.NotEqual(MapKind, kind, "MapKind requires 2 element types.")
@@ -197,6 +193,22 @@ func MakeUnresolvedType(namespace, n string) Type {
 	return Type{name: name{namespace, n}, Desc: UnresolvedDesc{ordinal: -1}, ref: &ref.Ref{}}
 }
 
+func MakeListType(elemType Type) Type {
+	return buildType("", CompoundDesc{ListKind, []Type{elemType}})
+}
+
+func MakeSetType(elemType Type) Type {
+	return buildType("", CompoundDesc{SetKind, []Type{elemType}})
+}
+
+func MakeMapType(keyType, valType Type) Type {
+	return buildType("", CompoundDesc{MapKind, []Type{keyType, valType}})
+}
+
+func MakeRefType(elemType Type) Type {
+	return buildType("", CompoundDesc{RefKind, []Type{elemType}})
+}
+
 func buildType(n string, desc TypeDesc) Type {
 	if IsPrimitiveKind(desc.Kind()) {
 		return Type{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
@@ -209,3 +221,17 @@ func buildType(n string, desc TypeDesc) Type {
 		panic("unreachable")
 	}
 }
+
+var Uint8Type = MakePrimitiveType(Uint8Kind)
+var Uint16Type = MakePrimitiveType(Uint16Kind)
+var Uint32Type = MakePrimitiveType(Uint32Kind)
+var Uint64Type = MakePrimitiveType(Uint64Kind)
+var Int8Type = MakePrimitiveType(Int8Kind)
+var Int16Type = MakePrimitiveType(Int16Kind)
+var Int32Type = MakePrimitiveType(Int32Kind)
+var Int64Type = MakePrimitiveType(Int64Kind)
+var Float32Type = MakePrimitiveType(Float32Kind)
+var Float64Type = MakePrimitiveType(Float64Kind)
+var BoolType = MakePrimitiveType(BoolKind)
+var StringType = MakePrimitiveType(StringKind)
+var BlobType = MakePrimitiveType(BlobKind)

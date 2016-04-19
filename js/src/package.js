@@ -43,18 +43,17 @@ export class Package extends ValueBase {
   }
 }
 
-const packageRegistry: { [key: string]: Package } = Object.create(null);
+const packageRegistry: {[key: string]: Package} = Object.create(null);
 
 export function lookupPackage(r: Ref): ?Package {
   return packageRegistry[r.toString()];
 }
 
-// TODO: Compute ref rather than setting
 export function registerPackage(p: Package) {
   packageRegistry[p.ref.toString()] = p;
 }
 
-const pendingPackages: { [key: string]: Promise<Package> } = Object.create(null);
+const pendingPackages: {[key: string]: Promise<Package>} = Object.create(null);
 
 export function readPackage(r: Ref, ds: DataStore): Promise<Package> {
   const refStr = r.toString();

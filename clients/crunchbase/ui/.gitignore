@@ -1,8 +1,0 @@
-.babelrc
-.eslintrc
-.flowconfig
-node_modules
-out.js
-nvd3.css
-nvd3.js
-d3.js

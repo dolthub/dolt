@@ -75,7 +75,7 @@ async function processDirectory(p: string, store: DataStore): Promise<Directory>
   const names = await fs.readdir(p);
   const children = names.map(name => {
     const chPath = path.join(p, name);
-    return processPath(chPath, store).then(dirEntryRef => [chPath, dirEntryRef]);
+    return processPath(chPath, store).then(dirEntryRef => [name, dirEntryRef]);
   });
 
   numFilesComplete++;

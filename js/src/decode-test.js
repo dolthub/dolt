@@ -440,15 +440,16 @@ suite('Decode', () => {
   test('test read struct with', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    let tr = makeStructType('A1', [
-      new Field('x', int16Type, false),
-      new Field('e', makeType(emptyRef, 1), false),
-      new Field('b', boolType, false),
+    const pkg = new Package([
+      makeStructType('A1', [
+        new Field('x', int16Type, false),
+        new Field('e', makeType(emptyRef, 1), false),
+        new Field('b', boolType, false),
+      ], []),
+      makeEnumType('E', ['a', 'b', 'c']),
     ], []);
-    const enumTref = makeEnumType('E', ['a', 'b', 'c']);
-    const pkg = new Package([tr, enumTref], []);
     registerPackage(pkg);
-    tr = pkg.types[0];
+    const tr = pkg.types[0];
 
     const a = [Kind.Unresolved, pkg.ref.toString(), '0', '42', '1', true];
     const r = new JsonArrayReader(a, ds);

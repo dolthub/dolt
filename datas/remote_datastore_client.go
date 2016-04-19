@@ -2,8 +2,8 @@ package datas
 
 import (
 	"flag"
-	"net/url"
 
+	"github.com/attic-labs/noms/types"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -13,32 +13,29 @@ type RemoteDataStoreClient struct {
 }
 
 func NewRemoteDataStore(baseURL, auth string) *RemoteDataStoreClient {
-	return &RemoteDataStoreClient{newDataStoreCommon(newHTTPHintedChunkStore(baseURL, auth))}
+	httpBS := newHTTPBatchStore(baseURL, auth)
+	return &RemoteDataStoreClient{newDataStoreCommon(httpBS, httpBS)}
 }
 
-func (rds *RemoteDataStoreClient) host() *url.URL {
-	return rds.hcs.(*httpHintedChunkStore).host
+func (rds *RemoteDataStoreClient) batchSink() batchSink {
+	httpBS := rds.bs.(*httpBatchStore)
+	return newNotABatchSink(httpBS.host, httpBS.auth)
 }
 
-func (rds *RemoteDataStoreClient) hintedChunkSink() hintedChunkSink {
-	hhcs := rds.hcs.(*httpHintedChunkStore)
-	return newNotAHintedChunkStore(hhcs.host, hhcs.auth)
-}
-
-func (rds *RemoteDataStoreClient) hintedChunkStore() hintedChunkStore {
-	return rds.hcs
+func (rds *RemoteDataStoreClient) batchStore() types.BatchStore {
+	return rds.bs
 }
 
 func (rds *RemoteDataStoreClient) Commit(datasetID string, commit Commit) (DataStore, error) {
 	err := rds.commit(datasetID, commit)
-	rds.hcs.Flush()
-	return &RemoteDataStoreClient{newDataStoreCommon(rds.hcs)}, err
+	rds.Flush()
+	return &RemoteDataStoreClient{newDataStoreCommon(rds.bs, rds.rt)}, err
 }
 
 func (rds *RemoteDataStoreClient) Delete(datasetID string) (DataStore, error) {
 	err := rds.doDelete(datasetID)
-	rds.hcs.Flush()
-	return &RemoteDataStoreClient{newDataStoreCommon(rds.hcs)}, err
+	rds.Flush()
+	return &RemoteDataStoreClient{newDataStoreCommon(rds.bs, rds.rt)}, err
 }
 
 type remoteDataStoreFlags struct {

@@ -3,7 +3,7 @@
 import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
-import {invariant, isNullOrUndefined, notNull} from './assert.js';
+import {invariant, notNull} from './assert.js';
 import {less} from './compare.js';
 import {search, Sequence, SequenceCursor} from './sequence.js';
 
@@ -21,7 +21,7 @@ export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
 
     while (sequence) {
       cursor = new OrderedSequenceCursor(cursor, sequence, last ? -1 : 0);
-      if (!isNullOrUndefined(key)) {
+      if (key !== null && key !== undefined) {
         const lastPositionIfNotfound = forInsertion && sequence.isMeta;
         if (!cursor._seekTo(key, lastPositionIfNotfound)) {
           return cursor; // invalid

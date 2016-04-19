@@ -24,7 +24,7 @@ func TestTypes(t *testing.T) {
 		Field{"StructField", mahType, false},
 		Field{"StringField", stringType, false},
 	})
-	pkgRef := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
+	pkgRef := vs.WriteValue(NewPackage([]Type{}, ref.RefSlice{})).TargetRef()
 	trType := MakeType(pkgRef, 42)
 
 	mRef := vs.WriteValue(mapType).TargetRef()

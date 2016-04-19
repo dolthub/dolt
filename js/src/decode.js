@@ -344,7 +344,7 @@ export class JsonArrayReader {
     const k = this.readKind();
 
     switch (k) {
-      case Kind.Enum:
+      case Kind.Enum: {
         const name = this.readString();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
         const ids = [];
@@ -352,6 +352,7 @@ export class JsonArrayReader {
           ids.push(r2.readString());
         }
         return makeEnumType(name, ids);
+      }
       case Kind.List:
       case Kind.Map:
       case Kind.Ref:

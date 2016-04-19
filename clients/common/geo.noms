@@ -1,9 +1,0 @@
-struct Geoposition {
-	Latitude: Float32
- 	Longitude: Float32
-}
-
-struct Georectangle {
-	TopLeft: Geoposition
-	BottomRight: Geoposition
-}

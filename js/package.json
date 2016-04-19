@@ -1,6 +1,6 @@
 {
   "name": "@attic/noms",
-  "version": "10.2.0",
+  "version": "11.1.0",
   "main": "dist/commonjs/noms.js",
   "jsnext:main": "dist/es6/noms.js",
   "dependencies": {
@@ -9,9 +9,9 @@
     "text-encoding-utf-8": "1.0.1"
   },
   "devDependencies": {
+    "@attic/eslintrc": "^1.0.0",
     "babel-cli": "6.6.5",
     "babel-core": "6.7.2",
-    "babel-eslint": "5.0.0",
     "babel-generator": "6.7.2",
     "babel-plugin-syntax-async-functions": "6.5.0",
     "babel-plugin-syntax-flow": "6.5.0",
@@ -26,12 +26,9 @@
     "chai": "3.5.0",
     "chokidar": "1.4.3",
     "commander": "2.9.0",
-    "eslint-plugin-flow-vars": "^0.2.1",
-    "eslint-plugin-react": "4.2.3",
-    "eslint": "^1.10.3",
-    "flow-bin": "0.22.1",
-    "mocha": "2.4.5",
-    "fs-extra": "0.26.7"
+    "flow-bin": "^0.23.0",
+    "fs-extra": "0.26.7",
+    "mocha": "2.4.5"
   },
   "scripts": {
     "pretest": "eslint src/ && flow src/",

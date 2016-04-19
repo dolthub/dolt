@@ -4,7 +4,8 @@ import {Kind, kindToString} from './noms-kind.js';
 import {CompoundDesc} from './type.js';
 import type {Type} from './type.js';
 import {ValueBase} from './value.js';
-import {invariant} from './assert.js';
+import {notNull, invariant} from './assert.js';
+import {lookupPackage} from './package.js';
 
 export default function validateType(t: Type, v: any): void {
   switch (t.kind) {
@@ -36,23 +37,31 @@ export default function validateType(t: Type, v: any): void {
       return;
     }
 
-    case Kind.Enum:
-      assertTypeof(v, 'number', t);
-      // TODO: Validate value.
+    case Kind.Unresolved: {
+      // Struct or Enum.
+      const pkg = lookupPackage(t.packageRef);
+      const t2 = notNull(pkg).types[t.ordinal];
+      if (t2.kind === Kind.Enum) {
+        assertTypeof(v, 'number', t);
+        // TODO: Validate value.
+      } else {
+        assertSubtype(v, t);
+      }
       return;
+    }
 
     case Kind.List:
     case Kind.Map:
     case Kind.Ref:
     case Kind.Set:
     case Kind.Blob:
-    case Kind.Struct:
     case Kind.Type:
     case Kind.Package:
-    case Kind.Unresolved:
       assertSubtype(v, t);
       return;
 
+    case Kind.Enum:
+    case Kind.Struct:
     default:
       throw new Error('unreachable');
   }

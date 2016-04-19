@@ -98,20 +98,20 @@ func getTestRefValueOrderMap(scale int) testMap {
 	}, setType)
 }
 
-func getTestRefToNativeOrderMap(scale int) testMap {
-	refType := MakeCompoundType(RefKind, MakePrimitiveType(Int64Kind))
+func getTestRefToNativeOrderMap(scale int, vw ValueWriter) testMap {
+	refType := MakeRefType(MakePrimitiveType(Int64Kind))
 	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
-		return newRef(v.Ref(), refType)
+		return vw.WriteValue(v)
 	}, func(x, y Value) bool {
 		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
 	}, refType)
 }
 
-func getTestRefToValueOrderMap(scale int) testMap {
+func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
 	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
-	refType := MakeCompoundType(RefKind, setType)
+	refType := MakeRefType(setType)
 	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
-		return newRef(NewTypedSet(setType, v).Ref(), refType)
+		return vw.WriteValue(NewTypedSet(setType, v))
 	}, func(x, y Value) bool {
 		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
 	}, refType)
@@ -120,8 +120,8 @@ func getTestRefToValueOrderMap(scale int) testMap {
 func TestCompoundMapHas(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := NewTestValueStore()
 	doTest := func(tm testMap) {
-		vs := NewTestValueStore()
 		m := tm.toCompoundMap()
 		m2 := vs.ReadValue(vs.WriteValue(m).TargetRef()).(compoundMap)
 		for _, entry := range tm.entries {
@@ -135,8 +135,8 @@ func TestCompoundMapHas(t *testing.T) {
 
 	doTest(getTestNativeOrderMap(16))
 	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2))
-	doTest(getTestRefToValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2, vs))
+	doTest(getTestRefToValueOrderMap(2, vs))
 }
 
 func TestCompoundMapFirst(t *testing.T) {
@@ -152,8 +152,8 @@ func TestCompoundMapFirst(t *testing.T) {
 
 	doTest(getTestNativeOrderMap(16))
 	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2))
-	doTest(getTestRefToValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2, NewTestValueStore()))
+	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
 }
 
 func TestCompoundMapMaybeGet(t *testing.T) {
@@ -173,8 +173,8 @@ func TestCompoundMapMaybeGet(t *testing.T) {
 
 	doTest(getTestNativeOrderMap(2))
 	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2))
-	doTest(getTestRefToValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2, NewTestValueStore()))
+	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
 }
 
 func TestCompoundMapIter(t *testing.T) {
@@ -201,8 +201,8 @@ func TestCompoundMapIter(t *testing.T) {
 
 	doTest(getTestNativeOrderMap(16))
 	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2))
-	doTest(getTestRefToValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2, NewTestValueStore()))
+	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
 }
 
 func TestCompoundMapIterAll(t *testing.T) {
@@ -222,8 +222,8 @@ func TestCompoundMapIterAll(t *testing.T) {
 
 	doTest(getTestNativeOrderMap(16))
 	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2))
-	doTest(getTestRefToValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2, NewTestValueStore()))
+	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
 }
 
 func TestCompoundMapSet(t *testing.T) {
@@ -248,8 +248,8 @@ func TestCompoundMapSet(t *testing.T) {
 	doTest(18, 3, getTestNativeOrderMap(9))
 	doTest(128, 1, getTestNativeOrderMap(32))
 	doTest(64, 1, getTestRefValueOrderMap(4))
-	doTest(64, 1, getTestRefToNativeOrderMap(4))
-	doTest(64, 1, getTestRefToValueOrderMap(4))
+	doTest(64, 1, getTestRefToNativeOrderMap(4, NewTestValueStore()))
+	doTest(64, 1, getTestRefToValueOrderMap(4, NewTestValueStore()))
 }
 
 func TestCompoundMapSetExistingKeyToExistingValue(t *testing.T) {
@@ -306,8 +306,8 @@ func TestCompoundMapRemove(t *testing.T) {
 
 	doTest(128, getTestNativeOrderMap(32))
 	doTest(64, getTestRefValueOrderMap(4))
-	doTest(64, getTestRefToNativeOrderMap(4))
-	doTest(64, getTestRefToValueOrderMap(4))
+	doTest(64, getTestRefToNativeOrderMap(4, NewTestValueStore()))
+	doTest(64, getTestRefToValueOrderMap(4, NewTestValueStore()))
 }
 
 func TestCompoundMapRemoveNonexistentKey(t *testing.T) {
@@ -344,8 +344,8 @@ func TestCompoundMapFilter(t *testing.T) {
 
 	doTest(getTestNativeOrderMap(16))
 	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2))
-	doTest(getTestRefToValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2, NewTestValueStore()))
+	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
 }
 
 func TestCompoundMapFirstNNumbers(t *testing.T) {
@@ -373,7 +373,7 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	pkg := NewPackage([]Type{structTypeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	structType := MakeType(pkgRef, 0)
-	refOfTypeStructType := MakeCompoundType(RefKind, structType)
+	refOfTypeStructType := MakeRefType(structType)
 
 	mapType := MakeCompoundType(MapKind, refOfTypeStructType, refOfTypeStructType)
 
@@ -382,6 +382,8 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	for i := 0; i < n; i++ {
 		k := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i)}))
 		v := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i + 1)}))
+		assert.NotNil(k)
+		assert.NotNil(v)
 		kvs = append(kvs, k, v)
 	}
 

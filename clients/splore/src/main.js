@@ -19,7 +19,9 @@ import {
   RefValue,
   SetLeafSequence,
   Struct,
+  StructMirror,
 } from '@attic/noms';
+import type {StructFieldMirror} from '@attic/noms';
 import {layout, TreeNode} from './buchheim.js';
 import type {NodeGraph} from './buchheim.js';
 
@@ -178,13 +180,13 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
     } else if (val instanceof Struct) {
       // Struct
       // Make a variable to the struct to work around Flow bug.
-      const struct: Struct = val;
-      const structName = val.typeDef.name;
+      const mirror = new StructMirror(val);
+      const structName = mirror.name;
       data.nodes[id] = {name: structName};
 
-      const processField = (k: string) => {
-        const v = struct.get(k);
-        const kid = process(ref, k, id);
+      const processField = (f: StructFieldMirror) => {
+        const v = f.value;
+        const kid = process(ref, f.name, id);
         if (kid) {
           // Start struct keys open, just makes it easier to use.
           data.nodes[kid].isOpen = true;
@@ -195,14 +197,12 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         }
       };
 
-      val.typeDef.desc.fields.forEach(f => {
-        processField(f.name);
-      });
-      if (val.hasUnion) {
-        const {name} = val.typeDef.desc.union[val.unionIndex];
-        processField(name);
+      mirror.forEachField(processField);
+      if (mirror.hasUnion) {
+        processField(mirror.unionField);
       }
     } else {
+      invariant(val !== null && val !== undefined);
       console.log('Unsupported type', val.constructor.name, val); // eslint-disable-line no-console
     }
 
