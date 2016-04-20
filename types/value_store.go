@@ -95,7 +95,7 @@ func (lvs *ValueStore) cacheChunks(v Value, r ref.Ref) {
 		if cur := lvs.check(hash); cur == nil || cur.Hint().IsEmpty() || cur.Hint() == hash {
 			lvs.set(hash, hintedChunk{getTargetType(reachable), r})
 			// Code-genned Packages are side-loaded when reading Values for performance reasons. This means that they won't pass through the ReadValue() codepath above, which means that they won't have their Chunks added to the cache. So, if reachable is a RefOfPackage, go look the package up in the PackageRegistry and recursively add its Chunks to the cache.
-			if _, ok := reachable.(RefOfPackage); ok {
+			if _, ok := reachable.(Ref); ok {
 				if p := LookupPackage(hash); p != nil {
 					lvs.cacheChunks(p, hash)
 				}

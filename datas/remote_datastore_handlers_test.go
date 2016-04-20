@@ -33,7 +33,7 @@ func TestHandleWriteValue(t *testing.T) {
 	hint := l.Ref()
 	newItem := types.NewEmptyBlob()
 	itemChunk := types.EncodeValue(newItem, nil)
-	l2 := l.Insert(1, types.NewRefOfBlob(itemChunk.Ref()))
+	l2 := l.Insert(1, types.NewTypedRefFromValue(newItem))
 	listChunk := types.EncodeValue(l2, nil)
 
 	body := &bytes.Buffer{}
@@ -69,7 +69,7 @@ func TestHandleWriteValueBackpressure(t *testing.T) {
 	hint := l.Ref()
 	newItem := types.NewEmptyBlob()
 	itemChunk := types.EncodeValue(newItem, nil)
-	l2 := l.Insert(1, types.NewRefOfBlob(itemChunk.Ref()))
+	l2 := l.Insert(1, types.NewTypedRefFromValue(newItem))
 	listChunk := types.EncodeValue(l2, nil)
 
 	body := &bytes.Buffer{}

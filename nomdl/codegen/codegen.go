@@ -62,7 +62,7 @@ func main() {
 	pkgDS := dataset.NewDataset(ds, *pkgDSFlag)
 	// Ensure that, if pkgDS has stuff in it, its head is a SetOfRefOfPackage.
 	if h, ok := pkgDS.MaybeHead(); ok {
-		d.Chk.IsType(types.SetOfRefOfPackage{}, h.Value())
+		d.Chk.IsType(types.NewSetOfRefOfPackage(), h.Value())
 	}
 
 	localPkgs := refSet{}
@@ -156,18 +156,18 @@ func generateAndEmit(tag, out string, written map[string]bool, deps depsMap, p p
 	io.Copy(outFile, &buf)
 }
 
-func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) types.SetOfRefOfPackage {
+func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) types.Set {
 	// Can do better once generated collections implement types.Value.
 	s := types.NewSetOfRefOfPackage()
 	if h, ok := ds.MaybeHead(); ok {
-		s = h.Value().(types.SetOfRefOfPackage)
+		s = h.Value().(types.Set)
 	}
 	for _, dep := range deps {
 		// Writing the deps into ds should be redundant at this point, but do it to be sure.
 		// TODO: consider moving all dataset work over into nomdl/pkg BUG 409
-		s = s.Insert(ds.Store().WriteValue(dep).(types.RefOfPackage))
+		s = s.Insert(ds.Store().WriteValue(dep).(types.Ref))
 	}
-	r := ds.Store().WriteValue(pkg.Package).(types.RefOfPackage)
+	r := ds.Store().WriteValue(pkg.Package).(types.Ref)
 	return s.Insert(r)
 }
 

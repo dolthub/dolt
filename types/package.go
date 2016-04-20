@@ -53,12 +53,12 @@ func (p Package) ChildValues() (res []Value) {
 		res = append(res, t)
 	}
 	for _, d := range p.dependencies {
-		res = append(res, NewRefOfPackage(d))
+		res = append(res, NewTypedRef(p.Type(), d))
 	}
 	return
 }
 
-var typeForPackage = MakePrimitiveType(PackageKind)
+var typeForPackage = PackageType
 
 func (p Package) Type() Type {
 	return typeForPackage
@@ -81,4 +81,8 @@ func (p Package) Dependencies() (dependencies []ref.Ref) {
 func (p Package) Types() (types []Type) {
 	types = append(types, p.types...)
 	return
+}
+
+func NewSetOfRefOfPackage() Set {
+	return NewTypedSet(MakeSetType(MakeRefType(PackageType)))
 }

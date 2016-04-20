@@ -73,9 +73,10 @@ func (suite *DataStoreSuite) TestWriteRefToNonexistentValue() {
 
 func (suite *DataStoreSuite) TestWriteWrongTypeRef() {
 	b := types.Bool(true)
+	blob := types.NewEmptyBlob()
 	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(b))
 
-	suite.Panics(func() { suite.ds.WriteValue(types.NewRefOfBlob(b.Ref())) })
+	suite.Panics(func() { suite.ds.WriteValue(types.NewTypedRef(blob.Type(), b.Ref())) })
 }
 
 func (suite *DataStoreSuite) TestWriteValueTypeRef() {
@@ -98,7 +99,7 @@ func (suite *DataStoreSuite) TestReadValueTypeRefPanics_BUG1121() {
 	suite.True(ok)
 	// Fix BUG 1121 and then uncomment this line and delete the one after
 	// suite.NotPanics(func() { ds2.WriteValue(types.NewRefOfBlob(b.Ref())) })
-	suite.Panics(func() { ds2.WriteValue(types.NewRefOfBlob(b.Ref())) })
+	suite.Panics(func() { ds2.WriteValue(types.NewTypedRefFromValue(b)) })
 }
 
 func (suite *DataStoreSuite) TestTolerateUngettableRefs() {
