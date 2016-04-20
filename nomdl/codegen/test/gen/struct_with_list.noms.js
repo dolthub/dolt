@@ -10,8 +10,10 @@ import {
   createStructClass as _createStructClass,
   int64Type as _int64Type,
   makeCompoundType as _makeCompoundType,
+  makeListType as _makeListType,
   makeStructType as _makeStructType,
   makeType as _makeType,
+  newList as _newList,
   registerPackage as _registerPackage,
   stringType as _stringType,
   uint8Type as _uint8Type,
@@ -62,3 +64,7 @@ interface StructWithList$Interface extends _Struct {
 }
 
 export const StructWithList: Class<StructWithList$Interface> = _createStructClass(StructWithList$type, StructWithList$typeDef);
+
+export function newListOfUint8(values: Array<_uint8>): Promise<_NomsList<_uint8>> {
+  return _newList(values, _makeListType(_uint8Type));
+}

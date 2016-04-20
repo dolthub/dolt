@@ -3,9 +3,6 @@ package main
 import (
 	"bytes"
 	"flag"
-	"fmt"
-	"go/parser"
-	"go/token"
 	"io"
 	"log"
 	"os"
@@ -16,10 +13,6 @@ import (
 	"sort"
 	"strings"
 	"text/template"
-	"unicode"
-	"unicode/utf8"
-
-	"golang.org/x/tools/imports"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
@@ -31,15 +24,11 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-const goExt = "go"
-const jsExt = "js"
-
 var (
 	outDirFlag  = flag.String("out-dir", ".", "Directory where generated code will be written")
 	inFlag      = flag.String("in", "", "The name of the noms file to read")
 	pkgDSFlag   = flag.String("package-ds", "", "The dataset to read/write packages from/to.")
 	packageFlag = flag.String("package", "", "The name of the go package to write")
-	outputLang  = flag.String("out-lang", goExt, `Output language. Supported values are "go" and "js"`)
 
 	idRegexp    = regexp.MustCompile(`[_\pL][_\pL\pN]*`)
 	illegalRune = regexp.MustCompile(`[^_\pL\pN]`)
@@ -70,12 +59,6 @@ func main() {
 		*pkgDSFlag = "default"
 	}
 
-	if *outputLang != goExt && *outputLang != jsExt {
-		log.Print("Invalid out-lang provided.")
-		flag.Usage()
-		return
-	}
-
 	pkgDS := dataset.NewDataset(ds, *pkgDSFlag)
 	// Ensure that, if pkgDS has stuff in it, its head is a SetOfRefOfPackage.
 	if h, ok := pkgDS.MaybeHead(); ok {
@@ -86,9 +69,6 @@ func main() {
 	outDir, err := filepath.Abs(*outDirFlag)
 	d.Chk.NoError(err, "Could not canonicalize -out-dir: %v", err)
 	packageName := ""
-	if *outputLang == goExt {
-		packageName = getGoPackageName(outDir)
-	}
 
 	if *inFlag != "" {
 		out := getOutFileName(filepath.Base(*inFlag))
@@ -151,7 +131,7 @@ func generateDepCode(packageName, outDir string, written map[string]bool, p type
 		tag := code.ToTag(p.Ref())
 		parsed := pkg.Parsed{Package: p, Name: packageName}
 		if !localPkgs[parsed.Ref()] {
-			generateAndEmit(tag, filepath.Join(outDir, tag+"."+*outputLang), written, pDeps, parsed)
+			generateAndEmit(tag, filepath.Join(outDir, tag+".js"), written, pDeps, parsed)
 			localPkgs[parsed.Ref()] = true
 		}
 		for depRef, dep := range pDeps {
@@ -164,18 +144,8 @@ func generateDepCode(packageName, outDir string, written map[string]bool, p type
 
 func generateAndEmit(tag, out string, written map[string]bool, deps depsMap, p pkg.Parsed) {
 	var buf bytes.Buffer
-	gen := newCodeGen(&buf, tag, *outputLang, written, deps, p)
+	gen := newCodeGen(&buf, tag, written, deps, p)
 	gen.WritePackage()
-
-	if *outputLang == goExt {
-		// go format
-		bs, err := imports.Process(out, buf.Bytes(), nil)
-		if err != nil {
-			fmt.Println(buf.String())
-		}
-		d.Chk.NoError(err)
-		buf = *bytes.NewBuffer(bs)
-	}
 
 	d.Chk.NoError(os.MkdirAll(filepath.Dir(out), 0700))
 
@@ -202,7 +172,7 @@ func buildSetOfRefOfPackage(pkg pkg.Parsed, deps depsMap, ds dataset.Dataset) ty
 }
 
 func getOutFileName(in string) string {
-	return in[:len(in)-len(ext)] + ".noms." + *outputLang
+	return in[:len(in)-len(ext)] + ".noms.js"
 }
 
 func getBareFileName(in string) string {
@@ -210,64 +180,22 @@ func getBareFileName(in string) string {
 	return base[:len(base)-len(filepath.Ext(base))]
 }
 
-func getGoPackageName(outDir string) string {
-	if *packageFlag != "" {
-		d.Exp.True(idRegexp.MatchString(*packageFlag), "%s is not a legal Go identifier.", *packageFlag)
-		return *packageFlag
-	}
-
-	// It is illegal to have multiple go files in the same directory with different package names.
-	// We can therefore just pick the first one and get the package name from there.
-	goFiles, err := filepath.Glob(filepath.Join(outDir, "*.go"))
-	d.Chk.NoError(err)
-	if len(goFiles) == 0 {
-		d.Exp.NotEmpty(outDir, "Cannot convert empty path into a Go package name.")
-		return makeGoIdentifier(filepath.Base(outDir))
-	}
-	d.Chk.True(len(goFiles) > 0, "No Go files in current directory; cannot infer pacakge name.")
-
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, goFiles[0], nil, parser.PackageClauseOnly)
-	d.Chk.NoError(err)
-	return f.Name.String()
-}
-
-func makeGoIdentifier(in string) string {
-	d.Chk.NotEmpty(in, "Cannot convert empty string to legal Go identifier.")
-	if r, _ := utf8.DecodeRuneInString(in); unicode.IsNumber(r) {
-		in = "_" + in
-	}
-	return illegalRune.ReplaceAllLiteralString(in, "_")
-}
-
 type codeGen struct {
-	w          io.Writer
-	pkg        pkg.Parsed
-	deps       depsMap
-	written    map[string]bool
-	toWrite    []types.Type
-	generator  *code.Generator
-	lang       string
-	templates  *template.Template
-	sharedData sharedData
+	w         io.Writer
+	pkg       pkg.Parsed
+	deps      depsMap
+	written   map[string]bool
+	toWrite   []types.Type
+	generator *code.Generator
+	templates *template.Template
 }
 
-func newCodeGen(w io.Writer, fileID, lang string, written map[string]bool, deps depsMap, pkg pkg.Parsed) *codeGen {
-	typesPackage := "types."
-	if pkg.Name == "types" {
-		typesPackage = ""
-	}
-	nomsImport := "github.com/attic-labs/noms"
-	gen := &codeGen{w, pkg, deps, written, []types.Type{}, nil, lang, nil, sharedData{
-		nomsImport,
-		typesPackage,
-		pkg.Package.Ref(),
-	}}
+func newCodeGen(w io.Writer, fileID string, written map[string]bool, deps depsMap, pkg pkg.Parsed) *codeGen {
+	gen := &codeGen{w, pkg, deps, written, []types.Type{}, nil, nil}
 	gen.generator = &code.Generator{
-		R:            gen,
-		TypesPackage: typesPackage,
-		AliasNames:   pkg.AliasNames,
-		Package:      &pkg.Package,
+		R:          gen,
+		AliasNames: pkg.AliasNames,
+		Package:    &pkg.Package,
 	}
 	gen.templates = gen.readTemplates()
 	return gen
@@ -275,7 +203,7 @@ func newCodeGen(w io.Writer, fileID, lang string, written map[string]bool, deps 
 
 func (gen *codeGen) readTemplates() *template.Template {
 	_, thisfile, _, _ := runtime.Caller(1)
-	glob := path.Join(path.Dir(thisfile), gen.lang, "*.tmpl")
+	glob := path.Join(path.Dir(thisfile), "js", "*.tmpl")
 	return template.Must(template.New("").Funcs(
 		template.FuncMap{
 			"defToUser":            gen.generator.DefToUser,
@@ -318,22 +246,16 @@ func (gen *codeGen) Resolve(t types.Type, pkg *types.Package) types.Type {
 	return dep.Types()[t.Ordinal()]
 }
 
-type sharedData struct {
-	NomsImport   string
-	TypesPackage string
-	PackageRef   ref.Ref
-}
-
 func (gen *codeGen) WritePackage() {
 	pkgTypes := gen.pkg.Types()
 	data := struct {
-		sharedData
+		PackageRef   ref.Ref
 		HasTypes     bool
 		Dependencies []ref.Ref
 		Name         string
 		Types        []types.Type
 	}{
-		gen.sharedData,
+		gen.pkg.Package.Ref(),
 		len(pkgTypes) > 0,
 		gen.pkg.Dependencies(),
 		gen.pkg.Name,
@@ -344,11 +266,7 @@ func (gen *codeGen) WritePackage() {
 	var buf bytes.Buffer
 	w := gen.w
 
-	if gen.lang == jsExt {
-		gen.w = &buf
-	} else {
-		gen.WriteHeader()
-	}
+	gen.w = &buf
 
 	err := gen.templates.ExecuteTemplate(gen.w, "package.tmpl", data)
 	d.Exp.NoError(err)
@@ -367,32 +285,28 @@ func (gen *codeGen) WritePackage() {
 		gen.write(t)
 	}
 
-	if gen.lang == jsExt {
-		gen.w = w
-		gen.WriteHeader()
-		io.Copy(w, &buf)
-	}
+	gen.w = w
+	gen.WriteHeader()
+	io.Copy(w, &buf)
 }
 
 func (gen *codeGen) WriteHeader() {
 	importedJS := make([]string, 0, len(gen.generator.ImportedJS))
 	importedJSTypes := make([]string, 0, len(gen.generator.ImportedJSTypes))
-	if gen.lang == jsExt {
-		for name := range gen.generator.ImportedJS {
-			importedJS = append(importedJS, name)
-		}
-		for name := range gen.generator.ImportedJSTypes {
-			if _, ok := gen.generator.ImportedJS[name]; !ok {
-				importedJSTypes = append(importedJSTypes, name)
-			}
-		}
-		sort.Strings(importedJS)
-		sort.Strings(importedJSTypes)
+	for name := range gen.generator.ImportedJS {
+		importedJS = append(importedJS, name)
 	}
+	for name := range gen.generator.ImportedJSTypes {
+		if _, ok := gen.generator.ImportedJS[name]; !ok {
+			importedJSTypes = append(importedJSTypes, name)
+		}
+	}
+	sort.Strings(importedJS)
+	sort.Strings(importedJSTypes)
 
 	pkgTypes := gen.pkg.Types()
 	data := struct {
-		sharedData
+		PackageRef      ref.Ref
 		HasTypes        bool
 		Dependencies    []ref.Ref
 		Name            string
@@ -401,7 +315,7 @@ func (gen *codeGen) WriteHeader() {
 		ImportedJSTypes []string
 		AliasNames      map[ref.Ref]string
 	}{
-		gen.sharedData,
+		gen.pkg.Package.Ref(),
 		len(pkgTypes) > 0,
 		gen.pkg.Dependencies(),
 		gen.pkg.Name,
@@ -477,7 +391,7 @@ func (gen *codeGen) writeStruct(t types.Type, ordinal int) {
 	d.Chk.True(ordinal >= 0)
 	desc := t.Desc.(types.StructDesc)
 	data := struct {
-		sharedData
+		PackageRef    ref.Ref
 		Name          string
 		Type          types.Type
 		Ordinal       int
@@ -485,17 +399,15 @@ func (gen *codeGen) writeStruct(t types.Type, ordinal int) {
 		Choices       types.Choices
 		HasUnion      bool
 		UnionZeroType types.Type
-		CanUseDef     bool
 	}{
-		gen.sharedData,
+		gen.pkg.Package.Ref(),
 		gen.generator.UserName(t),
 		t,
 		ordinal,
 		desc.Fields,
 		nil,
 		len(desc.Union) != 0,
-		types.MakePrimitiveType(types.Uint32Kind),
-		gen.canUseDef(t, gen.pkg.Package),
+		types.Uint32Type,
 	}
 
 	if data.HasUnion {
@@ -516,17 +428,15 @@ func (gen *codeGen) writeStruct(t types.Type, ordinal int) {
 func (gen *codeGen) writeList(t types.Type) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
-		sharedData
-		Name      string
-		Type      types.Type
-		ElemType  types.Type
-		CanUseDef bool
+		PackageRef ref.Ref
+		Name       string
+		Type       types.Type
+		ElemType   types.Type
 	}{
-		gen.sharedData,
+		gen.pkg.Package.Ref(),
 		gen.generator.UserName(t),
 		t,
 		elemTypes[0],
-		gen.canUseDef(t, gen.pkg.Package),
 	}
 	gen.writeTemplate("list.tmpl", t, data)
 	gen.writeLater(elemTypes[0])
@@ -535,19 +445,17 @@ func (gen *codeGen) writeList(t types.Type) {
 func (gen *codeGen) writeMap(t types.Type) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
-		sharedData
-		Name      string
-		Type      types.Type
-		KeyType   types.Type
-		ValueType types.Type
-		CanUseDef bool
+		PackageRef ref.Ref
+		Name       string
+		Type       types.Type
+		KeyType    types.Type
+		ValueType  types.Type
 	}{
-		gen.sharedData,
+		gen.pkg.Package.Ref(),
 		gen.generator.UserName(t),
 		t,
 		elemTypes[0],
 		elemTypes[1],
-		gen.canUseDef(t, gen.pkg.Package),
 	}
 	gen.writeTemplate("map.tmpl", t, data)
 	gen.writeLater(elemTypes[0])
@@ -557,12 +465,12 @@ func (gen *codeGen) writeMap(t types.Type) {
 func (gen *codeGen) writeRef(t types.Type) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
-		sharedData
-		Name     string
-		Type     types.Type
-		ElemType types.Type
+		PackageRef ref.Ref
+		Name       string
+		Type       types.Type
+		ElemType   types.Type
 	}{
-		gen.sharedData,
+		gen.pkg.Package.Ref(),
 		gen.generator.UserName(t),
 		t,
 		elemTypes[0],
@@ -574,17 +482,15 @@ func (gen *codeGen) writeRef(t types.Type) {
 func (gen *codeGen) writeSet(t types.Type) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
-		sharedData
-		Name      string
-		Type      types.Type
-		ElemType  types.Type
-		CanUseDef bool
+		PackageRef ref.Ref
+		Name       string
+		Type       types.Type
+		ElemType   types.Type
 	}{
-		gen.sharedData,
+		gen.pkg.Package.Ref(),
 		gen.generator.UserName(t),
 		t,
 		elemTypes[0],
-		gen.canUseDef(t, gen.pkg.Package),
 	}
 	gen.writeTemplate("set.tmpl", t, data)
 	gen.writeLater(elemTypes[0])
@@ -593,13 +499,13 @@ func (gen *codeGen) writeSet(t types.Type) {
 func (gen *codeGen) writeEnum(t types.Type, ordinal int) {
 	d.Chk.True(ordinal >= 0)
 	data := struct {
-		sharedData
-		Name    string
-		Type    types.Type
-		Ordinal int
-		Ids     []string
+		PackageRef ref.Ref
+		Name       string
+		Type       types.Type
+		Ordinal    int
+		Ids        []string
 	}{
-		gen.sharedData,
+		gen.pkg.Package.Ref(),
 		t.Name(),
 		t,
 		ordinal,
@@ -607,93 +513,4 @@ func (gen *codeGen) writeEnum(t types.Type, ordinal int) {
 	}
 
 	gen.writeTemplate("enum.tmpl", t, data)
-}
-
-func (gen *codeGen) canUseDef(t types.Type, p types.Package) bool {
-	cache := map[string]bool{}
-
-	var rec func(t types.Type, p types.Package) bool
-	rec = func(t types.Type, p types.Package) bool {
-		switch t.Kind() {
-		case types.UnresolvedKind:
-			t2, p2 := gen.resolveInPackage(t, p)
-			d.Chk.False(t2.IsUnresolved())
-			return rec(t2, p2)
-		case types.ListKind:
-			return rec(t.Desc.(types.CompoundDesc).ElemTypes[0], p)
-		case types.SetKind:
-			elemType := t.Desc.(types.CompoundDesc).ElemTypes[0]
-			return !gen.containsNonComparable(elemType, p) && rec(elemType, p)
-		case types.MapKind:
-			elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
-			return !gen.containsNonComparable(elemTypes[0], p) && rec(elemTypes[0], p) && rec(elemTypes[1], p)
-		case types.StructKind:
-			userName := gen.generator.UserName(t)
-			if b, ok := cache[userName]; ok {
-				return b
-			}
-			cache[userName] = true
-			for _, f := range t.Desc.(types.StructDesc).Fields {
-				if f.T.Equals(t) || !rec(f.T, p) {
-					cache[userName] = false
-					return false
-				}
-			}
-			return true
-		default:
-			return true
-		}
-	}
-
-	return rec(t, p)
-}
-
-// We use a go map as the def for Set and Map. These cannot have a key that is a
-// Set, Map or a List because slices and maps are not comparable in go.
-func (gen *codeGen) containsNonComparable(t types.Type, p types.Package) bool {
-	cache := map[string]bool{}
-
-	var rec func(t types.Type, p types.Package) bool
-	rec = func(t types.Type, p types.Package) bool {
-		switch t.Desc.Kind() {
-		case types.UnresolvedKind:
-			t2, p2 := gen.resolveInPackage(t, p)
-			d.Chk.False(t2.IsUnresolved())
-			return rec(t2, p2)
-		case types.ListKind, types.MapKind, types.SetKind:
-			return true
-		case types.StructKind:
-			// Only structs can be recursive
-			userName := gen.generator.UserName(t)
-			if b, ok := cache[userName]; ok {
-				return b
-			}
-			// If we get here in a recursive call we will mark it as not having a non comparable value. If it does then that will get handled higher up in the call chain.
-			cache[userName] = false
-			for _, f := range t.Desc.(types.StructDesc).Fields {
-				if rec(f.T, p) {
-					cache[userName] = true
-					return true
-				}
-			}
-			return cache[userName]
-		default:
-			return false
-		}
-	}
-
-	return rec(t, p)
-}
-
-func (gen *codeGen) resolveInPackage(t types.Type, p types.Package) (types.Type, types.Package) {
-	d.Chk.True(t.IsUnresolved())
-	d.Chk.True(t.HasPackageRef(), "Should have a package ref")
-
-	if p.Ref() != t.PackageRef() {
-		p = gen.deps[t.PackageRef()]
-	}
-
-	d.Chk.NotNil(p)
-	d.Chk.True(int(t.Ordinal()) < len(p.Types()))
-	return p.Types()[t.Ordinal()], p
 }

@@ -2,11 +2,9 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
@@ -18,10 +16,9 @@ import (
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/tools/imports"
 )
 
-func assertOutput(inPath, lang, goldenPath string, t *testing.T) {
+func assertOutput(inPath, goldenPath string, t *testing.T) {
 	assert := assert.New(t)
 	emptyDS := datas.NewDataStore(chunks.NewMemoryStore()) // Will be DataStore containing imports
 
@@ -42,15 +39,10 @@ func assertOutput(inPath, lang, goldenPath string, t *testing.T) {
 	var buf bytes.Buffer
 	pkg := pkg.ParseNomDL("gen", inFile, filepath.Dir(inPath), emptyDS)
 	written := map[string]bool{}
-	gen := newCodeGen(&buf, getBareFileName(inPath), lang, written, depsMap{}, pkg)
+	gen := newCodeGen(&buf, getBareFileName(inPath), written, depsMap{}, pkg)
 	gen.WritePackage()
 
 	bs := buf.Bytes()
-	if lang == "go" {
-		bs, err = imports.Process("", bs, nil)
-		d.Chk.NoError(err)
-	}
-
 	assert.Equal(string(goldenBytes), string(bs), "%s did not generate the same string", inPath)
 }
 
@@ -68,97 +60,7 @@ func TestGeneratedFiles(t *testing.T) {
 			// These two files race to write ListOfUint8
 			continue
 		}
-		assertOutput(n, "go", filepath.Join("test", "gen", file+".go"), t)
-		assertOutput(n, "js", filepath.Join("test", "gen", file+".js"), t)
-	}
-}
-
-func TestCanUseDef(t *testing.T) {
-	assert := assert.New(t)
-	emptyDS := datas.NewDataStore(chunks.NewMemoryStore())
-
-	depsDir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(depsDir)
-
-	assertCanUseDef := func(s string, using, named bool) {
-		pkg := pkg.ParseNomDL("fakefile", bytes.NewBufferString(s), "", emptyDS)
-		gen := newCodeGen(nil, "fakefile", "go", map[string]bool{}, depsMap{}, pkg)
-		for _, t := range pkg.UsingDeclarations {
-			assert.Equal(using, gen.canUseDef(t, gen.pkg.Package))
-		}
-		for _, t := range pkg.Types() {
-			assert.Equal(named, gen.canUseDef(t, gen.pkg.Package))
-		}
-	}
-
-	good := `
-		using List<Int8>
-		using Set<Int8>
-		using Map<Int8, Int8>
-		using Map<Int8, Set<Int8>>
-		using Map<Int8, Map<Int8, Int8>>
-
-		struct Simple {
-			x: Int8
-		}
-		using Set<Simple>
-		using Map<Simple, Int8>
-		using Map<Simple, Simple>
-		`
-	assertCanUseDef(good, true, true)
-
-	good = `
-		struct Tree {
-		  children: List<Tree>
-		}
-		`
-	assertCanUseDef(good, true, true)
-
-	bad := `
-		struct WithList {
-			x: List<Int8>
-		}
-		using Set<WithList>
-		using Map<WithList, Int8>
-
-		struct WithSet {
-			x: Set<Int8>
-		}
-		using Set<WithSet>
-		using Map<WithSet, Int8>
-
-		struct WithMap {
-			x: Map<Int8, Int8>
-		}
-		using Set<WithMap>
-		using Map<WithMap, Int8>
-		`
-	assertCanUseDef(bad, false, true)
-
-	bad = `
-		struct Commit {
-			value: Value
-			parents: Set<Commit>
-		}
-		`
-	assertCanUseDef(bad, false, false)
-
-	bad = `
-		Set<Set<Int8>>
-		Set<Map<Int8, Int8>>
-		Set<List<Int8>>
-		Map<Set<Int8>, Int8>
-		Map<Map<Int8, Int8>, Int8>
-		Map<List<Int8>, Int8>
-		`
-
-	for _, line := range strings.Split(bad, "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		assertCanUseDef(fmt.Sprintf("using %s", line), false, false)
-		assertCanUseDef(fmt.Sprintf("struct S { x: %s }", line), false, false)
+		assertOutput(n, filepath.Join("test", "gen", file+".js"), t)
 	}
 }
 
@@ -183,11 +85,11 @@ func TestSkipDuplicateTypes(t *testing.T) {
 
 	written := map[string]bool{}
 	tag1 := code.ToTag(leaf1.Ref())
-	leaf1Path := filepath.Join(dir, tag1+".go")
+	leaf1Path := filepath.Join(dir, tag1+".js")
 	generateAndEmit(tag1, leaf1Path, written, depsMap{}, pkg.Parsed{Package: leaf1, Name: "p"})
 
 	tag2 := code.ToTag(leaf2.Ref())
-	leaf2Path := filepath.Join(dir, tag2+".go")
+	leaf2Path := filepath.Join(dir, tag2+".js")
 	generateAndEmit(tag2, leaf2Path, written, depsMap{}, pkg.Parsed{Package: leaf2, Name: "p"})
 
 	code, err := ioutil.ReadFile(leaf2Path)
@@ -216,9 +118,9 @@ func TestGenerateDeps(t *testing.T) {
 	localPkgs := refSet{top.Ref(): true}
 	generateDepCode(filepath.Base(dir), dir, map[string]bool{}, top, localPkgs, ds)
 
-	leaf1Path := filepath.Join(dir, code.ToTag(leaf1.Ref())+".go")
-	leaf2Path := filepath.Join(dir, code.ToTag(leaf2.Ref())+".go")
-	leaf3Path := filepath.Join(dir, code.ToTag(depender.Ref())+".go")
+	leaf1Path := filepath.Join(dir, code.ToTag(leaf1.Ref())+".js")
+	leaf2Path := filepath.Join(dir, code.ToTag(leaf2.Ref())+".js")
+	leaf3Path := filepath.Join(dir, code.ToTag(depender.Ref())+".js")
 	_, err = os.Stat(leaf1Path)
 	assert.NoError(err)
 	_, err = os.Stat(leaf2Path)
@@ -241,54 +143,9 @@ func TestCommitNewPackages(t *testing.T) {
 
 	p := parsePackageFile("name", inFile, pkgDS)
 	localPkgs := refSet{p.Ref(): true}
-	pkgDS = generate("name", inFile, filepath.Join(dir, "out.go"), dir, map[string]bool{}, p, localPkgs, pkgDS)
+	pkgDS = generate("name", inFile, filepath.Join(dir, "out.js"), dir, map[string]bool{}, p, localPkgs, pkgDS)
 	s := pkgDS.Head().Value().(types.SetOfRefOfPackage)
 	assert.EqualValues(1, s.Len())
 	tr := s.First().TargetValue(ds).Types()[0]
 	assert.EqualValues(types.StructKind, tr.Kind())
-}
-
-func TestMakeGoIdentifier(t *testing.T) {
-	assert := assert.New(t)
-	assert.Equal("hello", makeGoIdentifier("hello"))
-	assert.Equal("hello88", makeGoIdentifier("hello88"))
-	assert.Equal("_88hello", makeGoIdentifier("88hello"))
-	assert.Equal("h_e_l_l_0", makeGoIdentifier("h-e-l-l-0"))
-	assert.Equal("_hello", makeGoIdentifier("\u2318hello"))
-	assert.Equal("he_llo", makeGoIdentifier("he\u2318llo"))
-
-}
-
-func TestCanUseDefFromImport(t *testing.T) {
-	assert := assert.New(t)
-	ds := datas.NewDataStore(chunks.NewMemoryStore())
-
-	dir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(dir)
-
-	byPathNomDL := filepath.Join(dir, "filedep.noms")
-	err = ioutil.WriteFile(byPathNomDL, []byte("struct FromFile{i:Int8}"), 0600)
-	assert.NoError(err)
-
-	r1 := strings.NewReader(`
-		struct A {
-			B: B
-		}
-		struct B {
-			X: Int64
-		}`)
-	pkg1 := pkg.ParseNomDL("test1", r1, dir, ds)
-	pkgRef1 := ds.WriteValue(pkg1.Package).TargetRef()
-
-	r2 := strings.NewReader(fmt.Sprintf(`
-		alias Other = import "%s"
-		struct C {
-			C: Map<Int64, Other.A>
-		}
-		`, pkgRef1))
-	pkg2 := pkg.ParseNomDL("test2", r2, dir, ds)
-	gen2 := newCodeGen(nil, "test2", "go", map[string]bool{}, depsMap{pkg1.Ref(): pkg1.Package}, pkg2)
-
-	assert.True(gen2.canUseDef(pkg2.Types()[0], gen2.pkg.Package))
 }
