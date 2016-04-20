@@ -13,12 +13,13 @@ const (
 
 type compoundSet struct {
 	metaSequenceObject
-	ref *ref.Ref
-	vr  ValueReader
+	numLeaves uint64
+	ref       *ref.Ref
+	vr        ValueReader
 }
 
 func buildCompoundSet(tuples metaSequenceData, t Type, vr ValueReader) Value {
-	s := compoundSet{metaSequenceObject{tuples, t}, &ref.Ref{}, vr}
+	s := compoundSet{metaSequenceObject{tuples, t}, tuples.numLeavesSum(), &ref.Ref{}, vr}
 	return valueFromType(s, t)
 }
 
@@ -34,12 +35,8 @@ func (cs compoundSet) Ref() ref.Ref {
 	return EnsureRef(cs.ref, cs)
 }
 
-func (cs compoundSet) Len() (length uint64) {
-	// https://github.com/attic-labs/noms/issues/764
-	cs.IterAll(func(v Value) {
-		length++
-	})
-	return
+func (cs compoundSet) Len() uint64 {
+	return cs.numLeaves
 }
 
 func (cs compoundSet) Empty() bool {

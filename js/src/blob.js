@@ -26,8 +26,7 @@ export class NomsBlob extends Collection<IndexedSequence<uint8>> {
   }
 
   get length(): number {
-    const seq = this.sequence;
-    return seq.getOffset(seq.items.length - 1) + 1;
+    return this.sequence.numLeaves;
   }
 }
 
@@ -77,7 +76,7 @@ const blobPattern = ((1 << 13) | 0) - 1;
 function newBlobLeafChunkFn(cs: ?DataStore = null): makeChunkFn {
   return (items: Array<uint8>) => {
     const blobLeaf = new BlobLeafSequence(cs, new Uint8Array(items));
-    const mt = new MetaTuple(blobLeaf, items.length);
+    const mt = new MetaTuple(blobLeaf, items.length, items.length);
     return [mt, blobLeaf];
   };
 }

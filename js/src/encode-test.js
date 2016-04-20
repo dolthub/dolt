@@ -34,7 +34,7 @@ import {
   uint8Type,
   valueType,
 } from './type.js';
-import {IndexedMetaSequence, MetaTuple} from './meta-sequence.js';
+import {IndexedMetaSequence, MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {Kind} from './noms-kind.js';
 import {newList, ListLeafSequence, NomsList} from './list.js';
 import {newMap, MapLeafSequence, NomsMap} from './map.js';
@@ -127,7 +127,7 @@ suite('Encode', () => {
         ['1', '2', '3']]], w.array);
   });
 
-  test('write set', async () => {
+  test('write leaf set', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
@@ -136,6 +136,26 @@ suite('Encode', () => {
     const v = new NomsSet(tr, new SetLeafSequence(ds, tr, [0, 1, 2, 3]));
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.Set, Kind.Uint32, false, ['0', '1', '2', '3']], w.array);
+  });
+
+  test('write compound set', async () => {
+    const ms = new MemoryStore();
+    const ds = new DataStore(ms);
+    const w = new JsonArrayWriter(ds);
+    const ltr = makeCompoundType(Kind.Set, int32Type);
+    const r1 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [0]))).targetRef;
+    const r2 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [1, 2]))).targetRef;
+    const r3 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
+    const tuples = [
+      new MetaTuple(r1, 0, 1),
+      new MetaTuple(r2, 2, 2),
+      new MetaTuple(r3, 5, 3),
+    ];
+    const l = new NomsSet(ltr, new OrderedMetaSequence(ds, ltr, tuples));
+
+    w.writeTopLevel(ltr, l);
+    assert.deepEqual([Kind.Set, Kind.Int32, true, [r1.toString(), '0', '1', r2.toString(), '2',
+                     '2', r3.toString(), '5', '3']], w.array);
   });
 
   test('write set of set', async () => {
@@ -356,19 +376,19 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
     const ltr = makeCompoundType(Kind.List, int32Type);
-    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0, 1]))).targetRef;
-    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [2, 3]))).targetRef;
-    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [4, 5]))).targetRef;
+    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0]))).targetRef;
+    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [1, 2]))).targetRef;
+    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
     const tuples = [
-      new MetaTuple(r1, 2),
-      new MetaTuple(r2, 4),
-      new MetaTuple(r3, 6),
+      new MetaTuple(r1, 1, 1),
+      new MetaTuple(r2, 2, 2),
+      new MetaTuple(r3, 3, 3),
     ];
     const l = new NomsList(ltr, new IndexedMetaSequence(ds, ltr, tuples));
 
     w.writeTopLevel(ltr, l);
-    assert.deepEqual([Kind.List, Kind.Int32, true, [r1.toString(), '2', r2.toString(), '4',
-        r3.toString(), '6']], w.array);
+    assert.deepEqual([Kind.List, Kind.Int32, true, [r1.toString(), '1', '1', r2.toString(), '2',
+                     '2', r3.toString(), '3', '3']], w.array);
   });
 
   test('write type value', async () => {

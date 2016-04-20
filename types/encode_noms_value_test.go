@@ -131,15 +131,15 @@ func TestWriteCompoundBlob(t *testing.T) {
 	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
 
 	v := newCompoundBlob([]metaTuple{
-		newMetaTuple(Uint64(20), nil, newRef(r1, MakeRefType(typeForBlob))),
-		newMetaTuple(Uint64(40), nil, newRef(r2, MakeRefType(typeForBlob))),
-		newMetaTuple(Uint64(60), nil, newRef(r3, MakeRefType(typeForBlob))),
+		newMetaTuple(Uint64(20), nil, newRef(r1, MakeRefType(typeForBlob)), 20),
+		newMetaTuple(Uint64(40), nil, newRef(r2, MakeRefType(typeForBlob)), 40),
+		newMetaTuple(Uint64(60), nil, newRef(r3, MakeRefType(typeForBlob)), 60),
 	}, NewTestValueStore())
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
 
 	// the order of the elements is based on the ref of the value.
-	assert.EqualValues([]interface{}{BlobKind, true, []interface{}{r1.String(), "20", r2.String(), "40", r3.String(), "60"}}, w.toArray())
+	assert.EqualValues([]interface{}{BlobKind, true, []interface{}{r1.String(), "20", "20", r2.String(), "40", "40", r3.String(), "60", "60"}}, w.toArray())
 }
 
 func TestWriteEmptyStruct(t *testing.T) {
@@ -314,13 +314,29 @@ func TestWriteCompoundList(t *testing.T) {
 	leaf1 := newListLeaf(ltr, Int32(0))
 	leaf2 := newListLeaf(ltr, Int32(1), Int32(2), Int32(3))
 	cl := buildCompoundList([]metaTuple{
-		newMetaTuple(Uint64(1), leaf1, Ref{}),
-		newMetaTuple(Uint64(4), leaf2, Ref{}),
+		newMetaTuple(Uint64(1), leaf1, Ref{}, 1),
+		newMetaTuple(Uint64(4), leaf2, Ref{}, 4),
 	}, ltr, NewTestValueStore())
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(cl)
-	assert.EqualValues([]interface{}{ListKind, Int32Kind, true, []interface{}{leaf1.Ref().String(), "1", leaf2.Ref().String(), "4"}}, w.toArray())
+	assert.EqualValues([]interface{}{ListKind, Int32Kind, true, []interface{}{leaf1.Ref().String(), "1", "1", leaf2.Ref().String(), "4", "4"}}, w.toArray())
+}
+
+func TestWriteCompoundSet(t *testing.T) {
+	assert := assert.New(t)
+
+	ltr := MakeCompoundType(SetKind, MakePrimitiveType(Int32Kind))
+	leaf1 := newSetLeaf(ltr, Int32(0), Int32(1))
+	leaf2 := newSetLeaf(ltr, Int32(2), Int32(3), Int32(4))
+	cl := buildCompoundSet([]metaTuple{
+		newMetaTuple(Int32(1), leaf1, Ref{}, 2),
+		newMetaTuple(Int32(4), leaf2, Ref{}, 3),
+	}, ltr, NewTestValueStore())
+
+	w := newJSONArrayWriter(NewTestValueStore())
+	w.writeTopLevelValue(cl)
+	assert.EqualValues([]interface{}{SetKind, Int32Kind, true, []interface{}{leaf1.Ref().String(), "1", "2", leaf2.Ref().String(), "4", "3"}}, w.toArray())
 }
 
 func TestWriteListOfValue(t *testing.T) {

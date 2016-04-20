@@ -23,7 +23,7 @@ const listPattern = ((1 << 6) | 0) - 1;
 function newListLeafChunkFn<T: valueOrPrimitive>(t: Type, ds: ?DataStore = null): makeChunkFn {
   return (items: Array<T>) => {
     const listLeaf = new ListLeafSequence(ds, t, items);
-    const mt = new MetaTuple(listLeaf, items.length);
+    const mt = new MetaTuple(listLeaf, items.length, items.length);
     return [mt, listLeaf];
   };
 }
@@ -120,8 +120,7 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
   }
 
   get length(): number {
-    const seq = this.sequence;
-    return seq.getOffset(seq.items.length - 1) + 1;
+    return this.sequence.numLeaves;
   }
 }
 

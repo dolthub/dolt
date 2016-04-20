@@ -18,15 +18,25 @@ export type MetaSequence = Sequence<MetaTuple>;
 
 export class MetaTuple<K> {
   _sequenceOrRef: Sequence | Ref;
-  value: K;
+  _value: K;
+  _numLeaves: number;
 
-  constructor(sequence: Sequence | Ref, value: K) {
+  constructor(sequence: Sequence | Ref, value: K, numLeaves: number) {
     this._sequenceOrRef = sequence;
-    this.value = value;
+    this._value = value;
+    this._numLeaves = numLeaves;
   }
 
   get ref(): Ref {
     return this._sequenceOrRef instanceof Ref ? this._sequenceOrRef : this._sequenceOrRef.ref;
+  }
+
+  get value(): K {
+    return this._value;
+  }
+
+  get numLeaves(): number {
+    return this._numLeaves;
   }
 
   get sequence(): ?Sequence {
@@ -45,21 +55,23 @@ export class MetaTuple<K> {
 }
 
 export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
-  offsets: Array<number>;
+  _offsets: Array<number>;
 
   constructor(ds: ?DataStore, type: Type, items: Array<MetaTuple<number>>) {
     super(ds, type, items);
-    this.offsets = [];
     let cum = 0;
-    for (let i = 0; i < items.length; i++) {
-      const length = items[i].value;
-      cum += length;
-      this.offsets.push(cum);
-    }
+    this._offsets = this.items.map(i => {
+      cum += i.value;
+      return cum;
+    });
   }
 
   get isMeta(): boolean {
     return true;
+  }
+
+  get numLeaves(): number {
+    return this._offsets[this._offsets.length - 1];
   }
 
   range(start: number, end: number): Promise<Array<any>> {
@@ -115,13 +127,24 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
   }
 
   getOffset(idx: number): number {
-    return this.offsets[idx] - 1;
+    return this._offsets[idx] - 1;
   }
 }
 
 export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K, MetaTuple<K>> {
+  _numLeaves: number;
+
+  constructor(ds: ?DataStore, type: Type, items: Array<MetaTuple<K>>) {
+    super(ds, type, items);
+    this._numLeaves = items.reduce((l, mt) => l + mt.numLeaves, 0);
+  }
+
   get isMeta(): boolean {
     return true;
+  }
+
+  get numLeaves(): number {
+    return this._numLeaves;
   }
 
   getChildSequence(idx: number): Promise<?Sequence> {
@@ -181,9 +204,10 @@ export function indexTypeForMetaSequence(t: Type): Type {
 
 export function newOrderedMetaSequenceChunkFn(t: Type, ds: ?DataStore = null): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
+    const numLeaves = tuples.reduce((l, mt) => l + mt.numLeaves, 0);
     const meta = new OrderedMetaSequence(ds, t, tuples);
     const lastValue = tuples[tuples.length - 1].value;
-    return [new MetaTuple(meta, lastValue), meta];
+    return [new MetaTuple(meta, lastValue, numLeaves), meta];
   };
 }
 
@@ -199,9 +223,12 @@ export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
 
 export function newIndexedMetaSequenceChunkFn(t: Type, ds: ?DataStore = null): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
-    const sum = tuples.reduce((l, mt) => l + mt.value, 0);
+    const sum = tuples.reduce((l, mt) => {
+      invariant(mt.value === mt.numLeaves);
+      return l + mt.value;
+    }, 0);
     const meta = new IndexedMetaSequence(ds, t, tuples);
-    return [new MetaTuple(meta, sum), meta];
+    return [new MetaTuple(meta, sum, sum), meta];
   };
 }
 

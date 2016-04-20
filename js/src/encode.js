@@ -8,7 +8,7 @@ import {default as Struct, StructMirror} from './struct.js';
 import type DataStore from './data-store.js';
 import type {NomsKind} from './noms-kind.js';
 import {encode as encodeBase64} from './base64.js';
-import {boolType, EnumDesc, stringType, StructDesc, Type, typeType} from './type.js';
+import {boolType, EnumDesc, stringType, StructDesc, Type, typeType, uint64Type} from './type.js';
 import {indexTypeForMetaSequence, MetaTuple} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
@@ -112,6 +112,7 @@ export class JsonArrayWriter {
       }
       w2.writeRef(tuple.ref);
       w2.writeValue(tuple.value, indexType, pkg);
+      w2.writeValue(tuple.numLeaves, uint64Type, pkg);
     }
     this.write(w2.array);
     return true;

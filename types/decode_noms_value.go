@@ -174,7 +174,8 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t Type, pkg *Package) (Value, bo
 	for !r2.atEnd() {
 		ref := refFromType(r2.readRef(), MakeRefType(t))
 		v := r2.readValueWithoutTag(indexType, pkg)
-		data = append(data, newMetaTuple(v, nil, ref))
+		numLeaves := uint64(r2.readUint())
+		data = append(data, newMetaTuple(v, nil, ref, numLeaves))
 	}
 
 	return newMetaSequenceFromData(data, t, r.vr), true

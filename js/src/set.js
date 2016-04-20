@@ -36,7 +36,7 @@ function newSetLeafChunkFn<T:valueOrPrimitive>(t: Type, ds: ?DataStore = null): 
       }
     }
 
-    const mt = new MetaTuple(setLeaf, indexValue);
+    const mt = new MetaTuple(setLeaf, indexValue, items.length);
     return [mt, setLeaf];
   };
 }
@@ -143,11 +143,7 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
   }
 
   get size(): number {
-    if (this.sequence instanceof SetLeafSequence) {
-      return this.sequence.items.length;
-    }
-
-    throw new Error('not implemented');
+    return this.sequence.numLeaves;
   }
 
   async intersect(...sets: Array<NomsSet<T>>): Promise<NomsSet<T>> {

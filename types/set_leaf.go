@@ -216,7 +216,7 @@ func makeSetLeafChunkFn(t Type, vr ValueReader) makeChunkFn {
 			}
 		}
 
-		return newMetaTuple(indexValue, setLeaf, Ref{}), setLeaf
+		return newMetaTuple(indexValue, setLeaf, Ref{}, uint64(len(items))), setLeaf
 	}
 }
 

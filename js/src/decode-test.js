@@ -34,7 +34,7 @@ import {
   valueType,
 } from './type.js';
 import {encode as encodeBase64} from './base64.js';
-import {IndexedMetaSequence, MetaTuple} from './meta-sequence.js';
+import {IndexedMetaSequence, MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
@@ -166,19 +166,18 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const ltr = makeCompoundType(Kind.List, int32Type);
-    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0, 1]))).targetRef;
-    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [2, 3]))).targetRef;
-    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [4, 5]))).targetRef;
+    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0]))).targetRef;
+    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [1, 2]))).targetRef;
+    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
     const tuples = [
-      new MetaTuple(r1, 2),
-      new MetaTuple(r2, 4),
-      new MetaTuple(r3, 6),
+      new MetaTuple(r1, 1, 1),
+      new MetaTuple(r2, 2, 2),
+      new MetaTuple(r3, 3, 3),
     ];
     const l:NomsList<int32> = new NomsList(ltr, new IndexedMetaSequence(ds, ltr, tuples));
-    invariant(l instanceof NomsList);
 
     const a = [Kind.List, Kind.Int32, true,
-               [r1.toString(), '2', r2.toString(), '4', r3.toString(), '6']];
+               [r1.toString(), '1', '1', r2.toString(), '2', '2', r3.toString(), '3', '3']];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
@@ -245,6 +244,28 @@ suite('Decode', () => {
     const t = makeCompoundType(Kind.Set, uint8Type);
     const s = new NomsSet(t, new SetLeafSequence(ds, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
+  });
+
+  test('read compound set', async () => {
+    const ms = new MemoryStore();
+    const ds = new DataStore(ms);
+    const ltr = makeCompoundType(Kind.Set, int32Type);
+    const r1 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [0]))).targetRef;
+    const r2 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [1, 2]))).targetRef;
+    const r3 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
+    const tuples = [
+      new MetaTuple(r1, 0, 1),
+      new MetaTuple(r2, 2, 2),
+      new MetaTuple(r3, 5, 3),
+    ];
+    const l:NomsSet<int32> = new NomsSet(ltr, new OrderedMetaSequence(ds, ltr, tuples));
+
+    const a = [Kind.Set, Kind.Int32, true,
+               [r1.toString(), '0', '1', r2.toString(), '2', '2', r3.toString(), '5', '3']];
+    const r = new JsonArrayReader(a, ds);
+    const v = await r.readTopLevelValue();
+    invariant(v instanceof NomsSet);
+    assert.isTrue(v.ref.equals(l.ref));
   });
 
   test('read value set of uint16', async () => {
@@ -567,7 +588,7 @@ suite('Decode', () => {
     const r1 = ds.writeValue(await newBlob(stringToUint8Array('hi'))).targetRef;
     const r2 = ds.writeValue(await newBlob(stringToUint8Array('world'))).targetRef;
 
-    const a = [Kind.Blob, true, [r1.ref.toString(), '2', r2.ref.toString(), '5']];
+    const a = [Kind.Blob, true, [r1.ref.toString(), '2', '2', r2.ref.toString(), '5', '5']];
     const r = new JsonArrayReader(a, ds);
     const v: NomsBlob = await r.readTopLevelValue();
     invariant(v instanceof NomsBlob);

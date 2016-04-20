@@ -9,25 +9,29 @@ import {ValueBase} from './value.js';
 
 export class Collection<S: Sequence> extends ValueBase {
   _type: Type;
-  sequence: S;
+  _sequence: S;
 
   constructor(type: Type, sequence: S) {
     super();
     this._type = type;
-    this.sequence = sequence;
+    this._sequence = sequence;
   }
 
   get type(): Type {
     return this._type;
   }
 
+  get sequence(): S {
+    return this._sequence;
+  }
+
   isEmpty(): boolean {
-    return !this.sequence.isMeta && this.sequence.items.length === 0;
+    return !this._sequence.isMeta && this._sequence.items.length === 0;
   }
 
   get chunks(): Array<RefValue> {
     const chunks = [];
-    const addChunks = this.sequence.isMeta ? (mt: MetaTuple) => {
+    const addChunks = this._sequence.isMeta ? (mt: MetaTuple) => {
       chunks.push(new RefValue(mt.ref, this.type));
     } : (v) => {
       if (!isPrimitive(v)) {
@@ -35,7 +39,7 @@ export class Collection<S: Sequence> extends ValueBase {
       }
     };
 
-    this.sequence.items.forEach(addChunks);
+    this._sequence.items.forEach(addChunks);
     return chunks;
   }
 }

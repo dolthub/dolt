@@ -57,12 +57,15 @@ func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 func newOrderedMetaSequenceChunkFn(t Type, vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
+		numLeaves := uint64(0)
 
 		for i, v := range items {
-			tuples[i] = v.(metaTuple) // chunk is written when the root sequence is written
+			mt := v.(metaTuple)
+			tuples[i] = mt // chunk is written when the root sequence is written
+			numLeaves += mt.numLeaves
 		}
 
 		meta := newMetaSequenceFromData(tuples, t, vr)
-		return newMetaTuple(tuples.last().value, meta, Ref{}), meta
+		return newMetaTuple(tuples.last().value, meta, Ref{}, numLeaves), meta
 	}
 }
