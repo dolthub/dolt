@@ -44,30 +44,30 @@ func (ds *Dataset) Head() datas.Commit {
 func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
 	p := datas.NewSetOfRefOfCommit()
 	if head, ok := ds.MaybeHead(); ok {
-		p = p.Insert(datas.NewRefOfCommit(head.Ref()))
+		p = p.Insert(types.NewTypedRefFromValue(head))
 	}
 	return ds.CommitWithParents(v, p)
 }
 
 // CommitWithParents updates the commit that a dataset points at. The new Commit is constructed using v and p.
 // If the update cannot be performed, e.g., because of a conflict, CommitWithParents returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
-func (ds *Dataset) CommitWithParents(v types.Value, p datas.SetOfRefOfCommit) (Dataset, error) {
+func (ds *Dataset) CommitWithParents(v types.Value, p types.Set) (Dataset, error) {
 	newCommit := datas.NewCommit().SetParents(p).SetValue(v)
 	store, err := ds.Store().Commit(ds.id, newCommit)
 	return Dataset{store, ds.id}, err
 }
 
-func (ds *Dataset) Pull(sourceStore datas.DataStore, sourceRef datas.RefOfCommit, concurrency int) (Dataset, error) {
+func (ds *Dataset) Pull(sourceStore datas.DataStore, sourceRef types.Ref, concurrency int) (Dataset, error) {
 	_, topDown := ds.Store().(*datas.LocalDataStore)
 	return ds.pull(sourceStore, sourceRef, concurrency, topDown)
 }
 
-func (ds *Dataset) pull(source datas.DataStore, sourceRef datas.RefOfCommit, concurrency int, topDown bool) (Dataset, error) {
+func (ds *Dataset) pull(source datas.DataStore, sourceRef types.Ref, concurrency int, topDown bool) (Dataset, error) {
 	sink := *ds
 
-	sinkHeadRef := datas.NewRefOfCommit(ref.Ref{})
+	sinkHeadRef := types.NewTypedRef(types.MakeRefType(datas.NewCommit().Type()), ref.Ref{})
 	if currentHead, ok := sink.MaybeHead(); ok {
-		sinkHeadRef = datas.NewRefOfCommit(currentHead.Ref())
+		sinkHeadRef = types.NewTypedRefFromValue(currentHead)
 	}
 
 	if sourceRef == sinkHeadRef {
@@ -87,7 +87,7 @@ func (ds *Dataset) pull(source datas.DataStore, sourceRef datas.RefOfCommit, con
 	return sink, err
 }
 
-func (ds *Dataset) validateRefAsCommit(r datas.RefOfCommit) datas.Commit {
+func (ds *Dataset) validateRefAsCommit(r types.Ref) datas.Commit {
 	v := ds.store.ReadValue(r.TargetRef())
 
 	d.Exp.NotNil(v, "%v cannot be found", r)
@@ -95,8 +95,13 @@ func (ds *Dataset) validateRefAsCommit(r datas.RefOfCommit) datas.Commit {
 	return v.(datas.Commit)
 }
 
-// setNewHead takes the Ref of the desired new Head of ds, the chunk for which should already exist in the Dataset. It validates that the Ref points to an existing chunk that decodes to the correct type of value and then commits it to ds, returning a new Dataset with newHeadRef set and ok set to true. In the event that the commit fails, ok is set to false and a new up-to-date Dataset is returned WITHOUT newHeadRef in it. The caller should take any necessary corrective action and try again using this new Dataset.
-func (ds *Dataset) setNewHead(newHeadRef datas.RefOfCommit) (Dataset, error) {
+// setNewHead takes the Ref of the desired new Head of ds, the chunk for which should already exist
+// in the Dataset. It validates that the Ref points to an existing chunk that decodes to the correct
+// type of value and then commits it to ds, returning a new Dataset with newHeadRef set and ok set
+// to true. In the event that the commit fails, ok is set to false and a new up-to-date Dataset is
+// returned WITHOUT newHeadRef in it. The caller should take any necessary corrective action and try
+// again using this new Dataset.
+func (ds *Dataset) setNewHead(newHeadRef types.Ref) (Dataset, error) {
 	commit := ds.validateRefAsCommit(newHeadRef)
 	return ds.CommitWithParents(commit.Value(), commit.Parents())
 }

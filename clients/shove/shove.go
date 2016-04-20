@@ -10,6 +10,7 @@ import (
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/types"
 )
 
 var (
@@ -39,20 +40,19 @@ func main() {
 			defer util.StopCPUProfile()
 		}
 
-		sourceRef := ref.Ref{}
+		var commit datas.Commit
 		if r, ok := ref.MaybeParse(*sourceObject); ok {
-			if sourceStore.ReadValue(r) != nil {
-				sourceRef = r
-			}
+			// sourceObject was sha1
+			commit, ok = sourceStore.ReadValue(r).(datas.Commit)
+			d.Exp.True(ok, "Unable to read Commit object with ref: %s", r)
 		} else {
-			if c, ok := sourceStore.MaybeHead(*sourceObject); ok {
-				sourceRef = c.Ref()
-			}
+			// sourceObject must be a dataset Id
+			commit, ok = sourceStore.MaybeHead(*sourceObject)
+			d.Exp.True(ok, "Unable to read dataset with name: %s", *sourceObject)
 		}
-		d.Exp.False(sourceRef.IsEmpty(), "Unknown source object: %s", *sourceObject)
 
 		var err error
-		*sink, err = sink.Pull(sourceStore, datas.NewRefOfCommit(sourceRef), int(*p))
+		*sink, err = sink.Pull(sourceStore, types.NewTypedRefFromValue(commit), int(*p))
 
 		util.MaybeWriteMemProfile()
 		d.Exp.NoError(err)
