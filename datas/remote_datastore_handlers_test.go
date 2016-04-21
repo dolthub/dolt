@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -32,7 +33,7 @@ func TestHandleWriteValue(t *testing.T) {
 	hint := l.Ref()
 	newItem := types.NewEmptyBlob()
 	itemChunk := types.EncodeValue(newItem, nil)
-	l2 := l.Insert(1, types.NewRefOfBlob(itemChunk.Ref()))
+	l2 := l.Insert(1, types.NewTypedRefFromValue(newItem))
 	listChunk := types.EncodeValue(l2, nil)
 
 	body := &bytes.Buffer{}
@@ -42,15 +43,49 @@ func TestHandleWriteValue(t *testing.T) {
 	sz.Put(listChunk)
 	sz.Close()
 
-	w := newFakeHTTPResponseWriter()
+	w := httptest.NewRecorder()
 	HandleWriteValue(w, &http.Request{Body: ioutil.NopCloser(body), Method: "POST"}, params{}, cs)
 
-	if assert.Equal(http.StatusCreated, w.resp.StatusCode, "Handler error:\n%s", string(w.buf.Bytes())) {
+	if assert.Equal(http.StatusCreated, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
 		ds2 := NewDataStore(cs)
 		v := ds2.ReadValue(l2.Ref())
 		if assert.NotNil(v) {
 			assert.True(v.Equals(l2), "%+v != %+v", v, l2)
 		}
+	}
+}
+
+func TestHandleWriteValueBackpressure(t *testing.T) {
+	assert := assert.New(t)
+	cs := &backpressureCS{ChunkStore: chunks.NewMemoryStore()}
+	ds := NewDataStore(cs)
+
+	l := types.NewList(
+		ds.WriteValue(types.Bool(true)),
+		ds.WriteValue(types.Bool(false)),
+	)
+	ds.WriteValue(l)
+
+	hint := l.Ref()
+	newItem := types.NewEmptyBlob()
+	itemChunk := types.EncodeValue(newItem, nil)
+	l2 := l.Insert(1, types.NewTypedRefFromValue(newItem))
+	listChunk := types.EncodeValue(l2, nil)
+
+	body := &bytes.Buffer{}
+	serializeHints(body, map[ref.Ref]struct{}{hint: struct{}{}})
+	sz := chunks.NewSerializer(body)
+	sz.Put(itemChunk)
+	sz.Put(listChunk)
+	sz.Close()
+
+	w := httptest.NewRecorder()
+	HandleWriteValue(w, &http.Request{Body: ioutil.NopCloser(body), Method: "POST"}, params{}, cs)
+
+	if assert.Equal(httpStatusTooManyRequests, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
+		hashes := deserializeHashes(w.Body)
+		assert.Len(hashes, 1)
+		assert.Equal(l2.Ref(), hashes[0])
 	}
 }
 
@@ -133,7 +168,7 @@ func TestHandleGetRefs(t *testing.T) {
 
 	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s", chnx[0].Ref(), chnx[1].Ref()))
 
-	w := newFakeHTTPResponseWriter()
+	w := httptest.NewRecorder()
 	HandleGetRefs(w,
 		&http.Request{Body: ioutil.NopCloser(body), Method: "POST", Header: http.Header{
 			"Content-Type": {"application/x-www-form-urlencoded"},
@@ -142,9 +177,9 @@ func TestHandleGetRefs(t *testing.T) {
 		cs,
 	)
 
-	if assert.Equal(http.StatusOK, w.resp.StatusCode, "Handler error:\n%s", string(w.buf.Bytes())) {
+	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
 		chunkChan := make(chan chunks.Chunk)
-		go chunks.DeserializeToChan(w.buf, chunkChan)
+		go chunks.DeserializeToChan(w.Body, chunkChan)
 		for c := range chunkChan {
 			assert.Equal(chnx[0].Ref(), c.Ref())
 			chnx = chnx[1:]
@@ -160,11 +195,11 @@ func TestHandleGetRoot(t *testing.T) {
 	cs.Put(c)
 	assert.True(cs.UpdateRoot(c.Ref(), ref.Ref{}))
 
-	w := newFakeHTTPResponseWriter()
+	w := httptest.NewRecorder()
 	HandleRootGet(w, &http.Request{Method: "GET"}, params{}, cs)
 
-	if assert.Equal(http.StatusOK, w.resp.StatusCode, "Handler error:\n%s", string(w.buf.Bytes())) {
-		root := ref.Parse(string(w.buf.Bytes()))
+	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
+		root := ref.Parse(string(w.Body.Bytes()))
 		assert.Equal(c.Ref(), root)
 	}
 }
@@ -187,50 +222,19 @@ func TestHandlePostRoot(t *testing.T) {
 	queryParams.Add("current", chnx[1].Ref().String())
 	u.RawQuery = queryParams.Encode()
 
-	w := newFakeHTTPResponseWriter()
+	w := httptest.NewRecorder()
 	HandleRootPost(w, &http.Request{URL: u, Method: "POST"}, params{}, cs)
-	assert.Equal(http.StatusConflict, w.resp.StatusCode, "Handler error:\n%s", string(w.buf.Bytes()))
+	assert.Equal(http.StatusConflict, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
 	// Now, update the root manually to 'last' and try again.
 	assert.True(cs.UpdateRoot(chnx[0].Ref(), ref.Ref{}))
-	w = newFakeHTTPResponseWriter()
+	w = httptest.NewRecorder()
 	HandleRootPost(w, &http.Request{URL: u, Method: "POST"}, params{}, cs)
-	assert.Equal(http.StatusOK, w.resp.StatusCode, "Handler error:\n%s", string(w.buf.Bytes()))
+	assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 }
 
 type params map[string]string
 
 func (p params) ByName(k string) string {
 	return p[k]
-}
-
-type fakeHTTPResponseWriter struct {
-	buf  *bytes.Buffer
-	resp *http.Response
-}
-
-func newFakeHTTPResponseWriter() *fakeHTTPResponseWriter {
-	buf := &bytes.Buffer{}
-	return &fakeHTTPResponseWriter{
-		buf: buf,
-		resp: &http.Response{
-			StatusCode: http.StatusOK,
-			Status:     http.StatusText(http.StatusOK),
-			Header:     http.Header{},
-			Body:       ioutil.NopCloser(buf),
-		},
-	}
-}
-
-func (rw *fakeHTTPResponseWriter) Header() http.Header {
-	return rw.resp.Header
-}
-
-func (rw *fakeHTTPResponseWriter) Write(b []byte) (int, error) {
-	return rw.buf.Write(b)
-}
-
-func (rw *fakeHTTPResponseWriter) WriteHeader(ret int) {
-	rw.resp.StatusCode = ret
-	rw.resp.Status = http.StatusText(ret)
 }

@@ -1,5 +1,7 @@
 package types
 
+import "github.com/attic-labs/noms/d"
+
 type List interface {
 	Value
 	Len() uint64
@@ -33,6 +35,7 @@ func NewList(v ...Value) List {
 
 // NewTypedList creates a new List with type t, populated with values, chunking if and when needed.
 func NewTypedList(t Type, values ...Value) List {
+	d.Chk.Equal(ListKind, t.Kind(), "Invalid type. Expected: ListKind, found: %s", t.Describe())
 	seq := newEmptySequenceChunker(makeListLeafChunkFn(t, nil), newIndexedMetaSequenceChunkFn(t, nil, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	for _, v := range values {
 		seq.Append(v)

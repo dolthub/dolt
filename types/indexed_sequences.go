@@ -14,16 +14,19 @@ func newIndexedMetaSequenceBoundaryChecker() boundaryChecker {
 func newIndexedMetaSequenceChunkFn(t Type, source ValueReader, sink ValueWriter) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
+		numLeaves := uint64(0)
 
 		for i, v := range items {
-			tuples[i] = v.(metaTuple)
+			mt := v.(metaTuple)
+			tuples[i] = mt
+			numLeaves += mt.numLeaves
 		}
 
 		meta := newMetaSequenceFromData(tuples, t, source)
 		if sink != nil {
 			r := sink.WriteValue(meta)
-			return newMetaTuple(Uint64(tuples.uint64ValuesSum()), nil, r), meta
+			return newMetaTuple(Uint64(tuples.uint64ValuesSum()), nil, r, numLeaves), meta
 		}
-		return newMetaTuple(Uint64(tuples.uint64ValuesSum()), meta, Ref{}), meta
+		return newMetaTuple(Uint64(tuples.uint64ValuesSum()), meta, Ref{}, numLeaves), meta
 	}
 }

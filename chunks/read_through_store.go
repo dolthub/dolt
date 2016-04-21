@@ -50,8 +50,8 @@ func (rts ReadThroughStore) Put(c Chunk) {
 func (rts ReadThroughStore) PutMany(chunks []Chunk) BackpressureError {
 	bpe := rts.backingStore.PutMany(chunks)
 	lookup := make(map[ref.Ref]bool, len(bpe))
-	for _, c := range bpe {
-		lookup[c.Ref()] = true
+	for _, r := range bpe {
+		lookup[r] = true
 	}
 	toPut := make([]Chunk, 0, len(chunks)-len(bpe))
 	for _, c := range chunks {

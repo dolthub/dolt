@@ -119,7 +119,7 @@ func TestCheckChunksInCache(t *testing.T) {
 	cs.Put(EncodeValue(b, nil))
 	cvs.set(b.Ref(), presentChunk(b.Type()))
 
-	bref := NewRefOfBlob(b.Ref())
+	bref := NewTypedRefFromValue(b)
 	assert.NotPanics(func() { cvs.checkChunksInCache(bref) })
 }
 
@@ -129,7 +129,7 @@ func TestCacheOnReadValue(t *testing.T) {
 	cvs := newLocalValueStore(cs)
 
 	b := NewEmptyBlob()
-	bref := cvs.WriteValue(b).(RefOfBlob)
+	bref := cvs.WriteValue(b).(Ref)
 	r := cvs.WriteValue(bref)
 
 	cvs2 := newLocalValueStore(cs)
@@ -146,7 +146,7 @@ func TestHintsOnCache(t *testing.T) {
 	bs := []Blob{NewEmptyBlob(), NewBlob(bytes.NewBufferString("f"))}
 	l := NewList()
 	for _, b := range bs {
-		bref := cvs.WriteValue(b).(RefOfBlob)
+		bref := cvs.WriteValue(b).(Ref)
 		l = l.Append(bref)
 	}
 	r := cvs.WriteValue(l)
@@ -154,7 +154,7 @@ func TestHintsOnCache(t *testing.T) {
 	v := cvs.ReadValue(r.TargetRef())
 	if assert.True(l.Equals(v)) {
 		l = v.(List)
-		bref := cvs.WriteValue(NewBlob(bytes.NewBufferString("g"))).(RefOfBlob)
+		bref := cvs.WriteValue(NewBlob(bytes.NewBufferString("g"))).(Ref)
 		l = l.Insert(0, bref)
 
 		hints := cvs.checkChunksInCache(l)

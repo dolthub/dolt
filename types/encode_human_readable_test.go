@@ -94,18 +94,18 @@ func TestWriteHumanReadableRef(t *testing.T) {
 func TestWriteHumanReadableCollections(t *testing.T) {
 	lt := MakeListType(Float64Type)
 	l := NewTypedList(lt, Float64(0), Float64(1), Float64(2), Float64(3))
-	assertWriteHRSEqual(t, `[0, 1, 2, 3]`, l)
-	assertWriteTaggedHRSEqual(t, `List<Float64>([0, 1, 2, 3])`, l)
+	assertWriteHRSEqual(t, "[\n  0,\n  1,\n  2,\n  3,\n]", l)
+	assertWriteTaggedHRSEqual(t, "List<Float64>([\n  0,\n  1,\n  2,\n  3,\n])", l)
 
 	st := MakeSetType(Int8Type)
 	s := NewTypedSet(st, Int8(0), Int8(1), Int8(2), Int8(3))
-	assertWriteHRSEqual(t, `{0, 1, 2, 3}`, s)
-	assertWriteTaggedHRSEqual(t, `Set<Int8>({0, 1, 2, 3})`, s)
+	assertWriteHRSEqual(t, "{\n  0,\n  1,\n  2,\n  3,\n}", s)
+	assertWriteTaggedHRSEqual(t, "Set<Int8>({\n  0,\n  1,\n  2,\n  3,\n})", s)
 
 	mt := MakeMapType(Int32Type, BoolType)
 	m := NewTypedMap(mt, Int32(0), Bool(false), Int32(1), Bool(true))
-	assertWriteHRSEqual(t, `{0: false, 1: true}`, m)
-	assertWriteTaggedHRSEqual(t, `Map<Int32, Bool>({0: false, 1: true})`, m)
+	assertWriteHRSEqual(t, "{\n  0: false,\n  1: true,\n}", m)
+	assertWriteTaggedHRSEqual(t, "Map<Int32, Bool>({\n  0: false,\n  1: true,\n})", m)
 }
 
 func TestWriteHumanReadableNested(t *testing.T) {
@@ -119,9 +119,38 @@ func TestWriteHumanReadableNested(t *testing.T) {
 
 	mt := MakeMapType(st, lt)
 	m := NewTypedMap(mt, s, l, s2, l2)
-	assertWriteHRSEqual(t, `{{"c", "d"}: [2, 3], {"a", "b"}: [0, 1]}`, m)
-	assertWriteTaggedHRSEqual(t, `Map<Set<String>, List<Float64>>({{"c", "d"}: [2, 3], {"a", "b"}: [0, 1]})`, m)
-
+	assertWriteHRSEqual(t, `{
+  {
+    "c",
+    "d",
+  }: [
+    2,
+    3,
+  ],
+  {
+    "a",
+    "b",
+  }: [
+    0,
+    1,
+  ],
+}`, m)
+	assertWriteTaggedHRSEqual(t, `Map<Set<String>, List<Float64>>({
+  {
+    "c",
+    "d",
+  }: [
+    2,
+    3,
+  ],
+  {
+    "a",
+    "b",
+  }: [
+    0,
+    1,
+  ],
+})`, m)
 }
 
 func TestWriteHumanReadableStruct(t *testing.T) {
@@ -138,15 +167,15 @@ func TestWriteHumanReadableStruct(t *testing.T) {
 	str := NewStruct(typ, typeDef, map[string]Value{
 		"x": Int32(1),
 	})
-	assertWriteHRSEqual(t, `S1 {x: 1}`, str)
-	assertWriteTaggedHRSEqual(t, `Struct<S1, sha1-bdd35d6fe5b89487d71d0ec27c1a6c79a0261baa, 0>({x: 1})`, str)
+	assertWriteHRSEqual(t, "S1 {\n  x: 1,\n}", str)
+	assertWriteTaggedHRSEqual(t, "Struct<S1, sha1-bdd35d6fe5b89487d71d0ec27c1a6c79a0261baa, 0>({\n  x: 1,\n})", str)
 
 	str2 := NewStruct(typ, typeDef, map[string]Value{
 		"x": Int32(2),
 		"y": Int32(3),
 	})
-	assertWriteHRSEqual(t, `S1 {x: 2, y: 3}`, str2)
-	assertWriteTaggedHRSEqual(t, `Struct<S1, sha1-bdd35d6fe5b89487d71d0ec27c1a6c79a0261baa, 0>({x: 2, y: 3})`, str2)
+	assertWriteHRSEqual(t, "S1 {\n  x: 2,\n  y: 3,\n}", str2)
+	assertWriteTaggedHRSEqual(t, "Struct<S1, sha1-bdd35d6fe5b89487d71d0ec27c1a6c79a0261baa, 0>({\n  x: 2,\n  y: 3,\n})", str2)
 }
 
 func TestWriteHumanReadableStructWithUnion(t *testing.T) {
@@ -163,14 +192,14 @@ func TestWriteHumanReadableStructWithUnion(t *testing.T) {
 	str := NewStruct(typ, typeDef, map[string]Value{
 		"x": Int32(1),
 	})
-	assertWriteHRSEqual(t, `S2 {x: 1}`, str)
-	assertWriteTaggedHRSEqual(t, `Struct<S2, sha1-13e3f926c03c637bc474442a10af9023b24010f8, 0>({x: 1})`, str)
+	assertWriteHRSEqual(t, "S2 {\n  x: 1,\n}", str)
+	assertWriteTaggedHRSEqual(t, "Struct<S2, sha1-13e3f926c03c637bc474442a10af9023b24010f8, 0>({\n  x: 1,\n})", str)
 
 	str2 := NewStruct(typ, typeDef, map[string]Value{
 		"y": Int32(2),
 	})
-	assertWriteHRSEqual(t, `S2 {y: 2}`, str2)
-	assertWriteTaggedHRSEqual(t, `Struct<S2, sha1-13e3f926c03c637bc474442a10af9023b24010f8, 0>({y: 2})`, str2)
+	assertWriteHRSEqual(t, "S2 {\n  y: 2,\n}", str2)
+	assertWriteTaggedHRSEqual(t, "Struct<S2, sha1-13e3f926c03c637bc474442a10af9023b24010f8, 0>({\n  y: 2,\n})", str2)
 }
 
 func TestWriteHumanReadableListOfStruct(t *testing.T) {
@@ -194,8 +223,28 @@ func TestWriteHumanReadableListOfStruct(t *testing.T) {
 	})
 	lt := MakeListType(typ)
 	l := NewTypedList(lt, str1, str2, str3)
-	assertWriteHRSEqual(t, `[S3 {x: 1}, S3 {x: 2}, S3 {x: 3}]`, l)
-	assertWriteTaggedHRSEqual(t, `List<Struct<S3, sha1-543f7124883ace7da7fccaed6d5cfc31598020f1, 0>>([S3 {x: 1}, S3 {x: 2}, S3 {x: 3}])`, l)
+	assertWriteHRSEqual(t, `[
+  S3 {
+    x: 1,
+  },
+  S3 {
+    x: 2,
+  },
+  S3 {
+    x: 3,
+  },
+]`, l)
+	assertWriteTaggedHRSEqual(t, `List<Struct<S3, sha1-543f7124883ace7da7fccaed6d5cfc31598020f1, 0>>([
+  S3 {
+    x: 1,
+  },
+  S3 {
+    x: 2,
+  },
+  S3 {
+    x: 3,
+  },
+])`, l)
 }
 
 func TestWriteHumanReadableEnum(t *testing.T) {
@@ -218,12 +267,12 @@ func TestWriteHumanReadableBlob(t *testing.T) {
 	assertWriteTaggedHRSEqual(t, "Blob()", NewEmptyBlob())
 
 	b1 := NewBlob(bytes.NewBuffer([]byte{0x01}))
-	assertWriteHRSEqual(t, "AQ==", b1)
-	assertWriteTaggedHRSEqual(t, "Blob(AQ==)", b1)
+	assertWriteHRSEqual(t, "AQ", b1)
+	assertWriteTaggedHRSEqual(t, "Blob(AQ)", b1)
 
 	b2 := NewBlob(bytes.NewBuffer([]byte{0x01, 0x02}))
-	assertWriteHRSEqual(t, "AQI=", b2)
-	assertWriteTaggedHRSEqual(t, "Blob(AQI=)", b2)
+	assertWriteHRSEqual(t, "AQI", b2)
+	assertWriteTaggedHRSEqual(t, "Blob(AQI)", b2)
 
 	b3 := NewBlob(bytes.NewBuffer([]byte{0x01, 0x02, 0x03}))
 	assertWriteHRSEqual(t, "AQID", b3)
@@ -234,8 +283,8 @@ func TestWriteHumanReadableBlob(t *testing.T) {
 		bs[i] = byte(i)
 	}
 	b4 := NewBlob(bytes.NewBuffer(bs))
-	assertWriteHRSEqual(t, "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w==", b4)
-	assertWriteTaggedHRSEqual(t, "Blob(AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w==)", b4)
+	assertWriteHRSEqual(t, "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w", b4)
+	assertWriteTaggedHRSEqual(t, "Blob(AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w)", b4)
 }
 
 func TestWriteHumanReadableListOfBlob(t *testing.T) {
@@ -243,8 +292,8 @@ func TestWriteHumanReadableListOfBlob(t *testing.T) {
 	b1 := NewBlob(bytes.NewBuffer([]byte{0x01}))
 	b2 := NewBlob(bytes.NewBuffer([]byte{0x02}))
 	l := NewTypedList(lt, b1, NewEmptyBlob(), b2)
-	assertWriteHRSEqual(t, "[AQ==, , Ag==]", l)
-	assertWriteTaggedHRSEqual(t, "List<Blob>([AQ==, , Ag==])", l)
+	assertWriteHRSEqual(t, "[\n  AQ,\n  ,\n  Ag,\n]", l)
+	assertWriteTaggedHRSEqual(t, "List<Blob>([\n  AQ,\n  ,\n  Ag,\n])", l)
 }
 
 func TestWriteHumanReadableListOfEnum(t *testing.T) {
@@ -255,8 +304,8 @@ func TestWriteHumanReadableListOfEnum(t *testing.T) {
 	typ := MakeType(pkg.Ref(), 0)
 	lt := MakeListType(typ)
 	l := NewTypedList(lt, newEnum(0, typ), newEnum(1, typ), newEnum(2, typ))
-	assertWriteHRSEqual(t, "[red, green, blue]", l)
-	assertWriteTaggedHRSEqual(t, "List<Enum<Color, sha1-51b66eaa0827d76d1618c8d4e7e42215d00d6642, 0>>([red, green, blue])", l)
+	assertWriteHRSEqual(t, "[\n  red,\n  green,\n  blue,\n]", l)
+	assertWriteTaggedHRSEqual(t, "List<Enum<Color, sha1-51b66eaa0827d76d1618c8d4e7e42215d00d6642, 0>>([\n  red,\n  green,\n  blue,\n])", l)
 }
 
 func TestWriteHumanReadableType(t *testing.T) {
@@ -300,12 +349,26 @@ func TestWriteHumanReadableType(t *testing.T) {
 	assertWriteTaggedHRSEqual(t, "Type(Struct<Str, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 1>)", st)
 
 	eTypeDef := pkg.Types()[0]
-	assertWriteHRSEqual(t, "enum Color {red green blue}", eTypeDef)
-	assertWriteTaggedHRSEqual(t, "Type(enum Color {red green blue})", eTypeDef)
+	assertWriteHRSEqual(t, "enum Color {\n  red\n  green\n  blue\n}", eTypeDef)
+	assertWriteTaggedHRSEqual(t, "Type(enum Color {\n  red\n  green\n  blue\n})", eTypeDef)
 
 	sTypeDef := pkg.Types()[1]
-	assertWriteHRSEqual(t, "struct Str {c: Enum<Color, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 0> o: optional String union {x: Struct<Str, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 1> y: Bool}}", sTypeDef)
-	assertWriteTaggedHRSEqual(t, "Type(struct Str {c: Enum<Color, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 0> o: optional String union {x: Struct<Str, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 1> y: Bool}})", sTypeDef)
+	assertWriteHRSEqual(t, `struct Str {
+  c: Enum<Color, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 0>
+  o: optional String
+  union {
+    x: Struct<Str, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 1>
+    y: Bool
+  }
+}`, sTypeDef)
+	assertWriteTaggedHRSEqual(t, `Type(struct Str {
+  c: Enum<Color, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 0>
+  o: optional String
+  union {
+    x: Struct<Str, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 1>
+    y: Bool
+  }
+})`, sTypeDef)
 }
 
 func TestWriteHumanReadableTaggedPrimitiveValues(t *testing.T) {

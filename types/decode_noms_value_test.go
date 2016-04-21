@@ -132,11 +132,30 @@ func TestReadCompoundList(t *testing.T) {
 	leaf1 := newListLeaf(tr, Int32(0))
 	leaf2 := newListLeaf(tr, Int32(1), Int32(2), Int32(3))
 	l2 := buildCompoundList([]metaTuple{
-		newMetaTuple(Uint64(1), leaf1, Ref{}),
-		newMetaTuple(Uint64(4), leaf2, Ref{}),
+		newMetaTuple(Uint64(1), leaf1, Ref{}, 1),
+		newMetaTuple(Uint64(4), leaf2, Ref{}, 4),
 	}, tr, cs)
 
-	a := parseJson(`[%d, %d, true, ["%s", "1", "%s", "4"]]`, ListKind, Int32Kind, leaf1.Ref(), leaf2.Ref())
+	a := parseJson(`[%d, %d, true, ["%s", "1", "1", "%s", "4", "4"]]`, ListKind, Int32Kind, leaf1.Ref(), leaf2.Ref())
+	r := newJsonArrayReader(a, cs)
+	l := r.readTopLevelValue()
+
+	assert.True(l2.Equals(l))
+}
+
+func TestReadCompoundSet(t *testing.T) {
+	assert := assert.New(t)
+	cs := NewTestValueStore()
+
+	tr := MakeCompoundType(SetKind, MakePrimitiveType(Int32Kind))
+	leaf1 := newSetLeaf(tr, Int32(0), Int32(1))
+	leaf2 := newSetLeaf(tr, Int32(2), Int32(3), Int32(4))
+	l2 := buildCompoundSet([]metaTuple{
+		newMetaTuple(Int32(1), leaf1, Ref{}, 2),
+		newMetaTuple(Int32(4), leaf2, Ref{}, 3),
+	}, tr, cs)
+
+	a := parseJson(`[%d, %d, true, ["%s", "1", "2", "%s", "4", "3"]]`, SetKind, Int32Kind, leaf1.Ref(), leaf2.Ref())
 	r := newJsonArrayReader(a, cs)
 	l := r.readTopLevelValue()
 
@@ -206,16 +225,16 @@ func TestReadCompoundBlob(t *testing.T) {
 	r1 := ref.Parse("sha1-0000000000000000000000000000000000000001")
 	r2 := ref.Parse("sha1-0000000000000000000000000000000000000002")
 	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
-	a := parseJson(`[%d, true, ["%s", "20", "%s", "40", "%s", "60"]]`, BlobKind, r1, r2, r3)
+	a := parseJson(`[%d, true, ["%s", "20", "20", "%s", "40", "40", "%s", "60", "60"]]`, BlobKind, r1, r2, r3)
 	r := newJsonArrayReader(a, cs)
 
 	m := r.readTopLevelValue()
 	_, ok := m.(compoundBlob)
 	assert.True(ok)
 	m2 := newCompoundBlob([]metaTuple{
-		newMetaTuple(Uint64(20), nil, newRef(r1, MakeRefType(typeForBlob))),
-		newMetaTuple(Uint64(40), nil, newRef(r2, MakeRefType(typeForBlob))),
-		newMetaTuple(Uint64(60), nil, newRef(r3, MakeRefType(typeForBlob))),
+		newMetaTuple(Uint64(20), nil, NewTypedRef(MakeRefType(typeForBlob), r1), 20),
+		newMetaTuple(Uint64(40), nil, NewTypedRef(MakeRefType(typeForBlob), r2), 40),
+		newMetaTuple(Uint64(60), nil, NewTypedRef(MakeRefType(typeForBlob), r3), 60),
 	}, cs)
 
 	assert.True(m.Type().Equals(m2.Type()))

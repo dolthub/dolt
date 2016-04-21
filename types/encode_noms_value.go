@@ -108,6 +108,7 @@ func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr Type, pkg *Package)
 		}
 		w2.writeRef(tuple.ChildRef().TargetRef())
 		w2.writeValue(tuple.value, indexType, pkg)
+		w2.writeUint(tuple.numLeaves)
 	}
 	w.write(w2.toArray())
 	return true

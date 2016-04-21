@@ -10,21 +10,29 @@ import {ValueBase} from './value.js';
 export class Sequence<T> extends ValueBase {
   ds: ?DataStore;
   _type: Type;
-  items: Array<T>;
+  _items: Array<T>;
 
   constructor(ds: ?DataStore, type: Type, items: Array<T>) {
     super();
     this.ds = ds;
     this._type = type;
-    this.items = items;
+    this._items = items;
   }
 
   get type(): Type {
     return this._type;
   }
 
+  get items(): Array<T> {
+    return this._items;
+  }
+
   get isMeta(): boolean {
     return false;
+  }
+
+  get numLeaves(): number {
+    return this._items.length;
   }
 
   getChildSequence(idx: number): Promise<?Sequence> { // eslint-disable-line no-unused-vars
@@ -32,7 +40,7 @@ export class Sequence<T> extends ValueBase {
   }
 
   get length(): number {
-    return this.items.length;
+    return this._items.length;
   }
 }
 

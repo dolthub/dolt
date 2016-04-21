@@ -1,6 +1,9 @@
 package types
 
-import "github.com/attic-labs/noms/ref"
+import (
+	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/ref"
+)
 
 type Ref struct {
 	target ref.Ref
@@ -14,11 +17,16 @@ type RefBase interface {
 }
 
 func NewRef(target ref.Ref) Ref {
-	return newRef(target, refType)
+	return NewTypedRef(refType, target)
 }
 
-func newRef(target ref.Ref, t Type) Ref {
+func NewTypedRef(t Type, target ref.Ref) Ref {
+	d.Chk.Equal(RefKind, t.Kind(), "Invalid type. Expected: RefKind, found: %s", t.Describe())
 	return Ref{target, t, &ref.Ref{}}
+}
+
+func NewTypedRefFromValue(v Value) Ref {
+	return NewTypedRef(MakeRefType(v.Type()), v.Ref())
 }
 
 func (r Ref) Equals(other Value) bool {

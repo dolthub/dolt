@@ -29,7 +29,7 @@ import Ref from './ref.js';
 import type {Type} from './type.js';
 
 const testMapSize = 1000;
-const mapOfNRef = 'sha1-b88cd90f3bd0b826bcd9bf57ea28bff15d1d141a';
+const mapOfNRef = 'sha1-e22822dc44753d19fd00b315b886b96e86c2c9a8';
 const smallRandomMapSize = 50;
 const randomMapSize = 500;
 
@@ -54,8 +54,7 @@ suite('BuildMap', () => {
       kvs.push(i, i + 1);
     }
 
-    const tr = makeCompoundType(Kind.Map, int64Type,
-                                int64Type);
+    const tr = makeCompoundType(Kind.Map, int64Type, int64Type);
     const m = await newMap(kvs, tr);
     assert.strictEqual(m.ref.toString(), mapOfNRef);
 
@@ -94,7 +93,7 @@ suite('BuildMap', () => {
     });
 
     const m = await newMap(kvRefs, tr);
-    assert.strictEqual(m.ref.toString(), 'sha1-8055bd75cd73e9a770123740739532661cec4a86');
+    assert.strictEqual(m.ref.toString(), 'sha1-44ecea74cd009c06cfed521ce8c2da6384902891');
   });
 
   test('set', async () => {
@@ -103,11 +102,11 @@ suite('BuildMap', () => {
       kvs.push(i, i + 1);
     }
 
-    const tr = makeCompoundType(Kind.Map, int64Type,
-                                int64Type);
+    const tr = makeCompoundType(Kind.Map, int64Type, int64Type);
     let m = await newMap(kvs, tr);
     for (let i = testMapSize - 10; i < testMapSize; i++) {
       m = await m.set(i, i + 1);
+      assert.strictEqual(i + 1, m.size);
     }
 
     assert.strictEqual(m.ref.toString(), mapOfNRef);
@@ -119,11 +118,11 @@ suite('BuildMap', () => {
       kvs.push(i, i + 1);
     }
 
-    const tr = makeCompoundType(Kind.Map, int64Type,
-                                int64Type);
+    const tr = makeCompoundType(Kind.Map, int64Type, int64Type);
     let m = await newMap(kvs, tr);
     for (let i = 0; i < testMapSize; i++) {
       m = await m.set(i, i + 1);
+      assert.strictEqual(testMapSize, m.size);
     }
 
     assert.strictEqual(m.ref.toString(), mapOfNRef);
@@ -135,14 +134,14 @@ suite('BuildMap', () => {
       kvs.push(i, i + 1);
     }
 
-    const tr = makeCompoundType(Kind.Map, int64Type,
-                                int64Type);
+    const tr = makeCompoundType(Kind.Map, int64Type, int64Type);
     let m = await newMap(kvs, tr);
     for (let i = testMapSize; i < testMapSize + 10; i++) {
       m = await m.remove(i);
     }
 
     assert.strictEqual(m.ref.toString(), mapOfNRef);
+    assert.strictEqual(testMapSize, m.size);
   });
 
   test('write, read, modify, read', async () => {
@@ -154,8 +153,7 @@ suite('BuildMap', () => {
       kvs.push(i, i + 1);
     }
 
-    const tr = makeCompoundType(Kind.Map, int64Type,
-                                int64Type);
+    const tr = makeCompoundType(Kind.Map, int64Type, int64Type);
     const m = await newMap(kvs, tr);
 
     const r = ds.writeValue(m).targetRef;
@@ -163,6 +161,7 @@ suite('BuildMap', () => {
     const outKvs = [];
     await m2.forEach((v, k) => outKvs.push(k, v));
     assert.deepEqual(kvs, outKvs);
+    assert.strictEqual(testMapSize, m2.size);
 
     invariant(m2 instanceof NomsMap);
     const m3 = await m2.remove(testMapSize - 1);
@@ -170,25 +169,28 @@ suite('BuildMap', () => {
     await m3.forEach((v, k) => outKvs2.push(k, v));
     kvs.splice(testMapSize * 2 - 2, 2);
     assert.deepEqual(kvs, outKvs2);
+    assert.strictEqual(testMapSize - 1, m3.size);
   });
 });
 
 suite('MapLeaf', () => {
-  test('isEmpty', () => {
+  test('isEmpty/size', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map, stringType,
-                                boolType);
+    const tr = makeCompoundType(Kind.Map, stringType, boolType);
     const newMap = entries => new NomsMap(tr, new MapLeafSequence(ds, tr, entries));
-    assert.isTrue(newMap([]).isEmpty());
-    assert.isFalse(newMap([{key: 'a', value: false}, {key:'k', value:true}]).isEmpty());
+    let m = newMap([]);
+    assert.isTrue(m.isEmpty());
+    assert.strictEqual(0, m.size);
+    m = newMap([{key: 'a', value: false}, {key:'k', value:true}]);
+    assert.isFalse(m.isEmpty());
+    assert.strictEqual(2, m.size);
   });
 
   test('has', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map, stringType,
-                                boolType);
+    const tr = makeCompoundType(Kind.Map, stringType, boolType);
     const m = new NomsMap(tr,
         new MapLeafSequence(ds, tr, [{key: 'a', value: false}, {key:'k', value:true}]));
     assert.isTrue(await m.has('a'));
@@ -200,8 +202,7 @@ suite('MapLeaf', () => {
   test('first/last/get', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map, stringType,
-                                int32Type);
+    const tr = makeCompoundType(Kind.Map, stringType, int32Type);
     const m = new NomsMap(tr,
         new MapLeafSequence(ds, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
 
@@ -217,8 +218,7 @@ suite('MapLeaf', () => {
   test('forEach', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map, stringType,
-                                int32Type);
+    const tr = makeCompoundType(Kind.Map, stringType, int32Type);
     const m = new NomsMap(tr,
         new MapLeafSequence(ds, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
 
@@ -230,8 +230,7 @@ suite('MapLeaf', () => {
   test('iterator', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map, stringType,
-                                int32Type);
+    const tr = makeCompoundType(Kind.Map, stringType, int32Type);
 
     const test = async entries => {
       const m = new NomsMap(tr, new MapLeafSequence(ds, tr, entries));
@@ -247,8 +246,7 @@ suite('MapLeaf', () => {
   test('iteratorAt', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Map, stringType,
-                                int32Type);
+    const tr = makeCompoundType(Kind.Map, stringType, int32Type);
     const build = entries => new NomsMap(tr, new MapLeafSequence(ds, tr, entries));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
@@ -313,23 +311,24 @@ suite('CompoundMap', () => {
         {key:'n', value:false}]));
     const r4 = ds.writeValue(l4).targetRef;
 
-    const m1 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r1, 'b'),
-        new MetaTuple(r2, 'f')]));
+    const m1 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r1, 'b', 2),
+        new MetaTuple(r2, 'f', 2)]));
     const rm1 = ds.writeValue(m1).targetRef;
-    const m2 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r3, 'i'),
-        new MetaTuple(r4, 'n')]));
+    const m2 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r3, 'i', 2),
+        new MetaTuple(r4, 'n', 2)]));
     const rm2 = ds.writeValue(m2).targetRef;
 
-    const c = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(rm1, 'f'),
-        new MetaTuple(rm2, 'n')]));
+    const c = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(rm1, 'f', 4),
+        new MetaTuple(rm2, 'n', 4)]));
     return [c, m1, m2];
   }
 
-  test('isEmpty', () => {
+  test('isEmpty/size', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const [c] = build(ds);
     assert.isFalse(c.isEmpty());
+    assert.strictEqual(8, c.size);
   });
 
   test('get', async () => {

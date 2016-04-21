@@ -1,5 +1,7 @@
 package types
 
+import "github.com/attic-labs/noms/d"
+
 type Map interface {
 	Value
 	First() (Value, Value)
@@ -30,6 +32,7 @@ func NewMap(kv ...Value) Map {
 }
 
 func NewTypedMap(t Type, kv ...Value) Map {
+	d.Chk.Equal(MapKind, t.Kind(), "Invalid type. Expected: MapKind, found: %s", t.Describe())
 	return newTypedMap(t, buildMapData(mapData{}, kv, t)...)
 }
 

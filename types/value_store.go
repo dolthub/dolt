@@ -95,7 +95,7 @@ func (lvs *ValueStore) cacheChunks(v Value, r ref.Ref) {
 		if cur := lvs.check(hash); cur == nil || cur.Hint().IsEmpty() || cur.Hint() == hash {
 			lvs.set(hash, hintedChunk{getTargetType(reachable), r})
 			// Code-genned Packages are side-loaded when reading Values for performance reasons. This means that they won't pass through the ReadValue() codepath above, which means that they won't have their Chunks added to the cache. So, if reachable is a RefOfPackage, go look the package up in the PackageRegistry and recursively add its Chunks to the cache.
-			if _, ok := reachable.(RefOfPackage); ok {
+			if _, ok := reachable.(Ref); ok {
 				if p := LookupPackage(hash); p != nil {
 					lvs.cacheChunks(p, hash)
 				}
@@ -139,7 +139,10 @@ func (lvs *ValueStore) checkChunksInCache(v Value) map[ref.Ref]struct{} {
 		}
 
 		// BUG 1121
-		// It's possible that entry.Type() will be simply 'Value', but that 'reachable' is actually a properly-typed object -- that is, a Ref to some specific Type. The Exp below would fail, though it's possible that the Type is actually correct. We wouldn't be able to verify without reading it, though, so we'll dig into this later.
+		// It's possible that entry.Type() will be simply 'Value', but that 'reachable' is actually a
+		// properly-typed object -- that is, a Ref to some specific Type. The Exp below would fail,
+		// though it's possible that the Type is actually correct. We wouldn't be able to verify
+		// without reading it, though, so we'll dig into this later.
 		targetType := getTargetType(reachable)
 		if targetType.Equals(MakePrimitiveType(ValueKind)) {
 			continue

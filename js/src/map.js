@@ -42,7 +42,7 @@ function newMapLeafChunkFn(t: Type, ds: ?DataStore = null): makeChunkFn {
       }
     }
 
-    const mt = new MetaTuple(mapLeaf, indexValue);
+    const mt = new MetaTuple(mapLeaf, indexValue, items.length);
     return [mt, mapLeaf];
   };
 }
@@ -181,11 +181,7 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
   }
 
   get size(): number {
-    if (this.sequence instanceof MapLeafSequence) {
-      return this.sequence.items.length;
-    }
-
-    throw new Error('Not implemented');
+    return this.sequence.numLeaves;
   }
 
   /**

@@ -136,7 +136,12 @@ func (s *DynamoStore) PutMany(chunks []Chunk) (e BackpressureError) {
 			s.requestWg.Add(1)
 			s.unwrittenPuts.Add(c)
 		default:
-			return BackpressureError(chunks[i:])
+			notPut := chunks[i:]
+			e = make(BackpressureError, len(notPut))
+			for j, np := range notPut {
+				e[j] = np.Ref()
+			}
+			return
 		}
 	}
 	return

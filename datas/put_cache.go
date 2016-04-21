@@ -43,10 +43,10 @@ func (p *unwrittenPutCache) Get(r ref.Ref) chunks.Chunk {
 	return chunks.EmptyChunk
 }
 
-func (p *unwrittenPutCache) Clear(chunks []chunks.Chunk) {
+func (p *unwrittenPutCache) Clear(hashes ref.RefSlice) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	for _, c := range chunks {
-		delete(p.unwrittenPuts, c.Ref())
+	for _, hash := range hashes {
+		delete(p.unwrittenPuts, hash)
 	}
 }

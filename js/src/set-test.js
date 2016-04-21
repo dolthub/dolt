@@ -32,7 +32,7 @@ import Ref from './ref.js';
 import type {Type} from './type.js';
 
 const testSetSize = 5000;
-const setOfNRef = 'sha1-54ff8f84b5f39fe2171572922d067257a57c539c';
+const setOfNRef = 'sha1-b8ce0af4afd144c64f58e393283407cc0321b0c3';
 const smallRandomSetSize = 200;
 const randomSetSize = 2000;
 
@@ -91,7 +91,7 @@ suite('BuildSet', () => {
     });
 
     const s = await newSet(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-3ed56cc080690be61c72828e80080ec3507fec65');
+    assert.strictEqual(s.ref.toString(), 'sha1-5f001cfce2d62e9870ebf9777a62408aed9ae05a');
   });
 
 
@@ -99,9 +99,9 @@ suite('BuildSet', () => {
     const nums = firstNNumbers(testSetSize - 10);
     const tr = makeCompoundType(Kind.Set, int64Type);
     let s = await newSet(nums, tr);
-
     for (let i = testSetSize - 10; i < testSetSize; i++) {
       s = await s.insert(i);
+      assert.strictEqual(i + 1, s.size);
     }
 
     assert.strictEqual(s.ref.toString(), setOfNRef);
@@ -111,10 +111,10 @@ suite('BuildSet', () => {
     const nums = firstNNumbers(testSetSize + 10);
     const tr = makeCompoundType(Kind.Set, int64Type);
     let s = await newSet(nums, tr);
-
     let count = 10;
     while (count-- > 0) {
       s = await s.remove(testSetSize + count);
+      assert.strictEqual(testSetSize + count, s.size);
     }
 
     assert.strictEqual(s.ref.toString(), setOfNRef);
@@ -132,6 +132,7 @@ suite('BuildSet', () => {
     const outNums = [];
     await s2.forEach(k => outNums.push(k));
     assert.deepEqual(nums, outNums);
+    assert.strictEqual(testSetSize, s2.size);
 
     invariant(s2 instanceof NomsSet);
     const s3 = await s2.remove(testSetSize - 1);
@@ -139,17 +140,22 @@ suite('BuildSet', () => {
     await s3.forEach(k => outNums2.push(k));
     nums.splice(testSetSize - 1, 1);
     assert.deepEqual(nums, outNums2);
+    assert.strictEqual(testSetSize - 1, s3.size);
   });
 });
 
 suite('SetLeaf', () => {
-  test('isEmpty', () => {
+  test('isEmpty/size', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, stringType);
     const newSet = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
-    assert.isTrue(newSet([]).isEmpty());
-    assert.isFalse(newSet(['a', 'k']).isEmpty());
+    let s = newSet([]);
+    assert.isTrue(s.isEmpty());
+    assert.strictEqual(0, s.size);
+    s = newSet(['a', 'k']);
+    assert.isFalse(s.isEmpty());
+    assert.strictEqual(2, s.size);
   });
 
   test('first/last/has', async () => {
@@ -245,7 +251,7 @@ suite('CompoundSet', () => {
     for (let i = 0; i < values.length; i += 2) {
       const l = new NomsSet(tr, new SetLeafSequence(ds, tr, [values[i], values[i + 1]]));
       const r = ds.writeValue(l).targetRef;
-      tuples.push(new MetaTuple(r, values[i + 1]));
+      tuples.push(new MetaTuple(r, values[i + 1], 2));
     }
 
     let last: ?NomsSet = null;
@@ -254,7 +260,8 @@ suite('CompoundSet', () => {
       for (let i = 0; i < tuples.length; i += 2) {
         last = new NomsSet(tr, new OrderedMetaSequence(ds, tr, [tuples[i], tuples[i + 1]]));
         const r = ds.writeValue(last).targetRef;
-        next.push(new MetaTuple(r, tuples[i + 1].value));
+        next.push(new MetaTuple(r, tuples[i + 1].value,
+                                tuples[i].numLeaves + tuples[i + 1].numLeaves));
       }
 
       tuples = next;
@@ -263,11 +270,12 @@ suite('CompoundSet', () => {
     return notNull(last);
   }
 
-  test('isEmpty', () => {
+  test('isEmpty/size', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     assert.isFalse(c.isEmpty());
+    assert.strictEqual(8, c.size);
   });
 
   test('first/last/has', async () => {

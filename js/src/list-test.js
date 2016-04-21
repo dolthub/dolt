@@ -27,7 +27,7 @@ import {Package, registerPackage} from './package.js';
 import type {Type} from './type.js';
 
 const testListSize = 5000;
-const listOfNRef = 'sha1-11e947e8aacfda8e9052bb57e661da442b26c625';
+const listOfNRef = 'sha1-36cffb3ac5fb12d3b0970c3de40b85c14cd1590b';
 
 async function assertToJS(list: NomsList, nums: Array<any>, start: number = 0,
     end: number = nums.length): Promise<void> {
@@ -79,7 +79,7 @@ suite('BuildList', () => {
     });
 
     const s = await newList(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-324e4faa5d80df9942627fe9848e0689261cbbc5');
+    assert.strictEqual(s.ref.toString(), 'sha1-c69b98c39753f566feca40ebf40d1b4e1a2c121e');
     assert.strictEqual(testListSize, s.length);
   });
 
@@ -282,15 +282,15 @@ suite('CompoundList', () => {
     const l4 = new NomsList(tr, new ListLeafSequence(ds, tr, ['m', 'n']));
     const r4 = ds.writeValue(l4).targetRef;
 
-    const m1 = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(r1, 2),
-        new MetaTuple(r2, 2)]));
+    const m1 = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(r1, 2, 2),
+        new MetaTuple(r2, 2, 2)]));
     const rm1 = ds.writeValue(m1).targetRef;
-    const m2 = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(r3, 2),
-        new MetaTuple(r4, 2)]));
+    const m2 = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(r3, 2, 2),
+        new MetaTuple(r4, 2, 2)]));
     const rm2 = ds.writeValue(m2).targetRef;
 
-    const l = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(rm1, 4),
-        new MetaTuple(rm2, 4)]));
+    const l = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(rm1, 4, 4),
+        new MetaTuple(rm2, 4, 4)]));
     return l;
   }
 

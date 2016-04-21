@@ -24,6 +24,8 @@ const (
 	httpChunkSinkConcurrency = 6
 	writeBufferSize          = 1 << 12 // 4K
 	readBufferSize           = 1 << 12 // 4K
+
+	httpStatusTooManyRequests = 429 // This is new in Go 1.6. Once the builders have that, use it.
 )
 
 // httpBatchStore implements types.BatchStore
@@ -242,8 +244,6 @@ func (bhcs *httpBatchStore) batchPutRequests() {
 						drained = true
 						d.Chk.NoError(sz.Close())
 						d.Chk.NoError(gw.Close())
-						_, err := buf.Seek(0, 0)
-						d.Chk.NoError(err, "Could not reset filesystem buffer to offset 0.")
 						bhcs.sendWriteRequests(buf, numChunks, hints) // Takes ownership of buf, hints
 
 						numChunks = 0
@@ -268,26 +268,45 @@ func (bhcs *httpBatchStore) sendWriteRequests(serializedChunks *os.File, numChun
 	bhcs.rateLimit <- struct{}{}
 	go func() {
 		defer func() {
+			<-bhcs.rateLimit
 			bhcs.unwrittenPuts = newUnwrittenPutCache()
 			bhcs.requestWg.Add(-numChunks)
 			d.Chk.NoError(serializedChunks.Close(), "Cannot close filesystem buffer.")
 			d.Chk.NoError(os.Remove(serializedChunks.Name()), "Cannot remove filesystem buffer.")
 		}()
 
-		body := buildWriteValueRequest(serializedChunks, hints)
+		var res *http.Response
+		for tryAgain := true; tryAgain; {
+			_, err := serializedChunks.Seek(0, 0)
+			d.Chk.NoError(err, "Could not reset filesystem buffer to offset 0.")
+			body := buildWriteValueRequest(serializedChunks, hints)
 
-		url := *bhcs.host
-		url.Path = httprouter.CleanPath(bhcs.host.Path + constants.WriteValuePath)
-		req := newRequest("POST", bhcs.auth, url.String(), body, http.Header{
-			"Content-Encoding": {"gzip"},
-			"Content-Type":     {"application/octet-stream"},
-		})
+			url := *bhcs.host
+			url.Path = httprouter.CleanPath(bhcs.host.Path + constants.WriteValuePath)
+			req := newRequest("POST", bhcs.auth, url.String(), body, http.Header{
+				"Accept-Encoding":  {"gzip"},
+				"Content-Encoding": {"gzip"},
+				"Content-Type":     {"application/octet-stream"},
+			})
 
-		res, err := bhcs.httpClient.Do(req)
-		d.Exp.NoError(err)
-		defer closeResponse(res)
+			res, err = bhcs.httpClient.Do(req)
+			d.Exp.NoError(err)
+			defer closeResponse(res)
+
+			if tryAgain = res.StatusCode == httpStatusTooManyRequests; tryAgain {
+				reader := res.Body
+				if strings.Contains(res.Header.Get("Content-Encoding"), "gzip") {
+					gr, err := gzip.NewReader(reader)
+					d.Exp.NoError(err)
+					defer gr.Close()
+					reader = gr
+				}
+				/*hashes :=*/ deserializeHashes(reader)
+				// TODO: BUG 1259 Since the client must currently send all chunks in one batch, the only thing to do in response to backpressure is send EVERYTHING again. Once batching is again possible, this code should figure out how to resend the chunks indicated by hashes.
+			}
+		}
+
 		d.Exp.Equal(http.StatusCreated, res.StatusCode, "Unexpected response: %s", formatErrorResponse(res))
-		<-bhcs.rateLimit
 	}()
 }
 

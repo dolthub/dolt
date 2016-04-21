@@ -125,7 +125,7 @@ func (t Type) Chunks() (chunks []RefBase) {
 
 func (t Type) ChildValues() (res []Value) {
 	if t.HasPackageRef() {
-		res = append(res, NewRefOfPackage(t.PackageRef()))
+		res = append(res, NewTypedRef(MakeRefType(PackageType), t.PackageRef()))
 	}
 	if !t.IsUnresolved() {
 		switch desc := t.Desc.(type) {
@@ -235,3 +235,4 @@ var Float64Type = MakePrimitiveType(Float64Kind)
 var BoolType = MakePrimitiveType(BoolKind)
 var StringType = MakePrimitiveType(StringKind)
 var BlobType = MakePrimitiveType(BlobKind)
+var PackageType = MakePrimitiveType(PackageKind)

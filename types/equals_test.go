@@ -59,8 +59,8 @@ func TestValueEquals(t *testing.T) {
 			b1 := NewBlob(bytes.NewBufferString("hi"))
 			b2 := NewBlob(bytes.NewBufferString("bye"))
 			return newCompoundBlob([]metaTuple{
-				newMetaTuple(Uint64(uint64(2)), b1, Ref{}),
-				newMetaTuple(Uint64(uint64(5)), b2, Ref{}),
+				newMetaTuple(Uint64(uint64(2)), b1, Ref{}, 2),
+				newMetaTuple(Uint64(uint64(5)), b2, Ref{}, 5),
 			}, nil)
 		},
 		func() Value { return NewList() },

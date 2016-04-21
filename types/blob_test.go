@@ -99,5 +99,5 @@ func TestBlobChunkingSameAsJavascript(t *testing.T) {
 		115,
 	}))
 
-	assert.Equal(b.Ref().String(), "sha1-fc30f237649464078574bc46b90c842179b4fa18")
+	assert.Equal(b.Ref().String(), "sha1-e4a0148729ba968e05fbd5afe7b8fff18a343583")
 }

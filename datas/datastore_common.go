@@ -14,7 +14,7 @@ type dataStoreCommon struct {
 	bs       types.BatchStore
 	rt       chunks.RootTracker
 	rootRef  ref.Ref
-	datasets *MapOfStringToRefOfCommit
+	datasets *types.Map
 }
 
 var (
@@ -27,8 +27,8 @@ func newDataStoreCommon(bs types.BatchStore, rt chunks.RootTracker) dataStoreCom
 }
 
 func (ds *dataStoreCommon) MaybeHead(datasetID string) (Commit, bool) {
-	if r, ok := ds.Datasets().MaybeGet(datasetID); ok {
-		return r.TargetValue(ds), true
+	if r, ok := ds.Datasets().MaybeGet(types.NewString(datasetID)); ok {
+		return r.(types.Ref).TargetValue(ds).(Commit), true
 	}
 	return NewCommit(), false
 }
@@ -39,11 +39,11 @@ func (ds *dataStoreCommon) Head(datasetID string) Commit {
 	return c
 }
 
-func (ds *dataStoreCommon) Datasets() MapOfStringToRefOfCommit {
+func (ds *dataStoreCommon) Datasets() types.Map {
 	if ds.datasets == nil {
 		if ds.rootRef.IsEmpty() {
-			emptySet := NewMapOfStringToRefOfCommit()
-			ds.datasets = &emptySet
+			emptyMap := NewMapOfStringToRefOfCommit()
+			ds.datasets = &emptyMap
 		} else {
 			ds.datasets = ds.datasetsFromRef(ds.rootRef)
 		}
@@ -52,8 +52,8 @@ func (ds *dataStoreCommon) Datasets() MapOfStringToRefOfCommit {
 	return *ds.datasets
 }
 
-func (ds *dataStoreCommon) datasetsFromRef(datasetsRef ref.Ref) *MapOfStringToRefOfCommit {
-	c := ds.ReadValue(datasetsRef).(MapOfStringToRefOfCommit)
+func (ds *dataStoreCommon) datasetsFromRef(datasetsRef ref.Ref) *types.Map {
+	c := ds.ReadValue(datasetsRef).(types.Map)
 	return &c
 }
 
@@ -66,15 +66,16 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) error {
 	currentRootRef, currentDatasets := ds.getRootAndDatasets()
 
 	// TODO: This Commit will be orphaned if the tryUpdateRoot() below fails
-	commitRef := ds.WriteValue(commit).(RefOfCommit)
+	ds.WriteValue(commit)
+	commitRef := types.NewTypedRefFromValue(commit)
 
 	// First commit in store is always fast-foward.
 	if !currentRootRef.IsEmpty() {
-		var currentHeadRef RefOfCommit
-		currentHeadRef, hasHead := currentDatasets.MaybeGet(datasetID)
+		r, hasHead := currentDatasets.MaybeGet(types.NewString(datasetID))
 
 		// First commit in dataset is always fast-foward.
 		if hasHead {
+			currentHeadRef := r.(types.Ref)
 			// Allow only fast-forward commits.
 			if commitRef.Equals(currentHeadRef) {
 				return nil
@@ -84,18 +85,18 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) error {
 			}
 		}
 	}
-	currentDatasets = currentDatasets.Set(datasetID, commitRef)
+	currentDatasets = currentDatasets.Set(types.NewString(datasetID), commitRef)
 	return ds.tryUpdateRoot(currentDatasets, currentRootRef)
 }
 
 // doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
 func (ds *dataStoreCommon) doDelete(datasetID string) error {
 	currentRootRef, currentDatasets := ds.getRootAndDatasets()
-	currentDatasets = currentDatasets.Remove(datasetID)
+	currentDatasets = currentDatasets.Remove(types.NewString(datasetID))
 	return ds.tryUpdateRoot(currentDatasets, currentRootRef)
 }
 
-func (ds *dataStoreCommon) getRootAndDatasets() (currentRootRef ref.Ref, currentDatasets MapOfStringToRefOfCommit) {
+func (ds *dataStoreCommon) getRootAndDatasets() (currentRootRef ref.Ref, currentDatasets types.Map) {
 	currentRootRef = ds.rt.Root()
 	currentDatasets = ds.Datasets()
 
@@ -106,7 +107,7 @@ func (ds *dataStoreCommon) getRootAndDatasets() (currentRootRef ref.Ref, current
 	return
 }
 
-func (ds *dataStoreCommon) tryUpdateRoot(currentDatasets MapOfStringToRefOfCommit, currentRootRef ref.Ref) (err error) {
+func (ds *dataStoreCommon) tryUpdateRoot(currentDatasets types.Map, currentRootRef ref.Ref) (err error) {
 	// TODO: This Commit will be orphaned if the UpdateRoot below fails
 	newRootRef := ds.WriteValue(currentDatasets).TargetRef()
 	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
@@ -116,7 +117,7 @@ func (ds *dataStoreCommon) tryUpdateRoot(currentDatasets MapOfStringToRefOfCommi
 	return
 }
 
-func descendsFrom(commit Commit, currentHeadRef RefOfCommit, vr types.ValueReader) bool {
+func descendsFrom(commit Commit, currentHeadRef types.Ref, vr types.ValueReader) bool {
 	// BFS because the common case is that the ancestor is only a step or two away
 	ancestors := commit.Parents()
 	for !ancestors.Has(currentHeadRef) {
@@ -128,10 +129,11 @@ func descendsFrom(commit Commit, currentHeadRef RefOfCommit, vr types.ValueReade
 	return true
 }
 
-func getAncestors(commits SetOfRefOfCommit, vr types.ValueReader) SetOfRefOfCommit {
+func getAncestors(commits types.Set, vr types.ValueReader) types.Set {
 	ancestors := NewSetOfRefOfCommit()
-	commits.IterAll(func(r RefOfCommit) {
-		c := r.TargetValue(vr)
+	commits.IterAll(func(v types.Value) {
+		r := v.(types.Ref)
+		c := r.TargetValue(vr).(Commit)
 		ancestors = ancestors.Union(c.Parents())
 	})
 	return ancestors

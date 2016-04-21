@@ -252,6 +252,6 @@ func makeMapLeafChunkFn(t Type, vr ValueReader) makeChunkFn {
 			}
 		}
 
-		return newMetaTuple(indexValue, mapLeaf, Ref{}), mapLeaf
+		return newMetaTuple(indexValue, mapLeaf, Ref{}, uint64(len(items))), mapLeaf
 	}
 }

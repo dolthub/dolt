@@ -20,6 +20,7 @@ import {
   StructDesc,
   Type,
   typeType,
+  uint64Type,
 } from './type.js';
 import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
@@ -191,7 +192,8 @@ export class JsonArrayReader {
     while (!this.atEnd()) {
       const ref = this.readRef();
       const v = this.readValueWithoutTag(indexType, pkg);
-      data.push(new MetaTuple(ref, v));
+      const numLeaves = this.readValueWithoutTag(uint64Type, pkg);
+      data.push(new MetaTuple(ref, v, numLeaves));
     }
 
     return newMetaSequenceFromData(this._ds, t, data);
