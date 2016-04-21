@@ -158,7 +158,7 @@ func TestWriteHumanReadableStruct(t *testing.T) {
 		MakeStructType("S1", []Field{
 			Field{Name: "x", T: Int32Type, Optional: false},
 			Field{Name: "y", T: Int32Type, Optional: true},
-		}, Choices{}),
+		}, []Field{}),
 	}, []ref.Ref{})
 	typeDef := pkg.Types()[0]
 	RegisterPackage(&pkg)
@@ -180,7 +180,7 @@ func TestWriteHumanReadableStruct(t *testing.T) {
 
 func TestWriteHumanReadableStructWithUnion(t *testing.T) {
 	pkg := NewPackage([]Type{
-		MakeStructType("S2", []Field{}, Choices{
+		MakeStructType("S2", []Field{}, []Field{
 			Field{Name: "x", T: Int32Type, Optional: false},
 			Field{Name: "y", T: Int32Type, Optional: false},
 		}),
@@ -204,7 +204,7 @@ func TestWriteHumanReadableStructWithUnion(t *testing.T) {
 
 func TestWriteHumanReadableListOfStruct(t *testing.T) {
 	pkg := NewPackage([]Type{
-		MakeStructType("S3", []Field{}, Choices{
+		MakeStructType("S3", []Field{}, []Field{
 			Field{Name: "x", T: Int32Type, Optional: false},
 		}),
 	}, []ref.Ref{})
@@ -334,7 +334,7 @@ func TestWriteHumanReadableType(t *testing.T) {
 		MakeStructType("Str", []Field{
 			Field{Name: "c", T: MakeType(ref.Ref{}, 0), Optional: false},
 			Field{Name: "o", T: StringType, Optional: true},
-		}, Choices{
+		}, []Field{
 			Field{Name: "x", T: MakeType(ref.Ref{}, 1), Optional: false},
 			Field{Name: "y", T: BoolType, Optional: false},
 		}),

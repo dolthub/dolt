@@ -22,7 +22,7 @@ func init() {
 				types.Field{"Tags", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind)), false},
 				types.Field{"Faces", types.MakeCompoundType(types.SetKind, types.MakeType(ref.Ref{}, 1)), false},
 			},
-			types.Choices{},
+			[]types.Field{},
 		),
 		types.MakeStructType("Face",
 			[]types.Field{
@@ -32,14 +32,14 @@ func init() {
 				types.Field{"Height", types.MakePrimitiveType(types.Float32Kind), false},
 				types.Field{"PersonName", types.MakePrimitiveType(types.StringKind), false},
 			},
-			types.Choices{},
+			[]types.Field{},
 		),
 		types.MakeStructType("Size",
 			[]types.Field{
 				types.Field{"Width", types.MakePrimitiveType(types.Uint32Kind), false},
 				types.Field{"Height", types.MakePrimitiveType(types.Uint32Kind), false},
 			},
-			types.Choices{},
+			[]types.Field{},
 		),
 	}, []ref.Ref{
 		ref.Parse("sha1-0b4ac7cb0583d7fecd71a1584a3f846e5d8b08eb"),

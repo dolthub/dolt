@@ -17,14 +17,14 @@ func init() {
 				types.Field{"Latitude", types.MakePrimitiveType(types.Float32Kind), false},
 				types.Field{"Longitude", types.MakePrimitiveType(types.Float32Kind), false},
 			},
-			types.Choices{},
+			[]types.Field{},
 		),
 		types.MakeStructType("Georectangle",
 			[]types.Field{
 				types.Field{"TopLeft", types.MakeType(ref.Ref{}, 0), false},
 				types.Field{"BottomRight", types.MakeType(ref.Ref{}, 0), false},
 			},
-			types.Choices{},
+			[]types.Field{},
 		),
 	}, []ref.Ref{})
 	types.RegisterPackage(&p)

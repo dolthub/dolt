@@ -396,7 +396,7 @@ func (gen *codeGen) writeStruct(t types.Type, ordinal int) {
 		Type          types.Type
 		Ordinal       int
 		Fields        []types.Field
-		Choices       types.Choices
+		Choices       []types.Field
 		HasUnion      bool
 		UnionZeroType types.Type
 	}{

@@ -198,7 +198,13 @@ type ParsedResultTestSuite struct {
 	mapOfNamedTypeField     testField
 	namedTypeField          testField
 	namespacedTypeField     testField
-	union                   types.Choices
+	union                   testChoices
+}
+
+type testChoices []types.Field
+
+func (c testChoices) Describe() string {
+	return describeUnion(c)
 }
 
 func (suite *ParsedResultTestSuite) SetupTest() {
@@ -218,7 +224,7 @@ func (suite *ParsedResultTestSuite) SetupTest() {
 		false}
 	suite.namedTypeField = testField{"otherStruct", types.MakeUnresolvedType("", "Other"), false}
 	suite.namespacedTypeField = testField{"namespacedStruct", types.MakeUnresolvedType("Elsewhere", "Other"), false}
-	suite.union = types.Choices{
+	suite.union = testChoices{
 		types.Field{"a", types.MakePrimitiveType(types.Int32Kind), false},
 		types.Field{"n", types.MakeUnresolvedType("NN", "Other"), false},
 		types.Field{"c", types.MakePrimitiveType(types.Uint32Kind), false},
@@ -227,11 +233,11 @@ func (suite *ParsedResultTestSuite) SetupTest() {
 
 type structTestCase struct {
 	Name   string
-	Union  types.Choices
+	Union  testChoices
 	Fields []testField
 }
 
-func makeStructTestCase(n string, u types.Choices, fields ...testField) structTestCase {
+func makeStructTestCase(n string, u testChoices, fields ...testField) structTestCase {
 	return structTestCase{n, u, fields}
 }
 
@@ -254,7 +260,16 @@ func (s structTestCase) unionToString() string {
 	if s.Union == nil {
 		return ""
 	}
-	return s.Union.Describe()
+	return describeUnion(s.Union)
+}
+
+func describeUnion(fields []types.Field) string {
+	out := " union {"
+	for _, f := range fields {
+		out += f.Name + ": "
+		out += f.T.Describe() + "\n"
+	}
+	return out + "}"
 }
 
 type testField struct {
@@ -291,7 +306,7 @@ func (suite *ParsedResultTestSuite) checkStruct(pkg intermediate, s structTestCa
 	for i, f := range s.Fields {
 		// Named unions are syntactic sugar for a struct Field that points to an anonymous struct containing an anonymous union.
 		// So, if the field in the test input was a union...
-		if _, ok := f.D.(types.Choices); ok {
+		if _, ok := f.D.(testChoices); ok {
 			// ...make sure the names are the same...
 			suite.Equal(f.Name, typFields[i].Name)
 			suite.Equal(f.Optional, typFields[i].Optional)

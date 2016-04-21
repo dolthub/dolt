@@ -13,7 +13,7 @@ func TestGenericStructEquals(t *testing.T) {
 	typeDef := MakeStructType("S1", []Field{
 		Field{"x", MakePrimitiveType(BoolKind), false},
 		Field{"o", MakePrimitiveType(StringKind), true},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
@@ -32,7 +32,7 @@ func TestGenericStructChunks(t *testing.T) {
 
 	typeDef := MakeStructType("S1", []Field{
 		Field{"r", MakeCompoundType(RefKind, MakePrimitiveType(BoolKind)), false},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
@@ -52,7 +52,7 @@ func TestGenericStructChunksOptional(t *testing.T) {
 
 	typeDef := MakeStructType("S1", []Field{
 		Field{"r", MakeCompoundType(RefKind, MakePrimitiveType(BoolKind)), true},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
@@ -76,7 +76,7 @@ func TestGenericStructChunksOptional(t *testing.T) {
 func TestGenericStructChunksUnion(t *testing.T) {
 	assert := assert.New(t)
 
-	typeDef := MakeStructType("S1", []Field{}, Choices{
+	typeDef := MakeStructType("S1", []Field{}, []Field{
 		Field{"r", MakeCompoundType(RefKind, MakePrimitiveType(BoolKind)), false},
 		Field{"s", MakePrimitiveType(StringKind), false},
 	})
@@ -104,7 +104,7 @@ func TestGenericStructNew(t *testing.T) {
 	typeDef := MakeStructType("S2", []Field{
 		Field{"b", MakePrimitiveType(BoolKind), false},
 		Field{"o", MakePrimitiveType(StringKind), true},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
@@ -130,7 +130,7 @@ func TestGenericStructNew(t *testing.T) {
 func TestGenericStructNewUnion(t *testing.T) {
 	assert := assert.New(t)
 
-	typeDef := MakeStructType("S3", []Field{}, Choices{
+	typeDef := MakeStructType("S3", []Field{}, []Field{
 		Field{"b", MakePrimitiveType(BoolKind), false},
 		Field{"o", MakePrimitiveType(StringKind), false},
 	})
@@ -150,7 +150,7 @@ func TestGenericStructSet(t *testing.T) {
 	typeDef := MakeStructType("S3", []Field{
 		Field{"b", MakePrimitiveType(BoolKind), false},
 		Field{"o", MakePrimitiveType(StringKind), true},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
@@ -168,7 +168,7 @@ func TestGenericStructSet(t *testing.T) {
 func TestGenericStructSetUnion(t *testing.T) {
 	assert := assert.New(t)
 
-	typeDef := MakeStructType("S3", []Field{}, Choices{
+	typeDef := MakeStructType("S3", []Field{}, []Field{
 		Field{"b", MakePrimitiveType(BoolKind), false},
 		Field{"s", MakePrimitiveType(StringKind), false},
 	})

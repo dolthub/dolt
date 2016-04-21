@@ -39,7 +39,7 @@ func TestUserName(t *testing.T) {
 		types.MakeEnumType("E1", "a", "b"),
 		types.MakeStructType("S1", []types.Field{
 			types.Field{"f", types.MakePrimitiveType(types.BoolKind), false},
-		}, types.Choices{}),
+		}, []types.Field{}),
 	}, []ref.Ref{})
 
 	res := testResolver{assert, map[ref.Ref]types.Package{imported.Ref(): imported}}
@@ -47,7 +47,7 @@ func TestUserName(t *testing.T) {
 	localStructName := "Local"
 	resolved := types.MakeStructType(localStructName, []types.Field{
 		types.Field{"a", types.MakePrimitiveType(types.Int8Kind), false},
-	}, types.Choices{})
+	}, []types.Field{})
 
 	g := Generator{R: &res, Package: &imported}
 	assert.Equal(localStructName, g.UserName(resolved))

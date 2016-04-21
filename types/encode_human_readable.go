@@ -225,7 +225,7 @@ func (w *hrsWriter) WriteTagged(v Value) {
 
 func (w *hrsWriter) writeTypeAsValue(t Type) {
 	switch t.Kind() {
-	case BlobKind, BoolKind, Float32Kind, Float64Kind, Int16Kind, Int32Kind, Int64Kind, Int8Kind, StringKind, TypeKind, Uint16Kind, Uint32Kind, Uint64Kind, Uint8Kind, ValueKind:
+	case BlobKind, BoolKind, Float32Kind, Float64Kind, Int16Kind, Int32Kind, Int64Kind, Int8Kind, StringKind, TypeKind, Uint16Kind, Uint32Kind, Uint64Kind, Uint8Kind, ValueKind, PackageKind:
 		w.write(KindToString[t.Kind()])
 	case ListKind, RefKind, SetKind:
 		w.write(KindToString[t.Kind()])
@@ -288,12 +288,18 @@ func (w *hrsWriter) writeTypeAsValue(t Type) {
 		w.write("}")
 	case UnresolvedKind:
 		w.writeUnresolvedTypeRef(t, true)
-	case PackageKind:
-		panic("not implemented")
 	}
 }
 
 func (w *hrsWriter) writeUnresolvedTypeRef(t Type, printStructName bool) {
+	if !t.HasPackageRef() {
+		if t.Namespace() != "" {
+			w.write(t.Namespace())
+			w.write(".")
+		}
+		w.write(t.Name())
+		return
+	}
 	pkg := LookupPackage(t.PackageRef())
 	typeDef := pkg.Types()[t.Ordinal()]
 	switch typeDef.Kind() {

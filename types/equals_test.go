@@ -73,8 +73,8 @@ func TestValueEquals(t *testing.T) {
 
 		func() Value { return MakePrimitiveType(BoolKind) },
 		func() Value { return MakePrimitiveType(StringKind) },
-		func() Value { return MakeStructType("a", []Field{}, Choices{}) },
-		func() Value { return MakeStructType("b", []Field{}, Choices{}) },
+		func() Value { return MakeStructType("a", []Field{}, []Field{}) },
+		func() Value { return MakeStructType("b", []Field{}, []Field{}) },
 		func() Value { return MakeEnumType("E", "a", "b") },
 		func() Value { return MakeEnumType("E", "a", "b", "c") },
 		func() Value { return MakeCompoundType(ListKind, MakePrimitiveType(Uint64Kind)) },

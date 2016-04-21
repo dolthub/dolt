@@ -204,7 +204,7 @@ func expandStruct(t types.Type, ordinal int) []types.Type {
 	desc := t.Desc.(types.StructDesc)
 	fields := doFields(desc.Fields)
 
-	var choices types.Choices
+	var choices []types.Field
 	if desc.Union != nil {
 		choices = doFields(desc.Union)
 	}

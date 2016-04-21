@@ -1319,12 +1319,12 @@ func (p *parser) callonUsing1() (interface{}, error) {
 
 func (c *current) onStruct1(i, l interface{}) (interface{}, error) {
 	ll := l.([]interface{})
-	var u types.Choices
+	var u []types.Field
 	fieldNames := map[string]bool{}
 	fields := make([]types.Field, 0, len(ll))
 	for _, e := range ll {
 		switch e := e.(type) {
-		case types.Choices:
+		case []types.Field:
 			if u != nil {
 				return nil, fmt.Errorf("Only one anonymous union per struct.")
 			}
@@ -1351,7 +1351,7 @@ func (p *parser) callonStruct1() (interface{}, error) {
 func (c *current) onUnion1(u interface{}) (interface{}, error) {
 	uu := u.([]interface{})
 	choiceNames := map[string]bool{}
-	desc := make(types.Choices, 0, len(uu))
+	desc := make([]types.Field, 0, len(uu))
 	for _, f := range uu {
 		ff := f.(types.Field)
 		if choiceNames[ff.Name] {
@@ -1393,7 +1393,7 @@ func (c *current) onType1(t interface{}) (interface{}, error) {
 	switch t := t.(type) {
 	case types.Type:
 		return t, nil
-	case types.Choices:
+	case []types.Field:
 		return types.MakeStructType("", nil, t), nil
 	case namespaceIdent:
 		return types.MakeUnresolvedType(t.Namespace, t.ID), nil

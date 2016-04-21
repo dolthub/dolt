@@ -1,9 +1,6 @@
 package types
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -12,7 +9,6 @@ import (
 type TypeDesc interface {
 	Kind() NomsKind
 	Equals(other TypeDesc) bool
-	Describe() string // For use in tests.
 }
 
 // PrimitiveDesc implements TypeDesc for all primitive Noms types:
@@ -40,10 +36,6 @@ func (p PrimitiveDesc) Kind() NomsKind {
 
 func (p PrimitiveDesc) Equals(other TypeDesc) bool {
 	return p.Kind() == other.Kind()
-}
-
-func (p PrimitiveDesc) Describe() string {
-	return KindToString[p.Kind()]
 }
 
 var KindToString = map[NomsKind]string{
@@ -96,10 +88,6 @@ func (u UnresolvedDesc) Equals(other TypeDesc) bool {
 	return false
 }
 
-func (u UnresolvedDesc) Describe() string {
-	return fmt.Sprintf("Unresolved(%s, %d)", u.pkgRef, u.ordinal)
-}
-
 // CompoundDesc describes a List, Map, Set or Ref type.
 // ElemTypes indicates what type or types are in the container indicated by kind, e.g. Map key and value or Set element.
 type CompoundDesc struct {
@@ -121,28 +109,6 @@ func (c CompoundDesc) Equals(other TypeDesc) bool {
 		}
 	}
 	return true
-}
-
-func (c CompoundDesc) Describe() string {
-	descElems := func() string {
-		out := make([]string, len(c.ElemTypes))
-		for i, e := range c.ElemTypes {
-			out[i] = e.Describe()
-		}
-		return strings.Join(out, ", ")
-	}
-	switch c.kind {
-	case ListKind:
-		return "List<" + descElems() + ">"
-	case MapKind:
-		return "Map<" + descElems() + ">"
-	case RefKind:
-		return "Ref<" + descElems() + ">"
-	case SetKind:
-		return "Set<" + descElems() + ">"
-	default:
-		panic(fmt.Errorf("Kind is not compound: %v", c.kind))
-	}
 }
 
 // EnumDesc simply lists the identifiers used in this enum.
@@ -170,29 +136,11 @@ func (e EnumDesc) Equals(other TypeDesc) bool {
 	return true
 }
 
-func (e EnumDesc) Describe() string {
-	return "{\n  " + strings.Join(e.IDs, "  \n") + "\n}"
-}
-
-// Choices represents a union, with each choice as a Field..
-type Choices []Field
-
-func (u Choices) Describe() string {
-	if len(u) == 0 {
-		return ""
-	}
-	out := "  union {\n"
-	for _, c := range u {
-		out += fmt.Sprintf("    %s: %s\n", c.Name, c.T.Describe())
-	}
-	return out + "  }"
-}
-
 // StructDesc describes a custom Noms Struct.
 // Structs can contain at most one anonymous union, so Union may be nil.
 type StructDesc struct {
 	Fields []Field
-	Union  Choices
+	Union  []Field
 }
 
 func (s StructDesc) Kind() NomsKind {
@@ -214,21 +162,6 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 		}
 	}
 	return true
-}
-
-func (s StructDesc) Describe() string {
-	out := "{\n"
-	for _, f := range s.Fields {
-		optional := ""
-		if f.Optional {
-			optional = "optional "
-		}
-		out += fmt.Sprintf("  %s: %s%s\n", f.Name, optional, f.T.Describe())
-	}
-	if len(s.Union) > 0 {
-		out += s.Union.Describe() + "\n"
-	}
-	return out + "}"
 }
 
 // Field represents a Struct field or a Union choice.

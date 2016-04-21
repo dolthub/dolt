@@ -17,7 +17,7 @@ func init() {
 				types.Field{"s", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"b", types.MakePrimitiveType(types.BoolKind), false},
 			},
-			types.Choices{},
+			[]types.Field{},
 		),
 		types.MakeEnumType("E", "e1", "e2", "e3"),
 	}, []ref.Ref{})

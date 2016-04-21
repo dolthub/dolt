@@ -336,7 +336,7 @@ func (r *jsonArrayReader) readTypeAsValue(pkg *Package) Type {
 		name := r.readString()
 
 		fields := []Field{}
-		choices := Choices{}
+		choices := []Field{}
 
 		fieldReader := newJsonArrayReader(r.readArray(), r.vr)
 		for !fieldReader.atEnd() {

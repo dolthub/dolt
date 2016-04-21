@@ -16,7 +16,7 @@ func init() {
 			[]types.Field{
 				types.Field{"A", types.MakeCompoundType(types.ListKind, types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.BlobKind))), false},
 			},
-			types.Choices{},
+			[]types.Field{},
 		),
 	}, []ref.Ref{})
 	types.RegisterPackage(&p)

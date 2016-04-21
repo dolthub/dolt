@@ -31,7 +31,7 @@ type ImportTestSuite struct {
 func (suite *ImportTestSuite) SetupTest() {
 	suite.vrw = datas.NewDataStore(chunks.NewMemoryStore())
 
-	ns := types.MakeStructType("NestedDepStruct", []types.Field{}, types.Choices{
+	ns := types.MakeStructType("NestedDepStruct", []types.Field{}, []types.Field{
 		types.Field{"b", types.MakePrimitiveType(types.BoolKind), false},
 		types.Field{"i", types.MakePrimitiveType(types.Int8Kind), false},
 	})
@@ -42,7 +42,7 @@ func (suite *ImportTestSuite) SetupTest() {
 		types.Field{"b", types.MakeType(ref.Ref{}, 1), false},
 		types.Field{"n", types.MakeType(suite.nestedRef, 0), false},
 	},
-		types.Choices{})
+		[]types.Field{})
 	fe := types.MakeEnumType("ForeignEnum", "uno", "dos")
 	suite.imported = types.NewPackage([]types.Type{fs, fe}, []ref.Ref{suite.nestedRef})
 	suite.importRef = suite.vrw.WriteValue(suite.imported).TargetRef()
@@ -85,7 +85,7 @@ func (suite *ImportTestSuite) TestDetectFreeVariable() {
 		types.Field{"b", types.MakePrimitiveType(types.BoolKind), false},
 		types.Field{"n", types.MakeUnresolvedType("", "OtherLocal"), false},
 	},
-		types.Choices{})
+		[]types.Field{})
 	suite.Panics(func() {
 		inter := intermediate{Types: []types.Type{ls}}
 		resolveLocalOrdinals(&inter)

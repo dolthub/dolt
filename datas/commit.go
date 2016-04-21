@@ -17,7 +17,7 @@ func init() {
 				types.Field{"value", types.MakePrimitiveType(types.ValueKind), false},
 				types.Field{"parents", types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Ref{}, 0))), false},
 			},
-			types.Choices{},
+			[]types.Field{},
 		),
 	}, []ref.Ref{})
 	types.RegisterPackage(&p)

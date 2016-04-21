@@ -17,13 +17,13 @@ func init() {
 				types.Field{"structField", types.MakeType(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 0), false},
 				types.Field{"enumField", types.MakeType(ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"), 1), false},
 			},
-			types.Choices{},
+			[]types.Field{},
 		),
 		types.MakeStructType("DUser",
 			[]types.Field{
 				types.Field{"Dfield", types.MakeType(ref.Ref{}, 0), false},
 			},
-			types.Choices{},
+			[]types.Field{},
 		),
 	}, []ref.Ref{
 		ref.Parse("sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"),

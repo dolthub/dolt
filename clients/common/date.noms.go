@@ -16,7 +16,7 @@ func init() {
 			[]types.Field{
 				types.Field{"MsSinceEpoch", types.MakePrimitiveType(types.Int64Kind), false},
 			},
-			types.Choices{},
+			[]types.Field{},
 		),
 	}, []ref.Ref{})
 	types.RegisterPackage(&p)

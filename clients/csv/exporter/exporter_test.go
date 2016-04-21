@@ -49,7 +49,7 @@ func (s *testSuite) TestCSVExporter() {
 		})
 	}
 
-	typeDef := types.MakeStructType(structName, f, types.Choices{})
+	typeDef := types.MakeStructType(structName, f, []types.Field{})
 	pkg := types.NewPackage([]types.Type{typeDef}, []ref.Ref{})
 	pkgRef := types.RegisterPackage(&pkg)
 	typeRef := types.MakeType(pkgRef, 0)

@@ -19,8 +19,8 @@ func TestTypes(t *testing.T) {
 	mahType := MakeStructType("MahStruct", []Field{
 		Field{"Field1", stringType, false},
 		Field{"Field2", boolType, true},
-	}, Choices{})
-	otherType := MakeStructType("MahOtherStruct", []Field{}, Choices{
+	}, []Field{})
+	otherType := MakeStructType("MahOtherStruct", []Field{}, []Field{
 		Field{"StructField", mahType, false},
 		Field{"StringField", stringType, false},
 	})
@@ -76,13 +76,13 @@ func TestTypeRefDescribe(t *testing.T) {
 	mahType := MakeStructType("MahStruct", []Field{
 		Field{"Field1", stringType, false},
 		Field{"Field2", boolType, true},
-	}, Choices{})
+	}, []Field{})
 	assert.Equal("struct MahStruct {\n  Field1: String\n  Field2: optional Bool\n}", mahType.Describe())
 
 	otherType := MakeStructType("MahOtherStruct", []Field{
 		Field{"Field1", stringType, false},
 		Field{"Field2", boolType, true},
-	}, Choices{
+	}, []Field{
 		Field{"Uint8Field", uint8Type, false},
 		Field{"StringField", stringType, false},
 	})

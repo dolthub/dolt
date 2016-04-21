@@ -249,7 +249,7 @@ func TestReadStruct(t *testing.T) {
 		Field{"x", MakePrimitiveType(Int16Kind), false},
 		Field{"s", MakePrimitiveType(StringKind), false},
 		Field{"b", MakePrimitiveType(BoolKind), false},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
@@ -268,7 +268,7 @@ func TestReadStructUnion(t *testing.T) {
 
 	typ := MakeStructType("A2", []Field{
 		Field{"x", MakePrimitiveType(Float32Kind), false},
-	}, Choices{
+	}, []Field{
 		Field{"b", MakePrimitiveType(BoolKind), false},
 		Field{"s", MakePrimitiveType(StringKind), false},
 	})
@@ -301,7 +301,7 @@ func TestReadStructOptional(t *testing.T) {
 		Field{"x", MakePrimitiveType(Float32Kind), false},
 		Field{"s", MakePrimitiveType(StringKind), true},
 		Field{"b", MakePrimitiveType(BoolKind), true},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
@@ -332,7 +332,7 @@ func TestReadStructWithList(t *testing.T) {
 		Field{"b", MakePrimitiveType(BoolKind), false},
 		Field{"l", MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind)), false},
 		Field{"s", MakePrimitiveType(StringKind), false},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
@@ -361,7 +361,7 @@ func TestReadStructWithValue(t *testing.T) {
 		Field{"b", MakePrimitiveType(BoolKind), false},
 		Field{"v", MakePrimitiveType(ValueKind), false},
 		Field{"s", MakePrimitiveType(StringKind), false},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
@@ -388,7 +388,7 @@ func TestReadValueStruct(t *testing.T) {
 		Field{"x", MakePrimitiveType(Int16Kind), false},
 		Field{"s", MakePrimitiveType(StringKind), false},
 		Field{"b", MakePrimitiveType(BoolKind), false},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
@@ -473,7 +473,7 @@ func TestReadStructWithEnum(t *testing.T) {
 		Field{"x", MakePrimitiveType(Int16Kind), false},
 		Field{"e", MakeType(ref.Ref{}, 1), false},
 		Field{"b", MakePrimitiveType(BoolKind), false},
-	}, Choices{})
+	}, []Field{})
 	enumTref := MakeEnumType("E", "a", "b", "c")
 	pkg := NewPackage([]Type{structTref, enumTref}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
@@ -498,7 +498,7 @@ func TestReadStructWithBlob(t *testing.T) {
 
 	typ := MakeStructType("A5", []Field{
 		Field{"b", MakePrimitiveType(BlobKind), false},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
@@ -533,10 +533,10 @@ func TestReadTypeValue(t *testing.T) {
 	test(MakeStructType("S", []Field{
 		Field{"x", MakePrimitiveType(Int16Kind), false},
 		Field{"v", MakePrimitiveType(ValueKind), true},
-	}, Choices{}),
+	}, []Field{}),
 		`[%d, %d, "S", ["x", %d, false, "v", %d, true], []]`, TypeKind, StructKind, Int16Kind, ValueKind)
 
-	test(MakeStructType("S", []Field{}, Choices{
+	test(MakeStructType("S", []Field{}, []Field{
 		Field{"x", MakePrimitiveType(Int16Kind), false},
 		Field{"v", MakePrimitiveType(ValueKind), false},
 	}),
@@ -548,7 +548,7 @@ func TestReadTypeValue(t *testing.T) {
 	test(MakeStructType("S", []Field{
 		Field{"e", MakeType(pkgRef, 123), false},
 		Field{"x", MakePrimitiveType(Int64Kind), false},
-	}, Choices{}),
+	}, []Field{}),
 		`[%d, %d, "S", ["e", %d, "%s", "123", false, "x", %d, false], []]`, TypeKind, StructKind, UnresolvedKind, pkgRef.String(), Int64Kind)
 
 	test(MakeUnresolvedType("ns", "n"), `[%d, %d, "%s", "-1", "ns", "n"]`, TypeKind, UnresolvedKind, ref.Ref{}.String())
@@ -561,7 +561,7 @@ func TestReadPackage(t *testing.T) {
 			[]Field{
 				Field{"hand", MakeType(ref.Ref{}, 1), false},
 			},
-			Choices{},
+			[]Field{},
 		),
 		MakeEnumType("Handedness", "right", "left", "switch"),
 	}, []ref.Ref{})
@@ -606,7 +606,7 @@ func TestReadPackageThroughChunkSource(t *testing.T) {
 	pkg := NewPackage([]Type{
 		MakeStructType("S", []Field{
 			Field{"X", MakePrimitiveType(Int32Kind), false},
-		}, Choices{}),
+		}, []Field{}),
 	}, []ref.Ref{})
 	// Don't register
 	pkgRef := cs.WriteValue(pkg).TargetRef()

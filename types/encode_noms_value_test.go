@@ -145,7 +145,7 @@ func TestWriteCompoundBlob(t *testing.T) {
 func TestWriteEmptyStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	typeDef := MakeStructType("S", []Field{}, Choices{})
+	typeDef := MakeStructType("S", []Field{}, []Field{})
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
@@ -162,7 +162,7 @@ func TestWriteStruct(t *testing.T) {
 	typeDef := MakeStructType("S", []Field{
 		Field{"x", MakePrimitiveType(Int8Kind), false},
 		Field{"b", MakePrimitiveType(BoolKind), false},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
@@ -179,7 +179,7 @@ func TestWriteStructOptionalField(t *testing.T) {
 	typeDef := MakeStructType("S", []Field{
 		Field{"x", MakePrimitiveType(Int8Kind), true},
 		Field{"b", MakePrimitiveType(BoolKind), false},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
@@ -201,7 +201,7 @@ func TestWriteStructWithUnion(t *testing.T) {
 
 	typeDef := MakeStructType("S", []Field{
 		Field{"x", MakePrimitiveType(Int8Kind), false},
-	}, Choices{
+	}, []Field{
 		Field{"b", MakePrimitiveType(BoolKind), false},
 		Field{"s", MakePrimitiveType(StringKind), false},
 	})
@@ -226,7 +226,7 @@ func TestWriteStructWithList(t *testing.T) {
 
 	typeDef := MakeStructType("S", []Field{
 		Field{"l", MakeCompoundType(ListKind, MakePrimitiveType(StringKind)), false},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
@@ -247,10 +247,10 @@ func TestWriteStructWithStruct(t *testing.T) {
 
 	s2TypeDef := MakeStructType("S2", []Field{
 		Field{"x", MakePrimitiveType(Int32Kind), false},
-	}, Choices{})
+	}, []Field{})
 	sTypeDef := MakeStructType("S", []Field{
 		Field{"s", MakeType(ref.Ref{}, 0), false},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{s2TypeDef, sTypeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	s2Type := MakeType(pkgRef, 0)
@@ -267,7 +267,7 @@ func TestWriteStructWithBlob(t *testing.T) {
 
 	typeDef := MakeStructType("S", []Field{
 		Field{"b", MakePrimitiveType(BlobKind), false},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	typ := MakeType(pkgRef, 0)
@@ -385,7 +385,7 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 
 	typeDef := MakeStructType("S", []Field{
 		Field{"x", MakePrimitiveType(Int32Kind), false},
-	}, Choices{})
+	}, []Field{})
 	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	listType := MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
@@ -403,7 +403,7 @@ func TestWriteListOfValueWithType(t *testing.T) {
 	pkg := NewPackage([]Type{
 		MakeStructType("S", []Field{
 			Field{"x", MakePrimitiveType(Int32Kind), false},
-		}, Choices{})}, []ref.Ref{})
+		}, []Field{})}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	typ := MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
@@ -470,10 +470,10 @@ func TestWriteTypeValue(t *testing.T) {
 		MakeStructType("S", []Field{
 			Field{"x", MakePrimitiveType(Int16Kind), false},
 			Field{"v", MakePrimitiveType(ValueKind), true},
-		}, Choices{}))
+		}, []Field{}))
 
 	test([]interface{}{TypeKind, StructKind, "S", []interface{}{}, []interface{}{"x", Int16Kind, false, "v", ValueKind, false}},
-		MakeStructType("S", []Field{}, Choices{
+		MakeStructType("S", []Field{}, []Field{
 			Field{"x", MakePrimitiveType(Int16Kind), false},
 			Field{"v", MakePrimitiveType(ValueKind), false},
 		}))
@@ -486,7 +486,7 @@ func TestWriteTypeValue(t *testing.T) {
 		MakeStructType("S", []Field{
 			Field{"e", MakeType(pkgRef, 123), false},
 			Field{"x", MakePrimitiveType(Int64Kind), false},
-		}, Choices{}))
+		}, []Field{}))
 
 	test([]interface{}{TypeKind, UnresolvedKind, ref.Ref{}.String(), "-1", "ns", "n"},
 		MakeUnresolvedType("ns", "n"))
@@ -509,7 +509,7 @@ func TestWritePackage(t *testing.T) {
 			[]Field{
 				Field{"hand", MakeType(ref.Ref{}, 1), false},
 			},
-			Choices{},
+			[]Field{},
 		),
 		MakeEnumType("Handedness", "right", "left", "switch"),
 	}, []ref.Ref{})

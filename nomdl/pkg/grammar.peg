@@ -87,12 +87,12 @@ Using <- `using` _ ct:CompoundType _ {
 
 Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 	ll := l.([]interface{})
-	var u types.Choices
+	var u []types.Field
 	fieldNames := map[string]bool{}
 	fields := make([]types.Field, 0, len(ll))
 	for _, e := range ll {
 		switch e := e.(type) {
-		case types.Choices:
+		case []types.Field:
 			if u != nil {
 				return nil, fmt.Errorf("Only one anonymous union per struct.")
 			}
@@ -116,7 +116,7 @@ StructEntry <- Union / Field
 Union <- `union` _ `{` _ u:UnionField+ _ `}` _ {
 	uu := u.([]interface{})
 	choiceNames := map[string]bool{}
-	desc := make(types.Choices, 0, len(uu))
+	desc := make([]types.Field, 0, len(uu))
 	for _, f := range uu {
 		ff := f.(types.Field)
 		if choiceNames[ff.Name] {
@@ -140,7 +140,7 @@ Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
 	switch t := t.(type) {
 	case types.Type:
 		return t, nil
-	case types.Choices:
+	case []types.Field:
 		return types.MakeStructType("", nil, t), nil
 	case namespaceIdent:
 		return types.MakeUnresolvedType(t.Namespace, t.ID), nil

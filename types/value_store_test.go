@@ -82,7 +82,7 @@ func TestWritePackageWhenValueIsWritten(t *testing.T) {
 
 	typeDef := MakeStructType("S", []Field{
 		Field{"X", MakePrimitiveType(Int32Kind), false},
-	}, Choices{})
+	}, []Field{})
 	pkg1 := NewPackage([]Type{typeDef}, []ref.Ref{})
 	// Don't write package
 	pkgRef1 := RegisterPackage(&pkg1)

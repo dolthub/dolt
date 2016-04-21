@@ -82,7 +82,7 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 			Optional: false,
 		}
 	}
-	typeDef = types.MakeStructType(structName, fields, types.Choices{})
+	typeDef = types.MakeStructType(structName, fields, []types.Field{})
 	pkg := types.NewPackage([]types.Type{typeDef}, []ref.Ref{})
 	pkgRef := types.RegisterPackage(&pkg)
 	typeRef = types.MakeType(pkgRef, 0)
