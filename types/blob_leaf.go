@@ -40,7 +40,7 @@ func (bl blobLeaf) ChildValues() []Value {
 	return nil
 }
 
-func (bl blobLeaf) Type() Type {
+func (bl blobLeaf) Type() *Type {
 	return typeForBlob
 }
 

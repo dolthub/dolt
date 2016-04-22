@@ -24,7 +24,7 @@ func TestTypes(t *testing.T) {
 		Field{"StructField", mahType, false},
 		Field{"StringField", stringType, false},
 	})
-	pkgRef := vs.WriteValue(NewPackage([]Type{}, ref.RefSlice{})).TargetRef()
+	pkgRef := vs.WriteValue(NewPackage([]*Type{}, ref.RefSlice{})).TargetRef()
 	trType := MakeType(pkgRef, 42)
 
 	mRef := vs.WriteValue(mapType).TargetRef()
@@ -44,7 +44,7 @@ func TestTypeWithPkgRef(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 
-	pkg := NewPackage([]Type{MakePrimitiveType(Float64Kind)}, []ref.Ref{})
+	pkg := NewPackage([]*Type{MakePrimitiveType(Float64Kind)}, []ref.Ref{})
 
 	pkgRef := RegisterPackage(&pkg)
 	unresolvedType := MakeType(pkgRef, 42)

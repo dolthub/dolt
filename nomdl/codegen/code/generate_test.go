@@ -13,7 +13,7 @@ type testResolver struct {
 	deps   map[ref.Ref]types.Package
 }
 
-func (res *testResolver) Resolve(t types.Type, pkg *types.Package) types.Type {
+func (res *testResolver) Resolve(t *types.Type, pkg *types.Package) *types.Type {
 	if !t.IsUnresolved() {
 		return t
 	}
@@ -34,7 +34,7 @@ func (res *testResolver) Resolve(t types.Type, pkg *types.Package) types.Type {
 func TestUserName(t *testing.T) {
 	assert := assert.New(t)
 
-	imported := types.NewPackage([]types.Type{
+	imported := types.NewPackage([]*types.Type{
 		types.MakeStructType("S1", []types.Field{
 			types.Field{"f", types.MakePrimitiveType(types.BoolKind), false},
 		}, []types.Field{}),

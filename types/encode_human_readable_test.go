@@ -154,7 +154,7 @@ func TestWriteHumanReadableNested(t *testing.T) {
 }
 
 func TestWriteHumanReadableStruct(t *testing.T) {
-	pkg := NewPackage([]Type{
+	pkg := NewPackage([]*Type{
 		MakeStructType("S1", []Field{
 			Field{Name: "x", T: Int32Type, Optional: false},
 			Field{Name: "y", T: Int32Type, Optional: true},
@@ -179,7 +179,7 @@ func TestWriteHumanReadableStruct(t *testing.T) {
 }
 
 func TestWriteHumanReadableStructWithUnion(t *testing.T) {
-	pkg := NewPackage([]Type{
+	pkg := NewPackage([]*Type{
 		MakeStructType("S2", []Field{}, []Field{
 			Field{Name: "x", T: Int32Type, Optional: false},
 			Field{Name: "y", T: Int32Type, Optional: false},
@@ -203,7 +203,7 @@ func TestWriteHumanReadableStructWithUnion(t *testing.T) {
 }
 
 func TestWriteHumanReadableListOfStruct(t *testing.T) {
-	pkg := NewPackage([]Type{
+	pkg := NewPackage([]*Type{
 		MakeStructType("S3", []Field{}, []Field{
 			Field{Name: "x", T: Int32Type, Optional: false},
 		}),
@@ -302,7 +302,7 @@ func TestWriteHumanReadableType(t *testing.T) {
 	assertWriteHRSEqual(t, "Ref<Int32>", MakeRefType(Int32Type))
 	assertWriteHRSEqual(t, "Map<Int64, String>", MakeMapType(Int64Type, StringType))
 
-	pkg := NewPackage([]Type{
+	pkg := NewPackage([]*Type{
 		MakeStructType("Str", []Field{
 			Field{Name: "c", T: MakeType(ref.Ref{}, 0), Optional: false},
 			Field{Name: "o", T: StringType, Optional: true},

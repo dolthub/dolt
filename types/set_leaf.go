@@ -13,13 +13,13 @@ import (
 type setLeaf struct {
 	data    setData // sorted by Ref()
 	indexOf indexOfSetFn
-	t       Type
+	t       *Type
 	ref     *ref.Ref
 }
 
 type setData []Value
 
-func newSetLeaf(t Type, m ...Value) setLeaf {
+func newSetLeaf(t *Type, m ...Value) setLeaf {
 	return setLeaf{m, getIndexFnForSetType(t), t, &ref.Ref{}}
 }
 
@@ -131,11 +131,11 @@ func (s setLeaf) ChildValues() []Value {
 	return append([]Value{}, s.data...)
 }
 
-func (s setLeaf) Type() Type {
+func (s setLeaf) Type() *Type {
 	return s.t
 }
 
-func (s setLeaf) elemType() Type {
+func (s setLeaf) elemType() *Type {
 	return s.t.Desc.(CompoundDesc).ElemTypes[0]
 }
 
@@ -145,7 +145,7 @@ func copySetData(m setData) setData {
 	return r
 }
 
-func buildSetData(old setData, values []Value, t Type) setData {
+func buildSetData(old setData, values []Value, t *Type) setData {
 	idxFn := getIndexFnForSetType(t)
 	elemType := t.Desc.(CompoundDesc).ElemTypes[0]
 
@@ -166,7 +166,7 @@ func buildSetData(old setData, values []Value, t Type) setData {
 	return data
 }
 
-func getIndexFnForSetType(t Type) indexOfSetFn {
+func getIndexFnForSetType(t *Type) indexOfSetFn {
 	orderByValue := t.Desc.(CompoundDesc).ElemTypes[0].IsOrdered()
 	if orderByValue {
 		return indexOfOrderedSetValue
@@ -196,7 +196,7 @@ func newSetLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeSetLeafChunkFn(t Type, vr ValueReader) makeChunkFn {
+func makeSetLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		setData := make([]Value, len(items), len(items))
 

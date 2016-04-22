@@ -7,7 +7,7 @@ import (
 
 type Ref struct {
 	target ref.Ref
-	t      Type
+	t      *Type
 	ref    *ref.Ref
 }
 
@@ -20,7 +20,7 @@ func NewRef(target ref.Ref) Ref {
 	return NewTypedRef(refType, target)
 }
 
-func NewTypedRef(t Type, target ref.Ref) Ref {
+func NewTypedRef(t *Type, target ref.Ref) Ref {
 	d.Chk.Equal(RefKind, t.Kind(), "Invalid type. Expected: RefKind, found: %s", t.Describe())
 	return Ref{target, t, &ref.Ref{}}
 }
@@ -51,7 +51,7 @@ func (r Ref) TargetRef() ref.Ref {
 
 var refType = MakeCompoundType(RefKind, MakePrimitiveType(ValueKind))
 
-func (r Ref) Type() Type {
+func (r Ref) Type() *Type {
 	return r.t
 }
 

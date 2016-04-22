@@ -633,7 +633,7 @@ func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
 	structTypeDef := MakeStructType("num", []Field{
 		Field{"n", MakePrimitiveType(Int64Kind), false},
 	}, []Field{})
-	pkg := NewPackage([]Type{structTypeDef}, []ref.Ref{})
+	pkg := NewPackage([]*Type{structTypeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	structType := MakeType(pkgRef, 0)
 	refOfTypeStructType := MakeCompoundType(RefKind, structType)

@@ -251,7 +251,7 @@ func TestMapNotStringKeys(t *testing.T) {
 	assert.Nil(m1.Get(Int32(42)))
 }
 
-func testMapOrder(assert *assert.Assertions, keyType, valueType Type, tuples []Value, expectOrdering []Value) {
+func testMapOrder(assert *assert.Assertions, keyType, valueType *Type, tuples []Value, expectOrdering []Value) {
 	mapTr := MakeCompoundType(MapKind, keyType, valueType)
 	m := NewTypedMap(mapTr, tuples...)
 	i := 0

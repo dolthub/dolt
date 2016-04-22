@@ -22,7 +22,7 @@ type compoundList struct {
 	vr     ValueReader
 }
 
-func buildCompoundList(tuples metaSequenceData, t Type, vr ValueReader) Value {
+func buildCompoundList(tuples metaSequenceData, t *Type, vr ValueReader) Value {
 	cl := compoundList{metaSequenceObject{tuples, t}, tuples.uint64ValuesSum(), &ref.Ref{}, vr}
 	return valueFromType(cl, t)
 }
@@ -146,7 +146,7 @@ func (cl compoundList) MapP(concurrency int, mf MapFunc) []interface{} {
 	return results
 }
 
-func (cl compoundList) elemType() Type {
+func (cl compoundList) elemType() *Type {
 	return cl.Type().Desc.(CompoundDesc).ElemTypes[0]
 }
 
@@ -255,7 +255,7 @@ func newListLeafBoundaryChecker() boundaryChecker {
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
-func makeListLeafChunkFn(t Type, sink ValueWriter) makeChunkFn {
+func makeListLeafChunkFn(t *Type, sink ValueWriter) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		values := make([]Value, len(items))
 

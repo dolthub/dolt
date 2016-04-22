@@ -11,7 +11,7 @@ import (
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.Type{
+	p := types.NewPackage([]*types.Type{
 		types.MakeStructType("Geoposition",
 			[]types.Field{
 				types.Field{"Latitude", types.MakePrimitiveType(types.Float32Kind), false},
@@ -67,9 +67,9 @@ func (s Geoposition) Def() (d GeopositionDef) {
 	return
 }
 
-var __typeForGeoposition types.Type
+var __typeForGeoposition *types.Type
 
-func (m Geoposition) Type() types.Type {
+func (m Geoposition) Type() *types.Type {
 	return __typeForGeoposition
 }
 
@@ -172,9 +172,9 @@ func (s Georectangle) Def() (d GeorectangleDef) {
 	return
 }
 
-var __typeForGeorectangle types.Type
+var __typeForGeorectangle *types.Type
 
-func (m Georectangle) Type() types.Type {
+func (m Georectangle) Type() *types.Type {
 	return __typeForGeorectangle
 }
 

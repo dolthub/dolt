@@ -1,4 +1,4 @@
-// Package code provides Generator, which has methods for generating code snippets from a types.Type.
+// Package code provides Generator, which has methods for generating code snippets from a *types.Type.
 // Conceptually there are few type spaces here:
 //
 // - Def - MyStructDef, ListOfBoolDef; convenient Go types for working with data from a given Noms Value.
@@ -21,7 +21,7 @@ import (
 
 // Resolver provides a single method for resolving an unresolved types.Type.
 type Resolver interface {
-	Resolve(t types.Type, pkg *types.Package) types.Type
+	Resolve(t *types.Type, pkg *types.Package) *types.Type
 }
 
 // Generator provides methods for generating code snippets from both resolved and unresolved types.Types. In the latter case, it uses R to resolve the types.Type before generating code.
@@ -35,7 +35,7 @@ type Generator struct {
 }
 
 // DefType returns a string containing the Go type that should be used as the 'Def' for the Noms type described by t.
-func (gen *Generator) DefType(t types.Type) string {
+func (gen *Generator) DefType(t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	k := rt.Kind()
 	switch k {
@@ -58,7 +58,7 @@ func (gen *Generator) DefType(t types.Type) string {
 }
 
 // UserType returns a string containing the Go type that should be used when the Noms type described by t needs to be returned by a generated getter or taken as a parameter to a generated setter.
-func (gen *Generator) UserType(t types.Type) string {
+func (gen *Generator) UserType(t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	k := rt.Kind()
 	switch k {
@@ -79,7 +79,7 @@ func (gen *Generator) UserType(t types.Type) string {
 }
 
 // UserTypeJS returns a string containing the JS type that should be used when the Noms type described by t needs to be returned by a generated getter or taken as a parameter to a generated setter.
-func (gen *Generator) UserTypeJS(t types.Type) string {
+func (gen *Generator) UserTypeJS(t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	k := rt.Kind()
 	switch k {
@@ -116,7 +116,7 @@ func (gen *Generator) UserTypeJS(t types.Type) string {
 }
 
 // DefToValue returns a string containing Go code to convert an instance of a Def type (named val) to a Noms types.Value of the type described by t.
-func (gen *Generator) DefToValue(val string, t types.Type) string {
+func (gen *Generator) DefToValue(val string, t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	switch rt.Kind() {
 	case types.BlobKind, types.PackageKind, types.ValueKind, types.TypeKind:
@@ -132,7 +132,7 @@ func (gen *Generator) DefToValue(val string, t types.Type) string {
 }
 
 // DefToUser returns a string containing Go code to convert an instance of a Def type (named val) to a User type described by t.
-func (gen *Generator) DefToUser(val string, t types.Type) string {
+func (gen *Generator) DefToUser(val string, t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	switch rt.Kind() {
 	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind:
@@ -144,7 +144,7 @@ func (gen *Generator) DefToUser(val string, t types.Type) string {
 }
 
 // MayHaveChunks returns whether the type (t) may contain more chunks.
-func (gen *Generator) MayHaveChunks(t types.Type) bool {
+func (gen *Generator) MayHaveChunks(t *types.Type) bool {
 	rt := gen.R.Resolve(t, gen.Package)
 	switch rt.Kind() {
 	case types.BlobKind, types.ListKind, types.MapKind, types.PackageKind, types.RefKind, types.SetKind, types.StructKind, types.TypeKind, types.ValueKind:
@@ -156,7 +156,7 @@ func (gen *Generator) MayHaveChunks(t types.Type) bool {
 }
 
 // ValueToDef returns a string containing Go code to convert an instance of a types.Value (val) into the Def type appropriate for t.
-func (gen *Generator) ValueToDef(val string, t types.Type) string {
+func (gen *Generator) ValueToDef(val string, t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	switch rt.Kind() {
 	case types.BlobKind, types.PackageKind, types.TypeKind:
@@ -174,7 +174,7 @@ func (gen *Generator) ValueToDef(val string, t types.Type) string {
 }
 
 // UserToDef returns a string containing Go code to convert an User value (val) into the Def type appropriate for t.
-func (gen *Generator) UserToDef(val string, t types.Type) string {
+func (gen *Generator) UserToDef(val string, t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	switch rt.Kind() {
 	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind:
@@ -188,7 +188,7 @@ func (gen *Generator) UserToDef(val string, t types.Type) string {
 }
 
 // NativeToValue returns a string containing Go code to convert an instance of a native type (named val) to a Noms types.Value of the type described by t.
-func (gen *Generator) NativeToValue(val string, t types.Type) string {
+func (gen *Generator) NativeToValue(val string, t *types.Type) string {
 	t = gen.R.Resolve(t, gen.Package)
 	k := t.Kind()
 	switch k {
@@ -201,7 +201,7 @@ func (gen *Generator) NativeToValue(val string, t types.Type) string {
 }
 
 // ValueToNative returns a string containing Go code to convert an instance of a types.Value (val) into the native type appropriate for t.
-func (gen *Generator) ValueToNative(val string, t types.Type) string {
+func (gen *Generator) ValueToNative(val string, t *types.Type) string {
 	k := t.Kind()
 	switch k {
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
@@ -214,7 +214,7 @@ func (gen *Generator) ValueToNative(val string, t types.Type) string {
 }
 
 // UserToValue returns a string containing Go code to convert an instance of a User type (named val) to a Noms types.Value of the type described by t. For Go primitive types, this will use NativeToValue(). For other types, their UserType is a Noms types.Value (or a wrapper around one), so this is more-or-less a pass-through.
-func (gen *Generator) UserToValue(val string, t types.Type) string {
+func (gen *Generator) UserToValue(val string, t *types.Type) string {
 	t = gen.R.Resolve(t, gen.Package)
 	k := t.Kind()
 	switch k {
@@ -227,7 +227,7 @@ func (gen *Generator) UserToValue(val string, t types.Type) string {
 }
 
 // ValueToUser returns a string containing Go code to convert an instance of a types.Value (val) into the User type appropriate for t. For Go primitives, this will use ValueToNative().
-func (gen *Generator) ValueToUser(val string, t types.Type) string {
+func (gen *Generator) ValueToUser(val string, t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	k := rt.Kind()
 	switch k {
@@ -248,7 +248,7 @@ func (gen *Generator) ValueToUser(val string, t types.Type) string {
 }
 
 // UserZero returns a string containing Go code to create an uninitialized instance of the User type appropriate for t.
-func (gen *Generator) UserZero(t types.Type) string {
+func (gen *Generator) UserZero(t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	k := rt.Kind()
 	switch k {
@@ -276,7 +276,7 @@ func (gen *Generator) UserZero(t types.Type) string {
 }
 
 // ValueZero returns a string containing Go code to create an uninitialized instance of the Noms types.Value appropriate for t.
-func (gen *Generator) ValueZero(t types.Type) string {
+func (gen *Generator) ValueZero(t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	k := rt.Kind()
 	switch k {
@@ -304,7 +304,7 @@ func (gen *Generator) ValueZero(t types.Type) string {
 }
 
 // UserName returns the name of the User type appropriate for t, taking into account Noms types imported from other packages.
-func (gen *Generator) UserName(t types.Type) string {
+func (gen *Generator) UserName(t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	k := rt.Kind()
 	switch k {
@@ -337,12 +337,12 @@ func (gen *Generator) UserName(t types.Type) string {
 	panic("unreachable")
 }
 
-func (gen Generator) importedUserNameJS(t types.Type) string {
+func (gen Generator) importedUserNameJS(t *types.Type) string {
 	d.Chk.True(t.HasPackageRef())
 	return fmt.Sprintf("%s.%s", gen.RefToAliasName(t.PackageRef()), gen.UserName(t))
 }
 
-func (gen *Generator) refToID(t types.Type) string {
+func (gen *Generator) refToID(t *types.Type) string {
 	if !t.IsUnresolved() || !t.HasPackageRef() {
 		return gen.UserName(t)
 	}
@@ -363,8 +363,8 @@ func (gen *Generator) RefToAliasName(r ref.Ref) string {
 	return fmt.Sprintf("_%s", gen.RefToJSIdentfierName(r))
 }
 
-// ToTypesType returns a string containing Go code that instantiates a types.Type instance equivalent to t.
-func (gen *Generator) ToTypesType(t types.Type, inPackageDef bool) string {
+// ToTypesType returns a string containing Go code that instantiates a *types.Type instance equivalent to t.
+func (gen *Generator) ToTypesType(t *types.Type, inPackageDef bool) string {
 	if t.IsUnresolved() {
 		d.Chk.True(t.HasPackageRef())
 		d.Chk.True(t.HasOrdinal(), "%s does not have an ordinal set", t.Name())
@@ -413,7 +413,7 @@ func firstToLower(s string) string {
 }
 
 // ToTypeValueJS returns a string containing JS code that instantiates a Type instance equivalent to t for JavaScript.
-func (gen *Generator) ToTypeValueJS(t types.Type, inPackageDef bool, indent int) string {
+func (gen *Generator) ToTypeValueJS(t *types.Type, inPackageDef bool, indent int) string {
 	if t.IsUnresolved() {
 		d.Chk.True(t.HasPackageRef())
 		d.Chk.True(t.HasOrdinal(), "%s does not have an ordinal set", t.Name())

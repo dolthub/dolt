@@ -17,7 +17,7 @@ type compoundMap struct {
 	vr        ValueReader
 }
 
-func buildCompoundMap(tuples metaSequenceData, t Type, vr ValueReader) Value {
+func buildCompoundMap(tuples metaSequenceData, t *Type, vr ValueReader) Value {
 	cm := compoundMap{metaSequenceObject{tuples, t}, tuples.numLeavesSum(), &ref.Ref{}, vr}
 	return valueFromType(cm, t)
 }
@@ -159,6 +159,6 @@ func (cm compoundMap) IterAll(cb mapIterAllCallback) {
 	})
 }
 
-func (cm compoundMap) elemTypes() []Type {
+func (cm compoundMap) elemTypes() []*Type {
 	return cm.Type().Desc.(CompoundDesc).ElemTypes
 }

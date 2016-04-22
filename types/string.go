@@ -40,6 +40,6 @@ func (fs String) ChildValues() []Value {
 
 var typeForString = MakePrimitiveType(StringKind)
 
-func (fs String) Type() Type {
+func (fs String) Type() *Type {
 	return typeForString
 }

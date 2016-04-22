@@ -92,7 +92,7 @@ func (u UnresolvedDesc) Equals(other TypeDesc) bool {
 // ElemTypes indicates what type or types are in the container indicated by kind, e.g. Map key and value or Set element.
 type CompoundDesc struct {
 	kind      NomsKind
-	ElemTypes []Type
+	ElemTypes []*Type
 }
 
 func (c CompoundDesc) Kind() NomsKind {
@@ -143,7 +143,7 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 // Neither Name nor T is allowed to be a zero-value, though T may be an unresolved Type.
 type Field struct {
 	Name     string
-	T        Type
+	T        *Type
 	Optional bool
 }
 

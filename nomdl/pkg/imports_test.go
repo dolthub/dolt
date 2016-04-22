@@ -35,7 +35,7 @@ func (suite *ImportTestSuite) SetupTest() {
 		types.Field{"b", types.MakePrimitiveType(types.BoolKind), false},
 		types.Field{"i", types.MakePrimitiveType(types.Int8Kind), false},
 	})
-	suite.nested = types.NewPackage([]types.Type{ns}, []ref.Ref{})
+	suite.nested = types.NewPackage([]*types.Type{ns}, []ref.Ref{})
 	suite.nestedRef = suite.vrw.WriteValue(suite.nested).TargetRef()
 
 	fs := types.MakeStructType("ForeignStruct", []types.Field{
@@ -43,7 +43,7 @@ func (suite *ImportTestSuite) SetupTest() {
 		types.Field{"n", types.MakeType(suite.nestedRef, 0), false},
 	},
 		[]types.Field{})
-	suite.imported = types.NewPackage([]types.Type{fs}, []ref.Ref{suite.nestedRef})
+	suite.imported = types.NewPackage([]*types.Type{fs}, []ref.Ref{suite.nestedRef})
 	suite.importRef = suite.vrw.WriteValue(suite.imported).TargetRef()
 }
 
@@ -73,13 +73,13 @@ func (suite *ImportTestSuite) TestDetectFreeVariable() {
 	},
 		[]types.Field{})
 	suite.Panics(func() {
-		inter := intermediate{Types: []types.Type{ls}}
+		inter := intermediate{Types: []*types.Type{ls}}
 		resolveLocalOrdinals(&inter)
 	})
 }
 
 func (suite *ImportTestSuite) TestImports() {
-	find := func(n string, typ types.Type) types.Field {
+	find := func(n string, typ *types.Type) types.Field {
 		suite.Equal(types.StructKind, typ.Kind())
 		for _, f := range typ.Desc.(types.StructDesc).Fields {
 			if f.Name == n {
@@ -89,7 +89,7 @@ func (suite *ImportTestSuite) TestImports() {
 		suite.Fail("Could not find field", "%s not present", n)
 		return types.Field{}
 	}
-	findChoice := func(n string, typ types.Type) types.Field {
+	findChoice := func(n string, typ *types.Type) types.Field {
 		suite.Equal(types.StructKind, typ.Kind())
 		for _, f := range typ.Desc.(types.StructDesc).Union {
 			if f.Name == n {

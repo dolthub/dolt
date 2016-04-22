@@ -5,7 +5,7 @@ import (
 	"sort"
 )
 
-func isSequenceOrderedByIndexedType(t Type) bool {
+func isSequenceOrderedByIndexedType(t *Type) bool {
 	return t.Desc.(CompoundDesc).ElemTypes[0].IsOrdered()
 }
 
@@ -13,7 +13,7 @@ func isSequenceOrderedByIndexedType(t Type) bool {
 type getLeafOrderedValuesFn func(Value) []Value
 
 // Returns a cursor to |key| in |ms|, plus the leaf + index that |key| is in. |t| is the type of the ordered values.
-func findLeafInOrderedSequence(ms metaSequence, t Type, key Value, getValues getLeafOrderedValuesFn, vr ValueReader) (cursor *sequenceCursor, leaf Value, idx int) {
+func findLeafInOrderedSequence(ms metaSequence, t *Type, key Value, getValues getLeafOrderedValuesFn, vr ValueReader) (cursor *sequenceCursor, leaf Value, idx int) {
 	cursor, leaf = newMetaSequenceCursor(ms, vr)
 
 	if isSequenceOrderedByIndexedType(t) {
@@ -54,7 +54,7 @@ func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 	})
 }
 
-func newOrderedMetaSequenceChunkFn(t Type, vr ValueReader) makeChunkFn {
+func newOrderedMetaSequenceChunkFn(t *Type, vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
 		numLeaves := uint64(0)

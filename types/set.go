@@ -15,7 +15,7 @@ type Set interface {
 	IterAll(cb setIterAllCallback)
 	IterAllP(concurrency int, f setIterAllCallback)
 	Filter(cb setFilterCallback) Set
-	elemType() Type
+	elemType() *Type
 	sequenceCursorAtFirst() *sequenceCursor
 	valueReader() ValueReader
 }
@@ -31,12 +31,12 @@ func NewSet(v ...Value) Set {
 	return NewTypedSet(setType, v...)
 }
 
-func NewTypedSet(t Type, v ...Value) Set {
+func NewTypedSet(t *Type, v ...Value) Set {
 	d.Chk.Equal(SetKind, t.Kind(), "Invalid type. Expected:SetKind, found: %s", t.Describe())
 	return newTypedSet(t, buildSetData(setData{}, v, t)...)
 }
 
-func newTypedSet(t Type, data ...Value) Set {
+func newTypedSet(t *Type, data ...Value) Set {
 	seq := newEmptySequenceChunker(makeSetLeafChunkFn(t, nil), newOrderedMetaSequenceChunkFn(t, nil), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, v := range data {

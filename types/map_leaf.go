@@ -13,7 +13,7 @@ import (
 type mapLeaf struct {
 	data    mapData // sorted by entry.key.Ref()
 	indexOf indexOfMapFn
-	t       Type
+	t       *Type
 	ref     *ref.Ref
 }
 
@@ -24,7 +24,7 @@ type mapEntry struct {
 	value Value
 }
 
-func newMapLeaf(t Type, data ...mapEntry) Map {
+func newMapLeaf(t *Type, data ...mapEntry) Map {
 	return mapLeaf{data, getIndexFnForMapType(t), t, &ref.Ref{}}
 }
 
@@ -164,15 +164,15 @@ func (m mapLeaf) ChildValues() []Value {
 	return res
 }
 
-func (m mapLeaf) Type() Type {
+func (m mapLeaf) Type() *Type {
 	return m.t
 }
 
-func (m mapLeaf) elemTypes() []Type {
+func (m mapLeaf) elemTypes() []*Type {
 	return m.t.Desc.(CompoundDesc).ElemTypes
 }
 
-func buildMapData(oldData mapData, values []Value, t Type) mapData {
+func buildMapData(oldData mapData, values []Value, t *Type) mapData {
 	idxFn := getIndexFnForMapType(t)
 	elemTypes := t.Desc.(CompoundDesc).ElemTypes
 
@@ -202,7 +202,7 @@ func buildMapData(oldData mapData, values []Value, t Type) mapData {
 	return data
 }
 
-func getIndexFnForMapType(t Type) indexOfMapFn {
+func getIndexFnForMapType(t *Type) indexOfMapFn {
 	orderByValue := t.Desc.(CompoundDesc).ElemTypes[0].IsOrdered()
 	if orderByValue {
 		return indexOfOrderedMapValue
@@ -232,7 +232,7 @@ func newMapLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeMapLeafChunkFn(t Type, vr ValueReader) makeChunkFn {
+func makeMapLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		mapData := make([]mapEntry, len(items), len(items))
 

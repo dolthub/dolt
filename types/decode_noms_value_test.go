@@ -37,7 +37,7 @@ func parseJson(s string, vs ...interface{}) (v []interface{}) {
 func TestReadTypeAsTag(t *testing.T) {
 	cs := NewTestValueStore()
 
-	test := func(expected Type, s string, vs ...interface{}) {
+	test := func(expected *Type, s string, vs ...interface{}) {
 		a := parseJson(s, vs...)
 		r := newJsonArrayReader(a, cs)
 		tr := r.readTypeAsTag()
@@ -250,7 +250,7 @@ func TestReadStruct(t *testing.T) {
 		Field{"s", MakePrimitiveType(StringKind), false},
 		Field{"b", MakePrimitiveType(BoolKind), false},
 	}, []Field{})
-	pkg := NewPackage([]Type{typ}, []ref.Ref{})
+	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", "0", "42", "hi", true]`, UnresolvedKind, pkgRef.String())
@@ -272,7 +272,7 @@ func TestReadStructUnion(t *testing.T) {
 		Field{"b", MakePrimitiveType(BoolKind), false},
 		Field{"s", MakePrimitiveType(StringKind), false},
 	})
-	pkg := NewPackage([]Type{typ}, []ref.Ref{})
+	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", "0", "42", "1", "hi"]`, UnresolvedKind, pkgRef.String())
@@ -302,7 +302,7 @@ func TestReadStructOptional(t *testing.T) {
 		Field{"s", MakePrimitiveType(StringKind), true},
 		Field{"b", MakePrimitiveType(BoolKind), true},
 	}, []Field{})
-	pkg := NewPackage([]Type{typ}, []ref.Ref{})
+	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", "0", "42", false, true, false]`, UnresolvedKind, pkgRef.String())
@@ -333,7 +333,7 @@ func TestReadStructWithList(t *testing.T) {
 		Field{"l", MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind)), false},
 		Field{"s", MakePrimitiveType(StringKind), false},
 	}, []Field{})
-	pkg := NewPackage([]Type{typ}, []ref.Ref{})
+	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", "0", true, false, ["0", "1", "2"], "hi"]`, UnresolvedKind, pkgRef.String())
@@ -362,7 +362,7 @@ func TestReadStructWithValue(t *testing.T) {
 		Field{"v", MakePrimitiveType(ValueKind), false},
 		Field{"s", MakePrimitiveType(StringKind), false},
 	}, []Field{})
-	pkg := NewPackage([]Type{typ}, []ref.Ref{})
+	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", "0", true, %d, "42", "hi"]`, UnresolvedKind, pkgRef.String(), Uint8Kind)
@@ -389,7 +389,7 @@ func TestReadValueStruct(t *testing.T) {
 		Field{"s", MakePrimitiveType(StringKind), false},
 		Field{"b", MakePrimitiveType(BoolKind), false},
 	}, []Field{})
-	pkg := NewPackage([]Type{typ}, []ref.Ref{})
+	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, %d, "%s", "0", "42", "hi", true]`, ValueKind, UnresolvedKind, pkgRef.String())
@@ -436,7 +436,7 @@ func TestReadStructWithBlob(t *testing.T) {
 	typ := MakeStructType("A5", []Field{
 		Field{"b", MakePrimitiveType(BlobKind), false},
 	}, []Field{})
-	pkg := NewPackage([]Type{typ}, []ref.Ref{})
+	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
 	a := parseJson(`[%d, "%s", "0", false, "AAE="]`, UnresolvedKind, pkgRef.String())
@@ -451,7 +451,7 @@ func TestReadTypeValue(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	test := func(expected Type, json string, vs ...interface{}) {
+	test := func(expected *Type, json string, vs ...interface{}) {
 		a := parseJson(json, vs...)
 		r := newJsonArrayReader(a, cs)
 		tr := r.readTopLevelValue()
@@ -494,7 +494,7 @@ func TestReadPackage2(t *testing.T) {
 
 	rr := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
 	setTref := MakeCompoundType(SetKind, MakePrimitiveType(Uint32Kind))
-	pkg := NewPackage([]Type{setTref}, []ref.Ref{rr})
+	pkg := NewPackage([]*Type{setTref}, []ref.Ref{rr})
 
 	a := []interface{}{float64(PackageKind), []interface{}{float64(SetKind), []interface{}{float64(Uint32Kind)}}, []interface{}{rr.String()}}
 	r := newJsonArrayReader(a, cs)
@@ -506,7 +506,7 @@ func TestReadPackageThroughChunkSource(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	pkg := NewPackage([]Type{
+	pkg := NewPackage([]*Type{
 		MakeStructType("S", []Field{
 			Field{"X", MakePrimitiveType(Int32Kind), false},
 		}, []Field{}),

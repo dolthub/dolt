@@ -185,13 +185,13 @@ type codeGen struct {
 	pkg       pkg.Parsed
 	deps      depsMap
 	written   map[string]bool
-	toWrite   []types.Type
+	toWrite   []*types.Type
 	generator *code.Generator
 	templates *template.Template
 }
 
 func newCodeGen(w io.Writer, fileID string, written map[string]bool, deps depsMap, pkg pkg.Parsed) *codeGen {
-	gen := &codeGen{w, pkg, deps, written, []types.Type{}, nil, nil}
+	gen := &codeGen{w, pkg, deps, written, []*types.Type{}, nil, nil}
 	gen.generator = &code.Generator{
 		R:          gen,
 		AliasNames: pkg.AliasNames,
@@ -229,7 +229,7 @@ func (gen *codeGen) readTemplates() *template.Template {
 		}).ParseGlob(glob))
 }
 
-func (gen *codeGen) Resolve(t types.Type, pkg *types.Package) types.Type {
+func (gen *codeGen) Resolve(t *types.Type, pkg *types.Package) *types.Type {
 	if !t.IsUnresolved() {
 		return t
 	}
@@ -253,7 +253,7 @@ func (gen *codeGen) WritePackage() {
 		HasTypes     bool
 		Dependencies []ref.Ref
 		Name         string
-		Types        []types.Type
+		Types        []*types.Type
 	}{
 		gen.pkg.Package.Ref(),
 		len(pkgTypes) > 0,
@@ -310,7 +310,7 @@ func (gen *codeGen) WriteHeader() {
 		HasTypes        bool
 		Dependencies    []ref.Ref
 		Name            string
-		Types           []types.Type
+		Types           []*types.Type
 		ImportedJS      []string
 		ImportedJSTypes []string
 		AliasNames      map[ref.Ref]string
@@ -329,7 +329,7 @@ func (gen *codeGen) WriteHeader() {
 	d.Exp.NoError(err)
 }
 
-func (gen *codeGen) shouldBeWritten(t types.Type) bool {
+func (gen *codeGen) shouldBeWritten(t *types.Type) bool {
 	if t.IsUnresolved() {
 		return false
 	}
@@ -341,7 +341,7 @@ func (gen *codeGen) shouldBeWritten(t types.Type) bool {
 	return !gen.written[gen.generator.UserName(t)]
 }
 
-func (gen *codeGen) writeTopLevel(t types.Type, ordinal int) {
+func (gen *codeGen) writeTopLevel(t *types.Type, ordinal int) {
 	switch t.Kind() {
 	case types.StructKind:
 		gen.writeStruct(t, ordinal)
@@ -351,7 +351,7 @@ func (gen *codeGen) writeTopLevel(t types.Type, ordinal int) {
 }
 
 // write generates the code for the given type.
-func (gen *codeGen) write(t types.Type) {
+func (gen *codeGen) write(t *types.Type) {
 	if !gen.shouldBeWritten(t) {
 		return
 	}
@@ -372,31 +372,31 @@ func (gen *codeGen) write(t types.Type) {
 	}
 }
 
-func (gen *codeGen) writeLater(t types.Type) {
+func (gen *codeGen) writeLater(t *types.Type) {
 	if !gen.shouldBeWritten(t) {
 		return
 	}
 	gen.toWrite = append(gen.toWrite, t)
 }
 
-func (gen *codeGen) writeTemplate(tmpl string, t types.Type, data interface{}) {
+func (gen *codeGen) writeTemplate(tmpl string, t *types.Type, data interface{}) {
 	err := gen.templates.ExecuteTemplate(gen.w, tmpl, data)
 	d.Exp.NoError(err)
 	gen.written[gen.generator.UserName(t)] = true
 }
 
-func (gen *codeGen) writeStruct(t types.Type, ordinal int) {
+func (gen *codeGen) writeStruct(t *types.Type, ordinal int) {
 	d.Chk.True(ordinal >= 0)
 	desc := t.Desc.(types.StructDesc)
 	data := struct {
 		PackageRef    ref.Ref
 		Name          string
-		Type          types.Type
+		Type          *types.Type
 		Ordinal       int
 		Fields        []types.Field
 		Choices       []types.Field
 		HasUnion      bool
-		UnionZeroType types.Type
+		UnionZeroType *types.Type
 	}{
 		gen.pkg.Package.Ref(),
 		gen.generator.UserName(t),
@@ -423,13 +423,13 @@ func (gen *codeGen) writeStruct(t types.Type, ordinal int) {
 	}
 }
 
-func (gen *codeGen) writeList(t types.Type) {
+func (gen *codeGen) writeList(t *types.Type) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		PackageRef ref.Ref
 		Name       string
-		Type       types.Type
-		ElemType   types.Type
+		Type       *types.Type
+		ElemType   *types.Type
 	}{
 		gen.pkg.Package.Ref(),
 		gen.generator.UserName(t),
@@ -440,14 +440,14 @@ func (gen *codeGen) writeList(t types.Type) {
 	gen.writeLater(elemTypes[0])
 }
 
-func (gen *codeGen) writeMap(t types.Type) {
+func (gen *codeGen) writeMap(t *types.Type) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		PackageRef ref.Ref
 		Name       string
-		Type       types.Type
-		KeyType    types.Type
-		ValueType  types.Type
+		Type       *types.Type
+		KeyType    *types.Type
+		ValueType  *types.Type
 	}{
 		gen.pkg.Package.Ref(),
 		gen.generator.UserName(t),
@@ -460,13 +460,13 @@ func (gen *codeGen) writeMap(t types.Type) {
 	gen.writeLater(elemTypes[1])
 }
 
-func (gen *codeGen) writeRef(t types.Type) {
+func (gen *codeGen) writeRef(t *types.Type) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		PackageRef ref.Ref
 		Name       string
-		Type       types.Type
-		ElemType   types.Type
+		Type       *types.Type
+		ElemType   *types.Type
 	}{
 		gen.pkg.Package.Ref(),
 		gen.generator.UserName(t),
@@ -477,13 +477,13 @@ func (gen *codeGen) writeRef(t types.Type) {
 	gen.writeLater(elemTypes[0])
 }
 
-func (gen *codeGen) writeSet(t types.Type) {
+func (gen *codeGen) writeSet(t *types.Type) {
 	elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 	data := struct {
 		PackageRef ref.Ref
 		Name       string
-		Type       types.Type
-		ElemType   types.Type
+		Type       *types.Type
+		ElemType   *types.Type
 	}{
 		gen.pkg.Package.Ref(),
 		gen.generator.UserName(t),

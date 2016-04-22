@@ -31,7 +31,7 @@ func (v Bool) ToPrimitive() interface{} {
 
 var typeForBool = MakePrimitiveType(BoolKind)
 
-func (v Bool) Type() Type {
+func (v Bool) Type() *Type {
 	return typeForBool
 }
 
@@ -59,7 +59,7 @@ func (v Float32) ToPrimitive() interface{} {
 
 var typeForFloat32 = MakePrimitiveType(Float32Kind)
 
-func (v Float32) Type() Type {
+func (v Float32) Type() *Type {
 	return typeForFloat32
 }
 
@@ -91,7 +91,7 @@ func (v Float64) ToPrimitive() interface{} {
 
 var typeForFloat64 = MakePrimitiveType(Float64Kind)
 
-func (v Float64) Type() Type {
+func (v Float64) Type() *Type {
 	return typeForFloat64
 }
 
@@ -123,7 +123,7 @@ func (v Int16) ToPrimitive() interface{} {
 
 var typeForInt16 = MakePrimitiveType(Int16Kind)
 
-func (v Int16) Type() Type {
+func (v Int16) Type() *Type {
 	return typeForInt16
 }
 
@@ -155,7 +155,7 @@ func (v Int32) ToPrimitive() interface{} {
 
 var typeForInt32 = MakePrimitiveType(Int32Kind)
 
-func (v Int32) Type() Type {
+func (v Int32) Type() *Type {
 	return typeForInt32
 }
 
@@ -187,7 +187,7 @@ func (v Int64) ToPrimitive() interface{} {
 
 var typeForInt64 = MakePrimitiveType(Int64Kind)
 
-func (v Int64) Type() Type {
+func (v Int64) Type() *Type {
 	return typeForInt64
 }
 
@@ -219,7 +219,7 @@ func (v Int8) ToPrimitive() interface{} {
 
 var typeForInt8 = MakePrimitiveType(Int8Kind)
 
-func (v Int8) Type() Type {
+func (v Int8) Type() *Type {
 	return typeForInt8
 }
 
@@ -251,7 +251,7 @@ func (v Uint16) ToPrimitive() interface{} {
 
 var typeForUint16 = MakePrimitiveType(Uint16Kind)
 
-func (v Uint16) Type() Type {
+func (v Uint16) Type() *Type {
 	return typeForUint16
 }
 
@@ -283,7 +283,7 @@ func (v Uint32) ToPrimitive() interface{} {
 
 var typeForUint32 = MakePrimitiveType(Uint32Kind)
 
-func (v Uint32) Type() Type {
+func (v Uint32) Type() *Type {
 	return typeForUint32
 }
 
@@ -315,7 +315,7 @@ func (v Uint64) ToPrimitive() interface{} {
 
 var typeForUint64 = MakePrimitiveType(Uint64Kind)
 
-func (v Uint64) Type() Type {
+func (v Uint64) Type() *Type {
 	return typeForUint64
 }
 
@@ -347,7 +347,7 @@ func (v Uint8) ToPrimitive() interface{} {
 
 var typeForUint8 = MakePrimitiveType(Uint8Kind)
 
-func (v Uint8) Type() Type {
+func (v Uint8) Type() *Type {
 	return typeForUint8
 }
 

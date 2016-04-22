@@ -48,25 +48,25 @@ func ReadPackage(r ref.Ref, vr ValueReader) *Package {
 	return &p
 }
 
-func RegisterStruct(t Type, bf structBuilderFunc, rf structReaderFunc) {
+func RegisterStruct(t *Type, bf structBuilderFunc, rf structReaderFunc) {
 	structFuncMap[t.Ref()] = structFuncs{bf, rf}
 }
 
-func structBuilderForType(values []Value, typ, typeDef Type) Value {
+func structBuilderForType(values []Value, typ, typeDef *Type) Value {
 	if s, ok := structFuncMap[typ.Ref()]; ok {
 		return s.builder(values)
 	}
 	return structBuilder(values, typ, typeDef)
 }
 
-func structReaderForType(v Value, typ, typeDef Type) []Value {
+func structReaderForType(v Value, typ, typeDef *Type) []Value {
 	if s, ok := structFuncMap[typ.Ref()]; ok {
 		return s.reader(v)
 	}
 	return structReader(v.(Struct), typ, typeDef)
 }
 
-func RegisterValue(t Type, bf valueBuilderFunc, rf valueReaderFunc) {
+func RegisterValue(t *Type, bf valueBuilderFunc, rf valueReaderFunc) {
 	switch t.Kind() {
 	case MapKind, ListKind, SetKind:
 		valueFuncMap[t.Ref()] = valueFuncs{bf, rf}
@@ -75,7 +75,7 @@ func RegisterValue(t Type, bf valueBuilderFunc, rf valueReaderFunc) {
 	}
 }
 
-func valueFromType(v Value, t Type) Value {
+func valueFromType(v Value, t *Type) Value {
 	switch t.Kind() {
 	case MapKind, ListKind, SetKind:
 		if s, ok := valueFuncMap[t.Ref()]; ok {
@@ -86,7 +86,7 @@ func valueFromType(v Value, t Type) Value {
 	return v
 }
 
-func internalValueFromType(v Value, t Type) Value {
+func internalValueFromType(v Value, t *Type) Value {
 	switch t.Kind() {
 	case MapKind, ListKind, SetKind:
 		if s, ok := valueFuncMap[t.Ref()]; ok {
@@ -97,11 +97,11 @@ func internalValueFromType(v Value, t Type) Value {
 	return v
 }
 
-func RegisterRef(t Type, bf refBuilderFunc) {
+func RegisterRef(t *Type, bf refBuilderFunc) {
 	refFuncMap[t.Ref()] = bf
 }
 
-func refFromType(target ref.Ref, t Type) RefBase {
+func refFromType(target ref.Ref, t *Type) RefBase {
 	if f, ok := refFuncMap[t.Ref()]; ok {
 		return f(target)
 	}

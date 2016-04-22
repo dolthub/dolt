@@ -62,7 +62,7 @@ func (w *jsonArrayWriter) writeRef(r ref.Ref) {
 	w.write(r.String())
 }
 
-func (w *jsonArrayWriter) writeTypeAsTag(t Type) {
+func (w *jsonArrayWriter) writeTypeAsTag(t *Type) {
 	k := t.Kind()
 	w.write(k)
 	switch k {
@@ -91,7 +91,7 @@ func (w *jsonArrayWriter) writeTopLevelValue(v Value) {
 	w.writeValue(v, tr, nil)
 }
 
-func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr Type, pkg *Package) bool {
+func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr *Type, pkg *Package) bool {
 	ms, ok := v.(metaSequence)
 	if !ok {
 		w.write(false) // not a meta sequence
@@ -114,7 +114,7 @@ func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr Type, pkg *Package)
 	return true
 }
 
-func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
+func (w *jsonArrayWriter) writeValue(v Value, tr *Type, pkg *Package) {
 	switch tr.Kind() {
 	case BlobKind:
 		if w.maybeWriteMetaSequence(v, tr, pkg) {
@@ -212,7 +212,7 @@ func (w *jsonArrayWriter) writeValue(v Value, tr Type, pkg *Package) {
 	}
 }
 
-func (w *jsonArrayWriter) writeTypeAsValue(t Type, pkg *Package) {
+func (w *jsonArrayWriter) writeTypeAsValue(t *Type, pkg *Package) {
 	k := t.Kind()
 	w.write(k)
 	switch k {
@@ -267,13 +267,14 @@ func (w *jsonArrayWriter) writeTypeAsValue(t Type, pkg *Package) {
 }
 
 // writeTypeKindValue writes either a struct or a Type value
-func (w *jsonArrayWriter) writeTypeKindValue(v Value, tr Type, pkg *Package) {
-	d.Chk.IsType(Type{}, v)
-	w.writeTypeAsValue(v.(Type), pkg)
+func (w *jsonArrayWriter) writeTypeKindValue(v Value, tr *Type, pkg *Package) {
+	_, ok := v.(*Type)
+	d.Chk.True(ok)
+	w.writeTypeAsValue(v.(*Type), pkg)
 }
 
 // writeUnresolvedKindValue writes a struct.
-func (w *jsonArrayWriter) writeUnresolvedKindValue(v Value, tr Type, pkg *Package) {
+func (w *jsonArrayWriter) writeUnresolvedKindValue(v Value, tr *Type, pkg *Package) {
 	d.Chk.NotNil(pkg)
 	typeDef := pkg.types[tr.Ordinal()]
 	switch typeDef.Kind() {
@@ -294,7 +295,7 @@ func (w *jsonArrayWriter) writeBlob(b Blob) {
 	w.write(buf.String())
 }
 
-func (w *jsonArrayWriter) writeStruct(v Value, typ, typeDef Type, pkg *Package) {
+func (w *jsonArrayWriter) writeStruct(v Value, typ, typeDef *Type, pkg *Package) {
 	i := 0
 	values := structReaderForType(v, typ, typeDef)
 	desc := typeDef.Desc.(StructDesc)

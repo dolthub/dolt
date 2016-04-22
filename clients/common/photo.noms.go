@@ -11,7 +11,7 @@ import (
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.Type{
+	p := types.NewPackage([]*types.Type{
 		types.MakeStructType("RemotePhoto",
 			[]types.Field{
 				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
@@ -110,9 +110,9 @@ func (s RemotePhoto) Def() (d RemotePhotoDef) {
 	return
 }
 
-var __typeForRemotePhoto types.Type
+var __typeForRemotePhoto *types.Type
 
-func (m RemotePhoto) Type() types.Type {
+func (m RemotePhoto) Type() *types.Type {
 	return __typeForRemotePhoto
 }
 
@@ -305,9 +305,9 @@ func (s Face) Def() (d FaceDef) {
 	return
 }
 
-var __typeForFace types.Type
+var __typeForFace *types.Type
 
-func (m Face) Type() types.Type {
+func (m Face) Type() *types.Type {
 	return __typeForFace
 }
 
@@ -452,9 +452,9 @@ func (s Size) Def() (d SizeDef) {
 	return
 }
 
-var __typeForSize types.Type
+var __typeForSize *types.Type
 
-func (m Size) Type() types.Type {
+func (m Size) Type() *types.Type {
 	return __typeForSize
 }
 
@@ -569,9 +569,9 @@ func (m MapOfSizeToString) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes MapOfSizeToString.
-var __typeForMapOfSizeToString types.Type
+var __typeForMapOfSizeToString *types.Type
 
-func (m MapOfSizeToString) Type() types.Type {
+func (m MapOfSizeToString) Type() *types.Type {
 	return __typeForMapOfSizeToString
 }
 
@@ -704,9 +704,9 @@ func (s SetOfString) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfString.
-var __typeForSetOfString types.Type
+var __typeForSetOfString *types.Type
 
-func (m SetOfString) Type() types.Type {
+func (m SetOfString) Type() *types.Type {
 	return __typeForSetOfString
 }
 
@@ -849,9 +849,9 @@ func (s SetOfFace) ChildValues() []types.Value {
 }
 
 // A Noms Value that describes SetOfFace.
-var __typeForSetOfFace types.Type
+var __typeForSetOfFace *types.Type
 
-func (m SetOfFace) Type() types.Type {
+func (m SetOfFace) Type() *types.Type {
 	return __typeForSetOfFace
 }
 

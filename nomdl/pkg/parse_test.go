@@ -267,14 +267,14 @@ type testField struct {
 }
 
 func (t testField) toField() types.Field {
-	return types.Field{t.Name, t.D.(types.Type), t.Optional}
+	return types.Field{t.Name, t.D.(*types.Type), t.Optional}
 }
 
 type describable interface {
 	Describe() string
 }
 
-func (suite *ParsedResultTestSuite) findTypeByName(n string, ts []types.Type) types.Type {
+func (suite *ParsedResultTestSuite) findTypeByName(n string, ts []*types.Type) *types.Type {
 	for _, t := range ts {
 		if n == t.Name() {
 			return t

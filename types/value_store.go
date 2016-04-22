@@ -22,7 +22,7 @@ type ValueStore struct {
 type chunkCacheEntry interface {
 	Present() bool
 	Hint() ref.Ref
-	Type() Type
+	Type() *Type
 }
 
 // NewTestValueStore creates a simple struct that satisfies ValueReadWriter and is backed by a chunks.TestStore.
@@ -72,7 +72,7 @@ func (lvs *ValueStore) WriteValue(v Value) RefBase {
 	c := EncodeValue(v, lvs)
 
 	hints := lvs.checkChunksInCache(v)
-	lvs.set(targetRef, presentChunk(v.Type()))
+	lvs.set(targetRef, (*presentChunk)(v.Type()))
 	lvs.bs.SchedulePut(c, hints)
 
 	return r
@@ -152,7 +152,7 @@ func (lvs *ValueStore) checkChunksInCache(v Value) map[ref.Ref]struct{} {
 	return hints
 }
 
-func getTargetType(refBase RefBase) Type {
+func getTargetType(refBase RefBase) *Type {
 	refType := refBase.Type()
 	d.Chk.Equal(RefKind, refType.Kind())
 	return refType.Desc.(CompoundDesc).ElemTypes[0]
@@ -160,20 +160,20 @@ func getTargetType(refBase RefBase) Type {
 
 type presentChunk Type
 
-func (p presentChunk) Present() bool {
+func (p *presentChunk) Present() bool {
 	return true
 }
 
-func (p presentChunk) Hint() (r ref.Ref) {
+func (p *presentChunk) Hint() (r ref.Ref) {
 	return
 }
 
-func (p presentChunk) Type() Type {
-	return Type(p)
+func (p *presentChunk) Type() *Type {
+	return (*Type)(p)
 }
 
 type hintedChunk struct {
-	t    Type
+	t    *Type
 	hint ref.Ref
 }
 
@@ -185,7 +185,7 @@ func (h hintedChunk) Hint() (r ref.Ref) {
 	return h.hint
 }
 
-func (h hintedChunk) Type() Type {
+func (h hintedChunk) Type() *Type {
 	return h.t
 }
 
@@ -199,6 +199,6 @@ func (a absentChunk) Hint() (r ref.Ref) {
 	return
 }
 
-func (a absentChunk) Type() Type {
+func (a absentChunk) Type() *Type {
 	panic("Not reached. Should never call Type() on an absentChunk.")
 }

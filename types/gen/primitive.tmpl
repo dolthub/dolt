@@ -22,7 +22,7 @@ func (v {{.NomsType}}) ToPrimitive() interface{} {
 
 var typeFor{{.NomsType}} = MakePrimitiveType({{.NomsType}}Kind)
 
-func (v {{.NomsType}}) Type() Type {
+func (v {{.NomsType}}) Type() *Type {
 	return typeFor{{.NomsType}}
 }
 {{if .IsOrdered}}

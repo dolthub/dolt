@@ -10,11 +10,11 @@ import (
 
 type listLeaf struct {
 	values []Value
-	t      Type
+	t      *Type
 	ref    *ref.Ref
 }
 
-func newListLeaf(t Type, v ...Value) List {
+func newListLeaf(t *Type, v ...Value) List {
 	d.Chk.Equal(ListKind, t.Kind())
 	return listLeaf{v, t, &ref.Ref{}}
 }
@@ -183,10 +183,10 @@ func (l listLeaf) ChildValues() []Value {
 	return append([]Value{}, l.values...)
 }
 
-func (l listLeaf) Type() Type {
+func (l listLeaf) Type() *Type {
 	return l.t
 }
 
-func (l listLeaf) elemType() Type {
+func (l listLeaf) elemType() *Type {
 	return l.t.Desc.(CompoundDesc).ElemTypes[0]
 }

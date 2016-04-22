@@ -9,14 +9,14 @@ type structData map[string]Value
 
 type Struct struct {
 	data       structData
-	t          Type
-	typeDef    Type
+	t          *Type
+	typeDef    *Type
 	unionIndex uint32
 	unionValue Value
 	ref        *ref.Ref
 }
 
-func newStructFromData(data structData, unionIndex uint32, unionValue Value, typ, typeDef Type) Struct {
+func newStructFromData(data structData, unionIndex uint32, unionValue Value, typ, typeDef *Type) Struct {
 	d.Chk.Equal(typ.Kind(), UnresolvedKind)
 	d.Chk.True(typ.HasPackageRef())
 	d.Chk.True(typ.HasOrdinal())
@@ -24,7 +24,7 @@ func newStructFromData(data structData, unionIndex uint32, unionValue Value, typ
 	return Struct{data, typ, typeDef, unionIndex, unionValue, &ref.Ref{}}
 }
 
-func NewStruct(typ, typeDef Type, data structData) Struct {
+func NewStruct(typ, typeDef *Type, data structData) Struct {
 	newData := make(structData)
 	unionIndex := uint32(0)
 	var unionValue Value
@@ -88,7 +88,7 @@ func (s Struct) ChildValues() (res []Value) {
 	return
 }
 
-func (s Struct) Type() Type {
+func (s Struct) Type() *Type {
 	return s.t
 }
 
@@ -170,7 +170,7 @@ func (s Struct) findField(n string) (Field, int32, bool) {
 	return Field{}, -1, false
 }
 
-func structBuilder(values []Value, typ, typeDef Type) Value {
+func structBuilder(values []Value, typ, typeDef *Type) Value {
 	i := 0
 	desc := typeDef.Desc.(StructDesc)
 	data := structData{}
@@ -200,7 +200,7 @@ func structBuilder(values []Value, typ, typeDef Type) Value {
 	return newStructFromData(data, unionIndex, unionValue, typ, typeDef)
 }
 
-func structReader(s Struct, typ, typeDef Type) []Value {
+func structReader(s Struct, typ, typeDef *Type) []Value {
 	values := []Value{}
 
 	desc := typeDef.Desc.(StructDesc)

@@ -11,7 +11,7 @@ import (
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.Type{
+	p := types.NewPackage([]*types.Type{
 		types.MakeStructType("Date",
 			[]types.Field{
 				types.Field{"MsSinceEpoch", types.MakePrimitiveType(types.Int64Kind), false},
@@ -54,9 +54,9 @@ func (s Date) Def() (d DateDef) {
 	return
 }
 
-var __typeForDate types.Type
+var __typeForDate *types.Type
 
-func (m Date) Type() types.Type {
+func (m Date) Type() *types.Type {
 	return __typeForDate
 }
 

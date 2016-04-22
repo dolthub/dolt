@@ -12,7 +12,7 @@ import (
 type testSet struct {
 	values []Value
 	less   testSetLessFn
-	tr     Type
+	tr     *Type
 }
 
 type testSetLessFn func(x, y Value) bool
@@ -42,7 +42,7 @@ func (ts testSet) toCompoundSet() compoundSet {
 
 type testSetGenFn func(v Int64) Value
 
-func newTestSet(length int, gen testSetGenFn, less testSetLessFn, tr Type) testSet {
+func newTestSet(length int, gen testSetGenFn, less testSetLessFn, tr *Type) testSet {
 	s := rand.NewSource(4242)
 	used := map[int64]bool{}
 
@@ -367,7 +367,7 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 	structTypeDef := MakeStructType("num", []Field{
 		Field{"n", MakePrimitiveType(Int64Kind), false},
 	}, []Field{})
-	pkg := NewPackage([]Type{structTypeDef}, []ref.Ref{})
+	pkg := NewPackage([]*Type{structTypeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	structType := MakeType(pkgRef, 0)
 	refOfTypeStructType := MakeCompoundType(RefKind, structType)

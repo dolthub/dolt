@@ -10,7 +10,7 @@ import (
 func TestType(t *testing.T) {
 	assert := assert.New(t)
 
-	st := NewPackage([]Type{}, []ref.Ref{})
+	st := NewPackage([]*Type{}, []ref.Ref{})
 	typ := st.Type()
 	assert.Equal(PackageKind, typ.Kind())
 }

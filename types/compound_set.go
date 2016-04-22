@@ -18,7 +18,7 @@ type compoundSet struct {
 	vr        ValueReader
 }
 
-func buildCompoundSet(tuples metaSequenceData, t Type, vr ValueReader) Value {
+func buildCompoundSet(tuples metaSequenceData, t *Type, vr ValueReader) Value {
 	s := compoundSet{metaSequenceObject{tuples, t}, tuples.numLeavesSum(), &ref.Ref{}, vr}
 	return valueFromType(s, t)
 }
@@ -167,7 +167,7 @@ func (cs compoundSet) IterAllP(concurrency int, f setIterAllCallback) {
 	})
 }
 
-func (cs compoundSet) elemType() Type {
+func (cs compoundSet) elemType() *Type {
 	return cs.t.Desc.(CompoundDesc).ElemTypes[0]
 }
 

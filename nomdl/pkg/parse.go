@@ -13,7 +13,7 @@ import (
 type Parsed struct {
 	types.Package
 	Name              string
-	UsingDeclarations []types.Type
+	UsingDeclarations []*types.Type
 	AliasNames        map[ref.Ref]string
 }
 
@@ -35,7 +35,7 @@ func ParseNomDL(packageName string, r io.Reader, includePath string, vrw types.V
 
 	pkg := types.NewPackage(i.Types, deps)
 
-	usingDeclarations := make([]types.Type, len(i.UsingDeclarations))
+	usingDeclarations := make([]*types.Type, len(i.UsingDeclarations))
 	for idx, t := range i.UsingDeclarations {
 		usingDeclarations[idx] = types.FixupType(t, &pkg)
 	}
@@ -51,8 +51,8 @@ func ParseNomDL(packageName string, r io.Reader, includePath string, vrw types.V
 type intermediate struct {
 	Name              string
 	Aliases           map[string]string
-	UsingDeclarations []types.Type
-	Types             []types.Type
+	UsingDeclarations []*types.Type
+	Types             []*types.Type
 }
 
 func runParser(logname string, r io.Reader) intermediate {
@@ -62,14 +62,14 @@ func runParser(logname string, r io.Reader) intermediate {
 }
 
 func resolveLocalOrdinals(p *intermediate) {
-	var rec func(t types.Type) types.Type
+	var rec func(t *types.Type) *types.Type
 	resolveFields := func(fields []types.Field) {
 		for idx, f := range fields {
 			f.T = rec(f.T)
 			fields[idx] = f
 		}
 	}
-	rec = func(t types.Type) types.Type {
+	rec = func(t *types.Type) *types.Type {
 		if t.IsUnresolved() {
 			if t.Namespace() == "" && !t.HasOrdinal() {
 				ordinal := indexOf(t, p.Types)
@@ -101,7 +101,7 @@ func resolveLocalOrdinals(p *intermediate) {
 	}
 }
 
-func indexOf(t types.Type, ts []types.Type) int16 {
+func indexOf(t *types.Type, ts []*types.Type) int16 {
 	for i, tt := range ts {
 		if tt.Name() == t.Name() && tt.Namespace() == "" {
 			return int16(i)
@@ -111,7 +111,7 @@ func indexOf(t types.Type, ts []types.Type) int16 {
 }
 
 func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) {
-	var rec func(t types.Type) types.Type
+	var rec func(t *types.Type) *types.Type
 	resolveFields := func(fields []types.Field) {
 		for idx, f := range fields {
 			if f.T.IsUnresolved() {
@@ -127,7 +127,7 @@ func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref
 			fields[idx] = f
 		}
 	}
-	rec = func(t types.Type) types.Type {
+	rec = func(t *types.Type) *types.Type {
 		if t.IsUnresolved() {
 			if p.checkLocal(t) {
 				return t
@@ -162,7 +162,7 @@ func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref
 	}
 }
 
-func (i *intermediate) checkLocal(t types.Type) bool {
+func (i *intermediate) checkLocal(t *types.Type) bool {
 	if t.Namespace() == "" {
 		d.Chk.True(t.HasOrdinal(), "Invalid local reference")
 		return true
@@ -170,7 +170,7 @@ func (i *intermediate) checkLocal(t types.Type) bool {
 	return false
 }
 
-func resolveNamespace(t types.Type, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) types.Type {
+func resolveNamespace(t *types.Type, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) *types.Type {
 	pkgRef, ok := aliases[t.Namespace()]
 	d.Exp.True(ok, "Could not find import aliased to %s", t.Namespace())
 	d.Chk.NotEqual("", t.Name())
@@ -181,9 +181,9 @@ func resolveNamespace(t types.Type, aliases map[string]ref.Ref, deps map[ref.Ref
 }
 
 // expandStruct takes a struct definition and expands the internal structs created for unions.
-func expandStruct(t types.Type, ordinal int) []types.Type {
+func expandStruct(t *types.Type, ordinal int) []*types.Type {
 	d.Chk.Equal(types.StructKind, t.Kind())
-	ts := []types.Type{t}
+	ts := []*types.Type{t}
 	ordinal++
 
 	doFields := func(fields []types.Field) []types.Field {

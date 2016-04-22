@@ -34,7 +34,7 @@ func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk) chunks.BackpressureEr
 	v := DecodeChunk(c, vbs.vs)
 	d.Exp.NotNil(v, "Chunk with hash %s failed to decode", r)
 	vbs.vs.checkChunksInCache(v)
-	vbs.vs.set(r, presentChunk(v.Type()))
+	vbs.vs.set(r, (*presentChunk)(v.Type()))
 
 	vbs.batch[vbs.count] = c
 	vbs.count++

@@ -11,7 +11,7 @@ import (
 // package implemented by this file and registers it with the global
 // type package definition cache.
 func init() {
-	p := types.NewPackage([]types.Type{
+	p := types.NewPackage([]*types.Type{
 		types.MakeStructType("Commit",
 			[]types.Field{
 				types.Field{"value", types.MakePrimitiveType(types.ValueKind), false},
@@ -41,9 +41,9 @@ func NewCommit() Commit {
 	}
 }
 
-var __typeForCommit types.Type
+var __typeForCommit *types.Type
 
-func (m Commit) Type() types.Type {
+func (m Commit) Type() *types.Type {
 	return __typeForCommit
 }
 
@@ -111,7 +111,7 @@ func (s Commit) SetParents(val types.Set) Commit {
 	return s
 }
 
-func typeForMapOfStringToRefOfCommit() types.Type {
+func typeForMapOfStringToRefOfCommit() *types.Type {
 	return types.MakeMapType(types.StringType, types.MakeRefType(__typeForCommit))
 }
 
@@ -119,7 +119,7 @@ func NewMapOfStringToRefOfCommit() types.Map {
 	return types.NewTypedMap(typeForMapOfStringToRefOfCommit())
 }
 
-func typeForSetOfRefOfCommit() types.Type {
+func typeForSetOfRefOfCommit() *types.Type {
 	return types.MakeSetType(types.MakeRefType(__typeForCommit))
 }
 

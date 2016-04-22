@@ -12,7 +12,7 @@ import (
 type testMap struct {
 	entries     []mapEntry
 	less        testMapLessFn
-	tr          Type
+	tr          *Type
 	knownBadKey Value
 }
 
@@ -63,7 +63,7 @@ func (tm testMap) toCompoundMap() compoundMap {
 
 type testMapGenFn func(v Int64) Value
 
-func newTestMap(length int, gen testMapGenFn, less testMapLessFn, tr Type) testMap {
+func newTestMap(length int, gen testMapGenFn, less testMapLessFn, tr *Type) testMap {
 	s := rand.NewSource(4242)
 	used := map[int64]bool{}
 
@@ -370,7 +370,7 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	structTypeDef := MakeStructType("num", []Field{
 		Field{"n", MakePrimitiveType(Int64Kind), false},
 	}, []Field{})
-	pkg := NewPackage([]Type{structTypeDef}, []ref.Ref{})
+	pkg := NewPackage([]*Type{structTypeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	structType := MakeType(pkgRef, 0)
 	refOfTypeStructType := MakeRefType(structType)

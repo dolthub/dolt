@@ -64,7 +64,7 @@ func (msd metaSequenceData) last() metaTuple {
 
 type metaSequenceObject struct {
 	tuples metaSequenceData
-	t      Type
+	t      *Type
 }
 
 func (ms metaSequenceObject) tupleAt(idx int) metaTuple {
@@ -100,11 +100,11 @@ func (ms metaSequenceObject) Chunks() (chunks []RefBase) {
 	return
 }
 
-func (ms metaSequenceObject) Type() Type {
+func (ms metaSequenceObject) Type() *Type {
 	return ms.t
 }
 
-type metaBuilderFunc func(tuples metaSequenceData, t Type, vr ValueReader) Value
+type metaBuilderFunc func(tuples metaSequenceData, t *Type, vr ValueReader) Value
 
 var metaFuncMap = map[NomsKind]metaBuilderFunc{}
 
@@ -112,7 +112,7 @@ func registerMetaValue(k NomsKind, bf metaBuilderFunc) {
 	metaFuncMap[k] = bf
 }
 
-func newMetaSequenceFromData(tuples metaSequenceData, t Type, vr ValueReader) Value {
+func newMetaSequenceFromData(tuples metaSequenceData, t *Type, vr ValueReader) Value {
 	if bf, ok := metaFuncMap[t.Kind()]; ok {
 		return bf(tuples, t, vr)
 	}

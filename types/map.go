@@ -17,7 +17,7 @@ type Map interface {
 	IterAll(cb mapIterAllCallback)
 	IterAllP(concurrency int, f mapIterAllCallback)
 	Filter(cb mapFilterCallback) Map
-	elemTypes() []Type
+	elemTypes() []*Type
 }
 
 type indexOfMapFn func(m mapData, v Value) int
@@ -31,12 +31,12 @@ func NewMap(kv ...Value) Map {
 	return NewTypedMap(mapType, kv...)
 }
 
-func NewTypedMap(t Type, kv ...Value) Map {
+func NewTypedMap(t *Type, kv ...Value) Map {
 	d.Chk.Equal(MapKind, t.Kind(), "Invalid type. Expected: MapKind, found: %s", t.Describe())
 	return newTypedMap(t, buildMapData(mapData{}, kv, t)...)
 }
 
-func newTypedMap(t Type, entries ...mapEntry) Map {
+func newTypedMap(t *Type, entries ...mapEntry) Map {
 	seq := newEmptySequenceChunker(makeMapLeafChunkFn(t, nil), newOrderedMetaSequenceChunkFn(t, nil), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, entry := range entries {

@@ -203,7 +203,7 @@ func TestSetIterAllP(t *testing.T) {
 	testIter(64, 200)
 }
 
-func testSetOrder(assert *assert.Assertions, valueType Type, value []Value, expectOrdering []Value) {
+func testSetOrder(assert *assert.Assertions, valueType *Type, value []Value, expectOrdering []Value) {
 	mapTr := MakeCompoundType(SetKind, valueType)
 	m := NewTypedSet(mapTr, value...)
 	i := 0

@@ -34,7 +34,7 @@ func NewList(v ...Value) List {
 }
 
 // NewTypedList creates a new List with type t, populated with values, chunking if and when needed.
-func NewTypedList(t Type, values ...Value) List {
+func NewTypedList(t *Type, values ...Value) List {
 	d.Chk.Equal(ListKind, t.Kind(), "Invalid type. Expected: ListKind, found: %s", t.Describe())
 	seq := newEmptySequenceChunker(makeListLeafChunkFn(t, nil), newIndexedMetaSequenceChunkFn(t, nil, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	for _, v := range values {
@@ -44,7 +44,7 @@ func NewTypedList(t Type, values ...Value) List {
 }
 
 // NewStreamingTypedList creates a new List with type t, populated with values, chunking if and when needed. As chunks are created, they're written to vrw -- including the root chunk of the list. Once the caller has closed values, she can read the completed List from the returned channel.
-func NewStreamingTypedList(t Type, vrw ValueReadWriter, values <-chan Value) <-chan List {
+func NewStreamingTypedList(t *Type, vrw ValueReadWriter, values <-chan Value) <-chan List {
 	out := make(chan List)
 	go func() {
 		seq := newEmptySequenceChunker(makeListLeafChunkFn(t, vrw), newIndexedMetaSequenceChunkFn(t, vrw, vrw), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)

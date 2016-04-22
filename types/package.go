@@ -7,12 +7,12 @@ import (
 )
 
 type Package struct {
-	types        []Type
+	types        []*Type
 	dependencies ref.RefSlice
 	ref          *ref.Ref
 }
 
-func NewPackage(types []Type, dependencies ref.RefSlice) Package {
+func NewPackage(types []*Type, dependencies ref.RefSlice) Package {
 	p := Package{types: types}
 	// The order |Package.dependencies| must be stable for the Package to have a stable ref.
 	// See https://github.com/attic-labs/noms/issues/814 for stable ordering of |Package.types|.
@@ -21,7 +21,7 @@ func NewPackage(types []Type, dependencies ref.RefSlice) Package {
 	r := getRef(p)
 	p.ref = &r
 
-	newTypes := make([]Type, len(types))
+	newTypes := make([]*Type, len(types))
 	for i, t := range types {
 		newTypes[i] = FixupType(t, &p)
 	}
@@ -60,7 +60,7 @@ func (p Package) ChildValues() (res []Value) {
 
 var typeForPackage = PackageType
 
-func (p Package) Type() Type {
+func (p Package) Type() *Type {
 	return typeForPackage
 }
 
@@ -78,7 +78,7 @@ func (p Package) Dependencies() (dependencies []ref.Ref) {
 	return
 }
 
-func (p Package) Types() (types []Type) {
+func (p Package) Types() (types []*Type) {
 	types = append(types, p.types...)
 	return
 }

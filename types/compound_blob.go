@@ -21,7 +21,7 @@ func newCompoundBlob(tuples metaSequenceData, vr ValueReader) compoundBlob {
 	return buildCompoundBlob(tuples, typeForBlob, vr).(compoundBlob)
 }
 
-func buildCompoundBlob(tuples metaSequenceData, t Type, vr ValueReader) Value {
+func buildCompoundBlob(tuples metaSequenceData, t *Type, vr ValueReader) Value {
 	d.Chk.True(t.Equals(typeForBlob))
 	return compoundBlob{metaSequenceObject{tuples, typeForBlob}, tuples.uint64ValuesSum(), &ref.Ref{}, vr}
 }

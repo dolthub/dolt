@@ -70,13 +70,13 @@ func TestSkipDuplicateTypes(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
-	leaf1 := types.NewPackage([]types.Type{
+	leaf1 := types.NewPackage([]*types.Type{
 		types.MakeStructType("S1", []types.Field{
 			types.Field{"f", types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.Uint16Kind)), false},
 			types.Field{"e", types.MakeType(ref.Ref{}, 0), false},
 		}, []types.Field{}),
 	}, []ref.Ref{})
-	leaf2 := types.NewPackage([]types.Type{
+	leaf2 := types.NewPackage([]*types.Type{
 		types.MakeStructType("S2", []types.Field{
 			types.Field{"f", types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.Uint16Kind)), false},
 		}, []types.Field{}),

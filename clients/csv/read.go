@@ -66,7 +66,7 @@ func ReportValidFieldTypes(r *csv.Reader, headers []string) []KindSlice {
 }
 
 // MakeStructTypeFromHeaders creates a struct type from the headers using |kinds| as the type of each field. If |kinds| is empty, default to strings.
-func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSlice) (typeRef, typeDef types.Type) {
+func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSlice) (typeRef, typeDef *types.Type) {
 	useStringType := len(kinds) == 0
 	d.Chk.True(useStringType || len(headers) == len(kinds))
 	fields := make([]types.Field, len(headers))
@@ -83,7 +83,7 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 		}
 	}
 	typeDef = types.MakeStructType(structName, fields, []types.Field{})
-	pkg := types.NewPackage([]types.Type{typeDef}, []ref.Ref{})
+	pkg := types.NewPackage([]*types.Type{typeDef}, []ref.Ref{})
 	pkgRef := types.RegisterPackage(&pkg)
 	typeRef = types.MakeType(pkgRef, 0)
 
@@ -93,7 +93,7 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 // Read takes a CSV reader and reads it into a typed List of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
 // If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
 // In addition to the list, Read returns the typeRef for the structs in the list, and last the typeDef of the structs.
-func Read(r *csv.Reader, structName string, headers []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, typeRef, typeDef types.Type) {
+func Read(r *csv.Reader, structName string, headers []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, typeRef, typeDef *types.Type) {
 	typeRef, typeDef = MakeStructTypeFromHeaders(headers, structName, kinds)
 	valueChan := make(chan types.Value, 128) // TODO: Make this a function param?
 	listType := types.MakeCompoundType(types.ListKind, typeRef)

@@ -11,7 +11,7 @@ type Value interface {
 	// Returns the immediate children of this value in the DAG, if any, not including Type().
 	ChildValues() []Value
 	Chunks() []RefBase
-	Type() Type
+	Type() *Type
 }
 
 type OrderedValue interface {
