@@ -5,18 +5,11 @@ import (
 	"github.com/attic-labs/noms/ref"
 )
 
-type enumBuilderFunc func(v uint32) Value
-type enumReaderFunc func(v Value) uint32
 type refBuilderFunc func(target ref.Ref) RefBase
 type structBuilderFunc func(values []Value) Value
 type structReaderFunc func(v Value) []Value
 type valueBuilderFunc func(v Value) Value
 type valueReaderFunc func(v Value) Value
-
-type enumFuncs struct {
-	builder enumBuilderFunc
-	reader  enumReaderFunc
-}
 
 type structFuncs struct {
 	builder structBuilderFunc
@@ -31,7 +24,6 @@ type valueFuncs struct {
 var (
 	packages map[ref.Ref]*Package = map[ref.Ref]*Package{}
 
-	enumFuncMap   map[ref.Ref]enumFuncs      = map[ref.Ref]enumFuncs{}
 	refFuncMap    map[ref.Ref]refBuilderFunc = map[ref.Ref]refBuilderFunc{}
 	structFuncMap map[ref.Ref]structFuncs    = map[ref.Ref]structFuncs{}
 	valueFuncMap  map[ref.Ref]valueFuncs     = map[ref.Ref]valueFuncs{}
@@ -72,24 +64,6 @@ func structReaderForType(v Value, typ, typeDef Type) []Value {
 		return s.reader(v)
 	}
 	return structReader(v.(Struct), typ, typeDef)
-}
-
-func RegisterEnum(t Type, bf enumBuilderFunc, rf enumReaderFunc) {
-	enumFuncMap[t.Ref()] = enumFuncs{bf, rf}
-}
-
-func enumFromType(v uint32, t Type) Value {
-	if s, ok := enumFuncMap[t.Ref()]; ok {
-		return s.builder(v)
-	}
-	return newEnum(v, t)
-}
-
-func enumPrimitiveValueFromType(v Value, t Type) uint32 {
-	if s, ok := enumFuncMap[t.Ref()]; ok {
-		return s.reader(v)
-	}
-	return v.(Enum).v
 }
 
 func RegisterValue(t Type, bf valueBuilderFunc, rf valueReaderFunc) {

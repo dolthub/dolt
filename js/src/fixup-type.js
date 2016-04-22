@@ -2,7 +2,6 @@
 
 import {
   CompoundDesc,
-  EnumDesc,
   Field,
   makeCompoundType,
   makeStructType,
@@ -60,6 +59,6 @@ export default function fixupType(t: Type, pkg: ?Package): Type {
     return changed ? makeStructType(t.name, newFields, newUnion) : t;
   }
 
-  invariant(desc instanceof EnumDesc || desc instanceof PrimitiveDesc);
+  invariant(desc instanceof PrimitiveDesc);
   return t;
 }

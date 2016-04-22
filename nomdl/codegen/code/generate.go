@@ -5,7 +5,7 @@
 // - Native - such as string, uint32
 // - Value - the generic types.Value
 // - Nom - types.String, types.Uint32, MyStruct, ListOfBool
-// - User - User defined structs, enums etc as well as native primitves. This uses Native when possible or Nom if not. These are to be used in APIs for generated types -- Getters and setters for maps and structs, etc.
+// - User - User defined structs as well as native primitves. This uses Native when possible or Nom if not. These are to be used in APIs for generated types -- Getters and setters for maps and structs, etc.
 package code
 
 import (
@@ -43,8 +43,6 @@ func (gen *Generator) DefType(t types.Type) string {
 		return fmt.Sprintf("%sBlob", gen.TypesPackage)
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return strings.ToLower(kindToString(k))
-	case types.EnumKind:
-		return gen.UserName(t)
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return gen.UserName(t) + "Def"
 	case types.PackageKind:
@@ -68,7 +66,7 @@ func (gen *Generator) UserType(t types.Type) string {
 		return fmt.Sprintf("%sBlob", gen.TypesPackage)
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return strings.ToLower(kindToString(k))
-	case types.EnumKind, types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
+	case types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return gen.UserName(t)
 	case types.PackageKind:
 		return fmt.Sprintf("%sPackage", gen.TypesPackage)
@@ -93,7 +91,7 @@ func (gen *Generator) UserTypeJS(t types.Type) string {
 		return "string"
 	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return gen.ImportJSType(strings.ToLower(kindToString(k)))
-	case types.EnumKind, types.StructKind:
+	case types.StructKind:
 		if t.HasPackageRef() && gen.Package.Ref() != t.PackageRef() {
 			return gen.importedUserNameJS(t)
 		}
@@ -121,7 +119,7 @@ func (gen *Generator) UserTypeJS(t types.Type) string {
 func (gen *Generator) DefToValue(val string, t types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	switch rt.Kind() {
-	case types.BlobKind, types.EnumKind, types.PackageKind, types.ValueKind, types.TypeKind:
+	case types.BlobKind, types.PackageKind, types.ValueKind, types.TypeKind:
 		return val // No special Def representation
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return gen.NativeToValue(val, rt)
@@ -137,7 +135,7 @@ func (gen *Generator) DefToValue(val string, t types.Type) string {
 func (gen *Generator) DefToUser(val string, t types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	switch rt.Kind() {
-	case types.BlobKind, types.BoolKind, types.EnumKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind:
+	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind:
 		return val
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return gen.DefToValue(val, rt)
@@ -151,7 +149,7 @@ func (gen *Generator) MayHaveChunks(t types.Type) bool {
 	switch rt.Kind() {
 	case types.BlobKind, types.ListKind, types.MapKind, types.PackageKind, types.RefKind, types.SetKind, types.StructKind, types.TypeKind, types.ValueKind:
 		return true
-	case types.BoolKind, types.EnumKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return false
 	}
 	panic("unreachable")
@@ -165,8 +163,6 @@ func (gen *Generator) ValueToDef(val string, t types.Type) string {
 		return gen.ValueToUser(val, rt) // No special Def representation
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return gen.ValueToNative(val, rt)
-	case types.EnumKind:
-		return fmt.Sprintf("%s.(%s)", val, gen.UserName(t))
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.Def()", gen.ValueToUser(val, t))
 	case types.RefKind:
@@ -181,7 +177,7 @@ func (gen *Generator) ValueToDef(val string, t types.Type) string {
 func (gen *Generator) UserToDef(val string, t types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	switch rt.Kind() {
-	case types.BlobKind, types.EnumKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind:
+	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind:
 		return val
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.Def()", val)
@@ -222,7 +218,7 @@ func (gen *Generator) UserToValue(val string, t types.Type) string {
 	t = gen.R.Resolve(t, gen.Package)
 	k := t.Kind()
 	switch k {
-	case types.BlobKind, types.EnumKind, types.ListKind, types.MapKind, types.PackageKind, types.RefKind, types.SetKind, types.StructKind, types.TypeKind, types.ValueKind:
+	case types.BlobKind, types.ListKind, types.MapKind, types.PackageKind, types.RefKind, types.SetKind, types.StructKind, types.TypeKind, types.ValueKind:
 		return val
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return gen.NativeToValue(val, t)
@@ -239,7 +235,7 @@ func (gen *Generator) ValueToUser(val string, t types.Type) string {
 		return fmt.Sprintf("%s.(%sBlob)", val, gen.TypesPackage)
 	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return gen.ValueToNative(val, rt)
-	case types.EnumKind, types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
+	case types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.(%s)", val, gen.UserName(t))
 	case types.PackageKind:
 		return fmt.Sprintf("%s.(%sPackage)", val, gen.TypesPackage)
@@ -260,8 +256,6 @@ func (gen *Generator) UserZero(t types.Type) string {
 		return fmt.Sprintf("%sNewEmptyBlob()", gen.TypesPackage)
 	case types.BoolKind:
 		return "false"
-	case types.EnumKind:
-		return fmt.Sprintf("New%s()", gen.UserName(rt))
 	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return fmt.Sprintf("%s(0)", strings.ToLower(kindToString(k)))
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
@@ -290,8 +284,6 @@ func (gen *Generator) ValueZero(t types.Type) string {
 		return fmt.Sprintf("%sNewEmptyBlob()", gen.TypesPackage)
 	case types.BoolKind:
 		return fmt.Sprintf("%sBool(false)", gen.TypesPackage)
-	case types.EnumKind:
-		return gen.UserZero(t)
 	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
 		return fmt.Sprintf("%s%s(0)", gen.TypesPackage, kindToString(k))
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind:
@@ -318,8 +310,6 @@ func (gen *Generator) UserName(t types.Type) string {
 	switch k {
 	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind, types.TypeKind:
 		return kindToString(k)
-	case types.EnumKind:
-		return rt.Name()
 	case types.ListKind:
 		return fmt.Sprintf("ListOf%s", gen.refToID(rt.Desc.(types.CompoundDesc).ElemTypes[0]))
 	case types.MapKind:
@@ -395,8 +385,6 @@ func (gen *Generator) ToTypesType(t types.Type, inPackageDef bool) string {
 			types[i] = gen.ToTypesType(t, inPackageDef)
 		}
 		return fmt.Sprintf(`%sMakeCompoundType(%s%sKind, %s)`, gen.TypesPackage, gen.TypesPackage, kindToString(t.Kind()), strings.Join(types, ", "))
-	case types.EnumDesc:
-		return fmt.Sprintf(`%sMakeEnumType("%s", "%s")`, gen.TypesPackage, t.Name(), strings.Join(desc.IDs, `", "`))
 	case types.StructDesc:
 		flatten := func(f []types.Field) string {
 			out := make([]string, 0, len(f))
@@ -450,8 +438,6 @@ func (gen *Generator) ToTypeValueJS(t types.Type, inPackageDef bool, indent int)
 			types[i] = gen.ToTypeValueJS(t, inPackageDef, 0)
 		}
 		return fmt.Sprintf(`%s(%s.%s, %s)`, gen.ImportJS("makeCompoundType"), gen.ImportJS("Kind"), kindToString(t.Kind()), strings.Join(types, ", "))
-	case types.EnumDesc:
-		return fmt.Sprintf(`%s('%s', '%s')`, gen.ImportJS("makeEnumType"), t.Name(), strings.Join(desc.IDs, `', '`))
 	case types.StructDesc:
 		flatten := func(f []types.Field) string {
 			out := make([]string, 0, len(f))

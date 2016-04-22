@@ -143,7 +143,7 @@ func (w *hrsWriter) Write(v Value) {
 	case PackageKind:
 		panic("not implemented")
 
-	case ValueKind, EnumKind, StructKind:
+	case ValueKind, StructKind:
 		panic("unreachable")
 	}
 }
@@ -188,11 +188,6 @@ func (w *hrsWriter) writeUnresolved(v Value, printStructName bool) {
 		w.outdent()
 		w.write("}")
 
-	case EnumKind:
-		v := v.(Enum)
-		i := enumPrimitiveValueFromType(v, t)
-		w.write(typeDef.Desc.(EnumDesc).IDs[i])
-
 	default:
 		panic("unreachable")
 	}
@@ -217,7 +212,7 @@ func (w *hrsWriter) WriteTagged(v Value) {
 	case PackageKind:
 		panic("not implemented")
 
-	case ValueKind, EnumKind, StructKind:
+	case ValueKind, StructKind:
 	default:
 		panic("unreachable")
 	}
@@ -239,20 +234,6 @@ func (w *hrsWriter) writeTypeAsValue(t Type) {
 		w.write(", ")
 		w.writeTypeAsValue(t.Desc.(CompoundDesc).ElemTypes[1])
 		w.write(">")
-	case EnumKind:
-		w.write("enum ")
-		w.write(t.Name())
-		w.write(" {")
-		w.indent()
-		for i, id := range t.Desc.(EnumDesc).IDs {
-			if i == 0 {
-				w.newLine()
-			}
-			w.write(id)
-			w.newLine()
-		}
-		w.outdent()
-		w.write("}")
 	case StructKind:
 		w.write("struct ")
 		w.write(t.Name())
@@ -305,8 +286,6 @@ func (w *hrsWriter) writeUnresolvedTypeRef(t Type, printStructName bool) {
 	switch typeDef.Kind() {
 	case StructKind:
 		w.write("Struct")
-	case EnumKind:
-		w.write("Enum")
 	default:
 		panic("unreachable")
 	}

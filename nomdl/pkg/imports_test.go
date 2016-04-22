@@ -43,8 +43,7 @@ func (suite *ImportTestSuite) SetupTest() {
 		types.Field{"n", types.MakeType(suite.nestedRef, 0), false},
 	},
 		[]types.Field{})
-	fe := types.MakeEnumType("ForeignEnum", "uno", "dos")
-	suite.imported = types.NewPackage([]types.Type{fs, fe}, []ref.Ref{suite.nestedRef})
+	suite.imported = types.NewPackage([]types.Type{fs}, []ref.Ref{suite.nestedRef})
 	suite.importRef = suite.vrw.WriteValue(suite.imported).TargetRef()
 }
 
@@ -58,19 +57,6 @@ func (suite *ImportTestSuite) TestGetDeps() {
 	suite.Len(deps, 1)
 	imported, ok = deps[suite.nestedRef]
 	suite.True(ok, "%s is a dep; should have been found.", suite.nestedRef.String())
-}
-
-func (suite *ImportTestSuite) TestResolveNamespace() {
-	deps := getDeps([]ref.Ref{suite.importRef}, suite.vrw)
-	t := resolveNamespace(types.MakeUnresolvedType("Other", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
-	suite.EqualValues(types.MakeType(suite.importRef, 1), t)
-}
-
-func (suite *ImportTestSuite) TestUnknownAlias() {
-	deps := getDeps([]ref.Ref{suite.importRef}, suite.vrw)
-	suite.Panics(func() {
-		resolveNamespace(types.MakeUnresolvedType("Bother", "ForeignEnum"), map[string]ref.Ref{"Other": suite.importRef}, deps)
-	})
 }
 
 func (suite *ImportTestSuite) TestUnknownImportedType() {
@@ -134,7 +120,6 @@ func (suite *ImportTestSuite) TestImports() {
 		alias Other = import "%s"
 		alias ByPath = import "%s"
 
-		using List<Other.ForeignEnum>
 		using List<Local1>
 		struct Local1 {
 			a: Other.ForeignStruct
@@ -143,7 +128,6 @@ func (suite *ImportTestSuite) TestImports() {
 		}
 		struct Local2 {
 			a: ByPath.FromFile
-			b: Other.ForeignEnum
 		}
 		struct Union {
 			union {
@@ -155,7 +139,6 @@ func (suite *ImportTestSuite) TestImports() {
 			a: Other.ForeignStruct
 			b: union {
 				s: Local1
-				t: Other.ForeignEnum
 			}
 		}`, suite.importRef, filepath.Base(byPathNomDL)))
 	p := ParseNomDL("testing", r, dir, suite.vrw)
@@ -171,8 +154,6 @@ func (suite *ImportTestSuite) TestImports() {
 	suite.Equal("Local2", named.Name())
 	field = find("a", named)
 	suite.EqualValues(refFromNomsFile(byPathNomDL), field.T.PackageRef())
-	field = find("b", named)
-	suite.EqualValues(suite.importRef, field.T.PackageRef())
 
 	named = p.Types()[2]
 	suite.Equal("Union", named.Name())
@@ -190,15 +171,10 @@ func (suite *ImportTestSuite) TestImports() {
 	namedUnion = p.Types()[namedUnion.Ordinal()]
 	field = findChoice("s", namedUnion)
 	suite.EqualValues(p.Ref(), field.T.PackageRef())
-	field = findChoice("t", namedUnion)
-	suite.EqualValues(suite.importRef, field.T.PackageRef())
 
 	usings := p.UsingDeclarations
-	suite.Len(usings, 2)
+	suite.Len(usings, 1)
 	suite.EqualValues(types.ListKind, usings[0].Kind())
-	suite.EqualValues(suite.importRef, usings[0].Desc.(types.CompoundDesc).ElemTypes[0].PackageRef())
-	suite.EqualValues(types.ListKind, usings[1].Kind())
-	suite.EqualValues(0, usings[1].Desc.(types.CompoundDesc).ElemTypes[0].Ordinal())
 }
 
 func (suite *ImportTestSuite) TestImportWithLocalRef() {

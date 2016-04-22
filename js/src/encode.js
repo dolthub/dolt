@@ -8,7 +8,7 @@ import {default as Struct, StructMirror} from './struct.js';
 import type DataStore from './data-store.js';
 import type {NomsKind} from './noms-kind.js';
 import {encode as encodeBase64} from './base64.js';
-import {boolType, EnumDesc, stringType, StructDesc, Type, typeType, uint64Type} from './type.js';
+import {boolType, stringType, StructDesc, Type, typeType, uint64Type} from './type.js';
 import {indexTypeForMetaSequence, MetaTuple} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
@@ -64,7 +64,6 @@ export class JsonArrayWriter {
     const k = t.kind;
     this.writeKind(k);
     switch (k) {
-      case Kind.Enum:
       case Kind.Struct:
         throw new Error('Unreachable');
       case Kind.List:
@@ -262,17 +261,6 @@ export class JsonArrayWriter {
     const k = t.kind;
     this.writeKind(k);
     switch (k) {
-      case Kind.Enum: {
-        const desc = t.desc;
-        invariant(desc instanceof EnumDesc);
-        this.write(t.name);
-        const w2 = new JsonArrayWriter(this._ds);
-        for (let i = 0; i < desc.ids.length; i++) {
-          w2.write(desc.ids[i]);
-        }
-        this.write(w2.array);
-        break;
-      }
       case Kind.List:
       case Kind.Map:
       case Kind.Ref:
@@ -337,11 +325,6 @@ export class JsonArrayWriter {
   writeUnresolvedKindValue(v: any, t: Type, pkg: Package) {
     const typeDef = pkg.types[t.ordinal];
     switch (typeDef.kind) {
-      case Kind.Enum:
-        invariant(typeof v === 'number',
-                  `Failed to write ${typeDef.describe()}. Invalid type: ${describeType(v)}`);
-        this.writeEnum(v);
-        break;
       case Kind.Struct: {
         invariant(v instanceof Struct,
                   `Failed to write ${typeDef.describe()}. Invalid type: ${describeType(v)}`);
@@ -380,10 +363,6 @@ export class JsonArrayWriter {
       this.writeInt(mirror.unionIndex);
       this.writeValue(unionField.value, unionField.type, pkg);
     }
-  }
-
-  writeEnum(v: number) {
-    this.writeInt(v);
   }
 }
 

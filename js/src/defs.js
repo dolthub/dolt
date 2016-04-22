@@ -72,7 +72,7 @@ export async function defToNoms(v: DefType, t: Type, pkg: ?Package): Promise<val
         t = makeType(notNull(pkg).ref, t.ordinal);
       }
       const typeDef = notNull(pkg).types[t.ordinal];
-      invariant(typeDef.kind === Kind.Struct);  // because enums are numbers and caught above.
+      invariant(typeDef.kind === Kind.Struct);
       invariant(v instanceof Object);
       return structDefToNoms(v, t, typeDef, pkg);
     }

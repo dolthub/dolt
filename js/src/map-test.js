@@ -93,7 +93,7 @@ suite('BuildMap', () => {
     });
 
     const m = await newMap(kvRefs, tr);
-    assert.strictEqual(m.ref.toString(), 'sha1-44ecea74cd009c06cfed521ce8c2da6384902891');
+    assert.strictEqual(m.ref.toString(), 'sha1-22e31377b0d34438f72b364eaa9853f881d01d61');
   });
 
   test('set', async () => {

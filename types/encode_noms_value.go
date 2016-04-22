@@ -66,7 +66,7 @@ func (w *jsonArrayWriter) writeTypeAsTag(t Type) {
 	k := t.Kind()
 	w.write(k)
 	switch k {
-	case EnumKind, StructKind:
+	case StructKind:
 		panic("unreachable")
 	case ListKind, MapKind, RefKind, SetKind:
 		for _, elemType := range t.Desc.(CompoundDesc).ElemTypes {
@@ -216,13 +216,6 @@ func (w *jsonArrayWriter) writeTypeAsValue(t Type, pkg *Package) {
 	k := t.Kind()
 	w.write(k)
 	switch k {
-	case EnumKind:
-		w.write(t.Name())
-		w2 := newJSONArrayWriter(w.vw)
-		for _, id := range t.Desc.(EnumDesc).IDs {
-			w2.write(id)
-		}
-		w.write(w2.toArray())
 	case ListKind, MapKind, RefKind, SetKind:
 		w2 := newJSONArrayWriter(w.vw)
 		for _, elemType := range t.Desc.(CompoundDesc).ElemTypes {
@@ -273,21 +266,19 @@ func (w *jsonArrayWriter) writeTypeAsValue(t Type, pkg *Package) {
 	}
 }
 
-// writeTypeKindValue writes either a struct, enum or a Type value
+// writeTypeKindValue writes either a struct or a Type value
 func (w *jsonArrayWriter) writeTypeKindValue(v Value, tr Type, pkg *Package) {
 	d.Chk.IsType(Type{}, v)
 	w.writeTypeAsValue(v.(Type), pkg)
 }
 
-// writeUnresolvedKindValue writes either a struct or an enum
+// writeUnresolvedKindValue writes a struct.
 func (w *jsonArrayWriter) writeUnresolvedKindValue(v Value, tr Type, pkg *Package) {
 	d.Chk.NotNil(pkg)
 	typeDef := pkg.types[tr.Ordinal()]
 	switch typeDef.Kind() {
 	default:
-		d.Chk.Fail("An Unresolved Type can only reference a StructKind or Enum Kind.", "Actually referenced: %+v", typeDef)
-	case EnumKind:
-		w.writeEnum(v, tr, pkg)
+		d.Chk.Fail("An Unresolved Type can only reference a StructKind.", "Actually referenced: %+v", typeDef)
 	case StructKind:
 		w.writeStruct(v, tr, typeDef, pkg)
 	}
@@ -329,9 +320,4 @@ func (w *jsonArrayWriter) writeStruct(v Value, typ, typeDef Type, pkg *Package) 
 		w.writeValue(values[i], desc.Union[unionIndex].T, pkg)
 		i++
 	}
-}
-
-func (w *jsonArrayWriter) writeEnum(v Value, t Type, pkg *Package) {
-	i := enumPrimitiveValueFromType(v, t)
-	w.writeUint(uint64(i))
 }

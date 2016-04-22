@@ -91,43 +91,6 @@ export class CompoundDesc {
   }
 }
 
-export class EnumDesc {
-  ids: Array<string>;
-
-  constructor(ids: Array<string>) {
-    this.ids = ids;
-  }
-
-  get kind(): NomsKind {
-    return Kind.Enum;
-  }
-
-  equals(other: TypeDesc): boolean {
-    if (other.kind !== this.kind) {
-      return false;
-    }
-    invariant(other instanceof EnumDesc);
-
-    if (other.ids.length !== this.ids.length) {
-      return false;
-    }
-
-    for (let i = 0; i < this.ids.length; i++) {
-      if (this.ids[i] !== other.id[i]) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  describe(): string {
-    const idsStr = this.ids.join('  \n');
-    return `{\n  ${idsStr}\n}`;
-  }
-}
-
-
 export class StructDesc {
   fields: Array<Field>;
   union: Array<Field>;
@@ -312,9 +275,6 @@ export class Type extends ValueBase {
   describe(): string {
     let out = '';
     switch (this.kind) {
-      case Kind.Enum:
-        out += 'enum ';
-        break;
       case Kind.Struct:
         out += 'struct ';
         break;
@@ -349,7 +309,6 @@ function buildType(n: string, desc: TypeDesc): Type {
     case Kind.Ref:
     case Kind.Set:
     case Kind.Map:
-    case Kind.Enum:
     case Kind.Struct:
     case Kind.Unresolved:
       return new Type(n, '', desc);
@@ -389,10 +348,6 @@ export function makeMapType(keyType: Type, valueType: Type): Type {
 
 export function makeRefType(elemType: Type): Type {
   return buildType('', new CompoundDesc(Kind.Ref, [elemType]));
-}
-
-export function makeEnumType(name: string, ids: Array<string>): Type {
-  return buildType(name, new EnumDesc(ids));
 }
 
 export function makeStructType(name: string, fields: Array<Field>, choices: Array<Field>): Type {

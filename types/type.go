@@ -6,12 +6,11 @@ import (
 )
 
 // Type defines and describes Noms types, both custom and built-in.
-// StructKind and EnumKind types, and possibly others if we do type aliases, will have a Name(). Named types are 'exported' in that they can be addressed from other type packages.
+// StructKind types, and possibly others if we do type aliases, will have a Name(). Named types are 'exported' in that they can be addressed from other type packages.
 // Desc provides more details of the type. It may contain only a types.NomsKind, in the case of primitives, or it may contain additional information -- e.g. element Types for compound type specializations, field descriptions for structs, etc. Either way, checking Kind() allows code to understand how to interpret the rest of the data.
 // If Kind() refers to a primitive, then Desc has no more info.
 // If Kind() refers to List, Map, Set or Ref, then Desc is a list of Types describing the element type(s).
 // If Kind() refers to Struct, then Desc contains a []Field and Choices.
-// If Kind() refers to Enum, then Desc is a []string describing the enumerated values.
 // If Kind() refers to an UnresolvedKind, then Desc contains a PackageRef, which is the Ref of the package where the type definition is defined. The ordinal, if not -1, is the index into the Types list of the package. If the Name is set then the ordinal needs to be found.
 type Type struct {
 	name name
@@ -128,7 +127,7 @@ func (t Type) ChildValues() (res []Value) {
 			}
 		case UnresolvedDesc:
 			// Nothing, this is handled by the HasPackageRef() check above
-		case PrimitiveDesc, EnumDesc:
+		case PrimitiveDesc:
 			// Nothing, these have no child values
 		default:
 			d.Chk.Fail("Unexpected type desc implementation: %#v", t)
@@ -160,10 +159,6 @@ func MakeCompoundType(kind NomsKind, elemTypes ...Type) Type {
 		d.Chk.Len(elemTypes, 2, "MapKind requires 2 element types.")
 	}
 	return buildType("", CompoundDesc{kind, elemTypes})
-}
-
-func MakeEnumType(name string, ids ...string) Type {
-	return buildType(name, EnumDesc{ids})
 }
 
 func MakeStructType(name string, fields []Field, choices []Field) Type {
@@ -200,7 +195,7 @@ func buildType(n string, desc TypeDesc) Type {
 		return Type{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
 	}
 	switch desc.Kind() {
-	case ListKind, RefKind, SetKind, MapKind, EnumKind, StructKind, UnresolvedKind:
+	case ListKind, RefKind, SetKind, MapKind, StructKind, UnresolvedKind:
 		return Type{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
 	default:
 		d.Exp.Fail("Unrecognized Kind:", "%v", desc.Kind())

@@ -168,14 +168,14 @@ func TestWriteHumanReadableStruct(t *testing.T) {
 		"x": Int32(1),
 	})
 	assertWriteHRSEqual(t, "S1 {\n  x: 1,\n}", str)
-	assertWriteTaggedHRSEqual(t, "Struct<S1, sha1-bdd35d6fe5b89487d71d0ec27c1a6c79a0261baa, 0>({\n  x: 1,\n})", str)
+	assertWriteTaggedHRSEqual(t, "Struct<S1, sha1-060081d28078bb395a2a0df4df5a27672e912976, 0>({\n  x: 1,\n})", str)
 
 	str2 := NewStruct(typ, typeDef, map[string]Value{
 		"x": Int32(2),
 		"y": Int32(3),
 	})
 	assertWriteHRSEqual(t, "S1 {\n  x: 2,\n  y: 3,\n}", str2)
-	assertWriteTaggedHRSEqual(t, "Struct<S1, sha1-bdd35d6fe5b89487d71d0ec27c1a6c79a0261baa, 0>({\n  x: 2,\n  y: 3,\n})", str2)
+	assertWriteTaggedHRSEqual(t, "Struct<S1, sha1-060081d28078bb395a2a0df4df5a27672e912976, 0>({\n  x: 2,\n  y: 3,\n})", str2)
 }
 
 func TestWriteHumanReadableStructWithUnion(t *testing.T) {
@@ -193,13 +193,13 @@ func TestWriteHumanReadableStructWithUnion(t *testing.T) {
 		"x": Int32(1),
 	})
 	assertWriteHRSEqual(t, "S2 {\n  x: 1,\n}", str)
-	assertWriteTaggedHRSEqual(t, "Struct<S2, sha1-13e3f926c03c637bc474442a10af9023b24010f8, 0>({\n  x: 1,\n})", str)
+	assertWriteTaggedHRSEqual(t, "Struct<S2, sha1-5f45a0ccd251ef723835f2e80d5c12422dfdab04, 0>({\n  x: 1,\n})", str)
 
 	str2 := NewStruct(typ, typeDef, map[string]Value{
 		"y": Int32(2),
 	})
 	assertWriteHRSEqual(t, "S2 {\n  y: 2,\n}", str2)
-	assertWriteTaggedHRSEqual(t, "Struct<S2, sha1-13e3f926c03c637bc474442a10af9023b24010f8, 0>({\n  y: 2,\n})", str2)
+	assertWriteTaggedHRSEqual(t, "Struct<S2, sha1-5f45a0ccd251ef723835f2e80d5c12422dfdab04, 0>({\n  y: 2,\n})", str2)
 }
 
 func TestWriteHumanReadableListOfStruct(t *testing.T) {
@@ -234,7 +234,7 @@ func TestWriteHumanReadableListOfStruct(t *testing.T) {
     x: 3,
   },
 ]`, l)
-	assertWriteTaggedHRSEqual(t, `List<Struct<S3, sha1-543f7124883ace7da7fccaed6d5cfc31598020f1, 0>>([
+	assertWriteTaggedHRSEqual(t, `List<Struct<S3, sha1-9331a57465cd1747c79b15cdb8ada8c2d2beb8b5, 0>>([
   S3 {
     x: 1,
   },
@@ -245,21 +245,6 @@ func TestWriteHumanReadableListOfStruct(t *testing.T) {
     x: 3,
   },
 ])`, l)
-}
-
-func TestWriteHumanReadableEnum(t *testing.T) {
-	pkg := NewPackage([]Type{
-		MakeEnumType("Color", "red", "green", "blue"),
-	}, []ref.Ref{})
-	RegisterPackage(&pkg)
-	typ := MakeType(pkg.Ref(), 0)
-
-	assertWriteHRSEqual(t, "red", newEnum(0, typ))
-	assertWriteTaggedHRSEqual(t, "Enum<Color, sha1-51b66eaa0827d76d1618c8d4e7e42215d00d6642, 0>(red)", newEnum(0, typ))
-	assertWriteHRSEqual(t, "green", newEnum(1, typ))
-	assertWriteTaggedHRSEqual(t, "Enum<Color, sha1-51b66eaa0827d76d1618c8d4e7e42215d00d6642, 0>(green)", newEnum(1, typ))
-	assertWriteHRSEqual(t, "blue", newEnum(2, typ))
-	assertWriteTaggedHRSEqual(t, "Enum<Color, sha1-51b66eaa0827d76d1618c8d4e7e42215d00d6642, 0>(blue)", newEnum(2, typ))
 }
 
 func TestWriteHumanReadableBlob(t *testing.T) {
@@ -296,18 +281,6 @@ func TestWriteHumanReadableListOfBlob(t *testing.T) {
 	assertWriteTaggedHRSEqual(t, "List<Blob>([\n  AQ,\n  ,\n  Ag,\n])", l)
 }
 
-func TestWriteHumanReadableListOfEnum(t *testing.T) {
-	pkg := NewPackage([]Type{
-		MakeEnumType("Color", "red", "green", "blue"),
-	}, []ref.Ref{})
-	RegisterPackage(&pkg)
-	typ := MakeType(pkg.Ref(), 0)
-	lt := MakeListType(typ)
-	l := NewTypedList(lt, newEnum(0, typ), newEnum(1, typ), newEnum(2, typ))
-	assertWriteHRSEqual(t, "[\n  red,\n  green,\n  blue,\n]", l)
-	assertWriteTaggedHRSEqual(t, "List<Enum<Color, sha1-51b66eaa0827d76d1618c8d4e7e42215d00d6642, 0>>([\n  red,\n  green,\n  blue,\n])", l)
-}
-
 func TestWriteHumanReadableType(t *testing.T) {
 	assertWriteHRSEqual(t, "Bool", BoolType)
 	assertWriteHRSEqual(t, "Blob", BlobType)
@@ -330,42 +303,34 @@ func TestWriteHumanReadableType(t *testing.T) {
 	assertWriteHRSEqual(t, "Map<Int64, String>", MakeMapType(Int64Type, StringType))
 
 	pkg := NewPackage([]Type{
-		MakeEnumType("Color", "red", "green", "blue"),
 		MakeStructType("Str", []Field{
 			Field{Name: "c", T: MakeType(ref.Ref{}, 0), Optional: false},
 			Field{Name: "o", T: StringType, Optional: true},
 		}, []Field{
-			Field{Name: "x", T: MakeType(ref.Ref{}, 1), Optional: false},
+			Field{Name: "x", T: MakeType(ref.Ref{}, 0), Optional: false},
 			Field{Name: "y", T: BoolType, Optional: false},
 		}),
 	}, []ref.Ref{})
 	RegisterPackage(&pkg)
-	et := MakeType(pkg.Ref(), 0)
-	st := MakeType(pkg.Ref(), 1)
+	st := MakeType(pkg.Ref(), 0)
 
-	assertWriteHRSEqual(t, "Enum<Color, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 0>", et)
-	assertWriteTaggedHRSEqual(t, "Type(Enum<Color, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 0>)", et)
-	assertWriteHRSEqual(t, "Struct<Str, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 1>", st)
-	assertWriteTaggedHRSEqual(t, "Type(Struct<Str, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 1>)", st)
+	assertWriteHRSEqual(t, "Struct<Str, sha1-b7decaf1ff8a10d818cb097fc36d3eafaf5dcf7e, 0>", st)
+	assertWriteTaggedHRSEqual(t, "Type(Struct<Str, sha1-b7decaf1ff8a10d818cb097fc36d3eafaf5dcf7e, 0>)", st)
 
-	eTypeDef := pkg.Types()[0]
-	assertWriteHRSEqual(t, "enum Color {\n  red\n  green\n  blue\n}", eTypeDef)
-	assertWriteTaggedHRSEqual(t, "Type(enum Color {\n  red\n  green\n  blue\n})", eTypeDef)
-
-	sTypeDef := pkg.Types()[1]
+	sTypeDef := pkg.Types()[0]
 	assertWriteHRSEqual(t, `struct Str {
-  c: Enum<Color, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 0>
+  c: Struct<Str, sha1-b7decaf1ff8a10d818cb097fc36d3eafaf5dcf7e, 0>
   o: optional String
   union {
-    x: Struct<Str, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 1>
+    x: Struct<Str, sha1-b7decaf1ff8a10d818cb097fc36d3eafaf5dcf7e, 0>
     y: Bool
   }
 }`, sTypeDef)
 	assertWriteTaggedHRSEqual(t, `Type(struct Str {
-  c: Enum<Color, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 0>
+  c: Struct<Str, sha1-b7decaf1ff8a10d818cb097fc36d3eafaf5dcf7e, 0>
   o: optional String
   union {
-    x: Struct<Str, sha1-9323c4c8d8a5745550b914fb01c8641ab42f121a, 1>
+    x: Struct<Str, sha1-b7decaf1ff8a10d818cb097fc36d3eafaf5dcf7e, 0>
     y: Bool
   }
 })`, sTypeDef)

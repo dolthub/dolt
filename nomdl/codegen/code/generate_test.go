@@ -1,7 +1,6 @@
 package code
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/attic-labs/noms/ref"
@@ -36,7 +35,6 @@ func TestUserName(t *testing.T) {
 	assert := assert.New(t)
 
 	imported := types.NewPackage([]types.Type{
-		types.MakeEnumType("E1", "a", "b"),
 		types.MakeStructType("S1", []types.Field{
 			types.Field{"f", types.MakePrimitiveType(types.BoolKind), false},
 		}, []types.Field{}),
@@ -51,7 +49,4 @@ func TestUserName(t *testing.T) {
 
 	g := Generator{R: &res, Package: &imported}
 	assert.Equal(localStructName, g.UserName(resolved))
-
-	listOfImported := types.MakeCompoundType(types.ListKind, types.MakeType(imported.Ref(), 1))
-	assert.Equal(fmt.Sprintf("ListOfS1"), g.UserName(listOfImported))
 }

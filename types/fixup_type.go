@@ -3,7 +3,7 @@ package types
 // FixupType goes trough the object graph of tr and updates the PackageRef to pkg if the the old PackageRef was an empty ref.
 func FixupType(tr Type, pkg *Package) Type {
 	switch desc := tr.Desc.(type) {
-	case EnumDesc, PrimitiveDesc:
+	case PrimitiveDesc:
 		return tr
 
 	case CompoundDesc:

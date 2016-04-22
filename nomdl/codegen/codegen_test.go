@@ -71,7 +71,6 @@ func TestSkipDuplicateTypes(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	leaf1 := types.NewPackage([]types.Type{
-		types.MakeEnumType("E1", "a", "b"),
 		types.MakeStructType("S1", []types.Field{
 			types.Field{"f", types.MakeCompoundType(types.ListKind, types.MakePrimitiveType(types.Uint16Kind)), false},
 			types.Field{"e", types.MakeType(ref.Ref{}, 0), false},
@@ -95,38 +94,6 @@ func TestSkipDuplicateTypes(t *testing.T) {
 	code, err := ioutil.ReadFile(leaf2Path)
 	assert.NoError(err)
 	assert.NotContains(string(code), "type ListOfUint16")
-}
-
-func TestGenerateDeps(t *testing.T) {
-	assert := assert.New(t)
-	ds := datas.NewDataStore(chunks.NewMemoryStore())
-	dir, err := ioutil.TempDir("", "codegen_test_")
-	assert.NoError(err)
-	defer os.RemoveAll(dir)
-
-	leaf1 := types.NewPackage([]types.Type{types.MakeEnumType("e1", "a", "b")}, []ref.Ref{})
-	leaf1Ref := ds.WriteValue(leaf1).TargetRef()
-	leaf2 := types.NewPackage([]types.Type{types.MakePrimitiveType(types.BoolKind)}, []ref.Ref{})
-	leaf2Ref := ds.WriteValue(leaf2).TargetRef()
-
-	depender := types.NewPackage([]types.Type{}, []ref.Ref{leaf1Ref})
-	dependerRef := ds.WriteValue(depender).TargetRef()
-
-	top := types.NewPackage([]types.Type{}, []ref.Ref{leaf2Ref, dependerRef})
-	types.RegisterPackage(&top)
-
-	localPkgs := refSet{top.Ref(): true}
-	generateDepCode(filepath.Base(dir), dir, map[string]bool{}, top, localPkgs, ds)
-
-	leaf1Path := filepath.Join(dir, code.ToTag(leaf1.Ref())+".js")
-	leaf2Path := filepath.Join(dir, code.ToTag(leaf2.Ref())+".js")
-	leaf3Path := filepath.Join(dir, code.ToTag(depender.Ref())+".js")
-	_, err = os.Stat(leaf1Path)
-	assert.NoError(err)
-	_, err = os.Stat(leaf2Path)
-	assert.NoError(err)
-	_, err = os.Stat(leaf3Path)
-	assert.NoError(err)
 }
 
 func TestCommitNewPackages(t *testing.T) {

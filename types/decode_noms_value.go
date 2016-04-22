@@ -181,10 +181,6 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t Type, pkg *Package) (Value, bo
 	return newMetaSequenceFromData(data, t, r.vr), true
 }
 
-func (r *jsonArrayReader) readEnum(t Type) Value {
-	return enumFromType(uint32(r.readUint()), t)
-}
-
 func (r *jsonArrayReader) readPackage(t Type, pkg *Package) Value {
 	r2 := newJsonArrayReader(r.readArray(), r.vr)
 	types := []Type{}
@@ -272,7 +268,7 @@ func (r *jsonArrayReader) readValueWithoutTag(t Type, pkg *Package) Value {
 
 		r2 := newJsonArrayReader(r.readArray(), r.vr)
 		return r2.readSet(t, pkg)
-	case EnumKind, StructKind:
+	case StructKind:
 		panic("not allowed")
 	case TypeKind:
 		return r.readTypeKindToValue(t, pkg)
@@ -288,7 +284,7 @@ func (r *jsonArrayReader) readTypeKindToValue(t Type, pkg *Package) Value {
 }
 
 func (r *jsonArrayReader) readUnresolvedKindToValue(t Type, pkg *Package) Value {
-	// When we have a struct referencing another struct/enum in the same package the package ref is empty. In that case we use the package that is passed into this function.
+	// When we have a struct referencing another struct in the same package the package ref is empty. In that case we use the package that is passed into this function.
 	d.Chk.True(t.IsUnresolved())
 	pkgRef := t.PackageRef()
 	ordinal := t.Ordinal()
@@ -305,10 +301,6 @@ func (r *jsonArrayReader) readUnresolvedKindToValue(t Type, pkg *Package) Value 
 
 	typeDef := pkg.types[ordinal]
 
-	if typeDef.Kind() == EnumKind {
-		return r.readEnum(t)
-	}
-
 	d.Chk.Equal(StructKind, typeDef.Kind())
 	return r.readStruct(typeDef, t, pkg)
 }
@@ -316,14 +308,6 @@ func (r *jsonArrayReader) readUnresolvedKindToValue(t Type, pkg *Package) Value 
 func (r *jsonArrayReader) readTypeAsValue(pkg *Package) Type {
 	k := r.readKind()
 	switch k {
-	case EnumKind:
-		name := r.readString()
-		r2 := newJsonArrayReader(r.readArray(), r.vr)
-		ids := []string{}
-		for !r2.atEnd() {
-			ids = append(ids, r2.readString())
-		}
-		return MakeEnumType(name, ids...)
 	case ListKind, MapKind, RefKind, SetKind:
 		r2 := newJsonArrayReader(r.readArray(), r.vr)
 		elemTypes := []Type{}

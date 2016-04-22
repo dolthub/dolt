@@ -1,9 +1,0 @@
-enum Handedness {
-  right
-  left
-  switch
-}
-
-struct EnumStruct {
-  hand: Handedness
-}

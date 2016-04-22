@@ -20,7 +20,6 @@ import {
   int64Type,
   int8Type,
   makeCompoundType,
-  makeEnumType,
   makeListType,
   makeMapType,
   makeSetType,
@@ -340,37 +339,6 @@ suite('Encode', () => {
     assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '1', '42'], w.array);
   });
 
-  test('write enum', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
-
-    const pkg = new Package([makeEnumType('E', ['a', 'b', 'c'])], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const typ = makeType(pkgRef, 0);
-
-    w.writeTopLevel(typ, 1);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', '1'], w.array);
-  });
-
-  test('write list of enum', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
-
-    const pkg = new Package([makeEnumType('E', ['a', 'b', 'c'])], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const typ = makeType(pkgRef, 0);
-    const listType = makeCompoundType(Kind.List, typ);
-    const l = new NomsList(listType, new ListLeafSequence(ds, listType, [0, 1, 2]));
-
-    w.writeTopLevel(listType, l);
-    assert.deepEqual([Kind.List, Kind.Unresolved, pkgRef.toString(), '0', false, ['0', '1', '2']],
-        w.array);
-  });
-
   test('write compound list', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
@@ -406,7 +374,6 @@ suite('Encode', () => {
          makeCompoundType(Kind.List, boolType));
     test([Kind.Type, Kind.Map, [Kind.Bool, Kind.String]],
          makeCompoundType(Kind.Map, boolType, stringType));
-    test([Kind.Type, Kind.Enum, 'E', ['a', 'b', 'c']], makeEnumType('E', ['a', 'b', 'c']));
     test([Kind.Type, Kind.Struct, 'S', ['x', Kind.Int16, false, 'v', Kind.Value, true], []],
          makeStructType('S', [
            new Field('x', int16Type, false),

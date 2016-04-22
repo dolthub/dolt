@@ -176,18 +176,6 @@ func (suite *ParserTestSuite) TestBadComment() {
 	}
 }
 
-func (suite *ParserTestSuite) TestEnum() {
-	enumTmpl := `enum %s { %s }`
-	name := "Enum"
-	ids := []string{"e1", "e2", "e4"}
-	enum := fmt.Sprintf(enumTmpl, name, strings.Join(ids, "\n"))
-
-	pkg := runParser("", strings.NewReader(enum))
-	t := pkg.Types[0]
-	suite.Equal(name, t.Name())
-	suite.EqualValues(ids, t.Desc.(types.EnumDesc).IDs)
-}
-
 type ParsedResultTestSuite struct {
 	suite.Suite
 

@@ -1,8 +1,7 @@
-alias leaf = import "sha1-1c216c6f1d6989e4ede5f78b7689214948dabeef"
+alias leaf = import "sha1-068bb32c733bd940a0d758715bf05082f4c12fcb"
 
 struct D {
   structField: leaf.S
-  enumField: leaf.E
 }
 
 struct DUser {

@@ -401,36 +401,6 @@ func TestReadValueStruct(t *testing.T) {
 	assert.True(v.Get("b").Equals(Bool(true)))
 }
 
-func TestReadEnum(t *testing.T) {
-	assert := assert.New(t)
-	cs := NewTestValueStore()
-
-	typeDef := MakeEnumType("E", "a", "b", "c")
-	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-
-	a := parseJson(`[%d, "%s", "0", "1"]`, UnresolvedKind, pkgRef.String())
-	r := newJsonArrayReader(a, cs)
-
-	v := r.readTopLevelValue().(Enum)
-	assert.Equal(uint32(1), v.v)
-}
-
-func TestReadValueEnum(t *testing.T) {
-	assert := assert.New(t)
-	cs := NewTestValueStore()
-
-	typeDef := MakeEnumType("E", "a", "b", "c")
-	pkg := NewPackage([]Type{typeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-
-	a := parseJson(`[%d, %d, "%s", "0", "1"]`, ValueKind, UnresolvedKind, pkgRef.String())
-	r := newJsonArrayReader(a, cs)
-
-	v := r.readTopLevelValue().(Enum)
-	assert.Equal(uint32(1), v.v)
-}
-
 func TestReadRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
@@ -453,39 +423,6 @@ func TestReadValueRef(t *testing.T) {
 	v := reader.readTopLevelValue()
 	tr := MakeCompoundType(RefKind, MakePrimitiveType(Uint32Kind))
 	assert.True(refFromType(r, tr).Equals(v))
-}
-
-func TestReadStructWithEnum(t *testing.T) {
-	assert := assert.New(t)
-	cs := NewTestValueStore()
-
-	// enum E {
-	//   a
-	//   b
-	// }
-	// struct A1 {
-	//   x: Float32
-	//   e: E
-	//   s: String
-	// }
-
-	structTref := MakeStructType("A1", []Field{
-		Field{"x", MakePrimitiveType(Int16Kind), false},
-		Field{"e", MakeType(ref.Ref{}, 1), false},
-		Field{"b", MakePrimitiveType(BoolKind), false},
-	}, []Field{})
-	enumTref := MakeEnumType("E", "a", "b", "c")
-	pkg := NewPackage([]Type{structTref, enumTref}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-
-	a := parseJson(`[%d, "%s", "0", "42", "1", true]`, UnresolvedKind, pkgRef.String())
-	r := newJsonArrayReader(a, cs)
-	enumTr := MakeType(pkgRef, 1)
-	v := r.readTopLevelValue().(Struct)
-
-	assert.True(v.Get("x").Equals(Int16(42)))
-	assert.True(v.Get("e").Equals(Enum{1, enumTr}))
-	assert.True(v.Get("b").Equals(Bool(true)))
 }
 
 func TestReadStructWithBlob(t *testing.T) {
@@ -527,8 +464,6 @@ func TestReadTypeValue(t *testing.T) {
 		`[%d, %d, [%d]]`, TypeKind, ListKind, BoolKind)
 	test(MakeCompoundType(MapKind, MakePrimitiveType(BoolKind), MakePrimitiveType(StringKind)),
 		`[%d, %d, [%d, %d]]`, TypeKind, MapKind, BoolKind, StringKind)
-	test(MakeEnumType("E", "a", "b", "c"),
-		`[%d, %d, "E", ["a", "b", "c"]]`, TypeKind, EnumKind)
 
 	test(MakeStructType("S", []Field{
 		Field{"x", MakePrimitiveType(Int16Kind), false},
@@ -552,38 +487,6 @@ func TestReadTypeValue(t *testing.T) {
 		`[%d, %d, "S", ["e", %d, "%s", "123", false, "x", %d, false], []]`, TypeKind, StructKind, UnresolvedKind, pkgRef.String(), Int64Kind)
 
 	test(MakeUnresolvedType("ns", "n"), `[%d, %d, "%s", "-1", "ns", "n"]`, TypeKind, UnresolvedKind, ref.Ref{}.String())
-}
-
-func TestReadPackage(t *testing.T) {
-	cs := NewTestValueStore()
-	pkg := NewPackage([]Type{
-		MakeStructType("EnumStruct",
-			[]Field{
-				Field{"hand", MakeType(ref.Ref{}, 1), false},
-			},
-			[]Field{},
-		),
-		MakeEnumType("Handedness", "right", "left", "switch"),
-	}, []ref.Ref{})
-
-	// struct Package {
-	// 	Dependencies: Set(Ref(Package))
-	// 	Types: List(Type)
-	// }
-
-	a := []interface{}{
-		float64(PackageKind),
-		[]interface{}{ // Types
-			float64(StructKind), "EnumStruct", []interface{}{
-				"hand", float64(UnresolvedKind), "sha1-0000000000000000000000000000000000000000", "1", false,
-			}, []interface{}{},
-			float64(EnumKind), "Handedness", []interface{}{"right", "left", "switch"},
-		},
-		[]interface{}{}, // Dependencies
-	}
-	r := newJsonArrayReader(a, cs)
-	pkg2 := r.readTopLevelValue().(Package)
-	assert.True(t, pkg.Equals(pkg2))
 }
 
 func TestReadPackage2(t *testing.T) {

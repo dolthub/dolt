@@ -21,7 +21,6 @@ export const Kind: {
   Map: NomsKind,
   Ref: NomsKind,
   Set: NomsKind,
-  Enum: NomsKind,
   Struct: NomsKind,
   Type: NomsKind,
   Unresolved: NomsKind,
@@ -45,11 +44,10 @@ export const Kind: {
   Map: 15,
   Ref: 16,
   Set: 17,
-  Enum: 18,
-  Struct: 19,
-  Type: 20,
-  Unresolved: 21,
-  Package: 22,
+  Struct: 18,
+  Type: 19,
+  Unresolved: 20,
+  Package: 21,
 };
 
 const kindToStringMap: { [key: number]: string } = Object.create(null);
@@ -71,7 +69,6 @@ kindToStringMap[Kind.List] = 'List';
 kindToStringMap[Kind.Map] = 'Map';
 kindToStringMap[Kind.Ref] = 'Ref';
 kindToStringMap[Kind.Set] = 'Set';
-kindToStringMap[Kind.Enum] = 'Enum';
 kindToStringMap[Kind.Struct] = 'Struct';
 kindToStringMap[Kind.Type] = 'Type';
 kindToStringMap[Kind.Unresolved] = 'Unresolved';

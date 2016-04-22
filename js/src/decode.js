@@ -13,7 +13,6 @@ import {
   Field,
   getPrimitiveType,
   makeCompoundType,
-  makeEnumType,
   makeStructType,
   makeType,
   makeUnresolvedType,
@@ -182,10 +181,6 @@ export class JsonArrayReader {
     return new MapLeafSequence(this._ds, t, entries);
   }
 
-  readEnum(): number {
-    return this.readUint();
-  }
-
   readMetaSequence(t: Type, pkg: ?Package): any {
     const data: Array<MetaTuple> = [];
     const indexType = indexTypeForMetaSequence(t);
@@ -309,7 +304,6 @@ export class JsonArrayReader {
           r2.readSetLeafSequence(t, pkg);
         return new NomsSet(t, sequence);
       }
-      case Kind.Enum:
       case Kind.Struct:
         throw new Error('Not allowed');
       case Kind.Type:
@@ -334,9 +328,6 @@ export class JsonArrayReader {
 
     pkg = notNull(pkg);
     const typeDef = pkg.types[ordinal];
-    if (typeDef.kind === Kind.Enum) {
-      return this.readEnum();
-    }
 
     invariant(typeDef.kind === Kind.Struct);
     return this.readStruct(typeDef, t, pkg);
@@ -346,15 +337,6 @@ export class JsonArrayReader {
     const k = this.readKind();
 
     switch (k) {
-      case Kind.Enum: {
-        const name = this.readString();
-        const r2 = new JsonArrayReader(this.readArray(), this._ds);
-        const ids = [];
-        while (!r2.atEnd()) {
-          ids.push(r2.readString());
-        }
-        return makeEnumType(name, ids);
-      }
       case Kind.List:
       case Kind.Map:
       case Kind.Ref:

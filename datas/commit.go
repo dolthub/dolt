@@ -48,7 +48,7 @@ func (m Commit) Type() types.Type {
 }
 
 func init() {
-	__typeForCommit = types.MakeType(ref.Parse("sha1-4da2f91cdbba5a7c91b383091da45e55e16d2152"), 0)
+	__typeForCommit = types.MakeType(ref.Parse("sha1-d8bf281149d5474072c87be999e961184bd9ec99"), 0)
 	types.RegisterStruct(__typeForCommit, builderForCommit, readerForCommit)
 }
 

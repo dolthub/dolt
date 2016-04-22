@@ -651,7 +651,7 @@ func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := NewTypedList(listType, nums...)
-	assert.Equal(s.Ref().String(), "sha1-c69b98c39753f566feca40ebf40d1b4e1a2c121e")
+	assert.Equal(s.Ref().String(), "sha1-7e7dc681c6b101175362d47d22af1a4c05d59b25")
 }
 
 func TestCompoundListModifyAfterRead(t *testing.T) {

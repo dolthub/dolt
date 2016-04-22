@@ -3,7 +3,7 @@
 import Chunk from './chunk.js';
 import DataStore from './data-store.js';
 import MemoryStore from './memory-store.js';
-import {default as Ref, emptyRef} from './ref.js';
+import Ref from './ref.js';
 import RefValue from './ref-value.js';
 import {default as Struct, StructMirror} from './struct.js';
 import type {float64, int32, int64, uint8, uint16, uint32, uint64} from './primitives.js';
@@ -21,7 +21,6 @@ import {
   int64Type,
   int8Type,
   makeCompoundType,
-  makeEnumType,
   makeStructType,
   makeType,
   stringType,
@@ -430,59 +429,6 @@ suite('Decode', () => {
     });
   });
 
-  test('test read enum', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const tr = makeEnumType('E', ['a', 'b', 'c']);
-    const pkg = new Package([tr], []);
-    registerPackage(pkg);
-
-    const a = [Kind.Unresolved, pkg.ref.toString(), '0', '1'];
-    const r = new JsonArrayReader(a, ds);
-    const v = await r.readTopLevelValue();
-
-    assert.deepEqual(1, v);
-  });
-
-  test('test read value enum', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const tr = makeEnumType('E', ['a', 'b', 'c']);
-    const pkg = new Package([tr], []);
-    registerPackage(pkg);
-
-    const a = [Kind.Value, Kind.Unresolved, pkg.ref.toString(), '0', '1'];
-    const r = new JsonArrayReader(a, ds);
-    const v = await r.readTopLevelValue();
-
-    assert.deepEqual(1, v);
-  });
-
-  test('test read struct with', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const pkg = new Package([
-      makeStructType('A1', [
-        new Field('x', int16Type, false),
-        new Field('e', makeType(emptyRef, 1), false),
-        new Field('b', boolType, false),
-      ], []),
-      makeEnumType('E', ['a', 'b', 'c']),
-    ], []);
-    registerPackage(pkg);
-    const tr = pkg.types[0];
-
-    const a = [Kind.Unresolved, pkg.ref.toString(), '0', '42', '1', true];
-    const r = new JsonArrayReader(a, ds);
-    const v = await r.readTopLevelValue();
-
-    assertStruct(v, tr.desc, {
-      x: 42,
-      e: 1,
-      b: true,
-    });
-  });
-
   test('test read map of string to struct', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
@@ -522,15 +468,35 @@ suite('Decode', () => {
   test('decodeNomsValue: counter with one commit', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const root = Ref.parse('sha1-c3680a063b73ac42c3075110108a48a91007abf7');
-    ms.put(Chunk.fromString('t [15,11,16,21,"sha1-7546d804d845125bc42669c7a4c3f3fb909eca29","0",' +
-        'false,["counter","sha1-a6fffab4e12b49d57f194f0d3add9f6623a13e19"]]')); // root
-    ms.put(Chunk.fromString('t [22,[19,"Commit",["value",13,false,"parents",17,[16,[21,' +
-        '"sha1-0000000000000000000000000000000000000000","0"]],false],[]],[]]')); // datas package
-    ms.put(Chunk.fromString('t [21,"sha1-4da2f91cdbba5a7c91b383091da45e55e16d2152","0",4,"1",' +
-        'false,[]]')); // commit
 
-    const rootMap = await ds.readValue(root);
+    const makeChunk = a => Chunk.fromString(`t ${JSON.stringify(a)}`);
+
+    // Package containing Commit def
+    const packageArray = [Kind.Package, [Kind.Struct, 'Commit', [
+      'value', Kind.Value, false,
+      'parents', Kind.Set, [
+        Kind.Ref, [
+          Kind.Unresolved, 'sha1-0000000000000000000000000000000000000000','0',
+        ],
+      ], false,
+    ], []],[]];
+    const pkgChunk = makeChunk(packageArray);
+    const pkgRef = pkgChunk.ref;
+    ms.put(pkgChunk);
+
+    // Commit value
+    const commitChunk = makeChunk(
+      [Kind.Unresolved, pkgRef.toString(), '0', Kind.Uint64, '1', false, []]);
+    const commitRef = commitChunk.ref;
+    ms.put(commitChunk);
+
+    // Root
+    const rootChunk = makeChunk([Kind.Map, Kind.String, Kind.Ref, Kind.Unresolved,
+      pkgRef.toString(), '0', false, ['counter', commitRef.toString()]]);
+    const rootRef = rootChunk.ref;
+    ms.put(rootChunk);
+
+    const rootMap = await ds.readValue(rootRef);
     const counterRef = await rootMap.get('counter');
     const commit = await counterRef.targetValue(ds);
     assert.strictEqual(1, await commit.value);

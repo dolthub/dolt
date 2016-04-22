@@ -111,31 +111,6 @@ func (c CompoundDesc) Equals(other TypeDesc) bool {
 	return true
 }
 
-// EnumDesc simply lists the identifiers used in this enum.
-type EnumDesc struct {
-	IDs []string
-}
-
-func (e EnumDesc) Kind() NomsKind {
-	return EnumKind
-}
-
-func (e EnumDesc) Equals(other TypeDesc) bool {
-	if e.Kind() != other.Kind() {
-		return false
-	}
-	e2 := other.(EnumDesc)
-	if len(e.IDs) != len(e2.IDs) {
-		return false
-	}
-	for i, id := range e2.IDs {
-		if id != e.IDs[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // StructDesc describes a custom Noms Struct.
 // Structs can contain at most one anonymous union, so Union may be nil.
 type StructDesc struct {

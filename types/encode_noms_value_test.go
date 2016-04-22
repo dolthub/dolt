@@ -279,34 +279,6 @@ func TestWriteStructWithBlob(t *testing.T) {
 	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", false, "AAE="}, w.toArray())
 }
 
-func TestWriteEnum(t *testing.T) {
-	assert := assert.New(t)
-
-	pkg := NewPackage([]Type{
-		MakeEnumType("E", "a", "b", "c")}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-	typ := MakeType(pkgRef, 0)
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeTopLevelValue(Enum{1, typ})
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", "1"}, w.toArray())
-}
-
-func TestWriteListOfEnum(t *testing.T) {
-	assert := assert.New(t)
-
-	pkg := NewPackage([]Type{
-		MakeEnumType("E", "a", "b", "c")}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-	et := MakeType(pkgRef, 0)
-	typ := MakeCompoundType(ListKind, et)
-	v := NewTypedList(typ, Enum{0, et}, Enum{1, et}, Enum{2, et})
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{ListKind, UnresolvedKind, pkgRef.String(), "0", false, []interface{}{"0", "1", "2"}}, w.toArray())
-}
-
 func TestWriteCompoundList(t *testing.T) {
 	assert := assert.New(t)
 
@@ -463,8 +435,6 @@ func TestWriteTypeValue(t *testing.T) {
 		MakeCompoundType(ListKind, MakePrimitiveType(BoolKind)))
 	test([]interface{}{TypeKind, MapKind, []interface{}{BoolKind, StringKind}},
 		MakeCompoundType(MapKind, MakePrimitiveType(BoolKind), MakePrimitiveType(StringKind)))
-	test([]interface{}{TypeKind, EnumKind, "E", []interface{}{"a", "b", "c"}},
-		MakeEnumType("E", "a", "b", "c"))
 
 	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"x", Int16Kind, false, "v", ValueKind, true}, []interface{}{}},
 		MakeStructType("S", []Field{
@@ -496,47 +466,14 @@ func TestWriteListOfTypes(t *testing.T) {
 	assert := assert.New(t)
 
 	typ := MakeCompoundType(ListKind, MakePrimitiveType(TypeKind))
-	v := NewTypedList(typ, MakePrimitiveType(BoolKind), MakeEnumType("E", "a", "b", "c"), MakePrimitiveType(StringKind))
+	v := NewTypedList(typ, MakePrimitiveType(BoolKind), MakePrimitiveType(StringKind))
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{ListKind, TypeKind, false, []interface{}{BoolKind, EnumKind, "E", []interface{}{"a", "b", "c"}, StringKind}}, w.toArray())
+	assert.EqualValues([]interface{}{ListKind, TypeKind, false, []interface{}{BoolKind, StringKind}}, w.toArray())
 }
 
 func TestWritePackage(t *testing.T) {
-	pkg := NewPackage([]Type{
-		MakeStructType("EnumStruct",
-			[]Field{
-				Field{"hand", MakeType(ref.Ref{}, 1), false},
-			},
-			[]Field{},
-		),
-		MakeEnumType("Handedness", "right", "left", "switch"),
-	}, []ref.Ref{})
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeTopLevelValue(pkg)
-
-	// struct Package {
-	// 	Dependencies: Set(Ref(Package))
-	// 	Types: List(Type)
-	// }
-
-	exp := []interface{}{
-		PackageKind,
-		[]interface{}{
-			StructKind, "EnumStruct", []interface{}{
-				"hand", UnresolvedKind, "sha1-0000000000000000000000000000000000000000", "1", false,
-			}, []interface{}{},
-			EnumKind, "Handedness", []interface{}{"right", "left", "switch"},
-		},
-		[]interface{}{}, // Dependencies
-	}
-
-	assert.EqualValues(t, exp, w.toArray())
-}
-
-func TestWritePackage2(t *testing.T) {
 	assert := assert.New(t)
 
 	setTref := MakeCompoundType(SetKind, MakePrimitiveType(Uint32Kind))

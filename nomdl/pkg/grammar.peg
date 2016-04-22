@@ -37,12 +37,6 @@ Package <- _ dd:Definition+ _ EOF {
 					}
 				}
 				usings = append(usings, d)
-			case types.EnumKind:
-				if seenTypes[d.Name()] {
-					return nil, fmt.Errorf("Redefinition of " + d.Name())
-				}
-				seenTypes[d.Name()] = true
-				orderedTypes = append(orderedTypes, d)
 			case types.StructKind:
 				ds := expandStruct(d, len(orderedTypes))
 				for _, d := range ds {
@@ -60,25 +54,11 @@ Package <- _ dd:Definition+ _ EOF {
 	return intermediate{"", aliases, usings, orderedTypes}, nil
 }
 
-Definition <- Struct / Using / Alias / Enum
+Definition <- Struct / Using / Alias
 
 Alias <- `alias` _ i:Ident _ `=` _ `import` _ q:QuotedString _ {
 	return alias{i.(string), q.(string)}, nil
 }
-
-Enum <- `enum` _ id:Ident _ `{` _ l:EnumEntry+ _ `}` _ {
-	entries := l.([]interface{})
-	ids := make([]string, len(entries))
-	for i, e := range entries {
-		ids[i] = e.(string)
-	}
-	return types.MakeEnumType(id.(string), ids...), nil
-}
-
-EnumEntry <- i:Ident _ {
-	return i.(string), nil
-}
-
 
 Using <- `using` _ ct:CompoundType _ {
 	return ct, nil

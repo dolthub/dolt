@@ -79,7 +79,7 @@ suite('BuildList', () => {
     });
 
     const s = await newList(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-c69b98c39753f566feca40ebf40d1b4e1a2c121e');
+    assert.strictEqual(s.ref.toString(), 'sha1-7e7dc681c6b101175362d47d22af1a4c05d59b25');
     assert.strictEqual(testListSize, s.length);
   });
 

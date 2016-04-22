@@ -333,7 +333,7 @@ func (gen *codeGen) shouldBeWritten(t types.Type) bool {
 	if t.IsUnresolved() {
 		return false
 	}
-	if t.Kind() == types.EnumKind || t.Kind() == types.StructKind {
+	if t.Kind() == types.StructKind {
 		name := gen.generator.UserName(t)
 		d.Chk.False(gen.written[name], "Multiple definitions of type named %s", name)
 		return true
@@ -343,8 +343,6 @@ func (gen *codeGen) shouldBeWritten(t types.Type) bool {
 
 func (gen *codeGen) writeTopLevel(t types.Type, ordinal int) {
 	switch t.Kind() {
-	case types.EnumKind:
-		gen.writeEnum(t, ordinal)
 	case types.StructKind:
 		gen.writeStruct(t, ordinal)
 	default:
@@ -494,23 +492,4 @@ func (gen *codeGen) writeSet(t types.Type) {
 	}
 	gen.writeTemplate("set.tmpl", t, data)
 	gen.writeLater(elemTypes[0])
-}
-
-func (gen *codeGen) writeEnum(t types.Type, ordinal int) {
-	d.Chk.True(ordinal >= 0)
-	data := struct {
-		PackageRef ref.Ref
-		Name       string
-		Type       types.Type
-		Ordinal    int
-		Ids        []string
-	}{
-		gen.pkg.Package.Ref(),
-		t.Name(),
-		t,
-		ordinal,
-		t.Desc.(types.EnumDesc).IDs,
-	}
-
-	gen.writeTemplate("enum.tmpl", t, data)
 }
