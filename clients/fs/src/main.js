@@ -127,9 +127,9 @@ function processBlob(p: string, store: DataStore): Promise<RefValue<NomsBlob>> {
 }
 
 function updateProgress() {
-  process.stdout.write(`\r${numFilesComplete} of ${numFilesFound} entries \
-(${formatFileSize(sizeFilesComplete)} of ${formatFileSize(sizeFilesFound)}) \
-processed...`);
+  process.stdout.write(`\r${numFilesComplete} of ${numFilesFound} entries ` +
+    `(${formatFileSize(sizeFilesComplete)} of ${formatFileSize(sizeFilesFound)}) ` +
+    `processed...`);
 }
 
 function parseArgs() {
