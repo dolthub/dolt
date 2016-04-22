@@ -16,7 +16,7 @@ func TestRead(t *testing.T) {
 	cs := NewTestValueStore()
 
 	a := []interface{}{float64(1), "hi", true}
-	r := newJsonArrayReader(a, cs)
+	r := newJSONArrayReader(a, cs)
 
 	assert.Equal(float64(1), r.read().(float64))
 	assert.False(r.atEnd())
@@ -28,7 +28,7 @@ func TestRead(t *testing.T) {
 	assert.True(r.atEnd())
 }
 
-func parseJson(s string, vs ...interface{}) (v []interface{}) {
+func parseJSON(s string, vs ...interface{}) (v []interface{}) {
 	dec := json.NewDecoder(strings.NewReader(fmt.Sprintf(s, vs...)))
 	dec.Decode(&v)
 	return
@@ -38,8 +38,8 @@ func TestReadTypeAsTag(t *testing.T) {
 	cs := NewTestValueStore()
 
 	test := func(expected *Type, s string, vs ...interface{}) {
-		a := parseJson(s, vs...)
-		r := newJsonArrayReader(a, cs)
+		a := parseJSON(s, vs...)
+		r := newJSONArrayReader(a, cs)
 		tr := r.readTypeAsTag()
 		assert.True(t, expected.Equals(tr))
 	}
@@ -60,8 +60,8 @@ func TestReadPrimitives(t *testing.T) {
 	cs := NewTestValueStore()
 
 	test := func(expected Value, s string, vs ...interface{}) {
-		a := parseJson(s, vs...)
-		r := newJsonArrayReader(a, cs)
+		a := parseJSON(s, vs...)
+		r := newJSONArrayReader(a, cs)
 		v := r.readTopLevelValue()
 		assert.True(expected.Equals(v))
 	}
@@ -90,8 +90,8 @@ func TestReadListOfInt32(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJson(`[%d, %d, false, ["0", "1", "2", "3"]]`, ListKind, Int32Kind)
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, %d, false, ["0", "1", "2", "3"]]`, ListKind, Int32Kind)
+	r := newJSONArrayReader(a, cs)
 
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
 
@@ -104,8 +104,8 @@ func TestReadListOfValue(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJson(`[%d, %d, false, [%d, "1", %d, "hi", %d, true]]`, ListKind, ValueKind, Int32Kind, StringKind, BoolKind)
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, %d, false, [%d, "1", %d, "hi", %d, true]]`, ListKind, ValueKind, Int32Kind, StringKind, BoolKind)
+	r := newJSONArrayReader(a, cs)
 	l := r.readTopLevelValue()
 	assert.True(NewList(Int32(1), NewString("hi"), Bool(true)).Equals(l))
 }
@@ -114,8 +114,8 @@ func TestReadValueListOfInt8(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJson(`[%d, %d, %d, false, ["0", "1", "2"]]`, ValueKind, ListKind, Int8Kind)
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, %d, %d, false, ["0", "1", "2"]]`, ValueKind, ListKind, Int8Kind)
+	r := newJSONArrayReader(a, cs)
 
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int8Kind))
 
@@ -136,8 +136,8 @@ func TestReadCompoundList(t *testing.T) {
 		newMetaTuple(Uint64(4), leaf2, Ref{}, 4),
 	}, tr, cs)
 
-	a := parseJson(`[%d, %d, true, ["%s", "1", "1", "%s", "4", "4"]]`, ListKind, Int32Kind, leaf1.Ref(), leaf2.Ref())
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, %d, true, ["%s", "1", "1", "%s", "4", "4"]]`, ListKind, Int32Kind, leaf1.Ref(), leaf2.Ref())
+	r := newJSONArrayReader(a, cs)
 	l := r.readTopLevelValue()
 
 	assert.True(l2.Equals(l))
@@ -155,8 +155,8 @@ func TestReadCompoundSet(t *testing.T) {
 		newMetaTuple(Int32(4), leaf2, Ref{}, 3),
 	}, tr, cs)
 
-	a := parseJson(`[%d, %d, true, ["%s", "1", "2", "%s", "4", "3"]]`, SetKind, Int32Kind, leaf1.Ref(), leaf2.Ref())
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, %d, true, ["%s", "1", "2", "%s", "4", "3"]]`, SetKind, Int32Kind, leaf1.Ref(), leaf2.Ref())
+	r := newJSONArrayReader(a, cs)
 	l := r.readTopLevelValue()
 
 	assert.True(l2.Equals(l))
@@ -166,8 +166,8 @@ func TestReadMapOfInt64ToFloat64(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJson(`[%d, %d, %d, false, ["0", "1", "2", "3"]]`, MapKind, Int64Kind, Float64Kind)
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, %d, %d, false, ["0", "1", "2", "3"]]`, MapKind, Int64Kind, Float64Kind)
+	r := newJSONArrayReader(a, cs)
 
 	tr := MakeCompoundType(MapKind, MakePrimitiveType(Int64Kind), MakePrimitiveType(Float64Kind))
 
@@ -180,8 +180,8 @@ func TestReadValueMapOfUint64ToUint32(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJson(`[%d, %d, %d, %d, false, ["0", "1", "2", "3"]]`, ValueKind, MapKind, Uint64Kind, Uint32Kind)
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, %d, %d, %d, false, ["0", "1", "2", "3"]]`, ValueKind, MapKind, Uint64Kind, Uint32Kind)
+	r := newJSONArrayReader(a, cs)
 
 	mapTr := MakeCompoundType(MapKind, MakePrimitiveType(Uint64Kind), MakePrimitiveType(Uint32Kind))
 
@@ -194,8 +194,8 @@ func TestReadSetOfUint8(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJson(`[%d, %d, false, ["0", "1", "2", "3"]]`, SetKind, Uint8Kind)
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, %d, false, ["0", "1", "2", "3"]]`, SetKind, Uint8Kind)
+	r := newJSONArrayReader(a, cs)
 
 	tr := MakeCompoundType(SetKind, MakePrimitiveType(Uint8Kind))
 
@@ -208,8 +208,8 @@ func TestReadValueSetOfUint16(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJson(`[%d, %d, %d, false, ["0", "1", "2", "3"]]`, ValueKind, SetKind, Uint16Kind)
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, %d, %d, false, ["0", "1", "2", "3"]]`, ValueKind, SetKind, Uint16Kind)
+	r := newJSONArrayReader(a, cs)
 
 	setTr := MakeCompoundType(SetKind, MakePrimitiveType(Uint16Kind))
 
@@ -225,8 +225,8 @@ func TestReadCompoundBlob(t *testing.T) {
 	r1 := ref.Parse("sha1-0000000000000000000000000000000000000001")
 	r2 := ref.Parse("sha1-0000000000000000000000000000000000000002")
 	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
-	a := parseJson(`[%d, true, ["%s", "20", "20", "%s", "40", "40", "%s", "60", "60"]]`, BlobKind, r1, r2, r3)
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, true, ["%s", "20", "20", "%s", "40", "40", "%s", "60", "60"]]`, BlobKind, r1, r2, r3)
+	r := newJSONArrayReader(a, cs)
 
 	m := r.readTopLevelValue()
 	_, ok := m.(compoundBlob)
@@ -253,8 +253,8 @@ func TestReadStruct(t *testing.T) {
 	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJson(`[%d, "%s", "0", "42", "hi", true]`, UnresolvedKind, pkgRef.String())
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, "%s", "0", "42", "hi", true]`, UnresolvedKind, pkgRef.String())
+	r := newJSONArrayReader(a, cs)
 
 	v := r.readTopLevelValue().(Struct)
 	assert.True(v.Get("x").Equals(Int16(42)))
@@ -275,8 +275,8 @@ func TestReadStructUnion(t *testing.T) {
 	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJson(`[%d, "%s", "0", "42", "1", "hi"]`, UnresolvedKind, pkgRef.String())
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, "%s", "0", "42", "1", "hi"]`, UnresolvedKind, pkgRef.String())
+	r := newJSONArrayReader(a, cs)
 
 	v := r.readTopLevelValue().(Struct)
 	assert.True(v.Get("x").Equals(Float32(42)))
@@ -305,8 +305,8 @@ func TestReadStructOptional(t *testing.T) {
 	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJson(`[%d, "%s", "0", "42", false, true, false]`, UnresolvedKind, pkgRef.String())
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, "%s", "0", "42", false, true, false]`, UnresolvedKind, pkgRef.String())
+	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
 	assert.True(v.Get("x").Equals(Float32(42)))
@@ -336,8 +336,8 @@ func TestReadStructWithList(t *testing.T) {
 	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJson(`[%d, "%s", "0", true, false, ["0", "1", "2"], "hi"]`, UnresolvedKind, pkgRef.String())
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, "%s", "0", true, false, ["0", "1", "2"], "hi"]`, UnresolvedKind, pkgRef.String())
+	r := newJSONArrayReader(a, cs)
 	l32Tr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
 	v := r.readTopLevelValue().(Struct)
 
@@ -365,8 +365,8 @@ func TestReadStructWithValue(t *testing.T) {
 	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJson(`[%d, "%s", "0", true, %d, "42", "hi"]`, UnresolvedKind, pkgRef.String(), Uint8Kind)
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, "%s", "0", true, %d, "42", "hi"]`, UnresolvedKind, pkgRef.String(), Uint8Kind)
+	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
 	assert.True(v.Get("b").Equals(Bool(true)))
@@ -392,8 +392,8 @@ func TestReadValueStruct(t *testing.T) {
 	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJson(`[%d, %d, "%s", "0", "42", "hi", true]`, ValueKind, UnresolvedKind, pkgRef.String())
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, %d, "%s", "0", "42", "hi", true]`, ValueKind, UnresolvedKind, pkgRef.String())
+	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
 	assert.True(v.Get("x").Equals(Int16(42)))
@@ -406,8 +406,8 @@ func TestReadRef(t *testing.T) {
 	cs := NewTestValueStore()
 
 	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-	a := parseJson(`[%d, %d, "%s"]`, RefKind, Uint32Kind, r.String())
-	reader := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, %d, "%s"]`, RefKind, Uint32Kind, r.String())
+	reader := newJSONArrayReader(a, cs)
 	v := reader.readTopLevelValue()
 	tr := MakeCompoundType(RefKind, MakePrimitiveType(Uint32Kind))
 	assert.True(refFromType(r, tr).Equals(v))
@@ -418,8 +418,8 @@ func TestReadValueRef(t *testing.T) {
 	cs := NewTestValueStore()
 
 	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-	a := parseJson(`[%d, %d, %d, "%s"]`, ValueKind, RefKind, Uint32Kind, r.String())
-	reader := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, %d, %d, "%s"]`, ValueKind, RefKind, Uint32Kind, r.String())
+	reader := newJSONArrayReader(a, cs)
 	v := reader.readTopLevelValue()
 	tr := MakeCompoundType(RefKind, MakePrimitiveType(Uint32Kind))
 	assert.True(refFromType(r, tr).Equals(v))
@@ -439,8 +439,8 @@ func TestReadStructWithBlob(t *testing.T) {
 	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJson(`[%d, "%s", "0", false, "AAE="]`, UnresolvedKind, pkgRef.String())
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, "%s", "0", false, "AAE="]`, UnresolvedKind, pkgRef.String())
+	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
 	blob := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
@@ -452,8 +452,8 @@ func TestReadTypeValue(t *testing.T) {
 	cs := NewTestValueStore()
 
 	test := func(expected *Type, json string, vs ...interface{}) {
-		a := parseJson(json, vs...)
-		r := newJsonArrayReader(a, cs)
+		a := parseJSON(json, vs...)
+		r := newJSONArrayReader(a, cs)
 		tr := r.readTopLevelValue()
 		assert.True(expected.Equals(tr))
 	}
@@ -497,7 +497,7 @@ func TestReadPackage2(t *testing.T) {
 	pkg := NewPackage([]*Type{setTref}, []ref.Ref{rr})
 
 	a := []interface{}{float64(PackageKind), []interface{}{float64(SetKind), []interface{}{float64(Uint32Kind)}}, []interface{}{rr.String()}}
-	r := newJsonArrayReader(a, cs)
+	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Package)
 	assert.True(t, pkg.Equals(v))
 }
@@ -514,8 +514,8 @@ func TestReadPackageThroughChunkSource(t *testing.T) {
 	// Don't register
 	pkgRef := cs.WriteValue(pkg).TargetRef()
 
-	a := parseJson(`[%d, "%s", "0", "42"]`, UnresolvedKind, pkgRef.String())
-	r := newJsonArrayReader(a, cs)
+	a := parseJSON(`[%d, "%s", "0", "42"]`, UnresolvedKind, pkgRef.String())
+	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
 	assert.True(v.Get("X").Equals(Int32(42)))

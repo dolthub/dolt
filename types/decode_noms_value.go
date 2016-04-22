@@ -12,7 +12,7 @@ import (
 )
 
 func fromTypedEncodeable(i []interface{}, vr ValueReader) Value {
-	r := newJsonArrayReader(i, vr)
+	r := newJSONArrayReader(i, vr)
 	return r.readTopLevelValue()
 }
 
@@ -22,7 +22,7 @@ type jsonArrayReader struct {
 	vr ValueReader
 }
 
-func newJsonArrayReader(a []interface{}, vr ValueReader) *jsonArrayReader {
+func newJSONArrayReader(a []interface{}, vr ValueReader) *jsonArrayReader {
 	return &jsonArrayReader{a: a, i: 0, vr: vr}
 }
 
@@ -168,7 +168,7 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t *Type, pkg *Package) (Value, b
 		return nil, false
 	}
 
-	r2 := newJsonArrayReader(r.readArray(), r.vr)
+	r2 := newJSONArrayReader(r.readArray(), r.vr)
 	data := metaSequenceData{}
 	indexType := indexTypeForMetaSequence(t)
 	for !r2.atEnd() {
@@ -182,13 +182,13 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t *Type, pkg *Package) (Value, b
 }
 
 func (r *jsonArrayReader) readPackage(t *Type, pkg *Package) Value {
-	r2 := newJsonArrayReader(r.readArray(), r.vr)
+	r2 := newJSONArrayReader(r.readArray(), r.vr)
 	types := []*Type{}
 	for !r2.atEnd() {
 		types = append(types, r2.readTypeAsValue(pkg))
 	}
 
-	r3 := newJsonArrayReader(r.readArray(), r.vr)
+	r3 := newJSONArrayReader(r.readArray(), r.vr)
 	deps := []ref.Ref{}
 	for !r3.atEnd() {
 		deps = append(deps, r3.readRef())
@@ -248,14 +248,14 @@ func (r *jsonArrayReader) readValueWithoutTag(t *Type, pkg *Package) Value {
 			return ms
 		}
 
-		r2 := newJsonArrayReader(r.readArray(), r.vr)
+		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		return r2.readList(t, pkg)
 	case MapKind:
 		if ms, ok := r.maybeReadMetaSequence(t, pkg); ok {
 			return ms
 		}
 
-		r2 := newJsonArrayReader(r.readArray(), r.vr)
+		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		return r2.readMap(t, pkg)
 	case PackageKind:
 		return r.readPackage(t, pkg)
@@ -266,7 +266,7 @@ func (r *jsonArrayReader) readValueWithoutTag(t *Type, pkg *Package) Value {
 			return ms
 		}
 
-		r2 := newJsonArrayReader(r.readArray(), r.vr)
+		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		return r2.readSet(t, pkg)
 	case StructKind:
 		panic("not allowed")
@@ -309,7 +309,7 @@ func (r *jsonArrayReader) readTypeAsValue(pkg *Package) *Type {
 	k := r.readKind()
 	switch k {
 	case ListKind, MapKind, RefKind, SetKind:
-		r2 := newJsonArrayReader(r.readArray(), r.vr)
+		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		elemTypes := []*Type{}
 		for !r2.atEnd() {
 			t := r2.readTypeAsValue(pkg)
@@ -322,14 +322,14 @@ func (r *jsonArrayReader) readTypeAsValue(pkg *Package) *Type {
 		fields := []Field{}
 		choices := []Field{}
 
-		fieldReader := newJsonArrayReader(r.readArray(), r.vr)
+		fieldReader := newJSONArrayReader(r.readArray(), r.vr)
 		for !fieldReader.atEnd() {
 			fieldName := fieldReader.readString()
 			fieldType := fieldReader.readTypeAsValue(pkg)
 			optional := fieldReader.readBool()
 			fields = append(fields, Field{Name: fieldName, T: fieldType, Optional: optional})
 		}
-		choiceReader := newJsonArrayReader(r.readArray(), r.vr)
+		choiceReader := newJSONArrayReader(r.readArray(), r.vr)
 		for !choiceReader.atEnd() {
 			fieldName := choiceReader.readString()
 			fieldType := choiceReader.readTypeAsValue(pkg)
