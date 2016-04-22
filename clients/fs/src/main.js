@@ -3,6 +3,7 @@
 import fs from 'mz/fs';
 import path from 'path';
 import argv from 'yargs';
+import formatFileSize from './format-file-size.js';
 import {
   newMapOfStringToRefOfDirectoryEntry,
   Directory,
@@ -28,6 +29,8 @@ const args = argv
 
 let numFilesFound = 0;
 let numFilesComplete = 0;
+let sizeFilesFound = 0;
+let sizeFilesComplete = 0;
 
 main().catch(ex => {
   console.error(ex.stack);
@@ -49,11 +52,13 @@ async function main(): Promise<void> {
     await ds.commit(r);
     process.stdout.write('\ndone\n');
   }
+
 }
 
 async function processPath(p: string, store: DataStore): Promise<?RefValue<DirectoryEntry>> {
   numFilesFound++;
   const st = await fs.stat(p);
+  sizeFilesFound += st.size;
   let de = null;
   if (st.isDirectory()) {
     de = new DirectoryEntry({
@@ -96,9 +101,13 @@ async function processFile(p: string, store: DataStore): Promise<File> {
     content: await processBlob(p, store),
   });
   numFilesComplete++;
+
+  const st = await fs.stat(p);
+  sizeFilesComplete += st.size;
   updateProgress();
   return f;
 }
+
 
 function processBlob(p: string, store: DataStore): Promise<RefValue<NomsBlob>> {
   const w = new BlobWriter();
@@ -118,7 +127,9 @@ function processBlob(p: string, store: DataStore): Promise<RefValue<NomsBlob>> {
 }
 
 function updateProgress() {
-  process.stdout.write(`\r${numFilesComplete} of ${numFilesFound} entries processed...`);
+  process.stdout.write(`\r${numFilesComplete} of ${numFilesFound} entries ` +
+    `(${formatFileSize(sizeFilesComplete)} of ${formatFileSize(sizeFilesFound)}) ` +
+    `processed...`);
 }
 
 function parseArgs() {
