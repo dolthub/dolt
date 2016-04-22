@@ -28,6 +28,8 @@ const args = argv
 
 let numFilesFound = 0;
 let numFilesComplete = 0;
+let sizeFilesFound = 0;
+let sizeFilesComplete = 0;
 
 main().catch(ex => {
   console.error(ex.stack);
@@ -49,11 +51,13 @@ async function main(): Promise<void> {
     await ds.commit(r);
     process.stdout.write('\ndone\n');
   }
+
 }
 
 async function processPath(p: string, store: DataStore): Promise<?RefValue<DirectoryEntry>> {
   numFilesFound++;
   const st = await fs.stat(p);
+  sizeFilesFound += st.size;
   let de = null;
   if (st.isDirectory()) {
     de = new DirectoryEntry({
@@ -96,9 +100,13 @@ async function processFile(p: string, store: DataStore): Promise<File> {
     content: await processBlob(p, store),
   });
   numFilesComplete++;
+
+  const st = await fs.stat(p);
+  sizeFilesComplete += st.size;
   updateProgress();
   return f;
 }
+
 
 function processBlob(p: string, store: DataStore): Promise<RefValue<NomsBlob>> {
   const w = new BlobWriter();
@@ -117,8 +125,24 @@ function processBlob(p: string, store: DataStore): Promise<RefValue<NomsBlob>> {
   });
 }
 
+function humanFileSize(bytes, si) {
+  const thresh = si ? 1000 : 1024;
+  if (Math.abs(bytes) < thresh) {
+    return bytes + ' B';
+  }
+  const units = si
+    ? ['kB','MB','GB','TB','PB','EB','ZB','YB']
+    : ['KiB','MiB','GiB','TiB','PiB','EiB','ZiB','YiB'];
+  let u = -1;
+  do {
+    bytes /= thresh;
+    ++u;
+  } while (Math.abs(bytes) >= thresh && u < units.length - 1);
+  return bytes.toFixed(1) + ' ' + units[u];
+}
+
 function updateProgress() {
-  process.stdout.write(`\r${numFilesComplete} of ${numFilesFound} entries processed...`);
+  process.stdout.write(`\r${numFilesComplete} of ${numFilesFound} entries processed... ${humanFileSize(sizeFilesComplete,true)} of ${humanFileSize(sizeFilesFound,true)} contents processed`);  // eslint-disable-line max-len
 }
 
 function parseArgs() {
