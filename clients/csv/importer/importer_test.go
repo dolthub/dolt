@@ -38,12 +38,12 @@ func (s *testSuite) TestCSVImporter() {
 	_, err = input.Seek(0, 0)
 	d.Chk.NoError(err)
 
-	storeName := "store"
 	setName := "csv"
-	out := s.Run(main, []string{"-store", storeName, "-column-types", "String,Number", "-ds", setName, input.Name()})
+	dataspec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, setName)
+	out := s.Run(main, []string{"-column-types", "String,Number", dataspec, input.Name()})
 	s.Equal("", out)
 
-	cs := chunks.NewLevelDBStore(s.LdbDir, storeName, 1, false)
+	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
 	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
 	defer ds.Store().Close()
 	defer os.RemoveAll(s.LdbDir)
@@ -80,9 +80,9 @@ func (s *testSuite) TestCSVImporterReportTypes() {
 	_, err = input.Seek(0, 0)
 	d.Chk.NoError(err)
 
-	storeName := "store"
 	setName := "csv"
-	out := s.Run(main, []string{"-store", storeName, "-column-types", "String,Number", "-ds", setName, input.Name()})
+	dataspec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, setName)
+	out := s.Run(main, []string{"-column-types", "String,Number", dataspec, input.Name()})
 	s.Equal("Possible types for each column:\na: String\nb: Number,String\n", out)
 }
 
@@ -100,12 +100,12 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 	_, err = input.WriteString("a|b\n1|2\n")
 	d.Chk.NoError(err)
 
-	storeName := "store"
 	setName := "csv"
-	out := s.Run(main, []string{"-store", storeName, "-column-types", "String,Number", "-ds", setName, input.Name()})
+	dataspec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, setName)
+	out := s.Run(main, []string{"-column-types", "String,Number", dataspec, input.Name()})
 	s.Equal("", out)
 
-	cs := chunks.NewLevelDBStore(s.LdbDir, storeName, 1, false)
+	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
 	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
 	defer ds.Store().Close()
 	defer os.RemoveAll(s.LdbDir)
@@ -132,12 +132,12 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	_, err = input.WriteString("7,8\n")
 	d.Chk.NoError(err)
 
-	storeName := "store"
 	setName := "csv"
-	out := s.Run(main, []string{"-store", storeName, "-column-types", "String,Number", "-ds", setName, input.Name()})
+	dataspec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, setName)
+	out := s.Run(main, []string{"-column-types", "String,Number", dataspec, input.Name()})
 	s.Equal("", out)
 
-	cs := chunks.NewLevelDBStore(s.LdbDir, storeName, 1, false)
+	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
 	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
 	defer ds.Store().Close()
 	defer os.RemoveAll(s.LdbDir)

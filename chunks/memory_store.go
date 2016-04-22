@@ -1,7 +1,6 @@
 package chunks
 
 import (
-	"flag"
 	"sync"
 
 	"github.com/attic-labs/noms/d"
@@ -66,44 +65,16 @@ func (ms *MemoryStore) Close() error {
 	return nil
 }
 
-type MemoryStoreFlags struct {
-	use *bool
-}
-
-func MemoryFlags(prefix string) MemoryStoreFlags {
-	return MemoryStoreFlags{
-		flag.Bool(prefix+"mem", false, "use a memory-based (ephemeral, and private to this application) chunkstore"),
-	}
-}
-
-func (f MemoryStoreFlags) CreateStore(ns string) ChunkStore {
-	if f.check() {
-		return NewMemoryStore()
-	}
-	return nil
-}
-
-func (f MemoryStoreFlags) CreateFactory() Factory {
-	if f.check() {
-		return &MemoryStoreFactory{f, map[string]*MemoryStore{}}
-	}
-	return nil
-}
-
-func (f MemoryStoreFlags) check() bool {
-	return *f.use
+func NewMemoryStoreFactory() Factory {
+	return &MemoryStoreFactory{map[string]*MemoryStore{}}
 }
 
 type MemoryStoreFactory struct {
-	flags  MemoryStoreFlags
 	stores map[string]*MemoryStore
 }
 
 func (f *MemoryStoreFactory) CreateStore(ns string) ChunkStore {
 	d.Chk.NotNil(f.stores, "Cannot use LevelDBStoreFactory after Shutter().")
-	if !f.flags.check() {
-		return nil
-	}
 	if cs, present := f.stores[ns]; present {
 		return cs
 	}

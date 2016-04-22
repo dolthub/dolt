@@ -1,8 +1,6 @@
 package dataset
 
 import (
-	"flag"
-
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/ref"
@@ -104,33 +102,4 @@ func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
 func (ds *Dataset) setNewHead(newHeadRef types.Ref) (Dataset, error) {
 	commit := ds.validateRefAsCommit(newHeadRef)
 	return ds.CommitWithParents(commit.Get(datas.ValueField), commit.Get(datas.ParentsField).(types.Set))
-}
-
-type DatasetFlags struct {
-	datas.Flags
-	datasetID *string
-}
-
-func NewFlags() DatasetFlags {
-	return NewFlagsWithPrefix("")
-}
-
-func NewFlagsWithPrefix(prefix string) DatasetFlags {
-	return DatasetFlags{
-		datas.NewFlagsWithPrefix(prefix),
-		flag.String(prefix+"ds", "", "dataset id to store data for"),
-	}
-}
-
-func (f DatasetFlags) CreateDataset() *Dataset {
-	if *f.datasetID == "" {
-		return nil
-	}
-	rootDS, ok := f.Flags.CreateDataStore()
-	if !ok {
-		return nil
-	}
-
-	ds := NewDataset(rootDS, *f.datasetID)
-	return &ds
 }

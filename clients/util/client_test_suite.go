@@ -11,10 +11,9 @@ import (
 
 type ClientTestSuite struct {
 	suite.Suite
-	LdbFlagName string
-	TempDir     string
-	LdbDir      string
-	out         *os.File
+	TempDir string
+	LdbDir  string
+	out     *os.File
 }
 
 func (suite *ClientTestSuite) SetupSuite() {
@@ -38,13 +37,7 @@ func (suite *ClientTestSuite) Run(m func(), args []string) string {
 	origOut := os.Stdout
 	origErr := os.Stderr
 
-	ldbFlagName := suite.LdbFlagName
-
-	if ldbFlagName == "" {
-		ldbFlagName = "-ldb"
-	}
-
-	os.Args = append([]string{"cmd", ldbFlagName, suite.LdbDir}, args...)
+	os.Args = append([]string{"cmd"}, args...)
 	os.Stdout = suite.out
 
 	defer func() {

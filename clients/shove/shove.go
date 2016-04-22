@@ -1,58 +1,59 @@
 package main
 
 import (
+	"errors"
 	"flag"
+	"fmt"
 	"log"
+	"os"
 	"runtime"
 
+	"github.com/attic-labs/noms/clients/flags"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
 var (
-	p                = flag.Uint("p", 512, "parallelism")
-	sinkDsFlags      = dataset.NewFlagsWithPrefix("sink-")
-	sourceStoreFlags = datas.NewFlagsWithPrefix("source-")
-	sourceObject     = flag.String("source", "", "source object to sync - either a dataset name or a ref")
+	p = flag.Uint("p", 512, "parallelism")
 )
 
 func main() {
 	cpuCount := runtime.NumCPU()
 	runtime.GOMAXPROCS(cpuCount)
 
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "%s [options] <source_objpath> <dest_dataset>\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+
+	flags.RegisterDataStoreFlags()
 	flag.Parse()
 
-	sourceStore, ok := sourceStoreFlags.CreateDataStore()
-	sink := sinkDsFlags.CreateDataset()
-	if !ok || sink == nil || *p == 0 || *sourceObject == "" {
-		flag.Usage()
-		return
+	if flag.NArg() != 2 {
+		util.CheckError(errors.New("expected a sourceObject and destSpec"))
 	}
-	defer sourceStore.Close()
-	defer sink.Store().Close()
 
-	err := d.Try(func() {
+	sourceSpec, err := flags.ParsePathSpec(flag.Arg(0))
+	util.CheckError(err)
+	sourceStore, sourceObj, err := sourceSpec.Value()
+	util.CheckError(err)
+	defer sourceStore.Close()
+
+	sinkSpec, err := flags.ParseDatasetSpec(flag.Arg(1))
+	util.CheckError(err)
+
+	sinkDataset, err := sinkSpec.Dataset()
+	util.CheckError(err)
+	defer sinkDataset.Store().Close()
+
+	err = d.Try(func() {
 		if util.MaybeStartCPUProfile() {
 			defer util.StopCPUProfile()
 		}
 
-		var commit types.Struct
-		if r, ok := ref.MaybeParse(*sourceObject); ok {
-			// sourceObject was sha1
-			commit, ok = sourceStore.ReadValue(r).(types.Struct)
-			d.Exp.True(ok, "Unable to read Commit object with ref: %s", r)
-		} else {
-			// sourceObject must be a dataset Id
-			commit, ok = sourceStore.MaybeHead(*sourceObject)
-			d.Exp.True(ok, "Unable to read dataset with name: %s", *sourceObject)
-		}
-
 		var err error
-		*sink, err = sink.Pull(sourceStore, types.NewTypedRefFromValue(commit), int(*p))
+		sinkDataset, err = sinkDataset.Pull(sourceStore, types.NewTypedRefFromValue(sourceObj), int(*p))
 
 		util.MaybeWriteMemProfile()
 		d.Exp.NoError(err)

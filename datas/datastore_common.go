@@ -23,7 +23,9 @@ var (
 )
 
 func newDataStoreCommon(bs types.BatchStore, rt chunks.RootTracker) dataStoreCommon {
-	return dataStoreCommon{ValueStore: types.NewValueStore(bs), bs: bs, rt: rt, rootRef: rt.Root()}
+	nvs := types.NewValueStore(bs)
+	rv := rt.Root()
+	return dataStoreCommon{ValueStore: nvs, bs: bs, rt: rt, rootRef: rv}
 }
 
 func (ds *dataStoreCommon) MaybeHead(datasetID string) (types.Struct, bool) {

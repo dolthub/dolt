@@ -1,47 +1,45 @@
 package main
 
 import (
+	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/attic-labs/noms/chunks"
+	"github.com/attic-labs/noms/clients/flags"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 )
-
-type flags struct {
-	ldb    chunks.LevelDBStoreFlags
-	dynamo chunks.DynamoStoreFlags
-	memory chunks.MemoryStoreFlags
-}
 
 var (
 	port = flag.Int("port", 8000, "")
 )
 
 func main() {
-	f := flags{
-		chunks.LevelDBFlags(""),
-		chunks.DynamoFlags(""),
-		chunks.MemoryFlags(""),
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "usage: %s <datastore>\n", os.Args[0])
+		flag.PrintDefaults()
 	}
+
+	flags.RegisterDataStoreFlags()
 	flag.Parse()
 
-	var cf chunks.Factory
-	if cf = f.ldb.CreateFactory(); cf != nil {
-	} else if cf = f.dynamo.CreateFactory(); cf != nil {
-	} else if cf = f.memory.CreateFactory(); cf != nil {
-	}
-
-	if cf == nil {
+	if len(flag.Args()) != 1 {
 		flag.Usage()
-		return
 	}
+	spec, err := flags.ParseDatastoreSpec(flag.Arg(0))
+	util.CheckError(err)
+	if spec.Protocol != "mem" && spec.Protocol != "ldb" {
+		err := errors.New("Illegal datastore spec for server, must be 'mem' or 'ldb'")
+		util.CheckError(err)
+	}
+	cs, err := spec.ChunkStore()
+	util.CheckError(err)
 
-	server := datas.NewRemoteDataStoreServer(cf, *port)
+	server := datas.NewRemoteDataStoreServer(cs, *port)
 
 	// Shutdown server gracefully so that profile may be written
 	c := make(chan os.Signal, 1)
@@ -58,5 +56,4 @@ func main() {
 		}
 		server.Run()
 	})
-	cf.Shutter()
 }

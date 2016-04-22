@@ -1,8 +1,6 @@
 package datas
 
 import (
-	"flag"
-
 	"github.com/attic-labs/noms/types"
 	"github.com/julienschmidt/httprouter"
 )
@@ -38,41 +36,24 @@ func (rds *RemoteDataStoreClient) Delete(datasetID string) (DataStore, error) {
 	return &RemoteDataStoreClient{newDataStoreCommon(rds.bs, rds.rt)}, err
 }
 
-type remoteDataStoreFlags struct {
-	host *string
-	auth *string
+func (f RemoteStoreFactory) CreateStore(ns string) DataStore {
+	return NewRemoteDataStore(f.host+httprouter.CleanPath(ns), f.auth)
 }
 
-func remoteFlags(prefix string) remoteDataStoreFlags {
-	return remoteDataStoreFlags{
-		flag.String(prefix+"h", "", "http host to connect to"),
-		flag.String(prefix+"h-auth", "", "\"Authorization\" http header"),
-	}
-}
-
-func (r remoteDataStoreFlags) CreateStore(ns string) DataStore {
-	if r.check() {
-		return NewRemoteDataStore(*r.host+httprouter.CleanPath(ns), *r.auth)
-	}
-	return nil
-}
-
-func (r remoteDataStoreFlags) Create(ns string) (DataStore, bool) {
-	if ds := r.CreateStore(ns); ds != nil {
+func (f RemoteStoreFactory) Create(ns string) (DataStore, bool) {
+	if ds := f.CreateStore(ns); ds != nil {
 		return ds, true
 	}
 	return &LocalDataStore{}, false
 }
 
-func (r remoteDataStoreFlags) Shutter() {}
+func (f RemoteStoreFactory) Shutter() {}
 
-func (r remoteDataStoreFlags) CreateFactory() Factory {
-	if r.check() {
-		return r
-	}
-	return nil
+func NewRemoteStoreFactory(host, auth string) Factory {
+	return RemoteStoreFactory{host: host, auth: auth}
 }
 
-func (r remoteDataStoreFlags) check() bool {
-	return *r.host != ""
+type RemoteStoreFactory struct {
+	host string
+	auth string
 }

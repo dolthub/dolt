@@ -19,15 +19,37 @@ const (
 	chunkPrefixConst = "/chunk/"
 )
 
-func NewLevelDBStore(dir, name string, maxFileHandles int, dumpStats bool) *LevelDBStore {
-	return newLevelDBStore(newBackingStore(dir, maxFileHandles, dumpStats), []byte(name), true)
+type LevelDBStoreFlags struct {
+	maxFileHandles int
+	dumpStats      bool
 }
 
-func newLevelDBStore(store *internalLevelDBStore, name []byte, closeBackingStore bool) *LevelDBStore {
+var (
+	ldbFlags        = LevelDBStoreFlags{24, false}
+	flagsRegistered = false
+)
+
+func RegisterLevelDBFlags() {
+	if !flagsRegistered {
+		flagsRegistered = true
+		flag.IntVar(&ldbFlags.maxFileHandles, "ldb-max-file-handles", 24, "max number of open file handles")
+		flag.BoolVar(&ldbFlags.dumpStats, "ldb-dump-stats", false, "print get/has/put counts on close")
+	}
+}
+
+func NewLevelDBStoreUseFlags(dir, ns string) *LevelDBStore {
+	return newLevelDBStore(newBackingStore(dir, ldbFlags.maxFileHandles, ldbFlags.dumpStats), []byte(ns), true)
+}
+
+func NewLevelDBStore(dir, ns string, maxFileHandles int, dumpStats bool) *LevelDBStore {
+	return newLevelDBStore(newBackingStore(dir, maxFileHandles, dumpStats), []byte(ns), true)
+}
+
+func newLevelDBStore(store *internalLevelDBStore, ns []byte, closeBackingStore bool) *LevelDBStore {
 	return &LevelDBStore{
 		internalLevelDBStore: store,
-		rootKey:              append(name, []byte(rootKeyConst)...),
-		chunkPrefix:          append(name, []byte(chunkPrefixConst)...),
+		rootKey:              append(ns, []byte(rootKeyConst)...),
+		chunkPrefix:          append(ns, []byte(chunkPrefixConst)...),
 		closeBackingStore:    closeBackingStore,
 	}
 }
@@ -188,49 +210,20 @@ func (l *internalLevelDBStore) Close() error {
 	return nil
 }
 
-type LevelDBStoreFlags struct {
-	dir            *string
-	maxFileHandles *int
-	dumpStats      *bool
-}
-
-func LevelDBFlags(prefix string) LevelDBStoreFlags {
-	return LevelDBStoreFlags{
-		flag.String(prefix+"ldb", "", "directory to use for a LevelDB-backed chunkstore"),
-		flag.Int(prefix+"ldb-max-file-handles", 24, "max number of open file handles"),
-		flag.Bool(prefix+"ldb-dump-stats", false, "print get/has/put counts on close"),
-	}
-}
-
-func (f LevelDBStoreFlags) CreateStore(ns string) ChunkStore {
-	if f.check() {
-		return NewLevelDBStore(*f.dir, ns, *f.maxFileHandles, *f.dumpStats)
-	}
-	return nil
-}
-
-func (f LevelDBStoreFlags) CreateFactory() Factory {
-	if f.check() {
-		return &LevelDBStoreFactory{f, newBackingStore(*f.dir, *f.maxFileHandles, *f.dumpStats)}
-	}
-	return nil
-}
-
-func (f LevelDBStoreFlags) check() bool {
-	return *f.dir != ""
+func NewLevelDBStoreFactory(dir string, maxHandles int, dumpStats bool) Factory {
+	return &LevelDBStoreFactory{dir, maxHandles, dumpStats, newBackingStore(dir, maxHandles, dumpStats)}
 }
 
 type LevelDBStoreFactory struct {
-	flags LevelDBStoreFlags
-	store *internalLevelDBStore
+	dir            string
+	maxFileHandles int
+	dumpStats      bool
+	store          *internalLevelDBStore
 }
 
 func (f *LevelDBStoreFactory) CreateStore(ns string) ChunkStore {
 	d.Chk.NotNil(f.store, "Cannot use LevelDBStoreFactory after Shutter().")
-	if f.flags.check() {
-		return newLevelDBStore(f.store, []byte(ns), false)
-	}
-	return nil
+	return newLevelDBStore(f.store, []byte(ns), false)
 }
 
 func (f *LevelDBStoreFactory) Shutter() {
