@@ -16,16 +16,16 @@ type DataStore interface {
 	io.Closer
 
 	// MaybeHead returns the current Head Commit of this Datastore, which contains the current root of the DataStore's value tree, if available. If not, it returns a new Commit and 'false'.
-	MaybeHead(datasetID string) (Commit, bool)
+	MaybeHead(datasetID string) (types.Struct, bool)
 
 	// Head returns the current head Commit, which contains the current root of the DataStore's value tree.
-	Head(datasetID string) Commit
+	Head(datasetID string) types.Struct
 
 	// Datasets returns the root of the datastore which is a MapOfStringToRefOfCommit where string is a datasetID.
 	Datasets() types.Map
 
 	// Commit updates the Commit that datasetID in this datastore points at. All Values that have been written to this DataStore are guaranteed to be persistent after Commit(). If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the datastore is always returned.
-	Commit(datasetID string, commit Commit) (DataStore, error)
+	Commit(datasetID string, commit types.Struct) (DataStore, error)
 
 	// Delete removes the Dataset named datasetID from the map at the root of the DataStore. The Dataset data is not necessarily cleaned up at this time, but may be garbage collected in the future. If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the datastore is always returned.
 	Delete(datasetID string) (DataStore, error)

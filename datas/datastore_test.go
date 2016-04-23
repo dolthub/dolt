@@ -59,7 +59,8 @@ func (suite *DataStoreSuite) TestReadWriteCache() {
 	var v types.Value = types.Bool(true)
 	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(v))
 	r := suite.ds.WriteValue(v).TargetRef()
-	newDs, err := suite.ds.Commit("foo", NewCommit().SetValue(v))
+	commit := NewCommit()
+	newDs, err := suite.ds.Commit("foo", commit.Set(ValueField, v))
 	suite.NoError(err)
 	suite.Equal(1, suite.cs.Writes-writesOnCommit)
 
@@ -91,7 +92,7 @@ func (suite *DataStoreSuite) TestReadValueTypeRefPanics_BUG1121() {
 	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(b))
 
 	datasetID := "ds1"
-	aCommit := NewCommit().SetValue(types.NewRef(b.Ref()))
+	aCommit := NewCommit().Set(ValueField, types.NewRef(b.Ref()))
 	ds2, err := suite.ds.Commit(datasetID, aCommit)
 	suite.NoError(err)
 
@@ -113,7 +114,7 @@ func (suite *DataStoreSuite) TestDataStoreCommit() {
 
 	// |a|
 	a := types.NewString("a")
-	aCommit := NewCommit().SetValue(a)
+	aCommit := NewCommit().Set(ValueField, a)
 	ds2, err := suite.ds.Commit(datasetID, aCommit)
 	suite.NoError(err)
 
@@ -123,37 +124,37 @@ func (suite *DataStoreSuite) TestDataStoreCommit() {
 
 	// The new datastore has |a|.
 	aCommit1 := ds2.Head(datasetID)
-	suite.True(aCommit1.Value().Equals(a))
+	suite.True(aCommit1.Get(ValueField).Equals(a))
 	suite.ds = ds2
 
 	// |a| <- |b|
 	b := types.NewString("b")
-	bCommit := NewCommit().SetValue(b).SetParents(NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(aCommit)))
+	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(aCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
-	suite.True(suite.ds.Head(datasetID).Value().Equals(b))
+	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
 
 	// |a| <- |b|
 	//   \----|c|
 	// Should be disallowed.
 	c := types.NewString("c")
-	cCommit := NewCommit().SetValue(c)
+	cCommit := NewCommit().Set(ValueField, c)
 	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
 	suite.Error(err)
-	suite.True(suite.ds.Head(datasetID).Value().Equals(b))
+	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
 
 	// |a| <- |b| <- |d|
 	d := types.NewString("d")
-	dCommit := NewCommit().SetValue(d).SetParents(NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(bCommit)))
+	dCommit := NewCommit().Set(ValueField, d).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(bCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, dCommit)
 	suite.NoError(err)
-	suite.True(suite.ds.Head(datasetID).Value().Equals(d))
+	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(d))
 
 	// Attempt to recommit |b| with |a| as parent.
 	// Should be disallowed.
 	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
 	suite.Error(err)
-	suite.True(suite.ds.Head(datasetID).Value().Equals(d))
+	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(d))
 
 	// Add a commit to a different datasetId
 	_, err = suite.ds.Commit("otherDs", aCommit)
@@ -174,21 +175,21 @@ func (suite *DataStoreSuite) TestDataStoreDelete() {
 	// |a|
 	var err error
 	a := types.NewString("a")
-	suite.ds, err = suite.ds.Commit(datasetID1, NewCommit().SetValue(a))
+	suite.ds, err = suite.ds.Commit(datasetID1, NewCommit().Set(ValueField, a))
 	suite.NoError(err)
-	suite.True(suite.ds.Head(datasetID1).Value().Equals(a))
+	suite.True(suite.ds.Head(datasetID1).Get(ValueField).Equals(a))
 
 	// ds1; |a|, ds2: |b|
 	b := types.NewString("b")
-	suite.ds, err = suite.ds.Commit(datasetID2, NewCommit().SetValue(b))
+	suite.ds, err = suite.ds.Commit(datasetID2, NewCommit().Set(ValueField, b))
 	suite.NoError(err)
-	suite.True(suite.ds.Head(datasetID2).Value().Equals(b))
+	suite.True(suite.ds.Head(datasetID2).Get(ValueField).Equals(b))
 
 	suite.ds, err = suite.ds.Delete(datasetID1)
 	suite.NoError(err)
-	suite.True(suite.ds.Head(datasetID2).Value().Equals(b))
+	suite.True(suite.ds.Head(datasetID2).Get(ValueField).Equals(b))
 	h, present := suite.ds.MaybeHead(datasetID1)
-	suite.False(present, "Dataset %s should not be present, but head is %v", datasetID1, h.Value())
+	suite.False(present, "Dataset %s should not be present, but head is %v", datasetID1, h.Get(ValueField))
 
 	// Get a fresh datastore, and verify that only ds1 is present
 	newDs := suite.makeDs(suite.cs)
@@ -207,22 +208,22 @@ func (suite *DataStoreSuite) TestDataStoreDeleteConcurrent() {
 
 	// |a|
 	a := types.NewString("a")
-	aCommit := NewCommit().SetValue(a)
+	aCommit := NewCommit().Set(ValueField, a)
 	suite.ds, err = suite.ds.Commit(datasetID, aCommit)
 	suite.NoError(err)
 
 	// |a| <- |b|
 	b := types.NewString("b")
-	bCommit := NewCommit().SetValue(b).SetParents(NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(aCommit)))
+	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(aCommit)))
 	ds2, err := suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
-	suite.True(suite.ds.Head(datasetID).Value().Equals(a))
-	suite.True(ds2.Head(datasetID).Value().Equals(b))
+	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(a))
+	suite.True(ds2.Head(datasetID).Get(ValueField).Equals(b))
 
 	suite.ds, err = suite.ds.Delete(datasetID)
 	suite.NoError(err)
 	h, present := suite.ds.MaybeHead(datasetID)
-	suite.False(present, "Dataset %s should not be present, but head is %v", datasetID, h.Value())
+	suite.False(present, "Dataset %s should not be present, but head is %v", datasetID, h.Get(ValueField))
 	h, present = ds2.MaybeHead(datasetID)
 	suite.True(present, "Dataset %s should be present", datasetID)
 
@@ -240,13 +241,13 @@ func (suite *DataStoreSuite) TestDataStoreConcurrency() {
 	// Setup:
 	// |a| <- |b|
 	a := types.NewString("a")
-	aCommit := NewCommit().SetValue(a)
+	aCommit := NewCommit().Set(ValueField, a)
 	suite.ds, err = suite.ds.Commit(datasetID, aCommit)
 	b := types.NewString("b")
-	bCommit := NewCommit().SetValue(b).SetParents(NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(aCommit)))
+	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(aCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
-	suite.True(suite.ds.Head(datasetID).Value().Equals(b))
+	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
 
 	// Important to create this here.
 	ds2 := suite.makeDs(suite.cs)
@@ -254,17 +255,17 @@ func (suite *DataStoreSuite) TestDataStoreConcurrency() {
 	// Change 1:
 	// |a| <- |b| <- |c|
 	c := types.NewString("c")
-	cCommit := NewCommit().SetValue(c).SetParents(NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(bCommit)))
+	cCommit := NewCommit().Set(ValueField, c).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(bCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
 	suite.NoError(err)
-	suite.True(suite.ds.Head(datasetID).Value().Equals(c))
+	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(c))
 
 	// Change 2:
 	// |a| <- |b| <- |e|
 	// Should be disallowed, DataStore returned by Commit() should have |c| as Head.
 	e := types.NewString("e")
-	eCommit := NewCommit().SetValue(e).SetParents(NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(bCommit)))
+	eCommit := NewCommit().Set(ValueField, e).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(bCommit)))
 	ds2, err = ds2.Commit(datasetID, eCommit)
 	suite.Error(err)
-	suite.True(ds2.Head(datasetID).Value().Equals(c))
+	suite.True(ds2.Head(datasetID).Get(ValueField).Equals(c))
 }

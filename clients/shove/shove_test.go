@@ -36,13 +36,13 @@ func (s *testSuite) TestShove() {
 	s.Equal("", out)
 
 	dest := dataset.NewDataset(datas.NewDataStore(chunks.NewLevelDBStore(ldb2dir, sn, 1, false)), "bar")
-	s.True(types.Int32(42).Equals(dest.Head().Value()))
+	s.True(types.Int32(42).Equals(dest.Head().Get(datas.ValueField)))
 	dest.Store().Close()
 
 	out = s.Run(main, []string{"-source-store", sn, "-source", "foo", "-sink-ldb", ldb2dir, "-sink-ds", "bar"})
 	s.Equal("", out)
 
 	dest = dataset.NewDataset(datas.NewDataStore(chunks.NewLevelDBStore(ldb2dir, sn, 1, false)), "bar")
-	s.True(types.Int32(43).Equals(dest.Head().Value()))
+	s.True(types.Int32(43).Equals(dest.Head().Get(datas.ValueField)))
 	dest.Store().Close()
 }

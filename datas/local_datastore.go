@@ -21,7 +21,7 @@ func newLocalDataStore(cs chunks.ChunkStore) *LocalDataStore {
 	}
 }
 
-func (lds *LocalDataStore) Commit(datasetID string, commit Commit) (DataStore, error) {
+func (lds *LocalDataStore) Commit(datasetID string, commit types.Struct) (DataStore, error) {
 	err := lds.commit(datasetID, commit)
 	lds.Flush()
 	return newLocalDataStore(lds.cs), err

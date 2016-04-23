@@ -8,6 +8,7 @@ import (
 
 	"github.com/attic-labs/noms/clients/csv"
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 )
 
@@ -43,7 +44,7 @@ func main() {
 	}
 
 	err = d.Try(func() {
-		nomsList, structDesc := csv.ValueToListAndElemDesc(ds.Head().Value(), ds.Store())
+		nomsList, structDesc := csv.ValueToListAndElemDesc(ds.Head().Get(datas.ValueField), ds.Store())
 		csv.Write(nomsList, structDesc, comma, os.Stdout)
 	})
 	if err != nil {

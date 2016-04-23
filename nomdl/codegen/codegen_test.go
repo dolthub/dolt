@@ -111,7 +111,7 @@ func TestCommitNewPackages(t *testing.T) {
 	p := parsePackageFile("name", inFile, pkgDS)
 	localPkgs := refSet{p.Ref(): true}
 	pkgDS = generate("name", inFile, filepath.Join(dir, "out.js"), dir, map[string]bool{}, p, localPkgs, pkgDS)
-	s := pkgDS.Head().Value().(types.Set)
+	s := pkgDS.Head().Get(datas.ValueField).(types.Set)
 	assert.EqualValues(1, s.Len())
 	tr := s.First().(types.Ref).TargetValue(ds).(types.Package).Types()[0]
 	assert.EqualValues(types.StructKind, tr.Kind())
