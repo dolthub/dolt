@@ -137,21 +137,95 @@ func (t *Type) ChildValues() (res []Value) {
 	return
 }
 
-var typeForType = MakePrimitiveType(TypeKind)
+var typeForType = makePrimitiveType(TypeKind)
 
 func (t *Type) Type() *Type {
 	return typeForType
 }
 
 func MakePrimitiveType(k NomsKind) *Type {
+	switch k {
+	case BoolKind:
+		return BoolType
+	case Int8Kind:
+		return Int8Type
+	case Int16Kind:
+		return Int16Type
+	case Int32Kind:
+		return Int32Type
+	case Int64Kind:
+		return Int64Type
+	case Float32Kind:
+		return Float32Type
+	case Float64Kind:
+		return Float64Type
+	case Uint8Kind:
+		return Uint8Type
+	case Uint16Kind:
+		return Uint16Type
+	case Uint32Kind:
+		return Uint32Type
+	case Uint64Kind:
+		return Uint64Type
+	case StringKind:
+		return StringType
+	case BlobKind:
+		return BlobType
+	case ValueKind:
+		return ValueType
+	case TypeKind:
+		return TypeType
+	case PackageKind:
+		return PackageType
+	}
+	d.Chk.Fail("invalid NomsKind: %d", k)
+	return nil
+}
+
+func makePrimitiveType(k NomsKind) *Type {
 	return buildType("", PrimitiveDesc(k))
 }
 
 func MakePrimitiveTypeByString(p string) *Type {
-	return buildType("", primitiveToDesc(p))
+	switch p {
+	case "Bool":
+		return BoolType
+	case "Int8":
+		return Int8Type
+	case "Int16":
+		return Int16Type
+	case "Int32":
+		return Int32Type
+	case "Int64":
+		return Int64Type
+	case "Float32":
+		return Float32Type
+	case "Float64":
+		return Float64Type
+	case "Uint8":
+		return Uint8Type
+	case "Uint16":
+		return Uint16Type
+	case "Uint32":
+		return Uint32Type
+	case "Uint64":
+		return Uint64Type
+	case "String":
+		return StringType
+	case "Blob":
+		return BlobType
+	case "Value":
+		return ValueType
+	case "Type":
+		return TypeType
+	case "Package":
+		return PackageType
+	}
+	d.Chk.Fail("invalid type string: %s", p)
+	return nil
 }
 
-func MakeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
+func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 	if len(elemTypes) == 1 {
 		d.Chk.NotEqual(MapKind, kind, "MapKind requires 2 element types.")
 		d.Chk.True(kind == RefKind || kind == ListKind || kind == SetKind)
@@ -204,17 +278,19 @@ func buildType(n string, desc TypeDesc) *Type {
 	}
 }
 
-var Uint8Type = MakePrimitiveType(Uint8Kind)
-var Uint16Type = MakePrimitiveType(Uint16Kind)
-var Uint32Type = MakePrimitiveType(Uint32Kind)
-var Uint64Type = MakePrimitiveType(Uint64Kind)
-var Int8Type = MakePrimitiveType(Int8Kind)
-var Int16Type = MakePrimitiveType(Int16Kind)
-var Int32Type = MakePrimitiveType(Int32Kind)
-var Int64Type = MakePrimitiveType(Int64Kind)
-var Float32Type = MakePrimitiveType(Float32Kind)
-var Float64Type = MakePrimitiveType(Float64Kind)
-var BoolType = MakePrimitiveType(BoolKind)
-var StringType = MakePrimitiveType(StringKind)
-var BlobType = MakePrimitiveType(BlobKind)
-var PackageType = MakePrimitiveType(PackageKind)
+var Uint8Type = makePrimitiveType(Uint8Kind)
+var Uint16Type = makePrimitiveType(Uint16Kind)
+var Uint32Type = makePrimitiveType(Uint32Kind)
+var Uint64Type = makePrimitiveType(Uint64Kind)
+var Int8Type = makePrimitiveType(Int8Kind)
+var Int16Type = makePrimitiveType(Int16Kind)
+var Int32Type = makePrimitiveType(Int32Kind)
+var Int64Type = makePrimitiveType(Int64Kind)
+var Float32Type = makePrimitiveType(Float32Kind)
+var Float64Type = makePrimitiveType(Float64Kind)
+var BoolType = makePrimitiveType(BoolKind)
+var StringType = makePrimitiveType(StringKind)
+var BlobType = makePrimitiveType(BlobKind)
+var PackageType = makePrimitiveType(PackageKind)
+var TypeType = makePrimitiveType(TypeKind)
+var ValueType = makePrimitiveType(ValueKind)

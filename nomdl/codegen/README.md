@@ -48,7 +48,7 @@ Here is the diff:
 --- a/nomdl/pkg/grammar.peg
 +++ b/nomdl/pkg/grammar.peg
 @@ -159,7 +159,7 @@ CompoundType <- `List` _ `(` _ t:Type _ `)` _ {
-        return types.MakeCompoundType(types.RefKind, t.(types.Type)), nil
+        return types.MakeRefType(t.(*types.Type)), nil
  }
 
 -PrimitiveType <- p:(`Uint64` / `Uint32` / `Uint16` / `Uint8` / `Int64` / `Int32` / `Int16` / `Int8` / `Float64` / `Float32` / `Bool` / `String` / `Blob` / `Value` / `Type`) {

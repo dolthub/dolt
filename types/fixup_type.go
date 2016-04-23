@@ -11,7 +11,7 @@ func FixupType(tr *Type, pkg *Package) *Type {
 		for i, elemType := range desc.ElemTypes {
 			elemTypes[i] = FixupType(elemType, pkg)
 		}
-		return MakeCompoundType(tr.Kind(), elemTypes...)
+		return makeCompoundType(tr.Kind(), elemTypes...)
 
 	case UnresolvedDesc:
 		if tr.HasPackageRef() {

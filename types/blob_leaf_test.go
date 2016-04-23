@@ -39,5 +39,5 @@ func TestBlobLeafChunks(t *testing.T) {
 func TestBlobLeafType(t *testing.T) {
 	assert := assert.New(t)
 	b := newBlobLeaf([]byte{})
-	assert.True(b.Type().Equals(MakePrimitiveType(BlobKind)))
+	assert.True(b.Type().Equals(BlobType))
 }

@@ -51,7 +51,7 @@ func TestWriteValue(t *testing.T) {
 	testEncode(fmt.Sprintf("t [%d,\"hi\"]", StringKind), NewString("hi"))
 
 	testEncode(fmt.Sprintf("t [%d,[],[]]", PackageKind), Package{types: []*Type{}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
-	ref1 := testEncode(fmt.Sprintf("t [%d,[%d],[]]", PackageKind, BoolKind), Package{types: []*Type{MakePrimitiveType(BoolKind)}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
+	ref1 := testEncode(fmt.Sprintf("t [%d,[%d],[]]", PackageKind, BoolKind), Package{types: []*Type{BoolType}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
 	testEncode(fmt.Sprintf("t [%d,[],[\"%s\"]]", PackageKind, ref1), Package{types: []*Type{}, dependencies: []ref.Ref{ref1}, ref: &ref.Ref{}})
 }
 
@@ -81,7 +81,7 @@ func TestWritePackageWhenValueIsWritten(t *testing.T) {
 	vs := NewTestValueStore()
 
 	typeDef := MakeStructType("S", []Field{
-		Field{"X", MakePrimitiveType(Int32Kind), false},
+		Field{"X", Int32Type, false},
 	}, []Field{})
 	pkg1 := NewPackage([]*Type{typeDef}, []ref.Ref{})
 	// Don't write package

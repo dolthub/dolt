@@ -14,8 +14,8 @@ func init() {
 	p := types.NewPackage([]*types.Type{
 		types.MakeStructType("Commit",
 			[]types.Field{
-				types.Field{"value", types.MakePrimitiveType(types.ValueKind), false},
-				types.Field{"parents", types.MakeCompoundType(types.SetKind, types.MakeCompoundType(types.RefKind, types.MakeType(ref.Ref{}, 0))), false},
+				types.Field{"value", types.ValueType, false},
+				types.Field{"parents", types.MakeSetType(types.MakeRefType(types.MakeType(ref.Ref{}, 0))), false},
 			},
 			[]types.Field{},
 		),

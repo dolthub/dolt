@@ -25,7 +25,7 @@ type mapIterCallback func(key, value Value) (stop bool)
 type mapIterAllCallback func(key, value Value)
 type mapFilterCallback func(key, value Value) (keep bool)
 
-var mapType = MakeCompoundType(MapKind, MakePrimitiveType(ValueKind), MakePrimitiveType(ValueKind))
+var mapType = MakeMapType(ValueType, ValueType)
 
 func NewMap(kv ...Value) Map {
 	return NewTypedMap(mapType, kv...)

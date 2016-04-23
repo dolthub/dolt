@@ -85,7 +85,7 @@ func (ms metaSequenceObject) data() metaSequenceData {
 
 func (ms metaSequenceObject) ChildValues() []Value {
 	leafType := ms.t.Desc.(CompoundDesc).ElemTypes[0]
-	refOfLeafType := MakeCompoundType(RefKind, leafType)
+	refOfLeafType := MakeRefType(leafType)
 	res := make([]Value, len(ms.tuples))
 	for i, t := range ms.tuples {
 		res[i] = refFromType(t.ChildRef().TargetRef(), refOfLeafType)

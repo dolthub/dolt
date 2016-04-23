@@ -169,7 +169,7 @@ func (w *jsonArrayWriter) writeValue(v Value, tr *Type, pkg *Package) {
 		})
 		w.write(w2.toArray())
 	case PackageKind:
-		ptr := MakePrimitiveType(TypeKind)
+		ptr := TypeType
 		w2 := newJSONArrayWriter(w.vw)
 		p := v.(Package)
 		for _, t := range p.types {

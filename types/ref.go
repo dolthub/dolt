@@ -49,7 +49,7 @@ func (r Ref) TargetRef() ref.Ref {
 	return r.target
 }
 
-var refType = MakeCompoundType(RefKind, MakePrimitiveType(ValueKind))
+var refType = MakeRefType(ValueType)
 
 func (r Ref) Type() *Type {
 	return r.t

@@ -36,7 +36,7 @@ func TestUserName(t *testing.T) {
 
 	imported := types.NewPackage([]*types.Type{
 		types.MakeStructType("S1", []types.Field{
-			types.Field{"f", types.MakePrimitiveType(types.BoolKind), false},
+			types.Field{"f", types.BoolType, false},
 		}, []types.Field{}),
 	}, []ref.Ref{})
 
@@ -44,7 +44,7 @@ func TestUserName(t *testing.T) {
 
 	localStructName := "Local"
 	resolved := types.MakeStructType(localStructName, []types.Field{
-		types.Field{"a", types.MakePrimitiveType(types.Int8Kind), false},
+		types.Field{"a", types.Int8Type, false},
 	}, []types.Field{})
 
 	g := Generator{R: &res, Package: &imported}

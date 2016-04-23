@@ -82,7 +82,7 @@ func TestStreamingCompoundListCreation(t *testing.T) {
 	vs := NewTestValueStore()
 	simpleList := getTestSimpleList()
 
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	tr := MakeListType(Int64Type)
 	cl := NewTypedList(tr, simpleList...)
 	valueChan := make(chan Value)
 	listChan := NewStreamingTypedList(tr, vs, valueChan)
@@ -111,7 +111,7 @@ func TestCompoundListGet(t *testing.T) {
 		}
 	}
 
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	tr := MakeListType(Int64Type)
 	cl := NewTypedList(tr, simpleList...).(compoundList)
 	testGet(cl)
 	testGet(vs.ReadValue(vs.WriteValue(cl).TargetRef()).(compoundList))
@@ -121,7 +121,7 @@ func TestCompoundListIter(t *testing.T) {
 	assert := assert.New(t)
 
 	simpleList := getTestSimpleList()
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	tr := MakeListType(Int64Type)
 	cl := NewTypedList(tr, simpleList...)
 
 	expectIdx := uint64(0)
@@ -140,7 +140,7 @@ func TestCompoundListIterAll(t *testing.T) {
 	assert := assert.New(t)
 
 	simpleList := getTestSimpleList()
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	tr := MakeListType(Int64Type)
 	cl := NewTypedList(tr, simpleList...)
 
 	expectIdx := uint64(0)
@@ -159,7 +159,7 @@ func TestCompoundListIterAllP(t *testing.T) {
 	mu := sync.Mutex{}
 
 	simpleList := getTestSimpleListUnique()
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	tr := MakeListType(Int64Type)
 	cl := NewTypedList(tr, simpleList...)
 
 	indexes := map[Value]uint64{}
@@ -183,7 +183,7 @@ func TestCompoundListMap(t *testing.T) {
 	assert := assert.New(t)
 
 	simpleList := getTestSimpleList()
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	tr := MakeListType(Int64Type)
 	cl := NewTypedList(tr, simpleList...)
 
 	l := cl.Map(func(v Value, i uint64) interface{} {
@@ -201,7 +201,7 @@ func TestCompoundListMapP(t *testing.T) {
 	assert := assert.New(t)
 
 	simpleList := getTestSimpleList()
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	tr := MakeListType(Int64Type)
 	cl := NewTypedList(tr, simpleList...)
 
 	l := cl.MapP(64, func(v Value, i uint64) interface{} {
@@ -218,7 +218,7 @@ func TestCompoundListMapP(t *testing.T) {
 func TestCompoundListLen(t *testing.T) {
 	assert := assert.New(t)
 
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	tr := MakeListType(Int64Type)
 
 	cl := NewTypedList(tr, getTestSimpleList()...).(compoundList)
 	assert.Equal(getTestSimpleListLen(), cl.Len())
@@ -231,7 +231,7 @@ func TestCompoundListCursorAt(t *testing.T) {
 
 	listLen := func(at uint64, next func(*sequenceCursor) bool) (size uint64) {
 		cs := NewTestValueStore()
-		tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+		tr := MakeListType(Int64Type)
 		cl := NewTypedList(tr, getTestSimpleList()...).(compoundList)
 		cur, _, _ := cl.cursorAt(at)
 		for {
@@ -254,7 +254,7 @@ func TestCompoundListAppend(t *testing.T) {
 	assert := assert.New(t)
 
 	newCompoundList := func(items testSimpleList) compoundList {
-		tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+		tr := MakeListType(Int64Type)
 		return NewTypedList(tr, items...).(compoundList)
 	}
 
@@ -430,7 +430,7 @@ func TestCompoundListInsertTypeError(t *testing.T) {
 	assert := assert.New(t)
 
 	testList := getTestSimpleList()
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	tr := MakeListType(Int64Type)
 	cl := NewTypedList(tr, testList...)
 	assert.Panics(func() {
 		cl.Insert(2, Bool(true))
@@ -531,7 +531,7 @@ func TestCompoundListSet(t *testing.T) {
 		testIdx(i, false)
 	}
 
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	tr := MakeListType(Int64Type)
 	cl2 := NewTypedList(tr, testList...)
 	assert.Panics(func() {
 		cl2.Set(0, Bool(true))
@@ -541,7 +541,7 @@ func TestCompoundListSet(t *testing.T) {
 func TestCompoundListSlice(t *testing.T) {
 	assert := assert.New(t)
 
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	tr := MakeListType(Int64Type)
 	testList := getTestSimpleList()
 
 	cl := NewTypedList(tr, testList...)
@@ -610,7 +610,7 @@ func TestCompoundListFilter(t *testing.T) {
 func TestCompoundListFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 
-	listType := MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind))
+	listType := MakeListType(Int64Type)
 
 	firstNNumbers := func(n int) []Value {
 		nums := []Value{}
@@ -631,13 +631,13 @@ func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
 	vs := NewTestValueStore()
 
 	structTypeDef := MakeStructType("num", []Field{
-		Field{"n", MakePrimitiveType(Int64Kind), false},
+		Field{"n", Int64Type, false},
 	}, []Field{})
 	pkg := NewPackage([]*Type{structTypeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	structType := MakeType(pkgRef, 0)
-	refOfTypeStructType := MakeCompoundType(RefKind, structType)
-	listType := MakeCompoundType(ListKind, refOfTypeStructType)
+	refOfTypeStructType := MakeRefType(structType)
+	listType := MakeListType(refOfTypeStructType)
 
 	firstNNumbers := func(n int) []Value {
 		nums := []Value{}

@@ -71,21 +71,21 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return NewSet() },
 		func() Value { return NewSet(NewString("hi")) },
 
-		func() Value { return MakePrimitiveType(BoolKind) },
-		func() Value { return MakePrimitiveType(StringKind) },
+		func() Value { return BoolType },
+		func() Value { return StringType },
 		func() Value { return MakeStructType("a", []Field{}, []Field{}) },
 		func() Value { return MakeStructType("b", []Field{}, []Field{}) },
-		func() Value { return MakeCompoundType(ListKind, MakePrimitiveType(Uint64Kind)) },
-		func() Value { return MakeCompoundType(ListKind, MakePrimitiveType(Int64Kind)) },
-		func() Value { return MakeCompoundType(SetKind, MakePrimitiveType(Uint32Kind)) },
-		func() Value { return MakeCompoundType(SetKind, MakePrimitiveType(Int32Kind)) },
-		func() Value { return MakeCompoundType(RefKind, MakePrimitiveType(Uint16Kind)) },
-		func() Value { return MakeCompoundType(RefKind, MakePrimitiveType(Int16Kind)) },
+		func() Value { return MakeListType(Uint64Type) },
+		func() Value { return MakeListType(Int64Type) },
+		func() Value { return MakeSetType(Uint32Type) },
+		func() Value { return MakeSetType(Int32Type) },
+		func() Value { return MakeRefType(Uint16Type) },
+		func() Value { return MakeRefType(Int16Type) },
 		func() Value {
-			return MakeCompoundType(MapKind, MakePrimitiveType(Uint8Kind), MakePrimitiveType(ValueKind))
+			return MakeMapType(Uint8Type, ValueType)
 		},
 		func() Value {
-			return MakeCompoundType(MapKind, MakePrimitiveType(Int8Kind), MakePrimitiveType(ValueKind))
+			return MakeMapType(Int8Type, ValueType)
 		},
 		func() Value { return MakeType(r1, 0) },
 		func() Value { return MakeType(r1, 1) },

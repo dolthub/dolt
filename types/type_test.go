@@ -11,11 +11,11 @@ func TestTypes(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 
-	boolType := MakePrimitiveType(BoolKind)
-	uint8Type := MakePrimitiveType(Uint8Kind)
-	stringType := MakePrimitiveType(StringKind)
-	mapType := MakeCompoundType(MapKind, stringType, uint8Type)
-	setType := MakeCompoundType(SetKind, stringType)
+	boolType := BoolType
+	uint8Type := Uint8Type
+	stringType := StringType
+	mapType := MakeMapType(stringType, uint8Type)
+	setType := MakeSetType(stringType)
 	mahType := MakeStructType("MahStruct", []Field{
 		Field{"Field1", stringType, false},
 		Field{"Field2", boolType, true},
@@ -44,7 +44,7 @@ func TestTypeWithPkgRef(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 
-	pkg := NewPackage([]*Type{MakePrimitiveType(Float64Kind)}, []ref.Ref{})
+	pkg := NewPackage([]*Type{Float64Type}, []ref.Ref{})
 
 	pkgRef := RegisterPackage(&pkg)
 	unresolvedType := MakeType(pkgRef, 42)
@@ -56,16 +56,16 @@ func TestTypeWithPkgRef(t *testing.T) {
 }
 
 func TestTypeType(t *testing.T) {
-	assert.True(t, MakePrimitiveType(BoolKind).Type().Equals(MakePrimitiveType(TypeKind)))
+	assert.True(t, BoolType.Type().Equals(TypeType))
 }
 
 func TestTypeRefDescribe(t *testing.T) {
 	assert := assert.New(t)
-	boolType := MakePrimitiveType(BoolKind)
-	uint8Type := MakePrimitiveType(Uint8Kind)
-	stringType := MakePrimitiveType(StringKind)
-	mapType := MakeCompoundType(MapKind, stringType, uint8Type)
-	setType := MakeCompoundType(SetKind, stringType)
+	boolType := BoolType
+	uint8Type := Uint8Type
+	stringType := StringType
+	mapType := MakeMapType(stringType, uint8Type)
+	setType := MakeSetType(stringType)
 
 	assert.Equal("Bool", boolType.Describe())
 	assert.Equal("Uint8", uint8Type.Describe())
@@ -92,22 +92,22 @@ func TestTypeRefDescribe(t *testing.T) {
 
 func TestTypeOrdered(t *testing.T) {
 	assert := assert.New(t)
-	assert.False(MakePrimitiveType(BoolKind).IsOrdered())
-	assert.True(MakePrimitiveType(Uint8Kind).IsOrdered())
-	assert.True(MakePrimitiveType(Uint16Kind).IsOrdered())
-	assert.True(MakePrimitiveType(Uint32Kind).IsOrdered())
-	assert.True(MakePrimitiveType(Uint64Kind).IsOrdered())
-	assert.True(MakePrimitiveType(Int8Kind).IsOrdered())
-	assert.True(MakePrimitiveType(Int16Kind).IsOrdered())
-	assert.True(MakePrimitiveType(Int32Kind).IsOrdered())
-	assert.True(MakePrimitiveType(Int64Kind).IsOrdered())
-	assert.True(MakePrimitiveType(Float32Kind).IsOrdered())
-	assert.True(MakePrimitiveType(Float64Kind).IsOrdered())
-	assert.True(MakePrimitiveType(StringKind).IsOrdered())
-	assert.False(MakePrimitiveType(BlobKind).IsOrdered())
-	assert.False(MakePrimitiveType(ValueKind).IsOrdered())
-	assert.False(MakeCompoundType(ListKind, MakePrimitiveType(StringKind)).IsOrdered())
-	assert.False(MakeCompoundType(SetKind, MakePrimitiveType(StringKind)).IsOrdered())
-	assert.False(MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(ValueKind)).IsOrdered())
-	assert.True(MakeCompoundType(RefKind, MakePrimitiveType(StringKind)).IsOrdered())
+	assert.False(BoolType.IsOrdered())
+	assert.True(Uint8Type.IsOrdered())
+	assert.True(Uint16Type.IsOrdered())
+	assert.True(Uint32Type.IsOrdered())
+	assert.True(Uint64Type.IsOrdered())
+	assert.True(Int8Type.IsOrdered())
+	assert.True(Int16Type.IsOrdered())
+	assert.True(Int32Type.IsOrdered())
+	assert.True(Int64Type.IsOrdered())
+	assert.True(Float32Type.IsOrdered())
+	assert.True(Float64Type.IsOrdered())
+	assert.True(StringType.IsOrdered())
+	assert.False(BlobType.IsOrdered())
+	assert.False(ValueType.IsOrdered())
+	assert.False(MakeListType(StringType).IsOrdered())
+	assert.False(MakeSetType(StringType).IsOrdered())
+	assert.False(MakeMapType(StringType, ValueType).IsOrdered())
+	assert.True(MakeRefType(StringType).IsOrdered())
 }

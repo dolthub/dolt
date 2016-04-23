@@ -38,7 +38,7 @@ func (fs String) ChildValues() []Value {
 	return nil
 }
 
-var typeForString = MakePrimitiveType(StringKind)
+var typeForString = StringType
 
 func (fs String) Type() *Type {
 	return typeForString

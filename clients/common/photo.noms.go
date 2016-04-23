@@ -14,30 +14,30 @@ func init() {
 	p := types.NewPackage([]*types.Type{
 		types.MakeStructType("RemotePhoto",
 			[]types.Field{
-				types.Field{"Id", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Title", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Id", types.StringType, false},
+				types.Field{"Title", types.StringType, false},
 				types.Field{"Date", types.MakeType(ref.Parse("sha1-0b4ac7cb0583d7fecd71a1584a3f846e5d8b08eb"), 0), false},
 				types.Field{"Geoposition", types.MakeType(ref.Parse("sha1-0cac0f1ed4777b6965548b0dfe6965a9f23af76c"), 0), false},
-				types.Field{"Sizes", types.MakeCompoundType(types.MapKind, types.MakeType(ref.Ref{}, 2), types.MakePrimitiveType(types.StringKind)), false},
-				types.Field{"Tags", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind)), false},
-				types.Field{"Faces", types.MakeCompoundType(types.SetKind, types.MakeType(ref.Ref{}, 1)), false},
+				types.Field{"Sizes", types.MakeMapType(types.MakeType(ref.Ref{}, 2), types.StringType), false},
+				types.Field{"Tags", types.MakeSetType(types.StringType), false},
+				types.Field{"Faces", types.MakeSetType(types.MakeType(ref.Ref{}, 1)), false},
 			},
 			[]types.Field{},
 		),
 		types.MakeStructType("Face",
 			[]types.Field{
-				types.Field{"Top", types.MakePrimitiveType(types.Float32Kind), false},
-				types.Field{"Left", types.MakePrimitiveType(types.Float32Kind), false},
-				types.Field{"Width", types.MakePrimitiveType(types.Float32Kind), false},
-				types.Field{"Height", types.MakePrimitiveType(types.Float32Kind), false},
-				types.Field{"PersonName", types.MakePrimitiveType(types.StringKind), false},
+				types.Field{"Top", types.Float32Type, false},
+				types.Field{"Left", types.Float32Type, false},
+				types.Field{"Width", types.Float32Type, false},
+				types.Field{"Height", types.Float32Type, false},
+				types.Field{"PersonName", types.StringType, false},
 			},
 			[]types.Field{},
 		),
 		types.MakeStructType("Size",
 			[]types.Field{
-				types.Field{"Width", types.MakePrimitiveType(types.Uint32Kind), false},
-				types.Field{"Height", types.MakePrimitiveType(types.Uint32Kind), false},
+				types.Field{"Width", types.Uint32Type, false},
+				types.Field{"Height", types.Uint32Type, false},
 			},
 			[]types.Field{},
 		),
@@ -576,7 +576,7 @@ func (m MapOfSizeToString) Type() *types.Type {
 }
 
 func init() {
-	__typeForMapOfSizeToString = types.MakeCompoundType(types.MapKind, types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 2), types.MakePrimitiveType(types.StringKind))
+	__typeForMapOfSizeToString = types.MakeMapType(types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 2), types.StringType)
 	types.RegisterValue(__typeForMapOfSizeToString, builderForMapOfSizeToString, readerForMapOfSizeToString)
 }
 
@@ -711,7 +711,7 @@ func (m SetOfString) Type() *types.Type {
 }
 
 func init() {
-	__typeForSetOfString = types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind))
+	__typeForSetOfString = types.MakeSetType(types.StringType)
 	types.RegisterValue(__typeForSetOfString, builderForSetOfString, readerForSetOfString)
 }
 
@@ -856,7 +856,7 @@ func (m SetOfFace) Type() *types.Type {
 }
 
 func init() {
-	__typeForSetOfFace = types.MakeCompoundType(types.SetKind, types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 1))
+	__typeForSetOfFace = types.MakeSetType(types.MakeType(ref.Parse("sha1-10004087fdbc623873c649d28aa59f4e066d374e"), 1))
 	types.RegisterValue(__typeForSetOfFace, builderForSetOfFace, readerForSetOfFace)
 }
 

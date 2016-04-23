@@ -204,7 +204,7 @@ func TestSetIterAllP(t *testing.T) {
 }
 
 func testSetOrder(assert *assert.Assertions, valueType *Type, value []Value, expectOrdering []Value) {
-	mapTr := MakeCompoundType(SetKind, valueType)
+	mapTr := MakeSetType(valueType)
 	m := NewTypedSet(mapTr, value...)
 	i := 0
 	m.IterAll(func(value Value) {
@@ -217,7 +217,7 @@ func TestSetOrdering(t *testing.T) {
 	assert := assert.New(t)
 
 	testSetOrder(assert,
-		MakePrimitiveType(StringKind),
+		StringType,
 		[]Value{
 			NewString("a"),
 			NewString("z"),
@@ -237,7 +237,7 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert,
-		MakePrimitiveType(Uint64Kind),
+		Uint64Type,
 		[]Value{
 			Uint64(0),
 			Uint64(1000),
@@ -257,7 +257,7 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert,
-		MakePrimitiveType(Int16Kind),
+		Int16Type,
 		[]Value{
 			Int16(0),
 			Int16(-30),
@@ -277,7 +277,7 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert,
-		MakePrimitiveType(Float32Kind),
+		Float32Type,
 		[]Value{
 			Float32(0.0001),
 			Float32(0.000001),
@@ -297,7 +297,7 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert,
-		MakePrimitiveType(ValueKind),
+		ValueType,
 		[]Value{
 			NewString("a"),
 			NewString("z"),
@@ -318,7 +318,7 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert,
-		MakePrimitiveType(BoolKind),
+		BoolType,
 		[]Value{
 			Bool(true),
 			Bool(false),
@@ -348,9 +348,9 @@ func TestSetType(t *testing.T) {
 	assert := assert.New(t)
 
 	s := newSetLeaf(setType)
-	assert.True(s.Type().Equals(MakeCompoundType(SetKind, MakePrimitiveType(ValueKind))))
+	assert.True(s.Type().Equals(MakeSetType(ValueType)))
 
-	tr := MakeCompoundType(SetKind, MakePrimitiveType(Uint64Kind))
+	tr := MakeSetType(Uint64Type)
 
 	s = newSetLeaf(tr)
 	assert.Equal(tr, s.Type())

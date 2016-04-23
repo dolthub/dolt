@@ -78,15 +78,21 @@ func (r *jsonArrayReader) readRef() ref.Ref {
 func (r *jsonArrayReader) readTypeAsTag() *Type {
 	kind := r.readKind()
 	switch kind {
-	case ListKind, SetKind, RefKind:
+	case ListKind:
 		elemType := r.readTypeAsTag()
-		return MakeCompoundType(kind, elemType)
+		return MakeListType(elemType)
+	case SetKind:
+		elemType := r.readTypeAsTag()
+		return MakeSetType(elemType)
+	case RefKind:
+		elemType := r.readTypeAsTag()
+		return MakeRefType(elemType)
 	case MapKind:
 		keyType := r.readTypeAsTag()
 		valueType := r.readTypeAsTag()
-		return MakeCompoundType(kind, keyType, valueType)
+		return MakeMapType(keyType, valueType)
 	case TypeKind:
-		return MakePrimitiveType(TypeKind)
+		return TypeType
 	case UnresolvedKind:
 		pkgRef := r.readRef()
 		ordinal := int16(r.readInt())
@@ -153,13 +159,13 @@ func indexTypeForMetaSequence(t *Type) *Type {
 	default:
 		panic(fmt.Sprintf("Unknown type used for metaSequence: %s", t.Describe()))
 	case BlobKind, ListKind:
-		return MakePrimitiveType(Uint64Kind)
+		return Uint64Type
 	case MapKind, SetKind:
 		elemType := t.Desc.(CompoundDesc).ElemTypes[0]
 		if elemType.IsOrdered() {
 			return elemType
 		}
-		return MakeCompoundType(RefKind, MakePrimitiveType(ValueKind))
+		return MakeRefType(ValueType)
 	}
 }
 
@@ -315,7 +321,7 @@ func (r *jsonArrayReader) readTypeAsValue(pkg *Package) *Type {
 			t := r2.readTypeAsValue(pkg)
 			elemTypes = append(elemTypes, t)
 		}
-		return MakeCompoundType(k, elemTypes...)
+		return makeCompoundType(k, elemTypes...)
 	case StructKind:
 		name := r.readString()
 

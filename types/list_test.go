@@ -341,9 +341,9 @@ func TestListType(t *testing.T) {
 	assert := assert.New(t)
 
 	l := NewList(Int32(0))
-	assert.True(l.Type().Equals(MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))))
+	assert.True(l.Type().Equals(MakeListType(ValueType)))
 
-	tr := MakeCompoundType(ListKind, MakePrimitiveType(Uint8Kind))
+	tr := MakeListType(Uint8Type)
 	l2 := newListLeaf(tr, []Value{Uint8(0), Uint8(1)}...)
 	assert.Equal(tr, l2.Type())
 

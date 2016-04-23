@@ -6,6 +6,6 @@ import (
 
 func NewMapOfStringToValue(kv ...types.Value) types.Map {
 	return types.NewTypedMap(
-		types.MakeCompoundType(types.MapKind, types.MakePrimitiveType(types.StringKind), types.MakePrimitiveType(types.ValueKind)),
+		types.MakeMapType(types.StringType, types.ValueType),
 		kv...)
 }

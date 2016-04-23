@@ -144,7 +144,7 @@ func (lvs *ValueStore) checkChunksInCache(v Value) map[ref.Ref]struct{} {
 		// though it's possible that the Type is actually correct. We wouldn't be able to verify
 		// without reading it, though, so we'll dig into this later.
 		targetType := getTargetType(reachable)
-		if targetType.Equals(MakePrimitiveType(ValueKind)) {
+		if targetType.Equals(ValueType) {
 			continue
 		}
 		d.Exp.True(entry.Type().Equals(targetType), "Value to write contains ref %s, which points to a value of a different type: %+v != %+v", reachable.TargetRef(), entry.Type(), targetType)

@@ -1,9 +1,6 @@
 package types
 
-import (
-	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
-)
+import "github.com/attic-labs/noms/ref"
 
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Int32, or a custom type.
 type TypeDesc interface {
@@ -59,17 +56,6 @@ var KindToString = map[NomsKind]string{
 	Uint64Kind:  "Uint64",
 	Uint8Kind:   "Uint8",
 	ValueKind:   "Value",
-}
-
-func primitiveToDesc(p string) PrimitiveDesc {
-	for k, v := range KindToString {
-		if p == v {
-			d.Chk.True(IsPrimitiveKind(k), "Kind must be primitive, not %s", KindToString[k])
-			return PrimitiveDesc(k)
-		}
-	}
-	d.Chk.Fail("Tried to create PrimitiveDesc from bad string", "%s", p)
-	panic("Unreachable")
 }
 
 type UnresolvedDesc struct {

@@ -252,7 +252,7 @@ func TestMapNotStringKeys(t *testing.T) {
 }
 
 func testMapOrder(assert *assert.Assertions, keyType, valueType *Type, tuples []Value, expectOrdering []Value) {
-	mapTr := MakeCompoundType(MapKind, keyType, valueType)
+	mapTr := MakeMapType(keyType, valueType)
 	m := NewTypedMap(mapTr, tuples...)
 	i := 0
 	m.IterAll(func(key, value Value) {
@@ -265,7 +265,7 @@ func TestMapOrdering(t *testing.T) {
 	assert := assert.New(t)
 
 	testMapOrder(assert,
-		MakePrimitiveType(StringKind), MakePrimitiveType(StringKind),
+		StringType, StringType,
 		[]Value{
 			NewString("a"), NewString("unused"),
 			NewString("z"), NewString("unused"),
@@ -285,7 +285,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert,
-		MakePrimitiveType(Uint64Kind), MakePrimitiveType(StringKind),
+		Uint64Type, StringType,
 		[]Value{
 			Uint64(0), NewString("unused"),
 			Uint64(1000), NewString("unused"),
@@ -305,7 +305,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert,
-		MakePrimitiveType(Int16Kind), MakePrimitiveType(StringKind),
+		Int16Type, StringType,
 		[]Value{
 			Int16(0), NewString("unused"),
 			Int16(-30), NewString("unused"),
@@ -325,7 +325,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert,
-		MakePrimitiveType(Float32Kind), MakePrimitiveType(StringKind),
+		Float32Type, StringType,
 		[]Value{
 			Float32(0.0001), NewString("unused"),
 			Float32(0.000001), NewString("unused"),
@@ -345,7 +345,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert,
-		MakePrimitiveType(ValueKind), MakePrimitiveType(StringKind),
+		ValueType, StringType,
 		[]Value{
 			NewString("a"), NewString("unused"),
 			NewString("z"), NewString("unused"),
@@ -366,7 +366,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert,
-		MakePrimitiveType(BoolKind), MakePrimitiveType(StringKind),
+		BoolType, StringType,
 		[]Value{
 			Bool(true), NewString("unused"),
 			Bool(false), NewString("unused"),
@@ -394,9 +394,9 @@ func TestMapType(t *testing.T) {
 	assert := assert.New(t)
 
 	m := newMapLeaf(mapType)
-	assert.True(m.Type().Equals(MakeCompoundType(MapKind, MakePrimitiveType(ValueKind), MakePrimitiveType(ValueKind))))
+	assert.True(m.Type().Equals(MakeMapType(ValueType, ValueType)))
 
-	tr := MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(Uint64Kind))
+	tr := MakeMapType(StringType, Uint64Type)
 	m = newMapLeaf(tr)
 	assert.Equal(tr, m.Type())
 

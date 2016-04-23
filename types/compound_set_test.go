@@ -55,7 +55,7 @@ func newTestSet(length int, gen testSetGenFn, less testSetLessFn, tr *Type) test
 		}
 	}
 
-	return testSet{values, less, MakeCompoundType(SetKind, tr)}
+	return testSet{values, less, MakeSetType(tr)}
 }
 
 func getTestNativeOrderSet(scale int) testSet {
@@ -63,11 +63,11 @@ func getTestNativeOrderSet(scale int) testSet {
 		return v
 	}, func(x, y Value) bool {
 		return !y.(OrderedValue).Less(x.(OrderedValue))
-	}, MakePrimitiveType(Int64Kind))
+	}, Int64Type)
 }
 
 func getTestRefValueOrderSet(scale int) testSet {
-	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
+	setType := MakeSetType(Int64Type)
 	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
 		return NewTypedSet(setType, v)
 	}, func(x, y Value) bool {
@@ -76,7 +76,7 @@ func getTestRefValueOrderSet(scale int) testSet {
 }
 
 func getTestRefToNativeOrderSet(scale int, vw ValueWriter) testSet {
-	refType := MakeRefType(MakePrimitiveType(Int64Kind))
+	refType := MakeRefType(Int64Type)
 	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
 		return vw.WriteValue(v)
 	}, func(x, y Value) bool {
@@ -85,7 +85,7 @@ func getTestRefToNativeOrderSet(scale int, vw ValueWriter) testSet {
 }
 
 func getTestRefToValueOrderSet(scale int, vw ValueWriter) testSet {
-	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
+	setType := MakeSetType(Int64Type)
 	refType := MakeRefType(setType)
 	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
 		return vw.WriteValue(NewTypedSet(setType, v))
@@ -344,7 +344,7 @@ func TestCompoundSetUnion(t *testing.T) {
 func TestCompoundSetFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 
-	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
+	setType := MakeSetType(Int64Type)
 
 	firstNNumbers := func(n int) []Value {
 		nums := []Value{}
@@ -365,14 +365,14 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 	vs := NewTestValueStore()
 
 	structTypeDef := MakeStructType("num", []Field{
-		Field{"n", MakePrimitiveType(Int64Kind), false},
+		Field{"n", Int64Type, false},
 	}, []Field{})
 	pkg := NewPackage([]*Type{structTypeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	structType := MakeType(pkgRef, 0)
-	refOfTypeStructType := MakeCompoundType(RefKind, structType)
+	refOfTypeStructType := MakeRefType(structType)
 
-	setType := MakeCompoundType(SetKind, refOfTypeStructType)
+	setType := MakeSetType(refOfTypeStructType)
 
 	firstNNumbers := func(n int) []Value {
 		nums := []Value{}

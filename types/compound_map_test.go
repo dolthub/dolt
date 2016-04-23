@@ -78,7 +78,7 @@ func newTestMap(length int, gen testMapGenFn, less testMapLessFn, tr *Type) test
 		}
 	}
 
-	return testMap{entries, less, MakeCompoundType(MapKind, tr, tr), gen(Int64(mask + 1))}
+	return testMap{entries, less, MakeMapType(tr, tr), gen(Int64(mask + 1))}
 }
 
 func getTestNativeOrderMap(scale int) testMap {
@@ -86,11 +86,11 @@ func getTestNativeOrderMap(scale int) testMap {
 		return v
 	}, func(x, y Value) bool {
 		return !y.(OrderedValue).Less(x.(OrderedValue))
-	}, MakePrimitiveType(Int64Kind))
+	}, Int64Type)
 }
 
 func getTestRefValueOrderMap(scale int) testMap {
-	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
+	setType := MakeSetType(Int64Type)
 	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
 		return NewTypedSet(setType, v)
 	}, func(x, y Value) bool {
@@ -99,7 +99,7 @@ func getTestRefValueOrderMap(scale int) testMap {
 }
 
 func getTestRefToNativeOrderMap(scale int, vw ValueWriter) testMap {
-	refType := MakeRefType(MakePrimitiveType(Int64Kind))
+	refType := MakeRefType(Int64Type)
 	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
 		return vw.WriteValue(v)
 	}, func(x, y Value) bool {
@@ -108,7 +108,7 @@ func getTestRefToNativeOrderMap(scale int, vw ValueWriter) testMap {
 }
 
 func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
-	setType := MakeCompoundType(SetKind, MakePrimitiveType(Int64Kind))
+	setType := MakeSetType(Int64Type)
 	refType := MakeRefType(setType)
 	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
 		return vw.WriteValue(NewTypedSet(setType, v))
@@ -351,7 +351,7 @@ func TestCompoundMapFilter(t *testing.T) {
 func TestCompoundMapFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 
-	mapType := MakeCompoundType(MapKind, MakePrimitiveType(Int64Kind), MakePrimitiveType(Int64Kind))
+	mapType := MakeMapType(Int64Type, Int64Type)
 
 	kvs := []Value{}
 	n := 5000
@@ -368,14 +368,14 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	vs := NewTestValueStore()
 
 	structTypeDef := MakeStructType("num", []Field{
-		Field{"n", MakePrimitiveType(Int64Kind), false},
+		Field{"n", Int64Type, false},
 	}, []Field{})
 	pkg := NewPackage([]*Type{structTypeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 	structType := MakeType(pkgRef, 0)
 	refOfTypeStructType := MakeRefType(structType)
 
-	mapType := MakeCompoundType(MapKind, refOfTypeStructType, refOfTypeStructType)
+	mapType := MakeMapType(refOfTypeStructType, refOfTypeStructType)
 
 	kvs := []Value{}
 	n := 5000

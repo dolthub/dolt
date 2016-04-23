@@ -45,7 +45,7 @@ func (s *testSuite) TestCSVExporter() {
 	for _, key := range header {
 		f = append(f, types.Field{
 			Name: key,
-			T:    types.MakePrimitiveType(types.StringKind),
+			T:    types.StringType,
 		})
 	}
 
@@ -65,7 +65,7 @@ func (s *testSuite) TestCSVExporter() {
 		structs[i] = types.NewStruct(typeRef, typeDef, fields)
 	}
 
-	listType := types.MakeCompoundType(types.ListKind, typeRef)
+	listType := types.MakeListType(typeRef)
 	ds.Commit(types.NewTypedList(listType, structs...))
 	ds.Store().Close()
 

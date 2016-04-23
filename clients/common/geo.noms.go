@@ -14,8 +14,8 @@ func init() {
 	p := types.NewPackage([]*types.Type{
 		types.MakeStructType("Geoposition",
 			[]types.Field{
-				types.Field{"Latitude", types.MakePrimitiveType(types.Float32Kind), false},
-				types.Field{"Longitude", types.MakePrimitiveType(types.Float32Kind), false},
+				types.Field{"Latitude", types.Float32Type, false},
+				types.Field{"Longitude", types.Float32Type, false},
 			},
 			[]types.Field{},
 		),

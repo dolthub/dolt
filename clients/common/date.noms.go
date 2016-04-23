@@ -14,7 +14,7 @@ func init() {
 	p := types.NewPackage([]*types.Type{
 		types.MakeStructType("Date",
 			[]types.Field{
-				types.Field{"MsSinceEpoch", types.MakePrimitiveType(types.Int64Kind), false},
+				types.Field{"MsSinceEpoch", types.Int64Type, false},
 			},
 			[]types.Field{},
 		),

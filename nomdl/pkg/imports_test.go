@@ -32,8 +32,8 @@ func (suite *ImportTestSuite) SetupTest() {
 	suite.vrw = datas.NewDataStore(chunks.NewMemoryStore())
 
 	ns := types.MakeStructType("NestedDepStruct", []types.Field{}, []types.Field{
-		types.Field{"b", types.MakePrimitiveType(types.BoolKind), false},
-		types.Field{"i", types.MakePrimitiveType(types.Int8Kind), false},
+		types.Field{"b", types.BoolType, false},
+		types.Field{"i", types.Int8Type, false},
 	})
 	suite.nested = types.NewPackage([]*types.Type{ns}, []ref.Ref{})
 	suite.nestedRef = suite.vrw.WriteValue(suite.nested).TargetRef()
@@ -68,7 +68,7 @@ func (suite *ImportTestSuite) TestUnknownImportedType() {
 
 func (suite *ImportTestSuite) TestDetectFreeVariable() {
 	ls := types.MakeStructType("Local", []types.Field{
-		types.Field{"b", types.MakePrimitiveType(types.BoolKind), false},
+		types.Field{"b", types.BoolType, false},
 		types.Field{"n", types.MakeUnresolvedType("", "OtherLocal"), false},
 	},
 		[]types.Field{})

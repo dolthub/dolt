@@ -130,11 +130,11 @@ func main() {
 		}
 
 		rl := types.NewTypedList(
-			types.MakeCompoundType(types.ListKind, 
-				types.MakeCompoundType(types.RefKind, 
-					types.MakeCompoundType(types.MapKind,
-						types.MakePrimitiveType(types.StringKind),
-						types.MakePrimitiveType(types.ValueKind)))), refs...)
+			types.MakeListType(
+				types.MakeRefType(
+					types.MakeMapType(
+						types.StringType,
+						types.ValueType))), refs...)
 
 		if !*noIO {
 			_, err := ds.Commit(rl)

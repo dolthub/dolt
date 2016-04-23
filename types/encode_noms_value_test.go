@@ -50,7 +50,7 @@ func TestWriteSimpleBlob(t *testing.T) {
 func TestWriteList(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
+	typ := MakeListType(Int32Type)
 	v := NewTypedList(typ, Int32(0), Int32(1), Int32(2), Int32(3))
 
 	w := newJSONArrayWriter(NewTestValueStore())
@@ -61,8 +61,8 @@ func TestWriteList(t *testing.T) {
 func TestWriteListOfList(t *testing.T) {
 	assert := assert.New(t)
 
-	it := MakeCompoundType(ListKind, MakePrimitiveType(Int16Kind))
-	typ := MakeCompoundType(ListKind, it)
+	it := MakeListType(Int16Type)
+	typ := MakeListType(it)
 	l1 := NewTypedList(it, Int16(0))
 	l2 := NewTypedList(it, Int16(1), Int16(2), Int16(3))
 	v := NewTypedList(typ, l1, l2)
@@ -75,7 +75,7 @@ func TestWriteListOfList(t *testing.T) {
 func TestWriteSet(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeCompoundType(SetKind, MakePrimitiveType(Uint32Kind))
+	typ := MakeSetType(Uint32Type)
 	v := NewTypedSet(typ, Uint32(3), Uint32(1), Uint32(2), Uint32(0))
 
 	w := newJSONArrayWriter(NewTestValueStore())
@@ -87,8 +87,8 @@ func TestWriteSet(t *testing.T) {
 func TestWriteSetOfSet(t *testing.T) {
 	assert := assert.New(t)
 
-	st := MakeCompoundType(SetKind, MakePrimitiveType(Int32Kind))
-	typ := MakeCompoundType(SetKind, st)
+	st := MakeSetType(Int32Type)
+	typ := MakeSetType(st)
 	v := NewTypedSet(typ, NewTypedSet(st, Int32(0)), NewTypedSet(st, Int32(1), Int32(2), Int32(3)))
 
 	w := newJSONArrayWriter(NewTestValueStore())
@@ -100,7 +100,7 @@ func TestWriteSetOfSet(t *testing.T) {
 func TestWriteMap(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(BoolKind))
+	typ := MakeMapType(StringType, BoolType)
 	v := newMapLeaf(typ, mapEntry{NewString("a"), Bool(false)}, mapEntry{NewString("b"), Bool(true)})
 
 	w := newJSONArrayWriter(NewTestValueStore())
@@ -112,9 +112,9 @@ func TestWriteMap(t *testing.T) {
 func TestWriteMapOfMap(t *testing.T) {
 	assert := assert.New(t)
 
-	kt := MakeCompoundType(MapKind, MakePrimitiveType(StringKind), MakePrimitiveType(Int64Kind))
-	vt := MakeCompoundType(SetKind, MakePrimitiveType(BoolKind))
-	typ := MakeCompoundType(MapKind, kt, vt)
+	kt := MakeMapType(StringType, Int64Type)
+	vt := MakeSetType(BoolType)
+	typ := MakeMapType(kt, vt)
 	v := NewTypedMap(typ, NewTypedMap(kt, NewString("a"), Int64(0)), NewTypedSet(vt, Bool(true)))
 
 	w := newJSONArrayWriter(NewTestValueStore())
@@ -160,8 +160,8 @@ func TestWriteStruct(t *testing.T) {
 	assert := assert.New(t)
 
 	typeDef := MakeStructType("S", []Field{
-		Field{"x", MakePrimitiveType(Int8Kind), false},
-		Field{"b", MakePrimitiveType(BoolKind), false},
+		Field{"x", Int8Type, false},
+		Field{"b", BoolType, false},
 	}, []Field{})
 	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
@@ -177,8 +177,8 @@ func TestWriteStructOptionalField(t *testing.T) {
 	assert := assert.New(t)
 
 	typeDef := MakeStructType("S", []Field{
-		Field{"x", MakePrimitiveType(Int8Kind), true},
-		Field{"b", MakePrimitiveType(BoolKind), false},
+		Field{"x", Int8Type, true},
+		Field{"b", BoolType, false},
 	}, []Field{})
 	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
@@ -200,10 +200,10 @@ func TestWriteStructWithUnion(t *testing.T) {
 	assert := assert.New(t)
 
 	typeDef := MakeStructType("S", []Field{
-		Field{"x", MakePrimitiveType(Int8Kind), false},
+		Field{"x", Int8Type, false},
 	}, []Field{
-		Field{"b", MakePrimitiveType(BoolKind), false},
-		Field{"s", MakePrimitiveType(StringKind), false},
+		Field{"b", BoolType, false},
+		Field{"s", StringType, false},
 	})
 	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
@@ -225,7 +225,7 @@ func TestWriteStructWithList(t *testing.T) {
 	assert := assert.New(t)
 
 	typeDef := MakeStructType("S", []Field{
-		Field{"l", MakeCompoundType(ListKind, MakePrimitiveType(StringKind)), false},
+		Field{"l", MakeListType(StringType), false},
 	}, []Field{})
 	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
@@ -246,7 +246,7 @@ func TestWriteStructWithStruct(t *testing.T) {
 	assert := assert.New(t)
 
 	s2TypeDef := MakeStructType("S2", []Field{
-		Field{"x", MakePrimitiveType(Int32Kind), false},
+		Field{"x", Int32Type, false},
 	}, []Field{})
 	sTypeDef := MakeStructType("S", []Field{
 		Field{"s", MakeType(ref.Ref{}, 0), false},
@@ -266,7 +266,7 @@ func TestWriteStructWithBlob(t *testing.T) {
 	assert := assert.New(t)
 
 	typeDef := MakeStructType("S", []Field{
-		Field{"b", MakePrimitiveType(BlobKind), false},
+		Field{"b", BlobType, false},
 	}, []Field{})
 	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
@@ -282,7 +282,7 @@ func TestWriteStructWithBlob(t *testing.T) {
 func TestWriteCompoundList(t *testing.T) {
 	assert := assert.New(t)
 
-	ltr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
+	ltr := MakeListType(Int32Type)
 	leaf1 := newListLeaf(ltr, Int32(0))
 	leaf2 := newListLeaf(ltr, Int32(1), Int32(2), Int32(3))
 	cl := buildCompoundList([]metaTuple{
@@ -298,7 +298,7 @@ func TestWriteCompoundList(t *testing.T) {
 func TestWriteCompoundSet(t *testing.T) {
 	assert := assert.New(t)
 
-	ltr := MakeCompoundType(SetKind, MakePrimitiveType(Int32Kind))
+	ltr := MakeSetType(Int32Type)
 	leaf1 := newSetLeaf(ltr, Int32(0), Int32(1))
 	leaf2 := newSetLeaf(ltr, Int32(2), Int32(3), Int32(4))
 	cl := buildCompoundSet([]metaTuple{
@@ -314,7 +314,7 @@ func TestWriteCompoundSet(t *testing.T) {
 func TestWriteListOfValue(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
+	typ := MakeListType(ValueType)
 	blob := NewBlob(bytes.NewBuffer([]byte{0x01}))
 	v := NewTypedList(typ,
 		Bool(true),
@@ -356,11 +356,11 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 	assert := assert.New(t)
 
 	typeDef := MakeStructType("S", []Field{
-		Field{"x", MakePrimitiveType(Int32Kind), false},
+		Field{"x", Int32Type, false},
 	}, []Field{})
 	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
-	listType := MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
+	listType := MakeListType(ValueType)
 	structType := MakeType(pkgRef, 0)
 	v := NewTypedList(listType, NewStruct(structType, typeDef, structData{"x": Int32(42)}))
 
@@ -374,15 +374,15 @@ func TestWriteListOfValueWithType(t *testing.T) {
 
 	pkg := NewPackage([]*Type{
 		MakeStructType("S", []Field{
-			Field{"x", MakePrimitiveType(Int32Kind), false},
+			Field{"x", Int32Type, false},
 		}, []Field{})}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
 
-	typ := MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
+	typ := MakeListType(ValueType)
 	v := NewTypedList(typ,
 		Bool(true),
-		MakePrimitiveType(Int32Kind),
-		MakePrimitiveType(TypeKind),
+		Int32Type,
+		TypeType,
 		MakeType(pkgRef, 0),
 	)
 
@@ -412,7 +412,7 @@ func (r testRef) TargetRef() ref.Ref {
 func TestWriteRef(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeCompoundType(RefKind, MakePrimitiveType(Uint32Kind))
+	typ := MakeRefType(Uint32Type)
 	r := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
 	v := NewRef(r)
 
@@ -430,22 +430,22 @@ func TestWriteTypeValue(t *testing.T) {
 		assert.EqualValues(expected, w.toArray())
 	}
 
-	test([]interface{}{TypeKind, Int32Kind}, MakePrimitiveType(Int32Kind))
+	test([]interface{}{TypeKind, Int32Kind}, Int32Type)
 	test([]interface{}{TypeKind, ListKind, []interface{}{BoolKind}},
-		MakeCompoundType(ListKind, MakePrimitiveType(BoolKind)))
+		MakeListType(BoolType))
 	test([]interface{}{TypeKind, MapKind, []interface{}{BoolKind, StringKind}},
-		MakeCompoundType(MapKind, MakePrimitiveType(BoolKind), MakePrimitiveType(StringKind)))
+		MakeMapType(BoolType, StringType))
 
 	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"x", Int16Kind, false, "v", ValueKind, true}, []interface{}{}},
 		MakeStructType("S", []Field{
-			Field{"x", MakePrimitiveType(Int16Kind), false},
-			Field{"v", MakePrimitiveType(ValueKind), true},
+			Field{"x", Int16Type, false},
+			Field{"v", ValueType, true},
 		}, []Field{}))
 
 	test([]interface{}{TypeKind, StructKind, "S", []interface{}{}, []interface{}{"x", Int16Kind, false, "v", ValueKind, false}},
 		MakeStructType("S", []Field{}, []Field{
-			Field{"x", MakePrimitiveType(Int16Kind), false},
-			Field{"v", MakePrimitiveType(ValueKind), false},
+			Field{"x", Int16Type, false},
+			Field{"v", ValueType, false},
 		}))
 
 	pkgRef := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
@@ -455,7 +455,7 @@ func TestWriteTypeValue(t *testing.T) {
 	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"e", UnresolvedKind, pkgRef.String(), "123", false, "x", Int64Kind, false}, []interface{}{}},
 		MakeStructType("S", []Field{
 			Field{"e", MakeType(pkgRef, 123), false},
-			Field{"x", MakePrimitiveType(Int64Kind), false},
+			Field{"x", Int64Type, false},
 		}, []Field{}))
 
 	test([]interface{}{TypeKind, UnresolvedKind, ref.Ref{}.String(), "-1", "ns", "n"},
@@ -465,8 +465,8 @@ func TestWriteTypeValue(t *testing.T) {
 func TestWriteListOfTypes(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeCompoundType(ListKind, MakePrimitiveType(TypeKind))
-	v := NewTypedList(typ, MakePrimitiveType(BoolKind), MakePrimitiveType(StringKind))
+	typ := MakeListType(TypeType)
+	v := NewTypedList(typ, BoolType, StringType)
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
@@ -476,7 +476,7 @@ func TestWriteListOfTypes(t *testing.T) {
 func TestWritePackage(t *testing.T) {
 	assert := assert.New(t)
 
-	setTref := MakeCompoundType(SetKind, MakePrimitiveType(Uint32Kind))
+	setTref := MakeSetType(Uint32Type)
 	r := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
 	v := Package{[]*Type{setTref}, []ref.Ref{r}, &ref.Ref{}}
 

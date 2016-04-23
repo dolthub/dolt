@@ -25,7 +25,7 @@ type setIterCallback func(v Value) bool
 type setIterAllCallback func(v Value)
 type setFilterCallback func(v Value) (keep bool)
 
-var setType = MakeCompoundType(SetKind, MakePrimitiveType(ValueKind))
+var setType = MakeSetType(ValueType)
 
 func NewSet(v ...Value) Set {
 	return NewTypedSet(setType, v...)

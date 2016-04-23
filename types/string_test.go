@@ -29,5 +29,5 @@ func TestStringString(t *testing.T) {
 }
 
 func TestStringType(t *testing.T) {
-	assert.True(t, NewString("hi").Type().Equals(MakePrimitiveType(StringKind)))
+	assert.True(t, NewString("hi").Type().Equals(StringType))
 }

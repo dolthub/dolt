@@ -54,7 +54,7 @@ using List<Noms.Commit>
 	suite.Len(pkg.UsingDeclarations, 2)
 
 	suite.Equal(types.MapKind, pkg.UsingDeclarations[0].Desc.Kind())
-	suite.True(types.MakePrimitiveType(types.StringKind).Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[0]))
+	suite.True(types.StringType.Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[0]))
 	suite.True(types.MakeUnresolvedType("", "Simple").Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[1]))
 
 	suite.Equal(types.ListKind, pkg.UsingDeclarations[1].Desc.Kind())
@@ -196,16 +196,15 @@ func (c testChoices) Describe() string {
 }
 
 func (suite *ParsedResultTestSuite) SetupTest() {
-	suite.primField = testField{"a", types.MakePrimitiveType(types.Int64Kind), false}
-	suite.primOptionalField = testField{"b", types.MakePrimitiveType(types.Float64Kind), true}
-	suite.compoundField = testField{"set", types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind)), false}
+	suite.primField = testField{"a", types.Int64Type, false}
+	suite.primOptionalField = testField{"b", types.Float64Type, true}
+	suite.compoundField = testField{"set", types.MakeSetType(types.StringType), false}
 	suite.compoundOfCompoundField = testField{
 		"listOfSet",
-		types.MakeCompoundType(types.ListKind,
-			types.MakeCompoundType(types.SetKind, types.MakePrimitiveType(types.StringKind))), false}
+		types.MakeListType(types.MakeSetType(types.StringType)), false}
 	suite.mapOfNamedTypeField = testField{
 		"mapOfStructToOther",
-		types.MakeCompoundType(types.MapKind,
+		types.MakeMapType(
 			types.MakeUnresolvedType("", "Struct"),
 			types.MakeUnresolvedType("Elsewhere", "Other"),
 		),
@@ -213,9 +212,9 @@ func (suite *ParsedResultTestSuite) SetupTest() {
 	suite.namedTypeField = testField{"otherStruct", types.MakeUnresolvedType("", "Other"), false}
 	suite.namespacedTypeField = testField{"namespacedStruct", types.MakeUnresolvedType("Elsewhere", "Other"), false}
 	suite.union = testChoices{
-		types.Field{"a", types.MakePrimitiveType(types.Int32Kind), false},
+		types.Field{"a", types.Int32Type, false},
 		types.Field{"n", types.MakeUnresolvedType("NN", "Other"), false},
-		types.Field{"c", types.MakePrimitiveType(types.Uint32Kind), false},
+		types.Field{"c", types.Uint32Type, false},
 	}
 }
 

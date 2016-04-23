@@ -1282,7 +1282,7 @@ func (p *parser) callonType1() (interface{}, error) {
 }
 
 func (c *current) onCompoundType2(t interface{}) (interface{}, error) {
-	return types.MakeCompoundType(types.ListKind, t.(*types.Type)), nil
+	return types.MakeListType(t.(*types.Type)), nil
 }
 
 func (p *parser) callonCompoundType2() (interface{}, error) {
@@ -1292,7 +1292,7 @@ func (p *parser) callonCompoundType2() (interface{}, error) {
 }
 
 func (c *current) onCompoundType13(k, v interface{}) (interface{}, error) {
-	return types.MakeCompoundType(types.MapKind, k.(*types.Type), v.(*types.Type)), nil
+	return types.MakeMapType(k.(*types.Type), v.(*types.Type)), nil
 }
 
 func (p *parser) callonCompoundType13() (interface{}, error) {
@@ -1302,7 +1302,7 @@ func (p *parser) callonCompoundType13() (interface{}, error) {
 }
 
 func (c *current) onCompoundType29(t interface{}) (interface{}, error) {
-	return types.MakeCompoundType(types.SetKind, t.(*types.Type)), nil
+	return types.MakeSetType(t.(*types.Type)), nil
 }
 
 func (p *parser) callonCompoundType29() (interface{}, error) {
@@ -1312,7 +1312,7 @@ func (p *parser) callonCompoundType29() (interface{}, error) {
 }
 
 func (c *current) onCompoundType40(t interface{}) (interface{}, error) {
-	return types.MakeCompoundType(types.RefKind, t.(*types.Type)), nil
+	return types.MakeRefType(t.(*types.Type)), nil
 }
 
 func (p *parser) callonCompoundType40() (interface{}, error) {

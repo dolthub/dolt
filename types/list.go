@@ -26,7 +26,7 @@ type listIterAllFunc func(v Value, index uint64)
 type listFilterCallback func(v Value, index uint64) (keep bool)
 type MapFunc func(v Value, index uint64) interface{}
 
-var listType = MakeCompoundType(ListKind, MakePrimitiveType(ValueKind))
+var listType = MakeListType(ValueType)
 
 // NewList creates a new untyped List, populated with values, chunking if and when needed.
 func NewList(v ...Value) List {
