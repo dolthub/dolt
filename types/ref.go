@@ -11,11 +11,6 @@ type Ref struct {
 	ref    *ref.Ref
 }
 
-type RefBase interface {
-	Value
-	TargetRef() ref.Ref
-}
-
 func NewRef(target ref.Ref) Ref {
 	return NewTypedRef(refType, target)
 }
@@ -37,7 +32,7 @@ func (r Ref) Ref() ref.Ref {
 	return EnsureRef(r.ref, r)
 }
 
-func (r Ref) Chunks() (chunks []RefBase) {
+func (r Ref) Chunks() (chunks []Ref) {
 	return append(chunks, r)
 }
 

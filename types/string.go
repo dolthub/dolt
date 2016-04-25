@@ -30,7 +30,7 @@ func (s String) Less(other OrderedValue) bool {
 	return s.s < other.(String).s
 }
 
-func (fs String) Chunks() []RefBase {
+func (fs String) Chunks() []Ref {
 	return nil
 }
 

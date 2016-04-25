@@ -116,7 +116,7 @@ func (w *hrsWriter) Write(v Value) {
 		w.write("}")
 
 	case RefKind:
-		w.write(v.(RefBase).TargetRef().String())
+		w.write(v.(Ref).TargetRef().String())
 
 	case SetKind:
 		w.write("{")

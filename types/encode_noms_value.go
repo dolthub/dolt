@@ -180,7 +180,7 @@ func (w *jsonArrayWriter) writeValue(v Value, tr *Type, pkg *Package) {
 		}
 		w.write(w3.toArray())
 	case RefKind:
-		w.writeRef(v.(RefBase).TargetRef())
+		w.writeRef(v.(Ref).TargetRef())
 	case SetKind:
 		if w.maybeWriteMetaSequence(v, tr, pkg) {
 			return

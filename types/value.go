@@ -10,7 +10,7 @@ type Value interface {
 	Ref() ref.Ref
 	// Returns the immediate children of this value in the DAG, if any, not including Type().
 	ChildValues() []Value
-	Chunks() []RefBase
+	Chunks() []Ref
 	Type() *Type
 }
 

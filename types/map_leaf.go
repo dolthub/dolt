@@ -147,7 +147,7 @@ func (m mapLeaf) Equals(other Value) bool {
 	return other != nil && m.t.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
-func (m mapLeaf) Chunks() (chunks []RefBase) {
+func (m mapLeaf) Chunks() (chunks []Ref) {
 	for _, entry := range m.data {
 		chunks = append(chunks, entry.key.Chunks()...)
 		chunks = append(chunks, entry.value.Chunks()...)

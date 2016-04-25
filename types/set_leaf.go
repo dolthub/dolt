@@ -120,7 +120,7 @@ func (s setLeaf) Equals(other Value) bool {
 	return other != nil && s.t.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
-func (s setLeaf) Chunks() (chunks []RefBase) {
+func (s setLeaf) Chunks() (chunks []Ref) {
 	for _, v := range s.data {
 		chunks = append(chunks, v.Chunks()...)
 	}

@@ -172,7 +172,7 @@ func (l listLeaf) Equals(other Value) bool {
 	return false
 }
 
-func (l listLeaf) Chunks() (chunks []RefBase) {
+func (l listLeaf) Chunks() (chunks []Ref) {
 	for _, v := range l.values {
 		chunks = append(chunks, v.Chunks()...)
 	}

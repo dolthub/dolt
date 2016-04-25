@@ -80,7 +80,7 @@ func getTestRefToNativeOrderSet(scale int, vw ValueWriter) testSet {
 	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
 		return vw.WriteValue(v)
 	}, func(x, y Value) bool {
-		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
+		return !y.(Ref).TargetRef().Less(x.(Ref).TargetRef())
 	}, refType)
 }
 
@@ -90,7 +90,7 @@ func getTestRefToValueOrderSet(scale int, vw ValueWriter) testSet {
 	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
 		return vw.WriteValue(NewTypedSet(setType, v))
 	}, func(x, y Value) bool {
-		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
+		return !y.(Ref).TargetRef().Less(x.(Ref).TargetRef())
 	}, refType)
 }
 

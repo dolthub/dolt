@@ -1,4 +1,0 @@
-struct Date {
-    // The number of milliseconds elapsed since 1 January 1970 00:00:00 UTC.
-    MsSinceEpoch: Int64
-}

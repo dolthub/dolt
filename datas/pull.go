@@ -9,20 +9,20 @@ import (
 )
 
 // CopyMissingChunksP copies to |sink| all chunks in source that are reachable from (and including) |r|, skipping chunks that |sink| already has
-func CopyMissingChunksP(source DataStore, sink *LocalDataStore, sourceRef types.RefBase, concurrency int) {
-	copyCallback := func(r types.RefBase) bool {
+func CopyMissingChunksP(source DataStore, sink *LocalDataStore, sourceRef types.Ref, concurrency int) {
+	copyCallback := func(r types.Ref) bool {
 		return sink.has(r.TargetRef())
 	}
 	copyWorker(source, sink, sourceRef, copyCallback, concurrency)
 }
 
 // CopyReachableChunksP copies to |sink| all chunks reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|
-func CopyReachableChunksP(source, sink DataStore, sourceRef, exclude types.RefBase, concurrency int) {
+func CopyReachableChunksP(source, sink DataStore, sourceRef, exclude types.Ref, concurrency int) {
 	excludeRefs := map[ref.Ref]bool{}
 
 	if !exclude.TargetRef().IsEmpty() {
 		mu := sync.Mutex{}
-		excludeCallback := func(r types.RefBase) bool {
+		excludeCallback := func(r types.Ref) bool {
 			mu.Lock()
 			excludeRefs[r.TargetRef()] = true
 			mu.Unlock()
@@ -32,13 +32,13 @@ func CopyReachableChunksP(source, sink DataStore, sourceRef, exclude types.RefBa
 		walk.SomeChunksP(exclude, source, excludeCallback, concurrency)
 	}
 
-	copyCallback := func(r types.RefBase) bool {
+	copyCallback := func(r types.Ref) bool {
 		return excludeRefs[r.TargetRef()]
 	}
 	copyWorker(source, sink, sourceRef, copyCallback, concurrency)
 }
 
-func copyWorker(source DataStore, sink DataStore, sourceRef types.RefBase, stopFn walk.SomeChunksCallback, concurrency int) {
+func copyWorker(source DataStore, sink DataStore, sourceRef types.Ref, stopFn walk.SomeChunksCallback, concurrency int) {
 	bs := sink.batchSink()
 	walk.SomeChunksP(sourceRef, newTeeDataSource(source.batchStore(), bs), stopFn, concurrency)
 

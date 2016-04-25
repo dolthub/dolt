@@ -22,17 +22,17 @@ func TestValidateRef(t *testing.T) {
 	assert.Panics(t, func() { ds.validateRefAsCommit(types.NewTypedRefFromValue(b)) })
 }
 
-func NewList(ds Dataset, vs ...types.Value) types.RefBase {
+func NewList(ds Dataset, vs ...types.Value) types.Ref {
 	v := types.NewList(vs...)
 	return ds.Store().WriteValue(v)
 }
 
-func NewMap(ds Dataset, vs ...types.Value) types.RefBase {
+func NewMap(ds Dataset, vs ...types.Value) types.Ref {
 	v := types.NewMap(vs...)
 	return ds.Store().WriteValue(v)
 }
 
-func NewSet(ds Dataset, vs ...types.Value) types.RefBase {
+func NewSet(ds Dataset, vs ...types.Value) types.Ref {
 	v := types.NewSet(vs...)
 	return ds.Store().WriteValue(v)
 }

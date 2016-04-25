@@ -62,7 +62,7 @@ func (p Package) Ref() ref.Ref {
 	return EnsureRef(p.ref, p)
 }
 
-func (p Package) Chunks() (chunks []RefBase) {
+func (p Package) Chunks() (chunks []Ref) {
 	for _, t := range p.types {
 		chunks = append(chunks, t.Chunks()...)
 	}
@@ -83,6 +83,7 @@ func (p Package) ChildValues() (res []Value) {
 }
 
 var typeForPackage = PackageType
+var typeForRefOfPackage = MakeRefType(PackageType)
 
 func (p Package) Type() *Type {
 	return typeForPackage
@@ -108,5 +109,5 @@ func (p Package) Types() (types []*Type) {
 }
 
 func NewSetOfRefOfPackage() Set {
-	return NewTypedSet(MakeSetType(MakeRefType(PackageType)))
+	return NewTypedSet(MakeSetType(typeForRefOfPackage))
 }

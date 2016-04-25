@@ -103,7 +103,7 @@ func getTestRefToNativeOrderMap(scale int, vw ValueWriter) testMap {
 	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
 		return vw.WriteValue(v)
 	}, func(x, y Value) bool {
-		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
+		return !y.(Ref).TargetRef().Less(x.(Ref).TargetRef())
 	}, refType)
 }
 
@@ -113,7 +113,7 @@ func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
 	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
 		return vw.WriteValue(NewTypedSet(setType, v))
 	}, func(x, y Value) bool {
-		return !y.(RefBase).TargetRef().Less(x.(RefBase).TargetRef())
+		return !y.(Ref).TargetRef().Less(x.(Ref).TargetRef())
 	}, refType)
 }
 
