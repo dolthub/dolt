@@ -147,12 +147,13 @@ func newMetaSequenceCursor(root metaSequence, vr ValueReader) (*sequenceCursor, 
 
 func readMetaTupleValue(item sequenceItem, vr ValueReader) Value {
 	mt := item.(metaTuple)
-	if mt.child == nil {
-		d.Chk.False(mt.childRef.TargetRef().IsEmpty())
-		mt.child = vr.ReadValue(mt.childRef.TargetRef())
-		d.Chk.NotNil(mt.child)
+	if mt.child != nil {
+		return mt.child
 	}
-	return mt.child
+
+	r := mt.childRef.TargetRef()
+	d.Chk.False(r.IsEmpty())
+	return vr.ReadValue(r)
 }
 
 func iterateMetaSequenceLeaf(ms metaSequence, vr ValueReader, cb func(Value) bool) {
