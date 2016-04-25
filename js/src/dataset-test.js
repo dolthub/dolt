@@ -1,7 +1,7 @@
 // @flow
 
 import {suite, test} from 'mocha';
-import MemoryStore from './memory-store.js';
+import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {assert} from 'chai';
 import Dataset from './dataset.js';
 import DataStore from './data-store.js';
@@ -9,8 +9,8 @@ import {invariant, notNull} from './assert.js';
 
 suite('Dataset', () => {
   test('commit', async () => {
-    const ms = new MemoryStore();
-    const store = new DataStore(ms);
+    const bs = makeTestingBatchStore();
+    const store = new DataStore(bs);
     let ds = new Dataset(store, 'ds1');
 
     // |a|
@@ -54,7 +54,7 @@ suite('Dataset', () => {
     assert.strictEqual('a', notNull(await ds.head('otherDs')).value);
 
     // Get a fresh datastore, and verify that both datasets are present
-    const newStore = new DataStore(ms);
+    const newStore = new DataStore(bs);
     assert.strictEqual('d', notNull(await newStore.head('ds1')).value);
     assert.strictEqual('a', notNull(await newStore.head('otherDs')).value);
   });

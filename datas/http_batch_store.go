@@ -139,7 +139,7 @@ func (bhcs *httpBatchStore) batchGetRequests() {
 
 func (bhcs *httpBatchStore) sendGetRequests(req chunks.ReadRequest) {
 	batch := chunks.ReadBatch{}
-	refs := types.Hints{}
+	refs := map[ref.Ref]struct{}{}
 
 	addReq := func(req chunks.ReadRequest) {
 		r := req.Ref()

@@ -1,8 +1,9 @@
 // @flow
 
+import BatchStoreAdaptor from './batch-store-adaptor.js';
 import Dataset from './dataset.js';
 import DataStore from './data-store.js';
-import HttpStore from './http-store.js';
+import HttpBatchStore from './http-batch-store.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 
@@ -48,10 +49,10 @@ export class DataStoreSpec {
   // Constructs a new DataStore based on the parsed spec.
   store(): DataStore {
     if (this.scheme === 'mem') {
-      return new DataStore(new MemoryStore());
+      return new DataStore(new BatchStoreAdaptor(new MemoryStore()));
     }
     if (this.scheme === 'http') {
-      return new DataStore(new HttpStore(`${this.scheme}:${this.path}`));
+      return new DataStore(new HttpBatchStore(`${this.scheme}:${this.path}`));
     }
     throw new Error('Unreached');
   }

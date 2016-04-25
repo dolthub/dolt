@@ -4,7 +4,6 @@ import Chunk from './chunk.js';
 import type Ref from './ref.js';
 import RefValue from './ref-value.js';
 import {default as Struct, StructMirror} from './struct.js';
-import type DataStore from './data-store.js';
 import type {NomsKind} from './noms-kind.js';
 import {encode as encodeBase64} from './base64.js';
 import {StructDesc, Type, getTypeOfValue} from './type.js';
@@ -28,11 +27,11 @@ type primitiveOrArray = primitive | Array<primitiveOrArray>;
 
 export class JsonArrayWriter {
   array: Array<primitiveOrArray>;
-  _ds: ?DataStore;
+  _vw: ?ValueWriter;
 
-  constructor(ds: ?DataStore) {
+  constructor(ds: ?ValueWriter) {
     this.array = [];
-    this._ds = ds;
+    this._vw = ds;
   }
 
   write(v: primitiveOrArray) {
@@ -97,14 +96,14 @@ export class JsonArrayWriter {
     }
 
     this.write(true);
-    const w2 = new JsonArrayWriter(this._ds);
+    const w2 = new JsonArrayWriter(this._vw);
     const indexType = indexTypeForMetaSequence(t);
     for (let i = 0; i < v.items.length; i++) {
       const tuple = v.items[i];
       invariant(tuple instanceof MetaTuple);
-      if (tuple.sequence && this._ds) {
+      if (tuple.sequence && this._vw) {
         const child = tuple.sequence;
-        this._ds.writeValue(child);
+        this._vw.writeValue(child);
       }
       w2.writeRef(tuple.ref);
       w2.writeValue(tuple.value, indexType);
@@ -154,7 +153,7 @@ export class JsonArrayWriter {
         }
 
         invariant(sequence instanceof ListLeafSequence);
-        const w2 = new JsonArrayWriter(this._ds);
+        const w2 = new JsonArrayWriter(this._vw);
         const elemType = t.elemTypes[0];
         sequence.items.forEach(sv => w2.writeValue(sv, elemType));
         this.write(w2.array);
@@ -170,7 +169,7 @@ export class JsonArrayWriter {
         }
 
         invariant(sequence instanceof MapLeafSequence);
-        const w2 = new JsonArrayWriter(this._ds);
+        const w2 = new JsonArrayWriter(this._vw);
         const keyType = t.elemTypes[0];
         const valueType = t.elemTypes[1];
         sequence.items.forEach(entry => {
@@ -196,7 +195,7 @@ export class JsonArrayWriter {
         }
 
         invariant(sequence instanceof SetLeafSequence);
-        const w2 = new JsonArrayWriter(this._ds);
+        const w2 = new JsonArrayWriter(this._vw);
         const elemType = t.elemTypes[0];
         const elems = [];
         sequence.items.forEach(v => {
@@ -236,7 +235,7 @@ export class JsonArrayWriter {
       case Kind.Ref:
       case Kind.Set: {
         this.writeKind(k);
-        const w2 = new JsonArrayWriter(this._ds);
+        const w2 = new JsonArrayWriter(this._vw);
         t.elemTypes.forEach(elem => w2.writeTypeAsValue(elem, parentStructTypes));
         this.write(w2.array);
         break;
@@ -262,7 +261,7 @@ export class JsonArrayWriter {
     const desc = t.desc;
     this.writeKind(t.kind);
     this.write(t.name);
-    const fieldWriter = new JsonArrayWriter(this._ds);
+    const fieldWriter = new JsonArrayWriter(this._vw);
     desc.fields.forEach(field => {
       fieldWriter.write(field.name);
       fieldWriter.writeTypeAsTag(field.type, parentStructTypes);
@@ -290,8 +289,8 @@ export class JsonArrayWriter {
   }
 }
 
-function encodeEmbeddedNomsValue(v: valueOrPrimitive, t: Type, ds: ?DataStore): Chunk {
-  const w = new JsonArrayWriter(ds);
+function encodeEmbeddedNomsValue(v: valueOrPrimitive, t: Type, vw: ?ValueWriter): Chunk {
+  const w = new JsonArrayWriter(vw);
   w.writeTopLevel(t, v);
   return Chunk.fromString(typedTag + JSON.stringify(w.array));
 }
@@ -309,7 +308,11 @@ function encodeTopLevelBlob(sequence: BlobLeafSequence): Chunk {
   return new Chunk(data);
 }
 
-export function encodeNomsValue(v: valueOrPrimitive, t: Type, ds: ?DataStore): Chunk {
+interface ValueWriter {
+    writeValue<T: valueOrPrimitive>(v: T, t: ?Type): RefValue<T>
+}
+
+export function encodeNomsValue(v: valueOrPrimitive, t: Type, vw: ?ValueWriter): Chunk {
   if (t.kind === Kind.Blob) {
     invariant(v instanceof NomsBlob || v instanceof IndexedSequence);
     const sequence = v instanceof NomsBlob ? v.sequence : v;
@@ -318,7 +321,7 @@ export function encodeNomsValue(v: valueOrPrimitive, t: Type, ds: ?DataStore): C
       return encodeTopLevelBlob(sequence);
     }
   }
-  return encodeEmbeddedNomsValue(v, t, ds);
+  return encodeEmbeddedNomsValue(v, t, vw);
 }
 
 setEncodeNomsValue(encodeNomsValue);

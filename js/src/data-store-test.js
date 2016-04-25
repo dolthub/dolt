@@ -1,34 +1,35 @@
 // @flow
 
 import {suite, test} from 'mocha';
-import MemoryStore from './memory-store.js';
+import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {emptyRef} from './ref.js';
 import {assert} from 'chai';
 import {default as DataStore, getDatasTypes, newCommit} from './data-store.js';
 import {invariant, notNull} from './assert.js';
 import {newMap} from './map.js';
 import {stringType} from './type.js';
-import {getRef} from './get-ref.js';
 import {encodeNomsValue} from './encode.js';
 
 suite('DataStore', () => {
   test('access', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const bs = makeTestingBatchStore();
+    const ds = new DataStore(bs);
     const input = 'abc';
 
     const c = encodeNomsValue(input, stringType);
     const v1 = await ds.readValue(c.ref);
     assert.equal(null, v1);
 
-    ms.put(c);
+    bs.schedulePut(c, new Set());
+    bs.flush();
+
     const v2 = await ds.readValue(c.ref);
     assert.equal('abc', v2);
   });
 
   test('commit', async () => {
-    const ms = new MemoryStore();
-    let ds = new DataStore(ms);
+    const bs = new makeTestingBatchStore();
+    let ds = new DataStore(bs);
     const datasetID = 'ds1';
 
     const datasets = await ds.datasets();
@@ -92,14 +93,14 @@ suite('DataStore', () => {
     assert.strictEqual('a', notNull(await ds.head('otherDs')).value);
 
     // Get a fresh datastore, and verify that both datasets are present
-    const newDs = new DataStore(ms);
+    const newDs = new DataStore(bs);
     assert.strictEqual('d', notNull(await newDs.head(datasetID)).value);
     assert.strictEqual('a', notNull(await newDs.head('otherDs')).value);
   });
 
   test('concurrency', async () => {
-    const ms = new MemoryStore();
-    let ds = new DataStore(ms);
+    const bs = new makeTestingBatchStore();
+    let ds = new DataStore(bs);
     const datasetID = 'ds1';
 
     // |a|
@@ -112,7 +113,7 @@ suite('DataStore', () => {
     assert.strictEqual('b', notNull(await ds.head(datasetID)).value);
 
     // Important to create this here.
-    let ds2 = new DataStore(ms);
+    let ds2 = new DataStore(bs);
 
     // Change 1:
     // |a| <- |b| <- |c|
@@ -137,15 +138,14 @@ suite('DataStore', () => {
 
 
   test('empty datasets', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const ds = new DataStore(makeTestingBatchStore());
     const datasets = await ds.datasets();
     assert.strictEqual(0, datasets.size);
   });
 
   test('head', async () => {
-    const ms = new MemoryStore();
-    let ds = new DataStore(ms);
+    const bs = new makeTestingBatchStore();
+    let ds = new DataStore(bs);
     const types = getDatasTypes();
 
     const commit = await newCommit('foo', []);
@@ -153,8 +153,8 @@ suite('DataStore', () => {
     const commitRef = ds.writeValue(commit);
     const datasets = await newMap(['foo', commitRef], types.commitMapType);
     const rootRef = ds.writeValue(datasets).targetRef;
-    assert.isTrue(await ms.updateRoot(rootRef, emptyRef));
-    ds = new DataStore(ms); // refresh the datasets
+    assert.isTrue(await bs.updateRoot(rootRef, emptyRef));
+    ds = new DataStore(bs); // refresh the datasets
 
     assert.strictEqual(1, datasets.size);
     const fooHead = await ds.head('foo');
@@ -162,62 +162,5 @@ suite('DataStore', () => {
     assert.isTrue(fooHead.equals(commit));
     const barHead = await ds.head('bar');
     assert.isNull(barHead);
-  });
-
-  test('writeValue primitives', async () => {
-    const ds = new DataStore(new MemoryStore());
-
-    const r1 = ds.writeValue('hello').targetRef;
-    const r2 = ds.writeValue(false).targetRef;
-    const r3 = ds.writeValue(2).targetRef;
-
-    const v1 = await ds.readValue(r1);
-    assert.equal('hello', v1);
-    const v2 = await ds.readValue(r2);
-    assert.equal(false, v2);
-    const v3 = await ds.readValue(r3);
-    assert.equal(2, v3);
-  });
-
-  test('caching', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms, 1e6);
-
-    const r1 = ds.writeValue('hello').targetRef;
-    (ms: any).get = (ms: any).put = () => { assert.fail('unreachable'); };
-    const v1 = await ds.readValue(r1);
-    assert.equal(v1, 'hello');
-    const r2 = ds.writeValue('hello').targetRef;
-    assert.isTrue(r1.equals(r2));
-  });
-
-  test('caching eviction', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms, 15);
-
-    const r1 = ds.writeValue('hello').targetRef;
-    const r2 = ds.writeValue('world').targetRef;
-    (ms: any).get = () => { throw new Error(); };
-    const v2 = await ds.readValue(r2);
-    assert.equal(v2, 'world');
-    let ex;
-    try {
-      await ds.readValue(r1);
-    } catch (e) {
-      ex = e;
-    }
-    assert.instanceOf(ex, Error);
-  });
-
-  test('caching has', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms, 1e6);
-
-    const r1 = getRef('hello', stringType);
-    const v1 = await ds.readValue(r1);
-    assert.equal(v1, null);
-    (ms: any).get = (ms: any).has = () => { assert.fail('unreachable'); };
-    const v2 = await ds.readValue(r1);
-    assert.equal(v2, null);
   });
 });

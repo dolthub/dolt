@@ -4,7 +4,7 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 import DataStore from './data-store.js';
-import MemoryStore from './memory-store.js';
+import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
 import {calcSplices} from './edit-distance.js';
@@ -152,8 +152,7 @@ suite('BuildList', () => {
   });
 
   test('LONG: write, read, modify, read', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const ds = new DataStore(makeTestingBatchStore());
 
     const nums = firstNNumbers(testListSize);
     const tr = makeListType(numberType);
@@ -173,8 +172,7 @@ suite('BuildList', () => {
 
 suite('ListLeafSequence', () => {
   test('isEmpty', () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const ds = new DataStore(makeTestingBatchStore());
     const tr = makeListType(stringType);
     const newList = items => new NomsList(tr, new ListLeafSequence(ds, tr, items));
     assert.isTrue(newList([]).isEmpty());
@@ -182,8 +180,7 @@ suite('ListLeafSequence', () => {
   });
 
   test('get', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const ds = new DataStore(makeTestingBatchStore());
     const tr = makeListType(stringType);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, ['z', 'x', 'a', 'b']));
     assert.strictEqual('z', await l.get(0));
@@ -193,8 +190,7 @@ suite('ListLeafSequence', () => {
   });
 
   test('forEach', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const ds = new DataStore(makeTestingBatchStore());
     const tr = makeListType(numberType);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, [4, 2, 10, 16]));
 
@@ -204,8 +200,7 @@ suite('ListLeafSequence', () => {
   });
 
   test('iterator', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const ds = new DataStore(makeTestingBatchStore());
     const tr = makeListType(numberType);
 
     const test = async items => {
@@ -220,8 +215,7 @@ suite('ListLeafSequence', () => {
   });
 
   test('iteratorAt', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const ds = new DataStore(makeTestingBatchStore());
     const tr = makeListType(numberType);
 
     const test = async items => {
@@ -239,8 +233,7 @@ suite('ListLeafSequence', () => {
   });
 
   function testChunks(elemType: Type) {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const ds = new DataStore(makeTestingBatchStore());
     const tr = makeListType(elemType);
     const r1 = ds.writeValue('x');
     const r2 = ds.writeValue('a');
@@ -263,8 +256,7 @@ suite('ListLeafSequence', () => {
 
 suite('CompoundList', () => {
   function build(): NomsList {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const ds = new DataStore(makeTestingBatchStore());
     const tr = makeListType(stringType);
     const l1 = new NomsList(tr, new ListLeafSequence(ds, tr, ['a', 'b']));
     const r1 = ds.writeValue(l1).targetRef;

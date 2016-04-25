@@ -1,6 +1,6 @@
 // @flow
 
-import type DataStore from './data-store.js';
+import type {ValueReader} from './decode.js';
 import {invariant, notNull} from './assert.js';
 import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
@@ -9,13 +9,13 @@ import type {Type} from './type.js';
 import {Value} from './value.js';
 
 export class Sequence<T> extends Value {
-  ds: ?DataStore;
+  vr: ?ValueReader;
   _type: Type;
   _items: Array<T>;
 
-  constructor(ds: ?DataStore, type: Type, items: Array<T>) {
+  constructor(vr: ?ValueReader, type: Type, items: Array<T>) {
     super();
-    this.ds = ds;
+    this.vr = vr;
     this._type = type;
     this._items = items;
   }

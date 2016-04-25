@@ -1,10 +1,10 @@
 // @flow
 
 import {invariant} from './assert.js';
+import BatchStoreAdaptor from './batch-store-adaptor.js';
 import Dataset from './dataset.js';
 import DataStore from './data-store.js';
-import HttpStore from './http-store.js';
-import MemoryStore from './memory-store.js';
+import HttpBatchStore from './http-batch-store.js';
 import Ref from './ref.js';
 import {DataStoreSpec, DatasetSpec, RefSpec, parseObjectSpec} from './specs.js';
 import {assert} from 'chai';
@@ -20,7 +20,7 @@ suite('Specs', () => {
     assert.equal(spec.scheme, 'mem');
     assert.equal(spec.path, '');
     assert.instanceOf(spec.store(), DataStore);
-    assert.instanceOf(spec.store()._cs, MemoryStore);
+    assert.instanceOf(spec.store()._bs, BatchStoreAdaptor);
 
     spec = DataStoreSpec.parse('http://foo');
     invariant(spec);
@@ -28,7 +28,7 @@ suite('Specs', () => {
     assert.equal(spec.scheme, 'http');
     assert.equal(spec.path, '//foo');
     assert.instanceOf(spec.store(), DataStore);
-    assert.instanceOf(spec.store()._cs, HttpStore);
+    assert.instanceOf(spec.store()._bs, HttpBatchStore);
 
     spec = DataStoreSpec.parse('https://foo');
     invariant(spec);
@@ -48,7 +48,7 @@ suite('Specs', () => {
     assert.equal(spec.store.path, '');
     let ds = spec.set();
     assert.instanceOf(ds, Dataset);
-    assert.instanceOf(ds.store._cs, MemoryStore);
+    assert.instanceOf(ds.store._bs, BatchStoreAdaptor);
 
     spec = DatasetSpec.parse('http://localhost:8000/foo:ds');
     invariant(spec);
@@ -57,7 +57,7 @@ suite('Specs', () => {
     assert.equal(spec.store.path, '//localhost:8000/foo');
     ds = spec.set();
     assert.instanceOf(ds, Dataset);
-    assert.instanceOf(ds.store._cs, HttpStore);
+    assert.instanceOf(ds.store._bs, HttpBatchStore);
   });
 
   test('RefSpec', () => {

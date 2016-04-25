@@ -1,6 +1,6 @@
 // @flow
 
-import MemoryStore from './memory-store.js';
+import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {default as Struct, newStruct, StructMirror, createStructClass} from './struct.js';
 import {assert} from 'chai';
 import {
@@ -32,8 +32,7 @@ suite('Struct', () => {
   });
 
   test('chunks', () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const ds = new DataStore(makeTestingBatchStore());
 
     const bt = boolType;
     const refOfBoolType = makeRefType(bt);
