@@ -40,10 +40,10 @@ func main() {
 			defer util.StopCPUProfile()
 		}
 
-		var commit datas.Commit
+		var commit types.Struct
 		if r, ok := ref.MaybeParse(*sourceObject); ok {
 			// sourceObject was sha1
-			commit, ok = sourceStore.ReadValue(r).(datas.Commit)
+			commit, ok = sourceStore.ReadValue(r).(types.Struct)
 			d.Exp.True(ok, "Unable to read Commit object with ref: %s", r)
 		} else {
 			// sourceObject must be a dataset Id

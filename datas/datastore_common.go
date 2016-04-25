@@ -26,14 +26,14 @@ func newDataStoreCommon(bs types.BatchStore, rt chunks.RootTracker) dataStoreCom
 	return dataStoreCommon{ValueStore: types.NewValueStore(bs), bs: bs, rt: rt, rootRef: rt.Root()}
 }
 
-func (ds *dataStoreCommon) MaybeHead(datasetID string) (Commit, bool) {
+func (ds *dataStoreCommon) MaybeHead(datasetID string) (types.Struct, bool) {
 	if r, ok := ds.Datasets().MaybeGet(types.NewString(datasetID)); ok {
-		return r.(types.Ref).TargetValue(ds).(Commit), true
+		return r.(types.Ref).TargetValue(ds).(types.Struct), true
 	}
 	return NewCommit(), false
 }
 
-func (ds *dataStoreCommon) Head(datasetID string) Commit {
+func (ds *dataStoreCommon) Head(datasetID string) types.Struct {
 	c, ok := ds.MaybeHead(datasetID)
 	d.Chk.True(ok, "DataStore has no Head.")
 	return c
@@ -57,12 +57,12 @@ func (ds *dataStoreCommon) datasetsFromRef(datasetsRef ref.Ref) *types.Map {
 	return &c
 }
 
-func (ds *dataStoreCommon) commit(datasetID string, commit Commit) error {
+func (ds *dataStoreCommon) commit(datasetID string, commit types.Struct) error {
 	return ds.doCommit(datasetID, commit)
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
-func (ds *dataStoreCommon) doCommit(datasetID string, commit Commit) error {
+func (ds *dataStoreCommon) doCommit(datasetID string, commit types.Struct) error {
 	currentRootRef, currentDatasets := ds.getRootAndDatasets()
 
 	// TODO: This Commit will be orphaned if the tryUpdateRoot() below fails
@@ -117,9 +117,9 @@ func (ds *dataStoreCommon) tryUpdateRoot(currentDatasets types.Map, currentRootR
 	return
 }
 
-func descendsFrom(commit Commit, currentHeadRef types.Ref, vr types.ValueReader) bool {
+func descendsFrom(commit types.Struct, currentHeadRef types.Ref, vr types.ValueReader) bool {
 	// BFS because the common case is that the ancestor is only a step or two away
-	ancestors := commit.Parents()
+	ancestors := commit.Get(ParentsField).(types.Set)
 	for !ancestors.Has(currentHeadRef) {
 		if ancestors.Empty() {
 			return false
@@ -133,8 +133,8 @@ func getAncestors(commits types.Set, vr types.ValueReader) types.Set {
 	ancestors := NewSetOfRefOfCommit()
 	commits.IterAll(func(v types.Value) {
 		r := v.(types.Ref)
-		c := r.TargetValue(vr).(Commit)
-		ancestors = ancestors.Union(c.Parents())
+		c := r.TargetValue(vr).(types.Struct)
+		ancestors = ancestors.Union(c.Get(ParentsField).(types.Set))
 	})
 	return ancestors
 }

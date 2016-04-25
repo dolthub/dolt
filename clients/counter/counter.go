@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 )
@@ -25,7 +26,7 @@ func main() {
 
 	lastVal := uint64(0)
 	if commit, ok := ds.MaybeHead(); ok {
-		lastVal = uint64(commit.Value().(types.Uint64))
+		lastVal = uint64(commit.Get(datas.ValueField).(types.Uint64))
 	}
 	newVal := lastVal + 1
 	_, err := ds.Commit(types.Uint64(newVal))

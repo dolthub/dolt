@@ -28,12 +28,12 @@ func (ds *Dataset) ID() string {
 }
 
 // MaybeHead returns the current Head Commit of this Dataset, which contains the current root of the Dataset's value tree, if available. If not, it returns a new Commit and 'false'.
-func (ds *Dataset) MaybeHead() (datas.Commit, bool) {
+func (ds *Dataset) MaybeHead() (types.Struct, bool) {
 	return ds.Store().MaybeHead(ds.id)
 }
 
 // Head returns the current head Commit, which contains the current root of the Dataset's value tree.
-func (ds *Dataset) Head() datas.Commit {
+func (ds *Dataset) Head() types.Struct {
 	c, ok := ds.MaybeHead()
 	d.Chk.True(ok, "Dataset \"%s\" does not exist", ds.id)
 	return c
@@ -52,7 +52,7 @@ func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
 // CommitWithParents updates the commit that a dataset points at. The new Commit is constructed using v and p.
 // If the update cannot be performed, e.g., because of a conflict, CommitWithParents returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
 func (ds *Dataset) CommitWithParents(v types.Value, p types.Set) (Dataset, error) {
-	newCommit := datas.NewCommit().SetParents(p).SetValue(v)
+	newCommit := datas.NewCommit().Set(datas.ParentsField, p).Set(datas.ValueField, v)
 	store, err := ds.Store().Commit(ds.id, newCommit)
 	return Dataset{store, ds.id}, err
 }
@@ -87,12 +87,12 @@ func (ds *Dataset) pull(source datas.DataStore, sourceRef types.Ref, concurrency
 	return sink, err
 }
 
-func (ds *Dataset) validateRefAsCommit(r types.Ref) datas.Commit {
+func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
 	v := ds.store.ReadValue(r.TargetRef())
 
 	d.Exp.NotNil(v, "%v cannot be found", r)
 	d.Exp.True(v.Type().Equals(datas.NewCommit().Type()), "Not a Commit: %+v", v)
-	return v.(datas.Commit)
+	return v.(types.Struct)
 }
 
 // setNewHead takes the Ref of the desired new Head of ds, the chunk for which should already exist
@@ -103,7 +103,7 @@ func (ds *Dataset) validateRefAsCommit(r types.Ref) datas.Commit {
 // again using this new Dataset.
 func (ds *Dataset) setNewHead(newHeadRef types.Ref) (Dataset, error) {
 	commit := ds.validateRefAsCommit(newHeadRef)
-	return ds.CommitWithParents(commit.Value(), commit.Parents())
+	return ds.CommitWithParents(commit.Get(datas.ValueField), commit.Get(datas.ParentsField).(types.Set))
 }
 
 type DatasetFlags struct {

@@ -26,7 +26,7 @@ func (rds *RemoteDataStoreClient) batchStore() types.BatchStore {
 	return rds.bs
 }
 
-func (rds *RemoteDataStoreClient) Commit(datasetID string, commit Commit) (DataStore, error) {
+func (rds *RemoteDataStoreClient) Commit(datasetID string, commit types.Struct) (DataStore, error) {
 	err := rds.commit(datasetID, commit)
 	rds.Flush()
 	return &RemoteDataStoreClient{newDataStoreCommon(rds.bs, rds.rt)}, err

@@ -106,7 +106,7 @@ func TestParseDatasetFromHTTP(t *testing.T) {
 	setTest, err := ParseDataset(datasetName)
 
 	assert.NoError(err)
-	assert.EqualValues(commit, setTest.Head().Value())
+	assert.EqualValues(commit, setTest.Head().Get(datas.ValueField))
 
 	server.Stop()
 }
@@ -123,7 +123,7 @@ func TestParseDatasetFromMem(t *testing.T) {
 	dsTest, err := dsTest.Commit(commit)
 	assert.NoError(err)
 
-	assert.EqualValues(commit, dsTest.Head().Value())
+	assert.EqualValues(commit, dsTest.Head().Get(datas.ValueField))
 }
 
 func TestParseDatasetFromLDB(t *testing.T) {
@@ -148,7 +148,7 @@ func TestParseDatasetFromLDB(t *testing.T) {
 	setTest, errRead := ParseDataset(datasetName)
 
 	assert.NoError(errRead)
-	assert.EqualValues(commit, setTest.Head().Value())
+	assert.EqualValues(commit, setTest.Head().Get(datas.ValueField))
 }
 
 func TestDatasetBadInput(t *testing.T) {
@@ -201,7 +201,7 @@ func TestParseDatasetObjectFromLdb(t *testing.T) {
 	assert.Zero(ref)
 	assert.True(isDs)
 	assert.NoError(errRead)
-	assert.EqualValues(commit, setTest.Head().Value())
+	assert.EqualValues(commit, setTest.Head().Get(datas.ValueField))
 }
 
 func TestReadRef(t *testing.T) {
