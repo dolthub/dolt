@@ -3,8 +3,32 @@ package types
 import (
 	"sort"
 
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
+
+var (
+	packages map[ref.Ref]*Package = map[ref.Ref]*Package{}
+)
+
+// LookupPackage looks for a Package by ref.Ref in the global cache of Noms type packages.
+func LookupPackage(r ref.Ref) *Package {
+	return packages[r]
+}
+
+// RegisterPackage puts p into the global cache of Noms type packages.
+func RegisterPackage(p *Package) (r ref.Ref) {
+	d.Chk.NotNil(p)
+	r = p.Ref()
+	packages[r] = p
+	return
+}
+
+func ReadPackage(r ref.Ref, vr ValueReader) *Package {
+	p := vr.ReadValue(r).(Package)
+	RegisterPackage(&p)
+	return &p
+}
 
 type Package struct {
 	types        []*Type
@@ -38,12 +62,12 @@ func (p Package) Ref() ref.Ref {
 	return EnsureRef(p.ref, p)
 }
 
-func (p Package) Chunks() (chunks []RefBase) {
+func (p Package) Chunks() (chunks []Ref) {
 	for _, t := range p.types {
 		chunks = append(chunks, t.Chunks()...)
 	}
 	for _, d := range p.dependencies {
-		chunks = append(chunks, refFromType(d, MakeRefType(typeForPackage)))
+		chunks = append(chunks, NewTypedRef(MakeRefType(typeForPackage), d))
 	}
 	return
 }
@@ -59,6 +83,7 @@ func (p Package) ChildValues() (res []Value) {
 }
 
 var typeForPackage = PackageType
+var typeForRefOfPackage = MakeRefType(PackageType)
 
 func (p Package) Type() *Type {
 	return typeForPackage
@@ -84,5 +109,5 @@ func (p Package) Types() (types []*Type) {
 }
 
 func NewSetOfRefOfPackage() Set {
-	return NewTypedSet(MakeSetType(MakeRefType(PackageType)))
+	return NewTypedSet(MakeSetType(typeForRefOfPackage))
 }

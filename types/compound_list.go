@@ -23,8 +23,7 @@ type compoundList struct {
 }
 
 func buildCompoundList(tuples metaSequenceData, t *Type, vr ValueReader) Value {
-	cl := compoundList{metaSequenceObject{tuples, t}, tuples.uint64ValuesSum(), &ref.Ref{}, vr}
-	return valueFromType(cl, t)
+	return compoundList{metaSequenceObject{tuples, t}, tuples.uint64ValuesSum(), &ref.Ref{}, vr}
 }
 
 func listAsSequenceItems(ls listLeaf) []sequenceItem {
@@ -66,7 +65,7 @@ func (cl compoundList) cursorAt(idx uint64) (*sequenceCursor, listLeaf, uint64) 
 		return idx < offset, offset
 	}, uint64(0))
 
-	if current := cursor.current().(metaTuple); current.ChildRef().TargetRef() != valueFromType(leaf, leaf.Type()).Ref() {
+	if current := cursor.current().(metaTuple); current.ChildRef().TargetRef() != leaf.Ref() {
 		leaf = readMetaTupleValue(current, cl.vr)
 	}
 
@@ -263,7 +262,7 @@ func makeListLeafChunkFn(t *Type, sink ValueWriter) makeChunkFn {
 			values[i] = v.(Value)
 		}
 
-		list := valueFromType(newListLeaf(t, values...), t)
+		list := newListLeaf(t, values...)
 		if sink != nil {
 			r := sink.WriteValue(list)
 			return newMetaTuple(Uint64(len(values)), nil, r, uint64(len(values))), list

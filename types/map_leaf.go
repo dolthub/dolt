@@ -147,7 +147,7 @@ func (m mapLeaf) Equals(other Value) bool {
 	return other != nil && m.t.Equals(other.Type()) && m.Ref() == other.Ref()
 }
 
-func (m mapLeaf) Chunks() (chunks []RefBase) {
+func (m mapLeaf) Chunks() (chunks []Ref) {
 	for _, entry := range m.data {
 		chunks = append(chunks, entry.key.Chunks()...)
 		chunks = append(chunks, entry.value.Chunks()...)
@@ -240,7 +240,7 @@ func makeMapLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 			mapData[i] = v.(mapEntry)
 		}
 
-		mapLeaf := valueFromType(newMapLeaf(t, mapData...), t)
+		mapLeaf := newMapLeaf(t, mapData...)
 
 		var indexValue Value
 		if len(mapData) > 0 {
@@ -248,7 +248,7 @@ func makeMapLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 			if isSequenceOrderedByIndexedType(t) {
 				indexValue = lastValue.key
 			} else {
-				indexValue = refFromType(lastValue.key.Ref(), MakeRefType(lastValue.key.Type()))
+				indexValue = NewTypedRef(MakeRefType(lastValue.key.Type()), lastValue.key.Ref())
 			}
 		}
 

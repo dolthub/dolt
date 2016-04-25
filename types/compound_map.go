@@ -18,8 +18,7 @@ type compoundMap struct {
 }
 
 func buildCompoundMap(tuples metaSequenceData, t *Type, vr ValueReader) Value {
-	cm := compoundMap{metaSequenceObject{tuples, t}, tuples.numLeavesSum(), &ref.Ref{}, vr}
-	return valueFromType(cm, t)
+	return compoundMap{metaSequenceObject{tuples, t}, tuples.numLeavesSum(), &ref.Ref{}, vr}
 }
 
 func init() {

@@ -100,10 +100,10 @@ func (t *Type) Equals(other Value) (res bool) {
 	return other != nil && t.Ref() == other.Ref()
 }
 
-func (t *Type) Chunks() (chunks []RefBase) {
+func (t *Type) Chunks() (chunks []Ref) {
 	if t.IsUnresolved() {
 		if t.HasPackageRef() {
-			chunks = append(chunks, refFromType(t.PackageRef(), MakeRefType(typeForPackage)))
+			chunks = append(chunks, NewTypedRef(MakeRefType(typeForPackage), t.PackageRef()))
 		}
 		return
 	}
@@ -117,7 +117,7 @@ func (t *Type) Chunks() (chunks []RefBase) {
 
 func (t *Type) ChildValues() (res []Value) {
 	if t.HasPackageRef() {
-		res = append(res, NewTypedRef(MakeRefType(PackageType), t.PackageRef()))
+		res = append(res, NewTypedRef(typeForRefOfPackage, t.PackageRef()))
 	}
 	if !t.IsUnresolved() {
 		switch desc := t.Desc.(type) {

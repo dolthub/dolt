@@ -10,10 +10,10 @@ import (
 )
 
 // SomeCallback takes a types.Value and returns a bool indicating whether the current walk should skip the tree descending from value. If |v| is a top-level value in a Chunk, then |r| will be the Ref which referenced it (otherwise |r| is nil).
-type SomeCallback func(v types.Value, r types.RefBase) bool
+type SomeCallback func(v types.Value, r *types.Ref) bool
 
 // AllCallback takes a types.Value and processes it. If |v| is a top-level value in a Chunk, then |r| will be the Ref which referenced it (otherwise |r| is nil).
-type AllCallback func(v types.Value, r types.RefBase)
+type AllCallback func(v types.Value, r *types.Ref)
 
 // SomeP recursively walks over all types.Values reachable from r and calls cb on them. If cb ever returns true, the walk will stop recursing on the current ref. If |concurrency| > 1, it is the callers responsibility to make ensure that |cb| is threadsafe.
 func SomeP(v types.Value, vr types.ValueReader, cb SomeCallback, concurrency int) {
@@ -22,7 +22,7 @@ func SomeP(v types.Value, vr types.ValueReader, cb SomeCallback, concurrency int
 
 // AllP recursively walks over all types.Values reachable from r and calls cb on them. If |concurrency| > 1, it is the callers responsibility to make ensure that |cb| is threadsafe.
 func AllP(v types.Value, vr types.ValueReader, cb AllCallback, concurrency int) {
-	doTreeWalkP(v, vr, func(v types.Value, r types.RefBase) (skip bool) {
+	doTreeWalkP(v, vr, func(v types.Value, r *types.Ref) (skip bool) {
 		cb(v, r)
 		return
 	}, concurrency)
@@ -36,13 +36,13 @@ func doTreeWalkP(v types.Value, vr types.ValueReader, cb SomeCallback, concurren
 	mu := sync.Mutex{}
 	wg := sync.WaitGroup{}
 
-	var processVal func(v types.Value, r types.RefBase)
-	processVal = func(v types.Value, r types.RefBase) {
+	var processVal func(v types.Value, r *types.Ref)
+	processVal = func(v types.Value, r *types.Ref) {
 		if cb(v, r) {
 			return
 		}
 
-		if sr, ok := v.(types.RefBase); ok {
+		if sr, ok := v.(types.Ref); ok {
 			wg.Add(1)
 			rq.tail() <- sr
 		} else {
@@ -52,7 +52,7 @@ func doTreeWalkP(v types.Value, vr types.ValueReader, cb SomeCallback, concurren
 		}
 	}
 
-	processRef := func(r types.RefBase) {
+	processRef := func(r types.Ref) {
 		defer wg.Done()
 
 		mu.Lock()
@@ -70,7 +70,7 @@ func doTreeWalkP(v types.Value, vr types.ValueReader, cb SomeCallback, concurren
 			f.fail(fmt.Errorf("Attempt to copy absent ref:%s", target.String()))
 			return
 		}
-		processVal(v, r)
+		processVal(v, &r)
 	}
 
 	iter := func() {
@@ -91,22 +91,22 @@ func doTreeWalkP(v types.Value, vr types.ValueReader, cb SomeCallback, concurren
 	f.checkNotFailed()
 }
 
-// SomeChunksCallback takes a types.RefBase and returns a bool indicating whether
+// SomeChunksCallback takes a types.Ref and returns a bool indicating whether
 // the current walk should skip the tree descending from value.
-type SomeChunksCallback func(r types.RefBase) bool
+type SomeChunksCallback func(r types.Ref) bool
 
 // SomeChunksP Invokes callback on all chunks reachable from |r| in top-down order. |callback| is invoked only once for each chunk regardless of how many times the chunk appears
-func SomeChunksP(r types.RefBase, vr types.ValueReader, callback SomeChunksCallback, concurrency int) {
+func SomeChunksP(r types.Ref, vr types.ValueReader, callback SomeChunksCallback, concurrency int) {
 	doChunkWalkP(r, vr, callback, concurrency)
 }
 
-func doChunkWalkP(r types.RefBase, vr types.ValueReader, callback SomeChunksCallback, concurrency int) {
+func doChunkWalkP(r types.Ref, vr types.ValueReader, callback SomeChunksCallback, concurrency int) {
 	rq := newRefQueue()
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
 	visitedRefs := map[ref.Ref]bool{}
 
-	walkChunk := func(r types.RefBase) {
+	walkChunk := func(r types.Ref) {
 		defer wg.Done()
 
 		mu.Lock()
@@ -143,22 +143,22 @@ func doChunkWalkP(r types.RefBase, vr types.ValueReader, callback SomeChunksCall
 
 // refQueue emulates a buffered channel of refs of unlimited size.
 type refQueue struct {
-	head  func() <-chan types.RefBase
-	tail  func() chan<- types.RefBase
+	head  func() <-chan types.Ref
+	tail  func() chan<- types.Ref
 	close func()
 }
 
 func newRefQueue() refQueue {
-	head := make(chan types.RefBase, 64)
-	tail := make(chan types.RefBase, 64)
+	head := make(chan types.Ref, 64)
+	tail := make(chan types.Ref, 64)
 	done := make(chan struct{})
-	buff := []types.RefBase{}
+	buff := []types.Ref{}
 
-	push := func(r types.RefBase) {
+	push := func(r types.Ref) {
 		buff = append(buff, r)
 	}
 
-	pop := func() types.RefBase {
+	pop := func() types.Ref {
 		d.Chk.True(len(buff) > 0)
 		r := buff[0]
 		buff = buff[1:]
@@ -191,10 +191,10 @@ func newRefQueue() refQueue {
 	}()
 
 	return refQueue{
-		func() <-chan types.RefBase {
+		func() <-chan types.Ref {
 			return head
 		},
-		func() chan<- types.RefBase {
+		func() chan<- types.Ref {
 			return tail
 		},
 		func() {

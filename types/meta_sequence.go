@@ -17,7 +17,7 @@ type metaSequence interface {
 	tupleCount() int
 }
 
-func newMetaTuple(value, child Value, childRef RefBase, numLeaves uint64) metaTuple {
+func newMetaTuple(value, child Value, childRef Ref, numLeaves uint64) metaTuple {
 	d.Chk.True((child != nil) != (childRef != Ref{}), "Either child or childRef can be set, but not both")
 	return metaTuple{child, childRef, value, numLeaves}
 }
@@ -25,12 +25,12 @@ func newMetaTuple(value, child Value, childRef RefBase, numLeaves uint64) metaTu
 // metaTuple is a node in a Prolly Tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
 	child     Value   // nil if the child data hasn't been read, or has already been written
-	childRef  RefBase // may be empty if |child| is non-nil; call ChildRef() instead of accessing |childRef| directly
+	childRef  Ref // may be empty if |child| is non-nil; call ChildRef() instead of accessing |childRef| directly
 	value     Value
 	numLeaves uint64
 }
 
-func (mt metaTuple) ChildRef() RefBase {
+func (mt metaTuple) ChildRef() Ref {
 	if mt.child != nil {
 		return NewTypedRef(MakeRefType(mt.child.Type()), mt.child.Ref())
 	}
@@ -88,12 +88,12 @@ func (ms metaSequenceObject) ChildValues() []Value {
 	refOfLeafType := MakeRefType(leafType)
 	res := make([]Value, len(ms.tuples))
 	for i, t := range ms.tuples {
-		res[i] = refFromType(t.ChildRef().TargetRef(), refOfLeafType)
+		res[i] = NewTypedRef(refOfLeafType, t.ChildRef().TargetRef())
 	}
 	return res
 }
 
-func (ms metaSequenceObject) Chunks() (chunks []RefBase) {
+func (ms metaSequenceObject) Chunks() (chunks []Ref) {
 	for _, tuple := range ms.tuples {
 		chunks = append(chunks, tuple.ChildRef())
 	}
@@ -152,7 +152,7 @@ func readMetaTupleValue(item sequenceItem, vr ValueReader) Value {
 		mt.child = vr.ReadValue(mt.childRef.TargetRef())
 		d.Chk.NotNil(mt.child)
 	}
-	return internalValueFromType(mt.child, mt.child.Type())
+	return mt.child
 }
 
 func iterateMetaSequenceLeaf(ms metaSequence, vr ValueReader, cb func(Value) bool) {

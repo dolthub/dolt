@@ -4,7 +4,7 @@ import "github.com/attic-labs/noms/chunks"
 
 // ValueWriter is an interface that knows how to write Noms Values, e.g. datas/DataStore. Required to avoid import cycle between this package and the package that implements Value writing.
 type ValueWriter interface {
-	WriteValue(v Value) RefBase
+	WriteValue(v Value) Ref
 }
 
 type primitive interface {

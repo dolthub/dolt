@@ -396,28 +396,15 @@ func TestWriteListOfValueWithType(t *testing.T) {
 	}}, w.toArray())
 }
 
-type testRef struct {
-	Value
-	t *Type
-}
-
-func (r testRef) Type() *Type {
-	return r.t
-}
-
-func (r testRef) TargetRef() ref.Ref {
-	return r.Value.(Ref).TargetRef()
-}
-
 func TestWriteRef(t *testing.T) {
 	assert := assert.New(t)
 
 	typ := MakeRefType(Uint32Type)
 	r := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
-	v := NewRef(r)
+	v := NewTypedRef(typ, r)
 
 	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeTopLevelValue(testRef{Value: v, t: typ})
+	w.writeTopLevelValue(v)
 	assert.EqualValues([]interface{}{RefKind, Uint32Kind, r.String()}, w.toArray())
 }
 

@@ -28,7 +28,7 @@ func findLeafInOrderedSequence(ms metaSequence, t *Type, key Value, getValues ge
 		})
 	}
 
-	if current := cursor.current().(metaTuple); current.ChildRef().TargetRef() != valueFromType(leaf, leaf.Type()).Ref() {
+	if current := cursor.current().(metaTuple); current.ChildRef().TargetRef() != leaf.Ref() {
 		leaf = readMetaTupleValue(current, vr)
 	}
 

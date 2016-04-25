@@ -19,8 +19,7 @@ type compoundSet struct {
 }
 
 func buildCompoundSet(tuples metaSequenceData, t *Type, vr ValueReader) Value {
-	s := compoundSet{metaSequenceObject{tuples, t}, tuples.numLeavesSum(), &ref.Ref{}, vr}
-	return valueFromType(s, t)
+	return compoundSet{metaSequenceObject{tuples, t}, tuples.numLeavesSum(), &ref.Ref{}, vr}
 }
 
 func init() {

@@ -56,14 +56,11 @@ func (lvs *ValueStore) ReadValue(r ref.Ref) Value {
 	return v
 }
 
-// WriteValue takes a Value, schedules it to be written it to lvs, and returns an appropriately-typed types.RefBase. v is not guaranteed to be actually written until after Flush().
-func (lvs *ValueStore) WriteValue(v Value) RefBase {
-	if v == nil {
-		return nil
-	}
-
+// WriteValue takes a Value, schedules it to be written it to lvs, and returns an appropriately-typed types.Ref. v is not guaranteed to be actually written until after Flush().
+func (lvs *ValueStore) WriteValue(v Value) Ref {
+	d.Chk.NotNil(v)
 	targetRef := v.Ref()
-	r := refFromType(targetRef, MakeRefType(v.Type()))
+	r := NewTypedRef(MakeRefType(v.Type()), targetRef)
 	if lvs.isPresent(targetRef) {
 		return r
 	}
@@ -95,7 +92,7 @@ func (lvs *ValueStore) cacheChunks(v Value, r ref.Ref) {
 		if cur := lvs.check(hash); cur == nil || cur.Hint().IsEmpty() || cur.Hint() == hash {
 			lvs.set(hash, hintedChunk{getTargetType(reachable), r})
 			// Code-genned Packages are side-loaded when reading Values for performance reasons. This means that they won't pass through the ReadValue() codepath above, which means that they won't have their Chunks added to the cache. So, if reachable is a RefOfPackage, go look the package up in the PackageRegistry and recursively add its Chunks to the cache.
-			if _, ok := reachable.(Ref); ok {
+			if (reachable.Type().Equals(typeForRefOfPackage)) {
 				if p := LookupPackage(hash); p != nil {
 					lvs.cacheChunks(p, hash)
 				}
@@ -152,7 +149,7 @@ func (lvs *ValueStore) checkChunksInCache(v Value) map[ref.Ref]struct{} {
 	return hints
 }
 
-func getTargetType(refBase RefBase) *Type {
+func getTargetType(refBase Ref) *Type {
 	refType := refBase.Type()
 	d.Chk.Equal(RefKind, refType.Kind())
 	return refType.Desc.(CompoundDesc).ElemTypes[0]

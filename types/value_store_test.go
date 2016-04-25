@@ -129,7 +129,7 @@ func TestCacheOnReadValue(t *testing.T) {
 	cvs := newLocalValueStore(cs)
 
 	b := NewEmptyBlob()
-	bref := cvs.WriteValue(b).(Ref)
+	bref := cvs.WriteValue(b)
 	r := cvs.WriteValue(bref)
 
 	cvs2 := newLocalValueStore(cs)
@@ -146,7 +146,7 @@ func TestHintsOnCache(t *testing.T) {
 	bs := []Blob{NewEmptyBlob(), NewBlob(bytes.NewBufferString("f"))}
 	l := NewList()
 	for _, b := range bs {
-		bref := cvs.WriteValue(b).(Ref)
+		bref := cvs.WriteValue(b)
 		l = l.Append(bref)
 	}
 	r := cvs.WriteValue(l)
@@ -154,7 +154,7 @@ func TestHintsOnCache(t *testing.T) {
 	v := cvs.ReadValue(r.TargetRef())
 	if assert.True(l.Equals(v)) {
 		l = v.(List)
-		bref := cvs.WriteValue(NewBlob(bytes.NewBufferString("g"))).(Ref)
+		bref := cvs.WriteValue(NewBlob(bytes.NewBufferString("g")))
 		l = l.Insert(0, bref)
 
 		hints := cvs.checkChunksInCache(l)
