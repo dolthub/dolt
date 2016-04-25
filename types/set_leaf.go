@@ -204,7 +204,7 @@ func makeSetLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 			setData[i] = v.(Value)
 		}
 
-		setLeaf := valueFromType(newSetLeaf(t, setData...), t)
+		setLeaf := newSetLeaf(t, setData...)
 
 		var indexValue Value
 		if len(setData) > 0 {

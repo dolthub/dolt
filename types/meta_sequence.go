@@ -88,7 +88,7 @@ func (ms metaSequenceObject) ChildValues() []Value {
 	refOfLeafType := MakeRefType(leafType)
 	res := make([]Value, len(ms.tuples))
 	for i, t := range ms.tuples {
-		res[i] = refFromType(t.ChildRef().TargetRef(), refOfLeafType)
+		res[i] = NewTypedRef(refOfLeafType, t.ChildRef().TargetRef())
 	}
 	return res
 }
@@ -152,7 +152,7 @@ func readMetaTupleValue(item sequenceItem, vr ValueReader) Value {
 		mt.child = vr.ReadValue(mt.childRef.TargetRef())
 		d.Chk.NotNil(mt.child)
 	}
-	return internalValueFromType(mt.child, mt.child.Type())
+	return mt.child
 }
 
 func iterateMetaSequenceLeaf(ms metaSequence, vr ValueReader, cb func(Value) bool) {

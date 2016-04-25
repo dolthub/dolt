@@ -144,7 +144,6 @@ func (w *jsonArrayWriter) writeValue(v Value, tr *Type, pkg *Package) {
 	case Uint8Kind:
 		w.writeUint(uint64(v.(Uint8)))
 	case ListKind:
-		v = internalValueFromType(v, tr)
 		if w.maybeWriteMetaSequence(v, tr, pkg) {
 			return
 		}
@@ -156,7 +155,6 @@ func (w *jsonArrayWriter) writeValue(v Value, tr *Type, pkg *Package) {
 		})
 		w.write(w2.toArray())
 	case MapKind:
-		v = internalValueFromType(v, tr)
 		if w.maybeWriteMetaSequence(v, tr, pkg) {
 			return
 		}
@@ -184,7 +182,6 @@ func (w *jsonArrayWriter) writeValue(v Value, tr *Type, pkg *Package) {
 	case RefKind:
 		w.writeRef(v.(RefBase).TargetRef())
 	case SetKind:
-		v = internalValueFromType(v, tr)
 		if w.maybeWriteMetaSequence(v, tr, pkg) {
 			return
 		}
@@ -297,7 +294,7 @@ func (w *jsonArrayWriter) writeBlob(b Blob) {
 
 func (w *jsonArrayWriter) writeStruct(v Value, typ, typeDef *Type, pkg *Package) {
 	i := 0
-	values := structReaderForType(v, typ, typeDef)
+	values := structReader(v.(Struct), typ, typeDef)
 	desc := typeDef.Desc.(StructDesc)
 
 	for _, f := range desc.Fields {

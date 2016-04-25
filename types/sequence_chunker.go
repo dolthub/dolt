@@ -125,7 +125,7 @@ func (seq *sequenceChunker) Done() Value {
 
 	if seq.isRoot() {
 		_, done := seq.makeChunk(seq.current)
-		return internalValueFromType(done, done.Type())
+		return done
 	}
 
 	if len(seq.current) > 0 {

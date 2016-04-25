@@ -103,7 +103,7 @@ func (t *Type) Equals(other Value) (res bool) {
 func (t *Type) Chunks() (chunks []RefBase) {
 	if t.IsUnresolved() {
 		if t.HasPackageRef() {
-			chunks = append(chunks, refFromType(t.PackageRef(), MakeRefType(typeForPackage)))
+			chunks = append(chunks, NewTypedRef(MakeRefType(typeForPackage), t.PackageRef()))
 		}
 		return
 	}

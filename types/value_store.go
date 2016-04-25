@@ -63,7 +63,7 @@ func (lvs *ValueStore) WriteValue(v Value) RefBase {
 	}
 
 	targetRef := v.Ref()
-	r := refFromType(targetRef, MakeRefType(v.Type()))
+	r := NewTypedRef(MakeRefType(v.Type()), targetRef)
 	if lvs.isPresent(targetRef) {
 		return r
 	}

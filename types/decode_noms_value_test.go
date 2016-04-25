@@ -410,7 +410,7 @@ func TestReadRef(t *testing.T) {
 	reader := newJSONArrayReader(a, cs)
 	v := reader.readTopLevelValue()
 	tr := MakeRefType(Uint32Type)
-	assert.True(refFromType(r, tr).Equals(v))
+	assert.True(NewTypedRef(tr, r).Equals(v))
 }
 
 func TestReadValueRef(t *testing.T) {
@@ -422,7 +422,7 @@ func TestReadValueRef(t *testing.T) {
 	reader := newJSONArrayReader(a, cs)
 	v := reader.readTopLevelValue()
 	tr := MakeRefType(Uint32Type)
-	assert.True(refFromType(r, tr).Equals(v))
+	assert.True(NewTypedRef(tr, r).Equals(v))
 }
 
 func TestReadStructWithBlob(t *testing.T) {

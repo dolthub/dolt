@@ -124,7 +124,7 @@ func (r *jsonArrayReader) readList(t *Type, pkg *Package) Value {
 		data = append(data, v)
 	}
 
-	return valueFromType(newListLeaf(t, data...), t)
+	return newListLeaf(t, data...)
 }
 
 func (r *jsonArrayReader) readSet(t *Type, pkg *Package) Value {
@@ -136,7 +136,7 @@ func (r *jsonArrayReader) readSet(t *Type, pkg *Package) Value {
 		data = append(data, v)
 	}
 
-	return valueFromType(newSetLeaf(t, data...), t)
+	return newSetLeaf(t, data...)
 }
 
 func (r *jsonArrayReader) readMap(t *Type, pkg *Package) Value {
@@ -151,7 +151,7 @@ func (r *jsonArrayReader) readMap(t *Type, pkg *Package) Value {
 		data = append(data, mapEntry{k, v})
 	}
 
-	return valueFromType(newMapLeaf(t, data...), t)
+	return newMapLeaf(t, data...)
 }
 
 func indexTypeForMetaSequence(t *Type) *Type {
@@ -178,7 +178,7 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t *Type, pkg *Package) (Value, b
 	data := metaSequenceData{}
 	indexType := indexTypeForMetaSequence(t)
 	for !r2.atEnd() {
-		ref := refFromType(r2.readRef(), MakeRefType(t))
+		ref := NewTypedRef(MakeRefType(t), r2.readRef())
 		v := r2.readValueWithoutTag(indexType, pkg)
 		numLeaves := uint64(r2.readUint())
 		data = append(data, newMetaTuple(v, nil, ref, numLeaves))
@@ -205,7 +205,7 @@ func (r *jsonArrayReader) readPackage(t *Type, pkg *Package) Value {
 
 func (r *jsonArrayReader) readRefValue(t *Type) Value {
 	ref := r.readRef()
-	return refFromType(ref, t)
+	return NewTypedRef(t, ref)
 }
 
 func (r *jsonArrayReader) readTopLevelValue() Value {
@@ -379,5 +379,5 @@ func (r *jsonArrayReader) readStruct(typeDef, typ *Type, pkg *Package) Value {
 		values = append(values, Uint32(unionIndex), r.readValueWithoutTag(desc.Union[unionIndex].T, pkg))
 	}
 
-	return structBuilderForType(values, typ, typeDef)
+	return structBuilder(values, typ, typeDef)
 }
