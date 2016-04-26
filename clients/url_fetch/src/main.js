@@ -7,7 +7,9 @@ import {
   BlobWriter,
   Dataset,
   DataStore,
+  invariant,
   HttpStore,
+  NomsBlob,
 } from '@attic/noms';
 
 const args = argv
@@ -29,15 +31,24 @@ main().catch(ex => {
   process.exit(1);
 });
 
-async function main(): Promise<void> {
+function main(): Promise<void> {
   const [url, datastoreSpec, datasetName] = parseArgs();
   if (!url) {
     process.exit(1);
-    return;
+    return Promise.resolve();
   }
 
   const store = new DataStore(new HttpStore(datastoreSpec));
   const ds = new Dataset(store, datasetName);
+
+  return getBlob(url)
+    .then(b => ds.commit(b))
+    .then(() => {
+      process.stderr.write(clearLine + 'Done\n');
+    });
+}
+
+function getBlob(url): Promise<NomsBlob> {
   const w = new BlobWriter();
 
   return new Promise(resolve => {
@@ -45,6 +56,7 @@ async function main(): Promise<void> {
       switch (Math.floor(res.statusCode / 100)) {
         case 4:
         case 5:
+          invariant(res.statusMessage);
           process.stderr.write(`Error fetching ${url}: ${res.statusCode}: ${res.statusMessage}\n`);
           process.exit(1);
           break;
@@ -77,11 +89,7 @@ async function main(): Promise<void> {
       res.on('end', () => {
         process.stdout.write(clearLine + 'Committing...');
         w.close()
-          .then(() => ds.commit(w.blob))
-          .then(() => {
-            process.stderr.write(clearLine + 'Done\n');
-            resolve();
-          });
+          .then(() => resolve(w.blob));
       });
 
       res.resume();
@@ -89,7 +97,7 @@ async function main(): Promise<void> {
   });
 }
 
-function parseArgs() {
+function parseArgs(): [string, string, string] {
   const [p, datasetSpec] = args._;
   const parts = datasetSpec.split(':');
   if (parts.length < 2) {
