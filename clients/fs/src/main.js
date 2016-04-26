@@ -1,9 +1,9 @@
 // @flow
 
 import fs from 'mz/fs';
+import humanize from 'humanize';
 import path from 'path';
 import argv from 'yargs';
-import formatFileSize from './format-file-size.js';
 import {
   newMapOfStringToRefOfDirectoryEntry,
   Directory,
@@ -31,6 +31,7 @@ let numFilesFound = 0;
 let numFilesComplete = 0;
 let sizeFilesFound = 0;
 let sizeFilesComplete = 0;
+let startTime = 0;
 
 main().catch(ex => {
   console.error(ex.stack);
@@ -47,6 +48,7 @@ async function main(): Promise<void> {
   const store = new DataStore(new HttpStore(datastoreSpec));
   const ds = new Dataset(store, datasetName);
 
+  startTime = Date.now();
   const r = await processPath(p, store);
   if (r) {
     await ds.commit(r);
@@ -101,9 +103,6 @@ async function processFile(p: string, store: DataStore): Promise<File> {
     content: await processBlob(p, store),
   });
   numFilesComplete++;
-
-  const st = await fs.stat(p);
-  sizeFilesComplete += st.size;
   updateProgress();
   return f;
 }
@@ -113,7 +112,11 @@ function processBlob(p: string, store: DataStore): Promise<RefValue<NomsBlob>> {
   const w = new BlobWriter();
   const s = fs.createReadStream(p);
   return new Promise((res, rej) => {
-    s.on('data', chunk => w.write(chunk));
+    s.on('data', chunk => {
+      sizeFilesComplete += chunk.length;
+      w.write(chunk);
+      updateProgress();
+    });
     s.on('end', async () => {
       await w.close();
       try {
@@ -127,9 +130,11 @@ function processBlob(p: string, store: DataStore): Promise<RefValue<NomsBlob>> {
 }
 
 function updateProgress() {
+  const elapsed = Date.now() - startTime;
+  const rate = sizeFilesComplete / (elapsed / 1000);
   process.stdout.write(`\r${numFilesComplete} of ${numFilesFound} entries ` +
-    `(${formatFileSize(sizeFilesComplete)} of ${formatFileSize(sizeFilesFound)}) ` +
-    `processed...`);
+    `(${humanize.filesize(sizeFilesComplete)} of ${humanize.filesize(sizeFilesFound)} - ` +
+    `${humanize.filesize(rate)}/s) processed...`);
 }
 
 function parseArgs() {
