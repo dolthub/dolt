@@ -3,6 +3,7 @@
   "dependencies": {
     "@attic/noms": "^11.1.0",
     "babel-regenerator-runtime": "6.5.0",
+    "humanize": "0.0.9",
     "mz": "2.4.0",
     "oauth": "^0.9.14",
     "yargs": "4.4.0"
