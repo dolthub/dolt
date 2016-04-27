@@ -59,7 +59,6 @@ function firstNNumbers(n: number): Array<number> {
 }
 
 suite('BuildSet', () => {
-
   test('unique keys - strings', async () => {
     const strs = ['hello', 'world', 'hello'];
     const tr = makeCompoundType(Kind.Set, stringType);
@@ -82,7 +81,7 @@ suite('BuildSet', () => {
     assert.isFalse(await s.has(2));
   });
 
-  test('set of n numbers', async () => {
+  test('LONG: set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
     const tr = makeCompoundType(Kind.Set, int64Type);
     const s = await newSet(nums, tr);
@@ -94,7 +93,7 @@ suite('BuildSet', () => {
     assert.strictEqual(s2.ref.toString(), setOfNRef);
   });
 
-  test('set of ref, set of n numbers', async () => {
+  test('LONG: set of ref, set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
 
     const structTypeDef = makeStructType('num', [
@@ -118,7 +117,7 @@ suite('BuildSet', () => {
   });
 
 
-  test('insert', async () => {
+  test('LONG: insert', async () => {
     const nums = firstNNumbers(testSetSize - 10);
     const tr = makeCompoundType(Kind.Set, int64Type);
     let s = await newSet(nums, tr);
@@ -130,7 +129,7 @@ suite('BuildSet', () => {
     assert.strictEqual(s.ref.toString(), setOfNRef);
   });
 
-  test('remove', async () => {
+  test('LONG: remove', async () => {
     const nums = firstNNumbers(testSetSize + 10);
     const tr = makeCompoundType(Kind.Set, int64Type);
     let s = await newSet(nums, tr);
@@ -143,7 +142,7 @@ suite('BuildSet', () => {
     assert.strictEqual(s.ref.toString(), setOfNRef);
   });
 
-  test('write, read, modify, read', async () => {
+  test('LONG: write, read, modify, read', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
@@ -223,7 +222,7 @@ suite('SetLeaf', () => {
     await test(['a', 'b']);
   });
 
-  test('iteratorAt', async () => {
+  test('LONG: iteratorAt', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, stringType);
@@ -341,7 +340,7 @@ suite('CompoundSet', () => {
     assert.deepEqual(values, await flattenParallel(c.iterator(), values.length));
   });
 
-  test('iteratorAt', async () => {
+  test('LONG: iteratorAt', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
@@ -484,7 +483,7 @@ suite('CompoundSet', () => {
     assert.deepEqual(expect, actual);
   }
 
-  test('intersect', async () => {
+  test('LONG: intersect', async () => {
     await testIntersect(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
         [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
         ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']]);
@@ -522,7 +521,7 @@ suite('CompoundSet', () => {
     assert.isFalse(await set.has(false));
   });
 
-  test('canned set diff', async () => {
+  test('LONG: canned set diff', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Set, int32Type);
@@ -596,23 +595,23 @@ suite('CompoundSet', () => {
     return Promise.all(tests).then(() => undefined);
   }
 
-  test('random small set diff 0.1/0.1', () => testSmallRandomDiff(0.1, 0.1));
-  test('random small set diff 0.1/0.5', () => testSmallRandomDiff(0.1, 0.5));
-  test('random small set diff 0.1/0.9', () => testSmallRandomDiff(0.1, 0.9));
+  test('LONG: random small set diff 0.1/0.1', () => testSmallRandomDiff(0.1, 0.1));
+  test('LONG: random small set diff 0.1/0.5', () => testSmallRandomDiff(0.1, 0.5));
+  test('LONG: random small set diff 0.1/0.9', () => testSmallRandomDiff(0.1, 0.9));
 
-  test('random set diff 0.0001/0.0001', () => testRandomDiff(randomSetSize, 0.0001, 0.0001));
-  test('random set diff 0.0001/0.5', () => testRandomDiff(randomSetSize, 0.0001, 0.5));
-  test('random set diff 0.0001/0.9999', () => testRandomDiff(randomSetSize, 0.0001, 0.9900));
+  test('LONG: random set diff 0.0001/0.0001', () => testRandomDiff(randomSetSize, 0.0001, 0.0001));
+  test('LONG: random set diff 0.0001/0.5', () => testRandomDiff(randomSetSize, 0.0001, 0.5));
+  test('LONG: random set diff 0.0001/0.9999', () => testRandomDiff(randomSetSize, 0.0001, 0.9900));
 
-  test('random set diff 0.001/0.001', () => testRandomDiff(randomSetSize, 0.001, 0.001));
-  test('random set diff 0.001/0.5', () => testRandomDiff(randomSetSize, 0.001, 0.5));
-  test('random set diff 0.001/0.999', () => testRandomDiff(randomSetSize, 0.001, 0.999));
+  test('LONG: random set diff 0.001/0.001', () => testRandomDiff(randomSetSize, 0.001, 0.001));
+  test('LONG: random set diff 0.001/0.5', () => testRandomDiff(randomSetSize, 0.001, 0.5));
+  test('LONG: random set diff 0.001/0.999', () => testRandomDiff(randomSetSize, 0.001, 0.999));
 
-  test('random set diff 0.01/0.01', () => testRandomDiff(randomSetSize, 0.01, 0.01));
-  test('random set diff 0.01/0.5', () => testRandomDiff(randomSetSize, 0.01, 0.5));
-  test('random set diff 0.01/0.99', () => testRandomDiff(randomSetSize, 0.01, 0.99));
+  test('LONG: random set diff 0.01/0.01', () => testRandomDiff(randomSetSize, 0.01, 0.01));
+  test('LONG: random set diff 0.01/0.5', () => testRandomDiff(randomSetSize, 0.01, 0.5));
+  test('LONG: random set diff 0.01/0.99', () => testRandomDiff(randomSetSize, 0.01, 0.99));
 
-  test('random set diff 0.1/0.1', () => testRandomDiff(randomSetSize, 0.1, 0.1));
-  test('random set diff 0.1/0.5', () => testRandomDiff(randomSetSize, 0.1, 0.5));
-  test('random set diff 0.1/0.9', () => testRandomDiff(randomSetSize, 0.1, 0.9));
+  test('LONG: random set diff 0.1/0.1', () => testRandomDiff(randomSetSize, 0.1, 0.1));
+  test('LONG: random set diff 0.1/0.5', () => testRandomDiff(randomSetSize, 0.1, 0.5));
+  test('LONG: random set diff 0.1/0.9', () => testRandomDiff(randomSetSize, 0.1, 0.9));
 });

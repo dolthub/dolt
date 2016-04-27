@@ -35,6 +35,7 @@
   },
   "scripts": {
     "pretest": "eslint src/ && flow src/",
+    "ts": "mocha --ui tdd --reporter spec --slow=50 --invert --grep='LONG:' --compilers js:babel-core/register src/*-test.js",
     "test": "mocha --ui tdd --reporter dot --compilers js:babel-core/register src/*-test.js",
     "prepublish": "npm run compile && npm run copy-flow-files",
     "compile": "npm run compile-to-commonjs && npm run compile-to-es6",
