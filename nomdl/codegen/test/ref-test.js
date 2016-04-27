@@ -4,7 +4,7 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 import {newSet, makeSetType, numberType, DataStore, MemoryStore} from '@attic/noms';
-import type {NomsSet, number} from '@attic/noms';
+import type {NomsSet} from '@attic/noms';
 import {StructWithRef} from './gen/ref.noms.js';
 
 suite('ref.noms', () => {

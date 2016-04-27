@@ -33,18 +33,18 @@ func TestMapUniqueKeysString(t *testing.T) {
 	assert.True(NewString("foo").Equals(m.Get(NewString("hello"))))
 }
 
-func TestMapUniqueKeysInt64(t *testing.T) {
+func TestMapUniqueKeysNumber(t *testing.T) {
 	assert := assert.New(t)
 	l := []Value{
-		Int64(4), Int64(1),
-		Int64(0), Int64(2),
-		Int64(1), Int64(2),
-		Int64(3), Int64(4),
-		Int64(1), Int64(5),
+		Number(4), Number(1),
+		Number(0), Number(2),
+		Number(1), Number(2),
+		Number(3), Number(4),
+		Number(1), Number(5),
 	}
 	m := NewMap(l...)
 	assert.Equal(uint64(4), m.Len())
-	assert.True(Int64(5).Equals(m.Get(Int64(1))))
+	assert.True(Number(5).Equals(m.Get(Number(1))))
 }
 
 func TestMapHasRemove(t *testing.T) {
@@ -381,12 +381,12 @@ func TestMapOrdering(t *testing.T) {
 		},
 		// Ordered by ref
 		[]Value{
-			NewString("x"),
-			NewString("c"),
-			NewString("y"),
 			NewString("z"),
+			NewString("c"),
 			NewString("a"),
+			NewString("x"),
 			NewString("b"),
+			NewString("y"),
 		},
 	)
 

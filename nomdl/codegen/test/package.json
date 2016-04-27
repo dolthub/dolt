@@ -5,7 +5,7 @@
   "main": "index.js",
   "devDependencies": {
     "@attic/eslintrc": "^1.0.0",
-    "@attic/noms": "^11.1.0",
+    "@attic/noms": "^13.0.0",
     "@attic/webpack-config": "^1.0.1",
     "babel-cli": "6.6.5",
     "babel-core": "6.7.2",

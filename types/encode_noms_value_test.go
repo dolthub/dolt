@@ -84,7 +84,7 @@ func TestWriteSetOfSet(t *testing.T) {
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
 	// The order of the elements is based on the order defined by OrderedValue.
-	assert.EqualValues([]interface{}{SetKind, SetKind, NumberKind, false, []interface{}{false, []interface{}{"1", "2", "3"}, false, []interface{}{"0"}}}, w.toArray())
+	assert.EqualValues([]interface{}{SetKind, SetKind, NumberKind, false, []interface{}{false, []interface{}{"0"}, false, []interface{}{"1", "2", "3"}}}, w.toArray())
 }
 
 func TestWriteMap(t *testing.T) {

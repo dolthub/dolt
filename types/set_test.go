@@ -44,15 +44,15 @@ func TestSetUniqueKeysString(t *testing.T) {
 	assert.False(s1.Has(NewString("foo")))
 }
 
-func TestSetUniqueKeysInt64(t *testing.T) {
+func TestSetUniqueKeysNumber(t *testing.T) {
 	assert := assert.New(t)
-	s1 := NewSet(Int64(4), Int64(1), Int64(0), Int64(0), Int64(1), Int64(3))
+	s1 := NewSet(Number(4), Number(1), Number(0), Number(0), Number(1), Number(3))
 	assert.Equal(uint64(4), s1.Len())
-	assert.True(s1.Has(Int64(4)))
-	assert.True(s1.Has(Int64(1)))
-	assert.True(s1.Has(Int64(0)))
-	assert.True(s1.Has(Int64(3)))
-	assert.False(s1.Has(Int64(2)))
+	assert.True(s1.Has(Number(4)))
+	assert.True(s1.Has(Number(1)))
+	assert.True(s1.Has(Number(0)))
+	assert.True(s1.Has(Number(3)))
+	assert.False(s1.Has(Number(2)))
 }
 
 func TestSetHas(t *testing.T) {
@@ -328,12 +328,12 @@ func TestSetOrdering(t *testing.T) {
 		},
 		// Ordered by ref
 		[]Value{
-			NewString("x"),
-			NewString("c"),
-			NewString("y"),
 			NewString("z"),
+			NewString("c"),
 			NewString("a"),
+			NewString("x"),
 			NewString("b"),
+			NewString("y"),
 		},
 	)
 
