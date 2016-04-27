@@ -77,6 +77,9 @@ func testSimpleListFromNomsList(list List) testSimpleList {
 }
 
 func TestStreamingCompoundListCreation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	vs := NewTestValueStore()
@@ -180,6 +183,9 @@ func TestCompoundListIterAllP(t *testing.T) {
 }
 
 func TestCompoundListMap(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	simpleList := getTestSimpleList()
@@ -198,6 +204,9 @@ func TestCompoundListMap(t *testing.T) {
 }
 
 func TestCompoundListMapP(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	simpleList := getTestSimpleList()
@@ -216,6 +225,9 @@ func TestCompoundListMapP(t *testing.T) {
 }
 
 func TestCompoundListLen(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	tr := MakeListType(Int64Type)
@@ -227,6 +239,9 @@ func TestCompoundListLen(t *testing.T) {
 }
 
 func TestCompoundListCursorAt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	listLen := func(at uint64, next func(*sequenceCursor) bool) (size uint64) {
@@ -251,6 +266,9 @@ func TestCompoundListCursorAt(t *testing.T) {
 }
 
 func TestCompoundListAppend(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	newCompoundList := func(items testSimpleList) compoundList {
@@ -317,6 +335,9 @@ func TestCompoundListInsertNothing(t *testing.T) {
 }
 
 func TestCompoundListInsertStart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	cl := getTestSimpleList().toCompoundList()
@@ -358,6 +379,9 @@ func TestCompoundListInsertStart(t *testing.T) {
 }
 
 func TestCompoundListInsertMiddle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	cl := getTestSimpleList().toCompoundList()
@@ -405,6 +429,9 @@ func TestCompoundListInsertMiddle(t *testing.T) {
 }
 
 func TestCompoundListInsertRanges(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	testList := getTestSimpleList()
@@ -460,6 +487,9 @@ func TestCompoundListRemoveEverything(t *testing.T) {
 }
 
 func TestCompoundListRemoveAtMiddle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	cl := getTestSimpleList().toCompoundList()
@@ -483,6 +513,9 @@ func TestCompoundListRemoveAtMiddle(t *testing.T) {
 }
 
 func TestCompoundListRemoveRanges(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	testList := getTestSimpleList()
@@ -506,6 +539,9 @@ func TestCompoundListRemoveRanges(t *testing.T) {
 }
 
 func TestCompoundListSet(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	testList := getTestSimpleList()
@@ -539,6 +575,9 @@ func TestCompoundListSet(t *testing.T) {
 }
 
 func TestCompoundListSlice(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	tr := MakeListType(Int64Type)
@@ -583,6 +622,9 @@ func TestCompoundListSlice(t *testing.T) {
 }
 
 func TestCompoundListFilter(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	simple := getTestSimpleList()
@@ -627,6 +669,9 @@ func TestCompoundListFirstNNumbers(t *testing.T) {
 }
 
 func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 

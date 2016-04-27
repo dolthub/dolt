@@ -168,6 +168,9 @@ func TestCompoundBlobReaderSeek(t *testing.T) {
 }
 
 func TestCompoundBlobLen(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 	cb := getTestCompoundBlob("hello", "world")
 	assert.Equal(uint64(10), cb.Len())
@@ -193,6 +196,9 @@ func TestCompoundBlobChunks(t *testing.T) {
 }
 
 func TestCompoundBlobSameChunksWithPrefix(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	cb1 := getRandomBlob(t)
@@ -224,6 +230,9 @@ func TestCompoundBlobSameChunksWithPrefix(t *testing.T) {
 }
 
 func TestCompoundBlobSameChunksWithSuffix(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	cb1 := getRandomBlob(t)

@@ -113,6 +113,9 @@ func TestCompoundSetChunks(t *testing.T) {
 }
 
 func TestCompoundSetHas(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	vs := NewTestValueStore()
@@ -195,6 +198,9 @@ func TestCompoundSetIterAll(t *testing.T) {
 }
 
 func TestCompoundSetInsert(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	doTest := func(incr, offset int, ts testSet) {
@@ -232,6 +238,10 @@ func TestCompoundSetInsertExistingValue(t *testing.T) {
 }
 
 func TestCompoundSetRemove(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
 	assert := assert.New(t)
 
 	doTest := func(incr, offset int, ts testSet) {
@@ -293,6 +303,9 @@ func TestCompoundSetFilter(t *testing.T) {
 }
 
 func TestCompoundSetUnion(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	doTest := func(ts testSet) {
@@ -361,6 +374,9 @@ func TestCompoundSetFirstNNumbers(t *testing.T) {
 }
 
 func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 

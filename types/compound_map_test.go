@@ -118,6 +118,9 @@ func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
 }
 
 func TestCompoundMapHas(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	vs := NewTestValueStore()
@@ -140,6 +143,9 @@ func TestCompoundMapHas(t *testing.T) {
 }
 
 func TestCompoundMapFirst(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
@@ -157,6 +163,9 @@ func TestCompoundMapFirst(t *testing.T) {
 }
 
 func TestCompoundMapMaybeGet(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
@@ -206,6 +215,9 @@ func TestCompoundMapIter(t *testing.T) {
 }
 
 func TestCompoundMapIterAll(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
@@ -227,6 +239,9 @@ func TestCompoundMapIterAll(t *testing.T) {
 }
 
 func TestCompoundMapSet(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	doTest := func(incr, offset int, tm testMap) {
@@ -253,6 +268,9 @@ func TestCompoundMapSet(t *testing.T) {
 }
 
 func TestCompoundMapSetExistingKeyToExistingValue(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	tm := getTestNativeOrderMap(2)
@@ -268,6 +286,9 @@ func TestCompoundMapSetExistingKeyToExistingValue(t *testing.T) {
 }
 
 func TestCompoundMapSetExistingKeyToNewValue(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	tm := getTestNativeOrderMap(2)
@@ -288,6 +309,9 @@ func TestCompoundMapSetExistingKeyToNewValue(t *testing.T) {
 }
 
 func TestCompoundMapRemove(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	doTest := func(incr int, tm testMap) {
@@ -322,6 +346,9 @@ func TestCompoundMapRemoveNonexistentKey(t *testing.T) {
 }
 
 func TestCompoundMapFilter(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
@@ -349,6 +376,9 @@ func TestCompoundMapFilter(t *testing.T) {
 }
 
 func TestCompoundMapFirstNNumbers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	mapType := MakeMapType(Int64Type, Int64Type)
@@ -364,6 +394,9 @@ func TestCompoundMapFirstNNumbers(t *testing.T) {
 }
 
 func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 
