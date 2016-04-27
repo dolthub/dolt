@@ -1,10 +1,10 @@
 struct StructWithUnions {
   a: union {
-    b: Float64
+    b: Number
     c: String
   }
   d: union {
-    e: Float64
+    e: Number
     f: String
   }
 }

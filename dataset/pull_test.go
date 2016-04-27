@@ -46,10 +46,10 @@ func pullTest(t *testing.T, topdown bool) {
 	// Give sink and source some initial shared context.
 	sourceInitialValue := types.NewMap(
 		types.NewString("first"), NewList(source),
-		types.NewString("second"), NewList(source, types.Int32(2)))
+		types.NewString("second"), NewList(source, types.Number(2)))
 	sinkInitialValue := types.NewMap(
 		types.NewString("first"), NewList(sink),
-		types.NewString("second"), NewList(sink, types.Int32(2)))
+		types.NewString("second"), NewList(sink, types.Number(2)))
 
 	var err error
 	source, err = source.Commit(sourceInitialValue)
@@ -59,13 +59,13 @@ func pullTest(t *testing.T, topdown bool) {
 
 	// Add some new stuff to source.
 	updatedValue := sourceInitialValue.Set(
-		types.NewString("third"), NewList(source, types.Int32(3)))
+		types.NewString("third"), NewList(source, types.Number(3)))
 	source, err = source.Commit(updatedValue)
 	assert.NoError(err)
 
 	// Add some more stuff, so that source isn't directly ahead of sink.
 	updatedValue = updatedValue.Set(
-		types.NewString("fourth"), NewList(source, types.Int32(4)))
+		types.NewString("fourth"), NewList(source, types.Number(4)))
 	source, err = source.Commit(updatedValue)
 	assert.NoError(err)
 
@@ -90,10 +90,10 @@ func pullFirstCommit(t *testing.T, topdown bool) {
 
 	sourceInitialValue := types.NewMap(
 		types.NewString("first"), NewList(source),
-		types.NewString("second"), NewList(source, types.Int32(2)))
+		types.NewString("second"), NewList(source, types.Number(2)))
 
 	NewList(sink)
-	NewList(sink, types.Int32(2))
+	NewList(sink, types.Number(2))
 
 	source, err := source.Commit(sourceInitialValue)
 	assert.NoError(err)

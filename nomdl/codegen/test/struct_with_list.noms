@@ -1,6 +1,6 @@
 struct StructWithList {
-  l: List<Uint8>
+  l: List<Number>
   b: Bool
   s: String
-  i: Int64
+  i: Number
 }

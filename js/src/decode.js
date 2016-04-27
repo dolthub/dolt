@@ -19,7 +19,7 @@ import {
   StructDesc,
   Type,
   typeType,
-  uint64Type,
+  numberType,
 } from './type.js';
 import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
@@ -187,7 +187,7 @@ export class JsonArrayReader {
     while (!this.atEnd()) {
       const ref = this.readRef();
       const v = this.readValueWithoutTag(indexType, pkg);
-      const numLeaves = this.readValueWithoutTag(uint64Type, pkg);
+      const numLeaves = this.readValueWithoutTag(numberType, pkg);
       data.push(new MetaTuple(ref, v, numLeaves));
     }
 
@@ -257,19 +257,8 @@ export class JsonArrayReader {
       }
       case Kind.Bool:
         return this.readBool();
-      case Kind.Float32:
-      case Kind.Float64:
+      case Kind.Number:
         return this.readFloat();
-      case Kind.Int8:
-      case Kind.Int16:
-      case Kind.Int32:
-      case Kind.Int64:
-        return this.readInt();
-      case Kind.Uint8:
-      case Kind.Uint16:
-      case Kind.Uint32:
-      case Kind.Uint64:
-        return this.readUint();
       case Kind.String:
         return this.readString();
       case Kind.Value: {

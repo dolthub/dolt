@@ -61,7 +61,7 @@ func (tm testMap) toCompoundMap() compoundMap {
 	return NewTypedMap(tm.tr, keyvals...).(compoundMap)
 }
 
-type testMapGenFn func(v Int64) Value
+type testMapGenFn func(v Number) Value
 
 func newTestMap(length int, gen testMapGenFn, less testMapLessFn, tr *Type) testMap {
 	s := rand.NewSource(4242)
@@ -72,26 +72,26 @@ func newTestMap(length int, gen testMapGenFn, less testMapLessFn, tr *Type) test
 	for len(entries) < length {
 		v := s.Int63() & mask
 		if _, ok := used[v]; !ok {
-			entry := mapEntry{gen(Int64(v)), gen(Int64(v * 2))}
+			entry := mapEntry{gen(Number(v)), gen(Number(v * 2))}
 			entries = append(entries, entry)
 			used[v] = true
 		}
 	}
 
-	return testMap{entries, less, MakeMapType(tr, tr), gen(Int64(mask + 1))}
+	return testMap{entries, less, MakeMapType(tr, tr), gen(Number(mask + 1))}
 }
 
 func getTestNativeOrderMap(scale int) testMap {
-	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
+	return newTestMap(int(mapPattern)*scale, func(v Number) Value {
 		return v
 	}, func(x, y Value) bool {
 		return !y.(OrderedValue).Less(x.(OrderedValue))
-	}, Int64Type)
+	}, NumberType)
 }
 
 func getTestRefValueOrderMap(scale int) testMap {
-	setType := MakeSetType(Int64Type)
-	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
+	setType := MakeSetType(NumberType)
+	return newTestMap(int(mapPattern)*scale, func(v Number) Value {
 		return NewTypedSet(setType, v)
 	}, func(x, y Value) bool {
 		return !y.Ref().Less(x.Ref())
@@ -99,8 +99,8 @@ func getTestRefValueOrderMap(scale int) testMap {
 }
 
 func getTestRefToNativeOrderMap(scale int, vw ValueWriter) testMap {
-	refType := MakeRefType(Int64Type)
-	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
+	refType := MakeRefType(NumberType)
+	return newTestMap(int(mapPattern)*scale, func(v Number) Value {
 		return vw.WriteValue(v)
 	}, func(x, y Value) bool {
 		return !y.(Ref).TargetRef().Less(x.(Ref).TargetRef())
@@ -108,9 +108,9 @@ func getTestRefToNativeOrderMap(scale int, vw ValueWriter) testMap {
 }
 
 func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
-	setType := MakeSetType(Int64Type)
+	setType := MakeSetType(NumberType)
 	refType := MakeRefType(setType)
-	return newTestMap(int(mapPattern)*scale, func(v Int64) Value {
+	return newTestMap(int(mapPattern)*scale, func(v Number) Value {
 		return vw.WriteValue(NewTypedSet(setType, v))
 	}, func(x, y Value) bool {
 		return !y.(Ref).TargetRef().Less(x.(Ref).TargetRef())
@@ -256,7 +256,7 @@ func TestCompoundMapSet(t *testing.T) {
 		}
 		run(len(tm.entries)-offset, len(tm.entries))
 		assert.Panics(func() {
-			expected.Set(Int8(1), Bool(true))
+			expected.Set(Number(1), Bool(true))
 		}, "Should panic due to wrong type")
 	}
 
@@ -297,7 +297,7 @@ func TestCompoundMapSetExistingKeyToNewValue(t *testing.T) {
 	expectedWorking := tm
 	actual := original
 	for i, entry := range tm.entries {
-		newValue := Int64(int64(entry.value.(Int64)) + 1)
+		newValue := Number(int64(entry.value.(Number)) + 1)
 		expectedWorking = expectedWorking.SetValue(i, newValue)
 		actual = actual.Set(entry.key, newValue).(compoundMap)
 	}
@@ -339,7 +339,7 @@ func TestCompoundMapRemoveNonexistentKey(t *testing.T) {
 
 	tm := getTestNativeOrderMap(2)
 	original := tm.toCompoundMap()
-	actual := original.Remove(Int64(-1)) // rand.Int63 returns non-negative numbers.
+	actual := original.Remove(Number(-1)) // rand.Int63 returns non-negative numbers.
 
 	assert.Equal(original.Len(), actual.Len())
 	assert.True(original.Equals(actual))
@@ -381,16 +381,16 @@ func TestCompoundMapFirstNNumbers(t *testing.T) {
 	}
 	assert := assert.New(t)
 
-	mapType := MakeMapType(Int64Type, Int64Type)
+	mapType := MakeMapType(NumberType, NumberType)
 
 	kvs := []Value{}
 	n := 5000
 	for i := 0; i < n; i++ {
-		kvs = append(kvs, Int64(i), Int64(i+1))
+		kvs = append(kvs, Number(i), Number(i+1))
 	}
 
 	m := NewTypedMap(mapType, kvs...)
-	assert.Equal(m.Ref().String(), "sha1-7bfa9b9e7a82074ae67347349f8da549bf829cfa")
+	assert.Equal(m.Ref().String(), "sha1-60f2d39d24da082cb8e022f866c60202152b2562")
 }
 
 func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
@@ -401,7 +401,7 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	vs := NewTestValueStore()
 
 	structTypeDef := MakeStructType("num", []Field{
-		Field{"n", Int64Type, false},
+		Field{"n", NumberType, false},
 	}, []Field{})
 	pkg := NewPackage([]*Type{structTypeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
@@ -413,15 +413,15 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	kvs := []Value{}
 	n := 5000
 	for i := 0; i < n; i++ {
-		k := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i)}))
-		v := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i + 1)}))
+		k := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Number(i)}))
+		v := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Number(i + 1)}))
 		assert.NotNil(k)
 		assert.NotNil(v)
 		kvs = append(kvs, k, v)
 	}
 
 	m := NewTypedMap(mapType, kvs...)
-	assert.Equal("sha1-2ce339505a342d68c020b2b0a3ec128ec9258ac4", m.Ref().String())
+	assert.Equal("sha1-3ab6131151c76cc3fdc9b639b37770d8d7dcdf5d", m.Ref().String())
 }
 
 func TestCompoundMapModifyAfterRead(t *testing.T) {

@@ -16,7 +16,7 @@ func getTestCompoundBlob(datas ...string) compoundBlob {
 	tuples := make([]metaTuple, len(datas))
 	for i, s := range datas {
 		b := NewBlob(bytes.NewBufferString(s))
-		tuples[i] = newMetaTuple(Uint64(len(s)), b, Ref{}, uint64(len(s)))
+		tuples[i] = newMetaTuple(Number(len(s)), b, Ref{}, uint64(len(s)))
 	}
 	return newCompoundBlob(tuples, nil)
 }
@@ -189,8 +189,8 @@ func TestCompoundBlobChunks(t *testing.T) {
 	bl1 := newBlobLeaf([]byte("hello"))
 	bl2 := newBlobLeaf([]byte("world"))
 	cb = newCompoundBlob([]metaTuple{
-		newMetaTuple(Uint64(5), bl1, Ref{}, 5),
-		newMetaTuple(Uint64(10), bl2, Ref{}, 5),
+		newMetaTuple(Number(5), bl1, Ref{}, 5),
+		newMetaTuple(Number(10), bl2, Ref{}, 5),
 	}, vs)
 	assert.Equal(2, len(cb.Chunks()))
 }

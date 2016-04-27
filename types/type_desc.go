@@ -2,7 +2,7 @@ package types
 
 import "github.com/attic-labs/noms/ref"
 
-// TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Int32, or a custom type.
+// TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Number, or a custom type.
 type TypeDesc interface {
 	Kind() NomsKind
 	Equals(other TypeDesc) bool
@@ -11,19 +11,10 @@ type TypeDesc interface {
 // PrimitiveDesc implements TypeDesc for all primitive Noms types:
 // Blob
 // Bool
-// Float32
-// Float64
-// Int16
-// Int32
-// Int64
-// Int8
+// Number
 // Package
 // String
 // Type
-// Uint16
-// Uint32
-// Uint64
-// Uint8
 // Value
 type PrimitiveDesc NomsKind
 
@@ -38,23 +29,14 @@ func (p PrimitiveDesc) Equals(other TypeDesc) bool {
 var KindToString = map[NomsKind]string{
 	BlobKind:    "Blob",
 	BoolKind:    "Bool",
-	Float32Kind: "Float32",
-	Float64Kind: "Float64",
-	Int16Kind:   "Int16",
-	Int32Kind:   "Int32",
-	Int64Kind:   "Int64",
-	Int8Kind:    "Int8",
 	ListKind:    "List",
 	MapKind:     "Map",
+	NumberKind:  "Number",
 	PackageKind: "Package",
 	RefKind:     "Ref",
 	SetKind:     "Set",
 	StringKind:  "String",
 	TypeKind:    "Type",
-	Uint16Kind:  "Uint16",
-	Uint32Kind:  "Uint32",
-	Uint64Kind:  "Uint64",
-	Uint8Kind:   "Uint8",
 	ValueKind:   "Value",
 }
 

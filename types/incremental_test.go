@@ -10,16 +10,7 @@ import (
 var (
 	testVals = []Value{
 		Bool(true),
-		Int8(1),
-		Int16(1),
-		Int32(1),
-		Int64(1),
-		Uint8(1),
-		Uint16(1),
-		Uint32(1),
-		Uint64(1),
-		Float32(1),
-		Float64(1),
+		Number(1),
 		NewString("hi"),
 		newBlobLeaf([]byte("hi")),
 		// compoundBlob
@@ -111,7 +102,7 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	cs := chunks.NewTestStore()
 	vs := newLocalValueStore(cs)
 
-	expectedItem := Uint32(42)
+	expectedItem := Number(42)
 	ref := vs.WriteValue(expectedItem).TargetRef()
 
 	expected := NewList(NewRef(ref))

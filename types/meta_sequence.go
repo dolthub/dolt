@@ -39,7 +39,7 @@ func (mt metaTuple) ChildRef() Ref {
 }
 
 func (mt metaTuple) uint64Value() uint64 {
-	return uint64(mt.value.(Uint64))
+	return uint64(mt.value.(Number))
 }
 
 type metaSequenceData []metaTuple

@@ -41,7 +41,7 @@ func (gen *Generator) DefType(t *types.Type) string {
 	switch k {
 	case types.BlobKind:
 		return fmt.Sprintf("%sBlob", gen.TypesPackage)
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.BoolKind, types.NumberKind, types.StringKind:
 		return strings.ToLower(kindToString(k))
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return gen.UserName(t) + "Def"
@@ -64,7 +64,7 @@ func (gen *Generator) UserType(t *types.Type) string {
 	switch k {
 	case types.BlobKind:
 		return fmt.Sprintf("%sBlob", gen.TypesPackage)
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.BoolKind, types.NumberKind, types.StringKind:
 		return strings.ToLower(kindToString(k))
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return gen.UserName(t)
@@ -89,7 +89,7 @@ func (gen *Generator) UserTypeJS(t *types.Type) string {
 		return "boolean"
 	case types.StringKind:
 		return "string"
-	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.NumberKind:
 		return gen.ImportJSType(strings.ToLower(kindToString(k)))
 	case types.StructKind:
 		if t.HasPackageRef() && gen.Package.Ref() != t.PackageRef() {
@@ -121,7 +121,7 @@ func (gen *Generator) DefToValue(val string, t *types.Type) string {
 	switch rt.Kind() {
 	case types.BlobKind, types.PackageKind, types.ValueKind, types.TypeKind:
 		return val // No special Def representation
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.BoolKind, types.NumberKind, types.StringKind:
 		return gen.NativeToValue(val, rt)
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.New()", val)
@@ -135,7 +135,7 @@ func (gen *Generator) DefToValue(val string, t *types.Type) string {
 func (gen *Generator) DefToUser(val string, t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	switch rt.Kind() {
-	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind:
+	case types.BlobKind, types.BoolKind, types.NumberKind, types.PackageKind, types.StringKind, types.TypeKind, types.ValueKind:
 		return val
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return gen.DefToValue(val, rt)
@@ -149,7 +149,7 @@ func (gen *Generator) MayHaveChunks(t *types.Type) bool {
 	switch rt.Kind() {
 	case types.BlobKind, types.ListKind, types.MapKind, types.PackageKind, types.RefKind, types.SetKind, types.StructKind, types.TypeKind, types.ValueKind:
 		return true
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.BoolKind, types.NumberKind, types.StringKind:
 		return false
 	}
 	panic("unreachable")
@@ -161,7 +161,7 @@ func (gen *Generator) ValueToDef(val string, t *types.Type) string {
 	switch rt.Kind() {
 	case types.BlobKind, types.PackageKind, types.TypeKind:
 		return gen.ValueToUser(val, rt) // No special Def representation
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.BoolKind, types.NumberKind, types.StringKind:
 		return gen.ValueToNative(val, rt)
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.Def()", gen.ValueToUser(val, t))
@@ -177,7 +177,7 @@ func (gen *Generator) ValueToDef(val string, t *types.Type) string {
 func (gen *Generator) UserToDef(val string, t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	switch rt.Kind() {
-	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.TypeKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind:
+	case types.BlobKind, types.BoolKind, types.NumberKind, types.PackageKind, types.StringKind, types.TypeKind, types.ValueKind:
 		return val
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.Def()", val)
@@ -192,7 +192,7 @@ func (gen *Generator) NativeToValue(val string, t *types.Type) string {
 	t = gen.R.Resolve(t, gen.Package)
 	k := t.Kind()
 	switch k {
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.BoolKind, types.NumberKind:
 		return fmt.Sprintf("%s%s(%s)", gen.TypesPackage, kindToString(k), val)
 	case types.StringKind:
 		return fmt.Sprintf("%sNewString(%s)", gen.TypesPackage, val)
@@ -204,7 +204,7 @@ func (gen *Generator) NativeToValue(val string, t *types.Type) string {
 func (gen *Generator) ValueToNative(val string, t *types.Type) string {
 	k := t.Kind()
 	switch k {
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.BoolKind, types.NumberKind:
 		n := kindToString(k)
 		return fmt.Sprintf("%s(%s.(%s%s))", strings.ToLower(n), val, gen.TypesPackage, n)
 	case types.StringKind:
@@ -220,7 +220,7 @@ func (gen *Generator) UserToValue(val string, t *types.Type) string {
 	switch k {
 	case types.BlobKind, types.ListKind, types.MapKind, types.PackageKind, types.RefKind, types.SetKind, types.StructKind, types.TypeKind, types.ValueKind:
 		return val
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.BoolKind, types.NumberKind, types.StringKind:
 		return gen.NativeToValue(val, t)
 	}
 	panic("unreachable")
@@ -233,7 +233,7 @@ func (gen *Generator) ValueToUser(val string, t *types.Type) string {
 	switch k {
 	case types.BlobKind:
 		return fmt.Sprintf("%s.(%sBlob)", val, gen.TypesPackage)
-	case types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.BoolKind, types.NumberKind, types.StringKind:
 		return gen.ValueToNative(val, rt)
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("%s.(%s)", val, gen.UserName(t))
@@ -256,7 +256,7 @@ func (gen *Generator) UserZero(t *types.Type) string {
 		return fmt.Sprintf("%sNewEmptyBlob()", gen.TypesPackage)
 	case types.BoolKind:
 		return "false"
-	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.NumberKind:
 		return fmt.Sprintf("%s(0)", strings.ToLower(kindToString(k)))
 	case types.ListKind, types.MapKind, types.SetKind, types.StructKind:
 		return fmt.Sprintf("New%s()", gen.UserName(rt))
@@ -284,7 +284,7 @@ func (gen *Generator) ValueZero(t *types.Type) string {
 		return fmt.Sprintf("%sNewEmptyBlob()", gen.TypesPackage)
 	case types.BoolKind:
 		return fmt.Sprintf("%sBool(false)", gen.TypesPackage)
-	case types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind:
+	case types.NumberKind:
 		return fmt.Sprintf("%s%s(0)", gen.TypesPackage, kindToString(k))
 	case types.ListKind, types.MapKind, types.RefKind, types.SetKind:
 		return gen.UserZero(t)
@@ -308,7 +308,7 @@ func (gen *Generator) UserName(t *types.Type) string {
 	rt := gen.R.Resolve(t, gen.Package)
 	k := rt.Kind()
 	switch k {
-	case types.BlobKind, types.BoolKind, types.Float32Kind, types.Float64Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Int8Kind, types.PackageKind, types.StringKind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind, types.Uint8Kind, types.ValueKind, types.TypeKind:
+	case types.BlobKind, types.BoolKind, types.NumberKind, types.PackageKind, types.StringKind, types.ValueKind, types.TypeKind:
 		return kindToString(k)
 	case types.ListKind:
 		return fmt.Sprintf("ListOf%s", gen.refToID(rt.Desc.(types.CompoundDesc).ElemTypes[0]))

@@ -10,19 +10,19 @@ import {
   makeCompoundType as _makeCompoundType,
   makeStructType as _makeStructType,
   makeType as _makeType,
+  numberType as _numberType,
   registerPackage as _registerPackage,
-  uint8Type as _uint8Type,
 } from '@attic/noms';
 import type {
   NomsList as _NomsList,
   Struct as _Struct,
-  uint8 as _uint8,
+  number as _number,
 } from '@attic/noms';
 
 const _pkg = new _Package([
   _makeStructType('StructWithDupList',
     [
-      new _Field('l', _makeCompoundType(_Kind.List, _uint8Type), false),
+      new _Field('l', _makeCompoundType(_Kind.List, _numberType), false),
     ],
     [
 
@@ -36,13 +36,13 @@ const StructWithDupList$typeDef = _pkg.types[0];
 
 
 type StructWithDupList$Data = {
-  l: _NomsList<_uint8>;
+  l: _NomsList<_number>;
 };
 
 interface StructWithDupList$Interface extends _Struct {
   constructor(data: StructWithDupList$Data): void;
-  l: _NomsList<_uint8>;  // readonly
-  setL(value: _NomsList<_uint8>): StructWithDupList$Interface;
+  l: _NomsList<_number>;  // readonly
+  setL(value: _NomsList<_number>): StructWithDupList$Interface;
 }
 
 export const StructWithDupList: Class<StructWithDupList$Interface> = _createStructClass(StructWithDupList$type, StructWithDupList$typeDef);

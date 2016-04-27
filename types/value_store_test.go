@@ -81,14 +81,14 @@ func TestWritePackageWhenValueIsWritten(t *testing.T) {
 	vs := NewTestValueStore()
 
 	typeDef := MakeStructType("S", []Field{
-		Field{"X", Int32Type, false},
+		Field{"X", NumberType, false},
 	}, []Field{})
 	pkg1 := NewPackage([]*Type{typeDef}, []ref.Ref{})
 	// Don't write package
 	pkgRef1 := RegisterPackage(&pkg1)
 	typ := MakeType(pkgRef1, 0)
 
-	s := NewStruct(typ, typeDef, structData{"X": Int32(42)})
+	s := NewStruct(typ, typeDef, structData{"X": Number(42)})
 	vs.WriteValue(s)
 
 	pkg2 := vs.ReadValue(pkgRef1)

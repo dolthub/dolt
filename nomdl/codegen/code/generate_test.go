@@ -44,7 +44,7 @@ func TestUserName(t *testing.T) {
 
 	localStructName := "Local"
 	resolved := types.MakeStructType(localStructName, []types.Field{
-		types.Field{"a", types.Int8Type, false},
+		types.Field{"a", types.NumberType, false},
 	}, []types.Field{})
 
 	g := Generator{R: &res, Package: &imported}

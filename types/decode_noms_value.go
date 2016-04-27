@@ -159,7 +159,7 @@ func indexTypeForMetaSequence(t *Type) *Type {
 	default:
 		panic(fmt.Sprintf("Unknown type used for metaSequence: %s", t.Describe()))
 	case BlobKind, ListKind:
-		return Uint64Type
+		return NumberType
 	case MapKind, SetKind:
 		elemType := t.Desc.(CompoundDesc).ElemTypes[0]
 		if elemType.IsOrdered() {
@@ -223,26 +223,8 @@ func (r *jsonArrayReader) readValueWithoutTag(t *Type, pkg *Package) Value {
 		return r.readBlob(t)
 	case BoolKind:
 		return Bool(r.read().(bool))
-	case Uint8Kind:
-		return Uint8(r.readUint())
-	case Uint16Kind:
-		return Uint16(r.readUint())
-	case Uint32Kind:
-		return Uint32(r.readUint())
-	case Uint64Kind:
-		return Uint64(r.readUint())
-	case Int8Kind:
-		return Int8(r.readInt())
-	case Int16Kind:
-		return Int16(r.readInt())
-	case Int32Kind:
-		return Int32(r.readInt())
-	case Int64Kind:
-		return Int64(r.readInt())
-	case Float32Kind:
-		return Float32(r.readFloat())
-	case Float64Kind:
-		return Float64(r.readFloat())
+	case NumberKind:
+		return Number(r.readFloat())
 	case StringKind:
 		return NewString(r.readString())
 	case ValueKind:
@@ -375,8 +357,8 @@ func (r *jsonArrayReader) readStruct(typeDef, typ *Type, pkg *Package) Value {
 		}
 	}
 	if len(desc.Union) > 0 {
-		unionIndex := uint32(r.readUint())
-		values = append(values, Uint32(unionIndex), r.readValueWithoutTag(desc.Union[unionIndex].T, pkg))
+		unionIndex := uint64(r.readUint())
+		values = append(values, Number(unionIndex), r.readValueWithoutTag(desc.Union[unionIndex].T, pkg))
 	}
 
 	return structBuilder(values, typ, typeDef)

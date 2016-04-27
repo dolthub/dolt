@@ -3,14 +3,14 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
-import {newSet, makeSetType, float32Type, DataStore, MemoryStore} from '@attic/noms';
-import type {NomsSet, float32} from '@attic/noms';
+import {newSet, makeSetType, numberType, DataStore, MemoryStore} from '@attic/noms';
+import type {NomsSet, number} from '@attic/noms';
 import {StructWithRef} from './gen/ref.noms.js';
 
 suite('ref.noms', () => {
   test('constructor', async () => {
     const ds = new DataStore(new MemoryStore());
-    const set: NomsSet<float32> = await newSet([0, 1, 2, 3], makeSetType(float32Type));
+    const set: NomsSet<number> = await newSet([0, 1, 2, 3], makeSetType(numberType));
     const r = ds.writeValue(set);
     const struct = new StructWithRef({r});
 

@@ -82,10 +82,10 @@ func (suite *ParserTestSuite) TestBadStructParse() {
 	dupName := "struct str { a :Bool a :Bool }"
 	suite.parsePanics(dupName, "Fields must have unique names.")
 
-	dupNameInUnion := "struct s { union { a: Bool a :Int32 } }"
+	dupNameInUnion := "struct s { union { a: Bool a :Number } }"
 	suite.parsePanics(dupNameInUnion, "union choices must have unique names.")
 
-	dupNameInNamedUnion := "struct s { u :union { a: Bool a :Int32 } }"
+	dupNameInNamedUnion := "struct s { u :union { a: Bool a :Number } }"
 	suite.parsePanics(dupNameInNamedUnion, "union choices must have unique names.")
 
 	twoAnonUnion := fmt.Sprintf(structTmpl, "str", union, union)
@@ -196,8 +196,8 @@ func (c testChoices) Describe() string {
 }
 
 func (suite *ParsedResultTestSuite) SetupTest() {
-	suite.primField = testField{"a", types.Int64Type, false}
-	suite.primOptionalField = testField{"b", types.Float64Type, true}
+	suite.primField = testField{"a", types.NumberType, false}
+	suite.primOptionalField = testField{"b", types.NumberType, true}
 	suite.compoundField = testField{"set", types.MakeSetType(types.StringType), false}
 	suite.compoundOfCompoundField = testField{
 		"listOfSet",
@@ -212,9 +212,9 @@ func (suite *ParsedResultTestSuite) SetupTest() {
 	suite.namedTypeField = testField{"otherStruct", types.MakeUnresolvedType("", "Other"), false}
 	suite.namespacedTypeField = testField{"namespacedStruct", types.MakeUnresolvedType("Elsewhere", "Other"), false}
 	suite.union = testChoices{
-		types.Field{"a", types.Int32Type, false},
+		types.Field{"a", types.NumberType, false},
 		types.Field{"n", types.MakeUnresolvedType("NN", "Other"), false},
-		types.Field{"c", types.Uint32Type, false},
+		types.Field{"c", types.NumberType, false},
 	}
 }
 
@@ -450,7 +450,7 @@ func (suite *ParsedResultTestSuite) TestMultipleStructs() {
 func (suite *ParsedResultTestSuite) TestExpandStruct() {
 	code := `
 		struct T {
-			x: Int32
+			x: Number
 			u: union {
 				s: String
 				b: Bool

@@ -6,7 +6,7 @@ import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type DataStore from './data-store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import type {Collection} from './collection.js';
-import {CompoundDesc, makeCompoundType, uint64Type, valueType} from './type.js';
+import {CompoundDesc, makeCompoundType, numberType, valueType} from './type.js';
 import type {Type} from './type.js';
 import {IndexedSequence} from './indexed-sequence.js';
 import {invariant} from './assert.js';
@@ -188,7 +188,7 @@ export function newMetaSequenceFromData(ds: DataStore, type: Type, tuples: Array
   }
 }
 
-const indexedSequenceIndexType = uint64Type;
+const indexedSequenceIndexType = numberType;
 
 export function indexTypeForMetaSequence(t: Type): Type {
   switch (t.kind) {

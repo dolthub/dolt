@@ -8,7 +8,7 @@ import {default as Struct, StructMirror} from './struct.js';
 import type DataStore from './data-store.js';
 import type {NomsKind} from './noms-kind.js';
 import {encode as encodeBase64} from './base64.js';
-import {boolType, stringType, StructDesc, Type, typeType, uint64Type} from './type.js';
+import {boolType, stringType, StructDesc, Type, typeType, numberType} from './type.js';
 import {indexTypeForMetaSequence, MetaTuple} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
@@ -111,7 +111,7 @@ export class JsonArrayWriter {
       }
       w2.writeRef(tuple.ref);
       w2.writeValue(tuple.value, indexType, pkg);
-      w2.writeValue(tuple.numLeaves, uint64Type, pkg);
+      w2.writeValue(tuple.numLeaves, numberType, pkg);
     }
     this.write(w2.array);
     return true;
@@ -141,23 +141,10 @@ export class JsonArrayWriter {
                   `Failed to write String. Invalid type: ${describeType(v)}`);
         this.write(v);
         break;
-      case Kind.Float32:
-      case Kind.Float64:
+      case Kind.Number:
         invariant(typeof v === 'number',
                 `Failed to write ${t.describe()}. Invalid type: ${describeType(v)}`);
         this.writeFloat(v); // TODO: Verify value fits in type
-        break;
-      case Kind.Uint8:
-      case Kind.Uint16:
-      case Kind.Uint32:
-      case Kind.Uint64:
-      case Kind.Int8:
-      case Kind.Int16:
-      case Kind.Int32:
-      case Kind.Int64:
-        invariant(typeof v === 'number',
-              `Failed to write ${t.describe()}. Invalid type: ${describeType(v)}`);
-        this.writeInt(v); // TODO: Verify value fits in type
         break;
       case Kind.List: {
         invariant(v instanceof NomsList || v instanceof Sequence,

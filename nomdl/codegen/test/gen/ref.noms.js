@@ -7,7 +7,6 @@ import {
   Kind as _Kind,
   Package as _Package,
   createStructClass as _createStructClass,
-  float32Type as _float32Type,
   makeCompoundType as _makeCompoundType,
   makeListType as _makeListType,
   makeSetType as _makeSetType,
@@ -15,6 +14,7 @@ import {
   makeType as _makeType,
   newList as _newList,
   newSet as _newSet,
+  numberType as _numberType,
   registerPackage as _registerPackage,
   stringType as _stringType,
 } from '@attic/noms';
@@ -23,13 +23,13 @@ import type {
   NomsSet as _NomsSet,
   RefValue as _RefValue,
   Struct as _Struct,
-  float32 as _float32,
+  number as _number,
 } from '@attic/noms';
 
 const _pkg = new _Package([
   _makeStructType('StructWithRef',
     [
-      new _Field('r', _makeCompoundType(_Kind.Ref, _makeCompoundType(_Kind.Set, _float32Type)), false),
+      new _Field('r', _makeCompoundType(_Kind.Ref, _makeCompoundType(_Kind.Set, _numberType)), false),
     ],
     [
 
@@ -43,25 +43,25 @@ const StructWithRef$typeDef = _pkg.types[0];
 
 
 type StructWithRef$Data = {
-  r: _RefValue<_NomsSet<_float32>>;
+  r: _RefValue<_NomsSet<_number>>;
 };
 
 interface StructWithRef$Interface extends _Struct {
   constructor(data: StructWithRef$Data): void;
-  r: _RefValue<_NomsSet<_float32>>;  // readonly
-  setR(value: _RefValue<_NomsSet<_float32>>): StructWithRef$Interface;
+  r: _RefValue<_NomsSet<_number>>;  // readonly
+  setR(value: _RefValue<_NomsSet<_number>>): StructWithRef$Interface;
 }
 
 export const StructWithRef: Class<StructWithRef$Interface> = _createStructClass(StructWithRef$type, StructWithRef$typeDef);
 
-export function newListOfRefOfFloat32(values: Array<_RefValue<_float32>>): Promise<_NomsList<_RefValue<_float32>>> {
-  return _newList(values, _makeListType(_makeCompoundType(_Kind.Ref, _float32Type)));
+export function newListOfRefOfNumber(values: Array<_RefValue<_number>>): Promise<_NomsList<_RefValue<_number>>> {
+  return _newList(values, _makeListType(_makeCompoundType(_Kind.Ref, _numberType)));
 }
 
 export function newListOfString(values: Array<string>): Promise<_NomsList<string>> {
   return _newList(values, _makeListType(_stringType));
 }
 
-export function newSetOfFloat32(values: Array<_float32>): Promise<_NomsSet<_float32>> {
-  return _newSet(values, _makeSetType(_float32Type));
+export function newSetOfNumber(values: Array<_number>): Promise<_NomsSet<_number>> {
+  return _newSet(values, _makeSetType(_numberType));
 }

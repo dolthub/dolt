@@ -34,10 +34,10 @@ func TestListGet(t *testing.T) {
 	assert := assert.New(t)
 
 	l := NewList()
-	l = l.Append(Int32(0), Int32(1), Int32(2))
-	assert.Equal(Int32(0), l.Get(0))
-	assert.Equal(Int32(1), l.Get(1))
-	assert.Equal(Int32(2), l.Get(2))
+	l = l.Append(Number(0), Number(1), Number(2))
+	assert.Equal(Number(0), l.Get(0))
+	assert.Equal(Number(1), l.Get(1))
+	assert.Equal(Number(2), l.Get(2))
 
 	assert.Panics(func() {
 		l.Get(3)
@@ -48,12 +48,12 @@ func TestListSlice(t *testing.T) {
 	assert := assert.New(t)
 
 	l1 := NewList()
-	l1 = l1.Append(Int32(0), Int32(1), Int32(2), Int32(3))
+	l1 = l1.Append(Number(0), Number(1), Number(2), Number(3))
 	l2 := l1.Slice(1, 3)
 	assert.Equal(uint64(4), l1.Len())
 	assert.Equal(uint64(2), l2.Len())
-	assert.Equal(Int32(1), l2.Get(0))
-	assert.Equal(Int32(2), l2.Get(1))
+	assert.Equal(Number(1), l2.Get(0))
+	assert.Equal(Number(2), l2.Get(1))
 
 	l3 := l1.Slice(0, 0)
 	assert.Equal(uint64(0), l3.Len())
@@ -61,7 +61,7 @@ func TestListSlice(t *testing.T) {
 	assert.Equal(uint64(0), l3.Len())
 	l3 = l1.Slice(1, 2)
 	assert.Equal(uint64(1), l3.Len())
-	assert.Equal(Int32(1), l3.Get(0))
+	assert.Equal(Number(1), l3.Get(0))
 	l3 = l1.Slice(0, l1.Len())
 	assert.True(l1.Equals(l3))
 
@@ -77,12 +77,12 @@ func TestListSet(t *testing.T) {
 	assert := assert.New(t)
 
 	l0 := NewList()
-	l0 = l0.Append(Float32(0.0))
-	l1 := l0.Set(uint64(0), Float32(1.0))
-	assert.Equal(Float32(1.0), l1.Get(0))
-	assert.Equal(Float32(0.0), l0.Get(0))
+	l0 = l0.Append(Number(0.0))
+	l1 := l0.Set(uint64(0), Number(1.0))
+	assert.Equal(Number(1.0), l1.Get(0))
+	assert.Equal(Number(0.0), l0.Get(0))
 	assert.Panics(func() {
-		l1.Set(uint64(2), Float32(2.0))
+		l1.Set(uint64(2), Number(2.0))
 	})
 }
 
@@ -108,24 +108,24 @@ func TestListInsert(t *testing.T) {
 
 	// Insert(0, v1)
 	l0 := NewList()
-	l1 := l0.Insert(uint64(0), Int32(-1))
+	l1 := l0.Insert(uint64(0), Number(-1))
 	assert.Equal(uint64(0), l0.Len())
 	assert.Equal(uint64(1), l1.Len())
-	assert.Equal(Int32(-1), l1.Get(0))
+	assert.Equal(Number(-1), l1.Get(0))
 
 	// Insert(0, v1, v2)
-	l2 := l1.Insert(0, Int32(-3), Int32(-2))
+	l2 := l1.Insert(0, Number(-3), Number(-2))
 	assert.Equal(uint64(3), l2.Len())
-	assert.Equal(Int32(-1), l2.Get(2))
-	assert.True(NewList(Int32(-3), Int32(-2)).Equals(l2.Slice(0, 2)))
+	assert.Equal(Number(-1), l2.Get(2))
+	assert.True(NewList(Number(-3), Number(-2)).Equals(l2.Slice(0, 2)))
 	assert.Equal(uint64(1), l1.Len())
 
 	// Insert(2, v3)
-	l3 := l2.Insert(2, Int32(1))
-	assert.Equal(Int32(1), l3.Get(2))
+	l3 := l2.Insert(2, Number(1))
+	assert.Equal(Number(1), l3.Get(2))
 
 	assert.Panics(func() {
-		l2.Insert(5, Int32(0))
+		l2.Insert(5, Number(0))
 	})
 }
 
@@ -177,7 +177,7 @@ func TestListMap(t *testing.T) {
 	testMap := func(concurrency, listLen int) {
 		values := make([]Value, listLen)
 		for i := 0; i < listLen; i++ {
-			values[i] = Int64(i)
+			values[i] = Number(i)
 		}
 
 		l := newListLeaf(listType, values...)
@@ -204,7 +204,7 @@ func TestListMap(t *testing.T) {
 			for getCur() < expectConcurreny {
 			}
 
-			i := v.(Int64)
+			i := v.(Number)
 			assert.Equal(uint64(i), index, "%d == %d", i, index)
 			return int64(i * i)
 		}
@@ -232,16 +232,16 @@ func TestListMap(t *testing.T) {
 func TestListIter(t *testing.T) {
 	assert := assert.New(t)
 
-	l := NewList(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
-	acc := []int32{}
+	l := NewList(Number(0), Number(1), Number(2), Number(3), Number(4))
+	acc := []Number{}
 	i := uint64(0)
 	l.Iter(func(v Value, index uint64) bool {
 		assert.Equal(i, index)
 		i++
-		acc = append(acc, int32(v.(Int32)))
+		acc = append(acc, Number(v.(Number)))
 		return i > 2
 	})
-	assert.Equal([]int32{0, 1, 2}, acc)
+	assert.Equal([]Number{0, 1, 2}, acc)
 
 	cl := NewList(NewString("a"), NewString("b"), NewString("c"), NewString("d"), NewString("e"), NewString("f"))
 	acc2 := []string{}
@@ -266,15 +266,15 @@ func TestListIter(t *testing.T) {
 func TestListIterAll(t *testing.T) {
 	assert := assert.New(t)
 
-	l := NewList(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
-	acc := []int32{}
+	l := NewList(Number(0), Number(1), Number(2), Number(3), Number(4))
+	acc := []Number{}
 	i := uint64(0)
 	l.IterAll(func(v Value, index uint64) {
 		assert.Equal(i, index)
 		i++
-		acc = append(acc, int32(v.(Int32)))
+		acc = append(acc, Number(v.(Number)))
 	})
-	assert.Equal([]int32{0, 1, 2, 3, 4}, acc)
+	assert.Equal([]Number{0, 1, 2, 3, 4}, acc)
 
 	cl := NewList(NewString("a"), NewString("b"), NewString("c"), NewString("d"), NewString("e"), NewString("f"))
 	acc2 := []string{}
@@ -294,7 +294,7 @@ func TestListIterAllP(t *testing.T) {
 	testIter := func(concurrency, listLen int) {
 		values := make([]Value, listLen)
 		for i := 0; i < listLen; i++ {
-			values[i] = Int64(i)
+			values[i] = Number(i)
 		}
 
 		l := newListLeaf(listType, values...)
@@ -320,7 +320,7 @@ func TestListIterAllP(t *testing.T) {
 			for getCur() < expectConcurreny {
 			}
 
-			i := v.(Int64)
+			i := v.(Number)
 			visited[index] = true
 			assert.Equal(uint64(i), index, "%d == %d", i, index)
 		}
@@ -347,11 +347,11 @@ func TestListIterAllP(t *testing.T) {
 func TestListType(t *testing.T) {
 	assert := assert.New(t)
 
-	l := NewList(Int32(0))
+	l := NewList(Number(0))
 	assert.True(l.Type().Equals(MakeListType(ValueType)))
 
-	tr := MakeListType(Uint8Type)
-	l2 := newListLeaf(tr, []Value{Uint8(0), Uint8(1)}...)
+	tr := MakeListType(NumberType)
+	l2 := newListLeaf(tr, []Value{Number(0), Number(1)}...)
 	assert.Equal(tr, l2.Type())
 
 	l3 := l2.Slice(0, 1)
@@ -361,11 +361,11 @@ func TestListType(t *testing.T) {
 	l3 = l2.RemoveAt(0)
 	assert.True(tr.Equals(l3.Type()))
 
-	l3 = l2.Set(0, Uint8(11))
+	l3 = l2.Set(0, Number(11))
 	assert.True(tr.Equals(l3.Type()))
-	l3 = l2.Append(Uint8(2))
+	l3 = l2.Append(Number(2))
 	assert.True(tr.Equals(l3.Type()))
-	l3 = l2.Insert(0, Uint8(3))
+	l3 = l2.Insert(0, Number(3))
 	assert.True(tr.Equals(l3.Type()))
 
 	assert.Panics(func() { l2.Set(0, NewString("")) })
@@ -376,11 +376,11 @@ func TestListType(t *testing.T) {
 func TestListChunks(t *testing.T) {
 	assert := assert.New(t)
 
-	l1 := NewList(Int32(0))
+	l1 := NewList(Number(0))
 	c1 := l1.Chunks()
 	assert.Len(c1, 0)
 
-	ool := NewRef(Int32(0).Ref())
+	ool := NewRef(Number(0).Ref())
 	l2 := NewList(ool)
 	c2 := l2.Chunks()
 	assert.Len(c2, 1)

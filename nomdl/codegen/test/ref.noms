@@ -1,6 +1,6 @@
 using Ref<List<String>>
-using List<Ref<Float32>>
+using List<Ref<Number>>
 
 struct StructWithRef {
-  r: Ref<Set<Float32>>
+  r: Ref<Set<Number>>
 }

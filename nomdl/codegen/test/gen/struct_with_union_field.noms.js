@@ -8,16 +8,14 @@ import {
   Package as _Package,
   blobType as _blobType,
   createStructClass as _createStructClass,
-  float32Type as _float32Type,
-  float64Type as _float64Type,
   makeCompoundType as _makeCompoundType,
   makeSetType as _makeSetType,
   makeStructType as _makeStructType,
   makeType as _makeType,
   newSet as _newSet,
+  numberType as _numberType,
   registerPackage as _registerPackage,
   stringType as _stringType,
-  uint8Type as _uint8Type,
   valueType as _valueType,
 } from '@attic/noms';
 import type {
@@ -25,22 +23,20 @@ import type {
   NomsSet as _NomsSet,
   Struct as _Struct,
   Value as _Value,
-  float32 as _float32,
-  float64 as _float64,
-  uint8 as _uint8,
+  number as _number,
 } from '@attic/noms';
 
 const _pkg = new _Package([
   _makeStructType('StructWithUnionField',
     [
-      new _Field('a', _float32Type, false),
+      new _Field('a', _numberType, false),
     ],
     [
-      new _Field('b', _float64Type, false),
+      new _Field('b', _numberType, false),
       new _Field('c', _stringType, false),
       new _Field('d', _blobType, false),
       new _Field('e', _valueType, false),
-      new _Field('f', _makeCompoundType(_Kind.Set, _uint8Type), false),
+      new _Field('f', _makeCompoundType(_Kind.Set, _numberType), false),
     ]
   ),
 ], [
@@ -51,27 +47,27 @@ const StructWithUnionField$typeDef = _pkg.types[0];
 
 
 type StructWithUnionField$Data = {
-  a: _float32;
+  a: _number;
 };
 
 interface StructWithUnionField$Interface extends _Struct {
   constructor(data: StructWithUnionField$Data): void;
-  a: _float32;  // readonly
-  setA(value: _float32): StructWithUnionField$Interface;
-  b: ?_float64;  // readonly
-  setB(value: _float64): StructWithUnionField$Interface;
+  a: _number;  // readonly
+  setA(value: _number): StructWithUnionField$Interface;
+  b: ?_number;  // readonly
+  setB(value: _number): StructWithUnionField$Interface;
   c: ?string;  // readonly
   setC(value: string): StructWithUnionField$Interface;
   d: ?_Blob;  // readonly
   setD(value: _Blob): StructWithUnionField$Interface;
   e: ?_Value;  // readonly
   setE(value: _Value): StructWithUnionField$Interface;
-  f: ?_NomsSet<_uint8>;  // readonly
-  setF(value: _NomsSet<_uint8>): StructWithUnionField$Interface;
+  f: ?_NomsSet<_number>;  // readonly
+  setF(value: _NomsSet<_number>): StructWithUnionField$Interface;
 }
 
 export const StructWithUnionField: Class<StructWithUnionField$Interface> = _createStructClass(StructWithUnionField$type, StructWithUnionField$typeDef);
 
-export function newSetOfUint8(values: Array<_uint8>): Promise<_NomsSet<_uint8>> {
-  return _newSet(values, _makeSetType(_uint8Type));
+export function newSetOfNumber(values: Array<_number>): Promise<_NomsSet<_number>> {
+  return _newSet(values, _makeSetType(_numberType));
 }

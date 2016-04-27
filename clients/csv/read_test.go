@@ -21,7 +21,7 @@ b,2,false
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 
 	headers := []string{"A", "B", "C"}
-	kinds := KindSlice{types.StringKind, types.Int8Kind, types.BoolKind}
+	kinds := KindSlice{types.StringKind, types.NumberKind, types.BoolKind}
 	l, typeRef, typeDef := Read(r, "test", headers, kinds, ds)
 
 	assert.Equal(uint64(2), l.Len())
@@ -38,8 +38,8 @@ b,2,false
 	assert.True(l.Get(0).(types.Struct).Get("A").Equals(types.NewString("a")))
 	assert.True(l.Get(1).(types.Struct).Get("A").Equals(types.NewString("b")))
 
-	assert.True(l.Get(0).(types.Struct).Get("B").Equals(types.Int8(1)))
-	assert.True(l.Get(1).(types.Struct).Get("B").Equals(types.Int8(2)))
+	assert.True(l.Get(0).(types.Struct).Get("B").Equals(types.Number(1)))
+	assert.True(l.Get(1).(types.Struct).Get("B").Equals(types.Number(2)))
 
 	assert.True(l.Get(0).(types.Struct).Get("C").Equals(types.Bool(true)))
 	assert.True(l.Get(1).(types.Struct).Get("C").Equals(types.Bool(false)))

@@ -10,39 +10,16 @@ import (
 func TestValueEquals(t *testing.T) {
 	assert := assert.New(t)
 
-	r1 := Uint16(1).Ref()
-	r2 := Uint16(2).Ref()
+	r1 := Number(1).Ref()
+	r2 := Number(2).Ref()
 
 	values := []func() Value{
 		func() Value { return nil },
 		func() Value { return Bool(false) },
 		func() Value { return Bool(true) },
-		func() Value { return Int8(0) },
-		func() Value { return Int8(1) },
-		func() Value { return Int8(-1) },
-		func() Value { return Int16(0) },
-		func() Value { return Int16(1) },
-		func() Value { return Int16(-1) },
-		func() Value { return Int32(0) },
-		func() Value { return Int32(1) },
-		func() Value { return Int32(-1) },
-		func() Value { return Int64(0) },
-		func() Value { return Int64(1) },
-		func() Value { return Int64(-1) },
-		func() Value { return Uint8(0) },
-		func() Value { return Uint8(1) },
-		func() Value { return Uint16(0) },
-		func() Value { return Uint16(1) },
-		func() Value { return Uint32(0) },
-		func() Value { return Uint32(1) },
-		func() Value { return Uint64(0) },
-		func() Value { return Uint64(1) },
-		func() Value { return Float32(0) },
-		func() Value { return Float32(-1) },
-		func() Value { return Float32(1) },
-		func() Value { return Float64(0) },
-		func() Value { return Float64(-1) },
-		func() Value { return Float64(1) },
+		func() Value { return Number(0) },
+		func() Value { return Number(-1) },
+		func() Value { return Number(1) },
 		func() Value { return NewString("") },
 		func() Value { return NewString("hi") },
 		func() Value { return NewString("bye") },
@@ -59,8 +36,8 @@ func TestValueEquals(t *testing.T) {
 			b1 := NewBlob(bytes.NewBufferString("hi"))
 			b2 := NewBlob(bytes.NewBufferString("bye"))
 			return newCompoundBlob([]metaTuple{
-				newMetaTuple(Uint64(uint64(2)), b1, Ref{}, 2),
-				newMetaTuple(Uint64(uint64(5)), b2, Ref{}, 5),
+				newMetaTuple(Number(uint64(2)), b1, Ref{}, 2),
+				newMetaTuple(Number(uint64(5)), b2, Ref{}, 5),
 			}, nil)
 		},
 		func() Value { return NewList() },
@@ -75,17 +52,17 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return StringType },
 		func() Value { return MakeStructType("a", []Field{}, []Field{}) },
 		func() Value { return MakeStructType("b", []Field{}, []Field{}) },
-		func() Value { return MakeListType(Uint64Type) },
-		func() Value { return MakeListType(Int64Type) },
-		func() Value { return MakeSetType(Uint32Type) },
-		func() Value { return MakeSetType(Int32Type) },
-		func() Value { return MakeRefType(Uint16Type) },
-		func() Value { return MakeRefType(Int16Type) },
+		func() Value { return MakeListType(BoolType) },
+		func() Value { return MakeListType(NumberType) },
+		func() Value { return MakeSetType(BoolType) },
+		func() Value { return MakeSetType(NumberType) },
+		func() Value { return MakeRefType(BoolType) },
+		func() Value { return MakeRefType(NumberType) },
 		func() Value {
-			return MakeMapType(Uint8Type, ValueType)
+			return MakeMapType(BoolType, ValueType)
 		},
 		func() Value {
-			return MakeMapType(Int8Type, ValueType)
+			return MakeMapType(NumberType, ValueType)
 		},
 		func() Value { return MakeType(r1, 0) },
 		func() Value { return MakeType(r1, 1) },

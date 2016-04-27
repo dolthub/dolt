@@ -18,7 +18,7 @@ type LibTestSuite struct {
 func (suite *LibTestSuite) TestPrimitiveTypes() {
 	suite.EqualValues(types.NewString("expected"), NomsValueFromDecodedJSON("expected"))
 	suite.EqualValues(types.Bool(false), NomsValueFromDecodedJSON(false))
-	suite.EqualValues(types.Float64(1.7), NomsValueFromDecodedJSON(1.7))
+	suite.EqualValues(types.Number(1.7), NomsValueFromDecodedJSON(1.7))
 	suite.False(NomsValueFromDecodedJSON(1.7).Equals(types.Bool(true)))
 }
 

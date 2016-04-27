@@ -81,16 +81,7 @@ function compareBools(v1: boolean, v2: boolean): number {
  */
 export function getCompareFunction(t: Type): (v1: any, v2: any) => number {
   switch (t.kind) {
-    case Kind.Uint8:
-    case Kind.Uint16:
-    case Kind.Uint32:
-    case Kind.Uint64:
-    case Kind.Int8:
-    case Kind.Int16:
-    case Kind.Int32:
-    case Kind.Int64:
-    case Kind.Float32:
-    case Kind.Float64:
+    case Kind.Number:
       return compareNumbers;
 
     case Kind.String:

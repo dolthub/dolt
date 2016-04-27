@@ -5,9 +5,8 @@ import {assert} from 'chai';
 import {getCompareFunction, compare, equals} from './compare.js';
 import {
   boolType,
-  float64Type,
-  int8Type,
   makeListType,
+  numberType,
   stringType,
 } from './type.js';
 import {newList} from './list.js';
@@ -15,7 +14,7 @@ import {newList} from './list.js';
 suite('compare', () => {
   suite('getCompareFunction', () => {
     test('int8', () => {
-      const compare = getCompareFunction(int8Type);
+      const compare = getCompareFunction(numberType);
       assert.equal(compare(1, 1), 0);
       assert.equal(compare(1, 3), -2);
       assert.equal(compare(4, 2), 2);
@@ -36,15 +35,15 @@ suite('compare', () => {
     });
 
     test('list', async () => {
-      const listOfFloat64Type = makeListType(float64Type);
-      const compare = getCompareFunction(listOfFloat64Type);
-      const listA = await newList([0, 1, 2, 3], listOfFloat64Type);
-      const listB = await newList([0, 1, 2, 3], listOfFloat64Type);
-      const listC = await newList([4, 5, 6, 7], listOfFloat64Type);
+      const listOfNumberType = makeListType(numberType);
+      const compare = getCompareFunction(listOfNumberType);
+      const listA = await newList([0, 1, 2, 3], listOfNumberType);
+      const listB = await newList([0, 1, 2, 3], listOfNumberType);
+      const listC = await newList([4, 5, 6, 7], listOfNumberType);
       assert.equal(compare(listA, listA), 0);
       assert.equal(compare(listA, listB), 0);
-      assert.equal(compare(listA, listC), 1);
-      assert.equal(compare(listC, listA), -1);
+      assert.equal(compare(listA, listC), -1);
+      assert.equal(compare(listC, listA), 1);
     });
   });
 
@@ -68,14 +67,14 @@ suite('compare', () => {
     });
 
     test('list', async () => {
-      const listOfFloat64Type = makeListType(float64Type);
-      const listA = await newList([0, 1, 2, 3], listOfFloat64Type);
-      const listB = await newList([0, 1, 2, 3], listOfFloat64Type);
-      const listC = await newList([4, 5, 6, 7], listOfFloat64Type);
+      const listOfNumberType = makeListType(numberType);
+      const listA = await newList([0, 1, 2, 3], listOfNumberType);
+      const listB = await newList([0, 1, 2, 3], listOfNumberType);
+      const listC = await newList([4, 5, 6, 7], listOfNumberType);
       assert.equal(compare(listA, listA), 0);
       assert.equal(compare(listA, listB), 0);
-      assert.equal(compare(listA, listC), 1);
-      assert.equal(compare(listC, listA), -1);
+      assert.equal(compare(listA, listC), -1);
+      assert.equal(compare(listC, listA), 1);
     });
   });
 
@@ -99,10 +98,10 @@ suite('compare', () => {
     });
 
     test('list', async () => {
-      const listOfFloat64Type = makeListType(float64Type);
-      const listA = await newList([0, 1, 2, 3], listOfFloat64Type);
-      const listB = await newList([0, 1, 2, 3], listOfFloat64Type);
-      const listC = await newList([4, 5, 6, 7], listOfFloat64Type);
+      const listOfNumberType = makeListType(numberType);
+      const listA = await newList([0, 1, 2, 3], listOfNumberType);
+      const listB = await newList([0, 1, 2, 3], listOfNumberType);
+      const listC = await newList([4, 5, 6, 7], listOfNumberType);
       assert.isTrue(equals(listA, listA));
       assert.isTrue(equals(listA, listB));
       assert.isFalse(equals(listA, listC));

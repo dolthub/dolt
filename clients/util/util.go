@@ -28,7 +28,7 @@ func NomsValueFromDecodedJSON(o interface{}) types.Value {
 	case bool:
 		return types.Bool(o)
 	case float64:
-		return types.Float64(o)
+		return types.Number(o)
 	case nil:
 		return nil
 	case []interface{}:

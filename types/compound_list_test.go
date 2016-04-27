@@ -48,7 +48,7 @@ func getTestSimpleList() testSimpleList {
 	s := rand.NewSource(42)
 	values := make([]Value, length)
 	for i := 0; i < length; i++ {
-		values[i] = Int64(s.Int63() & 0xff)
+		values[i] = Number(s.Int63() & 0xff)
 	}
 
 	return values
@@ -63,7 +63,7 @@ func getTestSimpleListUnique() testSimpleList {
 	}
 	values := make([]Value, 0, length)
 	for k := range uniques {
-		values = append(values, Int64(k))
+		values = append(values, Number(k))
 	}
 	return values
 }
@@ -85,7 +85,7 @@ func TestStreamingCompoundListCreation(t *testing.T) {
 	vs := NewTestValueStore()
 	simpleList := getTestSimpleList()
 
-	tr := MakeListType(Int64Type)
+	tr := MakeListType(NumberType)
 	cl := NewTypedList(tr, simpleList...)
 	valueChan := make(chan Value)
 	listChan := NewStreamingTypedList(tr, vs, valueChan)
@@ -114,7 +114,7 @@ func TestCompoundListGet(t *testing.T) {
 		}
 	}
 
-	tr := MakeListType(Int64Type)
+	tr := MakeListType(NumberType)
 	cl := NewTypedList(tr, simpleList...).(compoundList)
 	testGet(cl)
 	testGet(vs.ReadValue(vs.WriteValue(cl).TargetRef()).(compoundList))
@@ -124,7 +124,7 @@ func TestCompoundListIter(t *testing.T) {
 	assert := assert.New(t)
 
 	simpleList := getTestSimpleList()
-	tr := MakeListType(Int64Type)
+	tr := MakeListType(NumberType)
 	cl := NewTypedList(tr, simpleList...)
 
 	expectIdx := uint64(0)
@@ -143,7 +143,7 @@ func TestCompoundListIterAll(t *testing.T) {
 	assert := assert.New(t)
 
 	simpleList := getTestSimpleList()
-	tr := MakeListType(Int64Type)
+	tr := MakeListType(NumberType)
 	cl := NewTypedList(tr, simpleList...)
 
 	expectIdx := uint64(0)
@@ -162,7 +162,7 @@ func TestCompoundListIterAllP(t *testing.T) {
 	mu := sync.Mutex{}
 
 	simpleList := getTestSimpleListUnique()
-	tr := MakeListType(Int64Type)
+	tr := MakeListType(NumberType)
 	cl := NewTypedList(tr, simpleList...)
 
 	indexes := map[Value]uint64{}
@@ -189,17 +189,17 @@ func TestCompoundListMap(t *testing.T) {
 	assert := assert.New(t)
 
 	simpleList := getTestSimpleList()
-	tr := MakeListType(Int64Type)
+	tr := MakeListType(NumberType)
 	cl := NewTypedList(tr, simpleList...)
 
 	l := cl.Map(func(v Value, i uint64) interface{} {
-		v1 := v.(Int64)
-		return v1 + Int64(i)
+		v1 := v.(Number)
+		return v1 + Number(i)
 	})
 
 	assert.Equal(uint64(len(l)), cl.Len())
 	for i := 0; i < len(l); i++ {
-		assert.Equal(l[i], cl.Get(uint64(i)).(Int64)+Int64(i))
+		assert.Equal(l[i], cl.Get(uint64(i)).(Number)+Number(i))
 	}
 }
 
@@ -210,17 +210,17 @@ func TestCompoundListMapP(t *testing.T) {
 	assert := assert.New(t)
 
 	simpleList := getTestSimpleList()
-	tr := MakeListType(Int64Type)
+	tr := MakeListType(NumberType)
 	cl := NewTypedList(tr, simpleList...)
 
 	l := cl.MapP(64, func(v Value, i uint64) interface{} {
-		v1 := v.(Int64)
-		return v1 + Int64(i)
+		v1 := v.(Number)
+		return v1 + Number(i)
 	})
 
 	assert.Equal(uint64(len(l)), cl.Len())
 	for i := 0; i < len(l); i++ {
-		assert.Equal(l[i], cl.Get(uint64(i)).(Int64)+Int64(i))
+		assert.Equal(l[i], cl.Get(uint64(i)).(Number)+Number(i))
 	}
 }
 
@@ -230,7 +230,7 @@ func TestCompoundListLen(t *testing.T) {
 	}
 	assert := assert.New(t)
 
-	tr := MakeListType(Int64Type)
+	tr := MakeListType(NumberType)
 
 	cl := NewTypedList(tr, getTestSimpleList()...).(compoundList)
 	assert.Equal(getTestSimpleListLen(), cl.Len())
@@ -246,7 +246,7 @@ func TestCompoundListCursorAt(t *testing.T) {
 
 	listLen := func(at uint64, next func(*sequenceCursor) bool) (size uint64) {
 		cs := NewTestValueStore()
-		tr := MakeListType(Int64Type)
+		tr := MakeListType(NumberType)
 		cl := NewTypedList(tr, getTestSimpleList()...).(compoundList)
 		cur, _, _ := cl.cursorAt(at)
 		for {
@@ -272,7 +272,7 @@ func TestCompoundListAppend(t *testing.T) {
 	assert := assert.New(t)
 
 	newCompoundList := func(items testSimpleList) compoundList {
-		tr := MakeListType(Int64Type)
+		tr := MakeListType(NumberType)
 		return NewTypedList(tr, items...).(compoundList)
 	}
 
@@ -284,10 +284,10 @@ func TestCompoundListAppend(t *testing.T) {
 	}
 
 	cl := newCompoundList(getTestSimpleList())
-	cl2 := cl.Append(Int64(42))
-	cl3 := cl2.Append(Int64(43))
+	cl2 := cl.Append(Number(42))
+	cl3 := cl2.Append(Number(43))
 	cl4 := cl3.Append(getTestSimpleList()...)
-	cl5 := cl4.Append(Int64(44), Int64(45))
+	cl5 := cl4.Append(Number(44), Number(45))
 	cl6 := cl5.Append(getTestSimpleList()...)
 
 	expected := getTestSimpleList()
@@ -295,12 +295,12 @@ func TestCompoundListAppend(t *testing.T) {
 	assert.Equal(getTestSimpleListLen(), cl.Len())
 	assert.True(newCompoundList(expected).Equals(cl))
 
-	expected = append(expected, Int64(42))
+	expected = append(expected, Number(42))
 	assert.Equal(expected, compoundToSimple(cl2))
 	assert.Equal(getTestSimpleListLen()+1, cl2.Len())
 	assert.True(newCompoundList(expected).Equals(cl2))
 
-	expected = append(expected, Int64(43))
+	expected = append(expected, Number(43))
 	assert.Equal(expected, compoundToSimple(cl3))
 	assert.Equal(getTestSimpleListLen()+2, cl3.Len())
 	assert.True(newCompoundList(expected).Equals(cl3))
@@ -310,7 +310,7 @@ func TestCompoundListAppend(t *testing.T) {
 	assert.Equal(2*getTestSimpleListLen()+2, cl4.Len())
 	assert.True(newCompoundList(expected).Equals(cl4))
 
-	expected = append(expected, Int64(44), Int64(45))
+	expected = append(expected, Number(44), Number(45))
 	assert.Equal(expected, compoundToSimple(cl5))
 	assert.Equal(2*getTestSimpleListLen()+4, cl5.Len())
 	assert.True(newCompoundList(expected).Equals(cl5))
@@ -341,10 +341,10 @@ func TestCompoundListInsertStart(t *testing.T) {
 	assert := assert.New(t)
 
 	cl := getTestSimpleList().toCompoundList()
-	cl2 := cl.Insert(0, Int64(42))
-	cl3 := cl2.Insert(0, Int64(43))
+	cl2 := cl.Insert(0, Number(42))
+	cl3 := cl2.Insert(0, Number(43))
 	cl4 := cl3.Insert(0, getTestSimpleList()...)
-	cl5 := cl4.Insert(0, Int64(44), Int64(45))
+	cl5 := cl4.Insert(0, Number(44), Number(45))
 	cl6 := cl5.Insert(0, getTestSimpleList()...)
 
 	expected := getTestSimpleList()
@@ -352,12 +352,12 @@ func TestCompoundListInsertStart(t *testing.T) {
 	assert.Equal(getTestSimpleListLen(), cl.Len())
 	assert.True(expected.toCompoundList().Equals(cl))
 
-	expected = expected.Insert(0, Int64(42))
+	expected = expected.Insert(0, Number(42))
 	assert.Equal(expected, testSimpleListFromNomsList(cl2))
 	assert.Equal(getTestSimpleListLen()+1, cl2.Len())
 	assert.True(expected.toCompoundList().Equals(cl2))
 
-	expected = expected.Insert(0, Int64(43))
+	expected = expected.Insert(0, Number(43))
 	assert.Equal(expected, testSimpleListFromNomsList(cl3))
 	assert.Equal(getTestSimpleListLen()+2, cl3.Len())
 	assert.True(expected.toCompoundList().Equals(cl3))
@@ -367,7 +367,7 @@ func TestCompoundListInsertStart(t *testing.T) {
 	assert.Equal(2*getTestSimpleListLen()+2, cl4.Len())
 	assert.True(expected.toCompoundList().Equals(cl4))
 
-	expected = expected.Insert(0, Int64(44), Int64(45))
+	expected = expected.Insert(0, Number(44), Number(45))
 	assert.Equal(expected, testSimpleListFromNomsList(cl5))
 	assert.Equal(2*getTestSimpleListLen()+4, cl5.Len())
 	assert.True(expected.toCompoundList().Equals(cl5))
@@ -385,24 +385,24 @@ func TestCompoundListInsertMiddle(t *testing.T) {
 	assert := assert.New(t)
 
 	cl := getTestSimpleList().toCompoundList()
-	cl2 := cl.Insert(100, Int64(42))
-	cl3 := cl2.Insert(200, Int64(43))
+	cl2 := cl.Insert(100, Number(42))
+	cl3 := cl2.Insert(200, Number(43))
 	cl4 := cl3.Insert(300, getTestSimpleList()...)
-	cl5 := cl4.Insert(400, Int64(44), Int64(45))
+	cl5 := cl4.Insert(400, Number(44), Number(45))
 	cl6 := cl5.Insert(500, getTestSimpleList()...)
-	cl7 := cl6.Insert(600, Int64(100))
+	cl7 := cl6.Insert(600, Number(100))
 
 	expected := getTestSimpleList()
 	assert.Equal(expected, testSimpleListFromNomsList(cl))
 	assert.Equal(getTestSimpleListLen(), cl.Len())
 	assert.True(expected.toCompoundList().Equals(cl))
 
-	expected = expected.Insert(100, Int64(42))
+	expected = expected.Insert(100, Number(42))
 	assert.Equal(expected, testSimpleListFromNomsList(cl2))
 	assert.Equal(getTestSimpleListLen()+1, cl2.Len())
 	assert.True(expected.toCompoundList().Equals(cl2))
 
-	expected = expected.Insert(200, Int64(43))
+	expected = expected.Insert(200, Number(43))
 	assert.Equal(expected, testSimpleListFromNomsList(cl3))
 	assert.Equal(getTestSimpleListLen()+2, cl3.Len())
 	assert.True(expected.toCompoundList().Equals(cl3))
@@ -412,7 +412,7 @@ func TestCompoundListInsertMiddle(t *testing.T) {
 	assert.Equal(2*getTestSimpleListLen()+2, cl4.Len())
 	assert.True(expected.toCompoundList().Equals(cl4))
 
-	expected = expected.Insert(400, Int64(44), Int64(45))
+	expected = expected.Insert(400, Number(44), Number(45))
 	assert.Equal(expected, testSimpleListFromNomsList(cl5))
 	assert.Equal(2*getTestSimpleListLen()+4, cl5.Len())
 	assert.True(expected.toCompoundList().Equals(cl5))
@@ -422,7 +422,7 @@ func TestCompoundListInsertMiddle(t *testing.T) {
 	assert.Equal(3*getTestSimpleListLen()+4, cl6.Len())
 	assert.True(expected.toCompoundList().Equals(cl6))
 
-	expected = expected.Insert(600, Int64(100))
+	expected = expected.Insert(600, Number(100))
 	assert.Equal(expected, testSimpleListFromNomsList(cl7))
 	assert.Equal(3*getTestSimpleListLen()+5, cl7.Len())
 	assert.True(expected.toCompoundList().Equals(cl7))
@@ -457,7 +457,7 @@ func TestCompoundListInsertTypeError(t *testing.T) {
 	assert := assert.New(t)
 
 	testList := getTestSimpleList()
-	tr := MakeListType(Int64Type)
+	tr := MakeListType(NumberType)
 	cl := NewTypedList(tr, testList...)
 	assert.Panics(func() {
 		cl.Insert(2, Bool(true))
@@ -548,7 +548,7 @@ func TestCompoundListSet(t *testing.T) {
 	cl := testList.toCompoundList()
 
 	testIdx := func(idx int, testEquality bool) {
-		newVal := Int64(-1) // Test values are never < 0
+		newVal := Number(-1) // Test values are never < 0
 		cl2 := cl.Set(uint64(idx), newVal)
 		assert.False(cl.Equals(cl2))
 		if testEquality {
@@ -567,7 +567,7 @@ func TestCompoundListSet(t *testing.T) {
 		testIdx(i, false)
 	}
 
-	tr := MakeListType(Int64Type)
+	tr := MakeListType(NumberType)
 	cl2 := NewTypedList(tr, testList...)
 	assert.Panics(func() {
 		cl2.Set(0, Bool(true))
@@ -580,7 +580,7 @@ func TestCompoundListSlice(t *testing.T) {
 	}
 	assert := assert.New(t)
 
-	tr := MakeListType(Int64Type)
+	tr := MakeListType(NumberType)
 	testList := getTestSimpleList()
 
 	cl := NewTypedList(tr, testList...)
@@ -629,7 +629,7 @@ func TestCompoundListFilter(t *testing.T) {
 
 	simple := getTestSimpleList()
 	filterCb := func(v Value, idx uint64) bool {
-		return v.(Int64)%5 != 0
+		return uint64(v.(Number))%5 != 0
 	}
 
 	expected := testSimpleList{}
@@ -652,12 +652,12 @@ func TestCompoundListFilter(t *testing.T) {
 func TestCompoundListFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 
-	listType := MakeListType(Int64Type)
+	listType := MakeListType(NumberType)
 
 	firstNNumbers := func(n int) []Value {
 		nums := []Value{}
 		for i := 0; i < n; i++ {
-			nums = append(nums, Int64(i))
+			nums = append(nums, Number(i))
 		}
 
 		return nums
@@ -665,7 +665,7 @@ func TestCompoundListFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := NewTypedList(listType, nums...)
-	assert.Equal(s.Ref().String(), "sha1-36cffb3ac5fb12d3b0970c3de40b85c14cd1590b")
+	assert.Equal(s.Ref().String(), "sha1-df0a58e5fb11b2bc0adbab07c2f39c6b3e02b42b")
 }
 
 func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
@@ -676,7 +676,7 @@ func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
 	vs := NewTestValueStore()
 
 	structTypeDef := MakeStructType("num", []Field{
-		Field{"n", Int64Type, false},
+		Field{"n", NumberType, false},
 	}, []Field{})
 	pkg := NewPackage([]*Type{structTypeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
@@ -687,7 +687,7 @@ func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
 	firstNNumbers := func(n int) []Value {
 		nums := []Value{}
 		for i := 0; i < n; i++ {
-			r := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i)}))
+			r := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Number(i)}))
 			nums = append(nums, r)
 		}
 
@@ -696,7 +696,7 @@ func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := NewTypedList(listType, nums...)
-	assert.Equal(s.Ref().String(), "sha1-7e7dc681c6b101175362d47d22af1a4c05d59b25")
+	assert.Equal(s.Ref().String(), "sha1-f2e6c3aae6e8ac4c3776830e2d8141fc527c55c5")
 }
 
 func TestCompoundListModifyAfterRead(t *testing.T) {

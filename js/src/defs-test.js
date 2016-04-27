@@ -6,14 +6,13 @@ import {Package, registerPackage} from './package.js';
 import {
   boolType,
   Field,
-  float64Type,
   makeListType,
   makeMapType,
   makeSetType,
   makeStructType,
   makeType,
+  numberType,
   stringType,
-  uint8Type,
 } from './type.js';
 import {defToNoms} from './defs.js';
 import {newList} from './list.js';
@@ -31,7 +30,7 @@ suite('defs', () => {
   });
 
   test('number', async () => {
-    const v = await defToNoms(123, uint8Type);
+    const v = await defToNoms(123, numberType);
     assert.equal(v, 123);
   });
 
@@ -41,13 +40,13 @@ suite('defs', () => {
   });
 
   test('list', async () => {
-    const listOfUint8Type = makeListType(uint8Type);
-    const l1 = await newList([0, 1, 2, 3], listOfUint8Type);
-    const l2 = await defToNoms([0, 1, 2, 3], listOfUint8Type);
+    const listOfNumberType = makeListType(numberType);
+    const l1 = await newList([0, 1, 2, 3], listOfNumberType);
+    const l2 = await defToNoms([0, 1, 2, 3], listOfNumberType);
     invariant(l2 instanceof ValueBase);
     assert.isTrue(l1.equals(l2));
 
-    const l3 = await defToNoms(l1, listOfUint8Type);
+    const l3 = await defToNoms(l1, listOfNumberType);
     invariant(l3 instanceof ValueBase);
     assert.isTrue(l1.equals(l3));
 
@@ -61,9 +60,9 @@ suite('defs', () => {
   });
 
   test('set', async () => {
-    const setOfFloat64Type = makeSetType(float64Type);
-    const s1 = await newSet([0, 1, 2, 3], setOfFloat64Type);
-    const s2 = await defToNoms([0, 1, 2, 3], setOfFloat64Type);
+    const setOfNumberType = makeSetType(numberType);
+    const s1 = await newSet([0, 1, 2, 3], setOfNumberType);
+    const s2 = await defToNoms([0, 1, 2, 3], setOfNumberType);
     invariant(s2 instanceof ValueBase);
     assert.isTrue(s1.equals(s2));
 
@@ -77,15 +76,15 @@ suite('defs', () => {
   });
 
   test('map', async () => {
-    const mapOfFloat64ToStringType = makeMapType(float64Type, stringType);
-    const m1 = await newMap([0, 'zero', 1, 'one'], mapOfFloat64ToStringType);
-    const m2 = await defToNoms([0, 'zero', 1, 'one'], mapOfFloat64ToStringType);
+    const mapOfNumberToStringType = makeMapType(numberType, stringType);
+    const m1 = await newMap([0, 'zero', 1, 'one'], mapOfNumberToStringType);
+    const m2 = await defToNoms([0, 'zero', 1, 'one'], mapOfNumberToStringType);
     invariant(m2 instanceof ValueBase);
     assert.isTrue(m1.equals(m2));
 
     let ex;
     try {
-      await defToNoms(m1, makeMapType(stringType, float64Type));
+      await defToNoms(m1, makeMapType(stringType, numberType));
     } catch (e) {
       ex = e;
     }
@@ -117,17 +116,17 @@ suite('defs', () => {
 
   test('struct with list', async () => {
     let typeDef;
-    const listOfUint8Type = makeListType(uint8Type);
+    const listOfNumberType = makeListType(numberType);
     const pkg = new Package([
       typeDef = makeStructType('StructWithList', [
-        new Field('l', listOfUint8Type, false),
+        new Field('l', listOfNumberType, false),
       ], []),
     ], []);
     registerPackage(pkg);
     const type = makeType(pkg.ref, 0);
 
     const s1 = newStruct(type, typeDef, {
-      l: await newList([0, 1, 2, 3], listOfUint8Type),
+      l: await newList([0, 1, 2, 3], listOfNumberType),
     });
 
     const s2 = await defToNoms({
@@ -142,7 +141,7 @@ suite('defs', () => {
     let typeDef;
     const pkg = new Package([
       typeDef = makeStructType('Struct', [
-        new Field('i', uint8Type, false),
+        new Field('i', numberType, false),
       ], []),
     ], []);
     registerPackage(pkg);

@@ -123,26 +123,8 @@ func (w *jsonArrayWriter) writeValue(v Value, tr *Type, pkg *Package) {
 		w.writeBlob(v.(Blob))
 	case BoolKind:
 		w.writeBool(bool(v.(Bool)))
-	case Float32Kind:
-		w.writeFloat(float64(v.(Float32)))
-	case Float64Kind:
-		w.writeFloat(float64(v.(Float64)))
-	case Int16Kind:
-		w.writeInt(int64(v.(Int16)))
-	case Int32Kind:
-		w.writeInt(int64(v.(Int32)))
-	case Int64Kind:
-		w.writeInt(int64(v.(Int64)))
-	case Int8Kind:
-		w.writeInt(int64(v.(Int8)))
-	case Uint16Kind:
-		w.writeUint(uint64(v.(Uint16)))
-	case Uint32Kind:
-		w.writeUint(uint64(v.(Uint32)))
-	case Uint64Kind:
-		w.writeUint(uint64(v.(Uint64)))
-	case Uint8Kind:
-		w.writeUint(uint64(v.(Uint8)))
+	case NumberKind:
+		w.writeFloat(float64(v.(Number)))
 	case ListKind:
 		if w.maybeWriteMetaSequence(v, tr, pkg) {
 			return
@@ -312,7 +294,7 @@ func (w *jsonArrayWriter) writeStruct(v Value, typ, typeDef *Type, pkg *Package)
 		}
 	}
 	if len(desc.Union) > 0 {
-		unionIndex := uint64(values[i].(Uint32))
+		unionIndex := uint64(values[i].(Number))
 		i++
 		w.writeUint(unionIndex)
 		w.writeValue(values[i], desc.Union[unionIndex].T, pkg)
