@@ -35,6 +35,26 @@ func TestSetDuplicateInsert(t *testing.T) {
 	assert.Equal(uint64(2), s1.Len())
 }
 
+func TestSetUniqueKeysString(t *testing.T) {
+	assert := assert.New(t)
+	s1 := NewSet(NewString("hello"), NewString("world"), NewString("hello"))
+	assert.Equal(uint64(2), s1.Len())
+	assert.True(s1.Has(NewString("hello")))
+	assert.True(s1.Has(NewString("world")))
+	assert.False(s1.Has(NewString("foo")))
+}
+
+func TestSetUniqueKeysInt64(t *testing.T) {
+	assert := assert.New(t)
+	s1 := NewSet(Int64(4), Int64(1), Int64(0), Int64(0), Int64(1), Int64(3))
+	assert.Equal(uint64(4), s1.Len())
+	assert.True(s1.Has(Int64(4)))
+	assert.True(s1.Has(Int64(1)))
+	assert.True(s1.Has(Int64(0)))
+	assert.True(s1.Has(Int64(3)))
+	assert.False(s1.Has(Int64(2)))
+}
+
 func TestSetHas(t *testing.T) {
 	assert := assert.New(t)
 	s1 := NewSet(Bool(true), Int32(1), NewString("hi"))

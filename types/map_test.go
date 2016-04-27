@@ -20,6 +20,33 @@ func TestNewMap(t *testing.T) {
 	assert.True(NewString("bar").Equals(m.Get(NewString("bar"))))
 }
 
+func TestMapUniqueKeysString(t *testing.T) {
+	assert := assert.New(t)
+	l := []Value{
+		NewString("hello"), NewString("world"),
+		NewString("foo"), NewString("bar"),
+		NewString("bar"), NewString("foo"),
+		NewString("hello"), NewString("foo"),
+	}
+	m := NewMap(l...)
+	assert.Equal(uint64(3), m.Len())
+	assert.True(NewString("foo").Equals(m.Get(NewString("hello"))))
+}
+
+func TestMapUniqueKeysInt64(t *testing.T) {
+	assert := assert.New(t)
+	l := []Value{
+		Int64(4), Int64(1),
+		Int64(0), Int64(2),
+		Int64(1), Int64(2),
+		Int64(3), Int64(4),
+		Int64(1), Int64(5),
+	}
+	m := NewMap(l...)
+	assert.Equal(uint64(4), m.Len())
+	assert.True(Int64(5).Equals(m.Get(Int64(1))))
+}
+
 func TestMapHasRemove(t *testing.T) {
 	assert := assert.New(t)
 	m1 := newMapLeaf(mapType)
