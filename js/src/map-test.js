@@ -74,7 +74,7 @@ suite('BuildMap', () => {
     assert.strictEqual(5, await m.get(1));
   });
 
-  test('set of n numbers', async () => {
+  test('LONG: set of n numbers', async () => {
     const kvs = [];
     for (let i = 0; i < testMapSize; i++) {
       kvs.push(i, i + 1);
@@ -96,7 +96,7 @@ suite('BuildMap', () => {
     assert.strictEqual(m2.ref.toString(), mapOfNRef);
   });
 
-  test('map of ref to ref, set of n numbers', async () => {
+  test('LONG: map of ref to ref, set of n numbers', async () => {
     const kvs = [];
     for (let i = 0; i < testMapSize; i++) {
       kvs.push(i, i + 1);
@@ -122,7 +122,7 @@ suite('BuildMap', () => {
     assert.strictEqual(m.ref.toString(), 'sha1-22e31377b0d34438f72b364eaa9853f881d01d61');
   });
 
-  test('set', async () => {
+  test('LONG: set', async () => {
     const kvs = [];
     for (let i = 0; i < testMapSize - 10; i++) {
       kvs.push(i, i + 1);
@@ -138,7 +138,7 @@ suite('BuildMap', () => {
     assert.strictEqual(m.ref.toString(), mapOfNRef);
   });
 
-  test('set existing', async () => {
+  test('LONG: set existing', async () => {
     const kvs = [];
     for (let i = 0; i < testMapSize; i++) {
       kvs.push(i, i + 1);
@@ -154,7 +154,7 @@ suite('BuildMap', () => {
     assert.strictEqual(m.ref.toString(), mapOfNRef);
   });
 
-  test('remove', async () => {
+  test('LONG: remove', async () => {
     const kvs = [];
     for (let i = 0; i < testMapSize + 10; i++) {
       kvs.push(i, i + 1);
@@ -170,7 +170,7 @@ suite('BuildMap', () => {
     assert.strictEqual(testMapSize, m.size);
   });
 
-  test('write, read, modify, read', async () => {
+  test('LONG: write, read, modify, read', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
@@ -269,7 +269,7 @@ suite('MapLeaf', () => {
     await test([{key: 'a', value: 4}, {key: 'k', value: 8}]);
   });
 
-  test('iteratorAt', async () => {
+  test('LONG: iteratorAt', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeCompoundType(Kind.Map, stringType, int32Type);
@@ -428,7 +428,7 @@ suite('CompoundMap', () => {
     assert.deepEqual(expected, await flattenParallel(c.iterator(), expected.length));
   });
 
-  test('iteratorAt', async () => {
+  test('LONG: iteratorAt', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const [c] = build(ds);
@@ -538,32 +538,36 @@ suite('CompoundMap', () => {
     }
   }
 
-  test('random small map diff 0.1/0.1/0.1', () => testSmallRandomDiff(0.1, 0.1, 0.1));
-  test('random small map diff 0.1/0.5/0.1', () => testSmallRandomDiff(0.1, 0.5, 0.1));
-  test('random small map diff 0.1/0.1/0.5', () => testSmallRandomDiff(0.1, 0.1, 0.5));
-  test('random small map diff 0.1/0.9/0', () => testSmallRandomDiff(0.1, 0.9, 0));
+  test('LONG: random small map diff 0.1/0.1/0.1', () => testSmallRandomDiff(0.1, 0.1, 0.1));
+  test('LONG: random small map diff 0.1/0.5/0.1', () => testSmallRandomDiff(0.1, 0.5, 0.1));
+  test('LONG: random small map diff 0.1/0.1/0.5', () => testSmallRandomDiff(0.1, 0.1, 0.5));
+  test('LONG: random small map diff 0.1/0.9/0', () => testSmallRandomDiff(0.1, 0.9, 0));
 
-  test('random map diff 0.0001/0.0001/0.0001',
+  test('LONG: random map diff 0.0001/0.0001/0.0001',
        () => testRandomDiff(randomMapSize, 0.0001, 0.0001, 0.0001));
-  test('random map diff 0.0001/0.5/0.0001',
+  test('LONG: random map diff 0.0001/0.5/0.0001',
        () => testRandomDiff(randomMapSize, 0.0001, 0.5, 0.0001));
-  test('random map diff 0.0001/0.0001/0.5',
+  test('LONG: random map diff 0.0001/0.0001/0.5',
        () => testRandomDiff(randomMapSize, 0.0001, 0.0001, 0.5));
-  test('random map diff 0.0001/0.9999/0', () => testRandomDiff(randomMapSize, 0.0001, 0.9999, 0));
+  test('LONG: random map diff 0.0001/0.9999/0',
+       () => testRandomDiff(randomMapSize, 0.0001, 0.9999, 0));
 
-  test('random map diff 0.001/0.001/0.001',
+  test('LONG: random map diff 0.001/0.001/0.001',
        () => testRandomDiff(randomMapSize, 0.001, 0.001, 0.001));
-  test('random map diff 0.001/0.5/0.001', () => testRandomDiff(randomMapSize, 0.001, 0.5, 0.001));
-  test('random map diff 0.001/0.001/0.5', () => testRandomDiff(randomMapSize, 0.001, 0.001, 0.5));
-  test('random map diff 0.001/0.999/0', () => testRandomDiff(randomMapSize, 0.001, 0.999, 0));
+  test('LONG: random map diff 0.001/0.5/0.001',
+       () => testRandomDiff(randomMapSize, 0.001, 0.5, 0.001));
+  test('LONG: random map diff 0.001/0.001/0.5',
+       () => testRandomDiff(randomMapSize, 0.001, 0.001, 0.5));
+  test('LONG: random map diff 0.001/0.999/0', () => testRandomDiff(randomMapSize, 0.001, 0.999, 0));
 
-  test('random map diff 0.01/0.01/0.01', () => testRandomDiff(randomMapSize, 0.01, 0.01, 0.01));
-  test('random map diff 0.01/0.5/0.1', () => testRandomDiff(randomMapSize, 0.01, 0.5, 0.1));
-  test('random map diff 0.01/0.1/0.5', () => testRandomDiff(randomMapSize, 0.01, 0.1, 0.5));
-  test('random map diff 0.01/0.99', () => testRandomDiff(randomMapSize, 0.01, 0.99, 0));
+  test('LONG: random map diff 0.01/0.01/0.01',
+       () => testRandomDiff(randomMapSize, 0.01, 0.01, 0.01));
+  test('LONG: random map diff 0.01/0.5/0.1', () => testRandomDiff(randomMapSize, 0.01, 0.5, 0.1));
+  test('LONG: random map diff 0.01/0.1/0.5', () => testRandomDiff(randomMapSize, 0.01, 0.1, 0.5));
+  test('LONG: random map diff 0.01/0.99', () => testRandomDiff(randomMapSize, 0.01, 0.99, 0));
 
-  test('random map diff 0.1/0.1/0.1', () => testRandomDiff(randomMapSize, 0.1, 0.1, 0.1));
-  test('random map diff 0.1/0.5/0.1', () => testRandomDiff(randomMapSize, 0.1, 0.5, 0.1));
-  test('random map diff 0.1/0.1/0.5', () => testRandomDiff(randomMapSize, 0.1, 0.1, 0.5));
-  test('random map diff 0.1/0.9/0', () => testRandomDiff(randomMapSize, 0.1, 0.9, 0));
+  test('LONG: random map diff 0.1/0.1/0.1', () => testRandomDiff(randomMapSize, 0.1, 0.1, 0.1));
+  test('LONG: random map diff 0.1/0.5/0.1', () => testRandomDiff(randomMapSize, 0.1, 0.5, 0.1));
+  test('LONG: random map diff 0.1/0.1/0.5', () => testRandomDiff(randomMapSize, 0.1, 0.1, 0.5));
+  test('LONG: random map diff 0.1/0.9/0', () => testRandomDiff(randomMapSize, 0.1, 0.9, 0));
 });

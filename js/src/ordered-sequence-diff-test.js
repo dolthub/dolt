@@ -8,7 +8,7 @@ import {Kind} from './noms-kind.js';
 import {newSet} from './set.js';
 
 suite('OrderedSequenceCursor', () => {
-  test('fastForward', async () => {
+  test('LONG: fastForward', async () => {
     const numbersFromToBy = (from, to, by) => {
       const res = [];
       for (let i = from; i < to; i += by) {

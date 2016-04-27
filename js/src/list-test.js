@@ -51,7 +51,7 @@ suite('BuildList', () => {
     return intSequence(0, n);
   }
 
-  test('set of n numbers, length', async () => {
+  test('LONG: set of n numbers, length', async () => {
     const nums = firstNNumbers(testListSize);
     const tr = makeCompoundType(Kind.List, int64Type);
     const s = await newList(nums, tr);
@@ -59,7 +59,7 @@ suite('BuildList', () => {
     assert.strictEqual(testListSize, s.length);
   });
 
-  test('list of ref, set of n numbers, length', async () => {
+  test('LONG: list of ref, set of n numbers, length', async () => {
     const nums = firstNNumbers(testListSize);
 
     const structTypeDef = makeStructType('num', [
@@ -83,7 +83,7 @@ suite('BuildList', () => {
     assert.strictEqual(testListSize, s.length);
   });
 
-  test('toJS', async () => {
+  test('LONG: toJS', async () => {
     const nums = firstNNumbers(5000);
     const tr = makeCompoundType(Kind.List, int64Type);
     const s = await newList(nums, tr);
@@ -103,7 +103,7 @@ suite('BuildList', () => {
     await assertToJS(s, nums, -1);
   });
 
-  test('insert', async () => {
+  test('LONG: insert', async () => {
     const nums = firstNNumbers(testListSize - 10);
     const tr = makeCompoundType(Kind.List, int64Type);
     let s = await newList(nums, tr);
@@ -115,7 +115,7 @@ suite('BuildList', () => {
     assert.strictEqual(s.ref.toString(), listOfNRef);
   });
 
-  test('append', async () => {
+  test('LONG: append', async () => {
     const nums = firstNNumbers(testListSize - 10);
     const tr = makeCompoundType(Kind.List, int64Type);
     let s = await newList(nums, tr);
@@ -127,7 +127,7 @@ suite('BuildList', () => {
     assert.strictEqual(s.ref.toString(), listOfNRef);
   });
 
-  test('remove', async () => {
+  test('LONG: remove', async () => {
     const nums = firstNNumbers(testListSize + 10);
     const tr = makeCompoundType(Kind.List, int64Type);
     let s = await newList(nums, tr);
@@ -140,7 +140,7 @@ suite('BuildList', () => {
     assert.strictEqual(s.ref.toString(), listOfNRef);
   });
 
-  test('splice', async () => {
+  test('LONG: splice', async () => {
     const nums = firstNNumbers(testListSize);
     const tr = makeCompoundType(Kind.List, int64Type);
     let s = await newList(nums, tr);
@@ -158,7 +158,7 @@ suite('BuildList', () => {
     assert.strictEqual(s.ref.toString(), listOfNRef);
   });
 
-  test('write, read, modify, read', async () => {
+  test('LONG: write, read, modify, read', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
@@ -387,7 +387,7 @@ suite('Diff List', () => {
     return intSequence(0, n);
   }
 
-  test('Remove 5x100', async () => {
+  test('LONG: Remove 5x100', async () => {
     const nums1 = firstNNumbers(5000);
     const nums2 = nums1.slice(0);
 
@@ -406,7 +406,7 @@ suite('Diff List', () => {
     assert.deepEqual(directDiff, listDiff);
   });
 
-  test('Add 5x5', async () => {
+  test('LONG: Add 5x5', async () => {
     const nums1 = firstNNumbers(5000);
     const nums2 = nums1.slice(0);
 
@@ -425,7 +425,7 @@ suite('Diff List', () => {
     assert.deepEqual(directDiff, listDiff);
   });
 
-  test('Replace reverse 5x100', async () => {
+  test('LONG: Replace reverse 5x100', async () => {
     const nums1 = firstNNumbers(5000);
     const nums2 = nums1.slice(0);
 
@@ -444,7 +444,7 @@ suite('Diff List', () => {
     assert.deepEqual(directDiff, listDiff);
   });
 
-  test('Load Limit', async () => {
+  test('LONG: Load Limit', async () => {
     const nums1 = firstNNumbers(5);
     const nums2 = firstNNumbers(5000);
 
