@@ -59,6 +59,29 @@ function firstNNumbers(n: number): Array<number> {
 }
 
 suite('BuildSet', () => {
+
+  test('unique keys - strings', async () => {
+    const strs = ['hello', 'world', 'hello'];
+    const tr = makeCompoundType(Kind.Set, stringType);
+    const s = await newSet(strs, tr);
+    assert.strictEqual(2, s.size);
+    assert.isTrue(await s.has('hello'));
+    assert.isTrue(await s.has('world'));
+    assert.isFalse(await s.has('foo'));
+  });
+
+  test('unique keys - number', async () => {
+    const nums = [4, 1, 0, 0, 1, 3];
+    const tr = makeCompoundType(Kind.Set, int64Type);
+    const s = await newSet(nums, tr);
+    assert.strictEqual(4, s.size);
+    assert.isTrue(await s.has(4));
+    assert.isTrue(await s.has(1));
+    assert.isTrue(await s.has(0));
+    assert.isTrue(await s.has(3));
+    assert.isFalse(await s.has(2));
+  });
+
   test('set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
     const tr = makeCompoundType(Kind.Set, int64Type);

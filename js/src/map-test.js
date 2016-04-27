@@ -48,6 +48,32 @@ class CountingMemoryStore extends MemoryStore {
 }
 
 suite('BuildMap', () => {
+
+  test('unique keys - strings', async () => {
+    const kvs = [
+      'hello', 'world',
+      'foo', 'bar',
+      'bar', 'foo',
+      'hello', 'foo'];
+    const tr = makeCompoundType(Kind.Map, stringType, stringType);
+    const m = await newMap(kvs, tr);
+    assert.strictEqual(3, m.size);
+    assert.strictEqual('foo', await m.get('hello'));
+  });
+
+  test('unique keys - number', async () => {
+    const kvs = [
+      4, 1,
+      0, 2,
+      1, 2,
+      3, 4,
+      1, 5];
+    const tr = makeCompoundType(Kind.Map, int64Type, int64Type);
+    const m = await newMap(kvs, tr);
+    assert.strictEqual(4, m.size);
+    assert.strictEqual(5, await m.get(1));
+  });
+
   test('set of n numbers', async () => {
     const kvs = [];
     for (let i = 0; i < testMapSize; i++) {
