@@ -18,7 +18,7 @@ type StructData = {[key: string]: ?valueOrPrimitive};
  *
  * ```noms
  * struct MyStruct {
- *   x: Int8
+ *   x: Number
  *   s: string
  * }
  * ```

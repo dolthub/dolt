@@ -57,7 +57,7 @@ func TestGeneratedFiles(t *testing.T) {
 			continue
 		}
 		if file == "struct_with_list.noms" || file == "struct_with_dup_list.noms" {
-			// These two files race to write ListOfUint8
+			// These two files race to write ListOfNumber
 			continue
 		}
 		assertOutput(n, filepath.Join("test", "gen", file+".js"), t)
@@ -72,13 +72,13 @@ func TestSkipDuplicateTypes(t *testing.T) {
 
 	leaf1 := types.NewPackage([]*types.Type{
 		types.MakeStructType("S1", []types.Field{
-			types.Field{"f", types.MakeListType(types.Uint16Type), false},
+			types.Field{"f", types.MakeListType(types.NumberType), false},
 			types.Field{"e", types.MakeType(ref.Ref{}, 0), false},
 		}, []types.Field{}),
 	}, []ref.Ref{})
 	leaf2 := types.NewPackage([]*types.Type{
 		types.MakeStructType("S2", []types.Field{
-			types.Field{"f", types.MakeListType(types.Uint16Type), false},
+			types.Field{"f", types.MakeListType(types.NumberType), false},
 		}, []types.Field{}),
 	}, []ref.Ref{})
 
@@ -93,7 +93,7 @@ func TestSkipDuplicateTypes(t *testing.T) {
 
 	code, err := ioutil.ReadFile(leaf2Path)
 	assert.NoError(err)
-	assert.NotContains(string(code), "type ListOfUint16")
+	assert.NotContains(string(code), "type ListOfNumber")
 }
 
 func TestCommitNewPackages(t *testing.T) {

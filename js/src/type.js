@@ -206,16 +206,7 @@ export class Type extends ValueBase {
 
   get ordered(): boolean {
     switch (this.kind) {
-      case Kind.Float32:
-      case Kind.Float64:
-      case Kind.Int8:
-      case Kind.Int16:
-      case Kind.Int32:
-      case Kind.Int64:
-      case Kind.Uint8:
-      case Kind.Uint16:
-      case Kind.Uint32:
-      case Kind.Uint64:
+      case Kind.Number:
       case Kind.String:
       case Kind.Ref:
         return true;
@@ -363,16 +354,7 @@ export function makeUnresolvedType(namespace: string, name: string): Type {
 }
 
 export const boolType = makePrimitiveType(Kind.Bool);
-export const uint8Type = makePrimitiveType(Kind.Uint8);
-export const uint16Type = makePrimitiveType(Kind.Uint16);
-export const uint32Type = makePrimitiveType(Kind.Uint32);
-export const uint64Type = makePrimitiveType(Kind.Uint64);
-export const int8Type = makePrimitiveType(Kind.Int8);
-export const int16Type = makePrimitiveType(Kind.Int16);
-export const int32Type = makePrimitiveType(Kind.Int32);
-export const int64Type = makePrimitiveType(Kind.Int64);
-export const float32Type = makePrimitiveType(Kind.Float32);
-export const float64Type = makePrimitiveType(Kind.Float64);
+export const numberType = makePrimitiveType(Kind.Number);
 export const stringType = makePrimitiveType(Kind.String);
 export const blobType = makePrimitiveType(Kind.Blob);
 export const typeType = makePrimitiveType(Kind.Type);
@@ -393,26 +375,8 @@ export function getPrimitiveType(k: NomsKind): Type {
   switch (k) {
     case Kind.Bool:
       return boolType;
-    case Kind.Uint8:
-      return uint8Type;
-    case Kind.Uint16:
-      return uint16Type;
-    case Kind.Uint32:
-      return uint32Type;
-    case Kind.Uint64:
-      return uint64Type;
-    case Kind.Int8:
-      return int8Type;
-    case Kind.Int16:
-      return int16Type;
-    case Kind.Int32:
-      return int32Type;
-    case Kind.Int64:
-      return int64Type;
-    case Kind.Float32:
-      return float32Type;
-    case Kind.Float64:
-      return float64Type;
+    case Kind.Number:
+      return numberType;
     case Kind.String:
       return stringType;
     case Kind.Blob:

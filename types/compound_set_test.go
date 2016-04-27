@@ -40,7 +40,7 @@ func (ts testSet) toCompoundSet() compoundSet {
 	return NewTypedSet(ts.tr, ts.values...).(compoundSet)
 }
 
-type testSetGenFn func(v Int64) Value
+type testSetGenFn func(v Number) Value
 
 func newTestSet(length int, gen testSetGenFn, less testSetLessFn, tr *Type) testSet {
 	s := rand.NewSource(4242)
@@ -50,7 +50,7 @@ func newTestSet(length int, gen testSetGenFn, less testSetLessFn, tr *Type) test
 	for len(values) < length {
 		v := s.Int63() & 0xffffff
 		if _, ok := used[v]; !ok {
-			values = append(values, gen(Int64(v)))
+			values = append(values, gen(Number(v)))
 			used[v] = true
 		}
 	}
@@ -59,16 +59,16 @@ func newTestSet(length int, gen testSetGenFn, less testSetLessFn, tr *Type) test
 }
 
 func getTestNativeOrderSet(scale int) testSet {
-	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
+	return newTestSet(int(setPattern)*scale, func(v Number) Value {
 		return v
 	}, func(x, y Value) bool {
 		return !y.(OrderedValue).Less(x.(OrderedValue))
-	}, Int64Type)
+	}, NumberType)
 }
 
 func getTestRefValueOrderSet(scale int) testSet {
-	setType := MakeSetType(Int64Type)
-	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
+	setType := MakeSetType(NumberType)
+	return newTestSet(int(setPattern)*scale, func(v Number) Value {
 		return NewTypedSet(setType, v)
 	}, func(x, y Value) bool {
 		return !y.Ref().Less(x.Ref())
@@ -76,8 +76,8 @@ func getTestRefValueOrderSet(scale int) testSet {
 }
 
 func getTestRefToNativeOrderSet(scale int, vw ValueWriter) testSet {
-	refType := MakeRefType(Int64Type)
-	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
+	refType := MakeRefType(NumberType)
+	return newTestSet(int(setPattern)*scale, func(v Number) Value {
 		return vw.WriteValue(v)
 	}, func(x, y Value) bool {
 		return !y.(Ref).TargetRef().Less(x.(Ref).TargetRef())
@@ -85,9 +85,9 @@ func getTestRefToNativeOrderSet(scale int, vw ValueWriter) testSet {
 }
 
 func getTestRefToValueOrderSet(scale int, vw ValueWriter) testSet {
-	setType := MakeSetType(Int64Type)
+	setType := MakeSetType(NumberType)
 	refType := MakeRefType(setType)
-	return newTestSet(int(setPattern)*scale, func(v Int64) Value {
+	return newTestSet(int(setPattern)*scale, func(v Number) Value {
 		return vw.WriteValue(NewTypedSet(setType, v))
 	}, func(x, y Value) bool {
 		return !y.(Ref).TargetRef().Less(x.(Ref).TargetRef())
@@ -209,7 +209,7 @@ func TestCompoundSetInsert(t *testing.T) {
 		}
 		run(len(ts.values)-offset, len(ts.values))
 		assert.Panics(func() {
-			expected.Insert(Int8(1))
+			expected.Insert(Bool(true))
 		}, "Should panic due to wrong type")
 	}
 
@@ -260,7 +260,7 @@ func TestCompoundSetRemoveNonexistentValue(t *testing.T) {
 
 	ts := getTestNativeOrderSet(2)
 	original := ts.toCompoundSet()
-	actual := original.Remove(Int64(-1)) // rand.Int63 returns non-negative values.
+	actual := original.Remove(Number(-1)) // rand.Int63 returns non-negative values.
 
 	assert.Equal(original.Len(), actual.Len())
 	assert.True(original.Equals(actual))
@@ -344,12 +344,12 @@ func TestCompoundSetUnion(t *testing.T) {
 func TestCompoundSetFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 
-	setType := MakeSetType(Int64Type)
+	setType := MakeSetType(NumberType)
 
 	firstNNumbers := func(n int) []Value {
 		nums := []Value{}
 		for i := 0; i < n; i++ {
-			nums = append(nums, Int64(i))
+			nums = append(nums, Number(i))
 		}
 
 		return nums
@@ -357,7 +357,7 @@ func TestCompoundSetFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := newTypedSet(setType, nums...)
-	assert.Equal(s.Ref().String(), "sha1-b8ce0af4afd144c64f58e393283407cc0321b0c3")
+	assert.Equal(s.Ref().String(), "sha1-5b4cd51d88b3d99e6dafdb1cafb8cec90d5aecdf")
 }
 
 func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
@@ -365,7 +365,7 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 	vs := NewTestValueStore()
 
 	structTypeDef := MakeStructType("num", []Field{
-		Field{"n", Int64Type, false},
+		Field{"n", NumberType, false},
 	}, []Field{})
 	pkg := NewPackage([]*Type{structTypeDef}, []ref.Ref{})
 	pkgRef := RegisterPackage(&pkg)
@@ -377,7 +377,7 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 	firstNNumbers := func(n int) []Value {
 		nums := []Value{}
 		for i := 0; i < n; i++ {
-			r := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Int64(i)}))
+			r := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Number(i)}))
 			nums = append(nums, r)
 		}
 
@@ -386,7 +386,7 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := NewTypedSet(setType, nums...)
-	assert.Equal("sha1-f1126a3e01f462c6dd97e49dcaa79b9a448ee162", s.Ref().String())
+	assert.Equal("sha1-4c2b0e159ae443ec99299b6ea266d9a408f7987d", s.Ref().String())
 }
 
 func TestCompoundSetModifyAfterRead(t *testing.T) {

@@ -37,7 +37,7 @@ func TestBlobEquals(t *testing.T) {
 	AssertSymEq(assert, b1, b12)
 	AssertSymNe(assert, b1, b2)
 	AssertSymNe(assert, b2, b3)
-	AssertSymNe(assert, b1, Int32(1))
+	AssertSymNe(assert, b1, Number(1))
 }
 
 type testReader struct {
@@ -99,5 +99,5 @@ func TestBlobChunkingSameAsJavascript(t *testing.T) {
 		115,
 	}))
 
-	assert.Equal(b.Ref().String(), "sha1-e4a0148729ba968e05fbd5afe7b8fff18a343583")
+	assert.Equal(b.Ref().String(), "sha1-14399fe2ff6d333b4c18e004b0b2ec90173ff35c")
 }

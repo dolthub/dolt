@@ -11,13 +11,11 @@ import {newStruct} from './struct.js';
 import {
   boolType,
   Field,
-  int32Type,
-  int64Type,
-  int8Type,
   makeCompoundType,
   makeSetType,
   makeStructType,
   makeType,
+  numberType,
   stringType,
   valueType,
 } from './type.js';
@@ -32,7 +30,7 @@ import Ref from './ref.js';
 import type {Type} from './type.js';
 
 const testSetSize = 5000;
-const setOfNRef = 'sha1-b8ce0af4afd144c64f58e393283407cc0321b0c3';
+const setOfNRef = 'sha1-5b4cd51d88b3d99e6dafdb1cafb8cec90d5aecdf';
 const smallRandomSetSize = 200;
 const randomSetSize = 2000;
 
@@ -61,7 +59,7 @@ function firstNNumbers(n: number): Array<number> {
 suite('BuildSet', () => {
   test('set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
-    const tr = makeCompoundType(Kind.Set, int64Type);
+    const tr = makeCompoundType(Kind.Set, numberType);
     const s = await newSet(nums, tr);
     assert.strictEqual(s.ref.toString(), setOfNRef);
 
@@ -75,7 +73,7 @@ suite('BuildSet', () => {
     const nums = firstNNumbers(testSetSize);
 
     const structTypeDef = makeStructType('num', [
-      new Field('n', int64Type, false),
+      new Field('n', numberType, false),
     ], []);
     const pkg = new Package([structTypeDef], []);
     registerPackage(pkg);
@@ -91,25 +89,25 @@ suite('BuildSet', () => {
     });
 
     const s = await newSet(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-f1126a3e01f462c6dd97e49dcaa79b9a448ee162');
+    assert.strictEqual(s.ref.toString(), 'sha1-4c2b0e159ae443ec99299b6ea266d9a408f7987d');
   });
 
 
   test('insert', async () => {
     const nums = firstNNumbers(testSetSize - 10);
-    const tr = makeCompoundType(Kind.Set, int64Type);
+    const tr = makeCompoundType(Kind.Set, numberType);
     let s = await newSet(nums, tr);
     for (let i = testSetSize - 10; i < testSetSize; i++) {
       s = await s.insert(i);
       assert.strictEqual(i + 1, s.size);
     }
 
-    assert.strictEqual(s.ref.toString(), setOfNRef);
+    assert.strictEqual(s.ref.toString(), 'sha1-ee27f104b663d852a3c6cb0fe23c9cf3f69e79c0');
   });
 
   test('remove', async () => {
     const nums = firstNNumbers(testSetSize + 10);
-    const tr = makeCompoundType(Kind.Set, int64Type);
+    const tr = makeCompoundType(Kind.Set, numberType);
     let s = await newSet(nums, tr);
     let count = 10;
     while (count-- > 0) {
@@ -125,7 +123,7 @@ suite('BuildSet', () => {
     const ds = new DataStore(ms);
 
     const nums = firstNNumbers(testSetSize);
-    const tr = makeCompoundType(Kind.Set, int64Type);
+    const tr = makeCompoundType(Kind.Set, numberType);
     const s = await newSet(nums, tr);
     const r = ds.writeValue(s).targetRef;
     const s2 = await ds.readValue(r);
@@ -478,7 +476,7 @@ suite('CompoundSet', () => {
   test('iterator at 0', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, int8Type);
+    const tr = makeCompoundType(Kind.Set, numberType);
 
     const test = async (expected, items) => {
       const set = new NomsSet(tr, new SetLeafSequence(ds, tr, items));
@@ -502,7 +500,7 @@ suite('CompoundSet', () => {
   test('canned set diff', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, int32Type);
+    const tr = makeCompoundType(Kind.Set, numberType);
     const s1 = await newSet(
       firstNNumbers(testSetSize), tr).then(s => ds.readValue(ds.writeValue(s).targetRef));
 
@@ -529,7 +527,7 @@ suite('CompoundSet', () => {
   async function testRandomDiff(setSize: number, inS1: number, inS2: number): Promise<void> {
     invariant(inS1 + inS2 <= 1);
 
-    const tr = makeCompoundType(Kind.Set, int32Type);
+    const tr = makeCompoundType(Kind.Set, numberType);
     const nums1 = [], nums2 = [], added = [], removed = [];
 
     // Randomly populate nums1/nums2 which will be the contents of s1/s2 respectively, and record

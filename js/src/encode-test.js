@@ -13,24 +13,15 @@ import {
   blobType,
   boolType,
   Field,
-  float32Type,
-  float64Type,
-  int16Type,
-  int32Type,
-  int64Type,
-  int8Type,
   makeCompoundType,
   makeListType,
   makeMapType,
   makeSetType,
   makeStructType,
   makeType,
+  numberType,
   stringType,
   Type,
-  uint16Type,
-  uint32Type,
-  uint64Type,
-  uint8Type,
   valueType,
 } from './type.js';
 import {IndexedMetaSequence, MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
@@ -55,21 +46,11 @@ suite('Encode', () => {
     f(Kind.Bool, boolType, true, true);
     f(Kind.Bool, boolType, false, false);
 
-    f(Kind.Uint8, uint8Type, 0, '0');
-    f(Kind.Uint16, uint16Type, 0, '0');
-    f(Kind.Uint32, uint32Type, 0, '0');
-    f(Kind.Uint64, uint64Type, 0, '0');
-    f(Kind.Int8, int8Type, 0, '0');
-    f(Kind.Int16, int16Type, 0, '0');
-    f(Kind.Int32, int32Type, 0, '0');
-    f(Kind.Int64, int64Type, 0, '0');
-    f(Kind.Float32, float32Type, 0, '0');
-    f(Kind.Float64, float64Type, 0, '0');
+    f(Kind.Number, numberType, 0, '0');
 
-    f(Kind.Int64, int64Type, 1e18, '1000000000000000000');
-    f(Kind.Uint64, uint64Type, 1e19, '10000000000000000000');
-    f(Kind.Float64, float64Type, 1e19, '10000000000000000000');
-    f(Kind.Float64, float64Type, 1e20, '1e+20');
+    f(Kind.Number, numberType, 1e18, '1000000000000000000');
+    f(Kind.Number, numberType, 1e19, '10000000000000000000');
+    f(Kind.Number, numberType, 1e20, '1e+20');
 
     f(Kind.String, stringType, 'hi', 'hi');
   });
@@ -88,10 +69,10 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const tr = makeCompoundType(Kind.List, int32Type);
+    const tr = makeCompoundType(Kind.List, numberType);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, [0, 1, 2, 3]));
     w.writeTopLevel(tr, l);
-    assert.deepEqual([Kind.List, Kind.Int32, false, ['0', '1', '2', '3']], w.array);
+    assert.deepEqual([Kind.List, Kind.Number, false, ['0', '1', '2', '3']], w.array);
   });
 
   test('write list of value', async () => {
@@ -115,14 +96,14 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const it = makeCompoundType(Kind.List, int16Type);
+    const it = makeCompoundType(Kind.List, numberType);
     const tr = makeCompoundType(Kind.List, it);
     const v = new NomsList(tr, new ListLeafSequence(ds, tr, [
       new NomsList(tr, new ListLeafSequence(ds, it, [0])),
       new NomsList(tr, new ListLeafSequence(ds, it, [1, 2, 3])),
     ]));
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.List, Kind.List, Kind.Int16, false, [false, ['0'], false,
+    assert.deepEqual([Kind.List, Kind.List, Kind.Number, false, [false, ['0'], false,
         ['1', '2', '3']]], w.array);
   });
 
@@ -131,17 +112,17 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const tr = makeCompoundType(Kind.Set, uint32Type);
+    const tr = makeCompoundType(Kind.Set, numberType);
     const v = new NomsSet(tr, new SetLeafSequence(ds, tr, [0, 1, 2, 3]));
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Set, Kind.Uint32, false, ['0', '1', '2', '3']], w.array);
+    assert.deepEqual([Kind.Set, Kind.Number, false, ['0', '1', '2', '3']], w.array);
   });
 
   test('write compound set', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
-    const ltr = makeCompoundType(Kind.Set, int32Type);
+    const ltr = makeCompoundType(Kind.Set, numberType);
     const r1 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [0]))).targetRef;
     const r2 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [1, 2]))).targetRef;
     const r3 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
@@ -153,7 +134,7 @@ suite('Encode', () => {
     const l = new NomsSet(ltr, new OrderedMetaSequence(ds, ltr, tuples));
 
     w.writeTopLevel(ltr, l);
-    assert.deepEqual([Kind.Set, Kind.Int32, true, [r1.toString(), '0', '1', r2.toString(), '2',
+    assert.deepEqual([Kind.Set, Kind.Number, true, [r1.toString(), '0', '1', r2.toString(), '2',
                      '2', r3.toString(), '5', '3']], w.array);
   });
 
@@ -162,7 +143,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const st = makeCompoundType(Kind.Set, int32Type);
+    const st = makeCompoundType(Kind.Set, numberType);
     const tr = makeCompoundType(Kind.Set, st);
     const v = new NomsSet(tr, new SetLeafSequence(ds, tr, [
       new NomsSet(tr, new SetLeafSequence(ds, st, [0])),
@@ -170,7 +151,7 @@ suite('Encode', () => {
     ]));
 
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Set, Kind.Set, Kind.Int32, false, [false, ['0'], false,
+    assert.deepEqual([Kind.Set, Kind.Set, Kind.Number, false, [false, ['0'], false,
         ['1', '2', '3']]], w.array);
   });
 
@@ -191,7 +172,7 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const kt = makeCompoundType(Kind.Map, stringType, int64Type);
+    const kt = makeCompoundType(Kind.Map, stringType, numberType);
     const vt = makeCompoundType(Kind.Set, boolType);
     const tr = makeCompoundType(Kind.Map, kt, vt);
 
@@ -199,7 +180,7 @@ suite('Encode', () => {
     const m1 = new NomsMap(kt, new MapLeafSequence(ds, kt, [{key: 'a', value: 0}]));
     const v = new NomsMap(kt, new MapLeafSequence(ds, tr, [{key: m1, value: s}]));
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Map, Kind.Map, Kind.String, Kind.Int64, Kind.Set, Kind.Bool, false,
+    assert.deepEqual([Kind.Map, Kind.Map, Kind.String, Kind.Number, Kind.Set, Kind.Bool, false,
         [false, ['a', '0'], false, [true]]], w.array);
   });
 
@@ -226,7 +207,7 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ds);
 
     const typeDef = makeStructType('S', [
-      new Field('x', int8Type, false),
+      new Field('x', numberType, false),
       new Field('b', boolType, false),
     ], []);
     const pkg = new Package([typeDef], []);
@@ -246,7 +227,7 @@ suite('Encode', () => {
     let w = new JsonArrayWriter(ds);
 
     const typeDef = makeStructType('S', [
-      new Field('x', int8Type, true),
+      new Field('x', numberType, true),
       new Field('b', boolType, false),
     ], []);
     const pkg = new Package([typeDef], []);
@@ -270,7 +251,7 @@ suite('Encode', () => {
     let w = new JsonArrayWriter(ds);
 
     const typeDef = makeStructType('S', [
-      new Field('x', int8Type, false),
+      new Field('x', numberType, false),
     ], [
       new Field('b', boolType, false),
       new Field('s', stringType, false),
@@ -321,7 +302,7 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ds);
 
     const s2TypeDef = makeStructType('S2', [
-      new Field('x', int32Type, false),
+      new Field('x', numberType, false),
     ], []);
     let sTypeDef = makeStructType('S', [
       new Field('s', makeType(emptyRef, 0), false),
@@ -343,7 +324,7 @@ suite('Encode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
-    const ltr = makeCompoundType(Kind.List, int32Type);
+    const ltr = makeCompoundType(Kind.List, numberType);
     const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0]))).targetRef;
     const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [1, 2]))).targetRef;
     const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
@@ -355,7 +336,7 @@ suite('Encode', () => {
     const l = new NomsList(ltr, new IndexedMetaSequence(ds, ltr, tuples));
 
     w.writeTopLevel(ltr, l);
-    assert.deepEqual([Kind.List, Kind.Int32, true, [r1.toString(), '1', '1', r2.toString(), '2',
+    assert.deepEqual([Kind.List, Kind.Number, true, [r1.toString(), '1', '1', r2.toString(), '2',
                      '2', r3.toString(), '3', '3']], w.array);
   });
 
@@ -369,19 +350,19 @@ suite('Encode', () => {
       assert.deepEqual(expected, w.array);
     };
 
-    test([Kind.Type, Kind.Int32], int32Type);
+    test([Kind.Type, Kind.Number], numberType);
     test([Kind.Type, Kind.List, [Kind.Bool]],
          makeCompoundType(Kind.List, boolType));
     test([Kind.Type, Kind.Map, [Kind.Bool, Kind.String]],
          makeCompoundType(Kind.Map, boolType, stringType));
-    test([Kind.Type, Kind.Struct, 'S', ['x', Kind.Int16, false, 'v', Kind.Value, true], []],
+    test([Kind.Type, Kind.Struct, 'S', ['x', Kind.Number, false, 'v', Kind.Value, true], []],
          makeStructType('S', [
-           new Field('x', int16Type, false),
+           new Field('x', numberType, false),
            new Field('v', valueType, true),
          ], []));
-    test([Kind.Type, Kind.Struct, 'S', [], ['x', Kind.Int16, false, 'v', Kind.Value, false]],
+    test([Kind.Type, Kind.Struct, 'S', [], ['x', Kind.Number, false, 'v', Kind.Value, false]],
          makeStructType('S', [], [
-           new Field('x', int16Type, false),
+           new Field('x', numberType, false),
            new Field('v', valueType, false),
          ]));
 
@@ -389,10 +370,10 @@ suite('Encode', () => {
     test([Kind.Type, Kind.Unresolved, pkgRef.toString(), '123'], makeType(pkgRef, 123));
 
     test([Kind.Type, Kind.Struct, 'S',
-          ['e', Kind.Unresolved, pkgRef.toString(), '123', false, 'x', Kind.Int64, false], []],
+          ['e', Kind.Unresolved, pkgRef.toString(), '123', false, 'x', Kind.Number, false], []],
           makeStructType('S', [
             new Field('e', makeType(pkgRef, 123), false),
-            new Field('x', int64Type, false),
+            new Field('x', numberType, false),
           ], []));
 
     // test([Kind.Type, Kind.Unresolved, new Ref().toString(), -1, 'ns', 'n'],
@@ -457,8 +438,7 @@ suite('Encode', () => {
       assert.ok(false, `Expected error, 'Failed to write ${et}. Invalid type: ${at}' but Got none`);
     };
 
-    test('Int8', 'string', int8Type, 'hi');
-    test('Float64', 'string', float64Type, 'hi');
+    test('Number', 'string', numberType, 'hi');
     test('Bool', 'string', boolType, 'hi');
     test('Blob', 'string', blobType, 'hi');
 
@@ -466,36 +446,31 @@ suite('Encode', () => {
     test('Bool', 'number', boolType, 42);
     test('Blob', 'number', blobType, 42);
 
-    test('Int8', 'boolean', int8Type, true);
-    test('Float64', 'boolean', float64Type, true);
+    test('Number', 'boolean', numberType, true);
     test('String', 'boolean', stringType, true);
     test('Blob', 'boolean', blobType, true);
 
     const blob = await newBlob(new Uint8Array([0, 1]));
-    test('Int8', 'Blob', int8Type, blob);
-    test('Float64', 'Blob', float64Type, blob);
+    test('Number', 'Blob', numberType, blob);
     test('String', 'Blob', stringType, blob);
     test('Bool', 'Blob', boolType, blob);
 
-    const list = await newList([0, 1], makeListType(int8Type));
-    test('Int8', 'List<Int8>', int8Type, list);
-    test('Float64', 'List<Int8>', float64Type, list);
-    test('String', 'List<Int8>', stringType, list);
-    test('Bool', 'List<Int8>', boolType, list);
-    test('Blob', 'List<Int8>', blobType, list);
+    const list = await newList([0, 1], makeListType(numberType));
+    test('Number', 'List<Number>', numberType, list);
+    test('String', 'List<Number>', stringType, list);
+    test('Bool', 'List<Number>', boolType, list);
+    test('Blob', 'List<Number>', blobType, list);
 
-    const map = await newMap(['zero', 1], makeMapType(stringType, int8Type));
-    test('Int8', 'Map<String, Int8>', int8Type, map);
-    test('Float64', 'Map<String, Int8>', float64Type, map);
-    test('String', 'Map<String, Int8>', stringType, map);
-    test('Bool', 'Map<String, Int8>', boolType, map);
-    test('Blob', 'Map<String, Int8>', blobType, map);
+    const map = await newMap(['zero', 1], makeMapType(stringType, numberType));
+    test('Number', 'Map<String, Number>', numberType, map);
+    test('String', 'Map<String, Number>', stringType, map);
+    test('Bool', 'Map<String, Number>', boolType, map);
+    test('Blob', 'Map<String, Number>', blobType, map);
 
-    const set = await newSet([0, 1], makeSetType(int8Type));
-    test('Int8', 'Set<Int8>', int8Type, set);
-    test('Float64', 'Set<Int8>', float64Type, set);
-    test('String', 'Set<Int8>', stringType, set);
-    test('Bool', 'Set<Int8>', boolType, set);
-    test('Blob', 'Set<Int8>', blobType, set);
+    const set = await newSet([0, 1], makeSetType(numberType));
+    test('Number', 'Set<Number>', numberType, set);
+    test('String', 'Set<Number>', stringType, set);
+    test('Bool', 'Set<Number>', boolType, set);
+    test('Blob', 'Set<Number>', blobType, set);
   });
 });

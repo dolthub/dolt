@@ -3,7 +3,7 @@
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import {fastForward} from './ordered-sequence-diff.js';
-import {makeCompoundType, int32Type} from './type.js';
+import {makeCompoundType, numberType} from './type.js';
 import {Kind} from './noms-kind.js';
 import {newSet} from './set.js';
 
@@ -18,7 +18,7 @@ suite('OrderedSequenceCursor', () => {
     };
 
     const newMetaSequenceCursor = async (nums) => {
-      const tr = makeCompoundType(Kind.Set, int32Type);
+      const tr = makeCompoundType(Kind.Set, numberType);
       const lst = await newSet(nums, tr);
       assert.isTrue(lst.sequence.isMeta);
       return await lst.sequence.newCursorAt(0);

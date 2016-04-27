@@ -6,10 +6,10 @@ import {assert} from 'chai';
 import {
   boolType,
   Field,
-  float64Type,
   makeCompoundType,
   makeStructType,
   makeType,
+  numberType,
   stringType,
 } from './type.js';
 import {Kind} from './noms-kind.js';
@@ -249,11 +249,11 @@ suite('Struct', () => {
         new Field('d', makeType(emptyRef, 2), false),
       ], []),
       makeStructType('', [], [
-        new Field('b', float64Type, false),
+        new Field('b', numberType, false),
         new Field('c', stringType, false),
       ]),
       makeStructType('', [], [
-        new Field('e', float64Type, false),
+        new Field('e', numberType, false),
         new Field('f', stringType, false),
       ]),
     ], []);

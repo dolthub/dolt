@@ -2,7 +2,7 @@
 // @flow
 /* eslint-disable */
 
-import * as a from './sha1_9c6e87c.js';
-import * as b from './sha1_cfc4ae7.js';
+import * as a from './sha1_89fa11c.js';
+import * as b from './sha1_f2ea794.js';
 
 

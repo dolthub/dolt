@@ -12,7 +12,7 @@ import (
 func TestKindSliceJSON(t *testing.T) {
 	assert := assert.New(t)
 
-	ks := KindSlice{types.Uint8Kind, types.StringKind, types.BoolKind}
+	ks := KindSlice{types.NumberKind, types.StringKind, types.BoolKind}
 	b, err := json.Marshal(&ks)
 	assert.NoError(err)
 

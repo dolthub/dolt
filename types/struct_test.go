@@ -158,8 +158,8 @@ func TestGenericStructSet(t *testing.T) {
 	s := NewStruct(typ, typeDef, map[string]Value{"b": Bool(true)})
 	s2 := s.Set("b", Bool(false))
 
-	assert.Panics(func() { s.Set("b", Int32(1)) })
-	assert.Panics(func() { s.Set("x", Int32(1)) })
+	assert.Panics(func() { s.Set("b", Number(1)) })
+	assert.Panics(func() { s.Set("x", Number(1)) })
 
 	s3 := s2.Set("b", Bool(true))
 	assert.True(s.Equals(s3))

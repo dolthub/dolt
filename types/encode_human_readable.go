@@ -51,26 +51,8 @@ func (w *hrsWriter) Write(v Value) {
 	switch v.Type().Kind() {
 	case BoolKind:
 		w.write(strconv.FormatBool(bool(v.(Bool))))
-	case Uint8Kind:
-		w.write(strconv.FormatUint(uint64(v.(Uint8)), 10))
-	case Uint16Kind:
-		w.write(strconv.FormatUint(uint64(v.(Uint16)), 10))
-	case Uint32Kind:
-		w.write(strconv.FormatUint(uint64(v.(Uint32)), 10))
-	case Uint64Kind:
-		w.write(strconv.FormatUint(uint64(v.(Uint64)), 10))
-	case Int8Kind:
-		w.write(strconv.FormatInt(int64(v.(Int8)), 10))
-	case Int16Kind:
-		w.write(strconv.FormatInt(int64(v.(Int16)), 10))
-	case Int32Kind:
-		w.write(strconv.FormatInt(int64(v.(Int32)), 10))
-	case Int64Kind:
-		w.write(strconv.FormatInt(int64(v.(Int64)), 10))
-	case Float32Kind:
-		w.write(strconv.FormatFloat(float64(v.(Float32)), 'g', -1, 32))
-	case Float64Kind:
-		w.write(strconv.FormatFloat(float64(v.(Float64)), 'g', -1, 64))
+	case NumberKind:
+		w.write(strconv.FormatFloat(float64(v.(Number)), 'g', -1, 64))
 
 	case StringKind:
 		w.write(strconv.Quote(v.(String).String()))
@@ -198,7 +180,7 @@ func (w *hrsWriter) WriteTagged(v Value) {
 	switch t.Kind() {
 	case BoolKind, StringKind:
 		w.Write(v)
-	case Uint8Kind, Uint16Kind, Uint32Kind, Uint64Kind, Int8Kind, Int16Kind, Int32Kind, Int64Kind, Float32Kind, Float64Kind, BlobKind, ListKind, MapKind, RefKind, SetKind, TypeKind:
+	case NumberKind, BlobKind, ListKind, MapKind, RefKind, SetKind, TypeKind:
 		w.writeTypeAsValue(t)
 		w.write("(")
 		w.Write(v)
@@ -220,7 +202,7 @@ func (w *hrsWriter) WriteTagged(v Value) {
 
 func (w *hrsWriter) writeTypeAsValue(t *Type) {
 	switch t.Kind() {
-	case BlobKind, BoolKind, Float32Kind, Float64Kind, Int16Kind, Int32Kind, Int64Kind, Int8Kind, StringKind, TypeKind, Uint16Kind, Uint32Kind, Uint64Kind, Uint8Kind, ValueKind, PackageKind:
+	case BlobKind, BoolKind, NumberKind, StringKind, TypeKind, ValueKind, PackageKind:
 		w.write(KindToString[t.Kind()])
 	case ListKind, RefKind, SetKind:
 		w.write(KindToString[t.Kind()])

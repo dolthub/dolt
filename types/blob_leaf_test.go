@@ -25,7 +25,7 @@ func TestBlobLeafEquals(t *testing.T) {
 	AssertSymEq(assert, b1, b12)
 	AssertSymNe(assert, b1, b2)
 	AssertSymNe(assert, b2, b3)
-	AssertSymNe(assert, b1, Int32(1))
+	AssertSymNe(assert, b1, Number(1))
 }
 
 func TestBlobLeafChunks(t *testing.T) {

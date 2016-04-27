@@ -6,13 +6,12 @@ import {assert} from 'chai';
 import {
   boolType,
   Field,
-  float64Type,
   makeCompoundType,
   makeStructType,
   makeType,
+  numberType,
   stringType,
   typeType,
-  uint8Type,
 } from './type.js';
 import {Kind} from './noms-kind.js';
 import {Package, registerPackage} from './package.js';
@@ -24,7 +23,7 @@ suite('Type', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
-    const mapType = makeCompoundType(Kind.Map, stringType, uint8Type);
+    const mapType = makeCompoundType(Kind.Map, stringType, numberType);
     const setType = makeCompoundType(Kind.Set, stringType);
     const mahType = makeStructType('MahStruct', [
       new Field('Field1', stringType, false),
@@ -52,13 +51,13 @@ suite('Type', () => {
   });
 
   test('typeRef describe', async () => {
-    const mapType = makeCompoundType(Kind.Map, stringType, uint8Type);
+    const mapType = makeCompoundType(Kind.Map, stringType, numberType);
     const setType = makeCompoundType(Kind.Set, stringType);
 
     assert.strictEqual('Bool', boolType.describe());
-    assert.strictEqual('Uint8', uint8Type.describe());
+    assert.strictEqual('Number', numberType.describe());
     assert.strictEqual('String', stringType.describe());
-    assert.strictEqual('Map<String, Uint8>', mapType.describe());
+    assert.strictEqual('Map<String, Number>', mapType.describe());
     assert.strictEqual('Set<String>', setType.describe());
 
     const mahType = makeStructType('MahStruct',[
@@ -73,11 +72,11 @@ suite('Type', () => {
       new Field('Field1', stringType, false),
       new Field('Field2', boolType, true),
     ], [
-      new Field('Uint8Field', uint8Type, false),
+      new Field('NumberField', numberType, false),
       new Field('StringField', stringType, false),
     ]);
 
-    const exp = `struct MahOtherStruct {\n  Field1: String\n  Field2: optional Bool\n  union {\n    Uint8Field: Uint8\n    StringField: String\n  }\n}`; // eslint-disable-line max-len
+    const exp = `struct MahOtherStruct {\n  Field1: String\n  Field2: optional Bool\n  union {\n    NumberField: Number\n    StringField: String\n  }\n}`; // eslint-disable-line max-len
     assert.strictEqual(exp, otherType.describe());
   });
 
@@ -85,7 +84,7 @@ suite('Type', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
-    const pkg = new Package([float64Type], []);
+    const pkg = new Package([numberType], []);
     registerPackage(pkg);
     const pkgRef = pkg.ref;
 

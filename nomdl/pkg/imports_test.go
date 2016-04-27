@@ -33,7 +33,7 @@ func (suite *ImportTestSuite) SetupTest() {
 
 	ns := types.MakeStructType("NestedDepStruct", []types.Field{}, []types.Field{
 		types.Field{"b", types.BoolType, false},
-		types.Field{"i", types.Int8Type, false},
+		types.Field{"i", types.NumberType, false},
 	})
 	suite.nested = types.NewPackage([]*types.Type{ns}, []ref.Ref{})
 	suite.nestedRef = suite.vrw.WriteValue(suite.nested).TargetRef()
@@ -113,7 +113,7 @@ func (suite *ImportTestSuite) TestImports() {
 	defer os.RemoveAll(dir)
 
 	byPathNomDL := filepath.Join(dir, "filedep.noms")
-	err = ioutil.WriteFile(byPathNomDL, []byte("struct FromFile{i:Int8}"), 0600)
+	err = ioutil.WriteFile(byPathNomDL, []byte("struct FromFile{i:Number}"), 0600)
 	suite.NoError(err)
 
 	r := strings.NewReader(fmt.Sprintf(`
@@ -123,7 +123,7 @@ func (suite *ImportTestSuite) TestImports() {
 		using List<Local1>
 		struct Local1 {
 			a: Other.ForeignStruct
-			b: Int16
+			b: Number
 			c: Local2
 		}
 		struct Local2 {
@@ -183,7 +183,7 @@ func (suite *ImportTestSuite) TestImportWithLocalRef() {
 	defer os.RemoveAll(dir)
 
 	byPathNomDL := filepath.Join(dir, "filedep.noms")
-	err = ioutil.WriteFile(byPathNomDL, []byte("struct FromFile{i:Int8}"), 0600)
+	err = ioutil.WriteFile(byPathNomDL, []byte("struct FromFile{i:Number}"), 0600)
 	suite.NoError(err)
 
 	r1 := strings.NewReader(`
@@ -191,7 +191,7 @@ func (suite *ImportTestSuite) TestImportWithLocalRef() {
 			B: B
 		}
 		struct B {
-			X: Int64
+			X: Number
 		}`)
 	pkg1 := ParseNomDL("test1", r1, dir, suite.vrw)
 	pkgRef1 := suite.vrw.WriteValue(pkg1.Package).TargetRef()
@@ -199,7 +199,7 @@ func (suite *ImportTestSuite) TestImportWithLocalRef() {
 	r2 := strings.NewReader(fmt.Sprintf(`
 		alias Other = import "%s"
 		struct C {
-			C: Map<Int64, Other.A>
+			C: Map<Number, Other.A>
 		}
 		`, pkgRef1))
 	pkg2 := ParseNomDL("test2", r2, dir, suite.vrw)

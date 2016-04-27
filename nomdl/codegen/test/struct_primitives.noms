@@ -1,14 +1,5 @@
 struct StructPrimitives {
-  uint64: Uint64
-  uint32: Uint32
-  uint16: Uint16
-  uint8: Uint8
-  int64: Int64
-  int32: Int32
-  int16: Int16
-  int8: Int8
-  float64: Float64
-  float32: Float32
+  number: Number
   bool: Bool
   string: String
   blob: Blob

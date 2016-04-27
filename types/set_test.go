@@ -10,7 +10,7 @@ import (
 
 func TestSetLen(t *testing.T) {
 	assert := assert.New(t)
-	s1 := NewSet(Bool(true), Int32(1), NewString("hi"))
+	s1 := NewSet(Bool(true), Number(1), NewString("hi"))
 	assert.Equal(uint64(3), s1.Len())
 	s2 := s1.Insert(Bool(false))
 	assert.Equal(uint64(4), s2.Len())
@@ -24,24 +24,24 @@ func TestSetEmpty(t *testing.T) {
 	assert.True(s.Empty())
 	s = s.Insert(Bool(false))
 	assert.False(s.Empty())
-	s = s.Insert(Int32(42))
+	s = s.Insert(Number(42))
 	assert.False(s.Empty())
 }
 
 // BUG 98
 func TestSetDuplicateInsert(t *testing.T) {
 	assert := assert.New(t)
-	s1 := NewSet(Bool(true), Int32(42), Int32(42))
+	s1 := NewSet(Bool(true), Number(42), Number(42))
 	assert.Equal(uint64(2), s1.Len())
 }
 
 func TestSetHas(t *testing.T) {
 	assert := assert.New(t)
-	s1 := NewSet(Bool(true), Int32(1), NewString("hi"))
+	s1 := NewSet(Bool(true), Number(1), NewString("hi"))
 	assert.True(s1.Has(Bool(true)))
 	assert.False(s1.Has(Bool(false)))
-	assert.True(s1.Has(Int32(1)))
-	assert.False(s1.Has(Int32(0)))
+	assert.True(s1.Has(Number(1)))
+	assert.False(s1.Has(Number(0)))
 	assert.True(s1.Has(NewString("hi")))
 	assert.False(s1.Has(NewString("ho")))
 
@@ -58,7 +58,7 @@ func TestSetInsert(t *testing.T) {
 	s := NewSet()
 	v1 := Bool(false)
 	v2 := Bool(true)
-	v3 := Int32(0)
+	v3 := Number(0)
 
 	assert.False(s.Has(v1))
 	s = s.Insert(v1)
@@ -79,7 +79,7 @@ func TestSetRemove(t *testing.T) {
 	assert := assert.New(t)
 	v1 := Bool(false)
 	v2 := Bool(true)
-	v3 := Int32(0)
+	v3 := Number(0)
 	s := NewSet(v1, v2, v3)
 	assert.True(s.Has(v1))
 	assert.True(s.Has(v2))
@@ -100,30 +100,30 @@ func TestSetRemove(t *testing.T) {
 
 func TestSetUnion(t *testing.T) {
 	assert := assert.New(t)
-	assert.True(NewSet(Int32(1), Int32(2)).Union(
-		NewSet(Int32(2), Int32(3)),
-		NewSet(Int32(-1)),
+	assert.True(NewSet(Number(1), Number(2)).Union(
+		NewSet(Number(2), Number(3)),
+		NewSet(Number(-1)),
 		NewSet()).Equals(
-		NewSet(Int32(1), Int32(2), Int32(3), Int32(-1))))
-	assert.True(NewSet(Int32(1)).Union().Equals(NewSet(Int32(1))))
+		NewSet(Number(1), Number(2), Number(3), Number(-1))))
+	assert.True(NewSet(Number(1)).Union().Equals(NewSet(Number(1))))
 }
 
 func TestSetFirst(t *testing.T) {
 	assert := assert.New(t)
 	s := NewSet()
 	assert.Nil(s.First())
-	s = s.Insert(Int32(1))
+	s = s.Insert(Number(1))
 	assert.NotNil(s.First())
-	s = s.Insert(Int32(2))
+	s = s.Insert(Number(2))
 	assert.NotNil(s.First())
 }
 
 func TestSetIter(t *testing.T) {
 	assert := assert.New(t)
-	s := NewSet(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	s := NewSet(Number(0), Number(1), Number(2), Number(3), Number(4))
 	acc := NewSet()
 	s.Iter(func(v Value) bool {
-		_, ok := v.(Int32)
+		_, ok := v.(Number)
 		assert.True(ok)
 		acc = acc.Insert(v)
 		return false
@@ -139,10 +139,10 @@ func TestSetIter(t *testing.T) {
 
 func TestSetIterAll(t *testing.T) {
 	assert := assert.New(t)
-	s := NewSet(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	s := NewSet(Number(0), Number(1), Number(2), Number(3), Number(4))
 	acc := NewSet()
 	s.IterAll(func(v Value) {
-		_, ok := v.(Int32)
+		_, ok := v.(Number)
 		assert.True(ok)
 		acc = acc.Insert(v)
 	})
@@ -155,7 +155,7 @@ func TestSetIterAllP(t *testing.T) {
 	testIter := func(concurrency, setLen int) {
 		values := make([]Value, setLen)
 		for i := 0; i < setLen; i++ {
-			values[i] = Uint64(i)
+			values[i] = Number(i)
 		}
 
 		s := newSetLeaf(setType, values...)
@@ -181,7 +181,7 @@ func TestSetIterAllP(t *testing.T) {
 			for getCur() < expectConcurreny {
 			}
 
-			visited[v.(Uint64)] = true
+			visited[uint64(v.(Number))] = true
 		}
 
 		if concurrency == 1 {
@@ -237,62 +237,62 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert,
-		Uint64Type,
+		NumberType,
 		[]Value{
-			Uint64(0),
-			Uint64(1000),
-			Uint64(1),
-			Uint64(100),
-			Uint64(2),
-			Uint64(10),
+			Number(0),
+			Number(1000),
+			Number(1),
+			Number(100),
+			Number(2),
+			Number(10),
 		},
 		[]Value{
-			Uint64(0),
-			Uint64(1),
-			Uint64(2),
-			Uint64(10),
-			Uint64(100),
-			Uint64(1000),
-		},
-	)
-
-	testSetOrder(assert,
-		Int16Type,
-		[]Value{
-			Int16(0),
-			Int16(-30),
-			Int16(25),
-			Int16(1002),
-			Int16(-5050),
-			Int16(23),
-		},
-		[]Value{
-			Int16(-5050),
-			Int16(-30),
-			Int16(0),
-			Int16(23),
-			Int16(25),
-			Int16(1002),
+			Number(0),
+			Number(1),
+			Number(2),
+			Number(10),
+			Number(100),
+			Number(1000),
 		},
 	)
 
 	testSetOrder(assert,
-		Float32Type,
+		NumberType,
 		[]Value{
-			Float32(0.0001),
-			Float32(0.000001),
-			Float32(1),
-			Float32(25.01e3),
-			Float32(-32.231123e5),
-			Float32(23),
+			Number(0),
+			Number(-30),
+			Number(25),
+			Number(1002),
+			Number(-5050),
+			Number(23),
 		},
 		[]Value{
-			Float32(-32.231123e5),
-			Float32(0.000001),
-			Float32(0.0001),
-			Float32(1),
-			Float32(23),
-			Float32(25.01e3),
+			Number(-5050),
+			Number(-30),
+			Number(0),
+			Number(23),
+			Number(25),
+			Number(1002),
+		},
+	)
+
+	testSetOrder(assert,
+		NumberType,
+		[]Value{
+			Number(0.0001),
+			Number(0.000001),
+			Number(1),
+			Number(25.01e3),
+			Number(-32.231123e5),
+			Number(23),
+		},
+		[]Value{
+			Number(-32.231123e5),
+			Number(0.000001),
+			Number(0.0001),
+			Number(1),
+			Number(23),
+			Number(25.01e3),
 		},
 	)
 
@@ -334,14 +334,14 @@ func TestSetOrdering(t *testing.T) {
 func TestSetFilter(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSet(Int32(0), Int32(1), Int32(2), Int32(3), Int32(4))
+	s := NewSet(Number(0), Number(1), Number(2), Number(3), Number(4))
 	s2 := s.Filter(func(v Value) bool {
-		i, ok := v.(Int32)
+		i, ok := v.(Number)
 		assert.True(ok)
-		return i%2 == 0
+		return uint64(i)%2 == 0
 	})
 
-	assert.True(NewSet(Int32(0), Int32(2), Int32(4)).Equals(s2))
+	assert.True(NewSet(Number(0), Number(2), Number(4)).Equals(s2))
 }
 
 func TestSetType(t *testing.T) {
@@ -350,12 +350,12 @@ func TestSetType(t *testing.T) {
 	s := newSetLeaf(setType)
 	assert.True(s.Type().Equals(MakeSetType(ValueType)))
 
-	tr := MakeSetType(Uint64Type)
+	tr := MakeSetType(NumberType)
 
 	s = newSetLeaf(tr)
 	assert.Equal(tr, s.Type())
 
-	s2 := s.Remove(Uint64(1))
+	s2 := s.Remove(Number(1))
 	assert.True(tr.Equals(s2.Type()))
 
 	s2 = s.Filter(func(v Value) bool {
@@ -363,12 +363,12 @@ func TestSetType(t *testing.T) {
 	})
 	assert.True(tr.Equals(s2.Type()))
 
-	s2 = s.Insert(Uint64(0), Uint64(1))
+	s2 = s.Insert(Number(0), Number(1))
 	assert.True(tr.Equals(s2.Type()))
 
 	assert.Panics(func() { s.Insert(Bool(true)) })
-	assert.Panics(func() { s.Insert(Uint64(3), Bool(true)) })
-	assert.Panics(func() { s.Union(NewSet(Uint64(2))) })
+	assert.Panics(func() { s.Insert(Number(3), Bool(true)) })
+	assert.Panics(func() { s.Union(NewSet(Number(2))) })
 	assert.Panics(func() { s.Union(NewSet(Bool(true))) })
 	assert.Panics(func() { s.Union(s, NewSet(Bool(true))) })
 }
@@ -376,11 +376,11 @@ func TestSetType(t *testing.T) {
 func TestSetChunks(t *testing.T) {
 	assert := assert.New(t)
 
-	l1 := NewSet(Int32(0))
+	l1 := NewSet(Number(0))
 	c1 := l1.Chunks()
 	assert.Len(c1, 0)
 
-	l2 := NewSet(NewRef(Int32(0).Ref()))
+	l2 := NewSet(NewRef(Number(0).Ref()))
 	c2 := l2.Chunks()
 	assert.Len(c2, 1)
 }

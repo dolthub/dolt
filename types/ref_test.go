@@ -31,12 +31,12 @@ func TestRefInMap(t *testing.T) {
 
 	m := NewMap()
 	r := NewRef(m.Ref())
-	m = m.Set(Int32(0), r).Set(r, Int32(1))
-	r2 := m.Get(Int32(0))
+	m = m.Set(Number(0), r).Set(r, Number(1))
+	r2 := m.Get(Number(0))
 	assert.True(r.Equals(r2))
 
 	i := m.Get(r)
-	assert.Equal(int32(1), int32(i.(Int32)))
+	assert.Equal(int32(1), int32(i.(Number)))
 }
 
 func TestRefChunks(t *testing.T) {

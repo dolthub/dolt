@@ -701,53 +701,8 @@ var g = &grammar{
 						pos: position{line: 142, col: 21, offset: 3755},
 						alternatives: []interface{}{
 							&litMatcher{
-								pos:        position{line: 142, col: 21, offset: 3755},
-								val:        "Uint64",
-								ignoreCase: false,
-							},
-							&litMatcher{
-								pos:        position{line: 142, col: 32, offset: 3766},
-								val:        "Uint32",
-								ignoreCase: false,
-							},
-							&litMatcher{
-								pos:        position{line: 142, col: 43, offset: 3777},
-								val:        "Uint16",
-								ignoreCase: false,
-							},
-							&litMatcher{
-								pos:        position{line: 142, col: 54, offset: 3788},
-								val:        "Uint8",
-								ignoreCase: false,
-							},
-							&litMatcher{
-								pos:        position{line: 142, col: 64, offset: 3798},
-								val:        "Int64",
-								ignoreCase: false,
-							},
-							&litMatcher{
-								pos:        position{line: 142, col: 74, offset: 3808},
-								val:        "Int32",
-								ignoreCase: false,
-							},
-							&litMatcher{
-								pos:        position{line: 142, col: 84, offset: 3818},
-								val:        "Int16",
-								ignoreCase: false,
-							},
-							&litMatcher{
-								pos:        position{line: 142, col: 94, offset: 3828},
-								val:        "Int8",
-								ignoreCase: false,
-							},
-							&litMatcher{
 								pos:        position{line: 142, col: 103, offset: 3837},
-								val:        "Float64",
-								ignoreCase: false,
-							},
-							&litMatcher{
-								pos:        position{line: 142, col: 115, offset: 3849},
-								val:        "Float32",
+								val:        "Number",
 								ignoreCase: false,
 							},
 							&litMatcher{

@@ -62,7 +62,7 @@ func (t *Type) Kind() NomsKind {
 
 func (t *Type) IsOrdered() bool {
 	switch t.Desc.Kind() {
-	case Float32Kind, Float64Kind, Int8Kind, Int16Kind, Int32Kind, Int64Kind, Uint8Kind, Uint16Kind, Uint32Kind, Uint64Kind, StringKind, RefKind:
+	case NumberKind, StringKind, RefKind:
 		return true
 	default:
 		return false
@@ -153,26 +153,8 @@ func MakePrimitiveType(k NomsKind) *Type {
 	switch k {
 	case BoolKind:
 		return BoolType
-	case Int8Kind:
-		return Int8Type
-	case Int16Kind:
-		return Int16Type
-	case Int32Kind:
-		return Int32Type
-	case Int64Kind:
-		return Int64Type
-	case Float32Kind:
-		return Float32Type
-	case Float64Kind:
-		return Float64Type
-	case Uint8Kind:
-		return Uint8Type
-	case Uint16Kind:
-		return Uint16Type
-	case Uint32Kind:
-		return Uint32Type
-	case Uint64Kind:
-		return Uint64Type
+	case NumberKind:
+		return NumberType
 	case StringKind:
 		return StringType
 	case BlobKind:
@@ -196,26 +178,8 @@ func MakePrimitiveTypeByString(p string) *Type {
 	switch p {
 	case "Bool":
 		return BoolType
-	case "Int8":
-		return Int8Type
-	case "Int16":
-		return Int16Type
-	case "Int32":
-		return Int32Type
-	case "Int64":
-		return Int64Type
-	case "Float32":
-		return Float32Type
-	case "Float64":
-		return Float64Type
-	case "Uint8":
-		return Uint8Type
-	case "Uint16":
-		return Uint16Type
-	case "Uint32":
-		return Uint32Type
-	case "Uint64":
-		return Uint64Type
+	case "Number":
+		return NumberType
 	case "String":
 		return StringType
 	case "Blob":
@@ -284,16 +248,7 @@ func buildType(n string, desc TypeDesc) *Type {
 	}
 }
 
-var Uint8Type = makePrimitiveType(Uint8Kind)
-var Uint16Type = makePrimitiveType(Uint16Kind)
-var Uint32Type = makePrimitiveType(Uint32Kind)
-var Uint64Type = makePrimitiveType(Uint64Kind)
-var Int8Type = makePrimitiveType(Int8Kind)
-var Int16Type = makePrimitiveType(Int16Kind)
-var Int32Type = makePrimitiveType(Int32Kind)
-var Int64Type = makePrimitiveType(Int64Kind)
-var Float32Type = makePrimitiveType(Float32Kind)
-var Float64Type = makePrimitiveType(Float64Kind)
+var NumberType = makePrimitiveType(NumberKind)
 var BoolType = makePrimitiveType(BoolKind)
 var StringType = makePrimitiveType(StringKind)
 var BlobType = makePrimitiveType(BlobKind)

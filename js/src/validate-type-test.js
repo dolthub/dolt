@@ -14,12 +14,6 @@ import {
   blobType,
   boolType,
   Field,
-  float32Type,
-  float64Type,
-  int16Type,
-  int32Type,
-  int64Type,
-  int8Type,
   listOfValueType,
   makeListType,
   makeMapType,
@@ -27,14 +21,11 @@ import {
   makeStructType,
   makeType,
   mapOfValueType,
+  numberType,
   packageType,
   setOfValueType,
   stringType,
   typeType,
-  uint16Type,
-  uint32Type,
-  uint64Type,
-  uint8Type,
   valueType,
 } from './type.js';
 
@@ -46,16 +37,7 @@ suite('validate type', () => {
 
   const allTypes = [
     boolType,
-    uint8Type,
-    uint16Type,
-    uint32Type,
-    uint64Type,
-    int8Type,
-    int16Type,
-    int32Type,
-    int64Type,
-    float32Type,
-    float64Type,
+    numberType,
     stringType,
     blobType,
     typeType,
@@ -76,30 +58,12 @@ suite('validate type', () => {
   test('primitives', () => {
     validateType(boolType, true);
     validateType(boolType, false);
-    validateType(uint8Type, 42);
-    validateType(uint16Type, 42);
-    validateType(uint32Type, 42);
-    validateType(uint64Type, 42);
-    validateType(int8Type, 42);
-    validateType(int16Type, 42);
-    validateType(int32Type, 42);
-    validateType(int64Type, 42);
-    validateType(float32Type, 42);
-    validateType(float64Type, 42);
+    validateType(numberType, 42);
     validateType(stringType, 'abc');
 
     assertInvalid(boolType, 1);
     assertInvalid(boolType, 'abc');
-    assertInvalid(uint8Type, true);
-    assertInvalid(uint16Type, true);
-    assertInvalid(uint32Type, true);
-    assertInvalid(uint64Type, true);
-    assertInvalid(int8Type, true);
-    assertInvalid(int16Type, true);
-    assertInvalid(int32Type, true);
-    assertInvalid(int64Type, true);
-    assertInvalid(float32Type, true);
-    assertInvalid(float64Type, true);
+    assertInvalid(numberType, true);
     assertInvalid(stringType, 42);
   });
 
@@ -107,8 +71,8 @@ suite('validate type', () => {
     validateType(valueType, true);
     validateType(valueType, 1);
     validateType(valueType, 'abc');
-    const listOfUint8Type = makeListType(uint8Type);
-    const l = await newList([0, 1, 2, 3], listOfUint8Type);
+    const listOfNumberType = makeListType(numberType);
+    const l = await newList([0, 1, 2, 3], listOfNumberType);
     validateType(valueType, l);
 
     assertInvalid(valueType, null);
@@ -122,34 +86,34 @@ suite('validate type', () => {
   });
 
   test('list', async () => {
-    const listOfUint8Type = makeListType(uint8Type);
-    const l = await newList([0, 1, 2, 3], listOfUint8Type);
-    validateType(listOfUint8Type, l);
-    assertAll(listOfUint8Type, l);
+    const listOfNumberType = makeListType(numberType);
+    const l = await newList([0, 1, 2, 3], listOfNumberType);
+    validateType(listOfNumberType, l);
+    assertAll(listOfNumberType, l);
 
     validateType(listOfValueType, l);
   });
 
   test('map', async () => {
-    const mapOfUint8ToStringType = makeMapType(uint8Type, stringType);
-    const m = await newMap([0, 'a', 2, 'b'], mapOfUint8ToStringType);
-    validateType(mapOfUint8ToStringType, m);
-    assertAll(mapOfUint8ToStringType, m);
+    const mapOfNumberToStringType = makeMapType(numberType, stringType);
+    const m = await newMap([0, 'a', 2, 'b'], mapOfNumberToStringType);
+    validateType(mapOfNumberToStringType, m);
+    assertAll(mapOfNumberToStringType, m);
 
     validateType(mapOfValueType, m);
   });
 
   test('set', async () => {
-    const setOfUint8Type = makeSetType(uint8Type);
-    const s = await newSet([0, 1, 2, 3], setOfUint8Type);
-    validateType(setOfUint8Type, s);
-    assertAll(setOfUint8Type, s);
+    const setOfNumberType = makeSetType(numberType);
+    const s = await newSet([0, 1, 2, 3], setOfNumberType);
+    validateType(setOfNumberType, s);
+    assertAll(setOfNumberType, s);
 
     validateType(setOfValueType, s);
   });
 
   test('type', () => {
-    const t = makeSetType(uint8Type);
+    const t = makeSetType(numberType);
     validateType(typeType, t);
     assertAll(typeType, t);
 

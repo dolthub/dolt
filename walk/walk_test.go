@@ -35,17 +35,17 @@ func (suite *WalkAllTestSuite) storeAndRef(v types.Value) types.Ref {
 }
 
 func (suite *WalkAllTestSuite) TestWalkPrimitives() {
-	suite.walkWorker(suite.storeAndRef(types.Float64(0.0)), 2)
+	suite.walkWorker(suite.storeAndRef(types.Number(0.0)), 2)
 	suite.walkWorker(suite.storeAndRef(types.NewString("hello")), 2)
 }
 
 func (suite *WalkAllTestSuite) TestWalkComposites() {
 	suite.walkWorker(suite.storeAndRef(types.NewList()), 2)
-	suite.walkWorker(suite.storeAndRef(types.NewList(types.Bool(false), types.Int32(8))), 4)
+	suite.walkWorker(suite.storeAndRef(types.NewList(types.Bool(false), types.Number(8))), 4)
 	suite.walkWorker(suite.storeAndRef(types.NewSet()), 2)
-	suite.walkWorker(suite.storeAndRef(types.NewSet(types.Bool(false), types.Int32(8))), 4)
+	suite.walkWorker(suite.storeAndRef(types.NewSet(types.Bool(false), types.Number(8))), 4)
 	suite.walkWorker(suite.storeAndRef(types.NewMap()), 2)
-	suite.walkWorker(suite.storeAndRef(types.NewMap(types.Int32(8), types.Bool(true), types.Int32(0), types.Bool(false))), 6)
+	suite.walkWorker(suite.storeAndRef(types.NewMap(types.Number(8), types.Bool(true), types.Number(0), types.Bool(false))), 6)
 }
 
 func (suite *WalkAllTestSuite) NewList(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
@@ -65,7 +65,7 @@ func (suite *WalkAllTestSuite) NewSet(cs chunks.ChunkStore, vs ...types.Value) t
 
 func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
 	cs := chunks.NewMemoryStore()
-	suite.walkWorker(suite.storeAndRef(types.NewList(suite.NewSet(cs), types.Int32(8))), 5)
+	suite.walkWorker(suite.storeAndRef(types.NewList(suite.NewSet(cs), types.Number(8))), 5)
 	suite.walkWorker(suite.storeAndRef(types.NewSet(suite.NewList(cs), suite.NewSet(cs))), 6)
 	// {"string": "string",
 	//  "list": [false true],
@@ -79,7 +79,7 @@ func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
 		types.NewString("list"), suite.NewList(cs, types.Bool(false), types.Bool(true)),
 		types.NewString("map"), suite.NewMap(cs, types.NewString("nested"), types.NewString("string")),
 		types.NewString("mtlist"), suite.NewList(cs),
-		types.NewString("set"), suite.NewSet(cs, types.Int32(5), types.Int32(7), types.Int32(8)),
+		types.NewString("set"), suite.NewSet(cs, types.Number(5), types.Number(7), types.Number(8)),
 		suite.NewList(cs), types.NewString("wow"), // note that the dupe list chunk is skipped
 	)
 	suite.walkWorker(suite.storeAndRef(nested), 25)
@@ -97,7 +97,7 @@ func (suite *WalkTestSuite) SetupTest() {
 	suite.vs = types.NewTestValueStore()
 	suite.shouldSeeItem = types.NewString("zzz")
 	suite.shouldSee = types.NewList(suite.shouldSeeItem)
-	suite.deadValue = types.Uint64(0xDEADBEEF)
+	suite.deadValue = types.Number(0xDEADBEEF)
 	suite.mustSkip = types.NewList(suite.deadValue)
 }
 

@@ -40,7 +40,7 @@ func (s *testSuite) TestCSVImporter() {
 
 	storeName := "store"
 	setName := "csv"
-	out := s.Run(main, []string{"-store", storeName, "-column-types", "String,Uint8", "-ds", setName, input.Name()})
+	out := s.Run(main, []string{"-store", storeName, "-column-types", "String,Number", "-ds", setName, input.Name()})
 	s.Equal("", out)
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, storeName, 1, false)
@@ -56,7 +56,7 @@ func (s *testSuite) TestCSVImporter() {
 		s.Equal(i, j)
 		st := v.(types.Struct)
 		s.Equal(types.NewString(fmt.Sprintf("a%d", i)), st.Get("a"))
-		s.Equal(types.Uint8(i), st.Get("b"))
+		s.Equal(types.Number(i), st.Get("b"))
 		i++
 	})
 }
@@ -82,8 +82,8 @@ func (s *testSuite) TestCSVImporterReportTypes() {
 
 	storeName := "store"
 	setName := "csv"
-	out := s.Run(main, []string{"-store", storeName, "-column-types", "String,Uint8", "-ds", setName, input.Name()})
-	s.Equal("Possible types for each column:\na: String\nb: Uint8,Uint16,Uint32,Uint64,Int8,Int16,Int32,Int64,Float32,Float64,String\n", out)
+	out := s.Run(main, []string{"-store", storeName, "-column-types", "String,Number", "-ds", setName, input.Name()})
+	s.Equal("Possible types for each column:\na: String\nb: Number,String\n", out)
 }
 
 func (s *testSuite) TestCSVImporterWithPipe() {
@@ -102,7 +102,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 
 	storeName := "store"
 	setName := "csv"
-	out := s.Run(main, []string{"-store", storeName, "-column-types", "String,Uint8", "-ds", setName, input.Name()})
+	out := s.Run(main, []string{"-store", storeName, "-column-types", "String,Number", "-ds", setName, input.Name()})
 	s.Equal("", out)
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, storeName, 1, false)
@@ -115,7 +115,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 	v := l.Get(0)
 	st := v.(types.Struct)
 	s.Equal(types.NewString("1"), st.Get("a"))
-	s.Equal(types.Uint8(2), st.Get("b"))
+	s.Equal(types.Number(2), st.Get("b"))
 }
 
 func (s *testSuite) TestCSVImporterWithExternalHeader() {
@@ -134,7 +134,7 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 
 	storeName := "store"
 	setName := "csv"
-	out := s.Run(main, []string{"-store", storeName, "-column-types", "String,Uint8", "-ds", setName, input.Name()})
+	out := s.Run(main, []string{"-store", storeName, "-column-types", "String,Number", "-ds", setName, input.Name()})
 	s.Equal("", out)
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, storeName, 1, false)
@@ -147,5 +147,5 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	v := l.Get(0)
 	st := v.(types.Struct)
 	s.Equal(types.NewString("7"), st.Get("x"))
-	s.Equal(types.Uint8(8), st.Get("y"))
+	s.Equal(types.Number(8), st.Get("y"))
 }

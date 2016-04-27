@@ -32,9 +32,7 @@ func TestSchemaDetection(t *testing.T) {
 			KindSlice{types.StringKind},
 			KindSlice{types.BoolKind, types.StringKind},
 			KindSlice{
-				types.Uint8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind,
-				types.Int8Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind,
-				types.Float32Kind, types.Float64Kind,
+				types.NumberKind,
 				types.StringKind,
 			},
 		},
@@ -83,7 +81,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Float32Kind, types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -96,8 +94,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Float32Kind,
-				types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -111,7 +108,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -134,10 +131,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Uint8Kind, types.Uint16Kind, types.Uint32Kind, types.Uint64Kind,
-				types.Int8Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind,
-				types.Float32Kind,
-				types.Float64Kind,
+				types.NumberKind,
 				types.BoolKind,
 				types.StringKind},
 		},
@@ -150,8 +144,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Int8Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind,
-				types.Float32Kind, types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -162,8 +155,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Int8Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind,
-				types.Float32Kind, types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -176,8 +168,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Int16Kind, types.Int32Kind, types.Int64Kind,
-				types.Float32Kind, types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -190,8 +181,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Int16Kind, types.Int32Kind, types.Int64Kind,
-				types.Float32Kind, types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -204,8 +194,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Int32Kind, types.Int64Kind,
-				types.Float32Kind, types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -218,8 +207,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Int32Kind, types.Int64Kind,
-				types.Float32Kind, types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -232,8 +220,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Int64Kind,
-				types.Float32Kind, types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -246,8 +233,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Int64Kind,
-				types.Float32Kind, types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -259,9 +245,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Uint64Kind,
-				types.Float32Kind,
-				types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -273,9 +257,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			KindSlice{
-				types.Uint64Kind, types.Int64Kind,
-				types.Float32Kind,
-				types.Float64Kind,
+				types.NumberKind,
 				types.StringKind},
 		},
 	)
@@ -289,7 +271,7 @@ func TestReportValidFieldTypes(t *testing.T) {
 		{"2", "false", "d6"},
 	}
 	expectedKinds := []KindSlice{
-		KindSlice{types.Float32Kind, types.Float64Kind, types.StringKind},
+		KindSlice{types.NumberKind, types.StringKind},
 		KindSlice{types.BoolKind, types.StringKind},
 		KindSlice{types.StringKind},
 	}

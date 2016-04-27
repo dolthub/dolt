@@ -140,7 +140,7 @@ suite('Blob', () => {
       100,
       115,
     ]));
-    assert.equal(b.ref.toString(), 'sha1-e4a0148729ba968e05fbd5afe7b8fff18a343583');
+    assert.equal(b.ref.toString(), 'sha1-14399fe2ff6d333b4c18e004b0b2ec90173ff35c');
   });
 
   test('chunks', async () => {

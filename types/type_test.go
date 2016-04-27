@@ -12,9 +12,9 @@ func TestTypes(t *testing.T) {
 	vs := NewTestValueStore()
 
 	boolType := BoolType
-	uint8Type := Uint8Type
+	numberType := NumberType
 	stringType := StringType
-	mapType := MakeMapType(stringType, uint8Type)
+	mapType := MakeMapType(stringType, numberType)
 	setType := MakeSetType(stringType)
 	mahType := MakeStructType("MahStruct", []Field{
 		Field{"Field1", stringType, false},
@@ -44,7 +44,7 @@ func TestTypeWithPkgRef(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 
-	pkg := NewPackage([]*Type{Float64Type}, []ref.Ref{})
+	pkg := NewPackage([]*Type{NumberType}, []ref.Ref{})
 
 	pkgRef := RegisterPackage(&pkg)
 	unresolvedType := MakeType(pkgRef, 42)
@@ -62,15 +62,15 @@ func TestTypeType(t *testing.T) {
 func TestTypeRefDescribe(t *testing.T) {
 	assert := assert.New(t)
 	boolType := BoolType
-	uint8Type := Uint8Type
+	numberType := NumberType
 	stringType := StringType
-	mapType := MakeMapType(stringType, uint8Type)
+	mapType := MakeMapType(stringType, numberType)
 	setType := MakeSetType(stringType)
 
 	assert.Equal("Bool", boolType.Describe())
-	assert.Equal("Uint8", uint8Type.Describe())
+	assert.Equal("Number", numberType.Describe())
 	assert.Equal("String", stringType.Describe())
-	assert.Equal("Map<String, Uint8>", mapType.Describe())
+	assert.Equal("Map<String, Number>", mapType.Describe())
 	assert.Equal("Set<String>", setType.Describe())
 
 	mahType := MakeStructType("MahStruct", []Field{
@@ -83,26 +83,17 @@ func TestTypeRefDescribe(t *testing.T) {
 		Field{"Field1", stringType, false},
 		Field{"Field2", boolType, true},
 	}, []Field{
-		Field{"Uint8Field", uint8Type, false},
+		Field{"NumberField", numberType, false},
 		Field{"StringField", stringType, false},
 	})
-	assert.Equal("struct MahOtherStruct {\n  Field1: String\n  Field2: optional Bool\n  union {\n    Uint8Field: Uint8\n    StringField: String\n  }\n}", otherType.Describe())
+	assert.Equal("struct MahOtherStruct {\n  Field1: String\n  Field2: optional Bool\n  union {\n    NumberField: Number\n    StringField: String\n  }\n}", otherType.Describe())
 
 }
 
 func TestTypeOrdered(t *testing.T) {
 	assert := assert.New(t)
 	assert.False(BoolType.IsOrdered())
-	assert.True(Uint8Type.IsOrdered())
-	assert.True(Uint16Type.IsOrdered())
-	assert.True(Uint32Type.IsOrdered())
-	assert.True(Uint64Type.IsOrdered())
-	assert.True(Int8Type.IsOrdered())
-	assert.True(Int16Type.IsOrdered())
-	assert.True(Int32Type.IsOrdered())
-	assert.True(Int64Type.IsOrdered())
-	assert.True(Float32Type.IsOrdered())
-	assert.True(Float64Type.IsOrdered())
+	assert.True(NumberType.IsOrdered())
 	assert.True(StringType.IsOrdered())
 	assert.False(BlobType.IsOrdered())
 	assert.False(ValueType.IsOrdered())

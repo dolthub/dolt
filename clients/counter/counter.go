@@ -26,10 +26,10 @@ func main() {
 
 	lastVal := uint64(0)
 	if commit, ok := ds.MaybeHead(); ok {
-		lastVal = uint64(commit.Get(datas.ValueField).(types.Uint64))
+		lastVal = uint64(commit.Get(datas.ValueField).(types.Number))
 	}
 	newVal := lastVal + 1
-	_, err := ds.Commit(types.Uint64(newVal))
+	_, err := ds.Commit(types.Number(newVal))
 	d.Exp.NoError(err)
 
 	fmt.Println(newVal)
