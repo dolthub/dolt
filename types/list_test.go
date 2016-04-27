@@ -169,6 +169,9 @@ func TestListRemoveAt(t *testing.T) {
 }
 
 func TestListMap(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 
 	testMap := func(concurrency, listLen int) {
@@ -282,6 +285,10 @@ func TestListIterAll(t *testing.T) {
 }
 
 func TestListIterAllP(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
 	assert := assert.New(t)
 
 	testIter := func(concurrency, listLen int) {
