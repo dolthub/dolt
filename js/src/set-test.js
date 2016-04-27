@@ -614,4 +614,15 @@ suite('CompoundSet', () => {
   test('LONG: random set diff 0.1/0.1', () => testRandomDiff(randomSetSize, 0.1, 0.1));
   test('LONG: random set diff 0.1/0.5', () => testRandomDiff(randomSetSize, 0.1, 0.5));
   test('LONG: random set diff 0.1/0.9', () => testRandomDiff(randomSetSize, 0.1, 0.9));
+
+  test('chunks', () => {
+    const ms = new MemoryStore();
+    const ds = new DataStore(ms);
+    const s = build(ds, ['a', 'b', 'c', 'd']);
+    const chunks = s.chunks;
+    const sequence = s.sequence;
+    assert.equal(2, chunks.length);
+    assert.isTrue(sequence.items[0].ref.equals(chunks[0].targetRef));
+    assert.isTrue(sequence.items[1].ref.equals(chunks[1].targetRef));
+  });
 });

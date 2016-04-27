@@ -370,6 +370,15 @@ suite('CompoundList', () => {
     const l = build();
     assert.equal(l.length, 8);
   });
+
+  test('chunks', () => {
+    const l = build();
+    const chunks = l.chunks;
+    const sequence = l.sequence;
+    assert.equal(2, chunks.length);
+    assert.isTrue(sequence.items[0].ref.equals(chunks[0].targetRef));
+    assert.isTrue(sequence.items[1].ref.equals(chunks[1].targetRef));
+  });
 });
 
 suite('Diff List', () => {

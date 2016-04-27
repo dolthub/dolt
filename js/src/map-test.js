@@ -570,4 +570,15 @@ suite('CompoundMap', () => {
   test('LONG: random map diff 0.1/0.5/0.1', () => testRandomDiff(randomMapSize, 0.1, 0.5, 0.1));
   test('LONG: random map diff 0.1/0.1/0.5', () => testRandomDiff(randomMapSize, 0.1, 0.1, 0.5));
   test('LONG: random map diff 0.1/0.9/0', () => testRandomDiff(randomMapSize, 0.1, 0.9, 0));
+
+  test('chunks', () => {
+    const ms = new MemoryStore();
+    const ds = new DataStore(ms);
+    const m = build(ds)[1];
+    const chunks = m.chunks;
+    const sequence = m.sequence;
+    assert.equal(2, chunks.length);
+    assert.isTrue(sequence.items[0].ref.equals(chunks[0].targetRef));
+    assert.isTrue(sequence.items[1].ref.equals(chunks[1].targetRef));
+  });
 });

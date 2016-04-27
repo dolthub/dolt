@@ -12,6 +12,7 @@ import {IndexedSequence} from './indexed-sequence.js';
 import {invariant} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {OrderedSequence} from './ordered-sequence.js';
+import RefValue from './ref-value.js';
 import {Sequence} from './sequence.js';
 
 export type MetaSequence = Sequence<MetaTuple>;
@@ -72,6 +73,10 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
 
   get numLeaves(): number {
     return this._offsets[this._offsets.length - 1];
+  }
+
+  get chunks(): Array<RefValue> {
+    return getMetaSequenceChunks(this);
   }
 
   range(start: number, end: number): Promise<Array<any>> {
@@ -145,6 +150,10 @@ export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K,
 
   get numLeaves(): number {
     return this._numLeaves;
+  }
+
+  get chunks(): Array<RefValue> {
+    return getMetaSequenceChunks(this);
   }
 
   getChildSequence(idx: number): Promise<?Sequence> {
@@ -236,4 +245,8 @@ export function newIndexedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
   return new BuzHashBoundaryChecker(objectWindowSize, sha1Size, objectPattern,
     (mt: MetaTuple) => mt.ref.digest
   );
+}
+
+function getMetaSequenceChunks(ms: MetaSequence) {
+  return ms.items.map(mt => new RefValue(mt.ref, ms.type));
 }

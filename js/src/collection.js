@@ -2,8 +2,6 @@
 
 import RefValue from './ref-value.js';
 import type {Sequence} from './sequence.js'; // eslint-disable-line no-unused-vars
-import {isPrimitive} from './primitives.js';
-import type {MetaTuple} from './meta-sequence.js';
 import type {Type} from './type.js';
 import {ValueBase} from './value.js';
 
@@ -30,16 +28,6 @@ export class Collection<S: Sequence> extends ValueBase {
   }
 
   get chunks(): Array<RefValue> {
-    const chunks = [];
-    const addChunks = this._sequence.isMeta ? (mt: MetaTuple) => {
-      chunks.push(new RefValue(mt.ref, this.type));
-    } : (v) => {
-      if (!isPrimitive(v)) {
-        chunks.push(...v.chunks);
-      }
-    };
-
-    this._sequence.items.forEach(addChunks);
-    return chunks;
+    return this._sequence.chunks;
   }
 }

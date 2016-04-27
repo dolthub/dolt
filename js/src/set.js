@@ -19,6 +19,7 @@ import diff from './ordered-sequence-diff.js';
 import {setOfValueType, Type} from './type.js';
 import {sha1Size} from './ref.js';
 import {removeDuplicateFromOrdered} from './map.js';
+import {getValueChunks} from './sequence.js';
 
 const setWindowSize = 1;
 const setPattern = ((1 << 6) | 0) - 1;
@@ -202,6 +203,10 @@ export class SetLeafSequence<K:valueOrPrimitive> extends OrderedSequence<K, K> {
 
   equalsAt(idx: number, other: any): boolean {
     return equals(this.items[idx], other);
+  }
+
+  get chunks(): Array<RefValue> {
+    return getValueChunks(this.items);
   }
 }
 

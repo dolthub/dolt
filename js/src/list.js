@@ -15,6 +15,8 @@ import {invariant} from './assert.js';
 import {MetaTuple, newIndexedMetaSequenceBoundaryChecker,
   newIndexedMetaSequenceChunkFn} from './meta-sequence.js';
 import {sha1Size} from './ref.js';
+import RefValue from './ref-value.js';
+import {getValueChunks} from './sequence.js';
 import {listOfValueType, Type} from './type.js';
 
 const listWindowSize = 64;
@@ -125,6 +127,10 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
 }
 
 export class ListLeafSequence<T: valueOrPrimitive> extends IndexedSequence<T> {
+  get chunks(): Array<RefValue> {
+    return getValueChunks(this.items);
+  }
+
   getOffset(idx: number): number {
     return idx;
   }

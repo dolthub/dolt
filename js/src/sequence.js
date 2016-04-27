@@ -4,6 +4,7 @@ import type DataStore from './data-store.js';
 import {invariant, notNull} from './assert.js';
 import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
+import RefValue from './ref-value.js';
 import type {Type} from './type.js';
 import {ValueBase} from './value.js';
 
@@ -279,4 +280,14 @@ export function search(n: number, f: (i: number) => boolean): number {
 
   // i == j, f(i-1) == false, and f(j) (= f(i)) == true  =>  answer is i.
   return i;
+}
+
+export function getValueChunks<T>(items: Array<T>): Array<RefValue> {
+  const chunks = [];
+  for (const item of items) {
+    if (item instanceof ValueBase) {
+      chunks.push(...item.chunks);
+    }
+  }
+  return chunks;
 }
