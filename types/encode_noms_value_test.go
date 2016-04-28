@@ -135,12 +135,12 @@ func TestWriteCompoundBlob(t *testing.T) {
 func TestWriteEmptyStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S", []Field{}, []Field{})
+	typ := MakeStructType("S", []Field{})
 	v := NewStruct(typ, nil)
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{}, []interface{}{}}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{}}, w.toArray())
 }
 
 func TestWriteStruct(t *testing.T) {
@@ -149,12 +149,12 @@ func TestWriteStruct(t *testing.T) {
 	typ := MakeStructType("S", []Field{
 		Field{"x", NumberType, false},
 		Field{"b", BoolType, false},
-	}, []Field{})
+	})
 	v := NewStruct(typ, structData{"x": Number(42), "b": Bool(true)})
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, false, "b", BoolKind, false}, []interface{}{}, "42", true}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, false, "b", BoolKind, false}, "42", true}, w.toArray())
 }
 
 func TestWriteStructOptionalField(t *testing.T) {
@@ -163,41 +163,19 @@ func TestWriteStructOptionalField(t *testing.T) {
 	typ := MakeStructType("S", []Field{
 		Field{"x", NumberType, true},
 		Field{"b", BoolType, false},
-	}, []Field{})
+	})
 
 	v := NewStruct(typ, structData{"x": Number(42), "b": Bool(true)})
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, true, "b", BoolKind, false}, []interface{}{}, true, "42", true}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, true, "b", BoolKind, false}, true, "42", true}, w.toArray())
 
 	v = NewStruct(typ, structData{"b": Bool(true)})
 
 	w = newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, true, "b", BoolKind, false}, []interface{}{}, false, true}, w.toArray())
-}
-
-func TestWriteStructWithUnion(t *testing.T) {
-	assert := assert.New(t)
-
-	typ := MakeStructType("S", []Field{
-		Field{"x", NumberType, false},
-	}, []Field{
-		Field{"b", BoolType, false},
-		Field{"s", StringType, false},
-	})
-	v := NewStruct(typ, structData{"x": Number(42), "s": NewString("hi")})
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, false}, []interface{}{"b", BoolKind, false, "s", StringKind, false}, "42", "1", "hi"}, w.toArray())
-
-	v = NewStruct(typ, structData{"x": Number(42), "b": Bool(true)})
-
-	w = newJSONArrayWriter(NewTestValueStore())
-	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, false}, []interface{}{"b", BoolKind, false, "s", StringKind, false}, "42", "0", true}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, true, "b", BoolKind, false}, false, true}, w.toArray())
 }
 
 func TestWriteStructWithList(t *testing.T) {
@@ -205,17 +183,17 @@ func TestWriteStructWithList(t *testing.T) {
 
 	typ := MakeStructType("S", []Field{
 		Field{"l", MakeListType(StringType), false},
-	}, []Field{})
+	})
 
 	v := NewStruct(typ, structData{"l": NewList(NewString("a"), NewString("b"))})
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"l", ListKind, StringKind, false}, []interface{}{}, false, []interface{}{"a", "b"}}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"l", ListKind, StringKind, false}, false, []interface{}{"a", "b"}}, w.toArray())
 
 	v = NewStruct(typ, structData{"l": NewList()})
 	w = newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"l", ListKind, StringKind, false}, []interface{}{}, false, []interface{}{}}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"l", ListKind, StringKind, false}, false, []interface{}{}}, w.toArray())
 }
 
 func TestWriteStructWithStruct(t *testing.T) {
@@ -230,17 +208,17 @@ func TestWriteStructWithStruct(t *testing.T) {
 
 	s2Type := MakeStructType("S2", []Field{
 		Field{"x", NumberType, false},
-	}, []Field{})
+	})
 	sType := MakeStructType("S", []Field{
 		Field{"s", MakeStructType("S2", []Field{
 			Field{"x", NumberType, false},
-		}, []Field{}), false},
-	}, []Field{})
+		}), false},
+	})
 
 	v := NewStruct(sType, structData{"s": NewStruct(s2Type, structData{"x": Number(42)})})
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"s", StructKind, "S2", []interface{}{"x", NumberKind, false}, []interface{}{}, false}, []interface{}{}, "42"}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"s", StructKind, "S2", []interface{}{"x", NumberKind, false}, false}, "42"}, w.toArray())
 }
 
 func TestWriteStructWithBlob(t *testing.T) {
@@ -248,13 +226,13 @@ func TestWriteStructWithBlob(t *testing.T) {
 
 	typ := MakeStructType("S", []Field{
 		Field{"b", BlobType, false},
-	}, []Field{})
+	})
 	b := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	v := NewStruct(typ, structData{"b": b})
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"b", BlobKind, false}, []interface{}{}, false, "AAE="}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"b", BlobKind, false}, false, "AAE="}, w.toArray())
 }
 
 func TestWriteCompoundList(t *testing.T) {
@@ -317,13 +295,13 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 
 	structType := MakeStructType("S", []Field{
 		Field{"x", NumberType, false},
-	}, []Field{})
+	})
 	listType := MakeListType(ValueType)
 	v := NewTypedList(listType, NewStruct(structType, structData{"x": Number(42)}))
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{ListKind, ValueKind, false, []interface{}{StructKind, "S", []interface{}{"x", NumberKind, false}, []interface{}{}, "42"}}, w.toArray())
+	assert.EqualValues([]interface{}{ListKind, ValueKind, false, []interface{}{StructKind, "S", []interface{}{"x", NumberKind, false}, "42"}}, w.toArray())
 }
 
 func TestWriteListOfValueWithType(t *testing.T) {
@@ -331,7 +309,7 @@ func TestWriteListOfValueWithType(t *testing.T) {
 
 	structType := MakeStructType("S", []Field{
 		Field{"x", NumberType, false},
-	}, []Field{})
+	})
 
 	typ := MakeListType(ValueType)
 	v := NewTypedList(typ,
@@ -347,8 +325,7 @@ func TestWriteListOfValueWithType(t *testing.T) {
 		BoolKind, true,
 		TypeKind, NumberKind,
 		TypeKind, TypeKind,
-		TypeKind, StructKind, "S", []interface{}{"x", NumberKind, false}, []interface{}{},
-	}}, w.toArray())
+		TypeKind, StructKind, "S", []interface{}{"x", NumberKind, false}}}, w.toArray())
 }
 
 func TestWriteRef(t *testing.T) {
@@ -378,16 +355,10 @@ func TestWriteTypeValue(t *testing.T) {
 	test([]interface{}{TypeKind, MapKind, []interface{}{BoolKind, StringKind}},
 		MakeMapType(BoolType, StringType))
 
-	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"x", NumberKind, false, "v", ValueKind, true}, []interface{}{}},
+	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"x", NumberKind, false, "v", ValueKind, true}},
 		MakeStructType("S", []Field{
 			Field{"x", NumberType, false},
 			Field{"v", ValueType, true},
-		}, []Field{}))
-
-	test([]interface{}{TypeKind, StructKind, "S", []interface{}{}, []interface{}{"x", NumberKind, false, "v", ValueKind, false}},
-		MakeStructType("S", []Field{}, []Field{
-			Field{"x", NumberType, false},
-			Field{"v", ValueType, false},
 		}))
 }
 
@@ -413,7 +384,7 @@ func TestWriteRecursiveStruct(t *testing.T) {
 	structType := MakeStructType("A6", []Field{
 		Field{"v", NumberType, false},
 		Field{"cs", nil, false},
-	}, []Field{})
+	})
 	listType := MakeListType(structType)
 	// Mutate...
 	structType.Desc.(StructDesc).Fields[1].T = listType
@@ -430,5 +401,5 @@ func TestWriteRecursiveStruct(t *testing.T) {
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "A6", []interface{}{"v", NumberKind, false, "cs", ListKind, BackRefKind, uint8(0), false}, []interface{}{}, "42", false, []interface{}{"555", false, []interface{}{}}}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "A6", []interface{}{"v", NumberKind, false, "cs", ListKind, BackRefKind, uint8(0), false}, "42", false, []interface{}{"555", false, []interface{}{}}}, w.toArray())
 }

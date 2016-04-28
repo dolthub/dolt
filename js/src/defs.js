@@ -86,7 +86,6 @@ async function structDefToNoms<T: Struct>(data: StructDefType, type: Type): Prom
     }
   };
   desc.fields.forEach(add);
-  desc.union.forEach(add);
 
   const vals = await Promise.all(ps);
   const newData = Object.create(null);

@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	union      = "union { bool :Bool t2 :Blob }"
 	structTmpl = "struct %s { %s %s }"
 )
 
@@ -57,15 +56,6 @@ func (suite *ParserTestSuite) TestBadStructParse() {
 	dupName := "struct str { a :Bool a :Bool }"
 	suite.parsePanics(dupName, "Fields must have unique names.")
 
-	dupNameInUnion := "struct s { union { a: Bool a :Number } }"
-	suite.parsePanics(dupNameInUnion, "union choices must have unique names.")
-
-	dupNameInNamedUnion := "struct s { u :union { a: Bool a :Number } }"
-	suite.parsePanics(dupNameInNamedUnion, "union choices must have unique names.")
-
-	twoAnonUnion := fmt.Sprintf(structTmpl, "str", union, union)
-	suite.parsePanics(twoAnonUnion, "Can't have two anonymous unions.")
-
 	optionalAsTypeName := "struct S { x: optional }"
 	suite.parsePanics(optionalAsTypeName, "optional requires a type after it")
 
@@ -82,12 +72,6 @@ func (suite *ParserTestSuite) TestStructParse() {
 
 	multiLine := "\nstruct str {\na :Bool\n}"
 	suite.parseNotPanics(multiLine)
-
-	anonUnion := fmt.Sprintf(structTmpl, "str", "a :Bool\n", union)
-	suite.parseNotPanics(anonUnion)
-
-	namedUnions := fmt.Sprintf(structTmpl, "str", "a :Bool\nun1 :"+union, "un2 :"+union)
-	suite.parseNotPanics(namedUnions)
 
 	for k, v := range types.KindToString {
 		if types.IsPrimitiveKind(k) {
@@ -219,7 +203,7 @@ func (suite *ParsedResultTestSuite) parseAndCheckStructs(structs ...structTestCa
 		for i, f := range s.Fields {
 			fields[i] = f.Field
 		}
-		expectedTypes[i] = types.MakeStructType(s.Name, fields, nil)
+		expectedTypes[i] = types.MakeStructType(s.Name, fields)
 	}
 	suite.assertTypes(source, expectedTypes...)
 }
@@ -245,13 +229,13 @@ func (suite *ParsedResultTestSuite) TestPrimitiveOptionalField() {
 func (suite *ParsedResultTestSuite) TestCommentNextToName() {
 	n := "WithComment"
 	s := fmt.Sprintf("struct %s { /* Oy! */%s }", n, suite.primOptional)
-	suite.assertTypes(s, types.MakeStructType(n, []types.Field{suite.primOptional.Field}, nil))
+	suite.assertTypes(s, types.MakeStructType(n, []types.Field{suite.primOptional.Field}))
 }
 
 func (suite *ParsedResultTestSuite) TestCommentAmongFields() {
 	n := "WithComment"
 	s := fmt.Sprintf("struct %s { %s \n// Nope\n%s }", n, suite.prim, suite.primOptional)
-	suite.assertTypes(s, types.MakeStructType(n, []types.Field{suite.prim.Field, suite.primOptional.Field}, nil))
+	suite.assertTypes(s, types.MakeStructType(n, []types.Field{suite.prim.Field, suite.primOptional.Field}))
 }
 
 func (suite *ParsedResultTestSuite) TestCompoundField() {

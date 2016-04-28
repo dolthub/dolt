@@ -81,7 +81,7 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 			Optional: false,
 		}
 	}
-	return types.MakeStructType(structName, fields, []types.Field{})
+	return types.MakeStructType(structName, fields)
 }
 
 // Read takes a CSV reader and reads it into a typed List of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.

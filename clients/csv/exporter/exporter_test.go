@@ -48,7 +48,7 @@ func (s *testSuite) TestCSVExporter() {
 		})
 	}
 
-	typ := types.MakeStructType(structName, f, []types.Field{})
+	typ := types.MakeStructType(structName, f)
 	structFields := typ.Desc.(types.StructDesc).Fields
 
 	// Build data rows

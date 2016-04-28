@@ -8,23 +8,18 @@ import (
 type structData map[string]Value
 
 type Struct struct {
-	data       structData
-	t          *Type
-	unionIndex uint32
-	unionValue Value
-	ref        *ref.Ref
+	data structData
+	t    *Type
+	ref  *ref.Ref
 }
 
-func newStructFromData(data structData, unionIndex uint32, unionValue Value, t *Type) Struct {
+func newStructFromData(data structData, t *Type) Struct {
 	d.Chk.Equal(t.Kind(), StructKind)
-	return Struct{data, t, unionIndex, unionValue, &ref.Ref{}}
+	return Struct{data, t, &ref.Ref{}}
 }
 
 func NewStruct(t *Type, data structData) Struct {
 	newData := make(structData)
-	unionIndex := uint32(0)
-	var unionValue Value
-
 	desc := t.Desc.(StructDesc)
 	for _, f := range desc.Fields {
 		if v, ok := data[f.Name]; ok {
@@ -33,15 +28,7 @@ func NewStruct(t *Type, data structData) Struct {
 			d.Chk.True(f.Optional, "Missing required field %s", f.Name)
 		}
 	}
-	for i, f := range desc.Union {
-		v, ok := data[f.Name]
-		if ok {
-			unionIndex = uint32(i)
-			unionValue = v
-			break
-		}
-	}
-	return newStructFromData(newData, unionIndex, unionValue, t)
+	return newStructFromData(newData, t)
 }
 
 func (s Struct) Equals(other Value) bool {
@@ -62,10 +49,6 @@ func (s Struct) Chunks() (chunks []Ref) {
 		}
 	}
 
-	if s.hasUnion() {
-		chunks = append(chunks, s.unionValue.Chunks()...)
-	}
-
 	return
 }
 
@@ -78,9 +61,6 @@ func (s Struct) ChildValues() (res []Value) {
 			d.Chk.True(f.Optional)
 		}
 	}
-	if s.hasUnion() {
-		res = append(res, s.unionValue)
-	}
 	return
 }
 
@@ -92,86 +72,49 @@ func (s Struct) desc() StructDesc {
 	return s.t.Desc.(StructDesc)
 }
 
-func (s Struct) hasUnion() bool {
-	return len(s.desc().Union) > 0
-}
-
 func (s Struct) MaybeGet(n string) (Value, bool) {
-	_, idx, ok := s.findField(n)
+	_, ok := s.findField(n)
 	if !ok {
 		return nil, false
 	}
-	if idx == -1 {
-		v, ok := s.data[n]
-		return v, ok
-	}
-	if s.unionIndex != uint32(idx) {
-		return nil, false
-	}
-	return s.unionValue, true
+	v, ok := s.data[n]
+	return v, ok
 }
 
 func (s Struct) Get(n string) Value {
-	_, idx, ok := s.findField(n)
+	_, ok := s.findField(n)
 	d.Chk.True(ok, `Struct has no field "%s"`, n)
-	if idx == -1 {
-		v, ok := s.data[n]
-		d.Chk.True(ok)
-		return v
-	}
-	d.Chk.Equal(s.unionIndex, uint32(idx), `Union field "%s" is not set`, n)
-	return s.unionValue
+	v, ok := s.data[n]
+	d.Chk.True(ok)
+	return v
 }
 
 func (s Struct) Set(n string, v Value) Struct {
-	f, idx, ok := s.findField(n)
+	f, ok := s.findField(n)
 	d.Chk.True(ok, "Struct has no field %s", n)
 	assertType(f.T, v)
 	data := make(structData, len(s.data))
-	unionIndex := s.unionIndex
-	unionValue := s.unionValue
 	for k, v := range s.data {
 		data[k] = v
 	}
+	data[n] = v
 
-	if idx == -1 {
-		data[n] = v
-	} else {
-		unionIndex = uint32(idx)
-		unionValue = v
-	}
-
-	return newStructFromData(data, unionIndex, unionValue, s.t)
+	return newStructFromData(data, s.t)
 }
 
-func (s Struct) UnionIndex() uint32 {
-	return s.unionIndex
-}
-
-func (s Struct) UnionValue() Value {
-	return s.unionValue
-}
-
-func (s Struct) findField(n string) (Field, int32, bool) {
+func (s Struct) findField(n string) (Field, bool) {
 	for _, f := range s.desc().Fields {
 		if f.Name == n {
-			return f, -1, true
+			return f, true
 		}
 	}
-	for i, f := range s.desc().Union {
-		if f.Name == n {
-			return f, int32(i), true
-		}
-	}
-	return Field{}, -1, false
+	return Field{}, false
 }
 
 func structBuilder(values []Value, t *Type) Value {
 	i := 0
 	desc := t.Desc.(StructDesc)
 	data := structData{}
-	unionIndex := uint32(0)
-	var unionValue Value
 
 	for _, f := range desc.Fields {
 		if f.Optional {
@@ -186,14 +129,8 @@ func structBuilder(values []Value, t *Type) Value {
 			i++
 		}
 	}
-	if len(desc.Union) > 0 {
-		unionIndex = uint32(values[i].(Number))
-		i++
-		unionValue = values[i]
-		i++
-	}
 
-	return newStructFromData(data, unionIndex, unionValue, t)
+	return newStructFromData(data, t)
 }
 
 func structReader(s Struct, t *Type) []Value {
@@ -212,9 +149,6 @@ func structReader(s Struct, t *Type) []Value {
 			d.Chk.True(ok)
 			values = append(values, v)
 		}
-	}
-	if len(desc.Union) > 0 {
-		values = append(values, Number(s.unionIndex), s.unionValue)
 	}
 
 	return values

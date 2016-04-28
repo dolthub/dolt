@@ -140,26 +140,17 @@ func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
 	w.write("{")
 	w.indent()
 
-	writeField := func(f Field, v Value, i int) {
-		if i == 0 {
-			w.newLine()
-		}
-		w.write(f.Name)
-		w.write(": ")
-		w.Write(v)
-		w.write(",")
-		w.newLine()
-	}
-
 	for i, f := range desc.Fields {
 		if fv, present := v.MaybeGet(f.Name); present {
-			writeField(f, fv, i)
+			if i == 0 {
+				w.newLine()
+			}
+			w.write(f.Name)
+			w.write(": ")
+			w.Write(fv)
+			w.write(",")
+			w.newLine()
 		}
-	}
-	if len(desc.Union) > 0 {
-		f := desc.Union[v.UnionIndex()]
-		fv := v.UnionValue()
-		writeField(f, fv, 0)
 	}
 
 	w.outdent()
@@ -227,8 +218,7 @@ func (w *hrsWriter) writeStructType(t *Type, backRefs []*Type) {
 	w.write(" {")
 	w.indent()
 	desc := t.Desc.(StructDesc)
-	i := 0
-	writeField := func(f Field) {
+	for i, f := range desc.Fields {
 		if i == 0 {
 			w.newLine()
 		}
@@ -238,25 +228,6 @@ func (w *hrsWriter) writeStructType(t *Type, backRefs []*Type) {
 			w.write("optional ")
 		}
 		w.writeType(f.T, backRefs)
-		w.newLine()
-		i++
-	}
-	for _, f := range desc.Fields {
-		writeField(f)
-	}
-	if len(desc.Union) > 0 {
-		if i == 0 {
-			w.newLine()
-			i++
-		}
-		w.write("union {")
-		w.indent()
-		i = 0
-		for _, f := range desc.Union {
-			writeField(f)
-		}
-		w.outdent()
-		w.write("}")
 		w.newLine()
 	}
 	w.outdent()

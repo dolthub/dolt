@@ -57,12 +57,10 @@ export class CompoundDesc {
 export class StructDesc {
   name: string;
   fields: Array<Field>;
-  union: Array<Field>;
 
-  constructor(name: string, fields: Array<Field>, union: Array<Field>) {
+  constructor(name: string, fields: Array<Field>) {
     this.name = name;
     this.fields = fields;
-    this.union = union;
   }
 
   get kind(): NomsKind {
@@ -79,18 +77,12 @@ export class StructDesc {
     }
     invariant(other instanceof StructDesc);
 
-    if (this.fields.length !== other.fields.length || this.union.length !== other.union.length) {
+    if (this.fields.length !== other.fields.length) {
       return false;
     }
 
     for (let i = 0; i < this.fields.length; i++) {
       if (!this.fields[i].equals(other.fields[i])) {
-        return false;
-      }
-    }
-
-    for (let i = 0; i < this.union.length; i++) {
-      if (!this.union[i].equals(other.union[i])) {
         return false;
       }
     }
@@ -199,8 +191,8 @@ export function makeRefType(elemType: Type): Type {
   return buildType(new CompoundDesc(Kind.Ref, [elemType]));
 }
 
-export function makeStructType(name: string, fields: Array<Field>, choices: Array<Field>): Type {
-  return buildType(new StructDesc(name, fields, choices));
+export function makeStructType(name: string, fields: Array<Field>): Type {
+  return buildType(new StructDesc(name, fields));
 }
 
 export const boolType = makePrimitiveType(Kind.Bool);
@@ -238,6 +230,8 @@ export function getPrimitiveType(k: NomsKind): Type {
   }
 }
 
+// Returns the Noms type of any value. This will throw if you pass in an object that cannot be
+// represented by noms.
 export function getTypeOfValue(v: valueOrPrimitive): Type {
   switch (typeof v) {
     case 'object':

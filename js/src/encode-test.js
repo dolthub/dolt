@@ -189,11 +189,11 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const type = makeStructType('S', [], []);
+    const type = makeStructType('S', []);
     const v = newStruct(type, {});
 
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Struct, 'S', [], []], w.array);
+    assert.deepEqual([Kind.Struct, 'S', []], w.array);
   });
 
   test('write struct', async() => {
@@ -204,12 +204,12 @@ suite('Encode', () => {
     const type = makeStructType('S', [
       new Field('x', numberType, false),
       new Field('b', boolType, false),
-    ], []);
+    ]);
 
     const v = newStruct(type, {x: 42, b: true});
 
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Struct, 'S', ['x', Kind.Number, false, 'b', Kind.Bool, false], [],
+    assert.deepEqual([Kind.Struct, 'S', ['x', Kind.Number, false, 'b', Kind.Bool, false],
       '42', true], w.array);
   });
 
@@ -221,44 +221,18 @@ suite('Encode', () => {
     const type = makeStructType('S', [
       new Field('x', numberType, true),
       new Field('b', boolType, false),
-    ], []);
+    ]);
 
     let v = newStruct(type, {x: 42, b: true});
     w.writeTopLevel(type, v);
     assert.deepEqual([Kind.Struct, 'S',
-      ['x', Kind.Number, true, 'b', Kind.Bool, false], [], true, '42', true], w.array);
+      ['x', Kind.Number, true, 'b', Kind.Bool, false], true, '42', true], w.array);
 
     v = newStruct(type, {b: true});
     w = new JsonArrayWriter(ds);
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Struct, 'S', ['x', Kind.Number, true, 'b', Kind.Bool, false], [],
+    assert.deepEqual([Kind.Struct, 'S', ['x', Kind.Number, true, 'b', Kind.Bool, false],
       false, true], w.array);
-  });
-
-  test('write struct with union', async() => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    let w = new JsonArrayWriter(ds);
-
-    const type = makeStructType('S', [
-      new Field('x', numberType, false),
-    ], [
-      new Field('b', boolType, false),
-      new Field('s', stringType, false),
-    ]);
-
-    let v = newStruct(type, {x: 42, s: 'hi'});
-    w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Struct, 'S',
-      ['x', Kind.Number, false], ['b', Kind.Bool, false, 's', Kind.String, false], '42', '1', 'hi'],
-      w.array);
-
-    v = newStruct(type, {x: 42, b: true});
-    w = new JsonArrayWriter(ds);
-    w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Struct, 'S',
-      ['x', Kind.Number, false], ['b', Kind.Bool, false, 's', Kind.String, false], '42', '0', true],
-      w.array);
   });
 
   test('write struct with list', async() => {
@@ -269,17 +243,17 @@ suite('Encode', () => {
     const ltr = makeCompoundType(Kind.List, stringType);
     const type = makeStructType('S', [
       new Field('l', ltr, false),
-    ], []);
+    ]);
 
     let v = newStruct(type, {l: new NomsList(ltr, new ListLeafSequence(ds, ltr, ['a', 'b']))});
     w.writeTopLevel(type, v);
     assert.deepEqual([Kind.Struct, 'S',
-      ['l', Kind.List, Kind.String, false], [], false, ['a', 'b']], w.array);
+      ['l', Kind.List, Kind.String, false], false, ['a', 'b']], w.array);
 
     v = newStruct(type, {l: new NomsList(ltr, new ListLeafSequence(ds, ltr, []))});
     w = new JsonArrayWriter(ds);
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Struct, 'S', ['l', Kind.List, Kind.String, false], [], false, []],
+    assert.deepEqual([Kind.Struct, 'S', ['l', Kind.List, Kind.String, false], false, []],
                      w.array);
   });
 
@@ -290,15 +264,15 @@ suite('Encode', () => {
 
     const s2Type = makeStructType('S2', [
       new Field('x', numberType, false),
-    ], []);
+    ]);
     const sType = makeStructType('S', [
       new Field('s', s2Type, false),
-    ], []);
+    ]);
 
     const v = newStruct(sType, {s: newStruct(s2Type, {x: 42})});
     w.writeTopLevel(sType, v);
     assert.deepEqual([Kind.Struct, 'S',
-      ['s', Kind.Struct, 'S2', ['x', Kind.Number, false], [], false], [], '42'], w.array);
+      ['s', Kind.Struct, 'S2', ['x', Kind.Number, false], false], '42'], w.array);
   });
 
   test('write compound list', async () => {
@@ -336,23 +310,18 @@ suite('Encode', () => {
          makeCompoundType(Kind.List, boolType));
     test([Kind.Type, Kind.Map, [Kind.Bool, Kind.String]],
          makeCompoundType(Kind.Map, boolType, stringType));
-    test([Kind.Type, Kind.Struct, 'S', ['x', Kind.Number, false, 'v', Kind.Value, true], []],
+    test([Kind.Type, Kind.Struct, 'S', ['x', Kind.Number, false, 'v', Kind.Value, true]],
          makeStructType('S', [
            new Field('x', numberType, false),
            new Field('v', valueType, true),
-         ], []));
-    test([Kind.Type, Kind.Struct, 'S', [], ['x', Kind.Number, false, 'v', Kind.Value, false]],
-         makeStructType('S', [], [
-           new Field('x', numberType, false),
-           new Field('v', valueType, false),
          ]));
 
     test([Kind.Type, Kind.Struct, 'S',
-          ['e', Kind.Bool, true, 'x', Kind.Number, false], []],
+          ['e', Kind.Bool, true, 'x', Kind.Number, false]],
           makeStructType('S', [
             new Field('e', boolType, true),
             new Field('x', numberType, false),
-          ], []));
+          ]));
 
 
     // struct A6 {
@@ -363,13 +332,13 @@ suite('Encode', () => {
     const st = makeStructType('A6', [
       new Field('v', numberType, false),
       new Field('cs', valueType /* placeholder */, false),
-    ], []);
+    ]);
     const lt = makeListType(st);
     invariant(st.desc instanceof StructDesc);
     st.desc.fields[1].t = lt;
 
     test([Kind.Type, Kind.Struct, 'A6',
-      ['v', Kind.Number, false, 'cs', Kind.List, Kind.BackRef, 0, false], []], st);
+      ['v', Kind.Number, false, 'cs', Kind.List, Kind.BackRef, 0, false]], st);
   });
 
   test('top level blob', async () => {

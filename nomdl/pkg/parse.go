@@ -89,7 +89,6 @@ func resolveReferences(i *intermediate, aliases map[string][]*types.Type) {
 			return types.MakeMapType(rec(elemTypes[0]), rec(elemTypes[1]))
 		case types.StructKind:
 			resolveFields(t.Desc.(types.StructDesc).Fields)
-			resolveFields(t.Desc.(types.StructDesc).Union)
 		}
 		return t
 	}

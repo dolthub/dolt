@@ -308,42 +308,29 @@ export class JsonArrayReader {
       }
     }
 
-    let unionIndex = -1;
-    if (desc.union.length > 0) {
-      unionIndex = this.readUint();
-      const unionField = desc.union[unionIndex];
-      const v = this.readValueWithoutTag(unionField.t);
-      data[unionField.name] = v;
-    }
-
     return newStruct(type, data);
   }
 
   readStructType(backRefs: Type[]): Type {
     const name = this.readString();
     const fields = [];
-    const choices = [];
-    const structType = makeStructType(name, fields, choices);
-    backRefs = backRefs.concat(structType);  // needs to be a copy.
-    const readFields = () => {
-      const fields: Array<Field> = [];
-      const fieldReader = new JsonArrayReader(this.readArray(), this._ds);
-      while (!fieldReader.atEnd()) {
-        const fieldName = fieldReader.readString();
-        const fieldType = fieldReader.readTypeAsTag(backRefs);
-        const optional = fieldReader.readBool();
-        fields.push(new Field(fieldName, fieldType, optional));
-      }
-      return fields;
-    };
+    const structType = makeStructType(name, fields);
+    backRefs.push(structType);
 
-    const newFields = readFields();
-    const newChoices = readFields();
+    const newFields: Array<Field> = [];
+    const fieldReader = new JsonArrayReader(this.readArray(), this._ds);
+    while (!fieldReader.atEnd()) {
+      const fieldName = fieldReader.readString();
+      const fieldType = fieldReader.readTypeAsTag(backRefs);
+      const optional = fieldReader.readBool();
+      newFields.push(new Field(fieldName, fieldType, optional));
+    }
 
-    // Update the existing structType to keep object identity.
+    // Mutate the already created structType since when looking for the cycle we compare
+    // by identity.
     invariant(structType.desc instanceof StructDesc);
     structType.desc.fields = newFields;
-    structType.desc.union = newChoices;
+    backRefs.pop();
     return structType;
   }
 }

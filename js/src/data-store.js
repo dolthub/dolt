@@ -51,7 +51,7 @@ export function getDatasTypes(): DatasTypes {
     // }
     const commitType = makeStructType('Commit', [
       new Field('value', valueType, false),
-    ], []);
+    ]);
     const refOfCommitType = makeRefType(commitType);
     const commitSetType = makeSetType(refOfCommitType);
     invariant(commitType.desc instanceof StructDesc);

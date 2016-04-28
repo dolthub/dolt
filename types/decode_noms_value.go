@@ -293,10 +293,6 @@ func (r *jsonArrayReader) readStruct(t *Type) Value {
 			values = append(values, r.readValueWithoutTag(f.T))
 		}
 	}
-	if len(desc.Union) > 0 {
-		unionIndex := uint64(r.readUint())
-		values = append(values, Number(unionIndex), r.readValueWithoutTag(desc.Union[unionIndex].T))
-	}
 
 	return structBuilder(values, t)
 }
@@ -305,8 +301,7 @@ func (r *jsonArrayReader) readStructType(backRefs []*Type) *Type {
 	name := r.readString()
 
 	fields := []Field{}
-	choices := []Field{}
-	st := MakeStructType(name, fields, choices)
+	st := MakeStructType(name, fields)
 	backRefs = append(backRefs, st)
 	desc := st.Desc.(StructDesc)
 
@@ -317,15 +312,7 @@ func (r *jsonArrayReader) readStructType(backRefs []*Type) *Type {
 		optional := fieldReader.readBool()
 		fields = append(fields, Field{Name: fieldName, T: fieldType, Optional: optional})
 	}
-	choiceReader := newJSONArrayReader(r.readArray(), r.vr)
-	for !choiceReader.atEnd() {
-		fieldName := choiceReader.readString()
-		fieldType := choiceReader.readTypeAsTag(backRefs)
-		optional := choiceReader.readBool()
-		choices = append(choices, Field{Name: fieldName, T: fieldType, Optional: optional})
-	}
 	desc.Fields = fields
-	desc.Union = choices
 	st.Desc = desc
 	return st
 }

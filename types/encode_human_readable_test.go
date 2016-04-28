@@ -127,7 +127,7 @@ func TestWriteHumanReadableStruct(t *testing.T) {
 	typ := MakeStructType("S1", []Field{
 		Field{Name: "x", T: NumberType, Optional: false},
 		Field{Name: "y", T: NumberType, Optional: true},
-	}, []Field{})
+	})
 
 	str := NewStruct(typ, map[string]Value{
 		"x": Number(1),
@@ -143,29 +143,10 @@ func TestWriteHumanReadableStruct(t *testing.T) {
 	assertWriteTaggedHRSEqual(t, "struct S1 {\n  x: Number\n  y: optional Number\n}({\n  x: 2,\n  y: 3,\n})", str2)
 }
 
-func TestWriteHumanReadableStructWithUnion(t *testing.T) {
-	typ := MakeStructType("S2", []Field{}, []Field{
-		Field{Name: "x", T: NumberType, Optional: false},
-		Field{Name: "y", T: NumberType, Optional: false},
-	})
-
-	str := NewStruct(typ, map[string]Value{
-		"x": Number(1),
-	})
-	assertWriteHRSEqual(t, "S2 {\n  x: 1,\n}", str)
-	assertWriteTaggedHRSEqual(t, "struct S2 {\n  union {\n    x: Number\n    y: Number\n  }\n}({\n  x: 1,\n})", str)
-
-	str2 := NewStruct(typ, map[string]Value{
-		"y": Number(2),
-	})
-	assertWriteHRSEqual(t, "S2 {\n  y: 2,\n}", str2)
-	assertWriteTaggedHRSEqual(t, "struct S2 {\n  union {\n    x: Number\n    y: Number\n  }\n}({\n  y: 2,\n})", str2)
-}
-
 func TestWriteHumanReadableListOfStruct(t *testing.T) {
 	typ := MakeStructType("S3", []Field{
 		Field{Name: "x", T: NumberType, Optional: false},
-	}, []Field{})
+	})
 
 	str1 := NewStruct(typ, map[string]Value{
 		"x": Number(1),
@@ -306,11 +287,11 @@ func TestRecursiveStruct(t *testing.T) {
 		Field{Name: "b", T: nil, Optional: false},
 		Field{Name: "c", T: nil, Optional: false},
 		Field{Name: "d", T: nil, Optional: false},
-	}, []Field{})
+	})
 	d := MakeStructType("D", []Field{
 		Field{Name: "e", T: nil, Optional: false},
 		Field{Name: "f", T: a, Optional: false},
-	}, []Field{})
+	})
 	a.Desc.(StructDesc).Fields[0].T = a
 	a.Desc.(StructDesc).Fields[1].T = MakeListType(a)
 	a.Desc.(StructDesc).Fields[2].T = d

@@ -94,7 +94,7 @@ suite('defs', () => {
     const type = makeStructType('Struct', [
       new Field('b', boolType, false),
       new Field('s', stringType, false),
-    ], []);
+    ]);
 
     const s1 = newStruct(type, {
       b: true,
@@ -112,7 +112,7 @@ suite('defs', () => {
     const listOfNumberType = makeListType(numberType);
     const type = makeStructType('StructWithList', [
       new Field('l', listOfNumberType, false),
-    ], []);
+    ]);
 
     const s1 = newStruct(type, {
       l: await newList([0, 1, 2, 3], listOfNumberType),
@@ -129,7 +129,7 @@ suite('defs', () => {
   test('list of struct', async () => {
     const structType = makeStructType('Struct', [
       new Field('i', numberType, false),
-    ], []);
+    ]);
     const listType = makeListType(structType);
 
     const l1 = await newList([
@@ -149,7 +149,7 @@ suite('defs', () => {
   test('recursive struct', async () => {
     const type = makeStructType('Struct', [
       new Field('children', valueType /* placeholder */, false),
-    ], []);
+    ]);
     const listType = makeListType(type);
     invariant(type.desc instanceof StructDesc);
     type.desc.fields[0].t = listType;

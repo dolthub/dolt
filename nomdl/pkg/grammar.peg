@@ -51,16 +51,10 @@ Alias <- `alias` _ i:Ident _ `=` _ `import` _ q:QuotedString _ {
 
 Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 	ll := l.([]interface{})
-	var u []types.Field
 	fieldNames := map[string]bool{}
 	fields := make([]types.Field, 0, len(ll))
 	for _, e := range ll {
 		switch e := e.(type) {
-		case []types.Field:
-			if u != nil {
-				return nil, fmt.Errorf("Only one anonymous union per struct.")
-			}
-			u = e
 		case types.Field:
 			if fieldNames[e.Name] {
 				return nil, fmt.Errorf("Redefinition of field %s in struct %s", e.Name, i.(string))
@@ -68,44 +62,22 @@ Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 			fieldNames[e.Name] = true
 			fields = append(fields, e)
 		default:
-			return nil, fmt.Errorf("Structs must be made up of field declarations and at most one anonymous union.")
+			return nil, fmt.Errorf("Structs must be made up of field declarations.")
 		}
 	}
-	return types.MakeStructType(i.(string), fields, u), nil
+	return types.MakeStructType(i.(string), fields), nil
 }
 
-StructEntry <- Union / Field
-
-
-Union <- `union` _ `{` _ u:UnionField+ _ `}` _ {
-	uu := u.([]interface{})
-	choiceNames := map[string]bool{}
-	desc := make([]types.Field, 0, len(uu))
-	for _, f := range uu {
-		ff := f.(types.Field)
-		if choiceNames[ff.Name] {
-			return nil, fmt.Errorf("Redefinition of union choice %s", ff.Name)
-		}
-		choiceNames[ff.Name] = true
-		desc = append(desc, ff)
-	}
-	return desc, nil
-}
+StructEntry <- Field
 
 Field <- i:Ident _ `:` _ o:(`optional` _)? t:Type _ {
 	return types.Field{i.(string), t.(*types.Type), o != nil}, nil
 }
 
-UnionField <- i:Ident _ `:` _ t:Type _ {
-	return types.Field{i.(string), t.(*types.Type), false}, nil
-}
-
-Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
+Type <- t:(PrimitiveType / CompoundType / NamespaceIdent) {
 	switch t := t.(type) {
 	case *types.Type:
 		return t, nil
-	case []types.Field:
-		return types.MakeStructType("", nil, t), nil
 	case namespaceIdent:
 		return makeUnresolvedType(t.Namespace, t.ID), nil
 	default:

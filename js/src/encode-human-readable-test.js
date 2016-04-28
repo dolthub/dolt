@@ -52,22 +52,15 @@ suite('Encode human readable types', () => {
     const type = makeStructType('S1', [
       new Field('x', numberType, false),
       new Field('y', numberType, true),
-    ], []);
+    ]);
     assertWriteType('struct S1 {\n  x: Number\n  y: optional Number\n}', type);
   });
 
-  test('struct with union', () => {
-    const type = makeStructType('S1', [], [
-      new Field('x', numberType, false),
-      new Field('y', numberType, true),
-    ]);
-    assertWriteType('struct S1 {\n  union {\n    x: Number\n    y: optional Number\n  }\n}', type);
-  });
 
   test('list of struct', () => {
     const type = makeStructType('S3', [
       new Field('x', numberType, false),
-    ], []);
+    ]);
     assertWriteType('List<struct S3 {\n  x: Number\n}>', makeListType(type));
   });
 
@@ -85,11 +78,11 @@ suite('Encode human readable types', () => {
       new Field('b', valueType /* placeholder */, false),
       new Field('c', valueType /* placeholder */, false),
       new Field('d', valueType /* placeholder */, false),
-    ], []);
+    ]);
     const d = makeStructType('D', [
       new Field('e', valueType /* placeholder */, false),
       new Field('f', a, false),
-    ], []);
+    ]);
     const aDesc = a.desc;
     invariant(aDesc instanceof StructDesc);
     const dDesc = d.desc;

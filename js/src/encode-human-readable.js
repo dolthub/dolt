@@ -127,8 +127,8 @@ export class TypeWriter {
     this._w.write(desc.name);
     this._w.write(' {');
     this._w.indent();
-    let i = 0;
-    const writeField = (f: Field) => {
+
+    desc.fields.forEach((f: Field, i: number) => {
       if (i === 0) {
         this._w.newLine();
       }
@@ -139,23 +139,8 @@ export class TypeWriter {
       }
       this._writeType(f.t, backRefs);
       this._w.newLine();
-      i++;
-    };
-    desc.fields.forEach(writeField);
+    });
 
-    if (desc.union.length > 0) {
-      if (i === 0) {
-        this._w.newLine();
-        i++;
-      }
-      this._w.write('union {');
-      this._w.indent();
-      i = 0;
-      desc.union.forEach(writeField);
-      this._w.outdent();
-      this._w.write('}');
-      this._w.newLine();
-    }
     this._w.outdent();
     this._w.write('}');
   }

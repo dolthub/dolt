@@ -71,9 +71,6 @@ export default class Struct extends ValueBase {
     };
 
     mirror.forEachField(add);
-    if (mirror.hasUnion) {
-      add(mirror.unionField);
-    }
     return chunks;
   }
 }
@@ -99,33 +96,7 @@ function validate(type: Type, data: StructData): void {
       validateType(field.t, value);
     }
   }
-
-  const {union} = desc;
-  if (union.length > 0) {
-    invariant(dataCount === 1);
-    for (let i = 0; i < union.length; i++) {
-      const field = union[i];
-      const value = data[field.name];
-      if (value !== undefined) {
-        validateType(field.t, value);
-        return;
-      }
-    }
-
-    invariant(false);
-  } else {
-    invariant(dataCount === 0);
-  }
-}
-
-export function findUnionIndex(data: StructData, union: Array<Field>): number {
-  for (let i = 0; i < union.length; i++) {
-    const field = union[i];
-    if (data[field.name] !== undefined) {
-      return i;
-    }
-  }
-  return -1;
+  invariant(dataCount === 0);
 }
 
 export class StructFieldMirror {
@@ -170,23 +141,6 @@ export class StructMirror<T: Struct> {
     this.desc.fields.forEach(field => cb(new StructFieldMirror(this._data, field)));
   }
 
-  get hasUnion(): boolean {
-    return this.desc.union.length > 0;
-  }
-
-  get unionIndex(): number {
-    return findUnionIndex(this._data, this.desc.union);
-  }
-
-  get unionField(): StructFieldMirror {
-    invariant(this.hasUnion);
-    return new StructFieldMirror(this._data, this.desc.union[this.unionIndex]);
-  }
-
-  get unionValue(): ?valueOrPrimitive {
-    return this._data[this.unionField.name];
-  }
-
   get name(): string {
     return this.type.name;
   }
@@ -226,38 +180,36 @@ export function createStructClass<T: Struct>(type: Type): Class<T> {
   const {desc} = type;
   invariant(desc instanceof StructDesc);
 
-  for (const fields of [desc.fields, desc.union]) {
-    const isUnion = fields === desc.union;
-    for (const field of fields) {
-      const {name} = field;
-      Object.defineProperty(c.prototype, name, {
-        configurable: true,
-        enumerable: false,
-        get: function() {
-          return this._data[name];
-        },
-      });
-      Object.defineProperty(c.prototype, setterName(name), {
-        configurable: true,
-        enumerable: false,
-        value: getSetter(name, field.optional, isUnion),
-        writable: true,
-      });
-    }
+  const {fields} = desc;
+  for (const field of fields) {
+    const {name} = field;
+    Object.defineProperty(c.prototype, name, {
+      configurable: true,
+      enumerable: false,
+      get: function() {
+        return this._data[name];
+      },
+    });
+    Object.defineProperty(c.prototype, setterName(name), {
+      configurable: true,
+      enumerable: false,
+      value: getSetter(name, field.optional),
+      writable: true,
+    });
   }
 
   return cache[k] = c;
 }
 
-function getSetter(name: string, optional: boolean, union: boolean) {
-  if (!optional && !union) {
+function getSetter(name: string, optional: boolean) {
+  if (!optional) {
     return function(value) {
       const newData = Object.assign(Object.create(null), this._data);
       newData[name] = value;
       return new this.constructor(newData);
     };
   }
-  if (optional && !union) {
+  if (optional) {
     return function(value) {
       const newData = Object.assign(Object.create(null), this._data);
       if (value === undefined) {
@@ -288,24 +240,7 @@ function addProperty(mirror: StructMirror, name: string, value: ?valueOrPrimitiv
     }
   });
 
-  if (mirror.hasUnion) {
-    if (found) {
-      const {unionField} = mirror;
-      data[unionField.name] = unionField.value;
-    } else {
-      const {union} = mirror.desc;
-      for (let i = 0; i < union.length; i++) {
-        if (union[i].name === name) {
-          data[name] = value;
-          found = true;
-          break;
-        }
-      }
-    }
-  }
-
   invariant(found);
-
   return data;
 }
 

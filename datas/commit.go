@@ -21,7 +21,7 @@ func init() {
 		types.Field{Name: ValueField, T: types.ValueType},
 		types.Field{Name: ParentsField, T: nil},
 	}
-	commitType = types.MakeStructType(structName, fieldTypes, []types.Field{})
+	commitType = types.MakeStructType(structName, fieldTypes)
 	commitType.Desc.(types.StructDesc).Fields[1].T = types.MakeSetType(types.MakeRefType(commitType))
 }
 

@@ -47,8 +47,8 @@ func TestValueEquals(t *testing.T) {
 
 		func() Value { return BoolType },
 		func() Value { return StringType },
-		func() Value { return MakeStructType("a", []Field{}, []Field{}) },
-		func() Value { return MakeStructType("b", []Field{}, []Field{}) },
+		func() Value { return MakeStructType("a", []Field{}) },
+		func() Value { return MakeStructType("b", []Field{}) },
 		func() Value { return MakeListType(BoolType) },
 		func() Value { return MakeListType(NumberType) },
 		func() Value { return MakeSetType(BoolType) },

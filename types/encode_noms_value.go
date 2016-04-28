@@ -225,13 +225,6 @@ func (w *jsonArrayWriter) writeStructType(t *Type, backRefs []*Type) {
 		fieldWriter.write(field.Optional)
 	}
 	w.write(fieldWriter.toArray())
-	choiceWriter := newJSONArrayWriter(w.vw)
-	for _, choice := range t.Desc.(StructDesc).Union {
-		choiceWriter.write(choice.Name)
-		choiceWriter.writeTypeAsTag(choice.T, backRefs)
-		choiceWriter.write(choice.Optional)
-	}
-	w.write(choiceWriter.toArray())
 }
 
 func (w *jsonArrayWriter) writeBlob(b Blob) {
@@ -262,12 +255,5 @@ func (w *jsonArrayWriter) writeStruct(v Value, t *Type) {
 			w.writeValue(values[i], f.T)
 			i++
 		}
-	}
-	if len(desc.Union) > 0 {
-		unionIndex := uint64(values[i].(Number))
-		i++
-		w.writeUint(unionIndex)
-		w.writeValue(values[i], desc.Union[unionIndex].T)
-		i++
 	}
 }

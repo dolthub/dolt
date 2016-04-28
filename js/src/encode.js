@@ -264,13 +264,6 @@ export class JsonArrayWriter {
       fieldWriter.write(field.optional);
     });
     this.write(fieldWriter.array);
-    const choiceWriter = new JsonArrayWriter(this._ds);
-    desc.union.forEach(choice => {
-      choiceWriter.write(choice.name);
-      choiceWriter.writeTypeAsTag(choice.t, backRefs);
-      choiceWriter.write(choice.optional);
-    });
-    this.write(choiceWriter.array);
   }
 
   writeBackRef(i: number) {
@@ -299,12 +292,6 @@ export class JsonArrayWriter {
         this.writeValue(field.value, field.type);
       }
     });
-
-    if (mirror.hasUnion) {
-      const {unionField} = mirror;
-      this.writeInt(mirror.unionIndex);
-      this.writeValue(unionField.value, unionField.type);
-    }
   }
 }
 

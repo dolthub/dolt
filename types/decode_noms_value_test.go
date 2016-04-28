@@ -233,9 +233,9 @@ func TestReadStruct(t *testing.T) {
 		Field{"x", NumberType, false},
 		Field{"s", StringType, false},
 		Field{"b", BoolType, false},
-	}, []Field{})
+	})
 
-	a := parseJSON(`[%d, "A1", ["x", %d, false, "s", %d, false, "b", %d, false], [], "42", "hi", true]`, StructKind, NumberKind, StringKind, BoolKind)
+	a := parseJSON(`[%d, "A1", ["x", %d, false, "s", %d, false, "b", %d, false], "42", "hi", true]`, StructKind, NumberKind, StringKind, BoolKind)
 	r := newJSONArrayReader(a, cs)
 
 	v := r.readTopLevelValue().(Struct)
@@ -243,36 +243,6 @@ func TestReadStruct(t *testing.T) {
 	assert.True(v.Get("x").Equals(Number(42)))
 	assert.True(v.Get("s").Equals(NewString("hi")))
 	assert.True(v.Get("b").Equals(Bool(true)))
-}
-
-func TestReadStructUnion(t *testing.T) {
-	assert := assert.New(t)
-	cs := NewTestValueStore()
-
-	typ := MakeStructType("A2", []Field{
-		Field{"x", NumberType, false},
-	}, []Field{
-		Field{"b", BoolType, false},
-		Field{"s", StringType, false},
-	})
-
-	a := parseJSON(`[%d, "A2", ["x", %d, false], ["b", %d, false, "s", %d, false], "42", "1", "hi"]`, StructKind, NumberKind, BoolKind, StringKind)
-	r := newJSONArrayReader(a, cs)
-
-	v := r.readTopLevelValue().(Struct)
-	assert.True(v.Type().Equals(typ))
-	assert.True(v.Get("x").Equals(Number(42)))
-	assert.Equal(uint32(1), v.UnionIndex())
-	assert.True(v.UnionValue().Equals(NewString("hi")))
-
-	x, ok := v.MaybeGet("x")
-	assert.True(ok)
-	assert.True(x.Equals(Number(42)))
-
-	s, ok := v.MaybeGet("s")
-	assert.True(ok)
-	assert.True(s.Equals(NewString("hi")))
-	assert.True(v.UnionValue().Equals(s))
 }
 
 func TestReadStructOptional(t *testing.T) {
@@ -283,9 +253,9 @@ func TestReadStructOptional(t *testing.T) {
 		Field{"x", NumberType, false},
 		Field{"s", StringType, true},
 		Field{"b", BoolType, true},
-	}, []Field{})
+	})
 
-	a := parseJSON(`[%d, "A3", ["x", %d, false, "s", %d, true, "b", %d, true], [], "42", false, true, false]`, StructKind, NumberKind, StringKind, BoolKind)
+	a := parseJSON(`[%d, "A3", ["x", %d, false, "s", %d, true, "b", %d, true], "42", false, true, false]`, StructKind, NumberKind, StringKind, BoolKind)
 	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
@@ -313,9 +283,9 @@ func TestReadStructWithList(t *testing.T) {
 		Field{"b", BoolType, false},
 		Field{"l", MakeListType(NumberType), false},
 		Field{"s", StringType, false},
-	}, []Field{})
+	})
 
-	a := parseJSON(`[%d, "A4", ["b", %d, false, "l", %d, %d, false, "s", %d, false], [], true, false, ["0", "1", "2"], "hi"]`, StructKind, BoolKind, ListKind, NumberKind, StringKind)
+	a := parseJSON(`[%d, "A4", ["b", %d, false, "l", %d, %d, false, "s", %d, false], true, false, ["0", "1", "2"], "hi"]`, StructKind, BoolKind, ListKind, NumberKind, StringKind)
 	r := newJSONArrayReader(a, cs)
 	l32Tr := MakeListType(NumberType)
 	v := r.readTopLevelValue().(Struct)
@@ -341,9 +311,9 @@ func TestReadStructWithValue(t *testing.T) {
 		Field{"b", BoolType, false},
 		Field{"v", ValueType, false},
 		Field{"s", StringType, false},
-	}, []Field{})
+	})
 
-	a := parseJSON(`[%d, "A5", ["b", %d, false, "v", %d, false, "s", %d, false], [], true, %d, "42", "hi"]`, StructKind, BoolKind, ValueKind, StringKind, NumberKind)
+	a := parseJSON(`[%d, "A5", ["b", %d, false, "v", %d, false, "s", %d, false], true, %d, "42", "hi"]`, StructKind, BoolKind, ValueKind, StringKind, NumberKind)
 	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
@@ -367,9 +337,9 @@ func TestReadValueStruct(t *testing.T) {
 		Field{"x", NumberType, false},
 		Field{"s", StringType, false},
 		Field{"b", BoolType, false},
-	}, []Field{})
+	})
 
-	a := parseJSON(`[%d, %d, "A1", ["x", %d, false, "s", %d, false, "b", %d, false], [], "42", "hi", true]`, ValueKind, StructKind, NumberKind, StringKind, BoolKind)
+	a := parseJSON(`[%d, %d, "A1", ["x", %d, false, "s", %d, false, "b", %d, false], "42", "hi", true]`, ValueKind, StructKind, NumberKind, StringKind, BoolKind)
 	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
@@ -413,9 +383,9 @@ func TestReadStructWithBlob(t *testing.T) {
 
 	typ := MakeStructType("A5", []Field{
 		Field{"b", BlobType, false},
-	}, []Field{})
+	})
 
-	a := parseJSON(`[%d, "A5", ["b", %d, false], [], false, "AAE="]`, StructKind, BlobKind)
+	a := parseJSON(`[%d, "A5", ["b", %d, false], false, "AAE="]`, StructKind, BlobKind)
 	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 	assert.True(v.Type().Equals(typ))
@@ -436,11 +406,11 @@ func TestReadRecursiveStruct(t *testing.T) {
 
 	at := MakeStructType("A", []Field{
 		Field{"b", nil, false},
-	}, []Field{})
+	})
 	bt := MakeStructType("B", []Field{
 		Field{"a", MakeListType(at), false},
 		Field{"b", nil, false},
-	}, []Field{})
+	})
 	at.Desc.(StructDesc).Fields[0].T = bt
 	bt.Desc.(StructDesc).Fields[1].T = MakeListType(bt)
 
@@ -448,7 +418,7 @@ func TestReadRecursiveStruct(t *testing.T) {
 		["b", %d, "B", [
 			"a", %d, %d, 1, false,
 			"b", %d, %d, 0, false
-		], [], false], [],
+		], false],
 		false, [], false, []]`, StructKind, StructKind, ListKind, BackRefKind, ListKind, BackRefKind)
 
 	r := newJSONArrayReader(a, cs)
@@ -479,12 +449,6 @@ func TestReadTypeValue(t *testing.T) {
 	test(MakeStructType("S", []Field{
 		Field{"x", NumberType, false},
 		Field{"v", ValueType, true},
-	}, []Field{}),
-		`[%d, %d, "S", ["x", %d, false, "v", %d, true], []]`, TypeKind, StructKind, NumberKind, ValueKind)
-
-	test(MakeStructType("S", []Field{}, []Field{
-		Field{"x", NumberType, false},
-		Field{"v", ValueType, false},
 	}),
-		`[%d, %d, "S", [], ["x", %d, false, "v", %d, false]]`, TypeKind, StructKind, NumberKind, ValueKind)
+		`[%d, %d, "S", ["x", %d, false, "v", %d, true]]`, TypeKind, StructKind, NumberKind, ValueKind)
 }

@@ -65,9 +65,6 @@ func (t *Type) ChildValues() (res []Value) {
 		for _, t := range desc.Fields {
 			res = append(res, t.T)
 		}
-		for _, t := range desc.Union {
-			res = append(res, t.T)
-		}
 	case PrimitiveDesc:
 		// Nothing, these have no child values
 	default:
@@ -135,8 +132,8 @@ func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 	return buildType(CompoundDesc{kind, elemTypes})
 }
 
-func MakeStructType(name string, fields []Field, choices []Field) *Type {
-	return buildType(StructDesc{name, fields, choices})
+func MakeStructType(name string, fields []Field) *Type {
+	return buildType(StructDesc{name, fields})
 }
 
 func MakeListType(elemType *Type) *Type {

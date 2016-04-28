@@ -68,7 +68,6 @@ func (c CompoundDesc) Equals(other TypeDesc) bool {
 type StructDesc struct {
 	Name   string
 	Fields []Field
-	Union  []Field
 }
 
 func (s StructDesc) Kind() NomsKind {
@@ -81,11 +80,6 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 	}
 	for i, f := range other.(StructDesc).Fields {
 		if !s.Fields[i].Equals(f) {
-			return false
-		}
-	}
-	for i, f := range other.(StructDesc).Union {
-		if !s.Union[i].Equals(f) {
 			return false
 		}
 	}

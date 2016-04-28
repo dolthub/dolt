@@ -61,7 +61,7 @@ suite('BuildList', () => {
 
     const structType = makeStructType('num', [
       new Field('n', numberType, false),
-    ], []);
+    ]);
     const refOfStructType = makeRefType(structType);
     const tr = makeListType(refOfStructType);
 
@@ -72,7 +72,7 @@ suite('BuildList', () => {
     });
 
     const s = await newList(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-f2db6a2f8026ee6e12bb584cd38c813604774a69');
+    assert.strictEqual(s.ref.toString(), 'sha1-7a8a34a99e528d6c097f1d4cc7f83f41329e1e1e');
     assert.strictEqual(testListSize, s.length);
   });
 

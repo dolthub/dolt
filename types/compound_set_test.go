@@ -381,7 +381,7 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 
 	structType := MakeStructType("num", []Field{
 		Field{"n", NumberType, false},
-	}, []Field{})
+	})
 	refOfTypeStructType := MakeRefType(structType)
 
 	setType := MakeSetType(refOfTypeStructType)
@@ -398,7 +398,7 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := NewTypedSet(setType, nums...)
-	assert.Equal("sha1-b06811c4abafef5e2198c04a81d3a300a709fd02", s.Ref().String())
+	assert.Equal("sha1-511c16182c8c540a04ed0612df9d882788456334", s.Ref().String())
 }
 
 func TestCompoundSetModifyAfterRead(t *testing.T) {
