@@ -26,6 +26,7 @@ import {ListLeafSequence, NomsList} from './list.js';
 import {NomsMap, MapLeafSequence} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';
 import {IndexedMetaSequence} from './meta-sequence.js';
+import type {valueOrPrimitive} from './value.js';
 
 const typedTag = 't ';
 const blobTag = 'b ';
@@ -195,10 +196,9 @@ export class JsonArrayReader {
     return new RefValue(ref, t);
   }
 
-  readTopLevelValue(): Promise<any> {
+  readTopLevelValue(): any {
     const t = this.readTypeAsTag([]);
-    const v = this.readValueWithoutTag(t);
-    return Promise.resolve(v);
+    return this.readValueWithoutTag(t);
   }
 
   readValueWithoutTag(t: Type): any {
@@ -335,7 +335,7 @@ export class JsonArrayReader {
   }
 }
 
-export function decodeNomsValue(chunk: Chunk, ds: DataStore): Promise<any> {
+export function decodeNomsValue(chunk: Chunk, ds: DataStore): valueOrPrimitive {
   const tag = new Chunk(new Uint8Array(chunk.data.buffer, 0, 2)).toString();
 
   switch (tag) {
@@ -345,8 +345,7 @@ export function decodeNomsValue(chunk: Chunk, ds: DataStore): Promise<any> {
       return reader.readTopLevelValue();
     }
     case blobTag:
-      return Promise.resolve(
-          new NomsBlob(new BlobLeafSequence(ds, new Uint8Array(chunk.data.buffer, 2))));
+      return new NomsBlob(new BlobLeafSequence(ds, new Uint8Array(chunk.data.buffer, 2)));
     default:
       throw new Error('Not implemented');
   }

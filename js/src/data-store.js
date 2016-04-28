@@ -77,7 +77,7 @@ interface Cache<T> {  // eslint-disable-line no-undef
 export default class DataStore {
   _cs: ChunkStore;
   _datasets: Promise<NomsMap<string, RefValue<Commit>>>;
-  _valueCache: Cache<Promise<?valueOrPrimitive>>;
+  _valueCache: Cache<?valueOrPrimitive>;
 
   constructor(cs: ChunkStore, cacheSize: number = 0) {
     this._cs = cs;
@@ -116,6 +116,7 @@ export default class DataStore {
     return true;
   }
 
+  // TODO: This should return Promise<?valueOrPrimitive>
   async readValue(ref: Ref): Promise<any> {
     const entry = this._valueCache.entry(ref);
     if (entry) {
@@ -123,13 +124,13 @@ export default class DataStore {
     }
     const chunk: Chunk = await this._cs.get(ref);
     if (chunk.isEmpty()) {
-      this._valueCache.add(ref, 0, Promise.resolve(null));
+      this._valueCache.add(ref, 0, null);
       return null;
     }
 
-    const p = decodeNomsValue(chunk, this);
-    this._valueCache.add(ref, chunk.data.length, p);
-    return p;
+    const v = decodeNomsValue(chunk, this);
+    this._valueCache.add(ref, chunk.data.length, v);
+    return v;
   }
 
   writeValue<T: valueOrPrimitive>(v: T, t: ?Type = undefined): RefValue<T> {
@@ -158,7 +159,7 @@ export default class DataStore {
       return refValue;
     }
     this._cs.put(chunk);
-    this._valueCache.add(ref, chunk.data.length, Promise.resolve(v));
+    this._valueCache.add(ref, chunk.data.length, v);
     return refValue;
   }
 

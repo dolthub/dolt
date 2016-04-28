@@ -406,15 +406,16 @@ suite('Decode', () => {
     assertStruct(await v.get('baz'), tr.desc, {b: false, i: 1});
   });
 
-  test('decodeNomsValue', async () => {
+  test('decodeNomsValue', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const chunk = Chunk.fromString(
         `t [${Kind.Value}, ${Kind.Set}, ${Kind.Number}, false, ["0", "1", "2", "3"]]`);
-    const v: NomsSet<number> = await decodeNomsValue(chunk, new DataStore(new MemoryStore()));
+    const v = decodeNomsValue(chunk, new DataStore(new MemoryStore()));
+    invariant(v instanceof NomsSet);
 
     const t = makeSetType(numberType);
-    const s:NomsSet<number> = new NomsSet(t, new SetLeafSequence(ds, t, [0, 1, 2, 3]));
+    const s: NomsSet<number> = new NomsSet(t, new SetLeafSequence(ds, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
 
@@ -452,9 +453,11 @@ suite('Decode', () => {
 
   test('out of line blob', async () => {
     const chunk = Chunk.fromString('b hi');
-    const blob = await decodeNomsValue(chunk, new DataStore(new MemoryStore()));
+    const blob = decodeNomsValue(chunk, new DataStore(new MemoryStore()));
+    invariant(blob instanceof NomsBlob);
     const r = await blob.getReader().read();
     assert.isFalse(r.done);
+    invariant(r.value);
     assert.equal(2, r.value.byteLength);
     assert.deepEqual(stringToUint8Array('hi'), r.value);
 
@@ -468,9 +471,11 @@ suite('Decode', () => {
     }
 
     const chunk2 = new Chunk(data);
-    const blob2 = await decodeNomsValue(chunk2, new DataStore(new MemoryStore()));
+    const blob2 = decodeNomsValue(chunk2, new DataStore(new MemoryStore()));
+    invariant(blob2 instanceof NomsBlob);
     const r2 = await blob2.getReader().read();
     assert.isFalse(r2.done);
+    invariant(r2.value);
     assert.equal(bytes.length, r2.value.length);
     assert.deepEqual(bytes, r2.value);
   });
