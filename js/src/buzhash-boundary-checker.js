@@ -2,9 +2,8 @@
 
 import BuzHash from './buzhash.js';
 import {invariant} from './assert.js';
-import type {uint8} from './primitives.js';
 
-type getDataFn<T> = (item: T) => (Uint8Array | uint8);
+type getDataFn<T> = (item: T) => (Uint8Array | number);
 
 export default class BuzHashBoundaryChecker<T> {
   windowSize: number;
@@ -32,7 +31,7 @@ export default class BuzHashBoundaryChecker<T> {
     return this._checkPattern();
   }
 
-  _writeByte(b: uint8): boolean {
+  _writeByte(b: number): boolean {
     this._hash.hashByte(b);
     return this._checkPattern();
   }

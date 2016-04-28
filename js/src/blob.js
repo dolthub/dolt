@@ -14,10 +14,9 @@ import {
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import {SequenceChunker} from './sequence-chunker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {uint8} from './primitives.js';
 
-export class NomsBlob extends Collection<IndexedSequence<uint8>> {
-  constructor(sequence: IndexedSequence<uint8>) {
+export class NomsBlob extends Collection<IndexedSequence<number>> {
+  constructor(sequence: IndexedSequence<number>) {
     super(blobType, sequence);
   }
 
@@ -59,7 +58,7 @@ export class BlobReader {
   }
 }
 
-export class BlobLeafSequence extends IndexedSequence<uint8> {
+export class BlobLeafSequence extends IndexedSequence<number> {
   constructor(cs: ?DataStore, items: Uint8Array) {
     // $FlowIssue: The super class expects Array<T> but we sidestep that.
     super(cs, blobType, items);
@@ -74,15 +73,15 @@ const blobWindowSize = 64;
 const blobPattern = ((1 << 13) | 0) - 1;
 
 function newBlobLeafChunkFn(cs: ?DataStore = null): makeChunkFn {
-  return (items: Array<uint8>) => {
+  return (items: Array<number>) => {
     const blobLeaf = new BlobLeafSequence(cs, new Uint8Array(items));
     const mt = new MetaTuple(blobLeaf, items.length, items.length);
     return [mt, blobLeaf];
   };
 }
 
-function newBlobLeafBoundaryChecker(): BoundaryChecker<uint8> {
-  return new BuzHashBoundaryChecker(blobWindowSize, 1, blobPattern, (v: uint8) => v);
+function newBlobLeafBoundaryChecker(): BoundaryChecker<number> {
+  return new BuzHashBoundaryChecker(blobWindowSize, 1, blobPattern, (v: number) => v);
 }
 
 export function newBlob(bytes: Uint8Array): Promise<NomsBlob> {

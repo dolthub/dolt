@@ -1,9 +1,8 @@
 // @flow
-import type {uint8, uint32} from './primitives.js';
 
 // This a javascript port of github.com/kch42/buzhash.
 
-const bytehash:Array<uint32> = [
+const bytehash:Array<number> = [
   0x12bd9527, 0xf4140cea, 0x987bd6e1, 0x79079850, 0xafbfd539, 0xd350ce0a,
   0x82973931, 0x9fc32b9c, 0x28003b88, 0xc30c13aa, 0x6b678c34, 0x5844ef1d,
   0xaa552c18, 0x4a77d3e8, 0xd1f62ea0, 0x6599417c, 0xfbe30e7a, 0xf9e2d5ee,
@@ -49,15 +48,15 @@ const bytehash:Array<uint32> = [
   0x96ca63ef, 0xa0499838, 0xd9030f59, 0x8185f4d2];
 
 export default class BuzHash {
-  _state: uint32;
+  _state: number;
   _buf: Uint8Array;
-  _n: uint32;
-  _bshiftn: uint32;
-  _bshiftm: uint32;
-  _bufpos: uint32;
+  _n: number;
+  _bshiftn: number;
+  _bshiftm: number;
+  _bufpos: number;
   _overflow: boolean;
 
-  constructor(n: uint32) {
+  constructor(n: number) {
     this._n = n;
     this._bshiftn = n % 32;
     this._bshiftm = 32 - this._bshiftn;
@@ -65,7 +64,7 @@ export default class BuzHash {
     this.reset();
   }
 
-  hashByte(b: uint8): uint32 {
+  hashByte(b: number): number {
     if (this._bufpos === this._n) {
       this._overflow = true;
       this._bufpos = 0;
@@ -92,7 +91,7 @@ export default class BuzHash {
     return _state;
   }
 
-  write(p: Uint8Array): uint32 {
+  write(p: Uint8Array): number {
     for (let i = 0; i < p.length; i++) {
       this.hashByte(p[i]);
     }
@@ -106,11 +105,11 @@ export default class BuzHash {
     this._overflow = false;
   }
 
-  get blocksize(): uint32 {
+  get blocksize(): number {
     return this._n;
   }
 
-  get sum32(): uint32 {
+  get sum32(): number {
     return this._state;
   }
 }

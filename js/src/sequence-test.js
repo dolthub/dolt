@@ -3,7 +3,6 @@
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import {Sequence, SequenceCursor} from './sequence.js';
-import type {int64} from './primitives.js';
 import {notNull} from './assert.js';
 import {makeCompoundType, valueType} from './type.js';
 import {Kind} from './noms-kind.js';
@@ -35,7 +34,7 @@ suite('SequenceCursor', () => {
   }
 
   function expect(c: TestSequenceCursor, expectIdx: number,
-      expectParentIdx: number, expectValid: boolean, expectVal: ?int64) {
+      expectParentIdx: number, expectValid: boolean, expectVal: ?number) {
     assert.strictEqual(expectIdx, c.indexInChunk, 'indexInChunk');
     const parent = notNull(c.parent);
     assert.strictEqual(expectParentIdx, parent.indexInChunk, 'parentIdx');
