@@ -2,8 +2,7 @@
 
 import {
   boolType,
-  Kind,
-  makeCompoundType,
+  makeMapType,
   newMap,
   stringType,
 } from '@attic/noms';
