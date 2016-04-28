@@ -11,6 +11,7 @@ import {
   numberType,
   stringType,
   typeType,
+  getTypeOfValue,
 } from './type.js';
 import {suite, test} from 'mocha';
 import DataStore from './data-store.js';
@@ -44,5 +45,14 @@ suite('Type', () => {
 
   test('type Type', () => {
     assert.isTrue(boolType.type.equals(typeType));
+  });
+
+  test('getTypeOfValue', () => {
+    assert.equal(boolType, getTypeOfValue(true));
+    assert.equal(boolType, getTypeOfValue(false));
+    assert.equal(numberType, getTypeOfValue(42));
+    assert.equal(numberType, getTypeOfValue(0));
+    assert.equal(stringType, getTypeOfValue('abc'));
+    assert.equal(typeType, getTypeOfValue(stringType));
   });
 });

@@ -6,6 +6,7 @@ import type {NomsKind} from './noms-kind.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {ValueBase} from './value.js';
+import type {valueOrPrimitive} from './value.js';
 
 export interface TypeDesc {
   kind: NomsKind;
@@ -237,7 +238,7 @@ export function getPrimitiveType(k: NomsKind): Type {
   }
 }
 
-export function getTypeOfValue(v: any): Type {
+export function getTypeOfValue(v: valueOrPrimitive): Type {
   switch (typeof v) {
     case 'object':
       return v.type;
@@ -246,7 +247,7 @@ export function getTypeOfValue(v: any): Type {
     case 'boolean':
       return boolType;
     case 'number':
-      throw new Error('Encoding untagged numbers is not supported');
+      return numberType;
     default:
       throw new Error('Unknown type');
   }
