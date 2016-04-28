@@ -45,9 +45,7 @@ async function increment(ds: Dataset): Promise<Dataset> {
   const newVal = lastVal + 1;
 
   process.stdout.write(`\nincrementing counter to ${ newVal }\n`);
-  // TODO: fix this to use a number instead of a string, bug
-  // https://github.com/attic-labs/noms/issues/1318
-  return ds.commit(newVal.toString());
+  return ds.commit(newVal);
 }
 
 function parseArgs() {
