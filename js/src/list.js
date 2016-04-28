@@ -10,7 +10,7 @@ import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
 import {IndexedSequence, IndexedSequenceIterator} from './indexed-sequence.js';
 import {diff} from './indexed-sequence-diff.js';
-import {getRefOfValueOrPrimitive} from './get-ref.js';
+import {getRefOfValue} from './get-ref.js';
 import {invariant} from './assert.js';
 import {MetaTuple, newIndexedMetaSequenceBoundaryChecker,
   newIndexedMetaSequenceChunkFn} from './meta-sequence.js';
@@ -32,7 +32,7 @@ function newListLeafChunkFn<T: valueOrPrimitive>(t: Type, ds: ?DataStore = null)
 
 function newListLeafBoundaryChecker<T: valueOrPrimitive>(t: Type): BoundaryChecker<T> {
   return new BuzHashBoundaryChecker(listWindowSize, sha1Size, listPattern,
-    (v: T) => getRefOfValueOrPrimitive(v, t.elemTypes[0]).digest
+    (v: T) => getRefOfValue(v, t.elemTypes[0]).digest
   );
 }
 

@@ -6,9 +6,9 @@ import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
 import RefValue from './ref-value.js';
 import type {Type} from './type.js';
-import {ValueBase} from './value.js';
+import {Value} from './value.js';
 
-export class Sequence<T> extends ValueBase {
+export class Sequence<T> extends Value {
   ds: ?DataStore;
   _type: Type;
   _items: Array<T>;
@@ -285,7 +285,7 @@ export function search(n: number, f: (i: number) => boolean): number {
 export function getValueChunks<T>(items: Array<T>): Array<RefValue> {
   const chunks = [];
   for (const item of items) {
-    if (item instanceof ValueBase) {
+    if (item instanceof Value) {
       chunks.push(...item.chunks);
     }
   }

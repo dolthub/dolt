@@ -1,16 +1,19 @@
 // @flow
 
-import type {valueOrPrimitive, Value} from './value.js';
-import {invariant} from './assert.js';
-import {Kind} from './noms-kind.js';
-import {getRef} from './get-ref.js';
-import {boolType} from './type.js';
 import type {Type} from './type.js';
+import type {valueOrPrimitive} from './value.js';
+import {Kind} from './noms-kind.js';
+import {Value} from './value.js';
+import {boolType} from './type.js';
+import {getRef} from './get-ref.js';
+import {invariant} from './assert.js';
 
+// TODO: Implement total ordering of noms types.
 export function less(v1: valueOrPrimitive, v2: valueOrPrimitive): boolean {
   invariant(typeof v1 === typeof v2);
 
-  if (typeof v1 === 'object') {
+  if (v1 instanceof Value) {
+    invariant(v2 instanceof Value);
     return v1.less(v2);
   }
 
@@ -29,24 +32,14 @@ export function equals(v1: valueOrPrimitive, v2: valueOrPrimitive): boolean {
     return true;
   }
 
-  invariant(typeof v1 === typeof v2);
-
-  if (typeof v1 === 'object') {
-    return v1.equals(v2);
-  }
-
-  invariant(typeof v1 === 'string' || typeof v1 === 'number' || typeof v1 === 'boolean');
-  return v1 === v2;
+  return v1 instanceof Value && v2 instanceof Value && v1.equals(v2);
 }
 
 export function compare(v1: valueOrPrimitive, v2: valueOrPrimitive): number {
-  if (v1 === v2) {
-    return 0;
-  }
-
   if (equals(v1, v2)) {
     return 0;
   }
+
   return less(v1, v2) ? -1 : 1;
 }
 

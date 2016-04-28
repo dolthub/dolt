@@ -6,15 +6,7 @@ import {ensureRef} from './get-ref.js';
 import type {Type} from './type.js';
 import type RefValue from './ref-value.js';
 
-export interface Value {
-  ref: Ref;
-  equals(other: Value): boolean;
-  less(other: Value): boolean;
-  chunks: Array<RefValue>;
-  type: Type;
-}
-
-export class ValueBase {
+export class Value {
   _ref: ?Ref;
 
   constructor() {

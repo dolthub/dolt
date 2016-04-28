@@ -400,17 +400,17 @@ suite('Encode', () => {
       assert.ok(false, `Expected error, 'Failed to write ${et}. Invalid type: ${at}' but Got none`);
     };
 
-    test('Number', 'string', numberType, 'hi');
-    test('Bool', 'string', boolType, 'hi');
-    test('Blob', 'string', blobType, 'hi');
+    test('Number', 'String', numberType, 'hi');
+    test('Bool', 'String', boolType, 'hi');
+    test('Blob', 'String', blobType, 'hi');
 
-    test('String', 'number', stringType, 42);
-    test('Bool', 'number', boolType, 42);
-    test('Blob', 'number', blobType, 42);
+    test('String', 'Number', stringType, 42);
+    test('Bool', 'Number', boolType, 42);
+    test('Blob', 'Number', blobType, 42);
 
-    test('Number', 'boolean', numberType, true);
-    test('String', 'boolean', stringType, true);
-    test('Blob', 'boolean', blobType, true);
+    test('Number', 'Bool', numberType, true);
+    test('String', 'Bool', stringType, true);
+    test('Blob', 'Bool', blobType, true);
 
     const blob = await newBlob(new Uint8Array([0, 1]));
     test('Number', 'Blob', numberType, blob);

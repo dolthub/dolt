@@ -6,12 +6,18 @@ import type DataStore from './data-store.js';
 import {notNull} from './assert.js';
 import type {Type} from './type.js';
 import type {valueOrPrimitive} from './value.js';
+import {getTypeOfValue} from './type.js';
+import {Value} from './value.js';
 
 type encodeFn = (v: valueOrPrimitive, t: Type, ds: ?DataStore) => Chunk;
 let encodeNomsValue: ?encodeFn = null;
 
-export function getRefOfValueOrPrimitive(v: valueOrPrimitive, t: ?Type): Ref {
-  return typeof v === 'object' ? v.ref : getRef(v, notNull(t));
+export function getRefOfValue(v: valueOrPrimitive): Ref {
+  if (v instanceof Value) {
+    return v.ref;
+  }
+
+  return getRef(v, getTypeOfValue(v));
 }
 
 export function getRef(v: valueOrPrimitive, t: Type): Ref {

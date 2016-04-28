@@ -10,13 +10,13 @@ import type {NomsSet} from './set.js';
 import type {valueOrPrimitive} from './value.js';
 import {
   Field,
+  getTypeOfValue,
   makeRefType,
   makeStructType,
   makeSetType,
   makeMapType,
   Type,
   stringType,
-  boolType,
   valueType,
   StructDesc,
 } from './type.js';
@@ -133,23 +133,8 @@ export default class DataStore {
     return v;
   }
 
-  writeValue<T: valueOrPrimitive>(v: T, t: ?Type = undefined): RefValue<T> {
-    if (!t) {
-      switch (typeof v) {
-        case 'string':
-          t = stringType;
-          break;
-        case 'boolean':
-          t = boolType;
-          break;
-        case 'object':
-          t = v.type;
-          break;
-        default:
-          throw new Error(`type parameter is required for ${typeof v}`);
-      }
-      invariant(t);
-    }
+  writeValue<T: valueOrPrimitive>(v: T): RefValue<T> {
+    const t = getTypeOfValue(v);
     const chunk = encodeNomsValue(v, t, this);
     invariant(!chunk.isEmpty());
     const {ref} = chunk;

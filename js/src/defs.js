@@ -1,7 +1,7 @@
 // @flow
 
 import type {valueOrPrimitive} from './value.js';
-import {ValueBase} from './value.js';
+import {Value} from './value.js';
 import {Type, CompoundDesc, StructDesc} from './type.js';
 import type {Field} from './type.js';
 import {invariant} from './assert.js';
@@ -14,7 +14,7 @@ import type Struct from './struct.js';
 import {newStruct} from './struct.js';
 
 type StructDefType = {[name: string]: DefType};
-type DefType = number | string | boolean | Array<DefType> | StructDefType | Uint8Array | ValueBase;
+type DefType = number | string | boolean | Array<DefType> | StructDefType | Uint8Array | Value;
 
 export async function defToNoms(v: DefType, t: Type): Promise<valueOrPrimitive> {
   switch (typeof v) {
@@ -28,7 +28,7 @@ export async function defToNoms(v: DefType, t: Type): Promise<valueOrPrimitive> 
       invariant(false);
   }
 
-  if (v instanceof ValueBase) {
+  if (v instanceof Value) {
     if (t.equals(v.type)) {
       return v;
     }
