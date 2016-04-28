@@ -6,7 +6,7 @@ import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type DataStore from './data-store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import type {Collection} from './collection.js';
-import {CompoundDesc, makeCompoundType, numberType, valueType} from './type.js';
+import {CompoundDesc, makeCompoundType, makeRefType, numberType, valueType} from './type.js';
 import type {Type} from './type.js';
 import {IndexedSequence} from './indexed-sequence.js';
 import {invariant} from './assert.js';
@@ -248,5 +248,5 @@ export function newIndexedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
 }
 
 function getMetaSequenceChunks(ms: MetaSequence) {
-  return ms.items.map(mt => new RefValue(mt.ref, ms.type));
+  return ms.items.map(mt => new RefValue(mt.ref, makeRefType(ms.type)));
 }

@@ -1,6 +1,8 @@
 // @flow
 
 import type DataStore from './data-store.js';
+import {describeType} from './encode-human-readable.js';
+import {Kind} from './noms-kind.js';
 import type Ref from './ref.js';
 import type {Type} from './type.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
@@ -14,6 +16,7 @@ export default class RefValue<T: valueOrPrimitive> extends Value {
 
   constructor(targetRef: Ref, t: Type = refOfValueType) {
     super();
+    invariant(t.kind === Kind.Ref, `Not a Ref type: ${describeType(t)}`);
     this._type = t;
     this.targetRef = targetRef;
   }

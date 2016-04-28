@@ -6,7 +6,7 @@ import Random from './pseudo-random.js';
 import MemoryStore from './memory-store.js';
 import {newBlob, BlobWriter} from './blob.js';
 import DataStore from './data-store.js';
-import {blobType} from './type.js';
+import {blobType, makeRefType} from './type.js';
 
 suite('Blob', () => {
   function intSequence(start: number, end: number): Uint8Array {
@@ -148,7 +148,8 @@ suite('Blob', () => {
     const b = await newBlob(a);
     const chunks = b.chunks;
     assert.equal(chunks.length, 2);
-    assert.isTrue(chunks[0].type.equals(blobType));
-    assert.isTrue(chunks[1].type.equals(blobType));
+    const refOfBlobType = makeRefType(blobType);
+    assert.isTrue(chunks[0].type.equals(refOfBlobType));
+    assert.isTrue(chunks[1].type.equals(refOfBlobType));
   });
 });
