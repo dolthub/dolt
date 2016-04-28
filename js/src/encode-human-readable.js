@@ -5,7 +5,7 @@ import type {Field, Type} from './type.js';
 import {Kind, kindToString} from './noms-kind.js';
 import type {NomsKind} from './noms-kind.js';
 import {invariant} from './assert.js';
-import type {Value} from './value.js';
+import type {valueOrPrimitive} from './value.js';
 import {ValueBase} from './value.js';
 
 export interface StringWriter {
@@ -146,7 +146,7 @@ export class TypeWriter {
   }
 }
 
-export function describeType(t: Type) {
+export function describeType(t: Type): string {
   let s = '';
   const w = new TypeWriter({
     write(s2: string) {
@@ -157,7 +157,7 @@ export function describeType(t: Type) {
   return s;
 }
 
-export function describeTypeOfValue(v: Value) {
+export function describeTypeOfValue(v: valueOrPrimitive): string {
   const t = typeof v;
   if (t === 'object') {
     if (v === null) {

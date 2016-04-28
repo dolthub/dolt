@@ -7,9 +7,9 @@ import {default as Struct, StructMirror} from './struct.js';
 import type DataStore from './data-store.js';
 import type {NomsKind} from './noms-kind.js';
 import {encode as encodeBase64} from './base64.js';
-import {StructDesc, Type, numberType, getTypeOfValue} from './type.js';
+import {StructDesc, Type, getTypeOfValue} from './type.js';
 import {indexTypeForMetaSequence, MetaTuple} from './meta-sequence.js';
-import {invariant} from './assert.js';
+import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
 import {MapLeafSequence, NomsMap} from './map.js';
@@ -18,11 +18,16 @@ import {Sequence} from './sequence.js';
 import {setEncodeNomsValue} from './get-ref.js';
 import {NomsBlob, BlobLeafSequence} from './blob.js';
 import {describeTypeOfValue} from './encode-human-readable.js';
+import type {primitive} from './primitives.js';
+import type {valueOrPrimitive} from './value.js';
+import {IndexedSequence} from './indexed-sequence.js';
 
 const typedTag = 't ';
 
+type primitiveOrArray = primitive | Array<primitiveOrArray>;
+
 export class JsonArrayWriter {
-  array: Array<any>;
+  array: Array<primitiveOrArray>;
   _ds: ?DataStore;
 
   constructor(ds: ?DataStore) {
@@ -30,7 +35,7 @@ export class JsonArrayWriter {
     this._ds = ds;
   }
 
-  write(v: any) {
+  write(v: primitiveOrArray) {
     this.array.push(v);
   }
 
@@ -80,7 +85,7 @@ export class JsonArrayWriter {
     }
   }
 
-  writeTopLevel(t: Type, v: any) {
+  writeTopLevel(t: Type, v: valueOrPrimitive) {
     this.writeTypeAsTag(t, []);
     this.writeValue(v, t);
   }
@@ -103,13 +108,13 @@ export class JsonArrayWriter {
       }
       w2.writeRef(tuple.ref);
       w2.writeValue(tuple.value, indexType);
-      w2.writeValue(tuple.numLeaves, numberType);
+      w2.writeInt(tuple.numLeaves);
     }
     this.write(w2.array);
     return true;
   }
 
-  writeValue(v: any, t: Type) {
+  writeValue(v: valueOrPrimitive, t: Type) {
     switch (t.kind) {
       case Kind.Blob: {
         invariant(v instanceof NomsBlob || v instanceof Sequence,
@@ -214,6 +219,8 @@ export class JsonArrayWriter {
         break;
       }
       case Kind.Struct:
+        invariant(v instanceof Struct,
+                  `Failed to write Struct. Invalid type: ${describeTypeOfValue(v)}`);
         this.writeStruct(v);
         break;
       default:
@@ -283,19 +290,19 @@ export class JsonArrayWriter {
       if (field.optional) {
         if (field.present) {
           this.writeBoolean(true);
-          this.writeValue(field.value, field.type);
+          this.writeValue(notNull(field.value), field.type);
         } else {
           this.writeBoolean(false);
         }
       } else {
         invariant(field.present);
-        this.writeValue(field.value, field.type);
+        this.writeValue(notNull(field.value), field.type);
       }
     });
   }
 }
 
-function encodeEmbeddedNomsValue(v: any, t: Type, ds: ?DataStore): Chunk {
+function encodeEmbeddedNomsValue(v: valueOrPrimitive, t: Type, ds: ?DataStore): Chunk {
   const w = new JsonArrayWriter(ds);
   w.writeTopLevel(t, v);
   return Chunk.fromString(typedTag + JSON.stringify(w.array));
@@ -314,11 +321,12 @@ function encodeTopLevelBlob(sequence: BlobLeafSequence): Chunk {
   return new Chunk(data);
 }
 
-export function encodeNomsValue(v: any, t: Type, ds: ?DataStore): Chunk {
+export function encodeNomsValue(v: valueOrPrimitive, t: Type, ds: ?DataStore): Chunk {
   if (t.kind === Kind.Blob) {
-    invariant(v instanceof NomsBlob || v instanceof Sequence);
-    const sequence: BlobLeafSequence = v instanceof NomsBlob ? v.sequence : v;
+    invariant(v instanceof NomsBlob || v instanceof IndexedSequence);
+    const sequence = v instanceof NomsBlob ? v.sequence : v;
     if (!sequence.isMeta) {
+      invariant(sequence instanceof BlobLeafSequence);
       return encodeTopLevelBlob(sequence);
     }
   }

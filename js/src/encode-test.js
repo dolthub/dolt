@@ -32,10 +32,11 @@ import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {newBlob} from './blob.js';
 import DataStore from './data-store.js';
 import {invariant} from './assert.js';
+import type {valueOrPrimitive} from './value.js';
 
 suite('Encode', () => {
   test('write primitives', () => {
-    function f(k: NomsKind, t:Type, v: any, ex: any) {
+    function f(k: NomsKind, t:Type, v: valueOrPrimitive, ex: valueOrPrimitive) {
       const ms = new MemoryStore();
       const ds = new DataStore(ms);
       const w = new JsonArrayWriter(ds);
