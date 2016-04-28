@@ -9,7 +9,7 @@ import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
 import {getCompareFunction, equals, less} from './compare.js';
-import {getRefOfValueOrPrimitive} from './get-ref.js';
+import {getRefOfValue} from './get-ref.js';
 import {invariant} from './assert.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
   newOrderedMetaSequenceChunkFn} from './meta-sequence.js';
@@ -34,7 +34,7 @@ function newSetLeafChunkFn<T:valueOrPrimitive>(t: Type, ds: ?DataStore = null): 
       if (t.elemTypes[0].ordered) {
         indexValue = lastValue;
       } else {
-        indexValue = new RefValue(getRefOfValueOrPrimitive(lastValue, t.elemTypes[0]));
+        indexValue = new RefValue(getRefOfValue(lastValue));
       }
     }
 
@@ -43,9 +43,9 @@ function newSetLeafChunkFn<T:valueOrPrimitive>(t: Type, ds: ?DataStore = null): 
   };
 }
 
-function newSetLeafBoundaryChecker<T:valueOrPrimitive>(t: Type): BoundaryChecker<T> {
+function newSetLeafBoundaryChecker<T:valueOrPrimitive>(): BoundaryChecker<T> {
   return new BuzHashBoundaryChecker(setWindowSize, sha1Size, setPattern, (v: T) => {
-    const ref = getRefOfValueOrPrimitive(v, t.elemTypes[0]);
+    const ref = getRefOfValue(v);
     return ref.digest;
   });
 }
@@ -62,7 +62,7 @@ export function newSet<T:valueOrPrimitive>(values: Array<T>, type: Type = setOfV
 
   return chunkSequence(null, buildSetData(type, values), 0, newSetLeafChunkFn(type),
                        newOrderedMetaSequenceChunkFn(type),
-                       newSetLeafBoundaryChecker(type),
+                       newSetLeafBoundaryChecker(),
                        newOrderedMetaSequenceBoundaryChecker)
   .then((seq: OrderedSequence) => new NomsSet(type, seq));
 }

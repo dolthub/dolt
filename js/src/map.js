@@ -10,7 +10,7 @@ import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
 import {getCompareFunction, equals} from './compare.js';
 import {sha1Size} from './ref.js';
-import {getRefOfValueOrPrimitive} from './get-ref.js';
+import {getRefOfValue} from './get-ref.js';
 import {invariant} from './assert.js';
 import {mapOfValueType, Type} from './type.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
@@ -18,7 +18,7 @@ import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
 import {OrderedSequence, OrderedSequenceCursor,
   OrderedSequenceIterator} from './ordered-sequence.js';
 import diff from './ordered-sequence-diff.js';
-import {ValueBase} from './value.js';
+import {Value} from './value.js';
 
 export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
   key: K,
@@ -38,7 +38,7 @@ function newMapLeafChunkFn(t: Type, ds: ?DataStore = null): makeChunkFn {
       if (t.elemTypes[0].ordered) {
         indexValue = lastValue.key;
       } else {
-        indexValue = new RefValue(getRefOfValueOrPrimitive(lastValue.key, t.elemTypes[0]));
+        indexValue = new RefValue(getRefOfValue(lastValue.key, t.elemTypes[0]));
       }
     }
 
@@ -49,7 +49,7 @@ function newMapLeafChunkFn(t: Type, ds: ?DataStore = null): makeChunkFn {
 
 function newMapLeafBoundaryChecker(t: Type): BoundaryChecker<MapEntry> {
   return new BuzHashBoundaryChecker(mapWindowSize, sha1Size, mapPattern,
-    (entry: MapEntry) => getRefOfValueOrPrimitive(entry.key, t.elemTypes[0]).digest);
+    (entry: MapEntry) => getRefOfValue(entry.key, t.elemTypes[0]).digest);
 }
 
 export function removeDuplicateFromOrdered<T>(elems: Array<T>,
@@ -209,10 +209,10 @@ export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends
   get chunks(): Array<RefValue> {
     const chunks = [];
     for (const entry of this.items) {
-      if (entry.key instanceof ValueBase) {
+      if (entry.key instanceof Value) {
         chunks.push(...entry.key.chunks);
       }
-      if (entry.value instanceof ValueBase) {
+      if (entry.value instanceof Value) {
         chunks.push(...entry.value.chunks);
       }
     }

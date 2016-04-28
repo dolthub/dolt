@@ -3,7 +3,7 @@
 import {Kind, kindToString} from './noms-kind.js';
 import {CompoundDesc} from './type.js';
 import type {Type} from './type.js';
-import {ValueBase} from './value.js';
+import {Value} from './value.js';
 import {invariant} from './assert.js';
 
 export default function validateType(t: Type, v: any): void {
@@ -23,7 +23,7 @@ export default function validateType(t: Type, v: any): void {
 
     case Kind.Value: {
       const s = typeof v;
-      assert(v instanceof ValueBase || s === 'boolean' || s === 'number' || s === 'string', v, t);
+      assert(v instanceof Value || s === 'boolean' || s === 'number' || s === 'string', v, t);
       return;
     }
 
@@ -44,7 +44,7 @@ export default function validateType(t: Type, v: any): void {
 }
 
 function assertSubtype(v: any, t: Type) {
-  assert(v instanceof ValueBase, v, t);
+  assert(v instanceof Value, v, t);
   assert(subtype(t, v.type), v, t);
 }
 

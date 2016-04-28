@@ -1,12 +1,11 @@
 // @flow
 
-import {StructDesc, BackRefDesc, CompoundDesc} from './type.js';
+import {getTypeOfValue, StructDesc, BackRefDesc, CompoundDesc} from './type.js';
 import type {Field, Type} from './type.js';
 import {Kind, kindToString} from './noms-kind.js';
 import type {NomsKind} from './noms-kind.js';
 import {invariant} from './assert.js';
 import type {valueOrPrimitive} from './value.js';
-import {ValueBase} from './value.js';
 
 export interface StringWriter {
   write(s: string): void;
@@ -158,14 +157,9 @@ export function describeType(t: Type): string {
 }
 
 export function describeTypeOfValue(v: valueOrPrimitive): string {
-  const t = typeof v;
-  if (t === 'object') {
-    if (v === null) {
-      return 'null';
-    }
-    if (v instanceof ValueBase) {
-      return describeType(v.type);
-    }
+  if (v === null) {
+    return 'null';
   }
-  return t;
+
+  return describeType(getTypeOfValue(v));
 }
