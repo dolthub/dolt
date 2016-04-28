@@ -94,8 +94,6 @@ export function getCompareFunction(t: Type): (v1: any, v2: any) => number {
     case Kind.Set:
     case Kind.Struct:
     case Kind.Type:
-    case Kind.Unresolved:
-    case Kind.Package:
       return compareObjects;
 
     case Kind.Bool:

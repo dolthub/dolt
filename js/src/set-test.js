@@ -11,21 +11,18 @@ import {newStruct} from './struct.js';
 import {
   boolType,
   Field,
-  makeCompoundType,
   makeSetType,
+  makeRefType,
   makeStructType,
-  makeType,
   numberType,
   stringType,
   valueType,
 } from './type.js';
 import {flatten, flattenParallel} from './test-util.js';
 import {invariant, notNull} from './assert.js';
-import {Kind} from './noms-kind.js';
 import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {OrderedSequence} from './ordered-sequence.js';
-import {Package, registerPackage} from './package.js';
 import Ref from './ref.js';
 import type {Type} from './type.js';
 
@@ -59,7 +56,7 @@ function firstNNumbers(n: number): Array<number> {
 suite('BuildSet', () => {
   test('unique keys - strings', async () => {
     const strs = ['hello', 'world', 'hello'];
-    const tr = makeCompoundType(Kind.Set, stringType);
+    const tr = makeSetType(stringType);
     const s = await newSet(strs, tr);
     assert.strictEqual(2, s.size);
     assert.isTrue(await s.has('hello'));
@@ -81,7 +78,7 @@ suite('BuildSet', () => {
 
   test('LONG: set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
-    const tr = makeCompoundType(Kind.Set, numberType);
+    const tr = makeSetType(numberType);
     const s = await newSet(nums, tr);
     assert.strictEqual(s.ref.toString(), setOfNRef);
 
@@ -94,30 +91,26 @@ suite('BuildSet', () => {
   test('LONG: set of ref, set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
 
-    const structTypeDef = makeStructType('num', [
+    const structType = makeStructType('num', [
       new Field('n', numberType, false),
     ], []);
-    const pkg = new Package([structTypeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const structType = makeType(pkgRef, 0);
-    const refOfStructType = makeCompoundType(Kind.Ref, structType);
-    const tr = makeCompoundType(Kind.Set, refOfStructType);
+    const refOfStructType = makeRefType(structType);
+    const tr = makeSetType(refOfStructType);
 
     const refs = nums.map(n => {
-      const s = newStruct(structType, structTypeDef, {n});
+      const s = newStruct(structType, {n});
       const r = s.ref;
       return new RefValue(r, refOfStructType);
     });
 
     const s = await newSet(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-4c2b0e159ae443ec99299b6ea266d9a408f7987d');
+    assert.strictEqual(s.ref.toString(), 'sha1-b06811c4abafef5e2198c04a81d3a300a709fd02');
   });
 
 
   test('LONG: insert', async () => {
     const nums = firstNNumbers(testSetSize - 10);
-    const tr = makeCompoundType(Kind.Set, numberType);
+    const tr = makeSetType(numberType);
     let s = await newSet(nums, tr);
     for (let i = testSetSize - 10; i < testSetSize; i++) {
       s = await s.insert(i);
@@ -129,7 +122,7 @@ suite('BuildSet', () => {
 
   test('LONG: remove', async () => {
     const nums = firstNNumbers(testSetSize + 10);
-    const tr = makeCompoundType(Kind.Set, numberType);
+    const tr = makeSetType(numberType);
     let s = await newSet(nums, tr);
     let count = 10;
     while (count-- > 0) {
@@ -145,7 +138,7 @@ suite('BuildSet', () => {
     const ds = new DataStore(ms);
 
     const nums = firstNNumbers(testSetSize);
-    const tr = makeCompoundType(Kind.Set, numberType);
+    const tr = makeSetType(numberType);
     const s = await newSet(nums, tr);
     const r = ds.writeValue(s).targetRef;
     const s2 = await ds.readValue(r);
@@ -168,7 +161,7 @@ suite('SetLeaf', () => {
   test('isEmpty/size', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, stringType);
+    const tr = makeSetType(stringType);
     const newSet = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
     let s = newSet([]);
     assert.isTrue(s.isEmpty());
@@ -181,7 +174,7 @@ suite('SetLeaf', () => {
   test('first/last/has', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, stringType);
+    const tr = makeSetType(stringType);
     const s = new NomsSet(tr, new SetLeafSequence(ds, tr, ['a', 'k']));
 
     assert.strictEqual('a', await s.first());
@@ -196,7 +189,7 @@ suite('SetLeaf', () => {
   test('forEach', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, stringType);
+    const tr = makeSetType(stringType);
     const m = new NomsSet(tr, new SetLeafSequence(ds, tr, ['a', 'b']));
 
     const values = [];
@@ -207,7 +200,7 @@ suite('SetLeaf', () => {
   test('iterator', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, stringType);
+    const tr = makeSetType(stringType);
 
     const test = async items => {
       const m = new NomsSet(tr, new SetLeafSequence(ds, tr, items));
@@ -223,7 +216,7 @@ suite('SetLeaf', () => {
   test('LONG: iteratorAt', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, stringType);
+    const tr = makeSetType(stringType);
     const build = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
@@ -242,7 +235,7 @@ suite('SetLeaf', () => {
   function testChunks(elemType: Type) {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, elemType);
+    const tr = makeSetType(elemType);
     const r1 = ds.writeValue('x');
     const r2 = ds.writeValue('a');
     const r3 = ds.writeValue('b');
@@ -264,7 +257,7 @@ suite('SetLeaf', () => {
 
 suite('CompoundSet', () => {
   function build(ds: DataStore, values: Array<string>): NomsSet {
-    const tr = makeCompoundType(Kind.Set, stringType);
+    const tr = makeSetType(stringType);
     assert.isTrue(values.length > 1 && Math.log2(values.length) % 1 === 0);
 
     let tuples = [];
@@ -498,7 +491,7 @@ suite('CompoundSet', () => {
   test('iterator at 0', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, numberType);
+    const tr = makeSetType(numberType);
 
     const test = async (expected, items) => {
       const set = new NomsSet(tr, new SetLeafSequence(ds, tr, items));
@@ -522,7 +515,7 @@ suite('CompoundSet', () => {
   test('LONG: canned set diff', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.Set, numberType);
+    const tr = makeSetType(numberType);
     const s1 = await newSet(
       firstNNumbers(testSetSize), tr).then(s => ds.readValue(ds.writeValue(s).targetRef));
 
@@ -549,7 +542,7 @@ suite('CompoundSet', () => {
   async function testRandomDiff(setSize: number, inS1: number, inS2: number): Promise<void> {
     invariant(inS1 + inS2 <= 1);
 
-    const tr = makeCompoundType(Kind.Set, numberType);
+    const tr = makeSetType(numberType);
     const nums1 = [], nums2 = [], added = [], removed = [];
 
     // Randomly populate nums1/nums2 which will be the contents of s1/s2 respectively, and record

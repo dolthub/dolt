@@ -1,4 +1,0 @@
-
-export function new{{userType .Type}}(values: Array<{{userTypeJS .ElemType}}>): Promise<{{importJsType "NomsSet"}}<{{userTypeJS .ElemType}}>> {
-  return {{importJS "newSet"}}(values, {{importJS "makeSetType"}}({{toTypeValueJS .ElemType false 0}}));
-}

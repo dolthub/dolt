@@ -13,14 +13,17 @@ import {decodeNomsValue, JsonArrayReader} from './decode.js';
 import {
   boolType,
   Field,
-  makeCompoundType,
   makeStructType,
-  makeType,
+  makeListType,
+  makeMapType,
+  makeSetType,
+  makeRefType,
   numberType,
   stringType,
   Type,
   typeType,
   valueType,
+  StructDesc,
 } from './type.js';
 import {encode as encodeBase64} from './base64.js';
 import {IndexedMetaSequence, MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
@@ -30,7 +33,6 @@ import {ListLeafSequence, NomsList} from './list.js';
 import {MapLeafSequence, NomsMap} from './map.js';
 import {NomsBlob, newBlob} from './blob.js';
 import {NomsSet, SetLeafSequence} from './set.js';
-import {registerPackage, Package} from './package.js';
 import {suite, test} from 'mocha';
 
 suite('Decode', () => {
@@ -63,19 +65,17 @@ suite('Decode', () => {
     const ds = new DataStore(ms);
     function doTest(expected: Type, a: Array<any>) {
       const r = new JsonArrayReader(a, ds);
-      const tr = r.readTypeAsTag();
+      const tr = r.readTypeAsTag([]);
       assert.isTrue(expected.equals(tr));
     }
 
     doTest(boolType, [Kind.Bool, true]);
     doTest(typeType, [Kind.Type, Kind.Bool]);
-    doTest(makeCompoundType(Kind.List, boolType),
+    doTest(makeListType(boolType),
                             [Kind.List, Kind.Bool, true, false]);
 
-    const pkgRef = Ref.parse('sha1-a9993e364706816aba3e25717850c26c9cd0d89d');
-    doTest(makeType(pkgRef, 42), [Kind.Unresolved, pkgRef.toString(), '42']);
-
-    doTest(typeType, [Kind.Type, Kind.Type, pkgRef.toString()]);
+    doTest(makeStructType('S', [new Field('x', boolType, false)], []),
+           [Kind.Struct, 'S', ['x', Kind.Bool, false], []]);
   });
 
   test('read primitives', async () => {
@@ -104,10 +104,10 @@ suite('Decode', () => {
     const ds = new DataStore(ms);
     const a = [Kind.List, Kind.Number, false, ['0', '1', '2', '3']];
     const r = new JsonArrayReader(a, ds);
-    const v:NomsList<number> = await r.readTopLevelValue();
+    const v: NomsList<number> = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
 
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, [0, 1, 2, 3]));
     assert.isTrue(l.equals(v));
   });
@@ -119,10 +119,10 @@ suite('Decode', () => {
     const a = [Kind.List, Kind.Value, false,
       [Kind.Number, '1', Kind.String, 'hi', Kind.Bool, true]];
     const r = new JsonArrayReader(a, ds);
-    const v:NomsList<Value> = await r.readTopLevelValue();
+    const v: NomsList<Value> = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
 
-    const tr = makeCompoundType(Kind.List, valueType);
+    const tr = makeListType(valueType);
     assert.isTrue(v.type.equals(tr));
     assert.strictEqual(1, await v.get(0));
     assert.strictEqual('hi', await v.get(1));
@@ -137,7 +137,7 @@ suite('Decode', () => {
     const v = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
 
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, [0, 1, 2]));
     assert.isTrue(l.equals(v));
   });
@@ -145,7 +145,7 @@ suite('Decode', () => {
   test('read compound list', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const ltr = makeCompoundType(Kind.List, numberType);
+    const ltr = makeListType(numberType);
     const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0]))).targetRef;
     const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [1, 2]))).targetRef;
     const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
@@ -169,11 +169,10 @@ suite('Decode', () => {
     const ds = new DataStore(ms);
     const a = [Kind.Map, Kind.Number, Kind.Number, false, ['0', '1', '2', '3']];
     const r = new JsonArrayReader(a, ds);
-    const v:NomsMap<number, number> = await r.readTopLevelValue();
+    const v: NomsMap<number, number> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
-    const t = makeCompoundType(Kind.Map, numberType,
-                               numberType);
+    const t = makeMapType(numberType, numberType);
     const m = new NomsMap(t, new MapLeafSequence(ds, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(v.equals(m));
   });
@@ -185,11 +184,11 @@ suite('Decode', () => {
                ['sha1-0000000000000000000000000000000000000001', '2',
                 'sha1-0000000000000000000000000000000000000002', '4']];
     const r = new JsonArrayReader(a, ds);
-    const v:NomsMap<RefValue<Value>, number> = await r.readTopLevelValue();
+    const v: NomsMap<RefValue<Value>, number> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
-    const refOfValueType = makeCompoundType(Kind.Ref, valueType);
-    const mapType = makeCompoundType(Kind.Map, refOfValueType, numberType);
+    const refOfValueType = makeRefType(valueType);
+    const mapType = makeMapType(refOfValueType, numberType);
     const rv1 = new RefValue(new Ref('sha1-0000000000000000000000000000000000000001'),
         refOfValueType);
     const rv2 = new RefValue(new Ref('sha1-0000000000000000000000000000000000000002'),
@@ -204,11 +203,10 @@ suite('Decode', () => {
     const ds = new DataStore(ms);
     const a = [Kind.Value, Kind.Map, Kind.Number, Kind.Number, false, ['0', '1', '2', '3']];
     const r = new JsonArrayReader(a, ds);
-    const v:NomsMap<number, number> = await r.readTopLevelValue();
+    const v: NomsMap<number, number> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
-    const t = makeCompoundType(Kind.Map, numberType,
-                               numberType);
+    const t = makeMapType(numberType, numberType);
     const m = new NomsMap(t, new MapLeafSequence(ds, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(v.equals(m));
   });
@@ -218,10 +216,10 @@ suite('Decode', () => {
     const ds = new DataStore(ms);
     const a = [Kind.Set, Kind.Number, false, ['0', '1', '2', '3']];
     const r = new JsonArrayReader(a, ds);
-    const v:NomsSet<number> = await r.readTopLevelValue();
+    const v: NomsSet<number> = await r.readTopLevelValue();
     invariant(v instanceof NomsSet);
 
-    const t = makeCompoundType(Kind.Set, numberType);
+    const t = makeSetType(numberType);
     const s = new NomsSet(t, new SetLeafSequence(ds, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
@@ -229,7 +227,7 @@ suite('Decode', () => {
   test('read compound set', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const ltr = makeCompoundType(Kind.Set, numberType);
+    const ltr = makeSetType(numberType);
     const r1 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [0]))).targetRef;
     const r2 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [1, 2]))).targetRef;
     const r3 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
@@ -253,10 +251,10 @@ suite('Decode', () => {
     const ds = new DataStore(ms);
     const a = [Kind.Value, Kind.Set, Kind.Number, false, ['0', '1', '2', '3']];
     const r = new JsonArrayReader(a, ds);
-    const v:NomsSet<number> = await r.readTopLevelValue();
+    const v: NomsSet<number> = await r.readTopLevelValue();
     invariant(v instanceof NomsSet);
 
-    const t = makeCompoundType(Kind.Set, numberType);
+    const t = makeSetType(numberType);
     const s = new NomsSet(t, new SetLeafSequence(ds, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
@@ -281,10 +279,11 @@ suite('Decode', () => {
       new Field('b', boolType, false),
     ], []);
 
-    const pkg = new Package([tr], []);
-    registerPackage(pkg);
-
-    const a = [Kind.Unresolved, pkg.ref.toString(), '0', '42', 'hi', true];
+    const a = [Kind.Struct, 'A1', [
+      'x', Kind.Number, false,
+      's', Kind.String, false,
+      'b', Kind.Bool, false,
+    ], [], '42', 'hi', true];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
 
@@ -305,10 +304,8 @@ suite('Decode', () => {
       new Field('s', stringType, false),
     ]);
 
-    const pkg = new Package([tr], []);
-    registerPackage(pkg);
-
-    const a = [Kind.Unresolved, pkg.ref.toString(), '0', '42', '1', 'hi'];
+    const a = [Kind.Struct, 'A2', ['x', Kind.Number, false],
+      ['b', Kind.Bool, false, 's', Kind.String, false], '42', '1', 'hi'];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
 
@@ -327,10 +324,9 @@ suite('Decode', () => {
       new Field('b', boolType, true),
     ], []);
 
-    const pkg = new Package([tr], []);
-    registerPackage(pkg);
-
-    const a = [Kind.Unresolved, pkg.ref.toString(), '0', '42', false, true, false];
+    const a = [Kind.Struct, 'A3',
+      ['x', Kind.Number, false, 's', Kind.String, true, 'b', Kind.Bool, true], [],
+      '42', false, true, false];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
 
@@ -343,17 +339,18 @@ suite('Decode', () => {
   test('test read struct with list', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const ltr = makeCompoundType(Kind.List, numberType);
+    const ltr = makeListType(numberType);
     const tr = makeStructType('A4', [
       new Field('b', boolType, false),
       new Field('l', ltr, false),
       new Field('s', stringType, false),
     ], []);
 
-    const pkg = new Package([tr], []);
-    registerPackage(pkg);
-
-    const a = [Kind.Unresolved, pkg.ref.toString(), '0', true, false, ['0', '1', '2'], 'hi'];
+    const a = [Kind.Struct, 'A4', [
+      'b', Kind.Bool, false,
+      'l', Kind.List, Kind.Number, false,
+      's', Kind.String, false,
+    ], [], true, false, ['0', '1', '2'], 'hi'];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
 
@@ -373,10 +370,9 @@ suite('Decode', () => {
       new Field('s', stringType, false),
     ], []);
 
-    const pkg = new Package([tr], []);
-    registerPackage(pkg);
-
-    const a = [Kind.Unresolved, pkg.ref.toString(), '0', true, Kind.Number, '42', 'hi'];
+    const a = [Kind.Struct, 'A5',
+      ['b', Kind.Bool, false, 'v', Kind.Value, false, 's', Kind.String, false], [],
+      true, Kind.Number, '42', 'hi'];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
 
@@ -396,10 +392,9 @@ suite('Decode', () => {
       new Field('b', boolType, false),
     ], []);
 
-    const pkg = new Package([tr], []);
-    registerPackage(pkg);
-
-    const a = [Kind.Value, Kind.Unresolved, pkg.ref.toString(), '0', '42', 'hi', true];
+    const a = [Kind.Value, Kind.Struct, 'A1',
+        ['x', Kind.Number, false, 's', Kind.String, false, 'b', Kind.Bool, false], [],
+        '42', 'hi', true];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
 
@@ -418,14 +413,12 @@ suite('Decode', () => {
       new Field('i', numberType, false),
     ], []);
 
-    const pkg = new Package([tr], []);
-    registerPackage(pkg);
-
-    const a = [Kind.Value, Kind.Map, Kind.String, Kind.Unresolved, pkg.ref.toString(), '0', false,
-        ['bar', false, '2', 'baz', false, '1', 'foo', true, '3']];
+    const a = [Kind.Value, Kind.Map, Kind.String,
+      Kind.Struct, 's', ['b', Kind.Bool, false, 'i', Kind.Number, false], [],
+      false, ['bar', false, '2', 'baz', false, '1', 'foo', true, '3']];
 
     const r = new JsonArrayReader(a, ds);
-    const v:NomsMap<string, Struct> = await r.readTopLevelValue();
+    const v: NomsMap<string, Struct> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
     assert.strictEqual(3, v.size);
@@ -439,9 +432,9 @@ suite('Decode', () => {
     const ds = new DataStore(ms);
     const chunk = Chunk.fromString(
         `t [${Kind.Value}, ${Kind.Set}, ${Kind.Number}, false, ["0", "1", "2", "3"]]`);
-    const v:NomsSet<number> = await decodeNomsValue(chunk, new DataStore(new MemoryStore()));
+    const v: NomsSet<number> = await decodeNomsValue(chunk, new DataStore(new MemoryStore()));
 
-    const t = makeCompoundType(Kind.Set, numberType);
+    const t = makeSetType(numberType);
     const s:NomsSet<number> = new NomsSet(t, new SetLeafSequence(ds, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
@@ -452,28 +445,23 @@ suite('Decode', () => {
 
     const makeChunk = a => Chunk.fromString(`t ${JSON.stringify(a)}`);
 
-    // Package containing Commit def
-    const packageArray = [Kind.Package, [Kind.Struct, 'Commit', [
-      'value', Kind.Value, false,
-      'parents', Kind.Set, [
-        Kind.Ref, [
-          Kind.Unresolved, 'sha1-0000000000000000000000000000000000000000','0',
-        ],
-      ], false,
-    ], []],[]];
-    const pkgChunk = makeChunk(packageArray);
-    const pkgRef = pkgChunk.ref;
-    ms.put(pkgChunk);
+    // struct Commit {
+    //   value: Value
+    //   parents: Set<Ref<Commit>>
+    // }
 
     // Commit value
     const commitChunk = makeChunk(
-      [Kind.Unresolved, pkgRef.toString(), '0', Kind.Number, '1', false, []]);
+      [Kind.Struct, 'Commit',
+        ['value', Kind.Value, false, 'parents', Kind.Set, Kind.Ref, Kind.BackRef, 0, false], [],
+        Kind.Number, '1', false, []]);
     const commitRef = commitChunk.ref;
     ms.put(commitChunk);
 
     // Root
-    const rootChunk = makeChunk([Kind.Map, Kind.String, Kind.Ref, Kind.Unresolved,
-      pkgRef.toString(), '0', false, ['counter', commitRef.toString()]]);
+    const rootChunk = makeChunk([Kind.Map, Kind.String, Kind.Ref, Kind.Struct, 'Commit',
+      ['value', Kind.Value, false, 'parents', Kind.Set, Kind.Ref, Kind.BackRef, 0, false], [],
+      false, ['counter', commitRef.toString()]]);
     const rootRef = rootChunk.ref;
     ms.put(rootChunk);
 
@@ -542,10 +530,41 @@ suite('Decode', () => {
 
     const reader = v.getReader();
     assert.deepEqual(await reader.read(), {done: false, value: stringToUint8Array('hi')});
-    // console.log(stringToUint8Array('world'));
     const x = await reader.read();
-    // console.log(x);
     assert.deepEqual(x, {done: false, value: stringToUint8Array('world')});
     assert.deepEqual(await reader.read(), {done: true});
+  });
+
+  test('recursive struct', async () => {
+    const ms = new MemoryStore();
+    const ds = new DataStore(ms);
+
+    // struct A {
+    //   b: struct B {
+    //     a: List<A>
+    //     b: List<B>
+    //   }
+    // }
+
+    const ta = makeStructType('A', [], []);
+    const tb = makeStructType('B', [], []);
+    invariant(ta.desc instanceof StructDesc);
+    ta.desc.fields.push(new Field('b', tb, false));
+
+    invariant(tb.desc instanceof StructDesc);
+    const {fields} = tb.desc;
+    fields.push(new Field('a', makeListType(ta), false), new Field('b', makeListType(tb), false));
+
+    const a = [Kind.Struct, 'A',
+          ['b', Kind.Struct, 'B', [
+            'a', Kind.List, Kind.BackRef, 1, false,
+            'b', Kind.List, Kind.BackRef, 0, false,
+          ], [], false], [],
+          false, [], false, []];
+    const r = new JsonArrayReader(a, ds);
+    const v = await r.readTopLevelValue();
+
+    assert.isTrue(v.type.equals(ta));
+    assert.isTrue(v.b.type.equals(tb));
   });
 });

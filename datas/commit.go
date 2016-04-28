@@ -1,12 +1,8 @@
 package datas
 
-import (
-	"github.com/attic-labs/noms/ref"
-	"github.com/attic-labs/noms/types"
-)
+import "github.com/attic-labs/noms/types"
 
-var __typeForCommit *types.Type
-var __typeDef *types.Type
+var commitType *types.Type
 
 const (
 	ParentsField = "parents"
@@ -16,16 +12,17 @@ const (
 func init() {
 	structName := "Commit"
 
-	fieldTypes := []types.Field{
-		types.Field{Name: ValueField, T: types.MakePrimitiveType(types.ValueKind)},
-		types.Field{Name: ParentsField, T: types.MakeSetType(types.MakeRefType(types.MakeType(ref.Ref{}, 0)))},
-	}
+	// struct Commit {
+	//   value: Value
+	//   parents: Set<Ref<Commit>>
+	// }
 
-	typeDef := types.MakeStructType(structName, fieldTypes, []types.Field{})
-	pkg := types.NewPackage([]*types.Type{typeDef}, []ref.Ref{})
-	__typeDef = pkg.Types()[0]
-	pkgRef := types.RegisterPackage(&pkg)
-	__typeForCommit = types.MakeType(pkgRef, 0)
+	fieldTypes := []types.Field{
+		types.Field{Name: ValueField, T: types.ValueType},
+		types.Field{Name: ParentsField, T: nil},
+	}
+	commitType = types.MakeStructType(structName, fieldTypes, []types.Field{})
+	commitType.Desc.(types.StructDesc).Fields[1].T = types.MakeSetType(types.MakeRefType(commitType))
 }
 
 func NewCommit() types.Struct {
@@ -34,11 +31,11 @@ func NewCommit() types.Struct {
 		ParentsField: NewSetOfRefOfCommit(),
 	}
 
-	return types.NewStruct(__typeForCommit, __typeDef, initialFields)
+	return types.NewStruct(commitType, initialFields)
 }
 
 func typeForMapOfStringToRefOfCommit() *types.Type {
-	return types.MakeMapType(types.StringType, types.MakeRefType(__typeForCommit))
+	return types.MakeMapType(types.StringType, types.MakeRefType(commitType))
 }
 
 func NewMapOfStringToRefOfCommit() types.Map {
@@ -46,7 +43,7 @@ func NewMapOfStringToRefOfCommit() types.Map {
 }
 
 func typeForSetOfRefOfCommit() *types.Type {
-	return types.MakeSetType(types.MakeRefType(__typeForCommit))
+	return types.MakeSetType(types.MakeRefType(commitType))
 }
 
 func NewSetOfRefOfCommit() types.Set {

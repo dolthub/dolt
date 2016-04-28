@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -125,71 +124,56 @@ func TestWriteHumanReadableNested(t *testing.T) {
 }
 
 func TestWriteHumanReadableStruct(t *testing.T) {
-	pkg := NewPackage([]*Type{
-		MakeStructType("S1", []Field{
-			Field{Name: "x", T: NumberType, Optional: false},
-			Field{Name: "y", T: NumberType, Optional: true},
-		}, []Field{}),
-	}, []ref.Ref{})
-	typeDef := pkg.Types()[0]
-	RegisterPackage(&pkg)
-	typ := MakeType(pkg.Ref(), 0)
+	typ := MakeStructType("S1", []Field{
+		Field{Name: "x", T: NumberType, Optional: false},
+		Field{Name: "y", T: NumberType, Optional: true},
+	}, []Field{})
 
-	str := NewStruct(typ, typeDef, map[string]Value{
+	str := NewStruct(typ, map[string]Value{
 		"x": Number(1),
 	})
 	assertWriteHRSEqual(t, "S1 {\n  x: 1,\n}", str)
-	assertWriteTaggedHRSEqual(t, "Struct<S1, sha1-3db6273e80cdd1dccc5ebc830651cf359fb4e704, 0>({\n  x: 1,\n})", str)
+	assertWriteTaggedHRSEqual(t, "struct S1 {\n  x: Number\n  y: optional Number\n}({\n  x: 1,\n})", str)
 
-	str2 := NewStruct(typ, typeDef, map[string]Value{
+	str2 := NewStruct(typ, map[string]Value{
 		"x": Number(2),
 		"y": Number(3),
 	})
 	assertWriteHRSEqual(t, "S1 {\n  x: 2,\n  y: 3,\n}", str2)
-	assertWriteTaggedHRSEqual(t, "Struct<S1, sha1-3db6273e80cdd1dccc5ebc830651cf359fb4e704, 0>({\n  x: 2,\n  y: 3,\n})", str2)
+	assertWriteTaggedHRSEqual(t, "struct S1 {\n  x: Number\n  y: optional Number\n}({\n  x: 2,\n  y: 3,\n})", str2)
 }
 
 func TestWriteHumanReadableStructWithUnion(t *testing.T) {
-	pkg := NewPackage([]*Type{
-		MakeStructType("S2", []Field{}, []Field{
-			Field{Name: "x", T: NumberType, Optional: false},
-			Field{Name: "y", T: NumberType, Optional: false},
-		}),
-	}, []ref.Ref{})
-	typeDef := pkg.Types()[0]
-	RegisterPackage(&pkg)
-	typ := MakeType(pkg.Ref(), 0)
+	typ := MakeStructType("S2", []Field{}, []Field{
+		Field{Name: "x", T: NumberType, Optional: false},
+		Field{Name: "y", T: NumberType, Optional: false},
+	})
 
-	str := NewStruct(typ, typeDef, map[string]Value{
+	str := NewStruct(typ, map[string]Value{
 		"x": Number(1),
 	})
 	assertWriteHRSEqual(t, "S2 {\n  x: 1,\n}", str)
-	assertWriteTaggedHRSEqual(t, "Struct<S2, sha1-55b7ac37286f0bdda7ee328f4ba807f8bf8d561a, 0>({\n  x: 1,\n})", str)
+	assertWriteTaggedHRSEqual(t, "struct S2 {\n  union {\n    x: Number\n    y: Number\n  }\n}({\n  x: 1,\n})", str)
 
-	str2 := NewStruct(typ, typeDef, map[string]Value{
+	str2 := NewStruct(typ, map[string]Value{
 		"y": Number(2),
 	})
 	assertWriteHRSEqual(t, "S2 {\n  y: 2,\n}", str2)
-	assertWriteTaggedHRSEqual(t, "Struct<S2, sha1-55b7ac37286f0bdda7ee328f4ba807f8bf8d561a, 0>({\n  y: 2,\n})", str2)
+	assertWriteTaggedHRSEqual(t, "struct S2 {\n  union {\n    x: Number\n    y: Number\n  }\n}({\n  y: 2,\n})", str2)
 }
 
 func TestWriteHumanReadableListOfStruct(t *testing.T) {
-	pkg := NewPackage([]*Type{
-		MakeStructType("S3", []Field{}, []Field{
-			Field{Name: "x", T: NumberType, Optional: false},
-		}),
-	}, []ref.Ref{})
-	typeDef := pkg.Types()[0]
-	RegisterPackage(&pkg)
-	typ := MakeType(pkg.Ref(), 0)
+	typ := MakeStructType("S3", []Field{
+		Field{Name: "x", T: NumberType, Optional: false},
+	}, []Field{})
 
-	str1 := NewStruct(typ, typeDef, map[string]Value{
+	str1 := NewStruct(typ, map[string]Value{
 		"x": Number(1),
 	})
-	str2 := NewStruct(typ, typeDef, map[string]Value{
+	str2 := NewStruct(typ, map[string]Value{
 		"x": Number(2),
 	})
-	str3 := NewStruct(typ, typeDef, map[string]Value{
+	str3 := NewStruct(typ, map[string]Value{
 		"x": Number(3),
 	})
 	lt := MakeListType(typ)
@@ -205,7 +189,9 @@ func TestWriteHumanReadableListOfStruct(t *testing.T) {
     x: 3,
   },
 ]`, l)
-	assertWriteTaggedHRSEqual(t, `List<Struct<S3, sha1-363eb1cf9659329e783d0770cad81d25d468d8e0, 0>>([
+	assertWriteTaggedHRSEqual(t, `List<struct S3 {
+  x: Number
+}>([
   S3 {
     x: 1,
   },
@@ -223,12 +209,12 @@ func TestWriteHumanReadableBlob(t *testing.T) {
 	assertWriteTaggedHRSEqual(t, "Blob()", NewEmptyBlob())
 
 	b1 := NewBlob(bytes.NewBuffer([]byte{0x01}))
-	assertWriteHRSEqual(t, "AQ", b1)
-	assertWriteTaggedHRSEqual(t, "Blob(AQ)", b1)
+	assertWriteHRSEqual(t, "AQ==", b1)
+	assertWriteTaggedHRSEqual(t, "Blob(AQ==)", b1)
 
 	b2 := NewBlob(bytes.NewBuffer([]byte{0x01, 0x02}))
-	assertWriteHRSEqual(t, "AQI", b2)
-	assertWriteTaggedHRSEqual(t, "Blob(AQI)", b2)
+	assertWriteHRSEqual(t, "AQI=", b2)
+	assertWriteTaggedHRSEqual(t, "Blob(AQI=)", b2)
 
 	b3 := NewBlob(bytes.NewBuffer([]byte{0x01, 0x02, 0x03}))
 	assertWriteHRSEqual(t, "AQID", b3)
@@ -239,8 +225,8 @@ func TestWriteHumanReadableBlob(t *testing.T) {
 		bs[i] = byte(i)
 	}
 	b4 := NewBlob(bytes.NewBuffer(bs))
-	assertWriteHRSEqual(t, "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w", b4)
-	assertWriteTaggedHRSEqual(t, "Blob(AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w)", b4)
+	assertWriteHRSEqual(t, "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w==", b4)
+	assertWriteTaggedHRSEqual(t, "Blob(AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w==)", b4)
 }
 
 func TestWriteHumanReadableListOfBlob(t *testing.T) {
@@ -248,54 +234,20 @@ func TestWriteHumanReadableListOfBlob(t *testing.T) {
 	b1 := NewBlob(bytes.NewBuffer([]byte{0x01}))
 	b2 := NewBlob(bytes.NewBuffer([]byte{0x02}))
 	l := NewTypedList(lt, b1, NewEmptyBlob(), b2)
-	assertWriteHRSEqual(t, "[\n  AQ,\n  ,\n  Ag,\n]", l)
-	assertWriteTaggedHRSEqual(t, "List<Blob>([\n  AQ,\n  ,\n  Ag,\n])", l)
+	assertWriteHRSEqual(t, "[\n  AQ==,\n  ,\n  Ag==,\n]", l)
+	assertWriteTaggedHRSEqual(t, "List<Blob>([\n  AQ==,\n  ,\n  Ag==,\n])", l)
 }
 
 func TestWriteHumanReadableType(t *testing.T) {
 	assertWriteHRSEqual(t, "Bool", BoolType)
 	assertWriteHRSEqual(t, "Blob", BlobType)
 	assertWriteHRSEqual(t, "String", StringType)
-
 	assertWriteHRSEqual(t, "Number", NumberType)
 
 	assertWriteHRSEqual(t, "List<Number>", MakeListType(NumberType))
 	assertWriteHRSEqual(t, "Set<Number>", MakeSetType(NumberType))
 	assertWriteHRSEqual(t, "Ref<Number>", MakeRefType(NumberType))
 	assertWriteHRSEqual(t, "Map<Number, String>", MakeMapType(NumberType, StringType))
-
-	pkg := NewPackage([]*Type{
-		MakeStructType("Str", []Field{
-			Field{Name: "c", T: MakeType(ref.Ref{}, 0), Optional: false},
-			Field{Name: "o", T: StringType, Optional: true},
-		}, []Field{
-			Field{Name: "x", T: MakeType(ref.Ref{}, 0), Optional: false},
-			Field{Name: "y", T: BoolType, Optional: false},
-		}),
-	}, []ref.Ref{})
-	RegisterPackage(&pkg)
-	st := MakeType(pkg.Ref(), 0)
-
-	assertWriteHRSEqual(t, "Struct<Str, sha1-5b9619407f3a3b659586fa885fffb2dc0987358b, 0>", st)
-	assertWriteTaggedHRSEqual(t, "Type(Struct<Str, sha1-5b9619407f3a3b659586fa885fffb2dc0987358b, 0>)", st)
-
-	sTypeDef := pkg.Types()[0]
-	assertWriteHRSEqual(t, `struct Str {
-  c: Struct<Str, sha1-5b9619407f3a3b659586fa885fffb2dc0987358b, 0>
-  o: optional String
-  union {
-    x: Struct<Str, sha1-5b9619407f3a3b659586fa885fffb2dc0987358b, 0>
-    y: Bool
-  }
-}`, sTypeDef)
-	assertWriteTaggedHRSEqual(t, `Type(struct Str {
-  c: Struct<Str, sha1-5b9619407f3a3b659586fa885fffb2dc0987358b, 0>
-  o: optional String
-  union {
-    x: Struct<Str, sha1-5b9619407f3a3b659586fa885fffb2dc0987358b, 0>
-    y: Bool
-  }
-})`, sTypeDef)
 }
 
 func TestWriteHumanReadableTaggedPrimitiveValues(t *testing.T) {
@@ -338,4 +290,64 @@ func TestWriteHumanReadableTaggedType(t *testing.T) {
 	assertWriteTaggedHRSEqual(t, "Type(Ref<Number>)", MakeRefType(NumberType))
 	assertWriteTaggedHRSEqual(t, "Type(Map<Number, String>)", MakeMapType(NumberType, StringType))
 
+}
+
+func TestRecursiveStruct(t *testing.T) {
+	// struct A {
+	//   b: A
+	//   c: List<A>
+	//   d: struct D {
+	//     e: D
+	//     f: A
+	//   }
+	// }
+
+	a := MakeStructType("A", []Field{
+		Field{Name: "b", T: nil, Optional: false},
+		Field{Name: "c", T: nil, Optional: false},
+		Field{Name: "d", T: nil, Optional: false},
+	}, []Field{})
+	d := MakeStructType("D", []Field{
+		Field{Name: "e", T: nil, Optional: false},
+		Field{Name: "f", T: a, Optional: false},
+	}, []Field{})
+	a.Desc.(StructDesc).Fields[0].T = a
+	a.Desc.(StructDesc).Fields[1].T = MakeListType(a)
+	a.Desc.(StructDesc).Fields[2].T = d
+	d.Desc.(StructDesc).Fields[0].T = d
+	d.Desc.(StructDesc).Fields[1].T = a
+
+	assertWriteHRSEqual(t, `struct A {
+  b: BackRef<0>
+  c: List<BackRef<0>>
+  d: struct D {
+    e: BackRef<0>
+    f: BackRef<1>
+  }
+}`, a)
+	assertWriteTaggedHRSEqual(t, `Type(struct A {
+  b: BackRef<0>
+  c: List<BackRef<0>>
+  d: struct D {
+    e: BackRef<0>
+    f: BackRef<1>
+  }
+})`, a)
+
+	assertWriteHRSEqual(t, `struct D {
+  e: BackRef<0>
+  f: struct A {
+    b: BackRef<0>
+    c: List<BackRef<0>>
+    d: BackRef<1>
+  }
+}`, d)
+	assertWriteTaggedHRSEqual(t, `Type(struct D {
+  e: BackRef<0>
+  f: struct A {
+    b: BackRef<0>
+    c: List<BackRef<0>>
+    d: BackRef<1>
+  }
+})`, d)
 }

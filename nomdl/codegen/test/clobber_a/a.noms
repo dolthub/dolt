@@ -1,3 +1,0 @@
-struct A {
-  A: List<List<Blob>>
-}

@@ -1,6 +1,0 @@
-using Ref<List<String>>
-using List<Ref<Number>>
-
-struct StructWithRef {
-  r: Ref<Set<Number>>
-}

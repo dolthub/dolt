@@ -1,6 +1,6 @@
 package types
 
-import "github.com/attic-labs/noms/ref"
+import "fmt"
 
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Number, or a custom type.
 type TypeDesc interface {
@@ -32,28 +32,12 @@ var KindToString = map[NomsKind]string{
 	ListKind:    "List",
 	MapKind:     "Map",
 	NumberKind:  "Number",
-	PackageKind: "Package",
 	RefKind:     "Ref",
 	SetKind:     "Set",
 	StringKind:  "String",
 	TypeKind:    "Type",
 	ValueKind:   "Value",
-}
-
-type UnresolvedDesc struct {
-	pkgRef  ref.Ref
-	ordinal int16
-}
-
-func (u UnresolvedDesc) Kind() NomsKind {
-	return UnresolvedKind
-}
-
-func (u UnresolvedDesc) Equals(other TypeDesc) bool {
-	if other, ok := other.(UnresolvedDesc); ok {
-		return u.pkgRef == other.pkgRef && u.ordinal == other.ordinal
-	}
-	return false
+	BackRefKind: "BackRef",
 }
 
 // CompoundDesc describes a List, Map, Set or Ref type.
@@ -82,6 +66,7 @@ func (c CompoundDesc) Equals(other TypeDesc) bool {
 // StructDesc describes a custom Noms Struct.
 // Structs can contain at most one anonymous union, so Union may be nil.
 type StructDesc struct {
+	Name   string
 	Fields []Field
 	Union  []Field
 }
@@ -117,4 +102,19 @@ type Field struct {
 
 func (f Field) Equals(other Field) bool {
 	return f.Name == other.Name && f.Optional == other.Optional && f.T.Equals(other.T)
+}
+
+// BackRefDesc is used to symbolize back references in recursive struct types
+type BackRefDesc uint8
+
+func (b BackRefDesc) Kind() NomsKind {
+	return BackRefKind
+}
+
+func (b BackRefDesc) Equals(other TypeDesc) bool {
+	return b.Kind() == other.Kind() && other.(BackRefDesc) == b
+}
+
+func (b BackRefDesc) Describe() string {
+	return fmt.Sprintf("%s(%d)", KindToString[b.Kind()], b)
 }

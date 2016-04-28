@@ -23,21 +23,6 @@ func toEncodeable(v Value, vw ValueWriter) interface{} {
 	switch v := v.(type) {
 	case blobLeaf:
 		return v.Reader()
-	case Package:
-		processPackageChildren(v, vw)
 	}
 	return encNomsValue(v, vw)
-}
-
-func processPackageChildren(p Package, vw ValueWriter) {
-	if vw == nil {
-		return
-	}
-
-	for _, r := range p.dependencies {
-		p := LookupPackage(r)
-		if p != nil && vw != nil {
-			vw.WriteValue(*p)
-		}
-	}
 }

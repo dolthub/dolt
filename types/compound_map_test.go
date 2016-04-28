@@ -5,7 +5,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -390,7 +389,7 @@ func TestCompoundMapFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewTypedMap(mapType, kvs...)
-	assert.Equal(m.Ref().String(), "sha1-60f2d39d24da082cb8e022f866c60202152b2562")
+	assert.Equal("sha1-60f2d39d24da082cb8e022f866c60202152b2562", m.Ref().String())
 }
 
 func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
@@ -400,12 +399,9 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 
-	structTypeDef := MakeStructType("num", []Field{
+	structType := MakeStructType("num", []Field{
 		Field{"n", NumberType, false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{structTypeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-	structType := MakeType(pkgRef, 0)
 	refOfTypeStructType := MakeRefType(structType)
 
 	mapType := MakeMapType(refOfTypeStructType, refOfTypeStructType)
@@ -413,15 +409,15 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	kvs := []Value{}
 	n := 5000
 	for i := 0; i < n; i++ {
-		k := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Number(i)}))
-		v := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Number(i + 1)}))
+		k := vs.WriteValue(NewStruct(structType, structData{"n": Number(i)}))
+		v := vs.WriteValue(NewStruct(structType, structData{"n": Number(i + 1)}))
 		assert.NotNil(k)
 		assert.NotNil(v)
 		kvs = append(kvs, k, v)
 	}
 
 	m := NewTypedMap(mapType, kvs...)
-	assert.Equal("sha1-3ab6131151c76cc3fdc9b639b37770d8d7dcdf5d", m.Ref().String())
+	assert.Equal("sha1-d7c5ef579ec638a288cb23b48f601a0b1e277fe3", m.Ref().String())
 }
 
 func TestCompoundMapModifyAfterRead(t *testing.T) {

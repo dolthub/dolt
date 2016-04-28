@@ -1,6 +1,0 @@
-struct StructWithList {
-  l: List<Number>
-  b: Bool
-  s: String
-  i: Number
-}

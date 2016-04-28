@@ -2,23 +2,21 @@
 
 import type {valueOrPrimitive} from './value.js';
 import {ValueBase} from './value.js';
-import {Type, CompoundDesc, StructDesc, makeType} from './type.js';
+import {Type, CompoundDesc, StructDesc} from './type.js';
 import type {Field} from './type.js';
-import {invariant, notNull} from './assert.js';
+import {invariant} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {newList} from './list.js';
 import {newSet} from './set.js';
 import {newMap} from './map.js';
 import {newBlob} from './blob.js';
-import {lookupPackage} from './package.js';
-import type {Package} from './package.js';
 import type Struct from './struct.js';
 import {newStruct} from './struct.js';
 
 type StructDefType = {[name: string]: DefType};
 type DefType = number | string | boolean | Array<DefType> | StructDefType | Uint8Array | ValueBase;
 
-export async function defToNoms(v: DefType, t: Type, pkg: ?Package): Promise<valueOrPrimitive> {
+export async function defToNoms(v: DefType, t: Type): Promise<valueOrPrimitive> {
   switch (typeof v) {
     case 'number':
     case 'boolean':
@@ -41,7 +39,7 @@ export async function defToNoms(v: DefType, t: Type, pkg: ?Package): Promise<val
       invariant(v instanceof Array);
       invariant(t.desc instanceof CompoundDesc);
       const vt = t.desc.elemTypes[0];
-      const vs = await Promise.all(v.map(e => defToNoms(e, vt, pkg)));
+      const vs = await Promise.all(v.map(e => defToNoms(e, vt)));
       return newList(vs, t);
     }
 
@@ -49,7 +47,7 @@ export async function defToNoms(v: DefType, t: Type, pkg: ?Package): Promise<val
       invariant(v instanceof Array);
       invariant(t.desc instanceof CompoundDesc);
       const vt = t.desc.elemTypes[0];
-      const vs = await Promise.all(v.map(e => defToNoms(e, vt, pkg)));
+      const vs = await Promise.all(v.map(e => defToNoms(e, vt)));
       return newSet(vs, t);
     }
 
@@ -57,7 +55,7 @@ export async function defToNoms(v: DefType, t: Type, pkg: ?Package): Promise<val
       invariant(v instanceof Array);
       invariant(t.desc instanceof CompoundDesc);
       const ets = t.desc.elemTypes;
-      const vs = await Promise.all(v.map((e, i) => defToNoms(e, ets[i % 2], pkg)));
+      const vs = await Promise.all(v.map((e, i) => defToNoms(e, ets[i % 2])));
       return newMap(vs, t);
     }
 
@@ -65,16 +63,9 @@ export async function defToNoms(v: DefType, t: Type, pkg: ?Package): Promise<val
       invariant(v instanceof Uint8Array);
       return newBlob(v);
 
-    case Kind.Unresolved: {
-      if (t.hasPackageRef) {
-        pkg = lookupPackage(t.packageRef);
-      } else {
-        t = makeType(notNull(pkg).ref, t.ordinal);
-      }
-      const typeDef = notNull(pkg).types[t.ordinal];
-      invariant(typeDef.kind === Kind.Struct);
+    case Kind.Struct: {
       invariant(v instanceof Object);
-      return structDefToNoms(v, t, typeDef, pkg);
+      return structDefToNoms(v, t);
     }
 
     default:
@@ -82,9 +73,8 @@ export async function defToNoms(v: DefType, t: Type, pkg: ?Package): Promise<val
   }
 }
 
-async function structDefToNoms<T: Struct>(data: StructDefType, type: Type, typeDef: Type,
-                                          pkg: ?Package): Promise<T> {
-  const {desc} = typeDef;
+async function structDefToNoms<T: Struct>(data: StructDefType, type: Type): Promise<T> {
+  const {desc} = type;
   invariant(desc instanceof StructDesc);
   const keys = [];
   const ps: Array<Promise<valueOrPrimitive>> = [];
@@ -92,7 +82,7 @@ async function structDefToNoms<T: Struct>(data: StructDefType, type: Type, typeD
     const v = data[f.name];
     if (v !== undefined) {
       keys.push(f.name);
-      ps.push(defToNoms(v, f.t, pkg));
+      ps.push(defToNoms(v, f.t));
     }
   };
   desc.fields.forEach(add);
@@ -103,5 +93,5 @@ async function structDefToNoms<T: Struct>(data: StructDefType, type: Type, typeD
   for (let i = 0; i < keys.length; i++) {
     newData[keys[i]] = vals[i];
   }
-  return newStruct(type, typeDef, newData);
+  return newStruct(type, newData);
 }

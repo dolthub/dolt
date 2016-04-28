@@ -14,7 +14,6 @@ type namespaceIdent struct {
 
 Package <- _ dd:Definition+ _ EOF {
 	aliases := map[string]string{}
-	usings := []*types.Type{}
 	seenTypes := map[string]bool{}
 	orderedTypes := []*types.Type{}
 	for _, d := range dd.([]interface{}) {
@@ -30,40 +29,25 @@ Package <- _ dd:Definition+ _ EOF {
 			switch d.Kind() {
 			default:
 				return nil, fmt.Errorf("%v can't be defined at the top-level", d)
-			case types.ListKind, types.MapKind, types.RefKind, types.SetKind:
-				for _, u := range usings {
-					if u.Equals(d) {
-						return nil, fmt.Errorf("%v is a duplicate using declaration", d)
-					}
-				}
-				usings = append(usings, d)
 			case types.StructKind:
-				ds := expandStruct(d, len(orderedTypes))
-				for _, d := range ds {
-					if d.Name() != "" {
-						if seenTypes[d.Name()] {
-							return nil, fmt.Errorf("Redefinition of " + d.Name())
-						}
-						seenTypes[d.Name()] = true
+				if d.Name() != "" {
+					if seenTypes[d.Name()] {
+						return nil, fmt.Errorf("Redefinition of " + d.Name())
 					}
-					orderedTypes = append(orderedTypes, d)
+					seenTypes[d.Name()] = true
 				}
+				orderedTypes = append(orderedTypes, d)
 			}
 		}
 	}
-	return intermediate{"", aliases, usings, orderedTypes}, nil
+	return intermediate{"", aliases, orderedTypes}, nil
 }
 
-Definition <- Struct / Using / Alias
+Definition <- Struct / Alias
 
 Alias <- `alias` _ i:Ident _ `=` _ `import` _ q:QuotedString _ {
 	return alias{i.(string), q.(string)}, nil
 }
-
-Using <- `using` _ ct:CompoundType _ {
-	return ct, nil
-}
-
 
 Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 	ll := l.([]interface{})
@@ -123,7 +107,7 @@ Type <- t:(PrimitiveType / CompoundType / Union / NamespaceIdent) {
 	case []types.Field:
 		return types.MakeStructType("", nil, t), nil
 	case namespaceIdent:
-		return types.MakeUnresolvedType(t.Namespace, t.ID), nil
+		return makeUnresolvedType(t.Namespace, t.ID), nil
 	default:
 		return nil, fmt.Errorf("%v is %T, not something that satisfies Type", t, t)
 	}

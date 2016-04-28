@@ -40,18 +40,13 @@ func TestReadTypeAsTag(t *testing.T) {
 	test := func(expected *Type, s string, vs ...interface{}) {
 		a := parseJSON(s, vs...)
 		r := newJSONArrayReader(a, cs)
-		tr := r.readTypeAsTag()
+		tr := r.readTypeAsTag(nil)
 		assert.True(t, expected.Equals(tr))
 	}
 
 	test(BoolType, "[%d, true]", BoolKind)
 	test(TypeType, "[%d, %d]", TypeKind, BoolKind)
 	test(MakeListType(BoolType), "[%d, %d, true, false]", ListKind, BoolKind)
-
-	pkgRef := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-	test(MakeType(pkgRef, 42), `[%d, "%s", "42"]`, UnresolvedKind, pkgRef.String())
-
-	test(TypeType, `[%d, %d, "%s", "12"]`, TypeKind, TypeKind, pkgRef.String())
 }
 
 func TestReadPrimitives(t *testing.T) {
@@ -239,13 +234,12 @@ func TestReadStruct(t *testing.T) {
 		Field{"s", StringType, false},
 		Field{"b", BoolType, false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJSON(`[%d, "%s", "0", "42", "hi", true]`, UnresolvedKind, pkgRef.String())
+	a := parseJSON(`[%d, "A1", ["x", %d, false, "s", %d, false, "b", %d, false], [], "42", "hi", true]`, StructKind, NumberKind, StringKind, BoolKind)
 	r := newJSONArrayReader(a, cs)
 
 	v := r.readTopLevelValue().(Struct)
+	assert.True(v.Type().Equals(typ))
 	assert.True(v.Get("x").Equals(Number(42)))
 	assert.True(v.Get("s").Equals(NewString("hi")))
 	assert.True(v.Get("b").Equals(Bool(true)))
@@ -261,15 +255,14 @@ func TestReadStructUnion(t *testing.T) {
 		Field{"b", BoolType, false},
 		Field{"s", StringType, false},
 	})
-	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJSON(`[%d, "%s", "0", "42", "1", "hi"]`, UnresolvedKind, pkgRef.String())
+	a := parseJSON(`[%d, "A2", ["x", %d, false], ["b", %d, false, "s", %d, false], "42", "1", "hi"]`, StructKind, NumberKind, BoolKind, StringKind)
 	r := newJSONArrayReader(a, cs)
 
 	v := r.readTopLevelValue().(Struct)
+	assert.True(v.Type().Equals(typ))
 	assert.True(v.Get("x").Equals(Number(42)))
-	assert.Equal(uint64(Number(1)), uint64(v.UnionIndex()))
+	assert.Equal(uint32(1), v.UnionIndex())
 	assert.True(v.UnionValue().Equals(NewString("hi")))
 
 	x, ok := v.MaybeGet("x")
@@ -291,13 +284,12 @@ func TestReadStructOptional(t *testing.T) {
 		Field{"s", StringType, true},
 		Field{"b", BoolType, true},
 	}, []Field{})
-	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJSON(`[%d, "%s", "0", "42", false, true, false]`, UnresolvedKind, pkgRef.String())
+	a := parseJSON(`[%d, "A3", ["x", %d, false, "s", %d, true, "b", %d, true], [], "42", false, true, false]`, StructKind, NumberKind, StringKind, BoolKind)
 	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
+	assert.True(v.Type().Equals(typ))
 	assert.True(v.Get("x").Equals(Number(42)))
 	_, ok := v.MaybeGet("s")
 	assert.False(ok)
@@ -322,14 +314,13 @@ func TestReadStructWithList(t *testing.T) {
 		Field{"l", MakeListType(NumberType), false},
 		Field{"s", StringType, false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJSON(`[%d, "%s", "0", true, false, ["0", "1", "2"], "hi"]`, UnresolvedKind, pkgRef.String())
+	a := parseJSON(`[%d, "A4", ["b", %d, false, "l", %d, %d, false, "s", %d, false], [], true, false, ["0", "1", "2"], "hi"]`, StructKind, BoolKind, ListKind, NumberKind, StringKind)
 	r := newJSONArrayReader(a, cs)
 	l32Tr := MakeListType(NumberType)
 	v := r.readTopLevelValue().(Struct)
 
+	assert.True(v.Type().Equals(typ))
 	assert.True(v.Get("b").Equals(Bool(true)))
 	l := NewTypedList(l32Tr, Number(0), Number(1), Number(2))
 	assert.True(v.Get("l").Equals(l))
@@ -351,13 +342,12 @@ func TestReadStructWithValue(t *testing.T) {
 		Field{"v", ValueType, false},
 		Field{"s", StringType, false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJSON(`[%d, "%s", "0", true, %d, "42", "hi"]`, UnresolvedKind, pkgRef.String(), NumberKind)
+	a := parseJSON(`[%d, "A5", ["b", %d, false, "v", %d, false, "s", %d, false], [], true, %d, "42", "hi"]`, StructKind, BoolKind, ValueKind, StringKind, NumberKind)
 	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
+	assert.True(v.Type().Equals(typ))
 	assert.True(v.Get("b").Equals(Bool(true)))
 	assert.True(v.Get("v").Equals(Number(42)))
 	assert.True(v.Get("s").Equals(NewString("hi")))
@@ -378,13 +368,12 @@ func TestReadValueStruct(t *testing.T) {
 		Field{"s", StringType, false},
 		Field{"b", BoolType, false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJSON(`[%d, %d, "%s", "0", "42", "hi", true]`, ValueKind, UnresolvedKind, pkgRef.String())
+	a := parseJSON(`[%d, %d, "A1", ["x", %d, false, "s", %d, false, "b", %d, false], [], "42", "hi", true]`, ValueKind, StructKind, NumberKind, StringKind, BoolKind)
 	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
+	assert.True(v.Type().Equals(typ))
 	assert.True(v.Get("x").Equals(Number(42)))
 	assert.True(v.Get("s").Equals(NewString("hi")))
 	assert.True(v.Get("b").Equals(Bool(true)))
@@ -425,15 +414,48 @@ func TestReadStructWithBlob(t *testing.T) {
 	typ := MakeStructType("A5", []Field{
 		Field{"b", BlobType, false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{typ}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
 
-	a := parseJSON(`[%d, "%s", "0", false, "AAE="]`, UnresolvedKind, pkgRef.String())
+	a := parseJSON(`[%d, "A5", ["b", %d, false], [], false, "AAE="]`, StructKind, BlobKind)
 	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
-
+	assert.True(v.Type().Equals(typ))
 	blob := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	assert.True(v.Get("b").Equals(blob))
+}
+
+func TestReadRecursiveStruct(t *testing.T) {
+	assert := assert.New(t)
+	cs := NewTestValueStore()
+
+	// struct A {
+	//   b: struct B {
+	//     a: List<A>
+	//     b: List<B>
+	//   }
+	// }
+
+	at := MakeStructType("A", []Field{
+		Field{"b", nil, false},
+	}, []Field{})
+	bt := MakeStructType("B", []Field{
+		Field{"a", MakeListType(at), false},
+		Field{"b", nil, false},
+	}, []Field{})
+	at.Desc.(StructDesc).Fields[0].T = bt
+	bt.Desc.(StructDesc).Fields[1].T = MakeListType(bt)
+
+	a := parseJSON(`[%d, "A",
+		["b", %d, "B", [
+			"a", %d, %d, 1, false,
+			"b", %d, %d, 0, false
+		], [], false], [],
+		false, [], false, []]`, StructKind, StructKind, ListKind, BackRefKind, ListKind, BackRefKind)
+
+	r := newJSONArrayReader(a, cs)
+
+	v := r.readTopLevelValue().(Struct)
+	assert.True(v.Type().Equals(at))
+	assert.True(v.Get("b").Type().Equals(bt))
 }
 
 func TestReadTypeValue(t *testing.T) {
@@ -465,47 +487,4 @@ func TestReadTypeValue(t *testing.T) {
 		Field{"v", ValueType, false},
 	}),
 		`[%d, %d, "S", [], ["x", %d, false, "v", %d, false]]`, TypeKind, StructKind, NumberKind, ValueKind)
-
-	pkgRef := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
-	test(MakeType(pkgRef, 123), `[%d, %d, "%s", "123"]`, TypeKind, UnresolvedKind, pkgRef.String())
-
-	test(MakeStructType("S", []Field{
-		Field{"e", MakeType(pkgRef, 123), false},
-		Field{"x", NumberType, false},
-	}, []Field{}),
-		`[%d, %d, "S", ["e", %d, "%s", "123", false, "x", %d, false], []]`, TypeKind, StructKind, UnresolvedKind, pkgRef.String(), NumberKind)
-
-	test(MakeUnresolvedType("ns", "n"), `[%d, %d, "%s", "-1", "ns", "n"]`, TypeKind, UnresolvedKind, ref.Ref{}.String())
-}
-
-func TestReadPackage2(t *testing.T) {
-	cs := NewTestValueStore()
-
-	rr := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-	setTref := MakeSetType(NumberType)
-	pkg := NewPackage([]*Type{setTref}, []ref.Ref{rr})
-
-	a := []interface{}{float64(PackageKind), []interface{}{float64(SetKind), []interface{}{float64(NumberKind)}}, []interface{}{rr.String()}}
-	r := newJSONArrayReader(a, cs)
-	v := r.readTopLevelValue().(Package)
-	assert.True(t, pkg.Equals(v))
-}
-
-func TestReadPackageThroughChunkSource(t *testing.T) {
-	assert := assert.New(t)
-	cs := NewTestValueStore()
-
-	pkg := NewPackage([]*Type{
-		MakeStructType("S", []Field{
-			Field{"X", NumberType, false},
-		}, []Field{}),
-	}, []ref.Ref{})
-	// Don't register
-	pkgRef := cs.WriteValue(pkg).TargetRef()
-
-	a := parseJSON(`[%d, "%s", "0", "42"]`, UnresolvedKind, pkgRef.String())
-	r := newJSONArrayReader(a, cs)
-	v := r.readTopLevelValue().(Struct)
-
-	assert.True(v.Get("X").Equals(Number(42)))
 }

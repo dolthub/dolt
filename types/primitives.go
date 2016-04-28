@@ -26,10 +26,8 @@ func (v Bool) ToPrimitive() interface{} {
 	return bool(v)
 }
 
-var typeForBool = BoolType
-
 func (v Bool) Type() *Type {
-	return typeForBool
+	return BoolType
 }
 
 type Number float64
@@ -54,10 +52,8 @@ func (v Number) ToPrimitive() interface{} {
 	return float64(v)
 }
 
-var typeForNumber = NumberType
-
 func (v Number) Type() *Type {
-	return typeForNumber
+	return NumberType
 }
 
 func (v Number) Less(other OrderedValue) bool {

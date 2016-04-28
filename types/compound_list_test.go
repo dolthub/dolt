@@ -5,7 +5,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -665,7 +664,7 @@ func TestCompoundListFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := NewTypedList(listType, nums...)
-	assert.Equal(s.Ref().String(), "sha1-df0a58e5fb11b2bc0adbab07c2f39c6b3e02b42b")
+	assert.Equal("sha1-df0a58e5fb11b2bc0adbab07c2f39c6b3e02b42b", s.Ref().String())
 }
 
 func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
@@ -675,19 +674,17 @@ func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 
-	structTypeDef := MakeStructType("num", []Field{
+	structType := MakeStructType("num", []Field{
 		Field{"n", NumberType, false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{structTypeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-	structType := MakeType(pkgRef, 0)
+
 	refOfTypeStructType := MakeRefType(structType)
 	listType := MakeListType(refOfTypeStructType)
 
 	firstNNumbers := func(n int) []Value {
 		nums := []Value{}
 		for i := 0; i < n; i++ {
-			r := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Number(i)}))
+			r := vs.WriteValue(NewStruct(structType, structData{"n": Number(i)}))
 			nums = append(nums, r)
 		}
 
@@ -696,7 +693,7 @@ func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := NewTypedList(listType, nums...)
-	assert.Equal(s.Ref().String(), "sha1-f2e6c3aae6e8ac4c3776830e2d8141fc527c55c5")
+	assert.Equal("sha1-f2db6a2f8026ee6e12bb584cd38c813604774a69", s.Ref().String())
 }
 
 func TestCompoundListModifyAfterRead(t *testing.T) {

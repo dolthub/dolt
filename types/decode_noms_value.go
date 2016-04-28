@@ -62,6 +62,10 @@ func (r *jsonArrayReader) readUint() uint64 {
 	return v
 }
 
+func (r *jsonArrayReader) readUint8() uint8 {
+	return uint8(r.read().(float64))
+}
+
 func (r *jsonArrayReader) readArray() []interface{} {
 	return r.read().([]interface{})
 }
@@ -75,29 +79,30 @@ func (r *jsonArrayReader) readRef() ref.Ref {
 	return ref.Parse(s)
 }
 
-func (r *jsonArrayReader) readTypeAsTag() *Type {
+func (r *jsonArrayReader) readTypeAsTag(backRefs []*Type) *Type {
 	kind := r.readKind()
 	switch kind {
 	case ListKind:
-		elemType := r.readTypeAsTag()
+		elemType := r.readTypeAsTag(backRefs)
 		return MakeListType(elemType)
 	case SetKind:
-		elemType := r.readTypeAsTag()
+		elemType := r.readTypeAsTag(backRefs)
 		return MakeSetType(elemType)
 	case RefKind:
-		elemType := r.readTypeAsTag()
+		elemType := r.readTypeAsTag(backRefs)
 		return MakeRefType(elemType)
 	case MapKind:
-		keyType := r.readTypeAsTag()
-		valueType := r.readTypeAsTag()
+		keyType := r.readTypeAsTag(backRefs)
+		valueType := r.readTypeAsTag(backRefs)
 		return MakeMapType(keyType, valueType)
 	case TypeKind:
 		return TypeType
-	case UnresolvedKind:
-		pkgRef := r.readRef()
-		ordinal := int16(r.readInt())
-		d.Chk.NotEqual(int16(-1), ordinal)
-		return MakeType(pkgRef, ordinal)
+	case StructKind:
+		return r.readStructType(backRefs)
+	case BackRefKind:
+		i := r.readUint8()
+		d.Chk.True(i < uint8(len(backRefs)))
+		return backRefs[len(backRefs)-1-int(i)]
 	}
 
 	if IsPrimitiveKind(kind) {
@@ -107,7 +112,7 @@ func (r *jsonArrayReader) readTypeAsTag() *Type {
 	panic("unreachable")
 }
 
-func (r *jsonArrayReader) readBlob(t *Type) Value {
+func (r *jsonArrayReader) readBlob() Value {
 	s := r.readString()
 	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(s))
 	b, err := ioutil.ReadAll(decoder)
@@ -115,39 +120,39 @@ func (r *jsonArrayReader) readBlob(t *Type) Value {
 	return newBlobLeaf(b)
 }
 
-func (r *jsonArrayReader) readList(t *Type, pkg *Package) Value {
+func (r *jsonArrayReader) readList(t *Type) Value {
 	desc := t.Desc.(CompoundDesc)
 	data := []Value{}
 	elemType := desc.ElemTypes[0]
 	for !r.atEnd() {
-		v := r.readValueWithoutTag(elemType, pkg)
+		v := r.readValueWithoutTag(elemType)
 		data = append(data, v)
 	}
 
 	return newListLeaf(t, data...)
 }
 
-func (r *jsonArrayReader) readSet(t *Type, pkg *Package) Value {
+func (r *jsonArrayReader) readSet(t *Type) Value {
 	desc := t.Desc.(CompoundDesc)
 	data := setData{}
 	elemType := desc.ElemTypes[0]
 	for !r.atEnd() {
-		v := r.readValueWithoutTag(elemType, pkg)
+		v := r.readValueWithoutTag(elemType)
 		data = append(data, v)
 	}
 
 	return newSetLeaf(t, data...)
 }
 
-func (r *jsonArrayReader) readMap(t *Type, pkg *Package) Value {
+func (r *jsonArrayReader) readMap(t *Type) Value {
 	desc := t.Desc.(CompoundDesc)
 	data := mapData{}
 	keyType := desc.ElemTypes[0]
 	valueType := desc.ElemTypes[1]
 
 	for !r.atEnd() {
-		k := r.readValueWithoutTag(keyType, pkg)
-		v := r.readValueWithoutTag(valueType, pkg)
+		k := r.readValueWithoutTag(keyType)
+		v := r.readValueWithoutTag(valueType)
 		data = append(data, mapEntry{k, v})
 	}
 
@@ -169,7 +174,7 @@ func indexTypeForMetaSequence(t *Type) *Type {
 	}
 }
 
-func (r *jsonArrayReader) maybeReadMetaSequence(t *Type, pkg *Package) (Value, bool) {
+func (r *jsonArrayReader) maybeReadMetaSequence(t *Type) (Value, bool) {
 	if !r.read().(bool) {
 		return nil, false
 	}
@@ -179,28 +184,12 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t *Type, pkg *Package) (Value, b
 	indexType := indexTypeForMetaSequence(t)
 	for !r2.atEnd() {
 		ref := NewTypedRef(MakeRefType(t), r2.readRef())
-		v := r2.readValueWithoutTag(indexType, pkg)
+		v := r2.readValueWithoutTag(indexType)
 		numLeaves := uint64(r2.readUint())
 		data = append(data, newMetaTuple(v, nil, ref, numLeaves))
 	}
 
 	return newMetaSequenceFromData(data, t, r.vr), true
-}
-
-func (r *jsonArrayReader) readPackage(t *Type, pkg *Package) Value {
-	r2 := newJSONArrayReader(r.readArray(), r.vr)
-	types := []*Type{}
-	for !r2.atEnd() {
-		types = append(types, r2.readTypeAsValue(pkg))
-	}
-
-	r3 := newJSONArrayReader(r.readArray(), r.vr)
-	deps := []ref.Ref{}
-	for !r3.atEnd() {
-		deps = append(deps, r3.readRef())
-	}
-
-	return NewPackage(types, deps)
 }
 
 func (r *jsonArrayReader) readRefValue(t *Type) Value {
@@ -209,18 +198,18 @@ func (r *jsonArrayReader) readRefValue(t *Type) Value {
 }
 
 func (r *jsonArrayReader) readTopLevelValue() Value {
-	t := r.readTypeAsTag()
-	return r.readValueWithoutTag(t, nil)
+	t := r.readTypeAsTag(nil)
+	return r.readValueWithoutTag(t)
 }
 
-func (r *jsonArrayReader) readValueWithoutTag(t *Type, pkg *Package) Value {
+func (r *jsonArrayReader) readValueWithoutTag(t *Type) Value {
 	switch t.Kind() {
 	case BlobKind:
-		if ms, ok := r.maybeReadMetaSequence(t, pkg); ok {
+		if ms, ok := r.maybeReadMetaSequence(t); ok {
 			return ms
 		}
 
-		return r.readBlob(t)
+		return r.readBlob()
 	case BoolKind:
 		return Bool(r.read().(bool))
 	case NumberKind:
@@ -229,137 +218,114 @@ func (r *jsonArrayReader) readValueWithoutTag(t *Type, pkg *Package) Value {
 		return NewString(r.readString())
 	case ValueKind:
 		// The value is always tagged
-		t := r.readTypeAsTag()
-		return r.readValueWithoutTag(t, pkg)
+		t := r.readTypeAsTag(nil)
+		return r.readValueWithoutTag(t)
 	case ListKind:
-		if ms, ok := r.maybeReadMetaSequence(t, pkg); ok {
+		if ms, ok := r.maybeReadMetaSequence(t); ok {
 			return ms
 		}
 
 		r2 := newJSONArrayReader(r.readArray(), r.vr)
-		return r2.readList(t, pkg)
+		return r2.readList(t)
 	case MapKind:
-		if ms, ok := r.maybeReadMetaSequence(t, pkg); ok {
+		if ms, ok := r.maybeReadMetaSequence(t); ok {
 			return ms
 		}
 
 		r2 := newJSONArrayReader(r.readArray(), r.vr)
-		return r2.readMap(t, pkg)
-	case PackageKind:
-		return r.readPackage(t, pkg)
+		return r2.readMap(t)
 	case RefKind:
 		return r.readRefValue(t)
 	case SetKind:
-		if ms, ok := r.maybeReadMetaSequence(t, pkg); ok {
+		if ms, ok := r.maybeReadMetaSequence(t); ok {
 			return ms
 		}
 
 		r2 := newJSONArrayReader(r.readArray(), r.vr)
-		return r2.readSet(t, pkg)
+		return r2.readSet(t)
 	case StructKind:
-		panic("not allowed")
+		return r.readStruct(t)
 	case TypeKind:
-		return r.readTypeKindToValue(t, pkg)
-	case UnresolvedKind:
-		return r.readUnresolvedKindToValue(t, pkg)
+		return r.readTypeKindToValue(t)
+	case BackRefKind:
+		panic("BackRefKind should have been replaced")
 	}
+
 	panic("not reachable")
 }
 
-func (r *jsonArrayReader) readTypeKindToValue(t *Type, pkg *Package) Value {
+func (r *jsonArrayReader) readTypeKindToValue(t *Type) Value {
 	d.Chk.IsType(PrimitiveDesc(0), t.Desc)
-	return r.readTypeAsValue(pkg)
+	return r.readTypeAsValue(nil)
 }
 
-func (r *jsonArrayReader) readUnresolvedKindToValue(t *Type, pkg *Package) Value {
-	// When we have a struct referencing another struct in the same package the package ref is empty. In that case we use the package that is passed into this function.
-	d.Chk.True(t.IsUnresolved())
-	pkgRef := t.PackageRef()
-	ordinal := t.Ordinal()
-	if !pkgRef.IsEmpty() {
-		pkg2 := LookupPackage(pkgRef)
-		if pkg2 != nil {
-			pkg = pkg2
-		} else {
-			pkg = ReadPackage(pkgRef, r.vr)
-		}
-	}
-
-	d.Chk.NotNil(pkg, "Woah, got a nil pkg. pkgRef: %s, ordinal: %d\n", pkgRef, ordinal)
-
-	typeDef := pkg.types[ordinal]
-
-	d.Chk.Equal(StructKind, typeDef.Kind())
-	return r.readStruct(typeDef, t, pkg)
-}
-
-func (r *jsonArrayReader) readTypeAsValue(pkg *Package) *Type {
+func (r *jsonArrayReader) readTypeAsValue(backRefs []*Type) *Type {
 	k := r.readKind()
 	switch k {
 	case ListKind, MapKind, RefKind, SetKind:
 		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		elemTypes := []*Type{}
 		for !r2.atEnd() {
-			t := r2.readTypeAsValue(pkg)
+			t := r2.readTypeAsValue(backRefs)
 			elemTypes = append(elemTypes, t)
 		}
 		return makeCompoundType(k, elemTypes...)
 	case StructKind:
-		name := r.readString()
-
-		fields := []Field{}
-		choices := []Field{}
-
-		fieldReader := newJSONArrayReader(r.readArray(), r.vr)
-		for !fieldReader.atEnd() {
-			fieldName := fieldReader.readString()
-			fieldType := fieldReader.readTypeAsValue(pkg)
-			optional := fieldReader.readBool()
-			fields = append(fields, Field{Name: fieldName, T: fieldType, Optional: optional})
-		}
-		choiceReader := newJSONArrayReader(r.readArray(), r.vr)
-		for !choiceReader.atEnd() {
-			fieldName := choiceReader.readString()
-			fieldType := choiceReader.readTypeAsValue(pkg)
-			optional := choiceReader.readBool()
-			choices = append(choices, Field{Name: fieldName, T: fieldType, Optional: optional})
-		}
-		return MakeStructType(name, fields, choices)
-	case UnresolvedKind:
-		pkgRef := r.readRef()
-		ordinal := int16(r.readInt())
-		if ordinal == -1 {
-			namespace := r.readString()
-			name := r.readString()
-			d.Chk.True(pkgRef.IsEmpty(), "Unresolved Type may not have a package ref")
-			return MakeUnresolvedType(namespace, name)
-		}
-		return MakeType(pkgRef, ordinal)
+		return r.readStructType(backRefs)
 	}
 
 	d.Chk.True(IsPrimitiveKind(k))
 	return MakePrimitiveType(k)
 }
 
-func (r *jsonArrayReader) readStruct(typeDef, typ *Type, pkg *Package) Value {
-	// We've read `[StructKind, sha1, name` at this point
+func (r *jsonArrayReader) readStruct(t *Type) Value {
+	// We've read `[StructKind, name, fields, unions` at this point
 	values := []Value{}
-	desc := typeDef.Desc.(StructDesc)
+	desc := t.Desc.(StructDesc)
 	for _, f := range desc.Fields {
 		if f.Optional {
 			b := r.read().(bool)
 			values = append(values, Bool(b))
 			if b {
-				values = append(values, r.readValueWithoutTag(f.T, pkg))
+				values = append(values, r.readValueWithoutTag(f.T))
 			}
 		} else {
-			values = append(values, r.readValueWithoutTag(f.T, pkg))
+			values = append(values, r.readValueWithoutTag(f.T))
 		}
 	}
 	if len(desc.Union) > 0 {
 		unionIndex := uint64(r.readUint())
-		values = append(values, Number(unionIndex), r.readValueWithoutTag(desc.Union[unionIndex].T, pkg))
+		values = append(values, Number(unionIndex), r.readValueWithoutTag(desc.Union[unionIndex].T))
 	}
 
-	return structBuilder(values, typ, typeDef)
+	return structBuilder(values, t)
+}
+
+func (r *jsonArrayReader) readStructType(backRefs []*Type) *Type {
+	name := r.readString()
+
+	fields := []Field{}
+	choices := []Field{}
+	st := MakeStructType(name, fields, choices)
+	backRefs = append(backRefs, st)
+	desc := st.Desc.(StructDesc)
+
+	fieldReader := newJSONArrayReader(r.readArray(), r.vr)
+	for !fieldReader.atEnd() {
+		fieldName := fieldReader.readString()
+		fieldType := fieldReader.readTypeAsTag(backRefs)
+		optional := fieldReader.readBool()
+		fields = append(fields, Field{Name: fieldName, T: fieldType, Optional: optional})
+	}
+	choiceReader := newJSONArrayReader(r.readArray(), r.vr)
+	for !choiceReader.atEnd() {
+		fieldName := choiceReader.readString()
+		fieldType := choiceReader.readTypeAsTag(backRefs)
+		optional := choiceReader.readBool()
+		choices = append(choices, Field{Name: fieldName, T: fieldType, Optional: optional})
+	}
+	desc.Fields = fields
+	desc.Union = choices
+	st.Desc = desc
+	return st
 }

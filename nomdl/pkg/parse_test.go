@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/suite"
 )
@@ -43,30 +42,6 @@ func (suite *ParserTestSuite) TestAlias() {
 
 	pkg = runParser("", strings.NewReader(fmt.Sprintf(importTmpl, path)))
 	suite.Equal(path, pkg.Aliases["Noms"])
-}
-
-func (suite *ParserTestSuite) TestUsing() {
-	usingDecls := `
-using Map<String, Simple>
-using List<Noms.Commit>
-`
-	pkg := runParser("", strings.NewReader(usingDecls))
-	suite.Len(pkg.UsingDeclarations, 2)
-
-	suite.Equal(types.MapKind, pkg.UsingDeclarations[0].Desc.Kind())
-	suite.True(types.StringType.Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[0]))
-	suite.True(types.MakeUnresolvedType("", "Simple").Equals(pkg.UsingDeclarations[0].Desc.(types.CompoundDesc).ElemTypes[1]))
-
-	suite.Equal(types.ListKind, pkg.UsingDeclarations[1].Desc.Kind())
-	elemTypes := pkg.UsingDeclarations[1].Desc.(types.CompoundDesc).ElemTypes
-	suite.Len(elemTypes, 1)
-	suite.True(types.MakeUnresolvedType("Noms", "Commit").Equals(elemTypes[0]))
-}
-
-func (suite *ParserTestSuite) TestBadUsing() {
-	suite.Panics(func() { runParser("", strings.NewReader("using Blob")) }, "Can't 'use' a primitive.")
-	suite.Panics(func() { runParser("", strings.NewReader("using Noms.Commit")) }, "Can't 'use' a type from another package.")
-	suite.Panics(func() { runParser("", strings.NewReader("using f@<k")) }, "Can't 'use' illegal identifier.")
 }
 
 func (suite *ParserTestSuite) TestBadStructParse() {
@@ -179,301 +154,148 @@ func (suite *ParserTestSuite) TestBadComment() {
 type ParsedResultTestSuite struct {
 	suite.Suite
 
-	primField               testField
-	primOptionalField       testField
-	compoundField           testField
-	compoundOfCompoundField testField
-	mapOfNamedTypeField     testField
-	namedTypeField          testField
-	namespacedTypeField     testField
-	union                   testChoices
-}
-
-type testChoices []types.Field
-
-func (c testChoices) Describe() string {
-	return describeUnion(c)
+	prim               testField
+	primOptional       testField
+	compound           testField
+	compoundOfCompound testField
+	namedType          testField
+	namespacedType     testField
+	mapOfNamedType     testField
 }
 
 func (suite *ParsedResultTestSuite) SetupTest() {
-	suite.primField = testField{"a", types.NumberType, false}
-	suite.primOptionalField = testField{"b", types.NumberType, true}
-	suite.compoundField = testField{"set", types.MakeSetType(types.StringType), false}
-	suite.compoundOfCompoundField = testField{
-		"listOfSet",
-		types.MakeListType(types.MakeSetType(types.StringType)), false}
-	suite.mapOfNamedTypeField = testField{
-		"mapOfStructToOther",
-		types.MakeMapType(
-			types.MakeUnresolvedType("", "Struct"),
-			types.MakeUnresolvedType("Elsewhere", "Other"),
-		),
-		false}
-	suite.namedTypeField = testField{"otherStruct", types.MakeUnresolvedType("", "Other"), false}
-	suite.namespacedTypeField = testField{"namespacedStruct", types.MakeUnresolvedType("Elsewhere", "Other"), false}
-	suite.union = testChoices{
-		types.Field{"a", types.NumberType, false},
-		types.Field{"n", types.MakeUnresolvedType("NN", "Other"), false},
-		types.Field{"c", types.NumberType, false},
-	}
+	suite.prim = newTestField("a", types.NumberType, false, "")
+	suite.primOptional = newTestField("b", types.NumberType, true, "")
+	suite.compound = newTestField("set", types.MakeSetType(types.StringType), false, "")
+	suite.compoundOfCompound = newTestField("listOfSet", types.MakeListType(types.MakeSetType(types.StringType)), false, "")
+	suite.namedType = newTestField("otherStruct", makeUnresolvedType("", "Other"), false, "Other")
+	suite.namespacedType = newTestField("namespacedStruct", makeUnresolvedType("Elsewhere", "Other"), false, "Elsewhere.Other")
+	suite.mapOfNamedType = newTestField("mapOfStructToOther", types.MakeMapType(makeUnresolvedType("", "Struct"), makeUnresolvedType("Elsewhere", "Other")), false, "Map<Struct, Elsewhere.Other>")
 }
 
 type structTestCase struct {
 	Name   string
-	Union  testChoices
 	Fields []testField
 }
 
-func makeStructTestCase(n string, u testChoices, fields ...testField) structTestCase {
-	return structTestCase{n, u, fields}
+func makeStructTestCase(n string, fields ...testField) structTestCase {
+	return structTestCase{Name: n, Fields: fields}
 }
 
-func (s structTestCase) toText() string {
-	return fmt.Sprintf(structTmpl, s.Name, s.fieldsToString(), s.unionToString())
-}
-
-func (s structTestCase) fieldsToString() (out string) {
+func (s structTestCase) String() string {
+	fieldsSource := ""
 	for _, f := range s.Fields {
-		out += f.Name + ": "
-		if f.Optional {
-			out += "optional "
-		}
-		out += f.D.Describe() + "\n"
+		fieldsSource += f.String() + "\n"
 	}
-	return
-}
-
-func (s structTestCase) unionToString() string {
-	if s.Union == nil {
-		return ""
-	}
-	return describeUnion(s.Union)
-}
-
-func describeUnion(fields []types.Field) string {
-	out := " union {"
-	for _, f := range fields {
-		out += f.Name + ": "
-		out += f.T.Describe() + "\n"
-	}
-	return out + "}"
+	return fmt.Sprintf("struct %s { %s }", s.Name, fieldsSource)
 }
 
 type testField struct {
-	Name     string
-	D        describable
-	Optional bool
+	types.Field
+	S string
 }
 
-func (t testField) toField() types.Field {
-	return types.Field{t.Name, t.D.(*types.Type), t.Optional}
+func newTestField(name string, t *types.Type, optional bool, s string) testField {
+	return testField{Field: types.Field{Name: name, T: t, Optional: optional}, S: s}
 }
 
-type describable interface {
-	Describe() string
-}
-
-func (suite *ParsedResultTestSuite) findTypeByName(n string, ts []*types.Type) *types.Type {
-	for _, t := range ts {
-		if n == t.Name() {
-			return t
-		}
+func (t testField) String() string {
+	s := t.Name + ": "
+	if t.Optional {
+		s += "optional "
 	}
-	suite.Fail("Failed to find type by name")
-	panic("Unreachable")
-}
-
-func (suite *ParsedResultTestSuite) checkStruct(pkg intermediate, s structTestCase) {
-	typ := suite.findTypeByName(s.Name, pkg.Types)
-	typFields := typ.Desc.(types.StructDesc).Fields
-	typUnion := typ.Desc.(types.StructDesc).Union
-
-	suite.Equal(s.Name, typ.Name())
-	suite.Len(typFields, len(s.Fields))
-	for i, f := range s.Fields {
-		// Named unions are syntactic sugar for a struct Field that points to an anonymous struct containing an anonymous union.
-		// So, if the field in the test input was a union...
-		if _, ok := f.D.(testChoices); ok {
-			// ...make sure the names are the same...
-			suite.Equal(f.Name, typFields[i].Name)
-			suite.Equal(f.Optional, typFields[i].Optional)
-			// and  the Type points to somewhere else.
-			suite.True(typFields[i].T.IsUnresolved())
-			suite.True(typFields[i].T.Ordinal() > 0)
-			suite.Equal(ref.Ref{}, typFields[i].T.PackageRef())
-		} else {
-			suite.EqualValues(s.Fields[i].toField(), typFields[i])
-		}
+	if t.S != "" {
+		return s + t.S
 	}
-	if s.Union != nil && suite.NotEmpty(typUnion) {
-		suite.Len(typUnion, len(s.Union))
-		for i := range s.Union {
-			suite.EqualValues(s.Union[i], typUnion[i])
-		}
-	} else {
-		suite.EqualValues(s.Union, typUnion, "If s.Union is nil, so should typUnion be.")
-	}
-
+	return s + t.T.Describe()
 }
 
 func (suite *ParsedResultTestSuite) parseAndCheckStructs(structs ...structTestCase) {
-	pkgDef := ""
-	for _, s := range structs {
-		pkgDef += s.toText() + "\n"
+	source := ""
+	expectedTypes := make([]*types.Type, len(structs))
+	for i, s := range structs {
+		source += s.String() + "\n"
+		fields := make([]types.Field, len(s.Fields))
+		for i, f := range s.Fields {
+			fields[i] = f.Field
+		}
+		expectedTypes[i] = types.MakeStructType(s.Name, fields, nil)
 	}
+	suite.assertTypes(source, expectedTypes...)
+}
+
+func (suite *ParsedResultTestSuite) assertTypes(source string, ts ...*types.Type) {
 	err := d.Try(func() {
-		pkg := runParser("", strings.NewReader(pkgDef))
-		for _, s := range structs {
-			suite.checkStruct(pkg, s)
+		i := runParser("", strings.NewReader(source))
+		for idx, t := range i.Types {
+			suite.True(t.Equals(ts[idx]))
 		}
 	})
-	suite.NoError(err, pkgDef)
+	suite.NoError(err, source)
 }
 
 func (suite *ParsedResultTestSuite) TestPrimitiveField() {
-	suite.parseAndCheckStructs(makeStructTestCase("Simple", nil, suite.primField))
+	suite.parseAndCheckStructs(makeStructTestCase("Simple", suite.prim))
 }
 
 func (suite *ParsedResultTestSuite) TestPrimitiveOptionalField() {
-	suite.parseAndCheckStructs(makeStructTestCase("SimpleOptional", nil, suite.primOptionalField))
-}
-
-func (suite *ParsedResultTestSuite) TestAnonUnion() {
-	suite.parseAndCheckStructs(makeStructTestCase("WithAnon", suite.union, suite.primField))
-}
-
-func (suite *ParsedResultTestSuite) TestAnonUnionFirst() {
-	anonUnionFirst := makeStructTestCase("WithAnonFirst", suite.union, suite.primField)
-
-	pkgDef := fmt.Sprintf(structTmpl, anonUnionFirst.Name, anonUnionFirst.unionToString(), anonUnionFirst.fieldsToString())
-	err := d.Try(func() {
-		pkg := runParser("", strings.NewReader(pkgDef))
-		suite.checkStruct(pkg, anonUnionFirst)
-	})
-	suite.NoError(err, pkgDef)
+	suite.parseAndCheckStructs(makeStructTestCase("SimpleOptional", suite.primOptional))
 }
 
 func (suite *ParsedResultTestSuite) TestCommentNextToName() {
-	withComment := makeStructTestCase("WithComment", suite.union, suite.primField)
-
-	pkgDef := fmt.Sprintf(structTmpl, "/* Oy! */"+withComment.Name, withComment.unionToString(), withComment.fieldsToString())
-	err := d.Try(func() {
-		pkg := runParser("", strings.NewReader(pkgDef))
-		suite.checkStruct(pkg, withComment)
-	})
-	suite.NoError(err, pkgDef)
+	n := "WithComment"
+	s := fmt.Sprintf("struct %s { /* Oy! */%s }", n, suite.primOptional)
+	suite.assertTypes(s, types.MakeStructType(n, []types.Field{suite.primOptional.Field}, nil))
 }
 
 func (suite *ParsedResultTestSuite) TestCommentAmongFields() {
-	withComment := makeStructTestCase("WithComment", suite.union, suite.primField)
-
-	pkgDef := fmt.Sprintf(structTmpl, withComment.Name, withComment.fieldsToString()+"\n// Nope\n", withComment.unionToString())
-	err := d.Try(func() {
-		pkg := runParser("", strings.NewReader(pkgDef))
-		suite.checkStruct(pkg, withComment)
-	})
-	suite.NoError(err, pkgDef)
+	n := "WithComment"
+	s := fmt.Sprintf("struct %s { %s \n// Nope\n%s }", n, suite.prim, suite.primOptional)
+	suite.assertTypes(s, types.MakeStructType(n, []types.Field{suite.prim.Field, suite.primOptional.Field}, nil))
 }
 
 func (suite *ParsedResultTestSuite) TestCompoundField() {
-	suite.parseAndCheckStructs(makeStructTestCase("Compound", suite.union, suite.compoundField))
+	suite.parseAndCheckStructs(makeStructTestCase("Compound", suite.compound))
 }
 
 func (suite *ParsedResultTestSuite) TestCompoundOfCompoundField() {
-	suite.parseAndCheckStructs(makeStructTestCase("CofC", suite.union, suite.compoundOfCompoundField))
+	suite.parseAndCheckStructs(makeStructTestCase("CofC", suite.compoundOfCompound))
 }
 
 func (suite *ParsedResultTestSuite) TestNamedTypeField() {
-	suite.parseAndCheckStructs(makeStructTestCase("Named", suite.union, suite.namedTypeField))
+	suite.parseAndCheckStructs(makeStructTestCase("Named", suite.namedType))
 }
 
 func (suite *ParsedResultTestSuite) TestNamespacedTypeField() {
-	suite.parseAndCheckStructs(makeStructTestCase("Namespaced", suite.union, suite.namespacedTypeField))
+	suite.parseAndCheckStructs(makeStructTestCase("Namespaced", suite.namespacedType))
 }
 
 func (suite *ParsedResultTestSuite) TestMapOfNamedTypeField() {
-	suite.parseAndCheckStructs(makeStructTestCase("MapStruct", suite.union, suite.mapOfNamedTypeField))
+	suite.parseAndCheckStructs(makeStructTestCase("MapStruct", suite.mapOfNamedType))
 }
 
 func (suite *ParsedResultTestSuite) TestMultipleFields() {
-	suite.parseAndCheckStructs(makeStructTestCase("Multi", suite.union,
-		suite.primField,
-		suite.primOptionalField,
-		suite.namedTypeField,
-		suite.namespacedTypeField,
-		suite.compoundField,
-		suite.compoundOfCompoundField,
-		testField{"namedUnion", suite.union, false},
-	))
-}
-
-func (suite *ParsedResultTestSuite) TestNamedAndAnonUnion() {
-	suite.parseAndCheckStructs(makeStructTestCase("NamedAndAnon", suite.union,
-		testField{"namedUnion", suite.union, false},
-	))
-}
-
-func (suite *ParsedResultTestSuite) TestNamedUnionOnly() {
-	suite.parseAndCheckStructs(makeStructTestCase("NamedUnionOnly", nil,
-		testField{"namedUnion", suite.union, false},
-	))
-}
-
-func (suite *ParsedResultTestSuite) TestTwoNamedAndAnonUnion() {
-	suite.parseAndCheckStructs(makeStructTestCase("TwoNamedAndAnon", suite.union,
-		testField{"namedUnion1", suite.union, false},
-		testField{"namedUnion2", suite.union, false},
+	suite.parseAndCheckStructs(makeStructTestCase("Multi",
+		suite.prim,
+		suite.primOptional,
+		suite.namedType,
+		suite.namespacedType,
+		suite.compound,
+		suite.compoundOfCompound,
 	))
 }
 
 func (suite *ParsedResultTestSuite) TestMultipleStructs() {
 	defns := []structTestCase{
-		makeStructTestCase("Simple", nil, suite.primField),
-		makeStructTestCase("Optional", nil, suite.primOptionalField),
-		makeStructTestCase("Compound", nil, suite.compoundField),
-		makeStructTestCase("CompoundWithUnion", suite.union, suite.compoundField),
-		makeStructTestCase("TwoNamedAndAnon", suite.union,
-			testField{"namedUnion1", suite.union, false},
-			testField{"namedUnion2", suite.union, false},
-		),
-		makeStructTestCase("Multi", suite.union,
-			suite.primField,
-			suite.primOptionalField,
-			suite.namespacedTypeField,
-			suite.compoundField,
-			testField{"namedUnion", suite.union, false},
+		makeStructTestCase("Simple", suite.prim),
+		makeStructTestCase("Optional", suite.primOptional),
+		makeStructTestCase("Compound", suite.compound),
+		makeStructTestCase("Multi",
+			suite.prim,
+			suite.primOptional,
+			suite.namespacedType,
+			suite.compound,
 		),
 	}
 	suite.parseAndCheckStructs(defns...)
-}
-
-func (suite *ParsedResultTestSuite) TestExpandStruct() {
-	code := `
-		struct T {
-			x: Number
-			u: union {
-				s: String
-				b: Bool
-			}
-		}
-		`
-	pkg := runParser("", strings.NewReader(code))
-	suite.Len(pkg.Types, 2)
-
-	{
-		code := `
-			struct T {
-				a: union {
-					b: String
-					c: Bool
-				}
-				d: union {
-					e: String
-					f: Bool
-				}
-			}
-			`
-		pkg := runParser("", strings.NewReader(code))
-		suite.Len(pkg.Types, 3)
-	}
 }

@@ -1,7 +1,0 @@
-alias dep = import "../testDeps/dep.noms"
-
-struct ImportUser {
-	importedStruct :dep.D
-}
-
-using List<dep.D>

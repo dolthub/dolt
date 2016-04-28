@@ -20,7 +20,6 @@ export {
 export {encodeNomsValue} from './encode.js';
 export {invariant, notNull} from './assert.js';
 export {isPrimitiveKind, Kind, kindToString} from './noms-kind.js';
-export {lookupPackage, Package, readPackage, registerPackage} from './package.js';
 export {newList, ListLeafSequence, NomsList} from './list.js';
 export {newMap, NomsMap, MapLeafSequence} from './map.js';
 export {newSet, NomsSet, SetLeafSequence} from './set.js';
@@ -38,17 +37,14 @@ export {
   makeRefType,
   makeSetType,
   makeStructType,
-  makeType,
-  makeUnresolvedType,
   numberType,
-  packageType,
   PrimitiveDesc,
   stringType,
   StructDesc,
   Type,
   typeType,
-  UnresolvedDesc,
   valueType,
+  getTypeOfValue,
 } from './type.js';
 export {equals, less} from './compare.js';
 

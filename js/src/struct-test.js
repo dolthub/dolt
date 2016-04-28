@@ -6,33 +6,27 @@ import {assert} from 'chai';
 import {
   boolType,
   Field,
-  makeCompoundType,
-  makeStructType,
-  makeType,
   numberType,
+  makeStructType,
+  makeRefType,
   stringType,
+  valueType,
+  StructDesc,
 } from './type.js';
-import {Kind} from './noms-kind.js';
-import {Package, registerPackage} from './package.js';
 import {suite, test} from 'mocha';
 import DataStore from './data-store.js';
-import {emptyRef} from './ref.js';
+import {invariant} from './assert.js';
 
 suite('Struct', () => {
   test('equals', () => {
-    const typeDef = makeStructType('S1', [
+    const type = makeStructType('S1', [
       new Field('x', boolType, false),
       new Field('o', stringType, true),
     ], []);
 
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
-
     const data1 = {x: true};
-    const s1 = newStruct(type, typeDef, data1);
-    const s2 = newStruct(type, typeDef, data1);
+    const s1 = newStruct(type, data1);
+    const s2 = newStruct(type, data1);
 
     assert.isTrue(s1.equals(s2));
   });
@@ -42,139 +36,102 @@ suite('Struct', () => {
     const ds = new DataStore(ms);
 
     const bt = boolType;
-    const refOfBoolType = makeCompoundType(Kind.Ref, bt);
-    const typeDef = makeStructType('S1', [
+    const refOfBoolType = makeRefType(bt);
+    const type = makeStructType('S1', [
       new Field('r', refOfBoolType, false),
     ], []);
 
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
-
     const b = true;
     const r = ds.writeValue(b);
-    const s1 = newStruct(type, typeDef, {r: r});
-    assert.strictEqual(2, s1.chunks.length);
-    assert.isTrue(pkgRef.equals(s1.chunks[0].targetRef));
-    assert.isTrue(r.equals(s1.chunks[1]));
+    const s1 = newStruct(type, {r: r});
+    assert.strictEqual(1, s1.chunks.length);
+    assert.isTrue(r.equals(s1.chunks[0]));
   });
 
   test('chunks optional', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
-    const bt = boolType;
-    const refOfBoolType = makeCompoundType(Kind.Ref, bt);
-    const typeDef = makeStructType('S1', [
+    const refOfBoolType = makeRefType(boolType);
+    const type = makeStructType('S1', [
       new Field('r', refOfBoolType, true),
     ], []);
 
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
+    const s1 = newStruct(type, {});
 
-    const s1 = newStruct(type, typeDef, {});
-
-    assert.strictEqual(1, s1.chunks.length);
-    assert.isTrue(pkgRef.equals(s1.chunks[0].targetRef));
+    assert.strictEqual(0, s1.chunks.length);
 
     const b = true;
     const r = ds.writeValue(b);
-    const s2 = newStruct(type, typeDef, {r: r});
-    assert.strictEqual(2, s2.chunks.length);
-    assert.isTrue(pkgRef.equals(s2.chunks[0].targetRef));
-    assert.isTrue(r.equals(s2.chunks[1]));
+    const s2 = newStruct(type, {r: r});
+    assert.strictEqual(1, s2.chunks.length);
+    assert.isTrue(r.equals(s2.chunks[0]));
   });
 
   test('chunks union', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
 
-    const bt = boolType;
-    const refOfBoolType = makeCompoundType(Kind.Ref, bt);
-    const typeDef = makeStructType('S1', [], [
+    const refOfBoolType = makeRefType(boolType);
+    const type = makeStructType('S1', [], [
       new Field('r', refOfBoolType, false),
       new Field('s', stringType, false),
     ]);
 
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
-
-    const s1 = newStruct(type, typeDef, {s: 'hi'});
-    assert.strictEqual(1, s1.chunks.length);
-    assert.isTrue(pkgRef.equals(s1.chunks[0].targetRef));
+    const s1 = newStruct(type, {s: 'hi'});
+    assert.strictEqual(0, s1.chunks.length);
 
     const b = true;
     const r = ds.writeValue(b);
-    const s2 = newStruct(type, typeDef, {r: r});
-    assert.strictEqual(2, s2.chunks.length);
-    assert.isTrue(pkgRef.equals(s2.chunks[0].targetRef));
-    assert.isTrue(r.equals(s2.chunks[1]));
+    const s2 = newStruct(type, {r});
+    assert.strictEqual(1, s2.chunks.length);
+    assert.isTrue(r.equals(s2.chunks[0]));
   });
 
   test('new', () => {
-    const typeDef = makeStructType('S2', [
+    const type = makeStructType('S2', [
       new Field('b', boolType, false),
       new Field('o', stringType, true),
     ], []);
 
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
-
-    const s1 = newStruct(type, typeDef, {b: true});
+    const s1 = newStruct(type, {b: true});
     assert.strictEqual(true, s1.b);
     assert.strictEqual(s1.o, undefined);
 
-    const s2 = newStruct(type, typeDef, {b: false, o: 'hi'});
+    const s2 = newStruct(type, {b: false, o: 'hi'});
     assert.strictEqual(false, s2.b);
     assert.strictEqual('hi', s2.o);
 
     assert.throws(() => {
-      newStruct(type, typeDef, {o: 'hi'}); // missing required field
+      newStruct(type, {o: 'hi'}); // missing required field
     });
 
     assert.throws(() => {
-      newStruct(type, typeDef, {x: 'hi'}); // unknown field
+      newStruct(type, {x: 'hi'}); // unknown field
     });
 
-    const s3 = newStruct(type, typeDef, {b: true, o: undefined});
+    const s3 = newStruct(type, {b: true, o: undefined});
     assert.isTrue(s1.equals(s3));
   });
 
   test('new union', () => {
-    const typeDef = makeStructType('S3', [], [
+    const type = makeStructType('S3', [], [
       new Field('b', boolType, false),
       new Field('o', stringType, false),
     ]);
 
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
-
-    const s1 = newStruct(type, typeDef, {b: true});
+    const s1 = newStruct(type, {b: true});
     assert.strictEqual(true, s1.b);
     assert.strictEqual(s1.o, undefined);
   });
 
   test('struct set', () => {
-    const typeDef = makeStructType('S3', [
+    const type = makeStructType('S3', [
       new Field('b', boolType, false),
       new Field('o', stringType, true),
     ], []);
 
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
-
-    const s1 = newStruct(type, typeDef, {b: true});
+    const s1 = newStruct(type, {b: true});
     const s2 = s1.setB(false);
 
     // TODO: assert throws on set wrong type
@@ -195,17 +152,12 @@ suite('Struct', () => {
   });
 
   test('struct set union', () => {
-    const typeDef = makeStructType('S3', [], [
+    const type = makeStructType('S3', [], [
       new Field('b', boolType, false),
       new Field('s', stringType, false),
     ]);
 
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
-
-    const s1 = newStruct(type, typeDef, {b: true});
+    const s1 = newStruct(type, {b: true});
     const m1 = new StructMirror(s1);
     assert.strictEqual(0, m1.unionIndex);
     assert.strictEqual(true, m1.unionValue);
@@ -223,50 +175,28 @@ suite('Struct', () => {
   });
 
   test('type assertion on construct', () => {
-    const typeDef = makeStructType('S3', [
-      new Field('b', boolType, false),
-    ], []);
-
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
-
     assert.throws(() => {
-      newStruct(type, type, {b: true});
-    });
-
-    assert.throws(() => {
-      newStruct(typeDef, typeDef, {b: true});
+      newStruct(boolType, {b: true});
     });
   });
 
   test('named union', () => {
-
-    const pkg = new Package([
-      makeStructType('StructWithUnions', [
-        new Field('a', makeType(emptyRef, 1), false),
-        new Field('d', makeType(emptyRef, 2), false),
-      ], []),
-      makeStructType('', [], [
-        new Field('b', numberType, false),
-        new Field('c', stringType, false),
-      ]),
-      makeStructType('', [], [
-        new Field('e', numberType, false),
-        new Field('f', stringType, false),
-      ]),
+    const typeA = makeStructType('', [], [
+      new Field('b', numberType, false),
+      new Field('c', stringType, false),
+    ]);
+    const typeD = makeStructType('', [], [
+      new Field('e', numberType, false),
+      new Field('f', stringType, false),
+    ]);
+    const type = makeStructType('StructWithUnions', [
+      new Field('a', typeA, false),
+      new Field('d', typeD, false),
     ], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const [typeDef, typeDefA, typeDefD] = pkg.types;
-    const type = makeType(pkgRef, 0);
-    const typeA = makeType(pkgRef, 1);
-    const typeD = makeType(pkgRef, 2);
 
-    const StructWithUnions = createStructClass(type, typeDef);
-    const A = createStructClass(typeA, typeDefA);
-    const D = createStructClass(typeD, typeDefD);
+    const StructWithUnions = createStructClass(type);
+    const A = createStructClass(typeA);
+    const D = createStructClass(typeD);
 
     const s = new StructWithUnions({
       a: new A({b: 1}),
@@ -291,24 +221,38 @@ suite('Struct', () => {
   });
 
   test('type validation', () => {
-    const typeDef = makeStructType('S1', [
+    const type = makeStructType('S1', [
       new Field('x', boolType, false),
       new Field('o', stringType, true),
     ], []);
 
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
-
     assert.throws(() => {
-      newStruct(type, typeDef, {x: 1});
+      newStruct(type, {x: 1});
     });
     assert.throws(() => {
-      newStruct(type, typeDef, {o: 1});
+      newStruct(type, {o: 1});
     });
 
-    newStruct(type, typeDef, {x: true, o: undefined});
-    newStruct(type, typeDef, {x: true});
+    newStruct(type, {x: true, o: undefined});
+    newStruct(type, {x: true});
+  });
+
+  test('type validation cyclic', () => {
+    const type = makeStructType('S', [
+      new Field('b', boolType, false),
+      new Field('o', valueType /* placeholder */, true),
+    ], []);
+    invariant(type.desc instanceof StructDesc);
+    type.desc.fields[1].t = type;
+
+    newStruct(type, {b: true});
+    newStruct(type, {b: true, o: newStruct(type, {b: false})});
+
+    assert.throws(() => {
+      newStruct(type, {b: 1});
+    });
+    assert.throws(() => {
+      newStruct(type, {b: true, o: 1});
+    });
   });
 });

@@ -90,7 +90,7 @@ func main() {
 		kinds = csv.StringsToKinds(strings.Split(*columnTypes, ","))
 	}
 
-	value, _, _ := csv.Read(r, *name, headers, kinds, ds.Store())
+	value, _ := csv.Read(r, *name, headers, kinds, ds.Store())
 	_, err = ds.Commit(value)
 	d.Exp.NoError(err)
 }

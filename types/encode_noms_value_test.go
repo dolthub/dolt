@@ -135,138 +135,126 @@ func TestWriteCompoundBlob(t *testing.T) {
 func TestWriteEmptyStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	typeDef := MakeStructType("S", []Field{}, []Field{})
-	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-	typ := MakeType(pkgRef, 0)
-	v := NewStruct(typ, typeDef, nil)
+	typ := MakeStructType("S", []Field{}, []Field{})
+	v := NewStruct(typ, nil)
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0"}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{}, []interface{}{}}, w.toArray())
 }
 
 func TestWriteStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	typeDef := MakeStructType("S", []Field{
+	typ := MakeStructType("S", []Field{
 		Field{"x", NumberType, false},
 		Field{"b", BoolType, false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-	typ := MakeType(pkgRef, 0)
-	v := NewStruct(typ, typeDef, structData{"x": Number(42), "b": Bool(true)})
+	v := NewStruct(typ, structData{"x": Number(42), "b": Bool(true)})
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", "42", true}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, false, "b", BoolKind, false}, []interface{}{}, "42", true}, w.toArray())
 }
 
 func TestWriteStructOptionalField(t *testing.T) {
 	assert := assert.New(t)
 
-	typeDef := MakeStructType("S", []Field{
+	typ := MakeStructType("S", []Field{
 		Field{"x", NumberType, true},
 		Field{"b", BoolType, false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-	typ := MakeType(pkgRef, 0)
-	v := NewStruct(typ, typeDef, structData{"x": Number(42), "b": Bool(true)})
+
+	v := NewStruct(typ, structData{"x": Number(42), "b": Bool(true)})
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", true, "42", true}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, true, "b", BoolKind, false}, []interface{}{}, true, "42", true}, w.toArray())
 
-	v = NewStruct(typ, typeDef, structData{"b": Bool(true)})
+	v = NewStruct(typ, structData{"b": Bool(true)})
 
 	w = newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", false, true}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, true, "b", BoolKind, false}, []interface{}{}, false, true}, w.toArray())
 }
 
 func TestWriteStructWithUnion(t *testing.T) {
 	assert := assert.New(t)
 
-	typeDef := MakeStructType("S", []Field{
+	typ := MakeStructType("S", []Field{
 		Field{"x", NumberType, false},
 	}, []Field{
 		Field{"b", BoolType, false},
 		Field{"s", StringType, false},
 	})
-	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-	typ := MakeType(pkgRef, 0)
-	v := NewStruct(typ, typeDef, structData{"x": Number(42), "s": NewString("hi")})
+	v := NewStruct(typ, structData{"x": Number(42), "s": NewString("hi")})
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", "42", "1", "hi"}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, false}, []interface{}{"b", BoolKind, false, "s", StringKind, false}, "42", "1", "hi"}, w.toArray())
 
-	v = NewStruct(typ, typeDef, structData{"x": Number(42), "b": Bool(true)})
+	v = NewStruct(typ, structData{"x": Number(42), "b": Bool(true)})
 
 	w = newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", "42", "0", true}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, false}, []interface{}{"b", BoolKind, false, "s", StringKind, false}, "42", "0", true}, w.toArray())
 }
 
 func TestWriteStructWithList(t *testing.T) {
 	assert := assert.New(t)
 
-	typeDef := MakeStructType("S", []Field{
+	typ := MakeStructType("S", []Field{
 		Field{"l", MakeListType(StringType), false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-	typ := MakeType(pkgRef, 0)
 
-	v := NewStruct(typ, typeDef, structData{"l": NewList(NewString("a"), NewString("b"))})
+	v := NewStruct(typ, structData{"l": NewList(NewString("a"), NewString("b"))})
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", false, []interface{}{"a", "b"}}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"l", ListKind, StringKind, false}, []interface{}{}, false, []interface{}{"a", "b"}}, w.toArray())
 
-	v = NewStruct(typ, typeDef, structData{"l": NewList()})
+	v = NewStruct(typ, structData{"l": NewList()})
 	w = newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", false, []interface{}{}}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"l", ListKind, StringKind, false}, []interface{}{}, false, []interface{}{}}, w.toArray())
 }
 
 func TestWriteStructWithStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	s2TypeDef := MakeStructType("S2", []Field{
+	// struct S2 {
+	//   x: Number
+	// }
+	// struct S {
+	//   s: S2
+	// }
+
+	s2Type := MakeStructType("S2", []Field{
 		Field{"x", NumberType, false},
 	}, []Field{})
-	sTypeDef := MakeStructType("S", []Field{
-		Field{"s", MakeType(ref.Ref{}, 0), false},
+	sType := MakeStructType("S", []Field{
+		Field{"s", MakeStructType("S2", []Field{
+			Field{"x", NumberType, false},
+		}, []Field{}), false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{s2TypeDef, sTypeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-	s2Type := MakeType(pkgRef, 0)
-	sType := MakeType(pkgRef, 1)
 
-	v := NewStruct(sType, sTypeDef, structData{"s": NewStruct(s2Type, s2TypeDef, structData{"x": Number(42)})})
+	v := NewStruct(sType, structData{"s": NewStruct(s2Type, structData{"x": Number(42)})})
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "1", "42"}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"s", StructKind, "S2", []interface{}{"x", NumberKind, false}, []interface{}{}, false}, []interface{}{}, "42"}, w.toArray())
 }
 
 func TestWriteStructWithBlob(t *testing.T) {
 	assert := assert.New(t)
 
-	typeDef := MakeStructType("S", []Field{
+	typ := MakeStructType("S", []Field{
 		Field{"b", BlobType, false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-	typ := MakeType(pkgRef, 0)
 	b := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
-	v := NewStruct(typ, typeDef, structData{"b": b})
+	v := NewStruct(typ, structData{"b": b})
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{UnresolvedKind, pkgRef.String(), "0", false, "AAE="}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"b", BlobKind, false}, []interface{}{}, false, "AAE="}, w.toArray())
 }
 
 func TestWriteCompoundList(t *testing.T) {
@@ -327,35 +315,30 @@ func TestWriteListOfValue(t *testing.T) {
 func TestWriteListOfValueWithStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	typeDef := MakeStructType("S", []Field{
+	structType := MakeStructType("S", []Field{
 		Field{"x", NumberType, false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{typeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
 	listType := MakeListType(ValueType)
-	structType := MakeType(pkgRef, 0)
-	v := NewTypedList(listType, NewStruct(structType, typeDef, structData{"x": Number(42)}))
+	v := NewTypedList(listType, NewStruct(structType, structData{"x": Number(42)}))
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{ListKind, ValueKind, false, []interface{}{UnresolvedKind, pkgRef.String(), "0", "42"}}, w.toArray())
+	assert.EqualValues([]interface{}{ListKind, ValueKind, false, []interface{}{StructKind, "S", []interface{}{"x", NumberKind, false}, []interface{}{}, "42"}}, w.toArray())
 }
 
 func TestWriteListOfValueWithType(t *testing.T) {
 	assert := assert.New(t)
 
-	pkg := NewPackage([]*Type{
-		MakeStructType("S", []Field{
-			Field{"x", NumberType, false},
-		}, []Field{})}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
+	structType := MakeStructType("S", []Field{
+		Field{"x", NumberType, false},
+	}, []Field{})
 
 	typ := MakeListType(ValueType)
 	v := NewTypedList(typ,
 		Bool(true),
 		NumberType,
 		TypeType,
-		MakeType(pkgRef, 0),
+		structType,
 	)
 
 	w := newJSONArrayWriter(NewTestValueStore())
@@ -364,7 +347,7 @@ func TestWriteListOfValueWithType(t *testing.T) {
 		BoolKind, true,
 		TypeKind, NumberKind,
 		TypeKind, TypeKind,
-		TypeKind, UnresolvedKind, pkgRef.String(), "0",
+		TypeKind, StructKind, "S", []interface{}{"x", NumberKind, false}, []interface{}{},
 	}}, w.toArray())
 }
 
@@ -406,19 +389,6 @@ func TestWriteTypeValue(t *testing.T) {
 			Field{"x", NumberType, false},
 			Field{"v", ValueType, false},
 		}))
-
-	pkgRef := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
-	test([]interface{}{TypeKind, UnresolvedKind, pkgRef.String(), "123"},
-		MakeType(pkgRef, 123))
-
-	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"e", UnresolvedKind, pkgRef.String(), "123", false, "x", NumberKind, false}, []interface{}{}},
-		MakeStructType("S", []Field{
-			Field{"e", MakeType(pkgRef, 123), false},
-			Field{"x", NumberType, false},
-		}, []Field{}))
-
-	test([]interface{}{TypeKind, UnresolvedKind, ref.Ref{}.String(), "-1", "ns", "n"},
-		MakeUnresolvedType("ns", "n"))
 }
 
 func TestWriteListOfTypes(t *testing.T) {
@@ -432,14 +402,33 @@ func TestWriteListOfTypes(t *testing.T) {
 	assert.EqualValues([]interface{}{ListKind, TypeKind, false, []interface{}{BoolKind, StringKind}}, w.toArray())
 }
 
-func TestWritePackage(t *testing.T) {
+func TestWriteRecursiveStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	setTref := MakeSetType(NumberType)
-	r := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
-	v := Package{[]*Type{setTref}, []ref.Ref{r}, &ref.Ref{}}
+	// struct A6 {
+	//   v: Number
+	//   cs: List<A6>
+	// }
+
+	structType := MakeStructType("A6", []Field{
+		Field{"v", NumberType, false},
+		Field{"cs", nil, false},
+	}, []Field{})
+	listType := MakeListType(structType)
+	// Mutate...
+	structType.Desc.(StructDesc).Fields[1].T = listType
+
+	NewTypedList(listType)
+
+	v := NewStruct(structType, structData{
+		"v": Number(42),
+		"cs": NewTypedList(listType, NewStruct(structType, structData{
+			"v":  Number(555),
+			"cs": NewTypedList(listType),
+		})),
+	})
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{PackageKind, []interface{}{SetKind, []interface{}{NumberKind}}, []interface{}{r.String()}}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "A6", []interface{}{"v", NumberKind, false, "cs", ListKind, BackRefKind, uint8(0), false}, []interface{}{}, "42", false, []interface{}{"555", false, []interface{}{}}}, w.toArray())
 }

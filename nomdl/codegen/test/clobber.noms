@@ -1,2 +1,0 @@
-alias a = import "./clobber_a/a.noms"
-alias b = import "./clobber_b/b.noms"

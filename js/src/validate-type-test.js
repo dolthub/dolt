@@ -7,7 +7,6 @@ import {newMap} from './map.js';
 import {newSet} from './set.js';
 import {newStruct} from './struct.js';
 import {suite, test} from 'mocha';
-import {Package, registerPackage} from './package.js';
 import validateType from './validate-type.js';
 import type {Type} from './type.js';
 import {
@@ -19,10 +18,8 @@ import {
   makeMapType,
   makeSetType,
   makeStructType,
-  makeType,
   mapOfValueType,
   numberType,
-  packageType,
   setOfValueType,
   stringType,
   typeType,
@@ -41,7 +38,6 @@ suite('validate type', () => {
     stringType,
     blobType,
     typeType,
-    packageType,
     valueType,
   ];
 
@@ -120,24 +116,12 @@ suite('validate type', () => {
     validateType(valueType, t);
   });
 
-  test('package', async () => {
-    const pkg = new Package([], []);
-    validateType(packageType, pkg);
-    assertAll(packageType, pkg);
-
-    validateType(valueType, pkg);
-  });
-
   test('struct', async () => {
-    const typeDef = makeStructType('Struct', [
+    const type = makeStructType('Struct', [
       new Field('x', boolType, false),
     ], []);
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
 
-    const v = newStruct(type, typeDef, {x: true});
+    const v = newStruct(type, {x: true});
     validateType(type, v);
     assertAll(type, v);
 

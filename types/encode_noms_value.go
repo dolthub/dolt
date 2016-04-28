@@ -54,6 +54,10 @@ func (w *jsonArrayWriter) writeUint(v uint64) {
 	w.write(strconv.FormatUint(v, 10))
 }
 
+func (w *jsonArrayWriter) writeUint8(v uint8) {
+	w.write(v)
+}
+
 func (w *jsonArrayWriter) toArray() []interface{} {
 	return w.a
 }
@@ -62,36 +66,28 @@ func (w *jsonArrayWriter) writeRef(r ref.Ref) {
 	w.write(r.String())
 }
 
-func (w *jsonArrayWriter) writeTypeAsTag(t *Type) {
+func (w *jsonArrayWriter) writeTypeAsTag(t *Type, backRefs []*Type) {
 	k := t.Kind()
-	w.write(k)
 	switch k {
 	case StructKind:
-		panic("unreachable")
+		w.writeStructType(t, backRefs)
 	case ListKind, MapKind, RefKind, SetKind:
+		w.write(k)
 		for _, elemType := range t.Desc.(CompoundDesc).ElemTypes {
-			w.writeTypeAsTag(elemType)
+			w.writeTypeAsTag(elemType, backRefs)
 		}
-	case UnresolvedKind:
-		pkgRef := t.PackageRef()
-		d.Chk.NotEqual(ref.Ref{}, pkgRef)
-		w.writeRef(pkgRef)
-		w.writeInt(int64(t.Ordinal()))
-
-		pkg := LookupPackage(pkgRef)
-		if pkg != nil && w.vw != nil {
-			w.vw.WriteValue(*pkg)
-		}
+	default:
+		w.write(k)
 	}
 }
 
 func (w *jsonArrayWriter) writeTopLevelValue(v Value) {
 	tr := v.Type()
-	w.writeTypeAsTag(tr)
-	w.writeValue(v, tr, nil)
+	w.writeTypeAsTag(tr, nil)
+	w.writeValue(v, tr)
 }
 
-func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr *Type, pkg *Package) bool {
+func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr *Type) bool {
 	ms, ok := v.(metaSequence)
 	if !ok {
 		w.write(false) // not a meta sequence
@@ -107,17 +103,17 @@ func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr *Type, pkg *Package
 			w.vw.WriteValue(tuple.child)
 		}
 		w2.writeRef(tuple.ChildRef().TargetRef())
-		w2.writeValue(tuple.value, indexType, pkg)
+		w2.writeValue(tuple.value, indexType)
 		w2.writeUint(tuple.numLeaves)
 	}
 	w.write(w2.toArray())
 	return true
 }
 
-func (w *jsonArrayWriter) writeValue(v Value, tr *Type, pkg *Package) {
+func (w *jsonArrayWriter) writeValue(v Value, tr *Type) {
 	switch tr.Kind() {
 	case BlobKind:
-		if w.maybeWriteMetaSequence(v, tr, pkg) {
+		if w.maybeWriteMetaSequence(v, tr) {
 			return
 		}
 		w.writeBlob(v.(Blob))
@@ -126,142 +122,116 @@ func (w *jsonArrayWriter) writeValue(v Value, tr *Type, pkg *Package) {
 	case NumberKind:
 		w.writeFloat(float64(v.(Number)))
 	case ListKind:
-		if w.maybeWriteMetaSequence(v, tr, pkg) {
+		if w.maybeWriteMetaSequence(v, tr) {
 			return
 		}
 
 		w2 := newJSONArrayWriter(w.vw)
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
 		v.(List).IterAll(func(v Value, i uint64) {
-			w2.writeValue(v, elemType, pkg)
+			w2.writeValue(v, elemType)
 		})
 		w.write(w2.toArray())
 	case MapKind:
-		if w.maybeWriteMetaSequence(v, tr, pkg) {
+		if w.maybeWriteMetaSequence(v, tr) {
 			return
 		}
 
 		w2 := newJSONArrayWriter(w.vw)
 		elemTypes := tr.Desc.(CompoundDesc).ElemTypes
 		v.(Map).IterAll(func(k, v Value) {
-			w2.writeValue(k, elemTypes[0], pkg)
-			w2.writeValue(v, elemTypes[1], pkg)
+			w2.writeValue(k, elemTypes[0])
+			w2.writeValue(v, elemTypes[1])
 		})
 		w.write(w2.toArray())
-	case PackageKind:
-		ptr := TypeType
-		w2 := newJSONArrayWriter(w.vw)
-		p := v.(Package)
-		for _, t := range p.types {
-			w2.writeValue(t, ptr, &p)
-		}
-		w.write(w2.toArray())
-		w3 := newJSONArrayWriter(w.vw)
-		for _, r := range v.(Package).dependencies {
-			w3.writeRef(r)
-		}
-		w.write(w3.toArray())
 	case RefKind:
 		w.writeRef(v.(Ref).TargetRef())
 	case SetKind:
-		if w.maybeWriteMetaSequence(v, tr, pkg) {
+		if w.maybeWriteMetaSequence(v, tr) {
 			return
 		}
 
 		w2 := newJSONArrayWriter(w.vw)
 		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
 		v.(Set).IterAll(func(v Value) {
-			w2.writeValue(v, elemType, pkg)
+			w2.writeValue(v, elemType)
 		})
 		w.write(w2.toArray())
 	case StringKind:
 		w.write(v.(String).String())
 	case TypeKind:
-		w.writeTypeKindValue(v, tr, pkg)
-	case UnresolvedKind:
-		if tr.HasPackageRef() {
-			pkg = LookupPackage(tr.PackageRef())
-		}
-		w.writeUnresolvedKindValue(v, tr, pkg)
+		vt := v.(*Type)
+		w.writeTypeAsValue(vt, nil)
+	case StructKind:
+		w.writeStruct(v, tr)
 	case ValueKind:
-		w.writeTypeAsTag(v.Type())
-		w.writeValue(v, v.Type(), pkg)
+		vt := v.Type()
+		w.writeTypeAsTag(vt, nil)
+		w.writeValue(v, v.Type())
+	case BackRefKind:
+		w.writeUint8(uint8(v.(*Type).Desc.(BackRefDesc)))
 	default:
 		d.Chk.Fail("Unknown NomsKind")
 	}
 }
 
-func (w *jsonArrayWriter) writeTypeAsValue(t *Type, pkg *Package) {
+func (w *jsonArrayWriter) writeTypeAsValue(t *Type, backRefs []*Type) {
 	k := t.Kind()
-	w.write(k)
 	switch k {
 	case ListKind, MapKind, RefKind, SetKind:
+		w.write(k)
 		w2 := newJSONArrayWriter(w.vw)
 		for _, elemType := range t.Desc.(CompoundDesc).ElemTypes {
-			w2.writeTypeAsValue(elemType, pkg)
+			w2.writeTypeAsValue(elemType, backRefs)
 		}
 		w.write(w2.toArray())
 	case StructKind:
-		w.write(t.Name())
-		fieldWriter := newJSONArrayWriter(w.vw)
-		for _, field := range t.Desc.(StructDesc).Fields {
-			fieldWriter.write(field.Name)
-			fieldWriter.writeTypeAsValue(field.T, pkg)
-			fieldWriter.write(field.Optional)
-		}
-		w.write(fieldWriter.toArray())
-		choiceWriter := newJSONArrayWriter(w.vw)
-		for _, choice := range t.Desc.(StructDesc).Union {
-			choiceWriter.write(choice.Name)
-			choiceWriter.writeTypeAsValue(choice.T, pkg)
-			choiceWriter.write(choice.Optional)
-		}
-		w.write(choiceWriter.toArray())
-	case UnresolvedKind:
-		pkgRef := t.PackageRef()
-		isCurrentPackage := pkg != nil && pkg.ref != nil && *pkg.ref == pkgRef
-		if isCurrentPackage {
-			w.writeRef(ref.Ref{})
-		} else {
-			w.writeRef(pkgRef)
-		}
-		// Don't use Ordinal() here since we might need to serialize a Type that hasn't gotten a valid ordinal yet.
-		ordinal := t.Desc.(UnresolvedDesc).ordinal
-		w.writeInt(int64(ordinal))
-		if ordinal == -1 {
-			w.write(t.Namespace())
-			w.write(t.Name())
-		}
-
-		if !isCurrentPackage {
-			pkg := LookupPackage(pkgRef)
-			if pkg != nil && w.vw != nil {
-				w.vw.WriteValue(*pkg)
-			}
-		}
-
+		w.writeStructType(t, backRefs)
 	default:
+		w.write(k)
 		d.Chk.True(IsPrimitiveKind(k), "Kind: %v Desc: %s\n", t.Kind(), t.Describe())
 	}
 }
 
-// writeTypeKindValue writes either a struct or a Type value
-func (w *jsonArrayWriter) writeTypeKindValue(v Value, tr *Type, pkg *Package) {
-	_, ok := v.(*Type)
-	d.Chk.True(ok)
-	w.writeTypeAsValue(v.(*Type), pkg)
+func indexOfType(t *Type, ts []*Type) int {
+	for i, tt := range ts {
+		if t == tt {
+			return i
+		}
+	}
+	return -1
 }
 
-// writeUnresolvedKindValue writes a struct.
-func (w *jsonArrayWriter) writeUnresolvedKindValue(v Value, tr *Type, pkg *Package) {
-	d.Chk.NotNil(pkg)
-	typeDef := pkg.types[tr.Ordinal()]
-	switch typeDef.Kind() {
-	default:
-		d.Chk.Fail("An Unresolved Type can only reference a StructKind.", "Actually referenced: %+v", typeDef)
-	case StructKind:
-		w.writeStruct(v, tr, typeDef, pkg)
+func (w *jsonArrayWriter) writeBackRef(i int) {
+	w.write(BackRefKind)
+	w.write(uint8(i))
+}
+
+func (w *jsonArrayWriter) writeStructType(t *Type, backRefs []*Type) {
+	// The runtime representaion of struct types can contain cycles. These cycles are broken when encoding and decoding using special "back ref" placeholders.
+	i := indexOfType(t, backRefs)
+	if i != -1 {
+		w.writeBackRef(len(backRefs) - i - 1)
+		return
 	}
+	backRefs = append(backRefs, t)
+
+	w.write(StructKind)
+	w.write(t.Name())
+	fieldWriter := newJSONArrayWriter(w.vw)
+	for _, field := range t.Desc.(StructDesc).Fields {
+		fieldWriter.write(field.Name)
+		fieldWriter.writeTypeAsTag(field.T, backRefs)
+		fieldWriter.write(field.Optional)
+	}
+	w.write(fieldWriter.toArray())
+	choiceWriter := newJSONArrayWriter(w.vw)
+	for _, choice := range t.Desc.(StructDesc).Union {
+		choiceWriter.write(choice.Name)
+		choiceWriter.writeTypeAsTag(choice.T, backRefs)
+		choiceWriter.write(choice.Optional)
+	}
+	w.write(choiceWriter.toArray())
 }
 
 func (w *jsonArrayWriter) writeBlob(b Blob) {
@@ -274,10 +244,10 @@ func (w *jsonArrayWriter) writeBlob(b Blob) {
 	w.write(buf.String())
 }
 
-func (w *jsonArrayWriter) writeStruct(v Value, typ, typeDef *Type, pkg *Package) {
+func (w *jsonArrayWriter) writeStruct(v Value, t *Type) {
 	i := 0
-	values := structReader(v.(Struct), typ, typeDef)
-	desc := typeDef.Desc.(StructDesc)
+	values := structReader(v.(Struct), t)
+	desc := t.Desc.(StructDesc)
 
 	for _, f := range desc.Fields {
 		if f.Optional {
@@ -285,11 +255,11 @@ func (w *jsonArrayWriter) writeStruct(v Value, typ, typeDef *Type, pkg *Package)
 			i++
 			w.write(ok)
 			if ok {
-				w.writeValue(values[i], f.T, pkg)
+				w.writeValue(values[i], f.T)
 				i++
 			}
 		} else {
-			w.writeValue(values[i], f.T, pkg)
+			w.writeValue(values[i], f.T)
 			i++
 		}
 	}
@@ -297,7 +267,7 @@ func (w *jsonArrayWriter) writeStruct(v Value, typ, typeDef *Type, pkg *Package)
 		unionIndex := uint64(values[i].(Number))
 		i++
 		w.writeUint(unionIndex)
-		w.writeValue(values[i], desc.Union[unionIndex].T, pkg)
+		w.writeValue(values[i], desc.Union[unionIndex].T)
 		i++
 	}
 }

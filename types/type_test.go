@@ -3,7 +3,6 @@ package types
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -11,48 +10,32 @@ func TestTypes(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 
-	boolType := BoolType
-	numberType := NumberType
-	stringType := StringType
-	mapType := MakeMapType(stringType, numberType)
-	setType := MakeSetType(stringType)
+	mapType := MakeMapType(StringType, NumberType)
+	setType := MakeSetType(StringType)
 	mahType := MakeStructType("MahStruct", []Field{
-		Field{"Field1", stringType, false},
-		Field{"Field2", boolType, true},
+		Field{"Field1", StringType, false},
+		Field{"Field2", BoolType, true},
 	}, []Field{})
 	otherType := MakeStructType("MahOtherStruct", []Field{}, []Field{
 		Field{"StructField", mahType, false},
-		Field{"StringField", stringType, false},
+		Field{"StringField", StringType, false},
 	})
-	pkgRef := vs.WriteValue(NewPackage([]*Type{}, ref.RefSlice{})).TargetRef()
-	trType := MakeType(pkgRef, 42)
+	recType := MakeStructType("RecursiveStruct", []Field{
+		Field{Name: "self", T: nil},
+	}, []Field{})
+	recType.Desc.(StructDesc).Fields[0].T = recType
 
 	mRef := vs.WriteValue(mapType).TargetRef()
 	setRef := vs.WriteValue(setType).TargetRef()
 	otherRef := vs.WriteValue(otherType).TargetRef()
 	mahRef := vs.WriteValue(mahType).TargetRef()
-	trRef := vs.WriteValue(trType).TargetRef()
+	recRef := vs.WriteValue(recType).TargetRef()
 
 	assert.True(otherType.Equals(vs.ReadValue(otherRef)))
 	assert.True(mapType.Equals(vs.ReadValue(mRef)))
 	assert.True(setType.Equals(vs.ReadValue(setRef)))
 	assert.True(mahType.Equals(vs.ReadValue(mahRef)))
-	assert.True(trType.Equals(vs.ReadValue(trRef)))
-}
-
-func TestTypeWithPkgRef(t *testing.T) {
-	assert := assert.New(t)
-	vs := NewTestValueStore()
-
-	pkg := NewPackage([]*Type{NumberType}, []ref.Ref{})
-
-	pkgRef := RegisterPackage(&pkg)
-	unresolvedType := MakeType(pkgRef, 42)
-	unresolvedRef := vs.WriteValue(unresolvedType).TargetRef()
-
-	v := vs.ReadValue(unresolvedRef)
-	assert.EqualValues(pkgRef, v.Chunks()[0].TargetRef())
-	assert.NotNil(vs.ReadValue(pkgRef))
+	assert.True(recType.Equals(vs.ReadValue(recRef)))
 }
 
 func TestTypeType(t *testing.T) {
@@ -61,30 +44,27 @@ func TestTypeType(t *testing.T) {
 
 func TestTypeRefDescribe(t *testing.T) {
 	assert := assert.New(t)
-	boolType := BoolType
-	numberType := NumberType
-	stringType := StringType
-	mapType := MakeMapType(stringType, numberType)
-	setType := MakeSetType(stringType)
+	mapType := MakeMapType(StringType, NumberType)
+	setType := MakeSetType(StringType)
 
-	assert.Equal("Bool", boolType.Describe())
-	assert.Equal("Number", numberType.Describe())
-	assert.Equal("String", stringType.Describe())
+	assert.Equal("Bool", BoolType.Describe())
+	assert.Equal("Number", NumberType.Describe())
+	assert.Equal("String", StringType.Describe())
 	assert.Equal("Map<String, Number>", mapType.Describe())
 	assert.Equal("Set<String>", setType.Describe())
 
 	mahType := MakeStructType("MahStruct", []Field{
-		Field{"Field1", stringType, false},
-		Field{"Field2", boolType, true},
+		Field{"Field1", StringType, false},
+		Field{"Field2", BoolType, true},
 	}, []Field{})
 	assert.Equal("struct MahStruct {\n  Field1: String\n  Field2: optional Bool\n}", mahType.Describe())
 
 	otherType := MakeStructType("MahOtherStruct", []Field{
-		Field{"Field1", stringType, false},
-		Field{"Field2", boolType, true},
+		Field{"Field1", StringType, false},
+		Field{"Field2", BoolType, true},
 	}, []Field{
-		Field{"NumberField", numberType, false},
-		Field{"StringField", stringType, false},
+		Field{"NumberField", NumberType, false},
+		Field{"StringField", StringType, false},
 	})
 	assert.Equal("struct MahOtherStruct {\n  Field1: String\n  Field2: optional Bool\n  union {\n    NumberField: Number\n    StringField: String\n  }\n}", otherType.Describe())
 

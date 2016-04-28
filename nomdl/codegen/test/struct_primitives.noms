@@ -1,7 +1,0 @@
-struct StructPrimitives {
-  number: Number
-  bool: Bool
-  string: String
-  blob: Blob
-  value: Value
-}

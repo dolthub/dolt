@@ -1,9 +1,0 @@
-alias leaf = import "sha1-068bb32c733bd940a0d758715bf05082f4c12fcb"
-
-struct D {
-  structField: leaf.S
-}
-
-struct DUser {
-  Dfield: D
-}

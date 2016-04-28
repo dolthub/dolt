@@ -1,3 +1,0 @@
-struct Tree {
-  children: List<Tree>
-}

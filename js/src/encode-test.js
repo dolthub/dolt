@@ -4,7 +4,7 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 import MemoryStore from './memory-store.js';
-import {default as Ref, emptyRef} from './ref.js';
+import Ref from './ref.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
 import type {NomsKind} from './noms-kind.js';
@@ -18,20 +18,20 @@ import {
   makeMapType,
   makeSetType,
   makeStructType,
-  makeType,
   numberType,
   stringType,
   Type,
   valueType,
+  StructDesc,
 } from './type.js';
 import {IndexedMetaSequence, MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {Kind} from './noms-kind.js';
 import {newList, ListLeafSequence, NomsList} from './list.js';
 import {newMap, MapLeafSequence, NomsMap} from './map.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
-import {Package, registerPackage} from './package.js';
 import {newBlob} from './blob.js';
 import DataStore from './data-store.js';
+import {invariant} from './assert.js';
 
 suite('Encode', () => {
   test('write primitives', () => {
@@ -189,16 +189,11 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const typeDef = makeStructType('S', [], []);
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
-
-    const v = newStruct(type, typeDef, {});
+    const type = makeStructType('S', [], []);
+    const v = newStruct(type, {});
 
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0'], w.array);
+    assert.deepEqual([Kind.Struct, 'S', [], []], w.array);
   });
 
   test('write struct', async() => {
@@ -206,19 +201,16 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const typeDef = makeStructType('S', [
+    const type = makeStructType('S', [
       new Field('x', numberType, false),
       new Field('b', boolType, false),
     ], []);
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
 
-    const v = newStruct(type, typeDef, {x: 42, b: true});
+    const v = newStruct(type, {x: 42, b: true});
 
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', '42', true], w.array);
+    assert.deepEqual([Kind.Struct, 'S', ['x', Kind.Number, false, 'b', Kind.Bool, false], [],
+      '42', true], w.array);
   });
 
   test('write struct optional field', async() => {
@@ -226,23 +218,21 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     let w = new JsonArrayWriter(ds);
 
-    const typeDef = makeStructType('S', [
+    const type = makeStructType('S', [
       new Field('x', numberType, true),
       new Field('b', boolType, false),
     ], []);
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
 
-    let v = newStruct(type, typeDef, {x: 42, b: true});
+    let v = newStruct(type, {x: 42, b: true});
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', true, '42', true], w.array);
+    assert.deepEqual([Kind.Struct, 'S',
+      ['x', Kind.Number, true, 'b', Kind.Bool, false], [], true, '42', true], w.array);
 
-    v = newStruct(type, typeDef, {b: true});
+    v = newStruct(type, {b: true});
     w = new JsonArrayWriter(ds);
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', false, true], w.array);
+    assert.deepEqual([Kind.Struct, 'S', ['x', Kind.Number, true, 'b', Kind.Bool, false], [],
+      false, true], w.array);
   });
 
   test('write struct with union', async() => {
@@ -250,25 +240,25 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     let w = new JsonArrayWriter(ds);
 
-    const typeDef = makeStructType('S', [
+    const type = makeStructType('S', [
       new Field('x', numberType, false),
     ], [
       new Field('b', boolType, false),
       new Field('s', stringType, false),
     ]);
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
 
-    let v = newStruct(type, typeDef, {x: 42, s: 'hi'});
+    let v = newStruct(type, {x: 42, s: 'hi'});
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', '42', '1', 'hi'], w.array);
+    assert.deepEqual([Kind.Struct, 'S',
+      ['x', Kind.Number, false], ['b', Kind.Bool, false, 's', Kind.String, false], '42', '1', 'hi'],
+      w.array);
 
-    v = newStruct(type, typeDef, {x: 42, b: true});
+    v = newStruct(type, {x: 42, b: true});
     w = new JsonArrayWriter(ds);
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', '42', '0', true], w.array);
+    assert.deepEqual([Kind.Struct, 'S',
+      ['x', Kind.Number, false], ['b', Kind.Bool, false, 's', Kind.String, false], '42', '0', true],
+      w.array);
   });
 
   test('write struct with list', async() => {
@@ -277,23 +267,20 @@ suite('Encode', () => {
     let w = new JsonArrayWriter(ds);
 
     const ltr = makeCompoundType(Kind.List, stringType);
-    const typeDef = makeStructType('S', [
+    const type = makeStructType('S', [
       new Field('l', ltr, false),
     ], []);
-    const pkg = new Package([typeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const type = makeType(pkgRef, 0);
 
-    let v = newStruct(type, typeDef, {l: new NomsList(ltr,
-          new ListLeafSequence(ds, ltr, ['a', 'b']))});
+    let v = newStruct(type, {l: new NomsList(ltr, new ListLeafSequence(ds, ltr, ['a', 'b']))});
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', false, ['a', 'b']], w.array);
+    assert.deepEqual([Kind.Struct, 'S',
+      ['l', Kind.List, Kind.String, false], [], false, ['a', 'b']], w.array);
 
-    v = newStruct(type, typeDef, {l: new NomsList(ltr, new ListLeafSequence(ds, ltr, []))});
+    v = newStruct(type, {l: new NomsList(ltr, new ListLeafSequence(ds, ltr, []))});
     w = new JsonArrayWriter(ds);
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', false, []], w.array);
+    assert.deepEqual([Kind.Struct, 'S', ['l', Kind.List, Kind.String, false], [], false, []],
+                     w.array);
   });
 
   test('write struct with struct', async () => {
@@ -301,30 +288,24 @@ suite('Encode', () => {
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
 
-    const s2TypeDef = makeStructType('S2', [
+    const s2Type = makeStructType('S2', [
       new Field('x', numberType, false),
     ], []);
-    let sTypeDef = makeStructType('S', [
-      new Field('s', makeType(emptyRef, 0), false),
+    const sType = makeStructType('S', [
+      new Field('s', s2Type, false),
     ], []);
 
-    const pkg = new Package([s2TypeDef, sTypeDef], []);
-    registerPackage(pkg);
-    sTypeDef = pkg.types[1];
-    const pkgRef = pkg.ref;
-    const s2Type = makeType(pkgRef, 0);
-    const sType = makeType(pkgRef, 1);
-
-    const v = newStruct(sType, sTypeDef, {s: newStruct(s2Type, s2TypeDef, {x: 42})});
+    const v = newStruct(sType, {s: newStruct(s2Type, {x: 42})});
     w.writeTopLevel(sType, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '1', '42'], w.array);
+    assert.deepEqual([Kind.Struct, 'S',
+      ['s', Kind.Struct, 'S2', ['x', Kind.Number, false], [], false], [], '42'], w.array);
   });
 
   test('write compound list', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const w = new JsonArrayWriter(ds);
-    const ltr = makeCompoundType(Kind.List, numberType);
+    const ltr = makeListType(numberType);
     const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0]))).targetRef;
     const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [1, 2]))).targetRef;
     const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
@@ -347,7 +328,7 @@ suite('Encode', () => {
     const test = (expected: Array<any>, v: Type) => {
       const w = new JsonArrayWriter(ds);
       w.writeTopLevel(v.type, v);
-      assert.deepEqual(expected, w.array);
+      assert.deepEqual(w.array, expected);
     };
 
     test([Kind.Type, Kind.Number], numberType);
@@ -366,18 +347,29 @@ suite('Encode', () => {
            new Field('v', valueType, false),
          ]));
 
-    const pkgRef = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
-    test([Kind.Type, Kind.Unresolved, pkgRef.toString(), '123'], makeType(pkgRef, 123));
-
     test([Kind.Type, Kind.Struct, 'S',
-          ['e', Kind.Unresolved, pkgRef.toString(), '123', false, 'x', Kind.Number, false], []],
+          ['e', Kind.Bool, true, 'x', Kind.Number, false], []],
           makeStructType('S', [
-            new Field('e', makeType(pkgRef, 123), false),
+            new Field('e', boolType, true),
             new Field('x', numberType, false),
           ], []));
 
-    // test([Kind.Type, Kind.Unresolved, new Ref().toString(), -1, 'ns', 'n'],
-    //      makeUnresolvedType('ns', 'n'));
+
+    // struct A6 {
+    //   v: Number
+    //   cs: List<A6>
+    // }
+
+    const st = makeStructType('A6', [
+      new Field('v', numberType, false),
+      new Field('cs', valueType /* placeholder */, false),
+    ], []);
+    const lt = makeListType(st);
+    invariant(st.desc instanceof StructDesc);
+    st.desc.fields[1].t = lt;
+
+    test([Kind.Type, Kind.Struct, 'A6',
+      ['v', Kind.Number, false, 'cs', Kind.List, Kind.BackRef, 0, false], []], st);
   });
 
   test('top level blob', async () => {

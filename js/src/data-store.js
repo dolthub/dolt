@@ -1,7 +1,7 @@
 // @flow
 
 import Chunk from './chunk.js';
-import {default as Ref, emptyRef} from './ref.js';
+import Ref from './ref.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
 import type {ChunkStore} from './chunk-store.js';
@@ -10,27 +10,24 @@ import type {NomsSet} from './set.js';
 import type {valueOrPrimitive} from './value.js';
 import {
   Field,
-  makeCompoundType,
   makeRefType,
   makeStructType,
-  makeType,
+  makeSetType,
+  makeMapType,
   Type,
   stringType,
   boolType,
   valueType,
+  StructDesc,
 } from './type.js';
-import {Kind} from './noms-kind.js';
 import {newMap} from './map.js';
 import {newSet} from './set.js';
-import {Package, registerPackage} from './package.js';
 import {decodeNomsValue} from './decode.js';
 import {invariant} from './assert.js';
 import {encodeNomsValue} from './encode.js';
 import type {Commit} from './commit.js';
 
 type DatasTypes = {
-  commitTypeDef: Type,
-  datasPackage: Package,
   commitType: Type,
   commitSetType: Type,
   refOfCommitType: Type,
@@ -48,23 +45,19 @@ function getEmptyCommitMap(): Promise<NomsMap<string, RefValue<Commit>>> {
 let datasTypes: DatasTypes;
 export function getDatasTypes(): DatasTypes {
   if (!datasTypes) {
-    const datasPackage = new Package([
-      makeStructType('Commit', [
-        new Field('value', valueType, false),
-        new Field('parents', makeCompoundType(Kind.Set,
-          makeCompoundType(Kind.Ref, makeType(emptyRef, 0))), false),
-      ], []),
+    // struct Commit {
+    //   value: Value
+    //   parents: Set<Ref<Commit>>
+    // }
+    const commitType = makeStructType('Commit', [
+      new Field('value', valueType, false),
     ], []);
-    registerPackage(datasPackage);
-    const [commitTypeDef] = datasPackage.types;
-
-    const commitType = makeType(datasPackage.ref, 0);
-    const refOfCommitType = makeCompoundType(Kind.Ref, commitType);
-    const commitSetType = makeCompoundType(Kind.Set, refOfCommitType);
-    const commitMapType = makeCompoundType(Kind.Map, stringType, refOfCommitType);
+    const refOfCommitType = makeRefType(commitType);
+    const commitSetType = makeSetType(refOfCommitType);
+    invariant(commitType.desc instanceof StructDesc);
+    commitType.desc.fields.push(new Field('parents', commitSetType, false));
+    const commitMapType = makeMapType(stringType, refOfCommitType);
     datasTypes = {
-      commitTypeDef,
-      datasPackage,
       commitType,
       refOfCommitType,
       commitSetType,
@@ -212,7 +205,7 @@ export function newCommit(value: valueOrPrimitive, parents: Array<Ref> = []): Pr
   const types = getDatasTypes();
   const parentRefs = parents.map(r => new RefValue(r, types.refOfCommitType));
   return newSet(parentRefs, types.commitSetType).then(parents =>
-      newStruct(types.commitType, types.commitTypeDef, {value, parents}));
+      newStruct(types.commitType, {value, parents}));
 }
 
 class CacheEntry<T> {

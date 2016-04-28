@@ -27,23 +27,17 @@ export default function validateType(t: Type, v: any): void {
       return;
     }
 
-    case Kind.Unresolved: {
-      // Struct.
-      assertSubtype(v, t);
-      return;
-    }
-
+    case Kind.Blob:
     case Kind.List:
     case Kind.Map:
     case Kind.Ref:
     case Kind.Set:
-    case Kind.Blob:
+    case Kind.Struct:
     case Kind.Type:
-    case Kind.Package:
       assertSubtype(v, t);
       return;
 
-    case Kind.Struct:
+    case Kind.BackRef:
     default:
       throw new Error('unreachable');
   }

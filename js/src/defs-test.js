@@ -2,7 +2,6 @@
 
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
-import {Package, registerPackage} from './package.js';
 import {
   boolType,
   Field,
@@ -10,16 +9,16 @@ import {
   makeMapType,
   makeSetType,
   makeStructType,
-  makeType,
-  numberType,
   stringType,
+  numberType,
+  valueType,
+  StructDesc,
 } from './type.js';
 import {defToNoms} from './defs.js';
 import {newList} from './list.js';
 import {newStruct} from './struct.js';
 import {newSet} from './set.js';
 import {newMap} from './map.js';
-import {emptyRef} from './ref.js';
 import {ValueBase} from './value.js';
 import {invariant} from './assert.js';
 
@@ -92,17 +91,12 @@ suite('defs', () => {
   });
 
   test('struct', async () => {
-    let typeDef;
-    const pkg = new Package([
-      typeDef = makeStructType('Struct', [
-        new Field('b', boolType, false),
-        new Field('s', stringType, false),
-      ], []),
+    const type = makeStructType('Struct', [
+      new Field('b', boolType, false),
+      new Field('s', stringType, false),
     ], []);
-    registerPackage(pkg);
-    const type = makeType(pkg.ref, 0);
 
-    const s1 = newStruct(type, typeDef, {
+    const s1 = newStruct(type, {
       b: true,
       s: 'hi',
     });
@@ -115,17 +109,12 @@ suite('defs', () => {
   });
 
   test('struct with list', async () => {
-    let typeDef;
     const listOfNumberType = makeListType(numberType);
-    const pkg = new Package([
-      typeDef = makeStructType('StructWithList', [
-        new Field('l', listOfNumberType, false),
-      ], []),
+    const type = makeStructType('StructWithList', [
+      new Field('l', listOfNumberType, false),
     ], []);
-    registerPackage(pkg);
-    const type = makeType(pkg.ref, 0);
 
-    const s1 = newStruct(type, typeDef, {
+    const s1 = newStruct(type, {
       l: await newList([0, 1, 2, 3], listOfNumberType),
     });
 
@@ -138,55 +127,44 @@ suite('defs', () => {
   });
 
   test('list of struct', async () => {
-    let typeDef;
-    const pkg = new Package([
-      typeDef = makeStructType('Struct', [
-        new Field('i', numberType, false),
-      ], []),
+    const structType = makeStructType('Struct', [
+      new Field('i', numberType, false),
     ], []);
-    registerPackage(pkg);
-    const structType = makeType(pkg.ref, 0);
     const listType = makeListType(structType);
 
     const l1 = await newList([
-      newStruct(structType, typeDef, {i: 1}),
-      newStruct(structType, typeDef, {i: 2}),
+      newStruct(structType, {i: 1}),
+      newStruct(structType, {i: 2}),
     ], listType);
 
     const l2 = await defToNoms([{i: 1}, {i: 2}], listType);
     invariant(l2 instanceof ValueBase);
     assert.isTrue(l1.equals(l2));
 
-    const l3 = await defToNoms([newStruct(structType, typeDef, {i: 1}), {i: 2}], listType);
+    const l3 = await defToNoms([newStruct(structType, {i: 1}), {i: 2}], listType);
     invariant(l3 instanceof ValueBase);
     assert.isTrue(l1.equals(l3));
   });
 
   test('recursive struct', async () => {
-    const pkg = new Package([
-      makeStructType('Struct', [
-        new Field('children', makeListType(makeType(emptyRef, 0)), false),
-      ], []),
+    const type = makeStructType('Struct', [
+      new Field('children', valueType /* placeholder */, false),
     ], []);
-    registerPackage(pkg);
-    const type = makeType(pkg.ref, 0);
-    const typeDef = makeStructType('Struct', [
-      new Field('children', makeListType(makeType(pkg.ref, 0)), false),
-    ], []);
-
     const listType = makeListType(type);
+    invariant(type.desc instanceof StructDesc);
+    type.desc.fields[0].t = listType;
 
     const a = await newList([], listType);
     const b = await newList([], listType);
-    const x = newStruct(type, typeDef, {
+    const x = newStruct(type, {
       children: a,
     });
-    const y = newStruct(type, typeDef, {
+    const y = newStruct(type, {
       children: b,
     });
     const c = await newList([x, y], listType);
 
-    const t1 = newStruct(type, typeDef, {
+    const t1 = newStruct(type, {
       children: c,
     });
 

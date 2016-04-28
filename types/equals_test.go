@@ -10,9 +10,6 @@ import (
 func TestValueEquals(t *testing.T) {
 	assert := assert.New(t)
 
-	r1 := Number(1).Ref()
-	r2 := Number(2).Ref()
-
 	values := []func() Value{
 		func() Value { return nil },
 		func() Value { return Bool(false) },
@@ -64,12 +61,6 @@ func TestValueEquals(t *testing.T) {
 		func() Value {
 			return MakeMapType(NumberType, ValueType)
 		},
-		func() Value { return MakeType(r1, 0) },
-		func() Value { return MakeType(r1, 1) },
-		func() Value { return MakeType(r2, 0) },
-		func() Value { return MakeUnresolvedType("ns", "a") },
-		func() Value { return MakeUnresolvedType("ns", "b") },
-		func() Value { return MakeUnresolvedType("ns2", "a") },
 	}
 
 	for i, f1 := range values {

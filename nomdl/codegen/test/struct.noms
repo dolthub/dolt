@@ -1,6 +1,0 @@
-struct Struct {
-  s: String
-  b: Bool
-}
-
-using List<Struct>

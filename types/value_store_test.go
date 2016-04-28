@@ -49,10 +49,6 @@ func TestWriteValue(t *testing.T) {
 	testEncode(string([]byte{'b', ' ', 0x00, 0x01, 0x02}), b)
 
 	testEncode(fmt.Sprintf("t [%d,\"hi\"]", StringKind), NewString("hi"))
-
-	testEncode(fmt.Sprintf("t [%d,[],[]]", PackageKind), Package{types: []*Type{}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
-	ref1 := testEncode(fmt.Sprintf("t [%d,[%d],[]]", PackageKind, BoolKind), Package{types: []*Type{BoolType}, dependencies: []ref.Ref{}, ref: &ref.Ref{}})
-	testEncode(fmt.Sprintf("t [%d,[],[\"%s\"]]", PackageKind, ref1), Package{types: []*Type{}, dependencies: []ref.Ref{ref1}, ref: &ref.Ref{}})
 }
 
 func TestWriteBlobLeaf(t *testing.T) {
@@ -74,40 +70,6 @@ func TestWriteBlobLeaf(t *testing.T) {
 	r2 := vs.WriteValue(bl2).TargetRef()
 	// echo -n 'b Hello, World!' | sha1sum
 	assert.Equal("sha1-135fe1453330547994b2ce8a1b238adfbd7df87e", r2.String())
-}
-
-func TestWritePackageWhenValueIsWritten(t *testing.T) {
-	assert := assert.New(t)
-	vs := NewTestValueStore()
-
-	typeDef := MakeStructType("S", []Field{
-		Field{"X", NumberType, false},
-	}, []Field{})
-	pkg1 := NewPackage([]*Type{typeDef}, []ref.Ref{})
-	// Don't write package
-	pkgRef1 := RegisterPackage(&pkg1)
-	typ := MakeType(pkgRef1, 0)
-
-	s := NewStruct(typ, typeDef, structData{"X": Number(42)})
-	vs.WriteValue(s)
-
-	pkg2 := vs.ReadValue(pkgRef1)
-	assert.True(pkg1.Equals(pkg2))
-}
-
-func TestWritePackageDepWhenPackageIsWritten(t *testing.T) {
-	assert := assert.New(t)
-	vs := NewTestValueStore()
-
-	pkg1 := NewPackage([]*Type{}, []ref.Ref{})
-	// Don't write package
-	pkgRef1 := RegisterPackage(&pkg1)
-
-	pkg2 := NewPackage([]*Type{}, []ref.Ref{pkgRef1})
-	vs.WriteValue(pkg2)
-
-	pkg3 := vs.ReadValue(pkgRef1)
-	assert.True(pkg1.Equals(pkg3))
 }
 
 func TestCheckChunksInCache(t *testing.T) {

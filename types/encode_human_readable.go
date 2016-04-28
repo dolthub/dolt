@@ -60,7 +60,8 @@ func (w *hrsWriter) Write(v Value) {
 	case BlobKind:
 		w.maybeWriteIndentation()
 		blob := v.(Blob)
-		encoder := base64.NewEncoder(base64.RawStdEncoding, w.w)
+		// TODO: Use RawStdEncoding
+		encoder := base64.NewEncoder(base64.StdEncoding, w.w)
 		_, err := io.Copy(encoder, blob.Reader())
 		d.Chk.NoError(err)
 		encoder.Close()
@@ -117,62 +118,52 @@ func (w *hrsWriter) Write(v Value) {
 		w.write("}")
 
 	case TypeKind:
-		w.writeTypeAsValue(v.(*Type))
+		w.writeType(v.(*Type), nil)
 
-	case UnresolvedKind:
-		w.writeUnresolved(v, true)
+	case StructKind:
+		w.writeStruct(v.(Struct), true)
 
-	case PackageKind:
-		panic("not implemented")
-
-	case ValueKind, StructKind:
+	default:
+	case ValueKind, BackRefKind:
 		panic("unreachable")
 	}
 }
 
-func (w *hrsWriter) writeUnresolved(v Value, printStructName bool) {
+func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
 	t := v.Type()
-	pkg := LookupPackage(t.PackageRef())
-	typeDef := pkg.Types()[t.Ordinal()]
-	switch typeDef.Kind() {
-	case StructKind:
-		v := v.(Struct)
-		desc := typeDef.Desc.(StructDesc)
-		if printStructName {
-			w.write(typeDef.Name())
-			w.write(" ")
-		}
-		w.write("{")
-		w.indent()
 
-		writeField := func(f Field, v Value, i int) {
-			if i == 0 {
-				w.newLine()
-			}
-			w.write(f.Name)
-			w.write(": ")
-			w.Write(v)
-			w.write(",")
+	desc := t.Desc.(StructDesc)
+	if printStructName {
+		w.write(t.Name())
+		w.write(" ")
+	}
+	w.write("{")
+	w.indent()
+
+	writeField := func(f Field, v Value, i int) {
+		if i == 0 {
 			w.newLine()
 		}
-
-		for i, f := range desc.Fields {
-			if fv, present := v.MaybeGet(f.Name); present {
-				writeField(f, fv, i)
-			}
-		}
-		if len(desc.Union) > 0 {
-			f := desc.Union[v.UnionIndex()]
-			fv := v.UnionValue()
-			writeField(f, fv, 0)
-		}
-
-		w.outdent()
-		w.write("}")
-
-	default:
-		panic("unreachable")
+		w.write(f.Name)
+		w.write(": ")
+		w.Write(v)
+		w.write(",")
+		w.newLine()
 	}
+
+	for i, f := range desc.Fields {
+		if fv, present := v.MaybeGet(f.Name); present {
+			writeField(f, fv, i)
+		}
+	}
+	if len(desc.Union) > 0 {
+		f := desc.Union[v.UnionIndex()]
+		fv := v.UnionValue()
+		writeField(f, fv, 0)
+	}
+
+	w.outdent()
+	w.write("}")
 }
 
 func (w *hrsWriter) WriteTagged(v Value) {
@@ -180,110 +171,105 @@ func (w *hrsWriter) WriteTagged(v Value) {
 	switch t.Kind() {
 	case BoolKind, StringKind:
 		w.Write(v)
-	case NumberKind, BlobKind, ListKind, MapKind, RefKind, SetKind, TypeKind:
-		w.writeTypeAsValue(t)
+	case NumberKind, BlobKind, ListKind, MapKind, RefKind, SetKind, TypeKind, BackRefKind:
+		// TODO: Numbers have unique syntax now...
+		w.writeType(t, nil)
 		w.write("(")
 		w.Write(v)
 		w.write(")")
-
-	case UnresolvedKind:
-		w.writeTypeAsValue(t)
+	case StructKind:
+		w.writeType(t, nil)
 		w.write("(")
-		w.writeUnresolved(v, false)
+		w.writeStruct(v.(Struct), false)
 		w.write(")")
-	case PackageKind:
-		panic("not implemented")
 
-	case ValueKind, StructKind:
+	case ValueKind:
 	default:
 		panic("unreachable")
 	}
 }
 
-func (w *hrsWriter) writeTypeAsValue(t *Type) {
+func (w *hrsWriter) writeType(t *Type, backRefs []*Type) {
 	switch t.Kind() {
-	case BlobKind, BoolKind, NumberKind, StringKind, TypeKind, ValueKind, PackageKind:
+	case BlobKind, BoolKind, NumberKind, StringKind, TypeKind, ValueKind:
 		w.write(KindToString[t.Kind()])
 	case ListKind, RefKind, SetKind:
 		w.write(KindToString[t.Kind()])
 		w.write("<")
-		w.writeTypeAsValue(t.Desc.(CompoundDesc).ElemTypes[0])
+		w.writeType(t.Desc.(CompoundDesc).ElemTypes[0], backRefs)
 		w.write(">")
 	case MapKind:
 		w.write(KindToString[t.Kind()])
 		w.write("<")
-		w.writeTypeAsValue(t.Desc.(CompoundDesc).ElemTypes[0])
+		w.writeType(t.Desc.(CompoundDesc).ElemTypes[0], backRefs)
 		w.write(", ")
-		w.writeTypeAsValue(t.Desc.(CompoundDesc).ElemTypes[1])
+		w.writeType(t.Desc.(CompoundDesc).ElemTypes[1], backRefs)
 		w.write(">")
 	case StructKind:
-		w.write("struct ")
-		w.write(t.Name())
-		w.write(" {")
-		w.indent()
-		desc := t.Desc.(StructDesc)
-		writeField := func(f Field, i int) {
-			if i == 0 {
-				w.newLine()
-			}
-			w.write(f.Name)
-			w.write(": ")
-			if f.Optional {
-				w.write("optional ")
-			}
-			w.writeTypeAsValue(f.T)
-			w.newLine()
-		}
-		for i, f := range desc.Fields {
-			writeField(f, i)
-		}
-		if len(desc.Union) > 0 {
-			w.write("union {")
-			w.indent()
-			for i, f := range desc.Union {
-				writeField(f, i)
-			}
-			w.outdent()
-			w.write("}")
-			w.newLine()
-		}
-		w.outdent()
-		w.write("}")
-	case UnresolvedKind:
-		w.writeUnresolvedTypeRef(t, true)
-	}
-}
-
-func (w *hrsWriter) writeUnresolvedTypeRef(t *Type, printStructName bool) {
-	if !t.HasPackageRef() {
-		if t.Namespace() != "" {
-			w.write(t.Namespace())
-			w.write(".")
-		}
-		w.write(t.Name())
-		return
-	}
-	pkg := LookupPackage(t.PackageRef())
-	typeDef := pkg.Types()[t.Ordinal()]
-	switch typeDef.Kind() {
-	case StructKind:
-		w.write("Struct")
+		w.writeStructType(t, backRefs)
+	case BackRefKind:
+		w.writeBackRef(uint8(t.Desc.(BackRefDesc)))
 	default:
 		panic("unreachable")
 	}
-	fmt.Fprintf(w.w, "<%s, %s, %d>", typeDef.Name(), t.PackageRef(), t.Ordinal())
+}
+
+func (w *hrsWriter) writeStructType(t *Type, backRefs []*Type) {
+	idx := indexOfType(t, backRefs)
+	if idx != -1 {
+		w.writeBackRef(uint8(len(backRefs) - 1 - idx))
+		return
+	}
+	backRefs = append(backRefs, t)
+
+	w.write("struct ")
+	w.write(t.Name())
+	w.write(" {")
+	w.indent()
+	desc := t.Desc.(StructDesc)
+	i := 0
+	writeField := func(f Field) {
+		if i == 0 {
+			w.newLine()
+		}
+		w.write(f.Name)
+		w.write(": ")
+		if f.Optional {
+			w.write("optional ")
+		}
+		w.writeType(f.T, backRefs)
+		w.newLine()
+		i++
+	}
+	for _, f := range desc.Fields {
+		writeField(f)
+	}
+	if len(desc.Union) > 0 {
+		if i == 0 {
+			w.newLine()
+			i++
+		}
+		w.write("union {")
+		w.indent()
+		i = 0
+		for _, f := range desc.Union {
+			writeField(f)
+		}
+		w.outdent()
+		w.write("}")
+		w.newLine()
+	}
+	w.outdent()
+	w.write("}")
+}
+
+func (w *hrsWriter) writeBackRef(i uint8) {
+	fmt.Fprintf(w.w, "BackRef<%d>", i)
 }
 
 func WriteHRS(v Value) string {
 	var buf bytes.Buffer
 	w := &hrsWriter{w: &buf}
 	w.Write(v)
-	return buf.String()
-}
-
-func WriteTaggedHRS(v Value) string {
-	var buf bytes.Buffer
-	w := &hrsWriter{w: &buf}
-	w.WriteTagged(v)
 	return buf.String()
 }

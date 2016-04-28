@@ -1,3 +1,0 @@
-struct StructWithDupList {
-  l: List<Number>
-}

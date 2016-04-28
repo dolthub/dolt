@@ -10,9 +10,9 @@ import {newStruct} from './struct.js';
 import {calcSplices} from './edit-distance.js';
 import {
   Field,
-  makeCompoundType,
   makeStructType,
-  makeType,
+  makeRefType,
+  makeListType,
   numberType,
   stringType,
   valueType,
@@ -20,9 +20,7 @@ import {
 import {flatten, flattenParallel} from './test-util.js';
 import {IndexedMetaSequence, MetaTuple} from './meta-sequence.js';
 import {invariant} from './assert.js';
-import {Kind} from './noms-kind.js';
 import {ListLeafSequence, newList, NomsList} from './list.js';
-import {Package, registerPackage} from './package.js';
 import type {Type} from './type.js';
 
 const testListSize = 5000;
@@ -52,7 +50,7 @@ suite('BuildList', () => {
 
   test('LONG: set of n numbers, length', async () => {
     const nums = firstNNumbers(testListSize);
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     const s = await newList(nums, tr);
     assert.strictEqual(s.ref.toString(), listOfNRef);
     assert.strictEqual(testListSize, s.length);
@@ -61,30 +59,26 @@ suite('BuildList', () => {
   test('LONG: list of ref, set of n numbers, length', async () => {
     const nums = firstNNumbers(testListSize);
 
-    const structTypeDef = makeStructType('num', [
+    const structType = makeStructType('num', [
       new Field('n', numberType, false),
     ], []);
-    const pkg = new Package([structTypeDef], []);
-    registerPackage(pkg);
-    const pkgRef = pkg.ref;
-    const structType = makeType(pkgRef, 0);
-    const refOfStructType = makeCompoundType(Kind.Ref, structType);
-    const tr = makeCompoundType(Kind.List, refOfStructType);
+    const refOfStructType = makeRefType(structType);
+    const tr = makeListType(refOfStructType);
 
     const refs = nums.map(n => {
-      const s = newStruct(structType, structTypeDef, {n});
+      const s = newStruct(structType, {n});
       const r = s.ref;
       return new RefValue(r, refOfStructType);
     });
 
     const s = await newList(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-f2e6c3aae6e8ac4c3776830e2d8141fc527c55c5');
+    assert.strictEqual(s.ref.toString(), 'sha1-f2db6a2f8026ee6e12bb584cd38c813604774a69');
     assert.strictEqual(testListSize, s.length);
   });
 
   test('LONG: toJS', async () => {
     const nums = firstNNumbers(5000);
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     const s = await newList(nums, tr);
     assert.strictEqual(s.ref.toString(), listOfNRef);
     assert.strictEqual(testListSize, s.length);
@@ -104,7 +98,7 @@ suite('BuildList', () => {
 
   test('LONG: insert', async () => {
     const nums = firstNNumbers(testListSize - 10);
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     let s = await newList(nums, tr);
 
     for (let i = testListSize - 10; i < testListSize; i++) {
@@ -116,7 +110,7 @@ suite('BuildList', () => {
 
   test('LONG: append', async () => {
     const nums = firstNNumbers(testListSize - 10);
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     let s = await newList(nums, tr);
 
     for (let i = testListSize - 10; i < testListSize; i++) {
@@ -128,7 +122,7 @@ suite('BuildList', () => {
 
   test('LONG: remove', async () => {
     const nums = firstNNumbers(testListSize + 10);
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     let s = await newList(nums, tr);
 
     let count = 10;
@@ -141,7 +135,7 @@ suite('BuildList', () => {
 
   test('LONG: splice', async () => {
     const nums = firstNNumbers(testListSize);
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     let s = await newList(nums, tr);
 
     const splice500At = async (idx: number) => {
@@ -162,7 +156,7 @@ suite('BuildList', () => {
     const ds = new DataStore(ms);
 
     const nums = firstNNumbers(testListSize);
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     const s = await newList(nums, tr);
     const r = ds.writeValue(s).targetRef;
     const s2 = await ds.readValue(r);
@@ -181,7 +175,7 @@ suite('ListLeafSequence', () => {
   test('isEmpty', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.List, stringType);
+    const tr = makeListType(stringType);
     const newList = items => new NomsList(tr, new ListLeafSequence(ds, tr, items));
     assert.isTrue(newList([]).isEmpty());
     assert.isFalse(newList(['z', 'x', 'a', 'b']).isEmpty());
@@ -190,7 +184,7 @@ suite('ListLeafSequence', () => {
   test('get', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.List, stringType);
+    const tr = makeListType(stringType);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, ['z', 'x', 'a', 'b']));
     assert.strictEqual('z', await l.get(0));
     assert.strictEqual('x', await l.get(1));
@@ -201,7 +195,7 @@ suite('ListLeafSequence', () => {
   test('forEach', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, [4, 2, 10, 16]));
 
     const values = [];
@@ -212,7 +206,7 @@ suite('ListLeafSequence', () => {
   test('iterator', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
 
     const test = async items => {
       const l = new NomsList(tr, new ListLeafSequence(ds, tr, items));
@@ -228,7 +222,7 @@ suite('ListLeafSequence', () => {
   test('iteratorAt', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
 
     const test = async items => {
       const l = new NomsList(tr, new ListLeafSequence(ds, tr, items));
@@ -247,7 +241,7 @@ suite('ListLeafSequence', () => {
   function testChunks(elemType: Type) {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.List, elemType);
+    const tr = makeListType(elemType);
     const r1 = ds.writeValue('x');
     const r2 = ds.writeValue('a');
     const r3 = ds.writeValue('b');
@@ -271,7 +265,7 @@ suite('CompoundList', () => {
   function build(): NomsList {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
-    const tr = makeCompoundType(Kind.List, stringType);
+    const tr = makeListType(stringType);
     const l1 = new NomsList(tr, new ListLeafSequence(ds, tr, ['a', 'b']));
     const r1 = ds.writeValue(l1).targetRef;
     const l2 = new NomsList(tr, new ListLeafSequence(ds, tr, ['e', 'f']));
@@ -406,7 +400,7 @@ suite('Diff List', () => {
 
     const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
 
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     const l1 = await newList(nums1, tr);
     const l2 = await newList(nums2, tr);
 
@@ -425,7 +419,7 @@ suite('Diff List', () => {
 
     const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
 
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     const l1 = await newList(nums1, tr);
     const l2 = await newList(nums2, tr);
 
@@ -444,7 +438,7 @@ suite('Diff List', () => {
     }
 
     const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     const l1 = await newList(nums1, tr);
     const l2 = await newList(nums2, tr);
 
@@ -457,7 +451,7 @@ suite('Diff List', () => {
     const nums2 = firstNNumbers(5000);
 
     const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     const l1 = await newList(nums1, tr);
     const l2 = await newList(nums2, tr);
 

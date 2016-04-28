@@ -10,7 +10,7 @@ import (
 )
 
 // writesOnCommit allows tests to adjust for how many writes dataStoreCommon performs on Commit()
-const writesOnCommit = 3
+const writesOnCommit = 2
 
 func TestLocalDataStore(t *testing.T) {
 	suite.Run(t, &LocalDataStoreSuite{})

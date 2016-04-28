@@ -11,7 +11,6 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/suite"
 )
@@ -49,11 +48,8 @@ func (s *testSuite) TestCSVExporter() {
 		})
 	}
 
-	typeDef := types.MakeStructType(structName, f, []types.Field{})
-	pkg := types.NewPackage([]*types.Type{typeDef}, []ref.Ref{})
-	pkgRef := types.RegisterPackage(&pkg)
-	typeRef := types.MakeType(pkgRef, 0)
-	structFields := typeDef.Desc.(types.StructDesc).Fields
+	typ := types.MakeStructType(structName, f, []types.Field{})
+	structFields := typ.Desc.(types.StructDesc).Fields
 
 	// Build data rows
 	structs := make([]types.Value, len(payload))
@@ -62,10 +58,10 @@ func (s *testSuite) TestCSVExporter() {
 		for j, v := range row {
 			fields[structFields[j].Name] = types.NewString(v)
 		}
-		structs[i] = types.NewStruct(typeRef, typeDef, fields)
+		structs[i] = types.NewStruct(typ, fields)
 	}
 
-	listType := types.MakeListType(typeRef)
+	listType := types.MakeListType(typ)
 	ds.Commit(types.NewTypedList(listType, structs...))
 	ds.Store().Close()
 

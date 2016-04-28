@@ -14,32 +14,21 @@ import {
   getPrimitiveType,
   makeCompoundType,
   makeStructType,
-  makeType,
-  makeUnresolvedType,
   StructDesc,
   Type,
   typeType,
   numberType,
 } from './type.js';
 import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta-sequence.js';
-import {invariant, notNull} from './assert.js';
+import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
-import {lookupPackage, Package, readPackage} from './package.js';
 import {NomsMap, MapLeafSequence} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';
 import {IndexedMetaSequence} from './meta-sequence.js';
 
 const typedTag = 't ';
 const blobTag = 'b ';
-
-class UnresolvedPackage {
-  pkgRef: Ref;
-
-  constructor(pkgRef: Ref) {
-    this.pkgRef = pkgRef;
-  }
-}
 
 export class JsonArrayReader {
   _a: Array<any>;
@@ -84,6 +73,12 @@ export class JsonArrayReader {
     return v;
   }
 
+  readUint8(): number {
+    const v = this.read();
+    invariant((v & 0xff) === v);
+    return v;
+  }
+
   readFloat(): number {
     const next = this.read();
     invariant(typeof next === 'string');
@@ -111,26 +106,27 @@ export class JsonArrayReader {
     return Ref.parse(next);
   }
 
-  readTypeAsTag(): Type {
+  readTypeAsTag(backRefs: Type[]): Type {
     const kind = this.readKind();
     switch (kind) {
       case Kind.List:
       case Kind.Set:
       case Kind.Ref: {
-        const elemType = this.readTypeAsTag();
+        const elemType = this.readTypeAsTag(backRefs);
         return makeCompoundType(kind, elemType);
       }
       case Kind.Map: {
-        const keyType = this.readTypeAsTag();
-        const valueType = this.readTypeAsTag();
+        const keyType = this.readTypeAsTag(backRefs);
+        const valueType = this.readTypeAsTag(backRefs);
         return makeCompoundType(kind, keyType, valueType);
       }
       case Kind.Type:
         return typeType;
-      case Kind.Unresolved: {
-        const pkgRef = this.readRef();
-        const ordinal = this.readOrdinal();
-        return makeType(pkgRef, ordinal);
+      case Kind.Struct:
+        return this.readStructType(backRefs);
+      case Kind.BackRef: {
+        const i = this.readUint8();
+        return backRefs[backRefs.length - 1 - i];
       }
     }
 
@@ -147,67 +143,51 @@ export class JsonArrayReader {
     return new BlobLeafSequence(this._ds, bytes);
   }
 
-  readSequence(t: Type, pkg: ?Package): Array<any> {
+  readSequence(t: Type): Array<any> {
     const elemType = t.elemTypes[0];
     const list = [];
     while (!this.atEnd()) {
-      const v = this.readValueWithoutTag(elemType, pkg);
+      const v = this.readValueWithoutTag(elemType);
       list.push(v);
     }
 
     return list;
   }
 
-  readListLeafSequence(t: Type, pkg: ?Package): ListLeafSequence {
-    const seq = this.readSequence(t, pkg);
+  readListLeafSequence(t: Type): ListLeafSequence {
+    const seq = this.readSequence(t);
     return new ListLeafSequence(this._ds, t, seq);
   }
 
-  readSetLeafSequence(t: Type, pkg: ?Package): SetLeafSequence {
-    const seq = this.readSequence(t, pkg);
+  readSetLeafSequence(t: Type): SetLeafSequence {
+    const seq = this.readSequence(t);
     return new SetLeafSequence(this._ds, t, seq);
   }
 
-  readMapLeafSequence(t: Type, pkg: ?Package): MapLeafSequence {
+  readMapLeafSequence(t: Type): MapLeafSequence {
     const keyType = t.elemTypes[0];
     const valueType = t.elemTypes[1];
     const entries = [];
     while (!this.atEnd()) {
-      const k = this.readValueWithoutTag(keyType, pkg);
-      const v = this.readValueWithoutTag(valueType, pkg);
+      const k = this.readValueWithoutTag(keyType);
+      const v = this.readValueWithoutTag(valueType);
       entries.push({key: k, value: v});
     }
 
     return new MapLeafSequence(this._ds, t, entries);
   }
 
-  readMetaSequence(t: Type, pkg: ?Package): any {
+  readMetaSequence(t: Type): any {
     const data: Array<MetaTuple> = [];
     const indexType = indexTypeForMetaSequence(t);
     while (!this.atEnd()) {
       const ref = this.readRef();
-      const v = this.readValueWithoutTag(indexType, pkg);
-      const numLeaves = this.readValueWithoutTag(numberType, pkg);
+      const v = this.readValueWithoutTag(indexType);
+      const numLeaves = this.readValueWithoutTag(numberType);
       data.push(new MetaTuple(ref, v, numLeaves));
     }
 
     return newMetaSequenceFromData(this._ds, t, data);
-  }
-
-  readPackage(t: Type, pkg: ?Package): Package {
-    const r2 = new JsonArrayReader(this.readArray(), this._ds);
-    const types = [];
-    while (!r2.atEnd()) {
-      types.push(r2.readTypeAsValue(pkg));
-    }
-
-    const r3 = new JsonArrayReader(this.readArray(), this._ds);
-    const deps = [];
-    while (!r3.atEnd()) {
-      deps.push(r3.readRef());
-    }
-
-    return new Package(types, deps);
   }
 
   readRefValue(t: Type): RefValue {
@@ -216,31 +196,12 @@ export class JsonArrayReader {
   }
 
   readTopLevelValue(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      const t = this.readTypeAsTag();
-      const doRead = () => {
-        const i = this._i;
-
-        try {
-          const v = this.readValueWithoutTag(t);
-          resolve(v);
-        } catch (ex) {
-          if (ex instanceof UnresolvedPackage) {
-            readPackage(ex.pkgRef, this._ds).then(() => {
-              this._i = i;
-              doRead();
-            });
-          } else {
-            reject(ex);
-          }
-        }
-      };
-
-      doRead();
-    });
+    const t = this.readTypeAsTag([]);
+    const v = this.readValueWithoutTag(t);
+    return Promise.resolve(v);
   }
 
-  readValueWithoutTag(t: Type, pkg: ?Package = null): any {
+  readValueWithoutTag(t: Type): any {
     // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
       case Kind.Blob: {
@@ -248,7 +209,7 @@ export class JsonArrayReader {
         let sequence;
         if (isMeta) {
           const r2 = new JsonArrayReader(this.readArray(), this._ds);
-          sequence = r2.readMetaSequence(t, pkg);
+          sequence = r2.readMetaSequence(t);
           invariant(sequence instanceof IndexedMetaSequence);
         } else {
           sequence = this.readBlobLeafSequence();
@@ -262,67 +223,45 @@ export class JsonArrayReader {
       case Kind.String:
         return this.readString();
       case Kind.Value: {
-        const t2 = this.readTypeAsTag();
-        return this.readValueWithoutTag(t2, pkg);
+        const t2 = this.readTypeAsTag([]);
+        return this.readValueWithoutTag(t2);
       }
       case Kind.List: {
         const isMeta = this.readBool();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
         const sequence = isMeta ?
-            r2.readMetaSequence(t, pkg) :
-            r2.readListLeafSequence(t, pkg);
+            r2.readMetaSequence(t) :
+            r2.readListLeafSequence(t);
         return new NomsList(t, sequence);
       }
       case Kind.Map: {
         const isMeta = this.readBool();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
         const sequence = isMeta ?
-          r2.readMetaSequence(t, pkg) :
-          r2.readMapLeafSequence(t, pkg);
+          r2.readMetaSequence(t) :
+          r2.readMapLeafSequence(t);
         return new NomsMap(t, sequence);
       }
-      case Kind.Package:
-        return this.readPackage(t, pkg);
       case Kind.Ref:
         return this.readRefValue(t);
       case Kind.Set: {
         const isMeta = this.readBool();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
         const sequence = isMeta ?
-          r2.readMetaSequence(t, pkg) :
-          r2.readSetLeafSequence(t, pkg);
+          r2.readMetaSequence(t) :
+          r2.readSetLeafSequence(t);
         return new NomsSet(t, sequence);
       }
       case Kind.Struct:
-        throw new Error('Not allowed');
+        return this.readStruct(t);
       case Kind.Type:
-        return this.readTypeAsValue(pkg);
-      case Kind.Unresolved:
-        return this.readUnresolvedKindToValue(t, pkg);
+        return this.readTypeAsValue([]);
     }
 
     throw new Error('Unreached');
   }
 
-  readUnresolvedKindToValue(t: Type, pkg: ?Package = null): any {
-    const pkgRef = t.packageRef;
-    const ordinal = t.ordinal;
-    if (!pkgRef.isEmpty()) {
-      pkg = lookupPackage(pkgRef);
-      if (!pkg) {
-        throw new UnresolvedPackage(pkgRef);
-      }
-      invariant(pkg);
-    }
-
-    pkg = notNull(pkg);
-    const typeDef = pkg.types[ordinal];
-
-    invariant(typeDef.kind === Kind.Struct);
-    return this.readStruct(typeDef, t, pkg);
-  }
-
-  readTypeAsValue(pkg: ?Package): Type {
+  readTypeAsValue(backRefs: Type[]): Type {
     const k = this.readKind();
 
     switch (k) {
@@ -333,48 +272,24 @@ export class JsonArrayReader {
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
         const elemTypes: Array<Type> = [];
         while (!r2.atEnd()) {
-          elemTypes.push(r2.readTypeAsValue());
+          elemTypes.push(r2.readTypeAsValue(backRefs));
         }
 
         return makeCompoundType(k, ...elemTypes);
       }
-      case Kind.Struct: {
-        const name = this.readString();
-        const readFields = () => {
-          const fields: Array<Field> = [];
-          const fieldReader = new JsonArrayReader(this.readArray(), this._ds);
-          while (!fieldReader.atEnd()) {
-            const fieldName = fieldReader.readString();
-            const fieldType = fieldReader.readTypeAsValue(pkg);
-            const optional = fieldReader.readBool();
-            fields.push(new Field(fieldName, fieldType, optional));
-          }
-          return fields;
-        };
+      case Kind.Struct:
+        return this.readStructType(backRefs);
 
-        const fields = readFields();
-        const choices = readFields();
-        return makeStructType(name, fields, choices);
-      }
-      case Kind.Unresolved: {
-        const pkgRef = this.readRef();
-        const ordinal = this.readOrdinal();
-        if (ordinal === -1) {
-          const namespace = this.readString();
-          const name = this.readString();
-          return makeUnresolvedType(namespace, name);
-        }
-
-        return makeType(pkgRef, ordinal);
-      }
+      case Kind.BackRef:
+        throw new Error('not reachable');
     }
 
     invariant(isPrimitiveKind(k));
     return getPrimitiveType(k);
   }
 
-  readStruct<T: Struct>(typeDef: Type, type: Type, pkg: Package): T {
-    const desc = typeDef.desc;
+  readStruct<T: Struct>(type: Type): T {
+    const desc = type.desc;
     invariant(desc instanceof StructDesc);
 
     const data: {[key: string]: any} = Object.create(null);
@@ -384,11 +299,11 @@ export class JsonArrayReader {
       if (field.optional) {
         const b = this.readBool();
         if (b) {
-          const v = this.readValueWithoutTag(field.t, pkg);
+          const v = this.readValueWithoutTag(field.t);
           data[field.name] = v;
         }
       } else {
-        const v = this.readValueWithoutTag(field.t, pkg);
+        const v = this.readValueWithoutTag(field.t);
         data[field.name] = v;
       }
     }
@@ -397,11 +312,39 @@ export class JsonArrayReader {
     if (desc.union.length > 0) {
       unionIndex = this.readUint();
       const unionField = desc.union[unionIndex];
-      const v = this.readValueWithoutTag(unionField.t, pkg);
+      const v = this.readValueWithoutTag(unionField.t);
       data[unionField.name] = v;
     }
 
-    return newStruct(type, typeDef, data);
+    return newStruct(type, data);
+  }
+
+  readStructType(backRefs: Type[]): Type {
+    const name = this.readString();
+    const fields = [];
+    const choices = [];
+    const structType = makeStructType(name, fields, choices);
+    backRefs = backRefs.concat(structType);  // needs to be a copy.
+    const readFields = () => {
+      const fields: Array<Field> = [];
+      const fieldReader = new JsonArrayReader(this.readArray(), this._ds);
+      while (!fieldReader.atEnd()) {
+        const fieldName = fieldReader.readString();
+        const fieldType = fieldReader.readTypeAsTag(backRefs);
+        const optional = fieldReader.readBool();
+        fields.push(new Field(fieldName, fieldType, optional));
+      }
+      return fields;
+    };
+
+    const newFields = readFields();
+    const newChoices = readFields();
+
+    // Update the existing structType to keep object identity.
+    invariant(structType.desc instanceof StructDesc);
+    structType.desc.fields = newFields;
+    structType.desc.union = newChoices;
+    return structType;
   }
 }
 

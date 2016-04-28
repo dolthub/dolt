@@ -10,26 +10,22 @@ type structData map[string]Value
 type Struct struct {
 	data       structData
 	t          *Type
-	typeDef    *Type
 	unionIndex uint32
 	unionValue Value
 	ref        *ref.Ref
 }
 
-func newStructFromData(data structData, unionIndex uint32, unionValue Value, typ, typeDef *Type) Struct {
-	d.Chk.Equal(typ.Kind(), UnresolvedKind)
-	d.Chk.True(typ.HasPackageRef())
-	d.Chk.True(typ.HasOrdinal())
-	d.Chk.Equal(typeDef.Kind(), StructKind)
-	return Struct{data, typ, typeDef, unionIndex, unionValue, &ref.Ref{}}
+func newStructFromData(data structData, unionIndex uint32, unionValue Value, t *Type) Struct {
+	d.Chk.Equal(t.Kind(), StructKind)
+	return Struct{data, t, unionIndex, unionValue, &ref.Ref{}}
 }
 
-func NewStruct(typ, typeDef *Type, data structData) Struct {
+func NewStruct(t *Type, data structData) Struct {
 	newData := make(structData)
 	unionIndex := uint32(0)
 	var unionValue Value
 
-	desc := typeDef.Desc.(StructDesc)
+	desc := t.Desc.(StructDesc)
 	for _, f := range desc.Fields {
 		if v, ok := data[f.Name]; ok {
 			newData[f.Name] = v
@@ -45,7 +41,7 @@ func NewStruct(typ, typeDef *Type, data structData) Struct {
 			break
 		}
 	}
-	return newStructFromData(newData, unionIndex, unionValue, typ, typeDef)
+	return newStructFromData(newData, unionIndex, unionValue, t)
 }
 
 func (s Struct) Equals(other Value) bool {
@@ -93,7 +89,7 @@ func (s Struct) Type() *Type {
 }
 
 func (s Struct) desc() StructDesc {
-	return s.typeDef.Desc.(StructDesc)
+	return s.t.Desc.(StructDesc)
 }
 
 func (s Struct) hasUnion() bool {
@@ -145,7 +141,7 @@ func (s Struct) Set(n string, v Value) Struct {
 		unionValue = v
 	}
 
-	return newStructFromData(data, unionIndex, unionValue, s.t, s.typeDef)
+	return newStructFromData(data, unionIndex, unionValue, s.t)
 }
 
 func (s Struct) UnionIndex() uint32 {
@@ -170,9 +166,9 @@ func (s Struct) findField(n string) (Field, int32, bool) {
 	return Field{}, -1, false
 }
 
-func structBuilder(values []Value, typ, typeDef *Type) Value {
+func structBuilder(values []Value, t *Type) Value {
 	i := 0
-	desc := typeDef.Desc.(StructDesc)
+	desc := t.Desc.(StructDesc)
 	data := structData{}
 	unionIndex := uint32(0)
 	var unionValue Value
@@ -197,13 +193,14 @@ func structBuilder(values []Value, typ, typeDef *Type) Value {
 		i++
 	}
 
-	return newStructFromData(data, unionIndex, unionValue, typ, typeDef)
+	return newStructFromData(data, unionIndex, unionValue, t)
 }
 
-func structReader(s Struct, typ, typeDef *Type) []Value {
+func structReader(s Struct, t *Type) []Value {
+	d.Chk.Equal(t.Kind(), StructKind)
 	values := []Value{}
 
-	desc := typeDef.Desc.(StructDesc)
+	desc := t.Desc.(StructDesc)
 	for _, f := range desc.Fields {
 		v, ok := s.data[f.Name]
 		if f.Optional {

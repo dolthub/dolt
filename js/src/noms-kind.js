@@ -14,8 +14,7 @@ export const Kind: {
   Set: NomsKind,
   Struct: NomsKind,
   Type: NomsKind,
-  Unresolved: NomsKind,
-  Package: NomsKind,
+  BackRef: NomsKind,
 } = {
   Bool: 0,
   Number: 1,
@@ -28,8 +27,7 @@ export const Kind: {
   Set: 8,
   Struct: 9,
   Type: 10,
-  Unresolved: 11,
-  Package: 12,
+  BackRef: 11,
 };
 
 const kindToStringMap: { [key: number]: string } = Object.create(null);
@@ -44,10 +42,9 @@ kindToStringMap[Kind.Ref] = 'Ref';
 kindToStringMap[Kind.Set] = 'Set';
 kindToStringMap[Kind.Struct] = 'Struct';
 kindToStringMap[Kind.Type] = 'Type';
-kindToStringMap[Kind.Unresolved] = 'Unresolved';
-kindToStringMap[Kind.Package] = 'Package';
+kindToStringMap[Kind.BackRef] = 'BackRef';
 
-export function kindToString(kind: number): string {
+export function kindToString(kind: NomsKind): string {
   return kindToStringMap[kind];
 }
 
@@ -59,7 +56,6 @@ export function isPrimitiveKind(k: NomsKind): boolean {
     case Kind.Blob:
     case Kind.Value:
     case Kind.Type:
-    case Kind.Package:
       return true;
     default:
       return false;

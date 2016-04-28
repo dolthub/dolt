@@ -4,64 +4,63 @@ import (
 	"io"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
 // Parsed represents a parsed Noms type package, which has some additional metadata beyond that which is present in a types.Package.
-// UsingDeclarations is kind of a hack to indicate specializations of Noms containers that need to be generated. These should all be one of ListKind, SetKind, MapKind or RefKind, and Desc should be a CompoundDesc instance.
 type Parsed struct {
-	types.Package
-	Name              string
-	UsingDeclarations []*types.Type
-	AliasNames        map[ref.Ref]string
+	Filename   string
+	Types      []*types.Type
+	AliasNames map[string]string
 }
 
 // ParseNomDL reads a Noms package specification from r and returns a Package. Errors will be annotated with packageName and thrown.
-func ParseNomDL(packageName string, r io.Reader, includePath string, vrw types.ValueReadWriter) Parsed {
-	i := runParser(packageName, r)
-	i.Name = packageName
-	imports := resolveImports(i.Aliases, includePath, vrw)
-	deps := importsToDeps(imports)
+func ParseNomDL(filename string, r io.Reader, includePath string) []*types.Type {
+	i := runParser(filename, r)
+	i.Filename = filename
+	// name -> Parsed
+	imports := resolveImports(i.Aliases, includePath)
 
-	resolveLocalOrdinals(&i)
-	resolveNamespaces(&i, imports, getDeps(deps, vrw))
+	// Replace all variable references with the actual type.
+	resolveReferences(&i, imports)
 
-	// Transpose imports
-	aliasNames := map[ref.Ref]string{}
-	for k, v := range imports {
-		aliasNames[v] = k
-	}
-
-	pkg := types.NewPackage(i.Types, deps)
-
-	usingDeclarations := make([]*types.Type, len(i.UsingDeclarations))
-	for idx, t := range i.UsingDeclarations {
-		usingDeclarations[idx] = types.FixupType(t, &pkg)
-	}
-
-	return Parsed{
-		pkg,
-		i.Name,
-		usingDeclarations,
-		aliasNames,
-	}
+	return i.Types
 }
 
 type intermediate struct {
-	Name              string
-	Aliases           map[string]string
-	UsingDeclarations []*types.Type
-	Types             []*types.Type
+	Filename string
+	// Aliases maps from Name to Target, where target is the non resolved filename.
+	Aliases map[string]string
+	Types   []*types.Type
 }
 
-func runParser(logname string, r io.Reader) intermediate {
-	got, err := ParseReader(logname, r)
+func runParser(filename string, r io.Reader) intermediate {
+	got, err := ParseReader(filename, r)
 	d.Exp.NoError(err)
 	return got.(intermediate)
 }
 
-func resolveLocalOrdinals(p *intermediate) {
+func indexOf(t *types.Type, ts []*types.Type) int16 {
+	for i, tt := range ts {
+		if tt.Name() == t.Name() {
+			return int16(i)
+		}
+	}
+	return -1
+}
+
+func findType(n string, ts []*types.Type) *types.Type {
+	for _, t := range ts {
+		if n == t.Name() {
+			return t
+		}
+	}
+	d.Exp.Fail("Undefined reference %s", n)
+	return nil
+}
+
+// resolveReferences replaces references with the actual Type
+func resolveReferences(i *intermediate, aliases map[string][]*types.Type) {
 	var rec func(t *types.Type) *types.Type
 	resolveFields := func(fields []types.Field) {
 		for idx, f := range fields {
@@ -70,17 +69,15 @@ func resolveLocalOrdinals(p *intermediate) {
 		}
 	}
 	rec = func(t *types.Type) *types.Type {
-		if t.IsUnresolved() {
-			if t.Namespace() == "" && !t.HasOrdinal() {
-				ordinal := indexOf(t, p.Types)
-				d.Chk.True(ordinal >= 0 && int(ordinal) < len(p.Types), "Invalid reference: %s", t.Name())
-				return types.MakeType(ref.Ref{}, int16(ordinal))
-			}
-
-			return t
-		}
-
 		switch t.Kind() {
+		case UnresolvedKind:
+			desc := t.Desc.(UnresolvedDesc)
+			if desc.Namespace == "" {
+				return findType(desc.Name, i.Types)
+			}
+			ts, ok := aliases[desc.Namespace]
+			d.Exp.True(ok, "No such namespace: %s", desc.Namespace)
+			return findType(desc.Name, ts)
 		case types.ListKind:
 			return types.MakeListType(rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
 		case types.SetKind:
@@ -97,128 +94,7 @@ func resolveLocalOrdinals(p *intermediate) {
 		return t
 	}
 
-	for i, t := range p.Types {
-		p.Types[i] = rec(t)
+	for idx, t := range i.Types {
+		i.Types[idx] = rec(t)
 	}
-	for i, t := range p.UsingDeclarations {
-		p.UsingDeclarations[i] = rec(t)
-	}
-}
-
-func indexOf(t *types.Type, ts []*types.Type) int16 {
-	for i, tt := range ts {
-		if tt.Name() == t.Name() && tt.Namespace() == "" {
-			return int16(i)
-		}
-	}
-	return -1
-}
-
-func resolveNamespaces(p *intermediate, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) {
-	var rec func(t *types.Type) *types.Type
-	resolveFields := func(fields []types.Field) {
-		for idx, f := range fields {
-			if f.T.IsUnresolved() {
-				if p.checkLocal(f.T) {
-					continue
-				}
-				f.T = resolveNamespace(f.T, aliases, deps)
-			} else {
-				f.T = rec(f.T)
-			}
-
-			d.Chk.True(!f.T.IsUnresolved() || f.T.HasOrdinal())
-			fields[idx] = f
-		}
-	}
-	rec = func(t *types.Type) *types.Type {
-		if t.IsUnresolved() {
-			if p.checkLocal(t) {
-				return t
-			}
-			t = resolveNamespace(t, aliases, deps)
-		}
-		switch t.Kind() {
-		case types.UnresolvedKind:
-			d.Chk.True(t.HasPackageRef(), "should resolve again")
-		case types.ListKind:
-			return types.MakeListType(rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
-		case types.SetKind:
-			return types.MakeSetType(rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
-		case types.RefKind:
-			return types.MakeRefType(rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
-		case types.MapKind:
-			elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
-			return types.MakeMapType(rec(elemTypes[0]), rec(elemTypes[1]))
-		case types.StructKind:
-			resolveFields(t.Desc.(types.StructDesc).Fields)
-			resolveFields(t.Desc.(types.StructDesc).Union)
-		}
-
-		if t.IsUnresolved() {
-			return rec(t)
-		}
-
-		return t
-	}
-
-	for i, t := range p.Types {
-		p.Types[i] = rec(t)
-	}
-	for i, t := range p.UsingDeclarations {
-		p.UsingDeclarations[i] = rec(t)
-	}
-}
-
-func (i *intermediate) checkLocal(t *types.Type) bool {
-	if t.Namespace() == "" {
-		d.Chk.True(t.HasOrdinal(), "Invalid local reference")
-		return true
-	}
-	return false
-}
-
-func resolveNamespace(t *types.Type, aliases map[string]ref.Ref, deps map[ref.Ref]types.Package) *types.Type {
-	pkgRef, ok := aliases[t.Namespace()]
-	d.Exp.True(ok, "Could not find import aliased to %s", t.Namespace())
-	d.Chk.NotEqual("", t.Name())
-	ordinal := deps[pkgRef].GetOrdinal(t.Name())
-	d.Exp.NotEqual(int64(-1), ordinal, "Could not find type %s in package %s (aliased to %s).", t.Name(), pkgRef.String(), t.Namespace())
-	d.Chk.False(pkgRef.IsEmpty())
-	return types.MakeType(pkgRef, int16(ordinal))
-}
-
-// expandStruct takes a struct definition and expands the internal structs created for unions.
-func expandStruct(t *types.Type, ordinal int) []*types.Type {
-	d.Chk.Equal(types.StructKind, t.Kind())
-	ts := []*types.Type{t}
-	ordinal++
-
-	doFields := func(fields []types.Field) []types.Field {
-		rv := make([]types.Field, len(fields))
-		for i, f := range fields {
-			if f.T.Kind() == types.StructKind {
-				newType := expandStruct(f.T, ordinal)
-				ts = append(ts, newType...)
-				rv[i] = types.Field{Name: f.Name, T: types.MakeType(ref.Ref{}, int16(ordinal)), Optional: f.Optional}
-				ordinal += len(newType)
-			} else {
-				rv[i] = f
-			}
-		}
-		return rv
-	}
-
-	desc := t.Desc.(types.StructDesc)
-	fields := doFields(desc.Fields)
-
-	var choices []types.Field
-	if desc.Union != nil {
-		choices = doFields(desc.Union)
-	}
-
-	if len(ts) != 1 {
-		ts[0] = types.MakeStructType(t.Name(), fields, choices)
-	}
-	return ts
 }

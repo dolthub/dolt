@@ -22,13 +22,13 @@ b,2,false
 
 	headers := []string{"A", "B", "C"}
 	kinds := KindSlice{types.StringKind, types.NumberKind, types.BoolKind}
-	l, typeRef, typeDef := Read(r, "test", headers, kinds, ds)
+	l, typ := Read(r, "test", headers, kinds, ds)
 
 	assert.Equal(uint64(2), l.Len())
 
-	assert.True(typeRef.IsUnresolved())
+	assert.Equal(types.StructKind, typ.Kind())
 
-	desc, ok := typeDef.Desc.(types.StructDesc)
+	desc, ok := typ.Desc.(types.StructDesc)
 	assert.True(ok)
 	assert.Len(desc.Fields, 3)
 	assert.Equal("A", desc.Fields[0].Name)
@@ -53,13 +53,13 @@ func testTrailingHelper(t *testing.T, dataString string) {
 
 	headers := []string{"A", "B"}
 	kinds := KindSlice{types.StringKind, types.StringKind}
-	l, typeRef, typeDef := Read(r, "test", headers, kinds, ds)
+	l, typ := Read(r, "test", headers, kinds, ds)
 
 	assert.Equal(uint64(3), l.Len())
 
-	assert.True(typeRef.IsUnresolved())
+	assert.Equal(types.StructKind, typ.Kind())
 
-	desc, ok := typeDef.Desc.(types.StructDesc)
+	desc, ok := typ.Desc.(types.StructDesc)
 	assert.True(ok)
 	assert.Len(desc.Fields, 2)
 	assert.Equal("A", desc.Fields[0].Name)

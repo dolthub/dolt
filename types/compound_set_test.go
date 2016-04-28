@@ -5,7 +5,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -370,7 +369,7 @@ func TestCompoundSetFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := newTypedSet(setType, nums...)
-	assert.Equal(s.Ref().String(), "sha1-5b4cd51d88b3d99e6dafdb1cafb8cec90d5aecdf")
+	assert.Equal("sha1-5b4cd51d88b3d99e6dafdb1cafb8cec90d5aecdf", s.Ref().String())
 }
 
 func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
@@ -380,12 +379,9 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 
-	structTypeDef := MakeStructType("num", []Field{
+	structType := MakeStructType("num", []Field{
 		Field{"n", NumberType, false},
 	}, []Field{})
-	pkg := NewPackage([]*Type{structTypeDef}, []ref.Ref{})
-	pkgRef := RegisterPackage(&pkg)
-	structType := MakeType(pkgRef, 0)
 	refOfTypeStructType := MakeRefType(structType)
 
 	setType := MakeSetType(refOfTypeStructType)
@@ -393,7 +389,7 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 	firstNNumbers := func(n int) []Value {
 		nums := []Value{}
 		for i := 0; i < n; i++ {
-			r := vs.WriteValue(NewStruct(structType, structTypeDef, structData{"n": Number(i)}))
+			r := vs.WriteValue(NewStruct(structType, structData{"n": Number(i)}))
 			nums = append(nums, r)
 		}
 
@@ -402,7 +398,7 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := NewTypedSet(setType, nums...)
-	assert.Equal("sha1-4c2b0e159ae443ec99299b6ea266d9a408f7987d", s.Ref().String())
+	assert.Equal("sha1-b06811c4abafef5e2198c04a81d3a300a709fd02", s.Ref().String())
 }
 
 func TestCompoundSetModifyAfterRead(t *testing.T) {

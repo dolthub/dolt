@@ -1,18 +1,16 @@
 // @flow
 
 import type Ref from './ref.js';
-import {emptyRef} from './ref.js';
 import RefValue from './ref-value.js';
 import type {NomsKind} from './noms-kind.js';
 import {invariant} from './assert.js';
-import {isPrimitiveKind, Kind, kindToString} from './noms-kind.js';
+import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {ValueBase} from './value.js';
 
-export type TypeDesc = {
+export interface TypeDesc {
   kind: NomsKind;
-  equals: (other: TypeDesc) => boolean;
-  describe: () => string;
-};
+  equals(other: TypeDesc): boolean;
+}
 
 export class PrimitiveDesc {
   kind: NomsKind;
@@ -23,37 +21,6 @@ export class PrimitiveDesc {
 
   equals(other: TypeDesc): boolean {
     return other instanceof PrimitiveDesc && other.kind === this.kind;
-  }
-
-  describe(): string {
-    return kindToString(this.kind);
-  }
-}
-
-export class UnresolvedDesc {
-  _pkgRef: Ref;
-  _ordinal: number;
-
-  constructor(pkgRef: Ref, ordinal: number) {
-    this._pkgRef = pkgRef;
-    this._ordinal = ordinal;
-  }
-
-  get kind(): NomsKind {
-    return Kind.Unresolved;
-  }
-
-  equals(other: TypeDesc): boolean {
-    if (other.kind !== this.kind) {
-      return false;
-    }
-    invariant(other instanceof UnresolvedDesc);
-
-    return other._pkgRef.equals(this._pkgRef) && other._ordinal === this._ordinal;
-  }
-
-  describe(): string {
-    return `Unresolved(${this._pkgRef.toString()}, ${this._ordinal})`;
   }
 }
 
@@ -84,18 +51,15 @@ export class CompoundDesc {
 
     return false;
   }
-
-  describe(): string {
-    const elemsDesc = this.elemTypes.map(e => e.describe()).join(', ');
-    return `${kindToString(this.kind)}<${elemsDesc}>`;
-  }
 }
 
 export class StructDesc {
+  name: string;
   fields: Array<Field>;
   union: Array<Field>;
 
-  constructor(fields: Array<Field>, union: Array<Field>) {
+  constructor(name: string, fields: Array<Field>, union: Array<Field>) {
+    this.name = name;
     this.fields = fields;
     this.union = union;
   }
@@ -105,6 +69,10 @@ export class StructDesc {
   }
 
   equals(other: TypeDesc): boolean {
+    if (this === other) {
+      return true;
+    }
+
     if (other.kind !== this.kind) {
       return false;
     }
@@ -128,24 +96,6 @@ export class StructDesc {
 
     return true;
   }
-
-  describe(): string {
-    let out = '{\n';
-    this.fields.forEach(f => {
-      const optional = f.optional ? 'optional ' : '';
-      out += `  ${f.name}: ${optional}${f.t.describe()}\n`;
-    });
-
-    if (this.union.length > 0) {
-      out += '  union {\n';
-      this.union.forEach(f => {
-        out += `    ${f.name}: ${f.t.describe()}\n`;
-      });
-      out += '  }\n';
-    }
-
-    return out + '}';
-  }
 }
 
 export class Field {
@@ -166,15 +116,11 @@ export class Field {
 }
 
 export class Type extends ValueBase {
-  _namespace: string;
-  _name: string;
   _desc: TypeDesc;
   _ref: ?Ref;
 
-  constructor(name: string = '', namespace: string = '', desc: TypeDesc) {
+  constructor(desc: TypeDesc) {
     super();
-    this._name = name;
-    this._namespace = namespace;
     this._desc = desc;
   }
 
@@ -183,21 +129,7 @@ export class Type extends ValueBase {
   }
 
   get chunks(): Array<RefValue> {
-    const chunks = [];
-    if (this.unresolved) {
-      if (this.hasPackageRef) {
-        chunks.push(new RefValue(this.packageRef, packageType));
-      }
-
-      return chunks;
-    }
-
-    const desc = this._desc;
-    if (desc instanceof CompoundDesc) {
-      desc.elemTypes.forEach(et => chunks.push(...et.chunks()));
-    }
-
-    return chunks;
+    return [];
   }
 
   get kind(): NomsKind {
@@ -219,98 +151,23 @@ export class Type extends ValueBase {
     return this._desc;
   }
 
-  get unresolved(): boolean {
-    return this._desc instanceof UnresolvedDesc;
-  }
-
-  get hasPackageRef(): boolean {
-    return this.unresolved && !this.packageRef.isEmpty();
-  }
-
-  get packageRef(): Ref {
-    invariant(this._desc instanceof UnresolvedDesc);
-    return this._desc._pkgRef;
-  }
-
-  get ordinal(): number {
-    invariant(this._desc instanceof UnresolvedDesc);
-    return this._desc._ordinal;
-  }
-
   get name(): string {
-    return this._name;
-  }
-
-  get namespace(): string {
-    return this._namespace;
-  }
-
-  get namespacedName(): string {
-    let out = '';
-
-    if (this._namespace !== '') {
-      out = this._namespace + '.';
-    }
-    if (this._name !== '') {
-      out += this._name;
-    }
-
-    return out;
+    invariant(this._desc instanceof StructDesc);
+    return this._desc.name;
   }
 
   get elemTypes(): Array<Type> {
     invariant(this._desc instanceof CompoundDesc);
     return this._desc.elemTypes;
   }
-
-  describe(): string {
-    let out = '';
-    switch (this.kind) {
-      case Kind.Struct:
-        out += 'struct ';
-        break;
-    }
-    if (this.name) {
-      invariant(!this.namespace || (this.namespace && this.name));
-      if (this.namespace) {
-        out += this.namespace + '.';
-      }
-      if (this.name) {
-        out += this.name;
-      }
-      out += ' ';
-
-      if (this.unresolved) {
-        return out;
-      }
-    }
-
-    out += this.desc.describe();
-    return out;
-  }
 }
 
-function buildType(n: string, desc: TypeDesc): Type {
-  if (isPrimitiveKind(desc.kind)) {
-    return new Type(n, '', desc);
-  }
-
-  switch (desc.kind) {
-    case Kind.List:
-    case Kind.Ref:
-    case Kind.Set:
-    case Kind.Map:
-    case Kind.Struct:
-    case Kind.Unresolved:
-      return new Type(n, '', desc);
-
-    default:
-      throw new Error('Unrecognized Kind: ' + desc.kind);
-  }
+function buildType(desc: TypeDesc): Type {
+  return new Type(desc);
 }
 
 function makePrimitiveType(k: NomsKind): Type {
-  return buildType('', new PrimitiveDesc(k));
+  return buildType(new PrimitiveDesc(k));
 }
 
 export function makeCompoundType(k: NomsKind, ...elemTypes: Array<Type>): Type {
@@ -322,35 +179,27 @@ export function makeCompoundType(k: NomsKind, ...elemTypes: Array<Type>): Type {
     invariant(elemTypes.length === 2, 'Map requires 2 element types');
   }
 
-  return buildType('', new CompoundDesc(k, elemTypes));
+  return buildType(new CompoundDesc(k, elemTypes));
 }
 
 export function makeListType(elemType: Type): Type {
-  return buildType('', new CompoundDesc(Kind.List, [elemType]));
+  return buildType(new CompoundDesc(Kind.List, [elemType]));
 }
 
 export function makeSetType(elemType: Type): Type {
-  return buildType('', new CompoundDesc(Kind.Set, [elemType]));
+  return buildType(new CompoundDesc(Kind.Set, [elemType]));
 }
 
 export function makeMapType(keyType: Type, valueType: Type): Type {
-  return buildType('', new CompoundDesc(Kind.Map, [keyType, valueType]));
+  return buildType(new CompoundDesc(Kind.Map, [keyType, valueType]));
 }
 
 export function makeRefType(elemType: Type): Type {
-  return buildType('', new CompoundDesc(Kind.Ref, [elemType]));
+  return buildType(new CompoundDesc(Kind.Ref, [elemType]));
 }
 
 export function makeStructType(name: string, fields: Array<Field>, choices: Array<Field>): Type {
-  return buildType(name, new StructDesc(fields, choices));
-}
-
-export function makeType(pkgRef: Ref, ordinal: number): Type {
-  return new Type('', '', new UnresolvedDesc(pkgRef, ordinal));
-}
-
-export function makeUnresolvedType(namespace: string, name: string): Type {
-  return new Type(name, namespace, new UnresolvedDesc(emptyRef, -1));
+  return buildType(new StructDesc(name, fields, choices));
 }
 
 export const boolType = makePrimitiveType(Kind.Bool);
@@ -358,14 +207,12 @@ export const numberType = makePrimitiveType(Kind.Number);
 export const stringType = makePrimitiveType(Kind.String);
 export const blobType = makePrimitiveType(Kind.Blob);
 export const typeType = makePrimitiveType(Kind.Type);
-export const packageType = makePrimitiveType(Kind.Package);
 export const valueType = makePrimitiveType(Kind.Value);
+
 export const refOfValueType = makeCompoundType(Kind.Ref, valueType);
 export const listOfValueType = makeCompoundType(Kind.List, valueType);
 export const setOfValueType = makeCompoundType(Kind.Set, valueType);
 export const mapOfValueType = makeCompoundType(Kind.Map, valueType, valueType);
-
-export const packageRefType = makeCompoundType(Kind.Ref, packageType);
 
 /**
  * Gives the existing primitive Type value for a NomsKind.
@@ -383,11 +230,44 @@ export function getPrimitiveType(k: NomsKind): Type {
       return blobType;
     case Kind.Type:
       return typeType;
-    case Kind.Package:
-      return packageType;
     case Kind.Value:
       return valueType;
     default:
       invariant(false, 'not reachable');
+  }
+}
+
+export function getTypeOfValue(v: any): Type {
+  switch (typeof v) {
+    case 'object':
+      return v.type;
+    case 'string':
+      return stringType;
+    case 'boolean':
+      return boolType;
+    case 'number':
+      throw new Error('Encoding untagged numbers is not supported');
+    default:
+      throw new Error('Unknown type');
+  }
+}
+
+export class BackRefDesc {
+  value: number;
+
+  constructor(value: number) {
+    this.value = value;
+  }
+
+  get kind(): NomsKind {
+    return Kind.BackRef;
+  }
+
+  equals(other: TypeDesc): boolean {
+    return other instanceof BackRefDesc && other.value === this.value;
+  }
+
+  describe(): string {
+    return `BackRef<${this.value}>`;
   }
 }

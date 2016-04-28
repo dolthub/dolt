@@ -14,15 +14,7 @@ func ValueToListAndElemDesc(v types.Value, vr types.ValueReader) (types.List, ty
 	d.Exp.Equal(types.ListKind, v.Type().Kind(),
 		"Dataset must be List<>, found: %s", v.Type().Describe())
 
-	u := v.Type().Desc.(types.CompoundDesc).ElemTypes[0]
-	d.Exp.Equal(types.UnresolvedKind, u.Kind(),
-		"List<> must be UnresolvedKind, found: %s", u.Describe())
-
-	pkg := types.ReadPackage(u.PackageRef(), vr)
-	d.Exp.Equal(types.PackageKind, pkg.Type().Kind(),
-		"Failed to read package: %s", pkg.Type().Describe())
-
-	t := pkg.Types()[u.Ordinal()]
+	t := v.Type().Desc.(types.CompoundDesc).ElemTypes[0]
 	d.Exp.Equal(types.StructKind, t.Kind(), "Did not find Struct: %s", t.Describe())
 	return v.(types.List), t.Desc.(types.StructDesc)
 }

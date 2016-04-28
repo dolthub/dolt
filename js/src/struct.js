@@ -36,22 +36,18 @@ type StructData = {[key: string]: ?valueOrPrimitive};
 export default class Struct extends ValueBase {
   _data: StructData;
   _type: Type;
-  _typeDef: Type;
 
-
-  constructor(type: Type, typeDef: Type, data: StructData) {
+  constructor(type: Type, data: StructData) {
     super();
 
-    invariant(type.kind === Kind.Unresolved);
-    invariant(typeDef.kind === Kind.Struct);
+    invariant(type.kind === Kind.Struct);
 
     // TODO: Even in dev mode there are paths where the passed in data has already been validated.
     if (process.env.NODE_ENV !== 'production') {
-      validate(typeDef, data);
+      validate(type, data);
     }
 
     this._type = type;
-    this._typeDef = typeDef;
     this._data = data;
   }
 
@@ -62,7 +58,6 @@ export default class Struct extends ValueBase {
   get chunks(): Array<RefValue> {
     const mirror = new StructMirror(this);
     const chunks = [];
-    chunks.push(...this.type.chunks);
 
     const add = field => {
       if (!field.present) {
@@ -83,9 +78,9 @@ export default class Struct extends ValueBase {
   }
 }
 
-function validate(typeDef: Type, data: StructData): void {
+function validate(type: Type, data: StructData): void {
   // TODO: Validate field values match field types.
-  const {desc} = typeDef;
+  const {desc} = type;
   invariant(desc instanceof StructDesc);
   const {fields} = desc;
   let dataCount = Object.keys(data).length;
@@ -159,18 +154,16 @@ type FieldCallback = (f: StructFieldMirror) => void;
 
 export class StructMirror<T: Struct> {
   _data: StructData;
-  _type :Type;
-  typeDef: Type;
+  type :Type;
 
   constructor(s: Struct) {
     this._data = s._data;
-    this._type = s.type;
-    this.typeDef = s._typeDef;
+    this.type = s.type;
   }
 
   get desc(): StructDesc {
-    invariant(this.typeDef.desc instanceof StructDesc);
-    return this.typeDef.desc;
+    invariant(this.type.desc instanceof StructDesc);
+    return this.type.desc;
   }
 
   forEachField(cb: FieldCallback) {
@@ -195,7 +188,7 @@ export class StructMirror<T: Struct> {
   }
 
   get name(): string {
-    return this.typeDef.name;
+    return this.type.name;
   }
 
   get(name: string): ?valueOrPrimitive {
@@ -208,7 +201,7 @@ export class StructMirror<T: Struct> {
 
   set(name: string, value: ?valueOrPrimitive): T {
     const data = addProperty(this, name, value);
-    return newStruct(this._type, this.typeDef, data);
+    return newStruct(this.type, data);
   }
 }
 
@@ -218,7 +211,7 @@ function setterName(name) {
   return `set${name[0].toUpperCase()}${name.slice(1)}`;
 }
 
-export function createStructClass<T: Struct>(type: Type, typeDef: Type): Class<T> {
+export function createStructClass<T: Struct>(type: Type): Class<T> {
   const k = type.ref.toString();
   if (cache[k]) {
     return cache[k];
@@ -226,11 +219,11 @@ export function createStructClass<T: Struct>(type: Type, typeDef: Type): Class<T
 
   const c: any = class extends Struct {
     constructor(data: StructData) {
-      super(type, typeDef, data);
+      super(type, data);
     }
   };
 
-  const {desc} = typeDef;
+  const {desc} = type;
   invariant(desc instanceof StructDesc);
 
   for (const fields of [desc.fields, desc.union]) {
@@ -316,7 +309,7 @@ function addProperty(mirror: StructMirror, name: string, value: ?valueOrPrimitiv
   return data;
 }
 
-export function newStruct<T: Struct>(type: Type, typeDef: Type, data: StructData): T {
-  const c = createStructClass(type, typeDef);
+export function newStruct<T: Struct>(type: Type, data: StructData): T {
+  const c = createStructClass(type);
   return new c(data);
 }

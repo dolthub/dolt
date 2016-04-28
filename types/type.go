@@ -6,8 +6,6 @@ import (
 )
 
 // Type defines and describes Noms types, both custom and built-in.
-// StructKind types, and possibly others if we do type aliases, will have a Name(). Named types are
-//    'exported' in that they can be addressed from other type packages.
 // Desc provides more details of the type. It may contain only a types.NomsKind, in the case of
 //     primitives, or it may contain additional information -- e.g. element Types for compound type
 //     specializations, field descriptions for structs, etc. Either way, checking Kind() allows code
@@ -15,40 +13,10 @@ import (
 // If Kind() refers to a primitive, then Desc has no more info.
 // If Kind() refers to List, Map, Set or Ref, then Desc is a list of Types describing the element type(s).
 // If Kind() refers to Struct, then Desc contains a []Field and Choices.
-// If Kind() refers to an UnresolvedKind, then Desc contains a PackageRef, which is the Ref of the
-//     package where the type definition is defined. The ordinal, if not -1, is the index into the
-//     Types list of the package. If the Name is set then the ordinal needs to be found.
 
 type Type struct {
-	name name
 	Desc TypeDesc
-
-	ref *ref.Ref
-}
-
-type name struct {
-	namespace, name string
-}
-
-func (n name) compose() (out string) {
-	d.Chk.True(n.namespace == "" || (n.namespace != "" && n.name != ""), "If a Type's namespace is set, so must name be.")
-	if n.namespace != "" {
-		out = n.namespace + "."
-	}
-	if n.name != "" {
-		out += n.name
-	}
-	return
-}
-
-// IsUnresolved returns true if t doesn't contain description information. The caller should look the type up by Ordinal in the Types of the appropriate Package.
-func (t *Type) IsUnresolved() bool {
-	_, ok := t.Desc.(UnresolvedDesc)
-	return ok
-}
-
-func (t *Type) HasPackageRef() bool {
-	return t.IsUnresolved() && !t.PackageRef().IsEmpty()
+	ref  *ref.Ref
 }
 
 // Describe generate text that should parse into the struct being described.
@@ -69,27 +37,10 @@ func (t *Type) IsOrdered() bool {
 	}
 }
 
-func (t *Type) PackageRef() ref.Ref {
-	desc, ok := t.Desc.(UnresolvedDesc)
-	d.Chk.True(ok, "PackageRef only works on unresolved types")
-	return desc.pkgRef
-}
-
-func (t *Type) Ordinal() int16 {
-	d.Chk.True(t.HasOrdinal(), "Ordinal has not been set")
-	return t.Desc.(UnresolvedDesc).ordinal
-}
-
-func (t *Type) HasOrdinal() bool {
-	return t.IsUnresolved() && t.Desc.(UnresolvedDesc).ordinal >= 0
-}
-
 func (t *Type) Name() string {
-	return t.name.name
-}
-
-func (t *Type) Namespace() string {
-	return t.name.namespace
+	// TODO: Remove from Type
+	d.Chk.IsType(StructDesc{}, t.Desc, "Name only works on Struct types")
+	return t.Desc.(StructDesc).Name
 }
 
 func (t *Type) Ref() ref.Ref {
@@ -101,44 +52,26 @@ func (t *Type) Equals(other Value) (res bool) {
 }
 
 func (t *Type) Chunks() (chunks []Ref) {
-	if t.IsUnresolved() {
-		if t.HasPackageRef() {
-			chunks = append(chunks, NewTypedRef(MakeRefType(typeForPackage), t.PackageRef()))
-		}
-		return
-	}
-	if desc, ok := t.Desc.(CompoundDesc); ok {
-		for _, t := range desc.ElemTypes {
-			chunks = append(chunks, t.Chunks()...)
-		}
-	}
 	return
 }
 
 func (t *Type) ChildValues() (res []Value) {
-	if t.HasPackageRef() {
-		res = append(res, NewTypedRef(typeForRefOfPackage, t.PackageRef()))
-	}
-	if !t.IsUnresolved() {
-		switch desc := t.Desc.(type) {
-		case CompoundDesc:
-			for _, t := range desc.ElemTypes {
-				res = append(res, t)
-			}
-		case StructDesc:
-			for _, t := range desc.Fields {
-				res = append(res, t.T)
-			}
-			for _, t := range desc.Union {
-				res = append(res, t.T)
-			}
-		case UnresolvedDesc:
-			// Nothing, this is handled by the HasPackageRef() check above
-		case PrimitiveDesc:
-			// Nothing, these have no child values
-		default:
-			d.Chk.Fail("Unexpected type desc implementation: %#v", t)
+	switch desc := t.Desc.(type) {
+	case CompoundDesc:
+		for _, t := range desc.ElemTypes {
+			res = append(res, t)
 		}
+	case StructDesc:
+		for _, t := range desc.Fields {
+			res = append(res, t.T)
+		}
+		for _, t := range desc.Union {
+			res = append(res, t.T)
+		}
+	case PrimitiveDesc:
+		// Nothing, these have no child values
+	default:
+		d.Chk.Fail("Unexpected type desc implementation: %#v", t)
 	}
 	return
 }
@@ -163,15 +96,13 @@ func MakePrimitiveType(k NomsKind) *Type {
 		return ValueType
 	case TypeKind:
 		return TypeType
-	case PackageKind:
-		return PackageType
 	}
 	d.Chk.Fail("invalid NomsKind: %d", k)
 	return nil
 }
 
 func makePrimitiveType(k NomsKind) *Type {
-	return buildType("", PrimitiveDesc(k))
+	return buildType(PrimitiveDesc(k))
 }
 
 func MakePrimitiveTypeByString(p string) *Type {
@@ -188,8 +119,6 @@ func MakePrimitiveTypeByString(p string) *Type {
 		return ValueType
 	case "Type":
 		return TypeType
-	case "Package":
-		return PackageType
 	}
 	d.Chk.Fail("invalid type string: %s", p)
 	return nil
@@ -203,55 +132,41 @@ func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 		d.Chk.Equal(MapKind, kind)
 		d.Chk.Len(elemTypes, 2, "MapKind requires 2 element types.")
 	}
-	return buildType("", CompoundDesc{kind, elemTypes})
+	return buildType(CompoundDesc{kind, elemTypes})
 }
 
 func MakeStructType(name string, fields []Field, choices []Field) *Type {
-	return buildType(name, StructDesc{fields, choices})
-}
-
-func MakeType(pkgRef ref.Ref, ordinal int16) *Type {
-	d.Chk.True(ordinal >= 0)
-	return &Type{Desc: UnresolvedDesc{pkgRef, ordinal}, ref: &ref.Ref{}}
-}
-
-func MakeUnresolvedType(namespace, n string) *Type {
-	return &Type{name: name{namespace, n}, Desc: UnresolvedDesc{ordinal: -1}, ref: &ref.Ref{}}
+	return buildType(StructDesc{name, fields, choices})
 }
 
 func MakeListType(elemType *Type) *Type {
-	return buildType("", CompoundDesc{ListKind, []*Type{elemType}})
+	return buildType(CompoundDesc{ListKind, []*Type{elemType}})
 }
 
 func MakeSetType(elemType *Type) *Type {
-	return buildType("", CompoundDesc{SetKind, []*Type{elemType}})
+	return buildType(CompoundDesc{SetKind, []*Type{elemType}})
 }
 
 func MakeMapType(keyType, valType *Type) *Type {
-	return buildType("", CompoundDesc{MapKind, []*Type{keyType, valType}})
+	return buildType(CompoundDesc{MapKind, []*Type{keyType, valType}})
 }
 
 func MakeRefType(elemType *Type) *Type {
-	return buildType("", CompoundDesc{RefKind, []*Type{elemType}})
+	return buildType(CompoundDesc{RefKind, []*Type{elemType}})
 }
 
-func buildType(n string, desc TypeDesc) *Type {
-	if IsPrimitiveKind(desc.Kind()) {
-		return &Type{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
-	}
-	switch desc.Kind() {
-	case ListKind, RefKind, SetKind, MapKind, StructKind, UnresolvedKind:
-		return &Type{name: name{name: n}, Desc: desc, ref: &ref.Ref{}}
-	default:
-		d.Exp.Fail("Unrecognized Kind:", "%v", desc.Kind())
-		panic("unreachable")
-	}
+func MakeBackRef(n uint8) *Type {
+	return buildType(BackRefDesc(n))
+}
+
+func buildType(desc TypeDesc) *Type {
+	return &Type{Desc: desc, ref: &ref.Ref{}}
 }
 
 var NumberType = makePrimitiveType(NumberKind)
 var BoolType = makePrimitiveType(BoolKind)
 var StringType = makePrimitiveType(StringKind)
 var BlobType = makePrimitiveType(BlobKind)
-var PackageType = makePrimitiveType(PackageKind)
 var TypeType = makePrimitiveType(TypeKind)
 var ValueType = makePrimitiveType(ValueKind)
+var BackRefType = makePrimitiveType(BackRefKind)

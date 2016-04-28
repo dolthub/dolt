@@ -1,4 +1,0 @@
-struct S {
-  s: String
-  b: Bool
-}
