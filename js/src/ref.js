@@ -1,8 +1,7 @@
 // @flow
 
-import Rusha from 'rusha';
+import {hex} from './sha1.js';
 
-const r = new Rusha();
 export const sha1Size = 20;
 const pattern = /^(sha1-[0-9a-f]{40})$/;
 
@@ -83,7 +82,7 @@ export default class Ref {
   }
 
   static fromData(data: Uint8Array): Ref {
-    return new Ref(sha1Prefix + r.digest(data));
+    return new Ref(sha1Prefix + hex(data));
   }
 }
 

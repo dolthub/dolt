@@ -1,6 +1,6 @@
 // @flow
 
-// This is the browser version. The Node,js version is in ../utf8.js.
+// This is the browser version. The Node.js version is in ../utf8.js.
 
 import {TextEncoder, TextDecoder} from './text-encoding.js';
 
