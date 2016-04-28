@@ -13,7 +13,7 @@ On a command-line:
 ```sh
 mkdir noms-tour
 cd noms-tour
-echo '{"name":"noms-tour","version:0.0.1"}' > package.json
+echo '{"name":"noms-tour","version":"0.0.1"}' > package.json
 npm install @attic/noms
 ```
 
