@@ -2,7 +2,7 @@
 
 import Chunk from './chunk.js';
 import Ref from './ref.js';
-import RefValue from './ref-value.js';
+import {default as RefValue, refValueFromValue} from './ref-value.js';
 import {newStruct} from './struct.js';
 import type {ChunkStore} from './chunk-store.js';
 import type {NomsMap} from './map.js';
@@ -95,10 +95,12 @@ export default class DataStore {
     });
   }
 
+  headRef(datasetID: string): Promise<?RefValue<Commit>> {
+    return this._datasets.then(datasets => datasets.get(datasetID));
+  }
+
   head(datasetID: string): Promise<?Commit> {
-    return this._datasets.then(
-      datasets => datasets.get(datasetID).then(commitRef =>
-          commitRef ? this.readValue(commitRef.targetRef) : null));
+    return this.headRef(datasetID).then(hr => hr ? this.readValue(hr.targetRef) : null);
   }
 
   datasets(): Promise<NomsMap<string, RefValue<Commit>>> {
@@ -138,7 +140,7 @@ export default class DataStore {
     const chunk = encodeNomsValue(v, t, this);
     invariant(!chunk.isEmpty());
     const {ref} = chunk;
-    const refValue = new RefValue(ref, makeRefType(t));
+    const refValue = refValueFromValue(v);
     const entry = this._valueCache.entry(ref);
     if (entry && entry.present) {
       return refValue;
@@ -187,10 +189,10 @@ async function getAncestors(commits: NomsSet<RefValue<Commit>>, store: DataStore
   return ancestors;
 }
 
-export function newCommit(value: valueOrPrimitive, parents: Array<Ref> = []): Promise<Commit> {
+export function newCommit(value: valueOrPrimitive,
+                          parentsArr: Array<RefValue<Commit>> = []): Promise<Commit> {
   const types = getDatasTypes();
-  const parentRefs = parents.map(r => new RefValue(r, types.refOfCommitType));
-  return newSet(parentRefs, types.commitSetType).then(parents =>
+  return newSet(parentsArr, types.commitSetType).then(parents =>
       newStruct(types.commitType, {value, parents}));
 }
 

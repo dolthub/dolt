@@ -2,13 +2,18 @@
 
 import type DataStore from './data-store.js';
 import {describeType} from './encode-human-readable.js';
+import {getRefOfValue} from './get-ref.js';
 import {Kind} from './noms-kind.js';
 import type Ref from './ref.js';
 import type {Type} from './type.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant} from './assert.js';
-import {refOfValueType} from './type.js';
+import {getTypeOfValue, makeRefType, refOfValueType} from './type.js';
 import {Value} from './value.js';
+
+export function refValueFromValue(val: valueOrPrimitive): RefValue {
+  return new RefValue(getRefOfValue(val), makeRefType(getTypeOfValue(val)));
+}
 
 export default class RefValue<T: valueOrPrimitive> extends Value {
   _type: Type;

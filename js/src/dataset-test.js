@@ -20,12 +20,13 @@ suite('Dataset', () => {
     assert.isNull(await ds.head());
 
     // The new dataset has |a|.
+    const aRef = notNull(await ds2.headRef());
     const aCommit = notNull(await ds2.head());
     assert.strictEqual('a', aCommit.value);
     ds = ds2;
 
     // |a| <- |b|
-    ds = await ds.commit('b', [aCommit.ref]);
+    ds = await ds.commit('b', [aRef]);
     assert.strictEqual('b', notNull(await ds.head()).value);
 
     // |a| <- |b|
@@ -33,7 +34,7 @@ suite('Dataset', () => {
     // Should be disallowed.
     let ex;
     try {
-      await ds.commit('c', [aCommit.ref]);
+      await ds.commit('c', [aRef]);
     } catch (e) {
       ex = e;
     }

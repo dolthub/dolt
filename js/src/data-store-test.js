@@ -42,13 +42,17 @@ suite('DataStore', () => {
     assert.isNull(await ds.head(datasetID));
 
     // The new datastore has |a|.
+    const aRef = notNull(await ds2.headRef(datasetID));
+    assert.isTrue(aCommit.ref.equals(aRef.targetRef));
     const aCommit1 = notNull(await ds2.head(datasetID));
     assert.strictEqual('a', aCommit1.value);
     ds = ds2;
 
     // |a| <- |b|
-    const bCommit = await newCommit('b', [aCommit.ref]);
+    const bCommit = await newCommit('b', [aRef]);
     ds = await ds.commit(datasetID, bCommit);
+    const bRef = notNull(await ds.headRef(datasetID));
+    assert.isTrue(bCommit.ref.equals(bRef.targetRef));
     assert.strictEqual('b', notNull(await ds.head(datasetID)).value);
 
     // |a| <- |b|
@@ -66,8 +70,10 @@ suite('DataStore', () => {
     assert.strictEqual('b', notNull(await ds.head(datasetID)).value);
 
     // |a| <- |b| <- |d|
-    const dCommit = await newCommit('d', [bCommit.ref]);
+    const dCommit = await newCommit('d', [bRef]);
     ds = await ds.commit(datasetID, dCommit);
+    const dRef = notNull(await ds.headRef(datasetID));
+    assert.isTrue(dCommit.ref.equals(dRef.targetRef));
     assert.strictEqual('d', notNull(await ds.head(datasetID)).value);
 
     // Attempt to recommit |b| with |a| as parent.
@@ -99,8 +105,10 @@ suite('DataStore', () => {
     // |a|
     const aCommit = await newCommit('a');
     ds = await ds.commit(datasetID, aCommit);
-    const bCommit = await newCommit('b', [aCommit.ref]);
+    const aRef = notNull(await ds.headRef(datasetID));
+    const bCommit = await newCommit('b', [aRef]);
     ds = await ds.commit(datasetID, bCommit);
+    const bRef = notNull(await ds.headRef(datasetID));
     assert.strictEqual('b', notNull(await ds.head(datasetID)).value);
 
     // Important to create this here.
@@ -108,14 +116,14 @@ suite('DataStore', () => {
 
     // Change 1:
     // |a| <- |b| <- |c|
-    const cCommit = await newCommit('c', [bCommit.ref]);
+    const cCommit = await newCommit('c', [bRef]);
     ds = await ds.commit(datasetID, cCommit);
     assert.strictEqual('c', notNull(await ds.head(datasetID)).value);
 
     // Change 2:
     // |a| <- |b| <- |e|
     // Should be disallowed, DataStore returned by Commit() should have |c| as Head.
-    const eCommit = await newCommit('e', [bCommit.ref]);
+    const eCommit = await newCommit('e', [bRef]);
     let message = '';
     try {
       ds2 = await ds2.commit(datasetID, eCommit);
