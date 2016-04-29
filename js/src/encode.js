@@ -118,7 +118,7 @@ export class JsonArrayWriter {
     switch (t.kind) {
       case Kind.Blob: {
         invariant(v instanceof NomsBlob || v instanceof Sequence,
-                  `Failed to write Blob. Invalid type: ${describeTypeOfValue(v)}`);
+                  () => `Failed to write Blob. Invalid type: ${describeTypeOfValue(v)}`);
         const sequence: Sequence = v instanceof NomsBlob ? v.sequence : v;
 
         if (this.maybeWriteMetaSequence(sequence, t)) {
@@ -131,22 +131,22 @@ export class JsonArrayWriter {
       }
       case Kind.Bool:
         invariant(typeof v === 'boolean',
-                  `Failed to write Bool. Invalid type: ${describeTypeOfValue(v)}`);
+                  () => `Failed to write Bool. Invalid type: ${describeTypeOfValue(v)}`);
         this.write(v);
         break;
       case Kind.String:
         invariant(typeof v === 'string',
-                  `Failed to write String. Invalid type: ${describeTypeOfValue(v)}`);
+                  () => `Failed to write String. Invalid type: ${describeTypeOfValue(v)}`);
         this.write(v);
         break;
       case Kind.Number:
         invariant(typeof v === 'number',
-                `Failed to write Number. Invalid type: ${describeTypeOfValue(v)}`);
+                  () => `Failed to write Number. Invalid type: ${describeTypeOfValue(v)}`);
         this.writeFloat(v);
         break;
       case Kind.List: {
         invariant(v instanceof NomsList || v instanceof Sequence,
-                  `Failed to write List. Invalid type: ${describeTypeOfValue(v)}`);
+                  () => `Failed to write List. Invalid type: ${describeTypeOfValue(v)}`);
         const sequence: Sequence = v instanceof NomsList ? v.sequence : v;
 
         if (this.maybeWriteMetaSequence(sequence, t)) {
@@ -162,7 +162,7 @@ export class JsonArrayWriter {
       }
       case Kind.Map: {
         invariant(v instanceof NomsMap || v instanceof Sequence,
-                  `Failed to write Map. Invalid type: ${describeTypeOfValue(v)}`);
+                  () => `Failed to write Map. Invalid type: ${describeTypeOfValue(v)}`);
         const sequence: Sequence = v instanceof NomsMap ? v.sequence : v;
 
         if (this.maybeWriteMetaSequence(sequence, t)) {
@@ -182,13 +182,13 @@ export class JsonArrayWriter {
       }
       case Kind.Ref: {
         invariant(v instanceof RefValue,
-                  `Failed to write Ref. Invalid type: ${describeTypeOfValue(v)}`);
+                  () => `Failed to write Ref. Invalid type: ${describeTypeOfValue(v)}`);
         this.writeRef(v.targetRef);
         break;
       }
       case Kind.Set: {
         invariant(v instanceof NomsSet || v instanceof Sequence,
-                  `Failed to write Set. Invalid type: ${describeTypeOfValue(v)}`);
+                  () => `Failed to write Set. Invalid type: ${describeTypeOfValue(v)}`);
         const sequence: Sequence = v instanceof NomsSet ? v.sequence : v;
 
         if (this.maybeWriteMetaSequence(sequence, t)) {
@@ -208,7 +208,7 @@ export class JsonArrayWriter {
       }
       case Kind.Type: {
         invariant(v instanceof Type,
-                  `Failed to write Type. Invalid type: ${describeTypeOfValue(v)}`);
+                  () => `Failed to write Type. Invalid type: ${describeTypeOfValue(v)}`);
         this.writeTypeAsValue(v, []);
         break;
       }
@@ -220,7 +220,7 @@ export class JsonArrayWriter {
       }
       case Kind.Struct:
         invariant(v instanceof Struct,
-                  `Failed to write Struct. Invalid type: ${describeTypeOfValue(v)}`);
+                  () => `Failed to write Struct. Invalid type: ${describeTypeOfValue(v)}`);
         this.writeStruct(v);
         break;
       default:
