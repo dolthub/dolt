@@ -3,10 +3,8 @@
 import argv from 'yargs';
 import {
   Dataset,
-  DataStore,
-  HttpStore,
+  DatasetSpec,
 } from '@attic/noms';
-
 
 const args = argv
   .usage('Usage: $0 <dataset>')
@@ -14,24 +12,21 @@ const args = argv
   .demand(1)
   .argv;
 
-
 main().catch(ex => {
   console.error(ex.stack);
   process.exit(1);
 });
 
-
 async function main(): Promise<void> {
-  const [datastoreSpec, datasetName] = parseArgs();
-  if (!datastoreSpec) {
+  const spec = DatasetSpec.parse(args._[0]);
+  if (!spec) {
+    process.stderr.write('invalid dataset spec');
     process.exit(1);
     return;
   }
 
-  const store = new DataStore(new HttpStore(datastoreSpec));
-  let ds = new Dataset(store, datasetName);
-
-  ds = await increment(ds);
+  const ds = spec.set();
+  await increment(ds);
 }
 
 async function increment(ds: Dataset): Promise<Dataset> {
@@ -46,20 +41,4 @@ async function increment(ds: Dataset): Promise<Dataset> {
 
   process.stdout.write(`\nincrementing counter to ${ newVal }\n`);
   return ds.commit(newVal);
-}
-
-function parseArgs() {
-  const [datasetSpec] = args._;
-  const parts = datasetSpec.split(':');
-  if (parts.length < 2) {
-    console.error('invalid dataset spec');
-    return [];
-  }
-  const datasetName = parts.pop();
-  const datastoreSpec = parts.join(':');
-  if (!/^http/.test(datastoreSpec)) {
-    console.error('Unsupported datastore type: ', datastoreSpec);
-    return [];
-  }
-  return [datastoreSpec, datasetName];
 }

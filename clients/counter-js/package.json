@@ -1,9 +1,9 @@
 {
   "name": "@attic/counter-js",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "noms example javascript client with a counter",
   "dependencies": {
-    "@attic/noms": "^13.0.0",
+    "@attic/noms": "^15.3.0",
     "babel-regenerator-runtime": "6.5.0"
   },
   "devDependencies": {
