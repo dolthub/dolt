@@ -16,13 +16,13 @@ const (
 	SetKind
 	StructKind
 	TypeKind
-	BackRefKind
+	ParentKind
 )
 
 // IsPrimitiveKind returns true if k represents a Noms primitive type, which excludes collections (List, Map, Set), Refs, Structs, Symbolic and Unresolved types.
 func IsPrimitiveKind(k NomsKind) bool {
 	switch k {
-	case BoolKind, NumberKind, StringKind, BlobKind, ValueKind, TypeKind, BackRefKind:
+	case BoolKind, NumberKind, StringKind, BlobKind, ValueKind, TypeKind, ParentKind:
 		return true
 	default:
 		return false

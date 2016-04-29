@@ -79,30 +79,30 @@ func (r *jsonArrayReader) readRef() ref.Ref {
 	return ref.Parse(s)
 }
 
-func (r *jsonArrayReader) readTypeAsTag(backRefs []*Type) *Type {
+func (r *jsonArrayReader) readTypeAsTag(parentStructTypes []*Type) *Type {
 	kind := r.readKind()
 	switch kind {
 	case ListKind:
-		elemType := r.readTypeAsTag(backRefs)
+		elemType := r.readTypeAsTag(parentStructTypes)
 		return MakeListType(elemType)
 	case SetKind:
-		elemType := r.readTypeAsTag(backRefs)
+		elemType := r.readTypeAsTag(parentStructTypes)
 		return MakeSetType(elemType)
 	case RefKind:
-		elemType := r.readTypeAsTag(backRefs)
+		elemType := r.readTypeAsTag(parentStructTypes)
 		return MakeRefType(elemType)
 	case MapKind:
-		keyType := r.readTypeAsTag(backRefs)
-		valueType := r.readTypeAsTag(backRefs)
+		keyType := r.readTypeAsTag(parentStructTypes)
+		valueType := r.readTypeAsTag(parentStructTypes)
 		return MakeMapType(keyType, valueType)
 	case TypeKind:
 		return TypeType
 	case StructKind:
-		return r.readStructType(backRefs)
-	case BackRefKind:
+		return r.readStructType(parentStructTypes)
+	case ParentKind:
 		i := r.readUint8()
-		d.Chk.True(i < uint8(len(backRefs)))
-		return backRefs[len(backRefs)-1-int(i)]
+		d.Chk.True(i < uint8(len(parentStructTypes)))
+		return parentStructTypes[len(parentStructTypes)-1-int(i)]
 	}
 
 	if IsPrimitiveKind(kind) {
@@ -247,8 +247,8 @@ func (r *jsonArrayReader) readValueWithoutTag(t *Type) Value {
 		return r.readStruct(t)
 	case TypeKind:
 		return r.readTypeKindToValue(t)
-	case BackRefKind:
-		panic("BackRefKind should have been replaced")
+	case ParentKind:
+		panic("ParentKind should have been replaced")
 	}
 
 	panic("not reachable")
@@ -259,19 +259,19 @@ func (r *jsonArrayReader) readTypeKindToValue(t *Type) Value {
 	return r.readTypeAsValue(nil)
 }
 
-func (r *jsonArrayReader) readTypeAsValue(backRefs []*Type) *Type {
+func (r *jsonArrayReader) readTypeAsValue(parentStructTypes []*Type) *Type {
 	k := r.readKind()
 	switch k {
 	case ListKind, MapKind, RefKind, SetKind:
 		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		elemTypes := []*Type{}
 		for !r2.atEnd() {
-			t := r2.readTypeAsValue(backRefs)
+			t := r2.readTypeAsValue(parentStructTypes)
 			elemTypes = append(elemTypes, t)
 		}
 		return makeCompoundType(k, elemTypes...)
 	case StructKind:
-		return r.readStructType(backRefs)
+		return r.readStructType(parentStructTypes)
 	}
 
 	d.Chk.True(IsPrimitiveKind(k))
@@ -289,18 +289,18 @@ func (r *jsonArrayReader) readStruct(t *Type) Value {
 	return structBuilder(values, t)
 }
 
-func (r *jsonArrayReader) readStructType(backRefs []*Type) *Type {
+func (r *jsonArrayReader) readStructType(parentStructTypes []*Type) *Type {
 	name := r.readString()
 
 	fields := []Field{}
 	st := MakeStructType(name, fields)
-	backRefs = append(backRefs, st)
+	parentStructTypes = append(parentStructTypes, st)
 	desc := st.Desc.(StructDesc)
 
 	fieldReader := newJSONArrayReader(r.readArray(), r.vr)
 	for !fieldReader.atEnd() {
 		fieldName := fieldReader.readString()
-		fieldType := fieldReader.readTypeAsTag(backRefs)
+		fieldType := fieldReader.readTypeAsTag(parentStructTypes)
 		fields = append(fields, Field{Name: fieldName, T: fieldType})
 	}
 	desc.Fields = fields

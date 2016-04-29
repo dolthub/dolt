@@ -395,7 +395,7 @@ func TestReadRecursiveStruct(t *testing.T) {
 			"a", %d, %d, 1,
 			"b", %d, %d, 0
 		]],
-		false, [], false, []]`, StructKind, StructKind, ListKind, BackRefKind, ListKind, BackRefKind)
+		false, [], false, []]`, StructKind, StructKind, ListKind, ParentKind, ListKind, ParentKind)
 
 	r := newJSONArrayReader(a, cs)
 

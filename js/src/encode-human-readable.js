@@ -1,6 +1,6 @@
 // @flow
 
-import {getTypeOfValue, StructDesc, BackRefDesc, CompoundDesc} from './type.js';
+import {getTypeOfValue, StructDesc, ParentDesc, CompoundDesc} from './type.js';
 import type {Field, Type} from './type.js';
 import {Kind, kindToString} from './noms-kind.js';
 import type {NomsKind} from './noms-kind.js';
@@ -66,7 +66,7 @@ export class TypeWriter {
     this._writeType(t, []);
   }
 
-  _writeType(t: Type, backRefs: Type[]) {
+  _writeType(t: Type, parentStructTypes: Type[]) {
     switch (t.kind) {
       case Kind.Blob:
       case Kind.Bool:
@@ -82,7 +82,7 @@ export class TypeWriter {
         this._w.writeKind(t.kind);
         this._w.write('<');
         invariant(t.desc instanceof CompoundDesc);
-        this._writeType(t.desc.elemTypes[0], backRefs);
+        this._writeType(t.desc.elemTypes[0], parentStructTypes);
         this._w.write('>');
         break;
       case Kind.Map: {
@@ -90,35 +90,35 @@ export class TypeWriter {
         this._w.write('<');
         invariant(t.desc instanceof CompoundDesc);
         const [keyType, valueType] = t.desc.elemTypes;
-        this._writeType(keyType, backRefs);
+        this._writeType(keyType, parentStructTypes);
         this._w.write(', ');
-        this._writeType(valueType, backRefs);
+        this._writeType(valueType, parentStructTypes);
         this._w.write('>');
         break;
       }
       case Kind.Struct:
-        this._writeStructType(t, backRefs);
+        this._writeStructType(t, parentStructTypes);
         break;
-      case Kind.BackRef:
-        invariant(t.desc instanceof BackRefDesc);
-        this._writeBackRef(t.desc.value);
+      case Kind.Parent:
+        invariant(t.desc instanceof ParentDesc);
+        this._writeParent(t.desc.value);
         break;
       default:
         throw new Error('unreachable');
     }
   }
 
-  _writeBackRef(i: number) {
-    this._w.write(`BackRef<${i}>`);
+  _writeParent(i: number) {
+    this._w.write(`Parent<${i}>`);
   }
 
-  _writeStructType(t: Type, backRefs: Type[]) {
-    const idx = backRefs.indexOf(t);
+  _writeStructType(t: Type, parentStructTypes: Type[]) {
+    const idx = parentStructTypes.indexOf(t);
     if (idx !== -1) {
-      this._writeBackRef(backRefs.length - idx - 1);
+      this._writeParent(parentStructTypes.length - idx - 1);
       return;
     }
-    backRefs = backRefs.concat(t);
+    parentStructTypes.push(t);
 
     const desc = t.desc;
     invariant(desc instanceof StructDesc);
@@ -136,12 +136,13 @@ export class TypeWriter {
       if (f.optional) {
         this._w.write('optional ');
       }
-      this._writeType(f.t, backRefs);
+      this._writeType(f.t, parentStructTypes);
       this._w.newLine();
     });
 
     this._w.outdent();
     this._w.write('}');
+    parentStructTypes.pop(t);
   }
 }
 

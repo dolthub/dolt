@@ -37,7 +37,7 @@ export default function validateType(t: Type, v: any): void {
       assertSubtype(v, t);
       return;
 
-    case Kind.BackRef:
+    case Kind.Parent:
     default:
       throw new Error('unreachable');
   }

@@ -66,15 +66,15 @@ func (w *jsonArrayWriter) writeRef(r ref.Ref) {
 	w.write(r.String())
 }
 
-func (w *jsonArrayWriter) writeTypeAsTag(t *Type, backRefs []*Type) {
+func (w *jsonArrayWriter) writeTypeAsTag(t *Type, parentStructTypes []*Type) {
 	k := t.Kind()
 	switch k {
 	case StructKind:
-		w.writeStructType(t, backRefs)
+		w.writeStructType(t, parentStructTypes)
 	case ListKind, MapKind, RefKind, SetKind:
 		w.write(k)
 		for _, elemType := range t.Desc.(CompoundDesc).ElemTypes {
-			w.writeTypeAsTag(elemType, backRefs)
+			w.writeTypeAsTag(elemType, parentStructTypes)
 		}
 	default:
 		w.write(k)
@@ -168,25 +168,25 @@ func (w *jsonArrayWriter) writeValue(v Value, tr *Type) {
 		vt := v.Type()
 		w.writeTypeAsTag(vt, nil)
 		w.writeValue(v, v.Type())
-	case BackRefKind:
-		w.writeUint8(uint8(v.(*Type).Desc.(BackRefDesc)))
+	case ParentKind:
+		w.writeUint8(uint8(v.(*Type).Desc.(ParentDesc)))
 	default:
 		d.Chk.Fail("Unknown NomsKind")
 	}
 }
 
-func (w *jsonArrayWriter) writeTypeAsValue(t *Type, backRefs []*Type) {
+func (w *jsonArrayWriter) writeTypeAsValue(t *Type, parentStructTypes []*Type) {
 	k := t.Kind()
 	switch k {
 	case ListKind, MapKind, RefKind, SetKind:
 		w.write(k)
 		w2 := newJSONArrayWriter(w.vw)
 		for _, elemType := range t.Desc.(CompoundDesc).ElemTypes {
-			w2.writeTypeAsValue(elemType, backRefs)
+			w2.writeTypeAsValue(elemType, parentStructTypes)
 		}
 		w.write(w2.toArray())
 	case StructKind:
-		w.writeStructType(t, backRefs)
+		w.writeStructType(t, parentStructTypes)
 	default:
 		w.write(k)
 		d.Chk.True(IsPrimitiveKind(k), "Kind: %v Desc: %s\n", t.Kind(), t.Describe())
@@ -202,26 +202,26 @@ func indexOfType(t *Type, ts []*Type) int {
 	return -1
 }
 
-func (w *jsonArrayWriter) writeBackRef(i int) {
-	w.write(BackRefKind)
+func (w *jsonArrayWriter) writeParent(i int) {
+	w.write(ParentKind)
 	w.write(uint8(i))
 }
 
-func (w *jsonArrayWriter) writeStructType(t *Type, backRefs []*Type) {
+func (w *jsonArrayWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 	// The runtime representaion of struct types can contain cycles. These cycles are broken when encoding and decoding using special "back ref" placeholders.
-	i := indexOfType(t, backRefs)
+	i := indexOfType(t, parentStructTypes)
 	if i != -1 {
-		w.writeBackRef(len(backRefs) - i - 1)
+		w.writeParent(len(parentStructTypes) - i - 1)
 		return
 	}
-	backRefs = append(backRefs, t)
+	parentStructTypes = append(parentStructTypes, t)
 
 	w.write(StructKind)
 	w.write(t.Name())
 	fieldWriter := newJSONArrayWriter(w.vw)
 	for _, field := range t.Desc.(StructDesc).Fields {
 		fieldWriter.write(field.Name)
-		fieldWriter.writeTypeAsTag(field.T, backRefs)
+		fieldWriter.writeTypeAsTag(field.T, parentStructTypes)
 	}
 	w.write(fieldWriter.toArray())
 }

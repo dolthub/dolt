@@ -67,7 +67,7 @@ export class JsonArrayWriter {
     this.write(r.toString());
   }
 
-  writeTypeAsTag(t: Type, backRefs: Type[]) {
+  writeTypeAsTag(t: Type, parentStructTypes: Type[]) {
     const k = t.kind;
     switch (k) {
       case Kind.List:
@@ -75,10 +75,10 @@ export class JsonArrayWriter {
       case Kind.Ref:
       case Kind.Set:
         this.writeKind(k);
-        t.elemTypes.forEach(elemType => this.writeTypeAsTag(elemType, backRefs));
+        t.elemTypes.forEach(elemType => this.writeTypeAsTag(elemType, parentStructTypes));
         break;
       case Kind.Struct:
-        this.writeStructType(t, backRefs);
+        this.writeStructType(t, parentStructTypes);
         break;
       default:
         this.writeKind(k);
@@ -228,7 +228,7 @@ export class JsonArrayWriter {
     }
   }
 
-  writeTypeAsValue(t: Type, backRefs: Type[]) {
+  writeTypeAsValue(t: Type, parentStructTypes: Type[]) {
     const k = t.kind;
     switch (k) {
       case Kind.List:
@@ -237,12 +237,12 @@ export class JsonArrayWriter {
       case Kind.Set: {
         this.writeKind(k);
         const w2 = new JsonArrayWriter(this._ds);
-        t.elemTypes.forEach(elem => w2.writeTypeAsValue(elem, backRefs));
+        t.elemTypes.forEach(elem => w2.writeTypeAsValue(elem, parentStructTypes));
         this.write(w2.array);
         break;
       }
       case Kind.Struct: {
-        this.writeStructType(t, backRefs);
+        this.writeStructType(t, parentStructTypes);
         break;
       }
       default:
@@ -251,15 +251,15 @@ export class JsonArrayWriter {
     }
   }
 
-  writeStructType(t: Type, backRefs: Type[]) {
-    const i = backRefs.indexOf(t);
+  writeStructType(t: Type, parentStructTypes: Type[]) {
+    const i = parentStructTypes.indexOf(t);
     if (i !== -1) {
-      this.writeBackRef(backRefs.length - i - 1);
+      this.writeParent(parentStructTypes.length - i - 1);
       return;
     }
 
 
-    backRefs = backRefs.concat(t);  // we want a new array here.
+    parentStructTypes = parentStructTypes.concat(t);  // we want a new array here.
     const desc = t.desc;
     invariant(desc instanceof StructDesc);
     this.writeKind(t.kind);
@@ -267,13 +267,13 @@ export class JsonArrayWriter {
     const fieldWriter = new JsonArrayWriter(this._ds);
     desc.fields.forEach(field => {
       fieldWriter.write(field.name);
-      fieldWriter.writeTypeAsTag(field.t, backRefs);
+      fieldWriter.writeTypeAsTag(field.t, parentStructTypes);
     });
     this.write(fieldWriter.array);
   }
 
-  writeBackRef(i: number) {
-    this.write(Kind.BackRef);
+  writeParent(i: number) {
+    this.write(Kind.Parent);
     this.writeUint8(i);
   }
 

@@ -380,5 +380,5 @@ func TestWriteRecursiveStruct(t *testing.T) {
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "A6", []interface{}{"v", NumberKind, "cs", ListKind, BackRefKind, uint8(0)}, "42", false, []interface{}{"555", false, []interface{}{}}}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "A6", []interface{}{"v", NumberKind, "cs", ListKind, ParentKind, uint8(0)}, "42", false, []interface{}{"555", false, []interface{}{}}}, w.toArray())
 }

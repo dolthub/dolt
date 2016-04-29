@@ -14,7 +14,7 @@ export const Kind: {
   Set: NomsKind,
   Struct: NomsKind,
   Type: NomsKind,
-  BackRef: NomsKind,
+  Parent: NomsKind,
 } = {
   Bool: 0,
   Number: 1,
@@ -27,7 +27,7 @@ export const Kind: {
   Set: 8,
   Struct: 9,
   Type: 10,
-  BackRef: 11,
+  Parent: 11,
 };
 
 const kindToStringMap: { [key: number]: string } = Object.create(null);
@@ -42,7 +42,7 @@ kindToStringMap[Kind.Ref] = 'Ref';
 kindToStringMap[Kind.Set] = 'Set';
 kindToStringMap[Kind.Struct] = 'Struct';
 kindToStringMap[Kind.Type] = 'Type';
-kindToStringMap[Kind.BackRef] = 'BackRef';
+kindToStringMap[Kind.Parent] = 'Parent';
 
 export function kindToString(kind: NomsKind): string {
   return kindToStringMap[kind];

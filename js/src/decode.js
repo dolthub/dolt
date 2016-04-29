@@ -107,27 +107,27 @@ export class JsonArrayReader {
     return Ref.parse(next);
   }
 
-  readTypeAsTag(backRefs: Type[]): Type {
+  readTypeAsTag(parentStructTypes: Type[]): Type {
     const kind = this.readKind();
     switch (kind) {
       case Kind.List:
       case Kind.Set:
       case Kind.Ref: {
-        const elemType = this.readTypeAsTag(backRefs);
+        const elemType = this.readTypeAsTag(parentStructTypes);
         return makeCompoundType(kind, elemType);
       }
       case Kind.Map: {
-        const keyType = this.readTypeAsTag(backRefs);
-        const valueType = this.readTypeAsTag(backRefs);
+        const keyType = this.readTypeAsTag(parentStructTypes);
+        const valueType = this.readTypeAsTag(parentStructTypes);
         return makeCompoundType(kind, keyType, valueType);
       }
       case Kind.Type:
         return typeType;
       case Kind.Struct:
-        return this.readStructType(backRefs);
-      case Kind.BackRef: {
+        return this.readStructType(parentStructTypes);
+      case Kind.Parent: {
         const i = this.readUint8();
-        return backRefs[backRefs.length - 1 - i];
+        return parentStructTypes[parentStructTypes.length - 1 - i];
       }
     }
 
@@ -261,7 +261,7 @@ export class JsonArrayReader {
     throw new Error('Unreached');
   }
 
-  readTypeAsValue(backRefs: Type[]): Type {
+  readTypeAsValue(parentStructTypes: Type[]): Type {
     const k = this.readKind();
 
     switch (k) {
@@ -272,15 +272,15 @@ export class JsonArrayReader {
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
         const elemTypes: Array<Type> = [];
         while (!r2.atEnd()) {
-          elemTypes.push(r2.readTypeAsValue(backRefs));
+          elemTypes.push(r2.readTypeAsValue(parentStructTypes));
         }
 
         return makeCompoundType(k, ...elemTypes);
       }
       case Kind.Struct:
-        return this.readStructType(backRefs);
+        return this.readStructType(parentStructTypes);
 
-      case Kind.BackRef:
+      case Kind.Parent:
         throw new Error('not reachable');
     }
 
@@ -303,17 +303,17 @@ export class JsonArrayReader {
     return newStruct(type, data);
   }
 
-  readStructType(backRefs: Type[]): Type {
+  readStructType(parentStructTypes: Type[]): Type {
     const name = this.readString();
     const fields = [];
     const structType = makeStructType(name, fields);
-    backRefs.push(structType);
+    parentStructTypes.push(structType);
 
     const newFields: Array<Field> = [];
     const fieldReader = new JsonArrayReader(this.readArray(), this._ds);
     while (!fieldReader.atEnd()) {
       const fieldName = fieldReader.readString();
-      const fieldType = fieldReader.readTypeAsTag(backRefs);
+      const fieldType = fieldReader.readTypeAsTag(parentStructTypes);
       newFields.push(new Field(fieldName, fieldType));
     }
 
@@ -321,7 +321,7 @@ export class JsonArrayReader {
     // by identity.
     invariant(structType.desc instanceof StructDesc);
     structType.desc.fields = newFields;
-    backRefs.pop();
+    parentStructTypes.pop();
     return structType;
   }
 }

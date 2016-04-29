@@ -305,7 +305,7 @@ suite('Encode', () => {
     invariant(st.desc instanceof StructDesc);
     st.desc.fields[1].t = lt;
 
-    test([Kind.Type, Kind.Struct, 'A6', ['v', Kind.Number, 'cs', Kind.List, Kind.BackRef, 0]], st);
+    test([Kind.Type, Kind.Struct, 'A6', ['v', Kind.Number, 'cs', Kind.List, Kind.Parent, 0]], st);
   });
 
   test('top level blob', async () => {

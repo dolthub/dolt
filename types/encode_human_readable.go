@@ -124,7 +124,7 @@ func (w *hrsWriter) Write(v Value) {
 		w.writeStruct(v.(Struct), true)
 
 	default:
-	case ValueKind, BackRefKind:
+	case ValueKind, ParentKind:
 		panic("unreachable")
 	}
 }
@@ -162,7 +162,7 @@ func (w *hrsWriter) WriteTagged(v Value) {
 	switch t.Kind() {
 	case BoolKind, StringKind:
 		w.Write(v)
-	case NumberKind, BlobKind, ListKind, MapKind, RefKind, SetKind, TypeKind, BackRefKind:
+	case NumberKind, BlobKind, ListKind, MapKind, RefKind, SetKind, TypeKind, ParentKind:
 		// TODO: Numbers have unique syntax now...
 		w.writeType(t, nil)
 		w.write("(")
@@ -180,38 +180,38 @@ func (w *hrsWriter) WriteTagged(v Value) {
 	}
 }
 
-func (w *hrsWriter) writeType(t *Type, backRefs []*Type) {
+func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 	switch t.Kind() {
 	case BlobKind, BoolKind, NumberKind, StringKind, TypeKind, ValueKind:
 		w.write(KindToString[t.Kind()])
 	case ListKind, RefKind, SetKind:
 		w.write(KindToString[t.Kind()])
 		w.write("<")
-		w.writeType(t.Desc.(CompoundDesc).ElemTypes[0], backRefs)
+		w.writeType(t.Desc.(CompoundDesc).ElemTypes[0], parentStructTypes)
 		w.write(">")
 	case MapKind:
 		w.write(KindToString[t.Kind()])
 		w.write("<")
-		w.writeType(t.Desc.(CompoundDesc).ElemTypes[0], backRefs)
+		w.writeType(t.Desc.(CompoundDesc).ElemTypes[0], parentStructTypes)
 		w.write(", ")
-		w.writeType(t.Desc.(CompoundDesc).ElemTypes[1], backRefs)
+		w.writeType(t.Desc.(CompoundDesc).ElemTypes[1], parentStructTypes)
 		w.write(">")
 	case StructKind:
-		w.writeStructType(t, backRefs)
-	case BackRefKind:
-		w.writeBackRef(uint8(t.Desc.(BackRefDesc)))
+		w.writeStructType(t, parentStructTypes)
+	case ParentKind:
+		w.writeParent(uint8(t.Desc.(ParentDesc)))
 	default:
 		panic("unreachable")
 	}
 }
 
-func (w *hrsWriter) writeStructType(t *Type, backRefs []*Type) {
-	idx := indexOfType(t, backRefs)
+func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
+	idx := indexOfType(t, parentStructTypes)
 	if idx != -1 {
-		w.writeBackRef(uint8(len(backRefs) - 1 - idx))
+		w.writeParent(uint8(len(parentStructTypes) - 1 - idx))
 		return
 	}
-	backRefs = append(backRefs, t)
+	parentStructTypes = append(parentStructTypes, t)
 
 	w.write("struct ")
 	w.write(t.Name())
@@ -224,15 +224,15 @@ func (w *hrsWriter) writeStructType(t *Type, backRefs []*Type) {
 		}
 		w.write(f.Name)
 		w.write(": ")
-		w.writeType(f.T, backRefs)
+		w.writeType(f.T, parentStructTypes)
 		w.newLine()
 	}
 	w.outdent()
 	w.write("}")
 }
 
-func (w *hrsWriter) writeBackRef(i uint8) {
-	fmt.Fprintf(w.w, "BackRef<%d>", i)
+func (w *hrsWriter) writeParent(i uint8) {
+	fmt.Fprintf(w.w, "Parent<%d>", i)
 }
 
 func WriteHRS(v Value) string {

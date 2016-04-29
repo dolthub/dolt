@@ -407,14 +407,14 @@ suite('Decode', () => {
     // Commit value
     const commitChunk = makeChunk(
       [Kind.Struct, 'Commit',
-        ['value', Kind.Value, 'parents', Kind.Set, Kind.Ref, Kind.BackRef, 0],
+        ['value', Kind.Value, 'parents', Kind.Set, Kind.Ref, Kind.Parent, 0],
         Kind.Number, '1', false, []]);
     const commitRef = commitChunk.ref;
     ms.put(commitChunk);
 
     // Root
     const rootChunk = makeChunk([Kind.Map, Kind.String, Kind.Ref, Kind.Struct, 'Commit',
-      ['value', Kind.Value, 'parents', Kind.Set, Kind.Ref, Kind.BackRef, 0],
+      ['value', Kind.Value, 'parents', Kind.Set, Kind.Ref, Kind.Parent, 0],
       false, ['counter', commitRef.toString()]]);
     const rootRef = rootChunk.ref;
     ms.put(rootChunk);
@@ -515,8 +515,8 @@ suite('Decode', () => {
 
     const a = [Kind.Struct, 'A',
           ['b', Kind.Struct, 'B', [
-            'a', Kind.List, Kind.BackRef, 1,
-            'b', Kind.List, Kind.BackRef, 0,
+            'a', Kind.List, Kind.Parent, 1,
+            'b', Kind.List, Kind.Parent, 0,
           ]], false, [], false, []];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();

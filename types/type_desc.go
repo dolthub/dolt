@@ -27,17 +27,17 @@ func (p PrimitiveDesc) Equals(other TypeDesc) bool {
 }
 
 var KindToString = map[NomsKind]string{
-	BlobKind:    "Blob",
-	BoolKind:    "Bool",
-	ListKind:    "List",
-	MapKind:     "Map",
-	NumberKind:  "Number",
-	RefKind:     "Ref",
-	SetKind:     "Set",
-	StringKind:  "String",
-	TypeKind:    "Type",
-	ValueKind:   "Value",
-	BackRefKind: "BackRef",
+	BlobKind:   "Blob",
+	BoolKind:   "Bool",
+	ListKind:   "List",
+	MapKind:    "Map",
+	NumberKind: "Number",
+	RefKind:    "Ref",
+	SetKind:    "Set",
+	StringKind: "String",
+	TypeKind:   "Type",
+	ValueKind:  "Value",
+	ParentKind: "Parent",
 }
 
 // CompoundDesc describes a List, Map, Set or Ref type.
@@ -97,17 +97,17 @@ func (f Field) Equals(other Field) bool {
 	return f.Name == other.Name && f.T.Equals(other.T)
 }
 
-// BackRefDesc is used to symbolize back references in recursive struct types
-type BackRefDesc uint8
+// ParentDesc is used to symbolize back references in recursive struct types
+type ParentDesc uint8
 
-func (b BackRefDesc) Kind() NomsKind {
-	return BackRefKind
+func (b ParentDesc) Kind() NomsKind {
+	return ParentKind
 }
 
-func (b BackRefDesc) Equals(other TypeDesc) bool {
-	return b.Kind() == other.Kind() && other.(BackRefDesc) == b
+func (b ParentDesc) Equals(other TypeDesc) bool {
+	return b.Kind() == other.Kind() && other.(ParentDesc) == b
 }
 
-func (b BackRefDesc) Describe() string {
+func (b ParentDesc) Describe() string {
 	return fmt.Sprintf("%s(%d)", KindToString[b.Kind()], b)
 }
