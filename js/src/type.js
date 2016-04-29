@@ -246,23 +246,3 @@ export function getTypeOfValue(v: valueOrPrimitive): Type {
       throw new Error('Unknown type');
   }
 }
-
-export class ParentDesc {
-  value: number;
-
-  constructor(value: number) {
-    this.value = value;
-  }
-
-  get kind(): NomsKind {
-    return Kind.Parent;
-  }
-
-  equals(other: TypeDesc): boolean {
-    return other instanceof ParentDesc && other.value === this.value;
-  }
-
-  describe(): string {
-    return `Parent<${this.value}>`;
-  }
-}

@@ -199,7 +199,6 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 	case StructKind:
 		w.writeStructType(t, parentStructTypes)
 	case ParentKind:
-		w.writeParent(uint8(t.Desc.(ParentDesc)))
 	default:
 		panic("unreachable")
 	}

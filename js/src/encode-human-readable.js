@@ -1,6 +1,6 @@
 // @flow
 
-import {getTypeOfValue, ParentDesc, CompoundDesc} from './type.js';
+import {getTypeOfValue, CompoundDesc} from './type.js';
 import type {Field, Type} from './type.js';
 import {Kind, kindToString} from './noms-kind.js';
 import type {NomsKind} from './noms-kind.js';
@@ -100,9 +100,6 @@ export class TypeWriter {
         this._writeStructType(t, parentStructTypes);
         break;
       case Kind.Parent:
-        invariant(t.desc instanceof ParentDesc);
-        this._writeParent(t.desc.value);
-        break;
       default:
         throw new Error('unreachable');
     }

@@ -27,7 +27,7 @@ export const Kind: {
   Set: 8,
   Struct: 9,
   Type: 10,
-  Parent: 11,
+  Parent: 11,  // Only used in encoding/decoding.
 };
 
 const kindToStringMap: { [key: number]: string } = Object.create(null);

@@ -169,7 +169,6 @@ func (w *jsonArrayWriter) writeValue(v Value, tr *Type) {
 		w.writeTypeAsTag(vt, nil)
 		w.writeValue(v, v.Type())
 	case ParentKind:
-		w.writeUint8(uint8(v.(*Type).Desc.(ParentDesc)))
 	default:
 		d.Chk.Fail("Unknown NomsKind")
 	}

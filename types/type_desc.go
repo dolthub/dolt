@@ -1,7 +1,5 @@
 package types
 
-import "fmt"
-
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Number, or a custom type.
 type TypeDesc interface {
 	Kind() NomsKind
@@ -95,19 +93,4 @@ type Field struct {
 
 func (f Field) Equals(other Field) bool {
 	return f.Name == other.Name && f.T.Equals(other.T)
-}
-
-// ParentDesc is used to symbolize back references in recursive struct types
-type ParentDesc uint8
-
-func (b ParentDesc) Kind() NomsKind {
-	return ParentKind
-}
-
-func (b ParentDesc) Equals(other TypeDesc) bool {
-	return b.Kind() == other.Kind() && other.(ParentDesc) == b
-}
-
-func (b ParentDesc) Describe() string {
-	return fmt.Sprintf("%s(%d)", KindToString[b.Kind()], b)
 }
