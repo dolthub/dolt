@@ -50,16 +50,16 @@ suite('Encode human readable types', () => {
 
   test('struct', () => {
     const type = makeStructType('S1', [
-      new Field('x', numberType, false),
-      new Field('y', numberType, true),
+      new Field('x', numberType),
+      new Field('y', stringType),
     ]);
-    assertWriteType('struct S1 {\n  x: Number\n  y: optional Number\n}', type);
+    assertWriteType('struct S1 {\n  x: Number\n  y: String\n}', type);
   });
 
 
   test('list of struct', () => {
     const type = makeStructType('S3', [
-      new Field('x', numberType, false),
+      new Field('x', numberType),
     ]);
     assertWriteType('List<struct S3 {\n  x: Number\n}>', makeListType(type));
   });
@@ -75,13 +75,13 @@ suite('Encode human readable types', () => {
     // }
 
     const a = makeStructType('A', [
-      new Field('b', valueType /* placeholder */, false),
-      new Field('c', valueType /* placeholder */, false),
-      new Field('d', valueType /* placeholder */, false),
+      new Field('b', valueType /* placeholder */),
+      new Field('c', valueType /* placeholder */),
+      new Field('d', valueType /* placeholder */),
     ]);
     const d = makeStructType('D', [
-      new Field('e', valueType /* placeholder */, false),
-      new Field('f', a, false),
+      new Field('e', valueType /* placeholder */),
+      new Field('f', a),
     ]);
     const aDesc = a.desc;
     invariant(aDesc instanceof StructDesc);

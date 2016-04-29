@@ -400,7 +400,7 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	vs := NewTestValueStore()
 
 	structType := MakeStructType("num", []Field{
-		Field{"n", NumberType, false},
+		Field{"n", NumberType},
 	})
 	refOfTypeStructType := MakeRefType(structType)
 
@@ -417,7 +417,7 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewTypedMap(mapType, kvs...)
-	assert.Equal("sha1-f7a204f6f8507b9e60288e49d79d07eb42b24bd7", m.Ref().String())
+	assert.Equal("sha1-ea404a4f58d8d6afeacbc65f93edb26889d4ddd9", m.Ref().String())
 }
 
 func TestCompoundMapModifyAfterRead(t *testing.T) {

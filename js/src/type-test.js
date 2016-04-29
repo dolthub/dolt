@@ -24,8 +24,8 @@ suite('Type', () => {
     const mapType = makeMapType(stringType, numberType);
     const setType = makeSetType(stringType);
     const mahType = makeStructType('MahStruct', [
-      new Field('Field1', stringType, false),
-      new Field('Field2', boolType, true),
+      new Field('Field1', stringType),
+      new Field('Field2', boolType),
     ]);
 
     const mapRef = ds.writeValue(mapType).targetRef;

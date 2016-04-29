@@ -71,11 +71,8 @@ suite('Decode', () => {
 
     doTest(boolType, [Kind.Bool, true]);
     doTest(typeType, [Kind.Type, Kind.Bool]);
-    doTest(makeListType(boolType),
-                            [Kind.List, Kind.Bool, true, false]);
-
-    doTest(makeStructType('S', [new Field('x', boolType, false)]),
-           [Kind.Struct, 'S', ['x', Kind.Bool, false]]);
+    doTest(makeListType(boolType), [Kind.List, Kind.Bool, true, false]);
+    doTest(makeStructType('S', [new Field('x', boolType)]), [Kind.Struct, 'S', ['x', Kind.Bool]]);
   });
 
   test('read primitives', async () => {
@@ -274,15 +271,15 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeStructType('A1', [
-      new Field('x', numberType, false),
-      new Field('s', stringType, false),
-      new Field('b', boolType, false),
+      new Field('x', numberType),
+      new Field('s', stringType),
+      new Field('b', boolType),
     ]);
 
     const a = [Kind.Struct, 'A1', [
-      'x', Kind.Number, false,
-      's', Kind.String, false,
-      'b', Kind.Bool, false,
+      'x', Kind.Number,
+      's', Kind.String,
+      'b', Kind.Bool,
     ], '42', 'hi', true];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
@@ -294,41 +291,20 @@ suite('Decode', () => {
     });
   });
 
-  test('test read struct optional', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const tr = makeStructType('A3', [
-      new Field('x', numberType, false),
-      new Field('s', stringType, true),
-      new Field('b', boolType, true),
-    ]);
-
-    const a = [Kind.Struct, 'A3',
-      ['x', Kind.Number, false, 's', Kind.String, true, 'b', Kind.Bool, true],
-      '42', false, true, false];
-    const r = new JsonArrayReader(a, ds);
-    const v = await r.readTopLevelValue();
-
-    assertStruct(v, tr.desc, {
-      x: 42,
-      b: false,
-    });
-  });
-
   test('test read struct with list', async () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const ltr = makeListType(numberType);
     const tr = makeStructType('A4', [
-      new Field('b', boolType, false),
-      new Field('l', ltr, false),
-      new Field('s', stringType, false),
+      new Field('b', boolType),
+      new Field('l', ltr),
+      new Field('s', stringType),
     ]);
 
     const a = [Kind.Struct, 'A4', [
-      'b', Kind.Bool, false,
-      'l', Kind.List, Kind.Number, false,
-      's', Kind.String, false,
+      'b', Kind.Bool,
+      'l', Kind.List, Kind.Number,
+      's', Kind.String,
     ], true, false, ['0', '1', '2'], 'hi'];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
@@ -344,13 +320,12 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeStructType('A5', [
-      new Field('b', boolType, false),
-      new Field('v', valueType, false),
-      new Field('s', stringType, false),
+      new Field('b', boolType),
+      new Field('v', valueType),
+      new Field('s', stringType),
     ]);
 
-    const a = [Kind.Struct, 'A5',
-      ['b', Kind.Bool, false, 'v', Kind.Value, false, 's', Kind.String, false],
+    const a = [Kind.Struct, 'A5', ['b', Kind.Bool, 'v', Kind.Value, 's', Kind.String],
       true, Kind.Number, '42', 'hi'];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
@@ -366,13 +341,12 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeStructType('A1', [
-      new Field('x', numberType, false),
-      new Field('s', stringType, false),
-      new Field('b', boolType, false),
+      new Field('x', numberType),
+      new Field('s', stringType),
+      new Field('b', boolType),
     ]);
 
-    const a = [Kind.Value, Kind.Struct, 'A1',
-        ['x', Kind.Number, false, 's', Kind.String, false, 'b', Kind.Bool, false],
+    const a = [Kind.Value, Kind.Struct, 'A1', ['x', Kind.Number, 's', Kind.String, 'b', Kind.Bool],
         '42', 'hi', true];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
@@ -388,12 +362,12 @@ suite('Decode', () => {
     const ms = new MemoryStore();
     const ds = new DataStore(ms);
     const tr = makeStructType('s', [
-      new Field('b', boolType, false),
-      new Field('i', numberType, false),
+      new Field('b', boolType),
+      new Field('i', numberType),
     ]);
 
     const a = [Kind.Value, Kind.Map, Kind.String,
-      Kind.Struct, 's', ['b', Kind.Bool, false, 'i', Kind.Number, false],
+      Kind.Struct, 's', ['b', Kind.Bool, 'i', Kind.Number],
       false, ['bar', false, '2', 'baz', false, '1', 'foo', true, '3']];
 
     const r = new JsonArrayReader(a, ds);
@@ -433,14 +407,14 @@ suite('Decode', () => {
     // Commit value
     const commitChunk = makeChunk(
       [Kind.Struct, 'Commit',
-        ['value', Kind.Value, false, 'parents', Kind.Set, Kind.Ref, Kind.BackRef, 0, false],
+        ['value', Kind.Value, 'parents', Kind.Set, Kind.Ref, Kind.BackRef, 0],
         Kind.Number, '1', false, []]);
     const commitRef = commitChunk.ref;
     ms.put(commitChunk);
 
     // Root
     const rootChunk = makeChunk([Kind.Map, Kind.String, Kind.Ref, Kind.Struct, 'Commit',
-      ['value', Kind.Value, false, 'parents', Kind.Set, Kind.Ref, Kind.BackRef, 0, false],
+      ['value', Kind.Value, 'parents', Kind.Set, Kind.Ref, Kind.BackRef, 0],
       false, ['counter', commitRef.toString()]]);
     const rootRef = rootChunk.ref;
     ms.put(rootChunk);
@@ -533,17 +507,17 @@ suite('Decode', () => {
     const ta = makeStructType('A', []);
     const tb = makeStructType('B', []);
     invariant(ta.desc instanceof StructDesc);
-    ta.desc.fields.push(new Field('b', tb, false));
+    ta.desc.fields.push(new Field('b', tb));
 
     invariant(tb.desc instanceof StructDesc);
     const {fields} = tb.desc;
-    fields.push(new Field('a', makeListType(ta), false), new Field('b', makeListType(tb), false));
+    fields.push(new Field('a', makeListType(ta)), new Field('b', makeListType(tb)));
 
     const a = [Kind.Struct, 'A',
           ['b', Kind.Struct, 'B', [
-            'a', Kind.List, Kind.BackRef, 1, false,
-            'b', Kind.List, Kind.BackRef, 0, false,
-          ], false], false, [], false, []];
+            'a', Kind.List, Kind.BackRef, 1,
+            'b', Kind.List, Kind.BackRef, 0,
+          ]], false, [], false, []];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
 

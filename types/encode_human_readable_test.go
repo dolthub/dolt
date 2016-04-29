@@ -125,27 +125,21 @@ func TestWriteHumanReadableNested(t *testing.T) {
 
 func TestWriteHumanReadableStruct(t *testing.T) {
 	typ := MakeStructType("S1", []Field{
-		Field{Name: "x", T: NumberType, Optional: false},
-		Field{Name: "y", T: NumberType, Optional: true},
+		Field{Name: "x", T: NumberType},
+		Field{Name: "y", T: NumberType},
 	})
 
 	str := NewStruct(typ, map[string]Value{
 		"x": Number(1),
+		"y": Number(2),
 	})
-	assertWriteHRSEqual(t, "S1 {\n  x: 1,\n}", str)
-	assertWriteTaggedHRSEqual(t, "struct S1 {\n  x: Number\n  y: optional Number\n}({\n  x: 1,\n})", str)
-
-	str2 := NewStruct(typ, map[string]Value{
-		"x": Number(2),
-		"y": Number(3),
-	})
-	assertWriteHRSEqual(t, "S1 {\n  x: 2,\n  y: 3,\n}", str2)
-	assertWriteTaggedHRSEqual(t, "struct S1 {\n  x: Number\n  y: optional Number\n}({\n  x: 2,\n  y: 3,\n})", str2)
+	assertWriteHRSEqual(t, "S1 {\n  x: 1,\n  y: 2,\n}", str)
+	assertWriteTaggedHRSEqual(t, "struct S1 {\n  x: Number\n  y: Number\n}({\n  x: 1,\n  y: 2,\n})", str)
 }
 
 func TestWriteHumanReadableListOfStruct(t *testing.T) {
 	typ := MakeStructType("S3", []Field{
-		Field{Name: "x", T: NumberType, Optional: false},
+		Field{Name: "x", T: NumberType},
 	})
 
 	str1 := NewStruct(typ, map[string]Value{
@@ -284,13 +278,13 @@ func TestRecursiveStruct(t *testing.T) {
 	// }
 
 	a := MakeStructType("A", []Field{
-		Field{Name: "b", T: nil, Optional: false},
-		Field{Name: "c", T: nil, Optional: false},
-		Field{Name: "d", T: nil, Optional: false},
+		Field{Name: "b", T: nil},
+		Field{Name: "c", T: nil},
+		Field{Name: "d", T: nil},
 	})
 	d := MakeStructType("D", []Field{
-		Field{Name: "e", T: nil, Optional: false},
-		Field{Name: "f", T: a, Optional: false},
+		Field{Name: "e", T: nil},
+		Field{Name: "f", T: a},
 	})
 	a.Desc.(StructDesc).Fields[0].T = a
 	a.Desc.(StructDesc).Fields[1].T = MakeListType(a)

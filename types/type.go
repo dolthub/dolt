@@ -12,7 +12,7 @@ import (
 //     to understand how to interpret the rest of the data.
 // If Kind() refers to a primitive, then Desc has no more info.
 // If Kind() refers to List, Map, Set or Ref, then Desc is a list of Types describing the element type(s).
-// If Kind() refers to Struct, then Desc contains a []Field and Choices.
+// If Kind() refers to Struct, then Desc contains a []Field.
 
 type Type struct {
 	Desc TypeDesc

@@ -224,9 +224,6 @@ func (w *hrsWriter) writeStructType(t *Type, backRefs []*Type) {
 		}
 		w.write(f.Name)
 		w.write(": ")
-		if f.Optional {
-			w.write("optional ")
-		}
 		w.writeType(f.T, backRefs)
 		w.newLine()
 	}

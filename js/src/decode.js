@@ -296,16 +296,8 @@ export class JsonArrayReader {
 
     for (let i = 0; i < desc.fields.length; i++) {
       const field = desc.fields[i];
-      if (field.optional) {
-        const b = this.readBool();
-        if (b) {
-          const v = this.readValueWithoutTag(field.t);
-          data[field.name] = v;
-        }
-      } else {
-        const v = this.readValueWithoutTag(field.t);
-        data[field.name] = v;
-      }
+      const v = this.readValueWithoutTag(field.t);
+      data[field.name] = v;
     }
 
     return newStruct(type, data);
@@ -322,8 +314,7 @@ export class JsonArrayReader {
     while (!fieldReader.atEnd()) {
       const fieldName = fieldReader.readString();
       const fieldType = fieldReader.readTypeAsTag(backRefs);
-      const optional = fieldReader.readBool();
-      newFields.push(new Field(fieldName, fieldType, optional));
+      newFields.push(new Field(fieldName, fieldType));
     }
 
     // Mutate the already created structType since when looking for the cycle we compare

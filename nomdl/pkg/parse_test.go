@@ -55,12 +55,6 @@ func (suite *ParserTestSuite) TestBadStructParse() {
 
 	dupName := "struct str { a :Bool a :Bool }"
 	suite.parsePanics(dupName, "Fields must have unique names.")
-
-	optionalAsTypeName := "struct S { x: optional }"
-	suite.parsePanics(optionalAsTypeName, "optional requires a type after it")
-
-	optionalAsTypeName2 := "struct S { x: optional y: T }"
-	suite.parsePanics(optionalAsTypeName2, "optional requires a type after it")
 }
 
 func (suite *ParserTestSuite) TestStructParse() {
@@ -76,15 +70,8 @@ func (suite *ParserTestSuite) TestStructParse() {
 	for k, v := range types.KindToString {
 		if types.IsPrimitiveKind(k) {
 			suite.parseNotPanics(fmt.Sprintf(structTmpl, "s", "a :"+v, ""))
-			suite.parseNotPanics(fmt.Sprintf(structTmpl, "s", "a: optional "+v, ""))
 		}
 	}
-
-	optional := "struct str { a: optional Bool b: optional Blob c: optional Blob }"
-	suite.parseNotPanics(optional)
-
-	optionalNoSpace := "struct str{a:optional Bool}"
-	suite.parseNotPanics(optionalNoSpace)
 }
 
 func (suite *ParserTestSuite) TestComment() {
@@ -113,9 +100,7 @@ func (suite *ParserTestSuite) TestComment() {
 			// Not a field
 		}
 		/* More talk */
-		struct t { b :Bool }
-		struct t2 { b:optional/* x */Bool }
-		struct t3 { b:/* x */optional Bool }`,
+		struct t { b :Bool }`,
 	}
 	for _, c := range comments {
 		suite.parseNotPanics(c)
@@ -139,7 +124,7 @@ type ParsedResultTestSuite struct {
 	suite.Suite
 
 	prim               testField
-	primOptional       testField
+	prim2              testField
 	compound           testField
 	compoundOfCompound testField
 	namedType          testField
@@ -148,13 +133,13 @@ type ParsedResultTestSuite struct {
 }
 
 func (suite *ParsedResultTestSuite) SetupTest() {
-	suite.prim = newTestField("a", types.NumberType, false, "")
-	suite.primOptional = newTestField("b", types.NumberType, true, "")
-	suite.compound = newTestField("set", types.MakeSetType(types.StringType), false, "")
-	suite.compoundOfCompound = newTestField("listOfSet", types.MakeListType(types.MakeSetType(types.StringType)), false, "")
-	suite.namedType = newTestField("otherStruct", makeUnresolvedType("", "Other"), false, "Other")
-	suite.namespacedType = newTestField("namespacedStruct", makeUnresolvedType("Elsewhere", "Other"), false, "Elsewhere.Other")
-	suite.mapOfNamedType = newTestField("mapOfStructToOther", types.MakeMapType(makeUnresolvedType("", "Struct"), makeUnresolvedType("Elsewhere", "Other")), false, "Map<Struct, Elsewhere.Other>")
+	suite.prim = newTestField("a", types.NumberType, "")
+	suite.prim2 = newTestField("b", types.StringType, "")
+	suite.compound = newTestField("set", types.MakeSetType(types.StringType), "")
+	suite.compoundOfCompound = newTestField("listOfSet", types.MakeListType(types.MakeSetType(types.StringType)), "")
+	suite.namedType = newTestField("otherStruct", makeUnresolvedType("", "Other"), "Other")
+	suite.namespacedType = newTestField("namespacedStruct", makeUnresolvedType("Elsewhere", "Other"), "Elsewhere.Other")
+	suite.mapOfNamedType = newTestField("mapOfStructToOther", types.MakeMapType(makeUnresolvedType("", "Struct"), makeUnresolvedType("Elsewhere", "Other")), "Map<Struct, Elsewhere.Other>")
 }
 
 type structTestCase struct {
@@ -179,15 +164,12 @@ type testField struct {
 	S string
 }
 
-func newTestField(name string, t *types.Type, optional bool, s string) testField {
-	return testField{Field: types.Field{Name: name, T: t, Optional: optional}, S: s}
+func newTestField(name string, t *types.Type, s string) testField {
+	return testField{Field: types.Field{Name: name, T: t}, S: s}
 }
 
 func (t testField) String() string {
 	s := t.Name + ": "
-	if t.Optional {
-		s += "optional "
-	}
 	if t.S != "" {
 		return s + t.S
 	}
@@ -222,20 +204,16 @@ func (suite *ParsedResultTestSuite) TestPrimitiveField() {
 	suite.parseAndCheckStructs(makeStructTestCase("Simple", suite.prim))
 }
 
-func (suite *ParsedResultTestSuite) TestPrimitiveOptionalField() {
-	suite.parseAndCheckStructs(makeStructTestCase("SimpleOptional", suite.primOptional))
-}
-
 func (suite *ParsedResultTestSuite) TestCommentNextToName() {
 	n := "WithComment"
-	s := fmt.Sprintf("struct %s { /* Oy! */%s }", n, suite.primOptional)
-	suite.assertTypes(s, types.MakeStructType(n, []types.Field{suite.primOptional.Field}))
+	s := fmt.Sprintf("struct %s { /* Oy! */%s }", n, suite.prim2)
+	suite.assertTypes(s, types.MakeStructType(n, []types.Field{suite.prim2.Field}))
 }
 
 func (suite *ParsedResultTestSuite) TestCommentAmongFields() {
 	n := "WithComment"
-	s := fmt.Sprintf("struct %s { %s \n// Nope\n%s }", n, suite.prim, suite.primOptional)
-	suite.assertTypes(s, types.MakeStructType(n, []types.Field{suite.prim.Field, suite.primOptional.Field}))
+	s := fmt.Sprintf("struct %s { %s \n// Nope\n%s }", n, suite.prim, suite.prim2)
+	suite.assertTypes(s, types.MakeStructType(n, []types.Field{suite.prim.Field, suite.prim2.Field}))
 }
 
 func (suite *ParsedResultTestSuite) TestCompoundField() {
@@ -261,7 +239,7 @@ func (suite *ParsedResultTestSuite) TestMapOfNamedTypeField() {
 func (suite *ParsedResultTestSuite) TestMultipleFields() {
 	suite.parseAndCheckStructs(makeStructTestCase("Multi",
 		suite.prim,
-		suite.primOptional,
+		suite.prim2,
 		suite.namedType,
 		suite.namespacedType,
 		suite.compound,
@@ -272,11 +250,11 @@ func (suite *ParsedResultTestSuite) TestMultipleFields() {
 func (suite *ParsedResultTestSuite) TestMultipleStructs() {
 	defns := []structTestCase{
 		makeStructTestCase("Simple", suite.prim),
-		makeStructTestCase("Optional", suite.primOptional),
+		makeStructTestCase("Simple2", suite.prim2),
 		makeStructTestCase("Compound", suite.compound),
 		makeStructTestCase("Multi",
 			suite.prim,
-			suite.primOptional,
+			suite.prim2,
 			suite.namespacedType,
 			suite.compound,
 		),

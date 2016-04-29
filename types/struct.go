@@ -22,11 +22,9 @@ func NewStruct(t *Type, data structData) Struct {
 	newData := make(structData)
 	desc := t.Desc.(StructDesc)
 	for _, f := range desc.Fields {
-		if v, ok := data[f.Name]; ok {
-			newData[f.Name] = v
-		} else {
-			d.Chk.True(f.Optional, "Missing required field %s", f.Name)
-		}
+		v, ok := data[f.Name]
+		d.Chk.True(ok, "Missing required field %s", f.Name)
+		newData[f.Name] = v
 	}
 	return newStructFromData(newData, t)
 }
@@ -42,11 +40,9 @@ func (s Struct) Ref() ref.Ref {
 func (s Struct) Chunks() (chunks []Ref) {
 	chunks = append(chunks, s.t.Chunks()...)
 	for _, f := range s.desc().Fields {
-		if v, ok := s.data[f.Name]; ok {
-			chunks = append(chunks, v.Chunks()...)
-		} else {
-			d.Chk.True(f.Optional)
-		}
+		v, ok := s.data[f.Name]
+		d.Chk.True(ok)
+		chunks = append(chunks, v.Chunks()...)
 	}
 
 	return
@@ -55,11 +51,9 @@ func (s Struct) Chunks() (chunks []Ref) {
 func (s Struct) ChildValues() (res []Value) {
 	res = append(res, s.t)
 	for _, f := range s.desc().Fields {
-		if v, ok := s.data[f.Name]; ok {
-			res = append(res, v)
-		} else {
-			d.Chk.True(f.Optional)
-		}
+		v, ok := s.data[f.Name]
+		d.Chk.True(ok)
+		res = append(res, v)
 	}
 	return
 }
@@ -112,22 +106,11 @@ func (s Struct) findField(n string) (Field, bool) {
 }
 
 func structBuilder(values []Value, t *Type) Value {
-	i := 0
 	desc := t.Desc.(StructDesc)
 	data := structData{}
 
-	for _, f := range desc.Fields {
-		if f.Optional {
-			b := bool(values[i].(Bool))
-			i++
-			if b {
-				data[f.Name] = values[i]
-				i++
-			}
-		} else {
-			data[f.Name] = values[i]
-			i++
-		}
+	for i, f := range desc.Fields {
+		data[f.Name] = values[i]
 	}
 
 	return newStructFromData(data, t)
@@ -140,15 +123,8 @@ func structReader(s Struct, t *Type) []Value {
 	desc := t.Desc.(StructDesc)
 	for _, f := range desc.Fields {
 		v, ok := s.data[f.Name]
-		if f.Optional {
-			values = append(values, Bool(ok))
-			if ok {
-				values = append(values, v)
-			}
-		} else {
-			d.Chk.True(ok)
-			values = append(values, v)
-		}
+		d.Chk.True(ok)
+		values = append(values, v)
 	}
 
 	return values

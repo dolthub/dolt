@@ -118,7 +118,7 @@ suite('validate type', () => {
 
   test('struct', async () => {
     const type = makeStructType('Struct', [
-      new Field('x', boolType, false),
+      new Field('x', boolType),
     ]);
 
     const v = newStruct(type, {x: true});

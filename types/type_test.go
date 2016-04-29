@@ -13,8 +13,8 @@ func TestTypes(t *testing.T) {
 	mapType := MakeMapType(StringType, NumberType)
 	setType := MakeSetType(StringType)
 	mahType := MakeStructType("MahStruct", []Field{
-		Field{"Field1", StringType, false},
-		Field{"Field2", BoolType, true},
+		Field{"Field1", StringType},
+		Field{"Field2", BoolType},
 	})
 	recType := MakeStructType("RecursiveStruct", []Field{
 		Field{Name: "self", T: nil},
@@ -48,10 +48,10 @@ func TestTypeRefDescribe(t *testing.T) {
 	assert.Equal("Set<String>", setType.Describe())
 
 	mahType := MakeStructType("MahStruct", []Field{
-		Field{"Field1", StringType, false},
-		Field{"Field2", BoolType, true},
+		Field{"Field1", StringType},
+		Field{"Field2", BoolType},
 	})
-	assert.Equal("struct MahStruct {\n  Field1: String\n  Field2: optional Bool\n}", mahType.Describe())
+	assert.Equal("struct MahStruct {\n  Field1: String\n  Field2: Bool\n}", mahType.Describe())
 }
 
 func TestTypeOrdered(t *testing.T) {

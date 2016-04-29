@@ -92,7 +92,7 @@ suite('BuildSet', () => {
     const nums = firstNNumbers(testSetSize);
 
     const structType = makeStructType('num', [
-      new Field('n', numberType, false),
+      new Field('n', numberType),
     ]);
     const refOfStructType = makeRefType(structType);
     const tr = makeSetType(refOfStructType);
@@ -104,7 +104,7 @@ suite('BuildSet', () => {
     });
 
     const s = await newSet(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-511c16182c8c540a04ed0612df9d882788456334');
+    assert.strictEqual(s.ref.toString(), 'sha1-9d7c385651c1e58872621cf2b128f5107605c2c2');
   });
 
 

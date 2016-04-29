@@ -89,13 +89,12 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 // Field represents a Struct field or a Union choice.
 // Neither Name nor T is allowed to be a zero-value, though T may be an unresolved Type.
 type Field struct {
-	Name     string
-	T        *Type
-	Optional bool
+	Name string
+	T    *Type
 }
 
 func (f Field) Equals(other Field) bool {
-	return f.Name == other.Name && f.Optional == other.Optional && f.T.Equals(other.T)
+	return f.Name == other.Name && f.T.Equals(other.T)
 }
 
 // BackRefDesc is used to symbolize back references in recursive struct types

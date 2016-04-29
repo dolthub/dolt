@@ -77,8 +77,6 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 		fields[i] = types.Field{
 			Name: key,
 			T:    types.MakePrimitiveType(kind),
-			// TODO(misha): Think about whether we need fields to be optional.
-			Optional: false,
 		}
 	}
 	return types.MakeStructType(structName, fields)

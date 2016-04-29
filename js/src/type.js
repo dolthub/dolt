@@ -94,17 +94,15 @@ export class StructDesc {
 export class Field {
   name: string;
   t: Type;
-  optional: boolean;
 
-  constructor(name: string, t: Type, optional: boolean) {
+  constructor(name: string, t: Type) {
     this.name = name;
     // TODO: Rename this to type.
     this.t = t;
-    this.optional = optional;
   }
 
   equals(other: Field): boolean {
-    return this.name === other.name && this.t.equals(other.t) && this.optional === other.optional;
+    return this.name === other.name && this.t.equals(other.t);
   }
 }
 

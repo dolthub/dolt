@@ -92,8 +92,8 @@ suite('defs', () => {
 
   test('struct', async () => {
     const type = makeStructType('Struct', [
-      new Field('b', boolType, false),
-      new Field('s', stringType, false),
+      new Field('b', boolType),
+      new Field('s', stringType),
     ]);
 
     const s1 = newStruct(type, {
@@ -111,7 +111,7 @@ suite('defs', () => {
   test('struct with list', async () => {
     const listOfNumberType = makeListType(numberType);
     const type = makeStructType('StructWithList', [
-      new Field('l', listOfNumberType, false),
+      new Field('l', listOfNumberType),
     ]);
 
     const s1 = newStruct(type, {
@@ -128,7 +128,7 @@ suite('defs', () => {
 
   test('list of struct', async () => {
     const structType = makeStructType('Struct', [
-      new Field('i', numberType, false),
+      new Field('i', numberType),
     ]);
     const listType = makeListType(structType);
 
@@ -148,7 +148,7 @@ suite('defs', () => {
 
   test('recursive struct', async () => {
     const type = makeStructType('Struct', [
-      new Field('children', valueType /* placeholder */, false),
+      new Field('children', valueType /* placeholder */),
     ]);
     const listType = makeListType(type);
     invariant(type.desc instanceof StructDesc);

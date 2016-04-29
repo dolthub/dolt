@@ -222,7 +222,6 @@ func (w *jsonArrayWriter) writeStructType(t *Type, backRefs []*Type) {
 	for _, field := range t.Desc.(StructDesc).Fields {
 		fieldWriter.write(field.Name)
 		fieldWriter.writeTypeAsTag(field.T, backRefs)
-		fieldWriter.write(field.Optional)
 	}
 	w.write(fieldWriter.toArray())
 }
@@ -238,22 +237,10 @@ func (w *jsonArrayWriter) writeBlob(b Blob) {
 }
 
 func (w *jsonArrayWriter) writeStruct(v Value, t *Type) {
-	i := 0
 	values := structReader(v.(Struct), t)
 	desc := t.Desc.(StructDesc)
 
-	for _, f := range desc.Fields {
-		if f.Optional {
-			ok := bool(values[i].(Bool))
-			i++
-			w.write(ok)
-			if ok {
-				w.writeValue(values[i], f.T)
-				i++
-			}
-		} else {
-			w.writeValue(values[i], f.T)
-			i++
-		}
+	for i, f := range desc.Fields {
+		w.writeValue(values[i], f.T)
 	}
 }

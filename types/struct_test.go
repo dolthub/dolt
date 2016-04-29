@@ -10,13 +10,13 @@ func TestGenericStructEquals(t *testing.T) {
 	assert := assert.New(t)
 
 	typ := MakeStructType("S1", []Field{
-		Field{"x", BoolType, false},
-		Field{"o", StringType, true},
+		Field{"x", BoolType},
+		Field{"s", StringType},
 	})
 
-	data1 := structData{"x": Bool(true)}
+	data1 := structData{"x": Bool(true), "s": NewString("hi")}
 	s1 := newStructFromData(data1, typ)
-	data2 := structData{"x": Bool(true), "extra": NewString("is ignored")}
+	data2 := structData{"x": Bool(true), "s": NewString("hi")}
 	s2 := newStructFromData(data2, typ)
 
 	assert.True(s1.Equals(s2))
@@ -27,7 +27,7 @@ func TestGenericStructChunks(t *testing.T) {
 	assert := assert.New(t)
 
 	typ := MakeStructType("S1", []Field{
-		Field{"r", MakeRefType(BoolType), false},
+		Field{"r", MakeRefType(BoolType)},
 	})
 
 	b := Bool(true)
@@ -39,41 +39,17 @@ func TestGenericStructChunks(t *testing.T) {
 	assert.Equal(b.Ref(), s1.Chunks()[0].TargetRef())
 }
 
-func TestGenericStructChunksOptional(t *testing.T) {
-	assert := assert.New(t)
-
-	typ := MakeStructType("S1", []Field{
-		Field{"r", MakeRefType(BoolType), true},
-	})
-
-	b := Bool(true)
-
-	data1 := structData{}
-	s1 := newStructFromData(data1, typ)
-
-	assert.Len(s1.Chunks(), 0)
-
-	data2 := structData{"r": NewRef(b.Ref())}
-	s2 := newStructFromData(data2, typ)
-
-	assert.Len(s2.Chunks(), 1)
-	assert.Equal(b.Ref(), s2.Chunks()[0].TargetRef())
-}
-
 func TestGenericStructNew(t *testing.T) {
 	assert := assert.New(t)
 
 	typ := MakeStructType("S2", []Field{
-		Field{"b", BoolType, false},
-		Field{"o", StringType, true},
+		Field{"b", BoolType},
+		Field{"o", StringType},
 	})
 
-	s := NewStruct(typ, map[string]Value{"b": Bool(true)})
+	s := NewStruct(typ, map[string]Value{"b": Bool(true), "o": NewString("hi")})
 	assert.True(s.Get("b").Equals(Bool(true)))
-	_, ok := s.MaybeGet("o")
-	assert.False(ok)
-
-	_, ok = s.MaybeGet("x")
+	_, ok := s.MaybeGet("missing")
 	assert.False(ok)
 
 	s2 := NewStruct(typ, map[string]Value{"b": Bool(false), "o": NewString("hi")})
@@ -90,11 +66,11 @@ func TestGenericStructSet(t *testing.T) {
 	assert := assert.New(t)
 
 	typ := MakeStructType("S3", []Field{
-		Field{"b", BoolType, false},
-		Field{"o", StringType, true},
+		Field{"b", BoolType},
+		Field{"o", StringType},
 	})
 
-	s := NewStruct(typ, map[string]Value{"b": Bool(true)})
+	s := NewStruct(typ, map[string]Value{"b": Bool(true), "o": NewString("hi")})
 	s2 := s.Set("b", Bool(false))
 
 	assert.Panics(func() { s.Set("b", Number(1)) })

@@ -675,7 +675,7 @@ func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
 	vs := NewTestValueStore()
 
 	structType := MakeStructType("num", []Field{
-		Field{"n", NumberType, false},
+		Field{"n", NumberType},
 	})
 
 	refOfTypeStructType := MakeRefType(structType)
@@ -693,7 +693,7 @@ func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := NewTypedList(listType, nums...)
-	assert.Equal("sha1-7a8a34a99e528d6c097f1d4cc7f83f41329e1e1e", s.Ref().String())
+	assert.Equal("sha1-477335cbd865c332b79db23eec5caaa4f8be3f45", s.Ref().String())
 }
 
 func TestCompoundListModifyAfterRead(t *testing.T) {

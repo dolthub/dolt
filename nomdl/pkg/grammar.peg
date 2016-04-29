@@ -70,8 +70,8 @@ Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 
 StructEntry <- Field
 
-Field <- i:Ident _ `:` _ o:(`optional` _)? t:Type _ {
-	return types.Field{i.(string), t.(*types.Type), o != nil}, nil
+Field <- i:Ident _ `:` _ t:Type _ {
+	return types.Field{i.(string), t.(*types.Type)}, nil
 }
 
 Type <- t:(PrimitiveType / CompoundType / NamespaceIdent) {

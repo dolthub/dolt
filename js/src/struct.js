@@ -10,7 +10,7 @@ import {Kind} from './noms-kind.js';
 import {Value} from './value.js';
 import validateType from './validate-type.js';
 
-type StructData = {[key: string]: ?valueOrPrimitive};
+type StructData = {[key: string]: valueOrPrimitive};
 
 /**
  * Base class for all Noms structs. The decoder creates sub classes of this for Noms struct.
@@ -60,9 +60,6 @@ export default class Struct extends Value {
     const chunks = [];
 
     const add = field => {
-      if (!field.present) {
-        return;
-      }
       const {value} = field;
       if (!isPrimitive(value)) {
         invariant(value instanceof Value);
@@ -80,27 +77,15 @@ function validate(type: Type, data: StructData): void {
   const {desc} = type;
   invariant(desc instanceof StructDesc);
   const {fields} = desc;
-  let dataCount = Object.keys(data).length;
   for (let i = 0; i < fields.length; i++) {
     const field = fields[i];
     const value = data[field.name];
-    if (field.optional) {
-      if (field.name in data) {
-        dataCount--;
-      }
-      if (value !== undefined) {
-        validateType(field.t, value);
-      }
-    } else {
-      dataCount--;
-      validateType(field.t, value);
-    }
+    validateType(field.t, value);
   }
-  invariant(dataCount === 0);
 }
 
 export class StructFieldMirror {
-  value: ?valueOrPrimitive;
+  value: valueOrPrimitive;
   _f: Field;
 
   constructor(data: StructData, f: Field) {
@@ -112,12 +97,6 @@ export class StructFieldMirror {
   }
   get type(): Type {
     return this._f.t;
-  }
-  get optional(): boolean {
-    return this._f.optional;
-  }
-  get present(): boolean {
-    return this.value !== undefined;
   }
 }
 
@@ -193,7 +172,7 @@ export function createStructClass<T: Struct>(type: Type): Class<T> {
     Object.defineProperty(c.prototype, setterName(name), {
       configurable: true,
       enumerable: false,
-      value: getSetter(name, field.optional),
+      value: getSetter(name),
       writable: true,
     });
   }
@@ -201,28 +180,11 @@ export function createStructClass<T: Struct>(type: Type): Class<T> {
   return cache[k] = c;
 }
 
-function getSetter(name: string, optional: boolean) {
-  if (!optional) {
-    return function(value) {
-      const newData = Object.assign(Object.create(null), this._data);
-      newData[name] = value;
-      return new this.constructor(newData);
-    };
-  }
-  if (optional) {
-    return function(value) {
-      const newData = Object.assign(Object.create(null), this._data);
-      if (value === undefined) {
-        delete newData[name];
-      } else {
-        newData[name] = value;
-      }
-      return new this.constructor(newData);
-    };
-  }
+function getSetter(name: string) {
   return function(value) {
-    const data = addProperty(new StructMirror(this), name, value);
-    return new this.constructor(data);
+    const newData = Object.assign(Object.create(null), this._data);
+    newData[name] = value;
+    return new this.constructor(newData);
   };
 }
 
@@ -235,7 +197,7 @@ function addProperty(mirror: StructMirror, name: string, value: ?valueOrPrimitiv
         data[name] = value;
       }
       found = true;
-    } else if (f.present) {
+    } else {
       data[f.name] = f.value;
     }
   });

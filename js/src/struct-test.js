@@ -9,6 +9,7 @@ import {
   numberType,
   makeStructType,
   makeRefType,
+  makeListType,
   stringType,
   valueType,
   StructDesc,
@@ -16,15 +17,16 @@ import {
 import {suite, test} from 'mocha';
 import DataStore from './data-store.js';
 import {invariant} from './assert.js';
+import {newList} from './list.js';
 
 suite('Struct', () => {
   test('equals', () => {
     const type = makeStructType('S1', [
-      new Field('x', boolType, false),
-      new Field('o', stringType, true),
+      new Field('x', boolType),
+      new Field('o', stringType),
     ]);
 
-    const data1 = {x: true};
+    const data1 = {x: true, o: 'hi'};
     const s1 = newStruct(type, data1);
     const s2 = newStruct(type, data1);
 
@@ -38,7 +40,7 @@ suite('Struct', () => {
     const bt = boolType;
     const refOfBoolType = makeRefType(bt);
     const type = makeStructType('S1', [
-      new Field('r', refOfBoolType, false),
+      new Field('r', refOfBoolType),
     ]);
 
     const b = true;
@@ -48,39 +50,19 @@ suite('Struct', () => {
     assert.isTrue(r.equals(s1.chunks[0]));
   });
 
-  test('chunks optional', () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-
-    const refOfBoolType = makeRefType(boolType);
-    const type = makeStructType('S1', [
-      new Field('r', refOfBoolType, true),
-    ]);
-
-    const s1 = newStruct(type, {});
-
-    assert.strictEqual(0, s1.chunks.length);
-
-    const b = true;
-    const r = ds.writeValue(b);
-    const s2 = newStruct(type, {r: r});
-    assert.strictEqual(1, s2.chunks.length);
-    assert.isTrue(r.equals(s2.chunks[0]));
-  });
-
   test('new', () => {
     const type = makeStructType('S2', [
-      new Field('b', boolType, false),
-      new Field('o', stringType, true),
+      new Field('b', boolType),
+      new Field('o', stringType),
     ]);
 
-    const s1 = newStruct(type, {b: true});
-    assert.strictEqual(true, s1.b);
-    assert.strictEqual(s1.o, undefined);
+    const s1 = newStruct(type, {b: true, o: 'hi'});
+    assert.strictEqual(s1.b, true);
+    assert.strictEqual(s1.o, 'hi');
 
     const s2 = newStruct(type, {b: false, o: 'hi'});
-    assert.strictEqual(false, s2.b);
-    assert.strictEqual('hi', s2.o);
+    assert.strictEqual(s2.b, false);
+    assert.strictEqual(s2.o, 'hi');
 
     assert.throws(() => {
       newStruct(type, {o: 'hi'}); // missing required field
@@ -90,17 +72,17 @@ suite('Struct', () => {
       newStruct(type, {x: 'hi'}); // unknown field
     });
 
-    const s3 = newStruct(type, {b: true, o: undefined});
+    const s3 = newStruct(type, {b: true, o: 'hi'});
     assert.isTrue(s1.equals(s3));
   });
 
   test('struct set', () => {
     const type = makeStructType('S3', [
-      new Field('b', boolType, false),
-      new Field('o', stringType, true),
+      new Field('b', boolType),
+      new Field('o', stringType),
     ]);
 
-    const s1 = newStruct(type, {b: true});
+    const s1 = newStruct(type, {b: true, o: 'hi'});
     const s2 = s1.setB(false);
 
     // TODO: assert throws on set wrong type
@@ -115,8 +97,8 @@ suite('Struct', () => {
     const s4 = m.set('b', false);
     assert.isTrue(s2.equals(s4));
 
-    const s5 = s3.setO(undefined);
-    const s6 = new StructMirror(s3).set('o', undefined);
+    const s5 = s3.setO('bye');
+    const s6 = new StructMirror(s3).set('o', 'bye');
     assert.isTrue(s5.equals(s6));
   });
 
@@ -128,8 +110,8 @@ suite('Struct', () => {
 
   test('createStructClass', () => {
     const typeA = makeStructType('A', [
-      new Field('b', numberType, false),
-      new Field('c', stringType, false),
+      new Field('b', numberType),
+      new Field('c', stringType),
     ]);
     const A = createStructClass(typeA);
     const a = new A({b: 1, c: 'hi'});
@@ -141,31 +123,38 @@ suite('Struct', () => {
 
   test('type validation', () => {
     const type = makeStructType('S1', [
-      new Field('x', boolType, false),
-      new Field('o', stringType, true),
+      new Field('x', boolType),
+      new Field('o', stringType),
     ]);
 
     assert.throws(() => {
-      newStruct(type, {x: 1});
+      newStruct(type, {x: 1, o: 'hi'});
     });
     assert.throws(() => {
       newStruct(type, {o: 1});
     });
 
-    newStruct(type, {x: true, o: undefined});
-    newStruct(type, {x: true});
+    newStruct(type, {x: true, o: 'hi'});
   });
 
-  test('type validation cyclic', () => {
+  test('type validation cyclic', async () => {
+    // struct S {
+    //   b: Bool
+    //   l: List<S>
+    // }
     const type = makeStructType('S', [
-      new Field('b', boolType, false),
-      new Field('o', valueType /* placeholder */, true),
+      new Field('b', boolType),
+      new Field('l', valueType /* placeholder */),
     ]);
+    const listType = makeListType(type);
     invariant(type.desc instanceof StructDesc);
-    type.desc.fields[1].t = type;
+    type.desc.fields[1].t = listType;
 
-    newStruct(type, {b: true});
-    newStruct(type, {b: true, o: newStruct(type, {b: false})});
+    const emptyList = await newList([], listType);
+    newStruct(type, {b: true, l: emptyList});
+    newStruct(type, {b: true, l: await newList([
+      newStruct(type, {b: false, l: emptyList}),
+    ], listType)});
 
     assert.throws(() => {
       newStruct(type, {b: 1});

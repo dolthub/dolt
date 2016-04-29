@@ -100,7 +100,7 @@ suite('BuildMap', () => {
     }
 
     const structType = makeStructType('num', [
-      new Field('n', numberType, false),
+      new Field('n', numberType),
     ]);
     const refOfStructType = makeRefType(structType);
     const tr = makeMapType(refOfStructType, refOfStructType);
@@ -112,7 +112,7 @@ suite('BuildMap', () => {
     });
 
     const m = await newMap(kvRefs, tr);
-    assert.strictEqual(m.ref.toString(), 'sha1-862eeb0cd1a674184d486a680c6e1d102cf28ccf');
+    assert.strictEqual(m.ref.toString(), 'sha1-2784be4cfc759edbb89fcb57979d53d95d3e7187');
   });
 
   test('LONG: set', async () => {
