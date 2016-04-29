@@ -93,16 +93,15 @@ export class StructDesc {
 
 export class Field {
   name: string;
-  t: Type;
+  type: Type;
 
-  constructor(name: string, t: Type) {
+  constructor(name: string, type: Type) {
     this.name = name;
-    // TODO: Rename this to type.
-    this.t = t;
+    this.type = type;
   }
 
   equals(other: Field): boolean {
-    return this.name === other.name && this.t.equals(other.t);
+    return this.name === other.name && this.type.equals(other.type);
   }
 }
 
@@ -157,7 +156,7 @@ function buildType<T: TypeDesc>(desc: T): Type<T> {
   return new Type(desc);
 }
 
-function makePrimitiveType(k: NomsKind): Type {
+function makePrimitiveType(k: NomsKind): Type<PrimitiveDesc> {
   return buildType(new PrimitiveDesc(k));
 }
 

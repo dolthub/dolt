@@ -165,7 +165,7 @@ type testField struct {
 }
 
 func newTestField(name string, t *types.Type, s string) testField {
-	return testField{Field: types.Field{Name: name, T: t}, S: s}
+	return testField{Field: types.Field{Name: name, Type: t}, S: s}
 }
 
 func (t testField) String() string {
@@ -173,7 +173,7 @@ func (t testField) String() string {
 	if t.S != "" {
 		return s + t.S
 	}
-	return s + t.T.Describe()
+	return s + t.Type.Describe()
 }
 
 func (suite *ParsedResultTestSuite) parseAndCheckStructs(structs ...structTestCase) {

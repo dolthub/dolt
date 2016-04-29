@@ -132,7 +132,7 @@ export class TypeWriter {
       if (f.optional) {
         this._w.write('optional ');
       }
-      this._writeType(f.t, parentStructTypes);
+      this._writeType(f.type, parentStructTypes);
       this._w.newLine();
     });
 

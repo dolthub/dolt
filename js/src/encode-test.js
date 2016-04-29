@@ -300,7 +300,7 @@ suite('Encode', () => {
       new Field('cs', valueType /* placeholder */),
     ]);
     const lt = makeListType(st);
-    st.desc.fields[1].t = lt;
+    st.desc.fields[1].type = lt;
 
     test([Kind.Type, Kind.Struct, 'A6', ['v', Kind.Number, 'cs', Kind.List, Kind.Parent, 0]], st);
   });

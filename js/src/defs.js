@@ -81,7 +81,7 @@ async function structDefToNoms<T: Struct>(data: StructDefType, type: Type): Prom
     const v = data[f.name];
     if (v !== undefined) {
       keys.push(f.name);
-      ps.push(defToNoms(v, f.t));
+      ps.push(defToNoms(v, f.type));
     }
   };
   desc.fields.forEach(add);

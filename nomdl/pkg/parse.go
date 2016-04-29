@@ -64,7 +64,7 @@ func resolveReferences(i *intermediate, aliases map[string][]*types.Type) {
 	var rec func(t *types.Type) *types.Type
 	resolveFields := func(fields []types.Field) {
 		for idx, f := range fields {
-			f.T = rec(f.T)
+			f.Type = rec(f.Type)
 			fields[idx] = f
 		}
 	}

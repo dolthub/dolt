@@ -88,9 +88,9 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 // Neither Name nor T is allowed to be a zero-value, though T may be an unresolved Type.
 type Field struct {
 	Name string
-	T    *Type
+	Type *Type
 }
 
 func (f Field) Equals(other Field) bool {
-	return f.Name == other.Name && f.T.Equals(other.T)
+	return f.Name == other.Name && f.Type.Equals(other.Type)
 }

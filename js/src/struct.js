@@ -78,7 +78,7 @@ function validate(type: Type, data: StructData): void {
   for (let i = 0; i < fields.length; i++) {
     const field = fields[i];
     const value = data[field.name];
-    validateType(field.t, value);
+    validateType(field.type, value);
   }
 }
 
@@ -94,7 +94,7 @@ export class StructFieldMirror {
     return this._f.name;
   }
   get type(): Type {
-    return this._f.t;
+    return this._f.type;
   }
 }
 

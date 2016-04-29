@@ -296,7 +296,7 @@ export class JsonArrayReader {
 
     for (let i = 0; i < desc.fields.length; i++) {
       const field = desc.fields[i];
-      const v = this.readValueWithoutTag(field.t);
+      const v = this.readValueWithoutTag(field.type);
       data[field.name] = v;
     }
 

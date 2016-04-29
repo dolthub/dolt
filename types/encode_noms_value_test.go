@@ -366,7 +366,7 @@ func TestWriteRecursiveStruct(t *testing.T) {
 	})
 	listType := MakeListType(structType)
 	// Mutate...
-	structType.Desc.(StructDesc).Fields[1].T = listType
+	structType.Desc.(StructDesc).Fields[1].Type = listType
 
 	NewTypedList(listType)
 

@@ -63,7 +63,7 @@ func (t *Type) ChildValues() (res []Value) {
 		}
 	case StructDesc:
 		for _, t := range desc.Fields {
-			res = append(res, t.T)
+			res = append(res, t.Type)
 		}
 	case PrimitiveDesc:
 		// Nothing, these have no child values

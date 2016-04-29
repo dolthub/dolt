@@ -44,7 +44,7 @@ func (s *testSuite) TestCSVExporter() {
 	for _, key := range header {
 		f = append(f, types.Field{
 			Name: key,
-			T:    types.StringType,
+			Type: types.StringType,
 		})
 	}
 

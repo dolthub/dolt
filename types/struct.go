@@ -86,7 +86,7 @@ func (s Struct) Get(n string) Value {
 func (s Struct) Set(n string, v Value) Struct {
 	f, ok := s.findField(n)
 	d.Chk.True(ok, "Struct has no field %s", n)
-	assertType(f.T, v)
+	assertType(f.Type, v)
 	data := make(structData, len(s.data))
 	for k, v := range s.data {
 		data[k] = v

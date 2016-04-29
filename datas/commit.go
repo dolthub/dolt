@@ -18,11 +18,11 @@ func init() {
 	// }
 
 	fieldTypes := []types.Field{
-		types.Field{Name: ValueField, T: types.ValueType},
-		types.Field{Name: ParentsField, T: nil},
+		types.Field{Name: ValueField, Type: types.ValueType},
+		types.Field{Name: ParentsField, Type: nil},
 	}
 	commitType = types.MakeStructType(structName, fieldTypes)
-	commitType.Desc.(types.StructDesc).Fields[1].T = types.MakeSetType(types.MakeRefType(commitType))
+	commitType.Desc.(types.StructDesc).Fields[1].Type = types.MakeSetType(types.MakeRefType(commitType))
 }
 
 func NewCommit() types.Struct {

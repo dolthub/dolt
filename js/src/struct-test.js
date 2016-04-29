@@ -145,7 +145,7 @@ suite('Struct', () => {
       new Field('l', valueType /* placeholder */),
     ]);
     const listType = makeListType(type);
-    type.desc.fields[1].t = listType;
+    type.desc.fields[1].type = listType;
 
     const emptyList = await newList([], listType);
     newStruct(type, {b: true, l: emptyList});

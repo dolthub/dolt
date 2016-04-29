@@ -387,8 +387,8 @@ func TestReadRecursiveStruct(t *testing.T) {
 		Field{"a", MakeListType(at)},
 		Field{"b", nil},
 	})
-	at.Desc.(StructDesc).Fields[0].T = bt
-	bt.Desc.(StructDesc).Fields[1].T = MakeListType(bt)
+	at.Desc.(StructDesc).Fields[0].Type = bt
+	bt.Desc.(StructDesc).Fields[1].Type = MakeListType(bt)
 
 	a := parseJSON(`[%d, "A",
 		["b", %d, "B", [

@@ -83,11 +83,11 @@ suite('Encode human readable types', () => {
     ]);
     const aDesc = a.desc;
     const dDesc = d.desc;
-    aDesc.fields[0].t = a;
-    aDesc.fields[2].t = d;
-    dDesc.fields[0].t = d;
-    dDesc.fields[1].t = a;
-    aDesc.fields[1].t = makeListType(a);
+    aDesc.fields[0].type = a;
+    aDesc.fields[2].type = d;
+    dDesc.fields[0].type = d;
+    dDesc.fields[1].type = a;
+    aDesc.fields[1].type = makeListType(a);
 
 
     assertWriteType(`struct A {

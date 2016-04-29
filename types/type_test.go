@@ -17,9 +17,9 @@ func TestTypes(t *testing.T) {
 		Field{"Field2", BoolType},
 	})
 	recType := MakeStructType("RecursiveStruct", []Field{
-		Field{Name: "self", T: nil},
+		Field{Name: "self", Type: nil},
 	})
-	recType.Desc.(StructDesc).Fields[0].T = recType
+	recType.Desc.(StructDesc).Fields[0].Type = recType
 
 	mRef := vs.WriteValue(mapType).TargetRef()
 	setRef := vs.WriteValue(setType).TargetRef()

@@ -150,7 +150,7 @@ suite('defs', () => {
       new Field('children', valueType /* placeholder */),
     ]);
     const listType = makeListType(type);
-    type.desc.fields[0].t = listType;
+    type.desc.fields[0].type = listType;
 
     const a = await newList([], listType);
     const b = await newList([], listType);

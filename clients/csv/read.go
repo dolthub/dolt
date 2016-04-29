@@ -76,7 +76,7 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 		}
 		fields[i] = types.Field{
 			Name: key,
-			T:    types.MakePrimitiveType(kind),
+			Type: types.MakePrimitiveType(kind),
 		}
 	}
 	return types.MakeStructType(structName, fields)
@@ -106,7 +106,7 @@ func Read(r *csv.Reader, structName string, headers []string, kinds KindSlice, v
 		for i, v := range row {
 			if i < len(headers) {
 				f := structFields[i]
-				fields[f.Name] = StringToType(v, f.T.Kind())
+				fields[f.Name] = StringToType(v, f.Type.Kind())
 			}
 		}
 		valueChan <- types.NewStruct(t, fields)

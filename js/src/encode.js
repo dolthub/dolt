@@ -265,7 +265,7 @@ export class JsonArrayWriter {
     const fieldWriter = new JsonArrayWriter(this._ds);
     desc.fields.forEach(field => {
       fieldWriter.write(field.name);
-      fieldWriter.writeTypeAsTag(field.t, parentStructTypes);
+      fieldWriter.writeTypeAsTag(field.type, parentStructTypes);
     });
     this.write(fieldWriter.array);
     parentStructTypes.pop();
