@@ -2,7 +2,7 @@
 
 import type {valueOrPrimitive} from './value.js';
 import {Value} from './value.js';
-import {Type, CompoundDesc, StructDesc} from './type.js';
+import {Type, CompoundDesc} from './type.js';
 import type {Field} from './type.js';
 import {invariant} from './assert.js';
 import {Kind} from './noms-kind.js';
@@ -75,7 +75,6 @@ export async function defToNoms(v: DefType, t: Type): Promise<valueOrPrimitive> 
 
 async function structDefToNoms<T: Struct>(data: StructDefType, type: Type): Promise<T> {
   const {desc} = type;
-  invariant(desc instanceof StructDesc);
   const keys = [];
   const ps: Array<Promise<valueOrPrimitive>> = [];
   const add = (f: Field) => {

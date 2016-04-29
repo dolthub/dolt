@@ -73,9 +73,7 @@ export default class Struct extends Value {
 }
 
 function validate(type: Type, data: StructData): void {
-  // TODO: Validate field values match field types.
   const {desc} = type;
-  invariant(desc instanceof StructDesc);
   const {fields} = desc;
   for (let i = 0; i < fields.length; i++) {
     const field = fields[i];
@@ -104,7 +102,7 @@ type FieldCallback = (f: StructFieldMirror) => void;
 
 export class StructMirror<T: Struct> {
   _data: StructData;
-  type :Type;
+  type: Type<StructDesc>;
 
   constructor(s: Struct) {
     this._data = s._data;
@@ -112,7 +110,6 @@ export class StructMirror<T: Struct> {
   }
 
   get desc(): StructDesc {
-    invariant(this.type.desc instanceof StructDesc);
     return this.type.desc;
   }
 
@@ -144,7 +141,7 @@ function setterName(name) {
   return `set${name[0].toUpperCase()}${name.slice(1)}`;
 }
 
-export function createStructClass<T: Struct>(type: Type): Class<T> {
+export function createStructClass<T: Struct>(type: Type<StructDesc>): Class<T> {
   const k = type.ref.toString();
   if (cache[k]) {
     return cache[k];
@@ -157,7 +154,6 @@ export function createStructClass<T: Struct>(type: Type): Class<T> {
   };
 
   const {desc} = type;
-  invariant(desc instanceof StructDesc);
 
   const {fields} = desc;
   for (const field of fields) {

@@ -12,11 +12,9 @@ import {
   makeListType,
   stringType,
   valueType,
-  StructDesc,
 } from './type.js';
 import {suite, test} from 'mocha';
 import DataStore from './data-store.js';
-import {invariant} from './assert.js';
 import {newList} from './list.js';
 
 suite('Struct', () => {
@@ -147,7 +145,6 @@ suite('Struct', () => {
       new Field('l', valueType /* placeholder */),
     ]);
     const listType = makeListType(type);
-    invariant(type.desc instanceof StructDesc);
     type.desc.fields[1].t = listType;
 
     const emptyList = await newList([], listType);

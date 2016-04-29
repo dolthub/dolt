@@ -4,7 +4,6 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 import {TypeWriter} from './encode-human-readable.js';
-import {invariant} from './assert.js';
 import {
   blobType,
   boolType,
@@ -18,7 +17,6 @@ import {
   stringType,
   valueType,
   Type,
-  StructDesc,
 } from './type.js';
 
 suite('Encode human readable types', () => {
@@ -84,9 +82,7 @@ suite('Encode human readable types', () => {
       new Field('f', a),
     ]);
     const aDesc = a.desc;
-    invariant(aDesc instanceof StructDesc);
     const dDesc = d.desc;
-    invariant(dDesc instanceof StructDesc);
     aDesc.fields[0].t = a;
     aDesc.fields[2].t = d;
     dDesc.fields[0].t = d;

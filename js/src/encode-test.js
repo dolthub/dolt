@@ -22,7 +22,6 @@ import {
   stringType,
   Type,
   valueType,
-  StructDesc,
 } from './type.js';
 import {IndexedMetaSequence, MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {Kind} from './noms-kind.js';
@@ -31,7 +30,6 @@ import {newMap, MapLeafSequence, NomsMap} from './map.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {newBlob} from './blob.js';
 import DataStore from './data-store.js';
-import {invariant} from './assert.js';
 import type {valueOrPrimitive} from './value.js';
 
 suite('Encode', () => {
@@ -302,7 +300,6 @@ suite('Encode', () => {
       new Field('cs', valueType /* placeholder */),
     ]);
     const lt = makeListType(st);
-    invariant(st.desc instanceof StructDesc);
     st.desc.fields[1].t = lt;
 
     test([Kind.Type, Kind.Struct, 'A6', ['v', Kind.Number, 'cs', Kind.List, Kind.Parent, 0]], st);

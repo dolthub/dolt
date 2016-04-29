@@ -12,7 +12,6 @@ import {
   stringType,
   numberType,
   valueType,
-  StructDesc,
 } from './type.js';
 import {defToNoms} from './defs.js';
 import {newList} from './list.js';
@@ -151,7 +150,6 @@ suite('defs', () => {
       new Field('children', valueType /* placeholder */),
     ]);
     const listType = makeListType(type);
-    invariant(type.desc instanceof StructDesc);
     type.desc.fields[0].t = listType;
 
     const a = await newList([], listType);

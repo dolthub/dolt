@@ -18,7 +18,6 @@ import {
   Type,
   stringType,
   valueType,
-  StructDesc,
 } from './type.js';
 import {newMap} from './map.js';
 import {newSet} from './set.js';
@@ -54,7 +53,6 @@ export function getDatasTypes(): DatasTypes {
     ]);
     const refOfCommitType = makeRefType(commitType);
     const commitSetType = makeSetType(refOfCommitType);
-    invariant(commitType.desc instanceof StructDesc);
     commitType.desc.fields.push(new Field('parents', commitSetType));
     const commitMapType = makeMapType(stringType, refOfCommitType);
     datasTypes = {

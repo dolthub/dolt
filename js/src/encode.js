@@ -67,7 +67,7 @@ export class JsonArrayWriter {
     this.write(r.toString());
   }
 
-  writeTypeAsTag(t: Type, parentStructTypes: Type[]) {
+  writeTypeAsTag(t: Type, parentStructTypes: Type<StructDesc>[]) {
     const k = t.kind;
     switch (k) {
       case Kind.List:
@@ -228,7 +228,7 @@ export class JsonArrayWriter {
     }
   }
 
-  writeTypeAsValue(t: Type, parentStructTypes: Type[]) {
+  writeTypeAsValue(t: Type, parentStructTypes: Type<StructDesc>[]) {
     const k = t.kind;
     switch (k) {
       case Kind.List:
@@ -251,17 +251,15 @@ export class JsonArrayWriter {
     }
   }
 
-  writeStructType(t: Type, parentStructTypes: Type[]) {
+  writeStructType(t: Type<StructDesc>, parentStructTypes: Type<StructDesc>[]) {
     const i = parentStructTypes.indexOf(t);
     if (i !== -1) {
       this.writeParent(parentStructTypes.length - i - 1);
       return;
     }
 
-
-    parentStructTypes = parentStructTypes.concat(t);  // we want a new array here.
+    parentStructTypes.push(t);
     const desc = t.desc;
-    invariant(desc instanceof StructDesc);
     this.writeKind(t.kind);
     this.write(t.name);
     const fieldWriter = new JsonArrayWriter(this._ds);
@@ -270,6 +268,7 @@ export class JsonArrayWriter {
       fieldWriter.writeTypeAsTag(field.t, parentStructTypes);
     });
     this.write(fieldWriter.array);
+    parentStructTypes.pop();
   }
 
   writeParent(i: number) {

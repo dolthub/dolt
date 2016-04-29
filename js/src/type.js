@@ -106,11 +106,11 @@ export class Field {
   }
 }
 
-export class Type extends Value {
-  _desc: TypeDesc;
+export class Type<T: TypeDesc> extends Value {
+  _desc: T;
   _ref: ?Ref;
 
-  constructor(desc: TypeDesc) {
+  constructor(desc: T) {
     super();
     this._desc = desc;
   }
@@ -138,7 +138,7 @@ export class Type extends Value {
     }
   }
 
-  get desc(): TypeDesc {
+  get desc(): T {
     return this._desc;
   }
 
@@ -153,7 +153,7 @@ export class Type extends Value {
   }
 }
 
-function buildType(desc: TypeDesc): Type {
+function buildType<T: TypeDesc>(desc: T): Type<T> {
   return new Type(desc);
 }
 
@@ -173,23 +173,23 @@ export function makeCompoundType(k: NomsKind, ...elemTypes: Array<Type>): Type {
   return buildType(new CompoundDesc(k, elemTypes));
 }
 
-export function makeListType(elemType: Type): Type {
+export function makeListType(elemType: Type): Type<CompoundDesc> {
   return buildType(new CompoundDesc(Kind.List, [elemType]));
 }
 
-export function makeSetType(elemType: Type): Type {
+export function makeSetType(elemType: Type): Type<CompoundDesc> {
   return buildType(new CompoundDesc(Kind.Set, [elemType]));
 }
 
-export function makeMapType(keyType: Type, valueType: Type): Type {
+export function makeMapType(keyType: Type, valueType: Type): Type<CompoundDesc> {
   return buildType(new CompoundDesc(Kind.Map, [keyType, valueType]));
 }
 
-export function makeRefType(elemType: Type): Type {
+export function makeRefType(elemType: Type): Type<CompoundDesc> {
   return buildType(new CompoundDesc(Kind.Ref, [elemType]));
 }
 
-export function makeStructType(name: string, fields: Array<Field>): Type {
+export function makeStructType(name: string, fields: Array<Field>): Type<StructDesc> {
   return buildType(new StructDesc(name, fields));
 }
 

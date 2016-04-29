@@ -1,6 +1,6 @@
 // @flow
 
-import {getTypeOfValue, StructDesc, ParentDesc, CompoundDesc} from './type.js';
+import {getTypeOfValue, ParentDesc, CompoundDesc} from './type.js';
 import type {Field, Type} from './type.js';
 import {Kind, kindToString} from './noms-kind.js';
 import type {NomsKind} from './noms-kind.js';
@@ -121,7 +121,6 @@ export class TypeWriter {
     parentStructTypes.push(t);
 
     const desc = t.desc;
-    invariant(desc instanceof StructDesc);
     this._w.write('struct ');
     this._w.write(desc.name);
     this._w.write(' {');

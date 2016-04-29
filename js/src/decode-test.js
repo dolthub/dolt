@@ -23,7 +23,6 @@ import {
   Type,
   typeType,
   valueType,
-  StructDesc,
 } from './type.js';
 import {encode as encodeBase64} from './base64.js';
 import {IndexedMetaSequence, MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
@@ -506,10 +505,8 @@ suite('Decode', () => {
 
     const ta = makeStructType('A', []);
     const tb = makeStructType('B', []);
-    invariant(ta.desc instanceof StructDesc);
     ta.desc.fields.push(new Field('b', tb));
 
-    invariant(tb.desc instanceof StructDesc);
     const {fields} = tb.desc;
     fields.push(new Field('a', makeListType(ta)), new Field('b', makeListType(tb)));
 

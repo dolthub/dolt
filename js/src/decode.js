@@ -319,7 +319,6 @@ export class JsonArrayReader {
 
     // Mutate the already created structType since when looking for the cycle we compare
     // by identity.
-    invariant(structType.desc instanceof StructDesc);
     structType.desc.fields = newFields;
     parentStructTypes.pop();
     return structType;
