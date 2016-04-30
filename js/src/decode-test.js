@@ -276,10 +276,10 @@ suite('Decode', () => {
     ]);
 
     const a = [Kind.Struct, 'A1', [
-      'x', Kind.Number,
-      's', Kind.String,
       'b', Kind.Bool,
-    ], '42', 'hi', true];
+      's', Kind.String,
+      'x', Kind.Number,
+    ], true, 'hi', '42'];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
 
@@ -324,15 +324,15 @@ suite('Decode', () => {
       new Field('s', stringType),
     ]);
 
-    const a = [Kind.Struct, 'A5', ['b', Kind.Bool, 'v', Kind.Value, 's', Kind.String],
-      true, Kind.Number, '42', 'hi'];
+    const a = [Kind.Struct, 'A5', ['b', Kind.Bool, 's', Kind.String, 'v', Kind.Value],
+      true, 'hi', Kind.Number, '42'];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
 
     assertStruct(v, tr.desc, {
       b: true,
-      v: 42,
       s: 'hi',
+      v: 42,
     });
   });
 
@@ -345,8 +345,12 @@ suite('Decode', () => {
       new Field('b', boolType),
     ]);
 
-    const a = [Kind.Value, Kind.Struct, 'A1', ['x', Kind.Number, 's', Kind.String, 'b', Kind.Bool],
-        '42', 'hi', true];
+    const a = [Kind.Value, Kind.Struct, 'A1', [
+      'b', Kind.Bool,
+      's', Kind.String,
+      'x', Kind.Number,
+    ],
+    true, 'hi', '42'];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
 

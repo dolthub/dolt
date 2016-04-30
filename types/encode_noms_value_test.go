@@ -154,7 +154,7 @@ func TestWriteStruct(t *testing.T) {
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"x", NumberKind, "b", BoolKind}, "42", true}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"b", BoolKind, "x", NumberKind}, true, "42"}, w.toArray())
 }
 
 func TestWriteStructWithList(t *testing.T) {
@@ -334,7 +334,7 @@ func TestWriteTypeValue(t *testing.T) {
 	test([]interface{}{TypeKind, MapKind, []interface{}{BoolKind, StringKind}},
 		MakeMapType(BoolType, StringType))
 
-	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"x", NumberKind, "v", ValueKind}},
+	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"v", ValueKind, "x", NumberKind}},
 		MakeStructType("S", []Field{
 			Field{"x", NumberType},
 			Field{"v", ValueType},
@@ -356,17 +356,18 @@ func TestWriteRecursiveStruct(t *testing.T) {
 	assert := assert.New(t)
 
 	// struct A6 {
-	//   v: Number
 	//   cs: List<A6>
+	//   v: Number
 	// }
 
 	structType := MakeStructType("A6", []Field{
-		Field{"v", NumberType},
 		Field{"cs", nil},
+		Field{"v", NumberType},
 	})
 	listType := MakeListType(structType)
 	// Mutate...
-	structType.Desc.(StructDesc).Fields[1].Type = listType
+
+	structType.Desc.(StructDesc).Fields[0].Type = listType
 
 	NewTypedList(listType)
 
@@ -380,5 +381,5 @@ func TestWriteRecursiveStruct(t *testing.T) {
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
-	assert.EqualValues([]interface{}{StructKind, "A6", []interface{}{"v", NumberKind, "cs", ListKind, ParentKind, uint8(0)}, "42", false, []interface{}{"555", false, []interface{}{}}}, w.toArray())
+	assert.EqualValues([]interface{}{StructKind, "A6", []interface{}{"cs", ListKind, ParentKind, uint8(0), "v", NumberKind}, false, []interface{}{false, []interface{}{}, "555"}, "42"}, w.toArray())
 }

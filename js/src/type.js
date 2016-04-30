@@ -54,13 +54,17 @@ export class CompoundDesc {
   }
 }
 
+function compareFields(a, b) {
+  return a.name < b.name ? -1 : 1;  // Cannot be equal.
+}
+
 export class StructDesc {
   name: string;
   fields: Array<Field>;
 
   constructor(name: string, fields: Array<Field>) {
     this.name = name;
-    this.fields = fields;
+    this.fields = fields.sort(compareFields);
   }
 
   get kind(): NomsKind {

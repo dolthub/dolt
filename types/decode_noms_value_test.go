@@ -235,7 +235,7 @@ func TestReadStruct(t *testing.T) {
 		Field{"b", BoolType},
 	})
 
-	a := parseJSON(`[%d, "A1", ["x", %d, "s", %d, "b", %d], "42", "hi", true]`, StructKind, NumberKind, StringKind, BoolKind)
+	a := parseJSON(`[%d, "A1", ["b", %d, "s", %d, "x", %d], true, "hi", "42"]`, StructKind, BoolKind, StringKind, NumberKind)
 	r := newJSONArrayReader(a, cs)
 
 	v := r.readTopLevelValue().(Struct)
@@ -289,7 +289,7 @@ func TestReadStructWithValue(t *testing.T) {
 		Field{"s", StringType},
 	})
 
-	a := parseJSON(`[%d, "A5", ["b", %d, "v", %d, "s", %d], true, %d, "42", "hi"]`, StructKind, BoolKind, ValueKind, StringKind, NumberKind)
+	a := parseJSON(`[%d, "A5", ["b", %d, "s", %d, "v", %d], true, "hi", %d, "42"]`, StructKind, BoolKind, StringKind, ValueKind, NumberKind)
 	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 
@@ -315,7 +315,7 @@ func TestReadValueStruct(t *testing.T) {
 		Field{"b", BoolType},
 	})
 
-	a := parseJSON(`[%d, %d, "A1", ["x", %d, "s", %d, "b", %d], "42", "hi", true]`, ValueKind, StructKind, NumberKind, StringKind, BoolKind)
+	a := parseJSON(`[%d, %d, "A1", ["b", %d, "s", %d, "x", %d], true, "hi", "42"]`, ValueKind, StructKind, BoolKind, StringKind, NumberKind)
 	r := newJSONArrayReader(a, cs)
 	v := r.readTopLevelValue().(Struct)
 

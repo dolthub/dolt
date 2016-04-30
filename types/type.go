@@ -1,6 +1,8 @@
 package types
 
 import (
+	"sort"
+
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -132,7 +134,14 @@ func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 	return buildType(CompoundDesc{kind, elemTypes})
 }
 
+type fieldSlice []Field
+
+func (fs fieldSlice) Len() int           { return len(fs) }
+func (fs fieldSlice) Swap(i, j int)      { fs[i], fs[j] = fs[j], fs[i] }
+func (fs fieldSlice) Less(i, j int) bool { return fs[i].Name < fs[j].Name }
+
 func MakeStructType(name string, fields []Field) *Type {
+	sort.Sort(fieldSlice(fields))
 	return buildType(StructDesc{name, fields})
 }
 

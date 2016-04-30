@@ -208,7 +208,7 @@ suite('Encode', () => {
     const v = newStruct(type, {x: 42, b: true});
 
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Struct, 'S', ['x', Kind.Number, 'b', Kind.Bool], '42', true], w.array);
+    assert.deepEqual([Kind.Struct, 'S', ['b', Kind.Bool, 'x', Kind.Number], true, '42'], w.array);
   });
 
   test('write struct with list', async() => {
@@ -284,7 +284,7 @@ suite('Encode', () => {
          makeCompoundType(Kind.List, boolType));
     test([Kind.Type, Kind.Map, [Kind.Bool, Kind.String]],
          makeCompoundType(Kind.Map, boolType, stringType));
-    test([Kind.Type, Kind.Struct, 'S', ['x', Kind.Number, 'v', Kind.Value]],
+    test([Kind.Type, Kind.Struct, 'S', ['v', Kind.Value, 'x', Kind.Number]],
          makeStructType('S', [
            new Field('x', numberType),
            new Field('v', valueType),
@@ -296,13 +296,13 @@ suite('Encode', () => {
     // }
 
     const st = makeStructType('A6', [
-      new Field('v', numberType),
       new Field('cs', valueType /* placeholder */),
+      new Field('v', numberType),
     ]);
     const lt = makeListType(st);
-    st.desc.fields[1].type = lt;
+    st.desc.fields[0].type = lt;
 
-    test([Kind.Type, Kind.Struct, 'A6', ['v', Kind.Number, 'cs', Kind.List, Kind.Parent, 0]], st);
+    test([Kind.Type, Kind.Struct, 'A6', ['cs', Kind.List, Kind.Parent, 0, 'v', Kind.Number]], st);
   });
 
   test('top level blob', async () => {
