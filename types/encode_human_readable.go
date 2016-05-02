@@ -237,9 +237,16 @@ func (w *hrsWriter) writeParent(i uint8) {
 	fmt.Fprintf(w.w, "Parent<%d>", i)
 }
 
-func WriteHRS(v Value) string {
+func EncodedValue(v Value) string {
 	var buf bytes.Buffer
 	w := &hrsWriter{w: &buf}
 	w.Write(v)
+	return buf.String()
+}
+
+func EncodedValueWithTags(v Value) string {
+	var buf bytes.Buffer
+	w := &hrsWriter{w: &buf}
+	w.WriteTagged(v)
 	return buf.String()
 }

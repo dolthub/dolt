@@ -21,7 +21,7 @@ type Type struct {
 
 // Describe generate text that should parse into the struct being described.
 func (t *Type) Describe() (out string) {
-	return WriteHRS(t)
+	return EncodedValue(t)
 }
 
 func (t *Type) Kind() NomsKind {
