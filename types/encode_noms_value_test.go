@@ -121,9 +121,9 @@ func TestWriteCompoundBlob(t *testing.T) {
 	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
 
 	v := newCompoundBlob([]metaTuple{
-		newMetaTuple(Number(20), nil, NewTypedRef(MakeRefType(typeForBlob), r1), 20),
-		newMetaTuple(Number(40), nil, NewTypedRef(MakeRefType(typeForBlob), r2), 40),
-		newMetaTuple(Number(60), nil, NewTypedRef(MakeRefType(typeForBlob), r3), 60),
+		newMetaTuple(Number(20), nil, NewTypedRef(RefOfBlobType, r1), 20),
+		newMetaTuple(Number(40), nil, NewTypedRef(RefOfBlobType, r2), 40),
+		newMetaTuple(Number(60), nil, NewTypedRef(RefOfBlobType, r3), 60),
 	}, NewTestValueStore())
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeTopLevelValue(v)
