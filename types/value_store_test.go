@@ -79,7 +79,7 @@ func TestCheckChunksInCache(t *testing.T) {
 
 	b := NewEmptyBlob()
 	cs.Put(EncodeValue(b, nil))
-	cvs.set(b.Ref(), (*presentChunk)(b.Type()))
+	cvs.set(b.Ref(), hintedChunk{b.Type(), b.Ref()})
 
 	bref := NewTypedRefFromValue(b)
 	assert.NotPanics(func() { cvs.checkChunksInCache(bref) })
@@ -120,9 +120,11 @@ func TestHintsOnCache(t *testing.T) {
 		l = l.Insert(0, bref)
 
 		hints := cvs.checkChunksInCache(l)
-		if assert.Len(hints, 1) {
-			_, present := hints[v.Ref()]
-			assert.True(present)
+		if assert.Len(hints, 2) {
+			for _, hash := range []ref.Ref{v.Ref(), bref.TargetRef()} {
+				_, present := hints[hash]
+				assert.True(present)
+			}
 		}
 	}
 }

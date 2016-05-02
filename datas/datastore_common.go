@@ -10,8 +10,7 @@ import (
 )
 
 type dataStoreCommon struct {
-	*types.ValueStore
-	bs       types.BatchStore
+	vs       *types.ValueStore
 	rt       chunks.RootTracker
 	rootRef  ref.Ref
 	datasets *types.Map
@@ -22,10 +21,8 @@ var (
 	ErrMergeNeeded          = errors.New("Dataset head is not ancestor of commit")
 )
 
-func newDataStoreCommon(bs types.BatchStore, rt chunks.RootTracker) dataStoreCommon {
-	nvs := types.NewValueStore(bs)
-	rv := rt.Root()
-	return dataStoreCommon{ValueStore: nvs, bs: bs, rt: rt, rootRef: rv}
+func newDataStoreCommon(vs *types.ValueStore, rt chunks.RootTracker) dataStoreCommon {
+	return dataStoreCommon{vs: vs, rt: rt, rootRef: rt.Root()}
 }
 
 func (ds *dataStoreCommon) MaybeHead(datasetID string) (types.Struct, bool) {
@@ -65,6 +62,18 @@ func (ds *dataStoreCommon) Datasets() types.Map {
 	}
 
 	return *ds.datasets
+}
+
+func (ds *dataStoreCommon) ReadValue(r ref.Ref) types.Value {
+	return ds.vs.ReadValue(r)
+}
+
+func (ds *dataStoreCommon) WriteValue(v types.Value) types.Ref {
+	return ds.vs.WriteValue(v)
+}
+
+func (ds *dataStoreCommon) Close() error {
+	return ds.vs.Close()
 }
 
 func (ds *dataStoreCommon) datasetsFromRef(datasetsRef ref.Ref) *types.Map {
