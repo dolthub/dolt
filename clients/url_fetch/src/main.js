@@ -5,10 +5,8 @@ import http from 'http';
 import humanize from 'humanize';
 import {
   BlobWriter,
-  Dataset,
-  DataStore,
+  DatasetSpec,
   invariant,
-  HttpStore,
   NomsBlob,
 } from '@attic/noms';
 
@@ -32,14 +30,18 @@ main().catch(ex => {
 });
 
 function main(): Promise<void> {
-  const [url, datastoreSpec, datasetName] = parseArgs();
+  const [url, datasetSpec] = parseArgs();
   if (!url) {
     process.exit(1);
     return Promise.resolve();
   }
+  if (!datasetSpec) {
+    process.stderr.write('invalid dataset spec');
+    process.exit(1);
+    return Promise.resolve();
+  }
 
-  const store = new DataStore(new HttpStore(datastoreSpec));
-  const ds = new Dataset(store, datasetName);
+  const ds = datasetSpec.set();
 
   return getBlob(url)
     .then(b => ds.commit(b))
@@ -82,7 +84,7 @@ function getBlob(url): Promise<NomsBlob> {
         completedBytes += chunk.length;
         const elapsed = (Date.now() - startTime) / 1000;
         const rate = humanize.filesize(completedBytes / elapsed);
-        process.stdout.write(clearLine + `${humanize.filesize(completedBytes)} of ` + 
+        process.stdout.write(clearLine + `${humanize.filesize(completedBytes)} of ` +
             `${expectedBytesHuman} written in ${elapsed}s (${rate}/s)`);
       });
 
@@ -97,18 +99,7 @@ function getBlob(url): Promise<NomsBlob> {
   });
 }
 
-function parseArgs(): [string, string, string] {
-  const [p, datasetSpec] = args._;
-  const parts = datasetSpec.split(':');
-  if (parts.length < 2) {
-    console.error('invalid dataset spec');
-    return [];
-  }
-  const datasetName = parts.pop();
-  const datastoreSpec = parts.join(':');
-  if (!/^http/.test(datastoreSpec)) {
-    console.error('Unsupported datastore type: ', datastoreSpec);
-    return [];
-  }
-  return [p, datastoreSpec, datasetName];
+function parseArgs(): [string, ?DatasetSpec] {
+  const [url, datasetSpec] = args._;
+  return [url, DatasetSpec.parse(datasetSpec)];
 }
