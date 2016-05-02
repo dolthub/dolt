@@ -67,6 +67,7 @@ func (wc wc) Close() error {
 }
 
 func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
+	hashes := ref.RefSlice{}
 	err := d.Try(func() {
 		d.Exp.Equal("POST", req.Method)
 
@@ -84,6 +85,7 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 			}
 			// If a previous Enqueue() errored, we still need to drain chunkChan
 			// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
+			hashes = append(hashes, c.Ref())
 		}
 		if bpe == nil {
 			bpe = vbs.Flush()
@@ -100,7 +102,7 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 	})
 
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("Error: %v\nSaw hashes %v", err, hashes), http.StatusBadRequest)
 		return
 	}
 }
