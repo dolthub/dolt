@@ -72,7 +72,7 @@ interface Cache<T> {  // eslint-disable-line no-undef
   add(ref: Ref, size: number, value: T): void;  // eslint-disable-line no-undef
 }
 
-export default class Database {
+export default class DataStore {
   _cs: ChunkStore;
   _datasets: Promise<NomsMap<string, RefValue<Commit>>>;
   _valueCache: Cache<?valueOrPrimitive>;
@@ -148,7 +148,7 @@ export default class Database {
     return refValue;
   }
 
-  async commit(datasetId: string, commit: Commit): Promise<Database> {
+  async commit(datasetId: string, commit: Commit): Promise<DataStore> {
     const currentRootRefP = this._cs.getRoot();
     const datasetsP = this._datasetsFromRootRef(currentRootRefP);
     let currentDatasets = await (datasetsP:Promise<NomsMap>);
@@ -170,18 +170,18 @@ export default class Database {
     currentDatasets = await currentDatasets.set(datasetId, commitRef);
     const newRootRef = this.writeValue(currentDatasets).targetRef;
     if (await this._cs.updateRoot(newRootRef, currentRootRef)) {
-      return new Database(this._cs);
+      return new DataStore(this._cs);
     }
 
     throw new Error('Optimistic lock failed');
   }
 }
 
-async function getAncestors(commits: NomsSet<RefValue<Commit>>, db: Database):
+async function getAncestors(commits: NomsSet<RefValue<Commit>>, store: DataStore):
     Promise<NomsSet<RefValue<Commit>>> {
   let ancestors = await newSet([], getDatasTypes().commitSetType);
   await commits.map(async (commitRef) => {
-    const commit = await db.readValue(commitRef.targetRef);
+    const commit = await store.readValue(commitRef.targetRef);
     await commit.parents.map(async (ref) => ancestors = await ancestors.insert(ref));
   });
   return ancestors;

@@ -10,17 +10,17 @@ import (
 )
 
 type Dataset struct {
-	db datas.Database
-	id string
+	store datas.DataStore
+	id    string
 }
 
-func NewDataset(db datas.Database, datasetID string) Dataset {
+func NewDataset(store datas.DataStore, datasetID string) Dataset {
 	d.Exp.NotEmpty(datasetID, "Cannot create an unnamed Dataset.")
-	return Dataset{db, datasetID}
+	return Dataset{store, datasetID}
 }
 
-func (ds *Dataset) DB() datas.Database {
-	return ds.db
+func (ds *Dataset) Store() datas.DataStore {
+	return ds.store
 }
 
 func (ds *Dataset) ID() string {
@@ -29,7 +29,7 @@ func (ds *Dataset) ID() string {
 
 // MaybeHead returns the current Head Commit of this Dataset, which contains the current root of the Dataset's value tree, if available. If not, it returns a new Commit and 'false'.
 func (ds *Dataset) MaybeHead() (types.Struct, bool) {
-	return ds.db.MaybeHead(ds.id)
+	return ds.Store().MaybeHead(ds.id)
 }
 
 // Head returns the current head Commit, which contains the current root of the Dataset's value tree.
@@ -53,16 +53,16 @@ func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
 // If the update cannot be performed, e.g., because of a conflict, CommitWithParents returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
 func (ds *Dataset) CommitWithParents(v types.Value, p types.Set) (Dataset, error) {
 	newCommit := datas.NewCommit().Set(datas.ParentsField, p).Set(datas.ValueField, v)
-	db, err := ds.db.Commit(ds.id, newCommit)
-	return Dataset{db, ds.id}, err
+	store, err := ds.Store().Commit(ds.id, newCommit)
+	return Dataset{store, ds.id}, err
 }
 
-func (ds *Dataset) Pull(db datas.Database, sourceRef types.Ref, concurrency int) (Dataset, error) {
-	_, topDown := ds.db.(*datas.LocalDatabase)
-	return ds.pull(db, sourceRef, concurrency, topDown)
+func (ds *Dataset) Pull(sourceStore datas.DataStore, sourceRef types.Ref, concurrency int) (Dataset, error) {
+	_, topDown := ds.Store().(*datas.LocalDataStore)
+	return ds.pull(sourceStore, sourceRef, concurrency, topDown)
 }
 
-func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency int, topDown bool) (Dataset, error) {
+func (ds *Dataset) pull(source datas.DataStore, sourceRef types.Ref, concurrency int, topDown bool) (Dataset, error) {
 	sink := *ds
 
 	sinkHeadRef := types.NewTypedRef(types.MakeRefType(datas.NewCommit().Type()), ref.Ref{})
@@ -75,9 +75,9 @@ func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency 
 	}
 
 	if topDown {
-		datas.CopyMissingChunksP(source, sink.DB().(*datas.LocalDatabase), sourceRef, concurrency)
+		datas.CopyMissingChunksP(source, sink.Store().(*datas.LocalDataStore), sourceRef, concurrency)
 	} else {
-		datas.CopyReachableChunksP(source, sink.DB(), sourceRef, sinkHeadRef, concurrency)
+		datas.CopyReachableChunksP(source, sink.Store(), sourceRef, sinkHeadRef, concurrency)
 	}
 
 	err := datas.ErrOptimisticLockFailed
@@ -88,7 +88,7 @@ func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency 
 }
 
 func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
-	v := ds.db.ReadValue(r.TargetRef())
+	v := ds.store.ReadValue(r.TargetRef())
 
 	d.Exp.NotNil(v, "%v cannot be found", r)
 	d.Exp.True(v.Type().Equals(datas.NewCommit().Type()), "Not a Commit: %+v", v)
@@ -126,7 +126,7 @@ func (f DatasetFlags) CreateDataset() *Dataset {
 	if *f.datasetID == "" {
 		return nil
 	}
-	rootDS, ok := f.Flags.CreateDatabase()
+	rootDS, ok := f.Flags.CreateDataStore()
 	if !ok {
 		return nil
 	}

@@ -55,7 +55,7 @@ func main() {
 			flag.Usage()
 			return
 		}
-		defer ds.DB().Close()
+		defer ds.Store().Close()
 
 		if util.MaybeStartCPUProfile() {
 			defer util.StopCPUProfile()
@@ -99,7 +99,7 @@ func main() {
 				r := ref.Ref{}
 
 				if !*noIO {
-					r = ds.DB().WriteValue(nomsObj).TargetRef()
+					r = ds.Store().WriteValue(nomsObj).TargetRef()
 				}
 
 				refsChan <- refIndex{r, f.index}

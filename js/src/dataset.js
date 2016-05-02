@@ -1,22 +1,22 @@
 // @flow
 
-import {newCommit} from './database.js';
+import {newCommit} from './data-store.js';
 import type {valueOrPrimitive} from './value.js';
-import type Database from './database.js';
+import type DataStore from './data-store.js';
 import type {Commit} from './commit.js';
 import RefValue from './ref-value.js';
 
 export default class Dataset {
-  _db: Database;
+  _store: DataStore;
   _id: string;
 
-  constructor(db: Database, id: string) {
-    this._db = db;
+  constructor(store: DataStore, id: string) {
+    this._store = store;
     this._id = id;
   }
 
-  get db(): Database {
-    return this._db;
+  get store(): DataStore {
+    return this._store;
   }
 
   get id(): string {
@@ -24,11 +24,11 @@ export default class Dataset {
   }
 
   headRef(): Promise<?RefValue<Commit>> {
-    return this._db.headRef(this._id);
+    return this._store.headRef(this._id);
   }
 
   head(): Promise<?Commit> {
-    return this._db.head(this._id);
+    return this._store.head(this._id);
   }
 
   // Commit updates the commit that a dataset points at. If parents is provided then an the promise
@@ -40,7 +40,7 @@ export default class Dataset {
       parents = headRef ? [headRef] : [];
     }
     const commit: Commit = await newCommit(v, parents);
-    const db = await this._db.commit(this._id, commit);
-    return new Dataset(db, this._id);
+    const store = await this._store.commit(this._id, commit);
+    return new Dataset(store, this._id);
   }
 }

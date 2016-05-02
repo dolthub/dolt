@@ -13,7 +13,7 @@ import (
 
 func TestRead(t *testing.T) {
 	assert := assert.New(t)
-	ds := datas.NewDatabase(chunks.NewMemoryStore())
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 
 	dataString := `a,1,true
 b,2,false
@@ -47,7 +47,7 @@ b,2,false
 
 func testTrailingHelper(t *testing.T, dataString string) {
 	assert := assert.New(t)
-	ds := datas.NewDatabase(chunks.NewMemoryStore())
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 
@@ -92,7 +92,7 @@ g,h,i,j
 
 func TestReadParseError(t *testing.T) {
 	assert := assert.New(t)
-	ds := datas.NewDatabase(chunks.NewMemoryStore())
+	ds := datas.NewDataStore(chunks.NewMemoryStore())
 
 	dataString := `a,"b`
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')

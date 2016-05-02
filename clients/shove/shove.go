@@ -14,10 +14,10 @@ import (
 )
 
 var (
-	p             = flag.Uint("p", 512, "parallelism")
-	sinkDsFlags   = dataset.NewFlagsWithPrefix("sink-")
-	sourceDbFlags = datas.NewFlagsWithPrefix("source-")
-	sourceObject  = flag.String("source", "", "source object to sync - either a dataset name or a ref")
+	p                = flag.Uint("p", 512, "parallelism")
+	sinkDsFlags      = dataset.NewFlagsWithPrefix("sink-")
+	sourceStoreFlags = datas.NewFlagsWithPrefix("source-")
+	sourceObject     = flag.String("source", "", "source object to sync - either a dataset name or a ref")
 )
 
 func main() {
@@ -26,14 +26,14 @@ func main() {
 
 	flag.Parse()
 
-	sourceDb, ok := sourceDbFlags.CreateDatabase()
+	sourceStore, ok := sourceStoreFlags.CreateDataStore()
 	sink := sinkDsFlags.CreateDataset()
 	if !ok || sink == nil || *p == 0 || *sourceObject == "" {
 		flag.Usage()
 		return
 	}
-	defer sourceDb.Close()
-	defer sink.DB().Close()
+	defer sourceStore.Close()
+	defer sink.Store().Close()
 
 	err := d.Try(func() {
 		if util.MaybeStartCPUProfile() {
@@ -43,16 +43,16 @@ func main() {
 		var commit types.Struct
 		if r, ok := ref.MaybeParse(*sourceObject); ok {
 			// sourceObject was sha1
-			commit, ok = sourceDb.ReadValue(r).(types.Struct)
+			commit, ok = sourceStore.ReadValue(r).(types.Struct)
 			d.Exp.True(ok, "Unable to read Commit object with ref: %s", r)
 		} else {
 			// sourceObject must be a dataset Id
-			commit, ok = sourceDb.MaybeHead(*sourceObject)
+			commit, ok = sourceStore.MaybeHead(*sourceObject)
 			d.Exp.True(ok, "Unable to read dataset with name: %s", *sourceObject)
 		}
 
 		var err error
-		*sink, err = sink.Pull(sourceDb, types.NewTypedRefFromValue(commit), int(*p))
+		*sink, err = sink.Pull(sourceStore, types.NewTypedRefFromValue(commit), int(*p))
 
 		util.MaybeWriteMemProfile()
 		d.Exp.NoError(err)

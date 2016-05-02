@@ -22,7 +22,7 @@ type Factory interface {
 	Shutter()
 }
 
-// RootTracker allows querying and management of the root of an entire tree of references. The "root" is the single mutable variable in a ChunkStore. It can store any ref, but it is typically used by higher layers (such as Database) to store a ref to a value that represents the current state and entire history of a database.
+// RootTracker allows querying and management of the root of an entire tree of references. The "root" is the single mutable variable in a ChunkStore. It can store any ref, but it is typically used by higher layers (such as DataStore) to store a ref to a value that represents the current state and entire history of a datastore.
 type RootTracker interface {
 	Root() ref.Ref
 	UpdateRoot(current, last ref.Ref) bool

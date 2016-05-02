@@ -1,6 +1,6 @@
 # Shove
 
-Shove syncs between databases and datasets. It is the noms equivalent of Git's `push` and `pull` commands.
+Shove syncs between datastores and datasets. It is the noms equivalent of Git's `push` and `pull` commands.
 
 ## Example
 
@@ -16,7 +16,7 @@ go build
 ./shove -source-ldb="/tmp/shovetest1" -source="counter" -sink-ldb="/tmp/shovetest2" -sink-ds="counter2"
 ../counter/counter -ldb="/tmp/shovetest2" -ds="counter2"
 
-# Shove can also connect to http databases
+# Shove can also connect to http datastores
 cd ../server
 go build
 ./server -ldb="/tmp/shovetest2" &

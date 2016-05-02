@@ -83,14 +83,14 @@ func main() {
 		flag.Usage()
 		return
 	}
-	defer ds.DB().Close()
+	defer ds.Store().Close()
 
 	kinds := []types.NomsKind{}
 	if *columnTypes != "" {
 		kinds = csv.StringsToKinds(strings.Split(*columnTypes, ","))
 	}
 
-	value, _ := csv.Read(r, *name, headers, kinds, ds.DB())
+	value, _ := csv.Read(r, *name, headers, kinds, ds.Store())
 	_, err = ds.Commit(value)
 	d.Exp.NoError(err)
 }
