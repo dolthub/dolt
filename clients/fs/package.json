@@ -1,7 +1,7 @@
 {
   "name": "directory-import",
   "dependencies": {
-    "@attic/noms": "^13.0.0",
+    "@attic/noms": "^15.3.0",
     "babel-regenerator-runtime": "6.5.0",
     "humanize": "0.0.9",
     "mz": "2.4.0",

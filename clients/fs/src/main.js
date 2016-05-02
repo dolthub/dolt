@@ -5,19 +5,24 @@ import humanize from 'humanize';
 import path from 'path';
 import argv from 'yargs';
 import {
-  newMapOfStringToRefOfDirectoryEntry,
-  Directory,
-  DirectoryEntry,
-  File,
-} from './fs.noms.js';
-import {
+  blobType,
   BlobWriter,
-  Dataset,
+  createStructClass,
+  DatasetSpec,
   DataStore,
-  HttpStore,
+  Field,
+  makeMapType,
+  makeRefType,
+  makeStructType,
+  newMap,
   NomsBlob,
   RefValue,
+  stringType,
+  valueType,
+  Value,
 } from '@attic/noms';
+
+const clearLine = '\x1b[2K\r';
 
 const args = argv
   .usage('Usage: $0 <path> <dataset>')
@@ -27,6 +32,22 @@ const args = argv
   .demand(1)
   .argv;
 
+const fileType = makeStructType('File', [
+  new Field('content', makeRefType(blobType)),
+]);
+// TODO(aa): Change to Map<string, File|Directory> once we have unions.
+const entriesType = makeMapType(stringType, valueType);
+const directoryType = makeStructType('Directory', [
+  new Field('entries', makeRefType(entriesType)),
+]);
+
+const File = createStructClass(fileType);
+const Directory = createStructClass(directoryType);
+
+async function newDirectoryEntryMap(values) {
+  return newMap(values, entriesType);
+}
+
 let numFilesFound = 0;
 let numFilesComplete = 0;
 let sizeFilesFound = 0;
@@ -34,55 +55,54 @@ let sizeFilesComplete = 0;
 let startTime = 0;
 
 main().catch(ex => {
-  console.error(ex.stack);
+  console.error('\nError:', ex);
+  if (ex.stack) {
+    console.error(ex.stack);
+  }
   process.exit(1);
 });
 
 async function main(): Promise<void> {
-  const [p, datastoreSpec, datasetName] = parseArgs();
-  if (!p) {
+  const path = args._[0];
+  const spec = DatasetSpec.parse(args._[1]);
+  if (!spec) {
+    process.stderr.write('invalid dataset spec');
     process.exit(1);
     return;
   }
 
-  const store = new DataStore(new HttpStore(datastoreSpec));
-  const ds = new Dataset(store, datasetName);
-
   startTime = Date.now();
-  const r = await processPath(p, store);
-  if (r) {
-    await ds.commit(r);
+
+  const ds = spec.set();
+  const de = await processPath(path, ds.store);
+  if (de) {
+    await ds.commit(de);
     process.stdout.write('\ndone\n');
   }
 
 }
 
-async function processPath(p: string, store: DataStore): Promise<?RefValue<DirectoryEntry>> {
+async function processPath(p: string, store: DataStore): Promise<?Value> {
   numFilesFound++;
   const st = await fs.stat(p);
   sizeFilesFound += st.size;
   let de = null;
   if (st.isDirectory()) {
-    de = new DirectoryEntry({
-      directory: await processDirectory(p, store),
-    });
+    de = await processDirectory(p, store);
   } else if (st.isFile()) {
-    de = new DirectoryEntry({
-      file: await processFile(p, store),
-    });
+    de = await processFile(p, store);
   } else {
     console.info('Skipping path %s because this filesystem node type is not currently handled', p);
     return null;
   }
-
-  return await store.writeValue(de);
+  return de;
 }
 
 async function processDirectory(p: string, store: DataStore): Promise<Directory> {
   const names = await fs.readdir(p);
   const children = names.map(name => {
     const chPath = path.join(p, name);
-    return processPath(chPath, store).then(dirEntryRef => [name, dirEntryRef]);
+    return processPath(chPath, store).then(dirEntry => [name, dirEntry]);
   });
 
   numFilesComplete++;
@@ -90,11 +110,11 @@ async function processDirectory(p: string, store: DataStore): Promise<Directory>
 
   const resolved = await Promise.all(children);
   const entries = resolved
-    .filter(([, dirEntryRef]) => dirEntryRef)
+    .filter(([, dirEntry]) => dirEntry)
     .reduce((l, t) => { l.push(...t); return l; }, []);
-  const fm = await newMapOfStringToRefOfDirectoryEntry(entries);
+  const fm = await newDirectoryEntryMap(entries);
   return new Directory({
-    entries: fm,
+    entries: store.writeValue(fm),
   });
 }
 
@@ -132,23 +152,7 @@ function processBlob(p: string, store: DataStore): Promise<RefValue<NomsBlob>> {
 function updateProgress() {
   const elapsed = Date.now() - startTime;
   const rate = sizeFilesComplete / (elapsed / 1000);
-  process.stdout.write(`\r${numFilesComplete} of ${numFilesFound} entries ` +
+  process.stdout.write(`${clearLine}${numFilesComplete} of ${numFilesFound} entries ` +
     `(${humanize.filesize(sizeFilesComplete)} of ${humanize.filesize(sizeFilesFound)} - ` +
     `${humanize.filesize(rate)}/s) processed...`);
-}
-
-function parseArgs() {
-  const [p, datasetSpec] = args._;
-  const parts = datasetSpec.split(':');
-  if (parts.length < 2) {
-    console.error('invalid dataset spec');
-    return [];
-  }
-  const datasetName = parts.pop();
-  const datastoreSpec = parts.join(':');
-  if (!/^http/.test(datastoreSpec)) {
-    console.error('Unsupported datastore type: ', datastoreSpec);
-    return [];
-  }
-  return [p, datastoreSpec, datasetName];
 }
