@@ -6,7 +6,7 @@ import humanize from 'humanize';
 import {
   BlobWriter,
   Dataset,
-  DataStore,
+  Database,
   invariant,
   HttpStore,
   NomsBlob,
@@ -32,14 +32,14 @@ main().catch(ex => {
 });
 
 function main(): Promise<void> {
-  const [url, datastoreSpec, datasetName] = parseArgs();
+  const [url, databaseSpec, datasetName] = parseArgs();
   if (!url) {
     process.exit(1);
     return Promise.resolve();
   }
 
-  const store = new DataStore(new HttpStore(datastoreSpec));
-  const ds = new Dataset(store, datasetName);
+  const db = new Database(new HttpStore(databaseSpec));
+  const ds = new Dataset(db, datasetName);
 
   return getBlob(url)
     .then(b => ds.commit(b))
@@ -105,10 +105,10 @@ function parseArgs(): [string, string, string] {
     return [];
   }
   const datasetName = parts.pop();
-  const datastoreSpec = parts.join(':');
-  if (!/^http/.test(datastoreSpec)) {
-    console.error('Unsupported datastore type: ', datastoreSpec);
+  const databaseSpec = parts.join(':');
+  if (!/^http/.test(databaseSpec)) {
+    console.error('Unsupported database type: ', databaseSpec);
     return [];
   }
-  return [p, datastoreSpec, datasetName];
+  return [p, databaseSpec, datasetName];
 }

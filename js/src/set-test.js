@@ -4,7 +4,7 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 import Chunk from './chunk.js';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import MemoryStore from './memory-store.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
@@ -135,13 +135,13 @@ suite('BuildSet', () => {
 
   test('LONG: write, read, modify, read', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
 
     const nums = firstNNumbers(testSetSize);
     const tr = makeSetType(numberType);
     const s = await newSet(nums, tr);
-    const r = ds.writeValue(s).targetRef;
-    const s2 = await ds.readValue(r);
+    const r = db.writeValue(s).targetRef;
+    const s2 = await db.readValue(r);
     const outNums = [];
     await s2.forEach(k => outNums.push(k));
     assert.deepEqual(nums, outNums);
@@ -160,9 +160,9 @@ suite('BuildSet', () => {
 suite('SetLeaf', () => {
   test('isEmpty/size', () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeSetType(stringType);
-    const newSet = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
+    const newSet = items => new NomsSet(tr, new SetLeafSequence(db, tr, items));
     let s = newSet([]);
     assert.isTrue(s.isEmpty());
     assert.strictEqual(0, s.size);
@@ -173,9 +173,9 @@ suite('SetLeaf', () => {
 
   test('first/last/has', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeSetType(stringType);
-    const s = new NomsSet(tr, new SetLeafSequence(ds, tr, ['a', 'k']));
+    const s = new NomsSet(tr, new SetLeafSequence(db, tr, ['a', 'k']));
 
     assert.strictEqual('a', await s.first());
     assert.strictEqual('k', await s.last());
@@ -188,9 +188,9 @@ suite('SetLeaf', () => {
 
   test('forEach', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeSetType(stringType);
-    const m = new NomsSet(tr, new SetLeafSequence(ds, tr, ['a', 'b']));
+    const m = new NomsSet(tr, new SetLeafSequence(db, tr, ['a', 'b']));
 
     const values = [];
     await m.forEach((k) => { values.push(k); });
@@ -199,11 +199,11 @@ suite('SetLeaf', () => {
 
   test('iterator', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeSetType(stringType);
 
     const test = async items => {
-      const m = new NomsSet(tr, new SetLeafSequence(ds, tr, items));
+      const m = new NomsSet(tr, new SetLeafSequence(db, tr, items));
       assert.deepEqual(items, await flatten(m.iterator()));
       assert.deepEqual(items, await flattenParallel(m.iterator(), items.length));
     };
@@ -215,9 +215,9 @@ suite('SetLeaf', () => {
 
   test('LONG: iteratorAt', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeSetType(stringType);
-    const build = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
+    const build = items => new NomsSet(tr, new SetLeafSequence(db, tr, items));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
 
@@ -234,12 +234,12 @@ suite('SetLeaf', () => {
 
   function testChunks(elemType: Type) {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeSetType(elemType);
-    const r1 = ds.writeValue('x');
-    const r2 = ds.writeValue('a');
-    const r3 = ds.writeValue('b');
-    const l = new NomsSet(tr, new SetLeafSequence(ds, tr, ['z', r1, r2, r3]));
+    const r1 = db.writeValue('x');
+    const r2 = db.writeValue('a');
+    const r3 = db.writeValue('b');
+    const l = new NomsSet(tr, new SetLeafSequence(db, tr, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
     assert.isTrue(r1.equals(l.chunks[0]));
     assert.isTrue(r2.equals(l.chunks[1]));
@@ -256,14 +256,14 @@ suite('SetLeaf', () => {
 });
 
 suite('CompoundSet', () => {
-  function build(ds: DataStore, values: Array<string>): NomsSet {
+  function build(db: Database, values: Array<string>): NomsSet {
     const tr = makeSetType(stringType);
     assert.isTrue(values.length > 1 && Math.log2(values.length) % 1 === 0);
 
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
-      const l = new NomsSet(tr, new SetLeafSequence(ds, tr, [values[i], values[i + 1]]));
-      const r = ds.writeValue(l).targetRef;
+      const l = new NomsSet(tr, new SetLeafSequence(db, tr, [values[i], values[i + 1]]));
+      const r = db.writeValue(l).targetRef;
       tuples.push(new MetaTuple(r, values[i + 1], 2));
     }
 
@@ -271,8 +271,8 @@ suite('CompoundSet', () => {
     while (tuples.length > 1) {
       const next = [];
       for (let i = 0; i < tuples.length; i += 2) {
-        last = new NomsSet(tr, new OrderedMetaSequence(ds, tr, [tuples[i], tuples[i + 1]]));
-        const r = ds.writeValue(last).targetRef;
+        last = new NomsSet(tr, new OrderedMetaSequence(db, tr, [tuples[i], tuples[i + 1]]));
+        const r = db.writeValue(last).targetRef;
         next.push(new MetaTuple(r, tuples[i + 1].value,
                                 tuples[i].numLeaves + tuples[i + 1].numLeaves));
       }
@@ -285,16 +285,16 @@ suite('CompoundSet', () => {
 
   test('isEmpty/size', () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const db = new Database(ms);
+    const c = build(db, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     assert.isFalse(c.isEmpty());
     assert.strictEqual(8, c.size);
   });
 
   test('first/last/has', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const db = new Database(ms);
+    const c = build(db, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     assert.strictEqual('a', await c.first());
     assert.strictEqual('n', await c.last());
     assert.isTrue(await c.has('a'));
@@ -315,8 +315,8 @@ suite('CompoundSet', () => {
 
   test('forEach', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const db = new Database(ms);
+    const c = build(db, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const values = [];
     await c.forEach((k) => { values.push(k); });
     assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], values);
@@ -324,18 +324,18 @@ suite('CompoundSet', () => {
 
   test('iterator', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
-    const c = build(ds, values);
+    const c = build(db, values);
     assert.deepEqual(values, await flatten(c.iterator()));
     assert.deepEqual(values, await flattenParallel(c.iterator(), values.length));
   });
 
   test('LONG: iteratorAt', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
-    const c = build(ds, values);
+    const c = build(db, values);
     const offsets = {
       _: 0, a: 0,
       b: 1,
@@ -356,9 +356,9 @@ suite('CompoundSet', () => {
 
   test('iterator return', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
-    const c = build(ds, values);
+    const c = build(db, values);
     const iter = c.iterator();
     const values2 = [];
     for (let res = await iter.next(); !res.done; res = await iter.next()) {
@@ -372,8 +372,8 @@ suite('CompoundSet', () => {
 
   test('iterator return parallel', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const db = new Database(ms);
+    const c = build(db, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const iter = c.iterator();
     const values = await Promise.all([iter.next(), iter.next(), iter.return(), iter.next()]);
     assert.deepEqual(
@@ -383,23 +383,23 @@ suite('CompoundSet', () => {
 
   test('chunks', () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const db = new Database(ms);
+    const c = build(db, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     assert.strictEqual(2, c.chunks.length);
   });
 
   test('map', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const db = new Database(ms);
+    const c = build(db, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const values = await c.map((k) => k + '*');
     assert.deepEqual(['a*', 'b*', 'e*', 'f*', 'h*', 'i*', 'm*', 'n*'], values);
   });
 
   test('map async', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const db = new Database(ms);
+    const c = build(db, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const values = await c.map((k) => Promise.resolve(k + '*'));
     assert.deepEqual(['a*', 'b*', 'e*', 'f*', 'h*', 'i*', 'm*', 'n*'], values);
   });
@@ -417,9 +417,9 @@ suite('CompoundSet', () => {
 
   test('advanceTo', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
 
-    const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+    const c = build(db, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
 
     invariant(c.sequence instanceof OrderedSequence);
     let cursor = await c.sequence.newCursorAt(null);
@@ -460,12 +460,12 @@ suite('CompoundSet', () => {
 
   async function testIntersect(expect: Array<string>, seqs: Array<Array<string>>) {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
 
-    const first = build(ds, seqs[0]);
+    const first = build(db, seqs[0]);
     const sets:Array<NomsSet> = [];
     for (let i = 1; i < seqs.length; i++) {
-      sets.push(build(ds, seqs[i]));
+      sets.push(build(db, seqs[i]));
     }
 
     const result = await first.intersect(...sets);
@@ -490,11 +490,11 @@ suite('CompoundSet', () => {
 
   test('iterator at 0', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeSetType(numberType);
 
     const test = async (expected, items) => {
-      const set = new NomsSet(tr, new SetLeafSequence(ds, tr, items));
+      const set = new NomsSet(tr, new SetLeafSequence(db, tr, items));
       const iter = set.iteratorAt(0);
       assert.deepEqual(expected, await flatten(iter));
     };
@@ -514,10 +514,10 @@ suite('CompoundSet', () => {
 
   test('LONG: canned set diff', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeSetType(numberType);
     const s1 = await newSet(
-      firstNNumbers(testSetSize), tr).then(s => ds.readValue(ds.writeValue(s).targetRef));
+      firstNNumbers(testSetSize), tr).then(s => db.readValue(db.writeValue(s).targetRef));
 
     {
       // Insert/remove at start.
@@ -568,8 +568,8 @@ suite('CompoundSet', () => {
     }
 
     const ms = new CountingMemoryStore();
-    const ds = new DataStore(ms);
-    [s1, s2] = await Promise.all([s1, s2].map(s => ds.readValue(ds.writeValue(s).targetRef)));
+    const db = new Database(ms);
+    [s1, s2] = await Promise.all([s1, s2].map(s => db.readValue(db.writeValue(s).targetRef)));
 
     assert.deepEqual([[], []], await s1.diff(s1));
     assert.deepEqual([[], []], await s2.diff(s2));
@@ -608,8 +608,8 @@ suite('CompoundSet', () => {
 
   test('chunks', () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const s = build(ds, ['a', 'b', 'c', 'd']);
+    const db = new Database(ms);
+    const s = build(db, ['a', 'b', 'c', 'd']);
     const chunks = s.chunks;
     const sequence = s.sequence;
     assert.equal(2, chunks.length);

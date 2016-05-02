@@ -47,7 +47,7 @@ func (lvs *ValueStore) ReadValue(r ref.Ref) Value {
 	if v != nil {
 		lvs.cacheChunks(v, r)
 		// r is trivially a hint for v, so consider putting that in the cache. If we got to v by reading some higher-level chunk, this entry gets dropped on the floor because r already has a hint in the cache. If we later read some other chunk that references v, cacheChunks will overwrite this with a hint pointing to that chunk.
-		// If we don't do this, top-level Values that get read but not written -- such as the existing Head of a DataStore upon a Commit -- can be erroneously left out during a pull.
+		// If we don't do this, top-level Values that get read but not written -- such as the existing Head of a Database upon a Commit -- can be erroneously left out during a pull.
 		entry = hintedChunk{v.Type(), r}
 	}
 	if cur := lvs.check(r); cur == nil || cur.Hint().IsEmpty() {

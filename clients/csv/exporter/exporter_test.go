@@ -25,7 +25,7 @@ type testSuite struct {
 
 // FIXME: run with pipe
 func (s *testSuite) TestCSVExporter() {
-	storeName := "store"
+	dbName := "store"
 	setName := "csv"
 	header := []string{"a", "b", "c"}
 	payload := [][]string{
@@ -36,8 +36,8 @@ func (s *testSuite) TestCSVExporter() {
 	structName := "SomeStruct"
 
 	// Setup data store
-	cs := chunks.NewLevelDBStore(s.LdbDir, storeName, 1, false)
-	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
+	cs := chunks.NewLevelDBStore(s.LdbDir, dbName, 1, false)
+	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
 
 	// Build Struct fields based on header
 	f := make([]types.Field, 0, len(header))
@@ -63,10 +63,10 @@ func (s *testSuite) TestCSVExporter() {
 
 	listType := types.MakeListType(typ)
 	ds.Commit(types.NewTypedList(listType, structs...))
-	ds.Store().Close()
+	ds.DB().Close()
 
 	// Run exporter
-	out := s.Run(main, []string{"-store", storeName, "-ds", setName})
+	out := s.Run(main, []string{"-database", dbName, "-ds", setName})
 
 	// Verify output
 	csvReader := csv.NewReader(strings.NewReader(out))

@@ -1,7 +1,7 @@
 // @flow
 
 import Chunk from './chunk.js';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 import RefValue from './ref-value.js';
@@ -45,9 +45,9 @@ suite('Decode', () => {
 
   test('read', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const a = [1, 'hi', true];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
 
     assert.strictEqual(1, r.read());
     assert.isFalse(r.atEnd());
@@ -61,9 +61,9 @@ suite('Decode', () => {
 
   test('read type as tag', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     function doTest(expected: Type, a: Array<any>) {
-      const r = new JsonArrayReader(a, ds);
+      const r = new JsonArrayReader(a, db);
       const tr = r.readTypeAsTag([]);
       assert.isTrue(expected.equals(tr));
     }
@@ -76,10 +76,10 @@ suite('Decode', () => {
 
   test('read primitives', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
 
     async function doTest(expected: any, a: Array<any>): Promise<void> {
-      const r = new JsonArrayReader(a, ds);
+      const r = new JsonArrayReader(a, db);
       const v = await r.readTopLevelValue();
       assert.deepEqual(expected, v);
     }
@@ -97,24 +97,24 @@ suite('Decode', () => {
 
   test('read list of number', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const a = [Kind.List, Kind.Number, false, ['0', '1', '2', '3']];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v: NomsList<number> = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
 
     const tr = makeListType(numberType);
-    const l = new NomsList(tr, new ListLeafSequence(ds, tr, [0, 1, 2, 3]));
+    const l = new NomsList(tr, new ListLeafSequence(db, tr, [0, 1, 2, 3]));
     assert.isTrue(l.equals(v));
   });
 
   // TODO: Can't round-trip collections of value types. =-(
   test('read list of value', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const a = [Kind.List, Kind.Value, false,
       [Kind.Number, '1', Kind.String, 'hi', Kind.Bool, true]];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v: NomsList<Value> = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
 
@@ -127,34 +127,34 @@ suite('Decode', () => {
 
   test('read value list of number', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const a = [Kind.Value, Kind.List, Kind.Number, false, ['0', '1', '2']];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
 
     const tr = makeListType(numberType);
-    const l = new NomsList(tr, new ListLeafSequence(ds, tr, [0, 1, 2]));
+    const l = new NomsList(tr, new ListLeafSequence(db, tr, [0, 1, 2]));
     assert.isTrue(l.equals(v));
   });
 
   test('read compound list', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const ltr = makeListType(numberType);
-    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0]))).targetRef;
-    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [1, 2]))).targetRef;
-    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
+    const r1 = db.writeValue(new NomsList(ltr, new ListLeafSequence(db, ltr, [0]))).targetRef;
+    const r2 = db.writeValue(new NomsList(ltr, new ListLeafSequence(db, ltr, [1, 2]))).targetRef;
+    const r3 = db.writeValue(new NomsList(ltr, new ListLeafSequence(db, ltr, [3, 4, 5]))).targetRef;
     const tuples = [
       new MetaTuple(r1, 1, 1),
       new MetaTuple(r2, 2, 2),
       new MetaTuple(r3, 3, 3),
     ];
-    const l:NomsList<number> = new NomsList(ltr, new IndexedMetaSequence(ds, ltr, tuples));
+    const l:NomsList<number> = new NomsList(ltr, new IndexedMetaSequence(db, ltr, tuples));
 
     const a = [Kind.List, Kind.Number, true,
                [r1.toString(), '1', '1', r2.toString(), '2', '2', r3.toString(), '3', '3']];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
     assert.isTrue(v.ref.equals(l.ref));
@@ -162,24 +162,24 @@ suite('Decode', () => {
 
   test('read map of number to number', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const a = [Kind.Map, Kind.Number, Kind.Number, false, ['0', '1', '2', '3']];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v: NomsMap<number, number> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
     const t = makeMapType(numberType, numberType);
-    const m = new NomsMap(t, new MapLeafSequence(ds, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
+    const m = new NomsMap(t, new MapLeafSequence(db, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(v.equals(m));
   });
 
   test('read map of ref to number', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const a = [Kind.Map, Kind.Ref, Kind.Value, Kind.Number, false,
                ['sha1-0000000000000000000000000000000000000001', '2',
                 'sha1-0000000000000000000000000000000000000002', '4']];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v: NomsMap<RefValue<Value>, number> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
@@ -189,54 +189,54 @@ suite('Decode', () => {
         refOfValueType);
     const rv2 = new RefValue(new Ref('sha1-0000000000000000000000000000000000000002'),
         refOfValueType);
-    const m = new NomsMap(mapType, new MapLeafSequence(ds, mapType, [{key: rv1, value: 2},
+    const m = new NomsMap(mapType, new MapLeafSequence(db, mapType, [{key: rv1, value: 2},
                                                                      {key: rv2, value: 4}]));
     assert.isTrue(v.equals(m));
   });
 
   test('read value map of number to number', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const a = [Kind.Value, Kind.Map, Kind.Number, Kind.Number, false, ['0', '1', '2', '3']];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v: NomsMap<number, number> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
     const t = makeMapType(numberType, numberType);
-    const m = new NomsMap(t, new MapLeafSequence(ds, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
+    const m = new NomsMap(t, new MapLeafSequence(db, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(v.equals(m));
   });
 
   test('read set of number', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const a = [Kind.Set, Kind.Number, false, ['0', '1', '2', '3']];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v: NomsSet<number> = await r.readTopLevelValue();
     invariant(v instanceof NomsSet);
 
     const t = makeSetType(numberType);
-    const s = new NomsSet(t, new SetLeafSequence(ds, t, [0, 1, 2, 3]));
+    const s = new NomsSet(t, new SetLeafSequence(db, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
 
   test('read compound set', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const ltr = makeSetType(numberType);
-    const r1 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [0]))).targetRef;
-    const r2 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [1, 2]))).targetRef;
-    const r3 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
+    const r1 = db.writeValue(new NomsSet(ltr, new SetLeafSequence(db, ltr, [0]))).targetRef;
+    const r2 = db.writeValue(new NomsSet(ltr, new SetLeafSequence(db, ltr, [1, 2]))).targetRef;
+    const r3 = db.writeValue(new NomsSet(ltr, new SetLeafSequence(db, ltr, [3, 4, 5]))).targetRef;
     const tuples = [
       new MetaTuple(r1, 0, 1),
       new MetaTuple(r2, 2, 2),
       new MetaTuple(r3, 5, 3),
     ];
-    const l:NomsSet<number> = new NomsSet(ltr, new OrderedMetaSequence(ds, ltr, tuples));
+    const l:NomsSet<number> = new NomsSet(ltr, new OrderedMetaSequence(db, ltr, tuples));
 
     const a = [Kind.Set, Kind.Number, true,
                [r1.toString(), '0', '1', r2.toString(), '2', '2', r3.toString(), '5', '3']];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v = await r.readTopLevelValue();
     invariant(v instanceof NomsSet);
     assert.isTrue(v.ref.equals(l.ref));
@@ -244,14 +244,14 @@ suite('Decode', () => {
 
   test('read value set of number', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const a = [Kind.Value, Kind.Set, Kind.Number, false, ['0', '1', '2', '3']];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v: NomsSet<number> = await r.readTopLevelValue();
     invariant(v instanceof NomsSet);
 
     const t = makeSetType(numberType);
-    const s = new NomsSet(t, new SetLeafSequence(ds, t, [0, 1, 2, 3]));
+    const s = new NomsSet(t, new SetLeafSequence(db, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
 
@@ -268,7 +268,7 @@ suite('Decode', () => {
 
   test('test read struct', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeStructType('A1', [
       new Field('x', numberType),
       new Field('s', stringType),
@@ -280,7 +280,7 @@ suite('Decode', () => {
       's', Kind.String,
       'x', Kind.Number,
     ], true, 'hi', '42'];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v = await r.readTopLevelValue();
 
     assertStruct(v, tr.desc, {
@@ -292,7 +292,7 @@ suite('Decode', () => {
 
   test('test read struct with list', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const ltr = makeListType(numberType);
     const tr = makeStructType('A4', [
       new Field('b', boolType),
@@ -305,19 +305,19 @@ suite('Decode', () => {
       'l', Kind.List, Kind.Number,
       's', Kind.String,
     ], true, false, ['0', '1', '2'], 'hi'];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v = await r.readTopLevelValue();
 
     assertStruct(v, tr.desc, {
       b: true,
-      l: new NomsList(ltr, new ListLeafSequence(ds, ltr, [0, 1, 2])),
+      l: new NomsList(ltr, new ListLeafSequence(db, ltr, [0, 1, 2])),
       s: 'hi',
     });
   });
 
   test('test read struct with value', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeStructType('A5', [
       new Field('b', boolType),
       new Field('v', valueType),
@@ -326,7 +326,7 @@ suite('Decode', () => {
 
     const a = [Kind.Struct, 'A5', ['b', Kind.Bool, 's', Kind.String, 'v', Kind.Value],
       true, 'hi', Kind.Number, '42'];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v = await r.readTopLevelValue();
 
     assertStruct(v, tr.desc, {
@@ -338,7 +338,7 @@ suite('Decode', () => {
 
   test('test read value struct', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeStructType('A1', [
       new Field('x', numberType),
       new Field('s', stringType),
@@ -351,7 +351,7 @@ suite('Decode', () => {
       'x', Kind.Number,
     ],
     true, 'hi', '42'];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v = await r.readTopLevelValue();
 
     assertStruct(v, tr.desc, {
@@ -363,7 +363,7 @@ suite('Decode', () => {
 
   test('test read map of string to struct', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeStructType('s', [
       new Field('b', boolType),
       new Field('i', numberType),
@@ -373,7 +373,7 @@ suite('Decode', () => {
       Kind.Struct, 's', ['b', Kind.Bool, 'i', Kind.Number],
       false, ['bar', false, '2', 'baz', false, '1', 'foo', true, '3']];
 
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v: NomsMap<string, Struct> = await r.readTopLevelValue();
     invariant(v instanceof NomsMap);
 
@@ -385,20 +385,20 @@ suite('Decode', () => {
 
   test('decodeNomsValue', () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const chunk = Chunk.fromString(
         `t [${Kind.Value}, ${Kind.Set}, ${Kind.Number}, false, ["0", "1", "2", "3"]]`);
-    const v = decodeNomsValue(chunk, new DataStore(new MemoryStore()));
+    const v = decodeNomsValue(chunk, new Database(new MemoryStore()));
     invariant(v instanceof NomsSet);
 
     const t = makeSetType(numberType);
-    const s: NomsSet<number> = new NomsSet(t, new SetLeafSequence(ds, t, [0, 1, 2, 3]));
+    const s: NomsSet<number> = new NomsSet(t, new SetLeafSequence(db, t, [0, 1, 2, 3]));
     assert.isTrue(v.equals(s));
   });
 
   test('decodeNomsValue: counter with one commit', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
 
     const makeChunk = a => Chunk.fromString(`t ${JSON.stringify(a)}`);
 
@@ -422,15 +422,15 @@ suite('Decode', () => {
     const rootRef = rootChunk.ref;
     ms.put(rootChunk);
 
-    const rootMap = await ds.readValue(rootRef);
+    const rootMap = await db.readValue(rootRef);
     const counterRef = await rootMap.get('counter');
-    const commit = await counterRef.targetValue(ds);
+    const commit = await counterRef.targetValue(db);
     assert.strictEqual(1, await commit.value);
   });
 
   test('out of line blob', async () => {
     const chunk = Chunk.fromString('b hi');
-    const blob = decodeNomsValue(chunk, new DataStore(new MemoryStore()));
+    const blob = decodeNomsValue(chunk, new Database(new MemoryStore()));
     invariant(blob instanceof NomsBlob);
     const r = await blob.getReader().read();
     assert.isFalse(r.done);
@@ -448,7 +448,7 @@ suite('Decode', () => {
     }
 
     const chunk2 = new Chunk(data);
-    const blob2 = decodeNomsValue(chunk2, new DataStore(new MemoryStore()));
+    const blob2 = decodeNomsValue(chunk2, new Database(new MemoryStore()));
     invariant(blob2 instanceof NomsBlob);
     const r2 = await blob2.getReader().read();
     assert.isFalse(r2.done);
@@ -459,13 +459,13 @@ suite('Decode', () => {
 
   test('inline blob', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const a = [
       Kind.List, Kind.Blob, false,
       [false, encodeBase64(stringToUint8Array('hello')),
        false, encodeBase64(stringToUint8Array('world'))],
     ];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v: NomsList<NomsBlob> = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
 
@@ -479,13 +479,13 @@ suite('Decode', () => {
 
   test('compound blob', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
 
-    const r1 = ds.writeValue(await newBlob(stringToUint8Array('hi'))).targetRef;
-    const r2 = ds.writeValue(await newBlob(stringToUint8Array('world'))).targetRef;
+    const r1 = db.writeValue(await newBlob(stringToUint8Array('hi'))).targetRef;
+    const r2 = db.writeValue(await newBlob(stringToUint8Array('world'))).targetRef;
 
     const a = [Kind.Blob, true, [r1.ref.toString(), '2', '2', r2.ref.toString(), '5', '5']];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v: NomsBlob = await r.readTopLevelValue();
     invariant(v instanceof NomsBlob);
 
@@ -498,7 +498,7 @@ suite('Decode', () => {
 
   test('recursive struct', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
 
     // struct A {
     //   b: struct B {
@@ -519,7 +519,7 @@ suite('Decode', () => {
             'a', Kind.List, Kind.Parent, 1,
             'b', Kind.List, Kind.Parent, 0,
           ]], false, [], false, []];
-    const r = new JsonArrayReader(a, ds);
+    const r = new JsonArrayReader(a, db);
     const v = await r.readTopLevelValue();
 
     assert.isTrue(v.type.equals(ta));

@@ -29,15 +29,15 @@ import {newList, ListLeafSequence, NomsList} from './list.js';
 import {newMap, MapLeafSequence, NomsMap} from './map.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {newBlob} from './blob.js';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import type {valueOrPrimitive} from './value.js';
 
 suite('Encode', () => {
   test('write primitives', () => {
     function f(k: NomsKind, t:Type, v: valueOrPrimitive, ex: valueOrPrimitive) {
       const ms = new MemoryStore();
-      const ds = new DataStore(ms);
-      const w = new JsonArrayWriter(ds);
+      const db = new Database(ms);
+      const w = new JsonArrayWriter(db);
       w.writeTopLevel(t, v);
       assert.deepEqual([k, ex], w.array);
     }
@@ -56,8 +56,8 @@ suite('Encode', () => {
 
   test('write simple blob', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
     const blob = await newBlob(new Uint8Array([0x00, 0x01]));
     w.writeTopLevel(blobType, blob);
     assert.deepEqual([Kind.Blob, false, 'AAE='], w.array);
@@ -65,22 +65,22 @@ suite('Encode', () => {
 
   test('write list', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
 
     const tr = makeCompoundType(Kind.List, numberType);
-    const l = new NomsList(tr, new ListLeafSequence(ds, tr, [0, 1, 2, 3]));
+    const l = new NomsList(tr, new ListLeafSequence(db, tr, [0, 1, 2, 3]));
     w.writeTopLevel(tr, l);
     assert.deepEqual([Kind.List, Kind.Number, false, ['0', '1', '2', '3']], w.array);
   });
 
   test('write list of value', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
 
     const tr = makeCompoundType(Kind.List, valueType);
-    const l = new NomsList(tr, new ListLeafSequence(ds, tr, ['0', '1', '2', '3']));
+    const l = new NomsList(tr, new ListLeafSequence(db, tr, ['0', '1', '2', '3']));
     w.writeTopLevel(tr, l);
     assert.deepEqual([Kind.List, Kind.Value, false, [
       Kind.String, '0',
@@ -92,14 +92,14 @@ suite('Encode', () => {
 
   test('write list of list', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
 
     const it = makeCompoundType(Kind.List, numberType);
     const tr = makeCompoundType(Kind.List, it);
-    const v = new NomsList(tr, new ListLeafSequence(ds, tr, [
-      new NomsList(tr, new ListLeafSequence(ds, it, [0])),
-      new NomsList(tr, new ListLeafSequence(ds, it, [1, 2, 3])),
+    const v = new NomsList(tr, new ListLeafSequence(db, tr, [
+      new NomsList(tr, new ListLeafSequence(db, it, [0])),
+      new NomsList(tr, new ListLeafSequence(db, it, [1, 2, 3])),
     ]));
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.List, Kind.List, Kind.Number, false, [false, ['0'], false,
@@ -108,29 +108,29 @@ suite('Encode', () => {
 
   test('write leaf set', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
 
     const tr = makeCompoundType(Kind.Set, numberType);
-    const v = new NomsSet(tr, new SetLeafSequence(ds, tr, [0, 1, 2, 3]));
+    const v = new NomsSet(tr, new SetLeafSequence(db, tr, [0, 1, 2, 3]));
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.Set, Kind.Number, false, ['0', '1', '2', '3']], w.array);
   });
 
   test('write compound set', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
     const ltr = makeCompoundType(Kind.Set, numberType);
-    const r1 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [0]))).targetRef;
-    const r2 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [1, 2]))).targetRef;
-    const r3 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
+    const r1 = db.writeValue(new NomsSet(ltr, new SetLeafSequence(db, ltr, [0]))).targetRef;
+    const r2 = db.writeValue(new NomsSet(ltr, new SetLeafSequence(db, ltr, [1, 2]))).targetRef;
+    const r3 = db.writeValue(new NomsSet(ltr, new SetLeafSequence(db, ltr, [3, 4, 5]))).targetRef;
     const tuples = [
       new MetaTuple(r1, 0, 1),
       new MetaTuple(r2, 2, 2),
       new MetaTuple(r3, 5, 3),
     ];
-    const l = new NomsSet(ltr, new OrderedMetaSequence(ds, ltr, tuples));
+    const l = new NomsSet(ltr, new OrderedMetaSequence(db, ltr, tuples));
 
     w.writeTopLevel(ltr, l);
     assert.deepEqual([Kind.Set, Kind.Number, true, [r1.toString(), '0', '1', r2.toString(), '2',
@@ -139,14 +139,14 @@ suite('Encode', () => {
 
   test('write set of set', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
 
     const st = makeCompoundType(Kind.Set, numberType);
     const tr = makeCompoundType(Kind.Set, st);
-    const v = new NomsSet(tr, new SetLeafSequence(ds, tr, [
-      new NomsSet(tr, new SetLeafSequence(ds, st, [0])),
-      new NomsSet(tr, new SetLeafSequence(ds, st, [1, 2, 3])),
+    const v = new NomsSet(tr, new SetLeafSequence(db, tr, [
+      new NomsSet(tr, new SetLeafSequence(db, st, [0])),
+      new NomsSet(tr, new SetLeafSequence(db, st, [1, 2, 3])),
     ]));
 
     w.writeTopLevel(tr, v);
@@ -156,11 +156,11 @@ suite('Encode', () => {
 
   test('write map', async() => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
 
     const tr = makeCompoundType(Kind.Map, stringType, boolType);
-    const v = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'a', value: false},
+    const v = new NomsMap(tr, new MapLeafSequence(db, tr, [{key: 'a', value: false},
         {key:'b', value:true}]));
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.Map, Kind.String, Kind.Bool, false, ['a', false, 'b', true]], w.array);
@@ -168,16 +168,16 @@ suite('Encode', () => {
 
   test('write map of map', async() => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
 
     const kt = makeCompoundType(Kind.Map, stringType, numberType);
     const vt = makeCompoundType(Kind.Set, boolType);
     const tr = makeCompoundType(Kind.Map, kt, vt);
 
-    const s = new NomsSet(vt, new SetLeafSequence(ds, vt, [true]));
-    const m1 = new NomsMap(kt, new MapLeafSequence(ds, kt, [{key: 'a', value: 0}]));
-    const v = new NomsMap(kt, new MapLeafSequence(ds, tr, [{key: m1, value: s}]));
+    const s = new NomsSet(vt, new SetLeafSequence(db, vt, [true]));
+    const m1 = new NomsMap(kt, new MapLeafSequence(db, kt, [{key: 'a', value: 0}]));
+    const v = new NomsMap(kt, new MapLeafSequence(db, tr, [{key: m1, value: s}]));
     w.writeTopLevel(tr, v);
     assert.deepEqual([Kind.Map, Kind.Map, Kind.String, Kind.Number, Kind.Set, Kind.Bool, false,
         [false, ['a', '0'], false, [true]]], w.array);
@@ -185,8 +185,8 @@ suite('Encode', () => {
 
   test('write empty struct', async() => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
 
     const type = makeStructType('S', []);
     const v = newStruct(type, {});
@@ -197,8 +197,8 @@ suite('Encode', () => {
 
   test('write struct', async() => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
 
     const type = makeStructType('S', [
       new Field('x', numberType),
@@ -213,28 +213,28 @@ suite('Encode', () => {
 
   test('write struct with list', async() => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    let w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    let w = new JsonArrayWriter(db);
 
     const ltr = makeCompoundType(Kind.List, stringType);
     const type = makeStructType('S', [
       new Field('l', ltr),
     ]);
 
-    let v = newStruct(type, {l: new NomsList(ltr, new ListLeafSequence(ds, ltr, ['a', 'b']))});
+    let v = newStruct(type, {l: new NomsList(ltr, new ListLeafSequence(db, ltr, ['a', 'b']))});
     w.writeTopLevel(type, v);
     assert.deepEqual([Kind.Struct, 'S', ['l', Kind.List, Kind.String], false, ['a', 'b']], w.array);
 
-    v = newStruct(type, {l: new NomsList(ltr, new ListLeafSequence(ds, ltr, []))});
-    w = new JsonArrayWriter(ds);
+    v = newStruct(type, {l: new NomsList(ltr, new ListLeafSequence(db, ltr, []))});
+    w = new JsonArrayWriter(db);
     w.writeTopLevel(type, v);
     assert.deepEqual([Kind.Struct, 'S', ['l', Kind.List, Kind.String], false, []], w.array);
   });
 
   test('write struct with struct', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
 
     const s2Type = makeStructType('S2', [
       new Field('x', numberType),
@@ -251,18 +251,18 @@ suite('Encode', () => {
 
   test('write compound list', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
     const ltr = makeListType(numberType);
-    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0]))).targetRef;
-    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [1, 2]))).targetRef;
-    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
+    const r1 = db.writeValue(new NomsList(ltr, new ListLeafSequence(db, ltr, [0]))).targetRef;
+    const r2 = db.writeValue(new NomsList(ltr, new ListLeafSequence(db, ltr, [1, 2]))).targetRef;
+    const r3 = db.writeValue(new NomsList(ltr, new ListLeafSequence(db, ltr, [3, 4, 5]))).targetRef;
     const tuples = [
       new MetaTuple(r1, 1, 1),
       new MetaTuple(r2, 2, 2),
       new MetaTuple(r3, 3, 3),
     ];
-    const l = new NomsList(ltr, new IndexedMetaSequence(ds, ltr, tuples));
+    const l = new NomsList(ltr, new IndexedMetaSequence(db, ltr, tuples));
 
     w.writeTopLevel(ltr, l);
     assert.deepEqual([Kind.List, Kind.Number, true, [r1.toString(), '1', '1', r2.toString(), '2',
@@ -271,10 +271,10 @@ suite('Encode', () => {
 
   test('write type value', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
 
     const test = (expected: Array<any>, v: Type) => {
-      const w = new JsonArrayWriter(ds);
+      const w = new JsonArrayWriter(db);
       w.writeTopLevel(v.type, v);
       assert.deepEqual(w.array, expected);
     };
@@ -315,10 +315,10 @@ suite('Encode', () => {
     }
 
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const blob = await newBlob(stringToUint8Array('hi'));
 
-    const chunk = encodeNomsValue(blob, blobType, ds);
+    const chunk = encodeNomsValue(blob, blobType, db);
     assert.equal(4, chunk.data.length);
     assert.deepEqual(stringToUint8Array('b hi'), chunk.data);
 
@@ -332,15 +332,15 @@ suite('Encode', () => {
       view.setUint8(2 + i, i);
     }
     const blob2 = await newBlob(bytes);
-    const chunk2 = encodeNomsValue(blob2, blobType, ds);
+    const chunk2 = encodeNomsValue(blob2, blobType, db);
     assert.equal(buffer2.byteLength, chunk2.data.buffer.byteLength);
     assert.deepEqual(buffer2, chunk2.data.buffer);
   });
 
   test('write ref', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(ms);
+    const w = new JsonArrayWriter(db);
     const ref = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
     const t = makeCompoundType(Kind.Ref, blobType);
     const v = new RefValue(ref, t);
@@ -350,8 +350,8 @@ suite('Encode', () => {
   });
 
   test('type errors', async () => {
-    const ds = new DataStore(new MemoryStore());
-    const w = new JsonArrayWriter(ds);
+    const db = new Database(new MemoryStore());
+    const w = new JsonArrayWriter(db);
 
     const test = (et, at, t, v) => {
       try {

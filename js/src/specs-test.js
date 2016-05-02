@@ -2,35 +2,35 @@
 
 import {invariant} from './assert.js';
 import Dataset from './dataset.js';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import HttpStore from './http-store.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
-import {DataStoreSpec, DatasetSpec, RefSpec, parseObjectSpec} from './specs.js';
+import {DatabaseSpec, DatasetSpec, RefSpec, parseObjectSpec} from './specs.js';
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 suite('Specs', () => {
-  test('DataStoreSpec', () => {
+  test('DatabaseSpec', () => {
     const notAllowed = ['mem:', 'mem:stuff', 'http:', 'https:', 'random:', 'random:random'];
-    notAllowed.forEach(s => assert.isNull(DataStoreSpec.parse(s)));
+    notAllowed.forEach(s => assert.isNull(DatabaseSpec.parse(s)));
 
-    let spec = DataStoreSpec.parse('mem');
+    let spec = DatabaseSpec.parse('mem');
     invariant(spec);
     assert.equal(spec.scheme, 'mem');
     assert.equal(spec.path, '');
-    assert.instanceOf(spec.store(), DataStore);
-    assert.instanceOf(spec.store()._cs, MemoryStore);
+    assert.instanceOf(spec.db(), Database);
+    assert.instanceOf(spec.db()._cs, MemoryStore);
 
-    spec = DataStoreSpec.parse('http://foo');
+    spec = DatabaseSpec.parse('http://foo');
     invariant(spec);
     assert.isNotNull(spec);
     assert.equal(spec.scheme, 'http');
     assert.equal(spec.path, '//foo');
-    assert.instanceOf(spec.store(), DataStore);
-    assert.instanceOf(spec.store()._cs, HttpStore);
+    assert.instanceOf(spec.db(), Database);
+    assert.instanceOf(spec.db()._cs, HttpStore);
 
-    spec = DataStoreSpec.parse('https://foo');
+    spec = DatabaseSpec.parse('https://foo');
     invariant(spec);
     assert.isNotNull(spec);
     assert.equal(spec.scheme, 'https');
@@ -44,20 +44,20 @@ suite('Specs', () => {
     let spec = DatasetSpec.parse('mem:ds');
     invariant(spec);
     assert.equal(spec.name, 'ds');
-    assert.equal(spec.store.scheme, 'mem');
-    assert.equal(spec.store.path, '');
+    assert.equal(spec.db.scheme, 'mem');
+    assert.equal(spec.db.path, '');
     let ds = spec.set();
     assert.instanceOf(ds, Dataset);
-    assert.instanceOf(ds.store._cs, MemoryStore);
+    assert.instanceOf(ds.db._cs, MemoryStore);
 
     spec = DatasetSpec.parse('http://localhost:8000/foo:ds');
     invariant(spec);
     assert.equal(spec.name, 'ds');
-    assert.equal(spec.store.scheme, 'http');
-    assert.equal(spec.store.path, '//localhost:8000/foo');
+    assert.equal(spec.db.scheme, 'http');
+    assert.equal(spec.db.path, '//localhost:8000/foo');
     ds = spec.set();
     assert.instanceOf(ds, Dataset);
-    assert.instanceOf(ds.store._cs, HttpStore);
+    assert.instanceOf(ds.db._cs, HttpStore);
   });
 
   test('RefSpec', () => {
@@ -72,8 +72,8 @@ suite('Specs', () => {
     const spec = RefSpec.parse(`mem:${testRef}`);
     invariant(spec);
     assert.equal(spec.ref.toString(), testRef.toString());
-    assert.equal(spec.store.scheme, 'mem');
-    assert.equal(spec.store.path, '');
+    assert.equal(spec.db.scheme, 'mem');
+    assert.equal(spec.db.path, '');
   });
 
   test('ObjectSpec', () => {
@@ -82,8 +82,8 @@ suite('Specs', () => {
     assert.isNotNull(spec.value());
     invariant(spec instanceof DatasetSpec);
     assert.equal(spec.name, 'monkey');
-    assert.equal(spec.store.scheme, 'http');
-    assert.equal(spec.store.path, '//foo:8000/test');
+    assert.equal(spec.db.scheme, 'http');
+    assert.equal(spec.db.path, '//foo:8000/test');
 
     const testRef = new Ref('sha1-0000000000000000000000000000000000000000');
     spec = parseObjectSpec(`http://foo:8000/test:${testRef}`);

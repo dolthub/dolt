@@ -22,49 +22,49 @@ var (
 	validDatasetNameRegexp = regexp.MustCompile("^[a-zA-Z0-9]+([/\\-_][a-zA-Z0-9]+)*$")
 )
 
-//ParseDataStore takes an optional colon-delineated string indicating what kind of DataStore to open and return. Supported syntax includes
+//ParseDatabase takes an optional colon-delineated string indicating what kind of Database to open and return. Supported syntax includes
 // - http:<server and path>
 // - ldb:<path>
 // - mem:
-func ParseDataStore(in string) (ds datas.DataStore, err error) {
+func ParseDatabase(in string) (db datas.Database, err error) {
 	input := strings.Split(in, ":")
 
 	switch input[0] {
 	case "http":
 		//get from server and path, including http
 		if len(input) < 2 {
-			return ds, fmt.Errorf("Improper datastore name: %s", in)
+			return db, fmt.Errorf("Improper database name: %s", in)
 		}
 
-		ds = datas.NewRemoteDataStore(in, "")
+		db = datas.NewRemoteDatabase(in, "")
 
 	case "ldb":
 		//create/access from path
 		if len(input) < 2 {
-			return ds, fmt.Errorf("Improper datastore name: %s", in)
+			return db, fmt.Errorf("Improper database name: %s", in)
 		}
-		ds = datas.NewDataStore(chunks.NewLevelDBStore(strings.Join(input[1:len(input)], ":"), "", maxFileHandles, false))
+		db = datas.NewDatabase(chunks.NewLevelDBStore(strings.Join(input[1:len(input)], ":"), "", maxFileHandles, false))
 
 	case "mem":
 		if len(input) < 2 {
-			return ds, fmt.Errorf("Improper datastore name: %s", in)
+			return db, fmt.Errorf("Improper database name: %s", in)
 		}
 
-		ds = datas.NewDataStore(chunks.NewMemoryStore())
+		db = datas.NewDatabase(chunks.NewMemoryStore())
 
 	case "":
-		ds = datas.NewDataStore(chunks.NewLevelDBStore(filepath.Join(os.Getenv("HOME"), ".noms"), "", maxFileHandles, false))
+		db = datas.NewDatabase(chunks.NewLevelDBStore(filepath.Join(os.Getenv("HOME"), ".noms"), "", maxFileHandles, false))
 
 	default:
-		err = fmt.Errorf("Improper datastore name: %s", in)
+		err = fmt.Errorf("Improper database name: %s", in)
 
 	}
 
 	return
 }
 
-//ParseDataset takes a colon-delineated string indicating a DataStore and the name of a dataset to open and return. Supported syntax includes
-//<datastore>:<dataset>
+//ParseDataset takes a colon-delineated string indicating a Database and the name of a dataset to open and return. Supported syntax includes
+//<database>:<dataset>
 func ParseDataset(in string) (dataset.Dataset, error) {
 	input := strings.Split(in, ":")
 
@@ -72,7 +72,7 @@ func ParseDataset(in string) (dataset.Dataset, error) {
 		return dataset.Dataset{}, fmt.Errorf("Improper dataset name: %s", in)
 	}
 
-	ds, errStore := ParseDataStore(strings.Join(input[:len(input)-1], ":"))
+	db, errStore := ParseDatabase(strings.Join(input[:len(input)-1], ":"))
 	name := input[len(input)-1]
 
 	d.Chk.NoError(errStore)
@@ -81,12 +81,12 @@ func ParseDataset(in string) (dataset.Dataset, error) {
 		return dataset.Dataset{}, fmt.Errorf("Improper dataset name: %s", in)
 	}
 
-	return dataset.NewDataset(ds, name), nil
+	return dataset.NewDataset(db, name), nil
 }
 
-//ParseObject takes a colon-delineated string indicating a DataStore and an object from the DataStore to return. It also indicates whether the retun value is a dataset or a ref using a boolean. Supported syntax includes
-//<datastore>:<dataset>
-//<datastore>:<ref>
+//ParseObject takes a colon-delineated string indicating a Database and an object from the Database to return. It also indicates whether the retun value is a dataset or a ref using a boolean. Supported syntax includes
+//<database>:<dataset>
+//<database>:<ref>
 func ParseObject(in string) (dataset.Dataset, ref.Ref, bool, error) {
 	input := strings.Split(in, ":")
 

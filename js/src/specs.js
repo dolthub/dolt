@@ -1,22 +1,22 @@
 // @flow
 
 import Dataset from './dataset.js';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import HttpStore from './http-store.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 
-// A parsed specification for the location of a Noms datastore.
+// A parsed specification for the location of a Noms database.
 // For example: 'mem:' or 'https://ds.noms.io/aa/music'
 //
-// See "spelling datastores" for details on supported syntaxes:
+// See "spelling databases" for details on supported syntaxes:
 // https://docs.google.com/document/d/1QgKcRS304llwU0ECahKtn8lGBFmT5zXzWr-5tah1S_4/edit
-export class DataStoreSpec {
+export class DatabaseSpec {
   scheme: string;
   path: string;
 
   // Returns parsed spec, or null if the spec was invalid.
-  static parse(spec: string): ?DataStoreSpec {
+  static parse(spec: string): ?DatabaseSpec {
     const match = spec.match(/^(.+?)(\:.+)?$/);
     if (!match) {
       return null;
@@ -45,13 +45,13 @@ export class DataStoreSpec {
     this.path = path;
   }
 
-  // Constructs a new DataStore based on the parsed spec.
-  store(): DataStore {
+  // Constructs a new Database based on the parsed spec.
+  db(): Database {
     if (this.scheme === 'mem') {
-      return new DataStore(new MemoryStore());
+      return new Database(new MemoryStore());
     }
     if (this.scheme === 'http') {
-      return new DataStore(new HttpStore(`${this.scheme}:${this.path}`));
+      return new Database(new HttpStore(`${this.scheme}:${this.path}`));
     }
     throw new Error('Unreached');
   }
@@ -63,7 +63,7 @@ export class DataStoreSpec {
 // See "spelling datasets" for details on supported syntaxes:
 // https://docs.google.com/document/d/1QgKcRS304llwU0ECahKtn8lGBFmT5zXzWr-5tah1S_4/edit
 export class DatasetSpec {
-  store: DataStoreSpec;
+  db: DatabaseSpec;
   name: string;
 
   // Returns a parsed spec, or null if the spec was invalid.
@@ -72,21 +72,21 @@ export class DatasetSpec {
     if (!match) {
       return null;
     }
-    const store = DataStoreSpec.parse(match[1]);
-    if (!store) {
+    const db = DatabaseSpec.parse(match[1]);
+    if (!db) {
       return null;
     }
-    return new this(store, match[2]);
+    return new this(db, match[2]);
   }
 
-  constructor(store: DataStoreSpec, name: string) {
-    this.store = store;
+  constructor(db: DatabaseSpec, name: string) {
+    this.db = db;
     this.name = name;
   }
 
   // Returns a new DataSet based on the parsed spec.
   set(): Dataset {
-    return new Dataset(this.store.store(), this.name);
+    return new Dataset(this.db.db(), this.name);
   }
 
   // Returns the value at the HEAD of this dataset, if any, or null otherwise.
@@ -104,7 +104,7 @@ export class DatasetSpec {
 // See "spelling objects" for details on supported syntaxes:
 // https://docs.google.com/document/d/1QgKcRS304llwU0ECahKtn8lGBFmT5zXzWr-5tah1S_4/edit
 export class RefSpec {
-  store: DataStoreSpec;
+  db: DatabaseSpec;
   ref: Ref;
 
   // Returns a parsed spec, or null if the spec was invalid.
@@ -119,22 +119,22 @@ export class RefSpec {
       return null;
     }
 
-    const store = DataStoreSpec.parse(match[1]);
-    if (!store) {
+    const db = DatabaseSpec.parse(match[1]);
+    if (!db) {
       return null;
     }
 
-    return new this(store, ref);
+    return new this(db, ref);
   }
 
-  constructor(store: DataStoreSpec, ref: Ref) {
-    this.store = store;
+  constructor(db: DatabaseSpec, ref: Ref) {
+    this.db = db;
     this.ref = ref;
   }
 
   // Returns the value for the spec'd reference, if any, or null otherwise.
   value(): Promise<any> {
-    return this.store.store().readValue(this.ref);
+    return this.db.db().readValue(this.ref);
   }
 }
 

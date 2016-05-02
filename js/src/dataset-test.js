@@ -4,14 +4,14 @@ import {suite, test} from 'mocha';
 import MemoryStore from './memory-store.js';
 import {assert} from 'chai';
 import Dataset from './dataset.js';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import {invariant, notNull} from './assert.js';
 
 suite('Dataset', () => {
   test('commit', async () => {
     const ms = new MemoryStore();
-    const store = new DataStore(ms);
-    let ds = new Dataset(store, 'ds1');
+    const db = new Database(ms);
+    let ds = new Dataset(db, 'ds1');
 
     // |a|
     const ds2 = await ds.commit('a');
@@ -49,13 +49,13 @@ suite('Dataset', () => {
 
 
     // Add a commit to a different datasetId
-    ds = new Dataset(store, 'otherDs');
+    ds = new Dataset(db, 'otherDs');
     ds = await ds.commit('a');
     assert.strictEqual('a', notNull(await ds.head('otherDs')).value);
 
-    // Get a fresh datastore, and verify that both datasets are present
-    const newStore = new DataStore(ms);
-    assert.strictEqual('d', notNull(await newStore.head('ds1')).value);
-    assert.strictEqual('a', notNull(await newStore.head('otherDs')).value);
+    // Get a fresh database, and verify that both datasets are present
+    const newDb = new Database(ms);
+    assert.strictEqual('d', notNull(await newDb.head('ds1')).value);
+    assert.strictEqual('a', notNull(await newDb.head('otherDs')).value);
   });
 });

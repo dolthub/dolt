@@ -2,14 +2,14 @@
 
 import type Chunk from './chunk.js';
 import type Ref from './ref.js';
-import type DataStore from './data-store.js';
+import type Database from './database.js';
 import {notNull} from './assert.js';
 import type {Type} from './type.js';
 import type {valueOrPrimitive} from './value.js';
 import {getTypeOfValue} from './type.js';
 import {Value} from './value.js';
 
-type encodeFn = (v: valueOrPrimitive, t: Type, ds: ?DataStore) => Chunk;
+type encodeFn = (v: valueOrPrimitive, t: Type, db: ?Database) => Chunk;
 let encodeNomsValue: ?encodeFn = null;
 
 export function getRefOfValue(v: valueOrPrimitive): Ref {

@@ -1,6 +1,6 @@
 // @flow
 
-import type DataStore from './data-store.js';
+import type Database from './database.js';
 import {invariant, notNull} from './assert.js';
 import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
@@ -9,13 +9,13 @@ import type {Type} from './type.js';
 import {Value} from './value.js';
 
 export class Sequence<T> extends Value {
-  ds: ?DataStore;
+  db: ?Database;
   _type: Type;
   _items: Array<T>;
 
-  constructor(ds: ?DataStore, type: Type, items: Array<T>) {
+  constructor(db: ?Database, type: Type, items: Array<T>) {
     super();
-    this.ds = ds;
+    this.db = db;
     this._type = type;
     this._items = items;
   }

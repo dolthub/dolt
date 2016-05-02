@@ -9,7 +9,7 @@ import (
 )
 
 // CopyMissingChunksP copies to |sink| all chunks in source that are reachable from (and including) |r|, skipping chunks that |sink| already has
-func CopyMissingChunksP(source DataStore, sink *LocalDataStore, sourceRef types.Ref, concurrency int) {
+func CopyMissingChunksP(source Database, sink *LocalDatabase, sourceRef types.Ref, concurrency int) {
 	copyCallback := func(r types.Ref) bool {
 		return sink.has(r.TargetRef())
 	}
@@ -17,7 +17,7 @@ func CopyMissingChunksP(source DataStore, sink *LocalDataStore, sourceRef types.
 }
 
 // CopyReachableChunksP copies to |sink| all chunks reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|
-func CopyReachableChunksP(source, sink DataStore, sourceRef, exclude types.Ref, concurrency int) {
+func CopyReachableChunksP(source, sink Database, sourceRef, exclude types.Ref, concurrency int) {
 	excludeRefs := map[ref.Ref]bool{}
 
 	if !exclude.TargetRef().IsEmpty() {
@@ -38,7 +38,7 @@ func CopyReachableChunksP(source, sink DataStore, sourceRef, exclude types.Ref, 
 	copyWorker(source, sink, sourceRef, copyCallback, concurrency)
 }
 
-func copyWorker(source DataStore, sink DataStore, sourceRef types.Ref, stopFn walk.SomeChunksCallback, concurrency int) {
+func copyWorker(source Database, sink Database, sourceRef types.Ref, stopFn walk.SomeChunksCallback, concurrency int) {
 	bs := sink.batchSink()
 	walk.SomeChunksP(sourceRef, newTeeDataSource(source.batchStore(), bs), stopFn, concurrency)
 

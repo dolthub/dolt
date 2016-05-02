@@ -6,7 +6,7 @@ import Ref from './ref.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
 import type Struct from './struct.js';
-import type DataStore from './data-store.js';
+import type Database from './database.js';
 import type {NomsKind} from './noms-kind.js';
 import {decode as decodeBase64} from './base64.js';
 import {
@@ -34,12 +34,12 @@ const blobTag = 'b ';
 export class JsonArrayReader {
   _a: Array<any>;
   _i: number;
-  _ds: DataStore;
+  _db: Database;
 
-  constructor(a: Array<any>, ds: DataStore) {
+  constructor(a: Array<any>, db: Database) {
     this._a = a;
     this._i = 0;
-    this._ds = ds;
+    this._db = db;
   }
 
   read(): any {
@@ -141,7 +141,7 @@ export class JsonArrayReader {
 
   readBlobLeafSequence(): BlobLeafSequence {
     const bytes = decodeBase64(this.readString());
-    return new BlobLeafSequence(this._ds, bytes);
+    return new BlobLeafSequence(this._db, bytes);
   }
 
   readSequence(t: Type): Array<any> {
@@ -157,12 +157,12 @@ export class JsonArrayReader {
 
   readListLeafSequence(t: Type): ListLeafSequence {
     const seq = this.readSequence(t);
-    return new ListLeafSequence(this._ds, t, seq);
+    return new ListLeafSequence(this._db, t, seq);
   }
 
   readSetLeafSequence(t: Type): SetLeafSequence {
     const seq = this.readSequence(t);
-    return new SetLeafSequence(this._ds, t, seq);
+    return new SetLeafSequence(this._db, t, seq);
   }
 
   readMapLeafSequence(t: Type): MapLeafSequence {
@@ -175,7 +175,7 @@ export class JsonArrayReader {
       entries.push({key: k, value: v});
     }
 
-    return new MapLeafSequence(this._ds, t, entries);
+    return new MapLeafSequence(this._db, t, entries);
   }
 
   readMetaSequence(t: Type): any {
@@ -188,7 +188,7 @@ export class JsonArrayReader {
       data.push(new MetaTuple(ref, v, numLeaves));
     }
 
-    return newMetaSequenceFromData(this._ds, t, data);
+    return newMetaSequenceFromData(this._db, t, data);
   }
 
   readRefValue(t: Type): RefValue {
@@ -208,7 +208,7 @@ export class JsonArrayReader {
         const isMeta = this.readBool();
         let sequence;
         if (isMeta) {
-          const r2 = new JsonArrayReader(this.readArray(), this._ds);
+          const r2 = new JsonArrayReader(this.readArray(), this._db);
           sequence = r2.readMetaSequence(t);
           invariant(sequence instanceof IndexedMetaSequence);
         } else {
@@ -228,7 +228,7 @@ export class JsonArrayReader {
       }
       case Kind.List: {
         const isMeta = this.readBool();
-        const r2 = new JsonArrayReader(this.readArray(), this._ds);
+        const r2 = new JsonArrayReader(this.readArray(), this._db);
         const sequence = isMeta ?
             r2.readMetaSequence(t) :
             r2.readListLeafSequence(t);
@@ -236,7 +236,7 @@ export class JsonArrayReader {
       }
       case Kind.Map: {
         const isMeta = this.readBool();
-        const r2 = new JsonArrayReader(this.readArray(), this._ds);
+        const r2 = new JsonArrayReader(this.readArray(), this._db);
         const sequence = isMeta ?
           r2.readMetaSequence(t) :
           r2.readMapLeafSequence(t);
@@ -246,7 +246,7 @@ export class JsonArrayReader {
         return this.readRefValue(t);
       case Kind.Set: {
         const isMeta = this.readBool();
-        const r2 = new JsonArrayReader(this.readArray(), this._ds);
+        const r2 = new JsonArrayReader(this.readArray(), this._db);
         const sequence = isMeta ?
           r2.readMetaSequence(t) :
           r2.readSetLeafSequence(t);
@@ -269,7 +269,7 @@ export class JsonArrayReader {
       case Kind.Map:
       case Kind.Ref:
       case Kind.Set: {
-        const r2 = new JsonArrayReader(this.readArray(), this._ds);
+        const r2 = new JsonArrayReader(this.readArray(), this._db);
         const elemTypes: Array<Type> = [];
         while (!r2.atEnd()) {
           elemTypes.push(r2.readTypeAsValue(parentStructTypes));
@@ -310,7 +310,7 @@ export class JsonArrayReader {
     parentStructTypes.push(structType);
 
     const newFields: Array<Field> = [];
-    const fieldReader = new JsonArrayReader(this.readArray(), this._ds);
+    const fieldReader = new JsonArrayReader(this.readArray(), this._db);
     while (!fieldReader.atEnd()) {
       const fieldName = fieldReader.readString();
       const fieldType = fieldReader.readTypeAsTag(parentStructTypes);
@@ -325,17 +325,17 @@ export class JsonArrayReader {
   }
 }
 
-export function decodeNomsValue(chunk: Chunk, ds: DataStore): valueOrPrimitive {
+export function decodeNomsValue(chunk: Chunk, db: Database): valueOrPrimitive {
   const tag = new Chunk(new Uint8Array(chunk.data.buffer, 0, 2)).toString();
 
   switch (tag) {
     case typedTag: {
       const payload = JSON.parse(new Chunk(new Uint8Array(chunk.data.buffer, 2)).toString());
-      const reader = new JsonArrayReader(payload, ds);
+      const reader = new JsonArrayReader(payload, db);
       return reader.readTopLevelValue();
     }
     case blobTag:
-      return new NomsBlob(new BlobLeafSequence(ds, new Uint8Array(chunk.data.buffer, 2)));
+      return new NomsBlob(new BlobLeafSequence(db, new Uint8Array(chunk.data.buffer, 2)));
     default:
       throw new Error('Not implemented');
   }

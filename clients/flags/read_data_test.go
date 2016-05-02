@@ -13,33 +13,33 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestParseDataStoreFromHTTP(t *testing.T) {
+func TestParseDatabaseFromHTTP(t *testing.T) {
 	if os.Getenv("RUN_HTTP_FLAGS_TESTS") == "" {
-		t.Skip("Skipping flaky TestParseDataStoreFromHTTP; to enable set RUN_HTTP_FLAGS_TESTS env var")
+		t.Skip("Skipping flaky TestParseDatabaseFromHTTP; to enable set RUN_HTTP_FLAGS_TESTS env var")
 	}
 
 	assert := assert.New(t)
 
-	server := datas.NewRemoteDataStoreServer(chunks.NewTestStoreFactory(), 8000)
+	server := datas.NewRemoteDatabaseServer(chunks.NewTestStoreFactory(), 8000)
 	go server.Run()
 
-	ds := datas.NewRemoteDataStore("http://localhost:8000", "")
+	db := datas.NewRemoteDatabase("http://localhost:8000", "")
 
-	r := ds.WriteValue(types.Bool(true))
+	r := db.WriteValue(types.Bool(true))
 
-	ds.Close()
+	db.Close()
 
 	datastoreName := "http://localhost:8000"
-	dsTest, err := ParseDataStore(datastoreName)
+	dbTest, err := ParseDatabase(datastoreName)
 
 	assert.NoError(err)
-	assert.Equal(types.Bool(true), dsTest.ReadValue(r.TargetRef()))
+	assert.Equal(types.Bool(true), dbTest.ReadValue(r.TargetRef()))
 
-	dsTest.Close()
+	dbTest.Close()
 	server.Stop()
 }
 
-func TestParseDataStoreFromLDB(t *testing.T) {
+func TestParseDatabaseFromLDB(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
@@ -47,41 +47,41 @@ func TestParseDataStoreFromLDB(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	cs := chunks.NewLevelDBStore(filepath.Join(dir, "name"), "", 24, false)
-	ds := datas.NewDataStore(cs)
+	db := datas.NewDatabase(cs)
 
-	r := ds.WriteValue(types.Bool(true))
+	r := db.WriteValue(types.Bool(true))
 
-	ds.Close()
+	db.Close()
 
-	datastoreName := "ldb:" + filepath.Join(dir, "name")
-	dsTest, errRead := ParseDataStore(datastoreName)
+	databaseName := "ldb:" + filepath.Join(dir, "name")
+	dbTest, errRead := ParseDatabase(databaseName)
 
 	assert.NoError(errRead)
-	assert.Equal(types.Bool(true), dsTest.ReadValue(r.TargetRef()))
+	assert.Equal(types.Bool(true), dbTest.ReadValue(r.TargetRef()))
 
-	dsTest.Close()
+	dbTest.Close()
 }
 
-func TestParseDataStoreFromMem(t *testing.T) {
+func TestParseDatabaseFromMem(t *testing.T) {
 	assert := assert.New(t)
 
-	datastoreName := "mem:"
-	dsTest, err := ParseDataStore(datastoreName)
+	databaseName := "mem:"
+	dbTest, err := ParseDatabase(databaseName)
 
-	r := dsTest.WriteValue(types.Bool(true))
+	r := dbTest.WriteValue(types.Bool(true))
 
 	assert.NoError(err)
-	assert.Equal(types.Bool(true), dsTest.ReadValue(r.TargetRef()))
+	assert.Equal(types.Bool(true), dbTest.ReadValue(r.TargetRef()))
 }
 
-func TestDataStoreBadInput(t *testing.T) {
+func TestDatabaseBadInput(t *testing.T) {
 	assert := assert.New(t)
 
 	badName1 := "mem"
-	ds, err := ParseDataStore(badName1)
+	db, err := ParseDatabase(badName1)
 
 	assert.Error(err)
-	assert.Nil(ds)
+	assert.Nil(db)
 }
 
 func TestParseDatasetFromHTTP(t *testing.T) {
@@ -89,18 +89,18 @@ func TestParseDatasetFromHTTP(t *testing.T) {
 		t.Skip("Skipping flaky TestParseDatasetFromHTTP; to enable set RUN_HTTP_FLAGS_TESTS env var")
 	}
 	assert := assert.New(t)
-	server := datas.NewRemoteDataStoreServer(chunks.NewTestStoreFactory(), 8001)
+	server := datas.NewRemoteDatabaseServer(chunks.NewTestStoreFactory(), 8001)
 	go server.Run()
 
-	ds := datas.NewRemoteDataStore("http://localhost:8001", "")
+	db := datas.NewRemoteDatabase("http://localhost:8001", "")
 	id := "datasetTest"
 
-	set := dataset.NewDataset(ds, id)
+	set := dataset.NewDataset(db, id)
 	commit := types.NewString("Commit Value")
 	set, err := set.Commit(commit)
 	assert.NoError(err)
 
-	ds.Close()
+	db.Close()
 
 	datasetName := "http://localhost:8001:datasetTest"
 	setTest, err := ParseDataset(datasetName)
@@ -134,15 +134,15 @@ func TestParseDatasetFromLDB(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
-	ds := datas.NewDataStore(cs)
+	db := datas.NewDatabase(cs)
 	id := "testdataset"
 
-	set := dataset.NewDataset(ds, id)
+	set := dataset.NewDataset(db, id)
 	commit := types.NewString("Commit Value")
 	set, err = set.Commit(commit)
 	assert.NoError(err)
 
-	ds.Close()
+	db.Close()
 
 	datasetName := "ldb:" + dir + "/name:" + id
 	setTest, errRead := ParseDataset(datasetName)
@@ -185,15 +185,15 @@ func TestParseDatasetObjectFromLdb(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
-	ds := datas.NewDataStore(cs)
+	db := datas.NewDatabase(cs)
 	id := "testdataset"
 
-	set := dataset.NewDataset(ds, id)
+	set := dataset.NewDataset(db, id)
 	commit := types.NewString("Commit Value")
 	set, err = set.Commit(commit)
 	assert.NoError(err)
 
-	ds.Close()
+	db.Close()
 
 	datasetName := "ldb:" + dir + "/name:" + id
 	setTest, ref, isDs, errRead := ParseObject(datasetName)
@@ -212,17 +212,17 @@ func TestReadRef(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
-	ds := datas.NewDataStore(cs)
+	db := datas.NewDatabase(cs)
 	id := "testdataset"
 
-	set := dataset.NewDataset(ds, id)
+	set := dataset.NewDataset(db, id)
 	commit := types.NewString("Commit Value")
 	set, err = set.Commit(commit)
 	assert.NoError(err)
 
 	ref := set.Head().Ref()
 
-	ds.Close()
+	db.Close()
 
 	objectName := "ldb:" + dir + "/name:" + ref.String()
 
@@ -264,16 +264,16 @@ func TestDefaultDatastore(t *testing.T) {
 	os.Setenv(dir, "HOME")
 
 	cs := chunks.NewLevelDBStore(filepath.Join(os.Getenv("HOME"), ".noms"), "", 24, false)
-	ds := datas.NewDataStore(cs)
+	db := datas.NewDatabase(cs)
 
-	r := ds.WriteValue(types.Bool(true))
+	r := db.WriteValue(types.Bool(true))
 
-	ds.Close()
+	db.Close()
 
-	dsTest, errRead := ParseDataStore("")
+	dbTest, errRead := ParseDatabase("")
 
 	assert.NoError(errRead)
-	assert.Equal(types.Bool(true), dsTest.ReadValue(r.TargetRef()))
+	assert.Equal(types.Bool(true), dbTest.ReadValue(r.TargetRef()))
 
-	dsTest.Close()
+	dbTest.Close()
 }

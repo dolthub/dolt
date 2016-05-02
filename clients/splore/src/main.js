@@ -4,7 +4,7 @@ import Layout from './layout.js';
 import React from 'react';
 import ReactDOM from 'react-dom';
 import {
-  DataStore,
+  Database,
   HttpStore,
   IndexedMetaSequence,
   invariant,
@@ -27,7 +27,7 @@ import type {NodeGraph} from './buchheim.js';
 
 const data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
-let dataStore: DataStore;
+let database: Database;
 
 let renderNode: ?HTMLElement;
 let params;
@@ -48,7 +48,7 @@ function load() {
     });
   }
 
-  if (!params.store) {
+  if (!params.database) {
     renderPrompt();
     return;
   }
@@ -58,8 +58,8 @@ function load() {
     opts['headers'] = {Authorization: `Bearer ${params.token}`};
   }
 
-  const httpStore = new HttpStore(params.store, undefined, undefined, opts);
-  dataStore = new DataStore(httpStore);
+  const httpStore = new HttpStore(params.database, undefined, undefined, opts);
+  database = new Database(httpStore);
 
   const setRootRef = ref => {
     rootRef = ref;
@@ -229,7 +229,7 @@ function handleNodeClick(e: MouseEvent, id: string) {
       render();
     } else {
       const ref = Ref.parse(id);
-      dataStore.readValue(ref).then(value => {
+      database.readValue(ref).then(value => {
         handleChunkLoad(ref, value, id);
       });
     }
@@ -246,11 +246,11 @@ class Prompt extends React.Component<void, {}, void> {
     return <div style={{display: 'flex', height: '100%', alignItems: 'center',
       justifyContent: 'center'}}>
       <div style={fontStyle}>
-        Can haz datastore?
+        Can haz database?
         <form style={{margin:'0.5em 0'}} onSubmit={e => this._handleOnSubmit(e)}>
-          <input type='text' ref='store' autoFocus={true} style={inputStyle}
-            defaultValue={params.store || 'http://api.noms.io/-/ds/[user]'}
-            placeholder='noms store URL'
+          <input type='text' ref='database' autoFocus={true} style={inputStyle}
+            defaultValue={params.database || 'http://api.noms.io/-/ds/[user]'}
+            placeholder='noms database URL'
           />
           <input type='text' ref='token' style={inputStyle}
             defaultValue={params.token}
@@ -268,8 +268,8 @@ class Prompt extends React.Component<void, {}, void> {
 
   _handleOnSubmit(e) {
     e.preventDefault();
-    const {store, token, ref} = this.refs;
-    let qs = '?store=' + store.value;
+    const {database, token, ref} = this.refs;
+    let qs = '?database=' + database.value;
     if (token.value) {
       qs += '&token=' + token.value;
     }
@@ -289,6 +289,6 @@ function render() {
   const dt = new TreeNode(data, rootRef.toString(), null, 0, 0, {});
   layout(dt);
   ReactDOM.render(
-    <Layout tree={dt} data={data} onNodeClick={handleNodeClick} nomsStore={params.store}/>,
+    <Layout tree={dt} data={data} onNodeClick={handleNodeClick} nomsStore={params.database}/>,
     renderNode);
 }

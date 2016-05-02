@@ -3,7 +3,7 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
-import DataStore from './data-store';
+import Database from './database.js';
 import MemoryStore from './memory-store.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
@@ -165,7 +165,7 @@ suite('BuildMap', () => {
 
   test('LONG: write, read, modify, read', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
 
     const kvs = [];
     for (let i = 0; i < testMapSize; i++) {
@@ -175,8 +175,8 @@ suite('BuildMap', () => {
     const tr = makeMapType(numberType, numberType);
     const m = await newMap(kvs, tr);
 
-    const r = ds.writeValue(m).targetRef;
-    const m2 = await ds.readValue(r);
+    const r = db.writeValue(m).targetRef;
+    const m2 = await db.readValue(r);
     const outKvs = [];
     await m2.forEach((v, k) => outKvs.push(k, v));
     assert.deepEqual(kvs, outKvs);
@@ -195,9 +195,9 @@ suite('BuildMap', () => {
 suite('MapLeaf', () => {
   test('isEmpty/size', () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeMapType(stringType, boolType);
-    const newMap = entries => new NomsMap(tr, new MapLeafSequence(ds, tr, entries));
+    const newMap = entries => new NomsMap(tr, new MapLeafSequence(db, tr, entries));
     let m = newMap([]);
     assert.isTrue(m.isEmpty());
     assert.strictEqual(0, m.size);
@@ -208,10 +208,10 @@ suite('MapLeaf', () => {
 
   test('has', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeMapType(stringType, boolType);
     const m = new NomsMap(tr,
-        new MapLeafSequence(ds, tr, [{key: 'a', value: false}, {key:'k', value:true}]));
+        new MapLeafSequence(db, tr, [{key: 'a', value: false}, {key:'k', value:true}]));
     assert.isTrue(await m.has('a'));
     assert.isFalse(await m.has('b'));
     assert.isTrue(await m.has('k'));
@@ -220,10 +220,10 @@ suite('MapLeaf', () => {
 
   test('first/last/get', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeMapType(stringType, numberType);
     const m = new NomsMap(tr,
-        new MapLeafSequence(ds, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
+        new MapLeafSequence(db, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
 
     assert.deepEqual(['a', 4], await m.first());
     assert.deepEqual(['k', 8], await m.last());
@@ -236,10 +236,10 @@ suite('MapLeaf', () => {
 
   test('forEach', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeMapType(stringType, numberType);
     const m = new NomsMap(tr,
-        new MapLeafSequence(ds, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
+        new MapLeafSequence(db, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
 
     const kv = [];
     await m.forEach((v, k) => { kv.push(k, v); });
@@ -248,11 +248,11 @@ suite('MapLeaf', () => {
 
   test('iterator', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeMapType(stringType, numberType);
 
     const test = async entries => {
-      const m = new NomsMap(tr, new MapLeafSequence(ds, tr, entries));
+      const m = new NomsMap(tr, new MapLeafSequence(db, tr, entries));
       assert.deepEqual(entries, await flatten(m.iterator()));
       assert.deepEqual(entries, await flattenParallel(m.iterator(), entries.length));
     };
@@ -264,9 +264,9 @@ suite('MapLeaf', () => {
 
   test('LONG: iteratorAt', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeMapType(stringType, numberType);
-    const build = entries => new NomsMap(tr, new MapLeafSequence(ds, tr, entries));
+    const build = entries => new NomsMap(tr, new MapLeafSequence(db, tr, entries));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
 
@@ -289,14 +289,14 @@ suite('MapLeaf', () => {
 
   function testChunks(keyType: Type, valueType: Type) {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
     const tr = makeMapType(keyType, valueType);
-    const r1 = ds.writeValue('x');
-    const r2 = ds.writeValue(true);
-    const r3 = ds.writeValue('b');
-    const r4 = ds.writeValue(false);
+    const r1 = db.writeValue('x');
+    const r2 = db.writeValue(true);
+    const r3 = db.writeValue('b');
+    const r4 = db.writeValue(false);
     const m = new NomsMap(tr,
-        new MapLeafSequence(ds, tr, [{key: r1, value: r2}, {key: r3, value: r4}]));
+        new MapLeafSequence(db, tr, [{key: r1, value: r2}, {key: r3, value: r4}]));
     assert.strictEqual(4, m.chunks.length);
     assert.isTrue(r1.equals(m.chunks[0]));
     assert.isTrue(r2.equals(m.chunks[1]));
@@ -314,46 +314,46 @@ suite('MapLeaf', () => {
 });
 
 suite('CompoundMap', () => {
-  function build(ds: DataStore): Array<NomsMap> {
+  function build(db: Database): Array<NomsMap> {
     const tr = makeMapType(stringType,
         boolType);
-    const l1 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'a', value: false},
+    const l1 = new NomsMap(tr, new MapLeafSequence(db, tr, [{key: 'a', value: false},
         {key:'b', value:false}]));
-    const r1 = ds.writeValue(l1).targetRef;
-    const l2 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'e', value: true},
+    const r1 = db.writeValue(l1).targetRef;
+    const l2 = new NomsMap(tr, new MapLeafSequence(db, tr, [{key: 'e', value: true},
         {key:'f', value:true}]));
-    const r2 = ds.writeValue(l2).targetRef;
-    const l3 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'h', value: false},
+    const r2 = db.writeValue(l2).targetRef;
+    const l3 = new NomsMap(tr, new MapLeafSequence(db, tr, [{key: 'h', value: false},
         {key:'i', value:true}]));
-    const r3 = ds.writeValue(l3).targetRef;
-    const l4 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'm', value: true},
+    const r3 = db.writeValue(l3).targetRef;
+    const l4 = new NomsMap(tr, new MapLeafSequence(db, tr, [{key: 'm', value: true},
         {key:'n', value:false}]));
-    const r4 = ds.writeValue(l4).targetRef;
+    const r4 = db.writeValue(l4).targetRef;
 
-    const m1 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r1, 'b', 2),
+    const m1 = new NomsMap(tr, new OrderedMetaSequence(db, tr, [new MetaTuple(r1, 'b', 2),
         new MetaTuple(r2, 'f', 2)]));
-    const rm1 = ds.writeValue(m1).targetRef;
-    const m2 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r3, 'i', 2),
+    const rm1 = db.writeValue(m1).targetRef;
+    const m2 = new NomsMap(tr, new OrderedMetaSequence(db, tr, [new MetaTuple(r3, 'i', 2),
         new MetaTuple(r4, 'n', 2)]));
-    const rm2 = ds.writeValue(m2).targetRef;
+    const rm2 = db.writeValue(m2).targetRef;
 
-    const c = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(rm1, 'f', 4),
+    const c = new NomsMap(tr, new OrderedMetaSequence(db, tr, [new MetaTuple(rm1, 'f', 4),
         new MetaTuple(rm2, 'n', 4)]));
     return [c, m1, m2];
   }
 
   test('isEmpty/size', () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const [c] = build(ds);
+    const db = new Database(ms);
+    const [c] = build(db);
     assert.isFalse(c.isEmpty());
     assert.strictEqual(8, c.size);
   });
 
   test('get', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const [c] = build(ds);
+    const db = new Database(ms);
+    const [c] = build(db);
 
     assert.strictEqual(false, await c.get('a'));
     assert.strictEqual(false, await c.get('b'));
@@ -373,8 +373,8 @@ suite('CompoundMap', () => {
 
   test('first/last/has', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const [c, m1, m2] = build(ds);
+    const db = new Database(ms);
+    const [c, m1, m2] = build(db);
 
     assert.deepEqual(['a', false], await c.first());
     assert.deepEqual(['n', false], await c.last());
@@ -401,8 +401,8 @@ suite('CompoundMap', () => {
 
   test('forEach', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const [c] = build(ds);
+    const db = new Database(ms);
+    const [c] = build(db);
 
     const kv = [];
     await c.forEach((v, k) => { kv.push(k, v); });
@@ -412,8 +412,8 @@ suite('CompoundMap', () => {
 
   test('iterator', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const [c] = build(ds);
+    const db = new Database(ms);
+    const [c] = build(db);
     const expected = [{key: 'a', value: false}, {key: 'b', value: false}, {key: 'e', value: true},
                       {key: 'f', value: true}, {key: 'h', value: false}, {key: 'i', value: true},
                       {key: 'm', value: true}, {key: 'n', value: false}];
@@ -423,8 +423,8 @@ suite('CompoundMap', () => {
 
   test('LONG: iteratorAt', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const [c] = build(ds);
+    const db = new Database(ms);
+    const [c] = build(db);
     const entries = [{key: 'a', value: false}, {key: 'b', value: false}, {key: 'e', value: true},
                      {key: 'f', value: true}, {key: 'h', value: false}, {key: 'i', value: true},
                      {key: 'm', value: true}, {key: 'n', value: false}];
@@ -448,8 +448,8 @@ suite('CompoundMap', () => {
 
   test('iterator return', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const [c] = build(ds);
+    const db = new Database(ms);
+    const [c] = build(db);
     const iter = c.iterator();
     const values = [];
     for (let res = await iter.next(); !res.done; res = await iter.next()) {
@@ -465,8 +465,8 @@ suite('CompoundMap', () => {
 
   test('iterator return parallel', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const [c] = build(ds);
+    const db = new Database(ms);
+    const [c] = build(db);
     const iter = c.iterator();
     const values = await Promise.all([iter.next(), iter.next(), iter.return(), iter.next()]);
     assert.deepEqual([{done: false, value: {key: 'a', value: false}},
@@ -477,8 +477,8 @@ suite('CompoundMap', () => {
 
   test('chunks', () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const [c] = build(ds);
+    const db = new Database(ms);
+    const [c] = build(db);
     assert.strictEqual(2, c.chunks.length);
   });
 
@@ -515,8 +515,8 @@ suite('CompoundMap', () => {
     }
 
     const ms = new CountingMemoryStore();
-    const ds = new DataStore(ms);
-    [m1, m2] = await Promise.all([m1, m2].map(s => ds.readValue(ds.writeValue(s).targetRef)));
+    const db = new Database(ms);
+    [m1, m2] = await Promise.all([m1, m2].map(s => db.readValue(db.writeValue(s).targetRef)));
 
     assert.deepEqual([[], [], []], await m1.diff(m1));
     assert.deepEqual([[], [], []], await m2.diff(m2));
@@ -566,8 +566,8 @@ suite('CompoundMap', () => {
 
   test('chunks', () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
-    const m = build(ds)[1];
+    const db = new Database(ms);
+    const m = build(db)[1];
     const chunks = m.chunks;
     const sequence = m.sequence;
     assert.equal(2, chunks.length);

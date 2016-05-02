@@ -13,7 +13,7 @@ import {
 import {
   BlobWriter,
   Dataset,
-  DataStore,
+  Database,
   HttpStore,
   NomsBlob,
   RefValue,
@@ -39,17 +39,17 @@ main().catch(ex => {
 });
 
 async function main(): Promise<void> {
-  const [p, datastoreSpec, datasetName] = parseArgs();
+  const [p, databaseSpec, datasetName] = parseArgs();
   if (!p) {
     process.exit(1);
     return;
   }
 
-  const store = new DataStore(new HttpStore(datastoreSpec));
-  const ds = new Dataset(store, datasetName);
+  const db = new Database(new HttpStore(databaseSpec));
+  const ds = new Dataset(db, datasetName);
 
   startTime = Date.now();
-  const r = await processPath(p, store);
+  const r = await processPath(p, db);
   if (r) {
     await ds.commit(r);
     process.stdout.write('\ndone\n');
@@ -57,32 +57,32 @@ async function main(): Promise<void> {
 
 }
 
-async function processPath(p: string, store: DataStore): Promise<?RefValue<DirectoryEntry>> {
+async function processPath(p: string, db: Database): Promise<?RefValue<DirectoryEntry>> {
   numFilesFound++;
   const st = await fs.stat(p);
   sizeFilesFound += st.size;
   let de = null;
   if (st.isDirectory()) {
     de = new DirectoryEntry({
-      directory: await processDirectory(p, store),
+      directory: await processDirectory(p, db),
     });
   } else if (st.isFile()) {
     de = new DirectoryEntry({
-      file: await processFile(p, store),
+      file: await processFile(p, db),
     });
   } else {
     console.info('Skipping path %s because this filesystem node type is not currently handled', p);
     return null;
   }
 
-  return await store.writeValue(de);
+  return await db.writeValue(de);
 }
 
-async function processDirectory(p: string, store: DataStore): Promise<Directory> {
+async function processDirectory(p: string, db: Database): Promise<Directory> {
   const names = await fs.readdir(p);
   const children = names.map(name => {
     const chPath = path.join(p, name);
-    return processPath(chPath, store).then(dirEntryRef => [name, dirEntryRef]);
+    return processPath(chPath, db).then(dirEntryRef => [name, dirEntryRef]);
   });
 
   numFilesComplete++;
@@ -98,9 +98,9 @@ async function processDirectory(p: string, store: DataStore): Promise<Directory>
   });
 }
 
-async function processFile(p: string, store: DataStore): Promise<File> {
+async function processFile(p: string, db: Database): Promise<File> {
   const f = new File({
-    content: await processBlob(p, store),
+    content: await processBlob(p, db),
   });
   numFilesComplete++;
   updateProgress();
@@ -108,7 +108,7 @@ async function processFile(p: string, store: DataStore): Promise<File> {
 }
 
 
-function processBlob(p: string, store: DataStore): Promise<RefValue<NomsBlob>> {
+function processBlob(p: string, db: Database): Promise<RefValue<NomsBlob>> {
   const w = new BlobWriter();
   const s = fs.createReadStream(p);
   return new Promise((res, rej) => {
@@ -120,7 +120,7 @@ function processBlob(p: string, store: DataStore): Promise<RefValue<NomsBlob>> {
     s.on('end', async () => {
       await w.close();
       try {
-        res(store.writeValue(w.blob));
+        res(db.writeValue(w.blob));
       } catch (ex) {
         rej(ex);
       }
@@ -145,10 +145,10 @@ function parseArgs() {
     return [];
   }
   const datasetName = parts.pop();
-  const datastoreSpec = parts.join(':');
-  if (!/^http/.test(datastoreSpec)) {
-    console.error('Unsupported datastore type: ', datastoreSpec);
+  const databaseSpec = parts.join(':');
+  if (!/^http/.test(databaseSpec)) {
+    console.error('Unsupported database type: ', databaseSpec);
     return [];
   }
-  return [p, datastoreSpec, datasetName];
+  return [p, databaseSpec, datasetName];
 }

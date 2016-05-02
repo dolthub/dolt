@@ -23,40 +23,40 @@ Then launch Node so that we can have a play:
 node
 ```
 
-## [DataStore](TODO-link-to-DataStore-API)
+## [Database](TODO-link-to-Database-API)
 
 In Noms, data is represented as trees of immutable *values*. For example, the number `42` is a value. The string `'hello, world'` is a value. The set of all photos from the Hubble space telescope is a value, and each of those photos is also a value.
 
-A DataStore is a place where you can store Noms values. To do anything with Noms, you will first need to create an instance of a DataStore:
+A Database is a place where you can store Noms values. To do anything with Noms, you will first need to create an instance of a Database:
 
 ```js
 const noms = require('@attic/noms');
 
-// A datastore is backed by a "ChunkStore", which is where the physical chunks of data will be kept
+// A database is backed by a "ChunkStore", which is where the physical chunks of data will be kept
 // Noms/JS comes with several ChunkStore implementations, including MemoryStore, which is useful
 // for testing.
-const dataStore = new noms.DataStore(new noms.MemoryStore());
+const db = new noms.Database(new noms.MemoryStore());
 ```
 
-Noms is a [content-addressed](https://en.wikipedia.org/wiki/Content-addressable_storage) datastore. Every noms value has a hash. When you store a value in noms, you get a *Ref* (short for *reference*) to the data back. The Ref encapsulates the value's hash and some other details.
+Noms is a [content-addressed](https://en.wikipedia.org/wiki/Content-addressable_storage) database. Every noms value has a hash. When you store a value in noms, you get a *Ref* (short for *reference*) to the data back. The Ref encapsulates the value's hash and some other details.
 
 ```js
-const ref1 = dataStore.writeValue("Hello, world");
+const ref1 = db.writeValue("Hello, world");
 ref1.targetRef;  // prints: Ref { _refStr: 'sha1-b237e82a5ed084438714743d30dd4900b1327609' }
 
 // prints: Hello, world
-dataStore.readValue(ref1.targetRef).then(console.log);
+db.readValue(ref1.targetRef).then(console.log);
 ```
 
 
 ## [Dataset](TODO-link-to-DataSet-API)
 
-A DataStore on its own can only be used to store and retrieve immutable objects by their hash. This has limited utility.
+A Database on its own can only be used to store and retrieve immutable objects by their hash. This has limited utility.
 
 If you need to keep track of something that changes over time, you need a [Dataset](TODO). A Dataset is a named pointer to a value that can change:
 
 ```
-let dataSet = new noms.Dataset(dataStore, "salutation");
+let dataSet = new noms.Dataset(db, "salutation");
 
 // prints: null
 dataSet.head().then(console.log);
@@ -70,15 +70,15 @@ dataSet
 // prints: Hello, world
 dataSet
 	.then(ds => ds.head())
-	.then(commit => commit.value.targetValue(dataStore))
+	.then(commit => commit.value.targetValue(db))
 	.then(console.log);
 
 // prints: Buenos dias
-const ref2 = dataStore.writeValue("Buenos dias");
+const ref2 = db.writeValue("Buenos dias");
 dataSet = dataSet.then(ds => ds.commit(ref2));
 dataSet
 	.then(ds => ds.head())
-	.then(commit => commit.value.targetValue(dataStore))
+	.then(commit => commit.value.targetValue(db))
 	.then(console.log);
 ```
 
@@ -89,8 +89,8 @@ A DataSet is versioned. When you *commit* a new value, you aren't overwriting th
 dataSet
 	.then(ds => ds.head())
 	.then(h => h.parents.first())
-	.then(rv => rv.targetValue(dataStore))
-	.then(commit => commit.value.targetValue(dataStore))
+	.then(rv => rv.targetValue(db))
+	.then(commit => commit.value.targetValue(db))
 	.then(console.log);
 ```
 
@@ -115,7 +115,7 @@ For example:
 ```
 // Writes a noms value of type:
 // Struct<foo: String, num: Number, list: List<String|Number>>
-store.writeValue({
+db.writeValue({
   foo: "bar",
   num: 42,
   list: new NomsList("a", "b", 4, 8),

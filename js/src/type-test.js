@@ -14,12 +14,12 @@ import {
   getTypeOfValue,
 } from './type.js';
 import {suite, test} from 'mocha';
-import DataStore from './data-store.js';
+import Database from './database.js';
 
 suite('Type', () => {
   test('types', async () => {
     const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const db = new Database(ms);
 
     const mapType = makeMapType(stringType, numberType);
     const setType = makeSetType(stringType);
@@ -28,13 +28,13 @@ suite('Type', () => {
       new Field('Field2', boolType),
     ]);
 
-    const mapRef = ds.writeValue(mapType).targetRef;
-    const setRef = ds.writeValue(setType).targetRef;
-    const mahRef = ds.writeValue(mahType).targetRef;
+    const mapRef = db.writeValue(mapType).targetRef;
+    const setRef = db.writeValue(setType).targetRef;
+    const mahRef = db.writeValue(mahType).targetRef;
 
-    assert.isTrue(mapType.equals(await ds.readValue(mapRef)));
-    assert.isTrue(setType.equals(await ds.readValue(setRef)));
-    assert.isTrue(mahType.equals(await ds.readValue(mahRef)));
+    assert.isTrue(mapType.equals(await db.readValue(mapRef)));
+    assert.isTrue(setType.equals(await db.readValue(setRef)));
+    assert.isTrue(mahType.equals(await db.readValue(mahRef)));
   });
 
   test('type Type', () => {

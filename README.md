@@ -1,6 +1,6 @@
 # Noms
 
-Noms is a content-addressable, append-only, peer-to-peer, structured data store.
+Noms is a content-addressable, append-only, peer-to-peer, structured database.
 
 In other words, *noms is git for data*.
 

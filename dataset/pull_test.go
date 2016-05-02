@@ -10,13 +10,13 @@ import (
 )
 
 func createTestDataset(name string) Dataset {
-	return NewDataset(datas.NewDataStore(chunks.NewTestStore()), name)
+	return NewDataset(datas.NewDatabase(chunks.NewTestStore()), name)
 }
 
 func TestValidateRef(t *testing.T) {
 	ds := createTestDataset("test")
 	b := types.Bool(true)
-	r := ds.Store().WriteValue(b)
+	r := ds.db.WriteValue(b)
 
 	assert.Panics(t, func() { ds.validateRefAsCommit(types.NewRef(r.TargetRef())) })
 	assert.Panics(t, func() { ds.validateRefAsCommit(types.NewTypedRefFromValue(b)) })
@@ -24,17 +24,17 @@ func TestValidateRef(t *testing.T) {
 
 func NewList(ds Dataset, vs ...types.Value) types.Ref {
 	v := types.NewList(vs...)
-	return ds.Store().WriteValue(v)
+	return ds.db.WriteValue(v)
 }
 
 func NewMap(ds Dataset, vs ...types.Value) types.Ref {
 	v := types.NewMap(vs...)
-	return ds.Store().WriteValue(v)
+	return ds.db.WriteValue(v)
 }
 
 func NewSet(ds Dataset, vs ...types.Value) types.Ref {
 	v := types.NewSet(vs...)
-	return ds.Store().WriteValue(v)
+	return ds.db.WriteValue(v)
 }
 
 func pullTest(t *testing.T, topdown bool) {
@@ -69,7 +69,7 @@ func pullTest(t *testing.T, topdown bool) {
 	source, err = source.Commit(updatedValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source.Store(), types.NewTypedRefFromValue(source.Head()), 1, topdown)
+	sink, err = sink.pull(source.DB(), types.NewTypedRefFromValue(source.Head()), 1, topdown)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
@@ -98,7 +98,7 @@ func pullFirstCommit(t *testing.T, topdown bool) {
 	source, err := source.Commit(sourceInitialValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source.Store(), types.NewTypedRefFromValue(source.Head()), 1, topdown)
+	sink, err = sink.pull(source.db, types.NewTypedRefFromValue(source.Head()), 1, topdown)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
@@ -125,7 +125,7 @@ func pullDeepRef(t *testing.T, topdown bool) {
 	source, err := source.Commit(sourceInitialValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source.Store(), types.NewTypedRefFromValue(source.Head()), 1, topdown)
+	sink, err = sink.pull(source.db, types.NewTypedRefFromValue(source.Head()), 1, topdown)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }

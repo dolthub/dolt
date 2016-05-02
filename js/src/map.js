@@ -2,7 +2,7 @@
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import RefValue from './ref-value.js';
-import type DataStore from './data-store.js';
+import type Database from './database.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
@@ -28,9 +28,9 @@ export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
 const mapWindowSize = 1;
 const mapPattern = ((1 << 6) | 0) - 1;
 
-function newMapLeafChunkFn(t: Type, ds: ?DataStore = null): makeChunkFn {
+function newMapLeafChunkFn(t: Type, db: ?Database = null): makeChunkFn {
   return (items: Array<MapEntry>) => {
-    const mapLeaf = new MapLeafSequence(ds, t, items);
+    const mapLeaf = new MapLeafSequence(db, t, items);
 
     let indexValue: ?valueOrPrimitive = null;
     if (items.length > 0) {
@@ -150,7 +150,7 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
   async _splice(cursor: OrderedSequenceCursor, insert: Array<MapEntry>, remove: number):
       Promise<NomsMap<K, V>> {
     const type = this.type;
-    const ds = this.sequence.ds;
+    const ds = this.sequence.db;
     const seq = await chunkSequence(cursor, insert, remove, newMapLeafChunkFn(type, ds),
                                     newOrderedMetaSequenceChunkFn(type, ds),
                                     newMapLeafBoundaryChecker(type),

@@ -23,40 +23,40 @@ Then launch Node so that we can have a play:
 node
 ```
 
-## [DataStore](TODO-link-to-DataStore-API)
+## [Database](TODO-link-to-Database-API)
 
 In Noms, data is represented as trees of immutable *values*. For example, the number `42` is a value. The string `'Hello, world'` is a value. The set of all photos from the Hubble space telescope is a value, and each of those photos is also a value.
 
-A DataStore is a place where you can store Noms values. To do anything with Noms, you'll need a DataStore:
+A Database is a place where you can store Noms values. To do anything with Noms, you'll need a Database:
 
 ```js
 const noms = require('@attic/noms');
 
-// A datastore is backed by a "ChunkStore", which is where the physical chunks of data will be kept
+// A database is backed by a "ChunkStore", which is where the physical chunks of data will be kept
 // Noms/JS comes with several ChunkStore implementations, including MemoryStore, which is useful
 // for testing.
-const dataStore = new noms.DataStore(new noms.MemoryStore());
+const db = new noms.Database(new noms.MemoryStore());
 ```
 
 Noms is [content-addressed](https://en.wikipedia.org/wiki/Content-addressable_storage), meaning that every Noms value is identified by a unique hash. When you store a value, you receive a *Ref* which contains the value's hash, and which can be used to retrieve the value later.
 
 ```js
-const ref = dataStore.writeValue("Hello, world");
+const ref = db.writeValue("Hello, world");
 ref.targetHash;  // prints: Ref { _refStr: 'sha1-b237e82a5ed084438714743d30dd4900b1327609' }
 
 // prints: Hello, world
-dataStore.readValue(ref).then(console.log);
+db.readValue(ref).then(console.log);
 ```
 
 
 ## [Dataset](TODO-link-to-Dataset-API)
 
-A DataStore on its own can only be used to store and retrieve immutable objects.
+A Database on its own can only be used to store and retrieve immutable objects.
 
 If you need to keep track of something that changes over time, you need a [Dataset](TODO). A Dataset is a named pointer to a value that can change:
 
 ```js
-const dataset = new noms.Dataset(dataStore, "salutation");
+const dataset = new noms.Dataset(db, "salutation");
 
 // prints: null
 dataset.head().then(console.log);
@@ -106,7 +106,7 @@ In most cases, the Noms JavaScript library will automatically convert between Ja
 ```js
 // Writes a noms value of type:
 // Struct<foo: String, num: Number, list: List<String|Number>>
-store.writeValue({
+db.writeValue({
   foo: "bar",
   num: 42,
   list: new NomsList("a", "b", 4, 8),
