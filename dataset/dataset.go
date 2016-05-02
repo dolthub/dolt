@@ -3,7 +3,6 @@ package dataset
 import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -30,6 +29,10 @@ func (ds *Dataset) MaybeHead() (types.Struct, bool) {
 	return ds.Store().MaybeHead(ds.id)
 }
 
+func (ds *Dataset) MaybeHeadRef() (types.Ref, bool) {
+	return ds.Store().MaybeHeadRef(ds.id)
+}
+
 // Head returns the current head Commit, which contains the current root of the Dataset's value tree.
 func (ds *Dataset) Head() types.Struct {
 	c, ok := ds.MaybeHead()
@@ -37,12 +40,19 @@ func (ds *Dataset) Head() types.Struct {
 	return c
 }
 
+func (ds *Dataset) HeadRef() types.Ref {
+	r, ok := ds.MaybeHeadRef()
+	d.Chk.True(ok, "Dataset \"%s\" does not exist", ds.id)
+	return r
+}
+
 // Commit updates the commit that a dataset points at. The new Commit is constructed using v and the current Head.
 // If the update cannot be performed, e.g., because of a conflict, Commit returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
 func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
 	p := datas.NewSetOfRefOfCommit()
-	if head, ok := ds.MaybeHead(); ok {
-		p = p.Insert(types.NewTypedRefFromValue(head))
+	if headRef, ok := ds.MaybeHeadRef(); ok {
+		headRef.TargetValue(ds.Store()) // TODO: This is a hack to deconfuse the validation code, which doesn't hold onto validation state between commits.
+		p = p.Insert(headRef)
 	}
 	return ds.CommitWithParents(v, p)
 }
@@ -63,9 +73,9 @@ func (ds *Dataset) Pull(sourceStore datas.DataStore, sourceRef types.Ref, concur
 func (ds *Dataset) pull(source datas.DataStore, sourceRef types.Ref, concurrency int, topDown bool) (Dataset, error) {
 	sink := *ds
 
-	sinkHeadRef := types.NewTypedRef(types.MakeRefType(datas.NewCommit().Type()), ref.Ref{})
-	if currentHead, ok := sink.MaybeHead(); ok {
-		sinkHeadRef = types.NewTypedRefFromValue(currentHead)
+	sinkHeadRef := types.Ref{}
+	if currentHeadRef, ok := sink.MaybeHeadRef(); ok {
+		sinkHeadRef = currentHeadRef
 	}
 
 	if sourceRef == sinkHeadRef {

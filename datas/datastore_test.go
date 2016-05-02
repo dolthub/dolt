@@ -121,10 +121,13 @@ func (suite *DataStoreSuite) TestDataStoreCommit() {
 	// The old datastore still has no head.
 	_, ok := suite.ds.MaybeHead(datasetID)
 	suite.False(ok)
+	_, ok = suite.ds.MaybeHeadRef(datasetID)
+	suite.False(ok)
 
 	// The new datastore has |a|.
 	aCommit1 := ds2.Head(datasetID)
 	suite.True(aCommit1.Get(ValueField).Equals(a))
+	suite.Equal(aCommit1.Ref(), ds2.HeadRef(datasetID).TargetRef())
 	suite.ds = ds2
 
 	// |a| <- |b|

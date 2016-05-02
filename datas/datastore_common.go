@@ -29,16 +29,29 @@ func newDataStoreCommon(bs types.BatchStore, rt chunks.RootTracker) dataStoreCom
 }
 
 func (ds *dataStoreCommon) MaybeHead(datasetID string) (types.Struct, bool) {
-	if r, ok := ds.Datasets().MaybeGet(types.NewString(datasetID)); ok {
-		return r.(types.Ref).TargetValue(ds).(types.Struct), true
+	if r, ok := ds.MaybeHeadRef(datasetID); ok {
+		return r.TargetValue(ds).(types.Struct), true
 	}
 	return NewCommit(), false
 }
 
+func (ds *dataStoreCommon) MaybeHeadRef(datasetID string) (types.Ref, bool) {
+	if r, ok := ds.Datasets().MaybeGet(types.NewString(datasetID)); ok {
+		return r.(types.Ref), true
+	}
+	return types.Ref{}, false
+}
+
 func (ds *dataStoreCommon) Head(datasetID string) types.Struct {
 	c, ok := ds.MaybeHead(datasetID)
-	d.Chk.True(ok, "DataStore has no Head.")
+	d.Chk.True(ok, "DataStore \"%s\" has no Head.", datasetID)
 	return c
+}
+
+func (ds *dataStoreCommon) HeadRef(datasetID string) types.Ref {
+	r, ok := ds.MaybeHeadRef(datasetID)
+	d.Chk.True(ok, "DataStore \"%s\" has no Head.", datasetID)
+	return r
 }
 
 func (ds *dataStoreCommon) Datasets() types.Map {
@@ -68,8 +81,7 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit types.Struct) error
 	currentRootRef, currentDatasets := ds.getRootAndDatasets()
 
 	// TODO: This Commit will be orphaned if the tryUpdateRoot() below fails
-	ds.WriteValue(commit)
-	commitRef := types.NewTypedRefFromValue(commit)
+	commitRef := ds.WriteValue(commit)
 
 	// First commit in store is always fast-foward.
 	if !currentRootRef.IsEmpty() {
