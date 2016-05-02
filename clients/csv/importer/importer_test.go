@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/clients/util"
+	"github.com/attic-labs/noms/clients/test_util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
@@ -20,7 +20,7 @@ func TestCSVImporter(t *testing.T) {
 }
 
 type testSuite struct {
-	util.ClientTestSuite
+	test_util.ClientTestSuite
 }
 
 func (s *testSuite) TestCSVImporter() {
