@@ -70,7 +70,7 @@ export class BlobLeafSequence extends IndexedSequence<number> {
 }
 
 const blobWindowSize = 64;
-const blobPattern = ((1 << 13) | 0) - 1;
+const blobPattern = ((1 << 11) | 0) - 1; // Avg Chunk Size: 2k
 
 function newBlobLeafChunkFn(vr: ?ValueReader = null): makeChunkFn {
   return (items: Array<number>) => {

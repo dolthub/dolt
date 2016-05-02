@@ -18,12 +18,12 @@ type compoundBlob struct {
 }
 
 func newCompoundBlob(tuples metaSequenceData, vr ValueReader) compoundBlob {
-	return buildCompoundBlob(tuples, typeForBlob, vr).(compoundBlob)
+	return buildCompoundBlob(tuples, BlobType, vr).(compoundBlob)
 }
 
 func buildCompoundBlob(tuples metaSequenceData, t *Type, vr ValueReader) Value {
-	d.Chk.True(t.Equals(typeForBlob))
-	return compoundBlob{metaSequenceObject{tuples, typeForBlob}, tuples.uint64ValuesSum(), &ref.Ref{}, vr}
+	d.Chk.True(t.Equals(BlobType))
+	return compoundBlob{metaSequenceObject{tuples, BlobType}, tuples.uint64ValuesSum(), &ref.Ref{}, vr}
 }
 
 func init() {

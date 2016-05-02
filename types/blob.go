@@ -7,16 +7,13 @@ import (
 )
 
 const (
-	// 12 bits leads to an average size of 4k
-	// 13 bits leads to an average size of 8k
-	// 14 bits leads to an average size of 16k
-	blobPattern = uint32(1<<13 - 1)
+	blobPattern = uint32(1<<11 - 1) // Avg Chunk Size of 2k
 
 	// The window size to use for computing the rolling hash.
 	blobWindowSize = 64
 )
 
-var typeForBlob = BlobType
+var RefOfBlobType = MakeRefType(BlobType)
 
 type Blob interface {
 	Value
@@ -49,7 +46,7 @@ func newBlobLeafChunkFn() makeChunkFn {
 }
 
 func NewBlob(r io.Reader) Blob {
-	seq := newEmptySequenceChunker(newBlobLeafChunkFn(), newIndexedMetaSequenceChunkFn(typeForBlob, nil, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(newBlobLeafChunkFn(), newIndexedMetaSequenceChunkFn(BlobType, nil, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	buf := []byte{0}
 	for {
 		n, err := r.Read(buf)
