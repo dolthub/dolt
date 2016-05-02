@@ -2,7 +2,7 @@
   "name": "noms-splore",
   "devDependencies": {
     "@attic/eslintrc": "^1.0.0",
-    "@attic/noms": "^19.0.0",
+    "@attic/noms": "^20.0.1",
     "@attic/webpack-config": "^2.1.0",
     "babel-cli": "6.6.5",
     "babel-core": "6.7.2",
@@ -22,7 +22,9 @@
     "flow-bin": "^0.24.1",
     "http-server": "^0.8.5",
     "react-dom": "^0.14.1",
-    "react": "^0.14.1"
+    "react": "^0.14.1",
+    "chai": "3.5.0",
+    "mocha": "2.4.5"
   },
   "scripts": {
     "start": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js development",
