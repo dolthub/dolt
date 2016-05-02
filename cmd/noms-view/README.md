@@ -13,5 +13,5 @@ Examples:
 ## serve
 
 ```
-./noms-view serve ../../clients/splore database=ldb:/tmp/picasa
+./noms-view serve ../../clients/splore store=ldb:/tmp/picasa
 ```

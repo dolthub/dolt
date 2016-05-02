@@ -34,7 +34,7 @@ func main() {
 		flag.Usage()
 		return
 	}
-	defer ds.DB().Close()
+	defer ds.Store().Close()
 
 	comma, err := csv.StringToRune(*delimiter)
 	if err != nil {
@@ -44,7 +44,7 @@ func main() {
 	}
 
 	err = d.Try(func() {
-		nomsList, structDesc := csv.ValueToListAndElemDesc(ds.Head().Get(datas.ValueField), ds.DB())
+		nomsList, structDesc := csv.ValueToListAndElemDesc(ds.Head().Get(datas.ValueField), ds.Store())
 		csv.Write(nomsList, structDesc, comma, os.Stdout)
 	})
 	if err != nil {

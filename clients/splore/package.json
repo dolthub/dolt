@@ -2,7 +2,7 @@
   "name": "noms-splore",
   "devDependencies": {
     "@attic/eslintrc": "^1.0.0",
-    "@attic/noms": "^11.1.0",
+    "@attic/noms": "^13.0.0",
     "@attic/webpack-config": "^2.1.0",
     "babel-cli": "6.6.5",
     "babel-core": "6.7.2",

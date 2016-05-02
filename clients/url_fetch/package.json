@@ -1,7 +1,7 @@
 {
   "name": "noms-url-fetch",
   "dependencies": {
-    "@attic/noms": "^18.0.0",
+    "@attic/noms": "^13.0.0",
     "babel-regenerator-runtime": "6.5.0",
     "humanize": "0.0.9",
     "yargs": "4.4.0"

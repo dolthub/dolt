@@ -14,7 +14,7 @@ import {
   valueType,
 } from './type.js';
 import {suite, test} from 'mocha';
-import Database from './database.js';
+import DataStore from './data-store.js';
 import {newList} from './list.js';
 
 suite('Struct', () => {
@@ -33,7 +33,7 @@ suite('Struct', () => {
 
   test('chunks', () => {
     const ms = new MemoryStore();
-    const db = new Database(ms);
+    const ds = new DataStore(ms);
 
     const bt = boolType;
     const refOfBoolType = makeRefType(bt);
@@ -42,7 +42,7 @@ suite('Struct', () => {
     ]);
 
     const b = true;
-    const r = db.writeValue(b);
+    const r = ds.writeValue(b);
     const s1 = newStruct(type, {r: r});
     assert.strictEqual(1, s1.chunks.length);
     assert.isTrue(r.equals(s1.chunks[0]));

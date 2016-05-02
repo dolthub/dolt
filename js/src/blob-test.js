@@ -5,7 +5,7 @@ import {suite, test} from 'mocha';
 import Random from './pseudo-random.js';
 import MemoryStore from './memory-store.js';
 import {newBlob, BlobWriter} from './blob.js';
-import Database from './database.js';
+import DataStore from './data-store.js';
 import {blobType, makeRefType} from './type.js';
 
 suite('Blob', () => {
@@ -49,11 +49,11 @@ suite('Blob', () => {
 
   test('roundtrip', async () => {
     const ms = new MemoryStore();
-    const db = new Database(ms);
+    const ds = new DataStore(ms);
 
     const b1 = await newBlob(randomArray(15));
-    const r1 = await db.writeValue(b1).targetRef;
-    const b2 = await db.readValue(r1);
+    const r1 = await ds.writeValue(b1).targetRef;
+    const b2 = await ds.readValue(r1);
     assert.isTrue(b1.equals(b2));
   });
 

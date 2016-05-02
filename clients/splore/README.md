@@ -23,7 +23,7 @@ go build
 ./noms-view serve ../../clients/splore store="ldb:/tmp/sploretest" &
 ```
 
-Then, navigate to the URL printed by noms-view, e.g. http://127.0.0.1:12345?database=xyz.
+Then, navigate to the URL printed by noms-view, e.g. http://127.0.0.1:12345?store=xyz.
 
 ## Develop
 

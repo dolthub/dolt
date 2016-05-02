@@ -41,7 +41,7 @@ func main() {
 		return
 	}
 
-	server := datas.NewRemoteDatabaseServer(cf, *port)
+	server := datas.NewRemoteDataStoreServer(cf, *port)
 
 	// Shutdown server gracefully so that profile may be written
 	c := make(chan os.Signal, 1)

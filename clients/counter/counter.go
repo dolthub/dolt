@@ -22,7 +22,7 @@ func main() {
 		flag.Usage()
 		return
 	}
-	defer ds.DB().Close()
+	defer ds.Store().Close()
 
 	lastVal := uint64(0)
 	if commit, ok := ds.MaybeHead(); ok {
