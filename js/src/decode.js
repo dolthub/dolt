@@ -6,7 +6,6 @@ import Ref from './ref.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
 import type Struct from './struct.js';
-import type DataStore from './data-store.js';
 import type {NomsKind} from './noms-kind.js';
 import {decode as decodeBase64} from './base64.js';
 import {
@@ -34,9 +33,9 @@ const blobTag = 'b ';
 export class JsonArrayReader {
   _a: Array<any>;
   _i: number;
-  _ds: DataStore;
+  _ds: ValueReader;
 
-  constructor(a: Array<any>, ds: DataStore) {
+  constructor(a: Array<any>, ds: ValueReader) {
     this._a = a;
     this._i = 0;
     this._ds = ds;
@@ -325,17 +324,21 @@ export class JsonArrayReader {
   }
 }
 
-export function decodeNomsValue(chunk: Chunk, ds: DataStore): valueOrPrimitive {
+export interface ValueReader {
+  readValue(ref: Ref): Promise<any>
+}
+
+export function decodeNomsValue(chunk: Chunk, vr: ValueReader): valueOrPrimitive {
   const tag = new Chunk(new Uint8Array(chunk.data.buffer, 0, 2)).toString();
 
   switch (tag) {
     case typedTag: {
       const payload = JSON.parse(new Chunk(new Uint8Array(chunk.data.buffer, 2)).toString());
-      const reader = new JsonArrayReader(payload, ds);
+      const reader = new JsonArrayReader(payload, vr);
       return reader.readTopLevelValue();
     }
     case blobTag:
-      return new NomsBlob(new BlobLeafSequence(ds, new Uint8Array(chunk.data.buffer, 2)));
+      return new NomsBlob(new BlobLeafSequence(vr, new Uint8Array(chunk.data.buffer, 2)));
     default:
       throw new Error('Not implemented');
   }

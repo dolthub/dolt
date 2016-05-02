@@ -1,16 +1,15 @@
 // @flow
 
-import Chunk from './chunk.js';
 import Ref from './ref.js';
-import {default as RefValue, refValueFromValue} from './ref-value.js';
+import {default as RefValue} from './ref-value.js';
 import {newStruct} from './struct.js';
-import type {ChunkStore} from './chunk-store.js';
 import type {NomsMap} from './map.js';
 import type {NomsSet} from './set.js';
 import type {valueOrPrimitive} from './value.js';
+import ValueStore from './value-store.js';
+import BatchStore from './batch-store.js';
 import {
   Field,
-  getTypeOfValue,
   makeRefType,
   makeStructType,
   makeSetType,
@@ -21,9 +20,6 @@ import {
 } from './type.js';
 import {newMap} from './map.js';
 import {newSet} from './set.js';
-import {decodeNomsValue} from './decode.js';
-import {invariant} from './assert.js';
-import {encodeNomsValue} from './encode.js';
 import type {Commit} from './commit.js';
 
 type DatasTypes = {
@@ -66,21 +62,17 @@ export function getDatasTypes(): DatasTypes {
   return datasTypes;
 }
 
-interface Cache<T> {  // eslint-disable-line no-undef
-  entry(ref: Ref): ?CacheEntry<T>;  // eslint-disable-line no-undef
-  get(ref: Ref): ?T;  // eslint-disable-line no-undef
-  add(ref: Ref, size: number, value: T): void;  // eslint-disable-line no-undef
-}
-
-export default class DataStore {
-  _cs: ChunkStore;
+export default class DataStore extends ValueStore {
+  _bs: BatchStore;
+  _cacheSize: number;
   _datasets: Promise<NomsMap<string, RefValue<Commit>>>;
-  _valueCache: Cache<?valueOrPrimitive>;
 
-  constructor(cs: ChunkStore, cacheSize: number = 0) {
-    this._cs = cs;
-    this._datasets = this._datasetsFromRootRef(cs.getRoot());
-    this._valueCache = cacheSize > 0 ? new SizeCache(cacheSize) : new NoopCache();
+  constructor(bs: BatchStore, cacheSize: number = 0) {
+    super(bs, cacheSize);
+    // bs and cacheSize should only be used when creating a new DataStore instance in commit()
+    this._bs = bs;
+    this._cacheSize = cacheSize;
+    this._datasets = this._datasetsFromRootRef(bs.getRoot());
   }
 
   _datasetsFromRootRef(rootRef: Promise<Ref>): Promise<NomsMap<string, RefValue<Commit>>> {
@@ -116,40 +108,8 @@ export default class DataStore {
     return true;
   }
 
-  // TODO: This should return Promise<?valueOrPrimitive>
-  async readValue(ref: Ref): Promise<any> {
-    const entry = this._valueCache.entry(ref);
-    if (entry) {
-      return entry.value;
-    }
-    const chunk: Chunk = await this._cs.get(ref);
-    if (chunk.isEmpty()) {
-      this._valueCache.add(ref, 0, null);
-      return null;
-    }
-
-    const v = decodeNomsValue(chunk, this);
-    this._valueCache.add(ref, chunk.data.length, v);
-    return v;
-  }
-
-  writeValue<T: valueOrPrimitive>(v: T): RefValue<T> {
-    const t = getTypeOfValue(v);
-    const chunk = encodeNomsValue(v, t, this);
-    invariant(!chunk.isEmpty());
-    const {ref} = chunk;
-    const refValue = refValueFromValue(v);
-    const entry = this._valueCache.entry(ref);
-    if (entry && entry.present) {
-      return refValue;
-    }
-    this._cs.put(chunk);
-    this._valueCache.add(ref, chunk.data.length, v);
-    return refValue;
-  }
-
   async commit(datasetId: string, commit: Commit): Promise<DataStore> {
-    const currentRootRefP = this._cs.getRoot();
+    const currentRootRefP = this._bs.getRoot();
     const datasetsP = this._datasetsFromRootRef(currentRootRefP);
     let currentDatasets = await (datasetsP:Promise<NomsMap>);
     const currentRootRef = await currentRootRefP;
@@ -169,8 +129,8 @@ export default class DataStore {
 
     currentDatasets = await currentDatasets.set(datasetId, commitRef);
     const newRootRef = this.writeValue(currentDatasets).targetRef;
-    if (await this._cs.updateRoot(newRootRef, currentRootRef)) {
-      return new DataStore(this._cs);
+    if (await this._bs.updateRoot(newRootRef, currentRootRef)) {
+      return new DataStore(this._bs, this._cacheSize);
     }
 
     throw new Error('Optimistic lock failed');
@@ -192,79 +152,4 @@ export function newCommit(value: valueOrPrimitive,
   const types = getDatasTypes();
   return newSet(parentsArr, types.commitSetType).then(parents =>
       newStruct(types.commitType, {value, parents}));
-}
-
-class CacheEntry<T> {
-  size: number;
-  value: ?T;
-
-  constructor(size: number, value: ?T) {
-    this.size = size;
-    this.value = value;
-  }
-
-  get present(): boolean {
-    return this.value !== null;
-  }
-}
-
-/**
- * This uses a Map as an LRU cache. It uses the behavior that iteration of keys in a Map is done in
- * insertion order and any time a value is checked it is taken out and reinserted which puts it last
- * in the iteration.
- */
-class SizeCache<T> {
-  _size: number;
-  _maxSize: number;
-  _cache: Map<string, CacheEntry<T>>;
-
-  constructor(size: number) {
-    this._maxSize = size;
-    this._cache = new Map();
-    this._size = 0;
-  }
-
-  entry(ref: Ref): ?CacheEntry {
-    const key = ref.toString();
-    const entry = this._cache.get(key);
-    if (!entry) {
-      return undefined;
-    }
-    this._cache.delete(key);
-    this._cache.set(key, entry);
-    return entry;
-  }
-
-  get(ref: Ref): ?T {
-    const entry = this.entry(ref);
-    return entry ? entry.value : undefined;
-  }
-
-  add(ref: Ref, size: number, value: ?T) {
-    const key = ref.toString();
-    if (this._cache.has(key)) {
-      this._cache.delete(key);
-    } else {
-      this._size += size;
-    }
-    this._cache.set(key, new CacheEntry(size, value));
-
-    if (this._size > this._maxSize) {
-      for (const [key, {size}] of this._cache) {
-        if (this._size <= this._maxSize) {
-          break;
-        }
-        this._cache.delete(key);
-        this._size -= size;
-      }
-    }
-  }
-}
-
-class NoopCache<T> {
-  entry(ref: Ref): ?CacheEntry {}  // eslint-disable-line no-unused-vars
-
-  get(ref: Ref): ?T {}  // eslint-disable-line no-unused-vars
-
-  add(ref: Ref, size: number, value: T) {}  // eslint-disable-line no-unused-vars
 }

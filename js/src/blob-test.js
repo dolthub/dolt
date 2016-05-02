@@ -3,7 +3,7 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 import Random from './pseudo-random.js';
-import MemoryStore from './memory-store.js';
+import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {newBlob, BlobWriter} from './blob.js';
 import DataStore from './data-store.js';
 import {blobType, makeRefType} from './type.js';
@@ -48,8 +48,7 @@ suite('Blob', () => {
   });
 
   test('roundtrip', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const ds = new DataStore(makeTestingBatchStore());
 
     const b1 = await newBlob(randomArray(15));
     const r1 = await ds.writeValue(b1).targetRef;

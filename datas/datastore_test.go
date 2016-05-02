@@ -138,7 +138,7 @@ func (suite *DataStoreSuite) TestDataStoreCommit() {
 	//   \----|c|
 	// Should be disallowed.
 	c := types.NewString("c")
-	cCommit := NewCommit().Set(ValueField, c)
+	cCommit := NewCommit().Set(ValueField, c).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(aCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
 	suite.Error(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))

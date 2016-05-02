@@ -6,7 +6,7 @@ export {default as Dataset} from './dataset.js';
 export {newBlob, NomsBlob, BlobReader, BlobWriter} from './blob.js';
 export {decodeNomsValue} from './decode.js';
 export {default as Chunk} from './chunk.js';
-export {default as HttpStore} from './http-store.js';
+export {default as HttpBatchStore} from './http-batch-store.js';
 export {default as MemoryStore} from './memory-store.js';
 export {default as Ref, emptyRef} from './ref.js';
 export {default as RefValue} from './ref-value.js';

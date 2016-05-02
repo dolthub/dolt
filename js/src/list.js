@@ -2,7 +2,7 @@
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type DataStore from './data-store.js';
+import type {ValueReader} from './decode.js';
 import type {Splice} from './edit-distance.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
@@ -22,9 +22,9 @@ import {listOfValueType, Type} from './type.js';
 const listWindowSize = 64;
 const listPattern = ((1 << 6) | 0) - 1;
 
-function newListLeafChunkFn<T: valueOrPrimitive>(t: Type, ds: ?DataStore = null): makeChunkFn {
+function newListLeafChunkFn<T: valueOrPrimitive>(t: Type, vr: ?ValueReader = null): makeChunkFn {
   return (items: Array<T>) => {
-    const listLeaf = new ListLeafSequence(ds, t, items);
+    const listLeaf = new ListLeafSequence(vr, t, items);
     const mt = new MetaTuple(listLeaf, items.length, items.length);
     return [mt, listLeaf];
   };
@@ -54,10 +54,10 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
 
   async splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<NomsList<T>> {
     const cursor = await this.sequence.newCursorAt(idx);
-    const ds = this.sequence.ds;
+    const vr = this.sequence.vr;
     const type = this.type;
-    const seq = await chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(type, ds),
-                                    newIndexedMetaSequenceChunkFn(type, ds),
+    const seq = await chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(type, vr),
+                                    newIndexedMetaSequenceChunkFn(type, vr),
                                     newListLeafBoundaryChecker(type),
                                     newIndexedMetaSequenceBoundaryChecker);
     invariant(seq instanceof IndexedSequence);

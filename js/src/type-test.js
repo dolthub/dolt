@@ -1,6 +1,6 @@
 // @flow
 
-import MemoryStore from './memory-store.js';
+import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {assert} from 'chai';
 import {
   boolType,
@@ -18,8 +18,7 @@ import DataStore from './data-store.js';
 
 suite('Type', () => {
   test('types', async () => {
-    const ms = new MemoryStore();
-    const ds = new DataStore(ms);
+    const ds = new DataStore(makeTestingBatchStore());
 
     const mapType = makeMapType(stringType, numberType);
     const setType = makeSetType(stringType);

@@ -4,21 +4,22 @@ import Chunk from './chunk.js';
 import Ref from './ref.js';
 import {invariant} from './assert.js';
 
+const headerSize = 4; // uint32
+const littleEndian = true;
 const sha1Size = 20;
 const chunkLengthSize = 4; // uint32
 const chunkHeaderSize = sha1Size + chunkLengthSize;
 
-export function serialize(chunks: Array<Chunk>): ArrayBuffer {
-  let totalSize = 0;
-  for (let i = 0; i < chunks.length; i++) {
-    totalSize += chunkHeaderSize + chunks[i].data.length;
-  }
+export function serialize(hints: Set<Ref>, chunks: Array<Chunk>): ArrayBuffer {
+  const buffer = new ArrayBuffer(serializedHintLength(hints) + serializedChunkLength(chunks));
 
-  const buffer = new ArrayBuffer(totalSize);
-  let offset = 0;
+  let offset = serializeHints(hints, buffer);
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
+    invariant(buffer.byteLength - offset >= chunkHeaderSize + chunk.data.length,
+      'Invalid chunk buffer');
+
     const refArray = new Uint8Array(buffer, offset, sha1Size);
     refArray.set(chunk.ref.digest);
     offset += sha1Size;
@@ -40,11 +41,65 @@ export function serialize(chunks: Array<Chunk>): ArrayBuffer {
   return buffer;
 }
 
-export function deserialize(buffer: ArrayBuffer): Array<Chunk> {
+function serializeHints(hints: Set<Ref>, buffer: ArrayBuffer): number {
+  let offset = 0;
+  const view = new DataView(buffer, offset, headerSize);
+  view.setUint32(offset, hints.size | 0, littleEndian); // Coerce number to uint32
+  offset += headerSize;
+
+  hints.forEach(ref => {
+    const refArray = new Uint8Array(buffer, offset, sha1Size);
+    refArray.set(ref.digest);
+    offset += sha1Size;
+  });
+
+  return offset;
+}
+
+function serializedHintLength(hints: Set<Ref>): number {
+  return headerSize + sha1Size * hints.size;
+}
+
+function serializedChunkLength(chunks: Array<Chunk>): number {
+  let totalSize = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    totalSize += chunkHeaderSize + chunks[i].data.length;
+  }
+  return totalSize;
+}
+
+export function deserialize(buffer: ArrayBuffer): {hints: Array<Ref>, chunks: Array<Chunk>} {
+  const {hints, offset} = deserializeHints(buffer);
+  return {hints: hints, chunks: deserializeChunks(buffer, offset)};
+}
+
+function deserializeHints(buffer: ArrayBuffer): {hints: Array<Ref>, offset: number} {
+  const hints:Array<Ref> = [];
+
+  let offset = 0;
+  const view = new DataView(buffer, 0, headerSize);
+  const numHints = view.getUint32(0, littleEndian);
+  offset += headerSize;
+
+  const totalLength = headerSize + (numHints * sha1Size);
+  for (; offset < totalLength;) {
+    invariant(buffer.byteLength - offset >= sha1Size, 'Invalid hint buffer');
+
+    const refArray = new Uint8Array(buffer, offset, sha1Size);
+    const ref = Ref.fromDigest(new Uint8Array(refArray));
+    offset += sha1Size;
+
+    hints.push(ref);
+  }
+
+  return {hints: hints, offset: offset};
+}
+
+export function deserializeChunks(buffer: ArrayBuffer, offset: number = 0): Array<Chunk> {
   const chunks:Array<Chunk> = [];
 
   const totalLenth = buffer.byteLength;
-  for (let offset = 0; offset < totalLenth;) {
+  for (; offset < totalLenth;) {
     invariant(buffer.byteLength - offset >= chunkHeaderSize, 'Invalid chunk buffer');
 
     const refArray = new Uint8Array(buffer, offset, sha1Size);

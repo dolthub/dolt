@@ -7,15 +7,20 @@ import {notNull} from './assert.js';
 type PendingReadMap = { [key: string]: Promise<Chunk> };
 export type UnsentReadMap = { [key: string]: (c: Chunk) => void };
 
-export type WriteMap = { [key: string]: Chunk };
+type WriteMap = { [key: string]: Chunk };
+export type WriteRequest = {
+  c: Chunk;
+  hints: Set<Ref>;
+}
 
 interface Delegate {
   readBatch(reqs: UnsentReadMap): Promise<void>;
-  writeBatch(reqs: WriteMap): Promise<void>;
+  writeBatch(reqs: Array<WriteRequest>): Promise<void>;
+  getRoot(): Promise<Ref>;
   updateRoot(current: Ref, last: Ref): Promise<boolean>;
 }
 
-export class RemoteStore {
+export default class BatchStore {
   _pendingReads: PendingReadMap;
   _unsentReads: ?UnsentReadMap;
   _readScheduled: boolean;
@@ -23,15 +28,10 @@ export class RemoteStore {
   _maxReads: number;
 
   _pendingWrites: WriteMap;
-  _unsentWrites: ?WriteMap;
-  _writeScheduled: boolean;
-  _activeWrites: number;
-  _maxWrites: number;
-  _allWritesFinishedFn: ?() => void;
-  _canUpdateRoot: Promise<void>;
+  _unsentWrites: ?Array<WriteRequest>;
   _delegate: Delegate;
 
-  constructor(maxReads: number, maxWrites: number, delegate: Delegate) {
+  constructor(maxReads: number, delegate: Delegate) {
     this._pendingReads = Object.create(null);
     this._unsentReads = null;
     this._readScheduled = false;
@@ -40,19 +40,18 @@ export class RemoteStore {
 
     this._pendingWrites = Object.create(null);
     this._unsentWrites = null;
-    this._writeScheduled = false;
-    this._activeWrites = 0;
-    this._maxWrites = maxWrites;
-    this._allWritesFinishedFn = null;
-    this._canUpdateRoot = Promise.resolve();
     this._delegate = delegate;
   }
 
   get(ref: Ref): Promise<Chunk> {
     const refStr = ref.toString();
-    const p = this._pendingReads[refStr];
+    let p = this._pendingReads[refStr];
     if (p) {
       return p;
+    }
+    p = this._pendingWrites[refStr];
+    if (p) {
+      return Promise.resolve(p);
     }
 
     return this._pendingReads[refStr] = new Promise(resolve => {
@@ -92,7 +91,7 @@ export class RemoteStore {
     this._maybeStartRead();
   }
 
-  put(c: Chunk): void {
+  schedulePut(c: Chunk, hints: Set<Ref>): void {
     const refStr = c.ref.toString();
     if (this._pendingWrites[refStr]) {
       return; // Already in flight.
@@ -100,60 +99,41 @@ export class RemoteStore {
     this._pendingWrites[refStr] = c;
 
     if (!this._unsentWrites) {
-      this._unsentWrites = Object.create(null);
+      this._unsentWrites = [];
     }
-    this._unsentWrites[refStr] = c;
-
-    if (!this._allWritesFinishedFn) {
-      this._canUpdateRoot = new Promise(resolve => {
-        this._allWritesFinishedFn = resolve;
-      });
-    }
-
-    this._maybeStartWrite();
+    this._unsentWrites.push({c: c, hints: hints});
   }
 
-  _maybeStartWrite() {
-    if (!this._writeScheduled && this._unsentWrites && this._activeWrites < this._maxWrites) {
-      this._writeScheduled = true;
-      setTimeout(() => {
-        this._write();
-      }, 0);
+  async flush(): Promise<void> {
+    if (!this._unsentWrites) {
+      return;
     }
-  }
-
-  async _write(): Promise<void> {
-    this._activeWrites++;
 
     const reqs = notNull(this._unsentWrites);
     this._unsentWrites = null;
-    this._writeScheduled = false;
 
-    await this._delegate.writeBatch(reqs);
+    await this._delegate.writeBatch(reqs); // TODO: Deal with backpressure
 
     const self = this; // TODO: Remove this when babel bug is fixed.
-    Object.keys(reqs).forEach(refStr => {
-      delete self._pendingWrites[refStr];
+    reqs.forEach(req => {
+      delete self._pendingWrites[req.c.ref.toString()];
     });
+  }
 
-    this._activeWrites--;
-
-    if (this._activeWrites === 0 && !this._unsentWrites) {
-      notNull(this._allWritesFinishedFn)();
-      this._allWritesFinishedFn = null;
-    }
-
-    this._maybeStartWrite();
+  async getRoot(): Promise<Ref> {
+    return this._delegate.getRoot();
   }
 
   async updateRoot(current: Ref, last: Ref): Promise<boolean> {
-    await this._canUpdateRoot;
+    await this.flush();
     if (current.equals(last)) {
-      return Promise.resolve(true);
+      return true;
     }
 
     return this._delegate.updateRoot(current, last);
   }
 
+  // TODO: Should close() call flush() and block until it's done? Maybe closing with outstanding
+  // requests should be an error on both sides. TBD.
   close() {}
 }
