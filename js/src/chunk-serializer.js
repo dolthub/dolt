@@ -24,13 +24,10 @@ export function serialize(hints: Set<Ref>, chunks: Array<Chunk>): ArrayBuffer {
     refArray.set(chunk.ref.digest);
     offset += sha1Size;
 
-    // Uint32Arrays cannot be created at non-4-byte offsets into a buffer, so read & write of
-    // chunkLength must be done with tmp Uint8Array.
+
     const chunkLength = chunk.data.length;
-    const sizeArray = new Uint32Array(1);
-    sizeArray[0] = chunkLength;
-    const sizeWriteArray = new Uint8Array(buffer, offset, chunkLengthSize);
-    sizeWriteArray.set(new Uint8Array(sizeArray.buffer));
+    const view = new DataView(buffer, offset, chunkLengthSize);
+    view.setUint32(0, chunkLength | 0, bigEndian); // Coerce number to uint32
     offset += chunkLengthSize;
 
     const dataArray = new Uint8Array(buffer, offset, chunkLength);
@@ -44,7 +41,7 @@ export function serialize(hints: Set<Ref>, chunks: Array<Chunk>): ArrayBuffer {
 function serializeHints(hints: Set<Ref>, buffer: ArrayBuffer): number {
   let offset = 0;
   const view = new DataView(buffer, offset, headerSize);
-  view.setUint32(offset, hints.size | 0, bigEndian); // Coerce number to uint32
+  view.setUint32(0, hints.size | 0, bigEndian); // Coerce number to uint32
   offset += headerSize;
 
   hints.forEach(ref => {
@@ -77,7 +74,7 @@ function deserializeHints(buffer: ArrayBuffer): {hints: Array<Ref>, offset: numb
   const hints:Array<Ref> = [];
 
   let offset = 0;
-  const view = new DataView(buffer, 0, headerSize);
+  const view = new DataView(buffer, offset, headerSize);
   const numHints = view.getUint32(0, bigEndian);
   offset += headerSize;
 
@@ -106,9 +103,8 @@ export function deserializeChunks(buffer: ArrayBuffer, offset: number = 0): Arra
     const ref = Ref.fromDigest(new Uint8Array(refArray));
     offset += sha1Size;
 
-    const sizeReadArray = new Uint8Array(buffer, offset, chunkLengthSize);
-    const sizeArray = new Uint32Array(new Uint8Array(sizeReadArray).buffer);
-    const chunkLength = sizeArray[0];
+    const view = new DataView(buffer, offset, chunkLengthSize);
+    const chunkLength = view.getUint32(0, bigEndian);
     offset += chunkLengthSize;
 
     invariant(offset + chunkLength <= totalLenth, 'Invalid chunk buffer');
