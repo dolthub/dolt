@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/attic-labs/noms/clients/util"
+	"github.com/attic-labs/noms/clients/test_util"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -13,7 +13,7 @@ func TestCounter(t *testing.T) {
 }
 
 type counterTestSuite struct {
-	util.ClientTestSuite
+	test_util.ClientTestSuite
 }
 
 func (s *counterTestSuite) TestCounter() {

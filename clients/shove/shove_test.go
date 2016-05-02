@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/clients/util"
+	"github.com/attic-labs/noms/clients/test_util"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
@@ -18,7 +18,7 @@ func TestShove(t *testing.T) {
 }
 
 type testSuite struct {
-	util.ClientTestSuite
+	test_util.ClientTestSuite
 }
 
 func (s *testSuite) TestShove() {
