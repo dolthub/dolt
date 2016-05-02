@@ -2,29 +2,39 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 
+	"github.com/attic-labs/noms/clients/flags"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/dataset"
 )
 
 func main() {
-	dsFlags := dataset.NewFlags()
-	flag.Parse()
-	ds := dsFlags.CreateDataset()
-	if ds == nil {
-		flag.Usage()
-		return
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "usage: %s <dataset> <url>\n", os.Args[0])
+		flag.PrintDefaults()
 	}
-	defer ds.Store().Close()
 
-	url := flag.Arg(0)
-	if ds == nil || url == "" {
+	flags.RegisterDataStoreFlags()
+	flag.Parse()
+
+	if len(flag.Args()) != 2 {
+		util.CheckError(errors.New("expected dataset and url flags"))
+	}
+
+	spec, err := flags.ParseDatasetSpec(flag.Arg(0))
+	util.CheckError(err)
+	ds, err := spec.Dataset()
+	util.CheckError(err)
+
+	url := flag.Arg(1)
+	if url == "" {
 		flag.Usage()
-		return
 	}
 
 	res, err := http.Get(url)
@@ -43,4 +53,5 @@ func main() {
 
 	_, err = ds.Commit(util.NomsValueFromDecodedJSON(jsonObject))
 	d.Exp.NoError(err)
+	ds.Store().Close()
 }

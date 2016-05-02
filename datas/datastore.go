@@ -1,7 +1,6 @@
 package datas
 
 import (
-	"flag"
 	"io"
 
 	"github.com/attic-labs/noms/chunks"
@@ -43,60 +42,4 @@ type batchSink interface {
 
 func NewDataStore(cs chunks.ChunkStore) DataStore {
 	return newLocalDataStore(cs)
-}
-
-type Flags struct {
-	remote      remoteDataStoreFlags
-	ldb         chunks.LevelDBStoreFlags
-	dynamo      chunks.DynamoStoreFlags
-	memory      chunks.MemoryStoreFlags
-	datastoreID *string
-}
-
-func NewFlags() Flags {
-	return NewFlagsWithPrefix("")
-}
-
-func NewFlagsWithPrefix(prefix string) Flags {
-	return Flags{
-		remoteFlags(prefix),
-		chunks.LevelDBFlags(prefix),
-		chunks.DynamoFlags(prefix),
-		chunks.MemoryFlags(prefix),
-		flag.String(prefix+"store", "", "name of datastore to access datasets in"),
-	}
-}
-
-func (f Flags) CreateDataStore() (DataStore, bool) {
-	if ds := f.remote.CreateStore(*f.datastoreID); ds != nil {
-		return ds, true
-	}
-
-	var cs chunks.ChunkStore
-	if cs = f.ldb.CreateStore(*f.datastoreID); cs != nil {
-	} else if cs = f.dynamo.CreateStore(*f.datastoreID); cs != nil {
-	} else if cs = f.memory.CreateStore(*f.datastoreID); cs != nil {
-	}
-
-	if cs != nil {
-		return newLocalDataStore(cs), true
-	}
-	return &LocalDataStore{}, false
-}
-
-func (f Flags) CreateFactory() (Factory, bool) {
-	if df := f.remote.CreateFactory(); df != nil {
-		return df, true
-	}
-
-	var cf chunks.Factory
-	if cf = f.ldb.CreateFactory(); cf != nil {
-	} else if cf = f.dynamo.CreateFactory(); cf != nil {
-	} else if cf = f.memory.CreateFactory(); cf != nil {
-	}
-
-	if cf != nil {
-		return &localFactory{cf}, true
-	}
-	return &localFactory{}, false
 }

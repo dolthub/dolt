@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -8,13 +9,13 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/clients/csv"
+	"github.com/attic-labs/noms/clients/flags"
+	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 )
 
 var (
-	dsFlags = dataset.NewFlags()
 	// Actually the delimiter uses runes, which can be multiple characters long.
 	// https://blog.golang.org/strings
 	delimiter   = flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
@@ -25,27 +26,23 @@ var (
 )
 
 func main() {
+	flags.RegisterDataStoreFlags()
 	cpuCount := runtime.NumCPU()
 	runtime.GOMAXPROCS(cpuCount)
 
 	flag.Usage = func() {
-		fmt.Println("Usage: csv_importer [options] file\n")
+		fmt.Fprintln(os.Stderr, "Usage: csv_importer [options] <dataset> <csvfile>\n")
 		flag.PrintDefaults()
 	}
 
 	flag.Parse()
 
-	if flag.NArg() != 1 {
-		fmt.Printf("Expected exactly one parameter (path) after flags, but you have %d. Maybe you put a flag after the path?\n", flag.NArg())
-		flag.Usage()
-		return
+	if flag.NArg() != 2 {
+		err := errors.New("Expected exactly two parameters (dataset and path) after flags, but you have %d. Maybe you put a flag after the path?")
+		util.CheckError(err)
 	}
 
-	path := flag.Arg(0)
-	if path == "" {
-		flag.Usage()
-		return
-	}
+	path := flag.Arg(1)
 
 	res, err := os.Open(path)
 	d.Exp.NoError(err)
@@ -55,7 +52,6 @@ func main() {
 	if err != nil {
 		fmt.Println(err.Error())
 		flag.Usage()
-		return
 	}
 
 	r := csv.NewCSVReader(res, comma)
@@ -78,11 +74,10 @@ func main() {
 		return
 	}
 
-	ds := dsFlags.CreateDataset()
-	if ds == nil {
-		flag.Usage()
-		return
-	}
+	spec, err := flags.ParseDatasetSpec(flag.Arg(0))
+	util.CheckError(err)
+	ds, err := spec.Dataset()
+	util.CheckError(err)
 	defer ds.Store().Close()
 
 	kinds := []types.NomsKind{}

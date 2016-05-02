@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -10,9 +11,9 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/attic-labs/noms/clients/flags"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/clbanning/mxj"
@@ -23,7 +24,7 @@ var (
 	customUsage = func() {
 		fmtString := `%s walks the given directory, looking for .xml files. When it finds one, the entity inside is parsed into nested Noms maps/lists and committed to the dataset indicated on the command line.`
 		fmt.Fprintf(os.Stderr, fmtString, os.Args[0])
-		fmt.Fprintf(os.Stderr, "\n\nUsage: %s [options] <path/to/root/directory>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\n\nUsage: %s [options] <dataset> <path/to/root/directory>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 )
@@ -46,16 +47,18 @@ func (a refIndexList) Less(i, j int) bool { return a[i].index < a[j].index }
 
 func main() {
 	err := d.Try(func() {
-		dsFlags := dataset.NewFlags()
+		flags.RegisterDataStoreFlags()
 		flag.Usage = customUsage
 		flag.Parse()
-		ds := dsFlags.CreateDataset()
-		dir := flag.Arg(0)
-		if ds == nil || dir == "" {
-			flag.Usage()
-			return
+
+		if flag.NArg() != 2 {
+			util.CheckError(errors.New("Expected dataset followed by directory path"))
 		}
-		defer ds.Store().Close()
+		dir := flag.Arg(1)
+		spec, err := flags.ParseDatasetSpec(flag.Arg(0))
+		util.CheckError(err)
+		ds, err := spec.Dataset()
+		util.CheckError(err)
 
 		if util.MaybeStartCPUProfile() {
 			defer util.StopCPUProfile()

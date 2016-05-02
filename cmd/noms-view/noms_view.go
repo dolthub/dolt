@@ -103,7 +103,7 @@ func constructQueryString(args []string) (url.Values, chunkStoreRecords) {
 			_, path, _ := split2(v, ":")
 			record, ok := stores[path]
 			if !ok {
-				record.cs = chunks.NewLevelDBStore(path, "", 24, false)
+				record.cs = chunks.NewLevelDBStoreUseFlags(path, "")
 				// Identify the stores with a (abridged) hash of the file system path,
 				// so that the same URL always refers to the same database.
 				hash := sha1.Sum([]byte(path))

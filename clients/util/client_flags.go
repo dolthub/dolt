@@ -6,11 +6,9 @@ import (
 	"os"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/dataset"
 )
 
 type ClientFlags struct {
-	dsFlags          dataset.DatasetFlags
 	concurrencyFlag  *int
 	progressFileFlag *string
 	progressFile     *os.File
@@ -22,15 +20,10 @@ func NewFlags() ClientFlags {
 
 func NewFlagsWithPrefix(prefix string) ClientFlags {
 	return ClientFlags{
-		dataset.NewFlagsWithPrefix(prefix),
 		flag.Int(prefix+"concurrency", 100, "degree of concurrency"),
 		flag.String(prefix+"progress-file", "", "file for logging progress"),
 		nil,
 	}
-}
-
-func (cf *ClientFlags) CreateDataset() *dataset.Dataset {
-	return cf.dsFlags.CreateDataset()
 }
 
 func (cf *ClientFlags) Concurrency() int {

@@ -1,47 +1,51 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"runtime"
 
 	"github.com/attic-labs/noms/clients/csv"
+	"github.com/attic-labs/noms/clients/flags"
+	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/dataset"
 )
 
 var (
-	dsFlags = dataset.NewFlags()
 	// Actually the delimiter uses runes, which can be multiple characters long.
 	// https://blog.golang.org/strings
 	delimiter = flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
 )
 
 func main() {
+	flags.RegisterDataStoreFlags()
 	cpuCount := runtime.NumCPU()
 	runtime.GOMAXPROCS(cpuCount)
 
 	flag.Usage = func() {
-		fmt.Println("Usage: csv_exporter [options] > filename")
+		fmt.Fprintln(os.Stderr, "Usage: csv_exporter [options] dataset > filename")
 		flag.PrintDefaults()
 	}
 
 	flag.Parse()
-	ds := dsFlags.CreateDataset()
-	if ds == nil {
-		flag.Usage()
-		return
+
+	if flag.NArg() != 1 {
+		util.CheckError(errors.New("expected dataset arg"))
 	}
+
+	spec, err := flags.ParseDatasetSpec(flag.Arg(0))
+	util.CheckError(err)
+
+	ds, err := spec.Dataset()
+	util.CheckError(err)
+
 	defer ds.Store().Close()
 
 	comma, err := csv.StringToRune(*delimiter)
-	if err != nil {
-		fmt.Println(err.Error())
-		flag.Usage()
-		return
-	}
+	util.CheckError(err)
 
 	err = d.Try(func() {
 		nomsList, structDesc := csv.ValueToListAndElemDesc(ds.Head().Get(datas.ValueField), ds.Store())

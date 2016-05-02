@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -9,9 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attic-labs/noms/clients/flags"
+	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 	human "github.com/dustin/go-humanize"
 )
@@ -21,26 +23,30 @@ const (
 )
 
 var (
-	dsFlags = dataset.NewFlags()
-	start   time.Time
+	start time.Time
 )
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Fetches a URL into a noms blob\n\nUsage: %s <url>:\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Fetches a URL into a noms blob\n\nUsage: %s <dataset> <url>:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 
+	flags.RegisterDataStoreFlags()
 	flag.Parse()
 
-	ds := dsFlags.CreateDataset()
-	if ds == nil || len(flag.Args()) == 0 {
-		flag.Usage()
-		return
+	if flag.NArg() != 2 {
+		util.CheckError(errors.New("expected dataset and url arguments"))
 	}
-	defer ds.Store().Close()
 
-	url := flag.Arg(0)
+	spec, err := flags.ParseDatasetSpec(flag.Arg(0))
+	if err != nil {
+		util.CheckError(err)
+	}
+	ds, err := spec.Dataset()
+	util.CheckError(err)
+
+	url := flag.Arg(1)
 	start = time.Now()
 
 	var sr statusReader
@@ -82,9 +88,8 @@ func main() {
 		}
 	}
 
-	var err error
 	b := types.NewBlob(&sr)
-	*ds, err = ds.Commit(b)
+	ds, err = ds.Commit(b)
 	if err != nil {
 		d.Chk.Equal(datas.ErrMergeNeeded, err)
 		fmt.Fprintf(os.Stderr, "Could not commit, optimistic concurrency failed.")

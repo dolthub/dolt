@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/csv"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -25,7 +26,6 @@ type testSuite struct {
 
 // FIXME: run with pipe
 func (s *testSuite) TestCSVExporter() {
-	storeName := "store"
 	setName := "csv"
 	header := []string{"a", "b", "c"}
 	payload := [][]string{
@@ -36,7 +36,7 @@ func (s *testSuite) TestCSVExporter() {
 	structName := "SomeStruct"
 
 	// Setup data store
-	cs := chunks.NewLevelDBStore(s.LdbDir, storeName, 1, false)
+	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
 	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
 
 	// Build Struct fields based on header
@@ -66,7 +66,8 @@ func (s *testSuite) TestCSVExporter() {
 	ds.Store().Close()
 
 	// Run exporter
-	out := s.Run(main, []string{"-store", storeName, "-ds", setName})
+	dataspec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, setName)
+	out := s.Run(main, []string{dataspec})
 
 	// Verify output
 	csvReader := csv.NewReader(strings.NewReader(out))

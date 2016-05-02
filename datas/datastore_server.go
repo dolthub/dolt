@@ -17,16 +17,16 @@ type connectionState struct {
 }
 
 type remoteDataStoreServer struct {
-	csf     chunks.Factory
+	cs      chunks.ChunkStore
 	port    int
 	l       *net.Listener
 	csChan  chan *connectionState
 	closing bool
 }
 
-func NewRemoteDataStoreServer(csf chunks.Factory, port int) *remoteDataStoreServer {
+func NewRemoteDataStoreServer(cs chunks.ChunkStore, port int) *remoteDataStoreServer {
 	return &remoteDataStoreServer{
-		csf, port, nil, make(chan *connectionState, 16), false,
+		cs, port, nil, make(chan *connectionState, 16), false,
 	}
 }
 
@@ -39,12 +39,11 @@ func (s *remoteDataStoreServer) Run() {
 
 	router := httprouter.New()
 
-	dsKey := "store"
-	router.POST(fmt.Sprintf("/:%s%s", dsKey, constants.GetRefsPath), s.makeHandle(HandleGetRefs))
-	router.GET(fmt.Sprintf("/:%s%s", dsKey, constants.RootPath), s.makeHandle(HandleRootGet))
-	router.POST(fmt.Sprintf("/:%s%s", dsKey, constants.RootPath), s.makeHandle(HandleRootPost))
-	router.POST(fmt.Sprintf("/:%s%s", dsKey, constants.PostRefsPath), s.makeHandle(HandlePostRefs))
-	router.POST(fmt.Sprintf("/:%s%s", dsKey, constants.WriteValuePath), s.makeHandle(HandleWriteValue))
+	router.POST(constants.GetRefsPath, s.makeHandle(HandleGetRefs))
+	router.GET(constants.RootPath, s.makeHandle(HandleRootGet))
+	router.POST(constants.RootPath, s.makeHandle(HandleRootPost))
+	router.POST(constants.PostRefsPath, s.makeHandle(HandlePostRefs))
+	router.POST(constants.WriteValuePath, s.makeHandle(HandleWriteValue))
 
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -74,16 +73,8 @@ func (s *remoteDataStoreServer) Run() {
 
 func (s *remoteDataStoreServer) makeHandle(hndlr Handler) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		cs := expectStoreCreate(s.csf, ps)
-		defer cs.Close()
-		hndlr(w, req, ps, cs)
+		hndlr(w, req, ps, s.cs)
 	}
-}
-
-func expectStoreCreate(f chunks.Factory, ps httprouter.Params) (cs chunks.ChunkStore) {
-	cs = f.CreateStore(ps.ByName("store"))
-	d.Exp.NotNil(cs, "Failed to create store named %s", ps.ByName("store"))
-	return
 }
 
 func (s *remoteDataStoreServer) connState(c net.Conn, cs http.ConnState) {
@@ -98,5 +89,6 @@ func (s *remoteDataStoreServer) connState(c net.Conn, cs http.ConnState) {
 func (s *remoteDataStoreServer) Stop() {
 	s.closing = true
 	(*s.l).Close()
+	(s.cs).Close()
 	close(s.csChan)
 }

@@ -36,7 +36,6 @@ const (
 )
 
 var (
-	dynamoStats              = flag.Bool("dynamo-stats", false, "On each DynamoStore close, print read and write stats. Can be quite verbose")
 	dynamoRootKey            = []byte("root")
 	valueNotExistsExpression = fmt.Sprintf("attribute_not_exists(%s)", chunkAttr)
 	valueEqualsExpression    = fmt.Sprintf("%s = :prev", chunkAttr)
@@ -69,10 +68,11 @@ type DynamoStore struct {
 	requestWg       *sync.WaitGroup
 	workerWg        *sync.WaitGroup
 	unwrittenPuts   *unwrittenPutCache
+	showStats       bool
 }
 
 // NewDynamoStore returns a new DynamoStore instance pointed at a DynamoDB table in the given region. All keys used to access items are prefixed with the given namespace. If key and secret are empty, the DynamoStore will attempt to inherit AWS credentials from the environment.
-func NewDynamoStore(table, namespace, region, key, secret string) *DynamoStore {
+func NewDynamoStore(table, namespace, region, key, secret string, showStats bool) *DynamoStore {
 	config := aws.NewConfig().WithRegion(region)
 	if key != "" {
 		config = config.WithCredentials(credentials.NewStaticCredentials(key, secret, ""))
@@ -80,10 +80,10 @@ func NewDynamoStore(table, namespace, region, key, secret string) *DynamoStore {
 
 	sess := session.New(config)
 
-	return newDynamoStoreFromDDBsvc(table, namespace, dynamodb.New(sess))
+	return newDynamoStoreFromDDBsvc(table, namespace, dynamodb.New(sess), showStats)
 }
 
-func newDynamoStoreFromDDBsvc(table, namespace string, ddb ddbsvc) *DynamoStore {
+func newDynamoStoreFromDDBsvc(table, namespace string, ddb ddbsvc, showStats bool) *DynamoStore {
 	store := &DynamoStore{
 		table:         table,
 		namespace:     []byte(namespace),
@@ -99,6 +99,7 @@ func newDynamoStoreFromDDBsvc(table, namespace string, ddb ddbsvc) *DynamoStore 
 	store.rootKey = append(store.namespace, dynamoRootKey...)
 	store.batchGetRequests()
 	store.batchPutRequests()
+	store.showStats = showStats
 	return store
 }
 
@@ -364,7 +365,7 @@ func (s *DynamoStore) Close() error {
 	close(s.readQueue)
 	close(s.writeQueue)
 
-	if *dynamoStats {
+	if s.showStats {
 		if s.readBatchCount > 0 {
 			fmt.Printf("Read batch count: %d, Read batch latency: %dms\n", s.readBatchCount, s.readTime/s.readBatchCount/1e6)
 		}
@@ -452,6 +453,7 @@ func (s *DynamoStore) removeNamespace(namespaced []byte) []byte {
 }
 
 type DynamoStoreFlags struct {
+	dynamoStats *bool
 	dynamoTable *string
 	awsRegion   *string
 	authFromEnv *bool
@@ -461,6 +463,7 @@ type DynamoStoreFlags struct {
 
 func DynamoFlags(prefix string) DynamoStoreFlags {
 	return DynamoStoreFlags{
+		flag.Bool(prefix+"dynamo-stats", false, "On each DynamoStore close, print read and write stats. Can be quite verbose"),
 		flag.String(prefix+"dynamo-table", dynamoTableName, "dynamodb table to store the values of the chunkstore in. You probably don't want to change this."),
 		flag.String(prefix+"aws-region", "us-west-2", "aws region to put the aws-based chunkstore in"),
 		flag.Bool(prefix+"aws-auth-from-env", false, "creates the aws-based chunkstore from authorization found in the environment. This is typically used in production to get keys from IAM profile. If not specified, then -aws-key and aws-secret must be specified instead"),
@@ -471,7 +474,7 @@ func DynamoFlags(prefix string) DynamoStoreFlags {
 
 func (f DynamoStoreFlags) CreateStore(ns string) ChunkStore {
 	if f.check() {
-		return NewDynamoStore(*f.dynamoTable, ns, *f.awsRegion, *f.awsKey, *f.awsSecret)
+		return NewDynamoStore(*f.dynamoTable, ns, *f.awsRegion, *f.awsKey, *f.awsSecret, *f.dynamoStats)
 	}
 	return nil
 }
