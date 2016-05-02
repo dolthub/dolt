@@ -17,8 +17,14 @@ type DataStore interface {
 	// MaybeHead returns the current Head Commit of this Datastore, which contains the current root of the DataStore's value tree, if available. If not, it returns a new Commit and 'false'.
 	MaybeHead(datasetID string) (types.Struct, bool)
 
+	// MaybeHeadRef returns the types.Ref of the Head Commit of this Datastore, and true, if available. If not, it returns an invalid types.Ref and false.
+	MaybeHeadRef(datasetID string) (types.Ref, bool)
+
 	// Head returns the current head Commit, which contains the current root of the DataStore's value tree.
 	Head(datasetID string) types.Struct
+
+	// HeadRef returns the ref of the current head Commit. See Head(datasetID).
+	HeadRef(datasetID string) types.Ref
 
 	// Datasets returns the root of the datastore which is a MapOfStringToRefOfCommit where string is a datasetID.
 	Datasets() types.Map
