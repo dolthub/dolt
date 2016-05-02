@@ -43,7 +43,7 @@ func NewSerializer(writer io.Writer) ChunkSink {
 
 			// Because of chunking at higher levels, no chunk should never be more than 4GB
 			chunkSize := uint32(len(chunk.Data()))
-			err = binary.Write(s.writer, binary.LittleEndian, chunkSize)
+			err = binary.Write(s.writer, binary.BigEndian, chunkSize)
 			d.Chk.NoError(err)
 
 			n, err = io.Copy(s.writer, bytes.NewReader(chunk.Data()))
@@ -129,7 +129,7 @@ func deserializeChunk(reader io.Reader) Chunk {
 	r := ref.New(digest)
 
 	chunkSize := uint32(0)
-	err = binary.Read(reader, binary.LittleEndian, &chunkSize)
+	err = binary.Read(reader, binary.BigEndian, &chunkSize)
 	d.Chk.NoError(err)
 
 	w := NewChunkWriter()

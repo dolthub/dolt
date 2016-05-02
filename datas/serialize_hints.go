@@ -12,7 +12,7 @@ import (
 )
 
 func serializeHints(w io.Writer, hints types.Hints) {
-	err := binary.Write(w, binary.LittleEndian, uint32(len(hints))) // 4 billion hints is probably absurd. Maybe this should be smaller?
+	err := binary.Write(w, binary.BigEndian, uint32(len(hints))) // 4 billion hints is probably absurd. Maybe this should be smaller?
 	d.Chk.NoError(err)
 	for r := range hints {
 		serializeHash(w, r)
@@ -20,7 +20,7 @@ func serializeHints(w io.Writer, hints types.Hints) {
 }
 
 func serializeHashes(w io.Writer, hashes ref.RefSlice) {
-	err := binary.Write(w, binary.LittleEndian, uint32(len(hashes))) // 4 billion hashes is probably absurd. Maybe this should be smaller?
+	err := binary.Write(w, binary.BigEndian, uint32(len(hashes))) // 4 billion hashes is probably absurd. Maybe this should be smaller?
 	d.Chk.NoError(err)
 	for _, r := range hashes {
 		serializeHash(w, r)
@@ -36,7 +36,7 @@ func serializeHash(w io.Writer, hash ref.Ref) {
 
 func deserializeHints(reader io.Reader) types.Hints {
 	numRefs := uint32(0)
-	err := binary.Read(reader, binary.LittleEndian, &numRefs)
+	err := binary.Read(reader, binary.BigEndian, &numRefs)
 	d.Chk.NoError(err)
 
 	hints := make(types.Hints, numRefs)
@@ -48,7 +48,7 @@ func deserializeHints(reader io.Reader) types.Hints {
 
 func deserializeHashes(reader io.Reader) ref.RefSlice {
 	numRefs := uint32(0)
-	err := binary.Read(reader, binary.LittleEndian, &numRefs)
+	err := binary.Read(reader, binary.BigEndian, &numRefs)
 	d.Chk.NoError(err)
 
 	hashes := make(ref.RefSlice, numRefs)
