@@ -184,7 +184,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
       const structName = mirror.name;
       data.nodes[id] = {name: structName};
 
-      const processField = (f: StructFieldMirror) => {
+      mirror.forEachField((f: StructFieldMirror) => {
         const v = f.value;
         const kid = process(ref, f.name, id);
         if (kid) {
@@ -195,12 +195,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         } else {
           throw new Error('No kid id.');
         }
-      };
-
-      mirror.forEachField(processField);
-      if (mirror.hasUnion) {
-        processField(mirror.unionField);
-      }
+      });
     } else {
       invariant(val !== null && val !== undefined);
       console.log('Unsupported type', val.constructor.name, val); // eslint-disable-line no-console
