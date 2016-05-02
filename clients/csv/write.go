@@ -40,10 +40,10 @@ func Write(l types.List, sd types.StructDesc, comma rune, output io.Writer) {
 }
 
 func getFieldNamesFromStruct(structDesc types.StructDesc) (fieldNames []string) {
-	for _, f := range structDesc.Fields {
-		d.Exp.Equal(true, types.IsPrimitiveKind(f.Type.Kind()),
-			"Non-primitive CSV export not supported:", f.Type.Describe())
-		fieldNames = append(fieldNames, f.Name)
-	}
+	structDesc.IterFields(func(name string, t *types.Type) {
+		d.Exp.Equal(true, types.IsPrimitiveKind(t.Kind()),
+			"Non-primitive CSV export not supported:", t.Describe())
+		fieldNames = append(fieldNames, name)
+	})
 	return
 }

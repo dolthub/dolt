@@ -4,7 +4,6 @@ import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import {
   boolType,
-  Field,
   makeListType,
   makeMapType,
   makeSetType,
@@ -90,10 +89,10 @@ suite('defs', () => {
   });
 
   test('struct', async () => {
-    const type = makeStructType('Struct', [
-      new Field('b', boolType),
-      new Field('s', stringType),
-    ]);
+    const type = makeStructType('Struct', {
+      'b': boolType,
+      's': stringType,
+    });
 
     const s1 = newStruct(type, {
       b: true,
@@ -109,9 +108,9 @@ suite('defs', () => {
 
   test('struct with list', async () => {
     const listOfNumberType = makeListType(numberType);
-    const type = makeStructType('StructWithList', [
-      new Field('l', listOfNumberType),
-    ]);
+    const type = makeStructType('StructWithList', {
+      'l': listOfNumberType,
+    });
 
     const s1 = newStruct(type, {
       l: await newList([0, 1, 2, 3], listOfNumberType),
@@ -126,9 +125,9 @@ suite('defs', () => {
   });
 
   test('list of struct', async () => {
-    const structType = makeStructType('Struct', [
-      new Field('i', numberType),
-    ]);
+    const structType = makeStructType('Struct', {
+      'i': numberType,
+    });
     const listType = makeListType(structType);
 
     const l1 = await newList([
@@ -146,11 +145,11 @@ suite('defs', () => {
   });
 
   test('recursive struct', async () => {
-    const type = makeStructType('Struct', [
-      new Field('children', valueType /* placeholder */),
-    ]);
+    const type = makeStructType('Struct', {
+      'children': valueType,  // placeholder
+    });
     const listType = makeListType(type);
-    type.desc.fields[0].type = listType;
+    type.desc.fields['children'] = listType;
 
     const a = await newList([], listType);
     const b = await newList([], listType);

@@ -9,9 +9,9 @@ import (
 func TestGenericStructEquals(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S1", []Field{
-		Field{"x", BoolType},
-		Field{"s", StringType},
+	typ := MakeStructType("S1", TypeMap{
+		"x": BoolType,
+		"s": StringType,
 	})
 
 	data1 := structData{"x": Bool(true), "s": NewString("hi")}
@@ -26,8 +26,8 @@ func TestGenericStructEquals(t *testing.T) {
 func TestGenericStructChunks(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S1", []Field{
-		Field{"r", MakeRefType(BoolType)},
+	typ := MakeStructType("S1", TypeMap{
+		"r": MakeRefType(BoolType),
 	})
 
 	b := Bool(true)
@@ -42,9 +42,9 @@ func TestGenericStructChunks(t *testing.T) {
 func TestGenericStructNew(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S2", []Field{
-		Field{"b", BoolType},
-		Field{"o", StringType},
+	typ := MakeStructType("S2", TypeMap{
+		"b": BoolType,
+		"o": StringType,
 	})
 
 	s := NewStruct(typ, map[string]Value{"b": Bool(true), "o": NewString("hi")})
@@ -65,9 +65,9 @@ func TestGenericStructNew(t *testing.T) {
 func TestGenericStructSet(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S3", []Field{
-		Field{"b", BoolType},
-		Field{"o", StringType},
+	typ := MakeStructType("S3", TypeMap{
+		"b": BoolType,
+		"o": StringType,
 	})
 
 	s := NewStruct(typ, map[string]Value{"b": Bool(true), "o": NewString("hi")})

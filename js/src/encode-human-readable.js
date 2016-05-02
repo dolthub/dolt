@@ -1,7 +1,7 @@
 // @flow
 
 import {getTypeOfValue, CompoundDesc} from './type.js';
-import type {Field, Type} from './type.js';
+import type {Type} from './type.js';
 import {Kind, kindToString} from './noms-kind.js';
 import type {NomsKind} from './noms-kind.js';
 import {invariant} from './assert.js';
@@ -123,16 +123,15 @@ export class TypeWriter {
     this._w.write(' {');
     this._w.indent();
 
-    desc.fields.forEach((f: Field, i: number) => {
-      if (i === 0) {
+    let first = true;
+    desc.forEachField((name: string, type: Type) => {
+      if (first) {
         this._w.newLine();
+        first = false;
       }
-      this._w.write(f.name);
+      this._w.write(name);
       this._w.write(': ');
-      if (f.optional) {
-        this._w.write('optional ');
-      }
-      this._writeType(f.type, parentStructTypes);
+      this._writeType(type, parentStructTypes);
       this._w.newLine();
     });
 

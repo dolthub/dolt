@@ -12,7 +12,6 @@ import type {Type} from './type.js';
 import {
   blobType,
   boolType,
-  Field,
   listOfValueType,
   makeListType,
   makeMapType,
@@ -117,9 +116,9 @@ suite('validate type', () => {
   });
 
   test('struct', async () => {
-    const type = makeStructType('Struct', [
-      new Field('x', boolType),
-    ]);
+    const type = makeStructType('Struct', {
+      'x': boolType,
+    });
 
     const v = newStruct(type, {x: true});
     validateType(type, v);

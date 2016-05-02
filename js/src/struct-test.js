@@ -5,7 +5,6 @@ import {default as Struct, newStruct, StructMirror, createStructClass} from './s
 import {assert} from 'chai';
 import {
   boolType,
-  Field,
   numberType,
   makeStructType,
   makeRefType,
@@ -19,10 +18,10 @@ import {newList} from './list.js';
 
 suite('Struct', () => {
   test('equals', () => {
-    const type = makeStructType('S1', [
-      new Field('x', boolType),
-      new Field('o', stringType),
-    ]);
+    const type = makeStructType('S1', {
+      'x': boolType,
+      'o': stringType,
+    });
 
     const data1 = {x: true, o: 'hi'};
     const s1 = newStruct(type, data1);
@@ -36,9 +35,9 @@ suite('Struct', () => {
 
     const bt = boolType;
     const refOfBoolType = makeRefType(bt);
-    const type = makeStructType('S1', [
-      new Field('r', refOfBoolType),
-    ]);
+    const type = makeStructType('S1', {
+      'r': refOfBoolType,
+    });
 
     const b = true;
     const r = ds.writeValue(b);
@@ -48,10 +47,10 @@ suite('Struct', () => {
   });
 
   test('new', () => {
-    const type = makeStructType('S2', [
-      new Field('b', boolType),
-      new Field('o', stringType),
-    ]);
+    const type = makeStructType('S2', {
+      'b': boolType,
+      'o': stringType,
+    });
 
     const s1 = newStruct(type, {b: true, o: 'hi'});
     assert.strictEqual(s1.b, true);
@@ -74,10 +73,10 @@ suite('Struct', () => {
   });
 
   test('struct set', () => {
-    const type = makeStructType('S3', [
-      new Field('b', boolType),
-      new Field('o', stringType),
-    ]);
+    const type = makeStructType('S3', {
+      'b': boolType,
+      'o': stringType,
+    });
 
     const s1 = newStruct(type, {b: true, o: 'hi'});
     const s2 = s1.setB(false);
@@ -106,10 +105,10 @@ suite('Struct', () => {
   });
 
   test('createStructClass', () => {
-    const typeA = makeStructType('A', [
-      new Field('b', numberType),
-      new Field('c', stringType),
-    ]);
+    const typeA = makeStructType('A', {
+      'b': numberType,
+      'c': stringType,
+    });
     const A = createStructClass(typeA);
     const a = new A({b: 1, c: 'hi'});
     assert.instanceOf(a, Struct);
@@ -119,10 +118,10 @@ suite('Struct', () => {
   });
 
   test('type validation', () => {
-    const type = makeStructType('S1', [
-      new Field('x', boolType),
-      new Field('o', stringType),
-    ]);
+    const type = makeStructType('S1', {
+      'x': boolType,
+      'o': stringType,
+    });
 
     assert.throws(() => {
       newStruct(type, {x: 1, o: 'hi'});
@@ -139,12 +138,12 @@ suite('Struct', () => {
     //   b: Bool
     //   l: List<S>
     // }
-    const type = makeStructType('S', [
-      new Field('b', boolType),
-      new Field('l', valueType /* placeholder */),
-    ]);
+    const type = makeStructType('S', {
+      'b': boolType,
+      'l': valueType, // placeholder
+    });
     const listType = makeListType(type);
-    type.desc.fields[1].type = listType;
+    type.desc.fields['l'] = listType;
 
     const emptyList = await newList([], listType);
     newStruct(type, {b: true, l: emptyList});

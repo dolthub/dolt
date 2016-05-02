@@ -21,10 +21,10 @@ func newStructFromData(data structData, t *Type) Struct {
 func NewStruct(t *Type, data structData) Struct {
 	newData := make(structData)
 	desc := t.Desc.(StructDesc)
-	for _, f := range desc.Fields {
-		v, ok := data[f.Name]
-		d.Chk.True(ok, "Missing required field %s", f.Name)
-		newData[f.Name] = v
+	for name := range desc.Fields {
+		v, ok := data[name]
+		d.Chk.True(ok, "Missing required field %s", name)
+		newData[name] = v
 	}
 	return newStructFromData(newData, t)
 }
@@ -39,8 +39,8 @@ func (s Struct) Ref() ref.Ref {
 
 func (s Struct) Chunks() (chunks []Ref) {
 	chunks = append(chunks, s.t.Chunks()...)
-	for _, f := range s.desc().Fields {
-		v, ok := s.data[f.Name]
+	for name := range s.desc().Fields {
+		v, ok := s.data[name]
 		d.Chk.True(ok)
 		chunks = append(chunks, v.Chunks()...)
 	}
@@ -50,8 +50,8 @@ func (s Struct) Chunks() (chunks []Ref) {
 
 func (s Struct) ChildValues() (res []Value) {
 	res = append(res, s.t)
-	for _, f := range s.desc().Fields {
-		v, ok := s.data[f.Name]
+	for name := range s.desc().Fields {
+		v, ok := s.data[name]
 		d.Chk.True(ok)
 		res = append(res, v)
 	}
@@ -84,9 +84,9 @@ func (s Struct) Get(n string) Value {
 }
 
 func (s Struct) Set(n string, v Value) Struct {
-	f, ok := s.findField(n)
+	t, ok := s.findField(n)
 	d.Chk.True(ok, "Struct has no field %s", n)
-	assertType(f.Type, v)
+	assertType(t, v)
 	data := make(structData, len(s.data))
 	for k, v := range s.data {
 		data[k] = v
@@ -96,22 +96,24 @@ func (s Struct) Set(n string, v Value) Struct {
 	return newStructFromData(data, s.t)
 }
 
-func (s Struct) findField(n string) (Field, bool) {
-	for _, f := range s.desc().Fields {
-		if f.Name == n {
-			return f, true
+func (s Struct) findField(n string) (*Type, bool) {
+	for name, typ := range s.desc().Fields {
+		if name == n {
+			return typ, true
 		}
 	}
-	return Field{}, false
+	return nil, false
 }
 
 func structBuilder(values []Value, t *Type) Value {
 	desc := t.Desc.(StructDesc)
 	data := structData{}
 
-	for i, f := range desc.Fields {
-		data[f.Name] = values[i]
-	}
+	i := 0
+	desc.IterFields(func(name string, t *Type) {
+		data[name] = values[i]
+		i++
+	})
 
 	return newStructFromData(data, t)
 }
@@ -121,11 +123,11 @@ func structReader(s Struct, t *Type) []Value {
 	values := []Value{}
 
 	desc := t.Desc.(StructDesc)
-	for _, f := range desc.Fields {
-		v, ok := s.data[f.Name]
+	desc.IterFields(func(name string, t *Type) {
+		v, ok := s.data[name]
 		d.Chk.True(ok)
 		values = append(values, v)
-	}
+	})
 
 	return values
 }

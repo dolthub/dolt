@@ -1,8 +1,6 @@
 package types
 
 import (
-	"sort"
-
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -64,9 +62,9 @@ func (t *Type) ChildValues() (res []Value) {
 			res = append(res, t)
 		}
 	case StructDesc:
-		for _, t := range desc.Fields {
-			res = append(res, t.Type)
-		}
+		desc.IterFields(func(name string, t *Type) {
+			res = append(res, t)
+		})
 	case PrimitiveDesc:
 		// Nothing, these have no child values
 	default:
@@ -134,14 +132,7 @@ func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 	return buildType(CompoundDesc{kind, elemTypes})
 }
 
-type fieldSlice []Field
-
-func (fs fieldSlice) Len() int           { return len(fs) }
-func (fs fieldSlice) Swap(i, j int)      { fs[i], fs[j] = fs[j], fs[i] }
-func (fs fieldSlice) Less(i, j int) bool { return fs[i].Name < fs[j].Name }
-
-func MakeStructType(name string, fields []Field) *Type {
-	sort.Sort(fieldSlice(fields))
+func MakeStructType(name string, fields map[string]*Type) *Type {
 	return buildType(StructDesc{name, fields})
 }
 

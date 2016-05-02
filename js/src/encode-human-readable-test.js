@@ -7,7 +7,6 @@ import {TypeWriter} from './encode-human-readable.js';
 import {
   blobType,
   boolType,
-  Field,
   numberType,
   makeRefType,
   makeListType,
@@ -47,18 +46,18 @@ suite('Encode human readable types', () => {
   });
 
   test('struct', () => {
-    const type = makeStructType('S1', [
-      new Field('x', numberType),
-      new Field('y', stringType),
-    ]);
+    const type = makeStructType('S1', {
+      'x': numberType,
+      'y': stringType,
+    });
     assertWriteType('struct S1 {\n  x: Number\n  y: String\n}', type);
   });
 
 
   test('list of struct', () => {
-    const type = makeStructType('S3', [
-      new Field('x', numberType),
-    ]);
+    const type = makeStructType('S3', {
+      'x': numberType,
+    });
     assertWriteType('List<struct S3 {\n  x: Number\n}>', makeListType(type));
   });
 
@@ -72,23 +71,20 @@ suite('Encode human readable types', () => {
     //   }
     // }
 
-    const a = makeStructType('A', [
-      new Field('b', valueType /* placeholder */),
-      new Field('c', valueType /* placeholder */),
-      new Field('d', valueType /* placeholder */),
-    ]);
-    const d = makeStructType('D', [
-      new Field('e', valueType /* placeholder */),
-      new Field('f', a),
-    ]);
-    const aDesc = a.desc;
-    const dDesc = d.desc;
-    aDesc.fields[0].type = a;
-    aDesc.fields[2].type = d;
-    dDesc.fields[0].type = d;
-    dDesc.fields[1].type = a;
-    aDesc.fields[1].type = makeListType(a);
-
+    const a = makeStructType('A', {
+      'b': valueType,  // placeholder
+      'c': valueType,  // placeholder
+      'd': valueType,  // placeholder
+    });
+    const d = makeStructType('D', {
+      'e': valueType,  // placeholder
+      'f': a,
+    });
+    a.desc.fields['b'] = a;
+    a.desc.fields['d'] = d;
+    d.desc.fields['e'] = d;
+    d.desc.fields['f'] = a;
+    a.desc.fields['c'] = makeListType(a);
 
     assertWriteType(`struct A {
   b: Parent<0>

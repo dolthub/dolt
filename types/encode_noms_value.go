@@ -218,10 +218,10 @@ func (w *jsonArrayWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 	w.write(StructKind)
 	w.write(t.Name())
 	fieldWriter := newJSONArrayWriter(w.vw)
-	for _, field := range t.Desc.(StructDesc).Fields {
-		fieldWriter.write(field.Name)
-		fieldWriter.writeTypeAsTag(field.Type, parentStructTypes)
-	}
+	t.Desc.(StructDesc).IterFields(func(name string, t *Type) {
+		fieldWriter.write(name)
+		fieldWriter.writeTypeAsTag(t, parentStructTypes)
+	})
 	w.write(fieldWriter.toArray())
 }
 
@@ -239,7 +239,9 @@ func (w *jsonArrayWriter) writeStruct(v Value, t *Type) {
 	values := structReader(v.(Struct), t)
 	desc := t.Desc.(StructDesc)
 
-	for i, f := range desc.Fields {
-		w.writeValue(values[i], f.Type)
-	}
+	i := 0
+	desc.IterFields(func(name string, t *Type) {
+		w.writeValue(values[i], t)
+		i++
+	})
 }

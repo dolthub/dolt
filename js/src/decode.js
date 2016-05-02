@@ -9,7 +9,6 @@ import type Struct from './struct.js';
 import type {NomsKind} from './noms-kind.js';
 import {decode as decodeBase64} from './base64.js';
 import {
-  Field,
   getPrimitiveType,
   makeCompoundType,
   makeRefType,
@@ -293,27 +292,26 @@ export class JsonArrayReader {
 
     const data: {[key: string]: any} = Object.create(null);
 
-    for (let i = 0; i < desc.fields.length; i++) {
-      const field = desc.fields[i];
-      const v = this.readValueWithoutTag(field.type);
-      data[field.name] = v;
-    }
+    desc.forEachField((name: string, type: Type) => {
+      const v = this.readValueWithoutTag(type);
+      data[name] = v;
+    });
 
     return newStruct(type, data);
   }
 
   readStructType(parentStructTypes: Type[]): Type {
     const name = this.readString();
-    const fields = [];
+    const fields = {};
     const structType = makeStructType(name, fields);
     parentStructTypes.push(structType);
 
-    const newFields: Array<Field> = [];
+    const newFields = Object.create(null);
     const fieldReader = new JsonArrayReader(this.readArray(), this._ds);
     while (!fieldReader.atEnd()) {
       const fieldName = fieldReader.readString();
       const fieldType = fieldReader.readTypeAsTag(parentStructTypes);
-      newFields.push(new Field(fieldName, fieldType));
+      newFields[fieldName] = fieldType;
     }
 
     // Mutate the already created structType since when looking for the cycle we compare

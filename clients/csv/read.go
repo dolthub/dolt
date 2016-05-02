@@ -68,16 +68,13 @@ func ReportValidFieldTypes(r *csv.Reader, headers []string) []KindSlice {
 func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSlice) *types.Type {
 	useStringType := len(kinds) == 0
 	d.Chk.True(useStringType || len(headers) == len(kinds))
-	fields := make([]types.Field, len(headers))
+	fields := make(types.TypeMap, len(headers))
 	for i, key := range headers {
 		kind := types.StringKind
 		if !useStringType {
 			kind = kinds[i]
 		}
-		fields[i] = types.Field{
-			Name: key,
-			Type: types.MakePrimitiveType(kind),
-		}
+		fields[key] = types.MakePrimitiveType(kind)
 	}
 	return types.MakeStructType(structName, fields)
 }
@@ -105,8 +102,8 @@ func Read(r *csv.Reader, structName string, headers []string, kinds KindSlice, v
 		fields := make(map[string]types.Value)
 		for i, v := range row {
 			if i < len(headers) {
-				f := structFields[i]
-				fields[f.Name] = StringToType(v, f.Type.Kind())
+				name := headers[i]
+				fields[name] = StringToType(v, structFields[name].Kind())
 			}
 		}
 		valueChan <- types.NewStruct(t, fields)

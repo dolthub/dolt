@@ -4,7 +4,6 @@ import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {assert} from 'chai';
 import {
   boolType,
-  Field,
   makeMapType,
   makeSetType,
   makeStructType,
@@ -22,10 +21,10 @@ suite('Type', () => {
 
     const mapType = makeMapType(stringType, numberType);
     const setType = makeSetType(stringType);
-    const mahType = makeStructType('MahStruct', [
-      new Field('Field1', stringType),
-      new Field('Field2', boolType),
-    ]);
+    const mahType = makeStructType('MahStruct', {
+      'Field1': stringType,
+      'Field2': boolType,
+    });
 
     const mapRef = ds.writeValue(mapType).targetRef;
     const setRef = ds.writeValue(setType).targetRef;

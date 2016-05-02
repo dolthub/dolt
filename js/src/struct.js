@@ -3,7 +3,7 @@
 import type RefValue from './ref-value.js';
 import type {valueOrPrimitive} from './value.js';
 import {StructDesc} from './type.js';
-import type {Field, Type} from './type.js';
+import type {Type} from './type.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
 import {Kind} from './noms-kind.js';
@@ -73,28 +73,21 @@ export default class Struct extends Value {
 }
 
 function validate(type: Type, data: StructData): void {
-  const {desc} = type;
-  const {fields} = desc;
-  for (let i = 0; i < fields.length; i++) {
-    const field = fields[i];
-    const value = data[field.name];
-    validateType(field.type, value);
-  }
+  type.desc.forEachField((name: string, type: Type) => {
+    const value = data[name];
+    validateType(type, value);
+  });
 }
 
 export class StructFieldMirror {
   value: valueOrPrimitive;
-  _f: Field;
+  name: string;
+  type: Type;
 
-  constructor(data: StructData, f: Field) {
-    this.value = data[f.name];
-    this._f = f;
-  }
-  get name(): string {
-    return this._f.name;
-  }
-  get type(): Type {
-    return this._f.type;
+  constructor(data: StructData, name: string, type: Type) {
+    this.value = data[name];
+    this.name = name;
+    this.type = type;
   }
 }
 
@@ -114,7 +107,9 @@ export class StructMirror<T: Struct> {
   }
 
   forEachField(cb: FieldCallback) {
-    this.desc.fields.forEach(field => cb(new StructFieldMirror(this._data, field)));
+    this.desc.forEachField((name, type) => {
+      cb(new StructFieldMirror(this._data, name, type));
+    });
   }
 
   get name(): string {
@@ -153,11 +148,7 @@ export function createStructClass<T: Struct>(type: Type<StructDesc>): Class<T> {
     }
   };
 
-  const {desc} = type;
-
-  const {fields} = desc;
-  for (const field of fields) {
-    const {name} = field;
+  type.desc.forEachField((name: string, _: Type) => {
     Object.defineProperty(c.prototype, name, {
       configurable: true,
       enumerable: false,
@@ -171,7 +162,7 @@ export function createStructClass<T: Struct>(type: Type<StructDesc>): Class<T> {
       value: getSetter(name),
       writable: true,
     });
-  }
+  });
 
   return cache[k] = c;
 }

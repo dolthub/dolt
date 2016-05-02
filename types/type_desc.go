@@ -1,5 +1,7 @@
 package types
 
+import "sort"
+
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Number, or a custom type.
 type TypeDesc interface {
 	Kind() NomsKind
@@ -61,11 +63,13 @@ func (c CompoundDesc) Equals(other TypeDesc) bool {
 	return true
 }
 
+type TypeMap map[string]*Type
+
 // StructDesc describes a custom Noms Struct.
 // Structs can contain at most one anonymous union, so Union may be nil.
 type StructDesc struct {
 	Name   string
-	Fields []Field
+	Fields TypeMap
 }
 
 func (s StructDesc) Kind() NomsKind {
@@ -76,21 +80,21 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 	if s.Kind() != other.Kind() || len(s.Fields) != len(other.(StructDesc).Fields) {
 		return false
 	}
-	for i, f := range other.(StructDesc).Fields {
-		if !s.Fields[i].Equals(f) {
+	for i, t := range other.(StructDesc).Fields {
+		if !s.Fields[i].Equals(t) {
 			return false
 		}
 	}
 	return true
 }
 
-// Field represents a Struct field or a Union choice.
-// Neither Name nor T is allowed to be a zero-value, though T may be an unresolved Type.
-type Field struct {
-	Name string
-	Type *Type
-}
-
-func (f Field) Equals(other Field) bool {
-	return f.Name == other.Name && f.Type.Equals(other.Type)
+func (s StructDesc) IterFields(cb func(name string, t *Type)) {
+	names := make([]string, 0, len(s.Fields))
+	for name := range s.Fields {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		cb(name, s.Fields[name])
+	}
 }

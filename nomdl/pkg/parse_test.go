@@ -160,12 +160,13 @@ func (s structTestCase) String() string {
 }
 
 type testField struct {
-	types.Field
-	S string
+	Name string
+	Type *types.Type
+	S    string
 }
 
 func newTestField(name string, t *types.Type, s string) testField {
-	return testField{Field: types.Field{Name: name, Type: t}, S: s}
+	return testField{Name: name, Type: t, S: s}
 }
 
 func (t testField) String() string {
@@ -181,9 +182,9 @@ func (suite *ParsedResultTestSuite) parseAndCheckStructs(structs ...structTestCa
 	expectedTypes := make([]*types.Type, len(structs))
 	for i, s := range structs {
 		source += s.String() + "\n"
-		fields := make([]types.Field, len(s.Fields))
-		for i, f := range s.Fields {
-			fields[i] = f.Field
+		fields := make(types.TypeMap, len(s.Fields))
+		for _, f := range s.Fields {
+			fields[f.Name] = f.Type
 		}
 		expectedTypes[i] = types.MakeStructType(s.Name, fields)
 	}
@@ -207,13 +208,18 @@ func (suite *ParsedResultTestSuite) TestPrimitiveField() {
 func (suite *ParsedResultTestSuite) TestCommentNextToName() {
 	n := "WithComment"
 	s := fmt.Sprintf("struct %s { /* Oy! */%s }", n, suite.prim2)
-	suite.assertTypes(s, types.MakeStructType(n, []types.Field{suite.prim2.Field}))
+	suite.assertTypes(s, types.MakeStructType(n, types.TypeMap{
+		suite.prim2.Name: suite.prim2.Type,
+	}))
 }
 
 func (suite *ParsedResultTestSuite) TestCommentAmongFields() {
 	n := "WithComment"
 	s := fmt.Sprintf("struct %s { %s \n// Nope\n%s }", n, suite.prim, suite.prim2)
-	suite.assertTypes(s, types.MakeStructType(n, []types.Field{suite.prim.Field, suite.prim2.Field}))
+	suite.assertTypes(s, types.MakeStructType(n, types.TypeMap{
+		suite.prim.Name:  suite.prim.Type,
+		suite.prim2.Name: suite.prim2.Type,
+	}))
 }
 
 func (suite *ParsedResultTestSuite) TestCompoundField() {

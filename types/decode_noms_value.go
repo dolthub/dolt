@@ -282,9 +282,9 @@ func (r *jsonArrayReader) readStruct(t *Type) Value {
 	// We've read `[StructKind, name, fields, unions` at this point
 	values := []Value{}
 	desc := t.Desc.(StructDesc)
-	for _, f := range desc.Fields {
-		values = append(values, r.readValueWithoutTag(f.Type))
-	}
+	desc.IterFields(func(name string, t *Type) {
+		values = append(values, r.readValueWithoutTag(t))
+	})
 
 	return structBuilder(values, t)
 }
@@ -292,7 +292,7 @@ func (r *jsonArrayReader) readStruct(t *Type) Value {
 func (r *jsonArrayReader) readStructType(parentStructTypes []*Type) *Type {
 	name := r.readString()
 
-	fields := []Field{}
+	fields := map[string]*Type{}
 	st := MakeStructType(name, fields)
 	parentStructTypes = append(parentStructTypes, st)
 	desc := st.Desc.(StructDesc)
@@ -301,7 +301,7 @@ func (r *jsonArrayReader) readStructType(parentStructTypes []*Type) *Type {
 	for !fieldReader.atEnd() {
 		fieldName := fieldReader.readString()
 		fieldType := fieldReader.readTypeAsTag(parentStructTypes)
-		fields = append(fields, Field{Name: fieldName, Type: fieldType})
+		fields[fieldName] = fieldType
 	}
 	desc.Fields = fields
 	st.Desc = desc

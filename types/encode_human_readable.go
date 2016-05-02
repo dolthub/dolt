@@ -140,18 +140,19 @@ func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
 	w.write("{")
 	w.indent()
 
-	for i, f := range desc.Fields {
-		if fv, present := v.MaybeGet(f.Name); present {
-			if i == 0 {
-				w.newLine()
-			}
-			w.write(f.Name)
-			w.write(": ")
-			w.Write(fv)
-			w.write(",")
+	first := true
+	desc.IterFields(func(name string, t *Type) {
+		fv := v.Get(name)
+		if first {
 			w.newLine()
+			first = false
 		}
-	}
+		w.write(name)
+		w.write(": ")
+		w.Write(fv)
+		w.write(",")
+		w.newLine()
+	})
 
 	w.outdent()
 	w.write("}")
@@ -217,15 +218,17 @@ func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 	w.write(" {")
 	w.indent()
 	desc := t.Desc.(StructDesc)
-	for i, f := range desc.Fields {
-		if i == 0 {
+	first := true
+	desc.IterFields(func(name string, t *Type) {
+		if first {
+			first = false
 			w.newLine()
 		}
-		w.write(f.Name)
+		w.write(name)
 		w.write(": ")
-		w.writeType(f.Type, parentStructTypes)
+		w.writeType(t, parentStructTypes)
 		w.newLine()
-	}
+	})
 	w.outdent()
 	w.write("}")
 }

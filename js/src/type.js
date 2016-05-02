@@ -54,17 +54,13 @@ export class CompoundDesc {
   }
 }
 
-function compareFields(a, b) {
-  return a.name < b.name ? -1 : 1;  // Cannot be equal.
-}
-
 export class StructDesc {
   name: string;
-  fields: Array<Field>;
+  fields: {[key: string]: Type};
 
-  constructor(name: string, fields: Array<Field>) {
+  constructor(name: string, fields: {[key: string]: Type}) {
     this.name = name;
-    this.fields = fields.sort(compareFields);
+    this.fields = fields;
   }
 
   get kind(): NomsKind {
@@ -81,31 +77,34 @@ export class StructDesc {
     }
     invariant(other instanceof StructDesc);
 
-    if (this.fields.length !== other.fields.length) {
+    const names = Object.keys(this.fields);
+    const otherNames = Object.keys(other.fields);
+
+    if (names.length !== otherNames.length) {
       return false;
     }
 
-    for (let i = 0; i < this.fields.length; i++) {
-      if (!this.fields[i].equals(other.fields[i])) {
+    for (let i = 0; i < names.length; i++) {
+      const name = names[i];
+      if (!other.fields[name]) {
+        return false;
+      }
+
+      if (!this.fields[name].equals(other.fields[name])) {
         return false;
       }
     }
 
     return true;
   }
-}
 
-export class Field {
-  name: string;
-  type: Type;
-
-  constructor(name: string, type: Type) {
-    this.name = name;
-    this.type = type;
-  }
-
-  equals(other: Field): boolean {
-    return this.name === other.name && this.type.equals(other.type);
+  forEachField(cb: (name: string, type: Type) => void) {
+    const {fields} = this;
+    const names = Object.keys(fields);
+    names.sort();
+    names.forEach(n => {
+      cb(n, fields[n]);
+    });
   }
 }
 
@@ -192,7 +191,7 @@ export function makeRefType(elemType: Type): Type<CompoundDesc> {
   return buildType(new CompoundDesc(Kind.Ref, [elemType]));
 }
 
-export function makeStructType(name: string, fields: Array<Field>): Type<StructDesc> {
+export function makeStructType(name: string, fields: {[key: string]: Type}): Type<StructDesc> {
   return buildType(new StructDesc(name, fields));
 }
 

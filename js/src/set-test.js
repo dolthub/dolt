@@ -12,7 +12,6 @@ import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-ad
 import {newStruct} from './struct.js';
 import {
   boolType,
-  Field,
   makeSetType,
   makeRefType,
   makeStructType,
@@ -93,9 +92,9 @@ suite('BuildSet', () => {
   test('LONG: set of ref, set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
 
-    const structType = makeStructType('num', [
-      new Field('n', numberType),
-    ]);
+    const structType = makeStructType('num', {
+      'n': numberType,
+    });
     const refOfStructType = makeRefType(structType);
     const tr = makeSetType(refOfStructType);
 

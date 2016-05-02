@@ -9,7 +9,6 @@ import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
 import {calcSplices} from './edit-distance.js';
 import {
-  Field,
   makeStructType,
   makeRefType,
   makeListType,
@@ -59,9 +58,9 @@ suite('BuildList', () => {
   test('LONG: list of ref, set of n numbers, length', async () => {
     const nums = firstNNumbers(testListSize);
 
-    const structType = makeStructType('num', [
-      new Field('n', numberType),
-    ]);
+    const structType = makeStructType('num', {
+      'n': numberType,
+    });
     const refOfStructType = makeRefType(structType);
     const tr = makeListType(refOfStructType);
 

@@ -12,7 +12,6 @@ import {assert} from 'chai';
 import {decodeNomsValue, JsonArrayReader} from './decode.js';
 import {
   boolType,
-  Field,
   makeStructType,
   makeListType,
   makeMapType,
@@ -69,7 +68,7 @@ suite('Decode', () => {
     doTest(boolType, [Kind.Bool, true]);
     doTest(typeType, [Kind.Type, Kind.Bool]);
     doTest(makeListType(boolType), [Kind.List, Kind.Bool, true, false]);
-    doTest(makeStructType('S', [new Field('x', boolType)]), [Kind.Struct, 'S', ['x', Kind.Bool]]);
+    doTest(makeStructType('S', {'x': boolType}), [Kind.Struct, 'S', ['x', Kind.Bool]]);
   });
 
   test('read primitives', async () => {
@@ -259,11 +258,11 @@ suite('Decode', () => {
 
   test('test read struct', async () => {
     const ds = new DataStore(makeTestingBatchStore());
-    const tr = makeStructType('A1', [
-      new Field('x', numberType),
-      new Field('s', stringType),
-      new Field('b', boolType),
-    ]);
+    const tr = makeStructType('A1', {
+      'x': numberType,
+      's': stringType,
+      'b': boolType,
+    });
 
     const a = [Kind.Struct, 'A1', [
       'b', Kind.Bool,
@@ -283,11 +282,11 @@ suite('Decode', () => {
   test('test read struct with list', async () => {
     const ds = new DataStore(makeTestingBatchStore());
     const ltr = makeListType(numberType);
-    const tr = makeStructType('A4', [
-      new Field('b', boolType),
-      new Field('l', ltr),
-      new Field('s', stringType),
-    ]);
+    const tr = makeStructType('A4', {
+      'b': boolType,
+      'l': ltr,
+      's': stringType,
+    });
 
     const a = [Kind.Struct, 'A4', [
       'b', Kind.Bool,
@@ -306,11 +305,11 @@ suite('Decode', () => {
 
   test('test read struct with value', async () => {
     const ds = new DataStore(makeTestingBatchStore());
-    const tr = makeStructType('A5', [
-      new Field('b', boolType),
-      new Field('v', valueType),
-      new Field('s', stringType),
-    ]);
+    const tr = makeStructType('A5', {
+      'b': boolType,
+      'v': valueType,
+      's': stringType,
+    });
 
     const a = [Kind.Struct, 'A5', ['b', Kind.Bool, 's', Kind.String, 'v', Kind.Value],
       true, 'hi', Kind.Number, '42'];
@@ -326,11 +325,11 @@ suite('Decode', () => {
 
   test('test read value struct', async () => {
     const ds = new DataStore(makeTestingBatchStore());
-    const tr = makeStructType('A1', [
-      new Field('x', numberType),
-      new Field('s', stringType),
-      new Field('b', boolType),
-    ]);
+    const tr = makeStructType('A1', {
+      'x': numberType,
+      's': stringType,
+      'b': boolType,
+    });
 
     const a = [Kind.Value, Kind.Struct, 'A1', [
       'b', Kind.Bool,
@@ -350,10 +349,10 @@ suite('Decode', () => {
 
   test('test read map of string to struct', async () => {
     const ds = new DataStore(makeTestingBatchStore());
-    const tr = makeStructType('s', [
-      new Field('b', boolType),
-      new Field('i', numberType),
-    ]);
+    const tr = makeStructType('s', {
+      'b': boolType,
+      'i': numberType,
+    });
 
     const a = [Kind.Value, Kind.Map, Kind.String,
       Kind.Struct, 's', ['b', Kind.Bool, 'i', Kind.Number],
@@ -396,13 +395,13 @@ suite('Decode', () => {
     const commitChunk = makeChunk(
       [Kind.Struct, 'Commit',
         ['value', Kind.Value, 'parents', Kind.Set, Kind.Ref, Kind.Parent, 0],
-        Kind.Number, '1', false, []]);
+        false, [], Kind.Number, '1']);
     const commitRef = commitChunk.ref;
     bs.schedulePut(commitChunk, new Set());
 
     // Root
     const rootChunk = makeChunk([Kind.Map, Kind.String, Kind.Ref, Kind.Struct, 'Commit',
-      ['value', Kind.Value, 'parents', Kind.Set, Kind.Ref, Kind.Parent, 0],
+      ['parents', Kind.Set, Kind.Ref, Kind.Parent, 0, 'value', Kind.Value],
       false, ['counter', commitRef.toString()]]);
     const rootRef = rootChunk.ref;
     bs.schedulePut(rootChunk, new Set());
@@ -491,12 +490,16 @@ suite('Decode', () => {
     //   }
     // }
 
-    const ta = makeStructType('A', []);
-    const tb = makeStructType('B', []);
-    ta.desc.fields.push(new Field('b', tb));
-
-    const {fields} = tb.desc;
-    fields.push(new Field('a', makeListType(ta)), new Field('b', makeListType(tb)));
+    const ta = makeStructType('A', {
+      'b': valueType,  // placeholder
+    });
+    const tb = makeStructType('B', {
+      'a': valueType,  // placeholder
+      'b': valueType,  // placeholder
+    });
+    ta.desc.fields['b'] = tb;
+    tb.desc.fields['a'] = makeListType(ta);
+    tb.desc.fields['b'] = makeListType(tb);
 
     const a = [Kind.Struct, 'A',
           ['b', Kind.Struct, 'B', [

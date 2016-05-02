@@ -51,16 +51,14 @@ Alias <- `alias` _ i:Ident _ `=` _ `import` _ q:QuotedString _ {
 
 Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 	ll := l.([]interface{})
-	fieldNames := map[string]bool{}
-	fields := make([]types.Field, 0, len(ll))
+	fields := make(types.TypeMap, len(ll))
 	for _, e := range ll {
 		switch e := e.(type) {
-		case types.Field:
-			if fieldNames[e.Name] {
+		case Field:
+			if fields[e.Name] != nil {
 				return nil, fmt.Errorf("Redefinition of field %s in struct %s", e.Name, i.(string))
 			}
-			fieldNames[e.Name] = true
-			fields = append(fields, e)
+			fields[e.Name] = e.Type
 		default:
 			return nil, fmt.Errorf("Structs must be made up of field declarations.")
 		}
@@ -71,7 +69,7 @@ Struct <- `struct` _ i:Ident _ `{` _ l:StructEntry+ _ `}` _ {
 StructEntry <- Field
 
 Field <- i:Ident _ `:` _ t:Type _ {
-	return types.Field{i.(string), t.(*types.Type)}, nil
+	return Field{i.(string), t.(*types.Type)}, nil
 }
 
 Type <- t:(PrimitiveType / CompoundType / NamespaceIdent) {

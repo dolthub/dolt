@@ -30,7 +30,6 @@ export {
   blobType,
   boolType,
   CompoundDesc,
-  Field,
   makeCompoundType,
   makeListType,
   makeMapType,

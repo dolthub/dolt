@@ -9,7 +9,6 @@ import type {valueOrPrimitive} from './value.js';
 import ValueStore from './value-store.js';
 import BatchStore from './batch-store.js';
 import {
-  Field,
   makeRefType,
   makeStructType,
   makeSetType,
@@ -44,12 +43,13 @@ export function getDatasTypes(): DatasTypes {
     //   value: Value
     //   parents: Set<Ref<Commit>>
     // }
-    const commitType = makeStructType('Commit', [
-      new Field('value', valueType),
-    ]);
+    const commitType = makeStructType('Commit', {
+      'value': valueType,
+      'parents': valueType, // placeholder
+    });
     const refOfCommitType = makeRefType(commitType);
     const commitSetType = makeSetType(refOfCommitType);
-    commitType.desc.fields.push(new Field('parents', commitSetType));
+    commitType.desc.fields['parents'] = commitSetType;
     const commitMapType = makeMapType(stringType, refOfCommitType);
     datasTypes = {
       commitType,

@@ -62,10 +62,9 @@ func findType(n string, ts []*types.Type) *types.Type {
 // resolveReferences replaces references with the actual Type
 func resolveReferences(i *intermediate, aliases map[string][]*types.Type) {
 	var rec func(t *types.Type) *types.Type
-	resolveFields := func(fields []types.Field) {
-		for idx, f := range fields {
-			f.Type = rec(f.Type)
-			fields[idx] = f
+	resolveFields := func(fields types.TypeMap) {
+		for name, t := range fields {
+			fields[name] = rec(t)
 		}
 	}
 	rec = func(t *types.Type) *types.Type {

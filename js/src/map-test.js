@@ -11,7 +11,6 @@ import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-ad
 import {newStruct} from './struct.js';
 import {
   boolType,
-  Field,
   makeMapType,
   makeRefType,
   makeStructType,
@@ -101,9 +100,9 @@ suite('BuildMap', () => {
       kvs.push(i, i + 1);
     }
 
-    const structType = makeStructType('num', [
-      new Field('n', numberType),
-    ]);
+    const structType = makeStructType('num', {
+      'n': numberType,
+    });
     const refOfStructType = makeRefType(structType);
     const tr = makeMapType(refOfStructType, refOfStructType);
 

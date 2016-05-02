@@ -229,10 +229,10 @@ func TestReadStruct(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	typ := MakeStructType("A1", []Field{
-		Field{"x", NumberType},
-		Field{"s", StringType},
-		Field{"b", BoolType},
+	typ := MakeStructType("A1", TypeMap{
+		"x": NumberType,
+		"s": StringType,
+		"b": BoolType,
 	})
 
 	a := parseJSON(`[%d, "A1", ["b", %d, "s", %d, "x", %d], true, "hi", "42"]`, StructKind, BoolKind, StringKind, NumberKind)
@@ -255,10 +255,10 @@ func TestReadStructWithList(t *testing.T) {
 	//   s: String
 	// }
 
-	typ := MakeStructType("A4", []Field{
-		Field{"b", BoolType},
-		Field{"l", MakeListType(NumberType)},
-		Field{"s", StringType},
+	typ := MakeStructType("A4", TypeMap{
+		"b": BoolType,
+		"l": MakeListType(NumberType),
+		"s": StringType,
 	})
 
 	a := parseJSON(`[%d, "A4", ["b", %d, "l", %d, %d, "s", %d], true, false, ["0", "1", "2"], "hi"]`, StructKind, BoolKind, ListKind, NumberKind, StringKind)
@@ -283,10 +283,10 @@ func TestReadStructWithValue(t *testing.T) {
 	//   s: String
 	// }
 
-	typ := MakeStructType("A5", []Field{
-		Field{"b", BoolType},
-		Field{"v", ValueType},
-		Field{"s", StringType},
+	typ := MakeStructType("A5", TypeMap{
+		"b": BoolType,
+		"v": ValueType,
+		"s": StringType,
 	})
 
 	a := parseJSON(`[%d, "A5", ["b", %d, "s", %d, "v", %d], true, "hi", %d, "42"]`, StructKind, BoolKind, StringKind, ValueKind, NumberKind)
@@ -309,10 +309,10 @@ func TestReadValueStruct(t *testing.T) {
 	//   s: String
 	// }
 
-	typ := MakeStructType("A1", []Field{
-		Field{"x", NumberType},
-		Field{"s", StringType},
-		Field{"b", BoolType},
+	typ := MakeStructType("A1", TypeMap{
+		"x": NumberType,
+		"s": StringType,
+		"b": BoolType,
 	})
 
 	a := parseJSON(`[%d, %d, "A1", ["b", %d, "s", %d, "x", %d], true, "hi", "42"]`, ValueKind, StructKind, BoolKind, StringKind, NumberKind)
@@ -357,8 +357,8 @@ func TestReadStructWithBlob(t *testing.T) {
 	//   b: Blob
 	// }
 
-	typ := MakeStructType("A5", []Field{
-		Field{"b", BlobType},
+	typ := MakeStructType("A5", TypeMap{
+		"b": BlobType,
 	})
 
 	a := parseJSON(`[%d, "A5", ["b", %d], false, "AAE="]`, StructKind, BlobKind)
@@ -380,15 +380,15 @@ func TestReadRecursiveStruct(t *testing.T) {
 	//   }
 	// }
 
-	at := MakeStructType("A", []Field{
-		Field{"b", nil},
+	at := MakeStructType("A", TypeMap{
+		"b": nil,
 	})
-	bt := MakeStructType("B", []Field{
-		Field{"a", MakeListType(at)},
-		Field{"b", nil},
+	bt := MakeStructType("B", TypeMap{
+		"a": MakeListType(at),
+		"b": nil,
 	})
-	at.Desc.(StructDesc).Fields[0].Type = bt
-	bt.Desc.(StructDesc).Fields[1].Type = MakeListType(bt)
+	at.Desc.(StructDesc).Fields["b"] = bt
+	bt.Desc.(StructDesc).Fields["b"] = MakeListType(bt)
 
 	a := parseJSON(`[%d, "A",
 		["b", %d, "B", [

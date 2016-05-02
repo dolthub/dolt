@@ -674,8 +674,8 @@ func TestCompoundListRefOfStructFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 
-	structType := MakeStructType("num", []Field{
-		Field{"n", NumberType},
+	structType := MakeStructType("num", map[string]*Type{
+		"n": NumberType,
 	})
 
 	refOfTypeStructType := MakeRefType(structType)

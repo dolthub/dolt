@@ -40,23 +40,20 @@ func (s *testSuite) TestCSVExporter() {
 	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
 
 	// Build Struct fields based on header
-	f := make([]types.Field, 0, len(header))
+	f := make(types.TypeMap, len(header))
 	for _, key := range header {
-		f = append(f, types.Field{
-			Name: key,
-			Type: types.StringType,
-		})
+		f[key] = types.StringType
 	}
 
 	typ := types.MakeStructType(structName, f)
-	structFields := typ.Desc.(types.StructDesc).Fields
 
 	// Build data rows
 	structs := make([]types.Value, len(payload))
 	for i, row := range payload {
 		fields := make(map[string]types.Value)
 		for j, v := range row {
-			fields[structFields[j].Name] = types.NewString(v)
+			name := header[j]
+			fields[name] = types.NewString(v)
 		}
 		structs[i] = types.NewStruct(typ, fields)
 	}

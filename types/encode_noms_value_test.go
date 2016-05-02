@@ -135,7 +135,7 @@ func TestWriteCompoundBlob(t *testing.T) {
 func TestWriteEmptyStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S", []Field{})
+	typ := MakeStructType("S", TypeMap{})
 	v := NewStruct(typ, nil)
 
 	w := newJSONArrayWriter(NewTestValueStore())
@@ -146,9 +146,9 @@ func TestWriteEmptyStruct(t *testing.T) {
 func TestWriteStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S", []Field{
-		Field{"x", NumberType},
-		Field{"b", BoolType},
+	typ := MakeStructType("S", TypeMap{
+		"x": NumberType,
+		"b": BoolType,
 	})
 	v := NewStruct(typ, structData{"x": Number(42), "b": Bool(true)})
 
@@ -160,8 +160,8 @@ func TestWriteStruct(t *testing.T) {
 func TestWriteStructWithList(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S", []Field{
-		Field{"l", MakeListType(StringType)},
+	typ := MakeStructType("S", TypeMap{
+		"l": MakeListType(StringType),
 	})
 
 	v := NewStruct(typ, structData{"l": NewList(NewString("a"), NewString("b"))})
@@ -185,13 +185,13 @@ func TestWriteStructWithStruct(t *testing.T) {
 	//   s: S2
 	// }
 
-	s2Type := MakeStructType("S2", []Field{
-		Field{"x", NumberType},
+	s2Type := MakeStructType("S2", TypeMap{
+		"x": NumberType,
 	})
-	sType := MakeStructType("S", []Field{
-		Field{"s", MakeStructType("S2", []Field{
-			Field{"x", NumberType},
-		})},
+	sType := MakeStructType("S", TypeMap{
+		"s": MakeStructType("S2", TypeMap{
+			"x": NumberType,
+		}),
 	})
 
 	v := NewStruct(sType, structData{"s": NewStruct(s2Type, structData{"x": Number(42)})})
@@ -203,8 +203,8 @@ func TestWriteStructWithStruct(t *testing.T) {
 func TestWriteStructWithBlob(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S", []Field{
-		Field{"b", BlobType},
+	typ := MakeStructType("S", TypeMap{
+		"b": BlobType,
 	})
 	b := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	v := NewStruct(typ, structData{"b": b})
@@ -272,8 +272,8 @@ func TestWriteListOfValue(t *testing.T) {
 func TestWriteListOfValueWithStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	structType := MakeStructType("S", []Field{
-		Field{"x", NumberType},
+	structType := MakeStructType("S", TypeMap{
+		"x": NumberType,
 	})
 	listType := MakeListType(ValueType)
 	v := NewTypedList(listType, NewStruct(structType, structData{"x": Number(42)}))
@@ -286,8 +286,8 @@ func TestWriteListOfValueWithStruct(t *testing.T) {
 func TestWriteListOfValueWithType(t *testing.T) {
 	assert := assert.New(t)
 
-	structType := MakeStructType("S", []Field{
-		Field{"x", NumberType},
+	structType := MakeStructType("S", TypeMap{
+		"x": NumberType,
 	})
 
 	typ := MakeListType(ValueType)
@@ -335,9 +335,9 @@ func TestWriteTypeValue(t *testing.T) {
 		MakeMapType(BoolType, StringType))
 
 	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"v", ValueKind, "x", NumberKind}},
-		MakeStructType("S", []Field{
-			Field{"x", NumberType},
-			Field{"v", ValueType},
+		MakeStructType("S", TypeMap{
+			"x": NumberType,
+			"v": ValueType,
 		}))
 }
 
@@ -360,14 +360,14 @@ func TestWriteRecursiveStruct(t *testing.T) {
 	//   v: Number
 	// }
 
-	structType := MakeStructType("A6", []Field{
-		Field{"cs", nil},
-		Field{"v", NumberType},
+	structType := MakeStructType("A6", TypeMap{
+		"v":  NumberType,
+		"cs": nil,
 	})
 	listType := MakeListType(structType)
 	// Mutate...
 
-	structType.Desc.(StructDesc).Fields[0].Type = listType
+	structType.Desc.(StructDesc).Fields["cs"] = listType
 
 	NewTypedList(listType)
 

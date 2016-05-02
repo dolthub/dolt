@@ -12,7 +12,6 @@ import {encodeNomsValue, JsonArrayWriter} from './encode.js';
 import {
   blobType,
   boolType,
-  Field,
   makeCompoundType,
   makeListType,
   makeMapType,
@@ -179,7 +178,7 @@ suite('Encode', () => {
     const ds = new DataStore(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const type = makeStructType('S', []);
+    const type = makeStructType('S', {});
     const v = newStruct(type, {});
 
     w.writeTopLevel(type, v);
@@ -190,10 +189,10 @@ suite('Encode', () => {
     const ds = new DataStore(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const type = makeStructType('S', [
-      new Field('x', numberType),
-      new Field('b', boolType),
-    ]);
+    const type = makeStructType('S', {
+      'x': numberType,
+      'b': boolType,
+    });
 
     const v = newStruct(type, {x: 42, b: true});
 
@@ -206,9 +205,9 @@ suite('Encode', () => {
     let w = new JsonArrayWriter(ds);
 
     const ltr = makeCompoundType(Kind.List, stringType);
-    const type = makeStructType('S', [
-      new Field('l', ltr),
-    ]);
+    const type = makeStructType('S', {
+      'l': ltr,
+    });
 
     let v = newStruct(type, {l: new NomsList(ltr, new ListLeafSequence(ds, ltr, ['a', 'b']))});
     w.writeTopLevel(type, v);
@@ -224,12 +223,12 @@ suite('Encode', () => {
     const ds = new DataStore(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const s2Type = makeStructType('S2', [
-      new Field('x', numberType),
-    ]);
-    const sType = makeStructType('S', [
-      new Field('s', s2Type),
-    ]);
+    const s2Type = makeStructType('S2', {
+      'x': numberType,
+    });
+    const sType = makeStructType('S', {
+      's': s2Type,
+    });
 
     const v = newStruct(sType, {s: newStruct(s2Type, {x: 42})});
     w.writeTopLevel(sType, v);
@@ -273,22 +272,22 @@ suite('Encode', () => {
     test([Kind.Type, Kind.Map, [Kind.Bool, Kind.String]],
          makeCompoundType(Kind.Map, boolType, stringType));
     test([Kind.Type, Kind.Struct, 'S', ['v', Kind.Value, 'x', Kind.Number]],
-         makeStructType('S', [
-           new Field('x', numberType),
-           new Field('v', valueType),
-         ]));
+         makeStructType('S', {
+           'x': numberType,
+           'v': valueType,
+         }));
 
     // struct A6 {
     //   v: Number
     //   cs: List<A6>
     // }
 
-    const st = makeStructType('A6', [
-      new Field('cs', valueType /* placeholder */),
-      new Field('v', numberType),
-    ]);
+    const st = makeStructType('A6', {
+      'v': numberType,
+      'cs': valueType, // placeholder
+    });
     const lt = makeListType(st);
-    st.desc.fields[0].type = lt;
+    st.desc.fields['cs'] = lt;
 
     test([Kind.Type, Kind.Struct, 'A6', ['cs', Kind.List, Kind.Parent, 0, 'v', Kind.Number]], st);
   });

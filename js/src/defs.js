@@ -3,7 +3,6 @@
 import type {valueOrPrimitive} from './value.js';
 import {Value} from './value.js';
 import {Type, CompoundDesc} from './type.js';
-import type {Field} from './type.js';
 import {invariant} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {newList} from './list.js';
@@ -77,14 +76,13 @@ async function structDefToNoms<T: Struct>(data: StructDefType, type: Type): Prom
   const {desc} = type;
   const keys = [];
   const ps: Array<Promise<valueOrPrimitive>> = [];
-  const add = (f: Field) => {
-    const v = data[f.name];
+  desc.forEachField((name: string, type: Type) => {
+    const v = data[name];
     if (v !== undefined) {
-      keys.push(f.name);
-      ps.push(defToNoms(v, f.type));
+      keys.push(name);
+      ps.push(defToNoms(v, type));
     }
-  };
-  desc.fields.forEach(add);
+  });
 
   const vals = await Promise.all(ps);
   const newData = Object.create(null);
