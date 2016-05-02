@@ -1,7 +1,6 @@
 // @flow
 
 import Chunk from './chunk.js';
-import type Ref from './ref.js';
 import RefValue from './ref-value.js';
 import {default as Struct, StructMirror} from './struct.js';
 import type {NomsKind} from './noms-kind.js';
@@ -62,8 +61,8 @@ export class JsonArrayWriter {
     this.write(k);
   }
 
-  writeRef(r: Ref) {
-    this.write(r.toString());
+  writeRefValue(r: RefValue) {
+    this.write(r.targetRef.toString());
   }
 
   writeTypeAsTag(t: Type, parentStructTypes: Type<StructDesc>[]) {
@@ -105,7 +104,7 @@ export class JsonArrayWriter {
         const child = tuple.sequence;
         this._vw.writeValue(child);
       }
-      w2.writeRef(tuple.ref);
+      w2.writeRefValue(tuple.ref);
       w2.writeValue(tuple.value, indexType);
       w2.writeInt(tuple.numLeaves);
     }
@@ -182,7 +181,7 @@ export class JsonArrayWriter {
       case Kind.Ref: {
         invariant(v instanceof RefValue,
                   () => `Failed to write Ref. Invalid type: ${describeTypeOfValue(v)}`);
-        this.writeRef(v.targetRef);
+        this.writeRefValue(v);
         break;
       }
       case Kind.Set: {

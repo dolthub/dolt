@@ -14,7 +14,7 @@ import {getRefOfValue} from './get-ref.js';
 import {invariant} from './assert.js';
 import {mapOfValueType, Type} from './type.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
-  newOrderedMetaSequenceChunkFn} from './meta-sequence.js';
+  newOrderedMetaSequenceChunkFn, newLeafRefValue} from './meta-sequence.js';
 import {OrderedSequence, OrderedSequenceCursor,
   OrderedSequenceIterator} from './ordered-sequence.js';
 import diff from './ordered-sequence-diff.js';
@@ -42,7 +42,7 @@ function newMapLeafChunkFn(t: Type, vr: ?ValueReader = null): makeChunkFn {
       }
     }
 
-    const mt = new MetaTuple(mapLeaf, indexValue, items.length);
+    const mt = new MetaTuple(newLeafRefValue(mapLeaf), indexValue, items.length, mapLeaf);
     return [mt, mapLeaf];
   };
 }

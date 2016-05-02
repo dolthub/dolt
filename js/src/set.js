@@ -12,7 +12,7 @@ import {getCompareFunction, equals, less} from './compare.js';
 import {getRefOfValue} from './get-ref.js';
 import {invariant} from './assert.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker,
-  newOrderedMetaSequenceChunkFn} from './meta-sequence.js';
+  newOrderedMetaSequenceChunkFn, newLeafRefValue} from './meta-sequence.js';
 import {OrderedSequence, OrderedSequenceCursor,
   OrderedSequenceIterator} from './ordered-sequence.js';
 import diff from './ordered-sequence-diff.js';
@@ -38,7 +38,7 @@ function newSetLeafChunkFn<T:valueOrPrimitive>(t: Type, vr: ?ValueReader = null)
       }
     }
 
-    const mt = new MetaTuple(setLeaf, indexValue, items.length);
+    const mt = new MetaTuple(newLeafRefValue(setLeaf), indexValue, items.length, setLeaf);
     return [mt, setLeaf];
   };
 }

@@ -258,7 +258,7 @@ suite('CompoundSet', () => {
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
       const l = new NomsSet(tr, new SetLeafSequence(ds, tr, [values[i], values[i + 1]]));
-      const r = ds.writeValue(l).targetRef;
+      const r = ds.writeValue(l);
       tuples.push(new MetaTuple(r, values[i + 1], 2));
     }
 
@@ -267,7 +267,7 @@ suite('CompoundSet', () => {
       const next = [];
       for (let i = 0; i < tuples.length; i += 2) {
         last = new NomsSet(tr, new OrderedMetaSequence(ds, tr, [tuples[i], tuples[i + 1]]));
-        const r = ds.writeValue(last).targetRef;
+        const r = ds.writeValue(last);
         next.push(new MetaTuple(r, tuples[i + 1].value,
                                 tuples[i].numLeaves + tuples[i + 1].numLeaves));
       }
@@ -593,7 +593,7 @@ suite('CompoundSet', () => {
     const chunks = s.chunks;
     const sequence = s.sequence;
     assert.equal(2, chunks.length);
-    assert.isTrue(sequence.items[0].ref.equals(chunks[0].targetRef));
-    assert.isTrue(sequence.items[1].ref.equals(chunks[1].targetRef));
+    assert.isTrue(sequence.items[0].ref.equals(chunks[0]));
+    assert.isTrue(sequence.items[1].ref.equals(chunks[1]));
   });
 });

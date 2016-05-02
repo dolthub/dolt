@@ -1,7 +1,7 @@
 // @flow
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
-import {default as Ref, sha1Size} from './ref.js';
+import {sha1Size} from './ref.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {ValueReader} from './decode.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
@@ -9,7 +9,7 @@ import type {Collection} from './collection.js';
 import {CompoundDesc, makeCompoundType, makeRefType, numberType, valueType} from './type.js';
 import type {Type} from './type.js';
 import {IndexedSequence} from './indexed-sequence.js';
-import {invariant} from './assert.js';
+import {invariant, notNull} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import RefValue from './ref-value.js';
@@ -18,18 +18,20 @@ import {Sequence} from './sequence.js';
 export type MetaSequence = Sequence<MetaTuple>;
 
 export class MetaTuple<K> {
-  _sequenceOrRef: Sequence | Ref;
+  _ref: RefValue;
   _value: K;
   _numLeaves: number;
+  _sequence: ?Sequence;
 
-  constructor(sequence: Sequence | Ref, value: K, numLeaves: number) {
-    this._sequenceOrRef = sequence;
+  constructor(ref: RefValue, value: K, numLeaves: number, sequence: ?Sequence = null) {
+    this._ref = ref;
+    this._sequence = sequence;
     this._value = value;
     this._numLeaves = numLeaves;
   }
 
-  get ref(): Ref {
-    return this._sequenceOrRef instanceof Ref ? this._sequenceOrRef : this._sequenceOrRef.ref;
+  get ref(): RefValue {
+    return this._ref;
   }
 
   get value(): K {
@@ -41,17 +43,16 @@ export class MetaTuple<K> {
   }
 
   get sequence(): ?Sequence {
-    return this._sequenceOrRef instanceof Sequence ? this._sequenceOrRef : null;
+    return this._sequence;
   }
 
   getSequence(vr: ?ValueReader): Promise<Sequence> {
-    if (this._sequenceOrRef instanceof Sequence) {
-      return Promise.resolve(this._sequenceOrRef);
-    } else {
-      const ref = this._sequenceOrRef;
-      invariant(vr && ref instanceof Ref);
-      return vr.readValue(ref).then((c: Collection) => c.sequence);
-    }
+    return this._sequence ?
+        Promise.resolve(this._sequence) :
+        notNull(vr).readValue(this._ref.targetRef).then((c: Collection) => {
+          invariant(c, () => `Could not read sequence ${this._ref.targetRef}`);
+          return c.sequence;
+        });
   }
 }
 
@@ -212,11 +213,12 @@ export function indexTypeForMetaSequence(t: Type): Type {
 }
 
 export function newOrderedMetaSequenceChunkFn(t: Type, vr: ?ValueReader = null): makeChunkFn {
+  const tRefType = makeRefType(t);
   return (tuples: Array<MetaTuple>) => {
     const numLeaves = tuples.reduce((l, mt) => l + mt.numLeaves, 0);
     const meta = new OrderedMetaSequence(vr, t, tuples);
     const lastValue = tuples[tuples.length - 1].value;
-    return [new MetaTuple(meta, lastValue, numLeaves), meta];
+    return [new MetaTuple(new RefValue(meta.ref, tRefType), lastValue, numLeaves, meta), meta];
   };
 }
 
@@ -226,27 +228,32 @@ const objectPattern = ((1 << 6) | 0) - 1;
 
 export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTuple> {
   return new BuzHashBoundaryChecker(orderedSequenceWindowSize, sha1Size, objectPattern,
-    (mt: MetaTuple) => mt.ref.digest
+    (mt: MetaTuple) => mt.ref.targetRef.digest
   );
 }
 
 export function newIndexedMetaSequenceChunkFn(t: Type, vr: ?ValueReader = null): makeChunkFn {
+  const tRefType = makeRefType(t);
   return (tuples: Array<MetaTuple>) => {
     const sum = tuples.reduce((l, mt) => {
       invariant(mt.value === mt.numLeaves);
       return l + mt.value;
     }, 0);
     const meta = new IndexedMetaSequence(vr, t, tuples);
-    return [new MetaTuple(meta, sum, sum), meta];
+    return [new MetaTuple(new RefValue(meta.ref, tRefType), sum, sum, meta), meta];
   };
 }
 
 export function newIndexedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTuple> {
   return new BuzHashBoundaryChecker(objectWindowSize, sha1Size, objectPattern,
-    (mt: MetaTuple) => mt.ref.digest
+    (mt: MetaTuple) => mt.ref.targetRef.digest
   );
 }
 
-function getMetaSequenceChunks(ms: MetaSequence) {
-  return ms.items.map(mt => new RefValue(mt.ref, makeRefType(ms.type)));
+function getMetaSequenceChunks(ms: MetaSequence): Array<RefValue> {
+  return ms.items.map(mt => mt.ref);
+}
+
+export function newLeafRefValue<S, T: valueOrPrimitive>(seq: Sequence<S>): RefValue<T> {
+  return new RefValue(seq.ref, makeRefType(seq.type));
 }

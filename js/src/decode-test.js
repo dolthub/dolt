@@ -135,9 +135,9 @@ suite('Decode', () => {
   test('read compound list', async () => {
     const ds = new DataStore(makeTestingBatchStore());
     const ltr = makeListType(numberType);
-    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0]))).targetRef;
-    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [1, 2]))).targetRef;
-    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
+    const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0])));
+    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [1, 2])));
+    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [3, 4, 5])));
     const tuples = [
       new MetaTuple(r1, 1, 1),
       new MetaTuple(r2, 2, 2),
@@ -146,7 +146,9 @@ suite('Decode', () => {
     const l:NomsList<number> = new NomsList(ltr, new IndexedMetaSequence(ds, ltr, tuples));
 
     const a = [Kind.List, Kind.Number, true,
-               [r1.toString(), '1', '1', r2.toString(), '2', '2', r3.toString(), '3', '3']];
+               [r1.targetRef.toString(), '1', '1',
+                r2.targetRef.toString(), '2', '2',
+                r3.targetRef.toString(), '3', '3']];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
     invariant(v instanceof NomsList);
@@ -212,9 +214,9 @@ suite('Decode', () => {
   test('read compound set', async () => {
     const ds = new DataStore(makeTestingBatchStore());
     const ltr = makeSetType(numberType);
-    const r1 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [0]))).targetRef;
-    const r2 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [1, 2]))).targetRef;
-    const r3 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [3, 4, 5]))).targetRef;
+    const r1 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [0])));
+    const r2 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [1, 2])));
+    const r3 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [3, 4, 5])));
     const tuples = [
       new MetaTuple(r1, 0, 1),
       new MetaTuple(r2, 2, 2),
@@ -223,7 +225,9 @@ suite('Decode', () => {
     const l:NomsSet<number> = new NomsSet(ltr, new OrderedMetaSequence(ds, ltr, tuples));
 
     const a = [Kind.Set, Kind.Number, true,
-               [r1.toString(), '0', '1', r2.toString(), '2', '2', r3.toString(), '5', '3']];
+               [r1.targetRef.toString(), '0', '1',
+                r2.targetRef.toString(), '2', '2',
+                r3.targetRef.toString(), '5', '3']];
     const r = new JsonArrayReader(a, ds);
     const v = await r.readTopLevelValue();
     invariant(v instanceof NomsSet);
@@ -461,10 +465,11 @@ suite('Decode', () => {
   test('compound blob', async () => {
     const ds = new DataStore(makeTestingBatchStore());
 
-    const r1 = ds.writeValue(await newBlob(stringToUint8Array('hi'))).targetRef;
-    const r2 = ds.writeValue(await newBlob(stringToUint8Array('world'))).targetRef;
+    const r1 = ds.writeValue(await newBlob(stringToUint8Array('hi')));
+    const r2 = ds.writeValue(await newBlob(stringToUint8Array('world')));
 
-    const a = [Kind.Blob, true, [r1.ref.toString(), '2', '2', r2.ref.toString(), '5', '5']];
+    const a = [Kind.Blob, true,
+               [r1.targetRef.toString(), '2', '2', r2.targetRef.toString(), '5', '5']];
     const r = new JsonArrayReader(a, ds);
     const v: NomsBlob = await r.readTopLevelValue();
     invariant(v instanceof NomsBlob);

@@ -13,7 +13,7 @@ import {diff} from './indexed-sequence-diff.js';
 import {getRefOfValue} from './get-ref.js';
 import {invariant} from './assert.js';
 import {MetaTuple, newIndexedMetaSequenceBoundaryChecker,
-  newIndexedMetaSequenceChunkFn} from './meta-sequence.js';
+  newIndexedMetaSequenceChunkFn, newLeafRefValue} from './meta-sequence.js';
 import {sha1Size} from './ref.js';
 import RefValue from './ref-value.js';
 import {getValueChunks} from './sequence.js';
@@ -25,7 +25,7 @@ const listPattern = ((1 << 6) | 0) - 1;
 function newListLeafChunkFn<T: valueOrPrimitive>(t: Type, vr: ?ValueReader = null): makeChunkFn {
   return (items: Array<T>) => {
     const listLeaf = new ListLeafSequence(vr, t, items);
-    const mt = new MetaTuple(listLeaf, items.length, items.length);
+    const mt = new MetaTuple(newLeafRefValue(listLeaf), items.length, items.length, listLeaf);
     return [mt, listLeaf];
   };
 }

@@ -313,23 +313,23 @@ suite('CompoundMap', () => {
         boolType);
     const l1 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'a', value: false},
         {key:'b', value:false}]));
-    const r1 = ds.writeValue(l1).targetRef;
+    const r1 = ds.writeValue(l1);
     const l2 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'e', value: true},
         {key:'f', value:true}]));
-    const r2 = ds.writeValue(l2).targetRef;
+    const r2 = ds.writeValue(l2);
     const l3 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'h', value: false},
         {key:'i', value:true}]));
-    const r3 = ds.writeValue(l3).targetRef;
+    const r3 = ds.writeValue(l3);
     const l4 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'm', value: true},
         {key:'n', value:false}]));
-    const r4 = ds.writeValue(l4).targetRef;
+    const r4 = ds.writeValue(l4);
 
     const m1 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r1, 'b', 2),
         new MetaTuple(r2, 'f', 2)]));
-    const rm1 = ds.writeValue(m1).targetRef;
+    const rm1 = ds.writeValue(m1);
     const m2 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r3, 'i', 2),
         new MetaTuple(r4, 'n', 2)]));
-    const rm2 = ds.writeValue(m2).targetRef;
+    const rm2 = ds.writeValue(m2);
 
     const c = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(rm1, 'f', 4),
         new MetaTuple(rm2, 'n', 4)]));
@@ -555,7 +555,7 @@ suite('CompoundMap', () => {
     const chunks = m.chunks;
     const sequence = m.sequence;
     assert.equal(2, chunks.length);
-    assert.isTrue(sequence.items[0].ref.equals(chunks[0].targetRef));
-    assert.isTrue(sequence.items[1].ref.equals(chunks[1].targetRef));
+    assert.isTrue(sequence.items[0].ref.equals(chunks[0]));
+    assert.isTrue(sequence.items[1].ref.equals(chunks[1]));
   });
 });

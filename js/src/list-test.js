@@ -259,20 +259,20 @@ suite('CompoundList', () => {
     const ds = new DataStore(makeTestingBatchStore());
     const tr = makeListType(stringType);
     const l1 = new NomsList(tr, new ListLeafSequence(ds, tr, ['a', 'b']));
-    const r1 = ds.writeValue(l1).targetRef;
+    const r1 = ds.writeValue(l1);
     const l2 = new NomsList(tr, new ListLeafSequence(ds, tr, ['e', 'f']));
-    const r2 = ds.writeValue(l2).targetRef;
+    const r2 = ds.writeValue(l2);
     const l3 = new NomsList(tr, new ListLeafSequence(ds, tr, ['h', 'i']));
-    const r3 = ds.writeValue(l3).targetRef;
+    const r3 = ds.writeValue(l3);
     const l4 = new NomsList(tr, new ListLeafSequence(ds, tr, ['m', 'n']));
-    const r4 = ds.writeValue(l4).targetRef;
+    const r4 = ds.writeValue(l4);
 
     const m1 = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(r1, 2, 2),
         new MetaTuple(r2, 2, 2)]));
-    const rm1 = ds.writeValue(m1).targetRef;
+    const rm1 = ds.writeValue(m1);
     const m2 = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(r3, 2, 2),
         new MetaTuple(r4, 2, 2)]));
-    const rm2 = ds.writeValue(m2).targetRef;
+    const rm2 = ds.writeValue(m2);
 
     const l = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(rm1, 4, 4),
         new MetaTuple(rm2, 4, 4)]));
@@ -361,8 +361,8 @@ suite('CompoundList', () => {
     const chunks = l.chunks;
     const sequence = l.sequence;
     assert.equal(2, chunks.length);
-    assert.isTrue(sequence.items[0].ref.equals(chunks[0].targetRef));
-    assert.isTrue(sequence.items[1].ref.equals(chunks[1].targetRef));
+    assert.isTrue(sequence.items[0].ref.equals(chunks[0]));
+    assert.isTrue(sequence.items[1].ref.equals(chunks[1]));
   });
 });
 
