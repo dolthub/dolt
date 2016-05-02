@@ -5,7 +5,7 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import {
   DataStore,
-  HttpStore,
+  HttpBatchStore,
   IndexedMetaSequence,
   invariant,
   ListLeafSequence,
@@ -58,7 +58,7 @@ function load() {
     opts['headers'] = {Authorization: `Bearer ${params.token}`};
   }
 
-  const httpStore = new HttpStore(params.store, undefined, undefined, opts);
+  const httpStore = new HttpBatchStore(params.store, undefined, opts);
   dataStore = new DataStore(httpStore);
 
   const setRootRef = ref => {
