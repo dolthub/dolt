@@ -202,8 +202,7 @@ func (suite *DataStoreSuite) TestDataStoreDelete() {
 
 func (suite *DataStoreSuite) TestDataStoreDeleteConcurrent() {
 	datasetID := "ds1"
-	datasets := suite.ds.Datasets()
-	suite.Zero(datasets.Len())
+	suite.Zero(suite.ds.Datasets().Len())
 	var err error
 
 	// |a|
@@ -229,8 +228,7 @@ func (suite *DataStoreSuite) TestDataStoreDeleteConcurrent() {
 
 	// Get a fresh datastore, and verify that no datastores are present
 	newDs := suite.makeDs(suite.cs)
-	datasets = newDs.Datasets()
-	suite.Equal(uint64(0), datasets.Len())
+	suite.Equal(uint64(0), newDs.Datasets().Len())
 	newDs.Close()
 }
 

@@ -59,19 +59,17 @@ func (lvs *ValueStore) ReadValue(r ref.Ref) Value {
 // WriteValue takes a Value, schedules it to be written it to lvs, and returns an appropriately-typed types.Ref. v is not guaranteed to be actually written until after Flush().
 func (lvs *ValueStore) WriteValue(v Value) Ref {
 	d.Chk.NotNil(v)
-	targetRef := v.Ref()
-	r := NewTypedRef(MakeRefType(v.Type()), targetRef)
-	if lvs.isPresent(targetRef) {
-		return r
-	}
-
 	// Encoding v causes any child chunks, e.g. internal nodes if v is a meta sequence, to get written. That needs to happen before we try to validate v.
 	c := EncodeValue(v, lvs)
-
+	d.Chk.False(c.IsEmpty())
+	hash := c.Ref()
+	r := NewTypedRef(MakeRefType(v.Type()), hash)
+	if lvs.isPresent(hash) {
+		return r
+	}
 	hints := lvs.checkChunksInCache(v)
-	lvs.set(targetRef, (*presentChunk)(v.Type()))
+	lvs.set(hash, (*presentChunk)(v.Type()))
 	lvs.bs.SchedulePut(c, hints)
-
 	return r
 }
 
