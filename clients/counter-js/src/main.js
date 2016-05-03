@@ -38,7 +38,7 @@ async function increment(ds: Dataset): Promise<Dataset> {
   }
 
   const newVal = lastVal + 1;
-
-  process.stdout.write(`\nincrementing counter to ${ newVal }\n`);
-  return ds.commit(newVal);
+  ds = await ds.commit(newVal);
+  process.stdout.write(`${ newVal }\n`);
+  return ds;
 }
