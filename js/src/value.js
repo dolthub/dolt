@@ -18,7 +18,7 @@ export class Value {
   }
 
   get ref(): Ref {
-    return this._ref = ensureRef(this._ref, this, this.type);
+    return this._ref = ensureRef(this._ref, this);
   }
 
   equals(other: Value): boolean {

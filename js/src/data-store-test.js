@@ -7,7 +7,6 @@ import {assert} from 'chai';
 import {default as DataStore, getDatasTypes, newCommit} from './data-store.js';
 import {invariant, notNull} from './assert.js';
 import {newMap} from './map.js';
-import {stringType} from './type.js';
 import {encodeNomsValue} from './encode.js';
 
 suite('DataStore', () => {
@@ -16,7 +15,7 @@ suite('DataStore', () => {
     const ds = new DataStore(bs);
     const input = 'abc';
 
-    const c = encodeNomsValue(input, stringType);
+    const c = encodeNomsValue(input);
     const v1 = await ds.readValue(c.ref);
     assert.equal(null, v1);
 

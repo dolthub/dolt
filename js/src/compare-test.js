@@ -42,8 +42,8 @@ suite('compare', () => {
       const listC = await newList([4, 5, 6, 7], listOfNumberType);
       assert.equal(compare(listA, listA), 0);
       assert.equal(compare(listA, listB), 0);
-      assert.equal(compare(listA, listC), -1);
-      assert.equal(compare(listC, listA), 1);
+      assert.equal(compare(listA, listC), 1);
+      assert.equal(compare(listC, listA), -1);
     });
   });
 
@@ -73,8 +73,8 @@ suite('compare', () => {
       const listC = await newList([4, 5, 6, 7], listOfNumberType);
       assert.equal(compare(listA, listA), 0);
       assert.equal(compare(listA, listB), 0);
-      assert.equal(compare(listA, listC), -1);
-      assert.equal(compare(listC, listA), 1);
+      assert.equal(compare(listA, listC), 1);
+      assert.equal(compare(listC, listA), -1);
     });
   });
 

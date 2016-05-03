@@ -28,7 +28,7 @@ import type {Type} from './type.js';
 import type {ValueReadWriter} from './value-store.js';
 
 const testMapSize = 1000;
-const mapOfNRef = 'sha1-67b979260f367f9a7e6ac8121eca87a2f5abd015';
+const mapOfNRef = 'sha1-461888f373b08c62ee1744b873465666b5f239c0';
 const smallRandomMapSize = 50;
 const randomMapSize = 500;
 
@@ -114,7 +114,7 @@ suite('BuildMap', () => {
     });
 
     const m = await newMap(kvRefs, tr);
-    assert.strictEqual(m.ref.toString(), 'sha1-2784be4cfc759edbb89fcb57979d53d95d3e7187');
+    assert.strictEqual(m.ref.toString(), 'sha1-d38e77fb3de33e360976c245a86743e10091cb12');
   });
 
   test('LONG: set', async () => {

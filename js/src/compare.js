@@ -4,7 +4,6 @@ import type {Type} from './type.js';
 import type {valueOrPrimitive} from './value.js';
 import {Kind} from './noms-kind.js';
 import {Value} from './value.js';
-import {boolType} from './type.js';
 import {getRef} from './get-ref.js';
 import {invariant} from './assert.js';
 
@@ -66,7 +65,7 @@ function compareBools(v1: boolean, v2: boolean): number {
   if (v1 === v2) {
     return 0;
   }
-  return getRef(v1, boolType).less(getRef(v2 ,boolType)) ? -1 : 1;
+  return getRef(v1).less(getRef(v2)) ? -1 : 1;
 }
 
 /**

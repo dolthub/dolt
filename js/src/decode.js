@@ -17,7 +17,7 @@ import {
   Type,
   typeType,
 } from './type.js';
-import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta-sequence.js';
+import {MetaTuple, newMetaSequenceFromData} from './meta-sequence.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
@@ -137,17 +137,15 @@ export class JsonArrayReader {
     throw new Error('Unreachable');
   }
 
-
   readBlobLeafSequence(): BlobLeafSequence {
     const bytes = decodeBase64(this.readString());
     return new BlobLeafSequence(this._ds, bytes);
   }
 
-  readSequence(t: Type): Array<any> {
-    const elemType = t.elemTypes[0];
+  readSequence(): Array<any> {
     const list = [];
     while (!this.atEnd()) {
-      const v = this.readValueWithoutTag(elemType);
+      const v = this.readValue();
       list.push(v);
     }
 
@@ -155,22 +153,20 @@ export class JsonArrayReader {
   }
 
   readListLeafSequence(t: Type): ListLeafSequence {
-    const seq = this.readSequence(t);
+    const seq = this.readSequence();
     return new ListLeafSequence(this._ds, t, seq);
   }
 
   readSetLeafSequence(t: Type): SetLeafSequence {
-    const seq = this.readSequence(t);
+    const seq = this.readSequence();
     return new SetLeafSequence(this._ds, t, seq);
   }
 
   readMapLeafSequence(t: Type): MapLeafSequence {
-    const keyType = t.elemTypes[0];
-    const valueType = t.elemTypes[1];
     const entries = [];
     while (!this.atEnd()) {
-      const k = this.readValueWithoutTag(keyType);
-      const v = this.readValueWithoutTag(valueType);
+      const k = this.readValue();
+      const v = this.readValue();
       entries.push({key: k, value: v});
     }
 
@@ -179,10 +175,9 @@ export class JsonArrayReader {
 
   readMetaSequence(t: Type): any {
     const data: Array<MetaTuple> = [];
-    const indexType = indexTypeForMetaSequence(t);
     while (!this.atEnd()) {
       const ref = this.readRefValue(makeRefType(t));
-      const v = this.readValueWithoutTag(indexType);
+      const v = this.readValue();
       const numLeaves = this.readInt();
       data.push(new MetaTuple(ref, v, numLeaves));
     }
@@ -195,13 +190,8 @@ export class JsonArrayReader {
     return new RefValue(ref, t);
   }
 
-  readTopLevelValue(): any {
+  readValue(): any {
     const t = this.readTypeAsTag([]);
-    return this.readValueWithoutTag(t);
-  }
-
-  readValueWithoutTag(t: Type): any {
-    // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
       case Kind.Blob: {
         const isMeta = this.readBool();
@@ -222,8 +212,7 @@ export class JsonArrayReader {
       case Kind.String:
         return this.readString();
       case Kind.Value: {
-        const t2 = this.readTypeAsTag([]);
-        return this.readValueWithoutTag(t2);
+        return this.readValue();
       }
       case Kind.List: {
         const isMeta = this.readBool();
@@ -293,8 +282,8 @@ export class JsonArrayReader {
 
     const data: {[key: string]: any} = Object.create(null);
 
-    desc.forEachField((name: string, type: Type) => {
-      const v = this.readValueWithoutTag(type);
+    desc.forEachField((name: string) => {
+      const v = this.readValue();
       data[name] = v;
     });
 
@@ -330,7 +319,7 @@ export function decodeNomsValue(chunk: Chunk, vr: ValueReader): valueOrPrimitive
     case typedTag: {
       const payload = JSON.parse(new Chunk(new Uint8Array(chunk.data.buffer, 2)).toString());
       const reader = new JsonArrayReader(payload, vr);
-      return reader.readTopLevelValue();
+      return reader.readValue();
     }
     case blobTag:
       return new NomsBlob(new BlobLeafSequence(vr, new Uint8Array(chunk.data.buffer, 2)));

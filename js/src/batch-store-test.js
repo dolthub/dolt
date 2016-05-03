@@ -5,7 +5,6 @@ import {assert} from 'chai';
 import MemoryStore from './memory-store.js';
 import BatchStore from './batch-store.js';
 import {BatchStoreAdaptorDelegate} from './batch-store-adaptor.js';
-import {stringType} from './type.js';
 import {encodeNomsValue} from './encode.js';
 
 suite('BatchStore', () => {
@@ -14,7 +13,7 @@ suite('BatchStore', () => {
     const bs = new BatchStore(3, new BatchStoreAdaptorDelegate(ms));
     const input = 'abc';
 
-    const c = encodeNomsValue(input, stringType);
+    const c = encodeNomsValue(input);
     bs.schedulePut(c, new Set());
 
     const chunk = await bs.get(c.ref);
@@ -26,7 +25,7 @@ suite('BatchStore', () => {
     const bs = new BatchStore(3, new BatchStoreAdaptorDelegate(ms));
     const input = 'abc';
 
-    const c = encodeNomsValue(input, stringType);
+    const c = encodeNomsValue(input);
     bs.schedulePut(c, new Set());
 
     let chunk = await bs.get(c.ref);

@@ -30,7 +30,7 @@ import {invariant} from './assert.js';
 import {ListLeafSequence, newList, NomsList} from './list.js';
 
 const testListSize = 5000;
-const listOfNRef = 'sha1-df0a58e5fb11b2bc0adbab07c2f39c6b3e02b42b';
+const listOfNRef = 'sha1-9220f195a4273c1c31643014a6c6c6a39b2c068b';
 
 async function assertToJS(list: NomsList, nums: Array<any>, start: number = 0,
     end: number = nums.length): Promise<void> {
@@ -123,11 +123,11 @@ suite('List', () => {
   }
 
   test('List 1K', async () => {
-    await listTestSuite(10, 'sha1-12f9f864bfb61ae76ac3201f564757f1b576237c', 19, 19, 2);
+    await listTestSuite(10, 'sha1-34023a22fa32bda7d77c64c62361f3b31d674e6e', 19, 19, 2);
   });
 
   test('LONG: List 4K', async () => {
-    await listTestSuite(12, 'sha1-0bb374c248fcc987ef93dddef91af693032240a9', 2, 3, 2);
+    await listTestSuite(12, 'sha1-50389fd9a33c921c9aa7cc2b9b93290a13443cb4', 2, 3, 2);
   });
 
   test('LONG: list of ref, set of n numbers, length', async () => {
@@ -146,7 +146,7 @@ suite('List', () => {
     });
 
     const s = await newList(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-477335cbd865c332b79db23eec5caaa4f8be3f45');
+    assert.strictEqual(s.ref.toString(), 'sha1-471aa3beb1f8d06a8a9a398c1b29fa34c0163ecd');
     assert.strictEqual(testListSize, s.length);
   });
 

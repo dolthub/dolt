@@ -369,7 +369,7 @@ func TestCompoundSetFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := newTypedSet(setType, nums...)
-	assert.Equal("sha1-5b4cd51d88b3d99e6dafdb1cafb8cec90d5aecdf", s.Ref().String())
+	assert.Equal("sha1-189e35a1b7aa09e012c0a86f20921b4978d21629", s.Ref().String())
 }
 
 func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
@@ -398,7 +398,7 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(5000)
 	s := NewTypedSet(setType, nums...)
-	assert.Equal("sha1-9d7c385651c1e58872621cf2b128f5107605c2c2", s.Ref().String())
+	assert.Equal("sha1-d8815974c1b0ac51f2ffe8147d80ce8be8f5c52d", s.Ref().String())
 }
 
 func TestCompoundSetModifyAfterRead(t *testing.T) {

@@ -8,12 +8,11 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
 )
 
 func encNomsValue(v Value, vw ValueWriter) []interface{} {
 	w := newJSONArrayWriter(vw)
-	w.writeTopLevelValue(v)
+	w.writeValue(v)
 	return w.toArray()
 }
 
@@ -58,12 +57,16 @@ func (w *jsonArrayWriter) writeUint8(v uint8) {
 	w.write(v)
 }
 
+func (w *jsonArrayWriter) writeKind(kind NomsKind) {
+	w.write(kind)
+}
+
 func (w *jsonArrayWriter) toArray() []interface{} {
 	return w.a
 }
 
-func (w *jsonArrayWriter) writeRef(r ref.Ref) {
-	w.write(r.String())
+func (w *jsonArrayWriter) writeRef(r Ref) {
+	w.write(r.TargetRef().String())
 }
 
 func (w *jsonArrayWriter) writeTypeAsTag(t *Type, parentStructTypes []*Type) {
@@ -81,12 +84,6 @@ func (w *jsonArrayWriter) writeTypeAsTag(t *Type, parentStructTypes []*Type) {
 	}
 }
 
-func (w *jsonArrayWriter) writeTopLevelValue(v Value) {
-	tr := v.Type()
-	w.writeTypeAsTag(tr, nil)
-	w.writeValue(v, tr)
-}
-
 func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr *Type) bool {
 	ms, ok := v.(metaSequence)
 	if !ok {
@@ -96,24 +93,25 @@ func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr *Type) bool {
 
 	w.write(true) // a meta sequence
 	w2 := newJSONArrayWriter(w.vw)
-	indexType := indexTypeForMetaSequence(tr)
 	for _, tuple := range ms.(metaSequence).data() {
 		if tuple.child != nil && w.vw != nil {
 			// Write unwritten chunked sequences. Chunks are lazily written so that intermediate chunked structures like NewList().Append(x).Append(y) don't cause unnecessary churn.
 			w.vw.WriteValue(tuple.child)
 		}
-		w2.writeRef(tuple.ChildRef().TargetRef())
-		w2.writeValue(tuple.value, indexType)
+		w2.writeRef(tuple.ChildRef())
+		w2.writeValue(tuple.value)
 		w2.writeUint(tuple.numLeaves)
 	}
 	w.write(w2.toArray())
 	return true
 }
 
-func (w *jsonArrayWriter) writeValue(v Value, tr *Type) {
-	switch tr.Kind() {
+func (w *jsonArrayWriter) writeValue(v Value) {
+	t := v.Type()
+	w.writeTypeAsTag(t, nil)
+	switch t.Kind() {
 	case BlobKind:
-		if w.maybeWriteMetaSequence(v, tr) {
+		if w.maybeWriteMetaSequence(v, t) {
 			return
 		}
 		w.writeBlob(v.(Blob))
@@ -122,39 +120,36 @@ func (w *jsonArrayWriter) writeValue(v Value, tr *Type) {
 	case NumberKind:
 		w.writeFloat(float64(v.(Number)))
 	case ListKind:
-		if w.maybeWriteMetaSequence(v, tr) {
+		if w.maybeWriteMetaSequence(v, t) {
 			return
 		}
 
 		w2 := newJSONArrayWriter(w.vw)
-		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
 		v.(List).IterAll(func(v Value, i uint64) {
-			w2.writeValue(v, elemType)
+			w2.writeValue(v)
 		})
 		w.write(w2.toArray())
 	case MapKind:
-		if w.maybeWriteMetaSequence(v, tr) {
+		if w.maybeWriteMetaSequence(v, t) {
 			return
 		}
 
 		w2 := newJSONArrayWriter(w.vw)
-		elemTypes := tr.Desc.(CompoundDesc).ElemTypes
 		v.(Map).IterAll(func(k, v Value) {
-			w2.writeValue(k, elemTypes[0])
-			w2.writeValue(v, elemTypes[1])
+			w2.writeValue(k)
+			w2.writeValue(v)
 		})
 		w.write(w2.toArray())
 	case RefKind:
-		w.writeRef(v.(Ref).TargetRef())
+		w.writeRef(v.(Ref))
 	case SetKind:
-		if w.maybeWriteMetaSequence(v, tr) {
+		if w.maybeWriteMetaSequence(v, t) {
 			return
 		}
 
 		w2 := newJSONArrayWriter(w.vw)
-		elemType := tr.Desc.(CompoundDesc).ElemTypes[0]
 		v.(Set).IterAll(func(v Value) {
-			w2.writeValue(v, elemType)
+			w2.writeValue(v)
 		})
 		w.write(w2.toArray())
 	case StringKind:
@@ -163,12 +158,8 @@ func (w *jsonArrayWriter) writeValue(v Value, tr *Type) {
 		vt := v.(*Type)
 		w.writeTypeAsValue(vt, nil)
 	case StructKind:
-		w.writeStruct(v, tr)
-	case ValueKind:
-		vt := v.Type()
-		w.writeTypeAsTag(vt, nil)
-		w.writeValue(v, v.Type())
-	case ParentKind:
+		w.writeStruct(v, t)
+	case ValueKind, ParentKind:
 	default:
 		d.Chk.Fail("Unknown NomsKind")
 	}
@@ -241,7 +232,7 @@ func (w *jsonArrayWriter) writeStruct(v Value, t *Type) {
 
 	i := 0
 	desc.IterFields(func(name string, t *Type) {
-		w.writeValue(values[i], t)
+		w.writeValue(values[i])
 		i++
 	})
 }

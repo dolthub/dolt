@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -28,7 +30,27 @@ func TestRead(t *testing.T) {
 	assert.True(r.atEnd())
 }
 
+var replaceMap = map[string]NomsKind{
+	"BoolKind":   BoolKind,
+	"NumberKind": NumberKind,
+	"StringKind": StringKind,
+	"BlobKind":   BlobKind,
+	"ValueKind":  ValueKind,
+	"ListKind":   ListKind,
+	"MapKind":    MapKind,
+	"RefKind":    RefKind,
+	"SetKind":    SetKind,
+	"StructKind": StructKind,
+	"TypeKind":   TypeKind,
+	"ParentKind": ParentKind,
+}
+var kindRe = regexp.MustCompile(`(\w+Kind)`)
+
 func parseJSON(s string, vs ...interface{}) (v []interface{}) {
+	s = kindRe.ReplaceAllStringFunc(s, func(word string) string {
+		i := replaceMap[word]
+		return strconv.Itoa(int(i))
+	})
 	dec := json.NewDecoder(strings.NewReader(fmt.Sprintf(s, vs...)))
 	dec.Decode(&v)
 	return
@@ -54,32 +76,32 @@ func TestReadPrimitives(t *testing.T) {
 
 	cs := NewTestValueStore()
 
-	test := func(expected Value, s string, vs ...interface{}) {
-		a := parseJSON(s, vs...)
+	test := func(expected Value, s string) {
+		a := parseJSON(s)
 		r := newJSONArrayReader(a, cs)
-		v := r.readTopLevelValue()
+		v := r.readValue()
 		assert.True(expected.Equals(v))
 	}
 
-	test(Bool(true), "[%d, true]", BoolKind)
-	test(Bool(false), "[%d, false]", BoolKind)
-	test(Number(0), `[%d, "0"]`, NumberKind)
-	test(NewString("hi"), `[%d, "hi"]`, StringKind)
+	test(Bool(true), "[BoolKind, true]")
+	test(Bool(false), "[BoolKind, false]")
+	test(Number(0), `[NumberKind, "0"]`)
+	test(NewString("hi"), `[StringKind, "hi"]`)
 
 	blob := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
-	test(blob, `[%d, false, "AAE="]`, BlobKind)
+	test(blob, `[BlobKind, false, "AAE="]`)
 }
 
 func TestReadListOfNumber(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJSON(`[%d, %d, false, ["0", "1", "2", "3"]]`, ListKind, NumberKind)
+	a := parseJSON(`[ListKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`)
 	r := newJSONArrayReader(a, cs)
 
 	tr := MakeListType(NumberType)
 
-	l := r.readTopLevelValue()
+	l := r.readValue()
 	l2 := NewTypedList(tr, Number(0), Number(1), Number(2), Number(3))
 	assert.True(l2.Equals(l))
 }
@@ -88,9 +110,9 @@ func TestReadListOfValue(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJSON(`[%d, %d, false, [%d, "1", %d, "hi", %d, true]]`, ListKind, ValueKind, NumberKind, StringKind, BoolKind)
+	a := parseJSON(`[ListKind, ValueKind, false, [NumberKind, "1", StringKind, "hi", BoolKind, true]]`)
 	r := newJSONArrayReader(a, cs)
-	l := r.readTopLevelValue()
+	l := r.readValue()
 	assert.True(NewList(Number(1), NewString("hi"), Bool(true)).Equals(l))
 }
 
@@ -98,12 +120,12 @@ func TestReadValueListOfNumber(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJSON(`[%d, %d, %d, false, ["0", "1", "2"]]`, ValueKind, ListKind, NumberKind)
+	a := parseJSON(`[ValueKind, ListKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2"]]`)
 	r := newJSONArrayReader(a, cs)
 
 	tr := MakeListType(NumberType)
 
-	l := r.readTopLevelValue()
+	l := r.readValue()
 	l2 := NewTypedList(tr, Number(0), Number(1), Number(2))
 	assert.True(l2.Equals(l))
 }
@@ -120,9 +142,9 @@ func TestReadCompoundList(t *testing.T) {
 		newMetaTuple(Number(4), leaf2, Ref{}, 4),
 	}, tr, cs)
 
-	a := parseJSON(`[%d, %d, true, ["%s", "1", "1", "%s", "4", "4"]]`, ListKind, NumberKind, leaf1.Ref(), leaf2.Ref())
+	a := parseJSON(`[ListKind, NumberKind, true, ["%s", NumberKind, "1", "1", "%s", NumberKind, "4", "4"]]`, leaf1.Ref(), leaf2.Ref())
 	r := newJSONArrayReader(a, cs)
-	l := r.readTopLevelValue()
+	l := r.readValue()
 
 	assert.True(l2.Equals(l))
 }
@@ -139,9 +161,9 @@ func TestReadCompoundSet(t *testing.T) {
 		newMetaTuple(Number(4), leaf2, Ref{}, 3),
 	}, tr, cs)
 
-	a := parseJSON(`[%d, %d, true, ["%s", "1", "2", "%s", "4", "3"]]`, SetKind, NumberKind, leaf1.Ref(), leaf2.Ref())
+	a := parseJSON(`[SetKind, NumberKind, true, ["%s", NumberKind, "1", "2", "%s", NumberKind, "4", "3"]]`, leaf1.Ref(), leaf2.Ref())
 	r := newJSONArrayReader(a, cs)
-	l := r.readTopLevelValue()
+	l := r.readValue()
 
 	assert.True(l2.Equals(l))
 }
@@ -150,12 +172,12 @@ func TestReadMapOfNumberToNumber(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJSON(`[%d, %d, %d, false, ["0", "1", "2", "3"]]`, MapKind, NumberKind, NumberKind)
+	a := parseJSON(`[MapKind, NumberKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`)
 	r := newJSONArrayReader(a, cs)
 
 	tr := MakeMapType(NumberType, NumberType)
 
-	m := r.readTopLevelValue()
+	m := r.readValue()
 	m2 := NewTypedMap(tr, Number(0), Number(1), Number(2), Number(3))
 	assert.True(m2.Equals(m))
 }
@@ -164,12 +186,12 @@ func TestReadValueMapOfNumberToNumber(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJSON(`[%d, %d, %d, %d, false, ["0", "1", "2", "3"]]`, ValueKind, MapKind, NumberKind, NumberKind)
+	a := parseJSON(`[ValueKind, MapKind, NumberKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`)
 	r := newJSONArrayReader(a, cs)
 
 	tr := MakeMapType(NumberType, NumberType)
 
-	m := r.readTopLevelValue()
+	m := r.readValue()
 	m2 := NewTypedMap(tr, Number(0), Number(1), Number(2), Number(3))
 	assert.True(m2.Equals(m))
 }
@@ -178,12 +200,12 @@ func TestReadSetOfNumber(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJSON(`[%d, %d, false, ["0", "1", "2", "3"]]`, SetKind, NumberKind)
+	a := parseJSON(`[SetKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`)
 	r := newJSONArrayReader(a, cs)
 
 	tr := MakeSetType(NumberType)
 
-	s := r.readTopLevelValue()
+	s := r.readValue()
 	s2 := NewTypedSet(tr, Number(0), Number(1), Number(2), Number(3))
 	assert.True(s2.Equals(s))
 }
@@ -192,12 +214,12 @@ func TestReadValueSetOfNumber(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJSON(`[%d, %d, %d, false, ["0", "1", "2", "3"]]`, ValueKind, SetKind, NumberKind)
+	a := parseJSON(`[ValueKind, SetKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`)
 	r := newJSONArrayReader(a, cs)
 
 	setTr := MakeSetType(NumberType)
 
-	s := r.readTopLevelValue()
+	s := r.readValue()
 	s2 := NewTypedSet(setTr, Number(0), Number(1), Number(2), Number(3))
 	assert.True(s2.Equals(s))
 }
@@ -209,10 +231,10 @@ func TestReadCompoundBlob(t *testing.T) {
 	r1 := ref.Parse("sha1-0000000000000000000000000000000000000001")
 	r2 := ref.Parse("sha1-0000000000000000000000000000000000000002")
 	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
-	a := parseJSON(`[%d, true, ["%s", "20", "20", "%s", "40", "40", "%s", "60", "60"]]`, BlobKind, r1, r2, r3)
+	a := parseJSON(`[BlobKind, true, ["%s", NumberKind, "20", "20", "%s", NumberKind, "40", "40", "%s", NumberKind, "60", "60"]]`, r1, r2, r3)
 	r := newJSONArrayReader(a, cs)
 
-	m := r.readTopLevelValue()
+	m := r.readValue()
 	_, ok := m.(compoundBlob)
 	assert.True(ok)
 	m2 := newCompoundBlob([]metaTuple{
@@ -235,10 +257,10 @@ func TestReadStruct(t *testing.T) {
 		"b": BoolType,
 	})
 
-	a := parseJSON(`[%d, "A1", ["b", %d, "s", %d, "x", %d], true, "hi", "42"]`, StructKind, BoolKind, StringKind, NumberKind)
+	a := parseJSON(`[StructKind, "A1", ["b", BoolKind, "s", StringKind, "x", NumberKind], BoolKind, true, StringKind, "hi", NumberKind, "42"]`)
 	r := newJSONArrayReader(a, cs)
 
-	v := r.readTopLevelValue().(Struct)
+	v := r.readValue().(Struct)
 	assert.True(v.Type().Equals(typ))
 	assert.True(v.Get("x").Equals(Number(42)))
 	assert.True(v.Get("s").Equals(NewString("hi")))
@@ -261,10 +283,10 @@ func TestReadStructWithList(t *testing.T) {
 		"s": StringType,
 	})
 
-	a := parseJSON(`[%d, "A4", ["b", %d, "l", %d, %d, "s", %d], true, false, ["0", "1", "2"], "hi"]`, StructKind, BoolKind, ListKind, NumberKind, StringKind)
+	a := parseJSON(`[StructKind, "A4", ["b", BoolKind, "l", ListKind, NumberKind, "s", StringKind], BoolKind, true, ListKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2"], StringKind, "hi"]`)
 	r := newJSONArrayReader(a, cs)
 	l32Tr := MakeListType(NumberType)
-	v := r.readTopLevelValue().(Struct)
+	v := r.readValue().(Struct)
 
 	assert.True(v.Type().Equals(typ))
 	assert.True(v.Get("b").Equals(Bool(true)))
@@ -289,9 +311,9 @@ func TestReadStructWithValue(t *testing.T) {
 		"s": StringType,
 	})
 
-	a := parseJSON(`[%d, "A5", ["b", %d, "s", %d, "v", %d], true, "hi", %d, "42"]`, StructKind, BoolKind, StringKind, ValueKind, NumberKind)
+	a := parseJSON(`[StructKind, "A5", ["b", BoolKind, "s", StringKind, "v", ValueKind], BoolKind, true, StringKind, "hi", NumberKind, "42"]`)
 	r := newJSONArrayReader(a, cs)
-	v := r.readTopLevelValue().(Struct)
+	v := r.readValue().(Struct)
 
 	assert.True(v.Type().Equals(typ))
 	assert.True(v.Get("b").Equals(Bool(true)))
@@ -315,9 +337,9 @@ func TestReadValueStruct(t *testing.T) {
 		"b": BoolType,
 	})
 
-	a := parseJSON(`[%d, %d, "A1", ["b", %d, "s", %d, "x", %d], true, "hi", "42"]`, ValueKind, StructKind, BoolKind, StringKind, NumberKind)
+	a := parseJSON(`[ValueKind, StructKind, "A1", ["b", BoolKind, "s", StringKind, "x", NumberKind], BoolKind, true, StringKind, "hi", NumberKind, "42"]`)
 	r := newJSONArrayReader(a, cs)
-	v := r.readTopLevelValue().(Struct)
+	v := r.readValue().(Struct)
 
 	assert.True(v.Type().Equals(typ))
 	assert.True(v.Get("x").Equals(Number(42)))
@@ -332,7 +354,7 @@ func TestReadRef(t *testing.T) {
 	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
 	a := parseJSON(`[%d, %d, "%s"]`, RefKind, NumberKind, r.String())
 	reader := newJSONArrayReader(a, cs)
-	v := reader.readTopLevelValue()
+	v := reader.readValue()
 	tr := MakeRefType(NumberType)
 	assert.True(NewTypedRef(tr, r).Equals(v))
 }
@@ -344,7 +366,7 @@ func TestReadValueRef(t *testing.T) {
 	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
 	a := parseJSON(`[%d, %d, %d, "%s"]`, ValueKind, RefKind, NumberKind, r.String())
 	reader := newJSONArrayReader(a, cs)
-	v := reader.readTopLevelValue()
+	v := reader.readValue()
 	tr := MakeRefType(NumberType)
 	assert.True(NewTypedRef(tr, r).Equals(v))
 }
@@ -361,9 +383,9 @@ func TestReadStructWithBlob(t *testing.T) {
 		"b": BlobType,
 	})
 
-	a := parseJSON(`[%d, "A5", ["b", %d], false, "AAE="]`, StructKind, BlobKind)
+	a := parseJSON(`[StructKind, "A5", ["b", BlobKind], BlobKind, false, "AAE="]`)
 	r := newJSONArrayReader(a, cs)
-	v := r.readTopLevelValue().(Struct)
+	v := r.readValue().(Struct)
 	assert.True(v.Type().Equals(typ))
 	blob := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
 	assert.True(v.Get("b").Equals(blob))
@@ -390,18 +412,46 @@ func TestReadRecursiveStruct(t *testing.T) {
 	at.Desc.(StructDesc).Fields["b"] = bt
 	bt.Desc.(StructDesc).Fields["b"] = MakeListType(bt)
 
-	a := parseJSON(`[%d, "A",
-		["b", %d, "B", [
-			"a", %d, %d, 1,
-			"b", %d, %d, 0
-		]],
-		false, [], false, []]`, StructKind, StructKind, ListKind, ParentKind, ListKind, ParentKind)
+	// {b: {a: [], b: []}}
+	v2 := NewStruct(at, structData{
+		"b": NewStruct(bt, structData{
+			"a": NewTypedList(MakeListType(at)),
+			"b": NewTypedList(MakeListType(bt)),
+		}),
+	})
+
+	a := parseJSON(`[
+		StructKind, "A", [
+			"b", StructKind, "B", [
+				"a", ListKind, ParentKind, 1,
+				"b", ListKind, ParentKind, 0
+			]
+		],
+		StructKind, "B", [
+			"a", ListKind, StructKind, "A", [
+				"b", ParentKind, 1
+			],
+			"b", ListKind, ParentKind, 0
+		],
+		ListKind, StructKind, "A", [
+			"b", StructKind, "B", [
+				"a", ListKind, ParentKind, 1,
+				"b", ListKind, ParentKind, 0
+			]
+		], false, [],
+		ListKind, StructKind, "B", [
+			"a", ListKind, StructKind, "A", [
+				"b", ParentKind, 1
+			],
+			"b", ListKind, ParentKind, 0
+		], false, []]`)
 
 	r := newJSONArrayReader(a, cs)
 
-	v := r.readTopLevelValue().(Struct)
+	v := r.readValue().(Struct)
 	assert.True(v.Type().Equals(at))
 	assert.True(v.Get("b").Type().Equals(bt))
+	assert.True(v.Equals(v2))
 }
 
 func TestReadTypeValue(t *testing.T) {
@@ -411,7 +461,7 @@ func TestReadTypeValue(t *testing.T) {
 	test := func(expected *Type, json string, vs ...interface{}) {
 		a := parseJSON(json, vs...)
 		r := newJSONArrayReader(a, cs)
-		tr := r.readTopLevelValue()
+		tr := r.readValue()
 		assert.True(expected.Equals(tr))
 	}
 

@@ -75,26 +75,26 @@ func newBlobTestSuite(size uint, expectRefStr string, expectChunkCount int, expe
 }
 
 func TestBlobSuite1K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(10, "sha1-cb21e6231cbcf57ff8a9e80c9cbc5b1e798bf9ea", 3, 2, 2))
+	suite.Run(t, newBlobTestSuite(10, "sha1-28e2f80d426cdb8bdbb347d00050b4d3fcb644a8", 3, 2, 2))
 }
 
 func TestBlobSuite4K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(12, "sha1-53344f6e1d41ed9ce781e6cb3b999d3c5fc242a4", 9, 2, 2))
+	suite.Run(t, newBlobTestSuite(12, "sha1-5b2413e80d091f8b978ce927767e19e5655ac1a0", 9, 2, 2))
 }
 
 func TestBlobSuite16K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(14, "sha1-50821a3ce89449bbc490194000c380e979e79132", 33, 2, 2))
+	suite.Run(t, newBlobTestSuite(14, "sha1-666ebeed9cbcbcb2da71c0bd578c7266a5abf9b2", 33, 2, 2))
 }
 
 func TestBlobSuite64K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(16, "sha1-097098adc9ad9663c30ffcf69933b44165df1226", 4, 2, 2))
+	suite.Run(t, newBlobTestSuite(16, "sha1-a521ed352977cc544c2c98ac1a458f19fc551dce", 4, 2, 2))
 }
 
 func TestBlobSuite256K(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-	suite.Run(t, newBlobTestSuite(18, "sha1-ff9c888571d2317bd201cfc2d31dbfd6a546c629", 13, 2, 2))
+	suite.Run(t, newBlobTestSuite(18, "sha1-4692cb536901b70e66109191b0091cfb2ed32eea", 2, 15, 2))
 }
 
 func (suite *blobTestSuite) TestRef() {
@@ -174,7 +174,7 @@ func chunkDiffCount(c1 []Ref, c2 []Ref) int {
 	refs := make(map[ref.Ref]int)
 
 	for _, r := range c1 {
-		refs[r.TargetRef()] += 1
+		refs[r.TargetRef()]++
 	}
 
 	for _, r := range c2 {

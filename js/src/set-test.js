@@ -29,7 +29,7 @@ import type {Type} from './type.js';
 import type {ValueReadWriter} from './value-store.js';
 
 const testSetSize = 5000;
-const setOfNRef = 'sha1-5b4cd51d88b3d99e6dafdb1cafb8cec90d5aecdf';
+const setOfNRef = 'sha1-189e35a1b7aa09e012c0a86f20921b4978d21629';
 const smallRandomSetSize = 200;
 const randomSetSize = 2000;
 
@@ -106,7 +106,7 @@ suite('BuildSet', () => {
     });
 
     const s = await newSet(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-9d7c385651c1e58872621cf2b128f5107605c2c2');
+    assert.strictEqual(s.ref.toString(), 'sha1-d8815974c1b0ac51f2ffe8147d80ce8be8f5c52d');
   });
 
 
@@ -119,7 +119,7 @@ suite('BuildSet', () => {
       assert.strictEqual(i + 1, s.size);
     }
 
-    assert.strictEqual(s.ref.toString(), 'sha1-ee27f104b663d852a3c6cb0fe23c9cf3f69e79c0');
+    assert.strictEqual(s.ref.toString(), 'sha1-0c2672150a517e593b118705e84ed438028902ff');
   });
 
   test('LONG: remove', async () => {

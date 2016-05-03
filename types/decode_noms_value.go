@@ -13,7 +13,7 @@ import (
 
 func fromTypedEncodeable(i []interface{}, vr ValueReader) Value {
 	r := newJSONArrayReader(i, vr)
-	return r.readTopLevelValue()
+	return r.readValue()
 }
 
 type jsonArrayReader struct {
@@ -121,11 +121,9 @@ func (r *jsonArrayReader) readBlob() Value {
 }
 
 func (r *jsonArrayReader) readList(t *Type) Value {
-	desc := t.Desc.(CompoundDesc)
 	data := []Value{}
-	elemType := desc.ElemTypes[0]
 	for !r.atEnd() {
-		v := r.readValueWithoutTag(elemType)
+		v := r.readValue()
 		data = append(data, v)
 	}
 
@@ -133,11 +131,9 @@ func (r *jsonArrayReader) readList(t *Type) Value {
 }
 
 func (r *jsonArrayReader) readSet(t *Type) Value {
-	desc := t.Desc.(CompoundDesc)
 	data := setData{}
-	elemType := desc.ElemTypes[0]
 	for !r.atEnd() {
-		v := r.readValueWithoutTag(elemType)
+		v := r.readValue()
 		data = append(data, v)
 	}
 
@@ -145,14 +141,10 @@ func (r *jsonArrayReader) readSet(t *Type) Value {
 }
 
 func (r *jsonArrayReader) readMap(t *Type) Value {
-	desc := t.Desc.(CompoundDesc)
 	data := mapData{}
-	keyType := desc.ElemTypes[0]
-	valueType := desc.ElemTypes[1]
-
 	for !r.atEnd() {
-		k := r.readValueWithoutTag(keyType)
-		v := r.readValueWithoutTag(valueType)
+		k := r.readValue()
+		v := r.readValue()
 		data = append(data, mapEntry{k, v})
 	}
 
@@ -181,10 +173,9 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t *Type) (Value, bool) {
 
 	r2 := newJSONArrayReader(r.readArray(), r.vr)
 	data := metaSequenceData{}
-	indexType := indexTypeForMetaSequence(t)
 	for !r2.atEnd() {
 		ref := NewTypedRef(MakeRefType(t), r2.readRef())
-		v := r2.readValueWithoutTag(indexType)
+		v := r2.readValue()
 		numLeaves := uint64(r2.readUint())
 		data = append(data, newMetaTuple(v, nil, ref, numLeaves))
 	}
@@ -197,12 +188,8 @@ func (r *jsonArrayReader) readRefValue(t *Type) Value {
 	return NewTypedRef(t, ref)
 }
 
-func (r *jsonArrayReader) readTopLevelValue() Value {
+func (r *jsonArrayReader) readValue() Value {
 	t := r.readTypeAsTag(nil)
-	return r.readValueWithoutTag(t)
-}
-
-func (r *jsonArrayReader) readValueWithoutTag(t *Type) Value {
 	switch t.Kind() {
 	case BlobKind:
 		if ms, ok := r.maybeReadMetaSequence(t); ok {
@@ -217,9 +204,7 @@ func (r *jsonArrayReader) readValueWithoutTag(t *Type) Value {
 	case StringKind:
 		return NewString(r.readString())
 	case ValueKind:
-		// The value is always tagged
-		t := r.readTypeAsTag(nil)
-		return r.readValueWithoutTag(t)
+		return r.readValue()
 	case ListKind:
 		if ms, ok := r.maybeReadMetaSequence(t); ok {
 			return ms
@@ -283,7 +268,7 @@ func (r *jsonArrayReader) readStruct(t *Type) Value {
 	values := []Value{}
 	desc := t.Desc.(StructDesc)
 	desc.IterFields(func(name string, t *Type) {
-		values = append(values, r.readValueWithoutTag(t))
+		values = append(values, r.readValue())
 	})
 
 	return structBuilder(values, t)

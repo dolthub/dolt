@@ -71,7 +71,7 @@ export default class ValueStore {
 
   writeValue<T: valueOrPrimitive>(v: T): RefValue<T> {
     const t = getTypeOfValue(v);
-    const chunk = encodeNomsValue(v, t, this);
+    const chunk = encodeNomsValue(v, this);
     invariant(!chunk.isEmpty());
     const {ref} = chunk;
     const refValue = refValueFromValue(v);
