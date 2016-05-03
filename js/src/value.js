@@ -35,3 +35,11 @@ export class Value {
 }
 
 export type valueOrPrimitive = primitive | Value;
+
+export function getChunksOfValue(v: valueOrPrimitive): Array<RefValue> {
+  if (v instanceof Value) {
+    return v.chunks;
+  }
+
+  return [];
+}

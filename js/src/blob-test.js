@@ -4,9 +4,14 @@ import {blobType, refOfBlobType} from './type.js';
 import {assert} from 'chai';
 import {newBlob, BlobWriter, NomsBlob} from './blob.js';
 import {suite, test} from 'mocha';
-import {testRoundTripAndValidate} from './test-util.js';
+import {
+  assertChunkCountAndType,
+  assertValueRef,
+  assertValueType,
+  chunkDiffCount,
+  testRoundTripAndValidate,
+} from './test-util.js';
 import {invariant} from './assert.js';
-import RefValue from './ref-value.js';
 
 // IMPORTANT: These tests and in particular the hash of the values should stay in sync with the
 // corresponding tests in go
@@ -37,8 +42,8 @@ suite('Blob', () => {
       nb[i + 1] = buff[i];
     }
 
-    const b2 = await newBlob(nb);
-    assert.strictEqual(expectCount, chunkDiffCount(blob.chunks, b2.chunks));
+    const v2 = await newBlob(nb);
+    assert.strictEqual(expectCount, chunkDiffCount(blob, v2));
   }
 
   async function testAppendChunkDiff(buff: Uint8Array, blob: NomsBlob, expectCount: number):
@@ -48,33 +53,8 @@ suite('Blob', () => {
       nb[i] = buff[i];
     }
 
-    const b2 = await newBlob(nb);
-    assert.strictEqual(expectCount, chunkDiffCount(blob.chunks, b2.chunks));
-  }
-
-  function chunkDiffCount(c1: Array<RefValue>, c2: Array<RefValue>): number {
-    let diffCount = 0;
-    const refs = Object.create(null);
-    c1.forEach(r => {
-      const refStr = r.targetRef.toString();
-      let count = refs[refStr];
-      count = count === undefined ? 1 : count + 1;
-      refs[refStr] = count;
-    });
-
-    c2.forEach(r => {
-      const refStr = r.targetRef.toString();
-      const count = refs[refStr];
-      if (count === undefined) {
-        diffCount++;
-      } else if (count === 1) {
-        delete refs[refStr];
-      } else {
-        refs[refStr] = count - 1;
-      }
-    });
-
-    return diffCount + Object.keys(refs).length;
+    const v2 = await newBlob(nb);
+    assert.strictEqual(expectCount, chunkDiffCount(blob, v2));
   }
 
   function randomBuff(len: number): Uint8Array {
@@ -93,33 +73,18 @@ suite('Blob', () => {
     const buff = randomBuff(length);
     const blob = await newBlob(buff);
 
-    // Ref
-    assert.strictEqual(expectRefStr, blob.ref.toString());
-
-    // Type
-    assert.isTrue(blobType.equals(blob.type));
-
-    // Length
+    assertValueRef(expectRefStr, blob);
+    assertValueType(blobType, blob);
     assert.strictEqual(length, blob.length);
-
-    // Chunk Count
-    assert.strictEqual(expectChunkCount, blob.chunks.length);
-
-    // ChunkRef Type
-    blob.chunks.forEach(r => assert.isTrue(refOfBlobType.equals(r.type)));
+    assertChunkCountAndType(expectChunkCount, refOfBlobType, blob);
 
     await testRoundTripAndValidate(blob, async(b2) => {
       await assertReadFull(buff, b2);
-
-      // Equals
-      assert.isTrue(b2.equals(blob));
-      assert.isTrue(blob.equals(b2));
     });
 
     // TODO: Random Read
 
     await testPrependChunkDiff(buff, blob, expectPrependChunkDiff);
-
     await testAppendChunkDiff(buff, blob, expectAppendChunkDiff);
   }
 
@@ -128,29 +93,28 @@ suite('Blob', () => {
     _value: number;
     _count: number;
 
-  constructor(seed: number = 0) {
-    this._z = seed;
-    this._value = seed;
-    this._count = 4;
-  }
-
-  nextUint8(): number {
-    // Increment number
-    if (this._count === 0) {
-      this._z = this._z + 1;
-      this._value = this._z;
+    constructor(seed: number = 0) {
+      this._z = seed;
+      this._value = seed;
       this._count = 4;
     }
 
-    // Unshift a uint8 from our current number
-    const retval = this._value & 0xff;
-    this._value = this._value >>> 8;
-    this._count--;
+    nextUint8(): number {
+      // Increment number
+      if (this._count === 0) {
+        this._z++;
+        this._value = this._z;
+        this._count = 4;
+      }
 
-    return retval;
+      // Unshift a uint8 from our current number
+      const retval = this._value & 0xff;
+      this._value = this._value >>> 8;
+      this._count--;
+
+      return retval;
+    }
   }
-}
-
 
   test('Blob 1K', async () => {
     await blobTestSuite(10, 'sha1-cb21e6231cbcf57ff8a9e80c9cbc5b1e798bf9ea', 3, 2, 2);
