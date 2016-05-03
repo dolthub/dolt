@@ -1,6 +1,6 @@
 // @flow
 
-import type {ValueReader} from './decode.js';
+import type {ValueReader} from './value-store.js';
 import {invariant, notNull} from './assert.js';
 import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';

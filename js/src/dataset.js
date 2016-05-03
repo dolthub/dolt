@@ -2,8 +2,8 @@
 
 import {newCommit} from './data-store.js';
 import type {valueOrPrimitive} from './value.js';
-import type DataStore from './data-store.js';
 import type {Commit} from './commit.js';
+import type DataStore from './data-store.js';
 import RefValue from './ref-value.js';
 
 export default class Dataset {

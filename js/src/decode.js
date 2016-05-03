@@ -25,6 +25,7 @@ import {NomsMap, MapLeafSequence} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';
 import {IndexedMetaSequence} from './meta-sequence.js';
 import type {valueOrPrimitive} from './value.js';
+import type {ValueReader} from './value-store.js';
 
 const typedTag = 't ';
 const blobTag = 'b ';
@@ -320,10 +321,6 @@ export class JsonArrayReader {
     parentStructTypes.pop();
     return structType;
   }
-}
-
-export interface ValueReader {
-  readValue(ref: Ref): Promise<any>
 }
 
 export function decodeNomsValue(chunk: Chunk, vr: ValueReader): valueOrPrimitive {

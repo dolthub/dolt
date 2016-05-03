@@ -10,3 +10,8 @@ export type ChunkStore = {
   has(ref: Ref): Promise<boolean>;
   put(c: Chunk): void;
 }
+
+export interface RootTracker {
+  getRoot(): Promise<Ref>;
+  updateRoot(current: Ref, last: Ref): Promise<boolean>;
+}

@@ -20,7 +20,7 @@ suite('Specs', () => {
     assert.equal(spec.scheme, 'mem');
     assert.equal(spec.path, '');
     assert.instanceOf(spec.store(), DataStore);
-    assert.instanceOf(spec.store()._bs, BatchStoreAdaptor);
+    assert.instanceOf(spec.store()._vs._bs, BatchStoreAdaptor);
 
     spec = DataStoreSpec.parse('http://foo');
     invariant(spec);
@@ -28,7 +28,7 @@ suite('Specs', () => {
     assert.equal(spec.scheme, 'http');
     assert.equal(spec.path, '//foo');
     assert.instanceOf(spec.store(), DataStore);
-    assert.instanceOf(spec.store()._bs, HttpBatchStore);
+    assert.instanceOf(spec.store()._vs._bs, HttpBatchStore);
 
     spec = DataStoreSpec.parse('https://foo');
     invariant(spec);
@@ -48,7 +48,7 @@ suite('Specs', () => {
     assert.equal(spec.store.path, '');
     let ds = spec.set();
     assert.instanceOf(ds, Dataset);
-    assert.instanceOf(ds.store._bs, BatchStoreAdaptor);
+    assert.instanceOf(ds.store._vs._bs, BatchStoreAdaptor);
 
     spec = DatasetSpec.parse('http://localhost:8000/foo:ds');
     invariant(spec);
@@ -57,7 +57,7 @@ suite('Specs', () => {
     assert.equal(spec.store.path, '//localhost:8000/foo');
     ds = spec.set();
     assert.instanceOf(ds, Dataset);
-    assert.instanceOf(ds.store._bs, HttpBatchStore);
+    assert.instanceOf(ds.store._vs._bs, HttpBatchStore);
   });
 
   test('RefSpec', () => {

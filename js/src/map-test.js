@@ -25,6 +25,7 @@ import {MapLeafSequence, newMap, NomsMap} from './map.js';
 import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import Ref from './ref.js';
 import type {Type} from './type.js';
+import type {ValueReadWriter} from './value-store.js';
 
 const testMapSize = 1000;
 const mapOfNRef = 'sha1-67b979260f367f9a7e6ac8121eca87a2f5abd015';
@@ -307,30 +308,30 @@ suite('MapLeaf', () => {
 });
 
 suite('CompoundMap', () => {
-  function build(ds: DataStore): Array<NomsMap> {
+  function build(vwr: ValueReadWriter): Array<NomsMap> {
     const tr = makeMapType(stringType,
         boolType);
-    const l1 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'a', value: false},
+    const l1 = new NomsMap(tr, new MapLeafSequence(vwr, tr, [{key: 'a', value: false},
         {key:'b', value:false}]));
-    const r1 = ds.writeValue(l1);
-    const l2 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'e', value: true},
+    const r1 = vwr.writeValue(l1);
+    const l2 = new NomsMap(tr, new MapLeafSequence(vwr, tr, [{key: 'e', value: true},
         {key:'f', value:true}]));
-    const r2 = ds.writeValue(l2);
-    const l3 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'h', value: false},
+    const r2 = vwr.writeValue(l2);
+    const l3 = new NomsMap(tr, new MapLeafSequence(vwr, tr, [{key: 'h', value: false},
         {key:'i', value:true}]));
-    const r3 = ds.writeValue(l3);
-    const l4 = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'm', value: true},
+    const r3 = vwr.writeValue(l3);
+    const l4 = new NomsMap(tr, new MapLeafSequence(vwr, tr, [{key: 'm', value: true},
         {key:'n', value:false}]));
-    const r4 = ds.writeValue(l4);
+    const r4 = vwr.writeValue(l4);
 
-    const m1 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r1, 'b', 2),
+    const m1 = new NomsMap(tr, new OrderedMetaSequence(vwr, tr, [new MetaTuple(r1, 'b', 2),
         new MetaTuple(r2, 'f', 2)]));
-    const rm1 = ds.writeValue(m1);
-    const m2 = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(r3, 'i', 2),
+    const rm1 = vwr.writeValue(m1);
+    const m2 = new NomsMap(tr, new OrderedMetaSequence(vwr, tr, [new MetaTuple(r3, 'i', 2),
         new MetaTuple(r4, 'n', 2)]));
-    const rm2 = ds.writeValue(m2);
+    const rm2 = vwr.writeValue(m2);
 
-    const c = new NomsMap(tr, new OrderedMetaSequence(ds, tr, [new MetaTuple(rm1, 'f', 4),
+    const c = new NomsMap(tr, new OrderedMetaSequence(vwr, tr, [new MetaTuple(rm1, 'f', 4),
         new MetaTuple(rm2, 'n', 4)]));
     return [c, m1, m2];
   }

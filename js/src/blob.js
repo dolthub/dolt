@@ -4,7 +4,7 @@ import {Collection} from './collection.js';
 import {IndexedSequence} from './indexed-sequence.js';
 import {SequenceCursor} from './sequence.js';
 import {invariant} from './assert.js';
-import type {ValueReader} from './decode.js';
+import type {ValueReader} from './value-store.js';
 import {blobType} from './type.js';
 import {
   MetaTuple,
