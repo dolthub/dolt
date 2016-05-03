@@ -2,7 +2,7 @@
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {ValueReader} from './decode.js';
+import type {ValueReader} from './value-store.js';
 import type {Splice} from './edit-distance.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';

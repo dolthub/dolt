@@ -39,6 +39,10 @@ func NewValueStore(bs BatchStore) *ValueStore {
 	return &ValueStore{bs, map[ref.Ref]chunkCacheEntry{}, &sync.Mutex{}}
 }
 
+func (lvs *ValueStore) BatchStore() BatchStore {
+	return lvs.bs
+}
+
 // ReadValue reads and decodes a value from lvs. It is not considered an error for the requested chunk to be empty; in this case, the function simply returns nil.
 func (lvs *ValueStore) ReadValue(r ref.Ref) Value {
 	v := DecodeChunk(lvs.bs.Get(r), lvs)
@@ -68,8 +72,8 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 		return r
 	}
 	hints := lvs.checkChunksInCache(v)
-	lvs.set(hash, (*presentChunk)(v.Type()))
 	lvs.bs.SchedulePut(c, hints)
+	lvs.set(hash, hintedChunk{v.Type(), hash})
 	return r
 }
 
@@ -122,7 +126,7 @@ func (lvs *ValueStore) checkChunksInCache(v Value) map[ref.Ref]struct{} {
 	hints := map[ref.Ref]struct{}{}
 	for _, reachable := range v.Chunks() {
 		entry := lvs.check(reachable.TargetRef())
-		d.Exp.True(entry != nil && entry.Present(), "Value to write -- Type %s -- contains ref %s, which points to a non-existent Value.", v.Type().Describe(), reachable.TargetRef())
+		d.Exp.True(entry != nil && entry.Present(), "Attempted to write\n%s\n, containing ref %s, which points to a non-existent Value.", EncodedValueWithTags(v), reachable.TargetRef())
 		if hint := entry.Hint(); !hint.IsEmpty() {
 			hints[hint] = struct{}{}
 		}
@@ -145,20 +149,6 @@ func getTargetType(refBase Ref) *Type {
 	refType := refBase.Type()
 	d.Chk.Equal(RefKind, refType.Kind())
 	return refType.Desc.(CompoundDesc).ElemTypes[0]
-}
-
-type presentChunk Type
-
-func (p *presentChunk) Present() bool {
-	return true
-}
-
-func (p *presentChunk) Hint() (r ref.Ref) {
-	return
-}
-
-func (p *presentChunk) Type() *Type {
-	return (*Type)(p)
 }
 
 type hintedChunk struct {

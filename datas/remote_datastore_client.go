@@ -12,28 +12,28 @@ type RemoteDataStoreClient struct {
 
 func NewRemoteDataStore(baseURL, auth string) *RemoteDataStoreClient {
 	httpBS := newHTTPBatchStore(baseURL, auth)
-	return &RemoteDataStoreClient{newDataStoreCommon(httpBS, httpBS)}
+	return &RemoteDataStoreClient{newDataStoreCommon(types.NewValueStore(httpBS), httpBS)}
 }
 
 func (rds *RemoteDataStoreClient) batchSink() batchSink {
-	httpBS := rds.bs.(*httpBatchStore)
+	httpBS := rds.vs.BatchStore().(*httpBatchStore)
 	return newNotABatchSink(httpBS.host, httpBS.auth)
 }
 
 func (rds *RemoteDataStoreClient) batchStore() types.BatchStore {
-	return rds.bs
+	return rds.vs.BatchStore()
 }
 
 func (rds *RemoteDataStoreClient) Commit(datasetID string, commit types.Struct) (DataStore, error) {
 	err := rds.commit(datasetID, commit)
-	rds.Flush()
-	return &RemoteDataStoreClient{newDataStoreCommon(rds.bs, rds.rt)}, err
+	rds.vs.Flush()
+	return &RemoteDataStoreClient{newDataStoreCommon(rds.vs, rds.rt)}, err
 }
 
 func (rds *RemoteDataStoreClient) Delete(datasetID string) (DataStore, error) {
 	err := rds.doDelete(datasetID)
-	rds.Flush()
-	return &RemoteDataStoreClient{newDataStoreCommon(rds.bs, rds.rt)}, err
+	rds.vs.Flush()
+	return &RemoteDataStoreClient{newDataStoreCommon(rds.vs, rds.rt)}, err
 }
 
 func (f RemoteStoreFactory) CreateStore(ns string) DataStore {

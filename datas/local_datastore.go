@@ -8,29 +8,33 @@ import (
 
 // DataStore provides versioned storage for noms values. Each DataStore instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new DataStore, representing a new moment in history.
 type LocalDataStore struct {
-	cs  chunks.ChunkStore
 	cch *cachingChunkHaver
 	dataStoreCommon
 }
 
 func newLocalDataStore(cs chunks.ChunkStore) *LocalDataStore {
 	return &LocalDataStore{
-		cs,
 		newCachingChunkHaver(cs),
-		newDataStoreCommon(types.NewBatchStoreAdaptor(cs), cs),
+		newDataStoreCommon(types.NewValueStore(types.NewBatchStoreAdaptor(cs)), cs),
 	}
 }
 
 func (lds *LocalDataStore) Commit(datasetID string, commit types.Struct) (DataStore, error) {
 	err := lds.commit(datasetID, commit)
-	lds.Flush()
-	return newLocalDataStore(lds.cs), err
+	lds.vs.Flush()
+	return &LocalDataStore{
+		lds.cch,
+		newDataStoreCommon(lds.vs, lds.rt),
+	}, err
 }
 
 func (lds *LocalDataStore) Delete(datasetID string) (DataStore, error) {
 	err := lds.doDelete(datasetID)
-	lds.Flush()
-	return newLocalDataStore(lds.cs), err
+	lds.vs.Flush()
+	return &LocalDataStore{
+		lds.cch,
+		newDataStoreCommon(lds.vs, lds.rt),
+	}, err
 }
 
 func (lds *LocalDataStore) has(r ref.Ref) bool {
@@ -38,9 +42,9 @@ func (lds *LocalDataStore) has(r ref.Ref) bool {
 }
 
 func (lds *LocalDataStore) batchSink() batchSink {
-	return lds.bs
+	return lds.vs.BatchStore()
 }
 
 func (lds *LocalDataStore) batchStore() types.BatchStore {
-	return lds.bs
+	return lds.vs.BatchStore()
 }

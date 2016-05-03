@@ -13,12 +13,13 @@ import {ListLeafSequence, NomsList} from './list.js';
 import {MapLeafSequence, NomsMap} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';
 import {Sequence} from './sequence.js';
+import {IndexedSequence} from './indexed-sequence.js';
 import {setEncodeNomsValue} from './get-ref.js';
 import {NomsBlob, BlobLeafSequence} from './blob.js';
 import {describeTypeOfValue} from './encode-human-readable.js';
 import type {primitive} from './primitives.js';
 import type {valueOrPrimitive} from './value.js';
-import {IndexedSequence} from './indexed-sequence.js';
+import type {ValueWriter} from './value-store.js';
 
 const typedTag = 't ';
 
@@ -305,10 +306,6 @@ function encodeTopLevelBlob(sequence: BlobLeafSequence): Chunk {
     data[i + 2] = arr[i];
   }
   return new Chunk(data);
-}
-
-interface ValueWriter {
-    writeValue<T: valueOrPrimitive>(v: T, t: ?Type): RefValue<T>
 }
 
 export function encodeNomsValue(v: valueOrPrimitive, t: Type, vw: ?ValueWriter): Chunk {

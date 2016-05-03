@@ -6,6 +6,7 @@ import {newStruct} from './struct.js';
 import type {NomsMap} from './map.js';
 import type {NomsSet} from './set.js';
 import type {valueOrPrimitive} from './value.js';
+import type {RootTracker} from './chunk-store.js';
 import ValueStore from './value-store.js';
 import BatchStore from './batch-store.js';
 import {
@@ -62,17 +63,23 @@ export function getDatasTypes(): DatasTypes {
   return datasTypes;
 }
 
-export default class DataStore extends ValueStore {
-  _bs: BatchStore;
-  _cacheSize: number;
+export default class DataStore {
+  _vs: ValueStore;
+  _rt: RootTracker;
   _datasets: Promise<NomsMap<string, RefValue<Commit>>>;
 
   constructor(bs: BatchStore, cacheSize: number = 0) {
-    super(bs, cacheSize);
-    // bs and cacheSize should only be used when creating a new DataStore instance in commit()
-    this._bs = bs;
-    this._cacheSize = cacheSize;
+    this._vs = new ValueStore(bs, cacheSize);
+    this._rt = bs;
     this._datasets = this._datasetsFromRootRef(bs.getRoot());
+  }
+
+  _clone(vs: ValueStore, rt: RootTracker): DataStore {
+    const ds = Object.create(DataStore.prototype);
+    ds._vs = vs;
+    ds._rt = rt;
+    ds._datasets = this._datasetsFromRootRef(rt.getRoot());
+    return ds;
   }
 
   _datasetsFromRootRef(rootRef: Promise<Ref>): Promise<NomsMap<string, RefValue<Commit>>> {
@@ -97,6 +104,16 @@ export default class DataStore extends ValueStore {
     return this._datasets;
   }
 
+  // TODO: This should return Promise<?valueOrPrimitive>
+  async readValue(ref: Ref): Promise<any> {
+    return this._vs.readValue(ref);
+  }
+
+
+  writeValue<T: valueOrPrimitive>(v: T): RefValue<T> {
+    return this._vs.writeValue(v);
+  }
+
   async _descendsFrom(commit: Commit, currentHeadRef: RefValue<Commit>): Promise<boolean> {
     let ancestors = commit.parents;
     while (!(await ancestors.has(currentHeadRef))) {
@@ -109,7 +126,7 @@ export default class DataStore extends ValueStore {
   }
 
   async commit(datasetId: string, commit: Commit): Promise<DataStore> {
-    const currentRootRefP = this._bs.getRoot();
+    const currentRootRefP = this._rt.getRoot();
     const datasetsP = this._datasetsFromRootRef(currentRootRefP);
     let currentDatasets = await (datasetsP:Promise<NomsMap>);
     const currentRootRef = await currentRootRefP;
@@ -129,11 +146,15 @@ export default class DataStore extends ValueStore {
 
     currentDatasets = await currentDatasets.set(datasetId, commitRef);
     const newRootRef = this.writeValue(currentDatasets).targetRef;
-    if (await this._bs.updateRoot(newRootRef, currentRootRef)) {
-      return new DataStore(this._bs, this._cacheSize);
+    if (await this._rt.updateRoot(newRootRef, currentRootRef)) {
+      return this._clone(this._vs, this._rt);
     }
 
     throw new Error('Optimistic lock failed');
+  }
+
+  close() {
+    this._vs.close();
   }
 }
 

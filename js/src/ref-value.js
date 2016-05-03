@@ -1,6 +1,6 @@
 // @flow
 
-import type DataStore from './data-store.js';
+import type {ValueReader} from './value-store.js';
 import {describeType} from './encode-human-readable.js';
 import {getRefOfValue} from './get-ref.js';
 import {Kind} from './noms-kind.js';
@@ -30,8 +30,8 @@ export default class RefValue<T: valueOrPrimitive> extends Value {
     return this._type;
   }
 
-  targetValue(store: DataStore): Promise<T> {
-    return store.readValue(this.targetRef);
+  targetValue(vr: ValueReader): Promise<T> {
+    return vr.readValue(this.targetRef);
   }
 
   less(other: Value): boolean {

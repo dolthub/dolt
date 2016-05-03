@@ -17,10 +17,19 @@ import {invariant, notNull} from './assert.js';
 import {encodeNomsValue} from './encode.js';
 import {describeType, describeTypeOfValue} from './encode-human-readable.js';
 
-export interface Cache<T> {  // eslint-disable-line no-undef
-  entry(ref: Ref): ?CacheEntry<T>;  // eslint-disable-line no-undef
-  get(ref: Ref): ?T;  // eslint-disable-line no-undef
-  add(ref: Ref, size: number, value: T): void;  // eslint-disable-line no-undef
+export interface ValueWriter {
+    writeValue<T: valueOrPrimitive>(v: T, t: ?Type): RefValue<T>
+}
+
+export interface ValueReader {
+  // TODO: This should return Promise<?valueOrPrimitive>
+  readValue(ref: Ref): Promise<any>
+}
+
+export interface ValueReadWriter {
+  // TODO: This should return Promise<?valueOrPrimitive>
+  readValue(ref: Ref): Promise<any>;
+  writeValue<T: valueOrPrimitive>(v: T): RefValue<T>;
 }
 
 export default class ValueStore {
@@ -85,7 +94,13 @@ export default class ValueStore {
   }
 }
 
-export class CacheEntry<T> {
+interface Cache<T> {  // eslint-disable-line no-undef
+  entry(ref: Ref): ?CacheEntry<T>;  // eslint-disable-line no-undef
+  get(ref: Ref): ?T;  // eslint-disable-line no-undef
+  add(ref: Ref, size: number, value: T): void;  // eslint-disable-line no-undef
+}
+
+class CacheEntry<T> {
   size: number;
   value: ?T;
 

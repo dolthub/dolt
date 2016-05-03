@@ -45,7 +45,7 @@ func (suite *RemoteDataStoreSuite) SetupTest() {
 	suite.cs = chunks.NewTestStore()
 	suite.makeDs = func(cs chunks.ChunkStore) DataStore {
 		hbs := newHTTPBatchStoreForTest(suite.cs)
-		return &RemoteDataStoreClient{newDataStoreCommon(hbs, hbs)}
+		return &RemoteDataStoreClient{newDataStoreCommon(types.NewValueStore(hbs), hbs)}
 	}
 	suite.ds = suite.makeDs(suite.cs)
 }
@@ -59,13 +59,28 @@ func (suite *DataStoreSuite) TestReadWriteCache() {
 	var v types.Value = types.Bool(true)
 	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(v))
 	r := suite.ds.WriteValue(v).TargetRef()
-	commit := NewCommit()
-	newDs, err := suite.ds.Commit("foo", commit.Set(ValueField, v))
+	commit := NewCommit().Set(ValueField, v)
+	newDs, err := suite.ds.Commit("foo", commit)
 	suite.NoError(err)
 	suite.Equal(1, suite.cs.Writes-writesOnCommit)
 
 	v = newDs.ReadValue(r)
 	suite.True(v.Equals(types.Bool(true)))
+}
+
+func (suite *DataStoreSuite) TestReadWriteCachePersists() {
+	var err error
+	var v types.Value = types.Bool(true)
+	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(v))
+	r := suite.ds.WriteValue(v)
+	commit := NewCommit().Set(ValueField, v)
+	suite.ds, err = suite.ds.Commit("foo", commit)
+	suite.NoError(err)
+	suite.Equal(1, suite.cs.Writes-writesOnCommit)
+
+	newCommit := NewCommit().Set(ValueField, r).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(commit)))
+	suite.ds, err = suite.ds.Commit("foo", newCommit)
+	suite.NoError(err)
 }
 
 func (suite *DataStoreSuite) TestWriteRefToNonexistentValue() {

@@ -26,6 +26,7 @@ import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import Ref from './ref.js';
 import type {Type} from './type.js';
+import type {ValueReadWriter} from './value-store.js';
 
 const testSetSize = 5000;
 const setOfNRef = 'sha1-5b4cd51d88b3d99e6dafdb1cafb8cec90d5aecdf';
@@ -250,14 +251,14 @@ suite('SetLeaf', () => {
 });
 
 suite('CompoundSet', () => {
-  function build(ds: DataStore, values: Array<string>): NomsSet {
+  function build(vwr: ValueReadWriter, values: Array<string>): NomsSet {
     const tr = makeSetType(stringType);
     assert.isTrue(values.length > 1 && Math.log2(values.length) % 1 === 0);
 
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
-      const l = new NomsSet(tr, new SetLeafSequence(ds, tr, [values[i], values[i + 1]]));
-      const r = ds.writeValue(l);
+      const l = new NomsSet(tr, new SetLeafSequence(vwr, tr, [values[i], values[i + 1]]));
+      const r = vwr.writeValue(l);
       tuples.push(new MetaTuple(r, values[i + 1], 2));
     }
 
@@ -265,8 +266,8 @@ suite('CompoundSet', () => {
     while (tuples.length > 1) {
       const next = [];
       for (let i = 0; i < tuples.length; i += 2) {
-        last = new NomsSet(tr, new OrderedMetaSequence(ds, tr, [tuples[i], tuples[i + 1]]));
-        const r = ds.writeValue(last);
+        last = new NomsSet(tr, new OrderedMetaSequence(vwr, tr, [tuples[i], tuples[i + 1]]));
+        const r = vwr.writeValue(last);
         next.push(new MetaTuple(r, tuples[i + 1].value,
                                 tuples[i].numLeaves + tuples[i + 1].numLeaves));
       }
