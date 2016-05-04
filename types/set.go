@@ -3,10 +3,8 @@ package types
 import "github.com/attic-labs/noms/d"
 
 type Set interface {
-	Value
+	Collection
 	First() Value
-	Len() uint64
-	Empty() bool
 	Has(key Value) bool
 	Insert(values ...Value) Set
 	Remove(values ...Value) Set

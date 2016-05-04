@@ -123,7 +123,7 @@ suite('List', () => {
   }
 
   test('List 1K', async () => {
-    await listTestSuite(10, 'sha1-34023a22fa32bda7d77c64c62361f3b31d674e6e', 19, 19, 2);
+    await listTestSuite(10, 'sha1-34023a22fa32bda7d77c64c62361f3b31d674e6e', 17, 19, 2);
   });
 
   test('LONG: List 4K', async () => {

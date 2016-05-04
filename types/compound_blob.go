@@ -48,6 +48,10 @@ func (cb compoundBlob) Len() uint64 {
 	return cb.length
 }
 
+func (cb compoundBlob) Empty() bool {
+	return cb.length == 0
+}
+
 type compoundBlobReader struct {
 	cursor                          *sequenceCursor
 	currentReader                   io.ReadSeeker

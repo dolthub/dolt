@@ -28,6 +28,10 @@ func (bl blobLeaf) Len() uint64 {
 	return uint64(len(bl.data))
 }
 
+func (bl blobLeaf) Empty() bool {
+	return len(bl.data) == 0
+}
+
 func (bl blobLeaf) Ref() ref.Ref {
 	return EnsureRef(bl.ref, bl)
 }

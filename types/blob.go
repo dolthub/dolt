@@ -16,8 +16,7 @@ const (
 var RefOfBlobType = MakeRefType(BlobType)
 
 type Blob interface {
-	Value
-	Len() uint64
+	Collection
 	// BUG 155 - Should provide Write... Maybe even have Blob implement ReadWriteSeeker
 	Reader() io.ReadSeeker
 }

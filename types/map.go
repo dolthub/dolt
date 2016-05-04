@@ -3,10 +3,8 @@ package types
 import "github.com/attic-labs/noms/d"
 
 type Map interface {
-	Value
+	Collection
 	First() (Value, Value)
-	Len() uint64
-	Empty() bool
 	Has(key Value) bool
 	Get(key Value) Value
 	MaybeGet(key Value) (v Value, ok bool)

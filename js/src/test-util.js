@@ -38,6 +38,8 @@ export function assertValueType(expectType: Type, v: valueOrPrimitive) {
 
 export function assertChunkCountAndType(expectCount: number, expectType: Type,
     v: Collection) {
+  const chunks = v.chunks;
+  assert.strictEqual(expectCount, chunks.length);
   v.chunks.forEach(r => assert.isTrue(expectType.equals(r.type)));
 }
 

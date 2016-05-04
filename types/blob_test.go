@@ -52,25 +52,43 @@ func randomBuff(powOfTwo uint) []byte {
 }
 
 type blobTestSuite struct {
-	suite.Suite
-	blob                   Blob
-	buff                   []byte
-	expectRef              ref.Ref
-	expectChunkCount       int
-	expectPrependChunkDiff int
-	expectAppendChunkDiff  int
+	collectionTestSuite
+	buff []byte
 }
 
 func newBlobTestSuite(size uint, expectRefStr string, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int) *blobTestSuite {
+	length := 1 << size
 	buff := randomBuff(size)
 	blob := NewBlob(bytes.NewReader(buff))
 	return &blobTestSuite{
-		blob:                   blob,
-		buff:                   buff,
-		expectRef:              ref.Parse(expectRefStr),
-		expectChunkCount:       expectChunkCount,
-		expectPrependChunkDiff: expectPrependChunkDiff,
-		expectAppendChunkDiff:  expectAppendChunkDiff,
+		collectionTestSuite: collectionTestSuite{
+			col:                    blob,
+			expectType:             BlobType,
+			expectLen:              uint64(length),
+			expectRef:              expectRefStr,
+			expectChunkCount:       expectChunkCount,
+			expectPrependChunkDiff: expectPrependChunkDiff,
+			expectAppendChunkDiff:  expectAppendChunkDiff,
+			validate: func(v2 Collection) bool {
+				b2 := v2.(Blob)
+				out := make([]byte, length)
+				io.ReadFull(b2.Reader(), out)
+				return bytes.Compare(out, buff) == 0
+			},
+			prependOne: func() Collection {
+				dup := make([]byte, length+1)
+				dup[0] = 0
+				copy(dup[1:], buff)
+				return NewBlob(bytes.NewReader(dup))
+			},
+			appendOne: func() Collection {
+				dup := make([]byte, length+1)
+				copy(dup, buff)
+				dup[len(dup)-1] = 0
+				return NewBlob(bytes.NewReader(dup))
+			},
+		},
+		buff: buff,
 	}
 }
 
@@ -97,50 +115,10 @@ func TestBlobSuite256K(t *testing.T) {
 	suite.Run(t, newBlobTestSuite(18, "sha1-4692cb536901b70e66109191b0091cfb2ed32eea", 2, 15, 2))
 }
 
-func (suite *blobTestSuite) TestRef() {
-	suite.Equal(suite.expectRef.String(), suite.blob.Ref().String())
-}
-
-func (suite *blobTestSuite) TestType() {
-	suite.True(BlobType.Equals(suite.blob.Type()))
-}
-
-func (suite *blobTestSuite) TestLen() {
-	suite.Equal(len(suite.buff), int(suite.blob.Len()))
-}
-
-func (suite *blobTestSuite) TestEquals() {
-	b2 := suite.blob
-	suite.True(suite.blob.Equals(b2))
-	suite.True(b2.Equals(suite.blob))
-}
-
-func (suite *blobTestSuite) TestChunkCount() {
-	suite.Equal(suite.expectChunkCount, len(suite.blob.Chunks()))
-}
-
-func (suite *blobTestSuite) TestChunkRefType() {
-	for _, r := range suite.blob.Chunks() {
-		suite.True(RefOfBlobType.Equals(r.Type()))
-	}
-}
-
-func (suite *blobTestSuite) TestRoundTripAndReadFull() {
-	vs := NewTestValueStore()
-	r := vs.WriteValue(suite.blob)
-	v2 := vs.ReadValue(r.TargetRef()).(Blob)
-	suite.True(v2.Equals(suite.blob))
-	out := make([]byte, len(suite.buff))
-	n, err := io.ReadFull(v2.Reader(), out)
-	suite.NoError(err)
-	suite.Equal(len(suite.buff), n)
-	suite.Equal(suite.buff, out)
-}
-
 // Checks the first 1/2 of the bytes, then 1/2 of the remainder, then 1/2 of the remainder, etc...
 func (suite *blobTestSuite) TestRandomRead() {
 	buffReader := bytes.NewReader(suite.buff)
-	blobReader := suite.blob.Reader()
+	blobReader := suite.col.(Blob).Reader()
 
 	readByteRange := func(r io.ReadSeeker, start int64, count int64) []byte {
 		bytes := make([]byte, count)
@@ -191,22 +169,6 @@ func chunkDiffCount(c1 []Ref, c2 []Ref) int {
 
 	count += len(refs)
 	return count
-}
-
-func (suite *blobTestSuite) TestPrependChunkDiff() {
-	dup := make([]byte, len(suite.buff)+1)
-	dup[0] = 0
-	copy(dup[1:], suite.buff)
-	b2 := NewBlob(bytes.NewReader(dup))
-	suite.Equal(suite.expectPrependChunkDiff, chunkDiffCount(suite.blob.Chunks(), b2.Chunks()))
-}
-
-func (suite *blobTestSuite) TestAppendChunkDiff() {
-	dup := make([]byte, len(suite.buff)+1)
-	copy(dup, suite.buff)
-	dup[len(dup)-1] = 0
-	b2 := NewBlob(bytes.NewReader(dup))
-	suite.Equal(suite.expectAppendChunkDiff, chunkDiffCount(suite.blob.Chunks(), b2.Chunks()))
 }
 
 type testReader struct {

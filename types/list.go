@@ -3,9 +3,7 @@ package types
 import "github.com/attic-labs/noms/d"
 
 type List interface {
-	Value
-	Len() uint64
-	Empty() bool
+	Collection
 	Get(idx uint64) Value
 	Iter(f listIterFunc)
 	IterAll(f listIterAllFunc)
