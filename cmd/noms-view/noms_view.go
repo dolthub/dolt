@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/attic-labs/noms/chunks"
@@ -26,6 +27,7 @@ const (
 
 var (
 	hostFlag = flag.String("host", "localhost:0", "Host to listen on")
+	showHelp = flag.Bool("help", false, "Show help message")
 )
 
 type chunkStoreRecord struct {
@@ -38,13 +40,13 @@ type chunkStoreRecords map[string]chunkStoreRecord
 func main() {
 	usage := func() {
 		flag.PrintDefaults()
-		fmt.Printf("Usage: %s %s <view-dir> arg1=val1 arg2=val2...\n", os.Args[0], serveCmd)
+		fmt.Printf("Usage: %s %s <view-dir> arg1=val1 arg2=val2...\n", path.Base(os.Args[0]), serveCmd)
 	}
 
 	flag.Parse()
 	flag.Usage = usage
 
-	if len(flag.Args()) < 2 || flag.Arg(0) != serveCmd {
+	if *showHelp || len(flag.Args()) < 2 || flag.Arg(0) != serveCmd {
 		usage()
 		os.Exit(1)
 	}
