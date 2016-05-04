@@ -10,7 +10,6 @@ import {
   createStructClass,
   DatasetSpec,
   DataStore,
-  Field,
   makeMapType,
   makeRefType,
   makeStructType,
@@ -32,17 +31,14 @@ const args = argv
   .demand(1)
   .argv;
 
-const fileType = makeStructType('File', [
-  new Field('content', makeRefType(blobType)),
-]);
 // TODO(aa): Change to Map<string, File|Directory> once we have unions.
 const entriesType = makeMapType(stringType, valueType);
-const directoryType = makeStructType('Directory', [
-  new Field('entries', makeRefType(entriesType)),
-]);
-
-const File = createStructClass(fileType);
-const Directory = createStructClass(directoryType);
+const File = createStructClass(makeStructType('File', {
+  content: makeRefType(blobType),
+}));
+const Directory = createStructClass(makeStructType('Directory', {
+  entries: makeRefType(entriesType),
+}));
 
 async function newDirectoryEntryMap(values) {
   return newMap(values, entriesType);
