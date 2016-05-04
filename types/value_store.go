@@ -126,7 +126,9 @@ func (lvs *ValueStore) checkChunksInCache(v Value) map[ref.Ref]struct{} {
 	hints := map[ref.Ref]struct{}{}
 	for _, reachable := range v.Chunks() {
 		entry := lvs.check(reachable.TargetRef())
-		d.Exp.True(entry != nil && entry.Present(), "Attempted to write\n%s\n, containing ref %s, which points to a non-existent Value.", EncodedValueWithTags(v), reachable.TargetRef())
+		if entry == nil || !entry.Present() {
+			d.Exp.Fail("Attempted to write Value containing Ref to non-existent object.", "%s\n, contains ref %s, which points to a non-existent Value.", EncodedValueWithTags(v), reachable.TargetRef())
+		}
 		if hint := entry.Hint(); !hint.IsEmpty() {
 			hints[hint] = struct{}{}
 		}
