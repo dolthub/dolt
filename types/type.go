@@ -121,17 +121,6 @@ func MakePrimitiveTypeByString(p string) *Type {
 	return nil
 }
 
-func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
-	if len(elemTypes) == 1 {
-		d.Chk.NotEqual(MapKind, kind, "MapKind requires 2 element types.")
-		d.Chk.True(kind == RefKind || kind == ListKind || kind == SetKind)
-	} else {
-		d.Chk.Equal(MapKind, kind)
-		d.Chk.Len(elemTypes, 2, "MapKind requires 2 element types.")
-	}
-	return buildType(CompoundDesc{kind, elemTypes})
-}
-
 func MakeStructType(name string, fields map[string]*Type) *Type {
 	return buildType(StructDesc{name, fields})
 }

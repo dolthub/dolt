@@ -65,11 +65,11 @@ suite('Decode', () => {
     assert.isTrue(r.atEnd());
   });
 
-  test('read type as tag', () => {
+  test('read type', () => {
     const ds = new DataStore(makeTestingBatchStore());
     function doTest(expected: Type, a: Array<any>) {
       const r = new JsonArrayReader(a, ds);
-      const tr = r.readTypeAsTag([]);
+      const tr = r.readType([]);
       assert.isTrue(expected.equals(tr));
     }
 

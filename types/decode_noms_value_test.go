@@ -56,13 +56,13 @@ func parseJSON(s string, vs ...interface{}) (v []interface{}) {
 	return
 }
 
-func TestReadTypeAsTag(t *testing.T) {
+func TestReadType(t *testing.T) {
 	cs := NewTestValueStore()
 
 	test := func(expected *Type, s string, vs ...interface{}) {
 		a := parseJSON(s, vs...)
 		r := newJSONArrayReader(a, cs)
-		tr := r.readTypeAsTag(nil)
+		tr := r.readType(nil)
 		assert.True(t, expected.Equals(tr))
 	}
 
@@ -458,17 +458,17 @@ func TestReadTypeValue(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	test := func(expected *Type, json string, vs ...interface{}) {
-		a := parseJSON(json, vs...)
+	test := func(expected *Type, json string) {
+		a := parseJSON(json)
 		r := newJSONArrayReader(a, cs)
 		tr := r.readValue()
 		assert.True(expected.Equals(tr))
 	}
 
 	test(NumberType,
-		`[%d, %d]`, TypeKind, NumberKind)
+		`[TypeKind, NumberKind]`)
 	test(MakeListType(BoolType),
-		`[%d, %d, [%d]]`, TypeKind, ListKind, BoolKind)
+		`[TypeKind, ListKind, BoolKind]`)
 	test(MakeMapType(BoolType, StringType),
-		`[%d, %d, [%d, %d]]`, TypeKind, MapKind, BoolKind, StringKind)
+		`[TypeKind, MapKind, BoolKind, StringKind]`)
 }

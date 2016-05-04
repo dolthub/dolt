@@ -69,18 +69,19 @@ func (w *jsonArrayWriter) writeRef(r Ref) {
 	w.write(r.TargetRef().String())
 }
 
-func (w *jsonArrayWriter) writeTypeAsTag(t *Type, parentStructTypes []*Type) {
+func (w *jsonArrayWriter) writeType(t *Type, parentStructTypes []*Type) {
 	k := t.Kind()
 	switch k {
-	case StructKind:
-		w.writeStructType(t, parentStructTypes)
 	case ListKind, MapKind, RefKind, SetKind:
 		w.write(k)
 		for _, elemType := range t.Desc.(CompoundDesc).ElemTypes {
-			w.writeTypeAsTag(elemType, parentStructTypes)
+			w.writeType(elemType, parentStructTypes)
 		}
+	case StructKind:
+		w.writeStructType(t, parentStructTypes)
 	default:
 		w.write(k)
+		d.Chk.True(IsPrimitiveKind(k), "Kind: %v Desc: %s\n", t.Kind(), t.Describe())
 	}
 }
 
@@ -108,7 +109,7 @@ func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr *Type) bool {
 
 func (w *jsonArrayWriter) writeValue(v Value) {
 	t := v.Type()
-	w.writeTypeAsTag(t, nil)
+	w.writeType(t, nil)
 	switch t.Kind() {
 	case BlobKind:
 		if w.maybeWriteMetaSequence(v, t) {
@@ -156,30 +157,12 @@ func (w *jsonArrayWriter) writeValue(v Value) {
 		w.write(v.(String).String())
 	case TypeKind:
 		vt := v.(*Type)
-		w.writeTypeAsValue(vt, nil)
+		w.writeType(vt, nil)
 	case StructKind:
 		w.writeStruct(v, t)
 	case ValueKind, ParentKind:
 	default:
 		d.Chk.Fail("Unknown NomsKind")
-	}
-}
-
-func (w *jsonArrayWriter) writeTypeAsValue(t *Type, parentStructTypes []*Type) {
-	k := t.Kind()
-	switch k {
-	case ListKind, MapKind, RefKind, SetKind:
-		w.write(k)
-		w2 := newJSONArrayWriter(w.vw)
-		for _, elemType := range t.Desc.(CompoundDesc).ElemTypes {
-			w2.writeTypeAsValue(elemType, parentStructTypes)
-		}
-		w.write(w2.toArray())
-	case StructKind:
-		w.writeStructType(t, parentStructTypes)
-	default:
-		w.write(k)
-		d.Chk.True(IsPrimitiveKind(k), "Kind: %v Desc: %s\n", t.Kind(), t.Describe())
 	}
 }
 
@@ -211,7 +194,7 @@ func (w *jsonArrayWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 	fieldWriter := newJSONArrayWriter(w.vw)
 	t.Desc.(StructDesc).IterFields(func(name string, t *Type) {
 		fieldWriter.write(name)
-		fieldWriter.writeTypeAsTag(t, parentStructTypes)
+		fieldWriter.writeType(t, parentStructTypes)
 	})
 	w.write(fieldWriter.toArray())
 }

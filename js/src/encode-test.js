@@ -12,9 +12,9 @@ import {encodeNomsValue, JsonArrayWriter} from './encode.js';
 import {
   blobType,
   boolType,
-  makeCompoundType,
   makeListType,
   makeMapType,
+  makeRefType,
   makeSetType,
   makeStructType,
   numberType,
@@ -64,7 +64,7 @@ suite('Encode', () => {
     const ds = new DataStore(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const tr = makeCompoundType(Kind.List, numberType);
+    const tr = makeListType(numberType);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, [0, 1, 2, 3]));
     w.writeValue(l);
     assert.deepEqual([Kind.List, Kind.Number, false,
@@ -75,7 +75,7 @@ suite('Encode', () => {
     const ds = new DataStore(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const tr = makeCompoundType(Kind.List, valueType);
+    const tr = makeListType(valueType);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, ['0', 1, '2', true]));
     w.writeValue(l);
     assert.deepEqual([Kind.List, Kind.Value, false, [
@@ -107,7 +107,7 @@ suite('Encode', () => {
     const ds = new DataStore(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const tr = makeCompoundType(Kind.Set, numberType);
+    const tr = makeSetType(numberType);
     const v = new NomsSet(tr, new SetLeafSequence(ds, tr, [0, 1, 2, 3]));
     w.writeValue(v);
     assert.deepEqual([Kind.Set, Kind.Number, false,
@@ -117,7 +117,7 @@ suite('Encode', () => {
   test('write compound set', async () => {
     const ds = new DataStore(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
-    const ltr = makeCompoundType(Kind.Set, numberType);
+    const ltr = makeSetType(numberType);
     const r1 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [0])));
     const r2 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [1, 2])));
     const r3 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [3, 4, 5])));
@@ -157,7 +157,7 @@ suite('Encode', () => {
     const ds = new DataStore(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const tr = makeCompoundType(Kind.Map, stringType, boolType);
+    const tr = makeMapType(stringType, boolType);
     const v = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'a', value: false},
         {key:'b', value:true}]));
     w.writeValue(v);
@@ -300,10 +300,10 @@ suite('Encode', () => {
     };
 
     test([Kind.Type, Kind.Number], numberType);
-    test([Kind.Type, Kind.List, [Kind.Bool]],
-         makeCompoundType(Kind.List, boolType));
-    test([Kind.Type, Kind.Map, [Kind.Bool, Kind.String]],
-         makeCompoundType(Kind.Map, boolType, stringType));
+    test([Kind.Type, Kind.List, Kind.Bool],
+         makeListType(boolType));
+    test([Kind.Type, Kind.Map, Kind.Bool, Kind.String],
+         makeMapType(boolType, stringType));
     test([Kind.Type, Kind.Struct, 'S', ['v', Kind.Value, 'x', Kind.Number]],
          makeStructType('S', {
            'x': numberType,
@@ -360,7 +360,7 @@ suite('Encode', () => {
     const ds = new DataStore(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
     const ref = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
-    const t = makeCompoundType(Kind.Ref, blobType);
+    const t = makeRefType(blobType);
     const v = new RefValue(ref, t);
     w.writeValue(v);
 

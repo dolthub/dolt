@@ -163,18 +163,6 @@ function makePrimitiveType(k: NomsKind): Type<PrimitiveDesc> {
   return buildType(new PrimitiveDesc(k));
 }
 
-export function makeCompoundType(k: NomsKind, ...elemTypes: Array<Type>): Type {
-  if (elemTypes.length === 1) {
-    invariant(k !== Kind.Map, 'Map requires 2 element types');
-    invariant(k === Kind.Ref || k === Kind.List || k === Kind.Set);
-  } else {
-    invariant(k === Kind.Map, 'Only Map can have multiple element types');
-    invariant(elemTypes.length === 2, 'Map requires 2 element types');
-  }
-
-  return buildType(new CompoundDesc(k, elemTypes));
-}
-
 export function makeListType(elemType: Type): Type<CompoundDesc> {
   return buildType(new CompoundDesc(Kind.List, [elemType]));
 }
@@ -203,10 +191,10 @@ export const typeType = makePrimitiveType(Kind.Type);
 export const valueType = makePrimitiveType(Kind.Value);
 
 export const refOfBlobType = makeRefType(blobType);
-export const refOfValueType = makeCompoundType(Kind.Ref, valueType);
-export const listOfValueType = makeCompoundType(Kind.List, valueType);
-export const setOfValueType = makeCompoundType(Kind.Set, valueType);
-export const mapOfValueType = makeCompoundType(Kind.Map, valueType, valueType);
+export const refOfValueType = makeRefType(valueType);
+export const listOfValueType = makeListType(valueType);
+export const setOfValueType = makeSetType(valueType);
+export const mapOfValueType = makeMapType(valueType, valueType);
 
 /**
  * Gives the existing primitive Type value for a NomsKind.

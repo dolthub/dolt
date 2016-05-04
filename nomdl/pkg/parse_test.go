@@ -195,7 +195,8 @@ func (suite *ParsedResultTestSuite) assertTypes(source string, ts ...*types.Type
 	err := d.Try(func() {
 		i := runParser("", strings.NewReader(source))
 		for idx, t := range i.Types {
-			suite.True(t.Equals(ts[idx]))
+			// Cannot use t.Equals here since the parser generates a Type that cannot be serialized.
+			suite.Equal(ts[idx], t)
 		}
 	})
 	suite.NoError(err, source)

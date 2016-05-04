@@ -348,10 +348,8 @@ func TestWriteTypeValue(t *testing.T) {
 	}
 
 	test([]interface{}{TypeKind, NumberKind}, NumberType)
-	test([]interface{}{TypeKind, ListKind, []interface{}{BoolKind}},
-		MakeListType(BoolType))
-	test([]interface{}{TypeKind, MapKind, []interface{}{BoolKind, StringKind}},
-		MakeMapType(BoolType, StringType))
+	test([]interface{}{TypeKind, ListKind, BoolKind}, MakeListType(BoolType))
+	test([]interface{}{TypeKind, MapKind, BoolKind, StringKind}, MakeMapType(BoolType, StringType))
 
 	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"v", ValueKind, "x", NumberKind}},
 		MakeStructType("S", TypeMap{

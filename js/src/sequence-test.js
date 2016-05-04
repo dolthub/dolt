@@ -4,12 +4,11 @@ import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import {Sequence, SequenceCursor} from './sequence.js';
 import {notNull} from './assert.js';
-import {makeCompoundType, valueType} from './type.js';
-import {Kind} from './noms-kind.js';
+import {makeListType, valueType} from './type.js';
 
 class TestSequence extends Sequence<any> {
   constructor(items: Array<any>) {
-    super(null, makeCompoundType(Kind.List, valueType), items);
+    super(null, makeListType(valueType), items);
   }
 
   getChildSequence(idx: number): // eslint-disable-line no-unused-vars

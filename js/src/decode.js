@@ -10,8 +10,10 @@ import type {NomsKind} from './noms-kind.js';
 import {decode as decodeBase64} from './base64.js';
 import {
   getPrimitiveType,
-  makeCompoundType,
+  makeListType,
+  makeMapType,
   makeRefType,
+  makeSetType,
   makeStructType,
   StructDesc,
   Type,
@@ -106,20 +108,19 @@ export class JsonArrayReader {
     return Ref.parse(next);
   }
 
-  readTypeAsTag(parentStructTypes: Type[]): Type {
-    const kind = this.readKind();
-    switch (kind) {
+  readType(parentStructTypes: Type[]): Type {
+    const k = this.readKind();
+    switch (k) {
       case Kind.List:
+        return makeListType(this.readType(parentStructTypes));
+      case Kind.Map:
+        return makeMapType(this.readType(parentStructTypes),
+                           this.readType(parentStructTypes));
       case Kind.Set:
-      case Kind.Ref: {
-        const elemType = this.readTypeAsTag(parentStructTypes);
-        return makeCompoundType(kind, elemType);
-      }
-      case Kind.Map: {
-        const keyType = this.readTypeAsTag(parentStructTypes);
-        const valueType = this.readTypeAsTag(parentStructTypes);
-        return makeCompoundType(kind, keyType, valueType);
-      }
+        return makeSetType(this.readType(parentStructTypes));
+      case Kind.Ref:
+        return makeRefType(this.readType(parentStructTypes));
+
       case Kind.Type:
         return typeType;
       case Kind.Struct:
@@ -130,11 +131,8 @@ export class JsonArrayReader {
       }
     }
 
-    if (isPrimitiveKind(kind)) {
-      return getPrimitiveType(kind);
-    }
-
-    throw new Error('Unreachable');
+    invariant(isPrimitiveKind(k));
+    return getPrimitiveType(k);
   }
 
   readBlobLeafSequence(): BlobLeafSequence {
@@ -191,7 +189,7 @@ export class JsonArrayReader {
   }
 
   readValue(): any {
-    const t = this.readTypeAsTag([]);
+    const t = this.readType([]);
     switch (t.kind) {
       case Kind.Blob: {
         const isMeta = this.readBool();
@@ -243,37 +241,10 @@ export class JsonArrayReader {
       case Kind.Struct:
         return this.readStruct(t);
       case Kind.Type:
-        return this.readTypeAsValue([]);
+        return this.readType([]);
     }
 
     throw new Error('Unreached');
-  }
-
-  readTypeAsValue(parentStructTypes: Type[]): Type {
-    const k = this.readKind();
-
-    switch (k) {
-      case Kind.List:
-      case Kind.Map:
-      case Kind.Ref:
-      case Kind.Set: {
-        const r2 = new JsonArrayReader(this.readArray(), this._ds);
-        const elemTypes: Array<Type> = [];
-        while (!r2.atEnd()) {
-          elemTypes.push(r2.readTypeAsValue(parentStructTypes));
-        }
-
-        return makeCompoundType(k, ...elemTypes);
-      }
-      case Kind.Struct:
-        return this.readStructType(parentStructTypes);
-
-      case Kind.Parent:
-        throw new Error('not reachable');
-    }
-
-    invariant(isPrimitiveKind(k));
-    return getPrimitiveType(k);
   }
 
   readStruct<T: Struct>(type: Type): T {
@@ -300,7 +271,7 @@ export class JsonArrayReader {
     const fieldReader = new JsonArrayReader(this.readArray(), this._ds);
     while (!fieldReader.atEnd()) {
       const fieldName = fieldReader.readString();
-      const fieldType = fieldReader.readTypeAsTag(parentStructTypes);
+      const fieldType = fieldReader.readType(parentStructTypes);
       newFields[fieldName] = fieldType;
     }
 

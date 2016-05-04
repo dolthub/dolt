@@ -2,7 +2,6 @@ package types
 
 import (
 	"encoding/base64"
-	"fmt"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -79,24 +78,17 @@ func (r *jsonArrayReader) readRef() ref.Ref {
 	return ref.Parse(s)
 }
 
-func (r *jsonArrayReader) readTypeAsTag(parentStructTypes []*Type) *Type {
-	kind := r.readKind()
-	switch kind {
+func (r *jsonArrayReader) readType(parentStructTypes []*Type) *Type {
+	k := r.readKind()
+	switch k {
 	case ListKind:
-		elemType := r.readTypeAsTag(parentStructTypes)
-		return MakeListType(elemType)
-	case SetKind:
-		elemType := r.readTypeAsTag(parentStructTypes)
-		return MakeSetType(elemType)
-	case RefKind:
-		elemType := r.readTypeAsTag(parentStructTypes)
-		return MakeRefType(elemType)
+		return MakeListType(r.readType(parentStructTypes))
 	case MapKind:
-		keyType := r.readTypeAsTag(parentStructTypes)
-		valueType := r.readTypeAsTag(parentStructTypes)
-		return MakeMapType(keyType, valueType)
-	case TypeKind:
-		return TypeType
+		return MakeMapType(r.readType(parentStructTypes), r.readType(parentStructTypes))
+	case RefKind:
+		return MakeRefType(r.readType(parentStructTypes))
+	case SetKind:
+		return MakeSetType(r.readType(parentStructTypes))
 	case StructKind:
 		return r.readStructType(parentStructTypes)
 	case ParentKind:
@@ -105,11 +97,8 @@ func (r *jsonArrayReader) readTypeAsTag(parentStructTypes []*Type) *Type {
 		return parentStructTypes[len(parentStructTypes)-1-int(i)]
 	}
 
-	if IsPrimitiveKind(kind) {
-		return MakePrimitiveType(kind)
-	}
-
-	panic("unreachable")
+	d.Chk.True(IsPrimitiveKind(k))
+	return MakePrimitiveType(k)
 }
 
 func (r *jsonArrayReader) readBlob() Value {
@@ -151,21 +140,6 @@ func (r *jsonArrayReader) readMap(t *Type) Value {
 	return newMapLeaf(t, data...)
 }
 
-func indexTypeForMetaSequence(t *Type) *Type {
-	switch t.Kind() {
-	default:
-		panic(fmt.Sprintf("Unknown type used for metaSequence: %s", t.Describe()))
-	case BlobKind, ListKind:
-		return NumberType
-	case MapKind, SetKind:
-		elemType := t.Desc.(CompoundDesc).ElemTypes[0]
-		if elemType.IsOrdered() {
-			return elemType
-		}
-		return MakeRefType(ValueType)
-	}
-}
-
 func (r *jsonArrayReader) maybeReadMetaSequence(t *Type) (Value, bool) {
 	if !r.read().(bool) {
 		return nil, false
@@ -189,7 +163,7 @@ func (r *jsonArrayReader) readRefValue(t *Type) Value {
 }
 
 func (r *jsonArrayReader) readValue() Value {
-	t := r.readTypeAsTag(nil)
+	t := r.readType(nil)
 	switch t.Kind() {
 	case BlobKind:
 		if ms, ok := r.maybeReadMetaSequence(t); ok {
@@ -231,36 +205,12 @@ func (r *jsonArrayReader) readValue() Value {
 	case StructKind:
 		return r.readStruct(t)
 	case TypeKind:
-		return r.readTypeKindToValue(t)
+		return r.readType(nil)
 	case ParentKind:
 		panic("ParentKind should have been replaced")
 	}
 
 	panic("not reachable")
-}
-
-func (r *jsonArrayReader) readTypeKindToValue(t *Type) Value {
-	d.Chk.IsType(PrimitiveDesc(0), t.Desc)
-	return r.readTypeAsValue(nil)
-}
-
-func (r *jsonArrayReader) readTypeAsValue(parentStructTypes []*Type) *Type {
-	k := r.readKind()
-	switch k {
-	case ListKind, MapKind, RefKind, SetKind:
-		r2 := newJSONArrayReader(r.readArray(), r.vr)
-		elemTypes := []*Type{}
-		for !r2.atEnd() {
-			t := r2.readTypeAsValue(parentStructTypes)
-			elemTypes = append(elemTypes, t)
-		}
-		return makeCompoundType(k, elemTypes...)
-	case StructKind:
-		return r.readStructType(parentStructTypes)
-	}
-
-	d.Chk.True(IsPrimitiveKind(k))
-	return MakePrimitiveType(k)
 }
 
 func (r *jsonArrayReader) readStruct(t *Type) Value {
@@ -285,7 +235,7 @@ func (r *jsonArrayReader) readStructType(parentStructTypes []*Type) *Type {
 	fieldReader := newJSONArrayReader(r.readArray(), r.vr)
 	for !fieldReader.atEnd() {
 		fieldName := fieldReader.readString()
-		fieldType := fieldReader.readTypeAsTag(parentStructTypes)
+		fieldType := fieldReader.readType(parentStructTypes)
 		fields[fieldName] = fieldType
 	}
 	desc.Fields = fields

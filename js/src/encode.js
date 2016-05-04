@@ -66,7 +66,7 @@ export class JsonArrayWriter {
     this.write(r.targetRef.toString());
   }
 
-  writeTypeAsTag(t: Type, parentStructTypes: Type<StructDesc>[]) {
+  writeType(t: Type, parentStructTypes: Type<StructDesc>[]) {
     const k = t.kind;
     switch (k) {
       case Kind.List:
@@ -74,12 +74,13 @@ export class JsonArrayWriter {
       case Kind.Ref:
       case Kind.Set:
         this.writeKind(k);
-        t.elemTypes.forEach(elemType => this.writeTypeAsTag(elemType, parentStructTypes));
+        t.elemTypes.forEach(elemType => this.writeType(elemType, parentStructTypes));
         break;
       case Kind.Struct:
         this.writeStructType(t, parentStructTypes);
         break;
       default:
+        invariant(isPrimitiveKind(k));
         this.writeKind(k);
     }
   }
@@ -109,7 +110,7 @@ export class JsonArrayWriter {
 
   writeValue(v: valueOrPrimitive) {
     const t = getTypeOfValue(v);
-    this.writeTypeAsTag(t, []);
+    this.writeType(t, []);
     switch (t.kind) {
       case Kind.Blob: {
         invariant(v instanceof NomsBlob || v instanceof Sequence,
@@ -198,7 +199,7 @@ export class JsonArrayWriter {
       case Kind.Type: {
         invariant(v instanceof Type,
                   () => `Failed to write Type. Invalid type: ${describeTypeOfValue(v)}`);
-        this.writeTypeAsValue(v, []);
+        this.writeType(v, []);
         break;
       }
       case Kind.Value: {
@@ -212,29 +213,6 @@ export class JsonArrayWriter {
         break;
       default:
         throw new Error(`Not implemented: ${t.kind} ${v}`);
-    }
-  }
-
-  writeTypeAsValue(t: Type, parentStructTypes: Type<StructDesc>[]) {
-    const k = t.kind;
-    switch (k) {
-      case Kind.List:
-      case Kind.Map:
-      case Kind.Ref:
-      case Kind.Set: {
-        this.writeKind(k);
-        const w2 = new JsonArrayWriter(this._vw);
-        t.elemTypes.forEach(elem => w2.writeTypeAsValue(elem, parentStructTypes));
-        this.write(w2.array);
-        break;
-      }
-      case Kind.Struct: {
-        this.writeStructType(t, parentStructTypes);
-        break;
-      }
-      default:
-        invariant(isPrimitiveKind(k));
-        this.writeKind(k);
     }
   }
 
@@ -252,7 +230,7 @@ export class JsonArrayWriter {
     const fieldWriter = new JsonArrayWriter(this._vw);
     desc.forEachField((name: string, type: Type) => {
       fieldWriter.write(name);
-      fieldWriter.writeTypeAsTag(type, parentStructTypes);
+      fieldWriter.writeType(type, parentStructTypes);
     });
     this.write(fieldWriter.array);
     parentStructTypes.pop();

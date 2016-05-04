@@ -6,7 +6,7 @@ import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {ValueReader} from './value-store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import type {Collection} from './collection.js';
-import {CompoundDesc, makeCompoundType, makeRefType, numberType, valueType} from './type.js';
+import {makeRefType} from './type.js';
 import type {Type} from './type.js';
 import {IndexedSequence} from './indexed-sequence.js';
 import {invariant, notNull} from './assert.js';
@@ -187,29 +187,6 @@ export function newMetaSequenceFromData(vr: ValueReader, type: Type, tuples: Arr
     default:
       throw new Error('Not reached');
   }
-}
-
-const indexedSequenceIndexType = numberType;
-
-export function indexTypeForMetaSequence(t: Type): Type {
-  switch (t.kind) {
-    case Kind.Map:
-    case Kind.Set: {
-      const desc = t.desc;
-      invariant(desc instanceof CompoundDesc);
-      const elemType = desc.elemTypes[0];
-      if (elemType.ordered) {
-        return elemType;
-      } else {
-        return makeCompoundType(Kind.Ref, valueType);
-      }
-    }
-    case Kind.Blob:
-    case Kind.List:
-      return indexedSequenceIndexType;
-  }
-
-  throw new Error('Not reached');
 }
 
 export function newOrderedMetaSequenceChunkFn(t: Type, vr: ?ValueReader = null): makeChunkFn {
