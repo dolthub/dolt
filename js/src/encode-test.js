@@ -17,6 +17,7 @@ import {
   makeRefType,
   makeSetType,
   makeStructType,
+  makeUnionType,
   numberType,
   stringType,
   Type,
@@ -323,6 +324,11 @@ suite('Encode', () => {
     st.desc.fields['cs'] = lt;
 
     test([Kind.Type, Kind.Struct, 'A6', ['cs', Kind.List, Kind.Parent, 0, 'v', Kind.Number]], st);
+
+    test([Kind.Type, Kind.Union, 0], makeUnionType([]));
+    test([Kind.Type, Kind.Union, 2, Kind.Number, Kind.String],
+         makeUnionType([numberType, stringType]));
+    test([Kind.Type, Kind.List, Kind.Union, 0], makeListType(makeUnionType([])));
   });
 
   test('top level blob', async () => {
@@ -365,5 +371,24 @@ suite('Encode', () => {
     w.writeValue(v);
 
     assert.deepEqual([Kind.Ref, Kind.Blob, ref.toString(), '1'], w.array);
+  });
+
+  test('write union list', () => {
+    const ds = new DataStore(makeTestingBatchStore());
+    const w = new JsonArrayWriter(ds);
+    const tr = makeListType(makeUnionType([stringType, numberType]));
+    const v = new NomsList(tr, new ListLeafSequence(ds, tr, ['hi', 42]));
+    w.writeValue(v);
+    assert.deepEqual([Kind.List, Kind.Union, 2, Kind.Number, Kind.String,
+      false, [Kind.String, 'hi', Kind.Number, '42']], w.array);
+  });
+
+  test('write empty union list', () => {
+    const ds = new DataStore(makeTestingBatchStore());
+    const w = new JsonArrayWriter(ds);
+    const tr = makeListType(makeUnionType([]));
+    const v = new NomsList(tr, new ListLeafSequence(ds, tr, []));
+    w.writeValue(v);
+    assert.deepEqual([Kind.List, Kind.Union, 0, false, []], w.array);
   });
 });

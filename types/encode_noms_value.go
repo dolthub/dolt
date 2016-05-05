@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -56,6 +57,10 @@ func (w *jsonArrayWriter) writeUint8(v uint8) {
 	w.write(v)
 }
 
+func (w *jsonArrayWriter) writeUint16(v uint16) {
+	w.write(v)
+}
+
 func (w *jsonArrayWriter) writeKind(kind NomsKind) {
 	w.write(kind)
 }
@@ -77,8 +82,18 @@ func (w *jsonArrayWriter) writeType(t *Type, parentStructTypes []*Type) {
 		for _, elemType := range t.Desc.(CompoundDesc).ElemTypes {
 			w.writeType(elemType, parentStructTypes)
 		}
+
+	case UnionKind:
+		w.write(k)
+		elemTypes := t.Desc.(CompoundDesc).ElemTypes
+		w.writeUint16(uint16(len(elemTypes)))
+		for _, elemType := range elemTypes {
+			w.writeType(elemType, parentStructTypes)
+		}
 	case StructKind:
 		w.writeStructType(t, parentStructTypes)
+	case ParentKind:
+
 	default:
 		w.write(k)
 		d.Chk.True(IsPrimitiveKind(k), "Kind: %v Desc: %s\n", t.Kind(), t.Describe())
@@ -160,7 +175,8 @@ func (w *jsonArrayWriter) writeValue(v Value) {
 		w.writeType(vt, nil)
 	case StructKind:
 		w.writeStruct(v, t)
-	case ValueKind, ParentKind:
+	case ParentKind, UnionKind, ValueKind:
+		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", KindToString[t.Kind()]))
 	default:
 		d.Chk.Fail("Unknown NomsKind")
 	}

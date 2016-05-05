@@ -1,6 +1,8 @@
 package types
 
 import (
+	"sort"
+
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -139,6 +141,17 @@ func MakeMapType(keyType, valType *Type) *Type {
 
 func MakeRefType(elemType *Type) *Type {
 	return buildType(CompoundDesc{RefKind, []*Type{elemType}})
+}
+
+type unionTypes []*Type
+
+func (uts unionTypes) Len() int           { return len(uts) }
+func (uts unionTypes) Less(i, j int) bool { return uts[i].Ref().Less(uts[j].Ref()) }
+func (uts unionTypes) Swap(i, j int)      { uts[i], uts[j] = uts[j], uts[i] }
+
+func MakeUnionType(elemType ...*Type) *Type {
+	sort.Sort(unionTypes(elemType))
+	return buildType(CompoundDesc{UnionKind, elemType})
 }
 
 func buildType(desc TypeDesc) *Type {

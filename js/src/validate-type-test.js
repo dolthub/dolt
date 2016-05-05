@@ -17,6 +17,7 @@ import {
   makeMapType,
   makeSetType,
   makeStructType,
+  makeUnionType,
   mapOfValueType,
   numberType,
   setOfValueType,
@@ -125,5 +126,27 @@ suite('validate type', () => {
     assertAll(type, v);
 
     validateType(valueType, v);
+  });
+
+  test('union', async () => {
+    validateType(makeUnionType([numberType]), 42);
+    validateType(makeUnionType([numberType, stringType]), 42);
+    validateType(makeUnionType([numberType, stringType]), 'hi');
+    validateType(makeUnionType([numberType, stringType, boolType]), 555);
+    validateType(makeUnionType([numberType, stringType, boolType]), 'hi');
+    validateType(makeUnionType([numberType, stringType, boolType]), true);
+
+    const lt = makeListType(makeUnionType([numberType, stringType]));
+    validateType(lt, await newList([1, 'hi', 2, 'bye'], lt));
+
+    const st = makeSetType(stringType);
+    validateType(makeUnionType([st, numberType]), 42);
+    validateType(makeUnionType([st, numberType]), await newSet(['a', 'b'], st));
+
+    assertInvalid(makeUnionType([]), 42);
+    assertInvalid(makeUnionType([stringType]), 42);
+    assertInvalid(makeUnionType([stringType, boolType]), 42);
+    assertInvalid(makeUnionType([st, stringType]), 42);
+    assertInvalid(makeUnionType([st, numberType]), await newSet([1, 2], makeSetType(numberType)));
   });
 });

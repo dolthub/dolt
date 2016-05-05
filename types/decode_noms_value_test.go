@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
@@ -43,6 +44,7 @@ var replaceMap = map[string]NomsKind{
 	"StructKind": StructKind,
 	"TypeKind":   TypeKind,
 	"ParentKind": ParentKind,
+	"UnionKind":  UnionKind,
 }
 var kindRe = regexp.MustCompile(`(\w+Kind)`)
 
@@ -53,6 +55,7 @@ func parseJSON(s string, vs ...interface{}) (v []interface{}) {
 	})
 	dec := json.NewDecoder(strings.NewReader(fmt.Sprintf(s, vs...)))
 	dec.Decode(&v)
+	d.Chk.NotEmpty(v, "Failed to parse JSON: %s", s)
 	return
 }
 
@@ -116,20 +119,6 @@ func TestReadListOfValue(t *testing.T) {
 	assert.True(NewList(Number(1), NewString("hi"), Bool(true)).Equals(l))
 }
 
-func TestReadValueListOfNumber(t *testing.T) {
-	assert := assert.New(t)
-	cs := NewTestValueStore()
-
-	a := parseJSON(`[ValueKind, ListKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2"]]`)
-	r := newJSONArrayReader(a, cs)
-
-	tr := MakeListType(NumberType)
-
-	l := r.readValue()
-	l2 := NewTypedList(tr, Number(0), Number(1), Number(2))
-	assert.True(l2.Equals(l))
-}
-
 func TestReadCompoundList(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
@@ -182,20 +171,6 @@ func TestReadMapOfNumberToNumber(t *testing.T) {
 	assert.True(m2.Equals(m))
 }
 
-func TestReadValueMapOfNumberToNumber(t *testing.T) {
-	assert := assert.New(t)
-	cs := NewTestValueStore()
-
-	a := parseJSON(`[ValueKind, MapKind, NumberKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`)
-	r := newJSONArrayReader(a, cs)
-
-	tr := MakeMapType(NumberType, NumberType)
-
-	m := r.readValue()
-	m2 := NewTypedMap(tr, Number(0), Number(1), Number(2), Number(3))
-	assert.True(m2.Equals(m))
-}
-
 func TestReadSetOfNumber(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
@@ -207,20 +182,6 @@ func TestReadSetOfNumber(t *testing.T) {
 
 	s := r.readValue()
 	s2 := NewTypedSet(tr, Number(0), Number(1), Number(2), Number(3))
-	assert.True(s2.Equals(s))
-}
-
-func TestReadValueSetOfNumber(t *testing.T) {
-	assert := assert.New(t)
-	cs := NewTestValueStore()
-
-	a := parseJSON(`[ValueKind, SetKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`)
-	r := newJSONArrayReader(a, cs)
-
-	setTr := MakeSetType(NumberType)
-
-	s := r.readValue()
-	s2 := NewTypedSet(setTr, Number(0), Number(1), Number(2), Number(3))
 	assert.True(s2.Equals(s))
 }
 
@@ -260,8 +221,8 @@ func TestReadStruct(t *testing.T) {
 
 	a := parseJSON(`[StructKind, "A1", ["b", BoolKind, "s", StringKind, "x", NumberKind], BoolKind, true, StringKind, "hi", NumberKind, "42"]`)
 	r := newJSONArrayReader(a, cs)
-
 	v := r.readValue().(Struct)
+
 	assert.True(v.Type().Equals(typ))
 	assert.True(v.Get("x").Equals(Number(42)))
 	assert.True(v.Get("s").Equals(NewString("hi")))
@@ -322,54 +283,16 @@ func TestReadStructWithValue(t *testing.T) {
 	assert.True(v.Get("s").Equals(NewString("hi")))
 }
 
-func TestReadValueStruct(t *testing.T) {
-	assert := assert.New(t)
-	cs := NewTestValueStore()
-
-	// struct A1 {
-	//   x: Number
-	//   b: Bool
-	//   s: String
-	// }
-
-	typ := MakeStructType("A1", TypeMap{
-		"x": NumberType,
-		"s": StringType,
-		"b": BoolType,
-	})
-
-	a := parseJSON(`[ValueKind, StructKind, "A1", ["b", BoolKind, "s", StringKind, "x", NumberKind], BoolKind, true, StringKind, "hi", NumberKind, "42"]`)
-	r := newJSONArrayReader(a, cs)
-	v := r.readValue().(Struct)
-
-	assert.True(v.Type().Equals(typ))
-	assert.True(v.Get("x").Equals(Number(42)))
-	assert.True(v.Get("s").Equals(NewString("hi")))
-	assert.True(v.Get("b").Equals(Bool(true)))
-}
-
 func TestReadRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
 	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-	a := parseJSON(`[%d, %d, "%s", "42"]`, RefKind, NumberKind, r.String())
+	a := parseJSON(`[RefKind, NumberKind, "%s", "42"]`, r.String())
 	reader := newJSONArrayReader(a, cs)
 	v := reader.readValue()
 	tr := MakeRefType(NumberType)
 	assert.True(NewTypedRef(tr, r, 42).Equals(v))
-}
-
-func TestReadValueRef(t *testing.T) {
-	assert := assert.New(t)
-	cs := NewTestValueStore()
-
-	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
-	a := parseJSON(`[%d, %d, %d, "%s", "17"]`, ValueKind, RefKind, NumberKind, r.String())
-	reader := newJSONArrayReader(a, cs)
-	v := reader.readValue()
-	tr := MakeRefType(NumberType)
-	assert.True(NewTypedRef(tr, r, 17).Equals(v))
 }
 
 func TestReadStructWithBlob(t *testing.T) {
@@ -466,10 +389,35 @@ func TestReadTypeValue(t *testing.T) {
 		assert.True(expected.Equals(tr))
 	}
 
-	test(NumberType,
-		`[TypeKind, NumberKind]`)
-	test(MakeListType(BoolType),
-		`[TypeKind, ListKind, BoolKind]`)
-	test(MakeMapType(BoolType, StringType),
-		`[TypeKind, MapKind, BoolKind, StringKind]`)
+	test(NumberType, `[TypeKind, NumberKind]`)
+	test(MakeListType(BoolType), `[TypeKind, ListKind, BoolKind]`)
+	test(MakeMapType(BoolType, StringType), `[TypeKind, MapKind, BoolKind, StringKind]`)
+	test(MakeUnionType(), `[TypeKind, UnionKind, 0]`)
+	test(MakeUnionType(NumberType, StringType), `[TypeKind, UnionKind, 2, NumberKind, StringKind]`)
+	test(MakeListType(MakeUnionType()), `[TypeKind, ListKind, UnionKind, 0]`)
+}
+
+func TestReadUnionList(t *testing.T) {
+	assert := assert.New(t)
+	cs := NewTestValueStore()
+
+	a := parseJSON(`[ListKind, UnionKind, 2, StringKind, NumberKind,
+		false, [StringKind, "hi", NumberKind, "42"]]`)
+
+	r := newJSONArrayReader(a, cs)
+	v := r.readValue().(List)
+	v2 := NewTypedList(MakeListType(MakeUnionType(StringType, NumberType)), NewString("hi"), Number(42))
+	assert.True(v.Equals(v2))
+}
+
+func TestReadEmptyUnionList(t *testing.T) {
+	assert := assert.New(t)
+	cs := NewTestValueStore()
+
+	a := parseJSON(`[ListKind, UnionKind, 0, false, []]`)
+
+	r := newJSONArrayReader(a, cs)
+	v := r.readValue().(List)
+	v2 := NewTypedList(MakeListType(MakeUnionType()))
+	assert.True(v.Equals(v2))
 }

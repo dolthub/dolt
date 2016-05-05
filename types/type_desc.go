@@ -38,6 +38,7 @@ var KindToString = map[NomsKind]string{
 	TypeKind:   "Type",
 	ValueKind:  "Value",
 	ParentKind: "Parent",
+	UnionKind:  "Union",
 }
 
 // CompoundDesc describes a List, Map, Set or Ref type.

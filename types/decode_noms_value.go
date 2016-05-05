@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -65,6 +66,10 @@ func (r *jsonArrayReader) readUint8() uint8 {
 	return uint8(r.read().(float64))
 }
 
+func (r *jsonArrayReader) readUint16() uint16 {
+	return uint16(r.read().(float64))
+}
+
 func (r *jsonArrayReader) readArray() []interface{} {
 	return r.read().([]interface{})
 }
@@ -92,6 +97,13 @@ func (r *jsonArrayReader) readType(parentStructTypes []*Type) *Type {
 		return MakeSetType(r.readType(parentStructTypes))
 	case StructKind:
 		return r.readStructType(parentStructTypes)
+	case UnionKind:
+		l := r.readUint16()
+		elemTypes := make([]*Type, l)
+		for i := uint16(0); i < l; i++ {
+			elemTypes[i] = r.readType(parentStructTypes)
+		}
+		return MakeUnionType(elemTypes...)
 	case ParentKind:
 		i := r.readUint8()
 		d.Chk.True(i < uint8(len(parentStructTypes)))
@@ -173,20 +185,16 @@ func (r *jsonArrayReader) readValue() Value {
 		return Number(r.readFloat())
 	case StringKind:
 		return NewString(r.readString())
-	case ValueKind:
-		return r.readValue()
 	case ListKind:
 		if ms, ok := r.maybeReadMetaSequence(t); ok {
 			return ms
 		}
-
 		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		return r2.readList(t)
 	case MapKind:
 		if ms, ok := r.maybeReadMetaSequence(t); ok {
 			return ms
 		}
-
 		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		return r2.readMap(t)
 	case RefKind:
@@ -195,15 +203,14 @@ func (r *jsonArrayReader) readValue() Value {
 		if ms, ok := r.maybeReadMetaSequence(t); ok {
 			return ms
 		}
-
 		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		return r2.readSet(t)
 	case StructKind:
 		return r.readStruct(t)
 	case TypeKind:
 		return r.readType(nil)
-	case ParentKind:
-		panic("ParentKind should have been replaced")
+	case ParentKind, UnionKind, ValueKind:
+		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", KindToString[t.Kind()]))
 	}
 
 	panic("not reachable")

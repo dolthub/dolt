@@ -1,7 +1,7 @@
 // @flow
 
 import {Kind, kindToString} from './noms-kind.js';
-import {CompoundDesc} from './type.js';
+import {CompoundDesc, getTypeOfValue} from './type.js';
 import type {Type} from './type.js';
 import {Value} from './value.js';
 import {invariant} from './assert.js';
@@ -37,6 +37,10 @@ export default function validateType(t: Type, v: any): void {
       assertSubtype(v, t);
       return;
 
+    case Kind.Union:
+      assert(subtype(t, getTypeOfValue(v)), v, t);
+      break;
+
     case Kind.Parent:
     default:
       throw new Error('unreachable');
@@ -51,6 +55,12 @@ function assertSubtype(v: any, t: Type) {
 function subtype(expected: Type, actual: Type): boolean {
   if (expected.equals(actual)) {
     return true;
+  }
+
+  if (expected.kind === Kind.Union) {
+    const {desc} = expected;
+    invariant(desc instanceof CompoundDesc);
+    return desc.elemTypes.some(t => subtype(t, actual));
   }
 
   if (expected.kind !== actual.kind) {

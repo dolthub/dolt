@@ -356,6 +356,10 @@ func TestWriteTypeValue(t *testing.T) {
 			"x": NumberType,
 			"v": ValueType,
 		}))
+
+	test([]interface{}{TypeKind, UnionKind, uint16(0)}, MakeUnionType())
+	test([]interface{}{TypeKind, UnionKind, uint16(2), NumberKind, StringKind}, MakeUnionType(NumberType, StringType))
+	test([]interface{}{TypeKind, ListKind, UnionKind, uint16(0)}, MakeListType(MakeUnionType()))
 }
 
 func TestWriteListOfTypes(t *testing.T) {
@@ -418,5 +422,23 @@ func TestWriteRecursiveStruct(t *testing.T) {
 			}, false, []interface{}{}, NumberKind, "555",
 		}, NumberKind, "42",
 	}, w.toArray())
+}
 
+func TestWriteUnionList(t *testing.T) {
+	assert := assert.New(t)
+
+	w := newJSONArrayWriter(NewTestValueStore())
+	v := NewTypedList(MakeListType(MakeUnionType(StringType, NumberType)), NewString("hi"), Number(42))
+	w.writeValue(v)
+	assert.Equal([]interface{}{ListKind, UnionKind, uint16(2), NumberKind, StringKind,
+		false, []interface{}{StringKind, "hi", NumberKind, "42"}}, w.toArray())
+}
+
+func TestWriteEmptyUnionList(t *testing.T) {
+	assert := assert.New(t)
+
+	w := newJSONArrayWriter(NewTestValueStore())
+	v := NewTypedList(MakeListType(MakeUnionType()))
+	w.writeValue(v)
+	assert.Equal([]interface{}{ListKind, UnionKind, uint16(0), false, []interface{}{}}, w.toArray())
 }

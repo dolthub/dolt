@@ -183,6 +183,15 @@ export function makeStructType(name: string, fields: {[key: string]: Type}): Typ
   return buildType(new StructDesc(name, fields));
 }
 
+function compareTypeByRef(a: Type, b: Type): number {
+  return a.ref.less(b.ref) ? -1 : 1;
+}
+
+export function makeUnionType(types: Type[]): Type<CompoundDesc> {
+  types.sort(compareTypeByRef);
+  return buildType(new CompoundDesc(Kind.Union, types));
+}
+
 export const boolType = makePrimitiveType(Kind.Bool);
 export const numberType = makePrimitiveType(Kind.Number);
 export const stringType = makePrimitiveType(Kind.String);

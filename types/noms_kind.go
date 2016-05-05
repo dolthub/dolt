@@ -17,6 +17,7 @@ const (
 	StructKind
 	TypeKind
 	ParentKind // Only used in encoding/decoding.
+	UnionKind
 )
 
 // IsPrimitiveKind returns true if k represents a Noms primitive type, which excludes collections (List, Map, Set), Refs, Structs, Symbolic and Unresolved types.

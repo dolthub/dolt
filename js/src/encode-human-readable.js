@@ -79,23 +79,28 @@ export class TypeWriter {
       case Kind.List:
       case Kind.Ref:
       case Kind.Set:
+      case Kind.Map:
         this._w.writeKind(t.kind);
         this._w.write('<');
         invariant(t.desc instanceof CompoundDesc);
-        this._writeType(t.desc.elemTypes[0], parentStructTypes);
+        t.desc.elemTypes.forEach((t, i) => {
+          if (i !== 0) {
+            this._w.write(', ');
+          }
+          this._writeType(t, parentStructTypes);
+        });
         this._w.write('>');
         break;
-      case Kind.Map: {
-        this._w.writeKind(t.kind);
-        this._w.write('<');
+      case Kind.Union:
         invariant(t.desc instanceof CompoundDesc);
-        const [keyType, valueType] = t.desc.elemTypes;
-        this._writeType(keyType, parentStructTypes);
-        this._w.write(', ');
-        this._writeType(valueType, parentStructTypes);
-        this._w.write('>');
+        t.desc.elemTypes.forEach((t, i) => {
+          if (i !== 0) {
+            this._w.write(' | ');
+          }
+          this._writeType(t, parentStructTypes);
+        });
         break;
-      }
+
       case Kind.Struct:
         this._writeStructType(t, parentStructTypes);
         break;

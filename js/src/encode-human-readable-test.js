@@ -13,6 +13,7 @@ import {
   makeMapType,
   makeSetType,
   makeStructType,
+  makeUnionType,
   stringType,
   valueType,
   Type,
@@ -43,6 +44,12 @@ suite('Encode human readable types', () => {
     assertWriteType('Set<Number>', makeSetType(numberType));
     assertWriteType('Ref<Number>', makeRefType(numberType));
     assertWriteType('Map<Number, String>', makeMapType(numberType, stringType));
+
+    assertWriteType('Number | String', makeUnionType([numberType, stringType]));
+    assertWriteType('Bool', makeUnionType([boolType]));
+    assertWriteType('', makeUnionType([]));
+    assertWriteType('List<Number | String>', makeListType(makeUnionType([numberType, stringType])));
+    assertWriteType('List<>', makeListType(makeUnionType([])));
   });
 
   test('struct', () => {

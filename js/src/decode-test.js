@@ -16,6 +16,7 @@ import {
   makeRefType,
   makeSetType,
   makeStructType,
+  makeUnionType,
   numberType,
   stringType,
   Type,
@@ -69,14 +70,19 @@ suite('Decode', () => {
     const ds = new DataStore(makeTestingBatchStore());
     function doTest(expected: Type, a: Array<any>) {
       const r = new JsonArrayReader(a, ds);
-      const tr = r.readType([]);
+      const tr = r.readValue();
       assert.isTrue(expected.equals(tr));
     }
 
-    doTest(boolType, [Kind.Bool, true]);
-    doTest(typeType, [Kind.Type, Kind.Bool]);
-    doTest(makeListType(boolType), [Kind.List, Kind.Bool, true, false]);
-    doTest(makeStructType('S', {'x': boolType}), [Kind.Struct, 'S', ['x', Kind.Bool]]);
+    doTest(boolType, [Kind.Type, Kind.Bool, true]);
+    doTest(typeType, [Kind.Type, Kind.Type, Kind.Bool]);
+    doTest(makeListType(boolType), [Kind.Type, Kind.List, Kind.Bool, true, false]);
+    doTest(makeStructType('S', {'x': boolType}), [Kind.Type, Kind.Struct, 'S', ['x', Kind.Bool]]);
+
+    doTest(makeUnionType([]), [Kind.Type, Kind.Union, 0]);
+    doTest(makeUnionType([numberType, stringType]),
+           [Kind.Type, Kind.Union, 2, Kind.Number, Kind.String]);
+    doTest(makeListType(makeUnionType([])), [Kind.Type, Kind.List, Kind.Union, 0]);
   });
 
   test('read primitives', () => {
@@ -589,5 +595,26 @@ suite('Decode', () => {
 
     assert.isTrue(v.type.equals(ta));
     assert.isTrue(v.b.type.equals(tb));
+  });
+
+  test('read union list', async () => {
+    const ds = new DataStore(makeTestingBatchStore());
+    const a = parseJson(`[ListKind, UnionKind, 2, StringKind, NumberKind,
+      false, [StringKind, "hi", NumberKind, "42"]]`);
+    const r = new JsonArrayReader(a, ds);
+    const v = r.readValue();
+    const tr = makeListType(makeUnionType([stringType, numberType]));
+    const v2 = new NomsList(tr, new ListLeafSequence(ds, tr, ['hi', 42]));
+    assert.isTrue(v.equals(v2));
+  });
+
+  test('read empty union list', async () => {
+    const ds = new DataStore(makeTestingBatchStore());
+    const a = parseJson(`[ListKind, UnionKind, 0, false, []]`);
+    const r = new JsonArrayReader(a, ds);
+    const v = r.readValue();
+    const tr = makeListType(makeUnionType([]));
+    const v2 = new NomsList(tr, new ListLeafSequence(ds, tr, []));
+    assert.isTrue(v.equals(v2));
   });
 });

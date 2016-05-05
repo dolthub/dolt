@@ -185,18 +185,23 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 	switch t.Kind() {
 	case BlobKind, BoolKind, NumberKind, StringKind, TypeKind, ValueKind:
 		w.write(KindToString[t.Kind()])
-	case ListKind, RefKind, SetKind:
+	case ListKind, RefKind, SetKind, MapKind:
 		w.write(KindToString[t.Kind()])
 		w.write("<")
-		w.writeType(t.Desc.(CompoundDesc).ElemTypes[0], parentStructTypes)
+		for i, et := range t.Desc.(CompoundDesc).ElemTypes {
+			if i != 0 {
+				w.write(", ")
+			}
+			w.writeType(et, parentStructTypes)
+		}
 		w.write(">")
-	case MapKind:
-		w.write(KindToString[t.Kind()])
-		w.write("<")
-		w.writeType(t.Desc.(CompoundDesc).ElemTypes[0], parentStructTypes)
-		w.write(", ")
-		w.writeType(t.Desc.(CompoundDesc).ElemTypes[1], parentStructTypes)
-		w.write(">")
+	case UnionKind:
+		for i, et := range t.Desc.(CompoundDesc).ElemTypes {
+			if i != 0 {
+				w.write(" | ")
+			}
+			w.writeType(et, parentStructTypes)
+		}
 	case StructKind:
 		w.writeStructType(t, parentStructTypes)
 	case ParentKind:

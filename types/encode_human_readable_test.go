@@ -223,6 +223,11 @@ func TestWriteHumanReadableType(t *testing.T) {
 	assertWriteHRSEqual(t, "Set<Number>", MakeSetType(NumberType))
 	assertWriteHRSEqual(t, "Ref<Number>", MakeRefType(NumberType))
 	assertWriteHRSEqual(t, "Map<Number, String>", MakeMapType(NumberType, StringType))
+	assertWriteHRSEqual(t, "Number | String", MakeUnionType(NumberType, StringType))
+	assertWriteHRSEqual(t, "Bool", MakeUnionType(BoolType))
+	assertWriteHRSEqual(t, "", MakeUnionType())
+	assertWriteHRSEqual(t, "List<Number | String>", MakeListType(MakeUnionType(NumberType, StringType)))
+	assertWriteHRSEqual(t, "List<>", MakeListType(MakeUnionType()))
 }
 
 func TestWriteHumanReadableTaggedPrimitiveValues(t *testing.T) {

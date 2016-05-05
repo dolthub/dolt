@@ -15,6 +15,7 @@ import {
   makeRefType,
   makeSetType,
   makeStructType,
+  makeUnionType,
   StructDesc,
   Type,
   typeType,
@@ -81,14 +82,16 @@ export class JsonArrayReader {
     return v;
   }
 
+  readUint16(): number {
+    const v = this.read();
+    invariant((v & 0xffff) === v);
+    return v;
+  }
+
   readFloat(): number {
     const next = this.read();
     invariant(typeof next === 'string');
     return parseFloat(next);
-  }
-
-  readOrdinal(): number {
-    return this.readInt();
   }
 
   readArray(): Array<any> {
@@ -121,6 +124,14 @@ export class JsonArrayReader {
       case Kind.Ref:
         return makeRefType(this.readType(parentStructTypes));
 
+      case Kind.Union: {
+        const len = this.readUint16();
+        const types: Type[] = new Array(len);
+        for (let i = 0; i < len; i++) {
+          types[i] = this.readType(parentStructTypes);
+        }
+        return makeUnionType(types);
+      }
       case Kind.Type:
         return typeType;
       case Kind.Struct:

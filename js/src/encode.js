@@ -58,6 +58,10 @@ export class JsonArrayWriter {
     this.write(n);
   }
 
+  writeUint16(n: number) {
+    this.write(n);
+  }
+
   writeKind(k: NomsKind) {
     this.write(k);
   }
@@ -75,6 +79,11 @@ export class JsonArrayWriter {
       case Kind.Ref:
       case Kind.Set:
         this.writeKind(k);
+        t.elemTypes.forEach(elemType => this.writeType(elemType, parentStructTypes));
+        break;
+      case Kind.Union:
+        this.writeKind(k);
+        this.writeUint16(t.elemTypes.length);
         t.elemTypes.forEach(elemType => this.writeType(elemType, parentStructTypes));
         break;
       case Kind.Struct:

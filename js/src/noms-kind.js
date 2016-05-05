@@ -15,6 +15,7 @@ export const Kind: {
   Struct: NomsKind,
   Type: NomsKind,
   Parent: NomsKind,
+  Union: NomsKind,
 } = {
   Bool: 0,
   Number: 1,
@@ -28,6 +29,7 @@ export const Kind: {
   Struct: 9,
   Type: 10,
   Parent: 11,  // Only used in encoding/decoding.
+  Union: 12,
 };
 
 const kindToStringMap: { [key: number]: string } = Object.create(null);
@@ -43,6 +45,7 @@ kindToStringMap[Kind.Set] = 'Set';
 kindToStringMap[Kind.Struct] = 'Struct';
 kindToStringMap[Kind.Type] = 'Type';
 kindToStringMap[Kind.Parent] = 'Parent';
+kindToStringMap[Kind.Union] = 'Union';
 
 export function kindToString(kind: NomsKind): string {
   return kindToStringMap[kind];
