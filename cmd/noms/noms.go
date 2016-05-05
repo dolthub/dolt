@@ -18,35 +18,39 @@ const (
 )
 
 var (
-	usePager = flag.Bool("use-pager", true, "page results when length exceeds terminal height")
+	noPager = flag.Bool("no-pager", false, "suppress paging functionality")
 )
 
-func Usage() {
-	fmt.Fprintf(os.Stderr, "%s command [<command options>]\n", path.Base(os.Args[0]))
+func usage() {
+	fmt.Fprintf(os.Stderr, "usage: %s [-no-pager] [command] [command-args]\n\n", path.Base(os.Args[0]))
+	fmt.Fprintf(os.Stderr, "Flags:\n\n")
+	flag.PrintDefaults()
+	fmt.Fprintf(os.Stderr, "\nCommands:\n\n")
+	for _, cmd := range findCmds() {
+		fmt.Fprintf(os.Stderr, "  %s\n", cmd)
+	}
+	fmt.Fprintf(os.Stderr, "\nSee noms <command> -h for information on each available command.\n\n")
 }
 
 func main() {
+	flag.Usage = usage
 	flag.Parse()
 
 	if flag.NArg() == 0 || flag.Arg(0) == "help" {
-		cmds := findCmds()
-		if len(cmds) == 0 {
-			fmt.Fprintf(os.Stderr, "Configuration error: unable to find any noms command in PATH.\n")
-			os.Exit(-1)
-		}
-
-		fmt.Printf("Available commands:\n\n")
-		for _, c := range cmds {
-			fmt.Printf("%s\n", c)
-		}
+		usage()
 		return
 	}
 
 	cmdName := cmdPrefix + flag.Arg(0)
 	executable, err := exec.LookPath(cmdName)
 	if err != nil {
-		d.Chk.Equal(err, exec.ErrNotFound)
-		Usage()
+		if execErr, ok := err.(*exec.Error); ok {
+			d.Chk.Equal(exec.ErrNotFound, execErr.Err)
+			fmt.Fprintf(os.Stderr, "error: %s is not an available command\n", flag.Arg(0))
+		} else {
+			d.Chk.NoError(err)
+		}
+		usage()
 		return
 	}
 
@@ -81,7 +85,7 @@ func findCmds() []string {
 func executeCmd(executable string) {
 	lessCmd, err := exec.LookPath("less")
 	if err != nil {
-		*usePager = false
+		*noPager = true
 	}
 	args := flag.Args()[1:]
 	if len(args) == 0 {
@@ -92,7 +96,7 @@ func executeCmd(executable string) {
 	c1.Stdout = os.Stdout
 	c1.Stderr = os.Stderr
 
-	if *usePager {
+	if !*noPager {
 		c1.Stdout = nil
 		c2 := exec.Command(lessCmd, []string{"-FSRX"}...)
 		c2.Stdin, _ = c1.StdoutPipe()
