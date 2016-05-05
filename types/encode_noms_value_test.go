@@ -131,15 +131,15 @@ func TestWriteCompoundBlob(t *testing.T) {
 	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
 
 	v := newCompoundBlob([]metaTuple{
-		newMetaTuple(Number(20), nil, NewTypedRef(RefOfBlobType, r1), 20),
-		newMetaTuple(Number(40), nil, NewTypedRef(RefOfBlobType, r2), 40),
-		newMetaTuple(Number(60), nil, NewTypedRef(RefOfBlobType, r3), 60),
+		newMetaTuple(Number(20), nil, NewTypedRef(RefOfBlobType, r1, 11), 20),
+		newMetaTuple(Number(40), nil, NewTypedRef(RefOfBlobType, r2, 22), 40),
+		newMetaTuple(Number(60), nil, NewTypedRef(RefOfBlobType, r3, 33), 60),
 	}, NewTestValueStore())
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeValue(v)
 
 	// the order of the elements is based on the ref of the value.
-	assert.EqualValues([]interface{}{BlobKind, true, []interface{}{r1.String(), NumberKind, "20", "20", r2.String(), NumberKind, "40", "40", r3.String(), NumberKind, "60", "60"}}, w.toArray())
+	assert.EqualValues([]interface{}{BlobKind, true, []interface{}{r1.String(), "11", NumberKind, "20", "20", r2.String(), "22", NumberKind, "40", "40", r3.String(), "33", NumberKind, "60", "60"}}, w.toArray())
 }
 
 func TestWriteEmptyStruct(t *testing.T) {
@@ -238,13 +238,13 @@ func TestWriteCompoundList(t *testing.T) {
 	leaf1 := newListLeaf(ltr, Number(0))
 	leaf2 := newListLeaf(ltr, Number(1), Number(2), Number(3))
 	cl := buildCompoundList([]metaTuple{
-		newMetaTuple(Number(1), leaf1, Ref{}, 1),
-		newMetaTuple(Number(4), leaf2, Ref{}, 4),
+		newMetaTuple(Number(1), leaf1, NewTypedRefFromValue(leaf1), 1),
+		newMetaTuple(Number(4), leaf2, NewTypedRefFromValue(leaf2), 4),
 	}, ltr, NewTestValueStore())
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeValue(cl)
-	assert.EqualValues([]interface{}{ListKind, NumberKind, true, []interface{}{leaf1.Ref().String(), NumberKind, "1", "1", leaf2.Ref().String(), NumberKind, "4", "4"}}, w.toArray())
+	assert.EqualValues([]interface{}{ListKind, NumberKind, true, []interface{}{leaf1.Ref().String(), "1", NumberKind, "1", "1", leaf2.Ref().String(), "1", NumberKind, "4", "4"}}, w.toArray())
 }
 
 func TestWriteCompoundSet(t *testing.T) {
@@ -254,13 +254,13 @@ func TestWriteCompoundSet(t *testing.T) {
 	leaf1 := newSetLeaf(ltr, Number(0), Number(1))
 	leaf2 := newSetLeaf(ltr, Number(2), Number(3), Number(4))
 	cl := buildCompoundSet([]metaTuple{
-		newMetaTuple(Number(1), leaf1, Ref{}, 2),
-		newMetaTuple(Number(4), leaf2, Ref{}, 3),
+		newMetaTuple(Number(1), leaf1, NewTypedRefFromValue(leaf1), 2),
+		newMetaTuple(Number(4), leaf2, NewTypedRefFromValue(leaf2), 3),
 	}, ltr, NewTestValueStore())
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeValue(cl)
-	assert.EqualValues([]interface{}{SetKind, NumberKind, true, []interface{}{leaf1.Ref().String(), NumberKind, "1", "2", leaf2.Ref().String(), NumberKind, "4", "3"}}, w.toArray())
+	assert.EqualValues([]interface{}{SetKind, NumberKind, true, []interface{}{leaf1.Ref().String(), "1", NumberKind, "1", "2", leaf2.Ref().String(), "1", NumberKind, "4", "3"}}, w.toArray())
 }
 
 func TestWriteListOfValue(t *testing.T) {
@@ -331,11 +331,11 @@ func TestWriteRef(t *testing.T) {
 
 	typ := MakeRefType(NumberType)
 	r := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
-	v := NewTypedRef(typ, r)
+	v := NewTypedRef(typ, r, 4)
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeValue(v)
-	assert.EqualValues([]interface{}{RefKind, NumberKind, r.String()}, w.toArray())
+	assert.EqualValues([]interface{}{RefKind, NumberKind, r.String(), "4"}, w.toArray())
 }
 
 func TestWriteTypeValue(t *testing.T) {

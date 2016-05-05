@@ -97,7 +97,7 @@ func (suite *HTTPBatchStoreSuite) TestPutChunksInOrder() {
 	l := types.NewList()
 	for _, c := range chnx {
 		suite.store.SchedulePut(c, types.Hints{})
-		l = l.Append(types.NewRef(c.Ref()))
+		l = l.Append(newStringRef(c.Ref(), 1))
 	}
 	suite.store.SchedulePut(types.EncodeValue(l, nil), types.Hints{})
 	suite.store.Flush()
@@ -111,7 +111,7 @@ func (suite *HTTPBatchStoreSuite) TestPutChunkWithHints() {
 		types.EncodeValue(types.NewString("def"), nil),
 	}
 	suite.NoError(suite.cs.PutMany(chnx))
-	l := types.NewList(types.NewRef(chnx[0].Ref()), types.NewRef(chnx[1].Ref()))
+	l := types.NewList(newStringRef(chnx[0].Ref(), 1), newStringRef(chnx[1].Ref(), 1))
 
 	suite.store.SchedulePut(types.EncodeValue(l, nil), types.Hints{
 		chnx[0].Ref(): struct{}{},
@@ -160,7 +160,7 @@ func (suite *HTTPBatchStoreSuite) TestPutChunksBackpressure() {
 	l := types.NewList()
 	for _, c := range chnx {
 		bs.SchedulePut(c, types.Hints{})
-		l = l.Append(types.NewRef(c.Ref()))
+		l = l.Append(newStringRef(c.Ref(), 1))
 	}
 	bs.SchedulePut(types.EncodeValue(l, nil), types.Hints{})
 	bs.Flush()
@@ -185,4 +185,8 @@ func (suite *HTTPBatchStoreSuite) TestGet() {
 	suite.cs.Put(c)
 	got := suite.store.Get(c.Ref())
 	suite.Equal(c.Ref(), got.Ref())
+}
+
+func newStringRef(r ref.Ref, height uint64) types.Ref {
+	return types.NewTypedRef(types.MakeRefType(types.StringType), r, height)
 }

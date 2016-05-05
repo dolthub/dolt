@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const testSetSize = 5000
+
 type testSet struct {
 	values []Value
 	less   testSetLessFn
@@ -358,9 +360,11 @@ func TestCompoundSetFirstNNumbers(t *testing.T) {
 
 	setType := MakeSetType(NumberType)
 
-	nums := generateNumbersAsValues(5000)
-	s := newTypedSet(setType, nums...)
-	assert.Equal("sha1-189e35a1b7aa09e012c0a86f20921b4978d21629", s.Ref().String())
+	nums := generateNumbersAsValues(testSetSize)
+	s := newTypedSet(setType, nums...).(compoundSet)
+	assert.Equal("sha1-5937b476bb1d594e3a905c44f00863bd9ba1fb19", s.Ref().String())
+	height := deriveCompoundSetHeight(s)
+	assert.Equal(height, s.tuples[0].childRef.Height())
 }
 
 func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
@@ -369,11 +373,14 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 	}
 	assert := assert.New(t)
 
-	structType, nums := generateNumbersAsStructs(5000)
+	structType, nums := generateNumbersAsStructs(testSetSize)
 	refOfTypeStructType := MakeRefType(structType)
 	setType := MakeSetType(refOfTypeStructType)
-	s := NewTypedSet(setType, nums...)
-	assert.Equal("sha1-d8815974c1b0ac51f2ffe8147d80ce8be8f5c52d", s.Ref().String())
+	s := NewTypedSet(setType, nums...).(compoundSet)
+	assert.Equal("sha1-3664c45fcbf64f1272956a7b93f27488ab0eb4f8", s.Ref().String())
+	height := deriveCompoundSetHeight(s)
+	// height + 1 because the leaves are Ref values (with height 1).
+	assert.Equal(height+1, s.tuples[0].childRef.Height())
 }
 
 func TestCompoundSetModifyAfterRead(t *testing.T) {
@@ -389,4 +396,13 @@ func TestCompoundSetModifyAfterRead(t *testing.T) {
 	assert.True(set.Has(set.First()))
 	set = set.Insert(fst).(compoundSet)
 	assert.True(set.Has(fst))
+}
+
+func deriveCompoundSetHeight(s compoundSet) uint64 {
+	// Note: not using mt.childRef.Height() because the purpose of this method is to be redundant.
+	height := uint64(1)
+	if s2, ok := s.tupleAt(0).child.(compoundSet); ok {
+		height += deriveCompoundSetHeight(s2)
+	}
+	return height
 }

@@ -73,9 +73,10 @@ func (r *jsonArrayReader) readKind() NomsKind {
 	return NomsKind(r.read().(float64))
 }
 
-func (r *jsonArrayReader) readRef() ref.Ref {
-	s := r.readString()
-	return ref.Parse(s)
+func (r *jsonArrayReader) readRef(t *Type) Ref {
+	ref := ref.Parse(r.readString())
+	height := r.readUint()
+	return NewTypedRef(t, ref, height)
 }
 
 func (r *jsonArrayReader) readType(parentStructTypes []*Type) *Type {
@@ -148,18 +149,13 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t *Type) (Value, bool) {
 	r2 := newJSONArrayReader(r.readArray(), r.vr)
 	data := metaSequenceData{}
 	for !r2.atEnd() {
-		ref := NewTypedRef(MakeRefType(t), r2.readRef())
+		ref := r2.readRef(MakeRefType(t))
 		v := r2.readValue()
 		numLeaves := uint64(r2.readUint())
 		data = append(data, newMetaTuple(v, nil, ref, numLeaves))
 	}
 
 	return newMetaSequenceFromData(data, t, r.vr), true
-}
-
-func (r *jsonArrayReader) readRefValue(t *Type) Value {
-	ref := r.readRef()
-	return NewTypedRef(t, ref)
 }
 
 func (r *jsonArrayReader) readValue() Value {
@@ -194,7 +190,7 @@ func (r *jsonArrayReader) readValue() Value {
 		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		return r2.readMap(t)
 	case RefKind:
-		return r.readRefValue(t)
+		return r.readRef(t)
 	case SetKind:
 		if ms, ok := r.maybeReadMetaSequence(t); ok {
 			return ms

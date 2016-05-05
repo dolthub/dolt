@@ -155,9 +155,9 @@ suite('Decode', () => {
     const l: NomsList<number> = new NomsList(ltr, new IndexedMetaSequence(ds, ltr, tuples));
 
     const a = [Kind.List, Kind.Number, true,
-               [r1.targetRef.toString(), Kind.Number, '1', '1',
-                r2.targetRef.toString(), Kind.Number, '2', '2',
-                r3.targetRef.toString(), Kind.Number, '3', '3']];
+               [r1.targetRef.toString(), '1', Kind.Number, '1', '1',
+                r2.targetRef.toString(), '1', Kind.Number, '2', '2',
+                r3.targetRef.toString(), '1', Kind.Number, '3', '3']];
     const r = new JsonArrayReader(a, ds);
     const v = r.readValue();
     invariant(v instanceof NomsList);
@@ -184,8 +184,8 @@ suite('Decode', () => {
     const rv2 = ds.writeValue('hi');
     const a = [
       Kind.Map, Kind.Ref, Kind.Value, Kind.Number, false, [
-        Kind.Ref, Kind.Bool, rv1.targetRef.toString(), Kind.Number, '2',
-        Kind.Ref, Kind.String, rv2.targetRef.toString(), Kind.Number, '4',
+        Kind.Ref, Kind.Bool, rv1.targetRef.toString(), '1', Kind.Number, '2',
+        Kind.Ref, Kind.String, rv2.targetRef.toString(), '1', Kind.Number, '4',
       ],
     ];
     const r = new JsonArrayReader(a, ds);
@@ -238,7 +238,7 @@ suite('Decode', () => {
     const l: NomsSet<number> = new NomsSet(ltr, new OrderedMetaSequence(ds, ltr, tuples));
 
     const a = parseJson(`[SetKind, NumberKind, true,
-      ["%s", NumberKind, "1", "2", "%s", NumberKind, "4", "3"]]`,
+      ["%s", "1", NumberKind, "1", "2", "%s", "1", NumberKind, "4", "3"]]`,
       r1.targetRef.toString(), r2.targetRef.toString());
     const r = new JsonArrayReader(a, ds);
     const v = r.readValue();
@@ -458,7 +458,7 @@ suite('Decode', () => {
         Kind.Ref, Kind.Struct, 'Commit', [
           'parents', Kind.Set, Kind.Ref, Kind.Parent, 0,
           'value', Kind.Value,
-        ], commitRef.toString(),
+        ], commitRef.toString(), '1',
       ],
     ]);
     const rootRef = rootChunk.ref;
@@ -466,6 +466,7 @@ suite('Decode', () => {
 
     await bs.flush();
     const rootMap = await ds.readValue(rootRef);
+
     const counterRef = await rootMap.get('counter');
     const commit = await counterRef.targetValue(ds);
     assert.strictEqual(1, await commit.value);
@@ -524,8 +525,8 @@ suite('Decode', () => {
     const r2 = ds.writeValue(await newBlob(stringToUint8Array('world')));
 
     const a = parseJson(`[BlobKind, true, [
-      "%s", NumberKind, "2", "2",
-      "%s", NumberKind, "5", "5"]]`, r1.targetRef, r2.targetRef);
+      "%s", "1", NumberKind, "2", "2",
+      "%s", "1", NumberKind, "5", "5"]]`, r1.targetRef, r2.targetRef);
     const r = new JsonArrayReader(a, ds);
     const v: NomsBlob = r.readValue();
     invariant(v instanceof NomsBlob);

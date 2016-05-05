@@ -5,7 +5,7 @@ import {suite, test} from 'mocha';
 
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import Ref from './ref.js';
-import RefValue from './ref-value.js';
+import {constructRefValue} from './ref-value.js';
 import {newStruct} from './struct.js';
 import type {NomsKind} from './noms-kind.js';
 import {encodeNomsValue, JsonArrayWriter} from './encode.js';
@@ -130,9 +130,9 @@ suite('Encode', () => {
 
     w.writeValue(l);
     assert.deepEqual([Kind.Set, Kind.Number, true,
-                     [r1.targetRef.toString(), Kind.Number, '0', '1',
-                      r2.targetRef.toString(), Kind.Number, '2', '2',
-                      r3.targetRef.toString(), Kind.Number, '5', '3']], w.array);
+                     [r1.targetRef.toString(), '1', Kind.Number, '0', '1',
+                      r2.targetRef.toString(), '1', Kind.Number, '2', '2',
+                      r3.targetRef.toString(), '1', Kind.Number, '5', '3']], w.array);
   });
 
   test('write set of set', async () => {
@@ -267,9 +267,9 @@ suite('Encode', () => {
 
     w.writeValue(l);
     assert.deepEqual([Kind.List, Kind.Number, true,
-                     [r1.targetRef.toString(), Kind.Number, '1', '1',
-                      r2.targetRef.toString(), Kind.Number, '2', '2',
-                      r3.targetRef.toString(), Kind.Number, '3', '3']], w.array);
+                     [r1.targetRef.toString(), '1', Kind.Number, '1', '1',
+                      r2.targetRef.toString(), '1', Kind.Number, '2', '2',
+                      r3.targetRef.toString(), '1', Kind.Number, '3', '3']], w.array);
   });
 
   test('write compound set with bool', async () => {
@@ -286,8 +286,8 @@ suite('Encode', () => {
 
     w.writeValue(l);
     assert.deepEqual([Kind.Set, Kind.Bool, true,
-                     [r1.targetRef.toString(), Kind.Bool, true, '1',
-                      r2.targetRef.toString(), Kind.Bool, false, '1']], w.array);
+                     [r1.targetRef.toString(), '1', Kind.Bool, true, '1',
+                      r2.targetRef.toString(), '1', Kind.Bool, false, '1']], w.array);
   });
 
   test('write type value', async () => {
@@ -361,9 +361,9 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ds);
     const ref = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
     const t = makeRefType(blobType);
-    const v = new RefValue(ref, t);
+    const v = constructRefValue(t, ref, 1);
     w.writeValue(v);
 
-    assert.deepEqual([Kind.Ref, Kind.Blob, ref.toString()], w.array);
+    assert.deepEqual([Kind.Ref, Kind.Blob, ref.toString(), '1'], w.array);
   });
 });

@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+const testListSize = 5000
+
 type testList []Value
 
 func (tl testList) Set(idx int, v Value) (res testList) {
@@ -138,11 +140,11 @@ func (suite *listTestSuite) TestMap() {
 }
 
 func TestListSuite1K(t *testing.T) {
-	suite.Run(t, newListTestSuite(10, "sha1-34023a22fa32bda7d77c64c62361f3b31d674e6e", 17, 19, 2))
+	suite.Run(t, newListTestSuite(10, "sha1-e992e7259aec9a3e4df46d70d40d9ef30992bbd7", 17, 19, 2))
 }
 
 func TestListSuite4K(t *testing.T) {
-	suite.Run(t, newListTestSuite(12, "sha1-50389fd9a33c921c9aa7cc2b9b93290a13443cb4", 2, 3, 2))
+	suite.Run(t, newListTestSuite(12, "sha1-aac25b5ebf894249217f1996f6554bff62bb7382", 2, 3, 2))
 }
 
 func TestListInsert(t *testing.T) {
@@ -648,9 +650,9 @@ func TestListFirstNNumbers(t *testing.T) {
 		return nums
 	}
 
-	nums := firstNNumbers(5000)
+	nums := firstNNumbers(testListSize)
 	s := NewTypedList(listType, nums...)
-	assert.Equal("sha1-9220f195a4273c1c31643014a6c6c6a39b2c068b", s.Ref().String())
+	assert.Equal("sha1-77c24e36fd4d1b367e36b86f158e7fdd38373a6d", s.Ref().String())
 }
 
 func TestListRefOfStructFirstNNumbers(t *testing.T) {
@@ -677,9 +679,9 @@ func TestListRefOfStructFirstNNumbers(t *testing.T) {
 		return nums
 	}
 
-	nums := firstNNumbers(5000)
+	nums := firstNNumbers(testListSize)
 	s := NewTypedList(listType, nums...)
-	assert.Equal("sha1-471aa3beb1f8d06a8a9a398c1b29fa34c0163ecd", s.Ref().String())
+	assert.Equal("sha1-87be8b38153a653f140dbb67064f6ea832726871", s.Ref().String())
 }
 
 func TestListModifyAfterRead(t *testing.T) {

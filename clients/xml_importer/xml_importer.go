@@ -14,7 +14,6 @@ import (
 	"github.com/attic-labs/noms/clients/flags"
 	"github.com/attic-labs/noms/clients/util"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 	"github.com/clbanning/mxj"
 )
@@ -35,7 +34,7 @@ type fileIndex struct {
 }
 
 type refIndex struct {
-	ref   ref.Ref
+	ref   types.Ref
 	index int
 }
 
@@ -99,10 +98,10 @@ func main() {
 
 				nomsObj := util.NomsValueFromDecodedJSON(object)
 				d.Chk.IsType(expectedType, nomsObj)
-				r := ref.Ref{}
 
+				var r types.Ref
 				if !*noIO {
-					r = ds.Store().WriteValue(nomsObj).TargetRef()
+					r = ds.Store().WriteValue(nomsObj)
 				}
 
 				refsChan <- refIndex{r, f.index}
@@ -129,7 +128,7 @@ func main() {
 
 		refs := make([]types.Value, len(refList))
 		for idx, r := range refList {
-			refs[idx] = types.NewRef(r.ref)
+			refs[idx] = r.ref
 		}
 
 		rl := types.NewTypedList(

@@ -6,7 +6,6 @@ import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {ValueReader} from './value-store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import type {Collection} from './collection.js';
-import {makeRefType} from './type.js';
 import type {Type} from './type.js';
 import {IndexedSequence} from './indexed-sequence.js';
 import {invariant, notNull} from './assert.js';
@@ -190,12 +189,11 @@ export function newMetaSequenceFromData(vr: ValueReader, type: Type, tuples: Arr
 }
 
 export function newOrderedMetaSequenceChunkFn(t: Type, vr: ?ValueReader = null): makeChunkFn {
-  const tRefType = makeRefType(t);
   return (tuples: Array<MetaTuple>) => {
     const numLeaves = tuples.reduce((l, mt) => l + mt.numLeaves, 0);
     const meta = new OrderedMetaSequence(vr, t, tuples);
-    const lastValue = tuples[tuples.length - 1].value;
-    return [new MetaTuple(new RefValue(meta.ref, tRefType), lastValue, numLeaves, meta), meta];
+    const last = tuples[tuples.length - 1];
+    return [new MetaTuple(new RefValue(meta), last.value, numLeaves, meta), meta];
   };
 }
 
@@ -210,14 +208,13 @@ export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
 }
 
 export function newIndexedMetaSequenceChunkFn(t: Type, vr: ?ValueReader = null): makeChunkFn {
-  const tRefType = makeRefType(t);
   return (tuples: Array<MetaTuple>) => {
     const sum = tuples.reduce((l, mt) => {
       invariant(mt.value === mt.numLeaves);
       return l + mt.value;
     }, 0);
     const meta = new IndexedMetaSequence(vr, t, tuples);
-    return [new MetaTuple(new RefValue(meta.ref, tRefType), sum, sum, meta), meta];
+    return [new MetaTuple(new RefValue(meta), sum, sum, meta), meta];
   };
 }
 
@@ -229,8 +226,4 @@ export function newIndexedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
 
 function getMetaSequenceChunks(ms: MetaSequence): Array<RefValue> {
   return ms.items.map(mt => mt.ref);
-}
-
-export function newLeafRefValue<S, T: valueOrPrimitive>(seq: Sequence<S>): RefValue<T> {
-  return new RefValue(seq.ref, makeRefType(seq.type));
 }

@@ -66,8 +66,8 @@ func TestLDBDatastore(t *testing.T) {
 	ds := datas.NewDataStore(cs)
 
 	s1 := types.NewString("A String")
-	ds.WriteValue(s1)
-	ds.Commit("testDs", datas.NewCommit().Set(datas.ValueField, types.NewRef(s1.Ref())))
+	s1Ref := ds.WriteValue(s1)
+	ds.Commit("testDs", datas.NewCommit().Set(datas.ValueField, s1Ref))
 	ds.Close()
 
 	sp, errRead := ParseDatastoreSpec(spec)

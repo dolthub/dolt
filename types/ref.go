@@ -7,21 +7,29 @@ import (
 
 type Ref struct {
 	target ref.Ref
+	height uint64
 	t      *Type
 	ref    *ref.Ref
 }
 
-func NewRef(target ref.Ref) Ref {
-	return NewTypedRef(refType, target)
-}
-
-func NewTypedRef(t *Type, target ref.Ref) Ref {
+func NewTypedRef(t *Type, target ref.Ref, height uint64) Ref {
 	d.Chk.Equal(RefKind, t.Kind(), "Invalid type. Expected: RefKind, found: %s", t.Describe())
-	return Ref{target, t, &ref.Ref{}}
+	return Ref{target, height, t, &ref.Ref{}}
 }
 
 func NewTypedRefFromValue(v Value) Ref {
-	return NewTypedRef(MakeRefType(v.Type()), v.Ref())
+	return NewTypedRef(MakeRefType(v.Type()), v.Ref(), maxChunkHeight(v)+1)
+}
+
+func maxChunkHeight(v Value) (max uint64) {
+	if chunks := v.Chunks(); chunks != nil {
+		for _, r := range chunks {
+			if height := r.Height(); height > max {
+				max = height
+			}
+		}
+	}
+	return
 }
 
 func (r Ref) Equals(other Value) bool {
@@ -44,7 +52,9 @@ func (r Ref) TargetRef() ref.Ref {
 	return r.target
 }
 
-var refType = MakeRefType(ValueType)
+func (r Ref) Height() uint64 {
+	return r.height
+}
 
 func (r Ref) Type() *Type {
 	return r.t

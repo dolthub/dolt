@@ -66,6 +66,6 @@ func newOrderedMetaSequenceChunkFn(t *Type, vr ValueReader) makeChunkFn {
 		}
 
 		meta := newMetaSequenceFromData(tuples, t, vr)
-		return newMetaTuple(tuples.last().value, meta, Ref{}, numLeaves), meta
+		return newMetaTuple(tuples.last().value, meta, NewTypedRefFromValue(meta), numLeaves), meta
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const testMapSize = 1000
+
 type testMap struct {
 	entries     []mapEntry
 	less        testMapLessFn
@@ -383,13 +385,14 @@ func TestCompoundMapFirstNNumbers(t *testing.T) {
 	mapType := MakeMapType(NumberType, NumberType)
 
 	kvs := []Value{}
-	n := 5000
-	for i := 0; i < n; i++ {
+	for i := 0; i < testMapSize; i++ {
 		kvs = append(kvs, Number(i), Number(i+1))
 	}
 
-	m := NewTypedMap(mapType, kvs...)
-	assert.Equal("sha1-b6124b17659d88e0ac2a716e160403fab29f29b3", m.Ref().String())
+	m := NewTypedMap(mapType, kvs...).(compoundMap)
+	assert.Equal("sha1-4d2fb53d2020630376f2b188addf58e546dc33e8", m.Ref().String())
+	height := deriveCompoundMapHeight(m)
+	assert.Equal(height, m.tuples[0].childRef.Height())
 }
 
 func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
@@ -407,8 +410,7 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	mapType := MakeMapType(refOfTypeStructType, refOfTypeStructType)
 
 	kvs := []Value{}
-	n := 5000
-	for i := 0; i < n; i++ {
+	for i := 0; i < testMapSize; i++ {
 		k := vs.WriteValue(NewStruct(structType, structData{"n": Number(i)}))
 		v := vs.WriteValue(NewStruct(structType, structData{"n": Number(i + 1)}))
 		assert.NotNil(k)
@@ -416,8 +418,11 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 		kvs = append(kvs, k, v)
 	}
 
-	m := NewTypedMap(mapType, kvs...)
-	assert.Equal("sha1-b968e56276f957e771b609416c18265ad7f93ede", m.Ref().String())
+	m := NewTypedMap(mapType, kvs...).(compoundMap)
+	assert.Equal("sha1-c179c3dd34ec4430b11515cb5f859b8f4546b970", m.Ref().String())
+	height := deriveCompoundMapHeight(m)
+	// height + 1 because the leaves are Ref values (with height 1).
+	assert.Equal(height+1, m.tuples[0].childRef.Height())
 }
 
 func TestCompoundMapModifyAfterRead(t *testing.T) {
@@ -436,4 +441,13 @@ func TestCompoundMapModifyAfterRead(t *testing.T) {
 	}
 	m = m.Set(fst, fstval).(compoundMap)
 	assert.True(m.Has(fst))
+}
+
+func deriveCompoundMapHeight(m compoundMap) uint64 {
+	// Note: not using mt.childRef.Height() because the purpose of this method is to be redundant.
+	height := uint64(1)
+	if m2, ok := m.tupleAt(0).child.(compoundMap); ok {
+		height += deriveCompoundMapHeight(m2)
+	}
+	return height
 }

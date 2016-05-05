@@ -18,7 +18,7 @@ import {
   stringType,
   valueType,
 } from './type.js';
-import {flatten, flattenParallel} from './test-util.js';
+import {flatten, flattenParallel, deriveSequenceHeight} from './test-util.js';
 import {invariant} from './assert.js';
 import Chunk from './chunk.js';
 import {MapLeafSequence, newMap, NomsMap} from './map.js';
@@ -28,7 +28,7 @@ import type {Type} from './type.js';
 import type {ValueReadWriter} from './value-store.js';
 
 const testMapSize = 1000;
-const mapOfNRef = 'sha1-461888f373b08c62ee1744b873465666b5f239c0';
+const mapOfNRef = 'sha1-4d2fb53d2020630376f2b188addf58e546dc33e8';
 const smallRandomMapSize = 50;
 const randomMapSize = 500;
 
@@ -93,6 +93,11 @@ suite('BuildMap', () => {
     pairs.forEach(kv => kvs.push(kv.k, kv.v));
     const m2 = await newMap(kvs, tr);
     assert.strictEqual(m2.ref.toString(), mapOfNRef);
+
+    const height = deriveSequenceHeight(m.sequence);
+    assert.isTrue(height > 0);
+    assert.strictEqual(height, deriveSequenceHeight(m2.sequence));
+    assert.strictEqual(height, m.sequence.items[0].ref.height);
   });
 
   test('LONG: map of ref to ref, set of n numbers', async () => {
@@ -107,14 +112,13 @@ suite('BuildMap', () => {
     const refOfStructType = makeRefType(structType);
     const tr = makeMapType(refOfStructType, refOfStructType);
 
-    const kvRefs = kvs.map(n => {
-      const s = newStruct(structType, {n});
-      const r = s.ref;
-      return new RefValue(r, refOfStructType);
-    });
-
+    const kvRefs = kvs.map(n => new RefValue(newStruct(structType, {n})));
     const m = await newMap(kvRefs, tr);
-    assert.strictEqual(m.ref.toString(), 'sha1-d38e77fb3de33e360976c245a86743e10091cb12');
+    assert.strictEqual(m.ref.toString(), 'sha1-c179c3dd34ec4430b11515cb5f859b8f4546b970');
+    const height = deriveSequenceHeight(m.sequence);
+    assert.isTrue(height > 0);
+    // height + 1 because the leaves are RefValue values (with height 1).
+    assert.strictEqual(height + 1, m.sequence.items[0].ref.height);
   });
 
   test('LONG: set', async () => {
@@ -201,7 +205,7 @@ suite('MapLeaf', () => {
     let m = newMap([]);
     assert.isTrue(m.isEmpty());
     assert.strictEqual(0, m.size);
-    m = newMap([{key: 'a', value: false}, {key:'k', value:true}]);
+    m = newMap([{key: 'a', value: false}, {key: 'k', value: true}]);
     assert.isFalse(m.isEmpty());
     assert.strictEqual(2, m.size);
   });
@@ -210,7 +214,7 @@ suite('MapLeaf', () => {
     const ds = new DataStore(makeTestingBatchStore());
     const tr = makeMapType(stringType, boolType);
     const m = new NomsMap(tr,
-        new MapLeafSequence(ds, tr, [{key: 'a', value: false}, {key:'k', value:true}]));
+        new MapLeafSequence(ds, tr, [{key: 'a', value: false}, {key: 'k', value: true}]));
     assert.isTrue(await m.has('a'));
     assert.isFalse(await m.has('b'));
     assert.isTrue(await m.has('k'));
@@ -221,7 +225,7 @@ suite('MapLeaf', () => {
     const ds = new DataStore(makeTestingBatchStore());
     const tr = makeMapType(stringType, numberType);
     const m = new NomsMap(tr,
-        new MapLeafSequence(ds, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
+        new MapLeafSequence(ds, tr, [{key: 'a', value: 4}, {key: 'k', value: 8}]));
 
     assert.deepEqual(['a', 4], await m.first());
     assert.deepEqual(['k', 8], await m.last());
@@ -236,7 +240,7 @@ suite('MapLeaf', () => {
     const ds = new DataStore(makeTestingBatchStore());
     const tr = makeMapType(stringType, numberType);
     const m = new NomsMap(tr,
-        new MapLeafSequence(ds, tr, [{key: 'a', value: 4}, {key:'k', value:8}]));
+        new MapLeafSequence(ds, tr, [{key: 'a', value: 4}, {key: 'k', value: 8}]));
 
     const kv = [];
     await m.forEach((v, k) => { kv.push(k, v); });
@@ -555,7 +559,7 @@ suite('CompoundMap', () => {
     const chunks = m.chunks;
     const sequence = m.sequence;
     assert.equal(2, chunks.length);
-    assert.isTrue(sequence.items[0].ref.equals(chunks[0]));
-    assert.isTrue(sequence.items[1].ref.equals(chunks[1]));
+    assert.deepEqual(sequence.items[0].ref, chunks[0]);
+    assert.deepEqual(sequence.items[1].ref, chunks[1]);
   });
 });

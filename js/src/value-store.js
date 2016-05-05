@@ -2,7 +2,7 @@
 
 import Chunk from './chunk.js';
 import {default as Ref, emptyRef} from './ref.js';
-import {default as RefValue, refValueFromValue} from './ref-value.js';
+import RefValue from './ref-value.js';
 import type BatchStore from './batch-store.js';
 import type {valueOrPrimitive} from './value.js';
 import {
@@ -18,7 +18,7 @@ import {encodeNomsValue} from './encode.js';
 import {describeType, describeTypeOfValue} from './encode-human-readable.js';
 
 export interface ValueWriter {
-    writeValue<T: valueOrPrimitive>(v: T, t: ?Type): RefValue<T>
+  writeValue<T: valueOrPrimitive>(v: T, t: ?Type): RefValue<T>
 }
 
 export interface ValueReader {
@@ -74,7 +74,7 @@ export default class ValueStore {
     const chunk = encodeNomsValue(v, this);
     invariant(!chunk.isEmpty());
     const {ref} = chunk;
-    const refValue = refValueFromValue(v);
+    const refValue = new RefValue(v);
     const entry = this._knownRefs.get(ref);
     if (entry && entry.present) {
       return refValue;

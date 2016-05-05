@@ -18,7 +18,7 @@ func TestValidateRef(t *testing.T) {
 	b := types.Bool(true)
 	r := ds.Store().WriteValue(b)
 
-	assert.Panics(t, func() { ds.validateRefAsCommit(types.NewRef(r.TargetRef())) })
+	assert.Panics(t, func() { ds.validateRefAsCommit(r) })
 	assert.Panics(t, func() { ds.validateRefAsCommit(types.NewTypedRefFromValue(b)) })
 }
 

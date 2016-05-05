@@ -18,23 +18,19 @@ type metaSequence interface {
 }
 
 func newMetaTuple(value, child Value, childRef Ref, numLeaves uint64) metaTuple {
-	d.Chk.True((child != nil) != (childRef != Ref{}), "Either child or childRef can be set, but not both")
+	d.Chk.NotEqual(Ref{}, childRef)
 	return metaTuple{child, childRef, value, numLeaves}
 }
 
 // metaTuple is a node in a Prolly Tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
-	child     Value   // nil if the child data hasn't been read, or has already been written
-	childRef  Ref // may be empty if |child| is non-nil; call ChildRef() instead of accessing |childRef| directly
+	child     Value // may be nil
+	childRef  Ref
 	value     Value
 	numLeaves uint64
 }
 
 func (mt metaTuple) ChildRef() Ref {
-	if mt.child != nil {
-		return NewTypedRef(MakeRefType(mt.child.Type()), mt.child.Ref())
-	}
-	d.Chk.False(mt.childRef.TargetRef().IsEmpty())
 	return mt.childRef
 }
 
@@ -84,13 +80,11 @@ func (ms metaSequenceObject) data() metaSequenceData {
 }
 
 func (ms metaSequenceObject) ChildValues() []Value {
-	leafType := ms.t.Desc.(CompoundDesc).ElemTypes[0]
-	refOfLeafType := MakeRefType(leafType)
-	res := make([]Value, len(ms.tuples))
-	for i, t := range ms.tuples {
-		res[i] = NewTypedRef(refOfLeafType, t.ChildRef().TargetRef())
+	vals := make([]Value, len(ms.tuples))
+	for i, mt := range ms.tuples {
+		vals[i] = mt.childRef
 	}
-	return res
+	return vals
 }
 
 func (ms metaSequenceObject) Chunks() (chunks []Ref) {

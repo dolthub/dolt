@@ -10,7 +10,7 @@ func TestRefInList(t *testing.T) {
 	assert := assert.New(t)
 
 	l := NewList()
-	r := NewRef(l.Ref())
+	r := NewTypedRefFromValue(l)
 	l = l.Append(r)
 	r2 := l.Get(0)
 	assert.True(r.Equals(r2))
@@ -20,7 +20,7 @@ func TestRefInSet(t *testing.T) {
 	assert := assert.New(t)
 
 	s := NewSet()
-	r := NewRef(s.Ref())
+	r := NewTypedRefFromValue(s)
 	s = s.Insert(r)
 	r2 := s.First()
 	assert.True(r.Equals(r2))
@@ -30,7 +30,7 @@ func TestRefInMap(t *testing.T) {
 	assert := assert.New(t)
 
 	m := NewMap()
-	r := NewRef(m.Ref())
+	r := NewTypedRefFromValue(m)
 	m = m.Set(Number(0), r).Set(r, Number(1))
 	r2 := m.Get(Number(0))
 	assert.True(r.Equals(r2))
@@ -43,7 +43,7 @@ func TestRefChunks(t *testing.T) {
 	assert := assert.New(t)
 
 	l := NewList()
-	r := NewRef(l.Ref())
+	r := NewTypedRefFromValue(l)
 	assert.Len(r.Chunks(), 1)
 	assert.Equal(r, r.Chunks()[0])
 }

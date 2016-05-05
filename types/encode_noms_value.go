@@ -41,7 +41,6 @@ func (w *jsonArrayWriter) writeFloat(v float64) {
 		s := strconv.FormatFloat(v, 'e', -1, 64)
 		s = strings.Replace(s, "e+0", "e+", 1)
 		w.write(s)
-
 	}
 }
 
@@ -67,6 +66,7 @@ func (w *jsonArrayWriter) toArray() []interface{} {
 
 func (w *jsonArrayWriter) writeRef(r Ref) {
 	w.write(r.TargetRef().String())
+	w.writeUint(r.Height())
 }
 
 func (w *jsonArrayWriter) writeType(t *Type, parentStructTypes []*Type) {

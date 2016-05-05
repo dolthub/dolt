@@ -219,14 +219,14 @@ func makeMapLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 
 		var indexValue Value
 		if len(mapData) > 0 {
-			lastValue := mapData[len(mapData)-1]
+			lastValueKey := mapData[len(mapData)-1].key
 			if isSequenceOrderedByIndexedType(t) {
-				indexValue = lastValue.key
+				indexValue = lastValueKey
 			} else {
-				indexValue = NewTypedRef(MakeRefType(lastValue.key.Type()), lastValue.key.Ref())
+				indexValue = NewTypedRefFromValue(lastValueKey)
 			}
 		}
 
-		return newMetaTuple(indexValue, mapLeaf, Ref{}, uint64(len(items))), mapLeaf
+		return newMetaTuple(indexValue, mapLeaf, NewTypedRefFromValue(mapLeaf), uint64(len(items))), mapLeaf
 	}
 }

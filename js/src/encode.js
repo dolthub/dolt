@@ -64,6 +64,7 @@ export class JsonArrayWriter {
 
   writeRefValue(r: RefValue) {
     this.write(r.targetRef.toString());
+    this.writeInt(r.height);
   }
 
   writeType(t: Type, parentStructTypes: Type<StructDesc>[]) {

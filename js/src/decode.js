@@ -3,7 +3,7 @@
 import {NomsBlob, BlobLeafSequence} from './blob.js';
 import Chunk from './chunk.js';
 import Ref from './ref.js';
-import RefValue from './ref-value.js';
+import {default as RefValue, constructRefValue} from './ref-value.js';
 import {newStruct} from './struct.js';
 import type Struct from './struct.js';
 import type {NomsKind} from './noms-kind.js';
@@ -185,7 +185,8 @@ export class JsonArrayReader {
 
   readRefValue(t: Type): RefValue {
     const ref = this.readRef();
-    return new RefValue(ref, t);
+    const height = this.readInt();
+    return constructRefValue(t, ref, height);
   }
 
   readValue(): any {

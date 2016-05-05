@@ -84,38 +84,7 @@ func (suite *DataStoreSuite) TestReadWriteCachePersists() {
 }
 
 func (suite *DataStoreSuite) TestWriteRefToNonexistentValue() {
-	suite.Panics(func() { suite.ds.WriteValue(types.NewRef(types.Bool(true).Ref())) })
-}
-
-func (suite *DataStoreSuite) TestWriteWrongTypeRef() {
-	b := types.Bool(true)
-	blob := types.NewEmptyBlob()
-	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(b))
-
-	suite.Panics(func() { suite.ds.WriteValue(types.NewTypedRef(blob.Type(), b.Ref())) })
-}
-
-func (suite *DataStoreSuite) TestWriteValueTypeRef() {
-	b := types.Bool(true)
-	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(b))
-
-	suite.NotPanics(func() { suite.ds.WriteValue(types.NewRef(b.Ref())) })
-}
-
-func (suite *DataStoreSuite) TestReadValueTypeRefPanics_BUG1121() {
-	b := types.NewEmptyBlob()
-	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(b))
-
-	datasetID := "ds1"
-	aCommit := NewCommit().Set(ValueField, types.NewRef(b.Ref()))
-	ds2, err := suite.ds.Commit(datasetID, aCommit)
-	suite.NoError(err)
-
-	_, ok := ds2.MaybeHead(datasetID)
-	suite.True(ok)
-	// Fix BUG 1121 and then uncomment this line and delete the one after
-	// suite.NotPanics(func() { ds2.WriteValue(types.NewRefOfBlob(b.Ref())) })
-	suite.Panics(func() { ds2.WriteValue(types.NewTypedRefFromValue(b)) })
+	suite.Panics(func() { suite.ds.WriteValue(types.NewTypedRefFromValue(types.Bool(true))) })
 }
 
 func (suite *DataStoreSuite) TestTolerateUngettableRefs() {
@@ -142,7 +111,9 @@ func (suite *DataStoreSuite) TestDataStoreCommit() {
 	// The new datastore has |a|.
 	aCommit1 := ds2.Head(datasetID)
 	suite.True(aCommit1.Get(ValueField).Equals(a))
-	suite.Equal(aCommit1.Ref(), ds2.HeadRef(datasetID).TargetRef())
+	aRef1 := ds2.HeadRef(datasetID)
+	suite.Equal(aCommit1.Ref(), aRef1.TargetRef())
+	suite.Equal(uint64(1), aRef1.Height())
 	suite.ds = ds2
 
 	// |a| <- |b|
@@ -151,6 +122,7 @@ func (suite *DataStoreSuite) TestDataStoreCommit() {
 	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
+	suite.Equal(uint64(2), suite.ds.HeadRef(datasetID).Height())
 
 	// |a| <- |b|
 	//   \----|c|
@@ -167,6 +139,7 @@ func (suite *DataStoreSuite) TestDataStoreCommit() {
 	suite.ds, err = suite.ds.Commit(datasetID, dCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(d))
+	suite.Equal(uint64(3), suite.ds.HeadRef(datasetID).Height())
 
 	// Attempt to recommit |b| with |a| as parent.
 	// Should be disallowed.
@@ -284,4 +257,52 @@ func (suite *DataStoreSuite) TestDataStoreConcurrency() {
 	ds2, err = ds2.Commit(datasetID, eCommit)
 	suite.Error(err)
 	suite.True(ds2.Head(datasetID).Get(ValueField).Equals(c))
+}
+
+func (suite *DataStoreSuite) TestDataStoreHeightOfRefs() {
+	r1 := suite.ds.WriteValue(types.NewString("hello"))
+	suite.Equal(uint64(1), r1.Height())
+
+	r2 := suite.ds.WriteValue(r1)
+	suite.Equal(uint64(2), r2.Height())
+	suite.Equal(uint64(3), suite.ds.WriteValue(r2).Height())
+}
+
+func (suite *DataStoreSuite) TestDataStoreHeightOfCollections() {
+	setOfStringType := types.MakeSetType(types.StringType)
+	setOfRefOfStringType := types.MakeSetType(types.MakeRefType(types.StringType))
+
+	// Set<String>
+	v1 := types.NewString("hello")
+	v2 := types.NewString("world")
+	s1 := types.NewTypedSet(setOfStringType, v1, v2)
+	suite.Equal(uint64(1), suite.ds.WriteValue(s1).Height())
+
+	// Set<Ref<String>>
+	s2 := types.NewTypedSet(setOfRefOfStringType, suite.ds.WriteValue(v1), suite.ds.WriteValue(v2))
+	suite.Equal(uint64(2), suite.ds.WriteValue(s2).Height())
+
+	// List<Set<String>>
+	v3 := types.NewString("foo")
+	v4 := types.NewString("bar")
+	s3 := types.NewTypedSet(setOfStringType, v3, v4)
+	l1 := types.NewTypedList(types.MakeListType(setOfStringType), s1, s3)
+	suite.Equal(uint64(1), suite.ds.WriteValue(l1).Height())
+
+	// List<Ref<Set<String>>
+	l2 := types.NewTypedList(types.MakeListType(types.MakeRefType(setOfStringType)),
+		suite.ds.WriteValue(s1), suite.ds.WriteValue(s3))
+	suite.Equal(uint64(2), suite.ds.WriteValue(l2).Height())
+
+	// List<Ref<Set<Ref<String>>>
+	s4 := types.NewTypedSet(setOfRefOfStringType, suite.ds.WriteValue(v3), suite.ds.WriteValue(v4))
+	l3 := types.NewTypedList(types.MakeListType(types.MakeRefType(setOfRefOfStringType)),
+		suite.ds.WriteValue(s4))
+	suite.Equal(uint64(3), suite.ds.WriteValue(l3).Height())
+
+	// List<Set<String> | RefValue<Set<String>>>.
+	l4 := types.NewList(s1, suite.ds.WriteValue(s3))
+	suite.Equal(uint64(2), suite.ds.WriteValue(l4).Height())
+	l5 := types.NewList(suite.ds.WriteValue(s1), s3)
+	suite.Equal(uint64(2), suite.ds.WriteValue(l5).Height())
 }

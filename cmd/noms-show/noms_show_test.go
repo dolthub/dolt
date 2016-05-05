@@ -23,9 +23,9 @@ type nomsShowTestSuite struct {
 const (
 	res1 = "struct Commit {\n  parents: Set<Ref<Parent<0>>>\n  value: Value\n}({\n  parents: {},\n  value: sha1-7cecea5a8e3bcf30b35984eb7f592d98fa994a9a,\n})\n"
 	res2 = "\"test string\"\n"
-	res3 = "struct Commit {\n  parents: Set<Ref<Parent<0>>>\n  value: Value\n}({\n  parents: {\n    sha1-4e7e3216cd7d2e7d5d7bc4fb3ede98ae6b2406c4,\n  },\n  value: sha1-b326291d2a568f39fa863ad63408711e676bc05b,\n})\n"
+	res3 = "struct Commit {\n  parents: Set<Ref<Parent<0>>>\n  value: Value\n}({\n  parents: {\n    sha1-a8b8eb235f19275ada45cf3eab3eab184b181b3b,\n  },\n  value: sha1-b326291d2a568f39fa863ad63408711e676bc05b,\n})\n"
 	res4 = "List<Value>([\n  \"elem1\",\n  2,\n  \"elem3\",\n])\n"
-	res5 = "struct Commit {\n  parents: Set<Ref<Parent<0>>>\n  value: Value\n}({\n  parents: {\n    sha1-528e96673c69963f59df658a6e0ad3abe1561e75,\n  },\n  value: sha1-7cecea5a8e3bcf30b35984eb7f592d98fa994a9a,\n})\n"
+	res5 = "struct Commit {\n  parents: Set<Ref<Parent<0>>>\n  value: Value\n}({\n  parents: {\n    sha1-7324f750bc0a61920fc1fbc5c7607aed455de74e,\n  },\n  value: sha1-7cecea5a8e3bcf30b35984eb7f592d98fa994a9a,\n})\n"
 )
 
 func writeTestData(ds dataset.Dataset, value types.Value) types.Ref {

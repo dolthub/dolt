@@ -54,7 +54,7 @@ func (suite *NotABatchSinkSuite) TestPutChunks() {
 	l := types.NewList()
 	for _, c := range chnx {
 		suite.store.SchedulePut(c, types.Hints{})
-		l = l.Append(types.NewRef(c.Ref()))
+		l = l.Append(newStringRef(c.Ref(), 1))
 	}
 	suite.store.SchedulePut(types.EncodeValue(l, nil), types.Hints{})
 	suite.store.Flush()

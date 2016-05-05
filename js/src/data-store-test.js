@@ -6,8 +6,11 @@ import {emptyRef} from './ref.js';
 import {assert} from 'chai';
 import {default as DataStore, getDatasTypes, newCommit} from './data-store.js';
 import {invariant, notNull} from './assert.js';
+import {newList} from './list.js';
 import {newMap} from './map.js';
+import {stringType, makeListType, makeRefType, makeSetType} from './type.js';
 import {encodeNomsValue} from './encode.js';
+import {newSet} from './set.js';
 
 suite('DataStore', () => {
   test('access', async () => {
@@ -44,6 +47,7 @@ suite('DataStore', () => {
     // The new datastore has |a|.
     const aRef = notNull(await ds2.headRef(datasetID));
     assert.isTrue(aCommit.ref.equals(aRef.targetRef));
+    assert.strictEqual(1, aRef.height);
     const aCommit1 = notNull(await ds2.head(datasetID));
     assert.strictEqual('a', aCommit1.value);
     ds = ds2;
@@ -53,6 +57,7 @@ suite('DataStore', () => {
     ds = await ds.commit(datasetID, bCommit);
     const bRef = notNull(await ds.headRef(datasetID));
     assert.isTrue(bCommit.ref.equals(bRef.targetRef));
+    assert.strictEqual(2, bRef.height);
     assert.strictEqual('b', notNull(await ds.head(datasetID)).value);
 
     // |a| <- |b|
@@ -74,6 +79,7 @@ suite('DataStore', () => {
     ds = await ds.commit(datasetID, dCommit);
     const dRef = notNull(await ds.headRef(datasetID));
     assert.isTrue(dCommit.ref.equals(dRef.targetRef));
+    assert.strictEqual(3, dRef.height);
     assert.strictEqual('d', notNull(await ds.head(datasetID)).value);
 
     // Attempt to recommit |b| with |a| as parent.
@@ -161,5 +167,56 @@ suite('DataStore', () => {
     assert.isTrue(fooHead.equals(commit));
     const barHead = await ds.head('bar');
     assert.isNull(barHead);
+  });
+
+  test('height of refs', async () => {
+    const ds = new DataStore(new makeTestingBatchStore());
+
+    const v1 = ds.writeValue('hello');
+    assert.strictEqual(1, v1.height);
+
+    const r1 = ds.writeValue(v1);
+    assert.strictEqual(2, r1.height);
+    assert.strictEqual(3, ds.writeValue(r1).height);
+  });
+
+  test('height of collections', async() => {
+    const ds = new DataStore(new makeTestingBatchStore());
+
+    const setOfStringType = makeSetType(stringType);
+    const setOfRefOfStringType = makeSetType(makeRefType(stringType));
+
+    // Set<String>.
+    const v1 = 'hello';
+    const v2 = 'world';
+    const s1 = await newSet([v1, v2], setOfStringType);
+    assert.strictEqual(1, ds.writeValue(s1).height);
+
+    // Set<RefValue<String>>.
+    const s2 = await newSet([ds.writeValue(v1), ds.writeValue(v2)], setOfRefOfStringType);
+    assert.strictEqual(2, ds.writeValue(s2).height);
+
+    // List<Set<String>>.
+    const v3 = 'foo';
+    const v4 = 'bar';
+    const s3 = await newSet([v3, v4], setOfStringType);
+    const l1 = await newList([s1, s3], makeListType(setOfStringType));
+    assert.strictEqual(1, ds.writeValue(l1).height);
+
+    // List<RefValue<Set<String>>.
+    const l2 = await newList([ds.writeValue(s1), ds.writeValue(s3)],
+                             makeListType(makeRefType(setOfStringType)));
+    assert.strictEqual(2, ds.writeValue(l2).height);
+
+    // List<RefValue<Set<RefValue<String>>>.
+    const s4 = await newSet([ds.writeValue(v3), ds.writeValue(v4)], setOfRefOfStringType);
+    const l3 = await newList([ds.writeValue(s4)], makeListType(makeRefType(setOfRefOfStringType)));
+    assert.strictEqual(3, ds.writeValue(l3).height);
+
+    // List<Set<String> | RefValue<Set<String>>>.
+    const l4 = await newList([s1, ds.writeValue(s3)]);
+    assert.strictEqual(2, ds.writeValue(l4).height);
+    const l5 = await newList([ds.writeValue(s1), s3]);
+    assert.strictEqual(2, ds.writeValue(l5).height);
   });
 });

@@ -19,6 +19,7 @@ import {
   assertChunkCountAndType,
   assertValueRef,
   assertValueType,
+  deriveSequenceHeight,
   chunkDiffCount,
   flatten,
   flattenParallel,
@@ -30,7 +31,7 @@ import {invariant} from './assert.js';
 import {ListLeafSequence, newList, NomsList} from './list.js';
 
 const testListSize = 5000;
-const listOfNRef = 'sha1-9220f195a4273c1c31643014a6c6c6a39b2c068b';
+const listOfNRef = 'sha1-77c24e36fd4d1b367e36b86f158e7fdd38373a6d';
 
 async function assertToJS(list: NomsList, nums: Array<any>, start: number = 0,
     end: number = nums.length): Promise<void> {
@@ -123,11 +124,11 @@ suite('List', () => {
   }
 
   test('List 1K', async () => {
-    await listTestSuite(10, 'sha1-34023a22fa32bda7d77c64c62361f3b31d674e6e', 17, 19, 2);
+    await listTestSuite(10, 'sha1-e992e7259aec9a3e4df46d70d40d9ef30992bbd7', 17, 19, 2);
   });
 
   test('LONG: List 4K', async () => {
-    await listTestSuite(12, 'sha1-50389fd9a33c921c9aa7cc2b9b93290a13443cb4', 2, 3, 2);
+    await listTestSuite(12, 'sha1-aac25b5ebf894249217f1996f6554bff62bb7382', 2, 3, 2);
   });
 
   test('LONG: list of ref, set of n numbers, length', async () => {
@@ -139,15 +140,15 @@ suite('List', () => {
     const refOfStructType = makeRefType(structType);
     const tr = makeListType(refOfStructType);
 
-    const refs = nums.map(n => {
-      const s = newStruct(structType, {n});
-      const r = s.ref;
-      return new RefValue(r, refOfStructType);
-    });
-
+    const refs = nums.map(n => new RefValue(newStruct(structType, {n})));
     const s = await newList(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-471aa3beb1f8d06a8a9a398c1b29fa34c0163ecd');
+    assert.strictEqual(s.ref.toString(), 'sha1-87be8b38153a653f140dbb67064f6ea832726871');
     assert.strictEqual(testListSize, s.length);
+
+    const height = deriveSequenceHeight(s.sequence);
+    assert.isTrue(height > 0);
+    // height + 1 because the leaves are RefValue values (with height 1).
+    assert.strictEqual(height + 1, s.sequence.items[0].ref.height);
   });
 
   test('LONG: insert', async () => {

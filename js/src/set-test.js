@@ -12,14 +12,14 @@ import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-ad
 import {newStruct} from './struct.js';
 import {
   boolType,
-  makeSetType,
   makeRefType,
+  makeSetType,
   makeStructType,
   numberType,
   stringType,
   valueType,
 } from './type.js';
-import {flatten, flattenParallel} from './test-util.js';
+import {flatten, flattenParallel, deriveSequenceHeight} from './test-util.js';
 import {invariant, notNull} from './assert.js';
 import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
@@ -29,7 +29,7 @@ import type {Type} from './type.js';
 import type {ValueReadWriter} from './value-store.js';
 
 const testSetSize = 5000;
-const setOfNRef = 'sha1-189e35a1b7aa09e012c0a86f20921b4978d21629';
+const setOfNRef = 'sha1-5937b476bb1d594e3a905c44f00863bd9ba1fb19';
 const smallRandomSetSize = 200;
 const randomSetSize = 2000;
 
@@ -99,16 +99,14 @@ suite('BuildSet', () => {
     const refOfStructType = makeRefType(structType);
     const tr = makeSetType(refOfStructType);
 
-    const refs = nums.map(n => {
-      const s = newStruct(structType, {n});
-      const r = s.ref;
-      return new RefValue(r, refOfStructType);
-    });
-
+    const refs = nums.map(n => new RefValue(newStruct(structType, {n})));
     const s = await newSet(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-d8815974c1b0ac51f2ffe8147d80ce8be8f5c52d');
+    assert.strictEqual(s.ref.toString(), 'sha1-3664c45fcbf64f1272956a7b93f27488ab0eb4f8');
+    const height = deriveSequenceHeight(s.sequence);
+    assert.isTrue(height > 0);
+    // height + 1 because the leaves are RefValue values (with height 1).
+    assert.strictEqual(height + 1, s.sequence.items[0].ref.height);
   });
-
 
   test('LONG: insert', async () => {
     const nums = firstNNumbers(testSetSize - 10);
@@ -119,7 +117,7 @@ suite('BuildSet', () => {
       assert.strictEqual(i + 1, s.size);
     }
 
-    assert.strictEqual(s.ref.toString(), 'sha1-0c2672150a517e593b118705e84ed438028902ff');
+    assert.strictEqual(s.ref.toString(), 'sha1-c99cd8be7a36678e4a538cf23496dfc96beaa64f');
   });
 
   test('LONG: remove', async () => {
@@ -593,7 +591,7 @@ suite('CompoundSet', () => {
     const chunks = s.chunks;
     const sequence = s.sequence;
     assert.equal(2, chunks.length);
-    assert.isTrue(sequence.items[0].ref.equals(chunks[0]));
-    assert.isTrue(sequence.items[1].ref.equals(chunks[1]));
+    assert.deepEqual(sequence.items[0].ref, chunks[0]);
+    assert.deepEqual(sequence.items[1].ref, chunks[1]);
   });
 });

@@ -103,11 +103,11 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	vs := newLocalValueStore(cs)
 
 	expectedItem := Number(42)
-	ref := vs.WriteValue(expectedItem).TargetRef()
+	ref := vs.WriteValue(expectedItem)
 
-	expected := NewList(NewRef(ref))
-	ref = vs.WriteValue(expected).TargetRef()
-	actualVar := vs.ReadValue(ref)
+	expected := NewList(ref)
+	ref = vs.WriteValue(expected)
+	actualVar := vs.ReadValue(ref.TargetRef())
 
 	assert.Equal(1, cs.Reads)
 	assert.True(expected.Equals(actualVar))

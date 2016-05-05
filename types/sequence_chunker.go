@@ -125,6 +125,7 @@ func (seq *sequenceChunker) Done() Value {
 
 	if seq.isRoot() {
 		_, done := seq.makeChunk(seq.current)
+		d.Chk.NotNil(done)
 		return done
 	}
 

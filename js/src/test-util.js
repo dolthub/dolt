@@ -4,12 +4,13 @@ import DataStore from './data-store.js';
 import type {Collection} from './collection.js';
 import type {valueOrPrimitive} from './value.js';
 import {assert} from 'chai';
+import {notNull} from './assert.js';
 import {AsyncIterator} from './async-iterator.js';
 import {getChunksOfValue, Value} from './value.js';
 import {getRefOfValue} from './get-ref.js';
 import {getTypeOfValue, Type} from './type.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
-import {notNull} from './assert.js';
+import {Sequence} from './sequence.js';
 
 export async function flatten<T>(iter: AsyncIterator<T>): Promise<Array<T>> {
   const values = [];
@@ -97,4 +98,9 @@ export function intSequence(count: number, start: number = 0): Array<number> {
   }
 
   return nums;
+}
+
+export function deriveSequenceHeight(seq: Sequence): number {
+  // Note: not using seq.items[0].ref.height because the purpose of this method is to be redundant.
+  return seq.isMeta ? 1 + deriveSequenceHeight(notNull(seq.items[0].sequence)) : 0;
 }
