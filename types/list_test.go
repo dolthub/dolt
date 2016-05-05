@@ -2,7 +2,6 @@ package types
 
 import (
 	"math/rand"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -125,26 +124,6 @@ func (suite *listTestSuite) TestIter() {
 	suite.Equal(endAt, expectIdx)
 }
 
-func (suite *listTestSuite) TestIterAllP() {
-	list := suite.col.(List)
-	mu := sync.Mutex{}
-	indexes := map[Value]uint64{}
-	for i, v := range suite.elems {
-		indexes[v] = uint64(i)
-	}
-	visited := map[Value]bool{}
-	list.IterAllP(64, func(v Value, idx uint64) {
-		mu.Lock()
-		_, seen := visited[v]
-		visited[v] = true
-		mu.Unlock()
-		suite.False(seen)
-		suite.Equal(idx, indexes[v])
-	})
-
-	suite.Equal(suite.expectLen, uint64(len(visited)))
-}
-
 func (suite *listTestSuite) TestMap() {
 	list := suite.col.(List)
 	l := list.Map(func(v Value, i uint64) interface{} {
@@ -153,20 +132,6 @@ func (suite *listTestSuite) TestMap() {
 	})
 
 	suite.Equal(uint64(len(l)), suite.expectLen)
-	for i := 0; i < len(l); i++ {
-		suite.Equal(l[i], list.Get(uint64(i)).(Number)+Number(i))
-	}
-}
-
-func (suite *listTestSuite) TestMapP() {
-	list := suite.col.(List)
-
-	l := list.MapP(64, func(v Value, i uint64) interface{} {
-		v1 := v.(Number)
-		return v1 + Number(i)
-	})
-
-	suite.Equal(uint64(len(l)), list.Len())
 	for i := 0; i < len(l); i++ {
 		suite.Equal(l[i], list.Get(uint64(i)).(Number)+Number(i))
 	}

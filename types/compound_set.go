@@ -159,13 +159,6 @@ func (cs compoundSet) IterAll(cb setIterAllCallback) {
 	})
 }
 
-func (cs compoundSet) IterAllP(concurrency int, f setIterAllCallback) {
-	iterateMetaSequenceLeaf(cs, cs.vr, func(v Value) bool {
-		v.(setLeaf).IterAllP(concurrency, f)
-		return false
-	})
-}
-
 func (cs compoundSet) elemType() *Type {
 	return cs.t.Desc.(CompoundDesc).ElemTypes[0]
 }

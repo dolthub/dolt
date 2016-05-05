@@ -11,7 +11,6 @@ type Set interface {
 	Union(others ...Set) Set
 	Iter(cb setIterCallback)
 	IterAll(cb setIterAllCallback)
-	IterAllP(concurrency int, f setIterAllCallback)
 	Filter(cb setFilterCallback) Set
 	elemType() *Type
 	sequenceCursorAtFirst() *sequenceCursor

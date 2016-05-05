@@ -2,9 +2,7 @@ package types
 
 import (
 	"crypto/sha1"
-	"runtime"
 	"sort"
-	"sync"
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -70,28 +68,6 @@ func (s setLeaf) IterAll(cb setIterAllCallback) {
 	for _, v := range s.data {
 		cb(v)
 	}
-}
-
-func (s setLeaf) IterAllP(concurrency int, f setIterAllCallback) {
-	if concurrency == 0 {
-		concurrency = runtime.NumCPU()
-	}
-	sem := make(chan int, concurrency)
-
-	wg := sync.WaitGroup{}
-
-	for idx := range s.data {
-		wg.Add(1)
-
-		sem <- 1
-		go func(idx int) {
-			defer wg.Done()
-			f(s.data[idx])
-			<-sem
-		}(idx)
-	}
-
-	wg.Wait()
 }
 
 func (s setLeaf) Filter(cb setFilterCallback) Set {

@@ -13,7 +13,6 @@ type Map interface {
 	Remove(k Value) Map
 	Iter(cb mapIterCallback)
 	IterAll(cb mapIterAllCallback)
-	IterAllP(concurrency int, f mapIterAllCallback)
 	Filter(cb mapFilterCallback) Map
 	elemTypes() []*Type
 }

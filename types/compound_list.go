@@ -3,8 +3,6 @@ package types
 import (
 	"crypto/sha1"
 
-	"runtime"
-
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
@@ -77,22 +75,6 @@ func (cl compoundList) Get(idx uint64) Value {
 	return l.Get(idx - start)
 }
 
-func (cl compoundList) IterAllP(concurrency int, f listIterAllFunc) {
-	start := uint64(0)
-	var limit chan int
-	if concurrency == 0 {
-		limit = make(chan int, runtime.NumCPU())
-	} else {
-		limit = make(chan int, concurrency)
-	}
-	iterateMetaSequenceLeaf(cl, cl.vr, func(l Value) bool {
-		list := l.(listLeaf)
-		list.iterInternal(limit, f, start)
-		start += list.Len()
-		return false
-	})
-}
-
 func (cl compoundList) Slice(start uint64, end uint64) List {
 	// See https://github.com/attic-labs/noms/issues/744 for a better Slice implementation.
 	seq := cl.sequenceCursorAtIndex(start)
@@ -118,27 +100,6 @@ func (cl compoundList) Map(mf MapFunc) []interface{} {
 			res := mf(v, start+uint64(i))
 			results = append(results, res)
 		}
-		start += list.Len()
-		return false
-	})
-	return results
-}
-
-func (cl compoundList) MapP(concurrency int, mf MapFunc) []interface{} {
-	start := uint64(0)
-
-	var limit chan int
-	if concurrency == 0 {
-		limit = make(chan int, runtime.NumCPU())
-	} else {
-		limit = make(chan int, concurrency)
-	}
-
-	results := make([]interface{}, 0, cl.Len())
-	iterateMetaSequenceLeaf(cl, cl.vr, func(l Value) bool {
-		list := l.(listLeaf)
-		nl := list.mapInternal(limit, mf, start)
-		results = append(results, nl...)
 		start += list.Len()
 		return false
 	})

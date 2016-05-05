@@ -7,10 +7,8 @@ type List interface {
 	Get(idx uint64) Value
 	Iter(f listIterFunc)
 	IterAll(f listIterAllFunc)
-	IterAllP(concurrency int, f listIterAllFunc)
 	Filter(cb listFilterCallback) List
 	Map(mf MapFunc) []interface{}
-	MapP(concurrency int, mf MapFunc) []interface{}
 	Slice(start uint64, end uint64) List
 	Set(idx uint64, v Value) List
 	Append(v ...Value) List

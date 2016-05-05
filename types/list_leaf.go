@@ -1,7 +1,6 @@
 package types
 
 import (
-	"runtime"
 	"sync"
 
 	"github.com/attic-labs/noms/d"
@@ -45,17 +44,6 @@ func (l listLeaf) IterAll(f listIterAllFunc) {
 	}
 }
 
-func (l listLeaf) IterAllP(concurrency int, f listIterAllFunc) {
-	var limit chan int
-	if concurrency == 0 {
-		limit = make(chan int, runtime.NumCPU())
-	} else {
-		limit = make(chan int, concurrency)
-	}
-
-	l.iterInternal(limit, f, 0)
-}
-
 func (l listLeaf) iterInternal(sem chan int, lf listIterAllFunc, offset uint64) {
 	wg := sync.WaitGroup{}
 
@@ -85,18 +73,12 @@ func (l listLeaf) Filter(cb listFilterCallback) List {
 }
 
 func (l listLeaf) Map(mf MapFunc) []interface{} {
-	return l.MapP(1, mf)
-}
-
-func (l listLeaf) MapP(concurrency int, mf MapFunc) []interface{} {
-	var limit chan int
-	if concurrency == 0 {
-		limit = make(chan int, runtime.NumCPU())
-	} else {
-		limit = make(chan int, concurrency)
+	results := []interface{}{}
+	for i, v := range l.values {
+		res := mf(v, uint64(i))
+		results = append(results, res)
 	}
-
-	return l.mapInternal(limit, mf, 0)
+	return results
 }
 
 func (l listLeaf) mapInternal(sem chan int, mf MapFunc, offset uint64) []interface{} {

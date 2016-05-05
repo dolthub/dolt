@@ -2,9 +2,7 @@ package types
 
 import (
 	"crypto/sha1"
-	"runtime"
 	"sort"
-	"sync"
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -103,29 +101,6 @@ func (m mapLeaf) IterAll(cb mapIterAllCallback) {
 	for _, entry := range m.data {
 		cb(entry.key, entry.value)
 	}
-}
-
-func (m mapLeaf) IterAllP(concurrency int, f mapIterAllCallback) {
-	if concurrency == 0 {
-		concurrency = runtime.NumCPU()
-	}
-	sem := make(chan int, concurrency)
-
-	wg := sync.WaitGroup{}
-
-	for idx := range m.data {
-		wg.Add(1)
-
-		sem <- 1
-		go func(idx int) {
-			defer wg.Done()
-			md := m.data[idx]
-			f(md.key, md.value)
-			<-sem
-		}(idx)
-	}
-
-	wg.Wait()
 }
 
 func (m mapLeaf) Filter(cb mapFilterCallback) Map {

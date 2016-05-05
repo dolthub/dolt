@@ -2,8 +2,6 @@ package types
 
 import (
 	"bytes"
-	"runtime"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -162,61 +160,6 @@ func TestMapIter(t *testing.T) {
 	assert.Equal(1, len(results))
 	// Iteration order not guaranteed, but it has to be one of these.
 	assert.True(got(NewString("a"), Number(0)) || got(NewString("b"), Number(1)))
-}
-
-func TestMapIterAllP(t *testing.T) {
-	assert := assert.New(t)
-
-	testIter := func(concurrency, mapLen int) {
-		values := make([]Value, 2*mapLen)
-		for i := 0; i < mapLen; i++ {
-			values[2*i] = Number(i)
-			values[2*i+1] = Number(i)
-		}
-
-		m := newMapLeaf(mapType, buildMapData(mapData{}, values, mapType)...)
-
-		cur := 0
-		mu := sync.Mutex{}
-		getCur := func() int {
-			mu.Lock()
-			defer mu.Unlock()
-			return cur
-		}
-
-		expectConcurreny := concurrency
-		if concurrency == 0 {
-			expectConcurreny = runtime.NumCPU()
-		}
-		visited := make([]bool, mapLen)
-		f := func(k, v Value) {
-			mu.Lock()
-			cur++
-			mu.Unlock()
-
-			for getCur() < expectConcurreny {
-			}
-
-			visited[uint64(v.(Number))] = true
-		}
-
-		if concurrency == 1 {
-			m.IterAll(f)
-		} else {
-			m.IterAllP(concurrency, f)
-		}
-		numVisited := 0
-		for _, visit := range visited {
-			if visit {
-				numVisited++
-			}
-		}
-		assert.Equal(mapLen, numVisited, "IterAllP was not called with every map key")
-	}
-	testIter(0, 100)
-	testIter(10, 100)
-	testIter(1, 100)
-	testIter(64, 200)
 }
 
 func TestMapFilter(t *testing.T) {

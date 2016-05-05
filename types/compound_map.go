@@ -109,14 +109,6 @@ func (cm compoundMap) sequenceChunkerAtKey(k Value) (*sequenceChunker, bool) {
 	return seq, found
 }
 
-func (cm compoundMap) IterAllP(concurrency int, f mapIterAllCallback) {
-	// TODO: Improve
-	iterateMetaSequenceLeaf(cm, cm.vr, func(v Value) bool {
-		v.(mapLeaf).IterAllP(concurrency, f)
-		return false
-	})
-}
-
 func (cm compoundMap) Filter(cb mapFilterCallback) Map {
 	seq := newEmptySequenceChunker(makeMapLeafChunkFn(cm.t, cm.vr), newOrderedMetaSequenceChunkFn(cm.t, cm.vr), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
