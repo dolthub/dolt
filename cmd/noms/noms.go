@@ -17,6 +17,10 @@ const (
 	cmdPrefix = "noms-"
 )
 
+var (
+	usePager = flag.Bool("use-pager", true, "page results when length exceeds terminal height")
+)
+
 func Usage() {
 	fmt.Fprintf(os.Stderr, "%s command [<command options>]\n", path.Base(os.Args[0]))
 }
@@ -75,15 +79,32 @@ func findCmds() []string {
 }
 
 func executeCmd(executable string) {
+	lessCmd, err := exec.LookPath("less")
+	if err != nil {
+		*usePager = false
+	}
 	args := flag.Args()[1:]
 	if len(args) == 0 {
 		args = append(args, "-help")
 	}
-	c := exec.Command(executable, args...)
-	c.Stdin = os.Stdin
-	c.Stderr = os.Stderr
-	c.Stdout = os.Stdout
-	err := c.Run()
+	c1 := exec.Command(executable, args...)
+	c1.Stdin = os.Stdin
+	c1.Stdout = os.Stdout
+	c1.Stderr = os.Stderr
+
+	if *usePager {
+		c1.Stdout = nil
+		c2 := exec.Command(lessCmd, []string{"-FSRX"}...)
+		c2.Stdin, _ = c1.StdoutPipe()
+		c2.Stdout = os.Stdout
+		c2.Stderr = os.Stderr
+		c2.Start()
+		err = c1.Run()
+		c2.Wait()
+	} else {
+		err = c1.Run()
+	}
+
 	if err != nil {
 		switch t := err.(type) {
 		case *exec.ExitError:
