@@ -9,13 +9,13 @@ import (
 
 func TestNewMap(t *testing.T) {
 	assert := assert.New(t)
-	m := newMapLeaf(mapType)
-	assert.IsType(newMapLeaf(mapType), m)
+	m := NewMap()
+	assert.IsType(mapType, m.Type())
 	assert.Equal(uint64(0), m.Len())
-	m = NewMap(NewString("foo"), NewString("foo"), NewString("bar"), NewString("bar"))
+	m = NewMap(NewString("foo1"), NewString("bar1"), NewString("foo2"), NewString("bar2"))
 	assert.Equal(uint64(2), m.Len())
-	assert.True(NewString("foo").Equals(m.Get(NewString("foo"))))
-	assert.True(NewString("bar").Equals(m.Get(NewString("bar"))))
+	assert.True(NewString("bar1").Equals(m.Get(NewString("foo1"))))
+	assert.True(NewString("bar2").Equals(m.Get(NewString("foo2"))))
 }
 
 func TestMapUniqueKeysString(t *testing.T) {
@@ -47,7 +47,7 @@ func TestMapUniqueKeysNumber(t *testing.T) {
 
 func TestMapHasRemove(t *testing.T) {
 	assert := assert.New(t)
-	m1 := newMapLeaf(mapType)
+	m1 := NewMap()
 	assert.False(m1.Has(NewString("foo")))
 	m2 := m1.Set(NewString("foo"), NewString("foo"))
 	assert.False(m1.Has(NewString("foo")))
@@ -60,7 +60,7 @@ func TestMapHasRemove(t *testing.T) {
 
 func TestMapFirst(t *testing.T) {
 	assert := assert.New(t)
-	m1 := newMapLeaf(mapType)
+	m1 := NewMap()
 	k, v := m1.First()
 	assert.Nil(k)
 	assert.Nil(v)
@@ -81,7 +81,7 @@ func TestMapFirst(t *testing.T) {
 
 func TestMapSetGet(t *testing.T) {
 	assert := assert.New(t)
-	m1 := newMapLeaf(mapType)
+	m1 := NewMap()
 	assert.Nil(m1.Get(NewString("foo")))
 	m2 := m1.Set(NewString("foo"), Number(42))
 	assert.Nil(m1.Get(NewString("foo")))
@@ -99,7 +99,7 @@ func TestMapSetGet(t *testing.T) {
 
 func TestMapSetM(t *testing.T) {
 	assert := assert.New(t)
-	m1 := newMapLeaf(mapType)
+	m1 := NewMap()
 	m2 := m1.SetM()
 	assert.True(m1.Equals(m2))
 	m3 := m2.SetM(NewString("foo"), NewString("bar"), NewString("hot"), NewString("dog"))
@@ -121,7 +121,7 @@ func TestMapDuplicateSet(t *testing.T) {
 
 func TestMapIter(t *testing.T) {
 	assert := assert.New(t)
-	m := newMapLeaf(mapType)
+	m := NewMap()
 
 	type entry struct {
 		key   Value
@@ -175,9 +175,9 @@ func TestMapFilter(t *testing.T) {
 func TestMapEquals(t *testing.T) {
 	assert := assert.New(t)
 
-	m1 := newMapLeaf(mapType)
+	m1 := NewMap()
 	m2 := m1
-	m3 := newMapLeaf(mapType)
+	m3 := NewMap()
 
 	assert.True(m1.Equals(m2))
 	assert.True(m2.Equals(m1))
@@ -206,8 +206,8 @@ func TestMapNotStringKeys(t *testing.T) {
 		b2, NewString("blob2"),
 		NewList(), NewString("empty list"),
 		NewList(NewList()), NewString("list of list"),
-		newMapLeaf(mapType), NewString("empty map"),
-		NewMap(newMapLeaf(mapType), newMapLeaf(mapType)), NewString("map of map/map"),
+		NewMap(), NewString("empty map"),
+		NewMap(NewMap(), NewMap()), NewString("map of map/map"),
 		NewSet(), NewString("empty set"),
 		NewSet(NewSet()), NewString("map of set/set"),
 	}
@@ -350,22 +350,22 @@ func TestMapOrdering(t *testing.T) {
 func TestMapEmpty(t *testing.T) {
 	assert := assert.New(t)
 
-	m := newMapLeaf(mapType)
+	m := NewMap()
 	assert.True(m.Empty())
 	m = m.Set(Bool(false), NewString("hi"))
 	assert.False(m.Empty())
-	m = m.Set(NewList(), newMapLeaf(mapType))
+	m = m.Set(NewList(), NewMap())
 	assert.False(m.Empty())
 }
 
 func TestMapType(t *testing.T) {
 	assert := assert.New(t)
 
-	m := newMapLeaf(mapType)
+	m := NewMap()
 	assert.True(m.Type().Equals(MakeMapType(ValueType, ValueType)))
 
 	tr := MakeMapType(StringType, NumberType)
-	m = newMapLeaf(tr)
+	m = NewTypedMap(tr)
 	assert.Equal(tr, m.Type())
 
 	m2 := m.Remove(NewString("B"))

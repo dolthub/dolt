@@ -6,8 +6,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestNewSet(t *testing.T) {
+	assert := assert.New(t)
+	s := NewSet()
+	assert.IsType(setType, s.Type())
+	assert.Equal(uint64(0), s.Len())
+
+	s = NewSet(Number(0))
+	assert.IsType(setType, s.Type())
+
+	s = NewTypedSet(MakeSetType(NumberType))
+	assert.IsType(MakeSetType(NumberType), s.Type())
+
+	s2 := s.Remove(Number(1))
+	assert.IsType(s.Type(), s2.Type())
+}
+
 func TestSetLen(t *testing.T) {
 	assert := assert.New(t)
+	s0 := NewSet()
+	assert.Equal(uint64(0), s0.Len())
 	s1 := NewSet(Bool(true), Number(1), NewString("hi"))
 	assert.Equal(uint64(3), s1.Len())
 	s2 := s1.Insert(Bool(false))
@@ -20,10 +38,28 @@ func TestSetEmpty(t *testing.T) {
 	assert := assert.New(t)
 	s := NewSet()
 	assert.True(s.Empty())
+	assert.Equal(uint64(0), s.Len())
+}
+
+func TestSetEmptyInsert(t *testing.T) {
+	assert := assert.New(t)
+	s := NewSet()
+	assert.True(s.Empty())
 	s = s.Insert(Bool(false))
 	assert.False(s.Empty())
-	s = s.Insert(Number(42))
+	assert.Equal(uint64(1), s.Len())
+}
+
+func TestSetEmptyInsertRemove(t *testing.T) {
+	assert := assert.New(t)
+	s := NewSet()
+	assert.True(s.Empty())
+	s = s.Insert(Bool(false))
 	assert.False(s.Empty())
+	assert.Equal(uint64(1), s.Len())
+	s = s.Remove(Bool(false))
+	assert.True(s.Empty())
+	assert.Equal(uint64(0), s.Len())
 }
 
 // BUG 98
@@ -113,7 +149,6 @@ func TestSetRemove(t *testing.T) {
 	assert.False(s2.Has(v1))
 	assert.False(s2.Has(v2))
 	assert.True(s2.Has(v3))
-
 }
 
 func TestSetUnion(t *testing.T) {
@@ -134,6 +169,10 @@ func TestSetFirst(t *testing.T) {
 	assert.NotNil(s.First())
 	s = s.Insert(Number(2))
 	assert.NotNil(s.First())
+	s2 := s.Remove(Number(1))
+	assert.NotNil(s2.First())
+	s2 = s2.Remove(Number(2))
+	assert.Nil(s2.First())
 }
 
 func TestSetIter(t *testing.T) {
@@ -305,30 +344,38 @@ func TestSetFilter(t *testing.T) {
 		return uint64(i)%2 == 0
 	})
 
+	s3 := s.Filter(func(v Value) bool {
+		i, ok := v.(Number)
+		assert.True(ok)
+		return uint64(i)%3 == 0
+	})
+
 	assert.True(NewSet(Number(0), Number(2), Number(4)).Equals(s2))
+	assert.True(NewSet(Number(0), Number(3)).Equals(s3))
 }
 
 func TestSetType(t *testing.T) {
 	assert := assert.New(t)
 
-	s := newSetLeaf(setType)
-	assert.True(s.Type().Equals(MakeSetType(ValueType)))
+	s := NewSet()
+	assert.True(s.Type().Equals(setType))
 
-	tr := MakeSetType(NumberType)
+	s = NewSet(Number(0))
+	assert.True(s.Type().Equals(setType))
 
-	s = newSetLeaf(tr)
-	assert.Equal(tr, s.Type())
+	s = NewTypedSet(MakeSetType(NumberType))
+	assert.True(s.Type().Equals(MakeSetType(NumberType)))
 
 	s2 := s.Remove(Number(1))
-	assert.True(tr.Equals(s2.Type()))
+	assert.True(s.Type().Equals(s2.Type()))
 
 	s2 = s.Filter(func(v Value) bool {
 		return true
 	})
-	assert.True(tr.Equals(s2.Type()))
+	assert.True(s.Type().Equals(s2.Type()))
 
 	s2 = s.Insert(Number(0), Number(1))
-	assert.True(tr.Equals(s2.Type()))
+	assert.True(s.Type().Equals(s2.Type()))
 
 	assert.Panics(func() { s.Insert(Bool(true)) })
 	assert.Panics(func() { s.Insert(Number(3), Bool(true)) })
