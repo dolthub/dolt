@@ -24,7 +24,7 @@ Dataset specifications take the form:
 <datastore>:<dataset>
 ```
 
-See [spelling datastores](#spelling-datastores) for how to build the `datastore` part of the name. The `dataset` part is just any string matching the regex `^[a-zA-Z0-9\-_/]+$`. However, it is not advised to name datasets starting with `sha1-`.
+See [spelling datastores](#spelling-datastores) for how to build the `datastore` part of the name. The `dataset` part is just any string matching the regex `^[a-zA-Z0-9\-_/]+$`.
 
 ## Spelling Values
 
@@ -44,8 +44,8 @@ The `value-name` part can be either a ref or a dataset name. If  `value-name` ma
 # “foo” dataset at http://api.noms.io/-/aa
 http://api.noms.io/-/aa:foo
 
-# value sha1-123 at http://localhost:8000
-http://localhost:8000/monkey:sha1-123
+# value sha1-e7219f3603e1a20a9fabaa43b3f3a7c443ae1041 at http://localhost:8000
+http://localhost:8000/monkey:sha1-e7219f3603e1a20a9fabaa43b3f3a7c443ae1041
 
 # “bonk” dataset at ldb:/foo/bar
 ldb:/foo/bar:bonk
