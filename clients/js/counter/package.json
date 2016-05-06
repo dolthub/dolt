@@ -1,5 +1,6 @@
 {
-  "name": "@attic/counter-js",
+  "name": "@attic/counter",
+  "main": "dist/main.js",
   "version": "1.0.1",
   "description": "noms example javascript client with a counter",
   "dependencies": {
