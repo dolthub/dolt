@@ -29,7 +29,7 @@ import type {Type} from './type.js';
 import type {ValueReadWriter} from './value-store.js';
 
 const testSetSize = 5000;
-const setOfNRef = 'sha1-5937b476bb1d594e3a905c44f00863bd9ba1fb19';
+const setOfNRef = 'sha1-8186877fb71711b8e6a516ed5c8ad1ccac8c6c00';
 const smallRandomSetSize = 200;
 const randomSetSize = 2000;
 
@@ -101,7 +101,7 @@ suite('BuildSet', () => {
 
     const refs = nums.map(n => new RefValue(newStruct(structType, {n})));
     const s = await newSet(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-3664c45fcbf64f1272956a7b93f27488ab0eb4f8');
+    assert.strictEqual(s.ref.toString(), 'sha1-882b953455794580e6156eb21b316720aa9e45b2');
     const height = deriveSequenceHeight(s.sequence);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are RefValue values (with height 1).
@@ -117,7 +117,7 @@ suite('BuildSet', () => {
       assert.strictEqual(i + 1, s.size);
     }
 
-    assert.strictEqual(s.ref.toString(), 'sha1-c99cd8be7a36678e4a538cf23496dfc96beaa64f');
+    assert.strictEqual(s.ref.toString(), 'sha1-b41aab13e8de940d998c1f55a2f48f63159a19e0');
   });
 
   test('LONG: remove', async () => {

@@ -93,26 +93,26 @@ func newBlobTestSuite(size uint, expectRefStr string, expectChunkCount int, expe
 }
 
 func TestBlobSuite1K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(10, "sha1-a8a3656441ac61edd9cb734559a6c081b5268a6d", 3, 2, 2))
+	suite.Run(t, newBlobTestSuite(10, "sha1-f9fc78f387d90a334b85270a46484ebb86f32a3f", 3, 2, 2))
 }
 
 func TestBlobSuite4K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(12, "sha1-7fef6ea1ab709b1ea06446976d7fce02be164398", 9, 2, 2))
+	suite.Run(t, newBlobTestSuite(12, "sha1-060e57a95676be6078a2958f4586a8b3d3e6723d", 9, 2, 2))
 }
 
 func TestBlobSuite16K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(14, "sha1-16a7098cc077def534932f5a566d0b0ef60283b5", 33, 2, 2))
+	suite.Run(t, newBlobTestSuite(14, "sha1-73d3ce5da681cf651509194ce63a055c51790385", 33, 2, 2))
 }
 
 func TestBlobSuite64K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(16, "sha1-a8c6563067edd1c0a49c8b30a2c75cc9d53c0fd3", 4, 2, 2))
+	suite.Run(t, newBlobTestSuite(16, "sha1-130b214a2e7edbdd5583dc7920b52838cad49471", 4, 2, 2))
 }
 
 func TestBlobSuite256K(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-	suite.Run(t, newBlobTestSuite(18, "sha1-b924c4a13eb0542766a93f4329f4d13315ef823d", 13, 2, 2))
+	suite.Run(t, newBlobTestSuite(18, "sha1-42d53b4f225322f70d725d53f8bc631d4549b6e4", 13, 2, 2))
 }
 
 // Checks the first 1/2 of the bytes, then 1/2 of the remainder, then 1/2 of the remainder, etc...

@@ -28,7 +28,7 @@ import type {Type} from './type.js';
 import type {ValueReadWriter} from './value-store.js';
 
 const testMapSize = 1000;
-const mapOfNRef = 'sha1-4d2fb53d2020630376f2b188addf58e546dc33e8';
+const mapOfNRef = 'sha1-2bc451349d04c5f90cfe73d1e6eb3ee626db99a1';
 const smallRandomMapSize = 50;
 const randomMapSize = 500;
 
@@ -114,7 +114,7 @@ suite('BuildMap', () => {
 
     const kvRefs = kvs.map(n => new RefValue(newStruct(structType, {n})));
     const m = await newMap(kvRefs, tr);
-    assert.strictEqual(m.ref.toString(), 'sha1-c179c3dd34ec4430b11515cb5f859b8f4546b970');
+    assert.strictEqual(m.ref.toString(), 'sha1-3d8eea119bc685942107f7b9513b33d2f763d693');
     const height = deriveSequenceHeight(m.sequence);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are RefValue values (with height 1).

@@ -161,7 +161,7 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t *Type) (Value, bool) {
 	r2 := newJSONArrayReader(r.readArray(), r.vr)
 	data := metaSequenceData{}
 	for !r2.atEnd() {
-		ref := r2.readRef(MakeRefType(t))
+		ref := r2.readValue().(Ref)
 		v := r2.readValue()
 		numLeaves := uint64(r2.readUint())
 		data = append(data, newMetaTuple(v, nil, ref, numLeaves))

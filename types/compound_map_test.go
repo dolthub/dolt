@@ -390,7 +390,7 @@ func TestCompoundMapFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewTypedMap(mapType, kvs...).(compoundMap)
-	assert.Equal("sha1-4d2fb53d2020630376f2b188addf58e546dc33e8", m.Ref().String())
+	assert.Equal("sha1-2bc451349d04c5f90cfe73d1e6eb3ee626db99a1", m.Ref().String())
 	height := deriveCompoundMapHeight(m)
 	assert.Equal(height, m.tuples[0].childRef.Height())
 }
@@ -419,7 +419,7 @@ func TestCompoundMapRefOfStructFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewTypedMap(mapType, kvs...).(compoundMap)
-	assert.Equal("sha1-c179c3dd34ec4430b11515cb5f859b8f4546b970", m.Ref().String())
+	assert.Equal("sha1-3d8eea119bc685942107f7b9513b33d2f763d693", m.Ref().String())
 	height := deriveCompoundMapHeight(m)
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(height+1, m.tuples[0].childRef.Height())

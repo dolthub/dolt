@@ -362,7 +362,7 @@ func TestCompoundSetFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsValues(testSetSize)
 	s := newTypedSet(setType, nums...).(compoundSet)
-	assert.Equal("sha1-5937b476bb1d594e3a905c44f00863bd9ba1fb19", s.Ref().String())
+	assert.Equal("sha1-8186877fb71711b8e6a516ed5c8ad1ccac8c6c00", s.Ref().String())
 	height := deriveCompoundSetHeight(s)
 	assert.Equal(height, s.tuples[0].childRef.Height())
 }
@@ -377,7 +377,7 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 	refOfTypeStructType := MakeRefType(structType)
 	setType := MakeSetType(refOfTypeStructType)
 	s := NewTypedSet(setType, nums...).(compoundSet)
-	assert.Equal("sha1-3664c45fcbf64f1272956a7b93f27488ab0eb4f8", s.Ref().String())
+	assert.Equal("sha1-882b953455794580e6156eb21b316720aa9e45b2", s.Ref().String())
 	height := deriveCompoundSetHeight(s)
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(height+1, s.tuples[0].childRef.Height())

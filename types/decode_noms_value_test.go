@@ -131,7 +131,12 @@ func TestReadCompoundList(t *testing.T) {
 		newMetaTuple(Number(4), leaf2, NewTypedRefFromValue(leaf2), 4),
 	}, tr, cs)
 
-	a := parseJSON(`[ListKind, NumberKind, true, ["%s", "1", NumberKind, "1", "1", "%s", "1", NumberKind, "4", "4"]]`, leaf1.Ref(), leaf2.Ref())
+	a := parseJSON(`[
+		ListKind, NumberKind, true, [
+			RefKind, ListKind, NumberKind, "%s", "1", NumberKind, "1", "1",
+			RefKind, ListKind, NumberKind, "%s", "1", NumberKind, "4", "4"
+		]
+	]`, leaf1.Ref(), leaf2.Ref())
 	r := newJSONArrayReader(a, cs)
 	l := r.readValue()
 
@@ -150,7 +155,12 @@ func TestReadCompoundSet(t *testing.T) {
 		newMetaTuple(Number(4), leaf2, NewTypedRefFromValue(leaf2), 3),
 	}, tr, cs)
 
-	a := parseJSON(`[SetKind, NumberKind, true, ["%s", "1", NumberKind, "1", "2", "%s", "1", NumberKind, "4", "3"]]`, leaf1.Ref(), leaf2.Ref())
+	a := parseJSON(`[
+		SetKind, NumberKind, true, [
+			RefKind, SetKind, NumberKind, "%s", "1", NumberKind, "1", "2",
+			RefKind, SetKind, NumberKind, "%s", "1", NumberKind, "4", "3"
+		]
+	]`, leaf1.Ref(), leaf2.Ref())
 	r := newJSONArrayReader(a, cs)
 	l := r.readValue()
 
@@ -193,7 +203,13 @@ func TestReadCompoundBlob(t *testing.T) {
 	r1 := Number(1).Ref()
 	r2 := Number(2).Ref()
 	r3 := Number(3).Ref()
-	a := parseJSON(`[BlobKind, true, ["%s", "1", NumberKind, "20", "20", "%s", "1", NumberKind, "40", "40", "%s", "1", NumberKind, "60", "60"]]`, r1, r2, r3)
+	a := parseJSON(`[
+		BlobKind, true, [
+			RefKind, BlobKind, "%s", "1", NumberKind, "20", "20",
+			RefKind, BlobKind, "%s", "1", NumberKind, "40", "40",
+			RefKind, BlobKind, "%s", "1", NumberKind, "60", "60"
+		]
+	]`, r1, r2, r3)
 	r := newJSONArrayReader(a, cs)
 
 	m := r.readValue()

@@ -130,10 +130,13 @@ suite('Encode', () => {
     const l = new NomsSet(ltr, new OrderedMetaSequence(ds, ltr, tuples));
 
     w.writeValue(l);
-    assert.deepEqual([Kind.Set, Kind.Number, true,
-                     [r1.targetRef.toString(), '1', Kind.Number, '0', '1',
-                      r2.targetRef.toString(), '1', Kind.Number, '2', '2',
-                      r3.targetRef.toString(), '1', Kind.Number, '5', '3']], w.array);
+    assert.deepEqual([
+      Kind.Set, Kind.Number, true, [
+        Kind.Ref, Kind.Set, Kind.Number, r1.targetRef.toString(), '1', Kind.Number, '0', '1',
+        Kind.Ref, Kind.Set, Kind.Number, r2.targetRef.toString(), '1', Kind.Number, '2', '2',
+        Kind.Ref, Kind.Set, Kind.Number, r3.targetRef.toString(), '1', Kind.Number, '5', '3',
+      ],
+    ], w.array);
   });
 
   test('write set of set', async () => {
@@ -267,10 +270,13 @@ suite('Encode', () => {
     const l = new NomsList(ltr, new IndexedMetaSequence(ds, ltr, tuples));
 
     w.writeValue(l);
-    assert.deepEqual([Kind.List, Kind.Number, true,
-                     [r1.targetRef.toString(), '1', Kind.Number, '1', '1',
-                      r2.targetRef.toString(), '1', Kind.Number, '2', '2',
-                      r3.targetRef.toString(), '1', Kind.Number, '3', '3']], w.array);
+    assert.deepEqual([
+      Kind.List, Kind.Number, true, [
+        Kind.Ref, Kind.List, Kind.Number, r1.targetRef.toString(), '1', Kind.Number, '1', '1',
+        Kind.Ref, Kind.List, Kind.Number, r2.targetRef.toString(), '1', Kind.Number, '2', '2',
+        Kind.Ref, Kind.List, Kind.Number, r3.targetRef.toString(), '1', Kind.Number, '3', '3',
+      ],
+    ], w.array);
   });
 
   test('write compound set with bool', async () => {
@@ -286,9 +292,12 @@ suite('Encode', () => {
     const l = new NomsSet(str, new OrderedMetaSequence(ds, str, tuples));
 
     w.writeValue(l);
-    assert.deepEqual([Kind.Set, Kind.Bool, true,
-                     [r1.targetRef.toString(), '1', Kind.Bool, true, '1',
-                      r2.targetRef.toString(), '1', Kind.Bool, false, '1']], w.array);
+    assert.deepEqual([
+      Kind.Set, Kind.Bool, true, [
+        Kind.Ref, Kind.Set, Kind.Bool, r1.targetRef.toString(), '1', Kind.Bool, true, '1',
+        Kind.Ref, Kind.Set, Kind.Bool, r2.targetRef.toString(), '1', Kind.Bool, false, '1',
+      ],
+    ], w.array);
   });
 
   test('write type value', async () => {

@@ -110,7 +110,7 @@ export class JsonArrayWriter {
         const child = tuple.sequence;
         this._vw.writeValue(child);
       }
-      w2.writeRefValue(tuple.ref);
+      w2.writeValue(tuple.ref);
       w2.writeValue(tuple.value);
       w2.writeInt(tuple.numLeaves);
     }

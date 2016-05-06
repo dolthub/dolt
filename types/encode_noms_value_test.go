@@ -139,7 +139,13 @@ func TestWriteCompoundBlob(t *testing.T) {
 	w.writeValue(v)
 
 	// the order of the elements is based on the ref of the value.
-	assert.EqualValues([]interface{}{BlobKind, true, []interface{}{r1.String(), "11", NumberKind, "20", "20", r2.String(), "22", NumberKind, "40", "40", r3.String(), "33", NumberKind, "60", "60"}}, w.toArray())
+	assert.EqualValues([]interface{}{
+		BlobKind, true, []interface{}{
+			RefKind, BlobKind, r1.String(), "11", NumberKind, "20", "20",
+			RefKind, BlobKind, r2.String(), "22", NumberKind, "40", "40",
+			RefKind, BlobKind, r3.String(), "33", NumberKind, "60", "60",
+		},
+	}, w.toArray())
 }
 
 func TestWriteEmptyStruct(t *testing.T) {
@@ -244,7 +250,12 @@ func TestWriteCompoundList(t *testing.T) {
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeValue(cl)
-	assert.EqualValues([]interface{}{ListKind, NumberKind, true, []interface{}{leaf1.Ref().String(), "1", NumberKind, "1", "1", leaf2.Ref().String(), "1", NumberKind, "4", "4"}}, w.toArray())
+	assert.EqualValues([]interface{}{
+		ListKind, NumberKind, true, []interface{}{
+			RefKind, ListKind, NumberKind, leaf1.Ref().String(), "1", NumberKind, "1", "1",
+			RefKind, ListKind, NumberKind, leaf2.Ref().String(), "1", NumberKind, "4", "4",
+		},
+	}, w.toArray())
 }
 
 func TestWriteCompoundSet(t *testing.T) {
@@ -260,7 +271,12 @@ func TestWriteCompoundSet(t *testing.T) {
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeValue(cl)
-	assert.EqualValues([]interface{}{SetKind, NumberKind, true, []interface{}{leaf1.Ref().String(), "1", NumberKind, "1", "2", leaf2.Ref().String(), "1", NumberKind, "4", "3"}}, w.toArray())
+	assert.EqualValues([]interface{}{
+		SetKind, NumberKind, true, []interface{}{
+			RefKind, SetKind, NumberKind, leaf1.Ref().String(), "1", NumberKind, "1", "2",
+			RefKind, SetKind, NumberKind, leaf2.Ref().String(), "1", NumberKind, "4", "3",
+		},
+	}, w.toArray())
 }
 
 func TestWriteListOfValue(t *testing.T) {

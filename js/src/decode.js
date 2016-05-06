@@ -185,7 +185,7 @@ export class JsonArrayReader {
   readMetaSequence(t: Type): any {
     const data: Array<MetaTuple> = [];
     while (!this.atEnd()) {
-      const ref = this.readRefValue(makeRefType(t));
+      const ref = this.readValue();
       const v = this.readValue();
       const numLeaves = this.readInt();
       data.push(new MetaTuple(ref, v, numLeaves));

@@ -160,10 +160,13 @@ suite('Decode', () => {
     ];
     const l: NomsList<number> = new NomsList(ltr, new IndexedMetaSequence(ds, ltr, tuples));
 
-    const a = [Kind.List, Kind.Number, true,
-               [r1.targetRef.toString(), '1', Kind.Number, '1', '1',
-                r2.targetRef.toString(), '1', Kind.Number, '2', '2',
-                r3.targetRef.toString(), '1', Kind.Number, '3', '3']];
+    const a = [
+      Kind.List, Kind.Number, true, [
+        Kind.Ref, Kind.List, Kind.Number, r1.targetRef.toString(), '1', Kind.Number, '1', '1',
+        Kind.Ref, Kind.List, Kind.Number, r2.targetRef.toString(), '1', Kind.Number, '2', '2',
+        Kind.Ref, Kind.List, Kind.Number, r3.targetRef.toString(), '1', Kind.Number, '3', '3',
+      ],
+    ];
     const r = new JsonArrayReader(a, ds);
     const v = r.readValue();
     invariant(v instanceof NomsList);
@@ -243,9 +246,12 @@ suite('Decode', () => {
     ];
     const l: NomsSet<number> = new NomsSet(ltr, new OrderedMetaSequence(ds, ltr, tuples));
 
-    const a = parseJson(`[SetKind, NumberKind, true,
-      ["%s", "1", NumberKind, "1", "2", "%s", "1", NumberKind, "4", "3"]]`,
-      r1.targetRef.toString(), r2.targetRef.toString());
+    const a = parseJson(`[
+      SetKind, NumberKind, true, [
+        RefKind, SetKind, NumberKind, "%s", "1", NumberKind, "1", "2",
+        RefKind, SetKind, NumberKind, "%s", "1", NumberKind, "4", "3"
+      ]
+    ]`, r1.targetRef.toString(), r2.targetRef.toString());
     const r = new JsonArrayReader(a, ds);
     const v = r.readValue();
     invariant(v instanceof NomsSet);
@@ -530,9 +536,12 @@ suite('Decode', () => {
     const r1 = ds.writeValue(await newBlob(stringToUint8Array('hi')));
     const r2 = ds.writeValue(await newBlob(stringToUint8Array('world')));
 
-    const a = parseJson(`[BlobKind, true, [
-      "%s", "1", NumberKind, "2", "2",
-      "%s", "1", NumberKind, "5", "5"]]`, r1.targetRef, r2.targetRef);
+    const a = parseJson(`[
+      BlobKind, true, [
+        RefKind, BlobKind, "%s", "1", NumberKind, "2", "2",
+        RefKind, BlobKind, "%s", "1", NumberKind, "5", "5"
+      ]
+    ]`, r1.targetRef, r2.targetRef);
     const r = new JsonArrayReader(a, ds);
     const v: NomsBlob = r.readValue();
     invariant(v instanceof NomsBlob);
