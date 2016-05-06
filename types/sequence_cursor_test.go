@@ -3,42 +3,57 @@ package types
 import (
 	"testing"
 
+	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 )
 
-func newTestSequenceCursor(items [][]int) *sequenceCursor {
-	parent := &sequenceCursor{nil, items, 0, len(items), func(item sequenceItem, idx int) sequenceItem {
-		return item.([][]int)[idx] // item should be == items
-	}, func(item sequenceItem) (sequenceItem, int) {
-		panic("not reachable")
-	}}
+type testSequence struct {
+	items []interface{}
+}
 
-	return &sequenceCursor{parent, items[0], 0, len(items[0]), func(item sequenceItem, idx int) sequenceItem {
-		return item.([]int)[idx]
-	}, func(item sequenceItem) (sequenceItem, int) {
-		return item, len(item.([]int))
-	}}
+// sequence
+func (ts testSequence) getItem(idx int) sequenceItem {
+	return ts.items[idx]
+}
+
+func (ts testSequence) seqLen() int {
+	return len(ts.items)
+}
+
+func (ts testSequence) getChildSequence(idx int) sequence {
+	child := ts.items[idx]
+	return testSequence{child.([]interface{})}
+}
+
+func (ts testSequence) Equals(other Value) bool {
+	panic("not reached")
+}
+func (ts testSequence) Ref() ref.Ref {
+	panic("not reached")
+}
+func (ts testSequence) ChildValues() []Value {
+	panic("not reached")
+}
+func (ts testSequence) Chunks() []Ref {
+	panic("not reached")
+}
+func (ts testSequence) Type() *Type {
+	panic("not reached")
+}
+
+func newTestSequenceCursor(items []interface{}) *sequenceCursor {
+	parent := newSequenceCursor(nil, testSequence{items}, 0)
+	items = items[0].([]interface{})
+	return newSequenceCursor(parent, testSequence{items}, 0)
 }
 
 // TODO: Convert all tests to use newTestSequenceCursor3.
-func newTestSequenceCursor3(items [][][]int) *sequenceCursor {
-	top := &sequenceCursor{nil, items, 0, len(items), func(item sequenceItem, idx int) sequenceItem {
-		return item.([][][]int)[idx] // item should be == items
-	}, func(item sequenceItem) (sequenceItem, int) {
-		panic("not reachable")
-	}}
-
-	middle := &sequenceCursor{top, items[0], 0, len(items[0]), func(item sequenceItem, idx int) sequenceItem {
-		return item.([][]int)[idx]
-	}, func(item sequenceItem) (sequenceItem, int) {
-		return item, len(item.([][]int))
-	}}
-
-	return &sequenceCursor{middle, items[0][0], 0, len(items[0][0]), func(item sequenceItem, idx int) sequenceItem {
-		return item.([]int)[idx]
-	}, func(item sequenceItem) (sequenceItem, int) {
-		return item, len(item.([]int))
-	}}
+func newTestSequenceCursor3(items []interface{}) *sequenceCursor {
+	top := newSequenceCursor(nil, testSequence{items}, 0)
+	items = items[0].([]interface{})
+	middle := newSequenceCursor(top, testSequence{items}, 0)
+	items = items[0].([]interface{})
+	return newSequenceCursor(middle, testSequence{items}, 0)
 }
 
 func TestTestCursor(t *testing.T) {
@@ -46,7 +61,7 @@ func TestTestCursor(t *testing.T) {
 
 	var cur *sequenceCursor
 	reset := func() {
-		cur = newTestSequenceCursor([][]int{[]int{100, 101}, []int{102}})
+		cur = newTestSequenceCursor([]interface{}{[]interface{}{100, 101}, []interface{}{102}})
 	}
 	expect := func(expectIdx, expectParentIdx int, expectOk bool, expectVal sequenceItem) {
 		assert.Equal(expectIdx, cur.indexInChunk())
@@ -112,14 +127,14 @@ func TestTestCursor(t *testing.T) {
 
 func TestCursorGetMaxNPrevItemsWithEmptySequence(t *testing.T) {
 	assert := assert.New(t)
-	cur := newTestSequenceCursor([][]int{[]int{}})
+	cur := newTestSequenceCursor([]interface{}{[]interface{}{}})
 	assert.Equal([]sequenceItem{}, cur.maxNPrevItems(0))
 	assert.Equal([]sequenceItem{}, cur.maxNPrevItems(1))
 }
 
 func TestCursorGetMaxNPrevItemsWithSingleItemSequence(t *testing.T) {
 	assert := assert.New(t)
-	cur := newTestSequenceCursor([][]int{[]int{100}, []int{101}, []int{102}})
+	cur := newTestSequenceCursor([]interface{}{[]interface{}{100}, []interface{}{101}, []interface{}{102}})
 
 	assert.Equal([]sequenceItem{}, cur.maxNPrevItems(0))
 	assert.Equal([]sequenceItem{}, cur.maxNPrevItems(1))
@@ -152,9 +167,9 @@ func TestCursorGetMaxNPrevItemsWithSingleItemSequence(t *testing.T) {
 func TestCursorGetMaxNPrevItemsWithMultiItemSequence(t *testing.T) {
 	assert := assert.New(t)
 
-	cur := newTestSequenceCursor([][]int{
-		[]int{100, 101, 102, 103},
-		[]int{104, 105, 106, 107},
+	cur := newTestSequenceCursor([]interface{}{
+		[]interface{}{100, 101, 102, 103},
+		[]interface{}{104, 105, 106, 107},
 	})
 
 	assert.Equal([]sequenceItem{}, cur.maxNPrevItems(0))
@@ -225,141 +240,4 @@ func TestCursorGetMaxNPrevItemsWithMultiItemSequence(t *testing.T) {
 	assert.Equal([]sequenceItem{101, 102, 103, 104, 105, 106, 107}, cur.maxNPrevItems(7))
 	assert.Equal([]sequenceItem{100, 101, 102, 103, 104, 105, 106, 107}, cur.maxNPrevItems(8))
 	assert.Equal([]sequenceItem{100, 101, 102, 103, 104, 105, 106, 107}, cur.maxNPrevItems(9))
-}
-
-func TestCursorSeekBinary(t *testing.T) {
-	assert := assert.New(t)
-
-	var cur *sequenceCursor
-	reset := func() {
-		cur = newTestSequenceCursor([][]int{
-			[]int{100, 101, 102, 103},
-			[]int{104, 105, 106, 107},
-		})
-	}
-
-	assertSeeksTo := func(expected sequenceItem, seekTo int) {
-		cur.seekBinary(func(val sequenceItem) bool {
-			switch val := val.(type) {
-			case []int:
-				return val[len(val)-1] >= seekTo
-			case int:
-				return val >= seekTo
-			default:
-				panic("illegal")
-			}
-		})
-		assert.Equal(expected, cur.current())
-	}
-
-	// Test seeking immediately to values on cursor construction.
-	reset()
-	assertSeeksTo(sequenceItem(100), 99)
-	for i := 100; i <= 107; i++ {
-		reset()
-		assertSeeksTo(sequenceItem(i), i)
-	}
-	reset()
-	assertSeeksTo(sequenceItem(107), 108)
-
-	// Test reusing an existing cursor to seek all over the place.
-	reset()
-	assertSeeksTo(sequenceItem(100), 99)
-	for i := 100; i <= 107; i++ {
-		assertSeeksTo(sequenceItem(i), i)
-	}
-	assertSeeksTo(sequenceItem(107), 108)
-	assertSeeksTo(sequenceItem(100), 99)
-	for i := 100; i <= 107; i++ {
-		assertSeeksTo(sequenceItem(i), i)
-	}
-	assertSeeksTo(sequenceItem(107), 108)
-}
-
-func TestCursorSeekLinear(t *testing.T) {
-	assert := assert.New(t)
-
-	var cur *sequenceCursor
-
-	assertSeeksTo := func(reset bool, expectedPos sequenceItem, expectedSumUpto, seekTo int) {
-		if reset {
-			cur = newTestSequenceCursor3(
-				[][][]int{
-					[][]int{
-						[]int{100, 101, 102, 103},
-						[]int{104, 105, 106, 107},
-					},
-					[][]int{
-						[]int{108, 109, 110, 111},
-						[]int{112, 113, 114, 115},
-					},
-				},
-			)
-		}
-		sumUpto := cur.seekLinear(func(carry interface{}, item sequenceItem) (bool, interface{}) {
-			switch item := item.(type) {
-			case [][]int:
-				last := item[len(item)-1]
-				return seekTo <= last[len(last)-1], carry
-			case []int:
-				return seekTo <= item[len(item)-1], carry
-			case int:
-				return seekTo <= item, item + carry.(int)
-			}
-			panic("illegal")
-		}, 0)
-		pos, _ := cur.maybeCurrent()
-		assert.Equal(expectedPos, pos)
-		assert.Equal(expectedSumUpto, sumUpto)
-	}
-
-	// Test seeking immediately to values on cursor construction.
-	assertSeeksTo(true, sequenceItem(100), 0, 99)
-
-	assertSeeksTo(true, sequenceItem(100), 0, 100)
-	assertSeeksTo(true, sequenceItem(101), 100, 101)
-	assertSeeksTo(true, sequenceItem(102), 201, 102)
-	assertSeeksTo(true, sequenceItem(103), 303, 103)
-
-	assertSeeksTo(true, sequenceItem(104), 0, 104)
-	assertSeeksTo(true, sequenceItem(105), 104, 105)
-	assertSeeksTo(true, sequenceItem(106), 209, 106)
-	assertSeeksTo(true, sequenceItem(107), 315, 107)
-
-	assertSeeksTo(true, sequenceItem(108), 0, 108)
-	assertSeeksTo(true, sequenceItem(109), 108, 109)
-	assertSeeksTo(true, sequenceItem(110), 217, 110)
-	assertSeeksTo(true, sequenceItem(111), 327, 111)
-
-	assertSeeksTo(true, sequenceItem(112), 0, 112)
-	assertSeeksTo(true, sequenceItem(113), 112, 113)
-	assertSeeksTo(true, sequenceItem(114), 225, 114)
-	assertSeeksTo(true, sequenceItem(115), 339, 115)
-
-	assertSeeksTo(true, sequenceItem(115), 339, 116)
-
-	// Test reusing an existing cursor to seek all over the place.
-	assertSeeksTo(false, sequenceItem(100), 0, 99)
-
-	assertSeeksTo(false, sequenceItem(100), 0, 100)
-	assertSeeksTo(false, sequenceItem(101), 100, 101)
-	assertSeeksTo(false, sequenceItem(102), 201, 102)
-	assertSeeksTo(false, sequenceItem(103), 303, 103)
-
-	assertSeeksTo(false, sequenceItem(104), 0, 104)
-	assertSeeksTo(false, sequenceItem(105), 104, 105)
-	assertSeeksTo(false, sequenceItem(106), 209, 106)
-	assertSeeksTo(false, sequenceItem(107), 315, 107)
-
-	assertSeeksTo(false, sequenceItem(108), 0, 108)
-	assertSeeksTo(false, sequenceItem(109), 108, 109)
-	assertSeeksTo(false, sequenceItem(110), 217, 110)
-	assertSeeksTo(false, sequenceItem(111), 327, 111)
-
-	assertSeeksTo(false, sequenceItem(112), 0, 112)
-	assertSeeksTo(false, sequenceItem(113), 112, 113)
-	assertSeeksTo(false, sequenceItem(114), 225, 114)
-	assertSeeksTo(false, sequenceItem(115), 339, 115)
-
-	assertSeeksTo(false, sequenceItem(115), 339, 116)
 }

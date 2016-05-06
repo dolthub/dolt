@@ -17,11 +17,10 @@ type compoundList struct {
 	metaSequenceObject
 	length uint64
 	ref    *ref.Ref
-	vr     ValueReader
 }
 
-func buildCompoundList(tuples metaSequenceData, t *Type, vr ValueReader) Value {
-	return compoundList{metaSequenceObject{tuples, t}, tuples.uint64ValuesSum(), &ref.Ref{}, vr}
+func buildCompoundList(tuples metaSequenceData, t *Type, vr ValueReader) metaSequence {
+	return compoundList{metaSequenceObject{tuples, t, vr}, tuples.uint64ValuesSum(), &ref.Ref{}}
 }
 
 func listAsSequenceItems(ls listLeaf) []sequenceItem {
@@ -139,12 +138,7 @@ func (cl compoundList) Insert(idx uint64, vs ...Value) List {
 func (cl compoundList) sequenceCursorAtIndex(idx uint64) *sequenceCursor {
 	// TODO: An optimisation would be to decide at each level whether to step forward or backward across the node to find the insertion point, depending on which is closer. This would make Append much faster.
 	metaCur, leaf, start := cl.cursorAt(idx)
-	return &sequenceCursor{metaCur, leaf, int(idx - start), len(leaf.values), func(otherLeaf sequenceItem, idx int) sequenceItem {
-		return otherLeaf.(listLeaf).values[idx]
-	}, func(mt sequenceItem) (sequenceItem, int) {
-		otherLeaf := readMetaTupleValue(mt, cl.vr).(listLeaf)
-		return otherLeaf, len(otherLeaf.values)
-	}}
+	return newSequenceCursor(metaCur, leaf, int(idx-start))
 }
 
 func (cl compoundList) sequenceChunkerAtIndex(idx uint64) *sequenceChunker {

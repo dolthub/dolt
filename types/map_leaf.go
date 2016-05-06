@@ -22,7 +22,7 @@ type mapEntry struct {
 	value Value
 }
 
-func newMapLeaf(t *Type, data ...mapEntry) Map {
+func newMapLeaf(t *Type, data ...mapEntry) sequence {
 	return mapLeaf{data, getIndexFnForMapType(t), t, &ref.Ref{}}
 }
 
@@ -32,6 +32,15 @@ func (m mapLeaf) First() (Value, Value) {
 	}
 	entry := m.data[0]
 	return entry.key, entry.value
+}
+
+// sequence
+func (m mapLeaf) getItem(idx int) sequenceItem {
+	return m.data[idx]
+}
+
+func (m mapLeaf) seqLen() int {
+	return len(m.data)
 }
 
 func (m mapLeaf) Len() uint64 {

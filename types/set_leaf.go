@@ -17,8 +17,17 @@ type setLeaf struct {
 
 type setData []Value
 
-func newSetLeaf(t *Type, m ...Value) setLeaf {
+func newSetLeaf(t *Type, m ...Value) sequence {
 	return setLeaf{m, getIndexFnForSetType(t), t, &ref.Ref{}}
+}
+
+// sequence
+func (s setLeaf) getItem(idx int) sequenceItem {
+	return s.data[idx]
+}
+
+func (s setLeaf) seqLen() int {
+	return len(s.data)
 }
 
 func (s setLeaf) Empty() bool {
@@ -197,18 +206,7 @@ func makeSetLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 }
 
 func (s setLeaf) sequenceCursorAtFirst() *sequenceCursor {
-	return &sequenceCursor{
-		nil,
-		s.data,
-		0,
-		len(s.data),
-		func(parent sequenceItem, idx int) sequenceItem {
-			return s.data[idx]
-		},
-		func(reference sequenceItem) (sequence sequenceItem, length int) {
-			panic("unreachable")
-		},
-	}
+	return newSequenceCursor(nil, s, 0)
 }
 
 func (s setLeaf) valueReader() ValueReader {

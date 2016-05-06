@@ -10,21 +10,18 @@ const (
 
 // metaSequence is a logical abstraction, but has no concrete "base" implementation. A Meta Sequence is a non-leaf (internal) node of a "probably" tree, which results from the chunking of an ordered or unordered sequence of values.
 type metaSequence interface {
-	Value
-	data() metaSequenceData
-	tupleAt(idx int) metaTuple
-	tupleSlice(to int) []metaTuple
-	tupleCount() int
+	sequence
+	getChildSequence(idx int) sequence
 }
 
-func newMetaTuple(value, child Value, childRef Ref, numLeaves uint64) metaTuple {
+func newMetaTuple(value Value, child sequence, childRef Ref, numLeaves uint64) metaTuple {
 	d.Chk.NotEqual(Ref{}, childRef)
 	return metaTuple{child, childRef, value, numLeaves}
 }
 
 // metaTuple is a node in a Prolly Tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
-	child     Value // may be nil
+	child     sequence // may be nil
 	childRef  Ref
 	value     Value
 	numLeaves uint64
@@ -61,18 +58,26 @@ func (msd metaSequenceData) last() metaTuple {
 type metaSequenceObject struct {
 	tuples metaSequenceData
 	t      *Type
+	vr     ValueReader
 }
 
-func (ms metaSequenceObject) tupleAt(idx int) metaTuple {
+// sequence
+func (ms metaSequenceObject) getItem(idx int) sequenceItem {
 	return ms.tuples[idx]
 }
 
-func (ms metaSequenceObject) tupleSlice(to int) []metaTuple {
-	return ms.tuples[:to]
+func (ms metaSequenceObject) seqLen() int {
+	return len(ms.tuples)
 }
 
-func (ms metaSequenceObject) tupleCount() int {
-	return len(ms.tuples)
+func (ms metaSequenceObject) getChildSequence(idx int) sequence {
+	mt := ms.tuples[idx]
+	if mt.child != nil {
+		return mt.child
+	}
+
+	child := mt.childRef.TargetValue(ms.vr)
+	return child.(sequence)
 }
 
 func (ms metaSequenceObject) data() metaSequenceData {
@@ -98,7 +103,7 @@ func (ms metaSequenceObject) Type() *Type {
 	return ms.t
 }
 
-type metaBuilderFunc func(tuples metaSequenceData, t *Type, vr ValueReader) Value
+type metaBuilderFunc func(tuples metaSequenceData, t *Type, vr ValueReader) metaSequence
 
 var metaFuncMap = map[NomsKind]metaBuilderFunc{}
 
@@ -106,7 +111,7 @@ func registerMetaValue(k NomsKind, bf metaBuilderFunc) {
 	metaFuncMap[k] = bf
 }
 
-func newMetaSequenceFromData(tuples metaSequenceData, t *Type, vr ValueReader) Value {
+func newMetaSequenceFromData(tuples metaSequenceData, t *Type, vr ValueReader) metaSequence {
 	if bf, ok := metaFuncMap[t.Kind()]; ok {
 		return bf(tuples, t, vr)
 	}
@@ -118,21 +123,12 @@ func newMetaSequenceFromData(tuples metaSequenceData, t *Type, vr ValueReader) V
 func newMetaSequenceCursor(root metaSequence, vr ValueReader) (*sequenceCursor, Value) {
 	d.Chk.NotNil(root)
 
-	newCursor := func(parent *sequenceCursor, ms metaSequence) *sequenceCursor {
-		return &sequenceCursor{parent, ms, 0, ms.tupleCount(), func(otherMs sequenceItem, idx int) sequenceItem {
-			return otherMs.(metaSequence).tupleAt(idx)
-		}, func(item sequenceItem) (sequenceItem, int) {
-			otherMs := readMetaTupleValue(item, vr).(metaSequence)
-			return otherMs, otherMs.tupleCount()
-		}}
-	}
-
-	cursors := []*sequenceCursor{newCursor(nil, root)}
+	cursors := []*sequenceCursor{newSequenceCursor(nil, root, 0)}
 	for {
 		cursor := cursors[len(cursors)-1]
 		val := readMetaTupleValue(cursor.current(), vr)
 		if ms, ok := val.(metaSequence); ok {
-			cursors = append(cursors, newCursor(cursor, ms))
+			cursors = append(cursors, newSequenceCursor(cursor, ms, 0))
 		} else {
 			return cursor, val
 		}

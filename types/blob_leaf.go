@@ -14,8 +14,17 @@ type blobLeaf struct {
 	ref  *ref.Ref
 }
 
-func newBlobLeaf(data []byte) blobLeaf {
+func newBlobLeaf(data []byte) sequence {
 	return blobLeaf{data, &ref.Ref{}}
+}
+
+// sequence
+func (bl blobLeaf) getItem(idx int) sequenceItem {
+	return bl.data[idx]
+}
+
+func (bl blobLeaf) seqLen() int {
+	return len(bl.data)
 }
 
 // Reader implements the Blob interface

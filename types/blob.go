@@ -22,7 +22,7 @@ type Blob interface {
 }
 
 func NewEmptyBlob() Blob {
-	return newBlobLeaf([]byte{})
+	return newBlobLeaf([]byte{}).(Blob)
 }
 
 func newBlobLeafBoundaryChecker() boundaryChecker {

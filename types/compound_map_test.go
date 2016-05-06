@@ -446,7 +446,7 @@ func TestCompoundMapModifyAfterRead(t *testing.T) {
 func deriveCompoundMapHeight(m compoundMap) uint64 {
 	// Note: not using mt.childRef.Height() because the purpose of this method is to be redundant.
 	height := uint64(1)
-	if m2, ok := m.tupleAt(0).child.(compoundMap); ok {
+	if m2, ok := m.getItem(0).(metaTuple).child.(compoundMap); ok {
 		height += deriveCompoundMapHeight(m2)
 	}
 	return height

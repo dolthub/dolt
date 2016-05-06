@@ -6,20 +6,41 @@ import (
 	"github.com/attic-labs/noms/d"
 )
 
-// sequenceCursor explores a tree of sequence items.
-type sequenceCursor struct {
-	parent      *sequenceCursor
-	item        sequenceItem
-	idx, length int
-	getItem     getItemFn
-	readChunk   readChunkFn
+type sequenceItem interface{}
+
+type sequence interface {
+	Value
+	getItem(idx int) sequenceItem
+	seqLen() int
 }
 
-// getItemFn takes a parent in the sequence and an index into that parent, and returns the child item, equivalent to `child = parent[idx]`. The parent and the child aren't necessarily the same type.
-type getItemFn func(parent sequenceItem, idx int) (child sequenceItem)
+// sequenceCursor explores a tree of sequence items.
+type sequenceCursor struct {
+	parent *sequenceCursor
+	seq    sequence
+	idx    int
+}
 
-// readChunkFn takes an item in the sequence which references another sequence of items, and returns that sequence along with its length.
-type readChunkFn func(reference sequenceItem) (sequence sequenceItem, length int)
+func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int) *sequenceCursor {
+	return &sequenceCursor{parent, seq, idx}
+}
+
+func (cur *sequenceCursor) length() int {
+	return cur.seq.seqLen()
+}
+
+func (cur *sequenceCursor) getItem(idx int) sequenceItem {
+	return cur.seq.getItem(idx)
+}
+
+func (cur *sequenceCursor) sync() {
+	d.Chk.NotNil(cur.parent)
+	cur.seq = cur.parent.getChildSequence()
+}
+
+func (cur *sequenceCursor) getChildSequence() sequence {
+	return cur.seq.(metaSequence).getChildSequence(cur.idx)
+}
 
 // Returns the value the cursor refers to. Fails an assertion if the cursor doesn't point to a value.
 func (cur *sequenceCursor) current() sequenceItem {
@@ -30,11 +51,11 @@ func (cur *sequenceCursor) current() sequenceItem {
 
 // Returns the value the cursor refers to, if any. If the cursor doesn't point to a value, returns (nil, false).
 func (cur *sequenceCursor) maybeCurrent() (sequenceItem, bool) {
-	d.Chk.True(cur.idx >= -1 && cur.idx <= cur.length)
-	if cur.idx == -1 || cur.idx == cur.length {
+	d.Chk.True(cur.idx >= -1 && cur.idx <= cur.length())
+	if cur.idx == -1 || cur.idx == cur.length() {
 		return nil, false
 	}
-	return cur.getItem(cur.item, cur.idx), true
+	return cur.getItem(cur.idx), true
 }
 
 func (cur *sequenceCursor) indexInChunk() int {
@@ -46,15 +67,15 @@ func (cur *sequenceCursor) advance() bool {
 }
 
 func (cur *sequenceCursor) advanceMaybeAllowPastEnd(allowPastEnd bool) bool {
-	if cur.idx < cur.length-1 {
+	if cur.idx < cur.length()-1 {
 		cur.idx++
 		return true
 	}
-	if cur.idx == cur.length {
+	if cur.idx == cur.length() {
 		return false
 	}
 	if cur.parent != nil && cur.parent.advanceMaybeAllowPastEnd(false) {
-		cur.item, cur.length = cur.readChunk(cur.parent.current())
+		cur.sync()
 		cur.idx = 0
 		return true
 	}
@@ -78,8 +99,8 @@ func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(allowBeforeStart bool) b
 	}
 	d.Chk.Equal(0, cur.idx)
 	if cur.parent != nil && cur.parent.retreatMaybeAllowBeforeStart(false) {
-		cur.item, cur.length = cur.readChunk(cur.parent.current())
-		cur.idx = cur.length - 1
+		cur.sync()
+		cur.idx = cur.length() - 1
 		return true
 	}
 	if allowBeforeStart {
@@ -93,7 +114,7 @@ func (cur *sequenceCursor) clone() *sequenceCursor {
 	if cur.parent != nil {
 		parent = cur.parent.clone()
 	}
-	return &sequenceCursor{parent, cur.item, cur.idx, cur.length, cur.getItem, cur.readChunk}
+	return &sequenceCursor{parent, cur.seq, cur.idx}
 }
 
 type sequenceCursorSeekBinaryCompareFn func(item sequenceItem) bool
@@ -104,15 +125,15 @@ func (cur *sequenceCursor) seekBinary(compare sequenceCursorSeekBinaryCompareFn)
 
 	if cur.parent != nil {
 		cur.parent.seekBinary(compare)
-		cur.item, cur.length = cur.readChunk(cur.parent.current())
+		cur.sync()
 	}
 
-	cur.idx = sort.Search(cur.length, func(i int) bool {
-		return compare(cur.getItem(cur.item, i))
+	cur.idx = sort.Search(cur.length(), func(i int) bool {
+		return compare(cur.getItem(i))
 	})
 
-	if cur.idx == cur.length {
-		cur.idx = cur.length - 1
+	if cur.idx == cur.length() {
+		cur.idx = cur.length() - 1
 	}
 }
 
@@ -124,12 +145,12 @@ func (cur *sequenceCursor) seekLinear(step sequenceCursorSeekLinearStepFn, carry
 
 	if cur.parent != nil {
 		carry = cur.parent.seekLinear(step, carry)
-		cur.item, cur.length = cur.readChunk(cur.parent.current())
+		cur.sync()
 	}
 
 	cur.idx = 0
-	for i := 0; i < cur.length-1; i++ {
-		found, carryOut := step(carry, cur.getItem(cur.item, i))
+	for i := 0; i < cur.length()-1; i++ {
+		found, carryOut := step(carry, cur.getItem(i))
 		if found {
 			break
 		}

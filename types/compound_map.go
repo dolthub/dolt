@@ -14,11 +14,10 @@ type compoundMap struct {
 	metaSequenceObject
 	numLeaves uint64
 	ref       *ref.Ref
-	vr        ValueReader
 }
 
-func buildCompoundMap(tuples metaSequenceData, t *Type, vr ValueReader) Value {
-	return compoundMap{metaSequenceObject{tuples, t}, tuples.numLeavesSum(), &ref.Ref{}, vr}
+func buildCompoundMap(tuples metaSequenceData, t *Type, vr ValueReader) metaSequence {
+	return compoundMap{metaSequenceObject{tuples, t, vr}, tuples.numLeavesSum(), &ref.Ref{}}
 }
 
 func init() {
@@ -97,12 +96,7 @@ func (cm compoundMap) Remove(k Value) Map {
 func (cm compoundMap) sequenceChunkerAtKey(k Value) (*sequenceChunker, bool) {
 	metaCur, leaf, idx := cm.findLeaf(k)
 
-	cur := &sequenceCursor{metaCur, leaf, idx, len(leaf.data), func(otherLeaf sequenceItem, idx int) sequenceItem {
-		return otherLeaf.(mapLeaf).data[idx]
-	}, func(mt sequenceItem) (sequenceItem, int) {
-		otherLeaf := readMetaTupleValue(mt, cm.vr).(mapLeaf)
-		return otherLeaf, len(otherLeaf.data)
-	}}
+	cur := newSequenceCursor(metaCur, leaf, idx)
 
 	seq := newSequenceChunker(cur, makeMapLeafChunkFn(cm.t, cm.vr), newOrderedMetaSequenceChunkFn(cm.t, cm.vr), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 	found := idx < len(leaf.data) && leaf.data[idx].key.Equals(k)

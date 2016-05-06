@@ -2,8 +2,6 @@ package types
 
 import "github.com/attic-labs/noms/d"
 
-type sequenceItem interface{}
-
 type boundaryChecker interface {
 	// Write takes an item and returns true if the sequence should chunk after this item, false if not.
 	Write(sequenceItem) bool

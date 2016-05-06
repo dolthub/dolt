@@ -401,7 +401,7 @@ func TestCompoundSetModifyAfterRead(t *testing.T) {
 func deriveCompoundSetHeight(s compoundSet) uint64 {
 	// Note: not using mt.childRef.Height() because the purpose of this method is to be redundant.
 	height := uint64(1)
-	if s2, ok := s.tupleAt(0).child.(compoundSet); ok {
+	if s2, ok := s.getItem(0).(metaTuple).child.(compoundSet); ok {
 		height += deriveCompoundSetHeight(s2)
 	}
 	return height

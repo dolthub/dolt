@@ -13,9 +13,18 @@ type listLeaf struct {
 	ref    *ref.Ref
 }
 
-func newListLeaf(t *Type, v ...Value) List {
+func newListLeaf(t *Type, v ...Value) sequence {
 	d.Chk.Equal(ListKind, t.Kind())
 	return listLeaf{v, t, &ref.Ref{}}
+}
+
+// sequence
+func (l listLeaf) getItem(idx int) sequenceItem {
+	return l.values[idx]
+}
+
+func (l listLeaf) seqLen() int {
+	return len(l.values)
 }
 
 func (l listLeaf) Len() uint64 {

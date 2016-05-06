@@ -109,7 +109,8 @@ func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr *Type) bool {
 
 	w.write(true) // a meta sequence
 	w2 := newJSONArrayWriter(w.vw)
-	for _, tuple := range ms.(metaSequence).data() {
+	for i := 0; i < ms.seqLen(); i++ {
+		tuple := ms.getItem(i).(metaTuple)
 		if tuple.child != nil && w.vw != nil {
 			// Write unwritten chunked sequences. Chunks are lazily written so that intermediate chunked structures like NewList().Append(x).Append(y) don't cause unnecessary churn.
 			w.vw.WriteValue(tuple.child)

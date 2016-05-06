@@ -14,16 +14,15 @@ type compoundBlob struct {
 	metaSequenceObject
 	length uint64
 	ref    *ref.Ref
-	vr     ValueReader
 }
 
 func newCompoundBlob(tuples metaSequenceData, vr ValueReader) compoundBlob {
 	return buildCompoundBlob(tuples, BlobType, vr).(compoundBlob)
 }
 
-func buildCompoundBlob(tuples metaSequenceData, t *Type, vr ValueReader) Value {
+func buildCompoundBlob(tuples metaSequenceData, t *Type, vr ValueReader) metaSequence {
 	d.Chk.True(t.Equals(BlobType))
-	return compoundBlob{metaSequenceObject{tuples, BlobType}, tuples.uint64ValuesSum(), &ref.Ref{}, vr}
+	return compoundBlob{metaSequenceObject{tuples, BlobType, vr}, tuples.uint64ValuesSum(), &ref.Ref{}}
 }
 
 func init() {
