@@ -2,6 +2,7 @@
 
 import {
   boolType,
+  DatasetSpec,
   makeMapType,
   newMap,
   stringType,
@@ -31,5 +32,20 @@ function layout() {
 }
 
 function getMap() {
-  return newMap(['Donkeys', 36, 'Monkeys', 8, 'Giraffes', 12], makeMapType(stringType, boolType));
+  const args = (() => {
+    const s = location.search.substr(1);
+    const m = {};
+    for (const part of s.split('&')) {
+      const [k, v] = part.split('=');
+      m[k] = decodeURIComponent(v);
+    }
+    return m;
+  })();
+
+  if (args.ds) {
+    const ds = DatasetSpec.parse(args.ds).set();
+    return ds.head().then(commit => commit.value);
+  } else {
+    return newMap(['Donkeys', 36, 'Monkeys', 8, 'Giraffes', 12], makeMapType(stringType, boolType));
+  }
 }
