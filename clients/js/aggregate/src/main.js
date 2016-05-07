@@ -4,21 +4,36 @@ import argv from 'yargs';
 import {
   DatasetSpec,
   invariant,
-  makeRefType,
-  makeSetType,
-  newSet,
+  makeMapType,
+  newMap,
+  numberType,
+  stringType,
   Struct,
+  StructMirror,
   walk,
 } from '@attic/noms';
 
 const args = argv
-  .usage('Usage: $0 -n <name> <input-dataset> <output-dataset>')
+  .usage('Usage: aggregate -struct <struct-name> -group-by <field-name> ' +
+         '[-function sum] <input-dataset> <output-dataset>')
   .demand(2)
-  .option('n', {
-    alias: 'name',
+  .option('struct', {
+    alias: 's',
     describe: 'struct name to search for',
     type: 'string',
     demand: true,
+  })
+  .option('groupby', {
+    alias: 'g',
+    describe: 'field name to group on',
+    type: 'string',
+    demand: true,
+  })
+  .option('function', {
+    alias: 'f',
+    describe: 'function to aggregate by',
+    type: 'string',
+    default: 'sum',
   })
   .argv;
 
@@ -44,41 +59,43 @@ async function main(): Promise<void> {
   }
 
   const commit = await rv.targetValue(input.store);
-  const output = outSpec.set();
 
-  let s, elemType;
-  
+  let out;
   await walk(commit.value, input.store, async cv => {
-    if (!(cv instanceof Struct) || cv.type.name !== argv.name) {
-      return false;
+    if (!(cv instanceof Struct) || cv.type.name !== args.struct) {
+      return;
+    }
+
+    const fv = new StructMirror(cv).get(args.groupby);
+    if (!fv) {
+      return;
     }
 
     // TODO(aa): Remove this business once structural typing is in place.
-    if (!s) {
-      elemType = cv.type;
-      s = newSet([], makeSetType(makeRefType(elemType)));
-    } else if (!cv.type.equals(elemType)) {
-      throw new Error('Not implemented: cannot supported mixed collections (yet)');
+    if (!out) {
+      out = newMap([], makeMapType(stringType, numberType));
     }
-
-    const rv = output.store.writeValue(cv);
 
     // This is tricksy. We can't use await because we need the set insertions to happen in serial,
     // because otherwise (due to immutable datastructures), we will lose some of the inserts.
-    s = s.then(s => s.insert(rv));
+    out = out
+      .then(m => m.get(fv)
+        .then(prev => m.set(fv, (prev || 0) + 1)));
 
-    return s.then(() => false);
+    return out.then(() => {
+      return false;
+    });
   });
 
-  // TODO(aa): Remove this when we have structural typing (commit empty set instead).
-  if (s) {
-    await output.commit(await s);
+  // TODO(aa): Remove this when we have structural typing (commit empty map instead).
+  if (out) {
+    await outSpec.set().commit(await out);
   }
 }
 
 function quit(err: string): Function {
   return () => {
-    process.stderr.write(err);
+    process.stderr.write(err + '\n');
     process.exit(1);
   };
 }
