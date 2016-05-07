@@ -1,4 +1,2 @@
-.babelrc
-.flowconfig
 node_modules
 out.js
