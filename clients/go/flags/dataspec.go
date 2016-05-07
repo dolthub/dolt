@@ -17,44 +17,44 @@ var (
 	pathRegex  = regexp.MustCompile("^(.+):(.+)$")
 )
 
-type DatastoreSpec struct {
+type DatabaseSpec struct {
 	Protocol string
 	Path     string
 }
 
 type DatasetSpec struct {
-	StoreSpec   DatastoreSpec
+	StoreSpec   DatabaseSpec
 	DatasetName string
 }
 
 type RefSpec struct {
-	StoreSpec DatastoreSpec
+	StoreSpec DatabaseSpec
 	Ref       ref.Ref
 }
 
 type PathSpec interface {
-	Value() (datas.DataStore, types.Value, error)
+	Value() (datas.Database, types.Value, error)
 }
 
-func ParseDatastoreSpec(spec string) (DatastoreSpec, error) {
+func ParseDatabaseSpec(spec string) (DatabaseSpec, error) {
 	res := storeRegex.FindStringSubmatch(spec)
 	if len(res) != 3 {
-		return DatastoreSpec{}, fmt.Errorf("Invalid datastore spec: %s", spec)
+		return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
 	}
 	protocol := res[1]
 	switch protocol {
 	case "http", "https", "ldb":
 		if len(res[2]) == 0 {
-			return DatastoreSpec{}, fmt.Errorf("Invalid datastore spec: %s", spec)
+			return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
 		}
-		return DatastoreSpec{Protocol: protocol, Path: strings.TrimRight(res[2][1:], "/")}, nil
+		return DatabaseSpec{Protocol: protocol, Path: strings.TrimRight(res[2][1:], "/")}, nil
 	case "mem":
 		if len(res[2]) > 0 {
-			return DatastoreSpec{}, fmt.Errorf("Invalid datastore spec: %s", spec)
+			return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
 		}
-		return DatastoreSpec{Protocol: protocol, Path: ""}, nil
+		return DatabaseSpec{Protocol: protocol, Path: ""}, nil
 	}
-	return DatastoreSpec{}, fmt.Errorf("Invalid datastore spec: %s", spec)
+	return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
 }
 
 func ParseDatasetSpec(spec string) (DatasetSpec, error) {
@@ -62,7 +62,7 @@ func ParseDatasetSpec(spec string) (DatasetSpec, error) {
 	if len(res) != 3 {
 		return DatasetSpec{}, fmt.Errorf("Invalid dataset spec: %s", spec)
 	}
-	storeSpec, err := ParseDatastoreSpec(res[1])
+	storeSpec, err := ParseDatabaseSpec(res[1])
 	if err != nil {
 		return DatasetSpec{}, err
 	}
@@ -95,21 +95,21 @@ func ParsePathSpec(spec string) (PathSpec, error) {
 
 }
 
-func (spec DatastoreSpec) Datastore() (ds datas.DataStore, err error) {
+func (spec DatabaseSpec) Database() (ds datas.Database, err error) {
 	switch spec.Protocol {
 	case "http":
-		ds = datas.NewRemoteDataStore(spec.Protocol+":"+spec.Path, "")
+		ds = datas.NewRemoteDatabase(spec.Protocol+":"+spec.Path, "")
 	case "ldb":
-		ds = datas.NewDataStore(chunks.NewLevelDBStoreUseFlags(spec.Path, ""))
+		ds = datas.NewDatabase(chunks.NewLevelDBStoreUseFlags(spec.Path, ""))
 	case "mem":
-		ds = datas.NewDataStore(chunks.NewMemoryStore())
+		ds = datas.NewDatabase(chunks.NewMemoryStore())
 	default:
 		err = fmt.Errorf("Invalid path prototocol: %s", spec.Protocol)
 	}
 	return
 }
 
-func (spec DatastoreSpec) ChunkStore() (cs chunks.ChunkStore, err error) {
+func (spec DatabaseSpec) ChunkStore() (cs chunks.ChunkStore, err error) {
 	switch spec.Protocol {
 	case "ldb":
 		cs = chunks.NewLevelDBStoreUseFlags(spec.Path, "")
@@ -123,7 +123,7 @@ func (spec DatastoreSpec) ChunkStore() (cs chunks.ChunkStore, err error) {
 }
 
 func (spec DatasetSpec) Dataset() (dataset.Dataset, error) {
-	store, err := spec.StoreSpec.Datastore()
+	store, err := spec.StoreSpec.Database()
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
@@ -131,7 +131,7 @@ func (spec DatasetSpec) Dataset() (dataset.Dataset, error) {
 	return dataset.NewDataset(store, spec.DatasetName), nil
 }
 
-func (spec DatasetSpec) Value() (datas.DataStore, types.Value, error) {
+func (spec DatasetSpec) Value() (datas.Database, types.Value, error) {
 	dataset, err := spec.Dataset()
 	if err != nil {
 		return nil, nil, err
@@ -145,14 +145,14 @@ func (spec DatasetSpec) Value() (datas.DataStore, types.Value, error) {
 	return dataset.Store(), commit, nil
 }
 
-func (spec RefSpec) Value() (datas.DataStore, types.Value, error) {
-	store, err := spec.StoreSpec.Datastore()
+func (spec RefSpec) Value() (datas.Database, types.Value, error) {
+	store, err := spec.StoreSpec.Database()
 	if err != nil {
 		return nil, nil, err
 	}
 	return store, store.ReadValue(spec.Ref), nil
 }
 
-func RegisterDataStoreFlags() {
+func RegisterDatabaseFlags() {
 	chunks.RegisterLevelDBFlags()
 }

@@ -7,7 +7,7 @@ import {NomsMap} from './map.js';
 import RefValue from './ref-value.js';
 import Struct, {StructMirror} from './struct.js';
 
-import type DataStore from './data-store.js';
+import type Database from './database.js';
 import type {valueOrPrimitive} from './value.js';
 
 // Invokes |cb| once for |v| and each of its descendants. The returned promise is resolved when all
@@ -17,7 +17,7 @@ import type {valueOrPrimitive} from './value.js';
 // skip a node's children.
 //
 // For convenience, if |cb| returns |undefined|, the default is |true|.
-export default async function walk(v: valueOrPrimitive, ds: DataStore,
+export default async function walk(v: valueOrPrimitive, ds: Database,
                                    cb: (v: valueOrPrimitive) => Promise<?bool>): Promise<void> {
   let cont = await cb(v);
   if (cont === undefined) {

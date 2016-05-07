@@ -1,7 +1,7 @@
 // @flow
 
 export {AsyncIterator} from './async-iterator.js';
-export {default as DataStore, newCommit} from './data-store.js';
+export {default as Database, newCommit} from './database.js';
 export {default as Dataset} from './dataset.js';
 export {newBlob, NomsBlob, BlobReader, BlobWriter} from './blob.js';
 export {decodeNomsValue} from './decode.js';
@@ -45,7 +45,7 @@ export {
   getTypeOfValue,
 } from './type.js';
 export {equals, less} from './compare.js';
-export {DataStoreSpec, DatasetSpec, RefSpec, parseObjectSpec} from './specs.js';
+export {DatabaseSpec, DatasetSpec, RefSpec, parseObjectSpec} from './specs.js';
 export {default as walk} from './walk.js';
 
 export type {AsyncIteratorResult} from './async-iterator.js';

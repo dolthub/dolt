@@ -4,7 +4,7 @@ import {suite, test} from 'mocha';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {emptyRef} from './ref.js';
 import {assert} from 'chai';
-import {default as DataStore, getDatasTypes, newCommit} from './data-store.js';
+import {default as Database, getDatasTypes, newCommit} from './database.js';
 import {invariant, notNull} from './assert.js';
 import {newList} from './list.js';
 import {newMap} from './map.js';
@@ -12,10 +12,10 @@ import {stringType, makeListType, makeRefType, makeSetType} from './type.js';
 import {encodeNomsValue} from './encode.js';
 import {newSet} from './set.js';
 
-suite('DataStore', () => {
+suite('Database', () => {
   test('access', async () => {
     const bs = makeTestingBatchStore();
-    const ds = new DataStore(bs);
+    const ds = new Database(bs);
     const input = 'abc';
 
     const c = encodeNomsValue(input);
@@ -31,7 +31,7 @@ suite('DataStore', () => {
 
   test('commit', async () => {
     const bs = new makeTestingBatchStore();
-    let ds = new DataStore(bs);
+    let ds = new Database(bs);
     const datasetID = 'ds1';
 
     const datasets = await ds.datasets();
@@ -41,10 +41,10 @@ suite('DataStore', () => {
     const aCommit = await newCommit('a');
     const ds2 = await ds.commit(datasetID, aCommit);
 
-    // The old datastore still still has no head.
+    // The old database still still has no head.
     assert.isNull(await ds.head(datasetID));
 
-    // The new datastore has |a|.
+    // The new database has |a|.
     const aRef = notNull(await ds2.headRef(datasetID));
     assert.isTrue(aCommit.ref.equals(aRef.targetRef));
     assert.strictEqual(1, aRef.height);
@@ -97,15 +97,15 @@ suite('DataStore', () => {
     ds = await ds.commit('otherDs', aCommit);
     assert.strictEqual('a', notNull(await ds.head('otherDs')).value);
 
-    // Get a fresh datastore, and verify that both datasets are present
-    const newDs = new DataStore(bs);
+    // Get a fresh database, and verify that both datasets are present
+    const newDs = new Database(bs);
     assert.strictEqual('d', notNull(await newDs.head(datasetID)).value);
     assert.strictEqual('a', notNull(await newDs.head('otherDs')).value);
   });
 
   test('concurrency', async () => {
     const bs = new makeTestingBatchStore();
-    let ds = new DataStore(bs);
+    let ds = new Database(bs);
     const datasetID = 'ds1';
 
     // |a|
@@ -118,7 +118,7 @@ suite('DataStore', () => {
     assert.strictEqual('b', notNull(await ds.head(datasetID)).value);
 
     // Important to create this here.
-    let ds2 = new DataStore(bs);
+    let ds2 = new Database(bs);
 
     // Change 1:
     // |a| <- |b| <- |c|
@@ -128,7 +128,7 @@ suite('DataStore', () => {
 
     // Change 2:
     // |a| <- |b| <- |e|
-    // Should be disallowed, DataStore returned by Commit() should have |c| as Head.
+    // Should be disallowed, Database returned by Commit() should have |c| as Head.
     const eCommit = await newCommit('e', [bRef]);
     let message = '';
     try {
@@ -143,14 +143,14 @@ suite('DataStore', () => {
 
 
   test('empty datasets', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const datasets = await ds.datasets();
     assert.strictEqual(0, datasets.size);
   });
 
   test('head', async () => {
     const bs = new makeTestingBatchStore();
-    let ds = new DataStore(bs);
+    let ds = new Database(bs);
     const types = getDatasTypes();
 
     const commit = await newCommit('foo', []);
@@ -159,7 +159,7 @@ suite('DataStore', () => {
     const datasets = await newMap(['foo', commitRef], types.commitMapType);
     const rootRef = ds.writeValue(datasets).targetRef;
     assert.isTrue(await bs.updateRoot(rootRef, emptyRef));
-    ds = new DataStore(bs); // refresh the datasets
+    ds = new Database(bs); // refresh the datasets
 
     assert.strictEqual(1, datasets.size);
     const fooHead = await ds.head('foo');
@@ -170,7 +170,7 @@ suite('DataStore', () => {
   });
 
   test('height of refs', async () => {
-    const ds = new DataStore(new makeTestingBatchStore());
+    const ds = new Database(new makeTestingBatchStore());
 
     const v1 = ds.writeValue('hello');
     assert.strictEqual(1, v1.height);
@@ -181,7 +181,7 @@ suite('DataStore', () => {
   });
 
   test('height of collections', async() => {
-    const ds = new DataStore(new makeTestingBatchStore());
+    const ds = new Database(new makeTestingBatchStore());
 
     const setOfStringType = makeSetType(stringType);
     const setOfRefOfStringType = makeSetType(makeRefType(stringType));

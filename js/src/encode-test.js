@@ -29,13 +29,13 @@ import {ListLeafSequence, NomsList} from './list.js';
 import {MapLeafSequence, NomsMap} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';
 import {newBlob} from './blob.js';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import type {valueOrPrimitive} from './value.js';
 
 suite('Encode', () => {
   test('write primitives', () => {
     function f(k: NomsKind, v: valueOrPrimitive, ex: valueOrPrimitive) {
-      const ds = new DataStore(makeTestingBatchStore());
+      const ds = new Database(makeTestingBatchStore());
       const w = new JsonArrayWriter(ds);
       w.writeValue(v);
       assert.deepEqual([k, ex], w.array);
@@ -54,7 +54,7 @@ suite('Encode', () => {
   });
 
   test('write simple blob', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
     const blob = await newBlob(new Uint8Array([0x00, 0x01]));
     w.writeValue(blob);
@@ -62,7 +62,7 @@ suite('Encode', () => {
   });
 
   test('write list', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
     const tr = makeListType(numberType);
@@ -73,7 +73,7 @@ suite('Encode', () => {
   });
 
   test('write list of value', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
     const tr = makeListType(valueType);
@@ -88,7 +88,7 @@ suite('Encode', () => {
   });
 
   test('write list of list', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
     const it = makeListType(numberType);
@@ -105,7 +105,7 @@ suite('Encode', () => {
   });
 
   test('write leaf set', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
     const tr = makeSetType(numberType);
@@ -116,7 +116,7 @@ suite('Encode', () => {
   });
 
   test('write compound set', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
     const ltr = makeSetType(numberType);
     const r1 = ds.writeValue(new NomsSet(ltr, new SetLeafSequence(ds, ltr, [0])));
@@ -140,7 +140,7 @@ suite('Encode', () => {
   });
 
   test('write set of set', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
     const st = makeSetType(numberType);
@@ -158,7 +158,7 @@ suite('Encode', () => {
   });
 
   test('write map', async() => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
     const tr = makeMapType(stringType, boolType);
@@ -170,7 +170,7 @@ suite('Encode', () => {
   });
 
   test('write map of map', async() => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
     const kt = makeMapType(stringType, numberType);
@@ -190,7 +190,7 @@ suite('Encode', () => {
   });
 
   test('write empty struct', async() => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
     const type = makeStructType('S', {});
@@ -201,7 +201,7 @@ suite('Encode', () => {
   });
 
   test('write struct', async() => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
     const type = makeStructType('S', {
@@ -217,7 +217,7 @@ suite('Encode', () => {
   });
 
   test('write struct with list', async() => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     let w = new JsonArrayWriter(ds);
 
     const ltr = makeListType(stringType);
@@ -238,7 +238,7 @@ suite('Encode', () => {
   });
 
   test('write struct with struct', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
     const s2Type = makeStructType('S2', {
@@ -256,7 +256,7 @@ suite('Encode', () => {
   });
 
   test('write compound list', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
     const ltr = makeListType(numberType);
     const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0])));
@@ -280,7 +280,7 @@ suite('Encode', () => {
   });
 
   test('write compound set with bool', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
     const str = makeSetType(boolType);
     const r1 = ds.writeValue(new NomsSet(str, new SetLeafSequence(ds, str, [true])));
@@ -301,7 +301,7 @@ suite('Encode', () => {
   });
 
   test('write type value', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
 
     const test = (expected: Array<any>, v: Type) => {
       const w = new JsonArrayWriter(ds);
@@ -349,7 +349,7 @@ suite('Encode', () => {
       return bytes;
     }
 
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const blob = await newBlob(stringToUint8Array('hi'));
 
     const chunk = encodeNomsValue(blob, ds);
@@ -372,7 +372,7 @@ suite('Encode', () => {
   });
 
   test('write ref', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
     const ref = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
     const t = makeRefType(blobType);
@@ -383,7 +383,7 @@ suite('Encode', () => {
   });
 
   test('write union list', () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
     const tr = makeListType(makeUnionType([stringType, numberType]));
     const v = new NomsList(tr, new ListLeafSequence(ds, tr, ['hi', 42]));
@@ -393,7 +393,7 @@ suite('Encode', () => {
   });
 
   test('write empty union list', () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
     const tr = makeListType(makeUnionType([]));
     const v = new NomsList(tr, new ListLeafSequence(ds, tr, []));

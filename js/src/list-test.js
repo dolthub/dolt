@@ -3,7 +3,7 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
-import DataStore from './data-store.js';
+import Database from './database.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import RefValue from './ref-value.js';
 import {newStruct} from './struct.js';
@@ -207,7 +207,7 @@ suite('List', () => {
   });
 
   test('LONG: write, read, modify, read', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
 
     const nums = intSequence(testListSize);
     const tr = makeListType(numberType);
@@ -227,14 +227,14 @@ suite('List', () => {
 
 suite('ListLeafSequence', () => {
   test('Empty list isEmpty', () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const tr = makeListType(stringType);
     const newList = items => new NomsList(tr, new ListLeafSequence(ds, tr, items));
     assert.isTrue(newList([]).isEmpty());
   });
 
   test('iterator', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const tr = makeListType(numberType);
 
     const test = async items => {
@@ -249,7 +249,7 @@ suite('ListLeafSequence', () => {
   });
 
   test('iteratorAt', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const tr = makeListType(numberType);
 
     const test = async items => {
@@ -269,7 +269,7 @@ suite('ListLeafSequence', () => {
 
 suite('CompoundList', () => {
   function build(): NomsList {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const tr = makeListType(stringType);
     const l1 = new NomsList(tr, new ListLeafSequence(ds, tr, ['a', 'b']));
     const r1 = ds.writeValue(l1);

@@ -44,7 +44,7 @@ func (s *testSuite) TestCSVImporter() {
 	s.Equal("", out)
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
-	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
+	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
 	defer ds.Store().Close()
 	defer os.RemoveAll(s.LdbDir)
 
@@ -106,7 +106,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 	s.Equal("", out)
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
-	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
+	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
 	defer ds.Store().Close()
 	defer os.RemoveAll(s.LdbDir)
 
@@ -138,7 +138,7 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	s.Equal("", out)
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
-	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
+	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
 	defer ds.Store().Close()
 	defer os.RemoveAll(s.LdbDir)
 

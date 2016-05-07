@@ -20,7 +20,7 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	flags.RegisterDataStoreFlags()
+	flags.RegisterDatabaseFlags()
 	flag.Parse()
 
 	if len(flag.Args()) != 2 {

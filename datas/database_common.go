@@ -9,7 +9,7 @@ import (
 	"github.com/attic-labs/noms/types"
 )
 
-type dataStoreCommon struct {
+type databaseCommon struct {
 	vs       *types.ValueStore
 	rt       chunks.RootTracker
 	rootRef  ref.Ref
@@ -17,41 +17,41 @@ type dataStoreCommon struct {
 }
 
 var (
-	ErrOptimisticLockFailed = errors.New("Optimistic lock failed on datastore Root update")
+	ErrOptimisticLockFailed = errors.New("Optimistic lock failed on database Root update")
 	ErrMergeNeeded          = errors.New("Dataset head is not ancestor of commit")
 )
 
-func newDataStoreCommon(vs *types.ValueStore, rt chunks.RootTracker) dataStoreCommon {
-	return dataStoreCommon{vs: vs, rt: rt, rootRef: rt.Root()}
+func newDatabaseCommon(vs *types.ValueStore, rt chunks.RootTracker) databaseCommon {
+	return databaseCommon{vs: vs, rt: rt, rootRef: rt.Root()}
 }
 
-func (ds *dataStoreCommon) MaybeHead(datasetID string) (types.Struct, bool) {
+func (ds *databaseCommon) MaybeHead(datasetID string) (types.Struct, bool) {
 	if r, ok := ds.MaybeHeadRef(datasetID); ok {
 		return r.TargetValue(ds).(types.Struct), true
 	}
 	return NewCommit(), false
 }
 
-func (ds *dataStoreCommon) MaybeHeadRef(datasetID string) (types.Ref, bool) {
+func (ds *databaseCommon) MaybeHeadRef(datasetID string) (types.Ref, bool) {
 	if r, ok := ds.Datasets().MaybeGet(types.NewString(datasetID)); ok {
 		return r.(types.Ref), true
 	}
 	return types.Ref{}, false
 }
 
-func (ds *dataStoreCommon) Head(datasetID string) types.Struct {
+func (ds *databaseCommon) Head(datasetID string) types.Struct {
 	c, ok := ds.MaybeHead(datasetID)
-	d.Chk.True(ok, "DataStore \"%s\" has no Head.", datasetID)
+	d.Chk.True(ok, "Database \"%s\" has no Head.", datasetID)
 	return c
 }
 
-func (ds *dataStoreCommon) HeadRef(datasetID string) types.Ref {
+func (ds *databaseCommon) HeadRef(datasetID string) types.Ref {
 	r, ok := ds.MaybeHeadRef(datasetID)
-	d.Chk.True(ok, "DataStore \"%s\" has no Head.", datasetID)
+	d.Chk.True(ok, "Database \"%s\" has no Head.", datasetID)
 	return r
 }
 
-func (ds *dataStoreCommon) Datasets() types.Map {
+func (ds *databaseCommon) Datasets() types.Map {
 	if ds.datasets == nil {
 		if ds.rootRef.IsEmpty() {
 			emptyMap := NewMapOfStringToRefOfCommit()
@@ -64,29 +64,29 @@ func (ds *dataStoreCommon) Datasets() types.Map {
 	return *ds.datasets
 }
 
-func (ds *dataStoreCommon) ReadValue(r ref.Ref) types.Value {
+func (ds *databaseCommon) ReadValue(r ref.Ref) types.Value {
 	return ds.vs.ReadValue(r)
 }
 
-func (ds *dataStoreCommon) WriteValue(v types.Value) types.Ref {
+func (ds *databaseCommon) WriteValue(v types.Value) types.Ref {
 	return ds.vs.WriteValue(v)
 }
 
-func (ds *dataStoreCommon) Close() error {
+func (ds *databaseCommon) Close() error {
 	return ds.vs.Close()
 }
 
-func (ds *dataStoreCommon) datasetsFromRef(datasetsRef ref.Ref) *types.Map {
+func (ds *databaseCommon) datasetsFromRef(datasetsRef ref.Ref) *types.Map {
 	c := ds.ReadValue(datasetsRef).(types.Map)
 	return &c
 }
 
-func (ds *dataStoreCommon) commit(datasetID string, commit types.Struct) error {
+func (ds *databaseCommon) commit(datasetID string, commit types.Struct) error {
 	return ds.doCommit(datasetID, commit)
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
-func (ds *dataStoreCommon) doCommit(datasetID string, commit types.Struct) error {
+func (ds *databaseCommon) doCommit(datasetID string, commit types.Struct) error {
 	currentRootRef, currentDatasets := ds.getRootAndDatasets()
 
 	// TODO: This Commit will be orphaned if the tryUpdateRoot() below fails
@@ -113,13 +113,13 @@ func (ds *dataStoreCommon) doCommit(datasetID string, commit types.Struct) error
 }
 
 // doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootRef is the ref of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
-func (ds *dataStoreCommon) doDelete(datasetID string) error {
+func (ds *databaseCommon) doDelete(datasetID string) error {
 	currentRootRef, currentDatasets := ds.getRootAndDatasets()
 	currentDatasets = currentDatasets.Remove(types.NewString(datasetID))
 	return ds.tryUpdateRoot(currentDatasets, currentRootRef)
 }
 
-func (ds *dataStoreCommon) getRootAndDatasets() (currentRootRef ref.Ref, currentDatasets types.Map) {
+func (ds *databaseCommon) getRootAndDatasets() (currentRootRef ref.Ref, currentDatasets types.Map) {
 	currentRootRef = ds.rt.Root()
 	currentDatasets = ds.Datasets()
 
@@ -130,7 +130,7 @@ func (ds *dataStoreCommon) getRootAndDatasets() (currentRootRef ref.Ref, current
 	return
 }
 
-func (ds *dataStoreCommon) tryUpdateRoot(currentDatasets types.Map, currentRootRef ref.Ref) (err error) {
+func (ds *databaseCommon) tryUpdateRoot(currentDatasets types.Map, currentRootRef ref.Ref) (err error) {
 	// TODO: This Commit will be orphaned if the UpdateRoot below fails
 	newRootRef := ds.WriteValue(currentDatasets).TargetRef()
 	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404

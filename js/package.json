@@ -1,6 +1,6 @@
 {
   "name": "@attic/noms",
-  "version": "25.0.0",
+  "version": "26.0.0",
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms",
   "main": "dist/commonjs/noms.js",

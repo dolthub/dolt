@@ -9,53 +9,53 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// writesOnCommit allows tests to adjust for how many writes dataStoreCommon performs on Commit()
+// writesOnCommit allows tests to adjust for how many writes databaseCommon performs on Commit()
 const writesOnCommit = 2
 
-func TestLocalDataStore(t *testing.T) {
-	suite.Run(t, &LocalDataStoreSuite{})
+func TestLocalDatabase(t *testing.T) {
+	suite.Run(t, &LocalDatabaseSuite{})
 }
 
-func TestRemoteDataStore(t *testing.T) {
-	suite.Run(t, &RemoteDataStoreSuite{})
+func TestRemoteDatabase(t *testing.T) {
+	suite.Run(t, &RemoteDatabaseSuite{})
 }
 
-type DataStoreSuite struct {
+type DatabaseSuite struct {
 	suite.Suite
 	cs     *chunks.TestStore
-	ds     DataStore
-	makeDs func(chunks.ChunkStore) DataStore
+	ds     Database
+	makeDs func(chunks.ChunkStore) Database
 }
 
-type LocalDataStoreSuite struct {
-	DataStoreSuite
+type LocalDatabaseSuite struct {
+	DatabaseSuite
 }
 
-func (suite *LocalDataStoreSuite) SetupTest() {
+func (suite *LocalDatabaseSuite) SetupTest() {
 	suite.cs = chunks.NewTestStore()
-	suite.makeDs = NewDataStore
+	suite.makeDs = NewDatabase
 	suite.ds = suite.makeDs(suite.cs)
 }
 
-type RemoteDataStoreSuite struct {
-	DataStoreSuite
+type RemoteDatabaseSuite struct {
+	DatabaseSuite
 }
 
-func (suite *RemoteDataStoreSuite) SetupTest() {
+func (suite *RemoteDatabaseSuite) SetupTest() {
 	suite.cs = chunks.NewTestStore()
-	suite.makeDs = func(cs chunks.ChunkStore) DataStore {
+	suite.makeDs = func(cs chunks.ChunkStore) Database {
 		hbs := newHTTPBatchStoreForTest(suite.cs)
-		return &RemoteDataStoreClient{newDataStoreCommon(types.NewValueStore(hbs), hbs)}
+		return &RemoteDatabaseClient{newDatabaseCommon(types.NewValueStore(hbs), hbs)}
 	}
 	suite.ds = suite.makeDs(suite.cs)
 }
 
-func (suite *DataStoreSuite) TearDownTest() {
+func (suite *DatabaseSuite) TearDownTest() {
 	suite.ds.Close()
 	suite.cs.Close()
 }
 
-func (suite *DataStoreSuite) TestReadWriteCache() {
+func (suite *DatabaseSuite) TestReadWriteCache() {
 	var v types.Value = types.Bool(true)
 	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(v))
 	r := suite.ds.WriteValue(v).TargetRef()
@@ -68,7 +68,7 @@ func (suite *DataStoreSuite) TestReadWriteCache() {
 	suite.True(v.Equals(types.Bool(true)))
 }
 
-func (suite *DataStoreSuite) TestReadWriteCachePersists() {
+func (suite *DatabaseSuite) TestReadWriteCachePersists() {
 	var err error
 	var v types.Value = types.Bool(true)
 	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(v))
@@ -83,15 +83,15 @@ func (suite *DataStoreSuite) TestReadWriteCachePersists() {
 	suite.NoError(err)
 }
 
-func (suite *DataStoreSuite) TestWriteRefToNonexistentValue() {
+func (suite *DatabaseSuite) TestWriteRefToNonexistentValue() {
 	suite.Panics(func() { suite.ds.WriteValue(types.NewTypedRefFromValue(types.Bool(true))) })
 }
 
-func (suite *DataStoreSuite) TestTolerateUngettableRefs() {
+func (suite *DatabaseSuite) TestTolerateUngettableRefs() {
 	suite.Nil(suite.ds.ReadValue(ref.Ref{}))
 }
 
-func (suite *DataStoreSuite) TestDataStoreCommit() {
+func (suite *DatabaseSuite) TestDatabaseCommit() {
 	datasetID := "ds1"
 	datasets := suite.ds.Datasets()
 	suite.Zero(datasets.Len())
@@ -102,13 +102,13 @@ func (suite *DataStoreSuite) TestDataStoreCommit() {
 	ds2, err := suite.ds.Commit(datasetID, aCommit)
 	suite.NoError(err)
 
-	// The old datastore still has no head.
+	// The old database still has no head.
 	_, ok := suite.ds.MaybeHead(datasetID)
 	suite.False(ok)
 	_, ok = suite.ds.MaybeHeadRef(datasetID)
 	suite.False(ok)
 
-	// The new datastore has |a|.
+	// The new database has |a|.
 	aCommit1 := ds2.Head(datasetID)
 	suite.True(aCommit1.Get(ValueField).Equals(a))
 	aRef1 := ds2.HeadRef(datasetID)
@@ -151,14 +151,14 @@ func (suite *DataStoreSuite) TestDataStoreCommit() {
 	_, err = suite.ds.Commit("otherDs", aCommit)
 	suite.NoError(err)
 
-	// Get a fresh datastore, and verify that both datasets are present
+	// Get a fresh database, and verify that both datasets are present
 	newDs := suite.makeDs(suite.cs)
 	datasets2 := newDs.Datasets()
 	suite.Equal(uint64(2), datasets2.Len())
 	newDs.Close()
 }
 
-func (suite *DataStoreSuite) TestDataStoreDelete() {
+func (suite *DatabaseSuite) TestDatabaseDelete() {
 	datasetID1, datasetID2 := "ds1", "ds2"
 	datasets := suite.ds.Datasets()
 	suite.Zero(datasets.Len())
@@ -182,7 +182,7 @@ func (suite *DataStoreSuite) TestDataStoreDelete() {
 	h, present := suite.ds.MaybeHead(datasetID1)
 	suite.False(present, "Dataset %s should not be present, but head is %v", datasetID1, h.Get(ValueField))
 
-	// Get a fresh datastore, and verify that only ds1 is present
+	// Get a fresh database, and verify that only ds1 is present
 	newDs := suite.makeDs(suite.cs)
 	datasets = newDs.Datasets()
 	suite.Equal(uint64(1), datasets.Len())
@@ -191,7 +191,7 @@ func (suite *DataStoreSuite) TestDataStoreDelete() {
 	newDs.Close()
 }
 
-func (suite *DataStoreSuite) TestDataStoreDeleteConcurrent() {
+func (suite *DatabaseSuite) TestDatabaseDeleteConcurrent() {
 	datasetID := "ds1"
 	suite.Zero(suite.ds.Datasets().Len())
 	var err error
@@ -217,13 +217,13 @@ func (suite *DataStoreSuite) TestDataStoreDeleteConcurrent() {
 	h, present = ds2.MaybeHead(datasetID)
 	suite.True(present, "Dataset %s should be present", datasetID)
 
-	// Get a fresh datastore, and verify that no datastores are present
+	// Get a fresh database, and verify that no databases are present
 	newDs := suite.makeDs(suite.cs)
 	suite.Equal(uint64(0), newDs.Datasets().Len())
 	newDs.Close()
 }
 
-func (suite *DataStoreSuite) TestDataStoreConcurrency() {
+func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 	datasetID := "ds1"
 	var err error
 
@@ -251,7 +251,7 @@ func (suite *DataStoreSuite) TestDataStoreConcurrency() {
 
 	// Change 2:
 	// |a| <- |b| <- |e|
-	// Should be disallowed, DataStore returned by Commit() should have |c| as Head.
+	// Should be disallowed, Database returned by Commit() should have |c| as Head.
 	e := types.NewString("e")
 	eCommit := NewCommit().Set(ValueField, e).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(bCommit)))
 	ds2, err = ds2.Commit(datasetID, eCommit)
@@ -259,7 +259,7 @@ func (suite *DataStoreSuite) TestDataStoreConcurrency() {
 	suite.True(ds2.Head(datasetID).Get(ValueField).Equals(c))
 }
 
-func (suite *DataStoreSuite) TestDataStoreHeightOfRefs() {
+func (suite *DatabaseSuite) TestDatabaseHeightOfRefs() {
 	r1 := suite.ds.WriteValue(types.NewString("hello"))
 	suite.Equal(uint64(1), r1.Height())
 
@@ -268,7 +268,7 @@ func (suite *DataStoreSuite) TestDataStoreHeightOfRefs() {
 	suite.Equal(uint64(3), suite.ds.WriteValue(r2).Height())
 }
 
-func (suite *DataStoreSuite) TestDataStoreHeightOfCollections() {
+func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	setOfStringType := types.MakeSetType(types.StringType)
 	setOfRefOfStringType := types.MakeSetType(types.MakeRefType(types.StringType))
 

@@ -1,6 +1,6 @@
 // @flow
 
-import DataStore from './data-store.js';
+import Database from './database.js';
 import type {Collection} from './collection.js';
 import type {valueOrPrimitive} from './value.js';
 import {assert} from 'chai';
@@ -47,10 +47,10 @@ export function assertChunkCountAndType(expectCount: number, expectType: Type,
 export async function testRoundTripAndValidate<T: valueOrPrimitive>(v: T,
       validateFn: (v2: T) => Promise<void>): Promise<void> {
   const bs = makeTestingBatchStore();
-  const ds = new DataStore(bs);
+  const ds = new Database(bs);
 
   const r1 = await ds.writeValue(v).targetRef;
-  const ds2 = new DataStore(bs);
+  const ds2 = new Database(bs);
 
   const v2 = await ds2.readValue(r1);
   if (v instanceof Value) {

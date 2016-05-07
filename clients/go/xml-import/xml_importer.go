@@ -46,7 +46,7 @@ func (a refIndexList) Less(i, j int) bool { return a[i].index < a[j].index }
 
 func main() {
 	err := d.Try(func() {
-		flags.RegisterDataStoreFlags()
+		flags.RegisterDatabaseFlags()
 		flag.Usage = customUsage
 		flag.Parse()
 

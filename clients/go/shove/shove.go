@@ -27,7 +27,7 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	flags.RegisterDataStoreFlags()
+	flags.RegisterDatabaseFlags()
 	flag.Parse()
 
 	if flag.NArg() != 2 {

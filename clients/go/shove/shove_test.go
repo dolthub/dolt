@@ -22,13 +22,13 @@ type testSuite struct {
 }
 
 func (s *testSuite) TestShove() {
-	source1 := dataset.NewDataset(datas.NewDataStore(chunks.NewLevelDBStore(s.LdbDir, "", 1, false)), "foo")
+	source1 := dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false)), "foo")
 	source1, err := source1.Commit(types.Number(42))
 	s.NoError(err)
 	source2, err := source1.Commit(types.Number(43))
 	s.NoError(err)
 	source1HeadRef := source1.Head().Ref()
-	source2.Store().Close() // Close DataStore backing both Datasets
+	source2.Store().Close() // Close Database backing both Datasets
 
 	sourceSpec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, source1HeadRef)
 	ldb2dir := path.Join(s.TempDir, "ldb2")
@@ -36,7 +36,7 @@ func (s *testSuite) TestShove() {
 	out := s.Run(main, []string{sourceSpec, sinkDatasetSpec})
 	s.Equal("", out)
 
-	dest := dataset.NewDataset(datas.NewDataStore(chunks.NewLevelDBStore(ldb2dir, "", 1, false)), "bar")
+	dest := dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(ldb2dir, "", 1, false)), "bar")
 	s.True(types.Number(42).Equals(dest.Head().Get(datas.ValueField)))
 	dest.Store().Close()
 
@@ -44,7 +44,7 @@ func (s *testSuite) TestShove() {
 	out = s.Run(main, []string{sourceDataset, sinkDatasetSpec})
 	s.Equal("", out)
 
-	dest = dataset.NewDataset(datas.NewDataStore(chunks.NewLevelDBStore(ldb2dir, "", 1, false)), "bar")
+	dest = dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(ldb2dir, "", 1, false)), "bar")
 	s.True(types.Number(43).Equals(dest.Head().Get(datas.ValueField)))
 	dest.Store().Close()
 }

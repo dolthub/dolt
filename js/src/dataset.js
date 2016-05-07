@@ -1,21 +1,21 @@
 // @flow
 
-import {newCommit} from './data-store.js';
+import {newCommit} from './database.js';
 import type {valueOrPrimitive} from './value.js';
 import type {Commit} from './commit.js';
-import type DataStore from './data-store.js';
+import type Database from './database.js';
 import RefValue from './ref-value.js';
 
 export default class Dataset {
-  _store: DataStore;
+  _store: Database;
   _id: string;
 
-  constructor(store: DataStore, id: string) {
+  constructor(store: Database, id: string) {
     this._store = store;
     this._id = id;
   }
 
-  get store(): DataStore {
+  get store(): Database {
     return this._store;
   }
 

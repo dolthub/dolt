@@ -7,16 +7,16 @@ import (
 )
 
 type Dataset struct {
-	store datas.DataStore
+	store datas.Database
 	id    string
 }
 
-func NewDataset(store datas.DataStore, datasetID string) Dataset {
+func NewDataset(store datas.Database, datasetID string) Dataset {
 	d.Exp.NotEmpty(datasetID, "Cannot create an unnamed Dataset.")
 	return Dataset{store, datasetID}
 }
 
-func (ds *Dataset) Store() datas.DataStore {
+func (ds *Dataset) Store() datas.Database {
 	return ds.store
 }
 
@@ -65,12 +65,12 @@ func (ds *Dataset) CommitWithParents(v types.Value, p types.Set) (Dataset, error
 	return Dataset{store, ds.id}, err
 }
 
-func (ds *Dataset) Pull(sourceStore datas.DataStore, sourceRef types.Ref, concurrency int) (Dataset, error) {
-	_, topDown := ds.Store().(*datas.LocalDataStore)
+func (ds *Dataset) Pull(sourceStore datas.Database, sourceRef types.Ref, concurrency int) (Dataset, error) {
+	_, topDown := ds.Store().(*datas.LocalDatabase)
 	return ds.pull(sourceStore, sourceRef, concurrency, topDown)
 }
 
-func (ds *Dataset) pull(source datas.DataStore, sourceRef types.Ref, concurrency int, topDown bool) (Dataset, error) {
+func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency int, topDown bool) (Dataset, error) {
 	sink := *ds
 
 	sinkHeadRef := types.Ref{}
@@ -83,7 +83,7 @@ func (ds *Dataset) pull(source datas.DataStore, sourceRef types.Ref, concurrency
 	}
 
 	if topDown {
-		datas.CopyMissingChunksP(source, sink.Store().(*datas.LocalDataStore), sourceRef, concurrency)
+		datas.CopyMissingChunksP(source, sink.Store().(*datas.LocalDatabase), sourceRef, concurrency)
 	} else {
 		datas.CopyReachableChunksP(source, sink.Store(), sourceRef, sinkHeadRef, concurrency)
 	}

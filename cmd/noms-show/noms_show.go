@@ -35,9 +35,9 @@ func main() {
 
 	spec, err := flags.ParsePathSpec(flag.Arg(0))
 	util.CheckError(err)
-	datastore, value, err := spec.Value()
+	database, value, err := spec.Value()
 	util.CheckError(err)
 
 	fmt.Println(types.EncodedValueWithTags(value))
-	datastore.Close()
+	database.Close()
 }

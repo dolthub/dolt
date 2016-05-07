@@ -4,13 +4,13 @@ import {suite, test} from 'mocha';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {assert} from 'chai';
 import Dataset from './dataset.js';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import {invariant, notNull} from './assert.js';
 
 suite('Dataset', () => {
   test('commit', async () => {
     const bs = makeTestingBatchStore();
-    const store = new DataStore(bs);
+    const store = new Database(bs);
     let ds = new Dataset(store, 'ds1');
 
     // |a|
@@ -53,8 +53,8 @@ suite('Dataset', () => {
     ds = await ds.commit('a');
     assert.strictEqual('a', notNull(await ds.head('otherDs')).value);
 
-    // Get a fresh datastore, and verify that both datasets are present
-    const newStore = new DataStore(bs);
+    // Get a fresh database, and verify that both datasets are present
+    const newStore = new Database(bs);
     assert.strictEqual('d', notNull(await newStore.head('ds1')).value);
     assert.strictEqual('a', notNull(await newStore.head('otherDs')).value);
   });

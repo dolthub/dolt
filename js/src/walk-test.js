@@ -2,7 +2,7 @@
 
 import BatchStoreAdaptor from './batch-store-adaptor.js';
 import {createStructClass} from './struct.js';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import {
   makeListType,
   makeMapType,
@@ -24,7 +24,7 @@ import {assert} from 'chai';
 import type {valueOrPrimitive} from './value.js';
 
 suite('walk', () => {
-  const ds = new DataStore(new BatchStoreAdaptor(new MemoryStore()));
+  const ds = new Database(new BatchStoreAdaptor(new MemoryStore()));
 
   test('primitives', async () => {
     await Promise.all([true, false, 42, 88.8, 'hello!', ''].map(async v => {
@@ -143,7 +143,7 @@ suite('walk', () => {
   });
 });
 
-async function callbackHappensOnce(v: valueOrPrimitive, ds: DataStore,
+async function callbackHappensOnce(v: valueOrPrimitive, ds: Database,
                                    recurse: bool = false) : Promise<void> {
   // Test that our callback only gets called once.
   let count = 0;

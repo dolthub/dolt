@@ -10,7 +10,7 @@ import (
 )
 
 func createTestDataset(name string) Dataset {
-	return NewDataset(datas.NewDataStore(chunks.NewTestStore()), name)
+	return NewDataset(datas.NewDatabase(chunks.NewTestStore()), name)
 }
 
 func TestValidateRef(t *testing.T) {

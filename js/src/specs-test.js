@@ -3,34 +3,34 @@
 import {invariant} from './assert.js';
 import BatchStoreAdaptor from './batch-store-adaptor.js';
 import Dataset from './dataset.js';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import HttpBatchStore from './http-batch-store.js';
 import Ref from './ref.js';
-import {DataStoreSpec, DatasetSpec, RefSpec, parseObjectSpec} from './specs.js';
+import {DatabaseSpec, DatasetSpec, RefSpec, parseObjectSpec} from './specs.js';
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 suite('Specs', () => {
-  test('DataStoreSpec', () => {
+  test('DatabaseSpec', () => {
     const notAllowed = ['mem:', 'mem:stuff', 'http:', 'https:', 'random:', 'random:random'];
-    notAllowed.forEach(s => assert.isNull(DataStoreSpec.parse(s)));
+    notAllowed.forEach(s => assert.isNull(DatabaseSpec.parse(s)));
 
-    let spec = DataStoreSpec.parse('mem');
+    let spec = DatabaseSpec.parse('mem');
     invariant(spec);
     assert.equal(spec.scheme, 'mem');
     assert.equal(spec.path, '');
-    assert.instanceOf(spec.store(), DataStore);
+    assert.instanceOf(spec.store(), Database);
     assert.instanceOf(spec.store()._vs._bs, BatchStoreAdaptor);
 
-    spec = DataStoreSpec.parse('http://foo');
+    spec = DatabaseSpec.parse('http://foo');
     invariant(spec);
     assert.isNotNull(spec);
     assert.equal(spec.scheme, 'http');
     assert.equal(spec.path, '//foo');
-    assert.instanceOf(spec.store(), DataStore);
+    assert.instanceOf(spec.store(), Database);
     assert.instanceOf(spec.store()._vs._bs, HttpBatchStore);
 
-    spec = DataStoreSpec.parse('https://foo');
+    spec = DatabaseSpec.parse('https://foo');
     invariant(spec);
     assert.isNotNull(spec);
     assert.equal(spec.scheme, 'https');

@@ -13,7 +13,7 @@ import {
   valueType,
 } from './type.js';
 import {suite, test} from 'mocha';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import {newList} from './list.js';
 
 suite('Struct', () => {
@@ -31,7 +31,7 @@ suite('Struct', () => {
   });
 
   test('chunks', () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
 
     const bt = boolType;
     const refOfBoolType = makeRefType(bt);

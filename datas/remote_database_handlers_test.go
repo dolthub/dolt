@@ -22,7 +22,7 @@ import (
 func TestHandleWriteValue(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
-	ds := NewDataStore(cs)
+	ds := NewDatabase(cs)
 
 	l := types.NewList(
 		ds.WriteValue(types.Bool(true)),
@@ -47,7 +47,7 @@ func TestHandleWriteValue(t *testing.T) {
 	HandleWriteValue(w, &http.Request{Body: ioutil.NopCloser(body), Method: "POST"}, params{}, cs)
 
 	if assert.Equal(http.StatusCreated, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
-		ds2 := NewDataStore(cs)
+		ds2 := NewDatabase(cs)
 		v := ds2.ReadValue(l2.Ref())
 		if assert.NotNil(v) {
 			assert.True(v.Equals(l2), "%+v != %+v", v, l2)
@@ -58,7 +58,7 @@ func TestHandleWriteValue(t *testing.T) {
 func TestHandleWriteValueBackpressure(t *testing.T) {
 	assert := assert.New(t)
 	cs := &backpressureCS{ChunkStore: chunks.NewMemoryStore()}
-	ds := NewDataStore(cs)
+	ds := NewDatabase(cs)
 
 	l := types.NewList(
 		ds.WriteValue(types.Bool(true)),

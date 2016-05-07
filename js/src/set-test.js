@@ -4,7 +4,7 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 import Chunk from './chunk.js';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import MemoryStore from './memory-store.js';
 import RefValue from './ref-value.js';
 import BatchStore from './batch-store.js';
@@ -134,7 +134,7 @@ suite('BuildSet', () => {
   });
 
   test('LONG: write, read, modify, read', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
 
     const nums = firstNNumbers(testSetSize);
     const tr = makeSetType(numberType);
@@ -158,7 +158,7 @@ suite('BuildSet', () => {
 
 suite('SetLeaf', () => {
   test('isEmpty/size', () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const tr = makeSetType(stringType);
     const newSet = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
     let s = newSet([]);
@@ -170,7 +170,7 @@ suite('SetLeaf', () => {
   });
 
   test('first/last/has', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const tr = makeSetType(stringType);
     const s = new NomsSet(tr, new SetLeafSequence(ds, tr, ['a', 'k']));
 
@@ -184,7 +184,7 @@ suite('SetLeaf', () => {
   });
 
   test('forEach', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const tr = makeSetType(stringType);
     const m = new NomsSet(tr, new SetLeafSequence(ds, tr, ['a', 'b']));
 
@@ -194,7 +194,7 @@ suite('SetLeaf', () => {
   });
 
   test('iterator', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const tr = makeSetType(stringType);
 
     const test = async items => {
@@ -209,7 +209,7 @@ suite('SetLeaf', () => {
   });
 
   test('LONG: iteratorAt', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const tr = makeSetType(stringType);
     const build = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
 
@@ -227,7 +227,7 @@ suite('SetLeaf', () => {
   });
 
   function testChunks(elemType: Type) {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const tr = makeSetType(elemType);
     const r1 = ds.writeValue('x');
     const r2 = ds.writeValue('a');
@@ -277,14 +277,14 @@ suite('CompoundSet', () => {
   }
 
   test('isEmpty/size', () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     assert.isFalse(c.isEmpty());
     assert.strictEqual(8, c.size);
   });
 
   test('first/last/has', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     assert.strictEqual('a', await c.first());
     assert.strictEqual('n', await c.last());
@@ -305,7 +305,7 @@ suite('CompoundSet', () => {
   });
 
   test('forEach', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const values = [];
     await c.forEach((k) => { values.push(k); });
@@ -313,7 +313,7 @@ suite('CompoundSet', () => {
   });
 
   test('iterator', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
     const c = build(ds, values);
     assert.deepEqual(values, await flatten(c.iterator()));
@@ -321,7 +321,7 @@ suite('CompoundSet', () => {
   });
 
   test('LONG: iteratorAt', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
     const c = build(ds, values);
     const offsets = {
@@ -343,7 +343,7 @@ suite('CompoundSet', () => {
   });
 
   test('iterator return', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const values = ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'];
     const c = build(ds, values);
     const iter = c.iterator();
@@ -358,7 +358,7 @@ suite('CompoundSet', () => {
   });
 
   test('iterator return parallel', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const iter = c.iterator();
     const values = await Promise.all([iter.next(), iter.next(), iter.return(), iter.next()]);
@@ -368,20 +368,20 @@ suite('CompoundSet', () => {
   });
 
   test('chunks', () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     assert.strictEqual(2, c.chunks.length);
   });
 
   test('map', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const values = await c.map((k) => k + '*');
     assert.deepEqual(['a*', 'b*', 'e*', 'f*', 'h*', 'i*', 'm*', 'n*'], values);
   });
 
   test('map async', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const values = await c.map((k) => Promise.resolve(k + '*'));
     assert.deepEqual(['a*', 'b*', 'e*', 'f*', 'h*', 'i*', 'm*', 'n*'], values);
@@ -399,7 +399,7 @@ suite('CompoundSet', () => {
   }
 
   test('advanceTo', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
 
     const c = build(ds, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
 
@@ -441,7 +441,7 @@ suite('CompoundSet', () => {
   });
 
   async function testIntersect(expect: Array<string>, seqs: Array<Array<string>>) {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
 
     const first = build(ds, seqs[0]);
     const sets:Array<NomsSet> = [];
@@ -470,7 +470,7 @@ suite('CompoundSet', () => {
   });
 
   test('iterator at 0', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const tr = makeSetType(numberType);
 
     const test = async (expected, items) => {
@@ -493,7 +493,7 @@ suite('CompoundSet', () => {
   });
 
   test('LONG: canned set diff', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const tr = makeSetType(numberType);
     const s1 = await newSet(
       firstNNumbers(testSetSize), tr).then(s => ds.readValue(ds.writeValue(s).targetRef));
@@ -547,7 +547,7 @@ suite('CompoundSet', () => {
     }
 
     const ms = new CountingMemoryStore();
-    const ds = new DataStore(new BatchStore(3, new BatchStoreAdaptorDelegate(ms)));
+    const ds = new Database(new BatchStore(3, new BatchStoreAdaptorDelegate(ms)));
     [s1, s2] = await Promise.all([s1, s2].map(s => ds.readValue(ds.writeValue(s).targetRef)));
 
     assert.deepEqual([[], []], await s1.diff(s1));
@@ -586,7 +586,7 @@ suite('CompoundSet', () => {
   test('LONG: random set diff 0.1/0.9', () => testRandomDiff(randomSetSize, 0.1, 0.9));
 
   test('chunks', () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
     const s = build(ds, ['a', 'b', 'c', 'd']);
     const chunks = s.chunks;
     const sequence = s.sequence;

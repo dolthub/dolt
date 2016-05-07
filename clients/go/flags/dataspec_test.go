@@ -18,14 +18,14 @@ import (
 )
 
 // TODO: implement this with mock httpService
-func disabledTestHTTPDatastore(t *testing.T) {
+func disabledTestHTTPDatabase(t *testing.T) {
 	assert := assert.New(t)
 	const port = 8017
 	const testString = "A String for testing"
 	const dsetId = "testds"
 	spec := fmt.Sprintf("http://localhost:%d/", port)
 
-	server := datas.NewRemoteDataStoreServer(chunks.NewTestStore(), port)
+	server := datas.NewRemoteDatabaseServer(chunks.NewTestStore(), port)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -34,18 +34,18 @@ func disabledTestHTTPDatastore(t *testing.T) {
 	}()
 	time.Sleep(time.Second)
 
-	sp1, err := ParseDatastoreSpec(spec)
+	sp1, err := ParseDatabaseSpec(spec)
 	assert.NoError(err)
-	store1, err := sp1.Datastore()
+	store1, err := sp1.Database()
 	assert.NoError(err)
 	r1 := store1.WriteValue(types.NewString(testString))
 	store1, err = store1.Commit(dsetId, datas.NewCommit().Set(datas.ValueField, r1))
 	assert.NoError(err)
 	store1.Close()
 
-	sp2, err := ParseDatastoreSpec(spec)
+	sp2, err := ParseDatabaseSpec(spec)
 	assert.NoError(err)
-	store2, err := sp2.Datastore()
+	store2, err := sp2.Database()
 	assert.NoError(err)
 	assert.Equal(types.NewString(testString), store2.ReadValue(r1.TargetRef()))
 
@@ -53,7 +53,7 @@ func disabledTestHTTPDatastore(t *testing.T) {
 	wg.Wait()
 }
 
-func TestLDBDatastore(t *testing.T) {
+func TestLDBDatabase(t *testing.T) {
 	assert := assert.New(t)
 
 	d1 := os.TempDir()
@@ -63,29 +63,29 @@ func TestLDBDatastore(t *testing.T) {
 	spec := fmt.Sprintf("ldb:%s", path.Join(dir, "store"))
 
 	cs := chunks.NewLevelDBStoreUseFlags(ldbDir, "")
-	ds := datas.NewDataStore(cs)
+	ds := datas.NewDatabase(cs)
 
 	s1 := types.NewString("A String")
 	s1Ref := ds.WriteValue(s1)
 	ds.Commit("testDs", datas.NewCommit().Set(datas.ValueField, s1Ref))
 	ds.Close()
 
-	sp, errRead := ParseDatastoreSpec(spec)
+	sp, errRead := ParseDatabaseSpec(spec)
 	assert.NoError(errRead)
-	store, err := sp.Datastore()
+	store, err := sp.Database()
 	assert.NoError(err)
 	assert.Equal(s1.String(), store.ReadValue(s1.Ref()).(types.String).String())
 	store.Close()
 	os.Remove(dir)
 }
 
-func TestMemDatastore(t *testing.T) {
+func TestMemDatabase(t *testing.T) {
 	assert := assert.New(t)
 
 	spec := "mem"
-	sp, err := ParseDatastoreSpec(spec)
+	sp, err := ParseDatabaseSpec(spec)
 	assert.NoError(err)
-	store, err := sp.Datastore()
+	store, err := sp.Database()
 	assert.NoError(err)
 	r := store.WriteValue(types.Bool(true))
 
@@ -101,7 +101,7 @@ func disabledTestHTTPDataset(t *testing.T) {
 	spec := fmt.Sprintf("http://localhost:%d", port)
 	datasetSpec := fmt.Sprintf("%s:%s", spec, datasetId)
 
-	server := datas.NewRemoteDataStoreServer(chunks.NewTestStore(), port)
+	server := datas.NewRemoteDatabaseServer(chunks.NewTestStore(), port)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -110,9 +110,9 @@ func disabledTestHTTPDataset(t *testing.T) {
 	}()
 	time.Sleep(time.Second)
 
-	sp1, err := ParseDatastoreSpec(spec)
+	sp1, err := ParseDatabaseSpec(spec)
 	assert.NoError(err)
-	store, err := sp1.Datastore()
+	store, err := sp1.Database()
 	assert.NoError(err)
 
 	dataset1 := dataset.NewDataset(store, datasetId)
@@ -152,7 +152,7 @@ func TestLDBDataset(t *testing.T) {
 	assert.NoError(err)
 	ldbPath := path.Join(dir, "name")
 	cs := chunks.NewLevelDBStoreUseFlags(ldbPath, "")
-	ds := datas.NewDataStore(cs)
+	ds := datas.NewDatabase(cs)
 	id := "dsName"
 
 	set := dataset.NewDataset(ds, id)
@@ -179,7 +179,7 @@ func TestLDBObject(t *testing.T) {
 	dsId := "dsId"
 
 	cs1 := chunks.NewLevelDBStoreUseFlags(ldbpath, "")
-	store1 := datas.NewDataStore(cs1)
+	store1 := datas.NewDatabase(cs1)
 	dataset1 := dataset.NewDataset(store1, dsId)
 	s1 := types.NewString("Commit Value")
 	r1 := store1.WriteValue(s1)
@@ -200,9 +200,9 @@ func TestLDBObject(t *testing.T) {
 
 	spec3 := fmt.Sprintf("ldb:%s:%s", ldbpath, s1.Ref().String())
 	sp3, err := ParsePathSpec(spec3)
-	datastore, v3, err := sp3.Value()
+	database, v3, err := sp3.Value()
 	assert.Equal(s1.String(), v3.(types.String).String())
-	datastore.Close()
+	database.Close()
 }
 
 func TestReadRef(t *testing.T) {
@@ -214,8 +214,8 @@ func TestReadRef(t *testing.T) {
 
 	ldbPath := path.Join(dir, "/name")
 	cs1 := chunks.NewLevelDBStoreUseFlags(ldbPath, "")
-	datastore1 := datas.NewDataStore(cs1)
-	dataset1 := dataset.NewDataset(datastore1, datasetId)
+	database1 := datas.NewDatabase(cs1)
+	dataset1 := dataset.NewDataset(database1, datasetId)
 	commit := types.NewString("Commit Value")
 	dataset1, err = dataset1.Commit(commit)
 	assert.NoError(err)
@@ -225,45 +225,45 @@ func TestReadRef(t *testing.T) {
 	spec2 := fmt.Sprintf("ldb:%s:%s", ldbPath, r1.String())
 	sp2, err := ParsePathSpec(spec2)
 	assert.NoError(err)
-	datastore, v2, err := sp2.Value()
+	database, v2, err := sp2.Value()
 	assert.NoError(err)
 
 	assert.EqualValues(r1.String(), v2.Ref().String())
-	datastore.Close()
+	database.Close()
 }
 
-func TestDatastoreSpecs(t *testing.T) {
+func TestDatabaseSpecs(t *testing.T) {
 	assert := assert.New(t)
 
 	badSpecs := []string{"mem:", "mem:stuff", "http:", "https:", "random:", "random:random"}
 	for _, spec := range badSpecs {
-		_, err := ParseDatastoreSpec(spec)
+		_, err := ParseDatabaseSpec(spec)
 		assert.Error(err)
 	}
 
-	storeSpec, err := ParseDatastoreSpec("http://localhost:8000")
+	storeSpec, err := ParseDatabaseSpec("http://localhost:8000")
 	assert.NoError(err)
-	assert.Equal(DatastoreSpec{Protocol: "http", Path: "//localhost:8000"}, storeSpec)
+	assert.Equal(DatabaseSpec{Protocol: "http", Path: "//localhost:8000"}, storeSpec)
 
-	storeSpec, err = ParseDatastoreSpec("http://localhost:8000/")
+	storeSpec, err = ParseDatabaseSpec("http://localhost:8000/")
 	assert.NoError(err)
-	assert.Equal(DatastoreSpec{Protocol: "http", Path: "//localhost:8000"}, storeSpec)
+	assert.Equal(DatabaseSpec{Protocol: "http", Path: "//localhost:8000"}, storeSpec)
 
-	storeSpec, err = ParseDatastoreSpec("http://localhost:8000/fff")
+	storeSpec, err = ParseDatabaseSpec("http://localhost:8000/fff")
 	assert.NoError(err)
-	assert.Equal(DatastoreSpec{Protocol: "http", Path: "//localhost:8000/fff"}, storeSpec)
+	assert.Equal(DatabaseSpec{Protocol: "http", Path: "//localhost:8000/fff"}, storeSpec)
 
-	storeSpec, err = ParseDatastoreSpec("https://local.attic.io/john/doe")
+	storeSpec, err = ParseDatabaseSpec("https://local.attic.io/john/doe")
 	assert.NoError(err)
-	assert.Equal(DatastoreSpec{Protocol: "https", Path: "//local.attic.io/john/doe"}, storeSpec)
+	assert.Equal(DatabaseSpec{Protocol: "https", Path: "//local.attic.io/john/doe"}, storeSpec)
 
-	storeSpec, err = ParseDatastoreSpec("ldb:/filesys/john/doe")
+	storeSpec, err = ParseDatabaseSpec("ldb:/filesys/john/doe")
 	assert.NoError(err)
-	assert.Equal(DatastoreSpec{Protocol: "ldb", Path: "/filesys/john/doe"}, storeSpec)
+	assert.Equal(DatabaseSpec{Protocol: "ldb", Path: "/filesys/john/doe"}, storeSpec)
 
-	storeSpec, err = ParseDatastoreSpec("mem")
+	storeSpec, err = ParseDatabaseSpec("mem")
 	assert.NoError(err)
-	assert.Equal(DatastoreSpec{Protocol: "mem"}, storeSpec)
+	assert.Equal(DatabaseSpec{Protocol: "mem"}, storeSpec)
 }
 
 func TestDatasetSpecs(t *testing.T) {
@@ -277,27 +277,27 @@ func TestDatasetSpecs(t *testing.T) {
 
 	setSpec, err := ParseDatasetSpec("http://localhost:8000:dsname")
 	assert.NoError(err)
-	assert.Equal(DatasetSpec{StoreSpec: DatastoreSpec{Protocol: "http", Path: "//localhost:8000"}, DatasetName: "dsname"}, setSpec)
+	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "http", Path: "//localhost:8000"}, DatasetName: "dsname"}, setSpec)
 
 	setSpec, err = ParseDatasetSpec("http://localhost:8000/john/doe/:dsname")
 	assert.NoError(err)
-	assert.Equal(DatasetSpec{StoreSpec: DatastoreSpec{Protocol: "http", Path: "//localhost:8000/john/doe"}, DatasetName: "dsname"}, setSpec)
+	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "http", Path: "//localhost:8000/john/doe"}, DatasetName: "dsname"}, setSpec)
 
 	setSpec, err = ParseDatasetSpec("https://local.attic.io/john/doe:dsname")
 	assert.NoError(err)
-	assert.Equal(DatasetSpec{StoreSpec: DatastoreSpec{Protocol: "https", Path: "//local.attic.io/john/doe"}, DatasetName: "dsname"}, setSpec)
+	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "https", Path: "//local.attic.io/john/doe"}, DatasetName: "dsname"}, setSpec)
 
 	setSpec, err = ParseDatasetSpec("http://local.attic.io/john/doe:dsname")
 	assert.NoError(err)
-	assert.Equal(DatasetSpec{StoreSpec: DatastoreSpec{Protocol: "http", Path: "//local.attic.io/john/doe"}, DatasetName: "dsname"}, setSpec)
+	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "http", Path: "//local.attic.io/john/doe"}, DatasetName: "dsname"}, setSpec)
 
 	setSpec, err = ParseDatasetSpec("ldb:/filesys/john/doe:dsname")
 	assert.NoError(err)
-	assert.Equal(DatasetSpec{StoreSpec: DatastoreSpec{Protocol: "ldb", Path: "/filesys/john/doe"}, DatasetName: "dsname"}, setSpec)
+	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "ldb", Path: "/filesys/john/doe"}, DatasetName: "dsname"}, setSpec)
 
 	setSpec, err = ParseDatasetSpec("mem:dsname")
 	assert.NoError(err)
-	assert.Equal(DatasetSpec{StoreSpec: DatastoreSpec{Protocol: "mem"}, DatasetName: "dsname"}, setSpec)
+	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "mem"}, DatasetName: "dsname"}, setSpec)
 }
 
 func TestRefSpec(t *testing.T) {
@@ -307,15 +307,15 @@ func TestRefSpec(t *testing.T) {
 
 	refSpec, err := ParseRefSpec("http://local.attic.io/john/doe:sha1-0123456789012345678901234567890123456789")
 	assert.NoError(err)
-	assert.Equal(RefSpec{StoreSpec: DatastoreSpec{Protocol: "http", Path: "//local.attic.io/john/doe"}, Ref: testRef}, refSpec)
+	assert.Equal(RefSpec{StoreSpec: DatabaseSpec{Protocol: "http", Path: "//local.attic.io/john/doe"}, Ref: testRef}, refSpec)
 
 	refSpec, err = ParseRefSpec("ldb:/filesys/john/doe:sha1-0123456789012345678901234567890123456789")
 	assert.NoError(err)
-	assert.Equal(RefSpec{StoreSpec: DatastoreSpec{Protocol: "ldb", Path: "/filesys/john/doe"}, Ref: testRef}, refSpec)
+	assert.Equal(RefSpec{StoreSpec: DatabaseSpec{Protocol: "ldb", Path: "/filesys/john/doe"}, Ref: testRef}, refSpec)
 
 	refSpec, err = ParseRefSpec("mem:sha1-0123456789012345678901234567890123456789")
 	assert.NoError(err)
-	assert.Equal(RefSpec{StoreSpec: DatastoreSpec{Protocol: "mem"}, Ref: testRef}, refSpec)
+	assert.Equal(RefSpec{StoreSpec: DatabaseSpec{Protocol: "mem"}, Ref: testRef}, refSpec)
 }
 
 func TestPathSpec(t *testing.T) {
@@ -326,12 +326,12 @@ func TestPathSpec(t *testing.T) {
 	pathSpec, err := ParsePathSpec("http://local.attic.io/john/doe:sha1-0123456789012345678901234567890123456789")
 	assert.NoError(err)
 	refSpec := pathSpec.(*RefSpec)
-	assert.Equal(RefSpec{StoreSpec: DatastoreSpec{Protocol: "http", Path: "//local.attic.io/john/doe"}, Ref: testRef}, *refSpec)
+	assert.Equal(RefSpec{StoreSpec: DatabaseSpec{Protocol: "http", Path: "//local.attic.io/john/doe"}, Ref: testRef}, *refSpec)
 
 	pathSpec, err = ParsePathSpec("http://localhost:8000/john/doe/:dsname")
 	assert.NoError(err)
 	setSpec := pathSpec.(*DatasetSpec)
-	assert.Equal(DatasetSpec{StoreSpec: DatastoreSpec{Protocol: "http", Path: "//localhost:8000/john/doe"}, DatasetName: "dsname"}, *setSpec)
+	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "http", Path: "//localhost:8000/john/doe"}, DatasetName: "dsname"}, *setSpec)
 
 	_, err = ParsePathSpec("http://local.attic.io")
 	assert.Error(err)
@@ -347,23 +347,23 @@ func disabledTestRefSpec(t *testing.T) {
 
 	setSpec, err := ParseDatasetSpec("/filesys/john/doe:dsName")
 	assert.NoError(err)
-	assert.Equal(DatasetSpec{StoreSpec: DatastoreSpec{Protocol: "ldb", Path: "/filesys/john/doe"}, DatasetName: "dsName"}, setSpec)
+	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "ldb", Path: "/filesys/john/doe"}, DatasetName: "dsName"}, setSpec)
 
 	setSpec, err = ParseDatasetSpec("xyz")
 	assert.NoError(err)
-	assert.Equal(DatasetSpec{StoreSpec: DatastoreSpec{Protocol: "ldb", Path: "/u/testuser/.noms"}, DatasetName: "xyz"}, setSpec)
+	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "ldb", Path: "/u/testuser/.noms"}, DatasetName: "xyz"}, setSpec)
 
 	storeSpec, err := ParseDatasetSpec("/path/to/somewhere")
 	assert.NoError(err)
-	assert.Equal(DatastoreSpec{Protocol: "ldb", Path: "/path/to/somewhere"}, storeSpec)
+	assert.Equal(DatabaseSpec{Protocol: "ldb", Path: "/path/to/somewhere"}, storeSpec)
 
 	testRef := ref.Parse("sha1-0123456789012345678901234567890123456789")
 
 	refSpec, err := ParseRefSpec("/filesys/john/doe:sha1-0123456789012345678901234567890123456789")
 	assert.NoError(err)
-	assert.Equal(RefSpec{StoreSpec: DatastoreSpec{Protocol: "ldb", Path: "/filesys/john/doe"}, Ref: testRef}, refSpec)
+	assert.Equal(RefSpec{StoreSpec: DatabaseSpec{Protocol: "ldb", Path: "/filesys/john/doe"}, Ref: testRef}, refSpec)
 
 	refSpec, err = ParseRefSpec("sha1-0123456789012345678901234567890123456789")
 	assert.NoError(err)
-	assert.Equal(RefSpec{StoreSpec: DatastoreSpec{Protocol: "ldb", Path: "/u/testuser/.noms"}, Ref: testRef}, refSpec)
+	assert.Equal(RefSpec{StoreSpec: DatabaseSpec{Protocol: "ldb", Path: "/u/testuser/.noms"}, Ref: testRef}, refSpec)
 }

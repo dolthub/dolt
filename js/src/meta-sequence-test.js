@@ -4,7 +4,7 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
-import DataStore from './data-store.js';
+import Database from './database.js';
 import {ListLeafSequence} from './list.js';
 import {
   makeListType,
@@ -21,7 +21,7 @@ suite('MetaSequence', () => {
   const listOfStringType = makeListType(stringType);
 
   test('calculate ordered sequence MetaTuple height', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
 
     const seq1 = new SetLeafSequence(ds, setOfStringType, ['bar', 'baz']);
     const seq2 = new SetLeafSequence(ds, setOfStringType, ['foo', 'qux', 'zoo']);
@@ -41,7 +41,7 @@ suite('MetaSequence', () => {
   });
 
   test('calculate indexed sequence MetaTuple height', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
 
     const seq1 = new ListLeafSequence(ds, listOfStringType, ['bar', 'baz']);
     const seq2 = new ListLeafSequence(ds, listOfStringType, ['foo', 'qux', 'zoo']);

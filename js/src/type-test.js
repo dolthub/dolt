@@ -13,11 +13,11 @@ import {
   getTypeOfValue,
 } from './type.js';
 import {suite, test} from 'mocha';
-import DataStore from './data-store.js';
+import Database from './database.js';
 
 suite('Type', () => {
   test('types', async () => {
-    const ds = new DataStore(makeTestingBatchStore());
+    const ds = new Database(makeTestingBatchStore());
 
     const mapType = makeMapType(stringType, numberType);
     const setType = makeSetType(stringType);

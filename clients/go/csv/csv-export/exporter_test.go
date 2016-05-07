@@ -37,7 +37,7 @@ func (s *testSuite) TestCSVExporter() {
 
 	// Setup data store
 	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
-	ds := dataset.NewDataset(datas.NewDataStore(cs), setName)
+	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
 
 	// Build Struct fields based on header
 	f := make(types.TypeMap, len(header))

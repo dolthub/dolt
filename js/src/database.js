@@ -63,7 +63,7 @@ export function getDatasTypes(): DatasTypes {
   return datasTypes;
 }
 
-export default class DataStore {
+export default class Database {
   _vs: ValueStore;
   _rt: RootTracker;
   _datasets: Promise<NomsMap<string, RefValue<Commit>>>;
@@ -74,8 +74,8 @@ export default class DataStore {
     this._datasets = this._datasetsFromRootRef(bs.getRoot());
   }
 
-  _clone(vs: ValueStore, rt: RootTracker): DataStore {
-    const ds = Object.create(DataStore.prototype);
+  _clone(vs: ValueStore, rt: RootTracker): Database {
+    const ds = Object.create(Database.prototype);
     ds._vs = vs;
     ds._rt = rt;
     ds._datasets = this._datasetsFromRootRef(rt.getRoot());
@@ -125,7 +125,7 @@ export default class DataStore {
     return true;
   }
 
-  async commit(datasetId: string, commit: Commit): Promise<DataStore> {
+  async commit(datasetId: string, commit: Commit): Promise<Database> {
     const currentRootRefP = this._rt.getRoot();
     const datasetsP = this._datasetsFromRootRef(currentRootRefP);
     let currentDatasets = await (datasetsP:Promise<NomsMap>);
@@ -158,7 +158,7 @@ export default class DataStore {
   }
 }
 
-async function getAncestors(commits: NomsSet<RefValue<Commit>>, store: DataStore):
+async function getAncestors(commits: NomsSet<RefValue<Commit>>, store: Database):
     Promise<NomsSet<RefValue<Commit>>> {
   let ancestors = await newSet([], getDatasTypes().commitSetType);
   await commits.map(async (commitRef) => {

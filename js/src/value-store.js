@@ -64,7 +64,7 @@ export default class ValueStore {
     // the floor because r already has a hint in the cache. If we later read some other
     // chunk that references v, cacheChunks will overwrite this with a hint pointing to that chunk.
     // If we don't do this, top-level Values that get read but not written -- such as the
-    // existing Head of a DataStore upon a Commit -- can be erroneously left out during a pull.
+    // existing Head of a Database upon a Commit -- can be erroneously left out during a pull.
     this._knownRefs.addIfNotPresent(ref, new RefCacheEntry(true, getTypeOfValue(v), ref));
     return v;
   }
