@@ -9,7 +9,7 @@ import {
   BlobWriter,
   createStructClass,
   DatasetSpec,
-  DataStore,
+  Database,
   makeMapType,
   makeRefType,
   makeStructType,
@@ -78,7 +78,7 @@ async function main(): Promise<void> {
 
 }
 
-async function processPath(p: string, store: DataStore): Promise<?Value> {
+async function processPath(p: string, store: Database): Promise<?Value> {
   numFilesFound++;
   const st = await fs.stat(p);
   sizeFilesFound += st.size;
@@ -94,7 +94,7 @@ async function processPath(p: string, store: DataStore): Promise<?Value> {
   return de;
 }
 
-async function processDirectory(p: string, store: DataStore): Promise<Directory> {
+async function processDirectory(p: string, store: Database): Promise<Directory> {
   const names = await fs.readdir(p);
   const children = names.map(name => {
     const chPath = path.join(p, name);
@@ -114,7 +114,7 @@ async function processDirectory(p: string, store: DataStore): Promise<Directory>
   });
 }
 
-async function processFile(p: string, store: DataStore): Promise<File> {
+async function processFile(p: string, store: Database): Promise<File> {
   const f = new File({
     content: await processBlob(p, store),
   });
@@ -124,7 +124,7 @@ async function processFile(p: string, store: DataStore): Promise<File> {
 }
 
 
-function processBlob(p: string, store: DataStore): Promise<RefValue<NomsBlob>> {
+function processBlob(p: string, store: Database): Promise<RefValue<NomsBlob>> {
   const w = new BlobWriter();
   const s = fs.createReadStream(p);
   return new Promise((res, rej) => {

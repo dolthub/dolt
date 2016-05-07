@@ -4,7 +4,7 @@ import Layout from './layout.js';
 import React from 'react';
 import ReactDOM from 'react-dom';
 import {
-  DataStore,
+  Database,
   HttpBatchStore,
   IndexedMetaSequence,
   invariant,
@@ -27,7 +27,7 @@ import type {NodeGraph} from './buchheim.js';
 
 const data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
-let dataStore: DataStore;
+let database: Database;
 
 let renderNode: ?HTMLElement;
 let params;
@@ -59,7 +59,7 @@ function load() {
   }
 
   const httpStore = new HttpBatchStore(params.store, undefined, opts);
-  dataStore = new DataStore(httpStore);
+  database = new Database(httpStore);
 
   const setRootRef = ref => {
     rootRef = ref;
@@ -224,7 +224,7 @@ function handleNodeClick(e: MouseEvent, id: string) {
       render();
     } else {
       const ref = Ref.parse(id);
-      dataStore.readValue(ref).then(value => {
+      database.readValue(ref).then(value => {
         handleChunkLoad(ref, value, id);
       });
     }
@@ -241,7 +241,7 @@ class Prompt extends React.Component<void, {}, void> {
     return <div style={{display: 'flex', height: '100%', alignItems: 'center',
       justifyContent: 'center'}}>
       <div style={fontStyle}>
-        Can haz datastore?
+        Can haz database?
         <form style={{margin:'0.5em 0'}} onSubmit={e => this._handleOnSubmit(e)}>
           <input type='text' ref='store' autoFocus={true} style={inputStyle}
             defaultValue={params.store || 'http://api.noms.io/-/ds/[user]'}
