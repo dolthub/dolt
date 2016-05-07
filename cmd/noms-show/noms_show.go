@@ -38,6 +38,7 @@ func main() {
 	database, value, err := spec.Value()
 	util.CheckError(err)
 
-	fmt.Println(types.EncodedValueWithTags(value))
+	types.WriteEncodedValueWithTags(os.Stdout, value)
+	fmt.Fprintf(os.Stdout, "\n")
 	database.Close()
 }

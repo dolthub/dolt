@@ -255,3 +255,9 @@ func EncodedValueWithTags(v Value) string {
 	w.WriteTagged(v)
 	return buf.String()
 }
+
+// WriteEncodedValueWithTags writes the serialization of a value prefixed by its type.
+func WriteEncodedValueWithTags(w io.Writer, v Value) {
+	hrs := &hrsWriter{w: w}
+	hrs.WriteTagged(v)
+}
