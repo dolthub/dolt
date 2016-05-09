@@ -11,7 +11,7 @@ import (
 // compoundBlob represents a list of Blobs.
 // It implements the Blob interface.
 type compoundBlob struct {
-	metaSequenceObject
+	indexedMetaSequence
 	length uint64
 	ref    *ref.Ref
 }
@@ -22,7 +22,14 @@ func newCompoundBlob(tuples metaSequenceData, vr ValueReader) compoundBlob {
 
 func buildCompoundBlob(tuples metaSequenceData, t *Type, vr ValueReader) metaSequence {
 	d.Chk.True(t.Equals(BlobType))
-	return compoundBlob{metaSequenceObject{tuples, BlobType, vr}, tuples.uint64ValuesSum(), &ref.Ref{}}
+	return compoundBlob{
+		indexedMetaSequence{
+			metaSequenceObject{tuples, BlobType, vr},
+			computeIndexedSequenceOffsets(tuples),
+		},
+		tuples.uint64ValuesSum(),
+		&ref.Ref{},
+	}
 }
 
 func init() {
@@ -30,9 +37,8 @@ func init() {
 }
 
 func (cb compoundBlob) Reader() io.ReadSeeker {
-	cursor, v := newMetaSequenceCursor(cb, cb.vr)
-	reader := v.(blobLeaf).Reader()
-	return &compoundBlobReader{cursor, reader, 0, 0, cb.Len(), cb.vr}
+	cursor := newCursorAtIndex(cb, 0)
+	return &compoundBlobReader{cb, cursor, nil, 0, cb.vr}
 }
 
 func (cb compoundBlob) Equals(other Value) bool {
@@ -52,10 +58,11 @@ func (cb compoundBlob) Empty() bool {
 }
 
 type compoundBlobReader struct {
-	cursor                          *sequenceCursor
-	currentReader                   io.ReadSeeker
-	chunkStart, chunkOffset, length uint64
-	vr                              ValueReader
+	blob          Blob
+	cursor        *sequenceCursor
+	currentReader io.ReadSeeker
+	pos           uint64
+	vr            ValueReader
 }
 
 func (cbr *compoundBlobReader) Read(p []byte) (n int, err error) {
@@ -64,26 +71,20 @@ func (cbr *compoundBlobReader) Read(p []byte) (n int, err error) {
 	}
 
 	n, err = cbr.currentReader.Read(p)
-	if n > 0 || err != io.EOF {
-		if err == io.EOF {
-			err = nil
-		}
-		cbr.chunkOffset += uint64(n)
-		return
+	for i := 0; i < n; i++ {
+		cbr.pos++
+		cbr.cursor.advance()
+	}
+	if err == io.EOF && cbr.cursor.idx < cbr.cursor.seq.seqLen() {
+		cbr.currentReader = nil
+		err = nil
 	}
 
-	if !cbr.cursor.advance() {
-		return 0, io.EOF
-	}
-
-	cbr.chunkStart = cbr.chunkStart + cbr.chunkOffset
-	cbr.chunkOffset = 0
-	cbr.currentReader = nil
-	return cbr.Read(p)
+	return
 }
 
 func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
-	abs := int64(cbr.chunkStart) + int64(cbr.chunkOffset)
+	abs := int64(cbr.pos)
 
 	switch whence {
 	case 0:
@@ -91,7 +92,7 @@ func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
 	case 1:
 		abs += offset
 	case 2:
-		abs = int64(cbr.length) + offset
+		abs = int64(cbr.blob.Len()) + offset
 	default:
 		return 0, errors.New("Blob.Reader.Seek: invalid whence")
 	}
@@ -100,20 +101,13 @@ func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
 		return 0, errors.New("Blob.Reader.Seek: negative position")
 	}
 
-	seekAbs := uint64(abs)
-
-	chunkStart := cbr.cursor.seekLinear(func(carry interface{}, mt sequenceItem) (bool, interface{}) {
-		offset := carry.(uint64) + mt.(metaTuple).uint64Value()
-		return seekAbs < offset, offset
-	}, uint64(0))
-
-	cbr.chunkStart = chunkStart.(uint64)
-	cbr.chunkOffset = seekAbs - cbr.chunkStart
+	cbr.pos = uint64(abs)
+	cbr.cursor = newCursorAtIndex(cbr.blob.(indexedSequence), cbr.pos)
 	cbr.currentReader = nil
 	return abs, nil
 }
 
 func (cbr *compoundBlobReader) updateReader() {
-	cbr.currentReader = readMetaTupleValue(cbr.cursor.current(), cbr.vr).(blobLeaf).Reader()
-	cbr.currentReader.Seek(int64(cbr.chunkOffset), 0)
+	cbr.currentReader = cbr.cursor.seq.(blobLeaf).Reader()
+	cbr.currentReader.Seek(int64(cbr.cursor.idx), 0)
 }

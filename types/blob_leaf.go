@@ -27,6 +27,11 @@ func (bl blobLeaf) seqLen() int {
 	return len(bl.data)
 }
 
+// indexedSequence
+func (bl blobLeaf) getOffset(idx int) uint64 {
+	return uint64(idx)
+}
+
 // Reader implements the Blob interface
 func (bl blobLeaf) Reader() io.ReadSeeker {
 	return bytes.NewReader(bl.data)

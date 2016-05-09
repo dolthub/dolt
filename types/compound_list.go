@@ -14,13 +14,20 @@ const (
 )
 
 type compoundList struct {
-	metaSequenceObject
+	indexedMetaSequence
 	length uint64
 	ref    *ref.Ref
 }
 
 func buildCompoundList(tuples metaSequenceData, t *Type, vr ValueReader) metaSequence {
-	return compoundList{metaSequenceObject{tuples, t, vr}, tuples.uint64ValuesSum(), &ref.Ref{}}
+	return compoundList{
+		indexedMetaSequence{
+			metaSequenceObject{tuples, t, vr},
+			computeIndexedSequenceOffsets(tuples),
+		},
+		tuples.uint64ValuesSum(),
+		&ref.Ref{},
+	}
 }
 
 func listAsSequenceItems(ls listLeaf) []sequenceItem {
@@ -52,54 +59,37 @@ func (cl compoundList) Empty() bool {
 	return false
 }
 
-// Returns a cursor pointing to the deepest metaTuple containing |idx| within |cl|, the list leaf that it points to, and the offset within the list that the leaf starts at.
-func (cl compoundList) cursorAt(idx uint64) (*sequenceCursor, listLeaf, uint64) {
-	d.Chk.True(idx <= cl.Len())
-	cursor, leaf := newMetaSequenceCursor(cl, cl.vr)
-
-	chunkStart := cursor.seekLinear(func(carry interface{}, mt sequenceItem) (bool, interface{}) {
-		offset := carry.(uint64) + mt.(metaTuple).uint64Value()
-		return idx < offset, offset
-	}, uint64(0))
-
-	if current := cursor.current().(metaTuple); current.ChildRef().TargetRef() != leaf.Ref() {
-		leaf = readMetaTupleValue(current, cl.vr)
-	}
-
-	return cursor, leaf.(listLeaf), chunkStart.(uint64)
-}
-
 func (cl compoundList) Get(idx uint64) Value {
-	_, l, start := cl.cursorAt(idx)
-	return l.Get(idx - start)
+	cur := newCursorAtIndex(cl, idx)
+	v, ok := cur.maybeCurrent()
+	d.Chk.True(ok)
+	return v.(Value)
 }
 
 func (cl compoundList) Slice(start uint64, end uint64) List {
 	// See https://github.com/attic-labs/noms/issues/744 for a better Slice implementation.
-	seq := cl.sequenceCursorAtIndex(start)
+	cur := newCursorAtIndex(cl, start)
 	slice := make([]Value, 0, end-start)
 	for i := start; i < end; i++ {
-		if value, ok := seq.maybeCurrent(); ok {
+		if value, ok := cur.maybeCurrent(); ok {
 			slice = append(slice, value.(Value))
 		} else {
 			break
 		}
-		seq.advance()
+		cur.advance()
 	}
 	return NewTypedList(cl.t, slice...)
 }
 
 func (cl compoundList) Map(mf MapFunc) []interface{} {
-	start := uint64(0)
+	idx := uint64(0)
+	cur := newCursorAtIndex(cl, idx)
 
 	results := make([]interface{}, 0, cl.Len())
-	iterateMetaSequenceLeaf(cl, cl.vr, func(l Value) bool {
-		list := l.(listLeaf)
-		for i, v := range list.values {
-			res := mf(v, start+uint64(i))
-			results = append(results, res)
-		}
-		start += list.Len()
+	cur.iter(func(v interface{}) bool {
+		res := mf(v.(Value), uint64(idx))
+		results = append(results, res)
+		idx++
 		return false
 	})
 	return results
@@ -135,14 +125,8 @@ func (cl compoundList) Insert(idx uint64, vs ...Value) List {
 	return seq.Done().(List)
 }
 
-func (cl compoundList) sequenceCursorAtIndex(idx uint64) *sequenceCursor {
-	// TODO: An optimisation would be to decide at each level whether to step forward or backward across the node to find the insertion point, depending on which is closer. This would make Append much faster.
-	metaCur, leaf, start := cl.cursorAt(idx)
-	return newSequenceCursor(metaCur, leaf, int(idx-start))
-}
-
 func (cl compoundList) sequenceChunkerAtIndex(idx uint64) *sequenceChunker {
-	cur := cl.sequenceCursorAtIndex(idx)
+	cur := newCursorAtIndex(cl, idx)
 	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t, nil), newIndexedMetaSequenceChunkFn(cl.t, cl.vr, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 }
 
@@ -173,29 +157,23 @@ func (cl compoundList) RemoveAt(idx uint64) List {
 }
 
 func (cl compoundList) Iter(f listIterFunc) {
-	start := uint64(0)
-
-	iterateMetaSequenceLeaf(cl, cl.vr, func(l Value) bool {
-		list := l.(listLeaf)
-		for i, v := range list.values {
-			if f(v, start+uint64(i)) {
-				return true
-			}
+	idx := uint64(0)
+	cur := newCursorAtIndex(cl, idx)
+	cur.iter(func(v interface{}) bool {
+		if f(v.(Value), idx) {
+			return true
 		}
-		start += list.Len()
+		idx++
 		return false
 	})
 }
 
 func (cl compoundList) IterAll(f listIterAllFunc) {
-	start := uint64(0)
-
-	iterateMetaSequenceLeaf(cl, cl.vr, func(l Value) bool {
-		list := l.(listLeaf)
-		for i, v := range list.values {
-			f(v, start+uint64(i))
-		}
-		start += list.Len()
+	idx := uint64(0)
+	cur := newCursorAtIndex(cl, idx)
+	cur.iter(func(v interface{}) bool {
+		f(v.(Value), uint64(idx))
+		idx++
 		return false
 	})
 }

@@ -39,7 +39,10 @@ func (cur *sequenceCursor) sync() {
 }
 
 func (cur *sequenceCursor) getChildSequence() sequence {
-	return cur.seq.(metaSequence).getChildSequence(cur.idx)
+	if ms, ok := cur.seq.(metaSequence); ok {
+		return ms.getChildSequence(cur.idx)
+	}
+	return nil
 }
 
 // Returns the value the cursor refers to. Fails an assertion if the cursor doesn't point to a value.
@@ -49,10 +52,14 @@ func (cur *sequenceCursor) current() sequenceItem {
 	return item
 }
 
+func (cur *sequenceCursor) valid() bool {
+	return cur.idx >= 0 && cur.idx < cur.length()
+}
+
 // Returns the value the cursor refers to, if any. If the cursor doesn't point to a value, returns (nil, false).
 func (cur *sequenceCursor) maybeCurrent() (sequenceItem, bool) {
 	d.Chk.True(cur.idx >= -1 && cur.idx <= cur.length())
-	if cur.idx == -1 || cur.idx == cur.length() {
+	if !cur.valid() {
 		return nil, false
 	}
 	return cur.getItem(cur.idx), true
@@ -117,6 +124,14 @@ func (cur *sequenceCursor) clone() *sequenceCursor {
 	return &sequenceCursor{parent, cur.seq, cur.idx}
 }
 
+type cursorIterCallback func(item interface{}) bool
+
+func (cur *sequenceCursor) iter(cb cursorIterCallback) {
+	for cur.valid() && !cb(cur.getItem(cur.idx)) {
+		cur.advance()
+	}
+}
+
 type sequenceCursorSeekBinaryCompareFn func(item sequenceItem) bool
 
 // seekBinary seeks the cursor to the first position in the sequence where |compare| returns true. This uses a binary search, so the cursor items must be sorted relative to |compare|. seekBinary will not seek past the end of the cursor.
@@ -135,30 +150,6 @@ func (cur *sequenceCursor) seekBinary(compare sequenceCursorSeekBinaryCompareFn)
 	if cur.idx == cur.length() {
 		cur.idx = cur.length() - 1
 	}
-}
-
-type sequenceCursorSeekLinearStepFn func(carryIn interface{}, item sequenceItem) (found bool, carryOut interface{})
-
-// seekLinear seeks the cursor to the first position in the sequence where |step| returns true. This uses a linear search, so there is no ordering restriction. The carry value is initialized as |carry|, but will be replaced with the return value of successive calls to |step|, including when |step| is called on ancestor cursors. The return value is the carry value when seeking stopped. seekLinear will not seek past the end of the cursor.
-func (cur *sequenceCursor) seekLinear(step sequenceCursorSeekLinearStepFn, carry interface{}) interface{} {
-	d.Chk.NotNil(step)
-
-	if cur.parent != nil {
-		carry = cur.parent.seekLinear(step, carry)
-		cur.sync()
-	}
-
-	cur.idx = 0
-	for i := 0; i < cur.length()-1; i++ {
-		found, carryOut := step(carry, cur.getItem(i))
-		if found {
-			break
-		}
-		carry = carryOut
-		cur.idx++
-	}
-
-	return carry
 }
 
 // Returns a slice of the previous |n| items in |cur|, excluding the current item in |cur|. Does not modify |cur|.

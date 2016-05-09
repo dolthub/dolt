@@ -27,6 +27,11 @@ func (l listLeaf) seqLen() int {
 	return len(l.values)
 }
 
+// indexedSequence
+func (l listLeaf) getOffset(idx int) uint64 {
+	return uint64(idx)
+}
+
 func (l listLeaf) Len() uint64 {
 	return uint64(len(l.values))
 }

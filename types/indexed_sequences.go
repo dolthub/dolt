@@ -1,6 +1,74 @@
 package types
 
-import "crypto/sha1"
+import (
+	"crypto/sha1"
+	"sort"
+
+	"github.com/attic-labs/noms/d"
+)
+
+type indexedSequence interface {
+	sequence
+	getOffset(idx int) uint64
+}
+
+type indexedMetaSequence struct {
+	metaSequenceObject
+	offsets []uint64
+}
+
+func computeIndexedSequenceOffsets(tuples metaSequenceData) (offsets []uint64) {
+	cum := uint64(0)
+	for _, mt := range tuples {
+		cum += mt.uint64Value()
+		offsets = append(offsets, cum)
+	}
+	return
+}
+
+func (ims indexedMetaSequence) getOffset(idx int) uint64 {
+	// TODO: precompute these on the construction
+	offsets := []uint64{}
+	cum := uint64(0)
+	for _, mt := range ims.tuples {
+		cum += mt.uint64Value()
+		offsets = append(offsets, cum)
+	}
+
+	return ims.offsets[idx] - 1
+}
+
+func newCursorAtIndex(seq indexedSequence, idx uint64) *sequenceCursor {
+	var cur *sequenceCursor = nil
+	for {
+		cur = newSequenceCursor(cur, seq, 0)
+		idx = idx - advanceCursorToOffset(cur, idx)
+		cs := cur.getChildSequence()
+		if cs == nil {
+			break
+		}
+		seq = cs.(indexedSequence)
+	}
+
+	d.Chk.NotNil(cur)
+	return cur
+}
+
+func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
+	seq := cur.seq.(indexedSequence)
+	cur.idx = sort.Search(seq.seqLen(), func(i int) bool {
+		return uint64(idx) <= seq.getOffset(i)
+	})
+	if _, ok := seq.(metaSequence); ok {
+		if cur.idx == seq.seqLen() {
+			cur.idx = seq.seqLen() - 1
+		}
+	}
+	if cur.idx == 0 {
+		return 0
+	}
+	return seq.getOffset(cur.idx-1) + 1
+}
 
 func newIndexedMetaSequenceBoundaryChecker() boundaryChecker {
 	return newBuzHashBoundaryChecker(objectWindowSize, sha1.Size, objectPattern, func(item sequenceItem) []byte {
