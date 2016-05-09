@@ -175,6 +175,24 @@ func TestSetFirst(t *testing.T) {
 	assert.Nil(s2.First())
 }
 
+func TestSetOfStruct(t *testing.T) {
+	assert := assert.New(t)
+
+	typ := MakeStructType("S1", TypeMap{
+		"o": NumberType,
+	})
+
+	elems := []Value{}
+	for i := 0; i < 200; i++ {
+		elems = append(elems, newStructFromData(structData{"o": Number(i)}, typ))
+	}
+
+	s := NewTypedSet(MakeSetType(typ), elems...)
+	for i := 0; i < 200; i++ {
+		assert.True(s.Has(elems[i]))
+	}
+}
+
 func TestSetIter(t *testing.T) {
 	assert := assert.New(t)
 	s := NewSet(Number(0), Number(1), Number(2), Number(3), Number(4))

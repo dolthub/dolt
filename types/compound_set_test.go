@@ -373,7 +373,7 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 	}
 	assert := assert.New(t)
 
-	structType, nums := generateNumbersAsStructs(testSetSize)
+	structType, nums := generateNumbersAsRefOfStructs(testSetSize)
 	refOfTypeStructType := MakeRefType(structType)
 	setType := MakeSetType(refOfTypeStructType)
 	s := NewTypedSet(setType, nums...).(compoundSet)
@@ -381,6 +381,25 @@ func TestCompoundSetRefOfStructFirstNNumbers(t *testing.T) {
 	height := deriveCompoundSetHeight(s)
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(height+1, s.tuples[0].childRef.Height())
+}
+
+func TestCompoundSetOfStructFirstNNumbers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+	assert := assert.New(t)
+
+	structType, nums := generateNumbersAsStructs(testSetSize)
+	setType := MakeSetType(structType)
+	s := NewTypedSet(setType, nums...).(compoundSet)
+	assert.Equal("sha1-f10d8ccbc2270bb52bb988a0cadff912e2723eed", s.Ref().String())
+	height := deriveCompoundSetHeight(s)
+	assert.Equal(height, s.tuples[0].childRef.Height())
+
+	// has
+	for _, st := range nums {
+		assert.True(s.Has(st))
+	}
 }
 
 func TestCompoundSetModifyAfterRead(t *testing.T) {

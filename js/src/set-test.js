@@ -90,6 +90,25 @@ suite('BuildSet', () => {
     assert.strictEqual(s2.ref.toString(), setOfNRef);
   });
 
+  test('LONG: set of struct, set of n numbers', async () => {
+    const nums = firstNNumbers(testSetSize);
+
+    const type = makeStructType('num', {'n': numberType});
+    const tr = makeSetType(type);
+    const structs = nums.map(n => newStruct(type, {n}));
+    const s = await newSet(structs, tr);
+    assert.strictEqual(s.ref.toString(), 'sha1-f10d8ccbc2270bb52bb988a0cadff912e2723eed');
+    const height = deriveSequenceHeight(s.sequence);
+    assert.isTrue(height > 0);
+    assert.strictEqual(height, s.sequence.items[0].ref.height);
+
+    // has
+    for (let i = 0; i < structs.length; i++) {
+      assert.isTrue(await s.has(structs[i]));
+    }
+  });
+
+
   test('LONG: set of ref, set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
 

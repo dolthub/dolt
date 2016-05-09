@@ -6,6 +6,7 @@ import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unus
 import {invariant, notNull} from './assert.js';
 import {less} from './compare.js';
 import {search, Sequence, SequenceCursor} from './sequence.js';
+import {getRefOfValue} from './get-ref.js';
 
 export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
   // Returns:
@@ -63,7 +64,13 @@ export class OrderedSequenceCursor<T, K: valueOrPrimitive> extends
   // Moves the cursor to the first value in sequence >= key and returns true.
   // If none exists, returns false.
   _seekTo(key: K, lastPositionIfNotfound: boolean = false): boolean {
-    this.idx = search(this.length, (i: number) => !less(this.sequence.getKey(i), key));
+    if (this.sequence.isMeta && !this.sequence.type.elemTypes[0].ordered) {
+      const keyRef = getRefOfValue(key);
+      this.idx =
+          search(this.length, (i: number) => !this.sequence.getKey(i).targetRef.less(keyRef));
+    } else {
+      this.idx = search(this.length, (i: number) => !less(this.sequence.getKey(i), key));
+    }
 
     if (this.idx === this.length && lastPositionIfNotfound) {
       invariant(this.idx > 0);
