@@ -1,10 +1,6 @@
 package types
 
-import (
-	"sort"
-
-	"github.com/attic-labs/noms/d"
-)
+import "github.com/attic-labs/noms/d"
 
 type sequenceItem interface{}
 
@@ -22,6 +18,11 @@ type sequenceCursor struct {
 }
 
 func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int) *sequenceCursor {
+	if idx < 0 {
+		idx += seq.seqLen()
+		d.Chk.True(idx >= 0)
+	}
+
 	return &sequenceCursor{parent, seq, idx}
 }
 
@@ -47,22 +48,12 @@ func (cur *sequenceCursor) getChildSequence() sequence {
 
 // Returns the value the cursor refers to. Fails an assertion if the cursor doesn't point to a value.
 func (cur *sequenceCursor) current() sequenceItem {
-	item, ok := cur.maybeCurrent()
-	d.Chk.True(ok)
-	return item
+	d.Chk.True(cur.valid())
+	return cur.getItem(cur.idx)
 }
 
 func (cur *sequenceCursor) valid() bool {
 	return cur.idx >= 0 && cur.idx < cur.length()
-}
-
-// Returns the value the cursor refers to, if any. If the cursor doesn't point to a value, returns (nil, false).
-func (cur *sequenceCursor) maybeCurrent() (sequenceItem, bool) {
-	d.Chk.True(cur.idx >= -1 && cur.idx <= cur.length())
-	if !cur.valid() {
-		return nil, false
-	}
-	return cur.getItem(cur.idx), true
 }
 
 func (cur *sequenceCursor) indexInChunk() int {
@@ -129,26 +120,6 @@ type cursorIterCallback func(item interface{}) bool
 func (cur *sequenceCursor) iter(cb cursorIterCallback) {
 	for cur.valid() && !cb(cur.getItem(cur.idx)) {
 		cur.advance()
-	}
-}
-
-type sequenceCursorSeekBinaryCompareFn func(item sequenceItem) bool
-
-// seekBinary seeks the cursor to the first position in the sequence where |compare| returns true. This uses a binary search, so the cursor items must be sorted relative to |compare|. seekBinary will not seek past the end of the cursor.
-func (cur *sequenceCursor) seekBinary(compare sequenceCursorSeekBinaryCompareFn) {
-	d.Chk.NotNil(compare)
-
-	if cur.parent != nil {
-		cur.parent.seekBinary(compare)
-		cur.sync()
-	}
-
-	cur.idx = sort.Search(cur.length(), func(i int) bool {
-		return compare(cur.getItem(i))
-	})
-
-	if cur.idx == cur.length() {
-		cur.idx = cur.length() - 1
 	}
 }
 

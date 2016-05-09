@@ -3,48 +3,85 @@ package types
 import (
 	"crypto/sha1"
 	"sort"
+
+	"github.com/attic-labs/noms/d"
 )
+
+type orderedSequence interface {
+	sequence
+	getKey(idx int) Value
+}
+
+type orderedMetaSequence struct {
+	metaSequenceObject
+}
+
+func (oms orderedMetaSequence) getKey(idx int) Value {
+	return oms.tuples[idx].value
+}
+
+func newCursorAtKey(seq orderedSequence, key Value, forInsertion bool, last bool) *sequenceCursor {
+	var cur *sequenceCursor = nil
+	for {
+		idx := 0
+		if last {
+			idx = -1
+		}
+		_, seqIsMeta := seq.(metaSequence)
+		cur = newSequenceCursor(cur, seq, idx)
+		if key != nil {
+			if !seekTo(cur, key, forInsertion && seqIsMeta) {
+				return cur
+			}
+		}
+
+		cs := cur.getChildSequence()
+		if cs == nil {
+			break
+		}
+		seq = cs.(orderedSequence)
+	}
+
+	d.Chk.NotNil(cur)
+	return cur
+}
+
+func seekTo(cur *sequenceCursor, key Value, lastPositionIfNotFound bool) bool {
+	seq := cur.seq.(orderedSequence)
+	keyElemIsOrdered := seq.Type().Desc.(CompoundDesc).ElemTypes[0].IsOrdered()
+	_, seqIsMeta := seq.(metaSequence)
+	keyRef := key.Ref()
+
+	// Default order by value ref
+	searchFn := func(i int) bool {
+		return !seq.getKey(i).Ref().Less(keyRef)
+	}
+
+	if keyElemIsOrdered {
+		// Order by native value for scalars
+		orderedKey := key.(OrderedValue)
+		searchFn = func(i int) bool {
+			return !seq.getKey(i).(OrderedValue).Less(orderedKey)
+		}
+	} else if seqIsMeta {
+		// For non-native values, meta sequences will hold types.Ref rather than the value
+		searchFn = func(i int) bool {
+			return !seq.getKey(i).(Ref).TargetRef().Less(keyRef)
+		}
+	}
+
+	cur.idx = sort.Search(seq.seqLen(), searchFn)
+
+	if cur.idx == seq.seqLen() && lastPositionIfNotFound {
+		d.Chk.True(cur.idx > 0)
+		cur.idx--
+	}
+
+	return cur.idx < seq.seqLen()
+}
 
 func isSequenceOrderedByIndexedType(t *Type) bool {
 	return t.Desc.(CompoundDesc).ElemTypes[0].IsOrdered()
-}
-
-// Given a leaf in an ordered sequence, returns the values in that leaf which define the ordering of the sequence.
-type getLeafOrderedValuesFn func(Value) []Value
-
-// Returns a cursor to |key| in |ms|, plus the leaf + index that |key| is in. |t| is the type of the ordered values.
-func findLeafInOrderedSequence(ms metaSequence, t *Type, key Value, getValues getLeafOrderedValuesFn, vr ValueReader) (cursor *sequenceCursor, leaf Value, idx int) {
-	cursor, leaf = newMetaSequenceCursor(ms, vr)
-
-	if isSequenceOrderedByIndexedType(t) {
-		orderedKey := key.(OrderedValue)
-
-		cursor.seekBinary(func(mt sequenceItem) bool {
-			return !mt.(metaTuple).value.(OrderedValue).Less(orderedKey)
-		})
-	} else {
-		cursor.seekBinary(func(mt sequenceItem) bool {
-			return !mt.(metaTuple).value.(Ref).TargetRef().Less(key.Ref())
-		})
-	}
-
-	if current := cursor.current().(metaTuple); current.ChildRef().TargetRef() != leaf.Ref() {
-		leaf = readMetaTupleValue(current, vr)
-	}
-
-	if leafData := getValues(leaf); isSequenceOrderedByIndexedType(t) {
-		orderedKey := key.(OrderedValue)
-
-		idx = sort.Search(len(leafData), func(i int) bool {
-			return !leafData[i].(OrderedValue).Less(orderedKey)
-		})
-	} else {
-		idx = sort.Search(len(leafData), func(i int) bool {
-			return !leafData[i].Ref().Less(key.Ref())
-		})
-	}
-
-	return
 }
 
 func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {

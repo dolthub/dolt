@@ -43,6 +43,10 @@ func (m mapLeaf) seqLen() int {
 	return len(m.data)
 }
 
+func (m mapLeaf) getKey(idx int) Value {
+	return m.data[idx].key
+}
+
 func (m mapLeaf) Len() uint64 {
 	return uint64(len(m.data))
 }

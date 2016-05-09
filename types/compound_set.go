@@ -12,13 +12,13 @@ const (
 )
 
 type compoundSet struct {
-	metaSequenceObject
+	orderedMetaSequence
 	numLeaves uint64
 	ref       *ref.Ref
 }
 
 func buildCompoundSet(tuples metaSequenceData, t *Type, vr ValueReader) metaSequence {
-	return compoundSet{metaSequenceObject{tuples, t, vr}, tuples.numLeavesSum(), &ref.Ref{}}
+	return compoundSet{orderedMetaSequence{metaSequenceObject{tuples, t, vr}}, tuples.numLeavesSum(), &ref.Ref{}}
 }
 
 func init() {
@@ -43,8 +43,8 @@ func (cs compoundSet) Empty() bool {
 }
 
 func (cs compoundSet) First() Value {
-	_, leaf := newMetaSequenceCursor(cs, cs.vr)
-	return leaf.(setLeaf).First()
+	cur := newCursorAtKey(cs, nil, false, false)
+	return cur.current().(Value)
 }
 
 func (cs compoundSet) Insert(values ...Value) Set {
@@ -85,25 +85,11 @@ func (cs compoundSet) Remove(values ...Value) Set {
 	return res.Remove(tail...)
 }
 
-func (cs compoundSet) sequenceCursorAtValue(v Value) (*sequenceCursor, bool) {
-	metaCur, leaf, idx := cs.findLeaf(v)
-	cur := newSequenceCursor(metaCur, leaf, idx)
-	found := idx < len(leaf.data) && leaf.data[idx].Equals(v)
-	return cur, found
-}
-
 func (cs compoundSet) sequenceChunkerAtValue(v Value) (*sequenceChunker, bool) {
-	cur, found := cs.sequenceCursorAtValue(v)
+	cur := newCursorAtKey(cs, v, true, false)
+	found := cur.idx < cur.seq.seqLen() && cur.current().(Value).Equals(v)
 	seq := newSequenceChunker(cur, makeSetLeafChunkFn(cs.t, cs.vr), newOrderedMetaSequenceChunkFn(cs.t, cs.vr), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 	return seq, found
-}
-
-func (cs compoundSet) Union(others ...Set) Set {
-	return setUnion(cs, others)
-}
-
-func (cs compoundSet) Subtract(others ...Set) Set {
-	panic("not implemented")
 }
 
 func (cs compoundSet) Filter(cb setFilterCallback) Set {
@@ -118,44 +104,28 @@ func (cs compoundSet) Filter(cb setFilterCallback) Set {
 	return seq.Done().(Set)
 }
 
-func (cs compoundSet) findLeaf(key Value) (*sequenceCursor, setLeaf, int) {
-	cursor, leaf, idx := findLeafInOrderedSequence(cs, cs.t, key, func(v Value) []Value {
-		return v.(setLeaf).data
-	}, cs.vr)
-	return cursor, leaf.(setLeaf), idx
-}
-
 func (cs compoundSet) Has(key Value) bool {
-	_, leaf, _ := cs.findLeaf(key)
-	return leaf.Has(key)
+	cur := newCursorAtKey(cs, key, false, false)
+	return cur.valid() && cur.current().(Value).Equals(key)
 }
 
 func (cs compoundSet) Iter(cb setIterCallback) {
-	iterateMetaSequenceLeaf(cs, cs.vr, func(v Value) bool {
-		s := v.(setLeaf)
-		for _, v := range s.data {
-			if cb(v) {
-				return true
-			}
-		}
-		return false
+	cur := newCursorAtKey(cs, nil, false, false)
+	cur.iter(func(v interface{}) bool {
+		return cb(v.(Value))
 	})
 }
 
 func (cs compoundSet) IterAll(cb setIterAllCallback) {
-	iterateMetaSequenceLeaf(cs, cs.vr, func(v Value) bool {
-		v.(setLeaf).IterAll(cb)
+	cur := newCursorAtKey(cs, nil, false, false)
+	cur.iter(func(v interface{}) bool {
+		cb(v.(Value))
 		return false
 	})
 }
 
 func (cs compoundSet) elemType() *Type {
 	return cs.t.Desc.(CompoundDesc).ElemTypes[0]
-}
-
-func (cs compoundSet) sequenceCursorAtFirst() *sequenceCursor {
-	metaCur, leaf := newMetaSequenceCursor(cs, cs.vr)
-	return newSequenceCursor(metaCur, leaf.(setLeaf), 0)
 }
 
 func (cs compoundSet) valueReader() ValueReader {

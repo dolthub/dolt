@@ -30,6 +30,10 @@ func (s setLeaf) seqLen() int {
 	return len(s.data)
 }
 
+func (s setLeaf) getKey(idx int) Value {
+	return s.data[idx]
+}
+
 func (s setLeaf) Empty() bool {
 	return s.Len() == uint64(0)
 }
@@ -59,10 +63,6 @@ func (s setLeaf) Remove(values ...Value) Set {
 	}
 
 	return newTypedSet(s.t, data...)
-}
-
-func (s setLeaf) Union(others ...Set) Set {
-	return setUnion(s, others)
 }
 
 func (s setLeaf) Iter(cb setIterCallback) {
@@ -203,10 +203,6 @@ func makeSetLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 
 		return newMetaTuple(indexValue, setLeaf, NewTypedRefFromValue(setLeaf), uint64(len(items))), setLeaf
 	}
-}
-
-func (s setLeaf) sequenceCursorAtFirst() *sequenceCursor {
-	return newSequenceCursor(nil, s, 0)
 }
 
 func (s setLeaf) valueReader() ValueReader {

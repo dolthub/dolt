@@ -151,16 +151,6 @@ func TestSetRemove(t *testing.T) {
 	assert.True(s2.Has(v3))
 }
 
-func TestSetUnion(t *testing.T) {
-	assert := assert.New(t)
-	assert.True(NewSet(Number(1), Number(2)).Union(
-		NewSet(Number(2), Number(3)),
-		NewSet(Number(-1)),
-		NewSet()).Equals(
-		NewSet(Number(1), Number(2), Number(3), Number(-1))))
-	assert.True(NewSet(Number(1)).Union().Equals(NewSet(Number(1))))
-}
-
 func TestSetFirst(t *testing.T) {
 	assert := assert.New(t)
 	s := NewSet()
@@ -397,9 +387,6 @@ func TestSetType(t *testing.T) {
 
 	assert.Panics(func() { s.Insert(Bool(true)) })
 	assert.Panics(func() { s.Insert(Number(3), Bool(true)) })
-	assert.Panics(func() { s.Union(NewSet(Number(2))) })
-	assert.Panics(func() { s.Union(NewSet(Bool(true))) })
-	assert.Panics(func() { s.Union(s, NewSet(Bool(true))) })
 }
 
 func TestSetChunks(t *testing.T) {

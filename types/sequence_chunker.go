@@ -143,7 +143,7 @@ func (seq *sequenceChunker) isRoot() bool {
 }
 
 func (seq *sequenceChunker) finalizeCursor() {
-	if _, ok := seq.cur.maybeCurrent(); !ok {
+	if !seq.cur.valid() {
 		// The cursor is past the end, and due to the way cursors work, the parent cursor will actually point to its last chunk. We need to force it to point past the end so that our parent's Done() method doesn't add the last chunk twice.
 		seq.skipParentIfExists()
 		return

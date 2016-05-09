@@ -66,9 +66,10 @@ func TestTestCursor(t *testing.T) {
 	expect := func(expectIdx, expectParentIdx int, expectOk bool, expectVal sequenceItem) {
 		assert.Equal(expectIdx, cur.indexInChunk())
 		assert.Equal(expectParentIdx, cur.parent.indexInChunk())
-		val, ok := cur.maybeCurrent()
-		assert.Equal(expectOk, ok)
-		assert.Equal(expectVal, val)
+		assert.Equal(expectOk, cur.valid())
+		if cur.valid() {
+			assert.Equal(expectVal, cur.current())
+		}
 	}
 
 	// Test retreating past the start.

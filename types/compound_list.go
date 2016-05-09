@@ -61,9 +61,7 @@ func (cl compoundList) Empty() bool {
 
 func (cl compoundList) Get(idx uint64) Value {
 	cur := newCursorAtIndex(cl, idx)
-	v, ok := cur.maybeCurrent()
-	d.Chk.True(ok)
-	return v.(Value)
+	return cur.current().(Value)
 }
 
 func (cl compoundList) Slice(start uint64, end uint64) List {
@@ -71,11 +69,11 @@ func (cl compoundList) Slice(start uint64, end uint64) List {
 	cur := newCursorAtIndex(cl, start)
 	slice := make([]Value, 0, end-start)
 	for i := start; i < end; i++ {
-		if value, ok := cur.maybeCurrent(); ok {
-			slice = append(slice, value.(Value))
-		} else {
+		if !cur.valid() {
 			break
 		}
+
+		slice = append(slice, cur.current().(Value))
 		cur.advance()
 	}
 	return NewTypedList(cl.t, slice...)

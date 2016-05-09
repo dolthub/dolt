@@ -11,13 +11,13 @@ const (
 )
 
 type compoundMap struct {
-	metaSequenceObject
+	orderedMetaSequence
 	numLeaves uint64
 	ref       *ref.Ref
 }
 
 func buildCompoundMap(tuples metaSequenceData, t *Type, vr ValueReader) metaSequence {
-	return compoundMap{metaSequenceObject{tuples, t, vr}, tuples.numLeavesSum(), &ref.Ref{}}
+	return compoundMap{orderedMetaSequence{metaSequenceObject{tuples, t, vr}}, tuples.numLeavesSum(), &ref.Ref{}}
 }
 
 func init() {
@@ -41,26 +41,23 @@ func (cm compoundMap) Empty() bool {
 	return false
 }
 
-func (cm compoundMap) findLeaf(key Value) (*sequenceCursor, mapLeaf, int) {
-	cursor, leaf, idx := findLeafInOrderedSequence(cm, cm.t, key, func(v Value) []Value {
-		entries := v.(mapLeaf).data
-		res := make([]Value, len(entries))
-		for i, entry := range entries {
-			res[i] = entry.key
-		}
-		return res
-	}, cm.vr)
-	return cursor, leaf.(mapLeaf), idx
-}
-
 func (cm compoundMap) First() (Value, Value) {
-	_, leaf := newMetaSequenceCursor(cm, cm.vr)
-	return leaf.(mapLeaf).First()
+	cur := newCursorAtKey(cm, nil, false, false)
+	entry := cur.current().(mapEntry)
+	return entry.key, entry.value
 }
 
 func (cm compoundMap) MaybeGet(key Value) (v Value, ok bool) {
-	_, leaf, _ := cm.findLeaf(key)
-	return leaf.MaybeGet(key)
+	cur := newCursorAtKey(cm, key, false, false)
+	if !cur.valid() {
+		return nil, false
+	}
+	entry := cur.current().(mapEntry)
+	if !entry.key.Equals(key) {
+		return nil, false
+	}
+
+	return entry.value, true
 }
 
 func (cm compoundMap) Set(key Value, val Value) Map {
@@ -94,12 +91,9 @@ func (cm compoundMap) Remove(k Value) Map {
 }
 
 func (cm compoundMap) sequenceChunkerAtKey(k Value) (*sequenceChunker, bool) {
-	metaCur, leaf, idx := cm.findLeaf(k)
-
-	cur := newSequenceCursor(metaCur, leaf, idx)
-
+	cur := newCursorAtKey(cm, k, true, false)
+	found := cur.idx < cur.seq.seqLen() && cur.current().(mapEntry).key.Equals(k)
 	seq := newSequenceChunker(cur, makeMapLeafChunkFn(cm.t, cm.vr), newOrderedMetaSequenceChunkFn(cm.t, cm.vr), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
-	found := idx < len(leaf.data) && leaf.data[idx].key.Equals(k)
 	return seq, found
 }
 
@@ -116,30 +110,33 @@ func (cm compoundMap) Filter(cb mapFilterCallback) Map {
 }
 
 func (cm compoundMap) Has(key Value) bool {
-	_, leaf, _ := cm.findLeaf(key)
-	return leaf.Has(key)
+	cur := newCursorAtKey(cm, key, false, false)
+	if !cur.valid() {
+		return false
+	}
+	entry := cur.current().(mapEntry)
+	return entry.key.Equals(key)
 }
 
 func (cm compoundMap) Get(key Value) Value {
-	_, leaf, _ := cm.findLeaf(key)
-	return leaf.Get(key)
+	v, ok := cm.MaybeGet(key)
+	d.Chk.True(ok)
+	return v
 }
 
 func (cm compoundMap) Iter(cb mapIterCallback) {
-	iterateMetaSequenceLeaf(cm, cm.vr, func(v Value) bool {
-		m := v.(mapLeaf)
-		for _, entry := range m.data {
-			if cb(entry.key, entry.value) {
-				return true
-			}
-		}
-		return false
+	cur := newCursorAtKey(cm, nil, false, false)
+	cur.iter(func(v interface{}) bool {
+		entry := v.(mapEntry)
+		return cb(entry.key, entry.value)
 	})
 }
 
 func (cm compoundMap) IterAll(cb mapIterAllCallback) {
-	iterateMetaSequenceLeaf(cm, cm.vr, func(v Value) bool {
-		v.(mapLeaf).IterAll(cb)
+	cur := newCursorAtKey(cm, nil, false, false)
+	cur.iter(func(v interface{}) bool {
+		entry := v.(mapEntry)
+		cb(entry.key, entry.value)
 		return false
 	})
 }
