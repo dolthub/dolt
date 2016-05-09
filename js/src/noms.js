@@ -1,6 +1,7 @@
 // @flow
 
 export {AsyncIterator} from './async-iterator.js';
+export {default as BuzHash} from './buzhash.js';
 export {default as Database, newCommit} from './database.js';
 export {default as Dataset} from './dataset.js';
 export {newBlob, NomsBlob, BlobReader, BlobWriter} from './blob.js';
