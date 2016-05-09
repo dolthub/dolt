@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -70,7 +69,7 @@ type httpDoer interface {
 }
 
 type writeRequest struct {
-	c     chunks.Chunk
+	hash  ref.Ref
 	hints types.Hints
 }
 
@@ -93,6 +92,7 @@ func (bhcs *httpBatchStore) Flush() {
 
 func (bhcs *httpBatchStore) Close() (e error) {
 	close(bhcs.finishedChan)
+	bhcs.unwrittenPuts.Destroy()
 	bhcs.requestWg.Wait()
 	bhcs.workerWg.Wait()
 
@@ -203,7 +203,7 @@ func (bhcs *httpBatchStore) SchedulePut(c chunks.Chunk, hints types.Hints) {
 	}
 
 	bhcs.requestWg.Add(1)
-	bhcs.writeQueue <- writeRequest{c, hints}
+	bhcs.writeQueue <- writeRequest{c.Ref(), hints}
 }
 
 func (bhcs *httpBatchStore) batchPutRequests() {
@@ -211,14 +211,10 @@ func (bhcs *httpBatchStore) batchPutRequests() {
 	go func() {
 		defer bhcs.workerWg.Done()
 
-		numChunks := 0
 		hints := types.Hints{}
-		buf := makeBuffer()
-		gw := gzip.NewWriter(buf)
-		sz := chunks.NewSerializer(gw)
+		hashes := ref.RefSlice{}
 		handleRequest := func(wr writeRequest) {
-			numChunks++
-			sz.Put(wr.c)
+			hashes = append(hashes, wr.hash)
 			for hint := range wr.hints {
 				hints[hint] = struct{}{}
 			}
@@ -242,15 +238,10 @@ func (bhcs *httpBatchStore) batchPutRequests() {
 						handleRequest(wr)
 					default:
 						drained = true
-						d.Chk.NoError(sz.Close())
-						d.Chk.NoError(gw.Close())
-						bhcs.sendWriteRequests(buf, numChunks, hints) // Takes ownership of buf, hints
+						bhcs.sendWriteRequests(hashes, hints) // Takes ownership of hashes, hints
 
-						numChunks = 0
 						hints = types.Hints{}
-						buf = makeBuffer()
-						gw = gzip.NewWriter(buf)
-						sz = chunks.NewSerializer(gw)
+						hashes = ref.RefSlice{}
 					}
 				}
 			}
@@ -258,27 +249,31 @@ func (bhcs *httpBatchStore) batchPutRequests() {
 	}()
 }
 
-func makeBuffer() *os.File {
-	f, err := ioutil.TempFile("", "http_hinted_chunk_store_")
-	d.Chk.NoError(err, "Cannot create filesystem buffer for Chunks.")
-	return f
-}
-
-func (bhcs *httpBatchStore) sendWriteRequests(serializedChunks *os.File, numChunks int, hints types.Hints) {
+func (bhcs *httpBatchStore) sendWriteRequests(hashes ref.RefSlice, hints types.Hints) {
+	if len(hashes) == 0 {
+		return
+	}
 	bhcs.rateLimit <- struct{}{}
 	go func() {
 		defer func() {
 			<-bhcs.rateLimit
-			bhcs.unwrittenPuts = newUnwrittenPutCache()
-			bhcs.requestWg.Add(-numChunks)
-			d.Chk.NoError(serializedChunks.Close(), "Cannot close filesystem buffer.")
-			d.Chk.NoError(os.Remove(serializedChunks.Name()), "Cannot remove filesystem buffer.")
+			bhcs.unwrittenPuts.Clear(hashes)
+			bhcs.requestWg.Add(-len(hashes))
 		}()
 
 		var res *http.Response
+		var err error
 		for tryAgain := true; tryAgain; {
-			_, err := serializedChunks.Seek(0, 0)
-			d.Chk.NoError(err, "Could not reset filesystem buffer to offset 0.")
+			serializedChunks, pw := io.Pipe()
+			errChan := make(chan error)
+			go func() {
+				gw := gzip.NewWriter(pw)
+				err := bhcs.unwrittenPuts.ExtractChunks(hashes[0], hashes[len(hashes)-1], gw)
+				// The ordering of these is important. Close the gzipper to flush data to pw, then close pw so that the HTTP stack which is reading from serializedChunks knows it has everything, and only THEN block on errChan.
+				gw.Close()
+				pw.Close()
+				errChan <- err
+			}()
 			body := buildWriteValueRequest(serializedChunks, hints)
 
 			url := *bhcs.host
@@ -291,6 +286,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(serializedChunks *os.File, numChun
 
 			res, err = bhcs.httpClient.Do(req)
 			d.Exp.NoError(err)
+			d.Exp.NoError(<-errChan)
 			defer closeResponse(res)
 
 			if tryAgain = res.StatusCode == httpStatusTooManyRequests; tryAgain {
