@@ -14,7 +14,7 @@ import {SequenceChunker} from './sequence-chunker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 
 export class NomsBlob extends Collection<IndexedSequence<number>> {
-  constructor(sequence: IndexedSequence<number>) {
+  constructor(sequence: IndexedSequence) {
     super(blobType, sequence);
   }
 

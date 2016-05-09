@@ -20,13 +20,13 @@ import {
   Type,
   typeType,
 } from './type.js';
-import {MetaTuple, newMetaSequenceFromData} from './meta-sequence.js';
+import {MetaTuple} from './meta-sequence.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
 import {NomsMap, MapLeafSequence} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';
-import {IndexedMetaSequence} from './meta-sequence.js';
+import {IndexedMetaSequence, OrderedMetaSequence} from './meta-sequence.js';
 import type {valueOrPrimitive} from './value.js';
 import type {ValueReader} from './value-store.js';
 
@@ -182,7 +182,7 @@ export class JsonArrayReader {
     return new MapLeafSequence(this._ds, t, entries);
   }
 
-  readMetaSequence(t: Type): any {
+  readMetaSequence(): Array<MetaTuple> {
     const data: Array<MetaTuple> = [];
     while (!this.atEnd()) {
       const ref = this.readValue();
@@ -191,7 +191,15 @@ export class JsonArrayReader {
       data.push(new MetaTuple(ref, v, numLeaves));
     }
 
-    return newMetaSequenceFromData(this._ds, t, data);
+    return data;
+  }
+
+  readIndexedMetaSequence(t: Type): IndexedMetaSequence {
+    return new IndexedMetaSequence(this._ds, t, this.readMetaSequence(t));
+  }
+
+  readOrderedMetaSequence(t: Type): OrderedMetaSequence {
+    return new OrderedMetaSequence(this._ds, t, this.readMetaSequence(t));
   }
 
   readRefValue(t: Type): RefValue {
@@ -208,8 +216,7 @@ export class JsonArrayReader {
         let sequence;
         if (isMeta) {
           const r2 = new JsonArrayReader(this.readArray(), this._ds);
-          sequence = r2.readMetaSequence(t);
-          invariant(sequence instanceof IndexedMetaSequence);
+          sequence = r2.readIndexedMetaSequence(t);
         } else {
           sequence = this.readBlobLeafSequence();
         }
@@ -228,7 +235,7 @@ export class JsonArrayReader {
         const isMeta = this.readBool();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
         const sequence = isMeta ?
-            r2.readMetaSequence(t) :
+            r2.readIndexedMetaSequence(t) :
             r2.readListLeafSequence(t);
         return new NomsList(t, sequence);
       }
@@ -236,7 +243,7 @@ export class JsonArrayReader {
         const isMeta = this.readBool();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
         const sequence = isMeta ?
-          r2.readMetaSequence(t) :
+          r2.readOrderedMetaSequence(t) :
           r2.readMapLeafSequence(t);
         return new NomsMap(t, sequence);
       }
@@ -246,7 +253,7 @@ export class JsonArrayReader {
         const isMeta = this.readBool();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
         const sequence = isMeta ?
-          r2.readMetaSequence(t) :
+          r2.readOrderedMetaSequence(t) :
           r2.readSetLeafSequence(t);
         return new NomsSet(t, sequence);
       }

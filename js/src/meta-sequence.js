@@ -9,7 +9,6 @@ import type {Collection} from './collection.js';
 import type {Type} from './type.js';
 import {IndexedSequence} from './indexed-sequence.js';
 import {invariant, notNull} from './assert.js';
-import {Kind} from './noms-kind.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import RefValue from './ref-value.js';
 import {Sequence} from './sequence.js';
@@ -171,20 +170,6 @@ export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K,
 
   equalsAt(idx: number, other: MetaTuple): boolean {
     return this.items[idx].ref.equals(other.ref);
-  }
-}
-
-export function newMetaSequenceFromData(vr: ValueReader, type: Type, tuples: Array<MetaTuple>):
-    MetaSequence {
-  switch (type.kind) {
-    case Kind.Map:
-    case Kind.Set:
-      return new OrderedMetaSequence(vr, type, tuples);
-    case Kind.Blob:
-    case Kind.List:
-      return new IndexedMetaSequence(vr, type, tuples);
-    default:
-      throw new Error('Not reached');
   }
 }
 
