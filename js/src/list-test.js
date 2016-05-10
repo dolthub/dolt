@@ -19,7 +19,7 @@ import {
   assertChunkCountAndType,
   assertValueRef,
   assertValueType,
-  deriveSequenceHeight,
+  deriveCollectionHeight,
   chunkDiffCount,
   flatten,
   flattenParallel,
@@ -145,7 +145,7 @@ suite('List', () => {
     assert.strictEqual(s.ref.toString(), 'sha1-2e79d54322aa793d0e8d48380a28927a257a141a');
     assert.strictEqual(testListSize, s.length);
 
-    const height = deriveSequenceHeight(s.sequence);
+    const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are RefValue values (with height 1).
     assert.strictEqual(height + 1, s.sequence.items[0].ref.height);
@@ -229,7 +229,7 @@ suite('ListLeafSequence', () => {
   test('Empty list isEmpty', () => {
     const ds = new Database(makeTestingBatchStore());
     const tr = makeListType(stringType);
-    const newList = items => new NomsList(tr, new ListLeafSequence(ds, tr, items));
+    const newList = items => new NomsList(new ListLeafSequence(ds, tr, items));
     assert.isTrue(newList([]).isEmpty());
   });
 
@@ -238,7 +238,7 @@ suite('ListLeafSequence', () => {
     const tr = makeListType(numberType);
 
     const test = async items => {
-      const l = new NomsList(tr, new ListLeafSequence(ds, tr, items));
+      const l = new NomsList(new ListLeafSequence(ds, tr, items));
       assert.deepEqual(items, await flatten(l.iterator()));
       assert.deepEqual(items, await flattenParallel(l.iterator(), items.length));
     };
@@ -253,7 +253,7 @@ suite('ListLeafSequence', () => {
     const tr = makeListType(numberType);
 
     const test = async items => {
-      const l = new NomsList(tr, new ListLeafSequence(ds, tr, items));
+      const l = new NomsList(new ListLeafSequence(ds, tr, items));
       for (let i = 0; i <= items.length; i++) {
         const slice = items.slice(i);
         assert.deepEqual(slice, await flatten(l.iteratorAt(i)));
@@ -271,23 +271,23 @@ suite('CompoundList', () => {
   function build(): NomsList {
     const ds = new Database(makeTestingBatchStore());
     const tr = makeListType(stringType);
-    const l1 = new NomsList(tr, new ListLeafSequence(ds, tr, ['a', 'b']));
+    const l1 = new NomsList(new ListLeafSequence(ds, tr, ['a', 'b']));
     const r1 = ds.writeValue(l1);
-    const l2 = new NomsList(tr, new ListLeafSequence(ds, tr, ['e', 'f']));
+    const l2 = new NomsList(new ListLeafSequence(ds, tr, ['e', 'f']));
     const r2 = ds.writeValue(l2);
-    const l3 = new NomsList(tr, new ListLeafSequence(ds, tr, ['h', 'i']));
+    const l3 = new NomsList(new ListLeafSequence(ds, tr, ['h', 'i']));
     const r3 = ds.writeValue(l3);
-    const l4 = new NomsList(tr, new ListLeafSequence(ds, tr, ['m', 'n']));
+    const l4 = new NomsList(new ListLeafSequence(ds, tr, ['m', 'n']));
     const r4 = ds.writeValue(l4);
 
-    const m1 = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(r1, 2, 2),
+    const m1 = new NomsList(new IndexedMetaSequence(ds, tr, [new MetaTuple(r1, 2, 2),
         new MetaTuple(r2, 2, 2)]));
     const rm1 = ds.writeValue(m1);
-    const m2 = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(r3, 2, 2),
+    const m2 = new NomsList(new IndexedMetaSequence(ds, tr, [new MetaTuple(r3, 2, 2),
         new MetaTuple(r4, 2, 2)]));
     const rm2 = ds.writeValue(m2);
 
-    const l = new NomsList(tr, new IndexedMetaSequence(ds, tr, [new MetaTuple(rm1, 4, 4),
+    const l = new NomsList(new IndexedMetaSequence(ds, tr, [new MetaTuple(rm1, 4, 4),
         new MetaTuple(rm2, 4, 4)]));
     return l;
   }

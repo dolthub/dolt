@@ -12,43 +12,31 @@ import {invariant, notNull} from './assert.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import RefValue from './ref-value.js';
 import {Sequence} from './sequence.js';
-
 export type MetaSequence = Sequence<MetaTuple>;
+import {Kind} from './noms-kind.js';
+import {NomsList} from './list.js';
+import {NomsMap} from './map.js';
+import {NomsSet} from './set.js';
+import {NomsBlob} from './blob.js';
 
 export class MetaTuple<K> {
-  _ref: RefValue;
-  _value: K;
-  _numLeaves: number;
-  _sequence: ?Sequence;
+  ref: RefValue;
+  value: K;
+  numLeaves: number;
+  child: ?Collection;
 
-  constructor(ref: RefValue, value: K, numLeaves: number, sequence: ?Sequence = null) {
-    this._ref = ref;
-    this._sequence = sequence;
-    this._value = value;
-    this._numLeaves = numLeaves;
-  }
-
-  get ref(): RefValue {
-    return this._ref;
-  }
-
-  get value(): K {
-    return this._value;
-  }
-
-  get numLeaves(): number {
-    return this._numLeaves;
-  }
-
-  get sequence(): ?Sequence {
-    return this._sequence;
+  constructor(ref: RefValue, value: K, numLeaves: number, child: ?Collection = null) {
+    this.ref = ref;
+    this.child = child;
+    this.value = value;
+    this.numLeaves = numLeaves;
   }
 
   getSequence(vr: ?ValueReader): Promise<Sequence> {
-    return this._sequence ?
-        Promise.resolve(this._sequence) :
-        notNull(vr).readValue(this._ref.targetRef).then((c: Collection) => {
-          invariant(c, () => `Could not read sequence ${this._ref.targetRef}`);
+    return this.child ?
+        Promise.resolve(this.child.sequence) :
+        notNull(vr).readValue(this.ref.targetRef).then((c: Collection) => {
+          invariant(c, () => `Could not read sequence ${this.ref.targetRef}`);
           return c.sequence;
         });
   }
@@ -178,7 +166,8 @@ export function newOrderedMetaSequenceChunkFn(t: Type, vr: ?ValueReader = null):
     const numLeaves = tuples.reduce((l, mt) => l + mt.numLeaves, 0);
     const meta = new OrderedMetaSequence(vr, t, tuples);
     const last = tuples[tuples.length - 1];
-    return [new MetaTuple(new RefValue(meta), last.value, numLeaves, meta), meta];
+    const col = t.kind === Kind.Map ? new NomsMap(meta) : new NomsSet(meta);
+    return [new MetaTuple(new RefValue(col), last.value, numLeaves, col), col];
   };
 }
 
@@ -199,7 +188,8 @@ export function newIndexedMetaSequenceChunkFn(t: Type, vr: ?ValueReader = null):
       return l + mt.value;
     }, 0);
     const meta = new IndexedMetaSequence(vr, t, tuples);
-    return [new MetaTuple(new RefValue(meta), sum, sum, meta), meta];
+    const col = t.kind === Kind.List ? new NomsList(meta) : new NomsBlob(meta);
+    return [new MetaTuple(new RefValue(col), sum, sum, col), col];
   };
 }
 

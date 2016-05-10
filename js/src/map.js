@@ -11,7 +11,6 @@ import {Collection} from './collection.js';
 import {getCompareFunction, equals} from './compare.js';
 import {sha1Size} from './ref.js';
 import {getRefOfValue} from './get-ref.js';
-import {invariant} from './assert.js';
 import {mapOfValueType, Type} from './type.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker, newOrderedMetaSequenceChunkFn,} from
   './meta-sequence.js';
@@ -31,8 +30,6 @@ const mapPattern = ((1 << 6) | 0) - 1;
 function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(
     t: Type, vr: ?ValueReader = null): makeChunkFn {
   return (items: Array<MapEntry<K, V>>) => {
-    const mapLeaf = new MapLeafSequence(vr, t, items);
-
     let indexValue: ?valueOrPrimitive = null;
     if (items.length > 0) {
       indexValue = items[items.length - 1].key;
@@ -41,8 +38,9 @@ function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(
       }
     }
 
-    const mt = new MetaTuple(new RefValue(mapLeaf), indexValue, items.length, mapLeaf);
-    return [mt, mapLeaf];
+    const nm = new NomsMap(new MapLeafSequence(vr, t, items));
+    const mt = new MetaTuple(new RefValue(nm), indexValue, items.length, nm);
+    return [mt, nm];
   };
 }
 
@@ -93,8 +91,7 @@ export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<K | 
   return chunkSequence(null, buildMapData(type, kvs), 0, newMapLeafChunkFn(type),
                        newOrderedMetaSequenceChunkFn(type),
                        newMapLeafBoundaryChecker(type),
-                       newOrderedMetaSequenceBoundaryChecker)
-  .then((seq: OrderedSequence) => new NomsMap(type, seq));
+                       newOrderedMetaSequenceBoundaryChecker);
 }
 
 export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collection<OrderedSequence> {
@@ -147,16 +144,14 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
     return new OrderedSequenceIterator(this.sequence.newCursorAt(k));
   }
 
-  async _splice(cursor: OrderedSequenceCursor, insert: Array<MapEntry<K, V>>, remove: number):
+  _splice(cursor: OrderedSequenceCursor, insert: Array<MapEntry<K, V>>, remove: number):
       Promise<NomsMap<K, V>> {
     const type = this.type;
     const vr = this.sequence.vr;
-    const seq = await chunkSequence(cursor, insert, remove, newMapLeafChunkFn(type, vr),
-                                    newOrderedMetaSequenceChunkFn(type, vr),
-                                    newMapLeafBoundaryChecker(type),
-                                    newOrderedMetaSequenceBoundaryChecker);
-    invariant(seq instanceof OrderedSequence);
-    return new NomsMap(type, seq);
+    return chunkSequence(cursor, insert, remove, newMapLeafChunkFn(type, vr),
+                         newOrderedMetaSequenceChunkFn(type, vr),
+                         newMapLeafBoundaryChecker(type),
+                         newOrderedMetaSequenceBoundaryChecker);
   }
 
   async set(key: K, value: V): Promise<NomsMap<K, V>> {

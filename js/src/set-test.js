@@ -19,7 +19,7 @@ import {
   stringType,
   valueType,
 } from './type.js';
-import {flatten, flattenParallel, deriveSequenceHeight} from './test-util.js';
+import {flatten, flattenParallel, deriveCollectionHeight} from './test-util.js';
 import {invariant, notNull} from './assert.js';
 import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
@@ -98,7 +98,7 @@ suite('BuildSet', () => {
     const structs = nums.map(n => newStruct(type, {n}));
     const s = await newSet(structs, tr);
     assert.strictEqual(s.ref.toString(), 'sha1-f10d8ccbc2270bb52bb988a0cadff912e2723eed');
-    const height = deriveSequenceHeight(s.sequence);
+    const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     assert.strictEqual(height, s.sequence.items[0].ref.height);
 
@@ -121,7 +121,7 @@ suite('BuildSet', () => {
     const refs = nums.map(n => new RefValue(newStruct(structType, {n})));
     const s = await newSet(refs, tr);
     assert.strictEqual(s.ref.toString(), 'sha1-882b953455794580e6156eb21b316720aa9e45b2');
-    const height = deriveSequenceHeight(s.sequence);
+    const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are RefValue values (with height 1).
     assert.strictEqual(height + 1, s.sequence.items[0].ref.height);
@@ -179,7 +179,7 @@ suite('SetLeaf', () => {
   test('isEmpty/size', () => {
     const ds = new Database(makeTestingBatchStore());
     const tr = makeSetType(stringType);
-    const newSet = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
+    const newSet = items => new NomsSet(new SetLeafSequence(ds, tr, items));
     let s = newSet([]);
     assert.isTrue(s.isEmpty());
     assert.strictEqual(0, s.size);
@@ -191,7 +191,7 @@ suite('SetLeaf', () => {
   test('first/last/has', async () => {
     const ds = new Database(makeTestingBatchStore());
     const tr = makeSetType(stringType);
-    const s = new NomsSet(tr, new SetLeafSequence(ds, tr, ['a', 'k']));
+    const s = new NomsSet(new SetLeafSequence(ds, tr, ['a', 'k']));
 
     assert.strictEqual('a', await s.first());
     assert.strictEqual('k', await s.last());
@@ -205,7 +205,7 @@ suite('SetLeaf', () => {
   test('forEach', async () => {
     const ds = new Database(makeTestingBatchStore());
     const tr = makeSetType(stringType);
-    const m = new NomsSet(tr, new SetLeafSequence(ds, tr, ['a', 'b']));
+    const m = new NomsSet(new SetLeafSequence(ds, tr, ['a', 'b']));
 
     const values = [];
     await m.forEach((k) => { values.push(k); });
@@ -217,7 +217,7 @@ suite('SetLeaf', () => {
     const tr = makeSetType(stringType);
 
     const test = async items => {
-      const m = new NomsSet(tr, new SetLeafSequence(ds, tr, items));
+      const m = new NomsSet(new SetLeafSequence(ds, tr, items));
       assert.deepEqual(items, await flatten(m.iterator()));
       assert.deepEqual(items, await flattenParallel(m.iterator(), items.length));
     };
@@ -230,7 +230,7 @@ suite('SetLeaf', () => {
   test('LONG: iteratorAt', async () => {
     const ds = new Database(makeTestingBatchStore());
     const tr = makeSetType(stringType);
-    const build = items => new NomsSet(tr, new SetLeafSequence(ds, tr, items));
+    const build = items => new NomsSet(new SetLeafSequence(ds, tr, items));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
 
@@ -251,7 +251,7 @@ suite('SetLeaf', () => {
     const r1 = ds.writeValue('x');
     const r2 = ds.writeValue('a');
     const r3 = ds.writeValue('b');
-    const l = new NomsSet(tr, new SetLeafSequence(ds, tr, ['z', r1, r2, r3]));
+    const l = new NomsSet(new SetLeafSequence(ds, tr, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
     assert.isTrue(r1.equals(l.chunks[0]));
     assert.isTrue(r2.equals(l.chunks[1]));
@@ -274,7 +274,7 @@ suite('CompoundSet', () => {
 
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
-      const l = new NomsSet(tr, new SetLeafSequence(vwr, tr, [values[i], values[i + 1]]));
+      const l = new NomsSet(new SetLeafSequence(vwr, tr, [values[i], values[i + 1]]));
       const r = vwr.writeValue(l);
       tuples.push(new MetaTuple(r, values[i + 1], 2));
     }
@@ -283,7 +283,7 @@ suite('CompoundSet', () => {
     while (tuples.length > 1) {
       const next = [];
       for (let i = 0; i < tuples.length; i += 2) {
-        last = new NomsSet(tr, new OrderedMetaSequence(vwr, tr, [tuples[i], tuples[i + 1]]));
+        last = new NomsSet(new OrderedMetaSequence(vwr, tr, [tuples[i], tuples[i + 1]]));
         const r = vwr.writeValue(last);
         next.push(new MetaTuple(r, tuples[i + 1].value,
                                 tuples[i].numLeaves + tuples[i + 1].numLeaves));
@@ -493,7 +493,7 @@ suite('CompoundSet', () => {
     const tr = makeSetType(numberType);
 
     const test = async (expected, items) => {
-      const set = new NomsSet(tr, new SetLeafSequence(ds, tr, items));
+      const set = new NomsSet(new SetLeafSequence(ds, tr, items));
       const iter = set.iteratorAt(0);
       assert.deepEqual(expected, await flatten(iter));
     };

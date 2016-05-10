@@ -10,7 +10,6 @@ import {getChunksOfValue, Value} from './value.js';
 import {getRefOfValue} from './get-ref.js';
 import {getTypeOfValue, Type} from './type.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
-import {Sequence} from './sequence.js';
 
 export async function flatten<T>(iter: AsyncIterator<T>): Promise<Array<T>> {
   const values = [];
@@ -100,7 +99,7 @@ export function intSequence(count: number, start: number = 0): Array<number> {
   return nums;
 }
 
-export function deriveSequenceHeight(seq: Sequence): number {
+export function deriveCollectionHeight(col: Collection): number {
   // Note: not using seq.items[0].ref.height because the purpose of this method is to be redundant.
-  return seq.isMeta ? 1 + deriveSequenceHeight(notNull(seq.items[0].sequence)) : 0;
+  return col.sequence.isMeta ? 1 + deriveCollectionHeight(notNull(col.sequence.items[0].child)) : 0;
 }

@@ -13,11 +13,7 @@ import RefValue from './ref-value.js';
 import {SequenceChunker} from './sequence-chunker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 
-export class NomsBlob extends Collection<IndexedSequence<number>> {
-  constructor(sequence: IndexedSequence) {
-    super(blobType, sequence);
-  }
-
+export class NomsBlob extends Collection<IndexedSequence> {
   getReader(): BlobReader {
     return new BlobReader(this.sequence.newCursorAt(0));
   }
@@ -73,8 +69,9 @@ const blobPattern = ((1 << 11) | 0) - 1; // Avg Chunk Size: 2k
 function newBlobLeafChunkFn(vr: ?ValueReader = null): makeChunkFn {
   return (items: Array<number>) => {
     const blobLeaf = new BlobLeafSequence(vr, new Uint8Array(items));
-    const mt = new MetaTuple(new RefValue(blobLeaf), items.length, items.length, blobLeaf);
-    return [mt, blobLeaf];
+    const blob = new NomsBlob(blobLeaf);
+    const mt = new MetaTuple(new RefValue(blob), items.length, items.length, blob);
+    return [mt, blob];
   };
 }
 
@@ -112,8 +109,7 @@ export class BlobWriter {
   async close(): Promise<void> {
     assert(this._state === 'writable');
     this._state = 'closing';
-    const sequence = await this._chunker.done();
-    this._blob = new NomsBlob(sequence);
+    this._blob = await this._chunker.done();
     this._state = 'closed';
   }
 

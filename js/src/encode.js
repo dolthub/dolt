@@ -13,7 +13,6 @@ import {ListLeafSequence, NomsList} from './list.js';
 import {MapLeafSequence, NomsMap} from './map.js';
 import {NomsSet, SetLeafSequence} from './set.js';
 import {Sequence} from './sequence.js';
-import {IndexedSequence} from './indexed-sequence.js';
 import {setEncodeNomsValue} from './get-ref.js';
 import {NomsBlob, BlobLeafSequence} from './blob.js';
 import {describeTypeOfValue} from './encode-human-readable.js';
@@ -106,8 +105,8 @@ export class JsonArrayWriter {
     for (let i = 0; i < v.items.length; i++) {
       const tuple = v.items[i];
       invariant(tuple instanceof MetaTuple);
-      if (tuple.sequence && this._vw) {
-        const child = tuple.sequence;
+      const child = tuple.child;
+      if (child && this._vw) {
         this._vw.writeValue(child);
       }
       w2.writeValue(tuple.ref);
@@ -123,10 +122,9 @@ export class JsonArrayWriter {
     this.writeType(t, []);
     switch (t.kind) {
       case Kind.Blob: {
-        invariant(v instanceof NomsBlob || v instanceof Sequence,
+        invariant(v instanceof NomsBlob,
                   () => `Failed to write Blob. Invalid type: ${describeTypeOfValue(v)}`);
-        const sequence: Sequence = v instanceof NomsBlob ? v.sequence : v;
-
+        const sequence = v.sequence;
         if (this.maybeWriteMetaSequence(sequence)) {
           break;
         }
@@ -151,10 +149,9 @@ export class JsonArrayWriter {
         this.writeFloat(v);
         break;
       case Kind.List: {
-        invariant(v instanceof NomsList || v instanceof Sequence,
+        invariant(v instanceof NomsList,
                   () => `Failed to write List. Invalid type: ${describeTypeOfValue(v)}`);
-        const sequence: Sequence = v instanceof NomsList ? v.sequence : v;
-
+        const sequence = v.sequence;
         if (this.maybeWriteMetaSequence(sequence)) {
           break;
         }
@@ -166,10 +163,9 @@ export class JsonArrayWriter {
         break;
       }
       case Kind.Map: {
-        invariant(v instanceof NomsMap || v instanceof Sequence,
+        invariant(v instanceof NomsMap,
                   () => `Failed to write Map. Invalid type: ${describeTypeOfValue(v)}`);
-        const sequence: Sequence = v instanceof NomsMap ? v.sequence : v;
-
+        const sequence = v.sequence;
         if (this.maybeWriteMetaSequence(sequence)) {
           break;
         }
@@ -190,10 +186,9 @@ export class JsonArrayWriter {
         break;
       }
       case Kind.Set: {
-        invariant(v instanceof NomsSet || v instanceof Sequence,
+        invariant(v instanceof NomsSet,
                   () => `Failed to write Set. Invalid type: ${describeTypeOfValue(v)}`);
-        const sequence: Sequence = v instanceof NomsSet ? v.sequence : v;
-
+        const sequence = v.sequence;
         if (this.maybeWriteMetaSequence(sequence)) {
           break;
         }
@@ -287,13 +282,14 @@ function encodeTopLevelBlob(sequence: BlobLeafSequence): Chunk {
 export function encodeNomsValue(v: valueOrPrimitive, vw: ?ValueWriter): Chunk {
   const t = getTypeOfValue(v);
   if (t.kind === Kind.Blob) {
-    invariant(v instanceof NomsBlob || v instanceof IndexedSequence);
-    const sequence = v instanceof NomsBlob ? v.sequence : v;
+    invariant(v instanceof NomsBlob);
+    const sequence = v.sequence;
     if (!sequence.isMeta) {
       invariant(sequence instanceof BlobLeafSequence);
       return encodeTopLevelBlob(sequence);
     }
   }
+
   return encodeEmbeddedNomsValue(v, vw);
 }
 

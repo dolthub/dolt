@@ -24,9 +24,9 @@ const listPattern = ((1 << 6) | 0) - 1;
 
 function newListLeafChunkFn<T: valueOrPrimitive>(t: Type, vr: ?ValueReader = null): makeChunkFn {
   return (items: Array<T>) => {
-    const listLeaf = new ListLeafSequence(vr, t, items);
-    const mt = new MetaTuple(new RefValue(listLeaf), items.length, items.length, listLeaf);
-    return [mt, listLeaf];
+    const list = new NomsList(new ListLeafSequence(vr, t, items));
+    const mt = new MetaTuple(new RefValue(list), items.length, items.length, list);
+    return [mt, list];
   };
 }
 
@@ -41,8 +41,7 @@ export function newList<T: valueOrPrimitive>(values: Array<T>, type: Type = list
   return chunkSequence(null, values, 0, newListLeafChunkFn(type),
                        newIndexedMetaSequenceChunkFn(type),
                        newListLeafBoundaryChecker(type),
-                       newIndexedMetaSequenceBoundaryChecker)
-  .then((seq: IndexedSequence) => new NomsList(type, seq));
+                       newIndexedMetaSequenceBoundaryChecker);
 }
 
 export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
@@ -52,16 +51,14 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
     return cursor.getCurrent();
   }
 
-  async splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<NomsList<T>> {
-    const cursor = await this.sequence.newCursorAt(idx);
+  splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<NomsList<T>> {
     const vr = this.sequence.vr;
     const type = this.type;
-    const seq = await chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(type, vr),
-                                    newIndexedMetaSequenceChunkFn(type, vr),
-                                    newListLeafBoundaryChecker(type),
-                                    newIndexedMetaSequenceBoundaryChecker);
-    invariant(seq instanceof IndexedSequence);
-    return new NomsList(type, seq);
+    return this.sequence.newCursorAt(idx).then(cursor =>
+      chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(type, vr),
+                           newIndexedMetaSequenceChunkFn(type, vr),
+                           newListLeafBoundaryChecker(type),
+                           newIndexedMetaSequenceBoundaryChecker));
   }
 
   insert(idx: number, ...values: Array<T>): Promise<NomsList<T>> {

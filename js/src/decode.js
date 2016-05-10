@@ -237,7 +237,7 @@ export class JsonArrayReader {
         const sequence = isMeta ?
             r2.readIndexedMetaSequence(t) :
             r2.readListLeafSequence(t);
-        return new NomsList(t, sequence);
+        return new NomsList(sequence);
       }
       case Kind.Map: {
         const isMeta = this.readBool();
@@ -245,7 +245,7 @@ export class JsonArrayReader {
         const sequence = isMeta ?
           r2.readOrderedMetaSequence(t) :
           r2.readMapLeafSequence(t);
-        return new NomsMap(t, sequence);
+        return new NomsMap(sequence);
       }
       case Kind.Ref:
         return this.readRefValue(t);
@@ -255,7 +255,7 @@ export class JsonArrayReader {
         const sequence = isMeta ?
           r2.readOrderedMetaSequence(t) :
           r2.readSetLeafSequence(t);
-        return new NomsSet(t, sequence);
+        return new NomsSet(sequence);
       }
       case Kind.Struct:
         return this.readStruct(t);

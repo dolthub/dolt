@@ -6,28 +6,22 @@ import type {Type} from './type.js';
 import {Value} from './value.js';
 
 export class Collection<S: Sequence> extends Value {
-  _type: Type;
-  _sequence: S;
+  sequence: S;
 
-  constructor(type: Type, sequence: S) {
+  constructor(sequence: S) {
     super();
-    this._type = type;
-    this._sequence = sequence;
+    this.sequence = sequence;
   }
 
   get type(): Type {
-    return this._type;
-  }
-
-  get sequence(): S {
-    return this._sequence;
+    return this.sequence.type;
   }
 
   isEmpty(): boolean {
-    return !this._sequence.isMeta && this._sequence.items.length === 0;
+    return !this.sequence.isMeta && this.sequence.items.length === 0;
   }
 
   get chunks(): Array<RefValue> {
-    return this._sequence.chunks;
+    return this.sequence.chunks;
   }
 }

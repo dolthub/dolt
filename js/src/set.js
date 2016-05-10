@@ -36,8 +36,9 @@ function newSetLeafChunkFn<T:valueOrPrimitive>(t: Type, vr: ?ValueReader = null)
       }
     }
 
-    const mt = new MetaTuple(new RefValue(setLeaf), indexValue, items.length, setLeaf);
-    return [mt, setLeaf];
+    const ns = new NomsSet(setLeaf);
+    const mt = new MetaTuple(new RefValue(ns), indexValue, items.length, ns);
+    return [mt, ns];
   };
 }
 
@@ -61,8 +62,7 @@ export function newSet<T:valueOrPrimitive>(values: Array<T>, type: Type = setOfV
   return chunkSequence(null, buildSetData(type, values), 0, newSetLeafChunkFn(type),
                        newOrderedMetaSequenceChunkFn(type),
                        newSetLeafBoundaryChecker(),
-                       newOrderedMetaSequenceBoundaryChecker)
-  .then((seq: OrderedSequence) => new NomsSet(type, seq));
+                       newOrderedMetaSequenceBoundaryChecker);
 }
 
 export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
@@ -100,16 +100,14 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
     return new OrderedSequenceIterator(this.sequence.newCursorAt(v));
   }
 
-  async _splice(cursor: OrderedSequenceCursor, insert: Array<T>, remove: number):
+  _splice(cursor: OrderedSequenceCursor, insert: Array<T>, remove: number):
       Promise<NomsSet<T>> {
     const type = this.type;
     const vr = this.sequence.vr;
-    const seq = await chunkSequence(cursor, insert, remove, newSetLeafChunkFn(type, vr),
-                                    newOrderedMetaSequenceChunkFn(type, vr),
-                                    newSetLeafBoundaryChecker(type),
-                                    newOrderedMetaSequenceBoundaryChecker);
-    invariant(seq instanceof OrderedSequence);
-    return new NomsSet(type, seq);
+    return chunkSequence(cursor, insert, remove, newSetLeafChunkFn(type, vr),
+                         newOrderedMetaSequenceChunkFn(type, vr),
+                         newSetLeafBoundaryChecker(type),
+                         newOrderedMetaSequenceBoundaryChecker);
   }
 
   async insert(value: T): Promise<NomsSet<T>> {
@@ -180,7 +178,7 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
     }
 
     // TODO: Chunk the resulting set.
-    return new NomsSet(this.type, new SetLeafSequence(null, this.type, values));
+    return new NomsSet(new SetLeafSequence(null, this.type, values));
   }
 
   /**

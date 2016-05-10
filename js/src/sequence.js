@@ -8,13 +8,12 @@ import RefValue from './ref-value.js';
 import type {Type} from './type.js';
 import {Value} from './value.js';
 
-export class Sequence<T> extends Value {
+export class Sequence<T> {
   vr: ?ValueReader;
   _type: Type;
   _items: Array<T>;
 
   constructor(vr: ?ValueReader, type: Type, items: Array<T>) {
-    super();
     this.vr = vr;
     this._type = type;
     this._items = items;
@@ -38,6 +37,10 @@ export class Sequence<T> extends Value {
 
   getChildSequence(idx: number): Promise<?Sequence> { // eslint-disable-line no-unused-vars
     return Promise.resolve(null);
+  }
+
+  get chunks(): Array<RefValue> {
+    return [];
   }
 
   get length(): number {

@@ -5,7 +5,7 @@ import {suite, test} from 'mocha';
 
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import Database from './database.js';
-import {ListLeafSequence} from './list.js';
+import {ListLeafSequence, NomsList} from './list.js';
 import {
   makeListType,
   makeSetType,
@@ -14,7 +14,7 @@ import {
 import {MetaTuple, newOrderedMetaSequenceChunkFn, newIndexedMetaSequenceChunkFn,} from
   './meta-sequence.js';
 import RefValue from './ref-value.js';
-import {SetLeafSequence} from './set.js';
+import {SetLeafSequence, NomsSet} from './set.js';
 
 suite('MetaSequence', () => {
   const setOfStringType = makeSetType(stringType);
@@ -23,10 +23,10 @@ suite('MetaSequence', () => {
   test('calculate ordered sequence MetaTuple height', async () => {
     const ds = new Database(makeTestingBatchStore());
 
-    const seq1 = new SetLeafSequence(ds, setOfStringType, ['bar', 'baz']);
-    const seq2 = new SetLeafSequence(ds, setOfStringType, ['foo', 'qux', 'zoo']);
-    const mt1 = new MetaTuple(new RefValue(seq1, setOfStringType), 'baz', 2, seq1);
-    const mt2 = new MetaTuple(new RefValue(seq2, setOfStringType), 'zoo', 3, seq2);
+    const set1 = new NomsSet(new SetLeafSequence(ds, setOfStringType, ['bar', 'baz']));
+    const set2 = new NomsSet(new SetLeafSequence(ds, setOfStringType, ['foo', 'qux', 'zoo']));
+    const mt1 = new MetaTuple(new RefValue(set1), 'baz', 2, set1);
+    const mt2 = new MetaTuple(new RefValue(set2), 'zoo', 3, set2);
 
     assert.strictEqual(1, mt1.ref.height);
     assert.strictEqual(1, mt2.ref.height);
@@ -43,10 +43,10 @@ suite('MetaSequence', () => {
   test('calculate indexed sequence MetaTuple height', async () => {
     const ds = new Database(makeTestingBatchStore());
 
-    const seq1 = new ListLeafSequence(ds, listOfStringType, ['bar', 'baz']);
-    const seq2 = new ListLeafSequence(ds, listOfStringType, ['foo', 'qux', 'zoo']);
-    const mt1 = new MetaTuple(new RefValue(seq1, listOfStringType), 2, 2, seq1);
-    const mt2 = new MetaTuple(new RefValue(seq2, listOfStringType), 3, 3, seq2);
+    const list1 = new NomsList(new ListLeafSequence(ds, listOfStringType, ['bar', 'baz']));
+    const list2 = new NomsList(new ListLeafSequence(ds, listOfStringType, ['foo', 'qux', 'zoo']));
+    const mt1 = new MetaTuple(new RefValue(list1), 2, 2, list1);
+    const mt2 = new MetaTuple(new RefValue(list2), 3, 3, list2);
 
     assert.strictEqual(1, mt1.ref.height);
     assert.strictEqual(1, mt2.ref.height);
