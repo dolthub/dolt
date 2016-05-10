@@ -1,10 +1,10 @@
 # A Short Tour of Noms for JavaScript
 
-This is a short tour of how to use Noms from JavaScript. It should only take a few minutes if you have some familiarity with JavaScript and Node.
+This is a short introduction to using Noms from JavaScript. It should only take a few minutes if you have some familiarity with JavaScript and Node.
 
 ## Requirements
 
-You'll need Node (v5.3+). Go [install that](https://nodejs.org/en/), if you haven't already.
+You'll need Node (v5.11+). Go [install that](https://nodejs.org/en/), if you haven't already.
 
 ## Install Noms
 
@@ -23,66 +23,100 @@ Then launch Node so that we can have a play:
 node
 ```
 
-## [Database](TODO-link-to-Database-API)
+## [Database](https://github.com/attic-labs/noms/blob/master/js/src/database.js)
 
-In Noms, data is represented as trees of immutable *values*. For example, the number `42` is a value. The string `'Hello, world'` is a value. The set of all photos from the Hubble space telescope is a value, and each of those photos is also a value.
-
-A Database is a place where you can store Noms values. To do anything with Noms, you'll need a Database:
+To get started with Noms, first create a Database:
 
 ```js
 const noms = require('@attic/noms');
 
-// A database is backed by a "ChunkStore", which is where the physical chunks of data will be kept
-// Noms/JS comes with several ChunkStore implementations, including MemoryStore, which is useful
-// for testing.
 const database = new noms.Database(new noms.MemoryStore());
 ```
 
-Noms is [content-addressed](https://en.wikipedia.org/wiki/Content-addressable_storage), meaning that every Noms value is identified by a unique hash. When you store a value, you receive a *Ref* which contains the value's hash, and which can be used to retrieve the value later.
+A database is backed by a "ChunkStore", which is where physical chunks of data are kept. Noms/JS comes with several ChunkStore implementations, including MemoryStore, which is useful for testing.
+
+
+
+## [Dataset](https://github.com/attic-labs/noms/blob/master/js/src/dataset.js)
+
+Datasets are the main interface you'll use to work with Noms. A dataset is just a named value in the database that you can update:
 
 ```js
-const ref = database.writeValue("Hello, world");
-ref.targetHash;  // prints: Ref { _refStr: 'sha1-b237e82a5ed084438714743d30dd4900b1327609' }
-
-// prints: Hello, world
-database.readValue(ref).then(console.log);
-```
-
-
-## [Dataset](TODO-link-to-Dataset-API)
-
-A Database on its own can only be used to store and retrieve immutable objects.
-
-If you need to keep track of something that changes over time, you need a [Dataset](TODO). A Dataset is a named pointer to a value that can change:
-
-```js
-const dataset = new noms.Dataset(database, "salutation");
+const dataset = new noms.Dataset(database, "counter");
 
 // prints: null
 dataset.head().then(console.log);
 
-// prints: Hello, world
-dataset.commit({
-	lang: "English",
-	msg: "Hello, world",
-});
-dataset.head().then(h => console.log(h.value.msg));
+dataset.commit(1);
 
-// prints: Buenos dias
+// prints:
+// struct Commit<{
+//   parents: Set
+//   value: Value
+// }>(
+//   parents: [],
+//   value: 1,
+// )
+dataset.head().then(console.log);
+
+dataset.commit(2);
+dataset.commit("three");
 dataset.commit({
-	lang: "Spanish",
-	msg: "Buenos dias",
+	count: 4,
 });
-dataset.head().then(h => console.log(h.value.msg));
+
+// prints:
+// struct<{
+//   count: Number
+// }>(
+//   value: 4,
+// )
+dataset.head().then(h => console.log(h.value));
 ```
 
-A Dataset is versioned. When you *commit* a new value, you aren't overwriting the old value, but adding to a historical log of values.
+Datasets are versioned. When you *commit* a new value, you aren't overwriting the old value, but adding to a historical log of values.
 
+```js
+function printHead(head) {
+	console.log(head.value);
+	head.parents().first()
+		.then(headRef => headRef.targetValue())
+		.then(printHead);
+}
+
+// Prints:
+// {count:4}
+// "three"
+// 2
+// 1
+dataset.head().then(printHead);
 ```
-// prints: Hello, world
-dataset.head()
-	.then(h => h.parents().first())
-	.then(parent => console.log(parent.value.msg));
+
+Datasets can be very large. Noms will automatically break large lists, maps, sets, and blobs into chunks (using [Prolly Trees](TODO)), so that they can be transferred, searched, and updated efficiently.
+
+If you have structs with really large fields though, it's sometimes useful to break them up manually:
+
+```js
+// Write a value to the database manually, outside of a commit
+// Note that this doesn't get flushed until the next commit()
+const log = 'logloglog'.repeat(100000);
+const logRef = database.writeValue({log});
+console.log(r);
+
+database.readValue(r).then(v => console.log(v == log));
+
+dataset.commit({
+	count: 5,
+	logOutput: r,
+});
+
+dataset.head().then(h => {
+	// prints: {ref: ...}
+	console.log(h.value);
+
+	// Prints the first bit of the log
+	h.value.targetValue().then(v => console.log.substr(0, 100));
+}
 ```
 
 ## Values
@@ -113,4 +147,4 @@ store.writeValue({
 });
 ```
 
-However, you can control the Noms type explicitly with [NomsValue](#NomsValue).
+Sometimes it's nice to expliclty control the type. You can do that with [NomsValue](TODO).

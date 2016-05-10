@@ -10,7 +10,7 @@ This repository contains two reference implementations of the noms protocol - on
 
 * [Go 1.4+](https://golang.org/dl/)
 * [Python 2.7+](https://www.python.org/downloads/) (Note: Python 2.x only, not Python 3.x)
-* [Node.js 5.3+](https://nodejs.org/download/)
+* [Node.js 5.11+](https://nodejs.org/download/)
 
 # Set environment variables
 
