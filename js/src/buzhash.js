@@ -2,7 +2,7 @@
 
 // This a javascript port of github.com/kch42/buzhash.
 
-const bytehash:Array<number> = [
+const bytehash: Array<number> = [
   0x12bd9527, 0xf4140cea, 0x987bd6e1, 0x79079850, 0xafbfd539, 0xd350ce0a,
   0x82973931, 0x9fc32b9c, 0x28003b88, 0xc30c13aa, 0x6b678c34, 0x5844ef1d,
   0xaa552c18, 0x4a77d3e8, 0xd1f62ea0, 0x6599417c, 0xfbe30e7a, 0xf9e2d5ee,
@@ -70,25 +70,16 @@ export default class BuzHash {
       this._bufpos = 0;
     }
 
-    let _state = this._state;
-    _state = (((_state << 1) | 0) | (_state >>> 31)) | 0;
+    let state = this._state;
+    state = state << 1 | state >>> 31;
     if (this._overflow) {
       const toshift = bytehash[this._buf[this._bufpos]];
-      const ls = (toshift << this._bshiftn) | 0;
-      const rs = toshift >>> this._bshiftm;
-      const os = (ls | rs) | 0;
-      _state = (_state ^ os) | 0;
+      state ^= toshift << this._bshiftn | toshift >>> this._bshiftm;
     }
 
-    this._buf[this._bufpos] = b;
-    this._bufpos++;
+    this._buf[this._bufpos++] = b;
 
-    const xb = bytehash[b];
-    _state = (_state ^ xb) | 0;
-
-    this._state = _state;
-
-    return _state;
+    return this._state = state ^ bytehash[b];
   }
 
   write(p: Uint8Array): number {
