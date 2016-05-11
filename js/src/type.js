@@ -180,7 +180,16 @@ export function makeRefType(elemType: Type): Type<CompoundDesc> {
 }
 
 export function makeStructType(name: string, fields: {[key: string]: Type}): Type<StructDesc> {
+  Object.keys(fields).forEach(verifyFieldName);
   return buildType(new StructDesc(name, fields));
+}
+
+const fieldNameRe = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+
+function verifyFieldName(name: string) {
+  if (!fieldNameRe.test(name)) {
+    throw new Error(`Invalid struct field name: ${name}`);
+  }
 }
 
 function compareTypeByRef(a: Type, b: Type): number {
