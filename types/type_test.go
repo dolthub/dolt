@@ -66,30 +66,3 @@ func TestTypeOrdered(t *testing.T) {
 	assert.False(MakeMapType(StringType, ValueType).IsOrdered())
 	assert.True(MakeRefType(StringType).IsOrdered())
 }
-
-func TestVerifyFieldName(t *testing.T) {
-	assert := assert.New(t)
-
-	assertInvalid := func(n string) {
-		assert.Panics(func() {
-			MakeStructType("S", TypeMap{n: StringType})
-		})
-	}
-	assertInvalid("")
-	assertInvalid(" ")
-	assertInvalid(" a")
-	assertInvalid("a ")
-	assertInvalid("0")
-	assertInvalid("_")
-	assertInvalid("0a")
-	assertInvalid("_a")
-
-	assertValid := func(n string) {
-		MakeStructType("S", TypeMap{n: StringType})
-	}
-	assertValid("a")
-	assertValid("A")
-	assertValid("a0")
-	assertValid("a_")
-	assertValid("a0_")
-}
