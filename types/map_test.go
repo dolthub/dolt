@@ -56,12 +56,12 @@ func (tm testMap) toMap() Map {
 	return NewTypedMap(tm.tr, keyvals...)
 }
 
-func (tm testMap) toCompoundMap() compoundMap {
+func (tm testMap) toCompoundMap() Map {
 	keyvals := []Value{}
 	for _, entry := range tm.entries {
 		keyvals = append(keyvals, entry.key, entry.value)
 	}
-	return NewTypedMap(tm.tr, keyvals...).(compoundMap)
+	return NewTypedMap(tm.tr, keyvals...)
 }
 
 func (tm testMap) Flatten(from, to int) []Value {
@@ -254,7 +254,7 @@ func TestMapHas(t *testing.T) {
 	vs := NewTestValueStore()
 	doTest := func(tm testMap) {
 		m := tm.toMap()
-		m2 := vs.ReadValue(vs.WriteValue(m).TargetRef()).(compoundMap)
+		m2 := vs.ReadValue(vs.WriteValue(m).TargetRef()).(Map)
 		for _, entry := range tm.entries {
 			k, v := entry.key, entry.value
 			assert.True(m.Has(k))
@@ -422,7 +422,7 @@ func TestMapSetExistingKeyToNewValue(t *testing.T) {
 	for i, entry := range tm.entries {
 		newValue := Number(int64(entry.value.(Number)) + 1)
 		expectedWorking = expectedWorking.SetValue(i, newValue)
-		actual = actual.Set(entry.key, newValue).(compoundMap)
+		actual = actual.Set(entry.key, newValue)
 	}
 
 	expected := expectedWorking.toMap()
@@ -440,10 +440,9 @@ func TestMapSetM(t *testing.T) {
 	assert.Equal(uint64(2), m3.Len())
 	assert.True(NewString("bar").Equals(m3.Get(NewString("foo"))))
 	assert.True(NewString("dog").Equals(m3.Get(NewString("hot"))))
-	// TODO: Enable when CompoundMap.Len() is implemented
-	// m4 := m3.SetM(NewString("mon"), NewString("key"))
-	// assert.Equal(uint64(2), m3.Len())
-	// assert.Equal(uint64(3), m4.Len())
+	m4 := m3.SetM(NewString("mon"), NewString("key"))
+	assert.Equal(uint64(2), m3.Len())
+	assert.Equal(uint64(3), m4.Len())
 }
 
 // BUG 98
@@ -859,9 +858,7 @@ func TestMapFirstNNumbers(t *testing.T) {
 
 	m := NewTypedMap(mapType, kvs...)
 	assert.Equal("sha1-2bc451349d04c5f90cfe73d1e6eb3ee626db99a1", m.Ref().String())
-	height := deriveMapHeight(m)
-	cm := m.(compoundMap)
-	assert.Equal(height, cm.tuples[0].childRef.Height())
+	assert.Equal(deriveCollectionHeight(m), getRefHeightOfCollection(m))
 }
 
 func TestMapRefOfStructFirstNNumbers(t *testing.T) {
@@ -889,10 +886,8 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 
 	m := NewTypedMap(mapType, kvs...)
 	assert.Equal("sha1-3d8eea119bc685942107f7b9513b33d2f763d693", m.Ref().String())
-	height := deriveMapHeight(m)
-	cm := m.(compoundMap)
 	// height + 1 because the leaves are Ref values (with height 1).
-	assert.Equal(height+1, cm.tuples[0].childRef.Height())
+	assert.Equal(deriveCollectionHeight(m)+1, getRefHeightOfCollection(m))
 }
 
 func TestMapModifyAfterRead(t *testing.T) {
@@ -911,14 +906,4 @@ func TestMapModifyAfterRead(t *testing.T) {
 	}
 	m = m.Set(fst, fstval)
 	assert.True(m.Has(fst))
-}
-
-func deriveMapHeight(m Map) uint64 {
-	// Note: not using mt.childRef.Height() because the purpose of this method is to be redundant.
-	height := uint64(1)
-	cm := m.(compoundMap)
-	if m2, ok := cm.getItem(0).(metaTuple).child.(compoundMap); ok {
-		height += deriveMapHeight(m2)
-	}
-	return height
 }

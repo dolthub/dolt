@@ -40,7 +40,7 @@ func (ts testSet) Remove(from, to int) testSet {
 }
 
 func (ts testSet) toSet() Set {
-	return NewTypedSet(ts.tr, ts.values...).(compoundSet)
+	return NewTypedSet(ts.tr, ts.values...)
 }
 
 func newTestSet(length int) testSet {
@@ -755,9 +755,7 @@ func TestSetFirstNNumbers(t *testing.T) {
 	nums := generateNumbersAsValues(testSetSize)
 	s := NewTypedSet(setType, nums...)
 	assert.Equal("sha1-8186877fb71711b8e6a516ed5c8ad1ccac8c6c00", s.Ref().String())
-	height := deriveSetHeight(s)
-	cs := s.(compoundSet)
-	assert.Equal(height, cs.tuples[0].childRef.Height())
+	assert.Equal(deriveCollectionHeight(s), getRefHeightOfCollection(s))
 }
 
 func TestSetRefOfStructFirstNNumbers(t *testing.T) {
@@ -771,10 +769,8 @@ func TestSetRefOfStructFirstNNumbers(t *testing.T) {
 	setType := MakeSetType(refOfTypeStructType)
 	s := NewTypedSet(setType, nums...)
 	assert.Equal("sha1-882b953455794580e6156eb21b316720aa9e45b2", s.Ref().String())
-	height := deriveSetHeight(s)
-	cs := s.(compoundSet)
 	// height + 1 because the leaves are Ref values (with height 1).
-	assert.Equal(height+1, cs.tuples[0].childRef.Height())
+	assert.Equal(deriveCollectionHeight(s)+1, getRefHeightOfCollection(s))
 }
 
 func TestSetModifyAfterRead(t *testing.T) {
@@ -790,14 +786,4 @@ func TestSetModifyAfterRead(t *testing.T) {
 	assert.True(set.Has(set.First()))
 	set = set.Insert(fst)
 	assert.True(set.Has(fst))
-}
-
-func deriveSetHeight(s Set) uint64 {
-	// Note: not using mt.childRef.Height() because the purpose of this method is to be redundant.
-	height := uint64(1)
-	cs := s.(compoundSet)
-	if s2, ok := cs.getItem(0).(metaTuple).child.(compoundSet); ok {
-		height += deriveSetHeight(s2)
-	}
-	return height
 }

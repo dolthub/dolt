@@ -2,14 +2,6 @@ package types
 
 import "github.com/attic-labs/noms/d"
 
-type sequenceItem interface{}
-
-type sequence interface {
-	Value
-	getItem(idx int) sequenceItem
-	seqLen() int
-}
-
 // sequenceCursor explores a tree of sequence items.
 type sequenceCursor struct {
 	parent *sequenceCursor

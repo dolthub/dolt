@@ -20,9 +20,11 @@ func EncodeValue(v Value, vw ValueWriter) chunks.Chunk {
 }
 
 func toEncodeable(v Value, vw ValueWriter) interface{} {
-	switch v := v.(type) {
-	case blobLeaf:
-		return v.Reader()
+	if b, ok := v.(Blob); ok {
+		if _, ok := b.sequence().(blobLeafSequence); ok {
+			return b.Reader()
+		}
 	}
+
 	return encNomsValue(v, vw)
 }

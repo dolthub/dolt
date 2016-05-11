@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
@@ -12,7 +13,7 @@ var (
 		Bool(true),
 		Number(1),
 		NewString("hi"),
-		newBlobLeaf([]byte("hi")),
+		NewBlob(bytes.NewReader([]byte("hi"))),
 		// compoundBlob
 		NewSet(NewString("hi")),
 		NewList(NewString("hi")),

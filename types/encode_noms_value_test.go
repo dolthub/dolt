@@ -96,7 +96,7 @@ func TestWriteMap(t *testing.T) {
 	assert := assert.New(t)
 
 	typ := MakeMapType(StringType, BoolType)
-	v := newMapLeaf(typ, mapEntry{NewString("a"), Bool(false)}, mapEntry{NewString("b"), Bool(true)})
+	v := newMap(newMapLeafSequence(typ, nil, mapEntry{NewString("a"), Bool(false)}, mapEntry{NewString("b"), Bool(true)}))
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeValue(v)
@@ -130,11 +130,11 @@ func TestWriteCompoundBlob(t *testing.T) {
 	r2 := ref.Parse("sha1-0000000000000000000000000000000000000002")
 	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
 
-	v := newCompoundBlob([]metaTuple{
+	v := newBlob(newIndexedMetaSequence([]metaTuple{
 		newMetaTuple(Number(20), nil, NewTypedRef(RefOfBlobType, r1, 11), 20),
 		newMetaTuple(Number(40), nil, NewTypedRef(RefOfBlobType, r2, 22), 40),
 		newMetaTuple(Number(60), nil, NewTypedRef(RefOfBlobType, r3, 33), 60),
-	}, NewTestValueStore())
+	}, BlobType, NewTestValueStore()))
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeValue(v)
 
@@ -239,42 +239,43 @@ func TestWriteStructWithBlob(t *testing.T) {
 
 func TestWriteCompoundList(t *testing.T) {
 	assert := assert.New(t)
+	cs := NewTestValueStore()
 
 	ltr := MakeListType(NumberType)
-	leaf1 := newListLeaf(ltr, Number(0))
-	leaf2 := newListLeaf(ltr, Number(1), Number(2), Number(3))
-	cl := buildCompoundList([]metaTuple{
-		newMetaTuple(Number(1), leaf1, NewTypedRefFromValue(leaf1), 1),
-		newMetaTuple(Number(4), leaf2, NewTypedRefFromValue(leaf2), 4),
-	}, ltr, NewTestValueStore())
+	list1 := newList(newListLeafSequence(ltr, cs, Number(0)))
+	list2 := newList(newListLeafSequence(ltr, cs, Number(1), Number(2), Number(3)))
+	cl := newList(newIndexedMetaSequence([]metaTuple{
+		newMetaTuple(Number(1), list1, NewTypedRefFromValue(list1), 1),
+		newMetaTuple(Number(4), list2, NewTypedRefFromValue(list2), 4),
+	}, ltr, cs))
 
-	w := newJSONArrayWriter(NewTestValueStore())
+	w := newJSONArrayWriter(cs)
 	w.writeValue(cl)
 	assert.EqualValues([]interface{}{
 		ListKind, NumberKind, true, []interface{}{
-			RefKind, ListKind, NumberKind, leaf1.Ref().String(), "1", NumberKind, "1", "1",
-			RefKind, ListKind, NumberKind, leaf2.Ref().String(), "1", NumberKind, "4", "4",
+			RefKind, ListKind, NumberKind, list1.Ref().String(), "1", NumberKind, "1", "1",
+			RefKind, ListKind, NumberKind, list2.Ref().String(), "1", NumberKind, "4", "4",
 		},
 	}, w.toArray())
 }
 
 func TestWriteCompoundSet(t *testing.T) {
 	assert := assert.New(t)
-
+	cs := NewTestValueStore()
 	ltr := MakeSetType(NumberType)
-	leaf1 := newSetLeaf(ltr, Number(0), Number(1))
-	leaf2 := newSetLeaf(ltr, Number(2), Number(3), Number(4))
-	cl := buildCompoundSet([]metaTuple{
-		newMetaTuple(Number(1), leaf1, NewTypedRefFromValue(leaf1), 2),
-		newMetaTuple(Number(4), leaf2, NewTypedRefFromValue(leaf2), 3),
-	}, ltr, NewTestValueStore())
+	set1 := newSet(newSetLeafSequence(ltr, cs, Number(0), Number(1)))
+	set2 := newSet(newSetLeafSequence(ltr, cs, Number(2), Number(3), Number(4)))
+	cl := newSet(newOrderedMetaSequence([]metaTuple{
+		newMetaTuple(Number(1), set1, NewTypedRefFromValue(set1), 2),
+		newMetaTuple(Number(4), set2, NewTypedRefFromValue(set2), 3),
+	}, ltr, cs))
 
-	w := newJSONArrayWriter(NewTestValueStore())
+	w := newJSONArrayWriter(cs)
 	w.writeValue(cl)
 	assert.EqualValues([]interface{}{
 		SetKind, NumberKind, true, []interface{}{
-			RefKind, SetKind, NumberKind, leaf1.Ref().String(), "1", NumberKind, "1", "2",
-			RefKind, SetKind, NumberKind, leaf2.Ref().String(), "1", NumberKind, "4", "3",
+			RefKind, SetKind, NumberKind, set1.Ref().String(), "1", NumberKind, "1", "2",
+			RefKind, SetKind, NumberKind, set2.Ref().String(), "1", NumberKind, "4", "3",
 		},
 	}, w.toArray())
 }

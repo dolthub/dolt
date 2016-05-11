@@ -164,9 +164,15 @@ export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K,
 export function newOrderedMetaSequenceChunkFn(t: Type, vr: ?ValueReader = null): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
     const numLeaves = tuples.reduce((l, mt) => l + mt.numLeaves, 0);
-    const meta = new OrderedMetaSequence(vr, t, tuples);
+    const metaSeq = new OrderedMetaSequence(vr, t, tuples);
     const last = tuples[tuples.length - 1];
-    const col = t.kind === Kind.Map ? new NomsMap(meta) : new NomsSet(meta);
+    let col: Collection;
+    if (t.kind === Kind.Map) {
+      col = new NomsMap(metaSeq);
+    } else {
+      invariant(t.kind === Kind.Set);
+      col = new NomsSet(metaSeq);
+    }
     return [new MetaTuple(new RefValue(col), last.value, numLeaves, col), col];
   };
 }
@@ -187,8 +193,14 @@ export function newIndexedMetaSequenceChunkFn(t: Type, vr: ?ValueReader = null):
       invariant(mt.value === mt.numLeaves);
       return l + mt.value;
     }, 0);
-    const meta = new IndexedMetaSequence(vr, t, tuples);
-    const col = t.kind === Kind.List ? new NomsList(meta) : new NomsBlob(meta);
+    const metaSeq = new IndexedMetaSequence(vr, t, tuples);
+    let col: Collection;
+    if (t.kind === Kind.List) {
+      col = new NomsList(metaSeq);
+    } else {
+      invariant(t.kind === Kind.Blob);
+      col = new NomsBlob(metaSeq);
+    }
     return [new MetaTuple(new RefValue(col), sum, sum, col), col];
   };
 }

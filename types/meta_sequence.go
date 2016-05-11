@@ -14,14 +14,14 @@ type metaSequence interface {
 	getChildSequence(idx int) sequence
 }
 
-func newMetaTuple(value Value, child sequence, childRef Ref, numLeaves uint64) metaTuple {
+func newMetaTuple(value Value, child Collection, childRef Ref, numLeaves uint64) metaTuple {
 	d.Chk.NotEqual(Ref{}, childRef)
 	return metaTuple{child, childRef, value, numLeaves}
 }
 
 // metaTuple is a node in a Prolly Tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
-	child     sequence // may be nil
+	child     Collection // may be nil
 	childRef  Ref
 	value     Value
 	numLeaves uint64
@@ -61,7 +61,6 @@ type metaSequenceObject struct {
 	vr     ValueReader
 }
 
-// sequence
 func (ms metaSequenceObject) getItem(idx int) sequenceItem {
 	return ms.tuples[idx]
 }
@@ -73,11 +72,14 @@ func (ms metaSequenceObject) seqLen() int {
 func (ms metaSequenceObject) getChildSequence(idx int) sequence {
 	mt := ms.tuples[idx]
 	if mt.child != nil {
-		return mt.child
+		return mt.child.sequence()
 	}
 
-	child := mt.childRef.TargetValue(ms.vr)
-	return child.(sequence)
+	return mt.childRef.TargetValue(ms.vr).(Collection).sequence()
+}
+
+func (ms metaSequenceObject) valueReader() ValueReader {
+	return ms.vr
 }
 
 func (ms metaSequenceObject) data() metaSequenceData {
@@ -101,22 +103,6 @@ func (ms metaSequenceObject) Chunks() (chunks []Ref) {
 
 func (ms metaSequenceObject) Type() *Type {
 	return ms.t
-}
-
-type metaBuilderFunc func(tuples metaSequenceData, t *Type, vr ValueReader) metaSequence
-
-var metaFuncMap = map[NomsKind]metaBuilderFunc{}
-
-func registerMetaValue(k NomsKind, bf metaBuilderFunc) {
-	metaFuncMap[k] = bf
-}
-
-func newMetaSequenceFromData(tuples metaSequenceData, t *Type, vr ValueReader) metaSequence {
-	if bf, ok := metaFuncMap[t.Kind()]; ok {
-		return bf(tuples, t, vr)
-	}
-
-	panic("not reachable")
 }
 
 // Creates a sequenceCursor pointing to the first metaTuple in a metaSequence, and returns that cursor plus the leaf Value referenced from that metaTuple.

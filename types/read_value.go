@@ -33,7 +33,7 @@ func DecodeChunk(c chunks.Chunk, vr ValueReader) Value {
 	case io.Reader:
 		data, err := ioutil.ReadAll(v)
 		d.Chk.NoError(err)
-		return newBlobLeaf(data)
+		return newBlob(newBlobLeafSequence(vr, data))
 	case []interface{}:
 		return fromTypedEncodeable(v, vr)
 	}

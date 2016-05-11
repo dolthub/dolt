@@ -1,9 +1,12 @@
 package types
 
 import (
+	"bytes"
+	"errors"
 	"io"
 
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/ref"
 )
 
 const (
@@ -15,14 +18,110 @@ const (
 
 var RefOfBlobType = MakeRefType(BlobType)
 
-type Blob interface {
-	Collection
-	// BUG 155 - Should provide Write... Maybe even have Blob implement ReadWriteSeeker
-	Reader() io.ReadSeeker
+// Blob represents a list of Blobs.
+type Blob struct {
+	seq indexedSequence
+	ref *ref.Ref
+}
+
+func newBlob(seq indexedSequence) Blob {
+	return Blob{seq, &ref.Ref{}}
 }
 
 func NewEmptyBlob() Blob {
-	return newBlobLeaf([]byte{}).(Blob)
+	return Blob{newBlobLeafSequence(nil, []byte{}), &ref.Ref{}}
+}
+
+// BUG 155 - Should provide Write... Maybe even have Blob implement ReadWriteSeeker
+func (b Blob) Reader() io.ReadSeeker {
+	cursor := newCursorAtIndex(b.seq, 0)
+	return &BlobReader{b.seq, cursor, nil, 0}
+}
+
+func (b Blob) Equals(other Value) bool {
+	return other != nil && b.Ref() == other.Ref()
+}
+
+func (b Blob) Ref() ref.Ref {
+	return EnsureRef(b.ref, b)
+}
+
+func (b Blob) Len() uint64 {
+	return b.seq.numLeaves()
+}
+
+func (b Blob) Empty() bool {
+	return b.Len() == 0
+}
+
+func (b Blob) Chunks() []Ref {
+	return b.seq.Chunks()
+}
+
+func (b Blob) ChildValues() []Value {
+	return []Value{}
+}
+
+func (b Blob) Type() *Type {
+	return b.seq.Type()
+}
+
+func (b Blob) sequence() sequence {
+	return b.seq
+}
+
+type BlobReader struct {
+	seq           indexedSequence
+	cursor        *sequenceCursor
+	currentReader io.ReadSeeker
+	pos           uint64
+}
+
+func (cbr *BlobReader) Read(p []byte) (n int, err error) {
+	if cbr.currentReader == nil {
+		cbr.updateReader()
+	}
+
+	n, err = cbr.currentReader.Read(p)
+	for i := 0; i < n; i++ {
+		cbr.pos++
+		cbr.cursor.advance()
+	}
+	if err == io.EOF && cbr.cursor.idx < cbr.cursor.seq.seqLen() {
+		cbr.currentReader = nil
+		err = nil
+	}
+
+	return
+}
+
+func (cbr *BlobReader) Seek(offset int64, whence int) (int64, error) {
+	abs := int64(cbr.pos)
+
+	switch whence {
+	case 0:
+		abs = offset
+	case 1:
+		abs += offset
+	case 2:
+		abs = int64(cbr.seq.numLeaves()) + offset
+	default:
+		return 0, errors.New("Blob.Reader.Seek: invalid whence")
+	}
+
+	if abs < 0 {
+		return 0, errors.New("Blob.Reader.Seek: negative position")
+	}
+
+	cbr.pos = uint64(abs)
+	cbr.cursor = newCursorAtIndex(cbr.seq, cbr.pos)
+	cbr.currentReader = nil
+	return abs, nil
+}
+
+func (cbr *BlobReader) updateReader() {
+	cbr.currentReader = bytes.NewReader(cbr.cursor.seq.(blobLeafSequence).data)
+	cbr.currentReader.Seek(int64(cbr.cursor.idx), 0)
 }
 
 func newBlobLeafBoundaryChecker() boundaryChecker {
@@ -31,7 +130,7 @@ func newBlobLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func newBlobLeafChunkFn() makeChunkFn {
+func newBlobLeafChunkFn(vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		buff := make([]byte, len(items))
 
@@ -39,13 +138,13 @@ func newBlobLeafChunkFn() makeChunkFn {
 			buff[i] = v.(byte)
 		}
 
-		leaf := newBlobLeaf(buff)
-		return newMetaTuple(Number(len(buff)), leaf, NewTypedRefFromValue(leaf), uint64(len(buff))), leaf
+		blob := newBlob(newBlobLeafSequence(vr, buff))
+		return newMetaTuple(Number(len(buff)), blob, NewTypedRefFromValue(blob), uint64(len(buff))), blob
 	}
 }
 
 func NewBlob(r io.Reader) Blob {
-	seq := newEmptySequenceChunker(newBlobLeafChunkFn(), newIndexedMetaSequenceChunkFn(BlobType, nil, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(newBlobLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(BlobType, nil, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	buf := []byte{0}
 	for {
 		n, err := r.Read(buf)

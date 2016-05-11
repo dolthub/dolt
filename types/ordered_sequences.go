@@ -14,6 +14,23 @@ type orderedSequence interface {
 
 type orderedMetaSequence struct {
 	metaSequenceObject
+	leafCount uint64
+}
+
+func newOrderedMetaSequence(tuples metaSequenceData, t *Type, vr ValueReader) orderedMetaSequence {
+	leafCount := uint64(0)
+	for _, mt := range tuples {
+		leafCount += mt.numLeaves
+	}
+
+	return orderedMetaSequence{
+		metaSequenceObject{tuples, t, vr},
+		leafCount,
+	}
+}
+
+func (oms orderedMetaSequence) numLeaves() uint64 {
+	return oms.leafCount
 }
 
 func (oms orderedMetaSequence) getKey(idx int) Value {
@@ -102,7 +119,15 @@ func newOrderedMetaSequenceChunkFn(t *Type, vr ValueReader) makeChunkFn {
 			numLeaves += mt.numLeaves
 		}
 
-		meta := newMetaSequenceFromData(tuples, t, vr)
-		return newMetaTuple(tuples.last().value, meta, NewTypedRefFromValue(meta), numLeaves), meta
+		metaSeq := newOrderedMetaSequence(tuples, t, vr)
+		var col Collection
+		if t.Kind() == SetKind {
+			col = newSet(metaSeq)
+		} else {
+			d.Chk.Equal(MapKind, t.Kind())
+			col = newMap(metaSeq)
+		}
+
+		return newMetaTuple(tuples.last().value, col, NewTypedRefFromValue(col), numLeaves), col
 	}
 }

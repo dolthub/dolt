@@ -22,12 +22,12 @@ func TestReadValueBlobLeafDecode(t *testing.T) {
 
 	reader := bytes.NewBufferString("b ")
 	v1 := blobLeafDecode(reader)
-	bl1 := newBlobLeaf([]byte{})
+	bl1 := NewEmptyBlob()
 	assert.True(bl1.Equals(v1))
 
 	reader = bytes.NewBufferString("b Hello World!")
 	v2 := blobLeafDecode(reader)
-	bl2 := newBlobLeaf([]byte("Hello World!"))
+	bl2 := NewBlob(bytes.NewReader([]byte("Hello World!")))
 	assert.True(bl2.Equals(v2))
 }
 
@@ -57,17 +57,13 @@ func TestWriteBlobLeaf(t *testing.T) {
 
 	buf := bytes.NewBuffer([]byte{})
 	b1 := NewBlob(buf)
-	bl1, ok := b1.(blobLeaf)
-	assert.True(ok)
-	r1 := vs.WriteValue(bl1).TargetRef()
+	r1 := vs.WriteValue(b1).TargetRef()
 	// echo -n 'b ' | sha1sum
 	assert.Equal("sha1-e1bc846440ec2fb557a5a271e785cd4c648883fa", r1.String())
 
 	buf = bytes.NewBufferString("Hello, World!")
 	b2 := NewBlob(buf)
-	bl2, ok := b2.(blobLeaf)
-	assert.True(ok)
-	r2 := vs.WriteValue(bl2).TargetRef()
+	r2 := vs.WriteValue(b2).TargetRef()
 	// echo -n 'b Hello, World!' | sha1sum
 	assert.Equal("sha1-135fe1453330547994b2ce8a1b238adfbd7df87e", r2.String())
 }

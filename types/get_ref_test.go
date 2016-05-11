@@ -23,7 +23,6 @@ func TestEnsureRef(t *testing.T) {
 	vs := NewTestValueStore()
 	count := byte(1)
 	mockGetRef := func(v Value) ref.Ref {
-
 		d := ref.Sha1Digest{}
 		d[0] = count
 		count++
@@ -42,29 +41,29 @@ func TestEnsureRef(t *testing.T) {
 		getRefOverride = nil
 	}()
 
-	bl := newBlobLeaf([]byte("hi"))
-	cb := newCompoundBlob([]metaTuple{{bl, Ref{}, Number(2), 2}}, vs)
+	bl := newBlob(newBlobLeafSequence(nil, []byte("hi")))
+	cb := newBlob(newIndexedMetaSequence([]metaTuple{{bl, Ref{}, Number(2), 2}}, BlobType, vs))
 
-	ll := newListLeaf(listType, NewString("foo"))
-	cl := buildCompoundList([]metaTuple{{ll, Ref{}, Number(1), 1}}, listType, vs)
+	ll := newList(newListLeafSequence(listType, nil, NewString("foo")))
+	cl := newList(newIndexedMetaSequence([]metaTuple{{ll, Ref{}, Number(1), 1}}, listType, vs))
 
-	ml := newMapLeaf(mapType, mapEntry{NewString("foo"), NewString("bar")})
-	cm := buildCompoundMap([]metaTuple{{ml, Ref{}, NewString("foo"), 1}}, mapType, vs)
+	ml := newMap(newMapLeafSequence(mapType, nil, mapEntry{NewString("foo"), NewString("bar")}))
+	cm := newMap(newOrderedMetaSequence([]metaTuple{{ml, Ref{}, NewString("foo"), 1}}, mapType, vs))
 
-	sl := newSetLeaf(setType, NewString("foo"))
-	cps := buildCompoundSet([]metaTuple{{sl, Ref{}, NewString("foo"), 1}}, setType, vs)
+	sl := newSet(newSetLeafSequence(setType, nil, NewString("foo")))
+	cps := newSet(newOrderedMetaSequence([]metaTuple{{sl, Ref{}, NewString("foo"), 1}}, setType, vs))
 
 	count = byte(1)
 	values := []Value{
-		newBlobLeaf([]byte{}),
+		newBlob(newBlobLeafSequence(nil, []byte{})),
 		cb,
-		newListLeaf(listType, NewString("bar")),
+		newList(newListLeafSequence(listType, nil, NewString("bar"))),
 		cl,
 		NewString(""),
 		cm,
-		newMapLeaf(mapType),
+		newMap(newMapLeafSequence(mapType, nil)),
 		cps,
-		newSetLeaf(setType),
+		newSet(newSetLeafSequence(setType, nil)),
 	}
 	for i := 0; i < 2; i++ {
 		for j, v := range values {

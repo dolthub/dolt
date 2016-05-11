@@ -4,6 +4,7 @@ type Collection interface {
 	Value
 	Len() uint64
 	Empty() bool
+	sequence() sequence
 }
 
 func valueSlicesEqual(v1 []Value, v2 []Value) bool {

@@ -20,6 +20,10 @@ func (ts testSequence) seqLen() int {
 	return len(ts.items)
 }
 
+func (ts testSequence) numLeaves() uint64 {
+	return uint64(len(ts.items))
+}
+
 func (ts testSequence) getChildSequence(idx int) sequence {
 	child := ts.items[idx]
 	return testSequence{child.([]interface{})}
@@ -38,6 +42,9 @@ func (ts testSequence) Chunks() []Ref {
 	panic("not reached")
 }
 func (ts testSequence) Type() *Type {
+	panic("not reached")
+}
+func (ts testSequence) valueReader() ValueReader {
 	panic("not reached")
 }
 

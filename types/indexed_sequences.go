@@ -17,13 +17,22 @@ type indexedMetaSequence struct {
 	offsets []uint64
 }
 
-func computeIndexedSequenceOffsets(tuples metaSequenceData) (offsets []uint64) {
+func newIndexedMetaSequence(tuples metaSequenceData, t *Type, vr ValueReader) indexedMetaSequence {
+	offsets := make([]uint64, 0)
 	cum := uint64(0)
 	for _, mt := range tuples {
 		cum += mt.uint64Value()
 		offsets = append(offsets, cum)
 	}
-	return
+
+	return indexedMetaSequence{
+		metaSequenceObject{tuples, t, vr},
+		offsets,
+	}
+}
+
+func (ims indexedMetaSequence) numLeaves() uint64 {
+	return ims.offsets[len(ims.offsets)-1]
 }
 
 func (ims indexedMetaSequence) getOffset(idx int) uint64 {
@@ -90,11 +99,18 @@ func newIndexedMetaSequenceChunkFn(t *Type, source ValueReader, sink ValueWriter
 			numLeaves += mt.numLeaves
 		}
 
-		meta := newMetaSequenceFromData(tuples, t, source)
-		if sink != nil {
-			r := sink.WriteValue(meta)
-			return newMetaTuple(Number(tuples.uint64ValuesSum()), nil, r, numLeaves), meta
+		metaSeq := newIndexedMetaSequence(tuples, t, source)
+		var col Collection
+		if t.Kind() == ListKind {
+			col = newList(metaSeq)
+		} else {
+			d.Chk.Equal(BlobKind, t.Kind())
+			col = newBlob(metaSeq)
 		}
-		return newMetaTuple(Number(tuples.uint64ValuesSum()), meta, NewTypedRefFromValue(meta), numLeaves), meta
+		if sink != nil {
+			r := sink.WriteValue(col)
+			return newMetaTuple(Number(tuples.uint64ValuesSum()), nil, r, numLeaves), col
+		}
+		return newMetaTuple(Number(tuples.uint64ValuesSum()), col, NewTypedRefFromValue(col), numLeaves), col
 	}
 }

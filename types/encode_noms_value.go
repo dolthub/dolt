@@ -100,8 +100,8 @@ func (w *jsonArrayWriter) writeType(t *Type, parentStructTypes []*Type) {
 	}
 }
 
-func (w *jsonArrayWriter) maybeWriteMetaSequence(v Value, tr *Type) bool {
-	ms, ok := v.(metaSequence)
+func (w *jsonArrayWriter) maybeWriteMetaSequence(seq sequence, tr *Type) bool {
+	ms, ok := seq.(metaSequence)
 	if !ok {
 		w.write(false) // not a meta sequence
 		return false
@@ -128,16 +128,18 @@ func (w *jsonArrayWriter) writeValue(v Value) {
 	w.writeType(t, nil)
 	switch t.Kind() {
 	case BlobKind:
-		if w.maybeWriteMetaSequence(v, t) {
+		blob := v.(Blob)
+		if w.maybeWriteMetaSequence(blob.sequence(), t) {
 			return
 		}
-		w.writeBlob(v.(Blob))
+		w.writeBlob(blob)
 	case BoolKind:
 		w.writeBool(bool(v.(Bool)))
 	case NumberKind:
 		w.writeFloat(float64(v.(Number)))
 	case ListKind:
-		if w.maybeWriteMetaSequence(v, t) {
+		seq := v.(List).sequence()
+		if w.maybeWriteMetaSequence(seq, t) {
 			return
 		}
 
@@ -147,7 +149,8 @@ func (w *jsonArrayWriter) writeValue(v Value) {
 		})
 		w.write(w2.toArray())
 	case MapKind:
-		if w.maybeWriteMetaSequence(v, t) {
+		seq := v.(Map).sequence()
+		if w.maybeWriteMetaSequence(seq, t) {
 			return
 		}
 
@@ -160,7 +163,8 @@ func (w *jsonArrayWriter) writeValue(v Value) {
 	case RefKind:
 		w.writeRef(v.(Ref))
 	case SetKind:
-		if w.maybeWriteMetaSequence(v, t) {
+		seq := v.(Set).sequence()
+		if w.maybeWriteMetaSequence(seq, t) {
 			return
 		}
 

@@ -114,71 +114,76 @@ func (r *jsonArrayReader) readType(parentStructTypes []*Type) *Type {
 	return MakePrimitiveType(k)
 }
 
-func (r *jsonArrayReader) readBlob() Value {
+func (r *jsonArrayReader) readBlobLeafSequence() indexedSequence {
 	s := r.readString()
 	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(s))
 	b, err := ioutil.ReadAll(decoder)
 	d.Exp.NoError(err)
-	return newBlobLeaf(b)
+	return newBlobLeafSequence(r.vr, b)
 }
 
-func (r *jsonArrayReader) readList(t *Type) Value {
+func (r *jsonArrayReader) readListLeafSequence(t *Type) indexedSequence {
 	data := []Value{}
 	for !r.atEnd() {
 		v := r.readValue()
 		data = append(data, v)
 	}
 
-	return newListLeaf(t, data...)
+	return newListLeafSequence(t, r.vr, data...)
 }
 
-func (r *jsonArrayReader) readSet(t *Type) Value {
-	data := setData{}
+func (r *jsonArrayReader) readSetLeafSequence(t *Type) orderedSequence {
+	data := []Value{}
 	for !r.atEnd() {
 		v := r.readValue()
 		data = append(data, v)
 	}
 
-	return newSetLeaf(t, data...)
+	return newSetLeafSequence(t, r.vr, data...)
 }
 
-func (r *jsonArrayReader) readMap(t *Type) Value {
-	data := mapData{}
+func (r *jsonArrayReader) readMapLeafSequence(t *Type) orderedSequence {
+	data := []mapEntry{}
 	for !r.atEnd() {
 		k := r.readValue()
 		v := r.readValue()
 		data = append(data, mapEntry{k, v})
 	}
 
-	return newMapLeaf(t, data...)
+	return newMapLeafSequence(t, r.vr, data...)
 }
 
-func (r *jsonArrayReader) maybeReadMetaSequence(t *Type) (Value, bool) {
-	if !r.read().(bool) {
-		return nil, false
-	}
-
-	r2 := newJSONArrayReader(r.readArray(), r.vr)
+func (r *jsonArrayReader) readMetaSequence() metaSequenceData {
 	data := metaSequenceData{}
-	for !r2.atEnd() {
-		ref := r2.readValue().(Ref)
-		v := r2.readValue()
-		numLeaves := uint64(r2.readUint())
+	for !r.atEnd() {
+		ref := r.readValue().(Ref)
+		v := r.readValue()
+		numLeaves := uint64(r.readUint())
 		data = append(data, newMetaTuple(v, nil, ref, numLeaves))
 	}
 
-	return newMetaSequenceFromData(data, t, r.vr), true
+	return data
+}
+
+func (r *jsonArrayReader) readIndexedMetaSequence(t *Type) indexedMetaSequence {
+	return newIndexedMetaSequence(r.readMetaSequence(), t, r.vr)
+}
+
+func (r *jsonArrayReader) readOrderedMetaSequence(t *Type) orderedMetaSequence {
+	return newOrderedMetaSequence(r.readMetaSequence(), t, r.vr)
 }
 
 func (r *jsonArrayReader) readValue() Value {
 	t := r.readType(nil)
 	switch t.Kind() {
 	case BlobKind:
-		if ms, ok := r.maybeReadMetaSequence(t); ok {
-			return ms
+		isMeta := r.readBool()
+		if isMeta {
+			r2 := newJSONArrayReader(r.readArray(), r.vr)
+			return newBlob(r2.readIndexedMetaSequence(t))
 		}
 
-		return r.readBlob()
+		return newBlob(r.readBlobLeafSequence())
 	case BoolKind:
 		return Bool(r.read().(bool))
 	case NumberKind:
@@ -186,25 +191,28 @@ func (r *jsonArrayReader) readValue() Value {
 	case StringKind:
 		return NewString(r.readString())
 	case ListKind:
-		if ms, ok := r.maybeReadMetaSequence(t); ok {
-			return ms
-		}
+		isMeta := r.readBool()
 		r2 := newJSONArrayReader(r.readArray(), r.vr)
-		return r2.readList(t)
+		if isMeta {
+			return newList(r2.readIndexedMetaSequence(t))
+		}
+		return newList(r2.readListLeafSequence(t))
 	case MapKind:
-		if ms, ok := r.maybeReadMetaSequence(t); ok {
-			return ms
-		}
+		isMeta := r.readBool()
 		r2 := newJSONArrayReader(r.readArray(), r.vr)
-		return r2.readMap(t)
+		if isMeta {
+			return newMap(r2.readOrderedMetaSequence(t))
+		}
+		return newMap(r2.readMapLeafSequence(t))
 	case RefKind:
 		return r.readRef(t)
 	case SetKind:
-		if ms, ok := r.maybeReadMetaSequence(t); ok {
-			return ms
-		}
+		isMeta := r.readBool()
 		r2 := newJSONArrayReader(r.readArray(), r.vr)
-		return r2.readSet(t)
+		if isMeta {
+			return newSet(r2.readOrderedMetaSequence(t))
+		}
+		return newSet(r2.readSetLeafSequence(t))
 	case StructKind:
 		return r.readStruct(t)
 	case TypeKind:
