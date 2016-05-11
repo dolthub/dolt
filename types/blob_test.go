@@ -5,7 +5,6 @@ import (
 	"io"
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
@@ -145,30 +144,6 @@ func (suite *blobTestSuite) TestRandomRead() {
 		start = start + count
 		count = (length - start) / 2
 	}
-}
-
-func chunkDiffCount(c1 []Ref, c2 []Ref) int {
-	count := 0
-	refs := make(map[ref.Ref]int)
-
-	for _, r := range c1 {
-		refs[r.TargetRef()]++
-	}
-
-	for _, r := range c2 {
-		if c, ok := refs[r.TargetRef()]; ok {
-			if c == 1 {
-				delete(refs, r.TargetRef())
-			} else {
-				refs[r.TargetRef()] = c - 1
-			}
-		} else {
-			count++
-		}
-	}
-
-	count += len(refs)
-	return count
 }
 
 type testReader struct {
