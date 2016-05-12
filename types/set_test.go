@@ -673,7 +673,7 @@ func TestSetChunks(t *testing.T) {
 	c1 := l1.Chunks()
 	assert.Len(c1, 0)
 
-	l2 := NewSet(NewTypedRefFromValue(Number(0)))
+	l2 := NewSet(NewRef(Number(0)))
 	c2 := l2.Chunks()
 	assert.Len(c2, 1)
 }

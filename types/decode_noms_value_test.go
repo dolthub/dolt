@@ -127,8 +127,8 @@ func TestReadCompoundList(t *testing.T) {
 	list1 := newList(newListLeafSequence(tr, cs, Number(0)))
 	list2 := newList(newListLeafSequence(tr, cs, Number(1), Number(2), Number(3)))
 	l2 := newList(newIndexedMetaSequence([]metaTuple{
-		newMetaTuple(Number(1), list1, NewTypedRefFromValue(list1), 1),
-		newMetaTuple(Number(4), list2, NewTypedRefFromValue(list2), 4),
+		newMetaTuple(Number(1), list1, NewRef(list1), 1),
+		newMetaTuple(Number(4), list2, NewRef(list2), 4),
 	}, tr, cs))
 
 	a := parseJSON(`[
@@ -151,8 +151,8 @@ func TestReadCompoundSet(t *testing.T) {
 	set1 := newSet(newSetLeafSequence(tr, cs, Number(0), Number(1)))
 	set2 := newSet(newSetLeafSequence(tr, cs, Number(2), Number(3), Number(4)))
 	l2 := newSet(newOrderedMetaSequence([]metaTuple{
-		newMetaTuple(Number(1), set1, NewTypedRefFromValue(set1), 2),
-		newMetaTuple(Number(4), set2, NewTypedRefFromValue(set2), 3),
+		newMetaTuple(Number(1), set1, NewRef(set1), 2),
+		newMetaTuple(Number(4), set2, NewRef(set2), 3),
 	}, tr, cs))
 
 	a := parseJSON(`[
@@ -216,9 +216,9 @@ func TestReadCompoundBlob(t *testing.T) {
 	_, ok := m.(Blob)
 	assert.True(ok)
 	m2 := newBlob(newIndexedMetaSequence([]metaTuple{
-		newMetaTuple(Number(20), nil, NewTypedRef(RefOfBlobType, r1, 1), 20),
-		newMetaTuple(Number(40), nil, NewTypedRef(RefOfBlobType, r2, 1), 40),
-		newMetaTuple(Number(60), nil, NewTypedRef(RefOfBlobType, r3, 1), 60),
+		newMetaTuple(Number(20), nil, constructRef(RefOfBlobType, r1, 1), 20),
+		newMetaTuple(Number(40), nil, constructRef(RefOfBlobType, r2, 1), 40),
+		newMetaTuple(Number(60), nil, constructRef(RefOfBlobType, r3, 1), 60),
 	}, BlobType, cs))
 
 	assert.True(m.Type().Equals(m2.Type()))
@@ -308,7 +308,7 @@ func TestReadRef(t *testing.T) {
 	reader := newJSONArrayReader(a, cs)
 	v := reader.readValue()
 	tr := MakeRefType(NumberType)
-	assert.True(NewTypedRef(tr, r, 42).Equals(v))
+	assert.True(constructRef(tr, r, 42).Equals(v))
 }
 
 func TestReadStructWithBlob(t *testing.T) {

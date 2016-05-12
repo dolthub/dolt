@@ -791,11 +791,11 @@ func TestMapChunks(t *testing.T) {
 	c1 := l1.Chunks()
 	assert.Len(c1, 0)
 
-	l2 := NewMap(NewTypedRefFromValue(Number(0)), Number(1))
+	l2 := NewMap(NewRef(Number(0)), Number(1))
 	c2 := l2.Chunks()
 	assert.Len(c2, 1)
 
-	l3 := NewMap(Number(0), NewTypedRefFromValue(Number(1)))
+	l3 := NewMap(Number(0), NewRef(Number(1)))
 	c3 := l3.Chunks()
 	assert.Len(c3, 1)
 }

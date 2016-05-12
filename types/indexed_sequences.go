@@ -111,6 +111,6 @@ func newIndexedMetaSequenceChunkFn(t *Type, source ValueReader, sink ValueWriter
 			r := sink.WriteValue(col)
 			return newMetaTuple(Number(tuples.uint64ValuesSum()), nil, r, numLeaves), col
 		}
-		return newMetaTuple(Number(tuples.uint64ValuesSum()), col, NewTypedRefFromValue(col), numLeaves), col
+		return newMetaTuple(Number(tuples.uint64ValuesSum()), col, NewRef(col), numLeaves), col
 	}
 }

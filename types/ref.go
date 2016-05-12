@@ -12,13 +12,15 @@ type Ref struct {
 	ref    *ref.Ref
 }
 
-func NewTypedRef(t *Type, target ref.Ref, height uint64) Ref {
-	d.Chk.Equal(RefKind, t.Kind(), "Invalid type. Expected: RefKind, found: %s", t.Describe())
-	return Ref{target, height, t, &ref.Ref{}}
+func NewRef(v Value) Ref {
+	return Ref{v.Ref(), maxChunkHeight(v) + 1, MakeRefType(v.Type()), &ref.Ref{}}
 }
 
-func NewTypedRefFromValue(v Value) Ref {
-	return NewTypedRef(MakeRefType(v.Type()), v.Ref(), maxChunkHeight(v)+1)
+// Constructs a Ref directly from struct properties. This should not be used outside decoding and testing within the types package.
+func constructRef(t *Type, target ref.Ref, height uint64) Ref {
+	d.Chk.Equal(RefKind, t.Kind(), "Invalid type. Expected: RefKind, found: %s", t.Describe())
+	d.Chk.NotEqual(ValueType, t.Desc.(CompoundDesc).ElemTypes[0])
+	return Ref{target, height, t, &ref.Ref{}}
 }
 
 func maxChunkHeight(v Value) (max uint64) {

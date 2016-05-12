@@ -32,7 +32,7 @@ func TestGenericStructChunks(t *testing.T) {
 
 	b := Bool(true)
 
-	data1 := structData{"r": NewTypedRefFromValue(b)}
+	data1 := structData{"r": NewRef(b)}
 	s1 := newStructFromData(data1, typ)
 
 	assert.Len(s1.Chunks(), 1)

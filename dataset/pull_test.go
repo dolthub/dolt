@@ -19,7 +19,7 @@ func TestValidateRef(t *testing.T) {
 	r := ds.Store().WriteValue(b)
 
 	assert.Panics(t, func() { ds.validateRefAsCommit(r) })
-	assert.Panics(t, func() { ds.validateRefAsCommit(types.NewTypedRefFromValue(b)) })
+	assert.Panics(t, func() { ds.validateRefAsCommit(types.NewRef(b)) })
 }
 
 func NewList(ds Dataset, vs ...types.Value) types.Ref {
@@ -69,7 +69,7 @@ func pullTest(t *testing.T, topdown bool) {
 	source, err = source.Commit(updatedValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source.Store(), types.NewTypedRefFromValue(source.Head()), 1, topdown)
+	sink, err = sink.pull(source.Store(), types.NewRef(source.Head()), 1, topdown)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
@@ -98,7 +98,7 @@ func pullFirstCommit(t *testing.T, topdown bool) {
 	source, err := source.Commit(sourceInitialValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source.Store(), types.NewTypedRefFromValue(source.Head()), 1, topdown)
+	sink, err = sink.pull(source.Store(), types.NewRef(source.Head()), 1, topdown)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
@@ -125,7 +125,7 @@ func pullDeepRef(t *testing.T, topdown bool) {
 	source, err := source.Commit(sourceInitialValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source.Store(), types.NewTypedRefFromValue(source.Head()), 1, topdown)
+	sink, err = sink.pull(source.Store(), types.NewRef(source.Head()), 1, topdown)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }

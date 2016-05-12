@@ -53,7 +53,7 @@ func main() {
 		}
 
 		var err error
-		sinkDataset, err = sinkDataset.Pull(sourceStore, types.NewTypedRefFromValue(sourceObj), int(*p))
+		sinkDataset, err = sinkDataset.Pull(sourceStore, types.NewRef(sourceObj), int(*p))
 
 		util.MaybeWriteMemProfile()
 		d.Exp.NoError(err)

@@ -128,6 +128,6 @@ func newOrderedMetaSequenceChunkFn(t *Type, vr ValueReader) makeChunkFn {
 			col = newMap(metaSeq)
 		}
 
-		return newMetaTuple(tuples.last().value, col, NewTypedRefFromValue(col), numLeaves), col
+		return newMetaTuple(tuples.last().value, col, NewRef(col), numLeaves), col
 	}
 }

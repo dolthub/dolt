@@ -131,9 +131,9 @@ func TestWriteCompoundBlob(t *testing.T) {
 	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
 
 	v := newBlob(newIndexedMetaSequence([]metaTuple{
-		newMetaTuple(Number(20), nil, NewTypedRef(RefOfBlobType, r1, 11), 20),
-		newMetaTuple(Number(40), nil, NewTypedRef(RefOfBlobType, r2, 22), 40),
-		newMetaTuple(Number(60), nil, NewTypedRef(RefOfBlobType, r3, 33), 60),
+		newMetaTuple(Number(20), nil, constructRef(RefOfBlobType, r1, 11), 20),
+		newMetaTuple(Number(40), nil, constructRef(RefOfBlobType, r2, 22), 40),
+		newMetaTuple(Number(60), nil, constructRef(RefOfBlobType, r3, 33), 60),
 	}, BlobType, NewTestValueStore()))
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeValue(v)
@@ -245,8 +245,8 @@ func TestWriteCompoundList(t *testing.T) {
 	list1 := newList(newListLeafSequence(ltr, cs, Number(0)))
 	list2 := newList(newListLeafSequence(ltr, cs, Number(1), Number(2), Number(3)))
 	cl := newList(newIndexedMetaSequence([]metaTuple{
-		newMetaTuple(Number(1), list1, NewTypedRefFromValue(list1), 1),
-		newMetaTuple(Number(4), list2, NewTypedRefFromValue(list2), 4),
+		newMetaTuple(Number(1), list1, NewRef(list1), 1),
+		newMetaTuple(Number(4), list2, NewRef(list2), 4),
 	}, ltr, cs))
 
 	w := newJSONArrayWriter(cs)
@@ -266,8 +266,8 @@ func TestWriteCompoundSet(t *testing.T) {
 	set1 := newSet(newSetLeafSequence(ltr, cs, Number(0), Number(1)))
 	set2 := newSet(newSetLeafSequence(ltr, cs, Number(2), Number(3), Number(4)))
 	cl := newSet(newOrderedMetaSequence([]metaTuple{
-		newMetaTuple(Number(1), set1, NewTypedRefFromValue(set1), 2),
-		newMetaTuple(Number(4), set2, NewTypedRefFromValue(set2), 3),
+		newMetaTuple(Number(1), set1, NewRef(set1), 2),
+		newMetaTuple(Number(4), set2, NewRef(set2), 3),
 	}, ltr, cs))
 
 	w := newJSONArrayWriter(cs)
@@ -348,7 +348,7 @@ func TestWriteRef(t *testing.T) {
 
 	typ := MakeRefType(NumberType)
 	r := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
-	v := NewTypedRef(typ, r, 4)
+	v := constructRef(typ, r, 4)
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeValue(v)

@@ -33,8 +33,8 @@ func TestValueEquals(t *testing.T) {
 			b1 := NewBlob(bytes.NewBufferString("hi"))
 			b2 := NewBlob(bytes.NewBufferString("bye"))
 			return newBlob(newIndexedMetaSequence([]metaTuple{
-				newMetaTuple(Number(uint64(2)), b1, NewTypedRefFromValue(b1), 2),
-				newMetaTuple(Number(uint64(5)), b2, NewTypedRefFromValue(b2), 5),
+				newMetaTuple(Number(uint64(2)), b1, NewRef(b1), 2),
+				newMetaTuple(Number(uint64(5)), b2, NewRef(b2), 5),
 			}, BlobType, nil))
 		},
 		func() Value { return NewList() },
@@ -76,7 +76,7 @@ func TestValueEquals(t *testing.T) {
 		}
 		v := f1()
 		if v != nil {
-			r := NewTypedRefFromValue(v)
+			r := NewRef(v)
 			assert.False(r.Equals(v))
 			assert.False(v.Equals(r))
 		}

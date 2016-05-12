@@ -81,7 +81,7 @@ func (r *jsonArrayReader) readKind() NomsKind {
 func (r *jsonArrayReader) readRef(t *Type) Ref {
 	ref := ref.Parse(r.readString())
 	height := r.readUint()
-	return NewTypedRef(t, ref, height)
+	return constructRef(t, ref, height)
 }
 
 func (r *jsonArrayReader) readType(parentStructTypes []*Type) *Type {

@@ -90,14 +90,14 @@ func (suite *HTTPBatchStoreSuite) TestPutChunk() {
 }
 
 func (suite *HTTPBatchStoreSuite) TestPutChunksInOrder() {
-	chnx := []chunks.Chunk{
-		types.EncodeValue(types.NewString("abc"), nil),
-		types.EncodeValue(types.NewString("def"), nil),
+	vals := []types.Value{
+		types.NewString("abc"),
+		types.NewString("def"),
 	}
 	l := types.NewList()
-	for _, c := range chnx {
-		suite.store.SchedulePut(c, types.Hints{})
-		l = l.Append(newStringRef(c.Ref(), 1))
+	for _, val := range vals {
+		suite.store.SchedulePut(types.EncodeValue(val, nil), types.Hints{})
+		l = l.Append(types.NewRef(val))
 	}
 	suite.store.SchedulePut(types.EncodeValue(l, nil), types.Hints{})
 	suite.store.Flush()
@@ -106,12 +106,16 @@ func (suite *HTTPBatchStoreSuite) TestPutChunksInOrder() {
 }
 
 func (suite *HTTPBatchStoreSuite) TestPutChunkWithHints() {
+	vals := []types.Value{
+		types.NewString("abc"),
+		types.NewString("def"),
+	}
 	chnx := []chunks.Chunk{
-		types.EncodeValue(types.NewString("abc"), nil),
-		types.EncodeValue(types.NewString("def"), nil),
+		types.EncodeValue(vals[0], nil),
+		types.EncodeValue(vals[1], nil),
 	}
 	suite.NoError(suite.cs.PutMany(chnx))
-	l := types.NewList(newStringRef(chnx[0].Ref(), 1), newStringRef(chnx[1].Ref(), 1))
+	l := types.NewList(types.NewRef(vals[0]), types.NewRef(vals[1]))
 
 	suite.store.SchedulePut(types.EncodeValue(l, nil), types.Hints{
 		chnx[0].Ref(): struct{}{},
@@ -153,14 +157,14 @@ func (suite *HTTPBatchStoreSuite) TestPutChunksBackpressure() {
 	defer bs.Close()
 	defer bpcs.Close()
 
-	chnx := []chunks.Chunk{
-		types.EncodeValue(types.NewString("abc"), nil),
-		types.EncodeValue(types.NewString("def"), nil),
+	vals := []types.Value{
+		types.NewString("abc"),
+		types.NewString("def"),
 	}
 	l := types.NewList()
-	for _, c := range chnx {
-		bs.SchedulePut(c, types.Hints{})
-		l = l.Append(newStringRef(c.Ref(), 1))
+	for _, v := range vals {
+		bs.SchedulePut(types.EncodeValue(v, nil), types.Hints{})
+		l = l.Append(types.NewRef(v))
 	}
 	bs.SchedulePut(types.EncodeValue(l, nil), types.Hints{})
 	bs.Flush()
@@ -185,8 +189,4 @@ func (suite *HTTPBatchStoreSuite) TestGet() {
 	suite.cs.Put(c)
 	got := suite.store.Get(c.Ref())
 	suite.Equal(c.Ref(), got.Ref())
-}
-
-func newStringRef(r ref.Ref, height uint64) types.Ref {
-	return types.NewTypedRef(types.MakeRefType(types.StringType), r, height)
 }

@@ -205,6 +205,6 @@ func makeListLeafChunkFn(t *Type, vr ValueReader, sink ValueWriter) makeChunkFn 
 		if sink != nil {
 			return newMetaTuple(Number(len(values)), nil, sink.WriteValue(list), uint64(len(values))), list
 		}
-		return newMetaTuple(Number(len(values)), list, NewTypedRefFromValue(list), uint64(len(values))), list
+		return newMetaTuple(Number(len(values)), list, NewRef(list), uint64(len(values))), list
 	}
 }

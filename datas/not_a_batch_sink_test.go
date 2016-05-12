@@ -47,14 +47,14 @@ func (suite *NotABatchSinkSuite) TearDownTest() {
 }
 
 func (suite *NotABatchSinkSuite) TestPutChunks() {
-	chnx := []chunks.Chunk{
-		types.EncodeValue(types.NewString("abc"), nil),
-		types.EncodeValue(types.NewString("def"), nil),
+	vals := []types.Value{
+		types.NewString("abc"),
+		types.NewString("def"),
 	}
 	l := types.NewList()
-	for _, c := range chnx {
-		suite.store.SchedulePut(c, types.Hints{})
-		l = l.Append(newStringRef(c.Ref(), 1))
+	for _, v := range vals {
+		suite.store.SchedulePut(types.EncodeValue(v, nil), types.Hints{})
+		l = l.Append(types.NewRef(v))
 	}
 	suite.store.SchedulePut(types.EncodeValue(l, nil), types.Hints{})
 	suite.store.Flush()

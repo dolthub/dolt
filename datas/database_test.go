@@ -78,13 +78,13 @@ func (suite *DatabaseSuite) TestReadWriteCachePersists() {
 	suite.NoError(err)
 	suite.Equal(1, suite.cs.Writes-writesOnCommit)
 
-	newCommit := NewCommit().Set(ValueField, r).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(commit)))
+	newCommit := NewCommit().Set(ValueField, r).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(commit)))
 	suite.ds, err = suite.ds.Commit("foo", newCommit)
 	suite.NoError(err)
 }
 
 func (suite *DatabaseSuite) TestWriteRefToNonexistentValue() {
-	suite.Panics(func() { suite.ds.WriteValue(types.NewTypedRefFromValue(types.Bool(true))) })
+	suite.Panics(func() { suite.ds.WriteValue(types.NewRef(types.Bool(true))) })
 }
 
 func (suite *DatabaseSuite) TestTolerateUngettableRefs() {
@@ -118,7 +118,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 
 	// |a| <- |b|
 	b := types.NewString("b")
-	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(aCommit)))
+	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(aCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
@@ -128,14 +128,14 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	//   \----|c|
 	// Should be disallowed.
 	c := types.NewString("c")
-	cCommit := NewCommit().Set(ValueField, c).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(aCommit)))
+	cCommit := NewCommit().Set(ValueField, c).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(aCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
 	suite.Error(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
 
 	// |a| <- |b| <- |d|
 	d := types.NewString("d")
-	dCommit := NewCommit().Set(ValueField, d).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(bCommit)))
+	dCommit := NewCommit().Set(ValueField, d).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(bCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, dCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(d))
@@ -204,7 +204,7 @@ func (suite *DatabaseSuite) TestDatabaseDeleteConcurrent() {
 
 	// |a| <- |b|
 	b := types.NewString("b")
-	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(aCommit)))
+	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(aCommit)))
 	ds2, err := suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(a))
@@ -233,7 +233,7 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 	aCommit := NewCommit().Set(ValueField, a)
 	suite.ds, err = suite.ds.Commit(datasetID, aCommit)
 	b := types.NewString("b")
-	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(aCommit)))
+	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(aCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
@@ -244,7 +244,7 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 	// Change 1:
 	// |a| <- |b| <- |c|
 	c := types.NewString("c")
-	cCommit := NewCommit().Set(ValueField, c).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(bCommit)))
+	cCommit := NewCommit().Set(ValueField, c).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(bCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(c))
@@ -253,7 +253,7 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 	// |a| <- |b| <- |e|
 	// Should be disallowed, Database returned by Commit() should have |c| as Head.
 	e := types.NewString("e")
-	eCommit := NewCommit().Set(ValueField, e).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewTypedRefFromValue(bCommit)))
+	eCommit := NewCommit().Set(ValueField, e).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(bCommit)))
 	ds2, err = ds2.Commit(datasetID, eCommit)
 	suite.Error(err)
 	suite.True(ds2.Head(datasetID).Get(ValueField).Equals(c))

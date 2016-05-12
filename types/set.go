@@ -238,10 +238,10 @@ func makeSetLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 		if len(setData) > 0 {
 			indexValue = setData[len(setData)-1]
 			if !isSequenceOrderedByIndexedType(t) {
-				indexValue = NewTypedRefFromValue(indexValue)
+				indexValue = NewRef(indexValue)
 			}
 		}
 
-		return newMetaTuple(indexValue, set, NewTypedRefFromValue(set), uint64(len(items))), set
+		return newMetaTuple(indexValue, set, NewRef(set), uint64(len(items))), set
 	}
 }

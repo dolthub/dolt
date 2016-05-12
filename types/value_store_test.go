@@ -77,7 +77,7 @@ func TestCheckChunksInCache(t *testing.T) {
 	cs.Put(EncodeValue(b, nil))
 	cvs.set(b.Ref(), hintedChunk{b.Type(), b.Ref()})
 
-	bref := NewTypedRefFromValue(b)
+	bref := NewRef(b)
 	assert.NotPanics(func() { cvs.checkChunksInCache(bref) })
 }
 

@@ -67,7 +67,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	c := EncodeValue(v, lvs)
 	d.Chk.False(c.IsEmpty())
 	hash := c.Ref()
-	r := NewTypedRef(MakeRefType(v.Type()), hash, maxChunkHeight(v)+1)
+	r := constructRef(MakeRefType(v.Type()), hash, maxChunkHeight(v)+1)
 	if lvs.isPresent(hash) {
 		return r
 	}
