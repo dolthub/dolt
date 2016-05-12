@@ -644,52 +644,6 @@ func TestSetOrdering(t *testing.T) {
 	)
 }
 
-func TestSetFilter(t *testing.T) {
-	assert := assert.New(t)
-
-	s := NewSet(Number(0), Number(1), Number(2), Number(3), Number(4))
-	s2 := s.Filter(func(v Value) bool {
-		i, ok := v.(Number)
-		assert.True(ok)
-		return uint64(i)%2 == 0
-	})
-
-	s3 := s.Filter(func(v Value) bool {
-		i, ok := v.(Number)
-		assert.True(ok)
-		return uint64(i)%3 == 0
-	})
-
-	assert.True(NewSet(Number(0), Number(2), Number(4)).Equals(s2))
-	assert.True(NewSet(Number(0), Number(3)).Equals(s3))
-}
-
-func TestSetFilter2(t *testing.T) {
-	assert := assert.New(t)
-
-	doTest := func(ts testSet) {
-		set := ts.toSet()
-		sort.Sort(ts)
-		pivotPoint := 10
-		pivot := ts.values[pivotPoint]
-		actual := set.Filter(func(v Value) bool {
-			return ts.less(v, pivot)
-		})
-		assert.True(newTypedSet(ts.tr, ts.values[:pivotPoint+1]...).Equals(actual))
-
-		idx := 0
-		actual.IterAll(func(v Value) {
-			assert.True(ts.values[idx].Equals(v), "%v != %v", v, ts.values[idx])
-			idx++
-		})
-	}
-
-	doTest(getTestNativeOrderSet(16))
-	doTest(getTestRefValueOrderSet(2))
-	doTest(getTestRefToNativeOrderSet(2, NewTestValueStore()))
-	doTest(getTestRefToValueOrderSet(2, NewTestValueStore()))
-}
-
 func TestSetType(t *testing.T) {
 	assert := assert.New(t)
 
@@ -703,11 +657,6 @@ func TestSetType(t *testing.T) {
 	assert.True(s.Type().Equals(MakeSetType(NumberType)))
 
 	s2 := s.Remove(Number(1))
-	assert.True(s.Type().Equals(s2.Type()))
-
-	s2 = s.Filter(func(v Value) bool {
-		return true
-	})
 	assert.True(s.Type().Equals(s2.Type()))
 
 	s2 = s.Insert(Number(0), Number(1))

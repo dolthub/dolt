@@ -89,23 +89,9 @@ func (l List) sequence() sequence {
 }
 
 func (l List) Get(idx uint64) Value {
+	d.Chk.True(idx < l.Len())
 	cur := newCursorAtIndex(l.seq, idx)
 	return cur.current().(Value)
-}
-
-func (l List) Slice(start uint64, end uint64) List {
-	// See https://github.com/attic-labs/noms/issues/744 for a better Slice implementation.
-	cur := newCursorAtIndex(l.seq, start)
-	slice := make([]Value, 0, end-start)
-	for i := start; i < end; i++ {
-		if !cur.valid() {
-			break
-		}
-
-		slice = append(slice, cur.current().(Value))
-		cur.advance()
-	}
-	return NewTypedList(l.seq.Type(), slice...)
 }
 
 type MapFunc func(v Value, index uint64) interface{}
@@ -129,64 +115,47 @@ func (l List) elemType() *Type {
 }
 
 func (l List) Set(idx uint64, v Value) List {
-	assertType(l.elemType(), v)
-	seq := listSequenceChunkerAtIndex(l.seq, idx)
-	seq.Skip()
-	seq.Append(v)
-	return seq.Done().(List)
+	d.Chk.True(idx < l.Len())
+	return l.Splice(idx, 1, v)
 }
 
 func (l List) Append(vs ...Value) List {
-	return l.Insert(l.Len(), vs...)
+	return l.Splice(l.Len(), 0, vs...)
 }
 
-func (l List) Insert(idx uint64, vs ...Value) List {
-	if len(vs) == 0 {
+func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
+	if deleteCount == 0 && len(vs) == 0 {
 		return l
 	}
+
+	d.Chk.True(idx <= l.Len())
+	d.Chk.True(idx+deleteCount <= l.Len())
 
 	assertType(l.elemType(), vs...)
 
-	seq := listSequenceChunkerAtIndex(l.seq, idx)
-	for _, v := range vs {
-		seq.Append(v)
+	cur := newCursorAtIndex(l.seq, idx)
+	ch := newSequenceChunker(cur, makeListLeafChunkFn(l.seq.Type(), l.seq.valueReader(), nil), newIndexedMetaSequenceChunkFn(l.seq.Type(), l.seq.valueReader(), nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	for deleteCount > 0 {
+		ch.Skip()
+		deleteCount--
 	}
-	return seq.Done().(List)
-}
 
-func listSequenceChunkerAtIndex(seq indexedSequence, idx uint64) *sequenceChunker {
-	cur := newCursorAtIndex(seq, idx)
-	return newSequenceChunker(cur, makeListLeafChunkFn(seq.Type(), seq.valueReader(), nil), newIndexedMetaSequenceChunkFn(seq.Type(), seq.valueReader(), nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
-}
-
-type listFilterCallback func(v Value, index uint64) (keep bool)
-
-func (l List) Filter(cb listFilterCallback) List {
-	seq := l.seq
-	ch := newEmptySequenceChunker(makeListLeafChunkFn(seq.Type(), l.seq.valueReader(), nil), newIndexedMetaSequenceChunkFn(seq.Type(), seq.valueReader(), nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
-	l.IterAll(func(v Value, idx uint64) {
-		if cb(v, idx) {
-			ch.Append(v)
-		}
-	})
+	for _, v := range vs {
+		ch.Append(v)
+	}
 	return ch.Done().(List)
 }
 
+func (l List) Insert(idx uint64, vs ...Value) List {
+	return l.Splice(idx, 0, vs...)
+}
+
 func (l List) Remove(start uint64, end uint64) List {
-	if start == end {
-		return l
-	}
-	d.Chk.True(end > start)
-	d.Chk.True(start < l.Len() && end <= l.Len())
-	seq := listSequenceChunkerAtIndex(l.seq, start)
-	for i := start; i < end; i++ {
-		seq.Skip()
-	}
-	return seq.Done().(List)
+	return l.Splice(start, end-start)
 }
 
 func (l List) RemoveAt(idx uint64) List {
-	return l.Remove(idx, idx+1)
+	return l.Splice(idx, 1)
 }
 
 type listIterFunc func(v Value, index uint64) (stop bool)

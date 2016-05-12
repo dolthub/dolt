@@ -571,16 +571,6 @@ func TestMapIterAll(t *testing.T) {
 	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
 }
 
-func TestMapFilter2(t *testing.T) {
-	assert := assert.New(t)
-
-	m := NewMap(Number(0), NewString("a"), Number(1), NewString("b"), Number(2), NewString("c"))
-	m2 := m.Filter(func(k, v Value) bool {
-		return k.Equals(Number(0)) || v.Equals(NewString("c"))
-	})
-	assert.True(NewMap(Number(0), NewString("a"), Number(2), NewString("c")).Equals(m2))
-}
-
 func TestMapEquals(t *testing.T) {
 	assert := assert.New(t)
 
@@ -780,9 +770,6 @@ func TestMapType(t *testing.T) {
 	m2 := m.Remove(NewString("B"))
 	assert.True(tr.Equals(m2.Type()))
 
-	m = m.Filter(func(k, v Value) bool {
-		return true
-	})
 	assert.True(tr.Equals(m2.Type()))
 
 	m2 = m.Set(NewString("A"), Number(1))
@@ -811,36 +798,6 @@ func TestMapChunks(t *testing.T) {
 	l3 := NewMap(Number(0), NewTypedRefFromValue(Number(1)))
 	c3 := l3.Chunks()
 	assert.Len(c3, 1)
-}
-
-func TestMapFilter(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping test in short mode.")
-	}
-	assert := assert.New(t)
-
-	doTest := func(tm testMap) {
-		m := tm.toMap()
-		sort.Sort(tm)
-		pivotPoint := 10
-		pivot := tm.entries[pivotPoint].key
-		actual := m.Filter(func(k, v Value) bool {
-			return tm.less(k, pivot)
-		})
-		assert.True(newTypedMap(tm.tr, tm.entries[:pivotPoint+1]...).Equals(actual))
-
-		idx := 0
-		actual.IterAll(func(k, v Value) {
-			assert.True(tm.entries[idx].key.Equals(k), "%v != %v", k, tm.entries[idx].key)
-			assert.True(tm.entries[idx].value.Equals(v), "%v != %v", v, tm.entries[idx].value)
-			idx++
-		})
-	}
-
-	doTest(getTestNativeOrderMap(16))
-	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2, NewTestValueStore()))
-	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
 }
 
 func TestMapFirstNNumbers(t *testing.T) {

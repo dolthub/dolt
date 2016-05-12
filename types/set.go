@@ -97,9 +97,8 @@ func (s Set) Insert(values ...Value) Set {
 	head, tail := values[0], values[1:]
 
 	var res Set
-	if ch, found := setSequenceChunkerAtValue(s.seq, head); !found {
-		ch.Append(head)
-		res = ch.Done().(Set)
+	if cur, found := s.getCursorAtValue(head); !found {
+		res = s.splice(cur, 0, head)
 	} else {
 		res = s
 	}
@@ -115,9 +114,8 @@ func (s Set) Remove(values ...Value) Set {
 	head, tail := values[0], values[1:]
 
 	var res Set
-	if ch, found := setSequenceChunkerAtValue(s.seq, head); found {
-		ch.Skip()
-		res = ch.Done().(Set)
+	if cur, found := s.getCursorAtValue(head); found {
+		res = s.splice(cur, 1)
 	} else {
 		res = s
 	}
@@ -125,26 +123,24 @@ func (s Set) Remove(values ...Value) Set {
 	return res.Remove(tail...)
 }
 
-func setSequenceChunkerAtValue(seq orderedSequence, v Value) (*sequenceChunker, bool) {
-	cur := newCursorAtKey(seq, v, true, false)
-	found := cur.idx < cur.seq.seqLen() && cur.current().(Value).Equals(v)
-	ch := newSequenceChunker(cur, makeSetLeafChunkFn(seq.Type(), seq.valueReader()), newOrderedMetaSequenceChunkFn(seq.Type(), seq.valueReader()), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
-	return ch, found
+func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
+	assertType(s.elemType(), vs...)
+	ch := newSequenceChunker(cur, makeSetLeafChunkFn(s.seq.Type(), s.seq.valueReader()), newOrderedMetaSequenceChunkFn(s.seq.Type(), s.seq.valueReader()), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	for deleteCount > 0 {
+		ch.Skip()
+		deleteCount--
+	}
+
+	for _, v := range vs {
+		ch.Append(v)
+	}
+	return ch.Done().(Set)
 }
 
-type setFilterCallback func(v Value) (keep bool)
-
-func (s Set) Filter(cb setFilterCallback) Set {
-	seq := s.seq
-	ch := newEmptySequenceChunker(makeSetLeafChunkFn(seq.Type(), seq.valueReader()), newOrderedMetaSequenceChunkFn(seq.Type(), seq.valueReader()), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
-
-	s.IterAll(func(v Value) {
-		if cb(v) {
-			ch.Append(v)
-		}
-	})
-
-	return ch.Done().(Set)
+func (s Set) getCursorAtValue(v Value) (cur *sequenceCursor, found bool) {
+	cur = newCursorAtKey(s.seq, v, true, false)
+	found = cur.idx < cur.seq.seqLen() && cur.current().(Value).Equals(v)
+	return
 }
 
 func (s Set) Has(key Value) bool {

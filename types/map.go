@@ -114,42 +114,38 @@ func (m Map) SetM(kv ...Value) Map {
 
 	k, v, tail := kv[0], kv[1], kv[2:]
 
-	ch, found := mapSequenceChunkerAtKey(m.seq, k)
+	cur, found := m.getCursorAtValue(k)
+	deleteCount := uint64(0)
 	if found {
-		ch.Skip()
+		deleteCount = 1
 	}
-	ch.Append(mapEntry{k, v})
-	return ch.Done().(Map).SetM(tail...)
+	return m.splice(cur, deleteCount, mapEntry{k, v}).SetM(tail...)
 }
 
 func (m Map) Remove(k Value) Map {
-	if ch, found := mapSequenceChunkerAtKey(m.seq, k); found {
-		ch.Skip()
-		return ch.Done().(Map)
+	if cur, found := m.getCursorAtValue(k); found {
+		return m.splice(cur, 1)
 	}
 	return m
 }
 
-func mapSequenceChunkerAtKey(seq orderedSequence, k Value) (*sequenceChunker, bool) {
-	cur := newCursorAtKey(seq, k, true, false)
-	found := cur.idx < cur.seq.seqLen() && cur.current().(mapEntry).key.Equals(k)
-	ch := newSequenceChunker(cur, makeMapLeafChunkFn(seq.Type(), seq.valueReader()), newOrderedMetaSequenceChunkFn(seq.Type(), seq.valueReader()), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
-	return ch, found
+func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map {
+	ch := newSequenceChunker(cur, makeMapLeafChunkFn(m.seq.Type(), m.seq.valueReader()), newOrderedMetaSequenceChunkFn(m.seq.Type(), m.seq.valueReader()), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	for deleteCount > 0 {
+		ch.Skip()
+		deleteCount--
+	}
+
+	for _, v := range vs {
+		ch.Append(v)
+	}
+	return ch.Done().(Map)
 }
 
-type mapFilterCallback func(key, value Value) (keep bool)
-
-func (m Map) Filter(cb mapFilterCallback) Map {
-	seq := m.seq
-	ch := newEmptySequenceChunker(makeMapLeafChunkFn(seq.Type(), seq.valueReader()), newOrderedMetaSequenceChunkFn(seq.Type(), seq.valueReader()), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
-
-	m.IterAll(func(k, v Value) {
-		if cb(k, v) {
-			ch.Append(mapEntry{k, v})
-		}
-	})
-
-	return ch.Done().(Map)
+func (m Map) getCursorAtValue(v Value) (cur *sequenceCursor, found bool) {
+	cur = newCursorAtKey(m.seq, v, true, false)
+	found = cur.idx < cur.seq.seqLen() && cur.current().(mapEntry).key.Equals(v)
+	return
 }
 
 func (m Map) Has(key Value) bool {
