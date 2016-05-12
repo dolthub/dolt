@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-func TestShove(t *testing.T) {
+func TestSync(t *testing.T) {
 	suite.Run(t, &testSuite{})
 }
 
@@ -21,7 +21,7 @@ type testSuite struct {
 	test_util.ClientTestSuite
 }
 
-func (s *testSuite) TestShove() {
+func (s *testSuite) TestSync() {
 	source1 := dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false)), "foo")
 	source1, err := source1.Commit(types.Number(42))
 	s.NoError(err)

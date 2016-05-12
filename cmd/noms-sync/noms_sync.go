@@ -15,7 +15,8 @@ import (
 )
 
 var (
-	p = flag.Uint("p", 512, "parallelism")
+	p           = flag.Uint("p", 512, "parallelism")
+	stdoutIsTty = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
 )
 
 func main() {
@@ -25,6 +26,7 @@ func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s [options] <source-object> <dest-dataset>\n", os.Args[0])
 		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nFor detailed information on spelling objects and datasets, see: at https://github.com/attic-labs/noms/blob/master/doc/spelling.md.\n\n")
 	}
 
 	flags.RegisterDatabaseFlags()
