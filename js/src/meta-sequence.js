@@ -18,6 +18,7 @@ import {NomsList} from './list.js';
 import {NomsMap} from './map.js';
 import {NomsSet} from './set.js';
 import {NomsBlob} from './blob.js';
+import {equals} from './compare.js';
 
 export class MetaTuple<K> {
   ref: RefValue;
@@ -157,7 +158,7 @@ export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K,
   }
 
   equalsAt(idx: number, other: MetaTuple): boolean {
-    return this.items[idx].ref.equals(other.ref);
+    return equals(this.items[idx].ref, other.ref);
   }
 }
 

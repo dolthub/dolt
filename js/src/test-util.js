@@ -10,6 +10,7 @@ import {getChunksOfValue, Value} from './value.js';
 import {getRefOfValue} from './get-ref.js';
 import {getTypeOfValue, Type} from './type.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
+import {equals} from './compare.js';
 
 export async function flatten<T>(iter: AsyncIterator<T>): Promise<Array<T>> {
   const values = [];
@@ -33,14 +34,14 @@ export function assertValueRef(expectRefStr: string, v: valueOrPrimitive) {
 }
 
 export function assertValueType(expectType: Type, v: valueOrPrimitive) {
-  assert.isTrue(expectType.equals(getTypeOfValue(v)));
+  assert.isTrue(equals(expectType, getTypeOfValue(v)));
 }
 
 export function assertChunkCountAndType(expectCount: number, expectType: Type,
     v: Collection) {
   const chunks = v.chunks;
   assert.strictEqual(expectCount, chunks.length);
-  v.chunks.forEach(r => assert.isTrue(expectType.equals(r.type)));
+  v.chunks.forEach(r => assert.isTrue(equals(expectType, r.type)));
 }
 
 export async function testRoundTripAndValidate<T: valueOrPrimitive>(v: T,
@@ -53,8 +54,8 @@ export async function testRoundTripAndValidate<T: valueOrPrimitive>(v: T,
 
   const v2 = await ds2.readValue(r1);
   if (v instanceof Value) {
-    assert.isTrue(v.equals(v2));
-    assert.isTrue(v2.equals(v));
+    assert.isTrue(equals(v, v2));
+    assert.isTrue(equals(v2, v));
   } else {
     assert.strictEqual(v2, v);
   }

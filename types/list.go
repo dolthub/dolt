@@ -61,6 +61,10 @@ func (l List) Equals(other Value) bool {
 	return other != nil && l.Ref() == other.Ref()
 }
 
+func (l List) Less(other Value) bool {
+	return valueLess(l, other)
+}
+
 func (l List) Ref() ref.Ref {
 	return EnsureRef(l.ref, l)
 }

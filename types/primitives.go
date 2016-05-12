@@ -6,8 +6,15 @@ import (
 
 type Bool bool
 
-func (p Bool) Equals(other Value) bool {
-	return p == other
+func (v Bool) Equals(other Value) bool {
+	return v == other
+}
+
+func (v Bool) Less(other Value) bool {
+	if v2, ok := other.(Bool); ok {
+		return !bool(v) && bool(v2)
+	}
+	return true
 }
 
 func (v Bool) Ref() ref.Ref {
@@ -32,8 +39,8 @@ func (v Bool) Type() *Type {
 
 type Number float64
 
-func (p Number) Equals(other Value) bool {
-	return p == other
+func (v Number) Equals(other Value) bool {
+	return v == other
 }
 
 func (v Number) Ref() ref.Ref {
@@ -56,6 +63,9 @@ func (v Number) Type() *Type {
 	return NumberType
 }
 
-func (v Number) Less(other OrderedValue) bool {
-	return v < other.(Number)
+func (v Number) Less(other Value) bool {
+	if v2, ok := other.(Number); ok {
+		return float64(v) < float64(v2)
+	}
+	return NumberKind < other.Type().Kind()
 }

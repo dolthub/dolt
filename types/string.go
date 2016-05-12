@@ -26,8 +26,11 @@ func (s String) Equals(other Value) bool {
 	return false
 }
 
-func (s String) Less(other OrderedValue) bool {
-	return s.s < other.(String).s
+func (s String) Less(other Value) bool {
+	if s2, ok := other.(String); ok {
+		return s.s < s2.s
+	}
+	return StringKind < other.Type().Kind()
 }
 
 func (fs String) Chunks() []Ref {
@@ -38,8 +41,6 @@ func (fs String) ChildValues() []Value {
 	return nil
 }
 
-var typeForString = StringType
-
 func (fs String) Type() *Type {
-	return typeForString
+	return StringType
 }

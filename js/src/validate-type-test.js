@@ -25,6 +25,7 @@ import {
   typeType,
   valueType,
 } from './type.js';
+import {equals} from './compare.js';
 
 suite('validate type', () => {
 
@@ -43,7 +44,7 @@ suite('validate type', () => {
 
   function assertAll(t: Type, v) {
     for (const at of allTypes) {
-      if (at === valueType || t.equals(at)) {
+      if (at === valueType || equals(t, at)) {
         validateType(at, v);
       } else {
         assertInvalid(at, v);

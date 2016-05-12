@@ -4,11 +4,12 @@ import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import RefValue from './ref-value.js';
 import type {ValueReader} from './value-store.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {valueOrPrimitive, Value} from './value.js'; // eslint-disable-line no-unused-vars
+import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
+import {Value} from './value.js';
 import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
-import {getCompareFunction, equals, less} from './compare.js';
+import {compare, equals} from './compare.js';
 import {getRefOfValue} from './get-ref.js';
 import {invariant} from './assert.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker, newOrderedMetaSequenceChunkFn,} from
@@ -31,7 +32,7 @@ function newSetLeafChunkFn<T:valueOrPrimitive>(t: Type, vr: ?ValueReader = null)
     let indexValue: ?(T | RefValue) = null;
     if (items.length > 0) {
       indexValue = items[items.length - 1];
-      if (!t.elemTypes[0].ordered) {
+      if (indexValue instanceof Value) {
         indexValue = new RefValue(indexValue);
       }
     }
@@ -50,10 +51,8 @@ function newSetLeafBoundaryChecker<T:valueOrPrimitive>(): BoundaryChecker<T> {
 }
 
 function buildSetData<T>(t: Type, values: Array<any>): Array<T> {
-  // TODO: Assert values are of correct type
-  const compare = getCompareFunction(t.elemTypes[0]);
   values.sort(compare);
-  return removeDuplicateFromOrdered(values, (v1, v2) => 0 === compare(v1, v2));
+  return removeDuplicateFromOrdered(values, compare);
 }
 
 export function newSet<T:valueOrPrimitive>(values: Array<T>, type: Type = setOfValueType):
@@ -151,7 +150,7 @@ export class NomsSet<T:valueOrPrimitive> extends Collection<OrderedSequence> {
 
     // Can't intersect sets of different element type.
     for (let i = 0; i < sets.length; i++) {
-      invariant(sets[i].type.equals(this.type));
+      invariant(equals(sets[i].type, this.type));
     }
 
     let cursor = await this.sequence.newCursorAt(null);
@@ -234,8 +233,9 @@ class SetIntersectionCursor<K: valueOrPrimitive> {
     let v1 = this.s1.getCurrent();
     let v2 = this.s2.getCurrent();
 
-    while (!equals(v1, v2)) {
-      if (less(v1, v2)) {
+    let i;
+    while ((i = compare(v1, v2)) !== 0) {
+      if (i < 0) {
         if (!await this.s1.advanceTo(v2)) {
           return this.valid = false;
         }

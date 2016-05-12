@@ -30,15 +30,6 @@ func (t *Type) Kind() NomsKind {
 	return t.Desc.Kind()
 }
 
-func (t *Type) IsOrdered() bool {
-	switch t.Desc.Kind() {
-	case NumberKind, StringKind, RefKind:
-		return true
-	default:
-		return false
-	}
-}
-
 func (t *Type) Name() string {
 	// TODO: Remove from Type
 	d.Chk.IsType(StructDesc{}, t.Desc, "Name only works on Struct types")
@@ -51,6 +42,10 @@ func (t *Type) Ref() ref.Ref {
 
 func (t *Type) Equals(other Value) (res bool) {
 	return other != nil && t.Ref() == other.Ref()
+}
+
+func (t *Type) Less(other Value) (res bool) {
+	return valueLess(t, other)
 }
 
 func (t *Type) Chunks() (chunks []Ref) {

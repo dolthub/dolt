@@ -4,9 +4,9 @@ import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
-import {less} from './compare.js';
+import {compare} from './compare.js';
 import {search, Sequence, SequenceCursor} from './sequence.js';
-import {getRefOfValue} from './get-ref.js';
+import {Value} from './value.js';
 
 export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
   // Returns:
@@ -64,13 +64,7 @@ export class OrderedSequenceCursor<T, K: valueOrPrimitive> extends
   // Moves the cursor to the first value in sequence >= key and returns true.
   // If none exists, returns false.
   _seekTo(key: K, lastPositionIfNotfound: boolean = false): boolean {
-    if (this.sequence.isMeta && !this.sequence.type.elemTypes[0].ordered) {
-      const keyRef = getRefOfValue(key);
-      this.idx =
-          search(this.length, (i: number) => !this.sequence.getKey(i).targetRef.less(keyRef));
-    } else {
-      this.idx = search(this.length, (i: number) => !less(this.sequence.getKey(i), key));
-    }
+    this.idx = search(this.length, getSearchFunction(this.sequence, key));
 
     if (this.idx === this.length && lastPositionIfNotfound) {
       invariant(this.idx > 0);
@@ -125,4 +119,22 @@ export class OrderedSequenceIterator<T, K: valueOrPrimitive> extends AsyncIterat
   return(): Promise<AsyncIteratorResult<T>> {
     return this._iterator.then(it => it.return());
   }
+}
+
+function getSearchFunction(sequence: OrderedSequence, key: valueOrPrimitive):
+    (i: number) => number {
+  if (sequence.isMeta) {
+    const keyRef = key instanceof Value ? key.ref : null;
+    return i => {
+      const sk = sequence.getKey(i);
+      if (sk instanceof Value) {
+        if (keyRef) {
+          return sk.targetRef.compare(keyRef);
+        }
+        return 1;
+      }
+      return compare(sk, key);
+    };
+  }
+  return i => compare(sequence.getKey(i), key);
 }

@@ -12,6 +12,7 @@ import {
   testRoundTripAndValidate,
 } from './test-util.js';
 import {invariant} from './assert.js';
+import {equals} from './compare.js';
 
 // IMPORTANT: These tests and in particular the hash of the values should stay in sync with the
 // corresponding tests in go
@@ -147,7 +148,7 @@ suite('Blob', () => {
     const b2 = w.blob;
     const b3 = w.blob;
     assert.strictEqual(b2, b3);
-    assert.isTrue(b1.equals(b2));
+    assert.isTrue(equals(b1, b2));
   });
 
   test('BlobWriter blob throws', async () => {

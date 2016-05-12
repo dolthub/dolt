@@ -15,6 +15,7 @@ import {
   makeRefType,
   makeSetType,
   makeStructType,
+  makeUnionType,
   numberType,
   stringType,
   valueType,
@@ -27,6 +28,7 @@ import {OrderedSequence} from './ordered-sequence.js';
 import Ref from './ref.js';
 import type {Type} from './type.js';
 import type {ValueReadWriter} from './value-store.js';
+import {compare, equals} from './compare.js';
 
 const testSetSize = 5000;
 const setOfNRef = 'sha1-8186877fb71711b8e6a516ed5c8ad1ccac8c6c00';
@@ -108,7 +110,6 @@ suite('BuildSet', () => {
     }
   });
 
-
   test('LONG: set of ref, set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
 
@@ -120,7 +121,7 @@ suite('BuildSet', () => {
 
     const refs = nums.map(n => new RefValue(newStruct(structType, {n})));
     const s = await newSet(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-882b953455794580e6156eb21b316720aa9e45b2');
+    assert.strictEqual(s.ref.toString(), 'sha1-14eeb2d1835011bf3e018121ba3274bc08e634e5');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are RefValue values (with height 1).
@@ -172,6 +173,66 @@ suite('BuildSet', () => {
     nums.splice(testSetSize - 1, 1);
     assert.deepEqual(nums, outNums2);
     assert.strictEqual(testSetSize - 1, s3.size);
+  });
+
+
+  test('LONG: union write, read, modify, read', async () => {
+    const ds = new Database(makeTestingBatchStore());
+
+    const structType = makeStructType('num', {'n': numberType});
+    const type = makeSetType(makeUnionType([stringType, numberType, structType]));
+
+    const tmp = firstNNumbers(testSetSize);
+    const numbers = [];
+    const strings = [];
+    const structs = [];
+    const vals1 = [];
+    for (let i = 0; i < tmp.length; i++) {
+      let v = tmp[i];
+      if (i % 3 === 0) {
+        v = String(v);
+        strings.push(v);
+      } else if (v % 3 === 1) {
+        v = await newStruct(structType, {n: v});
+        structs.push(v);
+      } else {
+        numbers.push(v);
+      }
+      vals1.push(v);
+    }
+    strings.sort();
+    structs.sort(compare);
+    const vals2 = numbers.concat(strings, structs);
+
+    const s = await newSet(vals1, type);
+    assert.strictEqual(s.ref.toString(), 'sha1-fafd59d9dc3b1f86364a6742dd6d3550167801d5');
+    const height = deriveCollectionHeight(s);
+    assert.isTrue(height > 0);
+    assert.strictEqual(height, s.sequence.items[0].ref.height);
+
+    // has
+    for (let i = 0; i < vals1.length; i += 5) {
+      assert.isTrue(await s.has(vals1[i]));
+    }
+
+    const r = ds.writeValue(s).targetRef;
+    const s2 = await ds.readValue(r);
+    const outVals = [];
+    await s2.forEach(k => outVals.push(k));
+    assert.equal(testSetSize, s2.size);
+    for (let i = 0; i < vals1.length; i += 5) {
+      assert.isTrue(equals(vals1[i], outVals[i]));
+    }
+
+    invariant(s2 instanceof NomsSet);
+    const s3 = await s2.remove(vals2[testSetSize - 1]);  // removes struct
+    const outVals2 = [];
+    await s3.forEach(k => outVals2.push(k));
+    vals2.splice(testSetSize - 1, 1);
+    assert.equal(testSetSize - 1, s3.size);
+    for (let i = vals2.length - 1; i >= 0; i -= 5) {
+      assert.isTrue(equals(vals2[i], outVals2[i]));
+    }
   });
 });
 
@@ -253,9 +314,9 @@ suite('SetLeaf', () => {
     const r3 = ds.writeValue('b');
     const l = new NomsSet(new SetLeafSequence(ds, tr, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
-    assert.isTrue(r1.equals(l.chunks[0]));
-    assert.isTrue(r2.equals(l.chunks[1]));
-    assert.isTrue(r3.equals(l.chunks[2]));
+    assert.isTrue(equals(r1, l.chunks[0]));
+    assert.isTrue(equals(r2, l.chunks[1]));
+    assert.isTrue(equals(r3, l.chunks[2]));
   }
 
   test('chunks, set of value', () => {

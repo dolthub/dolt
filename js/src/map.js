@@ -8,7 +8,7 @@ import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unus
 import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence} from './sequence-chunker.js';
 import {Collection} from './collection.js';
-import {getCompareFunction, equals} from './compare.js';
+import {compare, equals} from './compare.js';
 import {sha1Size} from './ref.js';
 import {getRefOfValue} from './get-ref.js';
 import {mapOfValueType, Type} from './type.js';
@@ -33,7 +33,7 @@ function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(
     let indexValue: ?valueOrPrimitive = null;
     if (items.length > 0) {
       indexValue = items[items.length - 1].key;
-      if (!t.elemTypes[0].ordered) {
+      if (indexValue instanceof Value) {
         indexValue = new RefValue(indexValue);
       }
     }
@@ -51,13 +51,13 @@ function newMapLeafBoundaryChecker<K: valueOrPrimitive, V: valueOrPrimitive>(
 }
 
 export function removeDuplicateFromOrdered<T>(elems: Array<T>,
-    dupFn: (v1: T, v2: T) => boolean) : Array<T> {
+    compare: (v1: T, v2: T) => number) : Array<T> {
   const unique = [];
   let i = -1;
   let last = null;
   elems.forEach((elem: T) => {
     if (null === elem || undefined === elem ||
-        null === last || undefined === last || !dupFn(last, elem)) {
+        null === last || undefined === last || compare(last, elem) !== 0) {
       i++;
     }
     unique[i] = elem;
@@ -65,6 +65,10 @@ export function removeDuplicateFromOrdered<T>(elems: Array<T>,
   });
 
   return unique;
+}
+
+function compareKeys(v1, v2) {
+  return compare(v1.key, v2.key);
 }
 
 function buildMapData<K: valueOrPrimitive, V: valueOrPrimitive>(
@@ -76,14 +80,8 @@ function buildMapData<K: valueOrPrimitive, V: valueOrPrimitive>(
     const key: K = kvs[i], value: V = kvs[i + 1];
     entries.push({key, value});
   }
-  const compare = getCompareFunction(t.elemTypes[0]);
-  entries.sort((v1, v2) => compare(v1.key, v2.key));
-  return removeDuplicateFromOrdered(entries, (v1, v2) => {
-    if (v1.key !== null && v2.key !== null) {
-      return 0 === compare(v1.key, v2.key);
-    }
-    return false;
-  });
+  entries.sort(compareKeys);
+  return removeDuplicateFromOrdered(entries, compareKeys);
 }
 
 export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<K | V>,

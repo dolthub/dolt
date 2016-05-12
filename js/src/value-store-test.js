@@ -9,6 +9,7 @@ import {BatchStoreAdaptorDelegate} from './batch-store-adaptor.js';
 import ValueStore from './value-store.js';
 import {newList} from './list.js';
 import {encodeNomsValue} from './encode.js';
+import {equals} from './compare.js';
 
 export class FakeBatchStore extends BatchStore {
   constructor(cs: ChunkStore) {
@@ -118,6 +119,6 @@ suite('ValueStore', () => {
     // await vs.flush();
 
     const v = await vs.readValue(r.targetRef);
-    assert.isTrue(l.equals(v));
+    assert.isTrue(equals(l, v));
   });
 });

@@ -8,12 +8,13 @@ import MemoryStore from './memory-store.js';
 import RefValue from './ref-value.js';
 import BatchStore from './batch-store.js';
 import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-adaptor.js';
-import {newStruct} from './struct.js';
+import {newStruct, default as Struct} from './struct.js';
 import {
   boolType,
   makeMapType,
   makeRefType,
   makeStructType,
+  makeUnionType,
   numberType,
   stringType,
   valueType,
@@ -26,6 +27,7 @@ import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
 import Ref from './ref.js';
 import type {Type} from './type.js';
 import type {ValueReadWriter} from './value-store.js';
+import {compare, equals} from './compare.js';
 
 const testMapSize = 1000;
 const mapOfNRef = 'sha1-2bc451349d04c5f90cfe73d1e6eb3ee626db99a1';
@@ -114,7 +116,7 @@ suite('BuildMap', () => {
 
     const kvRefs = kvs.map(n => new RefValue(newStruct(structType, {n})));
     const m = await newMap(kvRefs, tr);
-    assert.strictEqual(m.ref.toString(), 'sha1-3d8eea119bc685942107f7b9513b33d2f763d693');
+    assert.strictEqual(m.ref.toString(), 'sha1-5c9a17f6da0ebfebc1f82f498ac46992fad85250');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are RefValue values (with height 1).
@@ -195,6 +197,94 @@ suite('BuildMap', () => {
     assert.deepEqual(kvs, outKvs2);
     assert.strictEqual(testMapSize - 1, m3.size);
   });
+
+  test('LONG: union write, read, modify, read', async () => {
+    const ds = new Database(makeTestingBatchStore());
+
+    const structType = makeStructType('num', {'n': numberType});
+    const type = makeMapType(makeUnionType([stringType, numberType, structType]), numberType);
+
+    const keys = [];
+    const kvs = [];
+    const numbers = [];
+    const strings = [];
+    const structs = [];
+    for (let i = 0; i < testMapSize; i++) {
+      let v = i;
+      if (i % 3 === 0) {
+        v = String(v);
+        strings.push(v);
+      } else if (v % 3 === 1) {
+        v = await newStruct(structType, {n: v});
+        structs.push(v);
+      } else {
+        numbers.push(v);
+      }
+      kvs.push(v, i);
+      keys.push(v);
+    }
+
+    strings.sort();
+    structs.sort(compare);
+    const sortedKeys = numbers.concat(strings, structs);
+
+    const m = await newMap(kvs, type);
+    assert.strictEqual(m.ref.toString(), 'sha1-d08902c0321cf91a02df6a2f30fe576d3fabb708');
+    const height = deriveCollectionHeight(m);
+    assert.isTrue(height > 0);
+    assert.strictEqual(height, m.sequence.items[0].ref.height);
+
+    // has
+    for (let i = 0; i < keys.length; i += 5) {
+      assert.isTrue(await m.has(keys[i]));
+    }
+
+    const r = ds.writeValue(m).targetRef;
+    const m2 = await ds.readValue(r);
+    const outVals = [];
+    const outKeys = [];
+    await m2.forEach((v, k) => {
+      outVals.push(v);
+      outKeys.push(k);
+    });
+    assert.equal(testMapSize, m2.size);
+
+    function assertEqualVal(k, v) {
+      if (k instanceof Struct) {
+        assert.equal(k.n, v);
+      } else if (typeof k === 'string') {
+        assert.equal(Number(k), v);
+      } else {
+        assert.equal(k, v);
+      }
+    }
+
+    for (let i = 0; i < sortedKeys.length; i += 5) {
+      const k = sortedKeys[i];
+      assert.isTrue(equals(k, outKeys[i]));
+      const v = await m2.get(k);
+      assertEqualVal(k, v);
+    }
+
+    invariant(m2 instanceof NomsMap);
+    const m3 = await m2.remove(sortedKeys[testMapSize - 1]);  // removes struct
+    const outVals2 = [];
+    const outKeys2 = [];
+    await m2.forEach((v, k) => {
+      outVals2.push(v);
+      outKeys2.push(k);
+    });
+    outVals2.splice(testMapSize - 1, 1);
+    outKeys2.splice(testMapSize - 1, 1);
+    assert.equal(testMapSize - 1, m3.size);
+    for (let i = outKeys2.length - 1; i >= 0; i -= 5) {
+      const k = sortedKeys[i];
+      assert.isTrue(equals(k, outKeys[i]));
+      const v = await m3.get(k);
+      assertEqualVal(k, v);
+    }
+  });
+
 });
 
 suite('MapLeaf', () => {
@@ -296,10 +386,10 @@ suite('MapLeaf', () => {
     const m = new NomsMap(
         new MapLeafSequence(ds, tr, [{key: r1, value: r2}, {key: r3, value: r4}]));
     assert.strictEqual(4, m.chunks.length);
-    assert.isTrue(r1.equals(m.chunks[0]));
-    assert.isTrue(r2.equals(m.chunks[1]));
-    assert.isTrue(r3.equals(m.chunks[2]));
-    assert.isTrue(r4.equals(m.chunks[3]));
+    assert.isTrue(equals(r1, m.chunks[0]));
+    assert.isTrue(equals(r2, m.chunks[1]));
+    assert.isTrue(equals(r3, m.chunks[2]));
+    assert.isTrue(equals(r4, m.chunks[3]));
   }
 
   test('chunks', () => {

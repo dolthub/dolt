@@ -5,6 +5,7 @@ import {CompoundDesc, getTypeOfValue} from './type.js';
 import type {Type} from './type.js';
 import {Value} from './value.js';
 import {invariant} from './assert.js';
+import {equals} from './compare.js';
 
 export default function validateType(t: Type, v: any): void {
   switch (t.kind) {
@@ -53,7 +54,7 @@ function assertSubtype(v: any, t: Type) {
 }
 
 function subtype(expected: Type, actual: Type): boolean {
-  if (expected.equals(actual)) {
+  if (equals(expected, actual)) {
     return true;
   }
 

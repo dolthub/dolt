@@ -16,6 +16,7 @@ import {decodeNomsValue} from './decode.js';
 import {invariant, notNull} from './assert.js';
 import {encodeNomsValue} from './encode.js';
 import {describeType, describeTypeOfValue} from './encode-human-readable.js';
+import {equals} from './compare.js';
 
 export interface ValueWriter {
   writeValue<T: valueOrPrimitive>(v: T, t: ?Type): RefValue<T>
@@ -244,11 +245,11 @@ class RefCache {
         // though it's possible that the Type is actually correct. We wouldn't be able to verify
         // without reading it, though, so we'll dig into this later.
         const targetType = getTargetType(reachable);
-        if (targetType.equals(valueType)) {
+        if (equals(targetType, valueType)) {
           continue;
         }
         const entryType = notNull(entry.type);
-        invariant(entryType.equals(targetType), () =>
+        invariant(equals(entryType, targetType), () =>
           `Value to write contains ref ${reachable.targetRef.toString()}, which points to a ` +
           `value of a different type: ${describeType(entryType)} != ${describeType(targetType)}`);
       }

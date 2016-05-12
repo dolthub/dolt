@@ -13,11 +13,9 @@ import (
 const testMapSize = 1000
 
 type testMapGenFn func(v Number) Value
-type testMapLessFn func(x, y Value) bool
 
 type testMap struct {
 	entries     []mapEntry
-	less        testMapLessFn
 	tr          *Type
 	knownBadKey Value
 }
@@ -27,7 +25,7 @@ func (tm testMap) Len() int {
 }
 
 func (tm testMap) Less(i, j int) bool {
-	return tm.less(tm.entries[i].key, tm.entries[j].key)
+	return tm.entries[i].key.Less(tm.entries[j].key)
 }
 
 func (tm testMap) Swap(i, j int) {
@@ -38,14 +36,14 @@ func (tm testMap) SetValue(i int, v Value) testMap {
 	entries := make([]mapEntry, 0, len(tm.entries))
 	entries = append(entries, tm.entries...)
 	entries[i].value = v
-	return testMap{entries, tm.less, tm.tr, tm.knownBadKey}
+	return testMap{entries, tm.tr, tm.knownBadKey}
 }
 
 func (tm testMap) Remove(from, to int) testMap {
 	entries := make([]mapEntry, 0, len(tm.entries)-(to-from))
 	entries = append(entries, tm.entries[:from]...)
 	entries = append(entries, tm.entries[to:]...)
-	return testMap{entries, tm.less, tm.tr, tm.knownBadKey}
+	return testMap{entries, tm.tr, tm.knownBadKey}
 }
 
 func (tm testMap) toMap() Map {
@@ -83,14 +81,10 @@ func newTestMap(length int) testMap {
 		entry := mapEntry{Number(i), Number(i * 2)}
 		entries = append(entries, entry)
 	}
-	return testMap{entries,
-		func(x, y Value) bool {
-			return !y.(OrderedValue).Less(x.(OrderedValue))
-		},
-		MakeMapType(NumberType, NumberType), Number(length + 2)}
+	return testMap{entries, MakeMapType(NumberType, NumberType), Number(length + 2)}
 }
 
-func newTestMapWithGen(length int, gen testMapGenFn, less testMapLessFn, tr *Type) testMap {
+func newTestMapWithGen(length int, gen testMapGenFn, tr *Type) testMap {
 	s := rand.NewSource(4242)
 	used := map[int64]bool{}
 
@@ -105,7 +99,7 @@ func newTestMapWithGen(length int, gen testMapGenFn, less testMapLessFn, tr *Typ
 		}
 	}
 
-	return testMap{entries, less, MakeMapType(tr, tr), gen(Number(mask + 1))}
+	return testMap{entries, MakeMapType(tr, tr), gen(Number(mask + 1))}
 }
 
 type mapTestSuite struct {
@@ -174,8 +168,6 @@ func TestMapSuite4K(t *testing.T) {
 func getTestNativeOrderMap(scale int) testMap {
 	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
 		return v
-	}, func(x, y Value) bool {
-		return !y.(OrderedValue).Less(x.(OrderedValue))
 	}, NumberType)
 }
 
@@ -183,8 +175,6 @@ func getTestRefValueOrderMap(scale int) testMap {
 	setType := MakeSetType(NumberType)
 	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
 		return NewTypedSet(setType, v)
-	}, func(x, y Value) bool {
-		return !y.Ref().Less(x.Ref())
 	}, setType)
 }
 
@@ -192,8 +182,6 @@ func getTestRefToNativeOrderMap(scale int, vw ValueWriter) testMap {
 	refType := MakeRefType(NumberType)
 	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
 		return vw.WriteValue(v)
-	}, func(x, y Value) bool {
-		return !y.(Ref).TargetRef().Less(x.(Ref).TargetRef())
 	}, refType)
 }
 
@@ -202,8 +190,6 @@ func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
 	refType := MakeRefType(setType)
 	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
 		return vw.WriteValue(NewTypedSet(setType, v))
-	}, func(x, y Value) bool {
-		return !y.(Ref).TargetRef().Less(x.(Ref).TargetRef())
 	}, refType)
 }
 
@@ -721,14 +707,13 @@ func TestMapOrdering(t *testing.T) {
 			NewString("c"), NewString("unused"),
 			NewString("x"), NewString("unused"),
 		},
-		// Ordered by ref
 		[]Value{
-			NewString("z"),
-			NewString("c"),
 			NewString("a"),
-			NewString("x"),
 			NewString("b"),
+			NewString("c"),
+			NewString("x"),
 			NewString("y"),
+			NewString("z"),
 		},
 	)
 
@@ -738,10 +723,9 @@ func TestMapOrdering(t *testing.T) {
 			Bool(true), NewString("unused"),
 			Bool(false), NewString("unused"),
 		},
-		// Ordered by ref
 		[]Value{
-			Bool(true),
 			Bool(false),
+			Bool(true),
 		},
 	)
 }
@@ -842,7 +826,7 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewTypedMap(mapType, kvs...)
-	assert.Equal("sha1-3d8eea119bc685942107f7b9513b33d2f763d693", m.Ref().String())
+	assert.Equal("sha1-5c9a17f6da0ebfebc1f82f498ac46992fad85250", m.Ref().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(m)+1, getRefHeightOfCollection(m))
 }
@@ -857,10 +841,10 @@ func TestMapModifyAfterRead(t *testing.T) {
 	fst, fstval := m.First()
 	m = m.Remove(fst)
 	assert.False(m.Has(fst))
-	{
-		fst, _ := m.First()
-		assert.True(m.Has(fst))
-	}
+
+	fst2, _ := m.First()
+	assert.True(m.Has(fst2))
+
 	m = m.Set(fst, fstval)
 	assert.True(m.Has(fst))
 }

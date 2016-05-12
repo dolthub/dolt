@@ -42,6 +42,10 @@ func (b Blob) Equals(other Value) bool {
 	return other != nil && b.Ref() == other.Ref()
 }
 
+func (b Blob) Less(other Value) bool {
+	return valueLess(b, other)
+}
+
 func (b Blob) Ref() ref.Ref {
 	return EnsureRef(b.ref, b)
 }

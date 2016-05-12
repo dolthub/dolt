@@ -18,6 +18,7 @@ import {sha1Size} from './ref.js';
 import RefValue from './ref-value.js';
 import {getValueChunks} from './sequence.js';
 import {listOfValueType, Type} from './type.js';
+import {equals} from './compare.js';
 
 const listWindowSize = 64;
 const listPattern = ((1 << 6) | 0) - 1;
@@ -90,9 +91,9 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
   }
 
   diff(last: NomsList<T>, loadLimit: number = -1): Promise<Array<Splice>> {
-    invariant(this.type.equals(last.type));
+    invariant(equals(this.type, last.type));
 
-    if (this.equals(last)) {
+    if (equals(this, last)) {
       return Promise.resolve([]); // nothing changed.
     }
     if (this.length === 0) {

@@ -7,6 +7,7 @@ import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {Value} from './value.js';
 import type {valueOrPrimitive} from './value.js';
+import {compare, equals} from './compare.js';
 
 export interface TypeDesc {
   kind: NomsKind;
@@ -42,7 +43,7 @@ export class CompoundDesc {
       }
 
       for (let i = 0; i < this.elemTypes.length; i++) {
-        if (!this.elemTypes[i].equals(other.elemTypes[i])) {
+        if (!equals(this.elemTypes[i], other.elemTypes[i])) {
           return false;
         }
       }
@@ -90,7 +91,7 @@ export class StructDesc {
         return false;
       }
 
-      if (!this.fields[name].equals(other.fields[name])) {
+      if (!equals(this.fields[name], other.fields[name])) {
         return false;
       }
     }
@@ -127,17 +128,6 @@ export class Type<T: TypeDesc> extends Value {
 
   get kind(): NomsKind {
     return this._desc.kind;
-  }
-
-  get ordered(): boolean {
-    switch (this.kind) {
-      case Kind.Number:
-      case Kind.String:
-      case Kind.Ref:
-        return true;
-      default:
-        return false;
-    }
   }
 
   get desc(): T {
@@ -183,12 +173,8 @@ export function makeStructType(name: string, fields: {[key: string]: Type}): Typ
   return buildType(new StructDesc(name, fields));
 }
 
-function compareTypeByRef(a: Type, b: Type): number {
-  return a.ref.less(b.ref) ? -1 : 1;
-}
-
-export function makeUnionType(types: Type[]): Type<CompoundDesc> {
-  types.sort(compareTypeByRef);
+export function makeUnionType(types: Type[]): Type {
+  types.sort(compare);
   return buildType(new CompoundDesc(Kind.Union, types));
 }
 

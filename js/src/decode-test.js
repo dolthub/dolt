@@ -71,7 +71,7 @@ suite('Decode', () => {
     function doTest(expected: Type, a: Array<any>) {
       const r = new JsonArrayReader(a, ds);
       const tr = r.readValue();
-      assert.isTrue(expected.equals(tr));
+      assert.isTrue(equals(expected, tr));
     }
 
     doTest(boolType, [Kind.Type, Kind.Bool, true]);
@@ -115,7 +115,7 @@ suite('Decode', () => {
 
     const tr = makeListType(numberType);
     const l = new NomsList(new ListLeafSequence(ds, tr, [0, 1, 2, 3]));
-    assert.isTrue(l.equals(v));
+    assert.isTrue(equals(l, v));
   });
 
   // TODO: Can't round-trip collections of value types. =-(
@@ -128,7 +128,7 @@ suite('Decode', () => {
     invariant(v instanceof NomsList);
 
     const tr = makeListType(valueType);
-    assert.isTrue(v.type.equals(tr));
+    assert.isTrue(equals(v.type, tr));
     assert.strictEqual(1, await v.get(0));
     assert.strictEqual('hi', await v.get(1));
     assert.strictEqual(true, await v.get(2));
@@ -144,7 +144,7 @@ suite('Decode', () => {
 
     const tr = makeListType(numberType);
     const l = new NomsList(new ListLeafSequence(ds, tr, [0, 1, 2]));
-    assert.isTrue(l.equals(v));
+    assert.isTrue(equals(l, v));
   });
 
   test('read compound list', () => {
@@ -184,7 +184,7 @@ suite('Decode', () => {
 
     const t = makeMapType(numberType, numberType);
     const m = new NomsMap(new MapLeafSequence(ds, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
-    assert.isTrue(v.equals(m));
+    assert.isTrue(equals(v, m));
   });
 
   test('read map of ref to number', () => {
@@ -206,7 +206,7 @@ suite('Decode', () => {
 
     const m = new NomsMap(new MapLeafSequence(ds, mapType, [{key: rv1, value: 2},
                                                             {key: rv2, value: 4}]));
-    assert.isTrue(v.equals(m));
+    assert.isTrue(equals(v, m));
   });
 
   test('read value map of number to number', () => {
@@ -219,7 +219,7 @@ suite('Decode', () => {
 
     const t = makeMapType(numberType, numberType);
     const m = new NomsMap(new MapLeafSequence(ds, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
-    assert.isTrue(v.equals(m));
+    assert.isTrue(equals(v, m));
   });
 
   test('read set of number', () => {
@@ -232,7 +232,7 @@ suite('Decode', () => {
 
     const t = makeSetType(numberType);
     const s = new NomsSet(new SetLeafSequence(ds, t, [0, 1, 2, 3]));
-    assert.isTrue(v.equals(s));
+    assert.isTrue(equals(v, s));
   });
 
   test('read compound set', () => {
@@ -268,7 +268,7 @@ suite('Decode', () => {
 
     const t = makeSetType(numberType);
     const s = new NomsSet(new SetLeafSequence(ds, t, [0, 1, 2, 3]));
-    assert.isTrue(v.equals(s));
+    assert.isTrue(equals(v, s));
   });
 
   function assertStruct(s: ?Struct, desc: TypeDesc, data: {[key: string]: any}) {
@@ -431,7 +431,7 @@ suite('Decode', () => {
     const t = makeSetType(numberType);
     const s: NomsSet<number> = new NomsSet(new SetLeafSequence(ds, t, [0, 1, 2, 3]));
 
-    assert.isTrue(v.equals(s));
+    assert.isTrue(equals(v, s));
   });
 
   test('decodeNomsValue: counter with one commit', async () => {
@@ -602,8 +602,8 @@ suite('Decode', () => {
     const r = new JsonArrayReader(a, ds);
     const v = r.readValue();
 
-    assert.isTrue(v.type.equals(ta));
-    assert.isTrue(v.b.type.equals(tb));
+    assert.isTrue(equals(v.type, ta));
+    assert.isTrue(equals(v.b.type, tb));
   });
 
   test('read union list', async () => {
@@ -614,7 +614,7 @@ suite('Decode', () => {
     const v = r.readValue();
     const tr = makeListType(makeUnionType([stringType, numberType]));
     const v2 = new NomsList(new ListLeafSequence(ds, tr, ['hi', 42]));
-    assert.isTrue(v.equals(v2));
+    assert.isTrue(equals(v, v2));
   });
 
   test('read empty union list', async () => {
@@ -624,6 +624,6 @@ suite('Decode', () => {
     const v = r.readValue();
     const tr = makeListType(makeUnionType([]));
     const v2 = new NomsList(new ListLeafSequence(ds, tr, []));
-    assert.isTrue(v.equals(v2));
+    assert.isTrue(equals(v, v2));
   });
 });

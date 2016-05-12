@@ -55,8 +55,8 @@ export default class Ref {
     return this._refStr === other._refStr;
   }
 
-  less(other: Ref): boolean {
-    return this._refStr < other._refStr;
+  compare(other: Ref): number {
+    return this._refStr === other._refStr ? 0 : this._refStr < other._refStr ? -1 : 1;
   }
 
   toString(): string {

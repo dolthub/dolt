@@ -265,24 +265,30 @@ export class SequenceIterator<T, S: Sequence> extends AsyncIterator<T> {
   }
 }
 
-// Translated from golang source (https://golang.org/src/sort/search.go?s=2249:2289#L49)
-export function search(n: number, f: (i: number) => boolean): number {
+// Searches between 0 and `length` until the compare function returns 0 (equal). If no match is
+// found then this returns `length`.
+export function search(length: number, compare: (i: number) => number): number {
+  // f = i => compare(i) >= 0
   // Define f(-1) == false and f(n) == true.
   // Invariant: f(i-1) == false, f(j) == true.
-  let i = 0;
-  let j = n;
-  while (i < j) {
-    const h = i + (((j - i) / 2) | 0); // avoid overflow when computing h
+  let lo = 0;
+  let hi = length;
+  while (lo < hi) {
+    const h = lo + (((hi - lo) / 2) | 0); // avoid overflow when computing h
+    const c = compare(h);
+    if (c === 0) {
+      return h;
+    }
     // i ≤ h < j
-    if (!f(h)) {
-      i = h + 1; // preserves f(i-1) == false
+    if (c < 0) {
+      lo = h + 1; // preserves f(i-1) == false
     } else {
-      j = h; // preserves f(j) == true
+      hi = h; // preserves f(j) == true
     }
   }
 
   // i == j, f(i-1) == false, and f(j) (= f(i)) == true  =>  answer is i.
-  return i;
+  return lo;
 }
 
 export function getValueChunks<T>(items: Array<T>): Array<RefValue> {

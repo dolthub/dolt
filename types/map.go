@@ -51,6 +51,10 @@ func (m Map) Equals(other Value) bool {
 	return other != nil && m.Ref() == other.Ref()
 }
 
+func (m Map) Less(other Value) bool {
+	return valueLess(m, other)
+}
+
 func (m Map) Ref() ref.Ref {
 	return EnsureRef(m.ref, m)
 }
@@ -188,7 +192,7 @@ func (m Map) elemTypes() []*Type {
 }
 
 func buildMapData(oldData []mapEntry, values []Value, t *Type) []mapEntry {
-	idxFn := getIndexFnForMapType(t)
+	// TODO(arv): If the type is number or string we could use something simpler.
 	elemTypes := t.Desc.(CompoundDesc).ElemTypes
 
 	// Sadly, d.Chk.Equals() costs too much. BUG #83
@@ -201,7 +205,7 @@ func buildMapData(oldData []mapEntry, values []Value, t *Type) []mapEntry {
 		v := values[i+1]
 		assertType(elemTypes[0], k)
 		assertType(elemTypes[1], v)
-		idx := idxFn(data, k)
+		idx := indexOfMapValue(data, k)
 		if idx < len(data) && data[idx].key.Equals(k) {
 			if !data[idx].value.Equals(v) {
 				data[idx] = mapEntry{k, v}
@@ -217,28 +221,9 @@ func buildMapData(oldData []mapEntry, values []Value, t *Type) []mapEntry {
 	return data
 }
 
-type indexOfMapFn func(m []mapEntry, v Value) int
-
-func getIndexFnForMapType(t *Type) indexOfMapFn {
-	orderByValue := t.Desc.(CompoundDesc).ElemTypes[0].IsOrdered()
-	if orderByValue {
-		return indexOfOrderedMapValue
-	}
-
-	return indexOfMapValue
-}
-
 func indexOfMapValue(m []mapEntry, v Value) int {
 	return sort.Search(len(m), func(i int) bool {
-		return !m[i].key.Ref().Less(v.Ref())
-	})
-}
-
-func indexOfOrderedMapValue(m []mapEntry, v Value) int {
-	ov := v.(OrderedValue)
-
-	return sort.Search(len(m), func(i int) bool {
-		return !m[i].key.(OrderedValue).Less(ov)
+		return !m[i].key.Less(v)
 	})
 }
 
@@ -262,7 +247,7 @@ func makeMapLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 		var indexValue Value
 		if len(mapData) > 0 {
 			indexValue = mapData[len(mapData)-1].key
-			if !isSequenceOrderedByIndexedType(t) {
+			if !isKindOrderedByValue(indexValue.Type().Kind()) {
 				indexValue = NewRef(indexValue)
 			}
 		}

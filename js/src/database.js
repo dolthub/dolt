@@ -21,6 +21,7 @@ import {
 import {newMap} from './map.js';
 import {newSet} from './set.js';
 import type {Commit} from './commit.js';
+import {equals} from './compare.js';
 
 type DatasTypes = {
   commitType: Type,
@@ -135,7 +136,7 @@ export default class Database {
     if (!currentRootRef.isEmpty()) {
       const currentHeadRef = await currentDatasets.get(datasetId);
       if (currentHeadRef) {
-        if (commitRef.equals(currentHeadRef)) {
+        if (equals(commitRef, currentHeadRef)) {
           return this;
         }
         if (!await this._descendsFrom(commit, currentHeadRef)) {

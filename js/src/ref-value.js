@@ -45,11 +45,6 @@ export default class RefValue<T: valueOrPrimitive> extends Value {
     return vr.readValue(this.targetRef);
   }
 
-  less(other: Value): boolean {
-    invariant(other instanceof RefValue);
-    return this.targetRef.less(other.targetRef);
-  }
-
   get chunks(): Array<RefValue> {
     return [this];
   }

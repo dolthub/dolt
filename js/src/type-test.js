@@ -14,6 +14,7 @@ import {
 } from './type.js';
 import {suite, test} from 'mocha';
 import Database from './database.js';
+import {equals} from './compare.js';
 
 suite('Type', () => {
   test('types', async () => {
@@ -30,13 +31,13 @@ suite('Type', () => {
     const setRef = ds.writeValue(setType).targetRef;
     const mahRef = ds.writeValue(mahType).targetRef;
 
-    assert.isTrue(mapType.equals(await ds.readValue(mapRef)));
-    assert.isTrue(setType.equals(await ds.readValue(setRef)));
-    assert.isTrue(mahType.equals(await ds.readValue(mahRef)));
+    assert.isTrue(equals(mapType, await ds.readValue(mapRef)));
+    assert.isTrue(equals(setType, await ds.readValue(setRef)));
+    assert.isTrue(equals(mahType, await ds.readValue(mahRef)));
   });
 
   test('type Type', () => {
-    assert.isTrue(boolType.type.equals(typeType));
+    assert.isTrue(equals(boolType.type, typeType));
   });
 
   test('getTypeOfValue', () => {

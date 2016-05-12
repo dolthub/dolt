@@ -56,13 +56,13 @@ func TestTypeRefDescribe(t *testing.T) {
 
 func TestTypeOrdered(t *testing.T) {
 	assert := assert.New(t)
-	assert.False(BoolType.IsOrdered())
-	assert.True(NumberType.IsOrdered())
-	assert.True(StringType.IsOrdered())
-	assert.False(BlobType.IsOrdered())
-	assert.False(ValueType.IsOrdered())
-	assert.False(MakeListType(StringType).IsOrdered())
-	assert.False(MakeSetType(StringType).IsOrdered())
-	assert.False(MakeMapType(StringType, ValueType).IsOrdered())
-	assert.True(MakeRefType(StringType).IsOrdered())
+	assert.True(isKindOrderedByValue(BoolType.Kind()))
+	assert.True(isKindOrderedByValue(NumberType.Kind()))
+	assert.True(isKindOrderedByValue(StringType.Kind()))
+	assert.False(isKindOrderedByValue(BlobType.Kind()))
+	assert.False(isKindOrderedByValue(ValueType.Kind()))
+	assert.False(isKindOrderedByValue(MakeListType(StringType).Kind()))
+	assert.False(isKindOrderedByValue(MakeSetType(StringType).Kind()))
+	assert.False(isKindOrderedByValue(MakeMapType(StringType, ValueType).Kind()))
+	assert.False(isKindOrderedByValue(MakeRefType(StringType).Kind()))
 }

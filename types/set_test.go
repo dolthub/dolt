@@ -12,11 +12,9 @@ import (
 const testSetSize = 5000
 
 type testSetGenFn func(v Number) Value
-type testSetLessFn func(x, y Value) bool
 
 type testSet struct {
 	values []Value
-	less   testSetLessFn
 	tr     *Type
 }
 
@@ -25,7 +23,7 @@ func (ts testSet) Len() int {
 }
 
 func (ts testSet) Less(i, j int) bool {
-	return ts.less(ts.values[i], ts.values[j])
+	return ts.values[i].Less(ts.values[j])
 }
 
 func (ts testSet) Swap(i, j int) {
@@ -36,7 +34,7 @@ func (ts testSet) Remove(from, to int) testSet {
 	values := make([]Value, 0, len(ts.values)-(to-from))
 	values = append(values, ts.values[:from]...)
 	values = append(values, ts.values[to:]...)
-	return testSet{values, ts.less, ts.tr}
+	return testSet{values, ts.tr}
 }
 
 func (ts testSet) toSet() Set {
@@ -49,14 +47,10 @@ func newTestSet(length int) testSet {
 		values = append(values, Number(i))
 	}
 
-	return testSet{values,
-		func(x, y Value) bool {
-			return !y.(OrderedValue).Less(x.(OrderedValue))
-		},
-		MakeSetType(NumberType)}
+	return testSet{values, MakeSetType(NumberType)}
 }
 
-func newTestSetWithGen(length int, gen testSetGenFn, less testSetLessFn, tr *Type) testSet {
+func newTestSetWithGen(length int, gen testSetGenFn, tr *Type) testSet {
 	s := rand.NewSource(4242)
 	used := map[int64]bool{}
 
@@ -69,7 +63,7 @@ func newTestSetWithGen(length int, gen testSetGenFn, less testSetLessFn, tr *Typ
 		}
 	}
 
-	return testSet{values, less, MakeSetType(tr)}
+	return testSet{values, MakeSetType(tr)}
 }
 
 type setTestSuite struct {
@@ -127,8 +121,6 @@ func TestSetSuite4K(t *testing.T) {
 func getTestNativeOrderSet(scale int) testSet {
 	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
 		return v
-	}, func(x, y Value) bool {
-		return !y.(OrderedValue).Less(x.(OrderedValue))
 	}, NumberType)
 }
 
@@ -136,8 +128,6 @@ func getTestRefValueOrderSet(scale int) testSet {
 	setType := MakeSetType(NumberType)
 	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
 		return NewTypedSet(setType, v)
-	}, func(x, y Value) bool {
-		return !y.Ref().Less(x.Ref())
 	}, setType)
 }
 
@@ -145,8 +135,6 @@ func getTestRefToNativeOrderSet(scale int, vw ValueWriter) testSet {
 	refType := MakeRefType(NumberType)
 	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
 		return vw.WriteValue(v)
-	}, func(x, y Value) bool {
-		return !y.(Ref).TargetRef().Less(x.(Ref).TargetRef())
 	}, refType)
 }
 
@@ -155,8 +143,6 @@ func getTestRefToValueOrderSet(scale int, vw ValueWriter) testSet {
 	refType := MakeRefType(setType)
 	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
 		return vw.WriteValue(NewTypedSet(setType, v))
-	}, func(x, y Value) bool {
-		return !y.(Ref).TargetRef().Less(x.(Ref).TargetRef())
 	}, refType)
 }
 
@@ -619,14 +605,14 @@ func TestSetOrdering(t *testing.T) {
 			NewString("c"),
 			NewString("x"),
 		},
-		// Ordered by ref
+		// Ordered by value
 		[]Value{
-			NewString("z"),
-			NewString("c"),
 			NewString("a"),
-			NewString("x"),
 			NewString("b"),
+			NewString("c"),
+			NewString("x"),
 			NewString("y"),
+			NewString("z"),
 		},
 	)
 
@@ -636,10 +622,10 @@ func TestSetOrdering(t *testing.T) {
 			Bool(true),
 			Bool(false),
 		},
-		// Ordered by ref
+		// Ordered by value
 		[]Value{
-			Bool(true),
 			Bool(false),
+			Bool(true),
 		},
 	)
 }
@@ -717,7 +703,7 @@ func TestSetRefOfStructFirstNNumbers(t *testing.T) {
 	refOfTypeStructType := MakeRefType(structType)
 	setType := MakeSetType(refOfTypeStructType)
 	s := NewTypedSet(setType, nums...)
-	assert.Equal("sha1-882b953455794580e6156eb21b316720aa9e45b2", s.Ref().String())
+	assert.Equal("sha1-14eeb2d1835011bf3e018121ba3274bc08e634e5", s.Ref().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(s)+1, getRefHeightOfCollection(s))
 }

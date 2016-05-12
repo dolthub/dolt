@@ -15,6 +15,7 @@ import {
 import {suite, test} from 'mocha';
 import Database from './database.js';
 import {newList} from './list.js';
+import {equals} from './compare.js';
 
 suite('Struct', () => {
   test('equals', () => {
@@ -27,7 +28,7 @@ suite('Struct', () => {
     const s1 = newStruct(type, data1);
     const s2 = newStruct(type, data1);
 
-    assert.isTrue(s1.equals(s2));
+    assert.isTrue(equals(s1, s2));
   });
 
   test('chunks', () => {
@@ -43,7 +44,7 @@ suite('Struct', () => {
     const r = ds.writeValue(b);
     const s1 = newStruct(type, {r: r});
     assert.strictEqual(1, s1.chunks.length);
-    assert.isTrue(r.equals(s1.chunks[0]));
+    assert.isTrue(equals(r, s1.chunks[0]));
   });
 
   test('new', () => {
@@ -69,7 +70,7 @@ suite('Struct', () => {
     });
 
     const s3 = newStruct(type, {b: true, o: 'hi'});
-    assert.isTrue(s1.equals(s3));
+    assert.isTrue(equals(s1, s3));
   });
 
   test('struct set', () => {
@@ -87,15 +88,15 @@ suite('Struct', () => {
     });
 
     const s3 = s2.setB(true);
-    assert.isTrue(s1.equals(s3));
+    assert.isTrue(equals(s1, s3));
 
     const m = new StructMirror(s1);
     const s4 = m.set('b', false);
-    assert.isTrue(s2.equals(s4));
+    assert.isTrue(equals(s2, s4));
 
     const s5 = s3.setO('bye');
     const s6 = new StructMirror(s3).set('o', 'bye');
-    assert.isTrue(s5.equals(s6));
+    assert.isTrue(equals(s5, s6));
   });
 
   test('type assertion on construct', () => {

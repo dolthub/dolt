@@ -11,6 +11,7 @@ import {newMap} from './map.js';
 import {stringType, makeListType, makeRefType, makeSetType} from './type.js';
 import {encodeNomsValue} from './encode.js';
 import {newSet} from './set.js';
+import {equals} from './compare.js';
 
 suite('Database', () => {
   test('access', async () => {
@@ -164,7 +165,7 @@ suite('Database', () => {
     assert.strictEqual(1, datasets.size);
     const fooHead = await ds.head('foo');
     invariant(fooHead);
-    assert.isTrue(fooHead.equals(commit));
+    assert.isTrue(equals(fooHead, commit));
     const barHead = await ds.head('bar');
     assert.isNull(barHead);
   });

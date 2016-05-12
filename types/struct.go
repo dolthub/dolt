@@ -33,6 +33,10 @@ func (s Struct) Equals(other Value) bool {
 	return other != nil && s.t.Equals(other.Type()) && s.Ref() == other.Ref()
 }
 
+func (s Struct) Less(other Value) bool {
+	return valueLess(s, other)
+}
+
 func (s Struct) Ref() ref.Ref {
 	return EnsureRef(s.ref, s)
 }

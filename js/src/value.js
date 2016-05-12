@@ -21,14 +21,6 @@ export class Value {
     return this._ref = ensureRef(this._ref, this);
   }
 
-  equals(other: Value): boolean {
-    return this === other || this.ref.equals(other.ref);
-  }
-
-  less(other: Value): boolean {
-    return this.ref.less(other.ref);
-  }
-
   get chunks(): Array<RefValue> {
     return [];
   }

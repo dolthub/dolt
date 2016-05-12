@@ -4,6 +4,7 @@ package types
 type NomsKind uint8
 
 // All supported kinds of Noms types are enumerated here.
+// The ordering of these (especially Bool, Number and String) is important for ordering of values.
 const (
 	BoolKind NomsKind = iota
 	NumberKind
@@ -28,4 +29,9 @@ func IsPrimitiveKind(k NomsKind) bool {
 	default:
 		return false
 	}
+}
+
+// isKindOrderedByValue determines if a value is ordered by its value instead of its hash.
+func isKindOrderedByValue(k NomsKind) bool {
+	return k <= StringKind
 }

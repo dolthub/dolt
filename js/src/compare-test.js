@@ -2,68 +2,44 @@
 
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
-import {getCompareFunction, compare, equals} from './compare.js';
+import {equals, compare} from './compare.js';
 import {
   boolType,
   makeListType,
+  makeMapType,
+  makeSetType,
+  makeStructType,
+  makeUnionType,
   numberType,
   stringType,
 } from './type.js';
+import {newBlob} from './blob.js';
 import {newList} from './list.js';
+import {newMap} from './map.js';
+import {newSet} from './set.js';
+import {newStruct} from './struct.js';
+import Database from './database.js';
+import {makeTestingBatchStore} from './batch-store-adaptor.js';
 
-suite('compare', () => {
-  suite('getCompareFunction', () => {
-    test('int8', () => {
-      const compare = getCompareFunction(numberType);
-      assert.equal(compare(1, 1), 0);
-      assert.equal(compare(1, 3), -2);
-      assert.equal(compare(4, 2), 2);
-    });
-
-    test('string', () => {
-      const compare = getCompareFunction(stringType);
-      assert.equal(compare('a', 'a'), 0);
-      assert.equal(compare('a', 'b'), -1);
-      assert.equal(compare('c', 'a'), 1);
-    });
-
-    test('bool', () => {
-      const compare = getCompareFunction(boolType);
-      assert.equal(compare(true, true), 0);
-      assert.equal(compare(true, false), -1);
-      assert.equal(compare(false, true), 1);
-    });
-
-    test('list', async () => {
-      const listOfNumberType = makeListType(numberType);
-      const compare = getCompareFunction(listOfNumberType);
-      const listA = await newList([0, 1, 2, 3], listOfNumberType);
-      const listB = await newList([0, 1, 2, 3], listOfNumberType);
-      const listC = await newList([4, 5, 6, 7], listOfNumberType);
-      assert.equal(compare(listA, listA), 0);
-      assert.equal(compare(listA, listB), 0);
-      assert.equal(compare(listA, listC), 1);
-      assert.equal(compare(listC, listA), -1);
-    });
-  });
-
+suite('compare.js', () => {
   suite('compare', () => {
-    test('int8', () => {
+    test('number', () => {
       assert.equal(compare(1, 1), 0);
-      assert.equal(compare(1, 3), -1);
-      assert.equal(compare(4, 2), 1);
+      assert.isBelow(compare(1, 3), 0);
+      assert.isAbove(compare(4, 2), 0);
     });
 
     test('string', () => {
       assert.equal(compare('a', 'a'), 0);
-      assert.equal(compare('a', 'b'), -1);
-      assert.equal(compare('c', 'a'), 1);
+      assert.isBelow(compare('a', 'b'), 0);
+      assert.isAbove(compare('c', 'a'), 0);
     });
 
     test('bool', () => {
       assert.equal(compare(true, true), 0);
-      assert.equal(compare(true, false), -1);
-      assert.equal(compare(false, true), 1);
+      assert.isBelow(compare(false, true), 0);
+      assert.isAbove(compare(true, false), 0);
+
     });
 
     test('list', async () => {
@@ -73,13 +49,67 @@ suite('compare', () => {
       const listC = await newList([4, 5, 6, 7], listOfNumberType);
       assert.equal(compare(listA, listA), 0);
       assert.equal(compare(listA, listB), 0);
-      assert.equal(compare(listA, listC), 1);
-      assert.equal(compare(listC, listA), -1);
+      // These two are ordered by hash
+      assert.isAbove(compare(listA, listC), 0);
+      assert.isBelow(compare(listC, listA), 0);
+    });
+
+    test('union', async () => {
+      const listOfNumberOrStringType = makeListType(makeUnionType([numberType, stringType]));
+      const listA = await newList([0, 'b', 2, 'd'], listOfNumberOrStringType);
+      const listB = await newList([0, 'b', 2, 'd'], listOfNumberOrStringType);
+      const listC = await newList([4, 5, 'x', 7], listOfNumberOrStringType);
+      assert.equal(compare(listA, listA), 0);
+      assert.equal(compare(listA, listB), 0);
+      assert.isBelow(compare(listA, listC), 0);
+      assert.isAbove(compare(listC, listA), 0);
+    });
+
+    test('total ordering', async () => {
+      const ds = new Database(makeTestingBatchStore());
+
+      const structType1 = makeStructType('a', {
+        x: numberType,
+        s: stringType,
+      });
+
+      // values in increasing order. Some of these are compared by ref so changing the serialization
+      // might change the ordering.
+      const values = [
+        false, true,
+        -10, 0, 10,
+        'a', 'b', 'c',
+
+        // The order of these are done by the hash.
+        ds.writeValue(10),
+        await newSet([0, 1, 2, 3], makeSetType(numberType)),
+        await newMap([0, 1, 2, 3], makeMapType(numberType, numberType)),
+        boolType,
+        await newBlob(new Uint8Array([0, 1, 2, 3])),
+        await newList([0, 1, 2, 3], makeListType(numberType)),
+        newStruct(structType1, {x: 1, s: 'a'}),
+
+        // Value - values cannot be value
+        // Parent - values cannot be parent
+        // Union - values cannot be unions
+      ];
+
+      for (let i = 0; i < values.length; i++) {
+        for (let j = 0; j < values.length; j++) {
+          if (i === j) {
+            assert.equal(compare(values[i], values[j]), 0);
+          } else if (i < j) {
+            assert.isBelow(compare(values[i], values[j]), 0);
+          } else {
+            assert.isAbove(compare(values[i], values[j]), 0);
+          }
+        }
+      }
     });
   });
 
   suite('equal', () => {
-    test('int8', () => {
+    test('number', () => {
       assert.isTrue(equals(1, 1));
       assert.isFalse(equals(1, 3));
       assert.isFalse(equals(4, 2));

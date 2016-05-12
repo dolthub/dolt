@@ -19,6 +19,7 @@ import {newSet} from './set.js';
 import {newMap} from './map.js';
 import {Value} from './value.js';
 import {invariant} from './assert.js';
+import {equals} from './compare.js';
 
 suite('defs', () => {
   test('string', async () => {
@@ -41,11 +42,11 @@ suite('defs', () => {
     const l1 = await newList([0, 1, 2, 3], listOfNumberType);
     const l2 = await defToNoms([0, 1, 2, 3], listOfNumberType);
     invariant(l2 instanceof Value);
-    assert.isTrue(l1.equals(l2));
+    assert.isTrue(equals(l1, l2));
 
     const l3 = await defToNoms(l1, listOfNumberType);
     invariant(l3 instanceof Value);
-    assert.isTrue(l1.equals(l3));
+    assert.isTrue(equals(l1, l3));
 
     let ex;
     try {
@@ -61,7 +62,7 @@ suite('defs', () => {
     const s1 = await newSet([0, 1, 2, 3], setOfNumberType);
     const s2 = await defToNoms([0, 1, 2, 3], setOfNumberType);
     invariant(s2 instanceof Value);
-    assert.isTrue(s1.equals(s2));
+    assert.isTrue(equals(s1, s2));
 
     let ex;
     try {
@@ -77,7 +78,7 @@ suite('defs', () => {
     const m1 = await newMap([0, 'zero', 1, 'one'], mapOfNumberToStringType);
     const m2 = await defToNoms([0, 'zero', 1, 'one'], mapOfNumberToStringType);
     invariant(m2 instanceof Value);
-    assert.isTrue(m1.equals(m2));
+    assert.isTrue(equals(m1, m2));
 
     let ex;
     try {
@@ -103,7 +104,7 @@ suite('defs', () => {
       b: true,
       s: 'hi',
     }, type);
-    assert.isTrue(s1.equals(s2));
+    assert.isTrue(equals(s1, s2));
   });
 
   test('struct with list', async () => {
@@ -121,7 +122,7 @@ suite('defs', () => {
     }, type);
 
     invariant(s2 instanceof Value);
-    assert.isTrue(s1.equals(s2));
+    assert.isTrue(equals(s1, s2));
   });
 
   test('list of struct', async () => {
@@ -137,11 +138,11 @@ suite('defs', () => {
 
     const l2 = await defToNoms([{i: 1}, {i: 2}], listType);
     invariant(l2 instanceof Value);
-    assert.isTrue(l1.equals(l2));
+    assert.isTrue(equals(l1, l2));
 
     const l3 = await defToNoms([newStruct(structType, {i: 1}), {i: 2}], listType);
     invariant(l3 instanceof Value);
-    assert.isTrue(l1.equals(l3));
+    assert.isTrue(equals(l1, l3));
   });
 
   test('recursive struct', async () => {
@@ -173,7 +174,7 @@ suite('defs', () => {
     }, type);
 
     invariant(t2 instanceof Value);
-    assert.isTrue(t1.equals(t2));
+    assert.isTrue(equals(t1, t2));
 
     const t3 = await defToNoms({
       children: [
@@ -183,6 +184,6 @@ suite('defs', () => {
     }, type);
 
     invariant(t3 instanceof Value);
-    assert.isTrue(t1.equals(t3));
+    assert.isTrue(equals(t1, t3));
   });
 });

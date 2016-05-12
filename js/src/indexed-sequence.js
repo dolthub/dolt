@@ -30,7 +30,7 @@ export class IndexedSequence<T> extends Sequence<T> {
 
 export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence> {
   advanceToOffset(idx: number): number {
-    this.idx = search(this.length, (i: number) => idx <= this.sequence.getOffset(i));
+    this.idx = search(this.length, (i: number) => this.sequence.getOffset(i) - idx);
 
     if (this.sequence.isMeta && this.idx === this.length) {
       this.idx = this.length - 1;

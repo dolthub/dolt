@@ -11,6 +11,7 @@ import {newMap} from './map.js';
 import {newBlob} from './blob.js';
 import type Struct from './struct.js';
 import {newStruct} from './struct.js';
+import {equals} from './compare.js';
 
 type StructDefType = {[name: string]: DefType};
 type DefType = number | string | boolean | Array<DefType> | StructDefType | Uint8Array | Value;
@@ -28,7 +29,7 @@ export async function defToNoms(v: DefType, t: Type): Promise<valueOrPrimitive> 
   }
 
   if (v instanceof Value) {
-    if (t.equals(v.type)) {
+    if (equals(t, v.type)) {
       return v;
     }
   }

@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/ref"
 )
 
 type orderedSequence interface {
@@ -38,7 +39,7 @@ func (oms orderedMetaSequence) getKey(idx int) Value {
 }
 
 func newCursorAtKey(seq orderedSequence, key Value, forInsertion bool, last bool) *sequenceCursor {
-	var cur *sequenceCursor = nil
+	var cur *sequenceCursor
 	for {
 		idx := 0
 		if last {
@@ -65,25 +66,30 @@ func newCursorAtKey(seq orderedSequence, key Value, forInsertion bool, last bool
 
 func seekTo(cur *sequenceCursor, key Value, lastPositionIfNotFound bool) bool {
 	seq := cur.seq.(orderedSequence)
-	keyElemIsOrdered := seq.Type().Desc.(CompoundDesc).ElemTypes[0].IsOrdered()
+	keyIsOrderedByValue := isKindOrderedByValue(key.Type().Kind())
 	_, seqIsMeta := seq.(metaSequence)
-	keyRef := key.Ref()
+	var keyRef ref.Ref
 
-	// Default order by value ref
-	searchFn := func(i int) bool {
-		return !seq.getKey(i).Ref().Less(keyRef)
-	}
+	var searchFn func(i int) bool
 
-	if keyElemIsOrdered {
-		// Order by native value for scalars
-		orderedKey := key.(OrderedValue)
-		searchFn = func(i int) bool {
-			return !seq.getKey(i).(OrderedValue).Less(orderedKey)
+	if seqIsMeta {
+		if !keyIsOrderedByValue {
+			keyRef = key.Ref()
 		}
-	} else if seqIsMeta {
 		// For non-native values, meta sequences will hold types.Ref rather than the value
 		searchFn = func(i int) bool {
-			return !seq.getKey(i).(Ref).TargetRef().Less(keyRef)
+			sk := seq.getKey(i)
+			if sr, ok := sk.(Ref); ok {
+				if keyIsOrderedByValue {
+					return true // Values > ordered
+				}
+				return !sr.TargetRef().Less(keyRef)
+			}
+			return !sk.Less(key)
+		}
+	} else {
+		searchFn = func(i int) bool {
+			return !seq.getKey(i).Less(key)
 		}
 	}
 
@@ -95,10 +101,6 @@ func seekTo(cur *sequenceCursor, key Value, lastPositionIfNotFound bool) bool {
 	}
 
 	return cur.idx < seq.seqLen()
-}
-
-func isSequenceOrderedByIndexedType(t *Type) bool {
-	return t.Desc.(CompoundDesc).ElemTypes[0].IsOrdered()
 }
 
 func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {

@@ -52,6 +52,10 @@ func (s Set) Equals(other Value) bool {
 	return other != nil && s.Ref() == other.Ref()
 }
 
+func (s Set) Less(other Value) bool {
+	return valueLess(s, other)
+}
+
 func (s Set) Ref() ref.Ref {
 	return EnsureRef(s.ref, s)
 }
@@ -172,14 +176,13 @@ func (s Set) elemType() *Type {
 }
 
 func buildSetData(old []Value, values []Value, t *Type) []Value {
-	idxFn := getIndexFnForSetType(t)
 	elemType := t.Desc.(CompoundDesc).ElemTypes[0]
 
 	data := make([]Value, len(old), len(old)+len(values))
 	copy(data, old)
 	for _, v := range values {
 		assertType(elemType, v)
-		idx := idxFn(data, v)
+		idx := indexOfSetValue(data, v)
 		if idx < len(data) && data[idx].Equals(v) {
 			// We already have this fellow.
 			continue
@@ -192,28 +195,9 @@ func buildSetData(old []Value, values []Value, t *Type) []Value {
 	return data
 }
 
-type indexOfSetFn func(m []Value, v Value) int
-
-func getIndexFnForSetType(t *Type) indexOfSetFn {
-	orderByValue := t.Desc.(CompoundDesc).ElemTypes[0].IsOrdered()
-	if orderByValue {
-		return indexOfOrderedSetValue
-	}
-
-	return indexOfSetValue
-}
-
 func indexOfSetValue(m []Value, v Value) int {
 	return sort.Search(len(m), func(i int) bool {
-		return !m[i].Ref().Less(v.Ref())
-	})
-}
-
-func indexOfOrderedSetValue(m []Value, v Value) int {
-	ov := v.(OrderedValue)
-
-	return sort.Search(len(m), func(i int) bool {
-		return !m[i].(OrderedValue).Less(ov)
+		return !m[i].Less(v)
 	})
 }
 
@@ -237,7 +221,7 @@ func makeSetLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 		var indexValue Value
 		if len(setData) > 0 {
 			indexValue = setData[len(setData)-1]
-			if !isSequenceOrderedByIndexedType(t) {
+			if !isKindOrderedByValue(indexValue.Type().Kind()) {
 				indexValue = NewRef(indexValue)
 			}
 		}
