@@ -15,10 +15,7 @@ func (fs String) String() string {
 	return fs.s
 }
 
-func (fs String) Ref() ref.Ref {
-	return EnsureRef(fs.ref, fs)
-}
-
+// Value interface
 func (s String) Equals(other Value) bool {
 	if other, ok := other.(String); ok {
 		return s.s == other.s
@@ -33,11 +30,15 @@ func (s String) Less(other Value) bool {
 	return StringKind < other.Type().Kind()
 }
 
-func (fs String) Chunks() []Ref {
-	return nil
+func (fs String) Ref() ref.Ref {
+	return EnsureRef(fs.ref, fs)
 }
 
 func (fs String) ChildValues() []Value {
+	return nil
+}
+
+func (fs String) Chunks() []Ref {
 	return nil
 }
 
