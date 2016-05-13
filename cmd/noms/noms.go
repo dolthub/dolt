@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/attic-labs/noms/d"
+	goisatty "github.com/mattn/go-isatty"
 )
 
 const (
@@ -90,6 +91,13 @@ func executeCmd(executable string) {
 	args := flag.Args()[1:]
 	if len(args) == 0 {
 		args = append(args, "-help")
+	}
+	if !*noPager {
+		arg := "-stdout-is-tty=0"
+		if goisatty.IsTerminal(os.Stdout.Fd()) {
+			arg = "-stdout-is-tty=1"
+		}
+		args = append([]string{arg}, args...)
 	}
 	c1 := exec.Command(executable, args...)
 	c1.Stdin = os.Stdin

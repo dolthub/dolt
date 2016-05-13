@@ -26,8 +26,9 @@ const (
 )
 
 var (
-	hostFlag = flag.String("host", "localhost:0", "Host to listen on")
-	showHelp = flag.Bool("help", false, "Show help message")
+	hostFlag    = flag.String("host", "localhost:0", "Host to listen on")
+	showHelp    = flag.Bool("help", false, "Show help message")
+	stdoutIsTty = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
 )
 
 type chunkStoreRecord struct {
