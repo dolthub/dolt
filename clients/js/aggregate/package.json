@@ -27,7 +27,7 @@
   },
   "scripts": {
     "start": "babel -d dist -w src",
-    "build": "babel -d dist src",
+    "build": "BABEL_ENV=production babel -d dist src",
     "test": "eslint src/ && flow src/"
   }
 }
