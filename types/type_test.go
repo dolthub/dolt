@@ -66,3 +66,19 @@ func TestTypeOrdered(t *testing.T) {
 	assert.False(isKindOrderedByValue(MakeMapType(StringType, ValueType).Kind()))
 	assert.False(isKindOrderedByValue(MakeRefType(StringType).Kind()))
 }
+
+func TestFlattenUnionTypes(t *testing.T) {
+	assert := assert.New(t)
+	assert.Equal(BoolType, MakeUnionType(BoolType))
+	assert.Equal(MakeUnionType(), MakeUnionType())
+	assert.Equal(MakeUnionType(BoolType, StringType), MakeUnionType(BoolType, MakeUnionType(StringType)))
+	assert.Equal(MakeUnionType(BoolType, StringType, NumberType), MakeUnionType(BoolType, MakeUnionType(StringType, NumberType)))
+	assert.Equal(BoolType, MakeUnionType(BoolType, BoolType))
+	assert.Equal(BoolType, MakeUnionType(BoolType, MakeUnionType()))
+	assert.Equal(BoolType, MakeUnionType(MakeUnionType(), BoolType))
+	assert.True(MakeUnionType(MakeUnionType(), MakeUnionType()).Equals(MakeUnionType()))
+	assert.Equal(MakeUnionType(BoolType, NumberType), MakeUnionType(BoolType, NumberType))
+	assert.Equal(MakeUnionType(BoolType, NumberType), MakeUnionType(NumberType, BoolType))
+	assert.Equal(MakeUnionType(BoolType, NumberType), MakeUnionType(BoolType, NumberType, BoolType))
+	assert.Equal(MakeUnionType(BoolType, NumberType), MakeUnionType(MakeUnionType(BoolType, NumberType), NumberType, BoolType))
+}

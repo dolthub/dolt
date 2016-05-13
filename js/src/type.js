@@ -173,9 +173,36 @@ export function makeStructType(name: string, fields: {[key: string]: Type}): Typ
   return buildType(new StructDesc(name, fields));
 }
 
+/**
+ * makeUnionType creates a new union type unless the elemTypes can be folded into a single non
+ * union type.
+ */
 export function makeUnionType(types: Type[]): Type {
+  types = flattenUnionTypes(types, Object.create(null));
+  if (types.length === 1) {
+    return types[0];
+  }
   types.sort(compare);
   return buildType(new CompoundDesc(Kind.Union, types));
+}
+
+function flattenUnionTypes(types: Type[], seenTypes: {[key: Ref]: boolean}): Type[] {
+  if (types.length === 0) {
+    return types;
+  }
+
+  const newTypes = [];
+  for (let i = 0; i < types.length; i++) {
+    if (types[i].kind === Kind.Union) {
+      newTypes.push(...flattenUnionTypes(types[i].desc.elemTypes, seenTypes));
+    } else {
+      if (!seenTypes[types[i].ref]) {
+        seenTypes[types[i].ref] = true;
+        newTypes.push(types[i]);
+      }
+    }
+  }
+  return newTypes;
 }
 
 export const boolType = makePrimitiveType(Kind.Bool);

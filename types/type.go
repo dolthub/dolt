@@ -144,9 +144,34 @@ func (uts unionTypes) Len() int           { return len(uts) }
 func (uts unionTypes) Less(i, j int) bool { return uts[i].Ref().Less(uts[j].Ref()) }
 func (uts unionTypes) Swap(i, j int)      { uts[i], uts[j] = uts[j], uts[i] }
 
-func MakeUnionType(elemType ...*Type) *Type {
-	sort.Sort(unionTypes(elemType))
-	return buildType(CompoundDesc{UnionKind, elemType})
+// MakeUnionType creates a new union type unless the elemTypes can be folded into a single non union type.
+func MakeUnionType(elemTypes ...*Type) *Type {
+	seenTypes := map[ref.Ref]bool{}
+	ts := flattenUnionTypes(elemTypes, &seenTypes)
+	if len(ts) == 1 {
+		return ts[0]
+	}
+	sort.Sort(unionTypes(ts))
+	return buildType(CompoundDesc{UnionKind, ts})
+}
+
+func flattenUnionTypes(ts []*Type, seenTypes *map[ref.Ref]bool) []*Type {
+	if len(ts) == 0 {
+		return ts
+	}
+
+	ts2 := make([]*Type, 0, len(ts))
+	for _, t := range ts {
+		if t.Kind() == UnionKind {
+			ts2 = append(ts2, flattenUnionTypes(t.Desc.(CompoundDesc).ElemTypes, seenTypes)...)
+		} else {
+			if !(*seenTypes)[t.Ref()] {
+				(*seenTypes)[t.Ref()] = true
+				ts2 = append(ts2, t)
+			}
+		}
+	}
+	return ts2
 }
 
 func buildType(desc TypeDesc) *Type {

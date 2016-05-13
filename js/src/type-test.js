@@ -7,6 +7,7 @@ import {
   makeMapType,
   makeSetType,
   makeStructType,
+  makeUnionType,
   numberType,
   stringType,
   typeType,
@@ -47,5 +48,24 @@ suite('Type', () => {
     assert.equal(numberType, getTypeOfValue(0));
     assert.equal(stringType, getTypeOfValue('abc'));
     assert.equal(typeType, getTypeOfValue(stringType));
+  });
+
+  test('flatten union types', () => {
+    assert.equal(makeUnionType([boolType]), boolType);
+    assert.deepEqual(makeUnionType([]), makeUnionType([]));
+    assert.deepEqual(makeUnionType([boolType, makeUnionType([stringType])]),
+                     makeUnionType([boolType, stringType]));
+    assert.deepEqual(makeUnionType([boolType, makeUnionType([stringType, numberType])]),
+                     makeUnionType([boolType, stringType, numberType]));
+    assert.equal(makeUnionType([boolType, boolType]), boolType);
+    assert.equal(makeUnionType([boolType, makeUnionType([])]), boolType);
+    assert.equal(makeUnionType([makeUnionType([]), boolType]), boolType);
+    assert.isTrue(equals(makeUnionType([makeUnionType([]), makeUnionType([])]), makeUnionType([])));
+    assert.deepEqual(makeUnionType([boolType, numberType]), makeUnionType([boolType, numberType]));
+    assert.deepEqual(makeUnionType([numberType, boolType]), makeUnionType([boolType, numberType]));
+    assert.deepEqual(makeUnionType([boolType, numberType, boolType]),
+                     makeUnionType([boolType, numberType]));
+    assert.deepEqual(makeUnionType([makeUnionType([boolType, numberType]), numberType, boolType]),
+                     makeUnionType([boolType, numberType]));
   });
 });
