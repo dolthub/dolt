@@ -13,7 +13,8 @@ import (
 )
 
 var (
-	showHelp = flag.Bool("help", false, "show help text")
+	showHelp    = flag.Bool("help", false, "show help text")
+	stdoutIsTty = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
 )
 
 func main() {
