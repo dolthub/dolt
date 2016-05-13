@@ -15,13 +15,15 @@ import (
 )
 
 var (
-	port = flag.Int("port", 8000, "")
+	port        = flag.Int("port", 8000, "")
+	stdoutIsTty = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
 )
 
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "usage: %s <database>\n", os.Args[0])
 		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nFor detailed information on spelling databases, see: at https://github.com/attic-labs/noms/blob/master/doc/spelling.md.\n\n")
 	}
 
 	flags.RegisterDatabaseFlags()

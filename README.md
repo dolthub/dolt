@@ -44,7 +44,7 @@ go build
 
 # What next?
 
-* Learn the core tools: [`server`](clients/go/server), [`splore`](clients/js/splore), [`shove`](clients/go/shove), [`csv import/export`](clients/go/csv), [`json-import`](clients/go/json-import), [`xml_importer`](clients/go/xml_importer)
+* Learn the core tools: [`serve`](cmd/noms-serve), [`splore`](clients/js/splore), [`sync`](cmd/noms-sync), [`csv import/export`](clients/go/csv), [`json-import`](clients/go/json-import), [`xml_importer`](clients/go/xml_importer)
 * Run sample apps: (TODO)
 * NomDL reference (TODO)
 * Go SDK reference (TODO)
