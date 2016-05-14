@@ -17,7 +17,7 @@ On a command-line:
 
 ```sh
 cd $GOPATH
-go get https://github.com/attic-labs/noms
+go get github.com/attic-labs/noms
 cd src/github.com/attic-labs/noms/cmd
 go install ./...
 ```
