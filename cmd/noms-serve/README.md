@@ -1,6 +1,6 @@
-# Server
+# noms-serve
 
-Server implements a noms database over HTTP.
+noms-serve implements a noms database over HTTP.
 
 ## Example
 
@@ -11,9 +11,7 @@ go build
 ./counter ldb:/tmp/servertest:counter
 ./counter ldb:/tmp/servertest:counter
 
-cd ../server
-go build
-./server ldb:/tmp/servertest
+noms serve ldb:/tmp/servertest
 ```
 
 Then navigate a web browser to [http://localhost:8000/root](http://localhost:8000/root). You should see a string starting with `sha1-...`. This _ref_ is the unique identifier for the current state of the database. You can explore it further by fetching URLs like http://localhost:8000/ref/sha1-...
