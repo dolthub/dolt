@@ -214,6 +214,10 @@ func NewLevelDBStoreFactory(dir string, maxHandles int, dumpStats bool) Factory 
 	return &LevelDBStoreFactory{dir, maxHandles, dumpStats, newBackingStore(dir, maxHandles, dumpStats)}
 }
 
+func NewLevelDBStoreFactoryUseFlags(dir string) Factory {
+	return NewLevelDBStoreFactory(dir, ldbFlags.maxFileHandles, ldbFlags.dumpStats)
+}
+
 type LevelDBStoreFactory struct {
 	dir            string
 	maxFileHandles int
