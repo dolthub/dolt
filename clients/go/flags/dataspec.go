@@ -2,8 +2,8 @@ package flags
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
-	"strings"
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
@@ -13,13 +13,14 @@ import (
 )
 
 var (
-	storeRegex = regexp.MustCompile("^(.+?)(:.+)?$")
+	storeRegex = regexp.MustCompile("^([^:]+):?(.+)?$")
 	pathRegex  = regexp.MustCompile("^(.+):(.+)$")
 )
 
 type DatabaseSpec struct {
-	Protocol string
-	Path     string
+	Protocol    string
+	Path        string
+	accessToken string
 }
 
 type DatasetSpec struct {
@@ -37,19 +38,30 @@ type PathSpec interface {
 }
 
 func ParseDatabaseSpec(spec string) (DatabaseSpec, error) {
-	res := storeRegex.FindStringSubmatch(spec)
-	if len(res) != 3 {
+	parts := storeRegex.FindStringSubmatch(spec)
+	if len(parts) != 3 {
 		return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
 	}
-	protocol := res[1]
+	protocol := parts[1]
+	path := parts[2]
 	switch protocol {
-	case "http", "https", "ldb":
-		if len(res[2]) == 0 {
+	case "http", "https":
+		if len(parts[2]) == 0 {
 			return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
 		}
-		return DatabaseSpec{Protocol: protocol, Path: strings.TrimRight(res[2][1:], "/")}, nil
+		u, err := url.Parse(spec)
+		if err != nil {
+			return DatabaseSpec{}, fmt.Errorf("Invalid path for %s protocol, spec: %s\n", protocol, spec)
+		}
+		token := u.Query().Get("access_token")
+		return DatabaseSpec{Protocol: protocol, Path: path, accessToken: token}, nil
+	case "ldb":
+		if len(parts[2]) == 0 {
+			return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
+		}
+		return DatabaseSpec{Protocol: protocol, Path: path}, nil
 	case "mem":
-		if len(res[2]) > 0 {
+		if len(parts[2]) > 0 {
 			return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
 		}
 		return DatabaseSpec{Protocol: protocol, Path: ""}, nil
@@ -58,15 +70,15 @@ func ParseDatabaseSpec(spec string) (DatabaseSpec, error) {
 }
 
 func ParseDatasetSpec(spec string) (DatasetSpec, error) {
-	res := pathRegex.FindStringSubmatch(spec)
-	if len(res) != 3 {
+	parts := pathRegex.FindStringSubmatch(spec)
+	if len(parts) != 3 {
 		return DatasetSpec{}, fmt.Errorf("Invalid dataset spec: %s", spec)
 	}
-	storeSpec, err := ParseDatabaseSpec(res[1])
+	storeSpec, err := ParseDatabaseSpec(parts[1])
 	if err != nil {
 		return DatasetSpec{}, err
 	}
-	return DatasetSpec{StoreSpec: storeSpec, DatasetName: res[2]}, nil
+	return DatasetSpec{StoreSpec: storeSpec, DatasetName: parts[2]}, nil
 }
 
 func ParseRefSpec(spec string) (RefSpec, error) {
@@ -95,10 +107,14 @@ func ParsePathSpec(spec string) (PathSpec, error) {
 
 }
 
+func (s DatabaseSpec) String() string {
+	return s.Protocol + ":" + s.Path
+}
+
 func (spec DatabaseSpec) Database() (ds datas.Database, err error) {
 	switch spec.Protocol {
-	case "http":
-		ds = datas.NewRemoteDatabase(spec.Protocol+":"+spec.Path, "")
+	case "http", "https":
+		ds = datas.NewRemoteDatabase(spec.String(), "Bearer "+spec.accessToken)
 	case "ldb":
 		ds = datas.NewDatabase(chunks.NewLevelDBStoreUseFlags(spec.Path, ""))
 	case "mem":

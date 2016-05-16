@@ -235,7 +235,7 @@ func TestReadRef(t *testing.T) {
 func TestDatabaseSpecs(t *testing.T) {
 	assert := assert.New(t)
 
-	badSpecs := []string{"mem:", "mem:stuff", "http:", "https:", "random:", "random:random"}
+	badSpecs := []string{"mem:stuff", "http:", "https:", "random:", "random:random"}
 	for _, spec := range badSpecs {
 		_, err := ParseDatabaseSpec(spec)
 		assert.Error(err)
@@ -247,7 +247,7 @@ func TestDatabaseSpecs(t *testing.T) {
 
 	storeSpec, err = ParseDatabaseSpec("http://localhost:8000/")
 	assert.NoError(err)
-	assert.Equal(DatabaseSpec{Protocol: "http", Path: "//localhost:8000"}, storeSpec)
+	assert.Equal(DatabaseSpec{Protocol: "http", Path: "//localhost:8000/"}, storeSpec)
 
 	storeSpec, err = ParseDatabaseSpec("http://localhost:8000/fff")
 	assert.NoError(err)
@@ -264,6 +264,18 @@ func TestDatabaseSpecs(t *testing.T) {
 	storeSpec, err = ParseDatabaseSpec("mem")
 	assert.NoError(err)
 	assert.Equal(DatabaseSpec{Protocol: "mem"}, storeSpec)
+
+	storeSpec, err = ParseDatabaseSpec("mem:")
+	assert.NoError(err)
+	assert.Equal(DatabaseSpec{Protocol: "mem"}, storeSpec)
+
+	storeSpec, err = ParseDatabaseSpec("http://server.com/john/doe?access_token=jane")
+	assert.NoError(err)
+	assert.Equal(DatabaseSpec{Protocol: "http", Path: "//server.com/john/doe?access_token=jane", accessToken: "jane"}, storeSpec)
+
+	storeSpec, err = ParseDatabaseSpec("http://server.com/john/doe/?arg=2&qp1=true&access_token=jane")
+	assert.NoError(err)
+	assert.Equal(DatabaseSpec{Protocol: "http", Path: "//server.com/john/doe/?arg=2&qp1=true&access_token=jane", accessToken: "jane"}, storeSpec)
 }
 
 func TestDatasetSpecs(t *testing.T) {
@@ -281,7 +293,7 @@ func TestDatasetSpecs(t *testing.T) {
 
 	setSpec, err = ParseDatasetSpec("http://localhost:8000/john/doe/:dsname")
 	assert.NoError(err)
-	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "http", Path: "//localhost:8000/john/doe"}, DatasetName: "dsname"}, setSpec)
+	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "http", Path: "//localhost:8000/john/doe/"}, DatasetName: "dsname"}, setSpec)
 
 	setSpec, err = ParseDatasetSpec("https://local.attic.io/john/doe:dsname")
 	assert.NoError(err)
@@ -331,7 +343,7 @@ func TestPathSpec(t *testing.T) {
 	pathSpec, err = ParsePathSpec("http://localhost:8000/john/doe/:dsname")
 	assert.NoError(err)
 	setSpec := pathSpec.(*DatasetSpec)
-	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "http", Path: "//localhost:8000/john/doe"}, DatasetName: "dsname"}, *setSpec)
+	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "http", Path: "//localhost:8000/john/doe/"}, DatasetName: "dsname"}, *setSpec)
 
 	_, err = ParsePathSpec("http://local.attic.io")
 	assert.Error(err)
