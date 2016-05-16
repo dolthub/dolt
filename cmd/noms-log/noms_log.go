@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"strings"
 
 	"github.com/attic-labs/noms/clients/go/flags"
@@ -28,7 +27,8 @@ var (
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s <dataset>\n", path.Base(os.Args[0]))
+		fmt.Fprintln(os.Stderr, "Displays the history of a Noms dataset\n")
+		fmt.Fprintln(os.Stderr, "Usage: noms log <dataset>")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nSee \"Spelling Objects\" at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object argument.\n\n")
 	}

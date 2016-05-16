@@ -21,7 +21,8 @@ var (
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: %s <database>\n", os.Args[0])
+		fmt.Fprintln(os.Stderr, "Serves a Noms database over HTTP\n")
+		fmt.Fprintln(os.Stderr, "Usage: noms serve <database>")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nFor detailed information on spelling databases, see: at https://github.com/attic-labs/noms/blob/master/doc/spelling.md.\n\n")
 	}

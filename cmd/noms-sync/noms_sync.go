@@ -24,7 +24,8 @@ func main() {
 	runtime.GOMAXPROCS(cpuCount)
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "%s [options] <source-object> <dest-dataset>\n", os.Args[0])
+		fmt.Fprintln(os.Stderr, "Moves datasets between or within databases\n")
+		fmt.Fprintln(os.Stderr, "noms sync [options] <source-object> <dest-dataset>\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nFor detailed information on spelling objects and datasets, see: at https://github.com/attic-labs/noms/blob/master/doc/spelling.md.\n\n")
 	}

@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path"
 
 	"github.com/attic-labs/noms/clients/go/flags"
 	"github.com/attic-labs/noms/clients/go/util"
@@ -19,7 +18,8 @@ var (
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s <object>\n", path.Base(os.Args[0]))
+		fmt.Fprintln(os.Stderr, "Shows a serialization of a Noms object\n")
+		fmt.Fprintln(os.Stderr, "Usage: noms show <object>\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nSee \"Spelling Objects\" at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object argument.\n\n")
 	}

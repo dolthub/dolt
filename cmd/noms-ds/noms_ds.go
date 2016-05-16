@@ -17,7 +17,8 @@ var (
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [<Datastore> | -d <dataset>]\n", os.Args[0])
+		fmt.Fprintln(os.Stderr, "Noms dataset management\n")
+		fmt.Fprintln(os.Stderr, "Usage: noms ds [<database> | -d <dataset>]")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nFor detailed information on spelling datastores and datasets, see: at https://github.com/attic-labs/noms/blob/master/doc/spelling.md.\n\n")
 	}

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"strings"
 
 	"github.com/attic-labs/noms/chunks"
@@ -40,8 +39,9 @@ type chunkStoreRecords map[string]chunkStoreRecord
 
 func main() {
 	usage := func() {
+		fmt.Fprintln(os.Stderr, "Starts a server to display a web application with access to one or more noms datasets\n")
+		fmt.Println("Usage: noms view %s <view-dir> arg1=val1 arg2=val2...\n", serveCmd)
 		flag.PrintDefaults()
-		fmt.Printf("Usage: %s %s <view-dir> arg1=val1 arg2=val2...\n", path.Base(os.Args[0]), serveCmd)
 	}
 
 	flag.Parse()
