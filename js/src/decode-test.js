@@ -13,7 +13,6 @@ import {
   boolType,
   makeListType,
   makeMapType,
-  makeRefType,
   makeSetType,
   makeStructType,
   makeUnionType,
@@ -24,7 +23,7 @@ import {
   valueType,
 } from './type.js';
 import {encode as encodeBase64} from './base64.js';
-import {IndexedMetaSequence, MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
+import {newListMetaSequence, MetaTuple, newSetMetaSequence} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {Kind} from './noms-kind.js';
 import {ListLeafSequence, NomsList} from './list.js';
@@ -113,25 +112,58 @@ suite('Decode', () => {
     const v: NomsList<number> = r.readValue();
     invariant(v instanceof NomsList);
 
-    const tr = makeListType(numberType);
-    const l = new NomsList(new ListLeafSequence(ds, tr, [0, 1, 2, 3]));
+    const l = new NomsList(new ListLeafSequence(ds, [0, 1, 2, 3]));
     assert.isTrue(equals(l, v));
   });
 
-  // TODO: Can't round-trip collections of value types. =-(
-  test('read list of value', async () => {
+  test('read list of mixed types', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const a = [Kind.List, Kind.Value, false,
+    const a = [Kind.List, Kind.Union, 3, Kind.Bool, Kind.Number, Kind.String, false,
       [Kind.Number, '1', Kind.String, 'hi', Kind.Bool, true]];
     const r = new JsonArrayReader(a, ds);
     const v: NomsList<Value> = r.readValue();
     invariant(v instanceof NomsList);
 
-    const tr = makeListType(valueType);
+    const tr = makeListType(makeUnionType([boolType, numberType, stringType]));
     assert.isTrue(equals(v.type, tr));
     assert.strictEqual(1, await v.get(0));
     assert.strictEqual('hi', await v.get(1));
     assert.strictEqual(true, await v.get(2));
+  });
+
+  test('read set of mixed types', async () => {
+    const ds = new Database(makeTestingBatchStore());
+    const a = [Kind.Set, Kind.Union, 3, Kind.Bool, Kind.Number, Kind.String, false,
+      [Kind.Bool, true, Kind.Number, '1', Kind.String, 'hi']];
+    const r = new JsonArrayReader(a, ds);
+    const v: NomsSet<boolean | number | string> = r.readValue();
+    invariant(v instanceof NomsSet);
+
+    const tr = makeSetType(makeUnionType([boolType, numberType, stringType]));
+    assert.isTrue(equals(v.type, tr));
+    assert.isTrue(await v.has(1));
+    assert.isTrue(await v.has('hi'));
+    assert.isTrue(await v.has(true));
+  });
+
+  test('read map of mixed types', async () => {
+    const ds = new Database(makeTestingBatchStore());
+    const a = [
+      Kind.Map, Kind.Union, 2, Kind.Bool, Kind.Number,
+      Kind.Union, 2, Kind.Number, Kind.String, false, [
+        Kind.Bool, true, Kind.Number, '1',
+        Kind.Number, '2', Kind.String, 'hi',
+      ],
+    ];
+    const r = new JsonArrayReader(a, ds);
+    const v: NomsMap<boolean | number, number | string> = r.readValue();
+    invariant(v instanceof NomsMap);
+
+    const tr = makeMapType(makeUnionType([boolType, numberType]),
+                           makeUnionType([numberType, stringType]));
+    assert.isTrue(equals(v.type, tr));
+    assert.equal(await v.get(true), 1);
+    assert.equal(await v.get(2), 'hi');
   });
 
   test('read value list of number', () => {
@@ -142,23 +174,21 @@ suite('Decode', () => {
     const v = r.readValue();
     invariant(v instanceof NomsList);
 
-    const tr = makeListType(numberType);
-    const l = new NomsList(new ListLeafSequence(ds, tr, [0, 1, 2]));
+    const l = new NomsList(new ListLeafSequence(ds, [0, 1, 2]));
     assert.isTrue(equals(l, v));
   });
 
   test('read compound list', () => {
     const ds = new Database(makeTestingBatchStore());
-    const ltr = makeListType(numberType);
-    const r1 = ds.writeValue(new NomsList(new ListLeafSequence(ds, ltr, [0])));
-    const r2 = ds.writeValue(new NomsList(new ListLeafSequence(ds, ltr, [1, 2])));
-    const r3 = ds.writeValue(new NomsList(new ListLeafSequence(ds, ltr, [3, 4, 5])));
+    const r1 = ds.writeValue(new NomsList(new ListLeafSequence(ds, [0])));
+    const r2 = ds.writeValue(new NomsList(new ListLeafSequence(ds, [1, 2])));
+    const r3 = ds.writeValue(new NomsList(new ListLeafSequence(ds, [3, 4, 5])));
     const tuples = [
       new MetaTuple(r1, 1, 1),
       new MetaTuple(r2, 2, 2),
       new MetaTuple(r3, 3, 3),
     ];
-    const l: NomsList<number> = new NomsList(new IndexedMetaSequence(ds, ltr, tuples));
+    const l: NomsList<number> = new NomsList(newListMetaSequence(ds, tuples));
 
     const a = [
       Kind.List, Kind.Number, true, [
@@ -182,8 +212,7 @@ suite('Decode', () => {
     const v: NomsMap<number, number> = r.readValue();
     invariant(v instanceof NomsMap);
 
-    const t = makeMapType(numberType, numberType);
-    const m = new NomsMap(new MapLeafSequence(ds, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
+    const m = new NomsMap(new MapLeafSequence(ds, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(equals(v, m));
   });
 
@@ -201,11 +230,7 @@ suite('Decode', () => {
     const v: NomsMap<RefValue<Value>, number> = r.readValue();
     invariant(v instanceof NomsMap);
 
-    const refOfValueType = makeRefType(valueType);
-    const mapType = makeMapType(refOfValueType, numberType);
-
-    const m = new NomsMap(new MapLeafSequence(ds, mapType, [{key: rv1, value: 2},
-                                                            {key: rv2, value: 4}]));
+    const m = new NomsMap(new MapLeafSequence(ds, [{key: rv1, value: 2}, {key: rv2, value: 4}]));
     assert.isTrue(equals(v, m));
   });
 
@@ -217,8 +242,7 @@ suite('Decode', () => {
     const v: NomsMap<number, number> = r.readValue();
     invariant(v instanceof NomsMap);
 
-    const t = makeMapType(numberType, numberType);
-    const m = new NomsMap(new MapLeafSequence(ds, t, [{key: 0, value: 1}, {key: 2, value: 3}]));
+    const m = new NomsMap(new MapLeafSequence(ds, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(equals(v, m));
   });
 
@@ -230,21 +254,19 @@ suite('Decode', () => {
     const v: NomsSet<number> = r.readValue();
     invariant(v instanceof NomsSet);
 
-    const t = makeSetType(numberType);
-    const s = new NomsSet(new SetLeafSequence(ds, t, [0, 1, 2, 3]));
+    const s = new NomsSet(new SetLeafSequence(ds, [0, 1, 2, 3]));
     assert.isTrue(equals(v, s));
   });
 
   test('read compound set', () => {
     const ds = new Database(makeTestingBatchStore());
-    const ltr = makeSetType(numberType);
-    const r1 = ds.writeValue(new NomsSet(new SetLeafSequence(ds, ltr, [0, 1])));
-    const r2 = ds.writeValue(new NomsSet(new SetLeafSequence(ds, ltr, [2, 3, 4])));
+    const r1 = ds.writeValue(new NomsSet(new SetLeafSequence(ds, [0, 1])));
+    const r2 = ds.writeValue(new NomsSet(new SetLeafSequence(ds, [2, 3, 4])));
     const tuples = [
       new MetaTuple(r1, 1, 2),
       new MetaTuple(r2, 4, 3),
     ];
-    const l: NomsSet<number> = new NomsSet(new OrderedMetaSequence(ds, ltr, tuples));
+    const l: NomsSet<number> = new NomsSet(newSetMetaSequence(ds, tuples));
 
     const a = parseJson(`[
       SetKind, NumberKind, true, [
@@ -266,8 +288,7 @@ suite('Decode', () => {
     const v: NomsSet<number> = r.readValue();
     invariant(v instanceof NomsSet);
 
-    const t = makeSetType(numberType);
-    const s = new NomsSet(new SetLeafSequence(ds, t, [0, 1, 2, 3]));
+    const s = new NomsSet(new SetLeafSequence(ds, [0, 1, 2, 3]));
     assert.isTrue(equals(v, s));
   });
 
@@ -329,37 +350,8 @@ suite('Decode', () => {
 
     assertStruct(v, tr.desc, {
       b: true,
-      l: new NomsList(new ListLeafSequence(ds, ltr, [0, 1, 2])),
+      l: new NomsList(new ListLeafSequence(ds, [0, 1, 2])),
       s: 'hi',
-    });
-  });
-
-  test('test read struct with value', () => {
-    const ds = new Database(makeTestingBatchStore());
-    const tr = makeStructType('A5', {
-      'b': boolType,
-      'v': valueType,
-      's': stringType,
-    });
-
-    const a = parseJson(`[
-      StructKind, "A5", [
-        "b", BoolKind,
-        "s", StringKind,
-        "v", ValueKind
-      ],
-      BoolKind, true,
-      StringKind, "hi",
-      NumberKind, "42"
-    ]`);
-
-    const r = new JsonArrayReader(a, ds);
-    const v = r.readValue();
-
-    assertStruct(v, tr.desc, {
-      b: true,
-      s: 'hi',
-      v: 42,
     });
   });
 
@@ -428,8 +420,7 @@ suite('Decode', () => {
     const v = decodeNomsValue(chunk, new Database(makeTestingBatchStore()));
     invariant(v instanceof NomsSet);
 
-    const t = makeSetType(numberType);
-    const s: NomsSet<number> = new NomsSet(new SetLeafSequence(ds, t, [0, 1, 2, 3]));
+    const s: NomsSet<number> = new NomsSet(new SetLeafSequence(ds, [0, 1, 2, 3]));
 
     assert.isTrue(equals(v, s));
   });
@@ -612,8 +603,7 @@ suite('Decode', () => {
       false, [StringKind, "hi", NumberKind, "42"]]`);
     const r = new JsonArrayReader(a, ds);
     const v = r.readValue();
-    const tr = makeListType(makeUnionType([stringType, numberType]));
-    const v2 = new NomsList(new ListLeafSequence(ds, tr, ['hi', 42]));
+    const v2 = new NomsList(new ListLeafSequence(ds, ['hi', 42]));
     assert.isTrue(equals(v, v2));
   });
 
@@ -622,8 +612,7 @@ suite('Decode', () => {
     const a = parseJson(`[ListKind, UnionKind, 0, false, []]`);
     const r = new JsonArrayReader(a, ds);
     const v = r.readValue();
-    const tr = makeListType(makeUnionType([]));
-    const v2 = new NomsList(new ListLeafSequence(ds, tr, []));
+    const v2 = new NomsList(new ListLeafSequence(ds, []));
     assert.isTrue(equals(v, v2));
   });
 });

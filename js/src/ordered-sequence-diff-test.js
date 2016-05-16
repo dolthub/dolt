@@ -3,7 +3,6 @@
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import {fastForward} from './ordered-sequence-diff.js';
-import {makeSetType, numberType} from './type.js';
 import {newSet} from './set.js';
 
 suite('OrderedSequenceCursor', () => {
@@ -17,8 +16,7 @@ suite('OrderedSequenceCursor', () => {
     };
 
     const newMetaSequenceCursor = async (nums) => {
-      const tr = makeSetType(numberType);
-      const lst = await newSet(nums, tr);
+      const lst = await newSet(nums);
       assert.isTrue(lst.sequence.isMeta);
       return await lst.sequence.newCursorAt(0);
     };

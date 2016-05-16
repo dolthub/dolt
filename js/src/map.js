@@ -11,13 +11,14 @@ import {Collection} from './collection.js';
 import {compare, equals} from './compare.js';
 import {sha1Size} from './ref.js';
 import {getRefOfValue} from './get-ref.js';
-import {mapOfValueType, Type} from './type.js';
+import {getTypeOfValue, makeMapType, makeUnionType} from './type.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker, newOrderedMetaSequenceChunkFn,} from
   './meta-sequence.js';
 import {OrderedSequence, OrderedSequenceCursor, OrderedSequenceIterator,} from
   './ordered-sequence.js';
 import diff from './ordered-sequence-diff.js';
 import {Value} from './value.js';
+import {Kind} from './noms-kind.js';
 
 export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
   key: K,
@@ -27,8 +28,8 @@ export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
 const mapWindowSize = 1;
 const mapPattern = ((1 << 6) | 0) - 1;
 
-function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(
-    t: Type, vr: ?ValueReader = null): makeChunkFn {
+function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(vr: ?ValueReader):
+    makeChunkFn {
   return (items: Array<MapEntry<K, V>>) => {
     let indexValue: ?valueOrPrimitive = null;
     if (items.length > 0) {
@@ -38,16 +39,16 @@ function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(
       }
     }
 
-    const nm = new NomsMap(new MapLeafSequence(vr, t, items));
+    const nm = new NomsMap(new MapLeafSequence(vr, items));
     const mt = new MetaTuple(new RefValue(nm), indexValue, items.length, nm);
     return [mt, nm];
   };
 }
 
-function newMapLeafBoundaryChecker<K: valueOrPrimitive, V: valueOrPrimitive>(
-    t: Type): BoundaryChecker<MapEntry<K, V>> {
+function newMapLeafBoundaryChecker<K: valueOrPrimitive, V: valueOrPrimitive>():
+    BoundaryChecker<MapEntry<K, V>> {
   return new BuzHashBoundaryChecker(mapWindowSize, sha1Size, mapPattern,
-    (entry: MapEntry<K, V>) => getRefOfValue(entry.key, t.elemTypes[0]).digest);
+    (entry: MapEntry<K, V>) => getRefOfValue(entry.key).digest);
 }
 
 export function removeDuplicateFromOrdered<T>(elems: Array<T>,
@@ -71,8 +72,8 @@ function compareKeys(v1, v2) {
   return compare(v1.key, v2.key);
 }
 
-function buildMapData<K: valueOrPrimitive, V: valueOrPrimitive>(
-    t: Type, kvs: Array<K | V>): Array<MapEntry<K, V>> {
+function buildMapData<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<K | V>):
+    Array<MapEntry<K, V>> {
   // TODO: Assert k & v are of correct type
   const entries = [];
   for (let i = 0; i < kvs.length; i += 2) {
@@ -84,11 +85,11 @@ function buildMapData<K: valueOrPrimitive, V: valueOrPrimitive>(
   return removeDuplicateFromOrdered(entries, compareKeys);
 }
 
-export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<K | V>,
-    type: Type = mapOfValueType): Promise<NomsMap<K, V>> {
-  return chunkSequence(null, buildMapData(type, kvs), 0, newMapLeafChunkFn(type),
-                       newOrderedMetaSequenceChunkFn(type),
-                       newMapLeafBoundaryChecker(type),
+export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<K | V>):
+    Promise<NomsMap<K, V>> {
+  return chunkSequence(null, buildMapData(kvs), 0, newMapLeafChunkFn(null),
+                       newOrderedMetaSequenceChunkFn(Kind.Map, null),
+                       newMapLeafBoundaryChecker(),
                        newOrderedMetaSequenceBoundaryChecker);
 }
 
@@ -144,11 +145,10 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
 
   _splice(cursor: OrderedSequenceCursor, insert: Array<MapEntry<K, V>>, remove: number):
       Promise<NomsMap<K, V>> {
-    const type = this.type;
     const vr = this.sequence.vr;
-    return chunkSequence(cursor, insert, remove, newMapLeafChunkFn(type, vr),
-                         newOrderedMetaSequenceChunkFn(type, vr),
-                         newMapLeafBoundaryChecker(type),
+    return chunkSequence(cursor, insert, remove, newMapLeafChunkFn(vr),
+                         newOrderedMetaSequenceChunkFn(Kind.Map, vr),
+                         newMapLeafBoundaryChecker(),
                          newOrderedMetaSequenceBoundaryChecker);
   }
 
@@ -190,6 +190,16 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
 
 export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends
     OrderedSequence<K, MapEntry<K, V>> {
+  constructor(vr: ?ValueReader, items: Array<MapEntry<K, V>>) {
+    const kt = [];
+    const vt = [];
+    for (let i = 0; i < items.length; i++) {
+      kt.push(getTypeOfValue(items[i].key));
+      vt.push(getTypeOfValue(items[i].value));
+    }
+    const t = makeMapType(makeUnionType(kt), makeUnionType(vt));
+    super(vr, t, items);
+  }
   getKey(idx: number): K {
     return this.items[idx].key;
   }

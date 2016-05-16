@@ -12,6 +12,7 @@ import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import RefValue from './ref-value.js';
 import {SequenceChunker} from './sequence-chunker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
+import {Kind} from './noms-kind.js';
 
 export class NomsBlob extends Collection<IndexedSequence> {
   getReader(): BlobReader {
@@ -95,7 +96,7 @@ export class BlobWriter {
   constructor() {
     this._state = 'writable';
     this._chunker = new SequenceChunker(null, newBlobLeafChunkFn(),
-        newIndexedMetaSequenceChunkFn(blobType), newBlobLeafBoundaryChecker(),
+        newIndexedMetaSequenceChunkFn(Kind.Blob, null), newBlobLeafBoundaryChecker(),
         newIndexedMetaSequenceBoundaryChecker);
   }
 

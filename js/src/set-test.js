@@ -10,23 +10,12 @@ import RefValue from './ref-value.js';
 import BatchStore from './batch-store.js';
 import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-adaptor.js';
 import {newStruct} from './struct.js';
-import {
-  boolType,
-  makeRefType,
-  makeSetType,
-  makeStructType,
-  makeUnionType,
-  numberType,
-  stringType,
-  valueType,
-} from './type.js';
 import {flatten, flattenParallel, deriveCollectionHeight} from './test-util.js';
 import {invariant, notNull} from './assert.js';
-import {MetaTuple, OrderedMetaSequence} from './meta-sequence.js';
+import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';
 import {newSet, NomsSet, SetLeafSequence} from './set.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import Ref from './ref.js';
-import type {Type} from './type.js';
 import type {ValueReadWriter} from './value-store.js';
 import {compare, equals} from './compare.js';
 
@@ -60,8 +49,7 @@ function firstNNumbers(n: number): Array<number> {
 suite('BuildSet', () => {
   test('unique keys - strings', async () => {
     const strs = ['hello', 'world', 'hello'];
-    const tr = makeSetType(stringType);
-    const s = await newSet(strs, tr);
+    const s = await newSet(strs);
     assert.strictEqual(2, s.size);
     assert.isTrue(await s.has('hello'));
     assert.isTrue(await s.has('world'));
@@ -70,8 +58,7 @@ suite('BuildSet', () => {
 
   test('unique keys - number', async () => {
     const nums = [4, 1, 0, 0, 1, 3];
-    const tr = makeSetType(numberType);
-    const s = await newSet(nums, tr);
+    const s = await newSet(nums);
     assert.strictEqual(4, s.size);
     assert.isTrue(await s.has(4));
     assert.isTrue(await s.has(1));
@@ -82,23 +69,19 @@ suite('BuildSet', () => {
 
   test('LONG: set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
-    const tr = makeSetType(numberType);
-    const s = await newSet(nums, tr);
+    const s = await newSet(nums);
     assert.strictEqual(s.ref.toString(), setOfNRef);
 
     // shuffle kvs, and test that the constructor sorts properly
     nums.sort(() => Math.random() > .5 ? 1 : -1);
-    const s2 = await newSet(nums, tr);
+    const s2 = await newSet(nums);
     assert.strictEqual(s2.ref.toString(), setOfNRef);
   });
 
   test('LONG: set of struct, set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
-
-    const type = makeStructType('num', {'n': numberType});
-    const tr = makeSetType(type);
-    const structs = nums.map(n => newStruct(type, {n}));
-    const s = await newSet(structs, tr);
+    const structs = nums.map(n => newStruct('num', {n}));
+    const s = await newSet(structs);
     assert.strictEqual(s.ref.toString(), 'sha1-f10d8ccbc2270bb52bb988a0cadff912e2723eed');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
@@ -112,15 +95,8 @@ suite('BuildSet', () => {
 
   test('LONG: set of ref, set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
-
-    const structType = makeStructType('num', {
-      'n': numberType,
-    });
-    const refOfStructType = makeRefType(structType);
-    const tr = makeSetType(refOfStructType);
-
-    const refs = nums.map(n => new RefValue(newStruct(structType, {n})));
-    const s = await newSet(refs, tr);
+    const refs = nums.map(n => new RefValue(newStruct('num', {n})));
+    const s = await newSet(refs);
     assert.strictEqual(s.ref.toString(), 'sha1-14eeb2d1835011bf3e018121ba3274bc08e634e5');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
@@ -130,8 +106,7 @@ suite('BuildSet', () => {
 
   test('LONG: insert', async () => {
     const nums = firstNNumbers(testSetSize - 10);
-    const tr = makeSetType(numberType);
-    let s = await newSet(nums, tr);
+    let s = await newSet(nums);
     for (let i = testSetSize - 10; i < testSetSize; i++) {
       s = await s.insert(i);
       assert.strictEqual(i + 1, s.size);
@@ -142,8 +117,7 @@ suite('BuildSet', () => {
 
   test('LONG: remove', async () => {
     const nums = firstNNumbers(testSetSize + 10);
-    const tr = makeSetType(numberType);
-    let s = await newSet(nums, tr);
+    let s = await newSet(nums);
     let count = 10;
     while (count-- > 0) {
       s = await s.remove(testSetSize + count);
@@ -157,8 +131,7 @@ suite('BuildSet', () => {
     const ds = new Database(makeTestingBatchStore());
 
     const nums = firstNNumbers(testSetSize);
-    const tr = makeSetType(numberType);
-    const s = await newSet(nums, tr);
+    const s = await newSet(nums);
     const r = ds.writeValue(s).targetRef;
     const s2 = await ds.readValue(r);
     const outNums = [];
@@ -179,9 +152,6 @@ suite('BuildSet', () => {
   test('LONG: union write, read, modify, read', async () => {
     const ds = new Database(makeTestingBatchStore());
 
-    const structType = makeStructType('num', {'n': numberType});
-    const type = makeSetType(makeUnionType([stringType, numberType, structType]));
-
     const tmp = firstNNumbers(testSetSize);
     const numbers = [];
     const strings = [];
@@ -193,7 +163,7 @@ suite('BuildSet', () => {
         v = String(v);
         strings.push(v);
       } else if (v % 3 === 1) {
-        v = await newStruct(structType, {n: v});
+        v = await newStruct('num', {n: v});
         structs.push(v);
       } else {
         numbers.push(v);
@@ -204,8 +174,8 @@ suite('BuildSet', () => {
     structs.sort(compare);
     const vals2 = numbers.concat(strings, structs);
 
-    const s = await newSet(vals1, type);
-    assert.strictEqual(s.ref.toString(), 'sha1-fafd59d9dc3b1f86364a6742dd6d3550167801d5');
+    const s = await newSet(vals1);
+    assert.strictEqual(s.ref.toString(), 'sha1-84ce63b4fb804fe9668133bf5d3136cfffcdc788');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     assert.strictEqual(height, s.sequence.items[0].ref.height);
@@ -239,8 +209,7 @@ suite('BuildSet', () => {
 suite('SetLeaf', () => {
   test('isEmpty/size', () => {
     const ds = new Database(makeTestingBatchStore());
-    const tr = makeSetType(stringType);
-    const newSet = items => new NomsSet(new SetLeafSequence(ds, tr, items));
+    const newSet = items => new NomsSet(new SetLeafSequence(ds, items));
     let s = newSet([]);
     assert.isTrue(s.isEmpty());
     assert.strictEqual(0, s.size);
@@ -251,8 +220,7 @@ suite('SetLeaf', () => {
 
   test('first/last/has', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const tr = makeSetType(stringType);
-    const s = new NomsSet(new SetLeafSequence(ds, tr, ['a', 'k']));
+    const s = new NomsSet(new SetLeafSequence(ds, ['a', 'k']));
 
     assert.strictEqual('a', await s.first());
     assert.strictEqual('k', await s.last());
@@ -265,8 +233,7 @@ suite('SetLeaf', () => {
 
   test('forEach', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const tr = makeSetType(stringType);
-    const m = new NomsSet(new SetLeafSequence(ds, tr, ['a', 'b']));
+    const m = new NomsSet(new SetLeafSequence(ds, ['a', 'b']));
 
     const values = [];
     await m.forEach((k) => { values.push(k); });
@@ -275,10 +242,9 @@ suite('SetLeaf', () => {
 
   test('iterator', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const tr = makeSetType(stringType);
 
     const test = async items => {
-      const m = new NomsSet(new SetLeafSequence(ds, tr, items));
+      const m = new NomsSet(new SetLeafSequence(ds, items));
       assert.deepEqual(items, await flatten(m.iterator()));
       assert.deepEqual(items, await flattenParallel(m.iterator(), items.length));
     };
@@ -290,8 +256,7 @@ suite('SetLeaf', () => {
 
   test('LONG: iteratorAt', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const tr = makeSetType(stringType);
-    const build = items => new NomsSet(new SetLeafSequence(ds, tr, items));
+    const build = items => new NomsSet(new SetLeafSequence(ds, items));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
 
@@ -306,36 +271,26 @@ suite('SetLeaf', () => {
     assert.deepEqual([], await flatten(build(['b', 'd']).iteratorAt('e')));
   });
 
-  function testChunks(elemType: Type) {
+  test('chunks', () => {
     const ds = new Database(makeTestingBatchStore());
-    const tr = makeSetType(elemType);
     const r1 = ds.writeValue('x');
     const r2 = ds.writeValue('a');
     const r3 = ds.writeValue('b');
-    const l = new NomsSet(new SetLeafSequence(ds, tr, ['z', r1, r2, r3]));
+    const l = new NomsSet(new SetLeafSequence(ds, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
     assert.isTrue(equals(r1, l.chunks[0]));
     assert.isTrue(equals(r2, l.chunks[1]));
     assert.isTrue(equals(r3, l.chunks[2]));
-  }
-
-  test('chunks, set of value', () => {
-    testChunks(valueType);
-  });
-
-  test('chunks', () => {
-    testChunks(stringType);
   });
 });
 
 suite('CompoundSet', () => {
   function build(vwr: ValueReadWriter, values: Array<string>): NomsSet {
-    const tr = makeSetType(stringType);
     assert.isTrue(values.length > 1 && Math.log2(values.length) % 1 === 0);
 
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
-      const l = new NomsSet(new SetLeafSequence(vwr, tr, [values[i], values[i + 1]]));
+      const l = new NomsSet(new SetLeafSequence(vwr, [values[i], values[i + 1]]));
       const r = vwr.writeValue(l);
       tuples.push(new MetaTuple(r, values[i + 1], 2));
     }
@@ -344,7 +299,7 @@ suite('CompoundSet', () => {
     while (tuples.length > 1) {
       const next = [];
       for (let i = 0; i < tuples.length; i += 2) {
-        last = new NomsSet(new OrderedMetaSequence(vwr, tr, [tuples[i], tuples[i + 1]]));
+        last = new NomsSet(newSetMetaSequence(vwr, [tuples[i], tuples[i + 1]]));
         const r = vwr.writeValue(last);
         next.push(new MetaTuple(r, tuples[i + 1].value,
                                 tuples[i].numLeaves + tuples[i + 1].numLeaves));
@@ -551,10 +506,9 @@ suite('CompoundSet', () => {
 
   test('iterator at 0', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const tr = makeSetType(numberType);
 
     const test = async (expected, items) => {
-      const set = new NomsSet(new SetLeafSequence(ds, tr, items));
+      const set = new NomsSet(new SetLeafSequence(ds, items));
       const iter = set.iteratorAt(0);
       assert.deepEqual(expected, await flatten(iter));
     };
@@ -566,17 +520,15 @@ suite('CompoundSet', () => {
   });
 
   test('set of bool', async () => {
-    const tr = makeSetType(boolType);
-    const set = await newSet([true], tr);
+    const set = await newSet([true]);
     assert.isTrue(await set.has(true));
     assert.isFalse(await set.has(false));
   });
 
   test('LONG: canned set diff', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const tr = makeSetType(numberType);
     const s1 = await newSet(
-      firstNNumbers(testSetSize), tr).then(s => ds.readValue(ds.writeValue(s).targetRef));
+      firstNNumbers(testSetSize)).then(s => ds.readValue(ds.writeValue(s).targetRef));
 
     {
       // Insert/remove at start.
@@ -601,7 +553,6 @@ suite('CompoundSet', () => {
   async function testRandomDiff(setSize: number, inS1: number, inS2: number): Promise<void> {
     invariant(inS1 + inS2 <= 1);
 
-    const tr = makeSetType(numberType);
     const nums1 = [], nums2 = [], added = [], removed = [];
 
     // Randomly populate nums1/nums2 which will be the contents of s1/s2 respectively, and record
@@ -620,7 +571,7 @@ suite('CompoundSet', () => {
       }
     }
 
-    let [s1, s2] = await Promise.all([newSet(nums1, tr), newSet(nums2, tr)]);
+    let [s1, s2] = await Promise.all([newSet(nums1), newSet(nums2)]);
 
     if (s1.empty || s2.empty || added.length + removed.length === 0) {
       return testRandomDiff(setSize, inS1, inS2);

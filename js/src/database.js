@@ -2,7 +2,7 @@
 
 import Ref from './ref.js';
 import {default as RefValue} from './ref-value.js';
-import {newStruct} from './struct.js';
+import {newStructWithType} from './struct.js';
 import type {NomsMap} from './map.js';
 import type {NomsSet} from './set.js';
 import type {valueOrPrimitive} from './value.js';
@@ -33,7 +33,7 @@ type DatasTypes = {
 let emptyCommitMap: Promise<NomsMap<string, RefValue<Commit>>>;
 function getEmptyCommitMap(): Promise<NomsMap<string, RefValue<Commit>>> {
   if (!emptyCommitMap) {
-    emptyCommitMap = newMap([], getDatasTypes().commitMapType);
+    emptyCommitMap = newMap([]);
   }
   return emptyCommitMap;
 }
@@ -161,7 +161,7 @@ export default class Database {
 
 async function getAncestors(commits: NomsSet<RefValue<Commit>>, store: Database):
     Promise<NomsSet<RefValue<Commit>>> {
-  let ancestors = await newSet([], getDatasTypes().commitSetType);
+  let ancestors = await newSet([]);
   await commits.map(async (commitRef) => {
     const commit = await store.readValue(commitRef.targetRef);
     await commit.parents.map(async (ref) => ancestors = await ancestors.insert(ref));
@@ -172,6 +172,5 @@ async function getAncestors(commits: NomsSet<RefValue<Commit>>, store: Database)
 export function newCommit(value: valueOrPrimitive,
                           parentsArr: Array<RefValue<Commit>> = []): Promise<Commit> {
   const types = getDatasTypes();
-  return newSet(parentsArr, types.commitSetType).then(parents =>
-      newStruct(types.commitType, {value, parents}));
+  return newSet(parentsArr).then(parents => newStructWithType(types.commitType, {value, parents}));
 }

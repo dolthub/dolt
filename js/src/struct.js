@@ -2,8 +2,8 @@
 
 import type RefValue from './ref-value.js';
 import type {valueOrPrimitive} from './value.js';
-import {StructDesc} from './type.js';
-import type {Type} from './type.js';
+import {getTypeOfValue, makeStructType} from './type.js';
+import type {Type, StructDesc} from './type.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
 import {Kind} from './noms-kind.js';
@@ -41,11 +41,6 @@ export default class Struct extends Value {
     super();
 
     invariant(type.kind === Kind.Struct);
-
-    // TODO: Even in dev mode there are paths where the passed in data has already been validated.
-    if (process.env.NODE_ENV !== 'production') {
-      validate(type, data);
-    }
 
     this._type = type;
     this._data = data;
@@ -126,7 +121,7 @@ export class StructMirror<T: Struct> {
 
   set(name: string, value: ?valueOrPrimitive): T {
     const data = addProperty(this, name, value);
-    return newStruct(this.type, data);
+    return newStruct(this.name, data);
   }
 }
 
@@ -193,7 +188,27 @@ function addProperty(mirror: StructMirror, name: string, value: ?valueOrPrimitiv
   return data;
 }
 
-export function newStruct<T: Struct>(type: Type, data: StructData): T {
-  const c = createStructClass(type);
-  return new c(data);
+export function newStruct<T: Struct>(name: string, data: StructData): T {
+  return newStructWithTypeNoValidation(computeTypeForStruct(name, data), data);
+}
+
+export function newStructWithType<T: Struct>(type: Type<StructDesc>, data: StructData): T {
+  validate(type, data);
+  return newStructWithTypeNoValidation(type, data);
+}
+
+export function newStructWithTypeNoValidation<T: Struct>(type: Type<StructDesc>,
+    data: StructData): T {
+  return new (createStructClass(type))(data);
+}
+
+function computeTypeForStruct(name: string, data: StructData): Type<StructDesc> {
+  const keys = Object.keys(data);
+  keys.sort();
+  const fields = Object.create(null);
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    fields[k] = getTypeOfValue(data[k]);
+  }
+  return makeStructType(name, fields);
 }

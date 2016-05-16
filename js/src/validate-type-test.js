@@ -68,8 +68,7 @@ suite('validate type', () => {
     validateType(valueType, true);
     validateType(valueType, 1);
     validateType(valueType, 'abc');
-    const listOfNumberType = makeListType(numberType);
-    const l = await newList([0, 1, 2, 3], listOfNumberType);
+    const l = await newList([0, 1, 2, 3]);
     validateType(valueType, l);
 
     assertInvalid(valueType, null);
@@ -84,7 +83,7 @@ suite('validate type', () => {
 
   test('list', async () => {
     const listOfNumberType = makeListType(numberType);
-    const l = await newList([0, 1, 2, 3], listOfNumberType);
+    const l = await newList([0, 1, 2, 3]);
     validateType(listOfNumberType, l);
     assertAll(listOfNumberType, l);
 
@@ -93,7 +92,7 @@ suite('validate type', () => {
 
   test('map', async () => {
     const mapOfNumberToStringType = makeMapType(numberType, stringType);
-    const m = await newMap([0, 'a', 2, 'b'], mapOfNumberToStringType);
+    const m = await newMap([0, 'a', 2, 'b']);
     validateType(mapOfNumberToStringType, m);
     assertAll(mapOfNumberToStringType, m);
 
@@ -102,7 +101,7 @@ suite('validate type', () => {
 
   test('set', async () => {
     const setOfNumberType = makeSetType(numberType);
-    const s = await newSet([0, 1, 2, 3], setOfNumberType);
+    const s = await newSet([0, 1, 2, 3]);
     validateType(setOfNumberType, s);
     assertAll(setOfNumberType, s);
 
@@ -122,7 +121,7 @@ suite('validate type', () => {
       'x': boolType,
     });
 
-    const v = newStruct(type, {x: true});
+    const v = newStruct('Struct', {x: true});
     validateType(type, v);
     assertAll(type, v);
 
@@ -138,16 +137,36 @@ suite('validate type', () => {
     validateType(makeUnionType([numberType, stringType, boolType]), true);
 
     const lt = makeListType(makeUnionType([numberType, stringType]));
-    validateType(lt, await newList([1, 'hi', 2, 'bye'], lt));
+    validateType(lt, await newList([1, 'hi', 2, 'bye']));
 
     const st = makeSetType(stringType);
     validateType(makeUnionType([st, numberType]), 42);
-    validateType(makeUnionType([st, numberType]), await newSet(['a', 'b'], st));
+    validateType(makeUnionType([st, numberType]), await newSet(['a', 'b']));
 
     assertInvalid(makeUnionType([]), 42);
     assertInvalid(makeUnionType([stringType]), 42);
     assertInvalid(makeUnionType([stringType, boolType]), 42);
     assertInvalid(makeUnionType([st, stringType]), 42);
-    assertInvalid(makeUnionType([st, numberType]), await newSet([1, 2], makeSetType(numberType)));
+    assertInvalid(makeUnionType([st, numberType]), await newSet([1, 2]));
+  });
+
+  test('empty list union', async () => {
+    const lt = makeListType(makeUnionType([]));
+    validateType(lt, await newList([]));
+  });
+
+  test('empty list', async () => {
+    const lt = makeListType(numberType);
+    validateType(lt, await newList([]));
+  });
+
+  test('empty set', async () => {
+    const st = makeSetType(numberType);
+    validateType(st, await newSet([]));
+  });
+
+  test('empty map', async () => {
+    const mt = makeMapType(numberType, stringType);
+    validateType(mt, await newMap([]));
   });
 });

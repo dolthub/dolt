@@ -5,8 +5,6 @@ import {createStructClass} from './struct.js';
 import Database from './database.js';
 import {
   makeListType,
-  makeMapType,
-  makeSetType,
   makeStructType,
   numberType,
   stringType,
@@ -49,7 +47,7 @@ suite('walk', () => {
     for (let i = 0; i < 1000; i++) {
       expected.add(i);
     }
-    const list = await newList(Array.from(expected), makeListType(numberType));
+    const list = await newList(Array.from(expected));
     expected.add(list);
 
     await callbackHappensOnce(list, ds);
@@ -66,7 +64,7 @@ suite('walk', () => {
     for (let i = 0; i < 1000; i++) {
       expected.add(String(i));
     }
-    const set = await newSet(Array.from(expected), makeSetType(stringType));
+    const set = await newSet(Array.from(expected));
     expected.add(set);
 
     await callbackHappensOnce(set, ds);
@@ -84,7 +82,7 @@ suite('walk', () => {
       expected.push(i);
       expected.push(String('value' + i));
     }
-    const map = await newMap(Array.from(expected), makeMapType(numberType, stringType));
+    const map = await newMap(Array.from(expected));
     expected.push(map);
 
     await callbackHappensOnce(map, ds);
@@ -108,7 +106,7 @@ suite('walk', () => {
     const val = new c({
       foo: 'bar',
       num: 42,
-      list: await newList([1,2], makeListType(numberType)),
+      list: await newList([1, 2]),
     });
 
     await callbackHappensOnce(val, ds);

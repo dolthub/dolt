@@ -17,31 +17,31 @@ import {MetaTuple, newIndexedMetaSequenceBoundaryChecker,
 import {sha1Size} from './ref.js';
 import RefValue from './ref-value.js';
 import {getValueChunks} from './sequence.js';
-import {listOfValueType, Type} from './type.js';
+import {makeListType, makeUnionType, getTypeOfValue} from './type.js';
 import {equals} from './compare.js';
+import {Kind} from './noms-kind.js';
 
 const listWindowSize = 64;
 const listPattern = ((1 << 6) | 0) - 1;
 
-function newListLeafChunkFn<T: valueOrPrimitive>(t: Type, vr: ?ValueReader = null): makeChunkFn {
+function newListLeafChunkFn<T: valueOrPrimitive>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
-    const list = new NomsList(new ListLeafSequence(vr, t, items));
+    const list = new NomsList(new ListLeafSequence(vr, items));
     const mt = new MetaTuple(new RefValue(list), items.length, items.length, list);
     return [mt, list];
   };
 }
 
-function newListLeafBoundaryChecker<T: valueOrPrimitive>(t: Type): BoundaryChecker<T> {
+function newListLeafBoundaryChecker<T: valueOrPrimitive>(): BoundaryChecker<T> {
   return new BuzHashBoundaryChecker(listWindowSize, sha1Size, listPattern,
-    (v: T) => getRefOfValue(v, t.elemTypes[0]).digest
+    (v: T) => getRefOfValue(v).digest
   );
 }
 
-export function newList<T: valueOrPrimitive>(values: Array<T>, type: Type = listOfValueType):
-    Promise<NomsList<T>> {
-  return chunkSequence(null, values, 0, newListLeafChunkFn(type),
-                       newIndexedMetaSequenceChunkFn(type),
-                       newListLeafBoundaryChecker(type),
+export function newList<T: valueOrPrimitive>(values: Array<T>): Promise<NomsList<T>> {
+  return chunkSequence(null, values, 0, newListLeafChunkFn(null),
+                       newIndexedMetaSequenceChunkFn(Kind.List, null),
+                       newListLeafBoundaryChecker(),
                        newIndexedMetaSequenceBoundaryChecker);
 }
 
@@ -54,12 +54,11 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
 
   splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<NomsList<T>> {
     const vr = this.sequence.vr;
-    const type = this.type;
     return this.sequence.newCursorAt(idx).then(cursor =>
-      chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(type, vr),
-                           newIndexedMetaSequenceChunkFn(type, vr),
-                           newListLeafBoundaryChecker(type),
-                           newIndexedMetaSequenceBoundaryChecker));
+      chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(vr),
+                    newIndexedMetaSequenceChunkFn(Kind.List, vr),
+                    newListLeafBoundaryChecker(),
+                    newIndexedMetaSequenceBoundaryChecker));
   }
 
   insert(idx: number, ...values: Array<T>): Promise<NomsList<T>> {
@@ -125,6 +124,11 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
 }
 
 export class ListLeafSequence<T: valueOrPrimitive> extends IndexedSequence<T> {
+  constructor(vr: ?ValueReader, items: T[]) {
+    const t = makeListType(makeUnionType(items.map(getTypeOfValue)));
+    super(vr, t, items);
+  }
+
   get chunks(): Array<RefValue> {
     return getValueChunks(this.items);
   }

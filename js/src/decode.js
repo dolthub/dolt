@@ -4,7 +4,7 @@ import {NomsBlob, BlobLeafSequence} from './blob.js';
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import {default as RefValue, constructRefValue} from './ref-value.js';
-import {newStruct} from './struct.js';
+import {newStructWithTypeNoValidation} from './struct.js';
 import type Struct from './struct.js';
 import type {NomsKind} from './noms-kind.js';
 import {decode as decodeBase64} from './base64.js';
@@ -161,17 +161,17 @@ export class JsonArrayReader {
     return list;
   }
 
-  readListLeafSequence(t: Type): ListLeafSequence {
+  readListLeafSequence(): ListLeafSequence {
     const seq = this.readSequence();
-    return new ListLeafSequence(this._ds, t, seq);
+    return new ListLeafSequence(this._ds, seq);
   }
 
-  readSetLeafSequence(t: Type): SetLeafSequence {
+  readSetLeafSequence(): SetLeafSequence {
     const seq = this.readSequence();
-    return new SetLeafSequence(this._ds, t, seq);
+    return new SetLeafSequence(this._ds, seq);
   }
 
-  readMapLeafSequence(t: Type): MapLeafSequence {
+  readMapLeafSequence(): MapLeafSequence {
     const entries = [];
     while (!this.atEnd()) {
       const k = this.readValue();
@@ -179,7 +179,7 @@ export class JsonArrayReader {
       entries.push({key: k, value: v});
     }
 
-    return new MapLeafSequence(this._ds, t, entries);
+    return new MapLeafSequence(this._ds, entries);
   }
 
   readMetaSequence(): Array<MetaTuple> {
@@ -195,11 +195,11 @@ export class JsonArrayReader {
   }
 
   readIndexedMetaSequence(t: Type): IndexedMetaSequence {
-    return new IndexedMetaSequence(this._ds, t, this.readMetaSequence(t));
+    return new IndexedMetaSequence(this._ds, t, this.readMetaSequence());
   }
 
   readOrderedMetaSequence(t: Type): OrderedMetaSequence {
-    return new OrderedMetaSequence(this._ds, t, this.readMetaSequence(t));
+    return new OrderedMetaSequence(this._ds, t, this.readMetaSequence());
   }
 
   readRefValue(t: Type): RefValue {
@@ -235,7 +235,7 @@ export class JsonArrayReader {
         if (isMeta) {
           return new NomsList(r2.readIndexedMetaSequence(t));
         }
-        return new NomsList(r2.readListLeafSequence(t));
+        return new NomsList(r2.readListLeafSequence());
       }
       case Kind.Map: {
         const isMeta = this.readBool();
@@ -243,7 +243,7 @@ export class JsonArrayReader {
         if (isMeta) {
           return new NomsMap(r2.readOrderedMetaSequence(t));
         }
-        return new NomsMap(r2.readMapLeafSequence(t));
+        return new NomsMap(r2.readMapLeafSequence());
       }
       case Kind.Ref:
         return this.readRefValue(t);
@@ -253,7 +253,7 @@ export class JsonArrayReader {
         if (isMeta) {
           return new NomsSet(r2.readOrderedMetaSequence(t));
         }
-        return new NomsSet(r2.readSetLeafSequence(t));
+        return new NomsSet(r2.readSetLeafSequence());
       }
       case Kind.Struct:
         return this.readStruct(t);
@@ -265,17 +265,17 @@ export class JsonArrayReader {
   }
 
   readStruct<T: Struct>(type: Type): T {
-    const desc = type.desc;
+    const {desc} = type;
     invariant(desc instanceof StructDesc);
 
-    const data: {[key: string]: any} = Object.create(null);
+    const data: {[key: string]: valueOrPrimitive} = Object.create(null);
 
     desc.forEachField((name: string) => {
       const v = this.readValue();
       data[name] = v;
     });
 
-    return newStruct(type, data);
+    return newStructWithTypeNoValidation(type, data);
   }
 
   readStructType(parentStructTypes: Type[]): Type {

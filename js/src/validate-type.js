@@ -70,11 +70,19 @@ function subtype(expected: Type, actual: Type): boolean {
 
   if (expected.desc instanceof CompoundDesc) {
     const {desc} = actual;
-    invariant(desc instanceof CompoundDesc);
-    return expected.desc.elemTypes.every((t, i) => subtype(t, desc.elemTypes[i]));
+    // invariant(desc instanceof CompoundDesc);
+    return expected.desc.elemTypes.every((t, i) => compoundSubtype(t, desc.elemTypes[i]));
   }
 
   invariant(false);
+}
+
+function compoundSubtype(expected: Type, actual: Type): boolean {
+  // In a compound type it is OK to have an empty union.
+  if (actual.kind === Kind.Union && actual.desc.elemTypes.length === 0) {
+    return true;
+  }
+  return subtype(expected, actual);
 }
 
 function makeTypeError(v: any, t: Type) {

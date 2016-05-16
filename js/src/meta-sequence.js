@@ -7,18 +7,21 @@ import type {ValueReader} from './value-store.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import type {Collection} from './collection.js';
 import type {Type} from './type.js';
+import {makeListType, makeUnionType, blobType, makeSetType, makeMapType} from './type.js';
 import {IndexedSequence} from './indexed-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import RefValue from './ref-value.js';
 import {Sequence} from './sequence.js';
-export type MetaSequence = Sequence<MetaTuple>;
 import {Kind} from './noms-kind.js';
+import type {NomsKind} from './noms-kind.js';
 import {NomsList} from './list.js';
 import {NomsMap} from './map.js';
 import {NomsSet} from './set.js';
 import {NomsBlob} from './blob.js';
 import {equals} from './compare.js';
+
+export type MetaSequence = Sequence<MetaTuple>;
 
 export class MetaTuple<K> {
   ref: RefValue;
@@ -43,11 +46,27 @@ export class MetaTuple<K> {
   }
 }
 
+// The elemTypes of the collection inside the Ref<Collection<?, ?>>
+function getCollectionTypes<K>(tuple: MetaTuple<K>): Type[] {
+  return tuple.ref.type.desc.elemTypes[0].desc.elemTypes;
+}
+
+export function newListMetaSequence(vr: ?ValueReader, items: Array<MetaTuple<number>>):
+    IndexedMetaSequence {
+  const t = makeListType(makeUnionType(items.map(tuple => getCollectionTypes(tuple)[0])));
+  return new IndexedMetaSequence(vr, t, items);
+}
+
+export function newBlobMetaSequence(vr: ?ValueReader, items: Array<MetaTuple<number>>):
+    IndexedMetaSequence {
+  return new IndexedMetaSequence(vr, blobType, items);
+}
+
 export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
   _offsets: Array<number>;
 
-  constructor(vr: ?ValueReader, type: Type, items: Array<MetaTuple<number>>) {
-    super(vr, type, items);
+  constructor(vr: ?ValueReader, t: Type, items: Array<MetaTuple<number>>) {
+    super(vr, t, items);
     let cum = 0;
     this._offsets = this.items.map(i => {
       cum += i.value;
@@ -124,11 +143,25 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
   }
 }
 
+export function newMapMetaSequence<K: valueOrPrimitive>(vr: ?ValueReader,
+    tuples: Array<MetaTuple<K>>): OrderedMetaSequence<K> {
+  const kt = makeUnionType(tuples.map(mt => getCollectionTypes(mt)[0]));
+  const vt = makeUnionType(tuples.map(mt => getCollectionTypes(mt)[1]));
+  const t = makeMapType(kt, vt);
+  return new OrderedMetaSequence(vr, t, tuples);
+}
+
+export function newSetMetaSequence<K: valueOrPrimitive>(vr: ?ValueReader,
+    tuples: Array<MetaTuple<K>>): OrderedMetaSequence<K> {
+  const t = makeSetType(makeUnionType(tuples.map(mt => getCollectionTypes(mt)[0])));
+  return new OrderedMetaSequence(vr, t, tuples);
+}
+
 export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K, MetaTuple<K>> {
   _numLeaves: number;
 
-  constructor(vr: ?ValueReader, type: Type, items: Array<MetaTuple<K>>) {
-    super(vr, type, items);
+  constructor(vr: ?ValueReader, t: Type, items: Array<MetaTuple<K>>) {
+    super(vr, t, items);
     this._numLeaves = items.reduce((l, mt) => l + mt.numLeaves, 0);
   }
 
@@ -162,16 +195,17 @@ export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K,
   }
 }
 
-export function newOrderedMetaSequenceChunkFn(t: Type, vr: ?ValueReader = null): makeChunkFn {
+export function newOrderedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
     const numLeaves = tuples.reduce((l, mt) => l + mt.numLeaves, 0);
-    const metaSeq = new OrderedMetaSequence(vr, t, tuples);
     const last = tuples[tuples.length - 1];
     let col: Collection;
-    if (t.kind === Kind.Map) {
+    if (kind === Kind.Map) {
+      const metaSeq = newMapMetaSequence(vr, tuples);
       col = new NomsMap(metaSeq);
     } else {
-      invariant(t.kind === Kind.Set);
+      invariant(kind === Kind.Set);
+      const metaSeq = newSetMetaSequence(vr, tuples);
       col = new NomsSet(metaSeq);
     }
     return [new MetaTuple(new RefValue(col), last.value, numLeaves, col), col];
@@ -188,18 +222,19 @@ export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
   );
 }
 
-export function newIndexedMetaSequenceChunkFn(t: Type, vr: ?ValueReader = null): makeChunkFn {
+export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
     const sum = tuples.reduce((l, mt) => {
       invariant(mt.value === mt.numLeaves);
       return l + mt.value;
     }, 0);
-    const metaSeq = new IndexedMetaSequence(vr, t, tuples);
     let col: Collection;
-    if (t.kind === Kind.List) {
+    if (kind === Kind.List) {
+      const metaSeq = newListMetaSequence(vr, tuples);
       col = new NomsList(metaSeq);
     } else {
-      invariant(t.kind === Kind.Blob);
+      invariant(kind === Kind.Blob);
+      const metaSeq = newBlobMetaSequence(vr, tuples);
       col = new NomsBlob(metaSeq);
     }
     return [new MetaTuple(new RefValue(col), sum, sum, col), col];

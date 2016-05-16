@@ -5,13 +5,6 @@ import {assert} from 'chai';
 import {equals, compare} from './compare.js';
 import {
   boolType,
-  makeListType,
-  makeMapType,
-  makeSetType,
-  makeStructType,
-  makeUnionType,
-  numberType,
-  stringType,
 } from './type.js';
 import {newBlob} from './blob.js';
 import {newList} from './list.js';
@@ -43,10 +36,9 @@ suite('compare.js', () => {
     });
 
     test('list', async () => {
-      const listOfNumberType = makeListType(numberType);
-      const listA = await newList([0, 1, 2, 3], listOfNumberType);
-      const listB = await newList([0, 1, 2, 3], listOfNumberType);
-      const listC = await newList([4, 5, 6, 7], listOfNumberType);
+      const listA = await newList([0, 1, 2, 3]);
+      const listB = await newList([0, 1, 2, 3]);
+      const listC = await newList([4, 5, 6, 7]);
       assert.equal(compare(listA, listA), 0);
       assert.equal(compare(listA, listB), 0);
       // These two are ordered by hash
@@ -55,10 +47,9 @@ suite('compare.js', () => {
     });
 
     test('union', async () => {
-      const listOfNumberOrStringType = makeListType(makeUnionType([numberType, stringType]));
-      const listA = await newList([0, 'b', 2, 'd'], listOfNumberOrStringType);
-      const listB = await newList([0, 'b', 2, 'd'], listOfNumberOrStringType);
-      const listC = await newList([4, 5, 'x', 7], listOfNumberOrStringType);
+      const listA = await newList([0, 'b', 2, 'd']);
+      const listB = await newList([0, 'b', 2, 'd']);
+      const listC = await newList([4, 5, 'x', 7]);
       assert.equal(compare(listA, listA), 0);
       assert.equal(compare(listA, listB), 0);
       assert.isBelow(compare(listA, listC), 0);
@@ -67,11 +58,6 @@ suite('compare.js', () => {
 
     test('total ordering', async () => {
       const ds = new Database(makeTestingBatchStore());
-
-      const structType1 = makeStructType('a', {
-        x: numberType,
-        s: stringType,
-      });
 
       // values in increasing order. Some of these are compared by ref so changing the serialization
       // might change the ordering.
@@ -82,12 +68,12 @@ suite('compare.js', () => {
 
         // The order of these are done by the hash.
         ds.writeValue(10),
-        await newSet([0, 1, 2, 3], makeSetType(numberType)),
-        await newMap([0, 1, 2, 3], makeMapType(numberType, numberType)),
+        await newSet([0, 1, 2, 3]),
+        await newMap([0, 1, 2, 3]),
         boolType,
         await newBlob(new Uint8Array([0, 1, 2, 3])),
-        await newList([0, 1, 2, 3], makeListType(numberType)),
-        newStruct(structType1, {x: 1, s: 'a'}),
+        await newList([0, 1, 2, 3]),
+        newStruct('', {x: 1, s: 'a'}),
 
         // Value - values cannot be value
         // Parent - values cannot be parent
@@ -128,10 +114,9 @@ suite('compare.js', () => {
     });
 
     test('list', async () => {
-      const listOfNumberType = makeListType(numberType);
-      const listA = await newList([0, 1, 2, 3], listOfNumberType);
-      const listB = await newList([0, 1, 2, 3], listOfNumberType);
-      const listC = await newList([4, 5, 6, 7], listOfNumberType);
+      const listA = await newList([0, 1, 2, 3]);
+      const listB = await newList([0, 1, 2, 3]);
+      const listC = await newList([4, 5, 6, 7]);
       assert.isTrue(equals(listA, listA));
       assert.isTrue(equals(listA, listB));
       assert.isFalse(equals(listA, listC));
