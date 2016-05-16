@@ -116,7 +116,6 @@ suite('ValueStore', () => {
 
     const l = await newList([vs.writeValue(1), vs.writeValue(2)]);
     const r = vs.writeValue(l);
-    // await vs.flush();
 
     const v = await vs.readValue(r.targetRef);
     assert.isTrue(equals(l, v));

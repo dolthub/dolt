@@ -5,6 +5,7 @@ import {assert} from 'chai';
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import {deserialize, serialize} from './chunk-serializer.js';
+import type {ChunkStream} from './chunk-serializer.js';
 
 suite('ChunkSerializer', () => {
 
@@ -22,38 +23,42 @@ suite('ChunkSerializer', () => {
     }
   }
 
-  test('simple', () => {
+  test('simple', async () => {
     const expHints = [];
     const expChunks = [Chunk.fromString('abc'), Chunk.fromString('def'), Chunk.fromString('ghi'),
                        Chunk.fromString('wacka wack wack')];
 
-    const {hints, chunks} = deserialize(serialize(new Set(expHints), expChunks));
+    const pSerialized = serialize(new Set(expHints), createChunkStream(expChunks));
+    const {hints, chunks} = deserialize(await pSerialized);
 
     assertHints(expHints, hints);
     assertChunks(expChunks, chunks);
   });
 
-  test('leading & trailing empty', () => {
+  test('leading & trailing empty', async () => {
     const expHints = [];
     const expChunks = [Chunk.fromString(''), Chunk.fromString('A'), Chunk.fromString('')];
 
-    const {hints, chunks} = deserialize(serialize(new Set(expHints), expChunks));
+    const pSerialized = serialize(new Set(expHints), createChunkStream(expChunks));
+    const {hints, chunks} = deserialize(await pSerialized);
 
     assertHints(expHints, hints);
     assertChunks(expChunks, chunks);
   });
 
-  test('all empty', () => {
+  test('all empty', async () => {
     const expHints = [];
     const expChunks = [];
 
-    const {hints, chunks} = deserialize(serialize(new Set(expHints), expChunks));
+
+    const pSerialized = serialize(new Set(expHints), createChunkStream(expChunks));
+    const {hints, chunks} = deserialize(await pSerialized);
 
     assertHints(expHints, hints);
     assertChunks(expChunks, chunks);
   });
 
-  test('with hints', () => {
+  test('with hints', async () => {
     const expHints = [
       Chunk.fromString('123').ref,
       Chunk.fromString('456').ref,
@@ -62,9 +67,36 @@ suite('ChunkSerializer', () => {
     ];
     const expChunks = [Chunk.fromString('abc'), Chunk.fromString('def'), Chunk.fromString('ghi')];
 
-    const {hints, chunks} = deserialize(serialize(new Set(expHints), expChunks));
+    const pSerialized = serialize(new Set(expHints), createChunkStream(expChunks));
+    const {hints, chunks} = deserialize(await pSerialized);
+
+    assertHints(expHints, hints);
+    assertChunks(expChunks, chunks);
+  });
+
+  test('large chunk', async () => {
+    const expHints = [];
+    const expChunks = [
+      new Chunk(new Uint8Array(1024)),
+      Chunk.fromString('abc'),
+      Chunk.fromString('def'),
+      new Chunk(new Uint8Array(2048))];
+
+    const pSerialized = serialize(new Set(expHints), createChunkStream(expChunks));
+    const {hints, chunks} = deserialize(await pSerialized);
 
     assertHints(expHints, hints);
     assertChunks(expChunks, chunks);
   });
 });
+
+function createChunkStream(chunks: Array<Chunk>): ChunkStream {
+  return function(cb: (chunk: Chunk) => void): Promise<void> {
+    return new Promise(fulfill => {
+      for (const chunk of chunks) {
+        cb(chunk);
+      }
+      fulfill();
+    });
+  };
+}

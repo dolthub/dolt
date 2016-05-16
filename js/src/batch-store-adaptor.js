@@ -1,10 +1,12 @@
 // @flow
 
+import Chunk from './chunk.js';
 import Ref from './ref.js';
 import MemoryStore from './memory-store.js';
 import BatchStore from './batch-store.js';
 import type {ChunkStore} from './chunk-store.js';
-import type {UnsentReadMap, WriteRequest} from './batch-store.js';
+import type {UnsentReadMap} from './batch-store.js';
+import type {ChunkStream} from './chunk-serializer.js';
 
 export function makeTestingBatchStore(): BatchStore {
   return new BatchStore(3, new BatchStoreAdaptorDelegate(new MemoryStore()));
@@ -29,10 +31,8 @@ export class BatchStoreAdaptorDelegate {
     });
   }
 
-  async writeBatch(reqs: Array<WriteRequest>): Promise<void> {
-    reqs.forEach(req => {
-      this._cs.put(req.c);
-    });
+  async writeBatch(hints: Set<Ref>, chunkStream: ChunkStream): Promise<void> {
+    return chunkStream((chunk: Chunk) => this._cs.put(chunk));
   }
 
   async getRoot(): Promise<Ref> {

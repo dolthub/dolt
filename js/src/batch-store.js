@@ -2,20 +2,21 @@
 
 import Chunk from './chunk.js';
 import Ref from './ref.js';
+import OrderedPutCache from './put-cache.js';
+import type {ChunkStream} from './chunk-serializer.js';
 import {notNull} from './assert.js';
 
 type PendingReadMap = { [key: string]: Promise<Chunk> };
 export type UnsentReadMap = { [key: string]: (c: Chunk) => void };
 
-type WriteMap = { [key: string]: Chunk };
 export type WriteRequest = {
-  c: Chunk;
+  hash: Ref;
   hints: Set<Ref>;
 }
 
 interface Delegate {
   readBatch(reqs: UnsentReadMap): Promise<void>;
-  writeBatch(reqs: Array<WriteRequest>): Promise<void>;
+  writeBatch(hints: Set<Ref>, chunkStream: ChunkStream): Promise<void>;
   getRoot(): Promise<Ref>;
   updateRoot(current: Ref, last: Ref): Promise<boolean>;
 }
@@ -27,7 +28,7 @@ export default class BatchStore {
   _activeReads: number;
   _maxReads: number;
 
-  _pendingWrites: WriteMap;
+  _pendingWrites: OrderedPutCache;
   _unsentWrites: ?Array<WriteRequest>;
   _delegate: Delegate;
 
@@ -38,7 +39,7 @@ export default class BatchStore {
     this._activeReads = 0;
     this._maxReads = maxReads;
 
-    this._pendingWrites = Object.create(null);
+    this._pendingWrites = new OrderedPutCache();
     this._unsentWrites = null;
     this._delegate = delegate;
   }
@@ -49,9 +50,9 @@ export default class BatchStore {
     if (p) {
       return p;
     }
-    p = this._pendingWrites[refStr];
+    p = this._pendingWrites.get(refStr);
     if (p) {
-      return Promise.resolve(p);
+      return p;
     }
 
     return this._pendingReads[refStr] = new Promise(resolve => {
@@ -92,16 +93,14 @@ export default class BatchStore {
   }
 
   schedulePut(c: Chunk, hints: Set<Ref>): void {
-    const refStr = c.ref.toString();
-    if (this._pendingWrites[refStr]) {
+    if (!this._pendingWrites.append(c)) {
       return; // Already in flight.
     }
-    this._pendingWrites[refStr] = c;
 
     if (!this._unsentWrites) {
       this._unsentWrites = [];
     }
-    this._unsentWrites.push({c: c, hints: hints});
+    this._unsentWrites.push({hash: c.ref, hints: hints});
   }
 
   async flush(): Promise<void> {
@@ -112,12 +111,18 @@ export default class BatchStore {
     const reqs = notNull(this._unsentWrites);
     this._unsentWrites = null;
 
-    await this._delegate.writeBatch(reqs); // TODO: Deal with backpressure
+    const first = reqs[0].hash;
+    let last = first;
+    const hints = new Set();
+    for (const req of reqs) {
+      req.hints.forEach(hint => hints.add(hint));
+      last = req.hash;
+    }
+    // TODO: Deal with backpressure
+    const chunkStream = await this._pendingWrites.extractChunks(first.toString(), last.toString());
+    await this._delegate.writeBatch(hints, chunkStream);
 
-    const self = this; // TODO: Remove this when babel bug is fixed.
-    reqs.forEach(req => {
-      delete self._pendingWrites[req.c.ref.toString()];
-    });
+    return this._pendingWrites.dropUntil(last.toString());
   }
 
   async getRoot(): Promise<Ref> {

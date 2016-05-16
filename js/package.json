@@ -9,7 +9,8 @@
     "babel-regenerator-runtime": "6.5.0",
     "babel-runtime": "5.8.38",
     "rusha": "0.8.3",
-    "text-encoding-utf-8": "1.0.1"
+    "text-encoding-utf-8": "1.0.1",
+    "tingodb": "^0.4.2"
   },
   "devDependencies": {
     "@attic/eslintrc": "^1.0.0",
@@ -35,7 +36,7 @@
   },
   "scripts": {
     "pretest": "eslint src/ && flow src/",
-    "ts": "mocha --ui tdd --timeout=3000 --reporter spec --slow=50 --invert --grep='LONG:' --compilers js:babel-core/register src/*-test.js",
+    "ts": "mocha --ui tdd --timeout=4000 --reporter spec --slow=50 --invert --grep='LONG:' --compilers js:babel-core/register src/*-test.js",
     "test": "mocha --ui tdd --timeout=3000 --reporter dot --compilers js:babel-core/register src/*-test.js",
     "prepublish": "npm run compile && npm run copy-flow-files",
     "compile": "npm run compile-to-commonjs && npm run compile-to-es6",

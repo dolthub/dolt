@@ -8,7 +8,7 @@ This repository contains two reference implementations of the noms protocol - on
 
 # Prerequisites
 
-* [Go 1.4+](https://golang.org/dl/)
+* [Go 1.6+](https://golang.org/dl/)
 * [Python 2.7+](https://www.python.org/downloads/) (Note: Python 2.x only, not Python 3.x)
 * [Node.js 5.11+](https://nodejs.org/download/)
 
