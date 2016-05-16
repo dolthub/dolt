@@ -15,11 +15,9 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/util/progressreader"
+	"github.com/attic-labs/noms/util/status"
 	human "github.com/dustin/go-humanize"
-)
-
-const (
-	clearLine = "\x1b[2K\r"
 )
 
 var (
@@ -49,7 +47,7 @@ func main() {
 	url := flag.Arg(1)
 	start = time.Now()
 
-	var sr statusReader
+	var pr io.Reader
 
 	if strings.HasPrefix(url, "http") {
 		resp, err := http.Get(url)
@@ -64,10 +62,7 @@ func main() {
 			return
 		}
 
-		sr = statusReader{
-			r:           resp.Body,
-			expectedLen: resp.ContentLength,
-		}
+		pr = progressreader.New(resp.Body, getStatusPrinter(resp.ContentLength))
 	} else {
 		// assume it's a file
 		f, err := os.Open(url)
@@ -82,13 +77,10 @@ func main() {
 			return
 		}
 
-		sr = statusReader{
-			r:           f,
-			expectedLen: s.Size(),
-		}
+		pr = progressreader.New(f, getStatusPrinter(s.Size()))
 	}
 
-	b := types.NewBlob(&sr)
+	b := types.NewBlob(pr)
 	ds, err = ds.Commit(b)
 	if err != nil {
 		d.Chk.Equal(datas.ErrMergeNeeded, err)
@@ -96,37 +88,26 @@ func main() {
 		return
 	}
 
-	fmt.Print(clearLine)
+	status.Done()
 	fmt.Println("Done")
 }
 
-type statusReader struct {
-	r           io.Reader
-	expectedLen int64
-	totalRead   uint64
-}
+func getStatusPrinter(expectedLen int64) progressreader.Callback {
+	return func(seenLen uint64) {
+		var expected string
+		if expectedLen < 0 {
+			expected = "(unknown)"
+		} else {
+			expected = human.Bytes(uint64(expectedLen))
+		}
 
-func (sr *statusReader) Read(p []byte) (n int, err error) {
-	// Print progress before calling Read() since we want to report progress on how far we've
-	// written so far, and we don't write until after the Read() call returns.
-	var expected string
-	if sr.expectedLen < 0 {
-		expected = "(unknown)"
-	} else {
-		expected = human.Bytes(uint64(sr.expectedLen))
+		elapsed := time.Now().Sub(start)
+		rate := uint64(float64(seenLen) / elapsed.Seconds())
+
+		status.Printf("%s of %s written in %ds (%s/s)...",
+			human.Bytes(seenLen),
+			expected,
+			uint64(elapsed.Seconds()),
+			human.Bytes(rate))
 	}
-
-	elapsed := time.Now().Sub(start)
-	rate := uint64(float64(sr.totalRead) / elapsed.Seconds())
-
-	fmt.Fprintf(os.Stderr, "%s%s of %s written in %ds (%s/s)...",
-		clearLine,
-		human.Bytes(sr.totalRead),
-		expected,
-		uint64(elapsed.Seconds()),
-		human.Bytes(rate))
-
-	n, err = sr.r.Read(p)
-	sr.totalRead += uint64(n)
-	return
 }
