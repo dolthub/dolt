@@ -10,16 +10,20 @@ import Struct, {StructMirror} from './struct.js';
 import type Database from './database.js';
 import type {valueOrPrimitive} from './value.js';
 
+type walkCb = (v: valueOrPrimitive) => ?bool | Promise<?bool>;
+
 // Invokes |cb| once for |v| and each of its descendants. The returned promise is resolved when all
 // invocations to |cb| have been resolved.
 //
-// The return value of |cb| indicates whether to recurse further into the tree. Return false to
-// skip a node's children.
+// The return value of |cb| indicates whether to recurse further into the tree. Return |false| or a
+// Promise which resolves to |false| to skip a node's children.
 //
-// For convenience, if |cb| returns |undefined|, the default is |true|.
-export default async function walk(v: valueOrPrimitive, ds: Database,
-                                   cb: (v: valueOrPrimitive) => Promise<?bool>): Promise<void> {
-  let cont = await cb(v);
+// For convenience, if |cb| returns |undefined| or a Promise to |undefined|, the default is |true|.
+export default async function walk(v: valueOrPrimitive, ds: Database, cb: walkCb): Promise<void> {
+  let cont = cb(v);
+  if (cont instanceof Promise) {
+    cont = await cont;
+  }
   if (cont === undefined) {
     cont = true;
   }

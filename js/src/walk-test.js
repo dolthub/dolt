@@ -132,14 +132,26 @@ suite('walk', () => {
     assert.equal(0, expected.size);
   });
 
-  test('cb-default', async () => {
-    const rv = ds.writeValue(42);
-    const expected = new Set([rv, 42]);
-    await walk(rv, ds, async v => {
-      assert.isOk(expected.delete(v));
-      // return nothing -- default should be to recurse.
-    });
-    assert.equal(0, expected.size);
+  test('cb-should-recurse', async () => {
+    const testShouldRecurse = async (cb, expectRecurse) => {
+      const rv = ds.writeValue(42);
+      const expected = new Set([rv, 42]);
+      await walk(rv, ds, v => {
+        assert.isOk(expected.delete(v));
+        return cb();
+      });
+      assert.equal(expectRecurse ? 0 : 1, expected.size);
+    };
+
+    // Return void, Promise<void>, true, or Promise<true> -- should recurse.
+    await testShouldRecurse(() => { return; }, true); // eslint-disable-line
+    await testShouldRecurse(() => Promise.resolve(), true);
+    await testShouldRecurse(() => true, true);
+    await testShouldRecurse(() => Promise.resolve(true), true);
+
+    // Return true or Promise<true> -- should stop
+    await testShouldRecurse(() => false, false);
+    await testShouldRecurse(() => Promise.resolve(false), false);
   });
 });
 
