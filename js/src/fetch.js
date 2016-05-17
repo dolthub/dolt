@@ -33,6 +33,13 @@ function fetch<T>(url: string, f: (buf: Buffer) => T, options: FetchOptions = {}
     req.on('error', err => {
       reject(err);
     });
+    // Set an idle-timeout of 2 minutes. The contract requires us to manually abort the connection,
+    // then catch that event and report an error.
+    req.setTimeout(2 * 60 * 1000, () => req.abort());
+    req.on('abort', () => {
+      reject(new Error('HTTP request timed out'));
+    });
+
     if (options.body) {
       req.write(options.body);
     }
