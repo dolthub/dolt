@@ -38,7 +38,7 @@
     "pretest": "eslint src/ && flow src/",
     "ts": "mocha --ui tdd --timeout=4000 --reporter spec --slow=50 --invert --grep='LONG:' --compilers js:babel-core/register src/*-test.js",
     "test": "mocha --ui tdd --timeout=3000 --reporter dot --compilers js:babel-core/register src/*-test.js",
-    "prepublish": "npm run compile && npm run copy-flow-files",
+    "prepublish": "rm -rf dist/ && npm run compile && npm run copy-flow-files",
     "compile": "npm run compile-to-commonjs && npm run compile-to-es6",
     "compile-to-commonjs": "BABEL_ENV=production babel -d dist/commonjs src/",
     "compile-to-es6": "BABEL_ENV=es6 babel -d dist/es6 src/",
