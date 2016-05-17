@@ -129,8 +129,7 @@ func (r *jsonArrayReader) readListLeafSequence(t *Type) indexedSequence {
 		data = append(data, v)
 	}
 
-	// TODO(arv): Pass down type here too.
-	return newListLeafSequence(r.vr, data...)
+	return listLeafSequence{data, t, r.vr}
 }
 
 func (r *jsonArrayReader) readSetLeafSequence(t *Type) orderedSequence {

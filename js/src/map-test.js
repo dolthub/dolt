@@ -12,7 +12,7 @@ import {newStruct, default as Struct} from './struct.js';
 import {flatten, flattenParallel, deriveCollectionHeight} from './test-util.js';
 import {invariant} from './assert.js';
 import Chunk from './chunk.js';
-import {MapLeafSequence, newMap, NomsMap} from './map.js';
+import {newMapLeafSequence, newMap, NomsMap} from './map.js';
 import {MetaTuple, newMapMetaSequence} from './meta-sequence.js';
 import Ref from './ref.js';
 import type {ValueReadWriter} from './value-store.js';
@@ -263,7 +263,7 @@ suite('BuildMap', () => {
 suite('MapLeaf', () => {
   test('isEmpty/size', () => {
     const ds = new Database(makeTestingBatchStore());
-    const newMap = entries => new NomsMap(new MapLeafSequence(ds, entries));
+    const newMap = entries => new NomsMap(newMapLeafSequence(ds, entries));
     let m = newMap([]);
     assert.isTrue(m.isEmpty());
     assert.strictEqual(0, m.size);
@@ -275,7 +275,7 @@ suite('MapLeaf', () => {
   test('has', async () => {
     const ds = new Database(makeTestingBatchStore());
     const m = new NomsMap(
-        new MapLeafSequence(ds, [{key: 'a', value: false}, {key: 'k', value: true}]));
+        newMapLeafSequence(ds, [{key: 'a', value: false}, {key: 'k', value: true}]));
     assert.isTrue(await m.has('a'));
     assert.isFalse(await m.has('b'));
     assert.isTrue(await m.has('k'));
@@ -285,7 +285,7 @@ suite('MapLeaf', () => {
   test('first/last/get', async () => {
     const ds = new Database(makeTestingBatchStore());
     const m = new NomsMap(
-        new MapLeafSequence(ds, [{key: 'a', value: 4}, {key: 'k', value: 8}]));
+        newMapLeafSequence(ds, [{key: 'a', value: 4}, {key: 'k', value: 8}]));
 
     assert.deepEqual(['a', 4], await m.first());
     assert.deepEqual(['k', 8], await m.last());
@@ -299,7 +299,7 @@ suite('MapLeaf', () => {
   test('forEach', async () => {
     const ds = new Database(makeTestingBatchStore());
     const m = new NomsMap(
-        new MapLeafSequence(ds, [{key: 'a', value: 4}, {key: 'k', value: 8}]));
+        newMapLeafSequence(ds, [{key: 'a', value: 4}, {key: 'k', value: 8}]));
 
     const kv = [];
     await m.forEach((v, k) => { kv.push(k, v); });
@@ -310,7 +310,7 @@ suite('MapLeaf', () => {
     const ds = new Database(makeTestingBatchStore());
 
     const test = async entries => {
-      const m = new NomsMap(new MapLeafSequence(ds, entries));
+      const m = new NomsMap(newMapLeafSequence(ds, entries));
       assert.deepEqual(entries, await flatten(m.iterator()));
       assert.deepEqual(entries, await flattenParallel(m.iterator(), entries.length));
     };
@@ -322,7 +322,7 @@ suite('MapLeaf', () => {
 
   test('LONG: iteratorAt', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const build = entries => new NomsMap(new MapLeafSequence(ds, entries));
+    const build = entries => new NomsMap(newMapLeafSequence(ds, entries));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
 
@@ -350,7 +350,7 @@ suite('MapLeaf', () => {
     const r3 = ds.writeValue('b');
     const r4 = ds.writeValue(false);
     const m = new NomsMap(
-        new MapLeafSequence(ds, [{key: r1, value: r2}, {key: r3, value: r4}]));
+        newMapLeafSequence(ds, [{key: r1, value: r2}, {key: r3, value: r4}]));
     assert.strictEqual(4, m.chunks.length);
     assert.isTrue(equals(r1, m.chunks[0]));
     assert.isTrue(equals(r2, m.chunks[1]));
@@ -362,16 +362,16 @@ suite('MapLeaf', () => {
 
 suite('CompoundMap', () => {
   function build(vwr: ValueReadWriter): Array<NomsMap> {
-    const l1 = new NomsMap(new MapLeafSequence(vwr, [{key: 'a', value: false},
+    const l1 = new NomsMap(newMapLeafSequence(vwr, [{key: 'a', value: false},
         {key:'b', value:false}]));
     const r1 = vwr.writeValue(l1);
-    const l2 = new NomsMap(new MapLeafSequence(vwr, [{key: 'e', value: true},
+    const l2 = new NomsMap(newMapLeafSequence(vwr, [{key: 'e', value: true},
         {key:'f', value:true}]));
     const r2 = vwr.writeValue(l2);
-    const l3 = new NomsMap(new MapLeafSequence(vwr, [{key: 'h', value: false},
+    const l3 = new NomsMap(newMapLeafSequence(vwr, [{key: 'h', value: false},
         {key:'i', value:true}]));
     const r3 = vwr.writeValue(l3);
-    const l4 = new NomsMap(new MapLeafSequence(vwr, [{key: 'm', value: true},
+    const l4 = new NomsMap(newMapLeafSequence(vwr, [{key: 'm', value: true},
         {key:'n', value:false}]));
     const r4 = vwr.writeValue(l4);
 

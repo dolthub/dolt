@@ -13,7 +13,7 @@ import {newStruct} from './struct.js';
 import {flatten, flattenParallel, deriveCollectionHeight} from './test-util.js';
 import {invariant, notNull} from './assert.js';
 import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';
-import {newSet, NomsSet, SetLeafSequence} from './set.js';
+import {newSet, NomsSet, newSetLeafSequence} from './set.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import Ref from './ref.js';
 import type {ValueReadWriter} from './value-store.js';
@@ -209,7 +209,7 @@ suite('BuildSet', () => {
 suite('SetLeaf', () => {
   test('isEmpty/size', () => {
     const ds = new Database(makeTestingBatchStore());
-    const newSet = items => new NomsSet(new SetLeafSequence(ds, items));
+    const newSet = items => new NomsSet(newSetLeafSequence(ds, items));
     let s = newSet([]);
     assert.isTrue(s.isEmpty());
     assert.strictEqual(0, s.size);
@@ -220,7 +220,7 @@ suite('SetLeaf', () => {
 
   test('first/last/has', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const s = new NomsSet(new SetLeafSequence(ds, ['a', 'k']));
+    const s = new NomsSet(newSetLeafSequence(ds, ['a', 'k']));
 
     assert.strictEqual('a', await s.first());
     assert.strictEqual('k', await s.last());
@@ -233,7 +233,7 @@ suite('SetLeaf', () => {
 
   test('forEach', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const m = new NomsSet(new SetLeafSequence(ds, ['a', 'b']));
+    const m = new NomsSet(newSetLeafSequence(ds, ['a', 'b']));
 
     const values = [];
     await m.forEach((k) => { values.push(k); });
@@ -244,7 +244,7 @@ suite('SetLeaf', () => {
     const ds = new Database(makeTestingBatchStore());
 
     const test = async items => {
-      const m = new NomsSet(new SetLeafSequence(ds, items));
+      const m = new NomsSet(newSetLeafSequence(ds, items));
       assert.deepEqual(items, await flatten(m.iterator()));
       assert.deepEqual(items, await flattenParallel(m.iterator(), items.length));
     };
@@ -256,7 +256,7 @@ suite('SetLeaf', () => {
 
   test('LONG: iteratorAt', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const build = items => new NomsSet(new SetLeafSequence(ds, items));
+    const build = items => new NomsSet(newSetLeafSequence(ds, items));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
 
@@ -276,7 +276,7 @@ suite('SetLeaf', () => {
     const r1 = ds.writeValue('x');
     const r2 = ds.writeValue('a');
     const r3 = ds.writeValue('b');
-    const l = new NomsSet(new SetLeafSequence(ds, ['z', r1, r2, r3]));
+    const l = new NomsSet(newSetLeafSequence(ds, ['z', r1, r2, r3]));
     assert.strictEqual(3, l.chunks.length);
     assert.isTrue(equals(r1, l.chunks[0]));
     assert.isTrue(equals(r2, l.chunks[1]));
@@ -290,7 +290,7 @@ suite('CompoundSet', () => {
 
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
-      const l = new NomsSet(new SetLeafSequence(vwr, [values[i], values[i + 1]]));
+      const l = new NomsSet(newSetLeafSequence(vwr, [values[i], values[i + 1]]));
       const r = vwr.writeValue(l);
       tuples.push(new MetaTuple(r, values[i + 1], 2));
     }
@@ -508,7 +508,7 @@ suite('CompoundSet', () => {
     const ds = new Database(makeTestingBatchStore());
 
     const test = async (expected, items) => {
-      const set = new NomsSet(new SetLeafSequence(ds, items));
+      const set = new NomsSet(newSetLeafSequence(ds, items));
       const iter = set.iteratorAt(0);
       assert.deepEqual(expected, await flatten(iter));
     };

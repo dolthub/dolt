@@ -391,14 +391,6 @@ func TestReadRecursiveStruct(t *testing.T) {
 	at.Desc.(StructDesc).Fields["b"] = bt
 	bt.Desc.(StructDesc).Fields["b"] = MakeListType(bt)
 
-	// {b: {a: [], b: []}}
-	v2 := NewStructWithType(at, structData{
-		"b": NewStructWithType(bt, structData{
-			"a": NewList(),
-			"b": NewList(),
-		}),
-	})
-
 	a := parseJSON(`[
 		StructKind, "A", [
 			"b", StructKind, "B", [
@@ -426,11 +418,10 @@ func TestReadRecursiveStruct(t *testing.T) {
 		], false, []]`)
 
 	r := newJSONArrayReader(a, cs)
-
 	v := r.readValue().(Struct)
+
 	assert.True(v.Type().Equals(at))
 	assert.True(v.Get("b").Type().Equals(bt))
-	assert.True(v.Equals(v2))
 }
 
 func TestReadTypeValue(t *testing.T) {

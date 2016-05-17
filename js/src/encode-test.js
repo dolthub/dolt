@@ -24,9 +24,9 @@ import {
 } from './type.js';
 import {newListMetaSequence, MetaTuple, newSetMetaSequence} from './meta-sequence.js';
 import {Kind} from './noms-kind.js';
-import {ListLeafSequence, NomsList} from './list.js';
-import {MapLeafSequence, NomsMap} from './map.js';
-import {NomsSet, SetLeafSequence} from './set.js';
+import {newListLeafSequence, NomsList} from './list.js';
+import {newMapLeafSequence, NomsMap} from './map.js';
+import {NomsSet, newSetLeafSequence} from './set.js';
 import {newBlob} from './blob.js';
 import Database from './database.js';
 import type {valueOrPrimitive} from './value.js';
@@ -64,7 +64,7 @@ suite('Encode', () => {
     const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const l = new NomsList(new ListLeafSequence(ds, [0, 1, 2, 3]));
+    const l = new NomsList(newListLeafSequence(ds, [0, 1, 2, 3]));
     w.writeValue(l);
     assert.deepEqual([Kind.List, Kind.Number, false,
       [Kind.Number, '0', Kind.Number, '1', Kind.Number, '2', Kind.Number, '3']], w.array);
@@ -74,7 +74,7 @@ suite('Encode', () => {
     const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const l = new NomsList(new ListLeafSequence(ds, ['0', 1, '2', true]));
+    const l = new NomsList(newListLeafSequence(ds, ['0', 1, '2', true]));
     w.writeValue(l);
     assert.deepEqual([Kind.List, Kind.Union, 3, Kind.Bool, Kind.Number, Kind.String, false, [
       Kind.String, '0',
@@ -88,9 +88,9 @@ suite('Encode', () => {
     const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const v = new NomsList(new ListLeafSequence(ds, [
-      new NomsList(new ListLeafSequence(ds, [0])),
-      new NomsList(new ListLeafSequence(ds, [1, 2, 3])),
+    const v = new NomsList(newListLeafSequence(ds, [
+      new NomsList(newListLeafSequence(ds, [0])),
+      new NomsList(newListLeafSequence(ds, [1, 2, 3])),
     ]));
     w.writeValue(v);
     assert.deepEqual([Kind.List, Kind.List, Kind.Number, false, [
@@ -103,7 +103,7 @@ suite('Encode', () => {
     const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const v = new NomsSet(new SetLeafSequence(ds, [0, 1, 2, 3]));
+    const v = new NomsSet(newSetLeafSequence(ds, [0, 1, 2, 3]));
     w.writeValue(v);
     assert.deepEqual([Kind.Set, Kind.Number, false,
       [Kind.Number, '0', Kind.Number, '1', Kind.Number, '2', Kind.Number, '3']], w.array);
@@ -112,9 +112,9 @@ suite('Encode', () => {
   test('write compound set', () => {
     const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
-    const r1 = ds.writeValue(new NomsSet(new SetLeafSequence(ds, [0])));
-    const r2 = ds.writeValue(new NomsSet(new SetLeafSequence(ds, [1, 2])));
-    const r3 = ds.writeValue(new NomsSet(new SetLeafSequence(ds, [3, 4, 5])));
+    const r1 = ds.writeValue(new NomsSet(newSetLeafSequence(ds, [0])));
+    const r2 = ds.writeValue(new NomsSet(newSetLeafSequence(ds, [1, 2])));
+    const r3 = ds.writeValue(new NomsSet(newSetLeafSequence(ds, [3, 4, 5])));
     const tuples = [
       new MetaTuple(r1, 0, 1),
       new MetaTuple(r2, 2, 2),
@@ -136,9 +136,9 @@ suite('Encode', () => {
     const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const v = new NomsSet(new SetLeafSequence(ds, [
-      new NomsSet(new SetLeafSequence(ds, [0])),
-      new NomsSet(new SetLeafSequence(ds, [1, 2, 3])),
+    const v = new NomsSet(newSetLeafSequence(ds, [
+      new NomsSet(newSetLeafSequence(ds, [0])),
+      new NomsSet(newSetLeafSequence(ds, [1, 2, 3])),
     ]));
 
     w.writeValue(v);
@@ -152,7 +152,7 @@ suite('Encode', () => {
     const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const v = new NomsMap(new MapLeafSequence(ds, [{key: 'a', value: false},
+    const v = new NomsMap(newMapLeafSequence(ds, [{key: 'a', value: false},
         {key:'b', value:true}]));
     w.writeValue(v);
     assert.deepEqual([Kind.Map, Kind.String, Kind.Bool, false,
@@ -164,9 +164,9 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ds);
 
     // Map<Map<String, Number>, Set<Bool>>({{'a': 0}: {true}})
-    const s = new NomsSet(new SetLeafSequence(ds, [true]));
-    const m1 = new NomsMap(new MapLeafSequence(ds, [{key: 'a', value: 0}]));
-    const v = new NomsMap(new MapLeafSequence(ds, [{key: m1, value: s}]));
+    const s = new NomsSet(newSetLeafSequence(ds, [true]));
+    const m1 = new NomsMap(newMapLeafSequence(ds, [{key: 'a', value: 0}]));
+    const v = new NomsMap(newMapLeafSequence(ds, [{key: m1, value: s}]));
     w.writeValue(v);
     assert.deepEqual([Kind.Map,
       Kind.Map, Kind.String, Kind.Number,
@@ -199,12 +199,12 @@ suite('Encode', () => {
     const ds = new Database(makeTestingBatchStore());
     let w = new JsonArrayWriter(ds);
 
-    let v = newStruct('S', {l: new NomsList(new ListLeafSequence(ds, ['a', 'b']))});
+    let v = newStruct('S', {l: new NomsList(newListLeafSequence(ds, ['a', 'b']))});
     w.writeValue(v);
     assert.deepEqual([Kind.Struct, 'S', ['l', Kind.List, Kind.String],
       Kind.List, Kind.String, false, [Kind.String, 'a', Kind.String, 'b']], w.array);
 
-    v = newStruct('S', {l: new NomsList(new ListLeafSequence(ds, []))});
+    v = newStruct('S', {l: new NomsList(newListLeafSequence(ds, []))});
     w = new JsonArrayWriter(ds);
     w.writeValue(v);
     assert.deepEqual([Kind.Struct, 'S', ['l', Kind.List, Kind.Union, 0],
@@ -225,9 +225,9 @@ suite('Encode', () => {
   test('write compound list', () => {
     const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
-    const r1 = ds.writeValue(new NomsList(new ListLeafSequence(ds, [0])));
-    const r2 = ds.writeValue(new NomsList(new ListLeafSequence(ds, [1, 2])));
-    const r3 = ds.writeValue(new NomsList(new ListLeafSequence(ds, [3, 4, 5])));
+    const r1 = ds.writeValue(new NomsList(newListLeafSequence(ds, [0])));
+    const r2 = ds.writeValue(new NomsList(newListLeafSequence(ds, [1, 2])));
+    const r3 = ds.writeValue(new NomsList(newListLeafSequence(ds, [3, 4, 5])));
     const tuples = [
       new MetaTuple(r1, 1, 1),
       new MetaTuple(r2, 2, 2),
@@ -248,8 +248,8 @@ suite('Encode', () => {
   test('write compound set with bool', () => {
     const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
-    const r1 = ds.writeValue(new NomsSet(new SetLeafSequence(ds, [true])));
-    const r2 = ds.writeValue(new NomsSet(new SetLeafSequence(ds, [false])));
+    const r1 = ds.writeValue(new NomsSet(newSetLeafSequence(ds, [true])));
+    const r2 = ds.writeValue(new NomsSet(newSetLeafSequence(ds, [false])));
     const tuples = [
       new MetaTuple(r1, true, 1),
       new MetaTuple(r2, false, 1),
@@ -350,7 +350,7 @@ suite('Encode', () => {
   test('write union list', () => {
     const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
-    const v = new NomsList(new ListLeafSequence(ds, ['hi', 42]));
+    const v = new NomsList(newListLeafSequence(ds, ['hi', 42]));
     w.writeValue(v);
     assert.deepEqual([Kind.List, Kind.Union, 2, Kind.Number, Kind.String,
       false, [Kind.String, 'hi', Kind.Number, '42']], w.array);
@@ -359,7 +359,7 @@ suite('Encode', () => {
   test('write empty union list', () => {
     const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
-    const v = new NomsList(new ListLeafSequence(ds, []));
+    const v = new NomsList(newListLeafSequence(ds, []));
     w.writeValue(v);
     assert.deepEqual([Kind.List, Kind.Union, 0, false, []], w.array);
   });

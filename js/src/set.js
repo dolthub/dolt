@@ -28,7 +28,7 @@ const setPattern = ((1 << 6) | 0) - 1;
 
 function newSetLeafChunkFn<T:valueOrPrimitive>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
-    const setLeaf = new SetLeafSequence(vr, items);
+    const setLeaf = newSetLeafSequence(vr, items);
 
     let indexValue: ?(T | RefValue) = null;
     if (items.length > 0) {
@@ -176,7 +176,7 @@ export class NomsSet<T: valueOrPrimitive> extends Collection<OrderedSequence> {
     }
 
     // TODO: Chunk the resulting set.
-    return new NomsSet(new SetLeafSequence(null, values));
+    return new NomsSet(newSetLeafSequence(null, values));
   }
 
   /**
@@ -191,11 +191,6 @@ export class NomsSet<T: valueOrPrimitive> extends Collection<OrderedSequence> {
 }
 
 export class SetLeafSequence<K: valueOrPrimitive> extends OrderedSequence<K, K> {
-  constructor(vr: ?ValueReader, items: K[]) {
-    const t = makeSetType(makeUnionType(items.map(getTypeOfValue)));
-    super(vr, t, items);
-  }
-
   getKey(idx: number): K {
     return this.items[idx];
   }
@@ -207,6 +202,11 @@ export class SetLeafSequence<K: valueOrPrimitive> extends OrderedSequence<K, K> 
   get chunks(): Array<RefValue> {
     return getValueChunks(this.items);
   }
+}
+
+export function newSetLeafSequence<K: valueOrPrimitive>(vr: ?ValueReader, items: K[]) {
+  const t = makeSetType(makeUnionType(items.map(getTypeOfValue)));
+  return new SetLeafSequence(vr, t, items);
 }
 
 type OrderedCursor<K: valueOrPrimitive> = {

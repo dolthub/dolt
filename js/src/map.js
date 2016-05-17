@@ -39,7 +39,7 @@ function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(vr: ?ValueR
       }
     }
 
-    const nm = new NomsMap(new MapLeafSequence(vr, items));
+    const nm = new NomsMap(newMapLeafSequence(vr, items));
     const mt = new MetaTuple(new RefValue(nm), indexValue, items.length, nm);
     return [mt, nm];
   };
@@ -190,16 +190,6 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
 
 export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends
     OrderedSequence<K, MapEntry<K, V>> {
-  constructor(vr: ?ValueReader, items: Array<MapEntry<K, V>>) {
-    const kt = [];
-    const vt = [];
-    for (let i = 0; i < items.length; i++) {
-      kt.push(getTypeOfValue(items[i].key));
-      vt.push(getTypeOfValue(items[i].value));
-    }
-    const t = makeMapType(makeUnionType(kt), makeUnionType(vt));
-    super(vr, t, items);
-  }
   getKey(idx: number): K {
     return this.items[idx].key;
   }
@@ -221,4 +211,16 @@ export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends
     }
     return chunks;
   }
+}
+
+export function newMapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive>(vr: ?ValueReader,
+    items: Array<MapEntry<K, V>>): MapLeafSequence<K, V> {
+  const kt = [];
+  const vt = [];
+  for (let i = 0; i < items.length; i++) {
+    kt.push(getTypeOfValue(items[i].key));
+    vt.push(getTypeOfValue(items[i].value));
+  }
+  const t = makeMapType(makeUnionType(kt), makeUnionType(vt));
+  return new MapLeafSequence(vr, t, items);
 }

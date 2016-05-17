@@ -2,12 +2,11 @@ package types
 
 type blobLeafSequence struct {
 	data []byte
-	t    *Type
 	vr   ValueReader
 }
 
 func newBlobLeafSequence(vr ValueReader, data []byte) indexedSequence {
-	return blobLeafSequence{data, BlobType, vr}
+	return blobLeafSequence{data, vr}
 }
 
 func (bl blobLeafSequence) getItem(idx int) sequenceItem {

@@ -5,19 +5,19 @@ import {suite, test} from 'mocha';
 
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import Database from './database.js';
-import {ListLeafSequence, NomsList} from './list.js';
+import {newListLeafSequence, NomsList} from './list.js';
 import {MetaTuple, newOrderedMetaSequenceChunkFn, newIndexedMetaSequenceChunkFn,} from
   './meta-sequence.js';
 import RefValue from './ref-value.js';
-import {SetLeafSequence, NomsSet} from './set.js';
+import {newSetLeafSequence, NomsSet} from './set.js';
 import {Kind} from './noms-kind.js';
 
 suite('MetaSequence', () => {
   test('calculate ordered sequence MetaTuple height', async () => {
     const ds = new Database(makeTestingBatchStore());
 
-    const set1 = new NomsSet(new SetLeafSequence(ds, ['bar', 'baz']));
-    const set2 = new NomsSet(new SetLeafSequence(ds, ['foo', 'qux', 'zoo']));
+    const set1 = new NomsSet(newSetLeafSequence(ds, ['bar', 'baz']));
+    const set2 = new NomsSet(newSetLeafSequence(ds, ['foo', 'qux', 'zoo']));
     const mt1 = new MetaTuple(new RefValue(set1), 'baz', 2, set1);
     const mt2 = new MetaTuple(new RefValue(set2), 'zoo', 3, set2);
 
@@ -36,8 +36,8 @@ suite('MetaSequence', () => {
   test('calculate indexed sequence MetaTuple height', async () => {
     const ds = new Database(makeTestingBatchStore());
 
-    const list1 = new NomsList(new ListLeafSequence(ds, ['bar', 'baz']));
-    const list2 = new NomsList(new ListLeafSequence(ds, ['foo', 'qux', 'zoo']));
+    const list1 = new NomsList(newListLeafSequence(ds, ['bar', 'baz']));
+    const list2 = new NomsList(newListLeafSequence(ds, ['foo', 'qux', 'zoo']));
     const mt1 = new MetaTuple(new RefValue(list1), 2, 2, list1);
     const mt2 = new MetaTuple(new RefValue(list2), 3, 3, list2);
 

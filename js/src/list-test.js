@@ -26,7 +26,7 @@ import {
 } from './test-util.js';
 import {newListMetaSequence, MetaTuple} from './meta-sequence.js';
 import {invariant} from './assert.js';
-import {ListLeafSequence, newList, NomsList} from './list.js';
+import {newListLeafSequence, newList, NomsList} from './list.js';
 
 const testListSize = 5000;
 const listOfNRef = 'sha1-aa1605484d993e89dbc0431acb9f2478282f9d94';
@@ -214,7 +214,7 @@ suite('List', () => {
 suite('ListLeafSequence', () => {
   test('Empty list isEmpty', () => {
     const ds = new Database(makeTestingBatchStore());
-    const newList = items => new NomsList(new ListLeafSequence(ds, items));
+    const newList = items => new NomsList(newListLeafSequence(ds, items));
     assert.isTrue(newList([]).isEmpty());
   });
 
@@ -222,7 +222,7 @@ suite('ListLeafSequence', () => {
     const ds = new Database(makeTestingBatchStore());
 
     const test = async items => {
-      const l = new NomsList(new ListLeafSequence(ds, items));
+      const l = new NomsList(newListLeafSequence(ds, items));
       assert.deepEqual(items, await flatten(l.iterator()));
       assert.deepEqual(items, await flattenParallel(l.iterator(), items.length));
     };
@@ -236,7 +236,7 @@ suite('ListLeafSequence', () => {
     const ds = new Database(makeTestingBatchStore());
 
     const test = async items => {
-      const l = new NomsList(new ListLeafSequence(ds, items));
+      const l = new NomsList(newListLeafSequence(ds, items));
       for (let i = 0; i <= items.length; i++) {
         const slice = items.slice(i);
         assert.deepEqual(slice, await flatten(l.iteratorAt(i)));
@@ -253,13 +253,13 @@ suite('ListLeafSequence', () => {
 suite('CompoundList', () => {
   function build(): NomsList {
     const ds = new Database(makeTestingBatchStore());
-    const l1 = new NomsList(new ListLeafSequence(ds, ['a', 'b']));
+    const l1 = new NomsList(newListLeafSequence(ds, ['a', 'b']));
     const r1 = ds.writeValue(l1);
-    const l2 = new NomsList(new ListLeafSequence(ds, ['e', 'f']));
+    const l2 = new NomsList(newListLeafSequence(ds, ['e', 'f']));
     const r2 = ds.writeValue(l2);
-    const l3 = new NomsList(new ListLeafSequence(ds, ['h', 'i']));
+    const l3 = new NomsList(newListLeafSequence(ds, ['h', 'i']));
     const r3 = ds.writeValue(l3);
-    const l4 = new NomsList(new ListLeafSequence(ds, ['m', 'n']));
+    const l4 = new NomsList(newListLeafSequence(ds, ['m', 'n']));
     const r4 = ds.writeValue(l4);
 
     const m1 = new NomsList(newListMetaSequence(ds, [new MetaTuple(r1, 2, 2),

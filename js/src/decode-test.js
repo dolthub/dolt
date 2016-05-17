@@ -26,10 +26,10 @@ import {encode as encodeBase64} from './base64.js';
 import {newListMetaSequence, MetaTuple, newSetMetaSequence} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {Kind} from './noms-kind.js';
-import {ListLeafSequence, NomsList} from './list.js';
-import {MapLeafSequence, NomsMap} from './map.js';
+import {newListLeafSequence, NomsList} from './list.js';
+import {newMapLeafSequence, NomsMap} from './map.js';
 import {NomsBlob, newBlob} from './blob.js';
-import {NomsSet, SetLeafSequence} from './set.js';
+import {NomsSet, newSetLeafSequence} from './set.js';
 import {suite, test} from 'mocha';
 import {equals} from './compare.js';
 
@@ -112,7 +112,7 @@ suite('Decode', () => {
     const v: NomsList<number> = r.readValue();
     invariant(v instanceof NomsList);
 
-    const l = new NomsList(new ListLeafSequence(ds, [0, 1, 2, 3]));
+    const l = new NomsList(newListLeafSequence(ds, [0, 1, 2, 3]));
     assert.isTrue(equals(l, v));
   });
 
@@ -174,15 +174,15 @@ suite('Decode', () => {
     const v = r.readValue();
     invariant(v instanceof NomsList);
 
-    const l = new NomsList(new ListLeafSequence(ds, [0, 1, 2]));
+    const l = new NomsList(newListLeafSequence(ds, [0, 1, 2]));
     assert.isTrue(equals(l, v));
   });
 
   test('read compound list', () => {
     const ds = new Database(makeTestingBatchStore());
-    const r1 = ds.writeValue(new NomsList(new ListLeafSequence(ds, [0])));
-    const r2 = ds.writeValue(new NomsList(new ListLeafSequence(ds, [1, 2])));
-    const r3 = ds.writeValue(new NomsList(new ListLeafSequence(ds, [3, 4, 5])));
+    const r1 = ds.writeValue(new NomsList(newListLeafSequence(ds, [0])));
+    const r2 = ds.writeValue(new NomsList(newListLeafSequence(ds, [1, 2])));
+    const r3 = ds.writeValue(new NomsList(newListLeafSequence(ds, [3, 4, 5])));
     const tuples = [
       new MetaTuple(r1, 1, 1),
       new MetaTuple(r2, 2, 2),
@@ -212,7 +212,7 @@ suite('Decode', () => {
     const v: NomsMap<number, number> = r.readValue();
     invariant(v instanceof NomsMap);
 
-    const m = new NomsMap(new MapLeafSequence(ds, [{key: 0, value: 1}, {key: 2, value: 3}]));
+    const m = new NomsMap(newMapLeafSequence(ds, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(equals(v, m));
   });
 
@@ -221,7 +221,7 @@ suite('Decode', () => {
     const rv1 = ds.writeValue(true);
     const rv2 = ds.writeValue('hi');
     const a = [
-      Kind.Map, Kind.Ref, Kind.Value, Kind.Number, false, [
+      Kind.Map, Kind.Union, 2, Kind.Ref, Kind.String, Kind.Ref, Kind.Bool, Kind.Number, false, [
         Kind.Ref, Kind.Bool, rv1.targetRef.toString(), '1', Kind.Number, '2',
         Kind.Ref, Kind.String, rv2.targetRef.toString(), '1', Kind.Number, '4',
       ],
@@ -230,7 +230,7 @@ suite('Decode', () => {
     const v: NomsMap<RefValue<Value>, number> = r.readValue();
     invariant(v instanceof NomsMap);
 
-    const m = new NomsMap(new MapLeafSequence(ds, [{key: rv1, value: 2}, {key: rv2, value: 4}]));
+    const m = new NomsMap(newMapLeafSequence(ds, [{key: rv1, value: 2}, {key: rv2, value: 4}]));
     assert.isTrue(equals(v, m));
   });
 
@@ -242,7 +242,7 @@ suite('Decode', () => {
     const v: NomsMap<number, number> = r.readValue();
     invariant(v instanceof NomsMap);
 
-    const m = new NomsMap(new MapLeafSequence(ds, [{key: 0, value: 1}, {key: 2, value: 3}]));
+    const m = new NomsMap(newMapLeafSequence(ds, [{key: 0, value: 1}, {key: 2, value: 3}]));
     assert.isTrue(equals(v, m));
   });
 
@@ -254,14 +254,14 @@ suite('Decode', () => {
     const v: NomsSet<number> = r.readValue();
     invariant(v instanceof NomsSet);
 
-    const s = new NomsSet(new SetLeafSequence(ds, [0, 1, 2, 3]));
+    const s = new NomsSet(newSetLeafSequence(ds, [0, 1, 2, 3]));
     assert.isTrue(equals(v, s));
   });
 
   test('read compound set', () => {
     const ds = new Database(makeTestingBatchStore());
-    const r1 = ds.writeValue(new NomsSet(new SetLeafSequence(ds, [0, 1])));
-    const r2 = ds.writeValue(new NomsSet(new SetLeafSequence(ds, [2, 3, 4])));
+    const r1 = ds.writeValue(new NomsSet(newSetLeafSequence(ds, [0, 1])));
+    const r2 = ds.writeValue(new NomsSet(newSetLeafSequence(ds, [2, 3, 4])));
     const tuples = [
       new MetaTuple(r1, 1, 2),
       new MetaTuple(r2, 4, 3),
@@ -288,7 +288,7 @@ suite('Decode', () => {
     const v: NomsSet<number> = r.readValue();
     invariant(v instanceof NomsSet);
 
-    const s = new NomsSet(new SetLeafSequence(ds, [0, 1, 2, 3]));
+    const s = new NomsSet(newSetLeafSequence(ds, [0, 1, 2, 3]));
     assert.isTrue(equals(v, s));
   });
 
@@ -350,7 +350,7 @@ suite('Decode', () => {
 
     assertStruct(v, tr.desc, {
       b: true,
-      l: new NomsList(new ListLeafSequence(ds, [0, 1, 2])),
+      l: new NomsList(newListLeafSequence(ds, [0, 1, 2])),
       s: 'hi',
     });
   });
@@ -420,7 +420,7 @@ suite('Decode', () => {
     const v = decodeNomsValue(chunk, new Database(makeTestingBatchStore()));
     invariant(v instanceof NomsSet);
 
-    const s: NomsSet<number> = new NomsSet(new SetLeafSequence(ds, [0, 1, 2, 3]));
+    const s: NomsSet<number> = new NomsSet(newSetLeafSequence(ds, [0, 1, 2, 3]));
 
     assert.isTrue(equals(v, s));
   });
@@ -545,7 +545,7 @@ suite('Decode', () => {
   });
 
   test('recursive struct', () => {
-    const ds = new Database(makeTestingBatchStore());
+    const db = new Database(makeTestingBatchStore());
 
     // struct A {
     //   b: struct B {
@@ -554,16 +554,15 @@ suite('Decode', () => {
     //   }
     // }
 
-    const ta = makeStructType('A', {
+    const at = makeStructType('A', {
       'b': valueType,  // placeholder
     });
-    const tb = makeStructType('B', {
-      'a': valueType,  // placeholder
+    const bt = makeStructType('B', {
+      'a': makeListType(at),
       'b': valueType,  // placeholder
     });
-    ta.desc.fields['b'] = tb;
-    tb.desc.fields['a'] = makeListType(ta);
-    tb.desc.fields['b'] = makeListType(tb);
+    at.desc.fields['b'] = bt;
+    bt.desc.fields['b'] = makeListType(bt);
 
     const a = parseJson(`[
       StructKind, "A", [
@@ -590,11 +589,12 @@ suite('Decode', () => {
         ],
         "b", ListKind, ParentKind, 0
       ], false, []]`);
-    const r = new JsonArrayReader(a, ds);
+
+    const r = new JsonArrayReader(a, db);
     const v = r.readValue();
 
-    assert.isTrue(equals(v.type, ta));
-    assert.isTrue(equals(v.b.type, tb));
+    assert.isTrue(equals(v.type, at));
+    assert.isTrue(equals(v.b.type, bt));
   });
 
   test('read union list', async () => {
@@ -603,7 +603,7 @@ suite('Decode', () => {
       false, [StringKind, "hi", NumberKind, "42"]]`);
     const r = new JsonArrayReader(a, ds);
     const v = r.readValue();
-    const v2 = new NomsList(new ListLeafSequence(ds, ['hi', 42]));
+    const v2 = new NomsList(newListLeafSequence(ds, ['hi', 42]));
     assert.isTrue(equals(v, v2));
   });
 
@@ -612,7 +612,7 @@ suite('Decode', () => {
     const a = parseJson(`[ListKind, UnionKind, 0, false, []]`);
     const r = new JsonArrayReader(a, ds);
     const v = r.readValue();
-    const v2 = new NomsList(new ListLeafSequence(ds, []));
+    const v2 = new NomsList(newListLeafSequence(ds, []));
     assert.isTrue(equals(v, v2));
   });
 });

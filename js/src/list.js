@@ -26,7 +26,7 @@ const listPattern = ((1 << 6) | 0) - 1;
 
 function newListLeafChunkFn<T: valueOrPrimitive>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
-    const list = new NomsList(new ListLeafSequence(vr, items));
+    const list = new NomsList(newListLeafSequence(vr, items));
     const mt = new MetaTuple(new RefValue(list), items.length, items.length, list);
     return [mt, list];
   };
@@ -124,11 +124,6 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
 }
 
 export class ListLeafSequence<T: valueOrPrimitive> extends IndexedSequence<T> {
-  constructor(vr: ?ValueReader, items: T[]) {
-    const t = makeListType(makeUnionType(items.map(getTypeOfValue)));
-    super(vr, t, items);
-  }
-
   get chunks(): Array<RefValue> {
     return getValueChunks(this.items);
   }
@@ -141,6 +136,12 @@ export class ListLeafSequence<T: valueOrPrimitive> extends IndexedSequence<T> {
     invariant(start >= 0 && end >= 0 && end <= this.items.length);
     return Promise.resolve(this.items.slice(start, end));
   }
+}
+
+export function newListLeafSequence<T: valueOrPrimitive>(vr: ?ValueReader, items: T[]):
+    ListLeafSequence<T> {
+  const t = makeListType(makeUnionType(items.map(getTypeOfValue)));
+  return new ListLeafSequence(vr, t, items);
 }
 
 function clampIndex(idx: number, length: number): number {
