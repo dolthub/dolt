@@ -50,7 +50,7 @@ func NomsValueFromDecodedJSON(o interface{}) types.Value {
 			}
 		}
 
-		return NewMapOfStringToValue(kv...)
+		return types.NewMap(kv...)
 
 	default:
 		d.Chk.Fail("Nomsification failed.", "I don't understand %+v, which is of type %s!\n", o, reflect.TypeOf(o).String())

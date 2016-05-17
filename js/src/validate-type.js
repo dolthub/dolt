@@ -22,12 +22,6 @@ export default function validateType(t: Type, v: any): void {
       assertTypeof(v, 'string', t);
       return;
 
-    case Kind.Value: {
-      const s = typeof v;
-      assert(v instanceof Value || s === 'boolean' || s === 'number' || s === 'string', v, t);
-      return;
-    }
-
     case Kind.Blob:
     case Kind.List:
     case Kind.Map:
@@ -38,6 +32,7 @@ export default function validateType(t: Type, v: any): void {
       assertSubtype(v, t);
       return;
 
+    case Kind.Value:
     case Kind.Union:
       assert(subtype(t, getTypeOfValue(v)), v, t);
       break;
@@ -69,9 +64,8 @@ function subtype(expected: Type, actual: Type): boolean {
   }
 
   if (expected.desc instanceof CompoundDesc) {
-    const {desc} = actual;
-    // invariant(desc instanceof CompoundDesc);
-    return expected.desc.elemTypes.every((t, i) => compoundSubtype(t, desc.elemTypes[i]));
+    const actualElemTypes = actual.desc.elemTypes;
+    return expected.desc.elemTypes.every((t, i) => compoundSubtype(t, actualElemTypes[i]));
   }
 
   invariant(false);

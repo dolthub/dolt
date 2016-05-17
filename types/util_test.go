@@ -14,26 +14,24 @@ var generateNumbersAsValues = func(n int) []Value {
 	return nums
 }
 
-var generateNumbersAsStructs = func(n int) (*Type, []Value) {
+var generateNumbersAsStructs = func(n int) []Value {
 	d.Chk.True(n > 0, "must be an integer greater than zero")
-	structType := MakeStructType("num", TypeMap{"n": NumberType})
 	nums := []Value{}
 	for i := 0; i < n; i++ {
-		nums = append(nums, NewStruct(structType, structData{"n": Number(i)}))
+		nums = append(nums, NewStruct("num", structData{"n": Number(i)}))
 	}
-	return structType, nums
+	return nums
 }
 
-var generateNumbersAsRefOfStructs = func(n int) (*Type, []Value) {
+var generateNumbersAsRefOfStructs = func(n int) []Value {
 	d.Chk.True(n > 0, "must be an integer greater than zero")
-	structType := MakeStructType("num", TypeMap{"n": NumberType})
 	vs := NewTestValueStore()
 	nums := []Value{}
 	for i := 0; i < n; i++ {
-		r := vs.WriteValue(NewStruct(structType, structData{"n": Number(i)}))
+		r := vs.WriteValue(NewStruct("num", structData{"n": Number(i)}))
 		nums = append(nums, r)
 	}
-	return structType, nums
+	return nums
 }
 
 func chunkDiffCount(c1 []Ref, c2 []Ref) int {

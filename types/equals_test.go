@@ -32,10 +32,10 @@ func TestValueEquals(t *testing.T) {
 		func() Value {
 			b1 := NewBlob(bytes.NewBufferString("hi"))
 			b2 := NewBlob(bytes.NewBufferString("bye"))
-			return newBlob(newIndexedMetaSequence([]metaTuple{
+			return newBlob(newBlobMetaSequence([]metaTuple{
 				newMetaTuple(Number(uint64(2)), b1, NewRef(b1), 2),
 				newMetaTuple(Number(uint64(5)), b2, NewRef(b2), 5),
-			}, BlobType, nil))
+			}, nil))
 		},
 		func() Value { return NewList() },
 		func() Value { return NewList(NewString("foo")) },

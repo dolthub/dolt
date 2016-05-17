@@ -38,7 +38,7 @@ func (ts testSet) Remove(from, to int) testSet {
 }
 
 func (ts testSet) toSet() Set {
-	return NewTypedSet(ts.tr, ts.values...)
+	return NewSet(ts.values...)
 }
 
 func newTestSet(length int) testSet {
@@ -75,7 +75,7 @@ func newSetTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 	length := 1 << size
 	elems := newTestSet(length)
 	tr := MakeSetType(NumberType)
-	set := NewTypedSet(tr, elems.values...)
+	set := NewSet(elems.values...)
 	return &setTestSuite{
 		collectionTestSuite: collectionTestSuite{
 			col:                    set,
@@ -97,13 +97,13 @@ func newSetTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 				dup := make([]Value, length+1)
 				dup[0] = Number(-1)
 				copy(dup[1:], elems.values)
-				return NewTypedSet(tr, dup...)
+				return NewSet(dup...)
 			},
 			appendOne: func() Collection {
 				dup := make([]Value, length+1)
 				copy(dup, elems.values)
 				dup[len(dup)-1] = Number(length + 1)
-				return NewTypedSet(tr, dup...)
+				return NewSet(dup...)
 			},
 		},
 		elems: elems,
@@ -127,7 +127,7 @@ func getTestNativeOrderSet(scale int) testSet {
 func getTestRefValueOrderSet(scale int) testSet {
 	setType := MakeSetType(NumberType)
 	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
-		return NewTypedSet(setType, v)
+		return NewSet(v)
 	}, setType)
 }
 
@@ -142,20 +142,20 @@ func getTestRefToValueOrderSet(scale int, vw ValueWriter) testSet {
 	setType := MakeSetType(NumberType)
 	refType := MakeRefType(setType)
 	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
-		return vw.WriteValue(NewTypedSet(setType, v))
+		return vw.WriteValue(NewSet(v))
 	}, refType)
 }
 
 func TestNewSet(t *testing.T) {
 	assert := assert.New(t)
 	s := NewSet()
-	assert.IsType(setType, s.Type())
+	assert.True(MakeSetType(MakeUnionType()).Equals(s.Type()))
 	assert.Equal(uint64(0), s.Len())
 
 	s = NewSet(Number(0))
-	assert.IsType(setType, s.Type())
+	assert.True(MakeSetType(NumberType).Equals(s.Type()))
 
-	s = NewTypedSet(MakeSetType(NumberType))
+	s = NewSet()
 	assert.IsType(MakeSetType(NumberType), s.Type())
 
 	s2 := s.Remove(Number(1))
@@ -308,9 +308,6 @@ func TestSetInsert2(t *testing.T) {
 			run(i, i+offset)
 		}
 		run(len(ts.values)-offset, len(ts.values))
-		assert.Panics(func() {
-			expected.Insert(Bool(true))
-		}, "Should panic due to wrong type")
 	}
 
 	doTest(18, 3, getTestNativeOrderSet(9))
@@ -418,7 +415,7 @@ func TestSetOfStruct(t *testing.T) {
 		elems = append(elems, newStructFromData(structData{"o": Number(i)}, typ))
 	}
 
-	s := NewTypedSet(MakeSetType(typ), elems...)
+	s := NewSet(elems...)
 	for i := 0; i < 200; i++ {
 		assert.True(s.Has(elems[i]))
 	}
@@ -503,8 +500,7 @@ func TestSetIterAll2(t *testing.T) {
 }
 
 func testSetOrder(assert *assert.Assertions, valueType *Type, value []Value, expectOrdering []Value) {
-	mapTr := MakeSetType(valueType)
-	m := NewTypedSet(mapTr, value...)
+	m := NewSet(value...)
 	i := 0
 	m.IterAll(func(value Value) {
 		assert.Equal(expectOrdering[i].Ref().String(), value.Ref().String())
@@ -634,22 +630,21 @@ func TestSetType(t *testing.T) {
 	assert := assert.New(t)
 
 	s := NewSet()
-	assert.True(s.Type().Equals(setType))
+	assert.True(s.Type().Equals(MakeSetType(MakeUnionType())))
 
 	s = NewSet(Number(0))
-	assert.True(s.Type().Equals(setType))
-
-	s = NewTypedSet(MakeSetType(NumberType))
 	assert.True(s.Type().Equals(MakeSetType(NumberType)))
 
 	s2 := s.Remove(Number(1))
-	assert.True(s.Type().Equals(s2.Type()))
+	assert.True(s2.Type().Equals(MakeSetType(NumberType)))
 
 	s2 = s.Insert(Number(0), Number(1))
 	assert.True(s.Type().Equals(s2.Type()))
 
-	assert.Panics(func() { s.Insert(Bool(true)) })
-	assert.Panics(func() { s.Insert(Number(3), Bool(true)) })
+	s3 := s.Insert(Bool(true))
+	assert.True(s3.Type().Equals(MakeSetType(MakeUnionType(BoolType, NumberType))))
+	s4 := s.Insert(Number(3), Bool(true))
+	assert.True(s4.Type().Equals(MakeSetType(MakeUnionType(BoolType, NumberType))))
 }
 
 func TestSetChunks(t *testing.T) {
@@ -685,10 +680,8 @@ func TestSetChunks2(t *testing.T) {
 func TestSetFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 
-	setType := MakeSetType(NumberType)
-
 	nums := generateNumbersAsValues(testSetSize)
-	s := NewTypedSet(setType, nums...)
+	s := NewSet(nums...)
 	assert.Equal("sha1-8186877fb71711b8e6a516ed5c8ad1ccac8c6c00", s.Ref().String())
 	assert.Equal(deriveCollectionHeight(s), getRefHeightOfCollection(s))
 }
@@ -699,10 +692,8 @@ func TestSetRefOfStructFirstNNumbers(t *testing.T) {
 	}
 	assert := assert.New(t)
 
-	structType, nums := generateNumbersAsRefOfStructs(testSetSize)
-	refOfTypeStructType := MakeRefType(structType)
-	setType := MakeSetType(refOfTypeStructType)
-	s := NewTypedSet(setType, nums...)
+	nums := generateNumbersAsRefOfStructs(testSetSize)
+	s := NewSet(nums...)
 	assert.Equal("sha1-14eeb2d1835011bf3e018121ba3274bc08e634e5", s.Ref().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(s)+1, getRefHeightOfCollection(s))

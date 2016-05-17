@@ -102,34 +102,79 @@ func TestReadListOfNumber(t *testing.T) {
 	a := parseJSON(`[ListKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`)
 	r := newJSONArrayReader(a, cs)
 
-	tr := MakeListType(NumberType)
-
 	l := r.readValue()
-	l2 := NewTypedList(tr, Number(0), Number(1), Number(2), Number(3))
+	l2 := NewList(Number(0), Number(1), Number(2), Number(3))
 	assert.True(l2.Equals(l))
 }
 
-func TestReadListOfValue(t *testing.T) {
+func TestReadListOfMixedTypes(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	a := parseJSON(`[ListKind, ValueKind, false, [NumberKind, "1", StringKind, "hi", BoolKind, true]]`)
+	a := parseJSON(`[
+		ListKind, UnionKind, 3, BoolKind, NumberKind, StringKind, false, [
+			NumberKind, "1", StringKind, "hi", BoolKind, true
+		]
+	]`)
 	r := newJSONArrayReader(a, cs)
-	l := r.readValue()
-	assert.True(NewList(Number(1), NewString("hi"), Bool(true)).Equals(l))
+	v := r.readValue().(List)
+
+	tr := MakeListType(MakeUnionType(BoolType, NumberType, StringType))
+	assert.True(v.Type().Equals(tr))
+	assert.Equal(Number(1), v.Get(0))
+	assert.Equal(NewString("hi"), v.Get(1))
+	assert.Equal(Bool(true), v.Get(2))
+}
+
+func TestReadSetOfMixedTypes(t *testing.T) {
+	assert := assert.New(t)
+	cs := NewTestValueStore()
+
+	a := parseJSON(`[
+		SetKind, UnionKind, 3, BoolKind, NumberKind, StringKind, false, [
+			BoolKind, true, NumberKind, "1", StringKind, "hi"
+		]
+	]`)
+	r := newJSONArrayReader(a, cs)
+	v := r.readValue().(Set)
+
+	tr := MakeSetType(MakeUnionType(BoolType, NumberType, StringType))
+	assert.True(v.Type().Equals(tr))
+	assert.True(v.Has(Number(1)))
+	assert.True(v.Has(NewString("hi")))
+	assert.True(v.Has(Bool(true)))
+}
+
+func TestReadMapOfMixedTypes(t *testing.T) {
+	assert := assert.New(t)
+	cs := NewTestValueStore()
+
+	a := parseJSON(`[
+		MapKind, UnionKind, 2, BoolKind, NumberKind,
+		UnionKind, 2, NumberKind, StringKind, false, [
+			BoolKind, true, NumberKind, "1",
+			NumberKind, "2", StringKind, "hi"
+		]
+	]`)
+	r := newJSONArrayReader(a, cs)
+	v := r.readValue().(Map)
+
+	tr := MakeMapType(MakeUnionType(BoolType, NumberType), MakeUnionType(NumberType, StringType))
+	assert.True(v.Type().Equals(tr))
+	assert.True(v.Get(Bool(true)).Equals(Number(1)))
+	assert.True(v.Get(Number(2)).Equals(NewString("hi")))
 }
 
 func TestReadCompoundList(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	tr := MakeListType(NumberType)
-	list1 := newList(newListLeafSequence(tr, cs, Number(0)))
-	list2 := newList(newListLeafSequence(tr, cs, Number(1), Number(2), Number(3)))
-	l2 := newList(newIndexedMetaSequence([]metaTuple{
+	list1 := newList(newListLeafSequence(cs, Number(0)))
+	list2 := newList(newListLeafSequence(cs, Number(1), Number(2), Number(3)))
+	l2 := newList(newListMetaSequence([]metaTuple{
 		newMetaTuple(Number(1), list1, NewRef(list1), 1),
 		newMetaTuple(Number(4), list2, NewRef(list2), 4),
-	}, tr, cs))
+	}, cs))
 
 	a := parseJSON(`[
 		ListKind, NumberKind, true, [
@@ -147,13 +192,12 @@ func TestReadCompoundSet(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	tr := MakeSetType(NumberType)
-	set1 := newSet(newSetLeafSequence(tr, cs, Number(0), Number(1)))
-	set2 := newSet(newSetLeafSequence(tr, cs, Number(2), Number(3), Number(4)))
-	l2 := newSet(newOrderedMetaSequence([]metaTuple{
+	set1 := newSet(newSetLeafSequence(cs, Number(0), Number(1)))
+	set2 := newSet(newSetLeafSequence(cs, Number(2), Number(3), Number(4)))
+	l2 := newSet(newSetMetaSequence([]metaTuple{
 		newMetaTuple(Number(1), set1, NewRef(set1), 2),
 		newMetaTuple(Number(4), set2, NewRef(set2), 3),
-	}, tr, cs))
+	}, cs))
 
 	a := parseJSON(`[
 		SetKind, NumberKind, true, [
@@ -174,10 +218,8 @@ func TestReadMapOfNumberToNumber(t *testing.T) {
 	a := parseJSON(`[MapKind, NumberKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`)
 	r := newJSONArrayReader(a, cs)
 
-	tr := MakeMapType(NumberType, NumberType)
-
 	m := r.readValue()
-	m2 := NewTypedMap(tr, Number(0), Number(1), Number(2), Number(3))
+	m2 := NewMap(Number(0), Number(1), Number(2), Number(3))
 	assert.True(m2.Equals(m))
 }
 
@@ -188,10 +230,8 @@ func TestReadSetOfNumber(t *testing.T) {
 	a := parseJSON(`[SetKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`)
 	r := newJSONArrayReader(a, cs)
 
-	tr := MakeSetType(NumberType)
-
 	s := r.readValue()
-	s2 := NewTypedSet(tr, Number(0), Number(1), Number(2), Number(3))
+	s2 := NewSet(Number(0), Number(1), Number(2), Number(3))
 	assert.True(s2.Equals(s))
 }
 
@@ -215,11 +255,11 @@ func TestReadCompoundBlob(t *testing.T) {
 	m := r.readValue()
 	_, ok := m.(Blob)
 	assert.True(ok)
-	m2 := newBlob(newIndexedMetaSequence([]metaTuple{
+	m2 := newBlob(newBlobMetaSequence([]metaTuple{
 		newMetaTuple(Number(20), nil, constructRef(RefOfBlobType, r1, 1), 20),
 		newMetaTuple(Number(40), nil, constructRef(RefOfBlobType, r2, 1), 40),
 		newMetaTuple(Number(60), nil, constructRef(RefOfBlobType, r3, 1), 60),
-	}, BlobType, cs))
+	}, cs))
 
 	assert.True(m.Type().Equals(m2.Type()))
 	assert.Equal(m.Ref().String(), m2.Ref().String())
@@ -263,12 +303,11 @@ func TestReadStructWithList(t *testing.T) {
 
 	a := parseJSON(`[StructKind, "A4", ["b", BoolKind, "l", ListKind, NumberKind, "s", StringKind], BoolKind, true, ListKind, NumberKind, false, [NumberKind, "0", NumberKind, "1", NumberKind, "2"], StringKind, "hi"]`)
 	r := newJSONArrayReader(a, cs)
-	l32Tr := MakeListType(NumberType)
 	v := r.readValue().(Struct)
 
 	assert.True(v.Type().Equals(typ))
 	assert.True(v.Get("b").Equals(Bool(true)))
-	l := NewTypedList(l32Tr, Number(0), Number(1), Number(2))
+	l := NewList(Number(0), Number(1), Number(2))
 	assert.True(v.Get("l").Equals(l))
 	assert.True(v.Get("s").Equals(NewString("hi")))
 }
@@ -353,10 +392,10 @@ func TestReadRecursiveStruct(t *testing.T) {
 	bt.Desc.(StructDesc).Fields["b"] = MakeListType(bt)
 
 	// {b: {a: [], b: []}}
-	v2 := NewStruct(at, structData{
-		"b": NewStruct(bt, structData{
-			"a": NewTypedList(MakeListType(at)),
-			"b": NewTypedList(MakeListType(bt)),
+	v2 := NewStructWithType(at, structData{
+		"b": NewStructWithType(bt, structData{
+			"a": NewList(),
+			"b": NewList(),
 		}),
 	})
 
@@ -422,7 +461,7 @@ func TestReadUnionList(t *testing.T) {
 
 	r := newJSONArrayReader(a, cs)
 	v := r.readValue().(List)
-	v2 := NewTypedList(MakeListType(MakeUnionType(StringType, NumberType)), NewString("hi"), Number(42))
+	v2 := NewList(NewString("hi"), Number(42))
 	assert.True(v.Equals(v2))
 }
 
@@ -434,6 +473,6 @@ func TestReadEmptyUnionList(t *testing.T) {
 
 	r := newJSONArrayReader(a, cs)
 	v := r.readValue().(List)
-	v2 := NewTypedList(MakeListType(MakeUnionType()))
+	v2 := NewList()
 	assert.True(v.Equals(v2))
 }

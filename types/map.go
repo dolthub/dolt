@@ -18,23 +18,13 @@ type Map struct {
 	ref *ref.Ref
 }
 
-var mapType = MakeMapType(ValueType, ValueType)
-
 func newMap(seq orderedSequence) Map {
 	return Map{seq, &ref.Ref{}}
 }
 
 func NewMap(kv ...Value) Map {
-	return NewTypedMap(mapType, kv...)
-}
-
-func NewTypedMap(t *Type, kv ...Value) Map {
-	d.Chk.Equal(MapKind, t.Kind(), "Invalid type. Expected: MapKind, found: %s", t.Describe())
-	return newTypedMap(t, buildMapData([]mapEntry{}, kv, t)...)
-}
-
-func newTypedMap(t *Type, entries ...mapEntry) Map {
-	seq := newEmptySequenceChunker(makeMapLeafChunkFn(t, nil), newOrderedMetaSequenceChunkFn(t, nil), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	entries := buildMapData([]mapEntry{}, kv)
+	seq := newEmptySequenceChunker(makeMapLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(MapKind, nil), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, entry := range entries {
 		seq.Append(entry)
@@ -114,8 +104,6 @@ func (m Map) SetM(kv ...Value) Map {
 	}
 	d.Chk.True(len(kv)%2 == 0)
 
-	assertMapElemTypes(m, kv...)
-
 	k, v, tail := kv[0], kv[1], kv[2:]
 
 	cur, found := m.getCursorAtValue(k)
@@ -134,7 +122,7 @@ func (m Map) Remove(k Value) Map {
 }
 
 func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map {
-	ch := newSequenceChunker(cur, makeMapLeafChunkFn(m.seq.Type(), m.seq.valueReader()), newOrderedMetaSequenceChunkFn(m.seq.Type(), m.seq.valueReader()), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	ch := newSequenceChunker(cur, makeMapLeafChunkFn(m.seq.valueReader()), newOrderedMetaSequenceChunkFn(MapKind, m.seq.valueReader()), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -191,10 +179,7 @@ func (m Map) elemTypes() []*Type {
 	return m.Type().Desc.(CompoundDesc).ElemTypes
 }
 
-func buildMapData(oldData []mapEntry, values []Value, t *Type) []mapEntry {
-	// TODO(arv): If the type is number or string we could use something simpler.
-	elemTypes := t.Desc.(CompoundDesc).ElemTypes
-
+func buildMapData(oldData []mapEntry, values []Value) []mapEntry {
 	// Sadly, d.Chk.Equals() costs too much. BUG #83
 	d.Chk.True(0 == len(values)%2, "Must specify even number of key/value pairs")
 
@@ -203,8 +188,6 @@ func buildMapData(oldData []mapEntry, values []Value, t *Type) []mapEntry {
 	for i := 0; i < len(values); i += 2 {
 		k := values[i]
 		v := values[i+1]
-		assertType(elemTypes[0], k)
-		assertType(elemTypes[1], v)
 		idx := indexOfMapValue(data, k)
 		if idx < len(data) && data[idx].key.Equals(k) {
 			if !data[idx].value.Equals(v) {
@@ -234,7 +217,7 @@ func newMapLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeMapLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
+func makeMapLeafChunkFn(vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		mapData := make([]mapEntry, len(items), len(items))
 
@@ -242,7 +225,7 @@ func makeMapLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 			mapData[i] = v.(mapEntry)
 		}
 
-		m := newMap(newMapLeafSequence(t, vr, mapData...))
+		m := newMap(newMapLeafSequence(vr, mapData...))
 
 		var indexValue Value
 		if len(mapData) > 0 {

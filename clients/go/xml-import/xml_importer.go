@@ -86,7 +86,7 @@ func main() {
 
 		wg := sync.WaitGroup{}
 		importXml := func() {
-			expectedType := util.NewMapOfStringToValue()
+			expectedType := types.NewMap()
 			for f := range filesChan {
 				file, err := os.Open(f.path)
 				d.Exp.NoError(err, "Error getting XML")
@@ -131,12 +131,7 @@ func main() {
 			refs[idx] = r.ref
 		}
 
-		rl := types.NewTypedList(
-			types.MakeListType(
-				types.MakeRefType(
-					types.MakeMapType(
-						types.StringType,
-						types.ValueType))), refs...)
+		rl := types.NewList(refs...)
 
 		if !*noIO {
 			_, err := ds.Commit(rl)

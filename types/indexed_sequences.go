@@ -17,14 +17,27 @@ type indexedMetaSequence struct {
 	offsets []uint64
 }
 
+func newListMetaSequence(tuples metaSequenceData, vr ValueReader) indexedMetaSequence {
+	ts := make([]*Type, len(tuples))
+	for i, mt := range tuples {
+		// Ref<List<T>>
+		ts[i] = mt.ChildRef().Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0]
+	}
+	t := MakeListType(MakeUnionType(ts...))
+	return newIndexedMetaSequence(tuples, t, vr)
+}
+
+func newBlobMetaSequence(tuples metaSequenceData, vr ValueReader) indexedMetaSequence {
+	return newIndexedMetaSequence(tuples, BlobType, vr)
+}
+
 func newIndexedMetaSequence(tuples metaSequenceData, t *Type, vr ValueReader) indexedMetaSequence {
-	offsets := make([]uint64, 0)
+	var offsets []uint64
 	cum := uint64(0)
 	for _, mt := range tuples {
 		cum += mt.uint64Value()
 		offsets = append(offsets, cum)
 	}
-
 	return indexedMetaSequence{
 		metaSequenceObject{tuples, t, vr},
 		offsets,
@@ -48,7 +61,7 @@ func (ims indexedMetaSequence) getOffset(idx int) uint64 {
 }
 
 func newCursorAtIndex(seq indexedSequence, idx uint64) *sequenceCursor {
-	var cur *sequenceCursor = nil
+	var cur *sequenceCursor
 	for {
 		cur = newSequenceCursor(cur, seq, 0)
 		idx = idx - advanceCursorToOffset(cur, idx)
@@ -88,7 +101,7 @@ func newIndexedMetaSequenceBoundaryChecker() boundaryChecker {
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
-func newIndexedMetaSequenceChunkFn(t *Type, source ValueReader, sink ValueWriter) makeChunkFn {
+func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader, sink ValueWriter) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
 		numLeaves := uint64(0)
@@ -99,12 +112,13 @@ func newIndexedMetaSequenceChunkFn(t *Type, source ValueReader, sink ValueWriter
 			numLeaves += mt.numLeaves
 		}
 
-		metaSeq := newIndexedMetaSequence(tuples, t, source)
 		var col Collection
-		if t.Kind() == ListKind {
+		if kind == ListKind {
+			metaSeq := newListMetaSequence(tuples, source)
 			col = newList(metaSeq)
 		} else {
-			d.Chk.Equal(BlobKind, t.Kind())
+			d.Chk.Equal(BlobKind, kind)
+			metaSeq := newBlobMetaSequence(tuples, source)
 			col = newBlob(metaSeq)
 		}
 		if sink != nil {

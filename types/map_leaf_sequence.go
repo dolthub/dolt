@@ -11,7 +11,14 @@ type mapEntry struct {
 	value Value
 }
 
-func newMapLeafSequence(t *Type, vr ValueReader, data ...mapEntry) orderedSequence {
+func newMapLeafSequence(vr ValueReader, data ...mapEntry) orderedSequence {
+	kts := make([]*Type, len(data))
+	vts := make([]*Type, len(data))
+	for i, e := range data {
+		kts[i] = e.key.Type()
+		vts[i] = e.value.Type()
+	}
+	t := MakeMapType(MakeUnionType(kts...), MakeUnionType(vts...))
 	return mapLeafSequence{data, t, vr}
 }
 

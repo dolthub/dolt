@@ -18,12 +18,24 @@ func newStructFromData(data structData, t *Type) Struct {
 	return Struct{data, t, &ref.Ref{}}
 }
 
-func NewStruct(t *Type, data structData) Struct {
-	newData := make(structData)
+func NewStruct(name string, data structData) Struct {
+	fields := make(TypeMap, len(data))
+	newData := make(structData, len(data))
+	for k, v := range data {
+		fields[k] = v.Type()
+		newData[k] = v
+	}
+	t := MakeStructType(name, fields)
+	return newStructFromData(newData, t)
+}
+
+func NewStructWithType(t *Type, data structData) Struct {
+	newData := make(structData, len(data))
 	desc := t.Desc.(StructDesc)
-	for name := range desc.Fields {
+	for name, t := range desc.Fields {
 		v, ok := data[name]
 		d.Chk.True(ok, "Missing required field %s", name)
+		assertType(t, v)
 		newData[name] = v
 	}
 	return newStructFromData(newData, t)

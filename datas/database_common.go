@@ -153,7 +153,7 @@ func descendsFrom(commit types.Struct, currentHeadRef types.Ref, vr types.ValueR
 }
 
 func getAncestors(commits types.Set, vr types.ValueReader) types.Set {
-	ancestors := NewSetOfRefOfCommit()
+	ancestors := types.NewSet()
 	commits.IterAll(func(v types.Value) {
 		r := v.(types.Ref)
 		c := r.TargetValue(vr).(types.Struct)

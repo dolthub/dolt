@@ -66,7 +66,7 @@ func (s *testSuite) TestNomsDs() {
 
 	// delete one dataset, print message at delete
 	rtnVal = s.Run(main, []string{"-d", datasetName})
-	s.Equal("Deleted dataset "+id+" (was sha1-923a61316a5bf5e9a3ef4fe860b1eeb762eb69c0)\n\n", rtnVal)
+	s.Equal("Deleted dataset "+id+" (was sha1-6e820c2eadc629c2b558bc0337ef00663f85d8b2)\n\n", rtnVal)
 
 	// resetting flag because main is called multiple times
 	*toDelete = ""
@@ -76,7 +76,7 @@ func (s *testSuite) TestNomsDs() {
 
 	// delete the second dataset
 	rtnVal = s.Run(main, []string{"-d", dataset2Name})
-	s.Equal("Deleted dataset "+id2+" (was sha1-40ddfc9469a16653e4199e942d22c8ed81252fa3)\n\n", rtnVal)
+	s.Equal("Deleted dataset "+id2+" (was sha1-61cdaa655aa8a705244b8d516d670c0e80384a05)\n\n", rtnVal)
 
 	//resetting flag because main is called multiple times
 	*toDelete = ""

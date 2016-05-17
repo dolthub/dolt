@@ -4,7 +4,6 @@ import (
 	"crypto/sha1"
 	"sort"
 
-	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -19,23 +18,13 @@ type Set struct {
 	ref *ref.Ref
 }
 
-var setType = MakeSetType(ValueType)
-
 func newSet(seq orderedSequence) Set {
 	return Set{seq, &ref.Ref{}}
 }
 
 func NewSet(v ...Value) Set {
-	return NewTypedSet(setType, v...)
-}
-
-func NewTypedSet(t *Type, v ...Value) Set {
-	d.Chk.Equal(SetKind, t.Kind(), "Invalid type. Expected:SetKind, found: %s", t.Describe())
-	return newTypedSet(t, buildSetData([]Value{}, v, t)...)
-}
-
-func newTypedSet(t *Type, data ...Value) Set {
-	seq := newEmptySequenceChunker(makeSetLeafChunkFn(t, nil), newOrderedMetaSequenceChunkFn(t, nil), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	data := buildSetData([]Value{}, v)
+	seq := newEmptySequenceChunker(makeSetLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(SetKind, nil), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, v := range data {
 		seq.Append(v)
@@ -96,8 +85,6 @@ func (s Set) Insert(values ...Value) Set {
 		return s
 	}
 
-	assertType(s.elemType(), values...)
-
 	head, tail := values[0], values[1:]
 
 	var res Set
@@ -128,8 +115,7 @@ func (s Set) Remove(values ...Value) Set {
 }
 
 func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
-	assertType(s.elemType(), vs...)
-	ch := newSequenceChunker(cur, makeSetLeafChunkFn(s.seq.Type(), s.seq.valueReader()), newOrderedMetaSequenceChunkFn(s.seq.Type(), s.seq.valueReader()), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	ch := newSequenceChunker(cur, makeSetLeafChunkFn(s.seq.valueReader()), newOrderedMetaSequenceChunkFn(SetKind, s.seq.valueReader()), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -175,13 +161,10 @@ func (s Set) elemType() *Type {
 	return s.Type().Desc.(CompoundDesc).ElemTypes[0]
 }
 
-func buildSetData(old []Value, values []Value, t *Type) []Value {
-	elemType := t.Desc.(CompoundDesc).ElemTypes[0]
-
+func buildSetData(old []Value, values []Value) []Value {
 	data := make([]Value, len(old), len(old)+len(values))
 	copy(data, old)
 	for _, v := range values {
-		assertType(elemType, v)
 		idx := indexOfSetValue(data, v)
 		if idx < len(data) && data[idx].Equals(v) {
 			// We already have this fellow.
@@ -208,7 +191,7 @@ func newSetLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeSetLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
+func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		setData := make([]Value, len(items), len(items))
 
@@ -216,7 +199,7 @@ func makeSetLeafChunkFn(t *Type, vr ValueReader) makeChunkFn {
 			setData[i] = v.(Value)
 		}
 
-		set := newSet(newSetLeafSequence(t, vr, setData...))
+		set := newSet(newSetLeafSequence(vr, setData...))
 
 		var indexValue Value
 		if len(setData) > 0 {

@@ -18,6 +18,29 @@ type orderedMetaSequence struct {
 	leafCount uint64
 }
 
+func newSetMetaSequence(tuples metaSequenceData, vr ValueReader) orderedMetaSequence {
+	ts := make([]*Type, len(tuples))
+	for i, mt := range tuples {
+		// Ref<Set<T>>
+		ts[i] = mt.ChildRef().Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0]
+	}
+	t := MakeSetType(MakeUnionType(ts...))
+	return newOrderedMetaSequence(tuples, t, vr)
+}
+
+func newMapMetaSequence(tuples metaSequenceData, vr ValueReader) orderedMetaSequence {
+	kts := make([]*Type, len(tuples))
+	vts := make([]*Type, len(tuples))
+	for i, mt := range tuples {
+		// Ref<Map<K, V>>
+		ets := mt.ChildRef().Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes
+		kts[i] = ets[0]
+		vts[i] = ets[1]
+	}
+	t := MakeMapType(MakeUnionType(kts...), MakeUnionType(vts...))
+	return newOrderedMetaSequence(tuples, t, vr)
+}
+
 func newOrderedMetaSequence(tuples metaSequenceData, t *Type, vr ValueReader) orderedMetaSequence {
 	leafCount := uint64(0)
 	for _, mt := range tuples {
@@ -110,7 +133,7 @@ func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 	})
 }
 
-func newOrderedMetaSequenceChunkFn(t *Type, vr ValueReader) makeChunkFn {
+func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
 		tuples := make(metaSequenceData, len(items))
 		numLeaves := uint64(0)
@@ -121,12 +144,13 @@ func newOrderedMetaSequenceChunkFn(t *Type, vr ValueReader) makeChunkFn {
 			numLeaves += mt.numLeaves
 		}
 
-		metaSeq := newOrderedMetaSequence(tuples, t, vr)
 		var col Collection
-		if t.Kind() == SetKind {
+		if kind == SetKind {
+			metaSeq := newSetMetaSequence(tuples, vr)
 			col = newSet(metaSeq)
 		} else {
-			d.Chk.Equal(MapKind, t.Kind())
+			d.Chk.Equal(MapKind, kind)
+			metaSeq := newMapMetaSequence(tuples, vr)
 			col = newMap(metaSeq)
 		}
 

@@ -51,7 +51,7 @@ func (tm testMap) toMap() Map {
 	for _, entry := range tm.entries {
 		keyvals = append(keyvals, entry.key, entry.value)
 	}
-	return NewTypedMap(tm.tr, keyvals...)
+	return NewMap(keyvals...)
 }
 
 func (tm testMap) toCompoundMap() Map {
@@ -59,7 +59,7 @@ func (tm testMap) toCompoundMap() Map {
 	for _, entry := range tm.entries {
 		keyvals = append(keyvals, entry.key, entry.value)
 	}
-	return NewTypedMap(tm.tr, keyvals...)
+	return NewMap(keyvals...)
 }
 
 func (tm testMap) Flatten(from, to int) []Value {
@@ -111,7 +111,7 @@ func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 	length := 1 << size
 	elems := newTestMap(length)
 	tr := MakeMapType(NumberType, NumberType)
-	tmap := NewTypedMap(tr, elems.FlattenAll()...)
+	tmap := NewMap(elems.FlattenAll()...)
 	return &mapTestSuite{
 		collectionTestSuite: collectionTestSuite{
 			col:                    tmap,
@@ -139,7 +139,7 @@ func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 					flat = append(flat, entry.key)
 					flat = append(flat, entry.value)
 				}
-				return NewTypedMap(tr, flat...)
+				return NewMap(flat...)
 			},
 			appendOne: func() Collection {
 				dup := make([]mapEntry, length+1)
@@ -150,7 +150,7 @@ func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 					flat = append(flat, entry.key)
 					flat = append(flat, entry.value)
 				}
-				return NewTypedMap(tr, flat...)
+				return NewMap(flat...)
 			},
 		},
 		elems: elems,
@@ -174,7 +174,7 @@ func getTestNativeOrderMap(scale int) testMap {
 func getTestRefValueOrderMap(scale int) testMap {
 	setType := MakeSetType(NumberType)
 	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
-		return NewTypedSet(setType, v)
+		return NewSet(v)
 	}, setType)
 }
 
@@ -189,14 +189,13 @@ func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
 	setType := MakeSetType(NumberType)
 	refType := MakeRefType(setType)
 	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
-		return vw.WriteValue(NewTypedSet(setType, v))
+		return vw.WriteValue(NewSet(v))
 	}, refType)
 }
 
 func TestNewMap(t *testing.T) {
 	assert := assert.New(t)
 	m := NewMap()
-	assert.IsType(mapType, m.Type())
 	assert.Equal(uint64(0), m.Len())
 	m = NewMap(NewString("foo1"), NewString("bar1"), NewString("foo2"), NewString("bar2"))
 	assert.Equal(uint64(2), m.Len())
@@ -382,9 +381,6 @@ func TestMapSet(t *testing.T) {
 			run(i, i+offset)
 		}
 		run(len(tm.entries)-offset, len(tm.entries))
-		assert.Panics(func() {
-			expected.Set(Number(1), Bool(true))
-		}, "Should panic due to wrong type")
 	}
 
 	doTest(18, 3, getTestNativeOrderMap(9))
@@ -605,8 +601,7 @@ func TestMapNotStringKeys(t *testing.T) {
 }
 
 func testMapOrder(assert *assert.Assertions, keyType, valueType *Type, tuples []Value, expectOrdering []Value) {
-	mapTr := MakeMapType(keyType, valueType)
-	m := NewTypedMap(mapTr, tuples...)
+	m := NewMap(tuples...)
 	i := 0
 	m.IterAll(func(key, value Value) {
 		assert.Equal(expectOrdering[i].Ref().String(), key.Ref().String())
@@ -744,28 +739,24 @@ func TestMapEmpty(t *testing.T) {
 func TestMapType(t *testing.T) {
 	assert := assert.New(t)
 
+	emptyMapType := MakeMapType(MakeUnionType(), MakeUnionType())
 	m := NewMap()
-	assert.True(m.Type().Equals(MakeMapType(ValueType, ValueType)))
-
-	tr := MakeMapType(StringType, NumberType)
-	m = NewTypedMap(tr)
-	assert.Equal(tr, m.Type())
+	assert.True(m.Type().Equals(emptyMapType))
 
 	m2 := m.Remove(NewString("B"))
-	assert.True(tr.Equals(m2.Type()))
+	assert.True(emptyMapType.Equals(m2.Type()))
 
-	assert.True(tr.Equals(m2.Type()))
-
+	tr := MakeMapType(StringType, NumberType)
 	m2 = m.Set(NewString("A"), Number(1))
 	assert.True(tr.Equals(m2.Type()))
 
 	m2 = m.SetM(NewString("B"), Number(2), NewString("C"), Number(2))
 	assert.True(tr.Equals(m2.Type()))
 
-	assert.Panics(func() { m.Set(NewString("A"), Bool(true)) })
-	assert.Panics(func() { m.Set(Bool(true), Number(1)) })
-	assert.Panics(func() { m.SetM(NewString("B"), Bool(false), NewString("A"), Bool(true)) })
-	assert.Panics(func() { m.SetM(NewString("B"), Number(2), Bool(true), Number(1)) })
+	m3 := m2.Set(NewString("A"), Bool(true))
+	assert.True(MakeMapType(StringType, MakeUnionType(BoolType, NumberType)).Equals(m3.Type()), m3.Type().Describe())
+	m4 := m3.Set(Bool(true), Number(1))
+	assert.True(MakeMapType(MakeUnionType(BoolType, StringType), MakeUnionType(BoolType, NumberType)).Equals(m4.Type()))
 }
 
 func TestMapChunks(t *testing.T) {
@@ -790,14 +781,12 @@ func TestMapFirstNNumbers(t *testing.T) {
 	}
 	assert := assert.New(t)
 
-	mapType := MakeMapType(NumberType, NumberType)
-
 	kvs := []Value{}
 	for i := 0; i < testMapSize; i++ {
 		kvs = append(kvs, Number(i), Number(i+1))
 	}
 
-	m := NewTypedMap(mapType, kvs...)
+	m := NewMap(kvs...)
 	assert.Equal("sha1-2bc451349d04c5f90cfe73d1e6eb3ee626db99a1", m.Ref().String())
 	assert.Equal(deriveCollectionHeight(m), getRefHeightOfCollection(m))
 }
@@ -809,23 +798,16 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 
-	structType := MakeStructType("num", TypeMap{
-		"n": NumberType,
-	})
-	refOfTypeStructType := MakeRefType(structType)
-
-	mapType := MakeMapType(refOfTypeStructType, refOfTypeStructType)
-
 	kvs := []Value{}
 	for i := 0; i < testMapSize; i++ {
-		k := vs.WriteValue(NewStruct(structType, structData{"n": Number(i)}))
-		v := vs.WriteValue(NewStruct(structType, structData{"n": Number(i + 1)}))
+		k := vs.WriteValue(NewStruct("num", structData{"n": Number(i)}))
+		v := vs.WriteValue(NewStruct("num", structData{"n": Number(i + 1)}))
 		assert.NotNil(k)
 		assert.NotNil(v)
 		kvs = append(kvs, k, v)
 	}
 
-	m := NewTypedMap(mapType, kvs...)
+	m := NewMap(kvs...)
 	assert.Equal("sha1-5c9a17f6da0ebfebc1f82f498ac46992fad85250", m.Ref().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(m)+1, getRefHeightOfCollection(m))

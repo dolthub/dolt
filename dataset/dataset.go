@@ -49,7 +49,7 @@ func (ds *Dataset) HeadRef() types.Ref {
 // Commit updates the commit that a dataset points at. The new Commit is constructed using v and the current Head.
 // If the update cannot be performed, e.g., because of a conflict, Commit returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
 func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
-	p := datas.NewSetOfRefOfCommit()
+	p := types.NewSet()
 	if headRef, ok := ds.MaybeHeadRef(); ok {
 		headRef.TargetValue(ds.Store()) // TODO: This is a hack to deconfuse the validation code, which doesn't hold onto validation state between commits.
 		p = p.Insert(headRef)

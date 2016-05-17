@@ -39,13 +39,13 @@ func (suite *LibTestSuite) TestCompositeTypes() {
 	//  "list": [false true],
 	//  "map": {"nested": "string"}
 	// }
-	m := util.NewMapOfStringToValue(
+	m := types.NewMap(
 		types.NewString("string"),
 		types.NewString("string"),
 		types.NewString("list"),
 		types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
 		types.NewString("map"),
-		util.NewMapOfStringToValue(
+		types.NewMap(
 			types.NewString("nested"),
 			types.NewString("string")))
 	o := util.NomsValueFromDecodedJSON(map[string]interface{}{

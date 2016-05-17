@@ -62,33 +62,27 @@ func TestWriteHumanReadableRef(t *testing.T) {
 }
 
 func TestWriteHumanReadableCollections(t *testing.T) {
-	lt := MakeListType(NumberType)
-	l := NewTypedList(lt, Number(0), Number(1), Number(2), Number(3))
+	l := NewList(Number(0), Number(1), Number(2), Number(3))
 	assertWriteHRSEqual(t, "[\n  0,\n  1,\n  2,\n  3,\n]", l)
 	assertWriteTaggedHRSEqual(t, "List<Number>([\n  0,\n  1,\n  2,\n  3,\n])", l)
 
-	st := MakeSetType(NumberType)
-	s := NewTypedSet(st, Number(0), Number(1), Number(2), Number(3))
+	s := NewSet(Number(0), Number(1), Number(2), Number(3))
 	assertWriteHRSEqual(t, "{\n  0,\n  1,\n  2,\n  3,\n}", s)
 	assertWriteTaggedHRSEqual(t, "Set<Number>({\n  0,\n  1,\n  2,\n  3,\n})", s)
 
-	mt := MakeMapType(NumberType, BoolType)
-	m := NewTypedMap(mt, Number(0), Bool(false), Number(1), Bool(true))
+	m := NewMap(Number(0), Bool(false), Number(1), Bool(true))
 	assertWriteHRSEqual(t, "{\n  0: false,\n  1: true,\n}", m)
 	assertWriteTaggedHRSEqual(t, "Map<Number, Bool>({\n  0: false,\n  1: true,\n})", m)
 }
 
 func TestWriteHumanReadableNested(t *testing.T) {
-	lt := MakeListType(NumberType)
-	l := NewTypedList(lt, Number(0), Number(1))
-	l2 := NewTypedList(lt, Number(2), Number(3))
+	l := NewList(Number(0), Number(1))
+	l2 := NewList(Number(2), Number(3))
 
-	st := MakeSetType(StringType)
-	s := NewTypedSet(st, NewString("a"), NewString("b"))
-	s2 := NewTypedSet(st, NewString("c"), NewString("d"))
+	s := NewSet(NewString("a"), NewString("b"))
+	s2 := NewSet(NewString("c"), NewString("d"))
 
-	mt := MakeMapType(st, lt)
-	m := NewTypedMap(mt, s, l, s2, l2)
+	m := NewMap(s, l, s2, l2)
 	assertWriteHRSEqual(t, `{
   {
     "c",
@@ -124,12 +118,7 @@ func TestWriteHumanReadableNested(t *testing.T) {
 }
 
 func TestWriteHumanReadableStruct(t *testing.T) {
-	typ := MakeStructType("S1", TypeMap{
-		"x": NumberType,
-		"y": NumberType,
-	})
-
-	str := NewStruct(typ, map[string]Value{
+	str := NewStruct("S1", map[string]Value{
 		"x": Number(1),
 		"y": Number(2),
 	})
@@ -138,21 +127,16 @@ func TestWriteHumanReadableStruct(t *testing.T) {
 }
 
 func TestWriteHumanReadableListOfStruct(t *testing.T) {
-	typ := MakeStructType("S3", TypeMap{
-		"x": NumberType,
-	})
-
-	str1 := NewStruct(typ, map[string]Value{
+	str1 := NewStruct("S3", map[string]Value{
 		"x": Number(1),
 	})
-	str2 := NewStruct(typ, map[string]Value{
+	str2 := NewStruct("S3", map[string]Value{
 		"x": Number(2),
 	})
-	str3 := NewStruct(typ, map[string]Value{
+	str3 := NewStruct("S3", map[string]Value{
 		"x": Number(3),
 	})
-	lt := MakeListType(typ)
-	l := NewTypedList(lt, str1, str2, str3)
+	l := NewList(str1, str2, str3)
 	assertWriteHRSEqual(t, `[
   S3 {
     x: 1,
@@ -205,10 +189,9 @@ func TestWriteHumanReadableBlob(t *testing.T) {
 }
 
 func TestWriteHumanReadableListOfBlob(t *testing.T) {
-	lt := MakeListType(BlobType)
 	b1 := NewBlob(bytes.NewBuffer([]byte{0x01}))
 	b2 := NewBlob(bytes.NewBuffer([]byte{0x02}))
-	l := NewTypedList(lt, b1, NewEmptyBlob(), b2)
+	l := NewList(b1, NewEmptyBlob(), b2)
 	assertWriteHRSEqual(t, "[\n  AQ==,\n  ,\n  Ag==,\n]", l)
 	assertWriteTaggedHRSEqual(t, "List<Blob>([\n  AQ==,\n  ,\n  Ag==,\n])", l)
 }

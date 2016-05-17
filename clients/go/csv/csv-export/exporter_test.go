@@ -55,11 +55,10 @@ func (s *testSuite) TestCSVExporter() {
 			name := header[j]
 			fields[name] = types.NewString(v)
 		}
-		structs[i] = types.NewStruct(typ, fields)
+		structs[i] = types.NewStructWithType(typ, fields)
 	}
 
-	listType := types.MakeListType(typ)
-	ds.Commit(types.NewTypedList(listType, structs...))
+	ds.Commit(types.NewList(structs...))
 	ds.Store().Close()
 
 	// Run exporter
@@ -79,6 +78,6 @@ func (s *testSuite) TestCSVExporter() {
 		s.Equal(payload[i], row)
 	}
 
-	row, err = csvReader.Read()
+	_, err = csvReader.Read()
 	s.Equal(io.EOF, err)
 }

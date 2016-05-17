@@ -30,7 +30,7 @@ func TestDatasetCommitTracker(t *testing.T) {
 	assert.False(ds2.Head().Get(datas.ValueField).Equals(ds1Commit))
 	assert.False(ds1.Head().Get(datas.ValueField).Equals(ds2Commit))
 
-	assert.Equal("sha1-e036816e1879969d0a8c8d26484b8d45ca3125cf", cs.Root().String())
+	assert.Equal("sha1-7a6ae3ae7839b78b04de0ab4618bf58d4f66b28b", cs.Root().String())
 }
 
 func newDS(id string, cs *chunks.MemoryStore) Dataset {
@@ -74,9 +74,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
-	mergeParents := datas.NewSetOfRefOfCommit().
-		Insert(types.NewRef(ds1.Head())).
-		Insert(types.NewRef(ds2.Head()))
+	mergeParents := types.NewSet(types.NewRef(ds1.Head()), types.NewRef(ds2.Head()))
 	d := types.NewString("d")
 	ds2, err = ds2.CommitWithParents(d, mergeParents)
 	assert.NoError(err)

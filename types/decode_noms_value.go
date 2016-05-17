@@ -129,7 +129,8 @@ func (r *jsonArrayReader) readListLeafSequence(t *Type) indexedSequence {
 		data = append(data, v)
 	}
 
-	return newListLeafSequence(t, r.vr, data...)
+	// TODO(arv): Pass down type here too.
+	return newListLeafSequence(r.vr, data...)
 }
 
 func (r *jsonArrayReader) readSetLeafSequence(t *Type) orderedSequence {
@@ -139,7 +140,7 @@ func (r *jsonArrayReader) readSetLeafSequence(t *Type) orderedSequence {
 		data = append(data, v)
 	}
 
-	return newSetLeafSequence(t, r.vr, data...)
+	return setLeafSequence{data, t, r.vr}
 }
 
 func (r *jsonArrayReader) readMapLeafSequence(t *Type) orderedSequence {
@@ -150,7 +151,7 @@ func (r *jsonArrayReader) readMapLeafSequence(t *Type) orderedSequence {
 		data = append(data, mapEntry{k, v})
 	}
 
-	return newMapLeafSequence(t, r.vr, data...)
+	return mapLeafSequence{data, t, r.vr}
 }
 
 func (r *jsonArrayReader) readMetaSequence() metaSequenceData {

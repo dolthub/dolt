@@ -28,10 +28,10 @@ func init() {
 func NewCommit() types.Struct {
 	initialFields := map[string]types.Value{
 		ValueField:   types.NewString(""),
-		ParentsField: NewSetOfRefOfCommit(),
+		ParentsField: types.NewSet(),
 	}
 
-	return types.NewStruct(commitType, initialFields)
+	return types.NewStructWithType(commitType, initialFields)
 }
 
 func typeForMapOfStringToRefOfCommit() *types.Type {
@@ -39,13 +39,9 @@ func typeForMapOfStringToRefOfCommit() *types.Type {
 }
 
 func NewMapOfStringToRefOfCommit() types.Map {
-	return types.NewTypedMap(typeForMapOfStringToRefOfCommit())
+	return types.NewMap()
 }
 
 func typeForSetOfRefOfCommit() *types.Type {
 	return types.MakeSetType(types.MakeRefType(commitType))
-}
-
-func NewSetOfRefOfCommit() types.Set {
-	return types.NewTypedSet(typeForSetOfRefOfCommit())
 }

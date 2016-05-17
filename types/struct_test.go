@@ -42,35 +42,29 @@ func TestGenericStructChunks(t *testing.T) {
 func TestGenericStructNew(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S2", TypeMap{
-		"b": BoolType,
-		"o": StringType,
-	})
-
-	s := NewStruct(typ, map[string]Value{"b": Bool(true), "o": NewString("hi")})
+	s := NewStruct("S2", map[string]Value{"b": Bool(true), "o": NewString("hi")})
 	assert.True(s.Get("b").Equals(Bool(true)))
 	_, ok := s.MaybeGet("missing")
 	assert.False(ok)
 
-	s2 := NewStruct(typ, map[string]Value{"b": Bool(false), "o": NewString("hi")})
+	s2 := NewStruct("S2", map[string]Value{"b": Bool(false), "o": NewString("hi")})
 	assert.True(s2.Get("b").Equals(Bool(false)))
 	o, ok := s2.MaybeGet("o")
 	assert.True(ok)
 	assert.True(NewString("hi").Equals(o))
 
-	assert.Panics(func() { NewStruct(typ, nil) })
-	assert.Panics(func() { NewStruct(typ, map[string]Value{"o": NewString("hi")}) })
+	typ := MakeStructType("S2", TypeMap{
+		"b": BoolType,
+		"o": StringType,
+	})
+	assert.Panics(func() { NewStructWithType(typ, nil) })
+	assert.Panics(func() { NewStructWithType(typ, map[string]Value{"o": NewString("hi")}) })
 }
 
 func TestGenericStructSet(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S3", TypeMap{
-		"b": BoolType,
-		"o": StringType,
-	})
-
-	s := NewStruct(typ, map[string]Value{"b": Bool(true), "o": NewString("hi")})
+	s := NewStruct("S3", map[string]Value{"b": Bool(true), "o": NewString("hi")})
 	s2 := s.Set("b", Bool(false))
 
 	assert.Panics(func() { s.Set("b", Number(1)) })

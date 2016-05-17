@@ -163,11 +163,13 @@ export class JsonArrayReader {
 
   readListLeafSequence(): ListLeafSequence {
     const seq = this.readSequence();
+    // TODO(arv): Pass along type here so we do not have to compute it again.
     return new ListLeafSequence(this._ds, seq);
   }
 
   readSetLeafSequence(): SetLeafSequence {
     const seq = this.readSequence();
+    // TODO(arv): Pass along type here so we do not have to compute it again.
     return new SetLeafSequence(this._ds, seq);
   }
 
@@ -179,6 +181,7 @@ export class JsonArrayReader {
       entries.push({key: k, value: v});
     }
 
+    // TODO(arv): Pass along type here so we do not have to compute it again.
     return new MapLeafSequence(this._ds, entries);
   }
 

@@ -42,28 +42,29 @@ func TestEnsureRef(t *testing.T) {
 	}()
 
 	bl := newBlob(newBlobLeafSequence(nil, []byte("hi")))
-	cb := newBlob(newIndexedMetaSequence([]metaTuple{{bl, Ref{}, Number(2), 2}}, BlobType, vs))
+	cb := newBlob(newBlobMetaSequence([]metaTuple{{bl, Ref{}, Number(2), 2}}, vs))
 
-	ll := newList(newListLeafSequence(listType, nil, NewString("foo")))
-	cl := newList(newIndexedMetaSequence([]metaTuple{{ll, Ref{}, Number(1), 1}}, listType, vs))
+	ll := newList(newListLeafSequence(nil, NewString("foo")))
+	lt := MakeListType(StringType)
+	cl := newList(newIndexedMetaSequence([]metaTuple{{ll, Ref{}, Number(1), 1}}, lt, vs))
 
-	ml := newMap(newMapLeafSequence(mapType, nil, mapEntry{NewString("foo"), NewString("bar")}))
-	cm := newMap(newOrderedMetaSequence([]metaTuple{{ml, Ref{}, NewString("foo"), 1}}, mapType, vs))
+	ml := newMap(newMapLeafSequence(nil, mapEntry{NewString("foo"), NewString("bar")}))
+	cm := newMap(newOrderedMetaSequence([]metaTuple{{ml, Ref{}, NewString("foo"), 1}}, MakeMapType(StringType, StringType), vs))
 
-	sl := newSet(newSetLeafSequence(setType, nil, NewString("foo")))
-	cps := newSet(newOrderedMetaSequence([]metaTuple{{sl, Ref{}, NewString("foo"), 1}}, setType, vs))
+	sl := newSet(newSetLeafSequence(nil, NewString("foo")))
+	cps := newSet(newOrderedMetaSequence([]metaTuple{{sl, Ref{}, NewString("foo"), 1}}, MakeSetType(StringType), vs))
 
 	count = byte(1)
 	values := []Value{
 		newBlob(newBlobLeafSequence(nil, []byte{})),
 		cb,
-		newList(newListLeafSequence(listType, nil, NewString("bar"))),
+		newList(newListLeafSequence(nil, NewString("bar"))),
 		cl,
 		NewString(""),
 		cm,
-		newMap(newMapLeafSequence(mapType, nil)),
+		newMap(newMapLeafSequence(nil)),
 		cps,
-		newSet(newSetLeafSequence(setType, nil)),
+		newSet(newSetLeafSequence(nil)),
 	}
 	for i := 0; i < 2; i++ {
 		for j, v := range values {

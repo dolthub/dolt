@@ -78,7 +78,7 @@ func (suite *DatabaseSuite) TestReadWriteCachePersists() {
 	suite.NoError(err)
 	suite.Equal(1, suite.cs.Writes-writesOnCommit)
 
-	newCommit := NewCommit().Set(ValueField, r).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(commit)))
+	newCommit := NewCommit().Set(ValueField, r).Set(ParentsField, types.NewSet(types.NewRef(commit)))
 	suite.ds, err = suite.ds.Commit("foo", newCommit)
 	suite.NoError(err)
 }
@@ -118,7 +118,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 
 	// |a| <- |b|
 	b := types.NewString("b")
-	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(aCommit)))
+	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, types.NewSet(types.NewRef(aCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
@@ -128,14 +128,14 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	//   \----|c|
 	// Should be disallowed.
 	c := types.NewString("c")
-	cCommit := NewCommit().Set(ValueField, c).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(aCommit)))
+	cCommit := NewCommit().Set(ValueField, c).Set(ParentsField, types.NewSet(types.NewRef(aCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
 	suite.Error(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
 
 	// |a| <- |b| <- |d|
 	d := types.NewString("d")
-	dCommit := NewCommit().Set(ValueField, d).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(bCommit)))
+	dCommit := NewCommit().Set(ValueField, d).Set(ParentsField, types.NewSet(types.NewRef(bCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, dCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(d))
@@ -204,7 +204,7 @@ func (suite *DatabaseSuite) TestDatabaseDeleteConcurrent() {
 
 	// |a| <- |b|
 	b := types.NewString("b")
-	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(aCommit)))
+	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, types.NewSet(types.NewRef(aCommit)))
 	ds2, err := suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(a))
@@ -233,7 +233,7 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 	aCommit := NewCommit().Set(ValueField, a)
 	suite.ds, err = suite.ds.Commit(datasetID, aCommit)
 	b := types.NewString("b")
-	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(aCommit)))
+	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, types.NewSet(types.NewRef(aCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
@@ -244,7 +244,7 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 	// Change 1:
 	// |a| <- |b| <- |c|
 	c := types.NewString("c")
-	cCommit := NewCommit().Set(ValueField, c).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(bCommit)))
+	cCommit := NewCommit().Set(ValueField, c).Set(ParentsField, types.NewSet(types.NewRef(bCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(c))
@@ -253,7 +253,7 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 	// |a| <- |b| <- |e|
 	// Should be disallowed, Database returned by Commit() should have |c| as Head.
 	e := types.NewString("e")
-	eCommit := NewCommit().Set(ValueField, e).Set(ParentsField, NewSetOfRefOfCommit().Insert(types.NewRef(bCommit)))
+	eCommit := NewCommit().Set(ValueField, e).Set(ParentsField, types.NewSet(types.NewRef(bCommit)))
 	ds2, err = ds2.Commit(datasetID, eCommit)
 	suite.Error(err)
 	suite.True(ds2.Head(datasetID).Get(ValueField).Equals(c))
@@ -275,28 +275,28 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	// Set<String>
 	v1 := types.NewString("hello")
 	v2 := types.NewString("world")
-	s1 := types.NewTypedSet(setOfStringType, v1, v2)
+	s1 := types.NewSet(v1, v2)
 	suite.Equal(uint64(1), suite.ds.WriteValue(s1).Height())
 
 	// Set<Ref<String>>
-	s2 := types.NewTypedSet(setOfRefOfStringType, suite.ds.WriteValue(v1), suite.ds.WriteValue(v2))
+	s2 := types.NewSet(suite.ds.WriteValue(v1), suite.ds.WriteValue(v2))
 	suite.Equal(uint64(2), suite.ds.WriteValue(s2).Height())
 
 	// List<Set<String>>
 	v3 := types.NewString("foo")
 	v4 := types.NewString("bar")
-	s3 := types.NewTypedSet(setOfStringType, v3, v4)
-	l1 := types.NewTypedList(types.MakeListType(setOfStringType), s1, s3)
+	s3 := types.NewSet(v3, v4)
+	l1 := types.NewList(s1, s3)
 	suite.Equal(uint64(1), suite.ds.WriteValue(l1).Height())
 
 	// List<Ref<Set<String>>
-	l2 := types.NewTypedList(types.MakeListType(types.MakeRefType(setOfStringType)),
+	l2 := types.NewList(types.MakeListType(types.MakeRefType(setOfStringType)),
 		suite.ds.WriteValue(s1), suite.ds.WriteValue(s3))
 	suite.Equal(uint64(2), suite.ds.WriteValue(l2).Height())
 
 	// List<Ref<Set<Ref<String>>>
-	s4 := types.NewTypedSet(setOfRefOfStringType, suite.ds.WriteValue(v3), suite.ds.WriteValue(v4))
-	l3 := types.NewTypedList(types.MakeListType(types.MakeRefType(setOfRefOfStringType)),
+	s4 := types.NewSet(suite.ds.WriteValue(v3), suite.ds.WriteValue(v4))
+	l3 := types.NewList(types.MakeListType(types.MakeRefType(setOfRefOfStringType)),
 		suite.ds.WriteValue(s4))
 	suite.Equal(uint64(3), suite.ds.WriteValue(l3).Height())
 

@@ -6,8 +6,13 @@ type setLeafSequence struct {
 	vr   ValueReader
 }
 
-func newSetLeafSequence(t *Type, vr ValueReader, m ...Value) orderedSequence {
-	return setLeafSequence{m, t, vr}
+func newSetLeafSequence(vr ValueReader, v ...Value) orderedSequence {
+	ts := make([]*Type, len(v))
+	for i, v := range v {
+		ts[i] = v.Type()
+	}
+	t := MakeSetType(MakeUnionType(ts...))
+	return setLeafSequence{v, t, vr}
 }
 
 func (sl setLeafSequence) getItem(idx int) sequenceItem {

@@ -10,10 +10,6 @@ import (
 func TestTotalOrdering(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
-	structType1 := MakeStructType("a", TypeMap{
-		"x": NumberType,
-		"s": StringType,
-	})
 
 	// values in increasing order. Some of these are compared by ref so changing the serialization might change the ordering.
 	values := []Value{
@@ -23,12 +19,12 @@ func TestTotalOrdering(t *testing.T) {
 
 		// The order of these are done by the hash.
 		vs.WriteValue(Number(10)),
-		NewTypedSet(MakeSetType(NumberType), Number(0), Number(1), Number(2), Number(3)),
-		NewTypedMap(MakeMapType(NumberType, NumberType), Number(0), Number(1), Number(2), Number(3)),
+		NewSet(Number(0), Number(1), Number(2), Number(3)),
+		NewMap(Number(0), Number(1), Number(2), Number(3)),
 		BoolType,
 		NewBlob(bytes.NewBuffer([]byte{0x00, 0x01, 0x02, 0x03})),
-		NewTypedList(MakeListType(NumberType), Number(0), Number(1), Number(2), Number(3)),
-		NewStruct(structType1, structData{"x": Number(1), "s": NewString("a")}),
+		NewList(Number(0), Number(1), Number(2), Number(3)),
+		NewStruct("a", structData{"x": Number(1), "s": NewString("a")}),
 
 		// Value - values cannot be value
 		// Parent - values cannot be parent

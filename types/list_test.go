@@ -40,10 +40,6 @@ func (tl testList) toList() List {
 	return NewList(tl...)
 }
 
-func (tl testList) toTypedList(t *Type) List {
-	return NewTypedList(MakeListType(t), tl...)
-}
-
 func newTestList(length int) testList {
 	tl := testList{}
 	for i := 0; i < length; i++ {
@@ -69,7 +65,7 @@ func newListTestSuite(size uint, expectRefStr string, expectChunkCount int, expe
 	length := 1 << size
 	elems := newTestList(length)
 	tr := MakeListType(NumberType)
-	list := NewTypedList(tr, elems...)
+	list := NewList(elems...)
 	return &listTestSuite{
 		collectionTestSuite: collectionTestSuite{
 			col:                    list,
@@ -91,13 +87,13 @@ func newListTestSuite(size uint, expectRefStr string, expectChunkCount int, expe
 				dup := make([]Value, length+1)
 				dup[0] = Number(0)
 				copy(dup[1:], elems)
-				return NewTypedList(tr, dup...)
+				return NewList(dup...)
 			},
 			appendOne: func() Collection {
 				dup := make([]Value, length+1)
 				copy(dup, elems)
 				dup[len(dup)-1] = Number(0)
-				return NewTypedList(tr, dup...)
+				return NewList(dup...)
 			},
 		},
 		elems: elems,
@@ -236,10 +232,9 @@ func TestStreamingListCreation(t *testing.T) {
 	vs := NewTestValueStore()
 	simpleList := getTestList()
 
-	tr := MakeListType(NumberType)
-	cl := NewTypedList(tr, simpleList...)
+	cl := NewList(simpleList...)
 	valueChan := make(chan Value)
-	listChan := NewStreamingTypedList(tr, vs, valueChan)
+	listChan := NewStreamingList(vs, valueChan)
 	for _, v := range simpleList {
 		valueChan <- v
 	}
@@ -259,8 +254,7 @@ func TestListAppend(t *testing.T) {
 	assert := assert.New(t)
 
 	newList := func(items testList) List {
-		tr := MakeListType(NumberType)
-		return NewTypedList(tr, items...)
+		return NewList(items...)
 	}
 
 	listToSimple := func(cl List) (simple testList) {
@@ -440,17 +434,6 @@ func TestListInsertRanges(t *testing.T) {
 	}
 }
 
-func TestListInsertTypeError(t *testing.T) {
-	assert := assert.New(t)
-
-	testList := getTestList()
-	tr := MakeListType(NumberType)
-	cl := NewTypedList(tr, testList...)
-	assert.Panics(func() {
-		cl.Insert(2, Bool(true))
-	})
-}
-
 func TestListRemoveNothing(t *testing.T) {
 	assert := assert.New(t)
 
@@ -553,18 +536,10 @@ func TestListSet(t *testing.T) {
 	for incr, i := 10, 0; i < len(testList); i += incr {
 		testIdx(i, false)
 	}
-
-	tr := MakeListType(NumberType)
-	cl2 := NewTypedList(tr, testList...)
-	assert.Panics(func() {
-		cl2.Set(0, Bool(true))
-	})
 }
 
 func TestListFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
-
-	listType := MakeListType(NumberType)
 
 	firstNNumbers := func(n int) []Value {
 		nums := []Value{}
@@ -576,7 +551,7 @@ func TestListFirstNNumbers(t *testing.T) {
 	}
 
 	nums := firstNNumbers(testListSize)
-	s := NewTypedList(listType, nums...)
+	s := NewList(nums...)
 	assert.Equal("sha1-aa1605484d993e89dbc0431acb9f2478282f9d94", s.Ref().String())
 }
 
@@ -587,17 +562,10 @@ func TestListRefOfStructFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 
-	structType := MakeStructType("num", map[string]*Type{
-		"n": NumberType,
-	})
-
-	refOfTypeStructType := MakeRefType(structType)
-	listType := MakeListType(refOfTypeStructType)
-
 	firstNNumbers := func(n int) []Value {
 		nums := []Value{}
 		for i := 0; i < n; i++ {
-			r := vs.WriteValue(NewStruct(structType, structData{"n": Number(i)}))
+			r := vs.WriteValue(NewStruct("num", structData{"n": Number(i)}))
 			nums = append(nums, r)
 		}
 
@@ -605,7 +573,7 @@ func TestListRefOfStructFirstNNumbers(t *testing.T) {
 	}
 
 	nums := firstNNumbers(testListSize)
-	s := NewTypedList(listType, nums...)
+	s := NewList(nums...)
 	assert.Equal("sha1-2e79d54322aa793d0e8d48380a28927a257a141a", s.Ref().String())
 }
 

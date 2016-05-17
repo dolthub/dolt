@@ -148,7 +148,7 @@ func newBlobLeafChunkFn(vr ValueReader) makeChunkFn {
 }
 
 func NewBlob(r io.Reader) Blob {
-	seq := newEmptySequenceChunker(newBlobLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(BlobType, nil, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(newBlobLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(BlobKind, nil, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	buf := []byte{0}
 	for {
 		n, err := r.Read(buf)

@@ -6,7 +6,6 @@ import (
 
 	"github.com/attic-labs/noms/clients/go/flags"
 	"github.com/attic-labs/noms/clients/go/test_util"
-	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
@@ -58,11 +57,11 @@ func addCommitWithValue(ds dataset.Dataset, v types.Value) (dataset.Dataset, err
 }
 
 func addBranchedDataset(newDs, parentDs dataset.Dataset, v string) (dataset.Dataset, error) {
-	return newDs.CommitWithParents(types.NewString(v), datas.NewSetOfRefOfCommit().Insert(parentDs.HeadRef()))
+	return newDs.CommitWithParents(types.NewString(v), types.NewSet().Insert(parentDs.HeadRef()))
 }
 
 func mergeDatasets(ds1, ds2 dataset.Dataset, v string) (dataset.Dataset, error) {
-	return ds1.CommitWithParents(types.NewString(v), datas.NewSetOfRefOfCommit().Insert(ds1.HeadRef(), ds2.HeadRef()))
+	return ds1.CommitWithParents(types.NewString(v), types.NewSet(ds1.HeadRef(), ds2.HeadRef()))
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph1() {
@@ -140,7 +139,7 @@ func (s *nomsShowTestSuite) TestNomsGraph2() {
 	ba, err = mergeDatasets(ba, bb, "11")
 	s.NoError(err)
 
-	ba, err = mergeDatasets(ba, bc, "101")
+	_, err = mergeDatasets(ba, bc, "101")
 	s.NoError(err)
 
 	db.Close()
@@ -180,7 +179,7 @@ func (s *nomsShowTestSuite) TestNomsGraph3() {
 	w, err = mergeDatasets(w, y, "222-wy")
 	s.NoError(err)
 
-	w, err = mergeDatasets(w, z, "2222-wz")
+	_, err = mergeDatasets(w, z, "2222-wz")
 	s.NoError(err)
 
 	db.Close()
@@ -208,7 +207,7 @@ func (s *nomsShowTestSuite) TestTruncation() {
 	s.NoError(err)
 
 	l := []string{"one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven"}
-	t, err = addCommitWithValue(t, toNomsList(l))
+	_, err = addCommitWithValue(t, toNomsList(l))
 	s.NoError(err)
 	db.Close()
 
@@ -241,59 +240,15 @@ func TestBranchlistSplice(t *testing.T) {
 }
 
 const (
-	graphRes1 = "* sha1-611689ac2ab299731ef41f2ec343232519505e40\n| Parent: sha1-98dfc571a0f2cdb67fd6ccaf1f8" +
-		"8ad3c934b569f\n| \"7\"\n| \n* sha1-98dfc571a0f2cdb67fd6ccaf1f88ad3c934b569f\n| Parent: sha1-8f4bed6" +
-		"ca39e56521bb2c2d51e04b3c621d0b164\n| \"6\"\n| \n* sha1-8f4bed6ca39e56521bb2c2d51e04b3c621d0b164\n| " +
-		"Parent: sha1-1579de9719780729f805d832cedf30f3dc514ab6\n| \"5\"\n| \n*   sha1-1579de9719780729f805d8" +
-		"32cedf30f3dc514ab6\n|\\  Merge: sha1-ee04cc1dda6b010ca3488e4996d14a54176b169d sha1-3b3e72797f54d4d6" +
-		"ea4cefe080643e1717e5fc89\n| | \"4\"\n| | \n| * sha1-3b3e72797f54d4d6ea4cefe080643e1717e5fc89\n| | P" +
-		"arent: sha1-f67f4a5eafead91ddb0d090c2b350845c2d7c443\n| | \"3.7\"\n| | \n| *   sha1-f67f4a5eafead91" +
-		"ddb0d090c2b350845c2d7c443\n| |\\  Merge: sha1-d392854a7b3fea30b8f30cb1db70e27d03c23c6e sha1-4da4474" +
-		"c6c032fe3d5a7f6d051ac61142cc0777d\n| | | \"3.5\"\n| | | \n| * | sha1-d392854a7b3fea30b8f30cb1db70e2" +
-		"7d03c23c6e\n| | | Parent: sha1-dee9a653168b3b8ef274b2ec60c1b2524306591d\n| | | \"3.1.7\"\n| | | \n|" +
-		" * | sha1-dee9a653168b3b8ef274b2ec60c1b2524306591d\n| | | Parent: sha1-242e659af0ef0e376b877b64ffac" +
-		"1ba42f70df69\n| | | \"3.1.5\"\n| | | \n* | | sha1-ee04cc1dda6b010ca3488e4996d14a54176b169d\n| | | P" +
-		"arent: sha1-9b247a8497322fd362f98fd4f990bb175ca03908\n| | | \"3.6\"\n| | | \n| * | sha1-242e659af0e" +
-		"f0e376b877b64ffac1ba42f70df69\n| | | Parent: sha1-4da4474c6c032fe3d5a7f6d051ac61142cc0777d\n| | | " +
-		"\"3.1.3\"\n| | | \n* | | sha1-9b247a8497322fd362f98fd4f990bb175ca03908\n| |/  Parent: sha1-9443faf0" +
-		"2f7495e53f3f1e87b180e328424f2830\n| |   \"3.2\"\n| |   \n| * sha1-4da4474c6c032fe3d5a7f6d051ac61142" +
-		"cc0777d\n|/  Parent: sha1-9443faf02f7495e53f3f1e87b180e328424f2830\n|   \"3.1\"\n|   \n* sha1-9443f" +
-		"af02f7495e53f3f1e87b180e328424f2830\n| Parent: sha1-c2961e584d41e98a7c735e399eef6c618e0431b6\n|" +
-		" \"3\"\n| \n* sha1-c2961e584d41e98a7c735e399eef6c618e0431b6\n| Parent: sha1-4a1a4e051327f02c1be502a" +
-		"c7ce9e7bf04fbf729\n| \"2\"\n| \n* sha1-4a1a4e051327f02c1be502ac7ce9e7bf04fbf729\n| Parent: None\n|" +
-		" \"1\"\n"
+	graphRes1 = "* sha1-301cfbf24447ddf59657f4bd39ff7a13434a75e3\n| Parent: sha1-dceaef8d85dcf5b7691b05351fef06c1a44274a9\n| \"7\"\n| \n* sha1-dceaef8d85dcf5b7691b05351fef06c1a44274a9\n| Parent: sha1-26c893b54611bb8e73dcbe10fbbda162c05ecbe9\n| \"6\"\n| \n* sha1-26c893b54611bb8e73dcbe10fbbda162c05ecbe9\n| Parent: sha1-920314785c450666cec766a9e64d982253fa7676\n| \"5\"\n| \n*   sha1-920314785c450666cec766a9e64d982253fa7676\n|\\  Merge: sha1-96cdf733fda5975fd0164fe0ada6ac5cd2876934 sha1-3062f7ff50e0bf98342afeff3222a8a8dbc74d73\n| | \"4\"\n| | \n* | sha1-96cdf733fda5975fd0164fe0ada6ac5cd2876934\n| | Parent: sha1-92284b7199b8f403df472dc1fba96c1d5176c978\n| | \"3.7\"\n| | \n* |   sha1-92284b7199b8f403df472dc1fba96c1d5176c978\n|\\ \\  Merge: sha1-1ed12c115e67b0b0fa0e0da7909724e9668b77b9 sha1-5a4b29ec2470924be5de428c825e0210d9b10609\n| | | \"3.5\"\n| | | \n| * | sha1-5a4b29ec2470924be5de428c825e0210d9b10609\n| | | Parent: sha1-ea084320d402c6c3b4dc08f043d573eb08e98e9c\n| | | \"3.1.7\"\n| | | \n| * | sha1-ea084320d402c6c3b4dc08f043d573eb08e98e9c\n| | | Parent: sha1-4c20213b26bb97a3a1e49fb49177719c5cf3375a\n| | | \"3.1.5\"\n| | | \n| * | sha1-4c20213b26bb97a3a1e49fb49177719c5cf3375a\n| | | Parent: sha1-1ed12c115e67b0b0fa0e0da7909724e9668b77b9\n| | | \"3.1.3\"\n| | | \n| | * sha1-3062f7ff50e0bf98342afeff3222a8a8dbc74d73\n|/  | Parent: sha1-66e8c17d3f9fa3793a256316033f536c9fe4a19a\n|   | \"3.6\"\n|   | \n* | sha1-1ed12c115e67b0b0fa0e0da7909724e9668b77b9\n| | Parent: sha1-e68b5130f512c30879b3670640aff9a1c2f2b520\n| | \"3.1\"\n| | \n| * sha1-66e8c17d3f9fa3793a256316033f536c9fe4a19a\n|/  Parent: sha1-e68b5130f512c30879b3670640aff9a1c2f2b520\n|   \"3.2\"\n|   \n* sha1-e68b5130f512c30879b3670640aff9a1c2f2b520\n| Parent: sha1-b68eaba21eb2ef14d308a6411e418702983f0078\n| \"3\"\n| \n* sha1-b68eaba21eb2ef14d308a6411e418702983f0078\n| Parent: sha1-efd21957109c61767d8c5d08b61371606e2cc229\n| \"2\"\n| \n* sha1-efd21957109c61767d8c5d08b61371606e2cc229\n| Parent: None\n| \"1\"\n"
 
-	graphRes2 = "*   sha1-a7f6c6b7f0db1f9d2448bf23c4aa70d983dfecb2\n|\\  Merge: sha1-10473a7892604ff88d9" +
-		"149e3cbb9dd9dc123d194 sha1-d37384e9e9cf2f9a0abd5968151c246fdd8cf9dd\n| | \"101\"\n| | \n| *   sha1-" +
-		"d37384e9e9cf2f9a0abd5968151c246fdd8cf9dd\n| |\\  Merge: sha1-07cec20929f80a1fd923991683f4bf3adad099" +
-		"03 sha1-4a1a4e051327f02c1be502ac7ce9e7bf04fbf729\n| | | \"11\"\n| | | \n* | sha1-10473a7892604ff88d" +
-		"9149e3cbb9dd9dc123d194\n| | Parent: None\n| | \"100\"\n| | \n* sha1-07cec20929f80a1fd923991683f4bf3" +
-		"adad09903\n| Parent: None\n| \"10\"\n| \n* sha1-4a1a4e051327f02c1be502ac7ce9e7bf04fbf729\n| Parent:" +
-		" None\n| \"1\"\n"
+	graphRes2 = "*   sha1-04fd7504223fec9d34c45d3e69a7e480aa3cb0e0\n|\\  Merge: sha1-2f8d9e19cb008ca2b95c92d64cfde86c706aedc1 sha1-a1563dd09db2eee74eeb951e8c2b846c856623f8\n| | \"101\"\n| | \n| *   sha1-a1563dd09db2eee74eeb951e8c2b846c856623f8\n| |\\  Merge: sha1-67668ec954466f0caaf03315d80dc6806555f8ec sha1-efd21957109c61767d8c5d08b61371606e2cc229\n| | | \"11\"\n| | | \n* | sha1-2f8d9e19cb008ca2b95c92d64cfde86c706aedc1\n| | Parent: None\n| | \"100\"\n| | \n* sha1-67668ec954466f0caaf03315d80dc6806555f8ec\n| Parent: None\n| \"10\"\n| \n* sha1-efd21957109c61767d8c5d08b61371606e2cc229\n| Parent: None\n| \"1\"\n"
 
-	graphRes3 = "*   sha1-97eddb72fcb8b41be99d8f322bc4ddcd25cf9456\n|\\  Merge: sha1-1182ee3c6481e1c582c2f7ba" +
-		"2d6f81754c44e263 sha1-c857de40c67a58e72e722de5bedd1c444ece8dd1\n| | \"2222-wz\"\n| | \n| *   sha1-c8" +
-		"57de40c67a58e72e722de5bedd1c444ece8dd1\n| |\\  Merge: sha1-96a67ea3f5407c593dca7d71f98a8375dc1237dd " +
-		"sha1-126475cc41d8ad7f38250d563a29d683eca21a80\n| | | \"222-wy\"\n| | | \n| * |   sha1-96a67ea3f5407c" +
-		"593dca7d71f98a8375dc1237dd\n| |\\ \\  Merge: sha1-c2961e584d41e98a7c735e399eef6c618e0431b6 sha1-e824" +
-		"5c30e79dbb2c882112b796b51d718f4e5984\n| | | | \"22-wx\"\n| | | | \n* | | | sha1-1182ee3c6481e1c582c2" +
-		"f7ba2d6f81754c44e263\n| | | | Parent: sha1-c2961e584d41e98a7c735e399eef6c618e0431b6\n| | | | \"2000-" +
-		"z\"\n| | | | \n| | * | sha1-e8245c30e79dbb2c882112b796b51d718f4e5984\n| | | | Parent: sha1-c2961e584" +
-		"d41e98a7c735e399eef6c618e0431b6\n| | | | \"20-x\"\n| | | | \n| | | * sha1-126475cc41d8ad7f38250d563a" +
-		"29d683eca21a80\n|/ / /  Parent: sha1-c2961e584d41e98a7c735e399eef6c618e0431b6\n|       \"200-y\"\n| " +
-		"      \n* sha1-c2961e584d41e98a7c735e399eef6c618e0431b6\n| Parent: sha1-4a1a4e051327f02c1be502ac7ce9" +
-		"e7bf04fbf729\n| \"2\"\n| \n* sha1-4a1a4e051327f02c1be502ac7ce9e7bf04fbf729\n| Parent: None\n| \"1\"\n"
+	graphRes3 = "*   sha1-372cdc5cc6d00f50a43e7951c70b8a3d2a9a1f27\n|\\  Merge: sha1-8866f5b64b15cc20a0a1a44765a572223eaa3830 sha1-2eba6234e50a2cf14abb33da2285747ccaf63e26\n| | \"2222-wz\"\n| | \n* |   sha1-8866f5b64b15cc20a0a1a44765a572223eaa3830\n|\\ \\  Merge: sha1-91482e3b88a20ba32440e82a0a27793ce370ce77 sha1-a5c137eecd612dacd82074faa446b8437011eea0\n| | | \"222-wy\"\n| | | \n| * |   sha1-a5c137eecd612dacd82074faa446b8437011eea0\n| |\\ \\  Merge: sha1-8f0502e8da52872e73e80dd38d8494966dc2155f sha1-b68eaba21eb2ef14d308a6411e418702983f0078\n| | | | \"22-wx\"\n| | | | \n* | | | sha1-91482e3b88a20ba32440e82a0a27793ce370ce77\n| | | | Parent: sha1-b68eaba21eb2ef14d308a6411e418702983f0078\n| | | | \"200-y\"\n| | | | \n| * | | sha1-8f0502e8da52872e73e80dd38d8494966dc2155f\n| | | | Parent: sha1-b68eaba21eb2ef14d308a6411e418702983f0078\n| | | | \"20-x\"\n| | | | \n| | | * sha1-2eba6234e50a2cf14abb33da2285747ccaf63e26\n|/ / /  Parent: sha1-b68eaba21eb2ef14d308a6411e418702983f0078\n|       \"2000-z\"\n|       \n* sha1-b68eaba21eb2ef14d308a6411e418702983f0078\n| Parent: sha1-efd21957109c61767d8c5d08b61371606e2cc229\n| \"2\"\n| \n* sha1-efd21957109c61767d8c5d08b61371606e2cc229\n| Parent: None\n| \"1\"\n"
 
-	truncRes1 = "* sha1-a81bc1b23de202ef0e2275b5bef8449fc67fd863\n| Parent: sha1-81bc57a3956b56fa2bce22c6baf" +
-		"81ebc5e9cac2c\n| List<Value>([\n|   \"one\",\n|   \"two\",\n|   \"three\",\n|   \"four\",\n|   \"fi" +
-		"ve\",\n|   \"six\",\n|   \"seven\",\n| ...\n| \n* sha1-81bc57a3956b56fa2bce22c6baf81ebc5e9cac2c\n| " +
-		"Parent: None\n| \"the first line\"\n"
+	truncRes1 = "* sha1-1552e08d34bc82ecb889c44cf80edd02379d0104\n| Parent: sha1-b9883cf06956658088b93ffbdc5e589418f82a37\n| List<String>([\n|   \"one\",\n|   \"two\",\n|   \"three\",\n|   \"four\",\n|   \"five\",\n|   \"six\",\n|   \"seven\",\n| ...\n| \n* sha1-b9883cf06956658088b93ffbdc5e589418f82a37\n| Parent: None\n| \"the first line\"\n"
 
-	truncRes2 = "* sha1-a81bc1b23de202ef0e2275b5bef8449fc67fd863\n| Parent: sha1-81bc57a3956b56fa2bce22c6baf" +
-		"81ebc5e9cac2c\n| List<Value>([\n|   \"one\",\n|   \"two\",\n|   \"three\",\n|   \"four\",\n|   \"fi" +
-		"ve\",\n|   \"six\",\n|   \"seven\",\n|   \"eight\",\n|   \"nine\",\n|   \"ten\",\n|   \"eleven\",\n" +
-		"| ])\n| \n* sha1-81bc57a3956b56fa2bce22c6baf81ebc5e9cac2c\n| Parent: None\n| \"the first line\"\n"
+	truncRes2 = "* sha1-1552e08d34bc82ecb889c44cf80edd02379d0104\n| Parent: sha1-b9883cf06956658088b93ffbdc5e589418f82a37\n| List<String>([\n|   \"one\",\n|   \"two\",\n|   \"three\",\n|   \"four\",\n|   \"five\",\n|   \"six\",\n|   \"seven\",\n|   \"eight\",\n|   \"nine\",\n|   \"ten\",\n|   \"eleven\",\n| ])\n| \n* sha1-b9883cf06956658088b93ffbdc5e589418f82a37\n| Parent: None\n| \"the first line\"\n"
 
-	truncRes3 = "* sha1-a81bc1b23de202ef0e2275b5bef8449fc67fd863\n| Parent: sha1-81bc57a3956b56fa2bce22c6baf" +
-		"81ebc5e9cac2c\n| \n* sha1-81bc57a3956b56fa2bce22c6baf81ebc5e9cac2c\n| Parent: None\n"
+	truncRes3 = "* sha1-1552e08d34bc82ecb889c44cf80edd02379d0104\n| Parent: sha1-b9883cf06956658088b93ffbdc5e589418f82a37\n| \n* sha1-b9883cf06956658088b93ffbdc5e589418f82a37\n| Parent: None\n"
 )

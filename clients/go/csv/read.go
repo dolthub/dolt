@@ -85,8 +85,7 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 func Read(r *csv.Reader, structName string, headers []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, t *types.Type) {
 	t = MakeStructTypeFromHeaders(headers, structName, kinds)
 	valueChan := make(chan types.Value, 128) // TODO: Make this a function param?
-	listType := types.MakeListType(t)
-	listChan := types.NewStreamingTypedList(listType, vrw, valueChan)
+	listChan := types.NewStreamingList(vrw, valueChan)
 
 	structFields := t.Desc.(types.StructDesc).Fields
 
@@ -106,7 +105,7 @@ func Read(r *csv.Reader, structName string, headers []string, kinds KindSlice, v
 				fields[name] = StringToType(v, structFields[name].Kind())
 			}
 		}
-		valueChan <- types.NewStruct(t, fields)
+		valueChan <- types.NewStructWithType(t, fields)
 	}
 
 	return <-listChan, t

@@ -1,15 +1,17 @@
 package types
 
-import "github.com/attic-labs/noms/d"
-
 type listLeafSequence struct {
 	values []Value
 	t      *Type
 	vr     ValueReader
 }
 
-func newListLeafSequence(t *Type, vr ValueReader, v ...Value) indexedSequence {
-	d.Chk.Equal(ListKind, t.Kind())
+func newListLeafSequence(vr ValueReader, v ...Value) indexedSequence {
+	ts := make([]*Type, len(v))
+	for i, v := range v {
+		ts[i] = v.Type()
+	}
+	t := MakeListType(MakeUnionType(ts...))
 	return listLeafSequence{v, t, vr}
 }
 
