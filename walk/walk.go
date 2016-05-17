@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
@@ -91,16 +92,17 @@ func doTreeWalkP(v types.Value, vr types.ValueReader, cb SomeCallback, concurren
 	f.checkNotFailed()
 }
 
-// SomeChunksCallback takes a types.Ref and returns a bool indicating whether
-// the current walk should skip the tree descending from value.
-type SomeChunksCallback func(r types.Ref) bool
+// SomeChunksStopCallback is called for every unique types.Ref |r|. Return true to stop walking beyond |r|.
+type SomeChunksStopCallback func(r types.Ref) bool
 
-// SomeChunksP Invokes callback on all chunks reachable from |r| in top-down order. |callback| is invoked only once for each chunk regardless of how many times the chunk appears
-func SomeChunksP(r types.Ref, vr types.ValueReader, callback SomeChunksCallback, concurrency int) {
-	doChunkWalkP(r, vr, callback, concurrency)
-}
+// SomeChunksChunkCallback is called for every unique chunks.Chunk |c| which wasn't stopped from SomeChunksStopCallback.
+type SomeChunksChunkCallback func(c chunks.Chunk)
 
-func doChunkWalkP(r types.Ref, vr types.ValueReader, callback SomeChunksCallback, concurrency int) {
+// SomeChunksP invokes callbacks on every unique chunk reachable from |r| in top-down order. Callbacks are invoked only once for each chunk regardless of how many times the chunk appears.
+//
+// |stopCb| is invoked for the types.Ref of every chunk. It can return true to stop SomeChunksP from descending any further.
+// |chunkCb| is optional, invoked with the chunks.Chunk referenced by |stopCb| if it didn't return true.
+func SomeChunksP(r types.Ref, bs types.BatchStore, stopCb SomeChunksStopCallback, chunkCb SomeChunksChunkCallback, concurrency int) {
 	rq := newRefQueue()
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
@@ -109,16 +111,34 @@ func doChunkWalkP(r types.Ref, vr types.ValueReader, callback SomeChunksCallback
 	walkChunk := func(r types.Ref) {
 		defer wg.Done()
 
+		tr := r.TargetRef()
+
 		mu.Lock()
-		visited := visitedRefs[r.TargetRef()]
-		visitedRefs[r.TargetRef()] = true
+		visited := visitedRefs[tr]
+		visitedRefs[tr] = true
 		mu.Unlock()
 
-		if visited || callback(r) {
+		if visited || stopCb(r) {
 			return
 		}
 
-		v := vr.ReadValue(r.TargetRef())
+		// Try to avoid the cost of reading |c|. It's only necessary if the caller wants to know about every chunk, or if we need to descend below |c| (ref height > 1).
+		var c chunks.Chunk
+
+		if chunkCb != nil || r.Height() > 1 {
+			c = bs.Get(tr)
+			d.Chk.False(c.IsEmpty())
+
+			if chunkCb != nil {
+				chunkCb(c)
+			}
+		}
+
+		if r.Height() == 1 {
+			return
+		}
+
+		v := types.DecodeChunk(c, nil)
 		for _, r1 := range v.Chunks() {
 			wg.Add(1)
 			rq.tail() <- r1
