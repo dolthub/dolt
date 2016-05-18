@@ -1,9 +1,9 @@
 // @flow
 
-import {NomsBlob} from './blob.js';
-import {NomsList} from './list.js';
-import {NomsSet} from './set.js';
-import {NomsMap} from './map.js';
+import Blob from './blob.js';
+import List from './list.js';
+import Set from './set.js';
+import Map from './map.js';
 import RefValue from './ref-value.js';
 import Struct, {StructMirror} from './struct.js';
 
@@ -38,7 +38,7 @@ export default async function walk(v: valueOrPrimitive, ds: Database, cb: walkCb
       return;
   }
 
-  if (v instanceof NomsBlob) {
+  if (v instanceof Blob) {
     return;
   }
 
@@ -47,9 +47,9 @@ export default async function walk(v: valueOrPrimitive, ds: Database, cb: walkCb
   }
 
   const p = [];
-  if (v instanceof NomsList || v instanceof NomsSet) {
+  if (v instanceof List || v instanceof Set) {
     await v.forEach(cv => void(p.push(walk(cv, ds, cb))));
-  } else if (v instanceof NomsMap) {
+  } else if (v instanceof Map) {
     await v.forEach((cv, k) => {
       p.push(walk(k, ds, cb));
       p.push(walk(cv, ds, cb));

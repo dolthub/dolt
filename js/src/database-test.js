@@ -4,7 +4,7 @@ import {suite, test} from 'mocha';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {emptyRef} from './ref.js';
 import {assert} from 'chai';
-import {default as Database, newCommit} from './database.js';
+import Database, {newCommit} from './database.js';
 import {invariant, notNull} from './assert.js';
 import {newList} from './list.js';
 import {newMap} from './map.js';

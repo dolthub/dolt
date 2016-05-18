@@ -8,11 +8,11 @@ import MemoryStore from './memory-store.js';
 import RefValue from './ref-value.js';
 import BatchStore from './batch-store.js';
 import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-adaptor.js';
-import {newStruct, default as Struct} from './struct.js';
+import Struct, {newStruct} from './struct.js';
 import {flatten, flattenParallel, deriveCollectionHeight} from './test-util.js';
 import {invariant} from './assert.js';
 import Chunk from './chunk.js';
-import {newMapLeafSequence, newMap, NomsMap} from './map.js';
+import Map, {newMapLeafSequence, newMap} from './map.js';
 import {MetaTuple, newMapMetaSequence} from './meta-sequence.js';
 import Ref from './ref.js';
 import type {ValueReadWriter} from './value-store.js';
@@ -165,7 +165,7 @@ suite('BuildMap', () => {
     assert.deepEqual(kvs, outKvs);
     assert.strictEqual(testMapSize, m2.size);
 
-    invariant(m2 instanceof NomsMap);
+    invariant(m2 instanceof Map);
     const m3 = await m2.remove(testMapSize - 1);
     const outKvs2 = [];
     await m3.forEach((v, k) => outKvs2.push(k, v));
@@ -239,7 +239,7 @@ suite('BuildMap', () => {
       assertEqualVal(k, v);
     }
 
-    invariant(m2 instanceof NomsMap);
+    invariant(m2 instanceof Map);
     const m3 = await m2.remove(sortedKeys[testMapSize - 1]);  // removes struct
     const outVals2 = [];
     const outKeys2 = [];
@@ -263,7 +263,7 @@ suite('BuildMap', () => {
 suite('MapLeaf', () => {
   test('isEmpty/size', () => {
     const ds = new Database(makeTestingBatchStore());
-    const newMap = entries => new NomsMap(newMapLeafSequence(ds, entries));
+    const newMap = entries => new Map(newMapLeafSequence(ds, entries));
     let m = newMap([]);
     assert.isTrue(m.isEmpty());
     assert.strictEqual(0, m.size);
@@ -274,7 +274,7 @@ suite('MapLeaf', () => {
 
   test('has', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const m = new NomsMap(
+    const m = new Map(
         newMapLeafSequence(ds, [{key: 'a', value: false}, {key: 'k', value: true}]));
     assert.isTrue(await m.has('a'));
     assert.isFalse(await m.has('b'));
@@ -284,7 +284,7 @@ suite('MapLeaf', () => {
 
   test('first/last/get', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const m = new NomsMap(
+    const m = new Map(
         newMapLeafSequence(ds, [{key: 'a', value: 4}, {key: 'k', value: 8}]));
 
     assert.deepEqual(['a', 4], await m.first());
@@ -298,7 +298,7 @@ suite('MapLeaf', () => {
 
   test('forEach', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const m = new NomsMap(
+    const m = new Map(
         newMapLeafSequence(ds, [{key: 'a', value: 4}, {key: 'k', value: 8}]));
 
     const kv = [];
@@ -310,7 +310,7 @@ suite('MapLeaf', () => {
     const ds = new Database(makeTestingBatchStore());
 
     const test = async entries => {
-      const m = new NomsMap(newMapLeafSequence(ds, entries));
+      const m = new Map(newMapLeafSequence(ds, entries));
       assert.deepEqual(entries, await flatten(m.iterator()));
       assert.deepEqual(entries, await flattenParallel(m.iterator(), entries.length));
     };
@@ -322,7 +322,7 @@ suite('MapLeaf', () => {
 
   test('LONG: iteratorAt', async () => {
     const ds = new Database(makeTestingBatchStore());
-    const build = entries => new NomsMap(newMapLeafSequence(ds, entries));
+    const build = entries => new Map(newMapLeafSequence(ds, entries));
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
 
@@ -349,7 +349,7 @@ suite('MapLeaf', () => {
     const r2 = ds.writeValue(true);
     const r3 = ds.writeValue('b');
     const r4 = ds.writeValue(false);
-    const m = new NomsMap(
+    const m = new Map(
         newMapLeafSequence(ds, [{key: r1, value: r2}, {key: r3, value: r4}]));
     assert.strictEqual(4, m.chunks.length);
     assert.isTrue(equals(r1, m.chunks[0]));
@@ -361,28 +361,28 @@ suite('MapLeaf', () => {
 });
 
 suite('CompoundMap', () => {
-  function build(vwr: ValueReadWriter): Array<NomsMap> {
-    const l1 = new NomsMap(newMapLeafSequence(vwr, [{key: 'a', value: false},
+  function build(vwr: ValueReadWriter): Array<Map> {
+    const l1 = new Map(newMapLeafSequence(vwr, [{key: 'a', value: false},
         {key:'b', value:false}]));
     const r1 = vwr.writeValue(l1);
-    const l2 = new NomsMap(newMapLeafSequence(vwr, [{key: 'e', value: true},
+    const l2 = new Map(newMapLeafSequence(vwr, [{key: 'e', value: true},
         {key:'f', value:true}]));
     const r2 = vwr.writeValue(l2);
-    const l3 = new NomsMap(newMapLeafSequence(vwr, [{key: 'h', value: false},
+    const l3 = new Map(newMapLeafSequence(vwr, [{key: 'h', value: false},
         {key:'i', value:true}]));
     const r3 = vwr.writeValue(l3);
-    const l4 = new NomsMap(newMapLeafSequence(vwr, [{key: 'm', value: true},
+    const l4 = new Map(newMapLeafSequence(vwr, [{key: 'm', value: true},
         {key:'n', value:false}]));
     const r4 = vwr.writeValue(l4);
 
-    const m1 = new NomsMap(newMapMetaSequence(vwr, [new MetaTuple(r1, 'b', 2),
+    const m1 = new Map(newMapMetaSequence(vwr, [new MetaTuple(r1, 'b', 2),
         new MetaTuple(r2, 'f', 2)]));
     const rm1 = vwr.writeValue(m1);
-    const m2 = new NomsMap(newMapMetaSequence(vwr, [new MetaTuple(r3, 'i', 2),
+    const m2 = new Map(newMapMetaSequence(vwr, [new MetaTuple(r3, 'i', 2),
         new MetaTuple(r4, 'n', 2)]));
     const rm2 = vwr.writeValue(m2);
 
-    const c = new NomsMap(newMapMetaSequence(vwr, [new MetaTuple(rm1, 'f', 4),
+    const c = new Map(newMapMetaSequence(vwr, [new MetaTuple(rm1, 'f', 4),
         new MetaTuple(rm2, 'n', 4)]));
     return [c, m1, m2];
   }

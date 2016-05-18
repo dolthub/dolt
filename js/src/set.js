@@ -64,7 +64,7 @@ export function newSet<T:valueOrPrimitive>(values: Array<T>):
                        newOrderedMetaSequenceBoundaryChecker);
 }
 
-export class NomsSet<T: valueOrPrimitive> extends Collection<OrderedSequence> {
+export default class NomsSet<T: valueOrPrimitive> extends Collection<OrderedSequence> {
   async has(key: T): Promise<boolean> {
     const cursor = await this.sequence.newCursorAt(key);
     return cursor.valid && equals(cursor.getCurrentKey(), key);

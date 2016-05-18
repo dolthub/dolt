@@ -2,7 +2,7 @@
 
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
-import {default as Ref, emptyRef} from './ref.js';
+import Ref, {emptyRef} from './ref.js';
 import {encode} from './utf8.js';
 
 suite('Ref', () => {

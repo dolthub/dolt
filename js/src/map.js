@@ -39,7 +39,7 @@ function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(vr: ?ValueR
       }
     }
 
-    const nm = new NomsMap(newMapLeafSequence(vr, items));
+    const nm = new Map(newMapLeafSequence(vr, items));
     const mt = new MetaTuple(new RefValue(nm), indexValue, items.length, nm);
     return [mt, nm];
   };
@@ -86,14 +86,15 @@ function buildMapData<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<K | V
 }
 
 export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<K | V>):
-    Promise<NomsMap<K, V>> {
+    Promise<Map<K, V>> {
   return chunkSequence(null, buildMapData(kvs), 0, newMapLeafChunkFn(null),
                        newOrderedMetaSequenceChunkFn(Kind.Map, null),
                        newMapLeafBoundaryChecker(),
                        newOrderedMetaSequenceBoundaryChecker);
 }
 
-export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collection<OrderedSequence> {
+export default class Map<K: valueOrPrimitive, V: valueOrPrimitive> extends
+    Collection<OrderedSequence> {
   async has(key: K): Promise<boolean> {
     const cursor = await this.sequence.newCursorAt(key);
     return cursor.valid && equals(cursor.getCurrentKey(), key);
@@ -144,7 +145,7 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
   }
 
   _splice(cursor: OrderedSequenceCursor, insert: Array<MapEntry<K, V>>, remove: number):
-      Promise<NomsMap<K, V>> {
+      Promise<Map<K, V>> {
     const vr = this.sequence.vr;
     return chunkSequence(cursor, insert, remove, newMapLeafChunkFn(vr),
                          newOrderedMetaSequenceChunkFn(Kind.Map, vr),
@@ -152,7 +153,7 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
                          newOrderedMetaSequenceBoundaryChecker);
   }
 
-  async set(key: K, value: V): Promise<NomsMap<K, V>> {
+  async set(key: K, value: V): Promise<Map<K, V>> {
     let remove = 0;
     const cursor = await this.sequence.newCursorAt(key, true);
     if (cursor.valid && equals(cursor.getCurrentKey(), key)) {
@@ -167,7 +168,7 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
     return this._splice(cursor, [{key: key, value: value}], remove);
   }
 
-  async remove(key: K): Promise<NomsMap<K, V>> {
+  async remove(key: K): Promise<Map<K, V>> {
     const cursor = await this.sequence.newCursorAt(key);
     if (cursor.valid && equals(cursor.getCurrentKey(), key)) {
       return this._splice(cursor, [], 1);
@@ -183,7 +184,7 @@ export class NomsMap<K: valueOrPrimitive, V: valueOrPrimitive> extends Collectio
   /**
    * Returns a 3-tuple [added, removed, modified] sorted by keys.
    */
-  diff(from: NomsMap<K, V>): Promise<[Array<K>, Array<K>, Array<K>]> {
+  diff(from: Map<K, V>): Promise<[Array<K>, Array<K>, Array<K>]> {
     return diff(from.sequence, this.sequence);
   }
 }

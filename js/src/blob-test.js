@@ -2,7 +2,7 @@
 
 import {blobType, refOfBlobType} from './type.js';
 import {assert} from 'chai';
-import {newBlob, BlobWriter, NomsBlob} from './blob.js';
+import Blob, {newBlob, BlobWriter} from './blob.js';
 import {suite, test} from 'mocha';
 import {
   assertChunkCountAndType,
@@ -19,7 +19,7 @@ import {equals} from './compare.js';
 
 suite('Blob', () => {
 
-  async function assertReadFull(expect: Uint8Array, blob: NomsBlob): Promise<void> {
+  async function assertReadFull(expect: Uint8Array, blob: Blob): Promise<void> {
     const length = expect.length;
     const reader = blob.getReader();
     let i = 0;
@@ -36,7 +36,7 @@ suite('Blob', () => {
     }
   }
 
-  async function testPrependChunkDiff(buff: Uint8Array, blob: NomsBlob, expectCount: number):
+  async function testPrependChunkDiff(buff: Uint8Array, blob: Blob, expectCount: number):
       Promise<void> {
     const nb = new Uint8Array(buff.length + 1);
     for (let i = 0; i < buff.length; i++) {
@@ -47,7 +47,7 @@ suite('Blob', () => {
     assert.strictEqual(expectCount, chunkDiffCount(blob, v2));
   }
 
-  async function testAppendChunkDiff(buff: Uint8Array, blob: NomsBlob, expectCount: number):
+  async function testAppendChunkDiff(buff: Uint8Array, blob: Blob, expectCount: number):
       Promise<void> {
     const nb = new Uint8Array(buff.length + 1);
     for (let i = 0; i < buff.length; i++) {

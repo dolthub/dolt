@@ -3,7 +3,7 @@
 import tingodb from 'tingodb';
 import type {tcoll as Collection} from 'tingodb';
 import fs from 'fs';
-import {default as Chunk, emptyChunk} from './chunk.js';
+import Chunk, {emptyChunk} from './chunk.js';
 import {invariant} from './assert.js';
 
 const __tingodb = tingodb();

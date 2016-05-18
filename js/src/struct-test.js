@@ -1,8 +1,7 @@
 // @flow
 
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
-import {
-  default as Struct,
+import Struct, {
   newStruct,
   newStructWithType,
   StructMirror,

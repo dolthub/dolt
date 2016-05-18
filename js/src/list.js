@@ -26,7 +26,7 @@ const listPattern = ((1 << 6) | 0) - 1;
 
 function newListLeafChunkFn<T: valueOrPrimitive>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
-    const list = new NomsList(newListLeafSequence(vr, items));
+    const list = new List(newListLeafSequence(vr, items));
     const mt = new MetaTuple(new RefValue(list), items.length, items.length, list);
     return [mt, list];
   };
@@ -38,21 +38,21 @@ function newListLeafBoundaryChecker<T: valueOrPrimitive>(): BoundaryChecker<T> {
   );
 }
 
-export function newList<T: valueOrPrimitive>(values: Array<T>): Promise<NomsList<T>> {
+export function newList<T: valueOrPrimitive>(values: Array<T>): Promise<List<T>> {
   return chunkSequence(null, values, 0, newListLeafChunkFn(null),
                        newIndexedMetaSequenceChunkFn(Kind.List, null),
                        newListLeafBoundaryChecker(),
                        newIndexedMetaSequenceBoundaryChecker);
 }
 
-export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
+export default class List<T: valueOrPrimitive> extends Collection<IndexedSequence> {
   async get(idx: number): Promise<T> {
     // TODO (when |length| works) invariant(idx < this.length, idx + ' >= ' + this.length);
     const cursor = await this.sequence.newCursorAt(idx);
     return cursor.getCurrent();
   }
 
-  splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<NomsList<T>> {
+  splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<List<T>> {
     const vr = this.sequence.vr;
     return this.sequence.newCursorAt(idx).then(cursor =>
       chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(vr),
@@ -61,15 +61,15 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
                     newIndexedMetaSequenceBoundaryChecker));
   }
 
-  insert(idx: number, ...values: Array<T>): Promise<NomsList<T>> {
+  insert(idx: number, ...values: Array<T>): Promise<List<T>> {
     return this.splice(idx, 0, ...values);
   }
 
-  remove(start: number, end: number): Promise<NomsList<T>> {
+  remove(start: number, end: number): Promise<List<T>> {
     return this.splice(start, end - start);
   }
 
-  append(...values: Array<T>): Promise<NomsList<T>> {
+  append(...values: Array<T>): Promise<List<T>> {
     return this.splice(this.length, 0, ...values);
   }
 
@@ -89,7 +89,7 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
     return new IndexedSequenceIterator(this.sequence.newCursorAt(i));
   }
 
-  diff(last: NomsList<T>, loadLimit: number = -1): Promise<Array<Splice>> {
+  diff(last: List<T>, loadLimit: number = -1): Promise<Array<Splice>> {
     invariant(equals(this.type, last.type));
 
     if (equals(this, last)) {

@@ -1,7 +1,7 @@
 // @flow
 
 import Chunk from './chunk.js';
-import {default as Ref, emptyRef} from './ref.js';
+import Ref, {emptyRef} from './ref.js';
 import RefValue from './ref-value.js';
 import type BatchStore from './batch-store.js';
 import type {valueOrPrimitive} from './value.js';

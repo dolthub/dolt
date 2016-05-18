@@ -3,7 +3,7 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 import type {valueOrPrimitive} from './value.js';
-import {default as Database} from './database.js';
+import Database from './database.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
 
 export class TestValue {
@@ -57,5 +57,3 @@ suite('cross platform test', () => {
     await testSuite();
   });
 });
-
-

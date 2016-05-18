@@ -1,10 +1,10 @@
 // @flow
 
 import Ref from './ref.js';
-import {default as RefValue} from './ref-value.js';
+import RefValue from './ref-value.js';
 import {newStructWithType} from './struct.js';
-import type {NomsMap} from './map.js';
-import type {NomsSet} from './set.js';
+import type Map from './map.js';
+import type Set from './set.js';
 import type {valueOrPrimitive} from './value.js';
 import type {RootTracker} from './chunk-store.js';
 import ValueStore from './value-store.js';
@@ -30,8 +30,8 @@ type DatasTypes = {
   commitMapType: Type,
 };
 
-let emptyCommitMap: Promise<NomsMap<string, RefValue<Commit>>>;
-function getEmptyCommitMap(): Promise<NomsMap<string, RefValue<Commit>>> {
+let emptyCommitMap: Promise<Map<string, RefValue<Commit>>>;
+function getEmptyCommitMap(): Promise<Map<string, RefValue<Commit>>> {
   if (!emptyCommitMap) {
     emptyCommitMap = newMap([]);
   }
@@ -67,7 +67,7 @@ export function getDatasTypes(): DatasTypes {
 export default class Database {
   _vs: ValueStore;
   _rt: RootTracker;
-  _datasets: Promise<NomsMap<string, RefValue<Commit>>>;
+  _datasets: Promise<Map<string, RefValue<Commit>>>;
 
   constructor(bs: BatchStore, cacheSize: number = 0) {
     this._vs = new ValueStore(bs, cacheSize);
@@ -83,7 +83,7 @@ export default class Database {
     return ds;
   }
 
-  _datasetsFromRootRef(rootRef: Promise<Ref>): Promise<NomsMap<string, RefValue<Commit>>> {
+  _datasetsFromRootRef(rootRef: Promise<Ref>): Promise<Map<string, RefValue<Commit>>> {
     return rootRef.then(rootRef => {
       if (rootRef.isEmpty()) {
         return getEmptyCommitMap();
@@ -101,7 +101,7 @@ export default class Database {
     return this.headRef(datasetID).then(hr => hr ? this.readValue(hr.targetRef) : null);
   }
 
-  datasets(): Promise<NomsMap<string, RefValue<Commit>>> {
+  datasets(): Promise<Map<string, RefValue<Commit>>> {
     return this._datasets;
   }
 
@@ -129,7 +129,7 @@ export default class Database {
   async commit(datasetId: string, commit: Commit): Promise<Database> {
     const currentRootRefP = this._rt.getRoot();
     const datasetsP = this._datasetsFromRootRef(currentRootRefP);
-    let currentDatasets = await (datasetsP:Promise<NomsMap>);
+    let currentDatasets = await (datasetsP:Promise<Map>);
     const currentRootRef = await currentRootRefP;
     const commitRef = this.writeValue(commit);
 
@@ -159,8 +159,8 @@ export default class Database {
   }
 }
 
-async function getAncestors(commits: NomsSet<RefValue<Commit>>, store: Database):
-    Promise<NomsSet<RefValue<Commit>>> {
+async function getAncestors(commits: Set<RefValue<Commit>>, store: Database):
+    Promise<Set<RefValue<Commit>>> {
   let ancestors = await newSet([]);
   await commits.map(async (commitRef) => {
     const commit = await store.readValue(commitRef.targetRef);
