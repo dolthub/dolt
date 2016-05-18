@@ -15,23 +15,26 @@ type hrsWriter struct {
 	ind        int
 	w          io.Writer
 	lineLength int
+	err        error
 }
 
 func (w *hrsWriter) maybeWriteIndentation() {
 	if w.lineLength == 0 {
-		for i := 0; i < w.ind; i++ {
-			io.WriteString(w.w, "  ")
+		for i := 0; i < w.ind && w.err == nil; i++ {
+			_, w.err = io.WriteString(w.w, "  ")
 		}
 		w.lineLength = 2 * w.ind
 	}
 }
 
 func (w *hrsWriter) write(s string) {
+	if w.err != nil {
+		return
+	}
 	w.maybeWriteIndentation()
-	n, err := io.WriteString(w.w, s)
-	w.lineLength += len(s)
-	d.Chk.NoError(err)
-	d.Chk.Equal(len(s), n)
+	var n int
+	n, w.err = io.WriteString(w.w, s)
+	w.lineLength += n
 }
 
 func (w *hrsWriter) indent() {
@@ -62,20 +65,20 @@ func (w *hrsWriter) Write(v Value) {
 		blob := v.(Blob)
 		// TODO: Use RawStdEncoding
 		encoder := base64.NewEncoder(base64.StdEncoding, w.w)
-		_, err := io.Copy(encoder, blob.Reader())
-		d.Chk.NoError(err)
-		encoder.Close()
+		defer encoder.Close()
+		_, w.err = io.Copy(encoder, blob.Reader())
 
 	case ListKind:
 		w.write("[")
 		w.indent()
-		v.(List).IterAll(func(v Value, i uint64) {
+		v.(List).Iter(func(v Value, i uint64) bool {
 			if i == 0 {
 				w.newLine()
 			}
 			w.Write(v)
 			w.write(",")
 			w.newLine()
+			return w.err != nil
 		})
 		w.outdent()
 		w.write("]")
@@ -83,17 +86,18 @@ func (w *hrsWriter) Write(v Value) {
 	case MapKind:
 		w.write("{")
 		w.indent()
-		i := 0
-		v.(Map).IterAll(func(key, val Value) {
-			if i == 0 {
+		first := true
+		v.(Map).Iter(func(key, val Value) bool {
+			if first {
 				w.newLine()
+				first = false
 			}
 			w.Write(key)
 			w.write(": ")
 			w.Write(val)
 			w.write(",")
 			w.newLine()
-			i++
+			return w.err != nil
 		})
 		w.outdent()
 		w.write("}")
@@ -104,15 +108,16 @@ func (w *hrsWriter) Write(v Value) {
 	case SetKind:
 		w.write("{")
 		w.indent()
-		i := 0
-		v.(Set).IterAll(func(v Value) {
-			if i == 0 {
+		first := true
+		v.(Set).Iter(func(v Value) bool {
+			if first {
 				w.newLine()
+				first = false
 			}
 			w.Write(v)
 			w.write(",")
 			w.newLine()
-			i++
+			return w.err != nil
 		})
 		w.outdent()
 		w.write("}")
@@ -124,7 +129,6 @@ func (w *hrsWriter) Write(v Value) {
 		w.writeStruct(v.(Struct), true)
 
 	default:
-	case ValueKind, ParentKind:
 		panic("unreachable")
 	}
 }
@@ -174,7 +178,6 @@ func (w *hrsWriter) WriteTagged(v Value) {
 		w.write("(")
 		w.writeStruct(v.(Struct), false)
 		w.write(")")
-
 	case ValueKind:
 	default:
 		panic("unreachable")
@@ -193,6 +196,9 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 				w.write(", ")
 			}
 			w.writeType(et, parentStructTypes)
+			if w.err != nil {
+				break
+			}
 		}
 		w.write(">")
 	case UnionKind:
@@ -201,6 +207,9 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 				w.write(" | ")
 			}
 			w.writeType(et, parentStructTypes)
+			if w.err != nil {
+				break
+			}
 		}
 	case StructKind:
 		w.writeStructType(t, parentStructTypes)
@@ -239,13 +248,17 @@ func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 }
 
 func (w *hrsWriter) writeParent(i uint8) {
-	fmt.Fprintf(w.w, "Parent<%d>", i)
+	if w.err != nil {
+		return
+	}
+	_, w.err = fmt.Fprintf(w.w, "Parent<%d>", i)
 }
 
 func EncodedValue(v Value) string {
 	var buf bytes.Buffer
 	w := &hrsWriter{w: &buf}
 	w.Write(v)
+	d.Chk.NoError(w.err)
 	return buf.String()
 }
 
@@ -253,11 +266,13 @@ func EncodedValueWithTags(v Value) string {
 	var buf bytes.Buffer
 	w := &hrsWriter{w: &buf}
 	w.WriteTagged(v)
+	d.Chk.NoError(w.err)
 	return buf.String()
 }
 
 // WriteEncodedValueWithTags writes the serialization of a value prefixed by its type.
-func WriteEncodedValueWithTags(w io.Writer, v Value) {
+func WriteEncodedValueWithTags(w io.Writer, v Value) error {
 	hrs := &hrsWriter{w: w}
 	hrs.WriteTagged(v)
+	return hrs.err
 }

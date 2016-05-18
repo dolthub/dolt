@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -311,4 +312,19 @@ func TestRecursiveStruct(t *testing.T) {
     d: Parent<1>
   }
 })`, d)
+}
+
+type errorWriter struct {
+	err error
+}
+
+func (w *errorWriter) Write(p []byte) (int, error) {
+	return 0, w.err
+}
+
+func TestWriteHumanReadableWriterError(t *testing.T) {
+	assert := assert.New(t)
+	err := errors.New("test")
+	w := &errorWriter{err}
+	assert.Equal(err, WriteEncodedValueWithTags(w, Number(42)))
 }

@@ -17,12 +17,13 @@ import (
 )
 
 var (
-	color       = flag.Int("color", -1, "value of 1 forces color on, 2 forces color off")
-	maxLines    = flag.Int("max-lines", 10, "max number of lines to show per commit (-1 for all lines)")
-	showHelp    = flag.Bool("help", false, "show help text")
-	showGraph   = flag.Bool("graph", false, "show ascii-based commit hierarcy on left side of output")
-	stdoutIsTty = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
-	useColor    = false
+	color         = flag.Int("color", -1, "value of 1 forces color on, 2 forces color off")
+	maxLines      = flag.Int("max-lines", 10, "max number of lines to show per commit (-1 for all lines)")
+	showHelp      = flag.Bool("help", false, "show help text")
+	showGraph     = flag.Bool("graph", false, "show ascii-based commit hierarcy on left side of output")
+	stdoutIsTty   = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
+	useColor      = false
+	maxLinesError = errors.New("Maximum number of lines written")
 )
 
 func main() {
@@ -55,7 +56,9 @@ func main() {
 	if ok {
 		iter := NewCommitIterator(dataset.Store(), origCommit)
 		for ln, ok := iter.Next(); ok; ln, ok = iter.Next() {
-			printCommit(ln)
+			if printCommit(ln) != nil {
+				break
+			}
 		}
 	}
 
@@ -64,7 +67,7 @@ func main() {
 
 // Prints the information for one commit in the log, including ascii graph on left side of commits if
 // -graph arg is true.
-func printCommit(node LogNode) {
+func printCommit(node LogNode) (err error) {
 	lineno := 0
 	doColor := func(s string) string { return s }
 	if useColor {
@@ -86,11 +89,14 @@ func printCommit(node LogNode) {
 		fmt.Printf("%sParent: None\n", genGraph(node, lineno))
 	}
 	if *maxLines != 0 {
-		lineno += writeCommitLines(node, *maxLines, lineno, os.Stdout)
+		var n int
+		n, err = writeCommitLines(node, *maxLines, lineno, os.Stdout)
+		lineno += n
 	}
 	if !node.lastCommit {
 		fmt.Printf("%s\n", genGraph(node, lineno))
 	}
+	return
 }
 
 // Generates ascii graph chars to display on the left side of the commit info if -graph arg is true.
@@ -176,7 +182,7 @@ func (w *maxLineWriter) Write(data []byte) (n int, err error) {
 	for _, b := range data {
 		n++
 		if w.numLines == w.maxLines {
-			err = io.EOF
+			err = maxLinesError
 			return
 		}
 		// TODO: This is not technically correct due to utf-8, but ... meh.
@@ -195,27 +201,16 @@ func (w *maxLineWriter) Write(data []byte) (n int, err error) {
 	return
 }
 
-func writeCommitLines(node LogNode, maxLines, lineno int, w io.Writer) int {
-	// TODO(aa): Teach WriteEncodedValueWithTags how to deal with EOF
-	doWrite := func() int {
-		out := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, first: true}
-		defer func() {
-			if r := recover(); r != nil {
-				// This is hacky but for some reason e is not io.EOF here, but some weird long string.
-				if e, ok := r.(string); !ok || !strings.Contains(e, "EOF") {
-					panic(r)
-				} else {
-					out.dest.Write([]byte("..."))
-					out.numLines++
-				}
-			}
-			out.dest.Write([]byte("\n"))
-			return
-		}()
-		types.WriteEncodedValueWithTags(out, node.commit.Get(datas.ValueField))
-		return out.numLines
+func writeCommitLines(node LogNode, maxLines, lineno int, w io.Writer) (int, error) {
+	out := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, first: true}
+	err := types.WriteEncodedValueWithTags(out, node.commit.Get(datas.ValueField))
+	if err == maxLinesError {
+		fmt.Fprint(w, "...")
+		out.numLines++
+		err = nil
 	}
-	return doWrite()
+	fmt.Fprintln(w)
+	return out.numLines, err
 }
 
 func isStdoutTty() bool {
