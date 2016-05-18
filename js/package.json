@@ -1,6 +1,6 @@
 {
   "name": "@attic/noms",
-  "version": "32.0.0",
+  "version": "32.1.0",
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms",
   "main": "dist/commonjs/noms.js",
@@ -55,6 +55,9 @@
     "./dist/es6/sha1.js": "./dist/es6/browser/sha1.js",
     "./src/utf8.js": "./src/browser/utf8.js",
     "./dist/commonjs/utf8.js": "./dist/commonjs/browser/utf8.js",
-    "./dist/es6/utf8.js": "./dist/es6/browser/utf8.js"
+    "./dist/es6/utf8.js": "./dist/es6/browser/utf8.js",
+    "./src/put-cache.js": "./src/browser/put-cache.js",
+    "./dist/commonjs/put-cache.js": "./dist/commonjs/browser/put-cache.js",
+    "./dist/es6/put-cache.js": "./dist/es6/browser/put-cache.js"
   }
 }
