@@ -155,7 +155,7 @@ suite('Database', () => {
     const commit = await newCommit('foo', []);
 
     const commitRef = ds.writeValue(commit);
-    const datasets = await newMap(['foo', commitRef]);
+    const datasets = await newMap([['foo', commitRef]]);
     const rootRef = ds.writeValue(datasets).targetRef;
     assert.isTrue(await bs.updateRoot(rootRef, emptyRef));
     ds = new Database(bs); // refresh the datasets

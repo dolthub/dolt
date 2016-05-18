@@ -173,8 +173,8 @@ export class JsonArrayWriter {
         invariant(sequence instanceof MapLeafSequence);
         const w2 = new JsonArrayWriter(this._vw);
         sequence.items.forEach(entry => {
-          w2.writeValue(entry.key);
-          w2.writeValue(entry.value);
+          w2.writeValue(entry[0]);
+          w2.writeValue(entry[1]);
         });
         this.write(w2.array);
         break;

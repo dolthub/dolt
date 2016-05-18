@@ -90,7 +90,7 @@ suite('validate type', () => {
 
   test('map', async () => {
     const mapOfNumberToStringType = makeMapType(numberType, stringType);
-    const m = await newMap([0, 'a', 2, 'b']);
+    const m = await newMap([[0, 'a'], [2, 'b']]);
     assertSubtype(mapOfNumberToStringType, m);
     assertAll(mapOfNumberToStringType, m);
 
@@ -174,7 +174,7 @@ suite('validate type', () => {
     assertSubtype(mt, await newMap([]));
 
     // Map<> not a subtype of Map<Number, Number>
-    assertInvalid(makeMapType(makeUnionType([]), makeUnionType([])), await newMap([1, 2]));
+    assertInvalid(makeMapType(makeUnionType([]), makeUnionType([])), await newMap([[1, 2]]));
   });
 
   test('struct subtype by name', () => {

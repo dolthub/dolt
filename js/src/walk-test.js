@@ -78,11 +78,13 @@ suite('walk', () => {
 
   test('map', async () => {
     const expected = [];
+    const entries = [];
     for (let i = 0; i < 1000; i++) {
       expected.push(i);
-      expected.push(String('value' + i));
+      expected.push('value' + i);
+      entries.push([i, 'value' + i]);
     }
-    const map = await newMap(Array.from(expected));
+    const map = await newMap(entries);
     expected.push(map);
 
     await callbackHappensOnce(map, ds);

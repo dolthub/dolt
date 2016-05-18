@@ -41,10 +41,11 @@ suite('BuildMap', () => {
 
   test('unique keys - strings', async () => {
     const kvs = [
-      'hello', 'world',
-      'foo', 'bar',
-      'bar', 'foo',
-      'hello', 'foo'];
+      ['hello', 'world'],
+      ['foo', 'bar'],
+      ['bar', 'foo'],
+      ['hello', 'foo'],
+    ];
     const m = await newMap(kvs);
     assert.strictEqual(3, m.size);
     assert.strictEqual('foo', await m.get('hello'));
@@ -52,11 +53,12 @@ suite('BuildMap', () => {
 
   test('unique keys - number', async () => {
     const kvs = [
-      4, 1,
-      0, 2,
-      1, 2,
-      3, 4,
-      1, 5];
+      [4, 1],
+      [0, 2],
+      [1, 2],
+      [3, 4],
+      [1, 5],
+    ];
     const m = await newMap(kvs);
     assert.strictEqual(4, m.size);
     assert.strictEqual(5, await m.get(1));
@@ -65,7 +67,7 @@ suite('BuildMap', () => {
   test('LONG: set of n numbers', async () => {
     const kvs = [];
     for (let i = 0; i < testMapSize; i++) {
-      kvs.push(i, i + 1);
+      kvs.push([i, i + 1]);
     }
 
     const m = await newMap(kvs);
@@ -91,10 +93,10 @@ suite('BuildMap', () => {
   test('LONG: map of ref to ref, set of n numbers', async () => {
     const kvs = [];
     for (let i = 0; i < testMapSize; i++) {
-      kvs.push(i, i + 1);
+      kvs.push([i, i + 1]);
     }
 
-    const kvRefs = kvs.map(n => new RefValue(newStruct('num', {n})));
+    const kvRefs = kvs.map(entry => entry.map(n => new RefValue(newStruct('num', {n}))));
     const m = await newMap(kvRefs);
     assert.strictEqual(m.ref.toString(), 'sha1-5c9a17f6da0ebfebc1f82f498ac46992fad85250');
     const height = deriveCollectionHeight(m);
@@ -106,7 +108,7 @@ suite('BuildMap', () => {
   test('LONG: set', async () => {
     const kvs = [];
     for (let i = 0; i < testMapSize - 10; i++) {
-      kvs.push(i, i + 1);
+      kvs.push([i, i + 1]);
     }
 
     let m = await newMap(kvs);
@@ -121,7 +123,7 @@ suite('BuildMap', () => {
   test('LONG: set existing', async () => {
     const kvs = [];
     for (let i = 0; i < testMapSize; i++) {
-      kvs.push(i, i + 1);
+      kvs.push([i, i + 1]);
     }
 
     let m = await newMap(kvs);
@@ -136,7 +138,7 @@ suite('BuildMap', () => {
   test('LONG: remove', async () => {
     const kvs = [];
     for (let i = 0; i < testMapSize + 10; i++) {
-      kvs.push(i, i + 1);
+      kvs.push([i, i + 1]);
     }
 
     let m = await newMap(kvs);
@@ -153,7 +155,7 @@ suite('BuildMap', () => {
 
     const kvs = [];
     for (let i = 0; i < testMapSize; i++) {
-      kvs.push(i, i + 1);
+      kvs.push([i, i + 1]);
     }
 
     const m = await newMap(kvs);
@@ -161,15 +163,15 @@ suite('BuildMap', () => {
     const r = ds.writeValue(m).targetRef;
     const m2 = await ds.readValue(r);
     const outKvs = [];
-    await m2.forEach((v, k) => outKvs.push(k, v));
+    await m2.forEach((v, k) => outKvs.push([k, v]));
     assert.deepEqual(kvs, outKvs);
     assert.strictEqual(testMapSize, m2.size);
 
     invariant(m2 instanceof Map);
     const m3 = await m2.remove(testMapSize - 1);
     const outKvs2 = [];
-    await m3.forEach((v, k) => outKvs2.push(k, v));
-    kvs.splice(testMapSize * 2 - 2, 2);
+    await m3.forEach((v, k) => outKvs2.push([k, v]));
+    kvs.splice(testMapSize * 1 - 1, 1);
     assert.deepEqual(kvs, outKvs2);
     assert.strictEqual(testMapSize - 1, m3.size);
   });
@@ -193,7 +195,7 @@ suite('BuildMap', () => {
       } else {
         numbers.push(v);
       }
-      kvs.push(v, i);
+      kvs.push([v, i]);
       keys.push(v);
     }
 
@@ -267,7 +269,7 @@ suite('MapLeaf', () => {
     let m = newMap([]);
     assert.isTrue(m.isEmpty());
     assert.strictEqual(0, m.size);
-    m = newMap([{key: 'a', value: false}, {key: 'k', value: true}]);
+    m = newMap([['a', false], ['k', true]]);
     assert.isFalse(m.isEmpty());
     assert.strictEqual(2, m.size);
   });
@@ -275,7 +277,7 @@ suite('MapLeaf', () => {
   test('has', async () => {
     const ds = new Database(makeTestingBatchStore());
     const m = new Map(
-        newMapLeafSequence(ds, [{key: 'a', value: false}, {key: 'k', value: true}]));
+        newMapLeafSequence(ds, [['a', false], ['k', true]]));
     assert.isTrue(await m.has('a'));
     assert.isFalse(await m.has('b'));
     assert.isTrue(await m.has('k'));
@@ -285,7 +287,7 @@ suite('MapLeaf', () => {
   test('first/last/get', async () => {
     const ds = new Database(makeTestingBatchStore());
     const m = new Map(
-        newMapLeafSequence(ds, [{key: 'a', value: 4}, {key: 'k', value: 8}]));
+        newMapLeafSequence(ds, [['a', 4], ['k', 8]]));
 
     assert.deepEqual(['a', 4], await m.first());
     assert.deepEqual(['k', 8], await m.last());
@@ -299,7 +301,7 @@ suite('MapLeaf', () => {
   test('forEach', async () => {
     const ds = new Database(makeTestingBatchStore());
     const m = new Map(
-        newMapLeafSequence(ds, [{key: 'a', value: 4}, {key: 'k', value: 8}]));
+        newMapLeafSequence(ds, [['a', 4], ['k', 8]]));
 
     const kv = [];
     await m.forEach((v, k) => { kv.push(k, v); });
@@ -316,8 +318,8 @@ suite('MapLeaf', () => {
     };
 
     await test([]);
-    await test([{key: 'a', value: 4}]);
-    await test([{key: 'a', value: 4}, {key: 'k', value: 8}]);
+    await test([['a', 4]]);
+    await test([['a', 4], ['k', 8]]);
   });
 
   test('LONG: iteratorAt', async () => {
@@ -327,14 +329,14 @@ suite('MapLeaf', () => {
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
 
     {
-      const kv = [{key: 'b', value: 5}];
+      const kv = [['b', 5]];
       assert.deepEqual(kv, await flatten(build(kv).iteratorAt('a')));
       assert.deepEqual(kv, await flatten(build(kv).iteratorAt('b')));
       assert.deepEqual([], await flatten(build(kv).iteratorAt('c')));
     }
 
     {
-      const kv = [{key: 'b', value: 5}, {key: 'd', value: 10}];
+      const kv = [['b', 5], ['d', 10]];
       assert.deepEqual(kv, await flatten(build(kv).iteratorAt('a')));
       assert.deepEqual(kv, await flatten(build(kv).iteratorAt('b')));
       assert.deepEqual(kv.slice(1), await flatten(build(kv).iteratorAt('c')));
@@ -350,7 +352,7 @@ suite('MapLeaf', () => {
     const r3 = ds.writeValue('b');
     const r4 = ds.writeValue(false);
     const m = new Map(
-        newMapLeafSequence(ds, [{key: r1, value: r2}, {key: r3, value: r4}]));
+        newMapLeafSequence(ds, [[r1, r2], [r3, r4]]));
     assert.strictEqual(4, m.chunks.length);
     assert.isTrue(equals(r1, m.chunks[0]));
     assert.isTrue(equals(r2, m.chunks[1]));
@@ -362,17 +364,13 @@ suite('MapLeaf', () => {
 
 suite('CompoundMap', () => {
   function build(vwr: ValueReadWriter): Array<Map> {
-    const l1 = new Map(newMapLeafSequence(vwr, [{key: 'a', value: false},
-        {key:'b', value:false}]));
+    const l1 = new Map(newMapLeafSequence(vwr, [['a', false], ['b', false]]));
     const r1 = vwr.writeValue(l1);
-    const l2 = new Map(newMapLeafSequence(vwr, [{key: 'e', value: true},
-        {key:'f', value:true}]));
+    const l2 = new Map(newMapLeafSequence(vwr, [['e', true], ['f', true]]));
     const r2 = vwr.writeValue(l2);
-    const l3 = new Map(newMapLeafSequence(vwr, [{key: 'h', value: false},
-        {key:'i', value:true}]));
+    const l3 = new Map(newMapLeafSequence(vwr, [['h', false], ['i', true]]));
     const r3 = vwr.writeValue(l3);
-    const l4 = new Map(newMapLeafSequence(vwr, [{key: 'm', value: true},
-        {key:'n', value:false}]));
+    const l4 = new Map(newMapLeafSequence(vwr, [['m', true], ['n', false]]));
     const r4 = vwr.writeValue(l4);
 
     const m1 = new Map(newMapMetaSequence(vwr, [new MetaTuple(r1, 'b', 2),
@@ -454,9 +452,8 @@ suite('CompoundMap', () => {
   test('iterator', async () => {
     const ds = new Database(makeTestingBatchStore());
     const [c] = build(ds);
-    const expected = [{key: 'a', value: false}, {key: 'b', value: false}, {key: 'e', value: true},
-                      {key: 'f', value: true}, {key: 'h', value: false}, {key: 'i', value: true},
-                      {key: 'm', value: true}, {key: 'n', value: false}];
+    const expected = [['a', false], ['b', false], ['e', true], ['f', true], ['h', false],
+                      ['i', true], ['m', true], ['n', false]];
     assert.deepEqual(expected, await flatten(c.iterator()));
     assert.deepEqual(expected, await flattenParallel(c.iterator(), expected.length));
   });
@@ -464,9 +461,8 @@ suite('CompoundMap', () => {
   test('LONG: iteratorAt', async () => {
     const ds = new Database(makeTestingBatchStore());
     const [c] = build(ds);
-    const entries = [{key: 'a', value: false}, {key: 'b', value: false}, {key: 'e', value: true},
-                     {key: 'f', value: true}, {key: 'h', value: false}, {key: 'i', value: true},
-                     {key: 'm', value: true}, {key: 'n', value: false}];
+    const entries = [['a', false], ['b', false], ['e', true], ['f', true], ['h', false],
+                     ['i', true], ['m', true], ['n', false]];
     const offsets = {
       _: 0, a: 0,
       b: 1,
@@ -496,8 +492,7 @@ suite('CompoundMap', () => {
         await iter.return();
       }
     }
-    assert.deepEqual([{key: 'a', value: false}, {key: 'b', value: false}, {key: 'e', value: true},
-                      {key: 'f', value: true}, {key: 'h', value: false}],
+    assert.deepEqual([['a', false], ['b', false], ['e', true], ['f', true], ['h', false]],
                      values);
   });
 
@@ -506,8 +501,8 @@ suite('CompoundMap', () => {
     const [c] = build(ds);
     const iter = c.iterator();
     const values = await Promise.all([iter.next(), iter.next(), iter.return(), iter.next()]);
-    assert.deepEqual([{done: false, value: {key: 'a', value: false}},
-                      {done: false, value: {key: 'b', value: false}},
+    assert.deepEqual([{done: false, value: ['a', false]},
+                      {done: false, value: ['b', false]},
                       {done: true}, {done: true}],
                      values);
   });
@@ -528,18 +523,18 @@ suite('CompoundMap', () => {
     for (let i = 0; i < mapSize; i++) {
       const r = Math.random();
       if (r <= inM1) {
-        kv1.push(i, i + '');
+        kv1.push([i, i + '']);
         removed.push(i);
       } else if (r <= inM1 + inM2) {
-        kv2.push(i, i + '');
+        kv2.push([i, i + '']);
         added.push(i);
       } else if (r <= inM1 + inM2 + inBoth) {
-        kv1.push(i, i + '');
-        kv2.push(i, i + '_');
+        kv1.push([i, i + '']);
+        kv2.push([i, i + '_']);
         modified.push(i);
       } else {
-        kv1.push(i, i + '');
-        kv2.push(i, i + '');
+        kv1.push([i, i + '']);
+        kv2.push([i, i + '']);
       }
     }
 

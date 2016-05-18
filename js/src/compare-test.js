@@ -69,7 +69,7 @@ suite('compare.js', () => {
         // The order of these are done by the hash.
         ds.writeValue(10),
         await newSet([0, 1, 2, 3]),
-        await newMap([0, 1, 2, 3]),
+        await newMap([[0, 1], [2, 3]]),
         boolType,
         await newBlob(new Uint8Array([0, 1, 2, 3])),
         await newList([0, 1, 2, 3]),

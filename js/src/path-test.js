@@ -59,7 +59,7 @@ suite('Path', () => {
   });
 
   test('map', async () => {
-    const v = await newMap([1, 'foo', 'two', 'bar', false, 23, 2.3, 4.5]);
+    const v = await newMap([[1, 'foo'], ['two', 'bar'], [false, 23], [2.3, 4.5]]);
 
     await assertPathEqual('foo', v, new Path().addIndex(1));
     await assertPathEqual('bar', v, new Path().addIndex('two'));
@@ -69,8 +69,8 @@ suite('Path', () => {
   });
 
   test('struct.list.map', async () => {
-    const m1 = await newMap(['a', 'foo', 'b','bar', 'c', 'car']);
-    const m2 = await newMap(['d', 'dar', false, 'earth']);
+    const m1 = await newMap([['a', 'foo'], ['b','bar'], ['c', 'car']]);
+    const m2 = await newMap([['d', 'dar'], [false, 'earth']]);
     const l = await newList([m1, m2]);
     const s = newStruct('', {
       foo: l,

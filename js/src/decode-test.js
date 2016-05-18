@@ -213,7 +213,7 @@ suite('Decode', () => {
     const v: Map<number, number> = r.readValue();
     invariant(v instanceof Map);
 
-    const m = new Map(newMapLeafSequence(ds, [{key: 0, value: 1}, {key: 2, value: 3}]));
+    const m = new Map(newMapLeafSequence(ds, [[0, 1], [2, 3]]));
     assert.isTrue(equals(v, m));
   });
 
@@ -231,7 +231,7 @@ suite('Decode', () => {
     const v: Map<RefValue<Value>, number> = r.readValue();
     invariant(v instanceof Map);
 
-    const m = new Map(newMapLeafSequence(ds, [{key: rv1, value: 2}, {key: rv2, value: 4}]));
+    const m = new Map(newMapLeafSequence(ds, [[rv1, 2], [rv2, 4]]));
     assert.isTrue(equals(v, m));
   });
 
@@ -243,7 +243,7 @@ suite('Decode', () => {
     const v: Map<number, number> = r.readValue();
     invariant(v instanceof Map);
 
-    const m = new Map(newMapLeafSequence(ds, [{key: 0, value: 1}, {key: 2, value: 3}]));
+    const m = new Map(newMapLeafSequence(ds, [[0, 1], [2, 3]]));
     assert.isTrue(equals(v, m));
   });
 

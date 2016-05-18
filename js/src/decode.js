@@ -176,7 +176,7 @@ export class JsonArrayReader {
     while (!this.atEnd()) {
       const k = this.readValue();
       const v = this.readValue();
-      entries.push({key: k, value: v});
+      entries.push([k, v]);
     }
 
     return new MapLeafSequence(this._ds, t, entries);

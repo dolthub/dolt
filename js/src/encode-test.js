@@ -152,8 +152,7 @@ suite('Encode', () => {
     const ds = new Database(makeTestingBatchStore());
     const w = new JsonArrayWriter(ds);
 
-    const v = new Map(newMapLeafSequence(ds, [{key: 'a', value: false},
-        {key:'b', value:true}]));
+    const v = new Map(newMapLeafSequence(ds, [['a', false], ['b', true]]));
     w.writeValue(v);
     assert.deepEqual([Kind.Map, Kind.String, Kind.Bool, false,
       [Kind.String, 'a', Kind.Bool, false, Kind.String, 'b', Kind.Bool, true]], w.array);
@@ -165,8 +164,8 @@ suite('Encode', () => {
 
     // Map<Map<String, Number>, Set<Bool>>({{'a': 0}: {true}})
     const s = new Set(newSetLeafSequence(ds, [true]));
-    const m1 = new Map(newMapLeafSequence(ds, [{key: 'a', value: 0}]));
-    const v = new Map(newMapLeafSequence(ds, [{key: m1, value: s}]));
+    const m1 = new Map(newMapLeafSequence(ds, [['a', 0]]));
+    const v = new Map(newMapLeafSequence(ds, [[m1, s]]));
     w.writeValue(v);
     assert.deepEqual([Kind.Map,
       Kind.Map, Kind.String, Kind.Number,

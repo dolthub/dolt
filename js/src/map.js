@@ -20,10 +20,10 @@ import diff from './ordered-sequence-diff.js';
 import {Value} from './value.js';
 import {Kind} from './noms-kind.js';
 
-export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = {
-  key: K,
-  value: V,
-};
+export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = [K, V];
+
+const KEY = 0;
+const VALUE = 1;
 
 const mapWindowSize = 1;
 const mapPattern = ((1 << 6) | 0) - 1;
@@ -33,7 +33,7 @@ function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(vr: ?ValueR
   return (items: Array<MapEntry<K, V>>) => {
     let indexValue: ?valueOrPrimitive = null;
     if (items.length > 0) {
-      indexValue = items[items.length - 1].key;
+      indexValue = items[items.length - 1][KEY];
       if (indexValue instanceof Value) {
         indexValue = new RefValue(indexValue);
       }
@@ -48,7 +48,7 @@ function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(vr: ?ValueR
 function newMapLeafBoundaryChecker<K: valueOrPrimitive, V: valueOrPrimitive>():
     BoundaryChecker<MapEntry<K, V>> {
   return new BuzHashBoundaryChecker(mapWindowSize, sha1Size, mapPattern,
-    (entry: MapEntry<K, V>) => getRefOfValue(entry.key).digest);
+    (entry: MapEntry<K, V>) => getRefOfValue(entry[KEY]).digest);
 }
 
 export function removeDuplicateFromOrdered<T>(elems: Array<T>,
@@ -69,24 +69,22 @@ export function removeDuplicateFromOrdered<T>(elems: Array<T>,
 }
 
 function compareKeys(v1, v2) {
-  return compare(v1.key, v2.key);
+  return compare(v1[KEY], v2[KEY]);
 }
 
-function buildMapData<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<K | V>):
-    Array<MapEntry<K, V>> {
+function buildMapData<K: valueOrPrimitive, V: valueOrPrimitive>(
+    kvs: Array<MapEntry<K, V>>): Array<MapEntry<K, V>> {
   // TODO: Assert k & v are of correct type
   const entries = [];
-  for (let i = 0; i < kvs.length; i += 2) {
-    // $FlowIssue: gets confused about the K | V type.
-    const key: K = kvs[i], value: V = kvs[i + 1];
-    entries.push({key, value});
+  for (let i = 0; i < kvs.length; i++) {
+    entries.push([kvs[i][KEY], kvs[i][VALUE]]);
   }
   entries.sort(compareKeys);
   return removeDuplicateFromOrdered(entries, compareKeys);
 }
 
-export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(kvs: Array<K | V>):
-    Promise<Map<K, V>> {
+export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(
+    kvs: Array<MapEntry<K, V>>): Promise<Map<K, V>> {
   return chunkSequence(null, buildMapData(kvs), 0, newMapLeafChunkFn(null),
                        newOrderedMetaSequenceChunkFn(Kind.Map, null),
                        newMapLeafBoundaryChecker(),
@@ -100,21 +98,20 @@ export default class Map<K: valueOrPrimitive, V: valueOrPrimitive> extends
     return cursor.valid && equals(cursor.getCurrentKey(), key);
   }
 
-  async _firstOrLast(last: boolean): Promise<?[K, V]> {
+  async _firstOrLast(last: boolean): Promise<?MapEntry<K, V>> {
     const cursor = await this.sequence.newCursorAt(null, false, last);
     if (!cursor.valid) {
       return undefined;
     }
 
-    const entry = cursor.getCurrent();
-    return [entry.key, entry.value];
+    return cursor.getCurrent();
   }
 
-  first(): Promise<?[K, V]> {
+  first(): Promise<?MapEntry<K, V>> {
     return this._firstOrLast(false);
   }
 
-  last(): Promise<?[K, V]> {
+  last(): Promise<?MapEntry<K, V>> {
     return this._firstOrLast(true);
   }
 
@@ -125,13 +122,13 @@ export default class Map<K: valueOrPrimitive, V: valueOrPrimitive> extends
     }
 
     const entry = cursor.getCurrent();
-    return equals(entry.key, key) ? entry.value : undefined;
+    return equals(entry[KEY], key) ? entry[VALUE] : undefined;
   }
 
   async forEach(cb: (v: V, k: K) => void): Promise<void> {
     const cursor = await this.sequence.newCursorAt(null);
     return cursor.iter(entry => {
-      cb(entry.value, entry.key);
+      cb(entry[VALUE], entry[KEY]);
       return false;
     });
   }
@@ -158,14 +155,14 @@ export default class Map<K: valueOrPrimitive, V: valueOrPrimitive> extends
     const cursor = await this.sequence.newCursorAt(key, true);
     if (cursor.valid && equals(cursor.getCurrentKey(), key)) {
       const entry = cursor.getCurrent();
-      if (equals(entry.value, value)) {
+      if (equals(entry[VALUE], value)) {
         return this;
       }
 
       remove = 1;
     }
 
-    return this._splice(cursor, [{key: key, value: value}], remove);
+    return this._splice(cursor, [[key, value]], remove);
   }
 
   async remove(key: K): Promise<Map<K, V>> {
@@ -192,22 +189,22 @@ export default class Map<K: valueOrPrimitive, V: valueOrPrimitive> extends
 export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends
     OrderedSequence<K, MapEntry<K, V>> {
   getKey(idx: number): K {
-    return this.items[idx].key;
+    return this.items[idx][KEY];
   }
 
   equalsAt(idx: number, other: MapEntry<K, V>): boolean {
     const entry = this.items[idx];
-    return equals(entry.key, other.key) && equals(entry.value, other.value);
+    return equals(entry[KEY], other[KEY]) && equals(entry[VALUE], other[VALUE]);
   }
 
   get chunks(): Array<RefValue> {
     const chunks = [];
     for (const entry of this.items) {
-      if (entry.key instanceof Value) {
-        chunks.push(...entry.key.chunks);
+      if (entry[KEY] instanceof Value) {
+        chunks.push(...entry[KEY].chunks);
       }
-      if (entry.value instanceof Value) {
-        chunks.push(...entry.value.chunks);
+      if (entry[VALUE] instanceof Value) {
+        chunks.push(...entry[VALUE].chunks);
       }
     }
     return chunks;
@@ -219,8 +216,8 @@ export function newMapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive>(vr:
   const kt = [];
   const vt = [];
   for (let i = 0; i < items.length; i++) {
-    kt.push(getTypeOfValue(items[i].key));
-    vt.push(getTypeOfValue(items[i].value));
+    kt.push(getTypeOfValue(items[i][KEY]));
+    vt.push(getTypeOfValue(items[i][VALUE]));
   }
   const t = makeMapType(makeUnionType(kt), makeUnionType(vt));
   return new MapLeafSequence(vr, t, items);
