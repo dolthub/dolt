@@ -82,9 +82,7 @@ async function main(): Promise<void> {
       .then(m => m.get(fv)
         .then(prev => m.set(fv, (prev || 0) + 1)));
 
-    return out.then(() => {
-      return false;
-    });
+    return out.then(() => false);
   });
 
   // TODO(aa): Remove this when we have structural typing (commit empty map instead).

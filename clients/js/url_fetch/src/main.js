@@ -7,7 +7,7 @@ import {
   BlobWriter,
   DatasetSpec,
   invariant,
-  NomsBlob,
+  Blob,
 } from '@attic/noms';
 
 const args = argv
@@ -46,7 +46,7 @@ function main(): Promise<void> {
     });
 }
 
-function getBlob(url): Promise<NomsBlob> {
+function getBlob(url): Promise<Blob> {
   const w = new BlobWriter();
 
   return new Promise(resolve => {
@@ -80,7 +80,7 @@ function getBlob(url): Promise<NomsBlob> {
         completedBytes += chunk.length;
         const elapsed = (Date.now() - startTime) / 1000;
         const rate = humanize.filesize(completedBytes / elapsed);
-        process.stdout.write(clearLine + `${humanize.filesize(completedBytes)} of ` + 
+        process.stdout.write(clearLine + `${humanize.filesize(completedBytes)} of ` +
             `${expectedBytesHuman} written in ${elapsed}s (${rate}/s)`);
       });
 

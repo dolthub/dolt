@@ -14,7 +14,7 @@ import {
   makeRefType,
   makeStructType,
   newMap,
-  NomsBlob,
+  Blob,
   RefValue,
   stringType,
   valueType,
@@ -124,7 +124,7 @@ async function processFile(p: string, store: Database): Promise<File> {
 }
 
 
-function processBlob(p: string, store: Database): Promise<RefValue<NomsBlob>> {
+function processBlob(p: string, store: Database): Promise<RefValue<Blob>> {
   const w = new BlobWriter();
   const s = fs.createReadStream(p);
   return new Promise((res, rej) => {
