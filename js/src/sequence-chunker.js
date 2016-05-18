@@ -2,6 +2,8 @@
 
 import type {Sequence} from './sequence.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
+import type {Collection} from './collection.js';
+import type {MetaSequence, MetaTuple} from './meta-sequence.js';
 import type {SequenceCursor} from './sequence.js';
 
 export type BoundaryChecker<T> = {
@@ -9,18 +11,18 @@ export type BoundaryChecker<T> = {
   windowSize: number;
 }
 
-export type NewBoundaryCheckerFn<T> = () => BoundaryChecker<T>;
+export type NewBoundaryCheckerFn = () => BoundaryChecker<MetaTuple>;
 
-export type makeChunkFn = (items: Array<any>) => [any, any];
+export type makeChunkFn<T: Collection> = (items: Array<any>) => [MetaTuple, T];
 
-export async function chunkSequence<S, T>(
+export async function chunkSequence<C: Collection, S>(
   cursor: ?SequenceCursor,
   insert: Array<S>,
   remove: number,
-  makeChunk: makeChunkFn,
-  parentMakeChunk: makeChunkFn,
+  makeChunk: makeChunkFn<C>,
+  parentMakeChunk: makeChunkFn<C>,
   boundaryChecker: BoundaryChecker<S>,
-  newBoundaryChecker: NewBoundaryCheckerFn<T>): Promise<any> {
+  newBoundaryChecker: NewBoundaryCheckerFn): Promise<C> {
 
   const chunker = new SequenceChunker(cursor, makeChunk, parentMakeChunk, boundaryChecker,
                                       newBoundaryChecker);
@@ -42,21 +44,21 @@ export async function chunkSequence<S, T>(
   return await chunker.done();
 }
 
-export class SequenceChunker<S, T, U:Sequence, V:Sequence> {
+export class SequenceChunker<C: Collection, S, U:Sequence> {
   _cursor: ?SequenceCursor<S, U>;
   _isOnChunkBoundary: boolean;
-  _parent: ?SequenceChunker<T, T, V, V>;
+  _parent: ?SequenceChunker<C, MetaTuple, MetaSequence>;
   _current: Array<S>;
-  _makeChunk: makeChunkFn;
-  _parentMakeChunk: makeChunkFn;
+  _makeChunk: makeChunkFn<C>;
+  _parentMakeChunk: makeChunkFn<C>;
   _boundaryChecker: BoundaryChecker<S>;
-  _newBoundaryChecker: NewBoundaryCheckerFn<T>;
+  _newBoundaryChecker: NewBoundaryCheckerFn;
   _used: boolean;
 
   constructor(cursor: ?SequenceCursor, makeChunk: makeChunkFn,
               parentMakeChunk: makeChunkFn,
               boundaryChecker: BoundaryChecker<S>,
-              newBoundaryChecker: NewBoundaryCheckerFn<T>) {
+              newBoundaryChecker: NewBoundaryCheckerFn) {
     this._cursor = cursor;
     this._isOnChunkBoundary = false;
     this._parent = null;
@@ -125,18 +127,19 @@ export class SequenceChunker<S, T, U:Sequence, V:Sequence> {
 
   handleChunkBoundary() {
     invariant(this._current.length > 0);
-    if (!this._parent) {
+    const parent = this._parent;
+    if (!parent) {
       invariant(!this._isOnChunkBoundary);
       this._isOnChunkBoundary = true;
     } else {
       invariant(this._current.length > 0);
       const chunk = this._makeChunk(this._current)[0];
-      notNull(this._parent).append(chunk);
+      parent.append(chunk);
       this._current = [];
     }
   }
 
-  async done(): Promise<any> {
+  async done(): Promise<C> {
     if (this._cursor) {
       await this.finalizeCursor();
     }

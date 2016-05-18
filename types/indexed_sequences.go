@@ -102,7 +102,7 @@ func newIndexedMetaSequenceBoundaryChecker() boundaryChecker {
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
 func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader, sink ValueWriter) makeChunkFn {
-	return func(items []sequenceItem) (sequenceItem, Value) {
+	return func(items []sequenceItem) (metaTuple, Collection) {
 		tuples := make(metaSequenceData, len(items))
 		numLeaves := uint64(0)
 

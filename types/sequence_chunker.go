@@ -23,7 +23,7 @@ type sequenceChunker struct {
 }
 
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items, a tuple of a reference to that chunk which can itself be chunked + its underlying value.
-type makeChunkFn func(values []sequenceItem) (sequenceItem, Value)
+type makeChunkFn func(values []sequenceItem) (metaTuple, Collection)
 
 func newEmptySequenceChunker(makeChunk, parentMakeChunk makeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
 	return newSequenceChunker(nil, makeChunk, parentMakeChunk, boundaryChk, newBoundaryChecker)

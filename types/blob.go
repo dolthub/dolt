@@ -135,7 +135,7 @@ func newBlobLeafBoundaryChecker() boundaryChecker {
 }
 
 func newBlobLeafChunkFn(vr ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (sequenceItem, Value) {
+	return func(items []sequenceItem) (metaTuple, Collection) {
 		buff := make([]byte, len(items))
 
 		for i, v := range items {

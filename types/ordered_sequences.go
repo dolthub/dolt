@@ -134,7 +134,7 @@ func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 }
 
 func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (sequenceItem, Value) {
+	return func(items []sequenceItem) (metaTuple, Collection) {
 		tuples := make(metaSequenceData, len(items))
 		numLeaves := uint64(0)
 

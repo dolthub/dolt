@@ -188,7 +188,7 @@ func newListLeafBoundaryChecker() boundaryChecker {
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
 func makeListLeafChunkFn(vr ValueReader, sink ValueWriter) makeChunkFn {
-	return func(items []sequenceItem) (sequenceItem, Value) {
+	return func(items []sequenceItem) (metaTuple, Collection) {
 		values := make([]Value, len(items))
 
 		for i, v := range items {

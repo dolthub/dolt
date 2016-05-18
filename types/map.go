@@ -218,7 +218,7 @@ func newMapLeafBoundaryChecker() boundaryChecker {
 }
 
 func makeMapLeafChunkFn(vr ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (sequenceItem, Value) {
+	return func(items []sequenceItem) (metaTuple, Collection) {
 		mapData := make([]mapEntry, len(items), len(items))
 
 		for i, v := range items {

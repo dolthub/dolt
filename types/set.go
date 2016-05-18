@@ -192,7 +192,7 @@ func newSetLeafBoundaryChecker() boundaryChecker {
 }
 
 func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (sequenceItem, Value) {
+	return func(items []sequenceItem) (metaTuple, Collection) {
 		setData := make([]Value, len(items), len(items))
 
 		for i, v := range items {
