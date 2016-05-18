@@ -35,7 +35,7 @@ func NewStructWithType(t *Type, data structData) Struct {
 	for name, t := range desc.Fields {
 		v, ok := data[name]
 		d.Chk.True(ok, "Missing required field %s", name)
-		assertType(t, v)
+		assertSubtype(t, v)
 		newData[name] = v
 	}
 	return newStructFromData(newData, t)
@@ -102,7 +102,7 @@ func (s Struct) Get(n string) Value {
 func (s Struct) Set(n string, v Value) Struct {
 	t, ok := s.findField(n)
 	d.Chk.True(ok, "Struct has no field %s", n)
-	assertType(t, v)
+	assertSubtype(t, v)
 	data := make(structData, len(s.data))
 	for k, v := range s.data {
 		data[k] = v

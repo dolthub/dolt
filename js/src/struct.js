@@ -8,7 +8,7 @@ import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
 import {Kind} from './noms-kind.js';
 import {Value} from './value.js';
-import validateType from './validate-type.js';
+import assertSubtype from './assert-type.js';
 
 type StructData = {[key: string]: valueOrPrimitive};
 
@@ -70,7 +70,7 @@ export default class Struct extends Value {
 function validate(type: Type, data: StructData): void {
   type.desc.forEachField((name: string, type: Type) => {
     const value = data[name];
-    validateType(type, value);
+    assertSubtype(type, value);
   });
 }
 
