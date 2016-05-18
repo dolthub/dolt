@@ -41,7 +41,7 @@ type Database interface {
 
 // This interface exists solely to allow RemoteDatabaseClient to pass back a gross side-channel thing for the purposes of pull.
 type batchSink interface {
-	SchedulePut(c chunks.Chunk, hints types.Hints)
+	SchedulePut(c chunks.Chunk, refHeight uint64, hints types.Hints)
 	Flush()
 	io.Closer
 }

@@ -39,7 +39,7 @@ type httpBatchStore struct {
 	rateLimit     chan struct{}
 	requestWg     *sync.WaitGroup
 	workerWg      *sync.WaitGroup
-	unwrittenPuts *unwrittenPutCache
+	unwrittenPuts *orderedChunkCache
 }
 
 func newHTTPBatchStore(baseURL, auth string) *httpBatchStore {
@@ -57,7 +57,7 @@ func newHTTPBatchStore(baseURL, auth string) *httpBatchStore {
 		rateLimit:     make(chan struct{}, httpChunkSinkConcurrency),
 		requestWg:     &sync.WaitGroup{},
 		workerWg:      &sync.WaitGroup{},
-		unwrittenPuts: newUnwrittenPutCache(),
+		unwrittenPuts: newOrderedChunkCache(),
 	}
 	buffSink.batchGetRequests()
 	buffSink.batchPutRequests()
@@ -138,16 +138,16 @@ func (bhcs *httpBatchStore) batchGetRequests() {
 
 func (bhcs *httpBatchStore) sendGetRequests(req chunks.ReadRequest) {
 	batch := chunks.ReadBatch{}
-	refs := map[ref.Ref]struct{}{}
+	hashes := hashSet{}
 
 	addReq := func(req chunks.ReadRequest) {
-		r := req.Ref()
-		batch[r] = append(batch[r], req.Outstanding())
-		refs[r] = struct{}{}
+		hash := req.Ref()
+		batch[hash] = append(batch[hash], req.Outstanding())
+		hashes.Insert(hash)
 	}
 
 	addReq(req)
-	for drained := false; !drained && len(refs) < readBufferSize; {
+	for drained := false; !drained && len(hashes) < readBufferSize; {
 		select {
 		case req := <-bhcs.readQueue:
 			addReq(req)
@@ -164,17 +164,17 @@ func (bhcs *httpBatchStore) sendGetRequests(req chunks.ReadRequest) {
 			batch.Close()
 		}()
 
-		bhcs.getRefs(refs, &batch)
+		bhcs.getRefs(hashes, &batch)
 		<-bhcs.rateLimit
 	}()
 }
 
-func (bhcs *httpBatchStore) getRefs(refs types.Hints, cs chunks.ChunkSink) {
+func (bhcs *httpBatchStore) getRefs(hashes hashSet, cs chunks.ChunkSink) {
 	// POST http://<host>/getRefs/. Post body: ref=sha1---&ref=sha1---& Response will be chunk data if present, 404 if absent.
 	u := *bhcs.host
 	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.GetRefsPath)
 
-	req := newRequest("POST", bhcs.auth, u.String(), buildGetRefsRequest(refs), http.Header{
+	req := newRequest("POST", bhcs.auth, u.String(), buildGetRefsRequest(hashes), http.Header{
 		"Accept-Encoding": {"gzip"},
 		"Content-Type":    {"application/x-www-form-urlencoded"},
 	})
@@ -196,8 +196,8 @@ func (bhcs *httpBatchStore) getRefs(refs types.Hints, cs chunks.ChunkSink) {
 	chunks.Deserialize(reader, cs, rl)
 }
 
-func (bhcs *httpBatchStore) SchedulePut(c chunks.Chunk, hints types.Hints) {
-	if !bhcs.unwrittenPuts.Add(c) {
+func (bhcs *httpBatchStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints types.Hints) {
+	if !bhcs.unwrittenPuts.Insert(c, refHeight) {
 		return
 	}
 
@@ -211,9 +211,13 @@ func (bhcs *httpBatchStore) batchPutRequests() {
 		defer bhcs.workerWg.Done()
 
 		hints := types.Hints{}
-		hashes := ref.RefSlice{}
+		hashes := hashSet{}
 		handleRequest := func(wr writeRequest) {
-			hashes = append(hashes, wr.hash)
+			if hashes.Has(wr.hash) {
+				bhcs.requestWg.Done() // Already have a put enqueued for wr.hash.
+			} else {
+				hashes.Insert(wr.hash)
+			}
 			for hint := range wr.hints {
 				hints[hint] = struct{}{}
 			}
@@ -238,9 +242,8 @@ func (bhcs *httpBatchStore) batchPutRequests() {
 					default:
 						drained = true
 						bhcs.sendWriteRequests(hashes, hints) // Takes ownership of hashes, hints
-
 						hints = types.Hints{}
-						hashes = ref.RefSlice{}
+						hashes = hashSet{}
 					}
 				}
 			}
@@ -248,7 +251,7 @@ func (bhcs *httpBatchStore) batchPutRequests() {
 	}()
 }
 
-func (bhcs *httpBatchStore) sendWriteRequests(hashes ref.RefSlice, hints types.Hints) {
+func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints) {
 	if len(hashes) == 0 {
 		return
 	}
@@ -267,7 +270,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes ref.RefSlice, hints types.H
 			errChan := make(chan error)
 			go func() {
 				gw := gzip.NewWriter(pw)
-				err := bhcs.unwrittenPuts.ExtractChunks(hashes[0], hashes[len(hashes)-1], gw)
+				err := bhcs.unwrittenPuts.ExtractChunks(hashes, gw)
 				// The ordering of these is important. Close the gzipper to flush data to pw, then close pw so that the HTTP stack which is reading from serializedChunks knows it has everything, and only THEN block on errChan.
 				gw.Close()
 				pw.Close()

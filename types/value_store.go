@@ -67,12 +67,13 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	c := EncodeValue(v, lvs)
 	d.Chk.False(c.IsEmpty())
 	hash := c.Ref()
-	r := constructRef(MakeRefType(v.Type()), hash, maxChunkHeight(v)+1)
+	height := maxChunkHeight(v) + 1
+	r := constructRef(MakeRefType(v.Type()), hash, height)
 	if lvs.isPresent(hash) {
 		return r
 	}
 	hints := lvs.checkChunksInCache(v)
-	lvs.bs.SchedulePut(c, hints)
+	lvs.bs.SchedulePut(c, height, hints)
 	lvs.set(hash, hintedChunk{v.Type(), hash})
 	return r
 }

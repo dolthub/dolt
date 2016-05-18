@@ -83,7 +83,7 @@ func (suite *HTTPBatchStoreSuite) TearDownTest() {
 
 func (suite *HTTPBatchStoreSuite) TestPutChunk() {
 	c := types.EncodeValue(types.NewString("abc"), nil)
-	suite.store.SchedulePut(c, types.Hints{})
+	suite.store.SchedulePut(c, 1, types.Hints{})
 	suite.store.Flush()
 
 	suite.Equal(1, suite.cs.Writes)
@@ -96,10 +96,10 @@ func (suite *HTTPBatchStoreSuite) TestPutChunksInOrder() {
 	}
 	l := types.NewList()
 	for _, val := range vals {
-		suite.store.SchedulePut(types.EncodeValue(val, nil), types.Hints{})
+		suite.store.SchedulePut(types.EncodeValue(val, nil), 1, types.Hints{})
 		l = l.Append(types.NewRef(val))
 	}
-	suite.store.SchedulePut(types.EncodeValue(l, nil), types.Hints{})
+	suite.store.SchedulePut(types.EncodeValue(l, nil), 2, types.Hints{})
 	suite.store.Flush()
 
 	suite.Equal(3, suite.cs.Writes)
@@ -117,7 +117,7 @@ func (suite *HTTPBatchStoreSuite) TestPutChunkWithHints() {
 	suite.NoError(suite.cs.PutMany(chnx))
 	l := types.NewList(types.NewRef(vals[0]), types.NewRef(vals[1]))
 
-	suite.store.SchedulePut(types.EncodeValue(l, nil), types.Hints{
+	suite.store.SchedulePut(types.EncodeValue(l, nil), 2, types.Hints{
 		chnx[0].Ref(): struct{}{},
 		chnx[1].Ref(): struct{}{},
 	})
@@ -163,10 +163,10 @@ func (suite *HTTPBatchStoreSuite) TestPutChunksBackpressure() {
 	}
 	l := types.NewList()
 	for _, v := range vals {
-		bs.SchedulePut(types.EncodeValue(v, nil), types.Hints{})
+		bs.SchedulePut(types.EncodeValue(v, nil), 1, types.Hints{})
 		l = l.Append(types.NewRef(v))
 	}
-	bs.SchedulePut(types.EncodeValue(l, nil), types.Hints{})
+	bs.SchedulePut(types.EncodeValue(l, nil), 2, types.Hints{})
 	bs.Flush()
 
 	suite.Equal(6, suite.cs.Writes)

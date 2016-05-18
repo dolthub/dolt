@@ -26,7 +26,7 @@ type notABatchSink struct {
 	rateLimit     chan struct{}
 	requestWg     *sync.WaitGroup
 	workerWg      *sync.WaitGroup
-	unwrittenPuts *unwrittenPutCache
+	unwrittenPuts *orderedChunkCache
 }
 
 func newNotABatchSink(host *url.URL, auth string) *notABatchSink {
@@ -40,7 +40,7 @@ func newNotABatchSink(host *url.URL, auth string) *notABatchSink {
 		rateLimit:     make(chan struct{}, httpChunkSinkConcurrency),
 		requestWg:     &sync.WaitGroup{},
 		workerWg:      &sync.WaitGroup{},
-		unwrittenPuts: newUnwrittenPutCache(),
+		unwrittenPuts: newOrderedChunkCache(),
 	}
 	sink.batchPutRequests()
 	return sink
@@ -63,8 +63,8 @@ func (bhcs *notABatchSink) Close() (e error) {
 	return
 }
 
-func (bhcs *notABatchSink) SchedulePut(c chunks.Chunk, hints types.Hints) {
-	if !bhcs.unwrittenPuts.Add(c) {
+func (bhcs *notABatchSink) SchedulePut(c chunks.Chunk, refHeight uint64, hints types.Hints) {
+	if !bhcs.unwrittenPuts.Insert(c, refHeight) {
 		return
 	}
 
@@ -119,7 +119,7 @@ func (bhcs *notABatchSink) batchPutRequests() {
 func (bhcs *notABatchSink) sendWriteRequests(chnx []chunks.Chunk) {
 	bhcs.rateLimit <- struct{}{}
 	go func() {
-		hashes := make(ref.RefSlice, len(chnx))
+		hashes := make(hashSet, len(chnx))
 		defer func() {
 			bhcs.unwrittenPuts.Clear(hashes)
 			bhcs.requestWg.Add(-len(chnx))
@@ -128,8 +128,8 @@ func (bhcs *notABatchSink) sendWriteRequests(chnx []chunks.Chunk) {
 		body := &bytes.Buffer{}
 		gw := gzip.NewWriter(body)
 		sz := chunks.NewSerializer(gw)
-		for i, chunk := range chnx {
-			hashes[i] = chunk.Ref()
+		for _, chunk := range chnx {
+			hashes.Insert(chunk.Ref())
 			sz.Put(chunk)
 		}
 		sz.Close()

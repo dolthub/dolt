@@ -25,8 +25,8 @@ func CopyReachableChunksP(source, sink Database, sourceRef, exclude types.Ref, c
 		mu := sync.Mutex{}
 		excludeCallback := func(r types.Ref) bool {
 			mu.Lock()
+			defer mu.Unlock()
 			excludeRefs[r.TargetRef()] = true
-			mu.Unlock()
 			return false
 		}
 
@@ -42,8 +42,8 @@ func CopyReachableChunksP(source, sink Database, sourceRef, exclude types.Ref, c
 func copyWorker(source, sink Database, sourceRef types.Ref, stopCb walk.SomeChunksStopCallback, concurrency int) {
 	bs := sink.batchSink()
 
-	walk.SomeChunksP(sourceRef, source.batchStore(), stopCb, func(c chunks.Chunk) {
-		bs.SchedulePut(c, types.Hints{})
+	walk.SomeChunksP(sourceRef, source.batchStore(), stopCb, func(r types.Ref, c chunks.Chunk) {
+		bs.SchedulePut(c, r.Height(), types.Hints{})
 	}, concurrency)
 
 	bs.Flush()

@@ -95,8 +95,8 @@ func doTreeWalkP(v types.Value, vr types.ValueReader, cb SomeCallback, concurren
 // SomeChunksStopCallback is called for every unique types.Ref |r|. Return true to stop walking beyond |r|.
 type SomeChunksStopCallback func(r types.Ref) bool
 
-// SomeChunksChunkCallback is called for every unique chunks.Chunk |c| which wasn't stopped from SomeChunksStopCallback.
-type SomeChunksChunkCallback func(c chunks.Chunk)
+// SomeChunksChunkCallback is called for every unique chunks.Chunk |c| which wasn't stopped from SomeChunksStopCallback. |r| is a types.Ref referring to |c|.
+type SomeChunksChunkCallback func(r types.Ref, c chunks.Chunk)
 
 // SomeChunksP invokes callbacks on every unique chunk reachable from |r| in top-down order. Callbacks are invoked only once for each chunk regardless of how many times the chunk appears.
 //
@@ -130,7 +130,7 @@ func SomeChunksP(r types.Ref, bs types.BatchStore, stopCb SomeChunksStopCallback
 			d.Chk.False(c.IsEmpty())
 
 			if chunkCb != nil {
-				chunkCb(c)
+				chunkCb(r, c)
 			}
 		}
 
