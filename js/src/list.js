@@ -47,9 +47,8 @@ export function newList<T: valueOrPrimitive>(values: Array<T>): Promise<List<T>>
 
 export default class List<T: valueOrPrimitive> extends Collection<IndexedSequence> {
   async get(idx: number): Promise<T> {
-    // TODO (when |length| works) invariant(idx < this.length, idx + ' >= ' + this.length);
-    const cursor = await this.sequence.newCursorAt(idx);
-    return cursor.getCurrent();
+    invariant(idx >= 0 && idx < this.length);
+    return this.sequence.newCursorAt(idx).then(cursor => cursor.getCurrent());
   }
 
   splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<List<T>> {
