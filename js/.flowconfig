@@ -1,5 +1,4 @@
 [ignore]
-.*/dist
 .*/node_modules/babel.*
 .*/node_modules/babylon/.*
 .*/node_modules/d3/.*
