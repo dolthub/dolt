@@ -73,3 +73,63 @@ func TestGenericStructSet(t *testing.T) {
 	s3 := s2.Set("b", Bool(true))
 	assert.True(s.Equals(s3))
 }
+
+func TestStructDiff(t *testing.T) {
+	assert := assert.New(t)
+
+	assertDiff := func(expect []string, s1, s2 Struct) {
+		actual := StructDiff(s1, s2)
+		assert.Equal(len(expect), len(actual))
+		for i, _ := range actual {
+			assert.Equal(expect[i], actual[i])
+		}
+	}
+
+	s1 := NewStruct("", map[string]Value{"a": Bool(true), "b": NewString("hi"), "c": Number(4)})
+
+	assertDiff([]string{}, s1,
+		NewStruct("", map[string]Value{"a": Bool(true), "b": NewString("hi"), "c": Number(4)}))
+
+	assertDiff([]string{"a", "b"}, s1,
+		NewStruct("", map[string]Value{"a": Bool(false), "b": NewString("bye"), "c": Number(4)}))
+
+	assertDiff([]string{"b", "c"}, s1,
+		NewStruct("", map[string]Value{"a": Bool(true), "b": NewString("bye"), "c": Number(5)}))
+
+	assertDiff([]string{"a", "c"}, s1,
+		NewStruct("", map[string]Value{"a": Bool(false), "b": NewString("hi"), "c": Number(10)}))
+
+	s2 := NewStruct("", map[string]Value{
+		"a": NewList(Number(0), Number(1)),
+		"b": NewMap(NewString("foo"), Bool(false), NewString("bar"), Bool(true)),
+		"c": NewSet(Number(0), Number(1), NewString("foo")),
+	})
+
+	assertDiff([]string{}, s2,
+		NewStruct("", map[string]Value{
+			"a": NewList(Number(0), Number(1)),
+			"b": NewMap(NewString("foo"), Bool(false), NewString("bar"), Bool(true)),
+			"c": NewSet(Number(0), Number(1), NewString("foo")),
+		}))
+
+	assertDiff([]string{"a", "b"}, s2,
+		NewStruct("", map[string]Value{
+			"a": NewList(Number(1), Number(1)),
+			"b": NewMap(NewString("foo"), Bool(true), NewString("bar"), Bool(true)),
+			"c": NewSet(Number(0), Number(1), NewString("foo")),
+		}))
+
+	assertDiff([]string{"a", "c"}, s2,
+		NewStruct("", map[string]Value{
+			"a": NewList(Number(0)),
+			"b": NewMap(NewString("foo"), Bool(false), NewString("bar"), Bool(true)),
+			"c": NewSet(Number(0), Number(2), NewString("foo")),
+		}))
+
+	assertDiff([]string{"b", "c"}, s2,
+		NewStruct("", map[string]Value{
+			"a": NewList(Number(0), Number(1)),
+			"b": NewMap(NewString("boo"), Bool(false), NewString("bar"), Bool(true)),
+			"c": NewSet(Number(0), Number(1), NewString("bar")),
+		}))
+}

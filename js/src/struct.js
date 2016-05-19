@@ -1,14 +1,15 @@
 // @flow
 
+import assertSubtype from './assert-type.js';
 import type RefValue from './ref-value.js';
-import type {valueOrPrimitive} from './value.js';
-import {getTypeOfValue, makeStructType} from './type.js';
 import type {Type, StructDesc} from './type.js';
-import {invariant} from './assert.js';
-import {isPrimitive} from './primitives.js';
+import type {valueOrPrimitive} from './value.js';
 import {Kind} from './noms-kind.js';
 import {Value} from './value.js';
-import assertSubtype from './assert-type.js';
+import {equals} from './compare.js';
+import {getTypeOfValue, makeStructType} from './type.js';
+import {invariant} from './assert.js';
+import {isPrimitive} from './primitives.js';
 
 type StructData = {[key: string]: valueOrPrimitive};
 
@@ -211,4 +212,23 @@ function computeTypeForStruct(name: string, data: StructData): Type<StructDesc> 
     fields[k] = getTypeOfValue(data[k]);
   }
   return makeStructType(name, fields);
+}
+
+// s1 & s2 must be of the same type. Returns the set of field names which have different values in
+// the respective structs
+export function structDiff(s1: Struct, s2: Struct): [string] {
+  const desc1: StructDesc = s1.type.desc;
+  const desc2: StructDesc = s2.type.desc;
+  invariant(desc1.equals(desc2));
+
+  const changed = [];
+  desc1.forEachField((name: string, _: Type) => {
+    const v1 = s1._data[name];
+    const v2 = s2._data[name];
+    if (!equals(v1, v2)) {
+      changed.push(name);
+    }
+  });
+
+  return changed;
 }

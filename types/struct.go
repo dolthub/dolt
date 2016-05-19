@@ -147,3 +147,18 @@ func structReader(s Struct, t *Type) []Value {
 
 	return values
 }
+
+// s1 & s2 must be of the same type. Returns the set of field names which have different values in the respective structs
+func StructDiff(s1, s2 Struct) (changed []string) {
+	d.Chk.True(s1.Type().Equals(s2.Type()))
+
+	s1.desc().IterFields(func(name string, t *Type) {
+		v1 := s1.data[name]
+		v2 := s2.data[name]
+		if !v1.Equals(v2) {
+			changed = append(changed, name)
+		}
+	})
+
+	return
+}

@@ -5,6 +5,7 @@ import Struct, {
   newStruct,
   newStructWithType,
   StructMirror,
+  structDiff,
   createStructClass,
 } from './struct.js';
 import {assert} from 'chai';
@@ -20,6 +21,8 @@ import {suite, test} from 'mocha';
 import Database from './database.js';
 import {equals} from './compare.js';
 import {newList} from './list.js';
+import {newMap} from './map.js';
+import {newSet} from './set.js';
 
 suite('Struct', () => {
   test('equals', () => {
@@ -127,5 +130,49 @@ suite('Struct', () => {
     assert.throws(() => {
       newStructWithType(type, {b: true, o: 1});
     });
+  });
+
+  function assertDiff(expect: [string], s1: Struct, s2: Struct) {
+    const actual = structDiff(s1, s2);
+    assert.deepEqual(expect, actual);
+  }
+
+  test('diff', async () => {
+    const s1 = newStruct('', {a: true, b: 'hi', c: 4});
+
+    assertDiff([], s1, newStruct('', {a: true, b: 'hi', c: 4}));
+    assertDiff(['a', 'b'], s1, newStruct('', {a: false, b: 'bye', c: 4}));
+    assertDiff(['b', 'c'], s1, newStruct('', {a: true, b: 'bye', c: 5}));
+    assertDiff(['a', 'c'], s1, newStruct('', {a: false, b: 'hi', c: 10}));
+
+    const s2 = newStruct('', {
+      a: await newList([0, 1]),
+      b: await newMap([['foo', false], ['bar', false]]),
+      c: await newSet([0, 1, 'foo']),
+    });
+
+    assertDiff([], s2, newStruct('', {
+      a: await newList([0, 1]),
+      b: await newMap([['foo', false], ['bar', false]]),
+      c: await newSet([0, 1, 'foo']),
+    }));
+
+    assertDiff(['a', 'b'], s2, newStruct('', {
+      a: await newList([1, 1]),
+      b: await newMap([['foo', false], ['bar', true]]),
+      c: await newSet([0, 1, 'foo']),
+    }));
+
+    assertDiff(['a', 'c'], s2, newStruct('', {
+      a: await newList([0]),
+      b: await newMap([['foo', false], ['bar', false]]),
+      c: await newSet([0, 1, 'bar']),
+    }));
+
+    assertDiff(['b', 'c'], s2, newStruct('', {
+      a: await newList([0, 1]),
+      b: await newMap([['boo', false], ['bar', true]]),
+      c: await newSet([0, 1, 'bar']),
+    }));
   });
 });
