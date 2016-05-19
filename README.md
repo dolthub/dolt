@@ -15,7 +15,6 @@ This repository contains two reference implementations of the noms protocol - on
 # Set environment variables
 
 * Ensure [`$GOPATH` is set correctly](https://golang.org/doc/code.html#GOPATH)
-* Set `GO15VENDOREXPERIMENT=1` in your environment - all our code requires this
 
 # Get the code
 
