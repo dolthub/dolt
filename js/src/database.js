@@ -154,8 +154,8 @@ export default class Database {
     throw new Error('Optimistic lock failed');
   }
 
-  close() {
-    this._vs.close();
+  close(): Promise<void> {
+    return this._vs.close();
   }
 }
 

@@ -90,8 +90,8 @@ export default class ValueStore {
     return this._bs.flush();
   }
 
-  close() {
-    this._bs.close();
+  close(): Promise<void> {
+    return this._bs.close();
   }
 }
 

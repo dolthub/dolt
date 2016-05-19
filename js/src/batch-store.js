@@ -140,5 +140,7 @@ export default class BatchStore {
 
   // TODO: Should close() call flush() and block until it's done? Maybe closing with outstanding
   // requests should be an error on both sides. TBD.
-  close() {}
+  close(): Promise<void> {
+    return this._pendingWrites.destroy();
+  }
 }

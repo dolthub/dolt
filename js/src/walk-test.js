@@ -16,13 +16,18 @@ import {newMap} from './map.js';
 import {newSet} from './set.js';
 import walk from './walk.js';
 
-import {suite, test} from 'mocha';
+import {suite, suiteSetup, suiteTeardown, test} from 'mocha';
 import {assert} from 'chai';
 
 import type {valueOrPrimitive} from './value.js';
 
 suite('walk', () => {
-  const ds = new Database(new BatchStoreAdaptor(new MemoryStore()));
+  let ds;
+  suiteSetup(() => {
+    ds = new Database(new BatchStoreAdaptor(new MemoryStore()));
+  });
+
+  suiteTeardown((): Promise<void> => ds.close());
 
   test('primitives', async () => {
     await Promise.all([true, false, 42, 88.8, 'hello!', ''].map(async v => {

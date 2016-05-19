@@ -60,6 +60,7 @@ export async function testRoundTripAndValidate<T: valueOrPrimitive>(v: T,
     assert.strictEqual(v2, v);
   }
   await validateFn(v2);
+  await ds2.close();
 }
 
 export function chunkDiffCount(v1: valueOrPrimitive, v2: valueOrPrimitive): number {
