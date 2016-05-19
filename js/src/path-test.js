@@ -68,7 +68,7 @@ suite('Path', () => {
     await assertPathEqual(undefined, v, new Path().addIndex(4));
   });
 
-  test('struct.list.map', async () => {
+  test('multi', async () => {
     const m1 = await newMap([['a', 'foo'], ['b','bar'], ['c', 'car']]);
     const m2 = await newMap([['d', 'dar'], [false, 'earth']]);
     const l = await newList([m1, m2]);
