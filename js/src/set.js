@@ -38,7 +38,7 @@ function newSetLeafChunkFn<T:valueOrPrimitive>(vr: ?ValueReader): makeChunkFn {
       }
     }
 
-    const ns = new NomsSet(setLeaf);
+    const ns = new Set(setLeaf);
     const mt = new MetaTuple(new RefValue(ns), indexValue, items.length, ns);
     return [mt, ns];
   };
@@ -57,14 +57,14 @@ function buildSetData<T>(values: Array<any>): Array<T> {
 }
 
 export function newSet<T:valueOrPrimitive>(values: Array<T>):
-    Promise<NomsSet<T>> {
+    Promise<Set<T>> {
   return chunkSequence(null, buildSetData(values), 0, newSetLeafChunkFn(null),
                        newOrderedMetaSequenceChunkFn(Kind.Set, null),
                        newSetLeafBoundaryChecker(),
                        newOrderedMetaSequenceBoundaryChecker);
 }
 
-export default class NomsSet<T: valueOrPrimitive> extends Collection<OrderedSequence> {
+export default class Set<T: valueOrPrimitive> extends Collection<OrderedSequence> {
   async has(key: T): Promise<boolean> {
     const cursor = await this.sequence.newCursorAt(key);
     return cursor.valid && equals(cursor.getCurrentKey(), key);
@@ -100,7 +100,7 @@ export default class NomsSet<T: valueOrPrimitive> extends Collection<OrderedSequ
   }
 
   _splice(cursor: OrderedSequenceCursor, insert: Array<T>, remove: number):
-      Promise<NomsSet<T>> {
+      Promise<Set<T>> {
     const vr = this.sequence.vr;
     return chunkSequence(cursor, insert, remove, newSetLeafChunkFn(vr),
                          newOrderedMetaSequenceChunkFn(Kind.Set, vr),
@@ -108,7 +108,7 @@ export default class NomsSet<T: valueOrPrimitive> extends Collection<OrderedSequ
                          newOrderedMetaSequenceBoundaryChecker);
   }
 
-  async insert(value: T): Promise<NomsSet<T>> {
+  async insert(value: T): Promise<Set<T>> {
     const cursor = await this.sequence.newCursorAt(value, true);
     if (cursor.valid && equals(cursor.getCurrentKey(), value)) {
       return this;
@@ -117,7 +117,7 @@ export default class NomsSet<T: valueOrPrimitive> extends Collection<OrderedSequ
     return this._splice(cursor, [value], 0);
   }
 
-  async remove(value: T): Promise<NomsSet<T>> {
+  async remove(value: T): Promise<Set<T>> {
     const cursor = await this.sequence.newCursorAt(value);
     if (cursor.valid && equals(cursor.getCurrentKey(), value)) {
       return this._splice(cursor, [], 1);
@@ -126,7 +126,7 @@ export default class NomsSet<T: valueOrPrimitive> extends Collection<OrderedSequ
     return this;
   }
 
-  // TODO: Find some way to return a NomsSet.
+  // TODO: Find some way to return a Set.
   async map<S>(cb: (v: T) => (Promise<S> | S)): Promise<Array<S>> {
     const cursor = await this.sequence.newCursorAt(null);
     const values = [];
@@ -142,7 +142,7 @@ export default class NomsSet<T: valueOrPrimitive> extends Collection<OrderedSequ
     return this.sequence.numLeaves;
   }
 
-  async intersect(...sets: Array<NomsSet<T>>): Promise<NomsSet<T>> {
+  async intersect(...sets: Array<Set<T>>): Promise<Set<T>> {
     if (sets.length === 0) {
       return this;
     }
@@ -176,13 +176,13 @@ export default class NomsSet<T: valueOrPrimitive> extends Collection<OrderedSequ
     }
 
     // TODO: Chunk the resulting set.
-    return new NomsSet(newSetLeafSequence(null, values));
+    return new Set(newSetLeafSequence(null, values));
   }
 
   /**
    * Returns a 2-tuple [added, removed] sorted values.
    */
-  diff(from: NomsSet<T>): Promise<[Array<T> /* added */, Array<T> /* removed */]> {
+  diff(from: Set<T>): Promise<[Array<T> /* added */, Array<T> /* removed */]> {
     return diff(from.sequence, this.sequence).then(([added, removed, modified]) => {
       invariant(modified.length === 0);
       return [added, removed];

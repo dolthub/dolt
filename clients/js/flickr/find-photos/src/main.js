@@ -11,9 +11,7 @@ import {
   StructMirror,
   walk,
 } from '@attic/noms';
-import type {
-  NomsMap,
-} from '@attic/noms';
+import type {Map} from '@attic/noms';
 
 const args = argv
   .usage(
@@ -68,8 +66,8 @@ function getGeo(input: Struct): Struct {
   return newStruct('Geoposition', geopos);
 }
 
-function getSizes(input: Struct): Promise<NomsMap<Struct, string>> {
-  let res: Promise<NomsMap<Struct, string>> = newMap([]);
+function getSizes(input: Struct): Promise<Map<Struct, string>> {
+  let res: Promise<Map<Struct, string>> = newMap([]);
 
   // TODO: Really want to do Go-style interface checking here.
   // Could have one struct for each size, then just check each one in turn, add it if present.

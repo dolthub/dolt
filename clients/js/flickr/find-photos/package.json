@@ -3,7 +3,7 @@
   "description": "Creates standard photo structs out of slurped flickr data",
   "main": "dist/main.js",
   "dependencies": {
-    "@attic/noms": "29.0.0",
+    "@attic/noms": "^32.2.0",
     "babel-regenerator-runtime": "6.5.0",
     "humanize": "0.0.9",
     "node-fetch": "1.5.2",

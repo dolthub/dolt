@@ -1,11 +1,8 @@
 /* global Plotly */
 
 import {
-  boolType,
   DatasetSpec,
-  makeMapType,
   newMap,
-  stringType,
 } from '@attic/noms';
 
 window.onload = main;
@@ -46,6 +43,6 @@ function getMap() {
     const ds = DatasetSpec.parse(args.ds).set();
     return ds.head().then(commit => commit.value);
   } else {
-    return newMap(['Donkeys', 36, 'Monkeys', 8, 'Giraffes', 12], makeMapType(stringType, boolType));
+    return newMap([['Donkeys', 36], ['Monkeys', 8], ['Giraffes', 12]]);
   }
 }

@@ -103,12 +103,12 @@ Noms Type | JavaScript Type
 Boolean | boolean
 Number | number
 String | string
-Blob | [NomsBlob](#NomsBlob)
-Set | [NomsSet](#NomsSet)
-List | [NomsList](#NomsList)
-Map | [NomsMap](#NomsMap)
+Blob | [noms.Blob](#Blob)
+Set | [noms.Set](#Set)
+List | [noms.List](#List)
+Map | [noms.Map](#Map)
 Ref | [Ref](#Ref)
-Struct | object or [NomsStruct](#NomsStruct)
+Struct | object or [noms.Struct](#Struct)
 
 For example:
 
@@ -118,6 +118,6 @@ For example:
 store.writeValue({
   foo: "bar",
   num: 42,
-  list: new NomsList("a", "b", 4, 8),
+  list: new List("a", "b", 4, 8),
 });
 ```

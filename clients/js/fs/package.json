@@ -2,7 +2,7 @@
   "name": "noms-fs",
   "main": "dist/main.js",
   "dependencies": {
-    "@attic/noms": "^31.0.0",
+    "@attic/noms": "^32.2.0",
     "babel-regenerator-runtime": "6.5.0",
     "humanize": "0.0.9",
     "mz": "2.4.0",

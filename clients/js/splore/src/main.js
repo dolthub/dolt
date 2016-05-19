@@ -4,19 +4,19 @@ import Layout from './layout.js';
 import React from 'react';
 import ReactDOM from 'react-dom';
 import {
+  Blob,
   Database,
   HttpBatchStore,
   IndexedMetaSequence,
   invariant,
+  List,
   ListLeafSequence,
+  Map,
   MapLeafSequence,
-  NomsBlob,
-  NomsList,
-  NomsMap,
-  NomsSet,
   OrderedMetaSequence,
   Ref,
   RefValue,
+  Set,
   SetLeafSequence,
   Struct,
   StructMirror,
@@ -129,9 +129,9 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
 
     if (t === 'boolean' || t === 'number' || t === 'string') {
       data.nodes[id] = {name: String(val)};
-    } else if (val instanceof NomsBlob) {
+    } else if (val instanceof Blob) {
       data.nodes[id] = {name: `Blob (${val.length})`};
-    } else if (val instanceof NomsList) {
+    } else if (val instanceof List) {
       const sequence = val.sequence;
       if (sequence instanceof ListLeafSequence) {
         data.nodes[id] = {name: `List (${val.length})`};
@@ -140,7 +140,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         invariant(sequence instanceof IndexedMetaSequence);
         processMetaSequence(id, sequence, 'ListNode');
       }
-    } else if (val instanceof NomsSet) {
+    } else if (val instanceof Set) {
       const sequence = val.sequence;
       if (sequence instanceof SetLeafSequence) {
         data.nodes[id] = {name: `Set (${val.size})`};
@@ -149,13 +149,12 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         invariant(sequence instanceof OrderedMetaSequence);
         processMetaSequence(id, sequence, 'SetNode');
       }
-    } else if (val instanceof NomsMap) {
+    } else if (val instanceof Map) {
       const sequence = val.sequence;
       if (sequence instanceof MapLeafSequence) {
         data.nodes[id] = {name: `Map (${val.size})`};
         sequence.items.forEach(entry => {
-          const k = entry.key;
-          const v = entry.value;
+          const [k, v] = entry;
           // TODO: handle non-string keys
           const kid = process(ref, k, id);
           if (kid) {
