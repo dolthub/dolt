@@ -13,7 +13,8 @@ export default class OrderedPutCache {
   }
 
   get(): ?Promise<Chunk> {
-    throw err();
+    // TODO: Implement
+    return null;
   }
 
   dropUntil(): Promise<void> {
