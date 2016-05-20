@@ -57,5 +57,6 @@ suite('Dataset', () => {
     const newStore = new Database(bs);
     assert.strictEqual('d', notNull(await newStore.head('ds1')).value);
     assert.strictEqual('a', notNull(await newStore.head('otherDs')).value);
+    await newStore.close();
   });
 });

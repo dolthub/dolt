@@ -27,6 +27,7 @@ suite('Database', () => {
 
     const v2 = await ds.readValue(c.ref);
     assert.equal('abc', v2);
+    await ds.close();
   });
 
   test('commit', async () => {
@@ -101,6 +102,7 @@ suite('Database', () => {
     const newDs = new Database(bs);
     assert.strictEqual('d', notNull(await newDs.head(datasetID)).value);
     assert.strictEqual('a', notNull(await newDs.head('otherDs')).value);
+    await ds.close();
   });
 
   test('concurrency', async () => {
@@ -139,6 +141,7 @@ suite('Database', () => {
     }
     assert.strictEqual('Merge needed', message);
     assert.strictEqual('c', notNull(await ds.head(datasetID)).value);
+    await ds.close();
   });
 
 
@@ -146,6 +149,7 @@ suite('Database', () => {
     const ds = new Database(makeTestingBatchStore());
     const datasets = await ds.datasets();
     assert.strictEqual(0, datasets.size);
+    await ds.close();
   });
 
   test('head', async () => {
@@ -166,6 +170,7 @@ suite('Database', () => {
     assert.isTrue(equals(fooHead, commit));
     const barHead = await ds.head('bar');
     assert.isNull(barHead);
+    await ds.close();
   });
 
   test('height of refs', async () => {
@@ -177,6 +182,7 @@ suite('Database', () => {
     const r1 = ds.writeValue(v1);
     assert.strictEqual(2, r1.height);
     assert.strictEqual(3, ds.writeValue(r1).height);
+    await ds.close();
   });
 
   test('height of collections', async() => {
@@ -213,5 +219,6 @@ suite('Database', () => {
     assert.strictEqual(2, ds.writeValue(l4).height);
     const l5 = await newList([ds.writeValue(s1), s3]);
     assert.strictEqual(2, ds.writeValue(l5).height);
+    await ds.close();
   });
 });

@@ -34,13 +34,14 @@ suite('Struct', () => {
   });
 
   test('chunks', () => {
-    const ds = new Database(makeTestingBatchStore());
+    const db = new Database(makeTestingBatchStore());
 
     const b = true;
-    const r = ds.writeValue(b);
+    const r = db.writeValue(b);
     const s1 = newStruct('S1', {r: r});
     assert.strictEqual(1, s1.chunks.length);
     assert.isTrue(equals(r, s1.chunks[0]));
+    return db.close();
   });
 
   test('new', () => {

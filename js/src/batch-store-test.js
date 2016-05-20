@@ -18,6 +18,7 @@ suite('BatchStore', () => {
 
     const chunk = await bs.get(c.ref);
     assert.isTrue(c.ref.equals(chunk.ref));
+    await bs.close();
   });
 
   test('get after schedulePut works after flush', async () => {
@@ -34,5 +35,6 @@ suite('BatchStore', () => {
     await bs.flush();
     chunk = await bs.get(c.ref);
     assert.isTrue(c.ref.equals(chunk.ref));
+    await bs.close();
   });
 });

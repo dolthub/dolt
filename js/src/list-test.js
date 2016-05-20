@@ -1,7 +1,7 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite, test} from 'mocha';
+import {suite, setup, teardown, test} from 'mocha';
 
 import Database from './database.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
@@ -194,12 +194,12 @@ suite('List', () => {
   });
 
   test('LONG: write, read, modify, read', async () => {
-    const ds = new Database(makeTestingBatchStore());
+    const db = new Database(makeTestingBatchStore());
 
     const nums = intSequence(testListSize);
     const s = await newList(nums);
-    const r = ds.writeValue(s).targetRef;
-    const s2 = await ds.readValue(r);
+    const r = db.writeValue(s).targetRef;
+    const s2 = await db.readValue(r);
     const outNums = await s2.toJS();
     assert.deepEqual(nums, outNums);
 
@@ -208,21 +208,27 @@ suite('List', () => {
     const outNums2 = await s3.toJS();
     nums.splice(testListSize - 1, 1);
     assert.deepEqual(nums, outNums2);
+    await db.close();
   });
 });
 
 suite('ListLeafSequence', () => {
+  let db;
+
+  setup(() => {
+    db = new Database(makeTestingBatchStore());
+  });
+
+  teardown((): Promise<void> => db.close());
+
   test('Empty list isEmpty', () => {
-    const ds = new Database(makeTestingBatchStore());
-    const newList = items => new List(newListLeafSequence(ds, items));
+    const newList = items => new List(newListLeafSequence(db, items));
     assert.isTrue(newList([]).isEmpty());
   });
 
   test('iterator', async () => {
-    const ds = new Database(makeTestingBatchStore());
-
     const test = async items => {
-      const l = new List(newListLeafSequence(ds, items));
+      const l = new List(newListLeafSequence(db, items));
       assert.deepEqual(items, await flatten(l.iterator()));
       assert.deepEqual(items, await flattenParallel(l.iterator(), items.length));
     };
@@ -233,10 +239,8 @@ suite('ListLeafSequence', () => {
   });
 
   test('iteratorAt', async () => {
-    const ds = new Database(makeTestingBatchStore());
-
     const test = async items => {
-      const l = new List(newListLeafSequence(ds, items));
+      const l = new List(newListLeafSequence(db, items));
       for (let i = 0; i <= items.length; i++) {
         const slice = items.slice(i);
         assert.deepEqual(slice, await flatten(l.iteratorAt(i)));
@@ -251,25 +255,31 @@ suite('ListLeafSequence', () => {
 });
 
 suite('CompoundList', () => {
+  let db;
+
+  setup(() => {
+    db = new Database(makeTestingBatchStore());
+  });
+
+  teardown((): Promise<void> => db.close());
   function build(): List {
-    const ds = new Database(makeTestingBatchStore());
-    const l1 = new List(newListLeafSequence(ds, ['a', 'b']));
-    const r1 = ds.writeValue(l1);
-    const l2 = new List(newListLeafSequence(ds, ['e', 'f']));
-    const r2 = ds.writeValue(l2);
-    const l3 = new List(newListLeafSequence(ds, ['h', 'i']));
-    const r3 = ds.writeValue(l3);
-    const l4 = new List(newListLeafSequence(ds, ['m', 'n']));
-    const r4 = ds.writeValue(l4);
+    const l1 = new List(newListLeafSequence(db, ['a', 'b']));
+    const r1 = db.writeValue(l1);
+    const l2 = new List(newListLeafSequence(db, ['e', 'f']));
+    const r2 = db.writeValue(l2);
+    const l3 = new List(newListLeafSequence(db, ['h', 'i']));
+    const r3 = db.writeValue(l3);
+    const l4 = new List(newListLeafSequence(db, ['m', 'n']));
+    const r4 = db.writeValue(l4);
 
-    const m1 = new List(newListMetaSequence(ds, [new MetaTuple(r1, 2, 2),
+    const m1 = new List(newListMetaSequence(db, [new MetaTuple(r1, 2, 2),
         new MetaTuple(r2, 2, 2)]));
-    const rm1 = ds.writeValue(m1);
-    const m2 = new List(newListMetaSequence(ds, [new MetaTuple(r3, 2, 2),
+    const rm1 = db.writeValue(m1);
+    const m2 = new List(newListMetaSequence(db, [new MetaTuple(r3, 2, 2),
         new MetaTuple(r4, 2, 2)]));
-    const rm2 = ds.writeValue(m2);
+    const rm2 = db.writeValue(m2);
 
-    const l = new List(newListMetaSequence(ds, [new MetaTuple(rm1, 4, 4),
+    const l = new List(newListMetaSequence(db, [new MetaTuple(rm1, 4, 4),
         new MetaTuple(rm2, 4, 4)]));
     return l;
   }

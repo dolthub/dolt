@@ -29,6 +29,7 @@ suite('cross platform test', () => {
     assert.strictEqual(v2, t._value, t._description);
     assert.strictEqual(t._value, v2, t._description);
     assert.strictEqual(t._expectedRef, r.targetRef.toString(), t._description);
+    return db.close();
   }
 
   async function testTypes(testValues: Array<TestValue>): Promise<void> {

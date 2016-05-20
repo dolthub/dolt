@@ -57,7 +57,7 @@ suite('compare.js', () => {
     });
 
     test('total ordering', async () => {
-      const ds = new Database(makeTestingBatchStore());
+      const db = new Database(makeTestingBatchStore());
 
       // values in increasing order. Some of these are compared by ref so changing the serialization
       // might change the ordering.
@@ -67,7 +67,7 @@ suite('compare.js', () => {
         'a', 'b', 'c',
 
         // The order of these are done by the hash.
-        ds.writeValue(10),
+        db.writeValue(10),
         await newSet([0, 1, 2, 3]),
         await newMap([[0, 1], [2, 3]]),
         boolType,
@@ -91,6 +91,7 @@ suite('compare.js', () => {
           }
         }
       }
+      await db.close();
     });
   });
 

@@ -30,6 +30,7 @@ suite('ValueStore', () => {
     ms.put(c);
     const v2 = await vs.readValue(c.ref);
     assert.equal('abc', v2);
+    await vs.close();
   });
 
   test('writeValue primitives', async () => {
@@ -45,6 +46,7 @@ suite('ValueStore', () => {
     assert.equal(false, v2);
     const v3 = await vs.readValue(r3);
     assert.equal(2, v3);
+    await vs.close();
   });
 
   test('writeValue rejects invalid', async () => {
@@ -62,6 +64,7 @@ suite('ValueStore', () => {
       ex = e;
     }
     assert.instanceOf(ex, Error);
+    await vs.close();
   });
 
   test('write coalescing', async () => {
@@ -72,6 +75,7 @@ suite('ValueStore', () => {
     (bs: any).schedulePut = () => { assert.fail('unreachable'); };
     const r2 = vs.writeValue('hello').targetRef;
     assert.isTrue(r1.equals(r2));
+    await vs.close();
   });
 
   test('read caching', async () => {
@@ -84,6 +88,7 @@ suite('ValueStore', () => {
     (bs: any).get = () => { throw new Error(); };
     const v2 = await vs.readValue(r1);
     assert.equal(v1, v2);
+    await vs.close();
   });
 
   test('caching eviction', async () => {
@@ -108,6 +113,7 @@ suite('ValueStore', () => {
       ex = e;
     }
     assert.instanceOf(ex, Error);
+    await vs.close();
   });
 
   test('hints on cache', async () => {
@@ -119,5 +125,6 @@ suite('ValueStore', () => {
 
     const v = await vs.readValue(r.targetRef);
     assert.isTrue(equals(l, v));
+    await vs.close();
   });
 });

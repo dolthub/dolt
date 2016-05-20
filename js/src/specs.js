@@ -92,6 +92,8 @@ export class DatasetSpec {
 
   // Returns the value at the HEAD of this dataset, if any, or null otherwise.
   value(): Promise<any> {
+    // Hm. Calling set() creates a Database that we then toss into the ether, which means we can't
+    // call close() on it. Ideally, we'd fix that.
     return this.set().head()
       .then(commit => commit && commit.value);
   }
@@ -135,7 +137,8 @@ export class RefSpec {
 
   // Returns the value for the spec'd reference, if any, or null otherwise.
   value(): Promise<any> {
-    return this.store.store().readValue(this.ref);
+    const store = this.store.store();
+    return store.readValue(this.ref).then(v => store.close().then(() => v));
   }
 }
 

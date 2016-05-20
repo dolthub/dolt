@@ -19,7 +19,7 @@ import {equals} from './compare.js';
 
 suite('Type', () => {
   test('types', async () => {
-    const ds = new Database(makeTestingBatchStore());
+    const db = new Database(makeTestingBatchStore());
 
     const mapType = makeMapType(stringType, numberType);
     const setType = makeSetType(stringType);
@@ -28,13 +28,14 @@ suite('Type', () => {
       'Field2': boolType,
     });
 
-    const mapRef = ds.writeValue(mapType).targetRef;
-    const setRef = ds.writeValue(setType).targetRef;
-    const mahRef = ds.writeValue(mahType).targetRef;
+    const mapRef = db.writeValue(mapType).targetRef;
+    const setRef = db.writeValue(setType).targetRef;
+    const mahRef = db.writeValue(mahType).targetRef;
 
-    assert.isTrue(equals(mapType, await ds.readValue(mapRef)));
-    assert.isTrue(equals(setType, await ds.readValue(setRef)));
-    assert.isTrue(equals(mahType, await ds.readValue(mahRef)));
+    assert.isTrue(equals(mapType, await db.readValue(mapRef)));
+    assert.isTrue(equals(setType, await db.readValue(setRef)));
+    assert.isTrue(equals(mahType, await db.readValue(mahRef)));
+    await db.close();
   });
 
   test('type Type', () => {

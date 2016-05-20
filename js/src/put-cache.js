@@ -38,7 +38,9 @@ export default class OrderedPutCache {
   }
 
   _init(): Promise<DbCollection> {
+    // invariant(false === true);
     return makeTempDir().then((dir): Promise<DbCollection> => {
+      // console.log('creating', dir);
       this._folder = dir;
       const coll = new DbCollection(dir);
       return coll.ensureIndex({hash: 1}, {unique: true}).then(() => coll);

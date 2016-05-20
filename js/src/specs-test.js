@@ -11,7 +11,7 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 suite('Specs', () => {
-  test('DatabaseSpec', () => {
+  test('DatabaseSpec', async () => {
     const notAllowed = ['mem:', 'mem:stuff', 'http:', 'https:', 'random:', 'random:random'];
     notAllowed.forEach(s => assert.isNull(DatabaseSpec.parse(s)));
 
@@ -19,16 +19,20 @@ suite('Specs', () => {
     invariant(spec);
     assert.equal(spec.scheme, 'mem');
     assert.equal(spec.path, '');
-    assert.instanceOf(spec.store(), Database);
-    assert.instanceOf(spec.store()._vs._bs, BatchStoreAdaptor);
+    let store = spec.store();
+    assert.instanceOf(store, Database);
+    assert.instanceOf(store._vs._bs, BatchStoreAdaptor);
+    await store.close();
 
     spec = DatabaseSpec.parse('http://foo');
     invariant(spec);
     assert.isNotNull(spec);
     assert.equal(spec.scheme, 'http');
     assert.equal(spec.path, '//foo');
-    assert.instanceOf(spec.store(), Database);
-    assert.instanceOf(spec.store()._vs._bs, HttpBatchStore);
+    store = spec.store();
+    assert.instanceOf(store, Database);
+    assert.instanceOf(store._vs._bs, HttpBatchStore);
+    await store.close();
 
     spec = DatabaseSpec.parse('https://foo');
     invariant(spec);
@@ -37,7 +41,7 @@ suite('Specs', () => {
     assert.equal(spec.path, '//foo');
   });
 
-  test('DataSetSpec', () => {
+  test('DataSetSpec', async () => {
     const invalid = ['mem', 'mem:', 'http', 'http:', 'http://foo', 'monkey', 'monkey:balls'];
     invalid.forEach(s => assert.isNull(DatasetSpec.parse(s)));
 
@@ -49,6 +53,7 @@ suite('Specs', () => {
     let ds = spec.set();
     assert.instanceOf(ds, Dataset);
     assert.instanceOf(ds.store._vs._bs, BatchStoreAdaptor);
+    await ds.store.close();
 
     spec = DatasetSpec.parse('http://localhost:8000/foo:ds');
     invariant(spec);
@@ -58,9 +63,10 @@ suite('Specs', () => {
     ds = spec.set();
     assert.instanceOf(ds, Dataset);
     assert.instanceOf(ds.store._vs._bs, HttpBatchStore);
+    await ds.store.close();
   });
 
-  test('RefSpec', () => {
+  test('RefSpec', async () => {
     const testRef = new Ref('sha1-0000000000000000000000000000000000000000');
     const invalid = [
       'mem', 'mem:', 'http', 'http:', 'http://foo', 'monkey', 'monkey:balls',
