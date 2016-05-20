@@ -3,12 +3,12 @@
 import {invariant} from './assert.js';
 import {getDatasTypes} from './database.js';
 import Struct from './struct.js';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 import type RefValue from './ref-value.js';
 import Set from './set.js';
 
 
-export default class Commit<T: valueOrPrimitive> extends Struct {
+export default class Commit<T: Value> extends Struct {
   constructor(value: T, parents: Set<RefValue<Commit>> = new Set()) {
     const {commitType} = getDatasTypes();
     super(commitType, {value, parents});
@@ -20,7 +20,7 @@ export default class Commit<T: valueOrPrimitive> extends Struct {
     return value;
   }
 
-  setValue<U: valueOrPrimitive>(value: U): Commit<U> {
+  setValue<U: Value>(value: U): Commit<U> {
     return new Commit(value, this.parents);
   }
 

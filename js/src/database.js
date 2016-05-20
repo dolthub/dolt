@@ -4,7 +4,7 @@ import Ref from './ref.js';
 import RefValue from './ref-value.js';
 import Map from './map.js';
 import Set from './set.js';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 import type {RootTracker} from './chunk-store.js';
 import ValueStore from './value-store.js';
 import BatchStore from './batch-store.js';
@@ -94,13 +94,13 @@ export default class Database {
     return this._datasets;
   }
 
-  // TODO: This should return Promise<?valueOrPrimitive>
+  // TODO: This should return Promise<?Value>
   async readValue(ref: Ref): Promise<any> {
     return this._vs.readValue(ref);
   }
 
 
-  writeValue<T: valueOrPrimitive>(v: T): RefValue<T> {
+  writeValue<T: Value>(v: T): RefValue<T> {
     return this._vs.writeValue(v);
   }
 

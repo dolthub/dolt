@@ -27,7 +27,7 @@ import {ListLeafSequence, newListFromSequence} from './list.js';
 import {MapLeafSequence, newMapFromSequence} from './map.js';
 import {SetLeafSequence, newSetFromSequence} from './set.js';
 import {IndexedMetaSequence, OrderedMetaSequence} from './meta-sequence.js';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 import type {ValueReader} from './value-store.js';
 
 const typedTag = 't ';
@@ -268,7 +268,7 @@ export class JsonArrayReader {
     const {desc} = type;
     invariant(desc instanceof StructDesc);
 
-    const data: {[key: string]: valueOrPrimitive} = Object.create(null);
+    const data: {[key: string]: Value} = Object.create(null);
 
     desc.forEachField((name: string) => {
       const v = this.readValue();
@@ -300,7 +300,7 @@ export class JsonArrayReader {
   }
 }
 
-export function decodeNomsValue(chunk: Chunk, vr: ValueReader): valueOrPrimitive {
+export function decodeNomsValue(chunk: Chunk, vr: ValueReader): Value {
   const tag = new Chunk(new Uint8Array(chunk.data.buffer, 0, 2)).toString();
 
   switch (tag) {

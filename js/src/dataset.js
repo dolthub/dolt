@@ -1,7 +1,7 @@
 // @flow
 
 import Commit from './commit.js';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 import type Database from './database.js';
 import RefValue from './ref-value.js';
 import Set from './set.js';
@@ -33,7 +33,7 @@ export default class Dataset {
 
   // Commit updates the commit that a dataset points at. If parents is provided then an the promise
   // is rejected if the commit does not descend from the parents.
-  async commit(v: valueOrPrimitive,
+  async commit(v: Value,
                parents: ?Array<RefValue<Commit>> = undefined): Promise<Dataset> {
     if (!parents) {
       const headRef = await this.headRef();

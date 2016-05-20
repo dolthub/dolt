@@ -19,7 +19,7 @@ import walk from './walk.js';
 import {suite, suiteSetup, suiteTeardown, test} from 'mocha';
 import {assert} from 'chai';
 
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 
 suite('walk', () => {
   let ds;
@@ -160,7 +160,7 @@ suite('walk', () => {
   });
 });
 
-async function callbackHappensOnce(v: valueOrPrimitive, ds: Database,
+async function callbackHappensOnce(v: Value, ds: Database,
                                    recurse: bool = false) : Promise<void> {
   // Test that our callback only gets called once.
   let count = 0;

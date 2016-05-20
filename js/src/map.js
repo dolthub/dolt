@@ -4,7 +4,7 @@ import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import RefValue from './ref-value.js';
 import type {ValueReader} from './value-store.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
+import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import {Collection} from './collection.js';
@@ -17,10 +17,10 @@ import {MetaTuple, newOrderedMetaSequenceBoundaryChecker, newOrderedMetaSequence
 import {OrderedSequence, OrderedSequenceCursor, OrderedSequenceIterator,} from
   './ordered-sequence.js';
 import diff from './ordered-sequence-diff.js';
-import {Value} from './value.js';
+import {ValueBase} from './value.js';
 import {Kind} from './noms-kind.js';
 
-export type MapEntry<K: valueOrPrimitive, V: valueOrPrimitive> = [K, V];
+export type MapEntry<K: Value, V: Value> = [K, V];
 
 const KEY = 0;
 const VALUE = 1;
@@ -28,13 +28,13 @@ const VALUE = 1;
 const mapWindowSize = 1;
 const mapPattern = ((1 << 6) | 0) - 1;
 
-function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(vr: ?ValueReader):
+function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader):
     makeChunkFn {
   return (items: Array<MapEntry<K, V>>) => {
-    let indexValue: ?valueOrPrimitive = null;
+    let indexValue: ?Value = null;
     if (items.length > 0) {
       indexValue = items[items.length - 1][KEY];
-      if (indexValue instanceof Value) {
+      if (indexValue instanceof ValueBase) {
         indexValue = new RefValue(indexValue);
       }
     }
@@ -45,7 +45,7 @@ function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(vr: ?ValueR
   };
 }
 
-function newMapLeafBoundaryChecker<K: valueOrPrimitive, V: valueOrPrimitive>():
+function newMapLeafBoundaryChecker<K: Value, V: Value>():
     BoundaryChecker<MapEntry<K, V>> {
   return new BuzHashBoundaryChecker(mapWindowSize, sha1Size, mapPattern,
     (entry: MapEntry<K, V>) => getRefOfValue(entry[KEY]).digest);
@@ -72,7 +72,7 @@ function compareKeys(v1, v2) {
   return compare(v1[KEY], v2[KEY]);
 }
 
-function buildMapData<K: valueOrPrimitive, V: valueOrPrimitive>(
+function buildMapData<K: Value, V: Value>(
     kvs: Array<MapEntry<K, V>>): Array<MapEntry<K, V>> {
   // TODO: Assert k & v are of correct type
   const entries = kvs.slice();
@@ -80,7 +80,7 @@ function buildMapData<K: valueOrPrimitive, V: valueOrPrimitive>(
   return removeDuplicateFromOrdered(entries, compareKeys);
 }
 
-export default class Map<K: valueOrPrimitive, V: valueOrPrimitive> extends
+export default class Map<K: Value, V: Value> extends
     Collection<OrderedSequence> {
   constructor(kvs: Array<MapEntry<K, V>> = []) {
     const self = chunkSequenceSync(
@@ -185,7 +185,7 @@ export default class Map<K: valueOrPrimitive, V: valueOrPrimitive> extends
   }
 }
 
-export function newMapFromSequence<K: valueOrPrimitive, V: valueOrPrimitive>(
+export function newMapFromSequence<K: Value, V: Value>(
     sequence: OrderedSequence): Map<K, V> {
   const map = Object.create(Map.prototype);
   map._ref = null; // Value
@@ -193,7 +193,7 @@ export function newMapFromSequence<K: valueOrPrimitive, V: valueOrPrimitive>(
   return map;
 }
 
-export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends
+export class MapLeafSequence<K: Value, V: Value> extends
     OrderedSequence<K, MapEntry<K, V>> {
   getKey(idx: number): K {
     return this.items[idx][KEY];
@@ -207,10 +207,10 @@ export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends
   get chunks(): Array<RefValue> {
     const chunks = [];
     for (const entry of this.items) {
-      if (entry[KEY] instanceof Value) {
+      if (entry[KEY] instanceof ValueBase) {
         chunks.push(...entry[KEY].chunks);
       }
-      if (entry[VALUE] instanceof Value) {
+      if (entry[VALUE] instanceof ValueBase) {
         chunks.push(...entry[VALUE].chunks);
       }
     }
@@ -218,7 +218,7 @@ export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends
   }
 }
 
-export function newMapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive>(vr: ?ValueReader,
+export function newMapLeafSequence<K: Value, V: Value>(vr: ?ValueReader,
     items: Array<MapEntry<K, V>>): MapLeafSequence<K, V> {
   const kt = [];
   const vt = [];

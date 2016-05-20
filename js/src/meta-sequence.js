@@ -4,7 +4,7 @@ import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import {sha1Size} from './ref.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {ValueReader} from './value-store.js';
-import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
+import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import type {Collection} from './collection.js';
 import type {Type} from './type.js';
 import {makeListType, makeUnionType, blobType, makeSetType, makeMapType} from './type.js';
@@ -143,7 +143,7 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
   }
 }
 
-export function newMapMetaSequence<K: valueOrPrimitive>(vr: ?ValueReader,
+export function newMapMetaSequence<K: Value>(vr: ?ValueReader,
     tuples: Array<MetaTuple<K>>): OrderedMetaSequence<K> {
   const kt = makeUnionType(tuples.map(mt => getCollectionTypes(mt)[0]));
   const vt = makeUnionType(tuples.map(mt => getCollectionTypes(mt)[1]));
@@ -151,13 +151,13 @@ export function newMapMetaSequence<K: valueOrPrimitive>(vr: ?ValueReader,
   return new OrderedMetaSequence(vr, t, tuples);
 }
 
-export function newSetMetaSequence<K: valueOrPrimitive>(vr: ?ValueReader,
+export function newSetMetaSequence<K: Value>(vr: ?ValueReader,
     tuples: Array<MetaTuple<K>>): OrderedMetaSequence<K> {
   const t = makeSetType(makeUnionType(tuples.map(mt => getCollectionTypes(mt)[0])));
   return new OrderedMetaSequence(vr, t, tuples);
 }
 
-export class OrderedMetaSequence<K: valueOrPrimitive> extends OrderedSequence<K, MetaTuple<K>> {
+export class OrderedMetaSequence<K: Value> extends OrderedSequence<K, MetaTuple<K>> {
   _numLeaves: number;
 
   constructor(vr: ?ValueReader, t: Type, items: Array<MetaTuple<K>>) {

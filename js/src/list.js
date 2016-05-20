@@ -4,7 +4,7 @@ import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {ValueReader} from './value-store.js';
 import type {Splice} from './edit-distance.js';
-import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
+import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import {Collection} from './collection.js';
@@ -24,7 +24,7 @@ import {Kind} from './noms-kind.js';
 const listWindowSize = 64;
 const listPattern = ((1 << 6) | 0) - 1;
 
-function newListLeafChunkFn<T: valueOrPrimitive>(vr: ?ValueReader): makeChunkFn {
+function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
     const list = newListFromSequence(newListLeafSequence(vr, items));
     const mt = new MetaTuple(new RefValue(list), items.length, items.length, list);
@@ -32,13 +32,13 @@ function newListLeafChunkFn<T: valueOrPrimitive>(vr: ?ValueReader): makeChunkFn 
   };
 }
 
-function newListLeafBoundaryChecker<T: valueOrPrimitive>(): BoundaryChecker<T> {
+function newListLeafBoundaryChecker<T: Value>(): BoundaryChecker<T> {
   return new BuzHashBoundaryChecker(listWindowSize, sha1Size, listPattern,
     (v: T) => getRefOfValue(v).digest
   );
 }
 
-export default class List<T: valueOrPrimitive> extends Collection<IndexedSequence> {
+export default class List<T: Value> extends Collection<IndexedSequence> {
   constructor(values: Array<T> = []) {
     const self = chunkSequenceSync(
         values,
@@ -125,14 +125,14 @@ export default class List<T: valueOrPrimitive> extends Collection<IndexedSequenc
   }
 }
 
-export function newListFromSequence<T: valueOrPrimitive>(sequence: IndexedSequence): List<T> {
+export function newListFromSequence<T: Value>(sequence: IndexedSequence): List<T> {
   const list = Object.create(List.prototype);
   list._ref = null; // Value
   list.sequence = sequence;
   return list;
 }
 
-export class ListLeafSequence<T: valueOrPrimitive> extends IndexedSequence<T> {
+export class ListLeafSequence<T: Value> extends IndexedSequence<T> {
   get chunks(): Array<RefValue> {
     return getValueChunks(this.items);
   }
@@ -147,7 +147,7 @@ export class ListLeafSequence<T: valueOrPrimitive> extends IndexedSequence<T> {
   }
 }
 
-export function newListLeafSequence<T: valueOrPrimitive>(vr: ?ValueReader, items: T[]):
+export function newListLeafSequence<T: Value>(vr: ?ValueReader, items: T[]):
     ListLeafSequence<T> {
   const t = makeListType(makeUnionType(items.map(getTypeOfValue)));
   return new ListLeafSequence(vr, t, items);

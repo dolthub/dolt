@@ -2,11 +2,11 @@
 
 import Database from './database.js';
 import type {Collection} from './collection.js';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 import {assert} from 'chai';
 import {notNull} from './assert.js';
 import {AsyncIterator} from './async-iterator.js';
-import {getChunksOfValue, Value} from './value.js';
+import {getChunksOfValue, ValueBase} from './value.js';
 import {getRefOfValue} from './get-ref.js';
 import {getTypeOfValue, Type} from './type.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
@@ -29,11 +29,11 @@ export async function flattenParallel<T>(iter: AsyncIterator<T>, count: number):
   return results.map(res => notNull(res.value));
 }
 
-export function assertValueRef(expectRefStr: string, v: valueOrPrimitive) {
+export function assertValueRef(expectRefStr: string, v: Value) {
   assert.strictEqual(expectRefStr, getRefOfValue(v).toString());
 }
 
-export function assertValueType(expectType: Type, v: valueOrPrimitive) {
+export function assertValueType(expectType: Type, v: Value) {
   assert.isTrue(equals(expectType, getTypeOfValue(v)));
 }
 
@@ -44,7 +44,7 @@ export function assertChunkCountAndType(expectCount: number, expectType: Type,
   v.chunks.forEach(r => assert.isTrue(equals(expectType, r.type)));
 }
 
-export async function testRoundTripAndValidate<T: valueOrPrimitive>(v: T,
+export async function testRoundTripAndValidate<T: Value>(v: T,
       validateFn: (v2: T) => Promise<void>): Promise<void> {
   const bs = makeTestingBatchStore();
   const ds = new Database(bs);
@@ -53,7 +53,7 @@ export async function testRoundTripAndValidate<T: valueOrPrimitive>(v: T,
   const ds2 = new Database(bs);
 
   const v2 = await ds2.readValue(r1);
-  if (v instanceof Value) {
+  if (v instanceof ValueBase) {
     assert.isTrue(equals(v, v2));
     assert.isTrue(equals(v2, v));
   } else {
@@ -63,7 +63,7 @@ export async function testRoundTripAndValidate<T: valueOrPrimitive>(v: T,
   await ds2.close();
 }
 
-export function chunkDiffCount(v1: valueOrPrimitive, v2: valueOrPrimitive): number {
+export function chunkDiffCount(v1: Value, v2: Value): number {
   const c1 = getChunksOfValue(v1);
   const c2 = getChunksOfValue(v2);
 

@@ -2,16 +2,16 @@
 
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 import Database from './database.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
 
 export class TestValue {
-  _value: valueOrPrimitive;
+  _value: Value;
   _expectedRef: string;
   _description: string;
 
-  constructor(value: valueOrPrimitive, expectedRef: string, description: string) {
+  constructor(value: Value, expectedRef: string, description: string) {
     this._value = value;
     this._expectedRef = expectedRef;
     this._description = description;

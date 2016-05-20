@@ -6,7 +6,7 @@ import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import type RefValue from './ref-value.js';
 import Struct, {StructMirror} from './struct.js';
 import type {TypeDesc} from './type.js';
-import type {Value} from './value.js';
+import type Value from './value.js';
 import {assert} from 'chai';
 import {decodeNomsValue, JsonArrayReader} from './decode.js';
 import {

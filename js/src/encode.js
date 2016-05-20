@@ -17,7 +17,7 @@ import {setEncodeNomsValue} from './get-ref.js';
 import Blob, {BlobLeafSequence} from './blob.js';
 import {describeTypeOfValue} from './encode-human-readable.js';
 import type {primitive} from './primitives.js';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 import type {ValueWriter} from './value-store.js';
 
 const typedTag = 't ';
@@ -117,7 +117,7 @@ export class JsonArrayWriter {
     return true;
   }
 
-  writeValue(v: valueOrPrimitive) {
+  writeValue(v: Value) {
     const t = getTypeOfValue(v);
     this.writeType(t, []);
     switch (t.kind) {
@@ -260,7 +260,7 @@ export class JsonArrayWriter {
   }
 }
 
-function encodeEmbeddedNomsValue(v: valueOrPrimitive, vw: ?ValueWriter): Chunk {
+function encodeEmbeddedNomsValue(v: Value, vw: ?ValueWriter): Chunk {
   const w = new JsonArrayWriter(vw);
   w.writeValue(v);
   return Chunk.fromString(typedTag + JSON.stringify(w.array));
@@ -279,7 +279,7 @@ function encodeTopLevelBlob(sequence: BlobLeafSequence): Chunk {
   return new Chunk(data);
 }
 
-export function encodeNomsValue(v: valueOrPrimitive, vw: ?ValueWriter): Chunk {
+export function encodeNomsValue(v: Value, vw: ?ValueWriter): Chunk {
   const t = getTypeOfValue(v);
   if (t.kind === Kind.Blob) {
     invariant(v instanceof Blob);

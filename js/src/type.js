@@ -5,8 +5,8 @@ import RefValue from './ref-value.js';
 import type {NomsKind} from './noms-kind.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
-import {Value} from './value.js';
-import type {valueOrPrimitive} from './value.js';
+import {ValueBase} from './value.js';
+import type Value from './value.js';
 import {compare, equals} from './compare.js';
 
 export interface TypeDesc {
@@ -109,7 +109,7 @@ export class StructDesc {
   }
 }
 
-export class Type<T: TypeDesc> extends Value {
+export class Type<T: TypeDesc> extends ValueBase {
   _desc: T;
   _ref: ?Ref;
 
@@ -243,8 +243,8 @@ export function getPrimitiveType(k: NomsKind): Type {
 
 // Returns the Noms type of any value. This will throw if you pass in an object that cannot be
 // represented by noms.
-export function getTypeOfValue(v: valueOrPrimitive): Type {
-  if (v instanceof Value) {
+export function getTypeOfValue(v: Value): Type {
+  if (v instanceof ValueBase) {
     return v.type;
   }
 

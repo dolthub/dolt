@@ -3,15 +3,15 @@
 import assertSubtype from './assert-type.js';
 import type RefValue from './ref-value.js';
 import type {Type, StructDesc} from './type.js';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 import {Kind} from './noms-kind.js';
-import {Value} from './value.js';
+import {ValueBase} from './value.js';
 import {equals} from './compare.js';
 import {getTypeOfValue, makeStructType} from './type.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
 
-type StructData = {[key: string]: valueOrPrimitive};
+type StructData = {[key: string]: Value};
 
 /**
  * Base class for all Noms structs. The decoder creates sub classes of this for Noms struct.
@@ -34,7 +34,7 @@ type StructData = {[key: string]: valueOrPrimitive};
  *
  * To reflect over structs you can create a new StructMirror.
  */
-export default class Struct extends Value {
+export default class Struct extends ValueBase {
   _data: StructData;
   _type: Type;
 
@@ -58,7 +58,7 @@ export default class Struct extends Value {
     const add = field => {
       const {value} = field;
       if (!isPrimitive(value)) {
-        invariant(value instanceof Value);
+        invariant(value instanceof ValueBase);
         chunks.push(...value.chunks);
       }
     };
@@ -76,7 +76,7 @@ function validate(type: Type, data: StructData): void {
 }
 
 export class StructFieldMirror {
-  value: valueOrPrimitive;
+  value: Value;
   name: string;
   type: Type;
 
@@ -112,7 +112,7 @@ export class StructMirror<T: Struct> {
     return this.type.name;
   }
 
-  get(name: string): ?valueOrPrimitive {
+  get(name: string): ?Value {
     return this._data[name];
   }
 
@@ -120,7 +120,7 @@ export class StructMirror<T: Struct> {
     return this.get(name) !== undefined;
   }
 
-  set(name: string, value: ?valueOrPrimitive): T {
+  set(name: string, value: ?Value): T {
     const data = addProperty(this, name, value);
     return newStruct(this.name, data);
   }
@@ -171,7 +171,7 @@ function getSetter(name: string) {
   };
 }
 
-function addProperty(mirror: StructMirror, name: string, value: ?valueOrPrimitive): StructData {
+function addProperty(mirror: StructMirror, name: string, value: ?Value): StructData {
   const data = Object.create(null);
   let found = false;
   mirror.forEachField(f => {

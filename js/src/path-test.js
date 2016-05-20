@@ -5,14 +5,14 @@ import {suite, test} from 'mocha';
 import {equals} from './compare.js';
 
 import Path from './path.js';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 import List from './list.js';
 import Map from './map.js';
 import {newStruct} from './struct.js';
 
 suite('Path', () => {
 
-  async function assertPathEqual(expect: any, ref: valueOrPrimitive, path: Path):
+  async function assertPathEqual(expect: any, ref: Value, path: Path):
       Promise<void> {
     // $FlowIssue: need to be able to pass in null for ref
     const actual = await path.resolve(ref);

@@ -3,9 +3,9 @@
 import RefValue from './ref-value.js';
 import type Sequence from './sequence.js'; // eslint-disable-line no-unused-vars
 import type {Type} from './type.js';
-import {Value} from './value.js';
+import {ValueBase} from './value.js';
 
-export class Collection<S: Sequence> extends Value {
+export class Collection<S: Sequence> extends ValueBase {
   sequence: S;
 
   constructor(sequence: S) {

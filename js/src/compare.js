@@ -1,11 +1,11 @@
 // @flow
 
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 
 // All Noms values are ordered. The ordering is booleans, numbers, strings and then Values.
 // All Value objects are ordered by their hash.
 
-export function compare(v1: valueOrPrimitive, v2: valueOrPrimitive): number {
+export function compare(v1: Value, v2: Value): number {
   const t1 = typeof v1;
   const t2 = typeof v2;
 
@@ -53,10 +53,10 @@ export function compare(v1: valueOrPrimitive, v2: valueOrPrimitive): number {
   }
 }
 
-export function less(v1: valueOrPrimitive, v2: valueOrPrimitive): boolean {
+export function less(v1: Value, v2: Value): boolean {
   return compare(v1, v2) < 0;
 }
 
-export function equals(v1: valueOrPrimitive, v2: valueOrPrimitive): boolean {
+export function equals(v1: Value, v2: Value): boolean {
   return compare(v1, v2) === 0;
 }

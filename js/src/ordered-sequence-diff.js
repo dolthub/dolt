@@ -4,14 +4,14 @@ import {invariant} from './assert.js';
 import {equals, less} from './compare.js';
 import {OrderedSequence, OrderedSequenceCursor} from './ordered-sequence.js';
 import {SequenceCursor} from './sequence.js';
-import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
+import type Value from './value.js'; // eslint-disable-line no-unused-vars
 
 // TODO: Expose an iteration API.
 
 /**
  * Returns a 3-tuple [added, removed, modified] sorted keys.
  */
-export default async function diff<K: valueOrPrimitive, T>(
+export default async function diff<K: Value, T>(
     last: OrderedSequence<K, T>, current: OrderedSequence<K, T>):
     Promise<[Array<K>, Array<K>, Array<K>]> {
   // TODO: Construct the cursor at exactly the right position. There is no point reading in the

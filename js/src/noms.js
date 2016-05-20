@@ -54,6 +54,6 @@ export type {AsyncIteratorResult} from './async-iterator.js';
 export type {ChunkStore} from './chunk-store.js';
 export type {MapEntry} from './map.js';
 export type {Splice} from './edit-distance.js';
-export type {valueOrPrimitive, Value} from './value.js';
+export type {default as Value, ValueBase} from './value.js';
 export type {NomsKind} from './noms-kind.js';
 export type {primitive} from './primitives.js';

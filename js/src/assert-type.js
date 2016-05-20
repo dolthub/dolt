@@ -5,7 +5,7 @@ import {CompoundDesc, getTypeOfValue} from './type.js';
 import type {Type} from './type.js';
 import {invariant} from './assert.js';
 import {equals} from './compare.js';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 
 /**
  * Ensures that the Noms value is a subtype of the Noms type. Throws a `TypeError` if not.
@@ -31,7 +31,7 @@ import type {valueOrPrimitive} from './value.js';
  * newStruct("S", {x: 42, y: true}) < struct S {x: Number}, extra fields OK.
  * ```
  */
-export default function assertSubtype(requiredType: Type, v: valueOrPrimitive): void {
+export default function assertSubtype(requiredType: Type, v: Value): void {
   assert(isSubtype(requiredType, getTypeOfValue(v)), v, requiredType);
 }
 

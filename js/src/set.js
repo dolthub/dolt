@@ -4,8 +4,8 @@ import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import RefValue from './ref-value.js';
 import type {ValueReader} from './value-store.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
-import {Value} from './value.js';
+import type Value from './value.js'; // eslint-disable-line no-unused-vars
+import {ValueBase} from './value.js';
 import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import {Collection} from './collection.js';
@@ -26,12 +26,12 @@ import {Kind} from './noms-kind.js';
 const setWindowSize = 1;
 const setPattern = ((1 << 6) | 0) - 1;
 
-function newSetLeafChunkFn<T:valueOrPrimitive>(vr: ?ValueReader): makeChunkFn {
+function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
     let indexValue: ?(T | RefValue) = null;
     if (items.length > 0) {
       indexValue = items[items.length - 1];
-      if (indexValue instanceof Value) {
+      if (indexValue instanceof ValueBase) {
         indexValue = new RefValue(indexValue);
       }
     }
@@ -42,26 +42,26 @@ function newSetLeafChunkFn<T:valueOrPrimitive>(vr: ?ValueReader): makeChunkFn {
   };
 }
 
-function newSetLeafBoundaryChecker<T:valueOrPrimitive>(): BoundaryChecker<T> {
+function newSetLeafBoundaryChecker<T:Value>(): BoundaryChecker<T> {
   return new BuzHashBoundaryChecker(setWindowSize, sha1Size, setPattern, (v: T) => {
     const ref = getRefOfValue(v);
     return ref.digest;
   });
 }
 
-function buildSetData<T: valueOrPrimitive>(values: Array<any>): Array<T> {
+function buildSetData<T: Value>(values: Array<any>): Array<T> {
   values = values.slice();
   values.sort(compare);
   return removeDuplicateFromOrdered(values, compare);
 }
 
-export function newSetLeafSequence<K: valueOrPrimitive>(
+export function newSetLeafSequence<K: Value>(
     vr: ?ValueReader, items: K[]): SetLeafSequence {
   const t = makeSetType(makeUnionType(items.map(getTypeOfValue)));
   return new SetLeafSequence(vr, t, items);
 }
 
-export default class Set<T: valueOrPrimitive> extends Collection<OrderedSequence> {
+export default class Set<T: Value> extends Collection<OrderedSequence> {
   constructor(values: Array<T> = []) {
     const self = chunkSequenceSync(
         buildSetData(values),
@@ -196,14 +196,14 @@ export default class Set<T: valueOrPrimitive> extends Collection<OrderedSequence
   }
 }
 
-export function newSetFromSequence<T: valueOrPrimitive>(sequence: OrderedSequence): Set<T> {
+export function newSetFromSequence<T: Value>(sequence: OrderedSequence): Set<T> {
   const set = Object.create(Set.prototype);
   set._ref = null; // Value
   set.sequence = sequence;
   return set;
 }
 
-export class SetLeafSequence<K: valueOrPrimitive> extends OrderedSequence<K, K> {
+export class SetLeafSequence<K: Value> extends OrderedSequence<K, K> {
   getKey(idx: number): K {
     return this.items[idx];
   }
@@ -217,14 +217,14 @@ export class SetLeafSequence<K: valueOrPrimitive> extends OrderedSequence<K, K> 
   }
 }
 
-type OrderedCursor<K: valueOrPrimitive> = {
+type OrderedCursor<K: Value> = {
   valid: boolean;
   getCurrent(): K;
   advanceTo(key: K): Promise<boolean>;
   advance(): Promise<boolean>;
 }
 
-class SetIntersectionCursor<K: valueOrPrimitive> {
+class SetIntersectionCursor<K: Value> {
   s1: OrderedCursor<K>;
   s2: OrderedCursor<K>;
   valid: boolean;

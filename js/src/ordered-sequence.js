@@ -2,13 +2,13 @@
 
 import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
-import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
+import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
 import {compare} from './compare.js';
 import Sequence, {search, SequenceCursor} from './sequence.js';
-import {Value} from './value.js';
+import {ValueBase} from './value.js';
 
-export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
+export class OrderedSequence<K: Value, T> extends Sequence<T> {
   // Returns:
   //   -null, if sequence is empty.
   //   -null, if all values in sequence are < key.
@@ -50,7 +50,7 @@ export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {
   }
 }
 
-export class OrderedSequenceCursor<T, K: valueOrPrimitive> extends
+export class OrderedSequenceCursor<T, K: Value> extends
     SequenceCursor<T, OrderedSequence> {
   getCurrentKey(): K {
     invariant(this.idx >= 0 && this.idx < this.length);
@@ -104,7 +104,7 @@ export class OrderedSequenceCursor<T, K: valueOrPrimitive> extends
   }
 }
 
-export class OrderedSequenceIterator<T, K: valueOrPrimitive> extends AsyncIterator<T> {
+export class OrderedSequenceIterator<T, K: Value> extends AsyncIterator<T> {
   _iterator: Promise<AsyncIterator<T>>;
 
   constructor(cursorP: Promise<OrderedSequenceCursor<T, K>>) {
@@ -121,13 +121,13 @@ export class OrderedSequenceIterator<T, K: valueOrPrimitive> extends AsyncIterat
   }
 }
 
-function getSearchFunction(sequence: OrderedSequence, key: valueOrPrimitive):
+function getSearchFunction(sequence: OrderedSequence, key: Value):
     (i: number) => number {
   if (sequence.isMeta) {
-    const keyRef = key instanceof Value ? key.ref : null;
+    const keyRef = key instanceof ValueBase ? key.ref : null;
     return i => {
       const sk = sequence.getKey(i);
-      if (sk instanceof Value) {
+      if (sk instanceof ValueBase) {
         if (keyRef) {
           return sk.targetRef.compare(keyRef);
         }

@@ -8,9 +8,9 @@ import RefValue from './ref-value.js';
 import Struct, {StructMirror} from './struct.js';
 
 import type Database from './database.js';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 
-type walkCb = (v: valueOrPrimitive) => ?bool | Promise<?bool>;
+type walkCb = (v: Value) => ?bool | Promise<?bool>;
 
 // Invokes |cb| once for |v| and each of its descendants. The returned promise is resolved when all
 // invocations to |cb| have been resolved.
@@ -19,7 +19,7 @@ type walkCb = (v: valueOrPrimitive) => ?bool | Promise<?bool>;
 // Promise which resolves to |false| to skip a node's children.
 //
 // For convenience, if |cb| returns |undefined| or a Promise to |undefined|, the default is |true|.
-export default async function walk(v: valueOrPrimitive, ds: Database, cb: walkCb): Promise<void> {
+export default async function walk(v: Value, ds: Database, cb: walkCb): Promise<void> {
   let cont = cb(v);
   if (cont instanceof Promise) {
     cont = await cont;

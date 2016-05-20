@@ -4,14 +4,14 @@ import Chunk from './chunk.js';
 import Ref, {emptyRef} from './ref.js';
 import RefValue from './ref-value.js';
 import type BatchStore from './batch-store.js';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 import {
   getTypeOfValue,
   Type,
   valueType,
 } from './type.js';
 import {Kind} from './noms-kind.js';
-import {Value} from './value.js';
+import {ValueBase} from './value.js';
 import {decodeNomsValue} from './decode.js';
 import {invariant, notNull} from './assert.js';
 import {encodeNomsValue} from './encode.js';
@@ -19,24 +19,24 @@ import {describeType, describeTypeOfValue} from './encode-human-readable.js';
 import {equals} from './compare.js';
 
 export interface ValueWriter {
-  writeValue<T: valueOrPrimitive>(v: T, t: ?Type): RefValue<T>
+  writeValue<T: Value>(v: T, t: ?Type): RefValue<T>
 }
 
 export interface ValueReader {
-  // TODO: This should return Promise<?valueOrPrimitive>
+  // TODO: This should return Promise<?Value>
   readValue(ref: Ref): Promise<any>
 }
 
 export interface ValueReadWriter {
-  // TODO: This should return Promise<?valueOrPrimitive>
+  // TODO: This should return Promise<?Value>
   readValue(ref: Ref): Promise<any>;
-  writeValue<T: valueOrPrimitive>(v: T): RefValue<T>;
+  writeValue<T: Value>(v: T): RefValue<T>;
 }
 
 export default class ValueStore {
   _bs: BatchStore;
   _knownRefs: RefCache;
-  _valueCache: Cache<?valueOrPrimitive>;
+  _valueCache: Cache<?Value>;
 
   constructor(bs: BatchStore, cacheSize: number = 0) {
     this._bs = bs;
@@ -44,7 +44,7 @@ export default class ValueStore {
     this._valueCache = cacheSize > 0 ? new SizeCache(cacheSize) : new NoopCache();
   }
 
-  // TODO: This should return Promise<?valueOrPrimitive>
+  // TODO: This should return Promise<?Value>
   async readValue(ref: Ref): Promise<any> {
     const entry = this._valueCache.entry(ref);
     if (entry) {
@@ -70,7 +70,7 @@ export default class ValueStore {
     return v;
   }
 
-  writeValue<T: valueOrPrimitive>(v: T): RefValue<T> {
+  writeValue<T: Value>(v: T): RefValue<T> {
     const t = getTypeOfValue(v);
     const chunk = encodeNomsValue(v, this);
     invariant(!chunk.isEmpty());
@@ -213,8 +213,8 @@ class RefCache {
     }
   }
 
-  cacheChunks(v: valueOrPrimitive, ref: Ref) {
-    if (v instanceof Value) {
+  cacheChunks(v: Value, ref: Ref) {
+    if (v instanceof ValueBase) {
       v.chunks.forEach(reachable => {
         const hash = reachable.targetRef;
         const cur = this.get(hash);
@@ -225,9 +225,9 @@ class RefCache {
     }
   }
 
-  checkChunksInCache(v: valueOrPrimitive): Set<Ref> {
+  checkChunksInCache(v: Value): Set<Ref> {
     const hints = new Set();
-    if (v instanceof Value) {
+    if (v instanceof ValueBase) {
       const chunks = v.chunks;
       for (let i = 0; i < chunks.length; i++) {
         const reachable = chunks[i];

@@ -29,7 +29,7 @@ import {newMapFromSequence, newMapLeafSequence} from './map.js';
 import {newSetFromSequence, newSetLeafSequence} from './set.js';
 import Blob from './blob.js';
 import Database from './database.js';
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 
 suite('Encode', () => {
   let db;
@@ -41,7 +41,7 @@ suite('Encode', () => {
   teardown((): Promise<void> => db.close());
 
   test('write primitives', () => {
-    function f(k: NomsKind, v: valueOrPrimitive, ex: valueOrPrimitive) {
+    function f(k: NomsKind, v: Value, ex: Value) {
       const w = new JsonArrayWriter(db);
       w.writeValue(v);
       assert.deepEqual([k, ex], w.array);

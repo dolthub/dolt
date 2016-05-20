@@ -1,12 +1,12 @@
 // @flow
-import type {valueOrPrimitive} from './value.js';
+import type Value from './value.js';
 import {Kind} from './noms-kind.js';
 import List from './list.js';
 import Map from './map.js';
 import {getTypeOfValue, StructDesc} from './type.js';
 
 interface Part {
-  resolve(v: Promise<?valueOrPrimitive>): Promise<?valueOrPrimitive>;
+  resolve(v: Promise<?Value>): Promise<?Value>;
   toString(): string;
 }
 
@@ -17,7 +17,7 @@ class FieldPart {
     this.name = name;
   }
 
-  resolve(v: Promise<?valueOrPrimitive>): Promise<?valueOrPrimitive> {
+  resolve(v: Promise<?Value>): Promise<?Value> {
     return v.then(value => {
       if (value === null || value === undefined) {
         return;
@@ -62,7 +62,7 @@ class IndexPart {
     }
   }
 
-  resolve(v: Promise<?valueOrPrimitive>): Promise<?valueOrPrimitive> {
+  resolve(v: Promise<?Value>): Promise<?Value> {
     return v.then(value => {
       if (value === null || value === undefined) {
         return;
@@ -121,7 +121,7 @@ export default class Path {
     return this._addPart(new IndexPart(idx));
   }
 
-  resolve(v: valueOrPrimitive): Promise<?valueOrPrimitive> {
+  resolve(v: Value): Promise<?Value> {
     return this._parts.reduce((v, p) => p.resolve(v), Promise.resolve(v));
   }
 
