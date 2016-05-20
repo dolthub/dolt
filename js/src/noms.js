@@ -37,6 +37,7 @@ export {
   makeRefType,
   makeSetType,
   makeStructType,
+  makeUnionType,
   numberType,
   PrimitiveDesc,
   stringType,
