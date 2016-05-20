@@ -61,6 +61,11 @@ type metaSequenceObject struct {
 	vr     ValueReader
 }
 
+func (ms metaSequenceObject) data() metaSequenceData {
+	return ms.tuples
+}
+
+// sequence interface
 func (ms metaSequenceObject) getItem(idx int) sequenceItem {
 	return ms.tuples[idx]
 }
@@ -69,29 +74,8 @@ func (ms metaSequenceObject) seqLen() int {
 	return len(ms.tuples)
 }
 
-func (ms metaSequenceObject) getChildSequence(idx int) sequence {
-	mt := ms.tuples[idx]
-	if mt.child != nil {
-		return mt.child.sequence()
-	}
-
-	return mt.childRef.TargetValue(ms.vr).(Collection).sequence()
-}
-
 func (ms metaSequenceObject) valueReader() ValueReader {
 	return ms.vr
-}
-
-func (ms metaSequenceObject) data() metaSequenceData {
-	return ms.tuples
-}
-
-func (ms metaSequenceObject) ChildValues() []Value {
-	vals := make([]Value, len(ms.tuples))
-	for i, mt := range ms.tuples {
-		vals[i] = mt.childRef
-	}
-	return vals
 }
 
 func (ms metaSequenceObject) Chunks() (chunks []Ref) {
@@ -103,6 +87,25 @@ func (ms metaSequenceObject) Chunks() (chunks []Ref) {
 
 func (ms metaSequenceObject) Type() *Type {
 	return ms.t
+}
+
+// Value interface
+func (ms metaSequenceObject) ChildValues() []Value {
+	vals := make([]Value, len(ms.tuples))
+	for i, mt := range ms.tuples {
+		vals[i] = mt.childRef
+	}
+	return vals
+}
+
+// metaSequence interface
+func (ms metaSequenceObject) getChildSequence(idx int) sequence {
+	mt := ms.tuples[idx]
+	if mt.child != nil {
+		return mt.child.sequence()
+	}
+
+	return mt.childRef.TargetValue(ms.vr).(Collection).sequence()
 }
 
 // Creates a sequenceCursor pointing to the first metaTuple in a metaSequence, and returns that cursor plus the leaf Value referenced from that metaTuple.

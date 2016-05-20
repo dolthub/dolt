@@ -21,6 +21,8 @@ type Type struct {
 	ref  *ref.Ref
 }
 
+var typeForType = makePrimitiveType(TypeKind)
+
 // Describe generate text that should parse into the struct being described.
 func (t *Type) Describe() (out string) {
 	return EncodedValue(t)
@@ -36,10 +38,7 @@ func (t *Type) Name() string {
 	return t.Desc.(StructDesc).Name
 }
 
-func (t *Type) Ref() ref.Ref {
-	return EnsureRef(t.ref, t)
-}
-
+// Value interface
 func (t *Type) Equals(other Value) (res bool) {
 	return other != nil && t.Ref() == other.Ref()
 }
@@ -48,8 +47,8 @@ func (t *Type) Less(other Value) (res bool) {
 	return valueLess(t, other)
 }
 
-func (t *Type) Chunks() (chunks []Ref) {
-	return
+func (t *Type) Ref() ref.Ref {
+	return EnsureRef(t.ref, t)
 }
 
 func (t *Type) ChildValues() (res []Value) {
@@ -70,7 +69,9 @@ func (t *Type) ChildValues() (res []Value) {
 	return
 }
 
-var typeForType = makePrimitiveType(TypeKind)
+func (t *Type) Chunks() (chunks []Ref) {
+	return
+}
 
 func (t *Type) Type() *Type {
 	return typeForType

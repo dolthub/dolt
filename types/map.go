@@ -33,10 +33,24 @@ func NewMap(kv ...Value) Map {
 	return seq.Done().(Map)
 }
 
-func (m Map) Type() *Type {
-	return m.seq.Type()
+func (m Map) Diff(last Map) (added []Value, removed []Value, modified []Value) {
+	return orderedSequenceDiff(last.sequence().(orderedSequence), m.sequence().(orderedSequence))
 }
 
+// Collection interface
+func (m Map) Len() uint64 {
+	return m.seq.numLeaves()
+}
+
+func (m Map) Empty() bool {
+	return m.Len() == 0
+}
+
+func (m Map) sequence() sequence {
+	return m.seq
+}
+
+// Value interface
 func (m Map) Equals(other Value) bool {
 	return other != nil && m.Ref() == other.Ref()
 }
@@ -47,14 +61,6 @@ func (m Map) Less(other Value) bool {
 
 func (m Map) Ref() ref.Ref {
 	return EnsureRef(m.ref, m)
-}
-
-func (m Map) Len() uint64 {
-	return m.seq.numLeaves()
-}
-
-func (m Map) Empty() bool {
-	return m.Len() == 0
 }
 
 func (m Map) ChildValues() (values []Value) {
@@ -68,8 +74,8 @@ func (m Map) Chunks() []Ref {
 	return m.seq.Chunks()
 }
 
-func (m Map) sequence() sequence {
-	return m.seq
+func (m Map) Type() *Type {
+	return m.seq.Type()
 }
 
 func (m Map) First() (Value, Value) {

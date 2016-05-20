@@ -11,6 +11,7 @@ import (
 type orderedSequence interface {
 	sequence
 	getKey(idx int) Value
+	equalsAt(idx int, other interface{}) bool
 }
 
 type orderedMetaSequence struct {
@@ -59,6 +60,10 @@ func (oms orderedMetaSequence) numLeaves() uint64 {
 
 func (oms orderedMetaSequence) getKey(idx int) Value {
 	return oms.tuples[idx].value
+}
+
+func (oms orderedMetaSequence) equalsAt(idx int, other interface{}) bool {
+	return oms.tuples[idx].childRef.Equals(other.(metaTuple).childRef)
 }
 
 func newCursorAtKey(seq orderedSequence, key Value, forInsertion bool, last bool) *sequenceCursor {
@@ -124,6 +129,13 @@ func seekTo(cur *sequenceCursor, key Value, lastPositionIfNotFound bool) bool {
 	}
 
 	return cur.idx < seq.seqLen()
+}
+
+// Gets the key used for ordering the sequence at current index.
+func getCurrentKey(cur *sequenceCursor) Value {
+	seq, ok := cur.seq.(orderedSequence)
+	d.Chk.True(ok, "need an ordered sequence here")
+	return seq.getKey(cur.idx)
 }
 
 func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {

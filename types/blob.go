@@ -38,6 +38,20 @@ func (b Blob) Reader() io.ReadSeeker {
 	return &BlobReader{b.seq, cursor, nil, 0}
 }
 
+// Collection interface
+func (b Blob) Len() uint64 {
+	return b.seq.numLeaves()
+}
+
+func (b Blob) Empty() bool {
+	return b.Len() == 0
+}
+
+func (b Blob) sequence() sequence {
+	return b.seq
+}
+
+// Value interface
 func (b Blob) Equals(other Value) bool {
 	return other != nil && b.Ref() == other.Ref()
 }
@@ -50,28 +64,16 @@ func (b Blob) Ref() ref.Ref {
 	return EnsureRef(b.ref, b)
 }
 
-func (b Blob) Len() uint64 {
-	return b.seq.numLeaves()
-}
-
-func (b Blob) Empty() bool {
-	return b.Len() == 0
+func (b Blob) ChildValues() []Value {
+	return []Value{}
 }
 
 func (b Blob) Chunks() []Ref {
 	return b.seq.Chunks()
 }
 
-func (b Blob) ChildValues() []Value {
-	return []Value{}
-}
-
 func (b Blob) Type() *Type {
 	return b.seq.Type()
-}
-
-func (b Blob) sequence() sequence {
-	return b.seq
 }
 
 type BlobReader struct {

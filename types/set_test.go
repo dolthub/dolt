@@ -37,6 +37,50 @@ func (ts testSet) Remove(from, to int) testSet {
 	return testSet{values, ts.tr}
 }
 
+func (ts testSet) Has(key Value) bool {
+	for _, entry := range ts.values {
+		if entry.Equals(key) {
+			return true
+		}
+	}
+	return false
+}
+
+func (ts testSet) Diff(last testSet) (added []Value, removed []Value) {
+	// Note: this could be use ts.toSet/last.toSet and then tsSet.Diff(lastSet) but the
+	// purpose of this method is to be redundant.
+	added = make([]Value, 0)
+	removed = make([]Value, 0)
+	if len(ts.values) == 0 && len(last.values) == 0 {
+		return // nothing changed
+	}
+	if len(ts.values) == 0 {
+		// everything removed
+		for _, entry := range last.values {
+			removed = append(removed, entry)
+		}
+		return
+	}
+	if len(last.values) == 0 {
+		// everything added
+		for _, entry := range ts.values {
+			added = append(added, entry)
+		}
+		return
+	}
+	for _, entry := range ts.values {
+		if !last.Has(entry) {
+			added = append(added, entry)
+		}
+	}
+	for _, entry := range last.values {
+		if !ts.Has(entry) {
+			removed = append(removed, entry)
+		}
+	}
+	return
+}
+
 func (ts testSet) toSet() Set {
 	return NewSet(ts.values...)
 }
@@ -48,6 +92,14 @@ func newTestSet(length int) testSet {
 	}
 
 	return testSet{values, MakeSetType(NumberType)}
+}
+
+func newTestSetFromSet(s Set) testSet {
+	values := make([]Value, 0, s.Len())
+	s.IterAll(func(v Value) {
+		values = append(values, v)
+	})
+	return testSet{values, s.Type()}
 }
 
 func newTestSetWithGen(length int, gen testSetGenFn, tr *Type) testSet {
@@ -146,6 +198,22 @@ func getTestRefToValueOrderSet(scale int, vw ValueWriter) testSet {
 	}, refType)
 }
 
+func diffSetTest(assert *assert.Assertions, s1 Set, s2 Set, numAddsExpected int, numRemovesExpected int) (added []Value, removed []Value) {
+	added, removed = s1.Diff(s2)
+	assert.Equal(numAddsExpected, len(added), "num added is not as expected")
+	assert.Equal(numRemovesExpected, len(removed), "num removed is not as expected")
+
+	ts1 := newTestSetFromSet(s1)
+	ts2 := newTestSetFromSet(s2)
+	tsAdded, tsRemoved := ts1.Diff(ts2)
+	assert.Equal(numAddsExpected, len(tsAdded), "num added is not as expected")
+	assert.Equal(numRemovesExpected, len(tsRemoved), "num removed is not as expected")
+
+	assert.Equal(added, tsAdded, "set added != tsSet added")
+	assert.Equal(removed, tsRemoved, "set removed != tsSet removed")
+	return
+}
+
 func TestNewSet(t *testing.T) {
 	assert := assert.New(t)
 	s := NewSet()
@@ -168,10 +236,20 @@ func TestSetLen(t *testing.T) {
 	assert.Equal(uint64(0), s0.Len())
 	s1 := NewSet(Bool(true), Number(1), NewString("hi"))
 	assert.Equal(uint64(3), s1.Len())
+	diffSetTest(assert, s0, s1, 0, 3)
+	diffSetTest(assert, s1, s0, 3, 0)
+
 	s2 := s1.Insert(Bool(false))
 	assert.Equal(uint64(4), s2.Len())
+	diffSetTest(assert, s0, s2, 0, 4)
+	diffSetTest(assert, s2, s0, 4, 0)
+	diffSetTest(assert, s1, s2, 0, 1)
+	diffSetTest(assert, s2, s1, 1, 0)
+
 	s3 := s2.Remove(Bool(true))
 	assert.Equal(uint64(3), s3.Len())
+	diffSetTest(assert, s2, s3, 1, 0)
+	diffSetTest(assert, s3, s2, 0, 1)
 }
 
 func TestSetEmpty(t *testing.T) {
@@ -261,6 +339,7 @@ func TestSetHas2(t *testing.T) {
 			assert.True(set.Has(v))
 			assert.True(set2.Has(v))
 		}
+		diffSetTest(assert, set, set2, 0, 0)
 	}
 
 	doTest(getTestNativeOrderSet(16))
@@ -303,6 +382,7 @@ func TestSetInsert2(t *testing.T) {
 			actual := ts.Remove(from, to).toSet().Insert(ts.values[from:to]...)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
+			diffSetTest(assert, expected, actual, 0, 0)
 		}
 		for i := 0; i < len(ts.values)-offset; i += incr {
 			run(i, i+offset)
@@ -364,6 +444,7 @@ func TestSetRemove2(t *testing.T) {
 			actual := whole.Remove(ts.values[from:to]...)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
+			diffSetTest(assert, expected, actual, 0, 0)
 		}
 		for i := 0; i < len(ts.values)-offset; i += incr {
 			run(i, i+offset)

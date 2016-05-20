@@ -11,7 +11,7 @@ type testSequence struct {
 	items []interface{}
 }
 
-// sequence
+// sequence interface
 func (ts testSequence) getItem(idx int) sequenceItem {
 	return ts.items[idx]
 }
@@ -24,27 +24,38 @@ func (ts testSequence) numLeaves() uint64 {
 	return uint64(len(ts.items))
 }
 
+func (ts testSequence) valueReader() ValueReader {
+	panic("not reached")
+}
+
+// metaSequence interface
 func (ts testSequence) getChildSequence(idx int) sequence {
 	child := ts.items[idx]
 	return testSequence{child.([]interface{})}
 }
 
+// Value interface
 func (ts testSequence) Equals(other Value) bool {
 	panic("not reached")
 }
+
+func (ts testSequence) Less(other Value) bool {
+	panic("not reached")
+}
+
 func (ts testSequence) Ref() ref.Ref {
 	panic("not reached")
 }
+
 func (ts testSequence) ChildValues() []Value {
 	panic("not reached")
 }
+
 func (ts testSequence) Chunks() []Ref {
 	panic("not reached")
 }
+
 func (ts testSequence) Type() *Type {
-	panic("not reached")
-}
-func (ts testSequence) valueReader() ValueReader {
 	panic("not reached")
 }
 

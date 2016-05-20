@@ -33,10 +33,27 @@ func NewSet(v ...Value) Set {
 	return seq.Done().(Set)
 }
 
-func (s Set) Type() *Type {
-	return s.seq.Type()
+func (s Set) Diff(last Set) (added []Value, removed []Value) {
+	// Set diff shouldn't return modified since it's not possible a value in a set of "changes".
+	// Elements can only enter and exit a set
+	added, removed, _ = orderedSequenceDiff(last.sequence().(orderedSequence), s.sequence().(orderedSequence))
+	return
 }
 
+// Collection interface
+func (s Set) Len() uint64 {
+	return s.seq.numLeaves()
+}
+
+func (s Set) Empty() bool {
+	return s.Len() == 0
+}
+
+func (s Set) sequence() sequence {
+	return s.seq
+}
+
+// Value interface
 func (s Set) Equals(other Value) bool {
 	return other != nil && s.Ref() == other.Ref()
 }
@@ -49,27 +66,19 @@ func (s Set) Ref() ref.Ref {
 	return EnsureRef(s.ref, s)
 }
 
-func (s Set) Len() uint64 {
-	return s.seq.numLeaves()
-}
-
-func (s Set) Empty() bool {
-	return s.Len() == 0
+func (s Set) ChildValues() (values []Value) {
+	s.IterAll(func(v Value) {
+		values = append(values, v)
+	})
+	return
 }
 
 func (s Set) Chunks() []Ref {
 	return s.seq.Chunks()
 }
 
-func (s Set) sequence() sequence {
-	return s.seq
-}
-
-func (s Set) ChildValues() (values []Value) {
-	s.IterAll(func(v Value) {
-		values = append(values, v)
-	})
-	return
+func (s Set) Type() *Type {
+	return s.seq.Type()
 }
 
 func (s Set) First() Value {

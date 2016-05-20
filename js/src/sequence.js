@@ -108,6 +108,7 @@ export class SequenceCursor<T, S: Sequence> {
 
   /**
    * Advances the cursor within the current chunk.
+   * Performance optimisation: allowing non-async resolution of leaf elements
    *
    * Returns true if the cursor advanced to a valid position within this chunk, false if not.
    *
@@ -133,6 +134,7 @@ export class SequenceCursor<T, S: Sequence> {
 
   /**
    * Returns true if the cursor can advance within the current chunk to a valid position.
+   * Performance optimisation: allowing non-async resolution of leaf elements
    */
   canAdvanceLocal(): boolean {
     return this.idx < this.length - 1;

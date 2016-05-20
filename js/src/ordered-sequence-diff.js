@@ -89,6 +89,7 @@ async function doFastForward(allowPastEnd: boolean,
       await Promise.all([syncWithIdx(a, aHasMore), syncWithIdx(b, bHasMore)]);
     } else {
       if (a.canAdvanceLocal() && b.canAdvanceLocal()) {
+        // Performance optimisation: allowing non-async resolution of leaf elements
         aHasMore = a.advanceLocal(allowPastEnd);
         bHasMore = b.advanceLocal(allowPastEnd);
       } else {

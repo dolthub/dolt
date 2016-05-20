@@ -46,15 +46,58 @@ func (tm testMap) Remove(from, to int) testMap {
 	return testMap{entries, tm.tr, tm.knownBadKey}
 }
 
-func (tm testMap) toMap() Map {
-	keyvals := []Value{}
+func (tm testMap) MaybeGet(key Value) (v Value, ok bool) {
 	for _, entry := range tm.entries {
-		keyvals = append(keyvals, entry.key, entry.value)
+		if entry.key.Equals(key) {
+			return entry.value, true
+		}
 	}
-	return NewMap(keyvals...)
+	return nil, false
 }
 
-func (tm testMap) toCompoundMap() Map {
+func (tm testMap) Diff(last testMap) (added []Value, removed []Value, modified []Value) {
+	// Note: this could be use tm.toMap/last.toMap and then tmMap.Diff(lastMap) but the
+	// purpose of this method is to be redundant.
+	added = make([]Value, 0)
+	removed = make([]Value, 0)
+	modified = make([]Value, 0)
+
+	if len(tm.entries) == 0 && len(last.entries) == 0 {
+		return // nothing changed
+	}
+	if len(tm.entries) == 0 {
+		// everything removed
+		for _, entry := range last.entries {
+			removed = append(removed, entry.key)
+		}
+		return
+	}
+	if len(last.entries) == 0 {
+		// everything added
+		for _, entry := range tm.entries {
+			added = append(added, entry.key)
+		}
+		return
+	}
+
+	for _, entry := range tm.entries {
+		otherValue, exists := last.MaybeGet(entry.key)
+		if !exists {
+			added = append(added, entry.key)
+		} else if !entry.value.Equals(otherValue) {
+			modified = append(modified, entry.key)
+		}
+	}
+	for _, entry := range last.entries {
+		_, exists := tm.MaybeGet(entry.key)
+		if !exists {
+			removed = append(removed, entry.key)
+		}
+	}
+	return
+}
+
+func (tm testMap) toMap() Map {
 	keyvals := []Value{}
 	for _, entry := range tm.entries {
 		keyvals = append(keyvals, entry.key, entry.value)
@@ -82,6 +125,14 @@ func newTestMap(length int) testMap {
 		entries = append(entries, entry)
 	}
 	return testMap{entries, MakeMapType(NumberType, NumberType), Number(length + 2)}
+}
+
+func newTestMapFromMap(m Map) testMap {
+	entries := make([]mapEntry, 0, m.Len())
+	m.IterAll(func(key, value Value) {
+		entries = append(entries, mapEntry{key, value})
+	})
+	return testMap{entries, m.Type(), Number(-0)}
 }
 
 func newTestMapWithGen(length int, gen testMapGenFn, tr *Type) testMap {
@@ -193,6 +244,41 @@ func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
 	}, refType)
 }
 
+func diffMapTest(assert *assert.Assertions, m1 Map, m2 Map, numAddsExpected int, numRemovesExpected int, numModifiedExpected int) (added []Value, removed []Value, modified []Value) {
+	added, removed, modified = m1.Diff(m2)
+	assert.Equal(numAddsExpected, len(added), "num added is not as expected")
+	assert.Equal(numRemovesExpected, len(removed), "num removed is not as expected")
+	assert.Equal(numModifiedExpected, len(modified), "num modified is not as expected")
+
+	tm1 := newTestMapFromMap(m1)
+	tm2 := newTestMapFromMap(m2)
+	tmAdded, tmRemoved, tmModified := tm1.Diff(tm2)
+	assert.Equal(numAddsExpected, len(tmAdded), "num added is not as expected")
+	assert.Equal(numRemovesExpected, len(tmRemoved), "num removed is not as expected")
+	assert.Equal(numModifiedExpected, len(tmModified), "num modified is not as expected")
+
+	assert.Equal(added, tmAdded, "map added != tmMap added")
+	assert.Equal(removed, tmRemoved, "map removed != tmMap removed")
+	assert.Equal(modified, tmModified, "map modified != tmMap modified")
+	return
+}
+
+func TestMapDiff(t *testing.T) {
+	testMap1 := newTestMapWithGen(int(mapPattern)*2, func(v Number) Value {
+		return v
+	}, NumberType)
+	testMap2 := newTestMapWithGen(int(mapPattern)*2, func(v Number) Value {
+		return v
+	}, NumberType)
+	testMapAdded, testMapRemoved, testMapModified := testMap1.Diff(testMap2)
+	map1 := testMap1.toMap()
+	map2 := testMap2.toMap()
+	mapDiffAdded, mapDiffRemoved, mapDiffModified := map1.Diff(map2)
+	assert.Equal(t, testMapAdded, mapDiffAdded, "testMap.diff != map.diff")
+	assert.Equal(t, testMapRemoved, mapDiffRemoved, "testMap.diff != map.diff")
+	assert.Equal(t, testMapModified, mapDiffModified, "testMap.diff != map.diff")
+}
+
 func TestNewMap(t *testing.T) {
 	assert := assert.New(t)
 	m := NewMap()
@@ -247,6 +333,7 @@ func TestMapHas(t *testing.T) {
 			assert.True(m2.Has(k))
 			assert.True(m2.Get(k).Equals(v))
 		}
+		diffMapTest(assert, m, m2, 0, 0, 0)
 	}
 
 	doTest(getTestNativeOrderMap(16))
@@ -281,6 +368,7 @@ func TestMapRemove(t *testing.T) {
 			actual := whole.Remove(tm.entries[i].key)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
+			diffMapTest(assert, expected, actual, 0, 0, 0)
 		}
 		for i := 0; i < len(tm.entries); i += incr {
 			run(i)
@@ -376,6 +464,7 @@ func TestMapSet(t *testing.T) {
 			actual := tm.Remove(from, to).toMap().SetM(tm.Flatten(from, to)...)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
+			diffMapTest(assert, expected, actual, 0, 0, 0)
 		}
 		for i := 0; i < len(tm.entries)-offset; i += incr {
 			run(i, i+offset)
@@ -411,6 +500,7 @@ func TestMapSetExistingKeyToNewValue(t *testing.T) {
 	assert.Equal(expected.Len(), actual.Len())
 	assert.True(expected.Equals(actual))
 	assert.False(original.Equals(actual))
+	diffMapTest(assert, expected, actual, 0, 0, 0)
 }
 
 func TestMapSetM(t *testing.T) {
@@ -564,6 +654,12 @@ func TestMapEquals(t *testing.T) {
 	assert.True(m2.Equals(m1))
 	assert.True(m3.Equals(m2))
 	assert.True(m2.Equals(m3))
+	diffMapTest(assert, m1, m2, 0, 0, 0)
+	diffMapTest(assert, m1, m3, 0, 0, 0)
+	diffMapTest(assert, m2, m1, 0, 0, 0)
+	diffMapTest(assert, m2, m3, 0, 0, 0)
+	diffMapTest(assert, m3, m1, 0, 0, 0)
+	diffMapTest(assert, m3, m2, 0, 0, 0)
 
 	m1 = NewMap(NewString("foo"), Number(0.0), NewString("bar"), NewList())
 	m2 = m2.SetM(NewString("foo"), Number(0.0), NewString("bar"), NewList())
@@ -571,6 +667,12 @@ func TestMapEquals(t *testing.T) {
 	assert.True(m2.Equals(m1))
 	assert.False(m2.Equals(m3))
 	assert.False(m3.Equals(m2))
+	diffMapTest(assert, m1, m2, 0, 0, 0)
+	diffMapTest(assert, m1, m3, 2, 0, 0)
+	diffMapTest(assert, m2, m1, 0, 0, 0)
+	diffMapTest(assert, m2, m3, 2, 0, 0)
+	diffMapTest(assert, m3, m1, 0, 2, 0)
+	diffMapTest(assert, m3, m2, 0, 2, 0)
 }
 
 func TestMapNotStringKeys(t *testing.T) {

@@ -34,22 +34,6 @@ func maxChunkHeight(v Value) (max uint64) {
 	return
 }
 
-func (r Ref) Equals(other Value) bool {
-	return other != nil && r.t.Equals(other.Type()) && r.Ref() == other.Ref()
-}
-
-func (r Ref) Ref() ref.Ref {
-	return EnsureRef(r.ref, r)
-}
-
-func (r Ref) Chunks() (chunks []Ref) {
-	return append(chunks, r)
-}
-
-func (r Ref) ChildValues() []Value {
-	return nil
-}
-
 func (r Ref) TargetRef() ref.Ref {
 	return r.target
 }
@@ -58,14 +42,31 @@ func (r Ref) Height() uint64 {
 	return r.height
 }
 
-func (r Ref) Type() *Type {
-	return r.t
+func (r Ref) TargetValue(vr ValueReader) Value {
+	return vr.ReadValue(r.target)
+}
+
+// Value interface
+func (r Ref) Equals(other Value) bool {
+	return other != nil && r.t.Equals(other.Type()) && r.Ref() == other.Ref()
 }
 
 func (r Ref) Less(other Value) bool {
 	return valueLess(r, other)
 }
 
-func (r Ref) TargetValue(vr ValueReader) Value {
-	return vr.ReadValue(r.target)
+func (r Ref) Ref() ref.Ref {
+	return EnsureRef(r.ref, r)
+}
+
+func (r Ref) ChildValues() []Value {
+	return nil
+}
+
+func (r Ref) Chunks() (chunks []Ref) {
+	return append(chunks, r)
+}
+
+func (r Ref) Type() *Type {
+	return r.t
 }
