@@ -37,5 +37,6 @@ cache:
 deploy:
   provider: script
   script: tools/publish-js-sdk.py
+  skip_cleanup: true
   on:
     branch: master
