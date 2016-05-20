@@ -1,10 +1,10 @@
 // @flow
 
 import {assert} from 'chai';
-import {newBlob} from './blob.js';
-import {newList} from './list.js';
-import {newMap} from './map.js';
-import {newSet} from './set.js';
+import Blob from './blob.js';
+import List from './list.js';
+import Map from './map.js';
+import Set from './set.js';
 import {newStruct} from './struct.js';
 import {suite, test} from 'mocha';
 import assertSubtype from './assert-type.js';
@@ -66,40 +66,40 @@ suite('validate type', () => {
     assertInvalid(stringType, 42);
   });
 
-  test('value', async () => {
+  test('value', () => {
     assertSubtype(valueType, true);
     assertSubtype(valueType, 1);
     assertSubtype(valueType, 'abc');
-    const l = await newList([0, 1, 2, 3]);
+    const l = new List([0, 1, 2, 3]);
     assertSubtype(valueType, l);
   });
 
-  test('blob', async () => {
-    const b = await newBlob(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]));
+  test('blob', () => {
+    const b = new Blob(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]));
     assertAll(blobType, b);
   });
 
-  test('list', async () => {
+  test('list', () => {
     const listOfNumberType = makeListType(numberType);
-    const l = await newList([0, 1, 2, 3]);
+    const l = new List([0, 1, 2, 3]);
     assertSubtype(listOfNumberType, l);
     assertAll(listOfNumberType, l);
 
     assertSubtype(listOfValueType, l);
   });
 
-  test('map', async () => {
+  test('map', () => {
     const mapOfNumberToStringType = makeMapType(numberType, stringType);
-    const m = await newMap([[0, 'a'], [2, 'b']]);
+    const m = new Map([[0, 'a'], [2, 'b']]);
     assertSubtype(mapOfNumberToStringType, m);
     assertAll(mapOfNumberToStringType, m);
 
     assertSubtype(mapOfValueType, m);
   });
 
-  test('set', async () => {
+  test('set', () => {
     const setOfNumberType = makeSetType(numberType);
-    const s = await newSet([0, 1, 2, 3]);
+    const s = new Set([0, 1, 2, 3]);
     assertSubtype(setOfNumberType, s);
     assertAll(setOfNumberType, s);
 
@@ -114,7 +114,7 @@ suite('validate type', () => {
     assertSubtype(valueType, t);
   });
 
-  test('struct', async () => {
+  test('struct', () => {
     const type = makeStructType('Struct', {
       'x': boolType,
     });
@@ -126,7 +126,7 @@ suite('validate type', () => {
     assertSubtype(valueType, v);
   });
 
-  test('union', async () => {
+  test('union', () => {
     assertSubtype(makeUnionType([numberType]), 42);
     assertSubtype(makeUnionType([numberType, stringType]), 42);
     assertSubtype(makeUnionType([numberType, stringType]), 'hi');
@@ -135,46 +135,46 @@ suite('validate type', () => {
     assertSubtype(makeUnionType([numberType, stringType, boolType]), true);
 
     const lt = makeListType(makeUnionType([numberType, stringType]));
-    assertSubtype(lt, await newList([1, 'hi', 2, 'bye']));
+    assertSubtype(lt, new List([1, 'hi', 2, 'bye']));
 
     const st = makeSetType(stringType);
     assertSubtype(makeUnionType([st, numberType]), 42);
-    assertSubtype(makeUnionType([st, numberType]), await newSet(['a', 'b']));
+    assertSubtype(makeUnionType([st, numberType]), new Set(['a', 'b']));
 
     assertInvalid(makeUnionType([]), 42);
     assertInvalid(makeUnionType([stringType]), 42);
     assertInvalid(makeUnionType([stringType, boolType]), 42);
     assertInvalid(makeUnionType([st, stringType]), 42);
-    assertInvalid(makeUnionType([st, numberType]), await newSet([1, 2]));
+    assertInvalid(makeUnionType([st, numberType]), new Set([1, 2]));
   });
 
-  test('empty list union', async () => {
+  test('empty list union', () => {
     const lt = makeListType(makeUnionType([]));
-    assertSubtype(lt, await newList([]));
+    assertSubtype(lt, new List());
   });
 
-  test('empty list', async () => {
+  test('empty list', () => {
     const lt = makeListType(numberType);
-    assertSubtype(lt, await newList([]));
+    assertSubtype(lt, new List());
 
     // List<> not a subtype of List<Number>
-    assertInvalid(makeListType(makeUnionType([])), await newList([1]));
+    assertInvalid(makeListType(makeUnionType([])), new List([1]));
   });
 
-  test('empty set', async () => {
+  test('empty set', () => {
     const st = makeSetType(numberType);
-    assertSubtype(st, await newSet([]));
+    assertSubtype(st, new Set());
 
     // Set<> not a subtype of Set<Number>
-    assertInvalid(makeSetType(makeUnionType([])), await newSet([1]));
+    assertInvalid(makeSetType(makeUnionType([])), new Set([1]));
   });
 
-  test('empty map', async () => {
+  test('empty map', () => {
     const mt = makeMapType(numberType, stringType);
-    assertSubtype(mt, await newMap([]));
+    assertSubtype(mt, new Map());
 
     // Map<> not a subtype of Map<Number, Number>
-    assertInvalid(makeMapType(makeUnionType([]), makeUnionType([])), await newMap([[1, 2]]));
+    assertInvalid(makeMapType(makeUnionType([]), makeUnionType([])), new Map([[1, 2]]));
   });
 
   test('struct subtype by name', () => {
@@ -214,10 +214,10 @@ suite('validate type', () => {
     assertSubtype(ct, cv);
   });
 
-  test('struct subtype', async () => {
+  test('struct subtype', () => {
     const c1 = newStruct('Commit', {
       value: 1,
-      parents: await newSet([]),
+      parents: new Set(),
     });
     const t1 = makeStructType('Commit', {
       value: numberType,
@@ -234,7 +234,7 @@ suite('validate type', () => {
 
     const c2 = newStruct('Commit', {
       value: 2,
-      parents: await newSet([new RefValue(c1)]),
+      parents: new Set([new RefValue(c1)]),
     });
     assertSubtype(t11, c2);
 

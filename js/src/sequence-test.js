@@ -2,7 +2,7 @@
 
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
-import {Sequence, SequenceCursor} from './sequence.js';
+import Sequence, {SequenceCursor} from './sequence.js';
 import {notNull} from './assert.js';
 import {makeListType, valueType} from './type.js';
 

@@ -12,13 +12,13 @@ import {IndexedSequence} from './indexed-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import RefValue from './ref-value.js';
-import {Sequence} from './sequence.js';
+import Sequence from './sequence.js';
 import {Kind} from './noms-kind.js';
 import type {NomsKind} from './noms-kind.js';
-import List from './list.js';
-import Map from './map.js';
-import Set from './set.js';
-import Blob from './blob.js';
+import {newListFromSequence} from './list.js';
+import {newMapFromSequence} from './map.js';
+import {newSetFromSequence} from './set.js';
+import {newBlobFromSequence} from './blob.js';
 import {equals} from './compare.js';
 
 export type MetaSequence = Sequence<MetaTuple>;
@@ -201,12 +201,10 @@ export function newOrderedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
     const last = tuples[tuples.length - 1];
     let col: Collection;
     if (kind === Kind.Map) {
-      const metaSeq = newMapMetaSequence(vr, tuples);
-      col = new Map(metaSeq);
+      col = newMapFromSequence(newMapMetaSequence(vr, tuples));
     } else {
       invariant(kind === Kind.Set);
-      const metaSeq = newSetMetaSequence(vr, tuples);
-      col = new Set(metaSeq);
+      col = newSetFromSequence(newSetMetaSequence(vr, tuples));
     }
     return [new MetaTuple(new RefValue(col), last.value, numLeaves, col), col];
   };
@@ -230,12 +228,10 @@ export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
     }, 0);
     let col: Collection;
     if (kind === Kind.List) {
-      const metaSeq = newListMetaSequence(vr, tuples);
-      col = new List(metaSeq);
+      col = newListFromSequence(newListMetaSequence(vr, tuples));
     } else {
       invariant(kind === Kind.Blob);
-      const metaSeq = newBlobMetaSequence(vr, tuples);
-      col = new Blob(metaSeq);
+      col = newBlobFromSequence(newBlobMetaSequence(vr, tuples));
     }
     return [new MetaTuple(new RefValue(col), sum, sum, col), col];
   };

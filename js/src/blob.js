@@ -10,11 +10,18 @@ import {MetaTuple, newIndexedMetaSequenceChunkFn, newIndexedMetaSequenceBoundary
   './meta-sequence.js';
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import RefValue from './ref-value.js';
-import {SequenceChunker} from './sequence-chunker.js';
+import SequenceChunker from './sequence-chunker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import {Kind} from './noms-kind.js';
 
 export default class Blob extends Collection<IndexedSequence> {
+  constructor(bytes: Uint8Array) {
+    const w = new BlobWriter();
+    w.write(bytes);
+    w.close();
+    super(w.blob.sequence);
+  }
+
   getReader(): BlobReader {
     return new BlobReader(this.sequence.newCursorAt(0));
   }
@@ -53,6 +60,13 @@ export class BlobReader {
   }
 }
 
+export function newBlobFromSequence(sequence: IndexedSequence): Blob {
+  const blob = Object.create(Blob.prototype);
+  blob._ref = null; // Value
+  blob.sequence = sequence;
+  return blob;
+}
+
 export class BlobLeafSequence extends IndexedSequence<number> {
   constructor(vr: ?ValueReader, items: Uint8Array) {
     // $FlowIssue: The super class expects Array<T> but we sidestep that.
@@ -70,7 +84,7 @@ const blobPattern = ((1 << 11) | 0) - 1; // Avg Chunk Size: 2k
 function newBlobLeafChunkFn(vr: ?ValueReader = null): makeChunkFn {
   return (items: Array<number>) => {
     const blobLeaf = new BlobLeafSequence(vr, new Uint8Array(items));
-    const blob = new Blob(blobLeaf);
+    const blob = newBlobFromSequence(blobLeaf);
     const mt = new MetaTuple(new RefValue(blob), items.length, items.length, blob);
     return [mt, blob];
   };
@@ -80,13 +94,7 @@ function newBlobLeafBoundaryChecker(): BoundaryChecker<number> {
   return new BuzHashBoundaryChecker(blobWindowSize, 1, blobPattern, (v: number) => v);
 }
 
-export function newBlob(bytes: Uint8Array): Promise<Blob> {
-  const w = new BlobWriter();
-  w.write(bytes);
-  return w.close().then(() => w.blob);
-}
-
-type BlobWriterState = 'writable' | 'closing' | 'closed';
+type BlobWriterState = 'writable' | 'closed';
 
 export class BlobWriter {
   _state: BlobWriterState;
@@ -107,10 +115,9 @@ export class BlobWriter {
     }
   }
 
-  async close(): Promise<void> {
+  close() {
     assert(this._state === 'writable');
-    this._state = 'closing';
-    this._blob = await this._chunker.done();
+    this._blob = this._chunker.doneSync();
     this._state = 'closed';
   }
 

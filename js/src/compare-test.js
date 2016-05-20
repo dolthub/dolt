@@ -6,13 +6,11 @@ import {equals, compare} from './compare.js';
 import {
   boolType,
 } from './type.js';
-import {newBlob} from './blob.js';
-import {newList} from './list.js';
-import {newMap} from './map.js';
-import {newSet} from './set.js';
+import Blob from './blob.js';
+import List from './list.js';
+import Map from './map.js';
+import Set from './set.js';
 import {newStruct} from './struct.js';
-import Database from './database.js';
-import {makeTestingBatchStore} from './batch-store-adaptor.js';
 
 suite('compare.js', () => {
   suite('compare', () => {
@@ -35,10 +33,10 @@ suite('compare.js', () => {
 
     });
 
-    test('list', async () => {
-      const listA = await newList([0, 1, 2, 3]);
-      const listB = await newList([0, 1, 2, 3]);
-      const listC = await newList([4, 5, 6, 7]);
+    test('list', () => {
+      const listA = new List([0, 1, 2, 3]);
+      const listB = new List([0, 1, 2, 3]);
+      const listC = new List([4, 5, 6, 7]);
       assert.equal(compare(listA, listA), 0);
       assert.equal(compare(listA, listB), 0);
       // These two are ordered by hash
@@ -46,19 +44,17 @@ suite('compare.js', () => {
       assert.isBelow(compare(listC, listA), 0);
     });
 
-    test('union', async () => {
-      const listA = await newList([0, 'b', 2, 'd']);
-      const listB = await newList([0, 'b', 2, 'd']);
-      const listC = await newList([4, 5, 'x', 7]);
+    test('union', () => {
+      const listA = new List([0, 'b', 2, 'd']);
+      const listB = new List([0, 'b', 2, 'd']);
+      const listC = new List([4, 5, 'x', 7]);
       assert.equal(compare(listA, listA), 0);
       assert.equal(compare(listA, listB), 0);
       assert.isBelow(compare(listA, listC), 0);
       assert.isAbove(compare(listC, listA), 0);
     });
 
-    test('total ordering', async () => {
-      const db = new Database(makeTestingBatchStore());
-
+    test('total ordering', () => {
       // values in increasing order. Some of these are compared by ref so changing the serialization
       // might change the ordering.
       const values = [
@@ -67,12 +63,11 @@ suite('compare.js', () => {
         'a', 'b', 'c',
 
         // The order of these are done by the hash.
-        db.writeValue(10),
-        await newSet([0, 1, 2, 3]),
-        await newMap([[0, 1], [2, 3]]),
+        new Set([0, 1, 2, 3]),
+        new Map([[0, 1], [2, 3]]),
         boolType,
-        await newBlob(new Uint8Array([0, 1, 2, 3])),
-        await newList([0, 1, 2, 3]),
+        new Blob(new Uint8Array([0, 1, 2, 3])),
+        new List([0, 1, 2, 3]),
         newStruct('', {x: 1, s: 'a'}),
 
         // Value - values cannot be value
@@ -91,7 +86,6 @@ suite('compare.js', () => {
           }
         }
       }
-      await db.close();
     });
   });
 
@@ -114,10 +108,10 @@ suite('compare.js', () => {
       assert.isFalse(equals(false, true));
     });
 
-    test('list', async () => {
-      const listA = await newList([0, 1, 2, 3]);
-      const listB = await newList([0, 1, 2, 3]);
-      const listC = await newList([4, 5, 6, 7]);
+    test('list', () => {
+      const listA = new List([0, 1, 2, 3]);
+      const listB = new List([0, 1, 2, 3]);
+      const listC = new List([4, 5, 6, 7]);
       assert.isTrue(equals(listA, listA));
       assert.isTrue(equals(listA, listB));
       assert.isFalse(equals(listA, listC));

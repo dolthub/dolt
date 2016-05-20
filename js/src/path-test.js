@@ -6,8 +6,8 @@ import {equals} from './compare.js';
 
 import Path from './path.js';
 import type {valueOrPrimitive} from './value.js';
-import {newList} from './list.js';
-import {newMap} from './map.js';
+import List from './list.js';
+import Map from './map.js';
 import {newStruct} from './struct.js';
 
 suite('Path', () => {
@@ -48,7 +48,7 @@ suite('Path', () => {
   });
 
   test('list', async () => {
-    const v = await newList([1, 3, 'foo', false]);
+    const v = new List([1, 3, 'foo', false]);
 
     await assertPathEqual(1, v, new Path().addIndex(0));
     await assertPathEqual(3, v, new Path().addIndex(1));
@@ -59,7 +59,7 @@ suite('Path', () => {
   });
 
   test('map', async () => {
-    const v = await newMap([[1, 'foo'], ['two', 'bar'], [false, 23], [2.3, 4.5]]);
+    const v = new Map([[1, 'foo'], ['two', 'bar'], [false, 23], [2.3, 4.5]]);
 
     await assertPathEqual('foo', v, new Path().addIndex(1));
     await assertPathEqual('bar', v, new Path().addIndex('two'));
@@ -69,9 +69,9 @@ suite('Path', () => {
   });
 
   test('multi', async () => {
-    const m1 = await newMap([['a', 'foo'], ['b','bar'], ['c', 'car']]);
-    const m2 = await newMap([['d', 'dar'], [false, 'earth']]);
-    const l = await newList([m1, m2]);
+    const m1 = new Map([['a', 'foo'], ['b','bar'], ['c', 'car']]);
+    const m2 = new Map([['d', 'dar'], [false, 'earth']]);
+    const l = new List([m1, m2]);
     const s = newStruct('', {
       foo: l,
     });

@@ -1,7 +1,7 @@
 // @flow
 
 import RefValue from './ref-value.js';
-import type {Sequence} from './sequence.js'; // eslint-disable-line no-unused-vars
+import type Sequence from './sequence.js'; // eslint-disable-line no-unused-vars
 import type {Type} from './type.js';
 import {Value} from './value.js';
 

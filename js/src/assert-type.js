@@ -16,14 +16,14 @@ import type {valueOrPrimitive} from './value.js';
  * "hi" < String
  * true < Bool | Number
  * [1, 2] < List<Number>
- * newSet(["hi"]) < Set<String>
- * newMap([1, "one"]) < Set<Number, String>
+ * new Set(["hi"]) < Set<String>
+ * new Map([1, "one"]) < Set<Number, String>
  * [1, "hi"] < List<Number | String>
  *
  * [] < List<>
  * [] < List<T> for all T
- * newSet([]) < Set<T> for all T
- * newMap([]) < Map<T, V> for all T and V
+ * new Set() < Set<T> for all T
+ * new Map() < Map<T, V> for all T and V
  *
  * newStruct("S", {x: 42}) < struct S {x: Number}
  * newStruct("S", {x: 42}) < struct "" {x: Number}, non nominal struct

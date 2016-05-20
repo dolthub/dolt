@@ -5,7 +5,7 @@ import type {AsyncIteratorResult} from './async-iterator.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
 import {compare} from './compare.js';
-import {search, Sequence, SequenceCursor} from './sequence.js';
+import Sequence, {search, SequenceCursor} from './sequence.js';
 import {Value} from './value.js';
 
 export class OrderedSequence<K: valueOrPrimitive, T> extends Sequence<T> {

@@ -8,7 +8,7 @@ import RefValue from './ref-value.js';
 import type {Type} from './type.js';
 import {Value} from './value.js';
 
-export class Sequence<T> {
+export default class Sequence<T> {
   vr: ?ValueReader;
   _type: Type;
   _items: Array<T>;

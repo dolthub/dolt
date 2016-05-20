@@ -7,7 +7,7 @@ import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import {Value} from './value.js';
 import {AsyncIterator} from './async-iterator.js';
-import {chunkSequence} from './sequence-chunker.js';
+import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import {Collection} from './collection.js';
 import {compare, equals} from './compare.js';
 import {getRefOfValue} from './get-ref.js';
@@ -28,8 +28,6 @@ const setPattern = ((1 << 6) | 0) - 1;
 
 function newSetLeafChunkFn<T:valueOrPrimitive>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
-    const setLeaf = newSetLeafSequence(vr, items);
-
     let indexValue: ?(T | RefValue) = null;
     if (items.length > 0) {
       indexValue = items[items.length - 1];
@@ -38,7 +36,7 @@ function newSetLeafChunkFn<T:valueOrPrimitive>(vr: ?ValueReader): makeChunkFn {
       }
     }
 
-    const ns = new Set(setLeaf);
+    const ns = newSetFromSequence(newSetLeafSequence(vr, items));
     const mt = new MetaTuple(new RefValue(ns), indexValue, items.length, ns);
     return [mt, ns];
   };
@@ -51,20 +49,29 @@ function newSetLeafBoundaryChecker<T:valueOrPrimitive>(): BoundaryChecker<T> {
   });
 }
 
-function buildSetData<T>(values: Array<any>): Array<T> {
+function buildSetData<T: valueOrPrimitive>(values: Array<any>): Array<T> {
+  values = values.slice();
   values.sort(compare);
   return removeDuplicateFromOrdered(values, compare);
 }
 
-export function newSet<T:valueOrPrimitive>(values: Array<T>):
-    Promise<Set<T>> {
-  return chunkSequence(null, buildSetData(values), 0, newSetLeafChunkFn(null),
-                       newOrderedMetaSequenceChunkFn(Kind.Set, null),
-                       newSetLeafBoundaryChecker(),
-                       newOrderedMetaSequenceBoundaryChecker);
+export function newSetLeafSequence<K: valueOrPrimitive>(
+    vr: ?ValueReader, items: K[]): SetLeafSequence {
+  const t = makeSetType(makeUnionType(items.map(getTypeOfValue)));
+  return new SetLeafSequence(vr, t, items);
 }
 
 export default class Set<T: valueOrPrimitive> extends Collection<OrderedSequence> {
+  constructor(values: Array<T> = []) {
+    const self = chunkSequenceSync(
+        buildSetData(values),
+        newSetLeafChunkFn(null),
+        newOrderedMetaSequenceChunkFn(Kind.Set, null),
+        newSetLeafBoundaryChecker(),
+        newOrderedMetaSequenceBoundaryChecker);
+    super(self.sequence);
+  }
+
   async has(key: T): Promise<boolean> {
     const cursor = await this.sequence.newCursorAt(key);
     return cursor.valid && equals(cursor.getCurrentKey(), key);
@@ -175,8 +182,7 @@ export default class Set<T: valueOrPrimitive> extends Collection<OrderedSequence
       await cursor.advance();
     }
 
-    // TODO: Chunk the resulting set.
-    return new Set(newSetLeafSequence(null, values));
+    return new Set(values);
   }
 
   /**
@@ -188,6 +194,13 @@ export default class Set<T: valueOrPrimitive> extends Collection<OrderedSequence
       return [added, removed];
     });
   }
+}
+
+export function newSetFromSequence<T: valueOrPrimitive>(sequence: OrderedSequence): Set<T> {
+  const set = Object.create(Set.prototype);
+  set._ref = null; // Value
+  set.sequence = sequence;
+  return set;
 }
 
 export class SetLeafSequence<K: valueOrPrimitive> extends OrderedSequence<K, K> {
@@ -202,11 +215,6 @@ export class SetLeafSequence<K: valueOrPrimitive> extends OrderedSequence<K, K> 
   get chunks(): Array<RefValue> {
     return getValueChunks(this.items);
   }
-}
-
-export function newSetLeafSequence<K: valueOrPrimitive>(vr: ?ValueReader, items: K[]) {
-  const t = makeSetType(makeUnionType(items.map(getTypeOfValue)));
-  return new SetLeafSequence(vr, t, items);
 }
 
 type OrderedCursor<K: valueOrPrimitive> = {

@@ -7,7 +7,7 @@ import type {ChunkStore} from './chunk-store.js';
 import BatchStore from './batch-store.js';
 import {BatchStoreAdaptorDelegate} from './batch-store-adaptor.js';
 import ValueStore from './value-store.js';
-import {newList} from './list.js';
+import List from './list.js';
 import {encodeNomsValue} from './encode.js';
 import {equals} from './compare.js';
 
@@ -56,7 +56,7 @@ suite('ValueStore', () => {
     vs.flush().then(() => { vs.close(); });
 
     vs = new ValueStore(bs);
-    const l = await newList([r]);
+    const l = new List([r]);
     let ex;
     try {
       await vs.writeValue(l);
@@ -120,7 +120,7 @@ suite('ValueStore', () => {
     const bs = new FakeBatchStore(new MemoryStore());
     const vs = new ValueStore(bs, 15);
 
-    const l = await newList([vs.writeValue(1), vs.writeValue(2)]);
+    const l = new List([vs.writeValue(1), vs.writeValue(2)]);
     const r = vs.writeValue(l);
 
     const v = await vs.readValue(r.targetRef);

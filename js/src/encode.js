@@ -12,7 +12,7 @@ import {isPrimitiveKind, Kind} from './noms-kind.js';
 import List, {ListLeafSequence} from './list.js';
 import Map, {MapLeafSequence} from './map.js';
 import Set, {SetLeafSequence} from './set.js';
-import {Sequence} from './sequence.js';
+import Sequence from './sequence.js';
 import {setEncodeNomsValue} from './get-ref.js';
 import Blob, {BlobLeafSequence} from './blob.js';
 import {describeTypeOfValue} from './encode-human-readable.js';

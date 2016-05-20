@@ -6,7 +6,7 @@ import type {ValueReader} from './value-store.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
-import {chunkSequence} from './sequence-chunker.js';
+import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import {Collection} from './collection.js';
 import {compare, equals} from './compare.js';
 import {sha1Size} from './ref.js';
@@ -39,7 +39,7 @@ function newMapLeafChunkFn<K: valueOrPrimitive, V: valueOrPrimitive>(vr: ?ValueR
       }
     }
 
-    const nm = new Map(newMapLeafSequence(vr, items));
+    const nm = newMapFromSequence(newMapLeafSequence(vr, items));
     const mt = new MetaTuple(new RefValue(nm), indexValue, items.length, nm);
     return [mt, nm];
   };
@@ -75,24 +75,23 @@ function compareKeys(v1, v2) {
 function buildMapData<K: valueOrPrimitive, V: valueOrPrimitive>(
     kvs: Array<MapEntry<K, V>>): Array<MapEntry<K, V>> {
   // TODO: Assert k & v are of correct type
-  const entries = [];
-  for (let i = 0; i < kvs.length; i++) {
-    entries.push([kvs[i][KEY], kvs[i][VALUE]]);
-  }
+  const entries = kvs.slice();
   entries.sort(compareKeys);
   return removeDuplicateFromOrdered(entries, compareKeys);
 }
 
-export function newMap<K: valueOrPrimitive, V: valueOrPrimitive>(
-    kvs: Array<MapEntry<K, V>>): Promise<Map<K, V>> {
-  return chunkSequence(null, buildMapData(kvs), 0, newMapLeafChunkFn(null),
-                       newOrderedMetaSequenceChunkFn(Kind.Map, null),
-                       newMapLeafBoundaryChecker(),
-                       newOrderedMetaSequenceBoundaryChecker);
-}
-
 export default class Map<K: valueOrPrimitive, V: valueOrPrimitive> extends
     Collection<OrderedSequence> {
+  constructor(kvs: Array<MapEntry<K, V>> = []) {
+    const self = chunkSequenceSync(
+        buildMapData(kvs),
+        newMapLeafChunkFn(null),
+        newOrderedMetaSequenceChunkFn(Kind.Map, null),
+        newMapLeafBoundaryChecker(),
+        newOrderedMetaSequenceBoundaryChecker);
+    super(self.sequence);
+  }
+
   async has(key: K): Promise<boolean> {
     const cursor = await this.sequence.newCursorAt(key);
     return cursor.valid && equals(cursor.getCurrentKey(), key);
@@ -184,6 +183,14 @@ export default class Map<K: valueOrPrimitive, V: valueOrPrimitive> extends
   diff(from: Map<K, V>): Promise<[Array<K>, Array<K>, Array<K>]> {
     return diff(from.sequence, this.sequence);
   }
+}
+
+export function newMapFromSequence<K: valueOrPrimitive, V: valueOrPrimitive>(
+    sequence: OrderedSequence): Map<K, V> {
+  const map = Object.create(Map.prototype);
+  map._ref = null; // Value
+  map.sequence = sequence;
+  return map;
 }
 
 export class MapLeafSequence<K: valueOrPrimitive, V: valueOrPrimitive> extends

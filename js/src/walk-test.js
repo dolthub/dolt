@@ -10,10 +10,10 @@ import {
   stringType,
 } from './type.js';
 import MemoryStore from './memory-store.js';
-import {newBlob} from './blob.js';
-import {newList} from './list.js';
-import {newMap} from './map.js';
-import {newSet} from './set.js';
+import Blob from './blob.js';
+import List from './list.js';
+import Map from './map.js';
+import NomsSet from './set.js'; // namespace collision with JS Set
 import walk from './walk.js';
 
 import {suite, suiteSetup, suiteTeardown, test} from 'mocha';
@@ -40,7 +40,7 @@ suite('walk', () => {
     for (let i = 0; i < arr.length; i++) {
       arr[i] = i;
     }
-    const blob = await newBlob(new Uint8Array(arr.buffer));
+    const blob = new Blob(new Uint8Array(arr.buffer));
     assert.equal(blob.length, arr.length * 4);
     assert.isAbove(blob.chunks.length, 1);
 
@@ -52,7 +52,7 @@ suite('walk', () => {
     for (let i = 0; i < 1000; i++) {
       expected.add(i);
     }
-    const list = await newList(Array.from(expected));
+    const list = new List(Array.from(expected));
     expected.add(list);
 
     await callbackHappensOnce(list, ds);
@@ -69,7 +69,7 @@ suite('walk', () => {
     for (let i = 0; i < 1000; i++) {
       expected.add(String(i));
     }
-    const set = await newSet(Array.from(expected));
+    const set = new NomsSet(Array.from(expected));
     expected.add(set);
 
     await callbackHappensOnce(set, ds);
@@ -89,7 +89,7 @@ suite('walk', () => {
       expected.push('value' + i);
       entries.push([i, 'value' + i]);
     }
-    const map = await newMap(entries);
+    const map = new Map(entries);
     expected.push(map);
 
     await callbackHappensOnce(map, ds);
@@ -113,7 +113,7 @@ suite('walk', () => {
     const val = new c({
       foo: 'bar',
       num: 42,
-      list: await newList([1, 2]),
+      list: new List([1, 2]),
     });
 
     await callbackHappensOnce(val, ds);

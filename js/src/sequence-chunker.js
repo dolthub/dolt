@@ -1,6 +1,6 @@
 // @flow
 
-import type {Sequence} from './sequence.js'; // eslint-disable-line no-unused-vars
+import type Sequence from './sequence.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
 import type {Collection} from './collection.js';
 import type {MetaSequence, MetaTuple} from './meta-sequence.js';
@@ -16,13 +16,13 @@ export type NewBoundaryCheckerFn = () => BoundaryChecker<MetaTuple>;
 export type makeChunkFn<T: Collection> = (items: Array<any>) => [MetaTuple, T];
 
 export async function chunkSequence<C: Collection, S>(
-  cursor: ?SequenceCursor,
-  insert: Array<S>,
-  remove: number,
-  makeChunk: makeChunkFn<C>,
-  parentMakeChunk: makeChunkFn<C>,
-  boundaryChecker: BoundaryChecker<S>,
-  newBoundaryChecker: NewBoundaryCheckerFn): Promise<C> {
+    cursor: SequenceCursor,
+    insert: Array<S>,
+    remove: number,
+    makeChunk: makeChunkFn<C>,
+    parentMakeChunk: makeChunkFn<C>,
+    boundaryChecker: BoundaryChecker<S>,
+    newBoundaryChecker: NewBoundaryCheckerFn): Promise<C> {
 
   const chunker = new SequenceChunker(cursor, makeChunk, parentMakeChunk, boundaryChecker,
                                       newBoundaryChecker);
@@ -37,14 +37,30 @@ export async function chunkSequence<C: Collection, S>(
     }
   }
 
-  for (let i = 0; i < insert.length; i++) {
-    chunker.append(insert[i]);
-  }
+  insert.forEach(i => chunker.append(i));
 
-  return await chunker.done();
+  return chunker.done();
 }
 
-export class SequenceChunker<C: Collection, S, U:Sequence> {
+// Like |chunkSequence|, but without an existing cursor (implying this is a new collection), so it
+// can be synchronous. Necessary for constructing collections without a Promises or async/await.
+// There is no equivalent in the Go code because Go is already synchronous.
+export function chunkSequenceSync<C: Collection, S>(
+    insert: Array<S>,
+    makeChunk: makeChunkFn<C>,
+    parentMakeChunk: makeChunkFn<C>,
+    boundaryChecker: BoundaryChecker<S>,
+    newBoundaryChecker: NewBoundaryCheckerFn): C {
+
+  const chunker = new SequenceChunker(null, makeChunk, parentMakeChunk, boundaryChecker,
+                                      newBoundaryChecker);
+
+  insert.forEach(i => chunker.append(i));
+
+  return chunker.doneSync();
+}
+
+export default class SequenceChunker<C: Collection, S, U:Sequence> {
   _cursor: ?SequenceCursor<S, U>;
   _isOnChunkBoundary: boolean;
   _parent: ?SequenceChunker<C, MetaTuple, MetaSequence>;
@@ -154,6 +170,24 @@ export class SequenceChunker<C: Collection, S, U:Sequence> {
 
     invariant(this._parent);
     return this._parent.done();
+  }
+
+  // Like |done|, but assumes there is no cursor, so it can be synchronous. Necessary for
+  // constructing collections without Promises or async/await. There is no equivalent in the Go
+  // code because Go is already synchronous.
+  doneSync(): C {
+    invariant(!this._cursor);
+
+    if (this.isRoot()) {
+      return this._makeChunk(this._current)[1];
+    }
+
+    if (this._current.length > 0) {
+      this.handleChunkBoundary();
+    }
+
+    invariant(this._parent);
+    return this._parent.doneSync();
   }
 
   isRoot(): boolean {

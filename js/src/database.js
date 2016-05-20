@@ -2,9 +2,8 @@
 
 import Ref from './ref.js';
 import RefValue from './ref-value.js';
-import {newStructWithType} from './struct.js';
-import type Map from './map.js';
-import type Set from './set.js';
+import Map from './map.js';
+import Set from './set.js';
 import type {valueOrPrimitive} from './value.js';
 import type {RootTracker} from './chunk-store.js';
 import ValueStore from './value-store.js';
@@ -18,9 +17,7 @@ import {
   stringType,
   valueType,
 } from './type.js';
-import {newMap} from './map.js';
-import {newSet} from './set.js';
-import type {Commit} from './commit.js';
+import Commit from './commit.js';
 import {equals} from './compare.js';
 
 type DatasTypes = {
@@ -29,14 +26,6 @@ type DatasTypes = {
   refOfCommitType: Type,
   commitMapType: Type,
 };
-
-let emptyCommitMap: Promise<Map<string, RefValue<Commit>>>;
-function getEmptyCommitMap(): Promise<Map<string, RefValue<Commit>>> {
-  if (!emptyCommitMap) {
-    emptyCommitMap = newMap([]);
-  }
-  return emptyCommitMap;
-}
 
 let datasTypes: DatasTypes;
 export function getDatasTypes(): DatasTypes {
@@ -86,7 +75,7 @@ export default class Database {
   _datasetsFromRootRef(rootRef: Promise<Ref>): Promise<Map<string, RefValue<Commit>>> {
     return rootRef.then(rootRef => {
       if (rootRef.isEmpty()) {
-        return getEmptyCommitMap();
+        return Promise.resolve(new Map());
       }
 
       return this.readValue(rootRef);
@@ -161,16 +150,10 @@ export default class Database {
 
 async function getAncestors(commits: Set<RefValue<Commit>>, store: Database):
     Promise<Set<RefValue<Commit>>> {
-  let ancestors = await newSet([]);
+  let ancestors = new Set();
   await commits.map(async (commitRef) => {
     const commit = await store.readValue(commitRef.targetRef);
     await commit.parents.map(async (ref) => ancestors = await ancestors.insert(ref));
   });
   return ancestors;
-}
-
-export function newCommit(value: valueOrPrimitive,
-                          parentsArr: Array<RefValue<Commit>> = []): Promise<Commit> {
-  const types = getDatasTypes();
-  return newSet(parentsArr).then(parents => newStructWithType(types.commitType, {value, parents}));
 }

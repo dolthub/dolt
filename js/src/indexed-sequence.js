@@ -3,7 +3,7 @@
 import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
 import {notNull} from './assert.js';
-import {search, Sequence, SequenceCursor} from './sequence.js';
+import Sequence, {search, SequenceCursor} from './sequence.js';
 
 export class IndexedSequence<T> extends Sequence<T> {
   getOffset(idx: number): number { // eslint-disable-line no-unused-vars

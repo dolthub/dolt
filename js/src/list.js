@@ -1,4 +1,4 @@
-  // @flow
+// @flow
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
@@ -6,7 +6,7 @@ import type {ValueReader} from './value-store.js';
 import type {Splice} from './edit-distance.js';
 import type {valueOrPrimitive} from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
-import {chunkSequence} from './sequence-chunker.js';
+import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import {Collection} from './collection.js';
 import {IndexedSequence, IndexedSequenceIterator} from './indexed-sequence.js';
 import {diff} from './indexed-sequence-diff.js';
@@ -26,7 +26,7 @@ const listPattern = ((1 << 6) | 0) - 1;
 
 function newListLeafChunkFn<T: valueOrPrimitive>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
-    const list = new List(newListLeafSequence(vr, items));
+    const list = newListFromSequence(newListLeafSequence(vr, items));
     const mt = new MetaTuple(new RefValue(list), items.length, items.length, list);
     return [mt, list];
   };
@@ -38,14 +38,17 @@ function newListLeafBoundaryChecker<T: valueOrPrimitive>(): BoundaryChecker<T> {
   );
 }
 
-export function newList<T: valueOrPrimitive>(values: Array<T>): Promise<List<T>> {
-  return chunkSequence(null, values, 0, newListLeafChunkFn(null),
-                       newIndexedMetaSequenceChunkFn(Kind.List, null),
-                       newListLeafBoundaryChecker(),
-                       newIndexedMetaSequenceBoundaryChecker);
-}
-
 export default class List<T: valueOrPrimitive> extends Collection<IndexedSequence> {
+  constructor(values: Array<T> = []) {
+    const self = chunkSequenceSync(
+        values,
+        newListLeafChunkFn(null),
+        newIndexedMetaSequenceChunkFn(Kind.List, null),
+        newListLeafBoundaryChecker(),
+        newIndexedMetaSequenceBoundaryChecker);
+    super(self.sequence);
+  }
+
   async get(idx: number): Promise<T> {
     invariant(idx >= 0 && idx < this.length);
     return this.sequence.newCursorAt(idx).then(cursor => cursor.getCurrent());
@@ -120,6 +123,13 @@ export default class List<T: valueOrPrimitive> extends Collection<IndexedSequenc
   get length(): number {
     return this.sequence.numLeaves;
   }
+}
+
+export function newListFromSequence<T: valueOrPrimitive>(sequence: IndexedSequence): List<T> {
+  const list = Object.create(List.prototype);
+  list._ref = null; // Value
+  list.sequence = sequence;
+  return list;
 }
 
 export class ListLeafSequence<T: valueOrPrimitive> extends IndexedSequence<T> {

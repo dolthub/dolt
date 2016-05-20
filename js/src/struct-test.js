@@ -20,9 +20,9 @@ import {
 import {suite, test} from 'mocha';
 import Database from './database.js';
 import {equals} from './compare.js';
-import {newList} from './list.js';
-import {newMap} from './map.js';
-import {newSet} from './set.js';
+import List from './list.js';
+import Map from './map.js';
+import Set from './set.js';
 
 suite('Struct', () => {
   test('equals', () => {
@@ -107,7 +107,7 @@ suite('Struct', () => {
     newStructWithType(type, {x: true, o: 'hi'});
   });
 
-  test('type validation cyclic', async () => {
+  test('type validation cyclic', () => {
     // struct S {
     //   b: Bool
     //   l: List<S>
@@ -119,9 +119,9 @@ suite('Struct', () => {
     const listType = makeListType(type);
     type.desc.fields['l'] = listType;
 
-    const emptyList = await newList([], listType);
+    const emptyList = new List([], listType);
     newStructWithType(type, {b: true, l: emptyList});
-    newStructWithType(type, {b: true, l: await newList([
+    newStructWithType(type, {b: true, l: new List([
       newStructWithType(type, {b: false, l: emptyList}),
     ], listType)});
 
@@ -147,33 +147,33 @@ suite('Struct', () => {
     assertDiff(['a', 'c'], s1, newStruct('', {a: false, b: 'hi', c: 10}));
 
     const s2 = newStruct('', {
-      a: await newList([0, 1]),
-      b: await newMap([['foo', false], ['bar', false]]),
-      c: await newSet([0, 1, 'foo']),
+      a: new List([0, 1]),
+      b: new Map([['foo', false], ['bar', false]]),
+      c: new Set([0, 1, 'foo']),
     });
 
     assertDiff([], s2, newStruct('', {
-      a: await newList([0, 1]),
-      b: await newMap([['foo', false], ['bar', false]]),
-      c: await newSet([0, 1, 'foo']),
+      a: new List([0, 1]),
+      b: new Map([['foo', false], ['bar', false]]),
+      c: new Set([0, 1, 'foo']),
     }));
 
     assertDiff(['a', 'b'], s2, newStruct('', {
-      a: await newList([1, 1]),
-      b: await newMap([['foo', false], ['bar', true]]),
-      c: await newSet([0, 1, 'foo']),
+      a: new List([1, 1]),
+      b: new Map([['foo', false], ['bar', true]]),
+      c: new Set([0, 1, 'foo']),
     }));
 
     assertDiff(['a', 'c'], s2, newStruct('', {
-      a: await newList([0]),
-      b: await newMap([['foo', false], ['bar', false]]),
-      c: await newSet([0, 1, 'bar']),
+      a: new List([0]),
+      b: new Map([['foo', false], ['bar', false]]),
+      c: new Set([0, 1, 'bar']),
     }));
 
     assertDiff(['b', 'c'], s2, newStruct('', {
-      a: await newList([0, 1]),
-      b: await newMap([['boo', false], ['bar', true]]),
-      c: await newSet([0, 1, 'bar']),
+      a: new List([0, 1]),
+      b: new Map([['boo', false], ['bar', true]]),
+      c: new Set([0, 1, 'bar']),
     }));
   });
 });

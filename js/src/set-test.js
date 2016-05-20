@@ -13,7 +13,7 @@ import {newStruct} from './struct.js';
 import {flatten, flattenParallel, deriveCollectionHeight} from './test-util.js';
 import {invariant, notNull} from './assert.js';
 import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';
-import Set, {newSet,newSetLeafSequence} from './set.js';
+import Set, {newSetFromSequence} from './set.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import Ref from './ref.js';
 import type {ValueReadWriter} from './value-store.js';
@@ -49,7 +49,7 @@ function firstNNumbers(n: number): Array<number> {
 suite('BuildSet', () => {
   test('unique keys - strings', async () => {
     const strs = ['hello', 'world', 'hello'];
-    const s = await newSet(strs);
+    const s = new Set(strs);
     assert.strictEqual(2, s.size);
     assert.isTrue(await s.has('hello'));
     assert.isTrue(await s.has('world'));
@@ -58,7 +58,7 @@ suite('BuildSet', () => {
 
   test('unique keys - number', async () => {
     const nums = [4, 1, 0, 0, 1, 3];
-    const s = await newSet(nums);
+    const s = new Set(nums);
     assert.strictEqual(4, s.size);
     assert.isTrue(await s.has(4));
     assert.isTrue(await s.has(1));
@@ -69,19 +69,19 @@ suite('BuildSet', () => {
 
   test('LONG: set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
-    const s = await newSet(nums);
+    const s = new Set(nums);
     assert.strictEqual(s.ref.toString(), setOfNRef);
 
     // shuffle kvs, and test that the constructor sorts properly
     nums.sort(() => Math.random() > .5 ? 1 : -1);
-    const s2 = await newSet(nums);
+    const s2 = new Set(nums);
     assert.strictEqual(s2.ref.toString(), setOfNRef);
   });
 
   test('LONG: set of struct, set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
     const structs = nums.map(n => newStruct('num', {n}));
-    const s = await newSet(structs);
+    const s = new Set(structs);
     assert.strictEqual(s.ref.toString(), 'sha1-f10d8ccbc2270bb52bb988a0cadff912e2723eed');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
@@ -96,7 +96,7 @@ suite('BuildSet', () => {
   test('LONG: set of ref, set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
     const refs = nums.map(n => new RefValue(newStruct('num', {n})));
-    const s = await newSet(refs);
+    const s = new Set(refs);
     assert.strictEqual(s.ref.toString(), 'sha1-14eeb2d1835011bf3e018121ba3274bc08e634e5');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
@@ -106,7 +106,7 @@ suite('BuildSet', () => {
 
   test('LONG: insert', async () => {
     const nums = firstNNumbers(testSetSize - 10);
-    let s = await newSet(nums);
+    let s = new Set(nums);
     for (let i = testSetSize - 10; i < testSetSize; i++) {
       s = await s.insert(i);
       assert.strictEqual(i + 1, s.size);
@@ -117,7 +117,7 @@ suite('BuildSet', () => {
 
   test('LONG: remove', async () => {
     const nums = firstNNumbers(testSetSize + 10);
-    let s = await newSet(nums);
+    let s = new Set(nums);
     let count = 10;
     while (count-- > 0) {
       s = await s.remove(testSetSize + count);
@@ -131,7 +131,7 @@ suite('BuildSet', () => {
     const db = new Database(makeTestingBatchStore());
 
     const nums = firstNNumbers(testSetSize);
-    const s = await newSet(nums);
+    const s = new Set(nums);
     const r = db.writeValue(s).targetRef;
     const s2 = await db.readValue(r);
     const outNums = [];
@@ -157,7 +157,7 @@ suite('BuildSet', () => {
     const numbers = [];
     const strings = [];
     const structs = [];
-    const vals1 = [];
+    const vals = [];
     for (let i = 0; i < tmp.length; i++) {
       let v = tmp[i];
       if (i % 3 === 0) {
@@ -169,21 +169,21 @@ suite('BuildSet', () => {
       } else {
         numbers.push(v);
       }
-      vals1.push(v);
+      vals.push(v);
     }
     strings.sort();
     structs.sort(compare);
-    const vals2 = numbers.concat(strings, structs);
+    vals.sort(compare);
 
-    const s = await newSet(vals1);
+    const s = new Set(vals);
     assert.strictEqual(s.ref.toString(), 'sha1-84ce63b4fb804fe9668133bf5d3136cfffcdc788');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     assert.strictEqual(height, s.sequence.items[0].ref.height);
 
     // has
-    for (let i = 0; i < vals1.length; i += 5) {
-      assert.isTrue(await s.has(vals1[i]));
+    for (let i = 0; i < vals.length; i += 5) {
+      assert.isTrue(await s.has(vals[i]));
     }
 
     const r = db.writeValue(s).targetRef;
@@ -191,18 +191,18 @@ suite('BuildSet', () => {
     const outVals = [];
     await s2.forEach(k => outVals.push(k));
     assert.equal(testSetSize, s2.size);
-    for (let i = 0; i < vals1.length; i += 5) {
-      assert.isTrue(equals(vals1[i], outVals[i]));
+    for (let i = 0; i < vals.length; i += 5) {
+      assert.isTrue(equals(vals[i], outVals[i]));
     }
 
     invariant(s2 instanceof Set);
-    const s3 = await s2.remove(vals2[testSetSize - 1]);  // removes struct
+    const s3 = await s2.remove(vals[testSetSize - 1]);  // removes struct
     const outVals2 = [];
     await s3.forEach(k => outVals2.push(k));
-    vals2.splice(testSetSize - 1, 1);
+    vals.splice(testSetSize - 1, 1);
     assert.equal(testSetSize - 1, s3.size);
-    for (let i = vals2.length - 1; i >= 0; i -= 5) {
-      assert.isTrue(equals(vals2[i], outVals2[i]));
+    for (let i = vals.length - 1; i >= 0; i -= 5) {
+      assert.isTrue(equals(vals[i], outVals2[i]));
     }
     await db.close();
   });
@@ -218,17 +218,16 @@ suite('SetLeaf', () => {
   teardown((): Promise<void> => db.close());
 
   test('isEmpty/size', () => {
-    const newSet = items => new Set(newSetLeafSequence(db, items));
-    let s = newSet([]);
+    let s = new Set();
     assert.isTrue(s.isEmpty());
     assert.strictEqual(0, s.size);
-    s = newSet(['a', 'k']);
+    s = new Set(['a', 'k']);
     assert.isFalse(s.isEmpty());
     assert.strictEqual(2, s.size);
   });
 
   test('first/last/has', async () => {
-    const s = new Set(newSetLeafSequence(db, ['a', 'k']));
+    const s = new Set(['a', 'k']);
 
     assert.strictEqual('a', await s.first());
     assert.strictEqual('k', await s.last());
@@ -240,7 +239,7 @@ suite('SetLeaf', () => {
   });
 
   test('forEach', async () => {
-    const m = new Set(newSetLeafSequence(db, ['a', 'b']));
+    const m = new Set(['a', 'b']);
 
     const values = [];
     await m.forEach((k) => { values.push(k); });
@@ -249,7 +248,7 @@ suite('SetLeaf', () => {
 
   test('iterator', async () => {
     const test = async items => {
-      const m = new Set(newSetLeafSequence(db, items));
+      const m = new Set(items);
       assert.deepEqual(items, await flatten(m.iterator()));
       assert.deepEqual(items, await flattenParallel(m.iterator(), items.length));
     };
@@ -260,7 +259,7 @@ suite('SetLeaf', () => {
   });
 
   test('LONG: iteratorAt', async () => {
-    const build = items => new Set(newSetLeafSequence(db, items));
+    const build = items => new Set(items);
 
     assert.deepEqual([], await flatten(build([]).iteratorAt('a')));
 
@@ -276,14 +275,10 @@ suite('SetLeaf', () => {
   });
 
   test('chunks', () => {
-    const r1 = db.writeValue('x');
-    const r2 = db.writeValue('a');
-    const r3 = db.writeValue('b');
-    const l = new Set(newSetLeafSequence(db, ['z', r1, r2, r3]));
-    assert.strictEqual(3, l.chunks.length);
-    assert.isTrue(equals(r1, l.chunks[0]));
-    assert.isTrue(equals(r2, l.chunks[1]));
-    assert.isTrue(equals(r3, l.chunks[2]));
+    const refs = ['x', 'a', 'b'].map(c => db.writeValue(c));
+    refs.sort(compare);
+    const l = new Set(['z', ...refs]);
+    assert.deepEqual(refs, l.chunks);
   });
 });
 
@@ -301,7 +296,7 @@ suite('CompoundSet', () => {
 
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
-      const l = new Set(newSetLeafSequence(vwr, [values[i], values[i + 1]]));
+      const l = new Set([values[i], values[i + 1]]);
       const r = vwr.writeValue(l);
       tuples.push(new MetaTuple(r, values[i + 1], 2));
     }
@@ -310,7 +305,7 @@ suite('CompoundSet', () => {
     while (tuples.length > 1) {
       const next = [];
       for (let i = 0; i < tuples.length; i += 2) {
-        last = new Set(newSetMetaSequence(vwr, [tuples[i], tuples[i + 1]]));
+        last = newSetFromSequence(newSetMetaSequence(vwr, [tuples[i], tuples[i + 1]]));
         const r = vwr.writeValue(last);
         next.push(new MetaTuple(r, tuples[i + 1].value,
                                 tuples[i].numLeaves + tuples[i + 1].numLeaves));
@@ -503,7 +498,7 @@ suite('CompoundSet', () => {
 
   test('iterator at 0', async () => {
     const test = async (expected, items) => {
-      const set = new Set(newSetLeafSequence(db, items));
+      const set = new Set(items);
       const iter = set.iteratorAt(0);
       assert.deepEqual(expected, await flatten(iter));
     };
@@ -515,14 +510,14 @@ suite('CompoundSet', () => {
   });
 
   test('set of bool', async () => {
-    const set = await newSet([true]);
+    const set = new Set([true]);
     assert.isTrue(await set.has(true));
     assert.isFalse(await set.has(false));
   });
 
   test('LONG: canned set diff', async () => {
-    const s1 = await newSet(
-      firstNNumbers(testSetSize)).then(s => db.readValue(db.writeValue(s).targetRef));
+    let s1 = new Set(firstNNumbers(testSetSize));
+    s1 = await db.readValue(db.writeValue(s1).targetRef);
 
     {
       // Insert/remove at start.
@@ -565,7 +560,7 @@ suite('CompoundSet', () => {
       }
     }
 
-    let [s1, s2] = await Promise.all([newSet(nums1), newSet(nums2)]);
+    let [s1, s2] = await Promise.all([new Set(nums1), new Set(nums2)]);
 
     if (s1.empty || s2.empty || added.length + removed.length === 0) {
       return testRandomDiff(setSize, inS1, inS2);

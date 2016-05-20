@@ -24,9 +24,9 @@ import {
   intSequence,
   testRoundTripAndValidate,
 } from './test-util.js';
-import {newListMetaSequence, MetaTuple} from './meta-sequence.js';
+import {MetaTuple, newListMetaSequence} from './meta-sequence.js';
 import {invariant} from './assert.js';
-import List, {newListLeafSequence, newList} from './list.js';
+import List, {newListFromSequence} from './list.js';
 
 const testListSize = 5000;
 const listOfNRef = 'sha1-aa1605484d993e89dbc0431acb9f2478282f9d94';
@@ -43,20 +43,18 @@ async function assertToJS(list: List, nums: Array<any>, start: number = 0,
 
 suite('List', () => {
 
-  async function testPrependChunkDiff(nums: Array<any>, list: List, expectCount: number):
-      Promise<void> {
+  function testPrependChunkDiff(nums: Array<any>, list: List, expectCount: number) {
     const nn = new Array(nums.length + 1);
     nn[0] = 0;
     for (let i = 0; i < nums.length; i++) {
       nn[i + 1] = nums[i];
     }
 
-    const v2 = await newList(nn);
+    const v2 = new List(nn);
     assert.strictEqual(expectCount, chunkDiffCount(list, v2));
   }
 
-  async function testAppendChunkDiff(nums: Array<any>, list: List, expectCount: number):
-      Promise<void> {
+  function testAppendChunkDiff(nums: Array<any>, list: List, expectCount: number) {
     const nn = new Array(nums.length + 1);
     nn[0] = 0;
     for (let i = 0; i < nums.length; i++) {
@@ -64,7 +62,7 @@ suite('List', () => {
     }
     nn[nums.length] = 0;
 
-    const v2 = await newList(nn);
+    const v2 = new List(nn);
     assert.strictEqual(expectCount, chunkDiffCount(list, v2));
   }
 
@@ -102,7 +100,7 @@ suite('List', () => {
     const length = 1 << size;
     const nums = intSequence(length);
     const tr = makeListType(numberType);
-    const list = await newList(nums);
+    const list = new List(nums);
 
     assertValueRef(expectRefStr, list);
     assertValueType(tr, list);
@@ -132,7 +130,7 @@ suite('List', () => {
   test('LONG: list of ref, set of n numbers, length', async () => {
     const nums = intSequence(testListSize);
     const refs = nums.map(n => new RefValue(newStruct('num', {n})));
-    const s = await newList(refs);
+    const s = new List(refs);
     assert.strictEqual(s.ref.toString(), 'sha1-2e79d54322aa793d0e8d48380a28927a257a141a');
     assert.strictEqual(testListSize, s.length);
 
@@ -144,7 +142,7 @@ suite('List', () => {
 
   test('LONG: insert', async () => {
     const nums = intSequence(testListSize - 10);
-    let s = await newList(nums);
+    let s = new List(nums);
 
     for (let i = testListSize - 10; i < testListSize; i++) {
       s = await s.insert(i, i);
@@ -155,7 +153,7 @@ suite('List', () => {
 
   test('LONG: append', async () => {
     const nums = intSequence(testListSize - 10);
-    let s = await newList(nums);
+    let s = new List(nums);
 
     for (let i = testListSize - 10; i < testListSize; i++) {
       s = await s.append(i);
@@ -166,7 +164,7 @@ suite('List', () => {
 
   test('LONG: remove', async () => {
     const nums = intSequence(testListSize + 10);
-    let s = await newList(nums);
+    let s = new List(nums);
 
     let count = 10;
     while (count-- > 0) {
@@ -178,7 +176,7 @@ suite('List', () => {
 
   test('LONG: splice', async () => {
     const nums = intSequence(testListSize);
-    let s = await newList(nums);
+    let s = new List(nums);
 
     const splice500At = async (idx: number) => {
       s = await s.splice(idx, 500);
@@ -197,7 +195,7 @@ suite('List', () => {
     const db = new Database(makeTestingBatchStore());
 
     const nums = intSequence(testListSize);
-    const s = await newList(nums);
+    const s = new List(nums);
     const r = db.writeValue(s).targetRef;
     const s2 = await db.readValue(r);
     const outNums = await s2.toJS();
@@ -222,13 +220,13 @@ suite('ListLeafSequence', () => {
   teardown((): Promise<void> => db.close());
 
   test('Empty list isEmpty', () => {
-    const newList = items => new List(newListLeafSequence(db, items));
-    assert.isTrue(newList([]).isEmpty());
+    assert.isTrue(new List().isEmpty());
+    assert.isTrue(new List().isEmpty());
   });
 
   test('iterator', async () => {
     const test = async items => {
-      const l = new List(newListLeafSequence(db, items));
+      const l = new List(items);
       assert.deepEqual(items, await flatten(l.iterator()));
       assert.deepEqual(items, await flattenParallel(l.iterator(), items.length));
     };
@@ -240,7 +238,7 @@ suite('ListLeafSequence', () => {
 
   test('iteratorAt', async () => {
     const test = async items => {
-      const l = new List(newListLeafSequence(db, items));
+      const l = new List(items);
       for (let i = 0; i <= items.length; i++) {
         const slice = items.slice(i);
         assert.deepEqual(slice, await flatten(l.iteratorAt(i)));
@@ -263,24 +261,24 @@ suite('CompoundList', () => {
 
   teardown((): Promise<void> => db.close());
   function build(): List {
-    const l1 = new List(newListLeafSequence(db, ['a', 'b']));
+    const l1 = new List(['a', 'b']);
     const r1 = db.writeValue(l1);
-    const l2 = new List(newListLeafSequence(db, ['e', 'f']));
+    const l2 = new List(['e', 'f']);
     const r2 = db.writeValue(l2);
-    const l3 = new List(newListLeafSequence(db, ['h', 'i']));
+    const l3 = new List(['h', 'i']);
     const r3 = db.writeValue(l3);
-    const l4 = new List(newListLeafSequence(db, ['m', 'n']));
+    const l4 = new List(['m', 'n']);
     const r4 = db.writeValue(l4);
 
-    const m1 = new List(newListMetaSequence(db, [new MetaTuple(r1, 2, 2),
-        new MetaTuple(r2, 2, 2)]));
+    const m1 = newListFromSequence(newListMetaSequence(
+      db, [new MetaTuple(r1, 2, 2), new MetaTuple(r2, 2, 2)]));
     const rm1 = db.writeValue(m1);
-    const m2 = new List(newListMetaSequence(db, [new MetaTuple(r3, 2, 2),
-        new MetaTuple(r4, 2, 2)]));
+    const m2 = newListFromSequence(newListMetaSequence(
+      db, [new MetaTuple(r3, 2, 2), new MetaTuple(r4, 2, 2)]));
     const rm2 = db.writeValue(m2);
 
-    const l = new List(newListMetaSequence(db, [new MetaTuple(rm1, 4, 4),
-        new MetaTuple(rm2, 4, 4)]));
+    const l = newListFromSequence(newListMetaSequence(
+      db, [new MetaTuple(rm1, 4, 4), new MetaTuple(rm2, 4, 4)]));
     return l;
   }
 
@@ -336,8 +334,8 @@ suite('Diff List', () => {
 
     const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
 
-    const l1 = await newList(nums1);
-    const l2 = await newList(nums2);
+    const l1 = new List(nums1);
+    const l2 = new List(nums2);
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(directDiff, listDiff);
@@ -354,8 +352,8 @@ suite('Diff List', () => {
 
     const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
 
-    const l1 = await newList(nums1);
-    const l2 = await newList(nums2);
+    const l1 = new List(nums1);
+    const l2 = new List(nums2);
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(directDiff, listDiff);
@@ -372,8 +370,8 @@ suite('Diff List', () => {
     }
 
     const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
-    const l1 = await newList(nums1);
-    const l2 = await newList(nums2);
+    const l1 = new List(nums1);
+    const l2 = new List(nums2);
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(directDiff, listDiff);
@@ -384,8 +382,8 @@ suite('Diff List', () => {
     const nums2 = intSequence(5000);
 
     const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
-    const l1 = await newList(nums1);
-    const l2 = await newList(nums2);
+    const l1 = new List(nums1);
+    const l2 = new List(nums2);
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(directDiff, listDiff);

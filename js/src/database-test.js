@@ -4,12 +4,13 @@ import {suite, test} from 'mocha';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {emptyRef} from './ref.js';
 import {assert} from 'chai';
-import Database, {newCommit} from './database.js';
+import Commit from './commit.js';
+import Database from './database.js';
 import {invariant, notNull} from './assert.js';
-import {newList} from './list.js';
-import {newMap} from './map.js';
+import List from './list.js';
+import Map from './map.js';
 import {encodeNomsValue} from './encode.js';
-import {newSet} from './set.js';
+import NomsSet from './set.js'; // namespace collision with JS Set
 import {equals} from './compare.js';
 
 suite('Database', () => {
@@ -39,7 +40,7 @@ suite('Database', () => {
     assert.isTrue(datasets.isEmpty());
 
     // |a|
-    const aCommit = await newCommit('a');
+    const aCommit = new Commit('a');
     const ds2 = await ds.commit(datasetID, aCommit);
 
     // The old database still still has no head.
@@ -54,7 +55,7 @@ suite('Database', () => {
     ds = ds2;
 
     // |a| <- |b|
-    const bCommit = await newCommit('b', [aRef]);
+    const bCommit = new Commit('b', new NomsSet([aRef]));
     ds = await ds.commit(datasetID, bCommit);
     const bRef = notNull(await ds.headRef(datasetID));
     assert.isTrue(bCommit.ref.equals(bRef.targetRef));
@@ -64,7 +65,7 @@ suite('Database', () => {
     // |a| <- |b|
     //   \----|c|
     // Should be disallowed.
-    const cCommit = await newCommit('c');
+    const cCommit = new Commit('c');
     let message = '';
     try {
       await ds.commit(datasetID, cCommit);
@@ -76,7 +77,7 @@ suite('Database', () => {
     assert.strictEqual('b', notNull(await ds.head(datasetID)).value);
 
     // |a| <- |b| <- |d|
-    const dCommit = await newCommit('d', [bRef]);
+    const dCommit = new Commit('d', new NomsSet([bRef]));
     ds = await ds.commit(datasetID, dCommit);
     const dRef = notNull(await ds.headRef(datasetID));
     assert.isTrue(dCommit.ref.equals(dRef.targetRef));
@@ -111,10 +112,10 @@ suite('Database', () => {
     const datasetID = 'ds1';
 
     // |a|
-    const aCommit = await newCommit('a');
+    const aCommit = new Commit('a');
     ds = await ds.commit(datasetID, aCommit);
     const aRef = notNull(await ds.headRef(datasetID));
-    const bCommit = await newCommit('b', [aRef]);
+    const bCommit = new Commit('b', new NomsSet([aRef]));
     ds = await ds.commit(datasetID, bCommit);
     const bRef = notNull(await ds.headRef(datasetID));
     assert.strictEqual('b', notNull(await ds.head(datasetID)).value);
@@ -124,14 +125,14 @@ suite('Database', () => {
 
     // Change 1:
     // |a| <- |b| <- |c|
-    const cCommit = await newCommit('c', [bRef]);
+    const cCommit = new Commit('c', new NomsSet([bRef]));
     ds = await ds.commit(datasetID, cCommit);
     assert.strictEqual('c', notNull(await ds.head(datasetID)).value);
 
     // Change 2:
     // |a| <- |b| <- |e|
     // Should be disallowed, Database returned by Commit() should have |c| as Head.
-    const eCommit = await newCommit('e', [bRef]);
+    const eCommit = new Commit('e', new NomsSet([bRef]));
     let message = '';
     try {
       ds2 = await ds2.commit(datasetID, eCommit);
@@ -156,10 +157,10 @@ suite('Database', () => {
     const bs = new makeTestingBatchStore();
     let ds = new Database(bs);
 
-    const commit = await newCommit('foo', []);
+    const commit = new Commit('foo');
 
     const commitRef = ds.writeValue(commit);
-    const datasets = await newMap([['foo', commitRef]]);
+    const datasets = new Map([['foo', commitRef]]);
     const rootRef = ds.writeValue(datasets).targetRef;
     assert.isTrue(await bs.updateRoot(rootRef, emptyRef));
     ds = new Database(bs); // refresh the datasets
@@ -191,33 +192,33 @@ suite('Database', () => {
     // Set<String>.
     const v1 = 'hello';
     const v2 = 'world';
-    const s1 = await newSet([v1, v2]);
+    const s1 = new NomsSet([v1, v2]);
     assert.strictEqual(1, ds.writeValue(s1).height);
 
     // Set<RefValue<String>>.
-    const s2 = await newSet([ds.writeValue(v1), ds.writeValue(v2)]);
+    const s2 = new NomsSet([ds.writeValue(v1), ds.writeValue(v2)]);
     assert.strictEqual(2, ds.writeValue(s2).height);
 
     // List<Set<String>>.
     const v3 = 'foo';
     const v4 = 'bar';
-    const s3 = await newSet([v3, v4]);
-    const l1 = await newList([s1, s3]);
+    const s3 = new NomsSet([v3, v4]);
+    const l1 = new List([s1, s3]);
     assert.strictEqual(1, ds.writeValue(l1).height);
 
     // List<RefValue<Set<String>>.
-    const l2 = await newList([ds.writeValue(s1), ds.writeValue(s3)]);
+    const l2 = new List([ds.writeValue(s1), ds.writeValue(s3)]);
     assert.strictEqual(2, ds.writeValue(l2).height);
 
     // List<RefValue<Set<RefValue<String>>>.
-    const s4 = await newSet([ds.writeValue(v3), ds.writeValue(v4)]);
-    const l3 = await newList([ds.writeValue(s4)]);
+    const s4 = new NomsSet([ds.writeValue(v3), ds.writeValue(v4)]);
+    const l3 = new List([ds.writeValue(s4)]);
     assert.strictEqual(3, ds.writeValue(l3).height);
 
     // List<Set<String> | RefValue<Set<String>>>.
-    const l4 = await newList([s1, ds.writeValue(s3)]);
+    const l4 = new List([s1, ds.writeValue(s3)]);
     assert.strictEqual(2, ds.writeValue(l4).height);
-    const l5 = await newList([ds.writeValue(s1), s3]);
+    const l5 = new List([ds.writeValue(s1), s3]);
     assert.strictEqual(2, ds.writeValue(l5).height);
     await ds.close();
   });
