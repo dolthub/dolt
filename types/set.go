@@ -23,7 +23,7 @@ func newSet(seq orderedSequence) Set {
 }
 
 func NewSet(v ...Value) Set {
-	data := buildSetData([]Value{}, v)
+	data := buildSetData(v)
 	seq := newEmptySequenceChunker(makeSetLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(SetKind, nil), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, v := range data {
@@ -170,27 +170,23 @@ func (s Set) elemType() *Type {
 	return s.Type().Desc.(CompoundDesc).ElemTypes[0]
 }
 
-func buildSetData(old []Value, values []Value) []Value {
-	data := make([]Value, len(old), len(old)+len(values))
-	copy(data, old)
-	for _, v := range values {
-		idx := indexOfSetValue(data, v)
-		if idx < len(data) && data[idx].Equals(v) {
-			// We already have this fellow.
-			continue
-		}
-		// TODO: These repeated copies suck. We're not allocating more memory (because we made the slice with the correct capacity to begin with above - yay!), but still, this is more work than necessary. Perhaps we should use an actual BST for the in-memory state, rather than a flat list.
-		data = append(data, nil)
-		copy(data[idx+1:], data[idx:])
-		data[idx] = v
+func buildSetData(values ValueSlice) ValueSlice {
+	if len(values) == 0 {
+		return ValueSlice{}
 	}
-	return data
-}
 
-func indexOfSetValue(m []Value, v Value) int {
-	return sort.Search(len(m), func(i int) bool {
-		return !m[i].Less(v)
-	})
+	uniqueSorted := make(ValueSlice, 0, len(values))
+	sort.Stable(values)
+	last := values[0]
+	for i := 1; i < len(values); i++ {
+		v := values[i]
+		if !v.Equals(last) {
+			uniqueSorted = append(uniqueSorted, last)
+		}
+		last = v
+	}
+
+	return append(uniqueSorted, last)
 }
 
 func newSetLeafBoundaryChecker() boundaryChecker {

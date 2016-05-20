@@ -6,17 +6,3 @@ type Collection interface {
 	Empty() bool
 	sequence() sequence
 }
-
-func valueSlicesEqual(v1 []Value, v2 []Value) bool {
-	if len(v1) != len(v2) {
-		return false
-	}
-
-	for i, _ := range v1 {
-		if !v1[i].Equals(v2[i]) {
-			return false
-		}
-	}
-
-	return true
-}

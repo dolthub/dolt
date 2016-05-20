@@ -13,32 +13,17 @@ const testSetSize = 5000
 
 type testSetGenFn func(v Number) Value
 
-type testSet struct {
-	values []Value
-	tr     *Type
-}
-
-func (ts testSet) Len() int {
-	return len(ts.values)
-}
-
-func (ts testSet) Less(i, j int) bool {
-	return ts.values[i].Less(ts.values[j])
-}
-
-func (ts testSet) Swap(i, j int) {
-	ts.values[i], ts.values[j] = ts.values[j], ts.values[i]
-}
+type testSet ValueSlice
 
 func (ts testSet) Remove(from, to int) testSet {
-	values := make([]Value, 0, len(ts.values)-(to-from))
-	values = append(values, ts.values[:from]...)
-	values = append(values, ts.values[to:]...)
-	return testSet{values, ts.tr}
+	values := make(testSet, 0, len(ts)-(to-from))
+	values = append(values, ts[:from]...)
+	values = append(values, ts[to:]...)
+	return values
 }
 
 func (ts testSet) Has(key Value) bool {
-	for _, entry := range ts.values {
+	for _, entry := range ts {
 		if entry.Equals(key) {
 			return true
 		}
@@ -51,29 +36,29 @@ func (ts testSet) Diff(last testSet) (added []Value, removed []Value) {
 	// purpose of this method is to be redundant.
 	added = make([]Value, 0)
 	removed = make([]Value, 0)
-	if len(ts.values) == 0 && len(last.values) == 0 {
+	if len(ts) == 0 && len(last) == 0 {
 		return // nothing changed
 	}
-	if len(ts.values) == 0 {
+	if len(ts) == 0 {
 		// everything removed
-		for _, entry := range last.values {
+		for _, entry := range last {
 			removed = append(removed, entry)
 		}
 		return
 	}
-	if len(last.values) == 0 {
+	if len(last) == 0 {
 		// everything added
-		for _, entry := range ts.values {
+		for _, entry := range ts {
 			added = append(added, entry)
 		}
 		return
 	}
-	for _, entry := range ts.values {
+	for _, entry := range ts {
 		if !last.Has(entry) {
 			added = append(added, entry)
 		}
 	}
-	for _, entry := range last.values {
+	for _, entry := range last {
 		if !ts.Has(entry) {
 			removed = append(removed, entry)
 		}
@@ -82,16 +67,16 @@ func (ts testSet) Diff(last testSet) (added []Value, removed []Value) {
 }
 
 func (ts testSet) toSet() Set {
-	return NewSet(ts.values...)
+	return NewSet(ts...)
 }
 
 func newTestSet(length int) testSet {
-	var values []Value
+	var values testSet
 	for i := 0; i < length; i++ {
 		values = append(values, Number(i))
 	}
 
-	return testSet{values, MakeSetType(NumberType)}
+	return values
 }
 
 func newTestSetFromSet(s Set) testSet {
@@ -99,10 +84,10 @@ func newTestSetFromSet(s Set) testSet {
 	s.IterAll(func(v Value) {
 		values = append(values, v)
 	})
-	return testSet{values, s.Type()}
+	return values
 }
 
-func newTestSetWithGen(length int, gen testSetGenFn, tr *Type) testSet {
+func newTestSetWithGen(length int, gen testSetGenFn) testSet {
 	s := rand.NewSource(4242)
 	used := map[int64]bool{}
 
@@ -115,7 +100,7 @@ func newTestSetWithGen(length int, gen testSetGenFn, tr *Type) testSet {
 		}
 	}
 
-	return testSet{values, MakeSetType(tr)}
+	return values
 }
 
 type setTestSuite struct {
@@ -127,7 +112,7 @@ func newSetTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 	length := 1 << size
 	elems := newTestSet(length)
 	tr := MakeSetType(NumberType)
-	set := NewSet(elems.values...)
+	set := NewSet(elems...)
 	return &setTestSuite{
 		collectionTestSuite: collectionTestSuite{
 			col:                    set,
@@ -139,21 +124,21 @@ func newSetTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 			expectAppendChunkDiff:  expectAppendChunkDiff,
 			validate: func(v2 Collection) bool {
 				l2 := v2.(Set)
-				out := []Value{}
+				out := ValueSlice{}
 				l2.IterAll(func(v Value) {
 					out = append(out, v)
 				})
-				return valueSlicesEqual(elems.values, out)
+				return ValueSlice(elems).Equals(out)
 			},
 			prependOne: func() Collection {
 				dup := make([]Value, length+1)
 				dup[0] = Number(-1)
-				copy(dup[1:], elems.values)
+				copy(dup[1:], elems)
 				return NewSet(dup...)
 			},
 			appendOne: func() Collection {
 				dup := make([]Value, length+1)
-				copy(dup, elems.values)
+				copy(dup, elems)
 				dup[len(dup)-1] = Number(length + 1)
 				return NewSet(dup...)
 			},
@@ -173,29 +158,25 @@ func TestSetSuite4K(t *testing.T) {
 func getTestNativeOrderSet(scale int) testSet {
 	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
 		return v
-	}, NumberType)
+	})
 }
 
 func getTestRefValueOrderSet(scale int) testSet {
-	setType := MakeSetType(NumberType)
 	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
 		return NewSet(v)
-	}, setType)
+	})
 }
 
 func getTestRefToNativeOrderSet(scale int, vw ValueWriter) testSet {
-	refType := MakeRefType(NumberType)
 	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
 		return vw.WriteValue(v)
-	}, refType)
+	})
 }
 
 func getTestRefToValueOrderSet(scale int, vw ValueWriter) testSet {
-	setType := MakeSetType(NumberType)
-	refType := MakeRefType(setType)
 	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
 		return vw.WriteValue(NewSet(v))
-	}, refType)
+	})
 }
 
 func diffSetTest(assert *assert.Assertions, s1 Set, s2 Set, numAddsExpected int, numRemovesExpected int) (added []Value, removed []Value) {
@@ -335,7 +316,7 @@ func TestSetHas2(t *testing.T) {
 	doTest := func(ts testSet) {
 		set := ts.toSet()
 		set2 := vs.ReadValue(vs.WriteValue(set).TargetRef()).(Set)
-		for _, v := range ts.values {
+		for _, v := range ts {
 			assert.True(set.Has(v))
 			assert.True(set2.Has(v))
 		}
@@ -379,15 +360,15 @@ func TestSetInsert2(t *testing.T) {
 	doTest := func(incr, offset int, ts testSet) {
 		expected := ts.toSet()
 		run := func(from, to int) {
-			actual := ts.Remove(from, to).toSet().Insert(ts.values[from:to]...)
+			actual := ts.Remove(from, to).toSet().Insert(ts[from:to]...)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 			diffSetTest(assert, expected, actual, 0, 0)
 		}
-		for i := 0; i < len(ts.values)-offset; i += incr {
+		for i := 0; i < len(ts)-offset; i += incr {
 			run(i, i+offset)
 		}
-		run(len(ts.values)-offset, len(ts.values))
+		run(len(ts)-offset, len(ts))
 	}
 
 	doTest(18, 3, getTestNativeOrderSet(9))
@@ -402,7 +383,7 @@ func TestSetInsertExistingValue(t *testing.T) {
 
 	ts := getTestNativeOrderSet(2)
 	original := ts.toSet()
-	actual := original.Insert(ts.values[0])
+	actual := original.Insert(ts[0])
 
 	assert.Equal(original.Len(), actual.Len())
 	assert.True(original.Equals(actual))
@@ -441,15 +422,15 @@ func TestSetRemove2(t *testing.T) {
 		whole := ts.toSet()
 		run := func(from, to int) {
 			expected := ts.Remove(from, to).toSet()
-			actual := whole.Remove(ts.values[from:to]...)
+			actual := whole.Remove(ts[from:to]...)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 			diffSetTest(assert, expected, actual, 0, 0)
 		}
-		for i := 0; i < len(ts.values)-offset; i += incr {
+		for i := 0; i < len(ts)-offset; i += incr {
 			run(i, i+offset)
 		}
-		run(len(ts.values)-offset, len(ts.values))
+		run(len(ts)-offset, len(ts))
 	}
 
 	doTest(18, 3, getTestNativeOrderSet(9))
@@ -526,12 +507,12 @@ func TestSetIter2(t *testing.T) {
 
 	doTest := func(ts testSet) {
 		set := ts.toSet()
-		sort.Sort(ts)
+		sort.Sort(ValueSlice(ts))
 		idx := uint64(0)
 		endAt := uint64(setPattern)
 
 		set.Iter(func(v Value) (done bool) {
-			assert.True(ts.values[idx].Equals(v))
+			assert.True(ts[idx].Equals(v))
 			if idx == endAt {
 				done = true
 			}
@@ -565,11 +546,11 @@ func TestSetIterAll2(t *testing.T) {
 
 	doTest := func(ts testSet) {
 		set := ts.toSet()
-		sort.Sort(ts)
+		sort.Sort(ValueSlice(ts))
 		idx := uint64(0)
 
 		set.IterAll(func(v Value) {
-			assert.True(ts.values[idx].Equals(v))
+			assert.True(ts[idx].Equals(v))
 			idx++
 		})
 	}

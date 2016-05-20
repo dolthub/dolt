@@ -15,3 +15,22 @@ type Value interface {
 	Chunks() []Ref
 	Type() *Type
 }
+
+type ValueSlice []Value
+
+func (vs ValueSlice) Len() int           { return len(vs) }
+func (vs ValueSlice) Swap(i, j int)      { vs[i], vs[j] = vs[j], vs[i] }
+func (vs ValueSlice) Less(i, j int) bool { return vs[i].Less(vs[j]) }
+func (vs ValueSlice) Equals(other ValueSlice) bool {
+	if vs.Len() != other.Len() {
+		return false
+	}
+
+	for i, v := range vs {
+		if !v.Equals(other[i]) {
+			return false
+		}
+	}
+
+	return true
+}

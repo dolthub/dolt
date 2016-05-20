@@ -11,6 +11,12 @@ type mapEntry struct {
 	value Value
 }
 
+type mapEntrySlice []mapEntry
+
+func (mes mapEntrySlice) Len() int           { return len(mes) }
+func (mes mapEntrySlice) Swap(i, j int)      { mes[i], mes[j] = mes[j], mes[i] }
+func (mes mapEntrySlice) Less(i, j int) bool { return mes[i].key.Less(mes[j].key) }
+
 func newMapLeafSequence(vr ValueReader, data ...mapEntry) orderedSequence {
 	kts := make([]*Type, len(data))
 	vts := make([]*Type, len(data))

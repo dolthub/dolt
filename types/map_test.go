@@ -15,35 +15,22 @@ const testMapSize = 1000
 type testMapGenFn func(v Number) Value
 
 type testMap struct {
-	entries     []mapEntry
-	tr          *Type
+	entries     mapEntrySlice
 	knownBadKey Value
-}
-
-func (tm testMap) Len() int {
-	return len(tm.entries)
-}
-
-func (tm testMap) Less(i, j int) bool {
-	return tm.entries[i].key.Less(tm.entries[j].key)
-}
-
-func (tm testMap) Swap(i, j int) {
-	tm.entries[i], tm.entries[j] = tm.entries[j], tm.entries[i]
 }
 
 func (tm testMap) SetValue(i int, v Value) testMap {
 	entries := make([]mapEntry, 0, len(tm.entries))
 	entries = append(entries, tm.entries...)
 	entries[i].value = v
-	return testMap{entries, tm.tr, tm.knownBadKey}
+	return testMap{entries, tm.knownBadKey}
 }
 
 func (tm testMap) Remove(from, to int) testMap {
 	entries := make([]mapEntry, 0, len(tm.entries)-(to-from))
 	entries = append(entries, tm.entries[:from]...)
 	entries = append(entries, tm.entries[to:]...)
-	return testMap{entries, tm.tr, tm.knownBadKey}
+	return testMap{entries, tm.knownBadKey}
 }
 
 func (tm testMap) MaybeGet(key Value) (v Value, ok bool) {
@@ -124,7 +111,7 @@ func newTestMap(length int) testMap {
 		entry := mapEntry{Number(i), Number(i * 2)}
 		entries = append(entries, entry)
 	}
-	return testMap{entries, MakeMapType(NumberType, NumberType), Number(length + 2)}
+	return testMap{entries, Number(length + 2)}
 }
 
 func newTestMapFromMap(m Map) testMap {
@@ -132,10 +119,10 @@ func newTestMapFromMap(m Map) testMap {
 	m.IterAll(func(key, value Value) {
 		entries = append(entries, mapEntry{key, value})
 	})
-	return testMap{entries, m.Type(), Number(-0)}
+	return testMap{entries, Number(-0)}
 }
 
-func newTestMapWithGen(length int, gen testMapGenFn, tr *Type) testMap {
+func newTestMapWithGen(length int, gen testMapGenFn) testMap {
 	s := rand.NewSource(4242)
 	used := map[int64]bool{}
 
@@ -150,7 +137,7 @@ func newTestMapWithGen(length int, gen testMapGenFn, tr *Type) testMap {
 		}
 	}
 
-	return testMap{entries, MakeMapType(tr, tr), gen(Number(mask + 1))}
+	return testMap{entries, gen(Number(mask + 1))}
 }
 
 type mapTestSuite struct {
@@ -174,12 +161,12 @@ func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 			expectAppendChunkDiff:  expectAppendChunkDiff,
 			validate: func(v2 Collection) bool {
 				l2 := v2.(Map)
-				out := []Value{}
+				out := ValueSlice{}
 				l2.IterAll(func(key, value Value) {
 					out = append(out, key)
 					out = append(out, value)
 				})
-				return valueSlicesEqual(elems.FlattenAll(), out)
+				return ValueSlice(elems.FlattenAll()).Equals(out)
 			},
 			prependOne: func() Collection {
 				dup := make([]mapEntry, length+1)
@@ -219,29 +206,25 @@ func TestMapSuite4K(t *testing.T) {
 func getTestNativeOrderMap(scale int) testMap {
 	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
 		return v
-	}, NumberType)
+	})
 }
 
 func getTestRefValueOrderMap(scale int) testMap {
-	setType := MakeSetType(NumberType)
 	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
 		return NewSet(v)
-	}, setType)
+	})
 }
 
 func getTestRefToNativeOrderMap(scale int, vw ValueWriter) testMap {
-	refType := MakeRefType(NumberType)
 	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
 		return vw.WriteValue(v)
-	}, refType)
+	})
 }
 
 func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
-	setType := MakeSetType(NumberType)
-	refType := MakeRefType(setType)
 	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
 		return vw.WriteValue(NewSet(v))
-	}, refType)
+	})
 }
 
 func diffMapTest(assert *assert.Assertions, m1 Map, m2 Map, numAddsExpected int, numRemovesExpected int, numModifiedExpected int) (added []Value, removed []Value, modified []Value) {
@@ -266,10 +249,10 @@ func diffMapTest(assert *assert.Assertions, m1 Map, m2 Map, numAddsExpected int,
 func TestMapDiff(t *testing.T) {
 	testMap1 := newTestMapWithGen(int(mapPattern)*2, func(v Number) Value {
 		return v
-	}, NumberType)
+	})
 	testMap2 := newTestMapWithGen(int(mapPattern)*2, func(v Number) Value {
 		return v
-	}, NumberType)
+	})
 	testMapAdded, testMapRemoved, testMapModified := testMap1.Diff(testMap2)
 	map1 := testMap1.toMap()
 	map2 := testMap2.toMap()
@@ -422,7 +405,7 @@ func TestMapFirst2(t *testing.T) {
 
 	doTest := func(tm testMap) {
 		m := tm.toMap()
-		sort.Stable(tm)
+		sort.Stable(tm.entries)
 		actualKey, actualValue := m.First()
 		assert.True(tm.entries[0].key.Equals(actualKey))
 		assert.True(tm.entries[0].value.Equals(actualValue))
@@ -596,7 +579,7 @@ func TestMapIter2(t *testing.T) {
 
 	doTest := func(tm testMap) {
 		m := tm.toMap()
-		sort.Sort(tm)
+		sort.Sort(tm.entries)
 		idx := uint64(0)
 		endAt := uint64(mapPattern)
 
@@ -627,7 +610,7 @@ func TestMapIterAll(t *testing.T) {
 
 	doTest := func(tm testMap) {
 		m := tm.toMap()
-		sort.Sort(tm)
+		sort.Sort(tm.entries)
 		idx := uint64(0)
 
 		m.IterAll(func(k, v Value) {

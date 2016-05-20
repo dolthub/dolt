@@ -10,7 +10,7 @@ import (
 
 const testListSize = 5000
 
-type testList []Value
+type testList ValueSlice
 
 func (tl testList) Set(idx int, v Value) (res testList) {
 	res = append(res, tl[:idx]...)
@@ -77,11 +77,11 @@ func newListTestSuite(size uint, expectRefStr string, expectChunkCount int, expe
 			expectAppendChunkDiff:  expectAppendChunkDiff,
 			validate: func(v2 Collection) bool {
 				l2 := v2.(List)
-				out := []Value{}
+				out := ValueSlice{}
 				l2.IterAll(func(v Value, index uint64) {
 					out = append(out, v)
 				})
-				return valueSlicesEqual(elems, out)
+				return ValueSlice(elems).Equals(out)
 			},
 			prependOne: func() Collection {
 				dup := make([]Value, length+1)

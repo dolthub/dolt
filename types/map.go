@@ -23,7 +23,7 @@ func newMap(seq orderedSequence) Map {
 }
 
 func NewMap(kv ...Value) Map {
-	entries := buildMapData([]mapEntry{}, kv)
+	entries := buildMapData(kv)
 	seq := newEmptySequenceChunker(makeMapLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(MapKind, nil), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, entry := range entries {
@@ -185,35 +185,33 @@ func (m Map) elemTypes() []*Type {
 	return m.Type().Desc.(CompoundDesc).ElemTypes
 }
 
-func buildMapData(oldData []mapEntry, values []Value) []mapEntry {
+func buildMapData(values []Value) mapEntrySlice {
+	if len(values) == 0 {
+		return mapEntrySlice{}
+	}
+
 	// Sadly, d.Chk.Equals() costs too much. BUG #83
 	d.Chk.True(0 == len(values)%2, "Must specify even number of key/value pairs")
+	kvs := make(mapEntrySlice, len(values)/2)
 
-	data := make([]mapEntry, len(oldData), len(oldData)+len(values))
-	copy(data, oldData)
 	for i := 0; i < len(values); i += 2 {
-		k := values[i]
-		v := values[i+1]
-		idx := indexOfMapValue(data, k)
-		if idx < len(data) && data[idx].key.Equals(k) {
-			if !data[idx].value.Equals(v) {
-				data[idx] = mapEntry{k, v}
-			}
-			continue
+		entry := mapEntry{values[i], values[i+1]}
+		kvs[i/2] = entry
+	}
+
+	uniqueSorted := make(mapEntrySlice, 0, len(kvs))
+	sort.Stable(kvs)
+	last := kvs[0]
+	for i := 1; i < len(kvs); i++ {
+		kv := kvs[i]
+		if !kv.key.Equals(last.key) {
+			uniqueSorted = append(uniqueSorted, last)
 		}
 
-		// TODO: These repeated copies suck. We're not allocating more memory (because we made the slice with the correct capacity to begin with above - yay!), but still, this is more work than necessary. Perhaps we should use an actual BST for the in-memory state, rather than a flat list.
-		data = append(data, mapEntry{})
-		copy(data[idx+1:], data[idx:])
-		data[idx] = mapEntry{k, v}
+		last = kv
 	}
-	return data
-}
 
-func indexOfMapValue(m []mapEntry, v Value) int {
-	return sort.Search(len(m), func(i int) bool {
-		return !m[i].key.Less(v)
-	})
+	return append(uniqueSorted, last)
 }
 
 func newMapLeafBoundaryChecker() boundaryChecker {
