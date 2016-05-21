@@ -378,7 +378,7 @@ func (r *Cache) Get(ns, key uint64, setFunc func() (size int, value Value)) *Han
 				if n.value == nil {
 					if setFunc == nil {
 						n.mu.Unlock()
-						n.unHash()
+						n.unref()
 						return nil
 					}
 
@@ -386,7 +386,7 @@ func (r *Cache) Get(ns, key uint64, setFunc func() (size int, value Value)) *Han
 					if n.value == nil {
 						n.size = 0
 						n.mu.Unlock()
-						n.unHash()
+						n.unref()
 						return nil
 					}
 					atomic.AddInt32(&r.size, int32(n.size))
@@ -434,7 +434,7 @@ func (r *Cache) Delete(ns, key uint64, onDel func()) bool {
 				if r.cacher != nil {
 					r.cacher.Ban(n)
 				}
-				n.unHash()
+				n.unref()
 				return true
 			}
 
@@ -469,7 +469,7 @@ func (r *Cache) Evict(ns, key uint64) bool {
 				if r.cacher != nil {
 					r.cacher.Evict(n)
 				}
-				n.unHash()
+				n.unref()
 				return true
 			}
 
@@ -594,7 +594,7 @@ func (n *Node) GetHandle() *Handle {
 	return &Handle{unsafe.Pointer(n)}
 }
 
-func (n *Node) unHash() {
+func (n *Node) unref() {
 	if atomic.AddInt32(&n.ref, -1) == 0 {
 		n.r.delete(n)
 	}

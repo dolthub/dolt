@@ -32,7 +32,7 @@ func main() {
 		set, err := setSpec.Dataset()
 		util.CheckError(err)
 
-		oldCommitRef, errBool := set.MaybeHeadHash()
+		oldCommitRef, errBool := set.MaybeHeadRef()
 		if !errBool {
 			util.CheckError(fmt.Errorf("Dataset %v not found", set.ID()))
 		}

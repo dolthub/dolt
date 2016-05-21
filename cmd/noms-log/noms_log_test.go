@@ -57,11 +57,11 @@ func addCommitWithValue(ds dataset.Dataset, v types.Value) (dataset.Dataset, err
 }
 
 func addBranchedDataset(newDs, parentDs dataset.Dataset, v string) (dataset.Dataset, error) {
-	return newDs.CommitWithParents(types.NewString(v), types.NewSet().Insert(parentDs.HeadHash()))
+	return newDs.CommitWithParents(types.NewString(v), types.NewSet().Insert(parentDs.HeadRef()))
 }
 
 func mergeDatasets(ds1, ds2 dataset.Dataset, v string) (dataset.Dataset, error) {
-	return ds1.CommitWithParents(types.NewString(v), types.NewSet(ds1.HeadHash(), ds2.HeadHash()))
+	return ds1.CommitWithParents(types.NewString(v), types.NewSet(ds1.HeadRef(), ds2.HeadRef()))
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph1() {
