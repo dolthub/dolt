@@ -6,7 +6,7 @@ import {suite, setup, teardown, test} from 'mocha';
 import Chunk from './chunk.js';
 import Database from './database.js';
 import MemoryStore from './memory-store.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import BatchStore from './batch-store.js';
 import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-adaptor.js';
 import {newStruct} from './struct.js';
@@ -85,7 +85,7 @@ suite('BuildSet', () => {
     assert.strictEqual(s.hash.toString(), 'sha1-f10d8ccbc2270bb52bb988a0cadff912e2723eed');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
-    assert.strictEqual(height, s.sequence.items[0].refValue.height);
+    assert.strictEqual(height, s.sequence.items[0].ref.height);
 
     // has
     for (let i = 0; i < structs.length; i++) {
@@ -95,13 +95,13 @@ suite('BuildSet', () => {
 
   test('LONG: set of ref, set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
-    const refValues = nums.map(n => new RefValue(newStruct('num', {n})));
-    const s = new Set(refValues);
+    const refs = nums.map(n => new Ref(newStruct('num', {n})));
+    const s = new Set(refs);
     assert.strictEqual(s.hash.toString(), 'sha1-14eeb2d1835011bf3e018121ba3274bc08e634e5');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
-    // height + 1 because the leaves are RefValue values (with height 1).
-    assert.strictEqual(height + 1, s.sequence.items[0].refValue.height);
+    // height + 1 because the leaves are Ref values (with height 1).
+    assert.strictEqual(height + 1, s.sequence.items[0].ref.height);
   });
 
   test('LONG: insert', async () => {
@@ -179,7 +179,7 @@ suite('BuildSet', () => {
     assert.strictEqual(s.hash.toString(), 'sha1-84ce63b4fb804fe9668133bf5d3136cfffcdc788');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
-    assert.strictEqual(height, s.sequence.items[0].refValue.height);
+    assert.strictEqual(height, s.sequence.items[0].ref.height);
 
     // has
     for (let i = 0; i < vals.length; i += 5) {
@@ -275,10 +275,10 @@ suite('SetLeaf', () => {
   });
 
   test('chunks', () => {
-    const refValues = ['x', 'a', 'b'].map(c => db.writeValue(c));
-    refValues.sort(compare);
-    const l = new Set(['z', ...refValues]);
-    assert.deepEqual(refValues, l.chunks);
+    const refs = ['x', 'a', 'b'].map(c => db.writeValue(c));
+    refs.sort(compare);
+    const l = new Set(['z', ...refs]);
+    assert.deepEqual(refs, l.chunks);
   });
 });
 
@@ -611,7 +611,7 @@ suite('CompoundSet', () => {
     const chunks = s.chunks;
     const sequence = s.sequence;
     assert.equal(2, chunks.length);
-    assert.deepEqual(sequence.items[0].refValue, chunks[0]);
-    assert.deepEqual(sequence.items[1].refValue, chunks[1]);
+    assert.deepEqual(sequence.items[0].ref, chunks[0]);
+    assert.deepEqual(sequence.items[1].ref, chunks[1]);
   });
 });

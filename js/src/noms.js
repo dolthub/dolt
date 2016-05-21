@@ -11,7 +11,7 @@ export {default as Chunk} from './chunk.js';
 export {default as HttpBatchStore} from './http-batch-store.js';
 export {default as MemoryStore} from './memory-store.js';
 export {default as Hash, emptyHash} from './hash.js';
-export {default as RefValue} from './ref-value.js';
+export {default as Ref} from './ref.js';
 export {
   default as Struct,
   StructMirror,

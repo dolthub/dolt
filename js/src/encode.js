@@ -1,7 +1,7 @@
 // @flow
 
 import Chunk from './chunk.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import Struct, {StructMirror} from './struct.js';
 import type {NomsKind} from './noms-kind.js';
 import {encode as encodeBase64} from './base64.js';
@@ -65,7 +65,7 @@ export class JsonArrayWriter {
     this.write(k);
   }
 
-  writeRefValue(r: RefValue) {
+  writeRef(r: Ref) {
     this.write(r.targetHash.toString());
     this.writeInt(r.height);
   }
@@ -109,7 +109,7 @@ export class JsonArrayWriter {
       if (child && this._vw) {
         this._vw.writeValue(child);
       }
-      w2.writeValue(tuple.refValue);
+      w2.writeValue(tuple.ref);
       w2.writeValue(tuple.value);
       w2.writeInt(tuple.numLeaves);
     }
@@ -180,9 +180,9 @@ export class JsonArrayWriter {
         break;
       }
       case Kind.Ref: {
-        invariant(v instanceof RefValue,
+        invariant(v instanceof Ref,
                   () => `Failed to write Ref. Invalid type: ${describeTypeOfValue(v)}`);
-        this.writeRefValue(v);
+        this.writeRef(v);
         break;
       }
       case Kind.Set: {

@@ -1,7 +1,7 @@
 // @flow
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import type {ValueReader} from './value-store.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
@@ -28,16 +28,16 @@ const setPattern = ((1 << 6) | 0) - 1;
 
 function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
-    let indexValue: ?(T | RefValue) = null;
+    let indexValue: ?(T | Ref) = null;
     if (items.length > 0) {
       indexValue = items[items.length - 1];
       if (indexValue instanceof ValueBase) {
-        indexValue = new RefValue(indexValue);
+        indexValue = new Ref(indexValue);
       }
     }
 
     const ns = newSetFromSequence(newSetLeafSequence(vr, items));
-    const mt = new MetaTuple(new RefValue(ns), indexValue, items.length, ns);
+    const mt = new MetaTuple(new Ref(ns), indexValue, items.length, ns);
     return [mt, ns];
   };
 }
@@ -212,7 +212,7 @@ export class SetLeafSequence<K: Value> extends OrderedSequence<K, K> {
     return equals(this.items[idx], other);
   }
 
-  get chunks(): Array<RefValue> {
+  get chunks(): Array<Ref> {
     return getValueChunks(this.items);
   }
 }

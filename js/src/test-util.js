@@ -103,7 +103,7 @@ export function intSequence(count: number, start: number = 0): Array<number> {
 }
 
 export function deriveCollectionHeight(col: Collection): number {
-  // Note: not using seq.items[0].refValue.height because the purpose of this method is to
+  // Note: not using seq.items[0].ref.height because the purpose of this method is to
   // be redundant.
   return col.sequence.isMeta ? 1 + deriveCollectionHeight(notNull(col.sequence.items[0].child)) : 0;
 }

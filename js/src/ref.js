@@ -11,22 +11,22 @@ import {invariant} from './assert.js';
 import {getTypeOfValue, makeRefType} from './type.js';
 import {ValueBase, getChunksOfValue} from './value.js';
 
-export function constructRefValue(t: Type, targetHash: Hash, height: number): RefValue {
+export function constructRef(t: Type, targetHash: Hash, height: number): Ref {
   invariant(t.kind === Kind.Ref, () => `Not a Ref type: ${describeType(t)}`);
   invariant(!targetHash.isEmpty());
   invariant(height > 0);
-  const rv = Object.create(RefValue.prototype);
+  const rv = Object.create(Ref.prototype);
   rv._type = t;
   rv.targetHash = targetHash;
   rv.height = height;
   return rv;
 }
 
-export default class RefValue<T: Value> extends ValueBase {
+export default class Ref<T: Value> extends ValueBase {
   _type: Type;
   // Hash of the value this points to.
   targetHash: Hash;
-  // The length of the longest path of RefValues to find any leaf in the graph.
+  // The length of the longest path of Refs to find any leaf in the graph.
   // By definition this must be > 0.
   height: number;
 
@@ -45,7 +45,7 @@ export default class RefValue<T: Value> extends ValueBase {
     return vr.readValue(this.targetHash);
   }
 
-  get chunks(): Array<RefValue> {
+  get chunks(): Array<Ref> {
     return [this];
   }
 }

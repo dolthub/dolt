@@ -1,7 +1,7 @@
 // @flow
 
 import type Hash from './hash.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import type {NomsKind} from './noms-kind.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
@@ -121,7 +121,7 @@ export class Type<T: TypeDesc> extends ValueBase {
     return typeType;
   }
 
-  get chunks(): Array<RefValue> {
+  get chunks(): Array<Ref> {
     return [];
   }
 

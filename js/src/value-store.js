@@ -2,7 +2,7 @@
 
 import Chunk from './chunk.js';
 import Hash, {emptyHash} from './hash.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import type BatchStore from './batch-store.js';
 import type Value from './value.js';
 import {
@@ -19,7 +19,7 @@ import {describeType, describeTypeOfValue} from './encode-human-readable.js';
 import {equals} from './compare.js';
 
 export interface ValueWriter {
-  writeValue<T: Value>(v: T, t: ?Type): RefValue<T>
+  writeValue<T: Value>(v: T, t: ?Type): Ref<T>
 }
 
 export interface ValueReader {
@@ -30,7 +30,7 @@ export interface ValueReader {
 export interface ValueReadWriter {
   // TODO: This should return Promise<?Value>
   readValue(hash: Hash): Promise<any>;
-  writeValue<T: Value>(v: T): RefValue<T>;
+  writeValue<T: Value>(v: T): Ref<T>;
 }
 
 export default class ValueStore {
@@ -70,20 +70,20 @@ export default class ValueStore {
     return v;
   }
 
-  writeValue<T: Value>(v: T): RefValue<T> {
+  writeValue<T: Value>(v: T): Ref<T> {
     const t = getTypeOfValue(v);
     const chunk = encodeNomsValue(v, this);
     invariant(!chunk.isEmpty());
     const {hash} = chunk;
-    const refValue = new RefValue(v);
+    const ref = new Ref(v);
     const entry = this._knownHashes.get(hash);
     if (entry && entry.present) {
-      return refValue;
+      return ref;
     }
     const hints = this._knownHashes.checkChunksInCache(v);
     this._bs.schedulePut(chunk, hints);
     this._knownHashes.add(hash, new HashCacheEntry(true, t));
-    return refValue;
+    return ref;
   }
 
   async flush(): Promise<void> {
@@ -258,7 +258,7 @@ class HashCache {
   }
 }
 
-function getTargetType(refVal: RefValue): Type {
+function getTargetType(refVal: Ref): Type {
   invariant(refVal.type.kind === Kind.Ref, refVal.type.kind);
   return refVal.type.elemTypes[0];
 }

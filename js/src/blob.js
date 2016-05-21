@@ -9,7 +9,7 @@ import {blobType} from './type.js';
 import {MetaTuple, newIndexedMetaSequenceChunkFn, newIndexedMetaSequenceBoundaryChecker,} from
   './meta-sequence.js';
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import SequenceChunker from './sequence-chunker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import {Kind} from './noms-kind.js';
@@ -85,7 +85,7 @@ function newBlobLeafChunkFn(vr: ?ValueReader = null): makeChunkFn {
   return (items: Array<number>) => {
     const blobLeaf = new BlobLeafSequence(vr, new Uint8Array(items));
     const blob = newBlobFromSequence(blobLeaf);
-    const mt = new MetaTuple(new RefValue(blob), items.length, items.length, blob);
+    const mt = new MetaTuple(new Ref(blob), items.length, items.length, blob);
     return [mt, blob];
   };
 }

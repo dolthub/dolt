@@ -27,7 +27,7 @@ import {
   valueType,
 } from './type.js';
 import {equals} from './compare.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 
 suite('validate type', () => {
 
@@ -234,7 +234,7 @@ suite('validate type', () => {
 
     const c2 = newStruct('Commit', {
       value: 2,
-      parents: new Set([new RefValue(c1)]),
+      parents: new Set([new Ref(c1)]),
     });
     assertSubtype(t11, c2);
 

@@ -3,7 +3,7 @@
 import Commit from './commit.js';
 import type Value from './value.js';
 import type Database from './database.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import Set from './set.js';
 
 export default class Dataset {
@@ -23,7 +23,7 @@ export default class Dataset {
     return this._id;
   }
 
-  headRef(): Promise<?RefValue<Commit>> {
+  headRef(): Promise<?Ref<Commit>> {
     return this._store.headRef(this._id);
   }
 
@@ -34,7 +34,7 @@ export default class Dataset {
   // Commit updates the commit that a dataset points at. If parents is provided then an the promise
   // is rejected if the commit does not descend from the parents.
   async commit(v: Value,
-               parents: ?Array<RefValue<Commit>> = undefined): Promise<Dataset> {
+               parents: ?Array<Ref<Commit>> = undefined): Promise<Dataset> {
     if (!parents) {
       const headRef = await this.headRef();
       parents = headRef ? [headRef] : [];

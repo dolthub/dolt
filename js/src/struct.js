@@ -1,7 +1,7 @@
 // @flow
 
 import assertSubtype from './assert-type.js';
-import type RefValue from './ref-value.js';
+import type Ref from './ref.js';
 import type {Type, StructDesc} from './type.js';
 import type Value from './value.js';
 import {Kind} from './noms-kind.js';
@@ -51,7 +51,7 @@ export default class Struct extends ValueBase {
     return this._type;
   }
 
-  get chunks(): Array<RefValue> {
+  get chunks(): Array<Ref> {
     const mirror = new StructMirror(this);
     const chunks = [];
 

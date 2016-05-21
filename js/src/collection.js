@@ -1,6 +1,6 @@
 // @flow
 
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import type Sequence from './sequence.js'; // eslint-disable-line no-unused-vars
 import type {Type} from './type.js';
 import {ValueBase} from './value.js';
@@ -21,7 +21,7 @@ export class Collection<S: Sequence> extends ValueBase {
     return !this.sequence.isMeta && this.sequence.items.length === 0;
   }
 
-  get chunks(): Array<RefValue> {
+  get chunks(): Array<Ref> {
     return this.sequence.chunks;
   }
 }

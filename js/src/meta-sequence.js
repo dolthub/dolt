@@ -11,7 +11,7 @@ import {makeListType, makeUnionType, blobType, makeSetType, makeMapType} from '.
 import {IndexedSequence} from './indexed-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {OrderedSequence} from './ordered-sequence.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import Sequence from './sequence.js';
 import {Kind} from './noms-kind.js';
 import type {NomsKind} from './noms-kind.js';
@@ -24,13 +24,13 @@ import {equals} from './compare.js';
 export type MetaSequence = Sequence<MetaTuple>;
 
 export class MetaTuple<K> {
-  refValue: RefValue;
+  ref: Ref;
   value: K;
   numLeaves: number;
   child: ?Collection;
 
-  constructor(refValue: RefValue, value: K, numLeaves: number, child: ?Collection = null) {
-    this.refValue = refValue;
+  constructor(ref: Ref, value: K, numLeaves: number, child: ?Collection = null) {
+    this.ref = ref;
     this.child = child;
     this.value = value;
     this.numLeaves = numLeaves;
@@ -39,8 +39,8 @@ export class MetaTuple<K> {
   getSequence(vr: ?ValueReader): Promise<Sequence> {
     return this.child ?
         Promise.resolve(this.child.sequence) :
-        notNull(vr).readValue(this.refValue.targetHash).then((c: Collection) => {
-          invariant(c, () => `Could not read sequence ${this.refValue.targetHash}`);
+        notNull(vr).readValue(this.ref.targetHash).then((c: Collection) => {
+          invariant(c, () => `Could not read sequence ${this.ref.targetHash}`);
           return c.sequence;
         });
   }
@@ -48,7 +48,7 @@ export class MetaTuple<K> {
 
 // The elemTypes of the collection inside the Ref<Collection<?, ?>>
 function getCollectionTypes<K>(tuple: MetaTuple<K>): Type[] {
-  return tuple.refValue.type.desc.elemTypes[0].desc.elemTypes;
+  return tuple.ref.type.desc.elemTypes[0].desc.elemTypes;
 }
 
 export function newListMetaSequence(vr: ?ValueReader, items: Array<MetaTuple<number>>):
@@ -82,7 +82,7 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
     return this._offsets[this._offsets.length - 1];
   }
 
-  get chunks(): Array<RefValue> {
+  get chunks(): Array<Ref> {
     return getMetaSequenceChunks(this);
   }
 
@@ -173,7 +173,7 @@ export class OrderedMetaSequence<K: Value> extends OrderedSequence<K, MetaTuple<
     return this._numLeaves;
   }
 
-  get chunks(): Array<RefValue> {
+  get chunks(): Array<Ref> {
     return getMetaSequenceChunks(this);
   }
 
@@ -191,7 +191,7 @@ export class OrderedMetaSequence<K: Value> extends OrderedSequence<K, MetaTuple<
   }
 
   equalsAt(idx: number, other: MetaTuple): boolean {
-    return equals(this.items[idx].refValue, other.refValue);
+    return equals(this.items[idx].ref, other.ref);
   }
 }
 
@@ -206,7 +206,7 @@ export function newOrderedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
       invariant(kind === Kind.Set);
       col = newSetFromSequence(newSetMetaSequence(vr, tuples));
     }
-    return [new MetaTuple(new RefValue(col), last.value, numLeaves, col), col];
+    return [new MetaTuple(new Ref(col), last.value, numLeaves, col), col];
   };
 }
 
@@ -216,7 +216,7 @@ const objectPattern = ((1 << 6) | 0) - 1;
 
 export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTuple> {
   return new BuzHashBoundaryChecker(orderedSequenceWindowSize, sha1Size, objectPattern,
-    (mt: MetaTuple) => mt.refValue.targetHash.digest
+    (mt: MetaTuple) => mt.ref.targetHash.digest
   );
 }
 
@@ -233,16 +233,16 @@ export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
       invariant(kind === Kind.Blob);
       col = newBlobFromSequence(newBlobMetaSequence(vr, tuples));
     }
-    return [new MetaTuple(new RefValue(col), sum, sum, col), col];
+    return [new MetaTuple(new Ref(col), sum, sum, col), col];
   };
 }
 
 export function newIndexedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTuple> {
   return new BuzHashBoundaryChecker(objectWindowSize, sha1Size, objectPattern,
-    (mt: MetaTuple) => mt.refValue.targetHash.digest
+    (mt: MetaTuple) => mt.ref.targetHash.digest
   );
 }
 
-function getMetaSequenceChunks(ms: MetaSequence): Array<RefValue> {
-  return ms.items.map(mt => mt.refValue);
+function getMetaSequenceChunks(ms: MetaSequence): Array<Ref> {
+  return ms.items.map(mt => mt.ref);
 }

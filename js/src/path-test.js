@@ -12,10 +12,10 @@ import {newStruct} from './struct.js';
 
 suite('Path', () => {
 
-  async function assertPathEqual(expect: any, refValue: Value, path: Path):
+  async function assertPathEqual(expect: any, ref: Value, path: Path):
       Promise<void> {
-    // $FlowIssue: need to be able to pass in null for refValue
-    const actual = await path.resolve(refValue);
+    // $FlowIssue: need to be able to pass in null for ref
+    const actual = await path.resolve(ref);
     if (actual === undefined || expect === undefined) {
       assert.strictEqual(expect, actual);
       return;

@@ -195,7 +195,7 @@ suite('Database', () => {
     const s1 = new NomsSet([v1, v2]);
     assert.strictEqual(1, ds.writeValue(s1).height);
 
-    // Set<RefValue<String>>.
+    // Set<Ref<String>>.
     const s2 = new NomsSet([ds.writeValue(v1), ds.writeValue(v2)]);
     assert.strictEqual(2, ds.writeValue(s2).height);
 
@@ -206,16 +206,16 @@ suite('Database', () => {
     const l1 = new List([s1, s3]);
     assert.strictEqual(1, ds.writeValue(l1).height);
 
-    // List<RefValue<Set<String>>.
+    // List<Ref<Set<String>>.
     const l2 = new List([ds.writeValue(s1), ds.writeValue(s3)]);
     assert.strictEqual(2, ds.writeValue(l2).height);
 
-    // List<RefValue<Set<RefValue<String>>>.
+    // List<Ref<Set<Ref<String>>>.
     const s4 = new NomsSet([ds.writeValue(v3), ds.writeValue(v4)]);
     const l3 = new List([ds.writeValue(s4)]);
     assert.strictEqual(3, ds.writeValue(l3).height);
 
-    // List<Set<String> | RefValue<Set<String>>>.
+    // List<Set<String> | Ref<Set<String>>>.
     const l4 = new List([s1, ds.writeValue(s3)]);
     assert.strictEqual(2, ds.writeValue(l4).height);
     const l5 = new List([ds.writeValue(s1), s3]);

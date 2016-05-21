@@ -3,7 +3,7 @@
 import Chunk from './chunk.js';
 import Database from './database.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
-import type RefValue from './ref-value.js';
+import type Ref from './ref.js';
 import Struct, {StructMirror} from './struct.js';
 import type {TypeDesc} from './type.js';
 import type Value from './value.js';
@@ -225,7 +225,7 @@ suite('Decode', () => {
       ],
     ];
     const r = new JsonArrayReader(a, db);
-    const v: Map<RefValue<Value>, number> = r.readValue();
+    const v: Map<Ref<Value>, number> = r.readValue();
     invariant(v instanceof Map);
 
     const m = new Map([[rv1, 2], [rv2, 4]]);

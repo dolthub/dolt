@@ -5,7 +5,7 @@ import {suite, setup, teardown, test} from 'mocha';
 
 import Database from './database.js';
 import MemoryStore from './memory-store.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import BatchStore from './batch-store.js';
 import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-adaptor.js';
 import Struct, {newStruct} from './struct.js';
@@ -87,7 +87,7 @@ suite('BuildMap', () => {
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     assert.strictEqual(height, deriveCollectionHeight(m2));
-    assert.strictEqual(height, m.sequence.items[0].refValue.height);
+    assert.strictEqual(height, m.sequence.items[0].ref.height);
   });
 
   test('LONG: map of ref to ref, set of n numbers', () => {
@@ -96,13 +96,13 @@ suite('BuildMap', () => {
       kvs.push([i, i + 1]);
     }
 
-    const kvRefs = kvs.map(entry => entry.map(n => new RefValue(newStruct('num', {n}))));
+    const kvRefs = kvs.map(entry => entry.map(n => new Ref(newStruct('num', {n}))));
     const m = new Map(kvRefs);
     assert.strictEqual(m.hash.toString(), 'sha1-5c9a17f6da0ebfebc1f82f498ac46992fad85250');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
-    // height + 1 because the leaves are RefValue values (with height 1).
-    assert.strictEqual(height + 1, m.sequence.items[0].refValue.height);
+    // height + 1 because the leaves are Ref values (with height 1).
+    assert.strictEqual(height + 1, m.sequence.items[0].ref.height);
   });
 
   test('LONG: set', async () => {
@@ -208,7 +208,7 @@ suite('BuildMap', () => {
     assert.strictEqual(m.hash.toString(), 'sha1-3840c9c93d79663e77a60f13f2877a8f5843da38');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
-    assert.strictEqual(height, m.sequence.items[0].refValue.height);
+    assert.strictEqual(height, m.sequence.items[0].ref.height);
 
     // has
     for (let i = 0; i < keys.length; i += 5) {
@@ -596,7 +596,7 @@ suite('CompoundMap', () => {
     const chunks = m.chunks;
     const sequence = m.sequence;
     assert.equal(2, chunks.length);
-    assert.deepEqual(sequence.items[0].refValue, chunks[0]);
-    assert.deepEqual(sequence.items[1].refValue, chunks[1]);
+    assert.deepEqual(sequence.items[0].ref, chunks[0]);
+    assert.deepEqual(sequence.items[1].ref, chunks[1]);
   });
 });

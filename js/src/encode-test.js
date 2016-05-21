@@ -5,7 +5,7 @@ import {suite, setup, teardown, test} from 'mocha';
 
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import Hash from './hash.js';
-import {constructRefValue} from './ref-value.js';
+import {constructRef} from './ref.js';
 import {newStruct} from './struct.js';
 import type {NomsKind} from './noms-kind.js';
 import {encodeNomsValue, JsonArrayWriter} from './encode.js';
@@ -329,7 +329,7 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(db);
     const hash = Hash.parse('sha1-0123456789abcdef0123456789abcdef01234567');
     const t = makeRefType(blobType);
-    const v = constructRefValue(t, hash, 1);
+    const v = constructRef(t, hash, 1);
     w.writeValue(v);
 
     assert.deepEqual([Kind.Ref, Kind.Blob, hash.toString(), '1'], w.array);

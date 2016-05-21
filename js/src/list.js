@@ -15,7 +15,7 @@ import {invariant} from './assert.js';
 import {MetaTuple, newIndexedMetaSequenceBoundaryChecker,
   newIndexedMetaSequenceChunkFn} from './meta-sequence.js';
 import {sha1Size} from './hash.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import {getValueChunks} from './sequence.js';
 import {makeListType, makeUnionType, getTypeOfValue} from './type.js';
 import {equals} from './compare.js';
@@ -27,7 +27,7 @@ const listPattern = ((1 << 6) | 0) - 1;
 function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
     const list = newListFromSequence(newListLeafSequence(vr, items));
-    const mt = new MetaTuple(new RefValue(list), items.length, items.length, list);
+    const mt = new MetaTuple(new Ref(list), items.length, items.length, list);
     return [mt, list];
   };
 }
@@ -133,7 +133,7 @@ export function newListFromSequence<T: Value>(sequence: IndexedSequence): List<T
 }
 
 export class ListLeafSequence<T: Value> extends IndexedSequence<T> {
-  get chunks(): Array<RefValue> {
+  get chunks(): Array<Ref> {
     return getValueChunks(this.items);
   }
 

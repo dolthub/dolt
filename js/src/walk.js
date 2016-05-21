@@ -4,7 +4,7 @@ import Blob from './blob.js';
 import List from './list.js';
 import Set from './set.js';
 import Map from './map.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import Struct, {StructMirror} from './struct.js';
 
 import type Database from './database.js';
@@ -42,7 +42,7 @@ export default async function walk(v: Value, ds: Database, cb: walkCb): Promise<
     return;
   }
 
-  if (v instanceof RefValue) {
+  if (v instanceof Ref) {
     return walk(await v.targetValue(ds), ds, cb);
   }
 
