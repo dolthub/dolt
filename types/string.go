@@ -31,7 +31,7 @@ func (s String) Less(other Value) bool {
 }
 
 func (fs String) Hash() hash.Hash {
-	return EnsureRef(fs.h, fs)
+	return EnsureHash(fs.h, fs)
 }
 
 func (fs String) ChildValues() []Value {

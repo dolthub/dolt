@@ -12,11 +12,11 @@ func TestGetRef(t *testing.T) {
 	assert := assert.New(t)
 	input := fmt.Sprintf("t [%d,false]", BoolKind)
 	expected := hash.FromData([]byte(input))
-	actual := getRef(Bool(false))
+	actual := getHash(Bool(false))
 	assert.Equal(expected, actual)
 }
 
-func TestEnsureRef(t *testing.T) {
+func TestEnsureHash(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 	count := byte(1)
@@ -34,9 +34,9 @@ func TestEnsureRef(t *testing.T) {
 		}
 	}
 
-	getRefOverride = mockGetRef
+	getHashOverride = mockGetRef
 	defer func() {
-		getRefOverride = nil
+		getHashOverride = nil
 	}()
 
 	bl := newBlob(newBlobLeafSequence(nil, []byte("hi")))

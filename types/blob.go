@@ -61,7 +61,7 @@ func (b Blob) Less(other Value) bool {
 }
 
 func (b Blob) Hash() hash.Hash {
-	return EnsureRef(b.h, b)
+	return EnsureHash(b.h, b)
 }
 
 func (b Blob) ChildValues() []Value {

@@ -68,7 +68,7 @@ func (l List) Less(other Value) bool {
 }
 
 func (l List) Hash() hash.Hash {
-	return EnsureRef(l.h, l)
+	return EnsureHash(l.h, l)
 }
 
 func (l List) ChildValues() (values []Value) {

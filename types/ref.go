@@ -56,7 +56,7 @@ func (r Ref) Less(other Value) bool {
 }
 
 func (r Ref) Hash() hash.Hash {
-	return EnsureRef(r.hash, r)
+	return EnsureHash(r.hash, r)
 }
 
 func (r Ref) ChildValues() []Value {

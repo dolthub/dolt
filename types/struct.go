@@ -51,7 +51,7 @@ func (s Struct) Less(other Value) bool {
 }
 
 func (s Struct) Hash() hash.Hash {
-	return EnsureRef(s.h, s)
+	return EnsureHash(s.h, s)
 }
 
 func (s Struct) ChildValues() (res []Value) {

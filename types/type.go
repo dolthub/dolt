@@ -48,7 +48,7 @@ func (t *Type) Less(other Value) (res bool) {
 }
 
 func (t *Type) Hash() hash.Hash {
-	return EnsureRef(t.h, t)
+	return EnsureHash(t.h, t)
 }
 
 func (t *Type) ChildValues() (res []Value) {

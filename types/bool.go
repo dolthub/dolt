@@ -19,7 +19,7 @@ func (v Bool) Less(other Value) bool {
 }
 
 func (v Bool) Hash() hash.Hash {
-	return getRef(v)
+	return getHash(v)
 }
 
 func (v Bool) ChildValues() []Value {

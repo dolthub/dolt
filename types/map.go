@@ -60,7 +60,7 @@ func (m Map) Less(other Value) bool {
 }
 
 func (m Map) Hash() hash.Hash {
-	return EnsureRef(m.h, m)
+	return EnsureHash(m.h, m)
 }
 
 func (m Map) ChildValues() (values []Value) {

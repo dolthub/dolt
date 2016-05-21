@@ -63,7 +63,7 @@ func (s Set) Less(other Value) bool {
 }
 
 func (s Set) Hash() hash.Hash {
-	return EnsureRef(s.h, s)
+	return EnsureHash(s.h, s)
 }
 
 func (s Set) ChildValues() (values []Value) {
