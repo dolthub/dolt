@@ -6,7 +6,7 @@ import Blob, {BlobWriter} from './blob.js';
 import {suite, test} from 'mocha';
 import {
   assertChunkCountAndType,
-  assertValueRef,
+  assertValueHash,
   assertValueType,
   chunkDiffCount,
   testRoundTripAndValidate,
@@ -67,14 +67,14 @@ suite('Blob', () => {
     return a;
   }
 
-  async function blobTestSuite(size: number, expectRefStr: string, expectChunkCount: number,
+  async function blobTestSuite(size: number, expectHashStr: string, expectChunkCount: number,
                                expectPrependChunkDiff: number,
                                expectAppendChunkDiff: number) {
     const length = 1 << size;
     const buff = randomBuff(length);
     const blob = new Blob(buff);
 
-    assertValueRef(expectRefStr, blob);
+    assertValueHash(expectHashStr, blob);
     assertValueType(blobType, blob);
     assert.strictEqual(length, blob.length);
     assertChunkCountAndType(expectChunkCount, refOfBlobType, blob);

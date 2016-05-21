@@ -1,24 +1,24 @@
 // @flow
 
-import type Ref from './ref.js';
-import {emptyRef} from './ref.js';
+import type Hash from './hash.js';
+import {emptyHash} from './hash.js';
 import type Chunk from './chunk.js';
 import {emptyChunk} from './chunk.js';
 
 export default class MemoryStore {
   _data: { [key: string]: Chunk };
-  _root: Ref;
+  _root: Hash;
 
   constructor() {
     this._data = Object.create(null);
-    this._root = emptyRef;
+    this._root = emptyHash;
   }
 
-  getRoot(): Promise<Ref> {
+  getRoot(): Promise<Hash> {
     return Promise.resolve(this._root);
   }
 
-  updateRoot(current: Ref, last: Ref): Promise<boolean> {
+  updateRoot(current: Hash, last: Hash): Promise<boolean> {
     if (!this._root.equals(last)) {
       return Promise.resolve(false);
     }
@@ -27,8 +27,8 @@ export default class MemoryStore {
     return Promise.resolve(true);
   }
 
-  get(ref: Ref): Promise<Chunk> {
-    let c = this._data[ref.toString()];
+  get(hash: Hash): Promise<Chunk> {
+    let c = this._data[hash.toString()];
     if (!c) {
       c = emptyChunk;
     }
@@ -36,12 +36,12 @@ export default class MemoryStore {
     return Promise.resolve(c);
   }
 
-  has(ref: Ref): Promise<boolean> {
-    return Promise.resolve(this._data[ref.toString()] !== undefined);
+  has(hash: Hash): Promise<boolean> {
+    return Promise.resolve(this._data[hash.toString()] !== undefined);
   }
 
   put(c: Chunk) {
-    this._data[c.ref.toString()] = c;
+    this._data[c.hash.toString()] = c;
   }
 
   get size(): number {

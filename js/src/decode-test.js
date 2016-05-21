@@ -3,7 +3,7 @@
 import Chunk from './chunk.js';
 import Database from './database.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
-import type RefValue from './ref-value.js';
+import type Ref from './ref.js';
 import Struct, {StructMirror} from './struct.js';
 import type {TypeDesc} from './type.js';
 import type Value from './value.js';
@@ -192,15 +192,15 @@ suite('Decode', () => {
 
     const a = [
       Kind.List, Kind.Number, true, [
-        Kind.Ref, Kind.List, Kind.Number, r1.targetRef.toString(), '1', Kind.Number, '1', '1',
-        Kind.Ref, Kind.List, Kind.Number, r2.targetRef.toString(), '1', Kind.Number, '2', '2',
-        Kind.Ref, Kind.List, Kind.Number, r3.targetRef.toString(), '1', Kind.Number, '3', '3',
+        Kind.Ref, Kind.List, Kind.Number, r1.targetHash.toString(), '1', Kind.Number, '1', '1',
+        Kind.Ref, Kind.List, Kind.Number, r2.targetHash.toString(), '1', Kind.Number, '2', '2',
+        Kind.Ref, Kind.List, Kind.Number, r3.targetHash.toString(), '1', Kind.Number, '3', '3',
       ],
     ];
     const r = new JsonArrayReader(a, db);
     const v = r.readValue();
     invariant(v instanceof List);
-    assert.isTrue(v.ref.equals(l.ref));
+    assert.isTrue(v.hash.equals(l.hash));
   });
 
   test('read map of number to number', () => {
@@ -220,12 +220,12 @@ suite('Decode', () => {
     const rv2 = db.writeValue('hi');
     const a = [
       Kind.Map, Kind.Union, 2, Kind.Ref, Kind.String, Kind.Ref, Kind.Bool, Kind.Number, false, [
-        Kind.Ref, Kind.String, rv2.targetRef.toString(), '1', Kind.Number, '4',
-        Kind.Ref, Kind.Bool, rv1.targetRef.toString(), '1', Kind.Number, '2',
+        Kind.Ref, Kind.String, rv2.targetHash.toString(), '1', Kind.Number, '4',
+        Kind.Ref, Kind.Bool, rv1.targetHash.toString(), '1', Kind.Number, '2',
       ],
     ];
     const r = new JsonArrayReader(a, db);
-    const v: Map<RefValue<Value>, number> = r.readValue();
+    const v: Map<Ref<Value>, number> = r.readValue();
     invariant(v instanceof Map);
 
     const m = new Map([[rv1, 2], [rv2, 4]]);
@@ -269,11 +269,11 @@ suite('Decode', () => {
         RefKind, SetKind, NumberKind, "%s", "1", NumberKind, "1", "2",
         RefKind, SetKind, NumberKind, "%s", "1", NumberKind, "4", "3"
       ]
-    ]`, r1.targetRef.toString(), r2.targetRef.toString());
+    ]`, r1.targetHash.toString(), r2.targetHash.toString());
     const r = new JsonArrayReader(a, db);
     const v = r.readValue();
     invariant(v instanceof NomsSet);
-    assert.isTrue(v.ref.equals(l.ref));
+    assert.isTrue(v.hash.equals(l.hash));
   });
 
   test('read value set of number', () => {
@@ -438,7 +438,7 @@ suite('Decode', () => {
         'parents', Kind.Set, Kind.Ref, Kind.Parent, 0,
       ], false, [],
       Kind.Number, '1']);
-    const commitRef = commitChunk.ref;
+    const commitRef = commitChunk.hash;
     bs.schedulePut(commitChunk, new Set());
 
     // Root
@@ -455,7 +455,7 @@ suite('Decode', () => {
         ], commitRef.toString(), '1',
       ],
     ]);
-    const rootRef = rootChunk.ref;
+    const rootRef = rootChunk.hash;
     bs.schedulePut(rootChunk, new Set());
 
     await bs.flush();
@@ -520,7 +520,7 @@ suite('Decode', () => {
         RefKind, BlobKind, "%s", "1", NumberKind, "2", "2",
         RefKind, BlobKind, "%s", "1", NumberKind, "5", "5"
       ]
-    ]`, r1.targetRef, r2.targetRef);
+    ]`, r1.targetHash, r2.targetHash);
     const r = new JsonArrayReader(a, db);
     const v: Blob = r.readValue();
     invariant(v instanceof Blob);

@@ -46,7 +46,7 @@ export function compare(v1: Value, v2: Value): number {
       }
 
       // $FlowIssue: Flow does not realize that v1 and v2 are Values here.
-      return v1.ref.compare(v2.ref);
+      return v1.hash.compare(v2.hash);
     }
     default:
       throw new Error('unreachable');

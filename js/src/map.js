@@ -1,7 +1,7 @@
 // @flow
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import type {ValueReader} from './value-store.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
@@ -9,8 +9,8 @@ import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import {Collection} from './collection.js';
 import {compare, equals} from './compare.js';
-import {sha1Size} from './ref.js';
-import {getRefOfValue} from './get-ref.js';
+import {sha1Size} from './hash.js';
+import {getHashOfValue} from './get-hash.js';
 import {getTypeOfValue, makeMapType, makeUnionType} from './type.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker, newOrderedMetaSequenceChunkFn,} from
   './meta-sequence.js';
@@ -35,12 +35,12 @@ function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader):
     if (items.length > 0) {
       indexValue = items[items.length - 1][KEY];
       if (indexValue instanceof ValueBase) {
-        indexValue = new RefValue(indexValue);
+        indexValue = new Ref(indexValue);
       }
     }
 
     const nm = newMapFromSequence(newMapLeafSequence(vr, items));
-    const mt = new MetaTuple(new RefValue(nm), indexValue, items.length, nm);
+    const mt = new MetaTuple(new Ref(nm), indexValue, items.length, nm);
     return [mt, nm];
   };
 }
@@ -48,7 +48,7 @@ function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader):
 function newMapLeafBoundaryChecker<K: Value, V: Value>():
     BoundaryChecker<MapEntry<K, V>> {
   return new BuzHashBoundaryChecker(mapWindowSize, sha1Size, mapPattern,
-    (entry: MapEntry<K, V>) => getRefOfValue(entry[KEY]).digest);
+    (entry: MapEntry<K, V>) => getHashOfValue(entry[KEY]).digest);
 }
 
 export function removeDuplicateFromOrdered<T>(elems: Array<T>,
@@ -188,7 +188,7 @@ export default class Map<K: Value, V: Value> extends
 export function newMapFromSequence<K: Value, V: Value>(
     sequence: OrderedSequence): Map<K, V> {
   const map = Object.create(Map.prototype);
-  map._ref = null; // Value
+  map._hash = null; // ValueBase
   map.sequence = sequence;
   return map;
 }
@@ -204,7 +204,7 @@ export class MapLeafSequence<K: Value, V: Value> extends
     return equals(entry[KEY], other[KEY]) && equals(entry[VALUE], other[VALUE]);
   }
 
-  get chunks(): Array<RefValue> {
+  get chunks(): Array<Ref> {
     const chunks = [];
     for (const entry of this.items) {
       if (entry[KEY] instanceof ValueBase) {

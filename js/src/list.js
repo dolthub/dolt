@@ -10,12 +10,12 @@ import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import {Collection} from './collection.js';
 import {IndexedSequence, IndexedSequenceIterator} from './indexed-sequence.js';
 import {diff} from './indexed-sequence-diff.js';
-import {getRefOfValue} from './get-ref.js';
+import {getHashOfValue} from './get-hash.js';
 import {invariant} from './assert.js';
 import {MetaTuple, newIndexedMetaSequenceBoundaryChecker,
   newIndexedMetaSequenceChunkFn} from './meta-sequence.js';
-import {sha1Size} from './ref.js';
-import RefValue from './ref-value.js';
+import {sha1Size} from './hash.js';
+import Ref from './ref.js';
 import {getValueChunks} from './sequence.js';
 import {makeListType, makeUnionType, getTypeOfValue} from './type.js';
 import {equals} from './compare.js';
@@ -27,14 +27,14 @@ const listPattern = ((1 << 6) | 0) - 1;
 function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
     const list = newListFromSequence(newListLeafSequence(vr, items));
-    const mt = new MetaTuple(new RefValue(list), items.length, items.length, list);
+    const mt = new MetaTuple(new Ref(list), items.length, items.length, list);
     return [mt, list];
   };
 }
 
 function newListLeafBoundaryChecker<T: Value>(): BoundaryChecker<T> {
   return new BuzHashBoundaryChecker(listWindowSize, sha1Size, listPattern,
-    (v: T) => getRefOfValue(v).digest
+    (v: T) => getHashOfValue(v).digest
   );
 }
 
@@ -127,13 +127,13 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
 
 export function newListFromSequence<T: Value>(sequence: IndexedSequence): List<T> {
   const list = Object.create(List.prototype);
-  list._ref = null; // Value
+  list._hash = null; // ValueBase
   list.sequence = sequence;
   return list;
 }
 
 export class ListLeafSequence<T: Value> extends IndexedSequence<T> {
-  get chunks(): Array<RefValue> {
+  get chunks(): Array<Ref> {
     return getValueChunks(this.items);
   }
 

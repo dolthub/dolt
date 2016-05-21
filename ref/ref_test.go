@@ -43,7 +43,7 @@ func TestMaybeParse(t *testing.T) {
 		if ok {
 			assert.Equal(s, r.String())
 		} else {
-			assert.Equal(emptyRef, r)
+			assert.Equal(emptyHash, r)
 		}
 	}
 

@@ -2,16 +2,16 @@
 
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
-import Ref, {emptyRef} from './ref.js';
+import Hash, {emptyHash} from './hash.js';
 import {encode} from './utf8.js';
 
-suite('Ref', () => {
+suite('Hash', () => {
   test('parse', () => {
     function assertParseError(s) {
       assert.throws(() => {
-        Ref.parse(s);
+        Hash.parse(s);
       });
-      assert.equal(null, Ref.maybeParse(s));
+      assert.equal(null, Hash.maybeParse(s));
     }
 
     assertParseError('foo');
@@ -28,14 +28,14 @@ suite('Ref', () => {
     assertParseError('sha2-0000000000000000000000000000000000000000');
 
     const valid = 'sha1-0000000000000000000000000000000000000000';
-    assert.isNotNull(Ref.parse(valid));
-    assert.isNotNull(Ref.maybeParse(valid));
+    assert.isNotNull(Hash.parse(valid));
+    assert.isNotNull(Hash.maybeParse(valid));
   });
 
   test('equals', () => {
-    const r0 = Ref.parse('sha1-0000000000000000000000000000000000000000');
-    const r01 = Ref.parse('sha1-0000000000000000000000000000000000000000');
-    const r1 = Ref.parse('sha1-0000000000000000000000000000000000000001');
+    const r0 = Hash.parse('sha1-0000000000000000000000000000000000000000');
+    const r01 = Hash.parse('sha1-0000000000000000000000000000000000000000');
+    const r1 = Hash.parse('sha1-0000000000000000000000000000000000000001');
 
     assert.isTrue(r0.equals(r01));
     assert.isTrue(r01.equals(r0));
@@ -45,26 +45,26 @@ suite('Ref', () => {
 
   test('toString', () => {
     const s = 'sha1-0123456789abcdef0123456789abcdef01234567';
-    const r = Ref.parse(s);
+    const r = Hash.parse(s);
     assert.strictEqual(s, r.toString());
   });
 
   test('fromData', () => {
-    const r = Ref.fromData(encode('abc'));
+    const r = Hash.fromData(encode('abc'));
 
     assert.strictEqual('sha1-a9993e364706816aba3e25717850c26c9cd0d89d', r.toString());
   });
 
   test('isEmpty', () => {
     const digest = new Uint8Array(20);
-    let r = Ref.fromDigest(digest);
+    let r = Hash.fromDigest(digest);
     assert.isTrue(r.isEmpty());
 
     digest[0] = 10;
-    r = Ref.fromDigest(digest);
+    r = Hash.fromDigest(digest);
     assert.isFalse(r.isEmpty());
 
-    r = emptyRef;
+    r = emptyHash;
     assert.isTrue(r.isEmpty());
   });
 });

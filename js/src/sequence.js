@@ -4,7 +4,7 @@ import type {ValueReader} from './value-store.js';
 import {invariant, notNull} from './assert.js';
 import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import type {Type} from './type.js';
 import {ValueBase} from './value.js';
 
@@ -39,7 +39,7 @@ export default class Sequence<T> {
     return Promise.resolve(null);
   }
 
-  get chunks(): Array<RefValue> {
+  get chunks(): Array<Ref> {
     return [];
   }
 
@@ -293,7 +293,7 @@ export function search(length: number, compare: (i: number) => number): number {
   return lo;
 }
 
-export function getValueChunks<T>(items: Array<T>): Array<RefValue> {
+export function getValueChunks<T>(items: Array<T>): Array<Ref> {
   const chunks = [];
   for (const item of items) {
     if (item instanceof ValueBase) {

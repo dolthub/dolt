@@ -55,8 +55,8 @@ suite('compare.js', () => {
     });
 
     test('total ordering', () => {
-      // values in increasing order. Some of these are compared by ref so changing the serialization
-      // might change the ordering.
+      // values in increasing order. Some of these are compared by hash so changing the
+      // serialization might change the ordering.
       const values = [
         false, true,
         -10, 0, 10,

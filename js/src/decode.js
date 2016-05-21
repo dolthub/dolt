@@ -2,8 +2,8 @@
 
 import {BlobLeafSequence, newBlobFromSequence} from './blob.js';
 import Chunk from './chunk.js';
-import Ref from './ref.js';
-import RefValue, {constructRefValue} from './ref-value.js';
+import Hash from './hash.js';
+import Ref, {constructRef} from './ref.js';
 import {newStructWithTypeNoValidation} from './struct.js';
 import type Struct from './struct.js';
 import type {NomsKind} from './noms-kind.js';
@@ -106,9 +106,9 @@ export class JsonArrayReader {
     return next;
   }
 
-  readRef(): Ref {
+  readHash(): Hash {
     const next = this.readString();
-    return Ref.parse(next);
+    return Hash.parse(next);
   }
 
   readType(parentStructTypes: Type[]): Type {
@@ -202,10 +202,10 @@ export class JsonArrayReader {
     return new OrderedMetaSequence(this._ds, t, this.readMetaSequence());
   }
 
-  readRefValue(t: Type): RefValue {
-    const ref = this.readRef();
+  readRef(t: Type): Ref {
+    const hash = this.readHash();
     const height = this.readInt();
-    return constructRefValue(t, ref, height);
+    return constructRef(t, hash, height);
   }
 
   readValue(): any {
@@ -246,7 +246,7 @@ export class JsonArrayReader {
         return newMapFromSequence(r2.readMapLeafSequence(t));
       }
       case Kind.Ref:
-        return this.readRefValue(t);
+        return this.readRef(t);
       case Kind.Set: {
         const isMeta = this.readBool();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);

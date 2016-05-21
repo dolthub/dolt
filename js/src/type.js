@@ -1,7 +1,7 @@
 // @flow
 
-import type Ref from './ref.js';
-import RefValue from './ref-value.js';
+import type Hash from './hash.js';
+import Ref from './ref.js';
 import type {NomsKind} from './noms-kind.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
@@ -111,7 +111,6 @@ export class StructDesc {
 
 export class Type<T: TypeDesc> extends ValueBase {
   _desc: T;
-  _ref: ?Ref;
 
   constructor(desc: T) {
     super();
@@ -122,7 +121,7 @@ export class Type<T: TypeDesc> extends ValueBase {
     return typeType;
   }
 
-  get chunks(): Array<RefValue> {
+  get chunks(): Array<Ref> {
     return [];
   }
 
@@ -186,7 +185,7 @@ export function makeUnionType(types: Type[]): Type {
   return buildType(new CompoundDesc(Kind.Union, types));
 }
 
-function flattenUnionTypes(types: Type[], seenTypes: {[key: Ref]: boolean}): Type[] {
+function flattenUnionTypes(types: Type[], seenTypes: {[key: Hash]: boolean}): Type[] {
   if (types.length === 0) {
     return types;
   }
@@ -196,8 +195,8 @@ function flattenUnionTypes(types: Type[], seenTypes: {[key: Ref]: boolean}): Typ
     if (types[i].kind === Kind.Union) {
       newTypes.push(...flattenUnionTypes(types[i].desc.elemTypes, seenTypes));
     } else {
-      if (!seenTypes[types[i].ref]) {
-        seenTypes[types[i].ref] = true;
+      if (!seenTypes[types[i].hash]) {
+        seenTypes[types[i].hash] = true;
         newTypes.push(types[i]);
       }
     }

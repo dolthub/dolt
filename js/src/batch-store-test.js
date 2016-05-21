@@ -16,8 +16,8 @@ suite('BatchStore', () => {
     const c = encodeNomsValue(input);
     bs.schedulePut(c, new Set());
 
-    const chunk = await bs.get(c.ref);
-    assert.isTrue(c.ref.equals(chunk.ref));
+    const chunk = await bs.get(c.hash);
+    assert.isTrue(c.hash.equals(chunk.hash));
     await bs.close();
   });
 
@@ -29,12 +29,12 @@ suite('BatchStore', () => {
     const c = encodeNomsValue(input);
     bs.schedulePut(c, new Set());
 
-    let chunk = await bs.get(c.ref);
-    assert.isTrue(c.ref.equals(chunk.ref));
+    let chunk = await bs.get(c.hash);
+    assert.isTrue(c.hash.equals(chunk.hash));
 
     await bs.flush();
-    chunk = await bs.get(c.ref);
-    assert.isTrue(c.ref.equals(chunk.ref));
+    chunk = await bs.get(c.hash);
+    assert.isTrue(c.hash.equals(chunk.hash));
     await bs.close();
   });
 });

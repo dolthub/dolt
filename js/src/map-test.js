@@ -5,7 +5,7 @@ import {suite, setup, teardown, test} from 'mocha';
 
 import Database from './database.js';
 import MemoryStore from './memory-store.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import BatchStore from './batch-store.js';
 import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-adaptor.js';
 import Struct, {newStruct} from './struct.js';
@@ -14,7 +14,7 @@ import {invariant} from './assert.js';
 import Chunk from './chunk.js';
 import Map, {newMapFromSequence} from './map.js';
 import {MetaTuple, newMapMetaSequence} from './meta-sequence.js';
-import Ref from './ref.js';
+import Hash from './hash.js';
 import type {ValueReadWriter} from './value-store.js';
 import {compare, equals} from './compare.js';
 
@@ -31,9 +31,9 @@ class CountingMemoryStore extends MemoryStore {
     this.getCount = 0;
   }
 
-  get(ref: Ref): Promise<Chunk> {
+  get(hash: Hash): Promise<Chunk> {
     this.getCount++;
-    return super.get(ref);
+    return super.get(hash);
   }
 }
 
@@ -71,7 +71,7 @@ suite('BuildMap', () => {
     }
 
     const m = new Map(kvs);
-    assert.strictEqual(m.ref.toString(), mapOfNRef);
+    assert.strictEqual(m.hash.toString(), mapOfNRef);
 
     // shuffle kvs, and test that the constructor sorts properly
     const pairs = [];
@@ -82,7 +82,7 @@ suite('BuildMap', () => {
     kvs.length = 0;
     pairs.forEach(kv => kvs.push(kv.k, kv.v));
     const m2 = new Map(kvs);
-    assert.strictEqual(m2.ref.toString(), mapOfNRef);
+    assert.strictEqual(m2.hash.toString(), mapOfNRef);
 
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
@@ -96,12 +96,12 @@ suite('BuildMap', () => {
       kvs.push([i, i + 1]);
     }
 
-    const kvRefs = kvs.map(entry => entry.map(n => new RefValue(newStruct('num', {n}))));
+    const kvRefs = kvs.map(entry => entry.map(n => new Ref(newStruct('num', {n}))));
     const m = new Map(kvRefs);
-    assert.strictEqual(m.ref.toString(), 'sha1-5c9a17f6da0ebfebc1f82f498ac46992fad85250');
+    assert.strictEqual(m.hash.toString(), 'sha1-5c9a17f6da0ebfebc1f82f498ac46992fad85250');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
-    // height + 1 because the leaves are RefValue values (with height 1).
+    // height + 1 because the leaves are Ref values (with height 1).
     assert.strictEqual(height + 1, m.sequence.items[0].ref.height);
   });
 
@@ -117,7 +117,7 @@ suite('BuildMap', () => {
       assert.strictEqual(i + 1, m.size);
     }
 
-    assert.strictEqual(m.ref.toString(), mapOfNRef);
+    assert.strictEqual(m.hash.toString(), mapOfNRef);
   });
 
   test('LONG: set existing', async () => {
@@ -132,7 +132,7 @@ suite('BuildMap', () => {
       assert.strictEqual(testMapSize, m.size);
     }
 
-    assert.strictEqual(m.ref.toString(), mapOfNRef);
+    assert.strictEqual(m.hash.toString(), mapOfNRef);
   });
 
   test('LONG: remove', async () => {
@@ -146,7 +146,7 @@ suite('BuildMap', () => {
       m = await m.remove(i);
     }
 
-    assert.strictEqual(m.ref.toString(), mapOfNRef);
+    assert.strictEqual(m.hash.toString(), mapOfNRef);
     assert.strictEqual(testMapSize, m.size);
   });
 
@@ -160,7 +160,7 @@ suite('BuildMap', () => {
 
     const m = new Map(kvs);
 
-    const r = db.writeValue(m).targetRef;
+    const r = db.writeValue(m).targetHash;
     const m2 = await db.readValue(r);
     const outKvs = [];
     await m2.forEach((v, k) => outKvs.push([k, v]));
@@ -205,7 +205,7 @@ suite('BuildMap', () => {
     const sortedKeys = numbers.concat(strings, structs);
 
     const m = new Map(kvs);
-    assert.strictEqual(m.ref.toString(), 'sha1-3840c9c93d79663e77a60f13f2877a8f5843da38');
+    assert.strictEqual(m.hash.toString(), 'sha1-3840c9c93d79663e77a60f13f2877a8f5843da38');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     assert.strictEqual(height, m.sequence.items[0].ref.height);
@@ -215,7 +215,7 @@ suite('BuildMap', () => {
       assert.isTrue(await m.has(keys[i]));
     }
 
-    const r = db.writeValue(m).targetRef;
+    const r = db.writeValue(m).targetHash;
     const m2 = await db.readValue(r);
     const outVals = [];
     const outKeys = [];
@@ -542,7 +542,7 @@ suite('CompoundMap', () => {
 
     const ms = new CountingMemoryStore();
     const db = new Database(new BatchStore(3, new BatchStoreAdaptorDelegate(ms)));
-    [m1, m2] = await Promise.all([m1, m2].map(s => db.readValue(db.writeValue(s).targetRef)));
+    [m1, m2] = await Promise.all([m1, m2].map(s => db.readValue(db.writeValue(s).targetHash)));
 
     assert.deepEqual([[], [], []], await m1.diff(m1));
     assert.deepEqual([[], [], []], await m2.diff(m2));

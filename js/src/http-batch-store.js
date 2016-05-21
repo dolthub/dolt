@@ -1,6 +1,6 @@
 // @flow
 
-import Ref from './ref.js';
+import Hash from './hash.js';
 import BatchStore from './batch-store.js';
 import type {UnsentReadMap} from './batch-store.js';
 import type {FetchOptions} from './fetch.js';
@@ -58,8 +58,8 @@ export class Delegate {
   }
 
   async readBatch(reqs: UnsentReadMap): Promise<void> {
-    const refStrs = Object.keys(reqs);
-    const body = refStrs.map(r => 'ref=' + r).join('&');
+    const hashStrs = Object.keys(reqs);
+    const body = hashStrs.map(r => 'ref=' + r).join('&');
     const opts = Object.assign(this._readBatchOptions, {body: body});
     const buf = await fetchArrayBuffer(this._rpc.getRefs, opts);
 
@@ -67,27 +67,27 @@ export class Delegate {
 
     // Return success
     chunks.forEach(chunk => {
-      const refStr = chunk.ref.toString();
-      reqs[refStr](chunk);
-      delete reqs[refStr];
+      const hashStr = chunk.hash.toString();
+      reqs[hashStr](chunk);
+      delete reqs[hashStr];
     });
 
     // Report failure
-    Object.keys(reqs).forEach(refStr => reqs[refStr](emptyChunk));
+    Object.keys(reqs).forEach(hashStr => reqs[hashStr](emptyChunk));
   }
 
-  writeBatch(hints: Set<Ref>, chunkStream: ChunkStream): Promise<void> {
+  writeBatch(hints: Set<Hash>, chunkStream: ChunkStream): Promise<void> {
     return serialize(hints, chunkStream)
       .then(body => fetchText(this._rpc.writeValue, {method: 'POST', body}))
       .then(() => undefined);
   }
 
-  async getRoot(): Promise<Ref> {
-    const refStr = await fetchText(this._rpc.root, this._rootOptions);
-    return Ref.parse(refStr);
+  async getRoot(): Promise<Hash> {
+    const hashStr = await fetchText(this._rpc.root, this._rootOptions);
+    return Hash.parse(hashStr);
   }
 
-  async updateRoot(current: Ref, last: Ref): Promise<boolean> {
+  async updateRoot(current: Hash, last: Hash): Promise<boolean> {
     const params = `?current=${current}&last=${last}`;
     try {
       await fetchText(this._rpc.root + params, {method: 'POST'});

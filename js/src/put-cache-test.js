@@ -29,14 +29,14 @@ suite('OrderedPutCache', () => {
     const cache = new OrderedPutCache();
     assert.isTrue(cache.append(canned[0]));
 
-    let p = cache.get(canned[1].ref.toString());
+    let p = cache.get(canned[1].hash.toString());
     assert.isNull(p);
 
     assert.isTrue(cache.append(canned[1]));
-    p = cache.get(canned[1].ref.toString());
+    p = cache.get(canned[1].hash.toString());
     assert.isNotNull(p);
     const chunk = await notNull(p);
-    assert.isTrue(canned[1].ref.equals(chunk.ref));
+    assert.isTrue(canned[1].hash.equals(chunk.hash));
 
     await cache.destroy();
   });
@@ -48,16 +48,16 @@ suite('OrderedPutCache', () => {
       assert.isTrue(cache.append(chunk));
     }
 
-    await cache.dropUntil(canned[1].ref.toString());
+    await cache.dropUntil(canned[1].hash.toString());
 
-    let p = cache.get(canned[2].ref.toString());
+    let p = cache.get(canned[2].hash.toString());
     assert.isNotNull(p);
     const chunk = await notNull(p);
-    assert.isTrue(canned[2].ref.equals(chunk.ref));
+    assert.isTrue(canned[2].hash.equals(chunk.hash));
 
-    p = cache.get(canned[0].ref.toString());
+    p = cache.get(canned[0].hash.toString());
     assert.isNull(p);
-    p = cache.get(canned[1].ref.toString());
+    p = cache.get(canned[1].hash.toString());
     assert.isNull(p);
 
     await cache.destroy();
@@ -70,13 +70,13 @@ suite('OrderedPutCache', () => {
       assert.isTrue(cache.append(chunk));
     }
 
-    const chunkStream = await cache.extractChunks(canned[0].ref.toString(),
-      canned[2].ref.toString());
+    const chunkStream = await cache.extractChunks(canned[0].hash.toString(),
+      canned[2].hash.toString());
     const chunks = [];
     await chunkStream(chunk => { chunks.push(chunk); });
 
     for (let i = 0; i < canned.length; i++) {
-      assert.isTrue(canned[i].ref.equals(chunks[i].ref));
+      assert.isTrue(canned[i].hash.equals(chunks[i].hash));
     }
 
     await cache.destroy();

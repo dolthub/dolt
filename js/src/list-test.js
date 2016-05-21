@@ -5,7 +5,7 @@ import {suite, setup, teardown, test} from 'mocha';
 
 import Database from './database.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import {newStruct} from './struct.js';
 import {calcSplices} from './edit-distance.js';
 import {
@@ -15,7 +15,7 @@ import {
 } from './type.js';
 import {
   assertChunkCountAndType,
-  assertValueRef,
+  assertValueHash,
   assertValueType,
   deriveCollectionHeight,
   chunkDiffCount,
@@ -94,7 +94,7 @@ suite('List', () => {
     assert.deepEqual(nums, out);
   }
 
-  async function listTestSuite(size: number, expectRefStr: string, expectChunkCount: number,
+  async function listTestSuite(size: number, expectHashStr: string, expectChunkCount: number,
                                expectPrependChunkDiff: number,
                                expectAppendChunkDiff: number): Promise<void> {
     const length = 1 << size;
@@ -102,7 +102,7 @@ suite('List', () => {
     const tr = makeListType(numberType);
     const list = new List(nums);
 
-    assertValueRef(expectRefStr, list);
+    assertValueHash(expectHashStr, list);
     assertValueType(tr, list);
     assert.isFalse(list.isEmpty());
     assert.strictEqual(length, list.length);
@@ -129,14 +129,14 @@ suite('List', () => {
 
   test('LONG: list of ref, set of n numbers, length', async () => {
     const nums = intSequence(testListSize);
-    const refs = nums.map(n => new RefValue(newStruct('num', {n})));
+    const refs = nums.map(n => new Ref(newStruct('num', {n})));
     const s = new List(refs);
-    assert.strictEqual(s.ref.toString(), 'sha1-2e79d54322aa793d0e8d48380a28927a257a141a');
+    assert.strictEqual(s.hash.toString(), 'sha1-2e79d54322aa793d0e8d48380a28927a257a141a');
     assert.strictEqual(testListSize, s.length);
 
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
-    // height + 1 because the leaves are RefValue values (with height 1).
+    // height + 1 because the leaves are Ref values (with height 1).
     assert.strictEqual(height + 1, s.sequence.items[0].ref.height);
   });
 
@@ -148,7 +148,7 @@ suite('List', () => {
       s = await s.insert(i, i);
     }
 
-    assert.strictEqual(s.ref.toString(), listOfNRef);
+    assert.strictEqual(s.hash.toString(), listOfNRef);
   });
 
   test('LONG: append', async () => {
@@ -159,7 +159,7 @@ suite('List', () => {
       s = await s.append(i);
     }
 
-    assert.strictEqual(s.ref.toString(), listOfNRef);
+    assert.strictEqual(s.hash.toString(), listOfNRef);
   });
 
   test('LONG: remove', async () => {
@@ -171,7 +171,7 @@ suite('List', () => {
       s = await s.remove(testListSize + count, testListSize + count + 1);
     }
 
-    assert.strictEqual(s.ref.toString(), listOfNRef);
+    assert.strictEqual(s.hash.toString(), listOfNRef);
   });
 
   test('LONG: splice', async () => {
@@ -188,7 +188,7 @@ suite('List', () => {
       await splice500At(i * 1000);
     }
 
-    assert.strictEqual(s.ref.toString(), listOfNRef);
+    assert.strictEqual(s.hash.toString(), listOfNRef);
   });
 
   test('LONG: write, read, modify, read', async () => {
@@ -196,7 +196,7 @@ suite('List', () => {
 
     const nums = intSequence(testListSize);
     const s = new List(nums);
-    const r = db.writeValue(s).targetRef;
+    const r = db.writeValue(s).targetHash;
     const s2 = await db.readValue(r);
     const outNums = await s2.toJS();
     assert.deepEqual(nums, outNums);

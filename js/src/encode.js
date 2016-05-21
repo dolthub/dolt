@@ -1,7 +1,7 @@
 // @flow
 
 import Chunk from './chunk.js';
-import RefValue from './ref-value.js';
+import Ref from './ref.js';
 import Struct, {StructMirror} from './struct.js';
 import type {NomsKind} from './noms-kind.js';
 import {encode as encodeBase64} from './base64.js';
@@ -13,7 +13,7 @@ import List, {ListLeafSequence} from './list.js';
 import Map, {MapLeafSequence} from './map.js';
 import Set, {SetLeafSequence} from './set.js';
 import Sequence from './sequence.js';
-import {setEncodeNomsValue} from './get-ref.js';
+import {setEncodeNomsValue} from './get-hash.js';
 import Blob, {BlobLeafSequence} from './blob.js';
 import {describeTypeOfValue} from './encode-human-readable.js';
 import type {primitive} from './primitives.js';
@@ -65,8 +65,8 @@ export class JsonArrayWriter {
     this.write(k);
   }
 
-  writeRefValue(r: RefValue) {
-    this.write(r.targetRef.toString());
+  writeRef(r: Ref) {
+    this.write(r.targetHash.toString());
     this.writeInt(r.height);
   }
 
@@ -103,7 +103,7 @@ export class JsonArrayWriter {
     this.write(true);
     const w2 = new JsonArrayWriter(this._vw);
     for (let i = 0; i < v.items.length; i++) {
-      const tuple = v.items[i];
+      const tuple: MetaTuple = v.items[i];
       invariant(tuple instanceof MetaTuple);
       const child = tuple.child;
       if (child && this._vw) {
@@ -180,9 +180,9 @@ export class JsonArrayWriter {
         break;
       }
       case Kind.Ref: {
-        invariant(v instanceof RefValue,
+        invariant(v instanceof Ref,
                   () => `Failed to write Ref. Invalid type: ${describeTypeOfValue(v)}`);
-        this.writeRefValue(v);
+        this.writeRef(v);
         break;
       }
       case Kind.Set: {
