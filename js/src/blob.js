@@ -62,7 +62,7 @@ export class BlobReader {
 
 export function newBlobFromSequence(sequence: IndexedSequence): Blob {
   const blob = Object.create(Blob.prototype);
-  blob._ref = null; // Value
+  blob._hash = null; // ValueBase
   blob.sequence = sequence;
   return blob;
 }

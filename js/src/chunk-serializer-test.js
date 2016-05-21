@@ -3,13 +3,13 @@
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import Chunk from './chunk.js';
-import Ref from './ref.js';
+import type Hash from './hash.js';
 import {deserialize, serialize} from './chunk-serializer.js';
 import type {ChunkStream} from './chunk-serializer.js';
 
 suite('ChunkSerializer', () => {
 
-  function assertHints(expect: Array<Ref>, actual: Array<Ref>) {
+  function assertHints(expect: Array<Hash>, actual: Array<Hash>) {
     assert.strictEqual(actual.length, expect.length);
     for (let i = 0; i < expect.length; i++) {
       assert.isTrue(expect[i].equals(actual[i]));
@@ -19,7 +19,7 @@ suite('ChunkSerializer', () => {
   function assertChunks(expect: Array<Chunk>, actual: Array<Chunk>) {
     assert.strictEqual(actual.length, expect.length);
     for (let i = 0; i < expect.length; i++) {
-      assert.isTrue(expect[i].ref.equals(actual[i].ref));
+      assert.isTrue(expect[i].hash.equals(actual[i].hash));
     }
   }
 
@@ -60,10 +60,10 @@ suite('ChunkSerializer', () => {
 
   test('with hints', async () => {
     const expHints = [
-      Chunk.fromString('123').ref,
-      Chunk.fromString('456').ref,
-      Chunk.fromString('789').ref,
-      Chunk.fromString('wacka wack wack').ref,
+      Chunk.fromString('123').hash,
+      Chunk.fromString('456').hash,
+      Chunk.fromString('789').hash,
+      Chunk.fromString('wacka wack wack').hash,
     ];
     const expChunks = [Chunk.fromString('abc'), Chunk.fromString('def'), Chunk.fromString('ghi')];
 

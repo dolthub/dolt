@@ -1,7 +1,7 @@
 // @flow
 
 import Chunk from './chunk.js';
-import Ref from './ref.js';
+import Hash from './hash.js';
 import {invariant} from './assert.js';
 
 const headerSize = 4; // uint32
@@ -12,7 +12,7 @@ const chunkHeaderSize = sha1Size + chunkLengthSize;
 
 export type ChunkStream = (cb: (chunk: Chunk) => void) => Promise<void>
 
-export function serialize(hints: Set<Ref>, stream: ChunkStream): Promise<ArrayBuffer> {
+export function serialize(hints: Set<Hash>, stream: ChunkStream): Promise<ArrayBuffer> {
   let buf = new ArrayBuffer(1024);
   const ensureCapacity = (needed: number) => {
     let newLen = buf.byteLength;
@@ -39,8 +39,8 @@ function serializeChunk(chunk: Chunk, buffer: ArrayBuffer, offset: number): numb
   invariant(buffer.byteLength - offset >= serializedChunkLength(chunk),
     'Invalid chunk buffer');
 
-  const refArray = new Uint8Array(buffer, offset, sha1Size);
-  refArray.set(chunk.ref.digest);
+  const hashArray = new Uint8Array(buffer, offset, sha1Size);
+  hashArray.set(chunk.hash.digest);
   offset += sha1Size;
 
   const chunkLength = chunk.data.length;
@@ -54,22 +54,22 @@ function serializeChunk(chunk: Chunk, buffer: ArrayBuffer, offset: number): numb
   return offset;
 }
 
-function serializeHints(hints: Set<Ref>, buffer: ArrayBuffer): number {
+function serializeHints(hints: Set<Hash>, buffer: ArrayBuffer): number {
   let offset = 0;
   const view = new DataView(buffer, offset, headerSize);
   view.setUint32(0, hints.size | 0, bigEndian); // Coerce number to uint32
   offset += headerSize;
 
-  hints.forEach(ref => {
-    const refArray = new Uint8Array(buffer, offset, sha1Size);
-    refArray.set(ref.digest);
+  hints.forEach(hash => {
+    const hashArray = new Uint8Array(buffer, offset, sha1Size);
+    hashArray.set(hash.digest);
     offset += sha1Size;
   });
 
   return offset;
 }
 
-function serializedHintsLength(hints: Set<Ref>): number {
+function serializedHintsLength(hints: Set<Hash>): number {
   return headerSize + sha1Size * hints.size;
 }
 
@@ -77,13 +77,13 @@ function serializedChunkLength(chunk: Chunk): number {
   return chunkHeaderSize + chunk.data.length;
 }
 
-export function deserialize(buffer: ArrayBuffer): {hints: Array<Ref>, chunks: Array<Chunk>} {
+export function deserialize(buffer: ArrayBuffer): {hints: Array<Hash>, chunks: Array<Chunk>} {
   const {hints, offset} = deserializeHints(buffer);
   return {hints: hints, chunks: deserializeChunks(buffer, offset)};
 }
 
-function deserializeHints(buffer: ArrayBuffer): {hints: Array<Ref>, offset: number} {
-  const hints:Array<Ref> = [];
+function deserializeHints(buffer: ArrayBuffer): {hints: Array<Hash>, offset: number} {
+  const hints:Array<Hash> = [];
 
   let offset = 0;
   const view = new DataView(buffer, offset, headerSize);
@@ -94,11 +94,11 @@ function deserializeHints(buffer: ArrayBuffer): {hints: Array<Ref>, offset: numb
   for (; offset < totalLength;) {
     invariant(buffer.byteLength - offset >= sha1Size, 'Invalid hint buffer');
 
-    const refArray = new Uint8Array(buffer, offset, sha1Size);
-    const ref = Ref.fromDigest(new Uint8Array(refArray));
+    const hashArray = new Uint8Array(buffer, offset, sha1Size);
+    const hash = Hash.fromDigest(new Uint8Array(hashArray));
     offset += sha1Size;
 
-    hints.push(ref);
+    hints.push(hash);
   }
 
   return {hints: hints, offset: offset};
@@ -111,8 +111,8 @@ export function deserializeChunks(buffer: ArrayBuffer, offset: number = 0): Arra
   for (; offset < totalLenth;) {
     invariant(buffer.byteLength - offset >= chunkHeaderSize, 'Invalid chunk buffer');
 
-    const refArray = new Uint8Array(buffer, offset, sha1Size);
-    const ref = Ref.fromDigest(new Uint8Array(refArray));
+    const hashArray = new Uint8Array(buffer, offset, sha1Size);
+    const hash = Hash.fromDigest(new Uint8Array(hashArray));
     offset += sha1Size;
 
     const view = new DataView(buffer, offset, chunkLengthSize);
@@ -125,7 +125,7 @@ export function deserializeChunks(buffer: ArrayBuffer, offset: number = 0): Arra
     const chunk = new Chunk(new Uint8Array(dataArray)); // Makes a slice (copy) of the byte sequence
                                                         // from buffer.
 
-    invariant(chunk.ref.equals(ref), 'Serialized ref !== computed ref');
+    invariant(chunk.hash.equals(hash), 'Serialized hash !== computed hash');
 
     offset += chunkLength;
     chunks.push(chunk);

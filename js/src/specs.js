@@ -5,7 +5,7 @@ import Dataset from './dataset.js';
 import Database from './database.js';
 import HttpBatchStore from './http-batch-store.js';
 import MemoryStore from './memory-store.js';
-import Ref from './ref.js';
+import Hash from './hash.js';
 
 // A parsed specification for the location of a Noms database.
 // For example: 'mem:' or 'https://ds.noms.io/aa/music'
@@ -100,25 +100,25 @@ export class DatasetSpec {
 }
 
 
-// A parsed specification for the location of a Noms ref.
+// A parsed specification for the location of a Noms hash.
 // For example: 'mem:sha1-5ba4be791d336d3184be7ee7dc598037f410ef96' or
 // 'https://ds.noms.io/aa/music:sha1-3ff6ee6add3490621a8886608cc8423dba3cf7ca'
 //
 // See "spelling objects" for details on supported syntaxes:
 // https://docs.google.com/document/d/1QgKcRS304llwU0ECahKtn8lGBFmT5zXzWr-5tah1S_4/edit
-export class RefSpec {
+export class HashSpec {
   store: DatabaseSpec;
-  ref: Ref;
+  hash: Hash;
 
   // Returns a parsed spec, or null if the spec was invalid.
-  static parse(spec: string): ?RefSpec {
+  static parse(spec: string): ?HashSpec {
     const match = spec.match(/^(.+)\:(.+)$/);
     if (!match) {
       return null;
     }
 
-    const ref = Ref.maybeParse(match[2]);
-    if (!ref) {
+    const hash = Hash.maybeParse(match[2]);
+    if (!hash) {
       return null;
     }
 
@@ -127,22 +127,22 @@ export class RefSpec {
       return null;
     }
 
-    return new this(store, ref);
+    return new this(store, hash);
   }
 
-  constructor(store: DatabaseSpec, ref: Ref) {
+  constructor(store: DatabaseSpec, hash: Hash) {
     this.store = store;
-    this.ref = ref;
+    this.hash = hash;
   }
 
   // Returns the value for the spec'd reference, if any, or null otherwise.
   value(): Promise<any> {
     const store = this.store.store();
-    return store.readValue(this.ref).then(v => store.close().then(() => v));
+    return store.readValue(this.hash).then(v => store.close().then(() => v));
   }
 }
 
-// Parses and returns the provided ref or dataset spec.
-export function parseObjectSpec(spec: string): ?(DatasetSpec|RefSpec) {
-  return RefSpec.parse(spec) || DatasetSpec.parse(spec);
+// Parses and returns the provided hash or dataset spec.
+export function parseObjectSpec(spec: string): ?(DatasetSpec | HashSpec) {
+  return HashSpec.parse(spec) || DatasetSpec.parse(spec);
 }

@@ -1,19 +1,19 @@
 // @flow
 
-import Ref from './ref.js';
+import Hash from './hash.js';
 import {encode, decode} from './utf8.js';
 
 export default class Chunk {
   data: Uint8Array;
-  _ref: ?Ref;
+  _hash: ?Hash;
 
-  constructor(data: Uint8Array = new Uint8Array(0), ref: ?Ref) {
+  constructor(data: Uint8Array = new Uint8Array(0), hash: ?Hash) {
     this.data = data;
-    this._ref = ref;
+    this._hash = hash;
   }
 
-  get ref(): Ref {
-    return this._ref || (this._ref = Ref.fromData(this.data));
+  get hash(): Hash {
+    return this._hash || (this._hash = Hash.fromData(this.data));
   }
 
   isEmpty(): boolean {
@@ -26,8 +26,8 @@ export default class Chunk {
 
   static emptyChunk: Chunk;
 
-  static fromString(s: string, ref: ?Ref): Chunk {
-    return new Chunk(encode(s), ref);
+  static fromString(s: string, hash: ?Hash): Chunk {
+    return new Chunk(encode(s), hash);
   }
 }
 

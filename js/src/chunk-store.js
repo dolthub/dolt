@@ -1,17 +1,17 @@
 // @flow
 
 import type Chunk from './chunk.js';
-import type Ref from './ref.js';
+import type Hash from './hash.js';
 
 export type ChunkStore = {
-  getRoot(): Promise<Ref>;
-  updateRoot(current: Ref, last: Ref): Promise<boolean>;
-  get(ref: Ref): Promise<Chunk>;
-  has(ref: Ref): Promise<boolean>;
+  getRoot(): Promise<Hash>;
+  updateRoot(current: Hash, last: Hash): Promise<boolean>;
+  get(hash: Hash): Promise<Chunk>;
+  has(hash: Hash): Promise<boolean>;
   put(c: Chunk): void;
 }
 
 export interface RootTracker {
-  getRoot(): Promise<Ref>;
-  updateRoot(current: Ref, last: Ref): Promise<boolean>;
+  getRoot(): Promise<Hash>;
+  updateRoot(current: Hash, last: Hash): Promise<boolean>;
 }

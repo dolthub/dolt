@@ -24,11 +24,11 @@ suite('ValueStore', () => {
     const input = 'abc';
 
     const c = encodeNomsValue(input);
-    const v1 = await vs.readValue(c.ref);
+    const v1 = await vs.readValue(c.hash);
     assert.equal(null, v1);
 
     ms.put(c);
-    const v2 = await vs.readValue(c.ref);
+    const v2 = await vs.readValue(c.hash);
     assert.equal('abc', v2);
     await vs.close();
   });
@@ -36,9 +36,9 @@ suite('ValueStore', () => {
   test('writeValue primitives', async () => {
     const vs = new ValueStore(new FakeBatchStore(new MemoryStore()));
 
-    const r1 = vs.writeValue('hello').targetRef;
-    const r2 = vs.writeValue(false).targetRef;
-    const r3 = vs.writeValue(2).targetRef;
+    const r1 = vs.writeValue('hello').targetHash;
+    const r2 = vs.writeValue(false).targetHash;
+    const r3 = vs.writeValue(2).targetHash;
 
     const v1 = await vs.readValue(r1);
     assert.equal('hello', v1);
@@ -71,9 +71,9 @@ suite('ValueStore', () => {
     const bs = new FakeBatchStore(new MemoryStore());
     const vs = new ValueStore(bs, 1e6);
 
-    const r1 = vs.writeValue('hello').targetRef;
+    const r1 = vs.writeValue('hello').targetHash;
     (bs: any).schedulePut = () => { assert.fail('unreachable'); };
-    const r2 = vs.writeValue('hello').targetRef;
+    const r2 = vs.writeValue('hello').targetHash;
     assert.isTrue(r1.equals(r2));
     await vs.close();
   });
@@ -82,7 +82,7 @@ suite('ValueStore', () => {
     const bs = new FakeBatchStore(new MemoryStore());
     const vs = new ValueStore(bs, 1e6);
 
-    const r1 = vs.writeValue('hello').targetRef;
+    const r1 = vs.writeValue('hello').targetHash;
     const v1 = await vs.readValue(r1);
     assert.equal(v1, 'hello');
     (bs: any).get = () => { throw new Error(); };
@@ -95,8 +95,8 @@ suite('ValueStore', () => {
     const bs = new FakeBatchStore(new MemoryStore());
     const vs = new ValueStore(bs, 15);
 
-    const r1 = vs.writeValue('hello').targetRef;
-    const r2 = vs.writeValue('world').targetRef;
+    const r1 = vs.writeValue('hello').targetHash;
+    const r2 = vs.writeValue('world').targetHash;
 
     // Prime the cache
     const v1 = await vs.readValue(r1);
@@ -123,7 +123,7 @@ suite('ValueStore', () => {
     const l = new List([vs.writeValue(1), vs.writeValue(2)]);
     const r = vs.writeValue(l);
 
-    const v = await vs.readValue(r.targetRef);
+    const v = await vs.readValue(r.targetHash);
     assert.isTrue(equals(l, v));
     await vs.close();
   });

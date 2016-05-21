@@ -10,7 +10,7 @@ export {decodeNomsValue} from './decode.js';
 export {default as Chunk} from './chunk.js';
 export {default as HttpBatchStore} from './http-batch-store.js';
 export {default as MemoryStore} from './memory-store.js';
-export {default as Ref, emptyRef} from './ref.js';
+export {default as Hash, emptyHash} from './hash.js';
 export {default as RefValue} from './ref-value.js';
 export {
   default as Struct,
@@ -48,7 +48,7 @@ export {
   getTypeOfValue,
 } from './type.js';
 export {equals, less} from './compare.js';
-export {DatabaseSpec, DatasetSpec, RefSpec, parseObjectSpec} from './specs.js';
+export {DatabaseSpec, DatasetSpec, HashSpec, parseObjectSpec} from './specs.js';
 export {default as walk} from './walk.js';
 
 export type {AsyncIteratorResult} from './async-iterator.js';

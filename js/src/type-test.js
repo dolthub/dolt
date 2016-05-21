@@ -28,9 +28,9 @@ suite('Type', () => {
       'Field2': boolType,
     });
 
-    const mapRef = db.writeValue(mapType).targetRef;
-    const setRef = db.writeValue(setType).targetRef;
-    const mahRef = db.writeValue(mahType).targetRef;
+    const mapRef = db.writeValue(mapType).targetHash;
+    const setRef = db.writeValue(setType).targetHash;
+    const mahRef = db.writeValue(mahType).targetHash;
 
     assert.isTrue(equals(mapType, await db.readValue(mapRef)));
     assert.isTrue(equals(setType, await db.readValue(setRef)));

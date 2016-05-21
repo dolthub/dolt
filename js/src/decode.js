@@ -2,7 +2,7 @@
 
 import {BlobLeafSequence, newBlobFromSequence} from './blob.js';
 import Chunk from './chunk.js';
-import Ref from './ref.js';
+import Hash from './hash.js';
 import RefValue, {constructRefValue} from './ref-value.js';
 import {newStructWithTypeNoValidation} from './struct.js';
 import type Struct from './struct.js';
@@ -106,9 +106,9 @@ export class JsonArrayReader {
     return next;
   }
 
-  readRef(): Ref {
+  readHash(): Hash {
     const next = this.readString();
-    return Ref.parse(next);
+    return Hash.parse(next);
   }
 
   readType(parentStructTypes: Type[]): Type {
@@ -185,10 +185,10 @@ export class JsonArrayReader {
   readMetaSequence(): Array<MetaTuple> {
     const data: Array<MetaTuple> = [];
     while (!this.atEnd()) {
-      const ref = this.readValue();
+      const refValue = this.readValue();
       const v = this.readValue();
       const numLeaves = this.readInt();
-      data.push(new MetaTuple(ref, v, numLeaves));
+      data.push(new MetaTuple(refValue, v, numLeaves));
     }
 
     return data;
@@ -203,9 +203,9 @@ export class JsonArrayReader {
   }
 
   readRefValue(t: Type): RefValue {
-    const ref = this.readRef();
+    const hash = this.readHash();
     const height = this.readInt();
-    return constructRefValue(t, ref, height);
+    return constructRefValue(t, hash, height);
   }
 
   readValue(): any {

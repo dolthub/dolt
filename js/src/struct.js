@@ -133,7 +133,7 @@ function setterName(name) {
 }
 
 export function createStructClass<T: Struct>(type: Type<StructDesc>): Class<T> {
-  const k = type.ref.toString();
+  const k = type.hash.toString();
   if (cache[k]) {
     return cache[k];
   }

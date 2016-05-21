@@ -13,7 +13,7 @@ import List, {ListLeafSequence} from './list.js';
 import Map, {MapLeafSequence} from './map.js';
 import Set, {SetLeafSequence} from './set.js';
 import Sequence from './sequence.js';
-import {setEncodeNomsValue} from './get-ref.js';
+import {setEncodeNomsValue} from './get-hash.js';
 import Blob, {BlobLeafSequence} from './blob.js';
 import {describeTypeOfValue} from './encode-human-readable.js';
 import type {primitive} from './primitives.js';
@@ -66,7 +66,7 @@ export class JsonArrayWriter {
   }
 
   writeRefValue(r: RefValue) {
-    this.write(r.targetRef.toString());
+    this.write(r.targetHash.toString());
     this.writeInt(r.height);
   }
 
@@ -103,13 +103,13 @@ export class JsonArrayWriter {
     this.write(true);
     const w2 = new JsonArrayWriter(this._vw);
     for (let i = 0; i < v.items.length; i++) {
-      const tuple = v.items[i];
+      const tuple: MetaTuple = v.items[i];
       invariant(tuple instanceof MetaTuple);
       const child = tuple.child;
       if (child && this._vw) {
         this._vw.writeValue(child);
       }
-      w2.writeValue(tuple.ref);
+      w2.writeValue(tuple.refValue);
       w2.writeValue(tuple.value);
       w2.writeInt(tuple.numLeaves);
     }

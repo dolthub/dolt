@@ -2,7 +2,7 @@
 
 import {suite, test} from 'mocha';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
-import {emptyRef} from './ref.js';
+import {emptyHash} from './hash.js';
 import {assert} from 'chai';
 import Commit from './commit.js';
 import Database from './database.js';
@@ -20,13 +20,13 @@ suite('Database', () => {
     const input = 'abc';
 
     const c = encodeNomsValue(input);
-    const v1 = await ds.readValue(c.ref);
+    const v1 = await ds.readValue(c.hash);
     assert.equal(null, v1);
 
     bs.schedulePut(c, new Set());
     bs.flush();
 
-    const v2 = await ds.readValue(c.ref);
+    const v2 = await ds.readValue(c.hash);
     assert.equal('abc', v2);
     await ds.close();
   });
@@ -48,7 +48,7 @@ suite('Database', () => {
 
     // The new database has |a|.
     const aRef = notNull(await ds2.headRef(datasetID));
-    assert.isTrue(aCommit.ref.equals(aRef.targetRef));
+    assert.isTrue(aCommit.hash.equals(aRef.targetHash));
     assert.strictEqual(1, aRef.height);
     const aCommit1 = notNull(await ds2.head(datasetID));
     assert.strictEqual('a', aCommit1.value);
@@ -58,7 +58,7 @@ suite('Database', () => {
     const bCommit = new Commit('b', new NomsSet([aRef]));
     ds = await ds.commit(datasetID, bCommit);
     const bRef = notNull(await ds.headRef(datasetID));
-    assert.isTrue(bCommit.ref.equals(bRef.targetRef));
+    assert.isTrue(bCommit.hash.equals(bRef.targetHash));
     assert.strictEqual(2, bRef.height);
     assert.strictEqual('b', notNull(await ds.head(datasetID)).value);
 
@@ -80,7 +80,7 @@ suite('Database', () => {
     const dCommit = new Commit('d', new NomsSet([bRef]));
     ds = await ds.commit(datasetID, dCommit);
     const dRef = notNull(await ds.headRef(datasetID));
-    assert.isTrue(dCommit.ref.equals(dRef.targetRef));
+    assert.isTrue(dCommit.hash.equals(dRef.targetHash));
     assert.strictEqual(3, dRef.height);
     assert.strictEqual('d', notNull(await ds.head(datasetID)).value);
 
@@ -161,8 +161,8 @@ suite('Database', () => {
 
     const commitRef = ds.writeValue(commit);
     const datasets = new Map([['foo', commitRef]]);
-    const rootRef = ds.writeValue(datasets).targetRef;
-    assert.isTrue(await bs.updateRoot(rootRef, emptyRef));
+    const rootRef = ds.writeValue(datasets).targetHash;
+    assert.isTrue(await bs.updateRoot(rootRef, emptyHash));
     ds = new Database(bs); // refresh the datasets
 
     assert.strictEqual(1, datasets.size);

@@ -1,7 +1,7 @@
 // @flow
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
-import {sha1Size} from './ref.js';
+import {sha1Size} from './hash.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {ValueReader} from './value-store.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
@@ -24,13 +24,13 @@ import {equals} from './compare.js';
 export type MetaSequence = Sequence<MetaTuple>;
 
 export class MetaTuple<K> {
-  ref: RefValue;
+  refValue: RefValue;
   value: K;
   numLeaves: number;
   child: ?Collection;
 
-  constructor(ref: RefValue, value: K, numLeaves: number, child: ?Collection = null) {
-    this.ref = ref;
+  constructor(refValue: RefValue, value: K, numLeaves: number, child: ?Collection = null) {
+    this.refValue = refValue;
     this.child = child;
     this.value = value;
     this.numLeaves = numLeaves;
@@ -39,8 +39,8 @@ export class MetaTuple<K> {
   getSequence(vr: ?ValueReader): Promise<Sequence> {
     return this.child ?
         Promise.resolve(this.child.sequence) :
-        notNull(vr).readValue(this.ref.targetRef).then((c: Collection) => {
-          invariant(c, () => `Could not read sequence ${this.ref.targetRef}`);
+        notNull(vr).readValue(this.refValue.targetHash).then((c: Collection) => {
+          invariant(c, () => `Could not read sequence ${this.refValue.targetHash}`);
           return c.sequence;
         });
   }
@@ -48,7 +48,7 @@ export class MetaTuple<K> {
 
 // The elemTypes of the collection inside the Ref<Collection<?, ?>>
 function getCollectionTypes<K>(tuple: MetaTuple<K>): Type[] {
-  return tuple.ref.type.desc.elemTypes[0].desc.elemTypes;
+  return tuple.refValue.type.desc.elemTypes[0].desc.elemTypes;
 }
 
 export function newListMetaSequence(vr: ?ValueReader, items: Array<MetaTuple<number>>):
@@ -191,7 +191,7 @@ export class OrderedMetaSequence<K: Value> extends OrderedSequence<K, MetaTuple<
   }
 
   equalsAt(idx: number, other: MetaTuple): boolean {
-    return equals(this.items[idx].ref, other.ref);
+    return equals(this.items[idx].refValue, other.refValue);
   }
 }
 
@@ -216,7 +216,7 @@ const objectPattern = ((1 << 6) | 0) - 1;
 
 export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTuple> {
   return new BuzHashBoundaryChecker(orderedSequenceWindowSize, sha1Size, objectPattern,
-    (mt: MetaTuple) => mt.ref.targetRef.digest
+    (mt: MetaTuple) => mt.refValue.targetHash.digest
   );
 }
 
@@ -239,10 +239,10 @@ export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
 
 export function newIndexedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTuple> {
   return new BuzHashBoundaryChecker(objectWindowSize, sha1Size, objectPattern,
-    (mt: MetaTuple) => mt.ref.targetRef.digest
+    (mt: MetaTuple) => mt.refValue.targetHash.digest
   );
 }
 
 function getMetaSequenceChunks(ms: MetaSequence): Array<RefValue> {
-  return ms.items.map(mt => mt.ref);
+  return ms.items.map(mt => mt.refValue);
 }

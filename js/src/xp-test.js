@@ -25,10 +25,10 @@ suite('cross platform test', () => {
   async function roundTripDigestTest(t: TestValue): Promise<void> {
     const db = new Database(makeTestingBatchStore());
     const r = db.writeValue(t._value);
-    const v2 = await db.readValue(r.targetRef);
+    const v2 = await db.readValue(r.targetHash);
     assert.strictEqual(v2, t._value, t._description);
     assert.strictEqual(t._value, v2, t._description);
-    assert.strictEqual(t._expectedRef, r.targetRef.toString(), t._description);
+    assert.strictEqual(t._expectedRef, r.targetHash.toString(), t._description);
     return db.close();
   }
 

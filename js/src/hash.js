@@ -6,7 +6,7 @@ export const sha1Size = 20;
 const pattern = /^(sha1-[0-9a-f]{40})$/;
 
 const sha1Prefix = 'sha1-';
-const emtpyRefStr = sha1Prefix + '0'.repeat(40);
+const emtpyHashStr = sha1Prefix + '0'.repeat(40);
 
 function uint8ArrayToHex(a: Uint8Array): string {
   let hex = '';
@@ -32,58 +32,58 @@ function hexToUint8(s: string): Uint8Array {
   return digest;
 }
 
-export default class Ref {
-  _refStr: string;
+export default class Hash {
+  _hashStr: string;
 
-  constructor(refStr: string) {
-    this._refStr = refStr;
+  constructor(hahsStr: string) {
+    this._hashStr = hahsStr;
   }
 
-  get ref(): Ref {
+  get hash(): Hash {
     return this;
   }
 
   get digest(): Uint8Array {
-    return hexToUint8(this._refStr.substring(5));
+    return hexToUint8(this._hashStr.substring(5));
   }
 
   isEmpty(): boolean {
-    return this._refStr === emtpyRefStr;
+    return this._hashStr === emtpyHashStr;
   }
 
-  equals(other: Ref): boolean {
-    return this._refStr === other._refStr;
+  equals(other: Hash): boolean {
+    return this._hashStr === other._hashStr;
   }
 
-  compare(other: Ref): number {
-    return this._refStr === other._refStr ? 0 : this._refStr < other._refStr ? -1 : 1;
+  compare(other: Hash): number {
+    return this._hashStr === other._hashStr ? 0 : this._hashStr < other._hashStr ? -1 : 1;
   }
 
   toString(): string {
-    return this._refStr;
+    return this._hashStr;
   }
 
-  static parse(s: string): Ref {
+  static parse(s: string): Hash {
     const m = s.match(pattern);
     if (!m) {
-      throw Error('Could not parse ref: ' + s);
+      throw Error('Could not parse hash: ' + s);
     }
 
-    return new Ref(m[1]);
+    return new Hash(m[1]);
   }
 
-  static maybeParse(s: string): ?Ref {
+  static maybeParse(s: string): ?Hash {
     const m = s.match(pattern);
-    return m ? new Ref(m[1]) : null;
+    return m ? new Hash(m[1]) : null;
   }
 
   static fromDigest(digest: Uint8Array = new Uint8Array(sha1Size)) {
-    return new Ref(sha1Prefix + uint8ArrayToHex(digest));
+    return new Hash(sha1Prefix + uint8ArrayToHex(digest));
   }
 
-  static fromData(data: Uint8Array): Ref {
-    return new Ref(sha1Prefix + hex(data));
+  static fromData(data: Uint8Array): Hash {
+    return new Hash(sha1Prefix + hex(data));
   }
 }
 
-export const emptyRef = new Ref(emtpyRefStr);
+export const emptyHash = new Hash(emtpyHashStr);

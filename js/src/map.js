@@ -9,8 +9,8 @@ import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import {Collection} from './collection.js';
 import {compare, equals} from './compare.js';
-import {sha1Size} from './ref.js';
-import {getRefOfValue} from './get-ref.js';
+import {sha1Size} from './hash.js';
+import {getHashOfValue} from './get-hash.js';
 import {getTypeOfValue, makeMapType, makeUnionType} from './type.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker, newOrderedMetaSequenceChunkFn,} from
   './meta-sequence.js';
@@ -48,7 +48,7 @@ function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader):
 function newMapLeafBoundaryChecker<K: Value, V: Value>():
     BoundaryChecker<MapEntry<K, V>> {
   return new BuzHashBoundaryChecker(mapWindowSize, sha1Size, mapPattern,
-    (entry: MapEntry<K, V>) => getRefOfValue(entry[KEY]).digest);
+    (entry: MapEntry<K, V>) => getHashOfValue(entry[KEY]).digest);
 }
 
 export function removeDuplicateFromOrdered<T>(elems: Array<T>,
@@ -188,7 +188,7 @@ export default class Map<K: Value, V: Value> extends
 export function newMapFromSequence<K: Value, V: Value>(
     sequence: OrderedSequence): Map<K, V> {
   const map = Object.create(Map.prototype);
-  map._ref = null; // Value
+  map._hash = null; // ValueBase
   map.sequence = sequence;
   return map;
 }

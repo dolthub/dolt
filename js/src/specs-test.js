@@ -5,8 +5,8 @@ import BatchStoreAdaptor from './batch-store-adaptor.js';
 import Dataset from './dataset.js';
 import Database from './database.js';
 import HttpBatchStore from './http-batch-store.js';
-import Ref from './ref.js';
-import {DatabaseSpec, DatasetSpec, RefSpec, parseObjectSpec} from './specs.js';
+import Hash from './hash.js';
+import {DatabaseSpec, DatasetSpec, HashSpec, parseObjectSpec} from './specs.js';
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
@@ -66,18 +66,18 @@ suite('Specs', () => {
     await ds.store.close();
   });
 
-  test('RefSpec', async () => {
-    const testRef = new Ref('sha1-0000000000000000000000000000000000000000');
+  test('HashSpec', async () => {
+    const testHash = new Hash('sha1-0000000000000000000000000000000000000000');
     const invalid = [
       'mem', 'mem:', 'http', 'http:', 'http://foo', 'monkey', 'monkey:balls',
-      'mem:not-ref', 'mem:sha1-', 'mem:sha2-0000',
+      'mem:not-hash', 'mem:sha1-', 'mem:sha2-0000',
       'http://foo:blah', 'https://foo:sha1',
     ];
-    invalid.forEach(s => assert.isNull(RefSpec.parse(s)));
+    invalid.forEach(s => assert.isNull(HashSpec.parse(s)));
 
-    const spec = RefSpec.parse(`mem:${testRef}`);
+    const spec = HashSpec.parse(`mem:${testHash}`);
     invariant(spec);
-    assert.equal(spec.ref.toString(), testRef.toString());
+    assert.equal(spec.hash.toString(), testHash.toString());
     assert.equal(spec.store.scheme, 'mem');
     assert.equal(spec.store.path, '');
   });
@@ -91,11 +91,11 @@ suite('Specs', () => {
     assert.equal(spec.store.scheme, 'http');
     assert.equal(spec.store.path, '//foo:8000/test');
 
-    const testRef = new Ref('sha1-0000000000000000000000000000000000000000');
-    spec = parseObjectSpec(`http://foo:8000/test:${testRef}`);
+    const testHash = new Hash('sha1-0000000000000000000000000000000000000000');
+    spec = parseObjectSpec(`http://foo:8000/test:${testHash}`);
     invariant(spec);
     assert.isNotNull(spec.value());
-    invariant(spec instanceof RefSpec);
-    assert.equal(spec.ref.toString(), testRef.toString());
+    invariant(spec instanceof HashSpec);
+    assert.equal(spec.hash.toString(), testHash.toString());
   });
 });

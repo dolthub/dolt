@@ -48,7 +48,7 @@ export default class OrderedPutCache {
   }
 
   append(c: Chunk): boolean {
-    const hash = c.ref.toString();
+    const hash = c.hash.toString();
     if (this._chunkIndex.has(hash)) {
       return false;
     }

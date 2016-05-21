@@ -15,7 +15,7 @@ import {invariant, notNull} from './assert.js';
 import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';
 import Set, {newSetFromSequence} from './set.js';
 import {OrderedSequence} from './ordered-sequence.js';
-import Ref from './ref.js';
+import Hash from './hash.js';
 import type {ValueReadWriter} from './value-store.js';
 import {compare, equals} from './compare.js';
 
@@ -32,9 +32,9 @@ class CountingMemoryStore extends MemoryStore {
     this.getCount = 0;
   }
 
-  get(ref: Ref): Promise<Chunk> {
+  get(hash: Hash): Promise<Chunk> {
     this.getCount++;
-    return super.get(ref);
+    return super.get(hash);
   }
 }
 
@@ -70,22 +70,22 @@ suite('BuildSet', () => {
   test('LONG: set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
     const s = new Set(nums);
-    assert.strictEqual(s.ref.toString(), setOfNRef);
+    assert.strictEqual(s.hash.toString(), setOfNRef);
 
     // shuffle kvs, and test that the constructor sorts properly
     nums.sort(() => Math.random() > .5 ? 1 : -1);
     const s2 = new Set(nums);
-    assert.strictEqual(s2.ref.toString(), setOfNRef);
+    assert.strictEqual(s2.hash.toString(), setOfNRef);
   });
 
   test('LONG: set of struct, set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
     const structs = nums.map(n => newStruct('num', {n}));
     const s = new Set(structs);
-    assert.strictEqual(s.ref.toString(), 'sha1-f10d8ccbc2270bb52bb988a0cadff912e2723eed');
+    assert.strictEqual(s.hash.toString(), 'sha1-f10d8ccbc2270bb52bb988a0cadff912e2723eed');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
-    assert.strictEqual(height, s.sequence.items[0].ref.height);
+    assert.strictEqual(height, s.sequence.items[0].refValue.height);
 
     // has
     for (let i = 0; i < structs.length; i++) {
@@ -95,13 +95,13 @@ suite('BuildSet', () => {
 
   test('LONG: set of ref, set of n numbers', async () => {
     const nums = firstNNumbers(testSetSize);
-    const refs = nums.map(n => new RefValue(newStruct('num', {n})));
-    const s = new Set(refs);
-    assert.strictEqual(s.ref.toString(), 'sha1-14eeb2d1835011bf3e018121ba3274bc08e634e5');
+    const refValues = nums.map(n => new RefValue(newStruct('num', {n})));
+    const s = new Set(refValues);
+    assert.strictEqual(s.hash.toString(), 'sha1-14eeb2d1835011bf3e018121ba3274bc08e634e5');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are RefValue values (with height 1).
-    assert.strictEqual(height + 1, s.sequence.items[0].ref.height);
+    assert.strictEqual(height + 1, s.sequence.items[0].refValue.height);
   });
 
   test('LONG: insert', async () => {
@@ -112,7 +112,7 @@ suite('BuildSet', () => {
       assert.strictEqual(i + 1, s.size);
     }
 
-    assert.strictEqual(s.ref.toString(), 'sha1-b41aab13e8de940d998c1f55a2f48f63159a19e0');
+    assert.strictEqual(s.hash.toString(), 'sha1-b41aab13e8de940d998c1f55a2f48f63159a19e0');
   });
 
   test('LONG: remove', async () => {
@@ -124,7 +124,7 @@ suite('BuildSet', () => {
       assert.strictEqual(testSetSize + count, s.size);
     }
 
-    assert.strictEqual(s.ref.toString(), setOfNRef);
+    assert.strictEqual(s.hash.toString(), setOfNRef);
   });
 
   test('LONG: write, read, modify, read', async () => {
@@ -132,7 +132,7 @@ suite('BuildSet', () => {
 
     const nums = firstNNumbers(testSetSize);
     const s = new Set(nums);
-    const r = db.writeValue(s).targetRef;
+    const r = db.writeValue(s).targetHash;
     const s2 = await db.readValue(r);
     const outNums = [];
     await s2.forEach(k => outNums.push(k));
@@ -176,17 +176,17 @@ suite('BuildSet', () => {
     vals.sort(compare);
 
     const s = new Set(vals);
-    assert.strictEqual(s.ref.toString(), 'sha1-84ce63b4fb804fe9668133bf5d3136cfffcdc788');
+    assert.strictEqual(s.hash.toString(), 'sha1-84ce63b4fb804fe9668133bf5d3136cfffcdc788');
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
-    assert.strictEqual(height, s.sequence.items[0].ref.height);
+    assert.strictEqual(height, s.sequence.items[0].refValue.height);
 
     // has
     for (let i = 0; i < vals.length; i += 5) {
       assert.isTrue(await s.has(vals[i]));
     }
 
-    const r = db.writeValue(s).targetRef;
+    const r = db.writeValue(s).targetHash;
     const s2 = await db.readValue(r);
     const outVals = [];
     await s2.forEach(k => outVals.push(k));
@@ -275,10 +275,10 @@ suite('SetLeaf', () => {
   });
 
   test('chunks', () => {
-    const refs = ['x', 'a', 'b'].map(c => db.writeValue(c));
-    refs.sort(compare);
-    const l = new Set(['z', ...refs]);
-    assert.deepEqual(refs, l.chunks);
+    const refValues = ['x', 'a', 'b'].map(c => db.writeValue(c));
+    refValues.sort(compare);
+    const l = new Set(['z', ...refValues]);
+    assert.deepEqual(refValues, l.chunks);
   });
 });
 
@@ -517,7 +517,7 @@ suite('CompoundSet', () => {
 
   test('LONG: canned set diff', async () => {
     let s1 = new Set(firstNNumbers(testSetSize));
-    s1 = await db.readValue(db.writeValue(s1).targetRef);
+    s1 = await db.readValue(db.writeValue(s1).targetHash);
 
     {
       // Insert/remove at start.
@@ -568,7 +568,7 @@ suite('CompoundSet', () => {
 
     const ms = new CountingMemoryStore();
     const db = new Database(new BatchStore(3, new BatchStoreAdaptorDelegate(ms)));
-    [s1, s2] = await Promise.all([s1, s2].map(s => db.readValue(db.writeValue(s).targetRef)));
+    [s1, s2] = await Promise.all([s1, s2].map(s => db.readValue(db.writeValue(s).targetHash)));
 
     assert.deepEqual([[], []], await s1.diff(s1));
     assert.deepEqual([[], []], await s2.diff(s2));
@@ -611,7 +611,7 @@ suite('CompoundSet', () => {
     const chunks = s.chunks;
     const sequence = s.sequence;
     assert.equal(2, chunks.length);
-    assert.deepEqual(sequence.items[0].ref, chunks[0]);
-    assert.deepEqual(sequence.items[1].ref, chunks[1]);
+    assert.deepEqual(sequence.items[0].refValue, chunks[0]);
+    assert.deepEqual(sequence.items[1].refValue, chunks[1]);
   });
 });

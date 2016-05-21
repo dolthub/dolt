@@ -2,30 +2,30 @@
 
 import type {ValueReader} from './value-store.js';
 import {describeType} from './encode-human-readable.js';
-import {getRefOfValue} from './get-ref.js';
+import {getHashOfValue} from './get-hash.js';
 import {Kind} from './noms-kind.js';
-import type Ref from './ref.js';
+import type Hash from './hash.js';
 import type {Type} from './type.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant} from './assert.js';
 import {getTypeOfValue, makeRefType} from './type.js';
 import {ValueBase, getChunksOfValue} from './value.js';
 
-export function constructRefValue(t: Type, targetRef: Ref, height: number): RefValue {
+export function constructRefValue(t: Type, targetHash: Hash, height: number): RefValue {
   invariant(t.kind === Kind.Ref, () => `Not a Ref type: ${describeType(t)}`);
-  invariant(!targetRef.isEmpty());
+  invariant(!targetHash.isEmpty());
   invariant(height > 0);
   const rv = Object.create(RefValue.prototype);
   rv._type = t;
-  rv.targetRef = targetRef;
+  rv.targetHash = targetHash;
   rv.height = height;
   return rv;
 }
 
 export default class RefValue<T: Value> extends ValueBase {
   _type: Type;
-  // Ref of the value this points to.
-  targetRef: Ref;
+  // Hash of the value this points to.
+  targetHash: Hash;
   // The length of the longest path of RefValues to find any leaf in the graph.
   // By definition this must be > 0.
   height: number;
@@ -34,7 +34,7 @@ export default class RefValue<T: Value> extends ValueBase {
     super();
     this._type = makeRefType(getTypeOfValue(val));
     this.height = 1 + getChunksOfValue(val).reduce((max, c) => Math.max(max, c.height), 0);
-    this.targetRef = getRefOfValue(val);
+    this.targetHash = getHashOfValue(val);
   }
 
   get type(): Type {
@@ -42,7 +42,7 @@ export default class RefValue<T: Value> extends ValueBase {
   }
 
   targetValue(vr: ValueReader): Promise<T> {
-    return vr.readValue(this.targetRef);
+    return vr.readValue(this.targetHash);
   }
 
   get chunks(): Array<RefValue> {

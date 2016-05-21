@@ -10,7 +10,7 @@ import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import {Collection} from './collection.js';
 import {compare, equals} from './compare.js';
-import {getRefOfValue} from './get-ref.js';
+import {getHashOfValue} from './get-hash.js';
 import {invariant} from './assert.js';
 import {MetaTuple, newOrderedMetaSequenceBoundaryChecker, newOrderedMetaSequenceChunkFn,} from
   './meta-sequence.js';
@@ -18,7 +18,7 @@ import {OrderedSequence, OrderedSequenceCursor, OrderedSequenceIterator,} from
   './ordered-sequence.js';
 import diff from './ordered-sequence-diff.js';
 import {makeSetType, makeUnionType, getTypeOfValue} from './type.js';
-import {sha1Size} from './ref.js';
+import {sha1Size} from './hash.js';
 import {removeDuplicateFromOrdered} from './map.js';
 import {getValueChunks} from './sequence.js';
 import {Kind} from './noms-kind.js';
@@ -44,8 +44,8 @@ function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn {
 
 function newSetLeafBoundaryChecker<T:Value>(): BoundaryChecker<T> {
   return new BuzHashBoundaryChecker(setWindowSize, sha1Size, setPattern, (v: T) => {
-    const ref = getRefOfValue(v);
-    return ref.digest;
+    const hash = getHashOfValue(v);
+    return hash.digest;
   });
 }
 
@@ -198,7 +198,7 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
 
 export function newSetFromSequence<T: Value>(sequence: OrderedSequence): Set<T> {
   const set = Object.create(Set.prototype);
-  set._ref = null; // Value
+  set._hash = null; // ValueBase
   set.sequence = sequence;
   return set;
 }

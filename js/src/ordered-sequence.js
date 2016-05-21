@@ -124,12 +124,12 @@ export class OrderedSequenceIterator<T, K: Value> extends AsyncIterator<T> {
 function getSearchFunction(sequence: OrderedSequence, key: Value):
     (i: number) => number {
   if (sequence.isMeta) {
-    const keyRef = key instanceof ValueBase ? key.ref : null;
+    const keyRef = key instanceof ValueBase ? key.hash : null;
     return i => {
       const sk = sequence.getKey(i);
       if (sk instanceof ValueBase) {
         if (keyRef) {
-          return sk.targetRef.compare(keyRef);
+          return sk.targetHash.compare(keyRef);
         }
         return 1;
       }

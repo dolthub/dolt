@@ -7,7 +7,7 @@ import {assert} from 'chai';
 import {notNull} from './assert.js';
 import {AsyncIterator} from './async-iterator.js';
 import {getChunksOfValue, ValueBase} from './value.js';
-import {getRefOfValue} from './get-ref.js';
+import {getHashOfValue} from './get-hash.js';
 import {getTypeOfValue, Type} from './type.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {equals} from './compare.js';
@@ -20,7 +20,8 @@ export async function flatten<T>(iter: AsyncIterator<T>): Promise<Array<T>> {
   return values;
 }
 
-export async function flattenParallel<T>(iter: AsyncIterator<T>, count: number): Promise<Array<T>> {
+export async function flattenParallel<T>(iter: AsyncIterator<T>, count: number):
+    Promise<Array<T>> {
   const promises = [];
   for (let i = 0; i < count; i++) {
     promises.push(iter.next());
@@ -29,8 +30,8 @@ export async function flattenParallel<T>(iter: AsyncIterator<T>, count: number):
   return results.map(res => notNull(res.value));
 }
 
-export function assertValueRef(expectRefStr: string, v: Value) {
-  assert.strictEqual(expectRefStr, getRefOfValue(v).toString());
+export function assertValueHash(expectHashStr: string, v: Value) {
+  assert.strictEqual(expectHashStr, getHashOfValue(v).toString());
 }
 
 export function assertValueType(expectType: Type, v: Value) {
@@ -49,7 +50,7 @@ export async function testRoundTripAndValidate<T: Value>(v: T,
   const bs = makeTestingBatchStore();
   const ds = new Database(bs);
 
-  const r1 = await ds.writeValue(v).targetRef;
+  const r1 = await ds.writeValue(v).targetHash;
   const ds2 = new Database(bs);
 
   const v2 = await ds2.readValue(r1);
@@ -68,27 +69,27 @@ export function chunkDiffCount(v1: Value, v2: Value): number {
   const c2 = getChunksOfValue(v2);
 
   let diffCount = 0;
-  const refs = Object.create(null);
+  const hashes = Object.create(null);
   c1.forEach(r => {
-    const refStr = r.targetRef.toString();
-    let count = refs[refStr];
+    const hashStr = r.targetHash.toString();
+    let count = hashes[hashStr];
     count = count === undefined ? 1 : count + 1;
-    refs[refStr] = count;
+    hashes[hashStr] = count;
   });
 
   c2.forEach(r => {
-    const refStr = r.targetRef.toString();
-    const count = refs[refStr];
+    const hashStr = r.targetHash.toString();
+    const count = hashes[hashStr];
     if (count === undefined) {
       diffCount++;
     } else if (count === 1) {
-      delete refs[refStr];
+      delete hashes[hashStr];
     } else {
-      refs[refStr] = count - 1;
+      hashes[hashStr] = count - 1;
     }
   });
 
-  return diffCount + Object.keys(refs).length;
+  return diffCount + Object.keys(hashes).length;
 }
 
 export function intSequence(count: number, start: number = 0): Array<number> {
@@ -102,6 +103,7 @@ export function intSequence(count: number, start: number = 0): Array<number> {
 }
 
 export function deriveCollectionHeight(col: Collection): number {
-  // Note: not using seq.items[0].ref.height because the purpose of this method is to be redundant.
+  // Note: not using seq.items[0].refValue.height because the purpose of this method is to
+  // be redundant.
   return col.sequence.isMeta ? 1 + deriveCollectionHeight(notNull(col.sequence.items[0].child)) : 0;
 }

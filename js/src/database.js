@@ -1,6 +1,6 @@
 // @flow
 
-import Ref from './ref.js';
+import Hash from './hash.js';
 import RefValue from './ref-value.js';
 import Map from './map.js';
 import Set from './set.js';
@@ -72,7 +72,7 @@ export default class Database {
     return ds;
   }
 
-  _datasetsFromRootRef(rootRef: Promise<Ref>): Promise<Map<string, RefValue<Commit>>> {
+  _datasetsFromRootRef(rootRef: Promise<Hash>): Promise<Map<string, RefValue<Commit>>> {
     return rootRef.then(rootRef => {
       if (rootRef.isEmpty()) {
         return Promise.resolve(new Map());
@@ -87,7 +87,7 @@ export default class Database {
   }
 
   head(datasetID: string): Promise<?Commit> {
-    return this.headRef(datasetID).then(hr => hr ? this.readValue(hr.targetRef) : null);
+    return this.headRef(datasetID).then(hr => hr ? this.readValue(hr.targetHash) : null);
   }
 
   datasets(): Promise<Map<string, RefValue<Commit>>> {
@@ -95,8 +95,8 @@ export default class Database {
   }
 
   // TODO: This should return Promise<?Value>
-  async readValue(ref: Ref): Promise<any> {
-    return this._vs.readValue(ref);
+  async readValue(hash: Hash): Promise<any> {
+    return this._vs.readValue(hash);
   }
 
 
@@ -135,7 +135,7 @@ export default class Database {
     }
 
     currentDatasets = await currentDatasets.set(datasetId, commitRef);
-    const newRootRef = this.writeValue(currentDatasets).targetRef;
+    const newRootRef = this.writeValue(currentDatasets).targetHash;
     if (await this._rt.updateRoot(newRootRef, currentRootRef)) {
       return this._clone(this._vs, this._rt);
     }
@@ -152,8 +152,8 @@ async function getAncestors(commits: Set<RefValue<Commit>>, store: Database):
     Promise<Set<RefValue<Commit>>> {
   let ancestors = new Set();
   await commits.map(async (commitRef) => {
-    const commit = await store.readValue(commitRef.targetRef);
-    await commit.parents.map(async (ref) => ancestors = await ancestors.insert(ref));
+    const commit = await store.readValue(commitRef.targetHash);
+    await commit.parents.map(async (refValue) => ancestors = await ancestors.insert(refValue));
   });
   return ancestors;
 }

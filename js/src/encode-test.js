@@ -4,7 +4,7 @@ import {assert} from 'chai';
 import {suite, setup, teardown, test} from 'mocha';
 
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
-import Ref from './ref.js';
+import Hash from './hash.js';
 import {constructRefValue} from './ref-value.js';
 import {newStruct} from './struct.js';
 import type {NomsKind} from './noms-kind.js';
@@ -126,9 +126,9 @@ suite('Encode', () => {
     w.writeValue(l);
     assert.deepEqual([
       Kind.Set, Kind.Number, true, [
-        Kind.Ref, Kind.Set, Kind.Number, r1.targetRef.toString(), '1', Kind.Number, '0', '1',
-        Kind.Ref, Kind.Set, Kind.Number, r2.targetRef.toString(), '1', Kind.Number, '2', '2',
-        Kind.Ref, Kind.Set, Kind.Number, r3.targetRef.toString(), '1', Kind.Number, '5', '3',
+        Kind.Ref, Kind.Set, Kind.Number, r1.targetHash.toString(), '1', Kind.Number, '0', '1',
+        Kind.Ref, Kind.Set, Kind.Number, r2.targetHash.toString(), '1', Kind.Number, '2', '2',
+        Kind.Ref, Kind.Set, Kind.Number, r3.targetHash.toString(), '1', Kind.Number, '5', '3',
       ],
     ], w.array);
   });
@@ -230,9 +230,9 @@ suite('Encode', () => {
     w.writeValue(l);
     assert.deepEqual([
       Kind.List, Kind.Number, true, [
-        Kind.Ref, Kind.List, Kind.Number, r1.targetRef.toString(), '1', Kind.Number, '1', '1',
-        Kind.Ref, Kind.List, Kind.Number, r2.targetRef.toString(), '1', Kind.Number, '2', '2',
-        Kind.Ref, Kind.List, Kind.Number, r3.targetRef.toString(), '1', Kind.Number, '3', '3',
+        Kind.Ref, Kind.List, Kind.Number, r1.targetHash.toString(), '1', Kind.Number, '1', '1',
+        Kind.Ref, Kind.List, Kind.Number, r2.targetHash.toString(), '1', Kind.Number, '2', '2',
+        Kind.Ref, Kind.List, Kind.Number, r3.targetHash.toString(), '1', Kind.Number, '3', '3',
       ],
     ], w.array);
   });
@@ -250,8 +250,8 @@ suite('Encode', () => {
     w.writeValue(l);
     assert.deepEqual([
       Kind.Set, Kind.Bool, true, [
-        Kind.Ref, Kind.Set, Kind.Bool, r1.targetRef.toString(), '1', Kind.Bool, true, '1',
-        Kind.Ref, Kind.Set, Kind.Bool, r2.targetRef.toString(), '1', Kind.Bool, false, '1',
+        Kind.Ref, Kind.Set, Kind.Bool, r1.targetHash.toString(), '1', Kind.Bool, true, '1',
+        Kind.Ref, Kind.Set, Kind.Bool, r2.targetHash.toString(), '1', Kind.Bool, false, '1',
       ],
     ], w.array);
   });
@@ -327,12 +327,12 @@ suite('Encode', () => {
 
   test('write ref', () => {
     const w = new JsonArrayWriter(db);
-    const ref = Ref.parse('sha1-0123456789abcdef0123456789abcdef01234567');
+    const hash = Hash.parse('sha1-0123456789abcdef0123456789abcdef01234567');
     const t = makeRefType(blobType);
-    const v = constructRefValue(t, ref, 1);
+    const v = constructRefValue(t, hash, 1);
     w.writeValue(v);
 
-    assert.deepEqual([Kind.Ref, Kind.Blob, ref.toString(), '1'], w.array);
+    assert.deepEqual([Kind.Ref, Kind.Blob, hash.toString(), '1'], w.array);
   });
 
   test('write union list', () => {

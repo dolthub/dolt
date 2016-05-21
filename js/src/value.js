@@ -1,24 +1,24 @@
 // @flow
 
-import type Ref from './ref.js';
+import type Hash from './hash.js';
 import type {primitive} from './primitives.js';
-import {ensureRef} from './get-ref.js';
+import {ensureHash} from './get-hash.js';
 import type {Type} from './type.js';
 import type RefValue from './ref-value.js';
 
 export class ValueBase {
-  _ref: ?Ref;
+  _hash: ?Hash;
 
   constructor() {
-    this._ref = null;
+    this._hash = null;
   }
 
   get type(): Type {
     throw new Error('abstract');
   }
 
-  get ref(): Ref {
-    return this._ref = ensureRef(this._ref, this);
+  get hash(): Hash {
+    return this._hash = ensureHash(this._hash, this);
   }
 
   get chunks(): Array<RefValue> {
