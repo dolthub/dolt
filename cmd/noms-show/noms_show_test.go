@@ -50,7 +50,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	r := writeTestData(ds, s1)
 	s.Equal(res1, s.Run(main, []string{spec}))
 
-	spec1 := fmt.Sprintf("ldb:%s:%s", s.LdbDir, r.TargetRef().String())
+	spec1 := fmt.Sprintf("ldb:%s:%s", s.LdbDir, r.TargetHash().String())
 	s.Equal(res2, s.Run(main, []string{spec1}))
 
 	ds, err = sp.Dataset()
@@ -58,7 +58,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	r = writeTestData(ds, list)
 	s.Equal(res3, s.Run(main, []string{spec}))
 
-	spec1 = fmt.Sprintf("ldb:%s:%s", s.LdbDir, r.TargetRef().String())
+	spec1 = fmt.Sprintf("ldb:%s:%s", s.LdbDir, r.TargetHash().String())
 	s.Equal(res4, s.Run(main, []string{spec1}))
 
 	ds, err = sp.Dataset()

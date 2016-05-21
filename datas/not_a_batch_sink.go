@@ -10,7 +10,7 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
 	"github.com/julienschmidt/httprouter"
 )
@@ -129,7 +129,7 @@ func (bhcs *notABatchSink) sendWriteRequests(chnx []chunks.Chunk) {
 		gw := gzip.NewWriter(body)
 		sz := chunks.NewSerializer(gw)
 		for _, chunk := range chnx {
-			hashes.Insert(chunk.Ref())
+			hashes.Insert(chunk.Hash())
 			sz.Put(chunk)
 		}
 		sz.Close()
@@ -151,10 +151,10 @@ func (bhcs *notABatchSink) sendWriteRequests(chnx []chunks.Chunk) {
 	}()
 }
 
-func (bhcs *notABatchSink) Root() ref.Ref {
+func (bhcs *notABatchSink) Root() hash.Hash {
 	panic("Not Reached")
 }
 
-func (bhcs *notABatchSink) UpdateRoot(current, last ref.Ref) bool {
+func (bhcs *notABatchSink) UpdateRoot(current, last hash.Hash) bool {
 	panic("Not Reached")
 }

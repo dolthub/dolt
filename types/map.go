@@ -5,7 +5,7 @@ import (
 	"sort"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 const (
@@ -15,11 +15,11 @@ const (
 
 type Map struct {
 	seq orderedSequence
-	ref *ref.Ref
+	h   *hash.Hash
 }
 
 func newMap(seq orderedSequence) Map {
-	return Map{seq, &ref.Ref{}}
+	return Map{seq, &hash.Hash{}}
 }
 
 func NewMap(kv ...Value) Map {
@@ -52,15 +52,15 @@ func (m Map) sequence() sequence {
 
 // Value interface
 func (m Map) Equals(other Value) bool {
-	return other != nil && m.Ref() == other.Ref()
+	return other != nil && m.Hash() == other.Hash()
 }
 
 func (m Map) Less(other Value) bool {
 	return valueLess(m, other)
 }
 
-func (m Map) Ref() ref.Ref {
-	return EnsureRef(m.ref, m)
+func (m Map) Hash() hash.Hash {
+	return EnsureRef(m.h, m)
 }
 
 func (m Map) ChildValues() (values []Value) {
@@ -216,7 +216,7 @@ func buildMapData(values []Value) mapEntrySlice {
 
 func newMapLeafBoundaryChecker() boundaryChecker {
 	return newBuzHashBoundaryChecker(mapWindowSize, sha1.Size, mapPattern, func(item sequenceItem) []byte {
-		digest := item.(mapEntry).key.Ref().Digest()
+		digest := item.(mapEntry).key.Hash().Digest()
 		return digest[:]
 	})
 }

@@ -27,7 +27,7 @@ func (vbs *ValidatingBatchingSink) Prepare(hints Hints) {
 
 // Enequeue adds a Chunk to the queue of Chunks waiting to be Put into vbs' backing ChunkStore. The instance keeps an internal buffer of Chunks, spilling to the ChunkStore when the buffer is full. If an attempt to Put Chunks fails, this method returns the BackpressureError from the underlying ChunkStore.
 func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk) chunks.BackpressureError {
-	r := c.Ref()
+	r := c.Hash()
 	if vbs.vs.isPresent(r) {
 		return nil
 	}

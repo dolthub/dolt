@@ -4,20 +4,20 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 type cachingChunkHaver struct {
 	backing  chunks.ChunkSource
-	hasCache map[ref.Ref]bool
+	hasCache map[hash.Hash]bool
 	mu       *sync.Mutex
 }
 
 func newCachingChunkHaver(cs chunks.ChunkSource) *cachingChunkHaver {
-	return &cachingChunkHaver{cs, map[ref.Ref]bool{}, &sync.Mutex{}}
+	return &cachingChunkHaver{cs, map[hash.Hash]bool{}, &sync.Mutex{}}
 }
 
-func (ccs *cachingChunkHaver) Has(r ref.Ref) bool {
+func (ccs *cachingChunkHaver) Has(r hash.Hash) bool {
 	if has, ok := checkCache(ccs, r); ok {
 		return has
 	}
@@ -26,14 +26,14 @@ func (ccs *cachingChunkHaver) Has(r ref.Ref) bool {
 	return has
 }
 
-func checkCache(ccs *cachingChunkHaver, r ref.Ref) (has, ok bool) {
+func checkCache(ccs *cachingChunkHaver, r hash.Hash) (has, ok bool) {
 	ccs.mu.Lock()
 	defer ccs.mu.Unlock()
 	has, ok = ccs.hasCache[r]
 	return
 }
 
-func setCache(ccs *cachingChunkHaver, r ref.Ref, has bool) {
+func setCache(ccs *cachingChunkHaver, r hash.Hash, has bool) {
 	ccs.mu.Lock()
 	defer ccs.mu.Unlock()
 	ccs.hasCache[r] = has

@@ -11,7 +11,7 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -67,7 +67,7 @@ func (wc wc) Close() error {
 }
 
 func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	hashes := ref.RefSlice{}
+	hashes := hash.HashSlice{}
 	err := d.Try(func() {
 		d.Exp.Equal("POST", req.Method)
 
@@ -85,7 +85,7 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 			}
 			// If a previous Enqueue() errored, we still need to drain chunkChan
 			// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
-			hashes = append(hashes, c.Ref())
+			hashes = append(hashes, c.Hash())
 		}
 		if bpe == nil {
 			bpe = vbs.Flush()
@@ -108,7 +108,7 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 }
 
 // Contents of the returned io.Reader are gzipped.
-func buildWriteValueRequest(serializedChunks io.Reader, hints map[ref.Ref]struct{}) io.Reader {
+func buildWriteValueRequest(serializedChunks io.Reader, hints map[hash.Hash]struct{}) io.Reader {
 	body := &bytes.Buffer{}
 	gw := gzip.NewWriter(body)
 	serializeHints(gw, hints)
@@ -125,9 +125,9 @@ func HandleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 		refStrs := req.PostForm["ref"]
 		d.Exp.True(len(refStrs) > 0)
 
-		refs := make([]ref.Ref, len(refStrs))
+		refs := make([]hash.Hash, len(refStrs))
 		for idx, refStr := range refStrs {
-			refs[idx] = ref.Parse(refStr)
+			refs[idx] = hash.Parse(refStr)
 		}
 
 		w.Header().Add("Content-Type", "application/octet-stream")
@@ -150,7 +150,7 @@ func HandleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 	}
 }
 
-func buildGetRefsRequest(refs map[ref.Ref]struct{}) io.Reader {
+func buildGetRefsRequest(refs map[hash.Hash]struct{}) io.Reader {
 	values := &url.Values{}
 	for r := range refs {
 		values.Add("ref", r.String())
@@ -180,10 +180,10 @@ func HandleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, rt c
 		params := req.URL.Query()
 		tokens := params["last"]
 		d.Exp.Len(tokens, 1)
-		last := ref.Parse(tokens[0])
+		last := hash.Parse(tokens[0])
 		tokens = params["current"]
 		d.Exp.Len(tokens, 1)
-		current := ref.Parse(tokens[0])
+		current := hash.Parse(tokens[0])
 
 		if !rt.UpdateRoot(current, last) {
 			w.WriteHeader(http.StatusConflict)

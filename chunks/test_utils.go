@@ -3,19 +3,19 @@ package chunks
 import (
 	"sync"
 
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/stretchr/testify/assert"
 )
 
-func assertInputInStore(input string, ref ref.Ref, s ChunkStore, assert *assert.Assertions) {
-	chunk := s.Get(ref)
-	assert.False(chunk.IsEmpty(), "Shouldn't get empty chunk for %s", ref.String())
+func assertInputInStore(input string, h hash.Hash, s ChunkStore, assert *assert.Assertions) {
+	chunk := s.Get(h)
+	assert.False(chunk.IsEmpty(), "Shouldn't get empty chunk for %s", h.String())
 	assert.Equal(input, string(chunk.Data()))
 }
 
-func assertInputNotInStore(input string, ref ref.Ref, s ChunkStore, assert *assert.Assertions) {
-	data := s.Get(ref)
-	assert.Nil(data, "Shouldn't have gotten data for %s", ref.String())
+func assertInputNotInStore(input string, h hash.Hash, s ChunkStore, assert *assert.Assertions) {
+	data := s.Get(h)
+	assert.Nil(data, "Shouldn't have gotten data for %s", h.String())
 }
 
 type TestStore struct {
@@ -33,14 +33,14 @@ func NewTestStore() *TestStore {
 	}
 }
 
-func (s *TestStore) Get(ref ref.Ref) Chunk {
+func (s *TestStore) Get(h hash.Hash) Chunk {
 	s.Reads++
-	return s.MemoryStore.Get(ref)
+	return s.MemoryStore.Get(h)
 }
 
-func (s *TestStore) Has(ref ref.Ref) bool {
+func (s *TestStore) Has(h hash.Hash) bool {
 	s.Hases++
-	return s.MemoryStore.Has(ref)
+	return s.MemoryStore.Has(h)
 }
 
 func (s *TestStore) Put(c Chunk) {

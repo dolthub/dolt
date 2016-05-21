@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/noms/walk"
 )
@@ -12,21 +12,21 @@ import (
 // CopyMissingChunksP copies to |sink| all chunks in source that are reachable from (and including) |r|, skipping chunks that |sink| already has
 func CopyMissingChunksP(source Database, sink *LocalDatabase, sourceRef types.Ref, concurrency int) {
 	stopCallback := func(r types.Ref) bool {
-		return sink.has(r.TargetRef())
+		return sink.has(r.TargetHash())
 	}
 	copyWorker(source, sink, sourceRef, stopCallback, concurrency)
 }
 
 // CopyReachableChunksP copies to |sink| all chunks reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|
 func CopyReachableChunksP(source, sink Database, sourceRef, exclude types.Ref, concurrency int) {
-	excludeRefs := map[ref.Ref]bool{}
+	excludeRefs := map[hash.Hash]bool{}
 
-	if !exclude.TargetRef().IsEmpty() {
+	if !exclude.TargetHash().IsEmpty() {
 		mu := sync.Mutex{}
 		excludeCallback := func(r types.Ref) bool {
 			mu.Lock()
 			defer mu.Unlock()
-			excludeRefs[r.TargetRef()] = true
+			excludeRefs[r.TargetHash()] = true
 			return false
 		}
 
@@ -34,7 +34,7 @@ func CopyReachableChunksP(source, sink Database, sourceRef, exclude types.Ref, c
 	}
 
 	stopCallback := func(r types.Ref) bool {
-		return excludeRefs[r.TargetRef()]
+		return excludeRefs[r.TargetHash()]
 	}
 	copyWorker(source, sink, sourceRef, stopCallback, concurrency)
 }

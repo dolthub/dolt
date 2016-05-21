@@ -35,7 +35,7 @@ func TestIncrementalLoadList(t *testing.T) {
 	vs := newLocalValueStore(cs)
 
 	expected := NewList(testVals...)
-	ref := vs.WriteValue(expected).TargetRef()
+	ref := vs.WriteValue(expected).TargetHash()
 
 	actualVar := vs.ReadValue(ref)
 	actual := actualVar.(List)
@@ -63,7 +63,7 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 	vs := newLocalValueStore(cs)
 
 	expected := NewSet(testVals...)
-	ref := vs.WriteValue(expected).TargetRef()
+	ref := vs.WriteValue(expected).TargetHash()
 
 	actualVar := vs.ReadValue(ref)
 	actual := actualVar.(Set)
@@ -83,7 +83,7 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 	vs := newLocalValueStore(cs)
 
 	expected := NewMap(testVals...)
-	ref := vs.WriteValue(expected).TargetRef()
+	ref := vs.WriteValue(expected).TargetHash()
 
 	actualVar := vs.ReadValue(ref)
 	actual := actualVar.(Map)
@@ -108,7 +108,7 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 
 	expected := NewList(ref)
 	ref = vs.WriteValue(expected)
-	actualVar := vs.ReadValue(ref.TargetRef())
+	actualVar := vs.ReadValue(ref.TargetHash())
 
 	assert.Equal(1, cs.Reads)
 	assert.True(expected.Equals(actualVar))

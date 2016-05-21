@@ -27,7 +27,7 @@ func (s *testSuite) TestSync() {
 	s.NoError(err)
 	source2, err := source1.Commit(types.Number(43))
 	s.NoError(err)
-	source1HeadRef := source1.Head().Ref()
+	source1HeadRef := source1.Head().Hash()
 	source2.Store().Close() // Close Database backing both Datasets
 
 	sourceSpec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, source1HeadRef)

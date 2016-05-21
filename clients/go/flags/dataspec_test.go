@@ -12,7 +12,7 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -47,7 +47,7 @@ func disabledTestHTTPDatabase(t *testing.T) {
 	assert.NoError(err)
 	store2, err := sp2.Database()
 	assert.NoError(err)
-	assert.Equal(types.NewString(testString), store2.ReadValue(r1.TargetRef()))
+	assert.Equal(types.NewString(testString), store2.ReadValue(r1.TargetHash()))
 
 	server.Stop()
 	wg.Wait()
@@ -74,7 +74,7 @@ func TestLDBDatabase(t *testing.T) {
 	assert.NoError(errRead)
 	store, err := sp.Database()
 	assert.NoError(err)
-	assert.Equal(s1.String(), store.ReadValue(s1.Ref()).(types.String).String())
+	assert.Equal(s1.String(), store.ReadValue(s1.Hash()).(types.String).String())
 	store.Close()
 	os.Remove(dir)
 }
@@ -90,7 +90,7 @@ func TestMemDatabase(t *testing.T) {
 	r := store.WriteValue(types.Bool(true))
 
 	assert.NoError(err)
-	assert.Equal(types.Bool(true), store.ReadValue(r.TargetRef()))
+	assert.Equal(types.Bool(true), store.ReadValue(r.TargetHash()))
 }
 
 // TODO: implement this with mock httpService
@@ -198,7 +198,7 @@ func TestLDBObject(t *testing.T) {
 	assert.Equal(s1.String(), s2.(types.String).String())
 	dataset2.Store().Close()
 
-	spec3 := fmt.Sprintf("ldb:%s:%s", ldbpath, s1.Ref().String())
+	spec3 := fmt.Sprintf("ldb:%s:%s", ldbpath, s1.Hash().String())
 	sp3, err := ParsePathSpec(spec3)
 	database, v3, err := sp3.Value()
 	assert.Equal(s1.String(), v3.(types.String).String())
@@ -219,7 +219,7 @@ func TestReadRef(t *testing.T) {
 	commit := types.NewString("Commit Value")
 	dataset1, err = dataset1.Commit(commit)
 	assert.NoError(err)
-	r1 := dataset1.Head().Ref()
+	r1 := dataset1.Head().Hash()
 	dataset1.Store().Close()
 
 	spec2 := fmt.Sprintf("ldb:%s:%s", ldbPath, r1.String())
@@ -228,7 +228,7 @@ func TestReadRef(t *testing.T) {
 	database, v2, err := sp2.Value()
 	assert.NoError(err)
 
-	assert.EqualValues(r1.String(), v2.Ref().String())
+	assert.EqualValues(r1.String(), v2.Hash().String())
 	database.Close()
 }
 
@@ -315,7 +315,7 @@ func TestDatasetSpecs(t *testing.T) {
 func TestRefSpec(t *testing.T) {
 	assert := assert.New(t)
 
-	testRef := ref.Parse("sha1-0123456789012345678901234567890123456789")
+	testRef := hash.Parse("sha1-0123456789012345678901234567890123456789")
 
 	refSpec, err := ParseRefSpec("http://local.attic.io/john/doe:sha1-0123456789012345678901234567890123456789")
 	assert.NoError(err)
@@ -333,7 +333,7 @@ func TestRefSpec(t *testing.T) {
 func TestPathSpec(t *testing.T) {
 	assert := assert.New(t)
 
-	testRef := ref.Parse("sha1-0123456789012345678901234567890123456789")
+	testRef := hash.Parse("sha1-0123456789012345678901234567890123456789")
 
 	pathSpec, err := ParsePathSpec("http://local.attic.io/john/doe:sha1-0123456789012345678901234567890123456789")
 	assert.NoError(err)
@@ -369,7 +369,7 @@ func disabledTestRefSpec(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(DatabaseSpec{Protocol: "ldb", Path: "/path/to/somewhere"}, storeSpec)
 
-	testRef := ref.Parse("sha1-0123456789012345678901234567890123456789")
+	testRef := hash.Parse("sha1-0123456789012345678901234567890123456789")
 
 	refSpec, err := ParseRefSpec("/filesys/john/doe:sha1-0123456789012345678901234567890123456789")
 	assert.NoError(err)

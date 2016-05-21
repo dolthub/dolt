@@ -4,7 +4,7 @@ import (
 	"crypto/sha1"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 const (
@@ -15,11 +15,11 @@ const (
 
 type List struct {
 	seq indexedSequence
-	ref *ref.Ref
+	h   *hash.Hash
 }
 
 func newList(seq indexedSequence) List {
-	return List{seq, &ref.Ref{}}
+	return List{seq, &hash.Hash{}}
 }
 
 // NewList creates a new List where the type is computed from the elements in the list, populated with values, chunking if and when needed.
@@ -60,15 +60,15 @@ func (l List) sequence() sequence {
 
 // Value interface
 func (l List) Equals(other Value) bool {
-	return other != nil && l.Ref() == other.Ref()
+	return other != nil && l.Hash() == other.Hash()
 }
 
 func (l List) Less(other Value) bool {
 	return valueLess(l, other)
 }
 
-func (l List) Ref() ref.Ref {
-	return EnsureRef(l.ref, l)
+func (l List) Hash() hash.Hash {
+	return EnsureRef(l.h, l)
 }
 
 func (l List) ChildValues() (values []Value) {
@@ -182,7 +182,7 @@ func (l List) IterAll(f listIterAllFunc) {
 
 func newListLeafBoundaryChecker() boundaryChecker {
 	return newBuzHashBoundaryChecker(listWindowSize, sha1.Size, listPattern, func(item sequenceItem) []byte {
-		digest := item.(Value).Ref().Digest()
+		digest := item.(Value).Hash().Digest()
 		return digest[:]
 	})
 }

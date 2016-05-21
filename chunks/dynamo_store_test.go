@@ -35,18 +35,18 @@ func TestGetRetrying(t *testing.T) {
 	c1 := NewChunk([]byte("abc"))
 
 	store.Put(c1)
-	store.UpdateRoot(c1.Ref(), store.Root()) // Commit writes
-	assert.True(store.Has(c1.Ref()))
+	store.UpdateRoot(c1.Hash(), store.Root()) // Commit writes
+	assert.True(store.Has(c1.Hash()))
 	store.Close()
 }
 
 func (suite *DynamoStoreTestSuite) TestChunkCompression() {
 	c1 := NewChunk(make([]byte, dynamoWriteUnitSize+1))
 	suite.Store.Put(c1)
-	suite.Store.UpdateRoot(c1.Ref(), suite.Store.Root()) // Commit writes
-	suite.True(suite.Store.Has(c1.Ref()))
+	suite.Store.UpdateRoot(c1.Hash(), suite.Store.Root()) // Commit writes
+	suite.True(suite.Store.Has(c1.Hash()))
 	suite.Equal(1, suite.ddb.numCompPuts)
 
-	roundTrip := suite.Store.Get(c1.Ref())
+	roundTrip := suite.Store.Get(c1.Hash())
 	suite.Equal(c1.Data(), roundTrip.Data())
 }

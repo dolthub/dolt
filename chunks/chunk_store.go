@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 // ChunkStore is the core storage abstraction in noms. We can put data anyplace we have a ChunkStore implementation for.
@@ -22,19 +22,19 @@ type Factory interface {
 	Shutter()
 }
 
-// RootTracker allows querying and management of the root of an entire tree of references. The "root" is the single mutable variable in a ChunkStore. It can store any ref, but it is typically used by higher layers (such as Database) to store a ref to a value that represents the current state and entire history of a database.
+// RootTracker allows querying and management of the root of an entire tree of references. The "root" is the single mutable variable in a ChunkStore. It can store any hash, but it is typically used by higher layers (such as Database) to store a hash to a value that represents the current state and entire history of a database.
 type RootTracker interface {
-	Root() ref.Ref
-	UpdateRoot(current, last ref.Ref) bool
+	Root() hash.Hash
+	UpdateRoot(current, last hash.Hash) bool
 }
 
 // ChunkSource is a place to get chunks from.
 type ChunkSource interface {
-	// Get gets a reader for the value of the Ref in the store. If the ref is absent from the store nil is returned.
-	Get(ref ref.Ref) Chunk
+	// Get the Chunk for the value of the hash in the store. If the hash is absent from the store nil is returned.
+	Get(h hash.Hash) Chunk
 
-	// Returns true iff the value at the address |ref| is contained in the source
-	Has(ref ref.Ref) bool
+	// Returns true iff the value at the address |h| is contained in the source
+	Has(h hash.Hash) bool
 }
 
 // ChunkSink is a place to put chunks.
@@ -48,13 +48,13 @@ type ChunkSink interface {
 	io.Closer
 }
 
-// BackpressureError is a slice of ref.Ref that indicates some chunks could not be Put(). Caller is free to try to Put them again later.
-type BackpressureError ref.RefSlice
+// BackpressureError is a slice of hash.Hash that indicates some chunks could not be Put(). Caller is free to try to Put them again later.
+type BackpressureError hash.HashSlice
 
 func (b BackpressureError) Error() string {
 	return fmt.Sprintf("Tried to Put %d too many Chunks", len(b))
 }
 
-func (b BackpressureError) AsHashes() ref.RefSlice {
-	return ref.RefSlice(b)
+func (b BackpressureError) AsHashes() hash.HashSlice {
+	return hash.HashSlice(b)
 }

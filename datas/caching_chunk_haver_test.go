@@ -14,15 +14,15 @@ func TestCachingChunkHaver(t *testing.T) {
 	input := "abc"
 
 	c := chunks.NewChunk([]byte(input))
-	assert.False(ccs.Has(c.Ref()))
+	assert.False(ccs.Has(c.Hash()))
 	assert.Equal(ts.Hases, 1)
-	assert.False(ccs.Has(c.Ref()))
+	assert.False(ccs.Has(c.Hash()))
 	assert.Equal(ts.Hases, 1)
 
 	ts.Put(c)
 	ccs = newCachingChunkHaver(ts)
-	assert.True(ccs.Has(c.Ref()))
+	assert.True(ccs.Has(c.Hash()))
 	assert.Equal(ts.Hases, 2)
-	assert.True(ccs.Has(c.Ref()))
+	assert.True(ccs.Has(c.Hash()))
 	assert.Equal(ts.Hases, 2)
 }

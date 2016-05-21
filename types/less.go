@@ -5,6 +5,6 @@ func valueLess(v1, v2 Value) bool {
 	case BoolKind, NumberKind, StringKind:
 		return false
 	default:
-		return v1.Ref().Less(v2.Ref())
+		return v1.Hash().Less(v2.Hash())
 	}
 }

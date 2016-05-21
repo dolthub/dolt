@@ -1,7 +1,7 @@
 package types
 
 type setLeafSequence struct {
-	data []Value // sorted by Ref()
+	data []Value // sorted by Hash()
 	t    *Type
 	vr   ValueReader
 }

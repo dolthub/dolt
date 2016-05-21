@@ -2,7 +2,7 @@ package types
 
 import (
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 var generateNumbersAsValues = func(n int) []Value {
@@ -42,24 +42,24 @@ var generateNumbersAsRefOfStructs = func(n int) []Value {
 
 func chunkDiffCount(c1 []Ref, c2 []Ref) int {
 	count := 0
-	refs := make(map[ref.Ref]int)
+	hashes := make(map[hash.Hash]int)
 
 	for _, r := range c1 {
-		refs[r.TargetRef()]++
+		hashes[r.TargetHash()]++
 	}
 
 	for _, r := range c2 {
-		if c, ok := refs[r.TargetRef()]; ok {
+		if c, ok := hashes[r.TargetHash()]; ok {
 			if c == 1 {
-				delete(refs, r.TargetRef())
+				delete(hashes, r.TargetHash())
 			} else {
-				refs[r.TargetRef()] = c - 1
+				hashes[r.TargetHash()] = c - 1
 			}
 		} else {
 			count++
 		}
 	}
 
-	count += len(refs)
+	count += len(hashes)
 	return count
 }

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,11 +35,11 @@ func TestWriteValue(t *testing.T) {
 	assert := assert.New(t)
 
 	vs := NewTestValueStore()
-	testEncode := func(expected string, v Value) ref.Ref {
-		r := vs.WriteValue(v).TargetRef()
+	testEncode := func(expected string, v Value) hash.Hash {
+		r := vs.WriteValue(v).TargetHash()
 
 		// Assuming that MemoryStore works correctly, we don't need to check the actual serialization, only the hash. Neat.
-		assert.EqualValues(sha1.Sum([]byte(expected)), r.Digest(), "Incorrect ref serializing %+v. Got: %#x", v, r.Digest())
+		assert.EqualValues(sha1.Sum([]byte(expected)), r.Digest(), "Incorrect hash serializing %+v. Got: %#x", v, r.Digest())
 		return r
 	}
 
@@ -57,13 +57,13 @@ func TestWriteBlobLeaf(t *testing.T) {
 
 	buf := bytes.NewBuffer([]byte{})
 	b1 := NewBlob(buf)
-	r1 := vs.WriteValue(b1).TargetRef()
+	r1 := vs.WriteValue(b1).TargetHash()
 	// echo -n 'b ' | sha1sum
 	assert.Equal("sha1-e1bc846440ec2fb557a5a271e785cd4c648883fa", r1.String())
 
 	buf = bytes.NewBufferString("Hello, World!")
 	b2 := NewBlob(buf)
-	r2 := vs.WriteValue(b2).TargetRef()
+	r2 := vs.WriteValue(b2).TargetHash()
 	// echo -n 'b Hello, World!' | sha1sum
 	assert.Equal("sha1-135fe1453330547994b2ce8a1b238adfbd7df87e", r2.String())
 }
@@ -75,7 +75,7 @@ func TestCheckChunksInCache(t *testing.T) {
 
 	b := NewEmptyBlob()
 	cs.Put(EncodeValue(b, nil))
-	cvs.set(b.Ref(), hintedChunk{b.Type(), b.Ref()})
+	cvs.set(b.Hash(), hintedChunk{b.Type(), b.Hash()})
 
 	bref := NewRef(b)
 	assert.NotPanics(func() { cvs.checkChunksInCache(bref) })
@@ -91,10 +91,10 @@ func TestCacheOnReadValue(t *testing.T) {
 	r := cvs.WriteValue(bref)
 
 	cvs2 := newLocalValueStore(cs)
-	v := cvs2.ReadValue(r.TargetRef())
+	v := cvs2.ReadValue(r.TargetHash())
 	assert.True(bref.Equals(v))
-	assert.True(cvs2.isPresent(b.Ref()))
-	assert.True(cvs2.isPresent(bref.Ref()))
+	assert.True(cvs2.isPresent(b.Hash()))
+	assert.True(cvs2.isPresent(b.Hash()))
 }
 
 func TestHintsOnCache(t *testing.T) {
@@ -109,7 +109,7 @@ func TestHintsOnCache(t *testing.T) {
 	}
 	r := cvs.WriteValue(l)
 
-	v := cvs.ReadValue(r.TargetRef())
+	v := cvs.ReadValue(r.TargetHash())
 	if assert.True(l.Equals(v)) {
 		l = v.(List)
 		bref := cvs.WriteValue(NewBlob(bytes.NewBufferString("g")))
@@ -117,7 +117,7 @@ func TestHintsOnCache(t *testing.T) {
 
 		hints := cvs.checkChunksInCache(l)
 		if assert.Len(hints, 2) {
-			for _, hash := range []ref.Ref{v.Ref(), bref.TargetRef()} {
+			for _, hash := range []hash.Hash{v.Hash(), bref.TargetHash()} {
 				_, present := hints[hash]
 				assert.True(present)
 			}

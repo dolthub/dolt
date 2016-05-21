@@ -1,7 +1,7 @@
 package types
 
 type mapLeafSequence struct {
-	data []mapEntry // sorted by entry.key.Ref()
+	data []mapEntry // sorted by entry.key.Hash()
 	t    *Type
 	vr   ValueReader
 }

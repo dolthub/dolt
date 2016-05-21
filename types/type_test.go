@@ -21,10 +21,10 @@ func TestTypes(t *testing.T) {
 	})
 	recType.Desc.(StructDesc).Fields["self"] = recType
 
-	mRef := vs.WriteValue(mapType).TargetRef()
-	setRef := vs.WriteValue(setType).TargetRef()
-	mahRef := vs.WriteValue(mahType).TargetRef()
-	recRef := vs.WriteValue(recType).TargetRef()
+	mRef := vs.WriteValue(mapType).TargetHash()
+	setRef := vs.WriteValue(setType).TargetHash()
+	mahRef := vs.WriteValue(mahType).TargetHash()
+	recRef := vs.WriteValue(recType).TargetHash()
 
 	assert.True(mapType.Equals(vs.ReadValue(mRef)))
 	assert.True(setType.Equals(vs.ReadValue(setRef)))

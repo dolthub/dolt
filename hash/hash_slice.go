@@ -1,20 +1,20 @@
-package ref
+package hash
 
-type RefSlice []Ref
+type HashSlice []Hash
 
-func (rs RefSlice) Len() int {
+func (rs HashSlice) Len() int {
 	return len(rs)
 }
 
-func (rs RefSlice) Less(i, j int) bool {
+func (rs HashSlice) Less(i, j int) bool {
 	return rs[i].Less(rs[j])
 }
 
-func (rs RefSlice) Swap(i, j int) {
+func (rs HashSlice) Swap(i, j int) {
 	rs[i], rs[j] = rs[j], rs[i]
 }
 
-func (rs RefSlice) Equals(other RefSlice) bool {
+func (rs HashSlice) Equals(other HashSlice) bool {
 	if len(rs) != len(other) {
 		return false
 	}

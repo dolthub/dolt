@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
@@ -61,29 +61,29 @@ type LevelDBStore struct {
 	closeBackingStore bool
 }
 
-func (l *LevelDBStore) Root() ref.Ref {
+func (l *LevelDBStore) Root() hash.Hash {
 	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
 	return l.rootByKey(l.rootKey)
 }
 
-func (l *LevelDBStore) UpdateRoot(current, last ref.Ref) bool {
+func (l *LevelDBStore) UpdateRoot(current, last hash.Hash) bool {
 	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
 	return l.updateRootByKey(l.rootKey, current, last)
 }
 
-func (l *LevelDBStore) Get(ref ref.Ref) Chunk {
+func (l *LevelDBStore) Get(ref hash.Hash) Chunk {
 	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
 	return l.getByKey(l.toChunkKey(ref), ref)
 }
 
-func (l *LevelDBStore) Has(ref ref.Ref) bool {
+func (l *LevelDBStore) Has(ref hash.Hash) bool {
 	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
 	return l.hasByKey(l.toChunkKey(ref))
 }
 
 func (l *LevelDBStore) Put(c Chunk) {
 	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
-	l.putByKey(l.toChunkKey(c.Ref()), c)
+	l.putByKey(l.toChunkKey(c.Hash()), c)
 }
 
 func (l *LevelDBStore) PutMany(chunks []Chunk) (e BackpressureError) {
@@ -92,7 +92,7 @@ func (l *LevelDBStore) PutMany(chunks []Chunk) (e BackpressureError) {
 	for _, c := range chunks {
 		d := c.Data()
 		numBytes += len(d)
-		b.Put(l.toChunkKey(c.Ref()), d)
+		b.Put(l.toChunkKey(c.Hash()), d)
 	}
 	l.putBatch(b, numBytes)
 	return
@@ -106,7 +106,7 @@ func (l *LevelDBStore) Close() error {
 	return nil
 }
 
-func (l *LevelDBStore) toChunkKey(r ref.Ref) []byte {
+func (l *LevelDBStore) toChunkKey(r hash.Hash) []byte {
 	digest := r.DigestSlice()
 	out := make([]byte, len(l.chunkPrefix), len(l.chunkPrefix)+len(digest))
 	copy(out, l.chunkPrefix)
@@ -139,17 +139,17 @@ func newBackingStore(dir string, maxFileHandles int, dumpStats bool) *internalLe
 	}
 }
 
-func (l *internalLevelDBStore) rootByKey(key []byte) ref.Ref {
+func (l *internalLevelDBStore) rootByKey(key []byte) hash.Hash {
 	val, err := l.db.Get(key, nil)
 	if err == errors.ErrNotFound {
-		return ref.Ref{}
+		return hash.Hash{}
 	}
 	d.Chk.NoError(err)
 
-	return ref.Parse(string(val))
+	return hash.Parse(string(val))
 }
 
-func (l *internalLevelDBStore) updateRootByKey(key []byte, current, last ref.Ref) bool {
+func (l *internalLevelDBStore) updateRootByKey(key []byte, current, last hash.Hash) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if last != l.rootByKey(key) {
@@ -162,7 +162,7 @@ func (l *internalLevelDBStore) updateRootByKey(key []byte, current, last ref.Ref
 	return true
 }
 
-func (l *internalLevelDBStore) getByKey(key []byte, ref ref.Ref) Chunk {
+func (l *internalLevelDBStore) getByKey(key []byte, ref hash.Hash) Chunk {
 	data, err := l.db.Get(key, nil)
 	l.getCount++
 	if err == errors.ErrNotFound {
@@ -170,7 +170,7 @@ func (l *internalLevelDBStore) getByKey(key []byte, ref ref.Ref) Chunk {
 	}
 	d.Chk.NoError(err)
 
-	return NewChunkWithRef(ref, data)
+	return NewChunkWithHash(ref, data)
 }
 
 func (l *internalLevelDBStore) hasByKey(key []byte) bool {

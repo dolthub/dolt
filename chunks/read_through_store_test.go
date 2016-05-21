@@ -29,10 +29,10 @@ func (suite *LevelDBStoreTestSuite) TestReadThroughStoreGet() {
 	input := "abc"
 	c := NewChunk([]byte(input))
 	bs.Put(c)
-	ref := c.Ref()
+	h := c.Hash()
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
-	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", ref.String())
+	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", h.String())
 
 	suite.Equal(1, bs.Len())
 	suite.Equal(1, bs.Writes)
@@ -42,7 +42,7 @@ func (suite *LevelDBStoreTestSuite) TestReadThroughStoreGet() {
 	rts := NewReadThroughStore(cs, bs)
 
 	// Now read "abc". It is not yet in the cache so we hit the backing store.
-	chunk := rts.Get(ref)
+	chunk := rts.Get(h)
 	suite.Equal(input, string(chunk.Data()))
 
 	suite.Equal(1, bs.Len())
@@ -53,7 +53,7 @@ func (suite *LevelDBStoreTestSuite) TestReadThroughStoreGet() {
 	suite.Equal(1, bs.Reads)
 
 	// Reading it again should not hit the backing store.
-	chunk = rts.Get(ref)
+	chunk = rts.Get(h)
 	suite.Equal(input, string(chunk.Data()))
 
 	suite.Equal(1, bs.Len())
@@ -73,12 +73,12 @@ func (suite *LevelDBStoreTestSuite) TestReadThroughStorePut() {
 	input := "abc"
 	c := NewChunk([]byte(input))
 	rts.Put(c)
-	ref := c.Ref()
+	h := c.Hash()
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
-	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", ref.String())
+	suite.Equal("sha1-a9993e364706816aba3e25717850c26c9cd0d89d", h.String())
 
-	assertInputInStore("abc", ref, bs, suite.Assert())
-	assertInputInStore("abc", ref, cs, suite.Assert())
-	assertInputInStore("abc", ref, rts, suite.Assert())
+	assertInputInStore("abc", h, bs, suite.Assert())
+	assertInputInStore("abc", h, cs, suite.Assert())
+	assertInputInStore("abc", h, rts, suite.Assert())
 }

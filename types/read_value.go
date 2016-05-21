@@ -7,12 +7,12 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 // ValueReader is an interface that knows how to read Noms Values, e.g. datas/Database. Required to avoid import cycle between this package and the package that implements Value reading.
 type ValueReader interface {
-	ReadValue(r ref.Ref) Value
+	ReadValue(r hash.Hash) Value
 }
 
 // ValueReadWriter is an interface that knows how to read and write Noms Values, e.g. datas/Database. Required to avoid import cycle between this package and the package that implements Value read/writing.

@@ -1,31 +1,31 @@
 package chunks
 
-import "github.com/attic-labs/noms/ref"
+import "github.com/attic-labs/noms/hash"
 
 type ReadRequest interface {
-	Ref() ref.Ref
+	Hash() hash.Hash
 	Outstanding() OutstandingRequest
 }
 
-func NewGetRequest(r ref.Ref, ch chan Chunk) GetRequest {
+func NewGetRequest(r hash.Hash, ch chan Chunk) GetRequest {
 	return GetRequest{r, ch}
 }
 
 type GetRequest struct {
-	r  ref.Ref
+	r  hash.Hash
 	ch chan Chunk
 }
 
-func NewHasRequest(r ref.Ref, ch chan bool) HasRequest {
+func NewHasRequest(r hash.Hash, ch chan bool) HasRequest {
 	return HasRequest{r, ch}
 }
 
 type HasRequest struct {
-	r  ref.Ref
+	r  hash.Hash
 	ch chan bool
 }
 
-func (g GetRequest) Ref() ref.Ref {
+func (g GetRequest) Hash() hash.Hash {
 	return g.r
 }
 
@@ -33,7 +33,7 @@ func (g GetRequest) Outstanding() OutstandingRequest {
 	return OutstandingGet(g.ch)
 }
 
-func (h HasRequest) Ref() ref.Ref {
+func (h HasRequest) Hash() hash.Hash {
 	return h.r
 }
 
@@ -70,11 +70,11 @@ func (h OutstandingHas) Fail() {
 }
 
 // ReadBatch represents a set of queued Get/Has requests, each of which are blocking on a receive channel for a response.
-type ReadBatch map[ref.Ref][]OutstandingRequest
+type ReadBatch map[hash.Hash][]OutstandingRequest
 
 // GetBatch represents a set of queued Get requests, each of which are blocking on a receive channel for a response.
-type GetBatch map[ref.Ref][]chan Chunk
-type HasBatch map[ref.Ref][]chan bool
+type GetBatch map[hash.Hash][]chan Chunk
+type HasBatch map[hash.Hash][]chan bool
 
 // Close ensures that callers to Get() and Has() are failed correctly if the corresponding chunk wasn't in the response from the server (i.e. it wasn't found).
 func (rb *ReadBatch) Close() error {
@@ -88,11 +88,11 @@ func (rb *ReadBatch) Close() error {
 
 // Put is implemented so that ReadBatch implements the ChunkSink interface.
 func (rb *ReadBatch) Put(c Chunk) {
-	for _, or := range (*rb)[c.Ref()] {
+	for _, or := range (*rb)[c.Hash()] {
 		or.Satisfy(c)
 	}
 
-	delete(*rb, c.Ref())
+	delete(*rb, c.Hash())
 }
 
 // PutMany is implemented so that ReadBatch implements the ChunkSink interface.
@@ -115,11 +115,11 @@ func (gb *GetBatch) Close() error {
 
 // Put is implemented so that GetBatch implements the ChunkSink interface.
 func (gb *GetBatch) Put(c Chunk) {
-	for _, ch := range (*gb)[c.Ref()] {
+	for _, ch := range (*gb)[c.Hash()] {
 		ch <- c
 	}
 
-	delete(*gb, c.Ref())
+	delete(*gb, c.Hash())
 }
 
 // PutMany is implemented so that GetBatch implements the ChunkSink interface.

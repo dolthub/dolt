@@ -1,21 +1,21 @@
 package types
 
-import "github.com/attic-labs/noms/ref"
+import "github.com/attic-labs/noms/hash"
 
-var getRefOverride func(v Value) ref.Ref
+var getRefOverride func(v Value) hash.Hash
 
-func getRef(v Value) ref.Ref {
+func getRef(v Value) hash.Hash {
 	if getRefOverride != nil {
 		return getRefOverride(v)
 	}
 	return getRefNoOverride(v)
 }
 
-func getRefNoOverride(v Value) ref.Ref {
-	return EncodeValue(v, nil).Ref()
+func getRefNoOverride(v Value) hash.Hash {
+	return EncodeValue(v, nil).Hash()
 }
 
-func EnsureRef(r *ref.Ref, v Value) ref.Ref {
+func EnsureRef(r *hash.Hash, v Value) hash.Hash {
 	if r.IsEmpty() {
 		*r = getRef(v)
 	}

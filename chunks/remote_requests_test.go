@@ -3,17 +3,17 @@ package chunks
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetRequestBatch(t *testing.T) {
 	assert := assert.New(t)
-	r0 := ref.Parse("sha1-0000000000000000000000000000000000000000")
+	r0 := hash.Parse("sha1-0000000000000000000000000000000000000000")
 	c1 := NewChunk([]byte("abc"))
-	r1 := c1.Ref()
+	r1 := c1.Hash()
 	c2 := NewChunk([]byte("123"))
-	r2 := c2.Ref()
+	r2 := c2.Hash()
 
 	tally := func(b bool, trueCnt, falseCnt *int) {
 		if b {
@@ -55,7 +55,7 @@ func TestGetRequestBatch(t *testing.T) {
 		tally(b, &r2True, &r2False)
 	}
 	for c := range req4chan {
-		assert.EqualValues(c2.Ref(), c.Ref())
+		assert.EqualValues(c2.Hash(), c.Hash())
 	}
 
 	assert.Equal(1, r1True)
@@ -69,7 +69,7 @@ func TestGetRequestBatch(t *testing.T) {
 		tally(b, &r0True, &r0False)
 	}
 	for c := range req1chan {
-		assert.EqualValues(EmptyChunk.Ref(), c.Ref())
+		assert.EqualValues(EmptyChunk.Hash(), c.Hash())
 	}
 	assert.Equal(0, r0True)
 	assert.Equal(1, r0False)

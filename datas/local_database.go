@@ -2,7 +2,7 @@ package datas
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -37,7 +37,7 @@ func (lds *LocalDatabase) Delete(datasetID string) (Database, error) {
 	}, err
 }
 
-func (lds *LocalDatabase) has(r ref.Ref) bool {
+func (lds *LocalDatabase) has(r hash.Hash) bool {
 	return lds.cch.Has(r)
 }
 

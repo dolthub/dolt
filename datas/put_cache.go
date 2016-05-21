@@ -10,7 +10,7 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -28,7 +28,7 @@ func newOrderedChunkCache() *orderedChunkCache {
 	d.Chk.NoError(err, "opening put cache in %s", dir)
 	return &orderedChunkCache{
 		orderedChunks: db,
-		chunkIndex:    map[ref.Ref][]byte{},
+		chunkIndex:    map[hash.Hash][]byte{},
 		dbDir:         dir,
 		mu:            &sync.RWMutex{},
 	}
@@ -37,30 +37,30 @@ func newOrderedChunkCache() *orderedChunkCache {
 // orderedChunkCache holds Chunks, allowing them to be retrieved by hash or enumerated in ref-height order.
 type orderedChunkCache struct {
 	orderedChunks *leveldb.DB
-	chunkIndex    map[ref.Ref][]byte
+	chunkIndex    map[hash.Hash][]byte
 	dbDir         string
 	mu            *sync.RWMutex
 }
 
-type hashSet map[ref.Ref]struct{}
+type hashSet map[hash.Hash]struct{}
 
-func (hs hashSet) Insert(hash ref.Ref) {
+func (hs hashSet) Insert(hash hash.Hash) {
 	hs[hash] = struct{}{}
 }
 
-func (hs hashSet) Has(hash ref.Ref) (has bool) {
+func (hs hashSet) Has(hash hash.Hash) (has bool) {
 	_, has = hs[hash]
 	return
 }
 
 // Insert can be called from any goroutine to store c in the cache. If c is successfully added to the cache, Insert returns true. If c was already in the cache, Insert returns false.
 func (p *orderedChunkCache) Insert(c chunks.Chunk, refHeight uint64) bool {
-	hash := c.Ref()
+	hash := c.Hash()
 	dbKey, present := func() (dbKey []byte, present bool) {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		if _, present = p.chunkIndex[hash]; !present {
-			dbKey = toDbKey(refHeight, c.Ref())
+			dbKey = toDbKey(refHeight, c.Hash())
 			p.chunkIndex[hash] = dbKey
 		}
 		return
@@ -77,7 +77,7 @@ func (p *orderedChunkCache) Insert(c chunks.Chunk, refHeight uint64) bool {
 	return false
 }
 
-func (p *orderedChunkCache) has(hash ref.Ref) (has bool) {
+func (p *orderedChunkCache) has(hash hash.Hash) (has bool) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	_, has = p.chunkIndex[hash]
@@ -85,7 +85,7 @@ func (p *orderedChunkCache) has(hash ref.Ref) (has bool) {
 }
 
 // Get can be called from any goroutine to retrieve the chunk referenced by hash. If the chunk is not present, Get returns the empty Chunk.
-func (p *orderedChunkCache) Get(hash ref.Ref) chunks.Chunk {
+func (p *orderedChunkCache) Get(hash hash.Hash) chunks.Chunk {
 	// Don't use defer p.mu.RUnlock() here, because I want reading from orderedChunks NOT to be guarded by the lock. LevelDB handles its own goroutine-safety.
 	p.mu.RLock()
 	dbKey, ok := p.chunkIndex[hash]
@@ -118,7 +118,7 @@ func (p *orderedChunkCache) Clear(hashes hashSet) {
 var uint64Size = binary.Size(uint64(0))
 
 // toDbKey takes a refHeight and a hash and returns a binary key suitable for use with LevelDB. The default sort order used by LevelDB ensures that these keys (and their associated values) will be iterated in ref-height order.
-func toDbKey(refHeight uint64, hash ref.Ref) []byte {
+func toDbKey(refHeight uint64, hash hash.Hash) []byte {
 	digest := hash.DigestSlice()
 	buf := bytes.NewBuffer(make([]byte, 0, uint64Size+binary.Size(digest)))
 	err := binary.Write(buf, binary.BigEndian, refHeight)
@@ -128,15 +128,15 @@ func toDbKey(refHeight uint64, hash ref.Ref) []byte {
 	return buf.Bytes()
 }
 
-func fromDbKey(key []byte) (uint64, ref.Ref) {
+func fromDbKey(key []byte) (uint64, hash.Hash) {
 	refHeight := uint64(0)
 	r := bytes.NewReader(key)
 	err := binary.Read(r, binary.BigEndian, &refHeight)
 	d.Chk.NoError(err)
-	digest := ref.Sha1Digest{}
+	digest := hash.Sha1Digest{}
 	err = binary.Read(r, binary.BigEndian, &digest)
 	d.Chk.NoError(err)
-	return refHeight, ref.New(digest)
+	return refHeight, hash.New(digest)
 }
 
 // ExtractChunks can be called from any goroutine to write Chunks referenced by the given hashes to w. The chunks are ordered by ref-height. Chunks of the same height are written in an unspecified order, relative to one another.

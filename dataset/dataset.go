@@ -29,7 +29,7 @@ func (ds *Dataset) MaybeHead() (types.Struct, bool) {
 	return ds.Store().MaybeHead(ds.id)
 }
 
-func (ds *Dataset) MaybeHeadRef() (types.Ref, bool) {
+func (ds *Dataset) MaybeHeadHash() (types.Ref, bool) {
 	return ds.Store().MaybeHeadRef(ds.id)
 }
 
@@ -40,8 +40,8 @@ func (ds *Dataset) Head() types.Struct {
 	return c
 }
 
-func (ds *Dataset) HeadRef() types.Ref {
-	r, ok := ds.MaybeHeadRef()
+func (ds *Dataset) HeadHash() types.Ref {
+	r, ok := ds.MaybeHeadHash()
 	d.Chk.True(ok, "Dataset \"%s\" does not exist", ds.id)
 	return r
 }
@@ -50,7 +50,7 @@ func (ds *Dataset) HeadRef() types.Ref {
 // If the update cannot be performed, e.g., because of a conflict, Commit returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
 func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
 	p := types.NewSet()
-	if headRef, ok := ds.MaybeHeadRef(); ok {
+	if headRef, ok := ds.MaybeHeadHash(); ok {
 		headRef.TargetValue(ds.Store()) // TODO: This is a hack to deconfuse the validation code, which doesn't hold onto validation state between commits.
 		p = p.Insert(headRef)
 	}
@@ -74,7 +74,7 @@ func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency 
 	sink := *ds
 
 	sinkHeadRef := types.Ref{}
-	if currentHeadRef, ok := sink.MaybeHeadRef(); ok {
+	if currentHeadRef, ok := sink.MaybeHeadHash(); ok {
 		sinkHeadRef = currentHeadRef
 	}
 
@@ -96,7 +96,7 @@ func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency 
 }
 
 func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
-	v := ds.store.ReadValue(r.TargetRef())
+	v := ds.store.ReadValue(r.TargetHash())
 
 	d.Exp.NotNil(v, "%v cannot be found", r)
 	d.Exp.True(v.Type().Equals(datas.NewCommit().Type()), "Not a Commit: %+v", v)

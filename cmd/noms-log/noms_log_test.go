@@ -28,9 +28,9 @@ func testCommitInResults(s *nomsShowTestSuite, spec string, i int) {
 	ds, err = ds.Commit(types.Number(1))
 	s.NoError(err)
 	commit := ds.Head()
-	fmt.Printf("commit ref: %s, type: %s\n", commit.Ref(), commit.Type().Name())
+	fmt.Printf("commit hash: %s, type: %s\n", commit.Hash(), commit.Type().Name())
 	ds.Store().Close()
-	s.Contains(s.Run(main, []string{spec}), commit.Ref().String())
+	s.Contains(s.Run(main, []string{spec}), commit.Hash().String())
 }
 
 func (s *nomsShowTestSuite) TestNomsLog() {
@@ -57,11 +57,11 @@ func addCommitWithValue(ds dataset.Dataset, v types.Value) (dataset.Dataset, err
 }
 
 func addBranchedDataset(newDs, parentDs dataset.Dataset, v string) (dataset.Dataset, error) {
-	return newDs.CommitWithParents(types.NewString(v), types.NewSet().Insert(parentDs.HeadRef()))
+	return newDs.CommitWithParents(types.NewString(v), types.NewSet().Insert(parentDs.HeadHash()))
 }
 
 func mergeDatasets(ds1, ds2 dataset.Dataset, v string) (dataset.Dataset, error) {
-	return ds1.CommitWithParents(types.NewString(v), types.NewSet(ds1.HeadRef(), ds2.HeadRef()))
+	return ds1.CommitWithParents(types.NewString(v), types.NewSet(ds1.HeadHash(), ds2.HeadHash()))
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph1() {

@@ -74,17 +74,17 @@ func printCommit(node LogNode) (err error) {
 		doColor = ansi.ColorFunc("red+h")
 	}
 
-	fmt.Printf("%s%s\n", genGraph(node, lineno), doColor(node.commit.Ref().String()))
+	fmt.Printf("%s%s\n", genGraph(node, lineno), doColor(node.commit.Hash().String()))
 	parents := commitRefsFromSet(node.commit.Get(datas.ParentsField).(types.Set))
 	lineno++
 	if len(parents) > 1 {
 		pstrings := []string{}
 		for _, cr := range parents {
-			pstrings = append(pstrings, cr.TargetRef().String())
+			pstrings = append(pstrings, cr.TargetHash().String())
 		}
 		fmt.Printf("%sMerge: %s\n", genGraph(node, lineno), strings.Join(pstrings, " "))
 	} else if len(parents) == 1 {
-		fmt.Printf("%sParent: %s\n", genGraph(node, lineno), parents[0].TargetRef().String())
+		fmt.Printf("%sParent: %s\n", genGraph(node, lineno), parents[0].TargetHash().String())
 	} else {
 		fmt.Printf("%sParent: None\n", genGraph(node, lineno))
 	}

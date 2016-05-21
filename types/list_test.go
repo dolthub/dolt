@@ -552,7 +552,7 @@ func TestListFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(testListSize)
 	s := NewList(nums...)
-	assert.Equal("sha1-aa1605484d993e89dbc0431acb9f2478282f9d94", s.Ref().String())
+	assert.Equal("sha1-aa1605484d993e89dbc0431acb9f2478282f9d94", s.Hash().String())
 }
 
 func TestListRefOfStructFirstNNumbers(t *testing.T) {
@@ -574,7 +574,7 @@ func TestListRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := firstNNumbers(testListSize)
 	s := NewList(nums...)
-	assert.Equal("sha1-2e79d54322aa793d0e8d48380a28927a257a141a", s.Ref().String())
+	assert.Equal("sha1-2e79d54322aa793d0e8d48380a28927a257a141a", s.Hash().String())
 }
 
 func TestListModifyAfterRead(t *testing.T) {
@@ -583,7 +583,7 @@ func TestListModifyAfterRead(t *testing.T) {
 
 	list := getTestList().toList()
 	// Drop chunk values.
-	list = vs.ReadValue(vs.WriteValue(list).TargetRef()).(List)
+	list = vs.ReadValue(vs.WriteValue(list).TargetHash()).(List)
 	// Modify/query. Once upon a time this would crash.
 	llen := list.Len()
 	z := list.Get(0)

@@ -19,8 +19,8 @@ type collectionTestSuite struct {
 type validateFn func(v2 Collection) bool
 type deltaFn func() Collection
 
-func (suite *collectionTestSuite) TestRef() {
-	suite.Equal(suite.expectRef, suite.col.Ref().String())
+func (suite *collectionTestSuite) TestHash() {
+	suite.Equal(suite.expectRef, suite.col.Hash().String())
 }
 
 func (suite *collectionTestSuite) TestType() {
@@ -50,7 +50,7 @@ func (suite *collectionTestSuite) TestChunkCountAndType() {
 func (suite *collectionTestSuite) TestRoundTripAndValidate() {
 	vs := NewTestValueStore()
 	r := vs.WriteValue(suite.col)
-	v2 := vs.ReadValue(r.TargetRef()).(Collection)
+	v2 := vs.ReadValue(r.TargetHash()).(Collection)
 	suite.True(v2.Equals(suite.col))
 	suite.True(suite.col.Equals(v2))
 	suite.True(suite.validate(v2))

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/suite"
 )
@@ -20,7 +20,7 @@ type LevelDBPutCacheSuite struct {
 	suite.Suite
 	cache  *orderedChunkCache
 	values []types.Value
-	chnx   map[ref.Ref]chunks.Chunk
+	chnx   map[hash.Hash]chunks.Chunk
 }
 
 func (suite *LevelDBPutCacheSuite) SetupTest() {
@@ -32,9 +32,9 @@ func (suite *LevelDBPutCacheSuite) SetupTest() {
 		types.NewString("jkl"),
 		types.NewString("mno"),
 	}
-	suite.chnx = map[ref.Ref]chunks.Chunk{}
+	suite.chnx = map[hash.Hash]chunks.Chunk{}
 	for _, v := range suite.values {
-		suite.chnx[v.Ref()] = types.EncodeValue(v, nil)
+		suite.chnx[v.Hash()] = types.EncodeValue(v, nil)
 	}
 }
 
@@ -43,17 +43,17 @@ func (suite *LevelDBPutCacheSuite) TearDownTest() {
 }
 
 func (suite *LevelDBPutCacheSuite) TestAddTwice() {
-	chunk := suite.chnx[suite.values[0].Ref()]
+	chunk := suite.chnx[suite.values[0].Hash()]
 	suite.True(suite.cache.Insert(chunk, 1))
 	suite.False(suite.cache.Insert(chunk, 1))
 }
 
 func (suite *LevelDBPutCacheSuite) TestAddParallel() {
-	hashes := make(chan ref.Ref)
+	hashes := make(chan hash.Hash)
 	for _, chunk := range suite.chnx {
 		go func(c chunks.Chunk) {
 			suite.cache.Insert(c, 1)
-			hashes <- c.Ref()
+			hashes <- c.Hash()
 		}(chunk)
 	}
 
@@ -72,15 +72,15 @@ func (suite *LevelDBPutCacheSuite) TestGetParallel() {
 	}
 
 	chunkChan := make(chan chunks.Chunk)
-	for hash := range suite.chnx {
-		go func(h ref.Ref) {
+	for h := range suite.chnx {
+		go func(h hash.Hash) {
 			chunkChan <- suite.cache.Get(h)
-		}(hash)
+		}(h)
 	}
 
 	for i := 0; i < len(suite.values); i++ {
 		c := <-chunkChan
-		delete(suite.chnx, c.Ref())
+		delete(suite.chnx, c.Hash())
 	}
 	close(chunkChan)
 	suite.Len(suite.chnx, 0)
@@ -92,9 +92,9 @@ func (suite *LevelDBPutCacheSuite) TestClearParallel() {
 	for i, v := range suite.values {
 		suite.cache.Insert(types.EncodeValue(v, nil), 1)
 		if i < keepIdx {
-			toClear1.Insert(v.Ref())
+			toClear1.Insert(v.Hash())
 		} else if i > keepIdx {
-			toClear2.Insert(v.Ref())
+			toClear2.Insert(v.Hash())
 		}
 	}
 
@@ -111,10 +111,10 @@ func (suite *LevelDBPutCacheSuite) TestClearParallel() {
 	wg.Wait()
 	for i, v := range suite.values {
 		if i == keepIdx {
-			suite.True(suite.cache.has(v.Ref()))
+			suite.True(suite.cache.has(v.Hash()))
 			continue
 		}
-		suite.False(suite.cache.has(v.Ref()))
+		suite.False(suite.cache.has(v.Hash()))
 	}
 }
 
@@ -131,7 +131,7 @@ func (suite *LevelDBPutCacheSuite) TestReaderSubset() {
 	chunkChan := suite.extractChunks(toExtract)
 	count := 0
 	for c := range chunkChan {
-		if suite.Contains(toExtract, c.Ref()) {
+		if suite.Contains(toExtract, c.Hash()) {
 			count++
 		}
 	}
@@ -150,14 +150,14 @@ func (suite *LevelDBPutCacheSuite) TestReaderSnapshot() {
 	suite.cache.Clear(hashes)
 
 	for c := range chunkChan {
-		delete(suite.chnx, c.Ref())
+		delete(suite.chnx, c.Hash())
 	}
 	suite.Len(suite.chnx, 0)
 }
 
 func (suite *LevelDBPutCacheSuite) TestExtractChunksOrder() {
 	maxHeight := len(suite.chnx)
-	orderedHashes := make(ref.RefSlice, maxHeight)
+	orderedHashes := make(hash.HashSlice, maxHeight)
 	toExtract := hashSet{}
 	heights := rand.Perm(maxHeight)
 	for hash, c := range suite.chnx {
@@ -169,7 +169,7 @@ func (suite *LevelDBPutCacheSuite) TestExtractChunksOrder() {
 
 	chunkChan := suite.extractChunks(toExtract)
 	for c := range chunkChan {
-		suite.Equal(orderedHashes[0], c.Ref())
+		suite.Equal(orderedHashes[0], c.Hash())
 		orderedHashes = orderedHashes[1:]
 	}
 	suite.Len(orderedHashes, 0)

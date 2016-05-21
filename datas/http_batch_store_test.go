@@ -8,7 +8,7 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/constants"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
 	"github.com/julienschmidt/httprouter"
 	"github.com/stretchr/testify/suite"
@@ -118,8 +118,8 @@ func (suite *HTTPBatchStoreSuite) TestPutChunkWithHints() {
 	l := types.NewList(types.NewRef(vals[0]), types.NewRef(vals[1]))
 
 	suite.store.SchedulePut(types.EncodeValue(l, nil), 2, types.Hints{
-		chnx[0].Ref(): struct{}{},
-		chnx[1].Ref(): struct{}{},
+		chnx[0].Hash(): struct{}{},
+		chnx[1].Hash(): struct{}{},
 	})
 	suite.store.Flush()
 
@@ -146,7 +146,7 @@ func (b *backpressureCS) PutMany(chnx []chunks.Chunk) chunks.BackpressureError {
 
 	bpe := make(chunks.BackpressureError, len(chnx)-b.tries)
 	for i, c := range chnx[b.tries:] {
-		bpe[i] = c.Ref()
+		bpe[i] = c.Hash()
 	}
 	return bpe
 }
@@ -174,19 +174,19 @@ func (suite *HTTPBatchStoreSuite) TestPutChunksBackpressure() {
 
 func (suite *HTTPBatchStoreSuite) TestRoot() {
 	c := chunks.NewChunk([]byte("abc"))
-	suite.True(suite.cs.UpdateRoot(c.Ref(), ref.Ref{}))
-	suite.Equal(c.Ref(), suite.store.Root())
+	suite.True(suite.cs.UpdateRoot(c.Hash(), hash.Hash{}))
+	suite.Equal(c.Hash(), suite.store.Root())
 }
 
 func (suite *HTTPBatchStoreSuite) TestUpdateRoot() {
 	c := chunks.NewChunk([]byte("abc"))
-	suite.True(suite.store.UpdateRoot(c.Ref(), ref.Ref{}))
-	suite.Equal(c.Ref(), suite.cs.Root())
+	suite.True(suite.store.UpdateRoot(c.Hash(), hash.Hash{}))
+	suite.Equal(c.Hash(), suite.cs.Root())
 }
 
 func (suite *HTTPBatchStoreSuite) TestGet() {
 	c := chunks.NewChunk([]byte("abc"))
 	suite.cs.Put(c)
-	got := suite.store.Get(c.Ref())
-	suite.Equal(c.Ref(), got.Ref())
+	got := suite.store.Get(c.Hash())
+	suite.Equal(c.Hash(), got.Hash())
 }

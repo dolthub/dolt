@@ -27,7 +27,7 @@ type metaTuple struct {
 	numLeaves uint64
 }
 
-func (mt metaTuple) ChildRef() Ref {
+func (mt metaTuple) ChildHash() Ref {
 	return mt.childRef
 }
 
@@ -80,7 +80,7 @@ func (ms metaSequenceObject) valueReader() ValueReader {
 
 func (ms metaSequenceObject) Chunks() (chunks []Ref) {
 	for _, tuple := range ms.tuples {
-		chunks = append(chunks, tuple.ChildRef())
+		chunks = append(chunks, tuple.ChildHash())
 	}
 	return
 }
@@ -130,7 +130,7 @@ func readMetaTupleValue(item sequenceItem, vr ValueReader) Value {
 		return mt.child
 	}
 
-	r := mt.childRef.TargetRef()
+	r := mt.childRef.TargetHash()
 	d.Chk.False(r.IsEmpty())
 	return vr.ReadValue(r)
 }

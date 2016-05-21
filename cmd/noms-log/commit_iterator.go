@@ -46,7 +46,7 @@ func (iter *CommitIterator) Next() (LogNode, bool) {
 	branches := branchList{}
 	parents := commitRefsFromSet(br.commit.Get(datas.ParentsField).(types.Set))
 	for _, p := range parents {
-		b := branch{cr: p, commit: iter.db.ReadValue(p.TargetRef()).(types.Struct)}
+		b := branch{cr: p, commit: iter.db.ReadValue(p.TargetHash()).(types.Struct)}
 		branches = append(branches, b)
 	}
 	iter.branches = iter.branches.Splice(col, 1, branches...)
@@ -84,7 +84,7 @@ type LogNode struct {
 }
 
 func (n LogNode) String() string {
-	return fmt.Sprintf("cr: %s, startingColCount: %d, endingColCount: %d, col: %d, newCols: %v, foldedCols: %v, expanding: %t, shrunk: %t, shrinking: %t", n.cr.TargetRef(), n.startingColCount, n.endingColCount, n.col, n.newCols, n.foldedCols, n.Expanding(), n.Shrunk(), n.Shrinking())
+	return fmt.Sprintf("cr: %s, startingColCount: %d, endingColCount: %d, col: %d, newCols: %v, foldedCols: %v, expanding: %t, shrunk: %t, shrinking: %t", n.cr.TargetHash(), n.startingColCount, n.endingColCount, n.col, n.newCols, n.foldedCols, n.Expanding(), n.Shrunk(), n.Shrinking())
 }
 
 // True if this commit's graph will expand to show an additional branch
@@ -108,7 +108,7 @@ type branch struct {
 }
 
 func (b branch) String() string {
-	return b.cr.TargetRef().String()
+	return b.cr.TargetHash().String()
 }
 
 type branchList []branch

@@ -1,4 +1,4 @@
-package ref
+package hash
 
 import (
 	"testing"
@@ -95,7 +95,7 @@ func TestFromData(t *testing.T) {
 }
 
 func TestIsEmpty(t *testing.T) {
-	r1 := Ref{}
+	r1 := Hash{}
 	assert.True(t, r1.IsEmpty())
 
 	r2 := Parse("sha1-0000000000000000000000000000000000000000")
@@ -116,7 +116,7 @@ func TestLess(t *testing.T) {
 	assert.False(r2.Less(r1))
 	assert.False(r2.Less(r2))
 
-	r0 := Ref{}
+	r0 := Hash{}
 	assert.False(r0.Less(r0))
 	assert.True(r0.Less(r2))
 	assert.False(r2.Less(r0))
@@ -133,7 +133,7 @@ func TestGreater(t *testing.T) {
 	assert.True(r2.Greater(r1))
 	assert.False(r2.Greater(r2))
 
-	r0 := Ref{}
+	r0 := Hash{}
 	assert.False(r0.Greater(r0))
 	assert.False(r0.Greater(r2))
 	assert.True(r2.Greater(r0))

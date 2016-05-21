@@ -32,7 +32,7 @@ func main() {
 		set, err := setSpec.Dataset()
 		util.CheckError(err)
 
-		oldCommitRef, errBool := set.MaybeHeadRef()
+		oldCommitRef, errBool := set.MaybeHeadHash()
 		if !errBool {
 			util.CheckError(fmt.Errorf("Dataset %v not found", set.ID()))
 		}
@@ -41,7 +41,7 @@ func main() {
 		util.CheckError(err)
 		defer store.Close()
 
-		fmt.Printf("Deleted dataset %v (was %v)\n\n", set.ID(), oldCommitRef.TargetRef().String())
+		fmt.Printf("Deleted dataset %v (was %v)\n\n", set.ID(), oldCommitRef.TargetHash().String())
 	} else {
 		if flag.NArg() != 1 {
 			flag.Usage()

@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -181,7 +181,7 @@ func TestReadCompoundList(t *testing.T) {
 			RefKind, ListKind, NumberKind, "%s", "1", NumberKind, "1", "1",
 			RefKind, ListKind, NumberKind, "%s", "1", NumberKind, "4", "4"
 		]
-	]`, list1.Ref(), list2.Ref())
+	]`, list1.Hash(), list2.Hash())
 	r := newJSONArrayReader(a, cs)
 	l := r.readValue()
 
@@ -204,7 +204,7 @@ func TestReadCompoundSet(t *testing.T) {
 			RefKind, SetKind, NumberKind, "%s", "1", NumberKind, "1", "2",
 			RefKind, SetKind, NumberKind, "%s", "1", NumberKind, "4", "3"
 		]
-	]`, set1.Ref(), set2.Ref())
+	]`, set1.Hash(), set2.Hash())
 	r := newJSONArrayReader(a, cs)
 	l := r.readValue()
 
@@ -240,9 +240,9 @@ func TestReadCompoundBlob(t *testing.T) {
 	cs := NewTestValueStore()
 
 	// Arbitrary valid refs.
-	r1 := Number(1).Ref()
-	r2 := Number(2).Ref()
-	r3 := Number(3).Ref()
+	r1 := Number(1).Hash()
+	r2 := Number(2).Hash()
+	r3 := Number(3).Hash()
 	a := parseJSON(`[
 		BlobKind, true, [
 			RefKind, BlobKind, "%s", "1", NumberKind, "20", "20",
@@ -262,7 +262,7 @@ func TestReadCompoundBlob(t *testing.T) {
 	}, cs))
 
 	assert.True(m.Type().Equals(m2.Type()))
-	assert.Equal(m.Ref().String(), m2.Ref().String())
+	assert.Equal(m.Hash().String(), m2.Hash().String())
 }
 
 func TestReadStruct(t *testing.T) {
@@ -342,7 +342,7 @@ func TestReadRef(t *testing.T) {
 	assert := assert.New(t)
 	cs := NewTestValueStore()
 
-	r := ref.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
+	r := hash.Parse("sha1-a9993e364706816aba3e25717850c26c9cd0d89d")
 	a := parseJSON(`[RefKind, NumberKind, "%s", "42"]`, r.String())
 	reader := newJSONArrayReader(a, cs)
 	v := reader.readValue()

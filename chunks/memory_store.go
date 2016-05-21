@@ -4,12 +4,12 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 // An in-memory implementation of store.ChunkStore. Useful mainly for tests.
 type MemoryStore struct {
-	data map[ref.Ref]Chunk
+	data map[hash.Hash]Chunk
 	memoryRootTracker
 	mu *sync.Mutex
 }
@@ -20,16 +20,16 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
-func (ms *MemoryStore) Get(ref ref.Ref) Chunk {
+func (ms *MemoryStore) Get(h hash.Hash) Chunk {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
-	if c, ok := ms.data[ref]; ok {
+	if c, ok := ms.data[h]; ok {
 		return c
 	}
 	return EmptyChunk
 }
 
-func (ms *MemoryStore) Has(r ref.Ref) bool {
+func (ms *MemoryStore) Has(r hash.Hash) bool {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	if ms.data == nil {
@@ -43,9 +43,9 @@ func (ms *MemoryStore) Put(c Chunk) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	if ms.data == nil {
-		ms.data = map[ref.Ref]Chunk{}
+		ms.data = map[hash.Hash]Chunk{}
 	}
-	ms.data[c.Ref()] = c
+	ms.data[c.Hash()] = c
 }
 
 func (ms *MemoryStore) PutMany(chunks []Chunk) (e BackpressureError) {

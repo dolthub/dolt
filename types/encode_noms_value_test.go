@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -107,7 +107,7 @@ func TestWriteMapOfMap(t *testing.T) {
 
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeValue(v)
-	// the order of the elements is based on the ref of the value.
+	// the order of the elements is based on the hash of the value.
 	assert.EqualValues([]interface{}{MapKind, MapKind, StringKind, NumberKind, SetKind, BoolKind, false, []interface{}{
 		MapKind, StringKind, NumberKind, false, []interface{}{StringKind, "a", NumberKind, "0"},
 		SetKind, BoolKind, false, []interface{}{BoolKind, true}}}, w.toArray())
@@ -116,9 +116,9 @@ func TestWriteMapOfMap(t *testing.T) {
 func TestWriteCompoundBlob(t *testing.T) {
 	assert := assert.New(t)
 
-	r1 := ref.Parse("sha1-0000000000000000000000000000000000000001")
-	r2 := ref.Parse("sha1-0000000000000000000000000000000000000002")
-	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
+	r1 := hash.Parse("sha1-0000000000000000000000000000000000000001")
+	r2 := hash.Parse("sha1-0000000000000000000000000000000000000002")
+	r3 := hash.Parse("sha1-0000000000000000000000000000000000000003")
 
 	v := newBlob(newBlobMetaSequence([]metaTuple{
 		newMetaTuple(Number(20), nil, constructRef(RefOfBlobType, r1, 11), 20),
@@ -128,7 +128,7 @@ func TestWriteCompoundBlob(t *testing.T) {
 	w := newJSONArrayWriter(NewTestValueStore())
 	w.writeValue(v)
 
-	// the order of the elements is based on the ref of the value.
+	// the order of the elements is based on the hash of the value.
 	assert.EqualValues([]interface{}{
 		BlobKind, true, []interface{}{
 			RefKind, BlobKind, r1.String(), "11", NumberKind, "20", "20",
@@ -216,8 +216,8 @@ func TestWriteCompoundList(t *testing.T) {
 	w.writeValue(cl)
 	assert.EqualValues([]interface{}{
 		ListKind, NumberKind, true, []interface{}{
-			RefKind, ListKind, NumberKind, list1.Ref().String(), "1", NumberKind, "1", "1",
-			RefKind, ListKind, NumberKind, list2.Ref().String(), "1", NumberKind, "4", "4",
+			RefKind, ListKind, NumberKind, list1.Hash().String(), "1", NumberKind, "1", "1",
+			RefKind, ListKind, NumberKind, list2.Hash().String(), "1", NumberKind, "4", "4",
 		},
 	}, w.toArray())
 }
@@ -236,8 +236,8 @@ func TestWriteCompoundSet(t *testing.T) {
 	w.writeValue(cl)
 	assert.EqualValues([]interface{}{
 		SetKind, NumberKind, true, []interface{}{
-			RefKind, SetKind, NumberKind, set1.Ref().String(), "1", NumberKind, "1", "2",
-			RefKind, SetKind, NumberKind, set2.Ref().String(), "1", NumberKind, "4", "3",
+			RefKind, SetKind, NumberKind, set1.Hash().String(), "1", NumberKind, "1", "2",
+			RefKind, SetKind, NumberKind, set2.Hash().String(), "1", NumberKind, "4", "3",
 		},
 	}, w.toArray())
 }
@@ -301,7 +301,7 @@ func TestWriteRef(t *testing.T) {
 	assert := assert.New(t)
 
 	typ := MakeRefType(NumberType)
-	r := ref.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
+	r := hash.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
 	v := constructRef(typ, r, 4)
 
 	w := newJSONArrayWriter(NewTestValueStore())

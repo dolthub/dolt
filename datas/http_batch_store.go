@@ -14,7 +14,7 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
 	"github.com/julienschmidt/httprouter"
 )
@@ -69,7 +69,7 @@ type httpDoer interface {
 }
 
 type writeRequest struct {
-	hash  ref.Ref
+	hash  hash.Hash
 	hints types.Hints
 }
 
@@ -101,7 +101,7 @@ func (bhcs *httpBatchStore) Close() (e error) {
 	return
 }
 
-func (bhcs *httpBatchStore) Get(r ref.Ref) chunks.Chunk {
+func (bhcs *httpBatchStore) Get(r hash.Hash) chunks.Chunk {
 	pending := bhcs.unwrittenPuts.Get(r)
 	if !pending.IsEmpty() {
 		return pending
@@ -141,7 +141,7 @@ func (bhcs *httpBatchStore) sendGetRequests(req chunks.ReadRequest) {
 	hashes := hashSet{}
 
 	addReq := func(req chunks.ReadRequest) {
-		hash := req.Ref()
+		hash := req.Hash()
 		batch[hash] = append(batch[hash], req.Outstanding())
 		hashes.Insert(hash)
 	}
@@ -202,7 +202,7 @@ func (bhcs *httpBatchStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints 
 	}
 
 	bhcs.requestWg.Add(1)
-	bhcs.writeQueue <- writeRequest{c.Ref(), hints}
+	bhcs.writeQueue <- writeRequest{c.Hash(), hints}
 }
 
 func (bhcs *httpBatchStore) batchPutRequests() {
@@ -308,18 +308,18 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 	}()
 }
 
-func (bhcs *httpBatchStore) Root() ref.Ref {
+func (bhcs *httpBatchStore) Root() hash.Hash {
 	// GET http://<host>/root. Response will be ref of root.
-	res := bhcs.requestRoot("GET", ref.Ref{}, ref.Ref{})
+	res := bhcs.requestRoot("GET", hash.Hash{}, hash.Hash{})
 	defer closeResponse(res)
 
 	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
 	data, err := ioutil.ReadAll(res.Body)
 	d.Chk.NoError(err)
-	return ref.Parse(string(data))
+	return hash.Parse(string(data))
 }
 
-func (bhcs *httpBatchStore) UpdateRoot(current, last ref.Ref) bool {
+func (bhcs *httpBatchStore) UpdateRoot(current, last hash.Hash) bool {
 	// POST http://<host>/root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
 	bhcs.Flush()
 
@@ -330,7 +330,7 @@ func (bhcs *httpBatchStore) UpdateRoot(current, last ref.Ref) bool {
 	return res.StatusCode == http.StatusOK
 }
 
-func (bhcs *httpBatchStore) requestRoot(method string, current, last ref.Ref) *http.Response {
+func (bhcs *httpBatchStore) requestRoot(method string, current, last hash.Hash) *http.Response {
 	u := *bhcs.host
 	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.RootPath)
 	if method == "POST" {

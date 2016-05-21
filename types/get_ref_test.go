@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetRef(t *testing.T) {
 	assert := assert.New(t)
 	input := fmt.Sprintf("t [%d,false]", BoolKind)
-	expected := ref.FromData([]byte(input))
+	expected := hash.FromData([]byte(input))
 	actual := getRef(Bool(false))
 	assert.Equal(expected, actual)
 }
@@ -20,13 +20,13 @@ func TestEnsureRef(t *testing.T) {
 	assert := assert.New(t)
 	vs := NewTestValueStore()
 	count := byte(1)
-	mockGetRef := func(v Value) ref.Ref {
-		d := ref.Sha1Digest{}
+	mockGetRef := func(v Value) hash.Hash {
+		d := hash.Sha1Digest{}
 		d[0] = count
 		count++
-		return ref.New(d)
+		return hash.New(d)
 	}
-	testRef := func(r ref.Ref, expected byte) {
+	testRef := func(r hash.Hash, expected byte) {
 		d := r.Digest()
 		assert.Equal(expected, d[0])
 		for i := 1; i < len(d); i++ {
@@ -66,7 +66,7 @@ func TestEnsureRef(t *testing.T) {
 	}
 	for i := 0; i < 2; i++ {
 		for j, v := range values {
-			testRef(v.Ref(), byte(j+1))
+			testRef(v.Hash(), byte(j+1))
 		}
 	}
 
@@ -77,7 +77,7 @@ func TestEnsureRef(t *testing.T) {
 	}
 	for i := 0; i < 2; i++ {
 		for j, v := range values {
-			testRef(v.Ref(), byte(i*len(values)+(j+1)))
+			testRef(v.Hash(), byte(i*len(values)+(j+1)))
 		}
 	}
 }

@@ -315,7 +315,7 @@ func TestSetHas2(t *testing.T) {
 	vs := NewTestValueStore()
 	doTest := func(ts testSet) {
 		set := ts.toSet()
-		set2 := vs.ReadValue(vs.WriteValue(set).TargetRef()).(Set)
+		set2 := vs.ReadValue(vs.WriteValue(set).TargetHash()).(Set)
 		for _, v := range ts {
 			assert.True(set.Has(v))
 			assert.True(set2.Has(v))
@@ -565,7 +565,7 @@ func testSetOrder(assert *assert.Assertions, valueType *Type, value []Value, exp
 	m := NewSet(value...)
 	i := 0
 	m.IterAll(func(value Value) {
-		assert.Equal(expectOrdering[i].Ref().String(), value.Ref().String())
+		assert.Equal(expectOrdering[i].Hash().String(), value.Hash().String())
 		i++
 	})
 }
@@ -727,7 +727,7 @@ func TestSetChunks2(t *testing.T) {
 	vs := NewTestValueStore()
 	doTest := func(ts testSet) {
 		set := ts.toSet()
-		set2chunks := vs.ReadValue(vs.WriteValue(set).TargetRef()).Chunks()
+		set2chunks := vs.ReadValue(vs.WriteValue(set).TargetHash()).Chunks()
 		for i, r := range set.Chunks() {
 			assert.True(r.Type().Equals(set2chunks[i].Type()), "%s != %s", r.Type().Describe(), set2chunks[i].Type().Describe())
 		}
@@ -744,7 +744,7 @@ func TestSetFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsValues(testSetSize)
 	s := NewSet(nums...)
-	assert.Equal("sha1-8186877fb71711b8e6a516ed5c8ad1ccac8c6c00", s.Ref().String())
+	assert.Equal("sha1-8186877fb71711b8e6a516ed5c8ad1ccac8c6c00", s.Hash().String())
 	assert.Equal(deriveCollectionHeight(s), getRefHeightOfCollection(s))
 }
 
@@ -756,7 +756,7 @@ func TestSetRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsRefOfStructs(testSetSize)
 	s := NewSet(nums...)
-	assert.Equal("sha1-14eeb2d1835011bf3e018121ba3274bc08e634e5", s.Ref().String())
+	assert.Equal("sha1-14eeb2d1835011bf3e018121ba3274bc08e634e5", s.Hash().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(s)+1, getRefHeightOfCollection(s))
 }
@@ -766,7 +766,7 @@ func TestSetModifyAfterRead(t *testing.T) {
 	vs := NewTestValueStore()
 	set := getTestNativeOrderSet(2).toSet()
 	// Drop chunk values.
-	set = vs.ReadValue(vs.WriteValue(set).TargetRef()).(Set)
+	set = vs.ReadValue(vs.WriteValue(set).TargetHash()).(Set)
 	// Modify/query. Once upon a time this would crash.
 	fst := set.First()
 	set = set.Remove(fst)

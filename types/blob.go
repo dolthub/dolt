@@ -6,7 +6,7 @@ import (
 	"io"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 const (
@@ -21,15 +21,15 @@ var RefOfBlobType = MakeRefType(BlobType)
 // Blob represents a list of Blobs.
 type Blob struct {
 	seq indexedSequence
-	ref *ref.Ref
+	h   *hash.Hash
 }
 
 func newBlob(seq indexedSequence) Blob {
-	return Blob{seq, &ref.Ref{}}
+	return Blob{seq, &hash.Hash{}}
 }
 
 func NewEmptyBlob() Blob {
-	return Blob{newBlobLeafSequence(nil, []byte{}), &ref.Ref{}}
+	return Blob{newBlobLeafSequence(nil, []byte{}), &hash.Hash{}}
 }
 
 // BUG 155 - Should provide Write... Maybe even have Blob implement ReadWriteSeeker
@@ -53,15 +53,15 @@ func (b Blob) sequence() sequence {
 
 // Value interface
 func (b Blob) Equals(other Value) bool {
-	return other != nil && b.Ref() == other.Ref()
+	return other != nil && b.Hash() == other.Hash()
 }
 
 func (b Blob) Less(other Value) bool {
 	return valueLess(b, other)
 }
 
-func (b Blob) Ref() ref.Ref {
-	return EnsureRef(b.ref, b)
+func (b Blob) Hash() hash.Hash {
+	return EnsureRef(b.h, b)
 }
 
 func (b Blob) ChildValues() []Value {

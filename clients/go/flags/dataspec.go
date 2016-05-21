@@ -8,7 +8,7 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -30,7 +30,7 @@ type DatasetSpec struct {
 
 type RefSpec struct {
 	StoreSpec DatabaseSpec
-	Ref       ref.Ref
+	Ref       hash.Hash
 }
 
 type PathSpec interface {
@@ -87,7 +87,7 @@ func ParseRefSpec(spec string) (RefSpec, error) {
 		return RefSpec{}, err
 	}
 
-	if r, ok := ref.MaybeParse(dspec.DatasetName); ok {
+	if r, ok := hash.MaybeParse(dspec.DatasetName); ok {
 		return RefSpec{StoreSpec: dspec.StoreSpec, Ref: r}, nil
 	}
 

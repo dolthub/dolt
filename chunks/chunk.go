@@ -4,18 +4,18 @@ import (
 	"bytes"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 // Chunk is a unit of stored data in noms
 type Chunk struct {
-	r    ref.Ref
+	r    hash.Hash
 	data []byte
 }
 
 var EmptyChunk = Chunk{}
 
-func (c Chunk) Ref() ref.Ref {
+func (c Chunk) Hash() hash.Hash {
 	return c.r
 }
 
@@ -29,12 +29,12 @@ func (c Chunk) IsEmpty() bool {
 
 // NewChunk creates a new Chunk backed by data. This means that the returned Chunk has ownership of this slice of memory.
 func NewChunk(data []byte) Chunk {
-	r := ref.FromData(data)
+	r := hash.FromData(data)
 	return Chunk{r, data}
 }
 
-// NewChunkWithRef creates a new chunk with a known ref. The ref is not re-calculated or verified. This should obviously only be used in cases where the caller already knows the specified ref is correct.
-func NewChunkWithRef(r ref.Ref, data []byte) Chunk {
+// NewChunkWithHash creates a new chunk with a known hash. The hash is not re-calculated or verified. This should obviously only be used in cases where the caller already knows the specified hash is correct.
+func NewChunkWithHash(r hash.Hash, data []byte) Chunk {
 	return Chunk{r, data}
 }
 
@@ -52,7 +52,7 @@ func NewChunkWriter() *ChunkWriter {
 }
 
 func (w *ChunkWriter) Write(data []byte) (int, error) {
-	d.Chk.NotNil(w.buffer, "Write() cannot be called after Ref() or Close().")
+	d.Chk.NotNil(w.buffer, "Write() cannot be called after Hash() or Close().")
 	size, err := w.buffer.Write(data)
 	d.Chk.NoError(err)
 	return size, nil
@@ -64,7 +64,7 @@ func (w *ChunkWriter) Chunk() Chunk {
 	return w.c
 }
 
-// Close() closes computes the ref and Puts it into the ChunkSink Note: The Write() method never returns an error. Instead, like other noms interfaces, errors are reported via panic.
+// Close() closes computes the hash and Puts it into the ChunkSink Note: The Write() method never returns an error. Instead, like other noms interfaces, errors are reported via panic.
 func (w *ChunkWriter) Close() error {
 	if w.buffer == nil {
 		return nil

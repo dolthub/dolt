@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 // Type defines and describes Noms types, both custom and built-in.
@@ -18,7 +18,7 @@ import (
 
 type Type struct {
 	Desc TypeDesc
-	ref  *ref.Ref
+	h    *hash.Hash
 }
 
 var typeForType = makePrimitiveType(TypeKind)
@@ -40,15 +40,15 @@ func (t *Type) Name() string {
 
 // Value interface
 func (t *Type) Equals(other Value) (res bool) {
-	return other != nil && t.Ref() == other.Ref()
+	return other != nil && t.Hash() == other.Hash()
 }
 
 func (t *Type) Less(other Value) (res bool) {
 	return valueLess(t, other)
 }
 
-func (t *Type) Ref() ref.Ref {
-	return EnsureRef(t.ref, t)
+func (t *Type) Hash() hash.Hash {
+	return EnsureRef(t.h, t)
 }
 
 func (t *Type) ChildValues() (res []Value) {
@@ -142,12 +142,12 @@ func MakeRefType(elemType *Type) *Type {
 type unionTypes []*Type
 
 func (uts unionTypes) Len() int           { return len(uts) }
-func (uts unionTypes) Less(i, j int) bool { return uts[i].Ref().Less(uts[j].Ref()) }
+func (uts unionTypes) Less(i, j int) bool { return uts[i].Hash().Less(uts[j].Hash()) }
 func (uts unionTypes) Swap(i, j int)      { uts[i], uts[j] = uts[j], uts[i] }
 
 // MakeUnionType creates a new union type unless the elemTypes can be folded into a single non union type.
 func MakeUnionType(elemTypes ...*Type) *Type {
-	seenTypes := map[ref.Ref]bool{}
+	seenTypes := map[hash.Hash]bool{}
 	ts := flattenUnionTypes(elemTypes, &seenTypes)
 	if len(ts) == 1 {
 		return ts[0]
@@ -156,7 +156,7 @@ func MakeUnionType(elemTypes ...*Type) *Type {
 	return buildType(CompoundDesc{UnionKind, ts})
 }
 
-func flattenUnionTypes(ts []*Type, seenTypes *map[ref.Ref]bool) []*Type {
+func flattenUnionTypes(ts []*Type, seenTypes *map[hash.Hash]bool) []*Type {
 	if len(ts) == 0 {
 		return ts
 	}
@@ -166,8 +166,8 @@ func flattenUnionTypes(ts []*Type, seenTypes *map[ref.Ref]bool) []*Type {
 		if t.Kind() == UnionKind {
 			ts2 = append(ts2, flattenUnionTypes(t.Desc.(CompoundDesc).ElemTypes, seenTypes)...)
 		} else {
-			if !(*seenTypes)[t.Ref()] {
-				(*seenTypes)[t.Ref()] = true
+			if !(*seenTypes)[t.Hash()] {
+				(*seenTypes)[t.Hash()] = true
 				ts2 = append(ts2, t)
 			}
 		}
@@ -176,7 +176,7 @@ func flattenUnionTypes(ts []*Type, seenTypes *map[ref.Ref]bool) []*Type {
 }
 
 func buildType(desc TypeDesc) *Type {
-	return &Type{Desc: desc, ref: &ref.Ref{}}
+	return &Type{Desc: desc, h: &hash.Hash{}}
 }
 
 var NumberType = makePrimitiveType(NumberKind)

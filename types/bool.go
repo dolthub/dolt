@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 type Bool bool
@@ -18,7 +18,7 @@ func (v Bool) Less(other Value) bool {
 	return true
 }
 
-func (v Bool) Ref() ref.Ref {
+func (v Bool) Hash() hash.Hash {
 	return getRef(v)
 }
 

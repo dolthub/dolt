@@ -2,7 +2,7 @@ package types
 
 import (
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 type structData map[string]Value
@@ -10,12 +10,12 @@ type structData map[string]Value
 type Struct struct {
 	data structData
 	t    *Type
-	ref  *ref.Ref
+	h    *hash.Hash
 }
 
 func newStructFromData(data structData, t *Type) Struct {
 	d.Chk.Equal(t.Kind(), StructKind)
-	return Struct{data, t, &ref.Ref{}}
+	return Struct{data, t, &hash.Hash{}}
 }
 
 func NewStruct(name string, data structData) Struct {
@@ -43,15 +43,15 @@ func NewStructWithType(t *Type, data structData) Struct {
 
 // Value interface
 func (s Struct) Equals(other Value) bool {
-	return other != nil && s.t.Equals(other.Type()) && s.Ref() == other.Ref()
+	return other != nil && s.t.Equals(other.Type()) && s.Hash() == other.Hash()
 }
 
 func (s Struct) Less(other Value) bool {
 	return valueLess(s, other)
 }
 
-func (s Struct) Ref() ref.Ref {
-	return EnsureRef(s.ref, s)
+func (s Struct) Hash() hash.Hash {
+	return EnsureRef(s.h, s)
 }
 
 func (s Struct) ChildValues() (res []Value) {

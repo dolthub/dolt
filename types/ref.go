@@ -2,25 +2,25 @@ package types
 
 import (
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 type Ref struct {
-	target ref.Ref
+	target hash.Hash
 	height uint64
 	t      *Type
-	ref    *ref.Ref
+	hash   *hash.Hash
 }
 
 func NewRef(v Value) Ref {
-	return Ref{v.Ref(), maxChunkHeight(v) + 1, MakeRefType(v.Type()), &ref.Ref{}}
+	return Ref{v.Hash(), maxChunkHeight(v) + 1, MakeRefType(v.Type()), &hash.Hash{}}
 }
 
 // Constructs a Ref directly from struct properties. This should not be used outside decoding and testing within the types package.
-func constructRef(t *Type, target ref.Ref, height uint64) Ref {
+func constructRef(t *Type, target hash.Hash, height uint64) Ref {
 	d.Chk.Equal(RefKind, t.Kind(), "Invalid type. Expected: RefKind, found: %s", t.Describe())
 	d.Chk.NotEqual(ValueType, t.Desc.(CompoundDesc).ElemTypes[0])
-	return Ref{target, height, t, &ref.Ref{}}
+	return Ref{target, height, t, &hash.Hash{}}
 }
 
 func maxChunkHeight(v Value) (max uint64) {
@@ -34,7 +34,7 @@ func maxChunkHeight(v Value) (max uint64) {
 	return
 }
 
-func (r Ref) TargetRef() ref.Ref {
+func (r Ref) TargetHash() hash.Hash {
 	return r.target
 }
 
@@ -48,15 +48,15 @@ func (r Ref) TargetValue(vr ValueReader) Value {
 
 // Value interface
 func (r Ref) Equals(other Value) bool {
-	return other != nil && r.t.Equals(other.Type()) && r.Ref() == other.Ref()
+	return other != nil && r.t.Equals(other.Type()) && r.Hash() == other.Hash()
 }
 
 func (r Ref) Less(other Value) bool {
 	return valueLess(r, other)
 }
 
-func (r Ref) Ref() ref.Ref {
-	return EnsureRef(r.ref, r)
+func (r Ref) Hash() hash.Hash {
+	return EnsureRef(r.hash, r)
 }
 
 func (r Ref) ChildValues() []Value {

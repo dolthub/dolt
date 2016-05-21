@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 /*
@@ -19,7 +19,7 @@ import (
     Chunk N
 
   Chunk:
-    Ref   // 20-byte sha1 hash
+    Hash   // 20-byte sha1 hash
     Len   // 4-byte int
     Data  // len(Data) == Len
 */
@@ -36,7 +36,7 @@ func NewSerializer(writer io.Writer) ChunkSink {
 		for chunk := range s.chs {
 			d.Chk.NotNil(chunk.Data)
 
-			digest := chunk.Ref().Digest()
+			digest := chunk.Hash().Digest()
 			n, err := io.Copy(s.writer, bytes.NewReader(digest[:]))
 			d.Chk.NoError(err)
 			d.Chk.Equal(int64(sha1.Size), n)
@@ -119,14 +119,14 @@ func DeserializeToChan(reader io.Reader, chunkChan chan<- Chunk) {
 }
 
 func deserializeChunk(reader io.Reader) Chunk {
-	digest := ref.Sha1Digest{}
+	digest := hash.Sha1Digest{}
 	n, err := io.ReadFull(reader, digest[:])
 	if err == io.EOF {
 		return EmptyChunk
 	}
 	d.Chk.NoError(err)
 	d.Chk.Equal(int(sha1.Size), n)
-	r := ref.New(digest)
+	h := hash.New(digest)
 
 	chunkSize := uint32(0)
 	err = binary.Read(reader, binary.BigEndian, &chunkSize)
@@ -137,6 +137,6 @@ func deserializeChunk(reader io.Reader) Chunk {
 	d.Chk.NoError(err)
 	d.Chk.Equal(int64(chunkSize), n2)
 	c := w.Chunk()
-	d.Chk.Equal(r, c.Ref())
+	d.Chk.Equal(h, c.Hash())
 	return c
 }

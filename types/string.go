@@ -1,14 +1,14 @@
 package types
 
-import "github.com/attic-labs/noms/ref"
+import "github.com/attic-labs/noms/hash"
 
 type String struct {
-	s   string
-	ref *ref.Ref
+	s string
+	h *hash.Hash
 }
 
 func NewString(s string) String {
-	return String{s, &ref.Ref{}}
+	return String{s, &hash.Hash{}}
 }
 
 func (fs String) String() string {
@@ -30,8 +30,8 @@ func (s String) Less(other Value) bool {
 	return StringKind < other.Type().Kind()
 }
 
-func (fs String) Ref() ref.Ref {
-	return EnsureRef(fs.ref, fs)
+func (fs String) Hash() hash.Hash {
+	return EnsureRef(fs.h, fs)
 }
 
 func (fs String) ChildValues() []Value {

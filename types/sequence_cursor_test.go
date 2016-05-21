@@ -3,7 +3,7 @@ package types
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -43,7 +43,7 @@ func (ts testSequence) Less(other Value) bool {
 	panic("not reached")
 }
 
-func (ts testSequence) Ref() ref.Ref {
+func (ts testSequence) Hash() hash.Hash {
 	panic("not reached")
 }
 

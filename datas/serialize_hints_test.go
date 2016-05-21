@@ -4,17 +4,17 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestHintRoundTrip(t *testing.T) {
 	b := &bytes.Buffer{}
-	input := map[ref.Ref]struct{}{
-		ref.Parse("sha1-0000000000000000000000000000000000000000"): struct{}{},
-		ref.Parse("sha1-0000000000000000000000000000000000000001"): struct{}{},
-		ref.Parse("sha1-0000000000000000000000000000000000000002"): struct{}{},
-		ref.Parse("sha1-0000000000000000000000000000000000000003"): struct{}{},
+	input := map[hash.Hash]struct{}{
+		hash.Parse("sha1-0000000000000000000000000000000000000000"): struct{}{},
+		hash.Parse("sha1-0000000000000000000000000000000000000001"): struct{}{},
+		hash.Parse("sha1-0000000000000000000000000000000000000002"): struct{}{},
+		hash.Parse("sha1-0000000000000000000000000000000000000003"): struct{}{},
 	}
 	serializeHints(b, input)
 	output := deserializeHints(b)

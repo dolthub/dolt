@@ -5,7 +5,7 @@ import (
 	"sort"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 type orderedSequence interface {
@@ -23,7 +23,7 @@ func newSetMetaSequence(tuples metaSequenceData, vr ValueReader) orderedMetaSequ
 	ts := make([]*Type, len(tuples))
 	for i, mt := range tuples {
 		// Ref<Set<T>>
-		ts[i] = mt.ChildRef().Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0]
+		ts[i] = mt.ChildHash().Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0]
 	}
 	t := MakeSetType(MakeUnionType(ts...))
 	return newOrderedMetaSequence(tuples, t, vr)
@@ -34,7 +34,7 @@ func newMapMetaSequence(tuples metaSequenceData, vr ValueReader) orderedMetaSequ
 	vts := make([]*Type, len(tuples))
 	for i, mt := range tuples {
 		// Ref<Map<K, V>>
-		ets := mt.ChildRef().Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes
+		ets := mt.ChildHash().Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes
 		kts[i] = ets[0]
 		vts[i] = ets[1]
 	}
@@ -96,13 +96,13 @@ func seekTo(cur *sequenceCursor, key Value, lastPositionIfNotFound bool) bool {
 	seq := cur.seq.(orderedSequence)
 	keyIsOrderedByValue := isKindOrderedByValue(key.Type().Kind())
 	_, seqIsMeta := seq.(metaSequence)
-	var keyRef ref.Ref
+	var keyRef hash.Hash
 
 	var searchFn func(i int) bool
 
 	if seqIsMeta {
 		if !keyIsOrderedByValue {
-			keyRef = key.Ref()
+			keyRef = key.Hash()
 		}
 		// For non-native values, meta sequences will hold types.Ref rather than the value
 		searchFn = func(i int) bool {
@@ -111,7 +111,7 @@ func seekTo(cur *sequenceCursor, key Value, lastPositionIfNotFound bool) bool {
 				if keyIsOrderedByValue {
 					return true // Values > ordered
 				}
-				return !sr.TargetRef().Less(keyRef)
+				return !sr.TargetHash().Less(keyRef)
 			}
 			return !sk.Less(key)
 		}
@@ -140,7 +140,7 @@ func getCurrentKey(cur *sequenceCursor) Value {
 
 func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 	return newBuzHashBoundaryChecker(orderedSequenceWindowSize, sha1.Size, objectPattern, func(item sequenceItem) []byte {
-		digest := item.(metaTuple).ChildRef().TargetRef().Digest()
+		digest := item.(metaTuple).ChildHash().TargetHash().Digest()
 		return digest[:]
 	})
 }

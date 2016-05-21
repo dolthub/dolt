@@ -70,7 +70,7 @@ func (w *jsonArrayWriter) toArray() []interface{} {
 }
 
 func (w *jsonArrayWriter) writeRef(r Ref) {
-	w.write(r.TargetRef().String())
+	w.write(r.TargetHash().String())
 	w.writeUint(r.Height())
 }
 
@@ -115,7 +115,7 @@ func (w *jsonArrayWriter) maybeWriteMetaSequence(seq sequence, tr *Type) bool {
 			// Write unwritten chunked sequences. Chunks are lazily written so that intermediate chunked structures like NewList().Append(x).Append(y) don't cause unnecessary churn.
 			w.vw.WriteValue(tuple.child)
 		}
-		w2.writeValue(tuple.ChildRef())
+		w2.writeValue(tuple.ChildHash())
 		w2.writeValue(tuple.value)
 		w2.writeUint(tuple.numLeaves)
 	}

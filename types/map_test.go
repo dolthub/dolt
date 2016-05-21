@@ -308,7 +308,7 @@ func TestMapHas(t *testing.T) {
 	vs := NewTestValueStore()
 	doTest := func(tm testMap) {
 		m := tm.toMap()
-		m2 := vs.ReadValue(vs.WriteValue(m).TargetRef()).(Map)
+		m2 := vs.ReadValue(vs.WriteValue(m).TargetHash()).(Map)
 		for _, entry := range tm.entries {
 			k, v := entry.key, entry.value
 			assert.True(m.Has(k))
@@ -689,7 +689,7 @@ func testMapOrder(assert *assert.Assertions, keyType, valueType *Type, tuples []
 	m := NewMap(tuples...)
 	i := 0
 	m.IterAll(func(key, value Value) {
-		assert.Equal(expectOrdering[i].Ref().String(), key.Ref().String())
+		assert.Equal(expectOrdering[i].Hash().String(), key.Hash().String())
 		i++
 	})
 }
@@ -872,7 +872,7 @@ func TestMapFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewMap(kvs...)
-	assert.Equal("sha1-2bc451349d04c5f90cfe73d1e6eb3ee626db99a1", m.Ref().String())
+	assert.Equal("sha1-2bc451349d04c5f90cfe73d1e6eb3ee626db99a1", m.Hash().String())
 	assert.Equal(deriveCollectionHeight(m), getRefHeightOfCollection(m))
 }
 
@@ -893,7 +893,7 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewMap(kvs...)
-	assert.Equal("sha1-5c9a17f6da0ebfebc1f82f498ac46992fad85250", m.Ref().String())
+	assert.Equal("sha1-5c9a17f6da0ebfebc1f82f498ac46992fad85250", m.Hash().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(m)+1, getRefHeightOfCollection(m))
 }
@@ -903,7 +903,7 @@ func TestMapModifyAfterRead(t *testing.T) {
 	vs := NewTestValueStore()
 	m := getTestNativeOrderMap(2).toMap()
 	// Drop chunk values.
-	m = vs.ReadValue(vs.WriteValue(m).TargetRef()).(Map)
+	m = vs.ReadValue(vs.WriteValue(m).TargetHash()).(Map)
 	// Modify/query. Once upon a time this would crash.
 	fst, fstval := m.First()
 	m = m.Remove(fst)

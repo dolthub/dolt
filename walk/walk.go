@@ -6,7 +6,7 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
 )
 
@@ -33,7 +33,7 @@ func doTreeWalkP(v types.Value, vr types.ValueReader, cb SomeCallback, concurren
 	rq := newRefQueue()
 	f := newFailure()
 
-	visited := map[ref.Ref]bool{}
+	visited := map[hash.Hash]bool{}
 	mu := sync.Mutex{}
 	wg := sync.WaitGroup{}
 
@@ -57,15 +57,15 @@ func doTreeWalkP(v types.Value, vr types.ValueReader, cb SomeCallback, concurren
 		defer wg.Done()
 
 		mu.Lock()
-		skip := visited[r.TargetRef()]
-		visited[r.TargetRef()] = true
+		skip := visited[r.TargetHash()]
+		visited[r.TargetHash()] = true
 		mu.Unlock()
 
 		if skip || f.didFail() {
 			return
 		}
 
-		target := r.TargetRef()
+		target := r.TargetHash()
 		v := vr.ReadValue(target)
 		if v == nil {
 			f.fail(fmt.Errorf("Attempt to copy absent ref:%s", target.String()))
@@ -106,12 +106,12 @@ func SomeChunksP(r types.Ref, bs types.BatchStore, stopCb SomeChunksStopCallback
 	rq := newRefQueue()
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
-	visitedRefs := map[ref.Ref]bool{}
+	visitedRefs := map[hash.Hash]bool{}
 
 	walkChunk := func(r types.Ref) {
 		defer wg.Done()
 
-		tr := r.TargetRef()
+		tr := r.TargetHash()
 
 		mu.Lock()
 		visited := visitedRefs[tr]

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
 	"github.com/stretchr/testify/suite"
 )
@@ -57,8 +57,8 @@ func (suite *DatabaseSuite) TearDownTest() {
 
 func (suite *DatabaseSuite) TestReadWriteCache() {
 	var v types.Value = types.Bool(true)
-	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(v))
-	r := suite.ds.WriteValue(v).TargetRef()
+	suite.NotEqual(hash.Hash{}, suite.ds.WriteValue(v))
+	r := suite.ds.WriteValue(v).TargetHash()
 	commit := NewCommit().Set(ValueField, v)
 	newDs, err := suite.ds.Commit("foo", commit)
 	suite.NoError(err)
@@ -71,7 +71,7 @@ func (suite *DatabaseSuite) TestReadWriteCache() {
 func (suite *DatabaseSuite) TestReadWriteCachePersists() {
 	var err error
 	var v types.Value = types.Bool(true)
-	suite.NotEqual(ref.Ref{}, suite.ds.WriteValue(v))
+	suite.NotEqual(hash.Hash{}, suite.ds.WriteValue(v))
 	r := suite.ds.WriteValue(v)
 	commit := NewCommit().Set(ValueField, v)
 	suite.ds, err = suite.ds.Commit("foo", commit)
@@ -88,7 +88,7 @@ func (suite *DatabaseSuite) TestWriteRefToNonexistentValue() {
 }
 
 func (suite *DatabaseSuite) TestTolerateUngettableRefs() {
-	suite.Nil(suite.ds.ReadValue(ref.Ref{}))
+	suite.Nil(suite.ds.ReadValue(hash.Hash{}))
 }
 
 func (suite *DatabaseSuite) TestDatabaseCommit() {
@@ -112,7 +112,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	aCommit1 := ds2.Head(datasetID)
 	suite.True(aCommit1.Get(ValueField).Equals(a))
 	aRef1 := ds2.HeadRef(datasetID)
-	suite.Equal(aCommit1.Ref(), aRef1.TargetRef())
+	suite.Equal(aCommit1.Hash(), aRef1.TargetHash())
 	suite.Equal(uint64(1), aRef1.Height())
 	suite.ds = ds2
 

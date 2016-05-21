@@ -1,15 +1,15 @@
 package chunks
 
-import "github.com/attic-labs/noms/ref"
+import "github.com/attic-labs/noms/hash"
 
-type memoryRootTracker ref.Ref
+type memoryRootTracker hash.Hash
 
-func (ms *memoryRootTracker) Root() ref.Ref {
-	return ref.Ref(*ms)
+func (ms *memoryRootTracker) Root() hash.Hash {
+	return hash.Hash(*ms)
 }
 
-func (ms *memoryRootTracker) UpdateRoot(current, last ref.Ref) bool {
-	if last != ref.Ref(*ms) {
+func (ms *memoryRootTracker) UpdateRoot(current, last hash.Hash) bool {
+	if last != hash.Hash(*ms) {
 		return false
 	}
 

@@ -5,7 +5,7 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 // ValueStore provides methods to read and write Noms Values to a BatchStore. It validates Values as they are written, but does not guarantee that these Values are persisted to the BatchStore until a subsequent Flush. or Close.
@@ -15,13 +15,13 @@ import (
 // - all Refs in v point to a Value of the correct Type
 type ValueStore struct {
 	bs    BatchStore
-	cache map[ref.Ref]chunkCacheEntry
+	cache map[hash.Hash]chunkCacheEntry
 	mu    *sync.Mutex
 }
 
 type chunkCacheEntry interface {
 	Present() bool
-	Hint() ref.Ref
+	Hint() hash.Hash
 	Type() *Type
 }
 
@@ -36,7 +36,7 @@ func newLocalValueStore(cs chunks.ChunkStore) *ValueStore {
 
 // NewValueStore returns a ValueStore instance that owns the provided BatchStore and manages its lifetime. Calling Close on the returned ValueStore will Close bs.
 func NewValueStore(bs BatchStore) *ValueStore {
-	return &ValueStore{bs, map[ref.Ref]chunkCacheEntry{}, &sync.Mutex{}}
+	return &ValueStore{bs, map[hash.Hash]chunkCacheEntry{}, &sync.Mutex{}}
 }
 
 func (lvs *ValueStore) BatchStore() BatchStore {
@@ -44,7 +44,7 @@ func (lvs *ValueStore) BatchStore() BatchStore {
 }
 
 // ReadValue reads and decodes a value from lvs. It is not considered an error for the requested chunk to be empty; in this case, the function simply returns nil.
-func (lvs *ValueStore) ReadValue(r ref.Ref) Value {
+func (lvs *ValueStore) ReadValue(r hash.Hash) Value {
 	v := DecodeChunk(lvs.bs.Get(r), lvs)
 
 	var entry chunkCacheEntry = absentChunk{}
@@ -66,7 +66,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	// Encoding v causes any child chunks, e.g. internal nodes if v is a meta sequence, to get written. That needs to happen before we try to validate v.
 	c := EncodeValue(v, lvs)
 	d.Chk.False(c.IsEmpty())
-	hash := c.Ref()
+	hash := c.Hash()
 	height := maxChunkHeight(v) + 1
 	r := constructRef(MakeRefType(v.Type()), hash, height)
 	if lvs.isPresent(hash) {
@@ -89,46 +89,46 @@ func (lvs *ValueStore) Close() error {
 }
 
 // cacheChunks looks at the Chunks reachable from v and, for each one checks if there's a hint in the cache. If there isn't, or if the hint is a self-reference, the chunk gets r set as its new hint.
-func (lvs *ValueStore) cacheChunks(v Value, r ref.Ref) {
+func (lvs *ValueStore) cacheChunks(v Value, r hash.Hash) {
 	for _, reachable := range v.Chunks() {
-		hash := reachable.TargetRef()
+		hash := reachable.TargetHash()
 		if cur := lvs.check(hash); cur == nil || cur.Hint().IsEmpty() || cur.Hint() == hash {
 			lvs.set(hash, hintedChunk{getTargetType(reachable), r})
 		}
 	}
 }
 
-func (lvs *ValueStore) isPresent(r ref.Ref) (present bool) {
+func (lvs *ValueStore) isPresent(r hash.Hash) (present bool) {
 	if entry := lvs.check(r); entry != nil && entry.Present() {
 		present = true
 	}
 	return
 }
 
-func (lvs *ValueStore) check(r ref.Ref) chunkCacheEntry {
+func (lvs *ValueStore) check(r hash.Hash) chunkCacheEntry {
 	lvs.mu.Lock()
 	defer lvs.mu.Unlock()
 	return lvs.cache[r]
 }
 
-func (lvs *ValueStore) set(r ref.Ref, entry chunkCacheEntry) {
+func (lvs *ValueStore) set(r hash.Hash, entry chunkCacheEntry) {
 	lvs.mu.Lock()
 	defer lvs.mu.Unlock()
 	lvs.cache[r] = entry
 }
 
-func (lvs *ValueStore) checkAndSet(r ref.Ref, entry chunkCacheEntry) {
+func (lvs *ValueStore) checkAndSet(r hash.Hash, entry chunkCacheEntry) {
 	if cur := lvs.check(r); cur == nil || cur.Hint().IsEmpty() {
 		lvs.set(r, entry)
 	}
 }
 
-func (lvs *ValueStore) checkChunksInCache(v Value) map[ref.Ref]struct{} {
-	hints := map[ref.Ref]struct{}{}
+func (lvs *ValueStore) checkChunksInCache(v Value) map[hash.Hash]struct{} {
+	hints := map[hash.Hash]struct{}{}
 	for _, reachable := range v.Chunks() {
-		entry := lvs.check(reachable.TargetRef())
+		entry := lvs.check(reachable.TargetHash())
 		if entry == nil || !entry.Present() {
-			d.Exp.Fail("Attempted to write Value containing Ref to non-existent object.", "%s\n, contains ref %s, which points to a non-existent Value.", EncodedValueWithTags(v), reachable.TargetRef())
+			d.Exp.Fail("Attempted to write Value containing Ref to non-existent object.", "%s\n, contains ref %s, which points to a non-existent Value.", EncodedValueWithTags(v), reachable.TargetHash())
 		}
 		if hint := entry.Hint(); !hint.IsEmpty() {
 			hints[hint] = struct{}{}
@@ -143,7 +143,7 @@ func (lvs *ValueStore) checkChunksInCache(v Value) map[ref.Ref]struct{} {
 		if targetType.Equals(ValueType) {
 			continue
 		}
-		d.Exp.True(entry.Type().Equals(targetType), "Value to write contains ref %s, which points to a value of a different type: %+v != %+v", reachable.TargetRef(), entry.Type(), targetType)
+		d.Exp.True(entry.Type().Equals(targetType), "Value to write contains ref %s, which points to a value of a different type: %+v != %+v", reachable.TargetHash(), entry.Type(), targetType)
 	}
 	return hints
 }
@@ -156,14 +156,14 @@ func getTargetType(refBase Ref) *Type {
 
 type hintedChunk struct {
 	t    *Type
-	hint ref.Ref
+	hint hash.Hash
 }
 
 func (h hintedChunk) Present() bool {
 	return true
 }
 
-func (h hintedChunk) Hint() (r ref.Ref) {
+func (h hintedChunk) Hint() (r hash.Hash) {
 	return h.hint
 }
 
@@ -177,7 +177,7 @@ func (a absentChunk) Present() bool {
 	return false
 }
 
-func (a absentChunk) Hint() (r ref.Ref) {
+func (a absentChunk) Hint() (r hash.Hash) {
 	return
 }
 

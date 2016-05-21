@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 func fromTypedEncodeable(i []interface{}, vr ValueReader) Value {
@@ -79,9 +79,9 @@ func (r *jsonArrayReader) readKind() NomsKind {
 }
 
 func (r *jsonArrayReader) readRef(t *Type) Ref {
-	ref := ref.Parse(r.readString())
+	h := hash.Parse(r.readString())
 	height := r.readUint()
-	return constructRef(t, ref, height)
+	return constructRef(t, h, height)
 }
 
 func (r *jsonArrayReader) readType(parentStructTypes []*Type) *Type {
@@ -156,10 +156,10 @@ func (r *jsonArrayReader) readMapLeafSequence(t *Type) orderedSequence {
 func (r *jsonArrayReader) readMetaSequence() metaSequenceData {
 	data := metaSequenceData{}
 	for !r.atEnd() {
-		ref := r.readValue().(Ref)
+		h := r.readValue().(Ref)
 		v := r.readValue()
 		numLeaves := uint64(r.readUint())
-		data = append(data, newMetaTuple(v, nil, ref, numLeaves))
+		data = append(data, newMetaTuple(v, nil, h, numLeaves))
 	}
 
 	return data

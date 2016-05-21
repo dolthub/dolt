@@ -52,11 +52,11 @@ func newTestSuite() *testSuite {
 func (suite *testSuite) roundTripDigestTest(t *testValue) {
 	vs := NewTestValueStore()
 	r := vs.WriteValue(t.value)
-	v2 := vs.ReadValue(r.TargetRef())
+	v2 := vs.ReadValue(r.TargetHash())
 
 	suite.True(v2.Equals(t.value), t.description)
 	suite.True(t.value.Equals(v2), t.description)
-	suite.Equal(t.expectedRef, r.TargetRef().String(), t.description)
+	suite.Equal(t.expectedRef, r.TargetHash().String(), t.description)
 }
 
 // Called from testify suite.Run()

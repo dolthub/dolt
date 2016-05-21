@@ -4,7 +4,7 @@ import (
 	"crypto/sha1"
 	"sort"
 
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 const (
@@ -15,11 +15,11 @@ const (
 
 type Set struct {
 	seq orderedSequence
-	ref *ref.Ref
+	h   *hash.Hash
 }
 
 func newSet(seq orderedSequence) Set {
-	return Set{seq, &ref.Ref{}}
+	return Set{seq, &hash.Hash{}}
 }
 
 func NewSet(v ...Value) Set {
@@ -55,15 +55,15 @@ func (s Set) sequence() sequence {
 
 // Value interface
 func (s Set) Equals(other Value) bool {
-	return other != nil && s.Ref() == other.Ref()
+	return other != nil && s.Hash() == other.Hash()
 }
 
 func (s Set) Less(other Value) bool {
 	return valueLess(s, other)
 }
 
-func (s Set) Ref() ref.Ref {
-	return EnsureRef(s.ref, s)
+func (s Set) Hash() hash.Hash {
+	return EnsureRef(s.h, s)
 }
 
 func (s Set) ChildValues() (values []Value) {
@@ -191,7 +191,7 @@ func buildSetData(values ValueSlice) ValueSlice {
 
 func newSetLeafBoundaryChecker() boundaryChecker {
 	return newBuzHashBoundaryChecker(setWindowSize, sha1.Size, setPattern, func(item sequenceItem) []byte {
-		digest := item.(Value).Ref().Digest()
+		digest := item.(Value).Hash().Digest()
 		return digest[:]
 	})
 }

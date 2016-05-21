@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/hash"
 )
 
 type Number float64
@@ -18,7 +18,7 @@ func (v Number) Less(other Value) bool {
 	return NumberKind < other.Type().Kind()
 }
 
-func (v Number) Ref() ref.Ref {
+func (v Number) Hash() hash.Hash {
 	return getRef(v)
 }
 

@@ -1,4 +1,4 @@
-package ref
+package hash
 
 import (
 	"sort"
@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRefSliceSort(t *testing.T) {
+func TestHashSliceSort(t *testing.T) {
 	assert := assert.New(t)
 
-	rs := RefSlice{}
+	rs := HashSlice{}
 	for i := 1; i <= 3; i++ {
 		for j := 1; j <= 3; j++ {
 			d := Sha1Digest{}
@@ -21,7 +21,7 @@ func TestRefSliceSort(t *testing.T) {
 		}
 	}
 
-	rs2 := RefSlice(make([]Ref, len(rs)))
+	rs2 := HashSlice(make([]Hash, len(rs)))
 	copy(rs2, rs)
 	sort.Sort(sort.Reverse(rs2))
 	assert.False(rs.Equals(rs2))
