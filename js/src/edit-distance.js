@@ -204,7 +204,7 @@ function operationsFromEditDistances(distances: Array<Array<number>>): Array<num
   return edits;
 }
 
-function sharedPrefix(eqFn: EqualsFn, searchLength: number) {
+function sharedPrefix(eqFn: EqualsFn, searchLength: number): number {
   for (let i = 0; i < searchLength; i++) {
     if (!eqFn(i, i)) {
       return i;
@@ -215,7 +215,7 @@ function sharedPrefix(eqFn: EqualsFn, searchLength: number) {
 }
 
 function sharedSuffix(eqFn: EqualsFn, previousLength: number, currentLength: number,
-    searchLength: number) {
+    searchLength: number): number {
   let count = 0;
   while (count < searchLength && eqFn(--previousLength, --currentLength)) {
     count++;
