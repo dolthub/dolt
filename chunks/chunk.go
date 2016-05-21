@@ -2,8 +2,6 @@ package chunks
 
 import (
 	"bytes"
-	"hash"
-	"io"
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -43,24 +41,19 @@ func NewChunkWithRef(r ref.Ref, data []byte) Chunk {
 // ChunkWriter wraps an io.WriteCloser, additionally providing the ability to grab the resulting Chunk for all data written through the interface. Calling Chunk() or Close() on an instance disallows further writing.
 type ChunkWriter struct {
 	buffer *bytes.Buffer
-	writer io.Writer
-	hash   hash.Hash
 	c      Chunk
 }
 
 func NewChunkWriter() *ChunkWriter {
 	b := &bytes.Buffer{}
-	h := ref.NewHash()
 	return &ChunkWriter{
 		buffer: b,
-		writer: io.MultiWriter(b, h),
-		hash:   h,
 	}
 }
 
 func (w *ChunkWriter) Write(data []byte) (int, error) {
 	d.Chk.NotNil(w.buffer, "Write() cannot be called after Ref() or Close().")
-	size, err := w.writer.Write(data)
+	size, err := w.buffer.Write(data)
 	d.Chk.NoError(err)
 	return size, nil
 }

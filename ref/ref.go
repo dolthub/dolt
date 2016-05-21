@@ -1,12 +1,9 @@
 package ref
 
 import (
-	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"hash"
-	"io"
 	"regexp"
 
 	"github.com/attic-labs/noms/d"
@@ -14,7 +11,7 @@ import (
 
 var (
 	// In the future we will allow different digest types, so this will get more complicated. For now sha1 is fine.
-	pattern  = regexp.MustCompile("^sha1-([0-9a-f]{40})$")
+	pattern   = regexp.MustCompile("^sha1-([0-9a-f]{40})$")
 	emptyHash = Ref{}
 )
 
@@ -47,16 +44,8 @@ func New(digest Sha1Digest) Ref {
 	return Ref{digest}
 }
 
-// NewHash creates a new instance of the hash we use for refs.
-func NewHash() hash.Hash {
-	return sha1.New()
-}
-
 func FromData(data []byte) Ref {
-	h := NewHash()
-	_, err := io.Copy(h, bytes.NewReader(data))
-	d.Chk.NoError(err)
-	return FromHash(h)
+	return New(sha1.Sum(data))
 }
 
 // FromSlice creates a new Ref backed by data, ensuring that data is an acceptable length.
@@ -64,13 +53,6 @@ func FromSlice(data []byte) Ref {
 	d.Chk.Len(data, sha1.Size)
 	digest := Sha1Digest{}
 	copy(digest[:], data)
-	return New(digest)
-}
-
-func FromHash(h hash.Hash) Ref {
-	d.Chk.Equal(sha1.Size, h.Size())
-	digest := Sha1Digest{}
-	h.Sum(digest[:0])
 	return New(digest)
 }
 

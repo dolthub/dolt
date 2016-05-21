@@ -11,9 +11,7 @@ import (
 func TestGetRef(t *testing.T) {
 	assert := assert.New(t)
 	input := fmt.Sprintf("t [%d,false]", BoolKind)
-	h := ref.NewHash()
-	h.Write([]byte(input))
-	expected := ref.FromHash(h)
+	expected := ref.FromData([]byte(input))
 	actual := getRef(Bool(false))
 	assert.Equal(expected, actual)
 }

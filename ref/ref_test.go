@@ -3,8 +3,6 @@ package ref
 import (
 	"testing"
 
-	"crypto/sha1"
-
 	"github.com/attic-labs/noms/d"
 	"github.com/stretchr/testify/assert"
 )
@@ -91,10 +89,8 @@ func TestDigestSlice(t *testing.T) {
 	assert.NotEqual(t, r.DigestSlice(), d)
 }
 
-func TestFromHash(t *testing.T) {
-	h := sha1.New()
-	h.Write([]byte("abc"))
-	r := FromHash(h)
+func TestFromData(t *testing.T) {
+	r := FromData([]byte("abc"))
 	assert.Equal(t, "sha1-a9993e364706816aba3e25717850c26c9cd0d89d", r.String())
 }
 
