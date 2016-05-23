@@ -69,4 +69,29 @@ suite('Type', () => {
     assert.deepEqual(makeUnionType([makeUnionType([boolType, numberType]), numberType, boolType]),
                      makeUnionType([boolType, numberType]));
   });
+
+  test('verify field name', () => {
+    function assertInvalid(n: string) {
+      assert.throw(() => {
+        makeStructType('S', {[n]: stringType});
+      });
+    }
+    assertInvalid('');
+    assertInvalid(' ');
+    assertInvalid(' a');
+    assertInvalid('a ');
+    assertInvalid('0');
+    assertInvalid('_');
+    assertInvalid('0a');
+    assertInvalid('_a');
+
+    function assertValid(n: string) {
+      makeStructType('S', {[n]: stringType});
+    }
+    assertValid('a');
+    assertValid('A');
+    assertValid('a0');
+    assertValid('a_');
+    assertValid('a0_');
+  });
 });
