@@ -71,8 +71,8 @@ var fieldNameTailNonValidRe = regexp.MustCompile(`[^a-zA-Z0-9]`)
 
 // NormalizeHeaderName replaces non valid characters in the header names with `_`. If the leading character of the header name is not in [a-zA-Z] this panics.
 func NormalizeHeaderName(s string) string {
-	d.Chk.True(fieldNameFirstCharRe.MatchString(s))
-	return string(s[0]) + fieldNameTailNonValidRe.ReplaceAllString(s[1:], "_")
+	d.Exp.True(fieldNameFirstCharRe.MatchString(s))
+	return fieldNameTailNonValidRe.ReplaceAllString(s, "_")
 }
 
 // MakeStructTypeFromHeaders creates a struct type from the headers using |kinds| as the type of each field. If |kinds| is empty, default to strings. This also normalizes header names using NormalizeHeaderName.
@@ -88,7 +88,7 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 
 		nk := NormalizeHeaderName(key)
 		_, ok := fields[nk]
-		d.Chk.False(ok, `Duplicate field name "%s" (normalized to "%s")`, key, nk)
+		d.Exp.False(ok, `Duplicate field name "%s" (normalized to "%s")`, key, nk)
 
 		fields[nk] = types.MakePrimitiveType(kind)
 	}
