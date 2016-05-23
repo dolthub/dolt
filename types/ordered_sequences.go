@@ -23,7 +23,7 @@ func newSetMetaSequence(tuples metaSequenceData, vr ValueReader) orderedMetaSequ
 	ts := make([]*Type, len(tuples))
 	for i, mt := range tuples {
 		// Ref<Set<T>>
-		ts[i] = mt.ChildHash().Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0]
+		ts[i] = mt.ref.Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0]
 	}
 	t := MakeSetType(MakeUnionType(ts...))
 	return newOrderedMetaSequence(tuples, t, vr)
@@ -34,7 +34,7 @@ func newMapMetaSequence(tuples metaSequenceData, vr ValueReader) orderedMetaSequ
 	vts := make([]*Type, len(tuples))
 	for i, mt := range tuples {
 		// Ref<Map<K, V>>
-		ets := mt.ChildHash().Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes
+		ets := mt.ref.Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes
 		kts[i] = ets[0]
 		vts[i] = ets[1]
 	}
@@ -63,7 +63,7 @@ func (oms orderedMetaSequence) getKey(idx int) Value {
 }
 
 func (oms orderedMetaSequence) equalsAt(idx int, other interface{}) bool {
-	return oms.tuples[idx].childRef.Equals(other.(metaTuple).childRef)
+	return oms.tuples[idx].ref.Equals(other.(metaTuple).ref)
 }
 
 func newCursorAtKey(seq orderedSequence, key Value, forInsertion bool, last bool) *sequenceCursor {
@@ -140,7 +140,7 @@ func getCurrentKey(cur *sequenceCursor) Value {
 
 func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 	return newBuzHashBoundaryChecker(orderedSequenceWindowSize, sha1.Size, objectPattern, func(item sequenceItem) []byte {
-		digest := item.(metaTuple).ChildHash().TargetHash().Digest()
+		digest := item.(metaTuple).ref.TargetHash().Digest()
 		return digest[:]
 	})
 }

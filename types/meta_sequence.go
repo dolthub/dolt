@@ -22,13 +22,9 @@ func newMetaTuple(value Value, child Collection, childRef Ref, numLeaves uint64)
 // metaTuple is a node in a Prolly Tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
 	child     Collection // may be nil
-	childRef  Ref
+	ref       Ref
 	value     Value
 	numLeaves uint64
-}
-
-func (mt metaTuple) ChildHash() Ref {
-	return mt.childRef
 }
 
 func (mt metaTuple) uint64Value() uint64 {
@@ -78,24 +74,16 @@ func (ms metaSequenceObject) valueReader() ValueReader {
 	return ms.vr
 }
 
-func (ms metaSequenceObject) Chunks() (chunks []Ref) {
-	for _, tuple := range ms.tuples {
-		chunks = append(chunks, tuple.ChildHash())
+func (ms metaSequenceObject) Chunks() []Ref {
+	chunks := make([]Ref, len(ms.tuples))
+	for i, tuple := range ms.tuples {
+		chunks[i] = tuple.ref
 	}
-	return
+	return chunks
 }
 
 func (ms metaSequenceObject) Type() *Type {
 	return ms.t
-}
-
-// Value interface
-func (ms metaSequenceObject) ChildValues() []Value {
-	vals := make([]Value, len(ms.tuples))
-	for i, mt := range ms.tuples {
-		vals[i] = mt.childRef
-	}
-	return vals
 }
 
 // metaSequence interface
@@ -105,7 +93,7 @@ func (ms metaSequenceObject) getChildSequence(idx int) sequence {
 		return mt.child.sequence()
 	}
 
-	return mt.childRef.TargetValue(ms.vr).(Collection).sequence()
+	return mt.ref.TargetValue(ms.vr).(Collection).sequence()
 }
 
 // Creates a sequenceCursor pointing to the first metaTuple in a metaSequence, and returns that cursor plus the leaf Value referenced from that metaTuple.
@@ -130,7 +118,7 @@ func readMetaTupleValue(item sequenceItem, vr ValueReader) Value {
 		return mt.child
 	}
 
-	r := mt.childRef.TargetHash()
+	r := mt.ref.TargetHash()
 	d.Chk.False(r.IsEmpty())
 	return vr.ReadValue(r)
 }

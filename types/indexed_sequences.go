@@ -21,7 +21,7 @@ func newListMetaSequence(tuples metaSequenceData, vr ValueReader) indexedMetaSeq
 	ts := make([]*Type, len(tuples))
 	for i, mt := range tuples {
 		// Ref<List<T>>
-		ts[i] = mt.ChildHash().Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0]
+		ts[i] = mt.ref.Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0]
 	}
 	t := MakeListType(MakeUnionType(ts...))
 	return newIndexedMetaSequence(tuples, t, vr)
@@ -94,7 +94,7 @@ func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 
 func newIndexedMetaSequenceBoundaryChecker() boundaryChecker {
 	return newBuzHashBoundaryChecker(objectWindowSize, sha1.Size, objectPattern, func(item sequenceItem) []byte {
-		digest := item.(metaTuple).ChildHash().TargetHash().Digest()
+		digest := item.(metaTuple).ref.TargetHash().Digest()
 		return digest[:]
 	})
 }
