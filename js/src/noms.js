@@ -50,6 +50,7 @@ export {
 export {equals, less} from './compare.js';
 export {DatabaseSpec, DatasetSpec, HashSpec, parseObjectSpec} from './specs.js';
 export {default as walk} from './walk.js';
+export {default as jsonToNoms} from './json-convert.js';
 
 export type {AsyncIteratorResult} from './async-iterator.js';
 export type {ChunkStore} from './chunk-store.js';
