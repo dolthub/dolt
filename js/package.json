@@ -1,10 +1,14 @@
 {
   "name": "@attic/noms",
-  "version": "35.0.0",
+  "version": "36.0.0",
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms",
   "main": "dist/commonjs/noms.js",
   "jsnext:main": "dist/es6/noms.js",
+  "engines": {
+    "node": ">=5.11",
+    "npm": ">=3"
+  },
   "dependencies": {
     "babel-regenerator-runtime": "6.5.0",
     "babel-runtime": "5.8.38",
