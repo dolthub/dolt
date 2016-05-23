@@ -12,22 +12,23 @@ import type Value from './value.js';
 
 type walkCb = (v: Value) => ?bool | Promise<?bool>;
 
-// Invokes |cb| once for |v| and each of its descendants. The returned promise is resolved when all
-// invocations to |cb| have been resolved.
-//
-// The return value of |cb| indicates whether to recurse further into the tree. Return |false| or a
-// Promise which resolves to |false| to skip a node's children.
-//
-// For convenience, if |cb| returns |undefined| or a Promise to |undefined|, the default is |true|.
+/**
+ * Invokes |cb| once for |v| and each of its descendants. The returned Promise is resolved when all
+ * invocations to |cb| have been resolved.
+ *
+ * The return value of |cb| indicates whether to recurse further into the tree. Return false or
+ * Promise.resolve(false) to continue recursing. Return true or Promise.resolve(true) to skip this
+ * node's children.
+ *
+ * If |cb| returns undefined or Promise.resolve(), the default is to continue recursing (false).
+ */
 export default async function walk(v: Value, ds: Database, cb: walkCb): Promise<void> {
-  let cont = cb(v);
-  if (cont instanceof Promise) {
-    cont = await cont;
+  let skip = cb(v);
+  if (skip instanceof Promise) {
+    skip = await skip;
   }
-  if (cont === undefined) {
-    cont = true;
-  }
-  if (!cont) {
+
+  if (skip) {
     return;
   }
 

@@ -31,7 +31,7 @@ suite('walk', () => {
 
   test('primitives', async () => {
     await Promise.all([true, false, 42, 88.8, 'hello!', ''].map(async v => {
-      await callbackHappensOnce(v, ds, true);
+      await callbackHappensOnce(v, ds, false);
     }));
   });
 
@@ -44,7 +44,7 @@ suite('walk', () => {
     assert.equal(blob.length, arr.length * 4);
     assert.isAbove(blob.chunks.length, 1);
 
-    await callbackHappensOnce(blob, ds, true);
+    await callbackHappensOnce(blob, ds, false);
   });
 
   test('list', async () => {
@@ -55,11 +55,10 @@ suite('walk', () => {
     const list = new List(Array.from(expected));
     expected.add(list);
 
-    await callbackHappensOnce(list, ds);
+    await callbackHappensOnce(list, ds, true);
 
     await walk(list, ds, async v => {
       assert.isOk(expected.delete(v));
-      return true;
     });
     assert.equal(0, expected.size);
   });
@@ -72,11 +71,10 @@ suite('walk', () => {
     const set = new NomsSet(Array.from(expected));
     expected.add(set);
 
-    await callbackHappensOnce(set, ds);
+    await callbackHappensOnce(set, ds, true);
 
     await walk(set, ds, async v => {
       assert.isOk(expected.delete(v));
-      return true;
     });
     assert.equal(0, expected.size);
   });
@@ -92,13 +90,12 @@ suite('walk', () => {
     const map = new Map(entries);
     expected.push(map);
 
-    await callbackHappensOnce(map, ds);
+    await callbackHappensOnce(map, ds, true);
 
     await walk(map, ds, async v => {
       const idx = expected.indexOf(v);
       assert.isAbove(idx, -1);
       assert.equal(expected.splice(idx, 1).length, 1);
-      return true;
     });
     assert.equal(0, expected.length);
   });
@@ -116,12 +113,11 @@ suite('walk', () => {
       list: new List([1, 2]),
     });
 
-    await callbackHappensOnce(val, ds);
+    await callbackHappensOnce(val, ds, true);
 
     const expected = new Set([val, val.foo, val.num, val.list, 1, 2]);
     await walk(val, ds, async v => {
       assert.isOk(expected.delete(v));
-      return true;
     });
     assert.equal(0, expected.size);
   });
@@ -129,45 +125,43 @@ suite('walk', () => {
   test('ref-value', async () => {
     const rv = ds.writeValue(42);
     const expected = new Set([rv, 42]);
-    await callbackHappensOnce(rv, ds);
+    await callbackHappensOnce(rv, ds, true);
     await walk(rv, ds, async v => {
       assert.isOk(expected.delete(v));
-      return true;
     });
     assert.equal(0, expected.size);
   });
 
   test('cb-should-recurse', async () => {
-    const testShouldRecurse = async (cb, expectRecurse) => {
+    const testShouldRecurse = async (cb, expectSkip) => {
       const rv = ds.writeValue(42);
       const expected = new Set([rv, 42]);
       await walk(rv, ds, v => {
         assert.isOk(expected.delete(v));
         return cb();
       });
-      assert.equal(expectRecurse ? 0 : 1, expected.size);
+      assert.equal(expectSkip ? 1 : 0, expected.size);
     };
 
-    // Return void, Promise<void>, true, or Promise<true> -- should recurse.
-    await testShouldRecurse(() => { return; }, true); // eslint-disable-line
-    await testShouldRecurse(() => Promise.resolve(), true);
-    await testShouldRecurse(() => true, true);
-    await testShouldRecurse(() => Promise.resolve(true), true);
-
-    // Return true or Promise<true> -- should stop
+    // Return void, Promise<void>, false, or Promise<false> -- should recurse.
+    await testShouldRecurse(() => { return; }, false); // eslint-disable-line
+    await testShouldRecurse(() => Promise.resolve(), false);
     await testShouldRecurse(() => false, false);
     await testShouldRecurse(() => Promise.resolve(false), false);
+
+    // Return true or Promise<true> -- should skip
+    await testShouldRecurse(() => true, true);
+    await testShouldRecurse(() => Promise.resolve(true), true);
   });
 });
 
-async function callbackHappensOnce(v: Value, ds: Database,
-                                   recurse: bool = false) : Promise<void> {
+async function callbackHappensOnce(v: Value, ds: Database, skip: bool): Promise<void> {
   // Test that our callback only gets called once.
   let count = 0;
   await walk(v, ds, async cv => {
     assert.strictEqual(v, cv);
     count++;
-    return recurse;
+    return skip;
   });
   assert.equal(1, count);
 }
