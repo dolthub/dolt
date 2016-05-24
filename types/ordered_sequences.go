@@ -73,7 +73,7 @@ func newCursorAtKey(seq orderedSequence, key Value, forInsertion bool, last bool
 		if last {
 			idx = -1
 		}
-		_, seqIsMeta := seq.(metaSequence)
+		seqIsMeta := isMetaSequence(seq)
 		cur = newSequenceCursor(cur, seq, idx)
 		if key != nil {
 			if !seekTo(cur, key, forInsertion && seqIsMeta) {
@@ -95,7 +95,7 @@ func newCursorAtKey(seq orderedSequence, key Value, forInsertion bool, last bool
 func seekTo(cur *sequenceCursor, key Value, lastPositionIfNotFound bool) bool {
 	seq := cur.seq.(orderedSequence)
 	keyIsOrderedByValue := isKindOrderedByValue(key.Type().Kind())
-	_, seqIsMeta := seq.(metaSequence)
+	seqIsMeta := isMetaSequence(seq)
 	var keyRef hash.Hash
 
 	var searchFn func(i int) bool

@@ -96,6 +96,40 @@ func (ms metaSequenceObject) getChildSequence(idx int) sequence {
 	return mt.ref.TargetValue(ms.vr).(Collection).sequence()
 }
 
+// Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
+// concatentation as one long composite sequence
+func (ms metaSequenceObject) getCompositeChildSequence(start uint64, length uint64) indexedSequence {
+	childIsMeta := false
+	metaItems := []metaTuple{}
+	valueItems := []Value{}
+	for i := start; i < start+length; i++ {
+		seq := ms.getChildSequence(int(i))
+		if i == start {
+			if idxSeq, ok := seq.(indexedSequence); ok {
+				childIsMeta = isMetaSequence(idxSeq)
+			}
+		}
+		for j := 0; j < seq.seqLen(); j++ {
+			if childIsMeta {
+				metaItems = append(metaItems, seq.getItem(j).(metaTuple))
+			} else {
+				valueItems = append(valueItems, seq.getItem(j).(Value))
+			}
+		}
+	}
+
+	if childIsMeta {
+		return newIndexedMetaSequence(metaItems, ms.Type(), ms.vr)
+	} else {
+		return newListLeafSequence(ms.vr, valueItems...)
+	}
+}
+
+func isMetaSequence(seq sequence) bool {
+	_, seqIsMeta := seq.(metaSequence)
+	return seqIsMeta
+}
+
 // Creates a sequenceCursor pointing to the first metaTuple in a metaSequence, and returns that cursor plus the leaf Value referenced from that metaTuple.
 func newMetaSequenceCursor(root metaSequence, vr ValueReader) (*sequenceCursor, Value) {
 	d.Chk.NotNil(root)

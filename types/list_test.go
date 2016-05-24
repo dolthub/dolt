@@ -36,16 +36,19 @@ func (tl testList) RemoveAt(idx int) testList {
 	return tl.Remove(idx, idx+1)
 }
 
+func (tl testList) Diff(last testList) []Splice {
+	// Note: this could be use tl.toList/last.toList and then tlList.Diff(lastList)
+	// but the purpose of this method is to be redundant.
+	return calcSplices(uint64(len(last)), uint64(len(tl)),
+		func(i uint64, j uint64) bool { return last[i] == tl[j] })
+}
+
 func (tl testList) toList() List {
 	return NewList(tl...)
 }
 
 func newTestList(length int) testList {
-	tl := testList{}
-	for i := 0; i < length; i++ {
-		tl = append(tl, Number(i))
-	}
-	return tl
+	return generateNumbersAsValues(length)
 }
 
 func newTestListFromList(list List) testList {
@@ -541,16 +544,7 @@ func TestListSet(t *testing.T) {
 func TestListFirstNNumbers(t *testing.T) {
 	assert := assert.New(t)
 
-	firstNNumbers := func(n int) []Value {
-		nums := []Value{}
-		for i := 0; i < n; i++ {
-			nums = append(nums, Number(i))
-		}
-
-		return nums
-	}
-
-	nums := firstNNumbers(testListSize)
+	nums := generateNumbersAsValues(testListSize)
 	s := NewList(nums...)
 	assert.Equal("sha1-aa1605484d993e89dbc0431acb9f2478282f9d94", s.Hash().String())
 }
@@ -560,19 +554,8 @@ func TestListRefOfStructFirstNNumbers(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 	assert := assert.New(t)
-	vs := NewTestValueStore()
 
-	firstNNumbers := func(n int) []Value {
-		nums := []Value{}
-		for i := 0; i < n; i++ {
-			r := vs.WriteValue(NewStruct("num", structData{"n": Number(i)}))
-			nums = append(nums, r)
-		}
-
-		return nums
-	}
-
-	nums := firstNNumbers(testListSize)
+	nums := generateNumbersAsRefOfStructs(testListSize)
 	s := NewList(nums...)
 	assert.Equal("sha1-2e79d54322aa793d0e8d48380a28927a257a141a", s.Hash().String())
 }
@@ -591,4 +574,137 @@ func TestListModifyAfterRead(t *testing.T) {
 	assert.Equal(llen-1, list.Len())
 	list = list.Append(z)
 	assert.Equal(llen, list.Len())
+}
+
+func TestListDiffIdentical(t *testing.T) {
+	assert := assert.New(t)
+	nums := generateNumbersAsValues(5)
+	l1 := NewList(nums...)
+	l2 := NewList(nums...)
+	diff1, err1 := l1.Diff(l2)
+	diff2, err2 := l2.Diff(l1)
+	assert.NoError(err1)
+	assert.NoError(err2)
+	assert.Equal(0, len(diff1))
+	assert.Equal(0, len(diff2))
+	assert.NoError(err1)
+}
+
+func TestListDiffVersusEmpty(t *testing.T) {
+	assert := assert.New(t)
+	nums1 := generateNumbersAsValues(5)
+	l1 := NewList(nums1...)
+	l2 := NewList()
+	diff1, err1 := l1.Diff(l2)
+	diff2, err2 := l2.Diff(l1)
+	assert.NoError(err1)
+	assert.NoError(err2)
+	assert.Equal(1, len(diff1))
+	assert.Equal(len(diff2), len(diff1))
+}
+
+func TestListDiffReverse(t *testing.T) {
+	assert := assert.New(t)
+	nums1 := generateNumbersAsValues(5000)
+	nums2 := reverseValues(nums1)
+	l1 := NewList(nums1...)
+	l2 := NewList(nums2...)
+	diff1, err1 := l1.Diff(l2)
+	diff2, err2 := l2.Diff(l1)
+	assert.NoError(err1)
+	assert.NoError(err2)
+	assert.Equal(2, len(diff1))
+	assert.Equal(len(diff2), len(diff1))
+}
+
+func TestListDiffRemove5x100(t *testing.T) {
+	assert := assert.New(t)
+	nums1 := generateNumbersAsValues(5000)
+	nums2 := generateNumbersAsValues(5000)
+	for count := 5; count > 0; count-- {
+		nums2 = spliceValues(nums2, (count-1)*1000, 100)
+	}
+	l1 := NewList(nums1...)
+	l2 := NewList(nums2...)
+	diff1, err1 := l1.Diff(l2)
+	diff2, err2 := l2.Diff(l1)
+	assert.NoError(err1)
+	assert.NoError(err2)
+	assert.Equal(5, len(diff2))
+	assert.Equal(len(diff1), len(diff2))
+
+	diff2Expected := []Splice{
+		Splice{0, 100, 0, 0},
+		Splice{1000, 100, 0, 0},
+		Splice{2000, 100, 0, 0},
+		Splice{3000, 100, 0, 0},
+		Splice{4000, 100, 0, 0},
+	}
+	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
+}
+
+func TestListDiffAdd5x5(t *testing.T) {
+	assert := assert.New(t)
+	nums1 := generateNumbersAsValues(5000)
+	nums2 := generateNumbersAsValues(5000)
+	for count := 5; count > 0; count-- {
+		nums2 = spliceValues(nums2, (count-1)*1000, 0, Number(0), Number(1), Number(2), Number(3), Number(4))
+	}
+	l1 := NewList(nums1...)
+	l2 := NewList(nums2...)
+	diff1, err1 := l1.Diff(l2)
+	diff2, err2 := l2.Diff(l1)
+	assert.NoError(err1)
+	assert.NoError(err2)
+	assert.Equal(5, len(diff2))
+	assert.Equal(len(diff1), len(diff2))
+
+	diff2Expected := []Splice{
+		Splice{5, 0, 5, 5},
+		Splice{1000, 0, 5, 1005},
+		Splice{2000, 0, 5, 2010},
+		Splice{3000, 0, 5, 3015},
+		Splice{4000, 0, 5, 4020},
+	}
+	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
+}
+
+func TestListDiffReplaceReverse5x100(t *testing.T) {
+	assert := assert.New(t)
+	nums1 := generateNumbersAsValues(5000)
+	nums2 := generateNumbersAsValues(5000)
+	for count := 5; count > 0; count-- {
+		out := reverseValues(nums2[(count-1)*1000 : (count-1)*1000+100])
+		nums2 = spliceValues(nums2, (count-1)*1000, 100, out...)
+	}
+	l1 := NewList(nums1...)
+	l2 := NewList(nums2...)
+	diff2, err2 := l2.Diff(l1)
+	assert.NoError(err2)
+	assert.Equal(10, len(diff2))
+
+	diff2Expected := []Splice{
+		Splice{0, 49, 50, 0},
+		Splice{50, 50, 49, 51},
+		Splice{1000, 49, 50, 1000},
+		Splice{1050, 50, 49, 1051},
+		Splice{2000, 49, 50, 2000},
+		Splice{2050, 50, 49, 2051},
+		Splice{3000, 49, 50, 3000},
+		Splice{3050, 50, 49, 3051},
+		Splice{4000, 49, 50, 4000},
+		Splice{4050, 50, 49, 4051},
+	}
+	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
+}
+
+func TestListDiffLoadLimit(t *testing.T) {
+	assert := assert.New(t)
+	nums1 := generateNumbersAsValues(5)
+	nums2 := generateNumbersAsValues(5000)
+	l1 := NewList(nums1...)
+	l2 := NewList(nums2...)
+	diff2, err2 := l2.DiffWithLoadLimit(l1, 50)
+	assert.Nil(diff2)
+	assert.Equal("load limit exceeded", err2.Error())
 }

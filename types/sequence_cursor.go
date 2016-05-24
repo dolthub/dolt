@@ -48,6 +48,13 @@ func (cur *sequenceCursor) valid() bool {
 	return cur.idx >= 0 && cur.idx < cur.length()
 }
 
+func (cur *sequenceCursor) depth() int {
+	if nil != cur.parent {
+		return 1 + cur.parent.depth()
+	}
+	return 1
+}
+
 func (cur *sequenceCursor) indexInChunk() int {
 	return cur.idx
 }

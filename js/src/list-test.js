@@ -339,6 +339,15 @@ suite('Diff List', () => {
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(directDiff, listDiff);
+
+    const expectedDiff = [
+      [0, 100, 0, 0],
+      [1000, 100, 0, 0],
+      [2000, 100, 0, 0],
+      [3000, 100, 0, 0],
+      [4000, 100, 0, 0],
+    ];
+    assert.deepEqual(expectedDiff, directDiff);
   });
 
   test('LONG: Add 5x5', async () => {
@@ -357,6 +366,15 @@ suite('Diff List', () => {
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(directDiff, listDiff);
+
+    const expectedDiff = [
+      [5, 0, 5, 5],
+      [1000, 0, 5, 1005],
+      [2000, 0, 5, 2010],
+      [3000, 0, 5, 3015],
+      [4000, 0, 5, 4020],
+    ];
+    assert.deepEqual(expectedDiff, directDiff);
   });
 
   test('LONG: Replace reverse 5x100', async () => {
@@ -365,7 +383,7 @@ suite('Diff List', () => {
 
     let count = 5;
     while (count-- > 0) {
-      const out = nums2.slice(count * 1000, 100).reverse();
+      const out = nums2.slice(count * 1000, count * 1000 + 100).reverse();
       nums2.splice(count * 1000, 100, ...out);
     }
 
@@ -375,6 +393,20 @@ suite('Diff List', () => {
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(directDiff, listDiff);
+
+    const expectedDiff = [
+      [0,49,50,0],
+      [50,50,49,51],
+      [1000,49,50,1000],
+      [1050,50,49,1051],
+      [2000,49,50,2000],
+      [2050,50,49,2051],
+      [3000,49,50,3000],
+      [3050,50,49,3051],
+      [4000,49,50,4000],
+      [4050,50,49,4051],
+    ];
+    assert.deepEqual(expectedDiff, directDiff);
   });
 
   test('LONG: Load Limit', async () => {

@@ -2,6 +2,7 @@ package types
 
 import (
 	"crypto/sha1"
+	"math"
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/hash"
@@ -178,6 +179,26 @@ func (l List) IterAll(f listIterAllFunc) {
 		idx++
 		return false
 	})
+}
+
+func (l List) Diff(last List) ([]Splice, error) {
+	return l.DiffWithLoadLimit(last, math.MaxUint64)
+}
+
+func (l List) DiffWithLoadLimit(last List, loadLimit uint64) ([]Splice, error) {
+	if l.Equals(last) {
+		return []Splice{}, nil // nothing changed
+	}
+	lLen, lastLen := l.Len(), last.Len()
+	if lLen == 0 {
+		return []Splice{Splice{0, lastLen, 0, 0}}, nil // everything removed
+	}
+	if lastLen == 0 {
+		return []Splice{Splice{0, 0, lLen, 0}}, nil // everything added
+	}
+	lastCur := newCursorAtIndex(last.seq, 0)
+	lCur := newCursorAtIndex(l.seq, 0)
+	return indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, loadLimit)
 }
 
 func newListLeafBoundaryChecker() boundaryChecker {

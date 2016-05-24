@@ -63,3 +63,21 @@ func chunkDiffCount(c1 []Ref, c2 []Ref) int {
 	count += len(hashes)
 	return count
 }
+
+func reverseValues(values []Value) []Value {
+	newValues := make([]Value, len(values))
+	for i := 0; i < len(values); i++ {
+		newValues[i] = values[len(values)-i-1]
+	}
+	return newValues
+}
+
+func spliceValues(values []Value, start int, deleteCount int, newItems ...Value) []Value {
+	numCurrentItems := len(values)
+	numNewItems := len(newItems)
+	newArr := make([]Value, numCurrentItems-deleteCount+numNewItems)
+	copy(newArr[0:], values[0:start])
+	copy(newArr[start:], newItems[0:])
+	copy(newArr[start+numNewItems:], values[start+deleteCount:])
+	return newArr
+}
