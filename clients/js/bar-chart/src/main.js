@@ -2,7 +2,7 @@
 
 import {
   DatasetSpec,
-  newMap,
+  Map,
 } from '@attic/noms';
 
 window.onload = main;
@@ -43,6 +43,6 @@ function getMap() {
     const ds = DatasetSpec.parse(args.ds).set();
     return ds.head().then(commit => commit.value);
   } else {
-    return newMap([['Donkeys', 36], ['Monkeys', 8], ['Giraffes', 12]]);
+    return Promise.resolve(new Map([['Donkeys', 36], ['Monkeys', 8], ['Giraffes', 12]]));
   }
 }

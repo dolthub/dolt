@@ -2,7 +2,7 @@
   "name": "noms-aggregate",
   "main": "dist/main.js",
   "dependencies": {
-    "@attic/noms": "^32.2.0",
+    "@attic/noms": "^37.0.0",
     "babel-regenerator-runtime": "6.5.0",
     "yargs": "4.4.0"
   },

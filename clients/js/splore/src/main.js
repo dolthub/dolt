@@ -6,6 +6,7 @@ import ReactDOM from 'react-dom';
 import {
   Blob,
   Database,
+  Hash,
   HttpBatchStore,
   IndexedMetaSequence,
   invariant,
@@ -15,7 +16,6 @@ import {
   MapLeafSequence,
   OrderedMetaSequence,
   Ref,
-  RefValue,
   Set,
   SetLeafSequence,
   Struct,
@@ -26,7 +26,7 @@ import {layout, TreeNode} from './buchheim.js';
 import type {NodeGraph} from './buchheim.js';
 
 const data: NodeGraph = {nodes: {}, links: {}};
-let rootRef: Ref;
+let rootHash: Hash;
 let database: Database;
 
 let renderNode: ?HTMLElement;
@@ -61,65 +61,65 @@ function load() {
   const httpStore = new HttpBatchStore(params.store, undefined, opts);
   database = new Database(httpStore);
 
-  const setRootRef = ref => {
-    rootRef = ref;
-    handleChunkLoad(ref, ref);
+  const setRootHash = hash => {
+    rootHash = hash;
+    handleChunkLoad(hash, hash);
   };
 
-  if (params.ref) {
-    setRootRef(Ref.parse(params.ref));
+  if (params.hash) {
+    setRootHash(Hash.parse(params.ref));
   } else {
-    httpStore.getRoot().then(setRootRef);
+    httpStore.getRoot().then(setRootHash);
   }
 }
 
 function formatKeyString(v: any): string {
-  if (v instanceof RefValue) {
-    v = v.targetRef;
-  }
   if (v instanceof Ref) {
+    v = v.targetHash;
+  }
+  if (v instanceof Hash) {
     return v.toString().substring(5, 11);
   }
 
   return String(v);
 }
 
-function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
+function handleChunkLoad(hash: Hash, val: any, fromHash: ?string) {
   let counter = 0;
 
   function processMetaSequence(id, sequence: IndexedMetaSequence | OrderedMetaSequence,
                                name: string) {
     data.nodes[id] = {name: name};
     sequence.items.forEach(tuple => {
-      const kid = process(ref, formatKeyString(tuple.value), id);
+      const kid = process(hash, formatKeyString(tuple.value), id);
       if (kid) {
         data.nodes[kid].isOpen = true;
 
-        process(ref, tuple.ref, kid);
+        process(hash, tuple.ref, kid);
       } else {
         throw new Error('No kid id.');
       }
     });
   }
 
-  function process(ref, val, fromId): ?string {
+  function process(hash, val, fromId): ?string {
     const t = typeof val;
     if (t === 'undefined') {
       return null;
     }
 
     // Assign a unique ID to this node.
-    // We don't use the noms ref because we only want to represent values as shared in the graph if
+    // We don't use the noms hash because we only want to represent values as shared in the graph if
     // they are actually in the same chunk.
     let id;
-    if (val instanceof RefValue) {
-      val = val.targetRef;
+    if (val instanceof Ref) {
+      val = val.targetHash;
     }
 
-    if (val instanceof Ref) {
+    if (val instanceof Hash) {
       id = val.toString();
     } else {
-      id = ref.toString() + '/' + counter++;
+      id = hash.toString() + '/' + counter++;
     }
 
     // Populate links.
@@ -135,7 +135,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
       const sequence = val.sequence;
       if (sequence instanceof ListLeafSequence) {
         data.nodes[id] = {name: `List (${val.length})`};
-        sequence.items.forEach(c => process(ref, c, id));
+        sequence.items.forEach(c => process(hash, c, id));
       } else {
         invariant(sequence instanceof IndexedMetaSequence);
         processMetaSequence(id, sequence, 'ListNode');
@@ -144,7 +144,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
       const sequence = val.sequence;
       if (sequence instanceof SetLeafSequence) {
         data.nodes[id] = {name: `Set (${val.size})`};
-        sequence.items.forEach(c => process(ref, c, id));
+        sequence.items.forEach(c => process(hash, c, id));
       } else {
         invariant(sequence instanceof OrderedMetaSequence);
         processMetaSequence(id, sequence, 'SetNode');
@@ -156,11 +156,11 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         sequence.items.forEach(entry => {
           const [k, v] = entry;
           // TODO: handle non-string keys
-          const kid = process(ref, k, id);
+          const kid = process(hash, k, id);
           if (kid) {
             data.nodes[kid].isOpen = true;
 
-            process(ref, v, kid);
+            process(hash, v, kid);
           } else {
             throw new Error('No kid id.');
           }
@@ -169,12 +169,12 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
         invariant(sequence instanceof OrderedMetaSequence);
         processMetaSequence(id, sequence, 'MapNode');
       }
-    } else if (val instanceof Ref) {
+    } else if (val instanceof Hash) {
       const refStr = val.toString();
       data.nodes[id] = {
         canOpen: true,
         name: refStr.substr(5, 6),
-        ref: val,
+        hash: val,
       };
     } else if (val instanceof Struct) {
       // Struct
@@ -185,12 +185,12 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
 
       mirror.forEachField((f: StructFieldMirror) => {
         const v = f.value;
-        const kid = process(ref, f.name, id);
+        const kid = process(hash, f.name, id);
         if (kid) {
           // Start struct keys open, just makes it easier to use.
           data.nodes[kid].isOpen = true;
 
-          process(ref, v, kid);
+          process(hash, v, kid);
         } else {
           throw new Error('No kid id.');
         }
@@ -203,7 +203,7 @@ function handleChunkLoad(ref: Ref, val: any, fromRef: ?string) {
     return id;
   }
 
-  process(ref, val, fromRef);
+  process(hash, val, fromHash);
   render();
 }
 
@@ -222,9 +222,9 @@ function handleNodeClick(e: MouseEvent, id: string) {
     if (data.links[id] || !data.nodes[id].isOpen) {
       render();
     } else {
-      const ref = Ref.parse(id);
-      database.readValue(ref).then(value => {
-        handleChunkLoad(ref, value, id);
+      const hash = Hash.parse(id);
+      database.readValue(hash).then(value => {
+        handleChunkLoad(hash, value, id);
       });
     }
   }
@@ -280,7 +280,7 @@ function renderPrompt() {
 }
 
 function render() {
-  const dt = new TreeNode(data, rootRef.toString(), null, 0, 0, {});
+  const dt = new TreeNode(data, rootHash.toString(), null, 0, 0, {});
   layout(dt);
   ReactDOM.render(
     <Layout tree={dt} data={data} onNodeClick={handleNodeClick} nomsStore={params.store}/>,

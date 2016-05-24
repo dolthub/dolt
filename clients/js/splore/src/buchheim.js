@@ -8,7 +8,7 @@
 
 // TreeNode represents one node of the tree visualization.
 
-import type {Ref} from '@attic/noms';
+import type {Hash} from '@attic/noms';
 
 function assertNotNull<T>(v: ?T): T {
   if (v !== null && v !== undefined) {
@@ -22,7 +22,7 @@ export type NodeData = {
   name: string,
   isOpen?: boolean,
   canOpen?: boolean,
-  ref?: Ref,
+  hash?: Hash,
 };
 
 export type NodeGraph = {

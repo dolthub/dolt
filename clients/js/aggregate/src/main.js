@@ -4,10 +4,7 @@ import argv from 'yargs';
 import {
   DatasetSpec,
   invariant,
-  makeMapType,
-  newMap,
-  numberType,
-  stringType,
+  Map,
   Struct,
   StructMirror,
   walk,
@@ -60,8 +57,9 @@ async function main(): Promise<void> {
 
   const commit = await rv.targetValue(input.store);
 
-  let out;
-  await walk(commit.value, input.store, async cv => {
+  let out = Promise.resolve(new Map());
+
+  await walk(commit.value, input.store, cv => {
     if (!(cv instanceof Struct) || cv.type.name !== args.struct) {
       return;
     }
@@ -71,24 +69,16 @@ async function main(): Promise<void> {
       return;
     }
 
-    // TODO(aa): Remove this business once structural typing is in place.
-    if (!out) {
-      out = newMap([], makeMapType(stringType, numberType));
-    }
-
     // This is tricksy. We can't use await because we need the set insertions to happen in serial,
     // because otherwise (due to immutable datastructures), we will lose some of the inserts.
     out = out
       .then(m => m.get(fv)
         .then(prev => m.set(fv, (prev || 0) + 1)));
 
-    return out.then(() => false);
+    return true;
   });
 
-  // TODO(aa): Remove this when we have structural typing (commit empty map instead).
-  if (out) {
-    await outSpec.set().commit(await out);
-  }
+  await outSpec.set().commit(await out);
 }
 
 function quit(err: string): Function {

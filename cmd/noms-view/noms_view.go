@@ -40,7 +40,7 @@ type chunkStoreRecords map[string]chunkStoreRecord
 func main() {
 	usage := func() {
 		fmt.Fprintln(os.Stderr, "Starts a server to display a web application with access to one or more noms datasets\n")
-		fmt.Println("Usage: noms view %s <view-dir> arg1=val1 arg2=val2...\n", serveCmd)
+		fmt.Printf("Usage: noms view %s <view-dir> arg1=val1 arg2=val2...\n", serveCmd)
 		flag.PrintDefaults()
 	}
 

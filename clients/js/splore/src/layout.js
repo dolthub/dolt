@@ -31,8 +31,8 @@ export default function Layout(props: Props) : React.Element {
     const hasChildren = treeNode.data.canOpen || links.length > 0;
     const x = getX(treeNode);
     const y = getY(treeNode);
-    const nomsRef = treeNode.data.ref;
-    const title = nomsRef ? nomsRef.toString() : '';
+    const hash = treeNode.data.hash;
+    const title = hash ? hash.toString() : '';
 
     maxX = Math.max(x + spaceX, maxX);
     minY = Math.min(y, minY);
@@ -51,7 +51,7 @@ export default function Layout(props: Props) : React.Element {
         title={title}
         canOpen={hasChildren}
         isOpen={!hasChildren || Boolean(treeNode.data.isOpen)}
-        nomsRef={nomsRef}
+        hash={hash}
         nomsStore={props.nomsStore}
         onClick={(e) => props.onNodeClick(e, treeNode.id)}/>);
     children.push(n);

@@ -86,8 +86,8 @@ function getBlob(url): Promise<Blob> {
 
       res.on('end', () => {
         process.stdout.write(clearLine + 'Committing...');
-        w.close()
-          .then(() => resolve(w.blob));
+        w.close();
+        resolve(w.blob);
       });
 
       res.resume();

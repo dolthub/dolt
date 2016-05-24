@@ -2,7 +2,7 @@
 
 import classNames from 'classnames';
 import React from 'react';
-import {Ref} from '@attic/noms';
+import {Hash} from '@attic/noms';
 
 type Props = {
   canOpen: boolean,
@@ -15,7 +15,7 @@ type Props = {
   x: number,
   y: number,
   spaceX: number,
-  nomsRef: ?Ref,
+  hash: ?Hash,
   nomsStore: string,
   onClick: (e: Event, s: String) => void,
 };
@@ -49,8 +49,8 @@ export default class Node extends React.Component<void, Props, State> {
     const translate = `translate3d(${this.state.x}px, ${this.state.y}px, 0)`;
 
     let text = this.props.text;
-    if (this.props.nomsRef) {
-      const url = `${this.props.nomsStore}/ref/${this.props.nomsRef.toString()}`;
+    if (this.props.hash) {
+      const url = `${this.props.nomsStore}/ref/${this.props.hash.toString()}`;
       text = <a href={url}>{text}</a>;
     }
 
