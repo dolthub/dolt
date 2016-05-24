@@ -7,7 +7,7 @@ import type {MetaSequence, MetaTuple} from './meta-sequence.js';
 import type {SequenceCursor} from './sequence.js';
 
 export type BoundaryChecker<T> = {
-  write: (item: T) => bool;
+  write: (item: T) => boolean;
   windowSize: number;
 }
 

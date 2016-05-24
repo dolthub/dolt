@@ -10,7 +10,7 @@ import Struct, {StructMirror} from './struct.js';
 import type Database from './database.js';
 import type Value from './value.js';
 
-type walkCb = (v: Value) => ?bool | Promise<?bool>;
+type walkCb = (v: Value) => ?boolean | Promise<?boolean>;
 
 /**
  * Invokes |cb| once for |v| and each of its descendants. The returned Promise is resolved when all
@@ -24,7 +24,8 @@ type walkCb = (v: Value) => ?bool | Promise<?bool>;
  */
 export default async function walk(v: Value, ds: Database, cb: walkCb): Promise<void> {
   let skip = cb(v);
-  if (skip instanceof Promise) {
+  if (skip && skip !== true) {
+    // Might be a Promise, but we can't check instanceof: https://phabricator.babeljs.io/T7340.
     skip = await skip;
   }
 
