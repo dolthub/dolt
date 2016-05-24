@@ -35,7 +35,7 @@ export default function assertSubtype(requiredType: Type, v: Value): void {
   assert(isSubtype(requiredType, getTypeOfValue(v)), v, requiredType);
 }
 
-function isSubtype(requiredType: Type, concreteType: Type): boolean {
+export function isSubtype(requiredType: Type, concreteType: Type): boolean {
   if (equals(requiredType, concreteType)) {
     return true;
   }
