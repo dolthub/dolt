@@ -48,7 +48,7 @@ function load() {
     });
   }
 
-  if (!params.store) {
+  if (!params.db) {
     renderPrompt();
     return;
   }
@@ -58,7 +58,7 @@ function load() {
     opts['headers'] = {Authorization: `Bearer ${params.token}`};
   }
 
-  const httpStore = new HttpBatchStore(params.store, undefined, opts);
+  const httpStore = new HttpBatchStore(params.db, undefined, opts);
   database = new Database(httpStore);
 
   const setRootHash = hash => {
@@ -242,9 +242,9 @@ class Prompt extends React.Component<void, {}, void> {
       <div style={fontStyle}>
         Can haz database?
         <form style={{margin:'0.5em 0'}} onSubmit={e => this._handleOnSubmit(e)}>
-          <input type='text' ref='store' autoFocus={true} style={inputStyle}
-            defaultValue={params.store || 'http://api.noms.io/-/ds/[user]'}
-            placeholder='noms store URL'
+          <input type='text' ref='db' autoFocus={true} style={inputStyle}
+            defaultValue={params.db || 'http://api.noms.io/-/ds/[user]'}
+            placeholder='noms database URL'
           />
           <input type='text' ref='token' style={inputStyle}
             defaultValue={params.token}
@@ -262,8 +262,8 @@ class Prompt extends React.Component<void, {}, void> {
 
   _handleOnSubmit(e) {
     e.preventDefault();
-    const {store, token, ref} = this.refs;
-    let qs = '?store=' + store.value;
+    const {db, token, ref} = this.refs;
+    let qs = '?db=' + db.value;
     if (token.value) {
       qs += '&token=' + token.value;
     }
@@ -283,6 +283,6 @@ function render() {
   const dt = new TreeNode(data, rootHash.toString(), null, 0, 0, {});
   layout(dt);
   ReactDOM.render(
-    <Layout tree={dt} data={data} onNodeClick={handleNodeClick} nomsStore={params.store}/>,
+    <Layout tree={dt} data={data} onNodeClick={handleNodeClick} nomsStore={params.db}/>,
     renderNode);
 }

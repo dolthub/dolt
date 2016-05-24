@@ -20,10 +20,10 @@ cd ../../js/splore
 # Launch Splore with noms-view
 cd ../../../cmd/noms-view
 go build
-./noms-view serve ../../clients/js/splore store="ldb:/tmp/sploretest"
+./noms-view serve ../../clients/js/splore db="ldb:/tmp/sploretest"
 ```
 
-Then, navigate to the URL printed by noms-view, e.g. http://127.0.0.1:12345?store=xyz.
+Then, navigate to the URL printed by noms-view, e.g. http://127.0.0.1:12345?db=xyz.
 
 ## Develop
 
