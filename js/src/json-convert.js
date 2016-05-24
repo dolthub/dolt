@@ -2,7 +2,10 @@
 
 import {invariant} from './assert.js';
 import List from './list.js';
-import {newStruct} from './struct.js';
+import {
+  escapeStructField,
+  newStruct,
+} from './struct.js';
 import type Value from './value.js';
 
 type JSON = string | number | boolean | null | JSONObject | JSONArray;
@@ -26,7 +29,7 @@ export default function jsonToNoms(v: JSON): Value {
     const props = {};
     Object.keys(v).forEach(k => {
       invariant(v instanceof Object);
-      props[k] = jsonToNoms(v[k]);
+      props[escapeStructField(k)] = jsonToNoms(v[k]);
     });
     return newStruct('', props);
   }

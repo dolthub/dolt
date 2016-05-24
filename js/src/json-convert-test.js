@@ -41,6 +41,12 @@ suite('jsonToNoms', () => {
           key: 'val',
         }),
       }),
+      {
+        _content: 42,
+      },
+      newStruct('', {
+        Q5Fcontent: 42,
+      }),
     ];
 
     for (let i = 0; i < tests.length; i += 2) {

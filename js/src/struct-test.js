@@ -7,6 +7,7 @@ import Struct, {
   StructMirror,
   structDiff,
   createStructClass,
+  escapeStructField,
 } from './struct.js';
 import {assert} from 'chai';
 import {
@@ -175,5 +176,23 @@ suite('Struct', () => {
       b: new Map([['boo', false], ['bar', true]]),
       c: new Set([0, 1, 'bar']),
     }));
+  });
+
+  test('escapeStructField', () => {
+    const cases = [
+      ['a', 'a'],
+      ['AaZz19_', 'AaZz19_'],
+      ['Q', 'Q51'],
+      ['AQ1', 'AQ511'],
+      ['$', 'Q24'],
+      ['_content', 'Q5Fcontent'],
+      ['Few ¢ents Short', 'FewQ20QC2A2entsQ20Short'],
+      ['💩', 'QF09F92A9'],
+    ];
+
+    cases.forEach(c => {
+      const [input, expected] = c;
+      assert.equal(escapeStructField(input), expected);
+    });
   });
 });
