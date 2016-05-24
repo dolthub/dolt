@@ -20,7 +20,7 @@ func NewDataset(db datas.Database, datasetID string) Dataset {
 	return Dataset{db, datasetID}
 }
 
-func (ds *Dataset) Store() datas.Database {
+func (ds *Dataset) Database() datas.Database {
 	return ds.store
 }
 
@@ -30,11 +30,11 @@ func (ds *Dataset) ID() string {
 
 // MaybeHead returns the current Head Commit of this Dataset, which contains the current root of the Dataset's value tree, if available. If not, it returns a new Commit and 'false'.
 func (ds *Dataset) MaybeHead() (types.Struct, bool) {
-	return ds.Store().MaybeHead(ds.id)
+	return ds.Database().MaybeHead(ds.id)
 }
 
 func (ds *Dataset) MaybeHeadRef() (types.Ref, bool) {
-	return ds.Store().MaybeHeadRef(ds.id)
+	return ds.Database().MaybeHeadRef(ds.id)
 }
 
 // Head returns the current head Commit, which contains the current root of the Dataset's value tree.
@@ -55,7 +55,7 @@ func (ds *Dataset) HeadRef() types.Ref {
 func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
 	p := types.NewSet()
 	if headRef, ok := ds.MaybeHeadRef(); ok {
-		headRef.TargetValue(ds.Store()) // TODO: This is a hack to deconfuse the validation code, which doesn't hold onto validation state between commits.
+		headRef.TargetValue(ds.Database()) // TODO: This is a hack to deconfuse the validation code, which doesn't hold onto validation state between commits.
 		p = p.Insert(headRef)
 	}
 	return ds.CommitWithParents(v, p)
@@ -65,12 +65,12 @@ func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
 // If the update cannot be performed, e.g., because of a conflict, CommitWithParents returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
 func (ds *Dataset) CommitWithParents(v types.Value, p types.Set) (Dataset, error) {
 	newCommit := datas.NewCommit().Set(datas.ParentsField, p).Set(datas.ValueField, v)
-	store, err := ds.Store().Commit(ds.id, newCommit)
+	store, err := ds.Database().Commit(ds.id, newCommit)
 	return Dataset{store, ds.id}, err
 }
 
 func (ds *Dataset) Pull(sourceStore datas.Database, sourceRef types.Ref, concurrency int) (Dataset, error) {
-	_, topDown := ds.Store().(*datas.LocalDatabase)
+	_, topDown := ds.Database().(*datas.LocalDatabase)
 	return ds.pull(sourceStore, sourceRef, concurrency, topDown)
 }
 
@@ -87,9 +87,9 @@ func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency 
 	}
 
 	if topDown {
-		datas.CopyMissingChunksP(source, sink.Store().(*datas.LocalDatabase), sourceRef, concurrency)
+		datas.CopyMissingChunksP(source, sink.Database().(*datas.LocalDatabase), sourceRef, concurrency)
 	} else {
-		datas.CopyReachableChunksP(source, sink.Store(), sourceRef, sinkHeadRef, concurrency)
+		datas.CopyReachableChunksP(source, sink.Database(), sourceRef, sinkHeadRef, concurrency)
 	}
 
 	err := datas.ErrOptimisticLockFailed

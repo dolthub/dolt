@@ -37,7 +37,7 @@ func main() {
 			util.CheckError(fmt.Errorf("Dataset %v not found", set.ID()))
 		}
 
-		store, err := set.Store().Delete(set.ID())
+		store, err := set.Database().Delete(set.ID())
 		util.CheckError(err)
 		defer store.Close()
 

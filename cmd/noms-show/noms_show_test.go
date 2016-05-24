@@ -29,10 +29,10 @@ const (
 )
 
 func writeTestData(ds dataset.Dataset, value types.Value) types.Ref {
-	r1 := ds.Store().WriteValue(value)
+	r1 := ds.Database().WriteValue(value)
 	ds, err := ds.Commit(r1)
 	d.Chk.NoError(err)
-	err = ds.Store().Close()
+	err = ds.Database().Close()
 	d.Chk.NoError(err)
 
 	return r1

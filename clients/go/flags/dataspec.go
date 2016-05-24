@@ -158,7 +158,7 @@ func (spec DatasetSpec) Value() (datas.Database, types.Value, error) {
 		return nil, nil, fmt.Errorf("No head value for dataset: %s", spec.DatasetName)
 	}
 
-	return dataset.Store(), commit, nil
+	return dataset.Database(), commit, nil
 }
 
 func (spec RefSpec) Value() (datas.Database, types.Value, error) {

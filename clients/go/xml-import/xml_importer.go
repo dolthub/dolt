@@ -101,7 +101,7 @@ func main() {
 
 				var r types.Ref
 				if !*noIO {
-					r = ds.Store().WriteValue(nomsObj)
+					r = ds.Database().WriteValue(nomsObj)
 				}
 
 				refsChan <- refIndex{r, f.index}

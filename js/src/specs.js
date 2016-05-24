@@ -47,7 +47,7 @@ export class DatabaseSpec {
   }
 
   // Constructs a new Database based on the parsed spec.
-  store(): Database {
+  database(): Database {
     if (this.scheme === 'mem') {
       return new Database(new BatchStoreAdaptor(new MemoryStore()));
     }
@@ -64,7 +64,7 @@ export class DatabaseSpec {
 // See "spelling datasets" for details on supported syntaxes:
 // https://docs.google.com/document/d/1QgKcRS304llwU0ECahKtn8lGBFmT5zXzWr-5tah1S_4/edit
 export class DatasetSpec {
-  store: DatabaseSpec;
+  database: DatabaseSpec;
   name: string;
 
   // Returns a parsed spec, or null if the spec was invalid.
@@ -73,28 +73,28 @@ export class DatasetSpec {
     if (!match) {
       return null;
     }
-    const store = DatabaseSpec.parse(match[1]);
-    if (!store) {
+    const database = DatabaseSpec.parse(match[1]);
+    if (!database) {
       return null;
     }
-    return new this(store, match[2]);
+    return new this(database, match[2]);
   }
 
-  constructor(store: DatabaseSpec, name: string) {
-    this.store = store;
+  constructor(database: DatabaseSpec, name: string) {
+    this.database = database;
     this.name = name;
   }
 
   // Returns a new DataSet based on the parsed spec.
-  set(): Dataset {
-    return new Dataset(this.store.store(), this.name);
+  dataset(): Dataset {
+    return new Dataset(this.database.database(), this.name);
   }
 
   // Returns the value at the HEAD of this dataset, if any, or null otherwise.
   value(): Promise<any> {
-    // Hm. Calling set() creates a Database that we then toss into the ether, which means we can't
-    // call close() on it. Ideally, we'd fix that.
-    return this.set().head()
+    // Hm. Calling dataset() creates a Database that we then toss into the ether, which means we
+    // can't call close() on it. Ideally, we'd fix that.
+    return this.dataset().head()
       .then(commit => commit && commit.value);
   }
 }
@@ -107,7 +107,7 @@ export class DatasetSpec {
 // See "spelling objects" for details on supported syntaxes:
 // https://docs.google.com/document/d/1QgKcRS304llwU0ECahKtn8lGBFmT5zXzWr-5tah1S_4/edit
 export class HashSpec {
-  store: DatabaseSpec;
+  database: DatabaseSpec;
   hash: Hash;
 
   // Returns a parsed spec, or null if the spec was invalid.
@@ -122,23 +122,23 @@ export class HashSpec {
       return null;
     }
 
-    const store = DatabaseSpec.parse(match[1]);
-    if (!store) {
+    const database = DatabaseSpec.parse(match[1]);
+    if (!database) {
       return null;
     }
 
-    return new this(store, hash);
+    return new this(database, hash);
   }
 
-  constructor(store: DatabaseSpec, hash: Hash) {
-    this.store = store;
+  constructor(database: DatabaseSpec, hash: Hash) {
+    this.database = database;
     this.hash = hash;
   }
 
   // Returns the value for the spec'd reference, if any, or null otherwise.
   value(): Promise<any> {
-    const store = this.store.store();
-    return store.readValue(this.hash).then(v => store.close().then(() => v));
+    const database = this.database.database();
+    return database.readValue(this.hash).then(v => database.close().then(() => v));
   }
 }
 

@@ -59,7 +59,7 @@ func (s *testSuite) TestCSVExporter() {
 	}
 
 	ds.Commit(types.NewList(structs...))
-	ds.Store().Close()
+	ds.Database().Close()
 
 	// Run exporter
 	dataspec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, setName)

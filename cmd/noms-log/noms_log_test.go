@@ -29,7 +29,7 @@ func testCommitInResults(s *nomsShowTestSuite, spec string, i int) {
 	s.NoError(err)
 	commit := ds.Head()
 	fmt.Printf("commit hash: %s, type: %s\n", commit.Hash(), commit.Type().Name())
-	ds.Store().Close()
+	ds.Database().Close()
 	s.Contains(s.Run(main, []string{spec}), commit.Hash().String())
 }
 
@@ -41,7 +41,7 @@ func (s *nomsShowTestSuite) TestNomsLog() {
 
 	ds, err := sp.Dataset()
 	s.NoError(err)
-	ds.Store().Close()
+	ds.Database().Close()
 	s.Equal("", s.Run(main, []string{spec}))
 
 	testCommitInResults(s, spec, 1)
@@ -112,7 +112,7 @@ func (s *nomsShowTestSuite) TestNomsGraph1() {
 	b1, err = addCommit(b1, "7")
 	s.NoError(err)
 
-	b1.Store().Close()
+	b1.Database().Close()
 	s.Equal(graphRes1, s.Run(main, []string{"-graph", spec + ":b1"}))
 }
 

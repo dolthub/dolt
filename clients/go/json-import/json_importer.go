@@ -53,5 +53,5 @@ func main() {
 
 	_, err = ds.Commit(util.NomsValueFromDecodedJSON(jsonObject))
 	d.Exp.NoError(err)
-	ds.Store().Close()
+	ds.Database().Close()
 }

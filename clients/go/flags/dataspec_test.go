@@ -194,9 +194,9 @@ func TestLDBObject(t *testing.T) {
 	dataset2, err := sp1.Dataset()
 	assert.NoError(err)
 	r2 := dataset2.Head().Get(datas.ValueField)
-	s2 := r2.(types.Ref).TargetValue(dataset2.Store())
+	s2 := r2.(types.Ref).TargetValue(dataset2.Database())
 	assert.Equal(s1.String(), s2.(types.String).String())
-	dataset2.Store().Close()
+	dataset2.Database().Close()
 
 	spec3 := fmt.Sprintf("ldb:%s:%s", ldbpath, s1.Hash().String())
 	sp3, err := ParsePathSpec(spec3)
@@ -220,7 +220,7 @@ func TestReadRef(t *testing.T) {
 	dataset1, err = dataset1.Commit(commit)
 	assert.NoError(err)
 	r1 := dataset1.Head().Hash()
-	dataset1.Store().Close()
+	dataset1.Database().Close()
 
 	spec2 := fmt.Sprintf("ldb:%s:%s", ldbPath, r1.String())
 	sp2, err := ParsePathSpec(spec2)

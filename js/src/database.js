@@ -148,11 +148,11 @@ export default class Database {
   }
 }
 
-async function getAncestors(commits: Set<Ref<Commit>>, store: Database):
+async function getAncestors(commits: Set<Ref<Commit>>, database: Database):
     Promise<Set<Ref<Commit>>> {
   let ancestors = new Set();
   await commits.map(async (commitRef) => {
-    const commit = await store.readValue(commitRef.targetHash);
+    const commit = await database.readValue(commitRef.targetHash);
     await commit.parents.map(async (ref) => ancestors = await ancestors.insert(ref));
   });
   return ancestors;

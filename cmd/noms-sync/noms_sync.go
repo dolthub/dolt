@@ -48,7 +48,7 @@ func main() {
 
 	sinkDataset, err := sinkSpec.Dataset()
 	util.CheckError(err)
-	defer sinkDataset.Store().Close()
+	defer sinkDataset.Database().Close()
 
 	err = d.Try(func() {
 		if util.MaybeStartCPUProfile() {

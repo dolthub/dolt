@@ -42,13 +42,13 @@ func main() {
 	ds, err := spec.Dataset()
 	util.CheckError(err)
 
-	defer ds.Store().Close()
+	defer ds.Database().Close()
 
 	comma, err := csv.StringToRune(*delimiter)
 	util.CheckError(err)
 
 	err = d.Try(func() {
-		nomsList, structDesc := csv.ValueToListAndElemDesc(ds.Head().Get(datas.ValueField), ds.Store())
+		nomsList, structDesc := csv.ValueToListAndElemDesc(ds.Head().Get(datas.ValueField), ds.Database())
 		csv.Write(nomsList, structDesc, comma, os.Stdout)
 	})
 	if err != nil {

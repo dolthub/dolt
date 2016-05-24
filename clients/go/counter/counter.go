@@ -31,7 +31,7 @@ func main() {
 	ds, err := spec.Dataset()
 	util.CheckError(err)
 
-	defer ds.Store().Close()
+	defer ds.Database().Close()
 
 	lastVal := uint64(0)
 	if commit, ok := ds.MaybeHead(); ok {

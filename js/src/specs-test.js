@@ -19,20 +19,20 @@ suite('Specs', () => {
     invariant(spec);
     assert.equal(spec.scheme, 'mem');
     assert.equal(spec.path, '');
-    let store = spec.store();
-    assert.instanceOf(store, Database);
-    assert.instanceOf(store._vs._bs, BatchStoreAdaptor);
-    await store.close();
+    let database = spec.database();
+    assert.instanceOf(database, Database);
+    assert.instanceOf(database._vs._bs, BatchStoreAdaptor);
+    await database.close();
 
     spec = DatabaseSpec.parse('http://foo');
     invariant(spec);
     assert.isNotNull(spec);
     assert.equal(spec.scheme, 'http');
     assert.equal(spec.path, '//foo');
-    store = spec.store();
-    assert.instanceOf(store, Database);
-    assert.instanceOf(store._vs._bs, HttpBatchStore);
-    await store.close();
+    database = spec.database();
+    assert.instanceOf(database, Database);
+    assert.instanceOf(database._vs._bs, HttpBatchStore);
+    await database.close();
 
     spec = DatabaseSpec.parse('https://foo');
     invariant(spec);
@@ -59,22 +59,22 @@ suite('Specs', () => {
     let spec = DatasetSpec.parse('mem:ds');
     invariant(spec);
     assert.equal(spec.name, 'ds');
-    assert.equal(spec.store.scheme, 'mem');
-    assert.equal(spec.store.path, '');
-    let ds = spec.set();
+    assert.equal(spec.database.scheme, 'mem');
+    assert.equal(spec.database.path, '');
+    let ds = spec.dataset();
     assert.instanceOf(ds, Dataset);
-    assert.instanceOf(ds.store._vs._bs, BatchStoreAdaptor);
-    await ds.store.close();
+    assert.instanceOf(ds.database._vs._bs, BatchStoreAdaptor);
+    await ds.database.close();
 
     spec = DatasetSpec.parse('http://localhost:8000/foo:ds');
     invariant(spec);
     assert.equal(spec.name, 'ds');
-    assert.equal(spec.store.scheme, 'http');
-    assert.equal(spec.store.path, '//localhost:8000/foo');
-    ds = spec.set();
+    assert.equal(spec.database.scheme, 'http');
+    assert.equal(spec.database.path, '//localhost:8000/foo');
+    ds = spec.dataset();
     assert.instanceOf(ds, Dataset);
-    assert.instanceOf(ds.store._vs._bs, HttpBatchStore);
-    await ds.store.close();
+    assert.instanceOf(ds.database._vs._bs, HttpBatchStore);
+    await ds.database.close();
   });
 
   test('HashSpec', async () => {
@@ -89,8 +89,8 @@ suite('Specs', () => {
     const spec = HashSpec.parse(`mem:${testHash}`);
     invariant(spec);
     assert.equal(spec.hash.toString(), testHash.toString());
-    assert.equal(spec.store.scheme, 'mem');
-    assert.equal(spec.store.path, '');
+    assert.equal(spec.database.scheme, 'mem');
+    assert.equal(spec.database.path, '');
   });
 
   test('ObjectSpec', () => {
@@ -99,8 +99,8 @@ suite('Specs', () => {
     assert.isNotNull(spec.value());
     invariant(spec instanceof DatasetSpec);
     assert.equal(spec.name, 'monkey');
-    assert.equal(spec.store.scheme, 'http');
-    assert.equal(spec.store.path, '//foo:8000/test');
+    assert.equal(spec.database.scheme, 'http');
+    assert.equal(spec.database.path, '//foo:8000/test');
 
     const testHash = new Hash('sha1-0000000000000000000000000000000000000000');
     spec = parseObjectSpec(`http://foo:8000/test:${testHash}`);

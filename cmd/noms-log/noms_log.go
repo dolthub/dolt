@@ -54,7 +54,7 @@ func main() {
 	origCommit, ok := dataset.MaybeHead()
 
 	if ok {
-		iter := NewCommitIterator(dataset.Store(), origCommit)
+		iter := NewCommitIterator(dataset.Database(), origCommit)
 		for ln, ok := iter.Next(); ok; ln, ok = iter.Next() {
 			if printCommit(ln) != nil {
 				break
@@ -62,7 +62,7 @@ func main() {
 		}
 	}
 
-	dataset.Store().Close()
+	dataset.Database().Close()
 }
 
 // Prints the information for one commit in the log, including ascii graph on left side of commits if

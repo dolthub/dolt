@@ -92,14 +92,14 @@ func main() {
 	util.CheckError(err)
 	ds, err := spec.Dataset()
 	util.CheckError(err)
-	defer ds.Store().Close()
+	defer ds.Database().Close()
 
 	kinds := []types.NomsKind{}
 	if *columnTypes != "" {
 		kinds = csv.StringsToKinds(strings.Split(*columnTypes, ","))
 	}
 
-	value, _ := csv.Read(cr, *name, headers, kinds, ds.Store())
+	value, _ := csv.Read(cr, *name, headers, kinds, ds.Database())
 	_, err = ds.Commit(value)
 	if !*noProgress {
 		status.Clear()
