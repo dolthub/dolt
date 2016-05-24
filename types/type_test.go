@@ -83,7 +83,7 @@ func TestFlattenUnionTypes(t *testing.T) {
 	assert.Equal(MakeUnionType(BoolType, NumberType), MakeUnionType(MakeUnionType(BoolType, NumberType), NumberType, BoolType))
 }
 
-func TestVerifyFieldName(t *testing.T) {
+func TestVerifyStructFieldName(t *testing.T) {
 	assert := assert.New(t)
 
 	assertInvalid := func(n string) {
@@ -99,10 +99,40 @@ func TestVerifyFieldName(t *testing.T) {
 	assertInvalid("_")
 	assertInvalid("0a")
 	assertInvalid("_a")
+	assertInvalid("💩")
 
 	assertValid := func(n string) {
 		MakeStructType("S", TypeMap{n: StringType})
 	}
+	assertValid("a")
+	assertValid("A")
+	assertValid("a0")
+	assertValid("a_")
+	assertValid("a0_")
+}
+
+func TestVerifyStructName(t *testing.T) {
+	assert := assert.New(t)
+
+	assertInvalid := func(n string) {
+		assert.Panics(func() {
+			MakeStructType(n, TypeMap{})
+		})
+	}
+
+	assertInvalid(" ")
+	assertInvalid(" a")
+	assertInvalid("a ")
+	assertInvalid("0")
+	assertInvalid("_")
+	assertInvalid("0a")
+	assertInvalid("_a")
+	assertInvalid("💩")
+
+	assertValid := func(n string) {
+		MakeStructType(n, TypeMap{})
+	}
+	assertValid("")
 	assertValid("a")
 	assertValid("A")
 	assertValid("a0")

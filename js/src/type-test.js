@@ -70,7 +70,7 @@ suite('Type', () => {
                      makeUnionType([boolType, numberType]));
   });
 
-  test('verify field name', () => {
+  test('verify struct field name', () => {
     function assertInvalid(n: string) {
       assert.throw(() => {
         makeStructType('S', {[n]: stringType});
@@ -84,10 +84,37 @@ suite('Type', () => {
     assertInvalid('_');
     assertInvalid('0a');
     assertInvalid('_a');
+    assertInvalid('💩');
 
     function assertValid(n: string) {
       makeStructType('S', {[n]: stringType});
     }
+    assertValid('a');
+    assertValid('A');
+    assertValid('a0');
+    assertValid('a_');
+    assertValid('a0_');
+  });
+
+  test('verify struct name', () => {
+    function assertInvalid(n: string) {
+      assert.throw(() => {
+        makeStructType(n, {});
+      });
+    }
+    assertInvalid(' ');
+    assertInvalid(' a');
+    assertInvalid('a ');
+    assertInvalid('0');
+    assertInvalid('_');
+    assertInvalid('0a');
+    assertInvalid('_a');
+    assertInvalid('💩');
+
+    function assertValid(n: string) {
+      makeStructType(n, {});
+    }
+    assertValid('');
     assertValid('a');
     assertValid('A');
     assertValid('a0');
